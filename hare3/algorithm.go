@@ -298,8 +298,8 @@ func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []types
 		}
 		// Gossip initial values
 		return &OutputMessage{
-			round:  p.round,
-			values: p.Si,
+			Round:  p.round,
+			Values: p.Si,
 		}, nil
 	case HardLock:
 		if j > 0 {
@@ -342,8 +342,8 @@ func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []types
 
 		// Send proposal to peers
 		return &OutputMessage{
-			round:  p.round,
-			values: set,
+			Round:  p.round,
+			Values: set,
 		}, nil
 	case Commit:
 		candidates := p.gc.RetrieveGradecastedMessages(NewAbsRound(j, 2))
@@ -360,8 +360,8 @@ func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []types
 		var mm *OutputMessage
 		if p.hardLocked[j] {
 			mm = &OutputMessage{
-				round:  NewAbsRound(j, 5),
-				values: []types.Hash20{*p.Li[j]},
+				Round:  NewAbsRound(j, 5),
+				Values: []types.Hash20{*p.Li[j]},
 			}
 		} else {
 			for _, c := range candidates {
@@ -411,8 +411,8 @@ func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []types
 					continue
 				}
 				mm = &OutputMessage{
-					round:  NewAbsRound(j, 5),
-					values: []types.Hash20{candidateHash},
+					Round:  NewAbsRound(j, 5),
+					Values: []types.Hash20{candidateHash},
 				}
 				break
 			}
@@ -424,8 +424,8 @@ func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []types
 		resultHash, result := matchInPreviousIterations(values, p.Ti, j)
 		if resultHash != nil {
 			return &OutputMessage{
-				round:  NewAbsRound(j, 6),
-				values: []types.Hash20{*resultHash},
+				Round:  NewAbsRound(j, 6),
+				Values: []types.Hash20{*resultHash},
 			}, result
 		}
 		// Case 2
@@ -433,8 +433,8 @@ func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []types
 			values := p.tgg.RetrieveThresholdMessages(NewAbsRound(j, 5), 5)
 			setHash, _ := matchInIteration(values, p.Ti, j)
 			return &OutputMessage{
-				round:  NewAbsRound(j, 6),
-				values: []types.Hash20{*setHash},
+				Round:  NewAbsRound(j, 6),
+				Values: []types.Hash20{*setHash},
 			}, nil
 
 		}
@@ -444,8 +444,8 @@ func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []types
 }
 
 type OutputMessage struct {
-	round  AbsRound
-	values []types.Hash20
+	Round  AbsRound
+	Values []types.Hash20
 }
 
 // with int8 we have a max iterations of 17 before we overflow.
