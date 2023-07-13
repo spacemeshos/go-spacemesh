@@ -1,5 +1,6 @@
 package config
 
+// MainnetAccounts generated from preimages at https://github.com/spacemeshos/wiki/wiki/Genesis-ledger.
 func MainnetAccounts() map[string]uint64 {
 	return map[string]uint64{
 		"sm1qqqqqq96ajwllyxr9mypa7yls9mtgyn556ekdjslp28h2": 1943200000000000,
