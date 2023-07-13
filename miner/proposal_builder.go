@@ -174,7 +174,7 @@ func NewProposalBuilder(
 		opt(pb)
 	}
 	if pb.proposalOracle == nil {
-		pb.proposalOracle = newMinerOracle(pb.cfg, clock, cdb, vrfSigner, pb.logger)
+		pb.proposalOracle = newMinerOracle(pb.cfg, clock, cdb, vrfSigner, syncer, pb.logger)
 	}
 	if pb.nonceFetcher == nil {
 		pb.nonceFetcher = defaultFetcher{pb.cdb}
