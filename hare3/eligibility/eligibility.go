@@ -41,3 +41,18 @@ func (ac *ActiveCheck) Active(ctx context.Context, round hare3.AbsRound) bool {
 	}
 	return eligibilityCount > 0
 }
+
+func (ac *ActiveCheck) Eligibility(ctx context.Context, round hare3.AbsRound) (proof types.VrfSignature, count uint16, err error) {
+	proof, err = ac.oracle.Proof(ctx, ac.layer, uint32(round))
+	if err != nil {
+		ac.l.With().Error("failed to get eligibility proof from oracle", log.Err(err))
+		return types.VrfSignature{}, 0, err
+	}
+
+	count, err = ac.oracle.CalcEligibility(ctx, ac.layer, uint32(round), ac.committeeSize, ac.id, proof)
+	if err != nil {
+		ac.oracle.With().Error("failed to check eligibility", log.Err(err))
+		return types.VrfSignature{}, 0, err
+	}
+	return proof, count, nil
+}

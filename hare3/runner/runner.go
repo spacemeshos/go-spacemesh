@@ -8,6 +8,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/beacon"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/hare"
@@ -39,6 +40,7 @@ type ProtocolRunner struct {
 	gossiper     NetworkGossiper
 	layer        types.LayerID
 	ac           *eligibility.ActiveCheck
+	mb           *MessageBuilder
 	weakcoinChan chan<- WeakCoinResult
 }
 
@@ -49,6 +51,7 @@ func NewProtocolRunner(
 	iterationLimit int8,
 	gossiper NetworkGossiper,
 	ac *eligibility.ActiveCheck,
+	mb *MessageBuilder,
 	weakcoinChan chan<- WeakCoinResult,
 ) *ProtocolRunner {
 	return &ProtocolRunner{
@@ -58,6 +61,7 @@ func NewProtocolRunner(
 		maxRound:     hare3.NewAbsRound(iterationLimit, 0),
 		gossiper:     gossiper,
 		ac:           ac,
+		mb:           mb,
 		weakcoinChan: weakcoinChan,
 	}
 }
@@ -85,14 +89,14 @@ func (r *ProtocolRunner) Run(ctx context.Context) ([]types.Hash20, error) {
 		select {
 		// We await the beginning of the round, which is achieved by calling AwaitEndOfRound with (round - 1).
 		case <-r.clock.AwaitEndOfRound(uint32(round - 1)):
-			toSend, output := r.protocol.NextRound(r.ac.Active(ctx, round))
+			// TODO fix this eligibility should not return an error
+			proof, count, err := r.ac.Eligibility(ctx, round)
+			if err != nil {
+				return nil, err
+			}
+			toSend, output := r.protocol.NextRound(count > 0)
 			if toSend != nil {
-				msg, err := buildEncodedOutputMessage(toSend)
-				if err != nil {
-					// This should never happen
-					panic(err)
-				}
-				r.gossiper.Gossip(ctx, msg)
+				r.gossiper.Gossip(ctx, r.mb.BuildEncodedMessage(toSend, proof, count))
 			}
 			if output != nil {
 				return output, nil
@@ -101,10 +105,6 @@ func (r *ProtocolRunner) Run(ctx context.Context) ([]types.Hash20, error) {
 			return nil, ctx.Err()
 		}
 	}
-}
-
-func buildEncodedOutputMessage(m *hare3.OutputMessage) ([]byte, error) {
-	return nil, nil
 }
 
 // RoundClock is a timer interface.
@@ -305,7 +305,7 @@ func (r *HareRunner) runLayer(ctx context.Context, layer types.LayerID, props []
 		initialSet[i] = types.Hash20(props[i])
 	}
 	ac := eligibility.NewActiveCheck(layer, r.nodeID, r.committeeSize, r.oracle, r.l)
-	protocolRunner := NewProtocolRunner(roundClock, handler.Protocol(lc, initialSet), coinChooser, r.maxIterations, r.gossiper, ac, r.weakcoinChan)
+	protocolRunner := NewProtocolRunner(roundClock, handler.Protocol(lc, initialSet), coinChooser, r.maxIterations, r.gossiper, ac, NewMessageBuilder(layer, r.nodeID), r.weakcoinChan)
 	v, err := protocolRunner.Run(ctx)
 	if err != nil {
 		return nil, err
@@ -336,4 +336,39 @@ type DefaultGossiper struct {
 func (g *DefaultGossiper) Gossip(ctx context.Context, msg []byte) {
 	err := g.p.Publish(ctx, pubsub.HareProtocol, msg)
 	g.l.With().Error("error while publishing hare message", log.Err(err))
+}
+
+type MessageBuilder struct {
+	layer  types.LayerID
+	nodeID types.NodeID
+}
+
+func NewMessageBuilder(layer types.LayerID, nodeID types.NodeID) *MessageBuilder {
+	return &MessageBuilder{layer: layer, nodeID: nodeID}
+}
+
+func (b *MessageBuilder) BuildEncodedMessage(m *hare3.OutputMessage, proof types.VrfSignature, eligibilityCount uint16) []byte {
+	values := make([]types.ProposalID, len(m.Values))
+	for i := range m.Values {
+		values[i] = types.ProposalID(m.Values[i])
+	}
+	msg := hare.Message{
+		InnerMessage: &hare.InnerMessage{
+			Layer:  b.layer,
+			Round:  uint32(m.Round),
+			Values: values,
+		},
+		SmesherID: b.nodeID,
+		Eligibility: types.HareEligibility{
+			Proof: proof,
+			Count: eligibilityCount,
+		},
+	}
+
+	bytes, err := codec.Encode(&msg)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	return bytes
 }
