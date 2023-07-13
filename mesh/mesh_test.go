@@ -346,6 +346,8 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 	require.True(t, mal)
 	saved, err = identities.GetMalfeasanceProof(tm.cdb, sig.NodeID())
 	require.NoError(t, err)
+	require.NotNil(t, saved.Received())
+	saved.SetReceived(time.Time{})
 	require.EqualValues(t, malProof, saved)
 	expected := malProof
 
@@ -359,6 +361,8 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 	require.True(t, mal)
 	saved, err = identities.GetMalfeasanceProof(tm.cdb, sig.NodeID())
 	require.NoError(t, err)
+	require.NotNil(t, saved.Received())
+	saved.SetReceived(time.Time{})
 	require.EqualValues(t, expected, saved)
 }
 
