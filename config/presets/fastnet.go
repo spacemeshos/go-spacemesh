@@ -33,6 +33,7 @@ func fastnet() config.Config {
 
 	conf.Genesis = &config.GenesisConfig{
 		ExtraData: "fastnet",
+		Accounts:  map[string]uint64{},
 	}
 
 	conf.LayerAvgSize = 50
