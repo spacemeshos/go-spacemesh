@@ -36,6 +36,7 @@ func standalone() config.Config {
 
 	conf.Genesis = &config.GenesisConfig{
 		ExtraData: "standalone",
+		Accounts:  map[string]uint64{},
 	}
 
 	conf.LayerAvgSize = 50
