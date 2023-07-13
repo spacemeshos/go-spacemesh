@@ -16,11 +16,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
-	"github.com/spacemeshos/go-spacemesh/sql/blocks"
-	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -393,14 +392,15 @@ func (o *Oracle) computeActiveSet(ctx context.Context, targetEpoch types.EpochID
 		)
 		return activeSet, nil
 	}
-	bid, err := certificates.FirstInEpoch(o.cdb, targetEpoch)
+
+	activeSet, err := miner.ActiveSetFromBlock(o.cdb, targetEpoch)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return nil, err
 	}
-	if bid == types.EmptyBlockID {
+	if len(activeSet) == 0 {
 		return o.activeSetFromRefBallots(targetEpoch)
 	}
-	return o.activeSetFromBlock(bid)
+	return activeSet, nil
 }
 
 func (o *Oracle) computeActiveWeights(targetEpoch types.EpochID, activeSet []types.ATXID) (map[types.NodeID]uint64, error) {
@@ -413,25 +413,6 @@ func (o *Oracle) computeActiveWeights(targetEpoch types.EpochID, activeSet []typ
 		weightedActiveSet[atx.NodeID] = atx.GetWeight()
 	}
 	return weightedActiveSet, nil
-}
-
-func (o *Oracle) activeSetFromBlock(bid types.BlockID) ([]types.ATXID, error) {
-	block, err := blocks.Get(o.cdb, bid)
-	if err != nil {
-		return nil, fmt.Errorf("actives get block: %w", err)
-	}
-	activeMap := make(map[types.ATXID]struct{})
-	for _, r := range block.Rewards {
-		// only the reference ballots record the active set
-		ballot, err := ballots.FirstInEpoch(o.cdb, r.AtxID, block.LayerIndex.GetEpoch())
-		if err != nil {
-			return nil, fmt.Errorf("actives get ballot: %w", err)
-		}
-		for _, id := range ballot.ActiveSet {
-			activeMap[id] = struct{}{}
-		}
-	}
-	return maps.Keys(activeMap), nil
 }
 
 func (o *Oracle) activeSetFromRefBallots(epoch types.EpochID) ([]types.ATXID, error) {

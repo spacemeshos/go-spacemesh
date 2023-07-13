@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 var (
@@ -35,18 +36,20 @@ type Oracle struct {
 	clock     layerClock
 	cdb       *datastore.CachedDB
 	vrfSigner *signing.VRFSigner
+	syncState system.SyncStateProvider
 	log       log.Log
 
 	mu    sync.Mutex
 	cache *EpochEligibility
 }
 
-func newMinerOracle(cfg config, c layerClock, cdb *datastore.CachedDB, vrfSigner *signing.VRFSigner, log log.Log) *Oracle {
+func newMinerOracle(cfg config, c layerClock, cdb *datastore.CachedDB, vrfSigner *signing.VRFSigner, ss system.SyncStateProvider, log log.Log) *Oracle {
 	return &Oracle{
 		cfg:       cfg,
 		clock:     c,
 		cdb:       cdb,
 		vrfSigner: vrfSigner,
+		syncState: ss,
 		log:       log,
 		cache:     &EpochEligibility{},
 	}
@@ -88,7 +91,42 @@ func (o *Oracle) ProposalEligibility(lid types.LayerID, beacon types.Beacon, non
 	return ee, nil
 }
 
+func (o *Oracle) activesFromFirstBlock(targetEpoch types.EpochID) (uint64, uint64, []types.ATXID, error) {
+	activeSet, err := ActiveSetFromBlock(o.cdb, targetEpoch)
+	if err != nil {
+		return 0, 0, nil, err
+	}
+	own, err := o.cdb.GetEpochAtx(targetEpoch-1, o.cfg.nodeID)
+	if err != nil {
+		return 0, 0, nil, err
+	}
+	// put miner's own ATXID last
+	activeSet = append(activeSet, own.ID)
+	var total uint64
+	for _, id := range activeSet {
+		hdr, err := o.cdb.GetAtxHeader(id)
+		if err != nil {
+			return 0, 0, nil, err
+		}
+		total += hdr.GetWeight()
+	}
+	o.log.With().Info("active set selected for proposal",
+		log.Stringer("epoch", targetEpoch),
+		log.Int("num_atx", len(activeSet)),
+	)
+	return own.GetWeight(), total, activeSet, nil
+}
+
 func (o *Oracle) activeSet(targetEpoch types.EpochID) (uint64, uint64, []types.ATXID, error) {
+	if !o.syncState.SyncedBefore(targetEpoch - 1) {
+		// if the node is not synced prior to `targetEpoch-1`, it doesn't have the correct receipt timestamp
+		// for all the atx and malfeasance proof, and cannot use atx grading for active set.
+		o.log.With().Info("node not synced before prior epoch, getting active set from first block",
+			log.Stringer("epoch", targetEpoch),
+		)
+		return o.activesFromFirstBlock(targetEpoch)
+	}
+
 	var (
 		minerWeight, totalWeight uint64
 		minerID                  types.ATXID

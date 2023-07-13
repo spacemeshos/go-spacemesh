@@ -239,7 +239,7 @@ func (db *CachedDB) GetLastAtx(nodeID types.NodeID) (*types.ActivationTxHeader, 
 	}
 }
 
-// GetEpochAtx gets the atx header of specified node ID in the specified epoch.
+// GetEpochAtx gets the atx header of specified node ID published in the specified epoch.
 func (db *CachedDB) GetEpochAtx(epoch types.EpochID, nodeID types.NodeID) (*types.ActivationTxHeader, error) {
 	vatx, err := atxs.GetByEpochAndNodeID(db, epoch, nodeID)
 	if err != nil {
