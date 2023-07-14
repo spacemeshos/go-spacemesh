@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
-	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
@@ -40,7 +39,7 @@ func Test_Validation_VRFNonce(t *testing.T) {
 		initialization.WithNodeId(nodeId.Bytes()),
 		initialization.WithCommitmentAtxId(commitmentAtxId.Bytes()),
 		initialization.WithConfig(postCfg.ToConfig()),
-		initialization.WithInitOpts((config.InitOpts)(initOpts)),
+		initialization.WithInitOpts(initOpts.ToInitOpts()),
 	)
 	r.NoError(err)
 	r.NoError(init.Initialize(context.Background()))
