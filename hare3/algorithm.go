@@ -42,6 +42,7 @@
 package hare3
 
 import (
+	"crypto/sha256"
 	"sync"
 	"time"
 
@@ -119,6 +120,13 @@ type RoundProvider struct {
 	roundDuration time.Duration
 }
 
+func NewRoundProvider(layerTime time.Time, roundDuration time.Duration) *RoundProvider {
+	return &RoundProvider{
+		layerTime:     layerTime,
+		roundDuration: roundDuration,
+	}
+}
+
 func (rp *RoundProvider) CurrentRound() AbsRound {
 	return AbsRound(time.Since(rp.layerTime) / rp.roundDuration)
 }
@@ -136,13 +144,13 @@ type Handler struct {
 	mu  *sync.Mutex
 }
 
-func NewHandler(gg GradedGossiper, tgg ThresholdGradedGossiper, gc Gradecaster, rp *RoundProvider, protocolMu *sync.Mutex) *Handler {
+func NewHandler(gg GradedGossiper, tgg ThresholdGradedGossiper, gc Gradecaster, rp *RoundProvider) *Handler {
 	return &Handler{
 		gg:  gg,
 		tgg: tgg,
 		gc:  gc,
 		rp:  rp,
-		mu:  protocolMu,
+		mu:  &sync.Mutex{},
 	}
 }
 
@@ -237,7 +245,13 @@ func (p *Protocol) Round() AbsRound {
 }
 
 func toHash(values []types.Hash20) types.Hash20 {
-	return types.Hash20{}
+	h := sha256.New()
+	for _, v := range values {
+		h.Write(v[:])
+	}
+	var result types.Hash20
+	copy(result[:], h.Sum(nil))
+	return result
 }
 
 // Given a slice of candidate set hashes and a slice of sets of valid set
