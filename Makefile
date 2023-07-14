@@ -11,13 +11,8 @@ ifneq ($(.SHELLSTATUS),0)
 	BRANCH := $(BRANCH)-dirty
 endif
 
-ifeq ($(BRANCH),develop)
-  DOCKER_IMAGE_REPO := go-spacemesh-dev
-else
-  DOCKER_IMAGE_REPO := go-spacemesh
-endif
-
 DOCKER_HUB ?= spacemeshos
+DOCKER_IMAGE_REPO ?= go-spacemesh-dev
 SHA = $(shell git rev-parse --short HEAD)
 DOCKER_IMAGE_VERSION ?= $(SHA)
 DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION)

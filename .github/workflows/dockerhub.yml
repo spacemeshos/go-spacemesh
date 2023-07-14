@@ -23,6 +23,7 @@ jobs:
     - name: set docker image on tag push
       run: |
         if [[ "${{ github.ref }}" == "refs/tags/"* ]]; then
+          echo "DOCKER_IMAGE_REPO=go-spacemesh" >> $GITHUB_ENV
           echo "DOCKER_IMAGE_VERSION=${{ github.ref_name }}" >> $GITHUB_ENV
         fi
     - name: push go-spacemesh
