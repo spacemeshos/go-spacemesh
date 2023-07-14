@@ -16,6 +16,10 @@ import (
 )
 
 func Test_Client(t *testing.T) {
+	if os.Getenv("MIMIR_ORG") == "" || os.Getenv("MIMIR_USR") == "" || os.Getenv("MIMIR_PWD") == "" {
+		t.Skip("MIMIR_ORG, MIMIR_USR, and MIMIR_PWD must be set")
+	}
+
 	logger := logtest.New(t, zapcore.InfoLevel)
 
 	genesis, err := time.Parse(time.RFC3339, "2023-07-11T23:00:00.498Z")
