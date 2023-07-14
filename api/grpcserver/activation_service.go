@@ -50,6 +50,7 @@ func (s *activationService) Get(ctx context.Context, request *pb.GetRequest) (*p
 	}, nil
 }
 
+// Highest implements v1.ActivationServiceServer.
 func (s *activationService) Highest(ctx context.Context, req *empty.Empty) (*pb.HighestResponse, error) {
 	highest, err := s.atxProvider.MaxHeightAtx()
 	if err != nil {
