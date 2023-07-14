@@ -212,13 +212,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 		startTime := time.Now()
 		events.EmitPostStart(nb.state.PoetProofRef[:])
 
-		opts := []proving.OptionFunc{}
-		if pubEpoch >= types.EpochID(nb.postSetupProvider.Config().MinerIDInK2PowSinceEpoch) {
-			nb.log.With().Info("Using nodeID as PoW creator")
-			opts = append(opts, proving.WithPowCreator(nb.nodeID.Bytes()))
-		}
-
-		proof, proofMetadata, err := nb.postSetupProvider.GenerateProof(ctx, nb.state.PoetProofRef[:], opts...)
+		proof, proofMetadata, err := nb.postSetupProvider.GenerateProof(ctx, nb.state.PoetProofRef[:], proving.WithPowCreator(nb.nodeID.Bytes()))
 		if err != nil {
 			events.EmitPostFailure()
 			return nil, 0, fmt.Errorf("failed to generate Post: %v", err)
