@@ -1,7 +1,8 @@
 # Generate latest build and push it to dockerhub on push to develop branch.
 # NOTE: This workflow does not include any tests, nor any dependencies, since bors guarantees
 # that only code that passes all tests is ever pushed to develop.
-name: push to dockerhub
+name: Push to Dockerhub
+run-name: Pushing ${{ github.ref_name }} to Dockerhub
 env:
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
   DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
@@ -19,6 +20,11 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@v3
+    - name: set docker image on tag push
+      run: |
+        if [[ "${{ github.ref }}" == "refs/tags/"* ]]; then
+          echo "DOCKER_IMAGE_VERSION=${{ github.ref_name }}" >> $GITHUB_ENV
+        fi
     - name: push go-spacemesh
       run: make dockerpush
     - name: push go-bootstrapper

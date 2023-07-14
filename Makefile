@@ -1,16 +1,6 @@
 VERSION ?= $(shell git describe --tags)
-LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
-include Makefile-libs.Inc
-
-DOCKER_HUB ?= spacemeshos
-UNIT_TESTS ?= $(shell go list ./...  | grep -v systest/tests | grep -v cmd/node | grep -v cmd/gen-p2p-identity | grep -v cmd/trace | grep -v genvm/cmd)
-
 COMMIT = $(shell git rev-parse HEAD)
-SHA = $(shell git rev-parse --short HEAD)
 BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
-
-export CGO_ENABLED := 1
-export CGO_CFLAGS := $(CGO_CFLAGS) -DSQLITE_ENABLE_DBSTAT_VTAB=1
 
 # Add an indicator to the branch name if dirty and use commithash if running in detached mode
 ifeq ($(BRANCH),HEAD)
@@ -22,13 +12,24 @@ ifneq ($(.SHELLSTATUS),0)
 endif
 
 ifeq ($(BRANCH),develop)
-  DOCKER_IMAGE_REPO := go-spacemesh
-else
   DOCKER_IMAGE_REPO := go-spacemesh-dev
+else
+  DOCKER_IMAGE_REPO := go-spacemesh
 endif
 
-DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(SHA)
-DOCKER_BS_IMAGE = $(DOCKER_IMAGE_REPO)-bs:$(SHA)
+DOCKER_HUB ?= spacemeshos
+SHA = $(shell git rev-parse --short HEAD)
+DOCKER_IMAGE_VERSION ?= $(SHA)
+DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION)
+DOCKER_BS_IMAGE = $(DOCKER_IMAGE_REPO)-bs:$(DOCKER_IMAGE_VERSION)
+
+LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
+include Makefile-libs.Inc
+
+UNIT_TESTS ?= $(shell go list ./...  | grep -v systest/tests | grep -v cmd/node | grep -v cmd/gen-p2p-identity | grep -v cmd/trace | grep -v genvm/cmd)
+
+export CGO_ENABLED := 1
+export CGO_CFLAGS := $(CGO_CFLAGS) -DSQLITE_ENABLE_DBSTAT_VTAB=1
 
 # setting extra command line params for the CI tests pytest commands
 ifdef namespace
