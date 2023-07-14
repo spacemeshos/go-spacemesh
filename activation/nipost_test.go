@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 func defaultPoetServiceMock(tb testing.TB, id []byte) *MockPoetProvingServiceClient {
@@ -109,14 +110,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	challenge := types.NIPostChallenge{
 		PublishEpoch: postGenesisEpoch + 2,
 	}
-	challengeHash := challenge.Hash()
-
-	poetDb := NewMockpoetDbAPI(gomock.NewController(t))
-	poetDb.EXPECT().GetProof(gomock.Any()).Return(
-		&types.PoetProof{}, &challengeHash, nil,
-	).AnyTimes()
-	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-
+	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t).WithName("poetDb"))
 	postCfg := DefaultPostConfig()
 	postCfg.PowDifficulty[0] = 1
 	postProvider := newTestPostManager(t, withPostConfig(postCfg))
@@ -125,20 +119,15 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	require.NoError(t, err)
 	defer verifier.Close()
 
-	nipost := buildNIPost(t, postProvider, postProvider.Config(), challenge, poetDb)
-	v := NewValidator(
-		poetDb,
-		postProvider.Config(),
-		logger,
-		verifier,
-	)
+	nipost := buildNIPost(t, postProvider, challenge, poetDb)
+	v := NewValidator(poetDb, postProvider.Config(), logger, verifier)
 	_, err = v.NIPost(
 		context.Background(),
 		challenge.PublishEpoch,
 		postProvider.id,
 		postProvider.commitmentAtxId,
 		nipost,
-		challengeHash,
+		challenge.Hash(),
 		postProvider.opts.NumUnits,
 		verifying.WithLabelScryptParams(postProvider.opts.Scrypt),
 	)
@@ -165,7 +154,7 @@ func spawnPoet(tb testing.TB, opts ...HTTPPoetOpt) *HTTPPoetClient {
 	return poetProver.HTTPPoetClient
 }
 
-func buildNIPost(tb testing.TB, postProvider *testPostManager, postCfg PostConfig, nipostChallenge types.NIPostChallenge, poetDb poetDbAPI) *types.NIPost {
+func buildNIPost(tb testing.TB, postProvider *testPostManager, nipostChallenge types.NIPostChallenge, poetDb poetDbAPI) *types.NIPost {
 	require.NoError(tb, postProvider.PrepareInitializer(context.Background(), postProvider.opts))
 	require.NoError(tb, postProvider.StartSession(context.Background()))
 	mclock := defaultLayerClockMock(tb)
