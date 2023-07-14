@@ -1,6 +1,7 @@
 package config
 
 import (
+	"math"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -91,6 +92,7 @@ func MainnetConfig() Config {
 		},
 		POST: activation.PostConfig{
 			MinNumUnits:   4,
+			MaxNumUnits:   math.MaxUint32,
 			LabelsPerUnit: 4294967296,
 			K1:            26,
 			K2:            37,
