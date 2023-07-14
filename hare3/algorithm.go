@@ -216,6 +216,7 @@ type Protocol struct {
 	// Each index "i" holds the locked value for iteration "i"
 	Li []*types.Hash20
 	// Each index "i" holds values considered valid up to round "i+1"
+	// TODO convert this to an object that accepts grades, so that it can be more closely mapped to the paper
 	Vi [][]types.Hash20
 	// Each index "i" holds a map of sets of values from valid proposals
 	// indexed by their hash received in iteration "i"
@@ -294,15 +295,15 @@ func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []types
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	defer func() { p.round++ }()
-	if p.round >= 0 && p.round <= 3 {
-		p.Vi[p.round] = p.tgg.RetrieveThresholdMessages(-1, 5-uint8(p.round))
-	}
 	// We are starting a new iteration build objects
 	if p.round.Round() == 0 {
 		p.Ti = append(p.Ti, make(map[types.Hash20][]types.Hash20))
-		p.Vi = append(p.Vi, nil)
 		p.hardLocked = append(p.hardLocked, false)
 		p.Li = append(p.Li, nil)
+		p.Vi = make([][]types.Hash20, 4)
+	}
+	if p.round >= 0 && p.round <= 3 {
+		p.Vi[p.round] = p.tgg.RetrieveThresholdMessages(-1, 5-uint8(p.round))
 	}
 	j := p.round.Iteration()
 	switch p.round.Type() {
@@ -351,7 +352,7 @@ func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []types
 		}
 		// If we didn't get a set from threshold gossip then use our local candidate
 		if set == nil {
-			set = p.Vi[4]
+			set = p.Vi[1]
 		}
 
 		// Send proposal to peers
@@ -362,7 +363,7 @@ func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []types
 	case Commit:
 		candidates := p.gc.RetrieveGradecastedMessages(NewAbsRound(j, 2))
 		for _, c := range candidates {
-			if isSubset(c.values, p.Vi[2]) {
+			if isSubset(c.values, p.Vi[3]) {
 				// Add to valid proposals for this iteration
 				p.Ti[j][toHash(c.values)] = c.values
 			}
@@ -398,14 +399,14 @@ func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []types
 				}
 				// Check subset of threshold values at round 3
 				// Round 5 condition f
-				if !isSubset(c.values, p.Vi[3]) {
+				if !isSubset(c.values, p.Vi[2]) {
 					continue
 				}
 				// Check superset of highest graded values or we received a
 				// commit for the previous iteration from thresh-gossip for
 				// this set with grade >= 1.
 				// Round 5 condition g
-				if !isSubset(p.Vi[5], c.values) {
+				if !isSubset(p.Vi[0], c.values) {
 					// Check for received message
 					lastIterationCommit := NewAbsRound(j-1, 5)
 					values := p.tgg.RetrieveThresholdMessages(lastIterationCommit, 1)
