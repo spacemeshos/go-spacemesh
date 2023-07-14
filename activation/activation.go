@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/post/shared"
 	"go.uber.org/atomic"
@@ -178,7 +177,6 @@ func (b *Builder) Smeshing() bool {
 // options (e.g., number of labels), after initial setup, is supported. If data
 // creation fails for any reason then the go-routine will panic.
 func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) error {
-	fmt.Printf("%v: Starting smeshing\n", time.Now().Format(time.RFC3339))
 	b.smeshingMutex.Lock()
 	defer b.smeshingMutex.Unlock()
 
@@ -195,7 +193,6 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 		return fmt.Errorf("failed to prepare post initializer: %w", err)
 	}
 
-	fmt.Printf("%v: Smeshing init completed\n", time.Now().Format(time.RFC3339))
 	b.eg.Go(func() error {
 		defer b.started.Store(false)
 
@@ -205,7 +202,6 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 		case <-b.syncer.RegisterForATXSynced():
 			// ensure we are ATX synced before starting the PoST Session
 		}
-		fmt.Printf("%v: Starting smeshing session\n", time.Now().Format(time.RFC3339))
 
 		// If start session returns any error other than context.Canceled
 		// (which is how we signal it to stop) then we panic.
@@ -254,12 +250,10 @@ func (b *Builder) SmesherID() types.NodeID {
 }
 
 func (b *Builder) run(ctx context.Context) {
-	now := time.Now()
 	if err := b.generateInitialPost(ctx); err != nil {
 		b.log.Error("Failed to generate proof: %s", err)
 		return
 	}
-	fmt.Printf("%v: atx generation time %v\n", time.Now().Format(time.RFC3339), time.Since(now))
 
 	select {
 	case <-ctx.Done():
@@ -420,7 +414,6 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 		challenge.Sequence = prevAtx.Sequence + 1
 	}
 
-	println("saving nipost challenge", b.nipostBuilder.DataDir())
 	if err = SaveNipostChallenge(b.nipostBuilder.DataDir(), challenge); err != nil {
 		return nil, err
 	}
@@ -620,26 +613,10 @@ func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChalleng
 		b.postSetupProvider.LastOpts().NumUnits,
 		nonce,
 	)
-
 	atx.InnerActivationTx.NodeID = nodeID
-
-	fmt.Printf("%s%s\n", "signed atx", spew.Sdump(atx))
-
 	if err = SignAndFinalizeAtx(b.signer, atx); err != nil {
 		return nil, fmt.Errorf("sign atx: %w", err)
 	}
-
-	// // buf, err := codec.Encode(atx)
-	// // if err != nil {
-	// // 	panic(err.Error())
-	// // }
-	// v, err := signing.NewEdVerifier()
-	// if err != nil {
-	// 	panic(err.Error())
-	// }
-
-	// result := v.Verify(signing.ATX, *atx.NodeID, atx.SignedBytes(), atx.Signature)
-	// fmt.Printf("result %v\n", result)
 	return atx, nil
 }
 
@@ -656,7 +633,6 @@ func (b *Builder) discardChallenge() error {
 }
 
 func (b *Builder) broadcast(ctx context.Context, atx *types.ActivationTx) (int, error) {
-	fmt.Printf("%s%s\n", "atx pre broadcast: ", spew.Sdump(atx))
 	buf, err := codec.Encode(atx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to serialize ATX: %w", err)

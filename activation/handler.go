@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/spacemeshos/post/shared"
 	"golang.org/x/exp/maps"
 
@@ -481,9 +480,6 @@ func (h *Handler) registerHashes(atx *types.ActivationTx, peer p2p.Peer) {
 // HandleGossipAtx handles the atx gossip data channel.
 func (h *Handler) HandleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte) error {
 	err := h.handleGossipAtx(ctx, peer, msg)
-	if err != nil {
-		fmt.Printf("%v\n", err)
-	}
 	if err != nil && !errors.Is(err, errMalformedData) && !errors.Is(err, errKnownAtx) {
 		h.log.WithContext(ctx).With().Warning("failed to process atx gossip",
 			log.Stringer("sender", peer),
@@ -509,8 +505,6 @@ func (h *Handler) handleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte
 	if err := atx.Initialize(); err != nil {
 		return fmt.Errorf("failed to derive ID from atx: %w", err)
 	}
-
-	fmt.Printf("%s%s\n", "atx dump hash: ", spew.Sdump(atx))
 
 	if !h.edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature) {
 		return fmt.Errorf("failed to verify atx signature: %w", errMalformedData)
