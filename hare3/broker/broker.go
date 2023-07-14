@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -18,9 +19,33 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
 var errNilInner = errors.New("nil inner message")
+
+type HandlerFactory struct {
+	clock         *timesync.NodeClock
+	roundTime     time.Duration
+	hareThreshold uint16
+}
+
+func NewHandlerFactory(clock *timesync.NodeClock, roundTime time.Duration, hareThreshold uint16) *HandlerFactory {
+	return &HandlerFactory{
+		clock:         clock,
+		roundTime:     roundTime,
+		hareThreshold: hareThreshold,
+	}
+}
+
+func (f *HandlerFactory) Handler(layer types.LayerID) *hare3.Handler {
+	return hare3.NewHandler(
+		hare3.NewDefaultGradedGossiper(),
+		hare3.NewDefaultThresholdGradedGossiper(f.hareThreshold),
+		hare3.NewGradecaster(),
+		hare3.NewRoundProvider(f.clock.LayerToTime(layer), f.roundTime),
+	)
+}
 
 // stateQuerier provides a query to check if an Ed public key is active on the current consensus view.
 // It returns true if the identity is active and false otherwise.
@@ -34,11 +59,11 @@ type validator interface {
 	ValidateEligibilityGossip(context.Context, *types.HareEligibilityGossip) bool
 }
 
-func newLayerState() *layerState {
+func newLayerState(handlerFactory *HandlerFactory, layer types.LayerID) *layerState {
 	return &layerState{
 		messages: make(map[types.Hash20]*hare.Message),
 		// TODO actually build the handler
-		// handler:     hare3.NewHandler(nil, nil, nil, nil),
+		handler:     handlerFactory.Handler(layer),
 		coinChooser: weakcoin.NewChooser(),
 	}
 }
@@ -83,12 +108,13 @@ type Broker struct {
 	log.Log
 	mu sync.RWMutex
 
-	cdb           *datastore.CachedDB
-	edVerifier    *signing.EdVerifier
-	roleValidator validator     // provides eligibility validation
-	stateQuerier  stateQuerier  // provides activeness check
-	latestLayer   types.LayerID // the latest layer to attempt register (successfully or unsuccessfully)
-	layerStates   map[types.LayerID]*layerState
+	cdb            *datastore.CachedDB
+	edVerifier     *signing.EdVerifier
+	roleValidator  validator    // provides eligibility validation
+	stateQuerier   stateQuerier // provides activeness check
+	handlerFactory *HandlerFactory
+	latestLayer    types.LayerID // the latest layer to attempt register (successfully or unsuccessfully)
+	layerStates    map[types.LayerID]*layerState
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -100,16 +126,18 @@ func NewBroker(
 	edVerifier *signing.EdVerifier,
 	roleValidator validator,
 	stateQuerier stateQuerier,
+	handlerFactory *HandlerFactory,
 	log log.Log,
 ) *Broker {
 	b := &Broker{
-		Log:           log,
-		cdb:           cdb,
-		edVerifier:    edVerifier,
-		roleValidator: roleValidator,
-		stateQuerier:  stateQuerier,
-		layerStates:   make(map[types.LayerID]*layerState),
-		latestLayer:   types.GetEffectiveGenesis(),
+		Log:            log,
+		cdb:            cdb,
+		edVerifier:     edVerifier,
+		roleValidator:  roleValidator,
+		stateQuerier:   stateQuerier,
+		handlerFactory: handlerFactory,
+		layerStates:    make(map[types.LayerID]*layerState),
+		latestLayer:    types.GetEffectiveGenesis(),
 	}
 	b.ctx, b.cancel = context.WithCancel(context.Background())
 	return b
@@ -162,9 +190,10 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 	default:
 	}
 
-	latestLayer := b.getLatestLayer()
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	hash := types.CalcMessageHash20(msg, pubsub.HareProtocol)
-	logger := b.WithContext(ctx).WithFields(log.Stringer("latest_layer", b.getLatestLayer()), hash.ToHash12())
+	logger := b.WithContext(ctx).WithFields(log.Stringer("latest_layer", b.latestLayer), hash.ToHash12())
 	hareMsg, err := hare.MessageFromBuffer(msg)
 	if err != nil {
 		logger.With().Error("failed to build message", hash.ToHash12(), log.Err(err))
@@ -180,11 +209,9 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 
 	logger.Debug("broker received hare message")
 
-	b.mu.Lock()
-	defer b.mu.Unlock()
 	state := b.layerStates[hareMsg.Layer]
 
-	early := hareMsg.Layer == latestLayer+1
+	early := hareMsg.Layer == b.latestLayer+1
 	// Exit now if this message is not early and not for a registered layer
 	if state == nil && !early {
 		return errors.New("consensus process not registered")
@@ -231,7 +258,7 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 
 	// If the message is early we may need to initialize the message store and handler.
 	if early && state == nil {
-		state = newLayerState()
+		state = newLayerState(b.handlerFactory, b.latestLayer)
 		b.layerStates[hareMsg.Layer] = state
 	}
 
@@ -287,7 +314,7 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (*hare3.Handler
 	b.latestLayer = id
 	state := b.layerStates[id]
 	if state == nil {
-		state = newLayerState()
+		state = newLayerState(b.handlerFactory, b.latestLayer)
 		b.layerStates[id] = state
 	} else {
 		b.handleEarlyMessages(state.messages, state.handler)
@@ -329,13 +356,6 @@ func (b *Broker) Unregister(ctx context.Context, id types.LayerID) {
 // Close closes broker.
 func (b *Broker) Close() {
 	b.cancel()
-}
-
-func (b *Broker) getLatestLayer() types.LayerID {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
-
-	return b.latestLayer
 }
 
 // Upon receiving a protocol message, we try to build the full message.
