@@ -52,7 +52,7 @@ func getCommand() *cobra.Command {
 			defer cancel()
 
 			// Start the clock
-			clock, err := setupClock()
+			clock, err := setupClock(conf)
 			if err != nil {
 				logger.With().Fatal("failed to setup clock", log.Err(err))
 			}
@@ -137,24 +137,16 @@ func shutdownServer(server *metrics.Server, logger log.Logger) {
 	}
 }
 
-func setupClock() (*timesync.NodeClock, error) {
-	appConfig, err := node.LoadConfigFromFile()
+func setupClock(conf *config.Config) (*timesync.NodeClock, error) {
+	types.SetLayersPerEpoch(conf.LayersPerEpoch)
+	gTime, err := time.Parse(time.RFC3339, conf.Genesis.GenesisTime)
 	if err != nil {
-		return nil, fmt.Errorf("cannot load config file: %w", err)
+		return nil, fmt.Errorf("cannot parse genesis time %s: %w", conf.Genesis.GenesisTime, err)
 	}
-	types.SetLayersPerEpoch(appConfig.LayersPerEpoch)
-	gTime, err := time.Parse(time.RFC3339, appConfig.Genesis.GenesisTime)
-	if err != nil {
-		return nil, fmt.Errorf("cannot parse genesis time %s: %w", appConfig.Genesis.GenesisTime, err)
-	}
-	clock, err := timesync.NewClock(
-		timesync.WithLayerDuration(appConfig.LayerDuration),
+	return timesync.NewClock(
+		timesync.WithLayerDuration(conf.LayerDuration),
 		timesync.WithTickInterval(1*time.Second),
 		timesync.WithGenesisTime(gTime),
 		timesync.WithLogger(log.NewDefault("clock")),
 	)
-	if err != nil {
-		return nil, err
-	}
-	return clock, nil
 }
