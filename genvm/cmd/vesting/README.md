@@ -5,7 +5,8 @@ This tool generates an address for vesting and vault accounts, based on the set 
 - total number of keys used in vesting multisig
 - required signatures
 - total vested amount
-- initial vested amount
+
+Amount that is unlocked at the start of vesting is 1/4 of total vested amount.
 
 #### How to use it (with openssl example)?
 
@@ -15,32 +16,65 @@ This tool generates an address for vesting and vault accounts, based on the set 
 go install github.com/spacemeshos/go-spacemesh/genvm/cmd/vesting@develop
 ```
 
-2. Setup some public keys.
+2. Generate keys that will be a part of multisig.
+
+Repeat that as many times as you need keys in multisig.
 
 ```bash
-openssl genpkey -algorithm ed25519 -out /tmp/privates/0.pem
-openssl genpkey -algorithm ed25519 -out /tmp/privates/1.pem
-openssl genpkey -algorithm ed25519 -out /tmp/privates/2.pem
+./smcli wallet create
+...
+./smcli wallet create
+```
 
-openssl pkey -in /tmp/privates/0.pem -pubout -out /tmp/publics/0.pem
-openssl pkey -in /tmp/privates/1.pem -pubout -out /tmp/publics/1.pem
-openssl pkey -in /tmp/privates/2.pem -pubout -out /tmp/publics/2.pem
+
+3. Extract public keys from wallet for each one.
+
+```
+./smcli wallet read /home/dd/.spacemesh/wallet_2023-07-12T06-14-00.086Z.json -f
+...
+./smcli wallet read /home/dd/.spacemesh/wallet_2023-07-12T06-43-19.316Z.json -f
+```
+
+Expected output:
+
+```
+Enter wallet password: 
++---------------------------------------------------------------------------------------------------------------------------------+
+| Wallet Contents                                                                                                                 |
++------------------------------------------------------------------+---------------------+-------------+--------------------------+
+| PUBKEY                                                           | PATH                | NAME        | CREATED                  |
++------------------------------------------------------------------+---------------------+-------------+--------------------------+
+| 33f8d3b3a9fd558ccef98e9693b6b264e5a593ea096c8984012e94c6e7f72692 | m/44'/540'/0'/0'/0' | Child Key 0 | 2023-07-12T06-13-57.282Z |
++------------------------------------------------------------------+---------------------+-------------+--------------------------
 ```
 
 3. Generate account addresses.
 
 ```bash
-vesting -k 2 --d /tmp/publics
-
-vesting: sm1qqqqqqp8pfuxrvxhjshvxg8f7yavxmykrh3ey0scf946c
-vault: sm1qqqqqq8v8lj5498j48z2r6vm25uanjuf4ysj53sucs8mz
-public keys:
-0: 0x537764ca2312e3b2e247a535ffb2be95f88dd3973a2b7cadc18489d64e923555
-1: 0x857373be04b38b92a450bac8e69fed5fcc58543aff2fe275735a76c0a6686388
-2: 0x6c99f84c9e11283f3095b5f57b0687ab98eb4fbadc2892089298ff17b00cd4a2
+vesting/ -k=1 -key=33f8d3b3a9fd558ccef98e9693b6b264e5a593ea096c8984012e94c6e7f72692 -key=93f801839a7e709f4c270370665ee71b7d86b5f65cb816559503b311d3213962 -total=100000000e9
 ```
 
-Note that order of the keys is important, and different order will result in different address.
+Note that order of keys and number of requires signatures (k) matters as it is a preimage for generated address, 
+and any changes will produce different address.
+
+
+Without debug:
+
+```json
+{"address":"sm1qqqqqq8wk2nfvmsn4qy7g3pmuqh74ylm73we4jcs6k9vu","balance":100000000000000000}
+```
+
+With debug:
+
+```
+vesting address: sm1qqqqqqphles02lr3um5t8fqxqspfvg525j4y50qvcrfwm.
+parameters: required=1
+0 : 0x33f8d3b3a9fd558ccef98e9693b6b264e5a593ea096c8984012e94c6e7f72692
+---
+vault address: sm1qqqqqq8wk2nfvmsn4qy7g3pmuqh74ylm73we4jcs6k9vu.
+parameters: owner = sm1qqqqqqphles02lr3um5t8fqxqspfvg525j4y50qvcrfwm. total = 100000000000000000 smidge. initial = 25000000000000000 smidge. start = 105120. end = 420480
+```
+
 
 
 
