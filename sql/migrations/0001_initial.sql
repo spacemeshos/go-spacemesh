@@ -26,9 +26,7 @@ CREATE INDEX ballots_by_layer_by_pubkey ON ballots (layer asc, pubkey);
 CREATE TABLE identities
 (
     pubkey   VARCHAR PRIMARY KEY,
-    proof    BLOB,
-    received INT NOT NULL
-
+    proof    BLOB
 ) WITHOUT ROWID;
 
 CREATE TABLE layers
