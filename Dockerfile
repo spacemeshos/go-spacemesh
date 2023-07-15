@@ -16,8 +16,7 @@ RUN set -ex \
    net-tools \
    file \
    ocl-icd-libopencl1 clinfo \
-   # required for OpenCL CPU provider
-   # pocl-opencl-icd libpocl2 \
+   pocl-opencl-icd libpocl2 \
    && apt-get clean \
    && rm -rf /var/lib/apt/lists/* \
    && locale-gen en_US.UTF-8 \
