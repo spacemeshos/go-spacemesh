@@ -1,6 +1,7 @@
 package config
 
 import (
+	"math"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -47,7 +48,7 @@ func MainnetConfig() Config {
 		},
 		Genesis: &GenesisConfig{
 			GenesisTime: "2023-07-14T08:00:00Z",
-			Accounts:    map[string]uint64{},
+			Accounts:    MainnetAccounts(),
 		},
 		Tortoise: tortoise.Config{
 			Hdist:                    200,
@@ -91,6 +92,7 @@ func MainnetConfig() Config {
 		},
 		POST: activation.PostConfig{
 			MinNumUnits:   4,
+			MaxNumUnits:   math.MaxUint32,
 			LabelsPerUnit: 4294967296,
 			K1:            26,
 			K2:            37,
