@@ -32,8 +32,6 @@ type PostConfig struct {
 	K2            uint32        `mapstructure:"post-k2"`
 	K3            uint32        `mapstructure:"post-k3"`
 	PowDifficulty PowDifficulty `mapstructure:"post-pow-difficulty"`
-	// Since when to include the miner ID in the K2 pow.
-	MinerIDInK2PowSinceEpoch uint32 `mapstructure:"post-minerid-in-k2-pow-since-epoch"`
 }
 
 func (c PostConfig) ToConfig() config.Config {

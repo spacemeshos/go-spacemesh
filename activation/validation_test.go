@@ -14,6 +14,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 func Test_Validation_VRFNonce(t *testing.T) {
@@ -567,12 +568,10 @@ func TestValidator_Validate(t *testing.T) {
 		PublishEpoch: postGenesisEpoch + 2,
 	}
 	challengeHash := challenge.Hash()
-	poetDb := NewMockpoetDbAPI(gomock.NewController(t))
-	poetDb.EXPECT().GetProof(gomock.Any()).AnyTimes().Return(&types.PoetProof{}, &challengeHash, nil)
-	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
+	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t).WithName("poetDb"))
 
 	postProvider := newTestPostManager(t)
-	nipost := buildNIPost(t, postProvider, postProvider.cfg, challenge, poetDb)
+	nipost := buildNIPost(t, postProvider, challenge, poetDb)
 
 	opts := []verifying.OptionFunc{verifying.WithLabelScryptParams(postProvider.opts.Scrypt)}
 

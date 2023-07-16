@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 func defaultPoetServiceMock(tb testing.TB, id []byte) *MockPoetProvingServiceClient {
@@ -50,7 +51,6 @@ func TestNIPostBuilderWithMocks(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	postProvider := NewMockpostSetupProvider(ctrl)
-	postProvider.EXPECT().Config().Return(PostConfig{})
 	postProvider.EXPECT().Status().Return(&PostSetupStatus{State: PostSetupStateComplete})
 	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any())
 
@@ -110,101 +110,28 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	challenge := types.NIPostChallenge{
 		PublishEpoch: postGenesisEpoch + 2,
 	}
-	challengeHash := challenge.Hash()
+	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t).WithName("poetDb"))
+	postCfg := DefaultPostConfig()
+	postCfg.PowDifficulty[0] = 1
+	postProvider := newTestPostManager(t, withPostConfig(postCfg))
+	logger := logtest.New(t).WithName("validator")
+	verifier, err := NewPostVerifier(postProvider.Config(), logger)
+	require.NoError(t, err)
+	defer verifier.Close()
 
-	poetDb := NewMockpoetDbAPI(gomock.NewController(t))
-	poetDb.EXPECT().GetProof(gomock.Any()).Return(
-		&types.PoetProof{}, &challengeHash, nil,
-	).AnyTimes()
-	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-
-	t.Run("POST with pow creator ID", func(t *testing.T) {
-		t.Parallel()
-		postCfg := DefaultPostConfig()
-		// lower threshold lowers probility of false positive
-		// when checking the negative variant
-		postCfg.PowDifficulty[0] = 1
-		postCfg.MinerIDInK2PowSinceEpoch = 2
-		postProvider := newTestPostManager(t, withPostConfig(postCfg))
-		logger := logtest.New(t).WithName("validator")
-		verifier, err := NewPostVerifier(postProvider.Config(), logger)
-		require.NoError(t, err)
-		defer verifier.Close()
-
-		nipost := buildNIPost(t, postProvider, postProvider.Config(), challenge, poetDb)
-		v := NewValidator(
-			poetDb,
-			postProvider.Config(),
-			logger,
-			verifier,
-		)
-		_, err = v.NIPost(
-			context.Background(),
-			challenge.PublishEpoch,
-			postProvider.id,
-			postProvider.commitmentAtxId,
-			nipost,
-			challengeHash,
-			postProvider.opts.NumUnits,
-			verifying.WithLabelScryptParams(postProvider.opts.Scrypt),
-		)
-		require.NoError(t, err)
-
-		_, err = v.NIPost(
-			context.Background(),
-			0,
-			postProvider.id,
-			postProvider.commitmentAtxId,
-			nipost,
-			challengeHash,
-			postProvider.opts.NumUnits,
-			verifying.WithLabelScryptParams(postProvider.opts.Scrypt),
-		)
-		require.Error(t, err)
-	})
-	t.Run("POST without pow creator ID", func(t *testing.T) {
-		t.Parallel()
-		postCfg := DefaultPostConfig()
-		// miner ID in K2 POW since future epoch - won't kick in.
-		postCfg.MinerIDInK2PowSinceEpoch = challenge.PublishEpoch.Uint32() + 1
-		postCfg.PowDifficulty[0] = 1
-		postProvider := newTestPostManager(t, withPostConfig(postCfg))
-		logger := logtest.New(t).WithName("validator")
-		verifier, err := NewPostVerifier(postProvider.Config(), logger)
-		require.NoError(t, err)
-		defer verifier.Close()
-
-		nipost := buildNIPost(t, postProvider, postCfg, challenge, poetDb)
-		v := NewValidator(
-			poetDb,
-			postCfg,
-			logger,
-			verifier,
-		)
-		_, err = v.NIPost(
-			context.Background(),
-			challenge.PublishEpoch,
-			postProvider.id,
-			postProvider.commitmentAtxId,
-			nipost,
-			challengeHash,
-			postProvider.opts.NumUnits,
-			verifying.WithLabelScryptParams(postProvider.opts.Scrypt),
-		)
-		require.NoError(t, err)
-
-		_, err = v.NIPost(
-			context.Background(),
-			types.EpochID(postCfg.MinerIDInK2PowSinceEpoch),
-			postProvider.id,
-			postProvider.commitmentAtxId,
-			nipost,
-			challengeHash,
-			postProvider.opts.NumUnits,
-			verifying.WithLabelScryptParams(postProvider.opts.Scrypt),
-		)
-		require.Error(t, err)
-	})
+	nipost := buildNIPost(t, postProvider, challenge, poetDb)
+	v := NewValidator(poetDb, postProvider.Config(), logger, verifier)
+	_, err = v.NIPost(
+		context.Background(),
+		challenge.PublishEpoch,
+		postProvider.id,
+		postProvider.commitmentAtxId,
+		nipost,
+		challenge.Hash(),
+		postProvider.opts.NumUnits,
+		verifying.WithLabelScryptParams(postProvider.opts.Scrypt),
+	)
+	require.NoError(t, err)
 }
 
 func spawnPoet(tb testing.TB, opts ...HTTPPoetOpt) *HTTPPoetClient {
@@ -227,7 +154,7 @@ func spawnPoet(tb testing.TB, opts ...HTTPPoetOpt) *HTTPPoetClient {
 	return poetProver.HTTPPoetClient
 }
 
-func buildNIPost(tb testing.TB, postProvider *testPostManager, postCfg PostConfig, nipostChallenge types.NIPostChallenge, poetDb poetDbAPI) *types.NIPost {
+func buildNIPost(tb testing.TB, postProvider *testPostManager, nipostChallenge types.NIPostChallenge, poetDb poetDbAPI) *types.NIPost {
 	require.NoError(tb, postProvider.PrepareInitializer(context.Background(), postProvider.opts))
 	require.NoError(tb, postProvider.StartSession(context.Background()))
 	mclock := defaultLayerClockMock(tb)
@@ -313,7 +240,6 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	dir := t.TempDir()
 
 	postProvider := NewMockpostSetupProvider(gomock.NewController(t))
-	postProvider.EXPECT().Config().Return(PostConfig{}).AnyTimes()
 	postProvider.EXPECT().Status().Return(&PostSetupStatus{State: PostSetupStateComplete}).AnyTimes()
 
 	challenge := types.NIPostChallenge{
@@ -431,7 +357,6 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 		PhaseShift: layerDuration * layersPerEpoch / 2,
 	}
 	postProvider := NewMockpostSetupProvider(ctrl)
-	postProvider.EXPECT().Config().Return(PostConfig{})
 	postProvider.EXPECT().Status().Return(&PostSetupStatus{State: PostSetupStateComplete})
 	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 		func(ctx context.Context, challenge []byte, _ proving.OptionFunc) (*types.Post, *types.PostMetadata, error) {
@@ -490,7 +415,6 @@ func TestNIPostBuilder_ManyPoETs_WaitingForProof_DeadlineReached(t *testing.T) {
 		GracePeriod: layerDuration * layersPerEpoch / 2,
 	}
 	postProvider := NewMockpostSetupProvider(ctrl)
-	postProvider.EXPECT().Config().Return(PostConfig{})
 	postProvider.EXPECT().Status().Return(&PostSetupStatus{State: PostSetupStateComplete})
 	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, challenge []byte, _ proving.OptionFunc) (*types.Post, *types.PostMetadata, error) {
@@ -550,7 +474,6 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 	sig, err := signing.NewEdSigner()
 	req.NoError(err)
 	postProvider := NewMockpostSetupProvider(ctrl)
-	postProvider.EXPECT().Config().Return(PostConfig{})
 	postProvider.EXPECT().Status().Return(&PostSetupStatus{State: PostSetupStateComplete})
 	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, challenge []byte, _ proving.OptionFunc) (*types.Post, *types.PostMetadata, error) {
@@ -795,7 +718,6 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 		PhaseShift: layerDuration * layersPerEpoch / 2,
 	}
 	postProvider := NewMockpostSetupProvider(ctrl)
-	postProvider.EXPECT().Config().Return(PostConfig{})
 	postProvider.EXPECT().Status().Return(&PostSetupStatus{State: PostSetupStateComplete}).Times(2)
 	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 		func(ctx context.Context, challenge []byte, _ proving.OptionFunc) (*types.Post, *types.PostMetadata, error) {
