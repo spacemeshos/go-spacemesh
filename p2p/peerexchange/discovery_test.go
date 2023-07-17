@@ -27,7 +27,10 @@ func TestDiscovery_CrawlMesh(t *testing.T) {
 
 	for _, h := range mesh.Hosts() {
 		logger := logtest.New(t).Named(h.ID().Pretty())
-		cfg := Config{FastCrawl: time.Second, SlowCrawl: 10 * time.Second, MinPeers: 2}
+		cfg := Config{
+			FastCrawl: time.Second, SlowCrawl: 10 * time.Second,
+			FastConcurrent: 10, SlowConcurrent: 5, MinPeers: 2,
+		}
 
 		if bootnode == nil {
 			require.NotEmpty(t, h.Addrs())

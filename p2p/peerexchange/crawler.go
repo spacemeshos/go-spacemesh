@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
 	"golang.org/x/sync/errgroup"
@@ -35,8 +36,8 @@ func newCrawler(logger log.Log, h host.Host, book *book.Book, disc *peerExchange
 
 // Crawl connects to number of peers, limit by concurrent parameter, and learns
 // new peers from it.
-func (r *crawler) Crawl(ctx context.Context, concurrent int) error {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+func (r *crawler) Crawl(ctx context.Context, concurrent int, keep bool) error {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	addrs := r.book.DrainQueue(concurrent)
 	if len(addrs) == 0 {
@@ -52,6 +53,7 @@ func (r *crawler) Crawl(ctx context.Context, concurrent int) error {
 			continue
 		}
 		eg.Go(func() error {
+			connected := r.host.Network().Connectedness(src.ID) == network.Connected
 			peers, err := getPeers(ctx, r.host, r.disc, src)
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
@@ -68,6 +70,10 @@ func (r *crawler) Crawl(ctx context.Context, concurrent int) error {
 				r.book.Update(src.ID.String(), book.Success, book.Connected)
 				for _, addr := range peers {
 					r.book.Add(src.ID.String(), addr.ID.String(), addr.Addr)
+				}
+				if !connected && !keep {
+					r.host.Network().ClosePeer(src.ID)
+					r.host.Peerstore().ClearAddrs(src.ID)
 				}
 			}
 			return nil

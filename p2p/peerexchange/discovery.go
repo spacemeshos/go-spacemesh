@@ -31,11 +31,12 @@ const peerPollPeriod = 500 * time.Millisecond
 
 // Config for Discovery.
 type Config struct {
-	Bootnodes            []string
-	DataDir              string
-	AdvertiseAddress     string // Address to advertise to a peers.
-	MinPeers             int
-	FastCrawl, SlowCrawl time.Duration
+	Bootnodes                      []string
+	DataDir                        string
+	AdvertiseAddress               string // Address to advertise to a peers.
+	MinPeers                       int
+	FastCrawl, SlowCrawl           time.Duration
+	FastConcurrent, SlowConcurrent int
 }
 
 // Discovery is struct that holds the protocol components, the protocol definition, the addr book data structure and more.
@@ -134,16 +135,24 @@ func (d *Discovery) recovery(ctx context.Context) error {
 			case <-ctx.Done():
 				return nil
 			case <-ticker.C:
-				buf := bytes.NewBuffer(nil)
-				if err := d.book.Persist(buf); err != nil {
-					return err
-				}
-				if err := atomic.WriteFile(fpath, buf); err != nil {
+				if err := d.persistBook(); err != nil {
 					return err
 				}
 			}
 		}
 	})
+	return nil
+}
+
+func (d *Discovery) persistBook() error {
+	fpath := filepath.Join(d.cfg.DataDir, peersFile)
+	buf := bytes.NewBuffer(nil)
+	if err := d.book.Persist(buf); err != nil {
+		return fmt.Errorf("encode book to buffer: %w", err)
+	}
+	if err := atomic.WriteFile(fpath, buf); err != nil {
+		return fmt.Errorf("atomic write book to %s: %w", fpath, err)
+	}
 	return nil
 }
 
@@ -174,17 +183,25 @@ func (d *Discovery) watchPortChanges(ctx context.Context, protocol *peerExchange
 	return nil
 }
 
+func (d *Discovery) Stats() book.Stats {
+	return d.book.Stats()
+}
+
 // Stop stops the discovery service.
 func (d *Discovery) Stop() {
 	d.collector.Stop()
 	d.cancel()
 	d.eg.Wait()
+	if err := d.persistBook(); err != nil {
+		d.logger.With().Error("failed to persist book on stop", log.Err(err))
+	}
 }
 
 // scanPeers scans the network for new connections and peers.
 func (d *Discovery) scanPeers(ctx context.Context) {
 	period := d.cfg.FastCrawl
-	concurrent := 5
+	concurrent := d.cfg.FastConcurrent
+	keep := true
 	d.eg.Go(func() error {
 		var prev time.Time
 		for {
@@ -195,16 +212,18 @@ func (d *Discovery) scanPeers(ctx context.Context) {
 			}
 			if len(d.host.Network().Peers()) >= d.cfg.MinPeers {
 				period = d.cfg.SlowCrawl
-				concurrent = 1
+				concurrent = d.cfg.SlowConcurrent
+				keep = false
 			} else {
 				period = d.cfg.FastCrawl
-				concurrent = 5
+				concurrent = d.cfg.FastConcurrent
+				keep = true
 			}
 			if time.Since(prev) < period {
 				continue
 			}
 			prev = time.Now()
-			if err := d.crawl.Crawl(ctx, concurrent); err != nil {
+			if err := d.crawl.Crawl(ctx, concurrent, keep); err != nil {
 				if errors.Is(err, context.Canceled) {
 					return nil
 				}

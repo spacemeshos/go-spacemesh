@@ -112,6 +112,8 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 		MinPeers:         cfg.MinPeers,
 		SlowCrawl:        10 * time.Minute,
 		FastCrawl:        10 * time.Second,
+		FastConcurrent:   10,
+		SlowConcurrent:   5,
 	}); err != nil {
 		return nil, fmt.Errorf("failed to initialize peerexchange discovery: %w", err)
 	}

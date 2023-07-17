@@ -1353,6 +1353,7 @@ func (app *App) Start(ctx context.Context) error {
 		app.Config.Genesis.GenesisID(),
 		types.GetEffectiveGenesis(),
 	)
+	fmt.Println(prologue)
 	app.host, err = p2p.New(ctx, p2plog, cfg, []byte(prologue),
 		p2p.WithNodeReporter(events.ReportNodeStatusUpdate),
 	)
