@@ -7,7 +7,7 @@ import (
 )
 
 func TestDefaultThresholdGradedGossiper(t *testing.T) {
-	var threshold uint16 = 2
+	var threshold uint16 = 3
 	t.Run("", func(t *testing.T) {
 		// Check that with not enough votes we do not reach the threshold.
 		tgg := NewDefaultThresholdGradedGossiper(threshold)

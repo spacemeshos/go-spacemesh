@@ -127,7 +127,7 @@ func (t *DefaultThresholdGradedGossiper) RetrieveThresholdMessages(msgRound AbsR
 	// the threshold and there is at least one good vote.
 	for value, v := range goodVotes {
 		goodVote := v.CumulativeVote(minGrade)
-		if goodVote > 0 && goodVote+maliciousVote > t.threshold {
+		if goodVote > 0 && goodVote+maliciousVote >= t.threshold {
 			results = append(results, value)
 		}
 	}
