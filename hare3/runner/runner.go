@@ -43,6 +43,7 @@ type ProtocolRunner struct {
 	ac           *eligibility.ActiveCheck
 	mb           *MessageBuilder
 	weakcoinChan chan<- WeakCoinResult
+	l            log.Log
 }
 
 func NewProtocolRunner(
@@ -51,9 +52,11 @@ func NewProtocolRunner(
 	coinChooser *weakcoin.Chooser,
 	iterationLimit int8,
 	gossiper NetworkGossiper,
+	layer types.LayerID,
 	ac *eligibility.ActiveCheck,
 	mb *MessageBuilder,
 	weakcoinChan chan<- WeakCoinResult,
+	l log.Log,
 ) *ProtocolRunner {
 	return &ProtocolRunner{
 		clock:        clock,
@@ -61,9 +64,11 @@ func NewProtocolRunner(
 		coinChooser:  coinChooser,
 		maxRound:     hare3.NewAbsRound(iterationLimit, 0),
 		gossiper:     gossiper,
+		layer:        layer,
 		ac:           ac,
 		mb:           mb,
 		weakcoinChan: weakcoinChan,
+		l:            l,
 	}
 }
 
@@ -95,8 +100,10 @@ func (r *ProtocolRunner) Run(ctx context.Context) ([]types.Hash20, error) {
 			if err != nil {
 				return nil, err
 			}
+			r.l.Info("running round %d, of layer %d, eligibility count %d", round, r.layer, count)
 			toSend, output := r.protocol.NextRound(count > 0)
 			if toSend != nil {
+				r.l.Info("sending hare message round: %v, proposals: %v", toSend.Round, toSend.Values)
 				r.gossiper.Gossip(ctx, r.mb.BuildEncodedMessage(toSend, proof, count))
 			}
 			if output != nil {
@@ -315,7 +322,7 @@ func (r *HareRunner) runLayer(ctx context.Context, layer types.LayerID, props []
 		initialSet[i] = types.Hash20(props[i])
 	}
 	ac := eligibility.NewActiveCheck(layer, r.nodeID, r.committeeSize, r.oracle, r.l)
-	protocolRunner := NewProtocolRunner(roundClock, handler.Protocol(lc, initialSet), coinChooser, r.maxIterations, r.gossiper, layer, ac, NewMessageBuilder(layer, r.nodeID, r.signer), r.weakcoinChan)
+	protocolRunner := NewProtocolRunner(roundClock, handler.Protocol(lc, initialSet), coinChooser, r.maxIterations, r.gossiper, layer, ac, NewMessageBuilder(layer, r.nodeID, r.signer), r.weakcoinChan, r.l)
 	v, err := protocolRunner.Run(ctx)
 	if err != nil {
 		return nil, err
