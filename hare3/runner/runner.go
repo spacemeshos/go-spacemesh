@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare3/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 )
 
@@ -125,6 +126,7 @@ type LayerClock interface {
 type HareRunner struct {
 	clock           LayerClock
 	gossiper        NetworkGossiper
+	signer          *signing.EdSigner
 	oracle          *heligibility.Oracle
 	syncer          *syncer.Syncer
 	beaconRetriever *beacon.ProtocolDriver
@@ -146,6 +148,7 @@ type HareRunner struct {
 
 func NewHareRunner(clock LayerClock,
 	gossiper NetworkGossiper,
+	signer *signing.EdSigner,
 	oracle *heligibility.Oracle,
 	syncer *syncer.Syncer,
 	beaconRetriever *beacon.ProtocolDriver,
@@ -165,6 +168,7 @@ func NewHareRunner(clock LayerClock,
 	return &HareRunner{
 		clock:            clock,
 		gossiper:         gossiper,
+		signer:           signer,
 		oracle:           oracle,
 		syncer:           syncer,
 		beaconRetriever:  beaconRetriever,
@@ -311,7 +315,7 @@ func (r *HareRunner) runLayer(ctx context.Context, layer types.LayerID, props []
 		initialSet[i] = types.Hash20(props[i])
 	}
 	ac := eligibility.NewActiveCheck(layer, r.nodeID, r.committeeSize, r.oracle, r.l)
-	protocolRunner := NewProtocolRunner(roundClock, handler.Protocol(lc, initialSet), coinChooser, r.maxIterations, r.gossiper, ac, NewMessageBuilder(layer, r.nodeID), r.weakcoinChan)
+	protocolRunner := NewProtocolRunner(roundClock, handler.Protocol(lc, initialSet), coinChooser, r.maxIterations, r.gossiper, layer, ac, NewMessageBuilder(layer, r.nodeID, r.signer), r.weakcoinChan)
 	v, err := protocolRunner.Run(ctx)
 	if err != nil {
 		return nil, err
@@ -347,10 +351,11 @@ func (g *DefaultGossiper) Gossip(ctx context.Context, msg []byte) {
 type MessageBuilder struct {
 	layer  types.LayerID
 	nodeID types.NodeID
+	signer *signing.EdSigner
 }
 
-func NewMessageBuilder(layer types.LayerID, nodeID types.NodeID) *MessageBuilder {
-	return &MessageBuilder{layer: layer, nodeID: nodeID}
+func NewMessageBuilder(layer types.LayerID, nodeID types.NodeID, signer *signing.EdSigner) *MessageBuilder {
+	return &MessageBuilder{layer: layer, nodeID: nodeID, signer: signer}
 }
 
 func (b *MessageBuilder) BuildEncodedMessage(m *hare3.OutputMessage, proof types.VrfSignature, eligibilityCount uint16) []byte {
@@ -370,6 +375,8 @@ func (b *MessageBuilder) BuildEncodedMessage(m *hare3.OutputMessage, proof types
 			Count: eligibilityCount,
 		},
 	}
+
+	msg.Signature = b.signer.Sign(signing.HARE, msg.SignedBytes())
 
 	bytes, err := codec.Encode(&msg)
 	if err != nil {
