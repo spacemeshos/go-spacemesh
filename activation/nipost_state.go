@@ -22,7 +22,7 @@ const (
 )
 
 func write(path string, data []byte) error {
-	tmp, err := os.CreateTemp("", filepath.Base(path))
+	tmp, err := os.Create(fmt.Sprintf("%s.tmp", path))
 	if err != nil {
 		return fmt.Errorf("create temporary file %s: %w", tmp.Name(), err)
 	}

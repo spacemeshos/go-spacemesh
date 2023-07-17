@@ -63,7 +63,8 @@ func TestReadCRC(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			path := filepath.Join(t.TempDir(), tt.name)
+			tmp := t.TempDir()
+			path := filepath.Join(tmp, tt.name)
 			err := atomic.WriteFile(path, bytes.NewReader(append(tt.data, tt.crc...)))
 			require.NoError(t, err)
 
