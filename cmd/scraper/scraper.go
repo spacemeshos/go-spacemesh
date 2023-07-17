@@ -35,19 +35,18 @@ func main() {
 		os.Exit(1)
 	}
 	disccfg := peerexchange.Config{
-		DataDir:   *dir,
-		FastCrawl: 1 * time.Second,
-		SlowCrawl: 1 * time.Second,
-		FastConcurrent: 100,
+		DataDir:        *dir,
+		FastCrawl:      1 * time.Second,
+		SlowCrawl:      1 * time.Second,
 		SlowConcurrent: 100,
+		FastConcurrent: 100,
 	}
 	disc, err := peerexchange.New(logger, h, disccfg)
 	if err != nil {
 		fmt.Printf("discovery: %s\n", err)
 		os.Exit(1)
 	}
-	disc.
-	()
+	disc.StartScan()
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	ticker := time.NewTicker(5 * time.Second)
