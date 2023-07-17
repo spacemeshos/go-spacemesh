@@ -461,10 +461,12 @@ func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []types
 		if active {
 			values := p.tgg.RetrieveThresholdMessages(NewAbsRound(j, 5), 5)
 			setHash, _ := matchInIteration(values, p.Ti, j)
-			return &OutputMessage{
-				Round:  NewAbsRound(j, 6),
-				Values: []types.Hash20{*setHash},
-			}, nil
+			if setHash != nil {
+				return &OutputMessage{
+					Round:  NewAbsRound(j, 6),
+					Values: []types.Hash20{*setHash},
+				}, nil
+			}
 
 		}
 	}
