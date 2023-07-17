@@ -309,16 +309,19 @@ func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []types
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	defer func() { p.round++ }()
-	// We are starting a new iteration build objects
-	if p.round.Round() == 0 {
-		p.Ti = append(p.Ti, make(map[types.Hash20][]types.Hash20))
-		p.hardLocked = append(p.hardLocked, false)
-		p.Li = append(p.Li, nil)
+	if p.round == -1 {
 		p.Vi = make([][]types.Hash20, 4)
 	}
 	if p.round >= 0 && p.round <= 3 {
 		p.Vi[p.round] = p.tgg.RetrieveThresholdMessages(-1, 5-uint8(p.round))
 	}
+	// We are starting a new iteration build objects
+	if p.round.Round() == 0 {
+		p.Ti = append(p.Ti, make(map[types.Hash20][]types.Hash20))
+		p.hardLocked = append(p.hardLocked, false)
+		p.Li = append(p.Li, nil)
+	}
+
 	j := p.round.Iteration()
 	switch p.round.Type() {
 	case Preround:
@@ -369,11 +372,14 @@ func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []types
 			set = p.Vi[1]
 		}
 
-		// Send proposal to peers
-		return &OutputMessage{
-			Round:  p.round,
-			Values: set,
-		}, nil
+		// If there is some value then send it
+		if set != nil {
+			// Send proposal to peers
+			return &OutputMessage{
+				Round:  p.round,
+				Values: set,
+			}, nil
+		}
 	case Commit:
 		candidates := p.gc.RetrieveGradecastedMessages(NewAbsRound(j, 2))
 		for _, c := range candidates {
