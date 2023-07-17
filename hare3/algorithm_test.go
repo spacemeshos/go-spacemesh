@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -76,78 +76,78 @@ func TestReachingConsensus(t *testing.T) {
 	p := h.Protocol(lc, values3)
 
 	msg, output := p.NextRound(active)
-	assert.Equal(t, &OutputMessage{NewAbsRound(0, -1), values3}, msg)
-	assert.Nil(t, output)
+	require.Equal(t, &OutputMessage{NewAbsRound(0, -1), values3}, msg)
+	require.Nil(t, output)
 
 	regossip, equivocationHash := h.HandleMsg(randHash20(), nodeId, msg.Round, msg.Values)
-	assert.Equal(t, true, regossip)
-	assert.Nil(t, equivocationHash)
+	require.Equal(t, true, regossip)
+	require.Nil(t, equivocationHash)
 
 	msg, output = p.NextRound(active)
-	assert.Nil(t, msg)
-	assert.Nil(t, output)
+	require.Nil(t, msg)
+	require.Nil(t, output)
 
 	msg, output = p.NextRound(active)
-	assert.Nil(t, msg)
-	assert.Nil(t, output)
+	require.Nil(t, msg)
+	require.Nil(t, output)
 
 	msg, output = p.NextRound(active)
-	assert.Equal(t, OutputMessage{NewAbsRound(0, 2), values3}, *msg)
-	assert.Nil(t, output)
+	require.Equal(t, &OutputMessage{NewAbsRound(0, 2), values3}, msg)
+	require.Nil(t, output)
 
 	regossip, equivocationHash = h.HandleMsg(randHash20(), nodeId, msg.Round, msg.Values)
-	assert.Equal(t, true, regossip)
-	assert.Nil(t, equivocationHash)
+	require.Equal(t, true, regossip)
+	require.Nil(t, equivocationHash)
 
 	msg, output = p.NextRound(active)
-	assert.Nil(t, msg)
-	assert.Nil(t, output)
+	require.Nil(t, msg)
+	require.Nil(t, output)
 
 	msg, output = p.NextRound(active)
-	assert.Nil(t, msg)
-	assert.Nil(t, output)
+	require.Nil(t, msg)
+	require.Nil(t, output)
 
 	msg, output = p.NextRound(active)
-	assert.Equal(t, &OutputMessage{NewAbsRound(0, 5), values3Hash}, msg)
-	assert.Nil(t, output)
+	require.Equal(t, &OutputMessage{NewAbsRound(0, 5), values3Hash}, msg)
+	require.Nil(t, output)
 
 	regossip, equivocationHash = h.HandleMsg(randHash20(), nodeId, msg.Round, msg.Values)
-	assert.Equal(t, true, regossip)
-	assert.Nil(t, equivocationHash)
+	require.Equal(t, true, regossip)
+	require.Nil(t, equivocationHash)
 
 	msg, output = p.NextRound(active)
-	assert.Equal(t, &OutputMessage{NewAbsRound(0, 6), values3Hash}, msg)
-	assert.Nil(t, output)
+	require.Equal(t, &OutputMessage{NewAbsRound(0, 6), values3Hash}, msg)
+	require.Nil(t, output)
 
 	regossip, equivocationHash = h.HandleMsg(randHash20(), nodeId, msg.Round, msg.Values)
-	assert.Equal(t, true, regossip)
-	assert.Nil(t, equivocationHash)
+	require.Equal(t, true, regossip)
+	require.Nil(t, equivocationHash)
 
 	msg, output = p.NextRound(active)
-	assert.Nil(t, msg)
-	assert.Nil(t, output)
+	require.Nil(t, msg)
+	require.Nil(t, output)
 
 	msg, output = p.NextRound(active)
-	assert.Nil(t, msg)
-	assert.Nil(t, output)
+	require.Nil(t, msg)
+	require.Nil(t, output)
 
 	msg, output = p.NextRound(active)
-	assert.Equal(t, &OutputMessage{NewAbsRound(1, 2), values3}, msg)
-	assert.Nil(t, output)
+	require.Equal(t, &OutputMessage{NewAbsRound(1, 2), values3}, msg)
+	require.Nil(t, output)
 
 	msg, output = p.NextRound(active)
-	assert.Nil(t, msg)
-	assert.Nil(t, output)
+	require.Nil(t, msg)
+	require.Nil(t, output)
 
 	msg, output = p.NextRound(active)
-	assert.Nil(t, msg)
-	assert.Nil(t, output)
+	require.Nil(t, msg)
+	require.Nil(t, output)
 
 	msg, output = p.NextRound(active)
-	assert.Equal(t, &OutputMessage{NewAbsRound(1, 5), values3Hash}, msg)
-	assert.Nil(t, output)
+	require.Equal(t, &OutputMessage{NewAbsRound(1, 5), values3Hash}, msg)
+	require.Nil(t, output)
 
 	msg, output = p.NextRound(active)
-	assert.Equal(t, &OutputMessage{NewAbsRound(1, 6), values3Hash}, msg)
-	assert.Equal(t, values3, output)
+	require.Equal(t, &OutputMessage{NewAbsRound(1, 6), values3Hash}, msg)
+	require.Equal(t, values3, output)
 }
