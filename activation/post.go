@@ -321,7 +321,6 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context) error {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
 	var errLabelMismatch initialization.ErrReferenceLabelMismatch
-
 	switch {
 	case errors.Is(err, context.Canceled):
 		mgr.logger.Info("post setup session was stopped")

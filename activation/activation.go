@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/post/shared"
 	"go.uber.org/atomic"
@@ -207,13 +206,9 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 		// If start session returns any error other than context.Canceled
 		// (which is how we signal it to stop) then we panic.
 		err := b.postSetupProvider.StartSession(ctx)
-
-		var labelErr initialization.ErrReferenceLabelMismatch
 		switch {
 		case errors.Is(err, context.Canceled):
 			return nil
-		case errors.As(err, &labelErr):
-			// TODO communicate error to the user
 		case err != nil:
 			b.log.Panic("initialization failed: %v", err)
 		}
