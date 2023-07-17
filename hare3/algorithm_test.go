@@ -17,9 +17,9 @@ var (
 
 	msgHash1 = randHash20()
 
-	values1 = []types.Hash20{val1}
-	values2 = []types.Hash20{val1, val2}
-	values3 = []types.Hash20{val1, val2, val3}
+	values1 = sortHash20([]types.Hash20{val1})
+	values2 = sortHash20([]types.Hash20{val1, val2})
+	values3 = sortHash20([]types.Hash20{val1, val2, val3})
 
 	rPre = NewAbsRound(0, -1)
 	r0   = NewAbsRound(0, 0)

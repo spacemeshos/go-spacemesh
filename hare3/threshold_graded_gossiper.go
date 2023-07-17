@@ -1,6 +1,8 @@
 package hare3
 
-import "github.com/spacemeshos/go-spacemesh/common/types"
+import (
+	"github.com/spacemeshos/go-spacemesh/common/types"
+)
 
 // ThresholdState holds the graded votes for a value and also records if this
 // value has been retrieved.
@@ -41,7 +43,8 @@ type ThresholdGradedGossiper interface {
 
 	// This function outputs the values that were part of messages sent at
 	// msgRound and reached the threshold with grade at least minGrade by round
-	// "msgRound + d + 1 - minGrade". minGrade must be between 1 and d inclusive.
+	// "msgRound + d + 1 - minGrade". minGrade must be between 1 and d
+	// inclusive. The values are sorted in ascending order.
 	RetrieveThresholdMessages(msgRound AbsRound, minGrade uint8) (values []types.Hash20)
 }
 
@@ -131,5 +134,6 @@ func (t *DefaultThresholdGradedGossiper) RetrieveThresholdMessages(msgRound AbsR
 			results = append(results, value)
 		}
 	}
+	sortHash20(results)
 	return results
 }

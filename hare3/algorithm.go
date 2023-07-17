@@ -42,7 +42,9 @@
 package hare3
 
 import (
+	"bytes"
 	"crypto/sha256"
+	"sort"
 	"sync"
 	"time"
 
@@ -257,6 +259,14 @@ func toHash(values []types.Hash20) types.Hash20 {
 	var result types.Hash20
 	copy(result[:], h.Sum(nil))
 	return result
+}
+
+// Sorts the array in place and also returns it so that it can be easily used in variable initialization statements.
+func sortHash20(values []types.Hash20) []types.Hash20 {
+	sort.Slice(values, func(i, j int) bool {
+		return bytes.Compare(values[i][:], values[j][:]) == -1
+	})
+	return values
 }
 
 // Given a slice of candidate set hashes and a slice of sets of valid set
