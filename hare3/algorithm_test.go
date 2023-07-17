@@ -2,8 +2,10 @@ package hare3
 
 import (
 	"crypto/rand"
+	"testing"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/stretchr/testify/assert"
 )
 
 var (
@@ -39,4 +41,113 @@ func randHash20() types.Hash20 {
 	var result types.Hash20
 	rand.Read(result[:])
 	return result
+}
+
+type TestRoundProvider struct {
+	round AbsRound
+}
+
+func NewTestRoundProvider(round AbsRound) *TestRoundProvider { return &TestRoundProvider{round: round} }
+
+// CurrentRound implements RoundProvider.
+func (rp *TestRoundProvider) CurrentRound() AbsRound {
+	return rp.round
+}
+
+type TestLeaderChecker struct{}
+
+func NewTestLeaderChecker() *TestLeaderChecker { return &TestLeaderChecker{} }
+
+// IsLeader implements LeaderChecker.
+func (lc *TestLeaderChecker) IsLeader(vk types.NodeID, round AbsRound) bool {
+	return true
+}
+
+// This test checks that a single node with a threshold of 1 vote can reach
+// consensus on a value, in order for the protocol to complete it is required
+// to run 2 iterations (15 rounds in total).
+func TestReachingConsensus(t *testing.T) {
+	rp := NewTestRoundProvider(-1)
+	h := NewHandler(NewDefaultGradedGossiper(), NewDefaultThresholdGradedGossiper(1), NewDefaultGradecaster(), rp)
+	lc := NewTestLeaderChecker()
+	nodeId := randID()
+	active := true
+	values3Hash := []types.Hash20{toHash(values3)}
+	p := h.Protocol(lc, values3)
+
+	msg, output := p.NextRound(active)
+	assert.Equal(t, &OutputMessage{NewAbsRound(0, -1), values3}, msg)
+	assert.Nil(t, output)
+
+	regossip, equivocationHash := h.HandleMsg(randHash20(), nodeId, msg.Round, msg.Values)
+	assert.Equal(t, true, regossip)
+	assert.Nil(t, equivocationHash)
+
+	msg, output = p.NextRound(active)
+	assert.Nil(t, msg)
+	assert.Nil(t, output)
+
+	msg, output = p.NextRound(active)
+	assert.Nil(t, msg)
+	assert.Nil(t, output)
+
+	msg, output = p.NextRound(active)
+	assert.Equal(t, OutputMessage{NewAbsRound(0, 2), values3}, *msg)
+	assert.Nil(t, output)
+
+	regossip, equivocationHash = h.HandleMsg(randHash20(), nodeId, msg.Round, msg.Values)
+	assert.Equal(t, true, regossip)
+	assert.Nil(t, equivocationHash)
+
+	msg, output = p.NextRound(active)
+	assert.Nil(t, msg)
+	assert.Nil(t, output)
+
+	msg, output = p.NextRound(active)
+	assert.Nil(t, msg)
+	assert.Nil(t, output)
+
+	msg, output = p.NextRound(active)
+	assert.Equal(t, &OutputMessage{NewAbsRound(0, 5), values3Hash}, msg)
+	assert.Nil(t, output)
+
+	regossip, equivocationHash = h.HandleMsg(randHash20(), nodeId, msg.Round, msg.Values)
+	assert.Equal(t, true, regossip)
+	assert.Nil(t, equivocationHash)
+
+	msg, output = p.NextRound(active)
+	assert.Equal(t, &OutputMessage{NewAbsRound(0, 6), values3Hash}, msg)
+	assert.Nil(t, output)
+
+	regossip, equivocationHash = h.HandleMsg(randHash20(), nodeId, msg.Round, msg.Values)
+	assert.Equal(t, true, regossip)
+	assert.Nil(t, equivocationHash)
+
+	msg, output = p.NextRound(active)
+	assert.Nil(t, msg)
+	assert.Nil(t, output)
+
+	msg, output = p.NextRound(active)
+	assert.Nil(t, msg)
+	assert.Nil(t, output)
+
+	msg, output = p.NextRound(active)
+	assert.Equal(t, &OutputMessage{NewAbsRound(1, 2), values3}, msg)
+	assert.Nil(t, output)
+
+	msg, output = p.NextRound(active)
+	assert.Nil(t, msg)
+	assert.Nil(t, output)
+
+	msg, output = p.NextRound(active)
+	assert.Nil(t, msg)
+	assert.Nil(t, output)
+
+	msg, output = p.NextRound(active)
+	assert.Equal(t, &OutputMessage{NewAbsRound(1, 5), values3Hash}, msg)
+	assert.Nil(t, output)
+
+	msg, output = p.NextRound(active)
+	assert.Equal(t, &OutputMessage{NewAbsRound(1, 6), values3Hash}, msg)
+	assert.Equal(t, values3, output)
 }
