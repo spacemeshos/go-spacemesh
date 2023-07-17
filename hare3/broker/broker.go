@@ -289,10 +289,10 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 	}
 
 	// The weak coin is calculated from pre-round messages, we are not overly
-	// concerned equivocations affecting the outcome since the coin is weak.
-	// (see package doc for hare3/weakcoin for an explanation of weak) However
-	// since at this point we know if the message was an equivocation based on
-	// the proof variable, we filter it anyway to save a few cycles.
+	// concerned about equivocations affecting the outcome since the coin is
+	// weak. (see package doc for hare3/weakcoin for an explanation of weak)
+	// However since at this point we know if the message was an equivocation
+	// based on the proof variable, we filter it anyway to save a few cycles.
 	if proof == nil && hare3.AbsRound(hareMsg.Round).Type() == hare3.Preround {
 		state.coinChooser.Put(&hareMsg.Eligibility.Proof)
 	}
