@@ -124,11 +124,8 @@ func (v *Validator) Post(ctx context.Context, publishEpoch types.EpochID, nodeId
 		LabelsPerUnit:   PostMetadata.LabelsPerUnit,
 	}
 
-	if publishEpoch >= types.EpochID(v.cfg.MinerIDInK2PowSinceEpoch) {
-		powCreatorId := nodeId
-		v.log.With().Info("verifying POST with pow creator ID", log.Named("id", powCreatorId), log.Named("publish epoch", publishEpoch))
-		opts = append(opts, verifying.WithPowCreator(powCreatorId.Bytes()))
-	}
+	v.log.With().Info("verifying POST with pow creator ID", log.Named("id", nodeId))
+	opts = append(opts, verifying.WithPowCreator(nodeId.Bytes()))
 
 	start := time.Now()
 	if err := v.postVerifier.Verify(ctx, p, m, opts...); err != nil {

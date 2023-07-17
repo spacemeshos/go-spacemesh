@@ -311,6 +311,22 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 	})
 }
 
+func TestBuilder_StoppingSmeshingBefore_Initialized(t *testing.T) {
+	tab := newTestBuilder(t)
+	tab.mpost.EXPECT().PrepareInitializer(gomock.Any(), gomock.Any()).AnyTimes()
+	tab.mpost.EXPECT().StartSession(gomock.Any()).DoAndReturn(func(ctx context.Context) error {
+		// wait for stop to be called
+		<-ctx.Done()
+		return ctx.Err()
+	}).AnyTimes()
+
+	require.NoError(t, tab.StartSmeshing(types.Address{}, PostSetupOpts{}))
+	require.NoError(t, tab.StopSmeshing(false))
+
+	// no calls to GenerateProof after stopping
+	require.NoError(t, tab.eg.Wait()) // returns without error (StartSmeshing can be called again)
+}
+
 func TestBuilder_StartSmeshing_PanicsOnErrInStartSession(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

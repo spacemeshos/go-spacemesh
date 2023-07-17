@@ -32,8 +32,6 @@ type PostConfig struct {
 	K2            uint32        `mapstructure:"post-k2"`
 	K3            uint32        `mapstructure:"post-k3"`
 	PowDifficulty PowDifficulty `mapstructure:"post-pow-difficulty"`
-	// Since when to include the miner ID in the K2 pow.
-	MinerIDInK2PowSinceEpoch uint32 `mapstructure:"post-minerid-in-k2-pow-since-epoch"`
 }
 
 func (c PostConfig) ToConfig() config.Config {
@@ -165,7 +163,28 @@ func DefaultPostConfig() PostConfig {
 
 // DefaultPostSetupOpts defines the default options for Post setup.
 func DefaultPostSetupOpts() PostSetupOpts {
-	return (PostSetupOpts)(config.DefaultInitOpts())
+	opts := config.DefaultInitOpts()
+	return PostSetupOpts{
+		DataDir:          opts.DataDir,
+		NumUnits:         opts.NumUnits,
+		MaxFileSize:      opts.MaxFileSize,
+		ProviderID:       opts.ProviderID,
+		Throttle:         opts.Throttle,
+		Scrypt:           opts.Scrypt,
+		ComputeBatchSize: opts.ComputeBatchSize,
+	}
+}
+
+func (o PostSetupOpts) ToInitOpts() config.InitOpts {
+	return config.InitOpts{
+		DataDir:          o.DataDir,
+		NumUnits:         o.NumUnits,
+		MaxFileSize:      o.MaxFileSize,
+		ProviderID:       o.ProviderID,
+		Throttle:         o.Throttle,
+		Scrypt:           o.Scrypt,
+		ComputeBatchSize: o.ComputeBatchSize,
+	}
 }
 
 // PostSetupManager implements the PostProvider interface.
@@ -359,7 +378,7 @@ func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSe
 		initialization.WithNodeId(mgr.id.Bytes()),
 		initialization.WithCommitmentAtxId(mgr.commitmentAtxId.Bytes()),
 		initialization.WithConfig(mgr.cfg.ToConfig()),
-		initialization.WithInitOpts(config.InitOpts(opts)),
+		initialization.WithInitOpts(opts.ToInitOpts()),
 		initialization.WithLogger(mgr.logger.Zap()),
 	)
 	if err != nil {

@@ -450,7 +450,19 @@ func load(fs afero.Fs, cfg Config, current types.EpochID) ([]*VerifiedUpdate, er
 }
 
 func requiredEpochs(current types.EpochID) []types.EpochID {
-	return []types.EpochID{current - 1, current, current + 1}
+	switch current {
+	case 0:
+		return nil
+	case 1:
+		return []types.EpochID{2}
+	case 2:
+		return []types.EpochID{2, 3}
+	case types.GetEffectiveGenesis().GetEpoch():
+		// when a checkpoint happens in the middle of the epoch, bootstrap data is needed for the epoch
+		return []types.EpochID{current, current + 1}
+	default:
+		return []types.EpochID{current - 1, current, current + 1}
+	}
 }
 
 func (u *Updater) prune(current types.EpochID) error {

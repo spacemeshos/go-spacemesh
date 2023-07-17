@@ -198,14 +198,18 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return nil
 		case <-b.syncer.RegisterForATXSynced():
 			// ensure we are ATX synced before starting the PoST Session
 		}
 
 		// If start session returns any error other than context.Canceled
 		// (which is how we signal it to stop) then we panic.
-		if err := b.postSetupProvider.StartSession(ctx); err != nil && !errors.Is(err, context.Canceled) {
+		err := b.postSetupProvider.StartSession(ctx)
+		switch {
+		case errors.Is(err, context.Canceled):
+			return nil
+		case err != nil:
 			b.log.Panic("initialization failed: %v", err)
 		}
 
