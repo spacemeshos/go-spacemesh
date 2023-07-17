@@ -9,91 +9,91 @@ import (
 func TestGradecast(t *testing.T) {
 	t.Run("", func(t *testing.T) {
 		// Grade 2, received same round as message with max grade.
-		gc := NewGradecaster()
+		gc := NewDefaultGradecaster()
 		gc.ReceiveMsg(id1, values3, r0, r0, 3)
 		assert.ElementsMatch(t, []GradecastedSet{{id1, values3, 2}}, gc.RetrieveGradecastedMessages(r0))
 	})
 
 	t.Run("", func(t *testing.T) {
 		// Grade 2, received 1 round after message round with max grade.
-		gc := NewGradecaster()
+		gc := NewDefaultGradecaster()
 		gc.ReceiveMsg(id1, values3, r0, r1, 3)
 		assert.ElementsMatch(t, []GradecastedSet{{id1, values3, 2}}, gc.RetrieveGradecastedMessages(r0))
 	})
 
 	t.Run("", func(t *testing.T) {
 		// Grade 1, received 2 rounds after message round with max grade.
-		gc := NewGradecaster()
+		gc := NewDefaultGradecaster()
 		gc.ReceiveMsg(id1, values3, r0, r2, 3)
 		assert.ElementsMatch(t, []GradecastedSet{{id1, values3, 1}}, gc.RetrieveGradecastedMessages(r0))
 	})
 
 	t.Run("", func(t *testing.T) {
 		// No result, received 3 rounds after message round with max grade.
-		gc := NewGradecaster()
+		gc := NewDefaultGradecaster()
 		gc.ReceiveMsg(id1, values3, r0, r3, 3)
 		assert.Nil(t, gc.RetrieveGradecastedMessages(r0))
 	})
 
 	t.Run("", func(t *testing.T) {
 		// No result, received 4 rounds after message round with max grade.
-		gc := NewGradecaster()
+		gc := NewDefaultGradecaster()
 		gc.ReceiveMsg(id1, values3, r0, r4, 3)
 		assert.Nil(t, gc.RetrieveGradecastedMessages(r0))
 	})
 
 	t.Run("", func(t *testing.T) {
 		// Grade 1, received same round as message with grade 2.
-		gc := NewGradecaster()
+		gc := NewDefaultGradecaster()
 		gc.ReceiveMsg(id1, values3, r0, r0, 2)
 		assert.ElementsMatch(t, []GradecastedSet{{id1, values3, 1}}, gc.RetrieveGradecastedMessages(r0))
 	})
 
 	t.Run("", func(t *testing.T) {
 		// Grade 1, received 1 round after message round with grade 2.
-		gc := NewGradecaster()
+		gc := NewDefaultGradecaster()
 		gc.ReceiveMsg(id1, values3, r0, r1, 2)
 		assert.ElementsMatch(t, []GradecastedSet{{id1, values3, 1}}, gc.RetrieveGradecastedMessages(r0))
 	})
 
 	t.Run("", func(t *testing.T) {
 		// Grade 1, received 2 rounds after message round with grade 2.
-		gc := NewGradecaster()
+		gc := NewDefaultGradecaster()
 		gc.ReceiveMsg(id1, values3, r0, r2, 2)
 		assert.ElementsMatch(t, []GradecastedSet{{id1, values3, 1}}, gc.RetrieveGradecastedMessages(r0))
 	})
 
 	t.Run("", func(t *testing.T) {
 		// No result, received 3 rounds after message round with grade 2.
-		gc := NewGradecaster()
+		gc := NewDefaultGradecaster()
 		gc.ReceiveMsg(id1, values3, r0, r3, 2)
 		assert.Nil(t, gc.RetrieveGradecastedMessages(r0))
 	})
 
 	t.Run("", func(t *testing.T) {
 		// No result, received 4 rounds after message round with grade 2.
-		gc := NewGradecaster()
+		gc := NewDefaultGradecaster()
 		gc.ReceiveMsg(id1, values3, r0, r4, 2)
 		assert.Nil(t, gc.RetrieveGradecastedMessages(r0))
 	})
 
 	t.Run("", func(t *testing.T) {
 		// No result, received 1 round after message round with grade 1.
-		gc := NewGradecaster()
+		gc := NewDefaultGradecaster()
 		gc.ReceiveMsg(id1, values3, r0, r1, 1)
 		assert.Nil(t, gc.RetrieveGradecastedMessages(r0))
 	})
 
 	t.Run("", func(t *testing.T) {
 		// No result, received 2 rounds after message round with grade 1.
-		gc := NewGradecaster()
+		gc := NewDefaultGradecaster()
 		gc.ReceiveMsg(id1, values3, r0, r2, 1)
 		assert.Nil(t, gc.RetrieveGradecastedMessages(r0))
 	})
 
 	t.Run("", func(t *testing.T) {
 		// No result, received 3 rounds after message round with grade 1.
-		gc := NewGradecaster()
+		gc := NewDefaultGradecaster()
 		gc.ReceiveMsg(id1, values3, r0, r3, 1)
 		assert.Nil(t, gc.RetrieveGradecastedMessages(r0))
 	})
@@ -101,7 +101,7 @@ func TestGradecast(t *testing.T) {
 	t.Run("", func(t *testing.T) {
 		// No result, received 1 round after message round with max grade with
 		// subsequent malicious message 1 round after message round.
-		gc := NewGradecaster()
+		gc := NewDefaultGradecaster()
 		gc.ReceiveMsg(id1, values3, r0, r1, 3)
 		gc.ReceiveMsg(id1, nil, r0, r1, 3)
 		assert.Nil(t, gc.RetrieveGradecastedMessages(r0))
@@ -110,7 +110,7 @@ func TestGradecast(t *testing.T) {
 	t.Run("", func(t *testing.T) {
 		// No result, received 1 round after message round with max grade with
 		// subsequent malicious message 2 rounds after message round.
-		gc := NewGradecaster()
+		gc := NewDefaultGradecaster()
 		gc.ReceiveMsg(id1, values3, r0, r1, 3)
 		gc.ReceiveMsg(id1, nil, r0, r2, 3)
 		assert.Nil(t, gc.RetrieveGradecastedMessages(r0))
@@ -119,7 +119,7 @@ func TestGradecast(t *testing.T) {
 	t.Run("", func(t *testing.T) {
 		// No result, received 1 round after message round with max grade with
 		// subsequent malicious message 3 rounds after message round.
-		gc := NewGradecaster()
+		gc := NewDefaultGradecaster()
 		gc.ReceiveMsg(id1, values3, r0, r1, 3)
 		gc.ReceiveMsg(id1, nil, r0, r3, 3)
 		assert.Nil(t, gc.RetrieveGradecastedMessages(r0))
@@ -128,7 +128,7 @@ func TestGradecast(t *testing.T) {
 	t.Run("", func(t *testing.T) {
 		// Grade 2, received 1 round after message round with max grade with
 		// subsequent malicious message 4 rounds after message round.
-		gc := NewGradecaster()
+		gc := NewDefaultGradecaster()
 		gc.ReceiveMsg(id1, values3, r0, r1, 3)
 		gc.ReceiveMsg(id1, nil, r0, r4, 3)
 		assert.ElementsMatch(t, []GradecastedSet{{id1, values3, 2}}, gc.RetrieveGradecastedMessages(r0))
@@ -137,7 +137,7 @@ func TestGradecast(t *testing.T) {
 	t.Run("", func(t *testing.T) {
 		// No result, received 2 rounds after message round with max grade with
 		// subsequent malicious message 2 rounds after message round.
-		gc := NewGradecaster()
+		gc := NewDefaultGradecaster()
 		gc.ReceiveMsg(id1, values3, r0, r2, 3)
 		gc.ReceiveMsg(id1, nil, r0, r2, 3)
 		assert.Nil(t, gc.RetrieveGradecastedMessages(r0))
@@ -146,7 +146,7 @@ func TestGradecast(t *testing.T) {
 	t.Run("", func(t *testing.T) {
 		// Grade 1, received 2 rounds after message round with max grade with
 		// subsequent malicious message 3 rounds after message round.
-		gc := NewGradecaster()
+		gc := NewDefaultGradecaster()
 		gc.ReceiveMsg(id1, values3, r0, r2, 3)
 		gc.ReceiveMsg(id1, nil, r0, r3, 3)
 		assert.ElementsMatch(t, []GradecastedSet{{id1, values3, 1}}, gc.RetrieveGradecastedMessages(r0))
@@ -154,7 +154,7 @@ func TestGradecast(t *testing.T) {
 
 	t.Run("", func(t *testing.T) {
 		// Multiple messages from multiple identities.
-		gc := NewGradecaster()
+		gc := NewDefaultGradecaster()
 		gc.ReceiveMsg(id1, values3, r0, r1, 3)
 		gc.ReceiveMsg(id2, values2, r0, r1, 3)
 		gc.ReceiveMsg(id3, values1, r0, r1, 3)
@@ -164,7 +164,7 @@ func TestGradecast(t *testing.T) {
 
 	t.Run("", func(t *testing.T) {
 		// Multiple messages from multiple identities with multiple malicious messages.
-		gc := NewGradecaster()
+		gc := NewDefaultGradecaster()
 		gc.ReceiveMsg(id1, values3, r0, r1, 3)
 		gc.ReceiveMsg(id2, values2, r0, r2, 3)
 		gc.ReceiveMsg(id3, values1, r0, r2, 2)
@@ -177,7 +177,7 @@ func TestGradecast(t *testing.T) {
 
 	t.Run("", func(t *testing.T) {
 		// Messages from different rounds are segregated.
-		gc := NewGradecaster()
+		gc := NewDefaultGradecaster()
 		gc.ReceiveMsg(id1, values3, r0, r1, 3)
 		gc.ReceiveMsg(id1, values2, r1, r2, 3)
 		gc.ReceiveMsg(id1, values1, r2, r3, 3)

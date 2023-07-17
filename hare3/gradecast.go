@@ -61,7 +61,7 @@ type DefaultGradecaster struct {
 	messages map[AbsRound]map[types.NodeID]*msgState
 }
 
-func NewGradecaster() *DefaultGradecaster {
+func NewDefaultGradecaster() *DefaultGradecaster {
 	return &DefaultGradecaster{
 		messages: make(map[AbsRound]map[types.NodeID]*msgState),
 	}
