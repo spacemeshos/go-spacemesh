@@ -43,11 +43,26 @@ func EmitInitStart(smesher types.NodeID, commitment types.ATXID) {
 	)
 }
 
-func EmitInitComplete(failure bool) {
+func EmitInitFailure(smesher types.NodeID, commitment types.ATXID, err error) {
+	const help = "Node failed post data initialization."
+	emitUserEvent(
+		help,
+		true,
+		&pb.Event_InitFailed{
+			InitFailed: &pb.EventInitFailed{
+				Smesher:    smesher[:],
+				Commitment: commitment[:],
+				Error:      err.Error(),
+			},
+		},
+	)
+}
+
+func EmitInitComplete() {
 	const help = "Node completed post data initialization."
 	emitUserEvent(
 		help,
-		failure,
+		false,
 		&pb.Event_InitComplete{
 			InitComplete: &pb.EventInitComplete{},
 		},
