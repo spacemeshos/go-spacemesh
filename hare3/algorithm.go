@@ -114,20 +114,24 @@ func gradeKey5(key types.NodeID) uint8 {
 	return 5
 }
 
-// RoundProvider provides a simple way to discover what is the current round.
-type RoundProvider struct {
+type RoundProvider interface {
+	CurrentRound() AbsRound
+}
+
+// DefaultRoundProvider provides a simple way to discover what is the current round.
+type DefaultRoundProvider struct {
 	layerTime     time.Time
 	roundDuration time.Duration
 }
 
-func NewRoundProvider(layerTime time.Time, roundDuration time.Duration) *RoundProvider {
-	return &RoundProvider{
+func NewDefaultRoundProvider(layerTime time.Time, roundDuration time.Duration) *DefaultRoundProvider {
+	return &DefaultRoundProvider{
 		layerTime:     layerTime,
 		roundDuration: roundDuration,
 	}
 }
 
-func (rp *RoundProvider) CurrentRound() AbsRound {
+func (rp *DefaultRoundProvider) CurrentRound() AbsRound {
 	return AbsRound(time.Since(rp.layerTime) / rp.roundDuration)
 }
 
@@ -140,11 +144,11 @@ type Handler struct {
 	gg  GradedGossiper
 	tgg ThresholdGradedGossiper
 	gc  Gradecaster
-	rp  *RoundProvider
+	rp  RoundProvider
 	mu  *sync.Mutex
 }
 
-func NewHandler(gg GradedGossiper, tgg ThresholdGradedGossiper, gc Gradecaster, rp *RoundProvider) *Handler {
+func NewHandler(gg GradedGossiper, tgg ThresholdGradedGossiper, gc Gradecaster, rp RoundProvider) *Handler {
 	return &Handler{
 		gg:  gg,
 		tgg: tgg,
