@@ -43,7 +43,6 @@ func (f *HandlerFactory) Handler(layer types.LayerID) *hare3.Handler {
 		hare3.NewDefaultGradedGossiper(),
 		hare3.NewDefaultThresholdGradedGossiper(f.hareThreshold),
 		hare3.NewDefaultGradecaster(),
-		hare3.NewDefaultRoundProvider(f.clock.LayerToTime(layer), f.roundTime),
 	)
 }
 

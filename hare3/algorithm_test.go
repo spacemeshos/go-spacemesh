@@ -66,9 +66,8 @@ func (lc *TestLeaderChecker) IsLeader(vk types.NodeID, round AbsRound) bool {
 // This test checks that a single node with a threshold of 1 vote can reach
 // consensus on a value, in order for the protocol to complete it is required
 // to run 2 iterations (15 rounds in total).
-func TestReachingConsensus(t *testing.T) {
-	rp := NewTestRoundProvider(-1)
-	h := NewHandler(NewDefaultGradedGossiper(), NewDefaultThresholdGradedGossiper(1), NewDefaultGradecaster(), rp)
+func TestReachingConsensusSingleNode(t *testing.T) {
+	h := NewHandler(NewDefaultGradedGossiper(), NewDefaultThresholdGradedGossiper(1), NewDefaultGradecaster())
 	lc := NewTestLeaderChecker()
 	nodeId := randID()
 	active := true
@@ -155,8 +154,7 @@ func TestReachingConsensus(t *testing.T) {
 // This test checks that a single node with a threshold of 2 votes can't reach
 // consensus on a value
 func TestNotReachingConsensus(t *testing.T) {
-	rp := NewTestRoundProvider(-1)
-	h := NewHandler(NewDefaultGradedGossiper(), NewDefaultThresholdGradedGossiper(2), NewDefaultGradecaster(), rp)
+	h := NewHandler(NewDefaultGradedGossiper(), NewDefaultThresholdGradedGossiper(2), NewDefaultGradecaster())
 	lc := NewTestLeaderChecker()
 	nodeId := randID()
 	active := true

@@ -46,7 +46,6 @@ import (
 	"crypto/sha256"
 	"sort"
 	"sync"
-	"time"
 
 	"golang.org/x/exp/slices"
 
@@ -116,47 +115,27 @@ func gradeKey5(key types.NodeID) uint8 {
 	return 5
 }
 
-type RoundProvider interface {
-	CurrentRound() AbsRound
-}
-
-// DefaultRoundProvider provides a simple way to discover what is the current round.
-type DefaultRoundProvider struct {
-	layerTime     time.Time
-	roundDuration time.Duration
-}
-
-func NewDefaultRoundProvider(layerTime time.Time, roundDuration time.Duration) *DefaultRoundProvider {
-	return &DefaultRoundProvider{
-		layerTime:     layerTime,
-		roundDuration: roundDuration,
-	}
-}
-
-func (rp *DefaultRoundProvider) CurrentRound() AbsRound {
-	return AbsRound(time.Since(rp.layerTime) / rp.roundDuration)
-}
-
 // Handler performs message handling, there is a handler per instance of each
 // hare protocol, and as such the handler does not need to be aware of the
 // session id. It is also assumed that some higher level handler performs the
 // actions of message decoding and signature verification and key grading,
 // leaving this handler to handle the decoded message inputs.
 type Handler struct {
-	gg  GradedGossiper
-	tgg ThresholdGradedGossiper
-	gc  Gradecaster
-	rp  RoundProvider
-	mu  *sync.Mutex
+	gg    GradedGossiper
+	tgg   ThresholdGradedGossiper
+	gc    Gradecaster
+	round *AbsRound
+	mu    *sync.Mutex
 }
 
-func NewHandler(gg GradedGossiper, tgg ThresholdGradedGossiper, gc Gradecaster, rp RoundProvider) *Handler {
+func NewHandler(gg GradedGossiper, tgg ThresholdGradedGossiper, gc Gradecaster) *Handler {
+	r := NewAbsRound(0, -2)
 	return &Handler{
-		gg:  gg,
-		tgg: tgg,
-		gc:  gc,
-		rp:  rp,
-		mu:  &sync.Mutex{},
+		gg:    gg,
+		tgg:   tgg,
+		gc:    gc,
+		round: &r,
+		mu:    &sync.Mutex{},
 	}
 }
 
@@ -190,7 +169,7 @@ func (h *Handler) HandleMsg(hash types.Hash20, id types.NodeID, round AbsRound, 
 		equivocationHash = eHash
 	}
 
-	curr := h.rp.CurrentRound()
+	curr := *h.round
 	// In the case of early messages we just set the curr round to be equal to
 	// the message round. I.E. we assume they were delivered perfectly on time.
 	if curr < round {
@@ -211,12 +190,12 @@ func (h *Handler) HandleMsg(hash types.Hash20, id types.NodeID, round AbsRound, 
 }
 
 func (h *Handler) Protocol(lc LeaderChecker, si []types.Hash20) *Protocol {
-	return NewProtocol(h.tgg, h.gc, lc, h.mu, si)
+	return NewProtocol(h.round, h.tgg, h.gc, lc, h.mu, si)
 }
 
 type Protocol struct {
 	// round encodes both iteration and round in a single value.
-	round AbsRound
+	round *AbsRound
 	// Each index "i" holds an indication of whether iteration "i" is hard locked
 	hardLocked []bool
 	// Each index "i" holds the locked value for iteration "i"
@@ -234,9 +213,10 @@ type Protocol struct {
 	mu  *sync.Mutex
 }
 
-func NewProtocol(tgg ThresholdGradedGossiper, gc Gradecaster, lc LeaderChecker, protocolMu *sync.Mutex, si []types.Hash20) *Protocol {
+// The round paramer is shared with the handler.
+func NewProtocol(round *AbsRound, tgg ThresholdGradedGossiper, gc Gradecaster, lc LeaderChecker, protocolMu *sync.Mutex, si []types.Hash20) *Protocol {
 	return &Protocol{
-		round: AbsRound(-2),
+		round: round,
 		tgg:   tgg,
 		gc:    gc,
 		lc:    lc,
@@ -248,7 +228,7 @@ func NewProtocol(tgg ThresholdGradedGossiper, gc Gradecaster, lc LeaderChecker, 
 func (p *Protocol) Round() AbsRound {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return p.round
+	return *p.round
 }
 
 func toHash(values []types.Hash20) types.Hash20 {
@@ -308,29 +288,30 @@ func isSubset(subset, superset []types.Hash20) bool {
 func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []types.Hash20) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.round++
-	if p.round == -1 {
+	*p.round++
+	r := *p.round
+	if r == -1 {
 		p.Vi = make([][]types.Hash20, 4)
 	}
-	if p.round >= 0 && p.round <= 3 {
-		p.Vi[p.round] = p.tgg.RetrieveThresholdMessages(-1, 5-uint8(p.round))
+	if r >= 0 && r <= 3 {
+		p.Vi[r] = p.tgg.RetrieveThresholdMessages(-1, 5-uint8(r))
 	}
 	// We are starting a new iteration build objects
-	if p.round.Round() == 0 {
+	if r.Round() == 0 {
 		p.Ti = append(p.Ti, make(map[types.Hash20][]types.Hash20))
 		p.hardLocked = append(p.hardLocked, false)
 		p.Li = append(p.Li, nil)
 	}
 
-	j := p.round.Iteration()
-	switch p.round.Type() {
+	j := r.Iteration()
+	switch r.Type() {
 	case Preround:
 		if !active {
 			return nil, nil
 		}
 		// Gossip initial values
 		return &OutputMessage{
-			Round:  p.round,
+			Round:  r,
 			Values: p.Si,
 		}, nil
 	case HardLock:
@@ -376,7 +357,7 @@ func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []types
 		if set != nil {
 			// Send proposal to peers
 			return &OutputMessage{
-				Round:  p.round,
+				Round:  r,
 				Values: set,
 			}, nil
 		}
