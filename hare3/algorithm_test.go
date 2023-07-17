@@ -151,3 +151,32 @@ func TestReachingConsensus(t *testing.T) {
 	require.Equal(t, &OutputMessage{NewAbsRound(1, 6), values3Hash}, msg)
 	require.Equal(t, values3, output)
 }
+
+// This test checks that a single node with a threshold of 2 votes can't reach
+// consensus on a value
+func TestNotReachingConsensus(t *testing.T) {
+	rp := NewTestRoundProvider(-1)
+	h := NewHandler(NewDefaultGradedGossiper(), NewDefaultThresholdGradedGossiper(2), NewDefaultGradecaster(), rp)
+	lc := NewTestLeaderChecker()
+	nodeId := randID()
+	active := true
+	// values3Hash := []types.Hash20{toHash(values3)}
+	p := h.Protocol(lc, values3)
+
+	// We expect just the pre round message to be sent
+	msg, output := p.NextRound(active)
+	require.Equal(t, &OutputMessage{NewAbsRound(0, -1), values3}, msg)
+	require.Nil(t, output)
+
+	regossip, equivocationHash := h.HandleMsg(randHash20(), nodeId, msg.Round, msg.Values)
+	require.Equal(t, true, regossip)
+	require.Nil(t, equivocationHash)
+
+	maxRound := NewAbsRound(3, 0)
+
+	for p.Round() < maxRound {
+		msg, output = p.NextRound(active)
+		require.Nil(t, msg)
+		require.Nil(t, output)
+	}
+}
