@@ -236,7 +236,7 @@ type Protocol struct {
 
 func NewProtocol(tgg ThresholdGradedGossiper, gc Gradecaster, lc LeaderChecker, protocolMu *sync.Mutex, si []types.Hash20) *Protocol {
 	return &Protocol{
-		round: AbsRound(-1),
+		round: AbsRound(-2),
 		tgg:   tgg,
 		gc:    gc,
 		lc:    lc,
@@ -308,7 +308,7 @@ func isSubset(subset, superset []types.Hash20) bool {
 func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []types.Hash20) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	defer func() { p.round++ }()
+	p.round++
 	if p.round == -1 {
 		p.Vi = make([][]types.Hash20, 4)
 	}
