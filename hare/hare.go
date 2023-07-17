@@ -628,7 +628,7 @@ func (h *Hare) malfeasanceLoop(ctx context.Context) {
 			if err != nil {
 				h.WithContext(ctx).With().Panic("failed to encode MalfeasanceProof", log.Err(err))
 			}
-			if err := identities.SetMalicious(h.msh.Cache(), gossip.Eligibility.NodeID, encoded); err != nil {
+			if err := identities.SetMalicious(h.msh.Cache(), gossip.Eligibility.NodeID, encoded, time.Now()); err != nil {
 				h.With().Error("failed to save MalfeasanceProof",
 					log.Context(ctx),
 					gossip.Eligibility.NodeID,

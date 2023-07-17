@@ -2,6 +2,7 @@ package identities
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -9,13 +10,14 @@ import (
 )
 
 // SetMalicious records identity as malicious.
-func SetMalicious(db sql.Executor, nodeID types.NodeID, proof []byte) error {
-	_, err := db.Exec(`insert into identities (pubkey, proof)
-	values (?1, ?2)
+func SetMalicious(db sql.Executor, nodeID types.NodeID, proof []byte, received time.Time) error {
+	_, err := db.Exec(`insert into identities (pubkey, proof, received)
+	values (?1, ?2, ?3)
 	on conflict do nothing;`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, nodeID.Bytes())
 			stmt.BindBytes(2, proof)
+			stmt.BindInt64(3, received.UnixNano())
 		}, nil,
 	)
 	if err != nil {
@@ -38,14 +40,30 @@ func IsMalicious(db sql.Executor, nodeID types.NodeID) (bool, error) {
 
 // GetMalfeasanceProof returns the malfeasance proof for the given identity.
 func GetMalfeasanceProof(db sql.Executor, nodeID types.NodeID) (*types.MalfeasanceProof, error) {
-	data, err := GetMalfeasanceBlob(db, nodeID.Bytes())
+	var (
+		data     []byte
+		received time.Time
+	)
+	rows, err := db.Exec("select proof, received from identities where pubkey = ?1;",
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, nodeID.Bytes())
+		}, func(stmt *sql.Statement) bool {
+			data = make([]byte, stmt.ColumnLen(0))
+			stmt.ColumnBytes(0, data[:])
+			received = time.Unix(0, stmt.ColumnInt64(1)).Local()
+			return true
+		})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("proof %v: %w", nodeID, err)
+	}
+	if rows == 0 {
+		return nil, sql.ErrNotFound
 	}
 	var proof types.MalfeasanceProof
 	if err = codec.Decode(data, &proof); err != nil {
 		return nil, err
 	}
+	proof.SetReceived(received.Local())
 	return &proof, nil
 }
 
