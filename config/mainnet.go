@@ -26,7 +26,19 @@ func MainnetConfig() Config {
 	if err := postPowDifficulty.UnmarshalText([]byte("00037ec8ec25e6d2c00000000000000000000000000000000000000000000000")); err != nil {
 		panic(err)
 	}
-
+	p2pconfig := p2p.DefaultConfig()
+	p2pconfig.Bootnodes = []string{
+		"/dns4/mainnet-bootnode-0.spacemesh.network/tcp/5000/p2p/12D3KooWPStnitMbLyWAGr32gHmPr538mT658Thp6zTUujZt3LRf",
+		"/dns4/mainnet-bootnode-1.spacemesh.network/tcp/5000/p2p/12D3KooWJubSzXMJ6f1Fd1PgAFvuVeGFAsGe6tamH1733x4524gb",
+		"/dns4/mainnet-bootnode-2.spacemesh.network/tcp/5000/p2p/12D3KooWAsMgXLpyGdsRNjHBF3FaXwnXhyMEqWQYBXUpvCHNzFNK",
+		"/dns4/mainnet-bootnode-3.spacemesh.network/tcp/5000/p2p/12D3KooWLu9jbmTemp8eCzNvAFT88u7urfywYqQjXiBQAUCiFAFq",
+		"/dns4/mainnet-bootnode-4.spacemesh.network/tcp/5000/p2p/12D3KooWRcTWDHzptnhJn5h6CtwnokzzMaDLcXv6oM9CxQEXd5FL",
+		"/dns4/mainnet-bootnode-5.spacemesh.network/tcp/5000/p2p/12D3KooWP8fFtK7pfgdLRAZCwYsxC2pCxXDhnTiadtiCQdiyCouw",
+		"/dns4/mainnet-bootnode-6.spacemesh.network/tcp/5000/p2p/12D3KooWRS47KAs3ZLkBtE2AqjJCwxRYqZKmyLkvombJJdrca8Hz",
+		"/dns4/mainnet-bootnode-7.spacemesh.network/tcp/5000/p2p/12D3KooWNDCmQUoFPCUWbdYC2owaAXkVYQz7B37myTieiH7xzF6F",
+		"/dns4/mainnet-bootnode-8.spacemesh.network/tcp/5000/p2p/12D3KooWFYv99aGbtXnZQy6UZxyf72NpkWJp3K4HS8Py35WhKtzE",
+		"/dns4/mainnet-bootnode-9.spacemesh.network/tcp/5000/p2p/12D3KooWRQ9VPotEBjmAxBeTnnLqQgXLi1vvt4nMwo5E3Smt5bXP",
+	}
 	return Config{
 		BaseConfig: BaseConfig{
 			DataDirParent:       defaultDataDir,
@@ -45,9 +57,17 @@ func MainnetConfig() Config {
 			OptFilterThreshold: 90,
 
 			TickSize: 9331200,
+			PoETServers: []string{
+				"https://mainnet-poet-0.spacemesh.network",
+				"https://mainnet-poet-1.spacemesh.network",
+				"https://mainnet-poet-2.spacemesh.network",
+				"https://poet-110.spacemesh.network",
+				"https://poet-111.spacemesh.network",
+			},
 		},
 		Genesis: &GenesisConfig{
 			GenesisTime: "2023-07-14T08:00:00Z",
+			ExtraData:   "00000000000000000001a6bc150307b5c1998045752b3c87eccf3c013036f3cc",
 			Accounts:    MainnetAccounts(),
 		},
 		Tortoise: tortoise.Config{
@@ -105,7 +125,7 @@ func MainnetConfig() Config {
 			DataDir:  os.TempDir(),
 			Interval: 30 * time.Second,
 		},
-		P2P:      p2p.DefaultConfig(),
+		P2P:      p2pconfig,
 		API:      grpcserver.DefaultConfig(),
 		TIME:     timeConfig.DefaultConfig(),
 		SMESHING: DefaultSmeshingConfig(),
