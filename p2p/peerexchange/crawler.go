@@ -36,7 +36,7 @@ func newCrawler(logger log.Log, h host.Host, book *book.Book, disc *peerExchange
 // Crawl connects to number of peers, limit by concurrent parameter, and learns
 // new peers from it.
 func (r *crawler) Crawl(ctx context.Context, concurrent int) error {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	addrs := r.book.DrainQueue(concurrent)
 	if len(addrs) == 0 {
@@ -86,10 +86,11 @@ func getPeers(ctx context.Context, h host.Host, disc *peerExchange, peer *peer.A
 	if err != nil {
 		return nil, err
 	}
-	res, err := disc.Request(ctx, peer.ID)
-	if err != nil {
-		return nil, err
-	}
+	var res []string
+	// res, err := disc.Request(ctx, peer.ID)
+	// if err != nil {
+	// 	return nil, err
+	// }
 	rst := make([]maddrIdTuple, 0, len(res))
 	for _, raw := range res {
 		maddr, id, err := parseIdMaddr(raw)

@@ -9,6 +9,7 @@ import (
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/core/transport"
 	"github.com/libp2p/go-libp2p/p2p/host/peerstore/pstoremem"
@@ -107,10 +108,23 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 		libp2p.BandwidthReporter(p2pmetrics.NewBandwidthCollector()),
 	}
 	// TODO no need to enable it on every node
+	// lopts = append(lopts,
+	// 	libp2p.EnableRelayService(),      // enables circuit v2 relay
+	// 	libp2p.EnableNATService(),        // enables service to help with discovering reachability
+	// 	libp2p.ForceReachabilityPublic(), // forces public reachability, otherwise bootnoe can't learn it in our setup
+	// )
+	bootnodes := []peer.AddrInfo{}
+	for _, bootnode := range cfg.Bootnodes {
+		info, err := peer.AddrInfoFromString(bootnode)
+		if err != nil {
+			return nil, fmt.Errorf("parse into peer.AddrInfo %s: %w", bootnode, err)
+		}
+		bootnodes = append(bootnodes, *info)
+	}
 	lopts = append(lopts,
-		libp2p.EnableRelayService(),      // enables circuit v2 relay
-		libp2p.EnableNATService(),        // enables service to help with discovering reachability
-		libp2p.ForceReachabilityPublic(), // forces public reachability, otherwise bootnoe can't learn it in our setup
+		libp2p.EnableNATService(),
+		libp2p.EnableAutoRelayWithStaticRelays(bootnodes),
+		libp2p.EnableHolePunching(),
 	)
 	if cfg.Metrics {
 		lopts = append(lopts, setupResourcesManager(cfg.HighPeers))

@@ -28,17 +28,11 @@ func MainnetConfig() Config {
 	}
 	p2pconfig := p2p.DefaultConfig()
 	p2pconfig.Bootnodes = []string{
-		"/dns4/mainnet-bootnode-0.spacemesh.network/tcp/5000/p2p/12D3KooWPStnitMbLyWAGr32gHmPr538mT658Thp6zTUujZt3LRf",
-		"/dns4/mainnet-bootnode-1.spacemesh.network/tcp/5000/p2p/12D3KooWJubSzXMJ6f1Fd1PgAFvuVeGFAsGe6tamH1733x4524gb",
-		"/dns4/mainnet-bootnode-2.spacemesh.network/tcp/5000/p2p/12D3KooWAsMgXLpyGdsRNjHBF3FaXwnXhyMEqWQYBXUpvCHNzFNK",
-		"/dns4/mainnet-bootnode-3.spacemesh.network/tcp/5000/p2p/12D3KooWLu9jbmTemp8eCzNvAFT88u7urfywYqQjXiBQAUCiFAFq",
-		"/dns4/mainnet-bootnode-4.spacemesh.network/tcp/5000/p2p/12D3KooWRcTWDHzptnhJn5h6CtwnokzzMaDLcXv6oM9CxQEXd5FL",
-		"/dns4/mainnet-bootnode-5.spacemesh.network/tcp/5000/p2p/12D3KooWP8fFtK7pfgdLRAZCwYsxC2pCxXDhnTiadtiCQdiyCouw",
-		"/dns4/mainnet-bootnode-6.spacemesh.network/tcp/5000/p2p/12D3KooWRS47KAs3ZLkBtE2AqjJCwxRYqZKmyLkvombJJdrca8Hz",
-		"/dns4/mainnet-bootnode-7.spacemesh.network/tcp/5000/p2p/12D3KooWNDCmQUoFPCUWbdYC2owaAXkVYQz7B37myTieiH7xzF6F",
-		"/dns4/mainnet-bootnode-8.spacemesh.network/tcp/5000/p2p/12D3KooWFYv99aGbtXnZQy6UZxyf72NpkWJp3K4HS8Py35WhKtzE",
-		"/dns4/mainnet-bootnode-9.spacemesh.network/tcp/5000/p2p/12D3KooWRQ9VPotEBjmAxBeTnnLqQgXLi1vvt4nMwo5E3Smt5bXP",
+		"/dns4/mainnet-relay-node-0.spacemesh.network/tcp/5000/p2p/12D3KooWLFF3bPw1q29LmNvxQyED1FmX7DNCBq4dAetjXBMEQKmg",
 	}
+	logcfg := defaultLoggingConfig()
+	logcfg.P2PLoggerLevel = "debug"
+
 	return Config{
 		BaseConfig: BaseConfig{
 			DataDirParent:       defaultDataDir,
@@ -130,7 +124,7 @@ func MainnetConfig() Config {
 		TIME:     timeConfig.DefaultConfig(),
 		SMESHING: DefaultSmeshingConfig(),
 		FETCH:    fetch.DefaultConfig(),
-		LOGGING:  defaultLoggingConfig(),
+		LOGGING:  logcfg,
 		Sync:     syncer.DefaultConfig(),
 		Recovery: checkpoint.DefaultConfig(),
 	}

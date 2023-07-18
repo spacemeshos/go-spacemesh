@@ -227,7 +227,12 @@ func portFromHost(logger log.Log, h host.Host) uint16 {
 		logger.With().Warning("failed to find best host address. host won't be dialable", log.Err(err))
 		return 0
 	}
-	logger.With().Info("selected new best address", log.String("address", addr.String()))
+	logger.With().Info("selected new best address", log.String("address", addr.String()), log.Array("address", log.ArrayMarshalerFunc(func(aencoder log.ArrayEncoder) error {
+		for _, addr := range h.Addrs() {
+			aencoder.AppendString(addr.String())
+		}
+		return nil
+	})))
 	port, err := portFromAddress(addr)
 	if err != nil {
 		logger.With().Warning("failed to find port from host. host won't be dialable", log.Err(err))
