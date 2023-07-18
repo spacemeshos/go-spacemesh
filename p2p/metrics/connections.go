@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"strings"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/network"
@@ -54,13 +55,13 @@ func (c *ConnectionsMeeter) ListenClose(network.Network, ma.Multiaddr) {}
 
 // Connected called when a connection opened.
 func (c *ConnectionsMeeter) Connected(_ network.Network, conn network.Conn) {
-	public.Connections.WithLabelValues(conn.Stat().Direction.String()).Inc()
+	public.Connections.WithLabelValues(strings.ToLower(conn.Stat().Direction.String())).Inc()
 	connections.WithLabelValues().Inc()
 }
 
 // Disconnected called when a connection closed.
 func (c *ConnectionsMeeter) Disconnected(_ network.Network, conn network.Conn) {
-	public.Connections.WithLabelValues(conn.Stat().Direction.String()).Dec()
+	public.Connections.WithLabelValues(strings.ToLower(conn.Stat().Direction.String())).Dec()
 	connections.WithLabelValues().Dec()
 }
 

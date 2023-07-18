@@ -1380,7 +1380,7 @@ func (app *App) Start(ctx context.Context) error {
 			app.Config.MetricsPushPass,
 			app.Config.MetricsXorgID,
 			app.Config.MetricsPushPeriod,
-			app.host.ID().ShortString(), app.Config.Genesis.GenesisID().ShortString())
+			app.host.ID().String()[:5], app.Config.Genesis.GenesisID().ShortString())
 	}
 
 	if err := app.startServices(ctx); err != nil {
