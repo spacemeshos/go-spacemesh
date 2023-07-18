@@ -258,6 +258,8 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 
 	tab.mpost.EXPECT().PrepareInitializer(gomock.Any(), gomock.Any()).AnyTimes()
 	tab.mpost.EXPECT().StartSession(gomock.Any()).AnyTimes()
+	tab.mpost.EXPECT().LastOpts().Return(&PostSetupOpts{}).AnyTimes()
+	tab.mpost.EXPECT().CommitmentAtx().Return(tab.goldenATXID, nil).AnyTimes()
 	tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(&types.Post{}, &types.PostMetadata{}, nil)
 	tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
 	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(make(chan struct{})).AnyTimes()
@@ -1098,10 +1100,10 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
 	tab.mpost.EXPECT().GenerateProof(gomock.Any(), shared.ZeroChallenge, gomock.Any()).Return(&types.Post{}, &types.PostMetadata{}, nil)
-	p, m, err := tab.generateInitialPost(context.Background())
-	require.NoError(t, err)
-	require.NotNil(t, p)
-	require.NotNil(t, m)
+	tab.mpost.EXPECT().LastOpts().Return(&PostSetupOpts{})
+	tab.mpost.EXPECT().CommitmentAtx().Return(tab.goldenATXID, nil)
+	tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
+	require.NoError(t, tab.generateInitialPost(context.Background()))
 
 	posEpoch := postGenesisEpoch + 1
 	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posEpoch, nil)
@@ -1121,36 +1123,27 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	assertLastAtx(require.New(t), tab.nodeID, types.BytesToHash(poetByte), atx, vPrevAtx, vPrevAtx, layersPerEpoch)
 
 	// GenerateProof() should not be called again
-	p, m, err = tab.generateInitialPost(context.Background())
-	require.NoError(t, err)
-	require.Nil(t, p)
-	require.Nil(t, m)
+	require.NoError(t, tab.generateInitialPost(context.Background()))
 }
 
 func TestBuilder_InitialPostIsPersisted(t *testing.T) {
 	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
 	tab.mpost.EXPECT().Config().AnyTimes().Return(PostConfig{})
+	tab.mpost.EXPECT().LastOpts().Return(&PostSetupOpts{}).Times(3)
+	tab.mpost.EXPECT().CommitmentAtx().Return(tab.goldenATXID, nil).Times(3)
 	tab.mpost.EXPECT().GenerateProof(gomock.Any(), shared.ZeroChallenge, gomock.Any()).Return(&types.Post{}, &types.PostMetadata{
 		Challenge: shared.ZeroChallenge,
 	}, nil)
-	p, m, err := tab.generateInitialPost(context.Background())
-	require.NoError(t, err)
-	require.NotNil(t, p)
-	require.NotNil(t, m)
+	tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
+	require.NoError(t, tab.generateInitialPost(context.Background()))
 
 	// GenerateProof() should not be called again
-	p2, m2, err := tab.generateInitialPost(context.Background())
-	require.NoError(t, err)
-	require.EqualValues(t, p, p2)
-	require.EqualValues(t, m, m2)
+	require.NoError(t, tab.generateInitialPost(context.Background()))
 
 	// Remove the persisted post file and try again
 	require.NoError(t, os.Remove(filepath.Join(tab.nipostBuilder.DataDir(), postFilename)))
 	tab.mpost.EXPECT().GenerateProof(gomock.Any(), shared.ZeroChallenge, gomock.Any()).Return(&types.Post{}, &types.PostMetadata{}, nil)
-	p, m, err = tab.generateInitialPost(context.Background())
-	require.NoError(t, err)
-	require.NotNil(t, p)
-	require.NotNil(t, m)
+	require.NoError(t, tab.generateInitialPost(context.Background()))
 }
 
 func TestBuilder_UpdatePoets(t *testing.T) {

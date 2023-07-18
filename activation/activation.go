@@ -262,23 +262,10 @@ func (b *Builder) SmesherID() types.NodeID {
 }
 
 func (b *Builder) run(ctx context.Context) {
-	post, metadata, err := b.generateInitialPost(ctx)
+	err := b.generateInitialPost(ctx)
 	if err != nil {
 		b.log.Error("Failed to generate proof: %s", err)
 		return
-	}
-
-	if post != nil {
-		b.log.With().Info("initial post created", log.Object("post", post), log.Object("metadata", metadata))
-		commitmentAtxId, err := b.postSetupProvider.CommitmentAtx()
-		if err != nil {
-			b.log.With().Panic("failed to fetch commitment ATX ID.", log.Err(err))
-		}
-		if err := b.validator.Post(ctx, types.EpochID(0), b.nodeID, commitmentAtxId, post, metadata, b.postSetupProvider.LastOpts().NumUnits); err != nil {
-			events.EmitInvalidPostProof()
-			b.log.With().Fatal("initial POST proof is invalid. Probably initialized POST data is corrupted. Please verify the data with postcli and regenerate the corrupted files.", log.Err(err))
-		}
-		b.initialPost = post
 	}
 
 	select {
@@ -289,17 +276,18 @@ func (b *Builder) run(ctx context.Context) {
 	b.loop(ctx)
 }
 
-func (b *Builder) generateInitialPost(ctx context.Context) (*types.Post, *types.PostMetadata, error) {
+func (b *Builder) generateInitialPost(ctx context.Context) error {
 	// Generate the initial POST if we don't have an ATX...
 	if _, err := b.cdb.GetLastAtx(b.nodeID); err == nil {
-		return nil, nil, nil
+		return nil
 	}
 	// ...and if we don't have an initial POST persisted already.
 	if post, err := loadPost(b.nipostBuilder.DataDir()); err == nil {
-		return post, &types.PostMetadata{
+		b.log.Info("loaded the initial post from disk")
+		return b.verifyInitialPost(ctx, post, &types.PostMetadata{
 			Challenge:     shared.ZeroChallenge,
 			LabelsPerUnit: b.postSetupProvider.Config().LabelsPerUnit,
-		}, nil
+		})
 	}
 
 	// Create the initial post and save it.
@@ -309,15 +297,34 @@ func (b *Builder) generateInitialPost(ctx context.Context) (*types.Post, *types.
 	post, metadata, err := b.postSetupProvider.GenerateProof(ctx, shared.ZeroChallenge, proving.WithPowCreator(b.nodeID.Bytes()))
 	if err != nil {
 		events.EmitPostFailure()
-		return nil, nil, fmt.Errorf("post execution: %w", err)
+		return fmt.Errorf("post execution: %w", err)
 	}
 	events.EmitPostComplete(shared.ZeroChallenge)
 	metrics.PostDuration.Set(float64(time.Since(startTime).Nanoseconds()))
+	b.log.Info("created the initial post")
+	if b.verifyInitialPost(ctx, post, metadata) != nil {
+		return err
+	}
 
 	if err := savePost(b.nipostBuilder.DataDir(), post); err != nil {
 		b.log.With().Warning("failed to save initial post: %w", log.Err(err))
 	}
-	return post, metadata, nil
+	return nil
+}
+
+func (b *Builder) verifyInitialPost(ctx context.Context, post *types.Post, metadata *types.PostMetadata) error {
+	b.log.With().Info("verifying the initial post", log.Object("post", post), log.Object("metadata", metadata))
+	commitmentAtxId, err := b.postSetupProvider.CommitmentAtx()
+	if err != nil {
+		b.log.With().Panic("failed to fetch commitment ATX ID.", log.Err(err))
+	}
+	if err := b.validator.Post(ctx, types.EpochID(0), b.nodeID, commitmentAtxId, post, metadata, b.postSetupProvider.LastOpts().NumUnits); err != nil {
+		events.EmitInvalidPostProof()
+		b.log.With().Fatal("initial POST proof is invalid. Probably the initialized POST data is corrupted. Please verify the data with postcli and regenerate the corrupted files.", log.Err(err))
+		return err
+	}
+	b.initialPost = post
+	return nil
 }
 
 func (b *Builder) receivePendingPoetClients() *[]PoetProvingServiceClient {
