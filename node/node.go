@@ -1194,6 +1194,10 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 	filename := filepath.Join(app.Config.SMESHING.Opts.DataDir, edKeyFileName)
 	log.Info("Looking for identity file at `%v`", filename)
 
+	if err := app.Config.Genesis.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid genesis: %w", err)
+	}
+
 	var data []byte
 	if len(app.Config.TestConfig.SmesherKey) > 0 {
 		log.With().Error("!!!TESTING!!! using pre-configured smesher key")
