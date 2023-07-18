@@ -392,7 +392,7 @@ func TestBuilder_StopSmeshing_OnPoSTError(t *testing.T) {
 	tab.mpost.EXPECT().PrepareInitializer(gomock.Any(), gomock.Any()).AnyTimes()
 	tab.mpost.EXPECT().StartSession(gomock.Any()).Return(nil).AnyTimes()
 	tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any()).Return(&types.Post{}, &types.PostMetadata{}, nil).AnyTimes()
-	tab.mpost.EXPECT().VerifyProof(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	tab.mpost.EXPECT().VerifyProof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	ch := make(chan struct{})
 	close(ch)
 	now := time.Now()
