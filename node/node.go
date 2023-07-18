@@ -145,6 +145,10 @@ func GetCommand() *cobra.Command {
 				}
 				defer app.Unlock()
 
+				if err := app.Initialize(); err != nil {
+					return err
+				}
+
 				/* Create or load miner identity */
 				if app.edSgn, err = app.LoadOrCreateEdSigner(); err != nil {
 					return fmt.Errorf("could not retrieve identity: %w", err)
@@ -152,10 +156,6 @@ func GetCommand() *cobra.Command {
 
 				app.preserve, err = app.LoadCheckpoint(ctx)
 				if err != nil {
-					return err
-				}
-
-				if err := app.Initialize(); err != nil {
 					return err
 				}
 
