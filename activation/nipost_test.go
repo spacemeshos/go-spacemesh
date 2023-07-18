@@ -53,6 +53,7 @@ func TestNIPostBuilderWithMocks(t *testing.T) {
 	postProvider := NewMockpostSetupProvider(ctrl)
 	postProvider.EXPECT().Status().Return(&PostSetupStatus{State: PostSetupStateComplete})
 	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any())
+	postProvider.EXPECT().VerifyProof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 
 	poetProvider := defaultPoetServiceMock(t, []byte("poet"))
 	poetProvider.EXPECT().Proof(gomock.Any(), "").Return(&types.PoetProofMessage{
@@ -277,6 +278,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 		poetDb, dir, logtest.New(t), sig, PoetConfig{}, mclock)
 
 	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	postProvider.EXPECT().VerifyProof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 	nipost, _, err := nb.BuildNIPost(context.Background(), &challenge)
 	req.NoError(err)
 	req.NotNil(nipost)
@@ -301,6 +303,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	req.NoError(err)
 	nb = NewNIPostBuilder(nodeID, postProvider, []PoetProvingServiceClient{poetProver}, poetDb, dir, logtest.New(t), sig, PoetConfig{}, mclock)
 	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	postProvider.EXPECT().VerifyProof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 	// check that proof ref is not called again
 	nipost, _, err = nb.BuildNIPost(context.Background(), &challenge2)
 	req.NoError(err)
@@ -309,6 +312,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	// test state not loading if other challenge provided
 	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
 	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	postProvider.EXPECT().VerifyProof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 	nipost, _, err = nb.BuildNIPost(context.Background(), &challenge3)
 	req.NoError(err)
 	req.NotNil(nipost)
@@ -365,6 +369,7 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 			}, nil
 		},
 	)
+	postProvider.EXPECT().VerifyProof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 	nb := NewNIPostBuilder(types.NodeID{1}, postProvider, poets, poetDb, t.TempDir(), logtest.New(t), sig, poetCfg, mclock)
 
 	// Act
@@ -423,6 +428,7 @@ func TestNIPostBuilder_ManyPoETs_WaitingForProof_DeadlineReached(t *testing.T) {
 			}, nil
 		},
 	)
+	postProvider.EXPECT().VerifyProof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 	nb := NewNIPostBuilder(types.NodeID{1}, postProvider, poets, poetDb, t.TempDir(), logtest.New(t), sig, poetCfg, mclock)
 
 	// Act
@@ -482,6 +488,7 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 			}, nil
 		},
 	)
+	postProvider.EXPECT().VerifyProof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 	nb := NewNIPostBuilder(types.NodeID{1}, postProvider, poets, poetDb, t.TempDir(), logtest.New(t), sig, PoetConfig{}, mclock)
 
 	// Act
@@ -726,6 +733,7 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 			}, nil
 		},
 	)
+	postProvider.EXPECT().VerifyProof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 	nb := NewNIPostBuilder(types.NodeID{1}, postProvider, []PoetProvingServiceClient{poet}, poetDb, t.TempDir(), logtest.New(t), sig, poetCfg, mclock)
 
 	// Act

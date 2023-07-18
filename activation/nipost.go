@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/merkle-tree"
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/proving"
+	"github.com/spacemeshos/post/verifying"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
@@ -216,6 +217,10 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 		if err != nil {
 			events.EmitPostFailure()
 			return nil, 0, fmt.Errorf("failed to generate Post: %v", err)
+		}
+		if err := nb.postSetupProvider.VerifyProof(ctx, proof, proofMetadata, verifying.WithPowCreator(nb.nodeID.Bytes())); err != nil {
+			events.EmitInvalidPostProof()
+			return nil, 0, fmt.Errorf("failed to verify Post: %v", err)
 		}
 		events.EmitPostComplete(nb.state.PoetProofRef[:])
 		postGenDuration = time.Since(startTime)

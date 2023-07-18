@@ -118,6 +118,15 @@ func EmitPostFailure() {
 	)
 }
 
+func EmitInvalidPostProof() {
+	const help = "Node generated invalid POST proof. Please verify your POST data."
+	emitUserEvent(
+		help,
+		true,
+		&pb.Event_PostComplete{PostComplete: &pb.EventPostComplete{}},
+	)
+}
+
 func EmitAtxPublished(
 	current, target types.EpochID,
 	id types.ATXID,

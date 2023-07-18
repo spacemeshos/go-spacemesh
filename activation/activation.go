@@ -13,6 +13,7 @@ import (
 
 	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/post/shared"
+	"github.com/spacemeshos/post/verifying"
 	"go.uber.org/atomic"
 	"golang.org/x/sync/errgroup"
 
@@ -211,6 +212,7 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 			return nil
 		case err != nil:
 			b.log.Panic("initialization failed: %v", err)
+			return err
 		}
 
 		b.run(ctx)
@@ -254,9 +256,19 @@ func (b *Builder) SmesherID() types.NodeID {
 }
 
 func (b *Builder) run(ctx context.Context) {
-	if err := b.generateInitialPost(ctx); err != nil {
+	post, metadata, err := b.generateInitialPost(ctx)
+	if err != nil {
 		b.log.Error("Failed to generate proof: %s", err)
 		return
+	}
+
+	if post != nil {
+		b.log.With().Info("initial post created", log.Object("post", post), log.Object("metadata", metadata))
+		if err := b.postSetupProvider.VerifyProof(ctx, post, metadata, verifying.WithPowCreator(b.nodeID.Bytes())); err != nil {
+			events.EmitInvalidPostProof()
+			b.log.With().Fatal("initial POST proof is invalid. Probably initialized POST data is corrupted. Please verify the data with postcli and regenerate the corrupted files.", log.Err(err))
+		}
+		b.initialPost = post
 	}
 
 	select {
@@ -267,33 +279,35 @@ func (b *Builder) run(ctx context.Context) {
 	b.loop(ctx)
 }
 
-func (b *Builder) generateInitialPost(ctx context.Context) error {
+func (b *Builder) generateInitialPost(ctx context.Context) (*types.Post, *types.PostMetadata, error) {
 	// Generate the initial POST if we don't have an ATX...
 	if _, err := b.cdb.GetLastAtx(b.nodeID); err == nil {
-		return nil
+		return nil, nil, nil
 	}
 	// ...and if we don't have an initial POST persisted already.
 	if post, err := loadPost(b.nipostBuilder.DataDir()); err == nil {
-		b.initialPost = post
-		return nil
+		return post, &types.PostMetadata{
+			Challenge:     shared.ZeroChallenge,
+			LabelsPerUnit: b.postSetupProvider.Config().LabelsPerUnit,
+		}, nil
 	}
 
 	// Create the initial post and save it.
 	startTime := time.Now()
 	var err error
 	events.EmitPostStart(shared.ZeroChallenge)
-	b.initialPost, _, err = b.postSetupProvider.GenerateProof(ctx, shared.ZeroChallenge, proving.WithPowCreator(b.nodeID.Bytes()))
+	post, metadata, err := b.postSetupProvider.GenerateProof(ctx, shared.ZeroChallenge, proving.WithPowCreator(b.nodeID.Bytes()))
 	if err != nil {
 		events.EmitPostFailure()
-		return fmt.Errorf("post execution: %w", err)
+		return nil, nil, fmt.Errorf("post execution: %w", err)
 	}
 	events.EmitPostComplete(shared.ZeroChallenge)
 	metrics.PostDuration.Set(float64(time.Since(startTime).Nanoseconds()))
 
-	if err := savePost(b.nipostBuilder.DataDir(), b.initialPost); err != nil {
+	if err := savePost(b.nipostBuilder.DataDir(), post); err != nil {
 		b.log.With().Warning("failed to save initial post: %w", log.Err(err))
 	}
-	return nil
+	return post, metadata, nil
 }
 
 func (b *Builder) receivePendingPoetClients() *[]PoetProvingServiceClient {

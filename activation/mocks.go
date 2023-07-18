@@ -695,6 +695,25 @@ func (mr *MockpostSetupProviderMockRecorder) VRFNonce() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRFNonce", reflect.TypeOf((*MockpostSetupProvider)(nil).VRFNonce))
 }
 
+// VerifyProof mocks base method.
+func (m *MockpostSetupProvider) VerifyProof(ctx context.Context, proof *types.Post, metadata *types.PostMetadata, options ...verifying.OptionFunc) error {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{ctx, proof, metadata}
+	for _, a := range options {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "VerifyProof", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// VerifyProof indicates an expected call of VerifyProof.
+func (mr *MockpostSetupProviderMockRecorder) VerifyProof(ctx, proof, metadata interface{}, options ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{ctx, proof, metadata}, options...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VerifyProof", reflect.TypeOf((*MockpostSetupProvider)(nil).VerifyProof), varargs...)
+}
+
 // MockSmeshingProvider is a mock of SmeshingProvider interface.
 type MockSmeshingProvider struct {
 	ctrl     *gomock.Controller
