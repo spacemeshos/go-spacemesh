@@ -83,8 +83,6 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 		libp2p.Identity(key),
 		libp2p.ListenAddrStrings(cfg.Listen),
 		libp2p.UserAgent("go-spacemesh"),
-		libp2p.DisableRelay(),
-
 		libp2p.Transport(func(upgrader transport.Upgrader, rcmgr network.ResourceManager) (transport.Transport, error) {
 			opts := []tcp.Option{}
 			if cfg.DisableReusePort {
@@ -108,6 +106,12 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 		libp2p.Peerstore(ps),
 		libp2p.BandwidthReporter(p2pmetrics.NewBandwidthCollector()),
 	}
+	// TODO no need to enable it on every node
+	lopts = append(lopts,
+		libp2p.EnableRelayService(),      // enables circuit v2 relay
+		libp2p.EnableNATService(),        // enables service to help with discovering reachability
+		libp2p.ForceReachabilityPublic(), // forces public reachability, otherwise bootnoe can't learn it in our setup
+	)
 	if cfg.Metrics {
 		lopts = append(lopts, setupResourcesManager(cfg.HighPeers))
 	}
