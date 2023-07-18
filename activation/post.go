@@ -11,8 +11,6 @@ import (
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/proving"
-	"github.com/spacemeshos/post/shared"
-	"github.com/spacemeshos/post/verifying"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -489,34 +487,6 @@ func (mgr *PostSetupManager) GenerateProof(ctx context.Context, challenge []byte
 		LabelsPerUnit: proofMetadata.LabelsPerUnit,
 	}
 	return p, m, nil
-}
-
-func (mgr *PostSetupManager) VerifyProof(ctx context.Context, proof *types.Post, metadata *types.PostMetadata, options ...verifying.OptionFunc) error {
-	commitmentAtx, err := mgr.CommitmentAtx()
-	if err != nil {
-		return fmt.Errorf("failed to get commitment ATX: %w", err)
-	}
-
-	p := (*shared.Proof)(proof)
-
-	m := &shared.ProofMetadata{
-		NodeId:          mgr.id.Bytes(),
-		CommitmentAtxId: commitmentAtx.Bytes(),
-		NumUnits:        mgr.lastOpts.NumUnits,
-		Challenge:       metadata.Challenge,
-		LabelsPerUnit:   metadata.LabelsPerUnit,
-	}
-
-	verifier, err := NewPostVerifier(mgr.cfg, mgr.logger)
-	if err != nil {
-		return fmt.Errorf("creating post verifier: %w", err)
-	}
-	opts := []verifying.OptionFunc{
-		verifying.WithLabelScryptParams(mgr.lastOpts.Scrypt),
-	}
-	opts = append(opts, options...)
-
-	return verifier.Verify(ctx, p, m, opts...)
 }
 
 // VRFNonce returns the VRF nonce found during initialization.
