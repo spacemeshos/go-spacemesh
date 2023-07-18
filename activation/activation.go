@@ -74,6 +74,7 @@ type Builder struct {
 	nipostBuilder     nipostBuilder
 	postSetupProvider postSetupProvider
 	initialPost       *types.Post
+	validator         nipostValidator
 
 	// smeshingMutex protects `StartSmeshing` and `StopSmeshing` from concurrent access
 	smeshingMutex sync.Mutex
@@ -122,6 +123,12 @@ func WithContext(ctx context.Context) BuilderOption {
 func WithPoetConfig(c PoetConfig) BuilderOption {
 	return func(b *Builder) {
 		b.poetCfg = c
+	}
+}
+
+func WithValidator(v nipostValidator) BuilderOption {
+	return func(b *Builder) {
+		b.validator = v
 	}
 }
 
@@ -211,6 +218,7 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 			return nil
 		case err != nil:
 			b.log.Panic("initialization failed: %v", err)
+			return err
 		}
 
 		b.run(ctx)
@@ -254,7 +262,8 @@ func (b *Builder) SmesherID() types.NodeID {
 }
 
 func (b *Builder) run(ctx context.Context) {
-	if err := b.generateInitialPost(ctx); err != nil {
+	err := b.generateInitialPost(ctx)
+	if err != nil {
 		b.log.Error("Failed to generate proof: %s", err)
 		return
 	}
@@ -274,25 +283,47 @@ func (b *Builder) generateInitialPost(ctx context.Context) error {
 	}
 	// ...and if we don't have an initial POST persisted already.
 	if post, err := loadPost(b.nipostBuilder.DataDir()); err == nil {
-		b.initialPost = post
-		return nil
+		b.log.Info("loaded the initial post from disk")
+		return b.verifyInitialPost(ctx, post, &types.PostMetadata{
+			Challenge:     shared.ZeroChallenge,
+			LabelsPerUnit: b.postSetupProvider.Config().LabelsPerUnit,
+		})
 	}
 
 	// Create the initial post and save it.
 	startTime := time.Now()
 	var err error
 	events.EmitPostStart(shared.ZeroChallenge)
-	b.initialPost, _, err = b.postSetupProvider.GenerateProof(ctx, shared.ZeroChallenge, proving.WithPowCreator(b.nodeID.Bytes()))
+	post, metadata, err := b.postSetupProvider.GenerateProof(ctx, shared.ZeroChallenge, proving.WithPowCreator(b.nodeID.Bytes()))
 	if err != nil {
 		events.EmitPostFailure()
 		return fmt.Errorf("post execution: %w", err)
 	}
 	events.EmitPostComplete(shared.ZeroChallenge)
 	metrics.PostDuration.Set(float64(time.Since(startTime).Nanoseconds()))
+	b.log.Info("created the initial post")
+	if b.verifyInitialPost(ctx, post, metadata) != nil {
+		return err
+	}
 
-	if err := savePost(b.nipostBuilder.DataDir(), b.initialPost); err != nil {
+	if err := savePost(b.nipostBuilder.DataDir(), post); err != nil {
 		b.log.With().Warning("failed to save initial post: %w", log.Err(err))
 	}
+	return nil
+}
+
+func (b *Builder) verifyInitialPost(ctx context.Context, post *types.Post, metadata *types.PostMetadata) error {
+	b.log.With().Info("verifying the initial post", log.Object("post", post), log.Object("metadata", metadata))
+	commitmentAtxId, err := b.postSetupProvider.CommitmentAtx()
+	if err != nil {
+		b.log.With().Panic("failed to fetch commitment ATX ID.", log.Err(err))
+	}
+	if err := b.validator.Post(ctx, types.EpochID(0), b.nodeID, commitmentAtxId, post, metadata, b.postSetupProvider.LastOpts().NumUnits); err != nil {
+		events.EmitInvalidPostProof()
+		b.log.With().Fatal("initial POST proof is invalid. Probably the initialized POST data is corrupted. Please verify the data with postcli and regenerate the corrupted files.", log.Err(err))
+		return err
+	}
+	b.initialPost = post
 	return nil
 }
 

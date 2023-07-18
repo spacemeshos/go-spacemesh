@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/merkle-tree"
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/proving"
+	"github.com/spacemeshos/post/verifying"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
@@ -69,6 +70,15 @@ type NIPostBuilder struct {
 	signer            *signing.EdSigner
 	layerClock        layerClock
 	poetCfg           PoetConfig
+	validator         nipostValidator
+}
+
+type NIPostBuilderOption func(*NIPostBuilder)
+
+func WithNipostValidator(v nipostValidator) NIPostBuilderOption {
+	return func(nb *NIPostBuilder) {
+		nb.validator = v
+	}
 }
 
 type poetDbAPI interface {
@@ -87,8 +97,9 @@ func NewNIPostBuilder(
 	signer *signing.EdSigner,
 	poetCfg PoetConfig,
 	layerClock layerClock,
+	opts ...NIPostBuilderOption,
 ) *NIPostBuilder {
-	return &NIPostBuilder{
+	b := &NIPostBuilder{
 		nodeID:            nodeID,
 		postSetupProvider: postSetupProvider,
 		poetProvers:       poetProvers,
@@ -100,6 +111,11 @@ func NewNIPostBuilder(
 		poetCfg:           poetCfg,
 		layerClock:        layerClock,
 	}
+
+	for _, opt := range opts {
+		opt(b)
+	}
+	return b
 }
 
 func (nb *NIPostBuilder) DataDir() string {
@@ -216,6 +232,23 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 		if err != nil {
 			events.EmitPostFailure()
 			return nil, 0, fmt.Errorf("failed to generate Post: %v", err)
+		}
+		commitmentAtxId, err := nb.postSetupProvider.CommitmentAtx()
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to get commitment ATX: %v", err)
+		}
+		if err := nb.validator.Post(
+			ctx,
+			challenge.PublishEpoch,
+			nb.nodeID,
+			commitmentAtxId,
+			proof,
+			proofMetadata,
+			nb.postSetupProvider.LastOpts().NumUnits,
+			verifying.WithLabelScryptParams(nb.postSetupProvider.LastOpts().Scrypt),
+		); err != nil {
+			events.EmitInvalidPostProof()
+			return nil, 0, fmt.Errorf("failed to verify Post: %v", err)
 		}
 		events.EmitPostComplete(nb.state.PoetProofRef[:])
 		postGenDuration = time.Since(startTime)
