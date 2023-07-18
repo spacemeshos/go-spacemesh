@@ -317,20 +317,27 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context) error {
 	)
 	events.EmitInitStart(mgr.id, mgr.commitmentAtxId)
 	err = mgr.init.Initialize(ctx)
-	events.EmitInitComplete(err != nil)
 
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
+	var errLabelMismatch initialization.ErrReferenceLabelMismatch
 	switch {
 	case errors.Is(err, context.Canceled):
 		mgr.logger.Info("post setup session was stopped")
 		mgr.state = PostSetupStateStopped
 		return err
+	case errors.As(err, &errLabelMismatch):
+		mgr.logger.With().Error("post setup session failed due to an issue with the initialization provider", log.Err(errLabelMismatch))
+		mgr.state = PostSetupStateError
+		events.EmitInitFailure(mgr.id, mgr.commitmentAtxId, errLabelMismatch)
+		return nil
 	case err != nil:
 		mgr.logger.With().Error("post setup session failed", log.Err(err))
 		mgr.state = PostSetupStateError
+		events.EmitInitFailure(mgr.id, mgr.commitmentAtxId, err)
 		return err
 	}
+	events.EmitInitComplete()
 
 	mgr.logger.With().Info("post setup completed",
 		log.String("node_id", mgr.id.String()),
