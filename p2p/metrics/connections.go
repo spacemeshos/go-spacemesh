@@ -7,6 +7,7 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 
 	"github.com/spacemeshos/go-spacemesh/metrics"
+	"github.com/spacemeshos/go-spacemesh/metrics/public"
 )
 
 var (
@@ -52,12 +53,14 @@ func (c *ConnectionsMeeter) Listen(network.Network, ma.Multiaddr) {}
 func (c *ConnectionsMeeter) ListenClose(network.Network, ma.Multiaddr) {}
 
 // Connected called when a connection opened.
-func (c *ConnectionsMeeter) Connected(network.Network, network.Conn) {
+func (c *ConnectionsMeeter) Connected(_ network.Network, conn network.Conn) {
+	public.Connections.WithLabelValues(conn.Stat().Direction.String()).Inc()
 	connections.WithLabelValues().Inc()
 }
 
 // Disconnected called when a connection closed.
-func (c *ConnectionsMeeter) Disconnected(network.Network, network.Conn) {
+func (c *ConnectionsMeeter) Disconnected(_ network.Network, conn network.Conn) {
+	public.Connections.WithLabelValues(conn.Stat().Direction.String()).Dec()
 	connections.WithLabelValues().Dec()
 }
 

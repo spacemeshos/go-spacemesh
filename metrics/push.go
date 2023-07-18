@@ -1,29 +1,29 @@
 package metrics
 
 import (
+	"net/http"
 	"time"
 
-	stdprometheus "github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/push"
 
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/metrics/public"
 )
 
 // StartPushingMetrics begins pushing metrics to the url specified by the --metrics-push flag
 // with period specified by the --metrics-push-period flag.
-func StartPushingMetrics(url, username, password string, periodSec int, nodeID, networkID string) {
-	period := time.Duration(periodSec) * time.Second
-	ticker := time.NewTicker(period)
-
-	pusher := push.New(url, "go-spacemesh").Gatherer(stdprometheus.DefaultGatherer).
-		Grouping("node_id", nodeID).
-		Grouping("network_id", networkID)
-
+func StartPushingMetrics(url, username, password, xorg string, period time.Duration, nodeID, networkID string) {
+	header := http.Header{}
+	header.Add("X-Scope-OrgId", xorg)
+	pusher := push.New(url, "go-spacemesh").Gatherer(public.Registry).
+		Grouping("node", nodeID).
+		Grouping("network", networkID).
+		Header(header)
 	if username != "" && password != "" {
-		pusher.BasicAuth(username, password)
+		pusher = pusher.BasicAuth(username, password)
 	}
-
 	go func() {
+		ticker := time.NewTicker(period)
 		for range ticker.C {
 			err := pusher.Push()
 			if err != nil {

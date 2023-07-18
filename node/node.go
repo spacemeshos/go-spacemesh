@@ -1374,9 +1374,13 @@ func (app *App) Start(ctx context.Context) error {
 	}
 
 	if app.Config.MetricsPush != "" {
-		metrics.StartPushingMetrics(app.Config.MetricsPush,
-			app.Config.MetricsPushUser, app.Config.MetricsPushPass, app.Config.MetricsPushPeriod,
-			app.host.ID().String(), app.Config.Genesis.GenesisID().ShortString())
+		metrics.StartPushingMetrics(
+			app.Config.MetricsPush,
+			app.Config.MetricsPushUser,
+			app.Config.MetricsPushPass,
+			app.Config.MetricsXorgID,
+			app.Config.MetricsPushPeriod,
+			app.host.ID().ShortString(), app.Config.Genesis.GenesisID().ShortString())
 	}
 
 	if err := app.startServices(ctx); err != nil {

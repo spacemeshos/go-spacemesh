@@ -85,10 +85,11 @@ type BaseConfig struct {
 	CollectMetrics bool `mapstructure:"metrics"`
 	MetricsPort    int  `mapstructure:"metrics-port"`
 
-	MetricsPush       string `mapstructure:"metrics-push"`
-	MetricsPushPeriod int    `mapstructure:"metrics-push-period"`
-	MetricsPushUser   string `mapstructure:"metrics-push-user"`
-	MetricsPushPass   string `mapstructure:"metrics-push-pass"`
+	MetricsPush       string        `mapstructure:"metrics-push"`
+	MetricsPushPeriod time.Duration `mapstructure:"metrics-push-period"`
+	MetricsPushUser   string        `mapstructure:"metrics-push-user"`
+	MetricsPushPass   string        `mapstructure:"metrics-push-pass"`
+	MetricsXorgID     string        `mapstructure:"metrics-push-xorg"`
 
 	ProfilerName string `mapstructure:"profiler-name"`
 	ProfilerURL  string `mapstructure:"profiler-url"`
