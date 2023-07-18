@@ -69,7 +69,6 @@ type postSetupProvider interface {
 	StartSession(context context.Context) error
 	Reset() error
 	GenerateProof(ctx context.Context, challenge []byte, options ...proving.OptionFunc) (*types.Post, *types.PostMetadata, error)
-	VerifyProof(ctx context.Context, proof *types.Post, metadata *types.PostMetadata, options ...verifying.OptionFunc) error
 	CommitmentAtx() (types.ATXID, error)
 	VRFNonce() (*types.VRFPostIndex, error)
 	LastOpts() *PostSetupOpts

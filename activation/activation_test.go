@@ -96,12 +96,13 @@ type testAtxBuilder struct {
 	coinbase    types.Address
 	goldenATXID types.ATXID
 
-	mhdlr   *MockatxHandler
-	mpub    *mocks.MockPublisher
-	mnipost *MocknipostBuilder
-	mpost   *MockpostSetupProvider
-	mclock  *MocklayerClock
-	msync   *Mocksyncer
+	mhdlr      *MockatxHandler
+	mpub       *mocks.MockPublisher
+	mnipost    *MocknipostBuilder
+	mpost      *MockpostSetupProvider
+	mclock     *MocklayerClock
+	msync      *Mocksyncer
+	mValidator *MocknipostValidator
 }
 
 func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
@@ -121,7 +122,10 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 		mpost:       NewMockpostSetupProvider(ctrl),
 		mclock:      NewMocklayerClock(ctrl),
 		msync:       NewMocksyncer(ctrl),
+		mValidator:  NewMocknipostValidator(ctrl),
 	}
+
+	opts = append(opts, WithValidator(tab.mValidator))
 
 	cfg := Config{
 		CoinbaseAccount: tab.coinbase,
@@ -255,7 +259,7 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 	tab.mpost.EXPECT().PrepareInitializer(gomock.Any(), gomock.Any()).AnyTimes()
 	tab.mpost.EXPECT().StartSession(gomock.Any()).AnyTimes()
 	tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(&types.Post{}, &types.PostMetadata{}, nil)
-	tab.mpost.EXPECT().VerifyProof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
+	tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
 	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(make(chan struct{})).AnyTimes()
 	require.NoError(t, tab.StartSmeshing(coinbase, postSetupOpts))
 	require.Equal(t, coinbase, tab.Coinbase())
@@ -272,12 +276,14 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 	getBuilder := func(t *testing.T) *Builder {
 		tab := newTestBuilder(t)
 		tab.mpost.EXPECT().PrepareInitializer(gomock.Any(), gomock.Any()).AnyTimes()
+		tab.mpost.EXPECT().CommitmentAtx().Return(types.EmptyATXID, nil).AnyTimes()
+		tab.mpost.EXPECT().LastOpts().Return(&PostSetupOpts{}).AnyTimes()
 		tab.mpost.EXPECT().StartSession(gomock.Any()).AnyTimes()
 		tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(&types.Post{}, &types.PostMetadata{
 			Challenge: shared.ZeroChallenge,
 		}, nil)
 		tab.mpost.EXPECT().Reset().AnyTimes()
-		tab.mpost.EXPECT().VerifyProof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
+		tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
 		tab.mpost.EXPECT().Config().AnyTimes()
 		ch := make(chan struct{})
 		close(ch)
@@ -391,8 +397,10 @@ func TestBuilder_StopSmeshing_OnPoSTError(t *testing.T) {
 	tab := newTestBuilder(t)
 	tab.mpost.EXPECT().PrepareInitializer(gomock.Any(), gomock.Any()).AnyTimes()
 	tab.mpost.EXPECT().StartSession(gomock.Any()).Return(nil).AnyTimes()
+	tab.mpost.EXPECT().CommitmentAtx().Return(types.EmptyATXID, nil).AnyTimes()
+	tab.mpost.EXPECT().LastOpts().Return(&PostSetupOpts{}).AnyTimes()
 	tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any()).Return(&types.Post{}, &types.PostMetadata{}, nil).AnyTimes()
-	tab.mpost.EXPECT().VerifyProof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
 	ch := make(chan struct{})
 	close(ch)
 	now := time.Now()

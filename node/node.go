@@ -798,6 +798,7 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		app.edSgn,
 		poetCfg,
 		app.clock,
+		activation.WithNipostValidator(app.validator),
 	)
 
 	var coinbaseAddr types.Address
@@ -831,6 +832,7 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		activation.WithContext(ctx),
 		activation.WithPoetConfig(poetCfg),
 		activation.WithPoetRetryInterval(app.Config.HARE.WakeupDelta),
+		activation.WithValidator(app.validator),
 	)
 
 	malfeasanceHandler := malfeasance.NewHandler(

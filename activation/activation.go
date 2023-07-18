@@ -13,7 +13,6 @@ import (
 
 	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/post/shared"
-	"github.com/spacemeshos/post/verifying"
 	"go.uber.org/atomic"
 	"golang.org/x/sync/errgroup"
 
@@ -75,6 +74,7 @@ type Builder struct {
 	nipostBuilder     nipostBuilder
 	postSetupProvider postSetupProvider
 	initialPost       *types.Post
+	validator         nipostValidator
 
 	// smeshingMutex protects `StartSmeshing` and `StopSmeshing` from concurrent access
 	smeshingMutex sync.Mutex
@@ -123,6 +123,12 @@ func WithContext(ctx context.Context) BuilderOption {
 func WithPoetConfig(c PoetConfig) BuilderOption {
 	return func(b *Builder) {
 		b.poetCfg = c
+	}
+}
+
+func WithValidator(v nipostValidator) BuilderOption {
+	return func(b *Builder) {
+		b.validator = v
 	}
 }
 
@@ -264,7 +270,11 @@ func (b *Builder) run(ctx context.Context) {
 
 	if post != nil {
 		b.log.With().Info("initial post created", log.Object("post", post), log.Object("metadata", metadata))
-		if err := b.postSetupProvider.VerifyProof(ctx, post, metadata, verifying.WithPowCreator(b.nodeID.Bytes())); err != nil {
+		commitmentAtxId, err := b.postSetupProvider.CommitmentAtx()
+		if err != nil {
+			b.log.With().Panic("failed to fetch commitment ATX ID.", log.Err(err))
+		}
+		if err := b.validator.Post(ctx, types.EpochID(0), b.nodeID, commitmentAtxId, post, metadata, b.postSetupProvider.LastOpts().NumUnits); err != nil {
 			events.EmitInvalidPostProof()
 			b.log.With().Fatal("initial POST proof is invalid. Probably initialized POST data is corrupted. Please verify the data with postcli and regenerate the corrupted files.", log.Err(err))
 		}
