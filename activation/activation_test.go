@@ -96,12 +96,13 @@ type testAtxBuilder struct {
 	coinbase    types.Address
 	goldenATXID types.ATXID
 
-	mhdlr   *MockatxHandler
-	mpub    *mocks.MockPublisher
-	mnipost *MocknipostBuilder
-	mpost   *MockpostSetupProvider
-	mclock  *MocklayerClock
-	msync   *Mocksyncer
+	mhdlr      *MockatxHandler
+	mpub       *mocks.MockPublisher
+	mnipost    *MocknipostBuilder
+	mpost      *MockpostSetupProvider
+	mclock     *MocklayerClock
+	msync      *Mocksyncer
+	mValidator *MocknipostValidator
 }
 
 func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
@@ -121,7 +122,10 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 		mpost:       NewMockpostSetupProvider(ctrl),
 		mclock:      NewMocklayerClock(ctrl),
 		msync:       NewMocksyncer(ctrl),
+		mValidator:  NewMocknipostValidator(ctrl),
 	}
+
+	opts = append(opts, WithValidator(tab.mValidator))
 
 	cfg := Config{
 		CoinbaseAccount: tab.coinbase,
@@ -254,7 +258,10 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 
 	tab.mpost.EXPECT().PrepareInitializer(gomock.Any(), gomock.Any()).AnyTimes()
 	tab.mpost.EXPECT().StartSession(gomock.Any()).AnyTimes()
+	tab.mpost.EXPECT().LastOpts().Return(&PostSetupOpts{}).AnyTimes()
+	tab.mpost.EXPECT().CommitmentAtx().Return(tab.goldenATXID, nil).AnyTimes()
 	tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(&types.Post{}, &types.PostMetadata{}, nil)
+	tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
 	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(make(chan struct{})).AnyTimes()
 	require.NoError(t, tab.StartSmeshing(coinbase, postSetupOpts))
 	require.Equal(t, coinbase, tab.Coinbase())
@@ -271,9 +278,15 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 	getBuilder := func(t *testing.T) *Builder {
 		tab := newTestBuilder(t)
 		tab.mpost.EXPECT().PrepareInitializer(gomock.Any(), gomock.Any()).AnyTimes()
+		tab.mpost.EXPECT().CommitmentAtx().Return(types.EmptyATXID, nil).AnyTimes()
+		tab.mpost.EXPECT().LastOpts().Return(&PostSetupOpts{}).AnyTimes()
 		tab.mpost.EXPECT().StartSession(gomock.Any()).AnyTimes()
-		tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(&types.Post{}, &types.PostMetadata{}, nil)
+		tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(&types.Post{}, &types.PostMetadata{
+			Challenge: shared.ZeroChallenge,
+		}, nil)
 		tab.mpost.EXPECT().Reset().AnyTimes()
+		tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
+		tab.mpost.EXPECT().Config().AnyTimes()
 		ch := make(chan struct{})
 		close(ch)
 		tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(ch).AnyTimes()
@@ -309,6 +322,22 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 		}
 		require.NoError(t, eg.Wait())
 	})
+}
+
+func TestBuilder_StoppingSmeshingBefore_Initialized(t *testing.T) {
+	tab := newTestBuilder(t)
+	tab.mpost.EXPECT().PrepareInitializer(gomock.Any(), gomock.Any()).AnyTimes()
+	tab.mpost.EXPECT().StartSession(gomock.Any()).DoAndReturn(func(ctx context.Context) error {
+		// wait for stop to be called
+		<-ctx.Done()
+		return ctx.Err()
+	}).AnyTimes()
+
+	require.NoError(t, tab.StartSmeshing(types.Address{}, PostSetupOpts{}))
+	require.NoError(t, tab.StopSmeshing(false))
+
+	// no calls to GenerateProof after stopping
+	require.NoError(t, tab.eg.Wait()) // returns without error (StartSmeshing can be called again)
 }
 
 func TestBuilder_StartSmeshing_PanicsOnErrInStartSession(t *testing.T) {
@@ -370,7 +399,10 @@ func TestBuilder_StopSmeshing_OnPoSTError(t *testing.T) {
 	tab := newTestBuilder(t)
 	tab.mpost.EXPECT().PrepareInitializer(gomock.Any(), gomock.Any()).AnyTimes()
 	tab.mpost.EXPECT().StartSession(gomock.Any()).Return(nil).AnyTimes()
+	tab.mpost.EXPECT().CommitmentAtx().Return(types.EmptyATXID, nil).AnyTimes()
+	tab.mpost.EXPECT().LastOpts().Return(&PostSetupOpts{}).AnyTimes()
 	tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any()).Return(&types.Post{}, &types.PostMetadata{}, nil).AnyTimes()
+	tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
 	ch := make(chan struct{})
 	close(ch)
 	now := time.Now()
@@ -1068,6 +1100,9 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
 	tab.mpost.EXPECT().GenerateProof(gomock.Any(), shared.ZeroChallenge, gomock.Any()).Return(&types.Post{}, &types.PostMetadata{}, nil)
+	tab.mpost.EXPECT().LastOpts().Return(&PostSetupOpts{})
+	tab.mpost.EXPECT().CommitmentAtx().Return(tab.goldenATXID, nil)
+	tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
 	require.NoError(t, tab.generateInitialPost(context.Background()))
 
 	posEpoch := postGenesisEpoch + 1
@@ -1093,7 +1128,13 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 
 func TestBuilder_InitialPostIsPersisted(t *testing.T) {
 	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
-	tab.mpost.EXPECT().GenerateProof(gomock.Any(), shared.ZeroChallenge, gomock.Any()).Return(&types.Post{}, &types.PostMetadata{}, nil)
+	tab.mpost.EXPECT().Config().AnyTimes().Return(PostConfig{})
+	tab.mpost.EXPECT().LastOpts().Return(&PostSetupOpts{}).Times(3)
+	tab.mpost.EXPECT().CommitmentAtx().Return(tab.goldenATXID, nil).Times(3)
+	tab.mpost.EXPECT().GenerateProof(gomock.Any(), shared.ZeroChallenge, gomock.Any()).Return(&types.Post{}, &types.PostMetadata{
+		Challenge: shared.ZeroChallenge,
+	}, nil)
+	tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
 	require.NoError(t, tab.generateInitialPost(context.Background()))
 
 	// GenerateProof() should not be called again

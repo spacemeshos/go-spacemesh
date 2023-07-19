@@ -1,0 +1,1 @@
+ALTER TABLE identities ADD received INT DEFAULT 0 NOT NULL;

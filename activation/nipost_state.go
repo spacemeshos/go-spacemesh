@@ -1,7 +1,6 @@
 package activation
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"hash/crc64"
@@ -20,43 +19,71 @@ const (
 	challengeFilename = "nipost_challenge.bin"
 	builderFilename   = "nipost_builder_state.bin"
 	postFilename      = "post.bin"
-	crc64Size         = 8
 )
 
 func write(path string, data []byte) error {
-	buf := bytes.NewBuffer(nil)
-	checksum := crc64.New(crc64.MakeTable(crc64.ISO))
-	w := io.MultiWriter(buf, checksum)
-	if _, err := w.Write(data); err != nil {
-		return fmt.Errorf("write data %v: %w", path, err)
+	tmp, err := os.Create(fmt.Sprintf("%s.tmp", path))
+	if err != nil {
+		return fmt.Errorf("create temporary file %s: %w", tmp.Name(), err)
 	}
 
-	crc := make([]byte, crc64Size)
+	checksum := crc64.New(crc64.MakeTable(crc64.ISO))
+	w := io.MultiWriter(tmp, checksum)
+	if _, err = w.Write(data); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("write data %v: %w", tmp.Name(), err)
+	}
+
+	crc := make([]byte, crc64.Size)
 	binary.BigEndian.PutUint64(crc, checksum.Sum64())
-	if _, err := buf.Write(crc); err != nil {
-		return fmt.Errorf("write checksum %v: %w", path, err)
+	if _, err = tmp.Write(crc); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("write checksum %s: %w", tmp.Name(), err)
 	}
-	if err := atomic.WriteFile(path, buf); err != nil {
-		return fmt.Errorf("save file %v: %w", path, err)
+
+	if err = tmp.Close(); err != nil {
+		return fmt.Errorf("failed to close tmp file %s: %w", tmp.Name(), err)
 	}
+
+	if err = atomic.ReplaceFile(tmp.Name(), path); err != nil {
+		return fmt.Errorf("save file from %s, %s: %w", tmp.Name(), path, err)
+	}
+
 	return nil
 }
 
 func read(path string) ([]byte, error) {
-	data, err := os.ReadFile(path)
+	file, err := os.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("read file %v: %w", path, err)
+		return nil, fmt.Errorf("open file %s: %w", path, err)
 	}
+
+	defer file.Close()
+
+	fInfo, err := file.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get file info %s: %w", path, err)
+	}
+
+	data := make([]byte, fInfo.Size()-crc64.Size)
 	checksum := crc64.New(crc64.MakeTable(crc64.ISO))
-	end := len(data) - crc64Size
-	if _, err = checksum.Write(data[:end]); err != nil {
-		return nil, fmt.Errorf("read checksum %v: %w", path, err)
+	if _, err = io.TeeReader(file, checksum).Read(data); err != nil {
+		return nil, fmt.Errorf("read file %s: %w", path, err)
 	}
-	saved := binary.BigEndian.Uint64(data[end:])
-	if saved != checksum.Sum64() {
-		return nil, fmt.Errorf("wrong checksum %d, computed %d", saved, checksum.Sum64())
+
+	saved := make([]byte, crc64.Size)
+	if _, err = file.Read(saved); err != nil {
+		return nil, fmt.Errorf("read checksum %s: %w", path, err)
 	}
-	return data[:end], nil
+
+	savedChecksum := binary.BigEndian.Uint64(saved)
+
+	if savedChecksum != checksum.Sum64() {
+		return nil, fmt.Errorf(
+			"wrong checksum 0x%X, computed 0x%X", savedChecksum, checksum.Sum64())
+	}
+
+	return data, nil
 }
 
 func load(filename string, dst scale.Decodable) error {

@@ -54,6 +54,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
+	"github.com/spacemeshos/go-spacemesh/metrics/public"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/node/mapstructureutil"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -145,6 +146,10 @@ func GetCommand() *cobra.Command {
 				}
 				defer app.Unlock()
 
+				if err := app.Initialize(); err != nil {
+					return err
+				}
+
 				/* Create or load miner identity */
 				if app.edSgn, err = app.LoadOrCreateEdSigner(); err != nil {
 					return fmt.Errorf("could not retrieve identity: %w", err)
@@ -152,10 +157,6 @@ func GetCommand() *cobra.Command {
 
 				app.preserve, err = app.LoadCheckpoint(ctx)
 				if err != nil {
-					return err
-				}
-
-				if err := app.Initialize(); err != nil {
 					return err
 				}
 
@@ -453,9 +454,9 @@ func (app *App) Initialize() error {
 	timeCfg.TimeConfigValues = app.Config.TIME
 
 	app.setupLogging()
-
 	app.introduction()
 
+	public.Version.WithLabelValues(cmd.Version).Set(1)
 	return nil
 }
 
@@ -798,6 +799,7 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		app.edSgn,
 		poetCfg,
 		app.clock,
+		activation.WithNipostValidator(app.validator),
 	)
 
 	var coinbaseAddr types.Address
@@ -831,6 +833,7 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		activation.WithContext(ctx),
 		activation.WithPoetConfig(poetCfg),
 		activation.WithPoetRetryInterval(app.Config.HARE.WakeupDelta),
+		activation.WithValidator(app.validator),
 	)
 
 	malfeasanceHandler := malfeasance.NewHandler(
@@ -1372,9 +1375,13 @@ func (app *App) Start(ctx context.Context) error {
 	}
 
 	if app.Config.MetricsPush != "" {
-		metrics.StartPushingMetrics(app.Config.MetricsPush,
-			app.Config.MetricsPushUser, app.Config.MetricsPushPass, app.Config.MetricsPushPeriod,
-			app.host.ID().String(), app.Config.Genesis.GenesisID().ShortString())
+		metrics.StartPushingMetrics(
+			app.Config.MetricsPush,
+			app.Config.MetricsPushUser,
+			app.Config.MetricsPushPass,
+			app.Config.MetricsPushHeader,
+			app.Config.MetricsPushPeriod,
+			app.host.ID().String()[:5], app.Config.Genesis.GenesisID().ShortString())
 	}
 
 	if err := app.startServices(ctx); err != nil {

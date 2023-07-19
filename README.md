@@ -107,7 +107,7 @@ with a simple command:
 
 Network will use short epochs (1 minute), and 10 layers within the epoch (each 6s). Poet is launched in the same process in this mode. So expect that it will periodically hog 1 core. Minimal smeshig is enabled in order for consensus to work.
 
-Public GRPC API are launched on 0.0.0.0:10092. Private - 0.0.0.0:10093.
+Public GRPC API are launched on 0.0.0.0:9092. Private - 0.0.0.0:9093.
 
 ### Building
 

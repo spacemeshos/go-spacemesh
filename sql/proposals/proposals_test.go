@@ -2,6 +2,7 @@ package proposals
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -17,7 +18,7 @@ func TestAdd(t *testing.T) {
 	ballot := types.NewExistingBallot(types.BallotID{1}, types.RandomEdSignature(), nodeID, types.LayerID(0))
 
 	require.NoError(t, ballots.Add(db, &ballot))
-	require.NoError(t, identities.SetMalicious(db, nodeID, []byte("proof")))
+	require.NoError(t, identities.SetMalicious(db, nodeID, []byte("proof"), time.Now()))
 	proposal := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot:   ballot,
@@ -38,7 +39,7 @@ func TestHas(t *testing.T) {
 	ballot := types.NewExistingBallot(types.BallotID{1}, types.RandomEdSignature(), nodeID, types.LayerID(0))
 
 	require.NoError(t, ballots.Add(db, &ballot))
-	require.NoError(t, identities.SetMalicious(db, nodeID, []byte("proof")))
+	require.NoError(t, identities.SetMalicious(db, nodeID, []byte("proof"), time.Now()))
 	proposal := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot:   ballot,
@@ -63,7 +64,7 @@ func TestGet(t *testing.T) {
 	ballot := types.NewExistingBallot(types.BallotID{1}, types.RandomEdSignature(), nodeID, types.LayerID(0))
 
 	require.NoError(t, ballots.Add(db, &ballot))
-	require.NoError(t, identities.SetMalicious(db, nodeID, []byte("proof")))
+	require.NoError(t, identities.SetMalicious(db, nodeID, []byte("proof"), time.Now()))
 	ballot.SetMalicious()
 
 	proposal := &types.Proposal{

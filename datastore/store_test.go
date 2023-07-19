@@ -43,7 +43,7 @@ func TestMalfeasanceProof_Honest(t *testing.T) {
 	require.Equal(t, 1, cdb.MalfeasanceCacheSize())
 
 	// secretly save the proof to database
-	require.NoError(t, identities.SetMalicious(db, nodeID1, []byte("bad")))
+	require.NoError(t, identities.SetMalicious(db, nodeID1, []byte("bad"), time.Now()))
 	bad, err := identities.IsMalicious(db, nodeID1)
 	require.NoError(t, err)
 	require.True(t, bad)
@@ -66,7 +66,7 @@ func TestMalfeasanceProof_Honest(t *testing.T) {
 	require.Equal(t, 2, cdb.MalfeasanceCacheSize())
 
 	// secretly save the proof to database
-	require.NoError(t, identities.SetMalicious(db, nodeID2, []byte("bad")))
+	require.NoError(t, identities.SetMalicious(db, nodeID2, []byte("bad"), time.Now()))
 	bad, err = identities.IsMalicious(db, nodeID2)
 	require.NoError(t, err)
 	require.True(t, bad)
@@ -374,7 +374,7 @@ func TestBlobStore_GetMalfeasanceBlob(t *testing.T) {
 
 	_, err = bs.Get(datastore.Malfeasance, nodeID.Bytes())
 	require.ErrorIs(t, err, sql.ErrNotFound)
-	require.NoError(t, identities.SetMalicious(db, nodeID, encoded))
+	require.NoError(t, identities.SetMalicious(db, nodeID, encoded, time.Now()))
 	got, err := bs.Get(datastore.Malfeasance, nodeID.Bytes())
 	require.NoError(t, err)
 	require.Equal(t, encoded, got)

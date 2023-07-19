@@ -124,7 +124,7 @@ func (db *CachedDB) GetMalfeasanceProof(id types.NodeID) (*types.MalfeasanceProo
 
 func (db *CachedDB) CacheMalfeasanceProof(id types.NodeID, proof *types.MalfeasanceProof) {
 	if id == types.EmptyNodeID {
-		log.Fatal("invalid argument to AddMalfeasanceProof")
+		log.Fatal("invalid argument to CacheMalfeasanceProof")
 	}
 
 	db.mu.Lock()

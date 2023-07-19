@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"go.uber.org/atomic"
 	"go.uber.org/zap/zapcore"
@@ -556,7 +557,7 @@ func (msh *Mesh) AddBallot(ctx context.Context, ballot *types.Ballot) (*types.Ma
 				if err != nil {
 					msh.logger.With().Panic("failed to encode MalfeasanceProof", log.Err(err))
 				}
-				if err := identities.SetMalicious(dbtx, ballot.SmesherID, encoded); err != nil {
+				if err := identities.SetMalicious(dbtx, ballot.SmesherID, encoded, time.Now()); err != nil {
 					return fmt.Errorf("add malfeasance proof: %w", err)
 				}
 				ballot.SetMalicious()

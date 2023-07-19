@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
-	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 func Test_Validation_VRFNonce(t *testing.T) {
@@ -40,7 +40,7 @@ func Test_Validation_VRFNonce(t *testing.T) {
 		initialization.WithNodeId(nodeId.Bytes()),
 		initialization.WithCommitmentAtxId(commitmentAtxId.Bytes()),
 		initialization.WithConfig(postCfg.ToConfig()),
-		initialization.WithInitOpts((config.InitOpts)(initOpts)),
+		initialization.WithInitOpts(initOpts.ToInitOpts()),
 	)
 	r.NoError(err)
 	r.NoError(init.Initialize(context.Background()))
@@ -568,20 +568,20 @@ func TestValidator_Validate(t *testing.T) {
 		PublishEpoch: postGenesisEpoch + 2,
 	}
 	challengeHash := challenge.Hash()
-	poetDb := NewMockpoetDbAPI(gomock.NewController(t))
-	poetDb.EXPECT().GetProof(gomock.Any()).AnyTimes().Return(&types.PoetProof{}, &challengeHash, nil)
-	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
-
-	postProvider := newTestPostManager(t)
-	nipost := buildNIPost(t, postProvider, postProvider.cfg, challenge, poetDb)
-
-	opts := []verifying.OptionFunc{verifying.WithLabelScryptParams(postProvider.opts.Scrypt)}
+	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t).WithName("poetDb"))
 
 	logger := logtest.New(t).WithName("validator")
+	postProvider := newTestPostManager(t)
 	verifier, err := NewPostVerifier(postProvider.cfg, logger)
 	r.NoError(err)
 	defer verifier.Close()
+
 	v := NewValidator(poetDb, postProvider.cfg, logger, verifier)
+
+	nipost := buildNIPost(t, postProvider, challenge, poetDb, v)
+
+	opts := []verifying.OptionFunc{verifying.WithLabelScryptParams(postProvider.opts.Scrypt)}
+
 	_, err = v.NIPost(context.Background(), challenge.PublishEpoch, postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, postProvider.opts.NumUnits, opts...)
 	r.NoError(err)
 
