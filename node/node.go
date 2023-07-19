@@ -130,7 +130,7 @@ func GetCommand() *cobra.Command {
 				// NOTE(dshulyak) this needs to be max level so that child logger can can be current level or below.
 				// otherwise it will fail later when child logger will try to increase level.
 				WithLog(log.RegisterHooks(
-					log.NewWithLevel("", zap.NewAtomicLevelAt(zapcore.DebugLevel)),
+					log.NewWithLevel("", zap.NewAtomicLevelAt(zap.InfoLevel)),
 					events.EventHook())),
 			)
 
@@ -293,8 +293,7 @@ func New(opts ...Option) *App {
 	for _, opt := range opts {
 		opt(app)
 	}
-	lvl := zap.NewAtomicLevelAt(zap.InfoLevel)
-	log.SetupGlobal(app.log.SetLevel(&lvl))
+	log.SetupGlobal(app.log)
 	types.SetNetworkHRP(app.Config.NetworkHRP)
 	return app
 }
