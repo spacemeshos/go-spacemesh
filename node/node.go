@@ -457,6 +457,8 @@ func (app *App) Initialize() error {
 	app.introduction()
 
 	public.Version.WithLabelValues(cmd.Version).Set(1)
+	public.SmeshingOptsProvingNonces.Set(float64(app.Config.SMESHING.ProvingOpts.Nonces))
+	public.SmeshingOptsProvingThreads.Set(float64(app.Config.SMESHING.ProvingOpts.Threads))
 	return nil
 }
 
