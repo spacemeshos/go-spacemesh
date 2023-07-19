@@ -26,4 +26,14 @@ var (
 		Namespace: "smh",
 		Name:      "version",
 	}, []string{"version"})
+
+	SmeshingOptsProvingNonces = promauto.With(Registry).NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "smh",
+		Name:      "smeshing_opts_proving_nonces",
+	}, []string{}).WithLabelValues()
+
+	SmeshingOptsProvingThreads = promauto.With(Registry).NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "smh",
+		Name:      "smeshing_opts_proving_threads",
+	}, []string{}).WithLabelValues()
 )
