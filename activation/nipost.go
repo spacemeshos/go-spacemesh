@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/metrics/public"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -253,7 +254,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 		events.EmitPostComplete(nb.state.PoetProofRef[:])
 		postGenDuration = time.Since(startTime)
 		nb.log.With().Info("finished post execution", log.Duration("duration", postGenDuration))
-
+		public.PostSeconds.Set(postGenDuration.Seconds())
 		nb.state.NIPost.Post = proof
 		nb.state.NIPost.PostMetadata = proofMetadata
 

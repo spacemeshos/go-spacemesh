@@ -54,6 +54,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
+	"github.com/spacemeshos/go-spacemesh/metrics/public"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/node/mapstructureutil"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -453,9 +454,9 @@ func (app *App) Initialize() error {
 	timeCfg.TimeConfigValues = app.Config.TIME
 
 	app.setupLogging()
-
 	app.introduction()
 
+	public.Version.WithLabelValues(cmd.Version).Set(1)
 	return nil
 }
 
@@ -1374,9 +1375,13 @@ func (app *App) Start(ctx context.Context) error {
 	}
 
 	if app.Config.MetricsPush != "" {
-		metrics.StartPushingMetrics(app.Config.MetricsPush,
-			app.Config.MetricsPushUser, app.Config.MetricsPushPass, app.Config.MetricsPushPeriod,
-			app.host.ID().String(), app.Config.Genesis.GenesisID().ShortString())
+		metrics.StartPushingMetrics(
+			app.Config.MetricsPush,
+			app.Config.MetricsPushUser,
+			app.Config.MetricsPushPass,
+			app.Config.MetricsPushHeader,
+			app.Config.MetricsPushPeriod,
+			app.host.ID().String()[:5], app.Config.Genesis.GenesisID().ShortString())
 	}
 
 	if err := app.startServices(ctx); err != nil {

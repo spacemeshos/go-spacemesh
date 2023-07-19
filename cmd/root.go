@@ -44,7 +44,7 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.MetricsPort, "metric server port")
 	cmd.PersistentFlags().StringVar(&cfg.MetricsPush, "metrics-push",
 		cfg.MetricsPush, "Push metrics to url")
-	cmd.PersistentFlags().IntVar(&cfg.MetricsPushPeriod, "metrics-push-period",
+	cmd.PersistentFlags().DurationVar(&cfg.MetricsPushPeriod, "metrics-push-period",
 		cfg.MetricsPushPeriod, "Push period")
 	cmd.PersistentFlags().StringArrayVar(&cfg.PoETServers, "poet-server",
 		cfg.PoETServers, "The poet server url. (temporary) Can be passed multiple times")
