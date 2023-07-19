@@ -19,7 +19,6 @@ import (
 
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
-	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/post/initialization"
@@ -480,10 +479,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		grpc.WithBlock(),
 	)
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, conn.Close())
-		grpczap.SetGrpcLoggerV2(grpclog, log.NewNop().Zap())
-	})
+	t.Cleanup(func() { assert.NoError(t, conn.Close()) })
 	c := pb.NewNodeServiceClient(conn)
 
 	eg.Go(func() error {

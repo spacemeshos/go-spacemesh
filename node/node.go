@@ -1192,6 +1192,10 @@ func (app *App) stopServices(ctx context.Context) {
 	}
 
 	events.CloseEventReporter()
+	// SetGrpcLogger unfortunately is global
+	// this ensures that a test-logger isn't used after the app shuts down
+	// by e.g. a grpc connection to the node that is still open - like in TestSpacemeshApp_NodeService
+	grpczap.SetGrpcLoggerV2(grpclog, log.NewNop().Zap())
 }
 
 // LoadOrCreateEdSigner either loads a previously created ed identity for the node or creates a new one if not exists.
