@@ -22,6 +22,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/metrics/public"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -301,6 +302,7 @@ func (b *Builder) generateInitialPost(ctx context.Context) error {
 	}
 	events.EmitPostComplete(shared.ZeroChallenge)
 	metrics.PostDuration.Set(float64(time.Since(startTime).Nanoseconds()))
+	public.PostSeconds.Set(float64(time.Since(startTime)))
 	b.log.Info("created the initial post")
 	if b.verifyInitialPost(ctx, post, metadata) != nil {
 		return err

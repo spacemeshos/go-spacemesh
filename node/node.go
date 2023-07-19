@@ -54,6 +54,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
+	"github.com/spacemeshos/go-spacemesh/metrics/public"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/node/mapstructureutil"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -453,9 +454,9 @@ func (app *App) Initialize() error {
 	timeCfg.TimeConfigValues = app.Config.TIME
 
 	app.setupLogging()
-
 	app.introduction()
 
+	public.Version.WithLabelValues(cmd.Version).Set(1)
 	return nil
 }
 
