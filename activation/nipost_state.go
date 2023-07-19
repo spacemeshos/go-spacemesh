@@ -64,6 +64,9 @@ func read(path string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get file info %s: %w", path, err)
 	}
+	if fInfo.Size() < crc64.Size {
+		return nil, fmt.Errorf("file %s is too small", path)
+	}
 
 	data := make([]byte, fInfo.Size()-crc64.Size)
 	checksum := crc64.New(crc64.MakeTable(crc64.ISO))
