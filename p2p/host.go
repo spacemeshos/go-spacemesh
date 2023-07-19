@@ -141,6 +141,16 @@ func setupResourcesManager(highPeers int) func(cfg *libp2p.Config) error {
 		limits.SystemBaseLimit.ConnsInbound = highPeers
 		limits.SystemBaseLimit.ConnsOutbound = highPeers
 		limits.SystemBaseLimit.Conns = 2 * highPeers
+		limits.SystemBaseLimit.FD = 2 * highPeers
+		limits.SystemBaseLimit.StreamsInbound = 8 * highPeers
+		limits.SystemBaseLimit.StreamsOutbound = 8 * highPeers
+		limits.SystemBaseLimit.Streams = 16 * highPeers
+		limits.ServiceBaseLimit.StreamsInbound = 8 * highPeers
+		limits.ServiceBaseLimit.StreamsOutbound = 8 * highPeers
+		limits.ServiceBaseLimit.Streams = 16 * highPeers
+		limits.ProtocolBaseLimit.StreamsInbound = 8 * highPeers
+		limits.ProtocolBaseLimit.StreamsOutbound = 8 * highPeers
+		limits.ProtocolBaseLimit.Streams = 16 * highPeers
 		libp2p.SetDefaultServiceLimits(&limits)
 
 		mgr, err := rcmgr.NewResourceManager(
