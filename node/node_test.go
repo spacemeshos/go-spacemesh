@@ -19,6 +19,7 @@ import (
 
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
+	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/post/initialization"
@@ -410,10 +411,7 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 
 // E2E app test of the stream endpoints in the NodeService.
 func TestSpacemeshApp_NodeService(t *testing.T) {
-	t.Skip("flaky on macos-latest: https://github.com/spacemeshos/go-spacemesh/issues/4729")
-	// errlog should be used only for testing.
-	logger := logtest.New(t, zapcore.DebugLevel)
-	errlog := log.RegisterHooks(logger, events.EventHook())
+	logger := logtest.New(t, zapcore.InfoLevel)
 
 	// Use a unique port
 	port := 1240
@@ -482,7 +480,10 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		grpc.WithBlock(),
 	)
 	require.NoError(t, err)
-	t.Cleanup(func() { assert.NoError(t, conn.Close()) })
+	t.Cleanup(func() {
+		assert.NoError(t, conn.Close())
+		grpczap.SetGrpcLoggerV2(grpclog, log.NewNop().Zap())
+	})
 	c := pb.NewNodeServiceClient(conn)
 
 	eg.Go(func() error {
@@ -515,6 +516,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	require.NoError(t, err)
 
 	// Report two errors and make sure they're both received
+	errlog := log.RegisterHooks(logtest.New(t, zapcore.InfoLevel), events.EventHook())
 	eg.Go(func() error {
 		errlog.Error("test123")
 		errlog.Error("test456")

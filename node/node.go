@@ -130,8 +130,9 @@ func GetCommand() *cobra.Command {
 				// NOTE(dshulyak) this needs to be max level so that child logger can can be current level or below.
 				// otherwise it will fail later when child logger will try to increase level.
 				WithLog(log.RegisterHooks(
-					log.NewWithLevel("", zap.NewAtomicLevelAt(zap.InfoLevel)),
-					events.EventHook())),
+					log.NewWithLevel("node", zap.NewAtomicLevelAt(zap.InfoLevel)),
+					events.EventHook()),
+				),
 			)
 
 			run := func(ctx context.Context) error {
