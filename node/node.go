@@ -1379,7 +1379,7 @@ func (app *App) Start(ctx context.Context) error {
 			app.Config.MetricsPush,
 			app.Config.MetricsPushUser,
 			app.Config.MetricsPushPass,
-			app.Config.MetricsXorgID,
+			app.Config.MetricsPushHeader,
 			app.Config.MetricsPushPeriod,
 			app.host.ID().String()[:5], app.Config.Genesis.GenesisID().ShortString())
 	}
