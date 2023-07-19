@@ -58,6 +58,16 @@ func TestReadCRC(t *testing.T) {
 			data:   []byte("spacemesh"),
 			crc:    []byte{0xC7, 0x11, 0x73, 0xE0, 0x53, 0xD8, 0x75, 0x0F},
 			errMsg: "wrong checksum 0xC71173E053D8750F, computed 0xC61072DF52D7740E",
+		}, {
+			name:   "file too short",
+			data:   []byte("123"),
+			crc:    []byte{},
+			errMsg: "too small",
+		}, {
+			name:   "file empty",
+			data:   []byte(""),
+			crc:    []byte{0xC6, 0x10, 0x72, 0xDF, 0x52, 0xD7, 0x74, 0x0E},
+			errMsg: "wrong checksum 0xC61072DF52D7740E, computed 0x0",
 		},
 	}
 
