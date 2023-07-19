@@ -528,7 +528,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	challenge, err := b.loadChallenge()
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			logger.With().Error("failed to load atx challenge", log.Err(err))
+			logger.With().Warning("failed to load atx challenge", log.Err(err))
 		}
 		logger.With().Info("building new atx challenge",
 			log.Stringer("current_epoch", b.currentEpoch()),
