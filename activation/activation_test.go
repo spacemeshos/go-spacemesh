@@ -324,6 +324,45 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 	})
 }
 
+func TestBuilder_StopSmeshing_Delete(t *testing.T) {
+	tab := newTestBuilder(t)
+
+	tab.mpost.EXPECT().PrepareInitializer(gomock.Any(), gomock.Any()).AnyTimes()
+	tab.mpost.EXPECT().StartSession(gomock.Any()).DoAndReturn(func(ctx context.Context) error {
+		// wait for stop to be called
+		<-ctx.Done()
+		return ctx.Err()
+	}).AnyTimes()
+
+	// Create state files
+	require.NoError(t, saveBuilderState(tab.nipostBuilder.DataDir(), &types.NIPostBuilderState{}))
+	require.NoError(t, savePost(tab.nipostBuilder.DataDir(), &types.Post{}))
+	require.NoError(t, SaveNipostChallenge(tab.nipostBuilder.DataDir(), &types.NIPostChallenge{}))
+	files, err := os.ReadDir(tab.nipostBuilder.DataDir())
+	require.NoError(t, err)
+	require.Len(t, files, 3) // 3 state files created
+
+	require.NoError(t, tab.StartSmeshing(types.Address{}, PostSetupOpts{}))
+	require.NoError(t, tab.StopSmeshing(false))
+	files, err = os.ReadDir(tab.nipostBuilder.DataDir())
+	require.NoError(t, err)
+	require.Len(t, files, 3) // state files still present
+
+	require.NoError(t, tab.StartSmeshing(types.Address{}, PostSetupOpts{}))
+	tab.mpost.EXPECT().Reset().Return(nil)
+	require.NoError(t, tab.StopSmeshing(true))
+	files, err = os.ReadDir(tab.nipostBuilder.DataDir())
+	require.NoError(t, err)
+	require.Len(t, files, 0) // state files deleted
+
+	require.NoError(t, tab.StartSmeshing(types.Address{}, PostSetupOpts{}))
+	tab.mpost.EXPECT().Reset().Return(nil)
+	require.NoError(t, tab.StopSmeshing(true)) // no-op
+	files, err = os.ReadDir(tab.nipostBuilder.DataDir())
+	require.NoError(t, err)
+	require.Len(t, files, 0) // state files still deleted
+}
+
 func TestBuilder_StoppingSmeshingBefore_Initialized(t *testing.T) {
 	tab := newTestBuilder(t)
 	tab.mpost.EXPECT().PrepareInitializer(gomock.Any(), gomock.Any()).AnyTimes()
