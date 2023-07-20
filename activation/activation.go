@@ -251,6 +251,19 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 			b.log.With().Error("failed to delete post files", log.Err(err))
 			return err
 		}
+		if err := discardBuilderState(b.nipostBuilder.DataDir()); err != nil {
+			b.log.With().Error("failed to delete builder state", log.Err(err))
+			return err
+		}
+		if err := discardNipostChallenge(b.nipostBuilder.DataDir()); err != nil {
+			b.log.With().Error("failed to delete nipost challenge", log.Err(err))
+			return err
+		}
+		if err := discardPost(b.nipostBuilder.DataDir()); err != nil {
+			b.log.With().Error("failed to delete post", log.Err(err))
+			return err
+		}
+
 		return nil
 	default:
 		return fmt.Errorf("failed to stop post data creation session: %w", err)
