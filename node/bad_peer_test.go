@@ -127,7 +127,8 @@ func NewApp(conf *config.Config) (*App, error) {
 		WithConfig(conf),
 		WithLog(log.RegisterHooks(
 			log.NewWithLevel("", zap.NewAtomicLevelAt(zapcore.DebugLevel)),
-			events.EventHook())),
+			events.EventHook()),
+		),
 	)
 
 	var err error

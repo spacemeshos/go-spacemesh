@@ -130,8 +130,9 @@ func GetCommand() *cobra.Command {
 				// NOTE(dshulyak) this needs to be max level so that child logger can can be current level or below.
 				// otherwise it will fail later when child logger will try to increase level.
 				WithLog(log.RegisterHooks(
-					log.NewWithLevel("", zap.NewAtomicLevelAt(zapcore.DebugLevel)),
-					events.EventHook())),
+					log.NewWithLevel("node", zap.NewAtomicLevelAt(zap.InfoLevel)),
+					events.EventHook()),
+				),
 			)
 
 			run := func(ctx context.Context) error {
@@ -293,8 +294,7 @@ func New(opts ...Option) *App {
 	for _, opt := range opts {
 		opt(app)
 	}
-	lvl := zap.NewAtomicLevelAt(zap.InfoLevel)
-	log.SetupGlobal(app.log.SetLevel(&lvl))
+	log.SetupGlobal(app.log)
 	types.SetNetworkHRP(app.Config.NetworkHRP)
 	return app
 }
@@ -1192,6 +1192,10 @@ func (app *App) stopServices(ctx context.Context) {
 	}
 
 	events.CloseEventReporter()
+	// SetGrpcLogger unfortunately is global
+	// this ensures that a test-logger isn't used after the app shuts down
+	// by e.g. a grpc connection to the node that is still open - like in TestSpacemeshApp_NodeService
+	grpczap.SetGrpcLoggerV2(grpclog, log.NewNop().Zap())
 }
 
 // LoadOrCreateEdSigner either loads a previously created ed identity for the node or creates a new one if not exists.

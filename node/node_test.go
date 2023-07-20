@@ -410,10 +410,8 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 
 // E2E app test of the stream endpoints in the NodeService.
 func TestSpacemeshApp_NodeService(t *testing.T) {
-	t.Skip("flaky on macos-latest: https://github.com/spacemeshos/go-spacemesh/issues/4729")
-	// errlog should be used only for testing.
-	logger := logtest.New(t)
-	errlog := log.RegisterHooks(logtest.New(t, zap.ErrorLevel), events.EventHook())
+	logger := logtest.New(t, zapcore.ErrorLevel)
+	errlog := log.RegisterHooks(logger, events.EventHook()) // errlog is used to simulate errors in the app
 
 	// Use a unique port
 	port := 1240
@@ -421,13 +419,13 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	app := New(WithLog(logger))
 	app.Config = getTestDefaultConfig(t)
 	app.Config.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte{1}).String()
-	app.Config.SMESHING.Opts.DataDir, _ = os.MkdirTemp("", "sm-app-test-post-datadir")
+	app.Config.SMESHING.Opts.DataDir = t.TempDir()
 
 	clock, err := timesync.NewClock(
 		timesync.WithLayerDuration(1*time.Second),
 		timesync.WithTickInterval(100*time.Millisecond),
 		timesync.WithGenesisTime(time.Now()),
-		timesync.WithLogger(logtest.New(t)),
+		timesync.WithLogger(logger),
 	)
 	require.NoError(t, err)
 	app.clock = clock
