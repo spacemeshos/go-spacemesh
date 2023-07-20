@@ -416,12 +416,10 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	// Use a unique port
 	port := 1240
 
-	var err error
 	app := New(WithLog(logger))
 	app.Config = getTestDefaultConfig(t)
 	app.Config.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte{1}).String()
-	app.Config.SMESHING.Opts.DataDir, err = os.MkdirTemp("", "sm-app-test-post-datadir")
-	require.NoError(t, err)
+	app.Config.SMESHING.Opts.DataDir = t.TempDir()
 
 	clock, err := timesync.NewClock(
 		timesync.WithLayerDuration(1*time.Second),
