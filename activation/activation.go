@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"sync"
 	"time"
@@ -251,15 +252,15 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 			b.log.With().Error("failed to delete post files", log.Err(err))
 			return err
 		}
-		if err := discardBuilderState(b.nipostBuilder.DataDir()); err != nil {
+		if err := discardBuilderState(b.nipostBuilder.DataDir()); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			b.log.With().Error("failed to delete builder state", log.Err(err))
 			return err
 		}
-		if err := discardNipostChallenge(b.nipostBuilder.DataDir()); err != nil {
+		if err := discardNipostChallenge(b.nipostBuilder.DataDir()); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			b.log.With().Error("failed to delete nipost challenge", log.Err(err))
 			return err
 		}
-		if err := discardPost(b.nipostBuilder.DataDir()); err != nil {
+		if err := discardPost(b.nipostBuilder.DataDir()); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			b.log.With().Error("failed to delete post", log.Err(err))
 			return err
 		}
