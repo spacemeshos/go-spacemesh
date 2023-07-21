@@ -78,29 +78,33 @@ func NewProtocolRunner(
 func (r *ProtocolRunner) Run(ctx context.Context) ([]types.Hash20, error) {
 	// ok want to actually use a lock here
 	for {
-		round := r.protocol.Round()
-		if round == r.maxRound {
+		// Note the round starts at -2 since the hare protocol increments the round as the first step of NextRound
+		previousRound := r.protocol.Round()
+		if previousRound == r.maxRound {
 			return nil, fmt.Errorf("hare protocol runner exceeded iteration limit of %d", r.maxRound.Iteration())
 		}
 		// The weak coin is calculated from pre-round messages, we select the
 		// coin after one round, we are not concerned about late messages
 		// affecting the outcome since the coin is weak (see package doc for
 		// hare3/weakcoin for an explanation of weak)
-		if round == hare3.Preround.Round()+1 {
+		coin := r.coinChooser.Choose()
+		if previousRound == hare3.Preround.Round()+1 && coin != nil {
 			r.weakcoinChan <- WeakCoinResult{
 				Layer: r.layer,
-				Coin:  r.coinChooser.Choose(),
+				Coin:  coin,
 			}
 		}
+
+		r.l.Info("awaiting beginning of round %d", previousRound+1)
 		select {
-		// We await the beginning of the round, which is achieved by calling AwaitEndOfRound with (round - 1).
-		case <-r.clock.AwaitEndOfRound(uint32(round - 1)):
+		// We await the beginning of the next round, which is achieved by calling AwaitEndOfRound with the previous round.
+		case <-r.clock.AwaitEndOfRound(uint32(previousRound)):
 			// TODO fix this eligibility should not return an error
-			proof, count, err := r.ac.Eligibility(ctx, round)
+			proof, count, err := r.ac.Eligibility(ctx, previousRound)
 			if err != nil {
 				return nil, err
 			}
-			r.l.Info("running round %d, of layer %d, eligibility count %d", round, r.layer, count)
+			r.l.Info("running round %d, of layer %d, eligibility count %d", previousRound+1, r.layer, count)
 			toSend, output := r.protocol.NextRound(true)
 			if toSend != nil {
 				r.l.Info("sending hare message round: %v, proposals: %v", toSend.Round, toSend.Values)
