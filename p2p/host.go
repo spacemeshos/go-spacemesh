@@ -18,6 +18,7 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	tptu "github.com/libp2p/go-libp2p/p2p/net/upgrader"
+	"github.com/libp2p/go-libp2p/p2p/protocol/identify"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	"github.com/multiformats/go-multiaddr"
@@ -59,6 +60,7 @@ type Config struct {
 	DisableNatPort         bool     `mapstructure:"disable-natport"`
 	Flood                  bool     `mapstructure:"flood"`
 	Listen                 string   `mapstructure:"listen"`
+	ListenMulti            []string `mapstructure:"listen-multi"`
 	Bootnodes              []string `mapstructure:"bootnodes"`
 	MinPeers               int      `mapstructure:"min-peers"`
 	LowPeers               int      `mapstructure:"low-peers"`
@@ -102,6 +104,8 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 	if err != nil {
 		return nil, err
 	}
+
+	identify.ActivationThresh = 1
 	lp2plog.SetPrimaryCore(logger.Core())
 	lp2plog.SetAllLoggers(lp2plog.LogLevel(cfg.LogLevel))
 	cm, err := connmgr.NewConnManager(cfg.LowPeers, cfg.HighPeers, connmgr.WithGracePeriod(cfg.GracePeersShutdown))
