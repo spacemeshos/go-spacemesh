@@ -168,11 +168,11 @@ func (d *Discovery) Stop() {
 }
 
 func (d *Discovery) bootstrap() {
-	ctx, cancel := context.WithTimeout(d.ctx, d.bootstrapDuration)
-	defer cancel()
+	ctx, _ := context.WithTimeout(d.ctx, d.bootstrapDuration)
 	if err := d.dht.Bootstrap(ctx); err != nil {
 		d.logger.Error("unexpected error from discovery dht", zap.Error(err))
 	}
+	<-ctx.Done()
 }
 
 func (d *Discovery) connect(eg *errgroup.Group, nodes []peer.AddrInfo) {
