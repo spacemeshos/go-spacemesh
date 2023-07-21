@@ -50,6 +50,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type (
@@ -126,9 +127,10 @@ type Handler struct {
 	gc    Gradecaster
 	round *AbsRound
 	mu    *sync.Mutex
+	l     log.Log
 }
 
-func NewHandler(gg GradedGossiper, tgg ThresholdGradedGossiper, gc Gradecaster) *Handler {
+func NewHandler(gg GradedGossiper, tgg ThresholdGradedGossiper, gc Gradecaster, l log.Log) *Handler {
 	r := NewAbsRound(0, -2)
 	return &Handler{
 		gg:    gg,
@@ -136,6 +138,7 @@ func NewHandler(gg GradedGossiper, tgg ThresholdGradedGossiper, gc Gradecaster) 
 		gc:    gc,
 		round: &r,
 		mu:    &sync.Mutex{},
+		l:     l,
 	}
 }
 
@@ -190,7 +193,7 @@ func (h *Handler) HandleMsg(hash types.Hash20, id types.NodeID, round AbsRound, 
 }
 
 func (h *Handler) Protocol(lc LeaderChecker, si []types.Hash20) *Protocol {
-	return NewProtocol(h.round, h.tgg, h.gc, lc, h.mu, si)
+	return NewProtocol(h.round, h.tgg, h.gc, lc, h.mu, si, h.l.WithName("algorithm"))
 }
 
 type Protocol struct {
@@ -211,10 +214,11 @@ type Protocol struct {
 	gc  Gradecaster
 	lc  LeaderChecker
 	mu  *sync.Mutex
+	l   log.Log
 }
 
 // The round paramer is shared with the handler.
-func NewProtocol(round *AbsRound, tgg ThresholdGradedGossiper, gc Gradecaster, lc LeaderChecker, protocolMu *sync.Mutex, si []types.Hash20) *Protocol {
+func NewProtocol(round *AbsRound, tgg ThresholdGradedGossiper, gc Gradecaster, lc LeaderChecker, protocolMu *sync.Mutex, si []types.Hash20, l log.Log) *Protocol {
 	return &Protocol{
 		round: round,
 		tgg:   tgg,
@@ -222,6 +226,7 @@ func NewProtocol(round *AbsRound, tgg ThresholdGradedGossiper, gc Gradecaster, l
 		lc:    lc,
 		mu:    protocolMu,
 		Si:    si,
+		l:     l,
 	}
 }
 
@@ -362,12 +367,15 @@ func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []types
 		}
 	case Commit:
 		candidates := p.gc.RetrieveGradecastedMessages(NewAbsRound(j, 2))
+		p.l.Debug("gradecast candidate sets %v", candidates)
+		p.l.Debug("before Ti[%d]: %v", j, p.Ti[j])
 		for _, c := range candidates {
 			if isSubset(c.values, p.Vi[3]) {
 				// Add to valid proposals for this iteration
 				p.Ti[j][toHash(c.values)] = c.values
 			}
 		}
+		p.l.Debug("after Ti[%d]: %v", j, p.Ti[j])
 		if !active {
 			return nil, nil
 		}

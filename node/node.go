@@ -750,8 +750,8 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		app.edVerifier,
 		eligibilityValidator,
 		app.hOracle,
-		broker.NewHandlerFactory(app.clock, hareCfg.RoundDuration, uint16(hareCfg.N/2+1)),
-		hareLog,
+		broker.NewHandlerFactory(app.clock, hareCfg.RoundDuration, uint16(hareCfg.N/2+1), lg),
+		lg.WithName("broker"),
 	)
 	weakCoinNotifier := tortoiseWeakCoin{db: app.cachedDB, tortoise: trtl}
 	weakcoinChan := make(chan runner.WeakCoinResult, 10) // TODO How much to buffer here?

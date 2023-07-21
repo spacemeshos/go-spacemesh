@@ -1,12 +1,20 @@
 package hare3
 
-import "github.com/spacemeshos/go-spacemesh/common/types"
+import (
+	"fmt"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+)
 
 // GradecastedSet encapsulates the output from gradecast for a given identity.
 type GradecastedSet struct {
 	id     types.NodeID
 	values []types.Hash20
 	grade  uint8
+}
+
+func (gs GradecastedSet) String() string {
+	return fmt.Sprintf("id: %s, vh: %s, g: %d", gs.id.ShortString(), toHash(sortHash20(gs.values)).ShortString(), gs.grade)
 }
 
 // Gradecaster acts as a specialized value store, it ingests messages that can

@@ -31,13 +31,15 @@ type HandlerFactory struct {
 	clock         *timesync.NodeClock
 	roundTime     time.Duration
 	hareThreshold uint16
+	l             log.Log
 }
 
-func NewHandlerFactory(clock *timesync.NodeClock, roundTime time.Duration, hareThreshold uint16) *HandlerFactory {
+func NewHandlerFactory(clock *timesync.NodeClock, roundTime time.Duration, hareThreshold uint16, l log.Log) *HandlerFactory {
 	return &HandlerFactory{
 		clock:         clock,
 		roundTime:     roundTime,
 		hareThreshold: hareThreshold,
+		l:             l,
 	}
 }
 
@@ -46,6 +48,7 @@ func (f *HandlerFactory) Handler(layer types.LayerID) *hare3.Handler {
 		hare3.NewDefaultGradedGossiper(),
 		hare3.NewDefaultThresholdGradedGossiper(f.hareThreshold),
 		hare3.NewDefaultGradecaster(),
+		f.l,
 	)
 }
 

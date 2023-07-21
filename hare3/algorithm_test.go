@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/stretchr/testify/require"
 )
 
@@ -67,7 +68,7 @@ func (lc *TestLeaderChecker) IsLeader(vk types.NodeID, round AbsRound) bool {
 // consensus on a value, in order for the protocol to complete it is required
 // to run 2 iterations (15 rounds in total).
 func TestReachingConsensusSingleNode(t *testing.T) {
-	h := NewHandler(NewDefaultGradedGossiper(), NewDefaultThresholdGradedGossiper(1), NewDefaultGradecaster())
+	h := NewHandler(NewDefaultGradedGossiper(), NewDefaultThresholdGradedGossiper(1), NewDefaultGradecaster(), log.NewNop())
 	lc := NewTestLeaderChecker()
 	nodeId := randID()
 	active := true
@@ -165,7 +166,7 @@ func NewTestNetwork(threshold uint16, initialValues ...[]types.Hash20) *TestNetw
 	lc := NewTestLeaderChecker()
 	tn := &TestNetwork{}
 	for i := 0; i < len(initialValues); i++ {
-		tn.handlers = append(tn.handlers, NewHandler(NewDefaultGradedGossiper(), NewDefaultThresholdGradedGossiper(threshold), NewDefaultGradecaster()))
+		tn.handlers = append(tn.handlers, NewHandler(NewDefaultGradedGossiper(), NewDefaultThresholdGradedGossiper(threshold), NewDefaultGradecaster(), log.NewNop()))
 		tn.protocols = append(tn.protocols, tn.handlers[i].Protocol(lc, initialValues[i]))
 		tn.ids = append(tn.ids, randID())
 	}
@@ -305,7 +306,7 @@ func TestReachingConsensusNetworkOf2(t *testing.T) {
 // This test checks that a single node with a threshold of 2 votes can't reach
 // consensus on a value
 func TestNotReachingConsensus(t *testing.T) {
-	h := NewHandler(NewDefaultGradedGossiper(), NewDefaultThresholdGradedGossiper(2), NewDefaultGradecaster())
+	h := NewHandler(NewDefaultGradedGossiper(), NewDefaultThresholdGradedGossiper(2), NewDefaultGradecaster(), log.NewNop())
 	lc := NewTestLeaderChecker()
 	nodeId := randID()
 	active := true
