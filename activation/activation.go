@@ -320,19 +320,13 @@ func (b *Builder) verifyInitialPost(ctx context.Context, post *types.Post, metad
 	if err != nil {
 		b.log.With().Panic("failed to fetch commitment ATX ID.", log.Err(err))
 	}
-	err = b.validator.Post(ctx, types.EpochID(0), b.nodeID, commitmentAtxId, post, metadata, b.postSetupProvider.LastOpts().NumUnits)
-	switch {
-	case errors.Is(err, context.Canceled):
-		// If the context was canceled, we don't want to emit or log errors just propagate the cancellation signal.
-		return err
-	case err != nil:
+	if err := b.validator.Post(ctx, types.EpochID(0), b.nodeID, commitmentAtxId, post, metadata, b.postSetupProvider.LastOpts().NumUnits); err != nil {
 		events.EmitInvalidPostProof()
 		b.log.With().Fatal("initial POST proof is invalid. Probably the initialized POST data is corrupted. Please verify the data with postcli and regenerate the corrupted files.", log.Err(err))
 		return err
-	default:
-		b.initialPost = post
-		return nil
 	}
+	b.initialPost = post
+	return nil
 }
 
 func (b *Builder) receivePendingPoetClients() *[]PoetProvingServiceClient {
