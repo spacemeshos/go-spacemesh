@@ -1,9 +1,12 @@
 package broker
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -164,6 +167,23 @@ func parts(msg *hare.Message) (id types.NodeID, round hare3.AbsRound, values []t
 	return msg.SmesherID, hare3.AbsRound(msg.Round), values
 }
 
+func sortProposalID(values []types.ProposalID) []types.ProposalID {
+	sort.Slice(values, func(i, j int) bool {
+		return bytes.Compare(values[i][:], values[j][:]) == -1
+	})
+	return values
+}
+
+func ToHash(values []types.ProposalID) types.ProposalID {
+	h := sha256.New()
+	for _, v := range values {
+		h.Write(v[:])
+	}
+	var result types.ProposalID
+	copy(result[:], h.Sum(nil))
+	return result
+}
+
 // HandleMessage receives messages from the network and forwards them to the
 // hare handler for a specific layer. The returned error controls whether a
 // received message will be relayed to the network, a nil error indicates that
@@ -192,45 +212,47 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	hash := types.CalcMessageHash20(msg, pubsub.HareProtocol)
-	logger := b.WithContext(ctx).WithFields(log.Stringer("latest_layer", b.latestLayer), hash.ToHash12())
 	hareMsg, err := hare.MessageFromBuffer(msg)
 	if err != nil {
-		logger.With().Error("failed to build message", hash.ToHash12(), log.Err(err))
-		b.WithContext(ctx).With().Error("failed to build message", hash.ToHash12(), log.Err(err))
+		b.Debug("failed to decode message hash %q error: %v", hash.ToHash12(), err)
 		return err
 	}
-	logger = logger.WithFields(log.Inline(hareMsg))
-
 	if hareMsg.InnerMessage == nil {
-		logger.With().Warning("hare msg missing inner msg", log.Err(errNilInner))
+		b.Debug("hare msg missing inner msg")
 		return errNilInner
 	}
+	vh := ToHash(sortProposalID(hareMsg.Values))
+	msgString := fmt.Sprintf("h: %s, l: %d, r: %d, s: %s, vh: %s", hash.ShortString(), hareMsg.Layer, hareMsg.Round, hareMsg.SmesherID.ShortString(), vh)
+	logger := b.WithFields(log.String("msg", msgString))
 
-	logger.Debug("broker received hare message")
+	logger.Debug("received hare message")
 
 	state := b.layerStates[hareMsg.Layer]
 
 	early := hareMsg.Layer == b.latestLayer+1
 	// Exit now if this message is not early and not for a registered layer
 	if state == nil && !early {
+		logger.Debug("consensus process not registered")
 		return errors.New("consensus process not registered")
 	}
 	if state != nil {
 		_, ok := state.messages[hash]
 		if ok {
+			// This is a warning, because p2p pubsub should not push duplicate messages.
+			logger.Warning("duplicate message received")
 			return errors.New("duplicate message received")
 		}
 	}
 
 	if !b.edVerifier.Verify(signing.HARE, hareMsg.SmesherID, hareMsg.SignedBytes(), hareMsg.Signature) {
-		logger.With().Error("failed to verify signature",
+		logger.Debug("failed to verify signature",
 			log.Int("sig_len", len(hareMsg.Signature)),
 		)
 		return fmt.Errorf("verify ed25519 signature")
 	}
 	// create msg
 	if err := checkIdentity(ctx, b.Log, hareMsg, b.stateQuerier); err != nil {
-		logger.With().Warning("message validation failed: could not construct msg", log.Err(err))
+		logger.Debug("failed to validate eligibility: %v", err)
 		return err
 	}
 
@@ -240,16 +262,15 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 	// 	return errors.New("not eligible")
 	// }
 
-	// validation passed, report
-	logger.With().Debug("broker reported hare message as valid")
-
 	id, round, values := parts(hareMsg)
 	proof, err := b.cdb.GetMalfeasanceProof(hareMsg.SmesherID)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		logger.With().Panic("failed to check malicious identity", log.Stringer("smesher", hareMsg.SmesherID), log.Err(err))
+		// An error here indicates a database failure.
+		logger.Panic("failed to check malicious identity: %v", err)
 	}
 
 	if proof != nil {
+		logger.Debug("msg is from malicious identity")
 		// The way we signify a message from a known malfeasant identity to the
 		// protocol is a message without values.
 		values = nil
@@ -261,6 +282,7 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 		b.layerStates[hareMsg.Layer] = state
 	}
 
+	logger.Debug("broker passing message to hare handler")
 	shouldRelay, equivocationHash := state.handler.HandleMsg(hash, id, round, values)
 	// If we detect a new equivocation then store it.
 	if equivocationHash != nil {
@@ -268,14 +290,11 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 
 		encoded, err := codec.Encode(proof)
 		if err != nil {
-			b.WithContext(ctx).With().Panic("failed to encode MalfeasanceProof", log.Err(err))
+			logger.Panic("failed to encode MalfeasanceProof: %v", err)
 		}
 		if err := identities.SetMalicious(b.cdb, hareMsg.SmesherID, encoded); err != nil {
-			b.With().Error("faild to store newly discovered malfeasance proof",
-				log.Context(ctx),
-				hareMsg.SmesherID,
-				log.Err(err),
-			)
+			// An error here indicates a database failure
+			logger.Panic("faild to store newly discovered malfeasance proof: %v", err)
 		}
 		b.cdb.CacheMalfeasanceProof(hareMsg.SmesherID, proof)
 	}
@@ -284,6 +303,7 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 	// for which we previously detected equivocation) return an error to
 	// indicate this to the p2p system.
 	if !shouldRelay {
+		logger.Debug("broker not relaying")
 		return errors.New("don't relay")
 	}
 
@@ -366,6 +386,7 @@ func checkIdentity(ctx context.Context, logger log.Log, hareMsg *hare.Message, q
 	// query if identity is active
 	res, err := querier.IsIdentityActiveOnConsensusView(ctx, hareMsg.SmesherID, hareMsg.Layer)
 	if err != nil {
+		// TODO should this be a panic?
 		logger.With().Error("failed to check if identity is active",
 			log.Stringer("smesher", hareMsg.SmesherID),
 			log.Err(err),
