@@ -81,10 +81,14 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 		opt(fh)
 	}
 	cfg := fh.cfg
-	var err error
+	bootnodes, err := parseIntoAddr(fh.cfg.Bootnodes)
+	if err != nil {
+		return nil, err
+	}
 	if fh.PubSub, err = pubsub.New(fh.ctx, fh.logger, h, pubsub.Config{
 		Flood:          cfg.Flood,
 		IsBootnode:     cfg.Bootnode,
+		Bootnodes:      bootnodes,
 		MaxMessageSize: cfg.MaxMessageSize,
 	}); err != nil {
 		return nil, fmt.Errorf("failed to initialize pubsub: %w", err)
@@ -101,10 +105,7 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 			return nil, fmt.Errorf("failed to initialize peerexchange discovery: %w", err)
 		}
 	}
-	bootnodes, err := parseIntoAddr(cfg.Bootnodes)
-	if err != nil {
-		return nil, err
-	}
+
 	dopts := []discovery.Opt{
 		discovery.WithDir(cfg.DataDir),
 		discovery.WithBootnodes(bootnodes),

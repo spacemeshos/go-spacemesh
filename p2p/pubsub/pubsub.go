@@ -87,6 +87,7 @@ func DefaultConfig() Config {
 type Config struct {
 	Flood          bool
 	IsBootnode     bool
+	Bootnodes      []peer.AddrInfo
 	MaxMessageSize int
 }
 
@@ -174,6 +175,10 @@ func msgID(msg *pubsubpb.Message) string {
 }
 
 func getOptions(cfg Config) []pubsub.Option {
+	boots := map[peer.ID]struct{}{}
+	for _, addr := range cfg.Bootnodes {
+		boots[addr.ID] = struct{}{}
+	}
 	options := []pubsub.Option{
 		// Gossipsubv1.1 configuration
 		pubsub.WithFloodPublish(cfg.Flood),
@@ -186,8 +191,10 @@ func getOptions(cfg Config) []pubsub.Option {
 		pubsub.WithPeerScore(
 			&pubsub.PeerScoreParams{
 				AppSpecificScore: func(p peer.ID) float64 {
-					// TODO: add application specific score to provide feedback to the pubsub system
-					//       based on observed behavior
+					_, exist := boots[p]
+					if exist && !cfg.IsBootnode {
+						return 10000
+					}
 					return 0
 				},
 				AppSpecificWeight: 1,
