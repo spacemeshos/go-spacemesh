@@ -2,7 +2,6 @@ package discovery
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -89,7 +88,7 @@ func New(h host.Host, opts ...Opt) (*Discovery, error) {
 	for _, opt := range opts {
 		opt(&d)
 	}
-	dht, err := newDht(ctx, h, d.bootnodes, d.public, d.server, d.dir)
+	dht, err := newDht(ctx, h, d.public, d.server, d.dir)
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +181,7 @@ func (d *Discovery) connect(eg *errgroup.Group, nodes []peer.AddrInfo) {
 	for _, boot := range nodes {
 		boot := boot
 		eg.Go(func() error {
-			if err := d.h.Connect(ctx, boot); err != nil && !errors.Is(err, context.Canceled) {
+			if err := d.h.Connect(ctx, boot); err != nil {
 				d.logger.Warn("failed to connect",
 					zap.Stringer("address", boot),
 					zap.Error(err),
@@ -194,7 +193,7 @@ func (d *Discovery) connect(eg *errgroup.Group, nodes []peer.AddrInfo) {
 	eg.Wait()
 }
 
-func newDht(ctx context.Context, h host.Host, bootnodes []peer.AddrInfo, public, server bool, dir string) (*dht.IpfsDHT, error) {
+func newDht(ctx context.Context, h host.Host, public, server bool, dir string) (*dht.IpfsDHT, error) {
 	ds, err := levelds.NewDatastore(dir, &levelds.Options{
 		Compression: ldbopts.NoCompression,
 		NoSync:      false,
@@ -210,9 +209,6 @@ func newDht(ctx context.Context, h host.Host, bootnodes []peer.AddrInfo, public,
 		dht.ProtocolPrefix("/spacekad"),
 		dht.DisableProviders(),
 		dht.DisableValues(),
-	}
-	if len(bootnodes) > 0 {
-		opts = append(opts, dht.BootstrapPeers(bootnodes...))
 	}
 	if public {
 		opts = append(opts, dht.QueryFilter(dht.PublicQueryFilter),
