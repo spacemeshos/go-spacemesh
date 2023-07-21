@@ -85,11 +85,7 @@ type BaseConfig struct {
 	CollectMetrics bool `mapstructure:"metrics"`
 	MetricsPort    int  `mapstructure:"metrics-port"`
 
-	MetricsPush       string            `mapstructure:"metrics-push"`
-	MetricsPushPeriod time.Duration     `mapstructure:"metrics-push-period"`
-	MetricsPushUser   string            `mapstructure:"metrics-push-user"`
-	MetricsPushPass   string            `mapstructure:"metrics-push-pass"`
-	MetricsPushHeader map[string]string `mapstructure:"metrics-push-header"`
+	PublicMetrics PublicMetrics `mapstructure:"public-metrics"`
 
 	ProfilerName string `mapstructure:"profiler-name"`
 	ProfilerURL  string `mapstructure:"profiler-url"`
@@ -113,6 +109,14 @@ type BaseConfig struct {
 	DatabaseLatencyMetering bool `mapstructure:"db-latency-metering"`
 
 	NetworkHRP string `mapstructure:"network-hrp"`
+}
+
+type PublicMetrics struct {
+	MetricsURL        string            `mapstructure:"metrics-url"`
+	MetricsPushPeriod time.Duration     `mapstructure:"metrics-push-period"`
+	MetricsPushUser   string            `mapstructure:"metrics-push-user"`
+	MetricsPushPass   string            `mapstructure:"metrics-push-pass"`
+	MetricsPushHeader map[string]string `mapstructure:"metrics-push-header"`
 }
 
 // SmeshingConfig defines configuration for the node's smeshing (mining).
@@ -164,8 +168,6 @@ func defaultBaseConfig() BaseConfig {
 		FileLock:            filepath.Join(os.TempDir(), "spacemesh.lock"),
 		CollectMetrics:      false,
 		MetricsPort:         1010,
-		MetricsPush:         "", // "" = doesn't push
-		MetricsPushPeriod:   60,
 		ProfilerName:        "gp-spacemesh",
 		LayerDuration:       30 * time.Second,
 		LayersPerEpoch:      3,

@@ -1380,13 +1380,13 @@ func (app *App) Start(ctx context.Context) error {
 		metrics.StartMetricsServer(app.Config.MetricsPort)
 	}
 
-	if app.Config.MetricsPush != "" {
+	if app.Config.PublicMetrics.MetricsURL != "" {
 		metrics.StartPushingMetrics(
-			app.Config.MetricsPush,
-			app.Config.MetricsPushUser,
-			app.Config.MetricsPushPass,
-			app.Config.MetricsPushHeader,
-			app.Config.MetricsPushPeriod,
+			app.Config.PublicMetrics.MetricsURL,
+			app.Config.PublicMetrics.MetricsPushUser,
+			app.Config.PublicMetrics.MetricsPushPass,
+			app.Config.PublicMetrics.MetricsPushHeader,
+			app.Config.PublicMetrics.MetricsPushPeriod,
 			app.host.ID().String()[:5], app.Config.Genesis.GenesisID().ShortString())
 	}
 
