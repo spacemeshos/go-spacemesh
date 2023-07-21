@@ -11,6 +11,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 
 	"github.com/spacemeshos/go-spacemesh/log"
+	discovery "github.com/spacemeshos/go-spacemesh/p2p/dhtdiscovery"
 	"github.com/spacemeshos/go-spacemesh/p2p/peerexchange"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
@@ -64,7 +65,8 @@ type Host struct {
 
 	nodeReporter func()
 
-	discovery *peerexchange.Discovery
+	discovery *discovery.Discovery
+	legacy    *peerexchange.Discovery
 }
 
 // Upgrade creates Host instance from host.Host.
@@ -88,7 +90,7 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 		return nil, fmt.Errorf("failed to initialize pubsub: %w", err)
 	}
 	if !cfg.DisableLegacyDiscovery {
-		if fh.discovery, err = peerexchange.New(fh.logger, h, peerexchange.Config{
+		if fh.legacy, err = peerexchange.New(fh.logger, h, peerexchange.Config{
 			DataDir:          cfg.DataDir,
 			Bootnodes:        cfg.Bootnodes,
 			AdvertiseAddress: cfg.AdvertiseAddress,
@@ -99,6 +101,24 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 			return nil, fmt.Errorf("failed to initialize peerexchange discovery: %w", err)
 		}
 	}
+	bootnodes, err := parseIntoAddr(cfg.Bootnodes)
+	if err != nil {
+		return nil, err
+	}
+	dopts := []discovery.Opt{
+		discovery.WithDir(cfg.DataDir),
+	}
+	if cfg.Bootnode {
+		dopts = append(dopts, discovery.Server())
+	}
+	if cfg.PrivateNetwork {
+		dopts = append(dopts, discovery.Private())
+	}
+	dhtdisc, err := discovery.New(fh, dopts...)
+	if err != nil {
+		return nil, err
+	}
+	fh.discovery = dhtdisc
 	if fh.nodeReporter != nil {
 		fh.Network().Notify(&network.NotifyBundle{
 			ConnectedF: func(network.Network, network.Conn) {
@@ -128,9 +148,10 @@ func (fh *Host) Start() error {
 	if fh.closed.closed {
 		return errors.New("p2p: closed")
 	}
-	if fh.discovery != nil {
-		fh.discovery.StartScan()
+	if fh.legacy != nil {
+		fh.legacy.StartScan()
 	}
+	fh.discovery.Start()
 	return nil
 }
 
@@ -142,11 +163,12 @@ func (fh *Host) Stop() error {
 		return errors.New("p2p: closed")
 	}
 	fh.closed.closed = true
-	if fh.discovery != nil {
-		fh.discovery.Stop()
+	if fh.legacy != nil {
+		fh.legacy.Stop()
 	}
 	if err := fh.Host.Close(); err != nil {
 		return fmt.Errorf("failed to close libp2p host: %w", err)
 	}
+	fh.discovery.Stop()
 	return nil
 }

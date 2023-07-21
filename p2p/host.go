@@ -96,14 +96,7 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
-	var bootnodes []peer.AddrInfo
-	for _, boot := range cfg.Bootnodes {
-		addr, err := peer.AddrInfoFromString(boot)
-		if err != nil {
-			return nil, fmt.Errorf("can't parse bootnode %s: %w", boot, err)
-		}
-		bootnodes = append(bootnodes, *addr)
-	}
+
 	logger.Zap().Info("starting libp2p host", zap.Any("config", &cfg))
 	key, err := EnsureIdentity(cfg.DataDir)
 	if err != nil {
@@ -158,6 +151,10 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 		}))
 	}
 	if cfg.RelayClient {
+		bootnodes, err := parseIntoAddr(cfg.Bootnodes)
+		if err != nil {
+			return nil, err
+		}
 		lopts = append(lopts, libp2p.EnableAutoRelayWithStaticRelays(bootnodes))
 	}
 	if cfg.RelayServer {
@@ -224,4 +221,16 @@ func setupResourcesManager(highPeers int) func(cfg *libp2p.Config) error {
 		cfg.Apply(libp2p.ResourceManager(mgr))
 		return nil
 	}
+}
+
+func parseIntoAddr(nodes []string) ([]peer.AddrInfo, error) {
+	var addrs []peer.AddrInfo
+	for _, boot := range nodes {
+		addr, err := peer.AddrInfoFromString(boot)
+		if err != nil {
+			return nil, fmt.Errorf("can't parse bootnode %s: %w", boot, err)
+		}
+		addrs = append(addrs, *addr)
+	}
+	return addrs, nil
 }
