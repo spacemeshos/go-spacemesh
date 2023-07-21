@@ -8,6 +8,7 @@ import (
 
 	levelds "github.com/ipfs/go-ds-leveldb"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
+	record "github.com/libp2p/go-libp2p-record"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -202,7 +203,13 @@ func newDht(ctx context.Context, h host.Host, public, server bool, dir string) (
 	if err != nil {
 		return nil, fmt.Errorf("open leveldb at %s: %w", dir, err)
 	}
-	var opts []dht.Option
+	opts := []dht.Option{
+		dht.Validator(record.PublicKeyValidator{}),
+		dht.Datastore(ds),
+		dht.ProtocolPrefix("spacemesh"),
+		dht.DisableProviders(),
+		dht.DisableValues(),
+	}
 	if public {
 		opts = append(opts, dht.QueryFilter(dht.PublicQueryFilter),
 			dht.RoutingTableFilter(dht.PublicRoutingTableFilter),
@@ -217,12 +224,5 @@ func newDht(ctx context.Context, h host.Host, public, server bool, dir string) (
 	} else {
 		opts = append(opts, dht.Mode(dht.ModeAuto))
 	}
-	opts = append(opts,
-		dht.Datastore(ds),
-		dht.ProtocolPrefix("spacemesh"),
-		dht.DisableProviders(),
-		dht.DisableValues())
-	return dht.New(
-		ctx, h, opts...,
-	)
+	return dht.New(ctx, h, opts...)
 }
