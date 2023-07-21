@@ -49,6 +49,7 @@ import (
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/malfeasance"
@@ -1379,15 +1380,16 @@ func (app *App) Start(ctx context.Context) error {
 	if app.Config.CollectMetrics {
 		metrics.StartMetricsServer(app.Config.MetricsPort)
 	}
-
+	fmt.Println(app.Config.PublicMetrics)
 	if app.Config.PublicMetrics.MetricsURL != "" {
+		id := hash.Sum([]byte(app.host.ID()))
 		metrics.StartPushingMetrics(
 			app.Config.PublicMetrics.MetricsURL,
 			app.Config.PublicMetrics.MetricsPushUser,
 			app.Config.PublicMetrics.MetricsPushPass,
 			app.Config.PublicMetrics.MetricsPushHeader,
 			app.Config.PublicMetrics.MetricsPushPeriod,
-			app.host.ID().String()[:5], app.Config.Genesis.GenesisID().ShortString())
+			types.Hash32(id).ShortString(), app.Config.Genesis.GenesisID().ShortString())
 	}
 
 	if err := app.startServices(ctx); err != nil {

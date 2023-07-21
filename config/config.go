@@ -44,6 +44,7 @@ func init() {
 type Config struct {
 	BaseConfig      `mapstructure:"main"`
 	Genesis         *GenesisConfig        `mapstructure:"genesis"`
+	PublicMetrics   PublicMetrics         `mapstructure:"public-metrics"`
 	Tortoise        tortoise.Config       `mapstructure:"tortoise"`
 	P2P             p2p.Config            `mapstructure:"p2p"`
 	API             grpcserver.Config     `mapstructure:"api"`
@@ -84,8 +85,6 @@ type BaseConfig struct {
 
 	CollectMetrics bool `mapstructure:"metrics"`
 	MetricsPort    int  `mapstructure:"metrics-port"`
-
-	PublicMetrics PublicMetrics `mapstructure:"public-metrics"`
 
 	ProfilerName string `mapstructure:"profiler-name"`
 	ProfilerURL  string `mapstructure:"profiler-url"`
