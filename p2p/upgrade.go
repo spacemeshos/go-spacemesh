@@ -107,6 +107,7 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 	}
 	dopts := []discovery.Opt{
 		discovery.WithDir(cfg.DataDir),
+		discovery.WithBootnodes(bootnodes),
 	}
 	if cfg.Bootnode {
 		dopts = append(dopts, discovery.Server())
