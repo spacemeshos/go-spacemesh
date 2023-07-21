@@ -1380,7 +1380,7 @@ func (app *App) Start(ctx context.Context) error {
 	if app.Config.CollectMetrics {
 		metrics.StartMetricsServer(app.Config.MetricsPort)
 	}
-	fmt.Println(app.Config.PublicMetrics)
+
 	if app.Config.PublicMetrics.MetricsURL != "" {
 		id := hash.Sum([]byte(app.host.ID()))
 		metrics.StartPushingMetrics(
