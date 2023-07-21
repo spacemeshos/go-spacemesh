@@ -207,7 +207,7 @@ func newDht(ctx context.Context, h host.Host, bootnodes []peer.AddrInfo, public,
 	opts := []dht.Option{
 		dht.Validator(record.PublicKeyValidator{}),
 		dht.Datastore(ds),
-		dht.ProtocolPrefix("spacemesh"),
+		dht.ProtocolPrefix("/spacekad"),
 		dht.DisableProviders(),
 		dht.DisableValues(),
 	}
@@ -221,7 +221,7 @@ func newDht(ctx context.Context, h host.Host, bootnodes []peer.AddrInfo, public,
 	if server {
 		opts = append(opts, dht.Mode(dht.ModeServer))
 	} else {
-		opts = append(opts, dht.Mode(dht.ModeClient))
+		opts = append(opts, dht.Mode(dht.ModeAutoServer))
 	}
 	return dht.New(ctx, h, opts...)
 }
