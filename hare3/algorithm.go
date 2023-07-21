@@ -335,7 +335,6 @@ func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []types
 				p.Li[j] = setHash
 			}
 		}
-		return nil, nil
 	case Propose:
 		if !active {
 			return nil, nil
