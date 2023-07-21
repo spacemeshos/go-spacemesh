@@ -768,6 +768,7 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 	app.hareRunner = runner.NewHareRunner(
 		app.clock,
 		runner.NewDefaultGossiper(app.host.PubSub, hareLog),
+		app.edSgn,
 		app.hOracle,
 		newSyncer,
 		beaconProtocol,
