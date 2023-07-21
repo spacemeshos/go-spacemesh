@@ -42,10 +42,10 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.CollectMetrics, "collect node metrics")
 	cmd.PersistentFlags().IntVar(&cfg.MetricsPort, "metrics-port",
 		cfg.MetricsPort, "metric server port")
-	cmd.PersistentFlags().StringVar(&cfg.MetricsPush, "metrics-push",
-		cfg.MetricsPush, "Push metrics to url")
-	cmd.PersistentFlags().DurationVar(&cfg.MetricsPushPeriod, "metrics-push-period",
-		cfg.MetricsPushPeriod, "Push period")
+	cmd.PersistentFlags().StringVar(&cfg.PublicMetrics.MetricsURL, "metrics-push",
+		cfg.PublicMetrics.MetricsURL, "Push metrics to url")
+	cmd.PersistentFlags().DurationVar(&cfg.PublicMetrics.MetricsPushPeriod, "metrics-push-period",
+		cfg.PublicMetrics.MetricsPushPeriod, "Push period")
 	cmd.PersistentFlags().StringArrayVar(&cfg.PoETServers, "poet-server",
 		cfg.PoETServers, "The poet server url. (temporary) Can be passed multiple times")
 	cmd.PersistentFlags().StringVar(&cfg.Genesis.GenesisTime, "genesis-time",

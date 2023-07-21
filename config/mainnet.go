@@ -32,7 +32,6 @@ func MainnetConfig() Config {
 			DataDirParent:       defaultDataDir,
 			FileLock:            filepath.Join(os.TempDir(), "spacemesh.lock"),
 			MetricsPort:         1010,
-			MetricsPushPeriod:   60,
 			DatabaseConnections: 16,
 			NetworkHRP:          "sm",
 
