@@ -77,6 +77,7 @@ func NewProtocolRunner(
 // returned and the result will be nil.
 func (r *ProtocolRunner) Run(ctx context.Context) ([]types.Hash20, error) {
 	// ok want to actually use a lock here
+	r.l.Info("running layer %d", r.layer)
 	for {
 		// Note the round starts at -2 since the hare protocol increments the round as the first step of NextRound
 		previousRound := r.protocol.Round()
@@ -302,6 +303,7 @@ func (r *HareRunner) Run(ctx context.Context) {
 				if err != nil {
 					r.l.With().Info("hare terminated without agreement", layer, log.Err(err))
 				} else {
+					r.l.With().Info("hare terminated with agreement", log.String("output", fmt.Sprintf("%v", result)), layer)
 					select {
 					// Send the result
 					case r.output <- hare.LayerOutput{
@@ -362,7 +364,9 @@ type DefaultGossiper struct {
 
 func (g *DefaultGossiper) Gossip(ctx context.Context, msg []byte) {
 	err := g.p.Publish(ctx, pubsub.HareProtocol, msg)
-	g.l.With().Error("error while publishing hare message", log.Err(err))
+	if err != nil {
+		g.l.With().Error("error while publishing hare message", log.Err(err))
+	}
 }
 
 type MessageBuilder struct {
