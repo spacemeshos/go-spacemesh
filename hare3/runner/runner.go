@@ -230,6 +230,13 @@ func (r *HareRunner) Run(ctx context.Context) {
 		layer := l
 		select {
 		case <-r.clock.AwaitLayer(layer):
+
+			roundClock := hare.NewSimpleRoundClock(r.clock.LayerToTime(layer), r.wakeupDelta, r.roundDuration)
+			select {
+			case <-roundClock.AwaitWakeup():
+			case <-ctx.Done():
+				return
+			}
 			if !r.syncer.IsSynced(ctx) {
 				// if not currently synced don't start consensus process.
 				r.l.With().Info("not starting hare: node not synced",
@@ -290,7 +297,7 @@ func (r *HareRunner) Run(ctx context.Context) {
 
 			// Execute layer
 			r.eg.Go(func() error {
-				result, err := r.runLayer(log.WithNewSessionID(ctx), layer, props, lc)
+				result, err := r.runLayer(log.WithNewSessionID(ctx), layer, props, lc, roundClock)
 				// We log the error, which is either ctx timeout or iteration exceeded
 				if err != nil {
 					r.l.With().Info("hare terminated without agreement", layer, log.Err(err))
@@ -315,11 +322,10 @@ func (r *HareRunner) Run(ctx context.Context) {
 }
 
 // runLayer constructs a ProtocolRunner and returns the output of its Run method.
-func (r *HareRunner) runLayer(ctx context.Context, layer types.LayerID, props []types.ProposalID, lc hare3.LeaderChecker) ([]types.ProposalID, error) {
+func (r *HareRunner) runLayer(ctx context.Context, layer types.LayerID, props []types.ProposalID, lc hare3.LeaderChecker, roundClock RoundClock) ([]types.ProposalID, error) {
 	// The broker may have already created a handler and coinChooser in
 	// response to early messages, that's why we get them from the broker.
 	handler, coinChooser := r.b.Register(ctx, layer)
-	roundClock := hare.NewSimpleRoundClock(r.clock.LayerToTime(layer), r.wakeupDelta, r.roundDuration)
 
 	initialSet := make([]types.Hash20, len(props))
 	for i := 0; i < len(props); i++ {
