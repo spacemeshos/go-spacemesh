@@ -19,17 +19,22 @@
 package weakcoin
 
 import (
+	"sync"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 type Chooser struct {
 	coin *types.VrfSignature
+	mu   sync.Mutex
 }
 
 func NewChooser() *Chooser { return &Chooser{} }
 
 // Put puts the coin into the chooser.
 func (c *Chooser) Put(coin *types.VrfSignature) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	switch {
 	case c.coin == nil:
 		c.coin = coin
@@ -42,6 +47,8 @@ func (c *Chooser) Put(coin *types.VrfSignature) {
 // Choose returns the coin value of the lowest seen coin or nil if no coins
 // have been seen.
 func (c *Chooser) Choose() *bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.coin == nil {
 		return nil
 	}
