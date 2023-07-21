@@ -3,12 +3,15 @@ package discovery
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
+	levelds "github.com/ipfs/go-ds-leveldb"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	ldbopts "github.com/syndtr/goleveldb/leveldb/opt"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 )
@@ -21,7 +24,7 @@ func WithPeriod(period time.Duration) Opt {
 	}
 }
 
-func WithhTimeout(timeout time.Duration) Opt {
+func WithTimeout(timeout time.Duration) Opt {
 	return func(d *Discovery) {
 		d.timeout = timeout
 	}
@@ -51,14 +54,32 @@ func WithLogger(logger *zap.Logger) Opt {
 	}
 }
 
-func New(h host.Host, dht *dht.IpfsDHT, opts ...Opt) *Discovery {
+func Server() Opt {
+	return func(d *Discovery) {
+		d.server = true
+	}
+}
+
+func Private() Opt {
+	return func(d *Discovery) {
+		d.public = false
+	}
+}
+
+func WithDir(path string) Opt {
+	return func(d *Discovery) {
+		d.dir = path
+	}
+}
+
+func New(h host.Host, opts ...Opt) (*Discovery, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	d := Discovery{
+		public:            true,
 		logger:            zap.NewNop(),
 		ctx:               ctx,
 		cancel:            cancel,
 		h:                 h,
-		dht:               dht,
 		period:            10 * time.Second,
 		timeout:           30 * time.Second,
 		bootstrapDuration: 30 * time.Second,
@@ -67,10 +88,19 @@ func New(h host.Host, dht *dht.IpfsDHT, opts ...Opt) *Discovery {
 	for _, opt := range opts {
 		opt(&d)
 	}
-	return &d
+	dht, err := newDht(ctx, h, d.public, d.server, d.dir)
+	if err != nil {
+		return nil, err
+	}
+	d.dht = dht
+	return &d, nil
 }
 
 type Discovery struct {
+	public bool
+	server bool
+	dir    string
+
 	logger *zap.Logger
 	eg     errgroup.Group
 	ctx    context.Context
@@ -119,7 +149,7 @@ func (d *Discovery) Start() {
 				)
 			} else {
 				if len(d.bootnodes) == 0 {
-					d.logger.Warn("bootnodes are empty")
+					d.logger.Warn("no bootnodes are provided")
 				}
 				d.connect(&connEg, d.bootnodes)
 				d.bootstrap()
@@ -131,6 +161,9 @@ func (d *Discovery) Start() {
 func (d *Discovery) Stop() {
 	d.cancel()
 	d.eg.Wait()
+	if err := d.dht.Close(); err != nil {
+		d.logger.Error("error closing dht", zap.Error(err))
+	}
 }
 
 func (d *Discovery) bootstrap() {
@@ -148,7 +181,7 @@ func (d *Discovery) connect(eg *errgroup.Group, nodes []peer.AddrInfo) {
 		boot := boot
 		eg.Go(func() error {
 			if err := d.h.Connect(ctx, boot); err != nil && !errors.Is(err, context.Canceled) {
-				d.logger.Warn("failed to connect with bootnode",
+				d.logger.Warn("failed to connect",
 					zap.Stringer("address", boot),
 					zap.Error(err),
 				)
@@ -157,4 +190,39 @@ func (d *Discovery) connect(eg *errgroup.Group, nodes []peer.AddrInfo) {
 		})
 	}
 	eg.Wait()
+}
+
+func newDht(ctx context.Context, h host.Host, public, server bool, dir string) (*dht.IpfsDHT, error) {
+	ds, err := levelds.NewDatastore(dir, &levelds.Options{
+		Compression: ldbopts.NoCompression,
+		NoSync:      false,
+		Strict:      ldbopts.StrictAll,
+		ReadOnly:    false,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("open leveldb at %s: %w", dir, err)
+	}
+	var opts []dht.Option
+	if public {
+		opts = append(opts, dht.QueryFilter(dht.PublicQueryFilter),
+			dht.RoutingTableFilter(dht.PublicRoutingTableFilter),
+			dht.RoutingTablePeerDiversityFilter(dht.NewRTPeerDiversityFilter(h, 2, 3)))
+	} else {
+		opts = append(opts,
+			dht.QueryFilter(dht.PrivateQueryFilter),
+			dht.RoutingTableFilter(dht.PrivateRoutingTableFilter))
+	}
+	if server {
+		opts = append(opts, dht.Mode(dht.ModeServer))
+	} else {
+		opts = append(opts, dht.Mode(dht.ModeAuto))
+	}
+	opts = append(opts,
+		dht.Datastore(ds),
+		dht.ProtocolPrefix("spacemesh"),
+		dht.DisableProviders(),
+		dht.DisableValues())
+	return dht.New(
+		ctx, h, opts...,
+	)
 }
