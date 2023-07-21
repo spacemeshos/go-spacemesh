@@ -101,7 +101,7 @@ func (r *ProtocolRunner) Run(ctx context.Context) ([]types.Hash20, error) {
 				return nil, err
 			}
 			r.l.Info("running round %d, of layer %d, eligibility count %d", round, r.layer, count)
-			toSend, output := r.protocol.NextRound(count > 0)
+			toSend, output := r.protocol.NextRound(true)
 			if toSend != nil {
 				r.l.Info("sending hare message round: %v, proposals: %v", toSend.Round, toSend.Values)
 				r.gossiper.Gossip(ctx, r.mb.BuildEncodedMessage(toSend, proof, count))

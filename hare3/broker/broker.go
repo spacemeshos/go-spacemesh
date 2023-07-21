@@ -235,10 +235,10 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 	}
 
 	// validate msg
-	if !b.roleValidator.Validate(ctx, hareMsg) {
-		logger.Warning("message validation failed: eligibility validator returned false")
-		return errors.New("not eligible")
-	}
+	// if !b.roleValidator.Validate(ctx, hareMsg) {
+	// 	logger.Warning("message validation failed: eligibility validator returned false")
+	// 	return errors.New("not eligible")
+	// }
 
 	// validation passed, report
 	logger.With().Debug("broker reported hare message as valid")
