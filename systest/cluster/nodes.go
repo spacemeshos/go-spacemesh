@@ -724,13 +724,13 @@ func SmesherKey(key ed25519.PrivateKey) DeploymentFlag {
 }
 
 func Bootnode() DeploymentFlag {
-	return DeploymentFlag{Name: "--p2p-bootnode"}
+	return DeploymentFlag{Name: "--p2p-bootnode", Value: fmt.Sprintf("%v", true)}
 }
 
 func PrivateNetwork() DeploymentFlag {
-	return DeploymentFlag{Name: "--p2p-private-network"}
+	return DeploymentFlag{Name: "--p2p-private-network", Value: fmt.Sprintf("%v", true)}
 }
 
 func DisableLegacyDiscovery() DeploymentFlag {
-	return DeploymentFlag{Name: "--p2p-private-network"}
+	return DeploymentFlag{Name: "--p2p-disable-legacy-discovery", Value: fmt.Sprintf("%v", true)}
 }
