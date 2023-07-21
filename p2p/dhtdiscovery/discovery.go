@@ -168,7 +168,8 @@ func (d *Discovery) Stop() {
 }
 
 func (d *Discovery) bootstrap() {
-	ctx, _ := context.WithTimeout(d.ctx, d.bootstrapDuration)
+	ctx, cancel := context.WithTimeout(d.ctx, d.bootstrapDuration)
+	defer cancel()
 	if err := d.dht.Bootstrap(ctx); err != nil {
 		d.logger.Error("unexpected error from discovery dht", zap.Error(err))
 	}
@@ -215,12 +216,7 @@ func newDht(ctx context.Context, h host.Host, bootnodes []peer.AddrInfo, public,
 	}
 	if public {
 		opts = append(opts, dht.QueryFilter(dht.PublicQueryFilter),
-			dht.RoutingTableFilter(dht.PublicRoutingTableFilter),
-			dht.RoutingTablePeerDiversityFilter(dht.NewRTPeerDiversityFilter(h, 2, 3)))
-	} else {
-		opts = append(opts,
-			dht.QueryFilter(dht.PrivateQueryFilter),
-			dht.RoutingTableFilter(dht.PrivateRoutingTableFilter))
+			dht.RoutingTableFilter(dht.PublicRoutingTableFilter))
 	}
 	if server {
 		opts = append(opts, dht.Mode(dht.ModeServer))
