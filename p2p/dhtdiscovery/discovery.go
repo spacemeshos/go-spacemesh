@@ -222,7 +222,7 @@ func newDht(ctx context.Context, h host.Host, public, server bool, dir string) (
 	if server {
 		opts = append(opts, dht.Mode(dht.ModeServer))
 	} else {
-		opts = append(opts, dht.Mode(dht.ModeAuto))
+		opts = append(opts, dht.Mode(dht.ModeClient))
 	}
 	return dht.New(ctx, h, opts...)
 }
