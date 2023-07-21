@@ -998,10 +998,8 @@ func TestEmptyExtraData(t *testing.T) {
 
 func getTestDefaultConfig(tb testing.TB) *config.Config {
 	cfg, err := LoadConfigFromFile()
-	if err != nil {
-		log.Error("cannot load config from file")
-		return nil
-	}
+	require.NoError(tb, err, "cannot load config from file")
+
 	// is set to 0 to make sync start immediately when node starts
 	cfg.P2P.MinPeers = 0
 

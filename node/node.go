@@ -382,10 +382,6 @@ func (app *App) Started() <-chan struct{} {
 	return app.started
 }
 
-func (app *App) introduction() {
-	log.Info("Welcome to Spacemesh. Spacemesh full node is starting...")
-}
-
 // Lock locks the app for exclusive use. It returns an error if the app is already locked.
 func (app *App) Lock() error {
 	lockdir := filepath.Dir(app.Config.FileLock)
@@ -412,7 +408,7 @@ func (app *App) Unlock() {
 		return
 	}
 	if err := app.fileLock.Unlock(); err != nil {
-		log.With().Error("failed to unlock file",
+		app.log.With().Error("failed to unlock file",
 			log.String("path", app.fileLock.Path()),
 			log.Err(err),
 		)
@@ -446,7 +442,7 @@ func (app *App) Initialize() error {
 	maxHareRoundsPerLayer := 1 + app.Config.HARE.LimitIterations*hare.RoundsPerIteration // pre-round + 4 rounds per iteration
 	maxHareLayerDuration := app.Config.HARE.WakeupDelta + time.Duration(maxHareRoundsPerLayer)*app.Config.HARE.RoundDuration
 	if app.Config.LayerDuration*time.Duration(app.Config.Tortoise.Zdist) <= maxHareLayerDuration {
-		log.With().Error("incompatible params",
+		app.log.With().Error("incompatible params",
 			log.Uint32("tortoise_zdist", app.Config.Tortoise.Zdist),
 			log.Duration("layer_duration", app.Config.LayerDuration),
 			log.Duration("hare_wakeup_delta", app.Config.HARE.WakeupDelta),
@@ -460,7 +456,7 @@ func (app *App) Initialize() error {
 	timeCfg.TimeConfigValues = app.Config.TIME
 
 	app.setupLogging()
-	app.introduction()
+	app.log.Info("Welcome to Spacemesh. Spacemesh full node is starting...")
 
 	public.Version.WithLabelValues(cmd.Version).Set(1)
 	public.SmeshingOptsProvingNonces.Set(float64(app.Config.SMESHING.ProvingOpts.Nonces))
@@ -470,7 +466,7 @@ func (app *App) Initialize() error {
 
 // setupLogging configured the app logging system.
 func (app *App) setupLogging() {
-	log.Info("%s", app.getAppInfo())
+	app.log.Info("%s", app.getAppInfo())
 	events.InitializeReporter()
 }
 
@@ -481,10 +477,10 @@ func (app *App) getAppInfo() string {
 
 // Cleanup stops all app services.
 func (app *App) Cleanup(ctx context.Context) {
-	log.Info("app cleanup starting...")
+	app.log.Info("app cleanup starting...")
 	app.stopServices(ctx)
 	// add any other Cleanup tasks here....
-	log.Info("app cleanup completed")
+	app.log.Info("app cleanup completed")
 }
 
 // Wrap the top-level logger to add context info and set the level for a
@@ -1016,10 +1012,10 @@ func (app *App) startServices(ctx context.Context) error {
 			app.log.Panic("failed to parse CoinbaseAccount address on start `%s`: %v", app.Config.SMESHING.CoinbaseAccount, err)
 		}
 		if err := app.atxBuilder.StartSmeshing(coinbaseAddr, app.Config.SMESHING.Opts); err != nil {
-			log.Panic("failed to start smeshing: %v", err)
+			app.log.Panic("failed to start smeshing: %v", err)
 		}
 	} else {
-		log.Info("smeshing not started, waiting to be triggered via smesher api")
+		app.log.Info("smeshing not started, waiting to be triggered via smesher api")
 	}
 
 	if app.ptimesync != nil {
@@ -1033,6 +1029,7 @@ func (app *App) startServices(ctx context.Context) error {
 }
 
 func (app *App) initService(ctx context.Context, svc grpcserver.Service) (grpcserver.ServiceAPI, error) {
+	// TODO(mafa): add app.log.WithName("service") to all services
 	switch svc {
 	case grpcserver.Debug:
 		return grpcserver.NewDebugService(app.db, app.conState, app.host, app.hOracle), nil
@@ -1118,23 +1115,23 @@ func (app *App) startAPIServices(ctx context.Context) error {
 func (app *App) stopServices(ctx context.Context) {
 	if app.jsonAPIService != nil {
 		if err := app.jsonAPIService.Shutdown(ctx); err != nil {
-			log.With().Error("error stopping json gateway server", log.Err(err))
+			app.log.With().Error("error stopping json gateway server", log.Err(err))
 		}
 	}
 
 	if app.grpcPublicService != nil {
-		log.Info("stopping public grpc service")
+		app.log.Info("stopping public grpc service")
 		// does not return any errors
 		_ = app.grpcPublicService.Close()
 	}
 	if app.grpcPrivateService != nil {
-		log.Info("stopping private grpc service")
+		app.log.Info("stopping private grpc service")
 		// does not return any errors
 		_ = app.grpcPrivateService.Close()
 	}
 
 	if app.updater != nil {
-		log.Info("stopping updater")
+		app.log.Info("stopping updater")
 		app.updater.Close()
 	}
 
@@ -1207,11 +1204,11 @@ func (app *App) stopServices(ctx context.Context) {
 // LoadOrCreateEdSigner either loads a previously created ed identity for the node or creates a new one if not exists.
 func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 	filename := filepath.Join(app.Config.SMESHING.Opts.DataDir, edKeyFileName)
-	log.Info("Looking for identity file at `%v`", filename)
+	app.log.Info("Looking for identity file at `%v`", filename)
 
 	var data []byte
 	if len(app.Config.TestConfig.SmesherKey) > 0 {
-		log.With().Error("!!!TESTING!!! using pre-configured smesher key")
+		app.log.With().Error("!!!TESTING!!! using pre-configured smesher key")
 		data = []byte(app.Config.TestConfig.SmesherKey)
 	} else {
 		var err error
@@ -1221,7 +1218,7 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 				return nil, fmt.Errorf("failed to read identity file: %w", err)
 			}
 
-			log.Info("Identity file not found. Creating new identity...")
+			app.log.Info("Identity file not found. Creating new identity...")
 
 			edSgn, err := signing.NewEdSigner(
 				signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()),
@@ -1238,7 +1235,7 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 				return nil, fmt.Errorf("failed to write identity file: %w", err)
 			}
 
-			log.With().Info("created new identity", edSgn.PublicKey())
+			app.log.With().Info("created new identity", edSgn.PublicKey())
 			return edSgn, nil
 		}
 	}
@@ -1258,7 +1255,7 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 		return nil, fmt.Errorf("failed to construct identity from data file: %w", err)
 	}
 
-	log.Info("Loaded existing identity; public key: %v", edSgn.PublicKey())
+	app.log.Info("Loaded existing identity; public key: %v", edSgn.PublicKey())
 	return edSgn, nil
 }
 
@@ -1413,7 +1410,7 @@ func (app *App) Start(ctx context.Context) error {
 	}
 
 	events.SubscribeToLayers(app.clock)
-	logger.Info("app started")
+	app.log.Info("app started")
 
 	// notify anyone who might be listening that the app has finished starting.
 	// this can be used by, e.g., app tests.

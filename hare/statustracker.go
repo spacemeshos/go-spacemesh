@@ -131,7 +131,7 @@ func (st *statusTracker) ProposalSet(expectedSize int) *Set {
 	}
 
 	if st.maxSet == nil { // should be impossible to reach
-		log.Fatal("maxSet is unexpectedly nil")
+		st.logger.Fatal("maxSet is unexpectedly nil")
 	}
 
 	return st.maxSet

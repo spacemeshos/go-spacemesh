@@ -10,7 +10,6 @@ import (
 	oasis "github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type Domain byte
@@ -71,7 +70,6 @@ func WithPrivateKey(priv PrivateKey) EdSignerOptionFunc {
 
 		keyPair := ed25519.NewKeyFromSeed(priv[:32])
 		if !bytes.Equal(keyPair[32:], priv.Public().(ed25519.PublicKey)) {
-			log.Error("Public key and private key do not match")
 			return errors.New("private and public do not match")
 		}
 
