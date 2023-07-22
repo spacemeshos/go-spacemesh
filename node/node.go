@@ -130,8 +130,9 @@ func GetCommand() *cobra.Command {
 				// NOTE(dshulyak) this needs to be max level so that child logger can can be current level or below.
 				// otherwise it will fail later when child logger will try to increase level.
 				WithLog(log.RegisterHooks(
-					log.NewWithLevel("", zap.NewAtomicLevelAt(zapcore.DebugLevel)),
-					events.EventHook())),
+					log.NewWithLevel("node", zap.NewAtomicLevelAt(zap.DebugLevel)),
+					events.EventHook()),
+				),
 			)
 
 			run := func(ctx context.Context) error {
@@ -293,8 +294,12 @@ func New(opts ...Option) *App {
 	for _, opt := range opts {
 		opt(app)
 	}
+	// TODO(mafa): this is a hack to suppress debugging logs on 0000.defaultLogger
+	// to fix this we should get rid of the global logger and pass app.log to all
+	// components that need it
 	lvl := zap.NewAtomicLevelAt(zap.InfoLevel)
 	log.SetupGlobal(app.log.SetLevel(&lvl))
+
 	types.SetNetworkHRP(app.Config.NetworkHRP)
 	return app
 }
