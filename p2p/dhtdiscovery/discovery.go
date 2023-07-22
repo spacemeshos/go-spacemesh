@@ -48,6 +48,12 @@ func WithBootnodes(bootnodes []peer.AddrInfo) Opt {
 	}
 }
 
+func WithBackup(backup []peer.AddrInfo) Opt {
+	return func(d *Discovery) {
+		d.backup = backup
+	}
+}
+
 func WithLogger(logger *zap.Logger) Opt {
 	return func(d *Discovery) {
 		d.logger = logger
@@ -88,6 +94,9 @@ func New(h host.Host, opts ...Opt) (*Discovery, error) {
 	for _, opt := range opts {
 		opt(&d)
 	}
+	if len(d.bootnodes) == 0 {
+		d.logger.Warn("no bootnodes in the config")
+	}
 	dht, err := newDht(ctx, h, d.public, d.server, d.dir)
 	if err != nil {
 		return nil, err
@@ -115,7 +124,7 @@ type Discovery struct {
 	timeout           time.Duration
 	bootstrapDuration time.Duration
 	minPeers          int
-	bootnodes         []peer.AddrInfo
+	backup, bootnodes []peer.AddrInfo
 }
 
 func (d *Discovery) Start() {
@@ -143,13 +152,16 @@ func (d *Discovery) Start() {
 				return nil
 			}
 			if connected := len(d.h.Network().Peers()); connected >= d.minPeers {
+				d.backup = nil // once got enough peers no need to keep backup, they are either already connected or unavailable
 				d.logger.Debug("node is connected with required number of peers. skipping bootstrap",
 					zap.Int("required", d.minPeers),
 					zap.Int("connected", connected),
 				)
 			} else {
-				if len(d.bootnodes) == 0 {
-					d.logger.Warn("no bootnodes are provided")
+				d.connect(&connEg, d.backup)
+				// no reason to spend more resources if we got enough from backup
+				if connected := len(d.h.Network().Peers()); connected >= d.minPeers {
+					continue
 				}
 				d.connect(&connEg, d.bootnodes)
 				d.bootstrap()

@@ -9,6 +9,7 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/log"
 	discovery "github.com/spacemeshos/go-spacemesh/p2p/dhtdiscovery"
@@ -51,7 +52,10 @@ func WithNodeReporter(reporter func()) Opt {
 // Host is a conveniency wrapper for all p2p related functionality required to run
 // a full spacemesh node.
 type Host struct {
+	eg     errgroup.Group
 	ctx    context.Context
+	cancel context.CancelFunc
+
 	cfg    Config
 	logger log.Log
 
@@ -71,8 +75,10 @@ type Host struct {
 
 // Upgrade creates Host instance from host.Host.
 func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
+	ctx, cancel := context.WithCancel(context.Background())
 	fh := &Host{
-		ctx:    context.Background(),
+		ctx:    ctx,
+		cancel: cancel,
 		cfg:    DefaultConfig(),
 		logger: log.NewNop(),
 		Host:   h,
@@ -109,12 +115,21 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 	dopts := []discovery.Opt{
 		discovery.WithDir(cfg.DataDir),
 		discovery.WithBootnodes(bootnodes),
+		discovery.WithLogger(fh.logger.Zap()),
 	}
 	if cfg.Bootnode {
 		dopts = append(dopts, discovery.Server())
 	}
 	if cfg.PrivateNetwork {
 		dopts = append(dopts, discovery.Private())
+	}
+	if !cfg.Bootnode {
+		backup, err := loadPeers(cfg.DataDir)
+		if err != nil {
+			fh.logger.With().Warning("failed to to load backup peers", log.Err(err))
+		} else if len(backup) > 0 {
+			dopts = append(dopts, discovery.WithBackup(backup))
+		}
 	}
 	dhtdisc, err := discovery.New(fh, dopts...)
 	if err != nil {
@@ -154,6 +169,12 @@ func (fh *Host) Start() error {
 		fh.legacy.StartScan()
 	}
 	fh.discovery.Start()
+	if !fh.cfg.Bootnode {
+		fh.eg.Go(func() error {
+			persist(fh.ctx, fh.logger, fh.Host, fh.cfg.DataDir, 30*time.Minute)
+			return nil
+		})
+	}
 	return nil
 }
 
@@ -164,13 +185,15 @@ func (fh *Host) Stop() error {
 	if fh.closed.closed {
 		return errors.New("p2p: closed")
 	}
+	fh.cancel()
 	fh.closed.closed = true
 	if fh.legacy != nil {
 		fh.legacy.Stop()
 	}
+	fh.discovery.Stop()
+	fh.eg.Wait()
 	if err := fh.Host.Close(); err != nil {
 		return fmt.Errorf("failed to close libp2p host: %w", err)
 	}
-	fh.discovery.Stop()
 	return nil
 }

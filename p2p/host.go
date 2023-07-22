@@ -18,6 +18,7 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	tptu "github.com/libp2p/go-libp2p/p2p/net/upgrader"
+	"github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/relay"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	"github.com/multiformats/go-multiaddr"
@@ -39,6 +40,8 @@ func DefaultConfig() Config {
 		GracePeersShutdown: 30 * time.Second,
 		MaxMessageSize:     2 << 20,
 		AcceptQueue:        tptu.AcceptQueueLength,
+		EnableHolepunching: true,
+		RelayServer:        RelayServer{TTL: 20 * time.Minute, Reservations: 512},
 	}
 }
 
@@ -55,24 +58,29 @@ type Config struct {
 	MaxMessageSize     int
 
 	// see https://lwn.net/Articles/542629/ for reuseport explanation
-	DisableReusePort       bool     `mapstructure:"disable-reuseport"`
-	DisableNatPort         bool     `mapstructure:"disable-natport"`
-	Flood                  bool     `mapstructure:"flood"`
-	Listen                 string   `mapstructure:"listen"`
-	ListenMulti            []string `mapstructure:"listen-multi"`
-	Bootnodes              []string `mapstructure:"bootnodes"`
-	MinPeers               int      `mapstructure:"min-peers"`
-	LowPeers               int      `mapstructure:"low-peers"`
-	HighPeers              int      `mapstructure:"high-peers"`
-	AdvertiseAddress       string   `mapstructure:"advertise-address"`
-	AcceptQueue            int      `mapstructure:"p2p-accept-queue"`
-	Metrics                bool     `mapstructure:"p2p-metrics"`
-	Bootnode               bool     `mapstructure:"p2p-bootnode"`
-	ForceReachability      string   `mapstructure:"p2p-reachability"`
-	RelayServer            bool     `mapstructure:"p2p-relay-service"`
-	RelayClient            bool     `mapstructure:"p2p-relay-client"`
-	DisableLegacyDiscovery bool     `mapstructure:"p2p-disable-legacy-discovery"`
-	PrivateNetwork         bool     `mapstructure:"p2p-private-network"`
+	DisableReusePort       bool        `mapstructure:"disable-reuseport"`
+	DisableNatPort         bool        `mapstructure:"disable-natport"`
+	Flood                  bool        `mapstructure:"flood"`
+	Listen                 string      `mapstructure:"listen"`
+	Bootnodes              []string    `mapstructure:"bootnodes"`
+	MinPeers               int         `mapstructure:"min-peers"`
+	LowPeers               int         `mapstructure:"low-peers"`
+	HighPeers              int         `mapstructure:"high-peers"`
+	AdvertiseAddress       string      `mapstructure:"advertise-address"`
+	AcceptQueue            int         `mapstructure:"p2p-accept-queue"`
+	Metrics                bool        `mapstructure:"p2p-metrics"`
+	Bootnode               bool        `mapstructure:"p2p-bootnode"`
+	ForceReachability      string      `mapstructure:"p2p-reachability"`
+	EnableHolepunching     bool        `mapstructure:"p2p-holepunching"`
+	DisableLegacyDiscovery bool        `mapstructure:"p2p-disable-legacy-discovery"`
+	PrivateNetwork         bool        `mapstructure:"p2p-private-network"`
+	RelayServer            RelayServer `mapstructure:"relay-server"`
+}
+
+type RelayServer struct {
+	Enable       bool          `mapstructure:"enable"`
+	Reservations int           `mapstructure:"reservations"`
+	TTL          time.Duration `mapstructure:"ttl"`
 }
 
 func (cfg *Config) Validate() error {
@@ -140,7 +148,6 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 		libp2p.Peerstore(ps),
 		libp2p.BandwidthReporter(p2pmetrics.NewBandwidthCollector()),
 		libp2p.EnableNATService(),
-		libp2p.EnableHolePunching(),
 	}
 	if len(cfg.AdvertiseAddress) > 0 {
 		addr, err := multiaddr.NewMultiaddr(cfg.AdvertiseAddress)
@@ -151,15 +158,20 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 			return []multiaddr.Multiaddr{addr}
 		}))
 	}
-	if cfg.RelayClient {
+	if cfg.EnableHolepunching {
 		bootnodes, err := parseIntoAddr(cfg.Bootnodes)
 		if err != nil {
 			return nil, err
 		}
-		lopts = append(lopts, libp2p.EnableAutoRelayWithStaticRelays(bootnodes))
+		lopts = append(lopts,
+			libp2p.EnableHolePunching(),
+			libp2p.EnableAutoRelayWithStaticRelays(bootnodes))
 	}
-	if cfg.RelayServer {
-		lopts = append(lopts, libp2p.EnableRelayService())
+	if cfg.RelayServer.Enable {
+		resources := relay.DefaultResources()
+		resources.MaxReservations = cfg.RelayServer.Reservations
+		resources.ReservationTTL = cfg.RelayServer.TTL
+		lopts = append(lopts, libp2p.EnableRelayService(relay.WithResources(resources)))
 	}
 	if cfg.ForceReachability == PublicReachability {
 		lopts = append(lopts, libp2p.ForceReachabilityPublic())
