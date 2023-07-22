@@ -137,7 +137,7 @@ jobs:
     needs: filter-changes
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         os:
           - ubuntu-latest
