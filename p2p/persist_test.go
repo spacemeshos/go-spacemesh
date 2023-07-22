@@ -8,9 +8,10 @@ import (
 	"time"
 
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
 func TestConnectedPersist(t *testing.T) {
@@ -59,7 +60,7 @@ func TestConnectedBrokenCRC(t *testing.T) {
 	}, 3*time.Second, 50*time.Microsecond)
 	cancel()
 	eg.Wait()
-	f, err := os.OpenFile(filepath.Join(dir, connectedFile), os.O_RDWR, 0600)
+	f, err := os.OpenFile(filepath.Join(dir, connectedFile), os.O_RDWR, 0o600)
 	require.NoError(t, err)
 	_, err = f.WriteAt([]byte{0, 1, 1, 1}, 0)
 	require.NoError(t, err)
