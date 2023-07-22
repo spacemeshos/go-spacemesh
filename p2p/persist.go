@@ -40,6 +40,11 @@ func persist(ctx context.Context, logger log.Log, h host.Host, dir string, perio
 }
 
 func writePeers(h host.Host, dir string) error {
+	peers := h.Network().Peers()
+	if len(peers) == 0 {
+		return nil
+	}
+
 	checksum := crc64.New(crc64.MakeTable(crc64.ISO))
 	tmp, err := os.CreateTemp(dir, "connected-***")
 	if err != nil {
@@ -51,7 +56,7 @@ func writePeers(h host.Host, dir string) error {
 		return err
 	}
 	codec := json.NewEncoder(io.MultiWriter(tmp, checksum))
-	for _, pid := range h.Network().Peers() {
+	for _, pid := range peers {
 		info := h.Peerstore().PeerInfo(pid)
 		if err := codec.Encode(info); err != nil {
 			tmp.Close()
