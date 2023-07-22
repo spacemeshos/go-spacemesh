@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -27,6 +28,14 @@ func MainnetConfig() Config {
 		panic(err)
 	}
 	p2pconfig := p2p.DefaultConfig()
+
+	smeshing := DefaultSmeshingConfig()
+	smeshing.ProvingOpts.Nonces = 288
+	smeshing.ProvingOpts.Threads = uint(runtime.NumCPU() * 3 / 4)
+	if smeshing.ProvingOpts.Threads < 1 {
+		smeshing.ProvingOpts.Threads = 1
+	}
+
 	return Config{
 		BaseConfig: BaseConfig{
 			DataDirParent:       defaultDataDir,
@@ -115,7 +124,7 @@ func MainnetConfig() Config {
 		P2P:      p2pconfig,
 		API:      grpcserver.DefaultConfig(),
 		TIME:     timeConfig.DefaultConfig(),
-		SMESHING: DefaultSmeshingConfig(),
+		SMESHING: smeshing,
 		FETCH:    fetch.DefaultConfig(),
 		LOGGING:  defaultLoggingConfig(),
 		Sync:     syncer.DefaultConfig(),
