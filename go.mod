@@ -2,14 +2,13 @@ module github.com/spacemeshos/go-spacemesh
 
 go 1.19
 
-replace github.com/spacemeshos/poet v0.8.6 => ../poet
-
 require (
 	cloud.google.com/go/storage v1.31.0
 	github.com/ALTree/bigfloat v0.0.0-20220102081255-38c8b72a9924
 	github.com/benbjohnson/clock v1.3.5
 	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20230531032220-a757362a12e1
 	github.com/cosmos/btcutil v1.0.5
+	github.com/davecgh/go-spew v1.1.1
 	github.com/go-llsqlite/llsqlite v0.0.0-20230612031458-a9e271fe723a
 	github.com/gofrs/flock v0.8.1
 	github.com/golang/mock v1.6.0
@@ -74,7 +73,6 @@ require (
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/containerd/cgroups v1.1.0 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
-	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/davidlazar/go-crypto v0.0.0-20200604182044-b73af7476f6c // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.1.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
