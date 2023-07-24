@@ -367,15 +367,15 @@ func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []types
 		}
 	case Commit:
 		candidates := p.gc.RetrieveGradecastedMessages(NewAbsRound(j, 2))
-		p.l.Debug("gradecast candidate sets %v", candidates)
-		p.l.Debug("before Ti[%d]: %v", j, p.Ti[j])
+		p.l.Debug("commit gradecast candidate sets %v", candidates)
+		p.l.Debug("commit before Ti[%d]: %v", j, p.Ti[j])
 		for _, c := range candidates {
 			if isSubset(c.values, p.Vi[3]) {
 				// Add to valid proposals for this iteration
 				p.Ti[j][toHash(c.values)] = c.values
 			}
 		}
-		p.l.Debug("after Ti[%d]: %v", j, p.Ti[j])
+		p.l.Debug("commit after Ti[%d]: %v", j, p.Ti[j])
 		if !active {
 			return nil, nil
 		}
@@ -386,13 +386,18 @@ func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []types
 				Round:  NewAbsRound(j, 5),
 				Values: []types.Hash20{*p.Li[j]},
 			}
+			p.l.Debug("commit hard locked sending Li[%d]: %v", j, mm.Values)
 		} else {
 			for _, c := range candidates {
+				p.l.Debug("commit checking gradecast candidate %v", c)
+				// TODO swap this
+				// candidateHash := toHash(sortHash20(c.values))
 				candidateHash := toHash(c.values)
 				// Check to see if valid proposal for this iteration
 				// Round 5 condition c
 				_, ok := p.Ti[j][candidateHash]
 				if !ok {
+					p.l.Debug("commit no valid proposal in this iteration for gradecast candidate %v, proposals: %v", c, p.Ti[j])
 					continue
 				}
 				// Check leader
