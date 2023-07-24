@@ -722,6 +722,8 @@ func TestHandler_ProcessAtx(t *testing.T) {
 	require.ErrorIs(t, atxHdlr.ProcessAtx(context.Background(), atx2), errMaliciousATX)
 	proof, err = identities.GetMalfeasanceProof(atxHdlr.cdb, sig.NodeID())
 	require.NoError(t, err)
+	require.NotNil(t, proof.Received())
+	proof.SetReceived(time.Time{})
 	require.Equal(t, got.MalfeasanceProof, *proof)
 	require.Equal(t, atx2.PublishEpoch.FirstLayer(), got.MalfeasanceProof.Layer)
 }

@@ -1,9 +1,11 @@
 package config
 
 import (
+	"math"
 	"math/big"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -22,8 +24,16 @@ import (
 
 func MainnetConfig() Config {
 	var postPowDifficulty activation.PowDifficulty
-	if err := postPowDifficulty.UnmarshalText([]byte("00037ec8ec25e6d2c00000000000000000000000000000000000000000000000")); err != nil {
+	if err := postPowDifficulty.UnmarshalText([]byte("000dfb23b0979b4b000000000000000000000000000000000000000000000000")); err != nil {
 		panic(err)
+	}
+	p2pconfig := p2p.DefaultConfig()
+
+	smeshing := DefaultSmeshingConfig()
+	smeshing.ProvingOpts.Nonces = 288
+	smeshing.ProvingOpts.Threads = uint(runtime.NumCPU() * 3 / 4)
+	if smeshing.ProvingOpts.Threads < 1 {
+		smeshing.ProvingOpts.Threads = 1
 	}
 
 	return Config{
@@ -31,7 +41,6 @@ func MainnetConfig() Config {
 			DataDirParent:       defaultDataDir,
 			FileLock:            filepath.Join(os.TempDir(), "spacemesh.lock"),
 			MetricsPort:         1010,
-			MetricsPushPeriod:   60,
 			DatabaseConnections: 16,
 			NetworkHRP:          "sm",
 
@@ -44,9 +53,17 @@ func MainnetConfig() Config {
 			OptFilterThreshold: 90,
 
 			TickSize: 9331200,
+			PoETServers: []string{
+				"https://mainnet-poet-0.spacemesh.network",
+				"https://mainnet-poet-1.spacemesh.network",
+				"https://mainnet-poet-2.spacemesh.network",
+				"https://poet-110.spacemesh.network",
+				"https://poet-111.spacemesh.network",
+			},
 		},
 		Genesis: &GenesisConfig{
 			GenesisTime: "2023-07-14T08:00:00Z",
+			ExtraData:   "00000000000000000001a6bc150307b5c1998045752b3c87eccf3c013036f3cc",
 			Accounts:    MainnetAccounts(),
 		},
 		Tortoise: tortoise.Config{
@@ -91,6 +108,7 @@ func MainnetConfig() Config {
 		},
 		POST: activation.PostConfig{
 			MinNumUnits:   4,
+			MaxNumUnits:   math.MaxUint32,
 			LabelsPerUnit: 4294967296,
 			K1:            26,
 			K2:            37,
@@ -103,10 +121,10 @@ func MainnetConfig() Config {
 			DataDir:  os.TempDir(),
 			Interval: 30 * time.Second,
 		},
-		P2P:      p2p.DefaultConfig(),
+		P2P:      p2pconfig,
 		API:      grpcserver.DefaultConfig(),
 		TIME:     timeConfig.DefaultConfig(),
-		SMESHING: DefaultSmeshingConfig(),
+		SMESHING: smeshing,
 		FETCH:    fetch.DefaultConfig(),
 		LOGGING:  defaultLoggingConfig(),
 		Sync:     syncer.DefaultConfig(),

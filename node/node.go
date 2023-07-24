@@ -51,11 +51,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare3/broker"
 	"github.com/spacemeshos/go-spacemesh/hare3/runner"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
+	"github.com/spacemeshos/go-spacemesh/metrics/public"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/node/mapstructureutil"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -131,8 +133,9 @@ func GetCommand() *cobra.Command {
 				// NOTE(dshulyak) this needs to be max level so that child logger can can be current level or below.
 				// otherwise it will fail later when child logger will try to increase level.
 				WithLog(log.RegisterHooks(
-					log.NewWithLevel("", zap.NewAtomicLevelAt(zapcore.DebugLevel)),
-					events.EventHook())),
+					log.NewWithLevel("node", zap.NewAtomicLevelAt(zap.DebugLevel)),
+					events.EventHook()),
+				),
 			)
 
 			run := func(ctx context.Context) error {
@@ -147,6 +150,10 @@ func GetCommand() *cobra.Command {
 				}
 				defer app.Unlock()
 
+				if err := app.Initialize(); err != nil {
+					return err
+				}
+
 				/* Create or load miner identity */
 				if app.edSgn, err = app.LoadOrCreateEdSigner(); err != nil {
 					return fmt.Errorf("could not retrieve identity: %w", err)
@@ -154,10 +161,6 @@ func GetCommand() *cobra.Command {
 
 				app.preserve, err = app.LoadCheckpoint(ctx)
 				if err != nil {
-					return err
-				}
-
-				if err := app.Initialize(); err != nil {
 					return err
 				}
 
@@ -294,8 +297,12 @@ func New(opts ...Option) *App {
 	for _, opt := range opts {
 		opt(app)
 	}
+	// TODO(mafa): this is a hack to suppress debugging logs on 0000.defaultLogger
+	// to fix this we should get rid of the global logger and pass app.log to all
+	// components that need it
 	lvl := zap.NewAtomicLevelAt(zap.InfoLevel)
 	log.SetupGlobal(app.log.SetLevel(&lvl))
+
 	types.SetNetworkHRP(app.Config.NetworkHRP)
 	return app
 }
@@ -456,9 +463,11 @@ func (app *App) Initialize() error {
 	timeCfg.TimeConfigValues = app.Config.TIME
 
 	app.setupLogging()
-
 	app.introduction()
 
+	public.Version.WithLabelValues(cmd.Version).Set(1)
+	public.SmeshingOptsProvingNonces.Set(float64(app.Config.SMESHING.ProvingOpts.Nonces))
+	public.SmeshingOptsProvingThreads.Set(float64(app.Config.SMESHING.ProvingOpts.Threads))
 	return nil
 }
 
@@ -844,6 +853,7 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		app.edSgn,
 		poetCfg,
 		app.clock,
+		activation.WithNipostValidator(app.validator),
 	)
 
 	var coinbaseAddr types.Address
@@ -877,6 +887,7 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		activation.WithContext(ctx),
 		activation.WithPoetConfig(poetCfg),
 		activation.WithPoetRetryInterval(app.Config.HARE.WakeupDelta),
+		activation.WithValidator(app.validator),
 	)
 
 	malfeasanceHandler := malfeasance.NewHandler(
@@ -1230,6 +1241,10 @@ func (app *App) stopServices(ctx context.Context) {
 	}
 
 	events.CloseEventReporter()
+	// SetGrpcLogger unfortunately is global
+	// this ensures that a test-logger isn't used after the app shuts down
+	// by e.g. a grpc connection to the node that is still open - like in TestSpacemeshApp_NodeService
+	grpczap.SetGrpcLoggerV2(grpclog, log.NewNop().Zap())
 }
 
 // LoadOrCreateEdSigner either loads a previously created ed identity for the node or creates a new one if not exists.
@@ -1414,10 +1429,15 @@ func (app *App) Start(ctx context.Context) error {
 		metrics.StartMetricsServer(app.Config.MetricsPort)
 	}
 
-	if app.Config.MetricsPush != "" {
-		metrics.StartPushingMetrics(app.Config.MetricsPush,
-			app.Config.MetricsPushUser, app.Config.MetricsPushPass, app.Config.MetricsPushPeriod,
-			app.host.ID().String(), app.Config.Genesis.GenesisID().ShortString())
+	if app.Config.PublicMetrics.MetricsURL != "" {
+		id := hash.Sum([]byte(app.host.ID()))
+		metrics.StartPushingMetrics(
+			app.Config.PublicMetrics.MetricsURL,
+			app.Config.PublicMetrics.MetricsPushUser,
+			app.Config.PublicMetrics.MetricsPushPass,
+			app.Config.PublicMetrics.MetricsPushHeader,
+			app.Config.PublicMetrics.MetricsPushPeriod,
+			types.Hash32(id).ShortString(), app.Config.Genesis.GenesisID().ShortString())
 	}
 
 	if err := app.startServices(ctx); err != nil {

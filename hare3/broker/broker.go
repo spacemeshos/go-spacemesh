@@ -216,6 +216,7 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 	default:
 	}
 
+	received := time.Now()
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	hash := types.CalcMessageHash20(msg, pubsub.HareProtocol)
@@ -304,7 +305,7 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 		if err != nil {
 			logger.Panic("failed to encode MalfeasanceProof: %v", err)
 		}
-		if err := identities.SetMalicious(b.cdb, hareMsg.SmesherID, encoded); err != nil {
+		if err := identities.SetMalicious(b.cdb, hareMsg.SmesherID, encoded, received); err != nil {
 			// An error here indicates a database failure
 			logger.Panic("faild to store newly discovered malfeasance proof: %v", err)
 		}

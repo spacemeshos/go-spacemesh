@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -104,7 +105,7 @@ func validateAndSave(
 		if err != nil {
 			logger.With().Panic("failed to encode MalfeasanceProof", log.Err(err))
 		}
-		if err := identities.SetMalicious(dbtx, nodeID, encoded); err != nil {
+		if err := identities.SetMalicious(dbtx, nodeID, encoded, time.Now()); err != nil {
 			return fmt.Errorf("add malfeasance proof: %w", err)
 		}
 		return nil

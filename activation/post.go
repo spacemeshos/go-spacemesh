@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/metrics/public"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
@@ -32,8 +33,6 @@ type PostConfig struct {
 	K2            uint32        `mapstructure:"post-k2"`
 	K3            uint32        `mapstructure:"post-k3"`
 	PowDifficulty PowDifficulty `mapstructure:"post-pow-difficulty"`
-	// Since when to include the miner ID in the K2 pow.
-	MinerIDInK2PowSinceEpoch uint32 `mapstructure:"post-minerid-in-k2-pow-since-epoch"`
 }
 
 func (c PostConfig) ToConfig() config.Config {
@@ -165,7 +164,28 @@ func DefaultPostConfig() PostConfig {
 
 // DefaultPostSetupOpts defines the default options for Post setup.
 func DefaultPostSetupOpts() PostSetupOpts {
-	return (PostSetupOpts)(config.DefaultInitOpts())
+	opts := config.DefaultInitOpts()
+	return PostSetupOpts{
+		DataDir:          opts.DataDir,
+		NumUnits:         opts.NumUnits,
+		MaxFileSize:      opts.MaxFileSize,
+		ProviderID:       opts.ProviderID,
+		Throttle:         opts.Throttle,
+		Scrypt:           opts.Scrypt,
+		ComputeBatchSize: opts.ComputeBatchSize,
+	}
+}
+
+func (o PostSetupOpts) ToInitOpts() config.InitOpts {
+	return config.InitOpts{
+		DataDir:          o.DataDir,
+		NumUnits:         o.NumUnits,
+		MaxFileSize:      o.MaxFileSize,
+		ProviderID:       o.ProviderID,
+		Throttle:         o.Throttle,
+		Scrypt:           o.Scrypt,
+		ComputeBatchSize: o.ComputeBatchSize,
+	}
 }
 
 // PostSetupManager implements the PostProvider interface.
@@ -296,22 +316,31 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context) error {
 		log.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
 		log.String("provider", fmt.Sprintf("%d", mgr.lastOpts.ProviderID)),
 	)
+	public.InitStart.Set(float64(mgr.lastOpts.NumUnits))
 	events.EmitInitStart(mgr.id, mgr.commitmentAtxId)
 	err = mgr.init.Initialize(ctx)
-	events.EmitInitComplete(err != nil)
 
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
+	var errLabelMismatch initialization.ErrReferenceLabelMismatch
 	switch {
 	case errors.Is(err, context.Canceled):
 		mgr.logger.Info("post setup session was stopped")
 		mgr.state = PostSetupStateStopped
 		return err
+	case errors.As(err, &errLabelMismatch):
+		mgr.logger.With().Error("post setup session failed due to an issue with the initialization provider", log.Err(errLabelMismatch))
+		mgr.state = PostSetupStateError
+		events.EmitInitFailure(mgr.id, mgr.commitmentAtxId, errLabelMismatch)
+		return nil
 	case err != nil:
 		mgr.logger.With().Error("post setup session failed", log.Err(err))
 		mgr.state = PostSetupStateError
+		events.EmitInitFailure(mgr.id, mgr.commitmentAtxId, err)
 		return err
 	}
+	public.InitEnd.Set(float64(mgr.lastOpts.NumUnits))
+	events.EmitInitComplete()
 
 	mgr.logger.With().Info("post setup completed",
 		// log.String("node_id", mgr.id.String()),
@@ -359,7 +388,7 @@ func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSe
 		initialization.WithNodeId(mgr.id.Bytes()),
 		initialization.WithCommitmentAtxId(mgr.commitmentAtxId.Bytes()),
 		initialization.WithConfig(mgr.cfg.ToConfig()),
-		initialization.WithInitOpts(config.InitOpts(opts)),
+		initialization.WithInitOpts(opts.ToInitOpts()),
 		initialization.WithLogger(mgr.logger.Zap()),
 	)
 	if err != nil {

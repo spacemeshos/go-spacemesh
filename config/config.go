@@ -44,6 +44,7 @@ func init() {
 type Config struct {
 	BaseConfig      `mapstructure:"main"`
 	Genesis         *GenesisConfig        `mapstructure:"genesis"`
+	PublicMetrics   PublicMetrics         `mapstructure:"public-metrics"`
 	Tortoise        tortoise.Config       `mapstructure:"tortoise"`
 	P2P             p2p.Config            `mapstructure:"p2p"`
 	API             grpcserver.Config     `mapstructure:"api"`
@@ -85,11 +86,6 @@ type BaseConfig struct {
 	CollectMetrics bool `mapstructure:"metrics"`
 	MetricsPort    int  `mapstructure:"metrics-port"`
 
-	MetricsPush       string `mapstructure:"metrics-push"`
-	MetricsPushPeriod int    `mapstructure:"metrics-push-period"`
-	MetricsPushUser   string `mapstructure:"metrics-push-user"`
-	MetricsPushPass   string `mapstructure:"metrics-push-pass"`
-
 	ProfilerName string `mapstructure:"profiler-name"`
 	ProfilerURL  string `mapstructure:"profiler-url"`
 
@@ -112,6 +108,14 @@ type BaseConfig struct {
 	DatabaseLatencyMetering bool `mapstructure:"db-latency-metering"`
 
 	NetworkHRP string `mapstructure:"network-hrp"`
+}
+
+type PublicMetrics struct {
+	MetricsURL        string            `mapstructure:"metrics-url"`
+	MetricsPushPeriod time.Duration     `mapstructure:"metrics-push-period"`
+	MetricsPushUser   string            `mapstructure:"metrics-push-user"`
+	MetricsPushPass   string            `mapstructure:"metrics-push-pass"`
+	MetricsPushHeader map[string]string `mapstructure:"metrics-push-header"`
 }
 
 // SmeshingConfig defines configuration for the node's smeshing (mining).
@@ -163,8 +167,6 @@ func defaultBaseConfig() BaseConfig {
 		FileLock:            filepath.Join(os.TempDir(), "spacemesh.lock"),
 		CollectMetrics:      false,
 		MetricsPort:         1010,
-		MetricsPush:         "", // "" = doesn't push
-		MetricsPushPeriod:   60,
 		ProfilerName:        "gp-spacemesh",
 		LayerDuration:       30 * time.Second,
 		LayersPerEpoch:      3,
