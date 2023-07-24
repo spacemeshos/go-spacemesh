@@ -230,6 +230,8 @@ func (h *Handler) handleProposal(ctx context.Context, peer p2p.Peer, data []byte
 		return fmt.Errorf("proposal before effective genesis: layer %v", p.Layer)
 	}
 
+	logger.Info("received proposal from %s, id:%s", p.SmesherID.ShortString(), types.Hash20(p.ID()).ShortString())
+
 	latency := receivedTime.Sub(h.clock.LayerToTime(p.Layer))
 	metrics.ReportMessageLatency(pubsub.ProposalProtocol, pubsub.ProposalProtocol, latency)
 

@@ -2,6 +2,8 @@ module github.com/spacemeshos/go-spacemesh
 
 go 1.19
 
+replace github.com/spacemeshos/poet v0.8.6 => ../poet
+
 require (
 	cloud.google.com/go/storage v1.31.0
 	github.com/ALTree/bigfloat v0.0.0-20220102081255-38c8b72a9924

@@ -303,6 +303,119 @@ func TestReachingConsensusNetworkOf2(t *testing.T) {
 	require.Equal(t, []*types.Hash20{nil, nil, nil, nil}, equivocation)
 }
 
+func TestReachingConsensusNetworkOf2DifferentValues(t *testing.T) {
+	v1 := []types.Hash20{val1}
+	v2 := []types.Hash20{val2}
+	n := NewTestNetwork(2, v1, v2)
+	// v1Hash := []types.Hash20{ToHash(v1)}
+	// v2Hash := []types.Hash20{ToHash(v2)}
+	// values3Hash := []types.Hash20{ToHash(values3)}
+
+	msgs, outputs := n.NextRound()
+	expected1 := &OutputMessage{NewAbsRound(0, -1), v1}
+	expected2 := &OutputMessage{NewAbsRound(0, -1), v2}
+	require.Equal(t, []*OutputMessage{expected1, expected2}, msgs)
+	require.Equal(t, [][]types.Hash20{nil, nil}, outputs)
+
+	regossip, equivocation := n.HandleMsgs(msgs)
+	require.Equal(t, []bool{true, true, true, true}, regossip)
+	require.Equal(t, []*types.Hash20{nil, nil, nil, nil}, equivocation)
+
+	msgs, outputs = n.NextRound()
+	var expected *OutputMessage = nil
+	require.Equal(t, []*OutputMessage{expected, expected}, msgs)
+	require.Equal(t, [][]types.Hash20{nil, nil}, outputs)
+
+	msgs, outputs = n.NextRound()
+	expected = nil
+	require.Equal(t, []*OutputMessage{expected, expected}, msgs)
+	require.Equal(t, [][]types.Hash20{nil, nil}, outputs)
+
+	msgs, outputs = n.NextRound() // Round 2
+	// expected = &OutputMessage{NewAbsRound(0, 2), nil}
+	require.Equal(t, []*OutputMessage{expected, expected}, msgs)
+	require.Equal(t, [][]types.Hash20{nil, nil}, outputs)
+
+	// regossip, equivocation = n.HandleMsgs(msgs)
+	// require.Equal(t, []bool{true, true, true, true}, regossip)
+	// require.Equal(t, []*types.Hash20{nil, nil, nil, nil}, equivocation)
+
+	// msgs, outputs = n.NextRound()
+	// expected = nil
+	// require.Equal(t, []*OutputMessage{expected, expected}, msgs)
+	// require.Equal(t, [][]types.Hash20{nil, nil}, outputs)
+
+	// msgs, outputs = n.NextRound()
+	// expected = nil
+	// require.Equal(t, []*OutputMessage{expected, expected}, msgs)
+	// require.Equal(t, [][]types.Hash20{nil, nil}, outputs)
+
+	// msgs, outputs = n.NextRound() // Round 5
+	// expected = &OutputMessage{NewAbsRound(0, 5), values3Hash}
+	// require.Equal(t, []*OutputMessage{expected, expected}, msgs)
+	// require.Equal(t, [][]types.Hash20{nil, nil}, outputs)
+
+	// regossip, equivocation = n.HandleMsgs(msgs)
+	// require.Equal(t, []bool{true, true, true, true}, regossip)
+	// require.Equal(t, []*types.Hash20{nil, nil, nil, nil}, equivocation)
+
+	// msgs, outputs = n.NextRound() // Round 6
+	// expected = &OutputMessage{NewAbsRound(0, 6), values3Hash}
+	// require.Equal(t, []*OutputMessage{expected, expected}, msgs)
+	// require.Equal(t, [][]types.Hash20{nil, nil}, outputs)
+
+	// regossip, equivocation = n.HandleMsgs(msgs)
+	// require.Equal(t, []bool{true, true, true, true}, regossip)
+	// require.Equal(t, []*types.Hash20{nil, nil, nil, nil}, equivocation)
+
+	// msgs, outputs = n.NextRound() // Round 0 iteration 1
+	// expected = nil
+	// require.Equal(t, []*OutputMessage{expected, expected}, msgs)
+	// require.Equal(t, [][]types.Hash20{nil, nil}, outputs)
+
+	// msgs, outputs = n.NextRound()
+	// expected = nil
+	// require.Equal(t, []*OutputMessage{expected, expected}, msgs)
+	// require.Equal(t, [][]types.Hash20{nil, nil}, outputs)
+
+	// msgs, outputs = n.NextRound() // Round 2 iteration 1
+	// expected = &OutputMessage{NewAbsRound(1, 2), values3}
+	// require.Equal(t, []*OutputMessage{expected, expected}, msgs)
+	// require.Equal(t, [][]types.Hash20{nil, nil}, outputs)
+
+	// regossip, equivocation = n.HandleMsgs(msgs)
+	// require.Equal(t, []bool{true, true, true, true}, regossip)
+	// require.Equal(t, []*types.Hash20{nil, nil, nil, nil}, equivocation)
+
+	// msgs, outputs = n.NextRound()
+	// expected = nil
+	// require.Equal(t, []*OutputMessage{expected, expected}, msgs)
+	// require.Equal(t, [][]types.Hash20{nil, nil}, outputs)
+
+	// msgs, outputs = n.NextRound()
+	// expected = nil
+	// require.Equal(t, []*OutputMessage{expected, expected}, msgs)
+	// require.Equal(t, [][]types.Hash20{nil, nil}, outputs)
+
+	// msgs, outputs = n.NextRound() // Round 5 iteration 1
+	// expected = &OutputMessage{NewAbsRound(1, 5), values3Hash}
+	// require.Equal(t, []*OutputMessage{expected, expected}, msgs)
+	// require.Equal(t, [][]types.Hash20{nil, nil}, outputs)
+
+	// regossip, equivocation = n.HandleMsgs(msgs)
+	// require.Equal(t, []bool{true, true, true, true}, regossip)
+	// require.Equal(t, []*types.Hash20{nil, nil, nil, nil}, equivocation)
+
+	// msgs, outputs = n.NextRound() // Round 6 iteration 1
+	// expected = &OutputMessage{NewAbsRound(1, 6), values3Hash}
+	// require.Equal(t, []*OutputMessage{expected, expected}, msgs)
+	// require.Equal(t, [][]types.Hash20{values3, values3}, outputs)
+
+	// regossip, equivocation = n.HandleMsgs(msgs)
+	// require.Equal(t, []bool{true, true, true, true}, regossip)
+	// require.Equal(t, []*types.Hash20{nil, nil, nil, nil}, equivocation)
+}
+
 // This test checks that a single node with a threshold of 2 votes can't reach
 // consensus on a value
 func TestNotReachingConsensus(t *testing.T) {

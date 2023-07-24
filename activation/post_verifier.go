@@ -121,7 +121,7 @@ func (v *OffloadingPostVerifier) Close() error {
 }
 
 func (w *postVerifierWorker) start(ctx context.Context) error {
-	w.log.Info("starting post proof verifier worker")
+	w.log.Debug("starting post proof verifier worker")
 	for {
 		select {
 		case <-ctx.Done():

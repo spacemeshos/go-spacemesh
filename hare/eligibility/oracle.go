@@ -245,10 +245,20 @@ func (o *Oracle) Validate(ctx context.Context, layer types.LayerID, round uint32
 		}
 	}()
 
+	// x num wins
+	// p prob winning
+	// n num trials
+	//
+	// n is the atxWeight of the miner
+	// x is the eligibilityCount
+	// p is the comitte size divided by the total weight, i.e the proportion of a comittee slot per uinit of atx weight
 	x := int(eligibilityCount)
+
+	// So this is saying that the probability that with n trials, and a probability p of winning each trial that we make from 0 to  x - 1 trials is greater than vrffrac and that the probability that with n trials and probability p or winning each trial that we make any trial up to x is less than vrffrac,
 	if !fixed.BinCDF(n, p, x-1).GreaterThan(vrfFrac) && vrfFrac.LessThan(fixed.BinCDF(n, p, x)) {
 		return true, nil
 	}
+
 	o.WithContext(ctx).With().Warning("eligibility: node did not pass vrf eligibility threshold",
 		layer,
 		log.Uint32("round", round),
@@ -293,15 +303,15 @@ func (o *Oracle) CalcEligibility(
 		}
 	}()
 
-	o.With().Debug("params",
-		layer,
-		layer.GetEpoch(),
-		log.Uint32("round_id", round),
-		log.Int("committee_size", committeeSize),
-		log.Int("n", n),
-		log.String("p", fmt.Sprintf("%g", p.Float())),
-		log.String("vrf_frac", fmt.Sprintf("%g", vrfFrac.Float())),
-	)
+	// o.With().Info("calc eligibility params",
+	// 	layer,
+	// 	layer.GetEpoch(),
+	// 	log.Uint32("round", round),
+	// 	log.Int("committee_size", committeeSize),
+	// 	log.Int("n", n),
+	// 	log.String("p", fmt.Sprintf("%g", p.Float())),
+	// 	log.String("vrf_frac", fmt.Sprintf("%g", vrfFrac.Float())),
+	// )
 
 	for x := 0; x < n; x++ {
 		if fixed.BinCDF(n, p, x).GreaterThan(vrfFrac) {

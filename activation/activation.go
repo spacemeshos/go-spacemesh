@@ -306,6 +306,7 @@ func (b *Builder) loop(ctx context.Context) {
 		}
 
 		ctx := log.WithNewSessionID(ctx)
+		// We are trying to publish here at the beginning of a layer, but probably internally this function waits.
 		err := b.PublishActivationTx(ctx)
 		if err == nil {
 			continue

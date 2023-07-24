@@ -111,6 +111,7 @@ func (t *DefaultThresholdGradedGossiper) ReceiveMsg(senderID types.NodeID, value
 // RetrieveThresholdMessages implements ThresholdGradedGossiper.
 func (t *DefaultThresholdGradedGossiper) RetrieveThresholdMessages(msgRound AbsRound, minGrade uint8) (values []types.Hash20) {
 	// maps values to the good votes they have received.
+	// fmt.Printf("retrieving messages from tgg round:%d, grade:%d %v\n", msgRound, minGrade, t.count)
 	goodVotes := make(map[types.Hash20]*GradedVotes)
 
 	// Tally all the votes from all senders for each value

@@ -170,10 +170,14 @@ func parts(msg *hare.Message) (id types.NodeID, round hare3.AbsRound, values []t
 	return msg.SmesherID, hare3.AbsRound(msg.Round), values
 }
 
-func sortProposalID(values []types.ProposalID) []types.ProposalID {
-	sort.Slice(values, func(i, j int) bool {
+func compareProposals(values []types.ProposalID) func(i, j int) bool {
+	return func(i, j int) bool {
 		return bytes.Compare(values[i][:], values[j][:]) == -1
-	})
+	}
+}
+
+func sortProposalID(values []types.ProposalID) []types.ProposalID {
+	sort.Slice(values, compareProposals(values))
 	return values
 }
 
@@ -227,6 +231,11 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 	vh := ToHash(sortProposalID(hareMsg.Values))
 	msgString := fmt.Sprintf("h: %s, l: %d, r: %d, s: %s, vh: %s", hash.ShortString(), hareMsg.Layer, hareMsg.Round, hareMsg.SmesherID.ShortString(), vh)
 	logger := b.WithFields(log.String("msg", msgString))
+
+	if !sort.SliceIsSorted(hareMsg.Values, compareProposals(hareMsg.Values)) {
+		b.Debug("hare msg values not sorted")
+		return errors.New("values not sorted")
+	}
 
 	logger.Debug("received hare message")
 

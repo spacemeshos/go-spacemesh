@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"math"
 	"math/rand"
 	"os"
 	"strconv"
@@ -875,4 +876,109 @@ func FuzzVrfMessageConsistency(f *testing.F) {
 
 func FuzzVrfMessageSafety(f *testing.F) {
 	tester.FuzzSafety[VrfMessage](f)
+}
+
+func TestMine(t *testing.T) {
+	var comitteeSize uint64 = 800
+	var totalWeight uint64 = 1000000
+	var n int = 50000 // weight of miner
+	var p fixed.Fixed = fixed.DivUint64(comitteeSize, totalWeight)
+	var eligibilityCount int = 400
+	var vrfFrac fixed.Fixed = fixed.From(0.5)
+	println(fixed.BinCDF(n, p, eligibilityCount-1).GreaterThan(vrfFrac) && vrfFrac.LessThan(fixed.BinCDF(n, p, eligibilityCount)))
+
+	println("should be full", fixed.BinCDF(int(totalWeight), p, int(comitteeSize)).Float())
+	p = fixed.DivUint64(totalWeight, totalWeight)
+	println("should be full", fixed.BinCDF(int(comitteeSize), p, int(comitteeSize)).Float())
+}
+
+func TestMine2(t *testing.T) {
+	totalWeight := 10000
+	minerWeight := totalWeight
+	comitteeSize := 800
+	p := fixed.DivUint64(uint64(comitteeSize), uint64(totalWeight))
+
+	small := fixed.DivUint64(1, math.MaxUint64>>8)
+	println(small.Float())
+
+	// smallestValue := fixed.New64(math.MinInt64) // var v int64 = 1mmm
+	// println(smallestValue.Float())
+	// halfSmallestValue := fixed.New64(math.MaxInt64 >> 1) // var v int64 = 1mmm
+	// println(halfSmallestValue.Float())
+	// var v int64 = 0
+	// for ; v > -100000; v -= 1000 {
+	// 	println(fixed.New64(v).Float())
+	// }
+	// println(fixed.BinCDF(minerWeight, p, minerWeight).Float())
+	for y := 800; y < 900; y++ {
+		println("probability of miner getting", y, "eligibilities", fixed.BinCDF(minerWeight, p, y).Float())
+	}
+
+	for x := 0; x <= minerWeight; x++ {
+		if fixed.BinCDF(minerWeight, p, x).GreaterThan(fixed.One.Sub(small)) {
+			println("miner eligibilities", x, "uint16", uint16(x))
+			break
+			// even with large N and large P, x will be << 2^16, so this cast is safe
+		}
+	}
+}
+
+func TestMine3(t *testing.T) {
+	totalWeight := 15000
+	// minerWeight := totalWeight
+	comitteeSize := 800
+	p := fixed.DivUint64(uint64(comitteeSize), uint64(totalWeight))
+
+	small := fixed.DivUint64(1, math.MaxUint64>>8)
+	println(small.Float())
+
+	// smallestValue := fixed.New64(math.MinInt64) // var v int64 = 1mmm
+	// println(smallestValue.Float())
+	// halfSmallestValue := fixed.New64(math.MaxInt64 >> 1) // var v int64 = 1mmm
+	// println(halfSmallestValue.Float())
+	// var v int64 = 0
+	// for ; v > -100000; v -= 1000 {
+	// 	println(fixed.New64(v).Float())
+	// }
+	// println(fixed.BinCDF(minerWeight, p, minerWeight).Float())
+	// for y := 800; y < 900; y++ {
+	// 	println("probability of miner getting", y, "eligibilities", fixed.BinCDF(minerWeight, p, y).Float())
+	// }
+
+	// A real miner weight is 1265
+	// so say 10 have 15000
+
+	fracBytes := make([]byte, 8)
+
+	totalEligibilitiesFound := 0
+	for y := 0; y < 10; y++ {
+		_, err := rand.Read(fracBytes)
+		if err != nil {
+			panic(err.Error())
+		}
+		fraction := fixed.FracFromBytes(fracBytes)
+		minerWeight := 1500
+		eligibilies := 0
+		for x := 1; x < minerWeight; x++ {
+			// So this is saying, given minerWeight trials, whats the probability that we get x or fewer successes, and is that bigger than the fraction from the vrf.
+			// Since p is gonna be small the probability of a success is small so the probability that we have x or fewer sucesses is going to be high, so its unlikely that we'll need to iterate that much.
+
+			// So each time we have miner weight opportunities to win, and we win C/total weight times. The number of trials that we need to win less of
+			// so the fraction is essentially sampling a point from the confidenceParam  I guess the higer the number of tirals the more difficult it is to get < some num successes, so the probability of that gets lower so we need a higher threshold.
+			// should be proportional to the miner weight.
+			// So as the number of trials increases so too does the threshold need to increase in order to reach a reasonable probability of winning x or less trials.
+			if fixed.BinCDF(minerWeight, p, x).GreaterThan(fraction) {
+				// println("miner", y, "eligibilities", x, "uint16", uint16(x))
+				totalEligibilitiesFound += x
+				eligibilies = x
+				println("x", eligibilies)
+				break
+				// even with large N and large P, x will be << 2^16, so this cast is safe
+			}
+		}
+		if eligibilies == 0 {
+			totalEligibilitiesFound += minerWeight
+		}
+	}
+	println("total eligibilities", totalEligibilitiesFound)
 }

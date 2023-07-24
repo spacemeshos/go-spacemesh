@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -133,7 +134,8 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 
 func TestConsensus(t *testing.T) {
 	spew.Config.DisableMethods = true
-	cfg := fastnet()
+	// cfg := fastnet()
+	cfg := conf()
 	cfg.Genesis = config.DefaultGenesisConfig()
 	cfg.SMESHING.Start = true
 	// cfg := config.DefaultTestConfig()
@@ -155,6 +157,13 @@ func NewNetwork(conf config.Config, l log.Log, size int) ([]*App, func() error, 
 	// We need to set this global state
 	types.SetLayersPerEpoch(conf.LayersPerEpoch)
 	types.SetNetworkHRP(conf.NetworkHRP) // set to generate coinbase
+
+	// To save an epoch of startup time, we bootstrap (meaning we manually set
+	// it) the beacon for epoch 2 so that in epoch 3 hare can start.
+	bootstrapEpoch := (types.GetEffectiveGenesis() + 1).GetEpoch()
+	bootstrapBeacon := types.Beacon{}
+	genesis := conf.Genesis.GenesisID()
+	copy(bootstrapBeacon[:], genesis[:])
 
 	ctx, cancel := context.WithCancel(context.Background())
 	g := errgroup.Group{}
@@ -212,8 +221,7 @@ func NewNetwork(conf config.Config, l log.Log, size int) ([]*App, func() error, 
 
 		c.DataDirParent = dir
 		c.SMESHING.Opts.DataDir = dir
-		fmt.Println(dir)
-		fmt.Println(conf.SMESHING.Opts.DataDir)
+		c.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte(strconv.Itoa(i))).String()
 		c.FileLock = filepath.Join(c.DataDirParent, "LOCK")
 		c.P2P.Listen = "/ip4/127.0.0.1/tcp/0"
 		c.API.PublicListener = "0.0.0.0:0"
@@ -225,12 +233,15 @@ func NewNetwork(conf config.Config, l log.Log, size int) ([]*App, func() error, 
 			cleanup()
 			return nil, nil, err
 		}
-
 		g.Go(func() error {
 			return app.Start(ctx)
 		})
 		<-app.Started()
+		if err := app.beaconProtocol.UpdateBeacon(bootstrapEpoch, bootstrapBeacon); err != nil {
+			return nil, nil, fmt.Errorf("failed to bootstrap beacon for node %q: %w", i, err)
+		}
 		apps = append(apps, app)
+
 	}
 
 	// Connect all nodes to each other
@@ -264,6 +275,7 @@ func NewApp(conf *config.Config, l log.Log) (*App, error) {
 	if app.edSgn, err = app.LoadOrCreateEdSigner(); err != nil {
 		return app, fmt.Errorf("could not retrieve identity: %w", err)
 	}
+
 	// app.edSgn, err = signing.NewEdSigner()
 	// if err != nil {
 	// 	return nil, err
@@ -279,6 +291,7 @@ func NewPoet(cfg *poetconfig.Config, appConf *config.Config) (*server.Server, st
 	cfg.PoetDir = dir
 	cfg.DataDir = filepath.Join(dir, "data")
 	cfg.LogDir = filepath.Join(dir, "logs")
+	cfg.DebugLog = false
 
 	cfg.RawRESTListener = "0.0.0.0:0"
 	cfg.RawRPCListener = "0.0.0.0:0"
@@ -336,67 +349,73 @@ func writeRpc(rpc *pubsub.RPC, s network.Stream) error {
 	return err
 }
 
-func fastnet() config.Config {
+func conf() config.Config {
 	conf := config.DefaultConfig()
-	// conf.Address = types.DefaultTestAddressConfig()
 	conf.NetworkHRP = "stest"
+	types.SetNetworkHRP(conf.NetworkHRP) // set to generate coinbase
 
-	conf.BaseConfig.OptFilterThreshold = 90
+	conf.TIME.Peersync.Disable = true
+	// conf.Standalone = true
+	conf.DataDirParent = filepath.Join(os.TempDir(), "spacemesh")
+	conf.FileLock = filepath.Join(conf.DataDirParent, "LOCK")
 
-	conf.HARE.N = 800
-	conf.HARE.ExpectedLeaders = 10
-	conf.HARE.LimitConcurrent = 5
+	conf.HARE.N = 2
+	conf.HARE.ExpectedLeaders = 2
+	conf.HARE.LimitConcurrent = 2
 	conf.HARE.LimitIterations = 3
-	conf.HARE.RoundDuration = 2 * time.Second
-	conf.HARE.WakeupDelta = 3 * time.Second
-
-	conf.P2P.MinPeers = 10
+	conf.HARE.RoundDuration = 500 * time.Millisecond
+	conf.HARE.WakeupDelta = 1 * time.Second
 
 	conf.Genesis = &config.GenesisConfig{
-		ExtraData: "fastnet",
+		ExtraData: "stest",
+		Accounts:  map[string]uint64{},
 	}
 
 	conf.LayerAvgSize = 50
 	conf.LayerDuration = 15 * time.Second
-	conf.Sync.Interval = 5 * time.Second
-	conf.LayersPerEpoch = 4
+	conf.Sync.Interval = 3 * time.Second
+	conf.LayersPerEpoch = 5
 
-	conf.POET.PhaseShift = 15 * time.Second
-	conf.POET.GracePeriod = 2 * time.Second
-	conf.POET.CycleGap = 10 * time.Second
-
-	conf.Tortoise.Hdist = 4
+	conf.Tortoise.Hdist = 3
 	conf.Tortoise.Zdist = 2
-	conf.Tortoise.BadBeaconVoteDelayLayers = 2
 
 	conf.HareEligibility.ConfidenceParam = 2
 
 	conf.POST.K1 = 12
 	conf.POST.K2 = 4
 	conf.POST.K3 = 4
-	conf.POST.LabelsPerUnit = 32
+	conf.POST.LabelsPerUnit = 64
 	conf.POST.MaxNumUnits = 2
 	conf.POST.MinNumUnits = 1
 
 	conf.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte("1")).String()
-	conf.SMESHING.Start = false
+	conf.SMESHING.Start = true
 	conf.SMESHING.Opts.ProviderID = int(initialization.CPUProviderID())
-	conf.SMESHING.Opts.NumUnits = 2
+	conf.SMESHING.Opts.NumUnits = 1
 	conf.SMESHING.Opts.Throttle = true
-	// Override proof of work flags to use light mode (less memory intensive)
+	conf.SMESHING.Opts.DataDir = conf.DataDirParent
 	conf.SMESHING.ProvingOpts.Flags = postCfg.RecommendedPowFlags()
 
 	conf.Beacon.Kappa = 40
 	conf.Beacon.Theta = big.NewRat(1, 4)
-	conf.Beacon.FirstVotingRoundDuration = 10 * time.Second
-	conf.Beacon.GracePeriodDuration = 30 * time.Second
-	conf.Beacon.ProposalDuration = 2 * time.Second
-	conf.Beacon.VotingRoundDuration = 2 * time.Second
-	conf.Beacon.WeakCoinRoundDuration = 2 * time.Second
+	conf.Beacon.FirstVotingRoundDuration = 2 * time.Second
+	conf.Beacon.GracePeriodDuration = 6 * time.Second
+	conf.Beacon.ProposalDuration = 400 * time.Millisecond
+	conf.Beacon.VotingRoundDuration = 400 * time.Millisecond
+	conf.Beacon.WeakCoinRoundDuration = 400 * time.Millisecond
 	conf.Beacon.RoundsNumber = 4
-	conf.Beacon.BeaconSyncWeightUnits = 5
+	conf.Beacon.BeaconSyncWeightUnits = 10
 	conf.Beacon.VotesLimit = 100
 
+	conf.PoETServers = []string{"http://0.0.0.0:10010"}
+	conf.POET.GracePeriod = 5 * time.Second
+	conf.POET.CycleGap = 30 * time.Second
+	conf.POET.PhaseShift = 30 * time.Second
+
+	conf.P2P.DisableNatPort = true
+
+	conf.API.PublicListener = "0.0.0.0:10092"
+	conf.API.PrivateListener = "0.0.0.0:10093"
 	return conf
 }
 

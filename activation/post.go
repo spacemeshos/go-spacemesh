@@ -314,7 +314,7 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context) error {
 	}
 
 	mgr.logger.With().Info("post setup completed",
-		log.String("node_id", mgr.id.String()),
+		// log.String("node_id", mgr.id.String()),
 		log.String("commitment_atx", mgr.commitmentAtxId.String()),
 		log.String("data_dir", mgr.lastOpts.DataDir),
 		log.String("num_units", fmt.Sprintf("%d", mgr.lastOpts.NumUnits)),

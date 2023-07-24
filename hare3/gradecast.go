@@ -14,7 +14,7 @@ type GradecastedSet struct {
 }
 
 func (gs GradecastedSet) String() string {
-	return fmt.Sprintf("id: %s, vh: %s, g: %d", gs.id.ShortString(), toHash(sortHash20(gs.values)).ShortString(), gs.grade)
+	return fmt.Sprintf("{ id: %s, vh: %s, g: %d }", gs.id.ShortString(), toHash(sortHash20(gs.values)).ShortString(), gs.grade)
 }
 
 // Gradecaster acts as a specialized value store, it ingests messages that can

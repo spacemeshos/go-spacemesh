@@ -318,30 +318,30 @@ func (l Log) Zap() *zap.Logger {
 
 // Info prints message with fields.
 func (fl FieldLogger) Info(msg string, fields ...LoggableField) {
-	fl.l.Info(msg, unpack(append(fields, String("name", fl.name)))...)
+	fl.l.Info(msg, unpack(fields)...)
 }
 
 // Debug prints message with fields.
 func (fl FieldLogger) Debug(msg string, fields ...LoggableField) {
-	fl.l.Debug(msg, unpack(append(fields, String("name", fl.name)))...)
+	fl.l.Debug(msg, unpack(fields)...)
 }
 
 // Error prints message with fields.
 func (fl FieldLogger) Error(msg string, fields ...LoggableField) {
-	fl.l.Error(msg, unpack(append(fields, String("name", fl.name)))...)
+	fl.l.Error(msg, unpack(fields)...)
 }
 
 // Warning prints message with fields.
 func (fl FieldLogger) Warning(msg string, fields ...LoggableField) {
-	fl.l.Warn(msg, unpack(append(fields, String("name", fl.name)))...)
+	fl.l.Warn(msg, unpack(fields)...)
 }
 
 // Panic prints message with fields.
 func (fl FieldLogger) Panic(msg string, fields ...LoggableField) {
-	fl.l.Panic(msg, unpack(append(fields, String("name", fl.name)))...)
+	fl.l.Panic(msg, unpack(fields)...)
 }
 
 // Fatal prints message with fields.
 func (fl FieldLogger) Fatal(msg string, fields ...LoggableField) {
-	fl.l.Fatal(msg, unpack(append(fields, String("name", fl.name)))...)
+	fl.l.Fatal(msg, unpack(fields)...)
 }

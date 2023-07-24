@@ -204,7 +204,7 @@ func (r *HareRunner) Run(ctx context.Context) {
 	defer r.eg.Wait()
 	currentLayer := r.clock.CurrentLayer()
 	var startLayer types.LayerID
-	if currentLayer < r.effectiveGenesis {
+	if currentLayer <= r.effectiveGenesis {
 		startLayer = r.effectiveGenesis + 1
 		toWait := time.Until(r.clock.LayerToTime(startLayer))
 		r.l.WithContext(ctx).With().Info(
@@ -212,7 +212,7 @@ func (r *HareRunner) Run(ctx context.Context) {
 			log.Stringer("time_to_wait", toWait),
 			log.Stringer("current_layer", currentLayer),
 			log.Stringer("effective_genesis", r.effectiveGenesis),
-			log.Stringer("start_layer", r.effectiveGenesis))
+			log.Stringer("start_layer", startLayer))
 	} else {
 		// We wait for the subsequent layer so that we can be sure of being on time.
 		startLayer = currentLayer + 1
@@ -280,6 +280,8 @@ func (r *HareRunner) Run(ctx context.Context) {
 				r.l.With().Info("no beacon for epoch",
 					log.Context(ctx),
 					layer,
+					layer.GetEpoch(),
+					log.Err(err),
 				)
 				continue
 			}
@@ -290,6 +292,7 @@ func (r *HareRunner) Run(ctx context.Context) {
 				r.l.With().Info("no active set for epoch",
 					log.Context(ctx),
 					layer,
+					log.Err(err),
 				)
 				continue
 			}
