@@ -23,16 +23,21 @@ import (
 	poetconfig "github.com/spacemeshos/poet/config"
 	"github.com/spacemeshos/poet/server"
 	postCfg "github.com/spacemeshos/post/config"
+	"github.com/spacemeshos/post/initialization"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	ps "github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	"github.com/spacemeshos/post/initialization"
 )
 
 func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
@@ -147,13 +152,77 @@ func TestConsensus(t *testing.T) {
 	// cfg.Beacon.VotingRoundDuration = time.Second * 5
 	// cfg.Beacon.WeakCoinRoundDuration = time.Second * 5
 	l := logtest.New(t)
-	_, cleanup, err := NewNetwork(cfg, l, 2)
+	networkSize := 2
+	network, cleanup, err := NewNetwork(cfg, l, networkSize)
 	require.NoError(t, err)
-	time.Sleep(time.Second * 600)
-	require.NoError(t, cleanup())
+	defer func() {
+		require.NoError(t, cleanup())
+	}()
+	// println("boundaddress1", network[0].grpcPublicService.BoundAddress)
+	// println("boundaddress2", network[1].grpcPublicService.BoundAddress)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Second)
+	defer cancel()
+	layerNotify := make(chan *pb.Layer)
+	var eg errgroup.Group
+	defer func() {
+		err := eg.Wait()
+		if status.Code(err) != codes.Canceled {
+			require.NoError(t, err)
+		}
+	}()
+	for _, app := range network {
+		appCopy := app
+		eg.Go(func() error {
+			meshapi := pb.NewMeshServiceClient(appCopy.Conn)
+			layers, err := meshapi.LayerStream(ctx, &pb.LayerStreamRequest{})
+			if err != nil {
+				return err
+			}
+			for {
+				layer, err := layers.Recv()
+				if err != nil {
+					return err
+				}
+				// fmt.Printf("-------------------------------------------------------------------GotLayer num:%v stat:%v blocks:%v\n", layer.Layer.Number, layer.Layer.Number, layer.Layer.Blocks)
+				select {
+				case layerNotify <- layer.Layer:
+				case <-ctx.Done():
+					return nil
+				}
+			}
+		})
+	}
+	results := make(map[uint32]int)
+	for {
+		select {
+		case layer := <-layerNotify:
+			fmt.Printf("got layer %v %v %v\n", layer.Number.Number, len(layer.Blocks), layer.Status.String())
+			fmt.Printf("results %v\n", results)
+			if layer.Status == pb.Layer_LAYER_STATUS_APPROVED && len(layer.Blocks) == 1 {
+				results[layer.Number.GetNumber()]++
+			}
+			if checkResults(results, networkSize) {
+				cancel() // shutdown goroutines
+				return
+			}
+		case <-ctx.Done():
+
+			t.Fatalf("timed out %v, results: %v", ctx.Err(), results)
+		}
+	}
 }
 
-func NewNetwork(conf config.Config, l log.Log, size int) ([]*App, func() error, error) {
+func checkResults(results map[uint32]int, n int) bool {
+	for i := 10; i < 14; i++ {
+		if results[uint32(i)] < n {
+			return false
+		}
+	}
+	return true
+}
+
+func NewNetwork(conf config.Config, l log.Log, size int) ([]*TestApp, func() error, error) {
 	// We need to set this global state
 	types.SetLayersPerEpoch(conf.LayersPerEpoch)
 	types.SetNetworkHRP(conf.NetworkHRP) // set to generate coinbase
@@ -167,7 +236,7 @@ func NewNetwork(conf config.Config, l log.Log, size int) ([]*App, func() error, 
 
 	ctx, cancel := context.WithCancel(context.Background())
 	g := errgroup.Group{}
-	var apps []*App
+	var apps []*TestApp
 	var datadirs []string
 	cleanup := func() error {
 		// cancel the context
@@ -223,10 +292,6 @@ func NewNetwork(conf config.Config, l log.Log, size int) ([]*App, func() error, 
 		c.SMESHING.Opts.DataDir = dir
 		c.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte(strconv.Itoa(i))).String()
 		c.FileLock = filepath.Join(c.DataDirParent, "LOCK")
-		c.P2P.Listen = "/ip4/127.0.0.1/tcp/0"
-		c.API.PublicListener = "0.0.0.0:0"
-		c.API.PrivateListener = "0.0.0.0:0"
-		c.API.JSONListener = "0.0.0.0:0"
 
 		app, err := NewApp(&c, l)
 		if err != nil {
@@ -240,8 +305,17 @@ func NewNetwork(conf config.Config, l log.Log, size int) ([]*App, func() error, 
 		if err := app.beaconProtocol.UpdateBeacon(bootstrapEpoch, bootstrapBeacon); err != nil {
 			return nil, nil, fmt.Errorf("failed to bootstrap beacon for node %q: %w", i, err)
 		}
-		apps = append(apps, app)
-
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		conn, err := grpc.DialContext(ctx, app.grpcPublicService.BoundAddress,
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithBlock(),
+		)
+		if err != nil {
+			return nil, nil, err
+		}
+		apps = append(apps, NewTestApp(app, conn))
+		// apps = append(apps, NewTestApp(app, nil))
 	}
 
 	// Connect all nodes to each other
@@ -413,9 +487,12 @@ func conf() config.Config {
 	conf.POET.PhaseShift = 30 * time.Second
 
 	conf.P2P.DisableNatPort = true
+	conf.P2P.Listen = "/ip4/127.0.0.1/tcp/0"
 
-	conf.API.PublicListener = "0.0.0.0:10092"
-	conf.API.PrivateListener = "0.0.0.0:10093"
+	conf.API.PublicListener = "0.0.0.0:0"
+	conf.API.PrivateListener = "0.0.0.0:0"
+	conf.API.JSONListener = "0.0.0.0:0"
+
 	return conf
 }
 
@@ -523,3 +600,15 @@ func conf() config.Config {
 // 	})
 // 	return nil
 // }
+
+type TestApp struct {
+	*App
+	Conn *grpc.ClientConn
+}
+
+func NewTestApp(app *App, conn *grpc.ClientConn) *TestApp {
+	return &TestApp{
+		App:  app,
+		Conn: conn,
+	}
+}
