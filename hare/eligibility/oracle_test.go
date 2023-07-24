@@ -961,10 +961,10 @@ func TestMine3(t *testing.T) {
 		eligibilies := 0
 		for x := 1; x < minerWeight; x++ {
 			// So this is saying, given minerWeight trials, whats the probability that we get x or fewer successes, and is that bigger than the fraction from the vrf.
-			// Since p is gonna be small the probability of a success is small so the probability that we have x or fewer sucesses is going to be high, so its unlikely that we'll need to iterate that much.
+			// Since p is gonna be small the probability of a success is small so the probability that we have x or fewer successes is going to be high, so its unlikely that we'll need to iterate that much.
 
 			// So each time we have miner weight opportunities to win, and we win C/total weight times. The number of trials that we need to win less of
-			// so the fraction is essentially sampling a point from the confidenceParam  I guess the higer the number of tirals the more difficult it is to get < some num successes, so the probability of that gets lower so we need a higher threshold.
+			// so the fraction is essentially sampling a point from the confidenceParam  I guess the higher the number of trials the more difficult it is to get < some num successes, so the probability of that gets lower so we need a higher threshold.
 			// should be proportional to the miner weight.
 			// So as the number of trials increases so too does the threshold need to increase in order to reach a reasonable probability of winning x or less trials.
 			if fixed.BinCDF(minerWeight, p, x).GreaterThan(fraction) {

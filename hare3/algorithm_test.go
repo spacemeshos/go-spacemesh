@@ -4,9 +4,10 @@ import (
 	"crypto/rand"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -417,7 +418,7 @@ func TestReachingConsensusNetworkOf2DifferentValues(t *testing.T) {
 }
 
 // This test checks that a single node with a threshold of 2 votes can't reach
-// consensus on a value
+// consensus on a value.
 func TestNotReachingConsensus(t *testing.T) {
 	h := NewHandler(NewDefaultGradedGossiper(), NewDefaultThresholdGradedGossiper(2), NewDefaultGradecaster(), log.NewNop())
 	lc := NewTestLeaderChecker()

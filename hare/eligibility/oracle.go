@@ -251,7 +251,7 @@ func (o *Oracle) Validate(ctx context.Context, layer types.LayerID, round uint32
 	//
 	// n is the atxWeight of the miner
 	// x is the eligibilityCount
-	// p is the comitte size divided by the total weight, i.e the proportion of a comittee slot per uinit of atx weight
+	// p is the committee size divided by the total weight, i.e the proportion of a committee slot per unit of atx weight
 	x := int(eligibilityCount)
 
 	// So this is saying that the probability that with n trials, and a probability p of winning each trial that we make from 0 to  x - 1 trials is greater than vrffrac and that the probability that with n trials and probability p or winning each trial that we make any trial up to x is less than vrffrac,
