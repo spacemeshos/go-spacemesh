@@ -70,11 +70,10 @@ func (lc *TestLeaderChecker) IsLeader(vk types.NodeID, round AbsRound) bool {
 // to run 2 iterations (15 rounds in total).
 func TestReachingConsensusSingleNode(t *testing.T) {
 	h := NewHandler(NewDefaultGradedGossiper(), NewDefaultThresholdGradedGossiper(1), NewDefaultGradecaster(), log.NewNop())
-	lc := NewTestLeaderChecker()
 	nodeId := randID()
 	active := true
 	values3Hash := []types.Hash20{toHash(values3)}
-	p := h.Protocol(lc, values3)
+	p := h.Protocol(values3)
 
 	msg, output := p.NextRound(active)
 	require.Equal(t, &OutputMessage{NewAbsRound(0, -1), values3}, msg)
@@ -164,11 +163,10 @@ type TestNetwork struct {
 }
 
 func NewTestNetwork(threshold uint16, initialValues ...[]types.Hash20) *TestNetwork {
-	lc := NewTestLeaderChecker()
 	tn := &TestNetwork{}
 	for i := 0; i < len(initialValues); i++ {
 		tn.handlers = append(tn.handlers, NewHandler(NewDefaultGradedGossiper(), NewDefaultThresholdGradedGossiper(threshold), NewDefaultGradecaster(), log.NewNop()))
-		tn.protocols = append(tn.protocols, tn.handlers[i].Protocol(lc, initialValues[i]))
+		tn.protocols = append(tn.protocols, tn.handlers[i].Protocol(initialValues[i]))
 		tn.ids = append(tn.ids, randID())
 	}
 	return tn
@@ -421,11 +419,10 @@ func TestReachingConsensusNetworkOf2DifferentValues(t *testing.T) {
 // consensus on a value.
 func TestNotReachingConsensus(t *testing.T) {
 	h := NewHandler(NewDefaultGradedGossiper(), NewDefaultThresholdGradedGossiper(2), NewDefaultGradecaster(), log.NewNop())
-	lc := NewTestLeaderChecker()
 	nodeId := randID()
 	active := true
 	// values3Hash := []types.Hash20{toHash(values3)}
-	p := h.Protocol(lc, values3)
+	p := h.Protocol(values3)
 
 	// We expect just the pre round message to be sent
 	msg, output := p.NextRound(active)

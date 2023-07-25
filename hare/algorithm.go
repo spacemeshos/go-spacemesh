@@ -974,9 +974,9 @@ func (proc *consensusProcess) addToRound(value uint32) (new uint32) {
 
 // Returns the expected committee size for the given round assuming maxExpActives is the default size.
 func expectedCommitteeSize(round uint32, maxExpActive, expLeaders int) int {
-	// if round%RoundsPerIteration == proposalRound {
-	// 	return expLeaders // expected number of leaders
-	// }
+	if round%RoundsPerIteration == proposalRound {
+		return expLeaders // expected number of leaders
+	}
 
 	// N actives in any other case
 	return maxExpActive

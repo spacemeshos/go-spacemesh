@@ -50,6 +50,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare3/broker"
+	h3eligibility "github.com/spacemeshos/go-spacemesh/hare3/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare3/runner"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
@@ -753,12 +754,12 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 	hareCfg := app.Config.HARE
 	hareCfg.Hdist = app.Config.Tortoise.Hdist
 	hareLog := app.addLogger(HareLogger, lg)
-	eligibilityValidator := hare.NewEligibilityValidator(app.hOracle, hareCfg.N, hareCfg.ExpectedLeaders, hareLog)
+	eligibilitiesSelector := h3eligibility.NewTotalEligibilitiesSelector(hareCfg.N, hareCfg.ExpectedLeaders)
+	eligibilityValidator := h3eligibility.NewValidator(eligibilitiesSelector, app.hOracle, hareLog)
 	b := broker.NewBroker(
 		app.cachedDB,
 		app.edVerifier,
 		eligibilityValidator,
-		app.hOracle,
 		broker.NewHandlerFactory(app.clock, hareCfg.RoundDuration, uint16(hareCfg.N/2+1), lg),
 		lg.WithName("broker"),
 	)
@@ -790,8 +791,7 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		int8(hareCfg.LimitIterations),
 		hareCfg.WakeupDelta,
 		hareCfg.RoundDuration,
-		hareCfg.N,
-		hareCfg.ExpectedLeaders,
+		eligibilitiesSelector,
 		app.edSgn.NodeID(),
 	)
 

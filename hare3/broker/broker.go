@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/hare3"
+	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare3/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -50,18 +51,6 @@ func (f *HandlerFactory) Handler(layer types.LayerID) *hare3.Handler {
 		hare3.NewDefaultGradecaster(),
 		f.l,
 	)
-}
-
-// stateQuerier provides a query to check if an Ed public key is active on the current consensus view.
-// It returns true if the identity is active and false otherwise.
-// An error is set iff the identity could not be checked for activeness.
-type stateQuerier interface {
-	IsIdentityActiveOnConsensusView(context.Context, types.NodeID, types.LayerID) (bool, error)
-}
-
-type validator interface {
-	Validate(context.Context, *hare.Message) bool
-	ValidateEligibilityGossip(context.Context, *types.HareEligibilityGossip) bool
 }
 
 func newLayerState(handlerFactory *HandlerFactory, layer types.LayerID) *layerState {
@@ -113,13 +102,12 @@ type Broker struct {
 	log.Log
 	mu sync.RWMutex
 
-	cdb            *datastore.CachedDB
-	edVerifier     *signing.EdVerifier
-	roleValidator  validator    // provides eligibility validation
-	stateQuerier   stateQuerier // provides activeness check
-	handlerFactory *HandlerFactory
-	latestLayer    types.LayerID // the latest layer to attempt register (successfully or unsuccessfully)
-	layerStates    map[types.LayerID]*layerState
+	cdb                  *datastore.CachedDB
+	edVerifier           *signing.EdVerifier
+	eligibilityValidator *eligibility.Validator
+	handlerFactory       *HandlerFactory
+	latestLayer          types.LayerID // the latest layer to attempt register (successfully or unsuccessfully)
+	layerStates          map[types.LayerID]*layerState
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -129,20 +117,18 @@ type Broker struct {
 func NewBroker(
 	cdb *datastore.CachedDB,
 	edVerifier *signing.EdVerifier,
-	roleValidator validator,
-	stateQuerier stateQuerier,
+	eligibilityValidator *eligibility.Validator,
 	handlerFactory *HandlerFactory,
 	log log.Log,
 ) *Broker {
 	b := &Broker{
-		Log:            log,
-		cdb:            cdb,
-		edVerifier:     edVerifier,
-		roleValidator:  roleValidator,
-		stateQuerier:   stateQuerier,
-		handlerFactory: handlerFactory,
-		layerStates:    make(map[types.LayerID]*layerState),
-		latestLayer:    types.GetEffectiveGenesis(),
+		Log:                  log,
+		cdb:                  cdb,
+		edVerifier:           edVerifier,
+		eligibilityValidator: eligibilityValidator,
+		handlerFactory:       handlerFactory,
+		layerStates:          make(map[types.LayerID]*layerState),
+		latestLayer:          types.GetEffectiveGenesis(),
 	}
 	b.ctx, b.cancel = context.WithCancel(context.Background())
 	return b
@@ -263,17 +249,6 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 		)
 		return fmt.Errorf("verify ed25519 signature")
 	}
-	// create msg
-	if err := checkIdentity(ctx, b.Log, hareMsg, b.stateQuerier); err != nil {
-		logger.Debug("failed to validate eligibility: %v", err)
-		return err
-	}
-
-	// validate msg
-	// if !b.roleValidator.Validate(ctx, hareMsg) {
-	// 	logger.Warning("message validation failed: eligibility validator returned false")
-	// 	return errors.New("not eligible")
-	// }
 
 	id, round, values := parts(hareMsg)
 	proof, err := b.cdb.GetMalfeasanceProof(hareMsg.SmesherID)
@@ -287,6 +262,19 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 		// The way we signify a message from a known malfeasant identity to the
 		// protocol is a message without values.
 		values = nil
+	}
+
+	// Check whether the message is eligible
+	valid, err := b.eligibilityValidator.Validate(ctx, hareMsg.Eligibility.Proof, hareMsg.SmesherID, hareMsg.Layer, hare3.AbsRound(hareMsg.Round), hareMsg.Eligibility.Count)
+	if err != nil {
+		err := fmt.Errorf("failed to validate eligibility: %v", err)
+		logger.Debug("%v", err)
+		return err
+	}
+	if !valid {
+		err := errors.New("message contained incorrect eligibility count")
+		logger.Debug("%v", err)
+		return err
 	}
 
 	// If the message is early we may need to initialize the message store and handler.
@@ -388,36 +376,4 @@ func (b *Broker) Unregister(ctx context.Context, id types.LayerID) {
 // Close closes broker.
 func (b *Broker) Close() {
 	b.cancel()
-}
-
-// Upon receiving a protocol message, we try to build the full message.
-// The full message consists of the original message and the extracted public key.
-// An extracted public key is considered valid if it represents an active identity for a consensus view.
-func checkIdentity(ctx context.Context, logger log.Log, hareMsg *hare.Message, querier stateQuerier) error {
-	logger = logger.WithContext(ctx)
-
-	// query if identity is active
-	res, err := querier.IsIdentityActiveOnConsensusView(ctx, hareMsg.SmesherID, hareMsg.Layer)
-	if err != nil {
-		// TODO should this be a panic?
-		logger.With().Error("failed to check if identity is active",
-			log.Stringer("smesher", hareMsg.SmesherID),
-			log.Err(err),
-			hareMsg.Layer,
-			log.String("msg_type", hareMsg.Type.String()),
-		)
-		return fmt.Errorf("check active identity: %w", err)
-	}
-
-	// check query result
-	if !res {
-		logger.With().Warning("identity is not active",
-			log.Stringer("smesher", hareMsg.SmesherID),
-			hareMsg.Layer,
-			log.String("msg_type", hareMsg.Type.String()),
-		)
-		return errors.New("inactive identity")
-	}
-
-	return nil
 }

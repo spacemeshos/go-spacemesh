@@ -192,8 +192,8 @@ func (h *Handler) HandleMsg(hash types.Hash20, id types.NodeID, round AbsRound, 
 	return true, equivocationHash
 }
 
-func (h *Handler) Protocol(lc LeaderChecker, si []types.Hash20) *Protocol {
-	return NewProtocol(h.round, h.tgg, h.gc, lc, h.mu, si, h.l.WithName("algorithm"))
+func (h *Handler) Protocol(si []types.Hash20) *Protocol {
+	return NewProtocol(h.round, h.tgg, h.gc, h.mu, si, h.l.WithName("algorithm"))
 }
 
 type Protocol struct {
@@ -212,18 +212,16 @@ type Protocol struct {
 	Si  []types.Hash20
 	tgg ThresholdGradedGossiper
 	gc  Gradecaster
-	lc  LeaderChecker
 	mu  *sync.Mutex
 	l   log.Log
 }
 
 // The round paramer is shared with the handler.
-func NewProtocol(round *AbsRound, tgg ThresholdGradedGossiper, gc Gradecaster, lc LeaderChecker, protocolMu *sync.Mutex, si []types.Hash20, l log.Log) *Protocol {
+func NewProtocol(round *AbsRound, tgg ThresholdGradedGossiper, gc Gradecaster, protocolMu *sync.Mutex, si []types.Hash20, l log.Log) *Protocol {
 	return &Protocol{
 		round: round,
 		tgg:   tgg,
 		gc:    gc,
-		lc:    lc,
 		mu:    protocolMu,
 		Si:    si,
 		l:     l,
@@ -400,11 +398,12 @@ func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []types
 					p.l.Debug("commit no valid proposal in this iteration for gradecast candidate %v, proposals: %v", c, p.Ti[j])
 					continue
 				}
+				// TODO this should probably be handled outside by checking eligibilities.
 				// Check leader
 				// Round 5 condition d
-				if !p.lc.IsLeader(c.id, NewAbsRound(j, 2)) {
-					continue
-				}
+				// if !p.lc.IsLeader(c.id, NewAbsRound(j, 2)) {
+				// 	continue
+				// }
 				// Check grade
 				// Round 5 condition e
 				if c.grade < 2 {
@@ -451,10 +450,14 @@ func (p *Protocol) NextRound(active bool) (toSend *OutputMessage, output []types
 		values := p.tgg.RetrieveThresholdMessages(NewAbsRound(j-1, 6), 5)
 		resultHash, result := matchInPreviousIterations(values, p.Ti, j)
 		if resultHash != nil {
-			return &OutputMessage{
-				Round:  NewAbsRound(j, 6),
-				Values: []types.Hash20{*resultHash},
-			}, result
+			var msg *OutputMessage
+			if active {
+				msg = &OutputMessage{
+					Round:  NewAbsRound(j, 6),
+					Values: []types.Hash20{*resultHash},
+				}
+			}
+			return msg, result
 		}
 		// Case 2
 		if active {

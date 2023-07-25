@@ -16,7 +16,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/hare3/broker"
 	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
-	"github.com/spacemeshos/go-spacemesh/hare3/leader"
 	"github.com/spacemeshos/go-spacemesh/hare3/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -34,16 +33,16 @@ type WeakCoinResult struct {
 
 // Protocol runner runs an instance of the hare3 protocol.
 type ProtocolRunner struct {
-	clock        RoundClock
-	protocol     hare3.Protocol
-	coinChooser  *weakcoin.Chooser
-	maxRound     hare3.AbsRound
-	gossiper     NetworkGossiper
-	layer        types.LayerID
-	ac           *eligibility.ActiveCheck
-	mb           *MessageBuilder
-	weakcoinChan chan<- WeakCoinResult
-	l            log.Log
+	clock                 RoundClock
+	protocol              hare3.Protocol
+	coinChooser           *weakcoin.Chooser
+	maxRound              hare3.AbsRound
+	gossiper              NetworkGossiper
+	layer                 types.LayerID
+	eligibilityCalculator *eligibility.Calculator
+	mb                    *MessageBuilder
+	weakcoinChan          chan<- WeakCoinResult
+	l                     log.Log
 }
 
 func NewProtocolRunner(
@@ -53,22 +52,22 @@ func NewProtocolRunner(
 	iterationLimit int8,
 	gossiper NetworkGossiper,
 	layer types.LayerID,
-	ac *eligibility.ActiveCheck,
+	ac *eligibility.Calculator,
 	mb *MessageBuilder,
 	weakcoinChan chan<- WeakCoinResult,
 	l log.Log,
 ) *ProtocolRunner {
 	return &ProtocolRunner{
-		clock:        clock,
-		protocol:     *protocol,
-		coinChooser:  coinChooser,
-		maxRound:     hare3.NewAbsRound(iterationLimit, 0),
-		gossiper:     gossiper,
-		layer:        layer,
-		ac:           ac,
-		mb:           mb,
-		weakcoinChan: weakcoinChan,
-		l:            l,
+		clock:                 clock,
+		protocol:              *protocol,
+		coinChooser:           coinChooser,
+		maxRound:              hare3.NewAbsRound(iterationLimit, 0),
+		gossiper:              gossiper,
+		layer:                 layer,
+		eligibilityCalculator: ac,
+		mb:                    mb,
+		weakcoinChan:          weakcoinChan,
+		l:                     l,
 	}
 }
 
@@ -80,8 +79,8 @@ func (r *ProtocolRunner) Run(ctx context.Context) ([]types.Hash20, error) {
 	r.l.Info("running layer %d", r.layer)
 	for {
 		// Note the round starts at -2 since the hare protocol increments the round as the first step of NextRound
-		previousRound := r.protocol.Round()
-		if previousRound == r.maxRound {
+		round := r.protocol.Round()
+		if round == r.maxRound {
 			return nil, fmt.Errorf("hare protocol runner exceeded iteration limit of %d", r.maxRound.Iteration())
 		}
 		// The weak coin is calculated from pre-round messages, we select the
@@ -89,24 +88,25 @@ func (r *ProtocolRunner) Run(ctx context.Context) ([]types.Hash20, error) {
 		// affecting the outcome since the coin is weak (see package doc for
 		// hare3/weakcoin for an explanation of weak)
 		coin := r.coinChooser.Choose()
-		if previousRound == hare3.Preround.Round()+1 && coin != nil {
+		if round == hare3.Preround.Round()+1 && coin != nil {
 			r.weakcoinChan <- WeakCoinResult{
 				Layer: r.layer,
 				Coin:  coin,
 			}
 		}
 
-		r.l.Info("awaiting beginning of round %d", previousRound+1)
+		nextRound := round + 1
+		r.l.Info("awaiting beginning of round %d", nextRound)
 		select {
 		// We await the beginning of the next round, which is achieved by calling AwaitEndOfRound with the previous round.
-		case <-r.clock.AwaitEndOfRound(uint32(previousRound)):
+		case <-r.clock.AwaitEndOfRound(uint32(round)):
 			// TODO fix this eligibility should not return an error
-			proof, count, err := r.ac.Eligibility(ctx, previousRound)
+			proof, count, err := r.eligibilityCalculator.Eligibilities(ctx, nextRound)
 			if err != nil {
 				return nil, err
 			}
-			r.l.Info("running round %d, of layer %d, eligibility count %d", previousRound+1, r.layer, count)
-			toSend, output := r.protocol.NextRound(true)
+			r.l.Info("running round %d, of layer %d, eligibility count %d", nextRound, r.layer, count)
+			toSend, output := r.protocol.NextRound(count > 0)
 			if toSend != nil {
 				r.l.Info("sending hare message round: %v, proposals: %v", toSend.Round, toSend.Values)
 				r.gossiper.Gossip(ctx, r.mb.BuildEncodedMessage(toSend, proof, count))
@@ -149,13 +149,12 @@ type HareRunner struct {
 	weakcoinChan    chan<- WeakCoinResult
 	eg              errgroup.Group
 
-	effectiveGenesis types.LayerID
-	maxIterations    int8
-	wakeupDelta      time.Duration
-	roundDuration    time.Duration
-	committeeSize    int
-	expectedLeaders  int
-	nodeID           types.NodeID
+	effectiveGenesis      types.LayerID
+	maxIterations         int8
+	wakeupDelta           time.Duration
+	roundDuration         time.Duration
+	eligibilitiesSelector *eligibility.TotalEligibilitiesSelector
+	nodeID                types.NodeID
 }
 
 func NewHareRunner(clock LayerClock,
@@ -173,29 +172,27 @@ func NewHareRunner(clock LayerClock,
 	maxIterations int8,
 	wakeupDelta time.Duration,
 	roundDuration time.Duration,
-	committeeSize int,
-	expectedLeaders int,
+	eligibilitiesSelector *eligibility.TotalEligibilitiesSelector,
 	nodeID types.NodeID,
 ) *HareRunner {
 	return &HareRunner{
-		clock:            clock,
-		gossiper:         gossiper,
-		signer:           signer,
-		oracle:           oracle,
-		syncer:           syncer,
-		beaconRetriever:  beaconRetriever,
-		b:                b,
-		l:                l,
-		db:               db,
-		output:           output,
-		weakcoinChan:     weakcoinChan,
-		effectiveGenesis: effectiveGenesis,
-		maxIterations:    maxIterations,
-		wakeupDelta:      wakeupDelta,
-		roundDuration:    roundDuration,
-		committeeSize:    committeeSize,
-		expectedLeaders:  expectedLeaders,
-		nodeID:           nodeID,
+		clock:                 clock,
+		gossiper:              gossiper,
+		signer:                signer,
+		oracle:                oracle,
+		syncer:                syncer,
+		beaconRetriever:       beaconRetriever,
+		b:                     b,
+		l:                     l,
+		db:                    db,
+		output:                output,
+		weakcoinChan:          weakcoinChan,
+		effectiveGenesis:      effectiveGenesis,
+		maxIterations:         maxIterations,
+		wakeupDelta:           wakeupDelta,
+		roundDuration:         roundDuration,
+		eligibilitiesSelector: eligibilitiesSelector,
+		nodeID:                nodeID,
 	}
 }
 
@@ -287,21 +284,22 @@ func (r *HareRunner) Run(ctx context.Context) {
 			}
 			props := goodProposals(ctx, r.l, r.db, r.nodeID, layer, beacon)
 
-			actives, err := r.oracle.ActiveMap(ctx, layer)
-			if err != nil {
-				r.l.With().Info("no active set for epoch",
-					log.Context(ctx),
-					layer,
-					log.Err(err),
-				)
-				continue
-			}
+			// actives, err := r.oracle.ActiveMap(ctx, layer)
+			// if err != nil {
+			// 	r.l.With().Info("no active set for epoch",
+			// 		log.Context(ctx),
+			// 		layer,
+			// 		log.Err(err),
+			// 	)
+			// 	continue
+			// }
 
-			lc := leader.NewDefaultLeaderChecker(r.oracle, r.expectedLeaders, actives, layer)
+			// lc := leader.NewDefaultLeaderChecker(r.oracle, r.numProposers, actives, layer)
 
 			// Execute layer
 			r.eg.Go(func() error {
-				result, err := r.runLayer(log.WithNewSessionID(ctx), layer, props, lc, roundClock)
+				ec := eligibility.NewCalculator(r.nodeID, layer, r.eligibilitiesSelector, r.oracle, r.l)
+				result, err := r.runLayer(log.WithNewSessionID(ctx), layer, props, ec, roundClock)
 				// We log the error, which is either ctx timeout or iteration exceeded
 				if err != nil {
 					r.l.With().Info("hare terminated without agreement", layer, log.Err(err))
@@ -327,7 +325,7 @@ func (r *HareRunner) Run(ctx context.Context) {
 }
 
 // runLayer constructs a ProtocolRunner and returns the output of its Run method.
-func (r *HareRunner) runLayer(ctx context.Context, layer types.LayerID, props []types.ProposalID, lc hare3.LeaderChecker, roundClock RoundClock) ([]types.ProposalID, error) {
+func (r *HareRunner) runLayer(ctx context.Context, layer types.LayerID, props []types.ProposalID, ec *eligibility.Calculator, roundClock RoundClock) ([]types.ProposalID, error) {
 	// The broker may have already created a handler and coinChooser in
 	// response to early messages, that's why we get them from the broker.
 	handler, coinChooser := r.b.Register(ctx, layer)
@@ -336,8 +334,7 @@ func (r *HareRunner) runLayer(ctx context.Context, layer types.LayerID, props []
 	for i := 0; i < len(props); i++ {
 		initialSet[i] = types.Hash20(props[i])
 	}
-	ac := eligibility.NewActiveCheck(layer, r.nodeID, r.committeeSize, r.oracle, r.l)
-	protocolRunner := NewProtocolRunner(roundClock, handler.Protocol(lc, initialSet), coinChooser, r.maxIterations, r.gossiper, layer, ac, NewMessageBuilder(layer, r.nodeID, r.signer), r.weakcoinChan, r.l)
+	protocolRunner := NewProtocolRunner(roundClock, handler.Protocol(initialSet), coinChooser, r.maxIterations, r.gossiper, layer, ec, NewMessageBuilder(layer, r.nodeID, r.signer), r.weakcoinChan, r.l)
 	v, err := protocolRunner.Run(ctx)
 	if err != nil {
 		return nil, err
