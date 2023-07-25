@@ -296,7 +296,7 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 	}
 
 	logger.Debug("broker passing message to hare handler")
-	shouldRelay, equivocationHash := state.handler.HandleMsg(hash, id, round, values)
+	shouldRelay, equivocationHash := state.handler.HandleMsg(hash, id, round, values, 1)
 	// If we detect a new equivocation then store it.
 	if equivocationHash != nil {
 		proof = state.buildMalfeasanceProof(hash, *equivocationHash)
@@ -372,7 +372,7 @@ func (b *Broker) handleEarlyMessages(msgs map[types.Hash20]*hare.Message, handle
 			id, round, _ := parts(v)
 			// The way we signify a message from a know malfeasant identity to the
 			// protocol is a message without values.
-			handler.HandleMsg(k, id, round, nil)
+			handler.HandleMsg(k, id, round, nil, 1)
 		}
 	}
 }

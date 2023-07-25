@@ -10,9 +10,9 @@ type GradedVotes struct {
 	votes [d]uint16
 }
 
-func (s *GradedVotes) Vote(grade uint8) {
+func (s *GradedVotes) Vote(grade uint8, weight uint16) {
 	// Grade is 1 indexed so we subtract 1
-	s.votes[grade-1]++
+	s.votes[grade-1] += weight
 }
 
 func (s *GradedVotes) CumulativeVote(minGrade uint8) uint16 {
@@ -33,13 +33,14 @@ func (s *GradedVotes) CumulativeVote(minGrade uint8) uint16 {
 type ThresholdGradedGossiper interface {
 	// ReceiveMsg ingests the given message inputs, for later retrieval through
 	// RetrieveThresholdMessages. The inputs are the message sender, the values
-	// contained in the message, the message round, the current round and a
-	// grade, the grade must be between 1 and d inclusive. If values is nil it
-	// indicates a message from a malicious entity.
+	// contained in the message, the voting weight of this participant, the
+	// message round, the current round and a grade, the grade must be between
+	// 1 and d inclusive. If values is nil it indicates a message from a
+	// malicious entity.
 	//
 	// Note that since this component is downstream from graded gossip it
 	// expects at most 2 messages per identity per round.
-	ReceiveMsg(senderID types.NodeID, values []types.Hash20, msgRound, currRound AbsRound, grade uint8)
+	ReceiveMsg(senderID types.NodeID, values []types.Hash20, weight uint16, msgRound, currRound AbsRound, grade uint8)
 
 	// This function outputs the values that were part of messages sent at
 	// msgRound and reached the threshold with grade at least minGrade by round
@@ -49,8 +50,9 @@ type ThresholdGradedGossiper interface {
 }
 
 type votes struct {
-	grade  uint8
 	values []types.Hash20
+	weight uint16
+	grade  uint8
 }
 
 type DefaultThresholdGradedGossiper struct {
@@ -84,7 +86,7 @@ func NewGradedVotes() *GradedVotes {
 }
 
 // ReceiveMsg implements ThresholdGradedGossiper.
-func (t *DefaultThresholdGradedGossiper) ReceiveMsg(senderID types.NodeID, values []types.Hash20, msgRound, currRound AbsRound, grade uint8) {
+func (t *DefaultThresholdGradedGossiper) ReceiveMsg(senderID types.NodeID, values []types.Hash20, weight uint16, msgRound, currRound AbsRound, grade uint8) {
 	if currRound-msgRound > d {
 		// Message received too late.
 		return
@@ -95,6 +97,7 @@ func (t *DefaultThresholdGradedGossiper) ReceiveMsg(senderID types.NodeID, value
 		// Store the votes and grade against the sender id.
 		votesBySender[senderID] = votes{
 			values: values,
+			weight: weight,
 			grade:  grade,
 		}
 	} else {
@@ -104,7 +107,7 @@ func (t *DefaultThresholdGradedGossiper) ReceiveMsg(senderID types.NodeID, value
 		// record the sender id for this malicious vote since we should receive
 		// at most one malicious message per identity per round from graded gossip.
 		votesByRound := EnsureValue(t.maliciousVotes, msgRound, NewGradedVotes)
-		votesByRound.Vote(grade)
+		votesByRound.Vote(grade, weight)
 	}
 }
 
@@ -119,7 +122,7 @@ func (t *DefaultThresholdGradedGossiper) RetrieveThresholdMessages(msgRound AbsR
 	for _, v := range votesBySender {
 		for _, value := range v.values {
 			gv := EnsureValue(goodVotes, value, NewGradedVotes)
-			gv.Vote(v.grade)
+			gv.Vote(v.grade, v.weight)
 		}
 	}
 	var results []types.Hash20

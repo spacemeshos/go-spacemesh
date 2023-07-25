@@ -144,7 +144,7 @@ func NewHandler(gg GradedGossiper, tgg ThresholdGradedGossiper, gc Gradecaster, 
 
 // HandleMsg handles an incoming message, it returns a boolean indicating
 // whether the message should be regossipped to peers.
-func (h *Handler) HandleMsg(hash types.Hash20, id types.NodeID, round AbsRound, values []types.Hash20) (bool, *types.Hash20) {
+func (h *Handler) HandleMsg(hash types.Hash20, id types.NodeID, round AbsRound, values []types.Hash20, weight uint16) (bool, *types.Hash20) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	r := AbsRound(round)
@@ -187,7 +187,7 @@ func (h *Handler) HandleMsg(hash types.Hash20, id types.NodeID, round AbsRound, 
 		h.gc.ReceiveMsg(id, values, r, curr, g)
 	} else {
 		// Pass result to threshold gossip
-		h.tgg.ReceiveMsg(id, values, r, curr, g)
+		h.tgg.ReceiveMsg(id, values, weight, r, curr, g)
 	}
 	return true, equivocationHash
 }

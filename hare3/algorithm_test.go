@@ -80,7 +80,7 @@ func TestReachingConsensusSingleNode(t *testing.T) {
 	require.Equal(t, &OutputMessage{NewAbsRound(0, -1), values3}, msg)
 	require.Nil(t, output)
 
-	regossip, equivocationHash := h.HandleMsg(randHash20(), nodeId, msg.Round, msg.Values)
+	regossip, equivocationHash := h.HandleMsg(randHash20(), nodeId, msg.Round, msg.Values, 1)
 	require.Equal(t, true, regossip)
 	require.Nil(t, equivocationHash)
 
@@ -96,7 +96,7 @@ func TestReachingConsensusSingleNode(t *testing.T) {
 	require.Equal(t, &OutputMessage{NewAbsRound(0, 2), values3}, msg)
 	require.Nil(t, output)
 
-	regossip, equivocationHash = h.HandleMsg(randHash20(), nodeId, msg.Round, msg.Values)
+	regossip, equivocationHash = h.HandleMsg(randHash20(), nodeId, msg.Round, msg.Values, 1)
 	require.Equal(t, true, regossip)
 	require.Nil(t, equivocationHash)
 
@@ -112,7 +112,7 @@ func TestReachingConsensusSingleNode(t *testing.T) {
 	require.Equal(t, &OutputMessage{NewAbsRound(0, 5), values3Hash}, msg)
 	require.Nil(t, output)
 
-	regossip, equivocationHash = h.HandleMsg(randHash20(), nodeId, msg.Round, msg.Values)
+	regossip, equivocationHash = h.HandleMsg(randHash20(), nodeId, msg.Round, msg.Values, 1)
 	require.Equal(t, true, regossip)
 	require.Nil(t, equivocationHash)
 
@@ -120,7 +120,7 @@ func TestReachingConsensusSingleNode(t *testing.T) {
 	require.Equal(t, &OutputMessage{NewAbsRound(0, 6), values3Hash}, msg)
 	require.Nil(t, output)
 
-	regossip, equivocationHash = h.HandleMsg(randHash20(), nodeId, msg.Round, msg.Values)
+	regossip, equivocationHash = h.HandleMsg(randHash20(), nodeId, msg.Round, msg.Values, 1)
 	require.Equal(t, true, regossip)
 	require.Nil(t, equivocationHash)
 
@@ -152,7 +152,7 @@ func TestReachingConsensusSingleNode(t *testing.T) {
 	require.Equal(t, &OutputMessage{NewAbsRound(1, 6), values3Hash}, msg)
 	require.Equal(t, values3, output)
 
-	regossip, equivocationHash = h.HandleMsg(randHash20(), nodeId, msg.Round, msg.Values)
+	regossip, equivocationHash = h.HandleMsg(randHash20(), nodeId, msg.Round, msg.Values, 1)
 	require.Equal(t, true, regossip)
 	require.Nil(t, equivocationHash)
 }
@@ -188,7 +188,7 @@ func (tn *TestNetwork) HandleMsgs(msgs []*OutputMessage) (regossip []bool, equiv
 		msgHash := randHash20()
 		id := tn.ids[i]
 		for _, h := range tn.handlers {
-			rg, eq := h.HandleMsg(msgHash, id, m.Round, m.Values)
+			rg, eq := h.HandleMsg(msgHash, id, m.Round, m.Values, 1)
 			regossip = append(regossip, rg)
 			equivocation = append(equivocation, eq)
 		}
@@ -432,7 +432,7 @@ func TestNotReachingConsensus(t *testing.T) {
 	require.Equal(t, &OutputMessage{NewAbsRound(0, -1), values3}, msg)
 	require.Nil(t, output)
 
-	regossip, equivocationHash := h.HandleMsg(randHash20(), nodeId, msg.Round, msg.Values)
+	regossip, equivocationHash := h.HandleMsg(randHash20(), nodeId, msg.Round, msg.Values, 1)
 	require.Equal(t, true, regossip)
 	require.Nil(t, equivocationHash)
 
