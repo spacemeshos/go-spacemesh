@@ -284,7 +284,7 @@ func (b *Broker) HandleMessage(ctx context.Context, _ p2p.Peer, msg []byte) erro
 	}
 
 	logger.Debug("broker passing message to hare handler")
-	shouldRelay, equivocationHash := state.handler.HandleMsg(hash, id, round, values, 1)
+	shouldRelay, equivocationHash := state.handler.HandleMsg(hash, id, round, values, hareMsg.Eligibility.Count)
 	// If we detect a new equivocation then store it.
 	if equivocationHash != nil {
 		proof = state.buildMalfeasanceProof(hash, *equivocationHash)
