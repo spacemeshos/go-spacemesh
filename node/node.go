@@ -512,7 +512,7 @@ func (app *App) addLogger(name string, logger log.Log) log.Log {
 		app.loggers[name] = &lvl
 		logger = logger.SetLevel(&lvl)
 	}
-	return logger.WithName(name)
+	return logger.WithName(name).WithFields(log.String("module", name))
 }
 
 func (app *App) getLevel(name string) log.Level {
