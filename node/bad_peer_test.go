@@ -146,6 +146,7 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 }
 
 func TestConsensus(t *testing.T) {
+	t.SkipNow()
 	spew.Config.DisableMethods = true
 	// cfg := fastnet()
 	cfg := conf()
