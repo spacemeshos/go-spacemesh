@@ -185,7 +185,7 @@ jobs:
         if: ${{ matrix.os == 'windows-latest' }}
         run: choco install opencl-intel-cpu-runtime
       - name: setup env
-        run: make install
+        run: make install && make get-libs
       - name: Clear test cache
         run: make clear-test-cache
       - name: unit tests
