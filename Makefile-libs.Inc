@@ -75,10 +75,10 @@ $(BINDIR_POSTRS_SETUP_LIBS): $(PROJ_DIR)$(POSTRS_SETUP_ZIP)
 	touch $@
 
 $(PROJ_DIR)$(POSTRS_SETUP_ZIP):
-	curl -sSL --retry-all-errors 20 --retry-max-time 60 $(POSTRS_SETUP_URL_ZIP) -o $(PROJ_DIR)$(POSTRS_SETUP_ZIP)
+	wget -nv -c $(POSTRS_SETUP_URL_ZIP) -O $(PROJ_DIR)$(POSTRS_SETUP_ZIP)
 
 $(BIN_DIR)$(POSTRS_PROFILER_BIN):
-	curl -sSL --retry-all-errors 20 --retry-max-time 60 $(POSTRS_PROFILER_URL) -o $(PROJ_DIR)$(POSTRS_PROFILER_ZIP)
+	wget -nv -c  $(POSTRS_PROFILER_URL) -O $(PROJ_DIR)$(POSTRS_PROFILER_ZIP)
 	unzip -o -j $(PROJ_DIR)$(POSTRS_PROFILER_ZIP) -d $(BIN_DIR)
 
 get-postrs-lib: $(PROJ_DIR)$(POSTRS_SETUP_ZIP) $(BINDIR_POSTRS_SETUP_LIBS)
