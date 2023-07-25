@@ -441,8 +441,8 @@ func conf() config.Config {
 	conf.DataDirParent = filepath.Join(os.TempDir(), "spacemesh")
 	conf.FileLock = filepath.Join(conf.DataDirParent, "LOCK")
 
-	conf.HARE.N = 2
-	conf.HARE.ExpectedLeaders = 2
+	conf.HARE.N = 800
+	conf.HARE.ExpectedLeaders = 10
 	conf.HARE.LimitConcurrent = 2
 	conf.HARE.LimitIterations = 3
 	conf.HARE.RoundDuration = 500 * time.Millisecond
