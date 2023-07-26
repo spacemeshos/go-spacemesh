@@ -177,7 +177,7 @@ func GetCommand() *cobra.Command {
 				select {
 				case <-done:
 				case <-cleanupCtx.Done():
-					log.With().Error("app failed to clean up in time")
+					app.log.With().Error("app failed to clean up in time")
 				}
 				return err
 			}
@@ -185,7 +185,7 @@ func GetCommand() *cobra.Command {
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer cancel()
 			if err = run(ctx); err != nil {
-				log.With().Fatal(err.Error())
+				app.log.With().Fatal(err.Error())
 			}
 		},
 	}
@@ -1032,27 +1032,27 @@ func (app *App) initService(ctx context.Context, svc grpcserver.Service) (grpcse
 	// TODO(mafa): add app.log.WithName("service") to all services
 	switch svc {
 	case grpcserver.Debug:
-		return grpcserver.NewDebugService(app.db, app.conState, app.host, app.hOracle), nil
+		return grpcserver.NewDebugService(app.db, app.conState, app.host, app.hOracle, app.log.WithName("grpc.Debug")), nil
 	case grpcserver.GlobalState:
-		return grpcserver.NewGlobalStateService(app.mesh, app.conState), nil
+		return grpcserver.NewGlobalStateService(app.mesh, app.conState, app.log.WithName("grpc.GlobalState")), nil
 	case grpcserver.Mesh:
-		return grpcserver.NewMeshService(app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.Genesis.GenesisID(), app.Config.LayerDuration, app.Config.LayerAvgSize, uint32(app.Config.TxsPerProposal)), nil
+		return grpcserver.NewMeshService(app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.Genesis.GenesisID(), app.Config.LayerDuration, app.Config.LayerAvgSize, uint32(app.Config.TxsPerProposal), app.log.WithName("grpc.Mesh")), nil
 	case grpcserver.Node:
-		return grpcserver.NewNodeService(ctx, app.host, app.mesh, app.clock, app.syncer, cmd.Version, cmd.Commit), nil
+		return grpcserver.NewNodeService(app.host, app.mesh, app.clock, app.syncer, cmd.Version, cmd.Commit, app.log.WithName("grpc.Node")), nil
 	case grpcserver.Admin:
-		return grpcserver.NewAdminService(app.db, app.Config.DataDir(), app.log.WithName("admin")), nil
+		return grpcserver.NewAdminService(app.db, app.Config.DataDir(), app.log.WithName("grpc.Admin")), nil
 	case grpcserver.Smesher:
-		return grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, app.Config.API.SmesherStreamInterval, app.Config.SMESHING.Opts), nil
+		return grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, app.Config.API.SmesherStreamInterval, app.Config.SMESHING.Opts, app.log.WithName("grpc.Smesher")), nil
 	case grpcserver.Transaction:
-		return grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer, app.txHandler), nil
+		return grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer, app.txHandler, app.log.WithName("grpc.Transaction")), nil
 	case grpcserver.Activation:
-		return grpcserver.NewActivationService(app.cachedDB, types.ATXID(app.Config.Genesis.GoldenATX())), nil
+		return grpcserver.NewActivationService(app.cachedDB, types.ATXID(app.Config.Genesis.GoldenATX()), app.log.WithName("grpc.Activation")), nil
 	}
 	return nil, fmt.Errorf("unknown service %s", svc)
 }
 
 func (app *App) newGrpc(logger *zap.Logger, endpoint string) *grpcserver.Server {
-	return grpcserver.New(endpoint,
+	return grpcserver.New(endpoint, logger.Named("grpc"),
 		grpc.ChainStreamInterceptor(grpctags.StreamServerInterceptor(), grpczap.StreamServerInterceptor(logger)),
 		grpc.ChainUnaryInterceptor(grpctags.UnaryServerInterceptor(), grpczap.UnaryServerInterceptor(logger)),
 		grpc.MaxSendMsgSize(app.Config.API.GrpcSendMsgSize),
@@ -1100,7 +1100,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		if len(public) == 0 {
 			return fmt.Errorf("can't start json server without public services")
 		}
-		app.jsonAPIService = grpcserver.NewJSONHTTPServer(app.Config.API.JSONListener)
+		app.jsonAPIService = grpcserver.NewJSONHTTPServer(app.Config.API.JSONListener, app.log.WithName("grpc.JSON"))
 		app.jsonAPIService.StartService(ctx, public...)
 	}
 	if app.grpcPublicService != nil {

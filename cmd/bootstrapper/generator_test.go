@@ -14,6 +14,7 @@ import (
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
@@ -115,9 +116,9 @@ func (m *MeshAPIMock) EpochAtxs(types.EpochID) ([]types.ATXID, error) {
 }
 
 func launchServer(tb testing.TB) func() {
-	grpcService := grpcserver.New(fmt.Sprintf("127.0.0.1:%d", grpcPort))
-	jsonService := grpcserver.NewJSONHTTPServer(fmt.Sprintf("127.0.0.1:%d", jsonport))
-	s := grpcserver.NewMeshService(&MeshAPIMock{}, nil, nil, 0, types.Hash20{}, 0, 0, 0)
+	grpcService := grpcserver.New(fmt.Sprintf("127.0.0.1:%d", grpcPort), zaptest.NewLogger(tb).Named("grpc"))
+	jsonService := grpcserver.NewJSONHTTPServer(fmt.Sprintf("127.0.0.1:%d", jsonport), logtest.New(tb).WithName("grpc.JSON"))
+	s := grpcserver.NewMeshService(&MeshAPIMock{}, nil, nil, 0, types.Hash20{}, 0, 0, 0, logtest.New(tb).WithName("grpc.Mesh"))
 
 	pb.RegisterMeshServiceServer(grpcService.GrpcServer, s)
 	// start gRPC and json servers

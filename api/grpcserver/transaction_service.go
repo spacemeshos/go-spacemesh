@@ -26,6 +26,7 @@ import (
 // TransactionService exposes transaction data, and a submit tx endpoint.
 type TransactionService struct {
 	db        *sql.Database
+	logger    log.Logger
 	publisher pubsub.Publisher // P2P Swarm
 	mesh      meshAPI          // Mesh
 	conState  conservativeState
@@ -46,9 +47,11 @@ func NewTransactionService(
 	conState conservativeState,
 	syncer syncer,
 	txHandler txValidator,
+	lg log.Logger,
 ) *TransactionService {
 	return &TransactionService{
 		db:        db,
+		logger:    lg,
 		publisher: publisher,
 		mesh:      msh,
 		conState:  conState,
@@ -188,10 +191,10 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 	for {
 		select {
 		case <-txBufFull:
-			log.Info("tx buffer is full, shutting down")
+			s.logger.Info("tx buffer is full, shutting down")
 			return status.Error(codes.Canceled, errTxBufferFull)
 		case <-layerBufFull:
-			log.Info("layer buffer is full, shutting down")
+			s.logger.Info("layer buffer is full, shutting down")
 			return status.Error(codes.Canceled, errLayerBufferFull)
 		case tx := <-txCh:
 			// Filter
@@ -233,7 +236,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 			// In order to read transactions, we first need to read layer blocks
 			layerObj, err := s.mesh.GetLayer(layer.LayerID)
 			if err != nil {
-				log.With().Error("error reading layer data for updated layer", layer.LayerID, log.Err(err))
+				s.logger.With().Error("error reading layer data for updated layer", layer.LayerID, log.Err(err))
 				return status.Error(codes.Internal, "error reading layer data")
 			}
 
@@ -276,7 +279,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 						if in.IncludeTransactions {
 							tx, err := s.conState.GetMeshTransaction(txid)
 							if err != nil {
-								log.Error("could not find transaction %v from layer %v: %v", txid, layer, err)
+								s.logger.Error("could not find transaction %v from layer %v: %v", txid, layer, err)
 								return status.Error(codes.Internal, "error retrieving tx data")
 							}
 

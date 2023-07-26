@@ -16,19 +16,24 @@ import (
 // JSONHTTPServer is a JSON http server providing the Spacemesh API.
 // It is implemented using a grpc-gateway. See https://github.com/grpc-ecosystem/grpc-gateway .
 type JSONHTTPServer struct {
+	logger log.Logger
+
 	mu       sync.RWMutex
 	listener string
 	server   *http.Server
 }
 
 // NewJSONHTTPServer creates a new json http server.
-func NewJSONHTTPServer(listener string) *JSONHTTPServer {
-	return &JSONHTTPServer{listener: listener}
+func NewJSONHTTPServer(listener string, lg log.Logger) *JSONHTTPServer {
+	return &JSONHTTPServer{
+		logger:   lg,
+		listener: listener,
+	}
 }
 
 // Shutdown stops the server.
 func (s *JSONHTTPServer) Shutdown(ctx context.Context) error {
-	log.Debug("stopping json-http service...")
+	s.logger.Debug("stopping json-http service...")
 	server := s.getServer()
 	if server != nil {
 		err := server.Shutdown(ctx)
@@ -90,7 +95,7 @@ func (s *JSONHTTPServer) startInternal(
 			err = pb.RegisterDebugServiceHandlerServer(ctx, mux, typed)
 		}
 		if err != nil {
-			log.Error("registering %T with grpc gateway failed with %v", svc, err)
+			s.logger.Error("registering %T with grpc gateway failed with %v", svc, err)
 		}
 		serviceCount++
 	}
@@ -99,18 +104,18 @@ func (s *JSONHTTPServer) startInternal(
 
 	// At least one service must be enabled
 	if serviceCount == 0 {
-		log.Error("not starting grpc gateway service; at least one service must be enabled")
+		s.logger.Error("not starting grpc gateway service; at least one service must be enabled")
 		return
 	}
 
-	log.With().Info("starting grpc gateway server", log.String("address", s.listener))
+	s.logger.With().Info("starting grpc gateway server", log.String("address", s.listener))
 	s.setServer(&http.Server{
 		Addr:    s.listener,
 		Handler: mux,
 	})
 
 	// This will block
-	log.Error("error from grpc http listener: %v", s.getServer().ListenAndServe())
+	s.logger.Error("error from grpc http listener: %v", s.getServer().ListenAndServe())
 }
 
 func (s *JSONHTTPServer) getServer() *http.Server {

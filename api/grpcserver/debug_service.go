@@ -21,6 +21,7 @@ import (
 // DebugService exposes global state data, output from the STF.
 type DebugService struct {
 	db       *sql.Database
+	logger   log.Logger
 	conState conservativeState
 	identity networkIdentity
 	oracle   oracle
@@ -32,9 +33,10 @@ func (d DebugService) RegisterService(server *Server) {
 }
 
 // NewDebugService creates a new grpc service using config data.
-func NewDebugService(db *sql.Database, conState conservativeState, host networkIdentity, oracle oracle) *DebugService {
+func NewDebugService(db *sql.Database, conState conservativeState, host networkIdentity, oracle oracle, lg log.Logger) *DebugService {
 	return &DebugService{
 		db:       db,
+		logger:   lg,
 		conState: conState,
 		identity: host,
 		oracle:   oracle,
@@ -43,7 +45,7 @@ func NewDebugService(db *sql.Database, conState conservativeState, host networkI
 
 // Accounts returns current counter and balance for all accounts.
 func (d DebugService) Accounts(_ context.Context, in *pb.AccountsRequest) (*pb.AccountsResponse, error) {
-	log.Info("GRPC DebugServices.Accounts")
+	d.logger.Info("GRPC DebugServices.Accounts")
 
 	var (
 		accts []*types.Account
@@ -55,7 +57,7 @@ func (d DebugService) Accounts(_ context.Context, in *pb.AccountsRequest) (*pb.A
 		accts, err = accounts.Snapshot(d.db, types.LayerID(in.Layer))
 	}
 	if err != nil {
-		log.Error("Failed to get all accounts from state: %s", err)
+		d.logger.Error("Failed to get all accounts from state: %s", err)
 		return nil, status.Errorf(codes.Internal, "error fetching accounts state")
 	}
 

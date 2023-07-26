@@ -28,6 +28,7 @@ import (
 	"github.com/spacemeshos/merkle-tree"
 	"github.com/spacemeshos/poet/shared"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"
@@ -483,8 +484,8 @@ func marshalProto(t *testing.T, msg proto.Message) string {
 var cfg = DefaultTestConfig()
 
 func launchServer(tb testing.TB, cfg Config, services ...ServiceAPI) func() {
-	grpcService := New(cfg.PublicListener)
-	jsonService := NewJSONHTTPServer(cfg.JSONListener)
+	grpcService := New(cfg.PublicListener, zaptest.NewLogger(tb).Named("grpc"))
+	jsonService := NewJSONHTTPServer(cfg.JSONListener, logtest.New(tb).WithName("grpc.JSON"))
 
 	// attach services
 	for _, svc := range services {
@@ -537,23 +538,20 @@ func getFreePort(optionalPort int) (int, error) {
 }
 
 func TestNewServersConfig(t *testing.T) {
-	logtest.SetupGlobal(t)
 	port1, err := getFreePort(0)
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
 	port2, err := getFreePort(0)
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
-	grpcService := New(fmt.Sprintf(":%d", port1))
-	jsonService := NewJSONHTTPServer(fmt.Sprintf(":%d", port2))
+	grpcService := New(fmt.Sprintf(":%d", port1), zaptest.NewLogger(t).Named("grpc"))
+	jsonService := NewJSONHTTPServer(fmt.Sprintf(":%d", port2), logtest.New(t).WithName("grpc.JSON"))
 
 	require.Contains(t, grpcService.Listener, strconv.Itoa(port1), "Expected same port")
 	require.Contains(t, jsonService.listener, strconv.Itoa(port2), "Expected same port")
 }
 
 func TestNodeService(t *testing.T) {
-	logtest.SetupGlobal(t)
-
 	ctrl := gomock.NewController(t)
 	syncer := NewMocksyncer(ctrl)
 	syncer.EXPECT().IsSynced(gomock.Any()).Return(false).AnyTimes()
@@ -566,7 +564,7 @@ func TestNodeService(t *testing.T) {
 
 	version := "v0.0.0"
 	build := "cafebabe"
-	grpcService := NewNodeService(ctx, peerCounter, meshAPIMock, genTime, syncer, version, build)
+	grpcService := NewNodeService(peerCounter, meshAPIMock, genTime, syncer, version, build, logtest.New(t).WithName("grpc.Node"))
 	t.Cleanup(launchServer(t, cfg, grpcService))
 
 	conn := dialGrpc(ctx, t, cfg.PublicListener)
@@ -578,7 +576,6 @@ func TestNodeService(t *testing.T) {
 		run  func(t *testing.T)
 	}{
 		{"Echo", func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			const message = "Hello World"
 			res, err := c.Echo(context.Background(), &pb.EchoRequest{
 				Msg: &pb.SimpleString{Value: message},
@@ -602,19 +599,16 @@ func TestNodeService(t *testing.T) {
 			require.Equal(t, "Must include `Msg`", grpcStatus.Message())
 		}},
 		{"Version", func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			res, err := c.Version(context.Background(), &empty.Empty{})
 			require.NoError(t, err)
 			require.Equal(t, version, res.VersionString.Value)
 		}},
 		{"Build", func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			res, err := c.Build(context.Background(), &empty.Empty{})
 			require.NoError(t, err)
 			require.Equal(t, build, res.BuildString.Value)
 		}},
 		{"Status", func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			// First do a mock checking during a genesis layer
 			// During genesis all layers should be set to current layer
 
@@ -657,8 +651,7 @@ func TestNodeService(t *testing.T) {
 }
 
 func TestGlobalStateService(t *testing.T) {
-	logtest.SetupGlobal(t)
-	svc := NewGlobalStateService(meshAPIMock, conStateAPI)
+	svc := NewGlobalStateService(meshAPIMock, conStateAPI, logtest.New(t).WithName("grpc.GlobalState"))
 	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -672,14 +665,12 @@ func TestGlobalStateService(t *testing.T) {
 		run  func(*testing.T)
 	}{
 		{"GlobalStateHash", func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			res, err := c.GlobalStateHash(context.Background(), &pb.GlobalStateHashRequest{})
 			require.NoError(t, err)
 			require.Equal(t, layerVerified.Uint32(), res.Response.Layer.Number)
 			require.Equal(t, stateRoot.Bytes(), res.Response.RootHash)
 		}},
 		{"Account", func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			res, err := c.Account(context.Background(), &pb.AccountRequest{
 				AccountId: &pb.AccountId{Address: addr1.String()},
 			})
@@ -691,13 +682,11 @@ func TestGlobalStateService(t *testing.T) {
 			require.Equal(t, uint64(accountCounter+1), res.AccountWrapper.StateProjected.Counter)
 		}},
 		{"AccountDataQuery_MissingFilter", func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			_, err := c.AccountDataQuery(context.Background(), &pb.AccountDataQueryRequest{})
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "`Filter` must be provided")
 		}},
 		{"AccountDataQuery_MissingFlags", func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			_, err := c.AccountDataQuery(context.Background(), &pb.AccountDataQueryRequest{
 				Filter: &pb.AccountDataFilter{
 					AccountId: &pb.AccountId{Address: addr1.String()},
@@ -707,7 +696,6 @@ func TestGlobalStateService(t *testing.T) {
 			require.Contains(t, err.Error(), "`Filter.AccountMeshDataFlags` must set at least one")
 		}},
 		{"AccountDataQuery_BadOffset", func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			res, err := c.AccountDataQuery(context.Background(), &pb.AccountDataQueryRequest{
 				MaxResults: uint32(1),
 				Offset:     math.MaxUint32,
@@ -723,7 +711,6 @@ func TestGlobalStateService(t *testing.T) {
 			require.Equal(t, 0, len(res.AccountItem))
 		}},
 		{"AccountDataQuery_ZeroMaxResults", func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			res, err := c.AccountDataQuery(context.Background(), &pb.AccountDataQueryRequest{
 				MaxResults: uint32(0),
 				Filter: &pb.AccountDataFilter{
@@ -738,7 +725,6 @@ func TestGlobalStateService(t *testing.T) {
 			require.Equal(t, 2, len(res.AccountItem))
 		}},
 		{"AccountDataQuery_OneResult", func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			res, err := c.AccountDataQuery(context.Background(), &pb.AccountDataQueryRequest{
 				MaxResults: uint32(1),
 				Filter: &pb.AccountDataFilter{
@@ -753,7 +739,6 @@ func TestGlobalStateService(t *testing.T) {
 			checkAccountDataQueryItemReward(t, res.AccountItem[0].Datum)
 		}},
 		{"AccountDataQuery", func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			res, err := c.AccountDataQuery(context.Background(), &pb.AccountDataQueryRequest{
 				Filter: &pb.AccountDataFilter{
 					AccountId: &pb.AccountId{Address: addr1.String()},
@@ -768,7 +753,6 @@ func TestGlobalStateService(t *testing.T) {
 			checkAccountDataQueryItemAccount(t, res.AccountItem[1].Datum)
 		}},
 		{"AppEventStream", func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			stream, err := c.AppEventStream(context.Background(), &pb.AppEventStreamRequest{})
 			// We expect to be able to open the stream but for it to fail upon the first request
 			require.NoError(t, err)
@@ -777,7 +761,6 @@ func TestGlobalStateService(t *testing.T) {
 			require.Equal(t, codes.Unimplemented, statusCode)
 		}},
 		{name: "AccountDataStream", run: func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			// common testing framework
 			generateRunFn := func(req *pb.AccountDataStreamRequest) func(*testing.T) {
 				return func(*testing.T) {
@@ -791,7 +774,6 @@ func TestGlobalStateService(t *testing.T) {
 			}
 			generateRunFnError := func(msg string, req *pb.AccountDataStreamRequest) func(*testing.T) {
 				return func(t *testing.T) {
-					logtest.SetupGlobal(t)
 					// there should be no error opening the stream
 					stream, err := c.AccountDataStream(context.Background(), req)
 					require.NoError(t, err, "unexpected error opening stream")
@@ -874,7 +856,6 @@ func TestGlobalStateService(t *testing.T) {
 			}
 		}},
 		{name: "GlobalStateStream", run: func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			// common testing framework
 			generateRunFn := func(req *pb.GlobalStateStreamRequest) func(*testing.T) {
 				return func(*testing.T) {
@@ -888,7 +869,6 @@ func TestGlobalStateService(t *testing.T) {
 			}
 			generateRunFnError := func(msg string, req *pb.GlobalStateStreamRequest) func(*testing.T) {
 				return func(t *testing.T) {
-					logtest.SetupGlobal(t)
 					// there should be no error opening the stream
 					stream, err := c.GlobalStateStream(context.Background(), req)
 					require.NoError(t, err, "unexpected error opening stream")
@@ -939,15 +919,13 @@ func TestGlobalStateService(t *testing.T) {
 }
 
 func TestSmesherService(t *testing.T) {
-	logtest.SetupGlobal(t)
-
 	ctrl := gomock.NewController(t)
 	postProvider := NewMockpostSetupProvider(ctrl)
 	postProvider.EXPECT().Config().Return(activation.DefaultPostConfig()).AnyTimes()
 	postProvider.EXPECT().Status().Return(&activation.PostSetupStatus{}).AnyTimes()
 	postProvider.EXPECT().Providers().Return(nil, nil).AnyTimes()
 	smeshingAPI := &SmeshingAPIMock{}
-	svc := NewSmesherService(postProvider, smeshingAPI, 10*time.Millisecond, activation.DefaultPostSetupOpts())
+	svc := NewSmesherService(postProvider, smeshingAPI, 10*time.Millisecond, activation.DefaultPostSetupOpts(), logtest.New(t).WithName("grpc.Smesher"))
 	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -956,20 +934,17 @@ func TestSmesherService(t *testing.T) {
 	c := pb.NewSmesherServiceClient(conn)
 
 	t.Run("IsSmeshing", func(t *testing.T) {
-		logtest.SetupGlobal(t)
 		res, err := c.IsSmeshing(context.Background(), &empty.Empty{})
 		require.NoError(t, err)
 		require.False(t, res.IsSmeshing, "expected IsSmeshing to be false")
 	})
 
 	t.Run("StartSmeshingMissingArgs", func(t *testing.T) {
-		logtest.SetupGlobal(t)
 		_, err := c.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{})
 		require.Equal(t, codes.InvalidArgument, status.Code(err))
 	})
 
 	t.Run("StartSmeshing", func(t *testing.T) {
-		logtest.SetupGlobal(t)
 		opts := &pb.PostSetupOpts{}
 		opts.DataDir = t.TempDir()
 		opts.NumUnits = 1
@@ -986,14 +961,12 @@ func TestSmesherService(t *testing.T) {
 	})
 
 	t.Run("StopSmeshing", func(t *testing.T) {
-		logtest.SetupGlobal(t)
 		res, err := c.StopSmeshing(context.Background(), &pb.StopSmeshingRequest{})
 		require.NoError(t, err)
 		require.Equal(t, int32(code.Code_OK), res.Status.Code)
 	})
 
 	t.Run("SmesherID", func(t *testing.T) {
-		logtest.SetupGlobal(t)
 		res, err := c.SmesherID(context.Background(), &empty.Empty{})
 		require.NoError(t, err)
 		require.NoError(t, err)
@@ -1001,7 +974,6 @@ func TestSmesherService(t *testing.T) {
 	})
 
 	t.Run("SetCoinbaseMissingArgs", func(t *testing.T) {
-		logtest.SetupGlobal(t)
 		_, err := c.SetCoinbase(context.Background(), &pb.SetCoinbaseRequest{})
 		require.Error(t, err)
 		statusCode := status.Code(err)
@@ -1009,7 +981,6 @@ func TestSmesherService(t *testing.T) {
 	})
 
 	t.Run("SetCoinbase", func(t *testing.T) {
-		logtest.SetupGlobal(t)
 		res, err := c.SetCoinbase(context.Background(), &pb.SetCoinbaseRequest{
 			Id: &pb.AccountId{Address: addr1.String()},
 		})
@@ -1018,7 +989,6 @@ func TestSmesherService(t *testing.T) {
 	})
 
 	t.Run("Coinbase", func(t *testing.T) {
-		logtest.SetupGlobal(t)
 		res, err := c.Coinbase(context.Background(), &empty.Empty{})
 		require.NoError(t, err)
 		addr, err := types.StringToAddress(res.AccountId.Address)
@@ -1027,7 +997,6 @@ func TestSmesherService(t *testing.T) {
 	})
 
 	t.Run("MinGas", func(t *testing.T) {
-		logtest.SetupGlobal(t)
 		_, err := c.MinGas(context.Background(), &empty.Empty{})
 		require.Error(t, err)
 		statusCode := status.Code(err)
@@ -1035,7 +1004,6 @@ func TestSmesherService(t *testing.T) {
 	})
 
 	t.Run("SetMinGas", func(t *testing.T) {
-		logtest.SetupGlobal(t)
 		_, err := c.SetMinGas(context.Background(), &pb.SetMinGasRequest{})
 		require.Error(t, err)
 		statusCode := status.Code(err)
@@ -1043,13 +1011,11 @@ func TestSmesherService(t *testing.T) {
 	})
 
 	t.Run("PostSetupComputeProviders", func(t *testing.T) {
-		logtest.SetupGlobal(t)
 		_, err := c.PostSetupProviders(context.Background(), &pb.PostSetupProvidersRequest{Benchmark: false})
 		require.NoError(t, err)
 	})
 
 	t.Run("PostSetupStatusStream", func(t *testing.T) {
-		logtest.SetupGlobal(t)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		stream, err := c.PostSetupStatusStream(ctx, &empty.Empty{})
@@ -1066,14 +1032,12 @@ func TestSmesherService(t *testing.T) {
 		require.ErrorContains(t, err, context.Canceled.Error())
 	})
 	t.Run("UpdatePoetServer", func(t *testing.T) {
-		logtest.SetupGlobal(t)
 		smeshingAPI.UpdatePoETErr = nil
 		res, err := c.UpdatePoetServers(context.Background(), &pb.UpdatePoetServersRequest{Urls: []string{"test"}})
 		require.NoError(t, err)
 		require.EqualValues(t, res.Status.Code, code.Code_OK)
 	})
 	t.Run("UpdatePoetServerUnavailable", func(t *testing.T) {
-		logtest.SetupGlobal(t)
 		smeshingAPI.UpdatePoETErr = activation.ErrPoetServiceUnstable
 		urls := []string{"test"}
 		res, err := c.UpdatePoetServers(context.Background(), &pb.UpdatePoetServersRequest{Urls: urls})
@@ -1083,13 +1047,12 @@ func TestSmesherService(t *testing.T) {
 }
 
 func TestMeshService(t *testing.T) {
-	logtest.SetupGlobal(t)
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
 	genesis := time.Unix(genTimeUnix, 0)
 	genTime.EXPECT().GenesisTime().Return(genesis)
 	genTime.EXPECT().CurrentLayer().Return(layerCurrent).AnyTimes()
-	grpcService := NewMeshService(meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
+	grpcService := NewMeshService(meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal, logtest.New(t).WithName("grpc.Mesh"))
 	t.Cleanup(launchServer(t, cfg, grpcService))
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -1103,43 +1066,36 @@ func TestMeshService(t *testing.T) {
 		run  func(*testing.T)
 	}{
 		{"GenesisTime", func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			response, err := c.GenesisTime(context.Background(), &pb.GenesisTimeRequest{})
 			require.NoError(t, err)
 			require.Equal(t, uint64(genesis.Unix()), response.Unixtime.Value)
 		}},
 		{"CurrentLayer", func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			response, err := c.CurrentLayer(context.Background(), &pb.CurrentLayerRequest{})
 			require.NoError(t, err)
 			require.Equal(t, layerCurrent.Uint32(), response.Layernum.Number)
 		}},
 		{"CurrentEpoch", func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			response, err := c.CurrentEpoch(context.Background(), &pb.CurrentEpochRequest{})
 			require.NoError(t, err)
 			require.Equal(t, layerCurrent.GetEpoch().Uint32(), response.Epochnum.Number)
 		}},
 		{"GenesisID", func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			response, err := c.GenesisID(context.Background(), &pb.GenesisIDRequest{})
 			require.NoError(t, err)
 			require.Equal(t, genesisID.Bytes(), response.GenesisId)
 		}},
 		{"LayerDuration", func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			response, err := c.LayerDuration(context.Background(), &pb.LayerDurationRequest{})
 			require.NoError(t, err)
 			require.Equal(t, layerDuration, time.Duration(response.Duration.Value)*time.Second)
 		}},
 		{"MaxTransactionsPerSecond", func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			response, err := c.MaxTransactionsPerSecond(context.Background(), &pb.MaxTransactionsPerSecondRequest{})
 			require.NoError(t, err)
 			require.Equal(t, uint64(layerAvgSize*txsPerProposal/layerDuration.Seconds()), response.MaxTxsPerSecond.Value)
 		}},
 		{"AccountMeshDataQuery", func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			subtests := []struct {
 				name string
 				run  func(*testing.T)
@@ -1149,7 +1105,6 @@ func TestMeshService(t *testing.T) {
 					// query is valid but MaxResults is 0 so expect no results
 					name: "no_inputs",
 					run: func(t *testing.T) {
-						logtest.SetupGlobal(t)
 						_, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{})
 						require.Error(t, err, "expected an error")
 						require.Contains(t, err.Error(), "`Filter` must be provided")
@@ -1160,7 +1115,6 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "MinLayer_too_high",
 					run: func(t *testing.T) {
-						logtest.SetupGlobal(t)
 						_, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
 							MinLayer: &pb.LayerNumber{Number: layerCurrent.Add(1).Uint32()},
 						})
@@ -1174,7 +1128,6 @@ func TestMeshService(t *testing.T) {
 					// This does not produce an error but we expect no results
 					name: "Offset_too_high",
 					run: func(t *testing.T) {
-						logtest.SetupGlobal(t)
 						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
 							Filter: &pb.AccountMeshDataFilter{
 								AccountId: &pb.AccountId{
@@ -1192,7 +1145,6 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "no_filter",
 					run: func(t *testing.T) {
-						logtest.SetupGlobal(t)
 						_, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(10),
 						})
@@ -1205,7 +1157,6 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "empty_filter",
 					run: func(t *testing.T) {
-						logtest.SetupGlobal(t)
 						_, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(10),
 							Filter:     &pb.AccountMeshDataFilter{},
@@ -1219,7 +1170,6 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "filter_with_empty_AccountId",
 					run: func(t *testing.T) {
-						logtest.SetupGlobal(t)
 						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(10),
 							Filter: &pb.AccountMeshDataFilter{
@@ -1237,7 +1187,6 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "filter_with_valid_AccountId",
 					run: func(t *testing.T) {
-						logtest.SetupGlobal(t)
 						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(10),
 							Filter: &pb.AccountMeshDataFilter{
@@ -1253,7 +1202,6 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "filter_with_valid_AccountId_and_AccountMeshDataFlags_zero",
 					run: func(t *testing.T) {
-						logtest.SetupGlobal(t)
 						_, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(10),
 							Filter: &pb.AccountMeshDataFilter{
@@ -1270,7 +1218,6 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "filter_with_valid_AccountId_and_AccountMeshDataFlags_tx_only",
 					run: func(t *testing.T) {
-						logtest.SetupGlobal(t)
 						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(10),
 							Filter: &pb.AccountMeshDataFilter{
@@ -1287,7 +1234,6 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "filter_with_valid_AccountId_and_AccountMeshDataFlags_activations_only",
 					run: func(t *testing.T) {
-						logtest.SetupGlobal(t)
 						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(10),
 							Filter: &pb.AccountMeshDataFilter{
@@ -1304,7 +1250,6 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "filter_with_valid_AccountId_and_AccountMeshDataFlags_all",
 					run: func(t *testing.T) {
-						logtest.SetupGlobal(t)
 						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
 							// Zero means unlimited
 							MaxResults: uint32(0),
@@ -1325,7 +1270,6 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "max_results",
 					run: func(t *testing.T) {
-						logtest.SetupGlobal(t)
 						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(1),
 							Filter: &pb.AccountMeshDataFilter{
@@ -1344,7 +1288,6 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "max_results_page_2",
 					run: func(t *testing.T) {
-						logtest.SetupGlobal(t)
 						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(1),
 							Offset:     uint32(1),
@@ -1369,7 +1312,6 @@ func TestMeshService(t *testing.T) {
 			}
 		}},
 		{name: "AccountMeshDataStream", run: func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			// common testing framework
 			generateRunFn := func(req *pb.AccountMeshDataStreamRequest) func(*testing.T) {
 				return func(*testing.T) {
@@ -1383,7 +1325,6 @@ func TestMeshService(t *testing.T) {
 			}
 			generateRunFnError := func(msg string, req *pb.AccountMeshDataStreamRequest) func(*testing.T) {
 				return func(t *testing.T) {
-					logtest.SetupGlobal(t)
 					// there should be no error opening the stream
 					stream, err := c.AccountMeshDataStream(context.Background(), req)
 					require.NoError(t, err, "unexpected error opening stream")
@@ -1466,10 +1407,8 @@ func TestMeshService(t *testing.T) {
 			}
 		}},
 		{"LayersQuery", func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			generateRunFn := func(numResults int, req *pb.LayersQueryRequest) func(*testing.T) {
 				return func(t *testing.T) {
-					logtest.SetupGlobal(t)
 					res, err := c.LayersQuery(context.Background(), req)
 					require.NoError(t, err, "query returned an unexpected error")
 					require.Equal(t, numResults, len(res.Layer), "unexpected number of layer results")
@@ -1477,7 +1416,6 @@ func TestMeshService(t *testing.T) {
 			}
 			generateRunFnError := func(msg string, req *pb.LayersQueryRequest) func(*testing.T) {
 				return func(t *testing.T) {
-					logtest.SetupGlobal(t)
 					_, err := c.LayersQuery(context.Background(), req)
 					require.Error(t, err, "expected query to produce an error")
 					require.Contains(t, err.Error(), msg, "expected error to contain string")
@@ -1577,7 +1515,6 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "comprehensive",
 					run: func(t *testing.T) {
-						logtest.SetupGlobal(t)
 						req := &pb.LayersQueryRequest{
 							StartLayer: &pb.LayerNumber{Number: layerFirst.Uint32()},
 							EndLayer:   &pb.LayerNumber{Number: layerLatest.Uint32()},
@@ -1615,7 +1552,6 @@ func TestMeshService(t *testing.T) {
 }
 
 func TestTransactionServiceSubmitUnsync(t *testing.T) {
-	logtest.SetupGlobal(t)
 	req := require.New(t)
 
 	ctrl := gomock.NewController(t)
@@ -1626,7 +1562,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	txHandler := NewMocktxValidator(ctrl)
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(nil)
 
-	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler)
+	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler, logtest.New(t).WithName("grpc.Transactions"))
 	t.Cleanup(launchServer(t, cfg, grpcService))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -1655,7 +1591,6 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 }
 
 func TestTransactionServiceSubmitInvalidTx(t *testing.T) {
-	logtest.SetupGlobal(t)
 	req := require.New(t)
 
 	ctrl := gomock.NewController(t)
@@ -1665,7 +1600,7 @@ func TestTransactionServiceSubmitInvalidTx(t *testing.T) {
 	txHandler := NewMocktxValidator(ctrl)
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(errors.New("failed validation"))
 
-	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler)
+	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler, logtest.New(t).WithName("grpc.Transactions"))
 	t.Cleanup(launchServer(t, cfg, grpcService))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -1687,8 +1622,6 @@ func TestTransactionServiceSubmitInvalidTx(t *testing.T) {
 }
 
 func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
-	logtest.SetupGlobal(t)
-
 	numTxs := 20
 
 	ctrl := gomock.NewController(t)
@@ -1699,7 +1632,7 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 	txHandler := NewMocktxValidator(ctrl)
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(nil).Times(numTxs)
 
-	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler)
+	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler, logtest.New(t).WithName("grpc.Transactions"))
 	t.Cleanup(launchServer(t, cfg, grpcService))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -1718,8 +1651,6 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 }
 
 func TestTransactionService(t *testing.T) {
-	logtest.SetupGlobal(t)
-
 	ctrl := gomock.NewController(t)
 	syncer := NewMocksyncer(ctrl)
 	syncer.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
@@ -1728,7 +1659,7 @@ func TestTransactionService(t *testing.T) {
 	txHandler := NewMocktxValidator(ctrl)
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
-	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler)
+	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler, logtest.New(t).WithName("grpc.Transactions"))
 	t.Cleanup(launchServer(t, cfg, grpcService))
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -1742,7 +1673,6 @@ func TestTransactionService(t *testing.T) {
 		run  func(*testing.T)
 	}{
 		{"SubmitSpawnTransaction", func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			res, err := c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
 				Transaction: globalTx.Raw,
 			})
@@ -1752,14 +1682,12 @@ func TestTransactionService(t *testing.T) {
 			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.Txstate.State)
 		}},
 		{"TransactionsState_MissingTransactionId", func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			_, err := c.TransactionsState(context.Background(), &pb.TransactionsStateRequest{})
 			statusCode := status.Code(err)
 			require.Equal(t, codes.InvalidArgument, statusCode)
 			require.Contains(t, err.Error(), "`TransactionId` must include")
 		}},
 		{"TransactionsState_TransactionIdZeroLen", func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			_, err := c.TransactionsState(context.Background(), &pb.TransactionsStateRequest{
 				TransactionId: []*pb.TransactionId{},
 			})
@@ -1768,7 +1696,6 @@ func TestTransactionService(t *testing.T) {
 			require.Contains(t, err.Error(), "`TransactionId` must include")
 		}},
 		{"TransactionsState_StateOnly", func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			req := &pb.TransactionsStateRequest{}
 			req.TransactionId = append(req.TransactionId, &pb.TransactionId{
 				Id: globalTx.ID.Bytes(),
@@ -1781,7 +1708,6 @@ func TestTransactionService(t *testing.T) {
 			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_PROCESSED, res.TransactionsState[0].State)
 		}},
 		{"TransactionsState_All", func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			req := &pb.TransactionsStateRequest{}
 			req.IncludeTransactions = true
 			req.TransactionId = append(req.TransactionId, &pb.TransactionId{
@@ -1797,7 +1723,6 @@ func TestTransactionService(t *testing.T) {
 			checkTransaction(t, res.Transactions[0])
 		}},
 		{"TransactionsStateStream_MissingTransactionId", func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			req := &pb.TransactionsStateStreamRequest{}
 			stream, err := c.TransactionsStateStream(context.Background(), req)
 			require.NoError(t, err)
@@ -1807,7 +1732,6 @@ func TestTransactionService(t *testing.T) {
 			require.Contains(t, err.Error(), "`TransactionId` must include")
 		}},
 		{"TransactionsStateStream_TransactionIdZeroLen", func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			req := &pb.TransactionsStateStreamRequest{
 				TransactionId: []*pb.TransactionId{},
 			}
@@ -1819,7 +1743,6 @@ func TestTransactionService(t *testing.T) {
 			require.Contains(t, err.Error(), "`TransactionId` must include")
 		}},
 		{"TransactionsStateStream_StateOnly", func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			// Set up the reporter
 			req := &pb.TransactionsStateStreamRequest{}
 			req.TransactionId = append(req.TransactionId, &pb.TransactionId{
@@ -1845,7 +1768,6 @@ func TestTransactionService(t *testing.T) {
 			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_PROCESSED, res.TransactionState.State)
 		}},
 		{"TransactionsStateStream_All", func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			events.CloseEventReporter()
 			events.InitializeReporter()
 			t.Cleanup(events.CloseEventReporter)
@@ -1874,7 +1796,6 @@ func TestTransactionService(t *testing.T) {
 		}},
 		// Submit a tx, then receive it over the stream
 		{"TransactionsState_SubmitThenStream", func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			events.CloseEventReporter()
 			events.InitializeReporter()
 			t.Cleanup(events.CloseEventReporter)
@@ -1933,7 +1854,6 @@ func TestTransactionService(t *testing.T) {
 			checkTransaction(t, response.Transaction)
 		}},
 		{"TransactionsStateStream_ManySubscribers", func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			events.CloseEventReporter()
 			events.InitializeReporter()
 			t.Cleanup(events.CloseEventReporter)
@@ -1970,7 +1890,6 @@ func TestTransactionService(t *testing.T) {
 			}
 		}},
 		{"TransactionsStateStream_NoEventReceiving", func(t *testing.T) {
-			logtest.SetupGlobal(t)
 			events.CloseEventReporter()
 			events.InitializeReporter()
 			t.Cleanup(events.CloseEventReporter)
@@ -2073,14 +1992,13 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 }
 
 func TestAccountMeshDataStream_comprehensive(t *testing.T) {
-	logtest.SetupGlobal(t)
 	events.CloseEventReporter()
 	events.InitializeReporter()
 	t.Cleanup(events.CloseEventReporter)
 
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
-	grpcService := NewMeshService(meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
+	grpcService := NewMeshService(meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal, logtest.New(t).WithName("grpc.Mesh"))
 	t.Cleanup(launchServer(t, cfg, grpcService))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -2131,12 +2049,11 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	logtest.SetupGlobal(t)
 	events.CloseEventReporter()
 	events.InitializeReporter()
 	t.Cleanup(events.CloseEventReporter)
 
-	svc := NewGlobalStateService(meshAPIMock, conStateAPI)
+	svc := NewGlobalStateService(meshAPIMock, conStateAPI, logtest.New(t).WithName("grpc.GlobalState"))
 	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -2190,12 +2107,11 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 }
 
 func TestGlobalStateStream_comprehensive(t *testing.T) {
-	logtest.SetupGlobal(t)
 	events.CloseEventReporter()
 	events.InitializeReporter()
 	t.Cleanup(events.CloseEventReporter)
 
-	svc := NewGlobalStateService(meshAPIMock, conStateAPI)
+	svc := NewGlobalStateService(meshAPIMock, conStateAPI, logtest.New(t).WithName("grpc.GlobalState"))
 	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -2250,14 +2166,13 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	logtest.SetupGlobal(t)
 	events.CloseEventReporter()
 	events.InitializeReporter()
 	t.Cleanup(events.CloseEventReporter)
 
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
-	grpcService := NewMeshService(meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
+	grpcService := NewMeshService(meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal, logtest.New(t).WithName("grpc.Mesh"))
 	t.Cleanup(launchServer(t, cfg, grpcService))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -2388,8 +2303,6 @@ func checkGlobalStateDataGlobalState(t *testing.T, dataItem any) {
 }
 
 func TestMultiService(t *testing.T) {
-	logtest.SetupGlobal(t)
-
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -2400,8 +2313,8 @@ func TestMultiService(t *testing.T) {
 	genTime := NewMockgenesisTimeAPI(ctrl)
 	genesis := time.Unix(genTimeUnix, 0)
 	genTime.EXPECT().GenesisTime().Return(genesis)
-	svc1 := NewNodeService(ctx, peerCounter, meshAPIMock, genTime, syncer, "v0.0.0", "cafebabe")
-	svc2 := NewMeshService(meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
+	svc1 := NewNodeService(peerCounter, meshAPIMock, genTime, syncer, "v0.0.0", "cafebabe", logtest.New(t).WithName("grpc.Node"))
+	svc2 := NewMeshService(meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal, logtest.New(t).WithName("grpc.Mesh"))
 	shutDown := launchServer(t, cfg, svc1, svc2)
 	t.Cleanup(shutDown)
 
@@ -2436,7 +2349,6 @@ func TestMultiService(t *testing.T) {
 }
 
 func TestJsonApi(t *testing.T) {
-	logtest.SetupGlobal(t)
 	const message = "hello world!"
 
 	// we cannot start the gateway service without enabling at least one service
@@ -2456,8 +2368,8 @@ func TestJsonApi(t *testing.T) {
 	genTime := NewMockgenesisTimeAPI(ctrl)
 	genesis := time.Unix(genTimeUnix, 0)
 	genTime.EXPECT().GenesisTime().Return(genesis)
-	svc1 := NewNodeService(context.Background(), peerCounter, meshAPIMock, genTime, syncer, "v0.0.0", "cafebabe")
-	svc2 := NewMeshService(meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
+	svc1 := NewNodeService(peerCounter, meshAPIMock, genTime, syncer, "v0.0.0", "cafebabe", logtest.New(t).WithName("grpc.Node"))
+	svc2 := NewMeshService(meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal, logtest.New(t).WithName("grpc.Mesh"))
 	t.Cleanup(launchServer(t, cfg, svc1, svc2))
 	time.Sleep(time.Second)
 
@@ -2478,12 +2390,11 @@ func TestJsonApi(t *testing.T) {
 }
 
 func TestDebugService(t *testing.T) {
-	logtest.SetupGlobal(t)
 	ctrl := gomock.NewController(t)
 	identity := NewMocknetworkIdentity(ctrl)
 	mOracle := NewMockoracle(ctrl)
 	db := sql.InMemory()
-	svc := NewDebugService(db, conStateAPI, identity, mOracle)
+	svc := NewDebugService(db, conStateAPI, identity, mOracle, logtest.New(t).WithName("grpc.Debug"))
 	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -2581,13 +2492,12 @@ func TestDebugService(t *testing.T) {
 }
 
 func TestEventsReceived(t *testing.T) {
-	logtest.SetupGlobal(t)
 	events.CloseEventReporter()
 	events.InitializeReporter()
 	t.Cleanup(events.CloseEventReporter)
 
-	txService := NewTransactionService(sql.InMemory(), nil, meshAPIMock, conStateAPI, nil, nil)
-	gsService := NewGlobalStateService(meshAPIMock, conStateAPI)
+	txService := NewTransactionService(sql.InMemory(), nil, meshAPIMock, conStateAPI, nil, nil, logtest.New(t).WithName("grpc.Transactions"))
+	gsService := NewGlobalStateService(meshAPIMock, conStateAPI, logtest.New(t).WithName("grpc.GlobalState"))
 	t.Cleanup(launchServer(t, cfg, txService, gsService))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -2660,13 +2570,12 @@ func TestEventsReceived(t *testing.T) {
 }
 
 func TestTransactionsRewards(t *testing.T) {
-	logtest.SetupGlobal(t)
 	req := require.New(t)
 	events.CloseEventReporter()
 	events.InitializeReporter()
 	t.Cleanup(events.CloseEventReporter)
 
-	t.Cleanup(launchServer(t, cfg, NewGlobalStateService(meshAPIMock, conStateAPI)))
+	t.Cleanup(launchServer(t, cfg, NewGlobalStateService(meshAPIMock, conStateAPI, logtest.New(t).WithName("grpc.GlobalState"))))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	t.Cleanup(cancel)
@@ -2724,7 +2633,6 @@ func TestTransactionsRewards(t *testing.T) {
 }
 
 func TestVMAccountUpdates(t *testing.T) {
-	logtest.SetupGlobal(t)
 	events.CloseEventReporter()
 	events.InitializeReporter()
 
@@ -2733,7 +2641,7 @@ func TestVMAccountUpdates(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	svm := vm.New(db, vm.WithLogger(logtest.New(t)))
-	t.Cleanup(launchServer(t, cfg, NewGlobalStateService(nil, txs.NewConservativeState(svm, db))))
+	t.Cleanup(launchServer(t, cfg, NewGlobalStateService(nil, txs.NewConservativeState(svm, db), logtest.New(t).WithName("grpc.GlobalState"))))
 
 	keys := make([]*signing.EdSigner, 10)
 	accounts := make([]types.Account, len(keys))
@@ -2806,11 +2714,9 @@ func TestVMAccountUpdates(t *testing.T) {
 }
 
 func TestMeshService_EpochStream(t *testing.T) {
-	logtest.SetupGlobal(t)
-
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
-	srv := NewMeshService(meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
+	srv := NewMeshService(meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal, logtest.New(t).WithName("grpc.Mesh"))
 	t.Cleanup(launchServer(t, cfg, srv))
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)

@@ -60,8 +60,6 @@ var (
 )
 
 // GetLogger gets logger.
-//
-// Deprecated: global logger is deprecated.
 func GetLogger() Log {
 	mu.RLock()
 	defer mu.RUnlock()
@@ -70,8 +68,6 @@ func GetLogger() Log {
 }
 
 // SetLogger sets logger.
-//
-// Deprecated: global logger is deprecated.
 func SetLogger(logger Log) {
 	mu.Lock()
 	defer mu.Unlock()
@@ -80,8 +76,6 @@ func SetLogger(logger Log) {
 }
 
 // SetupGlobal overwrites global logger.
-//
-// Deprecated: global logger is deprecated.
 func SetupGlobal(logger Log) {
 	SetLogger(NewFromLog(logger.logger.Named(mainLoggerName)))
 }
@@ -138,50 +132,31 @@ func NewFromLog(l *zap.Logger) Log {
 // public wrappers abstracting away logging lib impl
 
 // Info prints formatted info level log message.
-//
-// Deprecated: global logger is deprecated.
 func Info(msg string, args ...any) {
 	GetLogger().Info(msg, args...)
 }
 
 // Debug prints formatted debug level log message.
-//
-// Deprecated: global logger is deprecated.
 func Debug(msg string, args ...any) {
 	GetLogger().Debug(msg, args...)
 }
 
-// Error prints formatted error level log message.
-//
-// Deprecated: global logger is deprecated.
-func Error(msg string, args ...any) {
-	GetLogger().Error(msg, args...)
-}
-
 // Warning prints formatted warning level log message.
-//
-// Deprecated: global logger is deprecated.
 func Warning(msg string, args ...any) {
 	GetLogger().Warning(msg, args...)
 }
 
 // Fatal prints formatted error level log message.
-//
-// Deprecated: global logger is deprecated.
 func Fatal(msg string, args ...any) {
 	GetLogger().Fatal(msg, args...)
 }
 
 // With returns a FieldLogger which you can append fields to.
-//
-// Deprecated: global logger is deprecated.
 func With() FieldLogger {
 	return FieldLogger{GetLogger().logger, GetLogger().name}
 }
 
 // Panic writes the log message and then panics.
-//
-// Deprecated: global logger is deprecated.
 func Panic(msg string, args ...any) {
 	GetLogger().Panic(msg, args...)
 }

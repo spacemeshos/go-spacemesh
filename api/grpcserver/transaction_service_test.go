@@ -21,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
@@ -47,7 +48,7 @@ func TestTransactionService_StreamResults(t *testing.T) {
 		return nil
 	}))
 
-	svc := NewTransactionService(db, nil, nil, nil, nil, nil)
+	svc := NewTransactionService(db, nil, nil, nil, nil, nil, logtest.New(t).WithName("grpc.Transactions"))
 	t.Cleanup(launchServer(t, cfg, svc))
 
 	conn := dialGrpc(ctx, t, cfg.PublicListener)
@@ -162,7 +163,7 @@ func BenchmarkStreamResults(b *testing.B) {
 	}
 	require.NoError(b, tx.Commit())
 	require.NoError(b, tx.Release())
-	svc := NewTransactionService(db, nil, nil, nil, nil, nil)
+	svc := NewTransactionService(db, nil, nil, nil, nil, nil, logtest.New(b).WithName("grpc.Transactions"))
 	b.Cleanup(launchServer(b, cfg, svc))
 
 	conn := dialGrpc(ctx, b, cfg.PublicListener)
@@ -219,7 +220,7 @@ func TestParseTransactions(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	t.Cleanup(cancel)
 	vminst := vm.New(db)
-	t.Cleanup(launchServer(t, cfg, NewTransactionService(db, nil, nil, txs.NewConservativeState(vminst, db), nil, nil)))
+	t.Cleanup(launchServer(t, cfg, NewTransactionService(db, nil, nil, txs.NewConservativeState(vminst, db), nil, nil, logtest.New(t).WithName("grpc.Transactions"))))
 	var (
 		conn     = dialGrpc(ctx, t, cfg.PublicListener)
 		client   = pb.NewTransactionServiceClient(conn)

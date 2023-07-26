@@ -28,13 +28,13 @@ const (
 
 // AdminService exposes endpoints for node administration.
 type AdminService struct {
-	logger  log.Log
+	logger  log.Logger
 	db      *sql.Database
 	dataDir string
 }
 
 // NewAdminService creates a new admin grpc service.
-func NewAdminService(db *sql.Database, dataDir string, lg log.Log) *AdminService {
+func NewAdminService(db *sql.Database, dataDir string, lg log.Logger) *AdminService {
 	return &AdminService{
 		logger:  lg,
 		db:      db,
