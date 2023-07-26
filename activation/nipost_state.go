@@ -64,6 +64,9 @@ func read(path string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get file info %s: %w", path, err)
 	}
+	if fInfo.Size() < crc64.Size {
+		return nil, fmt.Errorf("file %s is too small", path)
+	}
 
 	data := make([]byte, fInfo.Size()-crc64.Size)
 	checksum := crc64.New(crc64.MakeTable(crc64.ISO))
@@ -150,6 +153,14 @@ func loadBuilderState(dir string) (*types.NIPostBuilderState, error) {
 	return &state, nil
 }
 
+func discardBuilderState(dir string) error {
+	filename := filepath.Join(dir, builderFilename)
+	if err := os.Remove(filename); err != nil {
+		return fmt.Errorf("discarding nipost builder state: %w", err)
+	}
+	return nil
+}
+
 func savePost(dir string, post *types.Post) error {
 	if err := save(filepath.Join(dir, postFilename), post); err != nil {
 		return fmt.Errorf("saving post: %w", err)
@@ -163,4 +174,12 @@ func loadPost(dir string) (*types.Post, error) {
 		return nil, fmt.Errorf("loading post: %w", err)
 	}
 	return &post, nil
+}
+
+func discardPost(dir string) error {
+	filename := filepath.Join(dir, postFilename)
+	if err := os.Remove(filename); err != nil {
+		return fmt.Errorf("discarding post: %w", err)
+	}
+	return nil
 }

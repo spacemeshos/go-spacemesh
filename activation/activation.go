@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"sync"
 	"time"
@@ -251,6 +252,19 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 			b.log.With().Error("failed to delete post files", log.Err(err))
 			return err
 		}
+		if err := discardBuilderState(b.nipostBuilder.DataDir()); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			b.log.With().Error("failed to delete builder state", log.Err(err))
+			return err
+		}
+		if err := discardNipostChallenge(b.nipostBuilder.DataDir()); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			b.log.With().Error("failed to delete nipost challenge", log.Err(err))
+			return err
+		}
+		if err := discardPost(b.nipostBuilder.DataDir()); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			b.log.With().Error("failed to delete post", log.Err(err))
+			return err
+		}
+
 		return nil
 	default:
 		return fmt.Errorf("failed to stop post data creation session: %w", err)
@@ -320,13 +334,19 @@ func (b *Builder) verifyInitialPost(ctx context.Context, post *types.Post, metad
 	if err != nil {
 		b.log.With().Panic("failed to fetch commitment ATX ID.", log.Err(err))
 	}
-	if err := b.validator.Post(ctx, types.EpochID(0), b.nodeID, commitmentAtxId, post, metadata, b.postSetupProvider.LastOpts().NumUnits); err != nil {
+	err = b.validator.Post(ctx, types.EpochID(0), b.nodeID, commitmentAtxId, post, metadata, b.postSetupProvider.LastOpts().NumUnits)
+	switch {
+	case errors.Is(err, context.Canceled):
+		// If the context was canceled, we don't want to emit or log errors just propagate the cancellation signal.
+		return err
+	case err != nil:
 		events.EmitInvalidPostProof()
 		b.log.With().Fatal("initial POST proof is invalid. Probably the initialized POST data is corrupted. Please verify the data with postcli and regenerate the corrupted files.", log.Err(err))
 		return err
+	default:
+		b.initialPost = post
+		return nil
 	}
-	b.initialPost = post
-	return nil
 }
 
 func (b *Builder) receivePendingPoetClients() *[]PoetProvingServiceClient {
@@ -529,9 +549,11 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 
 	challenge, err := b.loadChallenge()
 	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			logger.With().Warning("failed to load atx challenge", log.Err(err))
+		}
 		logger.With().Info("building new atx challenge",
 			log.Stringer("current_epoch", b.currentEpoch()),
-			log.Err(err),
 		)
 		challenge, err = b.buildNIPostChallenge(ctx)
 		if err != nil {

@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -23,10 +24,11 @@ import (
 
 func MainnetConfig() Config {
 	var postPowDifficulty activation.PowDifficulty
-	if err := postPowDifficulty.UnmarshalText([]byte("00037ec8ec25e6d2c00000000000000000000000000000000000000000000000")); err != nil {
+	if err := postPowDifficulty.UnmarshalText([]byte("000dfb23b0979b4b000000000000000000000000000000000000000000000000")); err != nil {
 		panic(err)
 	}
-	p2pconfig := p2p.DefaultConfig()
+
+  p2pconfig := p2p.DefaultConfig()
 	p2pconfig.Bootnodes = []string{
 		"/dns4/mainnet-bootnode-0.spacemesh.network/tcp/5000/p2p/12D3KooWPStnitMbLyWAGr32gHmPr538mT658Thp6zTUujZt3LRf",
 		"/dns4/mainnet-bootnode-1.spacemesh.network/tcp/5000/p2p/12D3KooWJubSzXMJ6f1Fd1PgAFvuVeGFAsGe6tamH1733x4524gb",
@@ -39,12 +41,19 @@ func MainnetConfig() Config {
 		"/dns4/mainnet-bootnode-8.spacemesh.network/tcp/5000/p2p/12D3KooWFYv99aGbtXnZQy6UZxyf72NpkWJp3K4HS8Py35WhKtzE",
 		"/dns4/mainnet-bootnode-9.spacemesh.network/tcp/5000/p2p/12D3KooWRQ9VPotEBjmAxBeTnnLqQgXLi1vvt4nMwo5E3Smt5bXP",
 	}
+
+	smeshing := DefaultSmeshingConfig()
+	smeshing.ProvingOpts.Nonces = 288
+	smeshing.ProvingOpts.Threads = uint(runtime.NumCPU() * 3 / 4)
+	if smeshing.ProvingOpts.Threads < 1 {
+		smeshing.ProvingOpts.Threads = 1
+	}
+
 	return Config{
 		BaseConfig: BaseConfig{
 			DataDirParent:       defaultDataDir,
 			FileLock:            filepath.Join(os.TempDir(), "spacemesh.lock"),
 			MetricsPort:         1010,
-			MetricsPushPeriod:   60,
 			DatabaseConnections: 16,
 			NetworkHRP:          "sm",
 
@@ -128,7 +137,7 @@ func MainnetConfig() Config {
 		P2P:      p2pconfig,
 		API:      grpcserver.DefaultConfig(),
 		TIME:     timeConfig.DefaultConfig(),
-		SMESHING: DefaultSmeshingConfig(),
+		SMESHING: smeshing,
 		FETCH:    fetch.DefaultConfig(),
 		LOGGING:  defaultLoggingConfig(),
 		Sync:     syncer.DefaultConfig(),
