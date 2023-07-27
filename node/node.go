@@ -534,7 +534,7 @@ func (app *App) SetLogLevel(name, loglevel string) error {
 	return nil
 }
 
-func (app *App) initServices(ctx context.Context, poetClients []activation.PoetProvingServiceClient) error {
+func (app *App) initServices(ctx context.Context) error {
 	vrfSigner, err := app.edSgn.VRFSigner()
 	if err != nil {
 		return fmt.Errorf("could not create vrf signer: %w", err)
@@ -797,11 +797,11 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		app.log.Panic("failed to create post setup manager: %v", err)
 	}
 
-	nipostBuilder := activation.NewNIPostBuilder(
+	nipostBuilder, err := activation.NewNIPostBuilder(
 		app.edSgn.NodeID(),
 		postSetupMgr,
-		poetClients,
 		poetDb,
+		app.Config.PoETServers,
 		app.Config.SMESHING.Opts.DataDir,
 		app.addLogger(NipostBuilderLogger, lg),
 		app.edSgn,
@@ -809,6 +809,9 @@ func (app *App) initServices(ctx context.Context, poetClients []activation.PoetP
 		app.clock,
 		activation.WithNipostValidator(app.validator),
 	)
+	if err != nil {
+		app.log.Panic("failed to create nipost builder: %v", err)
+	}
 
 	var coinbaseAddr types.Address
 	if app.Config.SMESHING.Start {
@@ -1332,15 +1335,6 @@ func (app *App) Start(ctx context.Context) error {
 
 	lg := logger.Named(app.edSgn.NodeID().ShortString()).WithFields(app.edSgn.NodeID())
 
-	poetClients := make([]activation.PoetProvingServiceClient, 0, len(app.Config.PoETServers))
-	for _, address := range app.Config.PoETServers {
-		client, err := activation.NewHTTPPoetClient(address, app.Config.POET)
-		if err != nil {
-			return fmt.Errorf("cannot create poet client: %w", err)
-		}
-		poetClients = append(poetClients, client)
-	}
-
 	/* Initialize all protocol services */
 
 	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
@@ -1378,7 +1372,7 @@ func (app *App) Start(ctx context.Context) error {
 	if err := app.setupDBs(ctx, lg, app.Config.DataDir()); err != nil {
 		return err
 	}
-	if err := app.initServices(ctx, poetClients); err != nil {
+	if err := app.initServices(ctx); err != nil {
 		return fmt.Errorf("cannot start services: %w", err)
 	}
 
