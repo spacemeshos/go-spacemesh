@@ -378,6 +378,7 @@ func membersContainChallenge(members []types.Member, challenge types.Hash32) (ui
 	return 0, fmt.Errorf("challenge is not a member of the proof")
 }
 
+// TODO(mafa): remove after next poet round; https://github.com/spacemeshos/go-spacemesh/issues/4753
 func (nb *NIPostBuilder) addPoet111ForPubEpoch1(ctx context.Context) error {
 	// because poet 111 had a hardware issue when challenges for round 0 were submitted, no node could submit to it
 	// 111 was recovered with the poet 110 DB, so all successful submissions to 110 should be able to be fetched from there as well
@@ -420,6 +421,7 @@ func (nb *NIPostBuilder) addPoet111ForPubEpoch1(ctx context.Context) error {
 }
 
 func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge types.Hash32, publishEpoch types.EpochID) (types.PoetProofRef, *types.MerkleProof, error) {
+	// TODO(mafa): remove after next poet round; https://github.com/spacemeshos/go-spacemesh/issues/4753
 	if publishEpoch == 1 {
 		err := nb.addPoet111ForPubEpoch1(ctx)
 		if err != nil {
