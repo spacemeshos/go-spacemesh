@@ -202,7 +202,7 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 			require.Equal(t, proofs, p.EligibilityProofs)
 			require.Equal(t, meshHash, p.MeshHash)
 			require.Equal(t, b.signer.NodeID(), p.SmesherID)
-			require.True(t, edVerifier.Verify(signing.BALLOT, p.SmesherID, p.SignedBytes(), p.Signature))
+			require.True(t, edVerifier.Verify(signing.PROPOSAL, p.SmesherID, p.SignedBytes(), p.Signature))
 			return nil
 		})
 
@@ -273,7 +273,7 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 			require.Equal(t, []types.TransactionID{tx.ID}, p.TxIDs)
 			require.Equal(t, meshHash, p.MeshHash)
 			require.Equal(t, b.signer.NodeID(), p.SmesherID)
-			require.True(t, edVerifier.Verify(signing.BALLOT, p.SmesherID, p.SignedBytes(), p.Signature))
+			require.True(t, edVerifier.Verify(signing.PROPOSAL, p.SmesherID, p.SignedBytes(), p.Signature))
 			return nil
 		})
 

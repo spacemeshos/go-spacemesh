@@ -18,9 +18,10 @@ type Domain byte
 const (
 	ATX Domain = 0
 
-	BALLOT = 2
-	HARE   = 3
-	POET   = 4
+	PROPOSAL = 1
+	BALLOT   = 2
+	HARE     = 3
+	POET     = 4
 
 	BEACON_FIRST_MSG    = 10
 	BEACON_FOLLOWUP_MSG = 11
@@ -31,6 +32,8 @@ func (d Domain) String() string {
 	switch d {
 	case ATX:
 		return "ATX"
+	case PROPOSAL:
+		return "PROPOSAL"
 	case BALLOT:
 		return "BALLOT"
 	case HARE:
