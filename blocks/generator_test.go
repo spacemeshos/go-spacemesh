@@ -207,7 +207,7 @@ func createProposal(
 		},
 	}
 	p.Ballot.Signature = signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
-	p.Signature = signer.Sign(signing.BALLOT, p.SignedBytes())
+	p.Signature = signer.Sign(signing.PROPOSAL, p.SignedBytes())
 	p.SmesherID = signer.NodeID()
 	require.NoError(t, p.Initialize())
 	require.NoError(t, ballots.Add(db, &p.Ballot))

@@ -62,3 +62,17 @@ func (mr *MockSyncStateProviderMockRecorder) IsSynced(arg0 interface{}) *gomock.
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSynced", reflect.TypeOf((*MockSyncStateProvider)(nil).IsSynced), arg0)
 }
+
+// SyncedBefore mocks base method.
+func (m *MockSyncStateProvider) SyncedBefore(arg0 types.EpochID) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SyncedBefore", arg0)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// SyncedBefore indicates an expected call of SyncedBefore.
+func (mr *MockSyncStateProviderMockRecorder) SyncedBefore(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncedBefore", reflect.TypeOf((*MockSyncStateProvider)(nil).SyncedBefore), arg0)
+}

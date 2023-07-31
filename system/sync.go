@@ -12,4 +12,5 @@ import (
 type SyncStateProvider interface {
 	IsSynced(context.Context) bool
 	IsBeaconSynced(types.EpochID) bool
+	SyncedBefore(types.EpochID) bool
 }
