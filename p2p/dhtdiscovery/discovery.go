@@ -144,12 +144,12 @@ func (d *Discovery) Start() {
 		ticker := time.NewTicker(d.period)
 		for {
 			select {
-			case <-ticker.C:
-			case <-disconnected:
 			case <-d.ctx.Done():
 				ticker.Stop()
 				d.h.Network().StopNotify(notifiee)
 				return nil
+			case <-ticker.C:
+			case <-disconnected:
 			}
 			if connected := len(d.h.Network().Peers()); connected >= d.minPeers {
 				d.backup = nil // once got enough peers no need to keep backup, they are either already connected or unavailable

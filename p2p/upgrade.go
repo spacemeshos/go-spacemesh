@@ -117,13 +117,12 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 		discovery.WithBootnodes(bootnodes),
 		discovery.WithLogger(fh.logger.Zap()),
 	}
-	if cfg.Bootnode {
-		dopts = append(dopts, discovery.Server())
-	}
 	if cfg.PrivateNetwork {
 		dopts = append(dopts, discovery.Private())
 	}
-	if !cfg.Bootnode {
+	if cfg.Bootnode {
+		dopts = append(dopts, discovery.Server())
+	} else {
 		backup, err := loadPeers(cfg.DataDir)
 		if err != nil {
 			fh.logger.With().Warning("failed to to load backup peers", log.Err(err))
