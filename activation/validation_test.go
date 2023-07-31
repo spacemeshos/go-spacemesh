@@ -570,16 +570,18 @@ func TestValidator_Validate(t *testing.T) {
 	challengeHash := challenge.Hash()
 	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t).WithName("poetDb"))
 
-	postProvider := newTestPostManager(t)
-	nipost := buildNIPost(t, postProvider, challenge, poetDb)
-
-	opts := []verifying.OptionFunc{verifying.WithLabelScryptParams(postProvider.opts.Scrypt)}
-
 	logger := logtest.New(t).WithName("validator")
+	postProvider := newTestPostManager(t)
 	verifier, err := NewPostVerifier(postProvider.cfg, logger)
 	r.NoError(err)
 	defer verifier.Close()
+
 	v := NewValidator(poetDb, postProvider.cfg, logger, verifier)
+
+	nipost := buildNIPost(t, postProvider, challenge, poetDb, v)
+
+	opts := []verifying.OptionFunc{verifying.WithLabelScryptParams(postProvider.opts.Scrypt)}
+
 	_, err = v.NIPost(context.Background(), challenge.PublishEpoch, postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, postProvider.opts.NumUnits, opts...)
 	r.NoError(err)
 

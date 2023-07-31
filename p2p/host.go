@@ -109,7 +109,7 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 		libp2p.BandwidthReporter(p2pmetrics.NewBandwidthCollector()),
 	}
 	if cfg.Metrics {
-		lopts = append(lopts, setupResourcesManager)
+		lopts = append(lopts, setupResourcesManager(cfg.HighPeers))
 	}
 	if !cfg.DisableNatPort {
 		lopts = append(lopts, libp2p.NATPortMap())
@@ -130,22 +130,37 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 	return Upgrade(h, opts...)
 }
 
-func setupResourcesManager(cfg *libp2p.Config) error {
-	rcmgrObs.MustRegisterWith(prometheus.DefaultRegisterer)
-	str, err := rcmgrObs.NewStatsTraceReporter()
-	if err != nil {
-		return err
-	}
-	limits := rcmgr.DefaultLimits
-	libp2p.SetDefaultServiceLimits(&limits)
+func setupResourcesManager(highPeers int) func(cfg *libp2p.Config) error {
+	return func(cfg *libp2p.Config) error {
+		rcmgrObs.MustRegisterWith(prometheus.DefaultRegisterer)
+		str, err := rcmgrObs.NewStatsTraceReporter()
+		if err != nil {
+			return err
+		}
+		limits := rcmgr.DefaultLimits
+		limits.SystemBaseLimit.ConnsInbound = highPeers
+		limits.SystemBaseLimit.ConnsOutbound = highPeers
+		limits.SystemBaseLimit.Conns = 2 * highPeers
+		limits.SystemBaseLimit.FD = 2 * highPeers
+		limits.SystemBaseLimit.StreamsInbound = 8 * highPeers
+		limits.SystemBaseLimit.StreamsOutbound = 8 * highPeers
+		limits.SystemBaseLimit.Streams = 16 * highPeers
+		limits.ServiceBaseLimit.StreamsInbound = 8 * highPeers
+		limits.ServiceBaseLimit.StreamsOutbound = 8 * highPeers
+		limits.ServiceBaseLimit.Streams = 16 * highPeers
+		limits.ProtocolBaseLimit.StreamsInbound = 8 * highPeers
+		limits.ProtocolBaseLimit.StreamsOutbound = 8 * highPeers
+		limits.ProtocolBaseLimit.Streams = 16 * highPeers
+		libp2p.SetDefaultServiceLimits(&limits)
 
-	mgr, err := rcmgr.NewResourceManager(
-		rcmgr.NewFixedLimiter(limits.AutoScale()),
-		rcmgr.WithTraceReporter(str),
-	)
-	if err != nil {
-		return err
+		mgr, err := rcmgr.NewResourceManager(
+			rcmgr.NewFixedLimiter(limits.AutoScale()),
+			rcmgr.WithTraceReporter(str),
+		)
+		if err != nil {
+			return err
+		}
+		cfg.Apply(libp2p.ResourceManager(mgr))
+		return nil
 	}
-	cfg.Apply(libp2p.ResourceManager(mgr))
-	return nil
 }
