@@ -318,7 +318,7 @@ func TestBlobStore_GetProposalBlob(t *testing.T) {
 			TxIDs:  types.RandomTXSet(11),
 		},
 	}
-	p.Signature = signer.Sign(signing.BALLOT, p.SignedBytes())
+	p.Signature = signer.Sign(signing.PROPOSAL, p.SignedBytes())
 	p.SmesherID = signer.NodeID()
 	require.NoError(t, p.Initialize())
 

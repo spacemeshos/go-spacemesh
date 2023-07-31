@@ -233,7 +233,7 @@ func (h *Handler) handleProposal(ctx context.Context, peer p2p.Peer, data []byte
 	latency := receivedTime.Sub(h.clock.LayerToTime(p.Layer))
 	metrics.ReportMessageLatency(pubsub.ProposalProtocol, pubsub.ProposalProtocol, latency)
 
-	if !h.edVerifier.Verify(signing.BALLOT, p.SmesherID, p.SignedBytes(), p.Signature) {
+	if !h.edVerifier.Verify(signing.PROPOSAL, p.SmesherID, p.SignedBytes(), p.Signature) {
 		badSigBallot.Inc()
 		return fmt.Errorf("failed to verify proposal signature")
 	}
