@@ -72,8 +72,9 @@ func MainnetConfig() Config {
 			WindowSize:               10000,
 			MaxExceptions:            1000,
 			BadBeaconVoteDelayLayers: 4032,
-			// TODO update it with safe but reasonble minimum weight in network before first ballot
-			MinimalActiveSetWeight: 1000 * 9331200,
+			// 1000 - is assumed minimal number of units
+			// 5000 - half of the expected poet ticks
+			MinimalActiveSetWeight: 1000 * 5000,
 		},
 		HARE: hareConfig.Config{
 			N:               200,
