@@ -341,7 +341,7 @@ func TestHare_onTick(t *testing.T) {
 			mockMesh.EXPECT().GetMalfeasanceProof(nodeID)
 		}
 	}
-	mockMesh.EXPECT().GetEpochAtx(lyrID.GetEpoch(), h.nodeID).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil)
+	mockMesh.EXPECT().GetEpochAtx(lyrID.GetEpoch()-1, h.nodeID).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil)
 	mockMesh.EXPECT().Proposals(lyrID).Return(pList, nil)
 	h.mockCoin.EXPECT().Set(lyrID, gomock.Any())
 
@@ -425,7 +425,7 @@ func TestHare_onTick_notMining(t *testing.T) {
 			mockMesh.EXPECT().GetMalfeasanceProof(nodeID)
 		}
 	}
-	mockMesh.EXPECT().GetEpochAtx(lyrID.GetEpoch(), h.nodeID).Return(nil, sql.ErrNotFound)
+	mockMesh.EXPECT().GetEpochAtx(lyrID.GetEpoch()-1, h.nodeID).Return(nil, sql.ErrNotFound)
 	mockMesh.EXPECT().Proposals(lyrID).Return(pList, nil)
 	h.mockCoin.EXPECT().Set(lyrID, gomock.Any()).DoAndReturn(
 		func(_ types.LayerID, _ bool) error {
@@ -602,7 +602,7 @@ func TestHare_goodProposals(t *testing.T) {
 				}
 			}
 			nodeID := types.NodeID{1, 2, 3}
-			mockMesh.EXPECT().GetEpochAtx(lyrID.GetEpoch(), nodeID).Return(&types.ActivationTxHeader{BaseTickHeight: nodeBaseHeight, TickCount: 1}, nil)
+			mockMesh.EXPECT().GetEpochAtx(lyrID.GetEpoch()-1, nodeID).Return(&types.ActivationTxHeader{BaseTickHeight: nodeBaseHeight, TickCount: 1}, nil)
 			mockMesh.EXPECT().Proposals(lyrID).Return(pList, nil)
 
 			expected := make([]types.ProposalID, 0, len(tc.expected))
@@ -687,7 +687,7 @@ func TestHare_goodProposals_gradedAtxs(t *testing.T) {
 	pList[6].ActiveSet = activeSet
 
 	nodeID := types.NodeID{1, 2, 3}
-	mockMesh.EXPECT().GetEpochAtx(lyrID.GetEpoch(), nodeID).Return(&types.ActivationTxHeader{BaseTickHeight: tickHeight, TickCount: 1}, nil)
+	mockMesh.EXPECT().GetEpochAtx(lyrID.GetEpoch()-1, nodeID).Return(&types.ActivationTxHeader{BaseTickHeight: tickHeight, TickCount: 1}, nil)
 	mockMesh.EXPECT().Proposals(lyrID).Return(pList, nil)
 	got := goodProposals(context.Background(), logtest.New(t), mockMesh, nodeID, lyrID, beacon, epochStart, delay)
 	require.ElementsMatch(t, types.ToProposalIDs(pList[:5]), got)
