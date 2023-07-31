@@ -722,3 +722,15 @@ func GenerateFallback() DeploymentFlag {
 func SmesherKey(key ed25519.PrivateKey) DeploymentFlag {
 	return DeploymentFlag{Name: "--testing-smesher-key", Value: hex.EncodeToString(key)}
 }
+
+func Bootnode() DeploymentFlag {
+	return DeploymentFlag{Name: "--p2p-bootnode", Value: fmt.Sprintf("%v", true)}
+}
+
+func PrivateNetwork() DeploymentFlag {
+	return DeploymentFlag{Name: "--p2p-private-network", Value: fmt.Sprintf("%v", true)}
+}
+
+func DisableLegacyDiscovery() DeploymentFlag {
+	return DeploymentFlag{Name: "--p2p-disable-legacy-discovery", Value: fmt.Sprintf("%v", true)}
+}

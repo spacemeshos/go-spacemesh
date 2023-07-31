@@ -166,7 +166,8 @@ func New(cctx *testcontext.Context, opts ...Opt) *Cluster {
 	cluster.addFlag(genesis)
 	cluster.addFlag(GenesisExtraData(defaultExtraData))
 	cluster.addFlag(MinPeers(minPeers(cctx.ClusterSize)))
-
+	cluster.addFlag(PrivateNetwork())
+	cluster.addFlag(DisableLegacyDiscovery())
 	cluster.addPoetFlag(genesis)
 	cluster.addPoetFlag(PoetRestListen(poetPort))
 
@@ -428,7 +429,7 @@ func (c *Cluster) AddBootnodes(cctx *testcontext.Context, n int) error {
 	}
 	clients, err := deployNodes(cctx, bootnodeApp, c.bootnodes, c.bootnodes+n,
 		WithFlags(maps.Values(c.smesherFlags)...),
-		WithFlags(StartSmeshing(false)),
+		WithFlags(StartSmeshing(false), Bootnode()),
 	)
 	if err != nil {
 		return err

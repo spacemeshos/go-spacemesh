@@ -479,10 +479,10 @@ func extractAtxsData(cdb *datastore.CachedDB, epoch types.EpochID) (uint64, uint
 		weight  uint64
 		heights []uint64
 	)
-	if err := cdb.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) bool {
+	if err := cdb.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) error {
 		weight += header.GetWeight()
 		heights = append(heights, header.TickHeight())
-		return true
+		return nil
 	}); err != nil {
 		return 0, 0, fmt.Errorf("computing epoch data for %d: %w", epoch, err)
 	}
@@ -1626,10 +1626,10 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 	partitionEnd := last
 	s1.Merge(s2)
 	require.NoError(t, s1.GetState(0).DB.IterateEpochATXHeaders(
-		partitionEnd.GetEpoch(), func(header *types.ActivationTxHeader) bool {
+		partitionEnd.GetEpoch(), func(header *types.ActivationTxHeader) error {
 			tortoise1.OnAtx(header.ToData())
 			tortoise2.OnAtx(header.ToData())
-			return true
+			return nil
 		}))
 	for lid := partitionStart; !lid.After(partitionEnd); lid = lid.Add(1) {
 		mergedBlocks, err := blocks.Layer(s1.GetState(0).DB, lid)

@@ -9,6 +9,7 @@ import (
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/core/transport"
 	"github.com/libp2p/go-libp2p/p2p/host/peerstore/pstoremem"
@@ -17,8 +18,10 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	tptu "github.com/libp2p/go-libp2p/p2p/net/upgrader"
+	"github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/relay"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
+	"github.com/multiformats/go-multiaddr"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 
@@ -37,8 +40,15 @@ func DefaultConfig() Config {
 		GracePeersShutdown: 30 * time.Second,
 		MaxMessageSize:     2 << 20,
 		AcceptQueue:        tptu.AcceptQueueLength,
+		EnableHolepunching: true,
+		RelayServer:        RelayServer{TTL: 20 * time.Minute, Reservations: 512},
 	}
 }
+
+const (
+	PublicReachability  = "public"
+	PrivateReachability = "private"
+)
 
 // Config for all things related to p2p layer.
 type Config struct {
@@ -48,21 +58,54 @@ type Config struct {
 	MaxMessageSize     int
 
 	// see https://lwn.net/Articles/542629/ for reuseport explanation
-	DisableReusePort bool     `mapstructure:"disable-reuseport"`
-	DisableNatPort   bool     `mapstructure:"disable-natport"`
-	Flood            bool     `mapstructure:"flood"`
-	Listen           string   `mapstructure:"listen"`
-	Bootnodes        []string `mapstructure:"bootnodes"`
-	MinPeers         int      `mapstructure:"min-peers"`
-	LowPeers         int      `mapstructure:"low-peers"`
-	HighPeers        int      `mapstructure:"high-peers"`
-	AdvertiseAddress string   `mapstructure:"advertise-address"`
-	AcceptQueue      int      `mapstructure:"p2p-accept-queue"`
-	Metrics          bool     `mapstructure:"p2p-metrics"`
+	DisableReusePort       bool        `mapstructure:"disable-reuseport"`
+	DisableNatPort         bool        `mapstructure:"disable-natport"`
+	Flood                  bool        `mapstructure:"flood"`
+	Listen                 string      `mapstructure:"listen"`
+	Bootnodes              []string    `mapstructure:"bootnodes"`
+	MinPeers               int         `mapstructure:"min-peers"`
+	LowPeers               int         `mapstructure:"low-peers"`
+	HighPeers              int         `mapstructure:"high-peers"`
+	AdvertiseAddress       string      `mapstructure:"advertise-address"`
+	AcceptQueue            int         `mapstructure:"p2p-accept-queue"`
+	Metrics                bool        `mapstructure:"p2p-metrics"`
+	Bootnode               bool        `mapstructure:"p2p-bootnode"`
+	ForceReachability      string      `mapstructure:"p2p-reachability"`
+	EnableHolepunching     bool        `mapstructure:"p2p-holepunching"`
+	DisableLegacyDiscovery bool        `mapstructure:"p2p-disable-legacy-discovery"`
+	PrivateNetwork         bool        `mapstructure:"p2p-private-network"`
+	RelayServer            RelayServer `mapstructure:"relay-server"`
+}
+
+type RelayServer struct {
+	Enable       bool          `mapstructure:"enable"`
+	Reservations int           `mapstructure:"reservations"`
+	TTL          time.Duration `mapstructure:"ttl"`
+}
+
+func (cfg *Config) Validate() error {
+	if len(cfg.ForceReachability) > 0 {
+		if cfg.ForceReachability != PublicReachability && cfg.ForceReachability != PrivateReachability {
+			return fmt.Errorf("p2p-reachability flag is invalid. should be one of %s, %s. got %s",
+				PublicReachability, PrivateReachability, cfg.ForceReachability,
+			)
+		}
+	}
+	if len(cfg.AdvertiseAddress) > 0 {
+		_, err := multiaddr.NewMultiaddr(cfg.AdvertiseAddress)
+		if err != nil {
+			return fmt.Errorf("address %s is not a valid multiaddr %w", cfg.AdvertiseAddress, err)
+		}
+	}
+	return nil
 }
 
 // New initializes libp2p host configured for spacemesh.
 func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ...Opt) (*Host, error) {
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+
 	logger.Zap().Info("starting libp2p host", zap.Any("config", &cfg))
 	key, err := EnsureIdentity(cfg.DataDir)
 	if err != nil {
@@ -83,8 +126,6 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 		libp2p.Identity(key),
 		libp2p.ListenAddrStrings(cfg.Listen),
 		libp2p.UserAgent("go-spacemesh"),
-		libp2p.DisableRelay(),
-
 		libp2p.Transport(func(upgrader transport.Upgrader, rcmgr network.ResourceManager) (transport.Transport, error) {
 			opts := []tcp.Option{}
 			if cfg.DisableReusePort {
@@ -103,10 +144,39 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 			return tp.WithSessionOptions(noise.Prologue(prologue))
 		}),
 		libp2p.Muxer("/yamux/1.0.0", &streamer),
-
 		libp2p.ConnectionManager(cm),
 		libp2p.Peerstore(ps),
 		libp2p.BandwidthReporter(p2pmetrics.NewBandwidthCollector()),
+		libp2p.EnableNATService(),
+	}
+	if len(cfg.AdvertiseAddress) > 0 {
+		addr, err := multiaddr.NewMultiaddr(cfg.AdvertiseAddress)
+		if err != nil {
+			panic(err) // validated in config
+		}
+		lopts = append(lopts, libp2p.AddrsFactory(func([]multiaddr.Multiaddr) []multiaddr.Multiaddr {
+			return []multiaddr.Multiaddr{addr}
+		}))
+	}
+	if cfg.EnableHolepunching {
+		bootnodes, err := parseIntoAddr(cfg.Bootnodes)
+		if err != nil {
+			return nil, err
+		}
+		lopts = append(lopts,
+			libp2p.EnableHolePunching(),
+			libp2p.EnableAutoRelayWithStaticRelays(bootnodes))
+	}
+	if cfg.RelayServer.Enable {
+		resources := relay.DefaultResources()
+		resources.MaxReservations = cfg.RelayServer.Reservations
+		resources.ReservationTTL = cfg.RelayServer.TTL
+		lopts = append(lopts, libp2p.EnableRelayService(relay.WithResources(resources)))
+	}
+	if cfg.ForceReachability == PublicReachability {
+		lopts = append(lopts, libp2p.ForceReachabilityPublic())
+	} else if cfg.ForceReachability == PrivateReachability {
+		lopts = append(lopts, libp2p.ForceReachabilityPrivate())
 	}
 	if cfg.Metrics {
 		lopts = append(lopts, setupResourcesManager(cfg.HighPeers))
@@ -148,6 +218,7 @@ func setupResourcesManager(highPeers int) func(cfg *libp2p.Config) error {
 		limits.ServiceBaseLimit.StreamsInbound = 8 * highPeers
 		limits.ServiceBaseLimit.StreamsOutbound = 8 * highPeers
 		limits.ServiceBaseLimit.Streams = 16 * highPeers
+
 		limits.ProtocolBaseLimit.StreamsInbound = 8 * highPeers
 		limits.ProtocolBaseLimit.StreamsOutbound = 8 * highPeers
 		limits.ProtocolBaseLimit.Streams = 16 * highPeers
@@ -163,4 +234,16 @@ func setupResourcesManager(highPeers int) func(cfg *libp2p.Config) error {
 		cfg.Apply(libp2p.ResourceManager(mgr))
 		return nil
 	}
+}
+
+func parseIntoAddr(nodes []string) ([]peer.AddrInfo, error) {
+	var addrs []peer.AddrInfo
+	for _, boot := range nodes {
+		addr, err := peer.AddrInfoFromString(boot)
+		if err != nil {
+			return nil, fmt.Errorf("can't parse bootnode %s: %w", boot, err)
+		}
+		addrs = append(addrs, *addr)
+	}
+	return addrs, nil
 }
