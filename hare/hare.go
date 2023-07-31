@@ -488,6 +488,7 @@ func goodProposals(
 	for _, p := range props {
 		atxs[p.AtxID]++
 	}
+	cache := map[types.ATXID]miner.AtxGrade{}
 	for _, p := range props {
 		if p.IsMalicious() {
 			logger.With().Warning("not voting on proposal from malicious identity",
@@ -559,7 +560,7 @@ func goodProposals(
 			)
 			return []types.ProposalID{}
 		}
-		if evil, err := gradeActiveSet(activeSet, msh, epochStart, networkDelay); err != nil {
+		if evil, err := gradeActiveSet(cache, activeSet, msh, epochStart, networkDelay); err != nil {
 			logger.With().Error("failed to grade active set",
 				log.Context(ctx),
 				lid,
@@ -591,15 +592,21 @@ func goodProposals(
 	return result
 }
 
-func gradeActiveSet(activeSet []types.ATXID, msh mesh, epochStart time.Time, networkDelay time.Duration) (types.ATXID, error) {
+func gradeActiveSet(cache map[types.ATXID]miner.AtxGrade, activeSet []types.ATXID, msh mesh, epochStart time.Time, networkDelay time.Duration) (types.ATXID, error) {
 	for _, id := range activeSet {
-		hdr, err := msh.GetAtxHeader(id)
-		if err != nil {
-			return types.EmptyATXID, fmt.Errorf("get header %v: %s", id, err)
-		}
-		grade, err := miner.GradeAtx(msh, hdr.NodeID, hdr.Received, epochStart, networkDelay)
-		if err != nil {
-			return types.EmptyATXID, fmt.Errorf("grade %v: %w", id, err)
+		var grade miner.AtxGrade
+		if g, ok := cache[id]; ok {
+			grade = g
+		} else {
+			hdr, err := msh.GetAtxHeader(id)
+			if err != nil {
+				return types.EmptyATXID, fmt.Errorf("get header %v: %s", id, err)
+			}
+			grade, err = miner.GradeAtx(msh, hdr.NodeID, hdr.Received, epochStart, networkDelay)
+			if err != nil {
+				return types.EmptyATXID, fmt.Errorf("grade %v: %w", id, err)
+			}
+			cache[id] = grade
 		}
 		if grade == miner.Evil {
 			return id, nil
