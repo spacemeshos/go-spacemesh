@@ -12,7 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 )
 
-func ActiveSetFromBlock(db sql.Executor, epoch types.EpochID) ([]types.ATXID, error) {
+func ActiveSetFromEpochFirstBlock(db sql.Executor, epoch types.EpochID) ([]types.ATXID, error) {
 	bid, err := certificates.FirstInEpoch(db, epoch)
 	if err != nil {
 		return nil, err

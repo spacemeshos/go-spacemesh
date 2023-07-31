@@ -92,7 +92,7 @@ func (o *Oracle) ProposalEligibility(lid types.LayerID, beacon types.Beacon, non
 }
 
 func (o *Oracle) activesFromFirstBlock(targetEpoch types.EpochID) (uint64, uint64, []types.ATXID, error) {
-	activeSet, err := ActiveSetFromBlock(o.cdb, targetEpoch)
+	activeSet, err := ActiveSetFromEpochFirstBlock(o.cdb, targetEpoch)
 	if err != nil {
 		return 0, 0, nil, err
 	}

@@ -396,5 +396,5 @@ func TestOracle_NotSyncedBeforeLastEpoch(t *testing.T) {
 	ee, err := o.ProposalEligibility(lid, types.RandomBeacon(), types.VRFPostIndex(1))
 	require.NoError(t, err)
 	require.NotNil(t, ee)
-	require.Len(t, ee.ActiveSet, len(expected))
+	require.ElementsMatch(t, ee.ActiveSet, expected)
 }
