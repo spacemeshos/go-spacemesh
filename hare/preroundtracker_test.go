@@ -35,7 +35,7 @@ func genLayerProposal(layerID types.LayerID, txs []types.TransactionID) *types.P
 	}
 	signer, _ := signing.NewEdSigner()
 	p.Ballot.Signature = signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
-	p.Signature = signer.Sign(signing.BALLOT, p.SignedBytes())
+	p.Signature = signer.Sign(signing.PROPOSAL, p.SignedBytes())
 	p.Initialize()
 	return p
 }

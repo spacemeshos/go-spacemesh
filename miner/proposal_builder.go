@@ -273,7 +273,7 @@ func (pb *ProposalBuilder) createProposal(
 	}
 	p.Ballot.Signature = pb.signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
 	p.SmesherID = pb.signer.NodeID()
-	p.Signature = pb.signer.Sign(signing.BALLOT, p.SignedBytes())
+	p.Signature = pb.signer.Sign(signing.PROPOSAL, p.SignedBytes())
 	if err := p.Initialize(); err != nil {
 		pb.logger.With().Fatal("proposal failed to initialize",
 			log.Context(ctx),

@@ -189,7 +189,7 @@ func createProposal(t *testing.T, opts ...any) *types.Proposal {
 	require.NoError(t, err)
 	p.Ballot.Signature = signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
 	p.Ballot.SmesherID = signer.NodeID()
-	p.Signature = signer.Sign(signing.BALLOT, p.SignedBytes())
+	p.Signature = signer.Sign(signing.PROPOSAL, p.SignedBytes())
 	p.SmesherID = signer.NodeID()
 	require.NoError(t, p.Initialize())
 	return p
@@ -876,7 +876,7 @@ func TestProposal_InconsistentSmeshers(t *testing.T) {
 	require.NoError(t, err)
 	p.Ballot.Signature = signer1.Sign(signing.BALLOT, p.Ballot.SignedBytes())
 	p.Ballot.SmesherID = signer1.NodeID()
-	p.Signature = signer2.Sign(signing.BALLOT, p.SignedBytes())
+	p.Signature = signer2.Sign(signing.PROPOSAL, p.SignedBytes())
 	p.SmesherID = signer2.NodeID()
 
 	data := encodeProposal(t, p)
