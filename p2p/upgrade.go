@@ -9,9 +9,10 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
-	"github.com/libp2p/go-libp2p/core/peer"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/log"
+	discovery "github.com/spacemeshos/go-spacemesh/p2p/dhtdiscovery"
 	"github.com/spacemeshos/go-spacemesh/p2p/peerexchange"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
@@ -51,7 +52,10 @@ func WithNodeReporter(reporter func()) Opt {
 // Host is a conveniency wrapper for all p2p related functionality required to run
 // a full spacemesh node.
 type Host struct {
+	eg     errgroup.Group
 	ctx    context.Context
+	cancel context.CancelFunc
+
 	cfg    Config
 	logger log.Log
 
@@ -65,27 +69,16 @@ type Host struct {
 
 	nodeReporter func()
 
-	discovery *peerexchange.Discovery
-}
-
-// TODO(dshulyak) IsBootnode should be a configuration option.
-func isBootnode(h host.Host, bootnodes []string) (bool, error) {
-	for _, raw := range bootnodes {
-		info, err := peer.AddrInfoFromString(raw)
-		if err != nil {
-			return false, fmt.Errorf("failed to parse bootstrap node: %w", err)
-		}
-		if h.ID() == info.ID {
-			return true, nil
-		}
-	}
-	return false, nil
+	discovery *discovery.Discovery
+	legacy    *peerexchange.Discovery
 }
 
 // Upgrade creates Host instance from host.Host.
 func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
+	ctx, cancel := context.WithCancel(context.Background())
 	fh := &Host{
-		ctx:    context.Background(),
+		ctx:    ctx,
+		cancel: cancel,
 		cfg:    DefaultConfig(),
 		logger: log.NewNop(),
 		Host:   h,
@@ -94,27 +87,54 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 		opt(fh)
 	}
 	cfg := fh.cfg
-	bootnode, err := isBootnode(h, cfg.Bootnodes)
+	bootnodes, err := parseIntoAddr(fh.cfg.Bootnodes)
 	if err != nil {
-		return nil, fmt.Errorf("check node as bootnode: %w", err)
+		return nil, err
 	}
 	if fh.PubSub, err = pubsub.New(fh.ctx, fh.logger, h, pubsub.Config{
 		Flood:          cfg.Flood,
-		IsBootnode:     bootnode,
+		IsBootnode:     cfg.Bootnode,
+		Bootnodes:      bootnodes,
 		MaxMessageSize: cfg.MaxMessageSize,
 	}); err != nil {
 		return nil, fmt.Errorf("failed to initialize pubsub: %w", err)
 	}
-	if fh.discovery, err = peerexchange.New(fh.logger, h, peerexchange.Config{
-		DataDir:          cfg.DataDir,
-		Bootnodes:        cfg.Bootnodes,
-		AdvertiseAddress: cfg.AdvertiseAddress,
-		MinPeers:         cfg.MinPeers,
-		SlowCrawl:        10 * time.Minute,
-		FastCrawl:        10 * time.Second,
-	}); err != nil {
-		return nil, fmt.Errorf("failed to initialize peerexchange discovery: %w", err)
+	if !cfg.DisableLegacyDiscovery {
+		if fh.legacy, err = peerexchange.New(fh.logger, h, peerexchange.Config{
+			DataDir:          cfg.DataDir,
+			Bootnodes:        cfg.Bootnodes,
+			AdvertiseAddress: cfg.AdvertiseAddress,
+			MinPeers:         cfg.MinPeers,
+			SlowCrawl:        10 * time.Minute,
+			FastCrawl:        10 * time.Second,
+		}); err != nil {
+			return nil, fmt.Errorf("failed to initialize peerexchange discovery: %w", err)
+		}
 	}
+
+	dopts := []discovery.Opt{
+		discovery.WithDir(cfg.DataDir),
+		discovery.WithBootnodes(bootnodes),
+		discovery.WithLogger(fh.logger.Zap()),
+	}
+	if cfg.PrivateNetwork {
+		dopts = append(dopts, discovery.Private())
+	}
+	if cfg.Bootnode {
+		dopts = append(dopts, discovery.Server())
+	} else {
+		backup, err := loadPeers(cfg.DataDir)
+		if err != nil {
+			fh.logger.With().Warning("failed to to load backup peers", log.Err(err))
+		} else if len(backup) > 0 {
+			dopts = append(dopts, discovery.WithBackup(backup))
+		}
+	}
+	dhtdisc, err := discovery.New(fh, dopts...)
+	if err != nil {
+		return nil, err
+	}
+	fh.discovery = dhtdisc
 	if fh.nodeReporter != nil {
 		fh.Network().Notify(&network.NotifyBundle{
 			ConnectedF: func(network.Network, network.Conn) {
@@ -144,7 +164,16 @@ func (fh *Host) Start() error {
 	if fh.closed.closed {
 		return errors.New("p2p: closed")
 	}
-	fh.discovery.StartScan()
+	if fh.legacy != nil {
+		fh.legacy.StartScan()
+	}
+	fh.discovery.Start()
+	if !fh.cfg.Bootnode {
+		fh.eg.Go(func() error {
+			persist(fh.ctx, fh.logger, fh.Host, fh.cfg.DataDir, 30*time.Minute)
+			return nil
+		})
+	}
 	return nil
 }
 
@@ -155,8 +184,13 @@ func (fh *Host) Stop() error {
 	if fh.closed.closed {
 		return errors.New("p2p: closed")
 	}
+	fh.cancel()
 	fh.closed.closed = true
+	if fh.legacy != nil {
+		fh.legacy.Stop()
+	}
 	fh.discovery.Stop()
+	fh.eg.Wait()
 	if err := fh.Host.Close(); err != nil {
 		return fmt.Errorf("failed to close libp2p host: %w", err)
 	}
