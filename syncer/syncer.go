@@ -212,6 +212,11 @@ func (s *Syncer) IsSynced(ctx context.Context) bool {
 	return s.getSyncState() == synced
 }
 
+// SyncedBefore returns true if the node became synced before `epoch` starts.
+func (s *Syncer) SyncedBefore(epoch types.EpochID) bool {
+	return s.getSyncState() == synced && s.getTargetSyncedLayer() < epoch.FirstLayer()
+}
+
 func (s *Syncer) IsBeaconSynced(epoch types.EpochID) bool {
 	_, err := s.beacon.GetBeacon(epoch)
 	return err == nil

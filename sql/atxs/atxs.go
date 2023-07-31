@@ -70,7 +70,7 @@ func Get(db sql.Executor, id types.ATXID) (*types.VerifiedActivationTx, error) {
 	return v, nil
 }
 
-// GetByEpochAndNodeID gets any ATX by the specified NodeID in the given epoch.
+// GetByEpochAndNodeID gets any ATX by the specified NodeID published in the given epoch.
 func GetByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.NodeID) (*types.VerifiedActivationTx, error) {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindInt64(1, int64(epoch))

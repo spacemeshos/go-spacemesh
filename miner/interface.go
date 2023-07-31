@@ -11,7 +11,7 @@ import (
 //go:generate mockgen -package=miner -destination=./mocks.go -source=./interface.go
 
 type proposalOracle interface {
-	GetProposalEligibility(types.LayerID, types.Beacon, types.VRFPostIndex) (*EpochEligibility, error)
+	ProposalEligibility(types.LayerID, types.Beacon, types.VRFPostIndex) (*EpochEligibility, error)
 }
 
 type conservativeState interface {
@@ -26,6 +26,10 @@ type votesEncoder interface {
 
 type nonceFetcher interface {
 	VRFNonce(types.NodeID, types.EpochID) (types.VRFPostIndex, error)
+}
+
+type mesh interface {
+	GetMalfeasanceProof(nodeID types.NodeID) (*types.MalfeasanceProof, error)
 }
 
 type layerClock interface {

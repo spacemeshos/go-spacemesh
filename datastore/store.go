@@ -200,10 +200,10 @@ func (db *CachedDB) GetEpochWeight(epoch types.EpochID) (uint64, []types.ATXID, 
 		weight uint64
 		ids    []types.ATXID
 	)
-	if err := db.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) bool {
+	if err := db.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) error {
 		weight += header.GetWeight()
 		ids = append(ids, header.ID)
-		return true
+		return nil
 	}); err != nil {
 		return 0, nil, err
 	}
@@ -211,7 +211,7 @@ func (db *CachedDB) GetEpochWeight(epoch types.EpochID) (uint64, []types.ATXID, 
 }
 
 // IterateEpochATXHeaders iterates over ActivationTxs that target an epoch.
-func (db *CachedDB) IterateEpochATXHeaders(epoch types.EpochID, iter func(*types.ActivationTxHeader) bool) error {
+func (db *CachedDB) IterateEpochATXHeaders(epoch types.EpochID, iter func(*types.ActivationTxHeader) error) error {
 	ids, err := atxs.GetIDsByEpoch(db, epoch-1)
 	if err != nil {
 		return err
@@ -221,8 +221,8 @@ func (db *CachedDB) IterateEpochATXHeaders(epoch types.EpochID, iter func(*types
 		if err != nil {
 			return err
 		}
-		if !iter(header) {
-			return nil
+		if err := iter(header); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -239,7 +239,7 @@ func (db *CachedDB) GetLastAtx(nodeID types.NodeID) (*types.ActivationTxHeader, 
 	}
 }
 
-// GetEpochAtx gets the atx header of specified node ID in the specified epoch.
+// GetEpochAtx gets the atx header of specified node ID published in the specified epoch.
 func (db *CachedDB) GetEpochAtx(epoch types.EpochID, nodeID types.NodeID) (*types.ActivationTxHeader, error) {
 	vatx, err := atxs.GetByEpochAndNodeID(db, epoch, nodeID)
 	if err != nil {
