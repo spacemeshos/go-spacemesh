@@ -87,11 +87,24 @@ func (p *Proposal) Initialize() error {
 
 // SignedBytes returns the serialization of the InnerProposal.
 func (p *Proposal) SignedBytes() []byte {
-	bytes, err := codec.Encode(&p.InnerProposal)
+	data, err := codec.Encode(&BallotMetadata{
+		Layer:   p.Layer,
+		MsgHash: BytesToHash(p.HashInnerProposal()),
+	})
 	if err != nil {
-		log.With().Fatal("failed to serialize proposal", log.Err(err))
+		log.With().Fatal("failed to serialize BallotMetadata for proposal", log.Err(err))
 	}
-	return bytes
+	return data
+}
+
+// HashInnerProposal returns the hash of the InnerProposal.
+func (p *Proposal) HashInnerProposal() []byte {
+	h := hash.New()
+	_, err := codec.EncodeTo(h, &p.InnerProposal)
+	if err != nil {
+		log.With().Fatal("failed to encode InnerProposal for hashing", log.Err(err))
+	}
+	return h.Sum(nil)
 }
 
 // ID returns the ProposalID.
