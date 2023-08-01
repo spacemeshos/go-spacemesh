@@ -49,7 +49,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
 const layersPerEpoch = 3
@@ -420,15 +419,6 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	app.Config = getTestDefaultConfig(t)
 	app.Config.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte{1}).String()
 	app.Config.SMESHING.Opts.DataDir = t.TempDir()
-
-	clock, err := timesync.NewClock(
-		timesync.WithLayerDuration(1*time.Second),
-		timesync.WithTickInterval(100*time.Millisecond),
-		timesync.WithGenesisTime(time.Now()),
-		timesync.WithLogger(logger),
-	)
-	require.NoError(t, err)
-	app.clock = clock
 
 	edSgn, err := signing.NewEdSigner()
 	require.NoError(t, err)

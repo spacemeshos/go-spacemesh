@@ -7,8 +7,10 @@ import (
 	"sync"
 	"time"
 
+	lp2plog "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
+	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -194,5 +196,6 @@ func (fh *Host) Stop() error {
 	if err := fh.Host.Close(); err != nil {
 		return fmt.Errorf("failed to close libp2p host: %w", err)
 	}
+	lp2plog.SetPrimaryCore(zapcore.NewNopCore())
 	return nil
 }
