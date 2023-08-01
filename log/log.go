@@ -141,11 +141,6 @@ func Debug(msg string, args ...any) {
 	GetLogger().Debug(msg, args...)
 }
 
-// Error prints formatted error level log message.
-func Error(msg string, args ...any) {
-	GetLogger().Error(msg, args...)
-}
-
 // Warning prints formatted warning level log message.
 func Warning(msg string, args ...any) {
 	GetLogger().Warning(msg, args...)
@@ -159,11 +154,6 @@ func Fatal(msg string, args ...any) {
 // With returns a FieldLogger which you can append fields to.
 func With() FieldLogger {
 	return FieldLogger{GetLogger().logger, GetLogger().name}
-}
-
-// Event returns a field logger with the Event field set to true.
-func Event() FieldLogger {
-	return GetLogger().Event()
 }
 
 // Panic writes the log message and then panics.

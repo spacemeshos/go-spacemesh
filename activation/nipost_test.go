@@ -113,7 +113,6 @@ func TestPostSetup(t *testing.T) {
 
 func TestNIPostBuilderWithClients(t *testing.T) {
 	t.Parallel()
-	logtest.SetupGlobal(t)
 
 	challenge := types.NIPostChallenge{
 		PublishEpoch: postGenesisEpoch + 2,

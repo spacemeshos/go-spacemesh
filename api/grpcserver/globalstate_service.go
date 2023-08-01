@@ -16,6 +16,7 @@ import (
 
 // GlobalStateService exposes global state data, output from the STF.
 type GlobalStateService struct {
+	logger   log.Logger
 	mesh     meshAPI
 	conState conservativeState
 }
@@ -26,8 +27,9 @@ func (s GlobalStateService) RegisterService(server *Server) {
 }
 
 // NewGlobalStateService creates a new grpc service using config data.
-func NewGlobalStateService(msh meshAPI, conState conservativeState) *GlobalStateService {
+func NewGlobalStateService(msh meshAPI, conState conservativeState, lg log.Logger) *GlobalStateService {
 	return &GlobalStateService{
+		logger:   lg,
 		mesh:     msh,
 		conState: conState,
 	}
@@ -35,7 +37,8 @@ func NewGlobalStateService(msh meshAPI, conState conservativeState) *GlobalState
 
 // GlobalStateHash returns the latest layer and its computed global state hash.
 func (s GlobalStateService) GlobalStateHash(context.Context, *pb.GlobalStateHashRequest) (*pb.GlobalStateHashResponse, error) {
-	log.Info("GRPC GlobalStateService.GlobalStateHash")
+	s.logger.Info("GRPC GlobalStateService.GlobalStateHash")
+
 	root, err := s.conState.GetStateRoot()
 	if err != nil {
 		return nil, err
@@ -71,7 +74,7 @@ func (s GlobalStateService) getAccount(addr types.Address) (acct *pb.Account, er
 
 // Account returns current and projected counter and balance for one account.
 func (s GlobalStateService) Account(_ context.Context, in *pb.AccountRequest) (*pb.AccountResponse, error) {
-	log.Info("GRPC GlobalStateService.Account")
+	s.logger.Info("GRPC GlobalStateService.Account")
 
 	if in.AccountId == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "`AccountId` must be provided")
@@ -84,23 +87,24 @@ func (s GlobalStateService) Account(_ context.Context, in *pb.AccountRequest) (*
 	}
 	acct, err := s.getAccount(addr)
 	if err != nil {
-		log.With().Error("unable to fetch projected account state", log.Err(err))
+		s.logger.With().Error("unable to fetch projected account state", log.Err(err))
 		return nil, status.Errorf(codes.Internal, "error fetching projected account data")
 	}
 
-	log.With().Debug("GRPC GlobalStateService.Account",
+	s.logger.With().Debug("GRPC GlobalStateService.Account",
 		addr,
 		log.Uint64("balance", acct.StateCurrent.Balance.Value),
 		log.Uint64("counter", acct.StateCurrent.Counter),
 		log.Uint64("balance projected", acct.StateProjected.Balance.Value),
-		log.Uint64("counter projected", acct.StateProjected.Counter))
+		log.Uint64("counter projected", acct.StateProjected.Counter),
+	)
 
 	return &pb.AccountResponse{AccountWrapper: acct}, nil
 }
 
 // AccountDataQuery returns historical account data such as rewards and receipts.
 func (s GlobalStateService) AccountDataQuery(_ context.Context, in *pb.AccountDataQueryRequest) (*pb.AccountDataQueryResponse, error) {
-	log.Info("GRPC GlobalStateService.AccountDataQuery")
+	s.logger.Info("GRPC GlobalStateService.AccountDataQuery")
 
 	if in.Filter == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "`Filter` must be provided")
@@ -151,7 +155,7 @@ func (s GlobalStateService) AccountDataQuery(_ context.Context, in *pb.AccountDa
 	if filterAccount {
 		acct, err := s.getAccount(addr)
 		if err != nil {
-			log.With().Error("unable to fetch projected account state", log.Err(err))
+			s.logger.With().Error("unable to fetch projected account state", log.Err(err))
 			return nil, status.Errorf(codes.Internal, "error fetching projected account data")
 		}
 		res.AccountItem = append(res.AccountItem, &pb.AccountData{Datum: &pb.AccountData_AccountWrapper{
@@ -190,7 +194,7 @@ func (s GlobalStateService) AccountDataQuery(_ context.Context, in *pb.AccountDa
 
 // SmesherDataQuery returns historical info on smesher rewards.
 func (s GlobalStateService) SmesherDataQuery(_ context.Context, in *pb.SmesherDataQueryRequest) (*pb.SmesherDataQueryResponse, error) {
-	log.Info("DEPRECATED GRPC GlobalStateService.SmesherDataQuery")
+	s.logger.Info("DEPRECATED GRPC GlobalStateService.SmesherDataQuery")
 	return nil, status.Errorf(codes.Unimplemented, "DEPRECATED")
 }
 
@@ -198,7 +202,7 @@ func (s GlobalStateService) SmesherDataQuery(_ context.Context, in *pb.SmesherDa
 
 // AccountDataStream exposes a stream of account-related data.
 func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, stream pb.GlobalStateService_AccountDataStreamServer) error {
-	log.Info("GRPC GlobalStateService.AccountDataStream")
+	s.logger.Info("GRPC GlobalStateService.AccountDataStream")
 
 	if in.Filter == nil {
 		return status.Errorf(codes.InvalidArgument, "`Filter` must be provided")
@@ -242,10 +246,10 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 	for {
 		select {
 		case <-accountBufFull:
-			log.Info("account buffer is full, shutting down")
+			s.logger.Info("account buffer is full, shutting down")
 			return status.Error(codes.Canceled, errAccountBufferFull)
 		case <-rewardsBufFull:
-			log.Info("rewards buffer is full, shutting down")
+			s.logger.Info("rewards buffer is full, shutting down")
 			return status.Error(codes.Canceled, errRewardsBufferFull)
 		case updatedAccountEvent := <-accountCh:
 			// Apply address filter
@@ -255,7 +259,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 				// nonce.
 				acct, err := s.getAccount(addr)
 				if err != nil {
-					log.With().Error("unable to fetch projected account state", log.Err(err))
+					s.logger.With().Error("unable to fetch projected account state", log.Err(err))
 					return status.Errorf(codes.Internal, "error fetching projected account data")
 				}
 				resp := &pb.AccountDataStreamResponse{Datum: &pb.AccountData{Datum: &pb.AccountData_AccountWrapper{
@@ -306,7 +310,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 			}
 
 		case <-stream.Context().Done():
-			log.Info("AccountDataStream closing stream, client disconnected")
+			s.logger.Info("AccountDataStream closing stream, client disconnected")
 			return nil
 		}
 		// TODO: do we need an additional case here for a context to indicate
@@ -317,13 +321,13 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 
 // SmesherRewardStream exposes a stream of smesher rewards.
 func (s GlobalStateService) SmesherRewardStream(in *pb.SmesherRewardStreamRequest, stream pb.GlobalStateService_SmesherRewardStreamServer) error {
-	log.Info("DEPRECATED GRPC GlobalStateService.SmesherRewardStream")
+	s.logger.Info("DEPRECATED GRPC GlobalStateService.SmesherRewardStream")
 	return status.Errorf(codes.Unimplemented, "DEPRECATED")
 }
 
 // AppEventStream exposes a stream of emitted app events.
 func (s GlobalStateService) AppEventStream(*pb.AppEventStreamRequest, pb.GlobalStateService_AppEventStreamServer) error {
-	log.Info("GRPC GlobalStateService.AppEventStream")
+	s.logger.Info("GRPC GlobalStateService.AppEventStream")
 
 	// TODO: implement me! We don't currently have any app events
 	// See https://github.com/spacemeshos/go-spacemesh/issues/2074
@@ -333,7 +337,7 @@ func (s GlobalStateService) AppEventStream(*pb.AppEventStreamRequest, pb.GlobalS
 
 // GlobalStateStream exposes a stream of global data data items: rewards, receipts, account info, global state hash.
 func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, stream pb.GlobalStateService_GlobalStateStreamServer) error {
-	log.Info("GRPC GlobalStateService.GlobalStateStream")
+	s.logger.Info("GRPC GlobalStateService.GlobalStateStream")
 
 	if in.GlobalStateDataFlags == uint32(pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_UNSPECIFIED) {
 		return status.Errorf(codes.InvalidArgument, "`GlobalStateDataFlags` must set at least one bitfield")
@@ -374,13 +378,13 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 	for {
 		select {
 		case <-accountBufFull:
-			log.Info("account buffer is full, shutting down")
+			s.logger.Info("account buffer is full, shutting down")
 			return status.Error(codes.Canceled, errAccountBufferFull)
 		case <-rewardsBufFull:
-			log.Info("rewards buffer is full, shutting down")
+			s.logger.Info("rewards buffer is full, shutting down")
 			return status.Error(codes.Canceled, errRewardsBufferFull)
 		case <-layersBufFull:
-			log.Info("layers buffer is full, shutting down")
+			s.logger.Info("layers buffer is full, shutting down")
 			return status.Error(codes.Canceled, errLayerBufferFull)
 		case updatedAccount := <-accountCh:
 			// The Reporter service just sends us the account address. We are responsible
@@ -388,7 +392,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			// nonce.
 			acct, err := s.getAccount(updatedAccount.Address)
 			if err != nil {
-				log.With().Error("unable to fetch projected account state", log.Err(err))
+				s.logger.With().Error("unable to fetch projected account state", log.Err(err))
 				return status.Errorf(codes.Internal, "error fetching projected account data")
 			}
 			resp := &pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_AccountWrapper{
@@ -418,7 +422,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			}
 			root, err := s.conState.GetLayerStateRoot(layer.LayerID)
 			if err != nil {
-				log.With().Warning("error retrieving layer data", log.Err(err))
+				s.logger.With().Warning("error retrieving layer data", log.Err(err))
 				root = types.Hash32{}
 			}
 			resp := &pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_GlobalState{
@@ -431,7 +435,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 				return fmt.Errorf("send to stream: %w", err)
 			}
 		case <-stream.Context().Done():
-			log.Info("AccountDataStream closing stream, client disconnected")
+			s.logger.Info("AccountDataStream closing stream, client disconnected")
 			return nil
 		}
 		// TODO: do we need an additional case here for a context to indicate

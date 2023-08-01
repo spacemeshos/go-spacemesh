@@ -14,12 +14,14 @@ import (
 )
 
 type activationService struct {
+	logger      log.Logger
 	goldenAtx   types.ATXID
 	atxProvider atxProvider
 }
 
-func NewActivationService(atxProvider atxProvider, goldenAtx types.ATXID) *activationService {
+func NewActivationService(atxProvider atxProvider, goldenAtx types.ATXID, lg log.Logger) *activationService {
 	return &activationService{
+		logger:      lg,
 		goldenAtx:   goldenAtx,
 		atxProvider: atxProvider,
 	}
@@ -27,7 +29,7 @@ func NewActivationService(atxProvider atxProvider, goldenAtx types.ATXID) *activ
 
 // RegisterService implements ServiceAPI.
 func (s *activationService) RegisterService(server *Server) {
-	log.Info("registering GRPC Activation Service")
+	s.logger.Info("registering GRPC Activation Service")
 	pb.RegisterActivationServiceServer(server.GrpcServer, s)
 }
 
@@ -38,11 +40,9 @@ func (s *activationService) Get(ctx context.Context, request *pb.GetRequest) (*p
 	}
 
 	atxId := types.ATXID(types.BytesToHash(request.Id))
-	logger := log.GetLogger().WithFields(log.Stringer("id", atxId))
-
 	atx, err := s.atxProvider.GetFullAtx(atxId)
 	if err != nil || atx == nil {
-		logger.With().Debug("failed to get the ATX", log.Err(err))
+		s.logger.With().Debug("failed to get the ATX", log.Err(err), log.Stringer("id", atxId))
 		return nil, status.Error(codes.NotFound, "id was not found")
 	}
 	return &pb.GetResponse{
