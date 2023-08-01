@@ -28,7 +28,6 @@ import (
 	"github.com/spacemeshos/merkle-tree"
 	"github.com/spacemeshos/poet/shared"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"
@@ -484,7 +483,7 @@ func marshalProto(t *testing.T, msg proto.Message) string {
 var cfg = DefaultTestConfig()
 
 func launchServer(tb testing.TB, cfg Config, services ...ServiceAPI) func() {
-	grpcService := New(cfg.PublicListener, zaptest.NewLogger(tb).Named("grpc"))
+	grpcService := New(cfg.PublicListener, logtest.New(tb).Named("grpc"))
 	jsonService := NewJSONHTTPServer(cfg.JSONListener, logtest.New(tb).WithName("grpc.JSON"))
 
 	// attach services
@@ -544,7 +543,7 @@ func TestNewServersConfig(t *testing.T) {
 	port2, err := getFreePort(0)
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
-	grpcService := New(fmt.Sprintf(":%d", port1), zaptest.NewLogger(t).Named("grpc"))
+	grpcService := New(fmt.Sprintf(":%d", port1), logtest.New(t).Named("grpc"))
 	jsonService := NewJSONHTTPServer(fmt.Sprintf(":%d", port2), logtest.New(t).WithName("grpc.JSON"))
 
 	require.Contains(t, grpcService.Listener, strconv.Itoa(port1), "Expected same port")

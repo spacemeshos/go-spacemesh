@@ -1052,7 +1052,7 @@ func (app *App) initService(ctx context.Context, svc grpcserver.Service) (grpcse
 }
 
 func (app *App) newGrpc(logger *zap.Logger, endpoint string) *grpcserver.Server {
-	return grpcserver.New(endpoint, logger.Named("grpc"),
+	return grpcserver.New(endpoint, log.NewFromLog(logger.Named("grpc")),
 		grpc.ChainStreamInterceptor(grpctags.StreamServerInterceptor(), grpczap.StreamServerInterceptor(logger)),
 		grpc.ChainUnaryInterceptor(grpctags.UnaryServerInterceptor(), grpczap.UnaryServerInterceptor(logger)),
 		grpc.MaxSendMsgSize(app.Config.API.GrpcSendMsgSize),
