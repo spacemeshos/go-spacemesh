@@ -252,18 +252,18 @@ func (mr *MockmeshMockRecorder) GetEpochAtx(arg0, arg1 interface{}) *gomock.Call
 }
 
 // GetMalfeasanceProof mocks base method.
-func (m *Mockmesh) GetMalfeasanceProof(nodeID types.NodeID) (*types.MalfeasanceProof, error) {
+func (m *Mockmesh) GetMalfeasanceProof(arg0 types.NodeID) (*types.MalfeasanceProof, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMalfeasanceProof", nodeID)
+	ret := m.ctrl.Call(m, "GetMalfeasanceProof", arg0)
 	ret0, _ := ret[0].(*types.MalfeasanceProof)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetMalfeasanceProof indicates an expected call of GetMalfeasanceProof.
-func (mr *MockmeshMockRecorder) GetMalfeasanceProof(nodeID interface{}) *gomock.Call {
+func (mr *MockmeshMockRecorder) GetMalfeasanceProof(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMalfeasanceProof", reflect.TypeOf((*Mockmesh)(nil).GetMalfeasanceProof), nodeID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMalfeasanceProof", reflect.TypeOf((*Mockmesh)(nil).GetMalfeasanceProof), arg0)
 }
 
 // Proposals mocks base method.

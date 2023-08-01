@@ -92,7 +92,7 @@ func (o *Oracle) ProposalEligibility(lid types.LayerID, beacon types.Beacon, non
 }
 
 func (o *Oracle) activesFromFirstBlock(targetEpoch types.EpochID) (uint64, uint64, []types.ATXID, error) {
-	activeSet, err := ActiveSetFromBlock(o.cdb, targetEpoch)
+	activeSet, err := ActiveSetFromEpochFirstBlock(o.cdb, targetEpoch)
 	if err != nil {
 		return 0, 0, nil, err
 	}
@@ -100,21 +100,25 @@ func (o *Oracle) activesFromFirstBlock(targetEpoch types.EpochID) (uint64, uint6
 	if err != nil {
 		return 0, 0, nil, err
 	}
-	// put miner's own ATXID last
-	activeSet = append(activeSet, own.ID)
 	var total uint64
+	var final []types.ATXID
 	for _, id := range activeSet {
 		hdr, err := o.cdb.GetAtxHeader(id)
 		if err != nil {
 			return 0, 0, nil, err
 		}
+		if id != own.ID {
+			final = append(final, id)
+		}
 		total += hdr.GetWeight()
 	}
+	// put miner's own ATXID last
+	final = append(final, own.ID)
 	o.log.With().Info("active set selected for proposal",
 		log.Stringer("epoch", targetEpoch),
-		log.Int("num_atx", len(activeSet)),
+		log.Int("num_atx", len(final)),
 	)
-	return own.GetWeight(), total, activeSet, nil
+	return own.GetWeight(), total, final, nil
 }
 
 func (o *Oracle) activeSet(targetEpoch types.EpochID) (uint64, uint64, []types.ATXID, error) {

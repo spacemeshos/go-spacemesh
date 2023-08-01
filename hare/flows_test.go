@@ -258,10 +258,7 @@ func Test_multipleCPs(t *testing.T) {
 	pList := make(map[types.LayerID][]*types.Proposal)
 	for j := types.GetEffectiveGenesis().Add(1); !j.After(finalLyr); j = j.Add(1) {
 		for i := uint64(0); i < 20; i++ {
-			p := genLayerProposal(j, []types.TransactionID{})
-			p.EpochData = &types.EpochData{
-				Beacon: types.EmptyBeacon,
-			}
+			p := randomProposal(j, types.EmptyBeacon)
 			pList[j] = append(pList[j], p)
 		}
 	}
@@ -378,10 +375,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	pList := make(map[types.LayerID][]*types.Proposal)
 	for j := types.GetEffectiveGenesis().Add(1); !j.After(finalLyr); j = j.Add(1) {
 		for i := uint64(0); i < 20; i++ {
-			p := genLayerProposal(j, []types.TransactionID{})
-			p.EpochData = &types.EpochData{
-				Beacon: types.EmptyBeacon,
-			}
+			p := randomProposal(j, types.EmptyBeacon)
 			pList[j] = append(pList[j], p)
 		}
 	}

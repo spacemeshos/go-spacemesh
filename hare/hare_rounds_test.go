@@ -78,10 +78,11 @@ func runNodesFor(t *testing.T, ctx context.Context, nodes, leaders, maxLayers, l
 	mockMesh := mocks.NewMockmesh(gomock.NewController(t))
 	if createProposal {
 		for lid := types.GetEffectiveGenesis().Add(1); !lid.After(types.GetEffectiveGenesis().Add(uint32(maxLayers))); lid = lid.Add(1) {
-			p := genLayerProposal(lid, []types.TransactionID{})
+			p := randomProposal(lid, types.RandomBeacon())
 			mockMesh.EXPECT().Ballot(p.Ballot.ID()).Return(&p.Ballot, nil).AnyTimes()
 			mockMesh.EXPECT().Proposals(lid).Return([]*types.Proposal{p}, nil).AnyTimes()
-			mockMesh.EXPECT().GetAtxHeader(p.AtxID).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil).AnyTimes()
+			mockMesh.EXPECT().GetAtxHeader(p.AtxID).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1, NodeID: p.SmesherID}, nil).AnyTimes()
+			mockMesh.EXPECT().GetMalfeasanceProof(p.SmesherID)
 		}
 	} else {
 		mockMesh.EXPECT().Proposals(gomock.Any()).Return([]*types.Proposal{}, nil).AnyTimes()
