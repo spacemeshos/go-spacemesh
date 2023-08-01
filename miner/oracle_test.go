@@ -363,38 +363,67 @@ func createBallots(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, nu
 }
 
 func TestOracle_NotSyncedBeforeLastEpoch(t *testing.T) {
-	avgLayerSize := uint32(10)
-	layersPerEpoch := uint32(20)
-	o := createTestOracle(t, avgLayerSize, layersPerEpoch, 0)
-	lid := types.LayerID(layersPerEpoch * 3)
-
-	common := types.RandomActiveSet(100)
-	blts := createBallots(t, o.cdb, lid, 20, common)
-	expected := common
-	block := &types.Block{
-		InnerBlock: types.InnerBlock{
-			LayerIndex: lid.GetEpoch().FirstLayer(),
+	for _, tc := range []struct {
+		desc          string
+		ownAtxInBlock bool
+	}{
+		{
+			desc: "own atx not in block",
 		},
-	}
-	for _, b := range blts {
-		block.Rewards = append(block.Rewards, types.AnyReward{AtxID: b.AtxID})
-		expected = append(expected, b.AtxID)
-	}
-	block.Initialize()
-	require.NoError(t, blocks.Add(o.cdb, block))
-	require.NoError(t, certificates.Add(o.cdb, lid.GetEpoch().FirstLayer(), &types.Certificate{BlockID: block.ID()}))
+		{
+			desc:          "own atx in block",
+			ownAtxInBlock: true,
+		},
+	} {
+		tc := tc
+		t.Run(tc.desc, func(t *testing.T) {
+			avgLayerSize := uint32(10)
+			lyrsPerEpoch := uint32(20)
+			o := createTestOracle(t, avgLayerSize, lyrsPerEpoch, 0)
+			lid := types.LayerID(lyrsPerEpoch * 3)
 
-	epoch := types.EpochID(2)
-	genMinerATX(t, o.cdb, expected[0], epoch.FirstLayer(), o.edSigner, time.Now())
-	for _, id := range expected[1:] {
-		signer, err := signing.NewEdSigner()
-		require.NoError(t, err)
-		genMinerATX(t, o.cdb, id, epoch.FirstLayer(), signer, time.Now())
-	}
+			common := types.RandomActiveSet(100)
+			blts := createBallots(t, o.cdb, lid, 20, common)
+			expected := common
+			block := &types.Block{
+				InnerBlock: types.InnerBlock{
+					LayerIndex: lid.GetEpoch().FirstLayer(),
+				},
+			}
+			for _, b := range blts {
+				block.Rewards = append(block.Rewards, types.AnyReward{AtxID: b.AtxID})
+				expected = append(expected, b.AtxID)
+			}
+			block.Initialize()
+			require.NoError(t, blocks.Add(o.cdb, block))
+			require.NoError(t, certificates.Add(o.cdb, lid.GetEpoch().FirstLayer(), &types.Certificate{BlockID: block.ID()}))
 
-	o.mSync.EXPECT().SyncedBefore(types.EpochID(2)).Return(false)
-	ee, err := o.ProposalEligibility(lid, types.RandomBeacon(), types.VRFPostIndex(1))
-	require.NoError(t, err)
-	require.NotNil(t, ee)
-	require.ElementsMatch(t, ee.ActiveSet, expected)
+			epoch := types.EpochID(2)
+			var ownAtx types.ATXID
+			var remaining []types.ATXID
+			if tc.ownAtxInBlock {
+				ownAtx = expected[0]
+				remaining = expected[1:]
+			} else {
+				ownAtx = types.RandomATXID()
+				remaining = expected
+			}
+			genMinerATX(t, o.cdb, ownAtx, epoch.FirstLayer(), o.edSigner, time.Now())
+			for _, id := range remaining {
+				signer, err := signing.NewEdSigner()
+				require.NoError(t, err)
+				genMinerATX(t, o.cdb, id, epoch.FirstLayer(), signer, time.Now())
+			}
+			if !tc.ownAtxInBlock {
+				expected = append(expected, ownAtx)
+			}
+
+			o.mSync.EXPECT().SyncedBefore(types.EpochID(2)).Return(false)
+			ee, err := o.ProposalEligibility(lid, types.RandomBeacon(), types.VRFPostIndex(1))
+			require.NoError(t, err)
+			require.NotNil(t, ee)
+			require.ElementsMatch(t, ee.ActiveSet, expected)
+			require.Equal(t, ownAtx, ee.Atx)
+		})
+	}
 }
