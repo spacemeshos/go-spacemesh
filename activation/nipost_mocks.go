@@ -35,6 +35,20 @@ func (m *MockPoetProvingServiceClient) EXPECT() *MockPoetProvingServiceClientMoc
 	return m.recorder
 }
 
+// Address mocks base method.
+func (m *MockPoetProvingServiceClient) Address() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Address")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// Address indicates an expected call of Address.
+func (mr *MockPoetProvingServiceClientMockRecorder) Address() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Address", reflect.TypeOf((*MockPoetProvingServiceClient)(nil).Address))
+}
+
 // PoetServiceID mocks base method.
 func (m *MockPoetProvingServiceClient) PoetServiceID(arg0 context.Context) (types.PoetServiceID, error) {
 	m.ctrl.T.Helper()
