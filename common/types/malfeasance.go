@@ -232,6 +232,14 @@ func (hm *HareMetadata) Equivocation(other *HareMetadata) bool {
 	return hm.Layer == other.Layer && hm.Round == other.Round && hm.MsgHash != other.MsgHash
 }
 
+func (hm HareMetadata) ToBytes() []byte {
+	buf, err := codec.Encode(&hm)
+	if err != nil {
+		panic(err.Error())
+	}
+	return buf
+}
+
 type HareProofMsg struct {
 	InnerMsg HareMetadata
 
@@ -241,9 +249,5 @@ type HareProofMsg struct {
 
 // SignedBytes returns the actual data being signed in a HareProofMsg.
 func (m *HareProofMsg) SignedBytes() []byte {
-	data, err := codec.Encode(&m.InnerMsg)
-	if err != nil {
-		log.With().Fatal("failed to serialize MultiBlockProposalsMsg", log.Err(err))
-	}
-	return data
+	return m.InnerMsg.ToBytes()
 }
