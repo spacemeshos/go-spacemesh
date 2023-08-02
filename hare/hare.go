@@ -321,6 +321,10 @@ func (h *Hare) onTick(ctx context.Context, lid types.LayerID) (bool, error) {
 		h.With().Debug("hare exiting", log.Context(ctx), lid)
 		return false, nil
 	}
+	if h.config.Disable != 0 && lid >= h.config.Disable {
+		h.With().Debug("hare is disabled at this layer", log.Context(ctx), lid)
+		return false, nil
+	}
 
 	h.setLastLayer(lid)
 

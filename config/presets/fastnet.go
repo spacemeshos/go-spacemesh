@@ -22,12 +22,13 @@ func fastnet() config.Config {
 	types.SetNetworkHRP(conf.NetworkHRP) // set to generate coinbase
 	conf.BaseConfig.OptFilterThreshold = 90
 
-	conf.HARE.N = 800
-	conf.HARE.ExpectedLeaders = 10
-	conf.HARE.LimitConcurrent = 5
-	conf.HARE.LimitIterations = 3
-	conf.HARE.RoundDuration = 2 * time.Second
-	conf.HARE.WakeupDelta = 3 * time.Second
+	conf.HARE.Disable = 1 // hare won't run starting at this layer
+
+	conf.HARE3.Enable = true
+	conf.HARE3.Committee = 800
+	conf.HARE3.Leaders = 10
+	conf.HARE3.PreroundDelay = 3 * time.Second
+	conf.HARE3.RoundDuration = 1 * time.Second
 
 	conf.P2P.MinPeers = 10
 

@@ -18,6 +18,7 @@ func (r Round) String() string {
 	return roundNames[r]
 }
 
+// NOTE(dshulyak) changes in order is a breaking change
 const (
 	preround Round = iota
 	hardlock

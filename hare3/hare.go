@@ -10,6 +10,7 @@ import (
 
 	"github.com/benbjohnson/clock"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -30,22 +31,34 @@ type Config struct {
 	Enable          bool          `mapstructure:"enable"`
 	EnableAfter     types.LayerID `mapstructure:"enable-layer"`
 	Committee       uint16        `mapstructure:"committee"`
-	Leaders         int           `mapstructure:"leaders"`
+	Leaders         uint16        `mapstructure:"leaders"`
 	IterationsLimit uint8         `mapstructure:"iterations-limit"`
 	PreroundDelay   time.Duration `mapstructure:"preround-delay"`
 	RoundDuration   time.Duration `mapstructure:"round-duration"`
 	ProtocolName    string
 }
 
+func (cfg *Config) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
+	encoder.AddBool("enabled", cfg.Enable)
+	encoder.AddUint32("after", cfg.EnableAfter.Uint32())
+	encoder.AddUint16("committee", cfg.Committee)
+	encoder.AddUint16("leaders", cfg.Leaders)
+	encoder.AddUint8("iterations limit", cfg.IterationsLimit)
+	encoder.AddDuration("preround delay", cfg.PreroundDelay)
+	encoder.AddDuration("round duration", cfg.RoundDuration)
+	encoder.AddString("p2p protocol", cfg.ProtocolName)
+	return nil
+}
+
 func DefaultConfig() Config {
 	return Config{
-		Enable:          true,
 		Committee:       800,
 		Leaders:         10,
 		IterationsLimit: 40,
 		PreroundDelay:   25 * time.Second,
 		RoundDuration:   10 * time.Second,
-		ProtocolName:    "/h/3.0", // can be bumped to 3.1 with oracle upgrade
+		// can be bumped to 3.1 when oracle upgrades
+		ProtocolName: "/h/3.0",
 	}
 }
 
@@ -198,6 +211,7 @@ func (h *Hare) Coins() <-chan WeakCoinOutput {
 }
 
 func (h *Hare) Start() {
+	h.log.Info("started", zap.Inline(&h.config))
 	h.eg.Go(func() error {
 		h.pubsub.Register(h.config.ProtocolName, h.handler)
 		enabled := types.MaxLayer(h.nodeclock.CurrentLayer(), h.config.EnableAfter)
@@ -496,4 +510,5 @@ func (h *Hare) Stop() {
 	h.eg.Wait()
 	close(h.results)
 	close(h.coins)
+	h.log.Info("stopped")
 }
