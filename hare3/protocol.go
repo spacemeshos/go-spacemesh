@@ -9,8 +9,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-type round = Round
-
 type grade uint8
 
 const (

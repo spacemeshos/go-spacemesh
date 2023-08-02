@@ -3,11 +3,12 @@ package hare3
 import (
 	"fmt"
 
+	"go.uber.org/zap/zapcore"
+
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"go.uber.org/zap/zapcore"
 )
 
 type Round uint8
@@ -18,7 +19,7 @@ func (r Round) String() string {
 	return roundNames[r]
 }
 
-// NOTE(dshulyak) changes in order is a breaking change
+// NOTE(dshulyak) changes in order is a breaking change.
 const (
 	preround Round = iota
 	hardlock

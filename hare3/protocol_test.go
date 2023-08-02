@@ -3,11 +3,11 @@ package hare3
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/stretchr/testify/require"
 )
 
 func castIds(strings ...string) []types.ProposalID {

@@ -103,7 +103,6 @@ func (inputs *instanceInputs) submit(msg *input) (*response, error) {
 	case <-inputs.ctx.Done():
 		return nil, inputs.ctx.Err()
 	}
-
 }
 
 type Opt func(*Hare)
