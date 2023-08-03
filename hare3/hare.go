@@ -22,6 +22,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/beacons"
+	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -268,8 +269,22 @@ func (h *Hare) handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 		return err
 	}
 	if resp.equivocation != nil {
-		// TODO(dshulyak) save and gossip equivocation
-		_ = resp.equivocation
+		proof := &types.MalfeasanceProof{
+			Layer: resp.equivocation.Messages[0].InnerMsg.Layer,
+			Proof: types.Proof{
+				Type: types.HareEquivocation,
+				Data: resp.equivocation,
+			},
+		}
+		encoded, err := codec.Encode(proof)
+		if err != nil {
+			panic("failed to encode")
+		}
+		if err := identities.SetMalicious(
+			h.db, resp.equivocation.Messages[0].SmesherID, encoded, time.Now()); err != nil {
+			h.log.Error("failed to save malicious identity", zap.Error(err))
+		}
+		h.db.CacheMalfeasanceProof(resp.equivocation.Messages[0].SmesherID, proof)
 	}
 	if !resp.gossip {
 		return fmt.Errorf("dropped by graded gossip")

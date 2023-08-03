@@ -11,6 +11,7 @@ import (
 	"github.com/benbjohnson/clock"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -198,4 +199,10 @@ func testHare(tb testing.TB, n int, pause time.Duration) {
 func TestHare(t *testing.T) {
 	t.Run("two", func(t *testing.T) { testHare(t, 2, 50*time.Millisecond) })
 	t.Run("small", func(t *testing.T) { testHare(t, 5, 50*time.Millisecond) })
+}
+
+func TestConfigMarshal(t *testing.T) {
+	enc := zapcore.NewMapObjectEncoder()
+	cfg := &Config{}
+	require.NoError(t, cfg.MarshalLogObject(enc))
 }

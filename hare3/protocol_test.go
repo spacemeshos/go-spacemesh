@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -402,4 +403,23 @@ func TestProtocol(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestInputMarshall(t *testing.T) {
+	enc := zapcore.NewMapObjectEncoder()
+	inp := &input{
+		Message: &Message{},
+	}
+	require.NoError(t, inp.MarshalLogObject(enc))
+}
+
+func TestOutputMarshall(t *testing.T) {
+	enc := zapcore.NewMapObjectEncoder()
+	coin := true
+	out := &output{
+		coin:    &coin,
+		result:  []types.ProposalID{{}},
+		message: &Message{},
+	}
+	require.NoError(t, out.MarshalLogObject(enc))
 }
