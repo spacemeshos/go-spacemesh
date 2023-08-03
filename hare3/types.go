@@ -38,8 +38,8 @@ type IterRound struct {
 	Round Round
 }
 
-// Since returns number of network delays since specified iterround.
-func (ir IterRound) Since(since IterRound) int {
+// Delay returns number of network delays since specified iterround.
+func (ir IterRound) Delay(since IterRound) int {
 	return int(ir.Single() - since.Single())
 }
 

@@ -147,7 +147,7 @@ func (p *protocol) onMessage(msg *input) (bool, *types.HareProof) {
 }
 
 func (p *protocol) thresholdGossipMessage(ir IterRound, grade grade) (*types.Hash32, []types.ProposalID) {
-	for _, ref := range p.thresholdGossip.filterref(ir, grade) {
+	for _, ref := range p.thresholdGossip.outputref(ir, grade) {
 		valid, exist := p.validProposals[ref]
 		if !exist || valid.iter > ir.Iter {
 			continue
@@ -158,7 +158,7 @@ func (p *protocol) thresholdGossipMessage(ir IterRound, grade grade) (*types.Has
 }
 
 func (p *protocol) commitExists(iter uint8, grade grade, match types.Hash32) bool {
-	for _, ref := range p.thresholdGossip.filterref(IterRound{Iter: iter, Round: commit}, grade) {
+	for _, ref := range p.thresholdGossip.outputref(IterRound{Iter: iter, Round: commit}, grade) {
 		if ref == match {
 			return true
 		}
@@ -172,7 +172,7 @@ func (p *protocol) execution(out *output, active bool) {
 		// -1 - skipped hardlock round in iter 0
 		// -1 - implementation rounds starts from 0
 		g := grade5 - grade(p.Round-2)
-		p.gradedProposals.set(g, p.thresholdGossip.filter(IterRound{Round: preround}, g))
+		p.gradedProposals.set(g, p.thresholdGossip.output(IterRound{Round: preround}, g))
 	}
 	if p.Round == preround && active {
 		out.message = &Message{Body: Body{
@@ -191,10 +191,15 @@ func (p *protocol) execution(out *output, active bool) {
 		if ref, _ := p.thresholdGossipMessage(IterRound{Iter: p.Iter - 1, Round: commit}, grade4); ref != nil {
 			p.locked = ref
 			p.hardLocked = true
+		} else {
+			p.locked = nil
+			p.hardLocked = false
 		}
 	} else if p.Round == softlock && p.Iter > 0 {
 		if ref, _ := p.thresholdGossipMessage(IterRound{Iter: p.Iter - 1, Round: commit}, grade3); ref != nil {
 			p.locked = ref
+		} else {
+			p.locked = nil
 		}
 	} else if p.Round == propose && active {
 		values := p.gradedProposals.get(grade4)
@@ -209,7 +214,7 @@ func (p *protocol) execution(out *output, active bool) {
 			Value:     Value{Proposals: values},
 		}}
 	} else if p.Round == commit {
-		proposed := p.gradecast.filter(IterRound{Iter: p.Iter, Round: propose})
+		proposed := p.gradecast.output(IterRound{Iter: p.Iter, Round: propose})
 		for _, graded := range proposed {
 			if graded.grade < grade1 || !isSubset(graded.values, p.gradedProposals.get(grade2)) {
 				continue
@@ -293,23 +298,33 @@ func (p *protocol) next(active bool) output {
 	return out
 }
 
+// Protocol 1. graded-gossip. page 10
 type gradedGossip struct {
 	state map[messageKey]*input
 }
 
 func (g *gradedGossip) receive(input *input) (bool, *types.HareProof) {
+	// Case 1: will not be discarded earlier
 	other, exist := g.state[input.Key()]
 	if exist {
 		if other.msgHash != input.msgHash && !other.malicious {
+			// Case 3
 			other.malicious = true
 			return true, &types.HareProof{Messages: [2]types.HareProofMsg{
 				other.ToMalfeasenceProof(), input.ToMalfeasenceProof(),
 			}}
 		}
+		// Case 2. but also we filter duplicates from p2p layer here
 		return false, nil
 	}
+	// Case 4
 	g.state[input.Key()] = input
 	return true, nil
+}
+
+// Protocol 2. gradecast. page 13
+type gradecast struct {
+	state map[messageKey]*gradecasted
 }
 
 type gradecasted struct {
@@ -320,25 +335,22 @@ type gradecasted struct {
 	smallest  types.VrfSignature
 }
 
-func (g *gradecasted) ggrade(past IterRound) grade {
+func (g *gradecasted) output(target IterRound) grade {
 	// TODO(dshulyak) i removed one round from 1st iteration, this and below
 	// requires adjustment for that
-	switch {
-	case !g.malicious && g.grade == grade3 && g.received.Since(past) <= 1:
+	if !g.malicious && g.grade == grade3 && g.received.Delay(target) <= 1 {
+		// 2 (a)
 		return grade2
-	case !g.malicious && g.grade >= grade2 && g.received.Since(past) <= 2:
+	} else if !g.malicious && g.grade >= grade2 && g.received.Delay(target) <= 2 {
+		// 3 (a)
 		return grade1
-	default:
-		return grade0
 	}
-}
-
-type gradecast struct {
-	state map[messageKey]*gradecasted
+	return grade0
 }
 
 func (g *gradecast) add(grade grade, current IterRound, msg *input) {
-	if current.Since(msg.IterRound) > 3 {
+	// TODO(dshulyak) where this condition came from?
+	if current.Delay(msg.IterRound) > 3 {
 		return
 	}
 	gc := gradecasted{
@@ -360,9 +372,11 @@ func (g *gradecast) add(grade grade, current IterRound, msg *input) {
 		}
 	}
 	switch {
-	case other.ggrade(current) == grade2 && current.Since(gc.received) <= 3:
+	// 2 (a) && 2 (b)
+	case other.output(current) == grade2 && current.Delay(gc.received) <= 3:
 		other.malicious = true
-	case other.ggrade(current) == grade1 && current.Since(gc.received) <= 2:
+	// 3(a) && 3 (b)
+	case other.output(current) == grade1 && current.Delay(gc.received) <= 2:
 		other.malicious = true
 	}
 }
@@ -373,11 +387,11 @@ type gset struct {
 	smallest types.VrfSignature
 }
 
-func (g *gradecast) filter(filter IterRound) []gset {
+func (g *gradecast) output(target IterRound) []gset {
 	var rst []gset
 	for key, value := range g.state {
-		if key.IterRound == filter {
-			if grade := value.ggrade(filter); grade > 0 {
+		if key.IterRound == target {
+			if grade := value.output(target); grade > grade0 {
 				rst = append(rst, gset{
 					grade:    grade,
 					values:   value.values,
@@ -386,7 +400,9 @@ func (g *gradecast) filter(filter IterRound) []gset {
 			}
 		}
 	}
-	// NOTE(dshulyak) consistent order, not a part of the paper
+	// TODO(dshulyak) i think it satisfies p-Weak leader election
+	// inconsistent order of proposals may cause participants to commit
+	// on different proposals
 	sort.Slice(rst, func(i, j int) bool {
 		return rst[i].smallest.Cmp(&rst[j].smallest) == -1
 	})
@@ -399,13 +415,16 @@ type votes struct {
 	malicious     bool
 	value         Value
 }
+
+// Protocol 3. thresh-gossip. Page 15
 type thresholdGossip struct {
 	threshold uint16
 	state     map[messageKey]*votes
 }
 
 func (t *thresholdGossip) add(grade grade, current IterRound, input *input) {
-	if current.Since(input.IterRound) > 5 {
+	// TODO(dshulyak) where this condition came from?
+	if current.Delay(input.IterRound) > 5 {
 		return
 	}
 	other, exist := t.state[input.Key()]
@@ -421,9 +440,9 @@ func (t *thresholdGossip) add(grade grade, current IterRound, input *input) {
 	}
 }
 
-// filter returns union of sorted proposals received
+// output returns union of sorted proposals received
 // in the given round with minimal specified grade.
-func (t *thresholdGossip) filter(filter IterRound, grade grade) []types.ProposalID {
+func (t *thresholdGossip) output(filter IterRound, grade grade) []types.ProposalID {
 	all := map[types.ProposalID]uint16{}
 	good := map[types.ProposalID]struct{}{}
 	for key, value := range t.state {
@@ -447,7 +466,7 @@ func (t *thresholdGossip) filter(filter IterRound, grade grade) []types.Proposal
 }
 
 // filterred returns all references to proposals in the given round with minimal grade.
-func (t *thresholdGossip) filterref(filter IterRound, grade grade) []types.Hash32 {
+func (t *thresholdGossip) outputref(filter IterRound, grade grade) []types.Hash32 {
 	all := map[types.Hash32]uint16{}
 	good := map[types.Hash32]struct{}{}
 	for key, value := range t.state {
