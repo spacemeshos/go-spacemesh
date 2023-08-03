@@ -63,6 +63,7 @@ type Config struct {
 	Flood                  bool        `mapstructure:"flood"`
 	Listen                 string      `mapstructure:"listen"`
 	Bootnodes              []string    `mapstructure:"bootnodes"`
+	Direct                 []string    `mapstructure:"direct"`
 	MinPeers               int         `mapstructure:"min-peers"`
 	LowPeers               int         `mapstructure:"low-peers"`
 	HighPeers              int         `mapstructure:"high-peers"`

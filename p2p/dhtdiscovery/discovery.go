@@ -54,6 +54,12 @@ func WithBackup(backup []peer.AddrInfo) Opt {
 	}
 }
 
+func WithDirect(direct []peer.AddrInfo) Opt {
+	return func(d *Discovery) {
+		d.direct = direct
+	}
+}
+
 func WithLogger(logger *zap.Logger) Opt {
 	return func(d *Discovery) {
 		d.logger = logger
@@ -121,10 +127,10 @@ type Discovery struct {
 	// how often to check if we have enough peers
 	period time.Duration
 	// timeout used for connections
-	timeout           time.Duration
-	bootstrapDuration time.Duration
-	minPeers          int
-	backup, bootnodes []peer.AddrInfo
+	timeout                   time.Duration
+	bootstrapDuration         time.Duration
+	minPeers                  int
+	direct, backup, bootnodes []peer.AddrInfo
 }
 
 func (d *Discovery) Start() {
@@ -151,6 +157,8 @@ func (d *Discovery) Start() {
 			case <-ticker.C:
 			case <-disconnected:
 			}
+			// ensure we are always connected with direct peers
+			d.connect(&connEg, d.direct)
 			if connected := len(d.h.Network().Peers()); connected >= d.minPeers {
 				d.backup = nil // once got enough peers no need to keep backup, they are either already connected or unavailable
 				d.logger.Debug("node is connected with required number of peers. skipping bootstrap",

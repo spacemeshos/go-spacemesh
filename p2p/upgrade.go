@@ -93,6 +93,13 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 	if err != nil {
 		return nil, err
 	}
+	direct, err := parseIntoAddr(fh.cfg.Bootnodes)
+	if err != nil {
+		return nil, err
+	}
+	for _, peer := range direct {
+		h.ConnManager().Protect(peer.ID, "direct")
+	}
 	if fh.PubSub, err = pubsub.New(fh.ctx, fh.logger, h, pubsub.Config{
 		Flood:          cfg.Flood,
 		IsBootnode:     cfg.Bootnode,
@@ -117,6 +124,7 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 	dopts := []discovery.Opt{
 		discovery.WithDir(cfg.DataDir),
 		discovery.WithBootnodes(bootnodes),
+		discovery.WithDirect(direct),
 		discovery.WithLogger(fh.logger.Zap()),
 	}
 	if cfg.PrivateNetwork {
