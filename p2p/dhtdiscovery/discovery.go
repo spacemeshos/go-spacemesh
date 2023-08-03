@@ -42,6 +42,12 @@ func WithMinPeers(minPeers int) Opt {
 	}
 }
 
+func WithHighPeers(peers int) Opt {
+	return func(d *Discovery) {
+		d.highPeers = peers
+	}
+}
+
 func WithBootnodes(bootnodes []peer.AddrInfo) Opt {
 	return func(d *Discovery) {
 		d.bootnodes = bootnodes
@@ -90,6 +96,7 @@ func New(h host.Host, opts ...Opt) (*Discovery, error) {
 		timeout:           30 * time.Second,
 		bootstrapDuration: 30 * time.Second,
 		minPeers:          20,
+		highPeers:         40,
 	}
 	for _, opt := range opts {
 		opt(&d)
@@ -121,10 +128,10 @@ type Discovery struct {
 	// how often to check if we have enough peers
 	period time.Duration
 	// timeout used for connections
-	timeout           time.Duration
-	bootstrapDuration time.Duration
-	minPeers          int
-	backup, bootnodes []peer.AddrInfo
+	timeout             time.Duration
+	bootstrapDuration   time.Duration
+	minPeers, highPeers int
+	backup, bootnodes   []peer.AddrInfo
 }
 
 func (d *Discovery) Start() {
@@ -157,6 +164,14 @@ func (d *Discovery) Start() {
 					zap.Int("required", d.minPeers),
 					zap.Int("connected", connected),
 				)
+				if connected >= d.highPeers {
+					for _, boot := range d.bootnodes {
+						if err := d.h.Network().ClosePeer(boot.ID); err != nil {
+							d.logger.Warn("failed to close bootnode connection",
+								zap.Stringer("address", boot), zap.Error(err))
+						}
+					}
+				}
 			} else {
 				d.connect(&connEg, d.backup)
 				// no reason to spend more resources if we got enough from backup
