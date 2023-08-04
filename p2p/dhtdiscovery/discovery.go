@@ -90,6 +90,12 @@ func WithDir(path string) Opt {
 	}
 }
 
+func DisableDHT() Opt {
+	return func(d *Discovery) {
+		d.disableDht = true
+	}
+}
+
 func New(h host.Host, opts ...Opt) (*Discovery, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	d := Discovery{
@@ -110,18 +116,21 @@ func New(h host.Host, opts ...Opt) (*Discovery, error) {
 	if len(d.bootnodes) == 0 {
 		d.logger.Warn("no bootnodes in the config")
 	}
-	dht, err := newDht(ctx, h, d.public, d.server, d.dir)
-	if err != nil {
-		return nil, err
+	if !d.disableDht {
+		dht, err := newDht(ctx, h, d.public, d.server, d.dir)
+		if err != nil {
+			return nil, err
+		}
+		d.dht = dht
 	}
-	d.dht = dht
 	return &d, nil
 }
 
 type Discovery struct {
-	public bool
-	server bool
-	dir    string
+	public     bool
+	server     bool
+	disableDht bool
+	dir        string
 
 	logger *zap.Logger
 	eg     errgroup.Group
@@ -176,6 +185,10 @@ func (d *Discovery) Start() {
 				)
 				if connected >= d.highPeers {
 					for _, boot := range d.bootnodes {
+						// preserve connection is bootnode is in direct peers
+						if _, exist := direct[boot.ID]; exist {
+							continue
+						}
 						if err := d.h.Network().ClosePeer(boot.ID); err != nil {
 							d.logger.Warn("failed to close bootnode connection",
 								zap.Stringer("address", boot), zap.Error(err))
@@ -198,12 +211,17 @@ func (d *Discovery) Start() {
 func (d *Discovery) Stop() {
 	d.cancel()
 	d.eg.Wait()
-	if err := d.dht.Close(); err != nil {
-		d.logger.Error("error closing dht", zap.Error(err))
+	if d.dht != nil {
+		if err := d.dht.Close(); err != nil {
+			d.logger.Error("error closing dht", zap.Error(err))
+		}
 	}
 }
 
 func (d *Discovery) bootstrap() {
+	if d.dht == nil {
+		return
+	}
 	ctx, cancel := context.WithTimeout(d.ctx, d.bootstrapDuration)
 	defer cancel()
 	if err := d.dht.Bootstrap(ctx); err != nil {
@@ -217,6 +235,10 @@ func (d *Discovery) connect(eg *errgroup.Group, nodes []peer.AddrInfo) {
 	defer cancel()
 	for _, boot := range nodes {
 		boot := boot
+		if boot.ID == d.h.ID() {
+			d.logger.Debug("not dialing self")
+			continue
+		}
 		eg.Go(func() error {
 			if err := d.h.Connect(ctx, boot); err != nil {
 				d.logger.Warn("failed to connect",

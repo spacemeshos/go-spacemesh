@@ -93,7 +93,7 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 	if err != nil {
 		return nil, err
 	}
-	direct, err := parseIntoAddr(fh.cfg.Bootnodes)
+	direct, err := parseIntoAddr(fh.cfg.Direct)
 	if err != nil {
 		return nil, err
 	}
@@ -132,6 +132,9 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 	}
 	if cfg.PrivateNetwork {
 		dopts = append(dopts, discovery.Private())
+	}
+	if cfg.DisableDHT {
+		dopts = append(dopts, discovery.DisableDHT())
 	}
 	if cfg.Bootnode {
 		dopts = append(dopts, discovery.Server())
