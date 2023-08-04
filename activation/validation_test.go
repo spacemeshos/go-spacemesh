@@ -29,18 +29,20 @@ func Test_Validation_VRFNonce(t *testing.T) {
 		LabelsPerUnit: postCfg.LabelsPerUnit,
 	}
 
-	initOpts := DefaultPostSetupOpts()
-	initOpts.DataDir = t.TempDir()
-	initOpts.ProviderID = int(initialization.CPUProviderID())
+	opts := DefaultPostSetupOpts()
+	opts.DataDir = t.TempDir()
+	opts.ProviderID = uint64(initialization.CPUProviderID())
 
 	nodeId := types.BytesToNodeID(make([]byte, 32))
 	commitmentAtxId := types.EmptyATXID
 
+	initOpts, err := opts.ToInitOpts()
+	r.NoError(err)
 	init, err := initialization.NewInitializer(
 		initialization.WithNodeId(nodeId.Bytes()),
 		initialization.WithCommitmentAtxId(commitmentAtxId.Bytes()),
 		initialization.WithConfig(postCfg.ToConfig()),
-		initialization.WithInitOpts(initOpts.ToInitOpts()),
+		initialization.WithInitOpts(initOpts),
 	)
 	r.NoError(err)
 	r.NoError(init.Initialize(context.Background()))
@@ -54,27 +56,27 @@ func Test_Validation_VRFNonce(t *testing.T) {
 	t.Run("valid vrf nonce", func(t *testing.T) {
 		t.Parallel()
 
-		require.NoError(t, v.VRFNonce(nodeId, commitmentAtxId, nonce, meta, initOpts.NumUnits))
+		require.NoError(t, v.VRFNonce(nodeId, commitmentAtxId, nonce, meta, opts.NumUnits))
 	})
 
 	t.Run("invalid vrf nonce", func(t *testing.T) {
 		t.Parallel()
 
 		nonce := types.VRFPostIndex(1)
-		require.Error(t, v.VRFNonce(nodeId, commitmentAtxId, &nonce, meta, initOpts.NumUnits))
+		require.Error(t, v.VRFNonce(nodeId, commitmentAtxId, &nonce, meta, opts.NumUnits))
 	})
 
 	t.Run("wrong commitmentAtxId", func(t *testing.T) {
 		t.Parallel()
 
 		commitmentAtxId := types.ATXID{1, 2, 3}
-		require.Error(t, v.VRFNonce(nodeId, commitmentAtxId, nonce, meta, initOpts.NumUnits))
+		require.Error(t, v.VRFNonce(nodeId, commitmentAtxId, nonce, meta, opts.NumUnits))
 	})
 
 	t.Run("numUnits can be smaller", func(t *testing.T) {
 		t.Parallel()
 
-		require.NoError(t, v.VRFNonce(nodeId, commitmentAtxId, nonce, meta, initOpts.NumUnits-1))
+		require.NoError(t, v.VRFNonce(nodeId, commitmentAtxId, nonce, meta, opts.NumUnits-1))
 	})
 }
 

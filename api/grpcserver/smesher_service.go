@@ -82,7 +82,7 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 	opts.DataDir = in.Opts.DataDir
 	opts.NumUnits = in.Opts.NumUnits
 	opts.MaxFileSize = in.Opts.MaxFileSize
-	opts.ProviderID = int(in.Opts.ProviderId)
+	opts.ProviderID = uint64(in.Opts.ProviderId)
 	opts.Throttle = in.Opts.Throttle
 
 	coinbaseAddr, err := types.StringToAddress(in.Coinbase.Address)

@@ -108,18 +108,6 @@ func TestPostSetupManager_PrepareInitializer(t *testing.T) {
 	req.Error(mgr.PrepareInitializer(ctx, opts))
 }
 
-func TestPostSetupManager_PrepareInitializer_BestProvider(t *testing.T) {
-	req := require.New(t)
-
-	mgr := newTestPostManager(t)
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
-
-	mgr.opts.ProviderID = config.BestProviderID
-	req.NoError(mgr.PrepareInitializer(ctx, mgr.opts))
-}
-
 // Checks that the sequence of calls for initialization (first
 // PrepareInitializer and then StartSession) is enforced.
 func TestPostSetupManager_InitializationCallSequence(t *testing.T) {
@@ -442,7 +430,7 @@ func newTestPostManager(tb testing.TB, o ...newPostSetupMgrOptionFunc) *testPost
 
 	opts := DefaultPostSetupOpts()
 	opts.DataDir = tb.TempDir()
-	opts.ProviderID = int(initialization.CPUProviderID())
+	opts.ProviderID = uint64(initialization.CPUProviderID())
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
 
 	goldenATXID := types.ATXID{2, 3, 4}

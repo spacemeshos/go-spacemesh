@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
 	"runtime"
 	"sync"
 
@@ -82,7 +83,7 @@ type PostSetupOpts struct {
 	DataDir          string              `mapstructure:"smeshing-opts-datadir"`
 	NumUnits         uint32              `mapstructure:"smeshing-opts-numunits"`
 	MaxFileSize      uint64              `mapstructure:"smeshing-opts-maxfilesize"`
-	ProviderID       int                 `mapstructure:"smeshing-opts-provider"`
+	ProviderID       uint64              `mapstructure:"smeshing-opts-provider"`
 	Throttle         bool                `mapstructure:"smeshing-opts-throttle"`
 	Scrypt           config.ScryptParams `mapstructure:"smeshing-opts-scrypt"`
 	ComputeBatchSize uint64              `mapstructure:"smeshing-opts-compute-batch-size"`
@@ -169,23 +170,32 @@ func DefaultPostSetupOpts() PostSetupOpts {
 		DataDir:          opts.DataDir,
 		NumUnits:         opts.NumUnits,
 		MaxFileSize:      opts.MaxFileSize,
-		ProviderID:       opts.ProviderID,
+		ProviderID:       math.MaxUint64,
 		Throttle:         opts.Throttle,
 		Scrypt:           opts.Scrypt,
 		ComputeBatchSize: opts.ComputeBatchSize,
 	}
 }
 
-func (o PostSetupOpts) ToInitOpts() config.InitOpts {
-	return config.InitOpts{
+func (o PostSetupOpts) ToInitOpts() (config.InitOpts, error) {
+	if o.ProviderID == math.MaxUint64 {
+		return config.InitOpts{}, fmt.Errorf("no provider ID specified: %d", o.ProviderID)
+	}
+	if o.ProviderID > math.MaxUint32 {
+		return config.InitOpts{}, fmt.Errorf("invalid provider id: %d", o.ProviderID)
+	}
+
+	providerID := uint32(o.ProviderID)
+	initOpts := config.InitOpts{
 		DataDir:          o.DataDir,
 		NumUnits:         o.NumUnits,
 		MaxFileSize:      o.MaxFileSize,
-		ProviderID:       o.ProviderID,
+		ProviderID:       &providerID,
 		Throttle:         o.Throttle,
 		Scrypt:           o.Scrypt,
 		ComputeBatchSize: o.ComputeBatchSize,
 	}
+	return initOpts, nil
 }
 
 // PostSetupManager implements the PostProvider interface.
@@ -368,27 +378,21 @@ func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSe
 		return fmt.Errorf("post setup session in progress")
 	}
 
-	if opts.ProviderID == config.BestProviderID {
-		p, err := mgr.BestProvider()
-		if err != nil {
-			return err
-		}
-
-		mgr.logger.Info("found best compute provider: id: %d, model: %v, device type: %v", p.ID, p.Model, p.DeviceType)
-		opts.ProviderID = int(p.ID)
-	}
-
 	var err error
 	mgr.commitmentAtxId, err = mgr.commitmentAtx(ctx, opts.DataDir)
 	if err != nil {
 		return err
 	}
 
+	initOpts, err := opts.ToInitOpts()
+	if err != nil {
+		return err
+	}
 	newInit, err := initialization.NewInitializer(
 		initialization.WithNodeId(mgr.id.Bytes()),
 		initialization.WithCommitmentAtxId(mgr.commitmentAtxId.Bytes()),
 		initialization.WithConfig(mgr.cfg.ToConfig()),
-		initialization.WithInitOpts(opts.ToInitOpts()),
+		initialization.WithInitOpts(initOpts),
 		initialization.WithLogger(mgr.logger.Zap()),
 	)
 	if err != nil {
