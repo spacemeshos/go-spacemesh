@@ -499,7 +499,7 @@ func isTooFarBehind(ctx context.Context, logger log.Log, current, lastSynced typ
 
 func (s *Syncer) setStateBeforeSync(ctx context.Context) {
 	current := s.ticker.CurrentLayer()
-	if s.ticker.CurrentLayer() <= types.GetEffectiveGenesis() {
+	if current <= types.GetEffectiveGenesis() {
 		s.setTargetSyncedLayer(ctx, current)
 		s.setSyncState(ctx, synced)
 		if current.GetEpoch() == 0 {
