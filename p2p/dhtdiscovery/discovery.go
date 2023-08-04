@@ -42,6 +42,12 @@ func WithMinPeers(minPeers int) Opt {
 	}
 }
 
+func WithHighPeers(peers int) Opt {
+	return func(d *Discovery) {
+		d.highPeers = peers
+	}
+}
+
 func WithBootnodes(bootnodes []peer.AddrInfo) Opt {
 	return func(d *Discovery) {
 		d.bootnodes = bootnodes
@@ -96,6 +102,7 @@ func New(h host.Host, opts ...Opt) (*Discovery, error) {
 		timeout:           30 * time.Second,
 		bootstrapDuration: 30 * time.Second,
 		minPeers:          20,
+		highPeers:         40,
 	}
 	for _, opt := range opts {
 		opt(&d)
@@ -129,7 +136,7 @@ type Discovery struct {
 	// timeout used for connections
 	timeout                   time.Duration
 	bootstrapDuration         time.Duration
-	minPeers                  int
+	minPeers, highPeers       int
 	direct, backup, bootnodes []peer.AddrInfo
 }
 
@@ -167,6 +174,14 @@ func (d *Discovery) Start() {
 					zap.Int("required", d.minPeers),
 					zap.Int("connected", connected),
 				)
+				if connected >= d.highPeers {
+					for _, boot := range d.bootnodes {
+						if err := d.h.Network().ClosePeer(boot.ID); err != nil {
+							d.logger.Warn("failed to close bootnode connection",
+								zap.Stringer("address", boot), zap.Error(err))
+						}
+					}
+				}
 			} else {
 				d.connect(&connEg, d.backup)
 				// no reason to spend more resources if we got enough from backup

@@ -123,6 +123,8 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 	}
 
 	dopts := []discovery.Opt{
+		discovery.WithMinPeers(cfg.MinPeers),
+		discovery.WithHighPeers(cfg.HighPeers),
 		discovery.WithDir(cfg.DataDir),
 		discovery.WithBootnodes(bootnodes),
 		discovery.WithDirect(direct),

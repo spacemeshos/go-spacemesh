@@ -67,6 +67,7 @@ type Config struct {
 	MinPeers               int         `mapstructure:"min-peers"`
 	LowPeers               int         `mapstructure:"low-peers"`
 	HighPeers              int         `mapstructure:"high-peers"`
+	AutoscalePeers         bool        `mapstructure:"autoscale-peers"`
 	AdvertiseAddress       string      `mapstructure:"advertise-address"`
 	AcceptQueue            int         `mapstructure:"p2p-accept-queue"`
 	Metrics                bool        `mapstructure:"p2p-metrics"`
@@ -180,7 +181,7 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 		lopts = append(lopts, libp2p.ForceReachabilityPrivate())
 	}
 	if cfg.Metrics {
-		lopts = append(lopts, setupResourcesManager(cfg.HighPeers))
+		lopts = append(lopts, setupResourcesManager(cfg))
 	}
 	if !cfg.DisableNatPort {
 		lopts = append(lopts, libp2p.NATPortMap())
@@ -201,17 +202,18 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 	return Upgrade(h, opts...)
 }
 
-func setupResourcesManager(highPeers int) func(cfg *libp2p.Config) error {
+func setupResourcesManager(hostcfg Config) func(cfg *libp2p.Config) error {
 	return func(cfg *libp2p.Config) error {
 		rcmgrObs.MustRegisterWith(prometheus.DefaultRegisterer)
 		str, err := rcmgrObs.NewStatsTraceReporter()
 		if err != nil {
 			return err
 		}
+		highPeers := hostcfg.HighPeers
 		limits := rcmgr.DefaultLimits
 		limits.SystemBaseLimit.ConnsInbound = highPeers
 		limits.SystemBaseLimit.ConnsOutbound = highPeers
-		limits.SystemBaseLimit.Conns = 2 * highPeers
+		limits.SystemBaseLimit.Conns = highPeers + hostcfg.MinPeers
 		limits.SystemBaseLimit.FD = 2 * highPeers
 		limits.SystemBaseLimit.StreamsInbound = 8 * highPeers
 		limits.SystemBaseLimit.StreamsOutbound = 8 * highPeers
@@ -220,13 +222,19 @@ func setupResourcesManager(highPeers int) func(cfg *libp2p.Config) error {
 		limits.ServiceBaseLimit.StreamsOutbound = 8 * highPeers
 		limits.ServiceBaseLimit.Streams = 16 * highPeers
 
+		limits.TransientBaseLimit.Conns = hostcfg.MinPeers
+
 		limits.ProtocolBaseLimit.StreamsInbound = 8 * highPeers
 		limits.ProtocolBaseLimit.StreamsOutbound = 8 * highPeers
 		limits.ProtocolBaseLimit.Streams = 16 * highPeers
 		libp2p.SetDefaultServiceLimits(&limits)
 
+		concrete := limits.AutoScale()
+		if !hostcfg.AutoscalePeers {
+			concrete = limits.Scale(0, 0)
+		}
 		mgr, err := rcmgr.NewResourceManager(
-			rcmgr.NewFixedLimiter(limits.AutoScale()),
+			rcmgr.NewFixedLimiter(concrete),
 			rcmgr.WithTraceReporter(str),
 		)
 		if err != nil {
