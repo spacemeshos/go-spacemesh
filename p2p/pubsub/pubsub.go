@@ -85,9 +85,11 @@ func DefaultConfig() Config {
 
 // Config for PubSub.
 type Config struct {
-	Flood          bool
-	IsBootnode     bool
-	Bootnodes      []peer.AddrInfo
+	Flood      bool
+	IsBootnode bool
+	Bootnodes  []peer.AddrInfo
+	// Direct peers should be configured on both ends.
+	Direct         []peer.AddrInfo
 	MaxMessageSize int
 }
 
@@ -182,6 +184,7 @@ func getOptions(cfg Config) []pubsub.Option {
 	options := []pubsub.Option{
 		// Gossipsubv1.1 configuration
 		pubsub.WithFloodPublish(cfg.Flood),
+		pubsub.WithDirectPeers(cfg.Direct),
 		pubsub.WithMessageIdFn(msgID),
 		pubsub.WithNoAuthor(),
 		pubsub.WithMessageSignaturePolicy(pubsub.StrictNoSign),

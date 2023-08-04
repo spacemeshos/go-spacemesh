@@ -60,9 +60,11 @@ type Config struct {
 	// see https://lwn.net/Articles/542629/ for reuseport explanation
 	DisableReusePort       bool        `mapstructure:"disable-reuseport"`
 	DisableNatPort         bool        `mapstructure:"disable-natport"`
+	DisableDHT             bool        `mapstructure:"disable-dht"`
 	Flood                  bool        `mapstructure:"flood"`
 	Listen                 string      `mapstructure:"listen"`
 	Bootnodes              []string    `mapstructure:"bootnodes"`
+	Direct                 []string    `mapstructure:"direct"`
 	MinPeers               int         `mapstructure:"min-peers"`
 	LowPeers               int         `mapstructure:"low-peers"`
 	HighPeers              int         `mapstructure:"high-peers"`
