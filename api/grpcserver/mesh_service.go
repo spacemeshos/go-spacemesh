@@ -595,11 +595,8 @@ func (s MeshService) EpochStream(req *pb.EpochStreamRequest, stream pb.MeshServi
 			}
 			var res pb.EpochStreamResponse
 			res.Id = &pb.ActivationId{Id: header.ID.Bytes()}
-			if err := stream.Send(&res); err != nil {
-				return status.Error(codes.Internal, err.Error())
-			}
+			return stream.Send(&res)
 		}
-		return nil
 	}); err != nil {
 		return status.Error(codes.Internal, err.Error())
 	}
