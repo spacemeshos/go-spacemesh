@@ -16,7 +16,9 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 const checkpointdata = `{
@@ -95,7 +97,8 @@ func updateCheckpoint(t *testing.T, ctx context.Context, data string) {
 }
 
 func TestServer(t *testing.T) {
-	t.Cleanup(launchServer(t))
+	db := sql.InMemory()
+	t.Cleanup(launchServer(t, datastore.NewCachedDB(db, logtest.New(t))))
 
 	fs := afero.NewMemMapFs()
 	g := NewGenerator(
@@ -123,6 +126,7 @@ func TestServer(t *testing.T) {
 	srv.Start(ctx, ch, np)
 
 	for _, epoch := range epochs {
+		createAtxs(t, db, epoch-1, types.RandomActiveSet(activeSetSize))
 		fname := PersistedFilename(epoch, bootstrap.SuffixBoostrap)
 		require.Eventually(t, func() bool {
 			_, err := fs.Stat(fname)
