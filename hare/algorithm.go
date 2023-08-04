@@ -185,6 +185,7 @@ type consensusProcess struct {
 	eTracker         *EligibilityTracker       // tracks eligible identities by rounds
 	eligibilityCount uint16
 	clock            RoundClock
+	alwaysPassive    bool
 	once             sync.Once
 }
 
@@ -204,6 +205,7 @@ func newConsensusProcess(
 	comm communication,
 	ev roleValidator,
 	clock RoundClock,
+	passive bool,
 	logger log.Log,
 ) *consensusProcess {
 	proc := &consensusProcess{
@@ -212,18 +214,19 @@ func newConsensusProcess(
 			committedRound: preRound,
 			value:          s.Clone(),
 		},
-		layer:     layer,
-		oracle:    oracle,
-		signer:    signing,
-		nid:       nid,
-		publisher: p2p,
-		cfg:       cfg,
-		comm:      comm,
-		pending:   make(map[types.NodeID]*Message, cfg.N),
-		Log:       logger,
-		mTracker:  newMsgsTracker(),
-		eTracker:  et,
-		clock:     clock,
+		layer:         layer,
+		oracle:        oracle,
+		signer:        signing,
+		nid:           nid,
+		publisher:     p2p,
+		cfg:           cfg,
+		comm:          comm,
+		pending:       make(map[types.NodeID]*Message, cfg.N),
+		Log:           logger,
+		mTracker:      newMsgsTracker(),
+		eTracker:      et,
+		clock:         clock,
+		alwaysPassive: passive,
 	}
 	proc.ctx, proc.cancel = context.WithCancel(ctx)
 	proc.preRoundTracker = newPreRoundTracker(logger.WithContext(proc.ctx).WithFields(proc.layer), comm.mchOut, proc.eTracker, cfg.N/2+1, cfg.N)
@@ -889,6 +892,11 @@ func (proc *consensusProcess) shouldParticipate(ctx context.Context) bool {
 	logger := proc.WithContext(ctx).WithFields(
 		log.Uint32("current_round", proc.getRound()),
 		proc.layer)
+
+	if proc.alwaysPassive {
+		logger.Debug("should not participate: identity is always passive in this layer")
+		return false
+	}
 
 	// query if identity is active
 	res, err := proc.oracle.IsIdentityActiveOnConsensusView(ctx, proc.signer.NodeID(), proc.layer)

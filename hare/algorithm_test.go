@@ -179,7 +179,7 @@ func (mev *mockEligibilityValidator) ValidateEligibilityGossip(context.Context, 
 
 // We assert that the threshold X is met as long as there is at least one
 // honest vote and the sum of honest, dishonest and known equivocator is >= X.
-func TestCountInfoMeetsTrheshold(t *testing.T) {
+func TestCountInfoMeetsThreshold(t *testing.T) {
 	c := &CountInfo{}
 	c.IncHonest(1)
 	assert.True(t, c.Meet(1))
@@ -228,6 +228,7 @@ func TestConsensusProcess_TerminationLimit(t *testing.T) {
 func TestConsensusProcess_PassiveParticipant(t *testing.T) {
 	c := config.Config{N: 10, RoundDuration: 200 * time.Millisecond, ExpectedLeaders: 5, LimitIterations: 1, LimitConcurrent: 1, Hdist: 20}
 	p := generateConsensusProcessWithConfig(t, c, make(chan any, 10))
+	p.alwaysPassive = true
 	p.Start()
 	require.Eventually(t, func() bool {
 		return p.getRound()/4 == uint32(1)
@@ -379,6 +380,7 @@ func generateConsensusProcessWithConfig(tb testing.TB, cfg config.Config, inbox 
 		comm,
 		truer{},
 		newRoundClockFromCfg(logger, cfg),
+		false,
 		logger.WithName(edPubkey.String()),
 	)
 }

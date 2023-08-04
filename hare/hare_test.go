@@ -318,7 +318,7 @@ func TestHare_onTick(t *testing.T) {
 	createdChan := make(chan struct{}, 1)
 	startedChan := make(chan struct{}, 1)
 	var nmcp *mockConsensusProcess
-	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, et *EligibilityTracker, sig *signing.EdSigner, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
+	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, et *EligibilityTracker, sig *signing.EdSigner, p2p pubsub.Publisher, comm communication, clock RoundClock, passive bool) Consensus {
 		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, sig, p2p, comm.report, comm.wc, startedChan)
 		close(createdChan)
 		return nmcp
@@ -403,7 +403,7 @@ func TestHare_onTick_notMining(t *testing.T) {
 	startedChan := make(chan struct{}, 1)
 	wcSaved := make(chan struct{}, 1)
 	var nmcp *mockConsensusProcess
-	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, et *EligibilityTracker, sig *signing.EdSigner, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
+	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, et *EligibilityTracker, sig *signing.EdSigner, p2p pubsub.Publisher, comm communication, clock RoundClock, passive bool) Consensus {
 		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, sig, p2p, comm.report, comm.wc, startedChan)
 		close(createdChan)
 		return nmcp
@@ -821,4 +821,40 @@ func TestHare_WeakCoin(t *testing.T) {
 	h.outputChan <- report{id: layerID, set: set, completed: false}
 	h.wcChan <- wcReport{id: layerID, coinflip: false}
 	require.Error(t, waitForMsg())
+}
+
+func TestHare_alwaysPassive(t *testing.T) {
+	lyrsPerEpoch := types.GetLayersPerEpoch()
+	require.Greater(t, lyrsPerEpoch, uint32(3))
+	tt := []struct {
+		name          string
+		synced        []uint32
+		current       uint32
+		alwaysPassive bool
+	}{
+		{
+			name:    "synced last epoch",
+			synced:  []uint32{10*lyrsPerEpoch - 2, 10*lyrsPerEpoch - 1},
+			current: 10*lyrsPerEpoch + 2,
+		},
+		{
+			name:          "synced this epoch",
+			synced:        []uint32{10 * lyrsPerEpoch, 10*lyrsPerEpoch + 1},
+			current:       10*lyrsPerEpoch + 2,
+			alwaysPassive: true,
+		},
+	}
+
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			sstate := smocks.NewMockSyncStateProvider(gomock.NewController(t))
+			for _, i := range tc.synced {
+				sstate.EXPECT().SyncedLayer().Return(types.LayerID(i))
+				require.Equal(t, tc.alwaysPassive, alwaysPassive(sstate, types.LayerID(tc.current)))
+			}
+		})
+	}
 }

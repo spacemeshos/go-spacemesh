@@ -37,6 +37,7 @@ type consensusFactory func(
 	pubsub.Publisher,
 	communication,
 	RoundClock,
+	bool,
 ) Consensus
 
 // Consensus represents an item that acts like a consensus process.
@@ -111,6 +112,7 @@ type Hare struct {
 	mchMalfeasance chan *types.MalfeasanceGossip
 
 	beacons       system.BeaconGetter
+	syncState     system.SyncStateProvider
 	rolacle       Rolacle
 	patrol        layerPatrol
 	newRoundClock func(LayerID types.LayerID) RoundClock
@@ -177,6 +179,7 @@ func New(
 	h.blockGenCh = ch
 
 	h.beacons = beacons
+	h.syncState = syncState
 	h.rolacle = rolacle
 	h.patrol = patrol
 	h.weakCoin = weakCoin
@@ -186,8 +189,8 @@ func New(
 	h.wcChan = make(chan wcReport, h.config.Hdist)
 	h.outputs = make(map[types.LayerID][]types.ProposalID, h.config.Hdist) // we keep results about LayerBuffer past layers
 	h.cps = make(map[types.LayerID]Consensus, h.config.LimitConcurrent)
-	h.factory = func(ctx context.Context, conf config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, et *EligibilityTracker, signing *signing.EdSigner, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
-		return newConsensusProcess(ctx, conf, instanceId, s, oracle, stateQ, signing, edVerifier, et, nid, p2p, comm, ev, clock, logger)
+	h.factory = func(ctx context.Context, conf config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, et *EligibilityTracker, signing *signing.EdSigner, p2p pubsub.Publisher, comm communication, clock RoundClock, passive bool) Consensus {
+		return newConsensusProcess(ctx, conf, instanceId, s, oracle, stateQ, signing, edVerifier, et, nid, p2p, comm, ev, clock, passive, logger)
 	}
 
 	h.nodeID = nid
@@ -392,7 +395,7 @@ func (h *Hare) onTick(ctx context.Context, lid types.LayerID) (bool, error) {
 	props := goodProposals(ctx, h.Log, h.msh, h.nodeID, lid, beacon, h.layerClock.LayerToTime(lid.GetEpoch().FirstLayer()), h.config.WakeupDelta)
 	preNumProposals.Add(float64(len(props)))
 	set := NewSet(props)
-	cp := h.factory(ctx, h.config, lid, set, h.rolacle, et, h.sign, h.publisher, comm, clock)
+	cp := h.factory(ctx, h.config, lid, set, h.rolacle, et, h.sign, h.publisher, comm, clock, alwaysPassive(h.syncState, lid))
 
 	h.With().Debug("starting hare",
 		log.Context(ctx),
@@ -403,6 +406,10 @@ func (h *Hare) onTick(ctx context.Context, lid types.LayerID) (bool, error) {
 	h.addCP(ctx, cp)
 	h.patrol.SetHareInCharge(lid)
 	return true, nil
+}
+
+func alwaysPassive(syncState system.SyncStateProvider, lid types.LayerID) bool {
+	return syncState.SyncedLayer() >= lid.GetEpoch().FirstLayer()
 }
 
 func (h *Hare) addCP(ctx context.Context, cp Consensus) {
