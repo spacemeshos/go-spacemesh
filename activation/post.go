@@ -222,8 +222,8 @@ func DefaultPostSetupOpts() PostSetupOpts {
 	}
 }
 
-func (o PostSetupOpts) ToInitOpts() (config.InitOpts, error) {
-	initOpts := config.InitOpts{
+func (o PostSetupOpts) ToInitOpts() config.InitOpts {
+	return config.InitOpts{
 		DataDir:          o.DataDir,
 		NumUnits:         o.NumUnits,
 		MaxFileSize:      o.MaxFileSize,
@@ -232,7 +232,6 @@ func (o PostSetupOpts) ToInitOpts() (config.InitOpts, error) {
 		Scrypt:           o.Scrypt,
 		ComputeBatchSize: o.ComputeBatchSize,
 	}
-	return initOpts, nil
 }
 
 // PostSetupManager implements the PostProvider interface.
@@ -421,15 +420,11 @@ func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSe
 		return err
 	}
 
-	initOpts, err := opts.ToInitOpts()
-	if err != nil {
-		return err
-	}
 	newInit, err := initialization.NewInitializer(
 		initialization.WithNodeId(mgr.id.Bytes()),
 		initialization.WithCommitmentAtxId(mgr.commitmentAtxId.Bytes()),
 		initialization.WithConfig(mgr.cfg.ToConfig()),
-		initialization.WithInitOpts(initOpts),
+		initialization.WithInitOpts(opts.ToInitOpts()),
 		initialization.WithLogger(mgr.logger.Zap()),
 	)
 	if err != nil {

@@ -108,6 +108,46 @@ func TestPostSetupManager_PrepareInitializer(t *testing.T) {
 	req.Error(mgr.PrepareInitializer(ctx, opts))
 }
 
+func TestPostSetupManager_StartSession_WithoutProvider_Error(t *testing.T) {
+	req := require.New(t)
+
+	mgr := newTestPostManager(t)
+	mgr.opts.ProviderID.value = nil
+
+	// Create data.
+	req.NoError(mgr.PrepareInitializer(context.Background(), mgr.opts)) // prepare is fine without provider
+	req.ErrorContains(mgr.StartSession(context.Background()), "no provider specified")
+
+	req.Equal(PostSetupStateError, mgr.Status().State)
+}
+
+func TestPostSetupManager_StartSession_WithoutProviderAfterInit_OK(t *testing.T) {
+	req := require.New(t)
+
+	mgr := newTestPostManager(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	// Create data.
+	req.NoError(mgr.PrepareInitializer(ctx, mgr.opts))
+	req.NoError(mgr.StartSession(ctx))
+
+	req.Equal(PostSetupStateComplete, mgr.Status().State)
+	cancel()
+
+	// start Initializer again, but with no provider set
+	mgr.opts.ProviderID.value = nil
+
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	req.NoError(mgr.PrepareInitializer(ctx, mgr.opts))
+	req.NoError(mgr.StartSession(ctx))
+
+	req.Equal(PostSetupStateComplete, mgr.Status().State)
+}
+
 // Checks that the sequence of calls for initialization (first
 // PrepareInitializer and then StartSession) is enforced.
 func TestPostSetupManager_InitializationCallSequence(t *testing.T) {
