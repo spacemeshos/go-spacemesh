@@ -125,6 +125,7 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 	if err != nil {
 		return nil, fmt.Errorf("can't create peer store: %w", err)
 	}
+	g := &gater{max: cfg.HighPeers + cfg.MinPeers}
 	lopts := []libp2p.Option{
 		libp2p.Identity(key),
 		libp2p.ListenAddrStrings(cfg.Listen),
@@ -151,6 +152,7 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 		libp2p.Peerstore(ps),
 		libp2p.BandwidthReporter(p2pmetrics.NewBandwidthCollector()),
 		libp2p.EnableNATService(),
+		libp2p.ConnectionGater(g),
 	}
 	if len(cfg.AdvertiseAddress) > 0 {
 		addr, err := multiaddr.NewMultiaddr(cfg.AdvertiseAddress)
@@ -194,6 +196,7 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize libp2p host: %w", err)
 	}
+	g.h = h
 	h.Network().Notify(p2pmetrics.NewConnectionsMeeter())
 
 	logger.Zap().Info("local node identity", zap.Stringer("identity", h.ID()))
