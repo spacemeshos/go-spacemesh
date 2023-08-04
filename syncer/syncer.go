@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -176,7 +177,7 @@ func NewSyncer(
 	s.syncState.Store(notSynced)
 	s.atxSyncState.Store(notSynced)
 	s.isBusy.Store(0)
-	s.targetSyncedLayer.Store(types.LayerID(0))
+	s.targetSyncedLayer.Store(types.LayerID(math.MaxUint32))
 	s.lastLayerSynced.Store(s.mesh.ProcessedLayer())
 	s.lastEpochSynced.Store(types.GetEffectiveGenesis().GetEpoch() - 1)
 	return s
@@ -212,9 +213,9 @@ func (s *Syncer) IsSynced(ctx context.Context) bool {
 	return s.getSyncState() == synced
 }
 
-// SyncedBefore returns true if the node became synced before `epoch` starts.
-func (s *Syncer) SyncedBefore(epoch types.EpochID) bool {
-	return s.getSyncState() == synced && s.getTargetSyncedLayer() < epoch.FirstLayer()
+// SyncedLayer returns the layer node became synced. it returns max uint32 if node is not synced.
+func (s *Syncer) SyncedLayer() types.LayerID {
+	return s.getTargetSyncedLayer()
 }
 
 func (s *Syncer) IsBeaconSynced(epoch types.EpochID) bool {
@@ -229,7 +230,9 @@ func (s *Syncer) Start() {
 		s.stop = cancel
 		s.logger.WithContext(ctx).Info("starting syncer loop")
 		s.eg.Go(func() error {
-			if s.ticker.CurrentLayer() <= types.GetEffectiveGenesis() {
+			current := s.ticker.CurrentLayer()
+			if current <= types.GetEffectiveGenesis() {
+				s.setTargetSyncedLayer(ctx, current)
 				s.setSyncState(ctx, synced)
 			}
 			for {
@@ -497,6 +500,7 @@ func isTooFarBehind(ctx context.Context, logger log.Log, current, lastSynced typ
 func (s *Syncer) setStateBeforeSync(ctx context.Context) {
 	current := s.ticker.CurrentLayer()
 	if s.ticker.CurrentLayer() <= types.GetEffectiveGenesis() {
+		s.setTargetSyncedLayer(ctx, current)
 		s.setSyncState(ctx, synced)
 		if current.GetEpoch() == 0 {
 			s.setATXSynced()
@@ -504,6 +508,7 @@ func (s *Syncer) setStateBeforeSync(ctx context.Context) {
 		return
 	}
 	if isTooFarBehind(ctx, s.logger, current, s.getLastSyncedLayer()) {
+		s.setTargetSyncedLayer(ctx, types.LayerID(math.MaxUint32))
 		s.setSyncState(ctx, notSynced)
 	}
 }
@@ -524,6 +529,7 @@ func (s *Syncer) setStateAfterSync(ctx context.Context, success bool) {
 	switch currSyncState {
 	case synced:
 		if !success && isTooFarBehind(ctx, s.logger, current, s.getLastSyncedLayer()) {
+			s.setTargetSyncedLayer(ctx, types.LayerID(math.MaxUint32))
 			s.setSyncState(ctx, notSynced)
 		}
 	case gossipSync:

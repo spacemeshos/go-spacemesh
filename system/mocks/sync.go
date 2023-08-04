@@ -63,16 +63,16 @@ func (mr *MockSyncStateProviderMockRecorder) IsSynced(arg0 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSynced", reflect.TypeOf((*MockSyncStateProvider)(nil).IsSynced), arg0)
 }
 
-// SyncedBefore mocks base method.
-func (m *MockSyncStateProvider) SyncedBefore(arg0 types.EpochID) bool {
+// SyncedLayer mocks base method.
+func (m *MockSyncStateProvider) SyncedLayer() types.LayerID {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SyncedBefore", arg0)
-	ret0, _ := ret[0].(bool)
+	ret := m.ctrl.Call(m, "SyncedLayer")
+	ret0, _ := ret[0].(types.LayerID)
 	return ret0
 }
 
-// SyncedBefore indicates an expected call of SyncedBefore.
-func (mr *MockSyncStateProviderMockRecorder) SyncedBefore(arg0 interface{}) *gomock.Call {
+// SyncedLayer indicates an expected call of SyncedLayer.
+func (mr *MockSyncStateProviderMockRecorder) SyncedLayer() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncedBefore", reflect.TypeOf((*MockSyncStateProvider)(nil).SyncedBefore), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncedLayer", reflect.TypeOf((*MockSyncStateProvider)(nil).SyncedLayer))
 }

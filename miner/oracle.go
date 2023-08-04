@@ -122,7 +122,7 @@ func (o *Oracle) activesFromFirstBlock(targetEpoch types.EpochID) (uint64, uint6
 }
 
 func (o *Oracle) activeSet(targetEpoch types.EpochID) (uint64, uint64, []types.ATXID, error) {
-	if !o.syncState.SyncedBefore(targetEpoch - 1) {
+	if o.syncState.SyncedLayer() >= (targetEpoch - 1).FirstLayer() {
 		// if the node is not synced prior to `targetEpoch-1`, it doesn't have the correct receipt timestamp
 		// for all the atx and malfeasance proof, and cannot use atx grading for active set.
 		o.log.With().Info("node not synced before prior epoch, getting active set from first block",

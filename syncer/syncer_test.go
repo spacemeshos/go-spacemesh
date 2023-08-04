@@ -3,6 +3,7 @@ package syncer
 import (
 	"context"
 	"errors"
+	"math"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -422,6 +423,7 @@ func TestSynchronize_BecomeNotSyncedUponFailureIfNoGossip(t *testing.T) {
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.False(t, ts.syncer.ListenToGossip())
 	require.False(t, ts.syncer.IsSynced(context.Background()))
+	require.EqualValues(t, math.MaxUint32, ts.syncer.SyncedLayer())
 }
 
 // test the case where the node originally starts from notSynced and eventually becomes synced.
@@ -439,6 +441,7 @@ func TestFromNotSyncedToSynced(t *testing.T) {
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.False(t, ts.syncer.ListenToGossip())
 	require.False(t, ts.syncer.IsSynced(context.Background()))
+	require.EqualValues(t, math.MaxUint32, ts.syncer.SyncedLayer())
 
 	for lid := lyr; lid.Before(current); lid = lid.Add(1) {
 		ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid)
@@ -449,8 +452,10 @@ func TestFromNotSyncedToSynced(t *testing.T) {
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.True(t, ts.syncer.ListenToGossip())
 	require.False(t, ts.syncer.IsSynced(context.Background()))
+	require.EqualValues(t, current.Uint32()+numGossipSyncLayers, ts.syncer.SyncedLayer())
 
 	waitOutGossipSync(t, current, ts)
+	require.EqualValues(t, current.Uint32()+numGossipSyncLayers, ts.syncer.SyncedLayer())
 }
 
 // test the case where the node originally starts from notSynced, advances to gossipSync, but falls behind
@@ -555,7 +560,7 @@ func waitOutGossipSync(t *testing.T, current types.LayerID, ts *testSyncer) {
 
 	// next layer will be still gossip syncing
 	require.Equal(t, types.LayerID(2).Uint32(), numGossipSyncLayers)
-	require.Equal(t, current.Add(numGossipSyncLayers), ts.syncer.getTargetSyncedLayer())
+	require.Equal(t, current.Add(numGossipSyncLayers), ts.syncer.SyncedLayer())
 
 	lyr := current
 	current = current.Add(1)

@@ -194,7 +194,7 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize, layersPerEpoch
 	endLayer := types.LayerID(numberOfEpochsToTest * layersPerEpoch).Add(startLayer)
 	counterValuesSeen := map[uint32]int{}
 	epochStart := time.Now()
-	o.mSync.EXPECT().SyncedBefore(gomock.Any()).Return(true).AnyTimes()
+	o.mSync.EXPECT().SyncedLayer().Return(types.LayerID(0)).AnyTimes()
 	o.mClock.EXPECT().LayerToTime(gomock.Any()).Return(epochStart).AnyTimes()
 	received := epochStart.Add(-5 * networkDelay)
 	epochInfo := genATXForTargetEpochs(t, o.cdb, types.EpochID(startEpoch), types.EpochID(startEpoch+numberOfEpochsToTest), o.edSigner, layersPerEpoch, received)
@@ -233,7 +233,7 @@ func TestOracle_OwnATXNotFound(t *testing.T) {
 	layersPerEpoch := uint32(20)
 	o := createTestOracle(t, avgLayerSize, layersPerEpoch, 0)
 	lid := types.LayerID(layersPerEpoch * 3)
-	o.mSync.EXPECT().SyncedBefore(types.EpochID(2)).Return(true)
+	o.mSync.EXPECT().SyncedLayer().Return(types.LayerID(0)).AnyTimes()
 	o.mClock.EXPECT().LayerToTime(lid).Return(time.Now())
 	ee, err := o.ProposalEligibility(lid, types.RandomBeacon(), types.VRFPostIndex(1))
 	require.ErrorIs(t, err, errMinerHasNoATXInPreviousEpoch)
@@ -250,7 +250,7 @@ func TestOracle_EligibilityCached(t *testing.T) {
 	info, ok := epochInfo[lid.GetEpoch()]
 	require.True(t, ok)
 	o.mClock.EXPECT().LayerToTime(lid).Return(received.Add(time.Hour)).AnyTimes()
-	o.mSync.EXPECT().SyncedBefore(types.EpochID(2)).Return(true).AnyTimes()
+	o.mSync.EXPECT().SyncedLayer().Return(types.LayerID(0)).AnyTimes()
 	ee1, err := o.ProposalEligibility(lid, info.beacon, types.VRFPostIndex(1))
 	require.NoError(t, err)
 	require.NotNil(t, ee1)
@@ -273,7 +273,7 @@ func TestOracle_MinimalActiveSetWeight(t *testing.T) {
 	info, ok := epochInfo[lid.GetEpoch()]
 	require.True(t, ok)
 
-	o.mSync.EXPECT().SyncedBefore(types.EpochID(2)).Return(true).AnyTimes()
+	o.mSync.EXPECT().SyncedLayer().Return(types.LayerID(0)).AnyTimes()
 	o.mClock.EXPECT().LayerToTime(lid).Return(received.Add(time.Hour)).AnyTimes()
 	ee1, err := o.ProposalEligibility(lid, info.beacon, types.VRFPostIndex(1))
 	require.NoError(t, err)
@@ -294,7 +294,7 @@ func TestOracle_ATXGrade(t *testing.T) {
 	o := createTestOracle(t, avgLayerSize, layersPerEpoch, 0)
 	lid := types.LayerID(layersPerEpoch * 3)
 	epochStart := time.Now()
-	o.mSync.EXPECT().SyncedBefore(types.EpochID(2)).Return(true)
+	o.mSync.EXPECT().SyncedLayer().Return(types.LayerID(0)).AnyTimes()
 	o.mClock.EXPECT().LayerToTime(lid).Return(epochStart)
 
 	goodTime := epochStart.Add(-4*networkDelay - time.Nanosecond)
@@ -418,7 +418,7 @@ func TestOracle_NotSyncedBeforeLastEpoch(t *testing.T) {
 				expected = append(expected, ownAtx)
 			}
 
-			o.mSync.EXPECT().SyncedBefore(types.EpochID(2)).Return(false)
+			o.mSync.EXPECT().SyncedLayer().Return(types.EpochID(2).FirstLayer()).AnyTimes()
 			ee, err := o.ProposalEligibility(lid, types.RandomBeacon(), types.VRFPostIndex(1))
 			require.NoError(t, err)
 			require.NotNil(t, ee)
