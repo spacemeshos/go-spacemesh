@@ -103,6 +103,7 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 	if fh.PubSub, err = pubsub.New(fh.ctx, fh.logger, h, pubsub.Config{
 		Flood:          cfg.Flood,
 		IsBootnode:     cfg.Bootnode,
+		Direct:         direct,
 		Bootnodes:      bootnodes,
 		MaxMessageSize: cfg.MaxMessageSize,
 	}); err != nil {
