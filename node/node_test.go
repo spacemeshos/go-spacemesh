@@ -999,7 +999,7 @@ func getTestDefaultConfig(tb testing.TB) *config.Config {
 	cfg.SMESHING = config.DefaultSmeshingConfig()
 	cfg.SMESHING.Start = true
 	cfg.SMESHING.Opts.NumUnits = cfg.POST.MinNumUnits + 1
-	cfg.SMESHING.Opts.ProviderID = uint64(initialization.CPUProviderID())
+	cfg.SMESHING.Opts.ProviderID.SetUint(initialization.CPUProviderID())
 
 	// note: these need to be set sufficiently low enough that turbohare finishes well before the LayerDurationSec
 	cfg.HARE.RoundDuration = 2

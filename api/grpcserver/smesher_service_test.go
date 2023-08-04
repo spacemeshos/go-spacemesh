@@ -53,6 +53,7 @@ func TestStartSmeshingPassesCorrectSmeshingOpts(t *testing.T) {
 	types.SetNetworkHRP("stest")
 	addr, err := types.StringToAddress("stest1qqqqqqrs60l66w5uksxzmaznwq6xnhqfv56c28qlkm4a5")
 	require.NoError(t, err)
+	providerID := uint32(7)
 	opts := activation.PostSetupOpts{
 		DataDir:          "data-dir",
 		NumUnits:         1,
@@ -61,7 +62,7 @@ func TestStartSmeshingPassesCorrectSmeshingOpts(t *testing.T) {
 		Scrypt:           config.DefaultLabelParams(),
 		ComputeBatchSize: config.DefaultComputeBatchSize,
 	}
-	opts.ProviderID.SetUint(7)
+	opts.ProviderID.SetUint(providerID)
 	smeshingProvider.EXPECT().StartSmeshing(addr, opts).Return(nil)
 
 	_, err = svc.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{
@@ -70,7 +71,7 @@ func TestStartSmeshingPassesCorrectSmeshingOpts(t *testing.T) {
 			DataDir:     "data-dir",
 			NumUnits:    1,
 			MaxFileSize: 1024,
-			ProviderId:  7,
+			ProviderId:  &providerID,
 			Throttle:    true,
 		},
 	})
