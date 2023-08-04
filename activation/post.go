@@ -5,8 +5,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"math"
 	"runtime"
+	"strconv"
 	"sync"
 
 	"github.com/spacemeshos/post/config"
@@ -83,10 +83,56 @@ type PostSetupOpts struct {
 	DataDir          string              `mapstructure:"smeshing-opts-datadir"`
 	NumUnits         uint32              `mapstructure:"smeshing-opts-numunits"`
 	MaxFileSize      uint64              `mapstructure:"smeshing-opts-maxfilesize"`
-	ProviderID       uint64              `mapstructure:"smeshing-opts-provider"`
+	ProviderID       PostProviderID      `mapstructure:"smeshing-opts-provider"`
 	Throttle         bool                `mapstructure:"smeshing-opts-throttle"`
 	Scrypt           config.ScryptParams `mapstructure:"smeshing-opts-scrypt"`
 	ComputeBatchSize uint64              `mapstructure:"smeshing-opts-compute-batch-size"`
+}
+
+type PostProviderID struct {
+	value *uint32
+}
+
+func (id *PostProviderID) String() string {
+	if id.value == nil {
+		return ""
+	}
+	return fmt.Sprintf("%d", *id.value)
+}
+
+// Set implements pflag.Value.Set.
+func (id *PostProviderID) Set(value string) error {
+	return id.UnmarshalText([]byte(value))
+}
+
+func (id *PostProviderID) SetUint(value uint32) {
+	id.value = new(uint32)
+	*id.value = value
+}
+
+func (id *PostProviderID) Value() *uint32 {
+	return id.value
+}
+
+// Type implements pflag.Value.Type.
+func (PostProviderID) Type() string {
+	return "PostProviderID"
+}
+
+func (id *PostProviderID) UnmarshalText(text []byte) error {
+	if len(text) == 0 {
+		id.value = nil
+		return nil
+	}
+
+	i, err := strconv.ParseUint(string(text), 10, 32)
+	if err != nil {
+		return fmt.Errorf("failed to parse PoST Provider ID (%s): %w", text, err)
+	}
+
+	id.value = new(uint32)
+	*id.value = uint32(i)
+	return nil
 }
 
 // PostProvingOpts are the options controlling POST proving process.
@@ -170,7 +216,6 @@ func DefaultPostSetupOpts() PostSetupOpts {
 		DataDir:          opts.DataDir,
 		NumUnits:         opts.NumUnits,
 		MaxFileSize:      opts.MaxFileSize,
-		ProviderID:       math.MaxUint64,
 		Throttle:         opts.Throttle,
 		Scrypt:           opts.Scrypt,
 		ComputeBatchSize: opts.ComputeBatchSize,
@@ -178,19 +223,11 @@ func DefaultPostSetupOpts() PostSetupOpts {
 }
 
 func (o PostSetupOpts) ToInitOpts() (config.InitOpts, error) {
-	if o.ProviderID == math.MaxUint64 {
-		return config.InitOpts{}, fmt.Errorf("no provider ID specified: %d", o.ProviderID)
-	}
-	if o.ProviderID > math.MaxUint32 {
-		return config.InitOpts{}, fmt.Errorf("invalid provider id: %d", o.ProviderID)
-	}
-
-	providerID := uint32(o.ProviderID)
 	initOpts := config.InitOpts{
 		DataDir:          o.DataDir,
 		NumUnits:         o.NumUnits,
 		MaxFileSize:      o.MaxFileSize,
-		ProviderID:       &providerID,
+		ProviderID:       o.ProviderID.Value(),
 		Throttle:         o.Throttle,
 		Scrypt:           o.Scrypt,
 		ComputeBatchSize: o.ComputeBatchSize,

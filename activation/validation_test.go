@@ -31,7 +31,7 @@ func Test_Validation_VRFNonce(t *testing.T) {
 
 	opts := DefaultPostSetupOpts()
 	opts.DataDir = t.TempDir()
-	opts.ProviderID = uint64(initialization.CPUProviderID())
+	opts.ProviderID.SetUint(initialization.CPUProviderID())
 
 	nodeId := types.BytesToNodeID(make([]byte, 32))
 	commitmentAtxId := types.EmptyATXID

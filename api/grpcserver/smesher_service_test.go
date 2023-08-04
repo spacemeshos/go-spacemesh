@@ -53,15 +53,16 @@ func TestStartSmeshingPassesCorrectSmeshingOpts(t *testing.T) {
 	types.SetNetworkHRP("stest")
 	addr, err := types.StringToAddress("stest1qqqqqqrs60l66w5uksxzmaznwq6xnhqfv56c28qlkm4a5")
 	require.NoError(t, err)
-	smeshingProvider.EXPECT().StartSmeshing(addr, activation.PostSetupOpts{
+	opts := activation.PostSetupOpts{
 		DataDir:          "data-dir",
 		NumUnits:         1,
 		MaxFileSize:      1024,
-		ProviderID:       7,
 		Throttle:         true,
 		Scrypt:           config.DefaultLabelParams(),
 		ComputeBatchSize: config.DefaultComputeBatchSize,
-	}).Return(nil)
+	}
+	opts.ProviderID.SetUint(7)
+	smeshingProvider.EXPECT().StartSmeshing(addr, opts).Return(nil)
 
 	_, err = svc.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{
 		Coinbase: &pb.AccountId{Address: "stest1qqqqqqrs60l66w5uksxzmaznwq6xnhqfv56c28qlkm4a5"},

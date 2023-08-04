@@ -82,7 +82,7 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 	opts.DataDir = in.Opts.DataDir
 	opts.NumUnits = in.Opts.NumUnits
 	opts.MaxFileSize = in.Opts.MaxFileSize
-	opts.ProviderID = uint64(in.Opts.ProviderId)
+	opts.ProviderID.SetUint(in.Opts.ProviderId) // TODO(mafa): this will set the ID to 0 if not provided
 	opts.Throttle = in.Opts.Throttle
 
 	coinbaseAddr, err := types.StringToAddress(in.Coinbase.Address)
@@ -258,8 +258,11 @@ func statusToPbStatus(status *activation.PostSetupStatus) *pb.PostSetupStatus {
 			DataDir:     status.LastOpts.DataDir,
 			NumUnits:    status.LastOpts.NumUnits,
 			MaxFileSize: status.LastOpts.MaxFileSize,
-			ProviderId:  uint32(status.LastOpts.ProviderID),
 			Throttle:    status.LastOpts.Throttle,
+		}
+		id := status.LastOpts.ProviderID.Value()
+		if id != nil { // TODO (mafa): if id is nil it will return 0 as provider ID
+			pbStatus.Opts.ProviderId = *id
 		}
 	}
 

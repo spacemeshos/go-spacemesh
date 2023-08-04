@@ -430,7 +430,7 @@ func newTestPostManager(tb testing.TB, o ...newPostSetupMgrOptionFunc) *testPost
 
 	opts := DefaultPostSetupOpts()
 	opts.DataDir = tb.TempDir()
-	opts.ProviderID = uint64(initialization.CPUProviderID())
+	opts.ProviderID.SetUint(initialization.CPUProviderID())
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
 
 	goldenATXID := types.ATXID{2, 3, 4}
@@ -478,5 +478,34 @@ func TestSettingPowDifficulty(t *testing.T) {
 		d := PowDifficulty{}
 		require.Error(t, d.Set(encoded))
 		require.Equal(t, PowDifficulty{}, d)
+	})
+}
+
+func TestSettingProviderID(t *testing.T) {
+	t.Parallel()
+
+	t.Run("valid value", func(t *testing.T) {
+		t.Parallel()
+		id := new(PostProviderID)
+		require.NoError(t, id.Set("1234"))
+		require.Equal(t, uint32(1234), *id.Value())
+	})
+	t.Run("no value", func(t *testing.T) {
+		t.Parallel()
+		id := new(PostProviderID)
+		require.NoError(t, id.Set(""))
+		require.Nil(t, id.Value())
+	})
+	t.Run("not a number", func(t *testing.T) {
+		t.Parallel()
+		id := new(PostProviderID)
+		require.Error(t, id.Set("asdf"))
+		require.Nil(t, id.Value())
+	})
+	t.Run("negative", func(t *testing.T) {
+		t.Parallel()
+		id := new(PostProviderID)
+		require.Error(t, id.Set("-1"))
+		require.Nil(t, id.Value())
 	})
 }
