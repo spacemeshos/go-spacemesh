@@ -83,11 +83,6 @@ func (o *output) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	return nil
 }
 
-type validProposal struct {
-	iter      uint8
-	proposals []types.ProposalID
-}
-
 type gradedProposals struct {
 	values [6][]types.ProposalID // the length is set to 6 so that 5 is a valid index
 }
@@ -103,7 +98,7 @@ func (g *gradedProposals) get(gr grade) []types.ProposalID {
 func newProtocol(initial []types.ProposalID, threshold uint16) *protocol {
 	return &protocol{
 		initial:        initial,
-		validProposals: map[types.Hash32]validProposal{},
+		validProposals: map[types.Hash32][]types.ProposalID{},
 		gradedGossip:   gradedGossip{state: map[messageKey]*input{}},
 		gradecast:      gradecast{state: map[messageKey]*gradecasted{}},
 		thresholdGossip: thresholdGossip{
@@ -121,8 +116,8 @@ type protocol struct {
 	result          *types.Hash32       // set after Round 6. Case 1
 	locked          *types.Hash32       // Li
 	hardLocked      bool
-	validProposals  map[types.Hash32]validProposal // Vi
-	gradedProposals gradedProposals                // valid values in 4.3
+	validProposals  map[types.Hash32][]types.ProposalID // Vi
+	gradedProposals gradedProposals                     // valid values in 4.3
 	gradedGossip    gradedGossip
 	gradecast       gradecast
 	thresholdGossip thresholdGossip
@@ -150,7 +145,7 @@ func (p *protocol) thresholdProposals(ir IterRound, grade grade) (*types.Hash32,
 	for _, ref := range p.thresholdGossip.outputref(ir, grade) {
 		valid, exist := p.validProposals[ref]
 		if exist {
-			return &ref, valid.proposals
+			return &ref, valid
 		}
 	}
 	return nil, nil
@@ -220,10 +215,7 @@ func (p *protocol) execution(out *output, active bool) {
 			if graded.grade < grade1 || !isSubset(graded.values, p.gradedProposals.get(grade2)) {
 				continue
 			}
-			p.validProposals[toHash(graded.values)] = validProposal{
-				iter:      p.Iter,
-				proposals: graded.values,
-			}
+			p.validProposals[toHash(graded.values)] = graded.values
 		}
 		if active {
 			var ref *types.Hash32
@@ -233,7 +225,7 @@ func (p *protocol) execution(out *output, active bool) {
 				for _, graded := range proposed {
 					id := toHash(graded.values)
 					// condition (c)
-					if proposal, exist := p.validProposals[id]; !exist || proposal.iter > p.Iter {
+					if _, exist := p.validProposals[id]; !exist {
 						continue
 					}
 					// condition (e)
