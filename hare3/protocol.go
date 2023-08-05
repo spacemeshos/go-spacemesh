@@ -208,6 +208,7 @@ func (p *protocol) execution(out *output, active bool) {
 			Value:     Value{Proposals: values},
 		}}
 	} else if p.Round == commit {
+		// condition (d) is realized by ordering proposals by vrf
 		proposed := p.gradecast.output(IterRound{Iter: p.Iter, Round: propose})
 		for _, graded := range proposed {
 			// condition (a) and (b)
@@ -230,8 +231,6 @@ func (p *protocol) execution(out *output, active bool) {
 					if proposal, exist := p.validProposals[id]; !exist || proposal.iter > p.Iter {
 						continue
 					}
-					// TODO(dshulyak) doublecheck if there are nuances about (d)
-					// condition (d) IsLeader is implicit, propose won't pass eligibility check
 					// condition (e)
 					if graded.grade != grade2 {
 						continue
@@ -241,7 +240,7 @@ func (p *protocol) execution(out *output, active bool) {
 						continue
 					}
 					// condition (g)
-					// TODO(dshulyak) if no proposals with grade5 1st condition is noop
+					// TODO(dshulyak) if no proposals with grade5 1st condition is noop?
 					if !isSubset(p.gradedProposals.get(grade5), graded.values) &&
 						!p.commitExists(p.Iter-1, grade1, id) {
 						continue

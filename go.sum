@@ -645,10 +645,10 @@ github.com/spacemeshos/go-scale v1.1.10 h1:wOfUR6l2KzAu+m/KU0JE7iopTrczvFgI21ZNp
 github.com/spacemeshos/go-scale v1.1.10/go.mod h1:TmYTorvilrhSZpqp51V6HWYtQPnWvBqOaF+GCWdnsgs=
 github.com/spacemeshos/merkle-tree v0.2.2 h1:+zF+17CwVebq9UzShunUBXv16rEVKIJHh2CTDIyFf9g=
 github.com/spacemeshos/merkle-tree v0.2.2/go.mod h1:0Q/z4S5Kt9qz/c3qWa7hKA1yT7n7odyysbPIUTRu/xo=
-github.com/spacemeshos/poet v0.8.6 h1:jMQ9HkJeCRqUMRTIk0HEP/5kvVdAH+OAkzOKQ0XlhJU=
-github.com/spacemeshos/poet v0.8.6/go.mod h1:Ut/aR/1Sks6/I/+GDFLqCinXW6OIIS8z9uL/zjFTTP8=
-github.com/spacemeshos/post v0.8.9 h1:3emD/g5ifXmkd+R4te16YaSQsii2GgukyiS4D0DdbPo=
-github.com/spacemeshos/post v0.8.9/go.mod h1:LDj6XQht1ZvTZurBJ+LZNf17t92qIQymWgU2sY6V2Zs=
+github.com/spacemeshos/poet v0.8.7 h1:Q85SDIlV0Asn7AJ9TaIbE1upimcXSUixYVeSY2bFqXI=
+github.com/spacemeshos/poet v0.8.7/go.mod h1:eRT87JENlVfItdJvKtnFCnSFcceeYTRrsXfF5u5sE8k=
+github.com/spacemeshos/post v0.8.11 h1:uZo8n5wF0fGOxRzXHabU/Buu9aLyPT4YWi6ZFms9mWg=
+github.com/spacemeshos/post v0.8.11/go.mod h1:LDj6XQht1ZvTZurBJ+LZNf17t92qIQymWgU2sY6V2Zs=
 github.com/spacemeshos/sha256-simd v0.1.0 h1:G7Mfu5RYdQiuE+wu4ZyJ7I0TI74uqLhFnKblEnSpjYI=
 github.com/spacemeshos/sha256-simd v0.1.0/go.mod h1:O8CClVIilId7RtuCMV2+YzMj6qjVn75JsxOxaE8vcfM=
 github.com/spaolacci/murmur3 v1.1.0 h1:7c1g84S4BPRrfL5Xrdp6fOJ206sU9y293DDHaoy0bLI=
@@ -756,8 +756,8 @@ go.uber.org/tools v0.0.0-20190618225709-2cfd321de3ee/go.mod h1:vJERXedbb3MVM5f9E
 go.uber.org/zap v1.16.0/go.mod h1:MA8QOfq0BHJwdXa996Y4dYkAqRKB8/1K1QMMZVaNZjQ=
 go.uber.org/zap v1.18.1/go.mod h1:xg/QME4nWcxGxrpdeYfq7UvYrLh66cuVKdrbD1XF/NI=
 go.uber.org/zap v1.19.1/go.mod h1:j3DNczoxDZroyBnOT1L/Q79cfUMGZxlv/9dzN7SM1rI=
-go.uber.org/zap v1.24.0 h1:FiJd5l1UOLj0wCgbSE0rwwXHzEdAZS6hiiSnxJN/D60=
-go.uber.org/zap v1.24.0/go.mod h1:2kMP+WWQ8aoFoedH3T2sq6iJ2yDWpHbP0f6MQbS9Gkg=
+go.uber.org/zap v1.25.0 h1:4Hvk6GtkucQ790dqmj7l1eEnRdKm3k3ZUrUMS2d5+5c=
+go.uber.org/zap v1.25.0/go.mod h1:JIAUzQIH94IC4fOJQm7gMmBJP5k7wQfdcnYdPoEXJYk=
 go4.org v0.0.0-20180809161055-417644f6feb5/go.mod h1:MkTOUMDaeVYJUOUsaDXIhWPZYa1yOyC1qaOBpL57BhE=
 golang.org/x/build v0.0.0-20190111050920-041ab4dc3f9d/go.mod h1:OWs+y06UdEOHN4y+MfF/py+xQ/tYqIWW03b70/CG9Rw=
 golang.org/x/crypto v0.0.0-20181030102418-4d3f4d9ffa16/go.mod h1:6SG95UA2DQfeDnfUPMdvaQW0Q7yPrPDi9nlGo2tz2b4=

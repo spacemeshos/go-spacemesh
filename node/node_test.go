@@ -546,11 +546,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	app.edSgn = signer
 	address := wallet.Address(signer.PublicKey().Bytes())
 
-	appCtx, appCancel := context.WithCancel(context.Background())
-	defer appCancel()
-
 	run := func(c *cobra.Command, args []string) {
-		defer app.Cleanup(context.Background())
 		r.NoError(app.Initialize())
 
 		// GRPC configuration
@@ -579,7 +575,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
 		// be done more surgically, and we don't need _all_ of the services.
-		require.NoError(t, app.Start(appCtx))
+		require.NoError(t, app.Start(context.Background()))
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -597,7 +593,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	}()
 
 	<-app.Started()
-	require.True(t, app.syncer.IsSynced(ctx))
+	require.Eventually(t, func() bool { return app.syncer.IsSynced(ctx) }, 4*time.Second, 10*time.Millisecond)
 	conn, err := grpc.Dial(
 		listener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -649,7 +645,8 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	wg2.Wait()
 
 	// This stops the app
-	appCancel()
+	// Cleanup stops all services and thereby the app
+	app.Cleanup(context.Background())
 
 	// Wait for it to stop
 	wg.Wait()
