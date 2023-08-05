@@ -544,21 +544,6 @@ func (m *MockmeshAPI) EXPECT() *MockmeshAPIMockRecorder {
 	return m.recorder
 }
 
-// EpochAtxs mocks base method.
-func (m *MockmeshAPI) EpochAtxs(arg0 types.EpochID) ([]types.ATXID, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "EpochAtxs", arg0)
-	ret0, _ := ret[0].([]types.ATXID)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// EpochAtxs indicates an expected call of EpochAtxs.
-func (mr *MockmeshAPIMockRecorder) EpochAtxs(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EpochAtxs", reflect.TypeOf((*MockmeshAPI)(nil).EpochAtxs), arg0)
-}
-
 // GetATXs mocks base method.
 func (m *MockmeshAPI) GetATXs(arg0 context.Context, arg1 []types.ATXID) (map[types.ATXID]*types.VerifiedActivationTx, []types.ATXID) {
 	m.ctrl.T.Helper()
