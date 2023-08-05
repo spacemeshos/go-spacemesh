@@ -863,8 +863,8 @@ func (app *App) initServices(ctx context.Context) error {
 		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(malfeasanceHandler.HandleSyncedMalfeasanceProof, app.host, lg)),
 	)
 
-	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) error {
-		if newSyncer.ListenToGossip() {
+	syncHandler := func(ctx context.Context, _ p2p.Peer, _ []byte) error {
+		if newSyncer.IsSynced(ctx) {
 			return nil
 		}
 		return errors.New("not synced for gossip")

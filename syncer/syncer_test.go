@@ -120,7 +120,6 @@ func TestStartAndShutdown(t *testing.T) {
 
 	require.False(t, ts.syncer.IsSynced(ctx))
 	require.False(t, ts.syncer.ListenToATXGossip())
-	require.False(t, ts.syncer.ListenToGossip())
 
 	// the node is synced when current layer is <= 1
 	ts.syncer.Start()
@@ -128,7 +127,7 @@ func TestStartAndShutdown(t *testing.T) {
 	ts.mForkFinder.EXPECT().Purge(false).AnyTimes()
 	ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), gomock.Any()).AnyTimes()
 	require.Eventually(t, func() bool {
-		return ts.syncer.ListenToATXGossip() && ts.syncer.ListenToGossip() && ts.syncer.IsSynced(ctx)
+		return ts.syncer.ListenToATXGossip() && ts.syncer.IsSynced(ctx)
 	}, time.Second, 10*time.Millisecond)
 
 	cancel()
@@ -206,7 +205,6 @@ func TestSynchronize_AllGood(t *testing.T) {
 	require.Equal(t, current.GetEpoch(), ts.syncer.lastAtxEpoch())
 	require.True(t, ts.syncer.dataSynced())
 	require.True(t, ts.syncer.ListenToATXGossip())
-	require.True(t, ts.syncer.ListenToGossip())
 	require.True(t, ts.syncer.IsSynced(context.Background()))
 
 	wg.Add(1)
@@ -238,7 +236,6 @@ func TestSynchronize_FetchLayerDataFailed(t *testing.T) {
 	require.Equal(t, current.GetEpoch(), ts.syncer.lastAtxEpoch())
 	require.False(t, ts.syncer.dataSynced())
 	require.True(t, ts.syncer.ListenToATXGossip())
-	require.False(t, ts.syncer.ListenToGossip())
 	require.False(t, ts.syncer.IsSynced(context.Background()))
 }
 
@@ -283,7 +280,6 @@ func TestSynchronize_FailedInitialATXsSync(t *testing.T) {
 	require.Equal(t, failedEpoch-1, ts.syncer.lastAtxEpoch())
 	require.False(t, ts.syncer.dataSynced())
 	require.False(t, ts.syncer.ListenToATXGossip())
-	require.False(t, ts.syncer.ListenToGossip())
 	require.False(t, ts.syncer.IsSynced(context.Background()))
 
 	wg.Add(1)
@@ -307,7 +303,6 @@ func startWithSyncedState(t *testing.T, ts *testSyncer) types.LayerID {
 	ts.mDataFetcher.EXPECT().GetEpochATXs(gomock.Any(), gLayer.GetEpoch())
 	require.True(t, ts.syncer.synchronize(context.Background()))
 	require.True(t, ts.syncer.ListenToATXGossip())
-	require.True(t, ts.syncer.ListenToGossip())
 	require.True(t, ts.syncer.IsSynced(context.Background()))
 
 	current := gLayer.Add(2)
@@ -317,7 +312,6 @@ func startWithSyncedState(t *testing.T, ts *testSyncer) types.LayerID {
 
 	require.True(t, ts.syncer.synchronize(context.Background()))
 	require.True(t, ts.syncer.ListenToATXGossip())
-	require.True(t, ts.syncer.ListenToGossip())
 	require.True(t, ts.syncer.IsSynced(context.Background()))
 	return current
 }
@@ -406,7 +400,6 @@ func TestSynchronize_StaySyncedUponFailure(t *testing.T) {
 	require.False(t, ts.syncer.synchronize(context.Background()))
 	require.False(t, ts.syncer.dataSynced())
 	require.True(t, ts.syncer.ListenToATXGossip())
-	require.True(t, ts.syncer.ListenToGossip())
 	require.True(t, ts.syncer.IsSynced(context.Background()))
 }
 
@@ -420,7 +413,6 @@ func TestSynchronize_BecomeNotSyncedUponFailureIfNoGossip(t *testing.T) {
 	require.False(t, ts.syncer.synchronize(context.Background()))
 	require.False(t, ts.syncer.dataSynced())
 	require.True(t, ts.syncer.ListenToATXGossip())
-	require.False(t, ts.syncer.ListenToGossip())
 	require.False(t, ts.syncer.IsSynced(context.Background()))
 }
 
@@ -437,7 +429,6 @@ func TestFromNotSyncedToSynced(t *testing.T) {
 	require.False(t, ts.syncer.synchronize(context.Background()))
 	require.False(t, ts.syncer.dataSynced())
 	require.True(t, ts.syncer.ListenToATXGossip())
-	require.False(t, ts.syncer.ListenToGossip())
 	require.False(t, ts.syncer.IsSynced(context.Background()))
 
 	for lid := lyr; lid <= current; lid++ {
@@ -446,7 +437,6 @@ func TestFromNotSyncedToSynced(t *testing.T) {
 	require.True(t, ts.syncer.synchronize(context.Background()))
 	require.True(t, ts.syncer.dataSynced())
 	require.True(t, ts.syncer.ListenToATXGossip())
-	require.True(t, ts.syncer.ListenToGossip())
 	require.True(t, ts.syncer.IsSynced(context.Background()))
 }
 
@@ -462,7 +452,6 @@ func TestNetworkHasNoData(t *testing.T) {
 		require.True(t, ts.syncer.synchronize(context.Background()))
 		require.True(t, ts.syncer.dataSynced())
 		require.True(t, ts.syncer.ListenToATXGossip())
-		require.True(t, ts.syncer.ListenToGossip())
 		require.True(t, ts.syncer.IsSynced(context.Background()))
 	}
 	// the network hasn't received any data
@@ -488,7 +477,6 @@ func TestFromSyncedToNotSynced(t *testing.T) {
 	require.False(t, ts.syncer.synchronize(context.Background()))
 	require.False(t, ts.syncer.dataSynced())
 	require.True(t, ts.syncer.ListenToATXGossip())
-	require.False(t, ts.syncer.ListenToGossip())
 	require.False(t, ts.syncer.IsSynced(context.Background()))
 
 	for lid := lyr; lid <= current; lid++ {
@@ -497,7 +485,6 @@ func TestFromSyncedToNotSynced(t *testing.T) {
 	require.True(t, ts.syncer.synchronize(context.Background()))
 	require.True(t, ts.syncer.dataSynced())
 	require.True(t, ts.syncer.ListenToATXGossip())
-	require.True(t, ts.syncer.ListenToGossip())
 	require.True(t, ts.syncer.IsSynced(context.Background()))
 }
 

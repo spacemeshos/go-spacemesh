@@ -186,11 +186,6 @@ func (s *Syncer) RegisterForATXSynced() chan struct{} {
 	return s.awaitATXSyncedCh
 }
 
-// ListenToGossip returns true if the node is listening to gossip for blocks/TXs data.
-func (s *Syncer) ListenToGossip() bool {
-	return s.getSyncState() == synced
-}
-
 // ListenToATXGossip returns true if the node is listening to gossip for ATXs data.
 func (s *Syncer) ListenToATXGossip() bool {
 	return s.getATXSyncState() == synced
@@ -307,7 +302,6 @@ func (s *Syncer) setSyncerIdle() {
 	s.isBusy.Store(0)
 }
 
-// syncedLayer is used to signal at which layer we can set this node to synced state.
 func (s *Syncer) setLayerTurnedSynced(lid types.LayerID) {
 	s.layerTurnedSynced.Store(lid)
 }
