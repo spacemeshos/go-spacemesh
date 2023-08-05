@@ -47,11 +47,10 @@ var (
 	nodeSyncState = metrics.NewGauge(
 		"sync_state",
 		namespace,
-		"node sync state in [not_synced, gossip, synced]",
+		"node sync state in [not, synced, atx_synced]",
 		[]string{"state"},
 	)
 	nodeNotSynced = nodeSyncState.WithLabelValues("not")
-	nodeGossip    = nodeSyncState.WithLabelValues("gossip")
 	nodeSynced    = nodeSyncState.WithLabelValues("synced")
 	atxSynced     = nodeSyncState.WithLabelValues("atx_synced")
 

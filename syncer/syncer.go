@@ -40,22 +40,13 @@ func DefaultConfig() Config {
 	}
 }
 
-const (
-	outOfSyncThreshold  uint32 = 3 // see notSynced
-	numGossipSyncLayers uint32 = 2 // see gossipSync
-)
+const outOfSyncThreshold uint32 = 3 // see notSynced
 
 type syncState uint32
 
 const (
 	// notSynced is the state where the node is outOfSyncThreshold layers or more behind the current layer.
 	notSynced syncState = iota
-	// gossipSync is the state in which a node listens to at least one full layer of gossip before participating
-	// in the protocol. this is to protect the node from participating in the consensus without full information.
-	// for example, when a node wakes up in the middle of layer N, since it didn't receive all relevant messages and
-	// blocks of layer N, it shouldn't vote or produce blocks in layer N+1. it instead listens to gossip for all
-	// through layer N+1 and starts producing blocks and participates in hare committee in layer N+2.
-	gossipSync
 	// synced is the state where the node is in sync with its peers.
 	synced
 )
@@ -64,8 +55,6 @@ func (s syncState) String() string {
 	switch s {
 	case notSynced:
 		return "notSynced"
-	case gossipSync:
-		return "gossipSync"
 	case synced:
 		return "synced"
 	default:
@@ -126,8 +115,8 @@ type Syncer struct {
 	isBusy        atomic.Value
 	syncTimer     *time.Ticker
 	validateTimer *time.Ticker
-	// targetSyncedLayer is used to signal at which layer we can set this node to synced state
-	targetSyncedLayer atomic.Value
+	// layerTurnedSynced is the layer when the node becomes synced
+	layerTurnedSynced atomic.Value
 	lastLayerSynced   atomic.Value
 	lastEpochSynced   atomic.Value
 
@@ -176,7 +165,7 @@ func NewSyncer(
 	s.syncState.Store(notSynced)
 	s.atxSyncState.Store(notSynced)
 	s.isBusy.Store(0)
-	s.targetSyncedLayer.Store(types.LayerID(0))
+	s.layerTurnedSynced.Store(types.LayerID(0))
 	s.lastLayerSynced.Store(s.mesh.ProcessedLayer())
 	s.lastEpochSynced.Store(types.GetEffectiveGenesis().GetEpoch() - 1)
 	return s
@@ -199,7 +188,7 @@ func (s *Syncer) RegisterForATXSynced() chan struct{} {
 
 // ListenToGossip returns true if the node is listening to gossip for blocks/TXs data.
 func (s *Syncer) ListenToGossip() bool {
-	return s.getSyncState() >= gossipSync
+	return s.getSyncState() == synced
 }
 
 // ListenToATXGossip returns true if the node is listening to gossip for ATXs data.
@@ -214,7 +203,7 @@ func (s *Syncer) IsSynced(ctx context.Context) bool {
 
 // SyncedBefore returns true if the node became synced before `epoch` starts.
 func (s *Syncer) SyncedBefore(epoch types.EpochID) bool {
-	return s.getSyncState() == synced && s.getTargetSyncedLayer() < epoch.FirstLayer()
+	return s.getSyncState() == synced && s.LayerTurnedSynced() < epoch.FirstLayer()
 }
 
 func (s *Syncer) IsBeaconSynced(epoch types.EpochID) bool {
@@ -285,12 +274,13 @@ func (s *Syncer) getSyncState() syncState {
 }
 
 func (s *Syncer) setSyncState(ctx context.Context, newState syncState) {
+	current := s.ticker.CurrentLayer()
 	oldState := s.syncState.Swap(newState).(syncState)
 	if oldState != newState {
 		s.logger.WithContext(ctx).With().Info("sync state change",
 			log.String("from state", oldState.String()),
 			log.String("to state", newState.String()),
-			log.Stringer("current", s.ticker.CurrentLayer()),
+			log.Stringer("current", current),
 			log.Stringer("last synced", s.getLastSyncedLayer()),
 			log.Stringer("latest", s.mesh.LatestLayer()),
 			log.Stringer("processed", s.mesh.ProcessedLayer()))
@@ -299,16 +289,11 @@ func (s *Syncer) setSyncState(ctx context.Context, newState syncState) {
 	switch newState {
 	case notSynced:
 		nodeNotSynced.Set(1)
-		nodeGossip.Set(0)
-		nodeSynced.Set(0)
-	case gossipSync:
-		nodeNotSynced.Set(0)
-		nodeGossip.Set(1)
 		nodeSynced.Set(0)
 	case synced:
 		nodeNotSynced.Set(0)
-		nodeGossip.Set(0)
 		nodeSynced.Set(1)
+		s.setLayerTurnedSynced(current)
 	}
 }
 
@@ -322,19 +307,13 @@ func (s *Syncer) setSyncerIdle() {
 	s.isBusy.Store(0)
 }
 
-// targetSyncedLayer is used to signal at which layer we can set this node to synced state.
-func (s *Syncer) setTargetSyncedLayer(ctx context.Context, layerID types.LayerID) {
-	oldSyncLayer := s.targetSyncedLayer.Swap(layerID).(types.LayerID)
-	s.logger.WithContext(ctx).With().Debug("target synced layer changed",
-		log.Uint32("from_layer", oldSyncLayer.Uint32()),
-		log.Uint32("to_layer", layerID.Uint32()),
-		log.Stringer("current", s.ticker.CurrentLayer()),
-		log.Stringer("latest", s.mesh.LatestLayer()),
-		log.Stringer("processed", s.mesh.ProcessedLayer()))
+// syncedLayer is used to signal at which layer we can set this node to synced state.
+func (s *Syncer) setLayerTurnedSynced(lid types.LayerID) {
+	s.layerTurnedSynced.Store(lid)
 }
 
-func (s *Syncer) getTargetSyncedLayer() types.LayerID {
-	return s.targetSyncedLayer.Load().(types.LayerID)
+func (s *Syncer) LayerTurnedSynced() types.LayerID {
+	return s.layerTurnedSynced.Load().(types.LayerID)
 }
 
 func (s *Syncer) setLastSyncedLayer(lid types.LayerID) {
@@ -410,8 +389,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		if s.ticker.CurrentLayer() <= types.GetEffectiveGenesis() {
 			return true
 		}
-		// always sync to currentLayer-1 to reduce race with gossip and hare/tortoise
-		for layerID := s.getLastSyncedLayer().Add(1); layerID.Before(s.ticker.CurrentLayer()); layerID = layerID.Add(1) {
+		for layerID := s.getLastSyncedLayer() + 1; layerID <= s.ticker.CurrentLayer(); layerID++ {
 			if err := s.syncLayer(ctx, layerID); err != nil {
 				s.logger.WithContext(ctx).With().Warning("failed to fetch layer", layerID, log.Err(err))
 				return false
@@ -510,37 +488,20 @@ func (s *Syncer) setStateBeforeSync(ctx context.Context) {
 
 func (s *Syncer) dataSynced() bool {
 	current := s.ticker.CurrentLayer()
-	return current.Uint32() <= 1 || !s.getLastSyncedLayer().Before(current.Sub(1))
+	return current.Uint32() <= 1 || s.getLastSyncedLayer() == current
 }
 
 func (s *Syncer) setStateAfterSync(ctx context.Context, success bool) {
 	currSyncState := s.getSyncState()
 	current := s.ticker.CurrentLayer()
-
-	// for the gossipSync/notSynced states, we check if the mesh state is on target before we advance sync state.
-	// but for the synced state, we don't check the mesh state because gossip+hare+tortoise are in charge of
-	// advancing processed/verified layers.  syncer is just auxiliary that fetches data in case of a temporary
-	// network outage.
 	switch currSyncState {
 	case synced:
 		if !success && isTooFarBehind(ctx, s.logger, current, s.getLastSyncedLayer()) {
 			s.setSyncState(ctx, notSynced)
 		}
-	case gossipSync:
-		if !success || !s.dataSynced() {
-			// push out the target synced layer
-			s.setTargetSyncedLayer(ctx, current.Add(numGossipSyncLayers))
-			break
-		}
-		// if we have gossip-synced to the target synced layer, we are ready to participate in consensus
-		if !s.getTargetSyncedLayer().After(current) {
-			s.setSyncState(ctx, synced)
-		}
 	case notSynced:
 		if success && s.dataSynced() {
-			// wait till s.ticker.GetCurrentLayer() + numGossipSyncLayers to participate in consensus
-			s.setSyncState(ctx, gossipSync)
-			s.setTargetSyncedLayer(ctx, current.Add(numGossipSyncLayers))
+			s.setSyncState(ctx, synced)
 		}
 	}
 }
