@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"time"
 
+	bcnmetrics "github.com/spacemeshos/go-spacemesh/beacon/metrics"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -78,7 +79,7 @@ func (pd *ProtocolDriver) HandleProposal(ctx context.Context, peer p2p.Peer, msg
 		return err
 	}
 
-	atx, err := pd.minerAtxHdr(m.EpochID, m.NodeID)
+	atx, malicious, err := pd.minerAtxHdr(m.EpochID, m.NodeID)
 	if err != nil {
 		return err
 	}
@@ -87,8 +88,12 @@ func (pd *ProtocolDriver) HandleProposal(ctx context.Context, peer p2p.Peer, msg
 		return err
 	}
 
-	cat := pd.classifyProposal(logger, m, atx.Received, receivedTime, st.proposalChecker)
-	return pd.addProposal(m, cat)
+	if malicious {
+		logger.With().Debug("malicious miner proposal invalid", log.Stringer("smesher", m.NodeID))
+		bcnmetrics.NumMaliciousProps.Inc()
+		return pd.addProposal(m, invalid)
+	}
+	return pd.addProposal(m, pd.classifyProposal(logger, m, atx.Received, receivedTime, st.proposalChecker))
 }
 
 func (pd *ProtocolDriver) classifyProposal(
@@ -274,11 +279,16 @@ func (pd *ProtocolDriver) storeFirstVotes(m FirstVotingMessage, nodeID types.Nod
 		return errProtocolNotRunning
 	}
 
-	atx, err := pd.minerAtxHdr(m.EpochID, nodeID)
+	atx, malicious, err := pd.minerAtxHdr(m.EpochID, nodeID)
 	if err != nil {
 		return err
 	}
-	voteWeight := new(big.Int).SetUint64(atx.GetWeight())
+	voteWeight := new(big.Int)
+	if !malicious {
+		voteWeight.SetUint64(atx.GetWeight())
+	} else {
+		pd.logger.With().Debug("malicious miner get 0 weight", log.Stringer("smesher", nodeID))
+	}
 
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
@@ -374,11 +384,16 @@ func (pd *ProtocolDriver) storeFollowingVotes(m FollowingVotingMessage, nodeID t
 		return errProtocolNotRunning
 	}
 
-	atx, err := pd.minerAtxHdr(m.EpochID, nodeID)
+	atx, malicious, err := pd.minerAtxHdr(m.EpochID, nodeID)
 	if err != nil {
 		return err
 	}
-	voteWeight := new(big.Int).SetUint64(atx.GetWeight())
+	voteWeight := new(big.Int)
+	if !malicious {
+		voteWeight.SetUint64(atx.GetWeight())
+	} else {
+		pd.logger.With().Debug("malicious miner get 0 weight", log.Stringer("smesher", nodeID))
+	}
 
 	firstRoundVotes, err := pd.getFirstRoundVote(m.EpochID, nodeID)
 	if err != nil {

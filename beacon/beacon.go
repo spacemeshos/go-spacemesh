@@ -304,40 +304,46 @@ func (pd *ProtocolDriver) OnAtx(atx *types.ActivationTxHeader) {
 	if !ok {
 		return
 	}
-	if id, ok := s.minerAtxs[atx.NodeID]; ok && id != atx.ID {
+	if mi, ok := s.minerAtxs[atx.NodeID]; ok && mi.atxid != atx.ID {
 		pd.logger.With().Warning("ignoring malicious atx",
 			log.Stringer("smesher", atx.NodeID),
-			log.Stringer("previous_atx", id),
+			log.Stringer("previous_atx", mi.atxid),
 			log.Stringer("new_atx", atx.ID),
 		)
 		return
 	}
-	s.minerAtxs[atx.NodeID] = atx.ID
+	s.minerAtxs[atx.NodeID] = &minerInfo{
+		atxid: atx.ID,
+	}
 }
 
-func (pd *ProtocolDriver) minerAtxHdr(epoch types.EpochID, nodeID types.NodeID) (*types.ActivationTxHeader, error) {
+func (pd *ProtocolDriver) minerAtxHdr(epoch types.EpochID, nodeID types.NodeID) (*types.ActivationTxHeader, bool, error) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 
 	st, ok := pd.states[epoch]
 	if !ok {
-		return nil, errEpochNotActive
+		return nil, false, errEpochNotActive
 	}
 
-	id, ok := st.minerAtxs[nodeID]
+	mi, ok := st.minerAtxs[nodeID]
 	if !ok {
 		pd.logger.With().Debug("miner does not have atx in previous epoch",
 			epoch-1,
 			log.Stringer("smesher", nodeID),
 		)
-		return nil, errMinerNotActive
+		return nil, false, errMinerNotActive
 	}
-	return pd.cdb.GetAtxHeader(id)
+	hdr, err := pd.cdb.GetAtxHeader(mi.atxid)
+	if err != nil {
+		return nil, false, fmt.Errorf("get miner atx hdr %v: %w", mi.atxid.ShortString(), err)
+	}
+	return hdr, mi.malicious, nil
 }
 
 func (pd *ProtocolDriver) MinerAllowance(epoch types.EpochID, nodeID types.NodeID) uint32 {
-	atx, err := pd.minerAtxHdr(epoch, nodeID)
-	if err != nil {
+	atx, malicious, err := pd.minerAtxHdr(epoch, nodeID)
+	if err != nil || malicious {
 		return 0
 	}
 	return atx.NumUnits
@@ -537,7 +543,7 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 
 	var (
 		epochWeight uint64
-		miners      = make(map[types.NodeID]types.ATXID)
+		miners      = make(map[types.NodeID]*minerInfo)
 		active      bool
 		nonce       *types.VRFPostIndex
 		// w1 is the weight units at δ before the end of the previous epoch, used to calculate `thresholdStrict`
@@ -547,9 +553,20 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 		early  = ontime.Add(-1 * pd.config.GracePeriodDuration)
 	)
 	if err := pd.cdb.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) error {
-		epochWeight += header.GetWeight()
+		malicious, err := pd.cdb.IsMalicious(header.NodeID)
+		if err != nil {
+			return err
+		}
+		if !malicious {
+			epochWeight += header.GetWeight()
+		} else {
+			pd.logger.With().Debug("malicious miner get 0 weight", log.Stringer("smesher", header.NodeID))
+		}
 		if _, ok := miners[header.NodeID]; !ok {
-			miners[header.NodeID] = header.ID
+			miners[header.NodeID] = &minerInfo{
+				atxid:     header.ID,
+				malicious: malicious,
+			}
 			if header.Received.Before(early) {
 				w1++
 			} else if header.Received.Before(ontime) {
@@ -558,6 +575,7 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 		} else {
 			pd.logger.With().Warning("ignoring malicious atx from miner",
 				header.ID,
+				log.Bool("malicious", malicious),
 				log.Stringer("smesher", header.NodeID))
 		}
 		if header.NodeID == pd.nodeID {
@@ -799,8 +817,8 @@ func (pd *ProtocolDriver) sendProposal(ctx context.Context, epoch types.EpochID,
 		return
 	}
 
-	atx, err := pd.minerAtxHdr(epoch, pd.edSigner.NodeID())
-	if err != nil {
+	atx, malicious, err := pd.minerAtxHdr(epoch, pd.edSigner.NodeID())
+	if err != nil || malicious {
 		return
 	}
 
