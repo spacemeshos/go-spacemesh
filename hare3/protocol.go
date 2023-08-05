@@ -293,7 +293,7 @@ func (p *protocol) next(active bool) output {
 	return out
 }
 
-// Protocol 1. graded-gossip. page 10
+// Protocol 1. graded-gossip. page 10.
 type gradedGossip struct {
 	state map[messageKey]*input
 }
@@ -317,7 +317,7 @@ func (g *gradedGossip) receive(input *input) (bool, *types.HareProof) {
 	return true, nil
 }
 
-// Protocol 2. gradecast. page 13
+// Protocol 2. gradecast. page 13.
 type gradecast struct {
 	state map[messageKey]*gradecasted
 }
@@ -393,7 +393,7 @@ type votes struct {
 	value         Value
 }
 
-// Protocol 3. thresh-gossip. Page 15
+// Protocol 3. thresh-gossip. Page 15.
 type thresholdGossip struct {
 	threshold uint16
 	state     map[messageKey]*votes

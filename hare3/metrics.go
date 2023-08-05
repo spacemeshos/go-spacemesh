@@ -2,6 +2,7 @@ package hare3
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/spacemeshos/go-spacemesh/metrics"
 )
 
@@ -44,7 +45,6 @@ var (
 		[]string{},
 	).WithLabelValues()
 
-	// histograms use a bit more data than counters, use it sparingly
 	validationLatency = metrics.NewHistogramWithBuckets(
 		"validation_seconds",
 		namespace,
