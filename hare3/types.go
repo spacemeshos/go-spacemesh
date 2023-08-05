@@ -40,7 +40,11 @@ type IterRound struct {
 
 // Delay returns number of network delays since specified iterround.
 func (ir IterRound) Delay(since IterRound) int {
-	return int(ir.Single() - since.Single())
+	delay := int(ir.Single() - since.Single())
+	if delay < 0 {
+		return 0
+	}
+	return delay
 }
 
 func (ir IterRound) Single() uint32 {
@@ -94,9 +98,14 @@ func (m *Message) ToMalfeasenceProof() types.HareProofMsg {
 	}
 }
 
-func (m *Message) Key() messageKey {
+type messageKey struct {
+	IterRound
+	Sender types.NodeID
+}
+
+func (m *Message) key() messageKey {
 	return messageKey{
-		sender:    m.Sender,
+		Sender:    m.Sender,
 		IterRound: m.IterRound,
 	}
 }

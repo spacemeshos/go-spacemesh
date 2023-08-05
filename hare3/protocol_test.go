@@ -225,6 +225,28 @@ func TestProtocol(t *testing.T) {
 			new(toutput).active().round(notify).iter(1).ref("a", "c"), // notify
 			new(toutput).terminated(),
 		),
+		gen("commit on softlock",
+			new(setup).thresh(10).initial("a", "b"),
+			new(toutput),
+			new(tinput).sender("1").round(preround).proposals("a", "b").vrfcount(11).g(grade5),
+			new(toutput).coin(false),
+			new(toutput),
+			new(tinput).sender("1").round(propose).proposals("a", "b").g(grade3),
+			new(tinput).sender("2").round(propose).proposals("b").g(grade3),
+			new(toutput),
+			new(toutput),
+			new(toutput),
+			new(tinput).sender("1").round(commit).ref("b").vrfcount(11).g(grade3),
+			new(toutput),
+			new(toutput), // hardlock
+			new(toutput), // softlock
+			// propose, commit, notify messages are built based on prervious state
+			new(toutput), // propose
+			new(tinput).sender("1").iter(1).round(propose).proposals("b").g(grade3),
+			new(toutput), // wait1
+			new(toutput), // wait2
+			new(toutput).active().round(commit).iter(1).ref("b"), // commit
+		),
 		gen("empty 0 iteration", // test that protocol can complete not only in 0st iteration
 			new(setup).thresh(10).initial("a", "b"),
 			new(toutput), // preround
@@ -366,6 +388,67 @@ func TestProtocol(t *testing.T) {
 				round(preround).proposals("b").vrfcount(11).g(grade5),
 			new(tinput).sender("7").nogossip().mshHash("m2").
 				round(preround).proposals("c").vrfcount(11).g(grade5),
+		),
+		gen("multiple malicious not broadcasted",
+			new(setup).thresh(10),
+			new(toutput),
+			new(tinput).sender("7").malicious().gossip().
+				round(preround).proposals("a").vrfcount(11).g(grade5),
+			new(tinput).sender("7").malicious().nogossip().
+				round(preround).proposals("b").vrfcount(11).g(grade5),
+			new(tinput).sender("7").malicious().nogossip().
+				round(preround).proposals("c").vrfcount(11).g(grade5),
+		),
+		gen("no commit for grade1",
+			new(setup).thresh(10),
+			new(toutput),
+			new(tinput).sender("5").
+				round(preround).proposals("a").vrfcount(11).g(grade5),
+			new(toutput).coin(false), // softlock
+			new(toutput),             // propose
+			new(toutput),             // wait1
+			new(tinput).sender("1").round(propose).proposals("a").g(grade3),
+			new(toutput),          // wait2
+			new(toutput).active(), // commit
+		),
+		gen("other gradecast was received",
+			new(setup).thresh(10),
+			new(toutput),
+			new(tinput).sender("5").
+				round(preround).proposals("a").vrfcount(11).g(grade5),
+			new(toutput).coin(false), // softlock
+			new(toutput),             // propose
+			new(tinput).sender("1").round(propose).proposals("a").g(grade3),
+			new(toutput), // wait1
+			new(tinput).sender("1").mshHash("a").gossip().round(propose).proposals("b").g(grade3),
+			new(toutput),          // wait2
+			new(toutput).active(), // commit
+		),
+		gen("no commit if not subset of grade3",
+			new(setup).thresh(10),
+			new(toutput), // preround
+			new(tinput).sender("1").
+				round(preround).proposals("a").vrfcount(11).g(grade2),
+			new(toutput).coin(false), // softlock
+			new(toutput),             // propose
+			new(tinput).sender("1").round(propose).proposals("a").g(grade3),
+			new(toutput),          // wait1
+			new(toutput),          // wait2
+			new(toutput).active(), // commit
+		),
+		gen("grade5 proposals are not in propose",
+			new(setup).thresh(10),
+			new(toutput), // preround
+			new(tinput).sender("1").
+				round(preround).proposals("a").vrfcount(11).g(grade5),
+			new(toutput).coin(false), // softlock
+			new(tinput).sender("2").
+				round(preround).proposals("b").vrfcount(11).g(grade5),
+			new(toutput), // propose
+			new(tinput).sender("1").round(propose).proposals("b").g(grade3),
+			new(toutput),          // wait1
+			new(toutput),          // wait2
+			new(toutput).active(), // commit
 		),
 	} {
 		tc := tc

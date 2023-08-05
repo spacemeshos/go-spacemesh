@@ -52,11 +52,6 @@ func (i *input) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	return nil
 }
 
-type messageKey struct {
-	IterRound
-	sender types.NodeID
-}
-
 type output struct {
 	coin       *bool              // set based on preround messages right after preround completes in 0 iter
 	result     []types.ProposalID // set based on notify messages at the start of next iter
@@ -137,7 +132,7 @@ func (p *protocol) onMessage(msg *input) (bool, *types.HareProof) {
 	if msg.Round == propose {
 		p.gradecast.add(msg.grade, p.IterRound, msg)
 	} else {
-		p.thresholdGossip.add(msg.grade, p.IterRound, msg)
+		p.thresholdGossip.add(msg.grade, msg)
 	}
 	if msg.Round == preround &&
 		(p.coin == nil || (p.coin != nil && msg.Eligibility.Proof.Cmp(p.coin) == -1)) {
@@ -146,13 +141,12 @@ func (p *protocol) onMessage(msg *input) (bool, *types.HareProof) {
 	return gossip, equivocation
 }
 
-func (p *protocol) thresholdGossipMessage(ir IterRound, grade grade) (*types.Hash32, []types.ProposalID) {
+func (p *protocol) thresholdProposals(ir IterRound, grade grade) (*types.Hash32, []types.ProposalID) {
 	for _, ref := range p.thresholdGossip.outputref(ir, grade) {
 		valid, exist := p.validProposals[ref]
-		if !exist || valid.iter > ir.Iter {
-			continue
+		if exist {
+			return &ref, valid.proposals
 		}
-		return &ref, valid.proposals
 	}
 	return nil, nil
 }
@@ -183,20 +177,20 @@ func (p *protocol) execution(out *output, active bool) {
 		if p.result != nil {
 			out.terminated = true
 		}
-		ref, values := p.thresholdGossipMessage(IterRound{Iter: p.Iter - 1, Round: notify}, grade5)
+		ref, values := p.thresholdProposals(IterRound{Iter: p.Iter - 1, Round: notify}, grade5)
 		if ref != nil && p.result == nil {
 			p.result = ref
 			out.result = values
 		}
-		if ref, _ := p.thresholdGossipMessage(IterRound{Iter: p.Iter - 1, Round: commit}, grade4); ref != nil {
+		if ref, _ := p.thresholdProposals(IterRound{Iter: p.Iter - 1, Round: commit}, grade4); ref != nil {
 			p.locked = ref
 			p.hardLocked = true
 		} else {
 			p.locked = nil
 			p.hardLocked = false
 		}
-	} else if p.Round == softlock && p.Iter > 0 {
-		if ref, _ := p.thresholdGossipMessage(IterRound{Iter: p.Iter - 1, Round: commit}, grade3); ref != nil {
+	} else if p.Round == softlock && p.Iter > 0 && !p.hardLocked {
+		if ref, _ := p.thresholdProposals(IterRound{Iter: p.Iter - 1, Round: commit}, grade3); ref != nil {
 			p.locked = ref
 		} else {
 			p.locked = nil
@@ -204,7 +198,7 @@ func (p *protocol) execution(out *output, active bool) {
 	} else if p.Round == propose && active {
 		values := p.gradedProposals.get(grade4)
 		if p.Iter > 0 {
-			ref, overwrite := p.thresholdGossipMessage(IterRound{Iter: p.Iter - 1, Round: commit}, grade2)
+			ref, overwrite := p.thresholdProposals(IterRound{Iter: p.Iter - 1, Round: commit}, grade2)
 			if ref != nil {
 				values = overwrite
 			}
@@ -216,6 +210,7 @@ func (p *protocol) execution(out *output, active bool) {
 	} else if p.Round == commit {
 		proposed := p.gradecast.output(IterRound{Iter: p.Iter, Round: propose})
 		for _, graded := range proposed {
+			// condition (a) and (b)
 			if graded.grade < grade1 || !isSubset(graded.values, p.gradedProposals.get(grade2)) {
 				continue
 			}
@@ -246,6 +241,7 @@ func (p *protocol) execution(out *output, active bool) {
 						continue
 					}
 					// condition (g)
+					// TODO(dshulyak) if no proposals with grade5 1st condition is noop
 					if !isSubset(p.gradedProposals.get(grade5), graded.values) &&
 						!p.commitExists(p.Iter-1, grade1, id) {
 						continue
@@ -268,7 +264,7 @@ func (p *protocol) execution(out *output, active bool) {
 	} else if p.Round == notify && active {
 		ref := p.result
 		if ref == nil {
-			ref, _ = p.thresholdGossipMessage(IterRound{Iter: p.Iter, Round: commit}, grade5)
+			ref, _ = p.thresholdProposals(IterRound{Iter: p.Iter, Round: commit}, grade5)
 		}
 		if ref != nil {
 			out.message = &Message{Body: Body{
@@ -305,7 +301,7 @@ type gradedGossip struct {
 
 func (g *gradedGossip) receive(input *input) (bool, *types.HareProof) {
 	// Case 1: will not be discarded earlier
-	other, exist := g.state[input.Key()]
+	other, exist := g.state[input.key()]
 	if exist {
 		if other.msgHash != input.msgHash && !other.malicious {
 			// Case 3
@@ -318,7 +314,7 @@ func (g *gradedGossip) receive(input *input) (bool, *types.HareProof) {
 		return false, nil
 	}
 	// Case 4
-	g.state[input.Key()] = input
+	g.state[input.key()] = input
 	return true, nil
 }
 
@@ -328,56 +324,26 @@ type gradecast struct {
 }
 
 type gradecasted struct {
-	grade     grade
-	received  IterRound
-	malicious bool
-	values    []types.ProposalID
-	smallest  types.VrfSignature
-}
-
-func (g *gradecasted) output(target IterRound) grade {
-	// TODO(dshulyak) i removed one round from 1st iteration, this and below
-	// requires adjustment for that
-	if !g.malicious && g.grade == grade3 && g.received.Delay(target) <= 1 {
-		// 2 (a)
-		return grade2
-	} else if !g.malicious && g.grade >= grade2 && g.received.Delay(target) <= 2 {
-		// 3 (a)
-		return grade1
-	}
-	return grade0
+	grade    grade
+	received IterRound
+	// set if another was received from graded gossip
+	otherReceived *IterRound
+	malicious     bool
+	values        []types.ProposalID
+	vrf           types.VrfSignature
 }
 
 func (g *gradecast) add(grade grade, current IterRound, msg *input) {
-	// TODO(dshulyak) where this condition came from?
-	if current.Delay(msg.IterRound) > 3 {
-		return
-	}
-	gc := gradecasted{
-		grade:     grade,
-		received:  current,
-		malicious: msg.malicious,
-		values:    msg.Value.Proposals,
-		smallest:  msg.Eligibility.Proof,
-	}
-	other, exist := g.state[msg.Key()]
-	if !exist {
-		g.state[msg.Key()] = &gc
-		return
-	} else if other.malicious {
-		return
-	} else {
-		if gc.smallest.Cmp(&other.smallest) == -1 {
-			other.smallest = msg.Eligibility.Proof
+	if stored, exist := g.state[msg.key()]; !exist {
+		g.state[msg.key()] = &gradecasted{
+			grade:     grade,
+			received:  current,
+			malicious: msg.malicious,
+			values:    msg.Value.Proposals,
+			vrf:       msg.Eligibility.Proof,
 		}
-	}
-	switch {
-	// 2 (a) && 2 (b)
-	case other.output(current) == grade2 && current.Delay(gc.received) <= 3:
-		other.malicious = true
-	// 3(a) && 3 (b)
-	case other.output(current) == grade1 && current.Delay(gc.received) <= 2:
-		other.malicious = true
+	} else {
+		stored.otherReceived = &current
 	}
 }
 
@@ -390,12 +356,24 @@ type gset struct {
 func (g *gradecast) output(target IterRound) []gset {
 	var rst []gset
 	for key, value := range g.state {
-		if key.IterRound == target {
-			if grade := value.output(target); grade > grade0 {
+		if key.IterRound == target && !value.malicious {
+			g := grade0
+			if value.grade == grade3 && value.received.Delay(target) <= 1 &&
+				// 2 (a)
+				(value.otherReceived == nil || value.otherReceived.Delay(target) > 3) {
+				// 2 (b)
+				g = grade2
+			} else if value.grade >= grade2 && value.received.Delay(target) <= 2 &&
+				// 3 (a)
+				(value.otherReceived == nil || value.otherReceived.Delay(target) > 2) {
+				// 3 (b)
+				g = grade1
+			}
+			if g > grade0 {
 				rst = append(rst, gset{
-					grade:    grade,
+					grade:    g,
 					values:   value.values,
-					smallest: value.smallest,
+					smallest: value.vrf,
 				})
 			}
 		}
@@ -422,21 +400,16 @@ type thresholdGossip struct {
 	state     map[messageKey]*votes
 }
 
-func (t *thresholdGossip) add(grade grade, current IterRound, input *input) {
-	// TODO(dshulyak) where this condition came from?
-	if current.Delay(input.IterRound) > 5 {
-		return
-	}
-	other, exist := t.state[input.Key()]
-	if !exist {
-		t.state[input.Key()] = &votes{
+func (t *thresholdGossip) add(grade grade, input *input) {
+	if stored, exist := t.state[input.key()]; !exist {
+		t.state[input.key()] = &votes{
 			grade:         grade,
 			eligibilities: input.Eligibility.Count,
 			malicious:     input.malicious,
 			value:         input.Value,
 		}
 	} else {
-		other.malicious = true
+		stored.malicious = true
 	}
 }
 
