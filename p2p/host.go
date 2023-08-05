@@ -37,6 +37,7 @@ func DefaultConfig() Config {
 		MinPeers:           20,
 		LowPeers:           40,
 		HighPeers:          100,
+		AutoscalePeers:     true,
 		GracePeersShutdown: 30 * time.Second,
 		MaxMessageSize:     2 << 20,
 		AcceptQueue:        tptu.AcceptQueueLength,
@@ -125,7 +126,20 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 	if err != nil {
 		return nil, fmt.Errorf("can't create peer store: %w", err)
 	}
-	g := &gater{max: cfg.HighPeers + cfg.MinPeers}
+	// leaves a small room for outbound connections in order to
+	// reduce risk of network isolation
+	g := &gater{
+		inbound:  int(float64(cfg.HighPeers) * 0.8),
+		outbound: int(float64(cfg.HighPeers) * 1.1),
+		direct:   map[peer.ID]struct{}{},
+	}
+	direct, err := parseIntoAddr(cfg.Direct)
+	if err != nil {
+		return nil, err
+	}
+	for _, pid := range direct {
+		g.direct[pid.ID] = struct{}{}
+	}
 	lopts := []libp2p.Option{
 		libp2p.Identity(key),
 		libp2p.ListenAddrStrings(cfg.Listen),
@@ -196,7 +210,7 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize libp2p host: %w", err)
 	}
-	g.h = h
+	g.updateHost(h)
 	h.Network().Notify(p2pmetrics.NewConnectionsMeeter())
 
 	logger.Zap().Info("local node identity", zap.Stringer("identity", h.ID()))
@@ -217,7 +231,7 @@ func setupResourcesManager(hostcfg Config) func(cfg *libp2p.Config) error {
 		limits := rcmgr.DefaultLimits
 		limits.SystemBaseLimit.ConnsInbound = highPeers
 		limits.SystemBaseLimit.ConnsOutbound = highPeers
-		limits.SystemBaseLimit.Conns = highPeers + hostcfg.MinPeers
+		limits.SystemBaseLimit.Conns = 2 * highPeers
 		limits.SystemBaseLimit.FD = 2 * highPeers
 		limits.SystemBaseLimit.StreamsInbound = 8 * highPeers
 		limits.SystemBaseLimit.StreamsOutbound = 8 * highPeers
@@ -225,8 +239,6 @@ func setupResourcesManager(hostcfg Config) func(cfg *libp2p.Config) error {
 		limits.ServiceBaseLimit.StreamsInbound = 8 * highPeers
 		limits.ServiceBaseLimit.StreamsOutbound = 8 * highPeers
 		limits.ServiceBaseLimit.Streams = 16 * highPeers
-
-		limits.TransientBaseLimit.Conns = hostcfg.MinPeers
 
 		limits.ProtocolBaseLimit.StreamsInbound = 8 * highPeers
 		limits.ProtocolBaseLimit.StreamsOutbound = 8 * highPeers
