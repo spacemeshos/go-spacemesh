@@ -37,6 +37,11 @@ func toHash(proposals []types.ProposalID) types.Hash32 {
 	return types.CalcProposalHash32Presorted(proposals, nil)
 }
 
+type messageKey struct {
+	IterRound
+	Sender types.NodeID
+}
+
 type input struct {
 	*Message
 	grade     grade

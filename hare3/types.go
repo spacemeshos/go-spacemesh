@@ -98,11 +98,6 @@ func (m *Message) ToMalfeasenceProof() types.HareProofMsg {
 	}
 }
 
-type messageKey struct {
-	IterRound
-	Sender types.NodeID
-}
-
 func (m *Message) key() messageKey {
 	return messageKey{
 		Sender:    m.Sender,
