@@ -34,8 +34,8 @@ func fastnet() config.Config {
 	conf.HARE3.Committee = 800
 	conf.HARE3.Leaders = 10
 	conf.HARE3.PreroundDelay = 3 * time.Second
-	conf.HARE3.RoundDuration = 1 * time.Second
-	conf.HARE3.IterationsLimit = 3
+	conf.HARE3.RoundDuration = 500 * time.Millisecond
+	conf.HARE3.IterationsLimit = 2
 
 	conf.P2P.MinPeers = 10
 
