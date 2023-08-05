@@ -23,13 +23,15 @@ type legacyOracle struct {
 }
 
 func (lg *legacyOracle) validate(msg *Message) grade {
+	if msg.Eligibility.Count == 0 {
+		return grade0
+	}
 	committee := int(lg.config.Committee)
 	if msg.Round == propose {
 		committee = int(lg.config.Leaders)
 	}
-	r := uint32(msg.Iter*uint8(notify)) + uint32(msg.Round)
 	valid, err := lg.oracle.Validate(context.Background(),
-		msg.Layer, r, committee, msg.Sender,
+		msg.Layer, msg.Single(), committee, msg.Sender,
 		msg.Eligibility.Proof, msg.Eligibility.Count)
 	if err != nil {
 		lg.log.Warn("failed proof validation", zap.Error(err))
@@ -45,8 +47,7 @@ func (lg *legacyOracle) validate(msg *Message) grade {
 }
 
 func (lg *legacyOracle) active(smesher types.NodeID, layer types.LayerID, ir IterRound) *types.HareEligibility {
-	r := uint32(ir.Iter*uint8(notify)) + uint32(ir.Round)
-	vrf, err := lg.oracle.Proof(context.Background(), layer, r)
+	vrf, err := lg.oracle.Proof(context.Background(), layer, ir.Single())
 	if err != nil {
 		lg.log.Error("failed to compute vrf", zap.Error(err))
 		return nil
@@ -55,11 +56,16 @@ func (lg *legacyOracle) active(smesher types.NodeID, layer types.LayerID, ir Ite
 	if ir.Round == propose {
 		committee = int(lg.config.Leaders)
 	}
-	count, err := lg.oracle.CalcEligibility(context.Background(), layer, r, committee, smesher, vrf)
+	count, err := lg.oracle.CalcEligibility(context.Background(), layer, ir.Single(), committee, smesher, vrf)
 	if err != nil {
 		if !errors.Is(err, eligibility.ErrNotActive) {
 			lg.log.Error("failed to compute eligibilities", zap.Error(err))
+		} else {
+			lg.log.Debug("identity is not active")
 		}
+		return nil
+	}
+	if count == 0 {
 		return nil
 	}
 	return &types.HareEligibility{Proof: vrf, Count: count}

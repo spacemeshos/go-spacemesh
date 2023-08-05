@@ -369,7 +369,7 @@ func (h *Hare) run(layer types.LayerID, beacon types.Beacon, inputs <-chan *inst
 	current := IterRound{Round: preround}
 
 	start := time.Now()
-	vrf := h.oracle.active(h.signer.NodeID(), layer, IterRound{Round: preround})
+	vrf := h.oracle.active(h.signer.NodeID(), layer, current)
 	activeLatency.Observe(time.Since(start).Seconds())
 
 	walltime := h.nodeclock.LayerToTime(layer).Add(h.config.PreroundDelay)
@@ -409,7 +409,7 @@ func (h *Hare) run(layer types.LayerID, beacon types.Beacon, inputs <-chan *inst
 			// on my computer
 			current := proto.IterRound
 			start := time.Now()
-			vrf := h.oracle.active(h.signer.NodeID(), layer, IterRound{Round: preround})
+			vrf := h.oracle.active(h.signer.NodeID(), layer, current)
 			activeLatency.Observe(time.Since(start).Seconds())
 
 			out := proto.next(vrf != nil)
