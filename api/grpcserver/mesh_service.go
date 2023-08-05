@@ -588,7 +588,7 @@ func (s MeshService) EpochStream(req *pb.EpochStreamRequest, stream pb.MeshServi
 		default:
 			malicious, err := s.cdb.IsMalicious(header.NodeID)
 			if err != nil {
-				return status.Error(codes.Internal, err.Error())
+				return err
 			}
 			if malicious {
 				return nil
