@@ -88,12 +88,13 @@ func (pd *ProtocolDriver) HandleProposal(ctx context.Context, peer p2p.Peer, msg
 		return err
 	}
 
-	if malicious {
-		logger.With().Debug("malicious miner proposal invalid", log.Stringer("smesher", m.NodeID))
+	cat := pd.classifyProposal(logger, m, atx.Received, receivedTime, st.proposalChecker)
+	if cat == valid && malicious {
 		bcnmetrics.NumMaliciousProps.Inc()
-		return pd.addProposal(m, invalid)
+		logger.With().Debug("malicious miner proposal potentially valid", log.Stringer("smesher", m.NodeID))
+		cat = potentiallyValid
 	}
-	return pd.addProposal(m, pd.classifyProposal(logger, m, atx.Received, receivedTime, st.proposalChecker))
+	return pd.addProposal(m, cat)
 }
 
 func (pd *ProtocolDriver) classifyProposal(

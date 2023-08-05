@@ -291,6 +291,7 @@ func Test_HandleProposal_Malicious(t *testing.T) {
 	require.NoError(t, err)
 
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
+	mockChecker.EXPECT().PassStrictThreshold(gomock.Any()).Return(true)
 	require.NoError(t, tpd.HandleProposal(context.Background(), "peerID", msgBytes1))
 
 	require.NoError(t, tpd.markProposalPhaseFinished(epoch, time.Now().Add(-20*time.Millisecond)))
@@ -303,11 +304,12 @@ func Test_HandleProposal_Malicious(t *testing.T) {
 	mockChecker.EXPECT().PassThreshold(gomock.Any()).Return(true)
 	require.NoError(t, tpd.HandleProposal(context.Background(), "peerID", msgBytes2))
 
+	p1 := ProposalFromVrf(msg1.VRFSignature)
 	p2 := ProposalFromVrf(msg2.VRFSignature)
 	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner1.NodeID(), true)
 	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner2.NodeID(), true)
 	expectedProposals := proposals{
-		potentiallyValid: proposalSet{p2: struct{}{}},
+		potentiallyValid: proposalSet{p1: struct{}{}, p2: struct{}{}},
 	}
 	checkProposals(t, tpd.ProtocolDriver, epoch, expectedProposals)
 }
