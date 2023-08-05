@@ -3,9 +3,11 @@ package hare3
 import (
 	"testing"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zapcore"
+
+	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 func TestMessageMarshall(t *testing.T) {
@@ -14,4 +16,21 @@ func TestMessageMarshall(t *testing.T) {
 	require.NoError(t, msg.MarshalLogObject(enc))
 	msg = &Message{Body: Body{Value: Value{Reference: &types.Hash32{}}}}
 	require.NoError(t, msg.MarshalLogObject(enc))
+}
+
+func FuzzMessageDecode(f *testing.F) {
+	for _, buf := range [][]byte{
+		{},
+		{0},
+		{0, 1, 1},
+		{0, 1, 1, 0, 10},
+	} {
+		f.Add(buf)
+	}
+	f.Fuzz(func(t *testing.T, buf []byte) {
+		var msg Message
+		if err := codec.Decode(buf, &msg); err == nil {
+			_ = msg.Validate()
+		}
+	})
 }
