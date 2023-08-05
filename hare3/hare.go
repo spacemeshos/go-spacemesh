@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -49,6 +50,17 @@ func (cfg *Config) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddDuration("round duration", cfg.RoundDuration)
 	encoder.AddString("p2p protocol", cfg.ProtocolName)
 	return nil
+}
+
+// roundStart returns expected time for iter/round relative to
+// layer start.
+func (cfg *Config) roundStart(round IterRound) time.Duration {
+	duration := cfg.PreroundDelay
+	if round.Round == preround {
+		return duration
+	}
+	delay := time.Duration(round.Delay(IterRound{Round: preround})) - 1
+	return duration + cfg.RoundDuration*delay
 }
 
 func DefaultConfig() Config {
@@ -237,34 +249,44 @@ func (h *Hare) Running() int {
 func (h *Hare) handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 	msg := &Message{}
 	if err := codec.Decode(buf, msg); err != nil {
+		malformedError.Inc()
 		return fmt.Errorf("%w: decoding error %s", pubsub.ErrValidationReject, err.Error())
 	}
 	if err := msg.Validate(); err != nil {
+		malformedError.Inc()
 		return fmt.Errorf("%w: validation %s", pubsub.ErrValidationReject, err.Error())
 	}
 	h.mu.Lock()
 	instance, registered := h.instances[msg.Layer]
 	h.mu.Unlock()
 	if !registered {
+		notRegisteredError.Inc()
 		return fmt.Errorf("layer %d is not registered", msg.Layer)
 	}
 	if !h.verifier.Verify(signing.HARE, msg.Sender, msg.ToMetadata().ToBytes(), msg.Signature) {
+		signatureError.Inc()
 		return fmt.Errorf("%w: invalid signature", pubsub.ErrValidationReject)
 	}
 	malicious, err := h.db.IsMalicious(msg.Sender)
 	if err != nil {
+		maliciuosError.Inc()
 		return fmt.Errorf("database error %s", err.Error())
 	}
+	start := time.Now()
 	g := h.oracle.validate(msg)
+	oracleLatency.Observe(time.Since(start).Seconds())
 	if g == grade0 {
+		oracleError.Inc()
 		return fmt.Errorf("zero grade")
 	}
+	start = time.Now()
 	resp, err := instance.submit(&input{
 		Message:   msg,
 		msgHash:   msg.ToHash(),
 		malicious: malicious,
 		grade:     g,
 	})
+	submitLatency.Observe(time.Since(start).Seconds())
 	if err != nil {
 		return err
 	}
@@ -287,8 +309,11 @@ func (h *Hare) handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 		h.db.CacheMalfeasanceProof(resp.equivocation.Messages[0].SmesherID, proof)
 	}
 	if !resp.gossip {
+		droppedMessages.Inc()
 		return fmt.Errorf("dropped by graded gossip")
 	}
+	expected := h.nodeclock.LayerToTime(msg.Layer).Add(h.config.roundStart(msg.IterRound))
+	metrics.ReportMessageLatency(h.config.ProtocolName, msg.Round.String(), time.Since(expected))
 	return nil
 }
 
@@ -314,6 +339,7 @@ func (h *Hare) onLayer(layer types.LayerID) {
 		inputs: inputs,
 	}
 	h.mu.Unlock()
+	instanceStart.Inc()
 	h.log.Debug("registered layer", zap.Uint32("lid", layer.Uint32()))
 	h.eg.Go(func() error {
 		if err := h.run(layer, beacon, inputs); err != nil {
@@ -321,6 +347,7 @@ func (h *Hare) onLayer(layer types.LayerID) {
 				zap.Uint32("lid", layer.Uint32()),
 				zap.Error(err),
 			)
+			exitErrors.Inc()
 		} else {
 			h.log.Debug("terminated",
 				zap.Uint32("lid", layer.Uint32()),
@@ -330,6 +357,7 @@ func (h *Hare) onLayer(layer types.LayerID) {
 		h.mu.Lock()
 		delete(h.instances, layer)
 		h.mu.Unlock()
+		instanceTerminated.Inc()
 		return nil
 	})
 }
@@ -339,7 +367,11 @@ func (h *Hare) run(layer types.LayerID, beacon types.Beacon, inputs <-chan *inst
 	// we do it before preround starts, so that load can have some slack time
 	// before it needs to be used in validation
 	current := IterRound{Round: preround}
+
+	start := time.Now()
 	vrf := h.oracle.active(h.signer.NodeID(), layer, IterRound{Round: preround})
+	activeLatency.Observe(time.Since(start).Seconds())
+
 	walltime := h.nodeclock.LayerToTime(layer).Add(h.config.PreroundDelay)
 	var proposals []types.ProposalID
 	if vrf != nil {
@@ -349,7 +381,9 @@ func (h *Hare) run(layer types.LayerID, beacon types.Beacon, inputs <-chan *inst
 		case <-h.wallclock.After(h.wallclock.Until(walltime)):
 		case <-h.ctx.Done():
 		}
+		start := time.Now()
 		proposals = h.proposals(layer, beacon)
+		proposalsLatency.Observe(time.Since(start).Seconds())
 	}
 	proto := newProtocol(proposals, h.config.Committee/2+1)
 	if err := h.onOutput(layer, current, proto.next(vrf != nil), vrf); err != nil {
@@ -374,7 +408,10 @@ func (h *Hare) run(layer types.LayerID, beacon types.Beacon, inputs <-chan *inst
 			// on the other hand this computation is between 300us-2ms
 			// on my computer
 			current := proto.IterRound
-			vrf := h.oracle.active(h.signer.NodeID(), layer, current)
+			start := time.Now()
+			vrf := h.oracle.active(h.signer.NodeID(), layer, IterRound{Round: preround})
+			activeLatency.Observe(time.Since(start).Seconds())
+
 			out := proto.next(vrf != nil)
 			if err := h.onOutput(layer, current, out, vrf); err != nil {
 				return err
@@ -421,6 +458,7 @@ func (h *Hare) onOutput(layer types.LayerID, ir IterRound, out output, vrf *type
 			return h.ctx.Err()
 		case h.coins <- WeakCoinOutput{Layer: layer, Coin: *out.coin}:
 		}
+		instanceCoin.Inc()
 	}
 	if out.result != nil {
 		select {
@@ -428,6 +466,7 @@ func (h *Hare) onOutput(layer types.LayerID, ir IterRound, out output, vrf *type
 			return h.ctx.Err()
 		case h.results <- ConsensusOutput{Layer: layer, Proposals: out.result}:
 		}
+		instanceResult.Inc()
 	}
 	return nil
 }
