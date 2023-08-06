@@ -637,6 +637,8 @@ github.com/sourcegraph/annotate v0.0.0-20160123013949-f4cad6c6324d/go.mod h1:Udh
 github.com/sourcegraph/syntaxhighlight v0.0.0-20170531221838-bd320f5d308e/go.mod h1:HuIsMU8RRBOtsCgI77wP899iHVBQpCmg4ErYMZB+2IA=
 github.com/spacemeshos/api/release/go v1.17.0 h1:GZT2foJ619pYLYbNGWkat8QSFJnH1u2eOWw8AwSlz/g=
 github.com/spacemeshos/api/release/go v1.17.0/go.mod h1:aSK7c2PUsle+EpC9VPAsPnsjKWDbo+NzT7kZgmzIZeM=
+github.com/spacemeshos/api/release/go v1.17.1-0.20230806133150-c15b9c591aaf h1:XW2zg0JwV3KWwx8w6nUiLQDXrz+vRLBHUXfz30GyxxQ=
+github.com/spacemeshos/api/release/go v1.17.1-0.20230806133150-c15b9c591aaf/go.mod h1:nC5g7IVRNxF8Kl/Tzvr7cQeYBwHN4sMTVsIEa6Ebtl4=
 github.com/spacemeshos/economics v0.1.0 h1:PJAKbhBKqbbdCYTB29pkmc8sYqK3pKUAiuAvQxuSJEg=
 github.com/spacemeshos/economics v0.1.0/go.mod h1:Bz0wRDwCOUP1A6w3cPW6iuUBGME8Tz48sIriYiohsBg=
 github.com/spacemeshos/fixed v0.1.0 h1:20KIGvxLlAsuidQrvuwwHe6PrvqeTKzbJIsScbmnUPQ=

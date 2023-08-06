@@ -179,6 +179,26 @@ func (b *Builder) Smeshing() bool {
 	return b.started.Load()
 }
 
+func (b *Builder) RegossipAtxs(ctx context.Context, epoch types.EpochID) (int, error) {
+	ids, err := atxs.GetIDsByEpoch(b.cdb, epoch)
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, id := range ids {
+		blob, err := atxs.GetBlob(b.cdb, id[:])
+		if err != nil {
+			return 0, err
+		}
+		if err := b.publisher.Publish(ctx, pubsub.AtxProtocol, blob); err != nil {
+			b.log.Error("unexpected error to publish", log.Stringer("id", id), log.Err(err))
+		} else {
+			n++
+		}
+	}
+	return n, nil
+}
+
 // StartSmeshing is the main entry point of the atx builder. It runs the main
 // loop of the builder in a new go-routine and shouldn't be called more than
 // once without calling StopSmeshing in between. If the post data is incomplete
