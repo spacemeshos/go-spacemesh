@@ -130,9 +130,9 @@ func (p *protocol) onMessage(msg *input) (bool, *types.HareProof) {
 	}
 	// gradecast and thresholdGossip should never be called with non-equivocating duplicates
 	if msg.Round == propose {
-		p.gradecast.add(msg.grade, p.IterRound, msg)
+		p.gradecast.receive(p.IterRound, msg)
 	} else {
-		p.thresholdGossip.add(msg.grade, msg)
+		p.thresholdGossip.receive(msg)
 	}
 	if msg.Round == preround &&
 		(p.coin == nil || (p.coin != nil && msg.Eligibility.Proof.Cmp(p.coin) == -1)) {
@@ -329,14 +329,14 @@ type gradecasted struct {
 	vrf           types.VrfSignature
 }
 
-func (g *gradecast) add(grade grade, current IterRound, msg *input) {
-	if stored, exist := g.state[msg.key()]; !exist {
-		g.state[msg.key()] = &gradecasted{
-			grade:     grade,
+func (g *gradecast) receive(current IterRound, input *input) {
+	if stored, exist := g.state[input.key()]; !exist {
+		g.state[input.key()] = &gradecasted{
+			grade:     input.grade,
 			received:  current,
-			malicious: msg.malicious,
-			values:    msg.Value.Proposals,
-			vrf:       msg.Eligibility.Proof,
+			malicious: input.malicious,
+			values:    input.Value.Proposals,
+			vrf:       input.Eligibility.Proof,
 		}
 	} else {
 		stored.otherReceived = &current
@@ -396,10 +396,10 @@ type thresholdGossip struct {
 	state     map[messageKey]*votes
 }
 
-func (t *thresholdGossip) add(grade grade, input *input) {
+func (t *thresholdGossip) receive(input *input) {
 	if stored, exist := t.state[input.key()]; !exist {
 		t.state[input.key()] = &votes{
-			grade:         grade,
+			grade:         input.grade,
 			eligibilities: input.Eligibility.Count,
 			malicious:     input.malicious,
 			value:         input.Value,
