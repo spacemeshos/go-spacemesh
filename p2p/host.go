@@ -59,26 +59,28 @@ type Config struct {
 	MaxMessageSize     int
 
 	// see https://lwn.net/Articles/542629/ for reuseport explanation
-	DisableReusePort       bool        `mapstructure:"disable-reuseport"`
-	DisableNatPort         bool        `mapstructure:"disable-natport"`
-	DisableDHT             bool        `mapstructure:"disable-dht"`
-	Flood                  bool        `mapstructure:"flood"`
-	Listen                 string      `mapstructure:"listen"`
-	Bootnodes              []string    `mapstructure:"bootnodes"`
-	Direct                 []string    `mapstructure:"direct"`
-	MinPeers               int         `mapstructure:"min-peers"`
-	LowPeers               int         `mapstructure:"low-peers"`
-	HighPeers              int         `mapstructure:"high-peers"`
-	AutoscalePeers         bool        `mapstructure:"autoscale-peers"`
-	AdvertiseAddress       string      `mapstructure:"advertise-address"`
-	AcceptQueue            int         `mapstructure:"p2p-accept-queue"`
-	Metrics                bool        `mapstructure:"p2p-metrics"`
-	Bootnode               bool        `mapstructure:"p2p-bootnode"`
-	ForceReachability      string      `mapstructure:"p2p-reachability"`
-	EnableHolepunching     bool        `mapstructure:"p2p-holepunching"`
-	DisableLegacyDiscovery bool        `mapstructure:"p2p-disable-legacy-discovery"`
-	PrivateNetwork         bool        `mapstructure:"p2p-private-network"`
-	RelayServer            RelayServer `mapstructure:"relay-server"`
+	DisableReusePort         bool        `mapstructure:"disable-reuseport"`
+	DisableNatPort           bool        `mapstructure:"disable-natport"`
+	DisableConnectionManager bool        `mapstructure:"disable-connection-manager"`
+	DisableResourceManager   bool        `mapstructure:"disable-resource-manager"`
+	DisableDHT               bool        `mapstructure:"disable-dht"`
+	Flood                    bool        `mapstructure:"flood"`
+	Listen                   string      `mapstructure:"listen"`
+	Bootnodes                []string    `mapstructure:"bootnodes"`
+	Direct                   []string    `mapstructure:"direct"`
+	MinPeers                 int         `mapstructure:"min-peers"`
+	LowPeers                 int         `mapstructure:"low-peers"`
+	HighPeers                int         `mapstructure:"high-peers"`
+	AutoscalePeers           bool        `mapstructure:"autoscale-peers"`
+	AdvertiseAddress         string      `mapstructure:"advertise-address"`
+	AcceptQueue              int         `mapstructure:"p2p-accept-queue"`
+	Metrics                  bool        `mapstructure:"p2p-metrics"`
+	Bootnode                 bool        `mapstructure:"p2p-bootnode"`
+	ForceReachability        string      `mapstructure:"p2p-reachability"`
+	EnableHolepunching       bool        `mapstructure:"p2p-holepunching"`
+	DisableLegacyDiscovery   bool        `mapstructure:"p2p-disable-legacy-discovery"`
+	PrivateNetwork           bool        `mapstructure:"p2p-private-network"`
+	RelayServer              RelayServer `mapstructure:"relay-server"`
 }
 
 type RelayServer struct {
@@ -162,11 +164,14 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 			return tp.WithSessionOptions(noise.Prologue(prologue))
 		}),
 		libp2p.Muxer("/yamux/1.0.0", &streamer),
-		libp2p.ConnectionManager(cm),
 		libp2p.Peerstore(ps),
 		libp2p.BandwidthReporter(p2pmetrics.NewBandwidthCollector()),
 		libp2p.EnableNATService(),
 		libp2p.ConnectionGater(g),
+		libp2p.Ping(false),
+	}
+	if !cfg.DisableConnectionManager {
+		lopts = append(lopts, libp2p.ConnectionManager(cm))
 	}
 	if len(cfg.AdvertiseAddress) > 0 {
 		addr, err := multiaddr.NewMultiaddr(cfg.AdvertiseAddress)
@@ -248,6 +253,9 @@ func setupResourcesManager(hostcfg Config) func(cfg *libp2p.Config) error {
 		concrete := limits.AutoScale()
 		if !hostcfg.AutoscalePeers {
 			concrete = limits.Scale(0, 0)
+		}
+		if hostcfg.DisableResourceManager {
+			concrete = rcmgr.InfiniteLimits
 		}
 		mgr, err := rcmgr.NewResourceManager(
 			rcmgr.NewFixedLimiter(concrete),
