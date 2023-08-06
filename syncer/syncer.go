@@ -280,6 +280,9 @@ func (s *Syncer) setSyncState(ctx context.Context, newState syncState) {
 			log.Stringer("latest", s.mesh.LatestLayer()),
 			log.Stringer("processed", s.mesh.ProcessedLayer()))
 		events.ReportNodeStatusUpdate()
+		if newState == synced {
+			s.setLayerTurnedSynced(current)
+		}
 	}
 	switch newState {
 	case notSynced:
@@ -288,7 +291,6 @@ func (s *Syncer) setSyncState(ctx context.Context, newState syncState) {
 	case synced:
 		nodeNotSynced.Set(0)
 		nodeSynced.Set(1)
-		s.setLayerTurnedSynced(current)
 	}
 }
 
