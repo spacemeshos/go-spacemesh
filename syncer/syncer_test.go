@@ -304,6 +304,7 @@ func startWithSyncedState(t *testing.T, ts *testSyncer) types.LayerID {
 
 	gLayer := types.GetEffectiveGenesis()
 	ts.mTicker.advanceToLayer(gLayer)
+	ts.mDataFetcher.EXPECT().PollMaliciousProofs(gomock.Any())
 	ts.mDataFetcher.EXPECT().GetEpochATXs(gomock.Any(), gLayer.GetEpoch())
 	require.True(t, ts.syncer.synchronize(context.Background()))
 	require.True(t, ts.syncer.ListenToATXGossip())
@@ -348,6 +349,7 @@ func TestSyncAtxs_Genesis(t *testing.T) {
 				for epoch := types.EpochID(1); epoch <= tc.lastSynced; epoch++ {
 					ts.mDataFetcher.EXPECT().GetEpochATXs(gomock.Any(), epoch)
 				}
+				ts.mDataFetcher.EXPECT().PollMaliciousProofs(gomock.Any())
 			}
 			require.True(t, ts.syncer.synchronize(context.Background()))
 			require.True(t, ts.syncer.ListenToATXGossip())
@@ -388,7 +390,6 @@ func TestSyncAtxs(t *testing.T) {
 			for lid := lyr; lid < tc.current; lid++ {
 				ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid)
 			}
-
 			require.True(t, ts.syncer.synchronize(context.Background()))
 			require.Equal(t, tc.lastSyncEpoch, ts.syncer.lastAtxEpoch())
 		})
@@ -648,6 +649,7 @@ func TestSynchronize_RecoverFromCheckpoint(t *testing.T) {
 		withForkFinder(ts.mForkFinder))
 	// should not sync any atxs before current epoch
 	ts.mDataFetcher.EXPECT().GetEpochATXs(gomock.Any(), current.GetEpoch())
+	ts.mDataFetcher.EXPECT().PollMaliciousProofs(gomock.Any())
 	require.True(t, ts.syncer.synchronize(context.Background()))
 	require.Equal(t, current.GetEpoch(), ts.syncer.lastAtxEpoch())
 	types.SetEffectiveGenesis(types.FirstEffectiveGenesis().Uint32())
