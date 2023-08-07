@@ -24,15 +24,17 @@ jobs:
       run: |
         make dockerbuild-go
         make dockerbuild-bs
-    - name: Push docker images to dockerhub dev repo
+    - name: Push docker images to dockerhub
       run: |
-        if [[ "${{ github.ref }}" == "refs/tags/"* ]]; then
-          echo "DOCKER_IMAGE_VERSION=${{ github.ref_name }}" >> $GITHUB_ENV
-        fi
         make dockerpush-only
         make dockerpush-bs-only
-    - name: Push docker images to dockerhub release repo
+    - name: Push docker images with version tag to dockerhub
       if: startsWith(github.ref, 'refs/tags/')
       run: |
+        echo "DOCKER_IMAGE_VERSION=${{ github.ref_name }}" >> $GITHUB_ENV
+
+        make dockerpush-only
+        make dockerpush-bs-only
+
         "DOCKER_IMAGE_REPO=go-spacemesh" make dockerpush-only
         "DOCKER_IMAGE_REPO=go-spacemesh" make dockerpush-bs-only
