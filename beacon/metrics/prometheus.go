@@ -103,3 +103,10 @@ func (bmc *BeaconMetricsCollector) Collect(ch chan<- prometheus.Metric) {
 	// export the calculated beacon for the target epoch for ease of monitoring along with the observed beacons
 	ch <- prometheus.MustNewConstMetric(bmc.calculatedBeaconWeight, prometheus.CounterValue, float64(0), calculated.Epoch.String(), calculated.Beacon)
 }
+
+var NumMaliciousProps = metrics.NewCounter(
+	"malicious_proposals",
+	subsystem,
+	"number of malicious proposals",
+	[]string{},
+).WithLabelValues()
