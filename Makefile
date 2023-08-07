@@ -11,12 +11,10 @@ ifneq ($(.SHELLSTATUS),0)
 	BRANCH := $(BRANCH)-dirty
 endif
 
+SHA = $(shell git rev-parse --short HEAD)
 DOCKER_HUB ?= spacemeshos
 DOCKER_IMAGE_REPO ?= go-spacemesh-dev
-SHA = $(shell git rev-parse --short HEAD)
 DOCKER_IMAGE_VERSION ?= $(SHA)
-DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION)
-DOCKER_BS_IMAGE = $(DOCKER_IMAGE_REPO)-bs:$(DOCKER_IMAGE_VERSION)
 
 LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
 include Makefile-libs.Inc
@@ -142,7 +140,7 @@ list-versions:
 .PHONY: list-versions
 
 dockerbuild-go:
-	DOCKER_BUILDKIT=1 docker build -t $(DOCKER_IMAGE) .
+	DOCKER_BUILDKIT=1 docker build -t go-spacemesh:$(SHA) .
 .PHONY: dockerbuild-go
 
 dockerpush: dockerbuild-go dockerpush-only
@@ -152,12 +150,12 @@ dockerpush-only:
 ifneq ($(DOCKER_USERNAME):$(DOCKER_PASSWORD),:)
 	echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
 endif
-	docker tag $(DOCKER_IMAGE) $(DOCKER_HUB)/$(DOCKER_IMAGE)
-	docker push $(DOCKER_HUB)/$(DOCKER_IMAGE)
+	docker tag go-spacemesh:$(SHA) $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION)
+	docker push $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION)
 .PHONY: dockerpush-only
 
 dockerbuild-bs:
-	DOCKER_BUILDKIT=1 docker build -t $(DOCKER_BS_IMAGE) -f ./bootstrap.Dockerfile .
+	DOCKER_BUILDKIT=1 docker build -t go-spacemesh-bs:$(SHA) -f ./bootstrap.Dockerfile .
 .PHONY: dockerbuild-bs
 
 dockerpush-bs: dockerbuild-bs dockerpush-bs-only
@@ -167,8 +165,8 @@ dockerpush-bs-only:
 ifneq ($(DOCKER_USERNAME):$(DOCKER_PASSWORD),:)
 	echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
 endif
-	docker tag $(DOCKER_BS_IMAGE) $(DOCKER_HUB)/$(DOCKER_BS_IMAGE)
-	docker push $(DOCKER_HUB)/$(DOCKER_BS_IMAGE)
+	docker tag go-spacemesh-bs:$(SHA) $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO)-bs:$(DOCKER_IMAGE_VERSION)
+	docker push $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO)-bs:$(DOCKER_IMAGE_VERSION)
 .PHONY: dockerpush-bs-only
 
 fuzz:

@@ -20,13 +20,19 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@v3
-    - name: set docker image on tag push
+    - name: Build docker images
+      run: |
+        make dockerbuild-go
+        make dockerbuild-bs
+    - name: Push docker images to dockerhub dev repo
       run: |
         if [[ "${{ github.ref }}" == "refs/tags/"* ]]; then
-          echo "DOCKER_IMAGE_REPO=go-spacemesh" >> $GITHUB_ENV
           echo "DOCKER_IMAGE_VERSION=${{ github.ref_name }}" >> $GITHUB_ENV
         fi
-    - name: push go-spacemesh
-      run: make dockerpush
-    - name: push go-bootstrapper
-      run: make dockerpush-bs
+        make dockerpush-only
+        make dockerpush-bs-only
+    - name: Push docker images to dockerhub release repo
+      if: startsWith(github.ref, 'refs/tags/')
+      run: |
+        "DOCKER_IMAGE_REPO=go-spacemesh" make dockerpush-only
+        "DOCKER_IMAGE_REPO=go-spacemesh" make dockerpush-bs-only
