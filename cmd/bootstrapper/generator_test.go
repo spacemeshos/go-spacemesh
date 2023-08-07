@@ -18,7 +18,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 func TestMain(m *testing.M) {
@@ -110,14 +113,29 @@ func (m *MeshAPIMock) GetATXs(context.Context, []types.ATXID) (map[types.ATXID]*
 	panic("not implemented")
 }
 func (m *MeshAPIMock) MeshHash(types.LayerID) (types.Hash32, error) { panic("not implemented") }
-func (m *MeshAPIMock) EpochAtxs(types.EpochID) ([]types.ATXID, error) {
-	return types.RandomActiveSet(activeSetSize), nil
+
+func createAtxs(tb testing.TB, db sql.Executor, epoch types.EpochID, atxids []types.ATXID) {
+	for _, id := range atxids {
+		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
+			NIPostChallenge: types.NIPostChallenge{
+				PublishEpoch: epoch,
+			},
+			NumUnits: 1,
+		}}
+		atx.SetID(id)
+		atx.SetEffectiveNumUnits(atx.NumUnits)
+		atx.SetReceived(time.Now())
+		atx.SmesherID = types.RandomNodeID()
+		vAtx, err := atx.Verify(0, 1)
+		require.NoError(tb, err)
+		require.NoError(tb, atxs.Add(db, vAtx))
+	}
 }
 
-func launchServer(tb testing.TB) func() {
+func launchServer(tb testing.TB, cdb *datastore.CachedDB) func() {
 	grpcService := grpcserver.New(fmt.Sprintf("127.0.0.1:%d", grpcPort), logtest.New(tb).Named("grpc"))
 	jsonService := grpcserver.NewJSONHTTPServer(fmt.Sprintf("127.0.0.1:%d", jsonport), logtest.New(tb).WithName("grpc.JSON"))
-	s := grpcserver.NewMeshService(&MeshAPIMock{}, nil, nil, 0, types.Hash20{}, 0, 0, 0, logtest.New(tb).WithName("grpc.Mesh"))
+	s := grpcserver.NewMeshService(cdb, &MeshAPIMock{}, nil, nil, 0, types.Hash20{}, 0, 0, 0, logtest.New(tb).WithName("grpc.Mesh"))
 
 	pb.RegisterMeshServiceServer(grpcService.GrpcServer, s)
 	// start gRPC and json servers
@@ -152,7 +170,10 @@ func verifyUpdate(t *testing.T, data []byte, epoch types.EpochID, expBeacon stri
 }
 
 func TestGenerator_Generate(t *testing.T) {
-	t.Cleanup(launchServer(t))
+	targetEpoch := types.EpochID(3)
+	db := sql.InMemory()
+	createAtxs(t, db, targetEpoch-1, types.RandomActiveSet(activeSetSize))
+	t.Cleanup(launchServer(t, datastore.NewCachedDB(db, logtest.New(t))))
 
 	for _, tc := range []struct {
 		desc            string
@@ -198,7 +219,6 @@ func TestGenerator_Generate(t *testing.T) {
 			)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			targetEpoch := types.EpochID(3)
 			persisted, err := g.Generate(ctx, targetEpoch, tc.beacon, tc.actives)
 			require.NoError(t, err)
 

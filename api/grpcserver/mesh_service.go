@@ -10,6 +10,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -17,6 +18,7 @@ import (
 // MeshService exposes mesh data such as accounts, blocks, and transactions.
 type MeshService struct {
 	logger         log.Logger
+	cdb            *datastore.CachedDB
 	mesh           meshAPI // Mesh
 	conState       conservativeState
 	genTime        genesisTimeAPI
@@ -34,12 +36,20 @@ func (s MeshService) RegisterService(server *Server) {
 
 // NewMeshService creates a new service using config data.
 func NewMeshService(
-	msh meshAPI, cstate conservativeState, genTime genesisTimeAPI,
-	layersPerEpoch uint32, genesisID types.Hash20, layerDuration time.Duration,
-	layerAvgSize, txsPerProposal uint32, lg log.Logger,
+	cdb *datastore.CachedDB,
+	msh meshAPI,
+	cstate conservativeState,
+	genTime genesisTimeAPI,
+	layersPerEpoch uint32,
+	genesisID types.Hash20,
+	layerDuration time.Duration,
+	layerAvgSize,
+	txsPerProposal uint32,
+	lg log.Logger,
 ) *MeshService {
 	return &MeshService{
 		logger:         lg,
+		cdb:            cdb,
 		mesh:           msh,
 		conState:       cstate,
 		genTime:        genTime,
@@ -63,7 +73,7 @@ func (s MeshService) GenesisTime(context.Context, *pb.GenesisTimeRequest) (*pb.G
 func (s MeshService) CurrentLayer(context.Context, *pb.CurrentLayerRequest) (*pb.CurrentLayerResponse, error) {
 	s.logger.Info("GRPC MeshService.CurrentLayer")
 	return &pb.CurrentLayerResponse{Layernum: &pb.LayerNumber{
-		Number: uint32(s.genTime.CurrentLayer().Uint32()),
+		Number: s.genTime.CurrentLayer().Uint32(),
 	}}, nil
 }
 
@@ -571,21 +581,24 @@ func convertLayerStatus(in int) pb.Layer_LayerStatus {
 
 func (s MeshService) EpochStream(req *pb.EpochStreamRequest, stream pb.MeshService_EpochStreamServer) error {
 	epoch := types.EpochID(req.Epoch)
-	atxids, err := s.mesh.EpochAtxs(epoch)
-	if err != nil {
-		return status.Error(codes.Internal, err.Error())
-	}
-	for _, id := range atxids {
+	if err := s.cdb.IterateEpochATXHeaders(epoch+1, func(header *types.ActivationTxHeader) error {
 		select {
 		case <-stream.Context().Done():
 			return nil
 		default:
-			var res pb.EpochStreamResponse
-			res.Id = &pb.ActivationId{Id: id.Bytes()}
-			if err = stream.Send(&res); err != nil {
-				return status.Error(codes.Internal, err.Error())
+			malicious, err := s.cdb.IsMalicious(header.NodeID)
+			if err != nil {
+				return err
 			}
+			if malicious {
+				return nil
+			}
+			var res pb.EpochStreamResponse
+			res.Id = &pb.ActivationId{Id: header.ID.Bytes()}
+			return stream.Send(&res)
 		}
+	}); err != nil {
+		return status.Error(codes.Internal, err.Error())
 	}
 	return nil
 }

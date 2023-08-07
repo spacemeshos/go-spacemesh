@@ -20,7 +20,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
@@ -614,10 +613,6 @@ func (msh *Mesh) GetATXs(ctx context.Context, atxIds []types.ATXID) (map[types.A
 		}
 	}
 	return atxs, mIds
-}
-
-func (msh *Mesh) EpochAtxs(epoch types.EpochID) ([]types.ATXID, error) {
-	return atxs.GetIDsByEpoch(msh.cdb, epoch)
 }
 
 // GetRewards retrieves account's rewards by the coinbase address.

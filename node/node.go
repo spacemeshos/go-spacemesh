@@ -1040,7 +1040,7 @@ func (app *App) initService(ctx context.Context, svc grpcserver.Service) (grpcse
 	case grpcserver.GlobalState:
 		return grpcserver.NewGlobalStateService(app.mesh, app.conState, app.log.WithName("grpc.GlobalState")), nil
 	case grpcserver.Mesh:
-		return grpcserver.NewMeshService(app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.Genesis.GenesisID(), app.Config.LayerDuration, app.Config.LayerAvgSize, uint32(app.Config.TxsPerProposal), app.log.WithName("grpc.Mesh")), nil
+		return grpcserver.NewMeshService(app.cachedDB, app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.Genesis.GenesisID(), app.Config.LayerDuration, app.Config.LayerAvgSize, uint32(app.Config.TxsPerProposal), app.log.WithName("grpc.Mesh")), nil
 	case grpcserver.Node:
 		return grpcserver.NewNodeService(app.host, app.mesh, app.clock, app.syncer, cmd.Version, cmd.Commit, app.log.WithName("grpc.Node")), nil
 	case grpcserver.Admin:
