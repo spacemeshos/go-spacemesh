@@ -450,13 +450,11 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 		s.logger.WithContext(ctx).With().Info("atxs synced to epoch", s.lastAtxEpoch())
 
 		// FIXME https://github.com/spacemeshos/go-spacemesh/issues/3987
-		if s.ticker.CurrentLayer() > types.GetEffectiveGenesis() {
-			s.logger.WithContext(ctx).With().Info("syncing malicious proofs")
-			if err := s.syncMalfeasance(ctx); err != nil {
-				return err
-			}
-			s.logger.WithContext(ctx).With().Info("malicious IDs synced")
+		s.logger.WithContext(ctx).With().Info("syncing malicious proofs")
+		if err := s.syncMalfeasance(ctx); err != nil {
+			return err
 		}
+		s.logger.WithContext(ctx).With().Info("malicious IDs synced")
 		s.setATXSynced()
 		return nil
 	}
