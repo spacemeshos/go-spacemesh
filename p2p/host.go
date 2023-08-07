@@ -42,6 +42,8 @@ func DefaultConfig() Config {
 		MaxMessageSize:     2 << 20,
 		AcceptQueue:        tptu.AcceptQueueLength,
 		EnableHolepunching: true,
+		InboundFraction:    0.8,
+		OutboundFraction:   1.1,
 		RelayServer:        RelayServer{TTL: 20 * time.Minute, Reservations: 512},
 	}
 }
@@ -71,6 +73,8 @@ type Config struct {
 	MinPeers                 int         `mapstructure:"min-peers"`
 	LowPeers                 int         `mapstructure:"low-peers"`
 	HighPeers                int         `mapstructure:"high-peers"`
+	InboundFraction          float64     `mapstructure:"inbound-fraction"`
+	OutboundFraction         float64     `mapstructure:"outbound-fraction"`
 	AutoscalePeers           bool        `mapstructure:"autoscale-peers"`
 	AdvertiseAddress         string      `mapstructure:"advertise-address"`
 	AcceptQueue              int         `mapstructure:"p2p-accept-queue"`
@@ -131,8 +135,8 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 	// leaves a small room for outbound connections in order to
 	// reduce risk of network isolation
 	g := &gater{
-		inbound:  int(float64(cfg.HighPeers) * 0.8),
-		outbound: int(float64(cfg.HighPeers) * 1.1),
+		inbound:  int(float64(cfg.HighPeers) * cfg.InboundFraction),
+		outbound: int(float64(cfg.HighPeers) * cfg.OutboundFraction),
 		direct:   map[peer.ID]struct{}{},
 	}
 	direct, err := parseIntoAddr(cfg.Direct)
