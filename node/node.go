@@ -634,11 +634,6 @@ func (app *App) initServices(ctx context.Context) error {
 		return fmt.Errorf("failed to create mesh: %w", err)
 	}
 
-	poetCfg := activation.PoetConfig{
-		PhaseShift:  app.Config.POET.PhaseShift,
-		CycleGap:    app.Config.POET.CycleGap,
-		GracePeriod: app.Config.POET.GracePeriod,
-	}
 	fetcherWrapped := &layerFetcher{}
 	atxHandler := activation.NewHandler(
 		app.cachedDB,
@@ -653,7 +648,7 @@ func (app *App) initServices(ctx context.Context) error {
 		beaconProtocol,
 		trtl,
 		app.addLogger(ATXHandlerLogger, lg),
-		poetCfg,
+		app.Config.POET,
 	)
 
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
@@ -802,7 +797,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.Config.SMESHING.Opts.DataDir,
 		app.addLogger(NipostBuilderLogger, lg),
 		app.edSgn,
-		poetCfg,
+		app.Config.POET,
 		app.clock,
 		activation.WithNipostValidator(app.validator),
 	)
@@ -839,7 +834,7 @@ func (app *App) initServices(ctx context.Context) error {
 		newSyncer,
 		app.addLogger("atxBuilder", lg),
 		activation.WithContext(ctx),
-		activation.WithPoetConfig(poetCfg),
+		activation.WithPoetConfig(app.Config.POET),
 		activation.WithPoetRetryInterval(app.Config.HARE.WakeupDelta),
 		activation.WithValidator(app.validator),
 	)

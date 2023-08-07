@@ -197,6 +197,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 		log.Time("poet proof deadline", poetProofDeadline),
 		log.Stringer("publish epoch", pubEpoch),
 		log.Stringer("target epoch", challenge.TargetEpoch()),
+		log.Any("config", nb.poetCfg),
 	)
 
 	challengeHash := challenge.Hash()
