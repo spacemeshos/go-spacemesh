@@ -760,6 +760,78 @@ func TestConfig_Preset(t *testing.T) {
 	})
 }
 
+func TestConfig_CustomTypes(t *testing.T) {
+	const name = "testnet"
+
+	tt := []struct {
+		name         string
+		cli          string
+		config       string
+		updatePreset func(*testing.T, *config.Config)
+	}{
+		{
+			name:   "smeshing-opts-provider",
+			cli:    "--smeshing-opts-provider=1337",
+			config: `{"smeshing": {"smeshing-opts": {"smeshing-opts-provider": "1337"}}}`,
+			updatePreset: func(t *testing.T, c *config.Config) {
+				c.SMESHING.Opts.ProviderID.SetUint(1337)
+			},
+		},
+		{
+			name:   "post-pow-difficulty",
+			cli:    "--post-pow-difficulty=00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+			config: `{"post": {"post-pow-difficulty": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"}}`,
+			updatePreset: func(t *testing.T, c *config.Config) {
+				diff, err := hex.DecodeString("00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff")
+				require.NoError(t, err)
+				copy(c.POST.PowDifficulty[:], diff)
+			},
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(fmt.Sprintf("%s_PresetOverwrittenByFlags", tc.name), func(t *testing.T) {
+			preset, err := presets.Get(name)
+			require.NoError(t, err)
+
+			c := &cobra.Command{}
+			cmd.AddCommands(c)
+			require.NoError(t, c.ParseFlags([]string{tc.cli}))
+
+			viper.Set("preset", name)
+			t.Cleanup(viper.Reset)
+			t.Cleanup(cmd.ResetConfig)
+
+			conf, err := loadConfig(c)
+			require.NoError(t, err)
+			tc.updatePreset(t, &preset)
+			require.Equal(t, preset, *conf)
+		})
+
+		t.Run(fmt.Sprintf("%s_PresetOverWrittenByConfigFile", tc.name), func(t *testing.T) {
+			preset, err := presets.Get(name)
+			require.NoError(t, err)
+
+			c := &cobra.Command{}
+			cmd.AddCommands(c)
+
+			path := filepath.Join(t.TempDir(), "config.json")
+			require.NoError(t, os.WriteFile(path, []byte(tc.config), 0o600))
+			require.NoError(t, c.ParseFlags([]string{"--config=" + path}))
+
+			viper.Set("preset", name)
+			t.Cleanup(viper.Reset)
+			t.Cleanup(cmd.ResetConfig)
+
+			conf, err := loadConfig(c)
+			require.NoError(t, err)
+			tc.updatePreset(t, &preset)
+			preset.ConfigFile = path
+			require.Equal(t, preset, *conf)
+		})
+	}
+}
+
 func TestConfig_Load(t *testing.T) {
 	t.Run("invalid fails to load", func(t *testing.T) {
 		c := &cobra.Command{}
@@ -775,6 +847,7 @@ func TestConfig_Load(t *testing.T) {
 		_, err := loadConfig(c)
 		require.ErrorContains(t, err, path)
 	})
+
 	t.Run("missing default doesn't fail", func(t *testing.T) {
 		c := &cobra.Command{}
 		cmd.AddCommands(c)
