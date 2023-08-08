@@ -179,6 +179,16 @@ func (hp *HareProof) MarshalLogObject(encoder log.ObjectEncoder) error {
 	return nil
 }
 
+func (hp *HareProof) ToMalfeasenceProof() *MalfeasanceProof {
+	return &MalfeasanceProof{
+		Layer: hp.Messages[0].InnerMsg.Layer,
+		Proof: Proof{
+			Type: HareEquivocation,
+			Data: hp,
+		},
+	}
+}
+
 type AtxProofMsg struct {
 	InnerMsg ATXMetadata
 

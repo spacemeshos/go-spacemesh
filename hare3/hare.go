@@ -290,14 +290,8 @@ func (h *Hare) handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 	if err != nil {
 		return err
 	}
-	if resp.equivocation != nil {
-		proof := &types.MalfeasanceProof{
-			Layer: resp.equivocation.Messages[0].InnerMsg.Layer,
-			Proof: types.Proof{
-				Type: types.HareEquivocation,
-				Data: resp.equivocation,
-			},
-		}
+	if resp.equivocation != nil && !malicious {
+		proof := resp.equivocation.ToMalfeasenceProof()
 		encoded, err := codec.Encode(proof)
 		if err != nil {
 			panic("failed to encode")
