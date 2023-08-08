@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"sync"
 	"time"
 
@@ -391,7 +390,7 @@ func (h *Hare) run(layer types.LayerID, beacon types.Beacon, inputs <-chan *inst
 		case <-h.ctx.Done():
 		}
 		start := time.Now()
-		proposals = h.proposals(layer, beacon)
+		proposals = h.Proposals(layer, beacon)
 		proposalsLatency.Observe(time.Since(start).Seconds())
 	}
 	proto := newProtocol(proposals, h.config.Committee/2+1)
@@ -486,7 +485,11 @@ func (h *Hare) onOutput(layer types.LayerID, ir IterRound, out output, vrf *type
 	return nil
 }
 
-func (h *Hare) proposals(lid types.LayerID, epochBeacon types.Beacon) []types.ProposalID {
+func (h *Hare) Proposals(lid types.LayerID, epochBeacon types.Beacon) []types.ProposalID {
+	h.log.Debug("requested proposals",
+		zap.Uint32("lid", lid.Uint32()),
+		zap.Stringer("beacon", epochBeacon),
+	)
 	props, err := proposals.GetByLayer(h.db, lid)
 	if err != nil {
 		if errors.Is(err, sql.ErrNotFound) {
@@ -498,20 +501,16 @@ func (h *Hare) proposals(lid types.LayerID, epochBeacon types.Beacon) []types.Pr
 		}
 		return []types.ProposalID{}
 	}
-
 	var (
-		beacon        types.Beacon
-		result        []types.ProposalID
-		ownHdr        *types.ActivationTxHeader
-		ownTickHeight = uint64(math.MaxUint64)
+		beacon types.Beacon
+		result []types.ProposalID
 	)
-
-	ownHdr, err = h.db.GetEpochAtx(lid.GetEpoch()-1, h.signer.NodeID())
+	own, err := h.db.GetEpochAtx(lid.GetEpoch()-1, h.signer.NodeID())
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
+		h.log.Warn("no atxs in the requisted epoch",
+			zap.Uint32("epoch", lid.GetEpoch().Uint32()-1),
+			zap.Error(err))
 		return []types.ProposalID{}
-	}
-	if ownHdr != nil {
-		ownTickHeight = ownHdr.TickHeight()
 	}
 	atxs := map[types.ATXID]int{}
 	for _, p := range props {
@@ -532,17 +531,17 @@ func (h *Hare) proposals(lid types.LayerID, epochBeacon types.Beacon) []types.Pr
 			)
 			continue
 		}
-		if ownHdr != nil {
+		if own != nil {
 			hdr, err := h.db.GetAtxHeader(p.AtxID)
 			if err != nil {
 				return []types.ProposalID{}
 			}
-			if hdr.BaseTickHeight >= ownTickHeight {
+			if hdr.BaseTickHeight >= own.TickHeight() {
 				// does not vote for future proposal
 				h.log.Warn("proposal base tick height too high. skipping",
 					zap.Uint32("lid", lid.Uint32()),
 					zap.Uint64("proposal_height", hdr.BaseTickHeight),
-					zap.Uint64("own_height", ownTickHeight),
+					zap.Uint64("own_height", own.TickHeight()),
 				)
 				continue
 			}

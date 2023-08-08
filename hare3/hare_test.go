@@ -28,6 +28,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/beacons"
+	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -492,4 +493,221 @@ func TestHandler(t *testing.T) {
 			"dropped by graded",
 		)
 	})
+}
+
+func gatx(id types.ATXID, epoch types.EpochID, smesher types.NodeID, base, height uint64) types.VerifiedActivationTx {
+	atx := &types.ActivationTx{}
+	atx.NumUnits = 10
+	atx.PublishEpoch = epoch
+	atx.SmesherID = smesher
+	atx.SetID(id)
+	atx.SetEffectiveNumUnits(atx.NumUnits)
+	atx.SetReceived(time.Time{}.Add(1))
+	nonce := types.VRFPostIndex(1)
+	atx.VRFNonce = &nonce
+	verified, err := atx.Verify(base, height-base)
+	if err != nil {
+		panic(err)
+	}
+	return *verified
+}
+
+func gproposal(id types.ProposalID, atxid types.ATXID, smesher types.NodeID, layer types.LayerID, beacon types.Beacon) types.Proposal {
+	proposal := types.Proposal{}
+	proposal.Layer = layer
+	proposal.EpochData = &types.EpochData{
+		Beacon: beacon,
+	}
+	proposal.AtxID = atxid
+	proposal.SmesherID = smesher
+	proposal.Ballot.SmesherID = smesher
+	proposal.SetID(id)
+	proposal.Ballot.SetID(types.BallotID(id))
+	return proposal
+}
+
+func gref(id types.ProposalID, atxid types.ATXID, smesher types.NodeID, layer types.LayerID, ref types.ProposalID) types.Proposal {
+	proposal := types.Proposal{}
+	proposal.Layer = layer
+	proposal.RefBallot = types.BallotID(ref)
+	proposal.AtxID = atxid
+	proposal.SmesherID = smesher
+	proposal.Ballot.SmesherID = smesher
+	proposal.SetID(id)
+	proposal.Ballot.SetID(types.BallotID(id))
+	return proposal
+}
+
+func TestProposals(t *testing.T) {
+	atxids := [3]types.ATXID{}
+	pids := [3]types.ProposalID{}
+	ids := [3]types.NodeID{}
+	for i := range atxids {
+		atxids[i][0] = byte(i) + 1
+		pids[i][0] = byte(i) + 1
+		ids[i][0] = byte(i) + 1
+	}
+	publish := types.EpochID(1)
+	layer := (publish + 1).FirstLayer()
+	goodBeacon := types.Beacon{1}
+	badBeacon := types.Beacon{2}
+
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	for _, tc := range []struct {
+		desc      string
+		atxs      []types.VerifiedActivationTx
+		proposals []types.Proposal
+		malicious []types.NodeID
+		layer     types.LayerID
+		beacon    types.Beacon
+		expect    []types.ProposalID
+	}{
+		{
+			desc:   "sanity",
+			layer:  layer,
+			beacon: goodBeacon,
+			atxs: []types.VerifiedActivationTx{
+				gatx(atxids[0], publish, ids[0], 10, 100),
+				gatx(atxids[1], publish, ids[1], 10, 100),
+			},
+			proposals: []types.Proposal{
+				gproposal(pids[0], atxids[0], ids[0], layer, goodBeacon),
+				gproposal(pids[1], atxids[1], ids[1], layer, goodBeacon),
+			},
+			expect: []types.ProposalID{pids[0], pids[1]},
+		},
+		{
+			desc:   "reference",
+			layer:  layer,
+			beacon: goodBeacon,
+			atxs: []types.VerifiedActivationTx{
+				gatx(atxids[0], publish, ids[0], 10, 100),
+				gatx(atxids[1], publish, ids[1], 10, 100),
+			},
+			proposals: []types.Proposal{
+				gproposal(pids[0], atxids[0], ids[0], layer, goodBeacon),
+				gproposal(pids[1], atxids[1], ids[1], layer.Sub(1), goodBeacon),
+				gref(pids[2], atxids[1], ids[1], layer, pids[1]),
+			},
+			expect: []types.ProposalID{pids[0], pids[2]},
+		},
+		{
+			desc:   "no reference",
+			layer:  layer,
+			beacon: goodBeacon,
+			atxs: []types.VerifiedActivationTx{
+				gatx(atxids[0], publish, ids[0], 10, 100),
+				gatx(atxids[1], publish, ids[1], 10, 100),
+			},
+			proposals: []types.Proposal{
+				gproposal(pids[0], atxids[0], ids[0], layer, goodBeacon),
+				gref(pids[2], atxids[1], ids[1], layer, pids[1]),
+			},
+			expect: []types.ProposalID{},
+		},
+		{
+			desc:   "reference to reference",
+			layer:  layer,
+			beacon: goodBeacon,
+			atxs: []types.VerifiedActivationTx{
+				gatx(atxids[0], publish, ids[0], 10, 100),
+				gatx(atxids[1], publish, ids[1], 10, 100),
+			},
+			proposals: []types.Proposal{
+				gproposal(pids[0], atxids[0], ids[0], layer, goodBeacon),
+				gref(pids[1], atxids[1], ids[1], layer.Sub(1), pids[1]),
+				gref(pids[2], atxids[1], ids[1], layer, pids[1]),
+			},
+			expect: []types.ProposalID{},
+		},
+		{
+			desc:   "empty reference",
+			layer:  layer,
+			beacon: goodBeacon,
+			atxs: []types.VerifiedActivationTx{
+				gatx(atxids[0], publish, ids[0], 10, 100),
+				gatx(atxids[1], publish, ids[1], 10, 100),
+			},
+			proposals: []types.Proposal{
+				gproposal(pids[0], atxids[0], ids[0], layer, goodBeacon),
+				gref(pids[1], atxids[1], ids[1], layer, types.EmptyProposalID),
+			},
+			expect: []types.ProposalID{},
+		},
+		{
+			desc:   "mismatched beacon",
+			layer:  layer,
+			beacon: goodBeacon,
+			atxs: []types.VerifiedActivationTx{
+				gatx(atxids[0], publish, ids[0], 10, 100),
+				gatx(atxids[1], publish, ids[1], 10, 100),
+			},
+			proposals: []types.Proposal{
+				gproposal(pids[0], atxids[0], ids[0], layer, goodBeacon),
+				gproposal(pids[1], atxids[1], ids[1], layer, badBeacon),
+			},
+			expect: []types.ProposalID{pids[0]},
+		},
+		{
+			desc:   "multiproposals",
+			layer:  layer,
+			beacon: goodBeacon,
+			atxs: []types.VerifiedActivationTx{
+				gatx(atxids[0], publish, ids[0], 10, 100),
+				gatx(atxids[1], publish, ids[1], 10, 100),
+			},
+			proposals: []types.Proposal{
+				gproposal(pids[0], atxids[0], ids[0], layer, goodBeacon),
+				gproposal(pids[1], atxids[1], ids[1], layer, goodBeacon),
+				gproposal(pids[2], atxids[1], ids[1], layer, goodBeacon),
+			},
+			expect: []types.ProposalID{pids[0]},
+		},
+		{
+			desc:   "future proposal",
+			layer:  layer,
+			beacon: goodBeacon,
+			atxs: []types.VerifiedActivationTx{
+				gatx(atxids[0], publish, ids[0], 101, 1000),
+				gatx(atxids[1], publish, signer.NodeID(), 10, 100),
+			},
+			proposals: []types.Proposal{
+				gproposal(pids[0], atxids[0], ids[0], layer, goodBeacon),
+				gproposal(pids[1], atxids[1], ids[1], layer, goodBeacon),
+			},
+			expect: []types.ProposalID{pids[1]},
+		},
+		{
+			desc:   "malicious",
+			layer:  layer,
+			beacon: goodBeacon,
+			atxs: []types.VerifiedActivationTx{
+				gatx(atxids[0], publish, ids[0], 10, 100),
+				gatx(atxids[1], publish, ids[1], 10, 100),
+			},
+			proposals: []types.Proposal{
+				gproposal(pids[0], atxids[0], ids[0], layer, goodBeacon),
+				gproposal(pids[1], atxids[1], ids[1], layer, goodBeacon),
+			},
+			malicious: []types.NodeID{ids[0]},
+			expect:    []types.ProposalID{pids[1]},
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			db := datastore.NewCachedDB(sql.InMemory(), log.NewNop())
+			hare := New(nil, nil, db, nil, signer, nil, nil, WithLogger(logtest.New(t).Zap()))
+			for _, atx := range tc.atxs {
+				require.NoError(t, atxs.Add(db, &atx))
+			}
+			for _, proposal := range tc.proposals {
+				require.NoError(t, proposals.Add(db, &proposal))
+				require.NoError(t, ballots.Add(db, &proposal.Ballot))
+			}
+			for _, id := range tc.malicious {
+				require.NoError(t, identities.SetMalicious(db, id, []byte("non empty"), time.Time{}))
+			}
+			require.Equal(t, tc.expect, hare.Proposals(tc.layer, tc.beacon))
+		})
+	}
 }
