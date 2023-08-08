@@ -12,6 +12,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zapcore"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -38,167 +39,362 @@ func TestMain(m *testing.M) {
 	os.Exit(res)
 }
 
-func testHare(tb testing.TB, n int, pause time.Duration) {
-	tb.Helper()
-	now := time.Now()
-	cfg := DefaultConfig()
-	layerDuration := 5 * time.Minute
-	beacon := types.Beacon{1, 1, 1, 1}
+type tester struct {
+	testing.TB
 
-	clocks := make([]*clock.Mock, n)
-	for i := 0; i < n; i++ {
-		clocks[i] = clock.NewMock()
-		clocks[i].Set(now)
-	}
-	verifier, err := signing.NewEdVerifier()
-	require.NoError(tb, err)
-	vrfverifier := signing.NewVRFVerifier()
-	rng := rand.New(rand.NewSource(1001))
-	hares := make([]*Hare, n)
-	tb.Cleanup(func() {
-		for _, hr := range hares {
-			hr.Stop()
-		}
+	rng           *rand.Rand
+	start         time.Time
+	cfg           Config
+	layerDuration time.Duration
+	beacon        types.Beacon
+	genesis       types.LayerID
+}
+
+func newNode(t *tester, i int) *node {
+	n := &node{t: t, i: i}
+	n = n.
+		withController().withSyncer().withPublisher().
+		withClock().withDb().withSigner().withAtx().withAtx().
+		withOracle().withHare()
+	n.hare.Start()
+	t.Cleanup(func() {
+		n.hare.Stop()
 	})
-	signers := make([]*signing.EdSigner, n)
-	for i := range signers {
-		signer, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
-		require.NoError(tb, err)
-		signers[i] = signer
-	}
-	genesis := types.GetEffectiveGenesis()
-	vatxs := make([]*types.VerifiedActivationTx, n)
-	ids := make([]types.ATXID, n)
-	for i := range vatxs {
-		atx := &types.ActivationTx{}
-		atx.NumUnits = 10
-		atx.PublishEpoch = genesis.GetEpoch()
-		atx.SmesherID = signers[i].NodeID()
-		id := types.ATXID{}
-		rng.Read(id[:])
-		atx.SetID(id)
-		atx.SetEffectiveNumUnits(atx.NumUnits)
-		atx.SetReceived(now)
-		nonce := types.VRFPostIndex(rng.Uint64())
-		atx.VRFNonce = &nonce
-		verified, err := atx.Verify(0, 100)
-		require.NoError(tb, err)
-		vatxs[i] = verified
-		ids[i] = id
-	}
+	return n
+}
 
-	for i := 0; i < n; i++ {
-		logger := logtest.New(tb).Named(fmt.Sprintf("hare=%d", i))
-		ctrl := gomock.NewController(tb)
-		syncer := smocks.NewMockSyncStateProvider(ctrl)
-		syncer.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
-		db := datastore.NewCachedDB(sql.InMemory(), log.NewNop())
-		require.NoError(tb, beacons.Add(db, types.GetEffectiveGenesis().GetEpoch()+1, beacon))
-		beaconget := smocks.NewMockBeaconGetter(ctrl)
-		beaconget.EXPECT().GetBeacon(gomock.Any()).DoAndReturn(func(epoch types.EpochID) (types.Beacon, error) {
-			return beacons.Get(db, epoch)
-		}).AnyTimes()
-		for _, atx := range vatxs {
-			require.NoError(tb, atxs.Add(db, atx))
+type node struct {
+	t *tester
+
+	i         int
+	clock     *clock.Mock
+	signer    *signing.EdSigner
+	vrfsigner *signing.VRFSigner
+	atx       *types.VerifiedActivationTx
+	oracle    *eligibility.Oracle
+	db        *datastore.CachedDB
+
+	ctrl       *gomock.Controller
+	mpublisher *pmocks.MockPublishSubsciber
+	msyncer    *smocks.MockSyncStateProvider
+
+	tracer *testTracer
+	hare   *Hare
+}
+
+func (n *node) withClock() *node {
+	n.clock = clock.NewMock()
+	n.clock.Set(n.t.start)
+	return n
+}
+
+func (n *node) withSigner() *node {
+	signer, err := signing.NewEdSigner(signing.WithKeyFromRand(n.t.rng))
+	require.NoError(n.t, err)
+	n.signer = signer
+	vrfsigner, err := signer.VRFSigner()
+	require.NoError(n.t, err)
+	n.vrfsigner = vrfsigner
+	return n
+}
+
+func (n *node) withDb() *node {
+	n.db = datastore.NewCachedDB(sql.InMemory(), log.NewNop())
+	return n
+}
+
+func (n *node) withAtx() *node {
+	atx := &types.ActivationTx{}
+	atx.NumUnits = 10
+	atx.PublishEpoch = n.t.genesis.GetEpoch()
+	atx.SmesherID = n.signer.NodeID()
+	id := types.ATXID{}
+	n.t.rng.Read(id[:])
+	atx.SetID(id)
+	atx.SetEffectiveNumUnits(atx.NumUnits)
+	atx.SetReceived(n.t.start)
+	nonce := types.VRFPostIndex(n.t.rng.Uint64())
+	atx.VRFNonce = &nonce
+	verified, err := atx.Verify(0, 100)
+	require.NoError(n.t, err)
+	n.atx = verified
+	return n
+}
+
+func (n *node) withController() *node {
+	n.ctrl = gomock.NewController(n.t)
+	return n
+}
+
+func (n *node) withSyncer() *node {
+	n.msyncer = smocks.NewMockSyncStateProvider(n.ctrl)
+	n.msyncer.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	return n
+}
+
+func (n *node) withOracle() *node {
+	beaconget := smocks.NewMockBeaconGetter(n.ctrl)
+	beaconget.EXPECT().GetBeacon(gomock.Any()).DoAndReturn(func(epoch types.EpochID) (types.Beacon, error) {
+		return beacons.Get(n.db, epoch)
+	}).AnyTimes()
+	n.oracle = eligibility.New(beaconget, n.db, signing.NewVRFVerifier(), n.vrfsigner, layersPerEpoch, config.DefaultConfig(), log.NewNop())
+	return n
+}
+
+func (n *node) withPublisher() *node {
+	n.mpublisher = pmocks.NewMockPublishSubsciber(n.ctrl)
+	n.mpublisher.EXPECT().Register(gomock.Any(), gomock.Any()).AnyTimes()
+	return n
+}
+
+func (n *node) withHare() *node {
+	logger := logtest.New(n.t).Named(fmt.Sprintf("hare=%d", n.i))
+	verifier, err := signing.NewEdVerifier()
+	require.NoError(n.t, err)
+	nodeclock, err := timesync.NewClock(
+		timesync.WithLogger(log.NewNop()),
+		timesync.WithClock(n.clock),
+		timesync.WithGenesisTime(n.t.start),
+		timesync.WithLayerDuration(n.t.layerDuration),
+		timesync.WithTickInterval(n.t.layerDuration),
+	)
+	require.NoError(n.t, err)
+
+	tracer := newTestTracer(n.t)
+	n.tracer = tracer
+	n.hare = New(nodeclock, n.mpublisher, n.db, verifier, n.signer, n.oracle, n.msyncer,
+		WithConfig(n.t.cfg),
+		WithLogger(logger.Zap()),
+		WithWallclock(n.clock),
+		WithEnableLayer(n.t.genesis),
+		WithTracer(tracer),
+	)
+	return n
+}
+
+// lockstepCluster allows to run rounds in lockstep
+// as no peer will be able to start around until test allows it.
+type lockstepCluster struct {
+	t     *tester
+	nodes []*node
+
+	timestamp time.Time
+	start     chan struct{}
+	complete  chan struct{}
+}
+
+func (cl *lockstepCluster) setup(ids []types.ATXID) {
+	cl.start = make(chan struct{}, len(cl.nodes))
+	cl.complete = make(chan struct{}, len(cl.nodes))
+	for _, n := range cl.nodes {
+		require.NoError(cl.t, beacons.Add(n.db, cl.t.genesis.GetEpoch()+1, cl.t.beacon))
+		for _, other := range cl.nodes {
+			require.NoError(cl.t, atxs.Add(n.db, other.atx))
 		}
-		vrfsigner, err := signers[i].VRFSigner()
-		require.NoError(tb, err)
-		or := eligibility.New(beaconget, db, vrfverifier, vrfsigner, layersPerEpoch, config.DefaultConfig(), log.NewNop())
-		or.UpdateActiveSet(types.FirstEffectiveGenesis().GetEpoch()+1, ids)
-		nodeclock, err := timesync.NewClock(
-			timesync.WithLogger(log.NewNop()),
-			timesync.WithClock(clocks[i]),
-			timesync.WithGenesisTime(now),
-			timesync.WithLayerDuration(layerDuration),
-			timesync.WithTickInterval(layerDuration),
-		)
-		require.NoError(tb, err)
-		pubs := pmocks.NewMockPublishSubsciber(ctrl)
-		pubs.EXPECT().Register(gomock.Any(), gomock.Any()).AnyTimes()
-		pubs.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ctx context.Context, _ string, msg []byte) error {
-			for _, hr := range hares {
-				require.NoError(tb, hr.handler(ctx, "self", msg))
+		n.oracle.UpdateActiveSet(cl.t.genesis.GetEpoch()+1, ids)
+		n.mpublisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ctx context.Context, _ string, msg []byte) error {
+			cl.timedReceive(cl.start)
+			var eg errgroup.Group
+			for _, other := range cl.nodes {
+				other := other
+				eg.Go(func() error {
+					return other.hare.handler(ctx, "self", msg)
+				})
 			}
-			return nil
+			err := eg.Wait()
+			cl.timedSend(cl.complete)
+			return err
 		}).AnyTimes()
-		hares[i] = New(nodeclock, pubs, db, verifier, signers[i], or, syncer,
-			WithConfig(cfg),
-			WithLogger(logger.Zap()),
-			WithWallclock(clocks[i]),
-			WithEnableLayer(genesis),
-		)
 	}
-	for i := range hares {
-		hares[i].Start()
+}
+
+func (cl *lockstepCluster) movePreround(layer types.LayerID) {
+	cl.timestamp = cl.t.start.
+		Add(cl.t.layerDuration * time.Duration(layer)).
+		Add(cl.t.cfg.PreroundDelay)
+	for _, n := range cl.nodes {
+		n.clock.Set(cl.timestamp)
 	}
-	layer := types.GetEffectiveGenesis() + 1
-	bound := len(vatxs)
-	if bound > 50 {
-		bound = 50
+	send := 0
+	for _, n := range cl.nodes {
+		if n.tracer.waitEligibility() != nil {
+			send++
+		}
 	}
-	for i, atx := range vatxs[:bound] {
+	for i := 0; i < send; i++ {
+		cl.timedSend(cl.start)
+	}
+	for i := 0; i < send; i++ {
+		cl.timedReceive(cl.complete)
+	}
+}
+
+func (cl *lockstepCluster) moveRound() {
+	cl.timestamp = cl.timestamp.Add(cl.t.cfg.RoundDuration)
+	send := 0
+	for _, n := range cl.nodes {
+		n.clock.Set(cl.timestamp)
+	}
+	for _, n := range cl.nodes {
+		if n.tracer.waitEligibility() != nil {
+			send++
+		}
+	}
+	for i := 0; i < send; i++ {
+		cl.timedSend(cl.start)
+	}
+	for i := 0; i < send; i++ {
+		cl.timedReceive(cl.complete)
+	}
+}
+
+func (cl *lockstepCluster) timedSend(ch chan struct{}) {
+	select {
+	case ch <- struct{}{}:
+	case <-time.After(time.Second):
+		require.FailNow(cl.t, "send timed out")
+	}
+}
+
+func (cl *lockstepCluster) timedReceive(ch chan struct{}) {
+	select {
+	case <-ch:
+	case <-time.After(time.Second):
+		require.FailNow(cl.t, "receive timed out")
+	}
+}
+
+func newTestTracer(tb testing.TB) *testTracer {
+	return &testTracer{
+		TB:          tb,
+		stopped:     make(chan types.LayerID, 100),
+		eligibility: make(chan *types.HareEligibility, 100),
+	}
+}
+
+type testTracer struct {
+	testing.TB
+	stopped     chan types.LayerID
+	eligibility chan *types.HareEligibility
+}
+
+func (t *testTracer) waitStopped() types.LayerID {
+	wait := time.Second
+	select {
+	case <-time.After(wait):
+		require.FailNow(t, "didn't stop", "wait %v", wait)
+	case lid := <-t.stopped:
+		return lid
+	}
+	return 0
+}
+
+func (t *testTracer) waitEligibility() *types.HareEligibility {
+	wait := time.Second
+	select {
+	case <-time.After(wait):
+		require.FailNow(t, "no eligibility", "wait %v", wait)
+	case el := <-t.eligibility:
+		return el
+	}
+	return nil
+}
+
+func (*testTracer) OnStart(types.LayerID) {}
+
+func (t *testTracer) OnStop(lid types.LayerID) {
+	select {
+	case t.stopped <- lid:
+	default:
+	}
+}
+
+func (t *testTracer) OnActive(el *types.HareEligibility) {
+	select {
+	case t.eligibility <- el:
+	default:
+	}
+}
+
+func (*testTracer) OnMessageSent(*Message) {}
+
+func (*testTracer) OnMessageReceived(*Message) {}
+
+func testHare(tb testing.TB, n int) {
+	tb.Helper()
+
+	tst := &tester{
+		TB:            tb,
+		rng:           rand.New(rand.NewSource(1001)),
+		start:         time.Now(),
+		cfg:           DefaultConfig(),
+		layerDuration: 5 * time.Minute,
+		beacon:        types.Beacon{1, 1, 1, 1},
+		genesis:       types.GetEffectiveGenesis(),
+	}
+	nodes := make([]*node, n)
+	ids := make([]types.ATXID, n)
+	for i := range nodes {
+		nodes[i] = newNode(tst, i)
+		ids[i] = nodes[i].atx.ID()
+	}
+	layer := tst.genesis + 1
+	maxProposals := n
+	if maxProposals > 50 {
+		maxProposals = 50
+	}
+	for _, n := range nodes[:maxProposals] {
 		proposal := &types.Proposal{}
 		proposal.Layer = layer
 		proposal.ActiveSet = ids
 		proposal.EpochData = &types.EpochData{
-			Beacon: beacon,
+			Beacon: tst.beacon,
 		}
-		proposal.AtxID = atx.ID()
-		proposal.SmesherID = signers[i].NodeID()
+		proposal.AtxID = n.atx.ID()
+		proposal.SmesherID = n.signer.NodeID()
 		id := types.ProposalID{}
-		rng.Read(id[:])
+		tst.rng.Read(id[:])
 		bid := types.BallotID{}
-		rng.Read(bid[:])
+		tst.rng.Read(bid[:])
 		proposal.SetID(id)
 		proposal.Ballot.SetID(bid)
-		for _, hr := range hares {
-			require.NoError(tb, ballots.Add(hr.db, &proposal.Ballot))
-			require.NoError(tb, proposals.Add(hr.db, proposal))
+		for _, other := range nodes {
+			require.NoError(tb, ballots.Add(other.db, &proposal.Ballot))
+			require.NoError(tb, proposals.Add(other.db, proposal))
 		}
 	}
-	target := hares[0].nodeclock.LayerToTime(genesis.Add(1)).Add(2 * time.Second)
-	for _, wall := range clocks {
-		// this triggers layer event
-		wall.Set(target)
+	cluster := lockstepCluster{
+		t:     tst,
+		nodes: nodes,
 	}
-	target = target.Add(cfg.PreroundDelay)
-	for _, wall := range clocks {
-		wall.Set(target)
-	}
+	cluster.setup(ids)
+	cluster.movePreround(layer)
 	for i := 0; i < 2*int(notify); i++ {
-		// TODO(dshulyak) this needs to be improved, i lack synchronization
-		// when active members completed round
-		time.Sleep(pause)
-		target = target.Add(cfg.RoundDuration)
-		for _, wall := range clocks {
-			wall.Set(target)
-		}
+		cluster.moveRound()
 	}
-	for _, hr := range hares {
+	for _, n := range nodes {
+		n.tracer.waitStopped()
 		select {
-		case coin := <-hr.Coins():
+		case coin := <-n.hare.Coins():
 			require.Equal(tb, coin.Layer, layer)
 		default:
 			require.FailNow(tb, "no coin")
 		}
 		select {
-		case rst := <-hr.Results():
+		case rst := <-n.hare.Results():
 			require.Equal(tb, rst.Layer, layer)
 			require.NotEmpty(tb, rst.Proposals)
 		default:
 			require.FailNow(tb, "no result")
 		}
-	}
-
-	for _, hr := range hares {
-		time.Sleep(pause)
-		require.Empty(tb, hr.Running())
+		require.Empty(tb, n.hare.Running())
 	}
 }
 
 func TestHare(t *testing.T) {
-	t.Run("two", func(t *testing.T) { testHare(t, 2, 50*time.Millisecond) })
-	t.Run("small", func(t *testing.T) { testHare(t, 5, 50*time.Millisecond) })
+	t.Run("one", func(t *testing.T) { testHare(t, 1) })
+	t.Run("two", func(t *testing.T) { testHare(t, 2) })
+	t.Run("small", func(t *testing.T) { testHare(t, 5) })
 }
 
 func TestConfigMarshal(t *testing.T) {

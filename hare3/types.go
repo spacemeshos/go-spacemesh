@@ -47,6 +47,20 @@ func (ir IterRound) Delay(since IterRound) int {
 	return delay
 }
 
+func (ir IterRound) IsMessageRound() bool {
+	switch ir.Round {
+	case preround:
+		return true
+	case propose:
+		return true
+	case commit:
+		return true
+	case notify:
+		return true
+	}
+	return false
+}
+
 func (ir IterRound) Single() uint32 {
 	return uint32(ir.Iter*uint8(notify) + uint8(ir.Round))
 }

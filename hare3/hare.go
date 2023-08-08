@@ -149,6 +149,12 @@ func WithEnableLayer(layer types.LayerID) Opt {
 	}
 }
 
+func WithTracer(tracer Tracer) Opt {
+	return func(hr *Hare) {
+		hr.tracer = tracer
+	}
+}
+
 func New(
 	nodeclock *timesync.NodeClock,
 	pubsub pubsub.PublishSubsciber,
@@ -181,7 +187,8 @@ func New(
 			oracle: oracle,
 			config: DefaultConfig(),
 		},
-		sync: sync,
+		sync:   sync,
+		tracer: noopTracer{},
 	}
 	for _, opt := range opts {
 		opt(hr)
@@ -212,6 +219,7 @@ type Hare struct {
 	signer    *signing.EdSigner
 	oracle    *legacyOracle
 	sync      system.SyncStateProvider
+	tracer    Tracer
 }
 
 func (h *Hare) Results() <-chan ConsensusOutput {
@@ -256,6 +264,7 @@ func (h *Hare) handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 		malformedError.Inc()
 		return fmt.Errorf("%w: validation %s", pubsub.ErrValidationReject, err.Error())
 	}
+	h.tracer.OnMessageReceived(msg)
 	h.mu.Lock()
 	instance, registered := h.instances[msg.Layer]
 	h.mu.Unlock()
@@ -334,6 +343,7 @@ func (h *Hare) onLayer(layer types.LayerID) {
 	}
 	h.mu.Unlock()
 	instanceStart.Inc()
+	h.tracer.OnStart(layer)
 	h.log.Debug("registered layer", zap.Uint32("lid", layer.Uint32()))
 	h.eg.Go(func() error {
 		if err := h.run(layer, beacon, inputs); err != nil {
@@ -352,6 +362,7 @@ func (h *Hare) onLayer(layer types.LayerID) {
 		delete(h.instances, layer)
 		h.mu.Unlock()
 		instanceTerminated.Inc()
+		h.tracer.OnStop(layer)
 		return nil
 	})
 }
@@ -365,6 +376,7 @@ func (h *Hare) run(layer types.LayerID, beacon types.Beacon, inputs <-chan *inst
 	start := time.Now()
 	vrf := h.oracle.active(h.signer.NodeID(), layer, current)
 	activeLatency.Observe(time.Since(start).Seconds())
+	h.tracer.OnActive(vrf)
 
 	walltime := h.nodeclock.LayerToTime(layer).Add(h.config.PreroundDelay)
 	var proposals []types.ProposalID
@@ -384,6 +396,7 @@ func (h *Hare) run(layer types.LayerID, beacon types.Beacon, inputs <-chan *inst
 		return err
 	}
 	h.log.Debug("ready to accept messages", zap.Uint32("lid", layer.Uint32()))
+	walltime = walltime.Add(h.config.RoundDuration)
 	for {
 		select {
 		case input := <-inputs:
@@ -403,8 +416,12 @@ func (h *Hare) run(layer types.LayerID, beacon types.Beacon, inputs <-chan *inst
 			// on my computer
 			current := proto.IterRound
 			start := time.Now()
-			vrf := h.oracle.active(h.signer.NodeID(), layer, current)
-			activeLatency.Observe(time.Since(start).Seconds())
+			var vrf *types.HareEligibility
+			if current.IsMessageRound() {
+				vrf = h.oracle.active(h.signer.NodeID(), layer, current)
+				activeLatency.Observe(time.Since(start).Seconds())
+			}
+			h.tracer.OnActive(vrf)
 
 			out := proto.next(vrf != nil)
 			if err := h.onOutput(layer, current, out, vrf); err != nil {
@@ -443,6 +460,7 @@ func (h *Hare) onOutput(layer types.LayerID, ir IterRound, out output, vrf *type
 			if err := h.pubsub.Publish(h.ctx, h.config.ProtocolName, out.message.ToBytes()); err != nil {
 				h.log.Error("failed to publish", zap.Inline(out.message))
 			}
+			h.tracer.OnMessageSent(out.message)
 			return nil
 		})
 	}
