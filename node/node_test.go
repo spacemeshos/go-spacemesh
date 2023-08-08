@@ -772,9 +772,9 @@ func TestConfig_CustomTypes(t *testing.T) {
 		{
 			name:   "smeshing-opts-provider",
 			cli:    "--smeshing-opts-provider=1337",
-			config: `{"smeshing": {"smeshing-opts": {"smeshing-opts-provider": "1337"}}}`,
+			config: `{"smeshing": {"smeshing-opts": {"smeshing-opts-provider": 1337}}}`,
 			updatePreset: func(t *testing.T, c *config.Config) {
-				c.SMESHING.Opts.ProviderID.SetUint(1337)
+				c.SMESHING.Opts.ProviderID.SetUint32(1337)
 			},
 		},
 		{
@@ -832,6 +832,55 @@ func TestConfig_CustomTypes(t *testing.T) {
 	}
 }
 
+func TestConfig_PostProviderID_InvalidValues(t *testing.T) {
+	tt := []struct {
+		name        string
+		cliValue    string
+		configValue string
+	}{
+		{
+			name:        "not a number",
+			cliValue:    "not-a-number",
+			configValue: "\"not-a-number\"",
+		},
+		{
+			name:        "negative number",
+			cliValue:    "-1",
+			configValue: "-1",
+		},
+		{
+			name:        "number too large for uint32",
+			cliValue:    "4294967296",
+			configValue: "4294967296",
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(fmt.Sprintf("%s_Flags", tc.name), func(t *testing.T) {
+			c := &cobra.Command{}
+			cmd.AddCommands(c)
+			t.Cleanup(cmd.ResetConfig)
+
+			err := c.ParseFlags([]string{fmt.Sprintf("--smeshing-opts-provider=%s", tc.cliValue)})
+			require.ErrorContains(t, err, "failed to parse PoST Provider ID")
+		})
+
+		t.Run(fmt.Sprintf("%s_ConfigFile", tc.name), func(t *testing.T) {
+			c := &cobra.Command{}
+			cmd.AddCommands(c)
+
+			path := filepath.Join(t.TempDir(), "config.json")
+			require.NoError(t, os.WriteFile(path, []byte(fmt.Sprintf(`{"smeshing": {"smeshing-opts": {"smeshing-opts-provider": %s}}}`, tc.configValue)), 0o600))
+			require.NoError(t, c.ParseFlags([]string{"--config=" + path}))
+
+			t.Cleanup(cmd.ResetConfig)
+
+			_, err := loadConfig(c)
+			require.ErrorContains(t, err, "invalid provider ID value")
+		})
+	}
+}
+
 func TestConfig_Load(t *testing.T) {
 	t.Run("invalid fails to load", func(t *testing.T) {
 		c := &cobra.Command{}
@@ -847,7 +896,6 @@ func TestConfig_Load(t *testing.T) {
 		_, err := loadConfig(c)
 		require.ErrorContains(t, err, path)
 	})
-
 	t.Run("missing default doesn't fail", func(t *testing.T) {
 		c := &cobra.Command{}
 		cmd.AddCommands(c)
@@ -1072,7 +1120,7 @@ func getTestDefaultConfig(tb testing.TB) *config.Config {
 	cfg.SMESHING = config.DefaultSmeshingConfig()
 	cfg.SMESHING.Start = true
 	cfg.SMESHING.Opts.NumUnits = cfg.POST.MinNumUnits + 1
-	cfg.SMESHING.Opts.ProviderID.SetUint(initialization.CPUProviderID())
+	cfg.SMESHING.Opts.ProviderID.SetUint32(initialization.CPUProviderID())
 
 	// note: these need to be set sufficiently low enough that turbohare finishes well before the LayerDurationSec
 	cfg.HARE.RoundDuration = 2

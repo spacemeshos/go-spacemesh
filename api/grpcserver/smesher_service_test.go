@@ -62,7 +62,7 @@ func TestStartSmeshingPassesCorrectSmeshingOpts(t *testing.T) {
 		Scrypt:           config.DefaultLabelParams(),
 		ComputeBatchSize: config.DefaultComputeBatchSize,
 	}
-	opts.ProviderID.SetUint(providerID)
+	opts.ProviderID.SetUint32(providerID)
 	smeshingProvider.EXPECT().StartSmeshing(addr, opts).Return(nil)
 
 	_, err = svc.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{

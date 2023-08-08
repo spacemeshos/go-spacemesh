@@ -81,7 +81,7 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *config.Config) error {
 					val = dst
 				case "activation.PostProviderID":
 					dst := activation.PostProviderID{}
-					if err := dst.UnmarshalText([]byte(viper.GetString(name))); err != nil {
+					if err := dst.Set(viper.GetString(name)); err != nil {
 						panic(err.Error())
 					}
 					val = dst

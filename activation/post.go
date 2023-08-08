@@ -93,6 +93,7 @@ type PostProviderID struct {
 	value *uint32
 }
 
+// String implements pflag.Value.String.
 func (id *PostProviderID) String() string {
 	if id.value == nil {
 		return ""
@@ -100,39 +101,37 @@ func (id *PostProviderID) String() string {
 	return fmt.Sprintf("%d", *id.value)
 }
 
-// Set implements pflag.Value.Set.
-func (id *PostProviderID) Set(value string) error {
-	return id.UnmarshalText([]byte(value))
-}
-
-func (id *PostProviderID) SetUint(value uint32) {
-	id.value = new(uint32)
-	*id.value = value
-}
-
-func (id *PostProviderID) Value() *uint32 {
-	return id.value
-}
-
 // Type implements pflag.Value.Type.
 func (PostProviderID) Type() string {
 	return "PostProviderID"
 }
 
-func (id *PostProviderID) UnmarshalText(text []byte) error {
-	if len(text) == 0 {
+// Set implements pflag.Value.Set.
+func (id *PostProviderID) Set(value string) error {
+	if len(value) == 0 {
 		id.value = nil
 		return nil
 	}
 
-	i, err := strconv.ParseUint(string(text), 10, 32)
+	i, err := strconv.ParseUint(string(value), 10, 32)
 	if err != nil {
-		return fmt.Errorf("failed to parse PoST Provider ID (%s): %w", text, err)
+		return fmt.Errorf("failed to parse PoST Provider ID (\"%s\"): %w", value, err)
 	}
 
 	id.value = new(uint32)
 	*id.value = uint32(i)
 	return nil
+}
+
+// SetUint32 sets the value of the PostProviderID to the given uint32.
+func (id *PostProviderID) SetUint32(value uint32) {
+	id.value = new(uint32)
+	*id.value = value
+}
+
+// Value returns the value of the PostProviderID as a pointer to uint32.
+func (id *PostProviderID) Value() *uint32 {
+	return id.value
 }
 
 // PostProvingOpts are the options controlling POST proving process.
