@@ -14,12 +14,14 @@ import (
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	pmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -198,7 +200,7 @@ func (cl *lockstepCluster) setup(ids []types.ATXID) {
 			for _, other := range cl.nodes {
 				other := other
 				eg.Go(func() error {
-					return other.hare.handler(ctx, "self", msg)
+					return other.hare.Handler(ctx, "self", msg)
 				})
 			}
 			err := eg.Wait()
@@ -401,4 +403,93 @@ func TestConfigMarshal(t *testing.T) {
 	enc := zapcore.NewMapObjectEncoder()
 	cfg := &Config{}
 	require.NoError(t, cfg.MarshalLogObject(enc))
+}
+
+func TestHandler(t *testing.T) {
+	tst := &tester{
+		TB:            t,
+		rng:           rand.New(rand.NewSource(1001)),
+		start:         time.Now(),
+		cfg:           DefaultConfig(),
+		layerDuration: 5 * time.Minute,
+		beacon:        types.Beacon{1, 1, 1, 1},
+		genesis:       types.GetEffectiveGenesis(),
+	}
+	n := newNode(tst, 0)
+	require.NoError(t, beacons.Add(n.db, tst.genesis.GetEpoch()+1, tst.beacon))
+	require.NoError(t, atxs.Add(n.db, n.atx))
+	n.oracle.UpdateActiveSet(tst.genesis.GetEpoch()+1, []types.ATXID{n.atx.ID()})
+	n.mpublisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	layer := tst.genesis + 1
+	n.clock.Set(tst.start.
+		Add(tst.layerDuration * time.Duration(layer)).
+		Add(tst.cfg.PreroundDelay),
+	)
+	elig := n.tracer.waitEligibility()
+	t.Run("malformed", func(t *testing.T) {
+		require.ErrorIs(t, n.hare.Handler(context.Background(), "", []byte("malformed")),
+			pubsub.ErrValidationReject)
+		require.ErrorContains(t, n.hare.Handler(context.Background(), "", []byte("malformed")),
+			"decoding")
+	})
+	t.Run("invalidated", func(t *testing.T) {
+		msg := &Message{}
+		msg.Round = commit
+		require.ErrorIs(t, n.hare.Handler(context.Background(), "", codec.MustEncode(msg)),
+			pubsub.ErrValidationReject)
+		require.ErrorContains(t, n.hare.Handler(context.Background(), "", codec.MustEncode(msg)),
+			"validation reference")
+	})
+	t.Run("unregistered", func(t *testing.T) {
+		msg := &Message{}
+		require.ErrorContains(t, n.hare.Handler(context.Background(), "", codec.MustEncode(msg)),
+			"is not registered")
+	})
+	t.Run("invalid signature", func(t *testing.T) {
+		msg := &Message{}
+		msg.Layer = layer
+		msg.Sender = n.signer.NodeID()
+		msg.Signature = n.signer.Sign(signing.HARE+1, msg.ToMetadata().ToBytes())
+		require.ErrorIs(t, n.hare.Handler(context.Background(), "", codec.MustEncode(msg)),
+			pubsub.ErrValidationReject)
+		require.ErrorContains(t, n.hare.Handler(context.Background(), "", codec.MustEncode(msg)),
+			"invalid signature")
+	})
+	t.Run("zero grade", func(t *testing.T) {
+		signer, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		msg := &Message{}
+		msg.Layer = layer
+		msg.Sender = signer.NodeID()
+		msg.Signature = signer.Sign(signing.HARE, msg.ToMetadata().ToBytes())
+		require.ErrorContains(t, n.hare.Handler(context.Background(), "", codec.MustEncode(msg)),
+			"zero grade")
+	})
+	t.Run("equivocation", func(t *testing.T) {
+		msg1 := &Message{}
+		msg1.Layer = layer
+		msg1.Value.Proposals = []types.ProposalID{{1}}
+		msg1.Eligibility = *elig
+		msg1.Sender = n.signer.NodeID()
+		msg1.Signature = n.signer.Sign(signing.HARE, msg1.ToMetadata().ToBytes())
+
+		msg2 := &Message{}
+		msg2.Layer = layer
+		msg2.Value.Proposals = []types.ProposalID{{2}}
+		msg2.Eligibility = *elig
+		msg2.Sender = n.signer.NodeID()
+		msg2.Signature = n.signer.Sign(signing.HARE, msg2.ToMetadata().ToBytes())
+
+		require.NoError(t, n.hare.Handler(context.Background(), "", codec.MustEncode(msg1)))
+		require.NoError(t, n.hare.Handler(context.Background(), "", codec.MustEncode(msg2)))
+
+		malicious, err := n.db.IsMalicious(n.signer.NodeID())
+		require.NoError(t, err)
+		require.True(t, malicious)
+
+		require.ErrorContains(t,
+			n.hare.Handler(context.Background(), "", codec.MustEncode(msg2)),
+			"dropped by graded",
+		)
+	})
 }

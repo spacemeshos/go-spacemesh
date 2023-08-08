@@ -233,7 +233,7 @@ func (h *Hare) Coins() <-chan WeakCoinOutput {
 func (h *Hare) Start() {
 	h.log.Info("started", zap.Inline(&h.config))
 	h.eg.Go(func() error {
-		h.pubsub.Register(h.config.ProtocolName, h.handler)
+		h.pubsub.Register(h.config.ProtocolName, h.Handler)
 		enabled := types.MaxLayer(h.nodeclock.CurrentLayer(), h.config.EnableAfter)
 		h.log.Debug("starting at layer", zap.Uint32("lid", enabled.Uint32()))
 		for next := enabled + 1; ; next++ {
@@ -254,7 +254,7 @@ func (h *Hare) Running() int {
 	return len(h.instances)
 }
 
-func (h *Hare) handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
+func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 	msg := &Message{}
 	if err := codec.Decode(buf, msg); err != nil {
 		malformedError.Inc()
@@ -300,6 +300,9 @@ func (h *Hare) handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 		return err
 	}
 	if resp.equivocation != nil && !malicious {
+		h.log.Debug("registered equivocation",
+			zap.Uint32("lid", msg.Layer.Uint32()),
+			zap.Stringer("sender", resp.equivocation.Messages[0].SmesherID))
 		proof := resp.equivocation.ToMalfeasenceProof()
 		encoded, err := codec.Encode(proof)
 		if err != nil {
