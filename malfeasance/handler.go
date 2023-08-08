@@ -113,7 +113,7 @@ func validateAndSave(
 			return fmt.Errorf("add malfeasance proof: %w", err)
 		}
 		return nil
-	}); err != nil {
+	}); err != nil && !errors.Is(err, ErrKnownProof) {
 		logger.WithContext(ctx).With().Error("failed to save MalfeasanceProof",
 			log.Stringer("smesher", nodeID),
 			log.Inline(p),
