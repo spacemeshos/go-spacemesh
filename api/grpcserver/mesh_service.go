@@ -604,7 +604,7 @@ func (s MeshService) EpochStream(req *pb.EpochStreamRequest, stream pb.MeshServi
 		return status.Error(codes.Internal, err.Error())
 	}
 	s.logger.With().Info("epoch atxs streamed",
-		log.Stringer("target epoch", epoch+1),
+		log.Uint32("target epoch", (epoch+1).Uint32()),
 		log.Int("total", total),
 		log.Int("malicious", mal),
 	)
