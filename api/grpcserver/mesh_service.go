@@ -581,7 +581,9 @@ func convertLayerStatus(in int) pb.Layer_LayerStatus {
 
 func (s MeshService) EpochStream(req *pb.EpochStreamRequest, stream pb.MeshService_EpochStreamServer) error {
 	epoch := types.EpochID(req.Epoch)
+	var total, mal int
 	if err := s.cdb.IterateEpochATXHeaders(epoch+1, func(header *types.ActivationTxHeader) error {
+		total++
 		select {
 		case <-stream.Context().Done():
 			return nil
@@ -591,6 +593,7 @@ func (s MeshService) EpochStream(req *pb.EpochStreamRequest, stream pb.MeshServi
 				return err
 			}
 			if malicious {
+				mal++
 				return nil
 			}
 			var res pb.EpochStreamResponse
@@ -600,5 +603,10 @@ func (s MeshService) EpochStream(req *pb.EpochStreamRequest, stream pb.MeshServi
 	}); err != nil {
 		return status.Error(codes.Internal, err.Error())
 	}
+	s.logger.With().Info("epoch atxs streamed",
+		log.Stringer("target epoch", epoch+1),
+		log.Int("total", total),
+		log.Int("malicious", mal),
+	)
 	return nil
 }
