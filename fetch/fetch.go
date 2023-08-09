@@ -187,7 +187,7 @@ func NewFetch(cdb *datastore.CachedDB, msh meshProvider, b system.BeaconGetter, 
 		server.WithLog(f.logger),
 	}
 	if len(f.servers) == 0 {
-		h := newHandler(cdb, f.cfg, bs, msh, b, f.logger)
+		h := newHandler(cdb, bs, msh, b, f.logger)
 		f.servers[atxProtocol] = server.New(host, atxProtocol, h.handleEpochInfoReq, srvOpts...)
 		f.servers[lyrDataProtocol] = server.New(host, lyrDataProtocol, h.handleLayerDataReq, srvOpts...)
 		f.servers[lyrOpnsProtocol] = server.New(host, lyrOpnsProtocol, h.handleLayerOpinionsReq, srvOpts...)
