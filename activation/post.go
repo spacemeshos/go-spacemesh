@@ -113,7 +113,7 @@ func (id *PostProviderID) Set(value string) error {
 		return nil
 	}
 
-	i, err := strconv.ParseInt(value, 10, 64)
+	i, err := strconv.ParseInt(value, 10, 33)
 	if err != nil {
 		return fmt.Errorf("failed to parse PoST Provider ID (\"%s\"): %w", value, err)
 	}

@@ -783,7 +783,7 @@ func TestConfig_CustomTypes(t *testing.T) {
 			cli:    "--smeshing-opts-provider=-1",
 			config: `{"smeshing": {"smeshing-opts": {"smeshing-opts-provider": -1}}}`,
 			updatePreset: func(t *testing.T, c *config.Config) {
-				c.SMESHING.Opts.ProviderID.SetInt64(0)
+				c.SMESHING.Opts.ProviderID.SetInt64(-1)
 			},
 		},
 		{
