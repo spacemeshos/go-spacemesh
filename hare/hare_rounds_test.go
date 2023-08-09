@@ -3,7 +3,6 @@ package hare
 import (
 	"context"
 	"errors"
-	"sync"
 	"testing"
 	"time"
 
@@ -123,10 +122,14 @@ func Test_HarePreRoundEmptySet(t *testing.T) {
 	const nodes = 5
 	const layers = 2
 
-	var mu sync.RWMutex
-	m := [layers][nodes]int{}
+	var m [layers][nodes]chan struct{}
+	for x := range m {
+		for y := range m[x] {
+			m[x][y] = make(chan struct{})
+		}
+	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	w := runNodesFor(t, ctx, nodes, 2, layers, 2, false,
 		func(layer types.LayerID, round uint32, committee int, id types.NodeID, sig types.VrfSignature, hare *testHare) (uint16, error) {
@@ -137,23 +140,18 @@ func Test_HarePreRoundEmptySet(t *testing.T) {
 		},
 		func(layer types.LayerID, hare *testHare) {
 			l := layer.Difference(types.GetEffectiveGenesis()) - 1
-
-			mu.Lock()
-			m[l][hare.N] = 1
-			mu.Unlock()
+			close(m[l][hare.N])
 		})
 
 	w.LayerTicker(100 * time.Millisecond)
-	time.Sleep(time.Second * 6)
-
-	cancel()
-
-	mu.RLock()
-	defer mu.RUnlock()
 
 	for x := range m {
 		for y := range m[x] {
-			assert.Equal(t, 1, m[x][y], "at layer %v node %v has non-empty set in result (%v)", x, y, m[x][y])
+			select {
+			case <-m[x][y]:
+			case <-ctx.Done():
+				assert.Failf(t, "timeout", "timeout waiting for node %v at layer %v", y, x)
+			}
 		}
 	}
 }
