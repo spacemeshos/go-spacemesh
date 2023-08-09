@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/identities"
 )
 
 func TestMain(m *testing.M) {
@@ -45,7 +46,7 @@ var allAtxs = map[types.NodeID][]*types.ActivationTx{
 		newatx(types.ATXID{27}, &types.ATXID{2}, 7, 0, 152, types.BytesToNodeID([]byte("smesher2"))),
 	},
 
-	// smesher 4 has 1 ATX in epoch 2
+	// smesher 3 has 1 ATX in epoch 2
 	types.BytesToNodeID([]byte("smesher3")): {
 		newatx(types.ATXID{32}, &types.ATXID{3}, 2, 0, 211, types.BytesToNodeID([]byte("smesher3"))),
 	},
@@ -176,9 +177,9 @@ func toShortAtx(v *types.VerifiedActivationTx, cmt *types.ATXID, nonce *types.VR
 	}
 }
 
-func createMesh(t *testing.T, db *sql.Database, identities map[types.NodeID][]*types.ActivationTx, accts []*types.Account) {
-	for _, identity := range identities {
-		for _, atx := range identity {
+func createMesh(t *testing.T, db *sql.Database, miners map[types.NodeID][]*types.ActivationTx, accts []*types.Account) {
+	for _, vatxs := range miners {
+		for _, atx := range vatxs {
 			require.NoError(t, atxs.Add(db, newvatx(t, atx)))
 		}
 	}
@@ -186,6 +187,12 @@ func createMesh(t *testing.T, db *sql.Database, identities map[types.NodeID][]*t
 	for _, it := range accts {
 		require.NoError(t, accounts.Update(db, it))
 	}
+
+	// smesher 5 is malicious and equivocated in epoch 7
+	bad := types.BytesToNodeID([]byte("smesher5"))
+	require.NoError(t, atxs.Add(db, newvatx(t, newatx(types.ATXID{83}, &types.ATXID{27}, 7, 0, 113, bad))))
+	require.NoError(t, atxs.Add(db, newvatx(t, newatx(types.ATXID{97}, &types.ATXID{16}, 7, 0, 113, bad))))
+	require.NoError(t, identities.SetMalicious(db, bad, []byte("bad"), time.Now()))
 }
 
 func TestRunner_Generate(t *testing.T) {
