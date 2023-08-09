@@ -186,6 +186,19 @@ type lockstepCluster struct {
 	complete  chan struct{}
 }
 
+func (cl *lockstepCluster) nogossip() {
+	cl.start = make(chan struct{}, len(cl.nodes))
+	cl.complete = make(chan struct{}, len(cl.nodes))
+	for _, n := range cl.nodes {
+		require.NoError(cl.t, beacons.Add(n.db, cl.t.genesis.GetEpoch()+1, cl.t.beacon))
+		n.mpublisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ctx context.Context, _ string, msg []byte) error {
+			cl.timedReceive(cl.start)
+			cl.timedSend(cl.complete)
+			return nil
+		}).AnyTimes()
+	}
+}
+
 func (cl *lockstepCluster) setup(ids []types.ATXID) {
 	cl.start = make(chan struct{}, len(cl.nodes))
 	cl.complete = make(chan struct{}, len(cl.nodes))
@@ -398,6 +411,32 @@ func TestHare(t *testing.T) {
 	t.Run("one", func(t *testing.T) { testHare(t, 1) })
 	t.Run("two", func(t *testing.T) { testHare(t, 2) })
 	t.Run("small", func(t *testing.T) { testHare(t, 5) })
+}
+
+func TestIterationLimit(t *testing.T) {
+	tst := &tester{
+		TB:            t,
+		rng:           rand.New(rand.NewSource(1001)),
+		start:         time.Now(),
+		cfg:           DefaultConfig(),
+		layerDuration: 5 * time.Minute,
+		beacon:        types.Beacon{1, 1, 1, 1},
+		genesis:       types.GetEffectiveGenesis(),
+	}
+	tst.cfg.IterationsLimit = 3
+
+	n := newNode(tst, 0)
+	layer := tst.genesis + 1
+	cluster := lockstepCluster{
+		t:     tst,
+		nodes: []*node{n},
+	}
+	cluster.nogossip()
+	cluster.movePreround(layer)
+	for i := 0; i < int(tst.cfg.IterationsLimit)*int(notify)-1; i++ {
+		cluster.moveRound()
+	}
+	require.Empty(t, n.hare.Running())
 }
 
 func TestConfigMarshal(t *testing.T) {

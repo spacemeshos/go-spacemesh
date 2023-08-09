@@ -294,10 +294,10 @@ func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 		malicious: malicious,
 		grade:     g,
 	})
-	submitLatency.Observe(time.Since(start).Seconds())
 	if err != nil {
 		return err
 	}
+	submitLatency.Observe(time.Since(start).Seconds())
 	if resp.equivocation != nil && !malicious {
 		h.log.Debug("registered equivocation",
 			zap.Uint32("lid", msg.Layer.Uint32()),
@@ -413,9 +413,6 @@ func (h *Hare) run(layer types.LayerID, beacon types.Beacon, inputs <-chan *inst
 				zap.Uint32("lid", layer.Uint32()),
 				zap.Uint8("iter", proto.Iter), zap.Stringer("round", proto.Round),
 			)
-			// NOTE(dshulyak) active call can be made in parallel with message processing.
-			// on the other hand this computation is between 300us-2ms
-			// on my computer
 			current := proto.IterRound
 			start := time.Now()
 			var vrf *types.HareEligibility

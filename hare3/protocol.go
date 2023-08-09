@@ -181,6 +181,11 @@ func (p *protocol) execution(out *output, active bool) {
 		if ref != nil && p.result == nil {
 			p.result = ref
 			out.result = values
+			if values == nil {
+				// receiver expects non-nil result to output it futher
+				// so if layer is empty output zero-length slice
+				out.result = []types.ProposalID{}
+			}
 		}
 		if ref, _ := p.thresholdProposals(IterRound{Iter: p.Iter - 1, Round: commit}, grade4); ref != nil {
 			p.locked = ref

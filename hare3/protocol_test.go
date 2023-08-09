@@ -277,6 +277,21 @@ func TestProtocol(t *testing.T) {
 			new(toutput),                  // 3rd notify
 			new(toutput).terminated(),     // 4th softlock
 		),
+		gen("empty proposal",
+			new(setup).thresh(10),
+			new(toutput), // preround
+			new(tinput).sender("1").round(preround).vrfcount(11).g(grade5),
+			new(toutput).coin(false),                         // softlock
+			new(toutput).active().round(propose).proposals(), // propose
+			new(tinput).sender("1").round(propose).g(grade3).vrf(2),
+			new(toutput), // wait1
+			new(toutput), // wait2
+			new(toutput).active().round(commit).ref(), // commit
+			new(tinput).sender("1").round(commit).ref().vrfcount(11).g(grade5),
+			new(toutput).active().round(notify).ref(), // notify
+			new(tinput).sender("1").round(notify).ref().vrfcount(11).g(grade5),
+			new(toutput).result(), // hardlock
+		),
 		gen("coin true",
 			new(setup).thresh(10),
 			new(toutput),
