@@ -108,7 +108,7 @@ func NewNIPostBuilder(
 	layerClock layerClock,
 	opts ...NIPostBuilderOption,
 ) (*NIPostBuilder, error) {
-	poetClients := make([]PoetProvingServiceClient, len(poetServers))
+	poetClients := make([]PoetProvingServiceClient, 0, len(poetServers))
 	for _, address := range poetServers {
 		client, err := NewHTTPPoetClient(address, poetCfg)
 		if err != nil {
