@@ -45,6 +45,25 @@ func DefaultConfig() Config {
 		InboundFraction:    0.8,
 		OutboundFraction:   1.1,
 		RelayServer:        RelayServer{TTL: 20 * time.Minute, Reservations: 512},
+		IP4Blocklist: []string{
+			// localhost
+			"127.0.0.0/8",
+			// private networks
+			"10.0.0.0/8",
+			"100.64.0.0/10",
+			"172.16.0.0/12",
+			"192.168.0.0/16",
+			// link local
+			"169.254.0.0/16",
+		},
+		IP6Blocklist: []string{
+			// localhost
+			"::1/128",
+			// ULA reserved
+			"fc00::/7",
+			// link local
+			"fe80::/10",
+		},
 	}
 }
 
@@ -85,6 +104,8 @@ type Config struct {
 	DisableLegacyDiscovery   bool        `mapstructure:"p2p-disable-legacy-discovery"`
 	PrivateNetwork           bool        `mapstructure:"p2p-private-network"`
 	RelayServer              RelayServer `mapstructure:"relay-server"`
+	IP4Blocklist             []string    `mapstructure:"ip4-blocklist"`
+	IP6Blocklist             []string    `mapstructure:"ip6-blocklist"`
 }
 
 type RelayServer struct {
@@ -132,19 +153,9 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 	if err != nil {
 		return nil, fmt.Errorf("can't create peer store: %w", err)
 	}
-	// leaves a small room for outbound connections in order to
-	// reduce risk of network isolation
-	g := &gater{
-		inbound:  int(float64(cfg.HighPeers) * cfg.InboundFraction),
-		outbound: int(float64(cfg.HighPeers) * cfg.OutboundFraction),
-		direct:   map[peer.ID]struct{}{},
-	}
-	direct, err := parseIntoAddr(cfg.Direct)
+	g, err := newGater(cfg)
 	if err != nil {
 		return nil, err
-	}
-	for _, pid := range direct {
-		g.direct[pid.ID] = struct{}{}
 	}
 	lopts := []libp2p.Option{
 		libp2p.Identity(key),
