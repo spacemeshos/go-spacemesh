@@ -303,12 +303,8 @@ func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 			zap.Uint32("lid", msg.Layer.Uint32()),
 			zap.Stringer("sender", resp.equivocation.Messages[0].SmesherID))
 		proof := resp.equivocation.ToMalfeasenceProof()
-		encoded, err := codec.Encode(proof)
-		if err != nil {
-			panic("failed to encode")
-		}
 		if err := identities.SetMalicious(
-			h.db, resp.equivocation.Messages[0].SmesherID, encoded, time.Now()); err != nil {
+			h.db, resp.equivocation.Messages[0].SmesherID, codec.MustEncode(proof), time.Now()); err != nil {
 			h.log.Error("failed to save malicious identity", zap.Error(err))
 		}
 		h.db.CacheMalfeasanceProof(resp.equivocation.Messages[0].SmesherID, proof)
@@ -448,9 +444,6 @@ func (h *Hare) onOutput(layer types.LayerID, ir IterRound, out output, vrf *type
 		zap.Bool("active", vrf != nil),
 	)
 	if out.message != nil {
-		if vrf == nil {
-			panic("inconsistent state. message without vrf")
-		}
 		h.eg.Go(func() error {
 			out.message.Layer = layer
 			out.message.Eligibility = *vrf
