@@ -790,6 +790,44 @@ func TestConfig_CustomTypes(t *testing.T) {
 	}
 
 	for _, tc := range tt {
+		t.Run(fmt.Sprintf("%s_Flags", tc.name), func(t *testing.T) {
+			mainnet := config.MainnetConfig()
+			require.Nil(t, mainnet.SMESHING.Opts.ProviderID.Value())
+
+			c := &cobra.Command{}
+			cmd.AddCommands(c)
+			require.NoError(t, c.ParseFlags([]string{tc.cli}))
+
+			t.Cleanup(viper.Reset)
+			t.Cleanup(cmd.ResetConfig)
+
+			conf, err := loadConfig(c)
+			require.NoError(t, err)
+			tc.updatePreset(t, &mainnet)
+			require.Equal(t, mainnet, *conf)
+		})
+
+		t.Run(fmt.Sprintf("%s_ConfigFile", tc.name), func(t *testing.T) {
+			mainnet := config.MainnetConfig()
+			require.Nil(t, mainnet.SMESHING.Opts.ProviderID.Value())
+
+			c := &cobra.Command{}
+			cmd.AddCommands(c)
+
+			path := filepath.Join(t.TempDir(), "config.json")
+			require.NoError(t, os.WriteFile(path, []byte(tc.config), 0o600))
+			require.NoError(t, c.ParseFlags([]string{"--config=" + path}))
+
+			t.Cleanup(viper.Reset)
+			t.Cleanup(cmd.ResetConfig)
+
+			conf, err := loadConfig(c)
+			require.NoError(t, err)
+			tc.updatePreset(t, &mainnet)
+			mainnet.ConfigFile = path
+			require.Equal(t, mainnet, *conf)
+		})
+
 		t.Run(fmt.Sprintf("%s_PresetOverwrittenByFlags", tc.name), func(t *testing.T) {
 			preset, err := presets.Get(name)
 			require.NoError(t, err)
