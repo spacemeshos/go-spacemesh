@@ -90,7 +90,7 @@ type PostSetupOpts struct {
 }
 
 type PostProviderID struct {
-	value *uint32
+	value *int64
 }
 
 // String implements pflag.Value.String.
@@ -113,24 +113,24 @@ func (id *PostProviderID) Set(value string) error {
 		return nil
 	}
 
-	i, err := strconv.ParseUint(string(value), 10, 32)
+	i, err := strconv.ParseInt(value, 10, 64)
 	if err != nil {
 		return fmt.Errorf("failed to parse PoST Provider ID (\"%s\"): %w", value, err)
 	}
 
-	id.value = new(uint32)
-	*id.value = uint32(i)
+	id.value = new(int64)
+	*id.value = int64(i)
 	return nil
 }
 
-// SetUint32 sets the value of the PostProviderID to the given uint32.
-func (id *PostProviderID) SetUint32(value uint32) {
-	id.value = new(uint32)
+// SetInt64 sets the value of the PostProviderID to the given int64.
+func (id *PostProviderID) SetInt64(value int64) {
+	id.value = new(int64)
 	*id.value = value
 }
 
 // Value returns the value of the PostProviderID as a pointer to uint32.
-func (id *PostProviderID) Value() *uint32 {
+func (id *PostProviderID) Value() *int64 {
 	return id.value
 }
 
@@ -222,11 +222,17 @@ func DefaultPostSetupOpts() PostSetupOpts {
 }
 
 func (o PostSetupOpts) ToInitOpts() config.InitOpts {
+	var providerID *uint32
+	if o.ProviderID.Value() != nil {
+		providerID = new(uint32)
+		*providerID = uint32(*o.ProviderID.Value())
+	}
+
 	return config.InitOpts{
 		DataDir:          o.DataDir,
 		NumUnits:         o.NumUnits,
 		MaxFileSize:      o.MaxFileSize,
-		ProviderID:       o.ProviderID.Value(),
+		ProviderID:       providerID,
 		Throttle:         o.Throttle,
 		Scrypt:           o.Scrypt,
 		ComputeBatchSize: o.ComputeBatchSize,
@@ -411,6 +417,20 @@ func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSe
 	defer mgr.mu.Unlock()
 	if mgr.state == PostSetupStatePrepared || mgr.state == PostSetupStateInProgress {
 		return fmt.Errorf("post setup session in progress")
+	}
+
+	// TODO(mafa): remove this, see https://github.com/spacemeshos/go-spacemesh/issues/4801
+	if opts.ProviderID.Value() != nil && *opts.ProviderID.Value() == -1 {
+		mgr.logger.Warning("DEPRECATED: auto-determining compute provider is deprecated, please specify a valid provider ID in the config file")
+
+		p, err := mgr.BestProvider()
+		if err != nil {
+			return err
+		}
+
+		mgr.logger.Warning("DEPRECATED: found best compute provider: id: %d, model: %v, device type: %v", p.ID, p.Model, p.DeviceType)
+		mgr.logger.Warning("DEPRECATED: please update your config file: {\"smeshing\": {\"smeshing-opts\": {\"smeshing-opts-provider\": %d }}}", p.ID)
+		opts.ProviderID.SetInt64(int64(p.ID))
 	}
 
 	var err error

@@ -774,7 +774,16 @@ func TestConfig_CustomTypes(t *testing.T) {
 			cli:    "--smeshing-opts-provider=1337",
 			config: `{"smeshing": {"smeshing-opts": {"smeshing-opts-provider": 1337}}}`,
 			updatePreset: func(t *testing.T, c *config.Config) {
-				c.SMESHING.Opts.ProviderID.SetUint32(1337)
+				c.SMESHING.Opts.ProviderID.SetInt64(1337)
+			},
+		},
+		{
+			// TODO(mafa): remove this test case, see https://github.com/spacemeshos/go-spacemesh/issues/4801
+			name:   "smeshing-opts-provider",
+			cli:    "--smeshing-opts-provider=-1",
+			config: `{"smeshing": {"smeshing-opts": {"smeshing-opts-provider": -1}}}`,
+			updatePreset: func(t *testing.T, c *config.Config) {
+				c.SMESHING.Opts.ProviderID.SetInt64(0)
 			},
 		},
 		{
@@ -881,11 +890,12 @@ func TestConfig_PostProviderID_InvalidValues(t *testing.T) {
 			cliValue:    "not-a-number",
 			configValue: "\"not-a-number\"",
 		},
-		{
-			name:        "negative number",
-			cliValue:    "-1",
-			configValue: "-1",
-		},
+		// TODO(mafa): still accepted for backward compatibility, see https://github.com/spacemeshos/go-spacemesh/issues/4801
+		// {
+		// 	name:        "negative number",
+		// 	cliValue:    "-1",
+		// 	configValue: "-1",
+		// },
 		{
 			name:        "number too large for uint32",
 			cliValue:    "4294967296",
@@ -1158,7 +1168,7 @@ func getTestDefaultConfig(tb testing.TB) *config.Config {
 	cfg.SMESHING = config.DefaultSmeshingConfig()
 	cfg.SMESHING.Start = true
 	cfg.SMESHING.Opts.NumUnits = cfg.POST.MinNumUnits + 1
-	cfg.SMESHING.Opts.ProviderID.SetUint32(initialization.CPUProviderID())
+	cfg.SMESHING.Opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
 
 	// note: these need to be set sufficiently low enough that turbohare finishes well before the LayerDurationSec
 	cfg.HARE.RoundDuration = 2

@@ -83,7 +83,7 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 	opts.NumUnits = in.Opts.NumUnits
 	opts.MaxFileSize = in.Opts.MaxFileSize
 	if in.Opts.ProviderId != nil {
-		opts.ProviderID.SetUint32(*in.Opts.ProviderId)
+		opts.ProviderID.SetInt64(int64(*in.Opts.ProviderId))
 	}
 	opts.Throttle = in.Opts.Throttle
 
@@ -256,11 +256,16 @@ func statusToPbStatus(status *activation.PostSetupStatus) *pb.PostSetupStatus {
 	pbStatus.NumLabelsWritten = status.NumLabelsWritten
 
 	if status.LastOpts != nil {
+		var providerID *uint32
+		if status.LastOpts.ProviderID.Value() != nil {
+			*providerID = uint32(*status.LastOpts.ProviderID.Value())
+		}
+
 		pbStatus.Opts = &pb.PostSetupOpts{
 			DataDir:     status.LastOpts.DataDir,
 			NumUnits:    status.LastOpts.NumUnits,
 			MaxFileSize: status.LastOpts.MaxFileSize,
-			ProviderId:  status.LastOpts.ProviderID.Value(),
+			ProviderId:  providerID,
 			Throttle:    status.LastOpts.Throttle,
 		}
 	}
