@@ -10,6 +10,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
+type minerInfo struct {
+	atxid     types.ATXID
+	malicious bool
+}
+
 // state does the data management for epoch specific data for the protocol.
 // not thread-safe. it relies on ProtocolDriver's thread-safety mechanism.
 type state struct {
@@ -28,7 +33,7 @@ type state struct {
 	hasVoted                  map[types.NodeID]*votesTracker
 	proposalPhaseFinishedTime time.Time
 	proposalChecker           eligibilityChecker
-	minerAtxs                 map[types.NodeID]types.ATXID
+	minerAtxs                 map[types.NodeID]*minerInfo
 }
 
 func newState(
@@ -36,7 +41,7 @@ func newState(
 	cfg Config,
 	nonce *types.VRFPostIndex,
 	epochWeight uint64,
-	miners map[types.NodeID]types.ATXID,
+	miners map[types.NodeID]*minerInfo,
 	checker eligibilityChecker,
 ) *state {
 	return &state{

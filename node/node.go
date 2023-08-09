@@ -637,11 +637,6 @@ func (app *App) initServices(ctx context.Context) error {
 		return fmt.Errorf("failed to create mesh: %w", err)
 	}
 
-	poetCfg := activation.PoetConfig{
-		PhaseShift:  app.Config.POET.PhaseShift,
-		CycleGap:    app.Config.POET.CycleGap,
-		GracePeriod: app.Config.POET.GracePeriod,
-	}
 	fetcherWrapped := &layerFetcher{}
 	atxHandler := activation.NewHandler(
 		app.cachedDB,
@@ -656,7 +651,7 @@ func (app *App) initServices(ctx context.Context) error {
 		beaconProtocol,
 		trtl,
 		app.addLogger(ATXHandlerLogger, lg),
-		poetCfg,
+		app.Config.POET,
 	)
 
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
@@ -823,7 +818,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.Config.SMESHING.Opts.DataDir,
 		app.addLogger(NipostBuilderLogger, lg),
 		app.edSgn,
-		poetCfg,
+		app.Config.POET,
 		app.clock,
 		activation.WithNipostValidator(app.validator),
 	)
@@ -860,7 +855,7 @@ func (app *App) initServices(ctx context.Context) error {
 		newSyncer,
 		app.addLogger("atxBuilder", lg),
 		activation.WithContext(ctx),
-		activation.WithPoetConfig(poetCfg),
+		activation.WithPoetConfig(app.Config.POET),
 		activation.WithPoetRetryInterval(app.Config.HARE.WakeupDelta),
 		activation.WithValidator(app.validator),
 	)
@@ -1061,7 +1056,7 @@ func (app *App) initService(ctx context.Context, svc grpcserver.Service) (grpcse
 	case grpcserver.GlobalState:
 		return grpcserver.NewGlobalStateService(app.mesh, app.conState, app.log.WithName("grpc.GlobalState")), nil
 	case grpcserver.Mesh:
-		return grpcserver.NewMeshService(app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.Genesis.GenesisID(), app.Config.LayerDuration, app.Config.LayerAvgSize, uint32(app.Config.TxsPerProposal), app.log.WithName("grpc.Mesh")), nil
+		return grpcserver.NewMeshService(app.cachedDB, app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.Genesis.GenesisID(), app.Config.LayerDuration, app.Config.LayerAvgSize, uint32(app.Config.TxsPerProposal), app.log.WithName("grpc.Mesh")), nil
 	case grpcserver.Node:
 		return grpcserver.NewNodeService(app.host, app.mesh, app.clock, app.syncer, cmd.Version, cmd.Commit, app.log.WithName("grpc.Node")), nil
 	case grpcserver.Admin:

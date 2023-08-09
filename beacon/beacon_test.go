@@ -27,6 +27,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
@@ -200,6 +201,74 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 		}
 		for _, db := range dbs {
 			createATX(t, db, atxPublishLid, node.edSigner, 1, time.Now().Add(-1*time.Second))
+		}
+	}
+	var wg sync.WaitGroup
+	for _, node := range testNodes {
+		wg.Add(1)
+		go func(testNode *testProtocolDriver) {
+			require.NoError(t, testNode.onNewEpoch(context.Background(), types.EpochID(2)))
+			wg.Done()
+		}(node)
+	}
+	wg.Wait()
+	beacons := make(map[types.Beacon]struct{})
+	for _, node := range testNodes {
+		got, err := node.GetBeacon(types.EpochID(3))
+		require.NoError(t, err)
+		require.NotEqual(t, types.EmptyBeacon, got)
+		beacons[got] = struct{}{}
+	}
+	require.Len(t, beacons, 1)
+}
+
+func TestBeacon_MultipleNodes_OnlyOneHonest(t *testing.T) {
+	numNodes := 5
+	testNodes := make([]*testProtocolDriver, 0, numNodes)
+	publisher := pubsubmocks.NewMockPublisher(gomock.NewController(t))
+	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, protocol string, data []byte) error {
+			for _, node := range testNodes {
+				switch protocol {
+				case pubsub.BeaconProposalProtocol:
+					require.NoError(t, node.HandleProposal(ctx, p2p.Peer(node.nodeID.ShortString()), data))
+				case pubsub.BeaconFirstVotesProtocol:
+					require.NoError(t, node.HandleFirstVotes(ctx, p2p.Peer(node.nodeID.ShortString()), data))
+				case pubsub.BeaconFollowingVotesProtocol:
+					require.NoError(t, node.HandleFollowingVotes(ctx, p2p.Peer(node.nodeID.ShortString()), data))
+				case pubsub.BeaconWeakCoinProtocol:
+				}
+			}
+			return nil
+		}).AnyTimes()
+
+	atxPublishLid := types.LayerID(types.GetLayersPerEpoch()*2 - 1)
+	current := atxPublishLid.Add(1)
+	dbs := make([]*datastore.CachedDB, 0, numNodes)
+	cfg := NodeSimUnitTestConfig()
+	bootstrap := types.Beacon{1, 2, 3, 4}
+	now := time.Now()
+	for i := 0; i < numNodes; i++ {
+		node := newTestDriver(t, cfg, publisher)
+		require.NoError(t, node.UpdateBeacon(types.EpochID(2), bootstrap))
+		node.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+		node.mClock.EXPECT().CurrentLayer().Return(current).AnyTimes()
+		node.mClock.EXPECT().LayerToTime(current).Return(now).AnyTimes()
+		testNodes = append(testNodes, node)
+		dbs = append(dbs, node.cdb)
+
+		require.ErrorIs(t, node.onNewEpoch(context.Background(), types.EpochID(0)), errGenesis)
+		require.ErrorIs(t, node.onNewEpoch(context.Background(), types.EpochID(1)), errGenesis)
+		got, err := node.GetBeacon(types.EpochID(2))
+		require.NoError(t, err)
+		require.Equal(t, bootstrap, got)
+	}
+	for i, node := range testNodes {
+		for _, db := range dbs {
+			createATX(t, db, atxPublishLid, node.edSigner, 1, time.Now().Add(-1*time.Second))
+			if i != 0 {
+				require.NoError(t, identities.SetMalicious(db, node.nodeID, []byte("bad"), time.Now()))
+			}
 		}
 	}
 	var wg sync.WaitGroup
