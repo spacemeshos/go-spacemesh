@@ -926,6 +926,7 @@ func TestAdminEvents(t *testing.T) {
 	app.edSgn = signer // https://github.com/spacemeshos/go-spacemesh/issues/4653
 	require.NoError(t, app.Initialize())
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	var eg errgroup.Group
 	eg.Go(func() error {
 		if err := app.Start(ctx); err != nil {
@@ -936,13 +937,14 @@ func TestAdminEvents(t *testing.T) {
 		return nil
 	})
 	t.Cleanup(func() { eg.Wait() })
-	t.Cleanup(cancel)
 
-	conn, err := grpc.Dial(
+	grpcCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	conn, err := grpc.DialContext(
+		grpcCtx,
 		cfg.API.PrivateListener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
-		grpc.WithTimeout(5*time.Second),
 	)
 	require.NoError(t, err)
 	t.Cleanup(func() { conn.Close() })
