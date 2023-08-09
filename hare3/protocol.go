@@ -182,8 +182,7 @@ func (p *protocol) execution(out *output, active bool) {
 			p.result = ref
 			out.result = values
 			if values == nil {
-				// receiver expects non-nil result to output it futher
-				// so if layer is empty output zero-length slice
+				// receiver expects non-nil result
 				out.result = []types.ProposalID{}
 			}
 		}
