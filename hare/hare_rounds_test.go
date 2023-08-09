@@ -119,6 +119,9 @@ func runNodesFor(t *testing.T, ctx context.Context, nodes, leaders, maxLayers, l
 }
 
 func Test_HarePreRoundEmptySet(t *testing.T) {
+	if skipMoreTests {
+		t.SkipNow()
+	}
 	const nodes = 5
 	const layers = 2
 
@@ -160,7 +163,6 @@ func Test_HareNotEnoughStatuses(t *testing.T) {
 	if skipMoreTests {
 		t.SkipNow()
 	}
-
 	const nodes = 5
 	const layers = 2
 	m := [layers][nodes]int{}
