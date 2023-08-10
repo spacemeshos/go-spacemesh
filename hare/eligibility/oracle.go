@@ -461,12 +461,7 @@ func (o *Oracle) UpdateActiveSet(epoch types.EpochID, activeSet []types.ATXID) {
 	o.Log.With().Info("received activeset update",
 		epoch,
 		log.Int("size", len(activeSet)),
-		log.Array("activeset", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-			for _, atxid := range activeSet {
-				encoder.AppendString(atxid.String())
-			}
-			return nil
-		})))
+	)
 	o.lock.Lock()
 	defer o.lock.Unlock()
 	if _, ok := o.fallback[epoch]; ok {
