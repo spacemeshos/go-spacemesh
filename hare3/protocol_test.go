@@ -481,7 +481,7 @@ func TestProtocol(t *testing.T) {
 					proto = newProtocol(casted.proposals, casted.threshold)
 				case *tinput:
 					logger.Debug("input", zap.Int("i", i), zap.Inline(casted))
-					gossip, equivocation := proto.onMessage(&casted.input)
+					gossip, equivocation := proto.onInput(&casted.input)
 					if casted.expect != nil {
 						require.Equal(t, casted.expect.gossip, gossip, "%d", i)
 						if casted.expect.equivocation != nil {

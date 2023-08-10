@@ -398,7 +398,7 @@ func (h *Hare) run(layer types.LayerID, beacon types.Beacon, inputs <-chan *inst
 	for {
 		select {
 		case input := <-inputs:
-			gossip, equivocation := proto.onMessage(input.input)
+			gossip, equivocation := proto.onInput(input.input)
 			h.log.Debug("on message",
 				zap.Inline(input.input),
 				zap.Bool("gossip", gossip),
