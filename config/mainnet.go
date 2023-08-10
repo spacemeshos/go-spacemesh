@@ -128,7 +128,12 @@ func MainnetConfig() Config {
 		SMESHING: smeshing,
 		FETCH:    fetch.DefaultConfig(),
 		LOGGING:  defaultLoggingConfig(),
-		Sync:     syncer.DefaultConfig(),
+		Sync: syncer.Config{
+			Interval:         time.Minute,
+			EpochEndFraction: 0.8,
+			MaxStaleDuration: time.Hour,
+			Standalone:       false,
+		},
 		Recovery: checkpoint.DefaultConfig(),
 	}
 }
