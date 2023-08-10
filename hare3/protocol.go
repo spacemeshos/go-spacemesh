@@ -83,18 +83,6 @@ func (o *output) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	return nil
 }
 
-type gradedProposals struct {
-	values [6][]types.ProposalID // the length is set to 6 so that 5 is a valid index
-}
-
-func (g *gradedProposals) set(gr grade, values []types.ProposalID) {
-	g.values[gr] = values
-}
-
-func (g *gradedProposals) get(gr grade) []types.ProposalID {
-	return g.values[gr]
-}
-
 func newProtocol(initial []types.ProposalID, threshold uint16) *protocol {
 	return &protocol{
 		initial:        initial,
@@ -117,7 +105,7 @@ type protocol struct {
 	locked          *types.Hash32       // Li
 	hardLocked      bool
 	validProposals  map[types.Hash32][]types.ProposalID // Ti
-	gradedProposals gradedProposals                     // valid values in 4.3
+	validValues     [grade5 + 1][]types.ProposalID      // Vi
 	gradedGossip    gradedGossip
 	gradecast       gradecast
 	thresholdGossip thresholdGossip
@@ -166,7 +154,7 @@ func (p *protocol) execution(out *output, active bool) {
 		// -1 - skipped hardlock round in iter 0
 		// -1 - implementation rounds starts from 0
 		g := grade5 - grade(p.Round-2)
-		p.gradedProposals.set(g, p.thresholdGossip.output(IterRound{Round: preround}, g))
+		p.validValues[g] = p.thresholdGossip.output(IterRound{Round: preround}, g)
 	}
 	if p.Round == preround && active {
 		out.message = &Message{Body: Body{
@@ -200,7 +188,7 @@ func (p *protocol) execution(out *output, active bool) {
 			p.locked = nil
 		}
 	} else if p.Round == propose && active {
-		values := p.gradedProposals.get(grade4)
+		values := p.validValues[grade4]
 		if p.Iter > 0 {
 			ref, overwrite := p.thresholdProposals(IterRound{Iter: p.Iter - 1, Round: commit}, grade2)
 			if ref != nil {
@@ -216,7 +204,7 @@ func (p *protocol) execution(out *output, active bool) {
 		proposed := p.gradecast.output(IterRound{Iter: p.Iter, Round: propose})
 		for _, graded := range proposed {
 			// condition (a) and (b)
-			if graded.grade < grade1 || !isSubset(graded.values, p.gradedProposals.get(grade2)) {
+			if graded.grade < grade1 || !isSubset(graded.values, p.validValues[grade2]) {
 				continue
 			}
 			p.validProposals[toHash(graded.values)] = graded.values
@@ -237,12 +225,12 @@ func (p *protocol) execution(out *output, active bool) {
 						continue
 					}
 					// condition (f)
-					if !isSubset(graded.values, p.gradedProposals.get(grade3)) {
+					if !isSubset(graded.values, p.validValues[grade3]) {
 						continue
 					}
 					// condition (g)
 					// TODO(dshulyak) if no proposals with grade5 1st condition is noop?
-					if !isSubset(p.gradedProposals.get(grade5), graded.values) &&
+					if !isSubset(p.validValues[grade5], graded.values) &&
 						!p.commitExists(p.Iter-1, grade1, id) {
 						continue
 					}
