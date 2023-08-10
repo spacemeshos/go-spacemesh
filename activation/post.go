@@ -125,8 +125,7 @@ func (id *PostProviderID) Set(value string) error {
 
 // SetInt64 sets the value of the PostProviderID to the given int64.
 func (id *PostProviderID) SetInt64(value int64) {
-	id.value = new(int64)
-	*id.value = value
+	id.value = &value
 }
 
 // Value returns the value of the PostProviderID as a pointer to uint32.
