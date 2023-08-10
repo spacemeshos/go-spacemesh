@@ -710,14 +710,9 @@ func (app *App) initServices(ctx context.Context) error {
 	fetcherWrapped.Fetcher = fetcher
 
 	patrol := layerpatrol.New()
-	syncerConf := syncer.Config{
-		Interval:         app.Config.Sync.Interval,
-		EpochEndFraction: 0.8,
-		HareDelayLayers:  app.Config.Tortoise.Zdist,
-		SyncCertDistance: app.Config.Tortoise.Hdist,
-		MaxStaleDuration: time.Hour,
-		Standalone:       app.Config.Standalone,
-	}
+	syncerConf := app.Config.Sync
+	syncerConf.HareDelayLayers = app.Config.Tortoise.Zdist
+	syncerConf.SyncCertDistance = app.Config.Tortoise.Hdist
 	newSyncer := syncer.NewSyncer(app.cachedDB, app.clock, beaconProtocol, msh, trtl, fetcher, patrol, app.certifier,
 		syncer.WithConfig(syncerConf),
 		syncer.WithLogger(app.addLogger(SyncLogger, lg)),
