@@ -383,14 +383,13 @@ func (d *DataFetch) receiveOpinions(ctx context.Context, req *opinionRequest, pe
 	}
 }
 
-func (d *DataFetch) pickAtxPeer(epoch types.EpochID) p2p.Peer {
+func (d *DataFetch) pickAtxPeer(epoch types.EpochID, peers []p2p.Peer) p2p.Peer {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if _, ok := d.atxSynced[epoch]; !ok {
 		d.atxSynced[epoch] = map[p2p.Peer]struct{}{}
 		delete(d.atxSynced, epoch-1)
 	}
-	peers := d.fetcher.GetPeers()
 	for _, p := range peers {
 		if _, ok := d.atxSynced[epoch][p]; !ok {
 			return p
@@ -411,7 +410,7 @@ func (d *DataFetch) GetEpochATXs(ctx context.Context, epoch types.EpochID) error
 	if len(peers) == 0 {
 		return errNoPeers
 	}
-	peer := d.pickAtxPeer(epoch)
+	peer := d.pickAtxPeer(epoch, peers)
 	if peer == p2p.NoPeer {
 		d.logger.WithContext(ctx).With().Debug("synced atxs from all peers",
 			epoch,
