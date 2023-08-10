@@ -28,12 +28,12 @@ var (
 	}, []string{"version"})
 	CurrentBeacon = promauto.With(Registry).NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "smh",
-		Subset:    "beacon",
-		Name:      "current,
+		Subsystem: "beacon",
+		Name:      "current",
 	}, []string{"beacon"})
 	NextBeacon = promauto.With(Registry).NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "smh",
-		Subset:    "beacon",
+		Subsystem: "beacon",
 		Name:      "next",
 	}, []string{"beacon"})
 
