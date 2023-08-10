@@ -425,7 +425,7 @@ func (h *Hare) run(layer types.LayerID, beacon types.Beacon, inputs <-chan *inst
 			if out.terminated {
 				return nil
 			}
-			if proto.Iter == h.config.IterationsLimit {
+			if current.Iter == h.config.IterationsLimit {
 				return fmt.Errorf("hare failed to reach consensus in %d iterations",
 					h.config.IterationsLimit)
 			}

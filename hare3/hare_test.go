@@ -433,7 +433,7 @@ func TestIterationLimit(t *testing.T) {
 	}
 	cluster.nogossip()
 	cluster.movePreround(layer)
-	for i := 0; i < int(tst.cfg.IterationsLimit)*int(notify)-1; i++ {
+	for i := 0; i < int(tst.cfg.IterationsLimit)*int(notify); i++ {
 		cluster.moveRound()
 	}
 	require.Empty(t, n.hare.Running())
