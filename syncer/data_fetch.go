@@ -91,6 +91,7 @@ func (d *DataFetch) PollMaliciousProofs(ctx context.Context) error {
 	}
 	errFunc := func(err error, peer p2p.Peer) {
 		d.receiveMaliciousIDs(ctx, req, peer, nil, err)
+		malPeerError.Inc()
 	}
 	if err := d.fetcher.GetMaliciousIDs(ctx, peers, okFunc, errFunc); err != nil {
 		return err
@@ -150,6 +151,7 @@ func (d *DataFetch) PollLayerData(ctx context.Context, lid types.LayerID, peers 
 	}
 	errFunc := func(err error, peer p2p.Peer) {
 		d.receiveData(ctx, req, peer, nil, err)
+		layerPeerError.Inc()
 	}
 	if err := d.fetcher.GetLayerData(ctx, peers, lid, okFunc, errFunc); err != nil {
 		return err
@@ -323,6 +325,7 @@ func (d *DataFetch) PollLayerOpinions(ctx context.Context, lid types.LayerID) ([
 	}
 	errFunc := func(err error, peer p2p.Peer) {
 		d.receiveOpinions(ctx, req, peer, nil, err)
+		opnsPeerError.Inc()
 	}
 	if err := d.fetcher.GetLayerOpinions(ctx, peers, lid, okFunc, errFunc); err != nil {
 		return nil, err
@@ -419,6 +422,7 @@ func (d *DataFetch) GetEpochATXs(ctx context.Context, epoch types.EpochID) error
 
 	ed, err := d.fetcher.PeerEpochInfo(ctx, peer, epoch)
 	if err != nil {
+		atxPeerError.Inc()
 		return fmt.Errorf("get epoch info (peer %v): %w", peer, err)
 	}
 	if len(ed.AtxIDs) == 0 {

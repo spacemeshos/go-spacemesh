@@ -570,6 +570,7 @@ func (f *Fetch) handleHashError(batchHash types.Hash32, err error) {
 			log.Stringer("hash", req.hash),
 			log.Err(err))
 		req.promise.err = err
+		peerErrors.WithLabelValues(string(req.hint)).Inc()
 		close(req.promise.completed)
 		delete(f.ongoing, req.hash)
 	}
