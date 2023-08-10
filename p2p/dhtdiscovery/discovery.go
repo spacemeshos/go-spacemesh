@@ -117,11 +117,10 @@ func New(h host.Host, opts ...Opt) (*Discovery, error) {
 		d.logger.Warn("no bootnodes in the config")
 	}
 	if !d.disableDht {
-		dht, err := newDht(ctx, h, d.public, d.server, d.dir)
+		err := d.newDht(ctx, h, d.public, d.server, d.dir)
 		if err != nil {
 			return nil, err
 		}
-		d.dht = dht
 	}
 	return &d, nil
 }
@@ -137,8 +136,9 @@ type Discovery struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	h   host.Host
-	dht *dht.IpfsDHT
+	h         host.Host
+	dht       *dht.IpfsDHT
+	datastore *levelds.Datastore
 
 	// how often to check if we have enough peers
 	period time.Duration
@@ -211,9 +211,12 @@ func (d *Discovery) Start() {
 func (d *Discovery) Stop() {
 	d.cancel()
 	d.eg.Wait()
-	if d.dht != nil {
+	if !d.disableDht {
 		if err := d.dht.Close(); err != nil {
 			d.logger.Error("error closing dht", zap.Error(err))
+		}
+		if err := d.datastore.Close(); err != nil {
+			d.logger.Error("error closing level datastore", zap.Error(err))
 		}
 	}
 }
@@ -252,7 +255,7 @@ func (d *Discovery) connect(eg *errgroup.Group, nodes []peer.AddrInfo) {
 	eg.Wait()
 }
 
-func newDht(ctx context.Context, h host.Host, public, server bool, dir string) (*dht.IpfsDHT, error) {
+func (d *Discovery) newDht(ctx context.Context, h host.Host, public, server bool, dir string) error {
 	ds, err := levelds.NewDatastore(dir, &levelds.Options{
 		Compression: ldbopts.NoCompression,
 		NoSync:      false,
@@ -260,7 +263,7 @@ func newDht(ctx context.Context, h host.Host, public, server bool, dir string) (
 		ReadOnly:    false,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("open leveldb at %s: %w", dir, err)
+		return fmt.Errorf("open leveldb at %s: %w", dir, err)
 	}
 	opts := []dht.Option{
 		dht.Validator(record.PublicKeyValidator{}),
@@ -278,5 +281,14 @@ func newDht(ctx context.Context, h host.Host, public, server bool, dir string) (
 	} else {
 		opts = append(opts, dht.Mode(dht.ModeAutoServer))
 	}
-	return dht.New(ctx, h, opts...)
+	dht, err := dht.New(ctx, h, opts...)
+	if err != nil {
+		if err := ds.Close(); err != nil {
+			d.logger.Error("error closing level datastore", zap.Error(err))
+		}
+		return err
+	}
+	d.dht = dht
+	d.datastore = ds
+	return nil
 }
