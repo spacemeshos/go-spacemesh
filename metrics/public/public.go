@@ -26,6 +26,14 @@ var (
 		Namespace: "smh",
 		Name:      "version",
 	}, []string{"version"})
+	CurrentBeacon = promauto.With(Registry).NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "smh",
+		Name:      "beacon",
+	}, []string{"curr_beacon"})
+	NextBeacon = promauto.With(Registry).NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "smh",
+		Name:      "next_beacon",
+	}, []string{"beacon"})
 
 	SmeshingOptsProvingNonces = promauto.With(Registry).NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "smh",
