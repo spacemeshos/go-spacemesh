@@ -283,7 +283,9 @@ func (d *Discovery) newDht(ctx context.Context, h host.Host, public, server bool
 	}
 	dht, err := dht.New(ctx, h, opts...)
 	if err != nil {
-		ds.Close()
+		if err := ds.Close(); err != nil {
+			d.logger.Error("error closing level datastore", zap.Error(err))
+		}
 		return err
 	}
 	d.dht = dht
