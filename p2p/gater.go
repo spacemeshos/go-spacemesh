@@ -86,8 +86,10 @@ func (g *gater) allowed(m multiaddr.Multiaddr) bool {
 		switch c.Protocol().Code {
 		case multiaddr.P_IP4:
 			allow = !inAddrRange(net.IP(c.RawValue()), g.ip4blocklist)
+			return false
 		case multiaddr.P_IP6:
 			allow = !inAddrRange(net.IP(c.RawValue()), g.ip6blocklist)
+			return false
 		}
 		return true
 	})
