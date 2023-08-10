@@ -111,7 +111,7 @@ func (t *tinput) nogossip() *tinput {
 }
 
 func (t *tinput) g(g grade) *tinput {
-	t.grade = g
+	t.atxgrade = g
 	return t
 }
 

@@ -44,14 +44,14 @@ type messageKey struct {
 
 type input struct {
 	*Message
-	grade     grade
+	atxgrade  grade
 	malicious bool
 	msgHash   types.Hash32
 }
 
 func (i *input) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddObject("msg", i.Message)
-	encoder.AddUint8("grade", uint8(i.grade))
+	encoder.AddUint8("atxgrade", uint8(i.atxgrade))
 	encoder.AddBool("malicious", i.malicious)
 	encoder.AddString("hash", i.msgHash.ShortString())
 	return nil
@@ -112,15 +112,15 @@ type protocol struct {
 }
 
 func (p *protocol) onInput(msg *input) (bool, *types.HareProof) {
-	gossip, equivocation := p.gradedGossip.invoke(msg)
+	gossip, equivocation := p.gradedGossip.receive(msg)
 	if !gossip {
 		return false, equivocation
 	}
 	// gradecast and thresholdGossip should never be called with non-equivocating duplicates
 	if msg.Round == propose {
-		p.gradecast.invoke(p.IterRound, msg)
+		p.gradecast.receive(p.IterRound, msg)
 	} else {
-		p.thresholdGossip.invoke(msg)
+		p.thresholdGossip.receive(msg)
 	}
 	if msg.Round == preround &&
 		(p.coin == nil || (p.coin != nil && msg.Eligibility.Proof.Cmp(p.coin) == -1)) {
@@ -229,7 +229,6 @@ func (p *protocol) execution(out *output, active bool) {
 						continue
 					}
 					// condition (g)
-					// TODO(dshulyak) if no proposals with grade5 1st condition is noop?
 					if !isSubset(p.validValues[grade5], graded.values) &&
 						!p.commitExists(p.Iter-1, grade1, id) {
 						continue
@@ -287,8 +286,8 @@ type gradedGossip struct {
 	state map[messageKey]*input
 }
 
-func (g *gradedGossip) invoke(input *input) (bool, *types.HareProof) {
-	// Case 1: will not be discarded earlier
+func (g *gradedGossip) receive(input *input) (bool, *types.HareProof) {
+	// Case 1: will be discarded earlier
 	other, exist := g.state[input.key()]
 	if exist {
 		if other.msgHash != input.msgHash && !other.malicious {
@@ -321,10 +320,10 @@ type gradecasted struct {
 	vrf           types.VrfSignature
 }
 
-func (g *gradecast) invoke(current IterRound, input *input) {
+func (g *gradecast) receive(current IterRound, input *input) {
 	if stored, exist := g.state[input.key()]; !exist {
 		g.state[input.key()] = &gradecasted{
-			grade:     input.grade,
+			grade:     input.atxgrade,
 			received:  current,
 			malicious: input.malicious,
 			values:    input.Value.Proposals,
@@ -366,9 +365,8 @@ func (g *gradecast) output(target IterRound) []gset {
 			}
 		}
 	}
-	// TODO(dshulyak) i think it satisfies p-Weak leader election
-	// inconsistent order of proposals may cause participants to commit
-	// on different proposals
+	// it satisfies p-Weak leader election
+	// inconsistent order of proposals may cause participants to commit on different proposals
 	sort.Slice(rst, func(i, j int) bool {
 		return rst[i].smallest.Cmp(&rst[j].smallest) == -1
 	})
@@ -388,10 +386,10 @@ type thresholdGossip struct {
 	state     map[messageKey]*votes
 }
 
-func (t *thresholdGossip) invoke(input *input) {
+func (t *thresholdGossip) receive(input *input) {
 	if stored, exist := t.state[input.key()]; !exist {
 		t.state[input.key()] = &votes{
-			grade:         input.grade,
+			grade:         input.atxgrade,
 			eligibilities: input.Eligibility.Count,
 			malicious:     input.malicious,
 			value:         input.Value,

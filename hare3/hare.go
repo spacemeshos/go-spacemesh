@@ -292,7 +292,7 @@ func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 		Message:   msg,
 		msgHash:   msg.ToHash(),
 		malicious: malicious,
-		grade:     g,
+		atxgrade:  g,
 	})
 	if err != nil {
 		return err
