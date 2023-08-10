@@ -1050,10 +1050,10 @@ func (app *App) initService(ctx context.Context, svc grpcserver.Service) (grpcse
 	return nil, fmt.Errorf("unknown service %s", svc)
 }
 
-func (app *App) newGrpc(logger *zap.Logger, endpoint string) *grpcserver.Server {
-	return grpcserver.New(endpoint, log.NewFromLog(logger.Named("grpc")),
-		grpc.ChainStreamInterceptor(grpctags.StreamServerInterceptor(), grpczap.StreamServerInterceptor(logger)),
-		grpc.ChainUnaryInterceptor(grpctags.UnaryServerInterceptor(), grpczap.UnaryServerInterceptor(logger)),
+func (app *App) newGrpc(logger log.Log, endpoint string) *grpcserver.Server {
+	return grpcserver.New(endpoint, logger,
+		grpc.ChainStreamInterceptor(grpctags.StreamServerInterceptor(), grpczap.StreamServerInterceptor(logger.Zap())),
+		grpc.ChainUnaryInterceptor(grpctags.UnaryServerInterceptor(), grpczap.UnaryServerInterceptor(logger.Zap())),
 		grpc.MaxSendMsgSize(app.Config.API.GrpcSendMsgSize),
 		grpc.MaxRecvMsgSize(app.Config.API.GrpcRecvMsgSize),
 	)
@@ -1067,10 +1067,10 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		public []grpcserver.ServiceAPI
 	)
 	if len(app.Config.API.PublicServices) > 0 {
-		app.grpcPublicService = app.newGrpc(logger.Zap(), app.Config.API.PublicListener)
+		app.grpcPublicService = app.newGrpc(logger, app.Config.API.PublicListener)
 	}
 	if len(app.Config.API.PrivateServices) > 0 {
-		app.grpcPrivateService = app.newGrpc(logger.Zap(), app.Config.API.PrivateListener)
+		app.grpcPrivateService = app.newGrpc(logger, app.Config.API.PrivateListener)
 	}
 	for _, svc := range app.Config.API.PublicServices {
 		if _, exists := unique[svc]; exists {
