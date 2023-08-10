@@ -27,13 +27,15 @@ func newGater(cfg Config) (*gater, error) {
 	if err != nil {
 		return nil, err
 	}
-	g.ip4blocklist, err = parseCIDR(cfg.IP4Blocklist)
-	if err != nil {
-		return nil, err
-	}
-	g.ip6blocklist, err = parseCIDR(cfg.IP6Blocklist)
-	if err != nil {
-		return nil, err
+	if !cfg.PrivateNetwork {
+		g.ip4blocklist, err = parseCIDR(cfg.IP4Blocklist)
+		if err != nil {
+			return nil, err
+		}
+		g.ip6blocklist, err = parseCIDR(cfg.IP6Blocklist)
+		if err != nil {
+			return nil, err
+		}
 	}
 	for _, pid := range direct {
 		g.direct[pid.ID] = struct{}{}
@@ -61,10 +63,10 @@ func (g *gater) InterceptPeerDial(pid peer.ID) bool {
 }
 
 func (g *gater) InterceptAddrDial(pid peer.ID, m multiaddr.Multiaddr) bool {
-	if !g.InterceptPeerDial(pid) {
-		return false
+	if _, exist := g.direct[pid]; exist {
+		return true
 	}
-	return !g.isBlocked(m)
+	return len(g.h.Network().Peers()) <= g.outbound && g.allowed(m)
 }
 
 func (g *gater) InterceptAccept(n network.ConnMultiaddrs) bool {
@@ -79,18 +81,18 @@ func (*gater) InterceptUpgraded(_ network.Conn) (allow bool, reason control.Disc
 	return true, 0
 }
 
-func (g *gater) isBlocked(m multiaddr.Multiaddr) bool {
-	blocked := false
+func (g *gater) allowed(m multiaddr.Multiaddr) bool {
+	allow := true
 	multiaddr.ForEach(m, func(c multiaddr.Component) bool {
 		switch c.Protocol().Code {
 		case multiaddr.P_IP4:
-			blocked = inAddrRange(net.IP(c.RawValue()), g.ip4blocklist)
+			allow = !inAddrRange(net.IP(c.RawValue()), g.ip4blocklist)
 		case multiaddr.P_IP6:
-			blocked = inAddrRange(net.IP(c.RawValue()), g.ip6blocklist)
+			allow = !inAddrRange(net.IP(c.RawValue()), g.ip6blocklist)
 		}
-		return false
+		return true
 	})
-	return blocked
+	return allow
 }
 
 func parseCIDR(cidrs []string) ([]*net.IPNet, error) {
