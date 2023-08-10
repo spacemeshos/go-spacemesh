@@ -1028,24 +1028,24 @@ func (app *App) startServices(ctx context.Context) error {
 }
 
 func (app *App) initService(ctx context.Context, svc grpcserver.Service) (grpcserver.ServiceAPI, error) {
-	// TODO(mafa): add app.log.WithName("service") to all services
+	logger := app.addLogger(GRPCLogger, app.log)
 	switch svc {
 	case grpcserver.Debug:
-		return grpcserver.NewDebugService(app.db, app.conState, app.host, app.hOracle, app.log.WithName("grpc.Debug")), nil
+		return grpcserver.NewDebugService(app.db, app.conState, app.host, app.hOracle, logger.WithName("Debug")), nil
 	case grpcserver.GlobalState:
-		return grpcserver.NewGlobalStateService(app.mesh, app.conState, app.log.WithName("grpc.GlobalState")), nil
+		return grpcserver.NewGlobalStateService(app.mesh, app.conState, logger.WithName("GlobalState")), nil
 	case grpcserver.Mesh:
-		return grpcserver.NewMeshService(app.cachedDB, app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.Genesis.GenesisID(), app.Config.LayerDuration, app.Config.LayerAvgSize, uint32(app.Config.TxsPerProposal), app.log.WithName("grpc.Mesh")), nil
+		return grpcserver.NewMeshService(app.cachedDB, app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.Genesis.GenesisID(), app.Config.LayerDuration, app.Config.LayerAvgSize, uint32(app.Config.TxsPerProposal), logger.WithName("Mesh")), nil
 	case grpcserver.Node:
-		return grpcserver.NewNodeService(app.host, app.mesh, app.clock, app.syncer, cmd.Version, cmd.Commit, app.log.WithName("grpc.Node")), nil
+		return grpcserver.NewNodeService(app.host, app.mesh, app.clock, app.syncer, cmd.Version, cmd.Commit, logger.WithName("Node")), nil
 	case grpcserver.Admin:
-		return grpcserver.NewAdminService(app.db, app.Config.DataDir(), app.log.WithName("grpc.Admin")), nil
+		return grpcserver.NewAdminService(app.db, app.Config.DataDir(), logger.WithName("Admin")), nil
 	case grpcserver.Smesher:
-		return grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, app.Config.API.SmesherStreamInterval, app.Config.SMESHING.Opts, app.log.WithName("grpc.Smesher")), nil
+		return grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, app.Config.API.SmesherStreamInterval, app.Config.SMESHING.Opts, logger.WithName("Smesher")), nil
 	case grpcserver.Transaction:
-		return grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer, app.txHandler, app.log.WithName("grpc.Transaction")), nil
+		return grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer, app.txHandler, logger.WithName("Transaction")), nil
 	case grpcserver.Activation:
-		return grpcserver.NewActivationService(app.cachedDB, types.ATXID(app.Config.Genesis.GoldenATX()), app.log.WithName("grpc.Activation")), nil
+		return grpcserver.NewActivationService(app.cachedDB, types.ATXID(app.Config.Genesis.GoldenATX()), logger.WithName("Activation")), nil
 	}
 	return nil, fmt.Errorf("unknown service %s", svc)
 }
@@ -1060,17 +1060,17 @@ func (app *App) newGrpc(logger *zap.Logger, endpoint string) *grpcserver.Server 
 }
 
 func (app *App) startAPIServices(ctx context.Context) error {
-	logger := app.addLogger(GRPCLogger, app.log).Zap()
-	grpczap.SetGrpcLoggerV2(grpclog, logger)
+	logger := app.addLogger(GRPCLogger, app.log)
+	grpczap.SetGrpcLoggerV2(grpclog, logger.Zap())
 	var (
 		unique = map[grpcserver.Service]struct{}{}
 		public []grpcserver.ServiceAPI
 	)
 	if len(app.Config.API.PublicServices) > 0 {
-		app.grpcPublicService = app.newGrpc(logger, app.Config.API.PublicListener)
+		app.grpcPublicService = app.newGrpc(logger.Zap(), app.Config.API.PublicListener)
 	}
 	if len(app.Config.API.PrivateServices) > 0 {
-		app.grpcPrivateService = app.newGrpc(logger, app.Config.API.PrivateListener)
+		app.grpcPrivateService = app.newGrpc(logger.Zap(), app.Config.API.PrivateListener)
 	}
 	for _, svc := range app.Config.API.PublicServices {
 		if _, exists := unique[svc]; exists {
@@ -1099,7 +1099,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		if len(public) == 0 {
 			return fmt.Errorf("can't start json server without public services")
 		}
-		app.jsonAPIService = grpcserver.NewJSONHTTPServer(app.Config.API.JSONListener, app.log.WithName("grpc.JSON"))
+		app.jsonAPIService = grpcserver.NewJSONHTTPServer(app.Config.API.JSONListener, logger.WithName("JSON"))
 		app.jsonAPIService.StartService(ctx, public...)
 	}
 	if app.grpcPublicService != nil {

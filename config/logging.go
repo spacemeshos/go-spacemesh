@@ -17,6 +17,7 @@ const (
 type LoggerConfig struct {
 	Encoder                   LogEncoder `mapstructure:"log-encoder"`
 	AppLoggerLevel            string     `mapstructure:"app"`
+	GrpcLoggerLevel           string     `mapstructure:"grpc"`
 	P2PLoggerLevel            string     `mapstructure:"p2p"`
 	PostLoggerLevel           string     `mapstructure:"post"`
 	StateDbLoggerLevel        string     `mapstructure:"stateDb"`
