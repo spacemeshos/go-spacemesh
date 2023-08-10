@@ -54,7 +54,7 @@ func NewValidator(poetDb poetDbAPI, cfg PostConfig, log log.Log, postVerifier Po
 // Some of the Post metadata fields validation values is ought to eventually be derived from
 // consensus instead of local configuration. If so, their validation should be removed to contextual validation,
 // while still syntactically-validate them here according to locally configured min/max values.
-func (v *Validator) NIPost(ctx context.Context, publishEpoch types.EpochID, nodeId types.NodeID, commitmentAtxId types.ATXID, nipost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32, opts ...verifying.OptionFunc) (uint64, error) {
+func (v *Validator) NIPost(ctx context.Context, nodeId types.NodeID, commitmentAtxId types.ATXID, nipost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32, opts ...verifying.OptionFunc) (uint64, error) {
 	if err := v.NumUnits(&v.cfg, numUnits); err != nil {
 		return 0, err
 	}
@@ -63,8 +63,8 @@ func (v *Validator) NIPost(ctx context.Context, publishEpoch types.EpochID, node
 		return 0, err
 	}
 
-	if err := v.Post(ctx, publishEpoch, nodeId, commitmentAtxId, nipost.Post, nipost.PostMetadata, numUnits, opts...); err != nil {
-		return 0, fmt.Errorf("invalid Post: %w", err)
+	if err := v.Post(ctx, nodeId, commitmentAtxId, nipost.Post, nipost.PostMetadata, numUnits, opts...); err != nil {
+		return 0, fmt.Errorf("invalid Post: %v", err)
 	}
 
 	var ref types.PoetProofRef
@@ -113,7 +113,7 @@ func validateMerkleProof(leaf []byte, proof *types.MerkleProof, expectedRoot []b
 
 // Post validates a Proof of Space-Time (PoST). It returns nil if validation passed or an error indicating why
 // validation failed.
-func (v *Validator) Post(ctx context.Context, publishEpoch types.EpochID, nodeId types.NodeID, commitmentAtxId types.ATXID, PoST *types.Post, PostMetadata *types.PostMetadata, numUnits uint32, opts ...verifying.OptionFunc) error {
+func (v *Validator) Post(ctx context.Context, nodeId types.NodeID, commitmentAtxId types.ATXID, PoST *types.Post, PostMetadata *types.PostMetadata, numUnits uint32, opts ...verifying.OptionFunc) error {
 	p := (*shared.Proof)(PoST)
 
 	m := &shared.ProofMetadata{
@@ -146,7 +146,7 @@ func (*Validator) NumUnits(cfg *PostConfig, numUnits uint32) error {
 }
 
 func (*Validator) PostMetadata(cfg *PostConfig, metadata *types.PostMetadata) error {
-	if metadata.LabelsPerUnit < uint64(cfg.LabelsPerUnit) {
+	if metadata.LabelsPerUnit < cfg.LabelsPerUnit {
 		return fmt.Errorf("invalid `LabelsPerUnit`; expected: >=%d, given: %d", cfg.LabelsPerUnit, metadata.LabelsPerUnit)
 	}
 	return nil
@@ -170,17 +170,9 @@ func (*Validator) VRFNonce(nodeId types.NodeID, commitmentAtxId types.ATXID, vrf
 	return nil
 }
 
-func (*Validator) InitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, goldenATXID types.ATXID) error {
-	if challenge.Sequence != 0 {
-		return fmt.Errorf("no prevATX declared, but sequence number not zero")
-	}
-
-	if challenge.InitialPost == nil {
-		return fmt.Errorf("no prevATX declared, but initial Post is not included in challenge")
-	}
-
+func (v *Validator) InitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, goldenATXID types.ATXID) error {
 	if challenge.CommitmentATX == nil {
-		return fmt.Errorf("no prevATX declared, but commitmentATX is missing")
+		v.log.Panic("commitment atx is nil")
 	}
 
 	if *challenge.CommitmentATX != goldenATXID {
@@ -218,21 +210,12 @@ func (*Validator) NIPostChallenge(challenge *types.NIPostChallenge, atxs atxProv
 	if prevATX.Sequence+1 != challenge.Sequence {
 		return fmt.Errorf("sequence number is not one more than prev sequence number")
 	}
-
-	if challenge.InitialPost != nil {
-		return fmt.Errorf("prevATX declared, but initial Post is included in challenge")
-	}
-
-	if challenge.CommitmentATX != nil {
-		return fmt.Errorf("prevATX declared, but commitmentATX is included")
-	}
-
 	return nil
 }
 
-func (*Validator) PositioningAtx(id *types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubepoch types.EpochID, layersPerEpoch uint32) error {
+func (v *Validator) PositioningAtx(id *types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubepoch types.EpochID) error {
 	if *id == types.EmptyATXID {
-		return fmt.Errorf("empty positioning atx")
+		v.log.Panic("empty positioning atx")
 	}
 	if *id == goldenATXID {
 		return nil
