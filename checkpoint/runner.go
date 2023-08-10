@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/identities"
 )
 
 const (
@@ -52,7 +53,15 @@ func checkpointDB(ctx context.Context, db *sql.Database, snapshot types.LayerID,
 	if err != nil {
 		return nil, fmt.Errorf("atxs snapshot: %w", err)
 	}
+	malicious := map[types.NodeID]bool{}
 	for i, catx := range atxSnapshot {
+		if _, ok := malicious[catx.SmesherID]; !ok {
+			mal, err := identities.IsMalicious(tx, catx.SmesherID)
+			if err != nil {
+				return nil, fmt.Errorf("atxs snapshot check identitiy: %w", err)
+			}
+			malicious[catx.SmesherID] = mal
+		}
 		commitmentAtx, err := atxs.CommitmentATX(tx, catx.SmesherID)
 		if err != nil {
 			return nil, fmt.Errorf("atxs snapshot commitment: %w", err)
@@ -65,6 +74,9 @@ func checkpointDB(ctx context.Context, db *sql.Database, snapshot types.LayerID,
 		atxSnapshot[i].VRFNonce = vrfNonce
 	}
 	for _, catx := range atxSnapshot {
+		if mal, ok := malicious[catx.SmesherID]; ok && mal {
+			continue
+		}
 		checkpoint.Data.Atxs = append(checkpoint.Data.Atxs, types.AtxSnapshot{
 			ID:             catx.ID.Bytes(),
 			Epoch:          catx.Epoch.Uint32(),
