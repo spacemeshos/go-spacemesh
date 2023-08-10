@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -53,10 +54,12 @@ type (
 type DataFetch struct {
 	fetcher
 
-	logger    log.Log
-	msh       meshProvider
-	ids       idProvider
-	asCache   activeSetCache
+	logger  log.Log
+	msh     meshProvider
+	ids     idProvider
+	asCache activeSetCache
+
+	mu        sync.Mutex
 	atxSynced map[types.EpochID]map[p2p.Peer]struct{}
 }
 
@@ -377,23 +380,35 @@ func (d *DataFetch) receiveOpinions(ctx context.Context, req *opinionRequest, pe
 	}
 }
 
+func (d *DataFetch) pickAtxPeer(epoch types.EpochID) p2p.Peer {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if _, ok := d.atxSynced[epoch]; !ok {
+		d.atxSynced[epoch] = map[p2p.Peer]struct{}{}
+		delete(d.atxSynced, epoch-1)
+	}
+	peers := d.fetcher.GetPeers()
+	for _, p := range peers {
+		if _, ok := d.atxSynced[epoch][p]; !ok {
+			return p
+		}
+	}
+	return p2p.NoPeer
+}
+
+func (d *DataFetch) updateAtxPeer(epoch types.EpochID, peer p2p.Peer) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.atxSynced[epoch][peer] = struct{}{}
+}
+
 // GetEpochATXs fetches all ATXs published in the specified epoch from a peer.
 func (d *DataFetch) GetEpochATXs(ctx context.Context, epoch types.EpochID) error {
 	peers := d.fetcher.GetPeers()
 	if len(peers) == 0 {
 		return errNoPeers
 	}
-	peer := p2p.NoPeer
-	if _, ok := d.atxSynced[epoch]; !ok {
-		d.atxSynced[epoch] = map[p2p.Peer]struct{}{}
-		delete(d.atxSynced, epoch-1)
-	}
-	for _, p := range peers {
-		if _, ok := d.atxSynced[epoch][p]; !ok {
-			peer = p
-			break
-		}
-	}
+	peer := d.pickAtxPeer(epoch)
 	if peer == p2p.NoPeer {
 		d.logger.WithContext(ctx).With().Debug("synced atxs from all peers",
 			epoch,
@@ -413,7 +428,7 @@ func (d *DataFetch) GetEpochATXs(ctx context.Context, epoch types.EpochID) error
 		)
 		return nil
 	}
-	d.atxSynced[epoch][peer] = struct{}{}
+	d.updateAtxPeer(epoch, peer)
 	d.fetcher.RegisterPeerHashes(peer, types.ATXIDsToHashes(ed.AtxIDs))
 	missing := d.asCache.GetMissingActiveSet(epoch+1, ed.AtxIDs)
 	d.logger.WithContext(ctx).With().Debug("fetching atxs",

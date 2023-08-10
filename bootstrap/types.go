@@ -36,11 +36,5 @@ func (vd *VerifiedUpdate) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("epoch", vd.Data.Epoch.String())
 	encoder.AddString("beacon", vd.Data.Beacon.String())
 	encoder.AddInt("activeset_size", len(vd.Data.ActiveSet))
-	encoder.AddArray("activeset", log.ArrayMarshalerFunc(func(aencoder log.ArrayEncoder) error {
-		for _, atx := range vd.Data.ActiveSet {
-			aencoder.AppendString(atx.String())
-		}
-		return nil
-	}))
 	return nil
 }
