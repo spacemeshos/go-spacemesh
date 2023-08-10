@@ -20,17 +20,15 @@ import (
 type handler struct {
 	logger log.Log
 	cdb    *datastore.CachedDB
-	cfg    Config
 	bs     *datastore.BlobStore
 	msh    meshProvider
 	beacon system.BeaconGetter
 }
 
-func newHandler(cdb *datastore.CachedDB, cfg Config, bs *datastore.BlobStore, m meshProvider, b system.BeaconGetter, lg log.Log) *handler {
+func newHandler(cdb *datastore.CachedDB, bs *datastore.BlobStore, m meshProvider, b system.BeaconGetter, lg log.Log) *handler {
 	return &handler{
 		logger: lg,
 		cdb:    cdb,
-		cfg:    cfg,
 		bs:     bs,
 		msh:    m,
 		beacon: b,

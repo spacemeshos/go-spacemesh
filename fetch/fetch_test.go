@@ -8,6 +8,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -312,7 +313,7 @@ func TestFetch_RegisterPeerHashes(t *testing.T) {
 func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	lg := logtest.New(t)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	t.Cleanup(cancel)
+	defer cancel()
 	cfg := Config{
 		time.Minute * time.Duration(2000), // make sure we never hit the batch timeout
 		3,
@@ -328,13 +329,13 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	// Good host
 	h, err := p2p.New(ctx, lg, p2pconf, []byte{})
 	require.NoError(t, err)
-	t.Cleanup(func() { h.Close() })
+	t.Cleanup(func() { assert.NoError(t, h.Stop()) })
 
 	// Bad host, will send a message that results in validation reject
 	p2pconf.DataDir = t.TempDir()
 	badPeerHost, err := p2p.New(ctx, lg, p2pconf, []byte{})
 	require.NoError(t, err)
-	t.Cleanup(func() { badPeerHost.Close() })
+	t.Cleanup(func() { assert.NoError(t, badPeerHost.Stop()) })
 
 	err = h.Connect(ctx, peer.AddrInfo{
 		ID:    badPeerHost.ID(),
@@ -367,6 +368,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 		WithConfig(cfg),
 		WithLogger(lg),
 	)
+	t.Cleanup(fetcher.Stop)
 
 	// We set a validatior just for atxs, this validator does not drop connections
 	vf := ValidatorFunc(func(ctx context.Context, id peer.ID, data []byte) error { return pubsub.ErrValidationReject })

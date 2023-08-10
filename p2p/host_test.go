@@ -20,8 +20,12 @@ func TestPrologue(t *testing.T) {
 
 	h1, err := New(context.Background(), logtest.New(t), cfg1, []byte("red"))
 	require.NoError(t, err)
+	t.Cleanup(func() { h1.Stop() })
+
 	h2, err := New(context.Background(), logtest.New(t), cfg2, []byte("blue"))
 	require.NoError(t, err)
+	t.Cleanup(func() { h2.Stop() })
+
 	err = h1.Connect(context.Background(), peer.AddrInfo{
 		ID:    h2.ID(),
 		Addrs: h2.Addrs(),

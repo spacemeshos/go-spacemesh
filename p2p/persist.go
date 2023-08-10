@@ -46,7 +46,7 @@ func writePeers(h host.Host, dir string) error {
 	}
 
 	checksum := crc64.New(crc64.MakeTable(crc64.ISO))
-	tmp, err := os.CreateTemp(dir, "connected-***")
+	tmp, err := os.CreateTemp(dir, "connected.tmp")
 	if err != nil {
 		return err
 	}
