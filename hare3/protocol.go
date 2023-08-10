@@ -116,7 +116,7 @@ type protocol struct {
 	result          *types.Hash32       // set after Round 6. Case 1
 	locked          *types.Hash32       // Li
 	hardLocked      bool
-	validProposals  map[types.Hash32][]types.ProposalID // Vi
+	validProposals  map[types.Hash32][]types.ProposalID // Ti
 	gradedProposals gradedProposals                     // valid values in 4.3
 	gradedGossip    gradedGossip
 	gradecast       gradecast
