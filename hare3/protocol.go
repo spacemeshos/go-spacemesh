@@ -106,9 +106,9 @@ type protocol struct {
 	hardLocked      bool
 	validProposals  map[types.Hash32][]types.ProposalID // Ti
 	validValues     [grade5 + 1][]types.ProposalID      // Vi
-	gradedGossip    gradedGossip
-	gradecast       gradecast
-	thresholdGossip thresholdGossip
+	gradedGossip    gradedGossip                        // Protocol 1. graded-gossip. page 10.
+	gradecast       gradecast                           // Protocol 2. gradecast. page 13.
+	thresholdGossip thresholdGossip                     // Protocol 3. thresh-gossip. Page 15.
 }
 
 func (p *protocol) onInput(msg *input) (bool, *types.HareProof) {
@@ -149,7 +149,7 @@ func (p *protocol) commitExists(iter uint8, grade grade, match types.Hash32) boo
 }
 
 func (p *protocol) execution(out *output, active bool) {
-	// code below aims to look similar to 4.3 Protocol Execution
+	// 4.3 Protocol Execution
 	if p.Iter == 0 && p.Round >= softlock && p.Round <= wait2 {
 		// -1 - skipped hardlock round in iter 0
 		// -1 - implementation rounds starts from 0
