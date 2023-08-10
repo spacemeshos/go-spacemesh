@@ -31,7 +31,7 @@ func (lg *legacyOracle) validate(msg *Message) grade {
 		committee = int(lg.config.Leaders)
 	}
 	valid, err := lg.oracle.Validate(context.Background(),
-		msg.Layer, msg.Single(), committee, msg.Sender,
+		msg.Layer, msg.Absolute(), committee, msg.Sender,
 		msg.Eligibility.Proof, msg.Eligibility.Count)
 	if err != nil {
 		lg.log.Warn("failed proof validation", zap.Error(err))
@@ -47,7 +47,7 @@ func (lg *legacyOracle) validate(msg *Message) grade {
 }
 
 func (lg *legacyOracle) active(smesher types.NodeID, layer types.LayerID, ir IterRound) *types.HareEligibility {
-	vrf, err := lg.oracle.Proof(context.Background(), layer, ir.Single())
+	vrf, err := lg.oracle.Proof(context.Background(), layer, ir.Absolute())
 	if err != nil {
 		lg.log.Error("failed to compute vrf", zap.Error(err))
 		return nil
@@ -56,7 +56,7 @@ func (lg *legacyOracle) active(smesher types.NodeID, layer types.LayerID, ir Ite
 	if ir.Round == propose {
 		committee = int(lg.config.Leaders)
 	}
-	count, err := lg.oracle.CalcEligibility(context.Background(), layer, ir.Single(), committee, smesher, vrf)
+	count, err := lg.oracle.CalcEligibility(context.Background(), layer, ir.Absolute(), committee, smesher, vrf)
 	if err != nil {
 		if !errors.Is(err, eligibility.ErrNotActive) {
 			lg.log.Error("failed to compute eligibilities", zap.Error(err))

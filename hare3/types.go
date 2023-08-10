@@ -40,7 +40,7 @@ type IterRound struct {
 
 // Delay returns number of network delays since specified iterround.
 func (ir IterRound) Delay(since IterRound) int {
-	delay := int(ir.Single() - since.Single())
+	delay := int(ir.Absolute() - since.Absolute())
 	if delay < 0 {
 		return 0
 	}
@@ -61,7 +61,7 @@ func (ir IterRound) IsMessageRound() bool {
 	return false
 }
 
-func (ir IterRound) Single() uint32 {
+func (ir IterRound) Absolute() uint32 {
 	return uint32(ir.Iter*uint8(notify) + uint8(ir.Round))
 }
 
@@ -99,7 +99,7 @@ func (m *Message) ToHash() types.Hash32 {
 func (m *Message) ToMetadata() types.HareMetadata {
 	return types.HareMetadata{
 		Layer:   m.Layer,
-		Round:   m.Single(),
+		Round:   m.Absolute(),
 		MsgHash: m.ToHash(),
 	}
 }
