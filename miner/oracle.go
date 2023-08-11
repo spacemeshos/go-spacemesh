@@ -63,6 +63,10 @@ func (o *Oracle) ProposalEligibility(lid types.LayerID, beacon types.Beacon, non
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
+	if legacy := types.GetLegacyLayer(); legacy != 0 && lid.Uint32() == legacy+1 {
+		o.cache = &EpochEligibility{}
+	}
+
 	epoch := lid.GetEpoch()
 	if lid <= types.GetEffectiveGenesis() {
 		o.log.With().Panic("eligibility should not be queried during genesis", lid, epoch)
