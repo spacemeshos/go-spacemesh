@@ -738,6 +738,7 @@ func (app *App) initServices(ctx context.Context) error {
 
 	hareCfg := app.Config.HARE
 	hareCfg.Hdist = app.Config.Tortoise.Hdist
+	hareCfg.StopAtxGrading = types.GetLegacyLayer()
 	app.hare = hare.New(
 		app.cachedDB,
 		hareCfg,
