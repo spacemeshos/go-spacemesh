@@ -23,6 +23,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/metrics/public"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -506,6 +507,13 @@ func (pd *ProtocolDriver) setBeacon(targetEpoch types.EpochID, beacon types.Beac
 	}
 	pd.beacons[targetEpoch] = beacon
 	pd.onResult(targetEpoch, beacon)
+	curr := pd.clock.CurrentLayer().GetEpoch()
+	switch targetEpoch {
+	case curr:
+		public.CurrentBeacon.WithLabelValues(beacon.String())
+	case curr + 1:
+		public.NextBeacon.WithLabelValues(beacon.String())
+	}
 	return nil
 }
 

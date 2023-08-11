@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"strconv"
 	"sync"
 
 	"github.com/spacemeshos/post/config"
@@ -82,10 +83,54 @@ type PostSetupOpts struct {
 	DataDir          string              `mapstructure:"smeshing-opts-datadir"`
 	NumUnits         uint32              `mapstructure:"smeshing-opts-numunits"`
 	MaxFileSize      uint64              `mapstructure:"smeshing-opts-maxfilesize"`
-	ProviderID       int                 `mapstructure:"smeshing-opts-provider"`
+	ProviderID       PostProviderID      `mapstructure:"smeshing-opts-provider"`
 	Throttle         bool                `mapstructure:"smeshing-opts-throttle"`
 	Scrypt           config.ScryptParams `mapstructure:"smeshing-opts-scrypt"`
 	ComputeBatchSize uint64              `mapstructure:"smeshing-opts-compute-batch-size"`
+}
+
+type PostProviderID struct {
+	value *int64
+}
+
+// String implements pflag.Value.String.
+func (id *PostProviderID) String() string {
+	if id.value == nil {
+		return ""
+	}
+	return fmt.Sprintf("%d", *id.value)
+}
+
+// Type implements pflag.Value.Type.
+func (PostProviderID) Type() string {
+	return "PostProviderID"
+}
+
+// Set implements pflag.Value.Set.
+func (id *PostProviderID) Set(value string) error {
+	if len(value) == 0 {
+		id.value = nil
+		return nil
+	}
+
+	i, err := strconv.ParseInt(value, 10, 33)
+	if err != nil {
+		return fmt.Errorf("failed to parse PoST Provider ID (\"%s\"): %w", value, err)
+	}
+
+	id.value = new(int64)
+	*id.value = int64(i)
+	return nil
+}
+
+// SetInt64 sets the value of the PostProviderID to the given int64.
+func (id *PostProviderID) SetInt64(value int64) {
+	id.value = &value
+}
+
+// Value returns the value of the PostProviderID as a pointer to uint32.
+func (id *PostProviderID) Value() *int64 {
+	return id.value
 }
 
 // PostProvingOpts are the options controlling POST proving process.
@@ -169,7 +214,6 @@ func DefaultPostSetupOpts() PostSetupOpts {
 		DataDir:          opts.DataDir,
 		NumUnits:         opts.NumUnits,
 		MaxFileSize:      opts.MaxFileSize,
-		ProviderID:       opts.ProviderID,
 		Throttle:         opts.Throttle,
 		Scrypt:           opts.Scrypt,
 		ComputeBatchSize: opts.ComputeBatchSize,
@@ -177,11 +221,17 @@ func DefaultPostSetupOpts() PostSetupOpts {
 }
 
 func (o PostSetupOpts) ToInitOpts() config.InitOpts {
+	var providerID *uint32
+	if o.ProviderID.Value() != nil {
+		providerID = new(uint32)
+		*providerID = uint32(*o.ProviderID.Value())
+	}
+
 	return config.InitOpts{
 		DataDir:          o.DataDir,
 		NumUnits:         o.NumUnits,
 		MaxFileSize:      o.MaxFileSize,
-		ProviderID:       o.ProviderID,
+		ProviderID:       providerID,
 		Throttle:         o.Throttle,
 		Scrypt:           o.Scrypt,
 		ComputeBatchSize: o.ComputeBatchSize,
@@ -368,14 +418,18 @@ func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSe
 		return fmt.Errorf("post setup session in progress")
 	}
 
-	if opts.ProviderID == config.BestProviderID {
+	// TODO(mafa): remove this, see https://github.com/spacemeshos/go-spacemesh/issues/4801
+	if opts.ProviderID.Value() != nil && *opts.ProviderID.Value() == -1 {
+		mgr.logger.Warning("DEPRECATED: auto-determining compute provider is deprecated, please specify a valid provider ID in the config file")
+
 		p, err := mgr.BestProvider()
 		if err != nil {
 			return err
 		}
 
-		mgr.logger.Info("found best compute provider: id: %d, model: %v, device type: %v", p.ID, p.Model, p.DeviceType)
-		opts.ProviderID = int(p.ID)
+		mgr.logger.Warning("DEPRECATED: found best compute provider: id: %d, model: %v, device type: %v", p.ID, p.Model, p.DeviceType)
+		mgr.logger.Warning("DEPRECATED: please update your config file: {\"smeshing\": {\"smeshing-opts\": {\"smeshing-opts-provider\": %d }}}", p.ID)
+		opts.ProviderID.SetInt64(int64(p.ID))
 	}
 
 	var err error

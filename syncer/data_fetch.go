@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -53,10 +54,12 @@ type (
 type DataFetch struct {
 	fetcher
 
-	logger    log.Log
-	msh       meshProvider
-	ids       idProvider
-	asCache   activeSetCache
+	logger  log.Log
+	msh     meshProvider
+	ids     idProvider
+	asCache activeSetCache
+
+	mu        sync.Mutex
 	atxSynced map[types.EpochID]map[p2p.Peer]struct{}
 }
 
@@ -88,6 +91,7 @@ func (d *DataFetch) PollMaliciousProofs(ctx context.Context) error {
 	}
 	errFunc := func(err error, peer p2p.Peer) {
 		d.receiveMaliciousIDs(ctx, req, peer, nil, err)
+		malPeerError.Inc()
 	}
 	if err := d.fetcher.GetMaliciousIDs(ctx, peers, okFunc, errFunc); err != nil {
 		return err
@@ -147,6 +151,7 @@ func (d *DataFetch) PollLayerData(ctx context.Context, lid types.LayerID, peers 
 	}
 	errFunc := func(err error, peer p2p.Peer) {
 		d.receiveData(ctx, req, peer, nil, err)
+		layerPeerError.Inc()
 	}
 	if err := d.fetcher.GetLayerData(ctx, peers, lid, okFunc, errFunc); err != nil {
 		return err
@@ -320,6 +325,7 @@ func (d *DataFetch) PollLayerOpinions(ctx context.Context, lid types.LayerID) ([
 	}
 	errFunc := func(err error, peer p2p.Peer) {
 		d.receiveOpinions(ctx, req, peer, nil, err)
+		opnsPeerError.Inc()
 	}
 	if err := d.fetcher.GetLayerOpinions(ctx, peers, lid, okFunc, errFunc); err != nil {
 		return nil, err
@@ -377,23 +383,34 @@ func (d *DataFetch) receiveOpinions(ctx context.Context, req *opinionRequest, pe
 	}
 }
 
-// GetEpochATXs fetches all ATXs published in the specified epoch from a peer.
-func (d *DataFetch) GetEpochATXs(ctx context.Context, epoch types.EpochID) error {
-	peers := d.fetcher.GetPeers()
-	if len(peers) == 0 {
-		return errNoPeers
-	}
-	peer := p2p.NoPeer
+func (d *DataFetch) pickAtxPeer(epoch types.EpochID, peers []p2p.Peer) p2p.Peer {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	if _, ok := d.atxSynced[epoch]; !ok {
 		d.atxSynced[epoch] = map[p2p.Peer]struct{}{}
 		delete(d.atxSynced, epoch-1)
 	}
 	for _, p := range peers {
 		if _, ok := d.atxSynced[epoch][p]; !ok {
-			peer = p
-			break
+			return p
 		}
 	}
+	return p2p.NoPeer
+}
+
+func (d *DataFetch) updateAtxPeer(epoch types.EpochID, peer p2p.Peer) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.atxSynced[epoch][peer] = struct{}{}
+}
+
+// GetEpochATXs fetches all ATXs published in the specified epoch from a peer.
+func (d *DataFetch) GetEpochATXs(ctx context.Context, epoch types.EpochID) error {
+	peers := d.fetcher.GetPeers()
+	if len(peers) == 0 {
+		return errNoPeers
+	}
+	peer := d.pickAtxPeer(epoch, peers)
 	if peer == p2p.NoPeer {
 		d.logger.WithContext(ctx).With().Debug("synced atxs from all peers",
 			epoch,
@@ -404,6 +421,7 @@ func (d *DataFetch) GetEpochATXs(ctx context.Context, epoch types.EpochID) error
 
 	ed, err := d.fetcher.PeerEpochInfo(ctx, peer, epoch)
 	if err != nil {
+		atxPeerError.Inc()
 		return fmt.Errorf("get epoch info (peer %v): %w", peer, err)
 	}
 	if len(ed.AtxIDs) == 0 {
@@ -413,7 +431,7 @@ func (d *DataFetch) GetEpochATXs(ctx context.Context, epoch types.EpochID) error
 		)
 		return nil
 	}
-	d.atxSynced[epoch][peer] = struct{}{}
+	d.updateAtxPeer(epoch, peer)
 	d.fetcher.RegisterPeerHashes(peer, types.ATXIDsToHashes(ed.AtxIDs))
 	missing := d.asCache.GetMissingActiveSet(epoch+1, ed.AtxIDs)
 	d.logger.WithContext(ctx).With().Debug("fetching atxs",
