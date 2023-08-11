@@ -124,7 +124,6 @@ func (v *Validator) Post(ctx context.Context, publishEpoch types.EpochID, nodeId
 		LabelsPerUnit:   PostMetadata.LabelsPerUnit,
 	}
 
-	v.log.With().Info("verifying POST with pow creator ID", log.Named("id", nodeId))
 	opts = append(opts, verifying.WithPowCreator(nodeId.Bytes()))
 
 	start := time.Now()

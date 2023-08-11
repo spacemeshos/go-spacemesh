@@ -187,7 +187,7 @@ func NewFetch(cdb *datastore.CachedDB, msh meshProvider, b system.BeaconGetter, 
 		server.WithLog(f.logger),
 	}
 	if len(f.servers) == 0 {
-		h := newHandler(cdb, f.cfg, bs, msh, b, f.logger)
+		h := newHandler(cdb, bs, msh, b, f.logger)
 		f.servers[atxProtocol] = server.New(host, atxProtocol, h.handleEpochInfoReq, srvOpts...)
 		f.servers[lyrDataProtocol] = server.New(host, lyrDataProtocol, h.handleLayerDataReq, srvOpts...)
 		f.servers[lyrOpnsProtocol] = server.New(host, lyrOpnsProtocol, h.handleLayerOpinionsReq, srvOpts...)
@@ -570,6 +570,7 @@ func (f *Fetch) handleHashError(batchHash types.Hash32, err error) {
 			log.Stringer("hash", req.hash),
 			log.Err(err))
 		req.promise.err = err
+		peerErrors.WithLabelValues(string(req.hint)).Inc()
 		close(req.promise.completed)
 		delete(f.ongoing, req.hash)
 	}

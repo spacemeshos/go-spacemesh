@@ -22,13 +22,13 @@ func TestConnectedPersist(t *testing.T) {
 	require.NoError(t, err)
 	var eg errgroup.Group
 	eg.Go(func() error {
-		persist(ctx, logtest.New(t), mock.Hosts()[0], dir, 100*time.Microsecond)
+		persist(ctx, logtest.New(t), mock.Hosts()[0], dir, 100*time.Millisecond)
 		return nil
 	})
 	require.Eventually(t, func() bool {
 		_, err := os.Stat(filepath.Join(dir, connectedFile))
 		return err == nil
-	}, 3*time.Second, 50*time.Microsecond)
+	}, 5*time.Second, 50*time.Millisecond)
 	cancel()
 	eg.Wait()
 	peers, err := loadPeers(dir)
@@ -62,6 +62,7 @@ func TestConnectedBrokenCRC(t *testing.T) {
 	eg.Wait()
 	f, err := os.OpenFile(filepath.Join(dir, connectedFile), os.O_RDWR, 0o600)
 	require.NoError(t, err)
+	defer f.Close()
 	_, err = f.WriteAt([]byte{0, 1, 1, 1}, 0)
 	require.NoError(t, err)
 	peers, err := loadPeers(dir)
