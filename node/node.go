@@ -138,6 +138,7 @@ func GetCommand() *cobra.Command {
 
 			run := func(ctx context.Context) error {
 				types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
+				types.SetLegacyLayers(app.Config.LegacyLayer)
 				// ensure all data folders exist
 				if err := os.MkdirAll(app.Config.DataDir(), 0o700); err != nil {
 					return fmt.Errorf("ensure folders exist: %w", err)

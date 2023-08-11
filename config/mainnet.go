@@ -45,6 +45,8 @@ func MainnetConfig() Config {
 			NetworkHRP:          "sm",
 
 			LayerDuration:  5 * time.Minute,
+			LayerAvgSize:   50,
+			LegacyLayer:    8150,
 			LayersPerEpoch: 4032,
 
 			TxsPerProposal: 700,       // https://github.com/spacemeshos/go-spacemesh/issues/4559

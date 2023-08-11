@@ -13,6 +13,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -201,10 +203,21 @@ func (o *Oracle) calcEligibilityProofs(epoch types.EpochID, beacon types.Beacon,
 		log.Uint64("weight", minerWeight),
 		log.Uint64("total weight", totalWeight),
 	)
-
-	numEligibleSlots, err := proposals.GetNumEligibleSlots(minerWeight, o.cfg.minActiveSetWeight, totalWeight, o.cfg.layerSize, o.cfg.layersPerEpoch)
-	if err != nil {
-		return nil, fmt.Errorf("oracle get num slots: %w", err)
+	var numEligibleSlots uint32
+	ref, err := ballots.GetRefBallot(o.cdb, epoch, o.vrfSigner.NodeID())
+	if errors.Is(err, sql.ErrNotFound) {
+		numEligibleSlots, err = proposals.GetNumEligibleSlots(minerWeight, o.cfg.minActiveSetWeight, totalWeight, o.cfg.layerSize, o.cfg.layersPerEpoch)
+		if err != nil {
+			return nil, fmt.Errorf("oracle get num slots: %w", err)
+		}
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to get refballot: %w", err)
+	} else {
+		ballot, err := ballots.Get(o.cdb, ref)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get ballot: %w", err)
+		}
+		numEligibleSlots = ballot.EpochData.EligibilityCount
 	}
 
 	eligibilityProofs := map[types.LayerID][]types.VotingEligibility{}

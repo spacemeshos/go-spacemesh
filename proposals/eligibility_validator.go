@@ -143,7 +143,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 
 	atxWeight = owned.GetWeight()
 
-	numEligibleSlots, err := GetNumEligibleSlots(atxWeight, v.minActiveSetWeight, totalWeight, v.avgLayerSize, v.layersPerEpoch)
+	numEligibleSlots, err := GetLegacyNumEligible(ballot.Layer, atxWeight, v.minActiveSetWeight, totalWeight, v.avgLayerSize, v.layersPerEpoch)
 	if err != nil {
 		return false, err
 	}
