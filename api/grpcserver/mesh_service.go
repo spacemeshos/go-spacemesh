@@ -8,7 +8,6 @@ import (
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -139,12 +138,7 @@ func (s MeshService) getFilteredActivations(ctx context.Context, startLayer type
 	// Look up full data
 	atxs, matxs := s.mesh.GetATXs(ctx, atxids)
 	if len(matxs) != 0 {
-		ctxzap.Error(ctx, "could not find activations", zap.Array("matxs", zapcore.ArrayMarshalerFunc(func(enc zapcore.ArrayEncoder) error {
-			for _, atxid := range matxs {
-				enc.AppendString(atxid.ShortString())
-			}
-			return nil
-		})))
+		ctxzap.Error(ctx, "could not find activations", zap.Array("matxs", types.ATXIDs(matxs)))
 		return nil, status.Errorf(codes.Internal, "error retrieving activations data")
 	}
 	for _, atx := range atxs {
@@ -350,12 +344,7 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 		ctxzap.Error(
 			ctx,
 			"could not find activations from layer",
-			zap.Array("missing", zapcore.ArrayMarshalerFunc(func(ae zapcore.ArrayEncoder) error {
-				for _, atxid := range matxs {
-					ae.AppendString(atxid.ShortString())
-				}
-				return nil
-			})),
+			zap.Array("missing", types.ATXIDs(matxs)),
 			layer.Index().Field().Zap(),
 		)
 		return nil, status.Errorf(codes.Internal, "error retrieving activations data")

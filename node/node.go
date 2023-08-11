@@ -1035,13 +1035,7 @@ func (app *App) initService(ctx context.Context, svc grpcserver.Service) (grpcse
 	case grpcserver.Node:
 		return grpcserver.NewNodeService(app.host, app.mesh, app.clock, app.syncer, cmd.Version, cmd.Commit), nil
 	case grpcserver.Admin:
-		return grpcserver.NewAdminService(app.db, app.Config.DataDir(), func(context.Context) {
-			go func() {
-				// Allow time for the response to be sent.
-				time.Sleep(time.Second)
-				os.Exit(0)
-			}()
-		}), nil
+		return grpcserver.NewAdminService(app.db, app.Config.DataDir()), nil
 	case grpcserver.Smesher:
 		return grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, app.Config.API.SmesherStreamInterval, app.Config.SMESHING.Opts), nil
 	case grpcserver.Transaction:

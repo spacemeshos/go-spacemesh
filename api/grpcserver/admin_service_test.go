@@ -56,7 +56,7 @@ func createMesh(tb testing.TB, db *sql.Database) {
 func TestAdminService_Checkpoint(t *testing.T) {
 	db := sql.InMemory()
 	createMesh(t, db)
-	svc := NewAdminService(db, t.TempDir(), func(context.Context) {})
+	svc := NewAdminService(db, t.TempDir())
 	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -91,7 +91,7 @@ func TestAdminService_Checkpoint(t *testing.T) {
 
 func TestAdminService_CheckpointError(t *testing.T) {
 	db := sql.InMemory()
-	svc := NewAdminService(db, t.TempDir(), func(context.Context) {})
+	svc := NewAdminService(db, t.TempDir())
 	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -108,9 +108,9 @@ func TestAdminService_CheckpointError(t *testing.T) {
 func TestAdminService_Recovery(t *testing.T) {
 	db := sql.InMemory()
 	recoveryCalled := atomic.Bool{}
-	svc := NewAdminService(db, t.TempDir(), func(context.Context) {
-		recoveryCalled.Store(true)
-	})
+	svc := NewAdminService(db, t.TempDir())
+	svc.recover = func() { recoveryCalled.Store(true) }
+
 	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -120,6 +120,5 @@ func TestAdminService_Recovery(t *testing.T) {
 
 	_, err := c.Recover(ctx, &pb.RecoverRequest{})
 	require.NoError(t, err)
-
-	require.Eventually(t, func() bool { return recoveryCalled.Load() }, 5*time.Second, 100*time.Millisecond)
+	require.True(t, recoveryCalled.Load())
 }

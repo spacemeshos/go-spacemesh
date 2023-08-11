@@ -68,6 +68,16 @@ func (t *ATXID) UnmarshalText(buf []byte) error {
 // EmptyATXID is a canonical empty ATXID.
 var EmptyATXID = ATXID{}
 
+type ATXIDs []ATXID
+
+// impl zap's ArrayMarshaler interface
+func (ids ATXIDs) MarshalLogArray(enc log.ArrayEncoder) error {
+	for _, id := range ids {
+		enc.AppendString(id.String())
+	}
+	return nil
+}
+
 // NIPostChallenge is the set of fields that's serialized, hashed and submitted to the PoET service to be included in the
 // PoET membership proof.
 type NIPostChallenge struct {
