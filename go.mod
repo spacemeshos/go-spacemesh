@@ -57,9 +57,9 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20230726155614-23370e0ffb3e
 	google.golang.org/grpc v1.57.0
 	google.golang.org/protobuf v1.31.0
-	k8s.io/api v0.26.3
+	k8s.io/api v0.27.4
 	k8s.io/apimachinery v0.27.4
-	k8s.io/client-go v0.26.3
+	k8s.io/client-go v0.27.4
 	sigs.k8s.io/controller-runtime v0.14.6
 )
 
