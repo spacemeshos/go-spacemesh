@@ -169,6 +169,45 @@ func (fh *Host) GetPeers() []Peer {
 	return fh.Host.Network().Peers()
 }
 
+// Peer info returns a slice containing info for connected peers.
+func (fh *Host) PeerInfo() []PeerInfo {
+	var infos []PeerInfo
+	for _, p := range fh.Host.Network().Peers() {
+		conns := fh.Network().ConnsToPeer(p)
+		// there's no sync between  Peers() and ConnsToPeer() so by the time we
+		// try to get the conns they may not exist.
+		if len(conns) == 0 {
+			continue
+		}
+
+		var connections []ConnectionInfo
+		for _, c := range conns {
+			connections = append(connections, ConnectionInfo{
+				Address:  c.RemoteMultiaddr(),
+				Uptime:   time.Since(c.Stat().Opened),
+				Outbound: c.Stat().Direction == network.DirOutbound,
+			})
+		}
+		var tags []string
+
+		if fh.discovery.IsDirect(p) {
+			tags = append(tags, "direct")
+		}
+		if fh.discovery.IsBootnode(p) {
+			tags = append(tags, "bootnode")
+		}
+		if fh.discovery.IsBackup(p) {
+			tags = append(tags, "backup")
+		}
+		infos = append(infos, PeerInfo{
+			ID:          p,
+			Connections: connections,
+			Tags:        tags,
+		})
+	}
+	return infos
+}
+
 // PeerCount returns number of connected peers.
 func (fh *Host) PeerCount() uint64 {
 	return uint64(len(fh.Host.Network().Peers()))

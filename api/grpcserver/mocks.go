@@ -470,6 +470,20 @@ func (mr *MockpeerCounterMockRecorder) PeerCount() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PeerCount", reflect.TypeOf((*MockpeerCounter)(nil).PeerCount))
 }
 
+// PeerInfo mocks base method.
+func (m *MockpeerCounter) PeerInfo() []p2p.PeerInfo {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PeerInfo")
+	ret0, _ := ret[0].([]p2p.PeerInfo)
+	return ret0
+}
+
+// PeerInfo indicates an expected call of PeerInfo.
+func (mr *MockpeerCounterMockRecorder) PeerInfo() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PeerInfo", reflect.TypeOf((*MockpeerCounter)(nil).PeerInfo))
+}
+
 // MockgenesisTimeAPI is a mock of genesisTimeAPI interface.
 type MockgenesisTimeAPI struct {
 	ctrl     *gomock.Controller

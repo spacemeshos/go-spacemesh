@@ -54,9 +54,10 @@ type postSetupProvider interface {
 	Config() activation.PostConfig
 }
 
-// peerCounter is an api to get amount of connected peers.
-type peerCounter interface {
+// Peers is an api to get amount of connected peers.
+type Peers interface {
 	PeerCount() uint64
+	PeerInfo() []p2p.PeerInfo
 }
 
 // genesisTimeAPI is an API to get genesis time and current layer of the system.
