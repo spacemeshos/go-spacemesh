@@ -69,7 +69,7 @@ func MainnetConfig() Config {
 			Accounts:    MainnetAccounts(),
 		},
 		Tortoise: tortoise.Config{
-			Hdist:                    200,
+			Hdist:                    10,
 			Zdist:                    2,
 			WindowSize:               10000,
 			MaxExceptions:            1000,

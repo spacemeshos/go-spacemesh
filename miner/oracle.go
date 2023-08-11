@@ -84,7 +84,7 @@ func (o *Oracle) ProposalEligibility(lid types.LayerID, beacon types.Beacon, non
 		return o.cache, nil
 	}
 
-	ee, err := o.calcEligibilityProofs(epoch, beacon, nonce)
+	ee, err := o.calcEligibilityProofs(lid, epoch, beacon, nonce)
 	if err != nil {
 		return nil, err
 	}
@@ -181,7 +181,7 @@ func (o *Oracle) activeSet(targetEpoch types.EpochID) (uint64, uint64, []types.A
 
 // calcEligibilityProofs calculates the eligibility proofs of proposals for the miner in the given epoch
 // and returns the proofs along with the epoch's active set.
-func (o *Oracle) calcEligibilityProofs(epoch types.EpochID, beacon types.Beacon, nonce types.VRFPostIndex) (*EpochEligibility, error) {
+func (o *Oracle) calcEligibilityProofs(lid types.LayerID, epoch types.EpochID, beacon types.Beacon, nonce types.VRFPostIndex) (*EpochEligibility, error) {
 	// get the previous epoch's total weight
 	minerWeight, totalWeight, activeSet, err := o.activeSet(epoch)
 	if err != nil {
@@ -206,7 +206,7 @@ func (o *Oracle) calcEligibilityProofs(epoch types.EpochID, beacon types.Beacon,
 	var numEligibleSlots uint32
 	ref, err := ballots.GetRefBallot(o.cdb, epoch, o.vrfSigner.NodeID())
 	if errors.Is(err, sql.ErrNotFound) {
-		numEligibleSlots, err = proposals.GetNumEligibleSlots(minerWeight, o.cfg.minActiveSetWeight, totalWeight, o.cfg.layerSize, o.cfg.layersPerEpoch)
+		numEligibleSlots, err = proposals.GetLegacyNumEligible(lid, minerWeight, o.cfg.minActiveSetWeight, totalWeight, o.cfg.layerSize, o.cfg.layersPerEpoch)
 		if err != nil {
 			return nil, fmt.Errorf("oracle get num slots: %w", err)
 		}
