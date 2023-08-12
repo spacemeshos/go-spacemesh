@@ -1282,6 +1282,9 @@ func TestCollectHashes(t *testing.T) {
 	b := p.Ballot
 	expected := []types.Hash32{b.RefBallot.AsHash32()}
 	expected = append(expected, b.Votes.Base.AsHash32())
+	for _, header := range b.Votes.Support {
+		expected = append(expected, header.ID.AsHash32())
+	}
 	require.ElementsMatch(t, expected, collectHashes(b))
 
 	expected = append(expected, types.TransactionIDsToHashes(p.TxIDs)...)

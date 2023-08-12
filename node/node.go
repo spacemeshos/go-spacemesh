@@ -66,6 +66,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
 	"github.com/spacemeshos/go-spacemesh/syncer"
+	"github.com/spacemeshos/go-spacemesh/syncer/blockssync"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
@@ -709,6 +710,9 @@ func (app *App) initServices(ctx context.Context) error {
 		fetch.WithConfig(app.Config.FETCH),
 		fetch.WithLogger(app.addLogger(Fetcher, lg)),
 	)
+	app.eg.Go(func() error {
+		return blockssync.Sync(ctx, app.addLogger(Fetcher, lg).Zap(), msh.MissingBlocks(), fetcher)
+	})
 	fetcherWrapped.Fetcher = fetcher
 
 	patrol := layerpatrol.New()
