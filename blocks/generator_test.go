@@ -56,7 +56,7 @@ type testGenerator struct {
 	*Generator
 	mockMesh   *mocks.MockmeshProvider
 	mockExec   *mocks.Mockexecutor
-	mockFetch  *smocks.MockProposalFetcher
+	mockFetch  *smocks.MockProposalBlockFetcher
 	mockCert   *mocks.Mockcertifier
 	mockPatrol *mocks.MocklayerPatrol
 }
@@ -67,7 +67,7 @@ func createTestGenerator(t *testing.T) *testGenerator {
 	tg := &testGenerator{
 		mockMesh:   mocks.NewMockmeshProvider(ctrl),
 		mockExec:   mocks.NewMockexecutor(ctrl),
-		mockFetch:  smocks.NewMockProposalFetcher(ctrl),
+		mockFetch:  smocks.NewMockProposalBlockFetcher(ctrl),
 		mockCert:   mocks.NewMockcertifier(ctrl),
 		mockPatrol: mocks.NewMocklayerPatrol(ctrl),
 	}

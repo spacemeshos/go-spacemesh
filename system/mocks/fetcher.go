@@ -345,31 +345,45 @@ func (mr *MockBallotFetcherMockRecorder) GetBallots(arg0, arg1 interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBallots", reflect.TypeOf((*MockBallotFetcher)(nil).GetBallots), arg0, arg1)
 }
 
-// MockProposalFetcher is a mock of ProposalFetcher interface.
-type MockProposalFetcher struct {
+// MockProposalBlockFetcher is a mock of ProposalBlockFetcher interface.
+type MockProposalBlockFetcher struct {
 	ctrl     *gomock.Controller
-	recorder *MockProposalFetcherMockRecorder
+	recorder *MockProposalBlockFetcherMockRecorder
 }
 
-// MockProposalFetcherMockRecorder is the mock recorder for MockProposalFetcher.
-type MockProposalFetcherMockRecorder struct {
-	mock *MockProposalFetcher
+// MockProposalBlockFetcherMockRecorder is the mock recorder for MockProposalBlockFetcher.
+type MockProposalBlockFetcherMockRecorder struct {
+	mock *MockProposalBlockFetcher
 }
 
-// NewMockProposalFetcher creates a new mock instance.
-func NewMockProposalFetcher(ctrl *gomock.Controller) *MockProposalFetcher {
-	mock := &MockProposalFetcher{ctrl: ctrl}
-	mock.recorder = &MockProposalFetcherMockRecorder{mock}
+// NewMockProposalBlockFetcher creates a new mock instance.
+func NewMockProposalBlockFetcher(ctrl *gomock.Controller) *MockProposalBlockFetcher {
+	mock := &MockProposalBlockFetcher{ctrl: ctrl}
+	mock.recorder = &MockProposalBlockFetcherMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockProposalFetcher) EXPECT() *MockProposalFetcherMockRecorder {
+func (m *MockProposalBlockFetcher) EXPECT() *MockProposalBlockFetcherMockRecorder {
 	return m.recorder
 }
 
+// GetBlocks mocks base method.
+func (m *MockProposalBlockFetcher) GetBlocks(arg0 context.Context, arg1 []types.BlockID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBlocks", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GetBlocks indicates an expected call of GetBlocks.
+func (mr *MockProposalBlockFetcherMockRecorder) GetBlocks(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlocks", reflect.TypeOf((*MockProposalBlockFetcher)(nil).GetBlocks), arg0, arg1)
+}
+
 // GetProposals mocks base method.
-func (m *MockProposalFetcher) GetProposals(arg0 context.Context, arg1 []types.ProposalID) error {
+func (m *MockProposalBlockFetcher) GetProposals(arg0 context.Context, arg1 []types.ProposalID) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetProposals", arg0, arg1)
 	ret0, _ := ret[0].(error)
@@ -377,9 +391,9 @@ func (m *MockProposalFetcher) GetProposals(arg0 context.Context, arg1 []types.Pr
 }
 
 // GetProposals indicates an expected call of GetProposals.
-func (mr *MockProposalFetcherMockRecorder) GetProposals(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockProposalBlockFetcherMockRecorder) GetProposals(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposals", reflect.TypeOf((*MockProposalFetcher)(nil).GetProposals), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposals", reflect.TypeOf((*MockProposalBlockFetcher)(nil).GetProposals), arg0, arg1)
 }
 
 // MockPeerTracker is a mock of PeerTracker interface.

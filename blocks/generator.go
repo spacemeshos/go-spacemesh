@@ -34,7 +34,7 @@ type Generator struct {
 	cdb      *datastore.CachedDB
 	msh      meshProvider
 	executor executor
-	fetcher  system.ProposalFetcher
+	fetcher  system.ProposalBlockFetcher
 	cert     certifier
 	patrol   layerPatrol
 
@@ -97,7 +97,7 @@ func NewGenerator(
 	cdb *datastore.CachedDB,
 	exec executor,
 	m meshProvider,
-	f system.ProposalFetcher,
+	f system.ProposalBlockFetcher,
 	c certifier,
 	p layerPatrol,
 	opts ...GeneratorOpt,
@@ -239,7 +239,7 @@ func (g *Generator) processHareOutput(out hare.LayerOutput) (*types.Block, error
 	if err := g.saveAndCertify(out.Ctx, out.Layer, block); err != nil {
 		return block, err
 	}
-	if err := g.msh.ProcessLayerPerHareOutput(out.Ctx, out.Layer, hareOutput, false); err != nil {
+	if err := g.processLayer(out.Ctx, out.Layer, hareOutput, false); err != nil {
 		return block, err
 	}
 	return block, nil
@@ -267,7 +267,7 @@ func (g *Generator) processOptimisticLayers(max types.LayerID) {
 				return err
 			}
 			g.logger.With().Info("generated block (optimistic)", lid, block.ID())
-			if err = g.msh.ProcessLayerPerHareOutput(md.ctx, lid, block.ID(), true); err != nil {
+			if err = g.processLayer(md.ctx, lid, block.ID(), true); err != nil {
 				return err
 			}
 			return nil
@@ -279,6 +279,23 @@ func (g *Generator) processOptimisticLayers(max types.LayerID) {
 				log.Err(err),
 			)
 			return
+		}
+	}
+}
+
+func (g *Generator) processLayer(ctx context.Context, lid types.LayerID, id types.BlockID, optimistic bool) error {
+	for {
+		oerr := g.msh.ProcessLayerPerHareOutput(ctx, lid, id, optimistic)
+		if oerr == nil {
+			return nil
+		}
+		var missing *types.ErrorMissing
+		if !errors.As(oerr, &missing) {
+			return oerr
+		}
+		err := g.fetcher.GetBlocks(ctx, missing.Blocks)
+		if err != nil {
+			return fmt.Errorf("%w: %s", oerr, err)
 		}
 	}
 }
