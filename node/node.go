@@ -705,15 +705,16 @@ func (app *App) initServices(ctx context.Context) error {
 		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg)),
 	)
 
+	flog := app.addLogger(Fetcher, lg)
 	fetcher := fetch.NewFetch(app.cachedDB, msh, beaconProtocol, app.host,
 		fetch.WithContext(ctx),
 		fetch.WithConfig(app.Config.FETCH),
-		fetch.WithLogger(app.addLogger(Fetcher, lg)),
+		fetch.WithLogger(flog),
 	)
-	app.eg.Go(func() error {
-		return blockssync.Sync(ctx, app.addLogger(Fetcher, lg).Zap(), msh.MissingBlocks(), fetcher)
-	})
 	fetcherWrapped.Fetcher = fetcher
+	app.eg.Go(func() error {
+		return blockssync.Sync(ctx, flog.Zap(), msh.MissingBlocks(), fetcher)
+	})
 
 	patrol := layerpatrol.New()
 	syncerConf := app.Config.Sync
