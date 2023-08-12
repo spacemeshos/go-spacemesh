@@ -7,40 +7,41 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/fetch"
 )
 
-func Sync(ctx context.Context, logger *zap.Logger, requests <-chan map[types.BlockID]struct{}, fetcher *fetch.Fetch) error {
+type blockFetcher interface {
+	GetBlocks(context.Context, []types.BlockID) error
+}
+
+// Sync requests last specified blocks in background.
+func Sync(ctx context.Context, logger *zap.Logger, requests <-chan []types.BlockID, fetcher blockFetcher) error {
 	var (
-		eg         errgroup.Group
-		aggregated = make(chan map[types.BlockID]struct{})
+		eg     errgroup.Group
+		lastch = make(chan []types.BlockID)
 	)
 	eg.Go(func() error {
-		var aggregate map[types.BlockID]struct{}
+		var (
+			send chan []types.BlockID
+			last []types.BlockID
+		)
 		for {
 			select {
 			case <-ctx.Done():
-				close(aggregated)
+				close(lastch)
 				return ctx.Err()
 			case req := <-requests:
-				if aggregate == nil {
-					aggregate = req
-				} else {
-					for id := range req {
-						aggregate[id] = struct{}{}
-					}
+				if last == nil {
+					send = lastch
 				}
-			case aggregated <- aggregate:
-				aggregate = nil
+				last = req
+			case send <- last:
+				last = nil
+				send = nil
 			}
 		}
 	})
-	for batch := range aggregated {
-		blocks := make([]types.BlockID, 0, len(batch))
-		for id := range batch {
-			blocks = append(blocks, id)
-		}
-		if err := fetcher.GetBlocks(ctx, blocks); err != nil {
+	for batch := range lastch {
+		if err := fetcher.GetBlocks(ctx, batch); err != nil {
 			logger.Warn("failed to fetch blocks", zap.Error(err))
 		}
 	}

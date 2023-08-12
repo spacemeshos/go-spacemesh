@@ -39,7 +39,7 @@ type Mesh struct {
 	conState conservativeState
 	trtl     system.Tortoise
 
-	missingBlocks chan map[types.BlockID]struct{}
+	missingBlocks chan []types.BlockID
 
 	mu sync.Mutex
 	// latestLayer is the latest layer this node had seen from blocks
@@ -66,7 +66,7 @@ func NewMesh(cdb *datastore.CachedDB, c layerClock, trtl system.Tortoise, exec *
 		executor:            exec,
 		conState:            state,
 		nextProcessedLayers: make(map[types.LayerID]struct{}),
-		missingBlocks:       make(chan map[types.BlockID]struct{}, 32),
+		missingBlocks:       make(chan []types.BlockID, 32),
 	}
 	msh.latestLayer.Store(types.LayerID(0))
 	msh.latestLayerInState.Store(types.LayerID(0))
@@ -136,7 +136,7 @@ func (msh *Mesh) LatestLayerInState() types.LayerID {
 
 // MissingBlocks returns single consumer channel.
 // Consumer by contract is responsible for downloading missing blocks.
-func (msh *Mesh) MissingBlocks() <-chan map[types.BlockID]struct{} {
+func (msh *Mesh) MissingBlocks() <-chan []types.BlockID {
 	return msh.missingBlocks
 }
 
@@ -334,12 +334,12 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, lid types.LayerID) error {
 	return nil
 }
 
-func missingBlocks(results []result.Layer) map[types.BlockID]struct{} {
-	response := map[types.BlockID]struct{}{}
+func missingBlocks(results []result.Layer) []types.BlockID {
+	var response []types.BlockID
 	for _, layer := range results {
 		for _, block := range layer.Blocks {
 			if (block.Valid || block.Hare || block.Local) && !block.Data {
-				response[block.Header.ID] = struct{}{}
+				response = append(response, block.Header.ID)
 			}
 		}
 	}
