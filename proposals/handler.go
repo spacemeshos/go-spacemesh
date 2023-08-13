@@ -190,6 +190,9 @@ func collectHashes(a any) []types.Hash32 {
 		if b.RefBallot != types.EmptyBallotID {
 			hashes = append(hashes, b.RefBallot.AsHash32())
 		}
+		for _, header := range b.Votes.Support {
+			hashes = append(hashes, header.ID.AsHash32())
+		}
 		return hashes
 	}
 	log.Fatal("unexpected type")

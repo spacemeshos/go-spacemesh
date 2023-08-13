@@ -39,6 +39,8 @@ type Mesh struct {
 	conState conservativeState
 	trtl     system.Tortoise
 
+	missingBlocks chan []types.BlockID
+
 	mu sync.Mutex
 	// latestLayer is the latest layer this node had seen from blocks
 	latestLayer atomic.Value
@@ -64,6 +66,7 @@ func NewMesh(cdb *datastore.CachedDB, c layerClock, trtl system.Tortoise, exec *
 		executor:            exec,
 		conState:            state,
 		nextProcessedLayers: make(map[types.LayerID]struct{}),
+		missingBlocks:       make(chan []types.BlockID, 32),
 	}
 	msh.latestLayer.Store(types.LayerID(0))
 	msh.latestLayerInState.Store(types.LayerID(0))
@@ -129,6 +132,12 @@ func (msh *Mesh) recoverFromDB(latest types.LayerID) {
 // LatestLayerInState returns the latest layer we applied to state.
 func (msh *Mesh) LatestLayerInState() types.LayerID {
 	return msh.latestLayerInState.Load().(types.LayerID)
+}
+
+// MissingBlocks returns single consumer channel.
+// Consumer by contract is responsible for downloading missing blocks.
+func (msh *Mesh) MissingBlocks() <-chan []types.BlockID {
+	return msh.missingBlocks
 }
 
 // LatestLayer - returns the latest layer we saw from the network.
@@ -308,7 +317,11 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, lid types.LayerID) error {
 		)
 	}
 	if missing := missingBlocks(results); len(missing) > 0 {
-		return &types.ErrorMissing{MissingData: types.MissingData{Blocks: missing}}
+		select {
+		case <-ctx.Done():
+		case msh.missingBlocks <- missing:
+		}
+		return fmt.Errorf("request missing blocks %v", missing)
 	}
 	if err := msh.ensureStateConsistent(ctx, results); err != nil {
 		return err
