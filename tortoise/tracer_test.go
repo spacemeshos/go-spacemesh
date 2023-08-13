@@ -33,7 +33,8 @@ func TestTracer(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		s.Next()
 	}
-	trt.TallyVotes(ctx, s.Next())
+	last := s.Next()
+	trt.TallyVotes(ctx, last)
 	trt.Updates() // just trace final result
 	t.Run("live", func(t *testing.T) {
 		t.Parallel()
@@ -42,7 +43,7 @@ func TestTracer(t *testing.T) {
 	t.Run("recover", func(t *testing.T) {
 		t.Parallel()
 		path := filepath.Join(t.TempDir(), "tortoise.trace")
-		trt, err := Recover(s.GetState(0).DB, s.GetState(0).Beacons, WithTracer(WithOutput(path)))
+		trt, err := Recover(s.GetState(0).DB, last, s.GetState(0).Beacons, WithTracer(WithOutput(path)))
 		require.NoError(t, err)
 		trt.Updates()
 		trt.Results(types.GetEffectiveGenesis(), trt.LatestComplete())
