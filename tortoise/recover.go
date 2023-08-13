@@ -18,7 +18,7 @@ import (
 )
 
 // Recover tortoise state from database.
-func Recover(db *datastore.CachedDB, beacon system.BeaconGetter, opts ...Opt) (*Tortoise, error) {
+func Recover(db *datastore.CachedDB, latest types.LayerID, beacon system.BeaconGetter, opts ...Opt) (*Tortoise, error) {
 	trtl, err := New(opts...)
 	if err != nil {
 		return nil, err
@@ -57,7 +57,7 @@ func Recover(db *datastore.CachedDB, beacon system.BeaconGetter, opts ...Opt) (*
 		}
 	}
 	for lid := types.GetEffectiveGenesis().Add(1); !lid.After(layer); lid = lid.Add(1) {
-		if err := RecoverLayer(context.Background(), trtl, db, beacon, lid); err != nil {
+		if err := RecoverLayer(context.Background(), trtl, db, beacon, lid, types.MinLayer(layer, latest)); err != nil {
 			return nil, fmt.Errorf("failed to load tortoise state at layer %d: %w", lid, err)
 		}
 	}
@@ -78,7 +78,7 @@ func recoverEpoch(epoch types.EpochID, trtl *Tortoise, db *datastore.CachedDB, b
 	return nil
 }
 
-func RecoverLayer(ctx context.Context, trtl *Tortoise, db *datastore.CachedDB, beacon system.BeaconGetter, lid types.LayerID) error {
+func RecoverLayer(ctx context.Context, trtl *Tortoise, db *datastore.CachedDB, beacon system.BeaconGetter, lid, current types.LayerID) error {
 	if lid.FirstInEpoch() {
 		if err := recoverEpoch(lid.GetEpoch(), trtl, db, beacon); err != nil {
 			return err
@@ -120,7 +120,9 @@ func RecoverLayer(ctx context.Context, trtl *Tortoise, db *datastore.CachedDB, b
 	if err == nil {
 		trtl.OnWeakCoin(lid, coin)
 	}
-	trtl.TallyVotes(ctx, lid)
+	if lid <= current {
+		trtl.TallyVotes(ctx, lid)
+	}
 	opinion, err := layers.GetAggregatedHash(db, lid-1)
 	if err == nil {
 		trtl.resetPending(lid-1, opinion)

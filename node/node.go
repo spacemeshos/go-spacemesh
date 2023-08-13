@@ -616,7 +616,8 @@ func (app *App) initServices(ctx context.Context) error {
 		trtlopts = append(trtlopts, tortoise.WithTracer())
 	}
 	trtl, err := tortoise.Recover(
-		app.cachedDB, beaconProtocol, trtlopts...,
+		app.cachedDB,
+		app.clock.CurrentLayer(), beaconProtocol, trtlopts...,
 	)
 	if err != nil {
 		return fmt.Errorf("can't recover tortoise state: %w", err)
