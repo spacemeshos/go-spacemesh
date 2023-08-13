@@ -9,6 +9,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
+//go:generate mockgen -package=blockssync -destination=./mocks.go -source=./blocks.go
+
 type blockFetcher interface {
 	GetBlocks(context.Context, []types.BlockID) error
 }
@@ -17,12 +19,12 @@ type blockFetcher interface {
 func Sync(ctx context.Context, logger *zap.Logger, requests <-chan []types.BlockID, fetcher blockFetcher) error {
 	var (
 		eg     errgroup.Group
-		lastch = make(chan []types.BlockID)
+		lastch = make(chan map[types.BlockID]struct{})
 	)
 	eg.Go(func() error {
 		var (
-			send chan []types.BlockID
-			last []types.BlockID
+			send chan map[types.BlockID]struct{}
+			last map[types.BlockID]struct{}
 		)
 		for {
 			select {
@@ -31,9 +33,12 @@ func Sync(ctx context.Context, logger *zap.Logger, requests <-chan []types.Block
 				return ctx.Err()
 			case req := <-requests:
 				if last == nil {
+					last = map[types.BlockID]struct{}{}
 					send = lastch
 				}
-				last = req
+				for _, id := range req {
+					last[id] = struct{}{}
+				}
 			case send <- last:
 				last = nil
 				send = nil
@@ -41,7 +46,11 @@ func Sync(ctx context.Context, logger *zap.Logger, requests <-chan []types.Block
 		}
 	})
 	for batch := range lastch {
-		if err := fetcher.GetBlocks(ctx, batch); err != nil {
+		blocks := make([]types.BlockID, 0, len(batch))
+		for id := range batch {
+			blocks = append(blocks, id)
+		}
+		if err := fetcher.GetBlocks(ctx, blocks); err != nil {
 			logger.Warn("failed to fetch blocks", zap.Error(err))
 		}
 	}
