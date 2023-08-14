@@ -125,7 +125,7 @@ func TestPostSetupManager_StartSession_WithoutProvider_Error(t *testing.T) {
 	req := require.New(t)
 
 	mgr := newTestPostManager(t)
-	mgr.opts.ProviderID.value = nil
+	mgr.opts.ProviderID.InnerValue = nil
 
 	// Create data.
 	req.NoError(mgr.PrepareInitializer(context.Background(), mgr.opts)) // prepare is fine without provider
@@ -150,7 +150,7 @@ func TestPostSetupManager_StartSession_WithoutProviderAfterInit_OK(t *testing.T)
 	cancel()
 
 	// start Initializer again, but with no provider set
-	mgr.opts.ProviderID.value = nil
+	mgr.opts.ProviderID.InnerValue = nil
 
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()

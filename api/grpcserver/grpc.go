@@ -18,9 +18,14 @@ type ServiceAPI interface {
 
 // Server is a very basic grpc server.
 type Server struct {
-	Listener   string
-	logger     log.Logger
-	GrpcServer *grpc.Server
+	Listener string
+	logger   log.Logger
+	// BoundAddress contains the address that the server bound to, useful if
+	// the server uses a dynamic port. It is set during startup and can be
+	// safely accessed after Start has completed (I.E. the returned channel has
+	// been waited on)
+	BoundAddress string
+	GrpcServer   *grpc.Server
 }
 
 // New creates and returns a new Server with port and interface.
@@ -53,11 +58,12 @@ func (s *Server) Start() <-chan struct{} {
 
 // Blocking, should be called in a goroutine.
 func (s *Server) startInternal(started chan<- struct{}) {
-	lis, err := net.Listen("tcp", s.Listener)
+	lis, err := net.Listen("tcp4", s.Listener)
 	if err != nil {
 		s.logger.Error("error listening: %v", err)
 		return
 	}
+	s.BoundAddress = lis.Addr().String()
 	reflection.Register(s.GrpcServer)
 	s.logger.Info("starting new grpc server on %s", s.Listener)
 	close(started)
