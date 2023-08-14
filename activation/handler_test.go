@@ -953,7 +953,7 @@ func TestHandler_HandleAtxData(t *testing.T) {
 		require.NoError(t, err)
 
 		atxHdlr.mclock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now())
-		require.EqualError(t, atxHdlr.HandleAtxData(context.Background(), p2p.NoPeer, buf), fmt.Sprintf("nil nipst in gossip for atx %v", atx.ID()))
+		require.EqualError(t, atxHdlr.HandleSyncedAtx(context.Background(), atx.ID().Hash32(), p2p.NoPeer, buf), fmt.Sprintf("nil nipst in gossip for atx %v", atx.ID()))
 	})
 
 	t.Run("known atx is ignored by handleAtxData", func(t *testing.T) {
@@ -971,7 +971,7 @@ func TestHandler_HandleAtxData(t *testing.T) {
 		require.NoError(t, err)
 
 		atxHdlr.mclock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now())
-		require.NoError(t, atxHdlr.HandleAtxData(context.Background(), p2p.NoPeer, buf))
+		require.NoError(t, atxHdlr.HandleSyncedAtx(context.Background(), atx.ID().Hash32(), p2p.NoPeer, buf))
 
 		atxHdlr.mclock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now())
 		require.Error(t, atxHdlr.HandleGossipAtx(context.Background(), "", buf))
@@ -988,7 +988,7 @@ func TestHandler_HandleAtxData(t *testing.T) {
 		require.NoError(t, err)
 
 		atxHdlr.mclock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now())
-		require.ErrorContains(t, atxHdlr.HandleAtxData(context.Background(), p2p.NoPeer, buf), "failed to verify atx signature")
+		require.ErrorContains(t, atxHdlr.HandleSyncedAtx(context.Background(), atx.ID().Hash32(), p2p.NoPeer, buf), "failed to verify atx signature")
 	})
 }
 
@@ -1191,7 +1191,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 	atxHdlr.mValidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
 	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
-	require.NoError(t, atxHdlr.HandleAtxData(context.Background(), peer, buf))
+	require.NoError(t, atxHdlr.HandleSyncedAtx(context.Background(), atx1.ID().Hash32(), peer, buf))
 
 	stored1, err := atxHdlr.cdb.GetAtxHeader(atx1.ID())
 	require.NoError(t, err)
@@ -1234,7 +1234,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 	atxHdlr.mValidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
 	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
-	require.NoError(t, atxHdlr.HandleAtxData(context.Background(), peer, buf))
+	require.NoError(t, atxHdlr.HandleSyncedAtx(context.Background(), atx2.ID().Hash32(), peer, buf))
 
 	stored2, err := atxHdlr.cdb.GetAtxHeader(atx2.ID())
 	require.NoError(t, err)

@@ -70,8 +70,8 @@ func (th *TxHandler) HandleGossipTransaction(ctx context.Context, peer p2p.Peer,
 }
 
 // HandleProposalTransaction handles data received on the transactions synced as a part of proposal.
-func (th *TxHandler) HandleProposalTransaction(ctx context.Context, _ p2p.Peer, msg []byte) error {
-	err := th.VerifyAndCacheTx(ctx, msg)
+func (th *TxHandler) HandleProposalTransaction(ctx context.Context, expHash types.Hash32, _ p2p.Peer, msg []byte) error {
+	err := th.verifyAndCache(ctx, expHash, msg)
 	updateMetrics(err, proposalTxCount)
 	if errors.Is(err, errDuplicateTX) {
 		return nil
@@ -80,12 +80,16 @@ func (th *TxHandler) HandleProposalTransaction(ctx context.Context, _ p2p.Peer, 
 }
 
 func (th *TxHandler) VerifyAndCacheTx(ctx context.Context, msg []byte) error {
+	return th.verifyAndCache(ctx, types.Hash32{}, msg)
+}
+
+func (th *TxHandler) verifyAndCache(ctx context.Context, expHash types.Hash32, msg []byte) error {
 	raw := types.NewRawTx(msg)
-	tx, err := th.state.GetMeshTransaction(raw.ID)
+	mtx, err := th.state.GetMeshTransaction(raw.ID)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return fmt.Errorf("get tx %w", err)
 	}
-	if tx != nil && tx.TxHeader != nil {
+	if mtx != nil && mtx.TxHeader != nil {
 		return errDuplicateTX
 	}
 
@@ -94,13 +98,17 @@ func (th *TxHandler) VerifyAndCacheTx(ctx context.Context, msg []byte) error {
 	if err != nil {
 		return fmt.Errorf("%w: %s (err: %s)", errParse, raw.ID, err)
 	}
+	tx := &types.Transaction{RawTx: raw, TxHeader: header}
+	if expHash != (types.Hash32{}) && tx.ID.Hash32() != expHash {
+		return fmt.Errorf("fetched wrong tx hash for proposal. want %s, got %s", expHash.ShortString(), tx.ID.ShortString())
+	}
 	if header.GasPrice == 0 {
 		return fmt.Errorf("%w: zero gas price %s", errParse, raw.ID)
 	}
 	if !req.Verify() {
 		return fmt.Errorf("%w: %s", errVerify, raw.ID)
 	}
-	if err := th.state.AddToCache(ctx, &types.Transaction{RawTx: raw, TxHeader: header}, time.Now()); err != nil {
+	if err := th.state.AddToCache(ctx, tx, time.Now()); err != nil {
 		th.logger.WithContext(ctx).With().Warning("failed to add tx to conservative cache",
 			raw.ID,
 			log.Err(err),
@@ -111,7 +119,7 @@ func (th *TxHandler) VerifyAndCacheTx(ctx context.Context, msg []byte) error {
 }
 
 // HandleBlockTransaction handles transactions received as a reference to a block.
-func (th *TxHandler) HandleBlockTransaction(_ context.Context, _ p2p.Peer, data []byte) error {
+func (th *TxHandler) HandleBlockTransaction(_ context.Context, expHash types.Hash32, _ p2p.Peer, data []byte) error {
 	raw := types.NewRawTx(data)
 	exists, err := th.state.HasTx(raw.ID)
 	if err != nil {
@@ -122,6 +130,9 @@ func (th *TxHandler) HandleBlockTransaction(_ context.Context, _ p2p.Peer, data 
 		return nil
 	}
 	tx := &types.Transaction{RawTx: raw}
+	if tx.ID.Hash32() != expHash {
+		return fmt.Errorf("fetched wrong tx hash for block. want %s, got %s", expHash.ShortString(), tx.ID.ShortString())
+	}
 	req := th.state.Validation(raw)
 	header, err := req.Parse()
 	if err == nil {

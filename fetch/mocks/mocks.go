@@ -74,17 +74,17 @@ func (m *MockSyncValidator) EXPECT() *MockSyncValidatorMockRecorder {
 }
 
 // HandleMessage mocks base method.
-func (m *MockSyncValidator) HandleMessage(arg0 context.Context, arg1 p2p.Peer, arg2 []byte) error {
+func (m *MockSyncValidator) HandleMessage(arg0 context.Context, arg1 types.Hash32, arg2 p2p.Peer, arg3 []byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HandleMessage", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "HandleMessage", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // HandleMessage indicates an expected call of HandleMessage.
-func (mr *MockSyncValidatorMockRecorder) HandleMessage(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockSyncValidatorMockRecorder) HandleMessage(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleMessage", reflect.TypeOf((*MockSyncValidator)(nil).HandleMessage), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleMessage", reflect.TypeOf((*MockSyncValidator)(nil).HandleMessage), arg0, arg1, arg2, arg3)
 }
 
 // MockPoetValidator is a mock of PoetValidator interface.
@@ -111,17 +111,17 @@ func (m *MockPoetValidator) EXPECT() *MockPoetValidatorMockRecorder {
 }
 
 // ValidateAndStoreMsg mocks base method.
-func (m *MockPoetValidator) ValidateAndStoreMsg(arg0 context.Context, arg1 p2p.Peer, arg2 []byte) error {
+func (m *MockPoetValidator) ValidateAndStoreMsg(arg0 context.Context, arg1 types.Hash32, arg2 p2p.Peer, arg3 []byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ValidateAndStoreMsg", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "ValidateAndStoreMsg", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ValidateAndStoreMsg indicates an expected call of ValidateAndStoreMsg.
-func (mr *MockPoetValidatorMockRecorder) ValidateAndStoreMsg(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockPoetValidatorMockRecorder) ValidateAndStoreMsg(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateAndStoreMsg", reflect.TypeOf((*MockPoetValidator)(nil).ValidateAndStoreMsg), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateAndStoreMsg", reflect.TypeOf((*MockPoetValidator)(nil).ValidateAndStoreMsg), arg0, arg1, arg2, arg3)
 }
 
 // MockmeshProvider is a mock of meshProvider interface.

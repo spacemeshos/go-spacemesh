@@ -885,7 +885,7 @@ func TestHandler_HandleSyncedMalfeasanceProof_multipleATXs(t *testing.T) {
 	data, err := codec.Encode(&proof)
 	require.NoError(t, err)
 	trt.EXPECT().OnMalfeasance(sig.NodeID())
-	require.NoError(t, h.HandleSyncedMalfeasanceProof(context.Background(), "peer", data))
+	require.NoError(t, h.HandleSyncedMalfeasanceProof(context.Background(), types.Hash32(sig.NodeID()), "peer", data))
 
 	malicious, err = identities.IsMalicious(db, sig.NodeID())
 	require.NoError(t, err)
@@ -941,7 +941,7 @@ func TestHandler_HandleSyncedMalfeasanceProof_multipleBallots(t *testing.T) {
 	data, err := codec.Encode(&proof)
 	require.NoError(t, err)
 	trt.EXPECT().OnMalfeasance(sig.NodeID())
-	require.NoError(t, h.HandleSyncedMalfeasanceProof(context.Background(), "peer", data))
+	require.NoError(t, h.HandleSyncedMalfeasanceProof(context.Background(), types.Hash32(sig.NodeID()), "peer", data))
 
 	malicious, err = identities.IsMalicious(db, sig.NodeID())
 	require.NoError(t, err)
@@ -1000,7 +1000,7 @@ func TestHandler_HandleSyncedMalfeasanceProof_hareEquivocation(t *testing.T) {
 	data, err := codec.Encode(&proof)
 	require.NoError(t, err)
 	trt.EXPECT().OnMalfeasance(sig.NodeID())
-	require.NoError(t, h.HandleSyncedMalfeasanceProof(context.Background(), "peer", data))
+	require.NoError(t, h.HandleSyncedMalfeasanceProof(context.Background(), types.Hash32(sig.NodeID()), "peer", data))
 
 	malicious, err = identities.IsMalicious(db, sig.NodeID())
 	require.NoError(t, err)

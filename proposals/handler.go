@@ -134,7 +134,7 @@ func NewHandler(
 }
 
 // HandleSyncedBallot handles Ballot data from sync.
-func (h *Handler) HandleSyncedBallot(ctx context.Context, peer p2p.Peer, data []byte) error {
+func (h *Handler) HandleSyncedBallot(ctx context.Context, expHash types.Hash32, peer p2p.Peer, data []byte) error {
 	logger := h.logger.WithContext(ctx)
 
 	var b types.Ballot
@@ -155,6 +155,10 @@ func (h *Handler) HandleSyncedBallot(ctx context.Context, peer p2p.Peer, data []
 	if err := b.Initialize(); err != nil {
 		failedInit.Inc()
 		return errInitialize
+	}
+
+	if b.ID().AsHash32() != expHash {
+		return fmt.Errorf("fetched wrong ballot hash. want %s, got %s", expHash.ShortString(), b.ID().String())
 	}
 
 	if b.AtxID == types.EmptyATXID || b.AtxID == h.cfg.GoldenATXID {
@@ -200,8 +204,8 @@ func collectHashes(a any) []types.Hash32 {
 }
 
 // HandleSyncedProposal handles Proposal data from sync.
-func (h *Handler) HandleSyncedProposal(ctx context.Context, peer p2p.Peer, data []byte) error {
-	err := h.HandleProposal(ctx, peer, data)
+func (h *Handler) HandleSyncedProposal(ctx context.Context, expHash types.Hash32, peer p2p.Peer, data []byte) error {
+	err := h.handleProposal(ctx, expHash, peer, data)
 	if errors.Is(err, errKnownProposal) {
 		return nil
 	}
@@ -210,7 +214,7 @@ func (h *Handler) HandleSyncedProposal(ctx context.Context, peer p2p.Peer, data 
 
 // HandleProposal is the gossip receiver for Proposal.
 func (h *Handler) HandleProposal(ctx context.Context, peer p2p.Peer, data []byte) error {
-	err := h.handleProposal(ctx, peer, data)
+	err := h.handleProposal(ctx, types.Hash32{}, peer, data)
 	if err != nil {
 		h.logger.WithContext(ctx).With().Debug("failed to process proposal gossip", log.Err(err))
 	}
@@ -218,7 +222,7 @@ func (h *Handler) HandleProposal(ctx context.Context, peer p2p.Peer, data []byte
 }
 
 // HandleProposal is the gossip receiver for Proposal.
-func (h *Handler) handleProposal(ctx context.Context, peer p2p.Peer, data []byte) error {
+func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer p2p.Peer, data []byte) error {
 	receivedTime := time.Now()
 	logger := h.logger.WithContext(ctx)
 
@@ -249,6 +253,10 @@ func (h *Handler) handleProposal(ctx context.Context, peer p2p.Peer, data []byte
 	if err := p.Initialize(); err != nil {
 		failedInit.Inc()
 		return errInitialize
+	}
+
+	if expHash != (types.Hash32{}) && p.ID().AsHash32() != expHash {
+		return fmt.Errorf("fetched wrong proposal hash. want %s, got %s", expHash.ShortString(), p.ID().AsHash32().ShortString())
 	}
 
 	if p.AtxID == types.EmptyATXID || p.AtxID == h.cfg.GoldenATXID {

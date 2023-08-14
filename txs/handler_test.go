@@ -82,7 +82,7 @@ func Test_HandleBlock(t *testing.T) {
 					cstate.EXPECT().AddToDB(&types.Transaction{RawTx: tx.RawTx}).Return(tc.addErr)
 				}
 			}
-			err = th.HandleBlockTransaction(context.Background(), p2p.NoPeer, tx.Raw)
+			err = th.HandleBlockTransaction(context.Background(), tx.ID.Hash32(), p2p.NoPeer, tx.Raw)
 			if tc.failed {
 				require.Error(t, err)
 			} else {
@@ -293,7 +293,7 @@ func Test_HandleProposal(t *testing.T) {
 				tc.hasErr, tc.parseErr, tc.addErr,
 				tc.has, tc.verify, tc.noHeader,
 			)
-			err := th.HandleProposalTransaction(context.Background(), p2p.NoPeer, tx.Raw)
+			err := th.HandleProposalTransaction(context.Background(), tx.ID.Hash32(), p2p.NoPeer, tx.Raw)
 			if tc.fail {
 				require.Error(t, err)
 			} else {

@@ -55,7 +55,7 @@ func NewHandler(f system.Fetcher, db *sql.Database, m meshProvider, opts ...Opt)
 }
 
 // HandleSyncedBlock handles Block data from sync.
-func (h *Handler) HandleSyncedBlock(ctx context.Context, peer p2p.Peer, data []byte) error {
+func (h *Handler) HandleSyncedBlock(ctx context.Context, expHash types.Hash32, peer p2p.Peer, data []byte) error {
 	logger := h.logger.WithContext(ctx)
 
 	var b types.Block
@@ -65,6 +65,11 @@ func (h *Handler) HandleSyncedBlock(ctx context.Context, peer p2p.Peer, data []b
 	}
 	// set the block ID when received
 	b.Initialize()
+
+	if b.ID().AsHash32() != expHash {
+		return fmt.Errorf("fetched wrong block hash. want %s, got %s", expHash.ShortString(), b.ID().String())
+	}
+
 	if b.LayerIndex <= types.GetEffectiveGenesis() {
 		return fmt.Errorf("block before effective genesis: layer %v", b.LayerIndex)
 	}

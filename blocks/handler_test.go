@@ -55,14 +55,16 @@ func createBlockData(t *testing.T, layerID types.LayerID, txIDs []types.Transact
 
 func Test_HandleBlockData_MalformedData(t *testing.T) {
 	th := createTestHandler(t)
-	assert.ErrorIs(t, th.HandleSyncedBlock(context.TODO(), p2p.NoPeer, []byte("malformed")), errMalformedData)
+	assert.ErrorIs(t, th.HandleSyncedBlock(context.TODO(), types.Hash32{}, p2p.NoPeer, []byte("malformed")), errMalformedData)
 }
 
 func Test_HandleBlockData_InvalidRewards(t *testing.T) {
 	th := createTestHandler(t)
-	buf, err := codec.Encode(&types.Block{InnerBlock: types.InnerBlock{LayerIndex: 11}})
+	b := &types.Block{InnerBlock: types.InnerBlock{LayerIndex: 11}}
+	b.Initialize()
+	buf, err := codec.Encode(b)
 	require.NoError(t, err)
-	require.ErrorIs(t, th.HandleSyncedBlock(context.TODO(), p2p.NoPeer, buf), errInvalidRewards)
+	require.ErrorIs(t, th.HandleSyncedBlock(context.TODO(), b.ID().AsHash32(), p2p.NoPeer, buf), errInvalidRewards)
 }
 
 func Test_HandleBlockData_AlreadyHasBlock(t *testing.T) {
@@ -72,7 +74,7 @@ func Test_HandleBlockData_AlreadyHasBlock(t *testing.T) {
 
 	block, data := createBlockData(t, layerID, txIDs)
 	require.NoError(t, blocks.Add(th.db, block))
-	assert.NoError(t, th.HandleSyncedBlock(context.TODO(), p2p.NoPeer, data))
+	assert.NoError(t, th.HandleSyncedBlock(context.TODO(), block.ID().AsHash32(), p2p.NoPeer, data))
 }
 
 func Test_HandleBlockData_FailedToFetchTXs(t *testing.T) {
@@ -85,7 +87,7 @@ func Test_HandleBlockData_FailedToFetchTXs(t *testing.T) {
 	th.mockFetcher.EXPECT().GetBlockTxs(gomock.Any(), txIDs).Return(errUnknown).Times(1)
 	peer := p2p.Peer("buddy")
 	th.mockFetcher.EXPECT().RegisterPeerHashes(peer, types.TransactionIDsToHashes(block.TxIDs))
-	assert.ErrorIs(t, th.HandleSyncedBlock(context.TODO(), peer, data), errUnknown)
+	assert.ErrorIs(t, th.HandleSyncedBlock(context.TODO(), block.ID().AsHash32(), peer, data), errUnknown)
 }
 
 func Test_HandleBlockData_FailedToAddBlock(t *testing.T) {
@@ -99,7 +101,7 @@ func Test_HandleBlockData_FailedToAddBlock(t *testing.T) {
 	th.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), block).Return(errUnknown).Times(1)
 	peer := p2p.Peer("buddy")
 	th.mockFetcher.EXPECT().RegisterPeerHashes(peer, types.TransactionIDsToHashes(block.TxIDs))
-	assert.ErrorIs(t, th.HandleSyncedBlock(context.TODO(), peer, data), errUnknown)
+	assert.ErrorIs(t, th.HandleSyncedBlock(context.TODO(), block.ID().AsHash32(), peer, data), errUnknown)
 }
 
 func Test_HandleBlockData(t *testing.T) {
@@ -112,7 +114,7 @@ func Test_HandleBlockData(t *testing.T) {
 	th.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), block).Return(nil).Times(1)
 	peer := p2p.Peer("buddy")
 	th.mockFetcher.EXPECT().RegisterPeerHashes(peer, types.TransactionIDsToHashes(block.TxIDs))
-	assert.NoError(t, th.HandleSyncedBlock(context.TODO(), peer, data))
+	assert.NoError(t, th.HandleSyncedBlock(context.TODO(), block.ID().AsHash32(), peer, data))
 }
 
 func max(i, j int) int {
