@@ -134,6 +134,7 @@ func MainnetConfig() Config {
 			Interval:         time.Minute,
 			EpochEndFraction: 0.8,
 			MaxStaleDuration: time.Hour,
+			UpdateLayer:      10000000,
 			Standalone:       false,
 		},
 		Recovery: checkpoint.DefaultConfig(),

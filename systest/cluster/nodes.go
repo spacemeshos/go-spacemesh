@@ -671,6 +671,10 @@ func CheckpointLayer(restoreLayer uint32) DeploymentFlag {
 	return DeploymentFlag{Name: "--recovery-layer", Value: strconv.Itoa(int(restoreLayer))}
 }
 
+func SyncUpdateLayer(syncUpdateLayer uint32) DeploymentFlag {
+	return DeploymentFlag{Name: "--sync-update-layer", Value: strconv.Itoa(int(syncUpdateLayer))}
+}
+
 const (
 	genesisTimeFlag  = "--genesis-time"
 	genesisExtraData = "--genesis-extra-data"
