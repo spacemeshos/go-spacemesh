@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"time"
 
 	"go.uber.org/zap/zapcore"
@@ -13,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
@@ -195,8 +195,7 @@ func (s *Syncer) adopt(ctx context.Context, lid types.LayerID, opinions []*fetch
 
 func (s *Syncer) certCutoffLayer() types.LayerID {
 	cutoff := types.GetEffectiveGenesis()
-	// TODO: change this to current layer after https://github.com/spacemeshos/go-spacemesh/issues/2921 is done
-	last := s.mesh.ProcessedLayer()
+	last := s.ticker.CurrentLayer()
 	if last.Uint32() > s.cfg.SyncCertDistance {
 		limit := last.Sub(s.cfg.SyncCertDistance)
 		if limit.After(cutoff) {
