@@ -174,6 +174,14 @@ func (f *Fetch) GetLayerOpinions(ctx context.Context, peers []p2p.Peer, lid type
 	return poll(ctx, f.servers[lyrOpnsProtocol], peers, lidBytes, okCB, errCB)
 }
 
+func (f *Fetch) GetLayerOpinions2(ctx context.Context, peers []p2p.Peer, lid types.LayerID, okCB func([]byte, p2p.Peer), errCB func(error, p2p.Peer)) error {
+	lidBytes, err := codec.Encode(&lid)
+	if err != nil {
+		return err
+	}
+	return poll(ctx, f.servers[lyrOpnsProtocol2], peers, lidBytes, okCB, errCB)
+}
+
 func poll(ctx context.Context, srv requester, peers []p2p.Peer, req []byte, okCB func([]byte, p2p.Peer), errCB func(error, p2p.Peer)) error {
 	for _, p := range peers {
 		peer := p
@@ -268,4 +276,59 @@ func (f *Fetch) PeerMeshHashes(ctx context.Context, peer p2p.Peer, req *MeshHash
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+}
+
+func (f *Fetch) GetCert(ctx context.Context, lid types.LayerID, bid types.BlockID, peers []p2p.Peer) (*types.Certificate, error) {
+	f.logger.WithContext(ctx).With().Debug("requesting block certificate from peers",
+		lid, bid, log.Int("num peer", len(peers)))
+	req := &CertRequest{
+		Layer: lid,
+		Block: bid,
+	}
+	reqData, err := codec.Encode(req)
+	if err != nil {
+		f.logger.With().Fatal("failed to encode cert request", log.Err(err))
+	}
+
+	out := make(chan *types.Certificate, 1)
+	for _, peer := range peers {
+		done := make(chan error, 1)
+		okCB := func(data []byte) {
+			var peerCert types.Certificate
+			err = codec.Decode(data, &peerCert)
+			if err != nil {
+				defer close(done)
+				done <- err
+				return
+			}
+			if peerCert.BlockID != bid {
+				defer close(done)
+				done <- fmt.Errorf("peer %v served wrong cert. want %s got %s", peer, bid.String(), peerCert.BlockID.String())
+				return
+			}
+			out <- &peerCert
+			close(out)
+		}
+		errCB := func(perr error) {
+			defer close(done)
+			done <- perr
+		}
+		if err := f.servers[certProtocol].Request(ctx, peer, reqData, okCB, errCB); err != nil {
+			done <- err
+			close(done)
+		}
+		select {
+		case err := <-done:
+			f.logger.With().Debug("failed to get cert from peer",
+				log.Stringer("peer", peer),
+				log.Err(err),
+			)
+			continue
+		case cert := <-out:
+			return cert, nil
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	return nil, fmt.Errorf("failed to get cert %v/%s from %d peers", lid, bid.String(), len(peers))
 }

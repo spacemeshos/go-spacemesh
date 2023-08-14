@@ -66,6 +66,20 @@ func generateLayerOpinions(t *testing.T) []byte {
 	return data
 }
 
+func generateLayerOpinions2(t *testing.T, hasCert bool, bid types.BlockID) []byte {
+	t.Helper()
+	lo := &fetch.LayerOpinion2{
+		PrevAggHash: types.RandomHash(),
+		Certified:   hasCert,
+	}
+	if hasCert {
+		lo.CertBlock = bid
+	}
+	data, err := codec.Encode(lo)
+	require.NoError(t, err)
+	return data
+}
+
 func generateLayerContent(t *testing.T) []byte {
 	t.Helper()
 	ballotIDs := make([]types.BallotID, 0, numBallots)
@@ -261,6 +275,113 @@ func TestDataFetch_PollLayerOpinions(t *testing.T) {
 			require.ErrorIs(t, err, tc.err)
 			if err == nil {
 				require.NotEmpty(t, got)
+			}
+		})
+	}
+}
+
+func TestDataFetch_PollLayerOpinions2(t *testing.T) {
+	const numPeers = 4
+	peers := GenPeers(numPeers)
+	lid := types.LayerID(10)
+	pe := errors.New("meh")
+	tt := []struct {
+		name                      string
+		needCert                  bool
+		err, cErr                 error
+		hasCert, queried, expCert []types.BlockID
+		pErrs                     []error
+	}{
+		{
+			name:    "all peers",
+			pErrs:   []error{nil, nil, nil, nil},
+			hasCert: []types.BlockID{{1}, {2}, {3}, {4}},
+		},
+		{
+			name:     "all peers need cert",
+			pErrs:    []error{nil, nil, nil, nil},
+			hasCert:  []types.BlockID{{1}, {1}, {2}, {2}},
+			needCert: true,
+			queried:  []types.BlockID{{1}, {2}},
+			expCert:  []types.BlockID{{1}, {2}},
+		},
+		{
+			name:     "all peers need cert but cert error",
+			pErrs:    []error{nil, nil, nil, nil},
+			cErr:     pe,
+			hasCert:  []types.BlockID{{1}, {1}, {2}, {2}},
+			needCert: true,
+			queried:  []types.BlockID{{1}, {2}},
+		},
+		{
+			name:     "all peers need cert but not available",
+			pErrs:    []error{nil, nil, nil, nil},
+			needCert: true,
+		},
+		{
+			name:     "some peers have errors",
+			pErrs:    []error{pe, pe, nil, nil},
+			hasCert:  []types.BlockID{{1}, {1}, {1}, {1}},
+			needCert: true,
+			queried:  []types.BlockID{{1}},
+			expCert:  []types.BlockID{{1}},
+		},
+		{
+			name:  "all peers have errors",
+			pErrs: []error{pe, pe, pe, pe},
+			err:   pe,
+		},
+	}
+
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			td := newTestDataFetch(t)
+			td.mFetcher.EXPECT().GetPeers().Return(peers)
+			td.mFetcher.EXPECT().GetLayerOpinions2(gomock.Any(), peers, lid, gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, _ []p2p.Peer, _ types.LayerID, okCB func([]byte, p2p.Peer), errCB func(error, p2p.Peer)) error {
+					for i, peer := range peers {
+						if tc.pErrs[i] != nil {
+							errCB(tc.pErrs[i], peer)
+						} else {
+							if tc.needCert && len(tc.hasCert) > 0 {
+								p := peer
+								td.mFetcher.EXPECT().RegisterPeerHashes(p, []types.Hash32{tc.hasCert[i].AsHash32()})
+							}
+							var certified types.BlockID
+							if len(tc.hasCert) > 0 {
+								certified = tc.hasCert[i]
+							}
+							okCB(generateLayerOpinions2(t, len(tc.hasCert) > 0, certified), peer)
+						}
+					}
+					for _, bid := range tc.queried {
+						td.mFetcher.EXPECT().GetCert(gomock.Any(), lid, bid, gomock.Any()).DoAndReturn(
+							func(_ context.Context, _ types.LayerID, bid types.BlockID, peers []p2p.Peer) (*types.Certificate, error) {
+								require.Len(t, peers, 2)
+								if tc.cErr == nil {
+									return &types.Certificate{BlockID: bid}, nil
+								} else {
+									return nil, tc.cErr
+								}
+							})
+					}
+					return nil
+				})
+
+			got, certs, err := td.PollLayerOpinions2(context.TODO(), lid, tc.needCert)
+			require.ErrorIs(t, err, tc.err)
+			if err == nil {
+				require.NotEmpty(t, got)
+				if tc.needCert {
+					var got []types.BlockID
+					for _, cert := range certs {
+						got = append(got, cert.BlockID)
+					}
+					require.ElementsMatch(t, tc.expCert, got)
+				}
 			}
 		})
 	}

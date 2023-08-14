@@ -127,6 +127,22 @@ func Get(db sql.Executor, lid types.LayerID) ([]CertValidity, error) {
 	return result, nil
 }
 
+func CertifiedBlock(db sql.Executor, lid types.LayerID) (types.BlockID, error) {
+	var result types.BlockID
+	if rows, err := db.Exec(`
+		select block from certificates where layer = ?1 and valid = 1 and cert is not null;`, func(stmt *sql.Statement) {
+		stmt.BindInt64(1, int64(lid))
+	}, func(stmt *sql.Statement) bool {
+		stmt.ColumnBytes(0, result[:])
+		return true
+	}); err != nil {
+		return types.EmptyBlockID, fmt.Errorf("CertifiedBlock %s: %w", lid, err)
+	} else if rows == 0 {
+		return types.EmptyBlockID, sql.ErrNotFound
+	}
+	return result, nil
+}
+
 func SetValid(db sql.Executor, lid types.LayerID, bid types.BlockID) error {
 	if _, err := db.Exec(`update certificates set valid = 1 where layer = ?1 and block = ?2;`,
 		func(stmt *sql.Statement) {

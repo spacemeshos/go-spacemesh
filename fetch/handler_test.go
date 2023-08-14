@@ -169,6 +169,87 @@ func TestHandleLayerOpinionsReq(t *testing.T) {
 	}
 }
 
+func TestHandleLayerOpinionsReq2(t *testing.T) {
+	tt := []struct {
+		name                       string
+		missingCert, multipleCerts bool
+	}{
+		{
+			name: "all good",
+		},
+		{
+			name:        "cert missing",
+			missingCert: true,
+		},
+		{
+			name:          "multiple certs",
+			multipleCerts: true,
+		},
+	}
+
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			th := createTestHandler(t)
+			lid := types.LayerID(111)
+			certified, aggHash := createOpinions(t, th.cdb, lid, !tc.missingCert)
+			if tc.multipleCerts {
+				bid := types.RandomBlockID()
+				require.NoError(t, certificates.Add(th.cdb, lid, &types.Certificate{
+					BlockID: bid,
+				}))
+				require.NoError(t, certificates.SetInvalid(th.cdb, lid, bid))
+			}
+
+			lidBytes, err := codec.Encode(&lid)
+			require.NoError(t, err)
+
+			out, err := th.handleLayerOpinionsReq2(context.Background(), lidBytes)
+			require.NoError(t, err)
+
+			var got LayerOpinion2
+			err = codec.Decode(out, &got)
+			require.NoError(t, err)
+			require.Equal(t, aggHash, got.PrevAggHash)
+			if tc.missingCert {
+				require.False(t, got.Certified)
+				require.Equal(t, types.EmptyBlockID, got.CertBlock)
+			} else {
+				require.True(t, got.Certified)
+				require.Equal(t, certified, got.CertBlock)
+			}
+		})
+	}
+}
+
+func TestHandleCertReq(t *testing.T) {
+	th := createTestHandler(t)
+	lid := types.LayerID(111)
+	bid := types.RandomBlockID()
+	req := &CertRequest{
+		Layer: lid,
+		Block: bid,
+	}
+	reqData, err := codec.Encode(req)
+	require.NoError(t, err)
+
+	resp, err := th.handleCertReq(context.Background(), reqData)
+	require.ErrorIs(t, err, sql.ErrNotFound)
+	require.Nil(t, resp)
+
+	cert := &types.Certificate{BlockID: bid}
+	require.NoError(t, certificates.Add(th.cdb, lid, cert))
+
+	resp, err = th.handleCertReq(context.Background(), reqData)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	var got types.Certificate
+	require.NoError(t, codec.Decode(resp, &got))
+	require.Equal(t, *cert, got)
+}
+
 func TestHandleMeshHashReq(t *testing.T) {
 	tt := []struct {
 		name        string

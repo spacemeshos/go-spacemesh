@@ -96,6 +96,7 @@ func newTestSyncer(t *testing.T, interval time.Duration) *testSyncer {
 		EpochEndFraction: 0.66,
 		SyncCertDistance: 4,
 		HareDelayLayers:  5,
+		UpdateLayer:      1000000,
 	}
 	ts.syncer = NewSyncer(ts.cdb, ts.mTicker, ts.mBeacon, ts.msh, nil, nil, ts.mLyrPatrol, ts.mCertHdr,
 		WithConfig(cfg),

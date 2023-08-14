@@ -39,6 +39,9 @@ type dataResponse struct {
 type opinionResponse struct {
 	opinions []*fetch.LayerOpinion
 }
+type opinionResponse2 struct {
+	opinions []*fetch.LayerOpinion2
+}
 
 type maliciousIDResponse struct {
 	ids map[types.NodeID]struct{}
@@ -47,6 +50,7 @@ type maliciousIDResponse struct {
 type (
 	dataRequest        request[fetch.LayerData, dataResponse]
 	opinionRequest     request[fetch.LayerOpinion, opinionResponse]
+	opinionRequest2    request[fetch.LayerOpinion2, opinionResponse2]
 	maliciousIDRequest request[fetch.MaliciousIDs, maliciousIDResponse]
 )
 
@@ -372,6 +376,103 @@ func (d *DataFetch) receiveOpinions(ctx context.Context, req *opinionRequest, pe
 		logger.With().Debug("received peer error for layer opinions", log.Err(peerErr))
 	} else if result.err = codec.Decode(data, &lo); result.err != nil {
 		logger.With().Debug("error converting bytes to LayerOpinion", log.Err(result.err))
+	} else {
+		lo.SetPeer(peer)
+		result.data = &lo
+	}
+	select {
+	case req.ch <- result:
+	case <-ctx.Done():
+		logger.Warning("request timed out")
+	}
+}
+
+func (d *DataFetch) PollLayerOpinions2(ctx context.Context, lid types.LayerID, needCert bool) ([]*fetch.LayerOpinion2, []*types.Certificate, error) {
+	peers := d.fetcher.GetPeers()
+	if len(peers) == 0 {
+		return nil, nil, errNoPeers
+	}
+
+	logger := d.logger.WithContext(ctx).WithFields(lid)
+	req := &opinionRequest2{
+		lid:   lid,
+		peers: peers,
+		ch:    make(chan peerResult[fetch.LayerOpinion2], len(peers)),
+	}
+	okFunc := func(data []byte, peer p2p.Peer) {
+		d.receiveOpinions2(ctx, req, peer, data, nil)
+	}
+	errFunc := func(err error, peer p2p.Peer) {
+		d.receiveOpinions2(ctx, req, peer, nil, err)
+		opnsPeerError.Inc()
+	}
+	if err := d.fetcher.GetLayerOpinions2(ctx, peers, lid, okFunc, errFunc); err != nil {
+		return nil, nil, err
+	}
+	req.peerResults = map[p2p.Peer]peerResult[fetch.LayerOpinion2]{}
+	var (
+		success      bool
+		candidateErr error
+	)
+	for {
+		select {
+		case res := <-req.ch:
+			req.peerResults[res.peer] = res
+			if res.err == nil {
+				success = true
+				req.response.opinions = append(req.response.opinions, res.data)
+			} else if candidateErr == nil {
+				candidateErr = res.err
+			}
+			if len(req.peerResults) < len(req.peers) {
+				break
+			}
+			// all peer responded
+			if success {
+				candidateErr = nil
+			}
+			var certs []*types.Certificate
+			if needCert {
+				peerCerts := map[types.BlockID][]p2p.Peer{}
+				for _, opns := range req.response.opinions {
+					if !opns.Certified {
+						continue
+					}
+					if _, ok := peerCerts[opns.CertBlock]; !ok {
+						peerCerts[opns.CertBlock] = []p2p.Peer{}
+					}
+					peerCerts[opns.CertBlock] = append(peerCerts[opns.CertBlock], opns.Peer())
+					d.fetcher.RegisterPeerHashes(opns.Peer(), []types.Hash32{opns.CertBlock.AsHash32()})
+				}
+				for bid, bidPeers := range peerCerts {
+					cert, err := d.fetcher.GetCert(ctx, lid, bid, bidPeers)
+					if err != nil {
+						logger.With().Warning("failed to get cert from peers", log.Err(err))
+						continue
+					}
+					certs = append(certs, cert)
+				}
+			}
+			return req.response.opinions, certs, candidateErr
+		case <-ctx.Done():
+			logger.Warning("request timed out")
+			return nil, nil, errTimeout
+		}
+	}
+}
+
+func (d *DataFetch) receiveOpinions2(ctx context.Context, req *opinionRequest2, peer p2p.Peer, data []byte, peerErr error) {
+	logger := d.logger.WithContext(ctx).WithFields(req.lid, log.Stringer("peer", peer))
+	logger.Debug("received layer opinions from peer")
+
+	var (
+		result = peerResult[fetch.LayerOpinion2]{peer: peer, err: peerErr}
+		lo     fetch.LayerOpinion2
+	)
+	if peerErr != nil {
+		logger.With().Debug("received peer error for layer opinions", log.Err(peerErr))
+	} else if result.err = codec.Decode(data, &lo); result.err != nil {
+		logger.With().Debug("error decoding LayerOpinion", log.Err(result.err))
 	} else {
 		lo.SetPeer(peer)
 		result.data = &lo

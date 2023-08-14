@@ -27,6 +27,7 @@ type Config struct {
 	SyncCertDistance uint32
 	MaxStaleDuration time.Duration
 	Standalone       bool
+	UpdateLayer      uint32 `mapstructure:"sync-update-layer"`
 }
 
 // DefaultConfig for the syncer.

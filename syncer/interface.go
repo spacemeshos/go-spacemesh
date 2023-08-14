@@ -31,6 +31,7 @@ type fetchLogic interface {
 	PollMaliciousProofs(ctx context.Context) error
 	PollLayerData(context.Context, types.LayerID, ...p2p.Peer) error
 	PollLayerOpinions(context.Context, types.LayerID) ([]*fetch.LayerOpinion, error)
+	PollLayerOpinions2(context.Context, types.LayerID, bool) ([]*fetch.LayerOpinion2, []*types.Certificate, error)
 	GetEpochATXs(context.Context, types.EpochID) error
 }
 
@@ -39,6 +40,8 @@ type fetcher interface {
 	GetMaliciousIDs(context.Context, []p2p.Peer, func([]byte, p2p.Peer), func(error, p2p.Peer)) error
 	GetLayerData(context.Context, []p2p.Peer, types.LayerID, func([]byte, p2p.Peer), func(error, p2p.Peer)) error
 	GetLayerOpinions(context.Context, []p2p.Peer, types.LayerID, func([]byte, p2p.Peer), func(error, p2p.Peer)) error
+	GetLayerOpinions2(context.Context, []p2p.Peer, types.LayerID, func([]byte, p2p.Peer), func(error, p2p.Peer)) error
+	GetCert(context.Context, types.LayerID, types.BlockID, []p2p.Peer) (*types.Certificate, error)
 
 	GetMalfeasanceProofs(context.Context, []types.NodeID) error
 	GetAtxs(context.Context, []types.ATXID) error

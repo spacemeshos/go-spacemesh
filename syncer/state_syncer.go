@@ -85,6 +85,11 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 		}
 
 		if opinions, certs, err := s.fetchOpinions(ctx, lid); err == nil {
+			if len(certs) > 0 {
+				if err = s.adopt(ctx, lid, certs); err != nil {
+					s.logger.WithContext(ctx).With().Warning("failed to adopt peer opinions", lid, log.Err(err))
+				}
+			}
 			if s.stateSynced() {
 				if err = s.checkMeshAgreement(ctx, lid, opinions); err != nil && errors.Is(err, errMeshHashDiverged) {
 					s.logger.WithContext(ctx).With().Debug("mesh hash diverged, trying to reach agreement",
@@ -101,9 +106,6 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 						hashResolveFail.Inc()
 					}
 				}
-			}
-			if err = s.adopt(ctx, lid, certs); err != nil {
-				s.logger.WithContext(ctx).With().Warning("failed to adopt peer opinions", lid, log.Err(err))
 			}
 		}
 		// even if it fails to fetch opinions, we still go ahead to ProcessLayer so that the tortoise
@@ -137,7 +139,36 @@ func (s *Syncer) needCert(ctx context.Context, lid types.LayerID) (bool, error) 
 	return errors.Is(err, sql.ErrNotFound), nil
 }
 
+func (s *Syncer) fetchOpinions2(ctx context.Context, lid types.LayerID) ([]*peerOpinion, []*types.Certificate, error) {
+	s.logger.WithContext(ctx).With().Debug("polling layer opinions", lid)
+	needCert, err := s.needCert(ctx, lid)
+	if err != nil {
+		return nil, nil, err
+	}
+	opinions, certs, err := s.dataFetcher.PollLayerOpinions2(ctx, lid, needCert)
+	if err != nil {
+		s.logger.WithContext(ctx).With().Warning("failed to fetch opinions", lid, log.Err(err))
+		return nil, nil, fmt.Errorf("PollLayerOpinions: %w", err)
+	}
+	var result []*peerOpinion
+	for _, opn := range opinions {
+		result = append(result, &peerOpinion{
+			prevAggHash: opn.PrevAggHash,
+			peer:        opn.Peer(),
+		})
+		if opn.CertBlock != types.EmptyBlockID {
+			s.dataFetcher.RegisterPeerHashes(opn.Peer(), []types.Hash32{opn.CertBlock.AsHash32()})
+		}
+	}
+	opinionLayer.Set(float64(lid))
+	return result, certs, nil
+}
+
 func (s *Syncer) fetchOpinions(ctx context.Context, lid types.LayerID) ([]*peerOpinion, []*types.Certificate, error) {
+	if s.ticker.CurrentLayer() >= types.LayerID(s.cfg.UpdateLayer) {
+		return s.fetchOpinions2(ctx, lid)
+	}
+
 	s.logger.WithContext(ctx).With().Debug("polling layer opinions", lid)
 	opinions, err := s.dataFetcher.PollLayerOpinions(ctx, lid)
 	if err != nil {
@@ -155,6 +186,9 @@ func (s *Syncer) fetchOpinions(ctx context.Context, lid types.LayerID) ([]*peerO
 		})
 		if opn.Cert != nil {
 			certs[opn.Cert.BlockID] = opn.Cert
+			if opn.Cert.BlockID != types.EmptyBlockID {
+				s.dataFetcher.RegisterPeerHashes(opn.Peer(), []types.Hash32{opn.Cert.BlockID.AsHash32()})
+			}
 		}
 	}
 	opinionLayer.Set(float64(lid))
@@ -184,7 +218,6 @@ func (s *Syncer) adopt(ctx context.Context, lid types.LayerID, certs []*types.Ce
 		s.logger.WithContext(ctx).With().Debug("node already has certificate", lid)
 		return nil
 	}
-
 	for _, cert := range certs {
 		if err = s.adoptCert(ctx, lid, cert); err != nil {
 			s.logger.WithContext(ctx).With().Warning("failed to adopt cert", lid, cert.BlockID, log.Err(err))
