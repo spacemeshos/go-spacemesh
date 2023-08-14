@@ -589,7 +589,7 @@ func TestConsistentHandling(t *testing.T) {
 			instances[1].mvm.EXPECT().Validation(txs[i].RawTx).Times(1).Return(failed)
 
 			require.Equal(t, nil, instances[0].handler().HandleGossipTransaction(context.Background(), p2p.NoPeer, txs[i].Raw))
-			require.NoError(t, instances[1].handler().HandleBlockTransaction(context.Background(), p2p.NoPeer, txs[i].Raw))
+			require.NoError(t, instances[1].handler().HandleBlockTransaction(context.Background(), txs[i].ID.Hash32(), p2p.NoPeer, txs[i].Raw))
 		}
 		block := types.NewExistingBlock(types.BlockID{byte(lid)},
 			types.InnerBlock{

@@ -21,6 +21,7 @@ import (
 var (
 	ErrKnownProof    = errors.New("known proof")
 	errMalformedData = fmt.Errorf("%w: malformed data", pubsub.ErrValidationReject)
+	errWrongHash     = fmt.Errorf("%w: incorrect hash", pubsub.ErrValidationReject)
 )
 
 // Handler processes MalfeasanceProof from gossip and, if deems it valid, propagates it to peers.
@@ -52,14 +53,18 @@ func NewHandler(
 }
 
 // HandleSyncedMalfeasanceProof is the sync validator for MalfeasanceProof.
-func (h *Handler) HandleSyncedMalfeasanceProof(ctx context.Context, _ p2p.Peer, data []byte) error {
+func (h *Handler) HandleSyncedMalfeasanceProof(ctx context.Context, expHash types.Hash32, _ p2p.Peer, data []byte) error {
 	var p types.MalfeasanceProof
 	if err := codec.Decode(data, &p); err != nil {
 		numMalformed.Inc()
 		h.logger.With().Error("malformed message (sync)", log.Context(ctx), log.Err(err))
 		return errMalformedData
 	}
-	return validateAndSave(ctx, h.logger, h.cdb, h.edVerifier, h.cp, h.tortoise, &types.MalfeasanceGossip{MalfeasanceProof: p})
+	nodeID, err := validateAndSave(ctx, h.logger, h.cdb, h.edVerifier, h.cp, h.tortoise, &types.MalfeasanceGossip{MalfeasanceProof: p})
+	if err == nil && types.Hash32(nodeID) != expHash {
+		return fmt.Errorf("%w: malfesance proof want %s, got %s", errWrongHash, expHash.ShortString(), nodeID.ShortString())
+	}
+	return err
 }
 
 // HandleMalfeasanceProof is the gossip receiver for MalfeasanceGossip.
@@ -81,7 +86,8 @@ func (h *Handler) HandleMalfeasanceProof(ctx context.Context, peer p2p.Peer, dat
 		updateMetrics(p.Proof)
 		return nil
 	}
-	return validateAndSave(ctx, h.logger, h.cdb, h.edVerifier, h.cp, h.tortoise, &p)
+	_, err := validateAndSave(ctx, h.logger, h.cdb, h.edVerifier, h.cp, h.tortoise, &p)
+	return err
 }
 
 func validateAndSave(
@@ -92,10 +98,10 @@ func validateAndSave(
 	cp consensusProtocol,
 	trt tortoise,
 	p *types.MalfeasanceGossip,
-) error {
+) (types.NodeID, error) {
 	nodeID, err := Validate(ctx, logger, cdb, edVerifier, cp, p)
 	if err != nil {
-		return err
+		return types.EmptyNodeID, err
 	}
 	if err := cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
 		malicious, err := identities.IsMalicious(dbtx, nodeID)
@@ -121,7 +127,7 @@ func validateAndSave(
 				log.Err(err),
 			)
 		}
-		return err
+		return types.EmptyNodeID, err
 	}
 	trt.OnMalfeasance(nodeID)
 	cdb.CacheMalfeasanceProof(nodeID, &p.MalfeasanceProof)
@@ -130,7 +136,7 @@ func validateAndSave(
 		log.Stringer("smesher", nodeID),
 		log.Inline(p),
 	)
-	return nil
+	return nodeID, nil
 }
 
 func Validate(
