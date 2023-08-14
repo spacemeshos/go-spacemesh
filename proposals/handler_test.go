@@ -285,6 +285,16 @@ func TestBallot_BadSignature(t *testing.T) {
 	require.ErrorContains(t, got, "failed to verify ballot signature")
 }
 
+func TestBallot_WrongHash(t *testing.T) {
+	th := createTestHandlerNoopDecoder(t)
+	b := createBallot(t)
+	data := encodeBallot(t, b)
+	peer := p2p.Peer("buddy")
+	err := th.HandleSyncedBallot(context.Background(), types.RandomHash(), peer, data)
+	require.ErrorIs(t, err, errWrongHash)
+	require.ErrorIs(t, err, pubsub.ErrValidationReject)
+}
+
 func TestBallot_KnownBallot(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	b := createBallot(t)
@@ -885,6 +895,15 @@ func TestProposal_InconsistentSmeshers(t *testing.T) {
 
 	require.Error(t, th.HandleProposal(context.Background(), "", data))
 	checkProposal(t, th.cdb, p, false)
+}
+
+func TestProposal_WrongHash(t *testing.T) {
+	th := createTestHandlerNoopDecoder(t)
+	p := createProposal(t)
+	data := encodeProposal(t, p)
+	err := th.HandleSyncedProposal(context.Background(), types.RandomHash(), p2p.NoPeer, data)
+	require.ErrorIs(t, err, errWrongHash)
+	require.ErrorIs(t, err, pubsub.ErrValidationReject)
 }
 
 func TestProposal_KnownProposal(t *testing.T) {

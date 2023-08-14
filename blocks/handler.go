@@ -17,6 +17,7 @@ import (
 
 var (
 	errMalformedData  = fmt.Errorf("%w: malformed data", pubsub.ErrValidationReject)
+	errWrongHash      = fmt.Errorf("%w: incorrect hash", pubsub.ErrValidationReject)
 	errInvalidRewards = errors.New("invalid rewards")
 	errDuplicateTX    = errors.New("duplicate TxID in proposal")
 )
@@ -67,7 +68,7 @@ func (h *Handler) HandleSyncedBlock(ctx context.Context, expHash types.Hash32, p
 	b.Initialize()
 
 	if b.ID().AsHash32() != expHash {
-		return fmt.Errorf("fetched wrong block hash. want %s, got %s", expHash.ShortString(), b.ID().String())
+		return fmt.Errorf("%w: block want %s, got %s", errWrongHash, expHash.ShortString(), b.ID().String())
 	}
 
 	if b.LayerIndex <= types.GetEffectiveGenesis() {

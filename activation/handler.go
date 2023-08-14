@@ -28,6 +28,7 @@ import (
 var (
 	errKnownAtx      = errors.New("known atx")
 	errMalformedData = fmt.Errorf("%w: malformed data", pubsub.ErrValidationReject)
+	errWrongHash     = fmt.Errorf("%w: incorrect hash", pubsub.ErrValidationReject)
 	errMaliciousATX  = errors.New("malicious atx")
 )
 
@@ -546,7 +547,7 @@ func (h *Handler) handleAtx(ctx context.Context, expHash types.Hash32, peer p2p.
 	}
 
 	if expHash != (types.Hash32{}) && vAtx.ID().Hash32() != expHash {
-		return fmt.Errorf("fetched wrong atx hash. want %s, got %s", expHash.ShortString(), vAtx.ID().Hash32().ShortString())
+		return fmt.Errorf("%w: atx want %s, got %s", errWrongHash, expHash.ShortString(), vAtx.ID().Hash32().ShortString())
 	}
 
 	err = h.ProcessAtx(ctx, vAtx)

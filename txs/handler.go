@@ -12,10 +12,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 var (
+	errWrongHash   = fmt.Errorf("%w: incorrect hash", pubsub.ErrValidationReject)
 	errDuplicateTX = errors.New("tx already exists")
 	errParse       = errors.New("failed to parse tx")
 	errVerify      = errors.New("failed to verify tx")
@@ -100,7 +102,7 @@ func (th *TxHandler) verifyAndCache(ctx context.Context, expHash types.Hash32, m
 	}
 	tx := &types.Transaction{RawTx: raw, TxHeader: header}
 	if expHash != (types.Hash32{}) && tx.ID.Hash32() != expHash {
-		return fmt.Errorf("fetched wrong tx hash for proposal. want %s, got %s", expHash.ShortString(), tx.ID.ShortString())
+		return fmt.Errorf("%w: proposal tx want %s, got %s", errWrongHash, expHash.ShortString(), tx.ID.ShortString())
 	}
 	if header.GasPrice == 0 {
 		return fmt.Errorf("%w: zero gas price %s", errParse, raw.ID)
@@ -131,7 +133,7 @@ func (th *TxHandler) HandleBlockTransaction(_ context.Context, expHash types.Has
 	}
 	tx := &types.Transaction{RawTx: raw}
 	if tx.ID.Hash32() != expHash {
-		return fmt.Errorf("fetched wrong tx hash for block. want %s, got %s", expHash.ShortString(), tx.ID.ShortString())
+		return fmt.Errorf("%w: block tx want %s, got %s", errWrongHash, expHash.ShortString(), tx.ID.ShortString())
 	}
 	req := th.state.Validation(raw)
 	header, err := req.Parse()

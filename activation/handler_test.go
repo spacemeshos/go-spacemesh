@@ -934,7 +934,7 @@ func TestHandler_AwaitAtx(t *testing.T) {
 	r.Len(atxHdlr.atxChannels, 0) // last unsubscribe clears the channel
 }
 
-func TestHandler_HandleAtxData(t *testing.T) {
+func TestHandler_HandleSyncedAtx(t *testing.T) {
 	// Arrange
 	goldenATXID := types.ATXID{2, 3, 4}
 
@@ -1242,4 +1242,52 @@ func TestHandler_AtxWeight(t *testing.T) {
 	require.Equal(t, leaves/tickSize, stored2.TickCount)
 	require.Equal(t, stored1.TickHeight()+leaves/tickSize, stored2.TickHeight())
 	require.Equal(t, int(leaves/tickSize)*units, int(stored2.GetWeight()))
+}
+
+func TestHandler_WrongHash(t *testing.T) {
+	goldenATXID := types.ATXID{2, 3, 4}
+	atxHdlr := newTestHandler(t, goldenATXID)
+	currentLayer := types.LayerID(100)
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	nonce := types.VRFPostIndex(1)
+	nodeId := sig.NodeID()
+	atx := &types.ActivationTx{
+		InnerActivationTx: types.InnerActivationTx{
+			NIPostChallenge: types.NIPostChallenge{
+				PositioningATX: goldenATXID,
+				InitialPost:    &types.Post{Indices: []byte{1}},
+				PublishEpoch:   1,
+				CommitmentATX:  &goldenATXID,
+			},
+			NumUnits: 3,
+			NIPost: &types.NIPost{
+				Post:         &types.Post{},
+				PostMetadata: &types.PostMetadata{},
+			},
+			VRFNonce: &nonce,
+			NodeID:   &nodeId,
+		},
+	}
+	require.NoError(t, SignAndFinalizeAtx(sig, atx))
+
+	buf, err := codec.Encode(atx)
+	require.NoError(t, err)
+
+	peer := p2p.Peer("buddy")
+	proofRef := atx.GetPoetProofRef()
+	atxHdlr.mclock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now())
+	atxHdlr.mclock.EXPECT().CurrentLayer().Return(currentLayer)
+	atxHdlr.mockFetch.EXPECT().RegisterPeerHashes(peer, []types.Hash32{proofRef})
+	atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), proofRef)
+	atxHdlr.mValidator.EXPECT().VRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+	atxHdlr.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+	atxHdlr.mValidator.EXPECT().NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint64(111), nil)
+	atxHdlr.mValidator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+	atxHdlr.mValidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+	err = atxHdlr.HandleSyncedAtx(context.Background(), types.RandomHash(), peer, buf)
+	require.ErrorIs(t, err, errWrongHash)
+	require.ErrorIs(t, err, pubsub.ErrValidationReject)
 }

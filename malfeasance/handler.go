@@ -21,6 +21,7 @@ import (
 var (
 	ErrKnownProof    = errors.New("known proof")
 	errMalformedData = fmt.Errorf("%w: malformed data", pubsub.ErrValidationReject)
+	errWrongHash     = fmt.Errorf("%w: incorrect hash", pubsub.ErrValidationReject)
 )
 
 // Handler processes MalfeasanceProof from gossip and, if deems it valid, propagates it to peers.
@@ -61,7 +62,7 @@ func (h *Handler) HandleSyncedMalfeasanceProof(ctx context.Context, expHash type
 	}
 	nodeID, err := validateAndSave(ctx, h.logger, h.cdb, h.edVerifier, h.cp, h.tortoise, &types.MalfeasanceGossip{MalfeasanceProof: p})
 	if err == nil && types.Hash32(nodeID) != expHash {
-		return fmt.Errorf("fetched wrong tx hash for proposal. want %s, got %s", expHash.ShortString(), nodeID.ShortString())
+		return fmt.Errorf("%w: malfesance proof want %s, got %s", errWrongHash, expHash.ShortString(), nodeID.ShortString())
 	}
 	return err
 }

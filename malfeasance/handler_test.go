@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/malfeasance"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -1001,6 +1002,63 @@ func TestHandler_HandleSyncedMalfeasanceProof_hareEquivocation(t *testing.T) {
 	require.NoError(t, err)
 	trt.EXPECT().OnMalfeasance(sig.NodeID())
 	require.NoError(t, h.HandleSyncedMalfeasanceProof(context.Background(), types.Hash32(sig.NodeID()), "peer", data))
+
+	malicious, err = identities.IsMalicious(db, sig.NodeID())
+	require.NoError(t, err)
+	require.True(t, malicious)
+}
+
+func TestHandler_HandleSyncedMalfeasanceProof_wrongHash(t *testing.T) {
+	db := sql.InMemory()
+	lg := logtest.New(t)
+	ctrl := gomock.NewController(t)
+	trt := malfeasance.NewMocktortoise(ctrl)
+	mcp := malfeasance.NewMockconsensusProtocol(ctrl)
+	sigVerifier, err := signing.NewEdVerifier()
+	require.NoError(t, err)
+
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, sigVerifier, trt)
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	createIdentity(t, db, sig)
+
+	malicious, err := identities.IsMalicious(db, sig.NodeID())
+	require.NoError(t, err)
+	require.False(t, malicious)
+
+	lid := types.LayerID(11)
+	bp := types.BallotProof{
+		Messages: [2]types.BallotProofMsg{
+			{
+				InnerMsg: types.BallotMetadata{
+					Layer:   lid,
+					MsgHash: types.RandomHash(),
+				},
+			},
+			{
+				InnerMsg: types.BallotMetadata{
+					Layer:   lid,
+					MsgHash: types.RandomHash(),
+				},
+			},
+		},
+	}
+	bp.Messages[0].Signature = sig.Sign(signing.BALLOT, bp.Messages[0].SignedBytes())
+	bp.Messages[0].SmesherID = sig.NodeID()
+	bp.Messages[1].Signature = sig.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
+	bp.Messages[1].SmesherID = sig.NodeID()
+	proof := types.MalfeasanceProof{
+		Layer: lid,
+		Proof: types.Proof{
+			Type: types.MultipleBallots,
+			Data: &bp,
+		},
+	}
+	data, err := codec.Encode(&proof)
+	require.NoError(t, err)
+	trt.EXPECT().OnMalfeasance(sig.NodeID())
+	err = h.HandleSyncedMalfeasanceProof(context.Background(), types.RandomHash(), "peer", data)
+	require.ErrorIs(t, err, pubsub.ErrValidationReject)
 
 	malicious, err = identities.IsMalicious(db, sig.NodeID())
 	require.NoError(t, err)

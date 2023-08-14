@@ -26,6 +26,7 @@ import (
 
 var (
 	errMalformedData         = fmt.Errorf("%w: malformed data", pubsub.ErrValidationReject)
+	errWrongHash             = fmt.Errorf("%w: incorrect hash", pubsub.ErrValidationReject)
 	errInitialize            = errors.New("failed to initialize")
 	errInvalidATXID          = errors.New("ballot has invalid ATXID")
 	errMissingEpochData      = errors.New("epoch data is missing in ref ballot")
@@ -158,7 +159,7 @@ func (h *Handler) HandleSyncedBallot(ctx context.Context, expHash types.Hash32, 
 	}
 
 	if b.ID().AsHash32() != expHash {
-		return fmt.Errorf("fetched wrong ballot hash. want %s, got %s", expHash.ShortString(), b.ID().String())
+		return fmt.Errorf("%w: ballot want %s, got %s", errWrongHash, expHash.ShortString(), b.ID().String())
 	}
 
 	if b.AtxID == types.EmptyATXID || b.AtxID == h.cfg.GoldenATXID {
@@ -256,7 +257,7 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 	}
 
 	if expHash != (types.Hash32{}) && p.ID().AsHash32() != expHash {
-		return fmt.Errorf("fetched wrong proposal hash. want %s, got %s", expHash.ShortString(), p.ID().AsHash32().ShortString())
+		return fmt.Errorf("%w: proposal want %s, got %s", errWrongHash, expHash.ShortString(), p.ID().AsHash32().ShortString())
 	}
 
 	if p.AtxID == types.EmptyATXID || p.AtxID == h.cfg.GoldenATXID {

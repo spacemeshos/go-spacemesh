@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
@@ -75,6 +76,18 @@ func Test_HandleBlockData_AlreadyHasBlock(t *testing.T) {
 	block, data := createBlockData(t, layerID, txIDs)
 	require.NoError(t, blocks.Add(th.db, block))
 	assert.NoError(t, th.HandleSyncedBlock(context.TODO(), block.ID().AsHash32(), p2p.NoPeer, data))
+}
+
+func Test_HandleBlockData_WrongHash(t *testing.T) {
+	th := createTestHandler(t)
+	layerID := types.LayerID(99)
+	txIDs := createTransactions(t, max(10, rand.Intn(100)))
+
+	_, data := createBlockData(t, layerID, txIDs)
+	peer := p2p.Peer("buddy")
+	err := th.HandleSyncedBlock(context.TODO(), types.RandomHash(), peer, data)
+	require.ErrorIs(t, err, errWrongHash)
+	require.ErrorIs(t, err, pubsub.ErrValidationReject)
 }
 
 func Test_HandleBlockData_FailedToFetchTXs(t *testing.T) {
