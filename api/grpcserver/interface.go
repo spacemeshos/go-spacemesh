@@ -54,7 +54,7 @@ type postSetupProvider interface {
 	Config() activation.PostConfig
 }
 
-// Peers is an api to get amount of connected peers.
+// Peers is an api to get peer related info.
 type Peers interface {
 	PeerCount() uint64
 	PeerInfo() []p2p.PeerInfo
