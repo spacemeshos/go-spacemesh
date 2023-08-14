@@ -338,7 +338,7 @@ func (f *Fetch) receiveResponse(data []byte) {
 		rsp := resp
 		f.eg.Go(func() error {
 			// validation fetch data recursively. offload to another goroutine
-			f.hashValidationDone(rsp.Hash, req.validator(req.ctx, batch.peer, rsp.Data))
+			f.hashValidationDone(rsp.Hash, req.validator(req.ctx, rsp.Hash, batch.peer, rsp.Data))
 			return nil
 		})
 		delete(batchMap, resp.Hash)
@@ -347,7 +347,7 @@ func (f *Fetch) receiveResponse(data []byte) {
 	// iterate all requests that didn't return value from peer and notify
 	// they will be retried for MaxRetriesForRequest
 	for h, r := range batchMap {
-		f.logger.With().Warning("hash not found in response from peer",
+		f.logger.With().Debug("hash not found in response from peer",
 			log.String("hint", string(r.Hint)),
 			log.Stringer("hash", h),
 			log.Stringer("peer", batch.peer),
@@ -515,7 +515,7 @@ func (f *Fetch) sendBatch(p p2p.Peer, batch *batchInfo) error {
 
 	bytes, err := codec.Encode(&batch.RequestBatch)
 	if err != nil {
-		f.handleHashError(batch.ID, err)
+		f.logger.With().Panic("failed to encode batch", log.Err(err))
 	}
 
 	// try sending batch to provided peer
@@ -540,12 +540,7 @@ func (f *Fetch) sendBatch(p p2p.Peer, batch *batchInfo) error {
 			f.handleHashError(batch.ID, fmt.Errorf("batched request failed w retries: %w", err))
 			break
 		}
-		f.logger.With().Warning("batched request failed",
-			log.Stringer("peer", p),
-			log.Int("retries", retries),
-			log.Err(err))
 	}
-
 	return err
 }
 

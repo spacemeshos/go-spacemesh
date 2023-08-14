@@ -853,14 +853,14 @@ func (app *App) initServices(ctx context.Context) error {
 		trtl,
 	)
 	fetcher.SetValidators(
-		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(atxHandler.HandleAtxData, app.host, lg)),
-		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(poetDb.ValidateAndStoreMsg, app.host, lg)),
-		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(proposalListener.HandleSyncedBallot, app.host, lg)),
-		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(blockHandler.HandleSyncedBlock, app.host, lg)),
-		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(proposalListener.HandleSyncedProposal, app.host, lg)),
-		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(app.txHandler.HandleBlockTransaction, app.host, lg)),
-		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(app.txHandler.HandleProposalTransaction, app.host, lg)),
-		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(malfeasanceHandler.HandleSyncedMalfeasanceProof, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(atxHandler.HandleSyncedAtx, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(poetDb.ValidateAndStoreMsg, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(proposalListener.HandleSyncedBallot, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(blockHandler.HandleSyncedBlock, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(proposalListener.HandleSyncedProposal, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(app.txHandler.HandleBlockTransaction, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(app.txHandler.HandleProposalTransaction, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(malfeasanceHandler.HandleSyncedMalfeasanceProof, app.host, lg)),
 	)
 
 	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) error {
@@ -1446,17 +1446,18 @@ func (app *App) preserveAfterRecovery(ctx context.Context) {
 			)
 			continue
 		}
-		if err := app.poetDb.ValidateAndStoreMsg(ctx, p2p.NoPeer, encoded); err != nil {
+		hash := app.preserve.Deps[i].GetPoetProofRef()
+		if err := app.poetDb.ValidateAndStoreMsg(ctx, hash, p2p.NoPeer, encoded); err != nil {
 			app.log.With().Error("failed to preserve poet proof after checkpoint",
 				log.Stringer("atx id", app.preserve.Deps[i].ID()),
-				log.String("poet proof ref", app.preserve.Deps[i].GetPoetProofRef().ShortString()),
+				log.String("poet proof ref", hash.ShortString()),
 				log.Err(err),
 			)
 			continue
 		}
 		app.log.With().Info("preserved poet proof after checkpoint",
 			log.Stringer("atx id", app.preserve.Deps[i].ID()),
-			log.String("poet proof ref", app.preserve.Deps[i].GetPoetProofRef().ShortString()),
+			log.String("poet proof ref", hash.ShortString()),
 		)
 	}
 	for _, vatx := range app.preserve.Deps {
@@ -1468,7 +1469,7 @@ func (app *App) preserveAfterRecovery(ctx context.Context) {
 			)
 			continue
 		}
-		if err := app.atxHandler.HandleAtxData(ctx, p2p.NoPeer, encoded); err != nil {
+		if err := app.atxHandler.HandleSyncedAtx(ctx, vatx.ID().Hash32(), p2p.NoPeer, encoded); err != nil {
 			app.log.With().Error("failed to preserve atx after checkpoint",
 				log.Inline(vatx),
 				log.Err(err),

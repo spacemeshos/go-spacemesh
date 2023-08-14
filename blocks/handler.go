@@ -17,6 +17,7 @@ import (
 
 var (
 	errMalformedData  = fmt.Errorf("%w: malformed data", pubsub.ErrValidationReject)
+	errWrongHash      = fmt.Errorf("%w: incorrect hash", pubsub.ErrValidationReject)
 	errInvalidRewards = errors.New("invalid rewards")
 	errDuplicateTX    = errors.New("duplicate TxID in proposal")
 )
@@ -55,7 +56,7 @@ func NewHandler(f system.Fetcher, db *sql.Database, m meshProvider, opts ...Opt)
 }
 
 // HandleSyncedBlock handles Block data from sync.
-func (h *Handler) HandleSyncedBlock(ctx context.Context, peer p2p.Peer, data []byte) error {
+func (h *Handler) HandleSyncedBlock(ctx context.Context, expHash types.Hash32, peer p2p.Peer, data []byte) error {
 	logger := h.logger.WithContext(ctx)
 
 	var b types.Block
@@ -65,6 +66,11 @@ func (h *Handler) HandleSyncedBlock(ctx context.Context, peer p2p.Peer, data []b
 	}
 	// set the block ID when received
 	b.Initialize()
+
+	if b.ID().AsHash32() != expHash {
+		return fmt.Errorf("%w: block want %s, got %s", errWrongHash, expHash.ShortString(), b.ID().String())
+	}
+
 	if b.LayerIndex <= types.GetEffectiveGenesis() {
 		return fmt.Errorf("block before effective genesis: layer %v", b.LayerIndex)
 	}
