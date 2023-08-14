@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"time"
 
 	"go.uber.org/zap/zapcore"
@@ -103,7 +104,9 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 		// even if it fails to fetch opinions, we still go ahead to ProcessLayer so that the tortoise
 		// has a chance to count ballots and form its own opinions
 		if err := s.mesh.ProcessLayer(ctx, lid); err != nil {
-			s.logger.WithContext(ctx).With().Warning("mesh failed to process layer from sync", lid, log.Err(err))
+			if !errors.Is(err, mesh.ErrMissingBlock) {
+				s.logger.WithContext(ctx).With().Warning("mesh failed to process layer from sync", lid, log.Err(err))
+			}
 		}
 	}
 	s.logger.WithContext(ctx).With().Debug("end of state sync",
