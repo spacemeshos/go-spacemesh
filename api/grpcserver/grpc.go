@@ -58,7 +58,7 @@ func (s *Server) Start() <-chan struct{} {
 
 // Blocking, should be called in a goroutine.
 func (s *Server) startInternal(started chan<- struct{}) {
-	lis, err := net.Listen("tcp4", s.Listener)
+	lis, err := net.Listen("tcp", s.Listener)
 	if err != nil {
 		s.logger.Error("error listening: %v", err)
 		return
