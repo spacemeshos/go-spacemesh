@@ -21,6 +21,11 @@ import (
 
 var errMeshHashDiverged = errors.New("mesh hash diverged with peer")
 
+type peerOpinion struct {
+	prevAggHash types.Hash32
+	peer        p2p.Peer
+}
+
 func minLayer(a, b types.LayerID) types.LayerID {
 	if a.Before(b) {
 		return a
@@ -79,7 +84,7 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 			}
 		}
 
-		if opinions, err := s.fetchOpinions(ctx, lid); err == nil {
+		if opinions, certs, err := s.fetchOpinions(ctx, lid); err == nil {
 			if s.stateSynced() {
 				if err = s.checkMeshAgreement(ctx, lid, opinions); err != nil && errors.Is(err, errMeshHashDiverged) {
 					s.logger.WithContext(ctx).With().Debug("mesh hash diverged, trying to reach agreement",
@@ -97,7 +102,7 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 					}
 				}
 			}
-			if err = s.adopt(ctx, lid, opinions); err != nil {
+			if err = s.adopt(ctx, lid, certs); err != nil {
 				s.logger.WithContext(ctx).With().Warning("failed to adopt peer opinions", lid, log.Err(err))
 			}
 		}
@@ -132,32 +137,45 @@ func (s *Syncer) needCert(ctx context.Context, lid types.LayerID) (bool, error) 
 	return errors.Is(err, sql.ErrNotFound), nil
 }
 
-func (s *Syncer) fetchOpinions(ctx context.Context, lid types.LayerID) ([]*fetch.LayerOpinion, error) {
+func (s *Syncer) fetchOpinions(ctx context.Context, lid types.LayerID) ([]*peerOpinion, []*types.Certificate, error) {
 	s.logger.WithContext(ctx).With().Debug("polling layer opinions", lid)
 	opinions, err := s.dataFetcher.PollLayerOpinions(ctx, lid)
 	if err != nil {
 		s.logger.WithContext(ctx).With().Warning("failed to fetch opinions", lid, log.Err(err))
-		return nil, fmt.Errorf("PollLayerOpinions: %w", err)
+		return nil, nil, fmt.Errorf("PollLayerOpinions: %w", err)
+	}
+	var (
+		result []*peerOpinion
+		certs  = map[types.BlockID]*types.Certificate{}
+	)
+	for _, opn := range opinions {
+		result = append(result, &peerOpinion{
+			prevAggHash: opn.PrevAggHash,
+			peer:        opn.Peer(),
+		})
+		if opn.Cert != nil {
+			certs[opn.Cert.BlockID] = opn.Cert
+		}
 	}
 	opinionLayer.Set(float64(lid))
-	return opinions, nil
+	return result, maps.Values(certs), nil
 }
 
-func (s *Syncer) checkMeshAgreement(ctx context.Context, lid types.LayerID, opinions []*fetch.LayerOpinion) error {
+func (s *Syncer) checkMeshAgreement(ctx context.Context, lid types.LayerID, opinions []*peerOpinion) error {
 	prevHash, err := layers.GetAggregatedHash(s.cdb, lid.Sub(1))
 	if err != nil {
 		s.logger.WithContext(ctx).With().Error("failed to get prev agg hash", lid, log.Err(err))
 		return fmt.Errorf("opinions prev hash: %w", err)
 	}
 	for _, opn := range opinions {
-		if opn.PrevAggHash != (types.Hash32{}) && opn.PrevAggHash != prevHash {
+		if opn.prevAggHash != (types.Hash32{}) && opn.prevAggHash != prevHash {
 			return errMeshHashDiverged
 		}
 	}
 	return nil
 }
 
-func (s *Syncer) adopt(ctx context.Context, lid types.LayerID, opinions []*fetch.LayerOpinion) error {
+func (s *Syncer) adopt(ctx context.Context, lid types.LayerID, certs []*types.Certificate) error {
 	needCert, err := s.needCert(ctx, lid)
 	if err != nil {
 		return err
@@ -167,27 +185,12 @@ func (s *Syncer) adopt(ctx context.Context, lid types.LayerID, opinions []*fetch
 		return nil
 	}
 
-	var noCert int
-	for _, opn := range opinions {
-		if needCert {
-			if opn.Cert == nil {
-				noCert++
-				s.logger.WithContext(ctx).With().Debug("peer has no cert", lid, log.Inline(opn))
-			} else if err = s.adoptCert(ctx, lid, opn.Cert); err != nil {
-				s.logger.WithContext(ctx).With().Warning("failed to adopt cert", lid, log.Inline(opn), log.Err(err))
-			} else {
-				s.logger.WithContext(ctx).With().Debug("adopted cert from peer", lid, log.Inline(opn))
-				needCert = false
-				break
-			}
-		}
-	}
-	numPeers := len(opinions)
-	if needCert {
-		if noCert == numPeers {
-			s.logger.WithContext(ctx).With().Warning("certificate missing from all peers", lid)
+	for _, cert := range certs {
+		if err = s.adoptCert(ctx, lid, cert); err != nil {
+			s.logger.WithContext(ctx).With().Warning("failed to adopt cert", lid, cert.BlockID, log.Err(err))
 		} else {
-			s.logger.WithContext(ctx).With().Warning("no certificate adopted from peers", lid)
+			s.logger.WithContext(ctx).With().Info("adopted cert from peer", lid, cert.BlockID)
+			break
 		}
 	}
 	return nil
@@ -206,13 +209,13 @@ func (s *Syncer) certCutoffLayer() types.LayerID {
 }
 
 func (s *Syncer) adoptCert(ctx context.Context, lid types.LayerID, cert *types.Certificate) error {
+	if err := s.certHandler.HandleSyncedCertificate(ctx, lid, cert); err != nil {
+		return fmt.Errorf("opnions adopt cert: %w", err)
+	}
 	if cert.BlockID != types.EmptyBlockID {
 		if err := s.dataFetcher.GetBlocks(ctx, []types.BlockID{cert.BlockID}); err != nil {
 			return fmt.Errorf("fetch block in cert %v: %w", cert.BlockID, err)
 		}
-	}
-	if err := s.certHandler.HandleSyncedCertificate(ctx, lid, cert); err != nil {
-		return fmt.Errorf("opnions adopt cert: %w", err)
 	}
 	numCertAdopted.Inc()
 	return nil
@@ -222,7 +225,7 @@ func (s *Syncer) adoptCert(ctx context.Context, lid types.LayerID, cert *types.C
 func (s *Syncer) ensureMeshAgreement(
 	ctx context.Context,
 	diffLayer types.LayerID,
-	opinions []*fetch.LayerOpinion,
+	opinions []*peerOpinion,
 	resyncPeers map[p2p.Peer]struct{},
 ) error {
 	prevLid := diffLayer.Sub(1)
@@ -236,31 +239,31 @@ func (s *Syncer) ensureMeshAgreement(
 		ed   *fetch.EpochData
 	)
 	for _, opn := range opinions {
-		if opn.PrevAggHash == (types.Hash32{}) {
+		if opn.prevAggHash == (types.Hash32{}) {
 			continue
 		}
-		if _, ok := resyncPeers[opn.Peer()]; ok {
+		if _, ok := resyncPeers[opn.peer]; ok {
 			continue
 		}
-		if opn.PrevAggHash == prevHash {
-			s.forkFinder.UpdateAgreement(opn.Peer(), prevLid, prevHash, time.Now())
+		if opn.prevAggHash == prevHash {
+			s.forkFinder.UpdateAgreement(opn.peer, prevLid, prevHash, time.Now())
 			continue
 		}
 
-		peer := opn.Peer()
+		peer := opn.peer
 		s.logger.WithContext(ctx).With().Debug("found mesh disagreement",
 			log.Stringer("node_prev_hash", prevHash),
 			log.Stringer("peer", peer),
 			log.Stringer("disagreed", prevLid),
-			log.Stringer("peer_hash", opn.PrevAggHash),
+			log.Stringer("peer_hash", opn.prevAggHash),
 		)
 
-		if !s.forkFinder.NeedResync(prevLid, opn.PrevAggHash) {
+		if !s.forkFinder.NeedResync(prevLid, opn.prevAggHash) {
 			s.logger.WithContext(ctx).With().Debug("already resynced based on the same diverged hash",
 				log.Stringer("node_prev_hash", prevHash),
 				log.Stringer("peer", peer),
 				log.Stringer("disagreed", prevLid),
-				log.Stringer("peer_hash", opn.PrevAggHash),
+				log.Stringer("peer_hash", opn.prevAggHash),
 			)
 			continue
 		}
@@ -318,7 +321,7 @@ func (s *Syncer) ensureMeshAgreement(
 		}
 
 		// find the divergent layer and adopt the peer's mesh from there
-		fork, err = s.forkFinder.FindFork(ctx, peer, prevLid, opn.PrevAggHash)
+		fork, err = s.forkFinder.FindFork(ctx, peer, prevLid, opn.prevAggHash)
 		if err != nil {
 			s.logger.WithContext(ctx).With().Warning("failed to find fork",
 				log.Stringer("peer", peer),
@@ -346,8 +349,8 @@ func (s *Syncer) ensureMeshAgreement(
 			log.Stringer("peer", peer),
 			log.Stringer("from", from),
 			log.Stringer("to", to))
-		resyncPeers[opn.Peer()] = struct{}{}
-		s.forkFinder.AddResynced(prevLid, opn.PrevAggHash)
+		resyncPeers[opn.peer] = struct{}{}
+		s.forkFinder.AddResynced(prevLid, opn.prevAggHash)
 	}
 
 	// clear the agreement cache after syncing new data

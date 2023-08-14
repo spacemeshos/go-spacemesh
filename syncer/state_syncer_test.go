@@ -162,14 +162,12 @@ func TestProcessLayers_OpinionsNotAdopted(t *testing.T) {
 			ts.mLyrPatrol.EXPECT().IsHareInCharge(lid).Return(false)
 			ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid).Return(tc.opns, nil)
 			if tc.localCert == types.EmptyBlockID && hasCert {
+				ts.mCertHdr.EXPECT().HandleSyncedCertificate(gomock.Any(), lid, tc.opns[1].Cert).Return(tc.certErr)
 				ts.mDataFetcher.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).DoAndReturn(
 					func(_ context.Context, got []types.BlockID) error {
 						require.Equal(t, []types.BlockID{tc.opns[1].Cert.BlockID}, got)
 						return tc.fetchErr
-					})
-				if tc.fetchErr == nil {
-					ts.mCertHdr.EXPECT().HandleSyncedCertificate(gomock.Any(), lid, tc.opns[1].Cert).Return(tc.certErr)
-				}
+					}).AnyTimes()
 			}
 			ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
 			results := fixture.RLayers(fixture.RLayer(lid))
