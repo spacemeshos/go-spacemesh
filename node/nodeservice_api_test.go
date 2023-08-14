@@ -22,8 +22,6 @@ func TestPeerInfoApi(t *testing.T) {
 	cfg.P2P.Listen = "/ip4/127.0.0.1/tcp/0"
 
 	cfg.API.PublicListener = "0.0.0.0:0"
-	cfg.API.PrivateListener = "0.0.0.0:0"
-	cfg.API.JSONListener = "0.0.0.0:0"
 	cfg.API.PublicServices = []string{grpcserver.Node}
 	l := logtest.New(t)
 	networkSize := 3
