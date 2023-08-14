@@ -305,7 +305,7 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, lid types.LayerID) error {
 	}
 	// TODO(dshulyak) https://github.com/spacemeshos/go-spacemesh/issues/4425
 	if len(results) > 0 {
-		msh.logger.With().Info("consensus results",
+		msh.logger.With().Debug("consensus results",
 			log.Context(ctx),
 			log.Uint32("layer_id", lid.Uint32()),
 			log.Array("results", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
