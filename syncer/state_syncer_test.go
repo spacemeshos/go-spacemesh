@@ -37,6 +37,7 @@ func opinions(prevHash types.Hash32) []*fetch.LayerOpinion {
 func TestProcessLayers_MultiLayers(t *testing.T) {
 	gLid := types.GetEffectiveGenesis()
 	ts := newSyncerWithoutSyncTimer(t)
+	ts.syncer.cfg.SyncCertDistance = 10000
 	ts.syncer.setATXSynced()
 	current := gLid.Add(10)
 	ts.syncer.setLastSyncedLayer(current.Sub(1))

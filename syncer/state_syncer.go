@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
@@ -103,7 +104,9 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 		// even if it fails to fetch opinions, we still go ahead to ProcessLayer so that the tortoise
 		// has a chance to count ballots and form its own opinions
 		if err := s.mesh.ProcessLayer(ctx, lid); err != nil {
-			s.logger.WithContext(ctx).With().Warning("mesh failed to process layer from sync", lid, log.Err(err))
+			if !errors.Is(err, mesh.ErrMissingBlock) {
+				s.logger.WithContext(ctx).With().Warning("mesh failed to process layer from sync", lid, log.Err(err))
+			}
 		}
 	}
 	s.logger.WithContext(ctx).With().Debug("end of state sync",
@@ -192,8 +195,7 @@ func (s *Syncer) adopt(ctx context.Context, lid types.LayerID, opinions []*fetch
 
 func (s *Syncer) certCutoffLayer() types.LayerID {
 	cutoff := types.GetEffectiveGenesis()
-	// TODO: change this to current layer after https://github.com/spacemeshos/go-spacemesh/issues/2921 is done
-	last := s.mesh.ProcessedLayer()
+	last := s.ticker.CurrentLayer()
 	if last.Uint32() > s.cfg.SyncCertDistance {
 		limit := last.Sub(s.cfg.SyncCertDistance)
 		if limit.After(cutoff) {

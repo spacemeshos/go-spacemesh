@@ -29,6 +29,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
+var ErrMissingBlock = errors.New("missing blocks")
+
 // Mesh is the logic layer above our mesh.DB database.
 type Mesh struct {
 	logger log.Log
@@ -321,7 +323,7 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, lid types.LayerID) error {
 		case <-ctx.Done():
 		case msh.missingBlocks <- missing:
 		}
-		return fmt.Errorf("request missing blocks %v", missing)
+		return fmt.Errorf("%w: request missing blocks %v", ErrMissingBlock, missing)
 	}
 	if err := msh.ensureStateConsistent(ctx, results); err != nil {
 		return err
