@@ -66,6 +66,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
 	"github.com/spacemeshos/go-spacemesh/syncer"
+	"github.com/spacemeshos/go-spacemesh/syncer/blockssync"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
@@ -138,6 +139,7 @@ func GetCommand() *cobra.Command {
 
 			run := func(ctx context.Context) error {
 				types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
+				types.SetLegacyLayers(app.Config.LegacyLayer)
 				// ensure all data folders exist
 				if err := os.MkdirAll(app.Config.DataDir(), 0o700); err != nil {
 					return fmt.Errorf("ensure folders exist: %w", err)
@@ -703,12 +705,16 @@ func (app *App) initServices(ctx context.Context) error {
 		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg)),
 	)
 
+	flog := app.addLogger(Fetcher, lg)
 	fetcher := fetch.NewFetch(app.cachedDB, msh, beaconProtocol, app.host,
 		fetch.WithContext(ctx),
 		fetch.WithConfig(app.Config.FETCH),
-		fetch.WithLogger(app.addLogger(Fetcher, lg)),
+		fetch.WithLogger(flog),
 	)
 	fetcherWrapped.Fetcher = fetcher
+	app.eg.Go(func() error {
+		return blockssync.Sync(ctx, flog.Zap(), msh.MissingBlocks(), fetcher)
+	})
 
 	patrol := layerpatrol.New()
 	syncerConf := app.Config.Sync
@@ -737,6 +743,7 @@ func (app *App) initServices(ctx context.Context) error {
 
 	hareCfg := app.Config.HARE
 	hareCfg.Hdist = app.Config.Tortoise.Hdist
+	hareCfg.StopAtxGrading = types.GetLegacyLayer()
 	app.hare = hare.New(
 		app.cachedDB,
 		hareCfg,

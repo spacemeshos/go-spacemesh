@@ -71,13 +71,6 @@ var (
 		[]string{},
 	).WithLabelValues()
 
-	blockRequested = metrics.NewCounter(
-		"block_requested",
-		namespace,
-		"number of missing block requested",
-		[]string{},
-	).WithLabelValues()
-
 	syncedLayer = metrics.NewGauge(
 		"layer",
 		namespace,

@@ -429,33 +429,3 @@ func TestProcessLayers_NoHashResolutionForNewlySyncedNode(t *testing.T) {
 	ts.mForkFinder.EXPECT().Purge(true)
 	require.NoError(t, ts.syncer.processLayers(context.Background()))
 }
-
-func TestProcessLayers_SucceedOnRetry(t *testing.T) {
-	ts := newSyncerWithoutSyncTimer(t)
-	ts.syncer.setATXSynced()
-	current := types.GetEffectiveGenesis().Add(1)
-	ts.mTicker.advanceToLayer(current)
-	ts.syncer.setLastSyncedLayer(current)
-
-	ts.mLyrPatrol.EXPECT().IsHareInCharge(gomock.Any()).Return(false).AnyTimes()
-	ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), gomock.Any()).AnyTimes()
-	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any()).AnyTimes()
-	ts.mVm.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-	ts.mVm.EXPECT().GetStateRoot().AnyTimes()
-	ts.mConState.EXPECT().UpdateCache(gomock.Any(), gomock.Any(), gomock.Any(), nil, nil).AnyTimes()
-
-	missing := fixture.RLayers(fixture.RLayer(current,
-		fixture.RBlock(types.BlockID{1}, fixture.Hare()),
-		fixture.RBlock(types.BlockID{2}, fixture.Valid()),
-	))
-	ts.mTortoise.EXPECT().Updates().Return(missing)
-	ts.mTortoise.EXPECT().Updates().Return(nil)
-	ts.mTortoise.EXPECT().Results(gomock.Any(), gomock.Any()).Return(missing, nil)
-	ts.mDataFetcher.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, got []types.BlockID) error {
-			missing[0].Blocks[0].Data = true
-			missing[0].Blocks[1].Data = true
-			return nil
-		})
-	require.NoError(t, ts.syncer.processLayers(context.Background()))
-}
