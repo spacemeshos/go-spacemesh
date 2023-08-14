@@ -2,6 +2,8 @@ module github.com/spacemeshos/go-spacemesh
 
 go 1.19
 
+replace github.com/spacemeshos/api/release/go v1.18.0 => github.com/spacemeshos/api/release/go v1.18.1-0.20230811144450-baf8688a08b2
+
 require (
 	cloud.google.com/go/storage v1.31.0
 	github.com/ALTree/bigfloat v0.0.0-20220102081255-38c8b72a9924
