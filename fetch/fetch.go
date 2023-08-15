@@ -437,6 +437,25 @@ func (f *Fetch) send(requests []RequestMessage) {
 	}
 
 	peer2batches := f.organizeRequests(requests)
+	if len(peer2batches) == 0 {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		for _, msg := range requests {
+			if req, ok := f.ongoing[msg.Hash]; ok {
+				f.logger.WithContext(req.ctx).With().Info("delaying hash request",
+					log.Stringer("hash", msg.Hash),
+					log.String("hint", string(msg.Hint)),
+				)
+				f.unprocessed[msg.Hash] = req
+			} else {
+				f.logger.With().Error("ongoing request missing",
+					log.Stringer("hash", msg.Hash),
+					log.String("hint", string(msg.Hint)),
+				)
+			}
+		}
+		return
+	}
 
 	for peer, peerBatches := range peer2batches {
 		for _, reqs := range peerBatches {
@@ -457,7 +476,7 @@ func (f *Fetch) organizeRequests(requests []RequestMessage) map[p2p.Peer][][]Req
 	peer2requests := make(map[p2p.Peer][]RequestMessage)
 	peers := f.host.GetPeers()
 	if len(peers) == 0 {
-		f.logger.Info("cannot send fetch: no peers found")
+		f.logger.Info("cannot send batch: no peers found")
 		// in loop() we will try again after the batchTimeout
 		return nil
 	}
