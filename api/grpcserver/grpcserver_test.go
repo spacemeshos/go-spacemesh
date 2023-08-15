@@ -2082,6 +2082,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 		Total:       rewardAmount,
 		LayerReward: rewardAmount * 2,
 		Coinbase:    addr1,
+		SmesherID:   signer1.NodeID(),
 	})
 
 	res, err := stream.Recv()
@@ -2136,6 +2137,7 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 		Total:       rewardAmount,
 		LayerReward: rewardAmount * 2,
 		Coinbase:    addr1,
+		SmesherID:   signer1.NodeID(),
 	})
 	res, err := stream.Recv()
 	require.NoError(t, err, "got error from stream")
@@ -2258,6 +2260,7 @@ func checkAccountDataItemReward(t *testing.T, dataItem any) {
 	require.Equal(t, layerFirst.Uint32(), x.Reward.Layer.Number)
 	require.Equal(t, uint64(rewardAmount*2), x.Reward.LayerReward.Value)
 	require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
+	require.Equal(t, signer1.NodeID().Bytes(), x.Reward.Smesher.Id)
 }
 
 func checkAccountDataItemAccount(t *testing.T, dataItem any) {
@@ -2279,6 +2282,7 @@ func checkGlobalStateDataReward(t *testing.T, dataItem any) {
 	require.Equal(t, layerFirst.Uint32(), x.Reward.Layer.Number)
 	require.Equal(t, uint64(rewardAmount*2), x.Reward.LayerReward.Value)
 	require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
+	require.Equal(t, signer1.NodeID().Bytes(), x.Reward.Smesher.Id)
 }
 
 func checkGlobalStateDataAccountWrapper(t *testing.T, dataItem any) {
