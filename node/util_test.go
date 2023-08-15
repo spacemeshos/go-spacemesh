@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/gob"
 	"errors"
-	"os"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -62,9 +61,7 @@ func NewTestNetwork(t *testing.T, conf config.Config, l log.Log, size int) []*Te
 		err := gob.NewDecoder(bytes.NewBuffer(marshaled)).Decode(&c)
 		require.NoError(t, err)
 
-		dir, err := os.MkdirTemp("", "")
-		require.NoError(t, err)
-
+		dir := t.TempDir()
 		c.DataDirParent = dir
 		c.SMESHING.Opts.DataDir = dir
 		c.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte(strconv.Itoa(i))).String()
