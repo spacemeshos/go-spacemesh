@@ -34,7 +34,7 @@ func NewTestNetwork(t *testing.T, conf config.Config, l log.Log, size int) []*Te
 	genesis := conf.Genesis.GenesisID()
 	copy(bootstrapBeacon[:], genesis[:])
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	g := errgroup.Group{}
 	var apps []*TestApp
 
