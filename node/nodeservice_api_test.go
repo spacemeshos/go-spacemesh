@@ -25,7 +25,7 @@ func TestPeerInfoApi(t *testing.T) {
 	cfg.API.PublicServices = []string{grpcserver.Node}
 	l := logtest.New(t)
 	networkSize := 3
-	network, cleanup, err := NewNetwork(cfg, l, networkSize)
+	network, cleanup, err := NewTestNetwork(cfg, l, networkSize)
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, cleanup())

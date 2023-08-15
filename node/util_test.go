@@ -20,8 +20,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-// NewNetwork creates a network of fully connected nodes.
-func NewNetwork(conf config.Config, l log.Log, size int) ([]*TestApp, func() error, error) {
+// NewTestNetwork creates a network of fully connected nodes.
+func NewTestNetwork(conf config.Config, l log.Log, size int) ([]*TestApp, func() error, error) {
 	// We need to set this global state
 	types.SetLayersPerEpoch(conf.LayersPerEpoch)
 	types.SetNetworkHRP(conf.NetworkHRP) // set to generate coinbase
