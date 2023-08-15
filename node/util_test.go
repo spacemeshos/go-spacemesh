@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/gob"
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -72,7 +73,9 @@ func NewTestNetwork(t *testing.T, conf config.Config, l log.Log, size int) []*Te
 		app := NewApp(t, &c, l)
 		g.Go(func() error {
 			err := app.Start(ctx)
-			t.Logf("failed to start instance %d: %v", i, err)
+			if !errors.Is(err, context.Canceled) {
+				t.Logf("failed to start instance %d: %v", i, err)
+			}
 			return err
 		})
 		<-app.Started()
