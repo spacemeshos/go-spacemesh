@@ -63,7 +63,7 @@ func makeResults(lid types.LayerID, txs ...types.Transaction) []types.Transactio
 	return results
 }
 
-func createATX(t testing.TB, db sql.Executor, cb types.Address) types.ATXID {
+func createATX(t testing.TB, db sql.Executor, cb types.Address) (types.ATXID, types.NodeID) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	nonce := types.VRFPostIndex(1)
@@ -81,7 +81,7 @@ func createATX(t testing.TB, db sql.Executor, cb types.Address) types.ATXID {
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(db, vAtx))
-	return vAtx.ID()
+	return vAtx.ID(), sig.NodeID()
 }
 
 func TestExecutor_Execute(t *testing.T) {
@@ -128,24 +128,28 @@ func TestExecutor_Execute(t *testing.T) {
 
 	lid = lid.Add(1)
 	cbs := []types.Address{{1, 2, 3}, {2, 3, 4}}
+	atxid1, nodeId1 := createATX(t, te.db, cbs[0])
+	atxid2, nodeId2 := createATX(t, te.db, cbs[1])
 	rewards := []types.AnyReward{
 		{
-			AtxID:  createATX(t, te.db, cbs[0]),
+			AtxID:  atxid1,
 			Weight: types.RatNum{Num: 1, Denom: 3},
 		},
 		{
-			AtxID:  createATX(t, te.db, cbs[1]),
+			AtxID:  atxid2,
 			Weight: types.RatNum{Num: 2, Denom: 3},
 		},
 	}
 	expRewards := []types.CoinbaseReward{
 		{
-			Coinbase: cbs[0],
-			Weight:   rewards[0].Weight,
+			SmesherID: nodeId1,
+			Coinbase:  cbs[0],
+			Weight:    rewards[0].Weight,
 		},
 		{
-			Coinbase: cbs[1],
-			Weight:   rewards[1].Weight,
+			SmesherID: nodeId2,
+			Coinbase:  cbs[1],
+			Weight:    rewards[1].Weight,
 		},
 	}
 	sort.Slice(expRewards, func(i, j int) bool {
@@ -225,24 +229,28 @@ func TestExecutor_ExecuteOptimistic(t *testing.T) {
 	lid := types.GetEffectiveGenesis()
 	tickHeight := uint64(111)
 	cbs := []types.Address{{1, 2, 3}, {2, 3, 4}}
+	atxId1, nodeId1 := createATX(t, te.db, cbs[0])
+	atxId2, nodeId2 := createATX(t, te.db, cbs[1])
 	rewards := []types.AnyReward{
 		{
-			AtxID:  createATX(t, te.db, cbs[0]),
+			AtxID:  atxId1,
 			Weight: types.RatNum{Num: 1, Denom: 3},
 		},
 		{
-			AtxID:  createATX(t, te.db, cbs[1]),
+			AtxID:  atxId2,
 			Weight: types.RatNum{Num: 2, Denom: 3},
 		},
 	}
 	expRewards := []types.CoinbaseReward{
 		{
-			Coinbase: cbs[0],
-			Weight:   rewards[0].Weight,
+			SmesherID: nodeId1,
+			Coinbase:  cbs[0],
+			Weight:    rewards[0].Weight,
 		},
 		{
-			Coinbase: cbs[1],
-			Weight:   rewards[1].Weight,
+			SmesherID: nodeId2,
+			Coinbase:  cbs[1],
+			Weight:    rewards[1].Weight,
 		},
 	}
 	sort.Slice(expRewards, func(i, j int) bool {
