@@ -336,12 +336,8 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, lid types.LayerID) error {
 	if err := msh.applyResults(ctx, applicable); err != nil {
 		return err
 	}
-	if len(missing) == 0 {
-		msh.pendingUpdates.min = 0
-		msh.pendingUpdates.max = 0
-	} else if len(applicable) > 0 {
-		msh.pendingUpdates.min = applicable[len(applicable)-1].Layer + 1
-	}
+	msh.pendingUpdates.min = 0
+	msh.pendingUpdates.max = 0
 	return nil
 }
 
@@ -431,6 +427,7 @@ func (msh *Mesh) applyResults(ctx context.Context, results []result.Layer) error
 
 		msh.logger.With().Debug("state persisted",
 			log.Context(ctx),
+			log.Stringer("layer", layer.Layer),
 			log.Stringer("applied", target),
 		)
 		if layer.Layer > msh.LatestLayerInState() {
