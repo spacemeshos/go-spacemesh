@@ -90,15 +90,15 @@ type PostSetupOpts struct {
 }
 
 type PostProviderID struct {
-	InnerValue *int64
+	value *int64
 }
 
 // String implements pflag.Value.String.
 func (id *PostProviderID) String() string {
-	if id.InnerValue == nil {
+	if id.value == nil {
 		return ""
 	}
-	return fmt.Sprintf("%d", *id.InnerValue)
+	return fmt.Sprintf("%d", *id.value)
 }
 
 // Type implements pflag.Value.Type.
@@ -109,7 +109,7 @@ func (PostProviderID) Type() string {
 // Set implements pflag.Value.Set.
 func (id *PostProviderID) Set(value string) error {
 	if len(value) == 0 {
-		id.InnerValue = nil
+		id.value = nil
 		return nil
 	}
 
@@ -118,19 +118,19 @@ func (id *PostProviderID) Set(value string) error {
 		return fmt.Errorf("failed to parse PoST Provider ID (\"%s\"): %w", value, err)
 	}
 
-	id.InnerValue = new(int64)
-	*id.InnerValue = int64(i)
+	id.value = new(int64)
+	*id.value = int64(i)
 	return nil
 }
 
 // SetInt64 sets the value of the PostProviderID to the given int64.
 func (id *PostProviderID) SetInt64(value int64) {
-	id.InnerValue = &value
+	id.value = &value
 }
 
 // Value returns the value of the PostProviderID as a pointer to uint32.
 func (id *PostProviderID) Value() *int64 {
-	return id.InnerValue
+	return id.value
 }
 
 // PostProvingOpts are the options controlling POST proving process.

@@ -1,9 +1,7 @@
 package node
 
 import (
-	"bytes"
 	"context"
-	"encoding/gob"
 	"errors"
 	"path/filepath"
 	"strconv"
@@ -50,17 +48,10 @@ func NewTestNetwork(t *testing.T, conf config.Config, l log.Log, size int) []*Te
 		}
 	})
 
-	// We encode and decode the config in order to deep copy it.
-	var buf bytes.Buffer
-	err := gob.NewEncoder(&buf).Encode(conf)
-	require.NoError(t, err)
-	marshaled := buf.Bytes()
-
 	for i := 0; i < size; i++ {
-		var c config.Config
-		err := gob.NewDecoder(bytes.NewBuffer(marshaled)).Decode(&c)
-		require.NoError(t, err)
-
+		// Copy config, services don't modify their config, so we just need to
+		// be careful here when we modify any pointer values in the config.
+		c := conf
 		dir := t.TempDir()
 		c.DataDirParent = dir
 		c.SMESHING.Opts.DataDir = dir
@@ -76,7 +67,7 @@ func NewTestNetwork(t *testing.T, conf config.Config, l log.Log, size int) []*Te
 			return err
 		})
 		<-app.Started()
-		err = app.beaconProtocol.UpdateBeacon(bootstrapEpoch, bootstrapBeacon)
+		err := app.beaconProtocol.UpdateBeacon(bootstrapEpoch, bootstrapBeacon)
 		require.NoError(t, err, "failed to bootstrap beacon for node %q", i)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -92,7 +83,7 @@ func NewTestNetwork(t *testing.T, conf config.Config, l log.Log, size int) []*Te
 	// Connect all nodes to each other
 	for i := 0; i < size; i++ {
 		for j := i + 1; j < size; j++ {
-			err = apps[i].Host().Connect(context.Background(), peer.AddrInfo{
+			err := apps[i].Host().Connect(context.Background(), peer.AddrInfo{
 				ID:    apps[j].Host().ID(),
 				Addrs: apps[j].Host().Addrs(),
 			})
