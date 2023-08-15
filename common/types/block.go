@@ -106,10 +106,11 @@ type AnyReward struct {
 	Weight RatNum
 }
 
-// CoinbaseReward contains the reward information by coinbase, used as an interface to VM.
+// CoinbaseReward contains the reward information by coinbase and smesher, used as an interface to VM.
 type CoinbaseReward struct {
-	Coinbase Address
-	Weight   RatNum
+	SmesherID NodeID
+	Coinbase  Address
+	Weight    RatNum
 }
 
 // Initialize calculates and sets the Block's cached blockID.
