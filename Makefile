@@ -8,6 +8,7 @@ UNIT_TESTS ?= $(shell go list ./...  | grep -v systest/tests | grep -v cmd/node 
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
 BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
+TAG = $(shell git describe --tags --exact-match $(COMMIT) 2>/dev/null)
 
 export CGO_ENABLED := 1
 export CGO_CFLAGS := $(CGO_CFLAGS) -DSQLITE_ENABLE_DBSTAT_VTAB=1
@@ -21,14 +22,15 @@ ifneq ($(.SHELLSTATUS),0)
 	BRANCH := $(BRANCH)-dirty
 endif
 
-ifeq ($(BRANCH),develop)
-  DOCKER_IMAGE_REPO := go-spacemesh
-else
-  DOCKER_IMAGE_REPO := go-spacemesh-dev
+DOCKER_TAG := $(SHA)
+# Check if there is a TAG
+ifdef TAG
+    DOCKER_TAG := $(TAG)
 endif
 
-DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(SHA)
-DOCKER_BS_IMAGE = $(DOCKER_IMAGE_REPO)-bs:$(SHA)
+DOCKER_IMAGE_REPO := go-spacemesh
+DOCKER_IMAGE = $(DOCKER_IMAGE_REPO):$(DOCKER_TAG)
+DOCKER_BS_IMAGE = $(DOCKER_IMAGE_REPO)-bs:$(DOCKER_TAG)
 
 # setting extra command line params for the CI tests pytest commands
 ifdef namespace
