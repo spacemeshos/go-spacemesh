@@ -34,8 +34,7 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 	conf1.DataDirParent = t.TempDir()
 	conf1.FileLock = filepath.Join(conf1.DataDirParent, "LOCK")
 	conf1.P2P.Listen = "/ip4/127.0.0.1/tcp/0"
-	app1, err := NewApp(&conf1, l)
-	require.NoError(t, err)
+	app1 := NewApp(t, &conf1, l)
 	conf2 := config.DefaultTestConfig()
 	// We need to copy the genesis config to ensure that both nodes share the
 	// same gnenesis ID, otherwise they will not be able to connect to each
@@ -44,8 +43,7 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 	conf2.DataDirParent = t.TempDir()
 	conf2.FileLock = filepath.Join(conf2.DataDirParent, "LOCK")
 	conf2.P2P.Listen = "/ip4/127.0.0.1/tcp/0"
-	app2, err := NewApp(&conf2, l)
-	require.NoError(t, err)
+	app2 := NewApp(t, &conf2, l)
 
 	types.SetLayersPerEpoch(conf1.LayersPerEpoch)
 	t.Cleanup(func() {
@@ -63,7 +61,7 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 	<-app2.Started()
 
 	// Connect app2 to app1
-	err = app2.Host().Connect(context.Background(), peer.AddrInfo{
+	err := app2.Host().Connect(context.Background(), peer.AddrInfo{
 		ID:    app1.Host().ID(),
 		Addrs: app1.Host().Addrs(),
 	})

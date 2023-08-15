@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/gob"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
+	"testing"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -21,7 +22,7 @@ import (
 )
 
 // NewTestNetwork creates a network of fully connected nodes.
-func NewTestNetwork(conf config.Config, l log.Log, size int) ([]*TestApp, func() error, error) {
+func NewTestNetwork(t *testing.T, conf config.Config, l log.Log, size int) []*TestApp {
 	// We need to set this global state
 	types.SetLayersPerEpoch(conf.LayersPerEpoch)
 	types.SetNetworkHRP(conf.NetworkHRP) // set to generate coinbase
@@ -36,72 +37,55 @@ func NewTestNetwork(conf config.Config, l log.Log, size int) ([]*TestApp, func()
 	ctx, cancel := context.WithCancel(context.Background())
 	g := errgroup.Group{}
 	var apps []*TestApp
-	var datadirs []string
-	cleanup := func() error {
+
+	t.Cleanup(func() {
 		cancel()
 		// Wait for nodes to shutdown
 		g.Wait()
-		// Clean their datadirs
-		for _, d := range datadirs {
-			err := os.RemoveAll(d)
-			if err != nil {
-				return err
-			}
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		defer cancel()
+		for _, a := range apps {
+			a.Cleanup(ctx)
 		}
-		return nil
-	}
+	})
 
 	// We encode and decode the config in order to deep copy it.
 	var buf bytes.Buffer
 	err := gob.NewEncoder(&buf).Encode(conf)
-	if err != nil {
-		cleanup()
-		return nil, nil, err
-	}
+	require.NoError(t, err)
 	marshaled := buf.Bytes()
 
 	for i := 0; i < size; i++ {
 		var c config.Config
 		err := gob.NewDecoder(bytes.NewBuffer(marshaled)).Decode(&c)
-		if err != nil {
-			cleanup()
-			return nil, nil, err
-		}
+		require.NoError(t, err)
+
 		dir, err := os.MkdirTemp("", "")
-		if err != nil {
-			cleanup()
-			return nil, nil, err
-		}
-		datadirs = append(datadirs, dir)
+		require.NoError(t, err)
 
 		c.DataDirParent = dir
 		c.SMESHING.Opts.DataDir = dir
 		c.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte(strconv.Itoa(i))).String()
 		c.FileLock = filepath.Join(c.DataDirParent, "LOCK")
 
-		app, err := NewApp(&c, l)
-		if err != nil {
-			cleanup()
-			return nil, nil, err
-		}
+		app := NewApp(t, &c, l)
 		g.Go(func() error {
 			err := app.Start(ctx)
-			println(err)
+			t.Logf("failed to start instance %d: %v", i, err)
 			return err
 		})
 		<-app.Started()
-		if err := app.beaconProtocol.UpdateBeacon(bootstrapEpoch, bootstrapBeacon); err != nil {
-			return nil, nil, fmt.Errorf("failed to bootstrap beacon for node %q: %w", i, err)
-		}
+		err = app.beaconProtocol.UpdateBeacon(bootstrapEpoch, bootstrapBeacon)
+		require.NoError(t, err, "failed to bootstrap beacon for node %q", i)
+
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		conn, err := grpc.DialContext(ctx, app.grpcPublicService.BoundAddress,
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithBlock(),
 		)
-		if err != nil {
-			return nil, nil, err
-		}
+		require.NoError(t, err)
 		apps = append(apps, NewTestApp(app, conn))
 	}
 
@@ -112,32 +96,26 @@ func NewTestNetwork(conf config.Config, l log.Log, size int) ([]*TestApp, func()
 				ID:    apps[j].Host().ID(),
 				Addrs: apps[j].Host().Addrs(),
 			})
-			if err != nil {
-				cleanup()
-				return nil, nil, err
-			}
+			require.NoError(t, err)
 		}
 	}
-	return apps, cleanup, nil
+	return apps
 }
 
-func NewApp(conf *config.Config, l log.Log) (*App, error) {
+func NewApp(t *testing.T, conf *config.Config, l log.Log) *App {
 	app := New(
 		WithConfig(conf),
 		WithLog(l),
 	)
 
-	var err error
-	if err = app.Initialize(); err != nil {
-		return nil, err
-	}
+	err := app.Initialize()
+	require.NoError(t, err)
 
 	/* Create or load miner identity */
-	if app.edSgn, err = app.LoadOrCreateEdSigner(); err != nil {
-		return app, fmt.Errorf("could not retrieve identity: %w", err)
-	}
+	app.edSgn, err = app.LoadOrCreateEdSigner()
+	require.NoError(t, err, "could not retrieve identity")
 
-	return app, err
+	return app
 }
 
 type TestApp struct {

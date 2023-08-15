@@ -25,11 +25,7 @@ func TestPeerInfoApi(t *testing.T) {
 	cfg.API.PublicServices = []string{grpcserver.Admin}
 	l := logtest.New(t)
 	networkSize := 3
-	network, cleanup, err := NewTestNetwork(cfg, l, networkSize)
-	require.NoError(t, err)
-	defer func() {
-		require.NoError(t, cleanup())
-	}()
+	network := NewTestNetwork(t, cfg, l, networkSize)
 	var infos []*pb.PeerInfoResponse
 	for _, app := range network {
 		adminapi := pb.NewAdminServiceClient(app.Conn)
