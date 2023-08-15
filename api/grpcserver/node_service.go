@@ -20,13 +20,13 @@ import (
 // data such as node status, software version, errors, etc. It can also be used to start
 // the sync process, or to shut down the node.
 type NodeService struct {
-	logger     log.Logger
-	mesh       meshAPI
-	genTime    genesisTimeAPI
-	peers      Peers
-	syncer     syncer
-	appVersion string
-	appCommit  string
+	logger      log.Logger
+	mesh        meshAPI
+	genTime     genesisTimeAPI
+	peerCounter peerCounter
+	syncer      syncer
+	appVersion  string
+	appCommit   string
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -36,7 +36,7 @@ func (s NodeService) RegisterService(server *Server) {
 
 // NewNodeService creates a new grpc service using config data.
 func NewNodeService(
-	peers Peers,
+	peers peerCounter,
 	msh meshAPI,
 	genTime genesisTimeAPI,
 	syncer syncer,
@@ -45,13 +45,13 @@ func NewNodeService(
 	lg log.Logger,
 ) *NodeService {
 	return &NodeService{
-		logger:     lg,
-		mesh:       msh,
-		genTime:    genTime,
-		peers:      peers,
-		syncer:     syncer,
-		appVersion: appVersion,
-		appCommit:  appCommit,
+		logger:      lg,
+		mesh:        msh,
+		genTime:     genTime,
+		peerCounter: peers,
+		syncer:      syncer,
+		appVersion:  appVersion,
+		appCommit:   appCommit,
 	}
 }
 
@@ -88,7 +88,7 @@ func (s NodeService) Status(ctx context.Context, _ *pb.StatusRequest) (*pb.Statu
 	curLayer, latestLayer, verifiedLayer := s.getLayers()
 	return &pb.StatusResponse{
 		Status: &pb.NodeStatus{
-			ConnectedPeers: s.peers.PeerCount(),                    // number of connected peers
+			ConnectedPeers: s.peerCounter.PeerCount(),              // number of connected peers
 			IsSynced:       s.syncer.IsSynced(ctx),                 // whether the node is synced
 			SyncedLayer:    &pb.LayerNumber{Number: latestLayer},   // latest layer we saw from the network
 			TopLayer:       &pb.LayerNumber{Number: curLayer},      // current layer, based on time
@@ -103,30 +103,6 @@ func (s NodeService) NodeInfo(context.Context, *empty.Empty) (*pb.NodeInfoRespon
 		FirstGenesis:     types.FirstEffectiveGenesis().Uint32(),
 		EffectiveGenesis: types.GetEffectiveGenesis().Uint32(),
 		EpochSize:        types.GetLayersPerEpoch(),
-	}, nil
-}
-
-func (s NodeService) PeerInfo(context.Context, *empty.Empty) (*pb.PeerInfoResponse, error) {
-	infos := s.peers.PeerInfo()
-	peers := make([]*pb.PeerInfo, len(infos))
-	// for i, info := range s.peers.PeerInfo() {
-	for i, info := range s.peers.PeerInfo() {
-		connections := make([]*pb.ConnectionInfo, len(info.Connections))
-		for j, c := range info.Connections {
-			connections[j] = &pb.ConnectionInfo{
-				Address:  c.Address.String(),
-				Uptime:   c.Uptime.String(),
-				Outbound: c.Outbound,
-			}
-		}
-		peers[i] = &pb.PeerInfo{
-			Id:          info.ID.String(),
-			Connections: connections,
-			Tags:        info.Tags,
-		}
-	}
-	return &pb.PeerInfoResponse{
-		Peers: peers,
 	}, nil
 }
 
@@ -176,7 +152,7 @@ func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeServi
 
 			resp := &pb.StatusStreamResponse{
 				Status: &pb.NodeStatus{
-					ConnectedPeers: s.peers.PeerCount(),                    // number of connected peers
+					ConnectedPeers: s.peerCounter.PeerCount(),              // number of connected peers
 					IsSynced:       s.syncer.IsSynced(stream.Context()),    // whether the node is synced
 					SyncedLayer:    &pb.LayerNumber{Number: latestLayer},   // latest layer we saw from the network
 					TopLayer:       &pb.LayerNumber{Number: curLayer},      // current layer, based on time

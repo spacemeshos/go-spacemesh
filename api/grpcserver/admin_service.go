@@ -31,14 +31,16 @@ type AdminService struct {
 	logger  log.Logger
 	db      *sql.Database
 	dataDir string
+	p       peers
 }
 
 // NewAdminService creates a new admin grpc service.
-func NewAdminService(db *sql.Database, dataDir string, lg log.Logger) *AdminService {
+func NewAdminService(db *sql.Database, dataDir string, lg log.Logger, p peers) *AdminService {
 	return &AdminService{
 		logger:  lg,
 		db:      db,
 		dataDir: dataDir,
+		p:       p,
 	}
 }
 
@@ -127,4 +129,28 @@ func (a AdminService) EventsStream(req *pb.EventStreamRequest, stream pb.AdminSe
 			}
 		}
 	}
+}
+
+func (a AdminService) PeerInfo(context.Context, *empty.Empty) (*pb.PeerInfoResponse, error) {
+	infos := a.p.PeerInfo()
+	peers := make([]*pb.PeerInfo, len(infos))
+	// for i, info := range s.peers.PeerInfo() {
+	for i, info := range a.p.PeerInfo() {
+		connections := make([]*pb.ConnectionInfo, len(info.Connections))
+		for j, c := range info.Connections {
+			connections[j] = &pb.ConnectionInfo{
+				Address:  c.Address.String(),
+				Uptime:   c.Uptime.String(),
+				Outbound: c.Outbound,
+			}
+		}
+		peers[i] = &pb.PeerInfo{
+			Id:          info.ID.String(),
+			Connections: connections,
+			Tags:        info.Tags,
+		}
+	}
+	return &pb.PeerInfoResponse{
+		Peers: peers,
+	}, nil
 }

@@ -21,7 +21,8 @@ func TestPeerInfoApi(t *testing.T) {
 	cfg.P2P.Listen = "/ip4/127.0.0.1/tcp/0"
 
 	cfg.API.PublicListener = "0.0.0.0:0"
-	cfg.API.PublicServices = []string{grpcserver.Node}
+	cfg.API.PrivateServices = nil
+	cfg.API.PublicServices = []string{grpcserver.Admin}
 	l := logtest.New(t)
 	networkSize := 3
 	network, cleanup, err := NewTestNetwork(cfg, l, networkSize)
@@ -31,17 +32,16 @@ func TestPeerInfoApi(t *testing.T) {
 	}()
 	var infos []*pb.PeerInfoResponse
 	for _, app := range network {
-		nodeapi := pb.NewNodeServiceClient(app.Conn)
+		adminapi := pb.NewAdminServiceClient(app.Conn)
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		defer cancel()
-		info, err := nodeapi.PeerInfo(ctx, &empty.Empty{})
+		info, err := adminapi.PeerInfo(ctx, &empty.Empty{})
 		require.NoError(t, err)
 		infos = append(infos, info)
 	}
 
 	for i, app := range network {
 		for j, innerApp := range network {
-			// for j := 0; j < len(network); j++ {
 			if j == i {
 				continue
 			}
