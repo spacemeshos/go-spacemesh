@@ -309,7 +309,3 @@ func (d *Discovery) IsDirect(id peer.ID) bool {
 func (d *Discovery) IsBootnode(id peer.ID) bool {
 	return containsPeer(d.bootnodes, id)
 }
-
-func (d *Discovery) IsBackup(id peer.ID) bool {
-	return containsPeer(d.backup, id)
-}

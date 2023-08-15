@@ -196,9 +196,6 @@ func (fh *Host) PeerInfo() []PeerInfo {
 		if fh.discovery.IsBootnode(p) {
 			tags = append(tags, "bootnode")
 		}
-		if fh.discovery.IsBackup(p) {
-			tags = append(tags, "backup")
-		}
 		infos = append(infos, PeerInfo{
 			ID:          p,
 			Connections: connections,
