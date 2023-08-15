@@ -405,6 +405,20 @@ func TestProcessLayer(t *testing.T) {
 			},
 		},
 		{
+			"missing but can make progress",
+			[]call{
+				{
+					updates: rlayers(
+						rlayer(start, rblock(idg("1"), fixture.Valid(), fixture.Data())),
+						rlayer(start+1, rblock(idg("2"), fixture.Valid(), fixture.Data())),
+						rlayer(start+2, rblock(idg("3"), fixture.Valid())),
+					),
+					executed: []types.BlockID{idg("1"), idg("2")},
+					applied:  []types.BlockID{idg("1"), idg("2")},
+				},
+			},
+		},
+		{
 			"missing valid",
 			[]call{
 				{
