@@ -292,20 +292,3 @@ func (d *Discovery) newDht(ctx context.Context, h host.Host, public, server bool
 	d.datastore = ds
 	return nil
 }
-
-func containsPeer(addrInfo []peer.AddrInfo, id peer.ID) bool {
-	for _, a := range addrInfo {
-		if a.ID == id {
-			return true
-		}
-	}
-	return false
-}
-
-func (d *Discovery) IsDirect(id peer.ID) bool {
-	return containsPeer(d.direct, id)
-}
-
-func (d *Discovery) IsBootnode(id peer.ID) bool {
-	return containsPeer(d.bootnodes, id)
-}

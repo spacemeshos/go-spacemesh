@@ -10,6 +10,7 @@ import (
 	lp2plog "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
 
@@ -51,6 +52,18 @@ func WithNodeReporter(reporter func()) Opt {
 	}
 }
 
+func WithDirectNodes(direct map[peer.ID]struct{}) Opt {
+	return func(fh *Host) {
+		fh.direct = direct
+	}
+}
+
+func WithBootnodes(bootnodes map[peer.ID]struct{}) Opt {
+	return func(fh *Host) {
+		fh.bootnodes = bootnodes
+	}
+}
+
 // Host is a conveniency wrapper for all p2p related functionality required to run
 // a full spacemesh node.
 type Host struct {
@@ -73,6 +86,8 @@ type Host struct {
 
 	discovery *discovery.Discovery
 	legacy    *peerexchange.Discovery
+
+	direct, bootnodes map[peer.ID]struct{}
 }
 
 // Upgrade creates Host instance from host.Host.
@@ -189,10 +204,10 @@ func (fh *Host) PeerInfo(ctx context.Context, infoChan chan<- PeerInfo) {
 		}
 		var tags []string
 
-		if fh.discovery.IsDirect(p) {
+		if fh.IsDirect(p) {
 			tags = append(tags, "direct")
 		}
-		if fh.discovery.IsBootnode(p) {
+		if fh.IsBootnode(p) {
 			tags = append(tags, "bootnode")
 		}
 		select {
