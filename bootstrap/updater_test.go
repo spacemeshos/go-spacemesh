@@ -159,7 +159,6 @@ func TestLoad(t *testing.T) {
 				path := filepath.Join(bootstrap.PersistFilename(cfg.DataDir, epoch, fmt.Sprintf("update-%s", update[0])))
 				require.NoError(t, fs.MkdirAll(path, 0o700))
 				require.NoError(t, afero.WriteFile(fs, path, []byte(update[1]), 0o400))
-				fmt.Println("wrote file", path)
 			}
 			mc := bootstrap.NewMocklayerClock(gomock.NewController(t))
 			mc.EXPECT().CurrentLayer().Return(current.FirstLayer())
