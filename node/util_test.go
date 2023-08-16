@@ -59,10 +59,11 @@ func NewTestNetwork(t *testing.T, conf config.Config, l log.Log, size int) []*Te
 		c.FileLock = filepath.Join(c.DataDirParent, "LOCK")
 
 		app := NewApp(t, &c, l)
+		instanceIndex := i
 		g.Go(func() error {
 			err := app.Start(ctx)
-			if !errors.Is(err, context.Canceled) {
-				t.Logf("failed to start instance %d: %v", i, err)
+			if err != nil && !errors.Is(err, context.Canceled) {
+				t.Logf("failed to start instance %d: %v", instanceIndex, err)
 			}
 			return err
 		})
