@@ -33,7 +33,6 @@ func TestPeerInfoApi(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		defer cancel()
 
-		// info, err := adminapi.PeerInfo(ctx, &empty.Empty{})
 		streamClient, err := adminapi.PeerInfoStream(ctx, &empty.Empty{})
 		require.NoError(t, err)
 		for {
@@ -52,14 +51,14 @@ func TestPeerInfoApi(t *testing.T) {
 				continue
 			}
 			peers := infos[i]
-			require.Len(t, peers, 2, "expecting each node to have connections to all other nodes")
+			require.Len(t, peers, networkSize-1, "expecting each node to have connections to all other nodes")
 			peer := getPeerInfo(peers, innerApp.host.ID())
 			require.NotNil(t, peer, "info is missing connection to %v")
 			require.Len(t, peer.Connections, 1, "expecting only 1 connection to each peer")
 			require.Equal(t, innerApp.host.Addrs()[0].String(), peer.Connections[0].Address, "connection address should match address of peer")
 			outbound := peer.Connections[0].Outbound
-			// Check that outbound matches with the other side of the connection
 
+			// Check that outbound matches with the other side of the connection
 			otherSide := getPeerInfo(infos[j], app.host.ID())
 			require.NotNil(t, peer, "one side missing peer connection")
 			require.Len(t, otherSide.Connections, 1, "expecting only 1 connection to each peer")

@@ -33,7 +33,7 @@ func NewTestNetwork(t *testing.T, conf config.Config, l log.Log, size int) []*Te
 	copy(bootstrapBeacon[:], genesis[:])
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	g := errgroup.Group{}
+	g, grpContext := errgroup.WithContext(ctx)
 	var apps []*TestApp
 
 	t.Cleanup(func() {
@@ -61,7 +61,7 @@ func NewTestNetwork(t *testing.T, conf config.Config, l log.Log, size int) []*Te
 		app := NewApp(t, &c, l)
 		instanceIndex := i
 		g.Go(func() error {
-			err := app.Start(ctx)
+			err := app.Start(grpContext)
 			if err != nil && !errors.Is(err, context.Canceled) {
 				t.Logf("failed to start instance %d: %v", instanceIndex, err)
 			}
