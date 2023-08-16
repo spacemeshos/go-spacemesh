@@ -45,7 +45,7 @@ func (s *activationService) Get(ctx context.Context, request *pb.GetRequest) (*p
 	atxId := types.ATXID(types.BytesToHash(request.Id))
 	atx, err := s.atxProvider.GetFullAtx(atxId)
 	if err != nil || atx == nil {
-		s.logger.With().Error("failed to get ATX",
+		s.logger.With().Debug("failed to get ATX",
 			log.Stringer("atx id", atxId),
 			log.Err(err),
 		)

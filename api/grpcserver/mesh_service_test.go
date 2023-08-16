@@ -2,6 +2,7 @@ package grpcserver
 
 import (
 	"context"
+	"encoding/hex"
 	"testing"
 	"time"
 
@@ -148,7 +149,7 @@ func TestMeshService_MalfeasanceQuery(t *testing.T) {
 	nodeID, proof := BallotMalfeasance(t, db)
 
 	req := &pb.MalfeasanceRequest{
-		Smesher:      &pb.SmesherId{Id: nodeID.Bytes()},
+		SmesherHex:   hex.EncodeToString(nodeID.Bytes()),
 		IncludeProof: true,
 	}
 	resp, err := client.MalfeasanceQuery(context.Background(), req)

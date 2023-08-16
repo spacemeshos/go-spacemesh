@@ -616,20 +616,11 @@ func (s MeshService) EpochStream(req *pb.EpochStreamRequest, stream pb.MeshServi
 }
 
 func (s MeshService) MalfeasanceQuery(ctx context.Context, req *pb.MalfeasanceRequest) (*pb.MalfeasanceResponse, error) {
-	var id types.NodeID
-	if len(req.SmesherHex) == 0 {
-		if len(req.Smesher.Id) != types.NodeIDSize {
-			return nil, status.Error(codes.InvalidArgument,
-				fmt.Sprintf("invalid smesher id length (%d), expected (%d)", len(req.Smesher.Id), types.NodeIDSize))
-		}
-		id = types.BytesToNodeID(req.Smesher.Id)
-	} else {
-		parsed, err := hex.DecodeString(req.SmesherHex)
-		if err != nil {
-			return nil, status.Error(codes.InvalidArgument, err.Error())
-		}
-		id = types.BytesToNodeID(parsed)
+	parsed, err := hex.DecodeString(req.SmesherHex)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
+	id := types.BytesToNodeID(parsed)
 	proof, err := s.cdb.GetMalfeasanceProof(id)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return nil, status.Error(codes.Internal, err.Error())
