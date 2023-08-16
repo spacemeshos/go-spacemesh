@@ -228,6 +228,23 @@ func (db *CachedDB) IterateEpochATXHeaders(epoch types.EpochID, iter func(*types
 	return nil
 }
 
+func (db *CachedDB) IterateMalfeasanceProofs(iter func(types.NodeID, *types.MalfeasanceProof) error) error {
+	ids, err := identities.GetMalicious(db)
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		proof, err := db.GetMalfeasanceProof(id)
+		if err != nil {
+			return err
+		}
+		if err := iter(id, proof); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // GetLastAtx gets the last atx header of specified node ID.
 func (db *CachedDB) GetLastAtx(nodeID types.NodeID) (*types.ActivationTxHeader, error) {
 	if atxid, err := atxs.GetLastIDByNodeID(db, nodeID); err != nil {

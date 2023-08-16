@@ -45,6 +45,7 @@ type txValidator interface {
 type atxProvider interface {
 	GetFullAtx(id types.ATXID) (*types.VerifiedActivationTx, error)
 	MaxHeightAtx() (types.ATXID, error)
+	GetMalfeasanceProof(id types.NodeID) (*types.MalfeasanceProof, error)
 }
 
 type postSetupProvider interface {

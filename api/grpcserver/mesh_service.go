@@ -2,17 +2,21 @@ package grpcserver
 
 import (
 	"context"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"time"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 // MeshService exposes mesh data such as accounts, blocks, and transactions.
@@ -609,4 +613,69 @@ func (s MeshService) EpochStream(req *pb.EpochStreamRequest, stream pb.MeshServi
 		log.Int("malicious", mal),
 	)
 	return nil
+}
+
+func (s MeshService) MalfeasanceQuery(ctx context.Context, req *pb.MalfeasanceRequest) (*pb.MalfeasanceResponse, error) {
+	var id types.NodeID
+	if len(req.SmesherHex) == 0 {
+		if len(req.Smesher.Id) != types.NodeIDSize {
+			return nil, status.Error(codes.InvalidArgument,
+				fmt.Sprintf("invalid smesher id length (%d), expected (%d)", len(req.Smesher.Id), types.NodeIDSize))
+		}
+		id = types.BytesToNodeID(req.Smesher.Id)
+	} else {
+		parsed, err := hex.DecodeString(req.SmesherHex)
+		if err != nil {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+		id = types.BytesToNodeID(parsed)
+	}
+	proof, err := s.cdb.GetMalfeasanceProof(id)
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	return &pb.MalfeasanceResponse{
+		Proof: events.ToMalfeasancePB(id, proof, req.IncludeProof),
+	}, nil
+}
+
+func (s MeshService) MalfeasanceStream(req *pb.MalfeasanceStreamRequest, stream pb.MeshService_MalfeasanceStreamServer) error {
+	sub := events.SubscribeMalfeasance()
+	if sub == nil {
+		return status.Errorf(codes.FailedPrecondition, "event reporting is not enabled")
+	}
+	eventch, fullch := consumeEvents[events.EventMalfeasance](stream.Context(), sub)
+	if err := stream.SendHeader(metadata.MD{}); err != nil {
+		return status.Errorf(codes.Unavailable, "can't send header")
+	}
+
+	// first serve those already existed locally.
+	if err := s.cdb.IterateMalfeasanceProofs(func(id types.NodeID, mp *types.MalfeasanceProof) error {
+		select {
+		case <-stream.Context().Done():
+			return nil
+		default:
+			res := &pb.MalfeasanceStreamResponse{
+				Proof: events.ToMalfeasancePB(id, mp, req.IncludeProof),
+			}
+			return stream.Send(res)
+		}
+	}); err != nil {
+		return status.Error(codes.Internal, err.Error())
+	}
+
+	for {
+		select {
+		case <-stream.Context().Done():
+			return nil
+		case <-fullch:
+			return status.Errorf(codes.Canceled, "buffer is full")
+		case ev := <-eventch:
+			if err := stream.Send(&pb.MalfeasanceStreamResponse{
+				Proof: events.ToMalfeasancePB(ev.Smesher, ev.Proof, req.IncludeProof),
+			}); err != nil {
+				return status.Error(codes.Internal, fmt.Errorf("send to stream: %w", err).Error())
+			}
+		}
+	}
 }
