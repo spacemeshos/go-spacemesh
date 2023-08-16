@@ -5,14 +5,13 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/hashicorp/go-multierror"
-
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"golang.org/x/sync/errgroup"
 )
 
 var errBadRequest = errors.New("invalid request")
@@ -30,7 +29,8 @@ func (f *Fetch) GetAtxs(ctx context.Context, ids []types.ATXID) error {
 type dataReceiver func(context.Context, types.Hash32, p2p.Peer, []byte) error
 
 func (f *Fetch) getHashes(ctx context.Context, hashes []types.Hash32, hint datastore.Hint, receiver dataReceiver) error {
-	var eg multierror.Group
+	var eg errgroup.Group
+	var errs error
 	for _, hash := range hashes {
 		p, err := f.getHash(ctx, hash, hint, receiver)
 		if err != nil {
@@ -48,14 +48,16 @@ func (f *Fetch) getHashes(ctx context.Context, hashes []types.Hash32, hint datas
 				return ctx.Err()
 			case <-p.completed:
 				if p.err != nil {
-					return fmt.Errorf("hint: %v, hash: %v, err: %w", hint, h.String(), p.err)
+					err := fmt.Errorf("hint: %v, hash: %v, err: %w", hint, h.String(), p.err)
+					errs = errors.Join(errs, err)
 				}
 				return nil
 			}
 		})
 	}
 
-	return eg.Wait().ErrorOrNil()
+	errs = errors.Join(errs, eg.Wait())
+	return errs
 }
 
 // GetMalfeasanceProofs gets malfeasance proofs for the specified NodeIDs and validates them.
