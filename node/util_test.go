@@ -32,7 +32,9 @@ func NewTestNetwork(t *testing.T, conf config.Config, l log.Log, size int) []*Te
 	genesis := conf.Genesis.GenesisID()
 	copy(bootstrapBeacon[:], genesis[:])
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	// This context is used to call Start on a node and canceling it will
+	// shutdown the node. (Hence no timeout has been set).
+	ctx, cancel := context.WithCancel(context.Background())
 	g, grpContext := errgroup.WithContext(ctx)
 	var apps []*TestApp
 
