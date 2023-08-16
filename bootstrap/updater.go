@@ -46,7 +46,6 @@ const (
 	httpTimeout   = 5 * time.Second
 	notifyTimeout = time.Second
 	schemaFile    = "schema.json"
-	format        = "2006-01-02T15-04-05"
 )
 
 var (
@@ -210,13 +209,18 @@ func (u *Updater) Close() error {
 func (u *Updater) addUpdate(epoch types.EpochID, suffix string) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
+	switch suffix {
+	case SuffixActiveSet, SuffixBeacon, SuffixBoostrap:
+	default:
+		u.logger.With().Fatal("unexpected suffix for fallback files", log.String("suffix", suffix))
+	}
 	if _, ok := u.updates[epoch]; !ok {
 		u.updates[epoch] = map[string]struct{}{}
 	}
 	u.updates[epoch][suffix] = struct{}{}
 }
 
-func (u *Updater) downloaded(epoch types.EpochID, suffix string) bool {
+func (u *Updater) Downloaded(epoch types.EpochID, suffix string) bool {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	if _, ok := u.updates[epoch]; ok {
@@ -265,7 +269,7 @@ func makeUri(url string, epoch types.EpochID, suffix string) string {
 
 func (u *Updater) checkEpochUpdate(ctx context.Context, epoch types.EpochID, suffix string) (*VerifiedUpdate, bool, error) {
 	uri := makeUri(u.cfg.URL, epoch, suffix)
-	if u.downloaded(epoch, suffix) {
+	if u.Downloaded(epoch, suffix) {
 		return nil, true, nil
 	}
 	verified, data, err := u.get(ctx, uri)
@@ -505,5 +509,5 @@ func epochDir(dataDir string, epoch types.EpochID) string {
 }
 
 func PersistFilename(dataDir string, epoch types.EpochID, basename string) string {
-	return filepath.Join(epochDir(dataDir, epoch), fmt.Sprintf("%s-%v", basename, time.Now().UTC().Format(format)))
+	return filepath.Join(epochDir(dataDir, epoch), basename)
 }
