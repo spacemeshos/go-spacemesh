@@ -5,7 +5,7 @@ go 1.19
 replace github.com/spacemeshos/api/release/go v1.18.0 => github.com/spacemeshos/api/release/go v1.18.1-0.20230816104005-22d94455c4b9
 
 require (
-	cloud.google.com/go/storage v1.31.0
+	cloud.google.com/go/storage v1.32.0
 	github.com/ALTree/bigfloat v0.0.0-20220102081255-38c8b72a9924
 	github.com/benbjohnson/clock v1.3.5
 	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20230531032220-a757362a12e1
@@ -104,8 +104,8 @@ require (
 	github.com/google/gopacket v1.1.19 // indirect
 	github.com/google/pprof v0.0.0-20230602150820-91b7bce49751 // indirect
 	github.com/google/s2a-go v0.1.4 // indirect
-	github.com/googleapis/enterprise-certificate-proxy v0.2.3 // indirect
-	github.com/googleapis/gax-go/v2 v2.11.0 // indirect
+	github.com/googleapis/enterprise-certificate-proxy v0.2.5 // indirect
+	github.com/googleapis/gax-go/v2 v2.12.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
@@ -210,7 +210,7 @@ require (
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
 	gonum.org/v1/gonum v0.13.0 // indirect
-	google.golang.org/api v0.126.0 // indirect
+	google.golang.org/api v0.132.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20230706204954-ccb25ca9f130 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20230726155614-23370e0ffb3e // indirect

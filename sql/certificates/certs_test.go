@@ -135,10 +135,11 @@ func TestFirstInEpoch(t *testing.T) {
 	db := sql.InMemory()
 
 	lyrBlocks := map[types.LayerID]types.BlockID{
-		types.LayerID(layersPerEpoch - 1):   {1}, // epoch 0
-		types.LayerID(layersPerEpoch + 1):   {2}, // 2nd layer of epoch 1
-		types.LayerID(layersPerEpoch + 2):   {3}, // 3d layer of epoch 1
-		types.LayerID(2*layersPerEpoch - 1): {4}, // last layer of epoch 1
+		types.LayerID(layersPerEpoch - 1):   {1},                // epoch 0
+		types.LayerID(layersPerEpoch):       types.EmptyBlockID, // 1st layer of epoch 1
+		types.LayerID(layersPerEpoch + 1):   {2},                // 2nd layer of epoch 1
+		types.LayerID(layersPerEpoch + 2):   {3},                // 3d layer of epoch 1
+		types.LayerID(2*layersPerEpoch - 1): {4},                // last layer of epoch 1
 		// epoch 2 has no hare output
 		types.LayerID(3 * layersPerEpoch): {5}, // first layer of epoch 3
 		// epoch 4 has hare output but no cert

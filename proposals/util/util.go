@@ -36,6 +36,14 @@ func maxWeight(a, b uint64) uint64 {
 	return b
 }
 
+func GetLegacyNumEligible(lid types.LayerID, weight, minWeight, totalWeight uint64, committeeSize, layersPerEpoch uint32) (uint32, error) {
+	legacyLayer := types.GetLegacyLayer()
+	if legacyLayer != 0 && legacyLayer >= lid.Uint32() {
+		return 1, nil
+	}
+	return GetNumEligibleSlots(weight, minWeight, totalWeight, committeeSize, layersPerEpoch)
+}
+
 // GetNumEligibleSlots calculates the number of eligible slots for a smesher in an epoch.
 func GetNumEligibleSlots(weight, minWeight, totalWeight uint64, committeeSize, layersPerEpoch uint32) (uint32, error) {
 	if totalWeight == 0 {
