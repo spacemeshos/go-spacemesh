@@ -420,6 +420,7 @@ type EventReporter struct {
 	rewardEmitter      event.Emitter
 	resultsEmitter     event.Emitter
 	proposalsEmitter   event.Emitter
+	malfeasanceEmitter event.Emitter
 	events             struct {
 		sync.Mutex
 		buf     *Ring[UserEvent]
@@ -488,6 +489,10 @@ func newEventReporter() *EventReporter {
 	if err != nil {
 		log.With().Panic("failed to to create proposal emitter", log.Err(err))
 	}
+	malfeasanceEmitter, err := bus.Emitter(new(EventMalfeasance))
+	if err != nil {
+		log.With().Panic("failed to create malfeasance emitter", log.Err(err))
+	}
 
 	reporter := &EventReporter{
 		bus:                bus,
@@ -500,6 +505,7 @@ func newEventReporter() *EventReporter {
 		resultsEmitter:     resultsEmitter,
 		errorEmitter:       errorEmitter,
 		proposalsEmitter:   proposalsEmitter,
+		malfeasanceEmitter: malfeasanceEmitter,
 		stopChan:           make(chan struct{}),
 	}
 	reporter.events.buf = newRing[UserEvent](100)
@@ -538,6 +544,9 @@ func CloseEventReporter() {
 		}
 		if err := reporter.proposalsEmitter.Close(); err != nil {
 			log.With().Panic("failed to close propoposalsEmitter", log.Err(err))
+		}
+		if err := reporter.malfeasanceEmitter.Close(); err != nil {
+			log.With().Panic("failed to close malfeasanceEmitter", log.Err(err))
 		}
 
 		close(reporter.stopChan)

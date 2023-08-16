@@ -1,12 +1,16 @@
 package events
 
 import (
+	"encoding/hex"
+	"fmt"
+	"strings"
 	"time"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -213,6 +217,19 @@ func EmitProposal(layer types.LayerID, proposal types.ProposalID) {
 	)
 }
 
+func EmitOwnMalfeasanceProof(id types.NodeID, mp *types.MalfeasanceProof) {
+	const help = "Committed malicious behavior. Identity will be canceled."
+	emitUserEvent(
+		help,
+		false,
+		&pb.Event_Malfeasance{
+			Malfeasance: &pb.EventMalfeasance{
+				Proof: ToMalfeasancePB(id, mp, false),
+			},
+		},
+	)
+}
+
 func emitUserEvent(help string, failure bool, details pb.IsEventDetails) {
 	mu.RLock()
 	defer mu.RUnlock()
@@ -226,4 +243,67 @@ func emitUserEvent(help string, failure bool, details pb.IsEventDetails) {
 			log.With().Error("failed to emit event", log.Err(err))
 		}
 	}
+}
+
+func ToMalfeasancePB(smesher types.NodeID, mp *types.MalfeasanceProof, includeProof bool) *pb.MalfeasanceProof {
+	if mp == nil {
+		return &pb.MalfeasanceProof{}
+	}
+	kind := pb.MalfeasanceProof_MALFEASANCE_UNSPECIFIED
+	switch mp.Proof.Type {
+	case types.MultipleATXs:
+		kind = pb.MalfeasanceProof_MALFEASANCE_ATX
+	case types.MultipleBallots:
+		kind = pb.MalfeasanceProof_MALFEASANCE_BALLOT
+	case types.HareEquivocation:
+		kind = pb.MalfeasanceProof_MALFEASANCE_HARE
+	}
+	result := &pb.MalfeasanceProof{
+		SmesherId: &pb.SmesherId{Id: smesher.Bytes()},
+		Layer:     &pb.LayerNumber{Number: mp.Layer.Uint32()},
+		Kind:      kind,
+		DebugInfo: MalfeasanceInfo(smesher, mp),
+	}
+	if includeProof {
+		data, _ := codec.Encode(mp)
+		result.Proof = data
+	}
+	return result
+}
+
+func MalfeasanceInfo(smesher types.NodeID, mp *types.MalfeasanceProof) string {
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("generate layer: %v\n", mp.Layer))
+	b.WriteString(fmt.Sprintf("smesher id: %v\n", smesher))
+	switch mp.Proof.Type {
+	case types.MultipleATXs:
+		p, ok := mp.Proof.Data.(*types.AtxProof)
+		if ok {
+			b.WriteString(fmt.Sprintf("cause: smesher published multiple ATXs in epoch %d\n", p.Messages[0].InnerMsg.PublishEpoch))
+			b.WriteString(fmt.Sprintf("1st message hash: %s\n", hex.EncodeToString(p.Messages[0].InnerMsg.MsgHash.Bytes())))
+			b.WriteString(fmt.Sprintf("1st message signature: %s\n", hex.EncodeToString(p.Messages[0].Signature.Bytes())))
+			b.WriteString(fmt.Sprintf("2nd message hash: %s\n", hex.EncodeToString(p.Messages[1].InnerMsg.MsgHash.Bytes())))
+			b.WriteString(fmt.Sprintf("2nd message signature: %s\n", hex.EncodeToString(p.Messages[1].Signature.Bytes())))
+		}
+	case types.MultipleBallots:
+		p, ok := mp.Proof.Data.(*types.BallotProof)
+		if ok {
+			b.WriteString(fmt.Sprintf("cause: smesher published multiple ballots in layer %d\n", p.Messages[0].InnerMsg.Layer))
+			b.WriteString(fmt.Sprintf("1st message hash: %s\n", hex.EncodeToString(p.Messages[0].InnerMsg.MsgHash.Bytes())))
+			b.WriteString(fmt.Sprintf("1st message signature: %s\n", hex.EncodeToString(p.Messages[0].Signature.Bytes())))
+			b.WriteString(fmt.Sprintf("2nd message hash: %s\n", hex.EncodeToString(p.Messages[1].InnerMsg.MsgHash.Bytes())))
+			b.WriteString(fmt.Sprintf("2nd message signature: %s\n", hex.EncodeToString(p.Messages[1].Signature.Bytes())))
+		}
+	case types.HareEquivocation:
+		p, ok := mp.Proof.Data.(*types.HareProof)
+		if ok {
+			b.WriteString(fmt.Sprintf("cause: smesher published multiple hare messages in layer %d round %d\n",
+				p.Messages[0].InnerMsg.Layer, p.Messages[0].InnerMsg.Round))
+			b.WriteString(fmt.Sprintf("1st message hash: %s\n", hex.EncodeToString(p.Messages[0].InnerMsg.MsgHash.Bytes())))
+			b.WriteString(fmt.Sprintf("1st message signature: %s\n", hex.EncodeToString(p.Messages[0].Signature.Bytes())))
+			b.WriteString(fmt.Sprintf("2nd message hash: %s\n", hex.EncodeToString(p.Messages[1].InnerMsg.MsgHash.Bytes())))
+			b.WriteString(fmt.Sprintf("2nd message signature: %s\n", hex.EncodeToString(p.Messages[1].Signature.Bytes())))
+		}
+	}
+	return b.String()
 }
