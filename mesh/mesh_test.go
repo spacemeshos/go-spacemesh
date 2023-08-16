@@ -418,7 +418,7 @@ func TestProcessLayer(t *testing.T) {
 					applied:  map[types.LayerID]types.BlockID{start: idg("1"), start + 1: idg("2")},
 				},
 				{
-					updates: rlayers(
+					results: rlayers(
 						rlayer(start+2, rblock(idg("3"), fixture.Valid(), fixture.Data())),
 						rlayer(start+3, rblock(idg("4"), fixture.Valid(), fixture.Data())),
 					),
