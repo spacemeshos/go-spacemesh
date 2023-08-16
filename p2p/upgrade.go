@@ -60,7 +60,7 @@ func WithDirectNodes(direct map[peer.ID]struct{}) Opt {
 
 func WithBootnodes(bootnodes map[peer.ID]struct{}) Opt {
 	return func(fh *Host) {
-		fh.bootnodes = bootnodes
+		fh.bootnode = bootnodes
 	}
 }
 
@@ -87,7 +87,7 @@ type Host struct {
 	discovery *discovery.Discovery
 	legacy    *peerexchange.Discovery
 
-	direct, bootnodes map[peer.ID]struct{}
+	direct, bootnode map[peer.ID]struct{}
 }
 
 // Upgrade creates Host instance from host.Host.
@@ -184,41 +184,36 @@ func (fh *Host) GetPeers() []Peer {
 	return fh.Host.Network().Peers()
 }
 
-// PeerInfo accepts a channel which will receive a stream of PeerInfo objects.
-func (fh *Host) PeerInfo(ctx context.Context, infoChan chan<- PeerInfo) {
-	for _, p := range fh.Host.Network().Peers() {
-		conns := fh.Network().ConnsToPeer(p)
-		// there's no sync between  Peers() and ConnsToPeer() so by the time we
-		// try to get the conns they may not exist.
-		if len(conns) == 0 {
-			continue
-		}
+// ConnectedPeerInfo retrieves a peer info object for the given peer.ID, if the
+// given peer is not connected then nil is returned.
+func (fh *Host) ConnectedPeerInfo(id peer.ID) *PeerInfo {
+	conns := fh.Network().ConnsToPeer(id)
+	// there's no sync between  Peers() and ConnsToPeer() so by the time we
+	// try to get the conns they may not exist.
+	if len(conns) == 0 {
+		return nil
+	}
 
-		var connections []ConnectionInfo
-		for _, c := range conns {
-			connections = append(connections, ConnectionInfo{
-				Address:  c.RemoteMultiaddr(),
-				Uptime:   time.Since(c.Stat().Opened),
-				Outbound: c.Stat().Direction == network.DirOutbound,
-			})
-		}
-		var tags []string
+	var connections []ConnectionInfo
+	for _, c := range conns {
+		connections = append(connections, ConnectionInfo{
+			Address:  c.RemoteMultiaddr(),
+			Uptime:   time.Since(c.Stat().Opened),
+			Outbound: c.Stat().Direction == network.DirOutbound,
+		})
+	}
+	var tags []string
 
-		if fh.IsDirect(p) {
-			tags = append(tags, "direct")
-		}
-		if fh.IsBootnode(p) {
-			tags = append(tags, "bootnode")
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case infoChan <- PeerInfo{
-			ID:          p,
-			Connections: connections,
-			Tags:        tags,
-		}:
-		}
+	if _, ok := fh.direct[id]; ok {
+		tags = append(tags, "direct")
+	}
+	if _, ok := fh.bootnode[id]; ok {
+		tags = append(tags, "bootnode")
+	}
+	return &PeerInfo{
+		ID:          id,
+		Connections: connections,
+		Tags:        tags,
 	}
 }
 

@@ -293,13 +293,3 @@ func parseIntoAddr(nodes []string) ([]peer.AddrInfo, error) {
 	}
 	return addrs, nil
 }
-
-func (d *Host) IsDirect(id peer.ID) bool {
-	_, ok := d.direct[id]
-	return ok
-}
-
-func (d *Host) IsBootnode(id peer.ID) bool {
-	_, ok := d.bootnodes[id]
-	return ok
-}
