@@ -31,10 +31,10 @@ jobs:
     - name: Push docker images with version tag to dockerhub
       if: startsWith(github.ref, 'refs/tags/')
       run: |
-        echo "DOCKER_IMAGE_VERSION=${{ github.ref_name }}" >> $GITHUB_ENV
-
+        export DOCKER_IMAGE_VERSION="${{ github.ref_name }}"
         make dockerpush-only
         make dockerpush-bs-only
 
-        "DOCKER_IMAGE_REPO=go-spacemesh" make dockerpush-only
-        "DOCKER_IMAGE_REPO=go-spacemesh" make dockerpush-bs-only
+        export DOCKER_IMAGE_REPO="go-spacemesh"
+        make dockerpush-only
+        make dockerpush-bs-only
