@@ -500,7 +500,7 @@ func (h *Handler) handleAtx(ctx context.Context, expHash types.Hash32, peer p2p.
 	receivedTime := time.Now()
 	var atx types.ActivationTx
 	if err := codec.Decode(msg, &atx); err != nil {
-		return fmt.Errorf("%w: %v", errMalformedData, err)
+		return fmt.Errorf("%w: %w", errMalformedData, err)
 	}
 
 	epochStart := h.clock.LayerToTime(atx.PublishEpoch.FirstLayer())

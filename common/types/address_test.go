@@ -60,7 +60,7 @@ func TestAddress_NewAddress(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			_, err := types.StringToAddress(testCase.src)
 			if testCase.err != nil {
-				require.ErrorContains(t, err, testCase.err.Error())
+				require.ErrorIs(t, err, testCase.err)
 			} else {
 				require.NoError(t, err)
 			}

@@ -188,7 +188,7 @@ func (db *CachedDB) getAndCacheHeader(id types.ATXID) (*types.ActivationTxHeader
 
 	atxHeader, gotIt := db.atxHdrCache.Get(id)
 	if !gotIt {
-		return nil, fmt.Errorf("inconsistent state: failed to get atx header: %v", err)
+		return nil, fmt.Errorf("inconsistent state: failed to get atx header: %w", err)
 	}
 
 	return atxHeader, nil

@@ -86,7 +86,7 @@ func getProposalMetadata(
 			}
 			mtx, err := transactions.Get(cdb, tid)
 			if err != nil {
-				return nil, fmt.Errorf("%w: get proposal tx: %v", errProposalTxMissing, err.Error())
+				return nil, fmt.Errorf("%w: get proposal tx: %w", errProposalTxMissing, err)
 			}
 			if mtx.TxHeader == nil {
 				return nil, fmt.Errorf("%w: inconsistent state: tx %s is missing header", errProposalTxHdrMissing, mtx.ID)
