@@ -2,7 +2,7 @@ module github.com/spacemeshos/go-spacemesh
 
 go 1.19
 
-replace github.com/spacemeshos/api/release/go v1.18.0 => github.com/spacemeshos/api/release/go v1.18.1-0.20230815093653-d966b6d6a823
+replace github.com/spacemeshos/api/release/go v1.18.0 => github.com/spacemeshos/api/release/go v1.18.1-0.20230816104005-22d94455c4b9
 
 require (
 	cloud.google.com/go/storage v1.31.0

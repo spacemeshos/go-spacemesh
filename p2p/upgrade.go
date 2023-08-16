@@ -169,9 +169,8 @@ func (fh *Host) GetPeers() []Peer {
 	return fh.Host.Network().Peers()
 }
 
-// Peer info returns a slice containing info for connected peers.
-func (fh *Host) PeerInfo() []PeerInfo {
-	var infos []PeerInfo
+// PeerInfo accepts a channel which will receive a stream of PeerInfo objects.
+func (fh *Host) PeerInfo(ctx context.Context, infoChan chan<- PeerInfo) {
 	for _, p := range fh.Host.Network().Peers() {
 		conns := fh.Network().ConnsToPeer(p)
 		// there's no sync between  Peers() and ConnsToPeer() so by the time we
@@ -196,13 +195,16 @@ func (fh *Host) PeerInfo() []PeerInfo {
 		if fh.discovery.IsBootnode(p) {
 			tags = append(tags, "bootnode")
 		}
-		infos = append(infos, PeerInfo{
+		select {
+		case <-ctx.Done():
+			return
+		case infoChan <- PeerInfo{
 			ID:          p,
 			Connections: connections,
 			Tags:        tags,
-		})
+		}:
+		}
 	}
-	return infos
 }
 
 // PeerCount returns number of connected peers.

@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"io"
 	"testing"
 	"time"
 
@@ -26,14 +27,23 @@ func TestPeerInfoApi(t *testing.T) {
 	l := logtest.New(t)
 	networkSize := 3
 	network := NewTestNetwork(t, cfg, l, networkSize)
-	var infos []*pb.PeerInfoResponse
-	for _, app := range network {
+	infos := make([][]*pb.PeerInfo, networkSize)
+	for i, app := range network {
 		adminapi := pb.NewAdminServiceClient(app.Conn)
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		defer cancel()
-		info, err := adminapi.PeerInfo(ctx, &empty.Empty{})
+
+		// info, err := adminapi.PeerInfo(ctx, &empty.Empty{})
+		streamClient, err := adminapi.PeerInfoStream(ctx, &empty.Empty{})
 		require.NoError(t, err)
-		infos = append(infos, info)
+		for {
+			info, err := streamClient.Recv()
+			if err == io.EOF {
+				break
+			}
+			require.NoError(t, err)
+			infos[i] = append(infos[i], info)
+		}
 	}
 
 	for i, app := range network {
@@ -41,19 +51,19 @@ func TestPeerInfoApi(t *testing.T) {
 			if j == i {
 				continue
 			}
-			info := infos[i]
-			require.Len(t, info.Peers, 2, "expecting each node to have connections to all other nodes")
-			peer := getPeerInfo(info.Peers, innerApp.host.ID())
+			peers := infos[i]
+			require.Len(t, peers, 2, "expecting each node to have connections to all other nodes")
+			peer := getPeerInfo(peers, innerApp.host.ID())
 			require.NotNil(t, peer, "info is missing connection to %v")
 			require.Len(t, peer.Connections, 1, "expecting only 1 connection to each peer")
 			require.Equal(t, innerApp.host.Addrs()[0].String(), peer.Connections[0].Address, "connection address should match address of peer")
 			outbound := peer.Connections[0].Outbound
 			// Check that outbound matches with the other side of the connection
 
-			otherSide := getPeerInfo(infos[j].Peers, app.host.ID())
+			otherSide := getPeerInfo(infos[j], app.host.ID())
 			require.NotNil(t, peer, "one side missing peer connection")
 			require.Len(t, otherSide.Connections, 1, "expecting only 1 connection to each peer")
-			require.Equal(t, outbound, !otherSide.Connections[0].Outbound)
+			require.Equal(t, outbound, !otherSide.Connections[0].Outbound, "expecting pairwise connections to agree on outbound direction")
 		}
 	}
 }

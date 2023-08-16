@@ -10,6 +10,7 @@ import (
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spf13/afero"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -18,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -131,11 +133,22 @@ func (a AdminService) EventsStream(req *pb.EventStreamRequest, stream pb.AdminSe
 	}
 }
 
-func (a AdminService) PeerInfo(context.Context, *empty.Empty) (*pb.PeerInfoResponse, error) {
-	infos := a.p.PeerInfo()
-	peers := make([]*pb.PeerInfo, len(infos))
-	// for i, info := range s.peers.PeerInfo() {
-	for i, info := range a.p.PeerInfo() {
+func (a AdminService) PeerInfoStream(_ *empty.Empty, stream pb.AdminService_PeerInfoStreamServer) error {
+	var grp errgroup.Group
+	infoChan := make(chan p2p.PeerInfo, 1000)
+	ctx, cancel := context.WithCancel(stream.Context())
+	defer cancel()
+	grp.Go(func() error {
+		defer close(infoChan)
+		a.p.PeerInfo(ctx, infoChan)
+		return nil
+	})
+	defer grp.Wait()
+
+	// Note that when the context passed to PeerInfo expires PeerInfo will
+	// return and infoChan will be closed. Alternatively PeerInfo will return
+	// once it's returned all its peer info.
+	for info := range infoChan {
 		connections := make([]*pb.ConnectionInfo, len(info.Connections))
 		for j, c := range info.Connections {
 			connections[j] = &pb.ConnectionInfo{
@@ -144,13 +157,16 @@ func (a AdminService) PeerInfo(context.Context, *empty.Empty) (*pb.PeerInfoRespo
 				Outbound: c.Outbound,
 			}
 		}
-		peers[i] = &pb.PeerInfo{
+		err := stream.Send(&pb.PeerInfo{
 			Id:          info.ID.String(),
 			Connections: connections,
 			Tags:        info.Tags,
+		})
+		if err != nil {
+			// finish call to PeerInfo
+			cancel()
+			return fmt.Errorf("send to stream: %w", err)
 		}
 	}
-	return &pb.PeerInfoResponse{
-		Peers: peers,
-	}, nil
+	return nil
 }
