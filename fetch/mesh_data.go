@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
-	"github.com/hashicorp/go-multierror"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -30,7 +31,9 @@ func (f *Fetch) GetAtxs(ctx context.Context, ids []types.ATXID) error {
 type dataReceiver func(context.Context, types.Hash32, p2p.Peer, []byte) error
 
 func (f *Fetch) getHashes(ctx context.Context, hashes []types.Hash32, hint datastore.Hint, receiver dataReceiver) error {
-	var eg multierror.Group
+	var eg errgroup.Group
+	var errs error
+	var mu sync.Mutex
 	for _, hash := range hashes {
 		p, err := f.getHash(ctx, hash, hint, receiver)
 		if err != nil {
@@ -48,14 +51,18 @@ func (f *Fetch) getHashes(ctx context.Context, hashes []types.Hash32, hint datas
 				return ctx.Err()
 			case <-p.completed:
 				if p.err != nil {
-					return fmt.Errorf("hint: %v, hash: %v, err: %w", hint, h.String(), p.err)
+					mu.Lock()
+					defer mu.Unlock()
+					err := fmt.Errorf("hint: %v, hash: %v, err: %w", hint, h.String(), p.err)
+					errs = errors.Join(errs, err)
 				}
 				return nil
 			}
 		})
 	}
 
-	return eg.Wait().ErrorOrNil()
+	err := eg.Wait()
+	return errors.Join(errs, err)
 }
 
 // GetMalfeasanceProofs gets malfeasance proofs for the specified NodeIDs and validates them.

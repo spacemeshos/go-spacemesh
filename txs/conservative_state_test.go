@@ -2,9 +2,10 @@ package txs
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"math"
-	"math/rand"
+	mrand "math/rand"
 	"sort"
 	"testing"
 	"time"
@@ -550,7 +551,7 @@ func TestConsistentHandling(t *testing.T) {
 		createConservativeState(t),
 	}
 
-	rng := rand.New(rand.NewSource(101))
+	rng := mrand.New(mrand.NewSource(101))
 	signers := make([]*signing.EdSigner, 30)
 	nonces := make([]uint64, len(signers))
 	for i := range signers {

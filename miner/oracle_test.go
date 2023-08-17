@@ -2,6 +2,7 @@ package miner
 
 import (
 	"context"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -13,7 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/proposals"
-	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
