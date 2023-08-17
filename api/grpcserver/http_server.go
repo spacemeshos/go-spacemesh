@@ -99,7 +99,6 @@ func (s *JSONHTTPServer) StartService(
 	s.server = &http.Server{
 		Handler: mux,
 	}
-	s.server.Serve(lis)
 	s.grp.Go(func() error {
 		if err := s.server.Serve(lis); err != nil {
 			s.logger.Error("error from grpc http server: %v", err)
