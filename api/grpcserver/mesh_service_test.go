@@ -9,6 +9,8 @@ import (
 	"github.com/golang/mock/gomock"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -149,10 +151,15 @@ func TestMeshService_MalfeasanceQuery(t *testing.T) {
 	nodeID, proof := BallotMalfeasance(t, db)
 
 	req := &pb.MalfeasanceRequest{
-		SmesherHex:   hex.EncodeToString(nodeID.Bytes()),
+		SmesherHex:   "0123456789abcdef",
 		IncludeProof: true,
 	}
 	resp, err := client.MalfeasanceQuery(context.Background(), req)
+	require.Equal(t, status.Code(err), codes.InvalidArgument)
+	require.Nil(t, resp)
+
+	req.SmesherHex = hex.EncodeToString(nodeID.Bytes())
+	resp, err = client.MalfeasanceQuery(context.Background(), req)
 	require.NoError(t, err)
 	require.Equal(t, nodeID, types.BytesToNodeID(resp.Proof.SmesherId.Id))
 	require.EqualValues(t, layer, resp.Proof.Layer.Number)
