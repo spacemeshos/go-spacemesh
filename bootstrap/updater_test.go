@@ -2,6 +2,7 @@ package bootstrap_test
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -125,18 +126,24 @@ func TestLoad(t *testing.T) {
 	tcs := []struct {
 		desc        string
 		resultFuncs []checkFunc
-		persisted   map[types.EpochID]string
+		persisted   map[types.EpochID][]string
+		cached      map[types.EpochID]string
 	}{
 		{
 			desc: "no recovery",
 		},
 		{
 			desc: "recovery required",
-			persisted: map[types.EpochID]string{
-				current - 2: update1,
-				current - 1: update2,
-				current:     update3,
-				current + 1: update4,
+			persisted: map[types.EpochID][]string{
+				current - 2: {bootstrap.SuffixBoostrap, update1},
+				current - 1: {bootstrap.SuffixBoostrap, update2},
+				current:     {bootstrap.SuffixBeacon, update3},
+				current + 1: {bootstrap.SuffixActiveSet, update4},
+			},
+			cached: map[types.EpochID]string{
+				current - 1: bootstrap.SuffixBoostrap,
+				current:     bootstrap.SuffixBeacon,
+				current + 1: bootstrap.SuffixActiveSet,
 			},
 			resultFuncs: []checkFunc{checkUpdate2, checkUpdate3, checkUpdate4},
 		},
@@ -148,11 +155,10 @@ func TestLoad(t *testing.T) {
 
 			cfg := bootstrap.DefaultConfig()
 			fs := afero.NewMemMapFs()
-			persistDir := filepath.Join(cfg.DataDir, bootstrap.DirName)
 			for epoch, update := range tc.persisted {
-				path := filepath.Join(persistDir, strconv.Itoa(int(epoch)), "filename")
+				path := filepath.Join(bootstrap.PersistFilename(cfg.DataDir, epoch, fmt.Sprintf("update-%s", update[0])))
 				require.NoError(t, fs.MkdirAll(path, 0o700))
-				require.NoError(t, afero.WriteFile(fs, path, []byte(update), 0o400))
+				require.NoError(t, afero.WriteFile(fs, path, []byte(update[1]), 0o400))
 			}
 			mc := bootstrap.NewMocklayerClock(gomock.NewController(t))
 			mc.EXPECT().CurrentLayer().Return(current.FirstLayer())
@@ -165,6 +171,9 @@ func TestLoad(t *testing.T) {
 			ch, err := updater.Subscribe()
 			require.NoError(t, err)
 			require.NoError(t, updater.Load(context.Background()))
+			for epoch, suffix := range tc.cached {
+				require.True(t, updater.Downloaded(epoch, suffix))
+			}
 			if len(tc.resultFuncs) > 0 {
 				require.Len(t, ch, len(tc.resultFuncs))
 				for _, fnc := range tc.resultFuncs {
