@@ -496,9 +496,6 @@ func launchServer(tb testing.TB, cfg Config, services ...ServiceAPI) func() {
 	err = jsonService.StartService(context.Background(), services...)
 	require.NoError(tb, err)
 
-	timer := time.NewTimer(3 * time.Second)
-	defer timer.Stop()
-
 	return func() {
 		require.NoError(tb, jsonService.Shutdown(context.Background()))
 		_ = grpcService.Close()
