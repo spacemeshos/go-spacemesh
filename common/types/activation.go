@@ -70,7 +70,7 @@ var EmptyATXID = ATXID{}
 
 type ATXIDs []ATXID
 
-// impl zap's ArrayMarshaler interface
+// impl zap's ArrayMarshaler interface.
 func (ids ATXIDs) MarshalLogArray(enc log.ArrayEncoder) error {
 	for _, id := range ids {
 		enc.AppendString(id.String())
