@@ -55,11 +55,19 @@ func (db *PoetDb) ValidateAndStore(ctx context.Context, proofMessage *types.Poet
 }
 
 // ValidateAndStoreMsg validates and stores a new PoET proof.
-func (db *PoetDb) ValidateAndStoreMsg(ctx context.Context, _ p2p.Peer, data []byte) error {
+func (db *PoetDb) ValidateAndStoreMsg(ctx context.Context, expHash types.Hash32, _ p2p.Peer, data []byte) error {
 	var proofMessage types.PoetProofMessage
 	if err := codec.Decode(data, &proofMessage); err != nil {
 		return fmt.Errorf("parse message: %w", err)
 	}
+	ref, err := proofMessage.Ref()
+	if err != nil {
+		return err
+	}
+	if types.Hash32(ref) != expHash {
+		return fmt.Errorf("fetched wrong poet proof hash. want %s, got %s", expHash.ShortString(), types.Hash32(ref).ShortString())
+	}
+
 	return db.ValidateAndStore(ctx, &proofMessage)
 }
 

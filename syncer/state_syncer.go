@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
@@ -102,8 +103,10 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 		}
 		// even if it fails to fetch opinions, we still go ahead to ProcessLayer so that the tortoise
 		// has a chance to count ballots and form its own opinions
-		if err := s.processWithRetry(ctx, lid); err != nil {
-			s.logger.WithContext(ctx).With().Warning("mesh failed to process layer from sync", lid, log.Err(err))
+		if err := s.mesh.ProcessLayer(ctx, lid); err != nil {
+			if !errors.Is(err, mesh.ErrMissingBlock) {
+				s.logger.WithContext(ctx).With().Warning("mesh failed to process layer from sync", lid, log.Err(err))
+			}
 		}
 	}
 	s.logger.WithContext(ctx).With().Debug("end of state sync",
@@ -114,28 +117,6 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 		log.Stringer("last_synced", s.getLastSyncedLayer()),
 	)
 	return nil
-}
-
-func (s *Syncer) processWithRetry(ctx context.Context, lid types.LayerID) error {
-	for {
-		origerr := s.mesh.ProcessLayer(ctx, lid)
-		if origerr == nil {
-			return nil
-		}
-		var missing *types.ErrorMissing
-		if !errors.As(origerr, &missing) {
-			return origerr
-		}
-		s.logger.With().Debug("requesting missing blocks",
-			log.Context(ctx),
-			log.Inline(missing),
-		)
-		err := s.dataFetcher.GetBlocks(ctx, missing.Blocks)
-		if err != nil {
-			return fmt.Errorf("%w: %s", origerr, err)
-		}
-		blockRequested.Add(float64(len(missing.Blocks)))
-	}
 }
 
 func (s *Syncer) needCert(ctx context.Context, lid types.LayerID) (bool, error) {
@@ -214,8 +195,7 @@ func (s *Syncer) adopt(ctx context.Context, lid types.LayerID, opinions []*fetch
 
 func (s *Syncer) certCutoffLayer() types.LayerID {
 	cutoff := types.GetEffectiveGenesis()
-	// TODO: change this to current layer after https://github.com/spacemeshos/go-spacemesh/issues/2921 is done
-	last := s.mesh.ProcessedLayer()
+	last := s.ticker.CurrentLayer()
 	if last.Uint32() > s.cfg.SyncCertDistance {
 		limit := last.Sub(s.cfg.SyncCertDistance)
 		if limit.After(cutoff) {

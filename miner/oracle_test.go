@@ -427,3 +427,38 @@ func TestOracle_NotSyncedBeforeLastEpoch(t *testing.T) {
 		})
 	}
 }
+
+func TestRefBallot(t *testing.T) {
+	avgLayerSize := uint32(10)
+	lyrsPerEpoch := uint32(20)
+	o := createTestOracle(t, avgLayerSize, lyrsPerEpoch, 0)
+	o.mSync.EXPECT().SyncedBefore(gomock.Any()).Return(true)
+	o.mClock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now())
+
+	layer := types.LayerID(100)
+
+	atx := types.ActivationTx{}
+	atx.SmesherID = o.edSigner.NodeID()
+	atx.PublishEpoch = layer.GetEpoch() - 1
+	atx.SetID(types.ATXID{1})
+	atx.SetEffectiveNumUnits(10)
+	atx.NumUnits = 10
+	atx.SetReceived(time.Now().Add(-100 * time.Second))
+	vatx, err := atx.Verify(0, 100)
+	require.NoError(t, err)
+	require.NoError(t, atxs.Add(o.cdb, vatx))
+
+	ballot := types.Ballot{}
+	ballot.Layer = layer
+	ballot.AtxID = atx.ID()
+	ballot.SmesherID = o.edSigner.NodeID()
+	ballot.EpochData = &types.EpochData{EligibilityCount: 1}
+	ballot.ActiveSet = []types.ATXID{ballot.AtxID}
+	ballot.SetID(types.BallotID{1})
+	require.NoError(t, ballots.Add(o.cdb, &ballot))
+
+	ee, err := o.calcEligibilityProofs(layer, layer.GetEpoch(), types.Beacon{}, types.VRFPostIndex(101))
+	require.NoError(t, err)
+	require.NotEmpty(t, ee)
+	require.Equal(t, 1, int(ee.Slots))
+}

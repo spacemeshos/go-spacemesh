@@ -166,7 +166,7 @@ func NewSyncer(
 	}
 
 	s.syncTimer = time.NewTicker(s.cfg.Interval)
-	s.validateTimer = time.NewTicker(s.cfg.Interval * 2)
+	s.validateTimer = time.NewTicker(s.cfg.Interval)
 	if s.dataFetcher == nil {
 		s.dataFetcher = NewDataFetch(mesh, fetcher, cdb, cache, s.logger)
 	}
@@ -400,10 +400,6 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		}
 
 		if err := s.syncAtx(ctx); err != nil {
-			s.logger.WithContext(ctx).With().Warning("failed to sync atxs",
-				log.Stringer("current", s.ticker.CurrentLayer()),
-				log.Err(err),
-			)
 			return false
 		}
 
@@ -413,7 +409,6 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		// always sync to currentLayer-1 to reduce race with gossip and hare/tortoise
 		for layerID := s.getLastSyncedLayer().Add(1); layerID.Before(s.ticker.CurrentLayer()); layerID = layerID.Add(1) {
 			if err := s.syncLayer(ctx, layerID); err != nil {
-				s.logger.WithContext(ctx).With().Warning("failed to fetch layer", layerID, log.Err(err))
 				return false
 			}
 			s.setLastSyncedLayer(layerID)

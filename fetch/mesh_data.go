@@ -27,7 +27,7 @@ func (f *Fetch) GetAtxs(ctx context.Context, ids []types.ATXID) error {
 	return f.getHashes(ctx, hashes, datastore.ATXDB, f.validators.atx.HandleMessage)
 }
 
-type dataReceiver func(context.Context, p2p.Peer, []byte) error
+type dataReceiver func(context.Context, types.Hash32, p2p.Peer, []byte) error
 
 func (f *Fetch) getHashes(ctx context.Context, hashes []types.Hash32, hint datastore.Hint, receiver dataReceiver) error {
 	var eg multierror.Group

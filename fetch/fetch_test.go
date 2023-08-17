@@ -89,11 +89,11 @@ func createFetch(tb testing.TB) *testFetch {
 	return tf
 }
 
-func goodReceiver(context.Context, p2p.Peer, []byte) error {
+func goodReceiver(context.Context, types.Hash32, p2p.Peer, []byte) error {
 	return nil
 }
 
-func badReceiver(context.Context, p2p.Peer, []byte) error {
+func badReceiver(context.Context, types.Hash32, p2p.Peer, []byte) error {
 	return errors.New("bad receiver")
 }
 
@@ -371,7 +371,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	t.Cleanup(fetcher.Stop)
 
 	// We set a validatior just for atxs, this validator does not drop connections
-	vf := ValidatorFunc(func(ctx context.Context, id peer.ID, data []byte) error { return pubsub.ErrValidationReject })
+	vf := ValidatorFunc(func(context.Context, types.Hash32, peer.ID, []byte) error { return pubsub.ErrValidationReject })
 	fetcher.SetValidators(vf, nil, nil, nil, nil, nil, nil, nil)
 
 	// Request an atx by hash
@@ -387,7 +387,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	}
 
 	// Now wrap the atx validator with  DropPeerOnValidationReject and set it again
-	fetcher.SetValidators(ValidatorFunc(pubsub.DropPeerOnValidationReject(vf, h, lg)), nil, nil, nil, nil, nil, nil, nil)
+	fetcher.SetValidators(ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(vf, h, lg)), nil, nil, nil, nil, nil, nil, nil)
 
 	// Request an atx by hash
 	_, err = fetcher.getHash(ctx, types.Hash32{}, datastore.ATXDB, fetcher.validators.atx.HandleMessage)

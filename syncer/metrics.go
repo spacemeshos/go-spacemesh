@@ -71,17 +71,20 @@ var (
 		[]string{},
 	).WithLabelValues()
 
-	blockRequested = metrics.NewCounter(
-		"block_requested",
-		namespace,
-		"number of missing block requested",
-		[]string{},
-	).WithLabelValues()
-
 	syncedLayer = metrics.NewGauge(
 		"layer",
 		namespace,
 		"synced layer",
 		[]string{},
 	).WithLabelValues()
+
+	peerError = metrics.NewCounter(
+		"peer_error",
+		namespace,
+		"total number of errors by peers",
+		[]string{"kind"})
+	atxPeerError   = peerError.WithLabelValues("atx")
+	layerPeerError = peerError.WithLabelValues("layer")
+	opnsPeerError  = peerError.WithLabelValues("opns")
+	malPeerError   = peerError.WithLabelValues("mal")
 )

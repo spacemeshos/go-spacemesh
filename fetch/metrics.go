@@ -41,6 +41,12 @@ var (
 		subsystem,
 		"total request that hash has no data",
 		[]string{hint})
+
+	peerErrors = metrics.NewCounter(
+		"hash_peer_err",
+		subsystem,
+		"total error from sending peers hash requests",
+		[]string{hint})
 )
 
 // logCacheHit logs cache hit.
