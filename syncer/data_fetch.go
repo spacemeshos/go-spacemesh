@@ -358,7 +358,7 @@ func (d *DataFetch) PollLayerOpinions(ctx context.Context, lid types.LayerID) ([
 			}
 			return req.response.opinions, candidateErr
 		case <-ctx.Done():
-			logger.Warning("request timed out")
+			logger.Debug("request timed out")
 			return nil, errTimeout
 		}
 	}
@@ -383,7 +383,7 @@ func (d *DataFetch) receiveOpinions(ctx context.Context, req *opinionRequest, pe
 	select {
 	case req.ch <- result:
 	case <-ctx.Done():
-		logger.Warning("request timed out")
+		logger.Debug("request timed out")
 	}
 }
 
@@ -435,19 +435,22 @@ func (d *DataFetch) PollLayerOpinions2(ctx context.Context, lid types.LayerID, n
 			if needCert {
 				peerCerts := map[types.BlockID][]p2p.Peer{}
 				for _, opns := range req.response.opinions {
-					if !opns.Certified {
+					if opns.Certified == nil {
 						continue
 					}
-					if _, ok := peerCerts[opns.CertBlock]; !ok {
-						peerCerts[opns.CertBlock] = []p2p.Peer{}
+					if _, ok := peerCerts[*opns.Certified]; !ok {
+						peerCerts[*opns.Certified] = []p2p.Peer{}
 					}
-					peerCerts[opns.CertBlock] = append(peerCerts[opns.CertBlock], opns.Peer())
-					d.fetcher.RegisterPeerHashes(opns.Peer(), []types.Hash32{opns.CertBlock.AsHash32()})
+					peerCerts[*opns.Certified] = append(peerCerts[*opns.Certified], opns.Peer())
+					if *opns.Certified != types.EmptyBlockID {
+						d.fetcher.RegisterPeerHashes(opns.Peer(), []types.Hash32{opns.Certified.AsHash32()})
+					}
 				}
 				for bid, bidPeers := range peerCerts {
 					cert, err := d.fetcher.GetCert(ctx, lid, bid, bidPeers)
 					if err != nil {
-						logger.With().Warning("failed to get cert from peers", log.Err(err))
+						certPeerError.Inc()
+						logger.With().Debug("failed to get cert from peers", log.Err(err))
 						continue
 					}
 					certs = append(certs, cert)
@@ -455,7 +458,7 @@ func (d *DataFetch) PollLayerOpinions2(ctx context.Context, lid types.LayerID, n
 			}
 			return req.response.opinions, certs, candidateErr
 		case <-ctx.Done():
-			logger.Warning("request timed out")
+			logger.Debug("request timed out")
 			return nil, nil, errTimeout
 		}
 	}
@@ -480,7 +483,7 @@ func (d *DataFetch) receiveOpinions2(ctx context.Context, req *opinionRequest2, 
 	select {
 	case req.ch <- result:
 	case <-ctx.Done():
-		logger.Warning("request timed out")
+		logger.Debug("request timed out")
 	}
 }
 

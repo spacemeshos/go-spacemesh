@@ -150,15 +150,12 @@ func (s *Syncer) fetchOpinions2(ctx context.Context, lid types.LayerID) ([]*peer
 		s.logger.WithContext(ctx).With().Warning("failed to fetch opinions", lid, log.Err(err))
 		return nil, nil, fmt.Errorf("PollLayerOpinions: %w", err)
 	}
-	var result []*peerOpinion
+	result := make([]*peerOpinion, 0, len(opinions))
 	for _, opn := range opinions {
 		result = append(result, &peerOpinion{
 			prevAggHash: opn.PrevAggHash,
 			peer:        opn.Peer(),
 		})
-		if opn.CertBlock != types.EmptyBlockID {
-			s.dataFetcher.RegisterPeerHashes(opn.Peer(), []types.Hash32{opn.CertBlock.AsHash32()})
-		}
 	}
 	opinionLayer.Set(float64(lid))
 	return result, certs, nil

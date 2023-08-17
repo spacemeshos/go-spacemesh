@@ -66,14 +66,11 @@ func generateLayerOpinions(t *testing.T) []byte {
 	return data
 }
 
-func generateLayerOpinions2(t *testing.T, hasCert bool, bid types.BlockID) []byte {
+func generateLayerOpinions2(t *testing.T, bid *types.BlockID) []byte {
 	t.Helper()
 	lo := &fetch.LayerOpinion2{
 		PrevAggHash: types.RandomHash(),
-		Certified:   hasCert,
-	}
-	if hasCert {
-		lo.CertBlock = bid
+		Certified:   bid,
 	}
 	data, err := codec.Encode(lo)
 	require.NoError(t, err)
@@ -350,11 +347,11 @@ func TestDataFetch_PollLayerOpinions2(t *testing.T) {
 								p := peer
 								td.mFetcher.EXPECT().RegisterPeerHashes(p, []types.Hash32{tc.hasCert[i].AsHash32()})
 							}
-							var certified types.BlockID
+							var certified *types.BlockID
 							if len(tc.hasCert) > 0 {
-								certified = tc.hasCert[i]
+								certified = &tc.hasCert[i]
 							}
-							okCB(generateLayerOpinions2(t, len(tc.hasCert) > 0, certified), peer)
+							okCB(generateLayerOpinions2(t, certified), peer)
 						}
 					}
 					for _, bid := range tc.queried {

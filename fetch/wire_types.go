@@ -140,8 +140,7 @@ func (lo *LayerOpinion) MarshalLogObject(encoder log.ObjectEncoder) error {
 
 type LayerOpinion2 struct {
 	PrevAggHash types.Hash32
-	Certified   bool
-	CertBlock   types.BlockID
+	Certified   *types.BlockID
 
 	peer p2p.Peer
 }
@@ -160,8 +159,10 @@ func (lo *LayerOpinion2) Peer() p2p.Peer {
 func (lo *LayerOpinion2) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("peer", lo.peer.String())
 	encoder.AddString("prev hash", lo.PrevAggHash.String())
-	encoder.AddBool("has cert", lo.Certified)
-	encoder.AddString("cert block", lo.CertBlock.String())
+	encoder.AddBool("has cert", lo.Certified != nil)
+	if lo.Certified != nil {
+		encoder.AddString("cert block", lo.Certified.String())
+	}
 	return nil
 }
 

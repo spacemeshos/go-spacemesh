@@ -86,5 +86,6 @@ var (
 	atxPeerError   = peerError.WithLabelValues("atx")
 	layerPeerError = peerError.WithLabelValues("layer")
 	opnsPeerError  = peerError.WithLabelValues("opns")
+	certPeerError  = peerError.WithLabelValues("cert")
 	malPeerError   = peerError.WithLabelValues("mal")
 )

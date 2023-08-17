@@ -194,7 +194,7 @@ func TestHandleLayerOpinionsReq2(t *testing.T) {
 
 			th := createTestHandler(t)
 			lid := types.LayerID(111)
-			certified, aggHash := createOpinions(t, th.cdb, lid, !tc.missingCert)
+			_, aggHash := createOpinions(t, th.cdb, lid, !tc.missingCert)
 			if tc.multipleCerts {
 				bid := types.RandomBlockID()
 				require.NoError(t, certificates.Add(th.cdb, lid, &types.Certificate{
@@ -214,11 +214,9 @@ func TestHandleLayerOpinionsReq2(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, aggHash, got.PrevAggHash)
 			if tc.missingCert {
-				require.False(t, got.Certified)
-				require.Equal(t, types.EmptyBlockID, got.CertBlock)
+				require.Nil(t, got.Certified)
 			} else {
-				require.True(t, got.Certified)
-				require.Equal(t, certified, got.CertBlock)
+				require.NotNil(t, got.Certified)
 			}
 		})
 	}

@@ -167,8 +167,7 @@ func (h *handler) handleLayerOpinionsReq2(ctx context.Context, req []byte) ([]by
 		return nil, err
 	}
 	if err == nil {
-		lo.Certified = true
-		lo.CertBlock = bid
+		lo.Certified = &bid
 	}
 	out, err = codec.Encode(&lo)
 	if err != nil {

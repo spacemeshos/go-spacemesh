@@ -209,11 +209,9 @@ func (f *Fetch) PeerEpochInfo(ctx context.Context, peer p2p.Peer, epoch types.Ep
 		ed   EpochData
 	)
 	okCB := func(data []byte) {
-		defer close(done)
 		done <- codec.Decode(data, &ed)
 	}
 	errCB := func(perr error) {
-		defer close(done)
 		done <- perr
 	}
 	epochBytes, err := codec.Encode(epoch)
@@ -253,13 +251,11 @@ func (f *Fetch) PeerMeshHashes(ctx context.Context, peer p2p.Peer, req *MeshHash
 	}
 
 	okCB := func(data []byte) {
-		defer close(done)
 		h, err := codec.DecodeSlice[types.Hash32](data)
 		hashes = h
 		done <- err
 	}
 	errCB := func(perr error) {
-		defer close(done)
 		done <- perr
 	}
 	if err = f.servers[meshHashProtocol].Request(ctx, peer, reqData, okCB, errCB); err != nil {
@@ -295,27 +291,26 @@ func (f *Fetch) GetCert(ctx context.Context, lid types.LayerID, bid types.BlockI
 		done := make(chan error, 1)
 		okCB := func(data []byte) {
 			var peerCert types.Certificate
-			err = codec.Decode(data, &peerCert)
-			if err != nil {
-				defer close(done)
+			if err = codec.Decode(data, &peerCert); err != nil {
 				done <- err
 				return
 			}
+			// for generic data fetches by hash (ID for atx/block/proposal/ballot/tx), the check on whether the returned
+			// data matching the hash was done on the data handlers' path. for block certificate, there is no ID associated
+			// with it, hence the check here.
+			// however, certificate doesn't go through that path. it's requested by a separate protocol because a block
+			// certificate doesn't have an ID.
 			if peerCert.BlockID != bid {
-				defer close(done)
 				done <- fmt.Errorf("peer %v served wrong cert. want %s got %s", peer, bid.String(), peerCert.BlockID.String())
 				return
 			}
 			out <- &peerCert
-			close(out)
 		}
 		errCB := func(perr error) {
-			defer close(done)
 			done <- perr
 		}
 		if err := f.servers[certProtocol].Request(ctx, peer, reqData, okCB, errCB); err != nil {
 			done <- err
-			close(done)
 		}
 		select {
 		case err := <-done:

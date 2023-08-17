@@ -35,14 +35,14 @@ func opinions(prevHash types.Hash32) []*fetch.LayerOpinion {
 }
 
 func opinions2(prevHash types.Hash32) []*fetch.LayerOpinion2 {
+	bid := types.RandomBlockID()
 	return []*fetch.LayerOpinion2{
 		{
 			PrevAggHash: prevHash,
 		},
 		{
 			PrevAggHash: prevHash,
-			Certified:   true,
-			CertBlock:   types.RandomBlockID(),
+			Certified:   &bid,
 		},
 	}
 }
@@ -123,10 +123,9 @@ func TestProcessLayers_MultiLayers_NewOpinionsProtocol(t *testing.T) {
 				prevHash, err := layers.GetAggregatedHash(ts.cdb, prevLid)
 				require.NoError(t, err)
 				opns := opinions2(prevHash)
-				adopted[lid] = opns[1].CertBlock
-				return opns, []*types.Certificate{{BlockID: opns[1].CertBlock}}, nil
+				adopted[lid] = *opns[1].Certified
+				return opns, []*types.Certificate{{BlockID: *opns[1].Certified}}, nil
 			})
-		ts.mDataFetcher.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any())
 		ts.mDataFetcher.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).DoAndReturn(
 			func(_ context.Context, got []types.BlockID) error {
 				require.Equal(t, []types.BlockID{adopted[lid]}, got)
@@ -282,7 +281,7 @@ func TestProcessLayers_OpinionsNotAdopted_NewOpinionsProtocol(t *testing.T) {
 			name: "cert not accepted",
 			opns: []*fetch.LayerOpinion2{
 				{PrevAggHash: prevHash},
-				{PrevAggHash: prevHash, Certified: true, CertBlock: certBlock},
+				{PrevAggHash: prevHash, Certified: &certBlock},
 			},
 			certs:   []*types.Certificate{{BlockID: certBlock}},
 			certErr: errors.New("meh"),
@@ -291,7 +290,7 @@ func TestProcessLayers_OpinionsNotAdopted_NewOpinionsProtocol(t *testing.T) {
 			name: "cert block failed fetching",
 			opns: []*fetch.LayerOpinion2{
 				{PrevAggHash: prevHash},
-				{PrevAggHash: prevHash, Certified: true, CertBlock: certBlock},
+				{PrevAggHash: prevHash, Certified: &certBlock},
 			},
 			certs:    []*types.Certificate{{BlockID: certBlock}},
 			fetchErr: errors.New("meh"),
@@ -312,7 +311,7 @@ func TestProcessLayers_OpinionsNotAdopted_NewOpinionsProtocol(t *testing.T) {
 
 			hasCert := false
 			for _, opn := range tc.opns {
-				if opn.Certified {
+				if opn.Certified != nil {
 					hasCert = true
 				}
 			}
@@ -337,7 +336,7 @@ func TestProcessLayers_OpinionsNotAdopted_NewOpinionsProtocol(t *testing.T) {
 				ts.mCertHdr.EXPECT().HandleSyncedCertificate(gomock.Any(), lid, tc.certs[0]).Return(tc.certErr)
 				ts.mDataFetcher.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).DoAndReturn(
 					func(_ context.Context, got []types.BlockID) error {
-						require.Equal(t, []types.BlockID{tc.opns[1].CertBlock}, got)
+						require.Equal(t, []types.BlockID{*tc.opns[1].Certified}, got)
 						return tc.fetchErr
 					}).MaxTimes(1)
 			}
