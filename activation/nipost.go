@@ -252,11 +252,11 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 		proof, proofMetadata, err := nb.postSetupProvider.GenerateProof(ctx, nb.state.PoetProofRef[:], proving.WithPowCreator(nb.nodeID.Bytes()))
 		if err != nil {
 			events.EmitPostFailure()
-			return nil, 0, fmt.Errorf("failed to generate Post: %v", err)
+			return nil, 0, fmt.Errorf("failed to generate Post: %w", err)
 		}
 		commitmentAtxId, err := nb.postSetupProvider.CommitmentAtx()
 		if err != nil {
-			return nil, 0, fmt.Errorf("failed to get commitment ATX: %v", err)
+			return nil, 0, fmt.Errorf("failed to get commitment ATX: %w", err)
 		}
 		if err := nb.validator.Post(
 			ctx,
@@ -269,7 +269,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 			verifying.WithLabelScryptParams(nb.postSetupProvider.LastOpts().Scrypt),
 		); err != nil {
 			events.EmitInvalidPostProof()
-			return nil, 0, fmt.Errorf("failed to verify Post: %v", err)
+			return nil, 0, fmt.Errorf("failed to verify Post: %w", err)
 		}
 		events.EmitPostComplete(nb.state.PoetProofRef[:])
 		postGenDuration = time.Since(startTime)
