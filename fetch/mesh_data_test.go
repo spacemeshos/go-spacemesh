@@ -59,7 +59,6 @@ func (f *testFetch) testGetTxs(tids []types.TransactionID) error {
 
 const (
 	numBallots   = 10
-	numBlocks    = 3
 	numMalicious = 11
 )
 
@@ -765,16 +764,16 @@ func TestFetch_GetCert(t *testing.T) {
 			f := createFetch(t)
 			lid := types.LayerID(11)
 			bid := types.BlockID{1, 2, 3}
-			req := &CertRequest{
+			req := &OpinionRequest{
 				Layer: lid,
-				Block: bid,
+				Block: &bid,
 			}
 			expected := types.Certificate{BlockID: bid}
 			reqData, err := codec.Encode(req)
 			require.NoError(t, err)
 			for i, peer := range peers {
 				ith := i
-				f.mCertS.EXPECT().Request(gomock.Any(), peer, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+				f.mOpn2S.EXPECT().Request(gomock.Any(), peer, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 					func(_ context.Context, _ p2p.Peer, gotReq []byte, okCB func([]byte), errCB func(error)) error {
 						require.Equal(t, reqData, gotReq)
 						if tc.results[ith] == nil {
@@ -804,7 +803,7 @@ func TestFetch_GetCert(t *testing.T) {
 func FuzzCertRequest(f *testing.F) {
 	h := createTestHandler(f)
 	f.Fuzz(func(t *testing.T, data []byte) {
-		h.handleCertReq(context.Background(), data)
+		h.handleLayerOpinionsReq2(context.Background(), data)
 	})
 }
 

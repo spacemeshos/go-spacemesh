@@ -32,7 +32,6 @@ type testFetch struct {
 	mHashS  *mocks.Mockrequester
 	mMHashS *mocks.Mockrequester
 	mOpn2S  *mocks.Mockrequester
-	mCertS  *mocks.Mockrequester
 
 	mMesh        *mocks.MockmeshProvider
 	mMalH        *mocks.MockSyncValidator
@@ -57,7 +56,6 @@ func createFetch(tb testing.TB) *testFetch {
 		mHashS:       mocks.NewMockrequester(ctrl),
 		mMHashS:      mocks.NewMockrequester(ctrl),
 		mOpn2S:       mocks.NewMockrequester(ctrl),
-		mCertS:       mocks.NewMockrequester(ctrl),
 		mMalH:        mocks.NewMockSyncValidator(ctrl),
 		mAtxH:        mocks.NewMockSyncValidator(ctrl),
 		mBallotH:     mocks.NewMockSyncValidator(ctrl),
@@ -88,7 +86,6 @@ func createFetch(tb testing.TB) *testFetch {
 			hashProtocol:     tf.mHashS,
 			meshHashProtocol: tf.mMHashS,
 			lyrOpnsProtocol2: tf.mOpn2S,
-			certProtocol:     tf.mCertS,
 		}),
 		withHost(tf.mh))
 	tf.Fetch.SetValidators(tf.mAtxH, tf.mPoetH, tf.mBallotH, tf.mBlocksH, tf.mProposalH, tf.mTxBlocksH, tf.mTxProposalH, tf.mMalH)

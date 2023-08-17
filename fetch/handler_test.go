@@ -203,10 +203,11 @@ func TestHandleLayerOpinionsReq2(t *testing.T) {
 				require.NoError(t, certificates.SetInvalid(th.cdb, lid, bid))
 			}
 
-			lidBytes, err := codec.Encode(&lid)
+			req := OpinionRequest{Layer: lid}
+			reqBytes, err := codec.Encode(&req)
 			require.NoError(t, err)
 
-			out, err := th.handleLayerOpinionsReq2(context.Background(), lidBytes)
+			out, err := th.handleLayerOpinionsReq2(context.Background(), reqBytes)
 			require.NoError(t, err)
 
 			var got LayerOpinion2
@@ -226,21 +227,21 @@ func TestHandleCertReq(t *testing.T) {
 	th := createTestHandler(t)
 	lid := types.LayerID(111)
 	bid := types.RandomBlockID()
-	req := &CertRequest{
+	req := &OpinionRequest{
 		Layer: lid,
-		Block: bid,
+		Block: &bid,
 	}
 	reqData, err := codec.Encode(req)
 	require.NoError(t, err)
 
-	resp, err := th.handleCertReq(context.Background(), reqData)
+	resp, err := th.handleLayerOpinionsReq2(context.Background(), reqData)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.Nil(t, resp)
 
 	cert := &types.Certificate{BlockID: bid}
 	require.NoError(t, certificates.Add(th.cdb, lid, cert))
 
-	resp, err = th.handleCertReq(context.Background(), reqData)
+	resp, err = th.handleLayerOpinionsReq2(context.Background(), reqData)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	var got types.Certificate

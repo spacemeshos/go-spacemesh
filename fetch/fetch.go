@@ -29,7 +29,6 @@ const (
 	malProtocol      = "ml/1"
 
 	lyrOpnsProtocol2 = "lp/2"
-	certProtocol     = "ct/1"
 
 	cacheSize = 1000
 )
@@ -198,7 +197,6 @@ func NewFetch(cdb *datastore.CachedDB, msh meshProvider, b system.BeaconGetter, 
 		f.servers[meshHashProtocol] = server.New(host, meshHashProtocol, h.handleMeshHashReq, srvOpts...)
 		f.servers[malProtocol] = server.New(host, malProtocol, h.handleMaliciousIDsReq, srvOpts...)
 		f.servers[lyrOpnsProtocol2] = server.New(host, lyrOpnsProtocol2, h.handleLayerOpinionsReq2, srvOpts...)
-		f.servers[certProtocol] = server.New(host, certProtocol, h.handleCertReq, srvOpts...)
 	}
 	return f
 }

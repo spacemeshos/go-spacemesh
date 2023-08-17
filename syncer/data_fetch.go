@@ -442,6 +442,8 @@ func (d *DataFetch) PollLayerOpinions2(ctx context.Context, lid types.LayerID, n
 						peerCerts[*opns.Certified] = []p2p.Peer{}
 					}
 					peerCerts[*opns.Certified] = append(peerCerts[*opns.Certified], opns.Peer())
+					// note that we want to fetch block certificate for types.EmptyBlockID as well
+					// but we don't need to register hash for the actual block fetching
 					if *opns.Certified != types.EmptyBlockID {
 						d.fetcher.RegisterPeerHashes(opns.Peer(), []types.Hash32{opns.Certified.AsHash32()})
 					}

@@ -277,9 +277,9 @@ func (f *Fetch) PeerMeshHashes(ctx context.Context, peer p2p.Peer, req *MeshHash
 func (f *Fetch) GetCert(ctx context.Context, lid types.LayerID, bid types.BlockID, peers []p2p.Peer) (*types.Certificate, error) {
 	f.logger.WithContext(ctx).With().Debug("requesting block certificate from peers",
 		lid, bid, log.Int("num peer", len(peers)))
-	req := &CertRequest{
+	req := &OpinionRequest{
 		Layer: lid,
-		Block: bid,
+		Block: &bid,
 	}
 	reqData, err := codec.Encode(req)
 	if err != nil {
@@ -309,7 +309,7 @@ func (f *Fetch) GetCert(ctx context.Context, lid types.LayerID, bid types.BlockI
 		errCB := func(perr error) {
 			done <- perr
 		}
-		if err := f.servers[certProtocol].Request(ctx, peer, reqData, okCB, errCB); err != nil {
+		if err := f.servers[lyrOpnsProtocol2].Request(ctx, peer, reqData, okCB, errCB); err != nil {
 			done <- err
 		}
 		select {

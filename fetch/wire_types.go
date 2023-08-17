@@ -138,6 +138,11 @@ func (lo *LayerOpinion) MarshalLogObject(encoder log.ObjectEncoder) error {
 	return nil
 }
 
+type OpinionRequest struct {
+	Layer types.LayerID
+	Block *types.BlockID
+}
+
 type LayerOpinion2 struct {
 	PrevAggHash types.Hash32
 	Certified   *types.BlockID
@@ -164,9 +169,4 @@ func (lo *LayerOpinion2) MarshalLogObject(encoder log.ObjectEncoder) error {
 		encoder.AddString("cert block", lo.Certified.String())
 	}
 	return nil
-}
-
-type CertRequest struct {
-	Layer types.LayerID
-	Block types.BlockID
 }

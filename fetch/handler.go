@@ -145,25 +145,31 @@ func (h *handler) handleLayerOpinionsReq(ctx context.Context, req []byte) ([]byt
 	return out, nil
 }
 
-func (h *handler) handleLayerOpinionsReq2(ctx context.Context, req []byte) ([]byte, error) {
-	opnReqV2.Inc()
+func (h *handler) handleLayerOpinionsReq2(ctx context.Context, data []byte) ([]byte, error) {
+	var req OpinionRequest
+	if err := codec.Decode(data, &req); err != nil {
+		return nil, err
+	}
+	if req.Block != nil {
+		return h.handleCertReq(ctx, req.Layer, *req.Block)
+	}
+
 	var (
-		lid types.LayerID
+		lid = req.Layer
 		lo  LayerOpinion2
 		out []byte
 		err error
 	)
-	if err := codec.Decode(req, &lid); err != nil {
-		return nil, err
-	}
+
+	opnReqV2.Inc()
 	lo.PrevAggHash, err = layers.GetAggregatedHash(h.cdb, lid.Sub(1))
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		h.logger.WithContext(ctx).With().Warning("serve: failed to get prev agg hash", lid, log.Err(err))
+		h.logger.WithContext(ctx).With().Error("serve: failed to get prev agg hash", lid, log.Err(err))
 		return nil, err
 	}
 	bid, err := certificates.CertifiedBlock(h.cdb, lid)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		h.logger.WithContext(ctx).With().Warning("serve: failed to get layer certified block", lid, log.Err(err))
+		h.logger.WithContext(ctx).With().Error("serve: failed to get layer certified block", lid, log.Err(err))
 		return nil, err
 	}
 	if err == nil {
@@ -176,25 +182,17 @@ func (h *handler) handleLayerOpinionsReq2(ctx context.Context, req []byte) ([]by
 	return out, nil
 }
 
-func (h *handler) handleCertReq(ctx context.Context, req []byte) ([]byte, error) {
+func (h *handler) handleCertReq(ctx context.Context, lid types.LayerID, bid types.BlockID) ([]byte, error) {
 	certReq.Inc()
-	var (
-		cr  CertRequest
-		out []byte
-		err error
-	)
-	if err := codec.Decode(req, &cr); err != nil {
-		return nil, err
-	}
-	certs, err := certificates.Get(h.cdb, cr.Layer)
+	certs, err := certificates.Get(h.cdb, lid)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		h.logger.WithContext(ctx).With().Warning("serve: failed to get certificate", cr.Layer, log.Err(err))
+		h.logger.WithContext(ctx).With().Error("serve: failed to get certificate", lid, log.Err(err))
 		return nil, err
 	}
 	if err == nil {
 		for _, cert := range certs {
-			if cert.Block == cr.Block {
-				out, err = codec.Encode(cert.Cert)
+			if cert.Block == bid {
+				out, err := codec.Encode(cert.Cert)
 				if err != nil {
 					h.logger.WithContext(ctx).With().Fatal("serve: failed to encode cert", log.Err(err))
 				}
@@ -202,7 +200,7 @@ func (h *handler) handleCertReq(ctx context.Context, req []byte) ([]byte, error)
 			}
 		}
 	}
-	return out, err
+	return nil, err
 }
 
 func (h *handler) handleHashReq(ctx context.Context, data []byte) ([]byte, error) {
