@@ -1285,6 +1285,36 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log, dbPath string) error {
 
 // Start starts the Spacemesh node and initializes all relevant services according to command line arguments provided.
 func (app *App) Start(ctx context.Context) error {
+	err := app.startSynchronous(ctx)
+	if err != nil {
+		return err
+	}
+	defer events.ReportError(events.NodeError{
+		Msg:   "node is shutting down",
+		Level: zapcore.InfoLevel,
+	})
+	// TODO: pass app.eg to components and wait for them collectively
+	if app.ptimesync != nil {
+		app.eg.Go(func() error {
+			app.errCh <- app.ptimesync.Wait()
+			return nil
+		})
+	}
+	// app blocks until it receives a signal to exit
+	// this signal may come from the node or from sig-abort (ctrl-c)
+	select {
+	case <-ctx.Done():
+		return nil
+	case err = <-app.errCh:
+		return err
+	}
+}
+
+func (app *App) startSynchronous(ctx context.Context) error {
+	// notify anyone who might be listening that the app has finished starting.
+	// this can be used by, e.g., app tests.
+	defer close(app.started)
+
 	// Create a contextual logger for local usage (lower-level modules will create their own contextual loggers
 	// using context passed down to them)
 	logger := app.log.WithContext(ctx)
@@ -1407,30 +1437,7 @@ func (app *App) Start(ctx context.Context) error {
 
 	events.SubscribeToLayers(app.clock)
 	app.log.Info("app started")
-
-	// notify anyone who might be listening that the app has finished starting.
-	// this can be used by, e.g., app tests.
-	close(app.started)
-
-	defer events.ReportError(events.NodeError{
-		Msg:   "node is shutting down",
-		Level: zapcore.InfoLevel,
-	})
-	// TODO: pass app.eg to components and wait for them collectively
-	if app.ptimesync != nil {
-		app.eg.Go(func() error {
-			app.errCh <- app.ptimesync.Wait()
-			return nil
-		})
-	}
-	// app blocks until it receives a signal to exit
-	// this signal may come from the node or from sig-abort (ctrl-c)
-	select {
-	case <-ctx.Done():
-		return nil
-	case err = <-app.errCh:
-		return err
-	}
+	return nil
 }
 
 func (app *App) preserveAfterRecovery(ctx context.Context) {
