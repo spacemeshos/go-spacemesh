@@ -64,7 +64,7 @@ func (v *Validator) NIPost(ctx context.Context, publishEpoch types.EpochID, node
 	}
 
 	if err := v.Post(ctx, publishEpoch, nodeId, commitmentAtxId, nipost.Post, nipost.PostMetadata, numUnits, opts...); err != nil {
-		return 0, fmt.Errorf("invalid Post: %v", err)
+		return 0, fmt.Errorf("invalid Post: %w", err)
 	}
 
 	var ref types.PoetProofRef

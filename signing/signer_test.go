@@ -2,11 +2,10 @@ package signing
 
 import (
 	"crypto/ed25519"
+	"crypto/rand"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
 func TestNewEdSignerFromBuffer(t *testing.T) {

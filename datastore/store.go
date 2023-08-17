@@ -188,7 +188,7 @@ func (db *CachedDB) getAndCacheHeader(id types.ATXID) (*types.ActivationTxHeader
 
 	atxHeader, gotIt := db.atxHdrCache.Get(id)
 	if !gotIt {
-		return nil, fmt.Errorf("inconsistent state: failed to get atx header: %v", err)
+		return nil, fmt.Errorf("inconsistent state: failed to get atx header: %w", err)
 	}
 
 	return atxHeader, nil
@@ -222,6 +222,23 @@ func (db *CachedDB) IterateEpochATXHeaders(epoch types.EpochID, iter func(*types
 			return err
 		}
 		if err := iter(header); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (db *CachedDB) IterateMalfeasanceProofs(iter func(types.NodeID, *types.MalfeasanceProof) error) error {
+	ids, err := identities.GetMalicious(db)
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		proof, err := db.GetMalfeasanceProof(id)
+		if err != nil {
+			return err
+		}
+		if err := iter(id, proof); err != nil {
 			return err
 		}
 	}

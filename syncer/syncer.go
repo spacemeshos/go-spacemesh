@@ -168,7 +168,7 @@ func NewSyncer(
 	}
 
 	s.syncTimer = time.NewTicker(s.cfg.Interval)
-	s.validateTimer = time.NewTicker(s.cfg.Interval * 2)
+	s.validateTimer = time.NewTicker(s.cfg.Interval)
 	if s.dataFetcher == nil {
 		s.dataFetcher = NewDataFetch(mesh, fetcher, cdb, cache, s.logger)
 	}
