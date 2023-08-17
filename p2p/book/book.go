@@ -403,7 +403,7 @@ func persist(known map[ID]*addressInfo, w io.Writer) error {
 		}
 	}
 	if _, err := fmt.Fprintf(w, "%s", strconv.FormatUint(checksum.Sum64(), 10)); err != nil {
-		return fmt.Errorf("write checksum: %v", err)
+		return fmt.Errorf("write checksum: %w", err)
 	}
 	return nil
 }

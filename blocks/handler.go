@@ -76,7 +76,7 @@ func (h *Handler) HandleSyncedBlock(ctx context.Context, expHash types.Hash32, p
 	}
 
 	if err := ValidateRewards(b.Rewards); err != nil {
-		return fmt.Errorf("%w: %s", errInvalidRewards, err.Error())
+		return fmt.Errorf("%w: %w", errInvalidRewards, err)
 	}
 
 	logger = logger.WithFields(b.ID(), b.LayerIndex)

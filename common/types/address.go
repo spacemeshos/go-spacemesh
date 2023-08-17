@@ -48,7 +48,7 @@ func StringToAddress(src string) (Address, error) {
 	var addr Address
 	hrp, data, err := bech32.DecodeNoLimit(src)
 	if err != nil {
-		return addr, fmt.Errorf("%s: %w", ErrDecodeBech32, err)
+		return addr, fmt.Errorf("%w: %w", ErrDecodeBech32, err)
 	}
 
 	// for encoding bech32 uses slice of 5-bit unsigned integers. convert it back it 8-bit uints.
