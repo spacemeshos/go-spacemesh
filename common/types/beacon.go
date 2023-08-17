@@ -29,7 +29,7 @@ func (b Beacon) String() string { return b.Hex() }
 func (b Beacon) ShortString() string {
 	str := b.Hex()
 	l := len(str)
-	return Shorten(str[util.Min(2, l):], 10)
+	return Shorten(str[min(2, l):], 10)
 }
 
 // Bytes gets the byte representation of the underlying hash.

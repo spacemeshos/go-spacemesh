@@ -248,23 +248,3 @@ func NewLayer(layerIndex LayerID) *Layer {
 		blocks:  make([]*Block, 0, 3),
 	}
 }
-
-// MinLayer returns minimal nonzero layer.
-func MinLayer(i, j LayerID) LayerID {
-	if i == 0 {
-		return j
-	} else if j == 0 {
-		return i
-	} else if i < j {
-		return i
-	}
-	return j
-}
-
-// MaxLayer returns max layer.
-func MaxLayer(i, j LayerID) LayerID {
-	if i > j {
-		return i
-	}
-	return j
-}

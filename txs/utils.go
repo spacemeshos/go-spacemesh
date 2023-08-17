@@ -4,7 +4,6 @@ import (
 	"math/rand"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -20,7 +19,7 @@ func ShuffleWithNonceOrder(
 	byAddrAndNonce map[types.Address][]*NanoTX,
 ) []types.TransactionID {
 	rng.Shuffle(len(ntxs), func(i, j int) { ntxs[i], ntxs[j] = ntxs[j], ntxs[i] })
-	total := util.Min(len(ntxs), numTXs)
+	total := min(len(ntxs), numTXs)
 	result := make([]types.TransactionID, 0, total)
 	packed := make(map[types.Address][]uint64)
 	for _, ntx := range ntxs[:total] {

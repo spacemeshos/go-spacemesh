@@ -29,13 +29,6 @@ func CalcEligibleLayer(epochNumber types.EpochID, layersPerEpoch uint32, vrfSig 
 	return epochNumber.FirstLayer().Add(uint32(eligibleLayerOffset))
 }
 
-func maxWeight(a, b uint64) uint64 {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 func GetLegacyNumEligible(lid types.LayerID, weight, minWeight, totalWeight uint64, committeeSize, layersPerEpoch uint32) (uint32, error) {
 	legacyLayer := types.GetLegacyLayer()
 	if legacyLayer != 0 && legacyLayer >= lid.Uint32() {
@@ -49,7 +42,7 @@ func GetNumEligibleSlots(weight, minWeight, totalWeight uint64, committeeSize, l
 	if totalWeight == 0 {
 		return 0, ErrZeroTotalWeight
 	}
-	numEligible := weight * uint64(committeeSize) * uint64(layersPerEpoch) / maxWeight(minWeight, totalWeight) // TODO: ensure no overflow
+	numEligible := weight * uint64(committeeSize) * uint64(layersPerEpoch) / max(minWeight, totalWeight) // TODO: ensure no overflow
 	if numEligible == 0 {
 		numEligible = 1
 	}

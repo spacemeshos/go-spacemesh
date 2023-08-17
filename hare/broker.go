@@ -395,13 +395,13 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan any, *Eli
 	if len(b.outbox) >= b.limit {
 		// unregister the earliest layer to make space for the new layer
 		// cannot call unregister here because unregister blocks and this would cause a deadlock
-		min := types.LayerID(0)
+		minimum := types.LayerID(0)
 		for lid := range b.outbox {
-			min = types.MinLayer(min, lid)
+			minimum = min(minimum, lid)
 		}
-		delete(b.outbox, min)
-		b.minDeleted = min
-		b.With().Info("unregistered layer due to maximum concurrent processes", min)
+		delete(b.outbox, minimum)
+		b.minDeleted = minimum
+		b.With().Info("unregistered layer due to maximum concurrent processes", minimum)
 	}
 	outboxCh := make(chan any, inboxCapacity)
 	b.outbox[id] = outboxCh

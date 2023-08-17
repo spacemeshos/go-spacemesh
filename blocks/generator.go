@@ -147,7 +147,7 @@ func (g *Generator) run() error {
 				out.Layer,
 				log.Int("num_proposals", len(out.Proposals)),
 			)
-			maxLayer = types.MaxLayer(maxLayer, out.Layer)
+			maxLayer = max(maxLayer, out.Layer)
 			_, err := g.processHareOutput(out)
 			if err != nil {
 				if errors.Is(err, errNodeHasBadMeshHash) {

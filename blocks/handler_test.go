@@ -130,13 +130,6 @@ func Test_HandleBlockData(t *testing.T) {
 	assert.NoError(t, th.HandleSyncedBlock(context.TODO(), block.ID().AsHash32(), peer, data))
 }
 
-func max(i, j int) int {
-	if i > j {
-		return i
-	}
-	return j
-}
-
 func TestValidateRewards(t *testing.T) {
 	for _, tc := range []struct {
 		desc    string
