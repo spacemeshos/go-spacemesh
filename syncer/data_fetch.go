@@ -312,13 +312,7 @@ func fetchLayerData(ctx context.Context, logger log.Log, fetcher fetcher, req *d
 }
 
 // PollLayerOpinions polls all peers for opinions in the specified layer.
-func (d *DataFetch) PollLayerOpinions(ctx context.Context, lid types.LayerID) ([]*fetch.LayerOpinion, error) {
-	peers := d.fetcher.GetPeers()
-	if len(peers) == 0 {
-		return nil, errNoPeers
-	}
-
-	logger := d.logger.WithContext(ctx).WithFields(lid)
+func (d *DataFetch) PollLayerOpinions(ctx context.Context, lid types.LayerID, peers []p2p.Peer) ([]*fetch.LayerOpinion, error) {
 	req := &opinionRequest{
 		lid:   lid,
 		peers: peers,
@@ -358,7 +352,7 @@ func (d *DataFetch) PollLayerOpinions(ctx context.Context, lid types.LayerID) ([
 			}
 			return req.response.opinions, candidateErr
 		case <-ctx.Done():
-			logger.Debug("request timed out")
+			d.logger.WithContext(ctx).Debug("request timed out", lid)
 			return nil, errTimeout
 		}
 	}
@@ -387,13 +381,12 @@ func (d *DataFetch) receiveOpinions(ctx context.Context, req *opinionRequest, pe
 	}
 }
 
-func (d *DataFetch) PollLayerOpinions2(ctx context.Context, lid types.LayerID, needCert bool) ([]*fetch.LayerOpinion2, []*types.Certificate, error) {
-	peers := d.fetcher.GetPeers()
-	if len(peers) == 0 {
-		return nil, nil, errNoPeers
-	}
-
-	logger := d.logger.WithContext(ctx).WithFields(lid)
+func (d *DataFetch) PollLayerOpinions2(
+	ctx context.Context,
+	lid types.LayerID,
+	needCert bool,
+	peers []p2p.Peer,
+) ([]*fetch.LayerOpinion2, []*types.Certificate, error) {
 	req := &opinionRequest2{
 		lid:   lid,
 		peers: peers,
@@ -431,7 +424,7 @@ func (d *DataFetch) PollLayerOpinions2(ctx context.Context, lid types.LayerID, n
 			if success {
 				candidateErr = nil
 			}
-			var certs []*types.Certificate
+			certs := make([]*types.Certificate, 0, len(req.response.opinions))
 			if needCert {
 				peerCerts := map[types.BlockID][]p2p.Peer{}
 				for _, opns := range req.response.opinions {
@@ -452,7 +445,6 @@ func (d *DataFetch) PollLayerOpinions2(ctx context.Context, lid types.LayerID, n
 					cert, err := d.fetcher.GetCert(ctx, lid, bid, bidPeers)
 					if err != nil {
 						certPeerError.Inc()
-						logger.With().Debug("failed to get cert from peers", log.Err(err))
 						continue
 					}
 					certs = append(certs, cert)
@@ -460,7 +452,7 @@ func (d *DataFetch) PollLayerOpinions2(ctx context.Context, lid types.LayerID, n
 			}
 			return req.response.opinions, certs, candidateErr
 		case <-ctx.Done():
-			logger.Debug("request timed out")
+			d.logger.WithContext(ctx).Debug("request timed out", lid)
 			return nil, nil, errTimeout
 		}
 	}
@@ -477,7 +469,7 @@ func (d *DataFetch) receiveOpinions2(ctx context.Context, req *opinionRequest2, 
 	if peerErr != nil {
 		logger.With().Debug("received peer error for layer opinions", log.Err(peerErr))
 	} else if result.err = codec.Decode(data, &lo); result.err != nil {
-		logger.With().Debug("error decoding LayerOpinion", log.Err(result.err))
+		logger.With().Debug("error decoding LayerOpinion2", log.Err(result.err))
 	} else {
 		lo.SetPeer(peer)
 		result.data = &lo

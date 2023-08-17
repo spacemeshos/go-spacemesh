@@ -710,6 +710,7 @@ func (app *App) initServices(ctx context.Context) error {
 	fetcher := fetch.NewFetch(app.cachedDB, msh, beaconProtocol, app.host,
 		fetch.WithContext(ctx),
 		fetch.WithConfig(app.Config.FETCH),
+		fetch.WithServeNewOpn(app.Config.Sync.UseNewProtocol),
 		fetch.WithLogger(flog),
 	)
 	fetcherWrapped.Fetcher = fetcher

@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/libp2p/go-libp2p/core/protocol"
+	"github.com/libp2p/go-libp2p/p2p/host/peerstore/test"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
@@ -49,20 +51,23 @@ func opinions2(prevHash types.Hash32) []*fetch.LayerOpinion2 {
 
 func TestProcessLayers_MultiLayers(t *testing.T) {
 	gLid := types.GetEffectiveGenesis()
-	ts := newSyncerWithoutSyncTimer(t)
+	ts := newTestSyncerForState(t)
 	ts.syncer.cfg.SyncCertDistance = 10000
 	ts.syncer.setATXSynced()
 	current := gLid.Add(10)
 	ts.syncer.setLastSyncedLayer(current.Sub(1))
 	ts.mTicker.advanceToLayer(current)
 
+	peers := test.GeneratePeerIDs(3)
+	ts.mDataFetcher.EXPECT().GetPeers().Return(peers).AnyTimes()
+	ts.mDataFetcher.EXPECT().PeerProtocols(gomock.Any()).Return([]protocol.ID{}, nil).AnyTimes()
 	ts.mForkFinder.EXPECT().UpdateAgreement(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	adopted := make(map[types.LayerID]types.BlockID)
 	for lid := gLid.Add(1); lid.Before(current); lid = lid.Add(1) {
 		lid := lid
 		ts.mLyrPatrol.EXPECT().IsHareInCharge(lid).Return(false)
-		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid).DoAndReturn(
-			func(context.Context, types.LayerID) ([]*fetch.LayerOpinion, error) {
+		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid, peers).DoAndReturn(
+			func(context.Context, types.LayerID, []p2p.Peer) ([]*fetch.LayerOpinion, error) {
 				prevLid := lid.Sub(1)
 				prevHash, err := layers.GetAggregatedHash(ts.cdb, prevLid)
 				require.NoError(t, err)
@@ -104,21 +109,23 @@ func TestProcessLayers_MultiLayers(t *testing.T) {
 
 func TestProcessLayers_MultiLayers_NewOpinionsProtocol(t *testing.T) {
 	gLid := types.GetEffectiveGenesis()
-	ts := newSyncerWithoutSyncTimer(t)
+	ts := newTestSyncerForState(t)
 	ts.syncer.cfg.SyncCertDistance = 10000
-	ts.syncer.cfg.UpdateLayer = 0
 	ts.syncer.setATXSynced()
 	current := gLid.Add(10)
 	ts.syncer.setLastSyncedLayer(current.Sub(1))
 	ts.mTicker.advanceToLayer(current)
 
+	peers := test.GeneratePeerIDs(3)
+	ts.mDataFetcher.EXPECT().GetPeers().Return(peers).AnyTimes()
+	ts.mDataFetcher.EXPECT().PeerProtocols(gomock.Any()).Return([]protocol.ID{fetch.OpnProtocol}, nil).AnyTimes()
 	ts.mForkFinder.EXPECT().UpdateAgreement(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	adopted := make(map[types.LayerID]types.BlockID)
 	for lid := gLid.Add(1); lid.Before(current); lid = lid.Add(1) {
 		lid := lid
 		ts.mLyrPatrol.EXPECT().IsHareInCharge(lid).Return(false)
-		ts.mDataFetcher.EXPECT().PollLayerOpinions2(gomock.Any(), lid, true).DoAndReturn(
-			func(context.Context, types.LayerID, bool) ([]*fetch.LayerOpinion2, []*types.Certificate, error) {
+		ts.mDataFetcher.EXPECT().PollLayerOpinions2(gomock.Any(), lid, true, peers).DoAndReturn(
+			func(context.Context, types.LayerID, bool, []p2p.Peer) ([]*fetch.LayerOpinion2, []*types.Certificate, error) {
 				prevLid := lid.Sub(1)
 				prevHash, err := layers.GetAggregatedHash(ts.cdb, prevLid)
 				require.NoError(t, err)
@@ -155,6 +162,111 @@ func TestProcessLayers_MultiLayers_NewOpinionsProtocol(t *testing.T) {
 	require.False(t, ts.syncer.stateSynced())
 	require.NoError(t, ts.syncer.processLayers(context.Background()))
 	require.True(t, ts.syncer.stateSynced())
+}
+
+func TestProcessLayers_MixedOpinionProtocol(t *testing.T) {
+	gLid := types.GetEffectiveGenesis()
+	lid := gLid.Add(1)
+	bids := []types.BlockID{types.RandomBlockID(), types.RandomBlockID()}
+	const numPeers = 4
+	prevHash := types.RandomHash()
+	tt := []struct {
+		name           string
+		opns           []*fetch.LayerOpinion
+		opns2          []*fetch.LayerOpinion2
+		certs2         []*types.Certificate
+		numCerts       int
+		disableNewSync bool
+	}{
+		{
+			name: "both versions",
+			opns2: []*fetch.LayerOpinion2{
+				{PrevAggHash: prevHash, Certified: &bids[1]},
+			},
+			certs2: []*types.Certificate{
+				{BlockID: bids[1]},
+			},
+			opns: []*fetch.LayerOpinion{
+				{PrevAggHash: prevHash, Cert: &types.Certificate{BlockID: bids[0]}},
+				{PrevAggHash: prevHash, Cert: &types.Certificate{BlockID: bids[1]}},
+				{PrevAggHash: prevHash, Cert: &types.Certificate{BlockID: bids[0]}},
+			},
+			numCerts: 2,
+		},
+		{
+			name: "v2 disabled",
+			opns: []*fetch.LayerOpinion{
+				{PrevAggHash: prevHash, Cert: &types.Certificate{BlockID: bids[0]}},
+				{PrevAggHash: prevHash, Cert: &types.Certificate{BlockID: bids[0]}},
+				{PrevAggHash: prevHash, Cert: &types.Certificate{BlockID: bids[0]}},
+				{PrevAggHash: prevHash, Cert: &types.Certificate{BlockID: bids[0]}},
+			},
+			numCerts:       1,
+			disableNewSync: true,
+		},
+		{
+			name: "v1 only",
+			opns: []*fetch.LayerOpinion{
+				{PrevAggHash: prevHash, Cert: &types.Certificate{BlockID: bids[0]}},
+				{PrevAggHash: prevHash, Cert: &types.Certificate{BlockID: bids[0]}},
+				{PrevAggHash: prevHash, Cert: &types.Certificate{BlockID: bids[1]}},
+				{PrevAggHash: prevHash, Cert: &types.Certificate{BlockID: bids[0]}},
+			},
+			numCerts: 2,
+		},
+		{
+			name: "v2 only",
+			opns2: []*fetch.LayerOpinion2{
+				{PrevAggHash: prevHash, Certified: &bids[0]},
+				{PrevAggHash: prevHash, Certified: &bids[0]},
+				{PrevAggHash: prevHash, Certified: &bids[1]},
+				{PrevAggHash: prevHash, Certified: &bids[1]},
+			},
+			certs2: []*types.Certificate{
+				{BlockID: bids[0]},
+				{BlockID: bids[1]},
+			},
+			numCerts: 2,
+		},
+	}
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			ts := newTestSyncerForState(t)
+			ts.syncer.cfg.UseNewProtocol = !tc.disableNewSync
+			ts.syncer.cfg.SyncCertDistance = 10000
+			ts.mTicker.advanceToLayer(lid)
+			peers := test.GeneratePeerIDs(numPeers)
+			ts.mDataFetcher.EXPECT().GetPeers().Return(peers).AnyTimes()
+			numV2 := len(tc.opns2)
+			for i, p := range peers {
+				if i < numV2 {
+					ts.mDataFetcher.EXPECT().PeerProtocols(p).Return([]protocol.ID{fetch.OpnProtocol}, nil).AnyTimes()
+				} else {
+					ts.mDataFetcher.EXPECT().PeerProtocols(p).Return([]protocol.ID{}, nil).AnyTimes()
+				}
+			}
+			if len(tc.opns2) > 0 {
+				ts.mDataFetcher.EXPECT().PollLayerOpinions2(gomock.Any(), lid, true, gomock.Any()).DoAndReturn(
+					func(_ context.Context, _ types.LayerID, _ bool, got []p2p.Peer) ([]*fetch.LayerOpinion2, []*types.Certificate, error) {
+						require.ElementsMatch(t, peers[:len(tc.opns2)], got)
+						return tc.opns2, tc.certs2, nil
+					})
+			}
+			if len(tc.opns) > 0 {
+				ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid, gomock.Any()).DoAndReturn(
+					func(_ context.Context, _ types.LayerID, got []p2p.Peer) ([]*fetch.LayerOpinion, error) {
+						require.ElementsMatch(t, peers[len(tc.opns2):], got)
+						return tc.opns, nil
+					})
+			}
+			ts.mDataFetcher.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any()).AnyTimes()
+			opns, certs, err := ts.syncer.layerOpinions(context.Background(), lid)
+			require.Len(t, opns, len(peers))
+			require.Len(t, certs, tc.numCerts)
+			require.NoError(t, err)
+		})
+	}
 }
 
 func TestProcessLayers_OpinionsNotAdopted(t *testing.T) {
@@ -201,12 +313,15 @@ func TestProcessLayers_OpinionsNotAdopted(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			ts := newSyncerWithoutSyncTimer(t)
+			ts := newTestSyncerForState(t)
 			require.NoError(t, layers.SetMeshHash(ts.cdb, gLid, prevHash))
 			ts.syncer.setATXSynced()
 			current := lid.Add(1)
 			ts.syncer.setLastSyncedLayer(current.Sub(1))
 			ts.mTicker.advanceToLayer(current)
+			peers := test.GeneratePeerIDs(3)
+			ts.mDataFetcher.EXPECT().GetPeers().Return(peers).AnyTimes()
+			ts.mDataFetcher.EXPECT().PeerProtocols(gomock.Any()).Return([]protocol.ID{}, nil).AnyTimes()
 
 			hasCert := false
 			for _, opn := range tc.opns {
@@ -229,7 +344,7 @@ func TestProcessLayers_OpinionsNotAdopted(t *testing.T) {
 				ts.mVm.EXPECT().GetStateRoot()
 			}
 			ts.mLyrPatrol.EXPECT().IsHareInCharge(lid).Return(false)
-			ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid).Return(tc.opns, nil)
+			ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid, peers).Return(tc.opns, nil)
 			ts.mDataFetcher.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any()).MaxTimes(1)
 			if tc.localCert == types.EmptyBlockID && hasCert {
 				ts.mCertHdr.EXPECT().HandleSyncedCertificate(gomock.Any(), lid, tc.opns[1].Cert).Return(tc.certErr)
@@ -301,13 +416,15 @@ func TestProcessLayers_OpinionsNotAdopted_NewOpinionsProtocol(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			ts := newSyncerWithoutSyncTimer(t)
-			ts.syncer.cfg.UpdateLayer = 0
+			ts := newTestSyncerForState(t)
 			require.NoError(t, layers.SetMeshHash(ts.cdb, gLid, prevHash))
 			ts.syncer.setATXSynced()
 			current := lid.Add(1)
 			ts.syncer.setLastSyncedLayer(current.Sub(1))
 			ts.mTicker.advanceToLayer(current)
+			peers := test.GeneratePeerIDs(3)
+			ts.mDataFetcher.EXPECT().GetPeers().Return(peers).AnyTimes()
+			ts.mDataFetcher.EXPECT().PeerProtocols(gomock.Any()).Return([]protocol.ID{fetch.OpnProtocol}, nil).AnyTimes()
 
 			hasCert := false
 			for _, opn := range tc.opns {
@@ -330,7 +447,7 @@ func TestProcessLayers_OpinionsNotAdopted_NewOpinionsProtocol(t *testing.T) {
 				ts.mVm.EXPECT().GetStateRoot()
 			}
 			ts.mLyrPatrol.EXPECT().IsHareInCharge(lid).Return(false)
-			ts.mDataFetcher.EXPECT().PollLayerOpinions2(gomock.Any(), lid, tc.localCert == types.EmptyBlockID).Return(tc.opns, tc.certs, nil)
+			ts.mDataFetcher.EXPECT().PollLayerOpinions2(gomock.Any(), lid, tc.localCert == types.EmptyBlockID, peers).Return(tc.opns, tc.certs, nil)
 			ts.mDataFetcher.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any()).MaxTimes(1)
 			if tc.localCert == types.EmptyBlockID && hasCert {
 				ts.mCertHdr.EXPECT().HandleSyncedCertificate(gomock.Any(), lid, tc.certs[0]).Return(tc.certErr)
@@ -355,7 +472,7 @@ func TestProcessLayers_OpinionsNotAdopted_NewOpinionsProtocol(t *testing.T) {
 }
 
 func TestProcessLayers_ATXsNotSynced(t *testing.T) {
-	ts := newSyncerWithoutSyncTimer(t)
+	ts := newTestSyncerForState(t)
 	glayer := types.GetEffectiveGenesis()
 	current := glayer.Add(10)
 	ts.syncer.setLastSyncedLayer(current.Sub(1))
@@ -380,7 +497,7 @@ func TestProcessLayers_Shutdown(t *testing.T) {
 }
 
 func TestProcessLayers_HareIsStillWorking(t *testing.T) {
-	ts := newSyncerWithoutSyncTimer(t)
+	ts := newTestSyncerForState(t)
 	ts.syncer.setATXSynced()
 	lastSynced := types.GetEffectiveGenesis().Add(1)
 	ts.syncer.setLastSyncedLayer(lastSynced)
@@ -392,7 +509,10 @@ func TestProcessLayers_HareIsStillWorking(t *testing.T) {
 	require.False(t, ts.syncer.stateSynced())
 
 	ts.mLyrPatrol.EXPECT().IsHareInCharge(lastSynced).Return(false)
-	ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lastSynced).Return(nil, nil)
+	peers := test.GeneratePeerIDs(3)
+	ts.mDataFetcher.EXPECT().GetPeers().Return(peers)
+	ts.mDataFetcher.EXPECT().PeerProtocols(gomock.Any()).Return([]protocol.ID{}, nil).Times(len(peers))
+	ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lastSynced, peers).Return(nil, nil)
 	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lastSynced)
 	ts.mTortoise.EXPECT().Updates().Return(fixture.RLayers(fixture.RLayer(lastSynced)))
 	ts.mVm.EXPECT().Apply(gomock.Any(), nil, nil)
@@ -403,7 +523,7 @@ func TestProcessLayers_HareIsStillWorking(t *testing.T) {
 }
 
 func TestProcessLayers_HareTakesTooLong(t *testing.T) {
-	ts := newSyncerWithoutSyncTimer(t)
+	ts := newTestSyncerForState(t)
 	ts.syncer.setATXSynced()
 	glayer := types.GetEffectiveGenesis()
 	lastSynced := glayer.Add(ts.syncer.cfg.HareDelayLayers)
@@ -416,7 +536,10 @@ func TestProcessLayers_HareTakesTooLong(t *testing.T) {
 		} else {
 			ts.mLyrPatrol.EXPECT().IsHareInCharge(lid).Return(false)
 		}
-		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid).Return(nil, nil)
+		peers := test.GeneratePeerIDs(3)
+		ts.mDataFetcher.EXPECT().GetPeers().Return(peers)
+		ts.mDataFetcher.EXPECT().PeerProtocols(gomock.Any()).Return([]protocol.ID{}, nil).Times(len(peers))
+		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid, peers).Return(nil, nil)
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
 		ts.mTortoise.EXPECT().Updates().Return(fixture.RLayers(fixture.RLayer(lid)))
 		ts.mVm.EXPECT().Apply(vm.ApplyContext{Layer: lid}, nil, nil)
@@ -428,13 +551,16 @@ func TestProcessLayers_HareTakesTooLong(t *testing.T) {
 }
 
 func TestProcessLayers_OpinionsOptional(t *testing.T) {
-	ts := newSyncerWithoutSyncTimer(t)
+	ts := newTestSyncerForState(t)
 	ts.syncer.setATXSynced()
 	lastSynced := types.GetEffectiveGenesis().Add(1)
 	ts.syncer.setLastSyncedLayer(lastSynced)
 	ts.mTicker.advanceToLayer(lastSynced.Add(1))
 	ts.mLyrPatrol.EXPECT().IsHareInCharge(lastSynced).Return(false)
-	ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lastSynced).Return(nil, errors.New("meh"))
+	peers := test.GeneratePeerIDs(5)
+	ts.mDataFetcher.EXPECT().GetPeers().Return(peers)
+	ts.mDataFetcher.EXPECT().PeerProtocols(gomock.Any()).Return([]protocol.ID{}, nil).AnyTimes()
+	ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lastSynced, peers).Return(nil, errors.New("meh"))
 	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lastSynced)
 	ts.mTortoise.EXPECT().Updates().Return(fixture.RLayers(fixture.RLayer(lastSynced)))
 	require.False(t, ts.syncer.stateSynced())
@@ -446,7 +572,7 @@ func TestProcessLayers_OpinionsOptional(t *testing.T) {
 }
 
 func TestProcessLayers_MeshHashDiverged(t *testing.T) {
-	ts := newSyncerWithoutSyncTimer(t)
+	ts := newTestSyncerForState(t)
 	ts.syncer.setATXSynced()
 	current := types.GetEffectiveGenesis().Add(131)
 	ts.mTicker.advanceToLayer(current)
@@ -488,7 +614,10 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 	errUnknown := errors.New("unknown")
 
 	ts.mLyrPatrol.EXPECT().IsHareInCharge(instate).Return(false)
-	ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), instate).Return(opns, nil)
+	peers := test.GeneratePeerIDs(3)
+	ts.mDataFetcher.EXPECT().GetPeers().Return(peers)
+	ts.mDataFetcher.EXPECT().PeerProtocols(gomock.Any()).Return([]protocol.ID{}, nil).Times(len(peers))
+	ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), instate, peers).Return(opns, nil)
 	ts.mForkFinder.EXPECT().UpdateAgreement(opns[1].Peer(), instate.Sub(1), prevHash, gomock.Any())
 	for i := 0; i < numPeers; i++ {
 		if i == 1 {
@@ -552,7 +681,7 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 }
 
 func TestProcessLayers_NoHashResolutionForNewlySyncedNode(t *testing.T) {
-	ts := newSyncerWithoutSyncTimer(t)
+	ts := newTestSyncerForState(t)
 	ts.syncer.setATXSynced()
 	current := types.GetEffectiveGenesis().Add(131)
 	ts.mTicker.advanceToLayer(current)
@@ -583,7 +712,10 @@ func TestProcessLayers_NoHashResolutionForNewlySyncedNode(t *testing.T) {
 	}
 	for lid := instate; lid <= current; lid++ {
 		ts.mLyrPatrol.EXPECT().IsHareInCharge(lid)
-		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid).Return(opns, nil)
+		peers := test.GeneratePeerIDs(3)
+		ts.mDataFetcher.EXPECT().GetPeers().Return(peers)
+		ts.mDataFetcher.EXPECT().PeerProtocols(gomock.Any()).Return([]protocol.ID{}, nil).Times(len(peers))
+		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid, peers).Return(opns, nil)
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
 		ts.mTortoise.EXPECT().Updates().Return(fixture.RLayers(fixture.ROpinion(lid.Sub(1), opns[2].PrevAggHash)))
 		if lid != instate && lid != current {

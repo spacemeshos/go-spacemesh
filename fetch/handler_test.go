@@ -39,7 +39,7 @@ func createTestHandler(t testing.TB) *testHandler {
 	mm := mocks.NewMockmeshProvider(ctrl)
 	mb := smocks.NewMockBeaconGetter(ctrl)
 	return &testHandler{
-		handler: newHandler(cdb, datastore.NewBlobStore(cdb.Database), mm, mb, lg),
+		handler: newHandler(cdb, datastore.NewBlobStore(cdb.Database), mm, mb, true, lg),
 		cdb:     cdb,
 		mm:      mm,
 		mb:      mb,
@@ -247,6 +247,10 @@ func TestHandleCertReq(t *testing.T) {
 	var got types.Certificate
 	require.NoError(t, codec.Decode(resp, &got))
 	require.Equal(t, *cert, got)
+
+	th.serveNewOpn = false
+	_, err = th.handleLayerOpinionsReq2(context.Background(), reqData)
+	require.ErrorContains(t, err, "new opn protocol not supported")
 }
 
 func TestHandleMeshHashReq(t *testing.T) {

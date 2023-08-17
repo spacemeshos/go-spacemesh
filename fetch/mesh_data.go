@@ -175,11 +175,14 @@ func (f *Fetch) GetLayerOpinions(ctx context.Context, peers []p2p.Peer, lid type
 }
 
 func (f *Fetch) GetLayerOpinions2(ctx context.Context, peers []p2p.Peer, lid types.LayerID, okCB func([]byte, p2p.Peer), errCB func(error, p2p.Peer)) error {
-	lidBytes, err := codec.Encode(&lid)
+	req := OpinionRequest{
+		Layer: lid,
+	}
+	reqData, err := codec.Encode(&req)
 	if err != nil {
 		return err
 	}
-	return poll(ctx, f.servers[lyrOpnsProtocol2], peers, lidBytes, okCB, errCB)
+	return poll(ctx, f.servers[OpnProtocol], peers, reqData, okCB, errCB)
 }
 
 func poll(ctx context.Context, srv requester, peers []p2p.Peer, req []byte, okCB func([]byte, p2p.Peer), errCB func(error, p2p.Peer)) error {
@@ -309,7 +312,7 @@ func (f *Fetch) GetCert(ctx context.Context, lid types.LayerID, bid types.BlockI
 		errCB := func(perr error) {
 			done <- perr
 		}
-		if err := f.servers[lyrOpnsProtocol2].Request(ctx, peer, reqData, okCB, errCB); err != nil {
+		if err := f.servers[OpnProtocol].Request(ctx, peer, reqData, okCB, errCB); err != nil {
 			done <- err
 		}
 		select {

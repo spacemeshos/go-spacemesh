@@ -85,7 +85,7 @@ func createFetch(tb testing.TB) *testFetch {
 			lyrOpnsProtocol:  tf.mOpnS,
 			hashProtocol:     tf.mHashS,
 			meshHashProtocol: tf.mMHashS,
-			lyrOpnsProtocol2: tf.mOpn2S,
+			OpnProtocol:      tf.mOpn2S,
 		}),
 		withHost(tf.mh))
 	tf.Fetch.SetValidators(tf.mAtxH, tf.mPoetH, tf.mBallotH, tf.mBlocksH, tf.mProposalH, tf.mTxBlocksH, tf.mTxProposalH, tf.mMalH)

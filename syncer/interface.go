@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/protocol"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -30,8 +32,8 @@ type fetchLogic interface {
 
 	PollMaliciousProofs(ctx context.Context) error
 	PollLayerData(context.Context, types.LayerID, ...p2p.Peer) error
-	PollLayerOpinions(context.Context, types.LayerID) ([]*fetch.LayerOpinion, error)
-	PollLayerOpinions2(context.Context, types.LayerID, bool) ([]*fetch.LayerOpinion2, []*types.Certificate, error)
+	PollLayerOpinions(context.Context, types.LayerID, []p2p.Peer) ([]*fetch.LayerOpinion, error)
+	PollLayerOpinions2(context.Context, types.LayerID, bool, []p2p.Peer) ([]*fetch.LayerOpinion2, []*types.Certificate, error)
 	GetEpochATXs(context.Context, types.EpochID) error
 }
 
@@ -50,6 +52,7 @@ type fetcher interface {
 	RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32)
 
 	GetPeers() []p2p.Peer
+	PeerProtocols(p2p.Peer) ([]protocol.ID, error)
 	PeerEpochInfo(context.Context, p2p.Peer, types.EpochID) (*fetch.EpochData, error)
 	PeerMeshHashes(context.Context, p2p.Peer, *fetch.MeshHashRequest) (*fetch.MeshHashes, error)
 }

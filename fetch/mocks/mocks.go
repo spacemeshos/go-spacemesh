@@ -9,6 +9,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+	protocol "github.com/libp2p/go-libp2p/core/protocol"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
 )
@@ -224,4 +225,19 @@ func (m *Mockhost) ID() p2p.Peer {
 func (mr *MockhostMockRecorder) ID() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ID", reflect.TypeOf((*Mockhost)(nil).ID))
+}
+
+// PeerProtocols mocks base method.
+func (m *Mockhost) PeerProtocols(arg0 p2p.Peer) ([]protocol.ID, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PeerProtocols", arg0)
+	ret0, _ := ret[0].([]protocol.ID)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PeerProtocols indicates an expected call of PeerProtocols.
+func (mr *MockhostMockRecorder) PeerProtocols(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PeerProtocols", reflect.TypeOf((*Mockhost)(nil).PeerProtocols), arg0)
 }

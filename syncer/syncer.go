@@ -27,7 +27,7 @@ type Config struct {
 	SyncCertDistance uint32
 	MaxStaleDuration time.Duration
 	Standalone       bool
-	UpdateLayer      uint32 `mapstructure:"sync-update-layer"`
+	UseNewProtocol   bool `mapstructure:"use-new-protocol"`
 }
 
 // DefaultConfig for the syncer.
@@ -38,6 +38,7 @@ func DefaultConfig() Config {
 		HareDelayLayers:  10,
 		SyncCertDistance: 10,
 		MaxStaleDuration: time.Second,
+		UseNewProtocol:   true,
 	}
 }
 

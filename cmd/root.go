@@ -268,8 +268,8 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(&cfg.TestConfig.SmesherKey, "testing-smesher-key",
 		"", "import private smesher key for testing",
 	)
-	cmd.PersistentFlags().Uint32Var(&cfg.Sync.UpdateLayer, "sync-update-layer",
-		cfg.Sync.UpdateLayer, "the layer at which sync protocol is updated",
+	cmd.PersistentFlags().BoolVar(&cfg.Sync.UseNewProtocol, "use-new-protocol",
+		cfg.Sync.UseNewProtocol, "use new opinions sync protocol",
 	)
 
 	// Bind Flags to config

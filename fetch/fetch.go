@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -28,7 +29,7 @@ const (
 	meshHashProtocol = "mh/1"
 	malProtocol      = "ml/1"
 
-	lyrOpnsProtocol2 = "lp/2"
+	OpnProtocol = "lp/2"
 
 	cacheSize = 1000
 )
@@ -127,6 +128,12 @@ func WithLogger(log log.Log) Option {
 	}
 }
 
+func WithServeNewOpn(serve bool) Option {
+	return func(f *Fetch) {
+		f.serveNewOpn = serve
+	}
+}
+
 func withServers(s map[string]requester) Option {
 	return func(f *Fetch) {
 		f.servers = s
@@ -148,6 +155,8 @@ type Fetch struct {
 
 	servers    map[string]requester
 	validators *dataValidators
+
+	serveNewOpn bool
 
 	// unprocessed contains requests that are not processed
 	unprocessed map[types.Hash32]*request
@@ -189,14 +198,16 @@ func NewFetch(cdb *datastore.CachedDB, msh meshProvider, b system.BeaconGetter, 
 		server.WithLog(f.logger),
 	}
 	if len(f.servers) == 0 {
-		h := newHandler(cdb, bs, msh, b, f.logger)
+		h := newHandler(cdb, bs, msh, b, f.serveNewOpn, f.logger)
 		f.servers[atxProtocol] = server.New(host, atxProtocol, h.handleEpochInfoReq, srvOpts...)
 		f.servers[lyrDataProtocol] = server.New(host, lyrDataProtocol, h.handleLayerDataReq, srvOpts...)
 		f.servers[lyrOpnsProtocol] = server.New(host, lyrOpnsProtocol, h.handleLayerOpinionsReq, srvOpts...)
 		f.servers[hashProtocol] = server.New(host, hashProtocol, h.handleHashReq, srvOpts...)
 		f.servers[meshHashProtocol] = server.New(host, meshHashProtocol, h.handleMeshHashReq, srvOpts...)
 		f.servers[malProtocol] = server.New(host, malProtocol, h.handleMaliciousIDsReq, srvOpts...)
-		f.servers[lyrOpnsProtocol2] = server.New(host, lyrOpnsProtocol2, h.handleLayerOpinionsReq2, srvOpts...)
+		if f.serveNewOpn {
+			f.servers[OpnProtocol] = server.New(host, OpnProtocol, h.handleLayerOpinionsReq2, srvOpts...)
+		}
 	}
 	return f
 }
@@ -633,4 +644,8 @@ func (f *Fetch) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32) {
 
 func (f *Fetch) GetPeers() []p2p.Peer {
 	return f.host.GetPeers()
+}
+
+func (f *Fetch) PeerProtocols(p p2p.Peer) ([]protocol.ID, error) {
+	return f.host.PeerProtocols(p)
 }

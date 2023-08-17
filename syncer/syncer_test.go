@@ -96,18 +96,25 @@ func newTestSyncer(t *testing.T, interval time.Duration) *testSyncer {
 		EpochEndFraction: 0.66,
 		SyncCertDistance: 4,
 		HareDelayLayers:  5,
-		UpdateLayer:      1000000,
+		UseNewProtocol:   true,
 	}
 	ts.syncer = NewSyncer(ts.cdb, ts.mTicker, ts.mBeacon, ts.msh, nil, nil, ts.mLyrPatrol, ts.mCertHdr,
 		WithConfig(cfg),
 		WithLogger(lg),
 		withDataFetcher(ts.mDataFetcher),
 		withForkFinder(ts.mForkFinder))
-	ts.mDataFetcher.EXPECT().GetPeers().Return([]p2p.Peer{"non-empty"}).AnyTimes()
 	return ts
 }
 
 func newSyncerWithoutSyncTimer(t *testing.T) *testSyncer {
+	ts := newTestSyncer(t, never)
+	ts.syncer.syncTimer.Stop()
+	ts.syncer.validateTimer.Stop()
+	ts.mDataFetcher.EXPECT().GetPeers().Return([]p2p.Peer{"non-empty"}).AnyTimes()
+	return ts
+}
+
+func newTestSyncerForState(t *testing.T) *testSyncer {
 	ts := newTestSyncer(t, never)
 	ts.syncer.syncTimer.Stop()
 	ts.syncer.validateTimer.Stop()
@@ -127,7 +134,7 @@ func TestStartAndShutdown(t *testing.T) {
 	ts.syncer.Start()
 
 	ts.mForkFinder.EXPECT().Purge(false).AnyTimes()
-	ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), gomock.Any()).AnyTimes()
+	ts.mDataFetcher.EXPECT().GetPeers().Return(nil).AnyTimes()
 	require.Eventually(t, func() bool {
 		return ts.syncer.ListenToATXGossip() && ts.syncer.ListenToGossip() && ts.syncer.IsSynced(ctx)
 	}, time.Second, 10*time.Millisecond)

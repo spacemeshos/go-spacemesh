@@ -88,4 +88,22 @@ var (
 	opnsPeerError  = peerError.WithLabelValues("opns")
 	certPeerError  = peerError.WithLabelValues("cert")
 	malPeerError   = peerError.WithLabelValues("mal")
+
+	numOpnPoll = metrics.NewCounter(
+		"opn_poll",
+		namespace,
+		"number of times opinions are polled",
+		[]string{"version"},
+	)
+	v1OpnPoll = numOpnPoll.WithLabelValues("v1")
+	v2OpnPoll = numOpnPoll.WithLabelValues("v2")
+
+	numOpnErr = metrics.NewCounter(
+		"opn_err",
+		namespace,
+		"number of times opinions poll failed",
+		[]string{"version"},
+	)
+	v1OpnErr = numOpnErr.WithLabelValues("v1")
+	v2OpnErr = numOpnErr.WithLabelValues("v2")
 )

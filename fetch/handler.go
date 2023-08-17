@@ -23,15 +23,18 @@ type handler struct {
 	bs     *datastore.BlobStore
 	msh    meshProvider
 	beacon system.BeaconGetter
+
+	serveNewOpn bool
 }
 
-func newHandler(cdb *datastore.CachedDB, bs *datastore.BlobStore, m meshProvider, b system.BeaconGetter, lg log.Log) *handler {
+func newHandler(cdb *datastore.CachedDB, bs *datastore.BlobStore, m meshProvider, b system.BeaconGetter, newOpn bool, lg log.Log) *handler {
 	return &handler{
-		logger: lg,
-		cdb:    cdb,
-		bs:     bs,
-		msh:    m,
-		beacon: b,
+		logger:      lg,
+		cdb:         cdb,
+		bs:          bs,
+		msh:         m,
+		beacon:      b,
+		serveNewOpn: newOpn,
 	}
 }
 
@@ -146,6 +149,9 @@ func (h *handler) handleLayerOpinionsReq(ctx context.Context, req []byte) ([]byt
 }
 
 func (h *handler) handleLayerOpinionsReq2(ctx context.Context, data []byte) ([]byte, error) {
+	if !h.serveNewOpn {
+		return nil, errors.New("new opn protocol not supported")
+	}
 	var req OpinionRequest
 	if err := codec.Decode(data, &req); err != nil {
 		return nil, err
