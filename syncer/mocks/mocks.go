@@ -10,6 +10,7 @@ import (
 	time "time"
 
 	gomock "github.com/golang/mock/gomock"
+	protocol "github.com/libp2p/go-libp2p/core/protocol"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	fetch "github.com/spacemeshos/go-spacemesh/fetch"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
@@ -189,6 +190,21 @@ func (mr *MockfetchLogicMockRecorder) GetBlocks(arg0, arg1 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlocks", reflect.TypeOf((*MockfetchLogic)(nil).GetBlocks), arg0, arg1)
 }
 
+// GetCert mocks base method.
+func (m *MockfetchLogic) GetCert(arg0 context.Context, arg1 types.LayerID, arg2 types.BlockID, arg3 []p2p.Peer) (*types.Certificate, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCert", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(*types.Certificate)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetCert indicates an expected call of GetCert.
+func (mr *MockfetchLogicMockRecorder) GetCert(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCert", reflect.TypeOf((*MockfetchLogic)(nil).GetCert), arg0, arg1, arg2, arg3)
+}
+
 // GetEpochATXs mocks base method.
 func (m *MockfetchLogic) GetEpochATXs(arg0 context.Context, arg1 types.EpochID) error {
 	m.ctrl.T.Helper()
@@ -229,6 +245,20 @@ func (m *MockfetchLogic) GetLayerOpinions(arg0 context.Context, arg1 []p2p.Peer,
 func (mr *MockfetchLogicMockRecorder) GetLayerOpinions(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerOpinions", reflect.TypeOf((*MockfetchLogic)(nil).GetLayerOpinions), arg0, arg1, arg2, arg3, arg4)
+}
+
+// GetLayerOpinions2 mocks base method.
+func (m *MockfetchLogic) GetLayerOpinions2(arg0 context.Context, arg1 []p2p.Peer, arg2 types.LayerID, arg3 func([]byte, p2p.Peer), arg4 func(error, p2p.Peer)) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetLayerOpinions2", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GetLayerOpinions2 indicates an expected call of GetLayerOpinions2.
+func (mr *MockfetchLogicMockRecorder) GetLayerOpinions2(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerOpinions2", reflect.TypeOf((*MockfetchLogic)(nil).GetLayerOpinions2), arg0, arg1, arg2, arg3, arg4)
 }
 
 // GetMalfeasanceProofs mocks base method.
@@ -303,6 +333,21 @@ func (mr *MockfetchLogicMockRecorder) PeerMeshHashes(arg0, arg1, arg2 interface{
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PeerMeshHashes", reflect.TypeOf((*MockfetchLogic)(nil).PeerMeshHashes), arg0, arg1, arg2)
 }
 
+// PeerProtocols mocks base method.
+func (m *MockfetchLogic) PeerProtocols(arg0 p2p.Peer) ([]protocol.ID, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PeerProtocols", arg0)
+	ret0, _ := ret[0].([]protocol.ID)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PeerProtocols indicates an expected call of PeerProtocols.
+func (mr *MockfetchLogicMockRecorder) PeerProtocols(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PeerProtocols", reflect.TypeOf((*MockfetchLogic)(nil).PeerProtocols), arg0)
+}
+
 // PollLayerData mocks base method.
 func (m *MockfetchLogic) PollLayerData(arg0 context.Context, arg1 types.LayerID, arg2 ...p2p.Peer) error {
 	m.ctrl.T.Helper()
@@ -323,18 +368,34 @@ func (mr *MockfetchLogicMockRecorder) PollLayerData(arg0, arg1 interface{}, arg2
 }
 
 // PollLayerOpinions mocks base method.
-func (m *MockfetchLogic) PollLayerOpinions(arg0 context.Context, arg1 types.LayerID) ([]*fetch.LayerOpinion, error) {
+func (m *MockfetchLogic) PollLayerOpinions(arg0 context.Context, arg1 types.LayerID, arg2 []p2p.Peer) ([]*fetch.LayerOpinion, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PollLayerOpinions", arg0, arg1)
+	ret := m.ctrl.Call(m, "PollLayerOpinions", arg0, arg1, arg2)
 	ret0, _ := ret[0].([]*fetch.LayerOpinion)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // PollLayerOpinions indicates an expected call of PollLayerOpinions.
-func (mr *MockfetchLogicMockRecorder) PollLayerOpinions(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockfetchLogicMockRecorder) PollLayerOpinions(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PollLayerOpinions", reflect.TypeOf((*MockfetchLogic)(nil).PollLayerOpinions), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PollLayerOpinions", reflect.TypeOf((*MockfetchLogic)(nil).PollLayerOpinions), arg0, arg1, arg2)
+}
+
+// PollLayerOpinions2 mocks base method.
+func (m *MockfetchLogic) PollLayerOpinions2(arg0 context.Context, arg1 types.LayerID, arg2 bool, arg3 []p2p.Peer) ([]*fetch.LayerOpinion2, []*types.Certificate, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PollLayerOpinions2", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].([]*fetch.LayerOpinion2)
+	ret1, _ := ret[1].([]*types.Certificate)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// PollLayerOpinions2 indicates an expected call of PollLayerOpinions2.
+func (mr *MockfetchLogicMockRecorder) PollLayerOpinions2(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PollLayerOpinions2", reflect.TypeOf((*MockfetchLogic)(nil).PollLayerOpinions2), arg0, arg1, arg2, arg3)
 }
 
 // PollMaliciousProofs mocks base method.
@@ -428,6 +489,21 @@ func (mr *MockfetcherMockRecorder) GetBlocks(arg0, arg1 interface{}) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlocks", reflect.TypeOf((*Mockfetcher)(nil).GetBlocks), arg0, arg1)
 }
 
+// GetCert mocks base method.
+func (m *Mockfetcher) GetCert(arg0 context.Context, arg1 types.LayerID, arg2 types.BlockID, arg3 []p2p.Peer) (*types.Certificate, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCert", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(*types.Certificate)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetCert indicates an expected call of GetCert.
+func (mr *MockfetcherMockRecorder) GetCert(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCert", reflect.TypeOf((*Mockfetcher)(nil).GetCert), arg0, arg1, arg2, arg3)
+}
+
 // GetLayerData mocks base method.
 func (m *Mockfetcher) GetLayerData(arg0 context.Context, arg1 []p2p.Peer, arg2 types.LayerID, arg3 func([]byte, p2p.Peer), arg4 func(error, p2p.Peer)) error {
 	m.ctrl.T.Helper()
@@ -454,6 +530,20 @@ func (m *Mockfetcher) GetLayerOpinions(arg0 context.Context, arg1 []p2p.Peer, ar
 func (mr *MockfetcherMockRecorder) GetLayerOpinions(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerOpinions", reflect.TypeOf((*Mockfetcher)(nil).GetLayerOpinions), arg0, arg1, arg2, arg3, arg4)
+}
+
+// GetLayerOpinions2 mocks base method.
+func (m *Mockfetcher) GetLayerOpinions2(arg0 context.Context, arg1 []p2p.Peer, arg2 types.LayerID, arg3 func([]byte, p2p.Peer), arg4 func(error, p2p.Peer)) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetLayerOpinions2", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GetLayerOpinions2 indicates an expected call of GetLayerOpinions2.
+func (mr *MockfetcherMockRecorder) GetLayerOpinions2(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerOpinions2", reflect.TypeOf((*Mockfetcher)(nil).GetLayerOpinions2), arg0, arg1, arg2, arg3, arg4)
 }
 
 // GetMalfeasanceProofs mocks base method.
@@ -526,6 +616,21 @@ func (m *Mockfetcher) PeerMeshHashes(arg0 context.Context, arg1 p2p.Peer, arg2 *
 func (mr *MockfetcherMockRecorder) PeerMeshHashes(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PeerMeshHashes", reflect.TypeOf((*Mockfetcher)(nil).PeerMeshHashes), arg0, arg1, arg2)
+}
+
+// PeerProtocols mocks base method.
+func (m *Mockfetcher) PeerProtocols(arg0 p2p.Peer) ([]protocol.ID, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PeerProtocols", arg0)
+	ret0, _ := ret[0].([]protocol.ID)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PeerProtocols indicates an expected call of PeerProtocols.
+func (mr *MockfetcherMockRecorder) PeerProtocols(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PeerProtocols", reflect.TypeOf((*Mockfetcher)(nil).PeerProtocols), arg0)
 }
 
 // RegisterPeerHashes mocks base method.
