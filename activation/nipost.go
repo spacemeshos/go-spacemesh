@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/spacemeshos/merkle-tree"
@@ -20,6 +21,24 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/metrics/public"
 	"github.com/spacemeshos/go-spacemesh/signing"
+)
+
+const (
+	// Jitter values to avoid all nodes querying the poet at the same time.
+	// Note: the jitter values are represented as a percentage of cycle gap.
+	// mainnet cycle-gap: 12h
+	// systest cycle-gap: 30s.
+
+	// Minimum jitter value before querying for the proof.
+	// Gives the poet service time to generate proof after a round ends (~8s on mainnet).
+	// mainnet -> 8.64s
+	// systest -> 0.36s.
+	MinPoetGetProofJitter = 0.02
+
+	// The maximum jitter value before querying for the proof.
+	// mainnet -> 17.28s
+	// systest -> 0.72s.
+	MaxPoetGetProofJitter = 0.04
 )
 
 //go:generate mockgen -package=activation -destination=./nipost_mocks.go -source=./nipost.go PoetProvingServiceClient
@@ -385,12 +404,9 @@ func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge types.Hash3
 			continue
 		}
 		round := r.PoetRound.ID
-		// Time to wait before querying for the proof
-		// The additional second is an optimization to be nicer to poet
-		// and don't accidentally ask it to soon and have to retry.
-		waitTime := time.Until(r.PoetRound.End.IntoTime()) + time.Second
+		waitTime, jitter := calcGetProofWaitTime(r.PoetRound.End.IntoTime(), nb.poetCfg.CycleGap)
 		eg.Go(func() error {
-			logger.With().Info("waiting till poet round end", log.Duration("wait time", waitTime))
+			logger.With().Info("waiting till poet round end", log.Duration("wait time", waitTime), log.Duration("jitter", jitter))
 			select {
 			case <-ctx.Done():
 				return fmt.Errorf("waiting to query proof: %w", ctx.Err())
@@ -478,4 +494,22 @@ func constructMerkleProof(challenge types.Hash32, members []types.Member) (*type
 		LeafIndex: id,
 		Nodes:     nodesH32,
 	}, nil
+}
+
+func randomDurationInRange(min, max time.Duration) time.Duration {
+	return min + time.Duration(float64((max-min).Nanoseconds())*rand.Float64())
+}
+
+// Time to wait before querying for the proof
+// We add a jitter to avoid all nodes querying for the proof at the same time.
+// There's no need to add jitter if the round has already ended.
+func calcGetProofWaitTime(roundEnd time.Time, cycleGap time.Duration) (waitTime, jitter time.Duration) {
+	waitTime = time.Until(roundEnd)
+	if waitTime > 0 {
+		minWaitTime := time.Duration(float64(cycleGap) * MinPoetGetProofJitter / 100.0)
+		maxWaitTime := time.Duration(float64(cycleGap) * MaxPoetGetProofJitter / 100.0)
+		jitter := randomDurationInRange(minWaitTime, maxWaitTime)
+		return waitTime, jitter
+	}
+	return 0, 0
 }

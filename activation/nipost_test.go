@@ -1054,3 +1054,45 @@ func FuzzBuilderStateConsistency(f *testing.F) {
 func FuzzBuilderStateSafety(f *testing.F) {
 	tester.FuzzSafety[types.NIPostBuilderState](f)
 }
+
+func TestRandomDurationInRange(t *testing.T) {
+	t.Parallel()
+	test := func(min, max time.Duration) {
+		for i := 0; i < 100; i++ {
+			waittime := randomDurationInRange(min, max)
+			require.LessOrEqual(t, waittime, max)
+			require.GreaterOrEqual(t, waittime, min)
+		}
+	}
+	t.Run("min = 0", func(t *testing.T) {
+		t.Parallel()
+		test(0, 7*time.Second)
+	})
+	t.Run("min != 0", func(t *testing.T) {
+		t.Parallel()
+		test(5*time.Second, 7*time.Second)
+	})
+}
+
+func TestCalculatingGetProofWaitTime(t *testing.T) {
+	t.Parallel()
+	t.Run("past round end", func(t *testing.T) {
+		t.Parallel()
+		roundEnd := time.Now().Add(-time.Hour)
+		waitTime, jitter := calcGetProofWaitTime(roundEnd, time.Hour*12)
+
+		require.Equal(t, time.Duration(0), waitTime)
+		require.Equal(t, time.Duration(0), jitter)
+	})
+	t.Run("before round end", func(t *testing.T) {
+		t.Parallel()
+		roundEnd := time.Now().Add(time.Hour)
+		waitTime, jitter := calcGetProofWaitTime(roundEnd, time.Hour*12)
+
+		require.Greater(t, waitTime, time.Duration(0))
+		require.LessOrEqual(t, waitTime, time.Hour)
+
+		require.NotZero(t, jitter)
+		require.LessOrEqual(t, jitter, time.Duration(12*float64(time.Hour)*MaxPoetGetProofJitter/100))
+	})
+}
