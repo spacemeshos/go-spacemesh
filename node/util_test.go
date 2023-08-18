@@ -80,7 +80,7 @@ func NewTestNetwork(t *testing.T, conf config.Config, l log.Log, size int) []*Te
 			grpc.WithBlock(),
 		)
 		require.NoError(t, err)
-		apps = append(apps, NewTestApp(app, conn))
+		apps = append(apps, &TestApp{app, conn})
 	}
 
 	// Connect all nodes to each other
@@ -115,11 +115,4 @@ func NewApp(t *testing.T, conf *config.Config, l log.Log) *App {
 type TestApp struct {
 	*App
 	Conn *grpc.ClientConn
-}
-
-func NewTestApp(app *App, conn *grpc.ClientConn) *TestApp {
-	return &TestApp{
-		App:  app,
-		Conn: conn,
-	}
 }
