@@ -1078,21 +1078,15 @@ func TestCalculatingGetProofWaitTime(t *testing.T) {
 	t.Parallel()
 	t.Run("past round end", func(t *testing.T) {
 		t.Parallel()
-		roundEnd := time.Now().Add(-time.Hour)
-		waitTime, jitter := calcGetProofWaitTime(roundEnd, time.Hour*12)
-
-		require.Equal(t, time.Duration(0), waitTime)
-		require.Equal(t, time.Duration(0), jitter)
+		waitTime := calcGetProofWaitTime(-time.Hour, time.Hour*12)
+		require.Less(t, waitTime, time.Duration(0))
 	})
 	t.Run("before round end", func(t *testing.T) {
 		t.Parallel()
-		roundEnd := time.Now().Add(time.Hour)
-		waitTime, jitter := calcGetProofWaitTime(roundEnd, time.Hour*12)
+		cycleGap := 12 * time.Hour
+		waitTime := calcGetProofWaitTime(time.Hour, cycleGap)
 
-		require.Greater(t, waitTime, time.Duration(0))
-		require.LessOrEqual(t, waitTime, time.Hour)
-
-		require.NotZero(t, jitter)
-		require.LessOrEqual(t, jitter, time.Duration(12*float64(time.Hour)*MaxPoetGetProofJitter/100))
+		require.Greater(t, waitTime, time.Hour+time.Duration(float64(cycleGap)*MinPoetGetProofJitter/100))
+		require.LessOrEqual(t, waitTime, time.Hour+time.Duration(float64(cycleGap)*MaxPoetGetProofJitter/100))
 	})
 }

@@ -404,9 +404,9 @@ func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge types.Hash3
 			continue
 		}
 		round := r.PoetRound.ID
-		waitTime, jitter := calcGetProofWaitTime(r.PoetRound.End.IntoTime(), nb.poetCfg.CycleGap)
+		waitTime := calcGetProofWaitTime(time.Until(r.PoetRound.End.IntoTime()), nb.poetCfg.CycleGap)
 		eg.Go(func() error {
-			logger.With().Info("waiting till poet round end", log.Duration("wait time", waitTime), log.Duration("jitter", jitter))
+			logger.With().Info("waiting till poet round end", log.Duration("wait time", waitTime))
 			select {
 			case <-ctx.Done():
 				return fmt.Errorf("waiting to query proof: %w", ctx.Err())
@@ -497,19 +497,14 @@ func constructMerkleProof(challenge types.Hash32, members []types.Member) (*type
 }
 
 func randomDurationInRange(min, max time.Duration) time.Duration {
-	return min + time.Duration(float64((max-min).Nanoseconds())*rand.Float64())
+	return min + time.Duration(rand.Int63n(int64(max-min+1)))
 }
 
-// Time to wait before querying for the proof
+// Calculate the time to wait before querying for the proof
 // We add a jitter to avoid all nodes querying for the proof at the same time.
-// There's no need to add jitter if the round has already ended.
-func calcGetProofWaitTime(roundEnd time.Time, cycleGap time.Duration) (waitTime, jitter time.Duration) {
-	waitTime = time.Until(roundEnd)
-	if waitTime > 0 {
-		minWaitTime := time.Duration(float64(cycleGap) * MinPoetGetProofJitter / 100.0)
-		maxWaitTime := time.Duration(float64(cycleGap) * MaxPoetGetProofJitter / 100.0)
-		jitter := randomDurationInRange(minWaitTime, maxWaitTime)
-		return waitTime, jitter
-	}
-	return 0, 0
+func calcGetProofWaitTime(tillRoundEnd, cycleGap time.Duration) (waitTime time.Duration) {
+	minWaitTime := time.Duration(float64(cycleGap) * MinPoetGetProofJitter / 100.0)
+	maxWaitTime := time.Duration(float64(cycleGap) * MaxPoetGetProofJitter / 100.0)
+	jitter := randomDurationInRange(minWaitTime, maxWaitTime)
+	return tillRoundEnd + jitter
 }
