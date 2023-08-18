@@ -53,7 +53,7 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 	sigVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, sigVerifier, trt)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", types.EmptyNodeID, mcp, sigVerifier, trt)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	lid := types.LayerID(11)
@@ -261,7 +261,7 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 	sigVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, sigVerifier, trt)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", types.EmptyNodeID, mcp, sigVerifier, trt)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	lid := types.LayerID(11)
@@ -476,7 +476,7 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 	sigVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, sigVerifier, trt)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", types.EmptyNodeID, mcp, sigVerifier, trt)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	lid := types.LayerID(11)
@@ -706,7 +706,7 @@ func TestHandler_HandleMalfeasanceProof_validateHare(t *testing.T) {
 	sigVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, sigVerifier, trt)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", types.EmptyNodeID, mcp, sigVerifier, trt)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	createIdentity(t, db, sig)
@@ -787,7 +787,7 @@ func TestHandler_CrossDomain(t *testing.T) {
 	sigVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, sigVerifier, trt)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", types.EmptyNodeID, mcp, sigVerifier, trt)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	createIdentity(t, db, sig)
@@ -845,7 +845,7 @@ func TestHandler_HandleSyncedMalfeasanceProof_multipleATXs(t *testing.T) {
 	sigVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, sigVerifier, trt)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", types.EmptyNodeID, mcp, sigVerifier, trt)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	createIdentity(t, db, sig)
@@ -902,7 +902,7 @@ func TestHandler_HandleSyncedMalfeasanceProof_multipleBallots(t *testing.T) {
 	sigVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, sigVerifier, trt)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", types.EmptyNodeID, mcp, sigVerifier, trt)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	createIdentity(t, db, sig)
@@ -958,7 +958,7 @@ func TestHandler_HandleSyncedMalfeasanceProof_hareEquivocation(t *testing.T) {
 	sigVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, sigVerifier, trt)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", types.EmptyNodeID, mcp, sigVerifier, trt)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	createIdentity(t, db, sig)
@@ -1017,7 +1017,7 @@ func TestHandler_HandleSyncedMalfeasanceProof_wrongHash(t *testing.T) {
 	sigVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
 
-	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", mcp, sigVerifier, trt)
+	h := malfeasance.NewHandler(datastore.NewCachedDB(db, lg), lg, "self", types.EmptyNodeID, mcp, sigVerifier, trt)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	createIdentity(t, db, sig)
