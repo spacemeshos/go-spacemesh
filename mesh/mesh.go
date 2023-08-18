@@ -290,8 +290,10 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, lid types.LayerID) error {
 	}
 	results := msh.trtl.Updates()
 	pending := msh.pendingUpdates.min != 0
-	msh.pendingUpdates.min = types.MinLayer(msh.pendingUpdates.min, results[0].Layer)
-	msh.pendingUpdates.max = types.MaxLayer(msh.pendingUpdates.max, results[len(results)-1].Layer)
+	if len(results) > 0 {
+		msh.pendingUpdates.min = types.MinLayer(msh.pendingUpdates.min, results[0].Layer)
+		msh.pendingUpdates.max = types.MaxLayer(msh.pendingUpdates.max, results[len(results)-1].Layer)
+	}
 	next := msh.LatestLayerInState() + 1
 	if next < msh.pendingUpdates.min {
 		msh.pendingUpdates.min = next
@@ -335,8 +337,7 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, lid types.LayerID) error {
 		return err
 	}
 	if len(missing) > 0 {
-		lastApplicable := applicable[len(applicable)-1]
-		msh.pendingUpdates.min = types.MinLayer(msh.LatestLayerInState()+1, lastApplicable.Layer)
+		msh.pendingUpdates.min = applicable[len(applicable)-1].Layer
 		msh.pendingUpdates.max = types.MaxLayer(msh.pendingUpdates.min, msh.pendingUpdates.max)
 	} else {
 		msh.pendingUpdates.min = 0
