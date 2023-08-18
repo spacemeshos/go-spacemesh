@@ -122,12 +122,13 @@ func RecoverLayer(ctx context.Context, trtl *Tortoise, db *datastore.CachedDB, b
 	}
 	if lid <= current {
 		trtl.TallyVotes(ctx, lid)
-	}
-	opinion, err := layers.GetAggregatedHash(db, lid-1)
-	if err == nil {
-		trtl.resetPending(lid-1, opinion)
-	} else if !errors.Is(err, sql.ErrNotFound) {
-		return fmt.Errorf("check opinion %w", err)
+
+		opinion, err := layers.GetAggregatedHash(db, lid-1)
+		if err == nil {
+			trtl.resetPending(lid-1, opinion)
+		} else if !errors.Is(err, sql.ErrNotFound) {
+			return fmt.Errorf("check opinion %w", err)
+		}
 	}
 	return nil
 }
