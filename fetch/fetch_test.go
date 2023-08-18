@@ -31,6 +31,7 @@ type testFetch struct {
 	mOpnS   *mocks.Mockrequester
 	mHashS  *mocks.Mockrequester
 	mMHashS *mocks.Mockrequester
+	mOpn2S  *mocks.Mockrequester
 
 	mMesh        *mocks.MockmeshProvider
 	mMalH        *mocks.MockSyncValidator
@@ -54,6 +55,7 @@ func createFetch(tb testing.TB) *testFetch {
 		mOpnS:        mocks.NewMockrequester(ctrl),
 		mHashS:       mocks.NewMockrequester(ctrl),
 		mMHashS:      mocks.NewMockrequester(ctrl),
+		mOpn2S:       mocks.NewMockrequester(ctrl),
 		mMalH:        mocks.NewMockSyncValidator(ctrl),
 		mAtxH:        mocks.NewMockSyncValidator(ctrl),
 		mBallotH:     mocks.NewMockSyncValidator(ctrl),
@@ -64,12 +66,13 @@ func createFetch(tb testing.TB) *testFetch {
 		mPoetH:       mocks.NewMockSyncValidator(ctrl),
 	}
 	cfg := Config{
-		time.Millisecond * time.Duration(2000), // make sure we never hit the batch timeout
-		3,
-		3,
-		1000,
-		time.Second * time.Duration(3),
-		3,
+		BatchTimeout:         time.Millisecond * time.Duration(2000), // make sure we never hit the batch timeout
+		MaxRetriesForPeer:    3,
+		BatchSize:            3,
+		QueueSize:            1000,
+		RequestTimeout:       time.Second * time.Duration(3),
+		MaxRetriesForRequest: 3,
+		ServeNewProtocol:     true,
 	}
 	lg := logtest.New(tb)
 	tf.Fetch = NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), tf.mMesh, nil, nil,
@@ -83,6 +86,7 @@ func createFetch(tb testing.TB) *testFetch {
 			lyrOpnsProtocol:  tf.mOpnS,
 			hashProtocol:     tf.mHashS,
 			meshHashProtocol: tf.mMHashS,
+			OpnProtocol:      tf.mOpn2S,
 		}),
 		withHost(tf.mh))
 	tf.Fetch.SetValidators(tf.mAtxH, tf.mPoetH, tf.mBallotH, tf.mBlocksH, tf.mProposalH, tf.mTxBlocksH, tf.mTxProposalH, tf.mMalH)
@@ -315,12 +319,13 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 	cfg := Config{
-		time.Minute * time.Duration(2000), // make sure we never hit the batch timeout
-		3,
-		3,
-		1000,
-		time.Second * time.Duration(3),
-		3,
+		BatchTimeout:         time.Minute * time.Duration(2000), // make sure we never hit the batch timeout
+		MaxRetriesForPeer:    3,
+		BatchSize:            3,
+		QueueSize:            1000,
+		RequestTimeout:       time.Second * time.Duration(3),
+		MaxRetriesForRequest: 3,
+		ServeNewProtocol:     true,
 	}
 	p2pconf := p2p.DefaultConfig()
 	p2pconf.Listen = "/ip4/127.0.0.1/tcp/0"

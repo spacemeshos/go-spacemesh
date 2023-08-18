@@ -14,7 +14,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/transport"
 	"github.com/libp2p/go-libp2p/p2p/host/peerstore/pstoremem"
 	rcmgr "github.com/libp2p/go-libp2p/p2p/host/resource-manager"
-	rcmgrObs "github.com/libp2p/go-libp2p/p2p/host/resource-manager/obs"
 	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	tptu "github.com/libp2p/go-libp2p/p2p/net/upgrader"
@@ -240,8 +239,8 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 
 func setupResourcesManager(hostcfg Config) func(cfg *libp2p.Config) error {
 	return func(cfg *libp2p.Config) error {
-		rcmgrObs.MustRegisterWith(prometheus.DefaultRegisterer)
-		str, err := rcmgrObs.NewStatsTraceReporter()
+		rcmgr.MustRegisterWith(prometheus.DefaultRegisterer)
+		str, err := rcmgr.NewStatsTraceReporter()
 		if err != nil {
 			return err
 		}

@@ -475,8 +475,9 @@ func (c *Cluster) AddSmeshers(tctx *testcontext.Context, n int, opts ...Deployme
 	if err != nil {
 		return fmt.Errorf("extracting p2p endpoints %w", err)
 	}
-	clients, err := deployNodes(tctx, smesherApp, c.nextSmesher(), c.nextSmesher()+n,
-		append(opts, WithFlags(flags...), WithFlags(Bootnodes(endpoints...), StartSmeshing(true)))...)
+	dopts := []DeploymentOpt{WithFlags(flags...), WithFlags(Bootnodes(endpoints...), StartSmeshing(true))}
+	dopts = append(dopts, opts...)
+	clients, err := deployNodes(tctx, smesherApp, c.nextSmesher(), c.nextSmesher()+n, dopts...)
 	if err != nil {
 		return err
 	}

@@ -337,6 +337,21 @@ func (mr *MockatxProviderMockRecorder) GetFullAtx(id interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFullAtx", reflect.TypeOf((*MockatxProvider)(nil).GetFullAtx), id)
 }
 
+// GetMalfeasanceProof mocks base method.
+func (m *MockatxProvider) GetMalfeasanceProof(id types.NodeID) (*types.MalfeasanceProof, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMalfeasanceProof", id)
+	ret0, _ := ret[0].(*types.MalfeasanceProof)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetMalfeasanceProof indicates an expected call of GetMalfeasanceProof.
+func (mr *MockatxProviderMockRecorder) GetMalfeasanceProof(id interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMalfeasanceProof", reflect.TypeOf((*MockatxProvider)(nil).GetMalfeasanceProof), id)
+}
+
 // MaxHeightAtx mocks base method.
 func (m *MockatxProvider) MaxHeightAtx() (types.ATXID, error) {
 	m.ctrl.T.Helper()
