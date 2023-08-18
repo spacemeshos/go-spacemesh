@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -139,23 +140,18 @@ func launchServer(tb testing.TB, cdb *datastore.CachedDB) func() {
 
 	pb.RegisterMeshServiceServer(grpcService.GrpcServer, s)
 	// start gRPC and json servers
-	grpcStarted := grpcService.Start()
-	jsonStarted := jsonService.StartService(context.Background(), s)
-
-	timer := time.NewTimer(3 * time.Second)
-	defer timer.Stop()
-
-	// wait for server to be ready (critical on CI)
-	for _, ch := range []<-chan struct{}{grpcStarted, jsonStarted} {
-		select {
-		case <-ch:
-		case <-timer.C:
-		}
-	}
+	err := grpcService.Start()
+	require.NoError(tb, err)
+	err = jsonService.StartService(context.Background(), s)
+	require.NoError(tb, err)
 
 	return func() {
-		require.NoError(tb, jsonService.Shutdown(context.Background()))
-		_ = grpcService.Close()
+		err := jsonService.Shutdown(context.Background())
+		if !errors.Is(err, http.ErrServerClosed) {
+			require.NoError(tb, err)
+		}
+		err = grpcService.Close()
+		require.NoError(tb, err)
 	}
 }
 

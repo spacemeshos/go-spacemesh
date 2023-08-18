@@ -4,6 +4,7 @@ import (
 	"net"
 	"time"
 
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/reflection"
@@ -21,6 +22,7 @@ type Server struct {
 	Listener   string
 	logger     log.Logger
 	GrpcServer *grpc.Server
+	grp        errgroup.Group
 }
 
 // New creates and returns a new Server with port and interface.
@@ -34,7 +36,7 @@ func New(listener string, lg log.Logger, opts ...grpc.ServerOption) *Server {
 }
 
 // Start starts the server.
-func (s *Server) Start() <-chan struct{} {
+func (s *Server) Start() error {
 	s.logger.With().Info("starting grpc server",
 		log.String("address", s.Listener),
 		log.Array("services", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
@@ -44,35 +46,27 @@ func (s *Server) Start() <-chan struct{} {
 			return nil
 		})),
 	)
-
-	started := make(chan struct{})
-	go s.startInternal(started)
-
-	return started
-}
-
-// Blocking, should be called in a goroutine.
-func (s *Server) startInternal(started chan<- struct{}) {
 	lis, err := net.Listen("tcp", s.Listener)
 	if err != nil {
 		s.logger.Error("error listening: %v", err)
-		return
+		return err
 	}
 	reflection.Register(s.GrpcServer)
-	s.logger.Info("starting new grpc server on %s", s.Listener)
-	close(started)
-	if err := s.GrpcServer.Serve(lis); err != nil {
-		s.logger.Error("error stopping grpc server: %v", err)
-	}
+	s.grp.Go(func() error {
+		if err := s.GrpcServer.Serve(lis); err != nil {
+			s.logger.Error("error stopping grpc server: %v", err)
+			return err
+		}
+		return nil
+	})
+	return nil
 }
 
 // Close stops the server.
 func (s *Server) Close() error {
 	s.logger.Info("stopping the grpc server")
 	s.GrpcServer.Stop()
-
-	// We don't return any errors but we want to conform to io.Closer so return a nil error
-	return nil
+	return s.grp.Wait()
 }
 
 // ServerOptions are shared by all grpc servers.

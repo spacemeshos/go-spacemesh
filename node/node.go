@@ -1109,10 +1109,14 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		app.jsonAPIService.StartService(ctx, public...)
 	}
 	if app.grpcPublicService != nil {
-		app.grpcPublicService.Start()
+		if err := app.grpcPublicService.Start(); err != nil {
+			return err
+		}
 	}
 	if app.grpcPrivateService != nil {
-		app.grpcPrivateService.Start()
+		if err := app.grpcPrivateService.Start(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
