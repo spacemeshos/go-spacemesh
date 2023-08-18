@@ -671,11 +671,18 @@ func CheckpointLayer(restoreLayer uint32) DeploymentFlag {
 	return DeploymentFlag{Name: "--recovery-layer", Value: strconv.Itoa(int(restoreLayer))}
 }
 
-func NewSyncProtocol(newSyncProtocol bool) DeploymentFlag {
-	if newSyncProtocol {
-		return DeploymentFlag{Name: "--use-new-protocol", Value: "true"}
+func UseNewOpn(use bool) DeploymentFlag {
+	if use {
+		return DeploymentFlag{Name: "--use-new-opn", Value: "true"}
 	}
-	return DeploymentFlag{Name: "--use-new-protocol", Value: "false"}
+	return DeploymentFlag{Name: "--use-new-opn", Value: "false"}
+}
+
+func ServeNewOpn(newSyncProtocol bool) DeploymentFlag {
+	if newSyncProtocol {
+		return DeploymentFlag{Name: "--serve-new-opn", Value: "true"}
+	}
+	return DeploymentFlag{Name: "--serve-new-opn", Value: "false"}
 }
 
 const (

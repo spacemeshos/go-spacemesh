@@ -268,8 +268,13 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(&cfg.TestConfig.SmesherKey, "testing-smesher-key",
 		"", "import private smesher key for testing",
 	)
-	cmd.PersistentFlags().BoolVar(&cfg.Sync.UseNewProtocol, "use-new-protocol",
+	// TODO remove after sync protocol update
+	cmd.PersistentFlags().BoolVar(&cfg.Sync.UseNewProtocol, "use-new-opn",
 		cfg.Sync.UseNewProtocol, "use new opinions sync protocol",
+	)
+	// TODO remove after sync protocol update
+	cmd.PersistentFlags().BoolVar(&cfg.FETCH.ServeNewProtocol, "serve-new-opn",
+		cfg.FETCH.ServeNewProtocol, "serve new opinions sync protocol",
 	)
 
 	// Bind Flags to config

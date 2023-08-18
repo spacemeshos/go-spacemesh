@@ -27,7 +27,7 @@ type Config struct {
 	SyncCertDistance uint32
 	MaxStaleDuration time.Duration
 	Standalone       bool
-	UseNewProtocol   bool `mapstructure:"use-new-protocol"`
+	UseNewProtocol   bool `mapstructure:"use-new-opn"`
 }
 
 // DefaultConfig for the syncer.

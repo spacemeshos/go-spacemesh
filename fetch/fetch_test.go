@@ -66,12 +66,13 @@ func createFetch(tb testing.TB) *testFetch {
 		mPoetH:       mocks.NewMockSyncValidator(ctrl),
 	}
 	cfg := Config{
-		time.Millisecond * time.Duration(2000), // make sure we never hit the batch timeout
-		3,
-		3,
-		1000,
-		time.Second * time.Duration(3),
-		3,
+		BatchTimeout:         time.Millisecond * time.Duration(2000), // make sure we never hit the batch timeout
+		MaxRetriesForPeer:    3,
+		BatchSize:            3,
+		QueueSize:            1000,
+		RequestTimeout:       time.Second * time.Duration(3),
+		MaxRetriesForRequest: 3,
+		ServeNewProtocol:     true,
 	}
 	lg := logtest.New(tb)
 	tf.Fetch = NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), tf.mMesh, nil, nil,
@@ -318,12 +319,13 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 	cfg := Config{
-		time.Minute * time.Duration(2000), // make sure we never hit the batch timeout
-		3,
-		3,
-		1000,
-		time.Second * time.Duration(3),
-		3,
+		BatchTimeout:         time.Minute * time.Duration(2000), // make sure we never hit the batch timeout
+		MaxRetriesForPeer:    3,
+		BatchSize:            3,
+		QueueSize:            1000,
+		RequestTimeout:       time.Second * time.Duration(3),
+		MaxRetriesForRequest: 3,
+		ServeNewProtocol:     true,
 	}
 	p2pconf := p2p.DefaultConfig()
 	p2pconf.Listen = "/ip4/127.0.0.1/tcp/0"
