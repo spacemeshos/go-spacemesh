@@ -849,6 +849,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.cachedDB,
 		app.addLogger(MalfeasanceLogger, lg),
 		app.host.ID(),
+		app.edSgn.NodeID(),
 		app.hare,
 		app.edVerifier,
 		trtl,

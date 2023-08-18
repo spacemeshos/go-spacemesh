@@ -2,6 +2,7 @@ package grpcserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/golang/protobuf/ptypes/empty"
@@ -12,6 +13,8 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 type activationService struct {
@@ -40,12 +43,29 @@ func (s *activationService) Get(ctx context.Context, request *pb.GetRequest) (*p
 	atxId := types.ATXID(types.BytesToHash(request.Id))
 	atx, err := s.atxProvider.GetFullAtx(atxId)
 	if err != nil || atx == nil {
-		ctxzap.Debug(ctx, "failed to get the ATX", zap.Error(err), zap.Stringer("id", atxId))
+		ctxzap.Debug(ctx, "failed to get ATX",
+			zap.Stringer("id", atxId),
+			zap.Error(err),
+		)
 		return nil, status.Error(codes.NotFound, "id was not found")
 	}
-	return &pb.GetResponse{
+	proof, err := s.atxProvider.GetMalfeasanceProof(atx.SmesherID)
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
+		ctxzap.Error(ctx, "failed to get malfeasance proof",
+			zap.Stringer("smesher", atx.SmesherID),
+			zap.Stringer("smesher", atx.SmesherID),
+			zap.Stringer("id", atxId),
+			zap.Error(err),
+		)
+		return nil, status.Error(codes.NotFound, "id was not found")
+	}
+	resp := &pb.GetResponse{
 		Atx: convertActivation(atx),
-	}, nil
+	}
+	if proof != nil {
+		resp.MalfeasanceProof = events.ToMalfeasancePB(atx.SmesherID, proof, false)
+	}
+	return resp, nil
 }
 
 func (s *activationService) Highest(ctx context.Context, req *empty.Empty) (*pb.HighestResponse, error) {
