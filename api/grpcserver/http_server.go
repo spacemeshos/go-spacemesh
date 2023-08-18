@@ -44,7 +44,11 @@ func (s *JSONHTTPServer) Shutdown(ctx context.Context) error {
 			return fmt.Errorf("shutdown: %w", err)
 		}
 	}
-	return s.grp.Wait()
+	err := s.grp.Wait()
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
 }
 
 // StartService starts the json api server and listens for status (started, stopped).

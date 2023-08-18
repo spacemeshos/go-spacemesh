@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -145,8 +146,12 @@ func launchServer(tb testing.TB, cdb *datastore.CachedDB) func() {
 	require.NoError(tb, err)
 
 	return func() {
-		require.NoError(tb, jsonService.Shutdown(context.Background()))
-		_ = grpcService.Close()
+		err := jsonService.Shutdown(context.Background())
+		if !errors.Is(err, http.ErrServerClosed) {
+			require.NoError(tb, err)
+		}
+		err = grpcService.Close()
+		require.NoError(tb, err)
 	}
 }
 

@@ -493,8 +493,10 @@ func launchServer(tb testing.TB, cfg Config, services ...ServiceAPI) func() {
 	// start gRPC and json servers
 	err := grpcService.Start()
 	require.NoError(tb, err)
-	err = jsonService.StartService(context.Background(), services...)
-	require.NoError(tb, err)
+	if len(services) > 0 {
+		err = jsonService.StartService(context.Background(), services...)
+		require.NoError(tb, err)
+	}
 
 	return func() {
 		require.NoError(tb, jsonService.Shutdown(context.Background()))
