@@ -21,14 +21,14 @@ var LayerNumBlocks = metrics.NewHistogramWithBuckets(
 )
 
 var ExecOpt = metrics.NewCounter(
-	"opt",
+	"exec_opt",
 	Subsystem,
 	"number of times blocks are optimistically executed",
 	[]string{},
 ).WithLabelValues()
 
 var Exec = metrics.NewCounter(
-	"opt",
+	"exec",
 	Subsystem,
 	"number of times blocks are executed",
 	[]string{},
