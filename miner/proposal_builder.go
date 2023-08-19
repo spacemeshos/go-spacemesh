@@ -67,6 +67,9 @@ type config struct {
 	minActiveSetWeight uint64
 	nodeID             types.NodeID
 	networkDelay       time.Duration
+
+	// used to determine whether a node has enough information on the active set this epoch
+	syncedPct int
 }
 
 type defaultFetcher struct {
@@ -173,6 +176,7 @@ func NewProposalBuilder(
 	for _, opt := range opts {
 		opt(pb)
 	}
+	pb.cfg.syncedPct = 90
 	if pb.proposalOracle == nil {
 		pb.proposalOracle = newMinerOracle(pb.cfg, clock, cdb, vrfSigner, syncer, pb.logger)
 	}

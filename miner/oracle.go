@@ -97,55 +97,60 @@ func (o *Oracle) ProposalEligibility(lid types.LayerID, beacon types.Beacon, non
 	return ee, nil
 }
 
-func (o *Oracle) activesFromFirstBlock(targetEpoch types.EpochID) (uint64, uint64, []types.ATXID, error) {
+func (o *Oracle) activesFromFirstBlock(targetEpoch types.EpochID, ownAtx types.ATXID, ownWeight uint64) (uint64, []types.ATXID, error) {
+	if ownAtx == types.EmptyATXID || ownWeight == 0 {
+		o.log.Fatal("invalid miner atx")
+	}
+
 	activeSet, err := ActiveSetFromEpochFirstBlock(o.cdb, targetEpoch)
 	if err != nil {
-		return 0, 0, nil, err
+		return 0, nil, err
 	}
-	own, err := o.cdb.GetEpochAtx(targetEpoch-1, o.cfg.nodeID)
+	_, totalWeight, own, err := infoFromActiveSet(o.cdb, o.vrfSigner.NodeID(), activeSet)
 	if err != nil {
-		return 0, 0, nil, err
+		return 0, nil, err
 	}
-	var total uint64
-	var final []types.ATXID
+	if own == types.EmptyATXID {
+		// miner is not included in the active set derived from the epoch's first block
+		activeSet = append(activeSet, ownAtx)
+		totalWeight += ownWeight
+	}
+	return totalWeight, activeSet, nil
+}
+
+func infoFromActiveSet(cdb *datastore.CachedDB, nodeID types.NodeID, activeSet []types.ATXID) (uint64, uint64, types.ATXID, error) {
+	var (
+		total, ownWeight uint64
+		ownAtx           types.ATXID
+	)
 	for _, id := range activeSet {
-		hdr, err := o.cdb.GetAtxHeader(id)
+		hdr, err := cdb.GetAtxHeader(id)
 		if err != nil {
-			return 0, 0, nil, err
+			return 0, 0, types.EmptyATXID, fmt.Errorf("new ndoe get atx hdr: %w", err)
 		}
-		if id != own.ID {
-			final = append(final, id)
+		if hdr.NodeID == nodeID {
+			ownAtx = id
+			ownWeight = hdr.GetWeight()
 		}
 		total += hdr.GetWeight()
 	}
-	// put miner's own ATXID last
-	final = append(final, own.ID)
-	o.log.With().Info("active set selected for proposal",
-		log.Stringer("epoch", targetEpoch),
-		log.Int("num_atx", len(final)),
-	)
-	return own.GetWeight(), total, final, nil
+	return ownWeight, total, ownAtx, nil
 }
 
-func (o *Oracle) activeSet(targetEpoch types.EpochID) (uint64, uint64, []types.ATXID, error) {
-	if !o.syncState.SyncedBefore(targetEpoch - 1) {
-		// if the node is not synced prior to `targetEpoch-1`, it doesn't have the correct receipt timestamp
-		// for all the atx and malfeasance proof, and cannot use atx grading for active set.
-		o.log.With().Info("node not synced before prior epoch, getting active set from first block",
-			log.Stringer("epoch", targetEpoch),
-		)
-		return o.activesFromFirstBlock(targetEpoch)
-	}
-
+func (o *Oracle) activeSet(targetEpoch types.EpochID) (uint64, uint64, types.ATXID, []types.ATXID, error) {
 	var (
-		minerWeight, totalWeight uint64
-		minerID                  types.ATXID
-		atxids                   []types.ATXID
+		ownWeight, totalWeight uint64
+		ownAtx                 types.ATXID
+		atxids                 []types.ATXID
 	)
 
 	epochStart := o.clock.LayerToTime(targetEpoch.FirstLayer())
 	numOmitted := 0
 	if err := o.cdb.IterateEpochATXHeaders(targetEpoch, func(header *types.ActivationTxHeader) error {
+		if header.NodeID == o.cfg.nodeID {
+			ownWeight = header.GetWeight()
+			ownAtx = header.ID
+		}
 		grade, err := GradeAtx(o.cdb, header.NodeID, header.Received, epochStart, o.cfg.networkDelay)
 		if err != nil {
 			return err
@@ -155,6 +160,7 @@ func (o *Oracle) activeSet(targetEpoch types.EpochID) (uint64, uint64, []types.A
 				header.ID,
 				log.Int("grade", int(grade)),
 				log.Stringer("smesher", header.NodeID),
+				log.Bool("own", header.NodeID == o.cfg.nodeID),
 				log.Time("received", header.Received),
 				log.Time("epoch_start", epochStart),
 			)
@@ -162,37 +168,81 @@ func (o *Oracle) activeSet(targetEpoch types.EpochID) (uint64, uint64, []types.A
 			return nil
 		}
 		totalWeight += header.GetWeight()
-		if header.NodeID == o.cfg.nodeID {
-			minerWeight = header.GetWeight()
-			minerID = header.ID
-		} else {
-			atxids = append(atxids, header.ID)
-		}
+		atxids = append(atxids, header.ID)
 		return nil
 	}); err != nil {
-		return 0, 0, nil, err
+		return 0, 0, types.EmptyATXID, nil, err
 	}
-	// put miner's own ATXID last
-	if minerID != types.EmptyATXID {
-		atxids = append(atxids, minerID)
+
+	if ownAtx == types.EmptyATXID || ownWeight == 0 {
+		return 0, 0, types.EmptyATXID, nil, errMinerHasNoATXInPreviousEpoch
 	}
-	o.log.With().Info("active set selected for proposal",
-		log.Int("num_atx", len(atxids)),
-		log.Int("num_omitted", numOmitted),
-	)
-	return minerWeight, totalWeight, atxids, nil
+
+	if total := numOmitted + len(atxids); total == 0 {
+		return 0, 0, types.EmptyATXID, nil, errEmptyActiveSet
+	} else if numOmitted*100/total > 100-o.cfg.syncedPct {
+		// if the node is not synced during `targetEpoch-1`, it doesn't have the correct receipt timestamp
+		// for all the atx and malfeasance proof. this active set is not usable.
+		// TODO: change after timing info of ATXs and malfeasance proofs is sync'ed from peers as well
+		var err error
+		totalWeight, atxids, err = o.activesFromFirstBlock(targetEpoch, ownAtx, ownWeight)
+		if err != nil {
+			return 0, 0, types.EmptyATXID, nil, err
+		}
+		o.log.With().Info("miner not synced during prior epoch, active set from first block",
+			log.Int("num atx", len(atxids)),
+			log.Int("num omitted", numOmitted),
+			log.Int("num block atx", len(atxids)),
+		)
+	} else {
+		o.log.With().Info("active set selected for proposal",
+			log.Int("num atx", len(atxids)),
+			log.Int("num omitted", numOmitted),
+		)
+	}
+	return ownWeight, totalWeight, ownAtx, atxids, nil
+}
+
+func refBallot(db sql.Executor, epoch types.EpochID, nodeID types.NodeID) (*types.Ballot, error) {
+	ref, err := ballots.GetRefBallot(db, epoch, nodeID)
+	if errors.Is(err, sql.ErrNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get refballot: %w", err)
+	}
+	ballot, err := ballots.Get(db, ref)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get ballot: %w", err)
+	}
+	return ballot, nil
 }
 
 // calcEligibilityProofs calculates the eligibility proofs of proposals for the miner in the given epoch
 // and returns the proofs along with the epoch's active set.
 func (o *Oracle) calcEligibilityProofs(lid types.LayerID, epoch types.EpochID, beacon types.Beacon, nonce types.VRFPostIndex) (*EpochEligibility, error) {
-	// get the previous epoch's total weight
-	minerWeight, totalWeight, activeSet, err := o.activeSet(epoch)
+	ref, err := refBallot(o.cdb, epoch, o.vrfSigner.NodeID())
 	if err != nil {
-		return nil, fmt.Errorf("failed to get epoch %v weight: %w", epoch, err)
+		return nil, err
 	}
-	if minerWeight == 0 {
-		return nil, errMinerHasNoATXInPreviousEpoch
+
+	var (
+		minerWeight, totalWeight uint64
+		ownAtx                   types.ATXID
+		activeSet                []types.ATXID
+	)
+	if ref == nil {
+		minerWeight, totalWeight, ownAtx, activeSet, err = o.activeSet(epoch)
+	} else {
+		activeSet = ref.ActiveSet
+		minerWeight, totalWeight, ownAtx, err = infoFromActiveSet(o.cdb, o.vrfSigner.NodeID(), activeSet)
+		o.log.With().Info("use active set from ref ballot",
+			ref.ID(),
+			log.Int("num atx", len(activeSet)),
+		)
+	}
+	if err != nil {
+		return nil, err
 	}
 	if totalWeight == 0 {
 		return nil, errZeroEpochWeight
@@ -200,7 +250,6 @@ func (o *Oracle) calcEligibilityProofs(lid types.LayerID, epoch types.EpochID, b
 	if len(activeSet) == 0 {
 		return nil, errEmptyActiveSet
 	}
-	ownAtx := activeSet[len(activeSet)-1]
 	o.log.With().Debug("calculating eligibility",
 		epoch,
 		beacon,
@@ -208,20 +257,13 @@ func (o *Oracle) calcEligibilityProofs(lid types.LayerID, epoch types.EpochID, b
 		log.Uint64("total weight", totalWeight),
 	)
 	var numEligibleSlots uint32
-	ref, err := ballots.GetRefBallot(o.cdb, epoch, o.vrfSigner.NodeID())
-	if errors.Is(err, sql.ErrNotFound) {
+	if ref == nil {
 		numEligibleSlots, err = proposals.GetLegacyNumEligible(lid, minerWeight, o.cfg.minActiveSetWeight, totalWeight, o.cfg.layerSize, o.cfg.layersPerEpoch)
 		if err != nil {
 			return nil, fmt.Errorf("oracle get num slots: %w", err)
 		}
-	} else if err != nil {
-		return nil, fmt.Errorf("failed to get refballot: %w", err)
 	} else {
-		ballot, err := ballots.Get(o.cdb, ref)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get ballot: %w", err)
-		}
-		numEligibleSlots = ballot.EpochData.EligibilityCount
+		numEligibleSlots = ref.EpochData.EligibilityCount
 	}
 
 	eligibilityProofs := map[types.LayerID][]types.VotingEligibility{}
