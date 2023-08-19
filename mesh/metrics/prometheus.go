@@ -19,3 +19,17 @@ var LayerNumBlocks = metrics.NewHistogramWithBuckets(
 	[]string{},
 	prometheus.ExponentialBuckets(1, 2, 16),
 )
+
+var ExecOpt = metrics.NewCounter(
+	"opt",
+	Subsystem,
+	"number of times blocks are optimistically executed",
+	[]string{},
+).WithLabelValues()
+
+var Exec = metrics.NewCounter(
+	"opt",
+	Subsystem,
+	"number of times blocks are executed",
+	[]string{},
+).WithLabelValues()

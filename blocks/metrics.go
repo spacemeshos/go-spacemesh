@@ -69,3 +69,19 @@ func (c *collector) Collect(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(c.epochCertCount, prometheus.CounterValue, float64(cnt), epoch.String())
 	}
 }
+
+var (
+	optimistic = metrics.NewCounter(
+		"opt",
+		namespace,
+		"number of times blocks are optimistically filtered",
+		[]string{},
+	).WithLabelValues()
+
+	agreement = metrics.NewGauge(
+		"agreement",
+		namespace,
+		"percentage agreement on state",
+		[]string{},
+	).WithLabelValues()
+)

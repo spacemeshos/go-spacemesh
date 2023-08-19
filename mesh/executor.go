@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/txs"
@@ -118,6 +119,7 @@ func (e *Executor) ExecuteOptimistic(
 		log.Int("skipped", len(ineffective)),
 		log.Int("rewards", len(b.Rewards)),
 	)
+	metrics.ExecOpt.Inc()
 	return b, nil
 }
 
@@ -160,6 +162,7 @@ func (e *Executor) Execute(ctx context.Context, lid types.LayerID, block *types.
 		log.Duration("duration", time.Since(start)),
 		log.Int("count", len(executed)),
 	)
+	metrics.Exec.Inc()
 	return nil
 }
 

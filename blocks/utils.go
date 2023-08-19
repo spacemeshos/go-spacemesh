@@ -97,18 +97,27 @@ func getProposalMetadata(
 	}
 	majority := cfg.OptFilterThreshold * len(proposals)
 	var majorityState *meshState
+	var highest int
 	for _, ms := range meshHashes {
 		logger.With().Debug("mesh hash",
 			ms.hash,
 			log.Int("count", ms.count),
 			log.Int("threshold", cfg.OptFilterThreshold),
 			log.Int("num_proposals", len(proposals)))
-		if ms.hash != types.EmptyLayerHash && ms.count*100 >= majority {
-			majorityState = ms
+		if ms.hash != types.EmptyLayerHash {
+			if ms.count > highest {
+				highest = ms.count
+			}
+			if ms.count*100 >= majority {
+				majorityState = ms
+				optimistic.Inc()
+				agreement.Set(float64(ms.count*100) / float64(len(proposals)))
+			}
 		}
 	}
 	if majorityState == nil {
 		logger.With().Info("no consensus on mesh hash. NOT doing optimistic filtering", lid)
+		agreement.Set(float64(highest*100) / float64(len(proposals)))
 	} else {
 		ownMeshHash, err := layers.GetAggregatedHash(cdb, lid.Sub(1))
 		if err != nil {
