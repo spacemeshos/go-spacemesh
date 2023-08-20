@@ -44,8 +44,6 @@ type Generator struct {
 
 // Config is the config for Generator.
 type Config struct {
-	LayerSize          uint32
-	LayersPerEpoch     uint32
 	GenBlockInterval   time.Duration
 	BlockGasLimit      uint64
 	OptFilterThreshold int
@@ -53,8 +51,6 @@ type Config struct {
 
 func defaultConfig() Config {
 	return Config{
-		LayerSize:          50,
-		LayersPerEpoch:     3,
 		GenBlockInterval:   time.Second,
 		BlockGasLimit:      math.MaxUint64,
 		OptFilterThreshold: 90,

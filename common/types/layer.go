@@ -21,6 +21,9 @@ var (
 	EmptyLayerHash = Hash32{}
 
 	legacyLayer uint32
+
+	// layer at which optimistic filtering majority calculation is upgraded.
+	opUpgradeLayer uint32
 )
 
 // SetLayersPerEpoch sets global parameter of layers per epoch, all conversions from layer to epoch use this param.
@@ -35,6 +38,14 @@ func SetLegacyLayers(layer uint32) {
 
 func GetLegacyLayer() uint32 {
 	return legacyLayer
+}
+
+func SetOpUpgradeLayer(layer uint32) {
+	opUpgradeLayer = layer
+}
+
+func OpUpgradeLayer() uint32 {
+	return opUpgradeLayer
 }
 
 func SetEffectiveGenesis(layer uint32) {

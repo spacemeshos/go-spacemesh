@@ -69,15 +69,22 @@ func getProposalMetadata(
 	if err != nil {
 		return nil, err
 	}
+	upgrade := proposals[0].Layer.Uint32() >= types.OpUpgradeLayer()
+	total := 0
 	for _, p := range proposals {
 		key := p.MeshHash
+		cnt := 1
+		if upgrade {
+			cnt = len(p.EligibilityProofs)
+		}
+		total += cnt
 		if _, ok := meshHashes[key]; !ok {
 			meshHashes[key] = &meshState{
 				hash:  p.MeshHash,
-				count: 1,
+				count: cnt,
 			}
 		} else {
-			meshHashes[key].count++
+			meshHashes[key].count += cnt
 		}
 
 		for _, tid := range p.TxIDs {
@@ -95,12 +102,13 @@ func getProposalMetadata(
 			mtxs = append(mtxs, mtx)
 		}
 	}
-	majority := cfg.OptFilterThreshold * len(proposals)
+	majority := cfg.OptFilterThreshold * total
 	var majorityState *meshState
 	for _, ms := range meshHashes {
 		logger.With().Debug("mesh hash",
 			ms.hash,
 			log.Int("count", ms.count),
+			log.Int("total", total),
 			log.Int("threshold", cfg.OptFilterThreshold),
 			log.Int("num_proposals", len(proposals)))
 		if ms.hash != types.EmptyLayerHash && ms.count*100 >= majority {
@@ -223,7 +231,7 @@ func rewardInfoAndHeight(logger log.Log, cdb *datastore.CachedDB, cfg Config, pr
 			max = atx.BaseTickHeight
 		}
 		ballot := &p.Ballot
-		weightPer, err := proposals.ComputeWeightPerEligibility(cdb, ballot, cfg.LayerSize, cfg.LayersPerEpoch)
+		weightPer, err := proposals.ComputeWeightPerEligibility(cdb, ballot)
 		if err != nil {
 			logger.With().Error("failed to calculate weight per eligibility", p.ID(), log.Err(err))
 			return 0, nil, err
