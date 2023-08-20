@@ -763,6 +763,11 @@ func (app *App) initServices(ctx context.Context) error {
 		app.addLogger(HareLogger, lg),
 	)
 
+	minerGoodAtxPct := 90
+	if app.Config.TestConfig.MinerGoodAtxPct > 0 {
+		// only set this for systest TestEquivocation.
+		minerGoodAtxPct = app.Config.TestConfig.MinerGoodAtxPct
+	}
 	proposalBuilder := miner.NewProposalBuilder(
 		ctx,
 		app.clock,
@@ -780,6 +785,7 @@ func (app *App) initServices(ctx context.Context) error {
 		miner.WithMinimalActiveSetWeight(app.Config.Tortoise.MinimalActiveSetWeight),
 		miner.WithHdist(app.Config.Tortoise.Hdist),
 		miner.WithNetworkDelay(app.Config.HARE.WakeupDelta),
+		miner.WithMinGoodAtxPct(minerGoodAtxPct),
 		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)),
 	)
 

@@ -180,7 +180,7 @@ func (o *Oracle) activeSet(targetEpoch types.EpochID) (uint64, uint64, types.ATX
 
 	if total := numOmitted + len(atxids); total == 0 {
 		return 0, 0, types.EmptyATXID, nil, errEmptyActiveSet
-	} else if numOmitted*100/total > 100-o.cfg.syncedPct {
+	} else if numOmitted*100/total > 100-o.cfg.goodAtxPct {
 		// if the node is not synced during `targetEpoch-1`, it doesn't have the correct receipt timestamp
 		// for all the atx and malfeasance proof. this active set is not usable.
 		// TODO: change after timing info of ATXs and malfeasance proofs is sync'ed from peers as well
@@ -198,6 +198,7 @@ func (o *Oracle) activeSet(targetEpoch types.EpochID) (uint64, uint64, types.ATX
 		o.log.With().Info("active set selected for proposal",
 			log.Int("num atx", len(atxids)),
 			log.Int("num omitted", numOmitted),
+			log.Int("min atx good pct", o.cfg.goodAtxPct),
 		)
 	}
 	return ownWeight, totalWeight, ownAtx, atxids, nil

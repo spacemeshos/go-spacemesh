@@ -375,7 +375,7 @@ func TestOracle_NewNode(t *testing.T) {
 			avgLayerSize := uint32(10)
 			lyrsPerEpoch := uint32(20)
 			o := createTestOracle(t, avgLayerSize, lyrsPerEpoch, 0)
-			o.cfg.syncedPct = 90
+			o.cfg.goodAtxPct = 90
 			lid := types.LayerID(lyrsPerEpoch * 3)
 			o.mClock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now())
 			common := types.RandomActiveSet(100)
