@@ -190,7 +190,7 @@ func (o *Oracle) activeSet(targetEpoch types.EpochID) (uint64, uint64, types.ATX
 			return 0, 0, types.EmptyATXID, nil, err
 		}
 		o.log.With().Info("miner not synced during prior epoch, active set from first block",
-			log.Int("num atx", len(atxids)),
+			log.Int("all atx", total),
 			log.Int("num omitted", numOmitted),
 			log.Int("num block atx", len(atxids)),
 		)
@@ -209,11 +209,11 @@ func refBallot(db sql.Executor, epoch types.EpochID, nodeID types.NodeID) (*type
 		return nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to get refballot: %w", err)
+		return nil, fmt.Errorf("miner get refballot: %w", err)
 	}
 	ballot, err := ballots.Get(db, ref)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get ballot: %w", err)
+		return nil, fmt.Errorf("miner get ballot: %w", err)
 	}
 	return ballot, nil
 }
@@ -235,11 +235,11 @@ func (o *Oracle) calcEligibilityProofs(lid types.LayerID, epoch types.EpochID, b
 		minerWeight, totalWeight, ownAtx, activeSet, err = o.activeSet(epoch)
 	} else {
 		activeSet = ref.ActiveSet
-		minerWeight, totalWeight, ownAtx, err = infoFromActiveSet(o.cdb, o.vrfSigner.NodeID(), activeSet)
 		o.log.With().Info("use active set from ref ballot",
 			ref.ID(),
 			log.Int("num atx", len(activeSet)),
 		)
+		minerWeight, totalWeight, ownAtx, err = infoFromActiveSet(o.cdb, o.vrfSigner.NodeID(), activeSet)
 	}
 	if err != nil {
 		return nil, err
