@@ -22,6 +22,8 @@ func fastnet() config.Config {
 	types.SetNetworkHRP(conf.NetworkHRP) // set to generate coinbase
 	conf.BaseConfig.OptFilterThreshold = 90
 
+	conf.BaseConfig.TestConfig.MinerGoodAtxPct = 50
+
 	conf.HARE.N = 800
 	conf.HARE.ExpectedLeaders = 10
 	conf.HARE.LimitConcurrent = 5

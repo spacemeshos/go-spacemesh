@@ -70,7 +70,8 @@ func (cfg *Config) DataDir() string {
 }
 
 type TestConfig struct {
-	SmesherKey string `mapstructure:"testing-smesher-key"`
+	SmesherKey      string `mapstructure:"testing-smesher-key"`
+	MinerGoodAtxPct int
 }
 
 // BaseConfig defines the default configuration options for spacemesh app.
