@@ -43,14 +43,44 @@ type CachedDB struct {
 	malfeasanceCache *lru.Cache[types.NodeID, *types.MalfeasanceProof]
 }
 
+type Config struct {
+	ATXSize         int `mapstructure:"atx-size"`
+	MalfeasenceSize int `mapstructure:"malfeasence-size"`
+}
+
+func DefaultConfig() Config {
+	return Config{
+		ATXSize:         10_000,
+		MalfeasenceSize: 1_000,
+	}
+}
+
+type cacheOpts struct {
+	cfg Config
+}
+
+type Opt func(*cacheOpts)
+
+func WithConfig(cfg Config) Opt {
+	return func(o *cacheOpts) {
+		o.cfg = cfg
+	}
+}
+
 // NewCachedDB create an instance of a CachedDB.
-func NewCachedDB(db *sql.Database, lg log.Log) *CachedDB {
-	atxHdrCache, err := lru.New[types.ATXID, *types.ActivationTxHeader](atxHdrCacheSize)
+func NewCachedDB(db *sql.Database, lg log.Log, opts ...Opt) *CachedDB {
+	o := cacheOpts{cfg: DefaultConfig()}
+	for _, opt := range opts {
+		opt(&o)
+	}
+	lg.With().Info("initialized datastore", log.Any("config", o.cfg))
+
+	atxHdrCache, err := lru.New[types.ATXID, *types.ActivationTxHeader](o.cfg.ATXSize)
 	if err != nil {
 		lg.Fatal("failed to create atx cache", err)
 	}
 
-	malfeasanceCache, err := lru.New[types.NodeID, *types.MalfeasanceProof](malfeasanceCacheSize)
+	malfeasanceCache, err := lru.New[types.NodeID, *types.MalfeasanceProof](o.cfg.MalfeasenceSize)
 	if err != nil {
 		lg.Fatal("failed to create malfeasance cache", err)
 	}
