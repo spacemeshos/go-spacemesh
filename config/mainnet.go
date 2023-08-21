@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
@@ -134,8 +135,10 @@ func MainnetConfig() Config {
 			Interval:         time.Minute,
 			EpochEndFraction: 0.8,
 			MaxStaleDuration: time.Hour,
+			UseNewProtocol:   true,
 			Standalone:       false,
 		},
 		Recovery: checkpoint.DefaultConfig(),
+		Cache:    datastore.DefaultConfig(),
 	}
 }

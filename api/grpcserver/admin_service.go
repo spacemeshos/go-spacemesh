@@ -15,6 +15,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/durationpb"
 
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -32,10 +33,11 @@ type AdminService struct {
 	db      *sql.Database
 	dataDir string
 	recover func()
+	p       peers
 }
 
 // NewAdminService creates a new admin grpc service.
-func NewAdminService(db *sql.Database, dataDir string) *AdminService {
+func NewAdminService(db *sql.Database, dataDir string, p peers) *AdminService {
 	return &AdminService{
 		db:      db,
 		dataDir: dataDir,
@@ -46,6 +48,7 @@ func NewAdminService(db *sql.Database, dataDir string) *AdminService {
 				os.Exit(0)
 			}()
 		},
+		p: p,
 	}
 }
 
@@ -135,4 +138,38 @@ func (a AdminService) EventsStream(req *pb.EventStreamRequest, stream pb.AdminSe
 			}
 		}
 	}
+}
+
+func (a AdminService) PeerInfoStream(_ *empty.Empty, stream pb.AdminService_PeerInfoStreamServer) error {
+	for _, p := range a.p.GetPeers() {
+		select {
+		case <-stream.Context().Done():
+			return nil
+		default:
+			info := a.p.ConnectedPeerInfo(p)
+			// There is no guarantee that the peers originally returned will still
+			// be connected by the time we call ConnectedPeerInfo.
+			if info == nil {
+				continue
+			}
+			connections := make([]*pb.ConnectionInfo, len(info.Connections))
+			for j, c := range info.Connections {
+				connections[j] = &pb.ConnectionInfo{
+					Address:  c.Address.String(),
+					Uptime:   durationpb.New(c.Uptime),
+					Outbound: c.Outbound,
+				}
+			}
+			err := stream.Send(&pb.PeerInfo{
+				Id:          info.ID.String(),
+				Connections: connections,
+				Tags:        info.Tags,
+			})
+			if err != nil {
+				return fmt.Errorf("send to stream: %w", err)
+			}
+		}
+	}
+
+	return nil
 }

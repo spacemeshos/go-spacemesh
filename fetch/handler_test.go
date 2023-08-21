@@ -39,7 +39,7 @@ func createTestHandler(t testing.TB) *testHandler {
 	mm := mocks.NewMockmeshProvider(ctrl)
 	mb := smocks.NewMockBeaconGetter(ctrl)
 	return &testHandler{
-		handler: newHandler(cdb, datastore.NewBlobStore(cdb.Database), mm, mb, lg),
+		handler: newHandler(cdb, datastore.NewBlobStore(cdb.Database), mm, mb, true, lg),
 		cdb:     cdb,
 		mm:      mm,
 		mb:      mb,
@@ -167,6 +167,90 @@ func TestHandleLayerOpinionsReq(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestHandleLayerOpinionsReq2(t *testing.T) {
+	tt := []struct {
+		name                       string
+		missingCert, multipleCerts bool
+	}{
+		{
+			name: "all good",
+		},
+		{
+			name:        "cert missing",
+			missingCert: true,
+		},
+		{
+			name:          "multiple certs",
+			multipleCerts: true,
+		},
+	}
+
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			th := createTestHandler(t)
+			lid := types.LayerID(111)
+			_, aggHash := createOpinions(t, th.cdb, lid, !tc.missingCert)
+			if tc.multipleCerts {
+				bid := types.RandomBlockID()
+				require.NoError(t, certificates.Add(th.cdb, lid, &types.Certificate{
+					BlockID: bid,
+				}))
+				require.NoError(t, certificates.SetInvalid(th.cdb, lid, bid))
+			}
+
+			req := OpinionRequest{Layer: lid}
+			reqBytes, err := codec.Encode(&req)
+			require.NoError(t, err)
+
+			out, err := th.handleLayerOpinionsReq2(context.Background(), reqBytes)
+			require.NoError(t, err)
+
+			var got LayerOpinion2
+			err = codec.Decode(out, &got)
+			require.NoError(t, err)
+			require.Equal(t, aggHash, got.PrevAggHash)
+			if tc.missingCert {
+				require.Nil(t, got.Certified)
+			} else {
+				require.NotNil(t, got.Certified)
+			}
+		})
+	}
+}
+
+func TestHandleCertReq(t *testing.T) {
+	th := createTestHandler(t)
+	lid := types.LayerID(111)
+	bid := types.RandomBlockID()
+	req := &OpinionRequest{
+		Layer: lid,
+		Block: &bid,
+	}
+	reqData, err := codec.Encode(req)
+	require.NoError(t, err)
+
+	resp, err := th.handleLayerOpinionsReq2(context.Background(), reqData)
+	require.ErrorIs(t, err, sql.ErrNotFound)
+	require.Nil(t, resp)
+
+	cert := &types.Certificate{BlockID: bid}
+	require.NoError(t, certificates.Add(th.cdb, lid, cert))
+
+	resp, err = th.handleLayerOpinionsReq2(context.Background(), reqData)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	var got types.Certificate
+	require.NoError(t, codec.Decode(resp, &got))
+	require.Equal(t, *cert, got)
+
+	th.serveNewOpn = false
+	_, err = th.handleLayerOpinionsReq2(context.Background(), reqData)
+	require.ErrorContains(t, err, "new opn protocol not supported")
 }
 
 func TestHandleMeshHashReq(t *testing.T) {

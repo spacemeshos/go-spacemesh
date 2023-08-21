@@ -1,5 +1,4 @@
-# go-spacemesh needs at least ubuntu 20.04 (because gpu-post and post-rs are linked to glibc 2.31)
-# newer versions of ubuntu should work as well, so far only 22.04 has been tested
+# go-spacemesh needs at least ubuntu 22.04. newer versions of ubuntu might work as well, but are untested
 FROM ubuntu:22.04 AS linux
 ENV DEBIAN_FRONTEND noninteractive
 ENV SHELL /bin/bash

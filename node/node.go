@@ -764,6 +764,11 @@ func (app *App) initServices(ctx context.Context) error {
 		app.addLogger(HareLogger, lg),
 	)
 
+	minerGoodAtxPct := 90
+	if app.Config.TestConfig.MinerGoodAtxPct > 0 {
+		// only set this for systest TestEquivocation.
+		minerGoodAtxPct = app.Config.TestConfig.MinerGoodAtxPct
+	}
 	proposalBuilder := miner.NewProposalBuilder(
 		ctx,
 		app.clock,
@@ -781,6 +786,7 @@ func (app *App) initServices(ctx context.Context) error {
 		miner.WithMinimalActiveSetWeight(app.Config.Tortoise.MinimalActiveSetWeight),
 		miner.WithHdist(app.Config.Tortoise.Hdist),
 		miner.WithNetworkDelay(app.Config.HARE.WakeupDelta),
+		miner.WithMinGoodAtxPct(minerGoodAtxPct),
 		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)),
 	)
 
@@ -1045,7 +1051,7 @@ func (app *App) initService(ctx context.Context, svc grpcserver.Service) (grpcse
 	case grpcserver.Node:
 		return grpcserver.NewNodeService(app.host, app.mesh, app.clock, app.syncer, cmd.Version, cmd.Commit), nil
 	case grpcserver.Admin:
-		return grpcserver.NewAdminService(app.db, app.Config.DataDir()), nil
+		return grpcserver.NewAdminService(app.db, app.Config.DataDir(), app.host), nil
 	case grpcserver.Smesher:
 		return grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, app.Config.API.SmesherStreamInterval, app.Config.SMESHING.Opts), nil
 	case grpcserver.Transaction:
@@ -1121,10 +1127,14 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		app.jsonAPIService.StartService(ctx, public...)
 	}
 	if app.grpcPublicService != nil {
-		app.grpcPublicService.Start()
+		if err := app.grpcPublicService.Start(); err != nil {
+			return err
+		}
 	}
 	if app.grpcPrivateService != nil {
-		app.grpcPrivateService.Start()
+		if err := app.grpcPrivateService.Start(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -1291,7 +1301,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log, dbPath string) error {
 	if app.Config.CollectMetrics {
 		app.dbMetrics = dbmetrics.NewDBMetricsCollector(ctx, sqlDB, app.addLogger(StateDbLogger, lg), 5*time.Minute)
 	}
-	app.cachedDB = datastore.NewCachedDB(sqlDB, app.addLogger(CachedDBLogger, lg))
+	app.cachedDB = datastore.NewCachedDB(sqlDB, app.addLogger(CachedDBLogger, lg), datastore.WithConfig(app.Config.Cache))
 	return nil
 }
 

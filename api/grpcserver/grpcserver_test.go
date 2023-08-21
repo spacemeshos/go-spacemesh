@@ -491,18 +491,11 @@ func launchServer(tb testing.TB, cfg Config, services ...ServiceAPI) func() {
 	}
 
 	// start gRPC and json servers
-	grpcStarted := grpcService.Start()
-	jsonStarted := jsonService.StartService(context.Background(), services...)
-
-	timer := time.NewTimer(3 * time.Second)
-	defer timer.Stop()
-
-	// wait for server to be ready (critical on CI)
-	for _, ch := range []<-chan struct{}{grpcStarted, jsonStarted} {
-		select {
-		case <-ch:
-		case <-timer.C:
-		}
+	err := grpcService.Start()
+	require.NoError(tb, err)
+	if len(services) > 0 {
+		err = jsonService.StartService(context.Background(), services...)
+		require.NoError(tb, err)
 	}
 
 	return func() {
