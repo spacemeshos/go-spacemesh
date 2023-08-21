@@ -56,7 +56,7 @@ func createMesh(tb testing.TB, db *sql.Database) {
 func TestAdminService_Checkpoint(t *testing.T) {
 	db := sql.InMemory()
 	createMesh(t, db)
-	svc := NewAdminService(db, t.TempDir(), logtest.New(t), nil)
+	svc := NewAdminService(db, t.TempDir(), logtest.New(t))
 	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -91,7 +91,7 @@ func TestAdminService_Checkpoint(t *testing.T) {
 
 func TestAdminService_CheckpointError(t *testing.T) {
 	db := sql.InMemory()
-	svc := NewAdminService(db, t.TempDir(), logtest.New(t), nil)
+	svc := NewAdminService(db, t.TempDir(), logtest.New(t))
 	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

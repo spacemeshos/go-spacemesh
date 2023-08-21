@@ -131,33 +131,20 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 	if err != nil {
 		return nil, fmt.Errorf("can't create peer store: %w", err)
 	}
-
-	bootnodesMap := make(map[peer.ID]struct{})
-	bootnodes, err := parseIntoAddr(cfg.Bootnodes)
-	if err != nil {
-		return nil, err
-	}
-	for _, pid := range bootnodes {
-		bootnodesMap[pid.ID] = struct{}{}
-	}
-
-	directMap := make(map[peer.ID]struct{})
-	direct, err := parseIntoAddr(cfg.Direct)
-	if err != nil {
-		return nil, err
-	}
-	for _, pid := range direct {
-		directMap[pid.ID] = struct{}{}
-	}
 	// leaves a small room for outbound connections in order to
 	// reduce risk of network isolation
 	g := &gater{
 		inbound:  int(float64(cfg.HighPeers) * cfg.InboundFraction),
 		outbound: int(float64(cfg.HighPeers) * cfg.OutboundFraction),
-		direct:   directMap,
+		direct:   map[peer.ID]struct{}{},
 	}
-
-	g.direct = directMap
+	direct, err := parseIntoAddr(cfg.Direct)
+	if err != nil {
+		return nil, err
+	}
+	for _, pid := range direct {
+		g.direct[pid.ID] = struct{}{}
+	}
 	lopts := []libp2p.Option{
 		libp2p.Identity(key),
 		libp2p.ListenAddrStrings(cfg.Listen),
@@ -199,6 +186,10 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 		}))
 	}
 	if cfg.EnableHolepunching {
+		bootnodes, err := parseIntoAddr(cfg.Bootnodes)
+		if err != nil {
+			return nil, err
+		}
 		lopts = append(lopts,
 			libp2p.EnableHolePunching(),
 			libp2p.EnableAutoRelayWithStaticRelays(bootnodes))
@@ -233,7 +224,7 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 	logger.Zap().Info("local node identity", zap.Stringer("identity", h.ID()))
 	// TODO(dshulyak) this is small mess. refactor to avoid this patching
 	// both New and Upgrade should use options.
-	opts = append(opts, WithConfig(cfg), WithLog(logger), WithBootnodes(bootnodesMap), WithDirectNodes(directMap))
+	opts = append(opts, WithConfig(cfg), WithLog(logger))
 	return Upgrade(h, opts...)
 }
 
