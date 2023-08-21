@@ -33,12 +33,12 @@ const (
 	// Gives the poet service time to generate proof after a round ends (~8s on mainnet).
 	// mainnet -> 8.64s
 	// systest -> 0.36s.
-	MinPoetGetProofJitter = 0.02
+	minPoetGetProofJitter = 0.02
 
 	// The maximum jitter value before querying for the proof.
 	// mainnet -> 17.28s
 	// systest -> 0.72s.
-	MaxPoetGetProofJitter = 0.04
+	maxPoetGetProofJitter = 0.04
 )
 
 //go:generate mockgen -package=activation -destination=./nipost_mocks.go -source=./nipost.go PoetProvingServiceClient
@@ -503,8 +503,8 @@ func randomDurationInRange(min, max time.Duration) time.Duration {
 // Calculate the time to wait before querying for the proof
 // We add a jitter to avoid all nodes querying for the proof at the same time.
 func calcGetProofWaitTime(tillRoundEnd, cycleGap time.Duration) (waitTime time.Duration) {
-	minWaitTime := time.Duration(float64(cycleGap) * MinPoetGetProofJitter / 100.0)
-	maxWaitTime := time.Duration(float64(cycleGap) * MaxPoetGetProofJitter / 100.0)
-	jitter := randomDurationInRange(minWaitTime, maxWaitTime)
+	minJitter := time.Duration(float64(cycleGap) * minPoetGetProofJitter / 100.0)
+	maxJitter := time.Duration(float64(cycleGap) * maxPoetGetProofJitter / 100.0)
+	jitter := randomDurationInRange(minJitter, maxJitter)
 	return tillRoundEnd + jitter
 }

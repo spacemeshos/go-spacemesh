@@ -1086,7 +1086,7 @@ func TestCalculatingGetProofWaitTime(t *testing.T) {
 		cycleGap := 12 * time.Hour
 		waitTime := calcGetProofWaitTime(time.Hour, cycleGap)
 
-		require.Greater(t, waitTime, time.Hour+time.Duration(float64(cycleGap)*MinPoetGetProofJitter/100))
-		require.LessOrEqual(t, waitTime, time.Hour+time.Duration(float64(cycleGap)*MaxPoetGetProofJitter/100))
+		require.Greater(t, waitTime, time.Hour+time.Duration(float64(cycleGap)*minPoetGetProofJitter/100))
+		require.LessOrEqual(t, waitTime, time.Hour+time.Duration(float64(cycleGap)*maxPoetGetProofJitter/100))
 	})
 }
