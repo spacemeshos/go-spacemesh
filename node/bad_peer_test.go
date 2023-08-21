@@ -38,8 +38,8 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 	conf1.API.PublicListener = "0.0.0.0:0"
 	conf1.API.PrivateListener = "0.0.0.0:0"
 	app1 := NewApp(t, &conf1, l)
-
 	conf2 := config.DefaultTestConfig()
+
 	// We need to copy the genesis config to ensure that both nodes share the
 	// same gnenesis ID, otherwise they will not be able to connect to each
 	// other.
@@ -56,13 +56,13 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 		app1.Cleanup(ctx)
 		app2.Cleanup(ctx)
 	})
-	g := errgroup.Group{}
+	g, grpContext := errgroup.WithContext(ctx)
 	g.Go(func() error {
-		return app1.Start(ctx)
+		return app1.Start(grpContext)
 	})
 	<-app1.Started()
 	g.Go(func() error {
-		return app2.Start(ctx)
+		return app2.Start(grpContext)
 	})
 	<-app2.Started()
 

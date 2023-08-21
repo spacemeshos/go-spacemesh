@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -212,7 +213,7 @@ func (u *Updater) addUpdate(epoch types.EpochID, suffix string) {
 	switch suffix {
 	case SuffixActiveSet, SuffixBeacon, SuffixBoostrap:
 	default:
-		u.logger.With().Fatal("unexpected suffix for fallback files", log.String("suffix", suffix))
+		return
 	}
 	if _, ok := u.updates[epoch]; !ok {
 		u.updates[epoch] = map[string]struct{}{}
@@ -419,6 +420,33 @@ func validateData(cfg Config, update *Update) (*VerifiedUpdate, error) {
 	return verified, nil
 }
 
+func renameLegacyFile(fs afero.Fs, path string) string {
+	var idx int
+	for _, suffix := range []string{SuffixBoostrap, SuffixBeacon, SuffixActiveSet} {
+		if strings.HasSuffix(path, suffix) {
+			return path
+		}
+	}
+	for _, suffix := range []string{SuffixBoostrap, SuffixBeacon, SuffixActiveSet} {
+		idx = strings.Index(path, fmt.Sprintf("-%s-", suffix))
+		if idx > -1 {
+			break
+		}
+	}
+	if idx < 0 {
+		return ""
+	}
+	newPath := path[:idx+suffixLen+1]
+	if exists, _ := afero.Exists(fs, newPath); exists {
+		_ = fs.Remove(path)
+		return ""
+	}
+	if err := fs.Rename(path, newPath); err != nil {
+		return ""
+	}
+	return newPath
+}
+
 func load(fs afero.Fs, cfg Config, current types.EpochID) ([]*VerifiedUpdate, error) {
 	dir := bootstrapDir(cfg.DataDir)
 	_, err := fs.Stat(dir)
@@ -437,7 +465,10 @@ func load(fs afero.Fs, cfg Config, current types.EpochID) ([]*VerifiedUpdate, er
 			return nil, fmt.Errorf("read epoch dir %v: %w", dir, err)
 		}
 		for _, f := range files {
-			persisted := filepath.Join(edir, f.Name())
+			persisted := renameLegacyFile(fs, filepath.Join(edir, f.Name()))
+			if persisted == "" {
+				continue
+			}
 			data, err := afero.ReadFile(fs, persisted)
 			if err != nil {
 				return nil, fmt.Errorf("read bootstrap file %v: %w", persisted, err)

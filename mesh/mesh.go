@@ -337,7 +337,8 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, lid types.LayerID) error {
 		return err
 	}
 	if len(missing) > 0 {
-		msh.pendingUpdates.min = msh.LatestLayerInState()
+		msh.pendingUpdates.min = applicable[len(applicable)-1].Layer
+		msh.pendingUpdates.max = types.MaxLayer(msh.pendingUpdates.min, msh.pendingUpdates.max)
 	} else {
 		msh.pendingUpdates.min = 0
 		msh.pendingUpdates.max = 0
