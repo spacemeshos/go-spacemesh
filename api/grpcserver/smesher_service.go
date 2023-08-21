@@ -238,6 +238,7 @@ func statusToPbStatus(status *activation.PostSetupStatus) *pb.PostSetupStatus {
 	if status.LastOpts != nil {
 		var providerID *uint32
 		if status.LastOpts.ProviderID.Value() != nil {
+			providerID = new(uint32)
 			*providerID = uint32(*status.LastOpts.ProviderID.Value())
 		}
 
