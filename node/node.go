@@ -18,6 +18,7 @@ import (
 	"github.com/gofrs/flock"
 	grpc_logsettable "github.com/grpc-ecosystem/go-grpc-middleware/logging/settable"
 	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	grpctags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pyroscope-io/pyroscope/pkg/agent/profiler"
@@ -1040,32 +1041,41 @@ func (app *App) startServices(ctx context.Context) error {
 }
 
 func (app *App) initService(ctx context.Context, svc grpcserver.Service) (grpcserver.ServiceAPI, error) {
-	logger := app.addLogger(GRPCLogger, app.log)
 	switch svc {
 	case grpcserver.Debug:
-		return grpcserver.NewDebugService(app.db, app.conState, app.host, app.hOracle, logger.WithName("Debug")), nil
+		return grpcserver.NewDebugService(app.db, app.conState, app.host, app.hOracle), nil
 	case grpcserver.GlobalState:
-		return grpcserver.NewGlobalStateService(app.mesh, app.conState, logger.WithName("GlobalState")), nil
+		return grpcserver.NewGlobalStateService(app.mesh, app.conState), nil
 	case grpcserver.Mesh:
-		return grpcserver.NewMeshService(app.cachedDB, app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.Genesis.GenesisID(), app.Config.LayerDuration, app.Config.LayerAvgSize, uint32(app.Config.TxsPerProposal), logger.WithName("Mesh")), nil
+		return grpcserver.NewMeshService(app.cachedDB, app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.Genesis.GenesisID(), app.Config.LayerDuration, app.Config.LayerAvgSize, uint32(app.Config.TxsPerProposal)), nil
 	case grpcserver.Node:
-		return grpcserver.NewNodeService(app.host, app.mesh, app.clock, app.syncer, cmd.Version, cmd.Commit, logger.WithName("Node")), nil
+		return grpcserver.NewNodeService(app.host, app.mesh, app.clock, app.syncer, cmd.Version, cmd.Commit), nil
 	case grpcserver.Admin:
-		return grpcserver.NewAdminService(app.db, app.Config.DataDir(), logger.WithName("Admin"), app.host), nil
+		return grpcserver.NewAdminService(app.db, app.Config.DataDir(), app.host), nil
 	case grpcserver.Smesher:
-		return grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, app.Config.API.SmesherStreamInterval, app.Config.SMESHING.Opts, logger.WithName("Smesher")), nil
+		return grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, app.Config.API.SmesherStreamInterval, app.Config.SMESHING.Opts), nil
 	case grpcserver.Transaction:
-		return grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer, app.txHandler, logger.WithName("Transaction")), nil
+		return grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer, app.txHandler), nil
 	case grpcserver.Activation:
-		return grpcserver.NewActivationService(app.cachedDB, types.ATXID(app.Config.Genesis.GoldenATX()), logger.WithName("Activation")), nil
+		return grpcserver.NewActivationService(app.cachedDB, types.ATXID(app.Config.Genesis.GoldenATX())), nil
 	}
 	return nil, fmt.Errorf("unknown service %s", svc)
 }
 
+func unaryGrpcLogStart(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+	ctxzap.Info(ctx, "started unary call")
+	return handler(ctx, req)
+}
+
+func streamingGrpcLogStart(srv any, stream grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	ctxzap.Info(stream.Context(), "started streaming call")
+	return handler(srv, stream)
+}
+
 func (app *App) newGrpc(logger log.Log, endpoint string) *grpcserver.Server {
 	return grpcserver.New(endpoint, logger,
-		grpc.ChainStreamInterceptor(grpctags.StreamServerInterceptor(), grpczap.StreamServerInterceptor(logger.Zap())),
-		grpc.ChainUnaryInterceptor(grpctags.UnaryServerInterceptor(), grpczap.UnaryServerInterceptor(logger.Zap())),
+		grpc.ChainStreamInterceptor(grpctags.StreamServerInterceptor(), grpczap.StreamServerInterceptor(logger.Zap()), streamingGrpcLogStart),
+		grpc.ChainUnaryInterceptor(grpctags.UnaryServerInterceptor(), grpczap.UnaryServerInterceptor(logger.Zap()), unaryGrpcLogStart),
 		grpc.MaxSendMsgSize(app.Config.API.GrpcSendMsgSize),
 		grpc.MaxRecvMsgSize(app.Config.API.GrpcRecvMsgSize),
 	)
@@ -1092,6 +1102,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		logger.Info("registering public service %s", svc)
 		gsvc.RegisterService(app.grpcPublicService)
 		public = append(public, gsvc)
 		unique[svc] = struct{}{}
@@ -1104,6 +1115,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		logger.Info("registering private service %s", svc)
 		gsvc.RegisterService(app.grpcPrivateService)
 		unique[svc] = struct{}{}
 	}

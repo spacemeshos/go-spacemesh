@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/golang/protobuf/ptypes/empty"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc/codes"
@@ -13,14 +14,12 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // NodeService is a grpc server that provides the NodeService, which exposes node-related
 // data such as node status, software version, errors, etc. It can also be used to start
 // the sync process, or to shut down the node.
 type NodeService struct {
-	logger      log.Logger
 	mesh        meshAPI
 	genTime     genesisTimeAPI
 	peerCounter peerCounter
@@ -42,10 +41,8 @@ func NewNodeService(
 	syncer syncer,
 	appVersion string,
 	appCommit string,
-	lg log.Logger,
 ) *NodeService {
 	return &NodeService{
-		logger:      lg,
 		mesh:        msh,
 		genTime:     genTime,
 		peerCounter: peers,
@@ -57,7 +54,6 @@ func NewNodeService(
 
 // Echo returns the response for an echo api request. It's used for E2E tests.
 func (s NodeService) Echo(_ context.Context, in *pb.EchoRequest) (*pb.EchoResponse, error) {
-	s.logger.Info("GRPC NodeService.Echo")
 	if in.Msg != nil {
 		return &pb.EchoResponse{Msg: &pb.SimpleString{Value: in.Msg.Value}}, nil
 	}
@@ -66,7 +62,6 @@ func (s NodeService) Echo(_ context.Context, in *pb.EchoRequest) (*pb.EchoRespon
 
 // Version returns the version of the node software as a semver string.
 func (s NodeService) Version(context.Context, *empty.Empty) (*pb.VersionResponse, error) {
-	s.logger.Info("GRPC NodeService.Version")
 	return &pb.VersionResponse{
 		VersionString: &pb.SimpleString{Value: s.appVersion},
 	}, nil
@@ -74,7 +69,6 @@ func (s NodeService) Version(context.Context, *empty.Empty) (*pb.VersionResponse
 
 // Build returns the build of the node software.
 func (s NodeService) Build(context.Context, *empty.Empty) (*pb.BuildResponse, error) {
-	s.logger.Info("GRPC NodeService.Build")
 	return &pb.BuildResponse{
 		BuildString: &pb.SimpleString{Value: s.appCommit},
 	}, nil
@@ -83,8 +77,6 @@ func (s NodeService) Build(context.Context, *empty.Empty) (*pb.BuildResponse, er
 // Status returns a status object providing information about the connected peers, sync status,
 // current and verified layer.
 func (s NodeService) Status(ctx context.Context, _ *pb.StatusRequest) (*pb.StatusResponse, error) {
-	s.logger.Info("GRPC NodeService.Status")
-
 	curLayer, latestLayer, verifiedLayer := s.getLayers()
 	return &pb.StatusResponse{
 		Status: &pb.NodeStatus{
@@ -125,8 +117,6 @@ func (s NodeService) getLayers() (curLayer, latestLayer, verifiedLayer uint32) {
 
 // StatusStream exposes a stream of node status updates.
 func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeService_StatusStreamServer) error {
-	s.logger.Info("GRPC NodeService.StatusStream")
-
 	var (
 		statusCh      <-chan events.Status
 		statusBufFull <-chan struct{}
@@ -139,13 +129,13 @@ func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeServi
 	for {
 		select {
 		case <-statusBufFull:
-			s.logger.Info("status buffer is full, shutting down")
+			ctxzap.Info(stream.Context(), "status buffer is full, shutting down")
 			return status.Error(codes.Canceled, errStatusBufferFull)
 		case _, ok := <-statusCh:
 			// statusCh works a bit differently than the other streams. It doesn't actually
 			// send us data. Instead, it just notifies us that there's new data to be read.
 			if !ok {
-				s.logger.Info("StatusStream closed, shutting down")
+				ctxzap.Info(stream.Context(), "StatusStream closed, shutting down")
 				return nil
 			}
 			curLayer, latestLayer, verifiedLayer := s.getLayers()
@@ -164,7 +154,7 @@ func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeServi
 				return fmt.Errorf("send to stream: %w", err)
 			}
 		case <-stream.Context().Done():
-			s.logger.Info("StatusStream closing stream, client disconnected")
+			ctxzap.Info(stream.Context(), "StatusStream closing stream, client disconnected")
 			return nil
 		}
 		// TODO: do we need an additional case here for a context to indicate
@@ -174,8 +164,6 @@ func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeServi
 
 // ErrorStream exposes a stream of node errors.
 func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService_ErrorStreamServer) error {
-	s.logger.Info("GRPC NodeService.ErrorStream")
-
 	var (
 		errorsCh      <-chan events.NodeError
 		errorsBufFull <-chan struct{}
@@ -191,11 +179,11 @@ func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService
 	for {
 		select {
 		case <-errorsBufFull:
-			s.logger.Info("errors buffer is full, shutting down")
+			ctxzap.Info(stream.Context(), "errors buffer is full, shutting down")
 			return status.Error(codes.Canceled, errErrorsBufferFull)
 		case nodeError, ok := <-errorsCh:
 			if !ok {
-				s.logger.Info("ErrorStream closed, shutting down")
+				ctxzap.Info(stream.Context(), "ErrorStream closed, shutting down")
 				return nil
 			}
 
@@ -209,7 +197,7 @@ func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService
 				return fmt.Errorf("send to stream: %w", err)
 			}
 		case <-stream.Context().Done():
-			s.logger.Info("ErrorStream closing stream, client disconnected")
+			ctxzap.Info(stream.Context(), "ErrorStream closing stream, client disconnected")
 			return nil
 		}
 		// TODO: do we need an additional case here for a context to indicate

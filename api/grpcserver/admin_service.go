@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/golang/protobuf/ptypes/empty"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spf13/afero"
 	"google.golang.org/grpc/codes"
@@ -18,7 +20,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -29,19 +30,25 @@ const (
 
 // AdminService exposes endpoints for node administration.
 type AdminService struct {
-	logger  log.Logger
 	db      *sql.Database
 	dataDir string
+	recover func()
 	p       peers
 }
 
 // NewAdminService creates a new admin grpc service.
-func NewAdminService(db *sql.Database, dataDir string, lg log.Logger, p peers) *AdminService {
+func NewAdminService(db *sql.Database, dataDir string, p peers) *AdminService {
 	return &AdminService{
-		logger:  lg,
 		db:      db,
 		dataDir: dataDir,
-		p:       p,
+		recover: func() {
+			go func() {
+				// Allow time for the response to be sent.
+				time.Sleep(time.Second)
+				os.Exit(0)
+			}()
+		},
+		p: p,
 	}
 }
 
@@ -95,8 +102,9 @@ func (a AdminService) CheckpointStream(req *pb.CheckpointStreamRequest, stream p
 	}
 }
 
-func (a AdminService) Recover(_ context.Context, _ *pb.RecoverRequest) (*empty.Empty, error) {
-	a.logger.Panic("going to recover from checkpoint")
+func (a AdminService) Recover(ctx context.Context, _ *pb.RecoverRequest) (*empty.Empty, error) {
+	ctxzap.Info(ctx, "going to recover from checkpoint")
+	a.recover()
 	return &empty.Empty{}, nil
 }
 

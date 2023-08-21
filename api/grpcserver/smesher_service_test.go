@@ -15,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
 func TestPostConfig(t *testing.T) {
@@ -23,7 +22,7 @@ func TestPostConfig(t *testing.T) {
 	postSetupProvider := activation.NewMockpostSetupProvider(ctrl)
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
 
-	svc := grpcserver.NewSmesherService(postSetupProvider, smeshingProvider, time.Second, activation.DefaultPostSetupOpts(), logtest.New(t).WithName("grpc.Smesher"))
+	svc := grpcserver.NewSmesherService(postSetupProvider, smeshingProvider, time.Second, activation.DefaultPostSetupOpts())
 
 	postConfig := activation.PostConfig{
 		MinNumUnits:   rand.Uint32(),
@@ -48,7 +47,7 @@ func TestStartSmeshingPassesCorrectSmeshingOpts(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	postSetupProvider := activation.NewMockpostSetupProvider(ctrl)
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
-	svc := grpcserver.NewSmesherService(postSetupProvider, smeshingProvider, time.Second, activation.DefaultPostSetupOpts(), logtest.New(t).WithName("grpc.Smesher"))
+	svc := grpcserver.NewSmesherService(postSetupProvider, smeshingProvider, time.Second, activation.DefaultPostSetupOpts())
 
 	types.SetNetworkHRP("stest")
 	addr, err := types.StringToAddress("stest1qqqqqqrs60l66w5uksxzmaznwq6xnhqfv56c28qlkm4a5")
@@ -82,7 +81,7 @@ func TestSmesherService_PostSetupProviders(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	postSetupProvider := activation.NewMockpostSetupProvider(ctrl)
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
-	svc := grpcserver.NewSmesherService(postSetupProvider, smeshingProvider, time.Second, activation.DefaultPostSetupOpts(), logtest.New(t).WithName("grpc.Smesher"))
+	svc := grpcserver.NewSmesherService(postSetupProvider, smeshingProvider, time.Second, activation.DefaultPostSetupOpts())
 
 	providers := []activation.PostSetupProvider{
 		{
@@ -123,7 +122,7 @@ func TestSmesherService_PostSetupStatus(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		postSetupProvider := activation.NewMockpostSetupProvider(ctrl)
 		smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
-		svc := grpcserver.NewSmesherService(postSetupProvider, smeshingProvider, time.Second, activation.DefaultPostSetupOpts(), logtest.New(t).WithName("grpc.Smesher"))
+		svc := grpcserver.NewSmesherService(postSetupProvider, smeshingProvider, time.Second, activation.DefaultPostSetupOpts())
 
 		postSetupProvider.EXPECT().Status().Return(&activation.PostSetupStatus{
 			State:            activation.PostSetupStateComplete,
@@ -141,7 +140,7 @@ func TestSmesherService_PostSetupStatus(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		postSetupProvider := activation.NewMockpostSetupProvider(ctrl)
 		smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
-		svc := grpcserver.NewSmesherService(postSetupProvider, smeshingProvider, time.Second, activation.DefaultPostSetupOpts(), logtest.New(t).WithName("grpc.Smesher"))
+		svc := grpcserver.NewSmesherService(postSetupProvider, smeshingProvider, time.Second, activation.DefaultPostSetupOpts())
 
 		id := activation.PostProviderID{}
 		id.SetInt64(1)
@@ -172,7 +171,7 @@ func TestSmesherService_PostSetupStatus(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		postSetupProvider := activation.NewMockpostSetupProvider(ctrl)
 		smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
-		svc := grpcserver.NewSmesherService(postSetupProvider, smeshingProvider, time.Second, activation.DefaultPostSetupOpts(), logtest.New(t).WithName("grpc.Smesher"))
+		svc := grpcserver.NewSmesherService(postSetupProvider, smeshingProvider, time.Second, activation.DefaultPostSetupOpts())
 
 		id := activation.PostProviderID{}
 		id.SetInt64(100)
