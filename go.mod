@@ -22,7 +22,7 @@ require (
 	github.com/ipfs/go-ds-leveldb v0.5.0
 	github.com/ipfs/go-log/v2 v2.5.1
 	github.com/libp2p/go-libp2p v0.29.2
-	github.com/libp2p/go-libp2p-kad-dht v0.24.3
+	github.com/libp2p/go-libp2p-kad-dht v0.25.0
 	github.com/libp2p/go-libp2p-pubsub v0.9.3
 	github.com/libp2p/go-libp2p-record v0.2.0
 	github.com/mitchellh/mapstructure v1.5.0
