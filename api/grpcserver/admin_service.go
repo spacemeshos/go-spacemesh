@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/durationpb"
 
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -147,7 +148,7 @@ func (a AdminService) PeerInfoStream(_ *empty.Empty, stream pb.AdminService_Peer
 			for j, c := range info.Connections {
 				connections[j] = &pb.ConnectionInfo{
 					Address:  c.Address.String(),
-					Uptime:   c.Uptime.String(),
+					Uptime:   durationpb.New(c.Uptime),
 					Outbound: c.Outbound,
 				}
 			}
