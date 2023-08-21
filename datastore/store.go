@@ -20,11 +20,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
 
-const (
-	atxHdrCacheSize      = 2000
-	malfeasanceCacheSize = 1000
-)
-
 type VrfNonceKey struct {
 	ID    types.NodeID
 	Epoch types.EpochID
@@ -85,7 +80,7 @@ func NewCachedDB(db *sql.Database, lg log.Log, opts ...Opt) *CachedDB {
 		lg.Fatal("failed to create malfeasance cache", err)
 	}
 
-	vrfNonceCache, err := lru.New[VrfNonceKey, *types.VRFPostIndex](atxHdrCacheSize)
+	vrfNonceCache, err := lru.New[VrfNonceKey, *types.VRFPostIndex](o.cfg.ATXSize)
 	if err != nil {
 		lg.Fatal("failed to create vrf nonce cache", err)
 	}
