@@ -19,15 +19,10 @@ type ServiceAPI interface {
 
 // Server is a very basic grpc server.
 type Server struct {
-	Listener string
-	logger   log.Logger
-	// BoundAddress contains the address that the server bound to, useful if
-	// the server uses a dynamic port. It is set during startup and can be
-	// safely accessed after Start has completed (I.E. the returned channel has
-	// been waited on)
-	BoundAddress string
-	GrpcServer   *grpc.Server
-	grp          errgroup.Group
+	Listener   string
+	logger     log.Logger
+	GrpcServer *grpc.Server
+	grp        errgroup.Group
 }
 
 // New creates and returns a new Server with port and interface.
@@ -56,7 +51,6 @@ func (s *Server) Start() error {
 		s.logger.Error("error listening: %v", err)
 		return err
 	}
-	s.BoundAddress = lis.Addr().String()
 	reflection.Register(s.GrpcServer)
 	s.grp.Go(func() error {
 		if err := s.GrpcServer.Serve(lis); err != nil {

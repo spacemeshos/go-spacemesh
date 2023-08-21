@@ -10,7 +10,6 @@ import (
 	lp2plog "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
-	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
@@ -53,18 +52,6 @@ func WithNodeReporter(reporter func()) Opt {
 	}
 }
 
-func WithDirectNodes(direct map[peer.ID]struct{}) Opt {
-	return func(fh *Host) {
-		fh.direct = direct
-	}
-}
-
-func WithBootnodes(bootnodes map[peer.ID]struct{}) Opt {
-	return func(fh *Host) {
-		fh.bootnode = bootnodes
-	}
-}
-
 // Host is a conveniency wrapper for all p2p related functionality required to run
 // a full spacemesh node.
 type Host struct {
@@ -87,8 +74,6 @@ type Host struct {
 
 	discovery *discovery.Discovery
 	legacy    *peerexchange.Discovery
-
-	direct, bootnode map[peer.ID]struct{}
 }
 
 // Upgrade creates Host instance from host.Host.
@@ -183,39 +168,6 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 // GetPeers returns connected peers.
 func (fh *Host) GetPeers() []Peer {
 	return fh.Host.Network().Peers()
-}
-
-// ConnectedPeerInfo retrieves a peer info object for the given peer.ID, if the
-// given peer is not connected then nil is returned.
-func (fh *Host) ConnectedPeerInfo(id peer.ID) *PeerInfo {
-	conns := fh.Network().ConnsToPeer(id)
-	// there's no sync between  Peers() and ConnsToPeer() so by the time we
-	// try to get the conns they may not exist.
-	if len(conns) == 0 {
-		return nil
-	}
-
-	var connections []ConnectionInfo
-	for _, c := range conns {
-		connections = append(connections, ConnectionInfo{
-			Address:  c.RemoteMultiaddr(),
-			Uptime:   time.Since(c.Stat().Opened),
-			Outbound: c.Stat().Direction == network.DirOutbound,
-		})
-	}
-	var tags []string
-
-	if _, ok := fh.direct[id]; ok {
-		tags = append(tags, "direct")
-	}
-	if _, ok := fh.bootnode[id]; ok {
-		tags = append(tags, "bootnode")
-	}
-	return &PeerInfo{
-		ID:          id,
-		Connections: connections,
-		Tags:        tags,
-	}
 }
 
 // PeerCount returns number of connected peers.

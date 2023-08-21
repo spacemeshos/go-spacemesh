@@ -60,12 +60,6 @@ type peerCounter interface {
 	PeerCount() uint64
 }
 
-// Peers is an api to get peer related info.
-type peers interface {
-	ConnectedPeerInfo(p2p.Peer) *p2p.PeerInfo
-	GetPeers() []p2p.Peer
-}
-
 // genesisTimeAPI is an API to get genesis time and current layer of the system.
 type genesisTimeAPI interface {
 	GenesisTime() time.Time
