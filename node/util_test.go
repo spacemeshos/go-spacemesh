@@ -38,18 +38,6 @@ func NewTestNetwork(t *testing.T, conf config.Config, l log.Log, size int) []*Te
 	g, grpContext := errgroup.WithContext(ctx)
 	var apps []*TestApp
 
-	t.Cleanup(func() {
-		cancel()
-		// Wait for nodes to shutdown
-		g.Wait()
-
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-		defer cancel()
-		for _, a := range apps {
-			a.Cleanup(ctx)
-		}
-	})
-
 	for i := 0; i < size; i++ {
 		// Copy config, services don't modify their config, so we just need to
 		// be careful here when we modify any pointer values in the config.
@@ -82,6 +70,23 @@ func NewTestNetwork(t *testing.T, conf config.Config, l log.Log, size int) []*Te
 		require.NoError(t, err)
 		apps = append(apps, &TestApp{app, conn})
 	}
+
+	// Note that we must call cleanup after all calls to t.TempDir since calls
+	// to cleanup are executed in LIFO fashion (similar to defer) and t.TempDir
+	// internally calls Cleanup to delete the dir. By calling Cleanup here
+	// we ensure that the apps have been shut-down before attempting to delete
+	// the temp dirs.
+	t.Cleanup(func() {
+		cancel()
+		// Wait for nodes to shutdown
+		g.Wait()
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		defer cancel()
+		for _, a := range apps {
+			a.Cleanup(ctx)
+		}
+	})
 
 	// Connect all nodes to each other
 	for i := 0; i < size; i++ {
