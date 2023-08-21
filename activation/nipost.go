@@ -26,18 +26,18 @@ import (
 const (
 	// Jitter values to avoid all nodes querying the poet at the same time.
 	// Note: the jitter values are represented as a percentage of cycle gap.
-	// mainnet cycle-gap: 12h
-	// systest cycle-gap: 30s.
+	//  mainnet cycle-gap: 12h
+	//  systest cycle-gap: 30s
 
 	// Minimum jitter value before querying for the proof.
 	// Gives the poet service time to generate proof after a round ends (~8s on mainnet).
-	// mainnet -> 8.64s
-	// systest -> 0.36s.
+	//  mainnet -> 8.64s
+	//  systest -> 0.36s
 	minPoetGetProofJitter = 0.02
 
 	// The maximum jitter value before querying for the proof.
-	// mainnet -> 17.28s
-	// systest -> 0.72s.
+	//  mainnet -> 17.28s
+	//  systest -> 0.72s
 	maxPoetGetProofJitter = 0.04
 )
 

@@ -51,8 +51,8 @@ const (
 
 	// Jitter added to the wait time before building a nipost challenge.
 	// It's expressed as % of poet grace period which translates to:
-	// mainnet (grace period 1h) -> 36s
-	// systest (grace period 10s) -> 0.1s
+	//  mainnet (grace period 1h) -> 36s
+	//  systest (grace period 10s) -> 0.1s
 	maxNipostChallengeBuildJitter = 1.0
 )
 
