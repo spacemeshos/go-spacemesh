@@ -622,12 +622,8 @@ func (b *Builder) poetRoundStart(epoch types.EpochID) time.Time {
 
 func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChallenge) (*types.ActivationTx, error) {
 	pubEpoch := challenge.PublishEpoch
-	nextPoetRoundStart := b.poetRoundStart(pubEpoch)
 
-	// NiPoST must be ready before start of the next poet round.
-	buildingNipostCtx, cancel := context.WithDeadline(ctx, nextPoetRoundStart)
-	defer cancel()
-	nipost, postDuration, err := b.nipostBuilder.BuildNIPost(buildingNipostCtx, challenge)
+	nipost, postDuration, err := b.nipostBuilder.BuildNIPost(ctx, challenge)
 	if err != nil {
 		return nil, fmt.Errorf("build NIPost: %w", err)
 	}

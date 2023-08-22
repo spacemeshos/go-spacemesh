@@ -219,34 +219,39 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 	// Phase 0: Submit challenge to PoET services.
 	now := time.Now()
 	if len(nb.state.PoetRequests) == 0 {
-		if poetRoundStart.Before(now) {
+		submitCtx, cancel := context.WithDeadline(ctx, poetRoundStart)
+		defer cancel()
+		select {
+		case <-submitCtx.Done():
 			return nil, 0, fmt.Errorf("%w: poet round has already started at %s (now: %s)", ErrATXChallengeExpired, poetRoundStart, now)
+		default:
 		}
 
 		signature := nb.signer.Sign(signing.POET, challengeHash.Bytes())
 		prefix := bytes.Join([][]byte{nb.signer.Prefix(), {byte(signing.POET)}}, nil)
-		submitCtx, cancel := context.WithDeadline(ctx, poetRoundStart)
-		defer cancel()
+
 		poetRequests := nb.submitPoetChallenges(submitCtx, prefix, challengeHash.Bytes(), signature, nb.signer.NodeID())
 		if len(poetRequests) == 0 {
-			return nil, 0, &PoetSvcUnstableError{msg: "failed to submit challenge to any PoET", source: ctx.Err()}
+			return nil, 0, &PoetSvcUnstableError{msg: "failed to submit challenge to any PoET", source: submitCtx.Err()}
 		}
 
 		nb.state.Challenge = challengeHash
 		nb.state.PoetRequests = poetRequests
 		nb.persistState()
-		if err := ctx.Err(); err != nil {
+		if err := submitCtx.Err(); err != nil {
 			return nil, 0, fmt.Errorf("submitting challenges: %w", err)
 		}
 	}
 
 	// Phase 1: query PoET services for proofs
 	if nb.state.PoetProofRef == types.EmptyPoetProofRef {
-		if poetProofDeadline.Before(now) {
-			return nil, 0, fmt.Errorf("%w: deadline to query poet proof for pub epoch %d exceeded (deadline: %s, now: %s)", ErrATXChallengeExpired, challenge.PublishEpoch, poetProofDeadline, now)
-		}
 		getProofsCtx, cancel := context.WithDeadline(ctx, poetProofDeadline)
 		defer cancel()
+		select {
+		case <-getProofsCtx.Done():
+			return nil, 0, fmt.Errorf("%w: deadline to query poet proof for pub epoch %d exceeded (deadline: %s, now: %s)", ErrATXChallengeExpired, challenge.PublishEpoch, poetProofDeadline, now)
+		default:
+		}
 
 		events.EmitPoetWaitProof(challenge.PublishEpoch, challenge.TargetEpoch(), time.Until(poetRoundEnd))
 		poetProofRef, membership, err := nb.getBestProof(getProofsCtx, nb.state.Challenge)
@@ -264,11 +269,20 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 	// Phase 2: Post execution.
 	var postGenDuration time.Duration = 0
 	if nb.state.NIPost.Post == nil {
+		publishDeadline := nb.layerClock.LayerToTime(challenge.TargetEpoch().FirstLayer())
+		publishCtx, cancel := context.WithDeadline(ctx, publishDeadline)
+		defer cancel()
+		select {
+		case <-publishCtx.Done():
+			return nil, 0, fmt.Errorf("%w: deadline to publish ATX for pub epoch %d exceeded (deadline: %s, now: %s)", ErrATXChallengeExpired, challenge.PublishEpoch, publishDeadline, now)
+		default:
+		}
+
 		nb.log.With().Info("starting post execution", log.Binary("challenge", nb.state.PoetProofRef[:]))
 		startTime := time.Now()
 		events.EmitPostStart(nb.state.PoetProofRef[:])
 
-		proof, proofMetadata, err := nb.postSetupProvider.GenerateProof(ctx, nb.state.PoetProofRef[:], proving.WithPowCreator(nb.nodeID.Bytes()))
+		proof, proofMetadata, err := nb.postSetupProvider.GenerateProof(publishCtx, nb.state.PoetProofRef[:], proving.WithPowCreator(nb.nodeID.Bytes()))
 		if err != nil {
 			events.EmitPostFailure()
 			return nil, 0, fmt.Errorf("failed to generate Post: %w", err)
@@ -278,7 +292,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 			return nil, 0, fmt.Errorf("failed to get commitment ATX: %w", err)
 		}
 		if err := nb.validator.Post(
-			ctx,
+			publishCtx,
 			challenge.PublishEpoch,
 			nb.nodeID,
 			commitmentAtxId,
