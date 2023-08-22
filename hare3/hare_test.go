@@ -57,7 +57,7 @@ func newNode(t *tester, i int) *node {
 	n := &node{t: t, i: i}
 	n = n.
 		withController().withSyncer().withPublisher().
-		withClock().withDb().withSigner().withAtx().withAtx().
+		withClock().withDb().withSigner().withAtx().
 		withOracle().withHare()
 	n.hare.Start()
 	t.Cleanup(func() {
@@ -205,6 +205,9 @@ func (cl *lockstepCluster) setup(ids []types.ATXID) {
 	for _, n := range cl.nodes {
 		require.NoError(cl.t, beacons.Add(n.db, cl.t.genesis.GetEpoch()+1, cl.t.beacon))
 		for _, other := range cl.nodes {
+			if other.atx == nil {
+				continue
+			}
 			require.NoError(cl.t, atxs.Add(n.db, other.atx))
 		}
 		n.oracle.UpdateActiveSet(cl.t.genesis.GetEpoch()+1, ids)
@@ -336,9 +339,9 @@ func (*testTracer) OnMessageSent(*Message) {}
 
 func (*testTracer) OnMessageReceived(*Message) {}
 
-func testHare(tb testing.TB, n int) {
+func testHare(tb testing.TB, total, inactive int) {
 	tb.Helper()
-
+	active := total - inactive
 	tst := &tester{
 		TB:            tb,
 		rng:           rand.New(rand.NewSource(1001)),
@@ -348,18 +351,18 @@ func testHare(tb testing.TB, n int) {
 		beacon:        types.Beacon{1, 1, 1, 1},
 		genesis:       types.GetEffectiveGenesis(),
 	}
-	nodes := make([]*node, n)
-	ids := make([]types.ATXID, n)
+	nodes := make([]*node, total)
+	ids := make([]types.ATXID, active)
 	for i := range nodes {
 		nodes[i] = newNode(tst, i)
-		ids[i] = nodes[i].atx.ID()
+		if i < active {
+			ids[i] = nodes[i].atx.ID()
+		} else {
+			nodes[i].atx = nil
+		}
 	}
 	layer := tst.genesis + 1
-	maxProposals := n
-	if maxProposals > 50 {
-		maxProposals = 50
-	}
-	for _, n := range nodes[:maxProposals] {
+	for _, n := range nodes[:active] {
 		proposal := &types.Proposal{}
 		proposal.Layer = layer
 		proposal.ActiveSet = ids
@@ -408,9 +411,10 @@ func testHare(tb testing.TB, n int) {
 }
 
 func TestHare(t *testing.T) {
-	t.Run("one", func(t *testing.T) { testHare(t, 1) })
-	t.Run("two", func(t *testing.T) { testHare(t, 2) })
-	t.Run("small", func(t *testing.T) { testHare(t, 5) })
+	t.Run("one", func(t *testing.T) { testHare(t, 1, 0) })
+	t.Run("two", func(t *testing.T) { testHare(t, 2, 0) })
+	t.Run("small", func(t *testing.T) { testHare(t, 5, 0) })
+	t.Run("with inactive", func(t *testing.T) { testHare(t, 5, 3) })
 }
 
 func TestIterationLimit(t *testing.T) {
