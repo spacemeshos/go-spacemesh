@@ -375,8 +375,8 @@ func TestProcessLayer(t *testing.T) {
 
 		// outputs
 		err      string
-		executed []types.BlockID
-		applied  []types.BlockID
+		executed map[types.LayerID]types.BlockID
+		applied  map[types.LayerID]types.BlockID
 		validity map[types.BlockID]bool
 	}
 	type testCase struct {
@@ -395,12 +395,35 @@ func TestProcessLayer(t *testing.T) {
 							rblock(idg("1"), fixture.Good()),
 							rblock(idg("2"), fixture.Data(), fixture.Invalid())),
 					),
-					executed: []types.BlockID{idg("1")},
-					applied:  []types.BlockID{idg("1")},
+					executed: map[types.LayerID]types.BlockID{start: idg("1")},
+					applied:  map[types.LayerID]types.BlockID{start: idg("1")},
 					validity: map[types.BlockID]bool{
 						idg("1"): true,
 						idg("2"): false,
 					},
+				},
+			},
+		},
+		{
+			"missing but can make progress",
+			[]call{
+				{
+					updates: rlayers(
+						rlayer(start, rblock(idg("1"), fixture.Valid(), fixture.Data())),
+						rlayer(start+1, rblock(idg("2"), fixture.Valid(), fixture.Data())),
+						rlayer(start+2, rblock(idg("3"), fixture.Valid())),
+						rlayer(start+3, rblock(idg("4"), fixture.Valid(), fixture.Data())),
+					),
+					executed: map[types.LayerID]types.BlockID{start: idg("1"), start + 1: idg("2")},
+					applied:  map[types.LayerID]types.BlockID{start: idg("1"), start + 1: idg("2")},
+				},
+				{
+					results: rlayers(
+						rlayer(start+2, rblock(idg("3"), fixture.Valid(), fixture.Data())),
+						rlayer(start+3, rblock(idg("4"), fixture.Valid(), fixture.Data())),
+					),
+					executed: map[types.LayerID]types.BlockID{start + 2: idg("3"), start + 3: idg("4")},
+					applied:  map[types.LayerID]types.BlockID{start + 2: idg("3"), start + 3: idg("4")},
 				},
 			},
 		},
@@ -417,8 +440,8 @@ func TestProcessLayer(t *testing.T) {
 					results: rlayers(
 						rlayer(start, rblock(idg("1"), fixture.Data(), fixture.Valid())),
 					),
-					executed: []types.BlockID{idg("1")},
-					applied:  []types.BlockID{idg("1")},
+					executed: map[types.LayerID]types.BlockID{start: idg("1")},
+					applied:  map[types.LayerID]types.BlockID{start: idg("1")},
 					validity: map[types.BlockID]bool{
 						idg("1"): true,
 					},
@@ -438,8 +461,8 @@ func TestProcessLayer(t *testing.T) {
 					results: rlayers(
 						rlayer(start, rblock(idg("1"), fixture.Invalid())),
 					),
-					executed: []types.BlockID{{}},
-					applied:  []types.BlockID{{}},
+					executed: map[types.LayerID]types.BlockID{start: {}},
+					applied:  map[types.LayerID]types.BlockID{start: {}},
 				},
 			},
 		},
@@ -450,15 +473,15 @@ func TestProcessLayer(t *testing.T) {
 					updates: rlayers(
 						rlayer(start),
 					),
-					executed: []types.BlockID{{}},
-					applied:  []types.BlockID{{0}},
+					executed: map[types.LayerID]types.BlockID{start: {}},
+					applied:  map[types.LayerID]types.BlockID{start: {0}},
 				},
 				{
 					updates: []result.Layer{
 						rlayer(start, rblock(idg("2"), fixture.Valid(), fixture.Data())),
 					},
-					executed: []types.BlockID{idg("2")},
-					applied:  []types.BlockID{idg("2")},
+					executed: map[types.LayerID]types.BlockID{start: idg("2")},
+					applied:  map[types.LayerID]types.BlockID{start: idg("2")},
 				},
 			},
 		},
@@ -469,14 +492,14 @@ func TestProcessLayer(t *testing.T) {
 					updates: rlayers(
 						rlayer(start, rblock(idg("1"), fixture.Hare(), fixture.Data())),
 					),
-					executed: []types.BlockID{idg("1")},
-					applied:  []types.BlockID{idg("1")},
+					executed: map[types.LayerID]types.BlockID{start: idg("1")},
+					applied:  map[types.LayerID]types.BlockID{start: idg("1")},
 				},
 				{
 					updates: []result.Layer{
 						rlayer(start, rblock(idg("1"), fixture.Hare(), fixture.Data(), fixture.Valid())),
 					},
-					applied: []types.BlockID{idg("1")},
+					applied: map[types.LayerID]types.BlockID{start: idg("1")},
 				},
 			},
 		},
@@ -487,15 +510,15 @@ func TestProcessLayer(t *testing.T) {
 					updates: rlayers(
 						rlayer(start, rblock(idg("1"), fixture.Hare(), fixture.Data())),
 					),
-					executed: []types.BlockID{idg("1")},
-					applied:  []types.BlockID{idg("1")},
+					executed: map[types.LayerID]types.BlockID{start: idg("1")},
+					applied:  map[types.LayerID]types.BlockID{start: idg("1")},
 				},
 				{
 					updates: rlayers(
 						rlayer(start.Add(1), rblock(idg("2"), fixture.Hare(), fixture.Data())),
 					),
-					executed: []types.BlockID{idg("2")},
-					applied:  []types.BlockID{idg("1"), idg("2")},
+					executed: map[types.LayerID]types.BlockID{start: idg("2")},
+					applied:  map[types.LayerID]types.BlockID{start: idg("1"), start + 1: idg("2")},
 				},
 			},
 		},
@@ -506,15 +529,15 @@ func TestProcessLayer(t *testing.T) {
 					updates: rlayers(
 						rlayer(start, rblock(idg("1"), fixture.Valid(), fixture.Data())),
 					),
-					executed: []types.BlockID{idg("1")},
-					applied:  []types.BlockID{idg("1")},
+					executed: map[types.LayerID]types.BlockID{start: idg("1")},
+					applied:  map[types.LayerID]types.BlockID{start: idg("1")},
 				},
 				{
 					updates: rlayers(
 						rlayer(start, rblock(idg("1"), fixture.Invalid(), fixture.Hare(), fixture.Data())),
 					),
-					executed: []types.BlockID{{0}},
-					applied:  []types.BlockID{{0}},
+					executed: map[types.LayerID]types.BlockID{start: {0}},
+					applied:  map[types.LayerID]types.BlockID{start: {0}},
 				},
 			},
 		},
@@ -526,16 +549,16 @@ func TestProcessLayer(t *testing.T) {
 						rlayer(start, rblock(idg("1"), fixture.Valid(), fixture.Data())),
 						rlayer(start+1, rblock(idg("2"), fixture.Valid(), fixture.Data())),
 					),
-					executed: []types.BlockID{idg("1"), idg("2")},
-					applied:  []types.BlockID{idg("1"), idg("2")},
+					executed: map[types.LayerID]types.BlockID{start: idg("1"), start + 1: idg("2")},
+					applied:  map[types.LayerID]types.BlockID{start: idg("1"), start + 1: idg("2")},
 				},
 				{
 					updates: rlayers(
 						rlayer(start, rblock(idg("1"), fixture.Invalid(), fixture.Data())),
 						rlayer(start+1, rblock(idg("2"), fixture.Valid(), fixture.Data())),
 					),
-					executed: []types.BlockID{types.EmptyBlockID, idg("2")},
-					applied:  []types.BlockID{types.EmptyBlockID, idg("2")},
+					executed: map[types.LayerID]types.BlockID{start: types.EmptyBlockID, start + 1: idg("2")},
+					applied:  map[types.LayerID]types.BlockID{start: types.EmptyBlockID, start + 1: idg("2")},
 				},
 			},
 		},
@@ -547,8 +570,8 @@ func TestProcessLayer(t *testing.T) {
 						rlayer(start, rblock(idg("1"), fixture.Valid(), fixture.Data())),
 						rlayer(start+1, rblock(idg("2"), fixture.Valid(), fixture.Data())),
 					),
-					executed: []types.BlockID{idg("1"), idg("2")},
-					applied:  []types.BlockID{idg("1"), idg("2")},
+					executed: map[types.LayerID]types.BlockID{start: idg("1"), start + 1: idg("2")},
+					applied:  map[types.LayerID]types.BlockID{start: idg("1"), start + 1: idg("2")},
 				},
 				{
 					updates: rlayers(
@@ -570,8 +593,8 @@ func TestProcessLayer(t *testing.T) {
 						rlayer(start+1,
 							rblock(idg("2"), fixture.Valid(), fixture.Data())),
 					),
-					executed: []types.BlockID{idg("3"), idg("2")},
-					applied:  []types.BlockID{idg("3"), idg("2")},
+					executed: map[types.LayerID]types.BlockID{start: idg("3"), start + 1: idg("2")},
+					applied:  map[types.LayerID]types.BlockID{start: idg("3"), start + 1: idg("2")},
 				},
 			},
 		},
@@ -592,8 +615,8 @@ func TestProcessLayer(t *testing.T) {
 						rlayer(start, rblock(idg("1"), fixture.Valid(), fixture.Data())),
 						rlayer(start+1, rblock(idg("2"), fixture.Valid(), fixture.Data())),
 					),
-					executed: []types.BlockID{idg("1"), idg("2")},
-					applied:  []types.BlockID{idg("1"), idg("2")},
+					executed: map[types.LayerID]types.BlockID{start: idg("1"), start + 1: idg("2")},
+					applied:  map[types.LayerID]types.BlockID{start: idg("1"), start + 1: idg("2")},
 				},
 			},
 		},
@@ -609,8 +632,8 @@ func TestProcessLayer(t *testing.T) {
 					updates: rlayers(
 						fixture.RLayer(start),
 					),
-					executed: []types.BlockID{{}},
-					applied:  []types.BlockID{{}},
+					executed: map[types.LayerID]types.BlockID{start: {}},
+					applied:  map[types.LayerID]types.BlockID{start: {}},
 				},
 			},
 		},
@@ -631,8 +654,8 @@ func TestProcessLayer(t *testing.T) {
 							fixture.RBlock(fixture.IDGen("2"), fixture.Valid(), fixture.Data()),
 						),
 					),
-					executed: []types.BlockID{idg("1"), idg("2")},
-					applied:  []types.BlockID{idg("1"), idg("2")},
+					executed: map[types.LayerID]types.BlockID{start: idg("1"), start + 1: idg("2")},
+					applied:  map[types.LayerID]types.BlockID{start: idg("1"), start + 1: idg("2")},
 				},
 			},
 		},
@@ -648,15 +671,15 @@ func TestProcessLayer(t *testing.T) {
 							rblock(fixture.IDGen("2"), fixture.Invalid(), fixture.Data()),
 						),
 					),
-					executed: []types.BlockID{{}, {}},
-					applied:  []types.BlockID{{}, {}},
+					executed: map[types.LayerID]types.BlockID{start: {}, start + 1: {}},
+					applied:  map[types.LayerID]types.BlockID{start: {}, start + 1: {}},
 				},
 				{
 					updates: rlayers(
 						rlayer(start,
 							rblock(fixture.IDGen("1"), fixture.Invalid(), fixture.Data()),
 						)),
-					applied: []types.BlockID{{}, {}},
+					applied: map[types.LayerID]types.BlockID{start: {}, start + 1: {}},
 				},
 				{
 					updates: rlayers(
@@ -664,8 +687,8 @@ func TestProcessLayer(t *testing.T) {
 							rblock(fixture.IDGen("2"), fixture.Valid(), fixture.Data()),
 						),
 					),
-					executed: []types.BlockID{idg("2")},
-					applied:  []types.BlockID{{}, idg("2")},
+					executed: map[types.LayerID]types.BlockID{start: idg("2")},
+					applied:  map[types.LayerID]types.BlockID{start: {}, start + 1: idg("2")},
 				},
 			},
 		},
@@ -698,10 +721,10 @@ func TestProcessLayer(t *testing.T) {
 				} else {
 					require.NoError(t, err)
 				}
-				for i := range c.applied {
-					applied, err := layers.GetApplied(tm.cdb, start.Add(uint32(i)))
+				for lid, bid := range c.applied {
+					applied, err := layers.GetApplied(tm.cdb, lid)
 					require.NoError(t, err)
-					require.Equal(t, c.applied[i], applied)
+					require.Equal(t, bid, applied)
 				}
 				for bid, valid := range c.validity {
 					stored, err := blocks.IsValid(tm.cdb, bid)

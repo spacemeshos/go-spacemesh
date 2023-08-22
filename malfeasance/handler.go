@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -21,6 +22,7 @@ import (
 var (
 	ErrKnownProof    = errors.New("known proof")
 	errMalformedData = fmt.Errorf("%w: malformed data", pubsub.ErrValidationReject)
+	errWrongHash     = fmt.Errorf("%w: incorrect hash", pubsub.ErrValidationReject)
 )
 
 // Handler processes MalfeasanceProof from gossip and, if deems it valid, propagates it to peers.
@@ -28,6 +30,7 @@ type Handler struct {
 	logger     log.Log
 	cdb        *datastore.CachedDB
 	self       p2p.Peer
+	nodeID     types.NodeID
 	cp         consensusProtocol
 	edVerifier SigVerifier
 	tortoise   tortoise
@@ -37,6 +40,7 @@ func NewHandler(
 	cdb *datastore.CachedDB,
 	lg log.Log,
 	self p2p.Peer,
+	nodeID types.NodeID,
 	cp consensusProtocol,
 	edVerifier SigVerifier,
 	tortoise tortoise,
@@ -45,21 +49,34 @@ func NewHandler(
 		logger:     lg,
 		cdb:        cdb,
 		self:       self,
+		nodeID:     nodeID,
 		cp:         cp,
 		edVerifier: edVerifier,
 		tortoise:   tortoise,
 	}
 }
 
+func (h *Handler) reportMalfeasance(smesher types.NodeID, mp *types.MalfeasanceProof) {
+	h.tortoise.OnMalfeasance(smesher)
+	events.ReportMalfeasance(smesher, mp)
+	if h.nodeID == smesher {
+		events.EmitOwnMalfeasanceProof(smesher, mp)
+	}
+}
+
 // HandleSyncedMalfeasanceProof is the sync validator for MalfeasanceProof.
-func (h *Handler) HandleSyncedMalfeasanceProof(ctx context.Context, _ p2p.Peer, data []byte) error {
+func (h *Handler) HandleSyncedMalfeasanceProof(ctx context.Context, expHash types.Hash32, _ p2p.Peer, data []byte) error {
 	var p types.MalfeasanceProof
 	if err := codec.Decode(data, &p); err != nil {
 		numMalformed.Inc()
 		h.logger.With().Error("malformed message (sync)", log.Context(ctx), log.Err(err))
 		return errMalformedData
 	}
-	return validateAndSave(ctx, h.logger, h.cdb, h.edVerifier, h.cp, h.tortoise, &types.MalfeasanceGossip{MalfeasanceProof: p})
+	nodeID, err := h.validateAndSave(ctx, &types.MalfeasanceGossip{MalfeasanceProof: p})
+	if err == nil && types.Hash32(nodeID) != expHash {
+		return fmt.Errorf("%w: malfesance proof want %s, got %s", errWrongHash, expHash.ShortString(), nodeID.ShortString())
+	}
+	return err
 }
 
 // HandleMalfeasanceProof is the gossip receiver for MalfeasanceGossip.
@@ -75,39 +92,32 @@ func (h *Handler) HandleMalfeasanceProof(ctx context.Context, peer p2p.Peer, dat
 		if err != nil {
 			return err
 		}
-		h.tortoise.OnMalfeasance(id)
+		h.reportMalfeasance(id, &p.MalfeasanceProof)
 		// node saves malfeasance proof eagerly/atomically with the malicious data.
 		// it has validated the proof before saving to db.
 		updateMetrics(p.Proof)
 		return nil
 	}
-	return validateAndSave(ctx, h.logger, h.cdb, h.edVerifier, h.cp, h.tortoise, &p)
+	_, err := h.validateAndSave(ctx, &p)
+	return err
 }
 
-func validateAndSave(
-	ctx context.Context,
-	logger log.Log,
-	cdb *datastore.CachedDB,
-	edVerifier SigVerifier,
-	cp consensusProtocol,
-	trt tortoise,
-	p *types.MalfeasanceGossip,
-) error {
-	nodeID, err := Validate(ctx, logger, cdb, edVerifier, cp, p)
+func (h *Handler) validateAndSave(ctx context.Context, p *types.MalfeasanceGossip) (types.NodeID, error) {
+	nodeID, err := Validate(ctx, h.logger, h.cdb, h.edVerifier, h.cp, p)
 	if err != nil {
-		return err
+		return types.EmptyNodeID, err
 	}
-	if err := cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
+	if err := h.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
 		malicious, err := identities.IsMalicious(dbtx, nodeID)
 		if err != nil {
 			return fmt.Errorf("check known malicious: %w", err)
 		} else if malicious {
-			logger.WithContext(ctx).With().Debug("known malicious identity", log.Stringer("smesher", nodeID))
+			h.logger.WithContext(ctx).With().Debug("known malicious identity", log.Stringer("smesher", nodeID))
 			return ErrKnownProof
 		}
 		encoded, err := codec.Encode(&p.MalfeasanceProof)
 		if err != nil {
-			logger.With().Panic("failed to encode MalfeasanceProof", log.Err(err))
+			h.logger.With().Panic("failed to encode MalfeasanceProof", log.Err(err))
 		}
 		if err := identities.SetMalicious(dbtx, nodeID, encoded, time.Now()); err != nil {
 			return fmt.Errorf("add malfeasance proof: %w", err)
@@ -115,22 +125,22 @@ func validateAndSave(
 		return nil
 	}); err != nil {
 		if !errors.Is(err, ErrKnownProof) {
-			logger.WithContext(ctx).With().Error("failed to save MalfeasanceProof",
+			h.logger.WithContext(ctx).With().Error("failed to save MalfeasanceProof",
 				log.Stringer("smesher", nodeID),
 				log.Inline(p),
 				log.Err(err),
 			)
 		}
-		return err
+		return types.EmptyNodeID, err
 	}
-	trt.OnMalfeasance(nodeID)
-	cdb.CacheMalfeasanceProof(nodeID, &p.MalfeasanceProof)
+	h.reportMalfeasance(nodeID, &p.MalfeasanceProof)
+	h.cdb.CacheMalfeasanceProof(nodeID, &p.MalfeasanceProof)
 	updateMetrics(p.Proof)
-	logger.WithContext(ctx).With().Info("new malfeasance proof",
+	h.logger.WithContext(ctx).With().Info("new malfeasance proof",
 		log.Stringer("smesher", nodeID),
 		log.Inline(p),
 	)
-	return nil
+	return nodeID, nil
 }
 
 func Validate(

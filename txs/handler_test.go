@@ -15,9 +15,35 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
+
+func Test_WrongHash(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	cstate := NewMockconservativeState(ctrl)
+	_, pub, err := crypto.GenerateEd25519Key(nil)
+	require.NoError(t, err)
+	id, err := peer.IDFromPublicKey(pub)
+	require.NoError(t, err)
+	th := NewTxHandler(cstate, id, logtest.New(t))
+
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	tx := newTx(t, 3, 10, 1, signer)
+	cstate.EXPECT().HasTx(tx.ID).Return(false, nil)
+	err = th.HandleBlockTransaction(context.Background(), types.RandomHash(), p2p.NoPeer, tx.Raw)
+	require.ErrorIs(t, err, errWrongHash)
+	require.ErrorIs(t, err, pubsub.ErrValidationReject)
+	cstate.EXPECT().GetMeshTransaction(tx.ID).Return(nil, nil)
+	req := smocks.NewMockValidationRequest(ctrl)
+	req.EXPECT().Parse().Times(1).Return(tx.TxHeader, nil)
+	cstate.EXPECT().Validation(tx.RawTx).Times(1).Return(req)
+	err = th.HandleProposalTransaction(context.Background(), types.RandomHash(), p2p.NoPeer, tx.Raw)
+	require.ErrorIs(t, err, errWrongHash)
+	require.ErrorIs(t, err, pubsub.ErrValidationReject)
+}
 
 func Test_HandleBlock(t *testing.T) {
 	for _, tc := range []struct {
@@ -82,7 +108,7 @@ func Test_HandleBlock(t *testing.T) {
 					cstate.EXPECT().AddToDB(&types.Transaction{RawTx: tx.RawTx}).Return(tc.addErr)
 				}
 			}
-			err = th.HandleBlockTransaction(context.Background(), p2p.NoPeer, tx.Raw)
+			err = th.HandleBlockTransaction(context.Background(), tx.ID.Hash32(), p2p.NoPeer, tx.Raw)
 			if tc.failed {
 				require.Error(t, err)
 			} else {
@@ -293,7 +319,7 @@ func Test_HandleProposal(t *testing.T) {
 				tc.hasErr, tc.parseErr, tc.addErr,
 				tc.has, tc.verify, tc.noHeader,
 			)
-			err := th.HandleProposalTransaction(context.Background(), p2p.NoPeer, tx.Raw)
+			err := th.HandleProposalTransaction(context.Background(), tx.ID.Hash32(), p2p.NoPeer, tx.Raw)
 			if tc.fail {
 				require.Error(t, err)
 			} else {

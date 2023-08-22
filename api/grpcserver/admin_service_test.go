@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -11,7 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -56,7 +56,7 @@ func createMesh(tb testing.TB, db *sql.Database) {
 func TestAdminService_Checkpoint(t *testing.T) {
 	db := sql.InMemory()
 	createMesh(t, db)
-	svc := NewAdminService(db, t.TempDir(), logtest.New(t))
+	svc := NewAdminService(db, t.TempDir(), nil)
 	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -91,7 +91,7 @@ func TestAdminService_Checkpoint(t *testing.T) {
 
 func TestAdminService_CheckpointError(t *testing.T) {
 	db := sql.InMemory()
-	svc := NewAdminService(db, t.TempDir(), logtest.New(t))
+	svc := NewAdminService(db, t.TempDir(), nil)
 	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -103,4 +103,22 @@ func TestAdminService_CheckpointError(t *testing.T) {
 	require.NoError(t, err)
 	_, err = stream.Recv()
 	require.ErrorContains(t, err, sql.ErrNotFound.Error())
+}
+
+func TestAdminService_Recovery(t *testing.T) {
+	db := sql.InMemory()
+	recoveryCalled := atomic.Bool{}
+	svc := NewAdminService(db, t.TempDir(), nil)
+	svc.recover = func() { recoveryCalled.Store(true) }
+
+	t.Cleanup(launchServer(t, cfg, svc))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	conn := dialGrpc(ctx, t, cfg.PublicListener)
+	c := pb.NewAdminServiceClient(conn)
+
+	_, err := c.Recover(ctx, &pb.RecoverRequest{})
+	require.NoError(t, err)
+	require.True(t, recoveryCalled.Load())
 }

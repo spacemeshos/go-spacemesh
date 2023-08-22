@@ -1265,3 +1265,36 @@ func TestWaitPositioningAtx(t *testing.T) {
 		})
 	}
 }
+
+func TestWaitingToBuildNipostChallengeWithJitter(t *testing.T) {
+	t.Run("before grace period", func(t *testing.T) {
+		//          ┌──grace period──┐
+		//          │                │
+		// ───▲─────|──────|─────────|----> time
+		//    │     └jitter|         └round start
+		//   now
+		wait := timeToWaitToBuildNipostChallenge(2*time.Hour, time.Hour)
+		require.Greater(t, wait, time.Hour)
+		require.LessOrEqual(t, wait, time.Hour+time.Second*36)
+	})
+	t.Run("after grace period, within max jitter value", func(t *testing.T) {
+		//          ┌──grace period──┐
+		//          │                │
+		// ─────────|──▲────|────────|----> time
+		//          └ji│tter|        └round start
+		//            now
+		wait := timeToWaitToBuildNipostChallenge(time.Hour-time.Second*10, time.Hour)
+		require.GreaterOrEqual(t, wait, -time.Second*10)
+		// jitter is 1% = 36s for 1h grace period
+		require.LessOrEqual(t, wait, time.Second*(36-10))
+	})
+	t.Run("after jitter max value", func(t *testing.T) {
+		//          ┌──grace period──┐
+		//          │                │
+		// ─────────|──────|──▲──────|----> time
+		//          └jitter|  │       └round start
+		//                   now
+		wait := timeToWaitToBuildNipostChallenge(time.Hour-time.Second*37, time.Hour)
+		require.Less(t, wait, time.Duration(0))
+	})
+}

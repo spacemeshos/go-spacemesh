@@ -9,8 +9,9 @@ import (
 )
 
 var (
-	CalcEligibleLayer   = util.CalcEligibleLayer
-	GetNumEligibleSlots = util.GetNumEligibleSlots
+	CalcEligibleLayer    = util.CalcEligibleLayer
+	GetNumEligibleSlots  = util.GetNumEligibleSlots
+	GetLegacyNumEligible = util.GetLegacyNumEligible
 	// ComputeWeightPerEligibility computes the ballot weight per eligibility w.r.t the active set recorded in its reference ballot.
 	ComputeWeightPerEligibility = util.ComputeWeightPerEligibility
 )

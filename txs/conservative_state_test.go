@@ -2,9 +2,10 @@ package txs
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"math"
-	"math/rand"
+	mrand "math/rand"
 	"sort"
 	"testing"
 	"time"
@@ -550,7 +551,7 @@ func TestConsistentHandling(t *testing.T) {
 		createConservativeState(t),
 	}
 
-	rng := rand.New(rand.NewSource(101))
+	rng := mrand.New(mrand.NewSource(101))
 	signers := make([]*signing.EdSigner, 30)
 	nonces := make([]uint64, len(signers))
 	for i := range signers {
@@ -589,7 +590,7 @@ func TestConsistentHandling(t *testing.T) {
 			instances[1].mvm.EXPECT().Validation(txs[i].RawTx).Times(1).Return(failed)
 
 			require.Equal(t, nil, instances[0].handler().HandleGossipTransaction(context.Background(), p2p.NoPeer, txs[i].Raw))
-			require.NoError(t, instances[1].handler().HandleBlockTransaction(context.Background(), p2p.NoPeer, txs[i].Raw))
+			require.NoError(t, instances[1].handler().HandleBlockTransaction(context.Background(), txs[i].ID.Hash32(), p2p.NoPeer, txs[i].Raw))
 		}
 		block := types.NewExistingBlock(types.BlockID{byte(lid)},
 			types.InnerBlock{

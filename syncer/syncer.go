@@ -27,6 +27,7 @@ type Config struct {
 	SyncCertDistance uint32
 	MaxStaleDuration time.Duration
 	Standalone       bool
+	UseNewProtocol   bool `mapstructure:"use-new-opn"`
 }
 
 // DefaultConfig for the syncer.
@@ -37,6 +38,7 @@ func DefaultConfig() Config {
 		HareDelayLayers:  10,
 		SyncCertDistance: 10,
 		MaxStaleDuration: time.Second,
+		UseNewProtocol:   true,
 	}
 }
 
@@ -166,7 +168,7 @@ func NewSyncer(
 	}
 
 	s.syncTimer = time.NewTicker(s.cfg.Interval)
-	s.validateTimer = time.NewTicker(s.cfg.Interval * 2)
+	s.validateTimer = time.NewTicker(s.cfg.Interval)
 	if s.dataFetcher == nil {
 		s.dataFetcher = NewDataFetch(mesh, fetcher, cdb, cache, s.logger)
 	}
@@ -210,11 +212,6 @@ func (s *Syncer) ListenToATXGossip() bool {
 // IsSynced returns true if the node is in synced state.
 func (s *Syncer) IsSynced(ctx context.Context) bool {
 	return s.getSyncState() == synced
-}
-
-// SyncedBefore returns true if the node became synced before `epoch` starts.
-func (s *Syncer) SyncedBefore(epoch types.EpochID) bool {
-	return s.getSyncState() == synced && s.getTargetSyncedLayer() < epoch.FirstLayer()
 }
 
 func (s *Syncer) IsBeaconSynced(epoch types.EpochID) bool {
@@ -400,10 +397,6 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		}
 
 		if err := s.syncAtx(ctx); err != nil {
-			s.logger.WithContext(ctx).With().Warning("failed to sync atxs",
-				log.Stringer("current", s.ticker.CurrentLayer()),
-				log.Err(err),
-			)
 			return false
 		}
 
@@ -413,7 +406,6 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		// always sync to currentLayer-1 to reduce race with gossip and hare/tortoise
 		for layerID := s.getLastSyncedLayer().Add(1); layerID.Before(s.ticker.CurrentLayer()); layerID = layerID.Add(1) {
 			if err := s.syncLayer(ctx, layerID); err != nil {
-				s.logger.WithContext(ctx).With().Warning("failed to fetch layer", layerID, log.Err(err))
 				return false
 			}
 			s.setLastSyncedLayer(layerID)

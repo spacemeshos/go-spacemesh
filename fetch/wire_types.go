@@ -137,3 +137,36 @@ func (lo *LayerOpinion) MarshalLogObject(encoder log.ObjectEncoder) error {
 	}
 	return nil
 }
+
+type OpinionRequest struct {
+	Layer types.LayerID
+	Block *types.BlockID
+}
+
+type LayerOpinion2 struct {
+	PrevAggHash types.Hash32
+	Certified   *types.BlockID
+
+	peer p2p.Peer
+}
+
+// SetPeer ...
+func (lo *LayerOpinion2) SetPeer(p p2p.Peer) {
+	lo.peer = p
+}
+
+// Peer ...
+func (lo *LayerOpinion2) Peer() p2p.Peer {
+	return lo.peer
+}
+
+// MarshalLogObject implements logging encoder for LayerOpinion.
+func (lo *LayerOpinion2) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddString("peer", lo.peer.String())
+	encoder.AddString("prev hash", lo.PrevAggHash.String())
+	encoder.AddBool("has cert", lo.Certified != nil)
+	if lo.Certified != nil {
+		encoder.AddString("cert block", lo.Certified.String())
+	}
+	return nil
+}
