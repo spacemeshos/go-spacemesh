@@ -172,15 +172,10 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 	for _, pid := range direct {
 		directMap[pid.ID] = struct{}{}
 	}
-	// leaves a small room for outbound connections in order to
-	// reduce risk of network isolation
-	g := &gater{
-		inbound:  int(float64(cfg.HighPeers) * cfg.InboundFraction),
-		outbound: int(float64(cfg.HighPeers) * cfg.OutboundFraction),
-		direct:   directMap,
+	g, err := newGater(cfg)
+	if err != nil {
+		return nil, err
 	}
-
-	g.direct = directMap
 	lopts := []libp2p.Option{
 		libp2p.Identity(key),
 		libp2p.ListenAddrStrings(cfg.Listen),
