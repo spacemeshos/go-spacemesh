@@ -237,9 +237,6 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 		nb.state.Challenge = challengeHash
 		nb.state.PoetRequests = poetRequests
 		nb.persistState()
-		if err := submitCtx.Err(); err != nil {
-			return nil, 0, fmt.Errorf("submitting challenges: %w", err)
-		}
 	}
 
 	// Phase 1: query PoET services for proofs
