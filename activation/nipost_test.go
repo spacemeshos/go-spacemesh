@@ -847,6 +847,46 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 		require.ErrorContains(t, err, "poet proof for pub epoch")
 		require.Nil(t, nipost)
 	})
+
+	t.Run("too late for proof generation", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		poetDb := NewMockpoetDbAPI(ctrl)
+		mclock := NewMocklayerClock(ctrl)
+		poetProver := NewMockPoetProvingServiceClient(ctrl)
+		postProver := NewMockpostSetupProvider(ctrl)
+		postProver.EXPECT().Status().Return(&PostSetupStatus{State: PostSetupStateComplete})
+		mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
+			func(got types.LayerID) time.Time {
+				return genesis.Add(layerDuration * time.Duration(got))
+			}).AnyTimes()
+
+		dir := t.TempDir()
+		nb, err := NewNIPostBuilder(
+			types.NodeID{1},
+			postProver,
+			poetDb,
+			[]string{},
+			dir,
+			logtest.New(t),
+			sig,
+			PoetConfig{},
+			mclock,
+			withPoetClients([]PoetProvingServiceClient{poetProver}),
+		)
+		require.NoError(t, err)
+		challenge := types.NIPostChallenge{PublishEpoch: currLayer.GetEpoch() - 1}
+		state := types.NIPostBuilderState{
+			Challenge:    challenge.Hash(),
+			PoetRequests: []types.PoetRequest{{}},
+			PoetProofRef: [32]byte{},
+		}
+		require.NoError(t, saveBuilderState(dir, &state))
+
+		nipost, _, err := nb.BuildNIPost(context.Background(), &challenge)
+		require.ErrorIs(t, err, ErrATXChallengeExpired)
+		require.ErrorContains(t, err, "deadline to publish ATX for pub epoch")
+		require.Nil(t, nipost)
+	})
 }
 
 // Test if the NIPoSTBuilder continues after being interrupted just after
