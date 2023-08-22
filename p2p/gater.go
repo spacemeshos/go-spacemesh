@@ -78,9 +78,10 @@ func (g *gater) OnDisconnected(remote multiaddr.Multiaddr) {
 		if !exists {
 			return
 		}
-		g.ipsCounter[string(ip)]--
 		if n == 1 {
 			delete(g.ipsCounter, string(ip))
+		} else {
+			g.ipsCounter[string(ip)]--
 		}
 	}
 }
