@@ -87,10 +87,7 @@ type Message struct {
 
 func (m *Message) ToHash() types.Hash32 {
 	hash := hash.New()
-	_, err := codec.EncodeTo(hash, &m.Body)
-	if err != nil {
-		panic(err.Error())
-	}
+	codec.MustEncodeTo(hash, &m.Body)
 	var rst types.Hash32
 	hash.Sum(rst[:0])
 	return rst
@@ -120,11 +117,7 @@ func (m *Message) key() messageKey {
 }
 
 func (m *Message) ToBytes() []byte {
-	buf, err := codec.Encode(m)
-	if err != nil {
-		panic(err.Error())
-	}
-	return buf
+	return codec.MustEncode(m)
 }
 
 func (m *Message) Validate() error {
