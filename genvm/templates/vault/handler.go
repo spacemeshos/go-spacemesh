@@ -53,7 +53,7 @@ func (h *handler) Load(state []byte) (core.Template, error) {
 	dec := scale.NewDecoder(bytes.NewBuffer(state))
 	vault := &Vault{}
 	if _, err := vault.DecodeScale(dec); err != nil {
-		return nil, fmt.Errorf("%w: %s", core.ErrInternal, err)
+		return nil, fmt.Errorf("%w: %w", core.ErrInternal, err)
 	}
 	return vault, nil
 }

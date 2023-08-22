@@ -617,7 +617,8 @@ func (app *App) initServices(ctx context.Context) error {
 		trtlopts = append(trtlopts, tortoise.WithTracer())
 	}
 	trtl, err := tortoise.Recover(
-		app.cachedDB, beaconProtocol, trtlopts...,
+		app.cachedDB,
+		app.clock.CurrentLayer(), beaconProtocol, trtlopts...,
 	)
 	if err != nil {
 		return fmt.Errorf("can't recover tortoise state: %w", err)
@@ -762,6 +763,11 @@ func (app *App) initServices(ctx context.Context) error {
 		app.addLogger(HareLogger, lg),
 	)
 
+	minerGoodAtxPct := 90
+	if app.Config.TestConfig.MinerGoodAtxPct > 0 {
+		// only set this for systest TestEquivocation.
+		minerGoodAtxPct = app.Config.TestConfig.MinerGoodAtxPct
+	}
 	proposalBuilder := miner.NewProposalBuilder(
 		ctx,
 		app.clock,
@@ -779,6 +785,7 @@ func (app *App) initServices(ctx context.Context) error {
 		miner.WithMinimalActiveSetWeight(app.Config.Tortoise.MinimalActiveSetWeight),
 		miner.WithHdist(app.Config.Tortoise.Hdist),
 		miner.WithNetworkDelay(app.Config.HARE.WakeupDelta),
+		miner.WithMinGoodAtxPct(minerGoodAtxPct),
 		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)),
 	)
 
@@ -847,19 +854,20 @@ func (app *App) initServices(ctx context.Context) error {
 		app.cachedDB,
 		app.addLogger(MalfeasanceLogger, lg),
 		app.host.ID(),
+		app.edSgn.NodeID(),
 		app.hare,
 		app.edVerifier,
 		trtl,
 	)
 	fetcher.SetValidators(
-		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(atxHandler.HandleAtxData, app.host, lg)),
-		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(poetDb.ValidateAndStoreMsg, app.host, lg)),
-		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(proposalListener.HandleSyncedBallot, app.host, lg)),
-		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(blockHandler.HandleSyncedBlock, app.host, lg)),
-		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(proposalListener.HandleSyncedProposal, app.host, lg)),
-		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(app.txHandler.HandleBlockTransaction, app.host, lg)),
-		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(app.txHandler.HandleProposalTransaction, app.host, lg)),
-		fetch.ValidatorFunc(pubsub.DropPeerOnValidationReject(malfeasanceHandler.HandleSyncedMalfeasanceProof, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(atxHandler.HandleSyncedAtx, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(poetDb.ValidateAndStoreMsg, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(proposalListener.HandleSyncedBallot, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(blockHandler.HandleSyncedBlock, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(proposalListener.HandleSyncedProposal, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(app.txHandler.HandleBlockTransaction, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(app.txHandler.HandleProposalTransaction, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(malfeasanceHandler.HandleSyncedMalfeasanceProof, app.host, lg)),
 	)
 
 	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) error {
@@ -1107,10 +1115,14 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		app.jsonAPIService.StartService(ctx, public...)
 	}
 	if app.grpcPublicService != nil {
-		app.grpcPublicService.Start()
+		if err := app.grpcPublicService.Start(); err != nil {
+			return err
+		}
 	}
 	if app.grpcPrivateService != nil {
-		app.grpcPrivateService.Start()
+		if err := app.grpcPrivateService.Start(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -1445,17 +1457,18 @@ func (app *App) preserveAfterRecovery(ctx context.Context) {
 			)
 			continue
 		}
-		if err := app.poetDb.ValidateAndStoreMsg(ctx, p2p.NoPeer, encoded); err != nil {
+		hash := app.preserve.Deps[i].GetPoetProofRef()
+		if err := app.poetDb.ValidateAndStoreMsg(ctx, hash, p2p.NoPeer, encoded); err != nil {
 			app.log.With().Error("failed to preserve poet proof after checkpoint",
 				log.Stringer("atx id", app.preserve.Deps[i].ID()),
-				log.String("poet proof ref", app.preserve.Deps[i].GetPoetProofRef().ShortString()),
+				log.String("poet proof ref", hash.ShortString()),
 				log.Err(err),
 			)
 			continue
 		}
 		app.log.With().Info("preserved poet proof after checkpoint",
 			log.Stringer("atx id", app.preserve.Deps[i].ID()),
-			log.String("poet proof ref", app.preserve.Deps[i].GetPoetProofRef().ShortString()),
+			log.String("poet proof ref", hash.ShortString()),
 		)
 	}
 	for _, vatx := range app.preserve.Deps {
@@ -1467,7 +1480,7 @@ func (app *App) preserveAfterRecovery(ctx context.Context) {
 			)
 			continue
 		}
-		if err := app.atxHandler.HandleAtxData(ctx, p2p.NoPeer, encoded); err != nil {
+		if err := app.atxHandler.HandleSyncedAtx(ctx, vatx.ID().Hash32(), p2p.NoPeer, encoded); err != nil {
 			app.log.With().Error("failed to preserve atx after checkpoint",
 				log.Inline(vatx),
 				log.Err(err),

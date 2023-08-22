@@ -3,6 +3,8 @@ package fetch
 import (
 	"context"
 
+	"github.com/libp2p/go-libp2p/core/protocol"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -18,20 +20,20 @@ type requester interface {
 // SyncValidators so that we can mock the behavior of GossipHandlers. If we
 // didn't need to mock GossipHandler behavior then we could use GossipHandlers
 // directly and do away with both ValidatorFunc and SyncValidator.
-type ValidatorFunc pubsub.GossipHandler
+type ValidatorFunc pubsub.SyncHandler
 
-func (f ValidatorFunc) HandleMessage(ctx context.Context, peer p2p.Peer, msg []byte) error {
-	return f(ctx, peer, msg)
+func (f ValidatorFunc) HandleMessage(ctx context.Context, hash types.Hash32, peer p2p.Peer, msg []byte) error {
+	return f(ctx, hash, peer, msg)
 }
 
 // SyncValidator exists to allow for mocking of GossipHandlers through the use
 // of ValidatorFunc.
 type SyncValidator interface {
-	HandleMessage(context.Context, p2p.Peer, []byte) error
+	HandleMessage(context.Context, types.Hash32, p2p.Peer, []byte) error
 }
 
 type PoetValidator interface {
-	ValidateAndStoreMsg(context.Context, p2p.Peer, []byte) error
+	ValidateAndStoreMsg(context.Context, types.Hash32, p2p.Peer, []byte) error
 }
 
 type meshProvider interface {
@@ -41,5 +43,6 @@ type meshProvider interface {
 type host interface {
 	ID() p2p.Peer
 	GetPeers() []p2p.Peer
+	PeerProtocols(p2p.Peer) ([]protocol.ID, error)
 	Close() error
 }

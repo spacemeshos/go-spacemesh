@@ -36,9 +36,13 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 	conf1.DataDirParent = t.TempDir()
 	conf1.FileLock = filepath.Join(conf1.DataDirParent, "LOCK")
 	conf1.P2P.Listen = "/ip4/127.0.0.1/tcp/0"
+	// We setup the api to listen on an OS assigned port, which avoids the second instance getting stuck when
+	conf1.API.PublicListener = "0.0.0.0:0"
+	conf1.API.PrivateListener = "0.0.0.0:0"
 	app1, err := NewApp(&conf1)
 	require.NoError(t, err)
 	conf2 := config.DefaultTestConfig()
+
 	// We need to copy the genesis config to ensure that both nodes share the
 	// same gnenesis ID, otherwise they will not be able to connect to each
 	// other.
@@ -46,6 +50,8 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 	conf2.DataDirParent = t.TempDir()
 	conf2.FileLock = filepath.Join(conf2.DataDirParent, "LOCK")
 	conf2.P2P.Listen = "/ip4/127.0.0.1/tcp/0"
+	conf2.API.PublicListener = "0.0.0.0:0"
+	conf2.API.PrivateListener = "0.0.0.0:0"
 	app2, err := NewApp(&conf2)
 	require.NoError(t, err)
 
@@ -54,13 +60,13 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 		app1.Cleanup(ctx)
 		app2.Cleanup(ctx)
 	})
-	g := errgroup.Group{}
+	g, grpContext := errgroup.WithContext(ctx)
 	g.Go(func() error {
-		return app1.Start(ctx)
+		return app1.Start(grpContext)
 	})
 	<-app1.Started()
 	g.Go(func() error {
-		return app2.Start(ctx)
+		return app2.Start(grpContext)
 	})
 	<-app2.Started()
 

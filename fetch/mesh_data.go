@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
-	"github.com/hashicorp/go-multierror"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -27,10 +28,12 @@ func (f *Fetch) GetAtxs(ctx context.Context, ids []types.ATXID) error {
 	return f.getHashes(ctx, hashes, datastore.ATXDB, f.validators.atx.HandleMessage)
 }
 
-type dataReceiver func(context.Context, p2p.Peer, []byte) error
+type dataReceiver func(context.Context, types.Hash32, p2p.Peer, []byte) error
 
 func (f *Fetch) getHashes(ctx context.Context, hashes []types.Hash32, hint datastore.Hint, receiver dataReceiver) error {
-	var eg multierror.Group
+	var eg errgroup.Group
+	var errs error
+	var mu sync.Mutex
 	for _, hash := range hashes {
 		p, err := f.getHash(ctx, hash, hint, receiver)
 		if err != nil {
@@ -48,14 +51,18 @@ func (f *Fetch) getHashes(ctx context.Context, hashes []types.Hash32, hint datas
 				return ctx.Err()
 			case <-p.completed:
 				if p.err != nil {
-					return fmt.Errorf("hint: %v, hash: %v, err: %w", hint, h.String(), p.err)
+					mu.Lock()
+					defer mu.Unlock()
+					err := fmt.Errorf("hint: %v, hash: %v, err: %w", hint, h.String(), p.err)
+					errs = errors.Join(errs, err)
 				}
 				return nil
 			}
 		})
 	}
 
-	return eg.Wait().ErrorOrNil()
+	err := eg.Wait()
+	return errors.Join(errs, err)
 }
 
 // GetMalfeasanceProofs gets malfeasance proofs for the specified NodeIDs and validates them.
@@ -174,6 +181,17 @@ func (f *Fetch) GetLayerOpinions(ctx context.Context, peers []p2p.Peer, lid type
 	return poll(ctx, f.servers[lyrOpnsProtocol], peers, lidBytes, okCB, errCB)
 }
 
+func (f *Fetch) GetLayerOpinions2(ctx context.Context, peers []p2p.Peer, lid types.LayerID, okCB func([]byte, p2p.Peer), errCB func(error, p2p.Peer)) error {
+	req := OpinionRequest{
+		Layer: lid,
+	}
+	reqData, err := codec.Encode(&req)
+	if err != nil {
+		return err
+	}
+	return poll(ctx, f.servers[OpnProtocol], peers, reqData, okCB, errCB)
+}
+
 func poll(ctx context.Context, srv requester, peers []p2p.Peer, req []byte, okCB func([]byte, p2p.Peer), errCB func(error, p2p.Peer)) error {
 	for _, p := range peers {
 		peer := p
@@ -201,11 +219,9 @@ func (f *Fetch) PeerEpochInfo(ctx context.Context, peer p2p.Peer, epoch types.Ep
 		ed   EpochData
 	)
 	okCB := func(data []byte) {
-		defer close(done)
 		done <- codec.Decode(data, &ed)
 	}
 	errCB := func(perr error) {
-		defer close(done)
 		done <- perr
 	}
 	epochBytes, err := codec.Encode(epoch)
@@ -245,13 +261,11 @@ func (f *Fetch) PeerMeshHashes(ctx context.Context, peer p2p.Peer, req *MeshHash
 	}
 
 	okCB := func(data []byte) {
-		defer close(done)
 		h, err := codec.DecodeSlice[types.Hash32](data)
 		hashes = h
 		done <- err
 	}
 	errCB := func(perr error) {
-		defer close(done)
 		done <- perr
 	}
 	if err = f.servers[meshHashProtocol].Request(ctx, peer, reqData, okCB, errCB); err != nil {
@@ -268,4 +282,58 @@ func (f *Fetch) PeerMeshHashes(ctx context.Context, peer p2p.Peer, req *MeshHash
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+}
+
+func (f *Fetch) GetCert(ctx context.Context, lid types.LayerID, bid types.BlockID, peers []p2p.Peer) (*types.Certificate, error) {
+	f.logger.WithContext(ctx).With().Debug("requesting block certificate from peers",
+		lid, bid, log.Int("num peer", len(peers)))
+	req := &OpinionRequest{
+		Layer: lid,
+		Block: &bid,
+	}
+	reqData, err := codec.Encode(req)
+	if err != nil {
+		f.logger.With().Fatal("failed to encode cert request", log.Err(err))
+	}
+
+	out := make(chan *types.Certificate, 1)
+	for _, peer := range peers {
+		done := make(chan error, 1)
+		okCB := func(data []byte) {
+			var peerCert types.Certificate
+			if err = codec.Decode(data, &peerCert); err != nil {
+				done <- err
+				return
+			}
+			// for generic data fetches by hash (ID for atx/block/proposal/ballot/tx), the check on whether the returned
+			// data matching the hash was done on the data handlers' path. for block certificate, there is no ID associated
+			// with it, hence the check here.
+			// however, certificate doesn't go through that path. it's requested by a separate protocol because a block
+			// certificate doesn't have an ID.
+			if peerCert.BlockID != bid {
+				done <- fmt.Errorf("peer %v served wrong cert. want %s got %s", peer, bid.String(), peerCert.BlockID.String())
+				return
+			}
+			out <- &peerCert
+		}
+		errCB := func(perr error) {
+			done <- perr
+		}
+		if err := f.servers[OpnProtocol].Request(ctx, peer, reqData, okCB, errCB); err != nil {
+			done <- err
+		}
+		select {
+		case err := <-done:
+			f.logger.With().Debug("failed to get cert from peer",
+				log.Stringer("peer", peer),
+				log.Err(err),
+			)
+			continue
+		case cert := <-out:
+			return cert, nil
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	return nil, fmt.Errorf("failed to get cert %v/%s from %d peers", lid, bid.String(), len(peers))
 }

@@ -602,7 +602,7 @@ func gradeActiveSet(cache map[types.ATXID]miner.AtxGrade, activeSet []types.ATXI
 		} else {
 			hdr, err := msh.GetAtxHeader(id)
 			if err != nil {
-				return types.EmptyATXID, fmt.Errorf("get header %v: %s", id, err)
+				return types.EmptyATXID, fmt.Errorf("get header %v: %w", id, err)
 			}
 			grade, err = miner.GradeAtx(msh, hdr.NodeID, hdr.Received, epochStart, networkDelay)
 			if err != nil {

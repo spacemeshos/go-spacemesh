@@ -2,6 +2,7 @@ package bootstrap_test
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -121,22 +122,119 @@ func checkUpdate4(t *testing.T, got *bootstrap.VerifiedUpdate) {
 
 type checkFunc func(*testing.T, *bootstrap.VerifiedUpdate)
 
+func TestLoad_BackwardCompatible(t *testing.T) {
+	epoch := 2
+	tcs := []struct {
+		desc              string
+		filenames         []string
+		persisted, suffix string
+	}{
+		{
+			desc:      "legacy timestamp bootstrap",
+			filenames: []string{"epoch-2-update-bs-2023-08-10T06-00-08", "epoch-2-update-bs-2023-08-10T08-00-09"},
+			persisted: "epoch-2-update-bs",
+			suffix:    bootstrap.SuffixBoostrap,
+		},
+		{
+			desc:      "legacy timestamp beacon",
+			filenames: []string{"epoch-2-update-bc-2023-08-10T06-00-08", "epoch-2-update-bc-2023-08-10T08-00-09"},
+			persisted: "epoch-2-update-bc",
+			suffix:    bootstrap.SuffixBeacon,
+		},
+		{
+			desc:      "legacy timestamp active set",
+			filenames: []string{"epoch-2-update-as-2023-08-10T06-00-08", "epoch-2-update-as-2023-08-10T08-00-09"},
+			persisted: "epoch-2-update-as",
+			suffix:    bootstrap.SuffixActiveSet,
+		},
+		{
+			desc:      "legacy timestamp huh",
+			filenames: []string{"epoch-2-update-huh-2023-08-10T06-00-08"},
+		},
+		{
+			desc:      "bootstrap",
+			filenames: []string{"epoch-2-update-bs"},
+			persisted: "epoch-2-update-bs",
+			suffix:    bootstrap.SuffixBoostrap,
+		},
+		{
+			desc:      "beacon",
+			filenames: []string{"epoch-2-update-bc"},
+			persisted: "epoch-2-update-bc",
+			suffix:    bootstrap.SuffixBeacon,
+		},
+		{
+			desc:      "active set",
+			filenames: []string{"epoch-2-update-as"},
+			persisted: "epoch-2-update-as",
+			suffix:    bootstrap.SuffixActiveSet,
+		},
+	}
+	for _, tc := range tcs {
+		tc := tc
+		t.Run(tc.desc, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := bootstrap.DefaultConfig()
+			fs := afero.NewMemMapFs()
+			persistDir := filepath.Join(cfg.DataDir, bootstrap.DirName)
+			for _, file := range tc.filenames {
+				path := filepath.Join(persistDir, strconv.Itoa(epoch), file)
+				require.NoError(t, fs.MkdirAll(path, 0o700))
+				require.NoError(t, afero.WriteFile(fs, path, []byte(update2), 0o400))
+			}
+			mc := bootstrap.NewMocklayerClock(gomock.NewController(t))
+			mc.EXPECT().CurrentLayer().Return(current.FirstLayer())
+			updater := bootstrap.New(
+				mc,
+				bootstrap.WithConfig(cfg),
+				bootstrap.WithLogger(logtest.New(t)),
+				bootstrap.WithFilesystem(fs),
+			)
+			require.NoError(t, updater.Load(context.Background()))
+			if tc.suffix != "" {
+				require.True(t, updater.Downloaded(types.EpochID(epoch), tc.suffix))
+			} else {
+				require.False(t, updater.Downloaded(types.EpochID(epoch), bootstrap.SuffixBoostrap))
+				require.False(t, updater.Downloaded(types.EpochID(epoch), bootstrap.SuffixActiveSet))
+				require.False(t, updater.Downloaded(types.EpochID(epoch), bootstrap.SuffixBeacon))
+			}
+			if tc.persisted != "" {
+				edir := filepath.Join(persistDir, strconv.Itoa(epoch))
+				exists, err := afero.Exists(fs, filepath.Join(edir, tc.persisted))
+				require.NoError(t, err)
+				require.True(t, exists)
+				all, err := afero.ReadDir(fs, edir)
+				require.NoError(t, err)
+				require.Len(t, all, 1)
+				require.Equal(t, tc.persisted, all[0].Name())
+			}
+		})
+	}
+}
+
 func TestLoad(t *testing.T) {
 	tcs := []struct {
 		desc        string
 		resultFuncs []checkFunc
-		persisted   map[types.EpochID]string
+		persisted   map[types.EpochID][]string
+		cached      map[types.EpochID]string
 	}{
 		{
 			desc: "no recovery",
 		},
 		{
 			desc: "recovery required",
-			persisted: map[types.EpochID]string{
-				current - 2: update1,
-				current - 1: update2,
-				current:     update3,
-				current + 1: update4,
+			persisted: map[types.EpochID][]string{
+				current - 2: {bootstrap.SuffixBoostrap, update1},
+				current - 1: {bootstrap.SuffixActiveSet, update2},
+				current:     {bootstrap.SuffixBeacon, update3},
+				current + 1: {bootstrap.SuffixActiveSet, update4},
+			},
+			cached: map[types.EpochID]string{
+				current - 1: bootstrap.SuffixActiveSet,
+				current:     bootstrap.SuffixBeacon,
+				current + 1: bootstrap.SuffixActiveSet,
 			},
 			resultFuncs: []checkFunc{checkUpdate2, checkUpdate3, checkUpdate4},
 		},
@@ -148,11 +246,10 @@ func TestLoad(t *testing.T) {
 
 			cfg := bootstrap.DefaultConfig()
 			fs := afero.NewMemMapFs()
-			persistDir := filepath.Join(cfg.DataDir, bootstrap.DirName)
 			for epoch, update := range tc.persisted {
-				path := filepath.Join(persistDir, strconv.Itoa(int(epoch)), "filename")
+				path := filepath.Join(bootstrap.PersistFilename(cfg.DataDir, epoch, fmt.Sprintf("update-%s", update[0])))
 				require.NoError(t, fs.MkdirAll(path, 0o700))
-				require.NoError(t, afero.WriteFile(fs, path, []byte(update), 0o400))
+				require.NoError(t, afero.WriteFile(fs, path, []byte(update[1]), 0o400))
 			}
 			mc := bootstrap.NewMocklayerClock(gomock.NewController(t))
 			mc.EXPECT().CurrentLayer().Return(current.FirstLayer())
@@ -165,6 +262,9 @@ func TestLoad(t *testing.T) {
 			ch, err := updater.Subscribe()
 			require.NoError(t, err)
 			require.NoError(t, updater.Load(context.Background()))
+			for epoch, suffix := range tc.cached {
+				require.True(t, updater.Downloaded(epoch, suffix))
+			}
 			if len(tc.resultFuncs) > 0 {
 				require.Len(t, ch, len(tc.resultFuncs))
 				for _, fnc := range tc.resultFuncs {

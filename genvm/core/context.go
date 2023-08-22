@@ -84,11 +84,11 @@ func (c *Context) Spawn(args scale.Encodable) error {
 	buf := bytes.NewBuffer(nil)
 	instance, err := handler.New(args)
 	if err != nil {
-		return fmt.Errorf("%w: %s", ErrMalformed, err.Error())
+		return fmt.Errorf("%w: %w", ErrMalformed, err)
 	}
 	_, err = instance.EncodeScale(scale.NewEncoder(buf))
 	if err != nil {
-		return fmt.Errorf("%w: %s", ErrInternal, err)
+		return fmt.Errorf("%w: %w", ErrInternal, err)
 	}
 	account.State = buf.Bytes()
 	account.TemplateAddress = &c.Header.TemplateAddress
@@ -160,7 +160,7 @@ func (c *Context) Relay(remoteTemplate, address Address, call func(Host) error) 
 	buf := bytes.NewBuffer(nil)
 	encoder := scale.NewEncoder(buf)
 	if _, err := template.EncodeScale(encoder); err != nil {
-		return fmt.Errorf("%w: %s", ErrInternal, err.Error())
+		return fmt.Errorf("%w: %w", ErrInternal, err)
 	}
 	account.State = buf.Bytes()
 	c.change(account)
@@ -188,12 +188,12 @@ func (c *Context) Consume(gas uint64) (err error) {
 func (c *Context) Apply(updater AccountUpdater) error {
 	c.PrincipalAccount.NextNonce = c.Header.Nonce + 1
 	if err := updater.Update(c.PrincipalAccount); err != nil {
-		return fmt.Errorf("%w: %s", ErrInternal, err.Error())
+		return fmt.Errorf("%w: %w", ErrInternal, err)
 	}
 	for _, address := range c.touched {
 		account := c.changed[address]
 		if err := updater.Update(*account); err != nil {
-			return fmt.Errorf("%w: %s", ErrInternal, err.Error())
+			return fmt.Errorf("%w: %w", ErrInternal, err)
 		}
 	}
 	return nil
@@ -228,7 +228,7 @@ func (c *Context) load(address types.Address) (*Account, error) {
 	if !exist {
 		loaded, err := c.Loader.Get(address)
 		if err != nil {
-			return nil, fmt.Errorf("%w: %s", ErrInternal, err.Error())
+			return nil, fmt.Errorf("%w: %w", ErrInternal, err)
 		}
 		account = &loaded
 	}

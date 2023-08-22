@@ -51,6 +51,6 @@ func consumeEvents[T any](ctx context.Context, subscription event.Subscription) 
 
 func closeSubscription(accountSubscription event.Subscription) {
 	if err := accountSubscription.Close(); err != nil {
-		log.With().Panic("Failed to close account subscription: " + err.Error())
+		log.With().Panic("Failed to close account subscription", log.Err(err))
 	}
 }

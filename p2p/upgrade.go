@@ -10,6 +10,7 @@ import (
 	lp2plog "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
 
@@ -157,6 +158,11 @@ func (fh *Host) GetPeers() []Peer {
 // PeerCount returns number of connected peers.
 func (fh *Host) PeerCount() uint64 {
 	return uint64(len(fh.Host.Network().Peers()))
+}
+
+// PeerProtocols returns the protocols supported by peer.
+func (fh *Host) PeerProtocols(p Peer) ([]protocol.ID, error) {
+	return fh.Peerstore().GetProtocols(p)
 }
 
 func (fh *Host) Start() error {

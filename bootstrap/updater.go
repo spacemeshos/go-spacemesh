@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -46,7 +47,6 @@ const (
 	httpTimeout   = 5 * time.Second
 	notifyTimeout = time.Second
 	schemaFile    = "schema.json"
-	format        = "2006-01-02T15-04-05"
 )
 
 var (
@@ -210,13 +210,18 @@ func (u *Updater) Close() error {
 func (u *Updater) addUpdate(epoch types.EpochID, suffix string) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
+	switch suffix {
+	case SuffixActiveSet, SuffixBeacon, SuffixBoostrap:
+	default:
+		return
+	}
 	if _, ok := u.updates[epoch]; !ok {
 		u.updates[epoch] = map[string]struct{}{}
 	}
 	u.updates[epoch][suffix] = struct{}{}
 }
 
-func (u *Updater) downloaded(epoch types.EpochID, suffix string) bool {
+func (u *Updater) Downloaded(epoch types.EpochID, suffix string) bool {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	if _, ok := u.updates[epoch]; ok {
@@ -265,7 +270,7 @@ func makeUri(url string, epoch types.EpochID, suffix string) string {
 
 func (u *Updater) checkEpochUpdate(ctx context.Context, epoch types.EpochID, suffix string) (*VerifiedUpdate, bool, error) {
 	uri := makeUri(u.cfg.URL, epoch, suffix)
-	if u.downloaded(epoch, suffix) {
+	if u.Downloaded(epoch, suffix) {
 		return nil, true, nil
 	}
 	verified, data, err := u.get(ctx, uri)
@@ -415,6 +420,33 @@ func validateData(cfg Config, update *Update) (*VerifiedUpdate, error) {
 	return verified, nil
 }
 
+func renameLegacyFile(fs afero.Fs, path string) string {
+	var idx int
+	for _, suffix := range []string{SuffixBoostrap, SuffixBeacon, SuffixActiveSet} {
+		if strings.HasSuffix(path, suffix) {
+			return path
+		}
+	}
+	for _, suffix := range []string{SuffixBoostrap, SuffixBeacon, SuffixActiveSet} {
+		idx = strings.Index(path, fmt.Sprintf("-%s-", suffix))
+		if idx > -1 {
+			break
+		}
+	}
+	if idx < 0 {
+		return ""
+	}
+	newPath := path[:idx+suffixLen+1]
+	if exists, _ := afero.Exists(fs, newPath); exists {
+		_ = fs.Remove(path)
+		return ""
+	}
+	if err := fs.Rename(path, newPath); err != nil {
+		return ""
+	}
+	return newPath
+}
+
 func load(fs afero.Fs, cfg Config, current types.EpochID) ([]*VerifiedUpdate, error) {
 	dir := bootstrapDir(cfg.DataDir)
 	_, err := fs.Stat(dir)
@@ -433,7 +465,10 @@ func load(fs afero.Fs, cfg Config, current types.EpochID) ([]*VerifiedUpdate, er
 			return nil, fmt.Errorf("read epoch dir %v: %w", dir, err)
 		}
 		for _, f := range files {
-			persisted := filepath.Join(edir, f.Name())
+			persisted := renameLegacyFile(fs, filepath.Join(edir, f.Name()))
+			if persisted == "" {
+				continue
+			}
 			data, err := afero.ReadFile(fs, persisted)
 			if err != nil {
 				return nil, fmt.Errorf("read bootstrap file %v: %w", persisted, err)
@@ -505,5 +540,5 @@ func epochDir(dataDir string, epoch types.EpochID) string {
 }
 
 func PersistFilename(dataDir string, epoch types.EpochID, basename string) string {
-	return filepath.Join(epochDir(dataDir, epoch), fmt.Sprintf("%s-%v", basename, time.Now().UTC().Format(format)))
+	return filepath.Join(epochDir(dataDir, epoch), basename)
 }

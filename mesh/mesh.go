@@ -29,6 +29,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
+var ErrMissingBlock = errors.New("missing blocks")
+
 // Mesh is the logic layer above our mesh.DB database.
 type Mesh struct {
 	logger log.Log
@@ -292,7 +294,8 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, lid types.LayerID) error {
 		msh.pendingUpdates.min = types.MinLayer(msh.pendingUpdates.min, results[0].Layer)
 		msh.pendingUpdates.max = types.MaxLayer(msh.pendingUpdates.max, results[len(results)-1].Layer)
 	}
-	if next := msh.LatestLayerInState() + 1; next < msh.pendingUpdates.min {
+	next := msh.LatestLayerInState() + 1
+	if next < msh.pendingUpdates.min {
 		msh.pendingUpdates.min = next
 		pending = true
 	}
@@ -316,34 +319,56 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, lid types.LayerID) error {
 			})),
 		)
 	}
-	if missing := missingBlocks(results); len(missing) > 0 {
+	applicable, missing := filterMissing(results, next)
+	if len(missing) > 0 {
 		select {
 		case <-ctx.Done():
 		case msh.missingBlocks <- missing:
 		}
-		return fmt.Errorf("request missing blocks %v", missing)
+		if len(applicable) == 0 {
+			return fmt.Errorf("%w: request missing blocks %v", ErrMissingBlock, missing)
+		}
 	}
-	if err := msh.ensureStateConsistent(ctx, results); err != nil {
+
+	if err := msh.ensureStateConsistent(ctx, applicable); err != nil {
 		return err
 	}
-	if err := msh.applyResults(ctx, results); err != nil {
+	if err := msh.applyResults(ctx, applicable); err != nil {
 		return err
 	}
-	msh.pendingUpdates.min = 0
-	msh.pendingUpdates.max = 0
+	if len(missing) > 0 {
+		msh.pendingUpdates.min = applicable[len(applicable)-1].Layer
+		msh.pendingUpdates.max = types.MaxLayer(msh.pendingUpdates.min, msh.pendingUpdates.max)
+	} else {
+		msh.pendingUpdates.min = 0
+		msh.pendingUpdates.max = 0
+	}
 	return nil
 }
 
-func missingBlocks(results []result.Layer) []types.BlockID {
-	var response []types.BlockID
-	for _, layer := range results {
+func filterMissing(results []result.Layer, next types.LayerID) ([]result.Layer, []types.BlockID) {
+	var (
+		missing []types.BlockID
+		index   = -1
+	)
+	for i, layer := range results {
 		for _, block := range layer.Blocks {
 			if (block.Valid || block.Hare || block.Local) && !block.Data {
-				response = append(response, block.Header.ID)
+				missing = append(missing, block.Header.ID)
+				if index == -1 {
+					index = i
+				}
 			}
 		}
 	}
-	return response
+	if index >= 0 {
+		firstMissing := results[index].Layer
+		if firstMissing <= next {
+			return nil, missing
+		}
+		return results[:index], missing
+	}
+	return results, nil
 }
 
 func (msh *Mesh) applyResults(ctx context.Context, results []result.Layer) error {
@@ -407,6 +432,7 @@ func (msh *Mesh) applyResults(ctx context.Context, results []result.Layer) error
 
 		msh.logger.With().Debug("state persisted",
 			log.Context(ctx),
+			log.Stringer("layer", layer.Layer),
 			log.Stringer("applied", target),
 		)
 		if layer.Layer > msh.LatestLayerInState() {
