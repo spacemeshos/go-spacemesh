@@ -223,12 +223,10 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 			return nil, 0, fmt.Errorf("%w: poet round has already started at %s (now: %s)", ErrATXChallengeExpired, poetRoundStart, now)
 		}
 
-		submitCtx, cancel := context.WithDeadline(ctx, poetRoundStart)
-		defer cancel()
-
 		signature := nb.signer.Sign(signing.POET, challengeHash.Bytes())
 		prefix := bytes.Join([][]byte{nb.signer.Prefix(), {byte(signing.POET)}}, nil)
-
+		submitCtx, cancel := context.WithDeadline(ctx, poetRoundStart)
+		defer cancel()
 		poetRequests := nb.submitPoetChallenges(submitCtx, prefix, challengeHash.Bytes(), signature, nb.signer.NodeID())
 		if len(poetRequests) == 0 {
 			return nil, 0, &PoetSvcUnstableError{msg: "failed to submit challenge to any PoET", source: submitCtx.Err()}
@@ -267,7 +265,6 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 		if poetProofDeadline.Before(now) {
 			return nil, 0, fmt.Errorf("%w: deadline to publish ATX for pub epoch %d exceeded (deadline: %s, now: %s)", ErrATXChallengeExpired, challenge.PublishEpoch, publishDeadline, now)
 		}
-
 		publishCtx, cancel := context.WithDeadline(ctx, publishDeadline)
 		defer cancel()
 
