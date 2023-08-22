@@ -18,6 +18,7 @@ import (
 	"github.com/gofrs/flock"
 	grpc_logsettable "github.com/grpc-ecosystem/go-grpc-middleware/logging/settable"
 	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	grpctags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pyroscope-io/pyroscope/pkg/agent/profiler"
@@ -763,6 +764,11 @@ func (app *App) initServices(ctx context.Context) error {
 		app.addLogger(HareLogger, lg),
 	)
 
+	minerGoodAtxPct := 90
+	if app.Config.TestConfig.MinerGoodAtxPct > 0 {
+		// only set this for systest TestEquivocation.
+		minerGoodAtxPct = app.Config.TestConfig.MinerGoodAtxPct
+	}
 	proposalBuilder := miner.NewProposalBuilder(
 		ctx,
 		app.clock,
@@ -780,6 +786,7 @@ func (app *App) initServices(ctx context.Context) error {
 		miner.WithMinimalActiveSetWeight(app.Config.Tortoise.MinimalActiveSetWeight),
 		miner.WithHdist(app.Config.Tortoise.Hdist),
 		miner.WithNetworkDelay(app.Config.HARE.WakeupDelta),
+		miner.WithMinGoodAtxPct(minerGoodAtxPct),
 		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)),
 	)
 
@@ -1034,32 +1041,41 @@ func (app *App) startServices(ctx context.Context) error {
 }
 
 func (app *App) initService(ctx context.Context, svc grpcserver.Service) (grpcserver.ServiceAPI, error) {
-	logger := app.addLogger(GRPCLogger, app.log)
 	switch svc {
 	case grpcserver.Debug:
-		return grpcserver.NewDebugService(app.db, app.conState, app.host, app.hOracle, logger.WithName("Debug")), nil
+		return grpcserver.NewDebugService(app.db, app.conState, app.host, app.hOracle), nil
 	case grpcserver.GlobalState:
-		return grpcserver.NewGlobalStateService(app.mesh, app.conState, logger.WithName("GlobalState")), nil
+		return grpcserver.NewGlobalStateService(app.mesh, app.conState), nil
 	case grpcserver.Mesh:
-		return grpcserver.NewMeshService(app.cachedDB, app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.Genesis.GenesisID(), app.Config.LayerDuration, app.Config.LayerAvgSize, uint32(app.Config.TxsPerProposal), logger.WithName("Mesh")), nil
+		return grpcserver.NewMeshService(app.cachedDB, app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.Genesis.GenesisID(), app.Config.LayerDuration, app.Config.LayerAvgSize, uint32(app.Config.TxsPerProposal)), nil
 	case grpcserver.Node:
-		return grpcserver.NewNodeService(app.host, app.mesh, app.clock, app.syncer, cmd.Version, cmd.Commit, logger.WithName("Node")), nil
+		return grpcserver.NewNodeService(app.host, app.mesh, app.clock, app.syncer, cmd.Version, cmd.Commit), nil
 	case grpcserver.Admin:
-		return grpcserver.NewAdminService(app.db, app.Config.DataDir(), logger.WithName("Admin")), nil
+		return grpcserver.NewAdminService(app.db, app.Config.DataDir(), app.host), nil
 	case grpcserver.Smesher:
-		return grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, app.Config.API.SmesherStreamInterval, app.Config.SMESHING.Opts, logger.WithName("Smesher")), nil
+		return grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, app.Config.API.SmesherStreamInterval, app.Config.SMESHING.Opts), nil
 	case grpcserver.Transaction:
-		return grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer, app.txHandler, logger.WithName("Transaction")), nil
+		return grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer, app.txHandler), nil
 	case grpcserver.Activation:
-		return grpcserver.NewActivationService(app.cachedDB, types.ATXID(app.Config.Genesis.GoldenATX()), logger.WithName("Activation")), nil
+		return grpcserver.NewActivationService(app.cachedDB, types.ATXID(app.Config.Genesis.GoldenATX())), nil
 	}
 	return nil, fmt.Errorf("unknown service %s", svc)
 }
 
+func unaryGrpcLogStart(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+	ctxzap.Info(ctx, "started unary call")
+	return handler(ctx, req)
+}
+
+func streamingGrpcLogStart(srv any, stream grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	ctxzap.Info(stream.Context(), "started streaming call")
+	return handler(srv, stream)
+}
+
 func (app *App) newGrpc(logger log.Log, endpoint string) *grpcserver.Server {
 	return grpcserver.New(endpoint, logger,
-		grpc.ChainStreamInterceptor(grpctags.StreamServerInterceptor(), grpczap.StreamServerInterceptor(logger.Zap())),
-		grpc.ChainUnaryInterceptor(grpctags.UnaryServerInterceptor(), grpczap.UnaryServerInterceptor(logger.Zap())),
+		grpc.ChainStreamInterceptor(grpctags.StreamServerInterceptor(), grpczap.StreamServerInterceptor(logger.Zap()), streamingGrpcLogStart),
+		grpc.ChainUnaryInterceptor(grpctags.UnaryServerInterceptor(), grpczap.UnaryServerInterceptor(logger.Zap()), unaryGrpcLogStart),
 		grpc.MaxSendMsgSize(app.Config.API.GrpcSendMsgSize),
 		grpc.MaxRecvMsgSize(app.Config.API.GrpcRecvMsgSize),
 	)
@@ -1086,6 +1102,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		logger.Info("registering public service %s", svc)
 		gsvc.RegisterService(app.grpcPublicService)
 		public = append(public, gsvc)
 		unique[svc] = struct{}{}
@@ -1098,6 +1115,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		logger.Info("registering private service %s", svc)
 		gsvc.RegisterService(app.grpcPrivateService)
 		unique[svc] = struct{}{}
 	}
@@ -1109,10 +1127,14 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		app.jsonAPIService.StartService(ctx, public...)
 	}
 	if app.grpcPublicService != nil {
-		app.grpcPublicService.Start()
+		if err := app.grpcPublicService.Start(); err != nil {
+			return err
+		}
 	}
 	if app.grpcPrivateService != nil {
-		app.grpcPrivateService.Start()
+		if err := app.grpcPrivateService.Start(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -1279,7 +1301,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log, dbPath string) error {
 	if app.Config.CollectMetrics {
 		app.dbMetrics = dbmetrics.NewDBMetricsCollector(ctx, sqlDB, app.addLogger(StateDbLogger, lg), 5*time.Minute)
 	}
-	app.cachedDB = datastore.NewCachedDB(sqlDB, app.addLogger(CachedDBLogger, lg))
+	app.cachedDB = datastore.NewCachedDB(sqlDB, app.addLogger(CachedDBLogger, lg), datastore.WithConfig(app.Config.Cache))
 	return nil
 }
 

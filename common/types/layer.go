@@ -238,7 +238,7 @@ func NewLayer(layerIndex LayerID) *Layer {
 	}
 }
 
-// MinLayer returs minimal nonzero layer.
+// MinLayer returns minimal nonzero layer.
 func MinLayer(i, j LayerID) LayerID {
 	if i == 0 {
 		return j
@@ -250,7 +250,7 @@ func MinLayer(i, j LayerID) LayerID {
 	return j
 }
 
-// MaxLayer returs max layer.
+// MaxLayer returns max layer.
 func MaxLayer(i, j LayerID) LayerID {
 	if i > j {
 		return i

@@ -491,18 +491,11 @@ func launchServer(tb testing.TB, cfg Config, services ...ServiceAPI) func() {
 	}
 
 	// start gRPC and json servers
-	grpcStarted := grpcService.Start()
-	jsonStarted := jsonService.StartService(context.Background(), services...)
-
-	timer := time.NewTimer(3 * time.Second)
-	defer timer.Stop()
-
-	// wait for server to be ready (critical on CI)
-	for _, ch := range []<-chan struct{}{grpcStarted, jsonStarted} {
-		select {
-		case <-ch:
-		case <-timer.C:
-		}
+	err := grpcService.Start()
+	require.NoError(tb, err)
+	if len(services) > 0 {
+		err = jsonService.StartService(context.Background(), services...)
+		require.NoError(tb, err)
 	}
 
 	return func() {
@@ -562,7 +555,7 @@ func TestNodeService(t *testing.T) {
 
 	version := "v0.0.0"
 	build := "cafebabe"
-	grpcService := NewNodeService(peerCounter, meshAPIMock, genTime, syncer, version, build, logtest.New(t).WithName("grpc.Node"))
+	grpcService := NewNodeService(peerCounter, meshAPIMock, genTime, syncer, version, build)
 	t.Cleanup(launchServer(t, cfg, grpcService))
 
 	conn := dialGrpc(ctx, t, cfg.PublicListener)
@@ -649,7 +642,7 @@ func TestNodeService(t *testing.T) {
 }
 
 func TestGlobalStateService(t *testing.T) {
-	svc := NewGlobalStateService(meshAPIMock, conStateAPI, logtest.New(t).WithName("grpc.GlobalState"))
+	svc := NewGlobalStateService(meshAPIMock, conStateAPI)
 	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -923,7 +916,7 @@ func TestSmesherService(t *testing.T) {
 	postProvider.EXPECT().Status().Return(&activation.PostSetupStatus{}).AnyTimes()
 	postProvider.EXPECT().Providers().Return(nil, nil).AnyTimes()
 	smeshingAPI := &SmeshingAPIMock{}
-	svc := NewSmesherService(postProvider, smeshingAPI, 10*time.Millisecond, activation.DefaultPostSetupOpts(), logtest.New(t).WithName("grpc.Smesher"))
+	svc := NewSmesherService(postProvider, smeshingAPI, 10*time.Millisecond, activation.DefaultPostSetupOpts())
 	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -1050,7 +1043,7 @@ func TestMeshService(t *testing.T) {
 	genesis := time.Unix(genTimeUnix, 0)
 	genTime.EXPECT().GenesisTime().Return(genesis)
 	genTime.EXPECT().CurrentLayer().Return(layerCurrent).AnyTimes()
-	grpcService := NewMeshService(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal, logtest.New(t).WithName("grpc.Mesh"))
+	grpcService := NewMeshService(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
 	t.Cleanup(launchServer(t, cfg, grpcService))
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -1560,7 +1553,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	txHandler := NewMocktxValidator(ctrl)
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(nil)
 
-	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler, logtest.New(t).WithName("grpc.Transactions"))
+	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler)
 	t.Cleanup(launchServer(t, cfg, grpcService))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -1598,7 +1591,7 @@ func TestTransactionServiceSubmitInvalidTx(t *testing.T) {
 	txHandler := NewMocktxValidator(ctrl)
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(errors.New("failed validation"))
 
-	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler, logtest.New(t).WithName("grpc.Transactions"))
+	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler)
 	t.Cleanup(launchServer(t, cfg, grpcService))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -1630,7 +1623,7 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 	txHandler := NewMocktxValidator(ctrl)
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(nil).Times(numTxs)
 
-	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler, logtest.New(t).WithName("grpc.Transactions"))
+	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler)
 	t.Cleanup(launchServer(t, cfg, grpcService))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -1657,7 +1650,7 @@ func TestTransactionService(t *testing.T) {
 	txHandler := NewMocktxValidator(ctrl)
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
-	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler, logtest.New(t).WithName("grpc.Transactions"))
+	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler)
 	t.Cleanup(launchServer(t, cfg, grpcService))
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -1996,7 +1989,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
-	grpcService := NewMeshService(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal, logtest.New(t).WithName("grpc.Mesh"))
+	grpcService := NewMeshService(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
 	t.Cleanup(launchServer(t, cfg, grpcService))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -2051,7 +2044,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 	events.InitializeReporter()
 	t.Cleanup(events.CloseEventReporter)
 
-	svc := NewGlobalStateService(meshAPIMock, conStateAPI, logtest.New(t).WithName("grpc.GlobalState"))
+	svc := NewGlobalStateService(meshAPIMock, conStateAPI)
 	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -2109,7 +2102,7 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 	events.InitializeReporter()
 	t.Cleanup(events.CloseEventReporter)
 
-	svc := NewGlobalStateService(meshAPIMock, conStateAPI, logtest.New(t).WithName("grpc.GlobalState"))
+	svc := NewGlobalStateService(meshAPIMock, conStateAPI)
 	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -2170,7 +2163,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
-	grpcService := NewMeshService(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal, logtest.New(t).WithName("grpc.Mesh"))
+	grpcService := NewMeshService(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
 	t.Cleanup(launchServer(t, cfg, grpcService))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -2311,8 +2304,8 @@ func TestMultiService(t *testing.T) {
 	genTime := NewMockgenesisTimeAPI(ctrl)
 	genesis := time.Unix(genTimeUnix, 0)
 	genTime.EXPECT().GenesisTime().Return(genesis)
-	svc1 := NewNodeService(peerCounter, meshAPIMock, genTime, syncer, "v0.0.0", "cafebabe", logtest.New(t).WithName("grpc.Node"))
-	svc2 := NewMeshService(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal, logtest.New(t).WithName("grpc.Mesh"))
+	svc1 := NewNodeService(peerCounter, meshAPIMock, genTime, syncer, "v0.0.0", "cafebabe")
+	svc2 := NewMeshService(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
 	shutDown := launchServer(t, cfg, svc1, svc2)
 	t.Cleanup(shutDown)
 
@@ -2366,8 +2359,8 @@ func TestJsonApi(t *testing.T) {
 	genTime := NewMockgenesisTimeAPI(ctrl)
 	genesis := time.Unix(genTimeUnix, 0)
 	genTime.EXPECT().GenesisTime().Return(genesis)
-	svc1 := NewNodeService(peerCounter, meshAPIMock, genTime, syncer, "v0.0.0", "cafebabe", logtest.New(t).WithName("grpc.Node"))
-	svc2 := NewMeshService(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal, logtest.New(t).WithName("grpc.Mesh"))
+	svc1 := NewNodeService(peerCounter, meshAPIMock, genTime, syncer, "v0.0.0", "cafebabe")
+	svc2 := NewMeshService(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
 	t.Cleanup(launchServer(t, cfg, svc1, svc2))
 	time.Sleep(time.Second)
 
@@ -2392,7 +2385,7 @@ func TestDebugService(t *testing.T) {
 	identity := NewMocknetworkIdentity(ctrl)
 	mOracle := NewMockoracle(ctrl)
 	db := sql.InMemory()
-	svc := NewDebugService(db, conStateAPI, identity, mOracle, logtest.New(t).WithName("grpc.Debug"))
+	svc := NewDebugService(db, conStateAPI, identity, mOracle)
 	t.Cleanup(launchServer(t, cfg, svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -2494,8 +2487,8 @@ func TestEventsReceived(t *testing.T) {
 	events.InitializeReporter()
 	t.Cleanup(events.CloseEventReporter)
 
-	txService := NewTransactionService(sql.InMemory(), nil, meshAPIMock, conStateAPI, nil, nil, logtest.New(t).WithName("grpc.Transactions"))
-	gsService := NewGlobalStateService(meshAPIMock, conStateAPI, logtest.New(t).WithName("grpc.GlobalState"))
+	txService := NewTransactionService(sql.InMemory(), nil, meshAPIMock, conStateAPI, nil, nil)
+	gsService := NewGlobalStateService(meshAPIMock, conStateAPI)
 	t.Cleanup(launchServer(t, cfg, txService, gsService))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -2573,7 +2566,7 @@ func TestTransactionsRewards(t *testing.T) {
 	events.InitializeReporter()
 	t.Cleanup(events.CloseEventReporter)
 
-	t.Cleanup(launchServer(t, cfg, NewGlobalStateService(meshAPIMock, conStateAPI, logtest.New(t).WithName("grpc.GlobalState"))))
+	t.Cleanup(launchServer(t, cfg, NewGlobalStateService(meshAPIMock, conStateAPI)))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	t.Cleanup(cancel)
@@ -2639,7 +2632,7 @@ func TestVMAccountUpdates(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	svm := vm.New(db, vm.WithLogger(logtest.New(t)))
-	t.Cleanup(launchServer(t, cfg, NewGlobalStateService(nil, txs.NewConservativeState(svm, db), logtest.New(t).WithName("grpc.GlobalState"))))
+	t.Cleanup(launchServer(t, cfg, NewGlobalStateService(nil, txs.NewConservativeState(svm, db))))
 
 	keys := make([]*signing.EdSigner, 10)
 	accounts := make([]types.Account, len(keys))
@@ -2735,7 +2728,7 @@ func TestMeshService_EpochStream(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
 	db := sql.InMemory()
-	srv := NewMeshService(datastore.NewCachedDB(db, logtest.New(t)), meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal, logtest.New(t).WithName("grpc.Mesh"))
+	srv := NewMeshService(datastore.NewCachedDB(db, logtest.New(t)), meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
 	t.Cleanup(launchServer(t, cfg, srv))
 
 	epoch := types.EpochID(3)
