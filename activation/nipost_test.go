@@ -847,13 +847,12 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 
 	currLayer := types.EpochID(10).FirstLayer()
 	genesis := time.Now().Add(-time.Duration(currLayer) * layerDuration)
-	challenge := types.NIPostChallenge{PublishEpoch: types.EpochID(10)}
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
 	// Act & Verify
-	t.Run("not requests poet round started", func(t *testing.T) {
+	t.Run("no requests, poet round started", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		poetDb := NewMockpoetDbAPI(ctrl)
 		mclock := NewMocklayerClock(ctrl)
@@ -878,6 +877,8 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 			withPoetClients([]PoetProvingServiceClient{poetProver}),
 		)
 		require.NoError(t, err)
+
+		challenge := types.NIPostChallenge{PublishEpoch: currLayer.GetEpoch()}
 		nipost, _, err := nb.BuildNIPost(context.Background(), &challenge)
 		require.ErrorIs(t, err, ErrATXChallengeExpired)
 		require.ErrorContains(t, err, "poet round has already started")
@@ -909,6 +910,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 			withPoetClients([]PoetProvingServiceClient{poetProver}),
 		)
 		require.NoError(t, err)
+		challenge := types.NIPostChallenge{PublishEpoch: currLayer.GetEpoch() - 1}
 		state := types.NIPostBuilderState{
 			Challenge:    challenge.Hash(),
 			PoetRequests: []types.PoetRequest{{}},
