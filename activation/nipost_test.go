@@ -847,7 +847,6 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 		require.ErrorContains(t, err, "poet proof for pub epoch")
 		require.Nil(t, nipost)
 	})
-
 	t.Run("too late for proof generation", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		poetDb := NewMockpoetDbAPI(ctrl)
@@ -878,7 +877,8 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 		state := types.NIPostBuilderState{
 			Challenge:    challenge.Hash(),
 			PoetRequests: []types.PoetRequest{{}},
-			PoetProofRef: [32]byte{},
+			PoetProofRef: [32]byte{1, 2, 3},
+			NIPost:       &types.NIPost{},
 		}
 		require.NoError(t, saveBuilderState(dir, &state))
 
