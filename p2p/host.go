@@ -44,6 +44,7 @@ func DefaultConfig() Config {
 		InboundFraction:    0.8,
 		OutboundFraction:   1.1,
 		RelayServer:        RelayServer{TTL: 20 * time.Minute, Reservations: 512},
+		IPLimit:            3,
 		IP4Blocklist: []string{
 			// localhost
 			"127.0.0.0/8",
@@ -105,6 +106,7 @@ type Config struct {
 	RelayServer              RelayServer `mapstructure:"relay-server"`
 	IP4Blocklist             []string    `mapstructure:"ip4-blocklist"`
 	IP6Blocklist             []string    `mapstructure:"ip6-blocklist"`
+	IPLimit                  int         `mapstructure:"ip-limit"`
 }
 
 type RelayServer struct {

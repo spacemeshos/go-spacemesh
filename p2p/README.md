@@ -89,3 +89,16 @@ Private will connect only to the specified public node:
 tcp   ESTAB      0      0              127.0.0.1:7513        127.0.0.1:6000  users:(("go-spacemesh",pid=39165,fd=11)) 
 tcp   ESTAB      0      0              127.0.0.1:6000        127.0.0.1:7513  users:(("go-spacemesh",pid=39202,fd=47))
 ```
+
+#### Preventing many connections from the same ip
+
+By default node will limit connections from the same ip address to 3.
+To change that adjust `ip-limit` option.
+
+```json
+{
+    "p2p": {
+        "ip-limit": 10
+    }
+}
+```

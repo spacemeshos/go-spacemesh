@@ -3,6 +3,7 @@ package p2p
 import (
 	"fmt"
 	"net"
+	"sync"
 
 	"github.com/libp2p/go-libp2p/core/connmgr"
 	"github.com/libp2p/go-libp2p/core/control"
@@ -18,9 +19,11 @@ func newGater(cfg Config) (*gater, error) {
 	// leaves a small room for outbound connections in order to
 	// reduce risk of network isolation
 	g := &gater{
-		inbound:  int(float64(cfg.HighPeers) * cfg.InboundFraction),
-		outbound: int(float64(cfg.HighPeers) * cfg.OutboundFraction),
-		direct:   map[peer.ID]struct{}{},
+		inbound:    int(float64(cfg.HighPeers) * cfg.InboundFraction),
+		outbound:   int(float64(cfg.HighPeers) * cfg.OutboundFraction),
+		direct:     map[peer.ID]struct{}{},
+		iplimit:    cfg.IPLimit,
+		ipsCounter: map[string]int{},
 	}
 	direct, err := parseIntoAddr(cfg.Direct)
 	if err != nil {
@@ -48,10 +51,46 @@ type gater struct {
 	direct            map[peer.ID]struct{}
 	ip4blocklist      []*net.IPNet
 	ip6blocklist      []*net.IPNet
+
+	iplimit    int
+	mu         sync.Mutex
+	ipsCounter map[string]int
 }
 
 func (g *gater) updateHost(h host.Host) {
 	g.h = h
+	notifiee := &network.NotifyBundle{
+		DisconnectedF: func(_ network.Network, c network.Conn) {
+			g.OnDisconnected(c.RemoteMultiaddr())
+		},
+		ConnectedF: func(_ network.Network, c network.Conn) {
+			g.OnConnected(c.RemoteMultiaddr())
+		},
+	}
+	g.h.Network().Notify(notifiee)
+}
+
+func (g *gater) OnDisconnected(remote multiaddr.Multiaddr) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if ip := parseIP(remote); ip != nil {
+		n, exists := g.ipsCounter[string(ip)]
+		if !exists {
+			return
+		}
+		g.ipsCounter[string(ip)]--
+		if n == 1 {
+			delete(g.ipsCounter, string(ip))
+		}
+	}
+}
+
+func (g *gater) OnConnected(remote multiaddr.Multiaddr) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if ip := parseIP(remote); ip != nil {
+		g.ipsCounter[string(ip)]++
+	}
 }
 
 func (g *gater) InterceptPeerDial(pid peer.ID) bool {
@@ -69,7 +108,16 @@ func (g *gater) InterceptAddrDial(pid peer.ID, m multiaddr.Multiaddr) bool {
 }
 
 func (g *gater) InterceptAccept(n network.ConnMultiaddrs) bool {
-	return len(g.h.Network().Peers()) <= g.inbound
+	if len(g.h.Network().Peers()) > g.inbound {
+		return false
+	}
+	if ip := parseIP(n.RemoteMultiaddr()); ip != nil {
+		g.mu.Lock()
+		n := g.ipsCounter[string(ip)]
+		g.mu.Unlock()
+		return g.iplimit > n+1
+	}
+	return true
 }
 
 func (*gater) InterceptSecured(_ network.Direction, _ peer.ID, _ network.ConnMultiaddrs) bool {
@@ -94,6 +142,21 @@ func (g *gater) allowed(m multiaddr.Multiaddr) bool {
 		return true
 	})
 	return allow
+}
+
+func parseIP(m multiaddr.Multiaddr) (ip net.IP) {
+	multiaddr.ForEach(m, func(c multiaddr.Component) bool {
+		switch c.Protocol().Code {
+		case multiaddr.P_IP4:
+			ip = c.RawValue()
+			return false
+		case multiaddr.P_IP6:
+			ip = c.RawValue()
+			return false
+		}
+		return true
+	})
+	return ip
 }
 
 func parseCIDR(cidrs []string) ([]*net.IPNet, error) {
