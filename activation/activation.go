@@ -577,6 +577,8 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 
 	if b.pendingATX == nil {
 		var err error
+		ctx, cancel := context.WithDeadline(ctx, b.layerClock.LayerToTime((challenge.TargetEpoch() + 1).FirstLayer()))
+		defer cancel()
 		b.pendingATX, err = b.createAtx(ctx, challenge)
 		if err != nil {
 			return fmt.Errorf("create ATX: %w", err)
