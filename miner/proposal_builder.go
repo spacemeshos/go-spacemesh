@@ -67,6 +67,9 @@ type config struct {
 	minActiveSetWeight uint64
 	nodeID             types.NodeID
 	networkDelay       time.Duration
+
+	// used to determine whether a node has enough information on the active set this epoch
+	goodAtxPct int
 }
 
 type defaultFetcher struct {
@@ -127,6 +130,12 @@ func WithHdist(dist uint32) Opt {
 func WithNetworkDelay(delay time.Duration) Opt {
 	return func(pb *ProposalBuilder) {
 		pb.cfg.networkDelay = delay
+	}
+}
+
+func WithMinGoodAtxPct(pct int) Opt {
+	return func(pb *ProposalBuilder) {
+		pb.cfg.goodAtxPct = pct
 	}
 }
 

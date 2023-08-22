@@ -337,6 +337,21 @@ func (mr *MockatxProviderMockRecorder) GetFullAtx(id interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFullAtx", reflect.TypeOf((*MockatxProvider)(nil).GetFullAtx), id)
 }
 
+// GetMalfeasanceProof mocks base method.
+func (m *MockatxProvider) GetMalfeasanceProof(id types.NodeID) (*types.MalfeasanceProof, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMalfeasanceProof", id)
+	ret0, _ := ret[0].(*types.MalfeasanceProof)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetMalfeasanceProof indicates an expected call of GetMalfeasanceProof.
+func (mr *MockatxProviderMockRecorder) GetMalfeasanceProof(id interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMalfeasanceProof", reflect.TypeOf((*MockatxProvider)(nil).GetMalfeasanceProof), id)
+}
+
 // MaxHeightAtx mocks base method.
 func (m *MockatxProvider) MaxHeightAtx() (types.ATXID, error) {
 	m.ctrl.T.Helper()
@@ -468,6 +483,57 @@ func (m *MockpeerCounter) PeerCount() uint64 {
 func (mr *MockpeerCounterMockRecorder) PeerCount() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PeerCount", reflect.TypeOf((*MockpeerCounter)(nil).PeerCount))
+}
+
+// Mockpeers is a mock of peers interface.
+type Mockpeers struct {
+	ctrl     *gomock.Controller
+	recorder *MockpeersMockRecorder
+}
+
+// MockpeersMockRecorder is the mock recorder for Mockpeers.
+type MockpeersMockRecorder struct {
+	mock *Mockpeers
+}
+
+// NewMockpeers creates a new mock instance.
+func NewMockpeers(ctrl *gomock.Controller) *Mockpeers {
+	mock := &Mockpeers{ctrl: ctrl}
+	mock.recorder = &MockpeersMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *Mockpeers) EXPECT() *MockpeersMockRecorder {
+	return m.recorder
+}
+
+// ConnectedPeerInfo mocks base method.
+func (m *Mockpeers) ConnectedPeerInfo(arg0 p2p.Peer) *p2p.PeerInfo {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ConnectedPeerInfo", arg0)
+	ret0, _ := ret[0].(*p2p.PeerInfo)
+	return ret0
+}
+
+// ConnectedPeerInfo indicates an expected call of ConnectedPeerInfo.
+func (mr *MockpeersMockRecorder) ConnectedPeerInfo(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConnectedPeerInfo", reflect.TypeOf((*Mockpeers)(nil).ConnectedPeerInfo), arg0)
+}
+
+// GetPeers mocks base method.
+func (m *Mockpeers) GetPeers() []p2p.Peer {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPeers")
+	ret0, _ := ret[0].([]p2p.Peer)
+	return ret0
+}
+
+// GetPeers indicates an expected call of GetPeers.
+func (mr *MockpeersMockRecorder) GetPeers() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPeers", reflect.TypeOf((*Mockpeers)(nil).GetPeers))
 }
 
 // MockgenesisTimeAPI is a mock of genesisTimeAPI interface.

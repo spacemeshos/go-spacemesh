@@ -452,7 +452,10 @@ func (t *Tortoise) results(from, to types.LayerID) ([]result.Layer, error) {
 	if from <= t.trtl.evicted {
 		return nil, fmt.Errorf("requested layer %d is before evicted %d", from, t.trtl.evicted)
 	}
-	rst := make([]result.Layer, 0, to-from)
+	if from > to {
+		return nil, fmt.Errorf("requested range (%d - %d) is invalid", from, to)
+	}
+	rst := make([]result.Layer, 0, to-from+1)
 	for lid := from; lid <= to; lid++ {
 		layer := t.trtl.layer(lid)
 		blocks := make([]result.Block, 0, len(layer.blocks))

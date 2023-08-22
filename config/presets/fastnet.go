@@ -22,7 +22,9 @@ func fastnet() config.Config {
 	types.SetNetworkHRP(conf.NetworkHRP) // set to generate coinbase
 	conf.BaseConfig.OptFilterThreshold = 90
 
-	conf.HARE.Disable = 1 // hare won't run starting at this layer
+	conf.BaseConfig.TestConfig.MinerGoodAtxPct = 50
+
+	conf.HARE.Disable = 1 // non-zero low layer will prevent hare1 from running
 	conf.HARE.N = 800
 	conf.HARE.ExpectedLeaders = 10
 	conf.HARE.LimitConcurrent = 5
@@ -64,7 +66,7 @@ func fastnet() config.Config {
 
 	conf.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte("1")).String()
 	conf.SMESHING.Start = false
-	conf.SMESHING.Opts.ProviderID = int(initialization.CPUProviderID())
+	conf.SMESHING.Opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
 	conf.SMESHING.Opts.NumUnits = 2
 	conf.SMESHING.Opts.Throttle = true
 	// Override proof of work flags to use light mode (less memory intensive)

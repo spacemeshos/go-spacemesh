@@ -378,6 +378,7 @@ func TestBeaconNotSynced_ReleaseMemory(t *testing.T) {
 	tpd.mSync.EXPECT().IsSynced(gomock.Any()).Return(false).AnyTimes()
 	start := types.EpochID(2)
 	end := start + numEpochsToKeep + 10
+	tpd.mClock.EXPECT().CurrentLayer().Return(start.FirstLayer()).AnyTimes()
 	for eid := start; eid <= end; eid++ {
 		b := types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, start.FirstLayer())
 		b.EligibilityProofs = []types.VotingEligibility{{J: 1}}
@@ -466,15 +467,19 @@ func TestBeaconWithMetrics(t *testing.T) {
 func TestBeacon_BeaconsWithDatabase(t *testing.T) {
 	t.Parallel()
 
+	mclock := NewMocklayerClock(gomock.NewController(t))
 	pd := &ProtocolDriver{
 		logger:  logtest.New(t).WithName("Beacon"),
 		beacons: make(map[types.EpochID]types.Beacon),
 		cdb:     datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
+		clock:   mclock,
 	}
 	epoch3 := types.EpochID(3)
 	beacon2 := types.RandomBeacon()
 	epoch5 := types.EpochID(5)
 	beacon4 := types.RandomBeacon()
+
+	mclock.EXPECT().CurrentLayer().Return(epoch5.FirstLayer()).AnyTimes()
 	err := pd.setBeacon(epoch3, beacon2)
 	require.NoError(t, err)
 	err = pd.setBeacon(epoch5, beacon4)
@@ -514,13 +519,16 @@ func TestBeacon_BeaconsWithDatabase(t *testing.T) {
 func TestBeacon_BeaconsWithDatabaseFailure(t *testing.T) {
 	t.Parallel()
 
+	mclock := NewMocklayerClock(gomock.NewController(t))
 	pd := &ProtocolDriver{
 		logger:  logtest.New(t).WithName("Beacon"),
 		beacons: make(map[types.EpochID]types.Beacon),
 		cdb:     datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
+		clock:   mclock,
 	}
 	epoch := types.EpochID(3)
 
+	mclock.EXPECT().CurrentLayer().Return(epoch.FirstLayer()).AnyTimes()
 	got, errGet := pd.getPersistedBeacon(epoch)
 	require.Equal(t, types.EmptyBeacon, got)
 	require.ErrorIs(t, errGet, sql.ErrNotFound)
@@ -529,14 +537,17 @@ func TestBeacon_BeaconsWithDatabaseFailure(t *testing.T) {
 func TestBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
 	t.Parallel()
 
+	mclock := NewMocklayerClock(gomock.NewController(t))
 	pd := &ProtocolDriver{
 		logger:         logtest.New(t).WithName("Beacon"),
 		cdb:            datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
 		beacons:        make(map[types.EpochID]types.Beacon),
 		ballotsBeacons: make(map[types.EpochID]map[types.Beacon]*beaconWeight),
+		clock:          mclock,
 	}
 
 	epoch := types.EpochID(5)
+	mclock.EXPECT().CurrentLayer().Return(epoch.FirstLayer()).AnyTimes()
 	for i := 0; i < numEpochsToKeep; i++ {
 		e := epoch + types.EpochID(i)
 		err := pd.setBeacon(e, types.RandomBeacon())
@@ -630,16 +641,19 @@ func TestBeacon_ReportBeaconFromBallot(t *testing.T) {
 				require.Greater(t, maxWeight.Float(), 0.0)
 			}
 
+			mclock := NewMocklayerClock(gomock.NewController(t))
 			pd := &ProtocolDriver{
 				logger:         logtest.New(t).WithName("Beacon"),
 				config:         UnitTestConfig(),
 				cdb:            datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
 				beacons:        make(map[types.EpochID]types.Beacon),
 				ballotsBeacons: make(map[types.EpochID]map[types.Beacon]*beaconWeight),
+				clock:          mclock,
 			}
 			pd.config.BeaconSyncWeightUnits = 4
 
 			epoch := types.EpochID(3)
+			mclock.EXPECT().CurrentLayer().Return(epoch.FirstLayer()).AnyTimes()
 			for beacon, weights := range tc.beaconBallots {
 				for _, w := range weights {
 					b := types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, epoch.FirstLayer())
@@ -657,16 +671,19 @@ func TestBeacon_ReportBeaconFromBallot(t *testing.T) {
 func TestBeacon_ReportBeaconFromBallot_SameBallot(t *testing.T) {
 	t.Parallel()
 
+	mclock := NewMocklayerClock(gomock.NewController(t))
 	pd := &ProtocolDriver{
 		logger:         logtest.New(t).WithName("Beacon"),
 		config:         UnitTestConfig(),
 		cdb:            datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
 		beacons:        make(map[types.EpochID]types.Beacon),
 		ballotsBeacons: make(map[types.EpochID]map[types.Beacon]*beaconWeight),
+		clock:          mclock,
 	}
 	pd.config.BeaconSyncWeightUnits = 2
 
 	epoch := types.EpochID(3)
+	mclock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
 	beacon1 := types.RandomBeacon()
 	beacon2 := types.RandomBeacon()
 
@@ -847,6 +864,7 @@ func TestBeacon_setBeacon(t *testing.T) {
 
 	tpd := setUpProtocolDriver(t)
 	epoch := types.EpochID(5)
+	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer()).AnyTimes()
 	beacon := types.RandomBeacon()
 	require.NoError(t, tpd.setBeacon(epoch, beacon))
 

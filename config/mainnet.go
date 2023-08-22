@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
@@ -45,6 +46,8 @@ func MainnetConfig() Config {
 			NetworkHRP:          "sm",
 
 			LayerDuration:  5 * time.Minute,
+			LayerAvgSize:   50,
+			LegacyLayer:    8180,
 			LayersPerEpoch: 4032,
 
 			TxsPerProposal: 700,       // https://github.com/spacemeshos/go-spacemesh/issues/4559
@@ -67,7 +70,7 @@ func MainnetConfig() Config {
 			Accounts:    MainnetAccounts(),
 		},
 		Tortoise: tortoise.Config{
-			Hdist:                    200,
+			Hdist:                    10,
 			Zdist:                    2,
 			WindowSize:               10000,
 			MaxExceptions:            1000,
@@ -128,7 +131,14 @@ func MainnetConfig() Config {
 		SMESHING: smeshing,
 		FETCH:    fetch.DefaultConfig(),
 		LOGGING:  defaultLoggingConfig(),
-		Sync:     syncer.DefaultConfig(),
+		Sync: syncer.Config{
+			Interval:         time.Minute,
+			EpochEndFraction: 0.8,
+			MaxStaleDuration: time.Hour,
+			UseNewProtocol:   true,
+			Standalone:       false,
+		},
 		Recovery: checkpoint.DefaultConfig(),
+		Cache:    datastore.DefaultConfig(),
 	}
 }

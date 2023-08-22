@@ -74,11 +74,17 @@ $(BINDIR_POSTRS_SETUP_LIBS): $(PROJ_DIR)$(POSTRS_SETUP_ZIP)
 	unzip -o -j $(PROJ_DIR)$(POSTRS_SETUP_ZIP) -d $(dir $@) $(notdir $@)
 	touch $@
 
+CURL_OPTIONS = --retry 10 --retry-max-time 120
+CURL_VERSION = $(shell curl --version 2>/dev/null | head -n 1 | cut -d' ' -f2)
+ifeq ($(shell expr "$(CURL_VERSION)" \>= 7.71.0),1)
+	CURL_OPTIONS := $(CURL_OPTIONS) --retry-all-errors
+endif
+
 $(PROJ_DIR)$(POSTRS_SETUP_ZIP):
-	curl -sSL --retry 5 --retry-max-time 60 $(POSTRS_SETUP_URL_ZIP) -o $(PROJ_DIR)$(POSTRS_SETUP_ZIP)
+	curl -sSL $(CURL_OPTIONS) $(POSTRS_SETUP_URL_ZIP) -o $(PROJ_DIR)$(POSTRS_SETUP_ZIP)
 
 $(BIN_DIR)$(POSTRS_PROFILER_BIN):
-	curl -sSL --retry 5 --retry-max-time 60 $(POSTRS_PROFILER_URL) -o $(PROJ_DIR)$(POSTRS_PROFILER_ZIP)
+	curl -sSL $(CURL_OPTIONS) $(POSTRS_PROFILER_URL) -o $(PROJ_DIR)$(POSTRS_PROFILER_ZIP)
 	unzip -o -j $(PROJ_DIR)$(POSTRS_PROFILER_ZIP) -d $(BIN_DIR)
 
 get-postrs-lib: $(PROJ_DIR)$(POSTRS_SETUP_ZIP) $(BINDIR_POSTRS_SETUP_LIBS)

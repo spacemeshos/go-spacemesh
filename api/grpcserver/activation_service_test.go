@@ -15,14 +15,15 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 func Test_Highest_ReturnsGoldenAtxOnError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	atxProvider := grpcserver.NewMockatxProvider(ctrl)
 	goldenAtx := types.ATXID{2, 3, 4}
-	activationService := grpcserver.NewActivationService(atxProvider, goldenAtx, logtest.New(t).WithName("grpc.Activation"))
+	activationService := grpcserver.NewActivationService(atxProvider, goldenAtx)
 
 	atxProvider.EXPECT().MaxHeightAtx().Return(types.EmptyATXID, errors.New("blah"))
 	response, err := activationService.Highest(context.Background(), &empty.Empty{})
@@ -40,7 +41,7 @@ func Test_Highest_ReturnsMaxTickHeight(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	atxProvider := grpcserver.NewMockatxProvider(ctrl)
 	goldenAtx := types.ATXID{2, 3, 4}
-	activationService := grpcserver.NewActivationService(atxProvider, goldenAtx, logtest.New(t).WithName("grpc.Activation"))
+	activationService := grpcserver.NewActivationService(atxProvider, goldenAtx)
 
 	atx := types.VerifiedActivationTx{
 		ActivationTx: &types.ActivationTx{
@@ -75,7 +76,7 @@ func Test_Highest_ReturnsMaxTickHeight(t *testing.T) {
 func TestGet_RejectInvalidAtxID(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	atxProvider := grpcserver.NewMockatxProvider(ctrl)
-	activationService := grpcserver.NewActivationService(atxProvider, types.ATXID{1}, logtest.New(t).WithName("grpc.Activation"))
+	activationService := grpcserver.NewActivationService(atxProvider, types.ATXID{1})
 
 	_, err := activationService.Get(context.Background(), &pb.GetRequest{Id: []byte{1, 2, 3}})
 	require.Error(t, err)
@@ -85,7 +86,7 @@ func TestGet_RejectInvalidAtxID(t *testing.T) {
 func TestGet_AtxNotPresent(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	atxProvider := grpcserver.NewMockatxProvider(ctrl)
-	activationService := grpcserver.NewActivationService(atxProvider, types.ATXID{1}, logtest.New(t).WithName("grpc.Activation"))
+	activationService := grpcserver.NewActivationService(atxProvider, types.ATXID{1})
 
 	id := types.RandomATXID()
 	atxProvider.EXPECT().GetFullAtx(id).Return(nil, nil)
@@ -98,7 +99,7 @@ func TestGet_AtxNotPresent(t *testing.T) {
 func TestGet_AtxProviderReturnsFailure(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	atxProvider := grpcserver.NewMockatxProvider(ctrl)
-	activationService := grpcserver.NewActivationService(atxProvider, types.ATXID{1}, logtest.New(t).WithName("grpc.Activation"))
+	activationService := grpcserver.NewActivationService(atxProvider, types.ATXID{1})
 
 	id := types.RandomATXID()
 	atxProvider.EXPECT().GetFullAtx(id).Return(&types.VerifiedActivationTx{}, errors.New(""))
@@ -111,7 +112,7 @@ func TestGet_AtxProviderReturnsFailure(t *testing.T) {
 func TestGet_HappyPath(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	atxProvider := grpcserver.NewMockatxProvider(ctrl)
-	activationService := grpcserver.NewActivationService(atxProvider, types.ATXID{1}, logtest.New(t).WithName("grpc.Activation"))
+	activationService := grpcserver.NewActivationService(atxProvider, types.ATXID{1})
 
 	id := types.RandomATXID()
 	atx := types.VerifiedActivationTx{
@@ -130,6 +131,7 @@ func TestGet_HappyPath(t *testing.T) {
 	}
 	atx.SetID(id)
 	atxProvider.EXPECT().GetFullAtx(id).Return(&atx, nil)
+	atxProvider.EXPECT().GetMalfeasanceProof(gomock.Any()).Return(nil, sql.ErrNotFound)
 
 	response, err := activationService.Get(context.Background(), &pb.GetRequest{Id: id.Bytes()})
 	require.NoError(t, err)
@@ -141,4 +143,44 @@ func TestGet_HappyPath(t *testing.T) {
 	require.Equal(t, atx.PrevATXID.Bytes(), response.Atx.PrevAtx.Id)
 	require.Equal(t, atx.NumUnits, response.Atx.NumUnits)
 	require.Equal(t, atx.Sequence, response.Atx.Sequence)
+	require.Nil(t, response.MalfeasanceProof)
+}
+
+func TestGet_IdentityCanceled(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	atxProvider := grpcserver.NewMockatxProvider(ctrl)
+	activationService := grpcserver.NewActivationService(atxProvider, types.ATXID{1})
+
+	smesher, proof := grpcserver.BallotMalfeasance(t, sql.InMemory())
+	id := types.RandomATXID()
+	atx := types.VerifiedActivationTx{
+		ActivationTx: &types.ActivationTx{
+			InnerActivationTx: types.InnerActivationTx{
+				NIPostChallenge: types.NIPostChallenge{
+					Sequence:       rand.Uint64(),
+					PrevATXID:      types.RandomATXID(),
+					PublishEpoch:   0,
+					PositioningATX: types.RandomATXID(),
+				},
+				Coinbase: types.GenerateAddress(types.RandomBytes(32)),
+				NumUnits: rand.Uint32(),
+			},
+			SmesherID: smesher,
+		},
+	}
+	atx.SetID(id)
+	atxProvider.EXPECT().GetFullAtx(id).Return(&atx, nil)
+	atxProvider.EXPECT().GetMalfeasanceProof(smesher).Return(proof, nil)
+
+	response, err := activationService.Get(context.Background(), &pb.GetRequest{Id: id.Bytes()})
+	require.NoError(t, err)
+
+	require.Equal(t, atx.ID().Bytes(), response.Atx.Id.Id)
+	require.Equal(t, atx.PublishEpoch.Uint32(), response.Atx.Layer.Number)
+	require.Equal(t, atx.SmesherID.Bytes(), response.Atx.SmesherId.Id)
+	require.Equal(t, atx.Coinbase.String(), response.Atx.Coinbase.Address)
+	require.Equal(t, atx.PrevATXID.Bytes(), response.Atx.PrevAtx.Id)
+	require.Equal(t, atx.NumUnits, response.Atx.NumUnits)
+	require.Equal(t, atx.Sequence, response.Atx.Sequence)
+	require.Equal(t, events.ToMalfeasancePB(smesher, proof, false), response.MalfeasanceProof)
 }

@@ -28,6 +28,7 @@ import (
 var (
 	errKnownAtx      = errors.New("known atx")
 	errMalformedData = fmt.Errorf("%w: malformed data", pubsub.ErrValidationReject)
+	errWrongHash     = fmt.Errorf("%w: incorrect hash", pubsub.ErrValidationReject)
 	errMaliciousATX  = errors.New("malicious atx")
 )
 
@@ -457,9 +458,15 @@ func (h *Handler) GetEpochAtxs(epochID types.EpochID) (ids []types.ATXID, err er
 	return
 }
 
-// HandleAtxData handles atxs received by sync.
-func (h *Handler) HandleAtxData(ctx context.Context, peer p2p.Peer, data []byte) error {
-	err := h.HandleGossipAtx(ctx, peer, data)
+// HandleSyncedAtx handles atxs received by sync.
+func (h *Handler) HandleSyncedAtx(ctx context.Context, expHash types.Hash32, peer p2p.Peer, data []byte) error {
+	err := h.handleAtx(ctx, expHash, peer, data)
+	if err != nil && !errors.Is(err, errMalformedData) && !errors.Is(err, errKnownAtx) {
+		h.log.WithContext(ctx).With().Warning("failed to process synced atx",
+			log.Stringer("sender", peer),
+			log.Err(err),
+		)
+	}
 	if errors.Is(err, errKnownAtx) {
 		return nil
 	}
@@ -479,7 +486,7 @@ func (h *Handler) registerHashes(atx *types.ActivationTx, peer p2p.Peer) {
 
 // HandleGossipAtx handles the atx gossip data channel.
 func (h *Handler) HandleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte) error {
-	err := h.handleGossipAtx(ctx, peer, msg)
+	err := h.handleAtx(ctx, types.Hash32{}, peer, msg)
 	if err != nil && !errors.Is(err, errMalformedData) && !errors.Is(err, errKnownAtx) {
 		h.log.WithContext(ctx).With().Warning("failed to process atx gossip",
 			log.Stringer("sender", peer),
@@ -489,11 +496,11 @@ func (h *Handler) HandleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte
 	return err
 }
 
-func (h *Handler) handleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte) error {
+func (h *Handler) handleAtx(ctx context.Context, expHash types.Hash32, peer p2p.Peer, msg []byte) error {
 	receivedTime := time.Now()
 	var atx types.ActivationTx
 	if err := codec.Decode(msg, &atx); err != nil {
-		return fmt.Errorf("%w: %v", errMalformedData, err)
+		return fmt.Errorf("%w: %w", errMalformedData, err)
 	}
 
 	epochStart := h.clock.LayerToTime(atx.PublishEpoch.FirstLayer())
@@ -538,10 +545,14 @@ func (h *Handler) handleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte
 	if err != nil {
 		return fmt.Errorf("received syntactically invalid atx %v: %w", atx.ShortString(), err)
 	}
+
+	if expHash != (types.Hash32{}) && vAtx.ID().Hash32() != expHash {
+		return fmt.Errorf("%w: atx want %s, got %s", errWrongHash, expHash.ShortString(), vAtx.ID().Hash32().ShortString())
+	}
+
 	err = h.ProcessAtx(ctx, vAtx)
 	if err != nil {
 		return fmt.Errorf("cannot process atx %v: %w", atx.ShortString(), err)
-		// TODO(anton): blacklist peer
 	}
 	events.ReportNewActivation(vAtx)
 	logger.With().Info("new atx", log.Inline(vAtx), log.Int("size", len(msg)))

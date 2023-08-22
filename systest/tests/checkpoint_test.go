@@ -277,10 +277,7 @@ func snapshotNode(ctx *testcontext.Context, client *cluster.NodeClient, snapshot
 func recoverNode(ctx *testcontext.Context, client *cluster.NodeClient) error {
 	smshr := pb.NewAdminServiceClient(client)
 	_, err := smshr.Recover(ctx, &pb.RecoverRequest{})
-	if err == nil {
-		return errors.New("recover should return error but did not")
-	}
-	return nil
+	return err
 }
 
 type acctState struct {

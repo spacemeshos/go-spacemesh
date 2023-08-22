@@ -108,6 +108,7 @@ func TestPostSetupManager_PrepareInitializer(t *testing.T) {
 	req.Error(mgr.PrepareInitializer(ctx, opts))
 }
 
+// TODO(mafa): remove, see https://github.com/spacemeshos/go-spacemesh/issues/4801
 func TestPostSetupManager_PrepareInitializer_BestProvider(t *testing.T) {
 	req := require.New(t)
 
@@ -116,8 +117,48 @@ func TestPostSetupManager_PrepareInitializer_BestProvider(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 
-	mgr.opts.ProviderID = config.BestProviderID
+	mgr.opts.ProviderID.SetInt64(-1)
 	req.NoError(mgr.PrepareInitializer(ctx, mgr.opts))
+}
+
+func TestPostSetupManager_StartSession_WithoutProvider_Error(t *testing.T) {
+	req := require.New(t)
+
+	mgr := newTestPostManager(t)
+	mgr.opts.ProviderID.value = nil
+
+	// Create data.
+	req.NoError(mgr.PrepareInitializer(context.Background(), mgr.opts)) // prepare is fine without provider
+	req.ErrorContains(mgr.StartSession(context.Background()), "no provider specified")
+
+	req.Equal(PostSetupStateError, mgr.Status().State)
+}
+
+func TestPostSetupManager_StartSession_WithoutProviderAfterInit_OK(t *testing.T) {
+	req := require.New(t)
+
+	mgr := newTestPostManager(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	// Create data.
+	req.NoError(mgr.PrepareInitializer(ctx, mgr.opts))
+	req.NoError(mgr.StartSession(ctx))
+
+	req.Equal(PostSetupStateComplete, mgr.Status().State)
+	cancel()
+
+	// start Initializer again, but with no provider set
+	mgr.opts.ProviderID.value = nil
+
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	req.NoError(mgr.PrepareInitializer(ctx, mgr.opts))
+	req.NoError(mgr.StartSession(ctx))
+
+	req.Equal(PostSetupStateComplete, mgr.Status().State)
 }
 
 // Checks that the sequence of calls for initialization (first
@@ -442,7 +483,7 @@ func newTestPostManager(tb testing.TB, o ...newPostSetupMgrOptionFunc) *testPost
 
 	opts := DefaultPostSetupOpts()
 	opts.DataDir = tb.TempDir()
-	opts.ProviderID = int(initialization.CPUProviderID())
+	opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
 
 	goldenATXID := types.ATXID{2, 3, 4}
@@ -491,4 +532,34 @@ func TestSettingPowDifficulty(t *testing.T) {
 		require.Error(t, d.Set(encoded))
 		require.Equal(t, PowDifficulty{}, d)
 	})
+}
+
+func TestSettingProviderID(t *testing.T) {
+	t.Parallel()
+
+	t.Run("valid value", func(t *testing.T) {
+		t.Parallel()
+		id := new(PostProviderID)
+		require.NoError(t, id.Set("1234"))
+		require.Equal(t, int64(1234), *id.Value())
+	})
+	t.Run("no value", func(t *testing.T) {
+		t.Parallel()
+		id := new(PostProviderID)
+		require.NoError(t, id.Set(""))
+		require.Nil(t, id.Value())
+	})
+	t.Run("not a number", func(t *testing.T) {
+		t.Parallel()
+		id := new(PostProviderID)
+		require.Error(t, id.Set("asdf"))
+		require.Nil(t, id.Value())
+	})
+	// TODO(mafa): re-enable test, see https://github.com/spacemeshos/go-spacemesh/issues/4801
+	// t.Run("negative", func(t *testing.T) {
+	// 	t.Parallel()
+	// 	id := new(PostProviderID)
+	// 	require.Error(t, id.Set("-1"))
+	// 	require.Nil(t, id.Value())
+	// })
 }

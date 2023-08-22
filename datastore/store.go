@@ -20,11 +20,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
 
-const (
-	atxHdrCacheSize      = 2000
-	malfeasanceCacheSize = 1000
-)
-
 type VrfNonceKey struct {
 	ID    types.NodeID
 	Epoch types.EpochID
@@ -43,19 +38,49 @@ type CachedDB struct {
 	malfeasanceCache *lru.Cache[types.NodeID, *types.MalfeasanceProof]
 }
 
+type Config struct {
+	ATXSize         int `mapstructure:"atx-size"`
+	MalfeasenceSize int `mapstructure:"malfeasence-size"`
+}
+
+func DefaultConfig() Config {
+	return Config{
+		ATXSize:         10_000,
+		MalfeasenceSize: 1_000,
+	}
+}
+
+type cacheOpts struct {
+	cfg Config
+}
+
+type Opt func(*cacheOpts)
+
+func WithConfig(cfg Config) Opt {
+	return func(o *cacheOpts) {
+		o.cfg = cfg
+	}
+}
+
 // NewCachedDB create an instance of a CachedDB.
-func NewCachedDB(db *sql.Database, lg log.Log) *CachedDB {
-	atxHdrCache, err := lru.New[types.ATXID, *types.ActivationTxHeader](atxHdrCacheSize)
+func NewCachedDB(db *sql.Database, lg log.Log, opts ...Opt) *CachedDB {
+	o := cacheOpts{cfg: DefaultConfig()}
+	for _, opt := range opts {
+		opt(&o)
+	}
+	lg.With().Info("initialized datastore", log.Any("config", o.cfg))
+
+	atxHdrCache, err := lru.New[types.ATXID, *types.ActivationTxHeader](o.cfg.ATXSize)
 	if err != nil {
 		lg.Fatal("failed to create atx cache", err)
 	}
 
-	malfeasanceCache, err := lru.New[types.NodeID, *types.MalfeasanceProof](malfeasanceCacheSize)
+	malfeasanceCache, err := lru.New[types.NodeID, *types.MalfeasanceProof](o.cfg.MalfeasenceSize)
 	if err != nil {
 		lg.Fatal("failed to create malfeasance cache", err)
 	}
 
-	vrfNonceCache, err := lru.New[VrfNonceKey, *types.VRFPostIndex](atxHdrCacheSize)
+	vrfNonceCache, err := lru.New[VrfNonceKey, *types.VRFPostIndex](o.cfg.ATXSize)
 	if err != nil {
 		lg.Fatal("failed to create vrf nonce cache", err)
 	}
@@ -188,7 +213,7 @@ func (db *CachedDB) getAndCacheHeader(id types.ATXID) (*types.ActivationTxHeader
 
 	atxHeader, gotIt := db.atxHdrCache.Get(id)
 	if !gotIt {
-		return nil, fmt.Errorf("inconsistent state: failed to get atx header: %v", err)
+		return nil, fmt.Errorf("inconsistent state: failed to get atx header: %w", err)
 	}
 
 	return atxHeader, nil
@@ -222,6 +247,23 @@ func (db *CachedDB) IterateEpochATXHeaders(epoch types.EpochID, iter func(*types
 			return err
 		}
 		if err := iter(header); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (db *CachedDB) IterateMalfeasanceProofs(iter func(types.NodeID, *types.MalfeasanceProof) error) error {
+	ids, err := identities.GetMalicious(db)
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		proof, err := db.GetMalfeasanceProof(id)
+		if err != nil {
+			return err
+		}
+		if err := iter(id, proof); err != nil {
 			return err
 		}
 	}
