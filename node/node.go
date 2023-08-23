@@ -1308,11 +1308,12 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log, dbPath string) error {
 
 // Start starts the Spacemesh node and initializes all relevant services according to command line arguments provided.
 func (app *App) Start(ctx context.Context) error {
-	err := app.startSynchronous(ctx)
+	err, cleanup := app.startSynchronous(ctx)
 	if err != nil {
 		app.log.With().Error("failed to start App", log.Err(err))
 		return err
 	}
+	defer cleanup()
 	defer events.ReportError(events.NodeError{
 		Msg:   "node is shutting down",
 		Level: zapcore.InfoLevel,
@@ -1334,7 +1335,7 @@ func (app *App) Start(ctx context.Context) error {
 	}
 }
 
-func (app *App) startSynchronous(ctx context.Context) error {
+func (app *App) startSynchronous(ctx context.Context) (err error, shutdown func() error) {
 	// notify anyone who might be listening that the app has finished starting.
 	// this can be used by, e.g., app tests.
 	defer close(app.started)
@@ -1345,7 +1346,7 @@ func (app *App) startSynchronous(ctx context.Context) error {
 
 	hostname, err := os.Hostname()
 	if err != nil {
-		return fmt.Errorf("error reading hostname: %w", err)
+		return fmt.Errorf("error reading hostname: %w", err), nil
 	}
 
 	logger.With().Info("starting spacemesh",
@@ -1355,15 +1356,16 @@ func (app *App) startSynchronous(ctx context.Context) error {
 	)
 
 	if err := os.MkdirAll(app.Config.DataDir(), 0o700); err != nil {
-		return fmt.Errorf("data-dir %s not found or could not be created: %w", app.Config.DataDir(), err)
+		return fmt.Errorf("data-dir %s not found or could not be created: %w", app.Config.DataDir(), err), nil
 	}
 
 	/* Setup monitoring */
+	var srv *http.Server
 	app.errCh = make(chan error, 100)
 	if app.Config.PprofHTTPServer {
 		logger.Info("starting pprof server")
-		srv := &http.Server{Addr: ":6060"}
-		defer srv.Shutdown(ctx)
+		srv = &http.Server{Addr: ":6060"}
+		// defer srv.Shutdown(ctx)
 		app.eg.Go(func() error {
 			if err := srv.ListenAndServe(); err != nil {
 				app.errCh <- fmt.Errorf("cannot start pprof http server: %w", err)
@@ -1372,8 +1374,9 @@ func (app *App) startSynchronous(ctx context.Context) error {
 		})
 	}
 
+	var p *profiler.Profiler
 	if app.Config.ProfilerURL != "" {
-		p, err := profiler.Start(profiler.Config{
+		p, err = profiler.Start(profiler.Config{
 			ApplicationName: app.Config.ProfilerName,
 			// app.Config.ProfilerURL should be the pyroscope server address
 			// TODO: AuthToken? no need right now since server isn't public
@@ -1381,9 +1384,9 @@ func (app *App) startSynchronous(ctx context.Context) error {
 			// by default all profilers are enabled,
 		})
 		if err != nil {
-			return fmt.Errorf("cannot start profiling client: %w", err)
+			return fmt.Errorf("cannot start profiling client: %w", err), nil
 		}
-		defer p.Stop()
+		// defer p.Stop()
 	}
 
 	lg := logger.Named(app.edSgn.NodeID().ShortString()).WithFields(app.edSgn.NodeID())
@@ -1392,7 +1395,7 @@ func (app *App) startSynchronous(ctx context.Context) error {
 
 	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
 	if err != nil {
-		return fmt.Errorf("cannot parse genesis time %s: %w", app.Config.Genesis.GenesisTime, err)
+		return fmt.Errorf("cannot parse genesis time %s: %w", app.Config.Genesis.GenesisTime, err), nil
 	}
 	app.clock, err = timesync.NewClock(
 		timesync.WithLayerDuration(app.Config.LayerDuration),
@@ -1401,7 +1404,7 @@ func (app *App) startSynchronous(ctx context.Context) error {
 		timesync.WithLogger(app.addLogger(ClockLogger, lg)),
 	)
 	if err != nil {
-		return fmt.Errorf("cannot create clock: %w", err)
+		return fmt.Errorf("cannot create clock: %w", err), nil
 	}
 
 	lg.Info("initializing p2p services")
@@ -1419,14 +1422,14 @@ func (app *App) startSynchronous(ctx context.Context) error {
 		p2p.WithNodeReporter(events.ReportNodeStatusUpdate),
 	)
 	if err != nil {
-		return fmt.Errorf("failed to initialize p2p host: %w", err)
+		return fmt.Errorf("failed to initialize p2p host: %w", err), nil
 	}
 
 	if err := app.setupDBs(ctx, lg, app.Config.DataDir()); err != nil {
-		return err
+		return err, nil
 	}
 	if err := app.initServices(ctx); err != nil {
-		return fmt.Errorf("cannot start services: %w", err)
+		return fmt.Errorf("cannot start services: %w", err), nil
 	}
 
 	if app.Config.CollectMetrics {
@@ -1445,23 +1448,32 @@ func (app *App) startSynchronous(ctx context.Context) error {
 	}
 
 	if err := app.startServices(ctx); err != nil {
-		return err
+		return err, nil
 	}
 
 	// need post verifying service to start first
 	app.preserveAfterRecovery(ctx)
 
 	if err := app.startAPIServices(ctx); err != nil {
-		return err
+		return err, nil
 	}
 
 	if err := app.launchStandalone(ctx); err != nil {
-		return err
+		return err, nil
 	}
 
 	events.SubscribeToLayers(app.clock)
 	app.log.Info("app started")
-	return nil
+
+	// cleanup shuts down components started here.
+	cleanup := func() error {
+		var err error
+		err = errors.Join(err, srv.Shutdown(ctx))
+		err = errors.Join(err, p.Stop())
+		return err
+	}
+
+	return nil, cleanup
 }
 
 func (app *App) preserveAfterRecovery(ctx context.Context) {
