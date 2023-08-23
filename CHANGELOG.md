@@ -6,6 +6,9 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ### Upgrade information
 
+Legacy discovery protocol was removed in [4836](https://github.com/spacemeshos/go-spacemesh/pull/4836).
+Config option and flag `p2p-disable-legacy-discovery` is noop, and will be completely removed in future versions. 
+
 ### Highlights
 
 ### Features
@@ -37,6 +40,20 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
   "tags": [
     "bootnode"
   ]
+}
+```
+
+* [4795](https://github.com/spacemeshos/go-spacemesh/pull/4795) p2p: add ip4/ip6 blocklists
+
+Doesn't affect direct peers. In order to disable:
+
+
+```json
+{
+  "p2p": {
+    "ip4-blocklist": [],
+    "ip6-blocklist": []
+  }
 }
 ```
 
