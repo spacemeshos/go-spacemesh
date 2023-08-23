@@ -537,9 +537,8 @@ func (b *Builder) loadChallenge() (*types.NIPostChallenge, error) {
 	if err != nil {
 		return nil, err
 	}
-	if nipost.TargetEpoch() < b.currentEpoch() {
+	if nipost.PublishEpoch < b.currentEpoch() {
 		b.log.With().Info("atx nipost challenge is stale - discarding it",
-			log.Stringer("target_epoch", nipost.TargetEpoch()),
 			log.Stringer("publish_epoch", nipost.PublishEpoch),
 			log.Stringer("current_epoch", b.currentEpoch()),
 		)
@@ -604,16 +603,16 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	select {
 	case <-atxReceived:
 		logger.With().Info("received atx in db", atx.ID())
-	case <-b.layerClock.AwaitLayer((atx.TargetEpoch() + 1).FirstLayer()):
-		if err = b.discardChallenge(); err != nil {
-			return fmt.Errorf("%w: target epoch has passed", err)
+		if err := b.discardChallenge(); err != nil {
+			return fmt.Errorf("%w: after published atx", err)
 		}
-		return fmt.Errorf("%w: target epoch has passed", ErrATXChallengeExpired)
+	case <-b.layerClock.AwaitLayer((atx.TargetEpoch()).FirstLayer()):
+		if err := b.discardChallenge(); err != nil {
+			return fmt.Errorf("%w: publish epoch has passed", err)
+		}
+		return fmt.Errorf("%w: publish epoch has passed", ErrATXChallengeExpired)
 	case <-ctx.Done():
 		return ctx.Err()
-	}
-	if err = b.discardChallenge(); err != nil {
-		return fmt.Errorf("%w: after published atx", err)
 	}
 	return nil
 }
@@ -643,7 +642,7 @@ func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChalleng
 	}
 	b.log.Debug("publication epoch has arrived!")
 
-	if challenge.TargetEpoch() < b.currentEpoch() {
+	if challenge.PublishEpoch < b.currentEpoch() {
 		if err = b.discardChallenge(); err != nil {
 			return nil, fmt.Errorf("%w: atx publish epoch has passed during nipost construction", err)
 		}
