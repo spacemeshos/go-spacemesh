@@ -1309,6 +1309,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log, dbPath string) error {
 func (app *App) Start(ctx context.Context) error {
 	err := app.startSynchronous(ctx)
 	if err != nil {
+		app.log.With().Error("failed to start App", log.Err(err))
 		return err
 	}
 	defer events.ReportError(events.NodeError{
