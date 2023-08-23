@@ -465,6 +465,33 @@ func TestProtocol(t *testing.T) {
 			new(toutput),          // wait2
 			new(toutput).active(), // commit
 		),
+		gen("commit locked",
+			new(setup).thresh(10),
+			new(toutput), // preround
+			new(tinput).sender("1").
+				round(preround).proposals("a", "b").vrfcount(11).g(grade5),
+			new(toutput).coin(false), // softlock
+			new(toutput),             // propose
+			new(tinput).sender("1").round(propose).proposals("a").g(grade3),
+			new(toutput), // wait1
+			new(toutput), // wait2
+			new(toutput), // commit
+			new(toutput), // notify
+			new(toutput), // hardlock
+			// commit on a will have grade3, so no hardlock
+			new(tinput).sender("1").round(commit).ref("a").vrfcount(11).g(grade5),
+			new(toutput), // softlock
+			new(toutput), // propose
+			// commit on b will have grade1, to satisfy condition (g)
+			new(tinput).sender("2").round(commit).ref("b").vrfcount(11).g(grade5),
+			new(tinput).sender("1").iter(1).round(propose).proposals("a").g(grade3).vrf(2),
+			new(tinput).sender("2").iter(1).round(propose).proposals("b").g(grade3).vrf(1),
+			new(toutput), // wait1
+			new(toutput), // wait2
+			// condition (h) ensures that we commit on locked value, even though proposal for b
+			// is first in the order
+			new(toutput).active().round(commit).iter(1).ref("a"), // commit
+		),
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
