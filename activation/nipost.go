@@ -194,9 +194,8 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 	poetRoundStart := nb.layerClock.LayerToTime((publishEpoch - 1).FirstLayer()).Add(nb.poetCfg.PhaseShift)
 	poetRoundEnd := nb.layerClock.LayerToTime(publishEpoch.FirstLayer()).Add(nb.poetCfg.PhaseShift).Add(-nb.poetCfg.CycleGap)
 
-	// we want to publish before the publish epoch ends or we won't receive rewards (due to ATX grading)
-	// GracePeriod is a safety margin to make sure we don't miss the deadline
-	publishEpochEnd := nb.layerClock.LayerToTime((publishEpoch + 1).FirstLayer()).Add(-nb.poetCfg.GracePeriod)
+	// we want to publish before the publish epoch ends or we won't receive rewards
+	publishEpochEnd := nb.layerClock.LayerToTime((publishEpoch + 1).FirstLayer())
 
 	logger.With().Info("building nipost",
 		log.Time("poet round start", poetRoundStart),
