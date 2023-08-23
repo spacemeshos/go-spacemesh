@@ -1365,7 +1365,6 @@ func (app *App) startSynchronous(ctx context.Context) (err error, shutdown func(
 	if app.Config.PprofHTTPServer {
 		logger.Info("starting pprof server")
 		srv = &http.Server{Addr: ":6060"}
-		// defer srv.Shutdown(ctx)
 		app.eg.Go(func() error {
 			if err := srv.ListenAndServe(); err != nil {
 				app.errCh <- fmt.Errorf("cannot start pprof http server: %w", err)
@@ -1386,7 +1385,6 @@ func (app *App) startSynchronous(ctx context.Context) (err error, shutdown func(
 		if err != nil {
 			return fmt.Errorf("cannot start profiling client: %w", err), nil
 		}
-		// defer p.Stop()
 	}
 
 	lg := logger.Named(app.edSgn.NodeID().ShortString()).WithFields(app.edSgn.NodeID())
@@ -1468,8 +1466,12 @@ func (app *App) startSynchronous(ctx context.Context) (err error, shutdown func(
 	// cleanup shuts down components started here.
 	cleanup := func() error {
 		var err error
-		err = errors.Join(err, srv.Shutdown(ctx))
-		err = errors.Join(err, p.Stop())
+		if srv != nil {
+			err = errors.Join(err, srv.Shutdown(ctx))
+		}
+		if p != nil {
+			err = errors.Join(err, p.Stop())
+		}
 		return err
 	}
 
