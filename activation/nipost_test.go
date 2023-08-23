@@ -493,81 +493,6 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 	req.EqualValues(ref[:], nipost.PostMetadata.Challenge)
 }
 
-func TestNIPostBuilder_ManyPoETs_WaitingForProof_DeadlineReached(t *testing.T) {
-	t.Parallel()
-	// Arrange
-	req := require.New(t)
-	challenge := types.NIPostChallenge{
-		PublishEpoch: postGenesisEpoch + 1,
-	}
-
-	proof := &types.PoetProofMessage{PoetProof: types.PoetProof{}}
-	ctrl := gomock.NewController(t)
-	nipostValidator := NewMocknipostValidator(ctrl)
-	poetDb := NewMockpoetDbAPI(ctrl)
-	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
-	mclock := defaultLayerClockMock(t)
-
-	poets := make([]PoetProvingServiceClient, 0, 2)
-	{
-		poet := defaultPoetServiceMock(t, []byte("poet0"))
-		poet.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(proof, []types.Member{types.Member(challenge.Hash())}, nil)
-		poets = append(poets, poet)
-	}
-	{
-		poet := defaultPoetServiceMock(t, []byte("poet1"))
-		poet.EXPECT().Proof(gomock.Any(), gomock.Any()).DoAndReturn(
-			func(ctx context.Context, _ string) (*types.PoetProofMessage, []types.Member, error) {
-				// Hang up after the context expired
-				<-ctx.Done()
-				return nil, nil, ctx.Err()
-			},
-		)
-		poets = append(poets, poet)
-	}
-
-	sig, err := signing.NewEdSigner()
-	req.NoError(err)
-	poetCfg := PoetConfig{
-		PhaseShift:  layerDuration * layersPerEpoch / 2,
-		GracePeriod: layerDuration * layersPerEpoch / 2,
-	}
-	postProvider := NewMockpostSetupProvider(ctrl)
-	postProvider.EXPECT().Status().Return(&PostSetupStatus{State: PostSetupStateComplete})
-	postProvider.EXPECT().CommitmentAtx().Return(types.EmptyATXID, nil).AnyTimes()
-	postProvider.EXPECT().LastOpts().Return(&PostSetupOpts{}).AnyTimes()
-	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, challenge []byte, _ proving.OptionFunc) (*types.Post, *types.PostMetadata, error) {
-			return &types.Post{}, &types.PostMetadata{
-				Challenge: challenge,
-			}, nil
-		},
-	)
-	nipostValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return(nil)
-	nb, err := NewNIPostBuilder(
-		types.NodeID{1},
-		postProvider,
-		poetDb,
-		[]string{},
-		t.TempDir(),
-		logtest.New(t),
-		sig,
-		poetCfg,
-		mclock,
-		WithNipostValidator(nipostValidator),
-		withPoetClients(poets),
-	)
-	req.NoError(err)
-
-	// Act
-	nipost, _, err := nb.BuildNIPost(context.Background(), &challenge)
-	req.NoError(err)
-
-	// Verify
-	ref, _ := proof.Ref()
-	req.EqualValues(ref[:], nipost.PostMetadata.Challenge)
-}
-
 func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 	t.Parallel()
 	// Arrange
@@ -847,13 +772,12 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 
 	currLayer := types.EpochID(10).FirstLayer()
 	genesis := time.Now().Add(-time.Duration(currLayer) * layerDuration)
-	challenge := types.NIPostChallenge{PublishEpoch: types.EpochID(10)}
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
 	// Act & Verify
-	t.Run("not requests poet round started", func(t *testing.T) {
+	t.Run("no requests, poet round started", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		poetDb := NewMockpoetDbAPI(ctrl)
 		mclock := NewMocklayerClock(ctrl)
@@ -878,6 +802,8 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 			withPoetClients([]PoetProvingServiceClient{poetProver}),
 		)
 		require.NoError(t, err)
+
+		challenge := types.NIPostChallenge{PublishEpoch: currLayer.GetEpoch()}
 		nipost, _, err := nb.BuildNIPost(context.Background(), &challenge)
 		require.ErrorIs(t, err, ErrATXChallengeExpired)
 		require.ErrorContains(t, err, "poet round has already started")
@@ -909,6 +835,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 			withPoetClients([]PoetProvingServiceClient{poetProver}),
 		)
 		require.NoError(t, err)
+		challenge := types.NIPostChallenge{PublishEpoch: currLayer.GetEpoch() - 1}
 		state := types.NIPostBuilderState{
 			Challenge:    challenge.Hash(),
 			PoetRequests: []types.PoetRequest{{}},
@@ -918,6 +845,46 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 		nipost, _, err := nb.BuildNIPost(context.Background(), &challenge)
 		require.ErrorIs(t, err, ErrATXChallengeExpired)
 		require.ErrorContains(t, err, "poet proof for pub epoch")
+		require.Nil(t, nipost)
+	})
+	t.Run("too late for proof generation", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		poetDb := NewMockpoetDbAPI(ctrl)
+		mclock := NewMocklayerClock(ctrl)
+		poetProver := NewMockPoetProvingServiceClient(ctrl)
+		postProver := NewMockpostSetupProvider(ctrl)
+		postProver.EXPECT().Status().Return(&PostSetupStatus{State: PostSetupStateComplete})
+		mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
+			func(got types.LayerID) time.Time {
+				return genesis.Add(layerDuration * time.Duration(got))
+			}).AnyTimes()
+
+		dir := t.TempDir()
+		nb, err := NewNIPostBuilder(
+			types.NodeID{1},
+			postProver,
+			poetDb,
+			[]string{},
+			dir,
+			logtest.New(t),
+			sig,
+			PoetConfig{},
+			mclock,
+			withPoetClients([]PoetProvingServiceClient{poetProver}),
+		)
+		require.NoError(t, err)
+		challenge := types.NIPostChallenge{PublishEpoch: currLayer.GetEpoch() - 1}
+		state := types.NIPostBuilderState{
+			Challenge:    challenge.Hash(),
+			PoetRequests: []types.PoetRequest{{}},
+			PoetProofRef: [32]byte{1, 2, 3},
+			NIPost:       &types.NIPost{},
+		}
+		require.NoError(t, saveBuilderState(dir, &state))
+
+		nipost, _, err := nb.BuildNIPost(context.Background(), &challenge)
+		require.ErrorIs(t, err, ErrATXChallengeExpired)
+		require.ErrorContains(t, err, "deadline to publish ATX for pub epoch")
 		require.Nil(t, nipost)
 	})
 }
