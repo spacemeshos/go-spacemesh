@@ -44,6 +44,25 @@ func DefaultConfig() Config {
 		InboundFraction:    0.8,
 		OutboundFraction:   1.1,
 		RelayServer:        RelayServer{TTL: 20 * time.Minute, Reservations: 512},
+		IP4Blocklist: []string{
+			// localhost
+			"127.0.0.0/8",
+			// private networks
+			"10.0.0.0/8",
+			"100.64.0.0/10",
+			"172.16.0.0/12",
+			"192.168.0.0/16",
+			// link local
+			"169.254.0.0/16",
+		},
+		IP6Blocklist: []string{
+			// localhost
+			"::1/128",
+			// ULA reserved
+			"fc00::/7",
+			// link local
+			"fe80::/10",
+		},
 	}
 }
 
@@ -84,6 +103,8 @@ type Config struct {
 	DisableLegacyDiscovery   bool        `mapstructure:"p2p-disable-legacy-discovery"`
 	PrivateNetwork           bool        `mapstructure:"p2p-private-network"`
 	RelayServer              RelayServer `mapstructure:"relay-server"`
+	IP4Blocklist             []string    `mapstructure:"ip4-blocklist"`
+	IP6Blocklist             []string    `mapstructure:"ip6-blocklist"`
 }
 
 type RelayServer struct {
