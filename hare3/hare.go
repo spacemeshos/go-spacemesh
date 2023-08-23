@@ -84,7 +84,7 @@ type WeakCoinOutput struct {
 	Coin  bool
 }
 
-type instanceInput struct {
+type sessionInput struct {
 	input  *input
 	result chan *response
 }
@@ -94,13 +94,13 @@ type response struct {
 	equivocation *types.HareProof
 }
 
-type instanceInputs struct {
+type sessionInputs struct {
 	ctx    context.Context
-	inputs chan<- *instanceInput
+	inputs chan<- *sessionInput
 }
 
-func (inputs *instanceInputs) submit(msg *input) (*response, error) {
-	input := &instanceInput{
+func (inputs *sessionInputs) submit(msg *input) (*response, error) {
+	input := &sessionInput{
 		input:  msg,
 		result: make(chan *response, 1),
 	}
@@ -166,11 +166,11 @@ func New(
 ) *Hare {
 	ctx, cancel := context.WithCancel(context.Background())
 	hr := &Hare{
-		ctx:       ctx,
-		cancel:    cancel,
-		results:   make(chan ConsensusOutput, 32),
-		coins:     make(chan WeakCoinOutput, 32),
-		instances: map[types.LayerID]instanceInputs{},
+		ctx:      ctx,
+		cancel:   cancel,
+		results:  make(chan ConsensusOutput, 32),
+		coins:    make(chan WeakCoinOutput, 32),
+		sessions: map[types.LayerID]sessionInputs{},
 
 		config:    DefaultConfig(),
 		log:       zap.NewNop(),
@@ -197,13 +197,13 @@ func New(
 
 type Hare struct {
 	// state
-	ctx       context.Context
-	cancel    context.CancelFunc
-	eg        errgroup.Group
-	results   chan ConsensusOutput
-	coins     chan WeakCoinOutput
-	mu        sync.Mutex
-	instances map[types.LayerID]instanceInputs
+	ctx      context.Context
+	cancel   context.CancelFunc
+	eg       errgroup.Group
+	results  chan ConsensusOutput
+	coins    chan WeakCoinOutput
+	mu       sync.Mutex
+	sessions map[types.LayerID]sessionInputs
 
 	// options
 	config    Config
@@ -250,7 +250,7 @@ func (h *Hare) Start() {
 func (h *Hare) Running() int {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	return len(h.instances)
+	return len(h.sessions)
 }
 
 func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
@@ -265,7 +265,7 @@ func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 	}
 	h.tracer.OnMessageReceived(msg)
 	h.mu.Lock()
-	instance, registered := h.instances[msg.Layer]
+	session, registered := h.sessions[msg.Layer]
 	h.mu.Unlock()
 	if !registered {
 		notRegisteredError.Inc()
@@ -288,7 +288,7 @@ func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 		return fmt.Errorf("zero grade")
 	}
 	start = time.Now()
-	resp, err := instance.submit(&input{
+	resp, err := session.submit(&input{
 		Message:   msg,
 		msgHash:   msg.ToHash(),
 		malicious: malicious,
@@ -332,15 +332,15 @@ func (h *Hare) onLayer(layer types.LayerID) {
 		)
 		return
 	}
-	inputs := make(chan *instanceInput)
+	inputs := make(chan *sessionInput)
 	ctx, cancel := context.WithCancel(h.ctx)
 	h.mu.Lock()
-	h.instances[layer] = instanceInputs{
+	h.sessions[layer] = sessionInputs{
 		ctx:    ctx,
 		inputs: inputs,
 	}
 	h.mu.Unlock()
-	instanceStart.Inc()
+	sessionStart.Inc()
 	h.tracer.OnStart(layer)
 	h.log.Debug("registered layer", zap.Uint32("lid", layer.Uint32()))
 	h.eg.Go(func() error {
@@ -357,15 +357,15 @@ func (h *Hare) onLayer(layer types.LayerID) {
 		}
 		cancel()
 		h.mu.Lock()
-		delete(h.instances, layer)
+		delete(h.sessions, layer)
 		h.mu.Unlock()
-		instanceTerminated.Inc()
+		sessionTerminated.Inc()
 		h.tracer.OnStop(layer)
 		return nil
 	})
 }
 
-func (h *Hare) run(layer types.LayerID, beacon types.Beacon, inputs <-chan *instanceInput) error {
+func (h *Hare) run(layer types.LayerID, beacon types.Beacon, inputs <-chan *sessionInput) error {
 	// oracle may load non-negligible amount of data from disk
 	// we do it before preround starts, so that load can have some slack time
 	// before it needs to be used in validation
@@ -462,7 +462,7 @@ func (h *Hare) onOutput(layer types.LayerID, ir IterRound, out output, vrf *type
 			return h.ctx.Err()
 		case h.coins <- WeakCoinOutput{Layer: layer, Coin: *out.coin}:
 		}
-		instanceCoin.Inc()
+		sessionCoin.Inc()
 	}
 	if out.result != nil {
 		select {
@@ -470,7 +470,7 @@ func (h *Hare) onOutput(layer types.LayerID, ir IterRound, out output, vrf *type
 			return h.ctx.Err()
 		case h.results <- ConsensusOutput{Layer: layer, Proposals: out.result}:
 		}
-		instanceResult.Inc()
+		sessionResult.Inc()
 	}
 	return nil
 }

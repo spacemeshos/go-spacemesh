@@ -10,15 +10,15 @@ const namespace = "hare"
 
 var (
 	processCounter = metrics.NewCounter(
-		"process",
+		"session",
 		namespace,
-		"number of hare processes at different stages",
+		"number of hare sessions at different stages",
 		[]string{"stage"},
 	)
-	instanceStart      = processCounter.WithLabelValues("started")
-	instanceTerminated = processCounter.WithLabelValues("terminated")
-	instanceCoin       = processCounter.WithLabelValues("weakcoin")
-	instanceResult     = processCounter.WithLabelValues("result")
+	sessionStart      = processCounter.WithLabelValues("started")
+	sessionTerminated = processCounter.WithLabelValues("terminated")
+	sessionCoin       = processCounter.WithLabelValues("weakcoin")
+	sessionResult     = processCounter.WithLabelValues("result")
 
 	exitErrors = metrics.NewCounter(
 		"exit_errors",
