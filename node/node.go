@@ -167,10 +167,6 @@ func GetCommand() *cobra.Command {
 
 				// This blocks until the context is finished or until an error is produced
 				err = app.Start(ctx)
-				if err != nil {
-					app.log.With().Warning("App ended with error", log.Err(err))
-				}
-
 				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cleanupCancel()
 				done := make(chan struct{}, 1)
