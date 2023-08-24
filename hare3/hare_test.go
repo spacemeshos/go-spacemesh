@@ -186,6 +186,40 @@ type lockstepCluster struct {
 	complete  chan struct{}
 }
 
+func (cl *lockstepCluster) addNode(n *node) {
+	n.hare.Start()
+	cl.t.Cleanup(func() {
+		n.hare.Stop()
+	})
+	cl.nodes = append(cl.nodes, n)
+}
+
+func (cl *lockstepCluster) addActive(n int) *lockstepCluster {
+	last := len(cl.nodes)
+	for i := last; i < last+n; i++ {
+		n := &node{t: cl.t, i: i}
+		n = n.
+			withController().withSyncer().withPublisher().
+			withClock().withDb().withSigner().withAtx().
+			withOracle().withHare()
+		cl.addNode(n)
+	}
+	return cl
+}
+
+func (cl *lockstepCluster) addInactive(n int) *lockstepCluster {
+	last := len(cl.nodes)
+	for i := last; i < last+n; i++ {
+		n := &node{t: cl.t, i: i}
+		n = n.
+			withController().withSyncer().withPublisher().
+			withClock().withDb().withSigner().
+			withOracle().withHare()
+		cl.addNode(n)
+	}
+	return cl
+}
+
 func (cl *lockstepCluster) nogossip() {
 	cl.start = make(chan struct{}, len(cl.nodes))
 	cl.complete = make(chan struct{}, len(cl.nodes))
@@ -199,9 +233,48 @@ func (cl *lockstepCluster) nogossip() {
 	}
 }
 
-func (cl *lockstepCluster) setup(ids []types.ATXID) {
+func (cl *lockstepCluster) activeSet() []types.ATXID {
+	var ids []types.ATXID
+	for _, n := range cl.nodes {
+		if n.atx == nil {
+			continue
+		}
+		ids = append(ids, n.atx.ID())
+	}
+	return ids
+}
+
+func (cl *lockstepCluster) genProposals(lid types.LayerID) {
+	active := cl.activeSet()
+	for _, n := range cl.nodes {
+		if n.atx == nil {
+			continue
+		}
+		proposal := &types.Proposal{}
+		proposal.Layer = lid
+		proposal.ActiveSet = active
+		proposal.EpochData = &types.EpochData{
+			Beacon: cl.t.beacon,
+		}
+		proposal.AtxID = n.atx.ID()
+		proposal.SmesherID = n.signer.NodeID()
+		id := types.ProposalID{}
+		cl.t.rng.Read(id[:])
+		bid := types.BallotID{}
+		cl.t.rng.Read(bid[:])
+		proposal.SetID(id)
+		proposal.Ballot.SetID(bid)
+		for _, other := range cl.nodes {
+			require.NoError(cl.t, ballots.Add(other.db, &proposal.Ballot))
+			require.NoError(cl.t, proposals.Add(other.db, proposal))
+		}
+	}
+}
+
+func (cl *lockstepCluster) setup() {
 	cl.start = make(chan struct{}, len(cl.nodes))
 	cl.complete = make(chan struct{}, len(cl.nodes))
+	active := cl.activeSet()
 	for _, n := range cl.nodes {
 		require.NoError(cl.t, beacons.Add(n.db, cl.t.genesis.GetEpoch()+1, cl.t.beacon))
 		for _, other := range cl.nodes {
@@ -210,7 +283,7 @@ func (cl *lockstepCluster) setup(ids []types.ATXID) {
 			}
 			require.NoError(cl.t, atxs.Add(n.db, other.atx))
 		}
-		n.oracle.UpdateActiveSet(cl.t.genesis.GetEpoch()+1, ids)
+		n.oracle.UpdateActiveSet(cl.t.genesis.GetEpoch()+1, active)
 		n.mpublisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ctx context.Context, _ string, msg []byte) error {
 			cl.timedReceive(cl.start)
 			var eg errgroup.Group
@@ -341,7 +414,6 @@ func (*testTracer) OnMessageReceived(*Message) {}
 
 func testHare(tb testing.TB, total, inactive int) {
 	tb.Helper()
-	active := total - inactive
 	tst := &tester{
 		TB:            tb,
 		rng:           rand.New(rand.NewSource(1001)),
@@ -351,47 +423,18 @@ func testHare(tb testing.TB, total, inactive int) {
 		beacon:        types.Beacon{1, 1, 1, 1},
 		genesis:       types.GetEffectiveGenesis(),
 	}
-	nodes := make([]*node, total)
-	ids := make([]types.ATXID, active)
-	for i := range nodes {
-		nodes[i] = newNode(tst, i)
-		if i < active {
-			ids[i] = nodes[i].atx.ID()
-		} else {
-			nodes[i].atx = nil
-		}
-	}
+	cluster := (&lockstepCluster{t: tst}).
+		addActive(total - inactive).
+		addInactive(inactive)
+
 	layer := tst.genesis + 1
-	for _, n := range nodes[:active] {
-		proposal := &types.Proposal{}
-		proposal.Layer = layer
-		proposal.ActiveSet = ids
-		proposal.EpochData = &types.EpochData{
-			Beacon: tst.beacon,
-		}
-		proposal.AtxID = n.atx.ID()
-		proposal.SmesherID = n.signer.NodeID()
-		id := types.ProposalID{}
-		tst.rng.Read(id[:])
-		bid := types.BallotID{}
-		tst.rng.Read(bid[:])
-		proposal.SetID(id)
-		proposal.Ballot.SetID(bid)
-		for _, other := range nodes {
-			require.NoError(tb, ballots.Add(other.db, &proposal.Ballot))
-			require.NoError(tb, proposals.Add(other.db, proposal))
-		}
-	}
-	cluster := lockstepCluster{
-		t:     tst,
-		nodes: nodes,
-	}
-	cluster.setup(ids)
+	cluster.setup()
+	cluster.genProposals(layer)
 	cluster.movePreround(layer)
 	for i := 0; i < 2*int(notify); i++ {
 		cluster.moveRound()
 	}
-	for _, n := range nodes {
+	for _, n := range cluster.nodes {
 		n.tracer.waitStopped()
 		select {
 		case coin := <-n.hare.Coins():
