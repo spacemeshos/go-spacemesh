@@ -23,3 +23,19 @@ Cherry-pick selected commits to major release branch.
 Copy selected commits to CHANGELOG.md.
 Rename UNRELEASED to a concrete <version>.
 Commit changes, and create a tag.
+
+## Preparing for next release
+
+After releasing a new major or minor version, create a new UNRELEASED section at the top of CHANGELOG.md:
+
+```markdown
+## UNRELEASED
+
+### Upgrade information
+
+### Highlights
+
+### Features
+
+### Improvements
+```
