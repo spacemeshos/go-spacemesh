@@ -66,5 +66,3 @@ Doesn't affect direct peers. In order to disable:
 * [#4882](https://github.com/spacemeshos/go-spacemesh/pull/4882) Increase cache size and parametrize datastore.
 * [#4887](https://github.com/spacemeshos/go-spacemesh/pull/4887) Fixed crashes on API call.
 * [#4871](https://github.com/spacemeshos/go-spacemesh/pull/4871) Add jitter to spread out requests to get poet proof and submit challenge
-* [#4836](https://github.com/spacemeshos/go-spacemesh/pull/4836) p2p drop legacy discovery protocol and custom address book
-* [#4795](https://github.com/spacemeshos/go-spacemesh/pull/4795): p2p add ip4/ip6 blocklists
