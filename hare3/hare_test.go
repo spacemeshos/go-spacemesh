@@ -53,19 +53,6 @@ type tester struct {
 	genesis       types.LayerID
 }
 
-func newNode(t *tester, i int) *node {
-	n := &node{t: t, i: i}
-	n = n.
-		withController().withSyncer().withPublisher().
-		withClock().withDb().withSigner().withAtx().
-		withOracle().withHare()
-	n.hare.Start()
-	t.Cleanup(func() {
-		n.hare.Stop()
-	})
-	return n
-}
-
 type node struct {
 	t *tester
 
@@ -114,9 +101,13 @@ func (n *node) withDb() *node {
 	return n
 }
 
-func (n *node) withAtx() *node {
+func (n *node) withAtx(min, max int) *node {
 	atx := &types.ActivationTx{}
-	atx.NumUnits = 10
+	if max-min > 0 {
+		atx.NumUnits = uint32(n.t.rng.Intn(max-min) + min)
+	} else {
+		atx.NumUnits = uint32(min)
+	}
 	atx.PublishEpoch = n.t.genesis.GetEpoch()
 	atx.SmesherID = n.signer.NodeID()
 	id := types.ATXID{}
@@ -183,11 +174,47 @@ func (n *node) withHare() *node {
 	return n
 }
 
+type clusterOpt func(*lockstepCluster)
+
+func withUnits(min, max int) clusterOpt {
+	return func(cluster *lockstepCluster) {
+		cluster.units.min = min
+		cluster.units.max = max
+	}
+}
+
+func withProposals(fraction float64) clusterOpt {
+	return func(cluster *lockstepCluster) {
+		cluster.proposals.fraction = fraction
+		cluster.proposals.shuffle = true
+	}
+}
+
+func newLockstepCluster(t *tester, opts ...clusterOpt) *lockstepCluster {
+	cluster := &lockstepCluster{t: t}
+	cluster.units.min = 10
+	cluster.units.max = 10
+	cluster.proposals.fraction = 1
+	cluster.proposals.shuffle = false
+	for _, opt := range opts {
+		opt(cluster)
+	}
+	return cluster
+}
+
 // lockstepCluster allows to run rounds in lockstep
 // as no peer will be able to start around until test allows it.
 type lockstepCluster struct {
 	t     *tester
 	nodes []*node
+
+	units struct {
+		min, max int
+	}
+	proposals struct {
+		fraction float64
+		shuffle  bool
+	}
 
 	timestamp time.Time
 	start     chan struct{}
@@ -207,7 +234,7 @@ func (cl *lockstepCluster) addActive(n int) *lockstepCluster {
 	for i := last; i < last+n; i++ {
 		cl.addNode((&node{t: cl.t, i: i}).
 			withController().withSyncer().withPublisher().
-			withClock().withDb().withSigner().withAtx().
+			withClock().withDb().withSigner().withAtx(cl.units.min, cl.units.max).
 			withOracle().withHare())
 	}
 	return cl
@@ -231,7 +258,7 @@ func (cl *lockstepCluster) addEquivocators(n int) *lockstepCluster {
 		cl.addNode((&node{t: cl.t, i: i}).
 			reuseSigner(cl.nodes[i-last].signer).
 			withController().withSyncer().withPublisher().
-			withClock().withDb().withAtx().
+			withClock().withDb().withAtx(cl.units.min, cl.units.max).
 			withOracle().withHare())
 	}
 	return cl
@@ -263,6 +290,7 @@ func (cl *lockstepCluster) activeSet() []types.ATXID {
 
 func (cl *lockstepCluster) genProposals(lid types.LayerID) {
 	active := cl.activeSet()
+	all := []*types.Proposal{}
 	for _, n := range cl.nodes {
 		if n.atx == nil {
 			continue
@@ -281,11 +309,22 @@ func (cl *lockstepCluster) genProposals(lid types.LayerID) {
 		cl.t.rng.Read(bid[:])
 		proposal.SetID(id)
 		proposal.Ballot.SetID(bid)
-		for _, other := range cl.nodes {
+		all = append(all, proposal)
+	}
+	for _, other := range cl.nodes {
+		cp := make([]*types.Proposal, len(all))
+		copy(cp, all)
+		if cl.proposals.shuffle {
+			cl.t.rng.Shuffle(len(cp), func(i, j int) {
+				cp[i], cp[j] = cp[j], cp[i]
+			})
+		}
+		for _, proposal := range cp[:int(float64(len(cp))*cl.proposals.fraction)] {
 			require.NoError(cl.t, ballots.Add(other.db, &proposal.Ballot))
 			require.NoError(cl.t, proposals.Add(other.db, proposal))
 		}
 	}
+
 }
 
 func (cl *lockstepCluster) setup() {
@@ -299,6 +338,7 @@ func (cl *lockstepCluster) setup() {
 				continue
 			}
 			require.NoError(cl.t, atxs.Add(n.db, other.atx))
+
 		}
 		n.oracle.UpdateActiveSet(cl.t.genesis.GetEpoch()+1, active)
 		n.mpublisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ctx context.Context, _ string, msg []byte) error {
@@ -307,7 +347,8 @@ func (cl *lockstepCluster) setup() {
 			for _, other := range cl.nodes {
 				other := other
 				eg.Go(func() error {
-					return other.hare.Handler(ctx, "self", msg)
+					other.hare.Handler(ctx, "self", msg)
+					return nil
 				})
 			}
 			err := eg.Wait()
@@ -429,7 +470,7 @@ func (*testTracer) OnMessageSent(*Message) {}
 
 func (*testTracer) OnMessageReceived(*Message) {}
 
-func testHare(tb testing.TB, active, inactive, equivocators int) {
+func testHare(tb testing.TB, active, inactive, equivocators int, opts ...clusterOpt) {
 	tb.Helper()
 	tst := &tester{
 		TB:            tb,
@@ -440,7 +481,7 @@ func testHare(tb testing.TB, active, inactive, equivocators int) {
 		beacon:        types.Beacon{1, 1, 1, 1},
 		genesis:       types.GetEffectiveGenesis(),
 	}
-	cluster := (&lockstepCluster{t: tst}).
+	cluster := newLockstepCluster(tst, opts...).
 		addActive(active).
 		addInactive(inactive).
 		addEquivocators(equivocators)
@@ -452,6 +493,7 @@ func testHare(tb testing.TB, active, inactive, equivocators int) {
 	for i := 0; i < 2*int(notify); i++ {
 		cluster.moveRound()
 	}
+	var consistent []types.ProposalID
 	for _, n := range cluster.nodes {
 		n.tracer.waitStopped()
 		select {
@@ -464,6 +506,11 @@ func testHare(tb testing.TB, active, inactive, equivocators int) {
 		case rst := <-n.hare.Results():
 			require.Equal(tb, rst.Layer, layer)
 			require.NotEmpty(tb, rst.Proposals)
+			if consistent == nil {
+				consistent = rst.Proposals
+			} else {
+				require.Equal(tb, consistent, rst.Proposals)
+			}
 		default:
 			require.FailNow(tb, "no result")
 		}
@@ -475,8 +522,10 @@ func TestHare(t *testing.T) {
 	t.Run("one", func(t *testing.T) { testHare(t, 1, 0, 0) })
 	t.Run("two", func(t *testing.T) { testHare(t, 2, 0, 0) })
 	t.Run("small", func(t *testing.T) { testHare(t, 5, 0, 0) })
+	t.Run("with proposals subsets", func(t *testing.T) { testHare(t, 5, 0, 0, withProposals(0.5)) })
+	t.Run("with units", func(t *testing.T) { testHare(t, 5, 0, 0, withUnits(10, 50)) })
 	t.Run("with inactive", func(t *testing.T) { testHare(t, 3, 2, 0) })
-	t.Run("with equivocators", func(t *testing.T) { testHare(t, 3, 0, 2) })
+	t.Run("equivocators", func(t *testing.T) { testHare(t, 3, 0, 2, withProposals(0.6)) })
 }
 
 func TestIterationLimit(t *testing.T) {
@@ -491,18 +540,15 @@ func TestIterationLimit(t *testing.T) {
 	}
 	tst.cfg.IterationsLimit = 3
 
-	n := newNode(tst, 0)
 	layer := tst.genesis + 1
-	cluster := lockstepCluster{
-		t:     tst,
-		nodes: []*node{n},
-	}
+	cluster := newLockstepCluster(tst)
+	cluster.addActive(1)
 	cluster.nogossip()
 	cluster.movePreround(layer)
 	for i := 0; i < int(tst.cfg.IterationsLimit)*int(notify); i++ {
 		cluster.moveRound()
 	}
-	require.Empty(t, n.hare.Running())
+	require.Empty(t, cluster.nodes[0].hare.Running())
 }
 
 func TestConfigMarshal(t *testing.T) {
@@ -521,7 +567,9 @@ func TestHandler(t *testing.T) {
 		beacon:        types.Beacon{1, 1, 1, 1},
 		genesis:       types.GetEffectiveGenesis(),
 	}
-	n := newNode(tst, 0)
+	cluster := newLockstepCluster(tst)
+	cluster.addActive(1)
+	n := cluster.nodes[0]
 	require.NoError(t, beacons.Add(n.db, tst.genesis.GetEpoch()+1, tst.beacon))
 	require.NoError(t, atxs.Add(n.db, n.atx))
 	n.oracle.UpdateActiveSet(tst.genesis.GetEpoch()+1, []types.ATXID{n.atx.ID()})
