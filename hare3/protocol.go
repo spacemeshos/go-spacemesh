@@ -50,7 +50,9 @@ type input struct {
 }
 
 func (i *input) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
-	encoder.AddObject("msg", i.Message)
+	if i.Message != nil {
+		i.Message.MarshalLogObject(encoder)
+	}
 	encoder.AddUint8("atxgrade", uint8(i.atxgrade))
 	encoder.AddBool("malicious", i.malicious)
 	encoder.AddString("hash", i.msgHash.ShortString())

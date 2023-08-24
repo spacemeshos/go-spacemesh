@@ -101,6 +101,14 @@ func (n *node) withSigner() *node {
 	return n
 }
 
+func (n *node) reuseSigner(signer *signing.EdSigner) *node {
+	n.signer = signer
+	vrfsigner, err := signer.VRFSigner()
+	require.NoError(n.t, err)
+	n.vrfsigner = vrfsigner
+	return n
+}
+
 func (n *node) withDb() *node {
 	n.db = datastore.NewCachedDB(sql.InMemory(), log.NewNop())
 	return n
@@ -197,12 +205,10 @@ func (cl *lockstepCluster) addNode(n *node) {
 func (cl *lockstepCluster) addActive(n int) *lockstepCluster {
 	last := len(cl.nodes)
 	for i := last; i < last+n; i++ {
-		n := &node{t: cl.t, i: i}
-		n = n.
+		cl.addNode((&node{t: cl.t, i: i}).
 			withController().withSyncer().withPublisher().
 			withClock().withDb().withSigner().withAtx().
-			withOracle().withHare()
-		cl.addNode(n)
+			withOracle().withHare())
 	}
 	return cl
 }
@@ -210,12 +216,23 @@ func (cl *lockstepCluster) addActive(n int) *lockstepCluster {
 func (cl *lockstepCluster) addInactive(n int) *lockstepCluster {
 	last := len(cl.nodes)
 	for i := last; i < last+n; i++ {
-		n := &node{t: cl.t, i: i}
-		n = n.
+		cl.addNode((&node{t: cl.t, i: i}).
 			withController().withSyncer().withPublisher().
 			withClock().withDb().withSigner().
-			withOracle().withHare()
-		cl.addNode(n)
+			withOracle().withHare())
+	}
+	return cl
+}
+
+func (cl *lockstepCluster) addEquivocators(n int) *lockstepCluster {
+	require.LessOrEqual(cl.t, n, len(cl.nodes))
+	last := len(cl.nodes)
+	for i := last; i < last+n; i++ {
+		cl.addNode((&node{t: cl.t, i: i}).
+			reuseSigner(cl.nodes[i-last].signer).
+			withController().withSyncer().withPublisher().
+			withClock().withDb().withAtx().
+			withOracle().withHare())
 	}
 	return cl
 }
@@ -412,7 +429,7 @@ func (*testTracer) OnMessageSent(*Message) {}
 
 func (*testTracer) OnMessageReceived(*Message) {}
 
-func testHare(tb testing.TB, total, inactive int) {
+func testHare(tb testing.TB, active, inactive, equivocators int) {
 	tb.Helper()
 	tst := &tester{
 		TB:            tb,
@@ -424,8 +441,9 @@ func testHare(tb testing.TB, total, inactive int) {
 		genesis:       types.GetEffectiveGenesis(),
 	}
 	cluster := (&lockstepCluster{t: tst}).
-		addActive(total - inactive).
-		addInactive(inactive)
+		addActive(active).
+		addInactive(inactive).
+		addEquivocators(equivocators)
 
 	layer := tst.genesis + 1
 	cluster.setup()
@@ -454,10 +472,11 @@ func testHare(tb testing.TB, total, inactive int) {
 }
 
 func TestHare(t *testing.T) {
-	t.Run("one", func(t *testing.T) { testHare(t, 1, 0) })
-	t.Run("two", func(t *testing.T) { testHare(t, 2, 0) })
-	t.Run("small", func(t *testing.T) { testHare(t, 5, 0) })
-	t.Run("with inactive", func(t *testing.T) { testHare(t, 5, 3) })
+	t.Run("one", func(t *testing.T) { testHare(t, 1, 0, 0) })
+	t.Run("two", func(t *testing.T) { testHare(t, 2, 0, 0) })
+	t.Run("small", func(t *testing.T) { testHare(t, 5, 0, 0) })
+	t.Run("with inactive", func(t *testing.T) { testHare(t, 3, 2, 0) })
+	t.Run("with equivocators", func(t *testing.T) { testHare(t, 3, 0, 2) })
 }
 
 func TestIterationLimit(t *testing.T) {
