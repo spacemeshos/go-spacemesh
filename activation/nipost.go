@@ -241,30 +241,15 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 
 	// Phase 1: query PoET services for proofs
 	if nb.state.PoetProofRef == types.EmptyPoetProofRef {
-		// we have to wait for the poet round to end before querying for the proof
-		if time.Until(poetRoundEnd) > 0 {
-			nb.log.With().Info("waiting till poet round end", log.Duration("wait time", time.Until(poetRoundEnd)))
-
-			select {
-			case <-ctx.Done():
-				return nil, fmt.Errorf("waiting to query proof: %w", ctx.Err())
-			case <-time.After(time.Until(poetRoundEnd)):
-			}
-		}
-
 		now := time.Now()
 		// Deadline: the end of the publish epoch minus the cycle gap. A node that is setup correctly (i.e. can
 		// generate a PoST proof within the cycle gap) has enough time left to generate a post proof and publish.
 		if poetProofDeadline.Before(now) {
 			return nil, fmt.Errorf("%w: deadline to query poet proof for pub epoch %d exceeded (deadline: %s, now: %s)", ErrATXChallengeExpired, challenge.PublishEpoch, poetProofDeadline, now)
 		}
-		// TODO(mafa): this should be renamed from GracePeriod to something like RequestTimeout
-		// and should be much shorter (e.g. 10 seconds instead of 1 hour on mainnet)
-		getProofsCtx, cancel := context.WithTimeout(ctx, nb.poetCfg.GracePeriod)
-		defer cancel()
 
 		events.EmitPoetWaitProof(challenge.PublishEpoch, challenge.TargetEpoch(), time.Until(poetRoundEnd))
-		poetProofRef, membership, err := nb.getBestProof(getProofsCtx, nb.state.Challenge)
+		poetProofRef, membership, err := nb.getBestProof(ctx, nb.state.Challenge)
 		if err != nil {
 			return nil, &PoetSvcUnstableError{msg: "getBestProof failed", source: err}
 		}
@@ -428,16 +413,21 @@ func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge types.Hash3
 			continue
 		}
 		round := r.PoetRound.ID
-		waitTime := calcGetProofWaitTime(time.Until(r.PoetRound.End.IntoTime()), nb.poetCfg.CycleGap)
+		waitDeadline := proofDeadline(r.PoetRound.End.IntoTime(), nb.poetCfg.CycleGap)
 		eg.Go(func() error {
-			logger.With().Info("waiting till poet round end", log.Duration("wait time", waitTime))
+			logger.With().Info("waiting till poet round end", log.Duration("wait time", time.Until(waitDeadline)))
 			select {
 			case <-ctx.Done():
 				return fmt.Errorf("waiting to query proof: %w", ctx.Err())
-			case <-time.After(waitTime):
+			case <-time.After(time.Until(waitDeadline)):
 			}
 
-			proof, members, err := client.Proof(ctx, round)
+			// TODO(mafa): this should be renamed from GracePeriod to something like RequestTimeout
+			// and should be much shorter (e.g. 10 seconds instead of 1 hour on mainnet)
+			getProofsCtx, cancel := context.WithTimeout(ctx, nb.poetCfg.GracePeriod)
+			defer cancel()
+
+			proof, members, err := client.Proof(getProofsCtx, round)
 			switch {
 			case errors.Is(err, context.Canceled):
 				return fmt.Errorf("querying proof: %w", ctx.Err())
@@ -526,9 +516,9 @@ func randomDurationInRange(min, max time.Duration) time.Duration {
 
 // Calculate the time to wait before querying for the proof
 // We add a jitter to avoid all nodes querying for the proof at the same time.
-func calcGetProofWaitTime(tillRoundEnd, cycleGap time.Duration) (waitTime time.Duration) {
+func proofDeadline(roundEnd time.Time, cycleGap time.Duration) (waitTime time.Time) {
 	minJitter := time.Duration(float64(cycleGap) * minPoetGetProofJitter / 100.0)
 	maxJitter := time.Duration(float64(cycleGap) * maxPoetGetProofJitter / 100.0)
 	jitter := randomDurationInRange(minJitter, maxJitter)
-	return tillRoundEnd + jitter
+	return roundEnd.Add(jitter)
 }
