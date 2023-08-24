@@ -43,7 +43,7 @@ type layerClock interface {
 
 type nipostBuilder interface {
 	UpdatePoETProvers([]PoetProvingServiceClient)
-	BuildNIPost(ctx context.Context, challenge *types.NIPostChallenge) (*types.NIPost, time.Duration, error)
+	BuildNIPost(ctx context.Context, challenge *types.NIPostChallenge) (*types.NIPost, error)
 	DataDir() string
 }
 
