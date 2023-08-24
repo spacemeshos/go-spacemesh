@@ -194,8 +194,6 @@ jobs:
         env:
           GOTESTSUM_FORMAT: standard-verbose
           GOTESTSUM_JUNITFILE: unit-tests.xml
-          # We set this to prevent segmentation faults on macOS see - https://github.com/golang/go/issues/49138
-          MallocNanoZone: 0
         run: make test
       - name: Publish Test Report
         uses: mikepenz/action-junit-report@v3
