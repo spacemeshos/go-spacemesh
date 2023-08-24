@@ -324,7 +324,6 @@ func (cl *lockstepCluster) genProposals(lid types.LayerID) {
 			require.NoError(cl.t, proposals.Add(other.db, proposal))
 		}
 	}
-
 }
 
 func (cl *lockstepCluster) setup() {
