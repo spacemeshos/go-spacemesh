@@ -1223,7 +1223,7 @@ func (app *App) stopServices(ctx context.Context) {
 	}
 
 	if app.pprofService != nil {
-		if err := app.db.Close(); err != nil {
+		if err := app.pprofService.Close(); err != nil {
 			app.log.With().Warning("pprof service exited with error", log.Err(err))
 		}
 	}
