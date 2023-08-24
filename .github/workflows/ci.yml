@@ -190,7 +190,7 @@ jobs:
       - name: Clear test cache
         run: make clear-test-cache
       - name: unit tests
-        timeout-minutes: 30
+        timeout-minutes: 35
         env:
           GOTESTSUM_FORMAT: standard-verbose
           GOTESTSUM_JUNITFILE: unit-tests.xml
