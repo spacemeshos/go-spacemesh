@@ -197,6 +197,11 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 	// we want to publish before the publish epoch ends or we won't receive rewards
 	publishEpochEnd := nb.layerClock.LayerToTime((publishEpoch + 1).FirstLayer())
 
+	// we want to fetch the PoET proof latest 1 CycleGap before the publish epoch ends
+	// so that a node that is setup correctly (i.e. can generate a PoST proof within the cycle gap)
+	// has enough time left to generate a post proof and publish
+	poetProofDeadline := publishEpochEnd.Add(-nb.poetCfg.CycleGap)
+
 	logger.With().Info("building nipost",
 		log.Time("poet round start", poetRoundStart),
 		log.Time("poet round end", poetRoundEnd),
@@ -237,12 +242,14 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 	// Phase 1: query PoET services for proofs
 	if nb.state.PoetProofRef == types.EmptyPoetProofRef {
 		now := time.Now()
-		// Deadline: the end of the publish epoch (with a safety margin of `GracePeriod`). If we do not publish within
-		// the publish epoch we won't receive any rewards in the target epoch.
-		if publishEpochEnd.Before(now) {
-			return nil, 0, fmt.Errorf("%w: deadline to query poet proof for pub epoch %d exceeded (deadline: %s, now: %s)", ErrATXChallengeExpired, challenge.PublishEpoch, publishEpochEnd, now)
+		// Deadline: the end of the publish epoch minus the cycle gap. A node that is setup correctly (i.e. can
+		// generate a PoST proof within the cycle gap) has enough time left to generate a post proof and publish.
+		if poetProofDeadline.Before(now) {
+			return nil, 0, fmt.Errorf("%w: deadline to query poet proof for pub epoch %d exceeded (deadline: %s, now: %s)", ErrATXChallengeExpired, challenge.PublishEpoch, poetProofDeadline, now)
 		}
-		getProofsCtx, cancel := context.WithDeadline(ctx, publishEpochEnd)
+		// TODO(mafa): this should be renamed from GracePeriod to something like RequestTimeout
+		// and should be much shorter (e.g. 10 seconds instead of 1 hour on mainnet)
+		getProofsCtx, cancel := context.WithTimeout(ctx, nb.poetCfg.GracePeriod)
 		defer cancel()
 
 		events.EmitPoetWaitProof(challenge.PublishEpoch, challenge.TargetEpoch(), time.Until(poetRoundEnd))
@@ -262,7 +269,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 	var postGenDuration time.Duration = 0
 	if nb.state.NIPost.Post == nil {
 		now := time.Now()
-		// Deadline: the end of the publish epoch (with a safety margin of `GracePeriod`). If we do not publish within
+		// Deadline: the end of the publish epoch. If we do not publish within
 		// the publish epoch we won't receive any rewards in the target epoch.
 		if publishEpochEnd.Before(now) {
 			return nil, 0, fmt.Errorf("%w: deadline to publish ATX for pub epoch %d exceeded (deadline: %s, now: %s)", ErrATXChallengeExpired, challenge.PublishEpoch, publishEpochEnd, now)
