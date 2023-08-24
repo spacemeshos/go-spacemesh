@@ -6,14 +6,29 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ### Upgrade information
 
-Legacy discovery protocol was removed in [4836](https://github.com/spacemeshos/go-spacemesh/pull/4836).
-Config option and flag `p2p-disable-legacy-discovery` is noop, and will be completely removed in future versions. 
-
 ### Highlights
 
 ### Features
 
-* [#4845](https://github.com/spacemeshos/go-spacemesh/pull/4845) API to fetche opened connections.
+### Improvements
+
+## v1.1.2
+
+### Upgrade information
+
+Legacy discovery protocol was removed in [#4836](https://github.com/spacemeshos/go-spacemesh/pull/4836).
+Config option and flag `p2p-disable-legacy-discovery` is noop, and will be completely removed in future versions.
+
+### Highlights
+
+With [#4893](https://github.com/spacemeshos/go-spacemesh/pull/4893) Nodes are given more time to publish an ATX
+Nodes still need to publish an ATX before the new PoET round starts (within 12h on mainnet) to make it into the
+next PoET round, but if they miss that deadline they will now continue to publish an ATX to receive rewards for
+the upcoming epoch and skip one after that.
+
+### Features
+
+* [#4845](https://github.com/spacemeshos/go-spacemesh/pull/4845) API to fetch opened connections.
 
 > grpcurl -plaintext 127.0.0.1:9093 spacemesh.v1.AdminService.PeerInfoStream
 
@@ -47,7 +62,6 @@ Config option and flag `p2p-disable-legacy-discovery` is noop, and will be compl
 
 Doesn't affect direct peers. In order to disable:
 
-
 ```json
 {
   "p2p": {
@@ -61,3 +75,4 @@ Doesn't affect direct peers. In order to disable:
 
 * [#4882](https://github.com/spacemeshos/go-spacemesh/pull/4882) Increase cache size and parametrize datastore.
 * [#4887](https://github.com/spacemeshos/go-spacemesh/pull/4887) Fixed crashes on API call.
+* [#4871](https://github.com/spacemeshos/go-spacemesh/pull/4871) Add jitter to spread out requests to get poet proof and submit challenge
