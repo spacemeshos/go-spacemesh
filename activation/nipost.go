@@ -177,35 +177,31 @@ func (nb *NIPostBuilder) UpdatePoETProvers(poetProvers []PoetProvingServiceClien
 // publish a proof - a process that takes about an epoch.
 func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPostChallenge) (*types.NIPost, time.Duration, error) {
 	logger := nb.log.WithContext(ctx)
-	// Calculate deadline for waiting for poet proofs.
-	// Deadline must fit between:
-	// - the end of the current poet round
-	// - the start of the next one.
-	// It must also accommodate for PoST duration.
-	//
+	// Note: to avoid missing next PoET round, we need to publish the ATX before the next PoET round starts.
+	//   We can still publish an ATX late (i.e. within publish epoch) and receive rewards, but we will miss one
+	//   epoch because we didn't submit the challenge to PoET in time for next round.
 	//                                 PoST
 	//         ┌─────────────────────┐  ┌┐┌─────────────────────┐
 	//         │     POET ROUND      │  │││   NEXT POET ROUND   │
-	// ┌────▲──┴──────────────────┬──┴─▲┴┴┴─────────────────▲┬──┴───► time
-	// │    │      EPOCH          │    │       EPOCH        ││
-	// └────┼─────────────────────┴────┼────────────────────┼┴──────
-	//      │                          │                    │
-	//  WE ARE HERE                DEADLINE FOR       ATX PUBLICATION
-	//                           WAITING FOR POET        DEADLINE
-	//                               PROOFS
+	// ┌────▲──┴──────────────────┬──▲──┴┴┴─────────────────▲┬──┴─────────────► time
+	// │    │      EPOCH          │  │   PUBLISH EPOCH      ││  TARGET EPOCH
+	// └────┼─────────────────────┴──┼──────────────────────┼┴────────────────
+	//      │                        │                      │
+	//  WE ARE HERE            PROOF BECOMES         ATX PUBLICATION
+	//                           AVAILABLE               DEADLINE
 
-	pubEpoch := challenge.PublishEpoch
-	poetRoundStart := nb.layerClock.LayerToTime((pubEpoch - 1).FirstLayer()).Add(nb.poetCfg.PhaseShift)
-	nextPoetRoundStart := nb.layerClock.LayerToTime(pubEpoch.FirstLayer()).Add(nb.poetCfg.PhaseShift)
-	poetRoundEnd := nextPoetRoundStart.Add(-nb.poetCfg.CycleGap)
-	poetProofDeadline := poetRoundEnd.Add(nb.poetCfg.GracePeriod)
+	publishEpoch := challenge.PublishEpoch
+	poetRoundStart := nb.layerClock.LayerToTime((publishEpoch - 1).FirstLayer()).Add(nb.poetCfg.PhaseShift)
+	poetRoundEnd := nb.layerClock.LayerToTime(publishEpoch.FirstLayer()).Add(nb.poetCfg.PhaseShift).Add(-nb.poetCfg.CycleGap)
+
+	// we want to publish before the publish epoch ends or we won't receive rewards
+	publishEpochEnd := nb.layerClock.LayerToTime((publishEpoch + 1).FirstLayer())
 
 	logger.With().Info("building nipost",
 		log.Time("poet round start", poetRoundStart),
 		log.Time("poet round end", poetRoundEnd),
-		log.Time("next poet round start", nextPoetRoundStart),
-		log.Time("poet proof deadline", poetProofDeadline),
-		log.Stringer("publish epoch", pubEpoch),
+		log.Stringer("publish epoch", publishEpoch),
+		log.Time("publish epoch end", publishEpochEnd),
 		log.Stringer("target epoch", challenge.TargetEpoch()),
 	)
 
@@ -217,8 +213,9 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 	}
 
 	// Phase 0: Submit challenge to PoET services.
-	now := time.Now()
 	if len(nb.state.PoetRequests) == 0 {
+		now := time.Now()
+		// Deadline: start of PoET round for publish epoch. PoET won't accept registrations after that.
 		if poetRoundStart.Before(now) {
 			return nil, 0, fmt.Errorf("%w: poet round has already started at %s (now: %s)", ErrATXChallengeExpired, poetRoundStart, now)
 		}
@@ -229,23 +226,23 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 		defer cancel()
 		poetRequests := nb.submitPoetChallenges(submitCtx, prefix, challengeHash.Bytes(), signature, nb.signer.NodeID())
 		if len(poetRequests) == 0 {
-			return nil, 0, &PoetSvcUnstableError{msg: "failed to submit challenge to any PoET", source: ctx.Err()}
+			return nil, 0, &PoetSvcUnstableError{msg: "failed to submit challenge to any PoET", source: submitCtx.Err()}
 		}
 
 		nb.state.Challenge = challengeHash
 		nb.state.PoetRequests = poetRequests
 		nb.persistState()
-		if err := ctx.Err(); err != nil {
-			return nil, 0, fmt.Errorf("submitting challenges: %w", err)
-		}
 	}
 
 	// Phase 1: query PoET services for proofs
 	if nb.state.PoetProofRef == types.EmptyPoetProofRef {
-		if poetProofDeadline.Before(now) {
-			return nil, 0, fmt.Errorf("%w: deadline to query poet proof for pub epoch %d exceeded (deadline: %s, now: %s)", ErrATXChallengeExpired, challenge.PublishEpoch, poetProofDeadline, now)
+		now := time.Now()
+		// Deadline: the end of the publish epoch (with a safety margin of `GracePeriod`). If we do not publish within
+		// the publish epoch we won't receive any rewards in the target epoch.
+		if publishEpochEnd.Before(now) {
+			return nil, 0, fmt.Errorf("%w: deadline to query poet proof for pub epoch %d exceeded (deadline: %s, now: %s)", ErrATXChallengeExpired, challenge.PublishEpoch, publishEpochEnd, now)
 		}
-		getProofsCtx, cancel := context.WithDeadline(ctx, poetProofDeadline)
+		getProofsCtx, cancel := context.WithDeadline(ctx, publishEpochEnd)
 		defer cancel()
 
 		events.EmitPoetWaitProof(challenge.PublishEpoch, challenge.TargetEpoch(), time.Until(poetRoundEnd))
@@ -264,11 +261,20 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 	// Phase 2: Post execution.
 	var postGenDuration time.Duration = 0
 	if nb.state.NIPost.Post == nil {
+		now := time.Now()
+		// Deadline: the end of the publish epoch (with a safety margin of `GracePeriod`). If we do not publish within
+		// the publish epoch we won't receive any rewards in the target epoch.
+		if publishEpochEnd.Before(now) {
+			return nil, 0, fmt.Errorf("%w: deadline to publish ATX for pub epoch %d exceeded (deadline: %s, now: %s)", ErrATXChallengeExpired, challenge.PublishEpoch, publishEpochEnd, now)
+		}
+		postCtx, cancel := context.WithDeadline(ctx, publishEpochEnd)
+		defer cancel()
+
 		nb.log.With().Info("starting post execution", log.Binary("challenge", nb.state.PoetProofRef[:]))
 		startTime := time.Now()
 		events.EmitPostStart(nb.state.PoetProofRef[:])
 
-		proof, proofMetadata, err := nb.postSetupProvider.GenerateProof(ctx, nb.state.PoetProofRef[:], proving.WithPowCreator(nb.nodeID.Bytes()))
+		proof, proofMetadata, err := nb.postSetupProvider.GenerateProof(postCtx, nb.state.PoetProofRef[:], proving.WithPowCreator(nb.nodeID.Bytes()))
 		if err != nil {
 			events.EmitPostFailure()
 			return nil, 0, fmt.Errorf("failed to generate Post: %w", err)
@@ -278,7 +284,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 			return nil, 0, fmt.Errorf("failed to get commitment ATX: %w", err)
 		}
 		if err := nb.validator.Post(
-			ctx,
+			postCtx,
 			challenge.PublishEpoch,
 			nb.nodeID,
 			commitmentAtxId,
