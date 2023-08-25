@@ -19,7 +19,7 @@ func TestGater(t *testing.T) {
 		address string
 		allowed bool
 	}{
-		{address: "/ip4/127.0.0.1/tcp/8000"},
+		{address: "/ip4/10.0.0.1/tcp/8000"},
 		{address: "/ip4/192.168.0.3/tcp/8000"},
 		{address: "/ip6/fe80::42:44ff:fe2a:87c5/tcp/8000"},
 		{address: "/ip6/fe80::42:44ff:fe2a:87c5/tcp/8000"},
