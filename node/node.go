@@ -167,7 +167,6 @@ func GetCommand() *cobra.Command {
 
 				// This blocks until the context is finished or until an error is produced
 				err = app.Start(ctx)
-
 				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cleanupCancel()
 				done := make(chan struct{}, 1)
@@ -320,6 +319,8 @@ type App struct {
 	grpcPublicService  *grpcserver.Server
 	grpcPrivateService *grpcserver.Server
 	jsonAPIService     *grpcserver.JSONHTTPServer
+	pprofService       *http.Server
+	profilerService    *profiler.Profiler
 	syncer             *syncer.Syncer
 	proposalListener   *proposals.Handler
 	proposalBuilder    *miner.ProposalBuilder
@@ -1004,7 +1005,10 @@ func (app *App) startServices(ctx context.Context) error {
 	}
 	app.eg.Go(func() error {
 		app.postVerifier.Start(ctx)
-		return nil
+		// Start only returns when the context expires (which means the system
+		// is shutting down). We do the closing of the post verifier here so
+		// it's ensured that start has returned before we call Close.
+		return app.postVerifier.Close()
 	})
 	app.syncer.Start()
 	app.beaconProtocol.Start(ctx)
@@ -1217,8 +1221,15 @@ func (app *App) stopServices(ctx context.Context) {
 		app.dbMetrics.Close()
 	}
 
-	if app.postVerifier != nil {
-		app.postVerifier.Close()
+	if app.pprofService != nil {
+		if err := app.pprofService.Close(); err != nil {
+			app.log.With().Warning("pprof service exited with error", log.Err(err))
+		}
+	}
+	if app.profilerService != nil {
+		if err := app.profilerService.Stop(); err != nil {
+			app.log.With().Warning("profiler service exited with error", log.Err(err))
+		}
 	}
 
 	events.CloseEventReporter()
@@ -1307,6 +1318,37 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log, dbPath string) error {
 
 // Start starts the Spacemesh node and initializes all relevant services according to command line arguments provided.
 func (app *App) Start(ctx context.Context) error {
+	err := app.startSynchronous(ctx)
+	if err != nil {
+		app.log.With().Error("failed to start App", log.Err(err))
+		return err
+	}
+	defer events.ReportError(events.NodeError{
+		Msg:   "node is shutting down",
+		Level: zapcore.InfoLevel,
+	})
+	// TODO: pass app.eg to components and wait for them collectively
+	if app.ptimesync != nil {
+		app.eg.Go(func() error {
+			app.errCh <- app.ptimesync.Wait()
+			return nil
+		})
+	}
+	// app blocks until it receives a signal to exit
+	// this signal may come from the node or from sig-abort (ctrl-c)
+	select {
+	case <-ctx.Done():
+		return nil
+	case err = <-app.errCh:
+		return err
+	}
+}
+
+func (app *App) startSynchronous(ctx context.Context) (err error) {
+	// notify anyone who might be listening that the app has finished starting.
+	// this can be used by, e.g., app tests.
+	defer close(app.started)
+
 	// Create a contextual logger for local usage (lower-level modules will create their own contextual loggers
 	// using context passed down to them)
 	logger := app.log.WithContext(ctx)
@@ -1330,10 +1372,9 @@ func (app *App) Start(ctx context.Context) error {
 	app.errCh = make(chan error, 100)
 	if app.Config.PprofHTTPServer {
 		logger.Info("starting pprof server")
-		srv := &http.Server{Addr: ":6060"}
-		defer srv.Shutdown(ctx)
+		app.pprofService = &http.Server{Addr: ":6060"}
 		app.eg.Go(func() error {
-			if err := srv.ListenAndServe(); err != nil {
+			if err := app.pprofService.ListenAndServe(); err != nil {
 				app.errCh <- fmt.Errorf("cannot start pprof http server: %w", err)
 			}
 			return nil
@@ -1341,7 +1382,8 @@ func (app *App) Start(ctx context.Context) error {
 	}
 
 	if app.Config.ProfilerURL != "" {
-		p, err := profiler.Start(profiler.Config{
+
+		app.profilerService, err = profiler.Start(profiler.Config{
 			ApplicationName: app.Config.ProfilerName,
 			// app.Config.ProfilerURL should be the pyroscope server address
 			// TODO: AuthToken? no need right now since server isn't public
@@ -1351,7 +1393,6 @@ func (app *App) Start(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("cannot start profiling client: %w", err)
 		}
-		defer p.Stop()
 	}
 
 	lg := logger.Named(app.edSgn.NodeID().ShortString()).WithFields(app.edSgn.NodeID())
@@ -1430,29 +1471,7 @@ func (app *App) Start(ctx context.Context) error {
 	events.SubscribeToLayers(app.clock)
 	app.log.Info("app started")
 
-	// notify anyone who might be listening that the app has finished starting.
-	// this can be used by, e.g., app tests.
-	close(app.started)
-
-	defer events.ReportError(events.NodeError{
-		Msg:   "node is shutting down",
-		Level: zapcore.InfoLevel,
-	})
-	// TODO: pass app.eg to components and wait for them collectively
-	if app.ptimesync != nil {
-		app.eg.Go(func() error {
-			app.errCh <- app.ptimesync.Wait()
-			return nil
-		})
-	}
-	// app blocks until it receives a signal to exit
-	// this signal may come from the node or from sig-abort (ctrl-c)
-	select {
-	case <-ctx.Done():
-		return nil
-	case err = <-app.errCh:
-		return err
-	}
+	return nil
 }
 
 func (app *App) preserveAfterRecovery(ctx context.Context) {
