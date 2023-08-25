@@ -84,7 +84,7 @@ func TestNIPostBuilderWithMocks(t *testing.T) {
 		withPoetClients([]PoetProvingServiceClient{poetProvider}),
 	)
 	require.NoError(t, err)
-	nipost, _, err := nb.BuildNIPost(context.Background(), &challenge)
+	nipost, err := nb.BuildNIPost(context.Background(), &challenge)
 	require.NoError(t, err)
 	require.NotNil(t, nipost)
 }
@@ -130,7 +130,7 @@ func TestPostSetup(t *testing.T) {
 	r.NoError(postProvider.StartSession(context.Background()))
 	t.Cleanup(func() { assert.NoError(t, postProvider.Reset()) })
 
-	nipost, _, err := nb.BuildNIPost(context.Background(), &challenge)
+	nipost, err := nb.BuildNIPost(context.Background(), &challenge)
 	r.NoError(err)
 	r.NotNil(nipost)
 }
@@ -192,8 +192,9 @@ func buildNIPost(tb testing.TB, postProvider *testPostManager, nipostChallenge t
 
 	epoch := layersPerEpoch * layerDuration
 	poetCfg := PoetConfig{
-		PhaseShift: epoch / 5,
-		CycleGap:   epoch / 10,
+		PhaseShift:  epoch / 5,
+		CycleGap:    epoch / 10,
+		GracePeriod: 1 * time.Second,
 	}
 
 	poetProver := spawnPoet(tb, WithGenesis(time.Now()), WithEpochDuration(epoch), WithPhaseShift(poetCfg.PhaseShift), WithCycleGap(poetCfg.CycleGap))
@@ -214,7 +215,7 @@ func buildNIPost(tb testing.TB, postProvider *testPostManager, nipostChallenge t
 		withPoetClients([]PoetProvingServiceClient{poetProver}),
 	)
 	require.NoError(tb, err)
-	nipost, _, err := nb.BuildNIPost(context.Background(), &nipostChallenge)
+	nipost, err := nb.BuildNIPost(context.Background(), &nipostChallenge)
 	require.NoError(tb, err)
 	return nipost
 }
@@ -234,7 +235,14 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 
 	postProvider := newTestPostManager(t)
 
-	poetProver := spawnPoet(t, WithGenesis(time.Now()), WithEpochDuration(time.Second))
+	epoch := layersPerEpoch * layerDuration
+	poetCfg := PoetConfig{
+		PhaseShift:  epoch / 5,
+		CycleGap:    epoch / 10,
+		GracePeriod: 1 * time.Second,
+	}
+	genesis := time.Now()
+	poetProver := spawnPoet(t, WithGenesis(genesis), WithEpochDuration(epoch), WithPhaseShift(poetCfg.PhaseShift), WithCycleGap(poetCfg.CycleGap))
 
 	ctrl := gomock.NewController(t)
 	poetDb := NewMockpoetDbAPI(ctrl)
@@ -255,21 +263,21 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 		t.TempDir(),
 		logtest.New(t),
 		postProvider.signer,
-		PoetConfig{},
+		poetCfg,
 		mclock,
 		WithNipostValidator(nipostValidator),
 		withPoetClients([]PoetProvingServiceClient{poetProver}),
 	)
 	require.NoError(t, err)
 
-	nipost, _, err := nb.BuildNIPost(context.Background(), &challenge)
+	nipost, err := nb.BuildNIPost(context.Background(), &challenge)
 	r.EqualError(err, "post setup not complete")
 	r.Nil(nipost)
 
 	r.NoError(postProvider.PrepareInitializer(context.Background(), postProvider.opts))
 	r.NoError(postProvider.StartSession(context.Background()))
 
-	nipost, _, err = nb.BuildNIPost(context.Background(), &challenge)
+	nipost, err = nb.BuildNIPost(context.Background(), &challenge)
 	r.NoError(err)
 	r.NotNil(nipost)
 
@@ -350,7 +358,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 
 	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 	nipostValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return(nil)
-	nipost, _, err := nb.BuildNIPost(context.Background(), &challenge)
+	nipost, err := nb.BuildNIPost(context.Background(), &challenge)
 	req.NoError(err)
 	req.NotNil(nipost)
 
@@ -375,7 +383,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	req.NoError(err)
 	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil, fmt.Errorf("error")).Times(1)
 	// check that proof ref is not called again
-	nipost, _, err = nb.BuildNIPost(context.Background(), &challenge2)
+	nipost, err = nb.BuildNIPost(context.Background(), &challenge2)
 	req.Nil(nipost)
 	req.Error(err)
 
@@ -401,7 +409,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 	nipostValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return(nil)
 	// check that proof ref is not called again
-	nipost, _, err = nb.BuildNIPost(context.Background(), &challenge2)
+	nipost, err = nb.BuildNIPost(context.Background(), &challenge2)
 	req.NoError(err)
 	req.NotNil(nipost)
 
@@ -409,7 +417,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
 	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 	nipostValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return(nil)
-	nipost, _, err = nb.BuildNIPost(context.Background(), &challenge3)
+	nipost, err = nb.BuildNIPost(context.Background(), &challenge3)
 	req.NoError(err)
 	req.NotNil(nipost)
 }
@@ -485,7 +493,7 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 	req.NoError(err)
 
 	// Act
-	nipost, _, err := nb.BuildNIPost(context.Background(), &challenge)
+	nipost, err := nb.BuildNIPost(context.Background(), &challenge)
 	req.NoError(err)
 
 	// Verify
@@ -561,7 +569,7 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 	req.NoError(err)
 
 	// Act
-	nipost, _, err := nb.BuildNIPost(context.Background(), &challenge)
+	nipost, err := nb.BuildNIPost(context.Background(), &challenge)
 	req.NoError(err)
 
 	// Verify
@@ -601,7 +609,7 @@ func TestNIPostBuilder_Close(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	nipost, _, err := nb.BuildNIPost(ctx, &challenge)
+	nipost, err := nb.BuildNIPost(ctx, &challenge)
 	r.ErrorIs(err, context.Canceled)
 	r.Nil(nipost)
 }
@@ -611,7 +619,9 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 	challenge := types.NIPostChallenge{
 		PublishEpoch: postGenesisEpoch + 1,
 	}
-	poetCfg := PoetConfig{PhaseShift: layerDuration}
+	poetCfg := PoetConfig{
+		PhaseShift: layerDuration,
+	}
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -640,7 +650,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			withPoetClients([]PoetProvingServiceClient{poetProver}),
 		)
 		require.NoError(t, err)
-		nipst, _, err := nb.BuildNIPost(context.Background(), &challenge)
+		nipst, err := nb.BuildNIPost(context.Background(), &challenge)
 		require.ErrorIs(t, err, ErrPoetServiceUnstable)
 		require.Nil(t, nipst)
 	})
@@ -670,7 +680,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		nipst, _, err := nb.BuildNIPost(context.Background(), &challenge)
+		nipst, err := nb.BuildNIPost(context.Background(), &challenge)
 		require.ErrorIs(t, err, ErrPoetServiceUnstable)
 		require.Nil(t, nipst)
 	})
@@ -704,7 +714,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			withPoetClients([]PoetProvingServiceClient{poetProver}),
 		)
 		require.NoError(t, err)
-		nipst, _, err := nb.BuildNIPost(context.Background(), &challenge)
+		nipst, err := nb.BuildNIPost(context.Background(), &challenge)
 		require.ErrorIs(t, err, ErrPoetServiceUnstable)
 		require.Nil(t, nipst)
 	})
@@ -731,7 +741,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			withPoetClients([]PoetProvingServiceClient{poetProver}),
 		)
 		require.NoError(t, err)
-		nipst, _, err := nb.BuildNIPost(context.Background(), &challenge)
+		nipst, err := nb.BuildNIPost(context.Background(), &challenge)
 		require.ErrorIs(t, err, ErrPoetProofNotReceived)
 		require.Nil(t, nipst)
 	})
@@ -759,7 +769,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			withPoetClients([]PoetProvingServiceClient{poetProver}),
 		)
 		require.NoError(t, err)
-		nipst, _, err := nb.BuildNIPost(context.Background(), &challenge)
+		nipst, err := nb.BuildNIPost(context.Background(), &challenge)
 		require.ErrorIs(t, err, ErrPoetProofNotReceived)
 		require.Nil(t, nipst)
 	})
@@ -804,7 +814,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 		require.NoError(t, err)
 
 		challenge := types.NIPostChallenge{PublishEpoch: currLayer.GetEpoch()}
-		nipost, _, err := nb.BuildNIPost(context.Background(), &challenge)
+		nipost, err := nb.BuildNIPost(context.Background(), &challenge)
 		require.ErrorIs(t, err, ErrATXChallengeExpired)
 		require.ErrorContains(t, err, "poet round has already started")
 		require.Nil(t, nipost)
@@ -842,7 +852,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 		}
 		require.NoError(t, saveBuilderState(dir, &state))
 
-		nipost, _, err := nb.BuildNIPost(context.Background(), &challenge)
+		nipost, err := nb.BuildNIPost(context.Background(), &challenge)
 		require.ErrorIs(t, err, ErrATXChallengeExpired)
 		require.ErrorContains(t, err, "poet proof for pub epoch")
 		require.Nil(t, nipost)
@@ -882,7 +892,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 		}
 		require.NoError(t, saveBuilderState(dir, &state))
 
-		nipost, _, err := nb.BuildNIPost(context.Background(), &challenge)
+		nipost, err := nb.BuildNIPost(context.Background(), &challenge)
 		require.ErrorIs(t, err, ErrATXChallengeExpired)
 		require.ErrorContains(t, err, "deadline to publish ATX for pub epoch")
 		require.Nil(t, nipost)
@@ -957,11 +967,11 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 	req.NoError(err)
 
 	// Act
-	nipost, _, err := nb.BuildNIPost(buildCtx, &challenge)
+	nipost, err := nb.BuildNIPost(buildCtx, &challenge)
 	req.ErrorIs(err, context.Canceled)
 	req.Nil(nipost)
 
-	nipost, _, err = nb.BuildNIPost(context.Background(), &challenge)
+	nipost, err = nb.BuildNIPost(context.Background(), &challenge)
 	req.NoError(err)
 
 	// Verify
@@ -1045,15 +1055,15 @@ func TestCalculatingGetProofWaitTime(t *testing.T) {
 	t.Parallel()
 	t.Run("past round end", func(t *testing.T) {
 		t.Parallel()
-		waitTime := calcGetProofWaitTime(-time.Hour, time.Hour*12)
-		require.Less(t, waitTime, time.Duration(0))
+		deadline := proofDeadline(time.Now().Add(-time.Hour), time.Hour*12)
+		require.Less(t, time.Until(deadline), time.Duration(0))
 	})
 	t.Run("before round end", func(t *testing.T) {
 		t.Parallel()
 		cycleGap := 12 * time.Hour
-		waitTime := calcGetProofWaitTime(time.Hour, cycleGap)
+		deadline := proofDeadline(time.Now().Add(time.Hour), cycleGap)
 
-		require.Greater(t, waitTime, time.Hour+time.Duration(float64(cycleGap)*minPoetGetProofJitter/100))
-		require.LessOrEqual(t, waitTime, time.Hour+time.Duration(float64(cycleGap)*maxPoetGetProofJitter/100))
+		require.Greater(t, time.Until(deadline), time.Hour+time.Duration(float64(cycleGap)*minPoetGetProofJitter/100))
+		require.LessOrEqual(t, time.Until(deadline), time.Hour+time.Duration(float64(cycleGap)*maxPoetGetProofJitter/100))
 	})
 }

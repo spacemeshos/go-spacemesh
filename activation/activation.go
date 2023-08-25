@@ -624,11 +624,10 @@ func (b *Builder) poetRoundStart(epoch types.EpochID) time.Time {
 func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChallenge) (*types.ActivationTx, error) {
 	pubEpoch := challenge.PublishEpoch
 
-	nipost, postDuration, err := b.nipostBuilder.BuildNIPost(ctx, challenge)
+	nipost, err := b.nipostBuilder.BuildNIPost(ctx, challenge)
 	if err != nil {
 		return nil, fmt.Errorf("build NIPost: %w", err)
 	}
-	metrics.PostDuration.Set(float64(postDuration.Nanoseconds()))
 
 	b.log.With().Info("awaiting atx publication epoch",
 		log.Stringer("pub_epoch", pubEpoch),
