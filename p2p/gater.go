@@ -105,7 +105,19 @@ func (g *gater) InterceptAddrDial(pid peer.ID, m multiaddr.Multiaddr) bool {
 	if _, exist := g.direct[pid]; exist {
 		return true
 	}
-	return len(g.h.Network().Peers()) <= g.outbound && g.allowed(m)
+	if len(g.h.Network().Peers()) > g.outbound {
+		return false
+	}
+	if !g.allowed(m) {
+		return false
+	}
+	if ip := parseIP(m); ip != nil {
+		g.mu.Lock()
+		n := g.ipsCounter[string(ip)]
+		g.mu.Unlock()
+		return g.iplimit > n
+	}
+	return true
 }
 
 func (g *gater) InterceptAccept(n network.ConnMultiaddrs) bool {
@@ -116,7 +128,7 @@ func (g *gater) InterceptAccept(n network.ConnMultiaddrs) bool {
 		g.mu.Lock()
 		n := g.ipsCounter[string(ip)]
 		g.mu.Unlock()
-		return g.iplimit > n+1
+		return g.iplimit > n
 	}
 	return true
 }

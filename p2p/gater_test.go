@@ -52,7 +52,7 @@ func TestGaterIPLimit(t *testing.T) {
 	)
 
 	cfg := DefaultConfig()
-	cfg.IPLimit = 3
+	cfg.IPLimit = 2
 	h, err := mocknet.New().GenPeer()
 	require.NoError(t, err)
 
@@ -130,6 +130,7 @@ func TestGaterIPLimit(t *testing.T) {
 			addr, err := multiaddr.NewMultiaddr(tc.address)
 			require.NoError(t, err)
 			require.Equal(t, tc.allowed, gater.InterceptAccept(remote{addr}))
+			require.Equal(t, tc.allowed, gater.InterceptAddrDial("", addr))
 		})
 	}
 }

@@ -44,10 +44,8 @@ func DefaultConfig() Config {
 		InboundFraction:    0.8,
 		OutboundFraction:   1.1,
 		RelayServer:        RelayServer{TTL: 20 * time.Minute, Reservations: 512},
-		IPLimit:            3,
+		IPLimit:            10,
 		IP4Blocklist: []string{
-			// localhost
-			"127.0.0.0/8",
 			// private networks
 			"10.0.0.0/8",
 			"100.64.0.0/10",
@@ -57,8 +55,6 @@ func DefaultConfig() Config {
 			"169.254.0.0/16",
 		},
 		IP6Blocklist: []string{
-			// localhost
-			"::1/128",
 			// ULA reserved
 			"fc00::/7",
 			// link local
