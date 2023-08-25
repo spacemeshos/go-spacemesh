@@ -17,7 +17,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/log"
 	discovery "github.com/spacemeshos/go-spacemesh/p2p/dhtdiscovery"
-	"github.com/spacemeshos/go-spacemesh/p2p/peerexchange"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
@@ -85,9 +84,7 @@ type Host struct {
 
 	nodeReporter func()
 
-	discovery *discovery.Discovery
-	legacy    *peerexchange.Discovery
-
+	discovery        *discovery.Discovery
 	direct, bootnode map[peer.ID]struct{}
 }
 
@@ -125,19 +122,6 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 	}); err != nil {
 		return nil, fmt.Errorf("failed to initialize pubsub: %w", err)
 	}
-	if !cfg.DisableLegacyDiscovery {
-		if fh.legacy, err = peerexchange.New(fh.logger, h, peerexchange.Config{
-			DataDir:          cfg.DataDir,
-			Bootnodes:        cfg.Bootnodes,
-			AdvertiseAddress: cfg.AdvertiseAddress,
-			MinPeers:         cfg.MinPeers,
-			SlowCrawl:        10 * time.Minute,
-			FastCrawl:        10 * time.Second,
-		}); err != nil {
-			return nil, fmt.Errorf("failed to initialize peerexchange discovery: %w", err)
-		}
-	}
-
 	dopts := []discovery.Opt{
 		discovery.WithMinPeers(cfg.MinPeers),
 		discovery.WithHighPeers(cfg.HighPeers),
@@ -234,9 +218,6 @@ func (fh *Host) Start() error {
 	if fh.closed.closed {
 		return errors.New("p2p: closed")
 	}
-	if fh.legacy != nil {
-		fh.legacy.StartScan()
-	}
 	fh.discovery.Start()
 	if !fh.cfg.Bootnode {
 		fh.eg.Go(func() error {
@@ -256,9 +237,6 @@ func (fh *Host) Stop() error {
 	}
 	fh.cancel()
 	fh.closed.closed = true
-	if fh.legacy != nil {
-		fh.legacy.Stop()
-	}
 	fh.discovery.Stop()
 	fh.eg.Wait()
 	if err := fh.Host.Close(); err != nil {
