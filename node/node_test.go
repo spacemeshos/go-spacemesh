@@ -417,6 +417,8 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 	app := New(WithLog(logger))
 	app.Config = getTestDefaultConfig(t)
+	app.Config.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte{1}).String()
+	app.Config.SMESHING.Opts.DataDir = t.TempDir()
 
 	edSgn, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -1166,7 +1168,7 @@ func getTestDefaultConfig(tb testing.TB) *config.Config {
 	cfg.POST.K2 = 4
 
 	cfg.SMESHING = config.DefaultSmeshingConfig()
-	cfg.SMESHING.Start = false
+	cfg.SMESHING.Start = true
 	cfg.SMESHING.Opts.NumUnits = cfg.POST.MinNumUnits + 1
 	cfg.SMESHING.Opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
 
