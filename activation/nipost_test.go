@@ -49,10 +49,6 @@ func TestNIPostBuilderWithMocks(t *testing.T) {
 		PublishEpoch: postGenesisEpoch + 2,
 	}
 
-	poetCfg := PoetConfig{
-		GracePeriod: 1 * time.Second,
-	}
-
 	ctrl := gomock.NewController(t)
 	postProvider := NewMockpostSetupProvider(ctrl)
 	postProvider.EXPECT().Status().Return(&PostSetupStatus{State: PostSetupStateComplete})
@@ -82,7 +78,7 @@ func TestNIPostBuilderWithMocks(t *testing.T) {
 		t.TempDir(),
 		logtest.New(t),
 		sig,
-		poetCfg,
+		PoetConfig{},
 		mclock,
 		WithNipostValidator(nipostValidator),
 		withPoetClients([]PoetProvingServiceClient{poetProvider}),
@@ -101,10 +97,6 @@ func TestPostSetup(t *testing.T) {
 
 	challenge := types.NIPostChallenge{
 		PublishEpoch: postGenesisEpoch + 2,
-	}
-
-	poetCfg := PoetConfig{
-		GracePeriod: 1 * time.Second,
 	}
 
 	poetProvider := defaultPoetServiceMock(t, []byte("poet"))
@@ -127,7 +119,7 @@ func TestPostSetup(t *testing.T) {
 		t.TempDir(),
 		logtest.New(t),
 		postProvider.signer,
-		poetCfg,
+		PoetConfig{},
 		mclock,
 		WithNipostValidator(nipostValidator),
 		withPoetClients([]PoetProvingServiceClient{poetProvider}),
@@ -319,10 +311,6 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	postProvider.EXPECT().CommitmentAtx().Return(types.EmptyATXID, nil).AnyTimes()
 	postProvider.EXPECT().LastOpts().Return(&PostSetupOpts{}).AnyTimes()
 
-	poetCfg := PoetConfig{
-		GracePeriod: 1 * time.Second,
-	}
-
 	challenge := types.NIPostChallenge{
 		PublishEpoch: postGenesisEpoch + 2,
 	}
@@ -361,7 +349,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 		dir,
 		logtest.New(t),
 		sig,
-		poetCfg,
+		PoetConfig{},
 		mclock,
 		WithNipostValidator(nipostValidator),
 		withPoetClients([]PoetProvingServiceClient{poetProver}),
@@ -388,7 +376,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 		dir,
 		logtest.New(t),
 		sig,
-		poetCfg,
+		PoetConfig{},
 		mclock,
 		withPoetClients([]PoetProvingServiceClient{poetProver}),
 	)
@@ -412,7 +400,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 		dir,
 		logtest.New(t),
 		sig,
-		poetCfg,
+		PoetConfig{},
 		mclock,
 		WithNipostValidator(nipostValidator),
 		withPoetClients([]PoetProvingServiceClient{poetProver}),
@@ -475,8 +463,7 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 	sig, err := signing.NewEdSigner()
 	req.NoError(err)
 	poetCfg := PoetConfig{
-		PhaseShift:  layerDuration * layersPerEpoch / 2,
-		GracePeriod: 1 * time.Second,
+		PhaseShift: layerDuration * layersPerEpoch / 2,
 	}
 	postProvider := NewMockpostSetupProvider(ctrl)
 	postProvider.EXPECT().Status().Return(&PostSetupStatus{State: PostSetupStateComplete})
@@ -534,10 +521,6 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 		},
 	}
 
-	poetCfg := PoetConfig{
-		GracePeriod: 1 * time.Second,
-	}
-
 	ctrl := gomock.NewController(t)
 	nipostValidator := NewMocknipostValidator(ctrl)
 	poetDb := NewMockpoetDbAPI(ctrl)
@@ -578,7 +561,7 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 		t.TempDir(),
 		logtest.New(t),
 		sig,
-		poetCfg,
+		PoetConfig{},
 		mclock,
 		WithNipostValidator(nipostValidator),
 		withPoetClients(poets),
@@ -637,8 +620,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		PublishEpoch: postGenesisEpoch + 1,
 	}
 	poetCfg := PoetConfig{
-		PhaseShift:  layerDuration,
-		GracePeriod: 1 * time.Second,
+		PhaseShift: layerDuration,
 	}
 
 	sig, err := signing.NewEdSigner()
@@ -954,8 +936,7 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 	sig, err := signing.NewEdSigner()
 	req.NoError(err)
 	poetCfg := PoetConfig{
-		PhaseShift:  layerDuration * layersPerEpoch / 2,
-		GracePeriod: 1 * time.Second,
+		PhaseShift: layerDuration * layersPerEpoch / 2,
 	}
 	postProvider := NewMockpostSetupProvider(ctrl)
 	postProvider.EXPECT().Status().Return(&PostSetupStatus{State: PostSetupStateComplete}).Times(2)
