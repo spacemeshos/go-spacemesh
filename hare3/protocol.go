@@ -98,7 +98,7 @@ type protocol struct {
 	coinout        bool
 	coin           *types.VrfSignature // smallest vrf from preround messages. not a part of paper
 	initial        []types.ProposalID  // Si
-	result         *types.Hash32       // set after Round 6. Case 1
+	result         *types.Hash32       // set after waiting for notify messages. Case 1
 	locked         *types.Hash32       // Li
 	hardLocked     bool
 	validProposals map[types.Hash32][]types.ProposalID // Ti
