@@ -767,12 +767,14 @@ func (app *App) initServices(ctx context.Context) error {
 		app.addLogger(HareLogger, lg),
 	)
 	if app.Config.HARE3.Enable {
+		if err := app.Config.HARE3.Validate(time.Duration(app.Config.Tortoise.Zdist) * app.Config.LayerDuration); err != nil {
+			return err
+		}
 		logger := app.addLogger(HareLogger, lg).Zap()
 		app.hare3 = hare3.New(
 			app.clock, app.host, app.cachedDB, app.edVerifier, app.edSgn, app.hOracle, newSyncer,
 			hare3.WithLogger(logger),
 			hare3.WithConfig(app.Config.HARE3),
-			hare3.WithEnableLayer(types.GetEffectiveGenesis()),
 		)
 		app.hare3.Start()
 		app.eg.Go(func() error {

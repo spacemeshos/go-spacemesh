@@ -30,7 +30,7 @@ import (
 
 type Config struct {
 	Enable          bool          `mapstructure:"enable"`
-	EnableAfter     types.LayerID `mapstructure:"enable-layer"`
+	EnableLayer     types.LayerID `mapstructure:"enable-layer"`
 	Committee       uint16        `mapstructure:"committee"`
 	Leaders         uint16        `mapstructure:"leaders"`
 	IterationsLimit uint8         `mapstructure:"iterations-limit"`
@@ -39,9 +39,17 @@ type Config struct {
 	ProtocolName    string
 }
 
+func (cfg *Config) Validate(zdist time.Duration) error {
+	terminates := cfg.roundStart(IterRound{Iter: cfg.IterationsLimit, Round: hardlock})
+	if terminates > zdist {
+		return fmt.Errorf("hare terminates later (%v) than expected (%v)", terminates, zdist)
+	}
+	return nil
+}
+
 func (cfg *Config) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddBool("enabled", cfg.Enable)
-	encoder.AddUint32("after", cfg.EnableAfter.Uint32())
+	encoder.AddUint32("after", cfg.EnableLayer.Uint32())
 	encoder.AddUint16("committee", cfg.Committee)
 	encoder.AddUint16("leaders", cfg.Leaders)
 	encoder.AddUint8("iterations limit", cfg.IterationsLimit)
@@ -138,8 +146,8 @@ func WithLogger(logger *zap.Logger) Opt {
 // Note that for it to have effect it needs to be after WithConfig.
 func WithEnableLayer(layer types.LayerID) Opt {
 	return func(hr *Hare) {
-		hr.config.EnableAfter = layer
-		hr.oracle.config.EnableAfter = layer
+		hr.config.EnableLayer = layer
+		hr.oracle.config.EnableLayer = layer
 	}
 }
 
@@ -228,9 +236,10 @@ func (h *Hare) Start() {
 	h.log.Info("started", zap.Inline(&h.config))
 	h.eg.Go(func() error {
 		h.pubsub.Register(h.config.ProtocolName, h.Handler)
-		enabled := types.MaxLayer(h.nodeclock.CurrentLayer(), h.config.EnableAfter)
+		enabled := types.MaxLayer(h.nodeclock.CurrentLayer()+1, h.config.EnableLayer)
+		enabled = types.MaxLayer(enabled, types.GetEffectiveGenesis()+1)
 		h.log.Debug("starting at layer", zap.Uint32("lid", enabled.Uint32()))
-		for next := enabled + 1; ; next++ {
+		for next := enabled; ; next++ {
 			select {
 			case <-h.nodeclock.AwaitLayer(next):
 				h.log.Debug("notified", zap.Uint32("lid", next.Uint32()))
