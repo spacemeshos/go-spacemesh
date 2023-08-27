@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -31,6 +32,7 @@ import (
 type Config struct {
 	Enable          bool          `mapstructure:"enable"`
 	EnableLayer     types.LayerID `mapstructure:"enable-layer"`
+	DisableLayer    types.LayerID `mapstructure:"disable-layer"`
 	Committee       uint16        `mapstructure:"committee"`
 	Leaders         uint16        `mapstructure:"leaders"`
 	IterationsLimit uint8         `mapstructure:"iterations-limit"`
@@ -49,7 +51,8 @@ func (cfg *Config) Validate(zdist time.Duration) error {
 
 func (cfg *Config) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddBool("enabled", cfg.Enable)
-	encoder.AddUint32("after", cfg.EnableLayer.Uint32())
+	encoder.AddUint32("enabled layer", cfg.EnableLayer.Uint32())
+	encoder.AddUint32("disabled layer", cfg.DisableLayer.Uint32())
 	encoder.AddUint16("committee", cfg.Committee)
 	encoder.AddUint16("leaders", cfg.Leaders)
 	encoder.AddUint8("iterations limit", cfg.IterationsLimit)
@@ -238,8 +241,9 @@ func (h *Hare) Start() {
 		h.pubsub.Register(h.config.ProtocolName, h.Handler)
 		enabled := types.MaxLayer(h.nodeclock.CurrentLayer()+1, h.config.EnableLayer)
 		enabled = types.MaxLayer(enabled, types.GetEffectiveGenesis()+1)
+		disabled := types.MinLayer(types.LayerID(math.MaxUint32), h.config.DisableLayer)
 		h.log.Debug("starting at layer", zap.Uint32("lid", enabled.Uint32()))
-		for next := enabled; ; next++ {
+		for next := enabled; next < disabled; next++ {
 			select {
 			case <-h.nodeclock.AwaitLayer(next):
 				h.log.Debug("notified", zap.Uint32("lid", next.Uint32()))
@@ -248,6 +252,7 @@ func (h *Hare) Start() {
 				return nil
 			}
 		}
+		return nil
 	})
 }
 
