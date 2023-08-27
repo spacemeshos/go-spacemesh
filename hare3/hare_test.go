@@ -722,6 +722,7 @@ func TestProposals(t *testing.T) {
 			atxs: []types.VerifiedActivationTx{
 				gatx(atxids[0], publish, ids[0], 10, 100),
 				gatx(atxids[1], publish, ids[1], 10, 100),
+				gatx(atxids[2], publish, signer.NodeID(), 10, 100),
 			},
 			proposals: []types.Proposal{
 				gproposal(pids[0], atxids[0], ids[0], layer, goodBeacon),
@@ -736,6 +737,7 @@ func TestProposals(t *testing.T) {
 			atxs: []types.VerifiedActivationTx{
 				gatx(atxids[0], publish, ids[0], 10, 100),
 				gatx(atxids[1], publish, ids[1], 10, 100),
+				gatx(atxids[2], publish, signer.NodeID(), 10, 100),
 			},
 			proposals: []types.Proposal{
 				gproposal(pids[0], atxids[0], ids[0], layer, goodBeacon),
@@ -751,6 +753,7 @@ func TestProposals(t *testing.T) {
 			atxs: []types.VerifiedActivationTx{
 				gatx(atxids[0], publish, ids[0], 10, 100),
 				gatx(atxids[1], publish, ids[1], 10, 100),
+				gatx(atxids[2], publish, signer.NodeID(), 10, 100),
 			},
 			proposals: []types.Proposal{
 				gproposal(pids[0], atxids[0], ids[0], layer, goodBeacon),
@@ -765,6 +768,7 @@ func TestProposals(t *testing.T) {
 			atxs: []types.VerifiedActivationTx{
 				gatx(atxids[0], publish, ids[0], 10, 100),
 				gatx(atxids[1], publish, ids[1], 10, 100),
+				gatx(atxids[2], publish, signer.NodeID(), 10, 100),
 			},
 			proposals: []types.Proposal{
 				gproposal(pids[0], atxids[0], ids[0], layer, goodBeacon),
@@ -780,6 +784,7 @@ func TestProposals(t *testing.T) {
 			atxs: []types.VerifiedActivationTx{
 				gatx(atxids[0], publish, ids[0], 10, 100),
 				gatx(atxids[1], publish, ids[1], 10, 100),
+				gatx(atxids[2], publish, signer.NodeID(), 10, 100),
 			},
 			proposals: []types.Proposal{
 				gproposal(pids[0], atxids[0], ids[0], layer, goodBeacon),
@@ -794,6 +799,7 @@ func TestProposals(t *testing.T) {
 			atxs: []types.VerifiedActivationTx{
 				gatx(atxids[0], publish, ids[0], 10, 100),
 				gatx(atxids[1], publish, ids[1], 10, 100),
+				gatx(atxids[2], publish, signer.NodeID(), 10, 100),
 			},
 			proposals: []types.Proposal{
 				gproposal(pids[0], atxids[0], ids[0], layer, goodBeacon),
@@ -808,6 +814,7 @@ func TestProposals(t *testing.T) {
 			atxs: []types.VerifiedActivationTx{
 				gatx(atxids[0], publish, ids[0], 10, 100),
 				gatx(atxids[1], publish, ids[1], 10, 100),
+				gatx(atxids[2], publish, signer.NodeID(), 10, 100),
 			},
 			proposals: []types.Proposal{
 				gproposal(pids[0], atxids[0], ids[0], layer, goodBeacon),
@@ -837,6 +844,7 @@ func TestProposals(t *testing.T) {
 			atxs: []types.VerifiedActivationTx{
 				gatx(atxids[0], publish, ids[0], 10, 100),
 				gatx(atxids[1], publish, ids[1], 10, 100),
+				gatx(atxids[2], publish, signer.NodeID(), 10, 100),
 			},
 			proposals: []types.Proposal{
 				gproposal(pids[0], atxids[0], ids[0], layer, goodBeacon),
@@ -859,7 +867,7 @@ func TestProposals(t *testing.T) {
 			for _, id := range tc.malicious {
 				require.NoError(t, identities.SetMalicious(db, id, []byte("non empty"), time.Time{}))
 			}
-			require.Equal(t, tc.expect, hare.Proposals(tc.layer, tc.beacon))
+			require.Equal(t, tc.expect, hare.proposals(tc.layer, tc.beacon))
 		})
 	}
 }

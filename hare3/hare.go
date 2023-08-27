@@ -382,7 +382,7 @@ func (h *Hare) run(layer types.LayerID, beacon types.Beacon, inputs <-chan *sess
 			return h.ctx.Err()
 		}
 		start := time.Now()
-		proposals = h.Proposals(layer, beacon)
+		proposals = h.proposals(layer, beacon)
 		proposalsLatency.Observe(time.Since(start).Seconds())
 	}
 	proto := newProtocol(proposals, h.config.Committee/2+1)
@@ -471,7 +471,7 @@ func (h *Hare) onOutput(layer types.LayerID, ir IterRound, out output, vrf *type
 	return nil
 }
 
-func (h *Hare) Proposals(lid types.LayerID, epochBeacon types.Beacon) []types.ProposalID {
+func (h *Hare) proposals(lid types.LayerID, epochBeacon types.Beacon) []types.ProposalID {
 	h.log.Debug("requested proposals",
 		zap.Uint32("lid", lid.Uint32()),
 		zap.Stringer("beacon", epochBeacon),
@@ -492,8 +492,8 @@ func (h *Hare) Proposals(lid types.LayerID, epochBeacon types.Beacon) []types.Pr
 		result []types.ProposalID
 	)
 	own, err := h.db.GetEpochAtx(lid.GetEpoch()-1, h.signer.NodeID())
-	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		h.log.Warn("no atxs in the requisted epoch",
+	if err != nil {
+		h.log.Warn("no atxs in the requested epoch",
 			zap.Uint32("epoch", lid.GetEpoch().Uint32()-1),
 			zap.Error(err))
 		return []types.ProposalID{}
@@ -517,33 +517,35 @@ func (h *Hare) Proposals(lid types.LayerID, epochBeacon types.Beacon) []types.Pr
 			)
 			continue
 		}
-		if own != nil {
-			hdr, err := h.db.GetAtxHeader(p.AtxID)
-			if err != nil {
-				return []types.ProposalID{}
-			}
-			if hdr.BaseTickHeight >= own.TickHeight() {
-				// does not vote for future proposal
-				h.log.Warn("proposal base tick height too high. skipping",
-					zap.Uint32("lid", lid.Uint32()),
-					zap.Uint64("proposal_height", hdr.BaseTickHeight),
-					zap.Uint64("own_height", own.TickHeight()),
-				)
-				continue
-			}
+		hdr, err := h.db.GetAtxHeader(p.AtxID)
+		if err != nil {
+			h.log.Error("atx is not loaded", zap.Error(err), zap.Stringer("atxid", p.AtxID))
+			return []types.ProposalID{}
 		}
+		if hdr.BaseTickHeight >= own.TickHeight() {
+			// does not vote for future proposal
+			h.log.Warn("proposal base tick height too high. skipping",
+				zap.Uint32("lid", lid.Uint32()),
+				zap.Uint64("proposal_height", hdr.BaseTickHeight),
+				zap.Uint64("own_height", own.TickHeight()),
+			)
+			continue
+		}
+
 		if p.EpochData != nil {
 			beacon = p.EpochData.Beacon
 		} else if p.RefBallot == types.EmptyBallotID {
+			h.log.Error("empty refballot", zap.Stringer("id", p.Ballot.ID()))
 			return []types.ProposalID{}
 		} else if refBallot, err := ballots.Get(h.db, p.RefBallot); err != nil {
+			h.log.Error("refballot not loaded", zap.Stringer("id", p.RefBallot), zap.Error(err))
 			return []types.ProposalID{}
 		} else if refBallot.EpochData == nil {
+			h.log.Error("refballot with empty epoch data", zap.Stringer("id", refBallot.ID()))
 			return []types.ProposalID{}
 		} else {
 			beacon = refBallot.EpochData.Beacon
 		}
-
 		if beacon == epochBeacon {
 			result = append(result, p.ID())
 		} else {
