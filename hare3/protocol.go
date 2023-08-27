@@ -273,7 +273,10 @@ func (p *protocol) next(active bool) output {
 		p.coinout = true
 	}
 	if p.Round == preround && p.Iter == 0 {
-		p.Round = softlock // skips hardlock
+		// skips hardlock unlike softlock in the paper.
+		// this makes no practical difference from correctness.
+		// but allows to simplify assignment in validValues
+		p.Round = softlock
 	} else if p.Round == notify {
 		p.Round = hardlock
 		p.Iter++
