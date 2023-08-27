@@ -54,12 +54,7 @@ func (cfg *Config) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 // roundStart returns expected time for iter/round relative to
 // layer start.
 func (cfg *Config) roundStart(round IterRound) time.Duration {
-	duration := cfg.PreroundDelay
-	if round.Round == preround {
-		return duration
-	}
-	delay := time.Duration(round.Delay(IterRound{Round: preround})) - 1
-	return duration + cfg.RoundDuration*delay
+	return cfg.PreroundDelay + time.Duration(round.Absolute())*cfg.RoundDuration
 }
 
 func DefaultConfig() Config {
@@ -277,7 +272,7 @@ func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 	}
 	malicious, err := h.db.IsMalicious(msg.Sender)
 	if err != nil {
-		maliciuosError.Inc()
+		maliciousError.Inc()
 		return fmt.Errorf("database error %s", err.Error())
 	}
 	start := time.Now()
@@ -384,6 +379,7 @@ func (h *Hare) run(layer types.LayerID, beacon types.Beacon, inputs <-chan *sess
 		select {
 		case <-h.wallclock.After(h.wallclock.Until(walltime)):
 		case <-h.ctx.Done():
+			return h.ctx.Err()
 		}
 		start := time.Now()
 		proposals = h.Proposals(layer, beacon)
@@ -450,7 +446,7 @@ func (h *Hare) onOutput(layer types.LayerID, ir IterRound, out output, vrf *type
 			out.message.Sender = h.signer.NodeID()
 			out.message.Signature = h.signer.Sign(signing.HARE, out.message.ToMetadata().ToBytes())
 			if err := h.pubsub.Publish(h.ctx, h.config.ProtocolName, out.message.ToBytes()); err != nil {
-				h.log.Error("failed to publish", zap.Inline(out.message))
+				h.log.Error("failed to publish", zap.Inline(out.message), zap.Error(err))
 			}
 			h.tracer.OnMessageSent(out.message)
 			return nil

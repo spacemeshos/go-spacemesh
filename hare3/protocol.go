@@ -294,7 +294,7 @@ func (g *gossip) receive(current IterRound, input *input) (bool, *types.HareProo
 			other.malicious = true
 			other.otherReceived = &current
 			return true, &types.HareProof{Messages: [2]types.HareProofMsg{
-				other.ToMalfeasenceProof(), input.ToMalfeasenceProof(),
+				other.ToMalfeasanceProof(), input.ToMalfeasanceProof(),
 			}}
 		}
 		// Case 2. but also we filter duplicates from p2p layer here

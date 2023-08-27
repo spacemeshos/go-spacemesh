@@ -101,7 +101,7 @@ func (m *Message) ToMetadata() types.HareMetadata {
 	}
 }
 
-func (m *Message) ToMalfeasenceProof() types.HareProofMsg {
+func (m *Message) ToMalfeasanceProof() types.HareProofMsg {
 	return types.HareProofMsg{
 		InnerMsg:  m.ToMetadata(),
 		SmesherID: m.Sender,
@@ -123,6 +123,8 @@ func (m *Message) ToBytes() []byte {
 func (m *Message) Validate() error {
 	if (m.Round == commit || m.Round == notify) && m.Value.Reference == nil {
 		return fmt.Errorf("reference can't be nil in commit or notify rounds")
+	} else if (m.Round == preround || m.Round == propose) && m.Value.Reference != nil {
+		return fmt.Errorf("reference is set to not nil in round %s", m.Round)
 	}
 	return nil
 }
