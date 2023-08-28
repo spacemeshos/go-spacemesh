@@ -102,6 +102,8 @@ jobs:
             - macOS arm64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/macOS_ARM64.zip
             - Linux: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/Linux.zip
             - Linux arm64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/Linux_ARM64.zip
+
+            For information about changes in this release see the [changelog](https://github.com/spacemeshos/go-spacemesh/blob/${{ github.ref_name }}/CHANGELOG.md).
           generate_release_notes: true
           draft: false
           prerelease: true
