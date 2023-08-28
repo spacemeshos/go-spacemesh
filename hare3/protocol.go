@@ -313,16 +313,17 @@ type gset struct {
 
 // Protocol 2. gradecast. page 13.
 func (g *gossip) gradecast(target IterRound) []gset {
+	// unlike paper we use 5-graded gossip for gradecast as well
 	var rst []gset
 	for key, value := range g.state {
 		if key.IterRound == target && !value.malicious {
 			g := grade0
-			if value.atxgrade == grade3 && value.received.Delay(target) <= 1 &&
+			if value.atxgrade == grade5 && value.received.Delay(target) <= 1 &&
 				// 2 (a)
 				(value.otherReceived == nil || value.otherReceived.Delay(target) > 3) {
 				// 2 (b)
 				g = grade2
-			} else if value.atxgrade >= grade2 && value.received.Delay(target) <= 2 &&
+			} else if value.atxgrade >= grade4 && value.received.Delay(target) <= 2 &&
 				// 3 (a)
 				(value.otherReceived == nil || value.otherReceived.Delay(target) > 2) {
 				// 3 (b)

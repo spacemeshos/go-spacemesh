@@ -40,9 +40,6 @@ func (lg *legacyOracle) validate(msg *Message) grade {
 	if !valid {
 		return grade0
 	}
-	if msg.Round == propose {
-		return grade3
-	}
 	return grade5
 }
 
