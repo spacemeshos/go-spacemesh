@@ -51,8 +51,6 @@ func withClock(clock clock.Clock) OptionFunc {
 	}
 }
 
-var WithClock = withClock
-
 // WithGenesisTime sets the genesis time for the NodeClock.
 func WithGenesisTime(genesis time.Time) OptionFunc {
 	return func(opts *option) error {

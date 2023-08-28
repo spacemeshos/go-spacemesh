@@ -31,7 +31,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
-	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
 const layersPerEpoch = 4
@@ -51,6 +50,30 @@ type tester struct {
 	layerDuration time.Duration
 	beacon        types.Beacon
 	genesis       types.LayerID
+}
+
+// timesync.Nodeclock time can't be mocked nicely because of ticks.
+type testNodeClock struct {
+	clock   clock.Clock
+	genesis time.Time
+	layer   time.Duration
+}
+
+func (t *testNodeClock) CurrentLayer() types.LayerID {
+	return types.LayerID(t.clock.Now().Sub(t.genesis) / t.layer)
+}
+
+func (t *testNodeClock) LayerToTime(lid types.LayerID) time.Time {
+	return t.genesis.Add(time.Duration(lid) * t.layer)
+}
+
+func (t *testNodeClock) AwaitLayer(lid types.LayerID) <-chan struct{} {
+	sub := make(chan struct{})
+	go func() {
+		<-t.clock.After(t.clock.Until(t.LayerToTime(lid)))
+		close(sub)
+	}()
+	return sub
 }
 
 type node struct {
@@ -153,18 +176,15 @@ func (n *node) withHare() *node {
 	logger := logtest.New(n.t).Named(fmt.Sprintf("hare=%d", n.i))
 	verifier, err := signing.NewEdVerifier()
 	require.NoError(n.t, err)
-	nodeclock, err := timesync.NewClock(
-		timesync.WithLogger(log.NewNop()),
-		timesync.WithClock(n.clock),
-		timesync.WithGenesisTime(n.t.start),
-		timesync.WithLayerDuration(n.t.layerDuration),
-		timesync.WithTickInterval(n.t.layerDuration),
-	)
-	require.NoError(n.t, err)
 
+	nclock := &testNodeClock{
+		clock:   n.clock,
+		genesis: n.t.start,
+		layer:   n.t.layerDuration,
+	}
 	tracer := newTestTracer(n.t)
 	n.tracer = tracer
-	n.hare = New(nodeclock, n.mpublisher, n.db, verifier, n.signer, n.oracle, n.msyncer,
+	n.hare = New(nclock, n.mpublisher, n.db, verifier, n.signer, n.oracle, n.msyncer,
 		WithConfig(n.t.cfg),
 		WithLogger(logger.Zap()),
 		WithWallclock(n.clock),

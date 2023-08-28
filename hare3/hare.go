@@ -26,7 +26,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/system"
-	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
 type Config struct {
@@ -160,8 +159,14 @@ func WithTracer(tracer Tracer) Opt {
 	}
 }
 
+type nodeclock interface {
+	AwaitLayer(types.LayerID) <-chan struct{}
+	CurrentLayer() types.LayerID
+	LayerToTime(types.LayerID) time.Time
+}
+
 func New(
-	nodeclock *timesync.NodeClock,
+	nodeclock nodeclock,
 	pubsub pubsub.PublishSubsciber,
 	db *datastore.CachedDB,
 	verifier *signing.EdVerifier,
@@ -217,7 +222,7 @@ type Hare struct {
 	wallclock clock.Clock
 
 	// dependencies
-	nodeclock *timesync.NodeClock
+	nodeclock nodeclock
 	pubsub    pubsub.PublishSubsciber
 	db        *datastore.CachedDB
 	verifier  *signing.EdVerifier
@@ -236,13 +241,17 @@ func (h *Hare) Coins() <-chan WeakCoinOutput {
 }
 
 func (h *Hare) Start() {
-	h.log.Info("started", zap.Inline(&h.config))
+	h.pubsub.Register(h.config.ProtocolName, h.Handler)
+	current := h.nodeclock.CurrentLayer() + 1
+	enabled := types.MaxLayer(current, h.config.EnableLayer)
+	enabled = types.MaxLayer(enabled, types.GetEffectiveGenesis()+1)
+	disabled := types.MinLayer(types.LayerID(math.MaxUint32), h.config.DisableLayer)
+	h.log.Info("started",
+		zap.Inline(&h.config),
+		zap.Uint32("enabled", enabled.Uint32()),
+		zap.Uint32("disabled", disabled.Uint32()),
+	)
 	h.eg.Go(func() error {
-		h.pubsub.Register(h.config.ProtocolName, h.Handler)
-		enabled := types.MaxLayer(h.nodeclock.CurrentLayer()+1, h.config.EnableLayer)
-		enabled = types.MaxLayer(enabled, types.GetEffectiveGenesis()+1)
-		disabled := types.MinLayer(types.LayerID(math.MaxUint32), h.config.DisableLayer)
-		h.log.Debug("starting at layer", zap.Uint32("lid", enabled.Uint32()))
 		for next := enabled; next < disabled; next++ {
 			select {
 			case <-h.nodeclock.AwaitLayer(next):
