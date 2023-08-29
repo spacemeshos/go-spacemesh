@@ -128,8 +128,8 @@ func (p *protocol) OnInput(msg *input) (bool, *types.HareProof) {
 	return gossip, equivocation
 }
 
-func (p *protocol) thresholdProposals(ir IterRound, grade grade) (*types.Hash32, []types.ProposalID) {
-	for _, ref := range p.gossip.thresholdGossipRef(ir, grade) {
+func (p *protocol) thresholdProposals(ir IterRound) (*types.Hash32, []types.ProposalID) {
+	for _, ref := range p.gossip.thresholdGossipRef(ir) {
 		valid, exist := p.validProposals[ref]
 		if exist {
 			return &ref, valid
@@ -138,8 +138,8 @@ func (p *protocol) thresholdProposals(ir IterRound, grade grade) (*types.Hash32,
 	return nil, nil
 }
 
-func (p *protocol) commitExists(iter uint8, grade grade, match types.Hash32) bool {
-	for _, ref := range p.gossip.thresholdGossipRef(IterRound{Iter: iter, Round: commit}, grade) {
+func (p *protocol) commitExists(iter uint8, match types.Hash32) bool {
+	for _, ref := range p.gossip.thresholdGossipRef(IterRound{Iter: iter, Round: commit}) {
 		if ref == match {
 			return true
 		}
@@ -153,7 +153,7 @@ func (p *protocol) execution(out *output, active bool) {
 		// -1 - skipped hardlock round in iter 0
 		// -1 - implementation rounds starts from 0
 		g := grade5 - grade(p.Round-2)
-		p.validValues[g] = p.gossip.thresholdGossip(IterRound{Round: preround}, g)
+		p.validValues[g] = p.gossip.thresholdGossip(IterRound{Round: preround})
 	}
 	if p.Round == preround && active {
 		out.message = &Message{Body: Body{
@@ -164,7 +164,7 @@ func (p *protocol) execution(out *output, active bool) {
 		if p.result != nil {
 			out.terminated = true
 		}
-		ref, values := p.thresholdProposals(IterRound{Iter: p.Iter - 1, Round: notify}, grade5)
+		ref, values := p.thresholdProposals(IterRound{Iter: p.Iter - 1, Round: notify})
 		if ref != nil && p.result == nil {
 			p.result = ref
 			out.result = values
@@ -173,7 +173,7 @@ func (p *protocol) execution(out *output, active bool) {
 				out.result = []types.ProposalID{}
 			}
 		}
-		if ref, _ := p.thresholdProposals(IterRound{Iter: p.Iter - 1, Round: commit}, grade4); ref != nil {
+		if ref, _ := p.thresholdProposals(IterRound{Iter: p.Iter - 1, Round: commit}); ref != nil {
 			p.locked = ref
 			p.hardLocked = true
 		} else {
@@ -181,7 +181,7 @@ func (p *protocol) execution(out *output, active bool) {
 			p.hardLocked = false
 		}
 	} else if p.Round == softlock && p.Iter > 0 && !p.hardLocked {
-		if ref, _ := p.thresholdProposals(IterRound{Iter: p.Iter - 1, Round: commit}, grade3); ref != nil {
+		if ref, _ := p.thresholdProposals(IterRound{Iter: p.Iter - 1, Round: commit}); ref != nil {
 			p.locked = ref
 		} else {
 			p.locked = nil
@@ -189,7 +189,7 @@ func (p *protocol) execution(out *output, active bool) {
 	} else if p.Round == propose && active {
 		values := p.validValues[grade4]
 		if p.Iter > 0 {
-			ref, overwrite := p.thresholdProposals(IterRound{Iter: p.Iter - 1, Round: commit}, grade2)
+			ref, overwrite := p.thresholdProposals(IterRound{Iter: p.Iter - 1, Round: commit})
 			if ref != nil {
 				values = overwrite
 			}
@@ -229,7 +229,7 @@ func (p *protocol) execution(out *output, active bool) {
 					}
 					// condition (g)
 					if !isSubset(p.validValues[grade5], graded.values) &&
-						!p.commitExists(p.Iter-1, grade1, id) {
+						!p.commitExists(p.Iter-1, id) {
 						continue
 					}
 					// condition (h)
@@ -250,7 +250,7 @@ func (p *protocol) execution(out *output, active bool) {
 	} else if p.Round == notify && active {
 		ref := p.result
 		if ref == nil {
-			ref, _ = p.thresholdProposals(IterRound{Iter: p.Iter, Round: commit}, grade5)
+			ref, _ = p.thresholdProposals(IterRound{Iter: p.Iter, Round: commit})
 		}
 		if ref != nil {
 			out.message = &Message{Body: Body{
@@ -303,9 +303,19 @@ func (g *gossip) receive(current IterRound, input *input) (bool, *types.HareProo
 	other, exist := g.state[input.key()]
 	if exist {
 		if other.msgHash != input.msgHash && !other.malicious {
-			// Case 3
-			other.malicious = true
-			other.otherReceived = &current
+			// Protocol 3. thresh-gossip. keep one with the maximal grade.
+			if input.atxgrade > other.atxgrade {
+				input.malicious = true
+				g.state[input.key()] = &gossipInput{
+					input:         input,
+					received:      current,
+					otherReceived: &other.received,
+				}
+			} else {
+				// Case 3
+				other.malicious = true
+				other.otherReceived = &current
+			}
 			return true, &types.HareProof{Messages: [2]types.HareProofMsg{
 				other.ToMalfeasanceProof(), input.ToMalfeasanceProof(),
 			}}
@@ -362,13 +372,13 @@ func (g *gossip) gradecast(target IterRound) []gset {
 // Protocol 3. thresh-gossip. Page 15.
 // output returns union of sorted proposals received
 // in the given round with minimal specified grade.
-func (g *gossip) thresholdGossip(filter IterRound, grade grade) []types.ProposalID {
-	rst := thresholdGossip(g.state, g.threshold, filter, grade,
-		func(all map[types.ProposalID]uint16, good map[types.ProposalID]struct{}, inp *gossipInput) {
+func (g *gossip) thresholdGossip(filter IterRound) []types.ProposalID {
+	rst := thresholdGossip(g.state, g.threshold, filter,
+		func(total map[types.ProposalID]uint16, valid map[types.ProposalID]struct{}, inp *gossipInput) {
 			for _, id := range inp.Value.Proposals {
-				all[id] += inp.Eligibility.Count
+				total[id] += inp.Eligibility.Count
 				if !inp.malicious {
-					good[id] = struct{}{}
+					valid[id] = struct{}{}
 				}
 			}
 		})
@@ -376,30 +386,40 @@ func (g *gossip) thresholdGossip(filter IterRound, grade grade) []types.Proposal
 }
 
 // thresholdGossipRef returns all references to proposals in the given round with minimal grade.
-func (g *gossip) thresholdGossipRef(filter IterRound, grade grade) []types.Hash32 {
-	return thresholdGossip(g.state, g.threshold, filter, grade,
-		func(all map[types.Hash32]uint16, good map[types.Hash32]struct{}, inp *gossipInput) {
-			all[*inp.Value.Reference] += inp.Eligibility.Count
+func (g *gossip) thresholdGossipRef(filter IterRound) []types.Hash32 {
+	return thresholdGossip(g.state, g.threshold, filter,
+		func(total map[types.Hash32]uint16, valid map[types.Hash32]struct{}, inp *gossipInput) {
+			total[*inp.Value.Reference] += inp.Eligibility.Count
 			if !inp.malicious {
-				good[*inp.Value.Reference] = struct{}{}
+				valid[*inp.Value.Reference] = struct{}{}
 			}
 		})
 }
 
 func thresholdGossip[T comparable](
-	state map[messageKey]*gossipInput, threshold uint16, filter IterRound, grade grade,
-	fill func(all map[T]uint16, good map[T]struct{}, inp *gossipInput),
+	state map[messageKey]*gossipInput, threshold uint16, filter IterRound,
+	tally func(all map[T]uint16, good map[T]struct{}, inp *gossipInput),
 ) []T {
-	all := map[T]uint16{}
-	good := map[T]struct{}{}
+	total := map[T]uint16{}
+	valid := map[T]struct{}{}
+	min := grade5
+	// pick min atx grade from non equivocating identity.
 	for key, value := range state {
-		if key.IterRound == filter && value.atxgrade >= grade {
-			fill(all, good, value)
+		if key.IterRound == filter && value.atxgrade < min && !value.malicious {
+			min = value.atxgrade
+		}
+	}
+	// tally votes for valid and malicious messages
+	for key, value := range state {
+		if key.IterRound == filter && value.atxgrade >= min {
+			tally(total, valid, value)
 		}
 	}
 	rst := []T{}
-	for id := range good {
-		if all[id] >= threshold {
+	// valid > 0 and total >= f
+	// atleast one non-equivocating vote and crossed committee/2 + 1
+	for id := range valid {
+		if total[id] >= threshold {
 			rst = append(rst, id)
 		}
 	}

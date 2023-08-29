@@ -355,10 +355,10 @@ func TestProtocol(t *testing.T) {
 		gen("malicious proposal",
 			new(setup).thresh(10),
 			new(toutput),
+			new(toutput), // softlock
 			new(tinput).sender("5").
-				round(preround).proposals("a", "b", "c").vrfcount(11).g(grade4),
-			new(toutput).coin(false), // softlock
-			new(toutput),             // propose
+				round(preround).proposals("a", "b", "c").vrfcount(11).g(grade5),
+			new(toutput).coin(false), // propose
 			new(tinput).sender("1").round(propose).proposals("a", "c").vrf(2).g(grade5),
 			// this one would be preferred if from non-malicious
 			new(tinput).sender("2").malicious().gossip().
@@ -403,11 +403,11 @@ func TestProtocol(t *testing.T) {
 			new(setup).thresh(10),
 			new(toutput),
 			new(tinput).sender("7").mshHash("m0").
-				round(preround).proposals("a").vrfcount(11).g(grade5),
+				round(preround).proposals("a").vrfcount(11).g(grade4),
 			new(tinput).sender("7").gossip().mshHash("m1").equi().
 				round(preround).proposals("b").vrfcount(11).g(grade5),
 			new(tinput).sender("7").nogossip().mshHash("m2").
-				round(preround).proposals("c").vrfcount(11).g(grade5),
+				round(preround).proposals("c").vrfcount(11).g(grade3),
 		),
 		gen("multiple malicious not broadcasted",
 			new(setup).thresh(10),
@@ -447,14 +447,14 @@ func TestProtocol(t *testing.T) {
 		gen("no commit if not subset of grade3",
 			new(setup).thresh(10),
 			new(toutput), // preround
+			new(toutput), // softlock
+			new(toutput), // propose
+			new(tinput).sender("1").round(propose).proposals("a").g(grade5),
+			new(toutput), // wait1
 			new(tinput).sender("1").
 				round(preround).proposals("a").vrfcount(11).g(grade2),
-			new(toutput).coin(false), // softlock
-			new(toutput),             // propose
-			new(tinput).sender("1").round(propose).proposals("a").g(grade5),
-			new(toutput),          // wait1
-			new(toutput),          // wait2
-			new(toutput).active(), // commit
+			new(toutput).coin(false), // wait2
+			new(toutput).active(),    // commit
 		),
 		gen("grade5 proposals are not in propose",
 			new(setup).thresh(10),
