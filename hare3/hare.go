@@ -333,7 +333,7 @@ func (h *Hare) onLayer(layer types.LayerID) {
 				zap.Error(err),
 			)
 			exitErrors.Inc()
-			// if terminated succesfully it will notify block generator
+			// if terminated successfully it will notify block generator
 			// and it will have to CompleteHare
 			h.patrol.CompleteHare(layer)
 		} else {

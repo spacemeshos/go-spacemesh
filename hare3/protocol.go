@@ -363,46 +363,43 @@ func (g *gossip) gradecast(target IterRound) []gset {
 // output returns union of sorted proposals received
 // in the given round with minimal specified grade.
 func (g *gossip) thresholdGossip(filter IterRound, grade grade) []types.ProposalID {
-	all := map[types.ProposalID]uint16{}
-	good := map[types.ProposalID]struct{}{}
-	for key, value := range g.state {
-		if key.IterRound == filter && value.atxgrade >= grade {
-			for _, id := range value.Value.Proposals {
-				all[id] += value.Eligibility.Count
-				if !value.malicious {
+	rst := thresholdGossip(g.state, g.threshold, filter, grade,
+		func(all map[types.ProposalID]uint16, good map[types.ProposalID]struct{}, inp *gossipInput) {
+			for _, id := range inp.Value.Proposals {
+				all[id] += inp.Eligibility.Count
+				if !inp.malicious {
 					good[id] = struct{}{}
 				}
 			}
-		}
-	}
-	rst := []types.ProposalID{}
-	for id := range good {
-		if all[id] >= g.threshold {
-			rst = append(rst, id)
-		}
-	}
-	types.SortProposalIDs(rst)
-	return rst
+		})
+	return types.SortProposalIDs(rst)
 }
 
 // thresholdGossipRef returns all references to proposals in the given round with minimal grade.
 func (g *gossip) thresholdGossipRef(filter IterRound, grade grade) []types.Hash32 {
-	all := map[types.Hash32]uint16{}
-	good := map[types.Hash32]struct{}{}
-	for key, value := range g.state {
-		if key.IterRound == filter && value.atxgrade >= grade {
-			// nil should not be valid in this codepath
-			// this is enforced by correctly decoded messages
-			id := *value.Value.Reference
-			all[id] += value.Eligibility.Count
-			if !value.malicious {
-				good[id] = struct{}{}
+	return thresholdGossip(g.state, g.threshold, filter, grade,
+		func(all map[types.Hash32]uint16, good map[types.Hash32]struct{}, inp *gossipInput) {
+			all[*inp.Value.Reference] += inp.Eligibility.Count
+			if !inp.malicious {
+				good[*inp.Value.Reference] = struct{}{}
 			}
+		})
+}
+
+func thresholdGossip[T comparable](
+	state map[messageKey]*gossipInput, threshold uint16, filter IterRound, grade grade,
+	fill func(all map[T]uint16, good map[T]struct{}, inp *gossipInput),
+) []T {
+	all := map[T]uint16{}
+	good := map[T]struct{}{}
+	for key, value := range state {
+		if key.IterRound == filter && value.atxgrade >= grade {
+			fill(all, good, value)
 		}
 	}
-	var rst []types.Hash32
+	rst := []T{}
 	for id := range good {
-		if all[id] >= g.threshold {
+		if all[id] >= threshold {
 			rst = append(rst, id)
 		}
 	}
