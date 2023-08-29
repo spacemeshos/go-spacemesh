@@ -300,10 +300,15 @@ func (cl *lockstepCluster) nogossip() {
 
 func (cl *lockstepCluster) activeSet() []types.ATXID {
 	var ids []types.ATXID
+	unique := map[types.ATXID]struct{}{}
 	for _, n := range cl.nodes {
 		if n.atx == nil {
 			continue
 		}
+		if _, exists := unique[n.atx.ID()]; exists {
+			continue
+		}
+		unique[n.atx.ID()] = struct{}{}
 		ids = append(ids, n.atx.ID())
 	}
 	return ids
@@ -535,7 +540,6 @@ func testHare(tb testing.TB, active, inactive, equivocators int, opts ...cluster
 			require.FailNow(tb, "no result")
 		}
 		require.Empty(tb, n.hare.Running())
-		require.False(tb, n.patrol.IsHareInCharge(layer))
 	}
 }
 
@@ -570,6 +574,7 @@ func TestIterationLimit(t *testing.T) {
 		cluster.moveRound()
 	}
 	require.Empty(t, cluster.nodes[0].hare.Running())
+	require.False(t, cluster.nodes[0].patrol.IsHareInCharge(layer))
 }
 
 func TestConfigMarshal(t *testing.T) {

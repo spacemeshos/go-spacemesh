@@ -466,6 +466,11 @@ func (h *Hare) run(layer types.LayerID, beacon types.Beacon, inputs <-chan *sess
 }
 
 func (h *Hare) onOutput(layer types.LayerID, ir IterRound, out output, vrf *types.HareEligibility) error {
+	if out.message != nil {
+		out.message.Layer = layer
+		out.message.Eligibility = *vrf
+		out.message.Sender = h.signer.NodeID()
+	}
 	h.log.Debug("round output",
 		zap.Uint32("lid", layer.Uint32()),
 		zap.Uint8("iter", ir.Iter), zap.Stringer("round", ir.Round),
@@ -474,9 +479,6 @@ func (h *Hare) onOutput(layer types.LayerID, ir IterRound, out output, vrf *type
 	)
 	if out.message != nil {
 		h.eg.Go(func() error {
-			out.message.Layer = layer
-			out.message.Eligibility = *vrf
-			out.message.Sender = h.signer.NodeID()
 			out.message.Signature = h.signer.Sign(signing.HARE, out.message.ToMetadata().ToBytes())
 			if err := h.pubsub.Publish(h.ctx, h.config.ProtocolName, out.message.ToBytes()); err != nil {
 				h.log.Error("failed to publish", zap.Inline(out.message), zap.Error(err))
