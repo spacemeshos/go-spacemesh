@@ -550,7 +550,7 @@ func TestHare(t *testing.T) {
 	t.Run("with proposals subsets", func(t *testing.T) { testHare(t, 5, 0, 0, withProposals(0.5)) })
 	t.Run("with units", func(t *testing.T) { testHare(t, 5, 0, 0, withUnits(10, 50)) })
 	t.Run("with inactive", func(t *testing.T) { testHare(t, 3, 2, 0) })
-	t.Run("equivocators", func(t *testing.T) { testHare(t, 3, 0, 2, withProposals(0.6)) })
+	t.Run("equivocators", func(t *testing.T) { testHare(t, 4, 0, 1, withProposals(0.75)) })
 }
 
 func TestIterationLimit(t *testing.T) {
