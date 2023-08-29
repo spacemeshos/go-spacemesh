@@ -773,7 +773,7 @@ func (app *App) initServices(ctx context.Context) error {
 		}
 		logger := app.addLogger(HareLogger, lg).Zap()
 		app.hare3 = hare3.New(
-			app.clock, app.host, app.cachedDB, app.edVerifier, app.edSgn, app.hOracle, newSyncer,
+			app.clock, app.host, app.cachedDB, app.edVerifier, app.edSgn, app.hOracle, newSyncer, patrol,
 			hare3.WithLogger(logger),
 			hare3.WithConfig(app.Config.HARE3),
 		)

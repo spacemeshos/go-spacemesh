@@ -70,10 +70,14 @@ func (t *testNodeClock) LayerToTime(lid types.LayerID) time.Time {
 
 func (t *testNodeClock) AwaitLayer(lid types.LayerID) <-chan struct{} {
 	sub := make(chan struct{})
-	go func() {
-		<-t.clock.After(t.clock.Until(t.LayerToTime(lid)))
+	until := t.clock.Until(t.LayerToTime(lid))
+	if until <= 0 {
 		close(sub)
-	}()
+	} else {
+		t.clock.AfterFunc(until, func() {
+			close(sub)
+		})
+	}
 	return sub
 }
 
