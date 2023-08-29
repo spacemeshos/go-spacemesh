@@ -505,10 +505,11 @@ func TestProtocol(t *testing.T) {
 				}
 				switch casted := step.(type) {
 				case *setup:
-					proto = newProtocol(casted.proposals, casted.threshold)
+					proto = newProtocol(casted.threshold)
+					proto.OnInitial(casted.proposals)
 				case *tinput:
 					logger.Debug("input", zap.Int("i", i), zap.Inline(casted))
-					gossip, equivocation := proto.onInput(&casted.input)
+					gossip, equivocation := proto.OnInput(&casted.input)
 					if casted.expect != nil {
 						require.Equal(t, casted.expect.gossip, gossip, "%d", i)
 						if casted.expect.equivocation != nil {
@@ -517,7 +518,7 @@ func TestProtocol(t *testing.T) {
 					}
 				case *toutput:
 					before := proto.Round
-					require.Equal(t, casted.output, proto.next(casted.act), "%d", i)
+					require.Equal(t, casted.output, proto.Next(casted.act), "%d", i)
 					logger.Debug("output",
 						zap.Int("i", i),
 						zap.Inline(casted),

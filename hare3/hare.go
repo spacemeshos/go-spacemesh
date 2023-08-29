@@ -94,37 +94,9 @@ type WeakCoinOutput struct {
 	Coin  bool
 }
 
-type sessionInput struct {
-	input  *input
-	result chan *response
-}
-
 type response struct {
 	gossip       bool
 	equivocation *types.HareProof
-}
-
-type sessionInputs struct {
-	ctx    context.Context
-	inputs chan<- *sessionInput
-}
-
-func (inputs *sessionInputs) submit(msg *input) (*response, error) {
-	input := &sessionInput{
-		input:  msg,
-		result: make(chan *response, 1),
-	}
-	select {
-	case <-inputs.ctx.Done():
-		return nil, inputs.ctx.Err()
-	case inputs.inputs <- input:
-	}
-	select {
-	case resp := <-input.result:
-		return resp, nil
-	case <-inputs.ctx.Done():
-		return nil, inputs.ctx.Err()
-	}
 }
 
 type Opt func(*Hare)
@@ -178,7 +150,7 @@ func New(
 		cancel:   cancel,
 		results:  make(chan ConsensusOutput, 32),
 		coins:    make(chan WeakCoinOutput, 32),
-		sessions: map[types.LayerID]sessionInputs{},
+		sessions: map[types.LayerID]*protocol{},
 
 		config:    DefaultConfig(),
 		log:       zap.NewNop(),
@@ -212,7 +184,7 @@ type Hare struct {
 	results  chan ConsensusOutput
 	coins    chan WeakCoinOutput
 	mu       sync.Mutex
-	sessions map[types.LayerID]sessionInputs
+	sessions map[types.LayerID]*protocol
 
 	// options
 	config    Config
@@ -305,28 +277,30 @@ func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 		return fmt.Errorf("zero grade")
 	}
 	start = time.Now()
-	resp, err := session.submit(&input{
+	input := &input{
 		Message:   msg,
 		msgHash:   msg.ToHash(),
 		malicious: malicious,
 		atxgrade:  g,
-	})
-	if err != nil {
-		return err
 	}
+	gossip, equivocation := session.OnInput(input)
+	h.log.Debug("on message",
+		zap.Inline(input),
+		zap.Bool("gossip", gossip),
+	)
 	submitLatency.Observe(time.Since(start).Seconds())
-	if resp.equivocation != nil && !malicious {
+	if equivocation != nil && !malicious {
 		h.log.Debug("registered equivocation",
 			zap.Uint32("lid", msg.Layer.Uint32()),
-			zap.Stringer("sender", resp.equivocation.Messages[0].SmesherID))
-		proof := resp.equivocation.ToMalfeasenceProof()
+			zap.Stringer("sender", equivocation.Messages[0].SmesherID))
+		proof := equivocation.ToMalfeasenceProof()
 		if err := identities.SetMalicious(
-			h.db, resp.equivocation.Messages[0].SmesherID, codec.MustEncode(proof), time.Now()); err != nil {
+			h.db, equivocation.Messages[0].SmesherID, codec.MustEncode(proof), time.Now()); err != nil {
 			h.log.Error("failed to save malicious identity", zap.Error(err))
 		}
-		h.db.CacheMalfeasanceProof(resp.equivocation.Messages[0].SmesherID, proof)
+		h.db.CacheMalfeasanceProof(equivocation.Messages[0].SmesherID, proof)
 	}
-	if !resp.gossip {
+	if !gossip {
 		droppedMessages.Inc()
 		return fmt.Errorf("dropped by graded gossip")
 	}
@@ -350,19 +324,15 @@ func (h *Hare) onLayer(layer types.LayerID) {
 		return
 	}
 	h.patrol.SetHareInCharge(layer)
-	inputs := make(chan *sessionInput)
-	ctx, cancel := context.WithCancel(h.ctx)
+	proto := newProtocol(h.config.Committee/2 + 1)
 	h.mu.Lock()
-	h.sessions[layer] = sessionInputs{
-		ctx:    ctx,
-		inputs: inputs,
-	}
+	h.sessions[layer] = proto
 	h.mu.Unlock()
 	sessionStart.Inc()
 	h.tracer.OnStart(layer)
 	h.log.Debug("registered layer", zap.Uint32("lid", layer.Uint32()))
 	h.eg.Go(func() error {
-		if err := h.run(layer, beacon, inputs); err != nil {
+		if err := h.run(layer, beacon, proto); err != nil {
 			h.log.Warn("failed",
 				zap.Uint32("lid", layer.Uint32()),
 				zap.Error(err),
@@ -376,7 +346,6 @@ func (h *Hare) onLayer(layer types.LayerID) {
 				zap.Uint32("lid", layer.Uint32()),
 			)
 		}
-		cancel()
 		h.mu.Lock()
 		delete(h.sessions, layer)
 		h.mu.Unlock()
@@ -386,7 +355,7 @@ func (h *Hare) onLayer(layer types.LayerID) {
 	})
 }
 
-func (h *Hare) run(layer types.LayerID, beacon types.Beacon, inputs <-chan *sessionInput) error {
+func (h *Hare) run(layer types.LayerID, beacon types.Beacon, proto *protocol) error {
 	// oracle may load non-negligible amount of data from disk
 	// we do it before preround starts, so that load can have some slack time
 	// before it needs to be used in validation
@@ -398,7 +367,6 @@ func (h *Hare) run(layer types.LayerID, beacon types.Beacon, inputs <-chan *sess
 	h.tracer.OnActive(vrf)
 
 	walltime := h.nodeclock.LayerToTime(layer).Add(h.config.PreroundDelay)
-	var proposals []types.ProposalID
 	if vrf != nil {
 		h.log.Debug("active in preround", zap.Uint32("lid", layer.Uint32()))
 		// initial set is not needed if node is not active in preround
@@ -408,11 +376,10 @@ func (h *Hare) run(layer types.LayerID, beacon types.Beacon, inputs <-chan *sess
 			return h.ctx.Err()
 		}
 		start := time.Now()
-		proposals = h.proposals(layer, beacon)
+		proto.OnInitial(h.proposals(layer, beacon))
 		proposalsLatency.Observe(time.Since(start).Seconds())
 	}
-	proto := newProtocol(proposals, h.config.Committee/2+1)
-	if err := h.onOutput(layer, current, proto.next(vrf != nil), vrf); err != nil {
+	if err := h.onOutput(layer, current, proto.Next(vrf != nil), vrf); err != nil {
 		return err
 	}
 	h.log.Debug("ready to accept messages", zap.Uint32("lid", layer.Uint32()))
@@ -420,13 +387,6 @@ func (h *Hare) run(layer types.LayerID, beacon types.Beacon, inputs <-chan *sess
 	result := false
 	for {
 		select {
-		case input := <-inputs:
-			gossip, equivocation := proto.onInput(input.input)
-			h.log.Debug("on message",
-				zap.Inline(input.input),
-				zap.Bool("gossip", gossip),
-			)
-			input.result <- &response{gossip: gossip, equivocation: equivocation}
 		case <-h.wallclock.After(h.wallclock.Until(walltime)):
 			h.log.Debug("execute round",
 				zap.Uint32("lid", layer.Uint32()),
@@ -441,7 +401,7 @@ func (h *Hare) run(layer types.LayerID, beacon types.Beacon, inputs <-chan *sess
 			}
 			h.tracer.OnActive(vrf)
 
-			out := proto.next(vrf != nil)
+			out := proto.Next(vrf != nil)
 			if out.result != nil {
 				result = true
 			}

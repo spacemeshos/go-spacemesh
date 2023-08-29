@@ -2,6 +2,7 @@ package hare3
 
 import (
 	"sort"
+	"sync"
 
 	"go.uber.org/zap/zapcore"
 
@@ -85,15 +86,15 @@ func (o *output) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	return nil
 }
 
-func newProtocol(initial []types.ProposalID, threshold uint16) *protocol {
+func newProtocol(threshold uint16) *protocol {
 	return &protocol{
-		initial:        initial,
 		validProposals: map[types.Hash32][]types.ProposalID{},
 		gossip:         gossip{threshold: threshold, state: map[messageKey]*gossipInput{}},
 	}
 }
 
 type protocol struct {
+	mu sync.Mutex
 	IterRound
 	coinout        bool
 	coin           *types.VrfSignature // smallest vrf from preround messages. not a part of paper
@@ -106,7 +107,16 @@ type protocol struct {
 	gossip         gossip
 }
 
-func (p *protocol) onInput(msg *input) (bool, *types.HareProof) {
+func (p *protocol) OnInitial(proposals []types.ProposalID) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.initial = proposals
+}
+
+func (p *protocol) OnInput(msg *input) (bool, *types.HareProof) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	gossip, equivocation := p.gossip.receive(p.IterRound, msg)
 	if !gossip {
 		return false, equivocation
@@ -251,7 +261,10 @@ func (p *protocol) execution(out *output, active bool) {
 	}
 }
 
-func (p *protocol) next(active bool) output {
+func (p *protocol) Next(active bool) output {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	out := output{}
 	p.execution(&out, active)
 	if p.Round >= softlock && p.coin != nil && !p.coinout {
