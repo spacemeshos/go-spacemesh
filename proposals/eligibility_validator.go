@@ -31,23 +31,10 @@ type Validator struct {
 	avgLayerSize       uint32
 	layersPerEpoch     uint32
 	cdb                *datastore.CachedDB
-	mesh               meshProvider
 	beacons            system.BeaconCollector
 	logger             log.Log
 	vrfVerifier        vrfVerifier
 	nonceFetcher       nonceFetcher
-}
-
-type defaultFetcher struct {
-	cdb *datastore.CachedDB
-}
-
-func (f defaultFetcher) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
-	nonce, err := f.cdb.VRFNonce(nodeID, epoch)
-	if err != nil {
-		return types.VRFPostIndex(0), fmt.Errorf("get vrf nonce: %w", err)
-	}
-	return nonce, nil
 }
 
 // ValidatorOpt for configuring Validator.
@@ -61,14 +48,13 @@ func WithNonceFetcher(nf nonceFetcher) ValidatorOpt {
 
 // NewEligibilityValidator returns a new EligibilityValidator.
 func NewEligibilityValidator(
-	avgLayerSize, layersPerEpoch uint32, minActiveSetWeight uint64, cdb *datastore.CachedDB, bc system.BeaconCollector, m meshProvider, lg log.Log, vrfVerifier vrfVerifier, opts ...ValidatorOpt,
+	avgLayerSize, layersPerEpoch uint32, minActiveSetWeight uint64, cdb *datastore.CachedDB, bc system.BeaconCollector, lg log.Log, vrfVerifier vrfVerifier, opts ...ValidatorOpt,
 ) *Validator {
 	v := &Validator{
 		minActiveSetWeight: minActiveSetWeight,
 		avgLayerSize:       avgLayerSize,
 		layersPerEpoch:     layersPerEpoch,
 		cdb:                cdb,
-		mesh:               m,
 		beacons:            bc,
 		logger:             lg,
 		vrfVerifier:        vrfVerifier,
@@ -76,95 +62,92 @@ func NewEligibilityValidator(
 	for _, opt := range opts {
 		opt(v)
 	}
-
 	if v.nonceFetcher == nil {
-		v.nonceFetcher = defaultFetcher{cdb: cdb}
+		v.nonceFetcher = cdb
 	}
-
 	return v
 }
 
 // CheckEligibility checks that a ballot is eligible in the layer that it specifies.
 func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) (bool, error) {
-	var (
-		atxWeight, totalWeight uint64
-		err                    error
-		refBallot              = ballot
-		epoch                  = ballot.Layer.GetEpoch()
-	)
 	if len(ballot.EligibilityProofs) == 0 {
 		return false, fmt.Errorf("empty eligibility list is invalid (ballot %s)", ballot.ID())
 	}
-
-	if ballot.RefBallot != types.EmptyBallotID {
-		if refBallot, err = ballots.Get(v.cdb, ballot.RefBallot); err != nil {
+	owned, err := v.cdb.GetAtxHeader(ballot.AtxID)
+	if err != nil {
+		return false, fmt.Errorf("ballot has no atx %v: %w", ballot.AtxID, err)
+	}
+	var (
+		beacon           types.Beacon
+		numEligibleSlots uint32
+	)
+	if ballot.EpochData != nil {
+		beacon = ballot.EpochData.Beacon
+		if beacon == types.EmptyBeacon {
+			return false, fmt.Errorf("%w: ref ballot %v", errMissingBeacon, ballot.ID())
+		}
+		if len(ballot.ActiveSet) == 0 {
+			return false, fmt.Errorf("%w: ref ballot %v", errEmptyActiveSet, ballot.ID())
+		}
+		var totalWeight uint64
+		for _, atxID := range ballot.ActiveSet {
+			atx, err := v.cdb.GetAtxHeader(atxID)
+			if err != nil {
+				return false, fmt.Errorf("get ATX header %v: %w", atxID, err)
+			}
+			totalWeight += atx.GetWeight()
+		}
+		if owned.TargetEpoch() != ballot.Layer.GetEpoch() {
+			return false, fmt.Errorf("%w: ATX target epoch (%v), ballot publication epoch (%v)",
+				errTargetEpochMismatch, owned.TargetEpoch(), ballot.Layer.GetEpoch())
+		}
+		if ballot.SmesherID != owned.NodeID {
+			return false, fmt.Errorf("%w: public key (%v), ATX node key (%v)", errPublicKeyMismatch, ballot.SmesherID.String(), owned.NodeID)
+		}
+		numEligibleSlots, err = GetLegacyNumEligible(ballot.Layer, owned.GetWeight(), v.minActiveSetWeight, totalWeight, v.avgLayerSize, v.layersPerEpoch)
+		if err != nil {
+			return false, err
+		}
+		if ballot.EpochData.EligibilityCount != numEligibleSlots {
+			return false, fmt.Errorf("%w: expected %v, got: %v", errIncorrectEligCount, numEligibleSlots, ballot.EpochData.EligibilityCount)
+		}
+	} else {
+		if ballot.RefBallot == types.EmptyBallotID {
+			return false, fmt.Errorf("empty ballot as ref ballot for %v", ballot.RefBallot)
+		}
+		refBallot, err := ballots.Get(v.cdb, ballot.RefBallot)
+		if err != nil {
 			return false, fmt.Errorf("get ref ballot %v: %w", ballot.RefBallot, err)
 		}
-	}
-	if refBallot.EpochData == nil {
-		return false, fmt.Errorf("%w: ref ballot %v", errMissingEpochData, refBallot.ID())
-	}
-	if refBallot.AtxID != ballot.AtxID {
-		return false, fmt.Errorf("ballot (%v/%v) should be sharing atx with a reference ballot (%v/%v)", ballot.ID(), ballot.AtxID, refBallot.ID(), refBallot.AtxID)
-	}
-
-	beacon := refBallot.EpochData.Beacon
-	if beacon == types.EmptyBeacon {
-		return false, fmt.Errorf("%w: ref ballot %v", errMissingBeacon, refBallot.ID())
-	}
-
-	activeSets := refBallot.ActiveSet
-	if len(activeSets) == 0 {
-		return false, fmt.Errorf("%w: ref ballot %v", errEmptyActiveSet, refBallot.ID())
-	}
-
-	// todo: optimize by using reference to active set size and cache active set size to not load all atxsIDs from db
-	var owned *types.ActivationTxHeader
-	for _, atxID := range activeSets {
-		atx, err := v.cdb.GetAtxHeader(atxID)
-		if err != nil {
-			return false, fmt.Errorf("get ATX header %v: %w", atxID, err)
+		if refBallot.EpochData == nil {
+			return false, fmt.Errorf("%w: ref ballot %v", errMissingEpochData, refBallot.ID())
 		}
-		totalWeight += atx.GetWeight()
-		if atxID == ballot.AtxID {
-			owned = atx
+		if refBallot.AtxID != ballot.AtxID {
+			return false, fmt.Errorf("ballot (%v/%v) should be sharing atx with a reference ballot (%v/%v)", ballot.ID(), ballot.AtxID, refBallot.ID(), refBallot.AtxID)
 		}
-	}
-	if owned == nil {
-		return false, fmt.Errorf("atx %v from ballot %v (refballot %v) is not included into the active set", ballot.AtxID, ballot.ID(), refBallot.ID())
-	}
-	if targetEpoch := owned.TargetEpoch(); targetEpoch != epoch {
-		return false, fmt.Errorf("%w: ATX target epoch (%v), ballot publication epoch (%v)",
-			errTargetEpochMismatch, targetEpoch, epoch)
-	}
-	if ballot.SmesherID != owned.NodeID {
-		return false, fmt.Errorf("%w: public key (%v), ATX node key (%v)", errPublicKeyMismatch, ballot.SmesherID.String(), owned.NodeID)
+		if refBallot.SmesherID != ballot.SmesherID {
+			return false, fmt.Errorf("mismatched smesher id with refballot in ballot %v", ballot.ID())
+		}
+		if refBallot.Layer.GetEpoch() != ballot.Layer.GetEpoch() {
+			return false, fmt.Errorf("ballot %v targets mismatched epoch %d", ballot.ID(), ballot.Layer.GetEpoch())
+		}
+		numEligibleSlots = refBallot.EpochData.EligibilityCount
+		beacon = refBallot.EpochData.Beacon
 	}
 
-	atxWeight = owned.GetWeight()
-
-	numEligibleSlots, err := GetLegacyNumEligible(ballot.Layer, atxWeight, v.minActiveSetWeight, totalWeight, v.avgLayerSize, v.layersPerEpoch)
+	nonce, err := v.nonceFetcher.VRFNonce(ballot.SmesherID, ballot.Layer.GetEpoch())
 	if err != nil {
 		return false, err
 	}
-	if ballot.EpochData != nil && ballot.EpochData.EligibilityCount != numEligibleSlots {
-		return false, fmt.Errorf("%w: expected %v, got: %v", errIncorrectEligCount, numEligibleSlots, ballot.EpochData.EligibilityCount)
-	}
-
 	var (
 		last    uint32
 		isFirst = true
 	)
-
-	nonce, err := v.nonceFetcher.VRFNonce(ballot.SmesherID, epoch)
-	if err != nil {
-		return false, err
-	}
 	for _, proof := range ballot.EligibilityProofs {
 		counter := proof.J
 		if counter >= numEligibleSlots {
-			return false, fmt.Errorf("%w: proof counter (%d) numEligibleBallots (%d), totalWeight (%v)",
-				errIncorrectCounter, counter, numEligibleSlots, totalWeight)
+			return false, fmt.Errorf("%w: proof counter (%d) numEligibleBallots (%d)",
+				errIncorrectCounter, counter, numEligibleSlots)
 		}
 		if isFirst {
 			isFirst = false
@@ -173,20 +156,18 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		}
 		last = counter
 
-		message, err := SerializeVRFMessage(beacon, epoch, nonce, counter)
+		message, err := SerializeVRFMessage(beacon, ballot.Layer.GetEpoch(), nonce, counter)
 		if err != nil {
 			return false, err
 		}
-		vrfSig := proof.Sig
 
-		beaconStr := beacon.ShortString()
-		if !v.vrfVerifier.Verify(owned.NodeID, message, vrfSig) {
+		if !v.vrfVerifier.Verify(ballot.SmesherID, message, proof.Sig) {
 			return false, fmt.Errorf("%w: beacon: %v, epoch: %v, counter: %v, vrfSig: %s",
-				errIncorrectVRFSig, beaconStr, epoch, counter, vrfSig,
+				errIncorrectVRFSig, beacon.ShortString(), ballot.Layer.GetEpoch(), counter, proof.Sig,
 			)
 		}
 
-		eligibleLayer := CalcEligibleLayer(epoch, v.layersPerEpoch, vrfSig)
+		eligibleLayer := CalcEligibleLayer(ballot.Layer.GetEpoch(), v.layersPerEpoch, proof.Sig)
 		if ballot.Layer != eligibleLayer {
 			return false, fmt.Errorf("%w: ballot layer (%v), eligible layer (%v)",
 				errIncorrectLayerIndex, ballot.Layer, eligibleLayer)
@@ -196,11 +177,11 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 	v.logger.WithContext(ctx).With().Debug("ballot eligibility verified",
 		ballot.ID(),
 		ballot.Layer,
-		epoch,
+		ballot.Layer.GetEpoch(),
 		beacon,
 	)
 
-	weightPer := fixed.DivUint64(atxWeight, uint64(numEligibleSlots))
-	v.beacons.ReportBeaconFromBallot(epoch, ballot, beacon, weightPer)
+	weightPer := fixed.DivUint64(owned.GetWeight(), uint64(numEligibleSlots))
+	v.beacons.ReportBeaconFromBallot(ballot.Layer.GetEpoch(), ballot, beacon, weightPer)
 	return true, nil
 }

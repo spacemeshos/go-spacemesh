@@ -82,7 +82,7 @@ func createTestValidator(tb testing.TB) *testValidator {
 	lg := logtest.New(tb)
 
 	return &testValidator{
-		Validator: NewEligibilityValidator(layerAvgSize, layersPerEpoch, 0, datastore.NewCachedDB(sql.InMemory(), lg), ms.mbc, ms.mm, lg, ms.mvrf,
+		Validator: NewEligibilityValidator(layerAvgSize, layersPerEpoch, 0, datastore.NewCachedDB(sql.InMemory(), lg), ms.mbc, lg, ms.mvrf,
 			WithNonceFetcher(ms.mNonce),
 		),
 		mockSet: ms,
@@ -498,7 +498,7 @@ func TestCheckEligibility_AtxNotIncluded(t *testing.T) {
 	require.NoError(t, ballots.Add(tv.cdb, ballot))
 
 	eligibile, err := tv.CheckEligibility(context.Background(), ballot)
-	require.ErrorContains(t, err, "is not included into the active set")
+	require.ErrorContains(t, err, "not found")
 	require.False(t, eligibile)
 }
 
