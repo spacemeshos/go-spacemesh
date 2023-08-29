@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -44,6 +45,10 @@ func (cfg *Config) Validate(zdist time.Duration) error {
 	terminates := cfg.roundStart(IterRound{Iter: cfg.IterationsLimit, Round: hardlock})
 	if terminates > zdist {
 		return fmt.Errorf("hare terminates later (%v) than expected (%v)", terminates, zdist)
+	}
+	if cfg.Enable && cfg.DisableLayer <= cfg.EnableLayer {
+		return fmt.Errorf("disabled layer (%d) must be larger than enabled (%d)",
+			cfg.DisableLayer, cfg.EnableLayer)
 	}
 	return nil
 }
@@ -144,15 +149,6 @@ func WithLogger(logger *zap.Logger) Opt {
 	}
 }
 
-// WithEnableLayer can be used to pass genesis layer.
-// Note that for it to have effect it needs to be after WithConfig.
-func WithEnableLayer(layer types.LayerID) Opt {
-	return func(hr *Hare) {
-		hr.config.EnableLayer = layer
-		hr.oracle.config.EnableLayer = layer
-	}
-}
-
 func WithTracer(tracer Tracer) Opt {
 	return func(hr *Hare) {
 		hr.tracer = tracer
@@ -173,6 +169,7 @@ func New(
 	signer *signing.EdSigner,
 	oracle oracle,
 	sync system.SyncStateProvider,
+	patrol *layerpatrol.LayerPatrol,
 	opts ...Opt,
 ) *Hare {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -198,6 +195,7 @@ func New(
 			config: DefaultConfig(),
 		},
 		sync:   sync,
+		patrol: patrol,
 		tracer: noopTracer{},
 	}
 	for _, opt := range opts {
@@ -229,6 +227,7 @@ type Hare struct {
 	signer    *signing.EdSigner
 	oracle    *legacyOracle
 	sync      system.SyncStateProvider
+	patrol    *layerpatrol.LayerPatrol
 	tracer    Tracer
 }
 
@@ -350,6 +349,7 @@ func (h *Hare) onLayer(layer types.LayerID) {
 		)
 		return
 	}
+	h.patrol.SetHareInCharge(layer)
 	inputs := make(chan *sessionInput)
 	ctx, cancel := context.WithCancel(h.ctx)
 	h.mu.Lock()
@@ -368,6 +368,9 @@ func (h *Hare) onLayer(layer types.LayerID) {
 				zap.Error(err),
 			)
 			exitErrors.Inc()
+			// if terminated succesfully it will notify block generator
+			// and it will have to CompleteHare
+			h.patrol.CompleteHare(layer)
 		} else {
 			h.log.Debug("terminated",
 				zap.Uint32("lid", layer.Uint32()),
@@ -414,6 +417,7 @@ func (h *Hare) run(layer types.LayerID, beacon types.Beacon, inputs <-chan *sess
 	}
 	h.log.Debug("ready to accept messages", zap.Uint32("lid", layer.Uint32()))
 	walltime = walltime.Add(h.config.RoundDuration)
+	result := false
 	for {
 		select {
 		case input := <-inputs:
@@ -438,10 +442,16 @@ func (h *Hare) run(layer types.LayerID, beacon types.Beacon, inputs <-chan *sess
 			h.tracer.OnActive(vrf)
 
 			out := proto.next(vrf != nil)
+			if out.result != nil {
+				result = true
+			}
 			if err := h.onOutput(layer, current, out, vrf); err != nil {
 				return err
 			}
 			if out.terminated {
+				if !result {
+					return fmt.Errorf("terminated without result")
+				}
 				return nil
 			}
 			if current.Iter == h.config.IterationsLimit {

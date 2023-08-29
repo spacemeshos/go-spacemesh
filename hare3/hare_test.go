@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
+	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -90,9 +91,9 @@ type node struct {
 	ctrl       *gomock.Controller
 	mpublisher *pmocks.MockPublishSubsciber
 	msyncer    *smocks.MockSyncStateProvider
-
-	tracer *testTracer
-	hare   *Hare
+	patrol     *layerpatrol.LayerPatrol
+	tracer     *testTracer
+	hare       *Hare
 }
 
 func (n *node) withClock() *node {
@@ -184,11 +185,11 @@ func (n *node) withHare() *node {
 	}
 	tracer := newTestTracer(n.t)
 	n.tracer = tracer
-	n.hare = New(nclock, n.mpublisher, n.db, verifier, n.signer, n.oracle, n.msyncer,
+	n.patrol = layerpatrol.New()
+	n.hare = New(nclock, n.mpublisher, n.db, verifier, n.signer, n.oracle, n.msyncer, n.patrol,
 		WithConfig(n.t.cfg),
 		WithLogger(logger.Zap()),
 		WithWallclock(n.clock),
-		WithEnableLayer(n.t.genesis),
 		WithTracer(tracer),
 	)
 	return n
@@ -534,6 +535,7 @@ func testHare(tb testing.TB, active, inactive, equivocators int, opts ...cluster
 			require.FailNow(tb, "no result")
 		}
 		require.Empty(tb, n.hare.Running())
+		require.False(tb, n.patrol.IsHareInCharge(layer))
 	}
 }
 
@@ -876,7 +878,7 @@ func TestProposals(t *testing.T) {
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			db := datastore.NewCachedDB(sql.InMemory(), log.NewNop())
-			hare := New(nil, nil, db, nil, signer, nil, nil, WithLogger(logtest.New(t).Zap()))
+			hare := New(nil, nil, db, nil, signer, nil, nil, layerpatrol.New(), WithLogger(logtest.New(t).Zap()))
 			for _, atx := range tc.atxs {
 				require.NoError(t, atxs.Add(db, &atx))
 			}

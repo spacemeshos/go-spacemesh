@@ -316,7 +316,7 @@ func (g *gossip) gradecast(target IterRound) []gset {
 	// unlike paper we use 5-graded gossip for gradecast as well
 	var rst []gset
 	for key, value := range g.state {
-		if key.IterRound == target && !value.malicious {
+		if key.IterRound == target && (!value.malicious || value.otherReceived != nil) {
 			g := grade0
 			if value.atxgrade == grade5 && value.received.Delay(target) <= 1 &&
 				// 2 (a)
