@@ -26,6 +26,11 @@ type tinput struct {
 	expect *response
 }
 
+type response struct {
+	gossip       bool
+	equivocation *types.HareProof
+}
+
 func (t *tinput) ensureMsg() {
 	if t.Message == nil {
 		t.Message = &Message{}

@@ -94,11 +94,6 @@ type WeakCoinOutput struct {
 	Coin  bool
 }
 
-type response struct {
-	gossip       bool
-	equivocation *types.HareProof
-}
-
 type Opt func(*Hare)
 
 func WithWallclock(clock clock.Clock) Opt {

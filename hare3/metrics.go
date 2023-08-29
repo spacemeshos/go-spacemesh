@@ -50,7 +50,7 @@ var (
 		namespace,
 		"validation time in seconds",
 		[]string{"step"},
-		prometheus.ExponentialBuckets(0.5, 2, 10),
+		prometheus.ExponentialBuckets(0.01, 2, 10),
 	)
 	oracleLatency = validationLatency.WithLabelValues("oracle")
 	submitLatency = validationLatency.WithLabelValues("submit")
@@ -60,7 +60,7 @@ var (
 		namespace,
 		"protocol time in seconds",
 		[]string{"step"},
-		prometheus.ExponentialBuckets(0.5, 2, 10),
+		prometheus.ExponentialBuckets(0.01, 2, 10),
 	)
 	proposalsLatency = protocolLatency.WithLabelValues("proposals")
 	activeLatency    = protocolLatency.WithLabelValues("active")
