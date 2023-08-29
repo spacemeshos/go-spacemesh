@@ -490,7 +490,7 @@ func TestProtocol(t *testing.T) {
 			// commit on b will have grade1, to satisfy condition (g)
 			new(tinput).sender("2").round(commit).ref("b").vrfcount(11).g(grade5),
 			new(tinput).sender("1").iter(1).round(propose).proposals("a").g(grade5).vrf(2),
-			new(tinput).sender("2").iter(1).round(propose).proposals("b").g(grade3).vrf(1),
+			new(tinput).sender("2").iter(1).round(propose).proposals("b").g(grade5).vrf(1),
 			new(toutput), // wait1
 			new(toutput), // wait2
 			// condition (h) ensures that we commit on locked value, even though proposal for b
