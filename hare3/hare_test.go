@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -53,32 +54,55 @@ type tester struct {
 	genesis       types.LayerID
 }
 
+type waiter struct {
+	lid types.LayerID
+	ch  chan struct{}
+}
+
 // timesync.Nodeclock time can't be mocked nicely because of ticks.
 type testNodeClock struct {
-	clock   clock.Clock
-	genesis time.Time
-	layer   time.Duration
+	mu      sync.Mutex
+	started types.LayerID
+	waiters []waiter
+
+	clock         clock.Clock
+	genesis       time.Time
+	layerDuration time.Duration
 }
 
 func (t *testNodeClock) CurrentLayer() types.LayerID {
-	return types.LayerID(t.clock.Now().Sub(t.genesis) / t.layer)
+	return types.LayerID(t.clock.Now().Sub(t.genesis) / t.layerDuration)
 }
 
 func (t *testNodeClock) LayerToTime(lid types.LayerID) time.Time {
-	return t.genesis.Add(time.Duration(lid) * t.layer)
+	return t.genesis.Add(time.Duration(lid) * t.layerDuration)
+}
+
+func (t *testNodeClock) StartLayer(lid types.LayerID) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.started = lid
+	for _, w := range t.waiters {
+		if w.lid <= lid {
+			select {
+			case <-w.ch:
+			default:
+				close(w.ch)
+			}
+		}
+	}
 }
 
 func (t *testNodeClock) AwaitLayer(lid types.LayerID) <-chan struct{} {
-	sub := make(chan struct{})
-	until := t.clock.Until(t.LayerToTime(lid))
-	if until <= 0 {
-		close(sub)
-	} else {
-		t.clock.AfterFunc(until, func() {
-			close(sub)
-		})
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	ch := make(chan struct{})
+	if lid <= t.started {
+		close(ch)
+		return ch
 	}
-	return sub
+	t.waiters = append(t.waiters, waiter{lid: lid, ch: ch})
+	return ch
 }
 
 type node struct {
@@ -86,6 +110,7 @@ type node struct {
 
 	i         int
 	clock     *clock.Mock
+	nclock    *testNodeClock
 	signer    *signing.EdSigner
 	vrfsigner *signing.VRFSigner
 	atx       *types.VerifiedActivationTx
@@ -182,15 +207,15 @@ func (n *node) withHare() *node {
 	verifier, err := signing.NewEdVerifier()
 	require.NoError(n.t, err)
 
-	nclock := &testNodeClock{
-		clock:   n.clock,
-		genesis: n.t.start,
-		layer:   n.t.layerDuration,
+	n.nclock = &testNodeClock{
+		clock:         n.clock,
+		genesis:       n.t.start,
+		layerDuration: n.t.layerDuration,
 	}
 	tracer := newTestTracer(n.t)
 	n.tracer = tracer
 	n.patrol = layerpatrol.New()
-	n.hare = New(nclock, n.mpublisher, n.db, verifier, n.signer, n.oracle, n.msyncer, n.patrol,
+	n.hare = New(n.nclock, n.mpublisher, n.db, verifier, n.signer, n.oracle, n.msyncer, n.patrol,
 		WithConfig(n.t.cfg),
 		WithLogger(logger.Zap()),
 		WithWallclock(n.clock),
@@ -367,7 +392,6 @@ func (cl *lockstepCluster) setup() {
 				continue
 			}
 			require.NoError(cl.t, atxs.Add(n.db, other.atx))
-
 		}
 		n.oracle.UpdateActiveSet(cl.t.genesis.GetEpoch()+1, active)
 		n.mpublisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ctx context.Context, _ string, msg []byte) error {
@@ -392,6 +416,7 @@ func (cl *lockstepCluster) movePreround(layer types.LayerID) {
 		Add(cl.t.layerDuration * time.Duration(layer)).
 		Add(cl.t.cfg.PreroundDelay)
 	for _, n := range cl.nodes {
+		n.nclock.StartLayer(layer)
 		n.clock.Set(cl.timestamp)
 	}
 	send := 0
@@ -605,10 +630,10 @@ func TestHandler(t *testing.T) {
 	n.oracle.UpdateActiveSet(tst.genesis.GetEpoch()+1, []types.ATXID{n.atx.ID()})
 	n.mpublisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	layer := tst.genesis + 1
+	n.nclock.StartLayer(layer)
 	n.clock.Set(tst.start.
 		Add(tst.layerDuration * time.Duration(layer)).
-		Add(tst.cfg.PreroundDelay),
-	)
+		Add(tst.cfg.PreroundDelay))
 	elig := n.tracer.waitEligibility()
 	t.Run("malformed", func(t *testing.T) {
 		require.ErrorIs(t, n.hare.Handler(context.Background(), "", []byte("malformed")),
