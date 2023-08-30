@@ -536,7 +536,9 @@ func TestEligibilityValidator(t *testing.T) {
 
 			lg := logtest.New(t)
 			db := datastore.NewCachedDB(sql.InMemory(), lg)
-			tv := NewEligibilityValidator(layerAvgSize, layersPerEpoch, tc.minWeight, ms.mclock, db, ms.mbc, lg, ms.mvrf)
+			tv := NewEligibilityValidator(layerAvgSize, layersPerEpoch, tc.minWeight, ms.mclock, db, ms.mbc, lg, ms.mvrf,
+				WithNonceFetcher(db),
+			)
 			for _, atx := range tc.atxs {
 				require.NoError(t, atxs.Add(db, &atx))
 			}

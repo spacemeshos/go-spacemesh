@@ -24,6 +24,10 @@ var (
 	errIncorrectEligCount  = errors.New("ballot has incorrect eligibility count")
 )
 
+type nonceFetcher interface {
+	VRFNonce(types.NodeID, types.EpochID) (types.VRFPostIndex, error)
+}
+
 // Validator validates the eligibility of a Ballot.
 // the validation focuses on eligibility only and assumes the Ballot to be valid otherwise.
 type Validator struct {
@@ -56,6 +60,7 @@ func NewEligibilityValidator(
 		avgLayerSize:       avgLayerSize,
 		layersPerEpoch:     layersPerEpoch,
 		cdb:                cdb,
+		nonceFetcher:       cdb,
 		clock:              clock,
 		beacons:            bc,
 		logger:             lg,
@@ -63,9 +68,6 @@ func NewEligibilityValidator(
 	}
 	for _, opt := range opts {
 		opt(v)
-	}
-	if v.nonceFetcher == nil {
-		v.nonceFetcher = cdb
 	}
 	return v
 }
