@@ -170,6 +170,43 @@ func (mr *MockballotDecoderMockRecorder) StoreBallot(arg0 interface{}) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StoreBallot", reflect.TypeOf((*MockballotDecoder)(nil).StoreBallot), arg0)
 }
 
+// MockvrfVerifier is a mock of vrfVerifier interface.
+type MockvrfVerifier struct {
+	ctrl     *gomock.Controller
+	recorder *MockvrfVerifierMockRecorder
+}
+
+// MockvrfVerifierMockRecorder is the mock recorder for MockvrfVerifier.
+type MockvrfVerifierMockRecorder struct {
+	mock *MockvrfVerifier
+}
+
+// NewMockvrfVerifier creates a new mock instance.
+func NewMockvrfVerifier(ctrl *gomock.Controller) *MockvrfVerifier {
+	mock := &MockvrfVerifier{ctrl: ctrl}
+	mock.recorder = &MockvrfVerifierMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockvrfVerifier) EXPECT() *MockvrfVerifierMockRecorder {
+	return m.recorder
+}
+
+// Verify mocks base method.
+func (m *MockvrfVerifier) Verify(arg0 types.NodeID, arg1 []byte, arg2 types.VrfSignature) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Verify", arg0, arg1, arg2)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// Verify indicates an expected call of Verify.
+func (mr *MockvrfVerifierMockRecorder) Verify(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockvrfVerifier)(nil).Verify), arg0, arg1, arg2)
+}
+
 // MocknonceFetcher is a mock of nonceFetcher interface.
 type MocknonceFetcher struct {
 	ctrl     *gomock.Controller
@@ -206,43 +243,6 @@ func (m *MocknonceFetcher) VRFNonce(arg0 types.NodeID, arg1 types.EpochID) (type
 func (mr *MocknonceFetcherMockRecorder) VRFNonce(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRFNonce", reflect.TypeOf((*MocknonceFetcher)(nil).VRFNonce), arg0, arg1)
-}
-
-// MockvrfVerifier is a mock of vrfVerifier interface.
-type MockvrfVerifier struct {
-	ctrl     *gomock.Controller
-	recorder *MockvrfVerifierMockRecorder
-}
-
-// MockvrfVerifierMockRecorder is the mock recorder for MockvrfVerifier.
-type MockvrfVerifierMockRecorder struct {
-	mock *MockvrfVerifier
-}
-
-// NewMockvrfVerifier creates a new mock instance.
-func NewMockvrfVerifier(ctrl *gomock.Controller) *MockvrfVerifier {
-	mock := &MockvrfVerifier{ctrl: ctrl}
-	mock.recorder = &MockvrfVerifierMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockvrfVerifier) EXPECT() *MockvrfVerifierMockRecorder {
-	return m.recorder
-}
-
-// Verify mocks base method.
-func (m *MockvrfVerifier) Verify(arg0 types.NodeID, arg1 []byte, arg2 types.VrfSignature) bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Verify", arg0, arg1, arg2)
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// Verify indicates an expected call of Verify.
-func (mr *MockvrfVerifierMockRecorder) Verify(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockvrfVerifier)(nil).Verify), arg0, arg1, arg2)
 }
 
 // MocklayerClock is a mock of layerClock interface.
