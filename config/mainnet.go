@@ -137,6 +137,7 @@ func MainnetConfig() Config {
 			MaxStaleDuration: time.Hour,
 			UseNewProtocol:   true,
 			Standalone:       false,
+			GossipDuration:   2 * time.Minute,
 		},
 		Recovery: checkpoint.DefaultConfig(),
 		Cache:    datastore.DefaultConfig(),

@@ -35,7 +35,8 @@ func minLayer(a, b types.LayerID) types.LayerID {
 
 func (s *Syncer) stateSynced() bool {
 	current := s.ticker.CurrentLayer()
-	return current.Uint32() <= 1 || !s.mesh.ProcessedLayer().Before(current.Sub(1))
+	return current <= types.GetEffectiveGenesis() ||
+		(s.mesh.ProcessedLayer() >= current-1 && !s.stateErr.Load())
 }
 
 func (s *Syncer) processLayers(ctx context.Context) error {
@@ -62,7 +63,7 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 
 	// used to make sure we only resync from the same peer once during each run.
 	resyncPeers := make(map[p2p.Peer]struct{})
-	for lid := start; !lid.After(s.getLastSyncedLayer()); lid = lid.Add(1) {
+	for lid := start; lid <= s.getLastSyncedLayer(); lid++ {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -114,6 +115,9 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 			if !errors.Is(err, mesh.ErrMissingBlock) {
 				s.logger.WithContext(ctx).With().Warning("mesh failed to process layer from sync", lid, log.Err(err))
 			}
+			s.stateErr.Store(true)
+		} else {
+			s.stateErr.Store(false)
 		}
 	}
 	s.logger.WithContext(ctx).With().Debug("end of state sync",

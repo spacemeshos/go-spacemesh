@@ -195,8 +195,8 @@ func (d *DataFetch) PollLayerData(ctx context.Context, lid types.LayerID, peers 
 }
 
 func (d *DataFetch) receiveMaliciousIDs(ctx context.Context, req *maliciousIDRequest, peer p2p.Peer, data []byte, peerErr error) {
-	logger := d.logger.WithContext(ctx).WithFields(req.lid, log.Stringer("peer", peer))
-	logger.Debug("received layer data from peer")
+	logger := d.logger.WithContext(ctx).WithFields(log.Stringer("peer", peer))
+	logger.Debug("received malicious id from peer")
 	var (
 		result = peerResult[fetch.MaliciousIDs]{peer: peer, err: peerErr}
 		malIDs fetch.MaliciousIDs
