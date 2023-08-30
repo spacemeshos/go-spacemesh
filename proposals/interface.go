@@ -25,6 +25,10 @@ type ballotDecoder interface {
 	StoreBallot(*tortoise.DecodedBallot) error
 }
 
+type nonceFetcher interface {
+	VRFNonce(types.NodeID, types.EpochID) (types.VRFPostIndex, error)
+}
+
 type vrfVerifier interface {
 	Verify(types.NodeID, []byte, types.VrfSignature) bool
 }
