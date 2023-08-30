@@ -1,6 +1,7 @@
 package presets
 
 import (
+	"math"
 	"math/big"
 	"time"
 
@@ -33,6 +34,7 @@ func fastnet() config.Config {
 	conf.HARE.WakeupDelta = 3 * time.Second
 
 	conf.HARE3.Enable = true
+	conf.HARE3.DisableLayer = types.LayerID(math.MaxUint32)
 	conf.HARE3.Committee = 800
 	conf.HARE3.Leaders = 10
 	conf.HARE3.PreroundDelay = 3 * time.Second
