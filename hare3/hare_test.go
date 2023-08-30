@@ -524,10 +524,10 @@ func (*testTracer) OnMessageSent(*Message) {}
 
 func (*testTracer) OnMessageReceived(*Message) {}
 
-func testHare(tb testing.TB, active, inactive, equivocators int, opts ...clusterOpt) {
-	tb.Helper()
+func testHare(t *testing.T, active, inactive, equivocators int, opts ...clusterOpt) {
+	t.Parallel()
 	tst := &tester{
-		TB:            tb,
+		TB:            t,
 		rng:           rand.New(rand.NewSource(1001)),
 		start:         time.Now(),
 		cfg:           DefaultConfig(),
@@ -552,27 +552,28 @@ func testHare(tb testing.TB, active, inactive, equivocators int, opts ...cluster
 		n.tracer.waitStopped()
 		select {
 		case coin := <-n.hare.Coins():
-			require.Equal(tb, coin.Layer, layer)
+			require.Equal(t, coin.Layer, layer)
 		default:
-			require.FailNow(tb, "no coin")
+			require.FailNow(t, "no coin")
 		}
 		select {
 		case rst := <-n.hare.Results():
-			require.Equal(tb, rst.Layer, layer)
-			require.NotEmpty(tb, rst.Proposals)
+			require.Equal(t, rst.Layer, layer)
+			require.NotEmpty(t, rst.Proposals)
 			if consistent == nil {
 				consistent = rst.Proposals
 			} else {
-				require.Equal(tb, consistent, rst.Proposals)
+				require.Equal(t, consistent, rst.Proposals)
 			}
 		default:
-			require.FailNow(tb, "no result")
+			require.FailNow(t, "no result")
 		}
-		require.Empty(tb, n.hare.Running())
+		require.Empty(t, n.hare.Running())
 	}
 }
 
 func TestHare(t *testing.T) {
+	t.Parallel()
 	t.Run("one", func(t *testing.T) { testHare(t, 1, 0, 0) })
 	t.Run("two", func(t *testing.T) { testHare(t, 2, 0, 0) })
 	t.Run("small", func(t *testing.T) { testHare(t, 5, 0, 0) })
@@ -583,6 +584,7 @@ func TestHare(t *testing.T) {
 }
 
 func TestIterationLimit(t *testing.T) {
+	t.Parallel()
 	tst := &tester{
 		TB:            t,
 		rng:           rand.New(rand.NewSource(1001)),
@@ -613,6 +615,7 @@ func TestConfigMarshal(t *testing.T) {
 }
 
 func TestHandler(t *testing.T) {
+	t.Parallel()
 	tst := &tester{
 		TB:            t,
 		rng:           rand.New(rand.NewSource(1001)),
