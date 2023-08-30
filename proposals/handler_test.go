@@ -49,7 +49,6 @@ type mockSet struct {
 	mv     *MockeligibilityValidator
 	md     *MockballotDecoder
 	mvrf   *MockvrfVerifier
-	mNonce *MocknonceFetcher
 }
 
 func (ms *mockSet) decodeAnyBallots() *mockSet {
@@ -80,7 +79,6 @@ func fullMockSet(tb testing.TB) *mockSet {
 		mv:     NewMockeligibilityValidator(ctrl),
 		md:     NewMockballotDecoder(ctrl),
 		mvrf:   NewMockvrfVerifier(ctrl),
-		mNonce: NewMocknonceFetcher(ctrl),
 	}
 }
 

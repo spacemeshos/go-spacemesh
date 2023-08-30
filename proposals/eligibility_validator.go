@@ -35,23 +35,14 @@ type Validator struct {
 	beacons            system.BeaconCollector
 	logger             log.Log
 	vrfVerifier        vrfVerifier
-	nonceFetcher       nonceFetcher
-}
-
-// ValidatorOpt for configuring Validator.
-type ValidatorOpt func(h *Validator)
-
-func WithNonceFetcher(nf nonceFetcher) ValidatorOpt {
-	return func(h *Validator) {
-		h.nonceFetcher = nf
-	}
 }
 
 // NewEligibilityValidator returns a new EligibilityValidator.
 func NewEligibilityValidator(
-	avgLayerSize, layersPerEpoch uint32, minActiveSetWeight uint64, clock layerClock, cdb *datastore.CachedDB, bc system.BeaconCollector, lg log.Log, vrfVerifier vrfVerifier, opts ...ValidatorOpt,
+	avgLayerSize, layersPerEpoch uint32, minActiveSetWeight uint64, clock layerClock,
+	cdb *datastore.CachedDB, bc system.BeaconCollector, lg log.Log, vrfVerifier vrfVerifier,
 ) *Validator {
-	v := &Validator{
+	return &Validator{
 		minActiveSetWeight: minActiveSetWeight,
 		avgLayerSize:       avgLayerSize,
 		layersPerEpoch:     layersPerEpoch,
@@ -61,13 +52,6 @@ func NewEligibilityValidator(
 		logger:             lg,
 		vrfVerifier:        vrfVerifier,
 	}
-	for _, opt := range opts {
-		opt(v)
-	}
-	if v.nonceFetcher == nil {
-		v.nonceFetcher = cdb
-	}
-	return v
 }
 
 // CheckEligibility checks that a ballot is eligible in the layer that it specifies.
@@ -86,6 +70,10 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 	if ballot.SmesherID != owned.NodeID {
 		return false, fmt.Errorf("%w: public key (%v), ATX node key (%v)", errPublicKeyMismatch, ballot.SmesherID.String(), owned.NodeID)
 	}
+	nonce, err := v.cdb.VRFNonce(ballot.SmesherID, ballot.Layer.GetEpoch())
+	if err != nil {
+		return false, fmt.Errorf("no vrf nonce for %v in epoch %v: %w", ballot.SmesherID, ballot.Layer.GetEpoch(), err)
+	}
 	var data *types.EpochData
 	if ballot.EpochData != nil && ballot.Layer.GetEpoch() == v.clock.CurrentLayer().GetEpoch() {
 		var err error
@@ -100,10 +88,6 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 			return false, err
 		}
 	}
-	nonce, err := v.nonceFetcher.VRFNonce(ballot.SmesherID, ballot.Layer.GetEpoch())
-	if err != nil {
-		return false, fmt.Errorf("no nonce for %v in epoch %v: %w", ballot.SmesherID, ballot.Layer.GetEpoch(), err)
-	}
 	for i, proof := range ballot.EligibilityProofs {
 		if proof.J >= data.EligibilityCount {
 			return false, fmt.Errorf("%w: proof counter (%d) numEligibleBallots (%d)",
@@ -112,19 +96,15 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		if i != 0 && proof.J <= ballot.EligibilityProofs[i-1].J {
 			return false, fmt.Errorf("%w: %d <= %d", errInvalidProofsOrder, proof.J, ballot.EligibilityProofs[i-1].J)
 		}
-		message, err := SerializeVRFMessage(data.Beacon, ballot.Layer.GetEpoch(), nonce, proof.J)
-		if err != nil {
-			return false, err
-		}
+		message := MustSerializeVRFMessage(data.Beacon, ballot.Layer.GetEpoch(), nonce, proof.J)
 		if !v.vrfVerifier.Verify(ballot.SmesherID, message, proof.Sig) {
 			return false, fmt.Errorf("%w: beacon: %v, epoch: %v, counter: %v, vrfSig: %s",
 				errIncorrectVRFSig, data.Beacon.ShortString(), ballot.Layer.GetEpoch(), proof.J, proof.Sig,
 			)
 		}
-		eligibleLayer := CalcEligibleLayer(ballot.Layer.GetEpoch(), v.layersPerEpoch, proof.Sig)
-		if ballot.Layer != eligibleLayer {
+		if eligible := CalcEligibleLayer(ballot.Layer.GetEpoch(), v.layersPerEpoch, proof.Sig); ballot.Layer != eligible {
 			return false, fmt.Errorf("%w: ballot layer (%v), eligible layer (%v)",
-				errIncorrectLayerIndex, ballot.Layer, eligibleLayer)
+				errIncorrectLayerIndex, ballot.Layer, eligible)
 		}
 	}
 
@@ -135,8 +115,8 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		data.Beacon,
 	)
 
-	weightPer := fixed.DivUint64(owned.GetWeight(), uint64(data.EligibilityCount))
-	v.beacons.ReportBeaconFromBallot(ballot.Layer.GetEpoch(), ballot, data.Beacon, weightPer)
+	v.beacons.ReportBeaconFromBallot(ballot.Layer.GetEpoch(), ballot, data.Beacon,
+		fixed.DivUint64(owned.GetWeight(), uint64(data.EligibilityCount)))
 	return true, nil
 }
 
@@ -175,7 +155,7 @@ func (v *Validator) validateSecondary(ballot *types.Ballot, owned *types.Activat
 		var err error
 		refballot, err = ballots.Get(v.cdb, ballot.RefBallot)
 		if err != nil {
-			return nil, fmt.Errorf("get ref ballot %v: %w", ballot.RefBallot, err)
+			return nil, fmt.Errorf("ref ballot is missing %v: %w", ballot.RefBallot, err)
 		}
 	}
 	if refballot.EpochData == nil {

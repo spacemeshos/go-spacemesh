@@ -33,6 +33,21 @@ func gatx(id types.ATXID, epoch types.EpochID, smesher types.NodeID, units uint3
 	return *verified
 }
 
+func gatxNilNonce(id types.ATXID, epoch types.EpochID, smesher types.NodeID, units uint32) types.VerifiedActivationTx {
+	atx := &types.ActivationTx{}
+	atx.NumUnits = units
+	atx.PublishEpoch = epoch
+	atx.SmesherID = smesher
+	atx.SetID(id)
+	atx.SetEffectiveNumUnits(atx.NumUnits)
+	atx.SetReceived(time.Time{}.Add(1))
+	verified, err := atx.Verify(0, 100)
+	if err != nil {
+		panic(err)
+	}
+	return *verified
+}
+
 func gdata(slots uint32, beacon types.Beacon) *types.EpochData {
 	return &types.EpochData{
 		Beacon:           beacon,
@@ -112,6 +127,20 @@ func TestEligibilityValidator(t *testing.T) {
 			executed: gballot(
 				types.BallotID{1}, types.ATXID{1}, gactiveset(types.ATXID{1}, types.ATXID{2}),
 				types.NodeID{1}, epoch.FirstLayer(), gdata(15, types.Beacon{1}),
+				geligibilities(1, 2),
+			),
+		},
+		{
+			desc:      "ref ballot in current low activeset",
+			current:   epoch.FirstLayer(),
+			minWeight: 10000,
+			atxs: []types.VerifiedActivationTx{
+				gatx(types.ATXID{1}, publish, types.NodeID{1}, 10, 10),
+				gatx(types.ATXID{2}, publish, types.NodeID{2}, 10, 10),
+			},
+			executed: gballot(
+				types.BallotID{1}, types.ATXID{1}, gactiveset(types.ATXID{1}, types.ATXID{2}),
+				types.NodeID{1}, epoch.FirstLayer(), gdata(3, types.Beacon{1}),
 				geligibilities(1, 2),
 			),
 		},
@@ -260,6 +289,20 @@ func TestEligibilityValidator(t *testing.T) {
 			err:  "ballot smesher key and ATX node key mismatch",
 		},
 		{
+			desc:    "no vrf nonce",
+			current: epoch.FirstLayer(),
+			atxs: []types.VerifiedActivationTx{
+				gatxNilNonce(types.ATXID{1}, epoch-1, types.NodeID{1}, 10),
+			},
+			executed: gballot(
+				types.BallotID{1}, types.ATXID{1}, gactiveset(types.ATXID{1}),
+				types.NodeID{1}, epoch.FirstLayer(), gdata(10, types.Beacon{1}),
+				geligibilities(1, 2),
+			),
+			fail: true,
+			err:  "no vrf nonce",
+		},
+		{
 			desc:    "secondary ballot",
 			current: epoch.FirstLayer(),
 			atxs: []types.VerifiedActivationTx{
@@ -294,16 +337,170 @@ func TestEligibilityValidator(t *testing.T) {
 				types.NodeID{1, 1, 1},
 				epoch.FirstLayer()+2,
 				types.EmptyBallotID,
-				nil,
+				geligibilities(1, 2),
 			),
 			fail: true,
-			err:  "ballot smesher key and ATX node key mismatch",
+			err:  "epoch data is missing in ref ballot",
+		},
+		{
+			desc:    "secondary ballot missing ref",
+			current: epoch.FirstLayer(),
+			atxs: []types.VerifiedActivationTx{
+				gatx(types.ATXID{1}, publish, types.NodeID{1, 1, 1}, 10, 10),
+			},
+			executed: gref(
+				types.BallotID{2}, types.ATXID{1},
+				types.NodeID{1, 1, 1},
+				epoch.FirstLayer()+2,
+				types.BallotID{1},
+				geligibilities(1, 2),
+			),
+			fail: true,
+			err:  "ref ballot is missing",
+		},
+		{
+			desc:    "secondary ballot atx id mismatch",
+			current: epoch.FirstLayer(),
+			atxs: []types.VerifiedActivationTx{
+				gatx(types.ATXID{1}, publish, types.NodeID{1, 1, 1}, 10, 10),
+			},
+			ballots: []types.Ballot{
+				gballot(
+					types.BallotID{1}, types.ATXID{2},
+					nil,
+					types.NodeID{1, 1, 1},
+					epoch.FirstLayer(),
+					gdata(10, types.Beacon{1}),
+					nil,
+				),
+			},
+			executed: gref(
+				types.BallotID{2}, types.ATXID{1},
+				types.NodeID{1, 1, 1},
+				epoch.FirstLayer()+2,
+				types.BallotID{1},
+				geligibilityWithSig(1, "test1111111"),
+			),
+			fail: true,
+			err:  "sharing atx with a reference ballot",
+		},
+		{
+			desc:    "secondary ballot smesher id mismatch",
+			current: epoch.FirstLayer(),
+			atxs: []types.VerifiedActivationTx{
+				gatx(types.ATXID{1}, publish, types.NodeID{1, 1, 1}, 10, 10),
+			},
+			ballots: []types.Ballot{
+				gballot(
+					types.BallotID{1}, types.ATXID{1},
+					nil,
+					types.NodeID{2, 2, 2},
+					epoch.FirstLayer(),
+					gdata(10, types.Beacon{1}),
+					nil,
+				),
+			},
+			executed: gref(
+				types.BallotID{2}, types.ATXID{1},
+				types.NodeID{1, 1, 1},
+				epoch.FirstLayer()+2,
+				types.BallotID{1},
+				geligibilityWithSig(1, "test1111111"),
+			),
+			fail: true,
+			err:  "mismatched smesher id with refballot",
+		},
+		{
+			desc:    "secondary ballot mismatched epochs",
+			current: epoch.FirstLayer(),
+			atxs: []types.VerifiedActivationTx{
+				gatx(types.ATXID{1}, publish, types.NodeID{1, 1, 1}, 10, 10),
+			},
+			ballots: []types.Ballot{
+				gballot(
+					types.BallotID{1}, types.ATXID{1},
+					nil,
+					types.NodeID{1, 1, 1},
+					(epoch + 1).FirstLayer(),
+					gdata(10, types.Beacon{1}),
+					nil,
+				),
+			},
+			executed: gref(
+				types.BallotID{2}, types.ATXID{1},
+				types.NodeID{1, 1, 1},
+				epoch.FirstLayer()+2,
+				types.BallotID{1},
+				geligibilityWithSig(1, "test1111111"),
+			),
+			fail: true,
+			err:  "targets mismatched epoch",
+		},
+		{
+			desc:    "ref ballot bad elig order",
+			current: epoch.FirstLayer(),
+			atxs: []types.VerifiedActivationTx{
+				gatx(types.ATXID{1}, publish, types.NodeID{1}, 10, 10),
+				gatx(types.ATXID{2}, publish, types.NodeID{2}, 10, 10),
+			},
+			executed: gballot(
+				types.BallotID{1}, types.ATXID{1}, gactiveset(types.ATXID{1}, types.ATXID{2}),
+				types.NodeID{1}, epoch.FirstLayer(), gdata(15, types.Beacon{1}),
+				geligibilities(2, 1, 3),
+			),
+			fail: true,
+			err:  "proofs are out of order: 1 <= 2",
+		},
+		{
+			desc:    "proof overflows slots",
+			current: epoch.FirstLayer(),
+			atxs: []types.VerifiedActivationTx{
+				gatx(types.ATXID{1}, publish, types.NodeID{1}, 10, 10),
+				gatx(types.ATXID{2}, publish, types.NodeID{2}, 10, 10),
+			},
+			executed: gballot(
+				types.BallotID{1}, types.ATXID{1}, gactiveset(types.ATXID{1}, types.ATXID{2}),
+				types.NodeID{1}, epoch.FirstLayer(), gdata(15, types.Beacon{1}),
+				geligibilities(15),
+			),
+			fail: true,
+			err:  "proof counter larger than number of slots",
+		},
+		{
+			desc:    "verified didnt pass",
+			current: epoch.FirstLayer(),
+			atxs: []types.VerifiedActivationTx{
+				gatx(types.ATXID{1}, publish, types.NodeID{1}, 10, 10),
+				gatx(types.ATXID{2}, publish, types.NodeID{2}, 10, 10),
+			},
+			executed: gballot(
+				types.BallotID{1}, types.ATXID{1}, gactiveset(types.ATXID{1}, types.ATXID{2}),
+				types.NodeID{1}, epoch.FirstLayer(), gdata(15, types.Beacon{1}),
+				geligibilities(14),
+			),
+			vrfFailed: true,
+			fail:      true,
+			err:       "proof contains incorrect VRF signature",
+		},
+		{
+			desc:    "layer is wrong",
+			current: epoch.FirstLayer(),
+			atxs: []types.VerifiedActivationTx{
+				gatx(types.ATXID{1}, publish, types.NodeID{1}, 10, 10),
+				gatx(types.ATXID{2}, publish, types.NodeID{2}, 10, 10),
+			},
+			executed: gballot(
+				types.BallotID{1}, types.ATXID{1}, gactiveset(types.ATXID{1}, types.ATXID{2}),
+				types.NodeID{1}, epoch.FirstLayer(), gdata(15, types.Beacon{1}),
+				geligibilityWithSig(1, "adjust layer"),
+			),
+			fail: true,
+			err:  "ballot has incorrect layer index",
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			ms := fullMockSet(t)
 			ms.mclock.EXPECT().CurrentLayer().Return(tc.current).AnyTimes()
-			ms.mbc.EXPECT().ReportBeaconFromBallot(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 			ms.mvrf.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(!tc.vrfFailed).AnyTimes()
 
 			lg := logtest.New(t)
@@ -314,6 +511,9 @@ func TestEligibilityValidator(t *testing.T) {
 			}
 			for _, ballot := range tc.ballots {
 				require.NoError(t, ballots.Add(db, &ballot))
+			}
+			if !tc.fail {
+				ms.mbc.EXPECT().ReportBeaconFromBallot(tc.executed.Layer.GetEpoch(), &tc.executed, gomock.Any(), gomock.Any())
 			}
 			rst, err := tv.CheckEligibility(context.Background(), &tc.executed)
 			assert.Equal(t, !tc.fail, rst)
