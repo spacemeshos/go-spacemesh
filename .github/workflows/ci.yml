@@ -24,6 +24,7 @@ on:
     branches:
       - staging
       - trying
+  merge_group:
 
 concurrency:
   group: ${{ github.base_ref == 'staging' && 'smci-staging' || format('smci-{0}-{1}', github.workflow, github.ref) }}
