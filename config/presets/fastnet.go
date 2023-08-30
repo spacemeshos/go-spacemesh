@@ -1,6 +1,7 @@
 package presets
 
 import (
+	"math"
 	"math/big"
 	"time"
 
@@ -24,12 +25,21 @@ func fastnet() config.Config {
 
 	conf.BaseConfig.TestConfig.MinerGoodAtxPct = 50
 
+	conf.HARE.Disable = 1 // non-zero low layer will prevent hare1 from running
 	conf.HARE.N = 800
 	conf.HARE.ExpectedLeaders = 10
 	conf.HARE.LimitConcurrent = 5
 	conf.HARE.LimitIterations = 3
 	conf.HARE.RoundDuration = 2 * time.Second
 	conf.HARE.WakeupDelta = 3 * time.Second
+
+	conf.HARE3.Enable = true
+	conf.HARE3.DisableLayer = types.LayerID(math.MaxUint32)
+	conf.HARE3.Committee = 800
+	conf.HARE3.Leaders = 10
+	conf.HARE3.PreroundDelay = 3 * time.Second
+	conf.HARE3.RoundDuration = 500 * time.Millisecond
+	conf.HARE3.IterationsLimit = 2
 
 	conf.P2P.MinPeers = 10
 
