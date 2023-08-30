@@ -10,6 +10,12 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ### Features
 
+* [#4765](https://github.com/spacemeshos/go-spacemesh/pull/4765) hare 3 consensus protocol.
+
+Replacement for original version of hare. Won't be enabled on mainnet for now.
+Otherwise protocol uses significantly less traffic (atlest x20), and will allow
+to set lower expected latency in the network, eventually reducing layer time. 
+
 ### Improvements
 
 ## v1.1.2
