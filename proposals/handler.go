@@ -129,7 +129,7 @@ func NewHandler(
 		opt(b)
 	}
 	if b.validator == nil {
-		b.validator = NewEligibilityValidator(b.cfg.LayerSize, b.cfg.LayersPerEpoch, b.cfg.MinimalActiveSetWeight, cdb, bc, b.logger, verifier)
+		b.validator = NewEligibilityValidator(b.cfg.LayerSize, b.cfg.LayersPerEpoch, b.cfg.MinimalActiveSetWeight, clock, cdb, bc, b.logger, verifier)
 	}
 	return b
 }

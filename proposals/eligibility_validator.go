@@ -12,7 +12,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/system"
-	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
 var (
@@ -32,7 +31,7 @@ type Validator struct {
 	avgLayerSize       uint32
 	layersPerEpoch     uint32
 	cdb                *datastore.CachedDB
-	nodeclock          *timesync.NodeClock
+	clock              layerClock
 	beacons            system.BeaconCollector
 	logger             log.Log
 	vrfVerifier        vrfVerifier
@@ -50,7 +49,7 @@ func WithNonceFetcher(nf nonceFetcher) ValidatorOpt {
 
 // NewEligibilityValidator returns a new EligibilityValidator.
 func NewEligibilityValidator(
-	avgLayerSize, layersPerEpoch uint32, minActiveSetWeight uint64, cdb *datastore.CachedDB, bc system.BeaconCollector, lg log.Log, vrfVerifier vrfVerifier, opts ...ValidatorOpt,
+	avgLayerSize, layersPerEpoch uint32, minActiveSetWeight uint64, clock layerClock, cdb *datastore.CachedDB, bc system.BeaconCollector, lg log.Log, vrfVerifier vrfVerifier, opts ...ValidatorOpt,
 ) *Validator {
 	v := &Validator{
 		minActiveSetWeight: minActiveSetWeight,
@@ -80,7 +79,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		return false, fmt.Errorf("ballot has no atx %v: %w", ballot.AtxID, err)
 	}
 	var data *types.EpochData
-	if ballot.EpochData != nil && ballot.Layer.GetEpoch() == v.nodeclock.CurrentLayer().GetEpoch() {
+	if ballot.EpochData != nil && ballot.Layer.GetEpoch() == v.clock.CurrentLayer().GetEpoch() {
 		var err error
 		data, err = v.validateReference(ballot, owned)
 		if err != nil {
