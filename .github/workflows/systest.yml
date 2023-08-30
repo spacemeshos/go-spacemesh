@@ -6,6 +6,8 @@ on:
     branches:
       - staging
       - trying
+  merge_group:
+
 env:
   GCLOUD_KEY: ${{ secrets.GCLOUD_KEY }}
   PROJECT_NAME: ${{ secrets.PROJECT_NAME }}
