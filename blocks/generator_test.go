@@ -44,8 +44,6 @@ const (
 
 func testConfig() Config {
 	return Config{
-		LayerSize:          layerSize,
-		LayersPerEpoch:     epochSize,
 		GenBlockInterval:   10 * time.Millisecond,
 		BlockGasLimit:      math.MaxUint64,
 		OptFilterThreshold: 90,

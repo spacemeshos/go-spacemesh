@@ -141,6 +141,8 @@ func GetCommand() *cobra.Command {
 			run := func(ctx context.Context) error {
 				types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
 				types.SetLegacyLayers(app.Config.LegacyLayer)
+				// starting on 2023-09-14 20:00:00 +0000 UTC (~1 week into 4th epoch)
+				types.SetOpUpgradeLayer(18000)
 				// ensure all data folders exist
 				if err := os.MkdirAll(app.Config.DataDir(), 0o700); err != nil {
 					return fmt.Errorf("ensure folders exist: %w", err)
@@ -735,8 +737,6 @@ func (app *App) initServices(ctx context.Context) error {
 	app.blockGen = blocks.NewGenerator(app.cachedDB, executor, msh, fetcherWrapped, app.certifier, patrol,
 		blocks.WithContext(ctx),
 		blocks.WithConfig(blocks.Config{
-			LayerSize:          layerSize,
-			LayersPerEpoch:     layersPerEpoch,
 			BlockGasLimit:      app.Config.BlockGasLimit,
 			OptFilterThreshold: app.Config.OptFilterThreshold,
 			GenBlockInterval:   500 * time.Millisecond,
