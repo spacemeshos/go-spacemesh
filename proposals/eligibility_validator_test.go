@@ -539,3 +539,67 @@ func TestCheckEligibility_MinActiveSetWeight(t *testing.T) {
 	require.ErrorContains(t, err, "ballot has incorrect eligibility count: expected 15, got: 30")
 	require.False(t, eligibile)
 }
+
+func gatx(id types.ATXID, epoch types.EpochID, smesher types.NodeID, units uint32, nonce types.VRFPostIndex) types.VerifiedActivationTx {
+	atx := &types.ActivationTx{}
+	atx.NumUnits = units
+	atx.PublishEpoch = epoch
+	atx.SmesherID = smesher
+	atx.SetID(id)
+	atx.SetEffectiveNumUnits(atx.NumUnits)
+	atx.SetReceived(time.Time{}.Add(1))
+	atx.VRFNonce = &nonce
+	verified, err := atx.Verify(0, 100)
+	if err != nil {
+		panic(err)
+	}
+	return *verified
+}
+
+func gdata(slots uint32, beacon types.Beacon) *types.EpochData {
+	return &types.EpochData{
+		Beacon:           beacon,
+		EligibilityCount: slots,
+	}
+}
+
+func gactiveset(atxs ...types.ATXID) []types.ATXID {
+	return atxs
+}
+
+func gballot(id types.BallotID, atxid types.ATXID, activeset []types.ATXID, smesher types.NodeID, layer types.LayerID, edata *types.EpochData) types.Ballot {
+	ballot := types.Ballot{}
+	ballot.Layer = layer
+	ballot.EpochData = edata
+	ballot.AtxID = atxid
+	ballot.ActiveSet = activeset
+	ballot.SmesherID = smesher
+	ballot.SetID(id)
+	return ballot
+}
+
+func gref(id types.BallotID, atxid types.ATXID, smesher types.NodeID, layer types.LayerID, ref types.BallotID) types.Ballot {
+	ballot := types.Ballot{}
+	ballot.Layer = layer
+	ballot.RefBallot = types.BallotID(ref)
+	ballot.AtxID = atxid
+	ballot.SmesherID = smesher
+	ballot.SetID(id)
+	return ballot
+}
+
+func TestEligibilityValidator(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		desc     string
+		current  types.LayerID
+		atxs     []*types.VerifiedActivationTx
+		ballots  []types.Ballot
+		executed types.Ballot
+		expect   string
+	}{} {
+		t.Run(tc.desc, func(t *testing.T) {
+
+		})
+	}
+}
