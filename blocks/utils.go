@@ -69,7 +69,7 @@ func getProposalMetadata(
 	if err != nil {
 		return nil, err
 	}
-	upgrade := proposals[0].Layer.Uint32() >= types.OpUpgradeLayer()
+	upgrade := lid.Uint32() >= types.OpUpgradeLayer()
 	total := 0
 	for _, p := range proposals {
 		key := p.MeshHash
