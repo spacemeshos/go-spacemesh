@@ -112,8 +112,8 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		if i != 0 && proof.J <= ballot.EligibilityProofs[i-1].J {
 			return false, fmt.Errorf("%w: %d <= %d", errInvalidProofsOrder, proof.J, ballot.EligibilityProofs[i-1].J)
 		}
-		message := MustSerializeVRFMessage(data.Beacon, ballot.Layer.GetEpoch(), nonce, proof.J)
-		if !v.vrfVerifier.Verify(ballot.SmesherID, message, proof.Sig) {
+		if !v.vrfVerifier.Verify(ballot.SmesherID,
+			MustSerializeVRFMessage(data.Beacon, ballot.Layer.GetEpoch(), nonce, proof.J), proof.Sig) {
 			return false, fmt.Errorf("%w: beacon: %v, epoch: %v, counter: %v, vrfSig: %s",
 				errIncorrectVRFSig, data.Beacon.ShortString(), ballot.Layer.GetEpoch(), proof.J, proof.Sig,
 			)

@@ -33,6 +33,22 @@ func gatx(id types.ATXID, epoch types.EpochID, smesher types.NodeID, units uint3
 	return *verified
 }
 
+func gatxZeroHeight(id types.ATXID, epoch types.EpochID, smesher types.NodeID, units uint32, nonce types.VRFPostIndex) types.VerifiedActivationTx {
+	atx := &types.ActivationTx{}
+	atx.NumUnits = units
+	atx.PublishEpoch = epoch
+	atx.SmesherID = smesher
+	atx.SetID(id)
+	atx.SetEffectiveNumUnits(atx.NumUnits)
+	atx.SetReceived(time.Time{}.Add(1))
+	atx.VRFNonce = &nonce
+	verified, err := atx.Verify(0, 0)
+	if err != nil {
+		panic(err)
+	}
+	return *verified
+}
+
 func gatxNilNonce(id types.ATXID, epoch types.EpochID, smesher types.NodeID, units uint32) types.VerifiedActivationTx {
 	atx := &types.ActivationTx{}
 	atx.NumUnits = units
@@ -144,6 +160,20 @@ func TestEligibilityValidator(t *testing.T) {
 				types.NodeID{1}, epoch.FirstLayer(), gdata(3, types.Beacon{1}),
 				geligibilities(1, 2),
 			),
+		},
+		{
+			desc:    "ref ballot zero height",
+			current: epoch.FirstLayer(),
+			atxs: []types.VerifiedActivationTx{
+				gatxZeroHeight(types.ATXID{1}, publish, types.NodeID{1}, 10, 10),
+			},
+			executed: gballot(
+				types.BallotID{1}, types.ATXID{1}, gactiveset(types.ATXID{1}),
+				types.NodeID{1}, epoch.FirstLayer(), gdata(15, types.Beacon{1}),
+				geligibilities(1, 2),
+			),
+			fail: true,
+			err:  "zero total weight",
 		},
 		{
 			desc:    "ref ballot in previous",
