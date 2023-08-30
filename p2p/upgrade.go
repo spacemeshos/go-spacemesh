@@ -10,13 +10,13 @@ import (
 	lp2plog "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/log"
 	discovery "github.com/spacemeshos/go-spacemesh/p2p/dhtdiscovery"
-	"github.com/spacemeshos/go-spacemesh/p2p/peerexchange"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
@@ -52,6 +52,18 @@ func WithNodeReporter(reporter func()) Opt {
 	}
 }
 
+func WithDirectNodes(direct map[peer.ID]struct{}) Opt {
+	return func(fh *Host) {
+		fh.direct = direct
+	}
+}
+
+func WithBootnodes(bootnodes map[peer.ID]struct{}) Opt {
+	return func(fh *Host) {
+		fh.bootnode = bootnodes
+	}
+}
+
 // Host is a conveniency wrapper for all p2p related functionality required to run
 // a full spacemesh node.
 type Host struct {
@@ -72,8 +84,8 @@ type Host struct {
 
 	nodeReporter func()
 
-	discovery *discovery.Discovery
-	legacy    *peerexchange.Discovery
+	discovery        *discovery.Discovery
+	direct, bootnode map[peer.ID]struct{}
 }
 
 // Upgrade creates Host instance from host.Host.
@@ -110,19 +122,6 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 	}); err != nil {
 		return nil, fmt.Errorf("failed to initialize pubsub: %w", err)
 	}
-	if !cfg.DisableLegacyDiscovery {
-		if fh.legacy, err = peerexchange.New(fh.logger, h, peerexchange.Config{
-			DataDir:          cfg.DataDir,
-			Bootnodes:        cfg.Bootnodes,
-			AdvertiseAddress: cfg.AdvertiseAddress,
-			MinPeers:         cfg.MinPeers,
-			SlowCrawl:        10 * time.Minute,
-			FastCrawl:        10 * time.Second,
-		}); err != nil {
-			return nil, fmt.Errorf("failed to initialize peerexchange discovery: %w", err)
-		}
-	}
-
 	dopts := []discovery.Opt{
 		discovery.WithMinPeers(cfg.MinPeers),
 		discovery.WithHighPeers(cfg.HighPeers),
@@ -170,6 +169,39 @@ func (fh *Host) GetPeers() []Peer {
 	return fh.Host.Network().Peers()
 }
 
+// ConnectedPeerInfo retrieves a peer info object for the given peer.ID, if the
+// given peer is not connected then nil is returned.
+func (fh *Host) ConnectedPeerInfo(id peer.ID) *PeerInfo {
+	conns := fh.Network().ConnsToPeer(id)
+	// there's no sync between  Peers() and ConnsToPeer() so by the time we
+	// try to get the conns they may not exist.
+	if len(conns) == 0 {
+		return nil
+	}
+
+	var connections []ConnectionInfo
+	for _, c := range conns {
+		connections = append(connections, ConnectionInfo{
+			Address:  c.RemoteMultiaddr(),
+			Uptime:   time.Since(c.Stat().Opened),
+			Outbound: c.Stat().Direction == network.DirOutbound,
+		})
+	}
+	var tags []string
+
+	if _, ok := fh.direct[id]; ok {
+		tags = append(tags, "direct")
+	}
+	if _, ok := fh.bootnode[id]; ok {
+		tags = append(tags, "bootnode")
+	}
+	return &PeerInfo{
+		ID:          id,
+		Connections: connections,
+		Tags:        tags,
+	}
+}
+
 // PeerCount returns number of connected peers.
 func (fh *Host) PeerCount() uint64 {
 	return uint64(len(fh.Host.Network().Peers()))
@@ -185,9 +217,6 @@ func (fh *Host) Start() error {
 	defer fh.closed.Unlock()
 	if fh.closed.closed {
 		return errors.New("p2p: closed")
-	}
-	if fh.legacy != nil {
-		fh.legacy.StartScan()
 	}
 	fh.discovery.Start()
 	if !fh.cfg.Bootnode {
@@ -208,9 +237,6 @@ func (fh *Host) Stop() error {
 	}
 	fh.cancel()
 	fh.closed.closed = true
-	if fh.legacy != nil {
-		fh.legacy.Stop()
-	}
 	fh.discovery.Stop()
 	fh.eg.Wait()
 	if err := fh.Host.Close(); err != nil {

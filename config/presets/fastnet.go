@@ -22,6 +22,8 @@ func fastnet() config.Config {
 	types.SetNetworkHRP(conf.NetworkHRP) // set to generate coinbase
 	conf.BaseConfig.OptFilterThreshold = 90
 
+	conf.BaseConfig.TestConfig.MinerGoodAtxPct = 50
+
 	conf.HARE.N = 800
 	conf.HARE.ExpectedLeaders = 10
 	conf.HARE.LimitConcurrent = 5
@@ -72,6 +74,10 @@ func fastnet() config.Config {
 	conf.Beacon.RoundsNumber = 4
 	conf.Beacon.BeaconSyncWeightUnits = 10
 	conf.Beacon.VotesLimit = 100
+
+	conf.POET.GracePeriod = 10 * time.Second
+	conf.POET.CycleGap = 30 * time.Second
+	conf.POET.PhaseShift = 30 * time.Second
 
 	return conf
 }

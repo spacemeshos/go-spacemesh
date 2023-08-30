@@ -22,7 +22,7 @@ require (
 	github.com/ipfs/go-ds-leveldb v0.5.0
 	github.com/ipfs/go-log/v2 v2.5.1
 	github.com/libp2p/go-libp2p v0.29.2
-	github.com/libp2p/go-libp2p-kad-dht v0.24.3
+	github.com/libp2p/go-libp2p-kad-dht v0.25.0
 	github.com/libp2p/go-libp2p-pubsub v0.9.3
 	github.com/libp2p/go-libp2p-record v0.2.0
 	github.com/mitchellh/mapstructure v1.5.0
@@ -35,13 +35,13 @@ require (
 	github.com/pyroscope-io/pyroscope v0.37.2
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
 	github.com/seehuhn/mt19937 v1.0.0
-	github.com/spacemeshos/api/release/go v1.19.0
+	github.com/spacemeshos/api/release/go v1.20.0
 	github.com/spacemeshos/economics v0.1.0
 	github.com/spacemeshos/fixed v0.1.0
 	github.com/spacemeshos/go-scale v1.1.10
 	github.com/spacemeshos/merkle-tree v0.2.2
 	github.com/spacemeshos/poet v0.8.9
-	github.com/spacemeshos/post v0.9.1
+	github.com/spacemeshos/post v0.9.2
 	github.com/spf13/afero v1.9.5
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.5

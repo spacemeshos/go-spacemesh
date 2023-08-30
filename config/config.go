@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
@@ -61,6 +62,7 @@ type Config struct {
 	Bootstrap       bootstrap.Config      `mapstructure:"bootstrap"`
 	Sync            syncer.Config         `mapstructure:"syncer"`
 	Recovery        checkpoint.Config     `mapstructure:"recovery"`
+	Cache           datastore.Config      `mapstructure:"cache"`
 }
 
 // DataDir returns the absolute path to use for the node's data. This is the tilde-expanded path given in the config
@@ -70,7 +72,8 @@ func (cfg *Config) DataDir() string {
 }
 
 type TestConfig struct {
-	SmesherKey string `mapstructure:"testing-smesher-key"`
+	SmesherKey      string `mapstructure:"testing-smesher-key"`
+	MinerGoodAtxPct int
 }
 
 // BaseConfig defines the default configuration options for spacemesh app.
@@ -149,6 +152,7 @@ func DefaultConfig() Config {
 		Bootstrap:       bootstrap.DefaultConfig(),
 		Sync:            syncer.DefaultConfig(),
 		Recovery:        checkpoint.DefaultConfig(),
+		Cache:           datastore.DefaultConfig(),
 	}
 }
 
