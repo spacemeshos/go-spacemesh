@@ -1,6 +1,10 @@
 package config
 
-import "time"
+import (
+	"time"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+)
 
 // Config is the configuration of the Hare.
 type Config struct {
@@ -13,6 +17,9 @@ type Config struct {
 	StopAtxGrading  uint32        `mapstructure:"stop-atx-grading"`
 
 	Hdist uint32
+
+	// If set to non-zero value will disable hare starting at that layer.
+	Disable types.LayerID `mapstructure:"disable"`
 }
 
 // DefaultConfig returns the default configuration for the hare.

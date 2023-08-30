@@ -50,6 +50,8 @@ import (
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
+	"github.com/spacemeshos/go-spacemesh/hare3"
+	"github.com/spacemeshos/go-spacemesh/hare3/compat"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -330,6 +332,7 @@ type App struct {
 	cachedDB           *datastore.CachedDB
 	clock              *timesync.NodeClock
 	hare               *hare.Hare
+	hare3              *hare3.Hare
 	hOracle            *eligibility.Oracle
 	blockGen           *blocks.Generator
 	certifier          *blocks.Certifier
@@ -764,6 +767,26 @@ func (app *App) initServices(ctx context.Context) error {
 		tortoiseWeakCoin{db: app.cachedDB, tortoise: trtl},
 		app.addLogger(HareLogger, lg),
 	)
+	if app.Config.HARE3.Enable {
+		if err := app.Config.HARE3.Validate(time.Duration(app.Config.Tortoise.Zdist) * app.Config.LayerDuration); err != nil {
+			return err
+		}
+		logger := app.addLogger(HareLogger, lg).Zap()
+		app.hare3 = hare3.New(
+			app.clock, app.host, app.cachedDB, app.edVerifier, app.edSgn, app.hOracle, newSyncer, patrol,
+			hare3.WithLogger(logger),
+			hare3.WithConfig(app.Config.HARE3),
+		)
+		app.hare3.Start()
+		app.eg.Go(func() error {
+			compat.ReportWeakcoin(ctx, logger, app.hare3.Coins(), tortoiseWeakCoin{db: app.cachedDB, tortoise: trtl})
+			return nil
+		})
+		app.eg.Go(func() error {
+			compat.ReportResult(ctx, logger, app.hare3.Results(), hareOutputCh)
+			return nil
+		})
+	}
 
 	minerGoodAtxPct := 90
 	if app.Config.TestConfig.MinerGoodAtxPct > 0 {
@@ -1184,6 +1207,9 @@ func (app *App) stopServices(ctx context.Context) {
 
 	if app.hare != nil {
 		app.hare.Close()
+	}
+	if app.hare3 != nil {
+		app.hare3.Stop()
 	}
 
 	if app.blockGen != nil {
