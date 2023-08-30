@@ -165,9 +165,9 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func spawnPoet(tb testing.TB, opts ...HTTPPoetOpt) *HTTPPoetClient {
+func spawnPoet(tb testing.TB, clientCfg PoetConfig, opts ...HTTPPoetOpt) *HTTPPoetClient {
 	tb.Helper()
-	poetProver, err := NewHTTPPoetTestHarness(context.Background(), tb.TempDir(), opts...)
+	poetProver, err := NewHTTPPoetTestHarness(context.Background(), tb.TempDir(), clientCfg, opts...)
 	require.NoError(tb, err)
 	require.NotNil(tb, poetProver)
 
@@ -192,12 +192,14 @@ func buildNIPost(tb testing.TB, postProvider *testPostManager, nipostChallenge t
 
 	epoch := layersPerEpoch * layerDuration
 	poetCfg := PoetConfig{
-		PhaseShift:  epoch / 5,
-		CycleGap:    epoch / 10,
-		GracePeriod: 1 * time.Second,
+		PhaseShift:        epoch / 5,
+		CycleGap:          epoch / 10,
+		GracePeriod:       epoch / 10,
+		RequestRetryDelay: epoch / 100,
+		MaxRequestRetries: 10,
 	}
 
-	poetProver := spawnPoet(tb, WithGenesis(time.Now()), WithEpochDuration(epoch), WithPhaseShift(poetCfg.PhaseShift), WithCycleGap(poetCfg.CycleGap))
+	poetProver := spawnPoet(tb, poetCfg, WithGenesis(time.Now()), WithEpochDuration(epoch), WithPhaseShift(poetCfg.PhaseShift), WithCycleGap(poetCfg.CycleGap))
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(tb, err)
@@ -237,12 +239,15 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 
 	epoch := layersPerEpoch * layerDuration
 	poetCfg := PoetConfig{
-		PhaseShift:  epoch / 5,
-		CycleGap:    epoch / 10,
-		GracePeriod: 1 * time.Second,
+		PhaseShift:        epoch / 5,
+		CycleGap:          epoch / 10,
+		GracePeriod:       epoch / 10,
+		RequestRetryDelay: epoch / 100,
+		MaxRequestRetries: 10,
 	}
+
 	genesis := time.Now()
-	poetProver := spawnPoet(t, WithGenesis(genesis), WithEpochDuration(epoch), WithPhaseShift(poetCfg.PhaseShift), WithCycleGap(poetCfg.CycleGap))
+	poetProver := spawnPoet(t, poetCfg, WithGenesis(genesis), WithEpochDuration(epoch), WithPhaseShift(poetCfg.PhaseShift), WithCycleGap(poetCfg.CycleGap))
 
 	ctrl := gomock.NewController(t)
 	poetDb := NewMockpoetDbAPI(ctrl)
@@ -584,7 +589,7 @@ func TestNIPostBuilder_Close(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	postProvider := NewMockpostSetupProvider(ctrl)
 	postProvider.EXPECT().Status().Return(&PostSetupStatus{State: PostSetupStateComplete})
-	poetProver := spawnPoet(t, WithGenesis(time.Now()), WithEpochDuration(time.Second))
+	poetProver := spawnPoet(t, DefaultPoetConfig(), WithGenesis(time.Now()), WithEpochDuration(time.Second))
 	poetDb := NewMockpoetDbAPI(ctrl)
 	challenge := types.NIPostChallenge{
 		PublishEpoch: postGenesisEpoch + 2,
@@ -927,10 +932,10 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 	poet.EXPECT().Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 		func(ctx context.Context, _, _ []byte, _ types.EdSignature, _ types.NodeID, _ PoetPoW) (*types.PoetRound, error) {
 			cancel()
-			return &types.PoetRound{}, nil
+			return &types.PoetRound{}, context.Canceled
 		},
 	)
-	poet.EXPECT().PowParams(gomock.Any()).Return(&PoetPowParams{}, nil)
+	poet.EXPECT().PowParams(gomock.Any()).Times(2).Return(&PoetPowParams{}, nil)
 	poet.EXPECT().Proof(gomock.Any(), "").Return(proof, []types.Member{types.Member(challenge.Hash())}, nil)
 
 	sig, err := signing.NewEdSigner()
@@ -970,6 +975,9 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 	nipost, err := nb.BuildNIPost(buildCtx, &challenge)
 	req.ErrorIs(err, context.Canceled)
 	req.Nil(nipost)
+
+	// allow to submit in the second try
+	poet.EXPECT().Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&types.PoetRound{}, nil)
 
 	nipost, err = nb.BuildNIPost(context.Background(), &challenge)
 	req.NoError(err)
