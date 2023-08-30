@@ -60,8 +60,6 @@ func GetNumEligibleSlots(weight, minWeight, totalWeight uint64, committeeSize, l
 func ComputeWeightPerEligibility(
 	cdb *datastore.CachedDB,
 	ballot *types.Ballot,
-	layerSize,
-	layersPerEpoch uint32,
 ) (*big.Rat, error) {
 	var (
 		refBallot = ballot

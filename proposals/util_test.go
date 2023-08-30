@@ -20,7 +20,6 @@ import (
 )
 
 func TestComputeWeightPerEligibility(t *testing.T) {
-	types.SetLayersPerEpoch(layersPerEpoch)
 	signer, err := signing.NewEdSigner(
 		signing.WithKeyFromRand(rand.New(rand.NewSource(1001))),
 	)
@@ -49,7 +48,7 @@ func TestComputeWeightPerEligibility(t *testing.T) {
 	}
 	expectedWeight := big.NewRat(int64(testedATXUnit), int64(eligibleSlots))
 	for _, b := range blts {
-		got, err := ComputeWeightPerEligibility(cdb, b, layerAvgSize, layersPerEpoch)
+		got, err := ComputeWeightPerEligibility(cdb, b)
 		require.NoError(t, err)
 		require.NotNil(t, got)
 		require.Equal(t, 0, got.Cmp(expectedWeight))
@@ -57,7 +56,6 @@ func TestComputeWeightPerEligibility(t *testing.T) {
 }
 
 func TestComputeWeightPerEligibility_EmptyRefBallotID(t *testing.T) {
-	types.SetLayersPerEpoch(layersPerEpoch)
 	signer, err := signing.NewEdSigner(
 		signing.WithKeyFromRand(rand.New(rand.NewSource(1001))),
 	)
@@ -68,13 +66,12 @@ func TestComputeWeightPerEligibility_EmptyRefBallotID(t *testing.T) {
 	b := blts[1]
 	b.RefBallot = types.EmptyBallotID
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
-	got, err := ComputeWeightPerEligibility(cdb, b, layerAvgSize, layersPerEpoch)
+	got, err := ComputeWeightPerEligibility(cdb, b)
 	require.ErrorIs(t, err, putil.ErrBadBallotData)
 	require.Nil(t, got)
 }
 
 func TestComputeWeightPerEligibility_FailToGetRefBallot(t *testing.T) {
-	types.SetLayersPerEpoch(layersPerEpoch)
 	signer, err := signing.NewEdSigner(
 		signing.WithKeyFromRand(rand.New(rand.NewSource(1001))),
 	)
@@ -83,14 +80,13 @@ func TestComputeWeightPerEligibility_FailToGetRefBallot(t *testing.T) {
 	blts := createBallots(t, signer, genActiveSet(), beacon)
 	require.GreaterOrEqual(t, 2, len(blts))
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
-	got, err := ComputeWeightPerEligibility(cdb, blts[1], layerAvgSize, layersPerEpoch)
+	got, err := ComputeWeightPerEligibility(cdb, blts[1])
 	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.True(t, strings.Contains(err.Error(), "missing ref ballot"))
 	require.Nil(t, got)
 }
 
 func TestComputeWeightPerEligibility_FailATX(t *testing.T) {
-	types.SetLayersPerEpoch(layersPerEpoch)
 	signer, err := signing.NewEdSigner(
 		signing.WithKeyFromRand(rand.New(rand.NewSource(1001))),
 	)
@@ -98,7 +94,7 @@ func TestComputeWeightPerEligibility_FailATX(t *testing.T) {
 	beacon := types.Beacon{1, 1, 1}
 	blts := createBallots(t, signer, genActiveSet(), beacon)
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
-	got, err := ComputeWeightPerEligibility(cdb, blts[0], layerAvgSize, layersPerEpoch)
+	got, err := ComputeWeightPerEligibility(cdb, blts[0])
 	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.True(t, strings.Contains(err.Error(), "missing atx"))
 	require.Nil(t, got)
