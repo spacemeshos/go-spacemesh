@@ -11,6 +11,8 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 ### Features
 
 ### Improvements
+* [#4879](https://github.com/spacemeshos/go-spacemesh/pull/4795) Makes majority calculation weighted for optimistic filtering.
+The network will start using the new algorithm at layer 18_000 (2023-09-14 20:00:00 +0000 UTC)
 
 ## v1.1.2
 
