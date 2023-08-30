@@ -56,6 +56,7 @@ func NewEligibilityValidator(
 		avgLayerSize:       avgLayerSize,
 		layersPerEpoch:     layersPerEpoch,
 		cdb:                cdb,
+		clock:              clock,
 		beacons:            bc,
 		logger:             lg,
 		vrfVerifier:        vrfVerifier,
@@ -76,7 +77,14 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 	}
 	owned, err := v.cdb.GetAtxHeader(ballot.AtxID)
 	if err != nil {
-		return false, fmt.Errorf("ballot has no atx %v: %w", ballot.AtxID, err)
+		return false, fmt.Errorf("failed to load atx %v: %w", ballot.AtxID, err)
+	}
+	if owned.TargetEpoch() != ballot.Layer.GetEpoch() {
+		return false, fmt.Errorf("%w: ATX target epoch (%v), ballot publication epoch (%v)",
+			errTargetEpochMismatch, owned.TargetEpoch(), ballot.Layer.GetEpoch())
+	}
+	if ballot.SmesherID != owned.NodeID {
+		return false, fmt.Errorf("%w: public key (%v), ATX node key (%v)", errPublicKeyMismatch, ballot.SmesherID.String(), owned.NodeID)
 	}
 	var data *types.EpochData
 	if ballot.EpochData != nil && ballot.Layer.GetEpoch() == v.clock.CurrentLayer().GetEpoch() {
@@ -94,7 +102,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 	}
 	nonce, err := v.nonceFetcher.VRFNonce(ballot.SmesherID, ballot.Layer.GetEpoch())
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("no nonce for %v in epoch %v: %w", ballot.SmesherID, ballot.Layer.GetEpoch(), err)
 	}
 	for i, proof := range ballot.EligibilityProofs {
 		if proof.J >= data.EligibilityCount {
@@ -144,7 +152,7 @@ func (v *Validator) validateReference(ballot *types.Ballot, owned *types.Activat
 	for _, atxID := range ballot.ActiveSet {
 		atx, err := v.cdb.GetAtxHeader(atxID)
 		if err != nil {
-			return ballot.EpochData, fmt.Errorf("get ATX header %v: %w", atxID, err)
+			return nil, fmt.Errorf("atx in active set is missing %v: %w", atxID, err)
 		}
 		totalWeight += atx.GetWeight()
 	}
@@ -160,13 +168,6 @@ func (v *Validator) validateReference(ballot *types.Ballot, owned *types.Activat
 
 // validateSecondary executed for non-reference ballots in latest epoch and all ballots in past epochs.
 func (v *Validator) validateSecondary(ballot *types.Ballot, owned *types.ActivationTxHeader) (*types.EpochData, error) {
-	if owned.TargetEpoch() != ballot.Layer.GetEpoch() {
-		return nil, fmt.Errorf("%w: ATX target epoch (%v), ballot publication epoch (%v)",
-			errTargetEpochMismatch, owned.TargetEpoch(), ballot.Layer.GetEpoch())
-	}
-	if ballot.SmesherID != owned.NodeID {
-		return nil, fmt.Errorf("%w: public key (%v), ATX node key (%v)", errPublicKeyMismatch, ballot.SmesherID.String(), owned.NodeID)
-	}
 	var refballot *types.Ballot
 	if ballot.RefBallot == types.EmptyBallotID {
 		refballot = ballot
