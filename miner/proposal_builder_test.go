@@ -303,6 +303,7 @@ func TestBuilder_HandleLayer_NoBeacon(t *testing.T) {
 
 	layerID := types.LayerID(layersPerEpoch * 3)
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
+	b.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(22), nil)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.EmptyBeacon, errors.New("unknown"))
 
 	require.ErrorIs(t, b.handleLayer(context.Background(), layerID), errNoBeacon)
@@ -661,6 +662,7 @@ func TestBuilder_HandleLayer_Duplicate(t *testing.T) {
 	ballot := types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, b.signer.NodeID(), layerID)
 	require.NoError(t, ballots.Add(b.cdb, &ballot))
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true)
+	b.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(types.VRFPostIndex(22), nil)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
 	require.ErrorIs(t, b.handleLayer(context.Background(), layerID), errDuplicateLayer)
 }
