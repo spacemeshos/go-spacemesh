@@ -35,14 +35,23 @@ type Validator struct {
 	beacons            system.BeaconCollector
 	logger             log.Log
 	vrfVerifier        vrfVerifier
+	nonceFetcher       nonceFetcher
+}
+
+// ValidatorOpt for configuring Validator.
+type ValidatorOpt func(h *Validator)
+
+func WithNonceFetcher(nf nonceFetcher) ValidatorOpt {
+	return func(h *Validator) {
+		h.nonceFetcher = nf
+	}
 }
 
 // NewEligibilityValidator returns a new EligibilityValidator.
 func NewEligibilityValidator(
-	avgLayerSize, layersPerEpoch uint32, minActiveSetWeight uint64, clock layerClock,
-	cdb *datastore.CachedDB, bc system.BeaconCollector, lg log.Log, vrfVerifier vrfVerifier,
+	avgLayerSize, layersPerEpoch uint32, minActiveSetWeight uint64, clock layerClock, cdb *datastore.CachedDB, bc system.BeaconCollector, lg log.Log, vrfVerifier vrfVerifier, opts ...ValidatorOpt,
 ) *Validator {
-	return &Validator{
+	v := &Validator{
 		minActiveSetWeight: minActiveSetWeight,
 		avgLayerSize:       avgLayerSize,
 		layersPerEpoch:     layersPerEpoch,
@@ -52,6 +61,13 @@ func NewEligibilityValidator(
 		logger:             lg,
 		vrfVerifier:        vrfVerifier,
 	}
+	for _, opt := range opts {
+		opt(v)
+	}
+	if v.nonceFetcher == nil {
+		v.nonceFetcher = cdb
+	}
+	return v
 }
 
 // CheckEligibility checks that a ballot is eligible in the layer that it specifies.
@@ -70,7 +86,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 	if ballot.SmesherID != owned.NodeID {
 		return false, fmt.Errorf("%w: public key (%v), ATX node key (%v)", errPublicKeyMismatch, ballot.SmesherID.String(), owned.NodeID)
 	}
-	nonce, err := v.cdb.VRFNonce(ballot.SmesherID, ballot.Layer.GetEpoch())
+	nonce, err := v.nonceFetcher.VRFNonce(ballot.SmesherID, ballot.Layer.GetEpoch())
 	if err != nil {
 		return false, fmt.Errorf("no vrf nonce for %v in epoch %v: %w", ballot.SmesherID, ballot.Layer.GetEpoch(), err)
 	}

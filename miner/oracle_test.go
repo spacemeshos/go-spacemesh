@@ -185,7 +185,7 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize, layersPerEpoch
 	nonceFetcher := proposals.NewMocknonceFetcher(ctrl)
 	nonce := types.VRFPostIndex(rand.Uint64())
 
-	validator := proposals.NewEligibilityValidator(layerSize, layersPerEpoch, 0, o.cdb, mbc, nil, o.log.WithName("blkElgValidator"), vrfVerifier,
+	validator := proposals.NewEligibilityValidator(layerSize, layersPerEpoch, 0, o.mClock, o.cdb, mbc, o.log.WithName("blkElgValidator"), vrfVerifier,
 		proposals.WithNonceFetcher(nonceFetcher),
 	)
 
@@ -206,6 +206,7 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize, layersPerEpoch
 		for _, proof := range ee.Proofs[layer] {
 			b := genBallotWithEligibility(t, o.edSigner, info.beacon, layer, ee)
 			b.SmesherID = o.edSigner.NodeID()
+			o.mClock.EXPECT().CurrentLayer().Return(layer)
 			mbc.EXPECT().ReportBeaconFromBallot(layer.GetEpoch(), b, info.beacon, gomock.Any()).Times(1)
 			nonceFetcher.EXPECT().VRFNonce(b.SmesherID, layer.GetEpoch()).Return(nonce, nil).Times(1)
 			eligible, err := validator.CheckEligibility(context.Background(), b)

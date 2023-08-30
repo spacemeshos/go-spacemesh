@@ -66,7 +66,7 @@ func geligibilities(js ...uint32) (rst []types.VotingEligibility) {
 	return rst
 }
 
-// geligibilityWithSig is useful to influence CalcEligibleLayer
+// geligibilityWithSig is useful to influence CalcEligibleLayer.
 func geligibilityWithSig(j uint32, sig string) []types.VotingEligibility {
 	el := types.VotingEligibility{J: j}
 	copy(el.Sig[:], sig)
@@ -74,7 +74,8 @@ func geligibilityWithSig(j uint32, sig string) []types.VotingEligibility {
 }
 
 func gballot(id types.BallotID, atxid types.ATXID, activeset []types.ATXID, smesher types.NodeID, layer types.LayerID,
-	edata *types.EpochData, eligibilities []types.VotingEligibility) types.Ballot {
+	edata *types.EpochData, eligibilities []types.VotingEligibility,
+) types.Ballot {
 	ballot := types.Ballot{}
 	ballot.Layer = layer
 	ballot.EpochData = edata
