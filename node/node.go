@@ -965,8 +965,7 @@ func (app *App) launchStandalone(ctx context.Context) error {
 	}
 	cfg := poetconfig.DefaultConfig()
 	cfg.PoetDir = filepath.Join(app.Config.DataDir(), "poet")
-	cfg.DataDir = cfg.PoetDir
-	cfg.LogDir = cfg.PoetDir
+
 	parsed, err := url.Parse(app.Config.PoETServers[0])
 	if err != nil {
 		return err
@@ -976,6 +975,12 @@ func (app *App) launchStandalone(ctx context.Context) error {
 	cfg.Service.EpochDuration = app.Config.LayerDuration * time.Duration(app.Config.LayersPerEpoch)
 	cfg.Service.CycleGap = app.Config.POET.CycleGap
 	cfg.Service.PhaseShift = app.Config.POET.PhaseShift
+
+	cfg, err = poetconfig.SetupConfig(cfg)
+	if err != nil {
+		return fmt.Errorf("setup poet config: %w", err)
+	}
+
 	srv, err := server.New(ctx, *cfg)
 	if err != nil {
 		return fmt.Errorf("init poet server: %w", err)
