@@ -142,6 +142,20 @@ func (mr *MockballotDecoderMockRecorder) DecodeBallot(arg0 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DecodeBallot", reflect.TypeOf((*MockballotDecoder)(nil).DecodeBallot), arg0)
 }
 
+// GetBallot mocks base method.
+func (m *MockballotDecoder) GetBallot(arg0 types.BallotID) *tortoise.BallotData {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBallot", arg0)
+	ret0, _ := ret[0].(*tortoise.BallotData)
+	return ret0
+}
+
+// GetBallot indicates an expected call of GetBallot.
+func (mr *MockballotDecoderMockRecorder) GetBallot(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBallot", reflect.TypeOf((*MockballotDecoder)(nil).GetBallot), arg0)
+}
+
 // GetMissingActiveSet mocks base method.
 func (m *MockballotDecoder) GetMissingActiveSet(arg0 types.EpochID, arg1 []types.ATXID) []types.ATXID {
 	m.ctrl.T.Helper()

@@ -221,9 +221,12 @@ type (
 	}
 
 	referenceInfo struct {
-		weight *big.Rat
-		height uint64
-		beacon types.Beacon
+		smesher         types.NodeID
+		atxid           types.ATXID
+		expectedBallots uint32
+		beacon          types.Beacon
+		weight          *big.Rat
+		height          uint64
 	}
 
 	ballotInfo struct {

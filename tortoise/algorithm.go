@@ -312,6 +312,32 @@ type DecodedBallot struct {
 	minHint types.LayerID
 }
 
+type BallotData struct {
+	ID           types.BallotID
+	Layer        types.LayerID
+	ATXID        types.ATXID
+	Smesher      types.NodeID
+	Beacon       types.Beacon
+	Eligiblities uint32
+}
+
+func (t *Tortoise) GetBallot(id types.BallotID) *BallotData {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	info := t.trtl.ballotRefs[id]
+	if info == nil {
+		return nil
+	}
+	return &BallotData{
+		ID:           id,
+		Layer:        info.layer,
+		ATXID:        info.reference.atxid,
+		Smesher:      info.reference.smesher,
+		Beacon:       info.reference.beacon,
+		Eligiblities: info.reference.expectedBallots,
+	}
+}
+
 // DecodeBallot decodes ballot if it wasn't processed earlier.
 func (t *Tortoise) DecodeBallot(ballot *types.BallotTortoiseData) (*DecodedBallot, error) {
 	start := time.Now()

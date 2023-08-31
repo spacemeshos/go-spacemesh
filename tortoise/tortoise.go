@@ -697,9 +697,12 @@ func (t *turtle) decodeBallot(ballot *types.BallotTortoiseData) (*ballotInfo, ty
 			return nil, 0, err
 		}
 		refinfo = &referenceInfo{
-			height: atx.height,
-			beacon: ballot.EpochData.Beacon,
-			weight: big.NewRat(int64(atx.weight), int64(expected)),
+			smesher:         ballot.Smesher,
+			atxid:           ballot.AtxID,
+			expectedBallots: ballot.EpochData.Eligibilities,
+			beacon:          ballot.EpochData.Beacon,
+			height:          atx.height,
+			weight:          big.NewRat(int64(atx.weight), int64(expected)),
 		}
 	} else if ballot.Ref != nil {
 		ptr := *ballot.Ref

@@ -10,7 +10,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -30,6 +29,7 @@ type Validator struct {
 	minActiveSetWeight uint64
 	avgLayerSize       uint32
 	layersPerEpoch     uint32
+	tortoise           ballotDecoder
 	cdb                *datastore.CachedDB
 	clock              layerClock
 	beacons            system.BeaconCollector
@@ -49,12 +49,13 @@ func WithNonceFetcher(nf nonceFetcher) ValidatorOpt {
 
 // NewEligibilityValidator returns a new EligibilityValidator.
 func NewEligibilityValidator(
-	avgLayerSize, layersPerEpoch uint32, minActiveSetWeight uint64, clock layerClock, cdb *datastore.CachedDB, bc system.BeaconCollector, lg log.Log, vrfVerifier vrfVerifier, opts ...ValidatorOpt,
+	avgLayerSize, layersPerEpoch uint32, minActiveSetWeight uint64, clock layerClock, tortoise ballotDecoder, cdb *datastore.CachedDB, bc system.BeaconCollector, lg log.Log, vrfVerifier vrfVerifier, opts ...ValidatorOpt,
 ) *Validator {
 	v := &Validator{
 		minActiveSetWeight: minActiveSetWeight,
 		avgLayerSize:       avgLayerSize,
 		layersPerEpoch:     layersPerEpoch,
+		tortoise:           tortoise,
 		cdb:                cdb,
 		nonceFetcher:       cdb,
 		clock:              clock,
@@ -162,27 +163,24 @@ func (v *Validator) validateReference(ballot *types.Ballot, owned *types.Activat
 
 // validateSecondary executed for non-reference ballots in latest epoch and all ballots in past epochs.
 func (v *Validator) validateSecondary(ballot *types.Ballot, owned *types.ActivationTxHeader) (*types.EpochData, error) {
-	var refballot *types.Ballot
 	if ballot.RefBallot == types.EmptyBallotID {
-		refballot = ballot
-	} else {
-		var err error
-		refballot, err = ballots.Get(v.cdb, ballot.RefBallot)
-		if err != nil {
-			return nil, fmt.Errorf("ref ballot is missing %v: %w", ballot.RefBallot, err)
+		if ballot.EpochData == nil {
+			return nil, fmt.Errorf("%w: ref ballot %v", errMissingEpochData, ballot.ID())
 		}
+		return ballot.EpochData, nil
 	}
-	if refballot.EpochData == nil {
-		return nil, fmt.Errorf("%w: ref ballot %v", errMissingEpochData, refballot.ID())
+	refdata := v.tortoise.GetBallot(ballot.RefBallot)
+	if refdata == nil {
+		return nil, fmt.Errorf("ref ballot is missing %v", ballot.RefBallot)
 	}
-	if refballot.AtxID != ballot.AtxID {
-		return nil, fmt.Errorf("ballot (%v/%v) should be sharing atx with a reference ballot (%v/%v)", ballot.ID(), ballot.AtxID, refballot.ID(), refballot.AtxID)
+	if refdata.ATXID != ballot.AtxID {
+		return nil, fmt.Errorf("ballot (%v/%v) should be sharing atx with a reference ballot (%v/%v)", ballot.ID(), ballot.AtxID, refdata.ID, refdata.ATXID)
 	}
-	if refballot.SmesherID != ballot.SmesherID {
+	if refdata.Smesher != ballot.SmesherID {
 		return nil, fmt.Errorf("mismatched smesher id with refballot in ballot %v", ballot.ID())
 	}
-	if refballot.Layer.GetEpoch() != ballot.Layer.GetEpoch() {
+	if refdata.Layer.GetEpoch() != ballot.Layer.GetEpoch() {
 		return nil, fmt.Errorf("ballot %v targets mismatched epoch %d", ballot.ID(), ballot.Layer.GetEpoch())
 	}
-	return refballot.EpochData, nil
+	return &types.EpochData{Beacon: refdata.Beacon, EligibilityCount: refdata.Eligiblities}, nil
 }
