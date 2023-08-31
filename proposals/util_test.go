@@ -3,6 +3,7 @@ package proposals
 import (
 	"math/big"
 	"math/rand"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -18,6 +19,71 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 )
+
+const (
+	defaultATXUnit = uint32(5)
+	testedATXUnit  = uint32(2)
+	// eligibleSlots is calculated based on layerAvgSize, layersPerEpoch, epoch ATX weight and smesher's own weight.
+	eligibleSlots = uint32(3)
+	epoch         = types.EpochID(3)
+)
+
+func genActiveSet() types.ATXIDList {
+	return types.ATXIDList{types.RandomATXID(), types.RandomATXID(), types.RandomATXID(), types.RandomATXID()}
+}
+
+func createBallots(tb testing.TB, signer *signing.EdSigner, activeSet types.ATXIDList, beacon types.Beacon) []*types.Ballot {
+	totalWeight := uint64(len(activeSet)-1)*uint64(defaultATXUnit) + uint64(testedATXUnit)
+	slots, err := GetNumEligibleSlots(uint64(testedATXUnit), 0, totalWeight, layerAvgSize, layersPerEpoch)
+	require.NoError(tb, err)
+	require.Equal(tb, eligibleSlots, slots)
+	eligibilityProofs := map[types.LayerID][]types.VotingEligibility{}
+	order := make([]types.LayerID, 0, eligibleSlots)
+
+	nonce := types.VRFPostIndex(1)
+	vrfSigner, err := signer.VRFSigner()
+	require.NoError(tb, err)
+
+	for counter := uint32(0); counter < eligibleSlots; counter++ {
+		message, err := SerializeVRFMessage(beacon, epoch, nonce, counter)
+		require.NoError(tb, err)
+		vrfSig := vrfSigner.Sign(message)
+		eligibleLayer := CalcEligibleLayer(epoch, layersPerEpoch, vrfSig)
+		if _, exist := eligibilityProofs[eligibleLayer]; !exist {
+			order = append(order, eligibleLayer)
+		}
+		eligibilityProofs[eligibleLayer] = append(eligibilityProofs[eligibleLayer], types.VotingEligibility{
+			J:   counter,
+			Sig: vrfSig,
+		})
+	}
+	sort.Slice(order, func(i, j int) bool { return order[i].Before(order[j]) })
+	blts := make([]*types.Ballot, 0, eligibleSlots)
+	for _, lyr := range order {
+		proofs := eligibilityProofs[lyr]
+		isRef := len(blts) == 0
+		b := types.RandomBallot()
+		b.AtxID = activeSet[0]
+		b.Layer = lyr
+		if isRef {
+			b.RefBallot = types.EmptyBallotID
+			b.EpochData = &types.EpochData{
+				ActiveSetHash:    activeSet.Hash(),
+				Beacon:           beacon,
+				EligibilityCount: eligibleSlots,
+			}
+			b.ActiveSet = activeSet
+		} else {
+			b.RefBallot = blts[0].ID()
+		}
+		b.EligibilityProofs = proofs
+		b.Signature = signer.Sign(signing.BALLOT, b.SignedBytes())
+		b.SmesherID = signer.NodeID()
+		require.NoError(tb, b.Initialize())
+		blts = append(blts, b)
+	}
+	return blts
+}
 
 func TestComputeWeightPerEligibility(t *testing.T) {
 	signer, err := signing.NewEdSigner(
