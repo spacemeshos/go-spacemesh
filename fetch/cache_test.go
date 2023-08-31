@@ -94,9 +94,8 @@ func TestGetRandom(t *testing.T) {
 		}()
 		wg.Wait()
 		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-		peer, exists := cache.GetRandom(hash, datastore.TXDB, rng)
-		require.Equal(t, true, exists)
-		require.Contains(t, []p2p.Peer{peer1, peer2, peer3}, peer)
+		peers := cache.GetRandom(hash, datastore.TXDB, rng)
+		require.ElementsMatch(t, []p2p.Peer{peer1, peer2, peer3}, peers)
 	})
 	t.Run("2Hashes1Peer", func(t *testing.T) {
 		cache := NewHashPeersCache(10)
@@ -115,12 +114,10 @@ func TestGetRandom(t *testing.T) {
 		}()
 		wg.Wait()
 		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-		randomPeer, exists := cache.GetRandom(hash1, datastore.TXDB, rng)
-		require.Equal(t, true, exists)
-		require.Equal(t, peer, randomPeer)
-		randomPeer, exists = cache.GetRandom(hash2, datastore.TXDB, rng)
-		require.Equal(t, true, exists)
-		require.Equal(t, peer, randomPeer)
+		randomPeers := cache.GetRandom(hash1, datastore.TXDB, rng)
+		require.Equal(t, []p2p.Peer{peer}, randomPeers)
+		randomPeers = cache.GetRandom(hash2, datastore.TXDB, rng)
+		require.Equal(t, []p2p.Peer{peer}, randomPeers)
 	})
 }
 

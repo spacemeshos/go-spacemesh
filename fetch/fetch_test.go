@@ -136,6 +136,41 @@ func TestFetch_GetHash(t *testing.T) {
 	require.NotEqual(t, p1.completed, p2.completed)
 }
 
+func TestFetch_GetHashPeerNotConnected(t *testing.T) {
+	f := createFetch(t)
+	f.cfg.MaxRetriesForRequest = 0
+	f.cfg.MaxRetriesForPeer = 0
+	peer := p2p.Peer("buddy")
+	f.mh.EXPECT().GetPeers().Return([]p2p.Peer{peer})
+	f.mh.EXPECT().ID().Return(p2p.Peer("self"))
+	hsh := types.RandomHash()
+	f.RegisterPeerHashes("notConnected", []types.Hash32{hsh})
+
+	res := ResponseMessage{
+		Hash: hsh,
+		Data: []byte("a"),
+	}
+	f.mHashS.EXPECT().Request(gomock.Any(), peer, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ p2p.Peer, req []byte, okFunc func([]byte), _ func(error)) error {
+			var rb RequestBatch
+			err := codec.Decode(req, &rb)
+			require.NoError(t, err)
+			resBatch := ResponseBatch{
+				ID:        rb.ID,
+				Responses: []ResponseMessage{res},
+			}
+			bts, err := codec.Encode(&resBatch)
+			require.NoError(t, err)
+			okFunc(bts)
+			return nil
+		})
+
+	p, err := f.getHash(context.TODO(), hsh, datastore.BlockDB, goodReceiver)
+	require.NoError(t, err)
+	f.requestHashBatchFromPeers()
+	<-p.completed
+}
+
 func TestFetch_RequestHashBatchFromPeers(t *testing.T) {
 	tt := []struct {
 		name       string

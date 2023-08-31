@@ -482,18 +482,27 @@ func (f *Fetch) organizeRequests(requests []RequestMessage) map[p2p.Peer][][]Req
 		}
 		return nil
 	}
+	pm := map[p2p.Peer]struct{}{}
+	for _, p := range peers {
+		pm[p] = struct{}{}
+	}
 
 	for _, req := range requests {
-		p, exists := f.hashToPeers.GetRandom(req.Hash, req.Hint, rng)
-		if !exists {
-			p = randomPeer(peers)
+		target := p2p.NoPeer
+		hashPeers := f.hashToPeers.GetRandom(req.Hash, req.Hint, rng)
+		for _, p := range hashPeers {
+			if _, ok := pm[p]; ok {
+				target = p
+			}
 		}
-
-		_, ok := peer2requests[p]
+		if target == p2p.NoPeer {
+			target = randomPeer(peers)
+		}
+		_, ok := peer2requests[target]
 		if !ok {
-			peer2requests[p] = []RequestMessage{req}
+			peer2requests[target] = []RequestMessage{req}
 		} else {
-			peer2requests[p] = append(peer2requests[p], req)
+			peer2requests[target] = append(peer2requests[target], req)
 		}
 	}
 
