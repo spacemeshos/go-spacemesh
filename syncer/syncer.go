@@ -501,6 +501,11 @@ func (s *Syncer) setStateAfterSync(ctx context.Context, success bool) {
 		if !success || !s.dataSynced() || !s.stateSynced() {
 			// push out the target synced layer
 			s.syncedTargetTime.Store(time.Now().Add(s.cfg.GossipDuration))
+			s.logger.With().Info("extending gossip sync",
+				log.Bool("success", success),
+				log.Bool("data", s.dataSynced()),
+				log.Bool("state", s.stateSynced()),
+			)
 			break
 		}
 		// if we have gossip-synced long enough, we are ready to participate in consensus

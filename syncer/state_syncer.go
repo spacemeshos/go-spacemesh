@@ -91,7 +91,7 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 					s.logger.WithContext(ctx).With().Warning("failed to adopt peer opinions", lid, log.Err(err))
 				}
 			}
-			if s.stateSynced() {
+			if s.IsSynced(ctx) {
 				if err = s.checkMeshAgreement(ctx, lid, opinions); err != nil && errors.Is(err, errMeshHashDiverged) {
 					s.logger.WithContext(ctx).With().Debug("mesh hash diverged, trying to reach agreement",
 						lid,
