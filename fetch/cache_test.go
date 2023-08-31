@@ -72,6 +72,13 @@ func TestAdd(t *testing.T) {
 
 func TestGetRandom(t *testing.T) {
 	t.Parallel()
+	t.Run("no hash peers", func(t *testing.T) {
+		cache := NewHashPeersCache(10)
+		hash := types.RandomHash()
+		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+		peers := cache.GetRandom(hash, datastore.TXDB, rng)
+		require.Empty(t, peers)
+	})
 	t.Run("1Hash3Peers", func(t *testing.T) {
 		cache := NewHashPeersCache(10)
 		hash := types.RandomHash()
