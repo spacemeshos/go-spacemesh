@@ -234,7 +234,7 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 	}
 	if p.Layer <= types.GetEffectiveGenesis() {
 		preGenesis.Inc()
-		return fmt.Errorf("proposal bedbfore effective genesis: layer %v", p.Layer)
+		return fmt.Errorf("proposal before effective genesis: layer %v", p.Layer)
 	}
 
 	latency := receivedTime.Sub(h.clock.LayerToTime(p.Layer))
