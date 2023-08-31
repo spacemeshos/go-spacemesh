@@ -146,6 +146,7 @@ func TestFetch_getHashes(t *testing.T) {
 			f.cfg.BatchSize = 2
 			f.cfg.MaxRetriesForRequest = 0
 			f.cfg.MaxRetriesForPeer = 0
+			f.mh.EXPECT().Connected(gomock.Any()).Return(true).AnyTimes()
 			peers := []p2p.Peer{p2p.Peer("buddy 0"), p2p.Peer("buddy 1")}
 			f.mh.EXPECT().GetPeers().Return(peers)
 			f.mh.EXPECT().ID().Return(p2p.Peer("self")).AnyTimes()
