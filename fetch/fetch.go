@@ -482,16 +482,11 @@ func (f *Fetch) organizeRequests(requests []RequestMessage) map[p2p.Peer][][]Req
 		}
 		return nil
 	}
-	pm := map[p2p.Peer]struct{}{}
-	for _, p := range peers {
-		pm[p] = struct{}{}
-	}
-
 	for _, req := range requests {
 		target := p2p.NoPeer
 		hashPeers := f.hashToPeers.GetRandom(req.Hash, req.Hint, rng)
 		for _, p := range hashPeers {
-			if _, ok := pm[p]; ok {
+			if f.host.Connected(p) {
 				target = p
 				break
 			}

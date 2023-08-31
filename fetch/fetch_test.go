@@ -141,10 +141,12 @@ func TestFetch_GetHashPeerNotConnected(t *testing.T) {
 	f.cfg.MaxRetriesForRequest = 0
 	f.cfg.MaxRetriesForPeer = 0
 	peer := p2p.Peer("buddy")
+	awol := p2p.Peer("notConnected")
 	f.mh.EXPECT().GetPeers().Return([]p2p.Peer{peer})
 	f.mh.EXPECT().ID().Return(p2p.Peer("self"))
+	f.mh.EXPECT().Connected(awol).Return(false)
 	hsh := types.RandomHash()
-	f.RegisterPeerHashes("notConnected", []types.Hash32{hsh})
+	f.RegisterPeerHashes(awol, []types.Hash32{hsh})
 
 	res := ResponseMessage{
 		Hash: hsh,
@@ -199,6 +201,7 @@ func TestFetch_RequestHashBatchFromPeers(t *testing.T) {
 			f.cfg.MaxRetriesForPeer = 0
 			peer := p2p.Peer("buddy")
 			f.mh.EXPECT().GetPeers().Return([]p2p.Peer{peer})
+			f.mh.EXPECT().Connected(peer).Return(true).AnyTimes()
 
 			hsh0 := types.RandomHash()
 			res0 := ResponseMessage{
