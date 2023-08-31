@@ -14,7 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
-	"github.com/spacemeshos/go-spacemesh/sql/ballots"
+	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
 func gatx(id types.ATXID, epoch types.EpochID, smesher types.NodeID, units uint32, nonce types.VRFPostIndex) types.VerifiedActivationTx {
@@ -533,6 +533,21 @@ func TestEligibilityValidator(t *testing.T) {
 			ms := fullMockSet(t)
 			ms.mclock.EXPECT().CurrentLayer().Return(tc.current).AnyTimes()
 			ms.mvrf.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(!tc.vrfFailed).AnyTimes()
+			ballots := map[types.BallotID]*types.Ballot{}
+			ms.md.EXPECT().GetBallot(gomock.Any()).DoAndReturn(func(id types.BallotID) *tortoise.BallotData {
+				ballot, exists := ballots[id]
+				if !exists {
+					return nil
+				}
+				return &tortoise.BallotData{
+					ID:           ballot.ID(),
+					Layer:        ballot.Layer,
+					ATXID:        ballot.AtxID,
+					Smesher:      ballot.SmesherID,
+					Beacon:       ballot.EpochData.Beacon,
+					Eligiblities: ballot.EpochData.EligibilityCount,
+				}
+			}).AnyTimes()
 
 			lg := logtest.New(t)
 			db := datastore.NewCachedDB(sql.InMemory(), lg)
@@ -544,7 +559,7 @@ func TestEligibilityValidator(t *testing.T) {
 				require.NoError(t, atxs.Add(db, &atx))
 			}
 			for _, ballot := range tc.ballots {
-				require.NoError(t, ballots.Add(db, &ballot))
+				ballots[ballot.ID()] = &ballot
 			}
 			if !tc.fail {
 				ms.mbc.EXPECT().ReportBeaconFromBallot(tc.executed.Layer.GetEpoch(), &tc.executed, gomock.Any(), gomock.Any())
