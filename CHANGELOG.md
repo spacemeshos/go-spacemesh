@@ -17,8 +17,10 @@ Otherwise protocol uses significantly less traffic (atlest x20), and will allow
 to set lower expected latency in the network, eventually reducing layer time. 
 
 ### Improvements
+
 * [#4879](https://github.com/spacemeshos/go-spacemesh/pull/4795) Makes majority calculation weighted for optimistic filtering.
 The network will start using the new algorithm at layer 18_000 (2023-09-14 20:00:00 +0000 UTC)
+* [#4923](https://github.com/spacemeshos/go-spacemesh/pull/4923) Faster ballot eligibility validation. Improves sync speed. 
 
 ## v1.1.2
 
