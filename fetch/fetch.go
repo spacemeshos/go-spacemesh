@@ -493,6 +493,7 @@ func (f *Fetch) organizeRequests(requests []RequestMessage) map[p2p.Peer][][]Req
 		for _, p := range hashPeers {
 			if _, ok := pm[p]; ok {
 				target = p
+				break
 			}
 		}
 		if target == p2p.NoPeer {
