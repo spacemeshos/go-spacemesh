@@ -23,7 +23,8 @@ func fastnet() config.Config {
 	types.SetNetworkHRP(conf.NetworkHRP) // set to generate coinbase
 	conf.BaseConfig.OptFilterThreshold = 90
 
-	conf.BaseConfig.TestConfig.MinerGoodAtxPct = 50
+	// set for systest TestEquivocation
+	conf.BaseConfig.MinerGoodAtxsPercent = 50
 
 	conf.HARE.Disable = 1 // non-zero low layer will prevent hare1 from running
 	conf.HARE.N = 800

@@ -789,9 +789,8 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 
 	minerGoodAtxPct := 90
-	if app.Config.TestConfig.MinerGoodAtxPct > 0 {
-		// only set this for systest TestEquivocation.
-		minerGoodAtxPct = app.Config.TestConfig.MinerGoodAtxPct
+	if app.Config.MinerGoodAtxsPercent > 0 {
+		minerGoodAtxPct = app.Config.MinerGoodAtxsPercent
 	}
 	proposalBuilder := miner.NewProposalBuilder(
 		ctx,
