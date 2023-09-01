@@ -29,7 +29,7 @@ type Validator struct {
 	minActiveSetWeight uint64
 	avgLayerSize       uint32
 	layersPerEpoch     uint32
-	tortoise           ballotDecoder
+	tortoise           tortoiseProvider
 	cdb                *datastore.CachedDB
 	clock              layerClock
 	beacons            system.BeaconCollector
@@ -49,7 +49,7 @@ func WithNonceFetcher(nf nonceFetcher) ValidatorOpt {
 
 // NewEligibilityValidator returns a new EligibilityValidator.
 func NewEligibilityValidator(
-	avgLayerSize, layersPerEpoch uint32, minActiveSetWeight uint64, clock layerClock, tortoise ballotDecoder, cdb *datastore.CachedDB, bc system.BeaconCollector, lg log.Log, vrfVerifier vrfVerifier, opts ...ValidatorOpt,
+	avgLayerSize, layersPerEpoch uint32, minActiveSetWeight uint64, clock layerClock, tortoise tortoiseProvider, cdb *datastore.CachedDB, bc system.BeaconCollector, lg log.Log, vrfVerifier vrfVerifier, opts ...ValidatorOpt,
 ) *Validator {
 	v := &Validator{
 		minActiveSetWeight: minActiveSetWeight,

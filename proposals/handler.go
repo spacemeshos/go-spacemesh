@@ -55,7 +55,7 @@ type Handler struct {
 	fetcher    system.Fetcher
 	mesh       meshProvider
 	validator  eligibilityValidator
-	tortoise   ballotDecoder
+	tortoise   tortoiseProvider
 	clock      layerClock
 }
 
@@ -108,7 +108,7 @@ func NewHandler(
 	f system.Fetcher,
 	bc system.BeaconCollector,
 	m meshProvider,
-	tortoise ballotDecoder,
+	tortoise tortoiseProvider,
 	verifier vrfVerifier,
 	clock layerClock,
 	opts ...Opt,

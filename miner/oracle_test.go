@@ -182,7 +182,7 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize, layersPerEpoch
 	mbc := mocks.NewMockBeaconCollector(ctrl)
 	vrfVerifier := proposals.NewMockvrfVerifier(ctrl)
 	vrfVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
-	tmock := proposals.NewMockballotDecoder(ctrl)
+	tmock := proposals.NewMocktortoiseProvider(ctrl)
 	tmock.EXPECT().GetBallot(gomock.Any()).AnyTimes().DoAndReturn(func(id types.BallotID) *tortoise.BallotData {
 		ballot, err := ballots.Get(o.cdb, id)
 		require.NoError(t, err)

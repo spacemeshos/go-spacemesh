@@ -47,7 +47,7 @@ type mockSet struct {
 	mclock *MocklayerClock
 	mm     *MockmeshProvider
 	mv     *MockeligibilityValidator
-	md     *MockballotDecoder
+	md     *MocktortoiseProvider
 	mvrf   *MockvrfVerifier
 }
 
@@ -77,7 +77,7 @@ func fullMockSet(tb testing.TB) *mockSet {
 		mclock: NewMocklayerClock(ctrl),
 		mm:     NewMockmeshProvider(ctrl),
 		mv:     NewMockeligibilityValidator(ctrl),
-		md:     NewMockballotDecoder(ctrl),
+		md:     NewMocktortoiseProvider(ctrl),
 		mvrf:   NewMockvrfVerifier(ctrl),
 	}
 }
