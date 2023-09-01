@@ -169,6 +169,10 @@ func (fh *Host) GetPeers() []Peer {
 	return fh.Host.Network().Peers()
 }
 
+func (fh *Host) Connected(p Peer) bool {
+	return fh.Host.Network().Connectedness(p) == network.Connected
+}
+
 // ConnectedPeerInfo retrieves a peer info object for the given peer.ID, if the
 // given peer is not connected then nil is returned.
 func (fh *Host) ConnectedPeerInfo(id peer.ID) *PeerInfo {

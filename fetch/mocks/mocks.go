@@ -199,6 +199,20 @@ func (mr *MockhostMockRecorder) Close() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*Mockhost)(nil).Close))
 }
 
+// Connected mocks base method.
+func (m *Mockhost) Connected(arg0 p2p.Peer) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Connected", arg0)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// Connected indicates an expected call of Connected.
+func (mr *MockhostMockRecorder) Connected(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connected", reflect.TypeOf((*Mockhost)(nil).Connected), arg0)
+}
+
 // GetPeers mocks base method.
 func (m *Mockhost) GetPeers() []p2p.Peer {
 	m.ctrl.T.Helper()

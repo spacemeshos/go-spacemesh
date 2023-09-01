@@ -574,6 +574,7 @@ func TestProcessLayers_OpinionsOptional(t *testing.T) {
 func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 	ts := newTestSyncerForState(t)
 	ts.syncer.setATXSynced()
+	ts.syncer.setSyncState(context.Background(), synced)
 	current := types.GetEffectiveGenesis().Add(131)
 	ts.mTicker.advanceToLayer(current)
 	for lid := types.GetEffectiveGenesis().Add(1); lid.Before(current); lid = lid.Add(1) {
@@ -724,10 +725,5 @@ func TestProcessLayers_NoHashResolutionForNewlySyncedNode(t *testing.T) {
 			ts.mVm.EXPECT().GetStateRoot()
 		}
 	}
-	// only the last layer will trigger hash resolution
-	for i := range opns {
-		ts.mForkFinder.EXPECT().NeedResync(current.Sub(1), opns[i].PrevAggHash).Return(false)
-	}
-	ts.mForkFinder.EXPECT().Purge(true)
 	require.NoError(t, ts.syncer.processLayers(context.Background()))
 }
