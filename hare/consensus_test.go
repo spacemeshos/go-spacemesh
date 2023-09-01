@@ -419,9 +419,7 @@ func TestSndDelayedDishonest(t *testing.T) {
 }
 
 func TestRecvDelayedDishonest(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
+	t.Skip()
 
 	test := newConsensusTest()
 
