@@ -207,7 +207,7 @@ func (h *Hare) Coins() <-chan WeakCoinOutput {
 }
 
 func (h *Hare) Start() {
-	h.pubsub.Register(h.config.ProtocolName, h.Handler)
+	h.pubsub.Register(h.config.ProtocolName, h.Handler, pubsub.WithValidatorInline(true))
 	current := h.nodeclock.CurrentLayer() + 1
 	enabled := types.MaxLayer(current, h.config.EnableLayer)
 	enabled = types.MaxLayer(enabled, types.GetEffectiveGenesis()+1)

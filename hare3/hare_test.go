@@ -198,7 +198,7 @@ func (n *node) withOracle() *node {
 
 func (n *node) withPublisher() *node {
 	n.mpublisher = pmocks.NewMockPublishSubsciber(n.ctrl)
-	n.mpublisher.EXPECT().Register(gomock.Any(), gomock.Any()).AnyTimes()
+	n.mpublisher.EXPECT().Register(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	return n
 }
 

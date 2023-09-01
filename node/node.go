@@ -735,6 +735,7 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
 	beaconProtocol.SetSyncState(newSyncer)
+	app.hOracle.SetSync(newSyncer)
 
 	hareOutputCh := make(chan hare.LayerOutput, app.Config.HARE.LimitConcurrent)
 	app.blockGen = blocks.NewGenerator(app.cachedDB, executor, msh, fetcherWrapped, app.certifier, patrol,
