@@ -106,7 +106,7 @@ type p2pManipulator struct {
 	err          error
 }
 
-func (m *p2pManipulator) Register(protocol string, handler pubsub.GossipHandler) {
+func (m *p2pManipulator) Register(protocol string, handler pubsub.GossipHandler, opts ...pubsub.ValidatorOpt) {
 	m.nd.Register(protocol, handler)
 }
 
