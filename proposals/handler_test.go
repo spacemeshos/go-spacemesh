@@ -47,9 +47,8 @@ type mockSet struct {
 	mclock *MocklayerClock
 	mm     *MockmeshProvider
 	mv     *MockeligibilityValidator
-	md     *MockballotDecoder
+	md     *MocktortoiseProvider
 	mvrf   *MockvrfVerifier
-	mNonce *MocknonceFetcher
 }
 
 func (ms *mockSet) decodeAnyBallots() *mockSet {
@@ -78,9 +77,8 @@ func fullMockSet(tb testing.TB) *mockSet {
 		mclock: NewMocklayerClock(ctrl),
 		mm:     NewMockmeshProvider(ctrl),
 		mv:     NewMockeligibilityValidator(ctrl),
-		md:     NewMockballotDecoder(ctrl),
+		md:     NewMocktortoiseProvider(ctrl),
 		mvrf:   NewMockvrfVerifier(ctrl),
-		mNonce: NewMocknonceFetcher(ctrl),
 	}
 }
 
@@ -89,9 +87,27 @@ func createTestHandler(t *testing.T) *testHandler {
 	ms := fullMockSet(t)
 	edVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
+	db := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+	ms.md.EXPECT().GetBallot(gomock.Any()).AnyTimes().DoAndReturn(func(id types.BallotID) *tortoise.BallotData {
+		ballot, err := ballots.Get(db, id)
+		if err != nil {
+			return nil
+		}
 
+		data := &tortoise.BallotData{
+			ID:      ballot.ID(),
+			Layer:   ballot.Layer,
+			ATXID:   ballot.AtxID,
+			Smesher: ballot.SmesherID,
+		}
+		if ballot.EpochData != nil {
+			data.Beacon = ballot.EpochData.Beacon
+			data.Eligiblities = ballot.EpochData.EligibilityCount
+		}
+		return data
+	})
 	return &testHandler{
-		Handler: NewHandler(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), edVerifier, ms.mpub, ms.mf, ms.mbc, ms.mm, ms.md, ms.mvrf, ms.mclock,
+		Handler: NewHandler(db, edVerifier, ms.mpub, ms.mf, ms.mbc, ms.mm, ms.md, ms.mvrf, ms.mclock,
 			WithLogger(logtest.New(t)),
 			WithConfig(Config{
 				LayerSize:      layerAvgSize,

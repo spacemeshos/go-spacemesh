@@ -73,15 +73,20 @@ func (m *MockSubscriber) EXPECT() *MockSubscriberMockRecorder {
 }
 
 // Register mocks base method.
-func (m *MockSubscriber) Register(arg0 string, arg1 pubsub.GossipHandler) {
+func (m *MockSubscriber) Register(arg0 string, arg1 pubsub.GossipHandler, arg2 ...pubsub.ValidatorOpt) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Register", arg0, arg1)
+	varargs := []interface{}{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	m.ctrl.Call(m, "Register", varargs...)
 }
 
 // Register indicates an expected call of Register.
-func (mr *MockSubscriberMockRecorder) Register(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockSubscriberMockRecorder) Register(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Register", reflect.TypeOf((*MockSubscriber)(nil).Register), arg0, arg1)
+	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Register", reflect.TypeOf((*MockSubscriber)(nil).Register), varargs...)
 }
 
 // MockPublishSubsciber is a mock of PublishSubsciber interface.
@@ -122,13 +127,18 @@ func (mr *MockPublishSubsciberMockRecorder) Publish(arg0, arg1, arg2 interface{}
 }
 
 // Register mocks base method.
-func (m *MockPublishSubsciber) Register(arg0 string, arg1 pubsub.GossipHandler) {
+func (m *MockPublishSubsciber) Register(arg0 string, arg1 pubsub.GossipHandler, arg2 ...pubsub.ValidatorOpt) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Register", arg0, arg1)
+	varargs := []interface{}{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	m.ctrl.Call(m, "Register", varargs...)
 }
 
 // Register indicates an expected call of Register.
-func (mr *MockPublishSubsciberMockRecorder) Register(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockPublishSubsciberMockRecorder) Register(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Register", reflect.TypeOf((*MockPublishSubsciber)(nil).Register), arg0, arg1)
+	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Register", reflect.TypeOf((*MockPublishSubsciber)(nil).Register), varargs...)
 }

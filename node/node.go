@@ -50,6 +50,8 @@ import (
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
+	"github.com/spacemeshos/go-spacemesh/hare3"
+	"github.com/spacemeshos/go-spacemesh/hare3/compat"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -141,6 +143,8 @@ func GetCommand() *cobra.Command {
 			run := func(ctx context.Context) error {
 				types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
 				types.SetLegacyLayers(app.Config.LegacyLayer)
+				// starting on 2023-09-14 20:00:00 +0000 UTC (~1 week into 4th epoch)
+				types.SetOpUpgradeLayer(18000)
 				// ensure all data folders exist
 				if err := os.MkdirAll(app.Config.DataDir(), 0o700); err != nil {
 					return fmt.Errorf("ensure folders exist: %w", err)
@@ -167,7 +171,6 @@ func GetCommand() *cobra.Command {
 
 				// This blocks until the context is finished or until an error is produced
 				err = app.Start(ctx)
-
 				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cleanupCancel()
 				done := make(chan struct{}, 1)
@@ -320,6 +323,8 @@ type App struct {
 	grpcPublicService  *grpcserver.Server
 	grpcPrivateService *grpcserver.Server
 	jsonAPIService     *grpcserver.JSONHTTPServer
+	pprofService       *http.Server
+	profilerService    *profiler.Profiler
 	syncer             *syncer.Syncer
 	proposalListener   *proposals.Handler
 	proposalBuilder    *miner.ProposalBuilder
@@ -327,6 +332,7 @@ type App struct {
 	cachedDB           *datastore.CachedDB
 	clock              *timesync.NodeClock
 	hare               *hare.Hare
+	hare3              *hare3.Hare
 	hOracle            *eligibility.Oracle
 	blockGen           *blocks.Generator
 	certifier          *blocks.Certifier
@@ -729,13 +735,12 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
 	beaconProtocol.SetSyncState(newSyncer)
+	app.hOracle.SetSync(newSyncer)
 
 	hareOutputCh := make(chan hare.LayerOutput, app.Config.HARE.LimitConcurrent)
 	app.blockGen = blocks.NewGenerator(app.cachedDB, executor, msh, fetcherWrapped, app.certifier, patrol,
 		blocks.WithContext(ctx),
 		blocks.WithConfig(blocks.Config{
-			LayerSize:          layerSize,
-			LayersPerEpoch:     layersPerEpoch,
 			BlockGasLimit:      app.Config.BlockGasLimit,
 			OptFilterThreshold: app.Config.OptFilterThreshold,
 			GenBlockInterval:   500 * time.Millisecond,
@@ -763,6 +768,26 @@ func (app *App) initServices(ctx context.Context) error {
 		tortoiseWeakCoin{db: app.cachedDB, tortoise: trtl},
 		app.addLogger(HareLogger, lg),
 	)
+	if app.Config.HARE3.Enable {
+		if err := app.Config.HARE3.Validate(time.Duration(app.Config.Tortoise.Zdist) * app.Config.LayerDuration); err != nil {
+			return err
+		}
+		logger := app.addLogger(HareLogger, lg).Zap()
+		app.hare3 = hare3.New(
+			app.clock, app.host, app.cachedDB, app.edVerifier, app.edSgn, app.hOracle, newSyncer, patrol,
+			hare3.WithLogger(logger),
+			hare3.WithConfig(app.Config.HARE3),
+		)
+		app.hare3.Start()
+		app.eg.Go(func() error {
+			compat.ReportWeakcoin(ctx, logger, app.hare3.Coins(), tortoiseWeakCoin{db: app.cachedDB, tortoise: trtl})
+			return nil
+		})
+		app.eg.Go(func() error {
+			compat.ReportResult(ctx, logger, app.hare3.Results(), hareOutputCh)
+			return nil
+		})
+	}
 
 	minerGoodAtxPct := 90
 	if app.Config.TestConfig.MinerGoodAtxPct > 0 {
@@ -941,8 +966,7 @@ func (app *App) launchStandalone(ctx context.Context) error {
 	}
 	cfg := poetconfig.DefaultConfig()
 	cfg.PoetDir = filepath.Join(app.Config.DataDir(), "poet")
-	cfg.DataDir = cfg.PoetDir
-	cfg.LogDir = cfg.PoetDir
+
 	parsed, err := url.Parse(app.Config.PoETServers[0])
 	if err != nil {
 		return err
@@ -952,6 +976,12 @@ func (app *App) launchStandalone(ctx context.Context) error {
 	cfg.Service.EpochDuration = app.Config.LayerDuration * time.Duration(app.Config.LayersPerEpoch)
 	cfg.Service.CycleGap = app.Config.POET.CycleGap
 	cfg.Service.PhaseShift = app.Config.POET.PhaseShift
+
+	cfg, err = poetconfig.SetupConfig(cfg)
+	if err != nil {
+		return fmt.Errorf("setup poet config: %w", err)
+	}
+
 	srv, err := server.New(ctx, *cfg)
 	if err != nil {
 		return fmt.Errorf("init poet server: %w", err)
@@ -1004,7 +1034,10 @@ func (app *App) startServices(ctx context.Context) error {
 	}
 	app.eg.Go(func() error {
 		app.postVerifier.Start(ctx)
-		return nil
+		// Start only returns when the context expires (which means the system
+		// is shutting down). We do the closing of the post verifier here so
+		// it's ensured that start has returned before we call Close.
+		return app.postVerifier.Close()
 	})
 	app.syncer.Start()
 	app.beaconProtocol.Start(ctx)
@@ -1181,6 +1214,9 @@ func (app *App) stopServices(ctx context.Context) {
 	if app.hare != nil {
 		app.hare.Close()
 	}
+	if app.hare3 != nil {
+		app.hare3.Stop()
+	}
 
 	if app.blockGen != nil {
 		app.blockGen.Stop()
@@ -1217,8 +1253,15 @@ func (app *App) stopServices(ctx context.Context) {
 		app.dbMetrics.Close()
 	}
 
-	if app.postVerifier != nil {
-		app.postVerifier.Close()
+	if app.pprofService != nil {
+		if err := app.pprofService.Close(); err != nil {
+			app.log.With().Warning("pprof service exited with error", log.Err(err))
+		}
+	}
+	if app.profilerService != nil {
+		if err := app.profilerService.Stop(); err != nil {
+			app.log.With().Warning("profiler service exited with error", log.Err(err))
+		}
 	}
 
 	events.CloseEventReporter()
@@ -1307,6 +1350,37 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log, dbPath string) error {
 
 // Start starts the Spacemesh node and initializes all relevant services according to command line arguments provided.
 func (app *App) Start(ctx context.Context) error {
+	err := app.startSynchronous(ctx)
+	if err != nil {
+		app.log.With().Error("failed to start App", log.Err(err))
+		return err
+	}
+	defer events.ReportError(events.NodeError{
+		Msg:   "node is shutting down",
+		Level: zapcore.InfoLevel,
+	})
+	// TODO: pass app.eg to components and wait for them collectively
+	if app.ptimesync != nil {
+		app.eg.Go(func() error {
+			app.errCh <- app.ptimesync.Wait()
+			return nil
+		})
+	}
+	// app blocks until it receives a signal to exit
+	// this signal may come from the node or from sig-abort (ctrl-c)
+	select {
+	case <-ctx.Done():
+		return nil
+	case err = <-app.errCh:
+		return err
+	}
+}
+
+func (app *App) startSynchronous(ctx context.Context) (err error) {
+	// notify anyone who might be listening that the app has finished starting.
+	// this can be used by, e.g., app tests.
+	defer close(app.started)
+
 	// Create a contextual logger for local usage (lower-level modules will create their own contextual loggers
 	// using context passed down to them)
 	logger := app.log.WithContext(ctx)
@@ -1330,10 +1404,9 @@ func (app *App) Start(ctx context.Context) error {
 	app.errCh = make(chan error, 100)
 	if app.Config.PprofHTTPServer {
 		logger.Info("starting pprof server")
-		srv := &http.Server{Addr: ":6060"}
-		defer srv.Shutdown(ctx)
+		app.pprofService = &http.Server{Addr: ":6060"}
 		app.eg.Go(func() error {
-			if err := srv.ListenAndServe(); err != nil {
+			if err := app.pprofService.ListenAndServe(); err != nil {
 				app.errCh <- fmt.Errorf("cannot start pprof http server: %w", err)
 			}
 			return nil
@@ -1341,7 +1414,8 @@ func (app *App) Start(ctx context.Context) error {
 	}
 
 	if app.Config.ProfilerURL != "" {
-		p, err := profiler.Start(profiler.Config{
+
+		app.profilerService, err = profiler.Start(profiler.Config{
 			ApplicationName: app.Config.ProfilerName,
 			// app.Config.ProfilerURL should be the pyroscope server address
 			// TODO: AuthToken? no need right now since server isn't public
@@ -1351,7 +1425,6 @@ func (app *App) Start(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("cannot start profiling client: %w", err)
 		}
-		defer p.Stop()
 	}
 
 	lg := logger.Named(app.edSgn.NodeID().ShortString()).WithFields(app.edSgn.NodeID())
@@ -1430,29 +1503,7 @@ func (app *App) Start(ctx context.Context) error {
 	events.SubscribeToLayers(app.clock)
 	app.log.Info("app started")
 
-	// notify anyone who might be listening that the app has finished starting.
-	// this can be used by, e.g., app tests.
-	close(app.started)
-
-	defer events.ReportError(events.NodeError{
-		Msg:   "node is shutting down",
-		Level: zapcore.InfoLevel,
-	})
-	// TODO: pass app.eg to components and wait for them collectively
-	if app.ptimesync != nil {
-		app.eg.Go(func() error {
-			app.errCh <- app.ptimesync.Wait()
-			return nil
-		})
-	}
-	// app blocks until it receives a signal to exit
-	// this signal may come from the node or from sig-abort (ctrl-c)
-	select {
-	case <-ctx.Done():
-		return nil
-	case err = <-app.errCh:
-		return err
-	}
+	return nil
 }
 
 func (app *App) preserveAfterRecovery(ctx context.Context) {

@@ -19,7 +19,8 @@ type eligibilityValidator interface {
 	CheckEligibility(context.Context, *types.Ballot) (bool, error)
 }
 
-type ballotDecoder interface {
+type tortoiseProvider interface {
+	GetBallot(types.BallotID) *tortoise.BallotData
 	GetMissingActiveSet(types.EpochID, []types.ATXID) []types.ATXID
 	DecodeBallot(*types.BallotTortoiseData) (*tortoise.DecodedBallot, error)
 	StoreBallot(*tortoise.DecodedBallot) error

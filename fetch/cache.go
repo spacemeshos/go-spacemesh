@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	lru "github.com/hashicorp/golang-lru/v2"
+	"golang.org/x/exp/maps"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -71,24 +72,15 @@ func (hpc *HashPeersCache) Add(hash types.Hash32, peer p2p.Peer) {
 	hpc.add(hash, peer)
 }
 
-// GetRandom returns a random peer for a given hash.
-func (hpc *HashPeersCache) GetRandom(hash types.Hash32, hint datastore.Hint, rng *rand.Rand) (p2p.Peer, bool) {
+// GetRandom returns a randomized list of peers for a given hash.
+func (hpc *HashPeersCache) GetRandom(hash types.Hash32, hint datastore.Hint, rng *rand.Rand) []p2p.Peer {
 	hpc.mu.Lock()
 	defer hpc.mu.Unlock()
 
-	hashPeersMap, exists := hpc.getWithStats(hash, hint)
-	if !exists {
-		return p2p.NoPeer, false
-	}
-	n := rng.Intn(len(hashPeersMap)) + 1
-	i := 0
-	for peer := range hashPeersMap {
-		i++
-		if i == n {
-			return peer, true
-		}
-	}
-	return p2p.NoPeer, false
+	pm, _ := hpc.getWithStats(hash, hint)
+	peers := maps.Keys(pm)
+	rng.Shuffle(len(peers), func(i, j int) { peers[i], peers[j] = peers[j], peers[i] })
+	return peers
 }
 
 // RegisterPeerHashes registers provided peer for a list of hashes.

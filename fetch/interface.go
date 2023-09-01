@@ -43,6 +43,7 @@ type meshProvider interface {
 type host interface {
 	ID() p2p.Peer
 	GetPeers() []p2p.Peer
+	Connected(p2p.Peer) bool
 	PeerProtocols(p2p.Peer) ([]protocol.ID, error)
 	Close() error
 }

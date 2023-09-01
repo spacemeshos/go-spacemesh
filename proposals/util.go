@@ -42,3 +42,15 @@ func SerializeVRFMessage(beacon types.Beacon, epoch types.EpochID, nonce types.V
 	}
 	return serialized, nil
 }
+
+// MustSerializeVRFMessage serializes a message for generating/verifying a VRF signature.
+func MustSerializeVRFMessage(beacon types.Beacon, epoch types.EpochID, nonce types.VRFPostIndex, counter uint32) []byte {
+	m := VrfMessage{
+		Type:    types.EligibilityVoting,
+		Beacon:  beacon,
+		Epoch:   epoch,
+		Nonce:   nonce,
+		Counter: counter,
+	}
+	return codec.MustEncode(&m)
+}
