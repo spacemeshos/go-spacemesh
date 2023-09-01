@@ -21,6 +21,9 @@ to set lower expected latency in the network, eventually reducing layer time.
 * [#4879](https://github.com/spacemeshos/go-spacemesh/pull/4795) Makes majority calculation weighted for optimistic filtering.
 The network will start using the new algorithm at layer 18_000 (2023-09-14 20:00:00 +0000 UTC)
 * [#4923](https://github.com/spacemeshos/go-spacemesh/pull/4923) Faster ballot eligibility validation. Improves sync speed. 
+* [#4934](https://github.com/spacemeshos/go-spacemesh/pull/4934) Ensure state is synced before participating in tortoise consensus.
+* [#4939](https://github.com/spacemeshos/go-spacemesh/pull/4939) Make sure to fetch data from peers that are already connected.
+* [#4936](https://github.com/spacemeshos/go-spacemesh/pull/4936) Use correct hare active set after node was synced. Otherwise applied layer may lag slightly behind the rest.
 
 ## v1.1.2
 

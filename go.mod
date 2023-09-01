@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	cloud.google.com/go/storage v1.32.0
-	github.com/ALTree/bigfloat v0.0.0-20220102081255-38c8b72a9924
+	github.com/ALTree/bigfloat v0.2.0
 	github.com/benbjohnson/clock v1.3.5
 	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20230531032220-a757362a12e1
 	github.com/cosmos/btcutil v1.0.5
@@ -18,7 +18,7 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.17.1
 	github.com/hashicorp/go-retryablehttp v0.7.4
-	github.com/hashicorp/golang-lru/v2 v2.0.5
+	github.com/hashicorp/golang-lru/v2 v2.0.6
 	github.com/ipfs/go-ds-leveldb v0.5.0
 	github.com/ipfs/go-log/v2 v2.5.1
 	github.com/libp2p/go-libp2p v0.29.2

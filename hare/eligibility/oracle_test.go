@@ -869,6 +869,35 @@ func TestActiveSetDD(t *testing.T) {
 	}
 }
 
+func TestResetCache(t *testing.T) {
+	oracle := defaultOracle(t)
+	ctrl := gomock.NewController(t)
+
+	prev := oracle.activesCache
+	prev.Add(1, nil)
+
+	oracle.resetCacheOnSynced(context.Background())
+	require.Equal(t, prev, oracle.activesCache)
+
+	sync := mocks.NewMockSyncStateProvider(ctrl)
+	oracle.SetSync(sync)
+
+	sync.EXPECT().IsSynced(gomock.Any()).Return(false)
+	oracle.resetCacheOnSynced(context.Background())
+	require.Equal(t, prev, oracle.activesCache)
+
+	sync.EXPECT().IsSynced(gomock.Any()).Return(true)
+	oracle.resetCacheOnSynced(context.Background())
+	require.NotEqual(t, prev, oracle.activesCache)
+
+	prev = oracle.activesCache
+	prev.Add(1, nil)
+
+	sync.EXPECT().IsSynced(gomock.Any()).Return(true)
+	oracle.resetCacheOnSynced(context.Background())
+	require.Equal(t, prev, oracle.activesCache)
+}
+
 func FuzzVrfMessageConsistency(f *testing.F) {
 	tester.FuzzConsistency[VrfMessage](f)
 }
