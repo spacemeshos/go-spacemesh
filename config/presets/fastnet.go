@@ -91,5 +91,7 @@ func fastnet() config.Config {
 	conf.POET.CycleGap = 30 * time.Second
 	conf.POET.PhaseShift = 30 * time.Second
 
+	conf.TIME.TickInterval = 100 * time.Millisecond
+
 	return conf
 }

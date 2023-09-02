@@ -69,7 +69,10 @@ func (cfg *Config) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 // roundStart returns expected time for iter/round relative to
 // layer start.
 func (cfg *Config) roundStart(round IterRound) time.Duration {
-	return cfg.PreroundDelay + time.Duration(round.Absolute())*cfg.RoundDuration
+	if round.Round == 0 {
+		return cfg.PreroundDelay
+	}
+	return cfg.PreroundDelay + time.Duration(round.Absolute()-1)*cfg.RoundDuration
 }
 
 func DefaultConfig() Config {

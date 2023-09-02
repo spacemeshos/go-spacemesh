@@ -1436,7 +1436,7 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 	}
 	app.clock, err = timesync.NewClock(
 		timesync.WithLayerDuration(app.Config.LayerDuration),
-		timesync.WithTickInterval(1*time.Second),
+		timesync.WithTickInterval(app.Config.TIME.TickInterval),
 		timesync.WithGenesisTime(gTime),
 		timesync.WithLogger(app.addLogger(ClockLogger, lg)),
 	)
