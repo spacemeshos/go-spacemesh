@@ -779,6 +779,8 @@ func (t *turtle) storeBallot(ballot *ballotInfo, min types.LayerID) error {
 			}
 		}
 	}
+	ballot.votes.tail = t.state.layer(ballot.layer).reuseOpinion(ballot.opinion(), ballot.votes.tail)
+
 	if !ballot.layer.After(t.processed) {
 		if err := t.countBallot(ballot); err != nil {
 			if errors.Is(err, errBeaconUnavailable) {

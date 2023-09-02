@@ -94,7 +94,7 @@ func (s *state) layer(lid types.LayerID) *layerInfo {
 	layer, exist := s.layers[lid]
 	if !exist {
 		layersNumber.Inc()
-		layer = &layerInfo{lid: lid}
+		layer = &layerInfo{lid: lid, opinions: map[types.Hash32]*layerVote{}}
 		s.layers[lid] = layer
 	}
 	return layer
@@ -178,12 +178,22 @@ type layerInfo struct {
 	blocks         []*blockInfo
 	verifying      verifyingInfo
 	coinflip       sign
+	opinions       map[types.Hash32]*layerVote
 
 	opinion types.Hash32
 	// a pointer to the value stored on the previous layerInfo object
 	// it is stored as a pointer so that when previous layerInfo is evicted
 	// we still have access in case we need to recompute opinion for this layer
 	prevOpinion *types.Hash32
+}
+
+func (l *layerInfo) reuseOpinion(opinion types.Hash32, ptr *layerVote) *layerVote {
+	existing := l.opinions[opinion]
+	if existing != nil {
+		return existing
+	}
+	l.opinions[opinion] = ptr
+	return ptr
 }
 
 func (l *layerInfo) computeOpinion(hdist uint32, last types.LayerID) {
