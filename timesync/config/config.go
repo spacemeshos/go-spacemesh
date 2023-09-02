@@ -1,8 +1,6 @@
 package config
 
 import (
-	"time"
-
 	"github.com/spacemeshos/go-spacemesh/timesync/peersync"
 )
 
@@ -13,16 +11,14 @@ var (
 
 // TimeConfig specifies the timesync params for ntp.
 type TimeConfig struct {
-	TickInterval time.Duration   `mapstructure:"tick-interval"`
-	Peersync     peersync.Config `mapstructure:"peersync"`
+	Peersync peersync.Config `mapstructure:"peersync"`
 }
 
 // DefaultConfig defines the default tymesync configuration.
 func DefaultConfig() TimeConfig {
 	// TimeConfigValues defines default values for all time and ntp related params.
 	TimeConfigValues := TimeConfig{
-		TickInterval: time.Second,
-		Peersync:     peersync.DefaultConfig(),
+		Peersync: peersync.DefaultConfig(),
 	}
 
 	return TimeConfigValues
