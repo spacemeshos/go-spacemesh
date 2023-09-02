@@ -155,7 +155,7 @@ func (o *Oracle) activeSet(targetEpoch types.EpochID) (uint64, uint64, types.ATX
 		if err != nil {
 			return err
 		}
-		if grade != Good {
+		if grade != Good && header.NodeID != o.cfg.nodeID {
 			o.log.With().Info("atx omitted from active set",
 				header.ID,
 				log.Int("grade", int(grade)),

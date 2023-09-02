@@ -410,7 +410,7 @@ func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, logger log.L
 	t4 := time.Now()
 	if eligible, err := h.validator.CheckEligibility(ctx, b); err != nil || !eligible {
 		notEligible.Inc()
-		return nil, errNotEligible
+		return nil, fmt.Errorf("%w: %v", errNotEligible, err.Error())
 	}
 	ballotDuration.WithLabelValues(eligible).Observe(float64(time.Since(t4)))
 
