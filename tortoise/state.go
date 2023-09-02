@@ -94,7 +94,7 @@ func (s *state) layer(lid types.LayerID) *layerInfo {
 	layer, exist := s.layers[lid]
 	if !exist {
 		layersNumber.Inc()
-		layer = &layerInfo{lid: lid, opinions: map[types.Hash32]*layerVote{}}
+		layer = &layerInfo{lid: lid, ballotOpinions: map[types.Hash32]*layerVote{}}
 		s.layers[lid] = layer
 	}
 	return layer
@@ -178,7 +178,7 @@ type layerInfo struct {
 	blocks         []*blockInfo
 	verifying      verifyingInfo
 	coinflip       sign
-	opinions       map[types.Hash32]*layerVote
+	ballotOpinions map[types.Hash32]*layerVote
 
 	opinion types.Hash32
 	// a pointer to the value stored on the previous layerInfo object
@@ -188,11 +188,11 @@ type layerInfo struct {
 }
 
 func (l *layerInfo) reuseOpinion(opinion types.Hash32, ptr *layerVote) *layerVote {
-	existing := l.opinions[opinion]
+	existing := l.ballotOpinions[opinion]
 	if existing != nil {
 		return existing
 	}
-	l.opinions[opinion] = ptr
+	l.ballotOpinions[opinion] = ptr
 	return ptr
 }
 

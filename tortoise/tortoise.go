@@ -768,6 +768,7 @@ func (t *turtle) storeBallot(ballot *ballotInfo, min types.LayerID) error {
 		return fmt.Errorf("%w: %s", ErrBallotExists, ballot.id)
 	}
 
+	ballot.votes.tail = t.state.layer(ballot.layer).reuseOpinion(ballot.opinion(), ballot.votes.tail)
 	t.state.addBallot(ballot)
 	for current := ballot.votes.tail; current != nil && !current.lid.Before(min); current = current.prev {
 		for i, block := range current.supported {
@@ -779,7 +780,6 @@ func (t *turtle) storeBallot(ballot *ballotInfo, min types.LayerID) error {
 			}
 		}
 	}
-	ballot.votes.tail = t.state.layer(ballot.layer).reuseOpinion(ballot.opinion(), ballot.votes.tail)
 
 	if !ballot.layer.After(t.processed) {
 		if err := t.countBallot(ballot); err != nil {

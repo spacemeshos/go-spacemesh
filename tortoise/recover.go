@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -61,6 +62,7 @@ func Recover(db *datastore.CachedDB, latest types.LayerID, beacon system.BeaconG
 			return nil, fmt.Errorf("failed to load tortoise state at layer %d: %w", lid, err)
 		}
 	}
+	runtime.GC()
 	return trtl, nil
 }
 
