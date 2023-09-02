@@ -380,7 +380,6 @@ func (h *Hare) run(layer types.LayerID, beacon types.Beacon, proto *protocol) er
 	if err := h.onOutput(layer, current, proto.Next(vrf != nil), vrf); err != nil {
 		return err
 	}
-	h.log.Debug("ready to accept messages", zap.Uint32("lid", layer.Uint32()))
 	walltime = walltime.Add(h.config.RoundDuration)
 	result := false
 	for {
