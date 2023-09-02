@@ -391,9 +391,9 @@ func (h *Hare) run(layer types.LayerID, beacon types.Beacon, proto *protocol) er
 				zap.Uint8("iter", proto.Iter), zap.Stringer("round", proto.Round),
 			)
 			current := proto.IterRound
-			start := time.Now()
 			var vrf *types.HareEligibility
 			if current.IsMessageRound() {
+				start := time.Now()
 				vrf = h.oracle.active(h.signer.NodeID(), layer, current)
 				activeLatency.Observe(time.Since(start).Seconds())
 			}
@@ -428,6 +428,7 @@ func (h *Hare) onOutput(layer types.LayerID, ir IterRound, out output, vrf *type
 		out.message.Layer = layer
 		out.message.Eligibility = *vrf
 		out.message.Sender = h.signer.NodeID()
+		out.message.Signature = h.signer.Sign(signing.HARE, out.message.ToMetadata().ToBytes())
 	}
 	h.log.Debug("round output",
 		zap.Uint32("lid", layer.Uint32()),
@@ -436,14 +437,10 @@ func (h *Hare) onOutput(layer types.LayerID, ir IterRound, out output, vrf *type
 		zap.Bool("active", vrf != nil),
 	)
 	if out.message != nil {
-		h.eg.Go(func() error {
-			out.message.Signature = h.signer.Sign(signing.HARE, out.message.ToMetadata().ToBytes())
-			if err := h.pubsub.Publish(h.ctx, h.config.ProtocolName, out.message.ToBytes()); err != nil {
-				h.log.Error("failed to publish", zap.Inline(out.message), zap.Error(err))
-			}
-			h.tracer.OnMessageSent(out.message)
-			return nil
-		})
+		if err := h.pubsub.Publish(h.ctx, h.config.ProtocolName, out.message.ToBytes()); err != nil {
+			h.log.Error("failed to publish", zap.Inline(out.message), zap.Error(err))
+		}
+		h.tracer.OnMessageSent(out.message)
 	}
 	if out.coin != nil {
 		select {
