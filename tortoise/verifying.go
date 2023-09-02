@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -41,17 +42,20 @@ func (v *verifying) countBallot(logger *zap.Logger, ballot *ballotInfo) {
 	counted := !(ballot.conditions.badBeacon ||
 		prev.opinion != ballot.opinion() ||
 		prev.verifying.referenceHeight > ballot.reference.height)
-	logger.Debug("count ballot in verifying mode",
-		zap.Uint32("lid", ballot.layer.Uint32()),
-		zap.Stringer("ballot", ballot.id),
-		log.ZShortStringer("ballot opinion", ballot.opinion()),
-		log.ZShortStringer("local opinion", prev.opinion),
-		zap.Bool("bad beacon", ballot.conditions.badBeacon),
-		zap.Float64("weight", ballot.weight.Float()),
-		zap.Uint64("reference height", prev.verifying.referenceHeight),
-		zap.Uint64("ballot height", ballot.reference.height),
-		zap.Bool("counted", counted),
-	)
+
+	if logger.Level() == zapcore.DebugLevel {
+		logger.Debug("count ballot in verifying mode",
+			zap.Uint32("lid", ballot.layer.Uint32()),
+			zap.Stringer("ballot", ballot.id),
+			log.ZShortStringer("ballot opinion", ballot.opinion()),
+			log.ZShortStringer("local opinion", prev.opinion),
+			zap.Bool("bad beacon", ballot.conditions.badBeacon),
+			zap.Float64("weight", ballot.weight.Float()),
+			zap.Uint64("reference height", prev.verifying.referenceHeight),
+			zap.Uint64("ballot height", ballot.reference.height),
+			zap.Bool("counted", counted),
+		)
+	}
 	if !counted {
 		return
 	}
@@ -95,11 +99,13 @@ func (v *verifying) verify(logger *zap.Logger, lid types.LayerID) (bool, bool) {
 		)
 		return false, false
 	} else {
-		logger.Debug("crosses global threshold",
-			zap.Uint32("candidate layer", lid.Uint32()),
-			zap.Float64("margin", margin.Float()),
-			zap.Float64("global threshold", threshold.Float()),
-		)
+		if logger.Level() == zapcore.DebugLevel {
+			logger.Debug("crosses global threshold",
+				zap.Uint32("candidate layer", lid.Uint32()),
+				zap.Float64("margin", margin.Float()),
+				zap.Float64("global threshold", threshold.Float()),
+			)
+		}
 	}
 	if len(layer.blocks) == 0 {
 		logger.Debug("candidate layer is empty",

@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
@@ -132,10 +133,12 @@ func (f *full) verify(logger *zap.Logger, lid types.LayerID) (bool, bool) {
 		}
 		return empty, false
 	}
-	logger.Debug("global treshold",
-		zap.Uint32("target", lid.Uint32()),
-		zap.Float64("threshold", threshold.Float()),
-	)
+	if logger.Level() == zapcore.DebugLevel {
+		logger.Debug("global treshold",
+			zap.Uint32("target", lid.Uint32()),
+			zap.Float64("threshold", threshold.Float()),
+		)
+	}
 	rst, changes := verifyLayer(
 		logger,
 		layer.blocks,

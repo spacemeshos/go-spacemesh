@@ -1,8 +1,6 @@
 package tortoise
 
 import (
-	"sort"
-
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
@@ -54,29 +52,22 @@ func maxLayer(i, j types.LayerID) types.LayerID {
 }
 
 func verifyLayer(logger *zap.Logger, blocks []*blockInfo, getDecision func(*blockInfo) sign) (bool, bool) {
-	// order blocks by height in ascending order
-	// if there is a support before any abstain
-	// and a previous height is lower than the current one
-	// the layer is verified
-	//
-	// it will modify original slice
-	sort.Slice(blocks, func(i, j int) bool {
-		return blocks[i].height < blocks[j].height
-	})
 	var (
 		decisions = make([]sign, 0, len(blocks))
 		supported *blockInfo
 	)
 	for i, block := range blocks {
 		decision := getDecision(block)
-		logger.Debug("decision for a block",
-			zap.Int("ith", i),
-			zap.Stringer("block", block.id),
-			zap.Stringer("lid", block.layer),
-			zap.Stringer("decision", decision),
-			zap.Stringer("weight", block.margin),
-			zap.Uint64("height", block.height),
-		)
+		if logger.Level() == zapcore.DebugLevel {
+			logger.Debug("decision for a block",
+				zap.Int("ith", i),
+				zap.Stringer("block", block.id),
+				zap.Stringer("lid", block.layer),
+				zap.Stringer("decision", decision),
+				zap.Stringer("weight", block.margin),
+				zap.Uint64("height", block.height),
+			)
+		}
 
 		if decision == abstain {
 			// all blocks with the same height should be finalized
