@@ -22,6 +22,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/system/mocks"
+	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
 const (
@@ -181,11 +182,24 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize, layersPerEpoch
 	mbc := mocks.NewMockBeaconCollector(ctrl)
 	vrfVerifier := proposals.NewMockvrfVerifier(ctrl)
 	vrfVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+	tmock := proposals.NewMocktortoiseProvider(ctrl)
+	tmock.EXPECT().GetBallot(gomock.Any()).AnyTimes().DoAndReturn(func(id types.BallotID) *tortoise.BallotData {
+		ballot, err := ballots.Get(o.cdb, id)
+		require.NoError(t, err)
+		return &tortoise.BallotData{
+			ID:           ballot.ID(),
+			Layer:        ballot.Layer,
+			ATXID:        ballot.AtxID,
+			Smesher:      ballot.SmesherID,
+			Beacon:       ballot.EpochData.Beacon,
+			Eligiblities: ballot.EpochData.EligibilityCount,
+		}
+	})
 
 	nonceFetcher := proposals.NewMocknonceFetcher(ctrl)
 	nonce := types.VRFPostIndex(rand.Uint64())
 
-	validator := proposals.NewEligibilityValidator(layerSize, layersPerEpoch, 0, o.mClock, o.cdb, mbc, o.log.WithName("blkElgValidator"), vrfVerifier,
+	validator := proposals.NewEligibilityValidator(layerSize, layersPerEpoch, 0, o.mClock, tmock, o.cdb, mbc, o.log.WithName("blkElgValidator"), vrfVerifier,
 		proposals.WithNonceFetcher(nonceFetcher),
 	)
 

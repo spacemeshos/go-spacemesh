@@ -74,8 +74,7 @@ func (cfg *Config) DataDir() string {
 }
 
 type TestConfig struct {
-	SmesherKey      string `mapstructure:"testing-smesher-key"`
-	MinerGoodAtxPct int
+	SmesherKey string `mapstructure:"testing-smesher-key"`
 }
 
 // BaseConfig defines the default configuration options for spacemesh app.
@@ -114,6 +113,10 @@ type BaseConfig struct {
 	DatabaseLatencyMetering bool `mapstructure:"db-latency-metering"`
 
 	NetworkHRP string `mapstructure:"network-hrp"`
+
+	// MinerGoodAtxsPercent is a threshold to decide if tortoise activeset should be
+	// picked from first block insted of synced data.
+	MinerGoodAtxsPercent int `mapstructure:"miner-good-atxs-percent"`
 }
 
 type PublicMetrics struct {
