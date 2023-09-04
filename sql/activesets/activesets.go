@@ -21,7 +21,7 @@ func Add(db sql.Executor, id types.Hash32, set *types.EpochActiveSet) error {
 			stmt.BindBytes(2, buf)
 		}, nil)
 	if err != nil {
-		return fmt.Errorf("insert active set %s: %w", id, err)
+		return fmt.Errorf("add active set %s: %w", id, err)
 	}
 	return nil
 }

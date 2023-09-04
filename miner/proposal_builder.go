@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
@@ -65,6 +66,7 @@ type config struct {
 	layersPerEpoch     uint32
 	hdist              uint32
 	minActiveSetWeight uint64
+	emitEmptyActiveSet types.LayerID
 	nodeID             types.NodeID
 	networkDelay       time.Duration
 
@@ -136,6 +138,12 @@ func WithNetworkDelay(delay time.Duration) Opt {
 func WithMinGoodAtxPct(pct int) Opt {
 	return func(pb *ProposalBuilder) {
 		pb.cfg.goodAtxPct = pct
+	}
+}
+
+func WithEmitEmptyActiveSet(lid types.LayerID) Opt {
+	return func(pb *ProposalBuilder) {
+		pb.cfg.emitEmptyActiveSet = lid
 	}
 }
 
@@ -257,6 +265,12 @@ func (pb *ProposalBuilder) createProposal(
 			Beacon:           beacon,
 			EligibilityCount: epochEligibility.Slots,
 		}
+		if err := activesets.Add(pb.cdb, ib.EpochData.ActiveSetHash, &types.EpochActiveSet{
+			Epoch: epochEligibility.Epoch,
+			Set:   epochEligibility.ActiveSet,
+		}); err != nil {
+			return nil, err
+		}
 	} else {
 		pb.logger.With().Debug("creating ballot with reference ballot (no active set)",
 			log.Context(ctx),
@@ -277,7 +291,7 @@ func (pb *ProposalBuilder) createProposal(
 			MeshHash: pb.decideMeshHash(ctx, layerID),
 		},
 	}
-	if p.EpochData != nil {
+	if p.EpochData != nil && layerID < pb.cfg.emitEmptyActiveSet {
 		p.ActiveSet = epochEligibility.ActiveSet
 	}
 	p.Ballot.Signature = pb.signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())

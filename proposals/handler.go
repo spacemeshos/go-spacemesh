@@ -207,25 +207,22 @@ func (h *Handler) handleSet(ctx context.Context, id types.Hash32, set types.Epoc
 
 // collectHashes gathers all hashes in a proposal or ballot.
 func collectHashes(a any) []types.Hash32 {
-	p, ok := a.(types.Proposal)
-	if ok {
-		hashes := collectHashes(p.Ballot)
-		return append(hashes, types.TransactionIDsToHashes(p.TxIDs)...)
-	}
-
-	b, ok := a.(types.Ballot)
-	if ok {
-		hashes := []types.Hash32{b.Votes.Base.AsHash32()}
-		if b.RefBallot != types.EmptyBallotID {
-			hashes = append(hashes, b.RefBallot.AsHash32())
+	switch typed := a.(type) {
+	case types.Proposal:
+		return append(collectHashes(typed.Ballot), types.TransactionIDsToHashes(typed.TxIDs)...)
+	case types.Ballot:
+		hashes := []types.Hash32{typed.Votes.Base.AsHash32()}
+		if typed.RefBallot != types.EmptyBallotID {
+			hashes = append(hashes, typed.RefBallot.AsHash32())
+		} else if typed.EpochData != nil {
+			hashes = append(hashes, typed.EpochData.ActiveSetHash)
 		}
-		for _, header := range b.Votes.Support {
+		for _, header := range typed.Votes.Support {
 			hashes = append(hashes, header.ID.AsHash32())
 		}
 		return hashes
 	}
-	log.Fatal("unexpected type")
-	return nil
+	panic("unexpected type")
 }
 
 // HandleSyncedProposal handles Proposal data from sync.
@@ -470,6 +467,7 @@ func (h *Handler) checkBallotDataIntegrity(ctx context.Context, b *types.Ballot)
 			// NOTE(dshulyak) sidecar is stored for every ballot, so that
 			// nodes that won't update on time will be able to download it
 			// with sync
+
 			b.ActiveSet = set.Set
 		}
 	} else if b.EpochData != nil {
