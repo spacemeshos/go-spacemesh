@@ -249,7 +249,11 @@ func (msh *Mesh) ensureStateConsistent(ctx context.Context, results []result.Lay
 				log.Stringer("expected", bid),
 				log.Stringer("applied", applied),
 			)
-			changed = min(changed, layer.Layer)
+			if changed == 0 {
+				changed = layer.Layer
+			} else {
+				changed = min(changed, layer.Layer)
+			}
 		}
 	}
 	if changed == 0 {
