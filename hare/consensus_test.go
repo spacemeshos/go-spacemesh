@@ -498,7 +498,7 @@ func (ps *delayedPubSub) Publish(ctx context.Context, protocol string, msg []byt
 	return nil
 }
 
-func (ps *delayedPubSub) Register(protocol string, handler pubsub.GossipHandler) {
+func (ps *delayedPubSub) Register(protocol string, handler pubsub.GossipHandler, opts ...pubsub.ValidatorOpt) {
 	if ps.recvDelay != 0 {
 		handler = func(ctx context.Context, pid p2p.Peer, msg []byte) error {
 			rng := time.Duration(rand.Uint32()) * time.Second % ps.recvDelay
@@ -609,6 +609,6 @@ func (eps *equivocatePubSub) Publish(ctx context.Context, protocol string, data 
 	return nil
 }
 
-func (eps *equivocatePubSub) Register(protocol string, handler pubsub.GossipHandler) {
+func (eps *equivocatePubSub) Register(protocol string, handler pubsub.GossipHandler, opts ...pubsub.ValidatorOpt) {
 	eps.ps.Register(protocol, handler)
 }

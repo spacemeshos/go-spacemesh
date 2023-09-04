@@ -760,6 +760,175 @@ func TestConfig_Preset(t *testing.T) {
 	})
 }
 
+func TestConfig_CustomTypes(t *testing.T) {
+	const name = "testnet"
+
+	tt := []struct {
+		name         string
+		cli          string
+		config       string
+		updatePreset func(*testing.T, *config.Config)
+	}{
+		{
+			name:   "smeshing-opts-provider",
+			cli:    "--smeshing-opts-provider=1337",
+			config: `{"smeshing": {"smeshing-opts": {"smeshing-opts-provider": 1337}}}`,
+			updatePreset: func(t *testing.T, c *config.Config) {
+				c.SMESHING.Opts.ProviderID.SetInt64(1337)
+			},
+		},
+		{
+			// TODO(mafa): remove this test case, see https://github.com/spacemeshos/go-spacemesh/issues/4801
+			name:   "smeshing-opts-provider",
+			cli:    "--smeshing-opts-provider=-1",
+			config: `{"smeshing": {"smeshing-opts": {"smeshing-opts-provider": -1}}}`,
+			updatePreset: func(t *testing.T, c *config.Config) {
+				c.SMESHING.Opts.ProviderID.SetInt64(-1)
+			},
+		},
+		{
+			name:   "post-pow-difficulty",
+			cli:    "--post-pow-difficulty=00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+			config: `{"post": {"post-pow-difficulty": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"}}`,
+			updatePreset: func(t *testing.T, c *config.Config) {
+				diff, err := hex.DecodeString("00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff")
+				require.NoError(t, err)
+				copy(c.POST.PowDifficulty[:], diff)
+			},
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(fmt.Sprintf("%s_Flags", tc.name), func(t *testing.T) {
+			mainnet := config.MainnetConfig()
+			require.Nil(t, mainnet.SMESHING.Opts.ProviderID.Value())
+
+			c := &cobra.Command{}
+			cmd.AddCommands(c)
+			require.NoError(t, c.ParseFlags([]string{tc.cli}))
+
+			t.Cleanup(viper.Reset)
+			t.Cleanup(cmd.ResetConfig)
+
+			conf, err := loadConfig(c)
+			require.NoError(t, err)
+			tc.updatePreset(t, &mainnet)
+			require.Equal(t, mainnet, *conf)
+		})
+
+		t.Run(fmt.Sprintf("%s_ConfigFile", tc.name), func(t *testing.T) {
+			mainnet := config.MainnetConfig()
+			require.Nil(t, mainnet.SMESHING.Opts.ProviderID.Value())
+
+			c := &cobra.Command{}
+			cmd.AddCommands(c)
+
+			path := filepath.Join(t.TempDir(), "config.json")
+			require.NoError(t, os.WriteFile(path, []byte(tc.config), 0o600))
+			require.NoError(t, c.ParseFlags([]string{"--config=" + path}))
+
+			t.Cleanup(viper.Reset)
+			t.Cleanup(cmd.ResetConfig)
+
+			conf, err := loadConfig(c)
+			require.NoError(t, err)
+			tc.updatePreset(t, &mainnet)
+			mainnet.ConfigFile = path
+			require.Equal(t, mainnet, *conf)
+		})
+
+		t.Run(fmt.Sprintf("%s_PresetOverwrittenByFlags", tc.name), func(t *testing.T) {
+			preset, err := presets.Get(name)
+			require.NoError(t, err)
+
+			c := &cobra.Command{}
+			cmd.AddCommands(c)
+			require.NoError(t, c.ParseFlags([]string{tc.cli}))
+
+			viper.Set("preset", name)
+			t.Cleanup(viper.Reset)
+			t.Cleanup(cmd.ResetConfig)
+
+			conf, err := loadConfig(c)
+			require.NoError(t, err)
+			tc.updatePreset(t, &preset)
+			require.Equal(t, preset, *conf)
+		})
+
+		t.Run(fmt.Sprintf("%s_PresetOverWrittenByConfigFile", tc.name), func(t *testing.T) {
+			preset, err := presets.Get(name)
+			require.NoError(t, err)
+
+			c := &cobra.Command{}
+			cmd.AddCommands(c)
+
+			path := filepath.Join(t.TempDir(), "config.json")
+			require.NoError(t, os.WriteFile(path, []byte(tc.config), 0o600))
+			require.NoError(t, c.ParseFlags([]string{"--config=" + path}))
+
+			viper.Set("preset", name)
+			t.Cleanup(viper.Reset)
+			t.Cleanup(cmd.ResetConfig)
+
+			conf, err := loadConfig(c)
+			require.NoError(t, err)
+			tc.updatePreset(t, &preset)
+			preset.ConfigFile = path
+			require.Equal(t, preset, *conf)
+		})
+	}
+}
+
+func TestConfig_PostProviderID_InvalidValues(t *testing.T) {
+	tt := []struct {
+		name        string
+		cliValue    string
+		configValue string
+	}{
+		{
+			name:        "not a number",
+			cliValue:    "not-a-number",
+			configValue: "\"not-a-number\"",
+		},
+		// TODO(mafa): still accepted for backward compatibility, see https://github.com/spacemeshos/go-spacemesh/issues/4801
+		// {
+		// 	name:        "negative number",
+		// 	cliValue:    "-1",
+		// 	configValue: "-1",
+		// },
+		{
+			name:        "number too large for uint32",
+			cliValue:    "4294967296",
+			configValue: "4294967296",
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(fmt.Sprintf("%s_Flags", tc.name), func(t *testing.T) {
+			c := &cobra.Command{}
+			cmd.AddCommands(c)
+			t.Cleanup(cmd.ResetConfig)
+
+			err := c.ParseFlags([]string{fmt.Sprintf("--smeshing-opts-provider=%s", tc.cliValue)})
+			require.ErrorContains(t, err, "failed to parse PoST Provider ID")
+		})
+
+		t.Run(fmt.Sprintf("%s_ConfigFile", tc.name), func(t *testing.T) {
+			c := &cobra.Command{}
+			cmd.AddCommands(c)
+
+			path := filepath.Join(t.TempDir(), "config.json")
+			require.NoError(t, os.WriteFile(path, []byte(fmt.Sprintf(`{"smeshing": {"smeshing-opts": {"smeshing-opts-provider": %s}}}`, tc.configValue)), 0o600))
+			require.NoError(t, c.ParseFlags([]string{"--config=" + path}))
+
+			t.Cleanup(cmd.ResetConfig)
+
+			_, err := loadConfig(c)
+			require.ErrorContains(t, err, "invalid provider ID value")
+		})
+	}
+}
+
 func TestConfig_Load(t *testing.T) {
 	t.Run("invalid fails to load", func(t *testing.T) {
 		c := &cobra.Command{}
@@ -926,6 +1095,7 @@ func TestAdminEvents(t *testing.T) {
 	app.edSgn = signer // https://github.com/spacemeshos/go-spacemesh/issues/4653
 	require.NoError(t, app.Initialize())
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	var eg errgroup.Group
 	eg.Go(func() error {
 		if err := app.Start(ctx); err != nil {
@@ -936,13 +1106,14 @@ func TestAdminEvents(t *testing.T) {
 		return nil
 	})
 	t.Cleanup(func() { eg.Wait() })
-	t.Cleanup(cancel)
 
-	conn, err := grpc.Dial(
+	grpcCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	conn, err := grpc.DialContext(
+		grpcCtx,
 		cfg.API.PrivateListener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
-		grpc.WithTimeout(5*time.Second),
 	)
 	require.NoError(t, err)
 	t.Cleanup(func() { conn.Close() })
@@ -999,7 +1170,7 @@ func getTestDefaultConfig(tb testing.TB) *config.Config {
 	cfg.SMESHING = config.DefaultSmeshingConfig()
 	cfg.SMESHING.Start = true
 	cfg.SMESHING.Opts.NumUnits = cfg.POST.MinNumUnits + 1
-	cfg.SMESHING.Opts.ProviderID = int(initialization.CPUProviderID())
+	cfg.SMESHING.Opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
 
 	// note: these need to be set sufficiently low enough that turbohare finishes well before the LayerDurationSec
 	cfg.HARE.RoundDuration = 2

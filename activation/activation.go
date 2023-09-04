@@ -46,7 +46,15 @@ func DefaultPoetConfig() PoetConfig {
 	}
 }
 
-const defaultPoetRetryInterval = 5 * time.Second
+const (
+	defaultPoetRetryInterval = 5 * time.Second
+
+	// Jitter added to the wait time before building a nipost challenge.
+	// It's expressed as % of poet grace period which translates to:
+	//  mainnet (grace period 1h) -> 36s
+	//  systest (grace period 10s) -> 0.1s
+	maxNipostChallengeBuildJitter = 1.0
+)
 
 // Config defines configuration for Builder.
 type Config struct {
@@ -448,8 +456,8 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 			ErrATXChallengeExpired, current, -until)
 	}
 	metrics.PublishOntimeWindowLatency.Observe(until.Seconds())
-	if until > b.poetCfg.GracePeriod {
-		wait := until - b.poetCfg.GracePeriod
+	wait := timeToWaitToBuildNipostChallenge(until, b.poetCfg.GracePeriod)
+	if wait >= 0 {
 		b.log.WithContext(ctx).With().Debug("waiting for fresh atxs",
 			log.Duration("till poet round", until),
 			log.Uint32("current epoch", current.Uint32()),
@@ -545,9 +553,8 @@ func (b *Builder) loadChallenge() (*types.NIPostChallenge, error) {
 	if err != nil {
 		return nil, err
 	}
-	if nipost.TargetEpoch() < b.currentEpoch() {
+	if nipost.PublishEpoch < b.currentEpoch() {
 		b.log.With().Info("atx nipost challenge is stale - discarding it",
-			log.Stringer("target_epoch", nipost.TargetEpoch()),
 			log.Stringer("publish_epoch", nipost.PublishEpoch),
 			log.Stringer("current_epoch", b.currentEpoch()),
 		)
@@ -585,6 +592,8 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 
 	if b.pendingATX == nil {
 		var err error
+		ctx, cancel := context.WithDeadline(ctx, b.layerClock.LayerToTime((challenge.TargetEpoch()).FirstLayer()))
+		defer cancel()
 		b.pendingATX, err = b.createAtx(ctx, challenge)
 		if err != nil {
 			return fmt.Errorf("create ATX: %w", err)
@@ -610,16 +619,16 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	select {
 	case <-atxReceived:
 		logger.With().Info("received atx in db", atx.ID())
-	case <-b.layerClock.AwaitLayer((atx.TargetEpoch() + 1).FirstLayer()):
-		if err = b.discardChallenge(); err != nil {
-			return fmt.Errorf("%w: target epoch has passed", err)
+		if err := b.discardChallenge(); err != nil {
+			return fmt.Errorf("%w: after published atx", err)
 		}
-		return fmt.Errorf("%w: target epoch has passed", ErrATXChallengeExpired)
+	case <-b.layerClock.AwaitLayer((atx.TargetEpoch()).FirstLayer()):
+		if err := b.discardChallenge(); err != nil {
+			return fmt.Errorf("%w: publish epoch has passed", err)
+		}
+		return fmt.Errorf("%w: publish epoch has passed", ErrATXChallengeExpired)
 	case <-ctx.Done():
 		return ctx.Err()
-	}
-	if err = b.discardChallenge(); err != nil {
-		return fmt.Errorf("%w: after published atx", err)
 	}
 	return nil
 }
@@ -630,16 +639,11 @@ func (b *Builder) poetRoundStart(epoch types.EpochID) time.Time {
 
 func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChallenge) (*types.ActivationTx, error) {
 	pubEpoch := challenge.PublishEpoch
-	nextPoetRoundStart := b.poetRoundStart(pubEpoch)
 
-	// NiPoST must be ready before start of the next poet round.
-	buildingNipostCtx, cancel := context.WithDeadline(ctx, nextPoetRoundStart)
-	defer cancel()
-	nipost, postDuration, err := b.nipostBuilder.BuildNIPost(buildingNipostCtx, challenge)
+	nipost, err := b.nipostBuilder.BuildNIPost(ctx, challenge)
 	if err != nil {
 		return nil, fmt.Errorf("build NIPost: %w", err)
 	}
-	metrics.PostDuration.Set(float64(postDuration.Nanoseconds()))
 
 	b.log.With().Info("awaiting atx publication epoch",
 		log.Stringer("pub_epoch", pubEpoch),
@@ -653,7 +657,7 @@ func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChalleng
 	}
 	b.log.Debug("publication epoch has arrived!")
 
-	if challenge.TargetEpoch() < b.currentEpoch() {
+	if challenge.PublishEpoch < b.currentEpoch() {
 		if err = b.discardChallenge(); err != nil {
 			return nil, fmt.Errorf("%w: atx publish epoch has passed during nipost construction", err)
 		}
@@ -736,4 +740,9 @@ func SignAndFinalizeAtx(signer *signing.EdSigner, atx *types.ActivationTx) error
 	atx.Signature = signer.Sign(signing.ATX, atx.SignedBytes())
 	atx.SmesherID = signer.NodeID()
 	return atx.Initialize()
+}
+
+func timeToWaitToBuildNipostChallenge(untilRoundStart, gracePeriod time.Duration) time.Duration {
+	jitter := randomDurationInRange(time.Duration(0), gracePeriod*maxNipostChallengeBuildJitter/100.0)
+	return untilRoundStart + jitter - gracePeriod
 }

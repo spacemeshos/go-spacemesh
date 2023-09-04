@@ -321,6 +321,10 @@ func (h *Hare) onTick(ctx context.Context, lid types.LayerID) (bool, error) {
 		h.With().Debug("hare exiting", log.Context(ctx), lid)
 		return false, nil
 	}
+	if h.config.Disable != 0 && lid >= h.config.Disable {
+		h.With().Debug("hare is disabled at this layer", log.Context(ctx), lid)
+		return false, nil
+	}
 
 	h.setLastLayer(lid)
 
@@ -389,7 +393,7 @@ func (h *Hare) onTick(ctx context.Context, lid types.LayerID) (bool, error) {
 		report: h.outputChan,
 		wc:     h.wcChan,
 	}
-	props := goodProposals(ctx, h.Log, h.msh, h.nodeID, lid, beacon, h.layerClock.LayerToTime(lid.GetEpoch().FirstLayer()), h.config.WakeupDelta)
+	props := goodProposals(ctx, h.Log, h.msh, h.nodeID, lid, types.LayerID(h.config.StopAtxGrading), beacon, h.layerClock.LayerToTime(lid.GetEpoch().FirstLayer()), h.config.WakeupDelta)
 	preNumProposals.Add(float64(len(props)))
 	set := NewSet(props)
 	cp := h.factory(ctx, h.config, lid, set, h.rolacle, et, h.sign, h.publisher, comm, clock)
@@ -452,7 +456,7 @@ func goodProposals(
 	logger log.Log,
 	msh mesh,
 	nodeID types.NodeID,
-	lid types.LayerID,
+	lid, stopGrading types.LayerID,
 	epochBeacon types.Beacon,
 	epochStart time.Time,
 	networkDelay time.Duration,
@@ -560,22 +564,24 @@ func goodProposals(
 			)
 			return []types.ProposalID{}
 		}
-		if evil, err := gradeActiveSet(cache, activeSet, msh, epochStart, networkDelay); err != nil {
-			logger.With().Error("failed to grade active set",
-				log.Context(ctx),
-				lid,
-				p.ID(),
-				log.Err(err),
-			)
-			return []types.ProposalID{}
-		} else if evil != types.EmptyATXID {
-			logger.With().Warning("proposal has grade 0 active set",
-				log.Context(ctx),
-				lid,
-				p.ID(),
-				log.Stringer("evil atx", evil),
-			)
-			continue
+		if lid < stopGrading {
+			if evil, err := gradeActiveSet(cache, activeSet, msh, epochStart, networkDelay); err != nil {
+				logger.With().Error("failed to grade active set",
+					log.Context(ctx),
+					lid,
+					p.ID(),
+					log.Err(err),
+				)
+				return []types.ProposalID{}
+			} else if evil != types.EmptyATXID {
+				logger.With().Warning("proposal has grade 0 active set",
+					log.Context(ctx),
+					lid,
+					p.ID(),
+					log.Stringer("evil atx", evil),
+				)
+				continue
+			}
 		}
 
 		if beacon == epochBeacon {
@@ -600,7 +606,7 @@ func gradeActiveSet(cache map[types.ATXID]miner.AtxGrade, activeSet []types.ATXI
 		} else {
 			hdr, err := msh.GetAtxHeader(id)
 			if err != nil {
-				return types.EmptyATXID, fmt.Errorf("get header %v: %s", id, err)
+				return types.EmptyATXID, fmt.Errorf("get header %v: %w", id, err)
 			}
 			grade, err = miner.GradeAtx(msh, hdr.NodeID, hdr.Received, epochStart, networkDelay)
 			if err != nil {

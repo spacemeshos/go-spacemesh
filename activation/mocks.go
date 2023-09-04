@@ -342,13 +342,12 @@ func (m *MocknipostBuilder) EXPECT() *MocknipostBuilderMockRecorder {
 }
 
 // BuildNIPost mocks base method.
-func (m *MocknipostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPostChallenge) (*types.NIPost, time.Duration, error) {
+func (m *MocknipostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPostChallenge) (*types.NIPost, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "BuildNIPost", ctx, challenge)
 	ret0, _ := ret[0].(*types.NIPost)
-	ret1, _ := ret[1].(time.Duration)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // BuildNIPost indicates an expected call of BuildNIPost.

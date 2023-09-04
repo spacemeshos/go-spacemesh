@@ -60,14 +60,20 @@ type cachedActiveSet struct {
 
 // Oracle is the hare eligibility oracle.
 type Oracle struct {
-	lock           sync.Mutex
+	mu           sync.Mutex
+	activesCache activeSetCache
+	fallback     map[types.EpochID][]types.ATXID
+	sync         system.SyncStateProvider
+	// NOTE(dshulyak) on switch from synced to not synced reset the cache
+	// to cope with https://github.com/spacemeshos/go-spacemesh/issues/4552
+	// until graded oracle is implemented
+	synced bool
+
 	beacons        system.BeaconGetter
 	cdb            *datastore.CachedDB
 	vrfSigner      *signing.VRFSigner
 	vrfVerifier    vrfVerifier
 	layersPerEpoch uint32
-	activesCache   activeSetCache
-	fallback       map[types.EpochID][]types.ATXID
 	cfg            config.Config
 	log.Log
 }
@@ -108,6 +114,27 @@ type VrfMessage struct {
 	Beacon types.Beacon
 	Round  uint32
 	Layer  types.LayerID
+}
+
+func (o *Oracle) SetSync(sync system.SyncStateProvider) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.sync = sync
+}
+
+func (o *Oracle) resetCacheOnSynced(ctx context.Context) {
+	if o.sync == nil {
+		return
+	}
+	synced := o.synced
+	o.synced = o.sync.IsSynced(ctx)
+	if !synced && o.synced {
+		ac, err := lru.New[types.EpochID, *cachedActiveSet](activesCacheSize)
+		if err != nil {
+			o.Log.With().Fatal("failed to create lru cache for active set", log.Err(err))
+		}
+		o.activesCache = ac
+	}
 }
 
 // buildVRFMessage builds the VRF message used as input for the BLS (msg=Beacon##Layer##Round).
@@ -341,8 +368,9 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (*cache
 		log.Stringer("target_epoch", targetEpoch),
 	)
 
-	o.lock.Lock()
-	defer o.lock.Unlock()
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.resetCacheOnSynced(ctx)
 	if value, exists := o.activesCache.Get(targetEpoch); exists {
 		return value, nil
 	}
@@ -461,14 +489,9 @@ func (o *Oracle) UpdateActiveSet(epoch types.EpochID, activeSet []types.ATXID) {
 	o.Log.With().Info("received activeset update",
 		epoch,
 		log.Int("size", len(activeSet)),
-		log.Array("activeset", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-			for _, atxid := range activeSet {
-				encoder.AppendString(atxid.String())
-			}
-			return nil
-		})))
-	o.lock.Lock()
-	defer o.lock.Unlock()
+	)
+	o.mu.Lock()
+	defer o.mu.Unlock()
 	if _, ok := o.fallback[epoch]; ok {
 		o.Log.With().Debug("fallback active set already exists", epoch)
 		return

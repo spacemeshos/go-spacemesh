@@ -1,6 +1,7 @@
 package presets
 
 import (
+	"math"
 	"math/big"
 	"time"
 
@@ -22,12 +23,24 @@ func fastnet() config.Config {
 	types.SetNetworkHRP(conf.NetworkHRP) // set to generate coinbase
 	conf.BaseConfig.OptFilterThreshold = 90
 
+	// set for systest TestEquivocation
+	conf.BaseConfig.MinerGoodAtxsPercent = 50
+
+	conf.HARE.Disable = 1 // non-zero low layer will prevent hare1 from running
 	conf.HARE.N = 800
 	conf.HARE.ExpectedLeaders = 10
 	conf.HARE.LimitConcurrent = 5
 	conf.HARE.LimitIterations = 3
 	conf.HARE.RoundDuration = 2 * time.Second
 	conf.HARE.WakeupDelta = 3 * time.Second
+
+	conf.HARE3.Enable = true
+	conf.HARE3.DisableLayer = types.LayerID(math.MaxUint32)
+	conf.HARE3.Committee = 800
+	conf.HARE3.Leaders = 10
+	conf.HARE3.PreroundDelay = 3 * time.Second
+	conf.HARE3.RoundDuration = 500 * time.Millisecond
+	conf.HARE3.IterationsLimit = 2
 
 	conf.P2P.MinPeers = 10
 
@@ -39,6 +52,7 @@ func fastnet() config.Config {
 	conf.LayerAvgSize = 50
 	conf.LayerDuration = 15 * time.Second
 	conf.Sync.Interval = 5 * time.Second
+	conf.Sync.GossipDuration = 10 * time.Second
 	conf.LayersPerEpoch = 4
 
 	conf.Tortoise.Hdist = 4
@@ -56,7 +70,7 @@ func fastnet() config.Config {
 
 	conf.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte("1")).String()
 	conf.SMESHING.Start = false
-	conf.SMESHING.Opts.ProviderID = int(initialization.CPUProviderID())
+	conf.SMESHING.Opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
 	conf.SMESHING.Opts.NumUnits = 2
 	conf.SMESHING.Opts.Throttle = true
 	// Override proof of work flags to use light mode (less memory intensive)
@@ -72,6 +86,10 @@ func fastnet() config.Config {
 	conf.Beacon.RoundsNumber = 4
 	conf.Beacon.BeaconSyncWeightUnits = 10
 	conf.Beacon.VotesLimit = 100
+
+	conf.POET.GracePeriod = 10 * time.Second
+	conf.POET.CycleGap = 30 * time.Second
+	conf.POET.PhaseShift = 30 * time.Second
 
 	return conf
 }

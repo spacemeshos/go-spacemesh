@@ -63,6 +63,9 @@ func withCustomHttpClient(client *http.Client) PoetClientOpts {
 
 // NewHTTPPoetClient returns new instance of HTTPPoetClient connecting to the specified url.
 func NewHTTPPoetClient(baseUrl string, cfg PoetConfig, opts ...PoetClientOpts) (*HTTPPoetClient, error) {
+	// TODO(brozansk): Take a logger and use it instead of global logger
+	log.With().Info("creating poet client", log.String("url", baseUrl), log.Int("max_retries", cfg.MaxRequestRetries), log.Stringer("retry_delay", cfg.RequestRetryDelay))
+
 	client := &retryablehttp.Client{
 		RetryMax:     cfg.MaxRequestRetries,
 		RetryWaitMin: cfg.RequestRetryDelay,
@@ -88,10 +91,6 @@ func NewHTTPPoetClient(baseUrl string, cfg PoetConfig, opts ...PoetClientOpts) (
 	}
 
 	return poetClient, nil
-}
-
-func (c *HTTPPoetClient) Address() string {
-	return c.baseURL.String()
 }
 
 func (c *HTTPPoetClient) PowParams(ctx context.Context) (*PoetPowParams, error) {

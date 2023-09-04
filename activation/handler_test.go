@@ -934,7 +934,7 @@ func TestHandler_AwaitAtx(t *testing.T) {
 	r.Len(atxHdlr.atxChannels, 0) // last unsubscribe clears the channel
 }
 
-func TestHandler_HandleAtxData(t *testing.T) {
+func TestHandler_HandleSyncedAtx(t *testing.T) {
 	// Arrange
 	goldenATXID := types.ATXID{2, 3, 4}
 
@@ -953,7 +953,7 @@ func TestHandler_HandleAtxData(t *testing.T) {
 		require.NoError(t, err)
 
 		atxHdlr.mclock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now())
-		require.EqualError(t, atxHdlr.HandleAtxData(context.Background(), p2p.NoPeer, buf), fmt.Sprintf("nil nipst in gossip for atx %v", atx.ID()))
+		require.EqualError(t, atxHdlr.HandleSyncedAtx(context.Background(), atx.ID().Hash32(), p2p.NoPeer, buf), fmt.Sprintf("nil nipst in gossip for atx %v", atx.ID()))
 	})
 
 	t.Run("known atx is ignored by handleAtxData", func(t *testing.T) {
@@ -971,7 +971,7 @@ func TestHandler_HandleAtxData(t *testing.T) {
 		require.NoError(t, err)
 
 		atxHdlr.mclock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now())
-		require.NoError(t, atxHdlr.HandleAtxData(context.Background(), p2p.NoPeer, buf))
+		require.NoError(t, atxHdlr.HandleSyncedAtx(context.Background(), atx.ID().Hash32(), p2p.NoPeer, buf))
 
 		atxHdlr.mclock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now())
 		require.Error(t, atxHdlr.HandleGossipAtx(context.Background(), "", buf))
@@ -988,7 +988,7 @@ func TestHandler_HandleAtxData(t *testing.T) {
 		require.NoError(t, err)
 
 		atxHdlr.mclock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now())
-		require.ErrorContains(t, atxHdlr.HandleAtxData(context.Background(), p2p.NoPeer, buf), "failed to verify atx signature")
+		require.ErrorContains(t, atxHdlr.HandleSyncedAtx(context.Background(), atx.ID().Hash32(), p2p.NoPeer, buf), "failed to verify atx signature")
 	})
 }
 
@@ -1191,7 +1191,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 	atxHdlr.mValidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
 	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
-	require.NoError(t, atxHdlr.HandleAtxData(context.Background(), peer, buf))
+	require.NoError(t, atxHdlr.HandleSyncedAtx(context.Background(), atx1.ID().Hash32(), peer, buf))
 
 	stored1, err := atxHdlr.cdb.GetAtxHeader(atx1.ID())
 	require.NoError(t, err)
@@ -1234,7 +1234,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 	atxHdlr.mValidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
 	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
-	require.NoError(t, atxHdlr.HandleAtxData(context.Background(), peer, buf))
+	require.NoError(t, atxHdlr.HandleSyncedAtx(context.Background(), atx2.ID().Hash32(), peer, buf))
 
 	stored2, err := atxHdlr.cdb.GetAtxHeader(atx2.ID())
 	require.NoError(t, err)
@@ -1242,4 +1242,52 @@ func TestHandler_AtxWeight(t *testing.T) {
 	require.Equal(t, leaves/tickSize, stored2.TickCount)
 	require.Equal(t, stored1.TickHeight()+leaves/tickSize, stored2.TickHeight())
 	require.Equal(t, int(leaves/tickSize)*units, int(stored2.GetWeight()))
+}
+
+func TestHandler_WrongHash(t *testing.T) {
+	goldenATXID := types.ATXID{2, 3, 4}
+	atxHdlr := newTestHandler(t, goldenATXID)
+	currentLayer := types.LayerID(100)
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	nonce := types.VRFPostIndex(1)
+	nodeId := sig.NodeID()
+	atx := &types.ActivationTx{
+		InnerActivationTx: types.InnerActivationTx{
+			NIPostChallenge: types.NIPostChallenge{
+				PositioningATX: goldenATXID,
+				InitialPost:    &types.Post{Indices: []byte{1}},
+				PublishEpoch:   1,
+				CommitmentATX:  &goldenATXID,
+			},
+			NumUnits: 3,
+			NIPost: &types.NIPost{
+				Post:         &types.Post{},
+				PostMetadata: &types.PostMetadata{},
+			},
+			VRFNonce: &nonce,
+			NodeID:   &nodeId,
+		},
+	}
+	require.NoError(t, SignAndFinalizeAtx(sig, atx))
+
+	buf, err := codec.Encode(atx)
+	require.NoError(t, err)
+
+	peer := p2p.Peer("buddy")
+	proofRef := atx.GetPoetProofRef()
+	atxHdlr.mclock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now())
+	atxHdlr.mclock.EXPECT().CurrentLayer().Return(currentLayer)
+	atxHdlr.mockFetch.EXPECT().RegisterPeerHashes(peer, []types.Hash32{proofRef})
+	atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), proofRef)
+	atxHdlr.mValidator.EXPECT().VRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+	atxHdlr.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+	atxHdlr.mValidator.EXPECT().NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint64(111), nil)
+	atxHdlr.mValidator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+	atxHdlr.mValidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+	err = atxHdlr.HandleSyncedAtx(context.Background(), types.RandomHash(), peer, buf)
+	require.ErrorIs(t, err, errWrongHash)
+	require.ErrorIs(t, err, pubsub.ErrValidationReject)
 }

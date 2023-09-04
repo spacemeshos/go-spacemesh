@@ -131,14 +131,44 @@ func TestHareOutput(t *testing.T) {
 	require.Equal(t, types.EmptyBlockID, ho)
 }
 
+func TestCertifiedBlock(t *testing.T) {
+	db := sql.InMemory()
+
+	lyrBlocks := map[types.LayerID]types.BlockID{
+		types.LayerID(layersPerEpoch - 1):   {1},                // epoch 0
+		types.LayerID(layersPerEpoch):       types.EmptyBlockID, // 1st layer of epoch 1
+		types.LayerID(layersPerEpoch + 1):   {2},                // 2nd layer of epoch 1
+		types.LayerID(layersPerEpoch + 2):   {3},                // 3d layer of epoch 1
+		types.LayerID(2*layersPerEpoch - 1): {4},                // last layer of epoch 1
+		// epoch 2 has no hare output
+		types.LayerID(3 * layersPerEpoch): {5}, // first layer of epoch 3
+		// epoch 4 has hare output but no cert
+	}
+	for lid, bid := range lyrBlocks {
+		require.NoError(t, Add(db, lid, &types.Certificate{
+			BlockID: bid,
+		}))
+	}
+	for lid, bid := range lyrBlocks {
+		got, err := CertifiedBlock(db, lid)
+		require.NoError(t, err)
+		require.Equal(t, bid, got)
+	}
+
+	got, err := CertifiedBlock(db, types.LayerID(5*layersPerEpoch))
+	require.ErrorIs(t, err, sql.ErrNotFound)
+	require.Equal(t, types.EmptyBlockID, got)
+}
+
 func TestFirstInEpoch(t *testing.T) {
 	db := sql.InMemory()
 
 	lyrBlocks := map[types.LayerID]types.BlockID{
-		types.LayerID(layersPerEpoch - 1):   {1}, // epoch 0
-		types.LayerID(layersPerEpoch + 1):   {2}, // 2nd layer of epoch 1
-		types.LayerID(layersPerEpoch + 2):   {3}, // 3d layer of epoch 1
-		types.LayerID(2*layersPerEpoch - 1): {4}, // last layer of epoch 1
+		types.LayerID(layersPerEpoch - 1):   {1},                // epoch 0
+		types.LayerID(layersPerEpoch):       types.EmptyBlockID, // 1st layer of epoch 1
+		types.LayerID(layersPerEpoch + 1):   {2},                // 2nd layer of epoch 1
+		types.LayerID(layersPerEpoch + 2):   {3},                // 3d layer of epoch 1
+		types.LayerID(2*layersPerEpoch - 1): {4},                // last layer of epoch 1
 		// epoch 2 has no hare output
 		types.LayerID(3 * layersPerEpoch): {5}, // first layer of epoch 3
 		// epoch 4 has hare output but no cert

@@ -11,6 +11,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 	p2pmetrics "github.com/spacemeshos/go-spacemesh/p2p/metrics"
@@ -118,8 +119,12 @@ type Publisher interface {
 
 // Subscriber is an interface for subcribing to messages.
 type Subscriber interface {
-	Register(string, GossipHandler)
+	Register(string, GossipHandler, ...ValidatorOpt)
 }
+
+type ValidatorOpt = pubsub.ValidatorOpt
+
+var WithValidatorInline = pubsub.WithValidatorInline
 
 // PublishSubsciber common interface for publisher and subscribing.
 type PublishSubsciber interface {
@@ -129,6 +134,9 @@ type PublishSubsciber interface {
 
 // GossipHandler is a function that is for receiving p2p messages.
 type GossipHandler = func(context.Context, peer.ID, []byte) error
+
+// SyncHandler is a function that is for receiving synced data.
+type SyncHandler = func(context.Context, types.Hash32, peer.ID, []byte) error
 
 // ErrValidationReject is returned by a GossipHandler to indicate that the
 // pubsub validation result is ValidationReject. ValidationAccept is indicated
@@ -148,11 +156,28 @@ func ChainGossipHandler(handlers ...GossipHandler) GossipHandler {
 	}
 }
 
-// DropPeerValidationReject wraps a gossip handler to provide a handler that drops a
+// DropPeerOnValidationReject wraps a gossip handler to provide a handler that drops a
 // peer if the wrapped handler returns ErrValidationReject.
 func DropPeerOnValidationReject(handler GossipHandler, h host.Host, logger log.Log) GossipHandler {
 	return func(ctx context.Context, peer peer.ID, data []byte) error {
 		err := handler(ctx, peer, data)
+		if errors.Is(err, ErrValidationReject) {
+			p2pmetrics.DroppedConnectionsValidationReject.Inc()
+			err := h.Network().ClosePeer(peer)
+			if err != nil {
+				logger.With().Debug("failed to close peer",
+					log.String("peer", peer.ShortString()),
+					log.Err(err),
+				)
+			}
+		}
+		return err
+	}
+}
+
+func DropPeerOnSyncValidationReject(handler SyncHandler, h host.Host, logger log.Log) SyncHandler {
+	return func(ctx context.Context, hash types.Hash32, peer peer.ID, data []byte) error {
+		err := handler(ctx, hash, peer, data)
 		if errors.Is(err, ErrValidationReject) {
 			p2pmetrics.DroppedConnectionsValidationReject.Inc()
 			err := h.Network().ClosePeer(peer)

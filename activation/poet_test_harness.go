@@ -44,7 +44,7 @@ func WithCycleGap(gap time.Duration) HTTPPoetOpt {
 }
 
 // NewHTTPPoetTestHarness returns a new instance of HTTPPoetHarness.
-func NewHTTPPoetTestHarness(ctx context.Context, poetdir string, opts ...HTTPPoetOpt) (*HTTPPoetTestHarness, error) {
+func NewHTTPPoetTestHarness(ctx context.Context, poetdir string, clientCfg PoetConfig, opts ...HTTPPoetOpt) (*HTTPPoetTestHarness, error) {
 	cfg := config.DefaultConfig()
 	cfg.PoetDir = poetdir
 	cfg.RawRESTListener = "localhost:0"
@@ -70,7 +70,7 @@ func NewHTTPPoetTestHarness(ctx context.Context, poetdir string, opts ...HTTPPoe
 		Host:   poet.GrpcRestProxyAddr().String(),
 	}
 
-	client, err := NewHTTPPoetClient(url.String(), DefaultPoetConfig())
+	client, err := NewHTTPPoetClient(url.String(), clientCfg)
 	if err != nil {
 		return nil, err
 	}

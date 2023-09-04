@@ -335,11 +335,6 @@ func TestHare_onTick(t *testing.T) {
 	}
 	for _, p := range pList {
 		mockMesh.EXPECT().GetAtxHeader(p.AtxID).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1, NodeID: p.SmesherID}, nil)
-		for _, id := range p.ActiveSet {
-			nodeID := types.RandomNodeID()
-			mockMesh.EXPECT().GetAtxHeader(id).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1, NodeID: nodeID}, nil)
-			mockMesh.EXPECT().GetMalfeasanceProof(nodeID)
-		}
 	}
 	mockMesh.EXPECT().GetEpochAtx(lyrID.GetEpoch()-1, h.nodeID).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil)
 	mockMesh.EXPECT().Proposals(lyrID).Return(pList, nil)
@@ -417,13 +412,6 @@ func TestHare_onTick_notMining(t *testing.T) {
 		randomProposal(lyrID, beacon),
 		randomProposal(lyrID, beacon),
 		randomProposal(lyrID, beacon),
-	}
-	for _, p := range pList {
-		for _, id := range p.ActiveSet {
-			nodeID := types.RandomNodeID()
-			mockMesh.EXPECT().GetAtxHeader(id).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1, NodeID: nodeID}, nil)
-			mockMesh.EXPECT().GetMalfeasanceProof(nodeID)
-		}
 	}
 	mockMesh.EXPECT().GetEpochAtx(lyrID.GetEpoch()-1, h.nodeID).Return(nil, sql.ErrNotFound)
 	mockMesh.EXPECT().Proposals(lyrID).Return(pList, nil)
@@ -609,7 +597,7 @@ func TestHare_goodProposals(t *testing.T) {
 			for _, i := range tc.expected {
 				expected = append(expected, pList[i].ID())
 			}
-			got := goodProposals(context.Background(), logtest.New(t), mockMesh, nodeID, lyrID, nodeBeacon, time.Now(), time.Second)
+			got := goodProposals(context.Background(), logtest.New(t), mockMesh, nodeID, lyrID, types.LayerID(0), nodeBeacon, time.Now(), time.Second)
 			require.ElementsMatch(t, expected, got)
 		})
 	}
@@ -689,7 +677,7 @@ func TestHare_goodProposals_gradedAtxs(t *testing.T) {
 	nodeID := types.NodeID{1, 2, 3}
 	mockMesh.EXPECT().GetEpochAtx(lyrID.GetEpoch()-1, nodeID).Return(&types.ActivationTxHeader{BaseTickHeight: tickHeight, TickCount: 1}, nil)
 	mockMesh.EXPECT().Proposals(lyrID).Return(pList, nil)
-	got := goodProposals(context.Background(), logtest.New(t), mockMesh, nodeID, lyrID, beacon, epochStart, delay)
+	got := goodProposals(context.Background(), logtest.New(t), mockMesh, nodeID, lyrID, lyrID+1, beacon, epochStart, delay)
 	require.ElementsMatch(t, types.ToProposalIDs(pList[:5]), got)
 }
 

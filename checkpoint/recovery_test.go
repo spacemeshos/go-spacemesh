@@ -262,7 +262,7 @@ func validateAndPreserveData(tb testing.TB, db *sql.Database, deps []*types.Veri
 		mvalidator.EXPECT().NIPost(gomock.Any(), vatx.PublishEpoch, vatx.SmesherID, gomock.Any(), vatx.NIPost, gomock.Any(), vatx.NumUnits).Return(uint64(1111111), nil)
 		mreceiver.EXPECT().OnAtx(gomock.Any())
 		mtrtl.EXPECT().OnAtx(gomock.Any())
-		require.NoError(tb, atxHandler.HandleAtxData(context.Background(), "self", encoded))
+		require.NoError(tb, atxHandler.HandleSyncedAtx(context.Background(), vatx.ID().Hash32(), "self", encoded))
 		err = poetDb.ValidateAndStore(context.Background(), proofs[i])
 		require.ErrorContains(tb, err, "failed to validate poet proof for poetID 706f65745f round 1337")
 	}
