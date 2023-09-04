@@ -733,12 +733,11 @@ func (mr *MockSmeshingProviderMockRecorder) Coinbase() *gomock.Call {
 }
 
 // RegossipAtxs mocks base method.
-func (m *MockSmeshingProvider) RegossipAtxs(arg0 context.Context, arg1 types.EpochID) (int, error) {
+func (m *MockSmeshingProvider) RegossipAtxs(arg0 context.Context, arg1 types.EpochID) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "RegossipAtxs", arg0, arg1)
-	ret0, _ := ret[0].(int)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // RegossipAtxs indicates an expected call of RegossipAtxs.

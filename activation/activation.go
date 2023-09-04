@@ -179,24 +179,20 @@ func (b *Builder) Smeshing() bool {
 	return b.started.Load()
 }
 
-func (b *Builder) RegossipAtxs(ctx context.Context, epoch types.EpochID) (int, error) {
-	ids, err := atxs.GetIDsByEpoch(b.cdb, epoch)
+func (b *Builder) RegossipAtxs(ctx context.Context, epoch types.EpochID) error {
+	verified, err := atxs.GetByEpochAndNodeID(b.cdb, epoch, b.signer.NodeID())
 	if err != nil {
-		return 0, err
+		return err
 	}
-	n := 0
-	for _, id := range ids {
-		blob, err := atxs.GetBlob(b.cdb, id[:])
-		if err != nil {
-			return 0, err
-		}
-		if err := b.publisher.Publish(ctx, pubsub.AtxProtocol, blob); err != nil {
-			b.log.Error("unexpected error to publish", log.Stringer("id", id), log.Err(err))
-		} else {
-			n++
-		}
+	blob, err := atxs.GetBlob(b.cdb, verified.ID().Bytes())
+	if err != nil {
+		return err
 	}
-	return n, nil
+	if err := b.publisher.Publish(ctx, pubsub.AtxProtocol, blob); err != nil {
+		b.log.Error("unexpected error to publish", log.Stringer("id", verified.ID()), log.Err(err))
+	}
+	b.log.Info("gossiped atx", log.Stringer("id", verified.ID()))
+	return nil
 }
 
 // StartSmeshing is the main entry point of the atx builder. It runs the main

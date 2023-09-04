@@ -282,9 +282,9 @@ func (s SmesherService) UpdatePoetServers(ctx context.Context, req *pb.UpdatePoe
 }
 
 func (s SmesherService) RegossipAtxs(ctx context.Context, req *pb.RegossipAtxsRequest) (*pb.RegossipAtxsResponse, error) {
-	n, err := s.smeshingProvider.RegossipAtxs(ctx, types.EpochID(req.Epoch))
+	err := s.smeshingProvider.RegossipAtxs(ctx, types.EpochID(req.Epoch))
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to regossip: "+err.Error())
 	}
-	return &pb.RegossipAtxsResponse{Count: uint32(n)}, nil
+	return &pb.RegossipAtxsResponse{}, nil
 }
