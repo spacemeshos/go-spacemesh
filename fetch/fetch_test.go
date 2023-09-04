@@ -37,6 +37,7 @@ type testFetch struct {
 	mMalH        *mocks.MockSyncValidator
 	mAtxH        *mocks.MockSyncValidator
 	mBallotH     *mocks.MockSyncValidator
+	mActiveSetH  *mocks.MockSyncValidator
 	mBlocksH     *mocks.MockSyncValidator
 	mProposalH   *mocks.MockSyncValidator
 	method       int
@@ -59,6 +60,7 @@ func createFetch(tb testing.TB) *testFetch {
 		mMalH:        mocks.NewMockSyncValidator(ctrl),
 		mAtxH:        mocks.NewMockSyncValidator(ctrl),
 		mBallotH:     mocks.NewMockSyncValidator(ctrl),
+		mActiveSetH:  mocks.NewMockSyncValidator(ctrl),
 		mBlocksH:     mocks.NewMockSyncValidator(ctrl),
 		mProposalH:   mocks.NewMockSyncValidator(ctrl),
 		mTxBlocksH:   mocks.NewMockSyncValidator(ctrl),
@@ -89,7 +91,7 @@ func createFetch(tb testing.TB) *testFetch {
 			OpnProtocol:      tf.mOpn2S,
 		}),
 		withHost(tf.mh))
-	tf.Fetch.SetValidators(tf.mAtxH, tf.mPoetH, tf.mBallotH, tf.mBlocksH, tf.mProposalH, tf.mTxBlocksH, tf.mTxProposalH, tf.mMalH)
+	tf.Fetch.SetValidators(tf.mAtxH, tf.mPoetH, tf.mBallotH, tf.mAtxH, tf.mBlocksH, tf.mProposalH, tf.mTxBlocksH, tf.mTxProposalH, tf.mMalH)
 	return tf
 }
 
@@ -415,7 +417,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 
 	// We set a validatior just for atxs, this validator does not drop connections
 	vf := ValidatorFunc(func(context.Context, types.Hash32, peer.ID, []byte) error { return pubsub.ErrValidationReject })
-	fetcher.SetValidators(vf, nil, nil, nil, nil, nil, nil, nil)
+	fetcher.SetValidators(vf, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	// Request an atx by hash
 	_, err = fetcher.getHash(ctx, types.Hash32{}, datastore.ATXDB, fetcher.validators.atx.HandleMessage)
@@ -430,7 +432,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	}
 
 	// Now wrap the atx validator with  DropPeerOnValidationReject and set it again
-	fetcher.SetValidators(ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(vf, h, lg)), nil, nil, nil, nil, nil, nil, nil)
+	fetcher.SetValidators(ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(vf, h, lg)), nil, nil, nil, nil, nil, nil, nil, nil)
 
 	// Request an atx by hash
 	_, err = fetcher.getHash(ctx, types.Hash32{}, datastore.ATXDB, fetcher.validators.atx.HandleMessage)

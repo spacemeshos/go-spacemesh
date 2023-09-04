@@ -36,6 +36,20 @@ func (m *MockFetcher) EXPECT() *MockFetcherMockRecorder {
 	return m.recorder
 }
 
+// GetActiveSet mocks base method.
+func (m *MockFetcher) GetActiveSet(arg0 context.Context, arg1 types.Hash32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetActiveSet", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GetActiveSet indicates an expected call of GetActiveSet.
+func (mr *MockFetcherMockRecorder) GetActiveSet(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetActiveSet", reflect.TypeOf((*MockFetcher)(nil).GetActiveSet), arg0, arg1)
+}
+
 // GetAtxs mocks base method.
 func (m *MockFetcher) GetAtxs(arg0 context.Context, arg1 []types.ATXID) error {
 	m.ctrl.T.Helper()
@@ -380,6 +394,43 @@ func (m *MockProposalFetcher) GetProposals(arg0 context.Context, arg1 []types.Pr
 func (mr *MockProposalFetcherMockRecorder) GetProposals(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposals", reflect.TypeOf((*MockProposalFetcher)(nil).GetProposals), arg0, arg1)
+}
+
+// MockActiveSetFetcher is a mock of ActiveSetFetcher interface.
+type MockActiveSetFetcher struct {
+	ctrl     *gomock.Controller
+	recorder *MockActiveSetFetcherMockRecorder
+}
+
+// MockActiveSetFetcherMockRecorder is the mock recorder for MockActiveSetFetcher.
+type MockActiveSetFetcherMockRecorder struct {
+	mock *MockActiveSetFetcher
+}
+
+// NewMockActiveSetFetcher creates a new mock instance.
+func NewMockActiveSetFetcher(ctrl *gomock.Controller) *MockActiveSetFetcher {
+	mock := &MockActiveSetFetcher{ctrl: ctrl}
+	mock.recorder = &MockActiveSetFetcherMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockActiveSetFetcher) EXPECT() *MockActiveSetFetcherMockRecorder {
+	return m.recorder
+}
+
+// GetActiveSet mocks base method.
+func (m *MockActiveSetFetcher) GetActiveSet(arg0 context.Context, arg1 types.Hash32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetActiveSet", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GetActiveSet indicates an expected call of GetActiveSet.
+func (mr *MockActiveSetFetcherMockRecorder) GetActiveSet(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetActiveSet", reflect.TypeOf((*MockActiveSetFetcher)(nil).GetActiveSet), arg0, arg1)
 }
 
 // MockPeerTracker is a mock of PeerTracker interface.

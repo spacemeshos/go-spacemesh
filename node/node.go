@@ -888,6 +888,7 @@ func (app *App) initServices(ctx context.Context) error {
 		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(atxHandler.HandleSyncedAtx, app.host, lg)),
 		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(poetDb.ValidateAndStoreMsg, app.host, lg)),
 		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(proposalListener.HandleSyncedBallot, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(proposalListener.HandleActiveSet, app.host, lg)),
 		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(blockHandler.HandleSyncedBlock, app.host, lg)),
 		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(proposalListener.HandleSyncedProposal, app.host, lg)),
 		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(app.txHandler.HandleBlockTransaction, app.host, lg)),

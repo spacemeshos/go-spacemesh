@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
@@ -178,6 +179,30 @@ func (h *Handler) HandleSyncedBallot(ctx context.Context, expHash types.Hash32, 
 		return err
 	}
 	return nil
+}
+
+func (h *Handler) HandleActiveSet(ctx context.Context, id types.Hash32, peer p2p.Peer, data []byte) error {
+	var set types.EpochActiveSet
+	if err := codec.Decode(data, &set); err != nil {
+		return fmt.Errorf("%w: malformed active set %s", pubsub.ErrValidationReject, err.Error())
+	}
+	return h.handleSet(ctx, id, set)
+}
+
+func (h *Handler) handleSet(ctx context.Context, id types.Hash32, set types.EpochActiveSet) error {
+	for i := 0; i < len(set.Set)-1; i++ {
+		if bytes.Compare(set.Set[i].Bytes(), set.Set[i+1].Bytes()) >= 0 {
+			return fmt.Errorf("%w: active set is not sorted", pubsub.ErrValidationReject)
+		}
+	}
+	if id != types.ATXIDList(set.Set).Hash() {
+		return fmt.Errorf("%w: response for wrong hash %s", pubsub.ErrValidationReject, id)
+	}
+	// active set is invalid unless all activations that it references are from the correct epoch
+	if err := h.fetcher.GetAtxs(ctx, h.tortoise.GetMissingActiveSet(set.Epoch, set.Set)); err != nil {
+		return err
+	}
+	return activesets.Add(h.cdb, id, &set)
 }
 
 // collectHashes gathers all hashes in a proposal or ballot.
@@ -373,7 +398,7 @@ func (h *Handler) processBallot(ctx context.Context, logger log.Log, b *types.Ba
 
 func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, logger log.Log, b *types.Ballot) (*tortoise.DecodedBallot, error) {
 	t0 := time.Now()
-	if err := h.checkBallotDataIntegrity(b); err != nil {
+	if err := h.checkBallotDataIntegrity(ctx, b); err != nil {
 		badData.Inc()
 		return nil, err
 	}
@@ -418,7 +443,7 @@ func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, logger log.L
 	return decoded, nil
 }
 
-func (h *Handler) checkBallotDataIntegrity(b *types.Ballot) error {
+func (h *Handler) checkBallotDataIntegrity(ctx context.Context, b *types.Ballot) error {
 	if b.RefBallot == types.EmptyBallotID {
 		// this is the smesher's first Ballot in this epoch, should contain EpochData
 		if b.EpochData == nil {
@@ -427,17 +452,25 @@ func (h *Handler) checkBallotDataIntegrity(b *types.Ballot) error {
 		if b.EpochData.Beacon == types.EmptyBeacon {
 			return errMissingBeacon
 		}
-		if len(b.ActiveSet) == 0 {
-			return errEmptyActiveSet
-		}
-		for i := 0; i < len(b.ActiveSet)-1; i++ {
-			if bytes.Compare(b.ActiveSet[i].Bytes(), b.ActiveSet[i+1].Bytes()) >= 0 {
-				return errActiveSetNotSorted
+		if len(b.ActiveSet) != 0 {
+			if err := h.handleSet(ctx, b.EpochData.ActiveSetHash, types.EpochActiveSet{
+				Epoch: b.Layer.GetEpoch(),
+				Set:   b.ActiveSet,
+			}); err != nil && !errors.Is(err, sql.ErrObjectExists) {
+				return err
 			}
-		}
-		activeSetHash := types.ATXIDList(b.ActiveSet).Hash()
-		if activeSetHash != b.EpochData.ActiveSetHash {
-			return errBadActiveSetHash
+		} else {
+			if err := h.fetcher.GetActiveSet(ctx, b.EpochData.ActiveSetHash); err != nil {
+				return err
+			}
+			set, err := activesets.Get(h.cdb, b.EpochData.ActiveSetHash)
+			if err != nil {
+				return err
+			}
+			// NOTE(dshulyak) sidecar is stored for every ballot, so that
+			// nodes that won't update on time will be able to download it
+			// with sync
+			b.ActiveSet = set.Set
 		}
 	} else if b.EpochData != nil {
 		return errUnexpectedEpochData
@@ -502,17 +535,7 @@ func (h *Handler) checkBallotDataAvailability(ctx context.Context, b *types.Ball
 	if err := h.fetcher.GetBallots(ctx, blts); err != nil {
 		return fmt.Errorf("fetch ballots: %w", err)
 	}
-	if err := h.fetchReferencedATXs(ctx, b); err != nil {
-		return fmt.Errorf("fetch referenced ATXs: %w", err)
-	}
-	return nil
-}
-
-func (h *Handler) fetchReferencedATXs(ctx context.Context, b *types.Ballot) error {
 	atxs := []types.ATXID{b.AtxID}
-	if b.EpochData != nil {
-		atxs = append(atxs, b.ActiveSet...)
-	}
 	if err := h.fetcher.GetAtxs(ctx, h.tortoise.GetMissingActiveSet(b.Layer.GetEpoch(), atxs)); err != nil {
 		return fmt.Errorf("proposal get ATXs: %w", err)
 	}

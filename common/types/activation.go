@@ -492,3 +492,8 @@ func ATXIDsToHashes(ids []ATXID) []Hash32 {
 	}
 	return hashes
 }
+
+type EpochActiveSet struct {
+	Epoch EpochID
+	Set   []ATXID `scale:"max=1000000"`
+}
