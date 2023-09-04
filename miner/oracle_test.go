@@ -300,57 +300,77 @@ func TestOracle_MinimalActiveSetWeight(t *testing.T) {
 }
 
 func TestOracle_ATXGrade(t *testing.T) {
-	avgLayerSize := uint32(50)
-	layersPerEpoch := uint32(10)
-	o := createTestOracle(t, avgLayerSize, layersPerEpoch, 0)
-	lid := types.LayerID(layersPerEpoch * 3)
-	epochStart := time.Now()
-	o.mClock.EXPECT().LayerToTime(lid).Return(epochStart)
+	for _, tc := range []struct {
+		desc         string
+		ownMalicious bool
+	}{
+		{
+			desc: "own atx is good",
+		},
+		{
+			desc:         "own atx is malicious",
+			ownMalicious: true,
+		},
+	} {
+		tc := tc
+		t.Run(tc.desc, func(t *testing.T) {
+			avgLayerSize := uint32(50)
+			layersPerEpoch := uint32(10)
+			o := createTestOracle(t, avgLayerSize, layersPerEpoch, 0)
+			lid := types.LayerID(layersPerEpoch * 3)
+			epochStart := time.Now()
+			o.mClock.EXPECT().LayerToTime(lid).Return(epochStart)
 
-	goodTime := epochStart.Add(-4*networkDelay - time.Nanosecond)
-	okTime := epochStart.Add(-3*networkDelay - time.Nanosecond)
-	evilTime := epochStart.Add(-3 * networkDelay)
-	publishLayer := (lid.GetEpoch() - 1).FirstLayer()
-	ownAtx := genMinerATX(t, o.cdb, types.RandomATXID(), publishLayer, o.edSigner, goodTime)
-	expected := []types.ATXID{ownAtx.ID()}
-	for i := 1; i < activeSetSize; i++ {
-		sig, err := signing.NewEdSigner()
-		require.NoError(t, err)
-		atx := genMinerATX(t, o.cdb, types.RandomATXID(), publishLayer, sig, goodTime)
-		expected = append(expected, atx.ID())
+			goodTime := epochStart.Add(-4*networkDelay - time.Nanosecond)
+			okTime := epochStart.Add(-3*networkDelay - time.Nanosecond)
+			evilTime := epochStart.Add(-3 * networkDelay)
+			publishLayer := (lid.GetEpoch() - 1).FirstLayer()
+			received := goodTime
+			if tc.ownMalicious {
+				received = evilTime
+			}
+			ownAtx := genMinerATX(t, o.cdb, types.RandomATXID(), publishLayer, o.edSigner, received)
+			expected := []types.ATXID{ownAtx.ID()}
+			for i := 1; i < activeSetSize; i++ {
+				sig, err := signing.NewEdSigner()
+				require.NoError(t, err)
+				atx := genMinerATX(t, o.cdb, types.RandomATXID(), publishLayer, sig, goodTime)
+				expected = append(expected, atx.ID())
+			}
+			// add some atx that have good timing, with malicious proof arriving before epoch start
+			for i := 0; i < activeSetSize; i++ {
+				sig, err := signing.NewEdSigner()
+				require.NoError(t, err)
+				atx := genMinerATX(t, o.cdb, types.RandomATXID(), publishLayer, sig, goodTime)
+				genMinerMalfeasance(t, o.cdb, sig.NodeID(), epochStart)
+				expected = append(expected, atx.ID())
+			}
+			// add some atx that have good timing, with malfeasance proof arriving after epoch start
+			for i := 0; i < activeSetSize; i++ {
+				sig, err := signing.NewEdSigner()
+				require.NoError(t, err)
+				genMinerATX(t, o.cdb, types.RandomATXID(), publishLayer, sig, goodTime)
+				genMinerMalfeasance(t, o.cdb, sig.NodeID(), epochStart.Add(-1*time.Nanosecond))
+			}
+			// add some atx that are acceptable
+			for i := 0; i < activeSetSize; i++ {
+				sig, err := signing.NewEdSigner()
+				require.NoError(t, err)
+				genMinerATX(t, o.cdb, types.RandomATXID(), publishLayer, sig, okTime)
+			}
+			// add some atx that are evil
+			for i := 0; i < activeSetSize; i++ {
+				sig, err := signing.NewEdSigner()
+				require.NoError(t, err)
+				genMinerATX(t, o.cdb, types.RandomATXID(), publishLayer, sig, evilTime)
+			}
+			ee, err := o.ProposalEligibility(lid, types.RandomBeacon(), types.VRFPostIndex(1))
+			require.NoError(t, err)
+			require.Equal(t, ownAtx.ID(), ee.Atx)
+			require.ElementsMatch(t, expected, ee.ActiveSet)
+			require.NotEmpty(t, ee.Proofs)
+		})
 	}
-	// add some atx that have good timing, with malicious proof arriving before epoch start
-	for i := 0; i < activeSetSize; i++ {
-		sig, err := signing.NewEdSigner()
-		require.NoError(t, err)
-		atx := genMinerATX(t, o.cdb, types.RandomATXID(), publishLayer, sig, goodTime)
-		genMinerMalfeasance(t, o.cdb, sig.NodeID(), epochStart)
-		expected = append(expected, atx.ID())
-	}
-	// add some atx that have good timing, with malfeasance proof arriving after epoch start
-	for i := 0; i < activeSetSize; i++ {
-		sig, err := signing.NewEdSigner()
-		require.NoError(t, err)
-		genMinerATX(t, o.cdb, types.RandomATXID(), publishLayer, sig, goodTime)
-		genMinerMalfeasance(t, o.cdb, sig.NodeID(), epochStart.Add(-1*time.Nanosecond))
-	}
-	// add some atx that are acceptable
-	for i := 0; i < activeSetSize; i++ {
-		sig, err := signing.NewEdSigner()
-		require.NoError(t, err)
-		genMinerATX(t, o.cdb, types.RandomATXID(), publishLayer, sig, okTime)
-	}
-	// add some atx that are evil
-	for i := 0; i < activeSetSize; i++ {
-		sig, err := signing.NewEdSigner()
-		require.NoError(t, err)
-		genMinerATX(t, o.cdb, types.RandomATXID(), publishLayer, sig, evilTime)
-	}
-	ee, err := o.ProposalEligibility(lid, types.RandomBeacon(), types.VRFPostIndex(1))
-	require.NoError(t, err)
-	require.Equal(t, ownAtx.ID(), ee.Atx)
-	require.ElementsMatch(t, expected, ee.ActiveSet)
-	require.NotEmpty(t, ee.Proofs)
 }
 
 func createBallots(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, numBallots int, common []types.ATXID) []*types.Ballot {
