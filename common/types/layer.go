@@ -248,15 +248,3 @@ func NewLayer(layerIndex LayerID) *Layer {
 		blocks:  make([]*Block, 0, 3),
 	}
 }
-
-// MinLayer returns minimal nonzero layer.
-func MinLayer(i, j LayerID) LayerID {
-	switch {
-	case i == 0:
-		return j
-	case j == 0:
-		return i
-	default:
-		return min(i, j)
-	}
-}

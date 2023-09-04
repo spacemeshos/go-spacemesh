@@ -70,6 +70,10 @@ func NewMesh(cdb *datastore.CachedDB, c layerClock, trtl system.Tortoise, exec *
 		conState:            state,
 		nextProcessedLayers: make(map[types.LayerID]struct{}),
 		missingBlocks:       make(chan []types.BlockID, 32),
+
+		pendingUpdates: struct {
+			min, max types.LayerID
+		}{min: math.MaxUint32},
 	}
 	msh.latestLayer.Store(types.LayerID(0))
 	msh.latestLayerInState.Store(types.LayerID(0))
@@ -289,13 +293,13 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, lid types.LayerID) error {
 		return err
 	}
 	results := msh.trtl.Updates()
-	pending := msh.pendingUpdates.min != 0
+	pending := msh.pendingUpdates.min != math.MaxUint32
 	if len(results) > 0 {
-		msh.pendingUpdates.min = types.MinLayer(msh.pendingUpdates.min, results[0].Layer)
+		msh.pendingUpdates.min = min(msh.pendingUpdates.min, results[0].Layer)
 		msh.pendingUpdates.max = max(msh.pendingUpdates.max, results[len(results)-1].Layer)
 	}
 	next := msh.LatestLayerInState() + 1
-	if next < msh.pendingUpdates.min {
+	if msh.pendingUpdates.min != math.MaxUint32 && next < msh.pendingUpdates.min {
 		msh.pendingUpdates.min = next
 		pending = true
 	}
@@ -340,7 +344,7 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, lid types.LayerID) error {
 		msh.pendingUpdates.min = applicable[len(applicable)-1].Layer
 		msh.pendingUpdates.max = max(msh.pendingUpdates.min, msh.pendingUpdates.max)
 	} else {
-		msh.pendingUpdates.min = 0
+		msh.pendingUpdates.min = math.MaxUint32
 		msh.pendingUpdates.max = 0
 	}
 	return nil

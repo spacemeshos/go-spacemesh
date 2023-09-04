@@ -360,7 +360,10 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) {
 		opinion := layer.opinion
 		layer.computeOpinion(t.Hdist, t.last)
 		if opinion != layer.opinion {
-			t.pending = types.MinLayer(t.pending, t.last)
+			if t.pending == 0 {
+				t.pending = t.last
+			}
+			t.pending = min(t.pending, t.last)
 		}
 
 		t.logger.Debug("initial local opinion",
@@ -423,7 +426,7 @@ func (t *turtle) verifyLayers() {
 		vverified, vchanged := t.runVerifying()
 		if nverified == t.processed-1 && nverified == vverified {
 			t.switchModes()
-			changed = types.MinLayer(changed, vchanged)
+			changed = min(changed, vchanged)
 		}
 	} else {
 		nverified, changed = t.runVerifying()
@@ -431,17 +434,17 @@ func (t *turtle) verifyLayers() {
 		if !withinDistance(t.Hdist, nverified+1, t.last) {
 			fverified, fchanged := t.runFull()
 			nverified = fverified
-			changed = types.MinLayer(changed, fchanged)
+			changed = min(changed, fchanged)
 		}
 	}
 	for target := t.evicted.Add(1); target.Before(t.processed); target = target.Add(1) {
 		if nverified < target {
 			if target < t.verified {
-				changed = types.MinLayer(changed, target)
+				changed = min(changed, target)
 			}
 			break
 		} else if target > t.verified {
-			changed = types.MinLayer(changed, target)
+			changed = min(changed, target)
 		}
 		verified = target
 	}
@@ -451,8 +454,11 @@ func (t *turtle) verifyLayers() {
 		zap.Uint32("verified", verified.Uint32()),
 		zap.Uint32("changed", changed.Uint32()),
 	)
-	if changed != 0 {
-		t.pending = types.MinLayer(t.pending, changed)
+	if changed != math.MaxUint32 {
+		if t.pending == 0 {
+			t.pending = changed
+		}
+		t.pending = min(t.pending, changed)
 		t.onOpinionChange(changed, false)
 	}
 	t.verified = verified
@@ -461,13 +467,14 @@ func (t *turtle) verifyLayers() {
 
 func (t *turtle) runVerifying() (verified, changed types.LayerID) {
 	verified = t.evicted
+	changed = math.MaxUint32
 	for target := t.evicted.Add(1); target.Before(t.processed); target = target.Add(1) {
 		v, c := t.verifying.verify(t.logger, target)
 		if !v {
 			return verified, changed
 		}
 		if c {
-			changed = types.MinLayer(changed, target)
+			changed = min(changed, target)
 		}
 		verified = target
 	}
@@ -486,13 +493,14 @@ func (t *turtle) runFull() (verified, changed types.LayerID) {
 		}
 	}
 	verified = t.evicted
+	changed = math.MaxUint32
 	for target := t.evicted.Add(1); target.Before(t.processed); target = target.Add(1) {
 		v, c := t.full.verify(t.logger, target)
 		if !v {
 			return verified, changed
 		}
 		if c {
-			changed = types.MinLayer(changed, target)
+			changed = min(changed, target)
 		}
 		verified = target
 	}
@@ -598,13 +606,16 @@ func (t *turtle) onOpinionChange(lid types.LayerID, early bool) {
 			zapBlocks(layer.blocks),
 		)
 		if opinion != layer.opinion {
-			changed = types.MinLayer(changed, recompute)
+			changed = min(changed, recompute)
 		} else if early {
 			break
 		}
 	}
-	if changed != 0 {
-		t.pending = types.MinLayer(t.pending, changed)
+	if changed != math.MaxUint32 {
+		if t.pending == 0 {
+			t.pending = changed
+		}
+		t.pending = min(t.pending, changed)
 		t.verifying.resetWeights(lid)
 		for target := lid.Add(1); !target.After(t.processed); target = target.Add(1) {
 			t.verifying.countVotes(t.logger, t.ballots[target])
