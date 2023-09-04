@@ -6,7 +6,7 @@ require (
 	cloud.google.com/go/storage v1.32.0
 	github.com/ALTree/bigfloat v0.2.0
 	github.com/benbjohnson/clock v1.3.5
-	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20230531032220-a757362a12e1
+	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20230824072557-45fdbaea2552
 	github.com/cosmos/btcutil v1.0.5
 	github.com/go-llsqlite/llsqlite v0.0.0-20230612031458-a9e271fe723a
 	github.com/gofrs/flock v0.8.1
@@ -28,7 +28,7 @@ require (
 	github.com/multiformats/go-multiaddr v0.11.0
 	github.com/multiformats/go-varint v0.0.7
 	github.com/natefinch/atomic v1.0.1
-	github.com/oasisprotocol/curve25519-voi v0.0.0-20230110094441-db37f07504ce
+	github.com/oasisprotocol/curve25519-voi v0.0.0-20230904125328-1f23a7beb09a
 	github.com/prometheus/client_golang v1.16.0
 	github.com/prometheus/common v0.44.0
 	github.com/pyroscope-io/pyroscope v0.37.2
@@ -56,9 +56,9 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20230822172742-b8732ec3820d
 	google.golang.org/grpc v1.58.0
 	google.golang.org/protobuf v1.31.0
-	k8s.io/api v0.26.3
+	k8s.io/api v0.26.7
 	k8s.io/apimachinery v0.27.4
-	k8s.io/client-go v0.26.3
+	k8s.io/client-go v0.26.7
 	sigs.k8s.io/controller-runtime v0.14.6
 )
 
@@ -220,8 +220,8 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/apiextensions-apiserver v0.26.1 // indirect
-	k8s.io/component-base v0.26.1 // indirect
+	k8s.io/apiextensions-apiserver v0.26.7 // indirect
+	k8s.io/component-base v0.26.7 // indirect
 	k8s.io/klog/v2 v2.90.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20230501164219-8b0f38b5fd1f // indirect
 	k8s.io/utils v0.0.0-20230209194617-a36077c30491 // indirect
