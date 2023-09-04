@@ -288,8 +288,7 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, lid types.LayerID) error {
 
 	msh.trtl.TallyVotes(ctx, lid)
 
-	if err := msh.setProcessedLayer(
-		lid); err != nil {
+	if err := msh.setProcessedLayer(lid); err != nil {
 		return err
 	}
 	results := msh.trtl.Updates()
