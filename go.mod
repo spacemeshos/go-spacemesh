@@ -20,7 +20,7 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.6
 	github.com/ipfs/go-ds-leveldb v0.5.0
 	github.com/ipfs/go-log/v2 v2.5.1
-	github.com/libp2p/go-libp2p v0.30.0
+	github.com/libp2p/go-libp2p v0.31.0
 	github.com/libp2p/go-libp2p-kad-dht v0.25.1
 	github.com/libp2p/go-libp2p-pubsub v0.9.3
 	github.com/libp2p/go-libp2p-record v0.2.0
@@ -176,8 +176,8 @@ require (
 	github.com/prometheus/procfs v0.11.1 // indirect
 	github.com/pyroscope-io/dotnetdiag v1.2.1 // indirect
 	github.com/quic-go/qpack v0.4.0 // indirect
-	github.com/quic-go/qtls-go1-20 v0.3.2 // indirect
-	github.com/quic-go/quic-go v0.38.0 // indirect
+	github.com/quic-go/qtls-go1-20 v0.3.3 // indirect
+	github.com/quic-go/quic-go v0.38.1 // indirect
 	github.com/quic-go/webtransport-go v0.5.3 // indirect
 	github.com/raulk/go-watchdog v1.3.0 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
