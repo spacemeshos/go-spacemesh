@@ -202,7 +202,11 @@ func (h *Handler) handleSet(ctx context.Context, id types.Hash32, set types.Epoc
 	if err := h.fetcher.GetAtxs(ctx, h.tortoise.GetMissingActiveSet(set.Epoch, set.Set)); err != nil {
 		return err
 	}
-	return activesets.Add(h.cdb, id, &set)
+	err := activesets.Add(h.cdb, id, &set)
+	if err != nil && !errors.Is(err, sql.ErrObjectExists) {
+		return err
+	}
+	return nil
 }
 
 // collectHashes gathers all hashes in a proposal or ballot.
@@ -453,7 +457,7 @@ func (h *Handler) checkBallotDataIntegrity(ctx context.Context, b *types.Ballot)
 			if err := h.handleSet(ctx, b.EpochData.ActiveSetHash, types.EpochActiveSet{
 				Epoch: b.Layer.GetEpoch(),
 				Set:   b.ActiveSet,
-			}); err != nil && !errors.Is(err, sql.ErrObjectExists) {
+			}); err != nil {
 				return err
 			}
 		} else {
@@ -467,8 +471,10 @@ func (h *Handler) checkBallotDataIntegrity(ctx context.Context, b *types.Ballot)
 			// NOTE(dshulyak) sidecar is stored for every ballot, so that
 			// nodes that won't update on time will be able to download it
 			// with sync
-
 			b.ActiveSet = set.Set
+			if len(b.ActiveSet) == 0 {
+				return fmt.Errorf("%w: empty active set ballot %s", pubsub.ErrValidationReject, b.ID())
+			}
 		}
 	} else if b.EpochData != nil {
 		return errUnexpectedEpochData
