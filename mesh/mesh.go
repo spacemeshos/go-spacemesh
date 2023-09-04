@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -232,7 +233,7 @@ func (msh *Mesh) setProcessedLayer(layerID types.LayerID) error {
 // the block in consensus, and reverts state before that layer
 // if such layer is found.
 func (msh *Mesh) ensureStateConsistent(ctx context.Context, results []result.Layer) error {
-	var changed types.LayerID
+	changed := types.LayerID(math.MaxUint32)
 	for _, layer := range results {
 		applied, err := layers.GetApplied(msh.cdb, layer.Layer)
 		if err != nil && errors.Is(err, sql.ErrNotFound) {
@@ -249,14 +250,10 @@ func (msh *Mesh) ensureStateConsistent(ctx context.Context, results []result.Lay
 				log.Stringer("expected", bid),
 				log.Stringer("applied", applied),
 			)
-			if changed == 0 {
-				changed = layer.Layer
-			} else {
-				changed = min(changed, layer.Layer)
-			}
+			changed = min(changed, layer.Layer)
 		}
 	}
-	if changed == 0 {
+	if changed == math.MaxUint32 {
 		return nil
 	}
 	revert := changed.Sub(1)
@@ -294,7 +291,7 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, lid types.LayerID) error {
 	results := msh.trtl.Updates()
 	pending := msh.pendingUpdates.min != 0
 	if len(results) > 0 {
-		msh.pendingUpdates.min = min(msh.pendingUpdates.min, results[0].Layer)
+		msh.pendingUpdates.min = types.MinLayer(msh.pendingUpdates.min, results[0].Layer)
 		msh.pendingUpdates.max = max(msh.pendingUpdates.max, results[len(results)-1].Layer)
 	}
 	next := msh.LatestLayerInState() + 1
