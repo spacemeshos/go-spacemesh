@@ -45,7 +45,7 @@ type Config struct {
 
 func DefaultConfig() Config {
 	return Config{
-		ATXSize:         10_000,
+		ATXSize:         20_000,
 		MalfeasenceSize: 1_000,
 	}
 }
