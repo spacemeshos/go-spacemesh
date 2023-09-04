@@ -150,11 +150,19 @@ func (g *Generator) run() error {
 			maxLayer = types.MaxLayer(maxLayer, out.Layer)
 			_, err := g.processHareOutput(out)
 			if err != nil {
-				g.logger.With().Error("failed to process hare output",
-					log.Context(out.Ctx),
-					out.Layer,
-					log.Err(err),
-				)
+				if errors.Is(err, errNodeHasBadMeshHash) {
+					g.logger.With().Info("node has different mesh hash from majority, will download block instead",
+						log.Context(out.Ctx),
+						out.Layer,
+						log.Err(err),
+					)
+				} else {
+					g.logger.With().Error("failed to process hare output",
+						log.Context(out.Ctx),
+						out.Layer,
+						log.Err(err),
+					)
+				}
 			}
 			if len(g.optimisticOutput) > 0 {
 				g.processOptimisticLayers(maxLayer)
