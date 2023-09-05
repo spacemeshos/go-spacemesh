@@ -17,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -281,11 +282,9 @@ func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 		malicious: malicious,
 		atxgrade:  g,
 	}
+	h.log.Debug("on message", zap.Inline(input))
 	gossip, equivocation := session.OnInput(input)
-	h.log.Debug("on message",
-		zap.Inline(input),
-		zap.Bool("gossip", gossip),
-	)
+	h.log.Debug("after on message", log.ZShortStringer("hash", input.msgHash), zap.Bool("gossip", gossip))
 	submitLatency.Observe(time.Since(start).Seconds())
 	if equivocation != nil && !malicious {
 		h.log.Debug("registered equivocation",
