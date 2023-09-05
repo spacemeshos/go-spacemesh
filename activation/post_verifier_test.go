@@ -8,7 +8,6 @@ import (
 	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -26,29 +25,19 @@ func TestOffloadingPostVerifier(t *testing.T) {
 		[]activation.PostVerifier{verifier},
 		log.NewDefault(t.Name()),
 	)
+	defer offloadingVerifier.Close()
+	verifier.EXPECT().Close().Return(nil)
 
-	var eg errgroup.Group
-	eg.Go(func() error {
-		offloadingVerifier.Start(ctx)
-		return nil
-	})
+	verifier.EXPECT().Verify(gomock.Any(), &proof, &metadata, gomock.Any()).Return(nil)
+	err := offloadingVerifier.Verify(ctx, &proof, &metadata)
+	require.NoError(t, err)
 
-	{
-		verifier.EXPECT().Verify(ctx, &proof, &metadata, gomock.Any()).Return(nil)
-		err := offloadingVerifier.Verify(ctx, &proof, &metadata)
-		require.NoError(t, err)
-	}
-	{
-		verifier.EXPECT().Verify(ctx, &proof, &metadata, gomock.Any()).Return(errors.New("invalid proof!"))
-		err := offloadingVerifier.Verify(ctx, &proof, &metadata)
-		require.ErrorContains(t, err, "invalid proof!")
-	}
-
-	cancel()
-	require.NoError(t, eg.Wait())
+	verifier.EXPECT().Verify(gomock.Any(), &proof, &metadata, gomock.Any()).Return(errors.New("invalid proof!"))
+	err = offloadingVerifier.Verify(ctx, &proof, &metadata)
+	require.ErrorContains(t, err, "invalid proof!")
 }
 
-func TestPostVerfierDetectsInvalidProof(t *testing.T) {
+func TestPostVerifierDetectsInvalidProof(t *testing.T) {
 	verifier, err := activation.NewPostVerifier(activation.PostConfig{}, log.NewDefault(t.Name()))
 	require.NoError(t, err)
 	defer verifier.Close()
@@ -67,26 +56,19 @@ func TestPostVerifierVerifyAfterStop(t *testing.T) {
 		[]activation.PostVerifier{verifier},
 		log.NewDefault(t.Name()),
 	)
+	defer offloadingVerifier.Close()
+	verifier.EXPECT().Close().Return(nil)
 
-	var eg errgroup.Group
-	eg.Go(func() error {
-		offloadingVerifier.Start(ctx)
-		return nil
-	})
+	verifier.EXPECT().Verify(gomock.Any(), &proof, &metadata, gomock.Any()).Return(nil)
+	err := offloadingVerifier.Verify(ctx, &proof, &metadata)
+	require.NoError(t, err)
 
-	{
-		verifier.EXPECT().Verify(ctx, &proof, &metadata, gomock.Any()).Return(nil)
-		err := offloadingVerifier.Verify(ctx, &proof, &metadata)
-		require.NoError(t, err)
-	}
 	// Stop the verifier
-	cancel()
-	require.NoError(t, eg.Wait())
+	verifier.EXPECT().Close().Return(nil)
+	offloadingVerifier.Close()
 
-	{
-		err := offloadingVerifier.Verify(ctx, &proof, &metadata)
-		require.ErrorIs(t, err, context.Canceled)
-	}
+	err = offloadingVerifier.Verify(ctx, &proof, &metadata)
+	require.EqualError(t, err, "verifier is closed")
 }
 
 func TestPostVerifierReturnsOnCtxCanceledWhenBlockedVerifying(t *testing.T) {
@@ -98,15 +80,8 @@ func TestPostVerifierReturnsOnCtxCanceledWhenBlockedVerifying(t *testing.T) {
 			// empty list of verifiers - no one will verify the proof
 		}, log.NewDefault(t.Name()))
 
-	var eg errgroup.Group
-	eg.Go(func() error {
-		v.Start(ctx)
-		return nil
-	})
+	require.NoError(t, v.Close())
 
-	cancel()
 	err := v.Verify(ctx, &shared.Proof{}, &shared.ProofMetadata{})
-	require.ErrorIs(t, err, context.Canceled)
-
-	require.NoError(t, eg.Wait())
+	require.EqualError(t, err, "verifier is closed")
 }
