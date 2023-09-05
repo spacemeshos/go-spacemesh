@@ -221,7 +221,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atxHdlr.mValidator.EXPECT().NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint64(1), nil)
 		atxHdlr.mValidator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		atxHdlr.mValidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-		_, err = atxHdlr.SyntacticallyValidateDeps(context.Background(), atx)
+		_, err := atxHdlr.SyntacticallyValidateDeps(context.Background(), atx)
 		require.NoError(t, err)
 	})
 
@@ -245,7 +245,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atxHdlr.mValidator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		atxHdlr.mValidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		atxHdlr.mValidator.EXPECT().VRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-		_, err = atxHdlr.SyntacticallyValidateDeps(context.Background(), atx)
+		_, err := atxHdlr.SyntacticallyValidateDeps(context.Background(), atx)
 		require.NoError(t, err)
 	})
 
@@ -309,7 +309,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		require.NoError(t, atxHdlr.SyntacticallyValidate(context.Background(), atx))
 		atxHdlr.mValidator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		atxHdlr.mValidator.EXPECT().VRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("invalid VRF"))
-		_, err = atxHdlr.SyntacticallyValidateDeps(context.Background(), atx)
+		_, err := atxHdlr.SyntacticallyValidateDeps(context.Background(), atx)
 		require.ErrorContains(t, err, "invalid vrf nonce")
 	})
 
@@ -340,7 +340,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atxHdlr.mValidator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		atxHdlr.mValidator.EXPECT().NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint64(1), nil)
 		atxHdlr.mValidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-		_, err = atxHdlr.SyntacticallyValidateDeps(context.Background(), atx)
+		_, err := atxHdlr.SyntacticallyValidateDeps(context.Background(), atx)
 		require.NoError(t, err)
 	})
 
@@ -373,7 +373,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(currentLayer)
 		require.NoError(t, atxHdlr.SyntacticallyValidate(context.Background(), atx))
 		atxHdlr.mValidator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("nipost error"))
-		_, err = atxHdlr.SyntacticallyValidateDeps(context.Background(), atx)
+		_, err := atxHdlr.SyntacticallyValidateDeps(context.Background(), atx)
 		require.EqualError(t, err, "nipost error")
 	})
 
@@ -437,7 +437,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(currentLayer)
 
-		err = atxHdlr.SyntacticallyValidate(context.Background(), atx)
+		err := atxHdlr.SyntacticallyValidate(context.Background(), atx)
 		require.ErrorContains(t, err, "node id is missing")
 	})
 
@@ -456,7 +456,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atx.InnerActivationTx.NodeID = &nodeID
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(currentLayer)
-		err = atxHdlr.SyntacticallyValidate(context.Background(), atx)
+		err := atxHdlr.SyntacticallyValidate(context.Background(), atx)
 		require.ErrorContains(t, err, "vrf nonce is missing")
 	})
 
@@ -483,7 +483,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atxHdlr.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		atxHdlr.mValidator.EXPECT().VRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("invalid VRF nonce"))
 
-		err = atxHdlr.SyntacticallyValidate(context.Background(), atx)
+		err := atxHdlr.SyntacticallyValidate(context.Background(), atx)
 		require.ErrorContains(t, err, "invalid VRF nonce")
 	})
 
@@ -542,7 +542,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(currentLayer)
 
-		err = atxHdlr.SyntacticallyValidate(context.Background(), atx)
+		err := atxHdlr.SyntacticallyValidate(context.Background(), atx)
 		require.EqualError(t, err, "prev atx declared, but initial post is included")
 	})
 
@@ -561,7 +561,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(currentLayer)
 
-		err = atxHdlr.SyntacticallyValidate(context.Background(), atx)
+		err := atxHdlr.SyntacticallyValidate(context.Background(), atx)
 		require.EqualError(t, err, "prev atx declared, but node id is included")
 	})
 }
