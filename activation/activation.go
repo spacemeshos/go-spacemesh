@@ -192,19 +192,18 @@ func (b *Builder) RegossipAtxs(ctx context.Context, epoch types.EpochID, id stri
 	if epoch != 0 {
 		verified, err := atxs.GetByEpochAndNodeID(b.cdb, epoch, b.signer.NodeID())
 		if err != nil {
-			return err
+			return fmt.Errorf("cant read atx for epoch=%d smesher=%v: %w", epoch, b.signer.NodeID(), err)
 		}
 		atxid = verified.ID()
 	}
 	blob, err := atxs.GetBlob(b.cdb, atxid.Bytes())
 	if err != nil {
-		return err
+		return fmt.Errorf("cant read with id %v: %w", atxid.String(), err)
 	}
 	if err := b.publisher.Publish(ctx, pubsub.AtxProtocol, blob); err != nil {
-		b.log.Error("unexpected error to publish", log.Stringer("id", atxid), log.Err(err))
-		return err
+		return fmt.Errorf("cant publish with id %v: %w", atxid.String(), err)
 	}
-	b.log.Info("gossiped atx", log.Stringer("id", atxid))
+	b.log.With().Info("gossiped atx", log.Stringer("id", atxid))
 	return nil
 }
 
