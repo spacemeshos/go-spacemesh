@@ -106,14 +106,11 @@ func (v *OffloadingPostVerifier) Verify(ctx context.Context, p *shared.Proof, m 
 		opts:     opts,
 		result:   make(chan error, 1),
 	}
-	select {
-	case <-v.stopped:
-		return fmt.Errorf("verifier is closed")
-	default:
-	}
 
 	select {
 	case v.channel <- job:
+	case <-v.stopped:
+		return fmt.Errorf("verifier is closed")
 	case <-ctx.Done():
 		return fmt.Errorf("submitting verifying job: %w", ctx.Err())
 	}
