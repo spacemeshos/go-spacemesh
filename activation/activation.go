@@ -187,19 +187,24 @@ func (b *Builder) Smeshing() bool {
 	return b.started.Load()
 }
 
-func (b *Builder) RegossipAtxs(ctx context.Context, epoch types.EpochID) error {
-	verified, err := atxs.GetByEpochAndNodeID(b.cdb, epoch, b.signer.NodeID())
-	if err != nil {
-		return err
+func (b *Builder) RegossipAtxs(ctx context.Context, epoch types.EpochID, id string) error {
+	atxid := types.ATXID(types.HexToHash32(id))
+	if epoch != 0 {
+		verified, err := atxs.GetByEpochAndNodeID(b.cdb, epoch, b.signer.NodeID())
+		if err != nil {
+			return err
+		}
+		atxid = verified.ID()
 	}
-	blob, err := atxs.GetBlob(b.cdb, verified.ID().Bytes())
+	blob, err := atxs.GetBlob(b.cdb, atxid.Bytes())
 	if err != nil {
 		return err
 	}
 	if err := b.publisher.Publish(ctx, pubsub.AtxProtocol, blob); err != nil {
-		b.log.Error("unexpected error to publish", log.Stringer("id", verified.ID()), log.Err(err))
+		b.log.Error("unexpected error to publish", log.Stringer("id", atxid), log.Err(err))
+		return err
 	}
-	b.log.Info("gossiped atx", log.Stringer("id", verified.ID()))
+	b.log.Info("gossiped atx", log.Stringer("id", atxid))
 	return nil
 }
 

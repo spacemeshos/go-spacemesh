@@ -54,6 +54,16 @@ type Handler struct {
 	atxChannels     map[types.ATXID]*atxChan
 	fetcher         system.Fetcher
 	poetCfg         PoetConfig
+
+	pid p2p.Peer
+}
+
+type HandlerOpt func(*Handler)
+
+func WithHostID(pid p2p.Peer) HandlerOpt {
+	return func(h *Handler) {
+		h.pid = pid
+	}
 }
 
 // NewHandler returns a data handler for ATX.
@@ -71,8 +81,9 @@ func NewHandler(
 	tortoise system.Tortoise,
 	log log.Log,
 	poetCfg PoetConfig,
+	opts ...HandlerOpt,
 ) *Handler {
-	return &Handler{
+	h := &Handler{
 		cdb:             cdb,
 		edVerifier:      edVerifier,
 		clock:           c,
@@ -88,6 +99,10 @@ func NewHandler(
 		tortoise:        tortoise,
 		poetCfg:         poetCfg,
 	}
+	for _, opt := range opts {
+		opt(h)
+	}
+	return h
 }
 
 var closedChan = make(chan struct{})
@@ -487,6 +502,9 @@ func (h *Handler) registerHashes(atx *types.ActivationTx, peer p2p.Peer) {
 // HandleGossipAtx handles the atx gossip data channel.
 func (h *Handler) HandleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte) error {
 	err := h.handleAtx(ctx, types.Hash32{}, peer, msg)
+	if errors.Is(err, errKnownAtx) && peer == h.pid {
+		return nil
+	}
 	if err != nil && !errors.Is(err, errMalformedData) && !errors.Is(err, errKnownAtx) {
 		h.log.WithContext(ctx).With().Warning("failed to process atx gossip",
 			log.Stringer("sender", peer),

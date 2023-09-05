@@ -732,17 +732,17 @@ func (mr *MockSmeshingProviderMockRecorder) Coinbase() *gomock.Call {
 }
 
 // RegossipAtxs mocks base method.
-func (m *MockSmeshingProvider) RegossipAtxs(arg0 context.Context, arg1 types.EpochID) error {
+func (m *MockSmeshingProvider) RegossipAtxs(arg0 context.Context, arg1 types.EpochID, arg2 string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RegossipAtxs", arg0, arg1)
+	ret := m.ctrl.Call(m, "RegossipAtxs", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RegossipAtxs indicates an expected call of RegossipAtxs.
-func (mr *MockSmeshingProviderMockRecorder) RegossipAtxs(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockSmeshingProviderMockRecorder) RegossipAtxs(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegossipAtxs", reflect.TypeOf((*MockSmeshingProvider)(nil).RegossipAtxs), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegossipAtxs", reflect.TypeOf((*MockSmeshingProvider)(nil).RegossipAtxs), arg0, arg1, arg2)
 }
 
 // SetCoinbase mocks base method.

@@ -84,5 +84,5 @@ type SmeshingProvider interface {
 	Coinbase() types.Address
 	SetCoinbase(coinbase types.Address)
 	UpdatePoETServers(ctx context.Context, endpoints []string) error
-	RegossipAtxs(context.Context, types.EpochID) error
+	RegossipAtxs(context.Context, types.EpochID, string) error
 }

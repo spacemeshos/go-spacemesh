@@ -660,6 +660,7 @@ func (app *App) initServices(ctx context.Context) error {
 		trtl,
 		app.addLogger(ATXHandlerLogger, lg),
 		app.Config.POET,
+		activation.WithHostID(app.host.ID()),
 	)
 
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
