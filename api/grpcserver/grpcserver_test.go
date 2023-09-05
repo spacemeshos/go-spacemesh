@@ -472,6 +472,10 @@ func (*SmeshingAPIMock) Coinbase() types.Address {
 func (*SmeshingAPIMock) SetCoinbase(coinbase types.Address) {
 }
 
+func (*SmeshingAPIMock) RegossipAtxs(context.Context, types.EpochID, string) error {
+	return nil
+}
+
 func marshalProto(t *testing.T, msg proto.Message) string {
 	var buf bytes.Buffer
 	var m jsonpb.Marshaler
