@@ -118,6 +118,8 @@ func (v *OffloadingPostVerifier) Verify(ctx context.Context, p *shared.Proof, m 
 	select {
 	case res := <-job.result:
 		return res
+	case <-v.stopped:
+		return fmt.Errorf("verifier is closed")
 	case <-ctx.Done():
 		return fmt.Errorf("waiting for verification result: %w", ctx.Err())
 	}

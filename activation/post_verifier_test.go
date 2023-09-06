@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -69,6 +71,40 @@ func TestPostVerifierVerifyAfterStop(t *testing.T) {
 
 	err = offloadingVerifier.Verify(ctx, &proof, &metadata)
 	require.EqualError(t, err, "verifier is closed")
+}
+
+func TestPostVerifierNoRaceOnClose(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	proof := shared.Proof{}
+	metadata := shared.ProofMetadata{}
+
+	verifier := activation.NewMockPostVerifier(gomock.NewController(t))
+	offloadingVerifier := activation.NewOffloadingPostVerifier(
+		[]activation.PostVerifier{verifier},
+		log.NewDefault(t.Name()),
+	)
+	defer offloadingVerifier.Close()
+	verifier.EXPECT().Close().AnyTimes().Return(nil)
+	verifier.EXPECT().Verify(gomock.Any(), &proof, &metadata, gomock.Any()).AnyTimes().Return(nil)
+
+	// Stop the verifier
+	var eg errgroup.Group
+	eg.Go(func() error {
+		time.Sleep(50 * time.Millisecond)
+		return offloadingVerifier.Close()
+	})
+
+	for i := 0; i < 10; i++ {
+		ms := 10 * i
+		eg.Go(func() error {
+			time.Sleep(time.Duration(ms) * time.Millisecond)
+			return offloadingVerifier.Verify(ctx, &proof, &metadata)
+		})
+	}
+
+	require.EqualError(t, eg.Wait(), "verifier is closed")
 }
 
 func TestPostVerifierReturnsOnCtxCanceledWhenBlockedVerifying(t *testing.T) {
