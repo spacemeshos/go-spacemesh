@@ -184,6 +184,7 @@ func (h *Handler) HandleActiveSet(ctx context.Context, id types.Hash32, peer p2p
 	if err := codec.Decode(data, &set); err != nil {
 		return fmt.Errorf("%w: malformed active set %s", pubsub.ErrValidationReject, err.Error())
 	}
+	h.fetcher.RegisterPeerHashes(peer, types.ATXIDsToHashes(set.Set))
 	return h.handleSet(ctx, id, set)
 }
 

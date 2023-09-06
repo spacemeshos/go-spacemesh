@@ -1325,3 +1325,77 @@ func TestCollectHashes(t *testing.T) {
 	expected = append(expected, types.TransactionIDsToHashes(p.TxIDs)...)
 	require.ElementsMatch(t, expected, collectHashes(*p))
 }
+
+func TestHandleActiveSet(t *testing.T) {
+	good := []types.ATXID{{1}, {2}, {3}}
+	notsorted := []types.ATXID{{3}, {1}, {2}}
+	for _, tc := range []struct {
+		desc                    string
+		id                      types.Hash32
+		data                    []byte
+		tortoise, fetch, stored []types.ATXID
+		fetchErr                error
+		err                     string
+	}{
+		{
+			desc:     "sanity",
+			id:       types.ATXIDList(good).Hash(),
+			data:     codec.MustEncode(&types.EpochActiveSet{Epoch: 2, Set: good}),
+			tortoise: good,
+			fetch:    good,
+			stored:   good,
+		},
+		{
+			desc: "malformed",
+			data: []byte("test"),
+			err:  "malformed",
+		},
+		{
+			desc: "not sorted",
+			data: codec.MustEncode(&types.EpochActiveSet{Epoch: 2, Set: notsorted}),
+			err:  "not sorted",
+		},
+		{
+			desc: "wrong hash",
+			id:   types.Hash32{1, 2, 3},
+			data: codec.MustEncode(&types.EpochActiveSet{Epoch: 2, Set: good}),
+			err:  "wrong hash",
+		},
+		{
+			desc:     "fetcher error",
+			id:       types.ATXIDList(good).Hash(),
+			data:     codec.MustEncode(&types.EpochActiveSet{Epoch: 2, Set: good}),
+			tortoise: good,
+			fetch:    good,
+			fetchErr: errors.New("fetcher failed"),
+			err:      "fetcher failed",
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			th := createTestHandler(t)
+			pid := p2p.Peer("any")
+			var eset types.EpochActiveSet
+			if err := codec.Decode(tc.data, &eset); err == nil {
+				th.mf.EXPECT().RegisterPeerHashes(pid, types.ATXIDsToHashes(eset.Set))
+			}
+			if tc.tortoise != nil {
+
+				th.md.EXPECT().GetMissingActiveSet(eset.Epoch, tc.tortoise).Return(tc.fetch)
+			}
+			if tc.fetch != nil {
+				th.mf.EXPECT().GetAtxs(gomock.Any(), tc.fetch).Return(tc.fetchErr)
+			}
+			err := th.HandleActiveSet(context.Background(), tc.id, pid, tc.data)
+			if len(tc.err) > 0 {
+				require.ErrorContains(t, err, tc.err)
+			} else {
+				require.NoError(t, err)
+			}
+			if tc.stored != nil {
+				stored, err := activesets.Get(th.cdb, tc.id)
+				require.NoError(t, err)
+				require.Equal(t, tc.stored, stored.Set)
+			}
+		})
+	}
+}
