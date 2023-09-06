@@ -3,10 +3,11 @@ package activesets
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/stretchr/testify/require"
 )
 
 func TestActiveSet(t *testing.T) {

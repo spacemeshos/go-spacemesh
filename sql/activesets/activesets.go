@@ -21,7 +21,7 @@ func Add(db sql.Executor, id types.Hash32, set *types.EpochActiveSet) error {
 			stmt.BindBytes(2, buf)
 		}, nil)
 	if err != nil {
-		return fmt.Errorf("add active set %s: %w", id, err)
+		return fmt.Errorf("add active set %v: %w", id.String(), err)
 	}
 	return nil
 }
@@ -41,13 +41,13 @@ func Get(db sql.Executor, id types.Hash32) (*types.EpochActiveSet, error) {
 		},
 	)
 	if rows == 0 {
-		return nil, fmt.Errorf("active set %s: %w", id, sql.ErrNotFound)
+		return nil, fmt.Errorf("active set %v: %w", id.String(), sql.ErrNotFound)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("copy active set %s: %w", id, err)
+		return nil, fmt.Errorf("copy active set %v: %w", id.String(), err)
 	}
 	if err2 != nil {
-		return nil, fmt.Errorf("failed to decode data %s: %w", id, err2)
+		return nil, fmt.Errorf("failed to decode data %v: %w", id.String(), err2)
 	}
 	return &rst, nil
 }
@@ -66,10 +66,10 @@ func GetBlob(db sql.Executor, id []byte) ([]byte, error) {
 		},
 	)
 	if rows == 0 {
-		return nil, fmt.Errorf("active set %s: %w", id, sql.ErrNotFound)
+		return nil, fmt.Errorf("active set %x: %w", id, sql.ErrNotFound)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("get active set blob %s: %w", id, err)
+		return nil, fmt.Errorf("get active set blob %x: %w", id, err)
 	}
 	return rst, nil
 }

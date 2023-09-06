@@ -32,8 +32,6 @@ var (
 	errMissingEpochData      = errors.New("epoch data is missing in ref ballot")
 	errUnexpectedEpochData   = errors.New("non-ref ballot declares epoch data")
 	errEmptyActiveSet        = errors.New("ref ballot declares empty active set")
-	errActiveSetNotSorted    = errors.New("active set not sorted")
-	errBadActiveSetHash      = errors.New("incorrect active set hash")
 	errMissingBeacon         = errors.New("beacon is missing in ref ballot")
 	errNotEligible           = errors.New("ballot not eligible")
 	errDoubleVoting          = errors.New("ballot doubly-voted in same layer")
@@ -196,7 +194,7 @@ func (h *Handler) handleSet(ctx context.Context, id types.Hash32, set types.Epoc
 		}
 	}
 	if id != types.ATXIDList(set.Set).Hash() {
-		return fmt.Errorf("%w: response for wrong hash %s", pubsub.ErrValidationReject, id)
+		return fmt.Errorf("%w: response for wrong hash %s", pubsub.ErrValidationReject, id.String())
 	}
 	// active set is invalid unless all activations that it references are from the correct epoch
 	if err := h.fetcher.GetAtxs(ctx, h.tortoise.GetMissingActiveSet(set.Epoch, set.Set)); err != nil {
@@ -539,8 +537,7 @@ func (h *Handler) checkBallotDataAvailability(ctx context.Context, b *types.Ball
 	if err := h.fetcher.GetBallots(ctx, blts); err != nil {
 		return fmt.Errorf("fetch ballots: %w", err)
 	}
-	atxs := []types.ATXID{b.AtxID}
-	if err := h.fetcher.GetAtxs(ctx, h.tortoise.GetMissingActiveSet(b.Layer.GetEpoch(), atxs)); err != nil {
+	if err := h.fetcher.GetAtxs(ctx, h.tortoise.GetMissingActiveSet(b.Layer.GetEpoch(), []types.ATXID{b.AtxID})); err != nil {
 		return fmt.Errorf("proposal get ATXs: %w", err)
 	}
 	return nil
