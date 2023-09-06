@@ -8,9 +8,9 @@ import (
 	context "context"
 	reflect "reflect"
 
-	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	log "github.com/spacemeshos/go-spacemesh/log"
+	gomock "go.uber.org/mock/gomock"
 )
 
 // MocklayerPatrol is a mock of layerPatrol interface.

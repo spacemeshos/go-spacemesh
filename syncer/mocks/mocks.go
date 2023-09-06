@@ -9,11 +9,11 @@ import (
 	reflect "reflect"
 	time "time"
 
-	gomock "github.com/golang/mock/gomock"
 	protocol "github.com/libp2p/go-libp2p/core/protocol"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	fetch "github.com/spacemeshos/go-spacemesh/fetch"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
+	gomock "go.uber.org/mock/gomock"
 )
 
 // MocklayerTicker is a mock of layerTicker interface.

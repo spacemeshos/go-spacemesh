@@ -7,8 +7,8 @@ package weakcoin
 import (
 	reflect "reflect"
 
-	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	gomock "go.uber.org/mock/gomock"
 )
 
 // MockvrfSigner is a mock of vrfSigner interface.

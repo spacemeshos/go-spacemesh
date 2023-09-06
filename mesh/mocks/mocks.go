@@ -8,9 +8,9 @@ import (
 	context "context"
 	reflect "reflect"
 
-	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
+	gomock "go.uber.org/mock/gomock"
 )
 
 // MockconservativeState is a mock of conservativeState interface.

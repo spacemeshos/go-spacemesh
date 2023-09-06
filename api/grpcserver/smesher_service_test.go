@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/post/config"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/spacemeshos/go-spacemesh/activation"

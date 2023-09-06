@@ -8,10 +8,10 @@ import (
 	context "context"
 	reflect "reflect"
 
-	gomock "github.com/golang/mock/gomock"
 	network "github.com/libp2p/go-libp2p/core/network"
 	peer "github.com/libp2p/go-libp2p/core/peer"
 	protocol "github.com/libp2p/go-libp2p/core/protocol"
+	gomock "go.uber.org/mock/gomock"
 )
 
 // MockHost is a mock of Host interface.

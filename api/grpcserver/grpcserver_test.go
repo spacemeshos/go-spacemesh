@@ -21,7 +21,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
@@ -29,6 +28,7 @@ import (
 	"github.com/spacemeshos/merkle-tree"
 	"github.com/spacemeshos/poet/shared"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"

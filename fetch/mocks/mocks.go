@@ -8,10 +8,10 @@ import (
 	context "context"
 	reflect "reflect"
 
-	gomock "github.com/golang/mock/gomock"
 	protocol "github.com/libp2p/go-libp2p/core/protocol"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
+	gomock "go.uber.org/mock/gomock"
 )
 
 // Mockrequester is a mock of requester interface.

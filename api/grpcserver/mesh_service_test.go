@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 

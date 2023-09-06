@@ -9,9 +9,9 @@ import (
 	reflect "reflect"
 	time "time"
 
-	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
+	gomock "go.uber.org/mock/gomock"
 )
 
 // Mockcoin is a mock of coin interface.

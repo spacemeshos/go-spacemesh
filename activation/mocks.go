@@ -9,11 +9,11 @@ import (
 	reflect "reflect"
 	time "time"
 
-	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	proving "github.com/spacemeshos/post/proving"
 	shared "github.com/spacemeshos/post/shared"
 	verifying "github.com/spacemeshos/post/verifying"
+	gomock "go.uber.org/mock/gomock"
 )
 
 // MockAtxReceiver is a mock of AtxReceiver interface.

@@ -7,9 +7,9 @@ package mocks
 import (
 	reflect "reflect"
 
-	gomock "github.com/golang/mock/gomock"
 	scale "github.com/spacemeshos/go-scale"
 	core "github.com/spacemeshos/go-spacemesh/genvm/core"
+	gomock "go.uber.org/mock/gomock"
 )
 
 // MockTemplate is a mock of Template interface.

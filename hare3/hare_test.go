@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/codec"

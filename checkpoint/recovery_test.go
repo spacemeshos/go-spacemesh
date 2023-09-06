@@ -12,12 +12,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/initialization"
 	postShared "github.com/spacemeshos/post/shared"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"

@@ -6,10 +6,10 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 

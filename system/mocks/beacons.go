@@ -7,9 +7,9 @@ package mocks
 import (
 	reflect "reflect"
 
-	gomock "github.com/golang/mock/gomock"
 	fixed "github.com/spacemeshos/fixed"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	gomock "go.uber.org/mock/gomock"
 )
 
 // MockBeaconCollector is a mock of BeaconCollector interface.

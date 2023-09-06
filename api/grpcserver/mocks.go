@@ -9,11 +9,11 @@ import (
 	reflect "reflect"
 	time "time"
 
-	gomock "github.com/golang/mock/gomock"
 	activation "github.com/spacemeshos/go-spacemesh/activation"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
 	system "github.com/spacemeshos/go-spacemesh/system"
+	gomock "go.uber.org/mock/gomock"
 )
 
 // MocknetworkIdentity is a mock of networkIdentity interface.

@@ -9,9 +9,9 @@ import (
 	reflect "reflect"
 	time "time"
 
-	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	tortoise "github.com/spacemeshos/go-spacemesh/tortoise"
+	gomock "go.uber.org/mock/gomock"
 )
 
 // MockmeshProvider is a mock of meshProvider interface.

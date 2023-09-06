@@ -8,9 +8,9 @@ import (
 	context "context"
 	reflect "reflect"
 
-	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
+	gomock "go.uber.org/mock/gomock"
 )
 
 // MockFetcher is a mock of Fetcher interface.

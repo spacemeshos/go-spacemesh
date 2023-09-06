@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/golang/mock/gomock"
+	"go.uber.org/mock/gomock"
 	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"

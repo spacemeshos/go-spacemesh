@@ -8,9 +8,9 @@ import (
 	context "context"
 	reflect "reflect"
 
-	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	signing "github.com/spacemeshos/go-spacemesh/signing"
+	gomock "go.uber.org/mock/gomock"
 )
 
 // MockconsensusProtocol is a mock of consensusProtocol interface.

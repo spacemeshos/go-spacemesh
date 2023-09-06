@@ -9,10 +9,10 @@ import (
 	reflect "reflect"
 	time "time"
 
-	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	log "github.com/spacemeshos/go-spacemesh/log"
 	system "github.com/spacemeshos/go-spacemesh/system"
+	gomock "go.uber.org/mock/gomock"
 )
 
 // MockconservativeState is a mock of conservativeState interface.

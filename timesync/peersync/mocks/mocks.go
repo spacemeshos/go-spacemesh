@@ -8,8 +8,8 @@ import (
 	reflect "reflect"
 	time "time"
 
-	gomock "github.com/golang/mock/gomock"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
+	gomock "go.uber.org/mock/gomock"
 )
 
 // MockTime is a mock of Time interface.
