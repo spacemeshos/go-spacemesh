@@ -23,17 +23,19 @@ import (
 
 type testHandler struct {
 	*Handler
-	mockFetcher *smocks.MockFetcher
-	mockMesh    *mocks.MockmeshProvider
+	mockFetcher  *smocks.MockFetcher
+	mockTortoise *mocks.MocktortoiseProvider
+	mockMesh     *mocks.MockmeshProvider
 }
 
 func createTestHandler(t *testing.T) *testHandler {
 	ctrl := gomock.NewController(t)
 	th := &testHandler{
-		mockFetcher: smocks.NewMockFetcher(ctrl),
-		mockMesh:    mocks.NewMockmeshProvider(ctrl),
+		mockFetcher:  smocks.NewMockFetcher(ctrl),
+		mockTortoise: mocks.NewMocktortoiseProvider(ctrl),
+		mockMesh:     mocks.NewMockmeshProvider(ctrl),
 	}
-	th.Handler = NewHandler(th.mockFetcher, sql.InMemory(), th.mockMesh, WithLogger(logtest.New(t)))
+	th.Handler = NewHandler(th.mockFetcher, sql.InMemory(), th.mockTortoise, th.mockMesh, WithLogger(logtest.New(t)))
 	return th
 }
 

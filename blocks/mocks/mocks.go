@@ -238,3 +238,40 @@ func (mr *MockcertifierMockRecorder) RegisterForCert(arg0, arg1, arg2 interface{
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterForCert", reflect.TypeOf((*Mockcertifier)(nil).RegisterForCert), arg0, arg1, arg2)
 }
+
+// MocktortoiseProvider is a mock of tortoiseProvider interface.
+type MocktortoiseProvider struct {
+	ctrl     *gomock.Controller
+	recorder *MocktortoiseProviderMockRecorder
+}
+
+// MocktortoiseProviderMockRecorder is the mock recorder for MocktortoiseProvider.
+type MocktortoiseProviderMockRecorder struct {
+	mock *MocktortoiseProvider
+}
+
+// NewMocktortoiseProvider creates a new mock instance.
+func NewMocktortoiseProvider(ctrl *gomock.Controller) *MocktortoiseProvider {
+	mock := &MocktortoiseProvider{ctrl: ctrl}
+	mock.recorder = &MocktortoiseProviderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MocktortoiseProvider) EXPECT() *MocktortoiseProviderMockRecorder {
+	return m.recorder
+}
+
+// GetMissingActiveSet mocks base method.
+func (m *MocktortoiseProvider) GetMissingActiveSet(arg0 types.EpochID, arg1 []types.ATXID) []types.ATXID {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMissingActiveSet", arg0, arg1)
+	ret0, _ := ret[0].([]types.ATXID)
+	return ret0
+}
+
+// GetMissingActiveSet indicates an expected call of GetMissingActiveSet.
+func (mr *MocktortoiseProviderMockRecorder) GetMissingActiveSet(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMissingActiveSet", reflect.TypeOf((*MocktortoiseProvider)(nil).GetMissingActiveSet), arg0, arg1)
+}

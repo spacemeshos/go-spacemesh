@@ -26,9 +26,10 @@ var (
 type Handler struct {
 	logger log.Log
 
-	fetcher system.Fetcher
-	db      *sql.Database
-	mesh    meshProvider
+	fetcher  system.Fetcher
+	db       *sql.Database
+	tortoise tortoiseProvider
+	mesh     meshProvider
 }
 
 // Opt for configuring BlockHandler.
@@ -42,12 +43,13 @@ func WithLogger(logger log.Log) Opt {
 }
 
 // NewHandler creates new Handler.
-func NewHandler(f system.Fetcher, db *sql.Database, m meshProvider, opts ...Opt) *Handler {
+func NewHandler(f system.Fetcher, db *sql.Database, tortoise tortoiseProvider, m meshProvider, opts ...Opt) *Handler {
 	h := &Handler{
-		logger:  log.NewNop(),
-		fetcher: f,
-		db:      db,
-		mesh:    m,
+		logger:   log.NewNop(),
+		fetcher:  f,
+		db:       db,
+		tortoise: tortoise,
+		mesh:     m,
 	}
 	for _, opt := range opts {
 		opt(h)
@@ -89,6 +91,13 @@ func (h *Handler) HandleSyncedBlock(ctx context.Context, expHash types.Hash32, p
 	}
 	logger.With().Info("new block")
 
+	missing := h.tortoise.GetMissingActiveSet(b.LayerIndex.GetEpoch(), toAtxIDs(b.Rewards))
+	if len(missing) > 0 {
+		h.fetcher.RegisterPeerHashes(peer, types.ATXIDsToHashes(missing))
+		if err := h.fetcher.GetAtxs(ctx, missing); err != nil {
+			return err
+		}
+	}
 	h.fetcher.RegisterPeerHashes(peer, types.TransactionIDsToHashes(b.TxIDs))
 	if err := h.checkTransactions(ctx, &b); err != nil {
 		logger.With().Warning("failed to fetch block TXs", log.Err(err))
@@ -137,4 +146,12 @@ func (h *Handler) checkTransactions(ctx context.Context, b *types.Block) error {
 		return fmt.Errorf("block get TXs: %w", err)
 	}
 	return nil
+}
+
+func toAtxIDs(rewards []types.AnyReward) []types.ATXID {
+	rst := make([]types.ATXID, 0, len(rewards))
+	for i := range rewards {
+		rst = append(rst, rewards[i].AtxID)
+	}
+	return rst
 }
