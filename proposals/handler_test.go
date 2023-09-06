@@ -1379,7 +1379,6 @@ func TestHandleActiveSet(t *testing.T) {
 				th.mf.EXPECT().RegisterPeerHashes(pid, types.ATXIDsToHashes(eset.Set))
 			}
 			if tc.tortoise != nil {
-
 				th.md.EXPECT().GetMissingActiveSet(eset.Epoch, tc.tortoise).Return(tc.fetch)
 			}
 			if tc.fetch != nil {
