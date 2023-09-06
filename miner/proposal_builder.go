@@ -268,7 +268,7 @@ func (pb *ProposalBuilder) createProposal(
 		if err := activesets.Add(pb.cdb, ib.EpochData.ActiveSetHash, &types.EpochActiveSet{
 			Epoch: epoch,
 			Set:   epochEligibility.ActiveSet,
-		}); err != nil {
+		}); err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return nil, err
 		}
 	} else {
