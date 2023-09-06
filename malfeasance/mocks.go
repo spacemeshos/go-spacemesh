@@ -43,9 +43,33 @@ func (m *MockconsensusProtocol) HandleEligibility(arg0 context.Context, arg1 *ty
 }
 
 // HandleEligibility indicates an expected call of HandleEligibility.
-func (mr *MockconsensusProtocolMockRecorder) HandleEligibility(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockconsensusProtocolMockRecorder) HandleEligibility(arg0, arg1 interface{}) *consensusProtocolHandleEligibilityCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleEligibility", reflect.TypeOf((*MockconsensusProtocol)(nil).HandleEligibility), arg0, arg1)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleEligibility", reflect.TypeOf((*MockconsensusProtocol)(nil).HandleEligibility), arg0, arg1)
+	return &consensusProtocolHandleEligibilityCall{Call: call}
+}
+
+// consensusProtocolHandleEligibilityCall wrap *gomock.Call
+type consensusProtocolHandleEligibilityCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *consensusProtocolHandleEligibilityCall) Return() *consensusProtocolHandleEligibilityCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *consensusProtocolHandleEligibilityCall) Do(f func(context.Context, *types.HareEligibilityGossip)) *consensusProtocolHandleEligibilityCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *consensusProtocolHandleEligibilityCall) DoAndReturn(f func(context.Context, *types.HareEligibilityGossip)) *consensusProtocolHandleEligibilityCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // MockSigVerifier is a mock of SigVerifier interface.
@@ -80,9 +104,33 @@ func (m *MockSigVerifier) Verify(arg0 signing.Domain, arg1 types.NodeID, arg2 []
 }
 
 // Verify indicates an expected call of Verify.
-func (mr *MockSigVerifierMockRecorder) Verify(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+func (mr *MockSigVerifierMockRecorder) Verify(arg0, arg1, arg2, arg3 interface{}) *SigVerifierVerifyCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockSigVerifier)(nil).Verify), arg0, arg1, arg2, arg3)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockSigVerifier)(nil).Verify), arg0, arg1, arg2, arg3)
+	return &SigVerifierVerifyCall{Call: call}
+}
+
+// SigVerifierVerifyCall wrap *gomock.Call
+type SigVerifierVerifyCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *SigVerifierVerifyCall) Return(arg0 bool) *SigVerifierVerifyCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *SigVerifierVerifyCall) Do(f func(signing.Domain, types.NodeID, []byte, types.EdSignature) bool) *SigVerifierVerifyCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *SigVerifierVerifyCall) DoAndReturn(f func(signing.Domain, types.NodeID, []byte, types.EdSignature) bool) *SigVerifierVerifyCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // Mocktortoise is a mock of tortoise interface.
@@ -115,7 +163,31 @@ func (m *Mocktortoise) OnMalfeasance(arg0 types.NodeID) {
 }
 
 // OnMalfeasance indicates an expected call of OnMalfeasance.
-func (mr *MocktortoiseMockRecorder) OnMalfeasance(arg0 interface{}) *gomock.Call {
+func (mr *MocktortoiseMockRecorder) OnMalfeasance(arg0 interface{}) *tortoiseOnMalfeasanceCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnMalfeasance", reflect.TypeOf((*Mocktortoise)(nil).OnMalfeasance), arg0)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnMalfeasance", reflect.TypeOf((*Mocktortoise)(nil).OnMalfeasance), arg0)
+	return &tortoiseOnMalfeasanceCall{Call: call}
+}
+
+// tortoiseOnMalfeasanceCall wrap *gomock.Call
+type tortoiseOnMalfeasanceCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *tortoiseOnMalfeasanceCall) Return() *tortoiseOnMalfeasanceCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *tortoiseOnMalfeasanceCall) Do(f func(types.NodeID)) *tortoiseOnMalfeasanceCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *tortoiseOnMalfeasanceCall) DoAndReturn(f func(types.NodeID)) *tortoiseOnMalfeasanceCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }

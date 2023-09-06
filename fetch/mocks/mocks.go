@@ -46,9 +46,33 @@ func (m *Mockrequester) Request(arg0 context.Context, arg1 p2p.Peer, arg2 []byte
 }
 
 // Request indicates an expected call of Request.
-func (mr *MockrequesterMockRecorder) Request(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+func (mr *MockrequesterMockRecorder) Request(arg0, arg1, arg2, arg3, arg4 interface{}) *requesterRequestCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Request", reflect.TypeOf((*Mockrequester)(nil).Request), arg0, arg1, arg2, arg3, arg4)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Request", reflect.TypeOf((*Mockrequester)(nil).Request), arg0, arg1, arg2, arg3, arg4)
+	return &requesterRequestCall{Call: call}
+}
+
+// requesterRequestCall wrap *gomock.Call
+type requesterRequestCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *requesterRequestCall) Return(arg0 error) *requesterRequestCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *requesterRequestCall) Do(f func(context.Context, p2p.Peer, []byte, func([]byte), func(error)) error) *requesterRequestCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *requesterRequestCall) DoAndReturn(f func(context.Context, p2p.Peer, []byte, func([]byte), func(error)) error) *requesterRequestCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // MockSyncValidator is a mock of SyncValidator interface.
@@ -83,9 +107,33 @@ func (m *MockSyncValidator) HandleMessage(arg0 context.Context, arg1 types.Hash3
 }
 
 // HandleMessage indicates an expected call of HandleMessage.
-func (mr *MockSyncValidatorMockRecorder) HandleMessage(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+func (mr *MockSyncValidatorMockRecorder) HandleMessage(arg0, arg1, arg2, arg3 interface{}) *SyncValidatorHandleMessageCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleMessage", reflect.TypeOf((*MockSyncValidator)(nil).HandleMessage), arg0, arg1, arg2, arg3)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleMessage", reflect.TypeOf((*MockSyncValidator)(nil).HandleMessage), arg0, arg1, arg2, arg3)
+	return &SyncValidatorHandleMessageCall{Call: call}
+}
+
+// SyncValidatorHandleMessageCall wrap *gomock.Call
+type SyncValidatorHandleMessageCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *SyncValidatorHandleMessageCall) Return(arg0 error) *SyncValidatorHandleMessageCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *SyncValidatorHandleMessageCall) Do(f func(context.Context, types.Hash32, p2p.Peer, []byte) error) *SyncValidatorHandleMessageCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *SyncValidatorHandleMessageCall) DoAndReturn(f func(context.Context, types.Hash32, p2p.Peer, []byte) error) *SyncValidatorHandleMessageCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // MockPoetValidator is a mock of PoetValidator interface.
@@ -120,9 +168,33 @@ func (m *MockPoetValidator) ValidateAndStoreMsg(arg0 context.Context, arg1 types
 }
 
 // ValidateAndStoreMsg indicates an expected call of ValidateAndStoreMsg.
-func (mr *MockPoetValidatorMockRecorder) ValidateAndStoreMsg(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+func (mr *MockPoetValidatorMockRecorder) ValidateAndStoreMsg(arg0, arg1, arg2, arg3 interface{}) *PoetValidatorValidateAndStoreMsgCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateAndStoreMsg", reflect.TypeOf((*MockPoetValidator)(nil).ValidateAndStoreMsg), arg0, arg1, arg2, arg3)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateAndStoreMsg", reflect.TypeOf((*MockPoetValidator)(nil).ValidateAndStoreMsg), arg0, arg1, arg2, arg3)
+	return &PoetValidatorValidateAndStoreMsgCall{Call: call}
+}
+
+// PoetValidatorValidateAndStoreMsgCall wrap *gomock.Call
+type PoetValidatorValidateAndStoreMsgCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *PoetValidatorValidateAndStoreMsgCall) Return(arg0 error) *PoetValidatorValidateAndStoreMsgCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *PoetValidatorValidateAndStoreMsgCall) Do(f func(context.Context, types.Hash32, p2p.Peer, []byte) error) *PoetValidatorValidateAndStoreMsgCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *PoetValidatorValidateAndStoreMsgCall) DoAndReturn(f func(context.Context, types.Hash32, p2p.Peer, []byte) error) *PoetValidatorValidateAndStoreMsgCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // MockmeshProvider is a mock of meshProvider interface.
@@ -157,9 +229,33 @@ func (m *MockmeshProvider) LastVerified() types.LayerID {
 }
 
 // LastVerified indicates an expected call of LastVerified.
-func (mr *MockmeshProviderMockRecorder) LastVerified() *gomock.Call {
+func (mr *MockmeshProviderMockRecorder) LastVerified() *meshProviderLastVerifiedCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LastVerified", reflect.TypeOf((*MockmeshProvider)(nil).LastVerified))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LastVerified", reflect.TypeOf((*MockmeshProvider)(nil).LastVerified))
+	return &meshProviderLastVerifiedCall{Call: call}
+}
+
+// meshProviderLastVerifiedCall wrap *gomock.Call
+type meshProviderLastVerifiedCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *meshProviderLastVerifiedCall) Return(arg0 types.LayerID) *meshProviderLastVerifiedCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *meshProviderLastVerifiedCall) Do(f func() types.LayerID) *meshProviderLastVerifiedCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *meshProviderLastVerifiedCall) DoAndReturn(f func() types.LayerID) *meshProviderLastVerifiedCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // Mockhost is a mock of host interface.
@@ -194,9 +290,33 @@ func (m *Mockhost) Close() error {
 }
 
 // Close indicates an expected call of Close.
-func (mr *MockhostMockRecorder) Close() *gomock.Call {
+func (mr *MockhostMockRecorder) Close() *hostCloseCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*Mockhost)(nil).Close))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*Mockhost)(nil).Close))
+	return &hostCloseCall{Call: call}
+}
+
+// hostCloseCall wrap *gomock.Call
+type hostCloseCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *hostCloseCall) Return(arg0 error) *hostCloseCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *hostCloseCall) Do(f func() error) *hostCloseCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *hostCloseCall) DoAndReturn(f func() error) *hostCloseCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // Connected mocks base method.
@@ -208,9 +328,33 @@ func (m *Mockhost) Connected(arg0 p2p.Peer) bool {
 }
 
 // Connected indicates an expected call of Connected.
-func (mr *MockhostMockRecorder) Connected(arg0 interface{}) *gomock.Call {
+func (mr *MockhostMockRecorder) Connected(arg0 interface{}) *hostConnectedCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connected", reflect.TypeOf((*Mockhost)(nil).Connected), arg0)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connected", reflect.TypeOf((*Mockhost)(nil).Connected), arg0)
+	return &hostConnectedCall{Call: call}
+}
+
+// hostConnectedCall wrap *gomock.Call
+type hostConnectedCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *hostConnectedCall) Return(arg0 bool) *hostConnectedCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *hostConnectedCall) Do(f func(p2p.Peer) bool) *hostConnectedCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *hostConnectedCall) DoAndReturn(f func(p2p.Peer) bool) *hostConnectedCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // GetPeers mocks base method.
@@ -222,9 +366,33 @@ func (m *Mockhost) GetPeers() []p2p.Peer {
 }
 
 // GetPeers indicates an expected call of GetPeers.
-func (mr *MockhostMockRecorder) GetPeers() *gomock.Call {
+func (mr *MockhostMockRecorder) GetPeers() *hostGetPeersCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPeers", reflect.TypeOf((*Mockhost)(nil).GetPeers))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPeers", reflect.TypeOf((*Mockhost)(nil).GetPeers))
+	return &hostGetPeersCall{Call: call}
+}
+
+// hostGetPeersCall wrap *gomock.Call
+type hostGetPeersCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *hostGetPeersCall) Return(arg0 []p2p.Peer) *hostGetPeersCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *hostGetPeersCall) Do(f func() []p2p.Peer) *hostGetPeersCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *hostGetPeersCall) DoAndReturn(f func() []p2p.Peer) *hostGetPeersCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // ID mocks base method.
@@ -236,9 +404,33 @@ func (m *Mockhost) ID() p2p.Peer {
 }
 
 // ID indicates an expected call of ID.
-func (mr *MockhostMockRecorder) ID() *gomock.Call {
+func (mr *MockhostMockRecorder) ID() *hostIDCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ID", reflect.TypeOf((*Mockhost)(nil).ID))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ID", reflect.TypeOf((*Mockhost)(nil).ID))
+	return &hostIDCall{Call: call}
+}
+
+// hostIDCall wrap *gomock.Call
+type hostIDCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *hostIDCall) Return(arg0 p2p.Peer) *hostIDCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *hostIDCall) Do(f func() p2p.Peer) *hostIDCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *hostIDCall) DoAndReturn(f func() p2p.Peer) *hostIDCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // PeerProtocols mocks base method.
@@ -251,7 +443,31 @@ func (m *Mockhost) PeerProtocols(arg0 p2p.Peer) ([]protocol.ID, error) {
 }
 
 // PeerProtocols indicates an expected call of PeerProtocols.
-func (mr *MockhostMockRecorder) PeerProtocols(arg0 interface{}) *gomock.Call {
+func (mr *MockhostMockRecorder) PeerProtocols(arg0 interface{}) *hostPeerProtocolsCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PeerProtocols", reflect.TypeOf((*Mockhost)(nil).PeerProtocols), arg0)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PeerProtocols", reflect.TypeOf((*Mockhost)(nil).PeerProtocols), arg0)
+	return &hostPeerProtocolsCall{Call: call}
+}
+
+// hostPeerProtocolsCall wrap *gomock.Call
+type hostPeerProtocolsCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *hostPeerProtocolsCall) Return(arg0 []protocol.ID, arg1 error) *hostPeerProtocolsCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *hostPeerProtocolsCall) Do(f func(p2p.Peer) ([]protocol.ID, error)) *hostPeerProtocolsCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *hostPeerProtocolsCall) DoAndReturn(f func(p2p.Peer) ([]protocol.ID, error)) *hostPeerProtocolsCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }

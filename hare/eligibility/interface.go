@@ -4,7 +4,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-//go:generate mockgen -package=eligibility -destination=./mocks.go -source=./interface.go
+//go:generate mockgen -typed -package=eligibility -destination=./mocks.go -source=./interface.go
 
 type activeSetCache interface {
 	Add(key types.EpochID, value *cachedActiveSet) (evicted bool)

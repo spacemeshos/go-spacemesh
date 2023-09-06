@@ -44,9 +44,33 @@ func (m *MockSyncStateProvider) IsBeaconSynced(arg0 types.EpochID) bool {
 }
 
 // IsBeaconSynced indicates an expected call of IsBeaconSynced.
-func (mr *MockSyncStateProviderMockRecorder) IsBeaconSynced(arg0 interface{}) *gomock.Call {
+func (mr *MockSyncStateProviderMockRecorder) IsBeaconSynced(arg0 interface{}) *SyncStateProviderIsBeaconSyncedCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsBeaconSynced", reflect.TypeOf((*MockSyncStateProvider)(nil).IsBeaconSynced), arg0)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsBeaconSynced", reflect.TypeOf((*MockSyncStateProvider)(nil).IsBeaconSynced), arg0)
+	return &SyncStateProviderIsBeaconSyncedCall{Call: call}
+}
+
+// SyncStateProviderIsBeaconSyncedCall wrap *gomock.Call
+type SyncStateProviderIsBeaconSyncedCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *SyncStateProviderIsBeaconSyncedCall) Return(arg0 bool) *SyncStateProviderIsBeaconSyncedCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *SyncStateProviderIsBeaconSyncedCall) Do(f func(types.EpochID) bool) *SyncStateProviderIsBeaconSyncedCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *SyncStateProviderIsBeaconSyncedCall) DoAndReturn(f func(types.EpochID) bool) *SyncStateProviderIsBeaconSyncedCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // IsSynced mocks base method.
@@ -58,7 +82,31 @@ func (m *MockSyncStateProvider) IsSynced(arg0 context.Context) bool {
 }
 
 // IsSynced indicates an expected call of IsSynced.
-func (mr *MockSyncStateProviderMockRecorder) IsSynced(arg0 interface{}) *gomock.Call {
+func (mr *MockSyncStateProviderMockRecorder) IsSynced(arg0 interface{}) *SyncStateProviderIsSyncedCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSynced", reflect.TypeOf((*MockSyncStateProvider)(nil).IsSynced), arg0)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSynced", reflect.TypeOf((*MockSyncStateProvider)(nil).IsSynced), arg0)
+	return &SyncStateProviderIsSyncedCall{Call: call}
+}
+
+// SyncStateProviderIsSyncedCall wrap *gomock.Call
+type SyncStateProviderIsSyncedCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *SyncStateProviderIsSyncedCall) Return(arg0 bool) *SyncStateProviderIsSyncedCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *SyncStateProviderIsSyncedCall) Do(f func(context.Context) bool) *SyncStateProviderIsSyncedCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *SyncStateProviderIsSyncedCall) DoAndReturn(f func(context.Context) bool) *SyncStateProviderIsSyncedCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }

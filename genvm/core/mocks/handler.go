@@ -44,9 +44,33 @@ func (m *MockHandler) Args(arg0 byte) scale.Type {
 }
 
 // Args indicates an expected call of Args.
-func (mr *MockHandlerMockRecorder) Args(arg0 interface{}) *gomock.Call {
+func (mr *MockHandlerMockRecorder) Args(arg0 interface{}) *HandlerArgsCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Args", reflect.TypeOf((*MockHandler)(nil).Args), arg0)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Args", reflect.TypeOf((*MockHandler)(nil).Args), arg0)
+	return &HandlerArgsCall{Call: call}
+}
+
+// HandlerArgsCall wrap *gomock.Call
+type HandlerArgsCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *HandlerArgsCall) Return(arg0 scale.Type) *HandlerArgsCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *HandlerArgsCall) Do(f func(byte) scale.Type) *HandlerArgsCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *HandlerArgsCall) DoAndReturn(f func(byte) scale.Type) *HandlerArgsCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // Exec mocks base method.
@@ -58,9 +82,33 @@ func (m *MockHandler) Exec(arg0 core.Host, arg1 byte, arg2 scale.Encodable) erro
 }
 
 // Exec indicates an expected call of Exec.
-func (mr *MockHandlerMockRecorder) Exec(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockHandlerMockRecorder) Exec(arg0, arg1, arg2 interface{}) *HandlerExecCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockHandler)(nil).Exec), arg0, arg1, arg2)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockHandler)(nil).Exec), arg0, arg1, arg2)
+	return &HandlerExecCall{Call: call}
+}
+
+// HandlerExecCall wrap *gomock.Call
+type HandlerExecCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *HandlerExecCall) Return(arg0 error) *HandlerExecCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *HandlerExecCall) Do(f func(core.Host, byte, scale.Encodable) error) *HandlerExecCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *HandlerExecCall) DoAndReturn(f func(core.Host, byte, scale.Encodable) error) *HandlerExecCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // Load mocks base method.
@@ -73,9 +121,33 @@ func (m *MockHandler) Load(arg0 []byte) (core.Template, error) {
 }
 
 // Load indicates an expected call of Load.
-func (mr *MockHandlerMockRecorder) Load(arg0 interface{}) *gomock.Call {
+func (mr *MockHandlerMockRecorder) Load(arg0 interface{}) *HandlerLoadCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Load", reflect.TypeOf((*MockHandler)(nil).Load), arg0)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Load", reflect.TypeOf((*MockHandler)(nil).Load), arg0)
+	return &HandlerLoadCall{Call: call}
+}
+
+// HandlerLoadCall wrap *gomock.Call
+type HandlerLoadCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *HandlerLoadCall) Return(arg0 core.Template, arg1 error) *HandlerLoadCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *HandlerLoadCall) Do(f func([]byte) (core.Template, error)) *HandlerLoadCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *HandlerLoadCall) DoAndReturn(f func([]byte) (core.Template, error)) *HandlerLoadCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // New mocks base method.
@@ -88,9 +160,33 @@ func (m *MockHandler) New(arg0 interface{}) (core.Template, error) {
 }
 
 // New indicates an expected call of New.
-func (mr *MockHandlerMockRecorder) New(arg0 interface{}) *gomock.Call {
+func (mr *MockHandlerMockRecorder) New(arg0 interface{}) *HandlerNewCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "New", reflect.TypeOf((*MockHandler)(nil).New), arg0)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "New", reflect.TypeOf((*MockHandler)(nil).New), arg0)
+	return &HandlerNewCall{Call: call}
+}
+
+// HandlerNewCall wrap *gomock.Call
+type HandlerNewCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *HandlerNewCall) Return(arg0 core.Template, arg1 error) *HandlerNewCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *HandlerNewCall) Do(f func(interface{}) (core.Template, error)) *HandlerNewCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *HandlerNewCall) DoAndReturn(f func(interface{}) (core.Template, error)) *HandlerNewCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // Parse mocks base method.
@@ -103,7 +199,31 @@ func (m *MockHandler) Parse(arg0 core.Host, arg1 byte, arg2 *scale.Decoder) (cor
 }
 
 // Parse indicates an expected call of Parse.
-func (mr *MockHandlerMockRecorder) Parse(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockHandlerMockRecorder) Parse(arg0, arg1, arg2 interface{}) *HandlerParseCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Parse", reflect.TypeOf((*MockHandler)(nil).Parse), arg0, arg1, arg2)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Parse", reflect.TypeOf((*MockHandler)(nil).Parse), arg0, arg1, arg2)
+	return &HandlerParseCall{Call: call}
+}
+
+// HandlerParseCall wrap *gomock.Call
+type HandlerParseCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *HandlerParseCall) Return(arg0 core.ParseOutput, arg1 error) *HandlerParseCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *HandlerParseCall) Do(f func(core.Host, byte, *scale.Decoder) (core.ParseOutput, error)) *HandlerParseCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *HandlerParseCall) DoAndReturn(f func(core.Host, byte, *scale.Decoder) (core.ParseOutput, error)) *HandlerParseCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }

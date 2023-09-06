@@ -41,7 +41,7 @@ const (
 	maxPoetGetProofJitter = 0.04
 )
 
-//go:generate mockgen -package=activation -destination=./nipost_mocks.go -source=./nipost.go PoetProvingServiceClient
+//go:generate mockgen -typed -package=activation -destination=./nipost_mocks.go -source=./nipost.go PoetProvingServiceClient
 
 // PoetProvingServiceClient provides a gateway to a trust-less public proving service, which may serve many PoET
 // proving clients, and thus enormously reduce the cost-per-proof for PoET since each additional proof adds only

@@ -46,9 +46,33 @@ func (m *MockHost) Network() network.Network {
 }
 
 // Network indicates an expected call of Network.
-func (mr *MockHostMockRecorder) Network() *gomock.Call {
+func (mr *MockHostMockRecorder) Network() *HostNetworkCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Network", reflect.TypeOf((*MockHost)(nil).Network))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Network", reflect.TypeOf((*MockHost)(nil).Network))
+	return &HostNetworkCall{Call: call}
+}
+
+// HostNetworkCall wrap *gomock.Call
+type HostNetworkCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *HostNetworkCall) Return(arg0 network.Network) *HostNetworkCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *HostNetworkCall) Do(f func() network.Network) *HostNetworkCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *HostNetworkCall) DoAndReturn(f func() network.Network) *HostNetworkCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // NewStream mocks base method.
@@ -65,10 +89,34 @@ func (m *MockHost) NewStream(arg0 context.Context, arg1 peer.ID, arg2 ...protoco
 }
 
 // NewStream indicates an expected call of NewStream.
-func (mr *MockHostMockRecorder) NewStream(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+func (mr *MockHostMockRecorder) NewStream(arg0, arg1 interface{}, arg2 ...interface{}) *HostNewStreamCall {
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]interface{}{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewStream", reflect.TypeOf((*MockHost)(nil).NewStream), varargs...)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewStream", reflect.TypeOf((*MockHost)(nil).NewStream), varargs...)
+	return &HostNewStreamCall{Call: call}
+}
+
+// HostNewStreamCall wrap *gomock.Call
+type HostNewStreamCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *HostNewStreamCall) Return(arg0 network.Stream, arg1 error) *HostNewStreamCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *HostNewStreamCall) Do(f func(context.Context, peer.ID, ...protocol.ID) (network.Stream, error)) *HostNewStreamCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *HostNewStreamCall) DoAndReturn(f func(context.Context, peer.ID, ...protocol.ID) (network.Stream, error)) *HostNewStreamCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // SetStreamHandler mocks base method.
@@ -78,7 +126,31 @@ func (m *MockHost) SetStreamHandler(arg0 protocol.ID, arg1 network.StreamHandler
 }
 
 // SetStreamHandler indicates an expected call of SetStreamHandler.
-func (mr *MockHostMockRecorder) SetStreamHandler(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockHostMockRecorder) SetStreamHandler(arg0, arg1 interface{}) *HostSetStreamHandlerCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetStreamHandler", reflect.TypeOf((*MockHost)(nil).SetStreamHandler), arg0, arg1)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetStreamHandler", reflect.TypeOf((*MockHost)(nil).SetStreamHandler), arg0, arg1)
+	return &HostSetStreamHandlerCall{Call: call}
+}
+
+// HostSetStreamHandlerCall wrap *gomock.Call
+type HostSetStreamHandlerCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *HostSetStreamHandlerCall) Return() *HostSetStreamHandlerCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *HostSetStreamHandlerCall) Do(f func(protocol.ID, network.StreamHandler)) *HostSetStreamHandlerCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *HostSetStreamHandlerCall) DoAndReturn(f func(protocol.ID, network.StreamHandler)) *HostSetStreamHandlerCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }

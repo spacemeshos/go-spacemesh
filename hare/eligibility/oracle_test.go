@@ -606,7 +606,7 @@ func TestActives_ConcurrentCalls(t *testing.T) {
 	mc := NewMockactiveSetCache(gomock.NewController(t))
 	firstCall := true
 	mc.EXPECT().Get(layer.GetEpoch() - 1).DoAndReturn(
-		func(key any) (any, bool) {
+		func(types.EpochID) (*cachedActiveSet, bool) {
 			if firstCall {
 				firstCall = false
 				return nil, false

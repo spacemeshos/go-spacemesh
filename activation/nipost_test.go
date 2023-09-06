@@ -475,7 +475,7 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 	postProvider.EXPECT().CommitmentAtx().Return(types.EmptyATXID, nil).AnyTimes()
 	postProvider.EXPECT().LastOpts().Return(&PostSetupOpts{}).AnyTimes()
 	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, challenge []byte, _ proving.OptionFunc) (*types.Post, *types.PostMetadata, error) {
+		func(ctx context.Context, challenge []byte, _ ...proving.OptionFunc) (*types.Post, *types.PostMetadata, error) {
 			return &types.Post{}, &types.PostMetadata{
 				Challenge: challenge,
 			}, nil
@@ -551,7 +551,7 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 	postProvider.EXPECT().CommitmentAtx().Return(types.EmptyATXID, nil).AnyTimes()
 	postProvider.EXPECT().LastOpts().Return(&PostSetupOpts{}).AnyTimes()
 	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, challenge []byte, _ proving.OptionFunc) (*types.Post, *types.PostMetadata, error) {
+		func(_ context.Context, challenge []byte, _ ...proving.OptionFunc) (*types.Post, *types.PostMetadata, error) {
 			return &types.Post{}, &types.PostMetadata{
 				Challenge: challenge,
 			}, nil
@@ -948,7 +948,7 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 	postProvider.EXPECT().CommitmentAtx().Return(types.EmptyATXID, nil).AnyTimes()
 	postProvider.EXPECT().LastOpts().Return(&PostSetupOpts{}).AnyTimes()
 	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, challenge []byte, _ proving.OptionFunc) (*types.Post, *types.PostMetadata, error) {
+		func(ctx context.Context, challenge []byte, _ ...proving.OptionFunc) (*types.Post, *types.PostMetadata, error) {
 			return &types.Post{}, &types.PostMetadata{
 				Challenge: challenge,
 			}, nil

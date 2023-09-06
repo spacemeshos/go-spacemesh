@@ -385,7 +385,7 @@ func TestBuilder_StartSmeshing_PanicsOnErrInStartSession(t *testing.T) {
 
 	l := log.NewMockLogger(gomock.NewController(t))
 	panicCalled := make(chan struct{})
-	l.EXPECT().Panic(gomock.Any(), gomock.Any()).Do(func(_, _ any) {
+	l.EXPECT().Panic(gomock.Any(), gomock.Any()).Do(func(string, ...any) {
 		close(panicCalled)
 	})
 	tab := newTestBuilder(t)
@@ -509,7 +509,12 @@ func TestBuilder_Loop_WaitsOnStaleChallenge(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	tab.mclock.EXPECT().AwaitLayer(currLayer.Add(1)).Do(func(got types.LayerID) { cancel() })
+	tab.mclock.EXPECT().AwaitLayer(currLayer.Add(1)).Do(func(got types.LayerID) <-chan struct{} {
+		cancel()
+		ch := make(chan struct{})
+		close(ch)
+		return ch
+	})
 
 	// Act & Verify
 	var eg errgroup.Group

@@ -43,7 +43,31 @@ func (m *MockAccountUpdater) Update(arg0 types.Account) error {
 }
 
 // Update indicates an expected call of Update.
-func (mr *MockAccountUpdaterMockRecorder) Update(arg0 interface{}) *gomock.Call {
+func (mr *MockAccountUpdaterMockRecorder) Update(arg0 interface{}) *AccountUpdaterUpdateCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockAccountUpdater)(nil).Update), arg0)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockAccountUpdater)(nil).Update), arg0)
+	return &AccountUpdaterUpdateCall{Call: call}
+}
+
+// AccountUpdaterUpdateCall wrap *gomock.Call
+type AccountUpdaterUpdateCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *AccountUpdaterUpdateCall) Return(arg0 error) *AccountUpdaterUpdateCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *AccountUpdaterUpdateCall) Do(f func(types.Account) error) *AccountUpdaterUpdateCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *AccountUpdaterUpdateCall) DoAndReturn(f func(types.Account) error) *AccountUpdaterUpdateCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }

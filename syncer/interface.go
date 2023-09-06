@@ -11,7 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 )
 
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
+//go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./interface.go
 
 type layerTicker interface {
 	CurrentLayer() types.LayerID

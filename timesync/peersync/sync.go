@@ -28,7 +28,7 @@ var (
 	ErrTimesyncFailed = errors.New("timesync: failed request")
 )
 
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./sync.go
+//go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./sync.go
 
 // Time provides interface for current time.
 type Time interface {
