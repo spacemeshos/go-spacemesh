@@ -15,6 +15,7 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 * [#4965](https://github.com/spacemeshos/go-spacemesh/pull/4965) Updates to PoST:
   * Prevent errors when shutting down the node that can result in a crash
   * `postdata_metadata.json` is now updated atomically to prevent corruption of the file.
+* [#4969](https://github.com/spacemeshos/go-spacemesh/pull/4969) Make nodes fetch from PoET 111 for round 3 if they were able to register to PoET 110.
 
 ## v1.1.4
 
@@ -28,13 +29,13 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 Replacement for original version of hare. Won't be enabled on mainnet for now.
 Otherwise protocol uses significantly less traffic (atlest x20), and will allow
-to set lower expected latency in the network, eventually reducing layer time. 
+to set lower expected latency in the network, eventually reducing layer time.
 
 ### Improvements
 
 * [#4879](https://github.com/spacemeshos/go-spacemesh/pull/4795) Makes majority calculation weighted for optimistic filtering.
 The network will start using the new algorithm at layer 18_000 (2023-09-14 20:00:00 +0000 UTC)
-* [#4923](https://github.com/spacemeshos/go-spacemesh/pull/4923) Faster ballot eligibility validation. Improves sync speed. 
+* [#4923](https://github.com/spacemeshos/go-spacemesh/pull/4923) Faster ballot eligibility validation. Improves sync speed.
 * [#4934](https://github.com/spacemeshos/go-spacemesh/pull/4934) Ensure state is synced before participating in tortoise consensus.
 * [#4939](https://github.com/spacemeshos/go-spacemesh/pull/4939) Make sure to fetch data from peers that are already connected.
 * [#4936](https://github.com/spacemeshos/go-spacemesh/pull/4936) Use correct hare active set after node was synced. Otherwise applied layer may lag slightly behind the rest.
