@@ -266,7 +266,7 @@ func (pb *ProposalBuilder) createProposal(
 			EligibilityCount: epochEligibility.Slots,
 		}
 		if err := activesets.Add(pb.cdb, ib.EpochData.ActiveSetHash, &types.EpochActiveSet{
-			Epoch: epochEligibility.Epoch,
+			Epoch: epoch,
 			Set:   epochEligibility.ActiveSet,
 		}); err != nil {
 			return nil, err
