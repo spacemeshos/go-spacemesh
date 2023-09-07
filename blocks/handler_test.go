@@ -42,7 +42,8 @@ func TestHandleSyncedBlock(t *testing.T) {
 		LayerIndex: layer,
 		Rewards: []types.AnyReward{
 			{AtxID: types.ATXID{1}, Weight: types.RatNum{Num: 1, Denom: 1}},
-			{AtxID: types.ATXID{2}, Weight: types.RatNum{Num: 1, Denom: 1}}},
+			{AtxID: types.ATXID{2}, Weight: types.RatNum{Num: 1, Denom: 1}},
+		},
 		TxIDs: []types.TransactionID{{1}, {2}},
 	}}
 	good.Initialize()
@@ -51,7 +52,8 @@ func TestHandleSyncedBlock(t *testing.T) {
 		LayerIndex: layer,
 		Rewards: []types.AnyReward{
 			{AtxID: types.ATXID{1}},
-			{AtxID: types.ATXID{2}}},
+			{AtxID: types.ATXID{2}},
+		},
 	}}
 	badrewards.Initialize()
 
