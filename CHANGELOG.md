@@ -2,6 +2,18 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## UNRELEASED
+
+### Upgrade information
+
+### Highlights
+
+### Features
+
+### Improvements
+
+* [#4965](https://github.com/spacemeshos/go-spacemesh/pull/4965) Updates to PoST to prevent races and corruption of `postdata_metadata.json`.
+
 ## v1.1.4
 
 ### Upgrade information
