@@ -62,7 +62,7 @@ type Response struct {
 	Error string `scale:"max=1024"`     // TODO(mafa): make error code instead of string
 }
 
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./server.go
+//go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./server.go
 
 // Host is a subset of libp2p Host interface that needs to be implemented to be usable with server.
 type Host interface {

@@ -8,8 +8,8 @@ import (
 	context "context"
 	reflect "reflect"
 
-	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	gomock "go.uber.org/mock/gomock"
 )
 
 // MockblockFetcher is a mock of blockFetcher interface.
@@ -44,7 +44,31 @@ func (m *MockblockFetcher) GetBlocks(arg0 context.Context, arg1 []types.BlockID)
 }
 
 // GetBlocks indicates an expected call of GetBlocks.
-func (mr *MockblockFetcherMockRecorder) GetBlocks(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockblockFetcherMockRecorder) GetBlocks(arg0, arg1 interface{}) *blockFetcherGetBlocksCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlocks", reflect.TypeOf((*MockblockFetcher)(nil).GetBlocks), arg0, arg1)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlocks", reflect.TypeOf((*MockblockFetcher)(nil).GetBlocks), arg0, arg1)
+	return &blockFetcherGetBlocksCall{Call: call}
+}
+
+// blockFetcherGetBlocksCall wrap *gomock.Call
+type blockFetcherGetBlocksCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *blockFetcherGetBlocksCall) Return(arg0 error) *blockFetcherGetBlocksCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *blockFetcherGetBlocksCall) Do(f func(context.Context, []types.BlockID) error) *blockFetcherGetBlocksCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *blockFetcherGetBlocksCall) DoAndReturn(f func(context.Context, []types.BlockID) error) *blockFetcherGetBlocksCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }

@@ -3,9 +3,9 @@ package core_test
 import (
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/go-scale"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/core/mocks"

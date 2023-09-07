@@ -9,7 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
-//go:generate mockgen -package=txs -destination=./txs_mocks.go -source=./interface.go
+//go:generate mockgen -typed -package=txs -destination=./txs_mocks.go -source=./interface.go
 
 type conservativeState interface {
 	HasTx(types.TransactionID) (bool, error)

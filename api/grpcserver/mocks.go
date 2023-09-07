@@ -9,11 +9,11 @@ import (
 	reflect "reflect"
 	time "time"
 
-	gomock "github.com/golang/mock/gomock"
 	activation "github.com/spacemeshos/go-spacemesh/activation"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
 	system "github.com/spacemeshos/go-spacemesh/system"
+	gomock "go.uber.org/mock/gomock"
 )
 
 // MocknetworkIdentity is a mock of networkIdentity interface.
@@ -48,9 +48,33 @@ func (m *MocknetworkIdentity) ID() p2p.Peer {
 }
 
 // ID indicates an expected call of ID.
-func (mr *MocknetworkIdentityMockRecorder) ID() *gomock.Call {
+func (mr *MocknetworkIdentityMockRecorder) ID() *networkIdentityIDCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ID", reflect.TypeOf((*MocknetworkIdentity)(nil).ID))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ID", reflect.TypeOf((*MocknetworkIdentity)(nil).ID))
+	return &networkIdentityIDCall{Call: call}
+}
+
+// networkIdentityIDCall wrap *gomock.Call
+type networkIdentityIDCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *networkIdentityIDCall) Return(arg0 p2p.Peer) *networkIdentityIDCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *networkIdentityIDCall) Do(f func() p2p.Peer) *networkIdentityIDCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *networkIdentityIDCall) DoAndReturn(f func() p2p.Peer) *networkIdentityIDCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // MockconservativeState is a mock of conservativeState interface.
@@ -86,9 +110,33 @@ func (m *MockconservativeState) GetAllAccounts() ([]*types.Account, error) {
 }
 
 // GetAllAccounts indicates an expected call of GetAllAccounts.
-func (mr *MockconservativeStateMockRecorder) GetAllAccounts() *gomock.Call {
+func (mr *MockconservativeStateMockRecorder) GetAllAccounts() *conservativeStateGetAllAccountsCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllAccounts", reflect.TypeOf((*MockconservativeState)(nil).GetAllAccounts))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllAccounts", reflect.TypeOf((*MockconservativeState)(nil).GetAllAccounts))
+	return &conservativeStateGetAllAccountsCall{Call: call}
+}
+
+// conservativeStateGetAllAccountsCall wrap *gomock.Call
+type conservativeStateGetAllAccountsCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *conservativeStateGetAllAccountsCall) Return(arg0 []*types.Account, arg1 error) *conservativeStateGetAllAccountsCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *conservativeStateGetAllAccountsCall) Do(f func() ([]*types.Account, error)) *conservativeStateGetAllAccountsCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *conservativeStateGetAllAccountsCall) DoAndReturn(f func() ([]*types.Account, error)) *conservativeStateGetAllAccountsCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // GetBalance mocks base method.
@@ -101,9 +149,33 @@ func (m *MockconservativeState) GetBalance(arg0 types.Address) (uint64, error) {
 }
 
 // GetBalance indicates an expected call of GetBalance.
-func (mr *MockconservativeStateMockRecorder) GetBalance(arg0 interface{}) *gomock.Call {
+func (mr *MockconservativeStateMockRecorder) GetBalance(arg0 interface{}) *conservativeStateGetBalanceCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBalance", reflect.TypeOf((*MockconservativeState)(nil).GetBalance), arg0)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBalance", reflect.TypeOf((*MockconservativeState)(nil).GetBalance), arg0)
+	return &conservativeStateGetBalanceCall{Call: call}
+}
+
+// conservativeStateGetBalanceCall wrap *gomock.Call
+type conservativeStateGetBalanceCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *conservativeStateGetBalanceCall) Return(arg0 uint64, arg1 error) *conservativeStateGetBalanceCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *conservativeStateGetBalanceCall) Do(f func(types.Address) (uint64, error)) *conservativeStateGetBalanceCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *conservativeStateGetBalanceCall) DoAndReturn(f func(types.Address) (uint64, error)) *conservativeStateGetBalanceCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // GetLayerStateRoot mocks base method.
@@ -116,9 +188,33 @@ func (m *MockconservativeState) GetLayerStateRoot(arg0 types.LayerID) (types.Has
 }
 
 // GetLayerStateRoot indicates an expected call of GetLayerStateRoot.
-func (mr *MockconservativeStateMockRecorder) GetLayerStateRoot(arg0 interface{}) *gomock.Call {
+func (mr *MockconservativeStateMockRecorder) GetLayerStateRoot(arg0 interface{}) *conservativeStateGetLayerStateRootCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerStateRoot", reflect.TypeOf((*MockconservativeState)(nil).GetLayerStateRoot), arg0)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerStateRoot", reflect.TypeOf((*MockconservativeState)(nil).GetLayerStateRoot), arg0)
+	return &conservativeStateGetLayerStateRootCall{Call: call}
+}
+
+// conservativeStateGetLayerStateRootCall wrap *gomock.Call
+type conservativeStateGetLayerStateRootCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *conservativeStateGetLayerStateRootCall) Return(arg0 types.Hash32, arg1 error) *conservativeStateGetLayerStateRootCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *conservativeStateGetLayerStateRootCall) Do(f func(types.LayerID) (types.Hash32, error)) *conservativeStateGetLayerStateRootCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *conservativeStateGetLayerStateRootCall) DoAndReturn(f func(types.LayerID) (types.Hash32, error)) *conservativeStateGetLayerStateRootCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // GetMeshTransaction mocks base method.
@@ -131,9 +227,33 @@ func (m *MockconservativeState) GetMeshTransaction(arg0 types.TransactionID) (*t
 }
 
 // GetMeshTransaction indicates an expected call of GetMeshTransaction.
-func (mr *MockconservativeStateMockRecorder) GetMeshTransaction(arg0 interface{}) *gomock.Call {
+func (mr *MockconservativeStateMockRecorder) GetMeshTransaction(arg0 interface{}) *conservativeStateGetMeshTransactionCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMeshTransaction", reflect.TypeOf((*MockconservativeState)(nil).GetMeshTransaction), arg0)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMeshTransaction", reflect.TypeOf((*MockconservativeState)(nil).GetMeshTransaction), arg0)
+	return &conservativeStateGetMeshTransactionCall{Call: call}
+}
+
+// conservativeStateGetMeshTransactionCall wrap *gomock.Call
+type conservativeStateGetMeshTransactionCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *conservativeStateGetMeshTransactionCall) Return(arg0 *types.MeshTransaction, arg1 error) *conservativeStateGetMeshTransactionCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *conservativeStateGetMeshTransactionCall) Do(f func(types.TransactionID) (*types.MeshTransaction, error)) *conservativeStateGetMeshTransactionCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *conservativeStateGetMeshTransactionCall) DoAndReturn(f func(types.TransactionID) (*types.MeshTransaction, error)) *conservativeStateGetMeshTransactionCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // GetMeshTransactions mocks base method.
@@ -146,9 +266,33 @@ func (m *MockconservativeState) GetMeshTransactions(arg0 []types.TransactionID) 
 }
 
 // GetMeshTransactions indicates an expected call of GetMeshTransactions.
-func (mr *MockconservativeStateMockRecorder) GetMeshTransactions(arg0 interface{}) *gomock.Call {
+func (mr *MockconservativeStateMockRecorder) GetMeshTransactions(arg0 interface{}) *conservativeStateGetMeshTransactionsCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMeshTransactions", reflect.TypeOf((*MockconservativeState)(nil).GetMeshTransactions), arg0)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMeshTransactions", reflect.TypeOf((*MockconservativeState)(nil).GetMeshTransactions), arg0)
+	return &conservativeStateGetMeshTransactionsCall{Call: call}
+}
+
+// conservativeStateGetMeshTransactionsCall wrap *gomock.Call
+type conservativeStateGetMeshTransactionsCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *conservativeStateGetMeshTransactionsCall) Return(arg0 []*types.MeshTransaction, arg1 map[types.TransactionID]struct{}) *conservativeStateGetMeshTransactionsCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *conservativeStateGetMeshTransactionsCall) Do(f func([]types.TransactionID) ([]*types.MeshTransaction, map[types.TransactionID]struct{})) *conservativeStateGetMeshTransactionsCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *conservativeStateGetMeshTransactionsCall) DoAndReturn(f func([]types.TransactionID) ([]*types.MeshTransaction, map[types.TransactionID]struct{})) *conservativeStateGetMeshTransactionsCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // GetNonce mocks base method.
@@ -161,9 +305,33 @@ func (m *MockconservativeState) GetNonce(arg0 types.Address) (types.Nonce, error
 }
 
 // GetNonce indicates an expected call of GetNonce.
-func (mr *MockconservativeStateMockRecorder) GetNonce(arg0 interface{}) *gomock.Call {
+func (mr *MockconservativeStateMockRecorder) GetNonce(arg0 interface{}) *conservativeStateGetNonceCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNonce", reflect.TypeOf((*MockconservativeState)(nil).GetNonce), arg0)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNonce", reflect.TypeOf((*MockconservativeState)(nil).GetNonce), arg0)
+	return &conservativeStateGetNonceCall{Call: call}
+}
+
+// conservativeStateGetNonceCall wrap *gomock.Call
+type conservativeStateGetNonceCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *conservativeStateGetNonceCall) Return(arg0 types.Nonce, arg1 error) *conservativeStateGetNonceCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *conservativeStateGetNonceCall) Do(f func(types.Address) (types.Nonce, error)) *conservativeStateGetNonceCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *conservativeStateGetNonceCall) DoAndReturn(f func(types.Address) (types.Nonce, error)) *conservativeStateGetNonceCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // GetProjection mocks base method.
@@ -176,9 +344,33 @@ func (m *MockconservativeState) GetProjection(arg0 types.Address) (uint64, uint6
 }
 
 // GetProjection indicates an expected call of GetProjection.
-func (mr *MockconservativeStateMockRecorder) GetProjection(arg0 interface{}) *gomock.Call {
+func (mr *MockconservativeStateMockRecorder) GetProjection(arg0 interface{}) *conservativeStateGetProjectionCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProjection", reflect.TypeOf((*MockconservativeState)(nil).GetProjection), arg0)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProjection", reflect.TypeOf((*MockconservativeState)(nil).GetProjection), arg0)
+	return &conservativeStateGetProjectionCall{Call: call}
+}
+
+// conservativeStateGetProjectionCall wrap *gomock.Call
+type conservativeStateGetProjectionCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *conservativeStateGetProjectionCall) Return(arg0, arg1 uint64) *conservativeStateGetProjectionCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *conservativeStateGetProjectionCall) Do(f func(types.Address) (uint64, uint64)) *conservativeStateGetProjectionCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *conservativeStateGetProjectionCall) DoAndReturn(f func(types.Address) (uint64, uint64)) *conservativeStateGetProjectionCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // GetStateRoot mocks base method.
@@ -191,9 +383,33 @@ func (m *MockconservativeState) GetStateRoot() (types.Hash32, error) {
 }
 
 // GetStateRoot indicates an expected call of GetStateRoot.
-func (mr *MockconservativeStateMockRecorder) GetStateRoot() *gomock.Call {
+func (mr *MockconservativeStateMockRecorder) GetStateRoot() *conservativeStateGetStateRootCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStateRoot", reflect.TypeOf((*MockconservativeState)(nil).GetStateRoot))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStateRoot", reflect.TypeOf((*MockconservativeState)(nil).GetStateRoot))
+	return &conservativeStateGetStateRootCall{Call: call}
+}
+
+// conservativeStateGetStateRootCall wrap *gomock.Call
+type conservativeStateGetStateRootCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *conservativeStateGetStateRootCall) Return(arg0 types.Hash32, arg1 error) *conservativeStateGetStateRootCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *conservativeStateGetStateRootCall) Do(f func() (types.Hash32, error)) *conservativeStateGetStateRootCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *conservativeStateGetStateRootCall) DoAndReturn(f func() (types.Hash32, error)) *conservativeStateGetStateRootCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // GetTransactionsByAddress mocks base method.
@@ -206,9 +422,33 @@ func (m *MockconservativeState) GetTransactionsByAddress(arg0, arg1 types.LayerI
 }
 
 // GetTransactionsByAddress indicates an expected call of GetTransactionsByAddress.
-func (mr *MockconservativeStateMockRecorder) GetTransactionsByAddress(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockconservativeStateMockRecorder) GetTransactionsByAddress(arg0, arg1, arg2 interface{}) *conservativeStateGetTransactionsByAddressCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransactionsByAddress", reflect.TypeOf((*MockconservativeState)(nil).GetTransactionsByAddress), arg0, arg1, arg2)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransactionsByAddress", reflect.TypeOf((*MockconservativeState)(nil).GetTransactionsByAddress), arg0, arg1, arg2)
+	return &conservativeStateGetTransactionsByAddressCall{Call: call}
+}
+
+// conservativeStateGetTransactionsByAddressCall wrap *gomock.Call
+type conservativeStateGetTransactionsByAddressCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *conservativeStateGetTransactionsByAddressCall) Return(arg0 []*types.MeshTransaction, arg1 error) *conservativeStateGetTransactionsByAddressCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *conservativeStateGetTransactionsByAddressCall) Do(f func(types.LayerID, types.LayerID, types.Address) ([]*types.MeshTransaction, error)) *conservativeStateGetTransactionsByAddressCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *conservativeStateGetTransactionsByAddressCall) DoAndReturn(f func(types.LayerID, types.LayerID, types.Address) ([]*types.MeshTransaction, error)) *conservativeStateGetTransactionsByAddressCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // Validation mocks base method.
@@ -220,9 +460,33 @@ func (m *MockconservativeState) Validation(raw types.RawTx) system.ValidationReq
 }
 
 // Validation indicates an expected call of Validation.
-func (mr *MockconservativeStateMockRecorder) Validation(raw interface{}) *gomock.Call {
+func (mr *MockconservativeStateMockRecorder) Validation(raw interface{}) *conservativeStateValidationCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Validation", reflect.TypeOf((*MockconservativeState)(nil).Validation), raw)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Validation", reflect.TypeOf((*MockconservativeState)(nil).Validation), raw)
+	return &conservativeStateValidationCall{Call: call}
+}
+
+// conservativeStateValidationCall wrap *gomock.Call
+type conservativeStateValidationCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *conservativeStateValidationCall) Return(arg0 system.ValidationRequest) *conservativeStateValidationCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *conservativeStateValidationCall) Do(f func(types.RawTx) system.ValidationRequest) *conservativeStateValidationCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *conservativeStateValidationCall) DoAndReturn(f func(types.RawTx) system.ValidationRequest) *conservativeStateValidationCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // Mocksyncer is a mock of syncer interface.
@@ -257,9 +521,33 @@ func (m *Mocksyncer) IsSynced(arg0 context.Context) bool {
 }
 
 // IsSynced indicates an expected call of IsSynced.
-func (mr *MocksyncerMockRecorder) IsSynced(arg0 interface{}) *gomock.Call {
+func (mr *MocksyncerMockRecorder) IsSynced(arg0 interface{}) *syncerIsSyncedCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSynced", reflect.TypeOf((*Mocksyncer)(nil).IsSynced), arg0)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSynced", reflect.TypeOf((*Mocksyncer)(nil).IsSynced), arg0)
+	return &syncerIsSyncedCall{Call: call}
+}
+
+// syncerIsSyncedCall wrap *gomock.Call
+type syncerIsSyncedCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *syncerIsSyncedCall) Return(arg0 bool) *syncerIsSyncedCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *syncerIsSyncedCall) Do(f func(context.Context) bool) *syncerIsSyncedCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *syncerIsSyncedCall) DoAndReturn(f func(context.Context) bool) *syncerIsSyncedCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // MocktxValidator is a mock of txValidator interface.
@@ -294,9 +582,33 @@ func (m *MocktxValidator) VerifyAndCacheTx(arg0 context.Context, arg1 []byte) er
 }
 
 // VerifyAndCacheTx indicates an expected call of VerifyAndCacheTx.
-func (mr *MocktxValidatorMockRecorder) VerifyAndCacheTx(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MocktxValidatorMockRecorder) VerifyAndCacheTx(arg0, arg1 interface{}) *txValidatorVerifyAndCacheTxCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VerifyAndCacheTx", reflect.TypeOf((*MocktxValidator)(nil).VerifyAndCacheTx), arg0, arg1)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VerifyAndCacheTx", reflect.TypeOf((*MocktxValidator)(nil).VerifyAndCacheTx), arg0, arg1)
+	return &txValidatorVerifyAndCacheTxCall{Call: call}
+}
+
+// txValidatorVerifyAndCacheTxCall wrap *gomock.Call
+type txValidatorVerifyAndCacheTxCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *txValidatorVerifyAndCacheTxCall) Return(arg0 error) *txValidatorVerifyAndCacheTxCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *txValidatorVerifyAndCacheTxCall) Do(f func(context.Context, []byte) error) *txValidatorVerifyAndCacheTxCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *txValidatorVerifyAndCacheTxCall) DoAndReturn(f func(context.Context, []byte) error) *txValidatorVerifyAndCacheTxCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // MockatxProvider is a mock of atxProvider interface.
@@ -332,9 +644,33 @@ func (m *MockatxProvider) GetFullAtx(id types.ATXID) (*types.VerifiedActivationT
 }
 
 // GetFullAtx indicates an expected call of GetFullAtx.
-func (mr *MockatxProviderMockRecorder) GetFullAtx(id interface{}) *gomock.Call {
+func (mr *MockatxProviderMockRecorder) GetFullAtx(id interface{}) *atxProviderGetFullAtxCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFullAtx", reflect.TypeOf((*MockatxProvider)(nil).GetFullAtx), id)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFullAtx", reflect.TypeOf((*MockatxProvider)(nil).GetFullAtx), id)
+	return &atxProviderGetFullAtxCall{Call: call}
+}
+
+// atxProviderGetFullAtxCall wrap *gomock.Call
+type atxProviderGetFullAtxCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *atxProviderGetFullAtxCall) Return(arg0 *types.VerifiedActivationTx, arg1 error) *atxProviderGetFullAtxCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *atxProviderGetFullAtxCall) Do(f func(types.ATXID) (*types.VerifiedActivationTx, error)) *atxProviderGetFullAtxCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *atxProviderGetFullAtxCall) DoAndReturn(f func(types.ATXID) (*types.VerifiedActivationTx, error)) *atxProviderGetFullAtxCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // GetMalfeasanceProof mocks base method.
@@ -347,9 +683,33 @@ func (m *MockatxProvider) GetMalfeasanceProof(id types.NodeID) (*types.Malfeasan
 }
 
 // GetMalfeasanceProof indicates an expected call of GetMalfeasanceProof.
-func (mr *MockatxProviderMockRecorder) GetMalfeasanceProof(id interface{}) *gomock.Call {
+func (mr *MockatxProviderMockRecorder) GetMalfeasanceProof(id interface{}) *atxProviderGetMalfeasanceProofCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMalfeasanceProof", reflect.TypeOf((*MockatxProvider)(nil).GetMalfeasanceProof), id)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMalfeasanceProof", reflect.TypeOf((*MockatxProvider)(nil).GetMalfeasanceProof), id)
+	return &atxProviderGetMalfeasanceProofCall{Call: call}
+}
+
+// atxProviderGetMalfeasanceProofCall wrap *gomock.Call
+type atxProviderGetMalfeasanceProofCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *atxProviderGetMalfeasanceProofCall) Return(arg0 *types.MalfeasanceProof, arg1 error) *atxProviderGetMalfeasanceProofCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *atxProviderGetMalfeasanceProofCall) Do(f func(types.NodeID) (*types.MalfeasanceProof, error)) *atxProviderGetMalfeasanceProofCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *atxProviderGetMalfeasanceProofCall) DoAndReturn(f func(types.NodeID) (*types.MalfeasanceProof, error)) *atxProviderGetMalfeasanceProofCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // MaxHeightAtx mocks base method.
@@ -362,9 +722,33 @@ func (m *MockatxProvider) MaxHeightAtx() (types.ATXID, error) {
 }
 
 // MaxHeightAtx indicates an expected call of MaxHeightAtx.
-func (mr *MockatxProviderMockRecorder) MaxHeightAtx() *gomock.Call {
+func (mr *MockatxProviderMockRecorder) MaxHeightAtx() *atxProviderMaxHeightAtxCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MaxHeightAtx", reflect.TypeOf((*MockatxProvider)(nil).MaxHeightAtx))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MaxHeightAtx", reflect.TypeOf((*MockatxProvider)(nil).MaxHeightAtx))
+	return &atxProviderMaxHeightAtxCall{Call: call}
+}
+
+// atxProviderMaxHeightAtxCall wrap *gomock.Call
+type atxProviderMaxHeightAtxCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *atxProviderMaxHeightAtxCall) Return(arg0 types.ATXID, arg1 error) *atxProviderMaxHeightAtxCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *atxProviderMaxHeightAtxCall) Do(f func() (types.ATXID, error)) *atxProviderMaxHeightAtxCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *atxProviderMaxHeightAtxCall) DoAndReturn(f func() (types.ATXID, error)) *atxProviderMaxHeightAtxCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // MockpostSetupProvider is a mock of postSetupProvider interface.
@@ -400,9 +784,33 @@ func (m *MockpostSetupProvider) Benchmark(p activation.PostSetupProvider) (int, 
 }
 
 // Benchmark indicates an expected call of Benchmark.
-func (mr *MockpostSetupProviderMockRecorder) Benchmark(p interface{}) *gomock.Call {
+func (mr *MockpostSetupProviderMockRecorder) Benchmark(p interface{}) *postSetupProviderBenchmarkCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Benchmark", reflect.TypeOf((*MockpostSetupProvider)(nil).Benchmark), p)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Benchmark", reflect.TypeOf((*MockpostSetupProvider)(nil).Benchmark), p)
+	return &postSetupProviderBenchmarkCall{Call: call}
+}
+
+// postSetupProviderBenchmarkCall wrap *gomock.Call
+type postSetupProviderBenchmarkCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *postSetupProviderBenchmarkCall) Return(arg0 int, arg1 error) *postSetupProviderBenchmarkCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *postSetupProviderBenchmarkCall) Do(f func(activation.PostSetupProvider) (int, error)) *postSetupProviderBenchmarkCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *postSetupProviderBenchmarkCall) DoAndReturn(f func(activation.PostSetupProvider) (int, error)) *postSetupProviderBenchmarkCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // Config mocks base method.
@@ -414,9 +822,33 @@ func (m *MockpostSetupProvider) Config() activation.PostConfig {
 }
 
 // Config indicates an expected call of Config.
-func (mr *MockpostSetupProviderMockRecorder) Config() *gomock.Call {
+func (mr *MockpostSetupProviderMockRecorder) Config() *postSetupProviderConfigCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Config", reflect.TypeOf((*MockpostSetupProvider)(nil).Config))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Config", reflect.TypeOf((*MockpostSetupProvider)(nil).Config))
+	return &postSetupProviderConfigCall{Call: call}
+}
+
+// postSetupProviderConfigCall wrap *gomock.Call
+type postSetupProviderConfigCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *postSetupProviderConfigCall) Return(arg0 activation.PostConfig) *postSetupProviderConfigCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *postSetupProviderConfigCall) Do(f func() activation.PostConfig) *postSetupProviderConfigCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *postSetupProviderConfigCall) DoAndReturn(f func() activation.PostConfig) *postSetupProviderConfigCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // Providers mocks base method.
@@ -429,9 +861,33 @@ func (m *MockpostSetupProvider) Providers() ([]activation.PostSetupProvider, err
 }
 
 // Providers indicates an expected call of Providers.
-func (mr *MockpostSetupProviderMockRecorder) Providers() *gomock.Call {
+func (mr *MockpostSetupProviderMockRecorder) Providers() *postSetupProviderProvidersCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Providers", reflect.TypeOf((*MockpostSetupProvider)(nil).Providers))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Providers", reflect.TypeOf((*MockpostSetupProvider)(nil).Providers))
+	return &postSetupProviderProvidersCall{Call: call}
+}
+
+// postSetupProviderProvidersCall wrap *gomock.Call
+type postSetupProviderProvidersCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *postSetupProviderProvidersCall) Return(arg0 []activation.PostSetupProvider, arg1 error) *postSetupProviderProvidersCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *postSetupProviderProvidersCall) Do(f func() ([]activation.PostSetupProvider, error)) *postSetupProviderProvidersCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *postSetupProviderProvidersCall) DoAndReturn(f func() ([]activation.PostSetupProvider, error)) *postSetupProviderProvidersCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // Status mocks base method.
@@ -443,9 +899,33 @@ func (m *MockpostSetupProvider) Status() *activation.PostSetupStatus {
 }
 
 // Status indicates an expected call of Status.
-func (mr *MockpostSetupProviderMockRecorder) Status() *gomock.Call {
+func (mr *MockpostSetupProviderMockRecorder) Status() *postSetupProviderStatusCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Status", reflect.TypeOf((*MockpostSetupProvider)(nil).Status))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Status", reflect.TypeOf((*MockpostSetupProvider)(nil).Status))
+	return &postSetupProviderStatusCall{Call: call}
+}
+
+// postSetupProviderStatusCall wrap *gomock.Call
+type postSetupProviderStatusCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *postSetupProviderStatusCall) Return(arg0 *activation.PostSetupStatus) *postSetupProviderStatusCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *postSetupProviderStatusCall) Do(f func() *activation.PostSetupStatus) *postSetupProviderStatusCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *postSetupProviderStatusCall) DoAndReturn(f func() *activation.PostSetupStatus) *postSetupProviderStatusCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // MockpeerCounter is a mock of peerCounter interface.
@@ -480,9 +960,33 @@ func (m *MockpeerCounter) PeerCount() uint64 {
 }
 
 // PeerCount indicates an expected call of PeerCount.
-func (mr *MockpeerCounterMockRecorder) PeerCount() *gomock.Call {
+func (mr *MockpeerCounterMockRecorder) PeerCount() *peerCounterPeerCountCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PeerCount", reflect.TypeOf((*MockpeerCounter)(nil).PeerCount))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PeerCount", reflect.TypeOf((*MockpeerCounter)(nil).PeerCount))
+	return &peerCounterPeerCountCall{Call: call}
+}
+
+// peerCounterPeerCountCall wrap *gomock.Call
+type peerCounterPeerCountCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *peerCounterPeerCountCall) Return(arg0 uint64) *peerCounterPeerCountCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *peerCounterPeerCountCall) Do(f func() uint64) *peerCounterPeerCountCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *peerCounterPeerCountCall) DoAndReturn(f func() uint64) *peerCounterPeerCountCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // Mockpeers is a mock of peers interface.
@@ -517,9 +1021,33 @@ func (m *Mockpeers) ConnectedPeerInfo(arg0 p2p.Peer) *p2p.PeerInfo {
 }
 
 // ConnectedPeerInfo indicates an expected call of ConnectedPeerInfo.
-func (mr *MockpeersMockRecorder) ConnectedPeerInfo(arg0 interface{}) *gomock.Call {
+func (mr *MockpeersMockRecorder) ConnectedPeerInfo(arg0 interface{}) *peersConnectedPeerInfoCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConnectedPeerInfo", reflect.TypeOf((*Mockpeers)(nil).ConnectedPeerInfo), arg0)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConnectedPeerInfo", reflect.TypeOf((*Mockpeers)(nil).ConnectedPeerInfo), arg0)
+	return &peersConnectedPeerInfoCall{Call: call}
+}
+
+// peersConnectedPeerInfoCall wrap *gomock.Call
+type peersConnectedPeerInfoCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *peersConnectedPeerInfoCall) Return(arg0 *p2p.PeerInfo) *peersConnectedPeerInfoCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *peersConnectedPeerInfoCall) Do(f func(p2p.Peer) *p2p.PeerInfo) *peersConnectedPeerInfoCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *peersConnectedPeerInfoCall) DoAndReturn(f func(p2p.Peer) *p2p.PeerInfo) *peersConnectedPeerInfoCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // GetPeers mocks base method.
@@ -531,9 +1059,33 @@ func (m *Mockpeers) GetPeers() []p2p.Peer {
 }
 
 // GetPeers indicates an expected call of GetPeers.
-func (mr *MockpeersMockRecorder) GetPeers() *gomock.Call {
+func (mr *MockpeersMockRecorder) GetPeers() *peersGetPeersCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPeers", reflect.TypeOf((*Mockpeers)(nil).GetPeers))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPeers", reflect.TypeOf((*Mockpeers)(nil).GetPeers))
+	return &peersGetPeersCall{Call: call}
+}
+
+// peersGetPeersCall wrap *gomock.Call
+type peersGetPeersCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *peersGetPeersCall) Return(arg0 []p2p.Peer) *peersGetPeersCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *peersGetPeersCall) Do(f func() []p2p.Peer) *peersGetPeersCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *peersGetPeersCall) DoAndReturn(f func() []p2p.Peer) *peersGetPeersCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // MockgenesisTimeAPI is a mock of genesisTimeAPI interface.
@@ -568,9 +1120,33 @@ func (m *MockgenesisTimeAPI) CurrentLayer() types.LayerID {
 }
 
 // CurrentLayer indicates an expected call of CurrentLayer.
-func (mr *MockgenesisTimeAPIMockRecorder) CurrentLayer() *gomock.Call {
+func (mr *MockgenesisTimeAPIMockRecorder) CurrentLayer() *genesisTimeAPICurrentLayerCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CurrentLayer", reflect.TypeOf((*MockgenesisTimeAPI)(nil).CurrentLayer))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CurrentLayer", reflect.TypeOf((*MockgenesisTimeAPI)(nil).CurrentLayer))
+	return &genesisTimeAPICurrentLayerCall{Call: call}
+}
+
+// genesisTimeAPICurrentLayerCall wrap *gomock.Call
+type genesisTimeAPICurrentLayerCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *genesisTimeAPICurrentLayerCall) Return(arg0 types.LayerID) *genesisTimeAPICurrentLayerCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *genesisTimeAPICurrentLayerCall) Do(f func() types.LayerID) *genesisTimeAPICurrentLayerCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *genesisTimeAPICurrentLayerCall) DoAndReturn(f func() types.LayerID) *genesisTimeAPICurrentLayerCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // GenesisTime mocks base method.
@@ -582,9 +1158,33 @@ func (m *MockgenesisTimeAPI) GenesisTime() time.Time {
 }
 
 // GenesisTime indicates an expected call of GenesisTime.
-func (mr *MockgenesisTimeAPIMockRecorder) GenesisTime() *gomock.Call {
+func (mr *MockgenesisTimeAPIMockRecorder) GenesisTime() *genesisTimeAPIGenesisTimeCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenesisTime", reflect.TypeOf((*MockgenesisTimeAPI)(nil).GenesisTime))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenesisTime", reflect.TypeOf((*MockgenesisTimeAPI)(nil).GenesisTime))
+	return &genesisTimeAPIGenesisTimeCall{Call: call}
+}
+
+// genesisTimeAPIGenesisTimeCall wrap *gomock.Call
+type genesisTimeAPIGenesisTimeCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *genesisTimeAPIGenesisTimeCall) Return(arg0 time.Time) *genesisTimeAPIGenesisTimeCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *genesisTimeAPIGenesisTimeCall) Do(f func() time.Time) *genesisTimeAPIGenesisTimeCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *genesisTimeAPIGenesisTimeCall) DoAndReturn(f func() time.Time) *genesisTimeAPIGenesisTimeCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // MockmeshAPI is a mock of meshAPI interface.
@@ -620,9 +1220,33 @@ func (m *MockmeshAPI) GetATXs(arg0 context.Context, arg1 []types.ATXID) (map[typ
 }
 
 // GetATXs indicates an expected call of GetATXs.
-func (mr *MockmeshAPIMockRecorder) GetATXs(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockmeshAPIMockRecorder) GetATXs(arg0, arg1 interface{}) *meshAPIGetATXsCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetATXs", reflect.TypeOf((*MockmeshAPI)(nil).GetATXs), arg0, arg1)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetATXs", reflect.TypeOf((*MockmeshAPI)(nil).GetATXs), arg0, arg1)
+	return &meshAPIGetATXsCall{Call: call}
+}
+
+// meshAPIGetATXsCall wrap *gomock.Call
+type meshAPIGetATXsCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *meshAPIGetATXsCall) Return(arg0 map[types.ATXID]*types.VerifiedActivationTx, arg1 []types.ATXID) *meshAPIGetATXsCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *meshAPIGetATXsCall) Do(f func(context.Context, []types.ATXID) (map[types.ATXID]*types.VerifiedActivationTx, []types.ATXID)) *meshAPIGetATXsCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *meshAPIGetATXsCall) DoAndReturn(f func(context.Context, []types.ATXID) (map[types.ATXID]*types.VerifiedActivationTx, []types.ATXID)) *meshAPIGetATXsCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // GetLayer mocks base method.
@@ -635,9 +1259,33 @@ func (m *MockmeshAPI) GetLayer(arg0 types.LayerID) (*types.Layer, error) {
 }
 
 // GetLayer indicates an expected call of GetLayer.
-func (mr *MockmeshAPIMockRecorder) GetLayer(arg0 interface{}) *gomock.Call {
+func (mr *MockmeshAPIMockRecorder) GetLayer(arg0 interface{}) *meshAPIGetLayerCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayer", reflect.TypeOf((*MockmeshAPI)(nil).GetLayer), arg0)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayer", reflect.TypeOf((*MockmeshAPI)(nil).GetLayer), arg0)
+	return &meshAPIGetLayerCall{Call: call}
+}
+
+// meshAPIGetLayerCall wrap *gomock.Call
+type meshAPIGetLayerCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *meshAPIGetLayerCall) Return(arg0 *types.Layer, arg1 error) *meshAPIGetLayerCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *meshAPIGetLayerCall) Do(f func(types.LayerID) (*types.Layer, error)) *meshAPIGetLayerCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *meshAPIGetLayerCall) DoAndReturn(f func(types.LayerID) (*types.Layer, error)) *meshAPIGetLayerCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // GetRewards mocks base method.
@@ -650,9 +1298,33 @@ func (m *MockmeshAPI) GetRewards(arg0 types.Address) ([]*types.Reward, error) {
 }
 
 // GetRewards indicates an expected call of GetRewards.
-func (mr *MockmeshAPIMockRecorder) GetRewards(arg0 interface{}) *gomock.Call {
+func (mr *MockmeshAPIMockRecorder) GetRewards(arg0 interface{}) *meshAPIGetRewardsCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRewards", reflect.TypeOf((*MockmeshAPI)(nil).GetRewards), arg0)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRewards", reflect.TypeOf((*MockmeshAPI)(nil).GetRewards), arg0)
+	return &meshAPIGetRewardsCall{Call: call}
+}
+
+// meshAPIGetRewardsCall wrap *gomock.Call
+type meshAPIGetRewardsCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *meshAPIGetRewardsCall) Return(arg0 []*types.Reward, arg1 error) *meshAPIGetRewardsCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *meshAPIGetRewardsCall) Do(f func(types.Address) ([]*types.Reward, error)) *meshAPIGetRewardsCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *meshAPIGetRewardsCall) DoAndReturn(f func(types.Address) ([]*types.Reward, error)) *meshAPIGetRewardsCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // LatestLayer mocks base method.
@@ -664,9 +1336,33 @@ func (m *MockmeshAPI) LatestLayer() types.LayerID {
 }
 
 // LatestLayer indicates an expected call of LatestLayer.
-func (mr *MockmeshAPIMockRecorder) LatestLayer() *gomock.Call {
+func (mr *MockmeshAPIMockRecorder) LatestLayer() *meshAPILatestLayerCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LatestLayer", reflect.TypeOf((*MockmeshAPI)(nil).LatestLayer))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LatestLayer", reflect.TypeOf((*MockmeshAPI)(nil).LatestLayer))
+	return &meshAPILatestLayerCall{Call: call}
+}
+
+// meshAPILatestLayerCall wrap *gomock.Call
+type meshAPILatestLayerCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *meshAPILatestLayerCall) Return(arg0 types.LayerID) *meshAPILatestLayerCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *meshAPILatestLayerCall) Do(f func() types.LayerID) *meshAPILatestLayerCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *meshAPILatestLayerCall) DoAndReturn(f func() types.LayerID) *meshAPILatestLayerCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // LatestLayerInState mocks base method.
@@ -678,9 +1374,33 @@ func (m *MockmeshAPI) LatestLayerInState() types.LayerID {
 }
 
 // LatestLayerInState indicates an expected call of LatestLayerInState.
-func (mr *MockmeshAPIMockRecorder) LatestLayerInState() *gomock.Call {
+func (mr *MockmeshAPIMockRecorder) LatestLayerInState() *meshAPILatestLayerInStateCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LatestLayerInState", reflect.TypeOf((*MockmeshAPI)(nil).LatestLayerInState))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LatestLayerInState", reflect.TypeOf((*MockmeshAPI)(nil).LatestLayerInState))
+	return &meshAPILatestLayerInStateCall{Call: call}
+}
+
+// meshAPILatestLayerInStateCall wrap *gomock.Call
+type meshAPILatestLayerInStateCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *meshAPILatestLayerInStateCall) Return(arg0 types.LayerID) *meshAPILatestLayerInStateCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *meshAPILatestLayerInStateCall) Do(f func() types.LayerID) *meshAPILatestLayerInStateCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *meshAPILatestLayerInStateCall) DoAndReturn(f func() types.LayerID) *meshAPILatestLayerInStateCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // MeshHash mocks base method.
@@ -693,9 +1413,33 @@ func (m *MockmeshAPI) MeshHash(arg0 types.LayerID) (types.Hash32, error) {
 }
 
 // MeshHash indicates an expected call of MeshHash.
-func (mr *MockmeshAPIMockRecorder) MeshHash(arg0 interface{}) *gomock.Call {
+func (mr *MockmeshAPIMockRecorder) MeshHash(arg0 interface{}) *meshAPIMeshHashCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MeshHash", reflect.TypeOf((*MockmeshAPI)(nil).MeshHash), arg0)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MeshHash", reflect.TypeOf((*MockmeshAPI)(nil).MeshHash), arg0)
+	return &meshAPIMeshHashCall{Call: call}
+}
+
+// meshAPIMeshHashCall wrap *gomock.Call
+type meshAPIMeshHashCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *meshAPIMeshHashCall) Return(arg0 types.Hash32, arg1 error) *meshAPIMeshHashCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *meshAPIMeshHashCall) Do(f func(types.LayerID) (types.Hash32, error)) *meshAPIMeshHashCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *meshAPIMeshHashCall) DoAndReturn(f func(types.LayerID) (types.Hash32, error)) *meshAPIMeshHashCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // ProcessedLayer mocks base method.
@@ -707,9 +1451,33 @@ func (m *MockmeshAPI) ProcessedLayer() types.LayerID {
 }
 
 // ProcessedLayer indicates an expected call of ProcessedLayer.
-func (mr *MockmeshAPIMockRecorder) ProcessedLayer() *gomock.Call {
+func (mr *MockmeshAPIMockRecorder) ProcessedLayer() *meshAPIProcessedLayerCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProcessedLayer", reflect.TypeOf((*MockmeshAPI)(nil).ProcessedLayer))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProcessedLayer", reflect.TypeOf((*MockmeshAPI)(nil).ProcessedLayer))
+	return &meshAPIProcessedLayerCall{Call: call}
+}
+
+// meshAPIProcessedLayerCall wrap *gomock.Call
+type meshAPIProcessedLayerCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *meshAPIProcessedLayerCall) Return(arg0 types.LayerID) *meshAPIProcessedLayerCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *meshAPIProcessedLayerCall) Do(f func() types.LayerID) *meshAPIProcessedLayerCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *meshAPIProcessedLayerCall) DoAndReturn(f func() types.LayerID) *meshAPIProcessedLayerCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // Mockoracle is a mock of oracle interface.
@@ -745,7 +1513,31 @@ func (m *Mockoracle) ActiveSet(arg0 context.Context, arg1 types.EpochID) ([]type
 }
 
 // ActiveSet indicates an expected call of ActiveSet.
-func (mr *MockoracleMockRecorder) ActiveSet(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockoracleMockRecorder) ActiveSet(arg0, arg1 interface{}) *oracleActiveSetCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ActiveSet", reflect.TypeOf((*Mockoracle)(nil).ActiveSet), arg0, arg1)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ActiveSet", reflect.TypeOf((*Mockoracle)(nil).ActiveSet), arg0, arg1)
+	return &oracleActiveSetCall{Call: call}
+}
+
+// oracleActiveSetCall wrap *gomock.Call
+type oracleActiveSetCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *oracleActiveSetCall) Return(arg0 []types.ATXID, arg1 error) *oracleActiveSetCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *oracleActiveSetCall) Do(f func(context.Context, types.EpochID) ([]types.ATXID, error)) *oracleActiveSetCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *oracleActiveSetCall) DoAndReturn(f func(context.Context, types.EpochID) ([]types.ATXID, error)) *oracleActiveSetCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }

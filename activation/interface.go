@@ -12,7 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-//go:generate mockgen -package=activation -destination=./mocks.go -source=./interface.go
+//go:generate mockgen -typed -package=activation -destination=./mocks.go -source=./interface.go
 
 type AtxReceiver interface {
 	OnAtx(*types.ActivationTxHeader)
