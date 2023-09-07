@@ -127,7 +127,6 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 		discovery.WithHighPeers(cfg.HighPeers),
 		discovery.WithDir(cfg.DataDir),
 		discovery.WithBootnodes(bootnodes),
-		discovery.WithDirect(direct),
 		discovery.WithLogger(fh.logger.Zap()),
 	}
 	if cfg.PrivateNetwork {

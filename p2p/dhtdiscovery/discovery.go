@@ -60,12 +60,6 @@ func WithBackup(backup []peer.AddrInfo) Opt {
 	}
 }
 
-func WithDirect(direct []peer.AddrInfo) Opt {
-	return func(d *Discovery) {
-		d.direct = direct
-	}
-}
-
 func WithLogger(logger *zap.Logger) Opt {
 	return func(d *Discovery) {
 		d.logger = logger
@@ -143,17 +137,13 @@ type Discovery struct {
 	// how often to check if we have enough peers
 	period time.Duration
 	// timeout used for connections
-	timeout                   time.Duration
-	bootstrapDuration         time.Duration
-	minPeers, highPeers       int
-	direct, backup, bootnodes []peer.AddrInfo
+	timeout             time.Duration
+	bootstrapDuration   time.Duration
+	minPeers, highPeers int
+	backup, bootnodes   []peer.AddrInfo
 }
 
 func (d *Discovery) Start() {
-	direct := map[peer.ID]struct{}{}
-	for _, peer := range d.direct {
-		direct[peer.ID] = struct{}{}
-	}
 	d.eg.Go(func() error {
 		var connEg errgroup.Group
 		disconnected := make(chan struct{}, 1)
@@ -183,18 +173,6 @@ func (d *Discovery) Start() {
 					zap.Int("required", d.minPeers),
 					zap.Int("connected", connected),
 				)
-				if connected >= d.highPeers {
-					for _, boot := range d.bootnodes {
-						// preserve connection is bootnode is in direct peers
-						if _, exist := direct[boot.ID]; exist {
-							continue
-						}
-						if err := d.h.Network().ClosePeer(boot.ID); err != nil {
-							d.logger.Warn("failed to close bootnode connection",
-								zap.Stringer("address", boot), zap.Error(err))
-						}
-					}
-				}
 			} else {
 				d.connect(&connEg, d.backup)
 				// no reason to spend more resources if we got enough from backup
