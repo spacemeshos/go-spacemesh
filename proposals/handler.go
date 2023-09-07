@@ -66,6 +66,7 @@ type Config struct {
 	MaxExceptions          int
 	Hdist                  uint32
 	MinimalActiveSetWeight uint64
+	AllowEmptyActiveSet    types.LayerID
 }
 
 // defaultConfig for BlockHandler.
@@ -456,6 +457,9 @@ func (h *Handler) checkBallotDataIntegrity(ctx context.Context, b *types.Ballot)
 		if b.EpochData.Beacon == types.EmptyBeacon {
 			return errMissingBeacon
 		}
+		if len(b.ActiveSet) == 0 && b.Layer < h.cfg.AllowEmptyActiveSet {
+			return fmt.Errorf("%w: empty active set ballot %s", pubsub.ErrValidationReject, b.ID().String())
+		}
 		if len(b.ActiveSet) != 0 {
 			if err := h.handleSet(ctx, b.EpochData.ActiveSetHash, types.EpochActiveSet{
 				Epoch: b.Layer.GetEpoch(),
@@ -472,7 +476,7 @@ func (h *Handler) checkBallotDataIntegrity(ctx context.Context, b *types.Ballot)
 				return err
 			}
 			if len(set.Set) == 0 {
-				return fmt.Errorf("%w: empty active set ballot %s", pubsub.ErrValidationReject, b.ID())
+				return fmt.Errorf("%w: empty active set ballot %s", pubsub.ErrValidationReject, b.ID().String())
 			}
 			// NOTE(dshulyak) sidecar is still stored in reference ballot, so that
 			// nodes that won't update on time will be able to download it
