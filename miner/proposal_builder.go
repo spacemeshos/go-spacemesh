@@ -240,7 +240,7 @@ func (pb *ProposalBuilder) createProposal(
 	}
 
 	epoch := layerID.GetEpoch()
-	refBallot, err := ballots.GetRefBallot(pb.cdb, epoch, pb.signer.NodeID())
+	ref, err := ballots.FirstInEpoch(pb.cdb, epochEligibility.Atx, epoch)
 	if err != nil {
 		if !errors.Is(err, sql.ErrNotFound) {
 			return nil, fmt.Errorf("get ref ballot: %w", err)
@@ -261,9 +261,9 @@ func (pb *ProposalBuilder) createProposal(
 		pb.logger.With().Debug("creating ballot with reference ballot (no active set)",
 			log.Context(ctx),
 			layerID,
-			log.Named("ref_ballot", refBallot),
+			log.Stringer("ref_ballot", ref.ID()),
 		)
-		ib.RefBallot = refBallot
+		ib.RefBallot = ref.ID()
 	}
 
 	p := &types.Proposal{
