@@ -41,6 +41,27 @@ var (
 		subsystem,
 		"total request that hash has no data",
 		[]string{hint})
+
+	peerErrors = metrics.NewCounter(
+		"hash_peer_err",
+		subsystem,
+		"total error from sending peers hash requests",
+		[]string{hint})
+
+	certReq = metrics.NewCounter(
+		"certs",
+		subsystem,
+		"total requests for block certificate received",
+		[]string{}).WithLabelValues()
+
+	opnReq = metrics.NewCounter(
+		"opn_reqs",
+		subsystem,
+		"total layer opinion requests received",
+		[]string{"version"},
+	)
+	opnReqV1 = opnReq.WithLabelValues("v1")
+	opnReqV2 = opnReq.WithLabelValues("v2")
 )
 
 // logCacheHit logs cache hit.

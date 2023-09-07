@@ -104,31 +104,31 @@ func (mr *MockeligibilityValidatorMockRecorder) CheckEligibility(arg0, arg1 inte
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckEligibility", reflect.TypeOf((*MockeligibilityValidator)(nil).CheckEligibility), arg0, arg1)
 }
 
-// MockballotDecoder is a mock of ballotDecoder interface.
-type MockballotDecoder struct {
+// MocktortoiseProvider is a mock of tortoiseProvider interface.
+type MocktortoiseProvider struct {
 	ctrl     *gomock.Controller
-	recorder *MockballotDecoderMockRecorder
+	recorder *MocktortoiseProviderMockRecorder
 }
 
-// MockballotDecoderMockRecorder is the mock recorder for MockballotDecoder.
-type MockballotDecoderMockRecorder struct {
-	mock *MockballotDecoder
+// MocktortoiseProviderMockRecorder is the mock recorder for MocktortoiseProvider.
+type MocktortoiseProviderMockRecorder struct {
+	mock *MocktortoiseProvider
 }
 
-// NewMockballotDecoder creates a new mock instance.
-func NewMockballotDecoder(ctrl *gomock.Controller) *MockballotDecoder {
-	mock := &MockballotDecoder{ctrl: ctrl}
-	mock.recorder = &MockballotDecoderMockRecorder{mock}
+// NewMocktortoiseProvider creates a new mock instance.
+func NewMocktortoiseProvider(ctrl *gomock.Controller) *MocktortoiseProvider {
+	mock := &MocktortoiseProvider{ctrl: ctrl}
+	mock.recorder = &MocktortoiseProviderMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockballotDecoder) EXPECT() *MockballotDecoderMockRecorder {
+func (m *MocktortoiseProvider) EXPECT() *MocktortoiseProviderMockRecorder {
 	return m.recorder
 }
 
 // DecodeBallot mocks base method.
-func (m *MockballotDecoder) DecodeBallot(arg0 *types.BallotTortoiseData) (*tortoise.DecodedBallot, error) {
+func (m *MocktortoiseProvider) DecodeBallot(arg0 *types.BallotTortoiseData) (*tortoise.DecodedBallot, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DecodeBallot", arg0)
 	ret0, _ := ret[0].(*tortoise.DecodedBallot)
@@ -137,13 +137,27 @@ func (m *MockballotDecoder) DecodeBallot(arg0 *types.BallotTortoiseData) (*torto
 }
 
 // DecodeBallot indicates an expected call of DecodeBallot.
-func (mr *MockballotDecoderMockRecorder) DecodeBallot(arg0 interface{}) *gomock.Call {
+func (mr *MocktortoiseProviderMockRecorder) DecodeBallot(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DecodeBallot", reflect.TypeOf((*MockballotDecoder)(nil).DecodeBallot), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DecodeBallot", reflect.TypeOf((*MocktortoiseProvider)(nil).DecodeBallot), arg0)
+}
+
+// GetBallot mocks base method.
+func (m *MocktortoiseProvider) GetBallot(arg0 types.BallotID) *tortoise.BallotData {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBallot", arg0)
+	ret0, _ := ret[0].(*tortoise.BallotData)
+	return ret0
+}
+
+// GetBallot indicates an expected call of GetBallot.
+func (mr *MocktortoiseProviderMockRecorder) GetBallot(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBallot", reflect.TypeOf((*MocktortoiseProvider)(nil).GetBallot), arg0)
 }
 
 // GetMissingActiveSet mocks base method.
-func (m *MockballotDecoder) GetMissingActiveSet(arg0 types.EpochID, arg1 []types.ATXID) []types.ATXID {
+func (m *MocktortoiseProvider) GetMissingActiveSet(arg0 types.EpochID, arg1 []types.ATXID) []types.ATXID {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetMissingActiveSet", arg0, arg1)
 	ret0, _ := ret[0].([]types.ATXID)
@@ -151,13 +165,13 @@ func (m *MockballotDecoder) GetMissingActiveSet(arg0 types.EpochID, arg1 []types
 }
 
 // GetMissingActiveSet indicates an expected call of GetMissingActiveSet.
-func (mr *MockballotDecoderMockRecorder) GetMissingActiveSet(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MocktortoiseProviderMockRecorder) GetMissingActiveSet(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMissingActiveSet", reflect.TypeOf((*MockballotDecoder)(nil).GetMissingActiveSet), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMissingActiveSet", reflect.TypeOf((*MocktortoiseProvider)(nil).GetMissingActiveSet), arg0, arg1)
 }
 
 // StoreBallot mocks base method.
-func (m *MockballotDecoder) StoreBallot(arg0 *tortoise.DecodedBallot) error {
+func (m *MocktortoiseProvider) StoreBallot(arg0 *tortoise.DecodedBallot) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "StoreBallot", arg0)
 	ret0, _ := ret[0].(error)
@@ -165,9 +179,9 @@ func (m *MockballotDecoder) StoreBallot(arg0 *tortoise.DecodedBallot) error {
 }
 
 // StoreBallot indicates an expected call of StoreBallot.
-func (mr *MockballotDecoderMockRecorder) StoreBallot(arg0 interface{}) *gomock.Call {
+func (mr *MocktortoiseProviderMockRecorder) StoreBallot(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StoreBallot", reflect.TypeOf((*MockballotDecoder)(nil).StoreBallot), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StoreBallot", reflect.TypeOf((*MocktortoiseProvider)(nil).StoreBallot), arg0)
 }
 
 // MockvrfVerifier is a mock of vrfVerifier interface.

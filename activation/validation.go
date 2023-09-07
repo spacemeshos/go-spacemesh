@@ -64,7 +64,7 @@ func (v *Validator) NIPost(ctx context.Context, publishEpoch types.EpochID, node
 	}
 
 	if err := v.Post(ctx, publishEpoch, nodeId, commitmentAtxId, nipost.Post, nipost.PostMetadata, numUnits, opts...); err != nil {
-		return 0, fmt.Errorf("invalid Post: %v", err)
+		return 0, fmt.Errorf("invalid Post: %w", err)
 	}
 
 	var ref types.PoetProofRef
@@ -124,7 +124,6 @@ func (v *Validator) Post(ctx context.Context, publishEpoch types.EpochID, nodeId
 		LabelsPerUnit:   PostMetadata.LabelsPerUnit,
 	}
 
-	v.log.With().Info("verifying POST with pow creator ID", log.Named("id", nodeId))
 	opts = append(opts, verifying.WithPowCreator(nodeId.Bytes()))
 
 	start := time.Now()

@@ -36,7 +36,7 @@ jobs:
     outputs:
       nondocchanges: ${{ steps.filter.outputs.nondoc }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v2
         id: filter
         with:
@@ -60,7 +60,7 @@ jobs:
       - name: Add OpenCL support
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: set up go
         uses: actions/setup-go@v4
         with:
@@ -83,7 +83,7 @@ jobs:
       - name: Add OpenCL support
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: set up go
         uses: actions/setup-go@v4
         with:
@@ -121,7 +121,7 @@ jobs:
         run: |
           Set-MpPreference -DisableRealtimeMonitoring $true
       - name: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: set up go
         uses: actions/setup-go@v4
         with:
@@ -167,7 +167,7 @@ jobs:
         run: |
           Set-MpPreference -DisableRealtimeMonitoring $true
       - name: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           lfs: true
       - name: set up go
@@ -190,7 +190,7 @@ jobs:
       - name: Clear test cache
         run: make clear-test-cache
       - name: unit tests
-        timeout-minutes: 25
+        timeout-minutes: 35
         env:
           GOTESTSUM_FORMAT: standard-verbose
           GOTESTSUM_JUNITFILE: unit-tests.xml
@@ -235,7 +235,7 @@ jobs:
         run: |
           Set-MpPreference -DisableRealtimeMonitoring $true
       - name: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           lfs: true
       - name: set up go

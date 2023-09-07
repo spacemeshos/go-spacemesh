@@ -6,18 +6,20 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/golang/protobuf/ptypes/empty"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spf13/afero"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/durationpb"
 
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -28,17 +30,25 @@ const (
 
 // AdminService exposes endpoints for node administration.
 type AdminService struct {
-	logger  log.Logger
 	db      *sql.Database
 	dataDir string
+	recover func()
+	p       peers
 }
 
 // NewAdminService creates a new admin grpc service.
-func NewAdminService(db *sql.Database, dataDir string, lg log.Logger) *AdminService {
+func NewAdminService(db *sql.Database, dataDir string, p peers) *AdminService {
 	return &AdminService{
-		logger:  lg,
 		db:      db,
 		dataDir: dataDir,
+		recover: func() {
+			go func() {
+				// Allow time for the response to be sent.
+				time.Sleep(time.Second)
+				os.Exit(0)
+			}()
+		},
+		p: p,
 	}
 }
 
@@ -92,8 +102,9 @@ func (a AdminService) CheckpointStream(req *pb.CheckpointStreamRequest, stream p
 	}
 }
 
-func (a AdminService) Recover(_ context.Context, _ *pb.RecoverRequest) (*empty.Empty, error) {
-	a.logger.Panic("going to recover from checkpoint")
+func (a AdminService) Recover(ctx context.Context, _ *pb.RecoverRequest) (*empty.Empty, error) {
+	ctxzap.Info(ctx, "going to recover from checkpoint")
+	a.recover()
 	return &empty.Empty{}, nil
 }
 
@@ -127,4 +138,38 @@ func (a AdminService) EventsStream(req *pb.EventStreamRequest, stream pb.AdminSe
 			}
 		}
 	}
+}
+
+func (a AdminService) PeerInfoStream(_ *empty.Empty, stream pb.AdminService_PeerInfoStreamServer) error {
+	for _, p := range a.p.GetPeers() {
+		select {
+		case <-stream.Context().Done():
+			return nil
+		default:
+			info := a.p.ConnectedPeerInfo(p)
+			// There is no guarantee that the peers originally returned will still
+			// be connected by the time we call ConnectedPeerInfo.
+			if info == nil {
+				continue
+			}
+			connections := make([]*pb.ConnectionInfo, len(info.Connections))
+			for j, c := range info.Connections {
+				connections[j] = &pb.ConnectionInfo{
+					Address:  c.Address.String(),
+					Uptime:   durationpb.New(c.Uptime),
+					Outbound: c.Outbound,
+				}
+			}
+			err := stream.Send(&pb.PeerInfo{
+				Id:          info.ID.String(),
+				Connections: connections,
+				Tags:        info.Tags,
+			})
+			if err != nil {
+				return fmt.Errorf("send to stream: %w", err)
+			}
+		}
+	}
+
+	return nil
 }

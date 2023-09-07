@@ -9,8 +9,9 @@ import (
 )
 
 var (
-	CalcEligibleLayer   = util.CalcEligibleLayer
-	GetNumEligibleSlots = util.GetNumEligibleSlots
+	CalcEligibleLayer    = util.CalcEligibleLayer
+	GetNumEligibleSlots  = util.GetNumEligibleSlots
+	GetLegacyNumEligible = util.GetLegacyNumEligible
 	// ComputeWeightPerEligibility computes the ballot weight per eligibility w.r.t the active set recorded in its reference ballot.
 	ComputeWeightPerEligibility = util.ComputeWeightPerEligibility
 )
@@ -40,4 +41,16 @@ func SerializeVRFMessage(beacon types.Beacon, epoch types.EpochID, nonce types.V
 		return nil, fmt.Errorf("serialize vrf message: %w", err)
 	}
 	return serialized, nil
+}
+
+// MustSerializeVRFMessage serializes a message for generating/verifying a VRF signature.
+func MustSerializeVRFMessage(beacon types.Beacon, epoch types.EpochID, nonce types.VRFPostIndex, counter uint32) []byte {
+	m := VrfMessage{
+		Type:    types.EligibilityVoting,
+		Beacon:  beacon,
+		Epoch:   epoch,
+		Nonce:   nonce,
+		Counter: counter,
+	}
+	return codec.MustEncode(&m)
 }

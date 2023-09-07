@@ -9,6 +9,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+	protocol "github.com/libp2p/go-libp2p/core/protocol"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
 )
@@ -74,17 +75,17 @@ func (m *MockSyncValidator) EXPECT() *MockSyncValidatorMockRecorder {
 }
 
 // HandleMessage mocks base method.
-func (m *MockSyncValidator) HandleMessage(arg0 context.Context, arg1 p2p.Peer, arg2 []byte) error {
+func (m *MockSyncValidator) HandleMessage(arg0 context.Context, arg1 types.Hash32, arg2 p2p.Peer, arg3 []byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HandleMessage", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "HandleMessage", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // HandleMessage indicates an expected call of HandleMessage.
-func (mr *MockSyncValidatorMockRecorder) HandleMessage(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockSyncValidatorMockRecorder) HandleMessage(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleMessage", reflect.TypeOf((*MockSyncValidator)(nil).HandleMessage), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleMessage", reflect.TypeOf((*MockSyncValidator)(nil).HandleMessage), arg0, arg1, arg2, arg3)
 }
 
 // MockPoetValidator is a mock of PoetValidator interface.
@@ -111,17 +112,17 @@ func (m *MockPoetValidator) EXPECT() *MockPoetValidatorMockRecorder {
 }
 
 // ValidateAndStoreMsg mocks base method.
-func (m *MockPoetValidator) ValidateAndStoreMsg(arg0 context.Context, arg1 p2p.Peer, arg2 []byte) error {
+func (m *MockPoetValidator) ValidateAndStoreMsg(arg0 context.Context, arg1 types.Hash32, arg2 p2p.Peer, arg3 []byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ValidateAndStoreMsg", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "ValidateAndStoreMsg", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ValidateAndStoreMsg indicates an expected call of ValidateAndStoreMsg.
-func (mr *MockPoetValidatorMockRecorder) ValidateAndStoreMsg(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockPoetValidatorMockRecorder) ValidateAndStoreMsg(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateAndStoreMsg", reflect.TypeOf((*MockPoetValidator)(nil).ValidateAndStoreMsg), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateAndStoreMsg", reflect.TypeOf((*MockPoetValidator)(nil).ValidateAndStoreMsg), arg0, arg1, arg2, arg3)
 }
 
 // MockmeshProvider is a mock of meshProvider interface.
@@ -198,6 +199,20 @@ func (mr *MockhostMockRecorder) Close() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*Mockhost)(nil).Close))
 }
 
+// Connected mocks base method.
+func (m *Mockhost) Connected(arg0 p2p.Peer) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Connected", arg0)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// Connected indicates an expected call of Connected.
+func (mr *MockhostMockRecorder) Connected(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connected", reflect.TypeOf((*Mockhost)(nil).Connected), arg0)
+}
+
 // GetPeers mocks base method.
 func (m *Mockhost) GetPeers() []p2p.Peer {
 	m.ctrl.T.Helper()
@@ -224,4 +239,19 @@ func (m *Mockhost) ID() p2p.Peer {
 func (mr *MockhostMockRecorder) ID() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ID", reflect.TypeOf((*Mockhost)(nil).ID))
+}
+
+// PeerProtocols mocks base method.
+func (m *Mockhost) PeerProtocols(arg0 p2p.Peer) ([]protocol.ID, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PeerProtocols", arg0)
+	ret0, _ := ret[0].([]protocol.ID)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PeerProtocols indicates an expected call of PeerProtocols.
+func (mr *MockhostMockRecorder) PeerProtocols(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PeerProtocols", reflect.TypeOf((*Mockhost)(nil).PeerProtocols), arg0)
 }

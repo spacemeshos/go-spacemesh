@@ -27,6 +27,8 @@ type Config struct {
 	SyncCertDistance uint32
 	MaxStaleDuration time.Duration
 	Standalone       bool
+	UseNewProtocol   bool `mapstructure:"use-new-opn"`
+	GossipDuration   time.Duration
 }
 
 // DefaultConfig for the syncer.
@@ -37,12 +39,13 @@ func DefaultConfig() Config {
 		HareDelayLayers:  10,
 		SyncCertDistance: 10,
 		MaxStaleDuration: time.Second,
+		UseNewProtocol:   true,
+		GossipDuration:   15 * time.Second,
 	}
 }
 
 const (
-	outOfSyncThreshold  uint32 = 3 // see notSynced
-	numGossipSyncLayers uint32 = 2 // see gossipSync
+	outOfSyncThreshold uint32 = 3 // see notSynced
 )
 
 type syncState uint32
@@ -111,25 +114,24 @@ func withForkFinder(f forkFinder) Option {
 type Syncer struct {
 	logger log.Log
 
-	cfg           Config
-	cdb           *datastore.CachedDB
-	ticker        layerTicker
-	beacon        system.BeaconGetter
-	mesh          *mesh.Mesh
-	certHandler   certHandler
-	dataFetcher   fetchLogic
-	patrol        layerPatrol
-	forkFinder    forkFinder
-	syncOnce      sync.Once
-	syncState     atomic.Value
-	atxSyncState  atomic.Value
-	isBusy        atomic.Value
-	syncTimer     *time.Ticker
-	validateTimer *time.Ticker
-	// targetSyncedLayer is used to signal at which layer we can set this node to synced state
-	targetSyncedLayer atomic.Value
-	lastLayerSynced   atomic.Value
-	lastEpochSynced   atomic.Value
+	cfg          Config
+	cdb          *datastore.CachedDB
+	ticker       layerTicker
+	beacon       system.BeaconGetter
+	mesh         *mesh.Mesh
+	certHandler  certHandler
+	dataFetcher  fetchLogic
+	patrol       layerPatrol
+	forkFinder   forkFinder
+	syncOnce     sync.Once
+	syncState    atomic.Value
+	atxSyncState atomic.Value
+	isBusy       atomic.Bool
+	// syncedTargetTime is used to signal at which time we can set this node to synced state
+	syncedTargetTime atomic.Time
+	lastLayerSynced  atomic.Uint32
+	lastEpochSynced  atomic.Uint32
+	stateErr         atomic.Bool
 
 	// awaitATXSyncedCh is the list of subscribers' channels to notify when this node enters ATX synced state
 	awaitATXSyncedCh chan struct{}
@@ -165,8 +167,6 @@ func NewSyncer(
 		opt(s)
 	}
 
-	s.syncTimer = time.NewTicker(s.cfg.Interval)
-	s.validateTimer = time.NewTicker(s.cfg.Interval * 2)
 	if s.dataFetcher == nil {
 		s.dataFetcher = NewDataFetch(mesh, fetcher, cdb, cache, s.logger)
 	}
@@ -175,17 +175,15 @@ func NewSyncer(
 	}
 	s.syncState.Store(notSynced)
 	s.atxSyncState.Store(notSynced)
-	s.isBusy.Store(0)
-	s.targetSyncedLayer.Store(types.LayerID(0))
-	s.lastLayerSynced.Store(s.mesh.ProcessedLayer())
-	s.lastEpochSynced.Store(types.GetEffectiveGenesis().GetEpoch() - 1)
+	s.isBusy.Store(false)
+	s.syncedTargetTime.Store(time.Time{})
+	s.lastLayerSynced.Store(s.mesh.LatestLayer().Uint32())
+	s.lastEpochSynced.Store(types.GetEffectiveGenesis().GetEpoch().Uint32() - 1)
 	return s
 }
 
 // Close stops the syncing process and the goroutines syncer spawns.
 func (s *Syncer) Close() {
-	s.syncTimer.Stop()
-	s.validateTimer.Stop()
 	s.stop()
 	s.logger.With().Info("waiting for syncer goroutines to finish")
 	err := s.eg.Wait()
@@ -212,11 +210,6 @@ func (s *Syncer) IsSynced(ctx context.Context) bool {
 	return s.getSyncState() == synced
 }
 
-// SyncedBefore returns true if the node became synced before `epoch` starts.
-func (s *Syncer) SyncedBefore(epoch types.EpochID) bool {
-	return s.getSyncState() == synced && s.getTargetSyncedLayer() < epoch.FirstLayer()
-}
-
 func (s *Syncer) IsBeaconSynced(epoch types.EpochID) bool {
 	_, err := s.beacon.GetBeacon(epoch)
 	return err == nil
@@ -237,7 +230,7 @@ func (s *Syncer) Start() {
 				case <-ctx.Done():
 					s.logger.WithContext(ctx).Info("stopping sync to shutdown")
 					return fmt.Errorf("shutdown context done: %w", ctx.Err())
-				case <-s.syncTimer.C:
+				case <-time.After(s.cfg.Interval):
 					ok := s.synchronize(ctx)
 					if ok {
 						runSuccess.Inc()
@@ -253,7 +246,7 @@ func (s *Syncer) Start() {
 				select {
 				case <-ctx.Done():
 					return nil
-				case <-s.validateTimer.C:
+				case <-time.After(s.cfg.Interval):
 					if err := s.processLayers(ctx); err != nil {
 						sRunFail.Inc()
 					} else {
@@ -315,43 +308,28 @@ func (s *Syncer) setSyncState(ctx context.Context, newState syncState) {
 // setSyncerBusy returns false if the syncer is already running a sync process.
 // otherwise it sets syncer to be busy and returns true.
 func (s *Syncer) setSyncerBusy() bool {
-	return s.isBusy.CompareAndSwap(0, 1)
+	return s.isBusy.CompareAndSwap(false, true)
 }
 
 func (s *Syncer) setSyncerIdle() {
-	s.isBusy.Store(0)
-}
-
-// targetSyncedLayer is used to signal at which layer we can set this node to synced state.
-func (s *Syncer) setTargetSyncedLayer(ctx context.Context, layerID types.LayerID) {
-	oldSyncLayer := s.targetSyncedLayer.Swap(layerID).(types.LayerID)
-	s.logger.WithContext(ctx).With().Debug("target synced layer changed",
-		log.Uint32("from_layer", oldSyncLayer.Uint32()),
-		log.Uint32("to_layer", layerID.Uint32()),
-		log.Stringer("current", s.ticker.CurrentLayer()),
-		log.Stringer("latest", s.mesh.LatestLayer()),
-		log.Stringer("processed", s.mesh.ProcessedLayer()))
-}
-
-func (s *Syncer) getTargetSyncedLayer() types.LayerID {
-	return s.targetSyncedLayer.Load().(types.LayerID)
+	s.isBusy.Store(false)
 }
 
 func (s *Syncer) setLastSyncedLayer(lid types.LayerID) {
-	s.lastLayerSynced.Store(lid)
+	s.lastLayerSynced.Store(lid.Uint32())
 	syncedLayer.Set(float64(lid))
 }
 
 func (s *Syncer) getLastSyncedLayer() types.LayerID {
-	return s.lastLayerSynced.Load().(types.LayerID)
+	return types.LayerID(s.lastLayerSynced.Load())
 }
 
 func (s *Syncer) setLastAtxEpoch(epoch types.EpochID) {
-	s.lastEpochSynced.Store(epoch)
+	s.lastEpochSynced.Store(epoch.Uint32())
 }
 
 func (s *Syncer) lastAtxEpoch() types.EpochID {
-	return s.lastEpochSynced.Load().(types.EpochID)
+	return types.EpochID(s.lastEpochSynced.Load())
 }
 
 // synchronize sync data up to the currentLayer-1 and wait for the layers to be validated.
@@ -400,10 +378,6 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		}
 
 		if err := s.syncAtx(ctx); err != nil {
-			s.logger.WithContext(ctx).With().Warning("failed to sync atxs",
-				log.Stringer("current", s.ticker.CurrentLayer()),
-				log.Err(err),
-			)
 			return false
 		}
 
@@ -413,7 +387,6 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		// always sync to currentLayer-1 to reduce race with gossip and hare/tortoise
 		for layerID := s.getLastSyncedLayer().Add(1); layerID.Before(s.ticker.CurrentLayer()); layerID = layerID.Add(1) {
 			if err := s.syncLayer(ctx, layerID); err != nil {
-				s.logger.WithContext(ctx).With().Warning("failed to fetch layer", layerID, log.Err(err))
 				return false
 			}
 			s.setLastSyncedLayer(layerID)
@@ -525,20 +498,25 @@ func (s *Syncer) setStateAfterSync(ctx context.Context, success bool) {
 			s.setSyncState(ctx, notSynced)
 		}
 	case gossipSync:
-		if !success || !s.dataSynced() {
+		if !success || !s.dataSynced() || !s.stateSynced() {
 			// push out the target synced layer
-			s.setTargetSyncedLayer(ctx, current.Add(numGossipSyncLayers))
+			s.syncedTargetTime.Store(time.Now().Add(s.cfg.GossipDuration))
+			s.logger.With().Info("extending gossip sync",
+				log.Bool("success", success),
+				log.Bool("data", s.dataSynced()),
+				log.Bool("state", s.stateSynced()),
+			)
 			break
 		}
-		// if we have gossip-synced to the target synced layer, we are ready to participate in consensus
-		if !s.getTargetSyncedLayer().After(current) {
+		// if we have gossip-synced long enough, we are ready to participate in consensus
+		if !time.Now().Before(s.syncedTargetTime.Load()) {
 			s.setSyncState(ctx, synced)
 		}
 	case notSynced:
-		if success && s.dataSynced() {
+		if success && s.dataSynced() && s.stateSynced() {
 			// wait till s.ticker.GetCurrentLayer() + numGossipSyncLayers to participate in consensus
 			s.setSyncState(ctx, gossipSync)
-			s.setTargetSyncedLayer(ctx, current.Add(numGossipSyncLayers))
+			s.syncedTargetTime.Store(time.Now().Add(s.cfg.GossipDuration))
 		}
 	}
 }

@@ -60,6 +60,8 @@ type Field zap.Field
 // Field satisfies loggable field interface.
 func (f Field) Field() Field { return f }
 
+func (f Field) Zap() zap.Field { return zap.Field(f) }
+
 // Named is an alias to FieldNamed.
 // FieldNamed returns a field with the provided name instead of the default.
 var Named = FieldNamed

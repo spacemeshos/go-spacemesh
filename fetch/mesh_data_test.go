@@ -41,9 +41,9 @@ func (f *testFetch) withMethod(method int) *testFetch {
 
 func (f *testFetch) expectTransactionCall(times int) *gomock.Call {
 	if f.method == txsForBlock {
-		return f.mTxBlocksH.EXPECT().HandleMessage(gomock.Any(), gomock.Any(), gomock.Any()).Times(times)
+		return f.mTxBlocksH.EXPECT().HandleMessage(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(times)
 	} else if f.method == txsForProposal {
-		return f.mTxProposalH.EXPECT().HandleMessage(gomock.Any(), gomock.Any(), gomock.Any()).Times(times)
+		return f.mTxProposalH.EXPECT().HandleMessage(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(times)
 	}
 	return nil
 }
@@ -59,7 +59,6 @@ func (f *testFetch) testGetTxs(tids []types.TransactionID) error {
 
 const (
 	numBallots   = 10
-	numBlocks    = 3
 	numMalicious = 11
 )
 
@@ -73,7 +72,7 @@ func startTestLoop(t *testing.T, f *Fetch, eg *errgroup.Group, stop chan struct{
 			default:
 				f.mu.Lock()
 				for h, req := range f.unprocessed {
-					require.NoError(t, req.validator(req.ctx, p2p.NoPeer, []byte{}))
+					require.NoError(t, req.validator(req.ctx, types.Hash32{}, p2p.NoPeer, []byte{}))
 					close(req.promise.completed)
 					delete(f.unprocessed, h)
 				}
@@ -147,6 +146,7 @@ func TestFetch_getHashes(t *testing.T) {
 			f.cfg.BatchSize = 2
 			f.cfg.MaxRetriesForRequest = 0
 			f.cfg.MaxRetriesForPeer = 0
+			f.mh.EXPECT().Connected(gomock.Any()).Return(true).AnyTimes()
 			peers := []p2p.Peer{p2p.Peer("buddy 0"), p2p.Peer("buddy 1")}
 			f.mh.EXPECT().GetPeers().Return(peers)
 			f.mh.EXPECT().ID().Return(p2p.Peer("self")).AnyTimes()
@@ -176,7 +176,7 @@ func TestFetch_getHashes(t *testing.T) {
 						}
 						res := responses[r.Hash]
 						resBatch.Responses = append(resBatch.Responses, res)
-						f.mBlocksH.EXPECT().HandleMessage(gomock.Any(), p, res.Data).Return(tc.hdlrErr)
+						f.mBlocksH.EXPECT().HandleMessage(gomock.Any(), res.Hash, p, res.Data).Return(tc.hdlrErr)
 					}
 					bts, err := codec.Encode(&resBatch)
 					require.NoError(t, err)
@@ -197,7 +197,7 @@ func TestFetch_getHashes(t *testing.T) {
 func TestFetch_GetMalfeasanceProofs(t *testing.T) {
 	nodeIDs := []types.NodeID{{1}, {2}, {3}}
 	f := createFetch(t)
-	f.mMalH.EXPECT().HandleMessage(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(len(nodeIDs))
+	f.mMalH.EXPECT().HandleMessage(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(len(nodeIDs))
 
 	stop := make(chan struct{}, 1)
 	var eg errgroup.Group
@@ -215,7 +215,7 @@ func TestFetch_GetBlocks(t *testing.T) {
 	}
 	blockIDs := types.ToBlockIDs(blks)
 	f := createFetch(t)
-	f.mBlocksH.EXPECT().HandleMessage(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(len(blockIDs))
+	f.mBlocksH.EXPECT().HandleMessage(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(len(blockIDs))
 
 	stop := make(chan struct{}, 1)
 	var eg errgroup.Group
@@ -233,7 +233,7 @@ func TestFetch_GetBallots(t *testing.T) {
 	}
 	ballotIDs := types.ToBallotIDs(blts)
 	f := createFetch(t)
-	f.mBallotH.EXPECT().HandleMessage(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(len(ballotIDs))
+	f.mBallotH.EXPECT().HandleMessage(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(len(ballotIDs))
 
 	stop := make(chan struct{}, 1)
 	var eg errgroup.Group
@@ -298,7 +298,7 @@ func TestFetch_GetProposals(t *testing.T) {
 	}
 	proposalIDs := types.ToProposalIDs(proposals)
 	f := createFetch(t)
-	f.mProposalH.EXPECT().HandleMessage(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(len(proposalIDs))
+	f.mProposalH.EXPECT().HandleMessage(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(len(proposalIDs))
 
 	stop := make(chan struct{}, 1)
 	var eg errgroup.Group
@@ -385,7 +385,7 @@ func genATXs(tb testing.TB, num uint32) []*types.ActivationTx {
 func TestGetATXs(t *testing.T) {
 	atxs := genATXs(t, 2)
 	f := createFetch(t)
-	f.mAtxH.EXPECT().HandleMessage(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(len(atxs))
+	f.mAtxH.EXPECT().HandleMessage(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(len(atxs))
 
 	stop := make(chan struct{}, 1)
 	var eg errgroup.Group
@@ -400,7 +400,7 @@ func TestGetATXs(t *testing.T) {
 func TestGetPoetProof(t *testing.T) {
 	f := createFetch(t)
 	h := types.RandomHash()
-	f.mPoetH.EXPECT().HandleMessage(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+	f.mPoetH.EXPECT().HandleMessage(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 
 	stop := make(chan struct{}, 1)
 	var eg errgroup.Group
@@ -541,13 +541,24 @@ func TestFetch_GetLayerOpinions(t *testing.T) {
 	tt := []struct {
 		name string
 		errs []error
+		v2   bool
 	}{
 		{
 			name: "all peers returns",
 			errs: []error{nil, nil, nil, nil},
 		},
 		{
+			name: "all peers returns v2",
+			v2:   true,
+			errs: []error{nil, nil, nil, nil},
+		},
+		{
 			name: "some peers errors",
+			errs: []error{nil, errUnknown, nil, errUnknown},
+		},
+		{
+			name: "some peers errors v2",
+			v2:   true,
 			errs: []error{nil, errUnknown, nil, errUnknown},
 		},
 	}
@@ -579,7 +590,11 @@ func TestFetch_GetLayerOpinions(t *testing.T) {
 					expErr++
 				}
 				idx := i
-				f.mOpnS.EXPECT().Request(gomock.Any(), p, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+				ms := f.mOpnS
+				if tc.v2 {
+					ms = f.mOpn2S
+				}
+				ms.EXPECT().Request(gomock.Any(), p, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 					func(_ context.Context, _ p2p.Peer, _ []byte, okCB func([]byte), errCB func(error)) error {
 						if tc.errs[idx] == nil {
 							go okCB([]byte("data"))
@@ -589,7 +604,11 @@ func TestFetch_GetLayerOpinions(t *testing.T) {
 						return nil
 					})
 			}
-			require.NoError(t, f.GetLayerOpinions(context.Background(), peers, types.LayerID(111), okFunc, errFunc))
+			if tc.v2 {
+				require.NoError(t, f.GetLayerOpinions2(context.Background(), peers, types.LayerID(111), okFunc, errFunc))
+			} else {
+				require.NoError(t, f.GetLayerOpinions(context.Background(), peers, types.LayerID(111), okFunc, errFunc))
+			}
 			wg.Wait()
 			require.Len(t, oks, expOk)
 			require.Len(t, errs, expErr)
@@ -714,6 +733,79 @@ func TestFetch_GetMeshHashes(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestFetch_GetCert(t *testing.T) {
+	peers := []p2p.Peer{"p0", "p1", "p2"}
+	errUnknown := errors.New("unknown")
+	tt := []struct {
+		name    string
+		results [3]error
+		stop    int
+		err     bool
+	}{
+		{
+			name:    "success",
+			results: [3]error{errUnknown, nil, nil},
+			stop:    1,
+		},
+		{
+			name:    "failure",
+			results: [3]error{errUnknown, errUnknown, errUnknown},
+			stop:    -1,
+			err:     true,
+		},
+	}
+
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			f := createFetch(t)
+			lid := types.LayerID(11)
+			bid := types.BlockID{1, 2, 3}
+			req := &OpinionRequest{
+				Layer: lid,
+				Block: &bid,
+			}
+			expected := types.Certificate{BlockID: bid}
+			reqData, err := codec.Encode(req)
+			require.NoError(t, err)
+			for i, peer := range peers {
+				ith := i
+				f.mOpn2S.EXPECT().Request(gomock.Any(), peer, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+					func(_ context.Context, _ p2p.Peer, gotReq []byte, okCB func([]byte), errCB func(error)) error {
+						require.Equal(t, reqData, gotReq)
+						if tc.results[ith] == nil {
+							data, err := codec.Encode(&expected)
+							require.NoError(t, err)
+							okCB(data)
+						} else {
+							errCB(tc.results[ith])
+						}
+						return nil
+					})
+				if tc.stop > 0 && tc.stop == i {
+					break
+				}
+			}
+			got, err := f.GetCert(context.Background(), lid, bid, peers)
+			if tc.err {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, expected, *got)
+			}
+		})
+	}
+}
+
+func FuzzCertRequest(f *testing.F) {
+	h := createTestHandler(f)
+	f.Fuzz(func(t *testing.T, data []byte) {
+		h.handleLayerOpinionsReq2(context.Background(), data)
+	})
 }
 
 func FuzzMeshHashRequest(f *testing.F) {

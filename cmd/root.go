@@ -239,8 +239,8 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.SMESHING.Opts.NumUnits, "")
 	cmd.PersistentFlags().Uint64Var(&cfg.SMESHING.Opts.MaxFileSize, "smeshing-opts-maxfilesize",
 		cfg.SMESHING.Opts.MaxFileSize, "")
-	cmd.PersistentFlags().IntVar(&cfg.SMESHING.Opts.ProviderID, "smeshing-opts-provider",
-		cfg.SMESHING.Opts.ProviderID, "")
+	cmd.PersistentFlags().VarP(&cfg.SMESHING.Opts.ProviderID, "smeshing-opts-provider",
+		"", "")
 	cmd.PersistentFlags().BoolVar(&cfg.SMESHING.Opts.Throttle, "smeshing-opts-throttle",
 		cfg.SMESHING.Opts.Throttle, "")
 
@@ -267,6 +267,14 @@ func AddCommands(cmd *cobra.Command) {
 	/**======================== testing related flags ========================== **/
 	cmd.PersistentFlags().StringVar(&cfg.TestConfig.SmesherKey, "testing-smesher-key",
 		"", "import private smesher key for testing",
+	)
+	// TODO remove after sync protocol update
+	cmd.PersistentFlags().BoolVar(&cfg.Sync.UseNewProtocol, "use-new-opn",
+		cfg.Sync.UseNewProtocol, "use new opinions sync protocol",
+	)
+	// TODO remove after sync protocol update
+	cmd.PersistentFlags().BoolVar(&cfg.FETCH.ServeNewProtocol, "serve-new-opn",
+		cfg.FETCH.ServeNewProtocol, "serve new opinions sync protocol",
 	)
 
 	// Bind Flags to config

@@ -1,5 +1,5 @@
 name: Build and Release
-
+run-name: Release ${{ github.ref_name }}
 env:
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
   DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
@@ -45,7 +45,7 @@ jobs:
           Set-MpPreference -DisableRealtimeMonitoring $true
 
       - name: Check out Git repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           lfs: true
       - name: Setup Go
@@ -86,7 +86,7 @@ jobs:
     needs: build-and-upload
     steps:
       - name: Check out Git repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
@@ -102,6 +102,8 @@ jobs:
             - macOS arm64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/macOS_ARM64.zip
             - Linux: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/Linux.zip
             - Linux arm64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/Linux_ARM64.zip
+
+            For information about changes in this release see the [changelog](https://github.com/spacemeshos/go-spacemesh/blob/${{ github.ref_name }}/CHANGELOG.md).
           generate_release_notes: true
           draft: false
           prerelease: true

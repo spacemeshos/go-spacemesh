@@ -312,6 +312,32 @@ type DecodedBallot struct {
 	minHint types.LayerID
 }
 
+type BallotData struct {
+	ID           types.BallotID
+	Layer        types.LayerID
+	ATXID        types.ATXID
+	Smesher      types.NodeID
+	Beacon       types.Beacon
+	Eligiblities uint32
+}
+
+func (t *Tortoise) GetBallot(id types.BallotID) *BallotData {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	info := t.trtl.ballotRefs[id]
+	if info == nil {
+		return nil
+	}
+	return &BallotData{
+		ID:           id,
+		Layer:        info.layer,
+		ATXID:        info.reference.atxid,
+		Smesher:      info.reference.smesher,
+		Beacon:       info.reference.beacon,
+		Eligiblities: info.reference.expectedBallots,
+	}
+}
+
 // DecodeBallot decodes ballot if it wasn't processed earlier.
 func (t *Tortoise) DecodeBallot(ballot *types.BallotTortoiseData) (*DecodedBallot, error) {
 	start := time.Now()
@@ -452,7 +478,10 @@ func (t *Tortoise) results(from, to types.LayerID) ([]result.Layer, error) {
 	if from <= t.trtl.evicted {
 		return nil, fmt.Errorf("requested layer %d is before evicted %d", from, t.trtl.evicted)
 	}
-	rst := make([]result.Layer, 0, to-from)
+	if from > to {
+		return nil, fmt.Errorf("requested range (%d - %d) is invalid", from, to)
+	}
+	rst := make([]result.Layer, 0, to-from+1)
 	for lid := from; lid <= to; lid++ {
 		layer := t.trtl.layer(lid)
 		blocks := make([]result.Block, 0, len(layer.blocks))

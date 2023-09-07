@@ -49,6 +49,13 @@ func putEncoderBuffer(b *bytes.Buffer) {
 	encoderPool.Put(b)
 }
 
+func MustEncodeTo(w io.Writer, value Encodable) {
+	_, err := EncodeTo(w, value)
+	if err != nil {
+		panic(err)
+	}
+}
+
 func MustEncode(value Encodable) []byte {
 	buf, err := Encode(value)
 	if err != nil {

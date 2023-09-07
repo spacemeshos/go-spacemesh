@@ -15,10 +15,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
+	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
@@ -49,6 +51,7 @@ type Config struct {
 	P2P             p2p.Config            `mapstructure:"p2p"`
 	API             grpcserver.Config     `mapstructure:"api"`
 	HARE            hareConfig.Config     `mapstructure:"hare"`
+	HARE3           hare3.Config          `mapstructure:"hare3"`
 	HareEligibility eligConfig.Config     `mapstructure:"hare-eligibility"`
 	Beacon          beacon.Config         `mapstructure:"beacon"`
 	TIME            timeConfig.TimeConfig `mapstructure:"time"`
@@ -61,6 +64,7 @@ type Config struct {
 	Bootstrap       bootstrap.Config      `mapstructure:"bootstrap"`
 	Sync            syncer.Config         `mapstructure:"syncer"`
 	Recovery        checkpoint.Config     `mapstructure:"recovery"`
+	Cache           datastore.Config      `mapstructure:"cache"`
 }
 
 // DataDir returns the absolute path to use for the node's data. This is the tilde-expanded path given in the config
@@ -90,6 +94,7 @@ type BaseConfig struct {
 	ProfilerURL  string `mapstructure:"profiler-url"`
 
 	LayerDuration  time.Duration `mapstructure:"layer-duration"`
+	LegacyLayer    uint32        `mapstructure:"legacy-layer"`
 	LayerAvgSize   uint32        `mapstructure:"layer-average-size"`
 	LayersPerEpoch uint32        `mapstructure:"layers-per-epoch"`
 
@@ -108,6 +113,10 @@ type BaseConfig struct {
 	DatabaseLatencyMetering bool `mapstructure:"db-latency-metering"`
 
 	NetworkHRP string `mapstructure:"network-hrp"`
+
+	// MinerGoodAtxsPercent is a threshold to decide if tortoise activeset should be
+	// picked from first block insted of synced data.
+	MinerGoodAtxsPercent int `mapstructure:"miner-good-atxs-percent"`
 }
 
 type PublicMetrics struct {
@@ -136,6 +145,7 @@ func DefaultConfig() Config {
 		P2P:             p2p.DefaultConfig(),
 		API:             grpcserver.DefaultConfig(),
 		HARE:            hareConfig.DefaultConfig(),
+		HARE3:           hare3.DefaultConfig(),
 		HareEligibility: eligConfig.DefaultConfig(),
 		Beacon:          beacon.DefaultConfig(),
 		TIME:            timeConfig.DefaultConfig(),
@@ -148,6 +158,7 @@ func DefaultConfig() Config {
 		Bootstrap:       bootstrap.DefaultConfig(),
 		Sync:            syncer.DefaultConfig(),
 		Recovery:        checkpoint.DefaultConfig(),
+		Cache:           datastore.DefaultConfig(),
 	}
 }
 

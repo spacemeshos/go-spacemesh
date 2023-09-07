@@ -44,8 +44,6 @@ type Generator struct {
 
 // Config is the config for Generator.
 type Config struct {
-	LayerSize          uint32
-	LayersPerEpoch     uint32
 	GenBlockInterval   time.Duration
 	BlockGasLimit      uint64
 	OptFilterThreshold int
@@ -53,8 +51,6 @@ type Config struct {
 
 func defaultConfig() Config {
 	return Config{
-		LayerSize:          50,
-		LayersPerEpoch:     3,
 		GenBlockInterval:   time.Second,
 		BlockGasLimit:      math.MaxUint64,
 		OptFilterThreshold: 90,
@@ -154,11 +150,19 @@ func (g *Generator) run() error {
 			maxLayer = types.MaxLayer(maxLayer, out.Layer)
 			_, err := g.processHareOutput(out)
 			if err != nil {
-				g.logger.With().Error("failed to process hare output",
-					log.Context(out.Ctx),
-					out.Layer,
-					log.Err(err),
-				)
+				if errors.Is(err, errNodeHasBadMeshHash) {
+					g.logger.With().Info("node has different mesh hash from majority, will download block instead",
+						log.Context(out.Ctx),
+						out.Layer,
+						log.Err(err),
+					)
+				} else {
+					g.logger.With().Error("failed to process hare output",
+						log.Context(out.Ctx),
+						out.Layer,
+						log.Err(err),
+					)
+				}
 			}
 			if len(g.optimisticOutput) > 0 {
 				g.processOptimisticLayers(maxLayer)

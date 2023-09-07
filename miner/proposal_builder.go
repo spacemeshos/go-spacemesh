@@ -67,6 +67,9 @@ type config struct {
 	minActiveSetWeight uint64
 	nodeID             types.NodeID
 	networkDelay       time.Duration
+
+	// used to determine whether a node has enough information on the active set this epoch
+	goodAtxPct int
 }
 
 type defaultFetcher struct {
@@ -127,6 +130,12 @@ func WithHdist(dist uint32) Opt {
 func WithNetworkDelay(delay time.Duration) Opt {
 	return func(pb *ProposalBuilder) {
 		pb.cfg.networkDelay = delay
+	}
+}
+
+func WithMinGoodAtxPct(pct int) Opt {
+	return func(pb *ProposalBuilder) {
+		pb.cfg.goodAtxPct = pct
 	}
 }
 
@@ -364,6 +373,17 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 	if !pb.syncer.IsSynced(ctx) {
 		return errNotSynced
 	}
+
+	// make sure the miner is eligible first
+	nonce, err := pb.nonceFetcher.VRFNonce(pb.signer.NodeID(), layerID.GetEpoch())
+	if err != nil {
+		if errors.Is(err, sql.ErrNotFound) {
+			pb.logger.WithContext(ctx).With().Info("miner has no valid vrf nonce, not building proposal", layerID)
+			return nil
+		}
+		return err
+	}
+
 	if beacon, err = pb.beaconProvider.GetBeacon(epoch); err != nil {
 		return errNoBeacon
 	}
@@ -377,14 +397,6 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 		return errDuplicateLayer
 	}
 
-	nonce, err := pb.nonceFetcher.VRFNonce(pb.signer.NodeID(), layerID.GetEpoch())
-	if err != nil {
-		if errors.Is(err, sql.ErrNotFound) {
-			pb.logger.WithContext(ctx).With().Info("miner has no valid vrf nonce, not building proposal", layerID)
-			return nil
-		}
-		return err
-	}
 	epochEligibility, err := pb.proposalOracle.ProposalEligibility(layerID, beacon, nonce)
 	if err != nil {
 		if errors.Is(err, errMinerHasNoATXInPreviousEpoch) {
@@ -461,8 +473,12 @@ func (pb *ProposalBuilder) createProposalLoop(ctx context.Context) {
 			}
 			next = current.Add(1)
 			lyrCtx := log.WithNewSessionID(ctx)
-			if err := pb.handleLayer(lyrCtx, current); err != nil && !errors.Is(err, errGenesis) {
-				pb.logger.WithContext(lyrCtx).With().Warning("failed to build proposal", current, log.Err(err))
+			if err := pb.handleLayer(lyrCtx, current); err != nil {
+				switch {
+				case errors.Is(err, errGenesis), errors.Is(err, errNotSynced):
+				default:
+					pb.logger.WithContext(lyrCtx).With().Warning("failed to build proposal", current, log.Err(err))
+				}
 			}
 		}
 	}

@@ -59,10 +59,11 @@ func FirstInEpoch(db sql.Executor, epoch types.EpochID) (types.BlockID, error) {
 		rows   int
 	)
 	if rows, err = db.Exec(`
-		select block from certificates where layer between ?1 and ?2 and valid = 1 and cert is not null
+		select block from certificates where layer between ?1 and ?2 and valid = 1 and block != ?3 and cert is not null
 		order by layer asc limit 1;`, func(stmt *sql.Statement) {
 		stmt.BindInt64(1, int64(epoch.FirstLayer()))
 		stmt.BindInt64(2, int64((epoch+1).FirstLayer()-1))
+		stmt.BindBytes(3, types.EmptyBlockID[:])
 	}, func(stmt *sql.Statement) bool {
 		stmt.ColumnBytes(0, result[:])
 		return true
@@ -122,6 +123,22 @@ func Get(db sql.Executor, lid types.LayerID) ([]CertValidity, error) {
 		return nil, fmt.Errorf("get certs %s: %w", lid, err)
 	} else if rows == 0 {
 		return nil, fmt.Errorf("get certs %s: %w", lid, sql.ErrNotFound)
+	}
+	return result, nil
+}
+
+func CertifiedBlock(db sql.Executor, lid types.LayerID) (types.BlockID, error) {
+	var result types.BlockID
+	if rows, err := db.Exec(`
+		select block from certificates where layer = ?1 and valid = 1 and cert is not null;`, func(stmt *sql.Statement) {
+		stmt.BindInt64(1, int64(lid))
+	}, func(stmt *sql.Statement) bool {
+		stmt.ColumnBytes(0, result[:])
+		return true
+	}); err != nil {
+		return types.EmptyBlockID, fmt.Errorf("CertifiedBlock %s: %w", lid, err)
+	} else if rows == 0 {
+		return types.EmptyBlockID, sql.ErrNotFound
 	}
 	return result, nil
 }

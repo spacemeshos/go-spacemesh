@@ -26,7 +26,7 @@ type PubSub struct {
 }
 
 // Register handler for topic.
-func (ps *PubSub) Register(topic string, handler GossipHandler) {
+func (ps *PubSub) Register(topic string, handler GossipHandler, opts ...ValidatorOpt) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	if _, exist := ps.topics[topic]; exist {
@@ -47,7 +47,7 @@ func (ps *PubSub) Register(topic string, handler GossipHandler) {
 		default:
 			return pubsub.ValidationAccept
 		}
-	})
+	}, opts...)
 	topich, err := ps.pubsub.Join(topic)
 	if err != nil {
 		ps.logger.With().Panic("failed to join a topic", log.String("topic", topic), log.Err(err))

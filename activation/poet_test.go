@@ -29,7 +29,7 @@ func TestHTTPPoet(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	c, err := NewHTTPPoetTestHarness(ctx, poetDir)
+	c, err := NewHTTPPoetTestHarness(ctx, poetDir, DefaultPoetConfig())
 	r.NoError(err)
 	r.NotNil(c)
 
