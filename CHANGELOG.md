@@ -12,7 +12,9 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ### Improvements
 
-* [#4965](https://github.com/spacemeshos/go-spacemesh/pull/4965) Updates to PoST to prevent races and corruption of `postdata_metadata.json`.
+* [#4965](https://github.com/spacemeshos/go-spacemesh/pull/4965) Updates to PoST:
+  * Prevent errors when shutting down the node that can result in a crash
+  * `postdata_metadata.json` is now updated atomically to prevent corruption of the file.
 
 ## v1.1.4
 
