@@ -9,16 +9,12 @@ import (
 )
 
 func Add(db sql.Executor, id types.Hash32, set *types.EpochActiveSet) error {
-	buf, err := codec.Encode(set)
-	if err != nil {
-		return fmt.Errorf("encode active set %s: %w", id, err)
-	}
-	_, err = db.Exec(`insert into activesets
+	_, err := db.Exec(`insert into activesets
 		(id, active_set)
 		values (?1, ?2);`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, id[:])
-			stmt.BindBytes(2, buf)
+			stmt.BindBytes(2, codec.MustEncode(set))
 		}, nil)
 	if err != nil {
 		return fmt.Errorf("add active set %v: %w", id.String(), err)

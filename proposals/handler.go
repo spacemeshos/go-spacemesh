@@ -471,13 +471,13 @@ func (h *Handler) checkBallotDataIntegrity(ctx context.Context, b *types.Ballot)
 			if err != nil {
 				return err
 			}
-			// NOTE(dshulyak) sidecar is stored for every ballot, so that
+			if len(set.Set) == 0 {
+				return fmt.Errorf("%w: empty active set ballot %s", pubsub.ErrValidationReject, b.ID())
+			}
+			// NOTE(dshulyak) sidecar is still stored in reference ballot, so that
 			// nodes that won't update on time will be able to download it
 			// with sync
 			b.ActiveSet = set.Set
-			if len(b.ActiveSet) == 0 {
-				return fmt.Errorf("%w: empty active set ballot %s", pubsub.ErrValidationReject, b.ID())
-			}
 		}
 	} else if b.EpochData != nil {
 		return errUnexpectedEpochData
