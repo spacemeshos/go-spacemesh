@@ -185,29 +185,54 @@ func LayerBallotByNodeID(db sql.Executor, lid types.LayerID, nodeID types.NodeID
 	return &ballot, err
 }
 
-// GetRefBallot gets a ref ballot for a layer and a nodeID.
-func GetRefBallot(db sql.Executor, epochID types.EpochID, nodeID types.NodeID) (ballotID types.BallotID, err error) {
-	firstLayer := epochID.FirstLayer()
+// RefBallot gets a ref ballot for a layer and a nodeID.
+func RefBallot(db sql.Executor, epoch types.EpochID, nodeID types.NodeID) (*types.Ballot, error) {
+	firstLayer := epoch.FirstLayer()
 	lastLayer := firstLayer.Add(types.GetLayersPerEpoch()).Sub(1)
-	rows, err := db.Exec(`
-		select id from ballots 
+	var (
+		bid     types.BallotID
+		ballot  types.Ballot
+		rows, n int
+		err     error
+	)
+	dec := func(stmt *sql.Statement) bool {
+		stmt.ColumnBytes(0, bid[:])
+		if n, err = codec.DecodeFrom(stmt.ColumnReader(1), &ballot); err != nil {
+			if err != io.EOF {
+				err = fmt.Errorf("ref ballot %s/%d: %w", nodeID.ShortString(), epoch, err)
+				return false
+			}
+		} else if n == 0 {
+			err = fmt.Errorf("ref ballot missing data %s/%d", nodeID.ShortString(), epoch)
+			return false
+		}
+		ballot.SetID(bid)
+		ballot.SmesherID = nodeID
+		if stmt.ColumnInt(2) > 0 {
+			ballot.SetMalicious()
+		}
+		// only ref ballot has valid EpochData
+		if ballot.EpochData != nil {
+			return false
+		}
+		return true
+	}
+	rows, err = db.Exec(`
+		select id, ballot, length(identities.proof) from ballots
+	    left join identities using(pubkey)
 		where layer between ?1 and ?2 and pubkey = ?3
-		order by layer
-		limit 1;`,
+		order by layer asc;`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(firstLayer))
 			stmt.BindInt64(2, int64(lastLayer))
 			stmt.BindBytes(3, nodeID.Bytes())
-		}, func(stmt *sql.Statement) bool {
-			stmt.ColumnBytes(0, ballotID[:])
-			return true
-		})
+		}, dec)
 	if err != nil {
-		return types.BallotID{}, fmt.Errorf("ref ballot epoch %v: %w", epochID, err)
+		return nil, fmt.Errorf("ref ballot %s/%d: %w", nodeID.ShortString(), epoch, err)
 	} else if rows == 0 {
-		return types.BallotID{}, fmt.Errorf("%w ref ballot epoch %s", sql.ErrNotFound, epochID)
+		return nil, fmt.Errorf("%w ref ballot %s/%d", sql.ErrNotFound, nodeID.ShortString(), epoch)
 	}
-	return ballotID, nil
+	return &ballot, nil
 }
 
 // LatestLayer gets the highest layer with ballots.
@@ -251,11 +276,20 @@ func FirstInEpoch(db sql.Executor, atx types.ATXID, epoch types.EpochID) (*types
 		}
 		ballot.SetID(bid)
 		ballot.SmesherID = nodeID
+		if stmt.ColumnInt(3) > 0 {
+			ballot.SetMalicious()
+		}
+		// only ref ballot has valid EpochData
+		if ballot.EpochData != nil {
+			return false
+		}
 		return true
 	}
 	rows, err = db.Exec(`
-		select id, pubkey, ballot from ballots where atx = ?1 and layer between ?2 and ?3
-		order by layer asc, id asc limit 1;`, enc, dec)
+		select id, pubkey, ballot, length(identities.proof) from ballots
+	    left join identities using(pubkey)
+		where atx = ?1 and layer between ?2 and ?3
+		order by layer asc;`, enc, dec)
 	if err != nil {
 		return nil, fmt.Errorf("ballot by atx %s: %w", atx, err)
 	}
