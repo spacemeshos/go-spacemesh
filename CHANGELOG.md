@@ -10,12 +10,13 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ### Features
 
+* [#4969](https://github.com/spacemeshos/go-spacemesh/pull/4969) Nodes will also fetch from PoET 111 for round 3 if they were able to register to PoET 110.
+
 ### Improvements
 
 * [#4965](https://github.com/spacemeshos/go-spacemesh/pull/4965) Updates to PoST:
   * Prevent errors when shutting down the node that can result in a crash
   * `postdata_metadata.json` is now updated atomically to prevent corruption of the file.
-* [#4969](https://github.com/spacemeshos/go-spacemesh/pull/4969) Make nodes fetch from PoET 111 for round 3 if they were able to register to PoET 110.
 
 ## v1.1.4
 
