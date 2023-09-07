@@ -361,7 +361,7 @@ func (c *nipostValidatorNumUnitsCall) DoAndReturn(f func(*PostConfig, uint32) er
 }
 
 // PositioningAtx mocks base method.
-func (m *MocknipostValidator) PositioningAtx(id *types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubepoch types.EpochID) error {
+func (m *MocknipostValidator) PositioningAtx(id types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubepoch types.EpochID) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PositioningAtx", id, atxs, goldenATXID, pubepoch)
 	ret0, _ := ret[0].(error)

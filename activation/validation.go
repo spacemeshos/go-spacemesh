@@ -64,7 +64,7 @@ func (v *Validator) NIPost(ctx context.Context, nodeId types.NodeID, commitmentA
 	}
 
 	if err := v.Post(ctx, nodeId, commitmentAtxId, nipost.Post, nipost.PostMetadata, numUnits, opts...); err != nil {
-		return 0, fmt.Errorf("invalid Post: %v", err)
+		return 0, fmt.Errorf("invalid Post: %w", err)
 	}
 
 	var ref types.PoetProofRef
@@ -172,7 +172,7 @@ func (*Validator) VRFNonce(nodeId types.NodeID, commitmentAtxId types.ATXID, vrf
 
 func (v *Validator) InitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, goldenATXID types.ATXID) error {
 	if challenge.CommitmentATX == nil {
-		v.log.Panic("commitment atx is nil")
+		return errors.New("nil commitment atx in initial post challenge")
 	}
 
 	if *challenge.CommitmentATX != goldenATXID {
@@ -213,16 +213,16 @@ func (*Validator) NIPostChallenge(challenge *types.NIPostChallenge, atxs atxProv
 	return nil
 }
 
-func (v *Validator) PositioningAtx(id *types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubepoch types.EpochID) error {
-	if *id == types.EmptyATXID {
-		v.log.Panic("empty positioning atx")
+func (v *Validator) PositioningAtx(id types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubepoch types.EpochID) error {
+	if id == types.EmptyATXID {
+		return errors.New("positioning atx id is empty")
 	}
-	if *id == goldenATXID {
+	if id == goldenATXID {
 		return nil
 	}
-	posAtx, err := atxs.GetAtxHeader(*id)
+	posAtx, err := atxs.GetAtxHeader(id)
 	if err != nil {
-		return &ErrAtxNotFound{Id: *id, source: err}
+		return &ErrAtxNotFound{Id: id, source: err}
 	}
 	if posAtx.PublishEpoch >= pubepoch {
 		return fmt.Errorf("positioning atx epoch (%v) must be before %v", posAtx.PublishEpoch, pubepoch)

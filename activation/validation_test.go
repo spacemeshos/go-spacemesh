@@ -322,7 +322,7 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 			},
 		}, nil)
 
-		err := v.PositioningAtx(&posAtxId, atxProvider, goldenAtxId, 2)
+		err := v.PositioningAtx(posAtxId, atxProvider, goldenAtxId, 2)
 		require.NoError(t, err)
 	})
 
@@ -333,7 +333,7 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 
 		atxProvider := NewMockatxProvider(ctrl)
 
-		err := v.PositioningAtx(&goldenAtxId, atxProvider, goldenAtxId, types.LayerID(1012).GetEpoch())
+		err := v.PositioningAtx(goldenAtxId, atxProvider, goldenAtxId, types.LayerID(1012).GetEpoch())
 		require.NoError(t, err)
 	})
 
@@ -344,7 +344,7 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 
 		atxProvider := NewMockatxProvider(ctrl)
 
-		err := v.PositioningAtx(&goldenAtxId, atxProvider, goldenAtxId, 5)
+		err := v.PositioningAtx(goldenAtxId, atxProvider, goldenAtxId, 5)
 		require.NoError(t, err)
 	})
 
@@ -357,7 +357,7 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(posAtxId).Return(nil, errors.New("db error"))
 
-		err := v.PositioningAtx(&posAtxId, atxProvider, goldenAtxId, types.LayerID(1012).GetEpoch())
+		err := v.PositioningAtx(posAtxId, atxProvider, goldenAtxId, types.LayerID(1012).GetEpoch())
 		require.ErrorIs(t, err, &ErrAtxNotFound{Id: posAtxId})
 		require.ErrorContains(t, err, "db error")
 	})
@@ -376,7 +376,7 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 			},
 		}, nil)
 
-		err := v.PositioningAtx(&posAtxId, atxProvider, goldenAtxId, 3)
+		err := v.PositioningAtx(posAtxId, atxProvider, goldenAtxId, 3)
 		require.EqualError(t, err, "positioning atx epoch (5) must be before 3")
 	})
 
@@ -394,7 +394,7 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 			},
 		}, nil)
 
-		err := v.PositioningAtx(&posAtxId, atxProvider, goldenAtxId, 10)
+		err := v.PositioningAtx(posAtxId, atxProvider, goldenAtxId, 10)
 		require.NoError(t, err)
 	})
 }

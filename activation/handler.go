@@ -199,11 +199,11 @@ func (h *Handler) SyntacticallyValidate(ctx context.Context, atx *types.Activati
 		// as expected from the initial Post.
 		initialPostMetadata := *atx.NIPost.PostMetadata
 		initialPostMetadata.Challenge = shared.ZeroChallenge
-		if err := h.nipostValidator.Post(ctx, atx.SmesherID, *atx.CommitmentATX, atx.InitialPost, &initialPostMetadata, atx.NumUnits); err != nil {
-			return fmt.Errorf("invalid initial post: %w", err)
-		}
 		if err := h.nipostValidator.VRFNonce(atx.SmesherID, *atx.CommitmentATX, atx.VRFNonce, &initialPostMetadata, atx.NumUnits); err != nil {
 			return fmt.Errorf("invalid vrf nonce: %w", err)
+		}
+		if err := h.nipostValidator.Post(ctx, atx.SmesherID, *atx.CommitmentATX, atx.InitialPost, &initialPostMetadata, atx.NumUnits); err != nil {
+			return fmt.Errorf("invalid initial post: %w", err)
 		}
 	default:
 		if atx.InnerActivationTx.NodeID != nil {
@@ -213,7 +213,7 @@ func (h *Handler) SyntacticallyValidate(ctx context.Context, atx *types.Activati
 			return fmt.Errorf("prev atx declared, but initial post is included")
 		}
 		if atx.CommitmentATX != nil {
-			return fmt.Errorf("rpev atx declared, but commitment atx is included")
+			return fmt.Errorf("prev atx declared, but commitment atx is included")
 		}
 	}
 	return nil
@@ -239,7 +239,7 @@ func (h *Handler) SyntacticallyValidateDeps(ctx context.Context, atx *types.Acti
 		}
 	}
 
-	if err := h.nipostValidator.PositioningAtx(&atx.PositioningATX, h.cdb, h.goldenATXID, atx.PublishEpoch); err != nil {
+	if err := h.nipostValidator.PositioningAtx(atx.PositioningATX, h.cdb, h.goldenATXID, atx.PublishEpoch); err != nil {
 		return nil, err
 	}
 
@@ -523,7 +523,7 @@ func (h *Handler) handleAtx(ctx context.Context, expHash types.Hash32, peer p2p.
 	}
 
 	if err := h.SyntacticallyValidate(ctx, &atx); err != nil {
-		return err
+		return fmt.Errorf("atx %v syntactically invalid: %w", atx.ShortString(), err)
 	}
 
 	h.registerHashes(&atx, peer)
@@ -533,7 +533,7 @@ func (h *Handler) handleAtx(ctx context.Context, expHash types.Hash32, peer p2p.
 
 	vAtx, err := h.SyntacticallyValidateDeps(ctx, &atx)
 	if err != nil {
-		return fmt.Errorf("atx %v syntatically invalid based on deps: %w", atx.ShortString(), err)
+		return fmt.Errorf("atx %v syntactically invalid based on deps: %w", atx.ShortString(), err)
 	}
 
 	if expHash != (types.Hash32{}) && vAtx.ID().Hash32() != expHash {
