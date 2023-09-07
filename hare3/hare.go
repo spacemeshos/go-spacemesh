@@ -426,7 +426,6 @@ func (h *Hare) onOutput(layer types.LayerID, ir IterRound, out output, vrf *type
 		out.message.Layer = layer
 		out.message.Eligibility = *vrf
 		out.message.Sender = h.signer.NodeID()
-		out.message.Signature = h.signer.Sign(signing.HARE, out.message.ToMetadata().ToBytes())
 	}
 	h.log.Debug("round output",
 		zap.Uint32("lid", layer.Uint32()),
@@ -435,10 +434,14 @@ func (h *Hare) onOutput(layer types.LayerID, ir IterRound, out output, vrf *type
 		zap.Bool("active", vrf != nil),
 	)
 	if out.message != nil {
-		if err := h.pubsub.Publish(h.ctx, h.config.ProtocolName, out.message.ToBytes()); err != nil {
-			h.log.Error("failed to publish", zap.Inline(out.message), zap.Error(err))
-		}
-		h.tracer.OnMessageSent(out.message)
+		h.eg.Go(func() error {
+			out.message.Signature = h.signer.Sign(signing.HARE, out.message.ToMetadata().ToBytes())
+			if err := h.pubsub.Publish(h.ctx, h.config.ProtocolName, out.message.ToBytes()); err != nil {
+				h.log.Error("failed to publish", zap.Inline(out.message), zap.Error(err))
+			}
+			h.tracer.OnMessageSent(out.message)
+			return nil
+		})
 	}
 	if out.coin != nil {
 		select {
