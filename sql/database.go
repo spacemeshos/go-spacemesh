@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-llsqlite/llsqlite"
-	"github.com/go-llsqlite/llsqlite/sqlitex"
+	sqlite "github.com/go-llsqlite/crawshaw"
+	"github.com/go-llsqlite/crawshaw/sqlitex"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
