@@ -45,7 +45,7 @@ jobs:
           Set-MpPreference -DisableRealtimeMonitoring $true
 
       - name: Check out Git repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           lfs: true
       - name: Setup Go
@@ -86,7 +86,7 @@ jobs:
     needs: build-and-upload
     steps:
       - name: Check out Git repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Create Release
         uses: softprops/action-gh-release@v1

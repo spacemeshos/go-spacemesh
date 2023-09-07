@@ -37,7 +37,7 @@ jobs:
     outputs:
       nondocchanges: ${{ steps.filter.outputs.nondoc }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v2
         id: filter
         with:
@@ -52,7 +52,7 @@ jobs:
       - filter-changes
     timeout-minutes: 70
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Setup kubectl
         id: install
