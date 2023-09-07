@@ -567,7 +567,7 @@ func (msh *Mesh) AddBallot(ctx context.Context, ballot *types.Ballot) (*types.Ma
 	// ballots.LayerBallotByNodeID and ballots.Add should be atomic
 	// otherwise concurrent ballots.Add from the same smesher may not be noticed
 	if err = msh.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
-		if !malicious {
+		if !malicious && ballot.SmesherID != types.MinerNodeID() {
 			prev, err := ballots.LayerBallotByNodeID(dbtx, ballot.Layer, ballot.SmesherID)
 			if err != nil && !errors.Is(err, sql.ErrNotFound) {
 				return err

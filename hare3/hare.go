@@ -286,7 +286,7 @@ func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 	gossip, equivocation := session.OnInput(input)
 	h.log.Debug("after on message", log.ZShortStringer("hash", input.msgHash), zap.Bool("gossip", gossip))
 	submitLatency.Observe(time.Since(start).Seconds())
-	if equivocation != nil && !malicious {
+	if equivocation != nil && !malicious && msg.Sender != types.MinerNodeID() {
 		h.log.Debug("registered equivocation",
 			zap.Uint32("lid", msg.Layer.Uint32()),
 			zap.Stringer("sender", equivocation.Messages[0].SmesherID))

@@ -9,6 +9,18 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
+var ownNodeID NodeID
+
+func SetMinerNodeID(id NodeID) {
+	if ownNodeID == EmptyNodeID {
+		ownNodeID = id
+	}
+}
+
+func MinerNodeID() NodeID {
+	return ownNodeID
+}
+
 // BytesToNodeID is a helper to copy buffer into NodeID struct.
 func BytesToNodeID(buf []byte) (id NodeID) {
 	copy(id[:], buf)

@@ -107,6 +107,10 @@ func (h *Handler) validateAndSave(ctx context.Context, p *types.MalfeasanceGossi
 	if err != nil {
 		return types.EmptyNodeID, err
 	}
+	if nodeID == types.MinerNodeID() {
+		h.logger.WithContext(ctx).With().Warning("received gossip for own malfeasance proof", log.Inline(&p.MalfeasanceProof))
+		return nodeID, nil
+	}
 	if err := h.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
 		malicious, err := identities.IsMalicious(dbtx, nodeID)
 		if err != nil {

@@ -364,7 +364,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 	}
 	var proof *types.MalfeasanceProof
 	if err := h.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
-		if !malicious {
+		if !malicious && atx.SmesherID != types.MinerNodeID() {
 			prev, err := atxs.GetByEpochAndNodeID(dbtx, atx.PublishEpoch, atx.SmesherID)
 			if err != nil && !errors.Is(err, sql.ErrNotFound) {
 				return err

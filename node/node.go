@@ -163,6 +163,7 @@ func GetCommand() *cobra.Command {
 				if app.edSgn, err = app.LoadOrCreateEdSigner(); err != nil {
 					return fmt.Errorf("could not retrieve identity: %w", err)
 				}
+				types.SetMinerNodeID(app.edSgn.NodeID())
 
 				app.preserve, err = app.LoadCheckpoint(ctx)
 				if err != nil {
