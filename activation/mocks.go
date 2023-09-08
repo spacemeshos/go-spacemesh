@@ -387,13 +387,13 @@ func (c *nipostValidatorPositioningAtxCall) Return(arg0 error) *nipostValidatorP
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *nipostValidatorPositioningAtxCall) Do(f func(*types.ATXID, atxProvider, types.ATXID, types.EpochID) error) *nipostValidatorPositioningAtxCall {
+func (c *nipostValidatorPositioningAtxCall) Do(f func(types.ATXID, atxProvider, types.ATXID, types.EpochID) error) *nipostValidatorPositioningAtxCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *nipostValidatorPositioningAtxCall) DoAndReturn(f func(*types.ATXID, atxProvider, types.ATXID, types.EpochID) error) *nipostValidatorPositioningAtxCall {
+func (c *nipostValidatorPositioningAtxCall) DoAndReturn(f func(types.ATXID, atxProvider, types.ATXID, types.EpochID) error) *nipostValidatorPositioningAtxCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

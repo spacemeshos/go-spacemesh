@@ -1056,7 +1056,7 @@ func TestNIPostBuilder_Mainnet_PoetRound3_Workaround(t *testing.T) {
 	postProvider.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any())
 
 	nipostValidator := NewMocknipostValidator(ctrl)
-	nipostValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
+	nipostValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
 
 	poets := make([]PoetProvingServiceClient, 0, 2)
 	{
