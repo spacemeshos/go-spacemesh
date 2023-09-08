@@ -6,7 +6,7 @@ require (
 	cloud.google.com/go/storage v1.32.0
 	github.com/ALTree/bigfloat v0.2.0
 	github.com/benbjohnson/clock v1.3.5
-	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20230824072557-45fdbaea2552
+	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20230907091128-3c83a50b6d59
 	github.com/cosmos/btcutil v1.0.5
 	github.com/go-llsqlite/llsqlite v0.0.0-20230612031458-a9e271fe723a
 	github.com/gofrs/flock v0.8.1
@@ -51,14 +51,14 @@ require (
 	go.uber.org/atomic v1.11.0
 	go.uber.org/mock v0.2.0
 	go.uber.org/zap v1.25.0
-	golang.org/x/exp v0.0.0-20230817173708-d852ddb80c63
+	golang.org/x/exp v0.0.0-20230905200255-921286631fa9
 	golang.org/x/sync v0.3.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20230822172742-b8732ec3820d
 	google.golang.org/grpc v1.58.0
 	google.golang.org/protobuf v1.31.0
-	k8s.io/api v0.26.7
+	k8s.io/api v0.26.8
 	k8s.io/apimachinery v0.27.4
-	k8s.io/client-go v0.26.7
+	k8s.io/client-go v0.26.8
 	sigs.k8s.io/controller-runtime v0.14.6
 )
 
@@ -190,15 +190,15 @@ require (
 	go.uber.org/dig v1.17.0 // indirect
 	go.uber.org/fx v1.20.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/crypto v0.12.0 // indirect
+	golang.org/x/crypto v0.13.0 // indirect
 	golang.org/x/mod v0.12.0 // indirect
-	golang.org/x/net v0.14.0 // indirect
+	golang.org/x/net v0.15.0 // indirect
 	golang.org/x/oauth2 v0.11.0 // indirect
-	golang.org/x/sys v0.11.0 // indirect
-	golang.org/x/term v0.11.0 // indirect
+	golang.org/x/sys v0.12.0 // indirect
+	golang.org/x/term v0.12.0 // indirect
 	golang.org/x/text v0.13.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
-	golang.org/x/tools v0.12.1-0.20230815132531-74c255bcf846 // indirect
+	golang.org/x/tools v0.13.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
 	gonum.org/v1/gonum v0.13.0 // indirect
