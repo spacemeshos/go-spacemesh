@@ -45,9 +45,33 @@ func (m *MockFetcher) GetActiveSet(arg0 context.Context, arg1 types.Hash32) erro
 }
 
 // GetActiveSet indicates an expected call of GetActiveSet.
-func (mr *MockFetcherMockRecorder) GetActiveSet(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockFetcherMockRecorder) GetActiveSet(arg0, arg1 interface{}) *FetcherGetActiveSetCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetActiveSet", reflect.TypeOf((*MockFetcher)(nil).GetActiveSet), arg0, arg1)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetActiveSet", reflect.TypeOf((*MockFetcher)(nil).GetActiveSet), arg0, arg1)
+	return &FetcherGetActiveSetCall{Call: call}
+}
+
+// FetcherGetActiveSetCall wrap *gomock.Call
+type FetcherGetActiveSetCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *FetcherGetActiveSetCall) Return(arg0 error) *FetcherGetActiveSetCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *FetcherGetActiveSetCall) Do(f func(context.Context, types.Hash32) error) *FetcherGetActiveSetCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *FetcherGetActiveSetCall) DoAndReturn(f func(context.Context, types.Hash32) error) *FetcherGetActiveSetCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // GetAtxs mocks base method.
@@ -788,9 +812,33 @@ func (m *MockActiveSetFetcher) GetActiveSet(arg0 context.Context, arg1 types.Has
 }
 
 // GetActiveSet indicates an expected call of GetActiveSet.
-func (mr *MockActiveSetFetcherMockRecorder) GetActiveSet(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockActiveSetFetcherMockRecorder) GetActiveSet(arg0, arg1 interface{}) *ActiveSetFetcherGetActiveSetCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetActiveSet", reflect.TypeOf((*MockActiveSetFetcher)(nil).GetActiveSet), arg0, arg1)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetActiveSet", reflect.TypeOf((*MockActiveSetFetcher)(nil).GetActiveSet), arg0, arg1)
+	return &ActiveSetFetcherGetActiveSetCall{Call: call}
+}
+
+// ActiveSetFetcherGetActiveSetCall wrap *gomock.Call
+type ActiveSetFetcherGetActiveSetCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *ActiveSetFetcherGetActiveSetCall) Return(arg0 error) *ActiveSetFetcherGetActiveSetCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *ActiveSetFetcherGetActiveSetCall) Do(f func(context.Context, types.Hash32) error) *ActiveSetFetcherGetActiveSetCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *ActiveSetFetcherGetActiveSetCall) DoAndReturn(f func(context.Context, types.Hash32) error) *ActiveSetFetcherGetActiveSetCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // MockPeerTracker is a mock of PeerTracker interface.
