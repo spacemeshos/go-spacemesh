@@ -16,7 +16,7 @@ import (
 func testTransactions(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster, sendFor uint32) {
 	var (
 		// start sending transactions after two layers or after genesis
-		first       = maxLayer(currentLayer(tctx, t, cl.Client(0))+2, 8)
+		first       = max(currentLayer(tctx, t, cl.Client(0))+2, 8)
 		stopSending = first + sendFor
 		batch       = 10
 		amount      = 100

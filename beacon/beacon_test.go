@@ -500,7 +500,7 @@ func TestBeacon_BeaconsWithDatabase(t *testing.T) {
 	// clear out the in-memory map
 	// the database should still give us values
 	pd.mu.Lock()
-	pd.beacons = make(map[types.EpochID]types.Beacon)
+	clear(pd.beacons)
 	pd.mu.Unlock()
 
 	got, err = pd.GetBeacon(epoch3)

@@ -68,7 +68,7 @@ config: template
 
 .PHONY: gomplate
 gomplate:
-	@go install github.com/hairyhenderson/gomplate/v3/cmd/gomplate@latest
+	@go install github.com/hairyhenderson/gomplate/v4/cmd/gomplate@v4.0.0-pre-1
 
 .PHONY: run
 run: gomplate $(run_deps)

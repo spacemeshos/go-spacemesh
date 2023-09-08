@@ -26,13 +26,6 @@ type peerOpinion struct {
 	peer        p2p.Peer
 }
 
-func minLayer(a, b types.LayerID) types.LayerID {
-	if a.Before(b) {
-		return a
-	}
-	return b
-}
-
 func (s *Syncer) stateSynced() bool {
 	current := s.ticker.CurrentLayer()
 	return current <= types.GetEffectiveGenesis() ||
@@ -55,8 +48,8 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 		log.Stringer("last_synced", s.getLastSyncedLayer()),
 	)
 
-	start := minLayer(s.mesh.LatestLayerInState(), s.mesh.ProcessedLayer())
-	start = minLayer(start, s.getLastSyncedLayer())
+	start := min(s.mesh.LatestLayerInState(), s.mesh.ProcessedLayer())
+	start = min(start, s.getLastSyncedLayer())
 	if start == types.GetEffectiveGenesis() {
 		start = start.Add(1)
 	}
