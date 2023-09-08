@@ -10,10 +10,9 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zapcore"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -65,13 +64,14 @@ type testNodeClock struct {
 	started types.LayerID
 	waiters []waiter
 
-	clock         clock.Clock
 	genesis       time.Time
 	layerDuration time.Duration
 }
 
 func (t *testNodeClock) CurrentLayer() types.LayerID {
-	return types.LayerID(t.clock.Now().Sub(t.genesis) / t.layerDuration)
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.started
 }
 
 func (t *testNodeClock) LayerToTime(lid types.LayerID) time.Time {
@@ -208,7 +208,6 @@ func (n *node) withHare() *node {
 	require.NoError(n.t, err)
 
 	n.nclock = &testNodeClock{
-		clock:         n.clock,
 		genesis:       n.t.start,
 		layerDuration: n.t.layerDuration,
 	}
@@ -396,17 +395,11 @@ func (cl *lockstepCluster) setup() {
 		n.oracle.UpdateActiveSet(cl.t.genesis.GetEpoch()+1, active)
 		n.mpublisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ctx context.Context, _ string, msg []byte) error {
 			cl.timedReceive(cl.start)
-			var eg errgroup.Group
 			for _, other := range cl.nodes {
-				other := other
-				eg.Go(func() error {
-					other.hare.Handler(ctx, "self", msg)
-					return nil
-				})
+				other.hare.Handler(ctx, "self", msg)
 			}
-			err := eg.Wait()
 			cl.timedSend(cl.complete)
-			return err
+			return nil
 		}).AnyTimes()
 	}
 }

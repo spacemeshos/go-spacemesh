@@ -7,8 +7,8 @@ package weakcoin
 import (
 	reflect "reflect"
 
-	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	gomock "go.uber.org/mock/gomock"
 )
 
 // MockvrfSigner is a mock of vrfSigner interface.
@@ -43,9 +43,33 @@ func (m *MockvrfSigner) LittleEndian() bool {
 }
 
 // LittleEndian indicates an expected call of LittleEndian.
-func (mr *MockvrfSignerMockRecorder) LittleEndian() *gomock.Call {
+func (mr *MockvrfSignerMockRecorder) LittleEndian() *vrfSignerLittleEndianCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LittleEndian", reflect.TypeOf((*MockvrfSigner)(nil).LittleEndian))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LittleEndian", reflect.TypeOf((*MockvrfSigner)(nil).LittleEndian))
+	return &vrfSignerLittleEndianCall{Call: call}
+}
+
+// vrfSignerLittleEndianCall wrap *gomock.Call
+type vrfSignerLittleEndianCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *vrfSignerLittleEndianCall) Return(arg0 bool) *vrfSignerLittleEndianCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *vrfSignerLittleEndianCall) Do(f func() bool) *vrfSignerLittleEndianCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *vrfSignerLittleEndianCall) DoAndReturn(f func() bool) *vrfSignerLittleEndianCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // NodeID mocks base method.
@@ -57,9 +81,33 @@ func (m *MockvrfSigner) NodeID() types.NodeID {
 }
 
 // NodeID indicates an expected call of NodeID.
-func (mr *MockvrfSignerMockRecorder) NodeID() *gomock.Call {
+func (mr *MockvrfSignerMockRecorder) NodeID() *vrfSignerNodeIDCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NodeID", reflect.TypeOf((*MockvrfSigner)(nil).NodeID))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NodeID", reflect.TypeOf((*MockvrfSigner)(nil).NodeID))
+	return &vrfSignerNodeIDCall{Call: call}
+}
+
+// vrfSignerNodeIDCall wrap *gomock.Call
+type vrfSignerNodeIDCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *vrfSignerNodeIDCall) Return(arg0 types.NodeID) *vrfSignerNodeIDCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *vrfSignerNodeIDCall) Do(f func() types.NodeID) *vrfSignerNodeIDCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *vrfSignerNodeIDCall) DoAndReturn(f func() types.NodeID) *vrfSignerNodeIDCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // Sign mocks base method.
@@ -71,9 +119,33 @@ func (m *MockvrfSigner) Sign(msg []byte) types.VrfSignature {
 }
 
 // Sign indicates an expected call of Sign.
-func (mr *MockvrfSignerMockRecorder) Sign(msg interface{}) *gomock.Call {
+func (mr *MockvrfSignerMockRecorder) Sign(msg interface{}) *vrfSignerSignCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Sign", reflect.TypeOf((*MockvrfSigner)(nil).Sign), msg)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Sign", reflect.TypeOf((*MockvrfSigner)(nil).Sign), msg)
+	return &vrfSignerSignCall{Call: call}
+}
+
+// vrfSignerSignCall wrap *gomock.Call
+type vrfSignerSignCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *vrfSignerSignCall) Return(arg0 types.VrfSignature) *vrfSignerSignCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *vrfSignerSignCall) Do(f func([]byte) types.VrfSignature) *vrfSignerSignCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *vrfSignerSignCall) DoAndReturn(f func([]byte) types.VrfSignature) *vrfSignerSignCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // MockvrfVerifier is a mock of vrfVerifier interface.
@@ -108,9 +180,33 @@ func (m *MockvrfVerifier) Verify(nodeID types.NodeID, msg []byte, sig types.VrfS
 }
 
 // Verify indicates an expected call of Verify.
-func (mr *MockvrfVerifierMockRecorder) Verify(nodeID, msg, sig interface{}) *gomock.Call {
+func (mr *MockvrfVerifierMockRecorder) Verify(nodeID, msg, sig interface{}) *vrfVerifierVerifyCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockvrfVerifier)(nil).Verify), nodeID, msg, sig)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockvrfVerifier)(nil).Verify), nodeID, msg, sig)
+	return &vrfVerifierVerifyCall{Call: call}
+}
+
+// vrfVerifierVerifyCall wrap *gomock.Call
+type vrfVerifierVerifyCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *vrfVerifierVerifyCall) Return(arg0 bool) *vrfVerifierVerifyCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *vrfVerifierVerifyCall) Do(f func(types.NodeID, []byte, types.VrfSignature) bool) *vrfVerifierVerifyCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *vrfVerifierVerifyCall) DoAndReturn(f func(types.NodeID, []byte, types.VrfSignature) bool) *vrfVerifierVerifyCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // MocknonceFetcher is a mock of nonceFetcher interface.
@@ -146,9 +242,33 @@ func (m *MocknonceFetcher) VRFNonce(arg0 types.NodeID, arg1 types.EpochID) (type
 }
 
 // VRFNonce indicates an expected call of VRFNonce.
-func (mr *MocknonceFetcherMockRecorder) VRFNonce(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MocknonceFetcherMockRecorder) VRFNonce(arg0, arg1 interface{}) *nonceFetcherVRFNonceCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRFNonce", reflect.TypeOf((*MocknonceFetcher)(nil).VRFNonce), arg0, arg1)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRFNonce", reflect.TypeOf((*MocknonceFetcher)(nil).VRFNonce), arg0, arg1)
+	return &nonceFetcherVRFNonceCall{Call: call}
+}
+
+// nonceFetcherVRFNonceCall wrap *gomock.Call
+type nonceFetcherVRFNonceCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *nonceFetcherVRFNonceCall) Return(arg0 types.VRFPostIndex, arg1 error) *nonceFetcherVRFNonceCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *nonceFetcherVRFNonceCall) Do(f func(types.NodeID, types.EpochID) (types.VRFPostIndex, error)) *nonceFetcherVRFNonceCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *nonceFetcherVRFNonceCall) DoAndReturn(f func(types.NodeID, types.EpochID) (types.VRFPostIndex, error)) *nonceFetcherVRFNonceCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // Mockallowance is a mock of allowance interface.
@@ -183,7 +303,31 @@ func (m *Mockallowance) MinerAllowance(arg0 types.EpochID, arg1 types.NodeID) ui
 }
 
 // MinerAllowance indicates an expected call of MinerAllowance.
-func (mr *MockallowanceMockRecorder) MinerAllowance(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockallowanceMockRecorder) MinerAllowance(arg0, arg1 interface{}) *allowanceMinerAllowanceCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MinerAllowance", reflect.TypeOf((*Mockallowance)(nil).MinerAllowance), arg0, arg1)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MinerAllowance", reflect.TypeOf((*Mockallowance)(nil).MinerAllowance), arg0, arg1)
+	return &allowanceMinerAllowanceCall{Call: call}
+}
+
+// allowanceMinerAllowanceCall wrap *gomock.Call
+type allowanceMinerAllowanceCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *allowanceMinerAllowanceCall) Return(arg0 uint32) *allowanceMinerAllowanceCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *allowanceMinerAllowanceCall) Do(f func(types.EpochID, types.NodeID) uint32) *allowanceMinerAllowanceCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *allowanceMinerAllowanceCall) DoAndReturn(f func(types.EpochID, types.NodeID) uint32) *allowanceMinerAllowanceCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }

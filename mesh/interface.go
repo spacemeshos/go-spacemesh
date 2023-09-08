@@ -7,7 +7,7 @@ import (
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 )
 
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
+//go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./interface.go
 
 type conservativeState interface {
 	UpdateCache(context.Context, types.LayerID, types.BlockID, []types.TransactionWithResult, []types.Transaction) error

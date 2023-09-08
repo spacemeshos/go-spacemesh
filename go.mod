@@ -10,7 +10,6 @@ require (
 	github.com/cosmos/btcutil v1.0.5
 	github.com/go-llsqlite/llsqlite v0.0.0-20230612031458-a9e271fe723a
 	github.com/gofrs/flock v0.8.1
-	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.3
 	github.com/google/go-cmp v0.5.9
 	github.com/google/gofuzz v1.2.0
@@ -39,9 +38,9 @@ require (
 	github.com/spacemeshos/economics v0.1.0
 	github.com/spacemeshos/fixed v0.1.0
 	github.com/spacemeshos/go-scale v1.1.10
-	github.com/spacemeshos/merkle-tree v0.2.2
+	github.com/spacemeshos/merkle-tree v0.2.3
 	github.com/spacemeshos/poet v0.9.1
-	github.com/spacemeshos/post v0.9.3
+	github.com/spacemeshos/post v0.9.4
 	github.com/spf13/afero v1.9.5
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.5
@@ -50,11 +49,12 @@ require (
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
 	github.com/zeebo/blake3 v0.2.3
 	go.uber.org/atomic v1.11.0
+	go.uber.org/mock v0.2.0
 	go.uber.org/zap v1.25.0
 	golang.org/x/exp v0.0.0-20230817173708-d852ddb80c63
 	golang.org/x/sync v0.3.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20230822172742-b8732ec3820d
-	google.golang.org/grpc v1.57.0
+	google.golang.org/grpc v1.58.0
 	google.golang.org/protobuf v1.31.0
 	k8s.io/api v0.26.3
 	k8s.io/apimachinery v0.27.4
@@ -96,6 +96,7 @@ require (
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
+	github.com/golang/mock v1.6.0 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/gnostic v0.5.7-v3refs // indirect
 	github.com/google/gopacket v1.1.19 // indirect

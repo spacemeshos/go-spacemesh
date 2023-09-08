@@ -17,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -69,7 +70,10 @@ func (cfg *Config) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 // roundStart returns expected time for iter/round relative to
 // layer start.
 func (cfg *Config) roundStart(round IterRound) time.Duration {
-	return cfg.PreroundDelay + time.Duration(round.Absolute())*cfg.RoundDuration
+	if round.Round == 0 {
+		return cfg.PreroundDelay
+	}
+	return cfg.PreroundDelay + time.Duration(round.Absolute()-1)*cfg.RoundDuration
 }
 
 func DefaultConfig() Config {
@@ -278,11 +282,9 @@ func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 		malicious: malicious,
 		atxgrade:  g,
 	}
+	h.log.Debug("on message", zap.Inline(input))
 	gossip, equivocation := session.OnInput(input)
-	h.log.Debug("on message",
-		zap.Inline(input),
-		zap.Bool("gossip", gossip),
-	)
+	h.log.Debug("after on message", log.ZShortStringer("hash", input.msgHash), zap.Bool("gossip", gossip))
 	submitLatency.Observe(time.Since(start).Seconds())
 	if equivocation != nil && !malicious {
 		h.log.Debug("registered equivocation",
@@ -377,7 +379,6 @@ func (h *Hare) run(layer types.LayerID, beacon types.Beacon, proto *protocol) er
 	if err := h.onOutput(layer, current, proto.Next(vrf != nil), vrf); err != nil {
 		return err
 	}
-	h.log.Debug("ready to accept messages", zap.Uint32("lid", layer.Uint32()))
 	walltime = walltime.Add(h.config.RoundDuration)
 	result := false
 	for {
@@ -388,9 +389,9 @@ func (h *Hare) run(layer types.LayerID, beacon types.Beacon, proto *protocol) er
 				zap.Uint8("iter", proto.Iter), zap.Stringer("round", proto.Round),
 			)
 			current := proto.IterRound
-			start := time.Now()
 			var vrf *types.HareEligibility
 			if current.IsMessageRound() {
+				start := time.Now()
 				vrf = h.oracle.active(h.signer.NodeID(), layer, current)
 				activeLatency.Observe(time.Since(start).Seconds())
 			}

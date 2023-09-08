@@ -7,7 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
+//go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./interface.go
 
 type layerPatrol interface {
 	CompleteHare(types.LayerID)

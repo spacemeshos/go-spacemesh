@@ -10,7 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
-//go:generate mockgen -package=grpcserver -destination=./mocks.go -source=./interface.go
+//go:generate mockgen -typed -package=grpcserver -destination=./mocks.go -source=./interface.go
 
 // networkIdentity interface.
 type networkIdentity interface {

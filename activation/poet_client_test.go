@@ -60,6 +60,52 @@ func Test_HTTPPoetClient_Submit(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func Test_HTTPPoetClient_Address(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodGet, r.Method)
+
+		w.WriteHeader(http.StatusOK)
+		resp, err := protojson.Marshal(&rpcapi.InfoResponse{})
+		require.NoError(t, err)
+		w.Write(resp)
+
+		require.Equal(t, "/v1/info", r.URL.Path)
+	}))
+	defer ts.Close()
+
+	cfg := config.DefaultConfig()
+	client, err := NewHTTPPoetClient(ts.URL, PoetConfig{
+		PhaseShift: cfg.Service.PhaseShift,
+		CycleGap:   cfg.Service.CycleGap,
+	}, withCustomHttpClient(ts.Client()))
+	require.NoError(t, err)
+
+	require.Equal(t, ts.URL, client.Address())
+}
+
+func Test_HTTPPoetClient_Address_Mainnet(t *testing.T) {
+	poetCfg := config.DefaultConfig()
+
+	poETServers := []string{
+		"https://mainnet-poet-0.spacemesh.network",
+		"https://mainnet-poet-1.spacemesh.network",
+		"https://mainnet-poet-2.spacemesh.network",
+		"https://poet-110.spacemesh.network",
+		"https://poet-111.spacemesh.network",
+	}
+
+	for _, url := range poETServers {
+		t.Run(url, func(t *testing.T) {
+			client, err := NewHTTPPoetClient(url, PoetConfig{
+				PhaseShift: poetCfg.Service.PhaseShift,
+				CycleGap:   poetCfg.Service.CycleGap,
+			})
+			require.NoError(t, err)
+			require.Equal(t, url, client.Address())
+		})
+	}
+}
+
 func Test_HTTPPoetClient_Proof(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, http.MethodGet, r.Method)

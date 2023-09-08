@@ -204,26 +204,11 @@ func (o *Oracle) activeSet(targetEpoch types.EpochID) (uint64, uint64, types.ATX
 	return ownWeight, totalWeight, ownAtx, atxids, nil
 }
 
-func refBallot(db sql.Executor, epoch types.EpochID, nodeID types.NodeID) (*types.Ballot, error) {
-	ref, err := ballots.GetRefBallot(db, epoch, nodeID)
-	if errors.Is(err, sql.ErrNotFound) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("miner get refballot: %w", err)
-	}
-	ballot, err := ballots.Get(db, ref)
-	if err != nil {
-		return nil, fmt.Errorf("miner get ballot: %w", err)
-	}
-	return ballot, nil
-}
-
 // calcEligibilityProofs calculates the eligibility proofs of proposals for the miner in the given epoch
 // and returns the proofs along with the epoch's active set.
 func (o *Oracle) calcEligibilityProofs(lid types.LayerID, epoch types.EpochID, beacon types.Beacon, nonce types.VRFPostIndex) (*EpochEligibility, error) {
-	ref, err := refBallot(o.cdb, epoch, o.vrfSigner.NodeID())
-	if err != nil {
+	ref, err := ballots.RefBallot(o.cdb, epoch, o.vrfSigner.NodeID())
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return nil, err
 	}
 
