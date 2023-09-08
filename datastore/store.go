@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
@@ -320,6 +321,7 @@ const (
 	TXDB        Hint = "TXDB"
 	POETDB      Hint = "POETDB"
 	Malfeasance Hint = "malfeasance"
+	ActiveSet   Hint = "activeset"
 )
 
 // NewBlobStore returns a BlobStore.
@@ -369,6 +371,8 @@ func (bs *BlobStore) Get(hint Hint, key []byte) ([]byte, error) {
 		return poets.Get(bs.DB, ref)
 	case Malfeasance:
 		return identities.GetMalfeasanceBlob(bs.DB, key)
+	case ActiveSet:
+		return activesets.GetBlob(bs.DB, key)
 	}
 	return nil, fmt.Errorf("blob store not found %s", hint)
 }

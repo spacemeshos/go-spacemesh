@@ -65,6 +65,12 @@ func (f *Fetch) getHashes(ctx context.Context, hashes []types.Hash32, hint datas
 	return errors.Join(errs, err)
 }
 
+// GetActiveSet downloads activeset.
+func (f *Fetch) GetActiveSet(ctx context.Context, set types.Hash32) error {
+	f.logger.WithContext(ctx).With().Debug("request active set", log.ShortStringer("id", set))
+	return f.getHashes(ctx, []types.Hash32{set}, datastore.ActiveSet, f.validators.activeset.HandleMessage)
+}
+
 // GetMalfeasanceProofs gets malfeasance proofs for the specified NodeIDs and validates them.
 func (f *Fetch) GetMalfeasanceProofs(ctx context.Context, ids []types.NodeID) error {
 	if len(ids) == 0 {

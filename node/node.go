@@ -678,6 +678,7 @@ func (app *App) initServices(ctx context.Context) error {
 			MaxExceptions:          trtlCfg.MaxExceptions,
 			Hdist:                  trtlCfg.Hdist,
 			MinimalActiveSetWeight: trtlCfg.MinimalActiveSetWeight,
+			AllowEmptyActiveSet:    trtlCfg.EmitEmptyActiveSet,
 		}),
 	)
 
@@ -808,6 +809,7 @@ func (app *App) initServices(ctx context.Context) error {
 		miner.WithLayerSize(layerSize),
 		miner.WithLayerPerEpoch(layersPerEpoch),
 		miner.WithMinimalActiveSetWeight(app.Config.Tortoise.MinimalActiveSetWeight),
+		miner.WithEmitEmptyActiveSet(app.Config.Tortoise.EmitEmptyActiveSet),
 		miner.WithHdist(app.Config.Tortoise.Hdist),
 		miner.WithNetworkDelay(app.Config.HARE.WakeupDelta),
 		miner.WithMinGoodAtxPct(minerGoodAtxPct),
@@ -888,6 +890,7 @@ func (app *App) initServices(ctx context.Context) error {
 		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(atxHandler.HandleSyncedAtx, app.host, lg)),
 		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(poetDb.ValidateAndStoreMsg, app.host, lg)),
 		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(proposalListener.HandleSyncedBallot, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(proposalListener.HandleActiveSet, app.host, lg)),
 		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(blockHandler.HandleSyncedBlock, app.host, lg)),
 		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(proposalListener.HandleSyncedProposal, app.host, lg)),
 		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(app.txHandler.HandleBlockTransaction, app.host, lg)),

@@ -27,7 +27,8 @@ type Config struct {
 	// MinimalActiveSetWeight denotes weight that will replace weight
 	// recorded in the first ballot, if that weight is less than minimal
 	// for purposes of eligibility computation.
-	MinimalActiveSetWeight uint64 `mapstructure:"tortoise-activeset-weight"`
+	MinimalActiveSetWeight uint64        `mapstructure:"tortoise-activeset-weight"`
+	EmitEmptyActiveSet     types.LayerID `mapstructure:"emit-empty-active-set"`
 
 	LayerSize uint32
 }
