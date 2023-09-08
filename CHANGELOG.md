@@ -17,6 +17,8 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 * [#4965](https://github.com/spacemeshos/go-spacemesh/pull/4965) Updates to PoST:
   * Prevent errors when shutting down the node that can result in a crash
   * `postdata_metadata.json` is now updated atomically to prevent corruption of the file.
+* [#4956](https://github.com/spacemeshos/go-spacemesh/pull/4956) Active set is will not be gossipped in every proposal.
+  Active set usually contains list of atxs that targets current epoch. As the number of atxs grows this object grows as well.
 
 ## v1.1.4
 
