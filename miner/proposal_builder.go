@@ -74,6 +74,17 @@ type config struct {
 	goodAtxPct int
 }
 
+func (c *config) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddUint32("layer size", c.layerSize)
+	encoder.AddUint32("epoch size", c.layersPerEpoch)
+	encoder.AddUint32("hdist", c.hdist)
+	encoder.AddUint64("min active weight", c.minActiveSetWeight)
+	encoder.AddUint32("emit empty set", c.emitEmptyActiveSet.Uint32())
+	encoder.AddDuration("network delay", c.networkDelay)
+	encoder.AddInt("good atx percent", c.goodAtxPct)
+	return nil
+}
+
 type defaultFetcher struct {
 	cdb *datastore.CachedDB
 }
@@ -475,6 +486,7 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 
 func (pb *ProposalBuilder) createProposalLoop(ctx context.Context) {
 	next := pb.clock.CurrentLayer().Add(1)
+	pb.logger.With().Info("started", log.Inline(&pb.cfg), log.Uint32("current", next.Uint32()))
 	for {
 		select {
 		case <-pb.ctx.Done():

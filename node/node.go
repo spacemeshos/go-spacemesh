@@ -809,6 +809,7 @@ func (app *App) initServices(ctx context.Context) error {
 		miner.WithLayerSize(layerSize),
 		miner.WithLayerPerEpoch(layersPerEpoch),
 		miner.WithMinimalActiveSetWeight(app.Config.Tortoise.MinimalActiveSetWeight),
+		miner.WithEmitEmptyActiveSet(app.Config.Tortoise.EmitEmptyActiveSet),
 		miner.WithHdist(app.Config.Tortoise.Hdist),
 		miner.WithNetworkDelay(app.Config.HARE.WakeupDelta),
 		miner.WithMinGoodAtxPct(minerGoodAtxPct),
