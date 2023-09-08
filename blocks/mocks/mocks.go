@@ -463,7 +463,31 @@ func (m *MocktortoiseProvider) GetMissingActiveSet(arg0 types.EpochID, arg1 []ty
 }
 
 // GetMissingActiveSet indicates an expected call of GetMissingActiveSet.
-func (mr *MocktortoiseProviderMockRecorder) GetMissingActiveSet(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MocktortoiseProviderMockRecorder) GetMissingActiveSet(arg0, arg1 interface{}) *tortoiseProviderGetMissingActiveSetCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMissingActiveSet", reflect.TypeOf((*MocktortoiseProvider)(nil).GetMissingActiveSet), arg0, arg1)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMissingActiveSet", reflect.TypeOf((*MocktortoiseProvider)(nil).GetMissingActiveSet), arg0, arg1)
+	return &tortoiseProviderGetMissingActiveSetCall{Call: call}
+}
+
+// tortoiseProviderGetMissingActiveSetCall wrap *gomock.Call
+type tortoiseProviderGetMissingActiveSetCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *tortoiseProviderGetMissingActiveSetCall) Return(arg0 []types.ATXID) *tortoiseProviderGetMissingActiveSetCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *tortoiseProviderGetMissingActiveSetCall) Do(f func(types.EpochID, []types.ATXID) []types.ATXID) *tortoiseProviderGetMissingActiveSetCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *tortoiseProviderGetMissingActiveSetCall) DoAndReturn(f func(types.EpochID, []types.ATXID) []types.ATXID) *tortoiseProviderGetMissingActiveSetCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
