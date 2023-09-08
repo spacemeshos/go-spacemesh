@@ -16,12 +16,12 @@ import (
 	"time"
 
 	"github.com/gofrs/flock"
+	"github.com/grafana/pyroscope-go"
 	grpc_logsettable "github.com/grpc-ecosystem/go-grpc-middleware/logging/settable"
 	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	grpctags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
 	"github.com/mitchellh/mapstructure"
-	"github.com/pyroscope-io/pyroscope/pkg/agent/profiler"
 	poetconfig "github.com/spacemeshos/poet/config"
 	"github.com/spacemeshos/poet/server"
 	"github.com/spacemeshos/post/verifying"
@@ -324,7 +324,7 @@ type App struct {
 	grpcPrivateService *grpcserver.Server
 	jsonAPIService     *grpcserver.JSONHTTPServer
 	pprofService       *http.Server
-	profilerService    *profiler.Profiler
+	profilerService    *pyroscope.Profiler
 	syncer             *syncer.Syncer
 	proposalListener   *proposals.Handler
 	proposalBuilder    *miner.ProposalBuilder
@@ -1414,7 +1414,7 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 
 	if app.Config.ProfilerURL != "" {
 
-		app.profilerService, err = profiler.Start(profiler.Config{
+		app.profilerService, err = pyroscope.Start(pyroscope.Config{
 			ApplicationName: app.Config.ProfilerName,
 			// app.Config.ProfilerURL should be the pyroscope server address
 			// TODO: AuthToken? no need right now since server isn't public
