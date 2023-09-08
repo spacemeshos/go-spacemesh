@@ -7,7 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 )
 
-//go:generate mockgen -package=mocks -destination=./mocks/fetcher.go -source=./fetcher.go
+//go:generate mockgen -typed -package=mocks -destination=./mocks/fetcher.go -source=./fetcher.go
 
 // Fetcher is a general interface that defines a component capable of fetching data from remote peers.
 type Fetcher interface {

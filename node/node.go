@@ -1034,13 +1034,6 @@ func (app *App) startServices(ctx context.Context) error {
 	if err := app.fetcher.Start(); err != nil {
 		return fmt.Errorf("failed to start fetcher: %w", err)
 	}
-	app.eg.Go(func() error {
-		app.postVerifier.Start(ctx)
-		// Start only returns when the context expires (which means the system
-		// is shutting down). We do the closing of the post verifier here so
-		// it's ensured that start has returned before we call Close.
-		return app.postVerifier.Close()
-	})
 	app.syncer.Start()
 	app.beaconProtocol.Start(ctx)
 
@@ -1211,6 +1204,10 @@ func (app *App) stopServices(ctx context.Context) {
 
 	if app.atxBuilder != nil {
 		_ = app.atxBuilder.StopSmeshing(false)
+	}
+
+	if app.postVerifier != nil {
+		app.postVerifier.Close()
 	}
 
 	if app.hare != nil {

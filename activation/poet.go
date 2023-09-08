@@ -93,6 +93,10 @@ func NewHTTPPoetClient(baseUrl string, cfg PoetConfig, opts ...PoetClientOpts) (
 	return poetClient, nil
 }
 
+func (c *HTTPPoetClient) Address() string {
+	return c.baseURL.String()
+}
+
 func (c *HTTPPoetClient) PowParams(ctx context.Context) (*PoetPowParams, error) {
 	resBody := rpcapi.PowParamsResponse{}
 	if err := c.req(ctx, http.MethodGet, "/v1/pow_params", nil, &resBody); err != nil {

@@ -8,7 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
-//go:generate mockgen -package=proposals -destination=./mocks.go -source=./interface.go
+//go:generate mockgen -typed -package=proposals -destination=./mocks.go -source=./interface.go
 
 type meshProvider interface {
 	AddBallot(context.Context, *types.Ballot) (*types.MalfeasanceProof, error)

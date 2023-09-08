@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -417,7 +417,10 @@ func TestBuilder_HandleLayer_RefBallot(t *testing.T) {
 	b := createBuilder(t)
 
 	layerID := types.LayerID(layersPerEpoch * 3).Add(1)
+	atx := types.ATXID{1, 2, 3}
 	refBallot := types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, b.ProposalBuilder.signer.NodeID(), layerID.Sub(1))
+	refBallot.EpochData = &types.EpochData{}
+	refBallot.AtxID = atx
 	require.NoError(t, ballots.Add(b.cdb, &refBallot))
 	beacon := types.RandomBeacon()
 	sig, err := signing.NewEdSigner()
@@ -429,7 +432,7 @@ func TestBuilder_HandleLayer_RefBallot(t *testing.T) {
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
 	b.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(nonce, nil)
 	ee := &EpochEligibility{
-		Atx:       types.RandomATXID(),
+		Atx:       atx,
 		ActiveSet: genActiveSet(t),
 		Proofs:    map[types.LayerID][]types.VotingEligibility{layerID: genProofs(t, 1)},
 		Slots:     4,

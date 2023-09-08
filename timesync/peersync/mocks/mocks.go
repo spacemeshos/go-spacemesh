@@ -8,8 +8,8 @@ import (
 	reflect "reflect"
 	time "time"
 
-	gomock "github.com/golang/mock/gomock"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
+	gomock "go.uber.org/mock/gomock"
 )
 
 // MockTime is a mock of Time interface.
@@ -44,9 +44,33 @@ func (m *MockTime) Now() time.Time {
 }
 
 // Now indicates an expected call of Now.
-func (mr *MockTimeMockRecorder) Now() *gomock.Call {
+func (mr *MockTimeMockRecorder) Now() *TimeNowCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Now", reflect.TypeOf((*MockTime)(nil).Now))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Now", reflect.TypeOf((*MockTime)(nil).Now))
+	return &TimeNowCall{Call: call}
+}
+
+// TimeNowCall wrap *gomock.Call
+type TimeNowCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *TimeNowCall) Return(arg0 time.Time) *TimeNowCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *TimeNowCall) Do(f func() time.Time) *TimeNowCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *TimeNowCall) DoAndReturn(f func() time.Time) *TimeNowCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // MockgetPeers is a mock of getPeers interface.
@@ -81,7 +105,31 @@ func (m *MockgetPeers) GetPeers() []p2p.Peer {
 }
 
 // GetPeers indicates an expected call of GetPeers.
-func (mr *MockgetPeersMockRecorder) GetPeers() *gomock.Call {
+func (mr *MockgetPeersMockRecorder) GetPeers() *getPeersGetPeersCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPeers", reflect.TypeOf((*MockgetPeers)(nil).GetPeers))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPeers", reflect.TypeOf((*MockgetPeers)(nil).GetPeers))
+	return &getPeersGetPeersCall{Call: call}
+}
+
+// getPeersGetPeersCall wrap *gomock.Call
+type getPeersGetPeersCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *getPeersGetPeersCall) Return(arg0 []p2p.Peer) *getPeersGetPeersCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *getPeersGetPeersCall) Do(f func() []p2p.Peer) *getPeersGetPeersCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *getPeersGetPeersCall) DoAndReturn(f func() []p2p.Peer) *getPeersGetPeersCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }

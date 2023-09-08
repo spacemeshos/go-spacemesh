@@ -7,7 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-//go:generate mockgen -package=malfeasance -destination=./mocks.go -source=./interface.go
+//go:generate mockgen -typed -package=malfeasance -destination=./mocks.go -source=./interface.go
 
 type consensusProtocol interface {
 	HandleEligibility(context.Context, *types.HareEligibilityGossip)

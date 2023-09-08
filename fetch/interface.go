@@ -10,7 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
+//go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./interface.go
 
 type requester interface {
 	Request(context.Context, p2p.Peer, []byte, func([]byte), func(error)) error

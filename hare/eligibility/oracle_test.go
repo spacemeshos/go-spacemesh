@@ -11,11 +11,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/fixed"
 	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -606,7 +606,7 @@ func TestActives_ConcurrentCalls(t *testing.T) {
 	mc := NewMockactiveSetCache(gomock.NewController(t))
 	firstCall := true
 	mc.EXPECT().Get(layer.GetEpoch() - 1).DoAndReturn(
-		func(key any) (any, bool) {
+		func(types.EpochID) (*cachedActiveSet, bool) {
 			if firstCall {
 				firstCall = false
 				return nil, false

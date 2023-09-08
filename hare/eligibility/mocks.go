@@ -7,8 +7,8 @@ package eligibility
 import (
 	reflect "reflect"
 
-	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	gomock "go.uber.org/mock/gomock"
 )
 
 // MockactiveSetCache is a mock of activeSetCache interface.
@@ -43,9 +43,33 @@ func (m *MockactiveSetCache) Add(key types.EpochID, value *cachedActiveSet) bool
 }
 
 // Add indicates an expected call of Add.
-func (mr *MockactiveSetCacheMockRecorder) Add(key, value interface{}) *gomock.Call {
+func (mr *MockactiveSetCacheMockRecorder) Add(key, value interface{}) *activeSetCacheAddCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MockactiveSetCache)(nil).Add), key, value)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MockactiveSetCache)(nil).Add), key, value)
+	return &activeSetCacheAddCall{Call: call}
+}
+
+// activeSetCacheAddCall wrap *gomock.Call
+type activeSetCacheAddCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *activeSetCacheAddCall) Return(evicted bool) *activeSetCacheAddCall {
+	c.Call = c.Call.Return(evicted)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *activeSetCacheAddCall) Do(f func(types.EpochID, *cachedActiveSet) bool) *activeSetCacheAddCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *activeSetCacheAddCall) DoAndReturn(f func(types.EpochID, *cachedActiveSet) bool) *activeSetCacheAddCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // Get mocks base method.
@@ -58,9 +82,33 @@ func (m *MockactiveSetCache) Get(key types.EpochID) (*cachedActiveSet, bool) {
 }
 
 // Get indicates an expected call of Get.
-func (mr *MockactiveSetCacheMockRecorder) Get(key interface{}) *gomock.Call {
+func (mr *MockactiveSetCacheMockRecorder) Get(key interface{}) *activeSetCacheGetCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockactiveSetCache)(nil).Get), key)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockactiveSetCache)(nil).Get), key)
+	return &activeSetCacheGetCall{Call: call}
+}
+
+// activeSetCacheGetCall wrap *gomock.Call
+type activeSetCacheGetCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *activeSetCacheGetCall) Return(value *cachedActiveSet, ok bool) *activeSetCacheGetCall {
+	c.Call = c.Call.Return(value, ok)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *activeSetCacheGetCall) Do(f func(types.EpochID) (*cachedActiveSet, bool)) *activeSetCacheGetCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *activeSetCacheGetCall) DoAndReturn(f func(types.EpochID) (*cachedActiveSet, bool)) *activeSetCacheGetCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // MockvrfVerifier is a mock of vrfVerifier interface.
@@ -95,7 +143,31 @@ func (m *MockvrfVerifier) Verify(nodeID types.NodeID, msg []byte, sig types.VrfS
 }
 
 // Verify indicates an expected call of Verify.
-func (mr *MockvrfVerifierMockRecorder) Verify(nodeID, msg, sig interface{}) *gomock.Call {
+func (mr *MockvrfVerifierMockRecorder) Verify(nodeID, msg, sig interface{}) *vrfVerifierVerifyCall {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockvrfVerifier)(nil).Verify), nodeID, msg, sig)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockvrfVerifier)(nil).Verify), nodeID, msg, sig)
+	return &vrfVerifierVerifyCall{Call: call}
+}
+
+// vrfVerifierVerifyCall wrap *gomock.Call
+type vrfVerifierVerifyCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *vrfVerifierVerifyCall) Return(arg0 bool) *vrfVerifierVerifyCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *vrfVerifierVerifyCall) Do(f func(types.NodeID, []byte, types.VrfSignature) bool) *vrfVerifierVerifyCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *vrfVerifierVerifyCall) DoAndReturn(f func(types.NodeID, []byte, types.VrfSignature) bool) *vrfVerifierVerifyCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
