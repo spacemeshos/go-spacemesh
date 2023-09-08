@@ -57,7 +57,7 @@ func Recover(db *datastore.CachedDB, latest types.LayerID, beacon system.BeaconG
 		}
 	}
 	for lid := types.GetEffectiveGenesis().Add(1); !lid.After(layer); lid = lid.Add(1) {
-		if err := RecoverLayer(context.Background(), trtl, db, beacon, lid, types.MinLayer(layer, latest)); err != nil {
+		if err := RecoverLayer(context.Background(), trtl, db, beacon, lid, min(layer, latest)); err != nil {
 			return nil, fmt.Errorf("failed to load tortoise state at layer %d: %w", lid, err)
 		}
 	}

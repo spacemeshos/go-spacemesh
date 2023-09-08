@@ -21,7 +21,7 @@ func TestShortTimeskew(t *testing.T) {
 	require.NoError(t, err)
 
 	var (
-		enableSkew = maxLayer(currentLayer(tctx, t, cl.Client(0))+2, 9)
+		enableSkew = max(currentLayer(tctx, t, cl.Client(0))+2, 9)
 		stopSkew   = enableSkew + 2
 		stopTest   = stopSkew + 10
 		skewOffset = "-3s" // hare round is 2s

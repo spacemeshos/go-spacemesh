@@ -157,15 +157,17 @@ func decodeNibble(in byte) uint64 {
 }
 
 func mapError(err error) error {
-	if err, ok := err.(*strconv.NumError); ok {
-		switch err.Err {
+	var numErr *strconv.NumError
+	if errors.As(err, &numErr) {
+		switch numErr.Err {
 		case strconv.ErrRange:
 			return ErrUint64Range
 		case strconv.ErrSyntax:
 			return ErrSyntax
 		}
 	}
-	if _, ok := err.(hex.InvalidByteError); ok {
+	var syntaxErr hex.InvalidByteError
+	if errors.As(err, &syntaxErr) {
 		return ErrSyntax
 	}
 	if errors.Is(err, hex.ErrLength) {

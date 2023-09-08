@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -69,6 +70,10 @@ func NewMesh(cdb *datastore.CachedDB, c layerClock, trtl system.Tortoise, exec *
 		conState:            state,
 		nextProcessedLayers: make(map[types.LayerID]struct{}),
 		missingBlocks:       make(chan []types.BlockID, 32),
+
+		pendingUpdates: struct {
+			min, max types.LayerID
+		}{min: math.MaxUint32},
 	}
 	msh.latestLayer.Store(types.LayerID(0))
 	msh.latestLayerInState.Store(types.LayerID(0))
@@ -232,7 +237,7 @@ func (msh *Mesh) setProcessedLayer(layerID types.LayerID) error {
 // the block in consensus, and reverts state before that layer
 // if such layer is found.
 func (msh *Mesh) ensureStateConsistent(ctx context.Context, results []result.Layer) error {
-	var changed types.LayerID
+	changed := types.LayerID(math.MaxUint32)
 	for _, layer := range results {
 		applied, err := layers.GetApplied(msh.cdb, layer.Layer)
 		if err != nil && errors.Is(err, sql.ErrNotFound) {
@@ -249,10 +254,10 @@ func (msh *Mesh) ensureStateConsistent(ctx context.Context, results []result.Lay
 				log.Stringer("expected", bid),
 				log.Stringer("applied", applied),
 			)
-			changed = types.MinLayer(changed, layer.Layer)
+			changed = min(changed, layer.Layer)
 		}
 	}
-	if changed == 0 {
+	if changed == math.MaxUint32 {
 		return nil
 	}
 	revert := changed.Sub(1)
@@ -284,18 +289,17 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, lid types.LayerID) error {
 
 	msh.trtl.TallyVotes(ctx, lid)
 
-	if err := msh.setProcessedLayer(
-		lid); err != nil {
+	if err := msh.setProcessedLayer(lid); err != nil {
 		return err
 	}
 	results := msh.trtl.Updates()
-	pending := msh.pendingUpdates.min != 0
+	pending := msh.pendingUpdates.min != math.MaxUint32
 	if len(results) > 0 {
-		msh.pendingUpdates.min = types.MinLayer(msh.pendingUpdates.min, results[0].Layer)
-		msh.pendingUpdates.max = types.MaxLayer(msh.pendingUpdates.max, results[len(results)-1].Layer)
+		msh.pendingUpdates.min = min(msh.pendingUpdates.min, results[0].Layer)
+		msh.pendingUpdates.max = max(msh.pendingUpdates.max, results[len(results)-1].Layer)
 	}
 	next := msh.LatestLayerInState() + 1
-	if next < msh.pendingUpdates.min {
+	if msh.pendingUpdates.min != math.MaxUint32 && next < msh.pendingUpdates.min {
 		msh.pendingUpdates.min = next
 		pending = true
 	}
@@ -338,9 +342,9 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, lid types.LayerID) error {
 	}
 	if len(missing) > 0 {
 		msh.pendingUpdates.min = applicable[len(applicable)-1].Layer
-		msh.pendingUpdates.max = types.MaxLayer(msh.pendingUpdates.min, msh.pendingUpdates.max)
+		msh.pendingUpdates.max = max(msh.pendingUpdates.min, msh.pendingUpdates.max)
 	} else {
-		msh.pendingUpdates.min = 0
+		msh.pendingUpdates.min = math.MaxUint32
 		msh.pendingUpdates.max = 0
 	}
 	return nil

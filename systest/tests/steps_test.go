@@ -70,7 +70,7 @@ func TestStepShortDisconnect(t *testing.T) {
 	require.Greater(t, cl.Bootnodes(), 1)
 
 	var (
-		enable = maxLayer(currentLayer(tctx, t, cl.Client(0))+2, 9)
+		enable = max(currentLayer(tctx, t, cl.Client(0))+2, 9)
 		stop   = enable + 2
 	)
 	// make sure the first boot node is in the 2nd partition so the poet proof can be broadcast to both splits

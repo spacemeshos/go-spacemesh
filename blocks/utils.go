@@ -14,7 +14,6 @@ import (
 	"github.com/seehuhn/mt19937"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -207,7 +206,7 @@ func toUint64Slice(b []byte) []uint64 {
 	l := len(b)
 	var s []uint64
 	for i := 0; i < l; i += numByte {
-		s = append(s, binary.LittleEndian.Uint64(b[i:util.Min(l, i+numByte)]))
+		s = append(s, binary.LittleEndian.Uint64(b[i:min(l, i+numByte)]))
 	}
 	return s
 }
