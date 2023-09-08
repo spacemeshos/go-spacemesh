@@ -4,11 +4,17 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/spacemeshos/economics/constants"
 	"github.com/spacemeshos/economics/rewards"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/log"
+)
+
+const (
+	NON_MARKET_ATX_PENALTY    = 0.5 * constants.OneSmesh
+	NON_MARKET_BALLOT_PENALTY = 0.05 * constants.OneSmesh
 )
 
 func (v *VM) addRewards(lctx ApplyContext, ss *core.StagedCache, fees uint64, blockRewards []types.CoinbaseReward) ([]types.Reward, error) {
@@ -24,7 +30,8 @@ func (v *VM) addRewards(lctx ApplyContext, ss *core.StagedCache, fees uint64, bl
 	}
 	result := make([]types.Reward, 0, len(blockRewards))
 	for _, blockReward := range blockRewards {
-		relative := blockReward.Weight.ToBigRat()
+		weight := blockReward.Weight.ToBigRat()
+		relative := new(big.Rat).Set(weight)
 		relative.Quo(relative, totalWeight)
 
 		totalReward := new(big.Int).SetUint64(total)
@@ -44,12 +51,27 @@ func (v *VM) addRewards(lctx ApplyContext, ss *core.StagedCache, fees uint64, bl
 			return nil, fmt.Errorf("%w: subsidy reward %v for %v overflows uint64",
 				core.ErrInternal, subsidyReward, blockReward.Coinbase)
 		}
-
+		penalty := big.NewInt(0)
+		if lctx.Layer > v.cfg.ApplyATXPenalty {
+			// fraction of atx penalty according to the number of elibilities in this ballot
+			// plus ballot penalty
+			penalty.
+				SetUint64(NON_MARKET_ATX_PENALTY).
+				Mul(penalty, weight.Num()).
+				Quo(penalty, weight.Denom()).
+				Add(penalty, new(big.Int).SetUint64(NON_MARKET_BALLOT_PENALTY))
+			if penalty.Cmp(totalReward) == 0 {
+				totalReward.SetUint64(0)
+			} else {
+				totalReward.Sub(totalReward, penalty)
+			}
+		}
 		v.logger.With().Debug("rewards for coinbase",
 			lctx.Layer,
 			blockReward.Coinbase,
 			log.Stringer("relative weight", &blockReward.Weight),
 			log.Uint64("subsidy", subsidyReward.Uint64()),
+			log.Uint64("penalty", penalty.Uint64()),
 			log.Uint64("total", totalReward.Uint64()),
 		)
 

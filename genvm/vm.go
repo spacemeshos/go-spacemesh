@@ -39,8 +39,9 @@ func WithLogger(logger log.Log) Opt {
 
 // Config defines the configuration options for vm.
 type Config struct {
-	GasLimit  uint64
-	GenesisID types.Hash20
+	GasLimit        uint64
+	GenesisID       types.Hash20
+	ApplyATXPenalty types.LayerID
 }
 
 // DefaultConfig returns the default RewardConfig.
