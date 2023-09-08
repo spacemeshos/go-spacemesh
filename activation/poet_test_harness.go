@@ -13,8 +13,14 @@ import (
 // HTTPPoetTestHarness utilizes a local self-contained poet server instance
 // targeted by an HTTP client. It is intended to be used in tests only.
 type HTTPPoetTestHarness struct {
-	*HTTPPoetClient
 	Service *server.Server
+}
+
+func (h *HTTPPoetTestHarness) RestURL() *url.URL {
+	return &url.URL{
+		Scheme: "http",
+		Host:   h.Service.GrpcRestProxyAddr().String(),
+	}
 }
 
 type HTTPPoetOpt func(*config.Config)
@@ -44,7 +50,7 @@ func WithCycleGap(gap time.Duration) HTTPPoetOpt {
 }
 
 // NewHTTPPoetTestHarness returns a new instance of HTTPPoetHarness.
-func NewHTTPPoetTestHarness(ctx context.Context, poetdir string, clientCfg PoetConfig, opts ...HTTPPoetOpt) (*HTTPPoetTestHarness, error) {
+func NewHTTPPoetTestHarness(ctx context.Context, poetdir string, opts ...HTTPPoetOpt) (*HTTPPoetTestHarness, error) {
 	cfg := config.DefaultConfig()
 	cfg.PoetDir = poetdir
 	cfg.RawRESTListener = "localhost:0"
@@ -64,21 +70,7 @@ func NewHTTPPoetTestHarness(ctx context.Context, poetdir string, clientCfg PoetC
 		return nil, err
 	}
 
-	// NewHTTPPoetClient takes an URL as connection string. Server speaks HTTP.
-	url := &url.URL{
-		Scheme: "http",
-		Host:   poet.GrpcRestProxyAddr().String(),
-	}
-
-	client, err := NewHTTPPoetClient(url.String(), clientCfg)
-	if err != nil {
-		return nil, err
-	}
-
-	// TODO: query for the REST address to allow dynamic port allocation.
-	// It needs changes in poet.
 	return &HTTPPoetTestHarness{
-		HTTPPoetClient: client,
-		Service:        poet,
+		Service: poet,
 	}, nil
 }
