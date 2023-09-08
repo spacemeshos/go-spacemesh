@@ -5,8 +5,6 @@ import (
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-
-	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 const (
@@ -45,13 +43,6 @@ const (
 	reasonCoinflip       voteReason = "coinflip"
 	reasonMissingData    voteReason = "missing data"
 )
-
-func maxLayer(i, j types.LayerID) types.LayerID {
-	if i.After(j) {
-		return i
-	}
-	return j
-}
 
 func verifyLayer(logger *zap.Logger, blocks []*blockInfo, getDecision func(*blockInfo) sign) (bool, bool) {
 	// order blocks by height in ascending order

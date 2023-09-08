@@ -213,9 +213,11 @@ func (h *Hare) Coins() <-chan WeakCoinOutput {
 func (h *Hare) Start() {
 	h.pubsub.Register(h.config.ProtocolName, h.Handler, pubsub.WithValidatorInline(true))
 	current := h.nodeclock.CurrentLayer() + 1
-	enabled := types.MaxLayer(current, h.config.EnableLayer)
-	enabled = types.MaxLayer(enabled, types.GetEffectiveGenesis()+1)
-	disabled := types.MinLayer(types.LayerID(math.MaxUint32), h.config.DisableLayer)
+	enabled := max(current, h.config.EnableLayer, types.GetEffectiveGenesis()+1)
+	disabled := types.LayerID(math.MaxUint32)
+	if h.config.DisableLayer > 0 {
+		disabled = h.config.DisableLayer
+	}
 	h.log.Info("started",
 		zap.Inline(&h.config),
 		zap.Uint32("enabled", enabled.Uint32()),

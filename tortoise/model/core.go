@@ -203,10 +203,3 @@ func (b *beaconStore) GetBeacon(eid types.EpochID) (types.Beacon, error) {
 func (b *beaconStore) StoreBeacon(eid types.EpochID, beacon types.Beacon) {
 	b.beacons[eid] = beacon
 }
-
-func max(i, j uint32) uint32 {
-	if i > j {
-		return i
-	}
-	return j
-}

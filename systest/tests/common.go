@@ -310,20 +310,6 @@ func waitAll(tctx *testcontext.Context, cl *cluster.Cluster) error {
 	return eg.Wait()
 }
 
-func min(i, j int) int {
-	if i < j {
-		return i
-	}
-	return j
-}
-
-func maxLayer(i, j uint32) uint32 {
-	if i > j {
-		return i
-	}
-	return j
-}
-
 func nextFirstLayer(current, size uint32) uint32 {
 	if over := current % size; over != 0 {
 		current += size - over
