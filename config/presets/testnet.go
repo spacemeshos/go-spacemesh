@@ -1,12 +1,27 @@
 package presets
 
 import (
+	"math"
+	"math/big"
+	"os"
+	"path/filepath"
+	"runtime"
 	"time"
 
-	"github.com/spacemeshos/post/initialization"
-
-	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+	"github.com/spacemeshos/go-spacemesh/beacon"
+	"github.com/spacemeshos/go-spacemesh/bootstrap"
+	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/fetch"
+	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
+	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
+	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/syncer"
+	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
+	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
 func init() {
@@ -14,60 +29,117 @@ func init() {
 }
 
 func testnet() config.Config {
-	conf := config.DefaultConfig()
-
-	conf.NetworkHRP = "stest"
-	types.SetNetworkHRP(conf.NetworkHRP) // set to generate coinbase
-
-	conf.HARE.N = 800
-	conf.HARE.ExpectedLeaders = 10
-	conf.HARE.LimitConcurrent = 5
-	conf.HARE.LimitIterations = 10
-	conf.HARE.RoundDuration = 10 * time.Second
-	conf.HARE.WakeupDelta = 10 * time.Second
-
-	conf.P2P.MinPeers = 10
-
-	conf.Genesis = &config.GenesisConfig{
-		ExtraData: "testnet",
-		Accounts: map[string]uint64{
-			"stest1qqqqqqygdpsq62p4qxfyng8h2mm4f4d94vt7huqqu9mz3": 100000000000000000,
-			"stest1qqqqqqylzg8ypces4llx4gnat0dyntqfvr0h6mcprcz66": 100000000000000000,
-			"stest1qqqqqq90akdpc97206485eu4m0rmacd3mxfv0wsdrea6k": 100000000000000000,
-			"stest1qqqqqq9jpsarr7tnyv0qr0edddwqpg3vcya4cccauypts": 100000000000000000,
-			"stest1qqqqqq8lpq7f5ghqt569nvpl8kldv8r66ms2yzgudsd5t": 100000000000000000,
-		},
+	var postPowDifficulty activation.PowDifficulty
+	if err := postPowDifficulty.UnmarshalText([]byte("000dfb23b0979b4b000000000000000000000000000000000000000000000000")); err != nil {
+		panic(err)
 	}
+	p2pconfig := p2p.DefaultConfig()
 
-	conf.LayerAvgSize = 50
-	conf.LayerDuration = 120 * time.Second
-	conf.LayersPerEpoch = 60
+	smeshing := config.DefaultSmeshingConfig()
+	smeshing.ProvingOpts.Nonces = 288
+	smeshing.ProvingOpts.Threads = uint(runtime.NumCPU() * 3 / 4)
+	if smeshing.ProvingOpts.Threads < 1 {
+		smeshing.ProvingOpts.Threads = 1
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		panic("can't read homedir: " + err.Error())
+	}
+	defaultdir := filepath.Join(home, "spacemesh-testnet", "/")
+	return config.Config{
+		BaseConfig: config.BaseConfig{
+			DataDirParent:       defaultdir,
+			FileLock:            filepath.Join(os.TempDir(), "spacemesh.lock"),
+			MetricsPort:         1010,
+			DatabaseConnections: 16,
+			NetworkHRP:          "smtest",
 
-	conf.Tortoise.Hdist = 60
-	conf.Tortoise.Zdist = 10
-	conf.Tortoise.BadBeaconVoteDelayLayers = 30
+			LayerDuration:  5 * time.Minute,
+			LayerAvgSize:   50,
+			LayersPerEpoch: 288,
 
-	conf.POST.K1 = 26
-	conf.POST.K2 = 37
-	conf.POST.K3 = 37
-	conf.POST.LabelsPerUnit = 20 * 1024 / 16 // 20 kB units
-	conf.POST.MaxNumUnits = 4
-	conf.POST.MinNumUnits = 2
+			TxsPerProposal: 700,       // https://github.com/spacemeshos/go-spacemesh/issues/4559
+			BlockGasLimit:  100107000, // 3000 of spends
 
-	conf.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte("1")).String()
-	conf.SMESHING.Start = false
-	conf.SMESHING.Opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
-	conf.SMESHING.Opts.NumUnits = 2
-	conf.SMESHING.Opts.Throttle = true
+			OptFilterThreshold: 90,
 
-	conf.Beacon.FirstVotingRoundDuration = 3 * time.Minute
-	conf.Beacon.GracePeriodDuration = 10 * time.Second
-	conf.Beacon.ProposalDuration = 30 * time.Second
-	conf.Beacon.RoundsNumber = 6
-	conf.Beacon.BeaconSyncWeightUnits = 30
-	conf.Beacon.VotesLimit = 100
-	conf.Beacon.VotingRoundDuration = 50 * time.Second
-	conf.Beacon.WeakCoinRoundDuration = 10 * time.Second
-
-	return conf
+			TickSize:    666514,
+			PoETServers: []string{},
+		},
+		Genesis: &config.GenesisConfig{
+			GenesisTime: "2023-09-11T08:00:00Z",
+			ExtraData:   "0000000000000000000000c76c58ebac180989673fd6d237b40e66ed5c976ec3",
+		},
+		Tortoise: tortoise.Config{
+			Hdist:                    10,
+			Zdist:                    2,
+			WindowSize:               10000,
+			MaxExceptions:            1000,
+			BadBeaconVoteDelayLayers: 4032,
+			// 100 - is assumed minimal number of units
+			// 100 - half of the expected poet ticks
+			MinimalActiveSetWeight: 100 * 100,
+		},
+		HARE: hareConfig.Config{
+			N:               200,
+			ExpectedLeaders: 5,
+			RoundDuration:   25 * time.Second,
+			WakeupDelta:     25 * time.Second,
+			LimitConcurrent: 2,
+			LimitIterations: 4,
+		},
+		HareEligibility: eligConfig.Config{
+			ConfidenceParam: 20,
+		},
+		Beacon: beacon.Config{
+			Kappa:                    40,
+			Q:                        big.NewRat(1, 3),
+			Theta:                    big.NewRat(1, 4),
+			GracePeriodDuration:      10 * time.Minute,
+			ProposalDuration:         4 * time.Minute,
+			FirstVotingRoundDuration: 30 * time.Minute,
+			RoundsNumber:             20,
+			VotingRoundDuration:      4 * time.Minute,
+			WeakCoinRoundDuration:    4 * time.Minute,
+			VotesLimit:               100,
+			BeaconSyncWeightUnits:    800,
+		},
+		POET: activation.PoetConfig{
+			PhaseShift:        12 * time.Hour,
+			CycleGap:          2 * time.Hour,
+			GracePeriod:       10 * time.Minute,
+			RequestRetryDelay: 10 * time.Second,
+			MaxRequestRetries: 10,
+		},
+		POST: activation.PostConfig{
+			MinNumUnits:   4,
+			MaxNumUnits:   math.MaxUint32,
+			LabelsPerUnit: 1024,
+			K1:            26,
+			K2:            37,
+			K3:            37,
+			PowDifficulty: postPowDifficulty,
+		},
+		Bootstrap: bootstrap.Config{
+			URL:      "https://bootstrap.spacemesh.network/testnet06",
+			Version:  "https://spacemesh.io/bootstrap.schema.json.1.0",
+			DataDir:  os.TempDir(),
+			Interval: 30 * time.Second,
+		},
+		P2P:      p2pconfig,
+		API:      grpcserver.DefaultConfig(),
+		TIME:     timeConfig.DefaultConfig(),
+		SMESHING: smeshing,
+		FETCH:    fetch.DefaultConfig(),
+		LOGGING:  config.DefaultLoggingConfig(),
+		Sync: syncer.Config{
+			Interval:         time.Minute,
+			EpochEndFraction: 0.8,
+			MaxStaleDuration: time.Hour,
+			UseNewProtocol:   true,
+			GossipDuration:   50 * time.Second,
+		},
+		Recovery: checkpoint.DefaultConfig(),
+		Cache:    datastore.DefaultConfig(),
+	}
 }

@@ -47,7 +47,7 @@ type LoggerConfig struct {
 	VMLogLevel                string     `mapstructure:"vm"`
 }
 
-func defaultLoggingConfig() LoggerConfig {
+func DefaultLoggingConfig() LoggerConfig {
 	return LoggerConfig{
 		Encoder:                   ConsoleLogEncoder,
 		AppLoggerLevel:            defaultLoggingLevel.String(),

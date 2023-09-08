@@ -131,7 +131,7 @@ func MainnetConfig() Config {
 		TIME:     timeConfig.DefaultConfig(),
 		SMESHING: smeshing,
 		FETCH:    fetch.DefaultConfig(),
-		LOGGING:  defaultLoggingConfig(),
+		LOGGING:  DefaultLoggingConfig(),
 		Sync: syncer.Config{
 			Interval:         time.Minute,
 			EpochEndFraction: 0.8,
