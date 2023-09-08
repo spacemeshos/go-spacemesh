@@ -366,6 +366,42 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 	require.EqualValues(t, expected, saved)
 }
 
+func TestMesh_OwnMaliciousBallots(t *testing.T) {
+	tm := createTestMesh(t)
+
+	lid := types.LayerID(1)
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	createIdentity(t, tm.cdb, sig)
+	types.SetMinerNodeID(sig.NodeID())
+
+	var blts []*types.Ballot
+	for i := 0; i < 2; i++ {
+		b := &types.Ballot{
+			InnerBallot: types.InnerBallot{
+				Layer:       lid,
+				OpinionHash: types.RandomHash(),
+			},
+			SmesherID: sig.NodeID(),
+		}
+		b.Signature = sig.Sign(signing.BALLOT, b.SignedBytes())
+		require.NoError(t, b.Initialize())
+		blts = append(blts, b)
+	}
+	malProof, err := tm.AddBallot(context.Background(), blts[0])
+	require.NoError(t, err)
+	require.Nil(t, malProof)
+	require.False(t, blts[0].IsMalicious())
+	// second one will NOT create a MalfeasanceProof
+	malProof, err = tm.AddBallot(context.Background(), blts[1])
+	require.NoError(t, err)
+	require.Nil(t, malProof)
+	require.False(t, blts[1].IsMalicious())
+	got, err := identities.IsMalicious(tm.cdb, sig.NodeID())
+	require.NoError(t, err)
+	require.False(t, got)
+}
+
 func TestProcessLayer(t *testing.T) {
 	t.Parallel()
 	type call struct {

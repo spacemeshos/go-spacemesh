@@ -728,6 +728,29 @@ func TestHandler_ProcessAtx(t *testing.T) {
 	require.Equal(t, atx2.PublishEpoch.FirstLayer(), got.MalfeasanceProof.Layer)
 }
 
+func TestHandler_ProcessAtx_OwnMalfeasance(t *testing.T) {
+	goldenATXID := types.ATXID{2, 3, 4}
+	atxHdlr := newTestHandler(t, goldenATXID)
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	types.SetMinerNodeID(sig.NodeID())
+
+	atx1 := newActivationTx(t, sig, 0, types.EmptyATXID, types.EmptyATXID, nil, types.LayerID(layersPerEpoch).GetEpoch(), 0, 100, types.Address{1, 2, 3}, 100, &types.NIPost{})
+	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
+	require.NoError(t, atxHdlr.ProcessAtx(context.Background(), atx1))
+
+	// another atx for the same epoch is considered malicious
+	atx2 := newActivationTx(t, sig, 1, atx1.ID(), atx1.ID(), nil, types.LayerID(layersPerEpoch+1).GetEpoch(), 0, 100, types.Address{2, 3, 4}, 100, &types.NIPost{})
+	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
+	require.NoError(t, atxHdlr.ProcessAtx(context.Background(), atx2))
+	got, err := identities.IsMalicious(atxHdlr.cdb, sig.NodeID())
+	require.NoError(t, err)
+	require.False(t, got)
+}
+
 func TestHandler_ProcessAtxStoresNewVRFNonce(t *testing.T) {
 	// Arrange
 	goldenATXID := types.ATXID{2, 3, 4}
