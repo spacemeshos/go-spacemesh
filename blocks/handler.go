@@ -16,19 +16,19 @@ import (
 )
 
 var (
-	errMalformedData  = fmt.Errorf("%w: malformed data", pubsub.ErrValidationReject)
-	errWrongHash      = fmt.Errorf("%w: incorrect hash", pubsub.ErrValidationReject)
-	errInvalidRewards = errors.New("invalid rewards")
-	errDuplicateTX    = errors.New("duplicate TxID in proposal")
+	errMalformedData = fmt.Errorf("%w: malformed data", pubsub.ErrValidationReject)
+	errWrongHash     = fmt.Errorf("%w: incorrect hash", pubsub.ErrValidationReject)
+	errDuplicateTX   = errors.New("duplicate TxID in proposal")
 )
 
 // Handler processes Block fetched from peers during sync.
 type Handler struct {
 	logger log.Log
 
-	fetcher system.Fetcher
-	db      *sql.Database
-	mesh    meshProvider
+	fetcher  system.Fetcher
+	db       *sql.Database
+	tortoise tortoiseProvider
+	mesh     meshProvider
 }
 
 // Opt for configuring BlockHandler.
@@ -42,12 +42,13 @@ func WithLogger(logger log.Log) Opt {
 }
 
 // NewHandler creates new Handler.
-func NewHandler(f system.Fetcher, db *sql.Database, m meshProvider, opts ...Opt) *Handler {
+func NewHandler(f system.Fetcher, db *sql.Database, tortoise tortoiseProvider, m meshProvider, opts ...Opt) *Handler {
 	h := &Handler{
-		logger:  log.NewNop(),
-		fetcher: f,
-		db:      db,
-		mesh:    m,
+		logger:   log.NewNop(),
+		fetcher:  f,
+		db:       db,
+		tortoise: tortoise,
+		mesh:     m,
 	}
 	for _, opt := range opts {
 		opt(h)
@@ -61,7 +62,7 @@ func (h *Handler) HandleSyncedBlock(ctx context.Context, expHash types.Hash32, p
 
 	var b types.Block
 	if err := codec.Decode(data, &b); err != nil {
-		logger.With().Error("malformed block", log.Err(err))
+		logger.With().Debug("malformed block", log.Err(err))
 		return errMalformedData
 	}
 	// set the block ID when received
@@ -72,11 +73,11 @@ func (h *Handler) HandleSyncedBlock(ctx context.Context, expHash types.Hash32, p
 	}
 
 	if b.LayerIndex <= types.GetEffectiveGenesis() {
-		return fmt.Errorf("block before effective genesis: layer %v", b.LayerIndex)
+		return fmt.Errorf("%w: block before effective genesis: layer %v", pubsub.ErrValidationReject, b.LayerIndex)
 	}
 
 	if err := ValidateRewards(b.Rewards); err != nil {
-		return fmt.Errorf("%w: %w", errInvalidRewards, err)
+		return fmt.Errorf("%w: %s", pubsub.ErrValidationReject, err.Error())
 	}
 
 	logger = logger.WithFields(b.ID(), b.LayerIndex)
@@ -89,17 +90,22 @@ func (h *Handler) HandleSyncedBlock(ctx context.Context, expHash types.Hash32, p
 	}
 	logger.With().Info("new block")
 
-	h.fetcher.RegisterPeerHashes(peer, types.TransactionIDsToHashes(b.TxIDs))
-	if err := h.checkTransactions(ctx, &b); err != nil {
-		logger.With().Warning("failed to fetch block TXs", log.Err(err))
-		return err
+	if missing := h.tortoise.GetMissingActiveSet(b.LayerIndex.GetEpoch(), toAtxIDs(b.Rewards)); len(missing) > 0 {
+		h.fetcher.RegisterPeerHashes(peer, types.ATXIDsToHashes(missing))
+		if err := h.fetcher.GetAtxs(ctx, missing); err != nil {
+			return err
+		}
 	}
-
+	if len(b.TxIDs) > 0 {
+		if err := h.checkTransactions(ctx, peer, &b); err != nil {
+			logger.With().Warning("failed to fetch block TXs", log.Err(err))
+			return err
+		}
+	}
 	if err := h.mesh.AddBlockWithTXs(ctx, &b); err != nil {
 		logger.With().Error("failed to save block", log.Err(err))
 		return fmt.Errorf("save block: %w", err)
 	}
-
 	return nil
 }
 
@@ -121,11 +127,10 @@ func ValidateRewards(rewards []types.AnyReward) error {
 	return nil
 }
 
-func (h *Handler) checkTransactions(ctx context.Context, b *types.Block) error {
+func (h *Handler) checkTransactions(ctx context.Context, peer p2p.Peer, b *types.Block) error {
 	if len(b.TxIDs) == 0 {
 		return nil
 	}
-
 	set := make(map[types.TransactionID]struct{}, len(b.TxIDs))
 	for _, tx := range b.TxIDs {
 		if _, exist := set[tx]; exist {
@@ -133,8 +138,17 @@ func (h *Handler) checkTransactions(ctx context.Context, b *types.Block) error {
 		}
 		set[tx] = struct{}{}
 	}
+	h.fetcher.RegisterPeerHashes(peer, types.TransactionIDsToHashes(b.TxIDs))
 	if err := h.fetcher.GetBlockTxs(ctx, b.TxIDs); err != nil {
 		return fmt.Errorf("block get TXs: %w", err)
 	}
 	return nil
+}
+
+func toAtxIDs(rewards []types.AnyReward) []types.ATXID {
+	rst := make([]types.ATXID, 0, len(rewards))
+	for i := range rewards {
+		rst = append(rst, rewards[i].AtxID)
+	}
+	return rst
 }

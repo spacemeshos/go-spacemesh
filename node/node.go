@@ -682,7 +682,7 @@ func (app *App) initServices(ctx context.Context) error {
 		}),
 	)
 
-	blockHandler := blocks.NewHandler(fetcherWrapped, app.db, msh,
+	blockHandler := blocks.NewHandler(fetcherWrapped, app.db, trtl, msh,
 		blocks.WithLogger(app.addLogger(BlockHandlerLogger, lg)))
 
 	app.txHandler = txs.NewTxHandler(
