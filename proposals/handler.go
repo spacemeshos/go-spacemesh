@@ -266,12 +266,19 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 	latency := receivedTime.Sub(h.clock.LayerToTime(p.Layer))
 	metrics.ReportMessageLatency(pubsub.ProposalProtocol, pubsub.ProposalProtocol, latency)
 
+	set := p.ActiveSet
+	// on sync path activeset is downloaded together with proposal
+	// but starting at layer AllowEmptyActiveSet proposals are signed without activeset
+	if p.Layer >= h.cfg.AllowEmptyActiveSet {
+		p.ActiveSet = nil
+	}
 	if !h.edVerifier.Verify(signing.PROPOSAL, p.SmesherID, p.SignedBytes(), p.Signature) {
-		badSigBallot.Inc()
+		badSigProposal.Inc()
 		return fmt.Errorf("failed to verify proposal signature")
 	}
+	p.ActiveSet = set
 	if !h.edVerifier.Verify(signing.BALLOT, p.Ballot.SmesherID, p.Ballot.SignedBytes(), p.Ballot.Signature) {
-		badSigProposal.Inc()
+		badSigBallot.Inc()
 		return fmt.Errorf("failed to verify ballot signature")
 	}
 
