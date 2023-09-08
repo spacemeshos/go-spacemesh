@@ -15,6 +15,7 @@ type Fetcher interface {
 	BlockFetcher
 	PoetProofFetcher
 	BallotFetcher
+	ActiveSetFetcher
 	ProposalFetcher
 	TxFetcher
 	PeerTracker
@@ -49,6 +50,11 @@ type BallotFetcher interface {
 // ProposalFetcher defines an interface for fetching Proposal from remote peers.
 type ProposalFetcher interface {
 	GetProposals(context.Context, []types.ProposalID) error
+}
+
+// ActiveSetFetcher defines an interface downloading active set.
+type ActiveSetFetcher interface {
+	GetActiveSet(context.Context, types.Hash32) error
 }
 
 // PeerTracker defines an interface to track peer hashes.

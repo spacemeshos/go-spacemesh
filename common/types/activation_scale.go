@@ -413,3 +413,41 @@ func (t *PostMetadata) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	}
 	return total, nil
 }
+
+func (t *EpochActiveSet) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeCompact32(enc, uint32(t.Epoch))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.Set, 1000000)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *EpochActiveSet) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		field, n, err := scale.DecodeCompact32(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Epoch = EpochID(field)
+	}
+	{
+		field, n, err := scale.DecodeStructSliceWithLimit[ATXID](dec, 1000000)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Set = field
+	}
+	return total, nil
+}

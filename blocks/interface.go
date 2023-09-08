@@ -31,3 +31,7 @@ type certifier interface {
 	RegisterForCert(context.Context, types.LayerID, types.BlockID) error
 	CertifyIfEligible(context.Context, log.Log, types.LayerID, types.BlockID) error
 }
+
+type tortoiseProvider interface {
+	GetMissingActiveSet(types.EpochID, []types.ATXID) []types.ATXID
+}

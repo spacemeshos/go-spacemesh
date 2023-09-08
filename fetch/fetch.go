@@ -210,6 +210,7 @@ type dataValidators struct {
 	atx         SyncValidator
 	poet        SyncValidator
 	ballot      SyncValidator
+	activeset   SyncValidator
 	block       SyncValidator
 	proposal    SyncValidator
 	txBlock     SyncValidator
@@ -222,6 +223,7 @@ func (f *Fetch) SetValidators(
 	atx SyncValidator,
 	poet SyncValidator,
 	ballot SyncValidator,
+	activeset SyncValidator,
 	block SyncValidator,
 	prop SyncValidator,
 	txBlock SyncValidator,
@@ -232,6 +234,7 @@ func (f *Fetch) SetValidators(
 		atx:         atx,
 		poet:        poet,
 		ballot:      ballot,
+		activeset:   activeset,
 		block:       block,
 		proposal:    prop,
 		txBlock:     txBlock,

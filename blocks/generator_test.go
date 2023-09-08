@@ -93,10 +93,6 @@ func genTx(t testing.TB, signer *signing.EdSigner, dest types.Address, amount, n
 	return tx
 }
 
-func createTransactions(tb testing.TB, numOfTxs int) []types.TransactionID {
-	return createAndSaveTxs(tb, numOfTxs, nil)
-}
-
 func createAndSaveTxs(tb testing.TB, numOfTxs int, db sql.Executor) []types.TransactionID {
 	tb.Helper()
 	txIDs := make([]types.TransactionID, 0, numOfTxs)

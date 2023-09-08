@@ -35,6 +35,44 @@ func (m *MockPoetProvingServiceClient) EXPECT() *MockPoetProvingServiceClientMoc
 	return m.recorder
 }
 
+// Address mocks base method.
+func (m *MockPoetProvingServiceClient) Address() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Address")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// Address indicates an expected call of Address.
+func (mr *MockPoetProvingServiceClientMockRecorder) Address() *PoetProvingServiceClientAddressCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Address", reflect.TypeOf((*MockPoetProvingServiceClient)(nil).Address))
+	return &PoetProvingServiceClientAddressCall{Call: call}
+}
+
+// PoetProvingServiceClientAddressCall wrap *gomock.Call
+type PoetProvingServiceClientAddressCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *PoetProvingServiceClientAddressCall) Return(arg0 string) *PoetProvingServiceClientAddressCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *PoetProvingServiceClientAddressCall) Do(f func() string) *PoetProvingServiceClientAddressCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *PoetProvingServiceClientAddressCall) DoAndReturn(f func() string) *PoetProvingServiceClientAddressCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // PoetServiceID mocks base method.
 func (m *MockPoetProvingServiceClient) PoetServiceID(arg0 context.Context) (types.PoetServiceID, error) {
 	m.ctrl.T.Helper()

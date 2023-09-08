@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
@@ -65,11 +66,23 @@ type config struct {
 	layersPerEpoch     uint32
 	hdist              uint32
 	minActiveSetWeight uint64
+	emitEmptyActiveSet types.LayerID
 	nodeID             types.NodeID
 	networkDelay       time.Duration
 
 	// used to determine whether a node has enough information on the active set this epoch
 	goodAtxPct int
+}
+
+func (c *config) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddUint32("layer size", c.layerSize)
+	encoder.AddUint32("epoch size", c.layersPerEpoch)
+	encoder.AddUint32("hdist", c.hdist)
+	encoder.AddUint64("min active weight", c.minActiveSetWeight)
+	encoder.AddUint32("emit empty set", c.emitEmptyActiveSet.Uint32())
+	encoder.AddDuration("network delay", c.networkDelay)
+	encoder.AddInt("good atx percent", c.goodAtxPct)
+	return nil
 }
 
 type defaultFetcher struct {
@@ -136,6 +149,12 @@ func WithNetworkDelay(delay time.Duration) Opt {
 func WithMinGoodAtxPct(pct int) Opt {
 	return func(pb *ProposalBuilder) {
 		pb.cfg.goodAtxPct = pct
+	}
+}
+
+func WithEmitEmptyActiveSet(lid types.LayerID) Opt {
+	return func(pb *ProposalBuilder) {
+		pb.cfg.emitEmptyActiveSet = lid
 	}
 }
 
@@ -240,7 +259,7 @@ func (pb *ProposalBuilder) createProposal(
 	}
 
 	epoch := layerID.GetEpoch()
-	refBallot, err := ballots.GetRefBallot(pb.cdb, epoch, pb.signer.NodeID())
+	ref, err := ballots.FirstInEpoch(pb.cdb, epochEligibility.Atx, epoch)
 	if err != nil {
 		if !errors.Is(err, sql.ErrNotFound) {
 			return nil, fmt.Errorf("get ref ballot: %w", err)
@@ -257,13 +276,19 @@ func (pb *ProposalBuilder) createProposal(
 			Beacon:           beacon,
 			EligibilityCount: epochEligibility.Slots,
 		}
+		if err := activesets.Add(pb.cdb, ib.EpochData.ActiveSetHash, &types.EpochActiveSet{
+			Epoch: epoch,
+			Set:   epochEligibility.ActiveSet,
+		}); err != nil && !errors.Is(err, sql.ErrObjectExists) {
+			return nil, err
+		}
 	} else {
 		pb.logger.With().Debug("creating ballot with reference ballot (no active set)",
 			log.Context(ctx),
 			layerID,
-			log.Named("ref_ballot", refBallot),
+			log.Stringer("ref_ballot", ref.ID()),
 		)
-		ib.RefBallot = refBallot
+		ib.RefBallot = ref.ID()
 	}
 
 	p := &types.Proposal{
@@ -277,7 +302,7 @@ func (pb *ProposalBuilder) createProposal(
 			MeshHash: pb.decideMeshHash(ctx, layerID),
 		},
 	}
-	if p.EpochData != nil {
+	if p.EpochData != nil && layerID < pb.cfg.emitEmptyActiveSet {
 		p.ActiveSet = epochEligibility.ActiveSet
 	}
 	p.Ballot.Signature = pb.signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
@@ -461,6 +486,7 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 
 func (pb *ProposalBuilder) createProposalLoop(ctx context.Context) {
 	next := pb.clock.CurrentLayer().Add(1)
+	pb.logger.With().Info("started", log.Inline(&pb.cfg), log.Uint32("current", next.Uint32()))
 	for {
 		select {
 		case <-pb.ctx.Done():

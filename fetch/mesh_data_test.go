@@ -397,6 +397,19 @@ func TestGetATXs(t *testing.T) {
 	require.NoError(t, eg.Wait())
 }
 
+func TestGetActiveSet(t *testing.T) {
+	f := createFetch(t)
+	f.mActiveSetH.EXPECT().HandleMessage(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+
+	stop := make(chan struct{}, 1)
+	var eg errgroup.Group
+	startTestLoop(t, f.Fetch, &eg, stop)
+
+	require.NoError(t, f.GetActiveSet(context.Background(), types.Hash32{1, 2, 3}))
+	close(stop)
+	require.NoError(t, eg.Wait())
+}
+
 func TestGetPoetProof(t *testing.T) {
 	f := createFetch(t)
 	h := types.RandomHash()
