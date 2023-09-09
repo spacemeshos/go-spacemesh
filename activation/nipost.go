@@ -296,7 +296,6 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 		}
 		if err := nb.validator.Post(
 			postCtx,
-			challenge.PublishEpoch,
 			nb.nodeID,
 			commitmentAtxId,
 			proof,
