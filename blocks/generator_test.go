@@ -404,6 +404,7 @@ func Test_run(t *testing.T) {
 			tg.Start()
 			tg.hareCh <- hare.LayerOutput{Ctx: context.Background(), Layer: layerID, Proposals: pids}
 			require.Eventually(t, func() bool { return len(tg.hareCh) == 0 }, time.Second, 100*time.Millisecond)
+			tg.Stop()
 			for lid := oldest; lid < layerID; lid++ {
 				_, err := proposals.GetByLayer(tg.cdb, lid)
 				require.ErrorIs(t, err, sql.ErrNotFound)
@@ -411,7 +412,6 @@ func Test_run(t *testing.T) {
 			got, err := proposals.GetByLayer(tg.cdb, layerID)
 			require.NoError(t, err)
 			require.Len(t, got, len(signers))
-			tg.Stop()
 		})
 	}
 }
