@@ -13,10 +13,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/hare"
-	heligibility "github.com/spacemeshos/go-spacemesh/hare/eligibility"
+	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
-	dbproposals "github.com/spacemeshos/go-spacemesh/sql/proposals"
+	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -167,6 +167,12 @@ func (g *Generator) run() error {
 			if len(g.optimisticOutput) > 0 {
 				g.processOptimisticLayers(maxLayer)
 			}
+			if err := proposals.Delete(g.cdb, out.Layer); err != nil {
+				g.logger.With().Error("failed to delete old proposals",
+					out.Layer,
+					log.Err(err),
+				)
+			}
 		case <-time.After(g.cfg.GenBlockInterval):
 			if len(g.optimisticOutput) > 0 {
 				g.processOptimisticLayers(maxLayer)
@@ -182,7 +188,7 @@ func (g *Generator) getProposals(pids []types.ProposalID) ([]*types.Proposal, er
 		err    error
 	)
 	for _, pid := range pids {
-		if p, err = dbproposals.Get(g.cdb, pid); err != nil {
+		if p, err = proposals.Get(g.cdb, pid); err != nil {
 			return nil, err
 		}
 		result = append(result, p)
@@ -309,7 +315,7 @@ func (g *Generator) saveAndCertify(ctx context.Context, lid types.LayerID, block
 		)
 	}
 
-	if err := g.cert.CertifyIfEligible(ctx, g.logger, lid, hareOutput); err != nil && !errors.Is(err, heligibility.ErrNotActive) {
+	if err := g.cert.CertifyIfEligible(ctx, g.logger, lid, hareOutput); err != nil && !errors.Is(err, eligibility.ErrNotActive) {
 		g.logger.With().Warning("failed to certify block",
 			log.Context(ctx),
 			lid,
