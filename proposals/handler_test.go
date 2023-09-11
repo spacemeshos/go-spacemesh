@@ -1398,3 +1398,104 @@ func TestHandleActiveSet(t *testing.T) {
 		})
 	}
 }
+
+func gproposal(signer *signing.EdSigner, atxid types.ATXID, activeset []types.ATXID,
+	layer types.LayerID, edata *types.EpochData,
+) types.Proposal {
+	p := types.Proposal{}
+	p.Layer = layer
+	p.AtxID = atxid
+	p.ActiveSet = activeset
+	p.EpochData = edata
+	p.Ballot.Signature = signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
+	p.Ballot.SmesherID = signer.NodeID()
+	p.Signature = signer.Sign(signing.PROPOSAL, p.SignedBytes())
+	p.SmesherID = signer.NodeID()
+	return p
+}
+
+func TestHandleSyncedProposalActiveSet(t *testing.T) {
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	set := []types.ATXID{{1}, {2}}
+	const acceptEmpty = 20
+	good := gproposal(signer, types.ATXID{1}, set, acceptEmpty-1, &types.EpochData{
+		ActiveSetHash: types.ATXIDList(set).Hash(),
+		Beacon:        types.Beacon{1},
+	})
+	require.NoError(t, good.Initialize())
+
+	woActive := good
+	woActive.ActiveSet = nil
+
+	notSigned := gproposal(signer, types.ATXID{1}, nil, acceptEmpty, &types.EpochData{
+		ActiveSetHash: types.ATXIDList(set).Hash(),
+		Beacon:        types.Beacon{1},
+	})
+	require.NoError(t, notSigned.Initialize())
+	notSigned.ActiveSet = set
+
+	notSignedEmpty := notSigned
+	notSignedEmpty.ActiveSet = nil
+	for _, tc := range []struct {
+		desc       string
+		data       []byte
+		id         types.Hash32
+		requestSet []types.ATXID
+		err        string
+	}{
+		{
+			desc: "before empty signed active set",
+			data: codec.MustEncode(&good),
+			id:   good.ID().AsHash32(),
+		},
+		{
+			desc: "before empty without active set",
+			data: codec.MustEncode(&woActive),
+			id:   woActive.ID().AsHash32(),
+			err:  "failed to verify proposal signature",
+		},
+		{
+			desc: "after empty not signed active set",
+			data: codec.MustEncode(&notSigned),
+			id:   notSigned.ID().AsHash32(),
+		},
+		{
+			desc:       "after empty not signed active set empty",
+			data:       codec.MustEncode(&notSignedEmpty),
+			id:         notSigned.ID().AsHash32(),
+			requestSet: set,
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			th := createTestHandler(t)
+			th.cfg.AllowEmptyActiveSet = acceptEmpty
+			pid := p2p.Peer("any")
+
+			th.mclock.EXPECT().LayerToTime(gomock.Any())
+			th.mf.EXPECT().RegisterPeerHashes(pid, gomock.Any()).AnyTimes()
+			th.md.EXPECT().GetMissingActiveSet(gomock.Any(), gomock.Any()).AnyTimes()
+			if tc.requestSet != nil {
+				id := types.ATXIDList(tc.requestSet).Hash()
+				th.mf.EXPECT().GetActiveSet(gomock.Any(), id)
+				require.NoError(t, activesets.Add(th.cdb, id, &types.EpochActiveSet{
+					Set: tc.requestSet,
+				}))
+			}
+			th.mf.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).AnyTimes()
+			th.mf.EXPECT().GetBallots(gomock.Any(), gomock.Any()).AnyTimes()
+			th.mockSet.decodeAnyBallots()
+			th.mv.EXPECT().CheckEligibility(gomock.Any(), gomock.Any()).AnyTimes().Return(true, nil)
+			th.mm.EXPECT().AddBallot(gomock.Any(), gomock.Any()).AnyTimes()
+			th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+			err := th.HandleSyncedProposal(context.Background(), tc.id, pid, tc.data)
+			if len(tc.err) > 0 {
+				require.ErrorContains(t, err, tc.err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}

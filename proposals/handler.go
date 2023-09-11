@@ -272,25 +272,27 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 	if p.Layer >= h.cfg.AllowEmptyActiveSet {
 		p.ActiveSet = nil
 	}
+
 	if !h.edVerifier.Verify(signing.PROPOSAL, p.SmesherID, p.SignedBytes(), p.Signature) {
 		badSigProposal.Inc()
 		return fmt.Errorf("failed to verify proposal signature")
 	}
-	p.ActiveSet = set
 	if !h.edVerifier.Verify(signing.BALLOT, p.Ballot.SmesherID, p.Ballot.SignedBytes(), p.Ballot.Signature) {
 		badSigBallot.Inc()
 		return fmt.Errorf("failed to verify ballot signature")
 	}
 
 	// set the proposal ID when received
+	// It mustn't contain the active set if layer >= AllowEmptyActiveSet
+	// (p.Initialize uses SignedBytes again).
 	if err := p.Initialize(); err != nil {
 		failedInit.Inc()
 		return errInitialize
 	}
-
 	if expHash != (types.Hash32{}) && p.ID().AsHash32() != expHash {
 		return fmt.Errorf("%w: proposal want %s, got %s", errWrongHash, expHash.ShortString(), p.ID().AsHash32().ShortString())
 	}
+	p.ActiveSet = set
 
 	if p.AtxID == types.EmptyATXID || p.AtxID == h.cfg.GoldenATXID {
 		badData.Inc()
