@@ -322,15 +322,15 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 }
 
 // Submit the challenge to a single PoET.
-func (nb *NIPostBuilder) submitPoetChallenge(ctx context.Context, poet PoetProvingServiceClient, prefix, challenge []byte, signature types.EdSignature, nodeID types.NodeID) (*types.PoetRequest, error) {
-	poetServiceID, err := poet.PoetServiceID(ctx)
+func (nb *NIPostBuilder) submitPoetChallenge(ctx context.Context, client PoetProvingServiceClient, prefix, challenge []byte, signature types.EdSignature, nodeID types.NodeID) (*types.PoetRequest, error) {
+	poetServiceID, err := client.PoetServiceID(ctx)
 	if err != nil {
 		return nil, &PoetSvcUnstableError{msg: "failed to get PoET service ID", source: err}
 	}
 	logger := nb.log.WithContext(ctx).WithFields(log.String("poet_id", hex.EncodeToString(poetServiceID.ServiceID)))
 
 	logger.Debug("querying for poet pow parameters")
-	powParams, err := poet.PowParams(ctx)
+	powParams, err := client.PowParams(ctx)
 	if err != nil {
 		return nil, &PoetSvcUnstableError{msg: "failed to get PoW params", source: err}
 	}
@@ -345,7 +345,9 @@ func (nb *NIPostBuilder) submitPoetChallenge(ctx context.Context, poet PoetProvi
 
 	logger.Debug("submitting challenge to poet proving service")
 
-	round, err := poet.Submit(ctx, prefix, challenge, signature, nodeID, PoetPoW{
+	ctx, cancel := context.WithTimeout(ctx, nb.poetCfg.RequestTimeout)
+	defer cancel()
+	round, err := client.Submit(ctx, prefix, challenge, signature, nodeID, PoetPoW{
 		Nonce:  nonce,
 		Params: *powParams,
 	})
@@ -482,16 +484,10 @@ func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge types.Hash3
 			case <-time.After(time.Until(waitDeadline)):
 			}
 
-			// TODO(mafa): this should be renamed from GracePeriod to something like RequestTimeout
-			// and should be much shorter (e.g. 10 seconds instead of 1 hour on mainnet)
-			getProofsCtx, cancel := context.WithTimeout(ctx, nb.poetCfg.GracePeriod)
+			getProofsCtx, cancel := context.WithTimeout(ctx, nb.poetCfg.RequestTimeout)
 			defer cancel()
-
 			proof, members, err := client.Proof(getProofsCtx, round)
-			switch {
-			case errors.Is(err, context.Canceled):
-				return fmt.Errorf("querying proof: %w", ctx.Err())
-			case err != nil:
+			if err != nil {
 				logger.With().Warning("failed to get proof from poet", log.Err(err))
 				return nil
 			}
