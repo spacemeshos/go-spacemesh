@@ -140,6 +140,30 @@ func GetApplied(db sql.Executor, lid types.LayerID) (rst types.BlockID, err erro
 	return rst, err
 }
 
+func FirstAppliedInEpoch(db sql.Executor, epoch types.EpochID) (types.BlockID, error) {
+	var (
+		result types.BlockID
+		err    error
+		rows   int
+	)
+	if rows, err = db.Exec(`
+		select applied_block from layers 
+		where id between ?1 and ?2 and applied_block is not null and applied_block != ?3
+		order by id asc limit 1;`, func(stmt *sql.Statement) {
+		stmt.BindInt64(1, int64(epoch.FirstLayer()))
+		stmt.BindInt64(2, int64((epoch+1).FirstLayer()-1))
+		stmt.BindBytes(3, types.EmptyBlockID[:])
+	}, func(stmt *sql.Statement) bool {
+		stmt.ColumnBytes(0, result[:])
+		return true
+	}); err != nil {
+		return types.EmptyBlockID, fmt.Errorf("FirstAppliedInEpoch %s: %w", epoch, err)
+	} else if rows == 0 {
+		return types.EmptyBlockID, fmt.Errorf("FirstAppliedInEpoch %s: %w", epoch, sql.ErrNotFound)
+	}
+	return result, nil
+}
+
 // GetLastApplied for the applied block for layer.
 func GetLastApplied(db sql.Executor) (types.LayerID, error) {
 	var lid types.LayerID
