@@ -652,7 +652,6 @@ func (app *App) initServices(ctx context.Context) error {
 		app.clock,
 		app.host,
 		fetcherWrapped,
-		layersPerEpoch,
 		app.Config.TickSize,
 		goldenATXID,
 		validator,

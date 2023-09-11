@@ -241,9 +241,9 @@ func (c *nipostValidatorInitialNIPostChallengeCall) DoAndReturn(f func(*types.NI
 }
 
 // NIPost mocks base method.
-func (m *MocknipostValidator) NIPost(ctx context.Context, publishEpoch types.EpochID, nodeId types.NodeID, atxId types.ATXID, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32, opts ...verifying.OptionFunc) (uint64, error) {
+func (m *MocknipostValidator) NIPost(ctx context.Context, nodeId types.NodeID, atxId types.ATXID, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32, opts ...verifying.OptionFunc) (uint64, error) {
 	m.ctrl.T.Helper()
-	varargs := []interface{}{ctx, publishEpoch, nodeId, atxId, NIPost, expectedChallenge, numUnits}
+	varargs := []interface{}{ctx, nodeId, atxId, NIPost, expectedChallenge, numUnits}
 	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
@@ -254,9 +254,9 @@ func (m *MocknipostValidator) NIPost(ctx context.Context, publishEpoch types.Epo
 }
 
 // NIPost indicates an expected call of NIPost.
-func (mr *MocknipostValidatorMockRecorder) NIPost(ctx, publishEpoch, nodeId, atxId, NIPost, expectedChallenge, numUnits interface{}, opts ...interface{}) *nipostValidatorNIPostCall {
+func (mr *MocknipostValidatorMockRecorder) NIPost(ctx, nodeId, atxId, NIPost, expectedChallenge, numUnits interface{}, opts ...interface{}) *nipostValidatorNIPostCall {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{ctx, publishEpoch, nodeId, atxId, NIPost, expectedChallenge, numUnits}, opts...)
+	varargs := append([]interface{}{ctx, nodeId, atxId, NIPost, expectedChallenge, numUnits}, opts...)
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NIPost", reflect.TypeOf((*MocknipostValidator)(nil).NIPost), varargs...)
 	return &nipostValidatorNIPostCall{Call: call}
 }
@@ -273,13 +273,13 @@ func (c *nipostValidatorNIPostCall) Return(arg0 uint64, arg1 error) *nipostValid
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *nipostValidatorNIPostCall) Do(f func(context.Context, types.EpochID, types.NodeID, types.ATXID, *types.NIPost, types.Hash32, uint32, ...verifying.OptionFunc) (uint64, error)) *nipostValidatorNIPostCall {
+func (c *nipostValidatorNIPostCall) Do(f func(context.Context, types.NodeID, types.ATXID, *types.NIPost, types.Hash32, uint32, ...verifying.OptionFunc) (uint64, error)) *nipostValidatorNIPostCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *nipostValidatorNIPostCall) DoAndReturn(f func(context.Context, types.EpochID, types.NodeID, types.ATXID, *types.NIPost, types.Hash32, uint32, ...verifying.OptionFunc) (uint64, error)) *nipostValidatorNIPostCall {
+func (c *nipostValidatorNIPostCall) DoAndReturn(f func(context.Context, types.NodeID, types.ATXID, *types.NIPost, types.Hash32, uint32, ...verifying.OptionFunc) (uint64, error)) *nipostValidatorNIPostCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -361,17 +361,17 @@ func (c *nipostValidatorNumUnitsCall) DoAndReturn(f func(*PostConfig, uint32) er
 }
 
 // PositioningAtx mocks base method.
-func (m *MocknipostValidator) PositioningAtx(id *types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubepoch types.EpochID, layersPerEpoch uint32) error {
+func (m *MocknipostValidator) PositioningAtx(id types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubepoch types.EpochID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PositioningAtx", id, atxs, goldenATXID, pubepoch, layersPerEpoch)
+	ret := m.ctrl.Call(m, "PositioningAtx", id, atxs, goldenATXID, pubepoch)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // PositioningAtx indicates an expected call of PositioningAtx.
-func (mr *MocknipostValidatorMockRecorder) PositioningAtx(id, atxs, goldenATXID, pubepoch, layersPerEpoch interface{}) *nipostValidatorPositioningAtxCall {
+func (mr *MocknipostValidatorMockRecorder) PositioningAtx(id, atxs, goldenATXID, pubepoch interface{}) *nipostValidatorPositioningAtxCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PositioningAtx", reflect.TypeOf((*MocknipostValidator)(nil).PositioningAtx), id, atxs, goldenATXID, pubepoch, layersPerEpoch)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PositioningAtx", reflect.TypeOf((*MocknipostValidator)(nil).PositioningAtx), id, atxs, goldenATXID, pubepoch)
 	return &nipostValidatorPositioningAtxCall{Call: call}
 }
 
@@ -387,21 +387,21 @@ func (c *nipostValidatorPositioningAtxCall) Return(arg0 error) *nipostValidatorP
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *nipostValidatorPositioningAtxCall) Do(f func(*types.ATXID, atxProvider, types.ATXID, types.EpochID, uint32) error) *nipostValidatorPositioningAtxCall {
+func (c *nipostValidatorPositioningAtxCall) Do(f func(types.ATXID, atxProvider, types.ATXID, types.EpochID) error) *nipostValidatorPositioningAtxCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *nipostValidatorPositioningAtxCall) DoAndReturn(f func(*types.ATXID, atxProvider, types.ATXID, types.EpochID, uint32) error) *nipostValidatorPositioningAtxCall {
+func (c *nipostValidatorPositioningAtxCall) DoAndReturn(f func(types.ATXID, atxProvider, types.ATXID, types.EpochID) error) *nipostValidatorPositioningAtxCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // Post mocks base method.
-func (m *MocknipostValidator) Post(ctx context.Context, publishEpoch types.EpochID, nodeId types.NodeID, atxId types.ATXID, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint32, opts ...verifying.OptionFunc) error {
+func (m *MocknipostValidator) Post(ctx context.Context, nodeId types.NodeID, atxId types.ATXID, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint32, opts ...verifying.OptionFunc) error {
 	m.ctrl.T.Helper()
-	varargs := []interface{}{ctx, publishEpoch, nodeId, atxId, Post, PostMetadata, numUnits}
+	varargs := []interface{}{ctx, nodeId, atxId, Post, PostMetadata, numUnits}
 	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
@@ -411,9 +411,9 @@ func (m *MocknipostValidator) Post(ctx context.Context, publishEpoch types.Epoch
 }
 
 // Post indicates an expected call of Post.
-func (mr *MocknipostValidatorMockRecorder) Post(ctx, publishEpoch, nodeId, atxId, Post, PostMetadata, numUnits interface{}, opts ...interface{}) *nipostValidatorPostCall {
+func (mr *MocknipostValidatorMockRecorder) Post(ctx, nodeId, atxId, Post, PostMetadata, numUnits interface{}, opts ...interface{}) *nipostValidatorPostCall {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{ctx, publishEpoch, nodeId, atxId, Post, PostMetadata, numUnits}, opts...)
+	varargs := append([]interface{}{ctx, nodeId, atxId, Post, PostMetadata, numUnits}, opts...)
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Post", reflect.TypeOf((*MocknipostValidator)(nil).Post), varargs...)
 	return &nipostValidatorPostCall{Call: call}
 }
@@ -430,13 +430,13 @@ func (c *nipostValidatorPostCall) Return(arg0 error) *nipostValidatorPostCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *nipostValidatorPostCall) Do(f func(context.Context, types.EpochID, types.NodeID, types.ATXID, *types.Post, *types.PostMetadata, uint32, ...verifying.OptionFunc) error) *nipostValidatorPostCall {
+func (c *nipostValidatorPostCall) Do(f func(context.Context, types.NodeID, types.ATXID, *types.Post, *types.PostMetadata, uint32, ...verifying.OptionFunc) error) *nipostValidatorPostCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *nipostValidatorPostCall) DoAndReturn(f func(context.Context, types.EpochID, types.NodeID, types.ATXID, *types.Post, *types.PostMetadata, uint32, ...verifying.OptionFunc) error) *nipostValidatorPostCall {
+func (c *nipostValidatorPostCall) DoAndReturn(f func(context.Context, types.NodeID, types.ATXID, *types.Post, *types.PostMetadata, uint32, ...verifying.OptionFunc) error) *nipostValidatorPostCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

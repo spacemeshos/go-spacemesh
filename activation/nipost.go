@@ -135,7 +135,7 @@ func NewNIPostBuilder(
 ) (*NIPostBuilder, error) {
 	poetClients := make(map[string]PoetProvingServiceClient, len(poetServers))
 	for _, address := range poetServers {
-		client, err := NewHTTPPoetClient(address, poetCfg)
+		client, err := NewHTTPPoetClient(address, poetCfg, WithLogger(lg.Zap().Named("poet")))
 		if err != nil {
 			return nil, fmt.Errorf("cannot create poet client: %w", err)
 		}
@@ -296,7 +296,6 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 		}
 		if err := nb.validator.Post(
 			postCtx,
-			challenge.PublishEpoch,
 			nb.nodeID,
 			commitmentAtxId,
 			proof,
