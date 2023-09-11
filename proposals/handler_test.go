@@ -1399,8 +1399,9 @@ func TestHandleActiveSet(t *testing.T) {
 	}
 }
 
-func gproposal(signer *signing.EdSigner, atxid types.ATXID, activeset []types.ATXID, layer types.LayerID,
-	edata *types.EpochData) types.Proposal {
+func gproposal(signer *signing.EdSigner, atxid types.ATXID, activeset []types.ATXID,
+	layer types.LayerID, edata *types.EpochData,
+) types.Proposal {
 	p := types.Proposal{}
 	p.Layer = layer
 	p.AtxID = atxid
