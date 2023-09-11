@@ -337,7 +337,17 @@ func Test_run(t *testing.T) {
 			txIDs := createAndSaveTxs(t, numTXs, tg.cdb)
 			signers, atxes := createATXs(t, tg.cdb, (layerID.GetEpoch() - 1).FirstLayer(), numProposals)
 			activeSet := types.ToATXIDs(atxes)
+			// generate some proposals before this layer
+			oldest := layerID - 10
+			for lid := oldest; lid < layerID; lid++ {
+				createProposals(t, tg.cdb, lid, types.EmptyLayerHash, signers, activeSet, txIDs)
+			}
 			plist := createProposals(t, tg.cdb, layerID, meshHash, signers, activeSet, txIDs)
+			for lid := oldest; lid <= layerID; lid++ {
+				got, err := proposals.GetByLayer(tg.cdb, lid)
+				require.NoError(t, err)
+				require.Len(t, got, len(signers))
+			}
 			pids := types.ToProposalIDs(plist)
 			tg.mockFetch.EXPECT().GetProposals(gomock.Any(), pids)
 
@@ -395,6 +405,13 @@ func Test_run(t *testing.T) {
 			tg.hareCh <- hare.LayerOutput{Ctx: context.Background(), Layer: layerID, Proposals: pids}
 			require.Eventually(t, func() bool { return len(tg.hareCh) == 0 }, time.Second, 100*time.Millisecond)
 			tg.Stop()
+			for lid := oldest; lid < layerID; lid++ {
+				_, err := proposals.GetByLayer(tg.cdb, lid)
+				require.ErrorIs(t, err, sql.ErrNotFound)
+			}
+			got, err := proposals.GetByLayer(tg.cdb, layerID)
+			require.NoError(t, err)
+			require.Len(t, got, len(signers))
 		})
 	}
 }
