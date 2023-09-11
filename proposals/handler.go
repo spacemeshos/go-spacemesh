@@ -283,7 +283,8 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 	}
 
 	// set the proposal ID when received
-	// p.Initialize uses SignedBytes again
+	// It mustn't contain the active set if layer >= AllowEmptyActiveSet
+	// (p.Initialize uses SignedBytes again).
 	if err := p.Initialize(); err != nil {
 		failedInit.Inc()
 		return errInitialize
