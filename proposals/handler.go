@@ -288,10 +288,10 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 		failedInit.Inc()
 		return errInitialize
 	}
-	p.ActiveSet = set
 	if expHash != (types.Hash32{}) && p.ID().AsHash32() != expHash {
 		return fmt.Errorf("%w: proposal want %s, got %s", errWrongHash, expHash.ShortString(), p.ID().AsHash32().ShortString())
 	}
+	p.ActiveSet = set
 
 	if p.AtxID == types.EmptyATXID || p.AtxID == h.cfg.GoldenATXID {
 		badData.Inc()
