@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -29,13 +30,16 @@ func TestHTTPPoet(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	c, err := NewHTTPPoetTestHarness(ctx, poetDir, DefaultPoetConfig())
+	c, err := NewHTTPPoetTestHarness(ctx, poetDir)
 	r.NoError(err)
 	r.NotNil(c)
 
 	eg.Go(func() error {
 		return c.Service.Start(ctx)
 	})
+
+	client, err := NewHTTPPoetClient(c.RestURL().String(), DefaultPoetConfig(), WithLogger(zaptest.NewLogger(t)))
+	require.NoError(t, err)
 
 	signer, err := signing.NewEdSigner(signing.WithPrefix([]byte("prefix")))
 	require.NoError(t, err)
@@ -44,7 +48,7 @@ func TestHTTPPoet(t *testing.T) {
 	signature := signer.Sign(signing.POET, ch.Bytes())
 	prefix := bytes.Join([][]byte{signer.Prefix(), {byte(signing.POET)}}, nil)
 
-	poetRound, err := c.Submit(context.Background(), prefix, ch.Bytes(), signature, signer.NodeID(), PoetPoW{})
+	poetRound, err := client.Submit(context.Background(), prefix, ch.Bytes(), signature, signer.NodeID(), PoetPoW{})
 	r.NoError(err)
 	r.NotNil(poetRound)
 }

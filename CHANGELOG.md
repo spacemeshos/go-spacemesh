@@ -2,9 +2,12 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
-## UNRELEASED
+## v1.1.5
 
 ### Upgrade information
+
+It is critical for most nodes in the network to use v1.1.5 when layer 20 000 starts. Starting from that layer
+active set will not be gossipped together with proposals. That was the main network bottleneck in epoch 4.
 
 ### Highlights
 
@@ -17,6 +20,9 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 * [#4965](https://github.com/spacemeshos/go-spacemesh/pull/4965) Updates to PoST:
   * Prevent errors when shutting down the node that can result in a crash
   * `postdata_metadata.json` is now updated atomically to prevent corruption of the file.
+* [#4956](https://github.com/spacemeshos/go-spacemesh/pull/4956) Active set is will not be gossipped in every proposal.
+  Active set usually contains list of atxs that targets current epoch. As the number of atxs grows this object grows as well.
+* [#4993](https://github.com/spacemeshos/go-spacemesh/pull/4993) Drop proposals after genering a block. This limits growth of the state.
 
 ## v1.1.4
 
@@ -105,3 +111,4 @@ Doesn't affect direct peers. In order to disable:
 * [#4882](https://github.com/spacemeshos/go-spacemesh/pull/4882) Increase cache size and parametrize datastore.
 * [#4887](https://github.com/spacemeshos/go-spacemesh/pull/4887) Fixed crashes on API call.
 * [#4871](https://github.com/spacemeshos/go-spacemesh/pull/4871) Add jitter to spread out requests to get poet proof and submit challenge
+* [#4988](https://github.com/spacemeshos/go-spacemesh/pull/4988) Improve logging around communication with PoET services

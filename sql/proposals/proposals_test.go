@@ -33,6 +33,40 @@ func TestAdd(t *testing.T) {
 	require.ErrorIs(t, Add(db, proposal), sql.ErrObjectExists)
 }
 
+func TestDelete(t *testing.T) {
+	db := sql.InMemory()
+	nodeID := types.RandomNodeID()
+	maxLayers := 10
+	numProps := 3
+	for i := 1; i <= maxLayers; i++ {
+		for j := 0; j < numProps; j++ {
+			ballot := types.NewExistingBallot(types.RandomBallotID(), types.RandomEdSignature(), nodeID, types.LayerID(i))
+			require.NoError(t, ballots.Add(db, &ballot))
+			proposal := &types.Proposal{
+				InnerProposal: types.InnerProposal{
+					Ballot:   ballot,
+					TxIDs:    []types.TransactionID{{3, 4}},
+					MeshHash: types.RandomHash(),
+				},
+				Signature: types.RandomEdSignature(),
+			}
+			proposal.SetID(types.RandomProposalID())
+			require.NoError(t, Add(db, proposal))
+		}
+		got, err := GetByLayer(db, types.LayerID(i))
+		require.NoError(t, err)
+		require.Len(t, got, numProps)
+	}
+	require.NoError(t, Delete(db, types.LayerID(maxLayers)))
+	for i := 1; i < maxLayers; i++ {
+		_, err := GetByLayer(db, types.LayerID(i))
+		require.ErrorIs(t, err, sql.ErrNotFound)
+	}
+	got, err := GetByLayer(db, types.LayerID(maxLayers))
+	require.NoError(t, err)
+	require.Len(t, got, numProps)
+}
+
 func TestHas(t *testing.T) {
 	db := sql.InMemory()
 	nodeID := types.RandomNodeID()
