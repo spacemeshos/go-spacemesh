@@ -19,8 +19,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
-	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/system/mocks"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
@@ -427,7 +427,7 @@ func TestOracle_NewNode(t *testing.T) {
 			}
 			block.Initialize()
 			require.NoError(t, blocks.Add(o.cdb, block))
-			require.NoError(t, certificates.Add(o.cdb, lid.GetEpoch().FirstLayer(), &types.Certificate{BlockID: block.ID()}))
+			require.NoError(t, layers.SetApplied(o.cdb, lid, block.ID()))
 
 			epoch := types.EpochID(2)
 			var ownAtx types.ATXID

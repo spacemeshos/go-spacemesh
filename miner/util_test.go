@@ -18,20 +18,26 @@ import (
 
 func TestActiveSetFromEpochFirstBlock(t *testing.T) {
 	for _, tc := range []struct {
-		desc               string
-		certified, applied bool
-		err                error
+		desc        string
+		miner, hare bool
+		err         error
 	}{
 		{
-			desc:      "with certified",
-			certified: true,
+			desc:  "actives for miner",
+			miner: true,
 		},
 		{
-			desc:    "w/o certified",
-			applied: true,
+			desc:  "no actives for miner",
+			miner: true,
+			err:   sql.ErrNotFound,
 		},
 		{
-			desc: "nothing",
+			desc: "actives for hare",
+			hare: true,
+		},
+		{
+			desc: "no actives for hare",
+			hare: true,
 			err:  sql.ErrNotFound,
 		},
 	} {
@@ -59,10 +65,13 @@ func TestActiveSetFromEpochFirstBlock(t *testing.T) {
 				}
 				block.Initialize()
 				require.NoError(t, blocks.Add(cdb, block))
-				if tc.certified {
-					require.NoError(t, certificates.Add(cdb, lid, &types.Certificate{BlockID: block.ID()}))
-				} else if tc.applied {
-					require.NoError(t, layers.SetApplied(cdb, lid, block.ID()))
+				if tc.err == nil {
+					if tc.miner {
+						require.NoError(t, layers.SetApplied(cdb, lid, block.ID()))
+					}
+					if tc.hare {
+						require.NoError(t, certificates.Add(cdb, lid, &types.Certificate{BlockID: block.ID()}))
+					}
 				}
 				if i == 0 {
 					expected = all
@@ -74,15 +83,14 @@ func TestActiveSetFromEpochFirstBlock(t *testing.T) {
 				}
 			}
 
-			got, err = ActiveSetFromEpochFirstBlock(cdb, epoch)
+			if tc.miner {
+				got, err = ActiveSetFromEpochFirstBlock(cdb, epoch)
+			} else if tc.hare {
+				got, err = ActiveSetFromEpochFirstCertifiedBlock(cdb, epoch)
+			}
 			if tc.err != nil {
 				require.ErrorIs(t, err, tc.err)
 			} else {
-				require.NoError(t, err)
-				require.ElementsMatch(t, expected, got)
-			}
-			if tc.certified {
-				got, err = ActiveSetFromEpochFirstCertifiedBlock(cdb, epoch)
 				require.NoError(t, err)
 				require.ElementsMatch(t, expected, got)
 			}

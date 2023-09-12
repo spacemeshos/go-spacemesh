@@ -22,10 +22,6 @@ func ActiveSetFromEpochFirstCertifiedBlock(db sql.Executor, epoch types.EpochID)
 }
 
 func ActiveSetFromEpochFirstBlock(db sql.Executor, epoch types.EpochID) ([]types.ATXID, error) {
-	result, err := ActiveSetFromEpochFirstCertifiedBlock(db, epoch)
-	if err == nil {
-		return result, nil
-	}
 	bid, err := layers.FirstAppliedInEpoch(db, epoch)
 	if err != nil {
 		return nil, err
