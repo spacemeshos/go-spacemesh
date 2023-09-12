@@ -108,7 +108,7 @@ func testnet() config.Config {
 			PhaseShift:        12 * time.Hour,
 			CycleGap:          2 * time.Hour,
 			GracePeriod:       10 * time.Minute,
-			RequestRetryDelay: 10 * time.Second,
+			RequestRetryDelay: 5 * time.Second,
 			MaxRequestRetries: 10,
 		},
 		POST: activation.PostConfig{
