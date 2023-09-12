@@ -1116,7 +1116,7 @@ func TestAdminEvents(t *testing.T) {
 		grpc.WithBlock(),
 	)
 	require.NoError(t, err)
-	t.Cleanup(func() { conn.Close() })
+	t.Cleanup(func() { assert.NoError(t, conn.Close()) })
 	client := pb.NewAdminServiceClient(conn)
 
 	tctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
@@ -1144,6 +1144,7 @@ func TestAdminEvents(t *testing.T) {
 			require.NoError(t, err, "stream %d", i)
 			require.IsType(t, ev, msg.Details, "stream %d", i)
 		}
+		require.NoError(t, stream.CloseSend())
 	}
 }
 

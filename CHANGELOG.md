@@ -2,6 +2,19 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## UNRELEASED
+
+### Upgrade information
+
+A new config `poet-request-timeout` has been added, that defines the timeout for requesting PoET proofs.
+It defaults to 9 minutes so there is enough time to retry if the request fails.
+
+### Highlights
+
+### Features
+
+### Improvements
+
 ## v1.1.5
 
 ### Upgrade information

@@ -198,6 +198,7 @@ func buildNIPost(tb testing.TB, postProvider *testPostManager, nipostChallenge t
 		PhaseShift:        epoch / 5,
 		CycleGap:          epoch / 10,
 		GracePeriod:       epoch / 10,
+		RequestTimeout:    epoch / 20,
 		RequestRetryDelay: epoch / 100,
 		MaxRequestRetries: 10,
 	}
@@ -244,6 +245,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 		PhaseShift:        epoch / 5,
 		CycleGap:          epoch / 10,
 		GracePeriod:       epoch / 10,
+		RequestTimeout:    epoch / 20,
 		RequestRetryDelay: epoch / 100,
 		MaxRequestRetries: 10,
 	}

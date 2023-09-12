@@ -256,7 +256,9 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().DurationVar(&cfg.POET.CycleGap, "cycle-gap",
 		cfg.POET.CycleGap, "cycle gap of poet server")
 	cmd.PersistentFlags().DurationVar(&cfg.POET.GracePeriod, "grace-period",
-		cfg.POET.GracePeriod, "propagation time for ATXs in the network")
+		cfg.POET.GracePeriod, "time before PoET round starts when the node builds and submits a challenge")
+	cmd.PersistentFlags().DurationVar(&cfg.POET.RequestTimeout, "poet-request-timeout",
+		cfg.POET.RequestTimeout, "timeout for poet requests")
 
 	/**======================== bootstrap data updater Flags ========================== **/
 	cmd.PersistentFlags().StringVar(&cfg.Bootstrap.URL, "bootstrap-url",
