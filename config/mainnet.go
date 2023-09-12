@@ -108,8 +108,8 @@ func MainnetConfig() Config {
 			PhaseShift:        240 * time.Hour,
 			CycleGap:          12 * time.Hour,
 			GracePeriod:       1 * time.Hour,
-			RequestTimeout:    550 * time.Second, // RequestRetryDelay * 2 * MaxRequestRetries*(MaxRequestRetries+1)/2
-			RequestRetryDelay: 5 * time.Second,
+			RequestTimeout:    1100 * time.Second, // RequestRetryDelay * 2 * MaxRequestRetries*(MaxRequestRetries+1)/2
+			RequestRetryDelay: 10 * time.Second,
 			MaxRequestRetries: 10,
 		},
 		POST: activation.PostConfig{
