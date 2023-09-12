@@ -22,6 +22,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
+	"github.com/spacemeshos/post/initialization"
 )
 
 func init() {
@@ -29,13 +30,10 @@ func init() {
 }
 
 func testnet() config.Config {
-	var postPowDifficulty activation.PowDifficulty
-	if err := postPowDifficulty.UnmarshalText([]byte("000dfb23b0979b4b000000000000000000000000000000000000000000000000")); err != nil {
-		panic(err)
-	}
 	p2pconfig := p2p.DefaultConfig()
 
 	smeshing := config.DefaultSmeshingConfig()
+	smeshing.Opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
 	smeshing.ProvingOpts.Nonces = 288
 	smeshing.ProvingOpts.Threads = uint(runtime.NumCPU() * 3 / 4)
 	if smeshing.ProvingOpts.Threads < 1 {
@@ -67,9 +65,10 @@ func testnet() config.Config {
 			PoETServers: []string{},
 		},
 		Genesis: &config.GenesisConfig{
-			GenesisTime: "2023-09-13T08:00:00Z",
+			GenesisTime: "2023-09-13T18:00:00Z",
 			ExtraData:   "0000000000000000000000c76c58ebac180989673fd6d237b40e66ed5c976ec3",
 		},
+
 		Tortoise: tortoise.Config{
 			Hdist:                    10,
 			Zdist:                    2,
@@ -118,7 +117,7 @@ func testnet() config.Config {
 			K1:            26,
 			K2:            37,
 			K3:            37,
-			PowDifficulty: postPowDifficulty,
+			PowDifficulty: activation.DefaultPostConfig().PowDifficulty,
 		},
 		Bootstrap: bootstrap.Config{
 			URL:      "https://bootstrap.spacemesh.network/testnet06",
