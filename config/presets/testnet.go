@@ -112,7 +112,7 @@ func testnet() config.Config {
 			MaxRequestRetries: 10,
 		},
 		POST: activation.PostConfig{
-			MinNumUnits:   4,
+			MinNumUnits:   2,
 			MaxNumUnits:   math.MaxUint32,
 			LabelsPerUnit: 1024,
 			K1:            26,
