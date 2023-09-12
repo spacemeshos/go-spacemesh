@@ -154,7 +154,7 @@ func DefaultConfig() Config {
 		POET:            activation.DefaultPoetConfig(),
 		SMESHING:        DefaultSmeshingConfig(),
 		FETCH:           fetch.DefaultConfig(),
-		LOGGING:         defaultLoggingConfig(),
+		LOGGING:         DefaultLoggingConfig(),
 		Bootstrap:       bootstrap.DefaultConfig(),
 		Sync:            syncer.DefaultConfig(),
 		Recovery:        checkpoint.DefaultConfig(),
