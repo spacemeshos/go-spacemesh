@@ -330,7 +330,9 @@ func (nb *NIPostBuilder) submitPoetChallenge(ctx context.Context, client PoetPro
 	logger := nb.log.WithContext(ctx).WithFields(log.String("poet_id", hex.EncodeToString(poetServiceID.ServiceID)))
 
 	logger.Debug("querying for poet pow parameters")
-	powParams, err := client.PowParams(ctx)
+	powCtx, cancel := context.WithTimeout(ctx, nb.poetCfg.RequestTimeout)
+	defer cancel()
+	powParams, err := client.PowParams(powCtx)
 	if err != nil {
 		return nil, &PoetSvcUnstableError{msg: "failed to get PoW params", source: err}
 	}
@@ -345,9 +347,9 @@ func (nb *NIPostBuilder) submitPoetChallenge(ctx context.Context, client PoetPro
 
 	logger.Debug("submitting challenge to poet proving service")
 
-	ctx, cancel := context.WithTimeout(ctx, nb.poetCfg.RequestTimeout)
+	submitCtx, cancel := context.WithTimeout(ctx, nb.poetCfg.RequestTimeout)
 	defer cancel()
-	round, err := client.Submit(ctx, prefix, challenge, signature, nodeID, PoetPoW{
+	round, err := client.Submit(submitCtx, prefix, challenge, signature, nodeID, PoetPoW{
 		Nonce:  nonce,
 		Params: *powParams,
 	})
