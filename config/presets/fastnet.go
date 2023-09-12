@@ -88,9 +88,11 @@ func fastnet() config.Config {
 	conf.Beacon.VotesLimit = 100
 
 	conf.POET.GracePeriod = 10 * time.Second
-	conf.POET.RequestTimeout = 3 * time.Second
 	conf.POET.CycleGap = 30 * time.Second
 	conf.POET.PhaseShift = 30 * time.Second
+	conf.POET.RequestTimeout = 12 * time.Second // RequestRetryDelay * 2 * MaxRequestRetries*(MaxRequestRetries+1)/2
+	conf.POET.RequestRetryDelay = 1 * time.Second
+	conf.POET.MaxRequestRetries = 3
 
 	return conf
 }
