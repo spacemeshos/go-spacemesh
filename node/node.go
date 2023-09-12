@@ -165,6 +165,12 @@ func GetCommand() *cobra.Command {
 					return err
 				}
 
+				if app.Config.DatabaseCompactState {
+					if err := app.compactDB(); err != nil {
+						return err
+					}
+				}
+
 				// This blocks until the context is finished or until an error is produced
 				err = app.Start(ctx)
 				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -638,10 +644,16 @@ func (app *App) initServices(ctx context.Context) error {
 	})
 
 	executor := mesh.NewExecutor(app.cachedDB, state, app.conState, app.addLogger(ExecutorLogger, lg))
-	msh, err := mesh.NewMesh(app.cachedDB, app.clock, trtl, executor, app.conState, app.addLogger(MeshLogger, lg))
+	mlog := app.addLogger(MeshLogger, lg)
+	msh, err := mesh.NewMesh(app.cachedDB, app.clock, trtl, executor, app.conState, mlog)
 	if err != nil {
 		return fmt.Errorf("failed to create mesh: %w", err)
 	}
+
+	app.eg.Go(func() error {
+		mesh.Prune(ctx, mlog.Zap(), app.db, app.clock, app.Config.HareEligibility.ConfidenceParam, app.Config.DatabasePruneInterval)
+		return nil
+	})
 
 	fetcherWrapped := &layerFetcher{}
 	atxHandler := activation.NewHandler(
@@ -1322,7 +1334,34 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 	return edSgn, nil
 }
 
-func (app *App) setupDBs(ctx context.Context, lg log.Log, dbPath string) error {
+func (app *App) compactDB() error {
+	dbPath, err := filepath.Abs(filepath.Join(app.Config.DataDir(), dbFile))
+	if err != nil {
+		return fmt.Errorf("compact abs: %w", err)
+	}
+	if _, err := os.Stat(dbPath); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("compact stat: %w", err)
+	}
+	sqldb, err := sql.Open("file:" + dbPath)
+	if err != nil {
+		return fmt.Errorf("compact open %w", err)
+	}
+	app.log.With().Info("starting db compaction")
+	if err := sql.VacuumDB(sqldb); err != nil {
+		return fmt.Errorf("compact vacuum: %w", err)
+	}
+	if err := sqldb.Close(); err != nil {
+		return fmt.Errorf("compact close: %w", err)
+	}
+	app.log.With().Info("finished db compaction")
+	return nil
+}
+
+func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
+	dbPath := app.Config.DataDir()
 	if err := os.MkdirAll(dbPath, os.ModePerm); err != nil {
 		return fmt.Errorf("failed to create %s: %w", dbPath, err)
 	}
@@ -1407,7 +1446,6 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 	}
 
 	if app.Config.ProfilerURL != "" {
-
 		app.profilerService, err = pyroscope.Start(pyroscope.Config{
 			ApplicationName: app.Config.ProfilerName,
 			// app.Config.ProfilerURL should be the pyroscope server address
@@ -1456,7 +1494,7 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 		return fmt.Errorf("failed to initialize p2p host: %w", err)
 	}
 
-	if err := app.setupDBs(ctx, lg, app.Config.DataDir()); err != nil {
+	if err := app.setupDBs(ctx, lg); err != nil {
 		return err
 	}
 	if err := app.initServices(ctx); err != nil {
