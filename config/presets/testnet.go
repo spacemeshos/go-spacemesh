@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/spacemeshos/post/initialization"
+
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
@@ -22,7 +24,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
-	"github.com/spacemeshos/post/initialization"
 )
 
 func init() {
