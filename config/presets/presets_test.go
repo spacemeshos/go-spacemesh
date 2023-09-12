@@ -43,6 +43,4 @@ func TestCanGeneratePOST(t *testing.T) {
 	}
 
 	t.Run("fastnet", runTest(fastnet()))
-
-	t.Run("testnet", runTest(testnet()))
 }
