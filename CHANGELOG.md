@@ -2,9 +2,12 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
-## UNRELEASED
+## v1.1.5
 
 ### Upgrade information
+
+It is critical for most nodes in the network to use v1.1.5 when layer 20 000 starts. Starting from that layer
+active set will not be gossipped together with proposals. That was the main network bottleneck in epoch 4.
 
 ### Highlights
 
@@ -19,6 +22,7 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
   * `postdata_metadata.json` is now updated atomically to prevent corruption of the file.
 * [#4956](https://github.com/spacemeshos/go-spacemesh/pull/4956) Active set is will not be gossipped in every proposal.
   Active set usually contains list of atxs that targets current epoch. As the number of atxs grows this object grows as well.
+* [#4993](https://github.com/spacemeshos/go-spacemesh/pull/4993) Drop proposals after genering a block. This limits growth of the state.
 
 ## v1.1.4
 
