@@ -57,6 +57,21 @@ func Add(db sql.Executor, ballot *types.Ballot) error {
 	return nil
 }
 
+func Update(db sql.Executor, ballot *types.Ballot) error {
+	bytes, err := codec.Encode(ballot)
+	if err != nil {
+		return fmt.Errorf("encode ballot %s: %w", ballot.ID(), err)
+	}
+	if _, err := db.Exec(`update ballots set ballot = ?2 where id = ?1;`,
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, ballot.ID().Bytes())
+			stmt.BindBytes(2, bytes)
+		}, nil); err != nil {
+		return fmt.Errorf("update ballot %s: %w", ballot.ID(), err)
+	}
+	return nil
+}
+
 // Has a ballot in the database.
 func Has(db sql.Executor, id types.BallotID) (bool, error) {
 	rows, err := db.Exec("select 1 from ballots where id = ?1;",
