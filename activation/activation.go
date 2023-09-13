@@ -14,6 +14,7 @@ import (
 
 	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/post/shared"
+	"github.com/spacemeshos/post/verifying"
 	"go.uber.org/atomic"
 	"golang.org/x/sync/errgroup"
 
@@ -342,7 +343,14 @@ func (b *Builder) verifyInitialPost(ctx context.Context, post *types.Post, metad
 	if err != nil {
 		b.log.With().Panic("failed to fetch commitment ATX ID.", log.Err(err))
 	}
-	err = b.validator.Post(ctx, b.nodeID, commitmentAtxId, post, metadata, b.postSetupProvider.LastOpts().NumUnits)
+	err = b.validator.Post(
+		ctx,
+		b.nodeID,
+		commitmentAtxId,
+		post,
+		metadata,
+		b.postSetupProvider.LastOpts().NumUnits,
+		verifying.WithLabelScryptParams(b.postSetupProvider.LastOpts().Scrypt))
 	switch {
 	case errors.Is(err, context.Canceled):
 		// If the context was canceled, we don't want to emit or log errors just propagate the cancellation signal.
