@@ -1,6 +1,7 @@
 package layers
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -8,6 +9,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
+
+const layersPerEpoch = 4
+
+func TestMain(m *testing.M) {
+	types.SetLayersPerEpoch(layersPerEpoch)
+
+	res := m.Run()
+	os.Exit(res)
+}
 
 func TestWeakCoin(t *testing.T) {
 	db := sql.InMemory()
@@ -54,6 +64,46 @@ func TestAppliedBlock(t *testing.T) {
 	require.NoError(t, UnsetAppliedFrom(db, lid))
 	_, err = GetApplied(db, lid)
 	require.ErrorIs(t, err, sql.ErrNotFound)
+}
+
+func TestFirstAppliedInEpoch(t *testing.T) {
+	db := sql.InMemory()
+	blks := map[types.LayerID]types.BlockID{
+		types.EpochID(1).FirstLayer():     {1},
+		types.EpochID(2).FirstLayer():     types.EmptyBlockID,
+		types.EpochID(2).FirstLayer() + 1: {2},
+		types.EpochID(3).FirstLayer() + 1: {3},
+	}
+	for _, epoch := range []types.EpochID{0, 1, 2, 3} {
+		// cause layer to be inserted
+		for j := 0; j < layersPerEpoch; j++ {
+			lid := epoch.FirstLayer() + types.LayerID(j)
+			require.NoError(t, SetWeakCoin(db, lid, false))
+		}
+	}
+	for lid, bid := range blks {
+		require.NoError(t, SetApplied(db, lid, bid))
+	}
+
+	got, err := FirstAppliedInEpoch(db, types.EpochID(0))
+	require.ErrorIs(t, err, sql.ErrNotFound)
+	require.Equal(t, types.EmptyBlockID, got)
+
+	got, err = FirstAppliedInEpoch(db, types.EpochID(1))
+	require.NoError(t, err)
+	require.Equal(t, types.BlockID{1}, got)
+
+	got, err = FirstAppliedInEpoch(db, types.EpochID(2))
+	require.NoError(t, err)
+	require.Equal(t, types.BlockID{2}, got)
+
+	got, err = FirstAppliedInEpoch(db, types.EpochID(3))
+	require.NoError(t, err)
+	require.Equal(t, types.BlockID{3}, got)
+
+	got, err = FirstAppliedInEpoch(db, types.EpochID(4))
+	require.ErrorIs(t, err, sql.ErrNotFound)
+	require.Equal(t, types.EmptyBlockID, got)
 }
 
 func TestUnsetAppliedFrom(t *testing.T) {
