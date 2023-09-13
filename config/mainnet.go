@@ -47,7 +47,6 @@ func MainnetConfig() Config {
 
 			LayerDuration:  5 * time.Minute,
 			LayerAvgSize:   50,
-			LegacyLayer:    8180,
 			LayersPerEpoch: 4032,
 
 			TxsPerProposal: 700,       // https://github.com/spacemeshos/go-spacemesh/issues/4559

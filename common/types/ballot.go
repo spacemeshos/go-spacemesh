@@ -332,7 +332,6 @@ func (b *Ballot) ToTortoiseData() *BallotTortoiseData {
 		data.EpochData = &ReferenceData{
 			Beacon:        b.EpochData.Beacon,
 			Eligibilities: uint32(b.EpochData.EligibilityCount),
-			ActiveSet:     b.ActiveSet,
 		}
 	} else {
 		data.Ref = &b.RefBallot

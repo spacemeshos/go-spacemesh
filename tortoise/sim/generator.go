@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/proposals/util"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -110,10 +111,12 @@ type Generator struct {
 	layers    []*types.Layer
 	units     [2]int
 
-	activations []types.ATXID
-	ticksRange  [2]int
-	ticks       []uint64
-	prevHeight  []uint64
+	activations  []types.ATXID
+	weight       []uint64
+	eligiblities []uint32
+	ticksRange   [2]int
+	ticks        []uint64
+	prevHeight   []uint64
 
 	keys []*signing.EdSigner
 }
@@ -207,6 +210,8 @@ func (g *Generator) Setup(opts ...SetupOpt) {
 
 	miners := intInRange(g.rng, conf.Miners)
 	g.activations = make([]types.ATXID, miners)
+	g.weight = make([]uint64, miners)
+	g.eligiblities = make([]uint32, miners)
 	g.prevHeight = make([]uint64, miners)
 
 	for i := uint32(0); i < miners; i++ {
@@ -219,6 +224,7 @@ func (g *Generator) Setup(opts ...SetupOpt) {
 }
 
 func (g *Generator) generateAtxs() {
+	total := uint64(0)
 	for i := range g.activations {
 		units := intInRange(g.rng, g.units)
 		sig, err := signing.NewEdSigner()
@@ -249,10 +255,17 @@ func (g *Generator) generateAtxs() {
 
 		g.prevHeight[i] += ticks
 		g.activations[i] = atx.ID()
-
+		total += vAtx.GetWeight()
 		for _, state := range g.states {
 			state.OnActivationTx(vAtx)
 		}
+	}
+	for i, weight := range g.weight {
+		eligibilities, err := util.GetNumEligibleSlots(weight, 0, total, g.conf.LayerSize, g.conf.LayersPerEpoch)
+		if err != nil {
+			panic(err)
+		}
+		g.eligiblities[i] = eligibilities
 	}
 }
 

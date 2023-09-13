@@ -182,13 +182,13 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 				Layer: g.nextLayer,
 				AtxID: atxid,
 				EpochData: &types.EpochData{
-					ActiveSetHash: types.Hash32{1, 2, 3},
-					Beacon:        beacon,
+					EligibilityCount: g.eligiblities[miner],
+					ActiveSetHash:    types.Hash32{1, 2, 3},
+					Beacon:           beacon,
 				},
 			},
 			Votes:             voting,
 			EligibilityProofs: proofs,
-			ActiveSet:         activeset,
 		}
 		ballot.Signature = signer.Sign(signing.BALLOT, ballot.SignedBytes())
 		ballot.SmesherID = signer.NodeID()

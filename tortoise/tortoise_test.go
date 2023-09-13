@@ -3062,7 +3062,7 @@ func TestMinimalActiveSetWeight(t *testing.T) {
 	s.smesher(0).atx(1, new(aopt).height(10).weight(2))
 	s.beacon(1, "a")
 	s.smesher(0).atx(1).ballot(1, new(bopt).
-		activeset(s.smesher(0).atx(1)).
+		totalEligibilities(s.epochEligibilities()).
 		beacon("a").
 		eligibilities(1),
 	)
@@ -3076,11 +3076,11 @@ func TestDuplicateBallot(t *testing.T) {
 	s.smesher(0).atx(1, new(aopt).height(10).weight(2))
 	id := types.BallotID{1}
 	s.smesher(0).atx(1).rawballot(id, 1, new(bopt).
-		activeset(s.smesher(0).atx(1)).
+		totalEligibilities(s.epochEligibilities()).
 		eligibilities(1),
 	)
 	s.smesher(0).atx(1).rawballot(id, 1, new(bopt).
-		activeset(s.smesher(0).atx(1)).
+		totalEligibilities(s.epochEligibilities()).
 		eligibilities(1).assert(
 		func(db *DecodedBallot, err error) {
 			require.NotEmpty(t, db)
@@ -3100,20 +3100,16 @@ func TestSwitch(t *testing.T) {
 		withZdist(2)
 	const smeshers = 4
 	var (
-		elig      = s.layerSize / smeshers
-		activeset []*atxAction
+		elig = s.layerSize / smeshers
 	)
 	for i := 0; i < smeshers; i++ {
-		activeset = append(
-			activeset,
-			s.smesher(i).atx(1, new(aopt).height(10).weight(100)),
-		)
+		s.smesher(i).atx(1, new(aopt).height(10).weight(100))
 	}
 	s.beacon(1, "a")
 	for i := 0; i < smeshers; i++ {
 		s.smesher(i).atx(1).ballot(1, new(bopt).
 			beacon("a").
-			activeset(activeset...).
+			totalEligibilities(s.epochEligibilities()).
 			eligibilities(elig))
 	}
 
@@ -3150,21 +3146,15 @@ func TestOnMalfeasance(t *testing.T) {
 	t.Run("atxs", func(t *testing.T) {
 		s := newSession(t)
 		const smeshers = 3
-		var (
-			elig      = s.layerSize / smeshers
-			activeset []*atxAction
-		)
+		var elig = s.layerSize / smeshers
 		for i := 0; i < smeshers; i++ {
-			activeset = append(
-				activeset,
-				s.smesher(i).atx(1, new(aopt).height(10).weight(100)),
-			)
+			s.smesher(i).atx(1, new(aopt).height(10).weight(100))
 		}
 		s.beacon(1, "a")
 		for i := 0; i < smeshers; i++ {
 			s.smesher(i).atx(1).ballot(1, new(bopt).
 				beacon("a").
-				activeset(activeset...).
+				totalEligibilities(s.epochEligibilities()).
 				eligibilities(elig))
 		}
 		s.smesher(0).malfeasant() // without this call threshold will be very large, and s.updates fail
@@ -3180,21 +3170,15 @@ func TestOnMalfeasance(t *testing.T) {
 			withHdist(1).
 			withZdist(1)
 		const smeshers = 3
-		var (
-			elig      = s.layerSize / smeshers
-			activeset []*atxAction
-		)
+		var elig = s.layerSize / smeshers
 		for i := 0; i < smeshers; i++ {
-			activeset = append(
-				activeset,
-				s.smesher(i).atx(1, new(aopt).height(10).weight(100)),
-			)
+			s.smesher(i).atx(1, new(aopt).height(10).weight(100))
 		}
 		s.beacon(1, "a")
 		for i := 0; i < smeshers; i++ {
 			s.smesher(i).atx(1).ballot(1, new(bopt).
 				beacon("a").
-				activeset(activeset...).
+				totalEligibilities(s.epochEligibilities()).
 				eligibilities(elig))
 		}
 		for i := 0; i < smeshers; i++ {
@@ -3218,13 +3202,13 @@ func TestOnMalfeasance(t *testing.T) {
 
 func TestBaseAbstain(t *testing.T) {
 	s := newSession(t)
-	activeset := []*atxAction{
-		s.smesher(0).atx(1, new(aopt).height(10).weight(100)),
-	}
+
+	s.smesher(0).atx(1, new(aopt).height(10).weight(100))
+
 	s.beacon(1, "a")
 	s.smesher(0).atx(1).ballot(1, new(bopt).
 		beacon("a").
-		activeset(activeset...).
+		totalEligibilities(s.epochEligibilities()).
 		eligibilities(s.layerSize))
 	s.smesher(0).atx(1).ballot(2, new(bopt).
 		eligibilities(s.layerSize).
