@@ -127,7 +127,7 @@ func RecoverLayer(ctx context.Context, trtl *Tortoise, db *datastore.CachedDB, b
 	if err == nil {
 		trtl.OnWeakCoin(lid, coin)
 	}
-	if lid <= current && (lid%types.LayerID(trtl.cfg.WindowSize) == 0 || lid == last) {
+	if lid <= current && (trtl.cfg.WindowSize == 0 || lid%types.LayerID(trtl.cfg.WindowSize) == 0 || lid == last) {
 		trtl.TallyVotes(ctx, lid)
 
 		opinion, err := layers.GetAggregatedHash(db, lid-1)

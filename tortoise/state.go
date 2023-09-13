@@ -56,7 +56,7 @@ type (
 		evicted types.LayerID
 
 		epochs map[types.EpochID]*epochInfo
-		layers map[types.LayerID]*layerInfo
+		layers []*layerInfo
 		// ballots should not be referenced by other ballots
 		// each ballot stores references (votes) for X previous layers
 		// those X layers may reference another set of ballots that will
@@ -75,7 +75,7 @@ type (
 func newState() *state {
 	return &state{
 		epochs:     map[types.EpochID]*epochInfo{},
-		layers:     map[types.LayerID]*layerInfo{},
+		layers:     []*layerInfo{},
 		ballots:    map[types.LayerID][]*ballotInfo{},
 		ballotRefs: map[types.BallotID]*ballotInfo{},
 		malnodes:   map[types.NodeID]struct{}{},
@@ -91,13 +91,17 @@ func (s *state) expectedWeight(cfg Config, target types.LayerID) weight {
 }
 
 func (s *state) layer(lid types.LayerID) *layerInfo {
-	layer, exist := s.layers[lid]
-	if !exist {
-		layersNumber.Inc()
-		layer = &layerInfo{lid: lid}
-		s.layers[lid] = layer
+	i := lid - s.evicted - 1
+	lth := len(s.layers)
+	if int(i) < lth {
+		return s.layers[i]
 	}
-	return layer
+	last := s.evicted + types.LayerID(len(s.layers))
+	for j := 0; j <= int(i)-lth; j++ {
+		layersNumber.Inc()
+		s.layers = append(s.layers, &layerInfo{lid: last + types.LayerID(j) + 1})
+	}
+	return s.layer(lid)
 }
 
 func (s *state) epoch(eid types.EpochID) *epochInfo {
