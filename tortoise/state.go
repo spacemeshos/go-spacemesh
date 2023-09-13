@@ -99,7 +99,10 @@ func (s *state) layer(lid types.LayerID) *layerInfo {
 	last := s.evicted + types.LayerID(len(s.layers))
 	for j := 0; j <= int(i)-lth; j++ {
 		layersNumber.Inc()
-		s.layers = append(s.layers, &layerInfo{lid: last + types.LayerID(j) + 1})
+		s.layers = append(s.layers, &layerInfo{
+			lid:      last + types.LayerID(j) + 1,
+			opinions: map[types.Hash32]*votes{},
+		})
 	}
 	return s.layer(lid)
 }
@@ -182,6 +185,8 @@ type layerInfo struct {
 	blocks         []*blockInfo
 	verifying      verifyingInfo
 	coinflip       sign
+
+	opinions map[types.Hash32]*votes
 
 	opinion types.Hash32
 	// a pointer to the value stored on the previous layerInfo object
