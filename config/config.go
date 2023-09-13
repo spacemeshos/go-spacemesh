@@ -110,7 +110,7 @@ type BaseConfig struct {
 
 	DatabaseConnections     int           `mapstructure:"db-connections"`
 	DatabaseLatencyMetering bool          `mapstructure:"db-latency-metering"`
-	DatabaseCompactState    bool          `mapstructure:"db-compact-state"`
+	DatabaseCompactStatePct int           `mapstructure:"db-compact-state-pct"`
 	DatabasePruneInterval   time.Duration `mapstructure:"db-prune-interval"`
 
 	NetworkHRP string `mapstructure:"network-hrp"`

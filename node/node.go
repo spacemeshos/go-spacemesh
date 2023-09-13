@@ -67,6 +67,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
+	"github.com/spacemeshos/go-spacemesh/sql/vacuum"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/syncer/blockssync"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -165,8 +166,8 @@ func GetCommand() *cobra.Command {
 					return err
 				}
 
-				if app.Config.DatabaseCompactState {
-					if err := app.compactDB(); err != nil {
+				if app.Config.DatabaseCompactStatePct > 0 {
+					if err := app.compactDB(app.Config.DatabaseCompactStatePct); err != nil {
 						return err
 					}
 				}
@@ -1334,7 +1335,7 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 	return edSgn, nil
 }
 
-func (app *App) compactDB() error {
+func (app *App) compactDB(minPct int) error {
 	dbPath, err := filepath.Abs(filepath.Join(app.Config.DataDir(), dbFile))
 	if err != nil {
 		return fmt.Errorf("compact abs: %w", err)
@@ -1349,14 +1350,27 @@ func (app *App) compactDB() error {
 	if err != nil {
 		return fmt.Errorf("compact open %w", err)
 	}
-	app.log.With().Info("starting db compaction")
-	if err := sql.VacuumDB(sqldb); err != nil {
+	freePct, err := vacuum.FreePct(sqldb)
+	if err != nil {
+		return fmt.Errorf("compact check free pct: %w", err)
+	}
+	if freePct < minPct {
+		app.log.With().Info("db free space less that configured. not compacting",
+			log.Int("configured", minPct),
+			log.Int("actual", freePct),
+		)
+	}
+	app.log.With().Info("starting db compaction",
+		log.Int("configured", minPct),
+		log.Int("actual", freePct),
+	)
+	if err := vacuum.VacuumDB(sqldb); err != nil {
 		return fmt.Errorf("compact vacuum: %w", err)
 	}
 	if err := sqldb.Close(); err != nil {
 		return fmt.Errorf("compact close: %w", err)
 	}
-	app.log.With().Info("finished db compaction")
+	app.log.Info("finished db compaction")
 	return nil
 }
 
