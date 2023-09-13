@@ -1940,9 +1940,7 @@ func TestStateManagement(t *testing.T) {
 
 	evicted := tortoise.trtl.evicted
 	require.Equal(t, verified.Sub(window).Sub(1), evicted)
-	for lid := types.GetEffectiveGenesis(); !lid.After(evicted); lid = lid.Add(1) {
-		require.Empty(t, tortoise.trtl.layers[lid])
-	}
+	require.EqualValues(t, evicted+1, tortoise.trtl.layers.data[0].lid)
 
 	for lid := evicted.Add(1); !lid.After(last); lid = lid.Add(1) {
 		for _, ballot := range tortoise.trtl.ballots[lid] {

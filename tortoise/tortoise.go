@@ -58,11 +58,8 @@ func newTurtle(logger *zap.Logger, config Config) *turtle {
 	t.evicted = genesis.Sub(1)
 
 	t.epochs[genesis.GetEpoch()] = &epochInfo{atxs: map[types.ATXID]atxInfo{}}
-	t.layers[genesis] = &layerInfo{
-		lid:            genesis,
-		hareTerminated: true,
-		opinions:       map[types.Hash32]votes{},
-	}
+	genlayer := t.layer(genesis)
+	genlayer.hareTerminated = true
 	t.verifying = newVerifying(config, t.state)
 	t.full = newFullTortoise(config, t.state)
 	t.full.counted = genesis
@@ -104,11 +101,11 @@ func (t *turtle) evict(ctx context.Context) {
 			ballotsNumber.Dec()
 			delete(t.ballotRefs, ballot.id)
 		}
-		for range t.layers[lid].blocks {
+		for range t.layer(lid).blocks {
 			blocksNumber.Dec()
 		}
-		layersNumber.Dec()
-		delete(t.layers, lid)
+		t.layers.pop()
+
 		delete(t.ballots, lid)
 		if lid.OrdinalInEpoch() == types.GetLayersPerEpoch()-1 {
 			layersNumber.Dec()
