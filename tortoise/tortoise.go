@@ -61,6 +61,7 @@ func newTurtle(logger *zap.Logger, config Config) *turtle {
 	t.layers[genesis] = &layerInfo{
 		lid:            genesis,
 		hareTerminated: true,
+		opinions:       map[types.Hash32]*votes{},
 	}
 	t.verifying = newVerifying(config, t.state)
 	t.full = newFullTortoise(config, t.state)
@@ -757,11 +758,23 @@ func (t *turtle) decodeBallot(ballot *types.BallotTortoiseData) (*ballotInfo, ty
 		zap.Uint32("lid", ballot.Layer.Uint32()),
 	)
 
-	votes, min, err := decodeVotes(t.evicted, binfo.layer, base, ballot.Opinion.Votes)
-	if err != nil {
-		return nil, 0, err
+	layer := t.layer(binfo.layer)
+
+	existing := layer.opinions[ballot.Opinion.Hash]
+	var min types.LayerID
+	if existing != nil {
+		binfo.votes = *existing
+	} else {
+		var (
+			votes votes
+			err   error
+		)
+		votes, min, err = decodeVotes(t.evicted, binfo.layer, base, ballot.Opinion.Votes)
+		if err != nil {
+			return nil, 0, err
+		}
+		binfo.votes = votes
 	}
-	binfo.votes = votes
 	t.logger.Debug("decoded exceptions",
 		zap.Stringer("block", binfo.id),
 		zap.Uint32("lid", binfo.layer.Uint32()),
@@ -780,15 +793,22 @@ func (t *turtle) storeBallot(ballot *ballotInfo, min types.LayerID) error {
 	}
 
 	t.state.addBallot(ballot)
-	for current := ballot.votes.tail; current != nil && !current.lid.Before(min); current = current.prev {
-		for i, block := range current.supported {
-			existing := t.getBlock(block.header())
-			if existing != nil {
-				current.supported[i] = existing
-			} else {
-				t.addBlock(block)
+	layer := t.layer(ballot.layer)
+	votes := layer.opinions[ballot.opinion()]
+	if votes != nil {
+		ballot.votes.tail = votes.tail
+	} else {
+		for current := ballot.votes.tail; current != nil && !current.lid.Before(min); current = current.prev {
+			for i, block := range current.supported {
+				existing := t.getBlock(block.header())
+				if existing != nil {
+					current.supported[i] = existing
+				} else {
+					t.addBlock(block)
+				}
 			}
 		}
+		layer.opinions[ballot.opinion()] = &ballot.votes
 	}
 	if !ballot.layer.After(t.processed) {
 		if err := t.countBallot(ballot); err != nil {
