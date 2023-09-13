@@ -1144,7 +1144,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
 	tab.mpost.EXPECT().GenerateProof(gomock.Any(), shared.ZeroChallenge, gomock.Any()).Return(&types.Post{}, &types.PostMetadata{}, nil)
-	tab.mpost.EXPECT().LastOpts().Return(&PostSetupOpts{})
+	tab.mpost.EXPECT().LastOpts().Return(&PostSetupOpts{}).Times(2)
 	tab.mpost.EXPECT().CommitmentAtx().Return(tab.goldenATXID, nil)
 	tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
 	require.NoError(t, tab.generateInitialPost(context.Background()))
@@ -1173,7 +1173,7 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 func TestBuilder_InitialPostIsPersisted(t *testing.T) {
 	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
 	tab.mpost.EXPECT().Config().AnyTimes().Return(PostConfig{})
-	tab.mpost.EXPECT().LastOpts().Return(&PostSetupOpts{}).Times(3)
+	tab.mpost.EXPECT().LastOpts().Return(&PostSetupOpts{}).AnyTimes()
 	tab.mpost.EXPECT().CommitmentAtx().Return(tab.goldenATXID, nil).Times(3)
 	tab.mpost.EXPECT().GenerateProof(gomock.Any(), shared.ZeroChallenge, gomock.Any()).Return(&types.Post{}, &types.PostMetadata{
 		Challenge: shared.ZeroChallenge,
