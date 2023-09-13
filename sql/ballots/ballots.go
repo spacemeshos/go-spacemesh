@@ -334,3 +334,33 @@ func AllFirstInEpoch(db sql.Executor, epoch types.EpochID) ([]*types.Ballot, err
 	}
 	return rst, nil
 }
+
+func IterateBallots(db sql.Executor, from, to types.LayerID, fn func(*types.Ballot) bool) error {
+	var derr error
+	_, err := db.Exec("select id, ballot from ballots where layer between ?1 and ?2",
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(from))
+			stmt.BindInt64(2, int64(to))
+		},
+		func(stmt *sql.Statement) bool {
+			var (
+				id     types.BallotID
+				ballot types.Ballot
+			)
+			stmt.ColumnBytes(0, id[:])
+			_, derr = codec.DecodeFrom(stmt.ColumnReader(1), &ballot)
+			if derr != nil {
+				return false
+			}
+			ballot.SetID(id)
+			return fn(&ballot)
+		},
+	)
+	if err == nil {
+		err = derr
+	}
+	if err != nil {
+		return fmt.Errorf("ballot iteration %w", err)
+	}
+	return nil
+}

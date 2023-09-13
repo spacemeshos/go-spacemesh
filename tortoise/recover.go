@@ -106,20 +106,6 @@ func RecoverLayer(ctx context.Context, trtl *Tortoise, db *datastore.CachedDB, b
 			trtl.OnHareOutput(lid, hare)
 		}
 	}
-	ballotsrst, err := ballots.Layer(db, lid)
-	if err != nil {
-		return err
-	}
-	for _, ballot := range ballotsrst {
-		if ballot.EpochData != nil {
-			trtl.OnBallot(ballot.ToTortoiseData())
-		}
-	}
-	for _, ballot := range ballotsrst {
-		if ballot.EpochData == nil {
-			trtl.OnBallot(ballot.ToTortoiseData())
-		}
-	}
 	coin, err := layers.GetWeakCoin(db, lid)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return err
@@ -127,7 +113,14 @@ func RecoverLayer(ctx context.Context, trtl *Tortoise, db *datastore.CachedDB, b
 	if err == nil {
 		trtl.OnWeakCoin(lid, coin)
 	}
-	if lid <= current && (trtl.cfg.WindowSize == 0 || lid%types.LayerID(trtl.cfg.WindowSize) == 0 || lid == last) {
+	if lid <= current && (trtl.cfg.WindowSize == 0 || lid == last) {
+		if err := ballots.IterateBallots(db, types.GetEffectiveGenesis(), last, func(ballot *types.Ballot) bool {
+			trtl.OnBallot(ballot.ToTortoiseData())
+			return true
+		}); err != nil {
+			return err
+		}
+
 		trtl.TallyVotes(ctx, lid)
 
 		opinion, err := layers.GetAggregatedHash(db, lid-1)
