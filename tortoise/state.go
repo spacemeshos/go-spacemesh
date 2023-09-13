@@ -503,15 +503,3 @@ func decodeVotes(evicted, blid types.LayerID, base *ballotInfo, exceptions types
 	}
 	return decoded, from, nil
 }
-
-func activeSetWeight(epoch *epochInfo, aset []types.ATXID) (uint64, error) {
-	var weight uint64
-	for _, id := range aset {
-		atx, exists := epoch.atxs[id]
-		if !exists {
-			return 0, fmt.Errorf("atx %v is not in state", id)
-		}
-		weight += atx.weight
-	}
-	return weight, nil
-}
