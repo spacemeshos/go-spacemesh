@@ -198,7 +198,7 @@ func buildNIPost(tb testing.TB, postProvider *testPostManager, nipostChallenge t
 		PhaseShift:        epoch / 5,
 		CycleGap:          epoch / 10,
 		GracePeriod:       epoch / 10,
-		RequestTimeout:    epoch / 20,
+		RequestTimeout:    epoch / 10,
 		RequestRetryDelay: epoch / 100,
 		MaxRequestRetries: 10,
 	}
@@ -213,7 +213,7 @@ func buildNIPost(tb testing.TB, postProvider *testPostManager, nipostChallenge t
 		poetDb,
 		[]string{poetProver.RestURL().String()},
 		tb.TempDir(),
-		logtest.New(tb),
+		logtest.New(tb, zapcore.DebugLevel),
 		signer,
 		poetCfg,
 		mclock,
