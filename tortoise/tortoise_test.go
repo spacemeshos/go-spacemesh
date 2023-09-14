@@ -1094,6 +1094,7 @@ func TestBaseBallotPrioritization(t *testing.T) {
 				sim.WithSequence(5),
 			},
 			expected: genesis.Add(5),
+			window:   1,
 		},
 		{
 			desc: "BadBlocksIgnored",
