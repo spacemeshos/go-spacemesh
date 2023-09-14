@@ -78,8 +78,6 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.DatabaseConnections, "configure number of active connections to enable parallel read requests")
 	cmd.PersistentFlags().BoolVar(&cfg.DatabaseLatencyMetering, "db-latency-metering",
 		cfg.DatabaseLatencyMetering, "if enabled collect latency histogram for every database query")
-	cmd.PersistentFlags().IntVar(&cfg.DatabaseCompactStatePct, "db-compact-state-pct",
-		cfg.DatabaseCompactStatePct, "configure the threshold to trigger state compaction on startup")
 	cmd.PersistentFlags().DurationVar(&cfg.DatabasePruneInterval, "db-prune-interval",
 		cfg.DatabasePruneInterval, "configure interval for database pruning")
 

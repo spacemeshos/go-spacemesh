@@ -67,7 +67,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
-	"github.com/spacemeshos/go-spacemesh/sql/vacuum"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/syncer/blockssync"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -164,12 +163,6 @@ func GetCommand() *cobra.Command {
 				app.preserve, err = app.LoadCheckpoint(ctx)
 				if err != nil {
 					return err
-				}
-
-				if app.Config.DatabaseCompactStatePct > 0 {
-					if err := app.compactDB(app.Config.DatabaseCompactStatePct); err != nil {
-						return err
-					}
 				}
 
 				// This blocks until the context is finished or until an error is produced
@@ -1333,45 +1326,6 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 
 	app.log.Info("Loaded existing identity; public key: %v", edSgn.PublicKey())
 	return edSgn, nil
-}
-
-func (app *App) compactDB(minPct int) error {
-	dbPath, err := filepath.Abs(filepath.Join(app.Config.DataDir(), dbFile))
-	if err != nil {
-		return fmt.Errorf("compact abs: %w", err)
-	}
-	if _, err := os.Stat(dbPath); err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return fmt.Errorf("compact stat: %w", err)
-	}
-	sqldb, err := sql.Open("file:" + dbPath)
-	if err != nil {
-		return fmt.Errorf("compact open %w", err)
-	}
-	freePct, err := vacuum.FreePct(sqldb)
-	if err != nil {
-		return fmt.Errorf("compact check free pct: %w", err)
-	}
-	if freePct < minPct {
-		app.log.With().Info("db free space less that configured. not compacting",
-			log.Int("configured", minPct),
-			log.Int("actual", freePct),
-		)
-	}
-	app.log.With().Info("starting db compaction",
-		log.Int("configured", minPct),
-		log.Int("actual", freePct),
-	)
-	if err := vacuum.VacuumDB(sqldb); err != nil {
-		return fmt.Errorf("compact vacuum: %w", err)
-	}
-	if err := sqldb.Close(); err != nil {
-		return fmt.Errorf("compact close: %w", err)
-	}
-	app.log.Info("finished db compaction")
-	return nil
 }
 
 func (app *App) setupDBs(ctx context.Context, lg log.Log) error {

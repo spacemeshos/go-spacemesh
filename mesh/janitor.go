@@ -7,6 +7,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/mesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/proposals"
@@ -31,27 +32,30 @@ func Prune(
 			return
 		case <-time.After(interval):
 			oldest := lc.CurrentLayer() - types.LayerID(safeDist)
+			t0 := time.Now()
 			if err := proposals.Delete(db, oldest); err != nil {
 				logger.Error("failed to delete proposals",
 					zap.Stringer("lid", oldest),
 					zap.Error(err),
 				)
 			}
-			logger.Info("proposals pruned", zap.Stringer("lid", oldest))
+			metrics.PruneProposalLatency.Observe(time.Since(t0).Seconds())
+			t1 := time.Now()
 			if err := certificates.DeleteCert(db, oldest); err != nil {
 				logger.Error("failed to delete certificates",
 					zap.Stringer("lid", oldest),
 					zap.Error(err),
 				)
 			}
-			logger.Info("certificates pruned", zap.Stringer("lid", oldest))
+			metrics.PruneCertLatency.Observe(time.Since(t1).Seconds())
+			t2 := time.Now()
 			if err := transactions.DeleteProposalTxs(db, oldest); err != nil {
 				logger.Error("failed to delete proposal tx mapping",
 					zap.Stringer("lid", oldest),
 					zap.Error(err),
 				)
 			}
-			logger.Info("proposal tx pruned", zap.Stringer("lid", oldest))
+			metrics.PrunePropTxLatency.Observe(time.Since(t2).Seconds())
 		}
 	}
 }

@@ -12,10 +12,23 @@ const (
 )
 
 // LayerNumBlocks is number of blocks in layer.
-var LayerNumBlocks = metrics.NewHistogramWithBuckets(
-	"layer_num_blocks",
-	Subsystem,
-	"Number of blocks in layer",
-	[]string{},
-	prometheus.ExponentialBuckets(1, 2, 16),
+var (
+	LayerNumBlocks = metrics.NewHistogramWithBuckets(
+		"layer_num_blocks",
+		Subsystem,
+		"Number of blocks in layer",
+		[]string{},
+		prometheus.ExponentialBuckets(1, 2, 16),
+	)
+
+	pruneLatency = metrics.NewHistogramWithBuckets(
+		"prune_seconds",
+		Subsystem,
+		"prune time in seconds",
+		[]string{"step"},
+		prometheus.ExponentialBuckets(0.01, 2, 10),
+	)
+	PruneProposalLatency = pruneLatency.WithLabelValues("proposal")
+	PruneCertLatency     = pruneLatency.WithLabelValues("cert")
+	PrunePropTxLatency   = pruneLatency.WithLabelValues("proptxs")
 )
