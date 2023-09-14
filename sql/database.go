@@ -115,7 +115,18 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 	if config.enableLatency {
 		db.latency = newQueryLatency()
 	}
+	for i := 0; i < config.connections; i++ {
+		conn := pool.Get(context.Background())
+		if err := registerFunctions(conn); err != nil {
+			return nil, err
+		}
+		pool.Put(conn)
+	}
 	if config.migrations != nil {
+		before, err := version(db)
+		if err != nil {
+			return nil, err
+		}
 		tx, err := db.Tx(context.Background())
 		if err != nil {
 			return nil, err
@@ -128,13 +139,11 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 		if err != nil {
 			return nil, err
 		}
-	}
-	for i := 0; i < config.connections; i++ {
-		conn := pool.Get(context.Background())
-		if err := registerFunctions(conn); err != nil {
-			return nil, err
+		if before == 3 {
+			if err := Vacuum(db); err != nil {
+				return nil, err
+			}
 		}
-		defer pool.Put(conn)
 	}
 	return db, nil
 }
