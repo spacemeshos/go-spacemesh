@@ -52,6 +52,10 @@ for them if needed.
 }
 ```
 
+> [!NOTE]  
+> Please note that 0.0.0.0 in the above config will work ONLY if all nodes are on the same host. If you're using multiple hosts make sure that you're using proper IPs on both sides.
+> The `bootnodes` section can contain any bootnodes (or all) depending on your preference.
+
 ### Configuration for private node
 
 Set min-peers to the number of peers in the config and disable-dht.
@@ -73,6 +77,9 @@ low-peers and high-peers should not be lower than min-peers.
     }
 }
 ```
+
+> [!NOTE]  
+> Please note that 0.0.0.0 in the above config will work ONLY if all nodes are on the same host. If you're using multiple hosts make sure that you're using proper IPs on both sides.
 
 #### Expected result
 

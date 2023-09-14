@@ -51,7 +51,7 @@ func testnet() config.Config {
 			FileLock:            filepath.Join(os.TempDir(), "spacemesh.lock"),
 			MetricsPort:         1010,
 			DatabaseConnections: 16,
-			NetworkHRP:          "smtest",
+			NetworkHRP:          "stest",
 
 			LayerDuration:  5 * time.Minute,
 			LayerAvgSize:   50,
