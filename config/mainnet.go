@@ -45,8 +45,10 @@ func MainnetConfig() Config {
 			DatabaseConnections: 16,
 			NetworkHRP:          "sm",
 
-			LayerDuration:  5 * time.Minute,
-			LayerAvgSize:   50,
+			LayerDuration: 5 * time.Minute,
+			LayerAvgSize:  50,
+			// NOTE(dshulyak) this is only used to stop atx grading in hare.
+			// we should refactor that too.
 			LegacyLayer:    8180,
 			LayersPerEpoch: 4032,
 

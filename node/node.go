@@ -142,7 +142,6 @@ func GetCommand() *cobra.Command {
 
 			run := func(ctx context.Context) error {
 				types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
-				types.SetLegacyLayers(app.Config.LegacyLayer)
 				// starting on 2023-09-14 20:00:00 +0000 UTC (~1 week into 4th epoch)
 				types.SetOpUpgradeLayer(18000)
 				// ensure all data folders exist
@@ -750,7 +749,7 @@ func (app *App) initServices(ctx context.Context) error {
 
 	hareCfg := app.Config.HARE
 	hareCfg.Hdist = app.Config.Tortoise.Hdist
-	hareCfg.StopAtxGrading = types.GetLegacyLayer()
+	hareCfg.StopAtxGrading = app.Config.LegacyLayer
 	app.hare = hare.New(
 		app.cachedDB,
 		hareCfg,

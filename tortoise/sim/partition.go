@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 )
@@ -125,23 +124,19 @@ func (g *Generator) mergeKeys(other *Generator) {
 }
 
 func (g *Generator) mergeActivations(other *Generator) {
-	for _, atxid := range other.activations {
+	for _, atx := range other.activations {
 		var exists bool
 		for _, existing := range g.activations {
-			exists = atxid == existing
+			exists = atx.ID() == existing.ID()
 			if exists {
 				break
 			}
 		}
 		if !exists {
-			atx, err := other.GetState(0).DB.GetFullAtx(atxid)
-			if err != nil {
-				g.logger.With().Panic("failed to get atx", atxid, log.Err(err))
-			}
 			for _, state := range g.states {
 				state.OnActivationTx(atx)
 			}
-			g.activations = append(g.activations, atxid)
+			g.activations = append(g.activations, atx)
 			g.prevHeight = append(g.prevHeight, atx.TickHeight())
 		}
 	}

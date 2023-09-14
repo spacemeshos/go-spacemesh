@@ -63,10 +63,6 @@ func (o *Oracle) ProposalEligibility(lid types.LayerID, beacon types.Beacon, non
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
-	if legacy := types.GetLegacyLayer(); legacy != 0 && lid.Uint32() == legacy+1 {
-		o.cache = &EpochEligibility{}
-	}
-
 	epoch := lid.GetEpoch()
 	if lid <= types.GetEffectiveGenesis() {
 		o.log.With().Panic("eligibility should not be queried during genesis", lid, epoch)
@@ -244,7 +240,7 @@ func (o *Oracle) calcEligibilityProofs(lid types.LayerID, epoch types.EpochID, b
 	)
 	var numEligibleSlots uint32
 	if ref == nil {
-		numEligibleSlots, err = proposals.GetLegacyNumEligible(lid, minerWeight, o.cfg.minActiveSetWeight, totalWeight, o.cfg.layerSize, o.cfg.layersPerEpoch)
+		numEligibleSlots, err = proposals.GetNumEligibleSlots(minerWeight, o.cfg.minActiveSetWeight, totalWeight, o.cfg.layerSize, o.cfg.layersPerEpoch)
 		if err != nil {
 			return nil, fmt.Errorf("oracle get num slots: %w", err)
 		}
