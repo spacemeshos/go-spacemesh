@@ -3,6 +3,7 @@ package sim
 import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/proposals/util"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -154,8 +155,10 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 	if cfg.LayerSize >= 0 {
 		size = cfg.LayerSize
 	}
-	activeset := make([]types.ATXID, len(g.activations))
-	copy(activeset, g.activations)
+	var total uint64
+	for _, atx := range g.activations {
+		total += atx.GetWeight()
+	}
 
 	miners := make([]uint32, len(g.activations))
 	for i := 0; i < size; i++ {
@@ -167,7 +170,7 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 			continue
 		}
 		voting := cfg.VoteGen(g.rng, g.layers, miner)
-		atxid := g.activations[miner]
+		atx := g.activations[miner]
 		signer := g.keys[miner]
 		proofs := []types.VotingEligibility{}
 		for j := uint32(0); j < maxj; j++ {
@@ -177,12 +180,16 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 		if err != nil {
 			g.logger.With().Panic("failed to get a beacon", log.Err(err))
 		}
+		n, err := util.GetNumEligibleSlots(atx.GetWeight(), 0, total, g.conf.LayerSize, g.conf.LayersPerEpoch)
+		if err != nil {
+			g.logger.With().Panic("eligible slots", log.Err(err))
+		}
 		ballot := &types.Ballot{
 			InnerBallot: types.InnerBallot{
 				Layer: g.nextLayer,
-				AtxID: atxid,
+				AtxID: atx.ID(),
 				EpochData: &types.EpochData{
-					EligibilityCount: g.eligiblities[miner],
+					EligibilityCount: n,
 					ActiveSetHash:    types.Hash32{1, 2, 3},
 					Beacon:           beacon,
 				},

@@ -151,7 +151,7 @@ func (v *Validator) validateReference(ballot *types.Ballot, owned *types.Activat
 		}
 		totalWeight += atx.GetWeight()
 	}
-	numEligibleSlots, err := GetLegacyNumEligible(ballot.Layer, owned.GetWeight(), v.minActiveSetWeight, totalWeight, v.avgLayerSize, v.layersPerEpoch)
+	numEligibleSlots, err := GetNumEligibleSlots(owned.GetWeight(), v.minActiveSetWeight, totalWeight, v.avgLayerSize, v.layersPerEpoch)
 	if err != nil {
 		return nil, err
 	}
