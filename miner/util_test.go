@@ -12,32 +12,19 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
-	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
 func TestActiveSetFromEpochFirstBlock(t *testing.T) {
 	for _, tc := range []struct {
-		desc        string
-		miner, hare bool
-		err         error
+		desc string
+		err  error
 	}{
 		{
-			desc:  "actives for miner",
-			miner: true,
+			desc: "actives",
 		},
 		{
-			desc:  "no actives for miner",
-			miner: true,
-			err:   sql.ErrNotFound,
-		},
-		{
-			desc: "actives for hare",
-			hare: true,
-		},
-		{
-			desc: "no actives for hare",
-			hare: true,
+			desc: "no actives",
 			err:  sql.ErrNotFound,
 		},
 	} {
@@ -45,7 +32,7 @@ func TestActiveSetFromEpochFirstBlock(t *testing.T) {
 			epoch := types.EpochID(3)
 			cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 
-			got, err := ActiveSetFromEpochFirstCertifiedBlock(cdb, epoch)
+			got, err := ActiveSetFromEpochFirstBlock(cdb, epoch)
 			require.ErrorIs(t, err, sql.ErrNotFound)
 			require.Nil(t, got)
 
@@ -66,12 +53,7 @@ func TestActiveSetFromEpochFirstBlock(t *testing.T) {
 				block.Initialize()
 				require.NoError(t, blocks.Add(cdb, block))
 				if tc.err == nil {
-					if tc.miner {
-						require.NoError(t, layers.SetApplied(cdb, lid, block.ID()))
-					}
-					if tc.hare {
-						require.NoError(t, certificates.Add(cdb, lid, &types.Certificate{BlockID: block.ID()}))
-					}
+					require.NoError(t, layers.SetApplied(cdb, lid, block.ID()))
 				}
 				if i == 0 {
 					expected = all
@@ -83,11 +65,7 @@ func TestActiveSetFromEpochFirstBlock(t *testing.T) {
 				}
 			}
 
-			if tc.miner {
-				got, err = ActiveSetFromEpochFirstBlock(cdb, epoch)
-			} else if tc.hare {
-				got, err = ActiveSetFromEpochFirstCertifiedBlock(cdb, epoch)
-			}
+			got, err = ActiveSetFromEpochFirstBlock(cdb, epoch)
 			if tc.err != nil {
 				require.ErrorIs(t, err, tc.err)
 			} else {

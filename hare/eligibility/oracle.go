@@ -421,7 +421,7 @@ func (o *Oracle) computeActiveSet(ctx context.Context, targetEpoch types.EpochID
 		return activeSet, nil
 	}
 
-	activeSet, err := miner.ActiveSetFromEpochFirstCertifiedBlock(o.cdb, targetEpoch)
+	activeSet, err := miner.ActiveSetFromEpochFirstBlock(o.cdb, targetEpoch)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return nil, err
 	}

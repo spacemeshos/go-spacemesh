@@ -9,17 +9,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
-	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
-
-func ActiveSetFromEpochFirstCertifiedBlock(db sql.Executor, epoch types.EpochID) ([]types.ATXID, error) {
-	bid, err := certificates.FirstInEpoch(db, epoch)
-	if err != nil {
-		return nil, err
-	}
-	return activeSetFromBlock(db, bid)
-}
 
 func ActiveSetFromEpochFirstBlock(db sql.Executor, epoch types.EpochID) ([]types.ATXID, error) {
 	bid, err := layers.FirstAppliedInEpoch(db, epoch)
