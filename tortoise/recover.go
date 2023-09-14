@@ -106,7 +106,8 @@ func RecoverLayer(ctx context.Context, trtl *Tortoise, db *datastore.CachedDB, b
 			trtl.OnHareOutput(lid, hare)
 		}
 	}
-	ballotsrst, err := ballots.Layer(db, lid)
+	// NOTE(dshulyak) we loaded information about malicious identities earlier.
+	ballotsrst, err := ballots.LayerNoMalicious(db, lid)
 	if err != nil {
 		return err
 	}
