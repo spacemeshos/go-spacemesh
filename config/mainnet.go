@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"time"
 
+	"go.uber.org/zap/zapcore"
+
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
@@ -21,7 +23,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
-	"go.uber.org/zap/zapcore"
 )
 
 func MainnetConfig() Config {
