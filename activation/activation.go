@@ -14,7 +14,6 @@ import (
 
 	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/post/shared"
-	"github.com/spacemeshos/post/verifying"
 	"go.uber.org/atomic"
 	"golang.org/x/sync/errgroup"
 
@@ -350,7 +349,7 @@ func (b *Builder) verifyInitialPost(ctx context.Context, post *types.Post, metad
 		post,
 		metadata,
 		b.postSetupProvider.LastOpts().NumUnits,
-		verifying.WithLabelScryptParams(b.postSetupProvider.LastOpts().Scrypt))
+	)
 	switch {
 	case errors.Is(err, context.Canceled):
 		// If the context was canceled, we don't want to emit or log errors just propagate the cancellation signal.

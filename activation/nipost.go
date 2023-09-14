@@ -12,7 +12,6 @@ import (
 	"github.com/spacemeshos/merkle-tree"
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/proving"
-	"github.com/spacemeshos/post/verifying"
 	"golang.org/x/exp/slices"
 	"golang.org/x/sync/errgroup"
 
@@ -301,7 +300,6 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 			proof,
 			proofMetadata,
 			nb.postSetupProvider.LastOpts().NumUnits,
-			verifying.WithLabelScryptParams(nb.postSetupProvider.LastOpts().Scrypt),
 		); err != nil {
 			events.EmitInvalidPostProof()
 			return nil, fmt.Errorf("failed to verify Post: %w", err)
