@@ -61,7 +61,7 @@ func newTurtle(logger *zap.Logger, config Config) *turtle {
 	t.layers[genesis] = &layerInfo{
 		lid:            genesis,
 		hareTerminated: true,
-		opinions:       map[types.Hash32]*votes{},
+		opinions:       map[types.Hash32]votes{},
 	}
 	t.verifying = newVerifying(config, t.state)
 	t.full = newFullTortoise(config, t.state)
@@ -760,10 +760,10 @@ func (t *turtle) decodeBallot(ballot *types.BallotTortoiseData) (*ballotInfo, ty
 
 	layer := t.layer(binfo.layer)
 
-	existing := layer.opinions[ballot.Opinion.Hash]
+	existing, exists := layer.opinions[ballot.Opinion.Hash]
 	var min types.LayerID
-	if existing != nil {
-		binfo.votes = *existing
+	if exists {
+		binfo.votes = existing
 	} else {
 		var (
 			votes votes
@@ -794,9 +794,9 @@ func (t *turtle) storeBallot(ballot *ballotInfo, min types.LayerID) error {
 
 	t.state.addBallot(ballot)
 	layer := t.layer(ballot.layer)
-	votes := layer.opinions[ballot.opinion()]
-	if votes != nil {
-		ballot.votes.tail = votes.tail
+	existing, exists := layer.opinions[ballot.opinion()]
+	if exists {
+		ballot.votes = existing
 	} else {
 		for current := ballot.votes.tail; current != nil && !current.lid.Before(min); current = current.prev {
 			for i, block := range current.supported {
@@ -808,7 +808,7 @@ func (t *turtle) storeBallot(ballot *ballotInfo, min types.LayerID) error {
 				}
 			}
 		}
-		layer.opinions[ballot.opinion()] = &ballot.votes
+		layer.opinions[ballot.opinion()] = ballot.votes
 	}
 	if !ballot.layer.After(t.processed) {
 		if err := t.countBallot(ballot); err != nil {
