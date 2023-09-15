@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"go.uber.org/atomic"
 )
 
 type ATXData struct {
@@ -35,6 +36,8 @@ func New(opts ...Opt) *Cache {
 }
 
 type Cache struct {
+	evicted atomic.Uint32
+
 	// number of epochs to keep
 	// capacity is used for informational purposes.
 	capacity types.EpochID
@@ -48,21 +51,38 @@ type epochCache struct {
 	identities map[types.NodeID][]types.ATXID
 }
 
-func (c *Cache) Capacity() types.EpochID {
+func (c *Cache) TargetCapacity() types.EpochID {
 	return c.capacity
+}
+
+func (c *Cache) IsEvicted(epoch types.EpochID) bool {
+	return c.evicted.Load() >= epoch.Uint32()
 }
 
 // Evict supposed to be called when application knows that keeping epoch in memory is not useful.
 //
 // Good heuristic is when layer from higher epoch was applied, at that point it is unlikely
 // that we will see a lot of data from past epochs.
-func (c *Cache) Evict(epoch types.EpochID) {
+func (c *Cache) Evict(evict types.EpochID) {
+	if c.IsEvicted(evict) {
+		return
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	delete(c.epochs, epoch)
+	if c.evicted.Load() > evict.Uint32() {
+		c.evicted.Store(evict.Uint32())
+	}
+	for epoch := range c.epochs {
+		if epoch <= evict {
+			delete(c.epochs, epoch)
+		}
+	}
 }
 
 func (c *Cache) Add(epoch types.EpochID, node types.NodeID, atx types.ATXID, data *ATXData) {
+	if c.IsEvicted(epoch) {
+		return
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	ecache, exists := c.epochs[epoch]
@@ -79,29 +99,29 @@ func (c *Cache) Add(epoch types.EpochID, node types.NodeID, atx types.ATXID, dat
 	atxs := ecache.identities[node]
 	atxs = append(atxs, atx)
 	// NOTE(dshulyak) doesn't make sense, as we don't guarantee that every node
-	// will see same atxs. it actually should see atmost one and malfeasence proof if node equivocated
+	// will see same atxs. it actually should see atmost one and malfeasence proof if node equivocated.
+	// find out if we have use case in consensus.
 	sort.Slice(atxs, func(i, j int) bool {
 		return bytes.Compare(atxs[i].Bytes(), atxs[j].Bytes()) == -1
 	})
 	ecache.identities[node] = atxs
 }
 
-func (c *Cache) SetMalicious(epoch types.EpochID, node types.NodeID) {
+func (c *Cache) Malicious(node types.NodeID) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	ecache, exists := c.epochs[epoch]
-	if !exists {
-		return
-	}
-	for _, atx := range ecache.identities[node] {
-		data := ecache.atxs[atx]
-		// copy on update instead of copying on read
-		updated := *data
-		updated.Malicious = true
-		ecache.atxs[atx] = &updated
+	for _, ecache := range c.epochs {
+		for _, atx := range ecache.identities[node] {
+			data := ecache.atxs[atx]
+			// copy on update instead of copying on read
+			updated := *data
+			updated.Malicious = true
+			ecache.atxs[atx] = &updated
+		}
 	}
 }
 
+// Get returns atx data.
 func (c *Cache) Get(epoch types.EpochID, atx types.ATXID) *ATXData {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -116,6 +136,7 @@ func (c *Cache) Get(epoch types.EpochID, atx types.ATXID) *ATXData {
 	return data
 }
 
+// GetByNode returns atx data of the first atx in lexicographic order.
 func (c *Cache) GetByNode(epoch types.EpochID, node types.NodeID) *ATXData {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
