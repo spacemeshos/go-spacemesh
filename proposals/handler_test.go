@@ -876,6 +876,20 @@ func TestProposal_BeforeEffectiveGenesis(t *testing.T) {
 	checkProposal(t, th.cdb, p, false)
 }
 
+func TestProposal_NotCurrentLayer(t *testing.T) {
+	th := createTestHandlerNoopDecoder(t)
+	lid := types.LayerID(11)
+	th.mockSet.setCurrentLayer(lid)
+	p := createProposal(t)
+	p.Layer = lid - 1
+	data := encodeProposal(t, p)
+	got := th.HandleSyncedProposal(context.Background(), p.ID().AsHash32(), p2p.NoPeer, data)
+	require.ErrorContains(t, got, "proposal too late")
+
+	require.Error(t, th.HandleProposal(context.Background(), "", data))
+	checkProposal(t, th.cdb, p, false)
+}
+
 func TestProposal_BadSignature(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	p := createProposal(t)
