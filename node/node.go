@@ -38,6 +38,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
+	"github.com/spacemeshos/go-spacemesh/cache"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -638,9 +639,15 @@ func (app *App) initServices(ctx context.Context) error {
 		app.log.Debug("beacon results watcher exited")
 		return nil
 	})
+	start := time.Now()
+	cache, err := cache.Warmup(app.db)
+	if err != nil {
+		return err
+	}
+	app.log.With().Info("cache warmup", log.Duration("duration", time.Since(start)))
 
 	executor := mesh.NewExecutor(app.cachedDB, state, app.conState, app.addLogger(ExecutorLogger, lg))
-	msh, err := mesh.NewMesh(app.cachedDB, app.clock, trtl, executor, app.conState, app.addLogger(MeshLogger, lg))
+	msh, err := mesh.NewMesh(app.cachedDB, cache, app.clock, trtl, executor, app.conState, app.addLogger(MeshLogger, lg))
 	if err != nil {
 		return fmt.Errorf("failed to create mesh: %w", err)
 	}
@@ -648,6 +655,7 @@ func (app *App) initServices(ctx context.Context) error {
 	fetcherWrapped := &layerFetcher{}
 	atxHandler := activation.NewHandler(
 		app.cachedDB,
+		cache,
 		app.edVerifier,
 		app.clock,
 		app.host,

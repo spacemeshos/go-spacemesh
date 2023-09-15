@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/post/shared"
 	"golang.org/x/exp/maps"
 
+	"github.com/spacemeshos/go-spacemesh/cache"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -40,6 +41,7 @@ type atxChan struct {
 // Handler processes the atxs received from all nodes and their validity status.
 type Handler struct {
 	cdb             *datastore.CachedDB
+	cache           *cache.Cache
 	edVerifier      *signing.EdVerifier
 	clock           layerClock
 	publisher       pubsub.Publisher
@@ -58,6 +60,7 @@ type Handler struct {
 // NewHandler returns a data handler for ATX.
 func NewHandler(
 	cdb *datastore.CachedDB,
+	cache *cache.Cache,
 	edVerifier *signing.EdVerifier,
 	c layerClock,
 	pub pubsub.Publisher,
@@ -356,6 +359,22 @@ func (h *Handler) ContextuallyValidateAtx(atx *types.VerifiedActivationTx) error
 	return err
 }
 
+func (h *Handler) cacheAtx(ctx context.Context, atx *types.VerifiedActivationTx) {
+	if !h.cache.IsEvicted(atx.TargetEpoch()) {
+		nonce, err := h.cdb.VRFNonce(atx.SmesherID, atx.TargetEpoch())
+		if err != nil {
+			h.log.With().Error("failed vrf nonce read", log.Err(err), log.Context(ctx))
+			return
+		}
+		malicious, err := h.cdb.IsMalicious(atx.SmesherID)
+		if err != nil {
+			h.log.With().Error("failed is malicious read", log.Err(err), log.Context(ctx))
+			return
+		}
+		h.cache.Add(atx.TargetEpoch(), atx.SmesherID, atx.ID(), cache.ToATXData(atx, nonce, malicious))
+	}
+}
+
 // storeAtx stores an ATX and notifies subscribers of the ATXID.
 func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx) error {
 	malicious, err := h.cdb.IsMalicious(atx.SmesherID)
@@ -421,6 +440,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 	}
 	h.beacon.OnAtx(header)
 	h.tortoise.OnAtx(header.ToData())
+	h.cacheAtx(ctx, atx)
 
 	// notify subscribers
 	if ch, found := h.atxChannels[atx.ID()]; found {

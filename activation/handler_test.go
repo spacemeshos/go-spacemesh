@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
+	"github.com/spacemeshos/go-spacemesh/cache"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -101,7 +102,7 @@ func newTestHandler(tb testing.TB, goldenATXID types.ATXID) *testHandler {
 	mbeacon := NewMockAtxReceiver(ctrl)
 	mtortoise := mocks.NewMockTortoise(ctrl)
 
-	atxHdlr := NewHandler(cdb, verifier, mclock, mpub, mockFetch, 1, goldenATXID, mValidator, mbeacon, mtortoise, lg, PoetConfig{})
+	atxHdlr := NewHandler(cdb, cache.New(), verifier, mclock, mpub, mockFetch, 1, goldenATXID, mValidator, mbeacon, mtortoise, lg, PoetConfig{})
 	return &testHandler{
 		Handler: atxHdlr,
 

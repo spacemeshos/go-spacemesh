@@ -13,6 +13,7 @@ import (
 	"go.uber.org/atomic"
 	"go.uber.org/zap/zapcore"
 
+	"github.com/spacemeshos/go-spacemesh/cache"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
@@ -36,6 +37,7 @@ var ErrMissingBlock = errors.New("missing blocks")
 type Mesh struct {
 	logger log.Log
 	cdb    *datastore.CachedDB
+	cache  *cache.Cache
 	clock  layerClock
 
 	executor *Executor
@@ -60,10 +62,11 @@ type Mesh struct {
 }
 
 // NewMesh creates a new instant of a mesh.
-func NewMesh(cdb *datastore.CachedDB, c layerClock, trtl system.Tortoise, exec *Executor, state conservativeState, logger log.Log) (*Mesh, error) {
+func NewMesh(cdb *datastore.CachedDB, cache *cache.Cache, c layerClock, trtl system.Tortoise, exec *Executor, state conservativeState, logger log.Log) (*Mesh, error) {
 	msh := &Mesh{
 		logger:              logger,
 		cdb:                 cdb,
+		cache:               cache,
 		clock:               c,
 		trtl:                trtl,
 		executor:            exec,
@@ -440,6 +443,7 @@ func (msh *Mesh) applyResults(ctx context.Context, results []result.Layer) error
 			log.Stringer("applied", target),
 		)
 		if layer.Layer > msh.LatestLayerInState() {
+			msh.cache.Evict(layer.Layer.GetEpoch() - 1)
 			msh.setLatestLayerInState(layer.Layer)
 		}
 	}
