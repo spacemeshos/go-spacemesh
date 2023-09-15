@@ -93,6 +93,7 @@ var (
 	malformed      = processErrors.WithLabelValues("mal")
 	failedInit     = processErrors.WithLabelValues("init")
 	known          = processErrors.WithLabelValues("known")
+	tooLate        = processErrors.WithLabelValues("late")
 	preGenesis     = processErrors.WithLabelValues("genesis")
 	badSigProposal = processErrors.WithLabelValues("sigp")
 	badSigBallot   = processErrors.WithLabelValues("sigb")
