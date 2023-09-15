@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/benbjohnson/clock"
+	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
@@ -189,8 +189,7 @@ func Test_NodeClock_Await_WithClockMovingBackwards(t *testing.T) {
 	layerDuration := 100 * time.Millisecond
 	tickInterval := 10 * time.Millisecond
 
-	mClock := clock.NewMock()
-	mClock.Set(now)
+	mClock := clockwork.NewFakeClockAt(now)
 
 	clock, err := NewClock(
 		withClock(mClock),
@@ -213,7 +212,7 @@ func Test_NodeClock_Await_WithClockMovingBackwards(t *testing.T) {
 	}
 
 	// move the clock backwards by a layer
-	mClock.Set(now.Add(-2 * layerDuration))
+	mClock.Advance(-2 * layerDuration)
 	ch := clock.AwaitLayer(types.LayerID(9))
 
 	select {
@@ -223,7 +222,8 @@ func Test_NodeClock_Await_WithClockMovingBackwards(t *testing.T) {
 	}
 
 	// continue clock forward in time
-	mClock.Add(3 * layerDuration)
+	mClock.Advance(3 * layerDuration)
+	clock.tick()
 
 	select {
 	case <-ch:
@@ -238,8 +238,7 @@ func Test_NodeClock_NonMonotonicTick_Forward(t *testing.T) {
 	layerDuration := 100 * time.Millisecond
 	tickInterval := 10 * time.Millisecond
 
-	mClock := clock.NewMock()
-	mClock.Set(genesis.Add(5 * layerDuration))
+	mClock := clockwork.NewFakeClockAt(genesis.Add(5 * layerDuration))
 
 	clock, err := NewClock(
 		withClock(mClock),
@@ -261,7 +260,7 @@ func Test_NodeClock_NonMonotonicTick_Forward(t *testing.T) {
 	}
 
 	// hibernate for 5 layers (clock jumps forward)
-	mClock.Add(5 * layerDuration)
+	mClock.Advance(5 * layerDuration)
 
 	select {
 	case <-ch:
@@ -277,8 +276,7 @@ func Test_NodeClock_NonMonotonicTick_Backward(t *testing.T) {
 	layerDuration := 10 * time.Millisecond
 	tickInterval := 1 * time.Millisecond
 
-	mClock := clock.NewMock()
-	mClock.Set(genesis.Add(5 * layerDuration))
+	mClock := clockwork.NewFakeClockAt(genesis.Add(5 * layerDuration))
 
 	clock, err := NewClock(
 		withClock(mClock),
@@ -304,7 +302,7 @@ func Test_NodeClock_NonMonotonicTick_Backward(t *testing.T) {
 	}
 
 	// simulate time passing
-	mClock.Add(1 * layerDuration)
+	mClock.Advance(1 * layerDuration)
 
 	select {
 	case <-ch6:
@@ -321,7 +319,7 @@ func Test_NodeClock_NonMonotonicTick_Backward(t *testing.T) {
 	}
 
 	// NTP corrects time backwards
-	mClock.Add(-1 * layerDuration)
+	mClock.Advance(-1 * layerDuration)
 	ch6 = clock.AwaitLayer(types.LayerID(6))
 
 	select {
@@ -335,7 +333,7 @@ func Test_NodeClock_NonMonotonicTick_Backward(t *testing.T) {
 	}
 
 	// simulate time passing
-	mClock.Add(2 * layerDuration)
+	mClock.Advance(2 * layerDuration)
 
 	select {
 	case <-ch6:
@@ -374,8 +372,7 @@ func Fuzz_NodeClock_CurrentLayer(f *testing.F) {
 		layerTime := time.Duration(layerSecs) * time.Second
 		tickInterval := layerTime / 10
 
-		mClock := clock.NewMock()
-		mClock.Set(nowTime)
+		mClock := clockwork.NewFakeClockAt(nowTime)
 
 		clock, err := NewClock(
 			withClock(mClock),
