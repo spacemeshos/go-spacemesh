@@ -69,6 +69,7 @@ func createTestGenerator(t *testing.T) *testGenerator {
 		mockCert:   mocks.NewMockcertifier(ctrl),
 		mockPatrol: mocks.NewMocklayerPatrol(ctrl),
 	}
+	tg.mockMesh.EXPECT().ProcessedLayer().Return(types.LayerID(1)).AnyTimes()
 	lg := logtest.New(t)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
 	tg.Generator = NewGenerator(cdb, tg.mockExec, tg.mockMesh, tg.mockFetch, tg.mockCert, tg.mockPatrol,
@@ -325,7 +326,11 @@ func Test_run(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			tg := createTestGenerator(t)
 			tg.cfg.BlockGasLimit = tc.gasLimit
+			tg.mockMesh = mocks.NewMockmeshProvider(gomock.NewController(t))
+			tg.msh = tg.mockMesh
 			layerID := types.GetEffectiveGenesis().Add(100)
+			processed := layerID - 1
+			tg.mockMesh.EXPECT().ProcessedLayer().DoAndReturn(func() types.LayerID { return processed }).AnyTimes()
 			require.NoError(t, layers.SetApplied(tg.cdb, layerID-1, types.EmptyBlockID))
 			var meshHash types.Hash32
 			if tc.optimistic {
@@ -398,6 +403,7 @@ func Test_run(t *testing.T) {
 			tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, gomock.Any(), tc.optimistic).DoAndReturn(
 				func(_ context.Context, _ types.LayerID, got types.BlockID, _ bool) error {
 					require.Equal(t, block.ID(), got)
+					processed = layerID
 					return nil
 				})
 			tg.mockPatrol.EXPECT().CompleteHare(layerID)
