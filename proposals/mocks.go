@@ -114,6 +114,44 @@ func (c *meshProviderAddTXsFromProposalCall) DoAndReturn(f func(context.Context,
 	return c
 }
 
+// ProcessedLayer mocks base method.
+func (m *MockmeshProvider) ProcessedLayer() types.LayerID {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ProcessedLayer")
+	ret0, _ := ret[0].(types.LayerID)
+	return ret0
+}
+
+// ProcessedLayer indicates an expected call of ProcessedLayer.
+func (mr *MockmeshProviderMockRecorder) ProcessedLayer() *meshProviderProcessedLayerCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProcessedLayer", reflect.TypeOf((*MockmeshProvider)(nil).ProcessedLayer))
+	return &meshProviderProcessedLayerCall{Call: call}
+}
+
+// meshProviderProcessedLayerCall wrap *gomock.Call
+type meshProviderProcessedLayerCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *meshProviderProcessedLayerCall) Return(arg0 types.LayerID) *meshProviderProcessedLayerCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *meshProviderProcessedLayerCall) Do(f func() types.LayerID) *meshProviderProcessedLayerCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *meshProviderProcessedLayerCall) DoAndReturn(f func() types.LayerID) *meshProviderProcessedLayerCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // MockeligibilityValidator is a mock of eligibilityValidator interface.
 type MockeligibilityValidator struct {
 	ctrl     *gomock.Controller
