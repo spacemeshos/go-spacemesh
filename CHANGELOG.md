@@ -2,7 +2,7 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
-## v1.1.5
+## v1.1.6
 
 ### Upgrade information
 
@@ -23,6 +23,8 @@ active set will not be gossipped together with proposals. That was the main netw
 * [#4956](https://github.com/spacemeshos/go-spacemesh/pull/4956) Active set is will not be gossipped in every proposal.
   Active set usually contains list of atxs that targets current epoch. As the number of atxs grows this object grows as well.
 * [#4993](https://github.com/spacemeshos/go-spacemesh/pull/4993) Drop proposals after genering a block. This limits growth of the state.
+* [#5020](https://github.com/spacemeshos/go-spacemesh/pull/5020) Do not process proposals from old/deleted layers.
+  This fixes I/O issues observed on HDD miners caused by [#4993](https://github.com/spacemeshos/go-spacemesh/pull/4993).
 
 ## v1.1.4
 
@@ -40,7 +42,7 @@ to set lower expected latency in the network, eventually reducing layer time.
 
 ### Improvements
 
-* [#4879](https://github.com/spacemeshos/go-spacemesh/pull/4795) Makes majority calculation weighted for optimistic filtering.
+* [#4879](https://github.com/spacemeshos/go-spacemesh/pull/4879) Makes majority calculation weighted for optimistic filtering.
 The network will start using the new algorithm at layer 18_000 (2023-09-14 20:00:00 +0000 UTC)
 * [#4923](https://github.com/spacemeshos/go-spacemesh/pull/4923) Faster ballot eligibility validation. Improves sync speed.
 * [#4934](https://github.com/spacemeshos/go-spacemesh/pull/4934) Ensure state is synced before participating in tortoise consensus.
