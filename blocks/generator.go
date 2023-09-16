@@ -135,8 +135,9 @@ func (g *Generator) Stop() {
 	}
 }
 
-func (g *Generator) pruneAsync(lid types.LayerID) {
+func (g *Generator) pruneAsync() {
 	g.eg.Go(func() error {
+		lid := g.msh.ProcessedLayer()
 		start := time.Now()
 		if err := proposals.DeleteBefore(g.cdb, lid); err != nil {
 			g.logger.With().Error("failed to delete old proposals", lid, log.Err(err))
@@ -147,7 +148,7 @@ func (g *Generator) pruneAsync(lid types.LayerID) {
 }
 
 func (g *Generator) run() error {
-	g.pruneAsync(g.msh.LatestLayerInState())
+	g.pruneAsync()
 	var maxLayer types.LayerID
 	for {
 		select {
@@ -179,11 +180,12 @@ func (g *Generator) run() error {
 			if len(g.optimisticOutput) > 0 {
 				g.processOptimisticLayers(maxLayer)
 			}
-			g.pruneAsync(out.Layer)
+			g.pruneAsync()
 		case <-time.After(g.cfg.GenBlockInterval):
 			if len(g.optimisticOutput) > 0 {
 				g.processOptimisticLayers(maxLayer)
 			}
+			g.pruneAsync()
 		}
 	}
 }
