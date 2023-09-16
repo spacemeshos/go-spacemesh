@@ -862,7 +862,6 @@ func TestDecodeVotes(t *testing.T) {
 		require.NoError(t, err)
 		ballot := types.NewExistingBallot(types.BallotID{3, 3, 3}, types.EmptyEdSignature, types.EmptyNodeID, ballots[0].Layer)
 		ballot.InnerBallot = ballots[0].InnerBallot
-		ballot.ActiveSet = ballots[0].ActiveSet
 		hasher := opinionhash.New()
 		supported := types.BlockID{2, 2, 2}
 		hasher.WriteSupport(supported, 0)
@@ -2284,7 +2283,6 @@ func TestSwitchMode(t *testing.T) {
 			ballot := types.NewExistingBallot(types.BallotID{byte(i)}, types.EmptyEdSignature, types.EmptyNodeID, template.Layer)
 			ballot.InnerBallot = template.InnerBallot
 			ballot.EligibilityProofs = template.EligibilityProofs
-			ballot.ActiveSet = template.ActiveSet
 			tortoise.OnBallot(ballot.ToTortoiseData())
 		}
 		tortoise.TallyVotes(ctx, last)
@@ -2332,7 +2330,6 @@ func TestOnBallotComputeOpinion(t *testing.T) {
 		ballot := types.NewExistingBallot(id, types.EmptyEdSignature, types.EmptyNodeID, rst[0].Layer)
 		ballot.InnerBallot = rst[0].InnerBallot
 		ballot.EligibilityProofs = rst[0].EligibilityProofs
-		ballot.ActiveSet = rst[0].ActiveSet
 		ballot.Votes.Base = types.EmptyBallotID
 		ballot.Votes.Support = nil
 		ballot.Votes.Against = nil

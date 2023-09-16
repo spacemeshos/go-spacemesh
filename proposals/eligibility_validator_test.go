@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
@@ -64,14 +65,15 @@ func gatxNilNonce(id types.ATXID, epoch types.EpochID, smesher types.NodeID, uni
 	return *verified
 }
 
-func gdata(slots uint32, beacon types.Beacon) *types.EpochData {
+func gdata(slots uint32, beacon types.Beacon, hash types.Hash32) *types.EpochData {
 	return &types.EpochData{
 		Beacon:           beacon,
 		EligibilityCount: slots,
+		ActiveSetHash:    hash,
 	}
 }
 
-func gactiveset(atxs ...types.ATXID) []types.ATXID {
+func gactiveset(atxs ...types.ATXID) types.ATXIDList {
 	return atxs
 }
 
@@ -89,7 +91,7 @@ func geligibilityWithSig(j uint32, sig string) []types.VotingEligibility {
 	return []types.VotingEligibility{el}
 }
 
-func gballot(id types.BallotID, atxid types.ATXID, activeset []types.ATXID, smesher types.NodeID, layer types.LayerID,
+func gballot(id types.BallotID, atxid types.ATXID, smesher types.NodeID, layer types.LayerID,
 	edata *types.EpochData, eligibilities []types.VotingEligibility,
 ) types.Ballot {
 	ballot := types.Ballot{}
@@ -97,7 +99,6 @@ func gballot(id types.BallotID, atxid types.ATXID, activeset []types.ATXID, smes
 	ballot.EpochData = edata
 	ballot.AtxID = atxid
 	ballot.EligibilityProofs = eligibilities
-	ballot.ActiveSet = activeset
 	ballot.SmesherID = smesher
 	ballot.SetID(id)
 	return ballot
@@ -128,6 +129,7 @@ func TestEligibilityValidator(t *testing.T) {
 		current   types.LayerID
 		minWeight uint64
 		atxs      []types.VerifiedActivationTx
+		actives   types.ATXIDList
 		ballots   []types.Ballot
 		vrfFailed bool
 		executed  types.Ballot
@@ -141,9 +143,10 @@ func TestEligibilityValidator(t *testing.T) {
 				gatx(types.ATXID{1}, publish, types.NodeID{1}, 10, 10),
 				gatx(types.ATXID{2}, publish, types.NodeID{2}, 10, 10),
 			},
+			actives: gactiveset(types.ATXID{1}, types.ATXID{2}),
 			executed: gballot(
-				types.BallotID{1}, types.ATXID{1}, gactiveset(types.ATXID{1}, types.ATXID{2}),
-				types.NodeID{1}, epoch.FirstLayer(), gdata(15, types.Beacon{1}),
+				types.BallotID{1}, types.ATXID{1},
+				types.NodeID{1}, epoch.FirstLayer(), gdata(15, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
 				geligibilities(1, 2),
 			),
 		},
@@ -155,9 +158,10 @@ func TestEligibilityValidator(t *testing.T) {
 				gatx(types.ATXID{1}, publish, types.NodeID{1}, 10, 10),
 				gatx(types.ATXID{2}, publish, types.NodeID{2}, 10, 10),
 			},
+			actives: gactiveset(types.ATXID{1}, types.ATXID{2}),
 			executed: gballot(
-				types.BallotID{1}, types.ATXID{1}, gactiveset(types.ATXID{1}, types.ATXID{2}),
-				types.NodeID{1}, epoch.FirstLayer(), gdata(3, types.Beacon{1}),
+				types.BallotID{1}, types.ATXID{1},
+				types.NodeID{1}, epoch.FirstLayer(), gdata(3, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
 				geligibilities(1, 2),
 			),
 		},
@@ -167,9 +171,10 @@ func TestEligibilityValidator(t *testing.T) {
 			atxs: []types.VerifiedActivationTx{
 				gatxZeroHeight(types.ATXID{1}, publish, types.NodeID{1}, 10, 10),
 			},
+			actives: gactiveset(types.ATXID{1}),
 			executed: gballot(
-				types.BallotID{1}, types.ATXID{1}, gactiveset(types.ATXID{1}),
-				types.NodeID{1}, epoch.FirstLayer(), gdata(15, types.Beacon{1}),
+				types.BallotID{1}, types.ATXID{1},
+				types.NodeID{1}, epoch.FirstLayer(), gdata(15, types.Beacon{1}, gactiveset(types.ATXID{1}).Hash()),
 				geligibilities(1, 2),
 			),
 			fail: true,
@@ -182,16 +187,16 @@ func TestEligibilityValidator(t *testing.T) {
 				gatx(types.ATXID{1}, publish-1, types.NodeID{1}, 10, 10),
 			},
 			executed: gballot(
-				types.BallotID{1}, types.ATXID{1}, nil,
-				types.NodeID{1}, publish.FirstLayer(), gdata(15, types.Beacon{1}),
+				types.BallotID{1}, types.ATXID{1},
+				types.NodeID{1}, publish.FirstLayer(), gdata(15, types.Beacon{1}, types.Hash32{}),
 				geligibilities(1, 2),
 			),
 		},
 		{
 			desc: "no eligibilities",
 			executed: gballot(
-				types.BallotID{1}, types.ATXID{1}, nil,
-				types.NodeID{1}, publish.FirstLayer(), gdata(15, types.Beacon{1}),
+				types.BallotID{1}, types.ATXID{1},
+				types.NodeID{1}, publish.FirstLayer(), gdata(15, types.Beacon{1}, types.Hash32{}),
 				nil,
 			),
 			fail: true,
@@ -200,8 +205,8 @@ func TestEligibilityValidator(t *testing.T) {
 		{
 			desc: "no atx",
 			executed: gballot(
-				types.BallotID{1}, types.ATXID{1}, nil,
-				types.NodeID{1}, publish.FirstLayer(), gdata(15, types.Beacon{1}),
+				types.BallotID{1}, types.ATXID{1},
+				types.NodeID{1}, publish.FirstLayer(), gdata(15, types.Beacon{1}, types.Hash32{}),
 				geligibilities(1, 2),
 			),
 			fail: true,
@@ -214,7 +219,7 @@ func TestEligibilityValidator(t *testing.T) {
 				gatx(types.ATXID{1}, publish-1, types.NodeID{1}, 10, 10),
 			},
 			executed: gballot(
-				types.BallotID{1}, types.ATXID{1}, nil,
+				types.BallotID{1}, types.ATXID{1},
 				types.NodeID{1}, publish.FirstLayer(), nil,
 				geligibilities(1, 2),
 			),
@@ -228,7 +233,7 @@ func TestEligibilityValidator(t *testing.T) {
 				gatx(types.ATXID{1}, epoch-1, types.NodeID{1}, 10, 10),
 			},
 			executed: gballot(
-				types.BallotID{1}, types.ATXID{1}, nil,
+				types.BallotID{1}, types.ATXID{1},
 				types.NodeID{1}, epoch.FirstLayer(), nil,
 				geligibilities(1, 2),
 			),
@@ -241,9 +246,10 @@ func TestEligibilityValidator(t *testing.T) {
 			atxs: []types.VerifiedActivationTx{
 				gatx(types.ATXID{1}, epoch-1, types.NodeID{1}, 10, 10),
 			},
+			actives: types.ATXIDList{},
 			executed: gballot(
-				types.BallotID{1}, types.ATXID{1}, nil,
-				types.NodeID{1}, epoch.FirstLayer(), gdata(10, types.Beacon{1}),
+				types.BallotID{1}, types.ATXID{1},
+				types.NodeID{1}, epoch.FirstLayer(), gdata(10, types.Beacon{1}, types.ATXIDList{}.Hash()),
 				geligibilities(1, 2),
 			),
 			fail: true,
@@ -256,8 +262,8 @@ func TestEligibilityValidator(t *testing.T) {
 				gatx(types.ATXID{1}, epoch-1, types.NodeID{1}, 10, 10),
 			},
 			executed: gballot(
-				types.BallotID{1}, types.ATXID{1}, nil,
-				types.NodeID{1}, epoch.FirstLayer(), gdata(10, types.EmptyBeacon),
+				types.BallotID{1}, types.ATXID{1},
+				types.NodeID{1}, epoch.FirstLayer(), gdata(10, types.EmptyBeacon, types.Hash32{}),
 				geligibilities(1, 2),
 			),
 			fail: true,
@@ -269,9 +275,10 @@ func TestEligibilityValidator(t *testing.T) {
 			atxs: []types.VerifiedActivationTx{
 				gatx(types.ATXID{1}, epoch-1, types.NodeID{1}, 10, 10),
 			},
+			actives: gactiveset(types.ATXID{1}, types.ATXID{2}),
 			executed: gballot(
-				types.BallotID{1}, types.ATXID{1}, gactiveset(types.ATXID{1}, types.ATXID{2}),
-				types.NodeID{1}, epoch.FirstLayer(), gdata(10, types.Beacon{1}),
+				types.BallotID{1}, types.ATXID{1},
+				types.NodeID{1}, epoch.FirstLayer(), gdata(10, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
 				geligibilities(1, 2),
 			),
 			fail: true,
@@ -283,9 +290,10 @@ func TestEligibilityValidator(t *testing.T) {
 			atxs: []types.VerifiedActivationTx{
 				gatx(types.ATXID{1}, epoch-1, types.NodeID{1}, 10, 0),
 			},
+			actives: gactiveset(types.ATXID{1}),
 			executed: gballot(
-				types.BallotID{1}, types.ATXID{1}, gactiveset(types.ATXID{1}),
-				types.NodeID{1}, epoch.FirstLayer(), gdata(10, types.Beacon{1}),
+				types.BallotID{1}, types.ATXID{1},
+				types.NodeID{1}, epoch.FirstLayer(), gdata(10, types.Beacon{1}, gactiveset(types.ATXID{1}).Hash()),
 				geligibilities(1, 2),
 			),
 			fail: true,
@@ -297,9 +305,10 @@ func TestEligibilityValidator(t *testing.T) {
 			atxs: []types.VerifiedActivationTx{
 				gatx(types.ATXID{1}, epoch-1, types.NodeID{1}, 10, 0),
 			},
+			actives: gactiveset(types.ATXID{1}),
 			executed: gballot(
-				types.BallotID{1}, types.ATXID{1}, gactiveset(types.ATXID{1}),
-				types.NodeID{1}, (epoch + 1).FirstLayer(), gdata(10, types.Beacon{1}),
+				types.BallotID{1}, types.ATXID{1},
+				types.NodeID{1}, (epoch + 1).FirstLayer(), gdata(10, types.Beacon{1}, gactiveset(types.ATXID{1}).Hash()),
 				geligibilities(1, 2),
 			),
 			fail: true,
@@ -311,9 +320,10 @@ func TestEligibilityValidator(t *testing.T) {
 			atxs: []types.VerifiedActivationTx{
 				gatx(types.ATXID{1}, epoch-1, types.NodeID{2}, 10, 0),
 			},
+			actives: gactiveset(types.ATXID{1}),
 			executed: gballot(
-				types.BallotID{1}, types.ATXID{1}, gactiveset(types.ATXID{1}),
-				types.NodeID{1}, epoch.FirstLayer(), gdata(10, types.Beacon{1}),
+				types.BallotID{1}, types.ATXID{1},
+				types.NodeID{1}, epoch.FirstLayer(), gdata(10, types.Beacon{1}, gactiveset(types.ATXID{1}).Hash()),
 				geligibilities(1, 2),
 			),
 			fail: true,
@@ -325,9 +335,10 @@ func TestEligibilityValidator(t *testing.T) {
 			atxs: []types.VerifiedActivationTx{
 				gatxNilNonce(types.ATXID{1}, epoch-1, types.NodeID{1}, 10),
 			},
+			actives: gactiveset(types.ATXID{1}),
 			executed: gballot(
-				types.BallotID{1}, types.ATXID{1}, gactiveset(types.ATXID{1}),
-				types.NodeID{1}, epoch.FirstLayer(), gdata(10, types.Beacon{1}),
+				types.BallotID{1}, types.ATXID{1},
+				types.NodeID{1}, epoch.FirstLayer(), gdata(10, types.Beacon{1}, gactiveset(types.ATXID{1}).Hash()),
 				geligibilities(1, 2),
 			),
 			fail: true,
@@ -342,10 +353,9 @@ func TestEligibilityValidator(t *testing.T) {
 			ballots: []types.Ballot{
 				gballot(
 					types.BallotID{1}, types.ATXID{1},
-					nil,
 					types.NodeID{1, 1, 1},
 					epoch.FirstLayer(),
-					gdata(10, types.Beacon{1}),
+					gdata(10, types.Beacon{1}, types.Hash32{}),
 					nil,
 				),
 			},
@@ -398,10 +408,9 @@ func TestEligibilityValidator(t *testing.T) {
 			ballots: []types.Ballot{
 				gballot(
 					types.BallotID{1}, types.ATXID{2},
-					nil,
 					types.NodeID{1, 1, 1},
 					epoch.FirstLayer(),
-					gdata(10, types.Beacon{1}),
+					gdata(10, types.Beacon{1}, types.Hash32{}),
 					nil,
 				),
 			},
@@ -424,10 +433,9 @@ func TestEligibilityValidator(t *testing.T) {
 			ballots: []types.Ballot{
 				gballot(
 					types.BallotID{1}, types.ATXID{1},
-					nil,
 					types.NodeID{2, 2, 2},
 					epoch.FirstLayer(),
-					gdata(10, types.Beacon{1}),
+					gdata(10, types.Beacon{1}, types.Hash32{}),
 					nil,
 				),
 			},
@@ -450,10 +458,9 @@ func TestEligibilityValidator(t *testing.T) {
 			ballots: []types.Ballot{
 				gballot(
 					types.BallotID{1}, types.ATXID{1},
-					nil,
 					types.NodeID{1, 1, 1},
 					(epoch + 1).FirstLayer(),
-					gdata(10, types.Beacon{1}),
+					gdata(10, types.Beacon{1}, types.Hash32{}),
 					nil,
 				),
 			},
@@ -474,9 +481,10 @@ func TestEligibilityValidator(t *testing.T) {
 				gatx(types.ATXID{1}, publish, types.NodeID{1}, 10, 10),
 				gatx(types.ATXID{2}, publish, types.NodeID{2}, 10, 10),
 			},
+			actives: gactiveset(types.ATXID{1}, types.ATXID{2}),
 			executed: gballot(
-				types.BallotID{1}, types.ATXID{1}, gactiveset(types.ATXID{1}, types.ATXID{2}),
-				types.NodeID{1}, epoch.FirstLayer(), gdata(15, types.Beacon{1}),
+				types.BallotID{1}, types.ATXID{1},
+				types.NodeID{1}, epoch.FirstLayer(), gdata(15, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
 				geligibilities(2, 1, 3),
 			),
 			fail: true,
@@ -489,9 +497,10 @@ func TestEligibilityValidator(t *testing.T) {
 				gatx(types.ATXID{1}, publish, types.NodeID{1}, 10, 10),
 				gatx(types.ATXID{2}, publish, types.NodeID{2}, 10, 10),
 			},
+			actives: gactiveset(types.ATXID{1}, types.ATXID{2}),
 			executed: gballot(
-				types.BallotID{1}, types.ATXID{1}, gactiveset(types.ATXID{1}, types.ATXID{2}),
-				types.NodeID{1}, epoch.FirstLayer(), gdata(15, types.Beacon{1}),
+				types.BallotID{1}, types.ATXID{1},
+				types.NodeID{1}, epoch.FirstLayer(), gdata(15, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
 				geligibilities(15),
 			),
 			fail: true,
@@ -504,9 +513,10 @@ func TestEligibilityValidator(t *testing.T) {
 				gatx(types.ATXID{1}, publish, types.NodeID{1}, 10, 10),
 				gatx(types.ATXID{2}, publish, types.NodeID{2}, 10, 10),
 			},
+			actives: gactiveset(types.ATXID{1}, types.ATXID{2}),
 			executed: gballot(
-				types.BallotID{1}, types.ATXID{1}, gactiveset(types.ATXID{1}, types.ATXID{2}),
-				types.NodeID{1}, epoch.FirstLayer(), gdata(15, types.Beacon{1}),
+				types.BallotID{1}, types.ATXID{1},
+				types.NodeID{1}, epoch.FirstLayer(), gdata(15, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
 				geligibilities(14),
 			),
 			vrfFailed: true,
@@ -520,9 +530,10 @@ func TestEligibilityValidator(t *testing.T) {
 				gatx(types.ATXID{1}, publish, types.NodeID{1}, 10, 10),
 				gatx(types.ATXID{2}, publish, types.NodeID{2}, 10, 10),
 			},
+			actives: gactiveset(types.ATXID{1}, types.ATXID{2}),
 			executed: gballot(
-				types.BallotID{1}, types.ATXID{1}, gactiveset(types.ATXID{1}, types.ATXID{2}),
-				types.NodeID{1}, epoch.FirstLayer(), gdata(15, types.Beacon{1}),
+				types.BallotID{1}, types.ATXID{1},
+				types.NodeID{1}, epoch.FirstLayer(), gdata(15, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
 				geligibilityWithSig(1, "adjust layer"),
 			),
 			fail: true,
@@ -557,6 +568,9 @@ func TestEligibilityValidator(t *testing.T) {
 			)
 			for _, atx := range tc.atxs {
 				require.NoError(t, atxs.Add(db, &atx))
+			}
+			if tc.actives != nil {
+				require.NoError(t, activesets.Add(db, tc.actives.Hash(), &types.EpochActiveSet{Set: tc.actives}))
 			}
 			for _, ballot := range tc.ballots {
 				ballots[ballot.ID()] = &ballot

@@ -77,7 +77,6 @@ func MainnetConfig() Config {
 			// 1000 - is assumed minimal number of units
 			// 5000 - half of the expected poet ticks
 			MinimalActiveSetWeight: 1000 * 5000,
-			EmitEmptyActiveSet:     20000,
 		},
 		HARE: hareConfig.Config{
 			N:               200,

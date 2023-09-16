@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -140,11 +141,15 @@ func (v *Validator) validateReference(ballot *types.Ballot, owned *types.Activat
 	if ballot.EpochData.Beacon == types.EmptyBeacon {
 		return nil, fmt.Errorf("%w: ref ballot %v", errMissingBeacon, ballot.ID())
 	}
-	if len(ballot.ActiveSet) == 0 {
+	activeSet, err := activesets.Get(v.cdb, ballot.EpochData.ActiveSetHash)
+	if err != nil {
+		return nil, err
+	}
+	if len(activeSet.Set) == 0 {
 		return nil, fmt.Errorf("%w: ref ballot %v", errEmptyActiveSet, ballot.ID())
 	}
 	var totalWeight uint64
-	for _, atxID := range ballot.ActiveSet {
+	for _, atxID := range activeSet.Set {
 		atx, err := v.cdb.GetAtxHeader(atxID)
 		if err != nil {
 			return nil, fmt.Errorf("atx in active set is missing %v: %w", atxID, err)
