@@ -136,7 +136,6 @@ func testnet() config.Config {
 			Interval:         time.Minute,
 			EpochEndFraction: 0.8,
 			MaxStaleDuration: time.Hour,
-			UseNewProtocol:   true,
 			GossipDuration:   50 * time.Second,
 		},
 		Recovery: checkpoint.DefaultConfig(),

@@ -136,7 +136,6 @@ func MainnetConfig() Config {
 			Interval:         time.Minute,
 			EpochEndFraction: 0.8,
 			MaxStaleDuration: time.Hour,
-			UseNewProtocol:   true,
 			Standalone:       false,
 			GossipDuration:   50 * time.Second,
 		},

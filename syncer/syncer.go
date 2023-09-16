@@ -27,7 +27,6 @@ type Config struct {
 	SyncCertDistance uint32
 	MaxStaleDuration time.Duration
 	Standalone       bool
-	UseNewProtocol   bool `mapstructure:"use-new-opn"`
 	GossipDuration   time.Duration
 }
 
@@ -39,7 +38,6 @@ func DefaultConfig() Config {
 		HareDelayLayers:  10,
 		SyncCertDistance: 10,
 		MaxStaleDuration: time.Second,
-		UseNewProtocol:   true,
 		GossipDuration:   15 * time.Second,
 	}
 }

@@ -55,20 +55,9 @@ func generateMaliciousIDs(t *testing.T) ([]types.NodeID, []byte) {
 	return malicious.NodeIDs, data
 }
 
-func generateLayerOpinions(t *testing.T) []byte {
-	t.Helper()
-	var lo fetch.LayerOpinion
-	lo.Cert = &types.Certificate{
-		BlockID: types.RandomBlockID(),
-	}
-	data, err := codec.Encode(&lo)
-	require.NoError(t, err)
-	return data
-}
-
 func generateLayerOpinions2(t *testing.T, bid *types.BlockID) []byte {
 	t.Helper()
-	lo := &fetch.LayerOpinion2{
+	lo := &fetch.LayerOpinion{
 		PrevAggHash: types.RandomHash(),
 		Certified:   bid,
 	}
@@ -230,58 +219,6 @@ func TestDataFetch_PollLayerOpinions(t *testing.T) {
 	lid := types.LayerID(10)
 	pe := errors.New("meh")
 	tt := []struct {
-		name  string
-		err   error
-		pErrs []error
-	}{
-		{
-			name:  "all peers",
-			pErrs: []error{nil, nil, nil, nil},
-		},
-		{
-			name:  "some peers have errors",
-			pErrs: []error{pe, pe, nil, nil},
-		},
-		{
-			name:  "all peers have errors",
-			pErrs: []error{pe, pe, pe, pe},
-			err:   pe,
-		},
-	}
-
-	for _, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			td := newTestDataFetch(t)
-			td.mFetcher.EXPECT().GetLayerOpinions(gomock.Any(), peers, lid, gomock.Any(), gomock.Any()).DoAndReturn(
-				func(_ context.Context, _ []p2p.Peer, _ types.LayerID, okCB func([]byte, p2p.Peer), errCB func(error, p2p.Peer)) error {
-					for i, peer := range peers {
-						if tc.pErrs[i] != nil {
-							errCB(tc.pErrs[i], peer)
-						} else {
-							okCB(generateLayerOpinions(t), peer)
-						}
-					}
-					return nil
-				})
-
-			got, err := td.PollLayerOpinions(context.TODO(), lid, peers)
-			require.ErrorIs(t, err, tc.err)
-			if err == nil {
-				require.NotEmpty(t, got)
-			}
-		})
-	}
-}
-
-func TestDataFetch_PollLayerOpinions2(t *testing.T) {
-	const numPeers = 4
-	peers := GenPeers(numPeers)
-	lid := types.LayerID(10)
-	pe := errors.New("meh")
-	tt := []struct {
 		name                      string
 		needCert                  bool
 		err, cErr                 error
@@ -335,7 +272,7 @@ func TestDataFetch_PollLayerOpinions2(t *testing.T) {
 			t.Parallel()
 
 			td := newTestDataFetch(t)
-			td.mFetcher.EXPECT().GetLayerOpinions2(gomock.Any(), peers, lid, gomock.Any(), gomock.Any()).DoAndReturn(
+			td.mFetcher.EXPECT().GetLayerOpinions(gomock.Any(), peers, lid, gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ context.Context, _ []p2p.Peer, _ types.LayerID, okCB func([]byte, p2p.Peer), errCB func(error, p2p.Peer)) error {
 					for i, peer := range peers {
 						if tc.pErrs[i] != nil {
@@ -366,7 +303,7 @@ func TestDataFetch_PollLayerOpinions2(t *testing.T) {
 					return nil
 				})
 
-			got, certs, err := td.PollLayerOpinions2(context.TODO(), lid, tc.needCert, peers)
+			got, certs, err := td.PollLayerOpinions(context.TODO(), lid, tc.needCert, peers)
 			require.ErrorIs(t, err, tc.err)
 			if err == nil {
 				require.NotEmpty(t, got)

@@ -142,68 +142,12 @@ func (s *Syncer) layerOpinions(ctx context.Context, lid types.LayerID) ([]*peerO
 		return nil, nil, errNoPeers
 	}
 
-	if !s.cfg.UseNewProtocol {
-		return s.fetchOpinions(ctx, lid, peers)
-	}
-
-	remaining := make(map[p2p.Peer]struct{}, len(peers))
-	v2peers := make([]p2p.Peer, 0, len(peers))
-	for _, peer := range peers {
-		remaining[peer] = struct{}{}
-		if protocols, err := s.dataFetcher.PeerProtocols(peer); err == nil {
-			for _, p := range protocols {
-				if p == fetch.OpnProtocol {
-					v2peers = append(v2peers, peer)
-					break
-				}
-			}
-		}
-	}
-	if len(v2peers) == 0 {
-		return s.fetchOpinions(ctx, lid, peers)
-	}
-
-	var (
-		results []*peerOpinion
-		certs   []*types.Certificate
-		err     error
-	)
-	results, certs, err = s.fetchOpinions2(ctx, lid, v2peers)
-	if err == nil {
-		if len(v2peers) == len(peers) {
-			return results, certs, nil
-		}
-		for _, p := range v2peers {
-			delete(remaining, p)
-		}
-	}
-	// number of v2 peers are not sufficient.
-	knownCerts := map[types.BlockID]struct{}{}
-	for _, cert := range certs {
-		knownCerts[cert.BlockID] = struct{}{}
-	}
-	v1peers := maps.Keys(remaining)
-	v1results, v1certs, err := s.fetchOpinions(ctx, lid, v1peers)
-	if err != nil {
-		return nil, nil, err
-	}
-	results = append(results, v1results...)
-	for _, cert := range v1certs {
-		if _, ok := knownCerts[cert.BlockID]; !ok {
-			knownCerts[cert.BlockID] = struct{}{}
-			certs = append(certs, cert)
-		}
-	}
-	return results, certs, nil
-}
-
-func (s *Syncer) fetchOpinions2(ctx context.Context, lid types.LayerID, peers []p2p.Peer) ([]*peerOpinion, []*types.Certificate, error) {
 	v2OpnPoll.Inc()
 	needCert, err := s.needCert(ctx, lid)
 	if err != nil {
 		return nil, nil, err
 	}
-	opinions, certs, err := s.dataFetcher.PollLayerOpinions2(ctx, lid, needCert, peers)
+	opinions, certs, err := s.dataFetcher.PollLayerOpinions(ctx, lid, needCert, peers)
 	if err != nil {
 		v2OpnErr.Inc()
 		s.logger.WithContext(ctx).With().Debug("failed to fetch opinions2",
@@ -223,38 +167,6 @@ func (s *Syncer) fetchOpinions2(ctx context.Context, lid types.LayerID, peers []
 	}
 	opinionLayer.Set(float64(lid))
 	return result, certs, nil
-}
-
-func (s *Syncer) fetchOpinions(ctx context.Context, lid types.LayerID, peers []p2p.Peer) ([]*peerOpinion, []*types.Certificate, error) {
-	v1OpnPoll.Inc()
-	opinions, err := s.dataFetcher.PollLayerOpinions(ctx, lid, peers)
-	if err != nil {
-		v1OpnErr.Inc()
-		s.logger.WithContext(ctx).With().Debug("failed to fetch opinions",
-			lid,
-			log.Int("peers", len(peers)),
-			log.Err(err),
-		)
-		return nil, nil, fmt.Errorf("PollLayerOpinions: %w", err)
-	}
-	var (
-		result = make([]*peerOpinion, 0, len(opinions))
-		certs  = map[types.BlockID]*types.Certificate{}
-	)
-	for _, opn := range opinions {
-		result = append(result, &peerOpinion{
-			prevAggHash: opn.PrevAggHash,
-			peer:        opn.Peer(),
-		})
-		if opn.Cert != nil {
-			certs[opn.Cert.BlockID] = opn.Cert
-			if opn.Cert.BlockID != types.EmptyBlockID {
-				s.dataFetcher.RegisterPeerHashes(opn.Peer(), []types.Hash32{opn.Cert.BlockID.AsHash32()})
-			}
-		}
-	}
-	opinionLayer.Set(float64(lid))
-	return result, maps.Values(certs), nil
 }
 
 func (s *Syncer) checkMeshAgreement(ctx context.Context, lid types.LayerID, opinions []*peerOpinion) error {
