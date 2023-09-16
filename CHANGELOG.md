@@ -15,7 +15,7 @@ It defaults to 9 minutes so there is enough time to retry if the request fails.
 
 ### Improvements
 
-## v1.1.5
+## v1.1.6
 
 ### Upgrade information
 
@@ -36,6 +36,8 @@ active set will not be gossipped together with proposals. That was the main netw
 * [#4956](https://github.com/spacemeshos/go-spacemesh/pull/4956) Active set is will not be gossipped in every proposal.
   Active set usually contains list of atxs that targets current epoch. As the number of atxs grows this object grows as well.
 * [#4993](https://github.com/spacemeshos/go-spacemesh/pull/4993) Drop proposals after genering a block. This limits growth of the state.
+* [#5020](https://github.com/spacemeshos/go-spacemesh/pull/5020) Do not process proposals from old/deleted layers.
+  This fixes I/O issues observed on HDD miners caused by [#4993](https://github.com/spacemeshos/go-spacemesh/pull/4993).
 
 ## v1.1.4
 
