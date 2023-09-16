@@ -186,7 +186,7 @@ func decodeProposal(stmt *sql.Statement) (*types.Proposal, error) {
 	return proposal, nil
 }
 
-func Delete(db sql.Executor, lid types.LayerID) error {
+func DeleteBefore(db sql.Executor, lid types.LayerID) error {
 	if _, err := db.Exec(`delete from proposals where layer < ?1;`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(lid))

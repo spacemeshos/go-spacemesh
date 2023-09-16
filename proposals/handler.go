@@ -262,6 +262,11 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 		preGenesis.Inc()
 		return fmt.Errorf("proposal before effective genesis: layer %v", p.Layer)
 	}
+	if p.Layer <= h.mesh.ProcessedLayer() {
+		// old proposals have no use for the node
+		tooLate.Inc()
+		return fmt.Errorf("proposal too late: layer %v", p.Layer)
+	}
 
 	latency := receivedTime.Sub(h.clock.LayerToTime(p.Layer))
 	metrics.ReportMessageLatency(pubsub.ProposalProtocol, pubsub.ProposalProtocol, latency)
@@ -311,7 +316,9 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 	}
 	proposalDuration.WithLabelValues(dbLookup).Observe(float64(time.Since(t1)))
 
-	logger.With().Info("new proposal", log.Int("num_txs", len(p.TxIDs)))
+	logger.With().Info("new proposal",
+		log.String("exp hash", expHash.ShortString()),
+		log.Int("num_txs", len(p.TxIDs)))
 	t2 := time.Now()
 	h.fetcher.RegisterPeerHashes(peer, collectHashes(p))
 	proposalDuration.WithLabelValues(peerHashes).Observe(float64(time.Since(t2)))
