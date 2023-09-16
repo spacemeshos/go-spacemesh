@@ -94,7 +94,6 @@ type BaseConfig struct {
 	ProfilerURL  string `mapstructure:"profiler-url"`
 
 	LayerDuration  time.Duration `mapstructure:"layer-duration"`
-	LegacyLayer    uint32        `mapstructure:"legacy-layer"`
 	LayerAvgSize   uint32        `mapstructure:"layer-average-size"`
 	LayersPerEpoch uint32        `mapstructure:"layers-per-epoch"`
 

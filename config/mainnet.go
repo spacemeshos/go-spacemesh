@@ -45,11 +45,8 @@ func MainnetConfig() Config {
 			DatabaseConnections: 16,
 			NetworkHRP:          "sm",
 
-			LayerDuration: 5 * time.Minute,
-			LayerAvgSize:  50,
-			// NOTE(dshulyak) this is only used to stop atx grading in hare.
-			// we should refactor that too.
-			LegacyLayer:    8180,
+			LayerDuration:  5 * time.Minute,
+			LayerAvgSize:   50,
 			LayersPerEpoch: 4032,
 
 			TxsPerProposal: 700,       // https://github.com/spacemeshos/go-spacemesh/issues/4559
