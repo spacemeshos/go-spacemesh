@@ -60,6 +60,7 @@ func (ms *mockSet) decodeAnyBallots() *mockSet {
 
 func (ms *mockSet) setCurrentLayer(layer types.LayerID) *mockSet {
 	ms.mclock.EXPECT().CurrentLayer().Return(layer).AnyTimes()
+	ms.mm.EXPECT().ProcessedLayer().Return(layer - 1).AnyTimes()
 	ms.mclock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now().Add(-5 * time.Second)).AnyTimes()
 	return ms
 }
@@ -877,7 +878,7 @@ func TestProposal_BeforeEffectiveGenesis(t *testing.T) {
 	checkProposal(t, th.cdb, p, false)
 }
 
-func TestProposal_NotCurrentLayer(t *testing.T) {
+func TestProposal_TooOld(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	lid := types.LayerID(11)
 	th.mockSet.setCurrentLayer(lid)
@@ -1486,7 +1487,7 @@ func TestHandleSyncedProposalActiveSet(t *testing.T) {
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			th := createTestHandler(t)
-			th.mclock.EXPECT().CurrentLayer().Return(acceptEmpty - 1).AnyTimes()
+			th.mm.EXPECT().ProcessedLayer().Return(acceptEmpty - 2).AnyTimes()
 			th.cfg.AllowEmptyActiveSet = acceptEmpty
 			pid := p2p.Peer("any")
 

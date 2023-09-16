@@ -11,6 +11,7 @@ import (
 //go:generate mockgen -typed -package=proposals -destination=./mocks.go -source=./interface.go
 
 type meshProvider interface {
+	ProcessedLayer() types.LayerID
 	AddBallot(context.Context, *types.Ballot) (*types.MalfeasanceProof, error)
 	AddTXsFromProposal(context.Context, types.LayerID, types.ProposalID, []types.TransactionID) error
 }

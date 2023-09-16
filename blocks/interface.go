@@ -14,6 +14,7 @@ type layerPatrol interface {
 }
 
 type meshProvider interface {
+	LatestLayerInState() types.LayerID
 	AddBlockWithTXs(context.Context, *types.Block) error
 	ProcessLayerPerHareOutput(context.Context, types.LayerID, types.BlockID, bool) error
 }

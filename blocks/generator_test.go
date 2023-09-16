@@ -69,6 +69,7 @@ func createTestGenerator(t *testing.T) *testGenerator {
 		mockCert:   mocks.NewMockcertifier(ctrl),
 		mockPatrol: mocks.NewMocklayerPatrol(ctrl),
 	}
+	tg.mockMesh.EXPECT().LatestLayerInState().Return(types.LayerID(1)).AnyTimes()
 	lg := logtest.New(t)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
 	tg.Generator = NewGenerator(cdb, tg.mockExec, tg.mockMesh, tg.mockFetch, tg.mockCert, tg.mockPatrol,

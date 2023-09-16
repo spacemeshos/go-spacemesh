@@ -262,7 +262,7 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 		preGenesis.Inc()
 		return fmt.Errorf("proposal before effective genesis: layer %v", p.Layer)
 	}
-	if p.Layer < h.clock.CurrentLayer() {
+	if p.Layer <= h.mesh.ProcessedLayer() {
 		// old proposals have no use for the node
 		tooLate.Inc()
 		return fmt.Errorf("proposal too late: layer %v", p.Layer)

@@ -133,6 +133,44 @@ func (c *meshProviderAddBlockWithTXsCall) DoAndReturn(f func(context.Context, *t
 	return c
 }
 
+// LatestLayerInState mocks base method.
+func (m *MockmeshProvider) LatestLayerInState() types.LayerID {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LatestLayerInState")
+	ret0, _ := ret[0].(types.LayerID)
+	return ret0
+}
+
+// LatestLayerInState indicates an expected call of LatestLayerInState.
+func (mr *MockmeshProviderMockRecorder) LatestLayerInState() *meshProviderLatestLayerInStateCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LatestLayerInState", reflect.TypeOf((*MockmeshProvider)(nil).LatestLayerInState))
+	return &meshProviderLatestLayerInStateCall{Call: call}
+}
+
+// meshProviderLatestLayerInStateCall wrap *gomock.Call
+type meshProviderLatestLayerInStateCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *meshProviderLatestLayerInStateCall) Return(arg0 types.LayerID) *meshProviderLatestLayerInStateCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *meshProviderLatestLayerInStateCall) Do(f func() types.LayerID) *meshProviderLatestLayerInStateCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *meshProviderLatestLayerInStateCall) DoAndReturn(f func() types.LayerID) *meshProviderLatestLayerInStateCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // ProcessLayerPerHareOutput mocks base method.
 func (m *MockmeshProvider) ProcessLayerPerHareOutput(arg0 context.Context, arg1 types.LayerID, arg2 types.BlockID, arg3 bool) error {
 	m.ctrl.T.Helper()
