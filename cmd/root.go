@@ -115,7 +115,6 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.P2P.AdvertiseAddress, "libp2p address with identity (example: /dns4/bootnode.spacemesh.io/tcp/5003)")
 	cmd.PersistentFlags().BoolVar(&cfg.P2P.Bootnode, "p2p-bootnode", cfg.P2P.Bootnode,
 		"gossipsub and discovery will be running in a mode suitable for bootnode")
-	cmd.PersistentFlags().BoolVar(&cfg.P2P.DisableLegacyDiscovery, "p2p-disable-legacy-discovery", cfg.P2P.DisableLegacyDiscovery, "custom legacy discovery is disabled")
 	cmd.PersistentFlags().BoolVar(&cfg.P2P.PrivateNetwork, "p2p-private-network", cfg.P2P.PrivateNetwork, "discovery will work in private mode. mostly useful for testing, don't set in public networks")
 	/** ======================== TIME Flags ========================== **/
 

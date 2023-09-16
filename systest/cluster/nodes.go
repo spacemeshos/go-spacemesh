@@ -730,7 +730,3 @@ func Bootnode() DeploymentFlag {
 func PrivateNetwork() DeploymentFlag {
 	return DeploymentFlag{Name: "--p2p-private-network", Value: fmt.Sprintf("%v", true)}
 }
-
-func DisableLegacyDiscovery() DeploymentFlag {
-	return DeploymentFlag{Name: "--p2p-disable-legacy-discovery", Value: fmt.Sprintf("%v", true)}
-}
