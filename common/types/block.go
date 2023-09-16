@@ -109,6 +109,8 @@ type AnyReward struct {
 // CoinbaseReward contains the reward information by coinbase, used as an interface to VM.
 type CoinbaseReward struct {
 	Coinbase Address
+	AtxID    ATXID
+	NodeID   NodeID
 	Weight   RatNum
 }
 

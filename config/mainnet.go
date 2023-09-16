@@ -17,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
+	"github.com/spacemeshos/go-spacemesh/nats"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
@@ -128,6 +129,7 @@ func MainnetConfig() Config {
 		},
 		P2P:      p2pconfig,
 		API:      grpcserver.DefaultConfig(),
+		NATS:     nats.DefaultConfig(),
 		TIME:     timeConfig.DefaultConfig(),
 		SMESHING: smeshing,
 		FETCH:    fetch.DefaultConfig(),

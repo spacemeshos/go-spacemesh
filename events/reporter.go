@@ -202,6 +202,22 @@ func SubscribeTxs() Subscription {
 	return nil
 }
 
+// SubscribeTxsResult subscribes to new transactions.
+func SubscribeTxsResult() Subscription {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	if reporter != nil {
+		sub, err := reporter.bus.Subscribe(new(types.TransactionWithResult))
+		if err != nil {
+			log.With().Panic("Failed to subscribe to transactions result")
+		}
+
+		return sub
+	}
+	return nil
+}
+
 // SubscribeActivations subscribes to activations.
 func SubscribeActivations() Subscription {
 	mu.RLock()
@@ -386,6 +402,8 @@ type Reward struct {
 	Total       uint64
 	LayerReward uint64
 	Coinbase    types.Address
+	AtxID       types.ATXID
+	NodeID      types.NodeID
 }
 
 // Transaction wraps a tx with its layer ID and validity info.

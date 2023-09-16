@@ -60,6 +60,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/metrics/public"
 	"github.com/spacemeshos/go-spacemesh/miner"
+	"github.com/spacemeshos/go-spacemesh/nats"
 	"github.com/spacemeshos/go-spacemesh/node/mapstructureutil"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -320,6 +321,7 @@ type App struct {
 	Config             *config.Config
 	db                 *sql.Database
 	dbMetrics          *dbmetrics.DBMetricsCollector
+	natsConnector      *nats.NatsConnector
 	grpcPublicService  *grpcserver.Server
 	grpcPrivateService *grpcserver.Server
 	jsonAPIService     *grpcserver.JSONHTTPServer
@@ -1184,6 +1186,11 @@ func (app *App) stopServices(ctx context.Context) {
 		_ = app.grpcPrivateService.Close()
 	}
 
+	if app.natsConnector != nil {
+		app.log.Info("stopping nats connector")
+		app.natsConnector.Close()
+	}
+
 	if app.updater != nil {
 		app.log.Info("stopping updater")
 		app.updater.Close()
@@ -1470,6 +1477,13 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 
 	if app.Config.CollectMetrics {
 		metrics.StartMetricsServer(app.Config.MetricsPort)
+	}
+
+	if app.Config.NATS.NatsEnabled {
+		app.natsConnector, err = nats.NewNatsConnector(app.Config.NATS)
+		if err != nil {
+			return fmt.Errorf("cannot start services: %w", err)
+		}
 	}
 
 	if app.Config.PublicMetrics.MetricsURL != "" {

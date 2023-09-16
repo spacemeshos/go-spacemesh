@@ -263,6 +263,8 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []ty
 			Total:       reward.TotalReward,
 			LayerReward: reward.LayerReward,
 			Coinbase:    reward.Coinbase,
+			AtxID:       reward.AtxID,
+			NodeID:      reward.NodeID,
 		})
 	}
 

@@ -173,6 +173,8 @@ func (e *Executor) convertRewards(rewards []types.AnyReward) ([]types.CoinbaseRe
 		res = append(res, types.CoinbaseReward{
 			Coinbase: atx.Coinbase,
 			Weight:   r.Weight,
+			AtxID:    r.AtxID,
+			NodeID:   atx.NodeID,
 		})
 	}
 	sort.Slice(res, func(i, j int) bool {
