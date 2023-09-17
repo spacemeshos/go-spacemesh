@@ -1,4 +1,4 @@
-package mesh
+package prune
 
 import (
 	"context"
@@ -11,9 +11,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/mesh/mocks"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/proposals"
@@ -23,7 +21,7 @@ import (
 func TestPrune(t *testing.T) {
 	db := sql.InMemory()
 	current := types.LayerID(10)
-	mc := mocks.NewMocklayerClock(gomock.NewController(t))
+	mc := NewMocklayerClock(gomock.NewController(t))
 	done := make(chan struct{})
 	count := 0
 	mc.EXPECT().CurrentLayer().DoAndReturn(func() types.LayerID {
@@ -93,41 +91,5 @@ func TestPrune(t *testing.T) {
 		}
 	}, time.Second, 10*time.Millisecond)
 	cancel()
-	eg.Wait()
-}
-
-func TestExtractActiveSet(t *testing.T) {
-	db := sql.InMemory()
-	current := types.LayerID(20)
-	blts := make([]*types.Ballot, 0, current)
-	hashes := []types.Hash32{types.RandomHash(), types.RandomHash()}
-	actives := [][]types.ATXID{types.RandomActiveSet(11), types.RandomActiveSet(19)}
-	for lid := types.EpochID(2).FirstLayer(); lid < current; lid++ {
-		blt := types.NewExistingBallot(types.RandomBallotID(), types.RandomEdSignature(), types.NodeID{1}, lid)
-		if lid%3 == 0 {
-			blt.EpochData = &types.EpochData{
-				ActiveSetHash: hashes[0],
-			}
-			blt.ActiveSet = actives[0]
-		}
-		if lid%3 == 1 {
-			blt.EpochData = &types.EpochData{
-				ActiveSetHash: hashes[1],
-			}
-			blt.ActiveSet = actives[1]
-		}
-		require.NoError(t, ballots.Add(db, &blt))
-		blts = append(blts, &blt)
-	}
-	require.NoError(t, ExtractActiveSet(db))
-	for _, b := range blts {
-		got, err := ballots.Get(db, b.ID())
-		require.NoError(t, err)
-		require.Empty(t, got.ActiveSet)
-	}
-	for i, h := range hashes {
-		got, err := activesets.Get(db, h)
-		require.NoError(t, err)
-		require.Equal(t, actives[i], got.Set)
-	}
+	require.NoError(t, eg.Wait())
 }

@@ -20,15 +20,4 @@ var (
 		[]string{},
 		prometheus.ExponentialBuckets(1, 2, 16),
 	)
-
-	pruneLatency = metrics.NewHistogramWithBuckets(
-		"prune_seconds",
-		Subsystem,
-		"prune time in seconds",
-		[]string{"step"},
-		prometheus.ExponentialBuckets(0.01, 2, 10),
-	)
-	PruneProposalLatency = pruneLatency.WithLabelValues("proposal")
-	PruneCertLatency     = pruneLatency.WithLabelValues("cert")
-	PrunePropTxLatency   = pruneLatency.WithLabelValues("proptxs")
 )

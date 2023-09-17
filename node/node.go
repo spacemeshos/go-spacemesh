@@ -63,8 +63,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/proposals"
+	"github.com/spacemeshos/go-spacemesh/prune"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/ballots/util"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
 	"github.com/spacemeshos/go-spacemesh/syncer"
@@ -645,7 +647,7 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 
 	app.eg.Go(func() error {
-		mesh.Prune(ctx, mlog.Zap(), app.db, app.clock, app.Config.HareEligibility.ConfidenceParam, app.Config.DatabasePruneInterval)
+		prune.Prune(ctx, mlog.Zap(), app.db, app.clock, app.Config.Tortoise.Hdist, app.Config.DatabasePruneInterval)
 		return nil
 	})
 
@@ -1336,7 +1338,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	sqlDB, err := sql.Open("file:"+filepath.Join(dbPath, dbFile),
 		sql.WithConnections(app.Config.DatabaseConnections),
 		sql.WithLatencyMetering(app.Config.DatabaseLatencyMetering),
-		sql.WithV4PreMigration(mesh.ExtractActiveSet),
+		sql.WithV4Migration(util.ExtractActiveSet),
 	)
 	if err != nil {
 		return fmt.Errorf("open sqlite db %w", err)

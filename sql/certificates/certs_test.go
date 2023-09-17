@@ -165,7 +165,7 @@ func TestDeleteCert(t *testing.T) {
 	require.NoError(t, Add(db, types.LayerID(2), &types.Certificate{BlockID: types.BlockID{2}}))
 	require.NoError(t, Add(db, types.LayerID(3), &types.Certificate{BlockID: types.BlockID{3}}))
 	require.NoError(t, Add(db, types.LayerID(4), &types.Certificate{BlockID: types.BlockID{4}}))
-	require.NoError(t, DeleteCert(db, 4))
+	require.NoError(t, DeleteCertBefore(db, 4))
 
 	_, err := CertifiedBlock(db, types.LayerID(2))
 	require.ErrorIs(t, err, sql.ErrNotFound)

@@ -61,7 +61,7 @@ type conf struct {
 	enableLatency bool
 
 	// TODO: remove after state is pruned for majority
-	v4preMigration func(Executor) error
+	v4Migration func(Executor) error
 }
 
 // WithConnections overwrites number of pooled connections.
@@ -78,9 +78,9 @@ func WithMigrations(migrations Migrations) Opt {
 	}
 }
 
-func WithV4PreMigration(cb func(Executor) error) Opt {
+func WithV4Migration(cb func(Executor) error) Opt {
 	return func(c *conf) {
-		c.v4preMigration = cb
+		c.v4Migration = cb
 	}
 }
 
@@ -129,11 +129,6 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 		if err != nil {
 			return nil, err
 		}
-		if before == 3 && config.v4preMigration != nil {
-			if err := config.v4preMigration(db); err != nil {
-				return nil, err
-			}
-		}
 		tx, err := db.Tx(context.Background())
 		if err != nil {
 			return nil, err
@@ -146,7 +141,15 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 		if err != nil {
 			return nil, err
 		}
-		if before == 3 {
+		after, err := version(db)
+		if err != nil {
+			return nil, err
+		}
+		if before <= 3 && after == 4 && config.v4Migration != nil {
+			// v4 migration (active set extraction) needs the 3rd migration to execute first
+			if err := config.v4Migration(db); err != nil {
+				return nil, err
+			}
 			if err := Vacuum(db); err != nil {
 				return nil, err
 			}

@@ -30,14 +30,6 @@ var (
 	failFetchCnt   = blockGenCount.WithLabelValues(failFetch)
 	failGenCnt     = blockGenCount.WithLabelValues(failGen)
 	failErrCnt     = blockGenCount.WithLabelValues(internalErr)
-
-	deleteLatency = metrics.NewHistogramWithBuckets(
-		"delete_duration",
-		namespace,
-		"duration in second to delete old proposals",
-		[]string{},
-		prometheus.ExponentialBuckets(0.01, 2, 10),
-	).WithLabelValues()
 )
 
 type collector struct {

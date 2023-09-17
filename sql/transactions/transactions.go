@@ -59,7 +59,7 @@ func AddToProposal(db sql.Executor, tid types.TransactionID, lid types.LayerID, 
 	return nil
 }
 
-func DeleteProposalTxs(db sql.Executor, lid types.LayerID) error {
+func DeleteProposalTxsBefore(db sql.Executor, lid types.LayerID) error {
 	if _, err := db.Exec(`
 		delete from proposal_transactions where layer < ?1;`,
 		func(stmt *sql.Statement) {

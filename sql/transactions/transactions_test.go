@@ -168,7 +168,7 @@ func TestDeleteProposalTxs(t *testing.T) {
 			}
 		}
 	}
-	require.NoError(t, transactions.DeleteProposalTxs(db, types.LayerID(11)))
+	require.NoError(t, transactions.DeleteProposalTxsBefore(db, types.LayerID(11)))
 	for _, pid := range proposals[types.LayerID(10)] {
 		for _, tid := range tids {
 			has, err := transactions.HasProposalTX(db, pid, tid)
