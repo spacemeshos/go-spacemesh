@@ -9,7 +9,6 @@ import (
 	reflect "reflect"
 	time "time"
 
-	protocol "github.com/libp2p/go-libp2p/core/protocol"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	fetch "github.com/spacemeshos/go-spacemesh/fetch"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
@@ -487,44 +486,6 @@ func (c *fetchLogicGetLayerOpinionsCall) DoAndReturn(f func(context.Context, []p
 	return c
 }
 
-// GetLayerOpinions2 mocks base method.
-func (m *MockfetchLogic) GetLayerOpinions2(arg0 context.Context, arg1 []p2p.Peer, arg2 types.LayerID, arg3 func([]byte, p2p.Peer), arg4 func(error, p2p.Peer)) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetLayerOpinions2", arg0, arg1, arg2, arg3, arg4)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// GetLayerOpinions2 indicates an expected call of GetLayerOpinions2.
-func (mr *MockfetchLogicMockRecorder) GetLayerOpinions2(arg0, arg1, arg2, arg3, arg4 interface{}) *fetchLogicGetLayerOpinions2Call {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerOpinions2", reflect.TypeOf((*MockfetchLogic)(nil).GetLayerOpinions2), arg0, arg1, arg2, arg3, arg4)
-	return &fetchLogicGetLayerOpinions2Call{Call: call}
-}
-
-// fetchLogicGetLayerOpinions2Call wrap *gomock.Call
-type fetchLogicGetLayerOpinions2Call struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *fetchLogicGetLayerOpinions2Call) Return(arg0 error) *fetchLogicGetLayerOpinions2Call {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *fetchLogicGetLayerOpinions2Call) Do(f func(context.Context, []p2p.Peer, types.LayerID, func([]byte, p2p.Peer), func(error, p2p.Peer)) error) *fetchLogicGetLayerOpinions2Call {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *fetchLogicGetLayerOpinions2Call) DoAndReturn(f func(context.Context, []p2p.Peer, types.LayerID, func([]byte, p2p.Peer), func(error, p2p.Peer)) error) *fetchLogicGetLayerOpinions2Call {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // GetMalfeasanceProofs mocks base method.
 func (m *MockfetchLogic) GetMalfeasanceProofs(arg0 context.Context, arg1 []types.NodeID) error {
 	m.ctrl.T.Helper()
@@ -717,45 +678,6 @@ func (c *fetchLogicPeerMeshHashesCall) DoAndReturn(f func(context.Context, p2p.P
 	return c
 }
 
-// PeerProtocols mocks base method.
-func (m *MockfetchLogic) PeerProtocols(arg0 p2p.Peer) ([]protocol.ID, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PeerProtocols", arg0)
-	ret0, _ := ret[0].([]protocol.ID)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// PeerProtocols indicates an expected call of PeerProtocols.
-func (mr *MockfetchLogicMockRecorder) PeerProtocols(arg0 interface{}) *fetchLogicPeerProtocolsCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PeerProtocols", reflect.TypeOf((*MockfetchLogic)(nil).PeerProtocols), arg0)
-	return &fetchLogicPeerProtocolsCall{Call: call}
-}
-
-// fetchLogicPeerProtocolsCall wrap *gomock.Call
-type fetchLogicPeerProtocolsCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *fetchLogicPeerProtocolsCall) Return(arg0 []protocol.ID, arg1 error) *fetchLogicPeerProtocolsCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *fetchLogicPeerProtocolsCall) Do(f func(p2p.Peer) ([]protocol.ID, error)) *fetchLogicPeerProtocolsCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *fetchLogicPeerProtocolsCall) DoAndReturn(f func(p2p.Peer) ([]protocol.ID, error)) *fetchLogicPeerProtocolsCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // PollLayerData mocks base method.
 func (m *MockfetchLogic) PollLayerData(arg0 context.Context, arg1 types.LayerID, arg2 ...p2p.Peer) error {
 	m.ctrl.T.Helper()
@@ -800,18 +722,19 @@ func (c *fetchLogicPollLayerDataCall) DoAndReturn(f func(context.Context, types.
 }
 
 // PollLayerOpinions mocks base method.
-func (m *MockfetchLogic) PollLayerOpinions(arg0 context.Context, arg1 types.LayerID, arg2 []p2p.Peer) ([]*fetch.LayerOpinion, error) {
+func (m *MockfetchLogic) PollLayerOpinions(arg0 context.Context, arg1 types.LayerID, arg2 bool, arg3 []p2p.Peer) ([]*fetch.LayerOpinion, []*types.Certificate, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PollLayerOpinions", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "PollLayerOpinions", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].([]*fetch.LayerOpinion)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret1, _ := ret[1].([]*types.Certificate)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
 }
 
 // PollLayerOpinions indicates an expected call of PollLayerOpinions.
-func (mr *MockfetchLogicMockRecorder) PollLayerOpinions(arg0, arg1, arg2 interface{}) *fetchLogicPollLayerOpinionsCall {
+func (mr *MockfetchLogicMockRecorder) PollLayerOpinions(arg0, arg1, arg2, arg3 interface{}) *fetchLogicPollLayerOpinionsCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PollLayerOpinions", reflect.TypeOf((*MockfetchLogic)(nil).PollLayerOpinions), arg0, arg1, arg2)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PollLayerOpinions", reflect.TypeOf((*MockfetchLogic)(nil).PollLayerOpinions), arg0, arg1, arg2, arg3)
 	return &fetchLogicPollLayerOpinionsCall{Call: call}
 }
 
@@ -821,59 +744,19 @@ type fetchLogicPollLayerOpinionsCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *fetchLogicPollLayerOpinionsCall) Return(arg0 []*fetch.LayerOpinion, arg1 error) *fetchLogicPollLayerOpinionsCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *fetchLogicPollLayerOpinionsCall) Do(f func(context.Context, types.LayerID, []p2p.Peer) ([]*fetch.LayerOpinion, error)) *fetchLogicPollLayerOpinionsCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *fetchLogicPollLayerOpinionsCall) DoAndReturn(f func(context.Context, types.LayerID, []p2p.Peer) ([]*fetch.LayerOpinion, error)) *fetchLogicPollLayerOpinionsCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// PollLayerOpinions2 mocks base method.
-func (m *MockfetchLogic) PollLayerOpinions2(arg0 context.Context, arg1 types.LayerID, arg2 bool, arg3 []p2p.Peer) ([]*fetch.LayerOpinion2, []*types.Certificate, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PollLayerOpinions2", arg0, arg1, arg2, arg3)
-	ret0, _ := ret[0].([]*fetch.LayerOpinion2)
-	ret1, _ := ret[1].([]*types.Certificate)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
-}
-
-// PollLayerOpinions2 indicates an expected call of PollLayerOpinions2.
-func (mr *MockfetchLogicMockRecorder) PollLayerOpinions2(arg0, arg1, arg2, arg3 interface{}) *fetchLogicPollLayerOpinions2Call {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PollLayerOpinions2", reflect.TypeOf((*MockfetchLogic)(nil).PollLayerOpinions2), arg0, arg1, arg2, arg3)
-	return &fetchLogicPollLayerOpinions2Call{Call: call}
-}
-
-// fetchLogicPollLayerOpinions2Call wrap *gomock.Call
-type fetchLogicPollLayerOpinions2Call struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *fetchLogicPollLayerOpinions2Call) Return(arg0 []*fetch.LayerOpinion2, arg1 []*types.Certificate, arg2 error) *fetchLogicPollLayerOpinions2Call {
+func (c *fetchLogicPollLayerOpinionsCall) Return(arg0 []*fetch.LayerOpinion, arg1 []*types.Certificate, arg2 error) *fetchLogicPollLayerOpinionsCall {
 	c.Call = c.Call.Return(arg0, arg1, arg2)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *fetchLogicPollLayerOpinions2Call) Do(f func(context.Context, types.LayerID, bool, []p2p.Peer) ([]*fetch.LayerOpinion2, []*types.Certificate, error)) *fetchLogicPollLayerOpinions2Call {
+func (c *fetchLogicPollLayerOpinionsCall) Do(f func(context.Context, types.LayerID, bool, []p2p.Peer) ([]*fetch.LayerOpinion, []*types.Certificate, error)) *fetchLogicPollLayerOpinionsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *fetchLogicPollLayerOpinions2Call) DoAndReturn(f func(context.Context, types.LayerID, bool, []p2p.Peer) ([]*fetch.LayerOpinion2, []*types.Certificate, error)) *fetchLogicPollLayerOpinions2Call {
+func (c *fetchLogicPollLayerOpinionsCall) DoAndReturn(f func(context.Context, types.LayerID, bool, []p2p.Peer) ([]*fetch.LayerOpinion, []*types.Certificate, error)) *fetchLogicPollLayerOpinionsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -1204,44 +1087,6 @@ func (c *fetcherGetLayerOpinionsCall) DoAndReturn(f func(context.Context, []p2p.
 	return c
 }
 
-// GetLayerOpinions2 mocks base method.
-func (m *Mockfetcher) GetLayerOpinions2(arg0 context.Context, arg1 []p2p.Peer, arg2 types.LayerID, arg3 func([]byte, p2p.Peer), arg4 func(error, p2p.Peer)) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetLayerOpinions2", arg0, arg1, arg2, arg3, arg4)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// GetLayerOpinions2 indicates an expected call of GetLayerOpinions2.
-func (mr *MockfetcherMockRecorder) GetLayerOpinions2(arg0, arg1, arg2, arg3, arg4 interface{}) *fetcherGetLayerOpinions2Call {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerOpinions2", reflect.TypeOf((*Mockfetcher)(nil).GetLayerOpinions2), arg0, arg1, arg2, arg3, arg4)
-	return &fetcherGetLayerOpinions2Call{Call: call}
-}
-
-// fetcherGetLayerOpinions2Call wrap *gomock.Call
-type fetcherGetLayerOpinions2Call struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *fetcherGetLayerOpinions2Call) Return(arg0 error) *fetcherGetLayerOpinions2Call {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *fetcherGetLayerOpinions2Call) Do(f func(context.Context, []p2p.Peer, types.LayerID, func([]byte, p2p.Peer), func(error, p2p.Peer)) error) *fetcherGetLayerOpinions2Call {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *fetcherGetLayerOpinions2Call) DoAndReturn(f func(context.Context, []p2p.Peer, types.LayerID, func([]byte, p2p.Peer), func(error, p2p.Peer)) error) *fetcherGetLayerOpinions2Call {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // GetMalfeasanceProofs mocks base method.
 func (m *Mockfetcher) GetMalfeasanceProofs(arg0 context.Context, arg1 []types.NodeID) error {
 	m.ctrl.T.Helper()
@@ -1430,45 +1275,6 @@ func (c *fetcherPeerMeshHashesCall) Do(f func(context.Context, p2p.Peer, *fetch.
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *fetcherPeerMeshHashesCall) DoAndReturn(f func(context.Context, p2p.Peer, *fetch.MeshHashRequest) (*fetch.MeshHashes, error)) *fetcherPeerMeshHashesCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// PeerProtocols mocks base method.
-func (m *Mockfetcher) PeerProtocols(arg0 p2p.Peer) ([]protocol.ID, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PeerProtocols", arg0)
-	ret0, _ := ret[0].([]protocol.ID)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// PeerProtocols indicates an expected call of PeerProtocols.
-func (mr *MockfetcherMockRecorder) PeerProtocols(arg0 interface{}) *fetcherPeerProtocolsCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PeerProtocols", reflect.TypeOf((*Mockfetcher)(nil).PeerProtocols), arg0)
-	return &fetcherPeerProtocolsCall{Call: call}
-}
-
-// fetcherPeerProtocolsCall wrap *gomock.Call
-type fetcherPeerProtocolsCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *fetcherPeerProtocolsCall) Return(arg0 []protocol.ID, arg1 error) *fetcherPeerProtocolsCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *fetcherPeerProtocolsCall) Do(f func(p2p.Peer) ([]protocol.ID, error)) *fetcherPeerProtocolsCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *fetcherPeerProtocolsCall) DoAndReturn(f func(p2p.Peer) ([]protocol.ID, error)) *fetcherPeerProtocolsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

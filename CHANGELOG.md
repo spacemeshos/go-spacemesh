@@ -9,11 +9,17 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 A new config `poet-request-timeout` has been added, that defines the timeout for requesting PoET proofs.
 It defaults to 9 minutes so there is enough time to retry if the request fails.
 
+Config option and flag `p2p-disable-legacy-discovery` and `disable-dht` have been dropped. DHT has been the
+only p2p discovery mechanism since release v1.1.2.
+
+Support for old certificate sync protocol is dropped. This update is incompatible with v1.0.x series.
+
 ### Highlights
 
 ### Features
 
 ### Improvements
+* [#5021](https://github.com/spacemeshos/go-spacemesh/pull/5021) Drop support for old certificate sync protocol.
 
 ## v1.1.5
 
@@ -53,7 +59,7 @@ to set lower expected latency in the network, eventually reducing layer time.
 
 ### Improvements
 
-* [#4879](https://github.com/spacemeshos/go-spacemesh/pull/4795) Makes majority calculation weighted for optimistic filtering.
+* [#4879](https://github.com/spacemeshos/go-spacemesh/pull/4879) Makes majority calculation weighted for optimistic filtering.
 The network will start using the new algorithm at layer 18_000 (2023-09-14 20:00:00 +0000 UTC)
 * [#4923](https://github.com/spacemeshos/go-spacemesh/pull/4923) Faster ballot eligibility validation. Improves sync speed.
 * [#4934](https://github.com/spacemeshos/go-spacemesh/pull/4934) Ensure state is synced before participating in tortoise consensus.

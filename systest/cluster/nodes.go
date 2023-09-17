@@ -671,20 +671,6 @@ func CheckpointLayer(restoreLayer uint32) DeploymentFlag {
 	return DeploymentFlag{Name: "--recovery-layer", Value: strconv.Itoa(int(restoreLayer))}
 }
 
-func UseNewOpn(use bool) DeploymentFlag {
-	if use {
-		return DeploymentFlag{Name: "--use-new-opn", Value: "true"}
-	}
-	return DeploymentFlag{Name: "--use-new-opn", Value: "false"}
-}
-
-func ServeNewOpn(newSyncProtocol bool) DeploymentFlag {
-	if newSyncProtocol {
-		return DeploymentFlag{Name: "--serve-new-opn", Value: "true"}
-	}
-	return DeploymentFlag{Name: "--serve-new-opn", Value: "false"}
-}
-
 const (
 	genesisTimeFlag  = "--genesis-time"
 	genesisExtraData = "--genesis-extra-data"
@@ -743,8 +729,4 @@ func Bootnode() DeploymentFlag {
 
 func PrivateNetwork() DeploymentFlag {
 	return DeploymentFlag{Name: "--p2p-private-network", Value: fmt.Sprintf("%v", true)}
-}
-
-func DisableLegacyDiscovery() DeploymentFlag {
-	return DeploymentFlag{Name: "--p2p-disable-legacy-discovery", Value: fmt.Sprintf("%v", true)}
 }
