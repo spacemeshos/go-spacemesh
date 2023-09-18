@@ -465,7 +465,11 @@ func (o *Oracle) activeSetFromRefBallots(epoch types.EpochID) ([]types.ATXID, er
 		}
 		actives, err := activesets.Get(o.cdb, ballot.EpochData.ActiveSetHash)
 		if err != nil {
-			o.Log.With().Error("active set missing from ref ballot", log.Inline(ballot))
+			o.Log.With().Error("failed to get active set",
+				log.String("actives hash", ballot.EpochData.ActiveSetHash.ShortString()),
+				log.String("ballot ", ballot.ID().String()),
+				log.Err(err),
+			)
 			continue
 		}
 		for _, id := range actives.Set {
