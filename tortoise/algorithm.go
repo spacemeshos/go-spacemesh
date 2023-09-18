@@ -95,6 +95,9 @@ func New(opts ...Opt) (*Tortoise, error) {
 			zap.Uint32("zdist", t.cfg.Zdist),
 		)
 	}
+	if t.cfg.WindowSize == 0 {
+		t.logger.Panic("tortoise-window-size should not be zero")
+	}
 	t.trtl = newTurtle(t.logger, t.cfg)
 	if t.tracer != nil {
 		t.tracer.On(&ConfigTrace{
