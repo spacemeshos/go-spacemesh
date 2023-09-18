@@ -405,7 +405,8 @@ func (h *Handler) processBallot(ctx context.Context, logger log.Log, b *types.Ba
 
 func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, logger log.Log, b *types.Ballot) (*tortoise.DecodedBallot, error) {
 	t0 := time.Now()
-	if err := h.checkBallotDataIntegrity(ctx, b); err != nil {
+	actives, err := h.checkBallotDataIntegrity(ctx, b)
+	if err != nil {
 		badData.Inc()
 		return nil, err
 	}
@@ -440,7 +441,7 @@ func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, logger log.L
 	ballotDuration.WithLabelValues(votes).Observe(float64(time.Since(t3)))
 
 	t4 := time.Now()
-	if eligible, err := h.validator.CheckEligibility(ctx, b); err != nil || !eligible {
+	if eligible, err := h.validator.CheckEligibility(ctx, b, actives); err != nil || !eligible {
 		notEligible.Inc()
 		var reason string
 		if err != nil {
@@ -454,39 +455,43 @@ func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, logger log.L
 	return decoded, nil
 }
 
-func (h *Handler) checkBallotDataIntegrity(ctx context.Context, b *types.Ballot) error {
+func (h *Handler) checkBallotDataIntegrity(ctx context.Context, b *types.Ballot) ([]types.ATXID, error) {
+	var actives []types.ATXID
 	if b.RefBallot == types.EmptyBallotID {
 		// this is the smesher's first Ballot in this epoch, should contain EpochData
 		if b.EpochData == nil {
-			return errMissingEpochData
+			return nil, errMissingEpochData
 		}
 		if b.EpochData.Beacon == types.EmptyBeacon {
-			return errMissingBeacon
+			return nil, errMissingBeacon
 		}
 		// TODO: remove after the network no longer populate ActiveSet in ballot.
 		if len(b.ActiveSet) != 0 {
-			if err := h.handleSet(ctx, b.EpochData.ActiveSetHash, types.EpochActiveSet{
+			set := types.EpochActiveSet{
 				Epoch: b.Layer.GetEpoch(),
 				Set:   b.ActiveSet,
-			}); err != nil {
-				return err
 			}
+			if err := h.handleSet(ctx, b.EpochData.ActiveSetHash, set); err != nil {
+				return nil, err
+			}
+			actives = set.Set
 		} else {
 			if err := h.fetcher.GetActiveSet(ctx, b.EpochData.ActiveSetHash); err != nil {
-				return err
+				return nil, err
 			}
 			set, err := activesets.Get(h.cdb, b.EpochData.ActiveSetHash)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			if len(set.Set) == 0 {
-				return fmt.Errorf("%w: empty active set ballot %s", pubsub.ErrValidationReject, b.ID().String())
+				return nil, fmt.Errorf("%w: empty active set ballot %s", pubsub.ErrValidationReject, b.ID().String())
 			}
+			actives = set.Set
 		}
 	} else if b.EpochData != nil {
-		return errUnexpectedEpochData
+		return nil, errUnexpectedEpochData
 	}
-	return nil
+	return actives, nil
 }
 
 func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) error {

@@ -17,7 +17,7 @@ type meshProvider interface {
 }
 
 type eligibilityValidator interface {
-	CheckEligibility(context.Context, *types.Ballot) (bool, error)
+	CheckEligibility(context.Context, *types.Ballot, []types.ATXID) (bool, error)
 }
 
 type tortoiseProvider interface {

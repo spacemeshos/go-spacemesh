@@ -224,7 +224,7 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize, layersPerEpoch
 			o.mClock.EXPECT().CurrentLayer().Return(layer)
 			mbc.EXPECT().ReportBeaconFromBallot(layer.GetEpoch(), b, info.beacon, gomock.Any()).Times(1)
 			nonceFetcher.EXPECT().VRFNonce(b.SmesherID, layer.GetEpoch()).Return(nonce, nil).Times(1)
-			eligible, err := validator.CheckEligibility(context.Background(), b)
+			eligible, err := validator.CheckEligibility(context.Background(), b, ee.ActiveSet)
 			require.NoError(t, err, "at layer %d, with layersPerEpoch %d", layer, layersPerEpoch)
 			require.True(t, eligible, "should be eligible at layer %d, but isn't", layer)
 			counterValuesSeen[proof.J]++

@@ -13,7 +13,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
@@ -569,16 +568,13 @@ func TestEligibilityValidator(t *testing.T) {
 			for _, atx := range tc.atxs {
 				require.NoError(t, atxs.Add(db, &atx))
 			}
-			if tc.actives != nil {
-				require.NoError(t, activesets.Add(db, tc.actives.Hash(), &types.EpochActiveSet{Set: tc.actives}))
-			}
 			for _, ballot := range tc.ballots {
 				ballots[ballot.ID()] = &ballot
 			}
 			if !tc.fail {
 				ms.mbc.EXPECT().ReportBeaconFromBallot(tc.executed.Layer.GetEpoch(), &tc.executed, gomock.Any(), gomock.Any())
 			}
-			rst, err := tv.CheckEligibility(context.Background(), &tc.executed)
+			rst, err := tv.CheckEligibility(context.Background(), &tc.executed, tc.actives)
 			assert.Equal(t, !tc.fail, rst)
 			if len(tc.err) == 0 {
 				assert.Empty(t, err)
