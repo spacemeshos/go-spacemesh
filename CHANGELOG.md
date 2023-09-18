@@ -20,6 +20,7 @@ Support for old certificate sync protocol is dropped. This update is incompatibl
 
 ### Improvements
 * [#5021](https://github.com/spacemeshos/go-spacemesh/pull/5021) Drop support for old certificate sync protocol.
+* [#5024](https://github.com/spacemeshos/go-spacemesh/pull/5024) Active set will be saved in state separately from ballots.
 
 ## v1.1.5
 
@@ -41,7 +42,7 @@ active set will not be gossipped together with proposals. That was the main netw
   * `postdata_metadata.json` is now updated atomically to prevent corruption of the file.
 * [#4956](https://github.com/spacemeshos/go-spacemesh/pull/4956) Active set is will not be gossipped in every proposal.
   Active set usually contains list of atxs that targets current epoch. As the number of atxs grows this object grows as well.
-* [#4993](https://github.com/spacemeshos/go-spacemesh/pull/4993) Drop proposals after genering a block. This limits growth of the state.
+* [#4993](https://github.com/spacemeshos/go-spacemesh/pull/4993) Drop proposals after generating a block. This limits growth of the state.
 
 ## v1.1.4
 
