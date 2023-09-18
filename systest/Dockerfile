@@ -1,12 +1,20 @@
 FROM golang:1.21-alpine as build
 RUN apk add libc6-compat gcc musl-dev
-WORKDIR /build/
 
+WORKDIR /build/
+COPY ../go.mod .
+COPY ../go.sum .
+RUN go mod download
+
+WORKDIR /build/systest/
 COPY go.mod .
 COPY go.sum .
 RUN go mod download
 
+WORKDIR /build/
 COPY . .
+
+WORKDIR /build/systest/
 RUN --mount=type=cache,target=/root/.cache/go-build go test -failfast -v -c -o /build/tests.test ./tests/
 
 FROM alpine
