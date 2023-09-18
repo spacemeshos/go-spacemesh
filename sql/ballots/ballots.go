@@ -118,6 +118,31 @@ func Layer(db sql.Executor, lid types.LayerID) (rst []*types.Ballot, err error) 
 	return rst, err
 }
 
+// LayerNoMalicious returns full ballot without joining malicious identities.
+func LayerNoMalicious(db sql.Executor, lid types.LayerID) (rst []*types.Ballot, err error) {
+	var derr error
+	if _, err = db.Exec(`select id, ballot from ballots where layer = ?1;`,
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(lid))
+		}, func(stmt *sql.Statement) bool {
+			id := types.BallotID{}
+			stmt.ColumnBytes(0, id[:])
+			var ballot types.Ballot
+			_, derr := codec.DecodeFrom(stmt.ColumnReader(1), &ballot)
+			if derr != nil {
+				return false
+			}
+			ballot.SetID(id)
+			rst = append(rst, &ballot)
+			return true
+		}); err != nil {
+		return nil, fmt.Errorf("selecting %d: %w", lid, err)
+	} else if derr != nil {
+		return nil, fmt.Errorf("decoding %d: %w", lid, err)
+	}
+	return rst, err
+}
+
 // IDsInLayer returns ballots ids in the layer.
 func IDsInLayer(db sql.Executor, lid types.LayerID) (rst []types.BallotID, err error) {
 	if _, err := db.Exec("select id from ballots where layer = ?1;", func(stmt *sql.Statement) {

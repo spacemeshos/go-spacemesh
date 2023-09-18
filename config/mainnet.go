@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"time"
 
+	"go.uber.org/zap/zapcore"
+
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
@@ -36,7 +38,8 @@ func MainnetConfig() Config {
 	if smeshing.ProvingOpts.Threads < 1 {
 		smeshing.ProvingOpts.Threads = 1
 	}
-
+	logging := DefaultLoggingConfig()
+	logging.TrtlLoggerLevel = zapcore.WarnLevel.String()
 	return Config{
 		BaseConfig: BaseConfig{
 			DataDirParent:       defaultDataDir,
@@ -131,7 +134,7 @@ func MainnetConfig() Config {
 		TIME:     timeConfig.DefaultConfig(),
 		SMESHING: smeshing,
 		FETCH:    fetch.DefaultConfig(),
-		LOGGING:  DefaultLoggingConfig(),
+		LOGGING:  logging,
 		Sync: syncer.Config{
 			Interval:         time.Minute,
 			EpochEndFraction: 0.8,

@@ -619,6 +619,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.log.With().Info("tortoise will trace execution")
 		trtlopts = append(trtlopts, tortoise.WithTracer())
 	}
+	start := time.Now()
 	trtl, err := tortoise.Recover(
 		app.cachedDB,
 		app.clock.CurrentLayer(), beaconProtocol, trtlopts...,
@@ -626,6 +627,7 @@ func (app *App) initServices(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("can't recover tortoise state: %w", err)
 	}
+	app.log.With().Info("tortoise initialized", log.Duration("duration", time.Since(start)))
 	app.eg.Go(func() error {
 		for rst := range beaconProtocol.Results() {
 			events.EmitBeacon(rst.Epoch, rst.Beacon)

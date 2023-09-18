@@ -53,6 +53,13 @@ func TestLayer(t *testing.T) {
 	for _, ballot := range rst {
 		require.True(t, ballot.IsMalicious())
 	}
+
+	rst, err = LayerNoMalicious(db, start)
+	require.NoError(t, err)
+	require.Len(t, rst, len(ballots))
+	for _, ballot := range rst {
+		require.False(t, ballot.IsMalicious())
+	}
 }
 
 func TestAdd(t *testing.T) {
