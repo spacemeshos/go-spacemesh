@@ -25,6 +25,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
@@ -192,10 +193,10 @@ func createProposal(
 					EpochData: &types.EpochData{
 						Beacon:           types.RandomBeacon(),
 						EligibilityCount: uint32(layerSize * epochSize / len(activeSet)),
+						ActiveSetHash:    activeSet.Hash(),
 					},
 				},
 				EligibilityProofs: make([]types.VotingEligibility, numEligibility),
-				ActiveSet:         activeSet,
 			},
 			TxIDs:    txIDs,
 			MeshHash: meshHash,
@@ -207,6 +208,7 @@ func createProposal(
 	require.NoError(t, p.Initialize())
 	require.NoError(t, ballots.Add(db, &p.Ballot))
 	require.NoError(t, proposals.Add(db, p))
+	activesets.Add(db, activeSet.Hash(), &types.EpochActiveSet{Set: activeSet})
 	return p
 }
 

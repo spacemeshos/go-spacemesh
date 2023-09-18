@@ -325,7 +325,7 @@ func (cl *lockstepCluster) nogossip() {
 	}
 }
 
-func (cl *lockstepCluster) activeSet() []types.ATXID {
+func (cl *lockstepCluster) activeSet() types.ATXIDList {
 	var ids []types.ATXID
 	unique := map[types.ATXID]struct{}{}
 	for _, n := range cl.nodes {
@@ -350,9 +350,9 @@ func (cl *lockstepCluster) genProposals(lid types.LayerID) {
 		}
 		proposal := &types.Proposal{}
 		proposal.Layer = lid
-		proposal.ActiveSet = active
 		proposal.EpochData = &types.EpochData{
-			Beacon: cl.t.beacon,
+			Beacon:        cl.t.beacon,
+			ActiveSetHash: active.Hash(),
 		}
 		proposal.AtxID = n.atx.ID()
 		proposal.SmesherID = n.signer.NodeID()
