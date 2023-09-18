@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/benbjohnson/clock"
+	"github.com/jonboulle/clockwork"
 
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type option struct {
-	clock         clock.Clock
+	clock         clockwork.Clock
 	genesisTime   time.Time
 	layerDuration time.Duration
 	tickInterval  time.Duration
@@ -44,7 +44,7 @@ func (o *option) validate() error {
 type OptionFunc func(*option) error
 
 // withClock specifies which clock the NodeClock should use. Defaults to the real clock.
-func withClock(clock clock.Clock) OptionFunc {
+func withClock(clock clockwork.Clock) OptionFunc {
 	return func(opts *option) error {
 		opts.clock = clock
 		return nil

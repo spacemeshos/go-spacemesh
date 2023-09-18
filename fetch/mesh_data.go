@@ -178,16 +178,7 @@ func (f *Fetch) GetLayerData(ctx context.Context, peers []p2p.Peer, lid types.La
 	return poll(ctx, f.servers[lyrDataProtocol], peers, lidBytes, okCB, errCB)
 }
 
-// GetLayerOpinions get opinions on data in the specified layer from peers.
 func (f *Fetch) GetLayerOpinions(ctx context.Context, peers []p2p.Peer, lid types.LayerID, okCB func([]byte, p2p.Peer), errCB func(error, p2p.Peer)) error {
-	lidBytes, err := codec.Encode(&lid)
-	if err != nil {
-		return err
-	}
-	return poll(ctx, f.servers[lyrOpnsProtocol], peers, lidBytes, okCB, errCB)
-}
-
-func (f *Fetch) GetLayerOpinions2(ctx context.Context, peers []p2p.Peer, lid types.LayerID, okCB func([]byte, p2p.Peer), errCB func(error, p2p.Peer)) error {
 	req := OpinionRequest{
 		Layer: lid,
 	}

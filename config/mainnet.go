@@ -50,7 +50,6 @@ func MainnetConfig() Config {
 
 			LayerDuration:  5 * time.Minute,
 			LayerAvgSize:   50,
-			LegacyLayer:    8180,
 			LayersPerEpoch: 4032,
 
 			TxsPerProposal: 700,       // https://github.com/spacemeshos/go-spacemesh/issues/4559
@@ -140,7 +139,6 @@ func MainnetConfig() Config {
 			Interval:         time.Minute,
 			EpochEndFraction: 0.8,
 			MaxStaleDuration: time.Hour,
-			UseNewProtocol:   true,
 			Standalone:       false,
 			GossipDuration:   50 * time.Second,
 		},

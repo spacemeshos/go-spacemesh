@@ -22,7 +22,6 @@ import (
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	grpctags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
 	"github.com/mitchellh/mapstructure"
-	poetconfig "github.com/spacemeshos/poet/config"
 	"github.com/spacemeshos/poet/server"
 	"github.com/spacemeshos/post/verifying"
 	"github.com/spf13/afero"
@@ -142,9 +141,6 @@ func GetCommand() *cobra.Command {
 
 			run := func(ctx context.Context) error {
 				types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
-				types.SetLegacyLayers(app.Config.LegacyLayer)
-				// starting on 2023-09-14 20:00:00 +0000 UTC (~1 week into 4th epoch)
-				types.SetOpUpgradeLayer(18000)
 				// ensure all data folders exist
 				if err := os.MkdirAll(app.Config.DataDir(), 0o700); err != nil {
 					return fmt.Errorf("ensure folders exist: %w", err)
@@ -564,7 +560,7 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	app.postVerifier = activation.NewOffloadingPostVerifier(postVerifiers, nipostValidatorLogger)
 
-	validator := activation.NewValidator(poetDb, app.Config.POST, nipostValidatorLogger, app.postVerifier)
+	validator := activation.NewValidator(poetDb, app.Config.POST, app.Config.SMESHING.Opts.Scrypt, nipostValidatorLogger, app.postVerifier)
 	app.validator = validator
 
 	cfg := vm.DefaultConfig()
@@ -752,7 +748,6 @@ func (app *App) initServices(ctx context.Context) error {
 
 	hareCfg := app.Config.HARE
 	hareCfg.Hdist = app.Config.Tortoise.Hdist
-	hareCfg.StopAtxGrading = types.GetLegacyLayer()
 	app.hare = hare.New(
 		app.cachedDB,
 		hareCfg,
@@ -967,7 +962,7 @@ func (app *App) launchStandalone(ctx context.Context) error {
 	if err := app.beaconProtocol.UpdateBeacon(epoch, value); err != nil {
 		return fmt.Errorf("update standalone beacon: %w", err)
 	}
-	cfg := poetconfig.DefaultConfig()
+	cfg := server.DefaultConfig()
 	cfg.PoetDir = filepath.Join(app.Config.DataDir(), "poet")
 
 	parsed, err := url.Parse(app.Config.PoETServers[0])
@@ -975,12 +970,12 @@ func (app *App) launchStandalone(ctx context.Context) error {
 		return err
 	}
 	cfg.RawRESTListener = parsed.Host
-	cfg.Service.Genesis.UnmarshalFlag(app.Config.Genesis.GenesisTime)
-	cfg.Service.EpochDuration = app.Config.LayerDuration * time.Duration(app.Config.LayersPerEpoch)
-	cfg.Service.CycleGap = app.Config.POET.CycleGap
-	cfg.Service.PhaseShift = app.Config.POET.PhaseShift
+	cfg.Genesis.UnmarshalFlag(app.Config.Genesis.GenesisTime)
+	cfg.Round.EpochDuration = app.Config.LayerDuration * time.Duration(app.Config.LayersPerEpoch)
+	cfg.Round.CycleGap = app.Config.POET.CycleGap
+	cfg.Round.PhaseShift = app.Config.POET.PhaseShift
 
-	cfg, err = poetconfig.SetupConfig(cfg)
+	cfg, err = server.SetupConfig(cfg)
 	if err != nil {
 		return fmt.Errorf("setup poet config: %w", err)
 	}

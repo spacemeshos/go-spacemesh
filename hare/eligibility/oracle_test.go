@@ -26,7 +26,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
-	"github.com/spacemeshos/go-spacemesh/sql/certificates"
+	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
@@ -99,7 +99,7 @@ func createBlock(tb testing.TB, cdb *datastore.CachedDB, blts []*types.Ballot) {
 	}
 	block.Initialize()
 	require.NoError(tb, blocks.Add(cdb, block))
-	require.NoError(tb, certificates.Add(cdb, blts[0].Layer, &types.Certificate{BlockID: block.ID()}))
+	require.NoError(tb, layers.SetApplied(cdb, block.LayerIndex, block.ID()))
 }
 
 func createLayerData(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, numMiners int) []types.NodeID {

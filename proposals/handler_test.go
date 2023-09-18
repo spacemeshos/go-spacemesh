@@ -60,6 +60,7 @@ func (ms *mockSet) decodeAnyBallots() *mockSet {
 
 func (ms *mockSet) setCurrentLayer(layer types.LayerID) *mockSet {
 	ms.mclock.EXPECT().CurrentLayer().Return(layer).AnyTimes()
+	ms.mm.EXPECT().ProcessedLayer().Return(layer - 1).AnyTimes()
 	ms.mclock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now().Add(-5 * time.Second)).AnyTimes()
 	return ms
 }
@@ -188,6 +189,7 @@ func withTransactions(ids ...types.TransactionID) createProposalOpt {
 func createProposal(t *testing.T, opts ...any) *types.Proposal {
 	t.Helper()
 	b := types.RandomBallot()
+	b.Layer = 10000
 	p := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot: *b,
@@ -876,6 +878,20 @@ func TestProposal_BeforeEffectiveGenesis(t *testing.T) {
 	checkProposal(t, th.cdb, p, false)
 }
 
+func TestProposal_TooOld(t *testing.T) {
+	th := createTestHandlerNoopDecoder(t)
+	lid := types.LayerID(11)
+	th.mockSet.setCurrentLayer(lid)
+	p := createProposal(t)
+	p.Layer = lid - 1
+	data := encodeProposal(t, p)
+	got := th.HandleSyncedProposal(context.Background(), p.ID().AsHash32(), p2p.NoPeer, data)
+	require.ErrorContains(t, got, "proposal too late")
+
+	require.Error(t, th.HandleProposal(context.Background(), "", data))
+	checkProposal(t, th.cdb, p, false)
+}
+
 func TestProposal_BadSignature(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	p := createProposal(t)
@@ -896,6 +912,7 @@ func TestProposal_InconsistentSmeshers(t *testing.T) {
 			TxIDs:  []types.TransactionID{types.RandomTransactionID(), types.RandomTransactionID()},
 		},
 	}
+	p.Layer = th.clock.CurrentLayer()
 	signer1, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	signer2, err := signing.NewEdSigner()
@@ -936,7 +953,7 @@ func TestProposal_KnownProposal(t *testing.T) {
 
 func TestProposal_DuplicateTXs(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
-	lid := types.LayerID(100)
+	lid := th.clock.CurrentLayer()
 	supported := []*types.Block{
 		types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{LayerIndex: lid.Sub(1)}),
 		types.NewExistingBlock(types.BlockID{2}, types.InnerBlock{LayerIndex: lid.Sub(2)}),
@@ -973,7 +990,7 @@ func TestProposal_DuplicateTXs(t *testing.T) {
 
 func TestProposal_TXsNotAvailable(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
-	lid := types.LayerID(100)
+	lid := th.clock.CurrentLayer()
 	supported := []*types.Block{
 		types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{LayerIndex: lid.Sub(1)}),
 		types.NewExistingBlock(types.BlockID{2}, types.InnerBlock{LayerIndex: lid.Sub(2)}),
@@ -1011,7 +1028,7 @@ func TestProposal_TXsNotAvailable(t *testing.T) {
 
 func TestProposal_FailedToAddProposalTXs(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
-	lid := types.LayerID(100)
+	lid := th.clock.CurrentLayer()
 	supported := []*types.Block{
 		types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{LayerIndex: lid.Sub(1)}),
 		types.NewExistingBlock(types.BlockID{2}, types.InnerBlock{LayerIndex: lid.Sub(2)}),
@@ -1049,7 +1066,7 @@ func TestProposal_FailedToAddProposalTXs(t *testing.T) {
 
 func TestProposal_ProposalGossip_Concurrent(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
-	lid := types.LayerID(100)
+	lid := th.clock.CurrentLayer()
 	supported := []*types.Block{
 		types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{LayerIndex: lid.Sub(1)}),
 		types.NewExistingBlock(types.BlockID{2}, types.InnerBlock{LayerIndex: lid.Sub(2)}),
@@ -1105,7 +1122,7 @@ func TestProposal_ProposalGossip_Concurrent(t *testing.T) {
 
 func TestProposal_BroadcastMaliciousGossip(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
-	lid := types.LayerID(100)
+	lid := th.clock.CurrentLayer()
 	p := createProposal(t, withLayer(lid))
 	createAtx(t, th.cdb.Database, p.Layer.GetEpoch()-1, p.AtxID, p.SmesherID)
 	require.NoError(t, ballots.Add(th.cdb, &p.Ballot))
@@ -1183,7 +1200,7 @@ func TestProposal_ProposalGossip_Fetched(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			th := createTestHandlerNoopDecoder(t)
-			lid := types.LayerID(100)
+			lid := th.clock.CurrentLayer()
 			supported := []*types.Block{
 				types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{LayerIndex: lid.Sub(1)}),
 				types.NewExistingBlock(types.BlockID{2}, types.InnerBlock{LayerIndex: lid.Sub(2)}),
@@ -1231,7 +1248,7 @@ func TestProposal_ProposalGossip_Fetched(t *testing.T) {
 
 func TestProposal_ValidProposal(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
-	lid := types.LayerID(10)
+	lid := th.clock.CurrentLayer()
 	blks := []*types.Block{
 		types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{LayerIndex: lid.Sub(1)}),
 		types.NewExistingBlock(types.BlockID{2}, types.InnerBlock{LayerIndex: lid.Sub(2)}),
@@ -1268,7 +1285,7 @@ func TestProposal_ValidProposal(t *testing.T) {
 
 func TestMetrics(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
-	lid := types.LayerID(100)
+	lid := th.clock.CurrentLayer()
 	supported := []*types.Block{
 		types.NewExistingBlock(types.BlockID{1}, types.InnerBlock{LayerIndex: lid.Sub(1)}),
 		types.NewExistingBlock(types.BlockID{2}, types.InnerBlock{LayerIndex: lid.Sub(2)}),
@@ -1470,6 +1487,7 @@ func TestHandleSyncedProposalActiveSet(t *testing.T) {
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			th := createTestHandler(t)
+			th.mm.EXPECT().ProcessedLayer().Return(acceptEmpty - 2).AnyTimes()
 			th.cfg.AllowEmptyActiveSet = acceptEmpty
 			pid := p2p.Peer("any")
 

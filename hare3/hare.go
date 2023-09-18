@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/benbjohnson/clock"
+	"github.com/jonboulle/clockwork"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
@@ -100,7 +100,7 @@ type WeakCoinOutput struct {
 
 type Opt func(*Hare)
 
-func WithWallclock(clock clock.Clock) Opt {
+func WithWallclock(clock clockwork.Clock) Opt {
 	return func(hr *Hare) {
 		hr.wallclock = clock
 	}
@@ -153,7 +153,7 @@ func New(
 
 		config:    DefaultConfig(),
 		log:       zap.NewNop(),
-		wallclock: clock.New(),
+		wallclock: clockwork.NewRealClock(),
 
 		nodeclock: nodeclock,
 		pubsub:    pubsub,
@@ -188,7 +188,7 @@ type Hare struct {
 	// options
 	config    Config
 	log       *zap.Logger
-	wallclock clock.Clock
+	wallclock clockwork.Clock
 
 	// dependencies
 	nodeclock nodeclock
@@ -370,7 +370,7 @@ func (h *Hare) run(layer types.LayerID, beacon types.Beacon, proto *protocol) er
 		h.log.Debug("active in preround", zap.Uint32("lid", layer.Uint32()))
 		// initial set is not needed if node is not active in preround
 		select {
-		case <-h.wallclock.After(h.wallclock.Until(walltime)):
+		case <-h.wallclock.After(walltime.Sub(h.wallclock.Now())):
 		case <-h.ctx.Done():
 			return h.ctx.Err()
 		}
@@ -385,7 +385,7 @@ func (h *Hare) run(layer types.LayerID, beacon types.Beacon, proto *protocol) er
 	result := false
 	for {
 		select {
-		case <-h.wallclock.After(h.wallclock.Until(walltime)):
+		case <-h.wallclock.After(walltime.Sub(h.wallclock.Now())):
 			h.log.Debug("execute round",
 				zap.Uint32("lid", layer.Uint32()),
 				zap.Uint8("iter", proto.Iter), zap.Stringer("round", proto.Round),

@@ -38,10 +38,7 @@ func TestAddNodes(t *testing.T) {
 		tctx.Log.Info("cluster size changed to ", oldSize)
 		tctx.ClusterSize = oldSize
 	}
-	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(10),
-		cluster.WithSmesherFlag(cluster.UseNewOpn(true)),
-		cluster.WithSmesherFlag(cluster.ServeNewOpn(true)),
-	)
+	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 
 	// increase the cluster size to the original test size
@@ -57,10 +54,7 @@ func TestAddNodes(t *testing.T) {
 					"layer", layer.Layer.Number,
 				)
 				// the new smeshers will use the old sync protocol
-				return false, cl.AddSmeshers(tctx, addedLater,
-					cluster.WithFlags(cluster.UseNewOpn(false)),
-					cluster.WithFlags(cluster.ServeNewOpn(false)),
-				)
+				return false, cl.AddSmeshers(tctx, addedLater)
 			}
 			return true, nil
 		})

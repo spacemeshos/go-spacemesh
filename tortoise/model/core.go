@@ -107,10 +107,6 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		if c.refBallot != nil {
 			ballot.RefBallot = *c.refBallot
 		} else {
-			_, activeset, err := c.cdb.GetEpochWeight(ev.LayerID.GetEpoch())
-			if err != nil {
-				panic(err)
-			}
 			beacon, err := c.beacons.GetBeacon(ev.LayerID.GetEpoch())
 			if err != nil {
 				beacon = types.Beacon{}
@@ -118,10 +114,10 @@ func (c *core) OnMessage(m Messenger, event Message) {
 				c.beacons.StoreBeacon(ev.LayerID.GetEpoch(), beacon)
 			}
 			ballot.EpochData = &types.EpochData{
-				ActiveSetHash: types.Hash32{1, 2, 3},
-				Beacon:        beacon,
+				ActiveSetHash:    types.Hash32{1, 2, 3},
+				Beacon:           beacon,
+				EligibilityCount: c.eligibilities,
 			}
-			ballot.ActiveSet = activeset
 		}
 		ballot.Signature = c.signer.Sign(signing.BALLOT, ballot.SignedBytes())
 		ballot.SmesherID = c.signer.NodeID()

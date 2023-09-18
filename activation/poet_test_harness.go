@@ -5,9 +5,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/spacemeshos/poet/config"
 	"github.com/spacemeshos/poet/server"
-	"github.com/spacemeshos/poet/service"
 )
 
 // HTTPPoetTestHarness utilizes a local self-contained poet server instance
@@ -23,35 +21,35 @@ func (h *HTTPPoetTestHarness) RestURL() *url.URL {
 	}
 }
 
-type HTTPPoetOpt func(*config.Config)
+type HTTPPoetOpt func(*server.Config)
 
 func WithGenesis(genesis time.Time) HTTPPoetOpt {
-	return func(cfg *config.Config) {
-		cfg.Service.Genesis = service.Genesis(genesis)
+	return func(cfg *server.Config) {
+		cfg.Genesis = server.Genesis(genesis)
 	}
 }
 
 func WithEpochDuration(epoch time.Duration) HTTPPoetOpt {
-	return func(cfg *config.Config) {
-		cfg.Service.EpochDuration = epoch
+	return func(cfg *server.Config) {
+		cfg.Round.EpochDuration = epoch
 	}
 }
 
 func WithPhaseShift(phase time.Duration) HTTPPoetOpt {
-	return func(cfg *config.Config) {
-		cfg.Service.PhaseShift = phase
+	return func(cfg *server.Config) {
+		cfg.Round.PhaseShift = phase
 	}
 }
 
 func WithCycleGap(gap time.Duration) HTTPPoetOpt {
-	return func(cfg *config.Config) {
-		cfg.Service.CycleGap = gap
+	return func(cfg *server.Config) {
+		cfg.Round.CycleGap = gap
 	}
 }
 
 // NewHTTPPoetTestHarness returns a new instance of HTTPPoetHarness.
 func NewHTTPPoetTestHarness(ctx context.Context, poetdir string, opts ...HTTPPoetOpt) (*HTTPPoetTestHarness, error) {
-	cfg := config.DefaultConfig()
+	cfg := server.DefaultConfig()
 	cfg.PoetDir = poetdir
 	cfg.RawRESTListener = "localhost:0"
 	cfg.RawRPCListener = "localhost:0"
@@ -60,7 +58,7 @@ func NewHTTPPoetTestHarness(ctx context.Context, poetdir string, opts ...HTTPPoe
 		opt(cfg)
 	}
 
-	cfg, err := config.SetupConfig(cfg)
+	cfg, err := server.SetupConfig(cfg)
 	if err != nil {
 		return nil, err
 	}
