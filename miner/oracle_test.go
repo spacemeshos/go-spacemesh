@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
+	"github.com/spacemeshos/go-spacemesh/cache"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -199,7 +200,8 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize, layersPerEpoch
 	nonceFetcher := proposals.NewMocknonceFetcher(ctrl)
 	nonce := types.VRFPostIndex(rand.Uint64())
 
-	validator := proposals.NewEligibilityValidator(layerSize, layersPerEpoch, 0, o.mClock, tmock, o.cdb, mbc, o.log.WithName("blkElgValidator"), vrfVerifier,
+	c := cache.New()
+	validator := proposals.NewEligibilityValidator(layerSize, layersPerEpoch, 0, o.mClock, tmock, o.cdb, c, mbc, o.log.WithName("blkElgValidator"), vrfVerifier,
 		proposals.WithNonceFetcher(nonceFetcher),
 	)
 
@@ -211,6 +213,7 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize, layersPerEpoch
 	o.mClock.EXPECT().LayerToTime(gomock.Any()).Return(epochStart).AnyTimes()
 	received := epochStart.Add(-5 * networkDelay)
 	epochInfo := genATXForTargetEpochs(t, o.cdb, types.EpochID(startEpoch), types.EpochID(startEpoch+numberOfEpochsToTest), o.edSigner, layersPerEpoch, received)
+	require.NoError(t, cache.Warmup(o.cdb.Database, c), "should load generated state")
 	for layer := types.LayerID(startLayer); layer.Before(endLayer); layer = layer.Add(1) {
 		info, ok := epochInfo[layer.GetEpoch()]
 		require.True(t, ok)

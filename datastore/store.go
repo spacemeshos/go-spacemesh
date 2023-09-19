@@ -201,7 +201,7 @@ func (db *CachedDB) GetFullAtx(id types.ATXID) (*types.VerifiedActivationTx, err
 		return nil, fmt.Errorf("get ATXs from DB: %w", err)
 	}
 
-	db.atxHdrCache.Add(id, getHeader(atx))
+	db.atxHdrCache.Add(id, atx.ToHeader())
 	return atx, nil
 }
 
@@ -288,9 +288,9 @@ func (db *CachedDB) GetEpochAtx(epoch types.EpochID, nodeID types.NodeID) (*type
 	if err != nil {
 		return nil, fmt.Errorf("no epoch atx found: %w", err)
 	}
-	hdr := getHeader(vatx)
-	db.atxHdrCache.Add(vatx.ID(), hdr)
-	return hdr, nil
+	header := vatx.ToHeader()
+	db.atxHdrCache.Add(vatx.ID(), header)
+	return header, nil
 }
 
 // IdentityExists returns true if this NodeID has published any ATX.
@@ -375,22 +375,4 @@ func (bs *BlobStore) Get(hint Hint, key []byte) ([]byte, error) {
 		return activesets.GetBlob(bs.DB, key)
 	}
 	return nil, fmt.Errorf("blob store not found %s", hint)
-}
-
-func getHeader(vatx *types.VerifiedActivationTx) *types.ActivationTxHeader {
-	return &types.ActivationTxHeader{
-		NIPostChallenge:   vatx.NIPostChallenge,
-		Coinbase:          vatx.Coinbase,
-		NumUnits:          vatx.NumUnits,
-		EffectiveNumUnits: vatx.EffectiveNumUnits(),
-		VRFNonce:          vatx.VRFNonce,
-		Received:          vatx.Received(),
-
-		ID:     vatx.ID(),
-		NodeID: vatx.SmesherID,
-
-		BaseTickHeight: vatx.BaseTickHeight(),
-		TickCount:      vatx.TickCount(),
-		Golden:         vatx.Golden(),
-	}
 }

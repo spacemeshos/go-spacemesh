@@ -5,8 +5,9 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"go.uber.org/atomic"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 type ATXData struct {
@@ -69,7 +70,7 @@ func (c *Cache) Evict(evict types.EpochID) {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.evicted.Load() > evict.Uint32() {
+	if c.evicted.Load() < evict.Uint32() {
 		c.evicted.Store(evict.Uint32())
 	}
 	for epoch := range c.epochs {
@@ -91,6 +92,7 @@ func (c *Cache) Add(epoch types.EpochID, node types.NodeID, atx types.ATXID, dat
 			atxs:       map[types.ATXID]*ATXData{},
 			identities: map[types.NodeID][]types.ATXID{},
 		}
+		c.epochs[epoch] = ecache
 	}
 	if _, exists := ecache.atxs[atx]; exists {
 		return
@@ -153,4 +155,24 @@ func (c *Cache) GetByNode(epoch types.EpochID, node types.NodeID) *ATXData {
 		return nil
 	}
 	return data
+}
+
+// NodeHasAtx returns true if atx was registered with a given node id.
+func (c *Cache) NodeHasAtx(epoch types.EpochID, node types.NodeID, atx types.ATXID) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	ecache, exists := c.epochs[epoch]
+	if !exists {
+		return false
+	}
+	atxids, exists := ecache.identities[node]
+	if !exists {
+		return false
+	}
+	for i := range atxids {
+		if atxids[i] == atx {
+			return true
+		}
+	}
+	return false
 }

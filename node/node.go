@@ -640,7 +640,7 @@ func (app *App) initServices(ctx context.Context) error {
 		return nil
 	})
 	start = time.Now()
-	cache, err := cache.Warmup(app.db)
+	cache, err := cache.Warm(app.db)
 	if err != nil {
 		return err
 	}
@@ -682,7 +682,7 @@ func (app *App) initServices(ctx context.Context) error {
 			app.Config.HareEligibility.ConfidenceParam, app.Config.BaseConfig.LayersPerEpoch)
 	}
 
-	proposalListener := proposals.NewHandler(app.cachedDB, app.edVerifier, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifier, app.clock,
+	proposalListener := proposals.NewHandler(app.cachedDB, cache, app.edVerifier, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifier, app.clock,
 		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
 		proposals.WithConfig(proposals.Config{
 			LayerSize:              layerSize,

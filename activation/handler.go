@@ -359,19 +359,19 @@ func (h *Handler) ContextuallyValidateAtx(atx *types.VerifiedActivationTx) error
 	return err
 }
 
-func (h *Handler) cacheAtx(ctx context.Context, atx *types.VerifiedActivationTx) {
+func (h *Handler) cacheAtx(ctx context.Context, atx *types.ActivationTxHeader) {
 	if !h.cache.IsEvicted(atx.TargetEpoch()) {
-		nonce, err := h.cdb.VRFNonce(atx.SmesherID, atx.TargetEpoch())
+		nonce, err := h.cdb.VRFNonce(atx.NodeID, atx.TargetEpoch())
 		if err != nil {
 			h.log.With().Error("failed vrf nonce read", log.Err(err), log.Context(ctx))
 			return
 		}
-		malicious, err := h.cdb.IsMalicious(atx.SmesherID)
+		malicious, err := h.cdb.IsMalicious(atx.NodeID)
 		if err != nil {
 			h.log.With().Error("failed is malicious read", log.Err(err), log.Context(ctx))
 			return
 		}
-		h.cache.Add(atx.TargetEpoch(), atx.SmesherID, atx.ID(), cache.ToATXData(atx, nonce, malicious))
+		h.cache.Add(atx.TargetEpoch(), atx.NodeID, atx.ID, cache.ToATXData(atx, nonce, malicious))
 	}
 }
 
@@ -440,7 +440,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 	}
 	h.beacon.OnAtx(header)
 	h.tortoise.OnAtx(header.ToData())
-	h.cacheAtx(ctx, atx)
+	h.cacheAtx(ctx, header)
 
 	// notify subscribers
 	if ch, found := h.atxChannels[atx.ID()]; found {

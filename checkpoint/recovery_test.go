@@ -21,6 +21,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
+	"github.com/spacemeshos/go-spacemesh/cache"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -229,6 +230,7 @@ func validateAndPreserveData(tb testing.TB, db *sql.Database, deps []*types.Veri
 	cdb := datastore.NewCachedDB(db, lg)
 	atxHandler := activation.NewHandler(
 		cdb,
+		cache.New(),
 		edVerifier,
 		mclock,
 		nil,

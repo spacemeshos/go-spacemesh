@@ -9,6 +9,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/spacemeshos/go-spacemesh/cache"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -48,7 +49,8 @@ type Handler struct {
 	logger log.Log
 	cfg    Config
 
-	cdb        *datastore.CachedDB
+	db         *sql.Database
+	cache      *cache.Cache
 	edVerifier *signing.EdVerifier
 	publisher  pubsub.Publisher
 	fetcher    system.Fetcher
@@ -102,6 +104,7 @@ func WithConfig(cfg Config) Opt {
 // NewHandler creates new Handler.
 func NewHandler(
 	cdb *datastore.CachedDB,
+	cache *cache.Cache,
 	edVerifier *signing.EdVerifier,
 	p pubsub.Publisher,
 	f system.Fetcher,
@@ -115,7 +118,8 @@ func NewHandler(
 	b := &Handler{
 		logger:     log.NewNop(),
 		cfg:        defaultConfig(),
-		cdb:        cdb,
+		db:         cdb.Database,
+		cache:      cache,
 		edVerifier: edVerifier,
 		publisher:  p,
 		fetcher:    f,
@@ -127,7 +131,7 @@ func NewHandler(
 		opt(b)
 	}
 	if b.validator == nil {
-		b.validator = NewEligibilityValidator(b.cfg.LayerSize, b.cfg.LayersPerEpoch, b.cfg.MinimalActiveSetWeight, clock, tortoise, cdb, bc, b.logger, verifier)
+		b.validator = NewEligibilityValidator(b.cfg.LayerSize, b.cfg.LayersPerEpoch, b.cfg.MinimalActiveSetWeight, clock, tortoise, cdb, cache, bc, b.logger, verifier)
 	}
 	return b
 }
@@ -198,10 +202,16 @@ func (h *Handler) handleSet(ctx context.Context, id types.Hash32, set types.Epoc
 		return fmt.Errorf("%w: response for wrong hash %s", pubsub.ErrValidationReject, id.String())
 	}
 	// active set is invalid unless all activations that it references are from the correct epoch
-	if err := h.fetcher.GetAtxs(ctx, h.tortoise.GetMissingActiveSet(set.Epoch, set.Set)); err != nil {
+	var atxids []types.ATXID
+	for _, atxid := range set.Set {
+		if h.cache.Get(set.Epoch, atxid) == nil {
+			atxids = append(atxids, atxid)
+		}
+	}
+	if err := h.fetcher.GetAtxs(ctx, atxids); err != nil {
 		return err
 	}
-	err := activesets.Add(h.cdb, id, &set)
+	err := activesets.Add(h.db, id, &set)
 	if err != nil && !errors.Is(err, sql.ErrObjectExists) {
 		return err
 	}
@@ -296,7 +306,7 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 
 	logger = logger.WithFields(p.ID(), p.Ballot.ID(), p.Layer)
 	t1 := time.Now()
-	if has, err := proposals.Has(h.cdb, p.ID()); err != nil {
+	if has, err := proposals.Has(h.db, p.ID()); err != nil {
 		logger.With().Error("failed to look up proposal", log.Err(err))
 		return fmt.Errorf("lookup proposal %v: %w", p.ID(), err)
 	} else if has {
@@ -329,7 +339,7 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 
 	logger.With().Debug("proposal is syntactically valid")
 	t5 := time.Now()
-	if err := proposals.Add(h.cdb, &p); err != nil {
+	if err := proposals.Add(h.db, &p); err != nil {
 		if errors.Is(err, sql.ErrObjectExists) {
 			known.Inc()
 			return fmt.Errorf("%w proposal %s", errKnownProposal, p.ID())
@@ -479,7 +489,7 @@ func (h *Handler) checkBallotDataIntegrity(ctx context.Context, b *types.Ballot)
 			if err := h.fetcher.GetActiveSet(ctx, b.EpochData.ActiveSetHash); err != nil {
 				return nil, err
 			}
-			set, err := activesets.Get(h.cdb, b.EpochData.ActiveSetHash)
+			set, err := activesets.Get(h.db, b.EpochData.ActiveSetHash)
 			if err != nil {
 				return nil, err
 			}
@@ -551,8 +561,10 @@ func (h *Handler) checkBallotDataAvailability(ctx context.Context, b *types.Ball
 	if err := h.fetcher.GetBallots(ctx, blts); err != nil {
 		return fmt.Errorf("fetch ballots: %w", err)
 	}
-	if err := h.fetcher.GetAtxs(ctx, h.tortoise.GetMissingActiveSet(b.Layer.GetEpoch(), []types.ATXID{b.AtxID})); err != nil {
-		return fmt.Errorf("proposal get ATXs: %w", err)
+	if h.cache.Get(b.Layer.GetEpoch(), b.AtxID) == nil {
+		if err := h.fetcher.GetAtxs(ctx, []types.ATXID{b.AtxID}); err != nil {
+			return fmt.Errorf("proposal get ATXs: %w", err)
+		}
 	}
 	return nil
 }

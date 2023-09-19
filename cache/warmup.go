@@ -10,15 +10,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
-func Warmup(db *sql.Database, opts ...Opt) (*Cache, error) {
+func Warm(db *sql.Database, opts ...Opt) (*Cache, error) {
 	cache := New(opts...)
-	if err := warmup(db, cache); err != nil {
+	if err := Warmup(db, cache); err != nil {
 		return nil, fmt.Errorf("warmup %w", err)
 	}
 	return cache, nil
 }
 
-func warmup(db *sql.Database, cache *Cache) error {
+func Warmup(db *sql.Database, cache *Cache) error {
 	latest, err := atxs.LatestEpoch(db)
 	if err != nil {
 		return err
@@ -41,7 +41,7 @@ func warmup(db *sql.Database, cache *Cache) error {
 			ierr = err
 			return false
 		}
-		cache.Add(vatx.TargetEpoch(), vatx.SmesherID, vatx.ID(), ToATXData(vatx, nonce, malicious))
+		cache.Add(vatx.TargetEpoch(), vatx.SmesherID, vatx.ID(), ToATXData(vatx.ToHeader(), nonce, malicious))
 		return true
 	}); err != nil {
 		return err
@@ -49,10 +49,10 @@ func warmup(db *sql.Database, cache *Cache) error {
 	return ierr
 }
 
-func ToATXData(atx *types.VerifiedActivationTx, nonce types.VRFPostIndex, malicious bool) *ATXData {
+func ToATXData(atx *types.ActivationTxHeader, nonce types.VRFPostIndex, malicious bool) *ATXData {
 	return &ATXData{
 		Weight:     atx.GetWeight(),
-		BaseHeight: atx.BaseTickHeight(),
+		BaseHeight: atx.BaseTickHeight,
 		Height:     atx.TickHeight(),
 		Nonce:      nonce,
 		Malicious:  malicious,

@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
+	"github.com/spacemeshos/go-spacemesh/cache"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -125,6 +126,7 @@ func TestEligibilityValidator(t *testing.T) {
 
 	for _, tc := range []struct {
 		desc      string
+		evicted   types.EpochID
 		current   types.LayerID
 		minWeight uint64
 		atxs      []types.VerifiedActivationTx
@@ -311,7 +313,7 @@ func TestEligibilityValidator(t *testing.T) {
 				geligibilities(1, 2),
 			),
 			fail: true,
-			err:  "target epoch and ballot publish epoch mismatch",
+			err:  "failed to load atx from cache",
 		},
 		{
 			desc:    "ballot uses wrong atx",
@@ -326,10 +328,11 @@ func TestEligibilityValidator(t *testing.T) {
 				geligibilities(1, 2),
 			),
 			fail: true,
-			err:  "ballot smesher key and ATX node key mismatch",
+			err:  "atx and ballot key mismatch",
 		},
 		{
 			desc:    "no vrf nonce",
+			evicted: epoch,
 			current: epoch.FirstLayer(),
 			atxs: []types.VerifiedActivationTx{
 				gatxNilNonce(types.ATXID{1}, epoch-1, types.NodeID{1}, 10),
@@ -561,12 +564,19 @@ func TestEligibilityValidator(t *testing.T) {
 
 			lg := logtest.New(t)
 			db := datastore.NewCachedDB(sql.InMemory(), lg)
+
+			c := cache.New()
+			c.Evict(tc.evicted)
 			tv := NewEligibilityValidator(layerAvgSize, layersPerEpoch, tc.minWeight, ms.mclock, ms.md,
-				db, ms.mbc, lg, ms.mvrf,
+				db, c, ms.mbc, lg, ms.mvrf,
 				WithNonceFetcher(db),
 			)
 			for _, atx := range tc.atxs {
 				require.NoError(t, atxs.Add(db, &atx))
+				c.Add(
+					atx.TargetEpoch(), atx.SmesherID, atx.ID(),
+					cache.ToATXData(atx.ToHeader(), 0, false),
+				)
 			}
 			for _, ballot := range tc.ballots {
 				ballots[ballot.ID()] = &ballot
