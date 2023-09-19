@@ -12,12 +12,10 @@ const (
 )
 
 // LayerNumBlocks is number of blocks in layer.
-var (
-	LayerNumBlocks = metrics.NewHistogramWithBuckets(
-		"layer_num_blocks",
-		Subsystem,
-		"Number of blocks in layer",
-		[]string{},
-		prometheus.ExponentialBuckets(1, 2, 16),
-	)
+var LayerNumBlocks = metrics.NewHistogramWithBuckets(
+	"layer_num_blocks",
+	Subsystem,
+	"Number of blocks in layer",
+	[]string{},
+	prometheus.ExponentialBuckets(1, 2, 16),
 )
