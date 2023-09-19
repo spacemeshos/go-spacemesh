@@ -75,6 +75,7 @@ func NewHandler(
 ) *Handler {
 	return &Handler{
 		cdb:             cdb,
+		cache:           cache,
 		edVerifier:      edVerifier,
 		clock:           c,
 		publisher:       pub,
