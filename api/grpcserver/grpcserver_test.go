@@ -50,6 +50,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
+	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -58,7 +59,6 @@ import (
 
 const (
 	labelsPerUnit  = 2048
-	bitsPerLabel   = 8
 	numUnits       = 2
 	genTimeUnix    = 1000000
 	layerDuration  = 10 * time.Second
@@ -71,7 +71,6 @@ const (
 	accountBalance = 8675301
 	accountCounter = 0
 	rewardAmount   = 5551234
-	activesetSize  = 10001
 )
 
 var (
@@ -214,8 +213,7 @@ func TestMain(m *testing.M) {
 	// These create circular dependencies so they have to be initialized
 	// after the global vars
 	ballot1.AtxID = globalAtx.ID()
-	ballot1.EpochData = &types.EpochData{}
-	ballot1.ActiveSet = []types.ATXID{globalAtx.ID(), globalAtx2.ID()}
+	ballot1.EpochData = &types.EpochData{ActiveSetHash: types.ATXIDList{globalAtx.ID(), globalAtx2.ID()}.Hash()}
 
 	globalTx = NewTx(0, addr1, signer1)
 	globalTx2 = NewTx(1, addr2, signer2)
@@ -1043,7 +1041,9 @@ func TestMeshService(t *testing.T) {
 	genesis := time.Unix(genTimeUnix, 0)
 	genTime.EXPECT().GenesisTime().Return(genesis)
 	genTime.EXPECT().CurrentLayer().Return(layerCurrent).AnyTimes()
-	grpcService := NewMeshService(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
+	db := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+	grpcService := NewMeshService(db, meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
+	require.NoError(t, activesets.Add(db, ballot1.EpochData.ActiveSetHash, &types.EpochActiveSet{Set: types.ATXIDList{globalAtx.ID(), globalAtx2.ID()}}))
 	t.Cleanup(launchServer(t, cfg, grpcService))
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -2163,7 +2163,9 @@ func TestLayerStream_comprehensive(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
-	grpcService := NewMeshService(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
+	db := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+	grpcService := NewMeshService(db, meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
+	require.NoError(t, activesets.Add(db, ballot1.EpochData.ActiveSetHash, &types.EpochActiveSet{Set: types.ATXIDList{globalAtx.ID(), globalAtx2.ID()}}))
 	t.Cleanup(launchServer(t, cfg, grpcService))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

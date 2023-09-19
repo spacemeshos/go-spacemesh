@@ -7,19 +7,11 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
-	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
-
-func ActiveSetFromEpochFirstCertifiedBlock(db sql.Executor, epoch types.EpochID) ([]types.ATXID, error) {
-	bid, err := certificates.FirstInEpoch(db, epoch)
-	if err != nil {
-		return nil, err
-	}
-	return activeSetFromBlock(db, bid)
-}
 
 func ActiveSetFromEpochFirstBlock(db sql.Executor, epoch types.EpochID) ([]types.ATXID, error) {
 	bid, err := layers.FirstAppliedInEpoch(db, epoch)
@@ -42,7 +34,11 @@ func activeSetFromBlock(db sql.Executor, bid types.BlockID) ([]types.ATXID, erro
 		if err != nil {
 			return nil, fmt.Errorf("actives get ballot: %w", err)
 		}
-		for _, id := range ballot.ActiveSet {
+		actives, err := activesets.Get(db, ballot.EpochData.ActiveSetHash)
+		if err != nil {
+			return nil, fmt.Errorf("actives get active hash for ballot %s: %w", ballot.ID().String(), err)
+		}
+		for _, id := range actives.Set {
 			activeMap[id] = struct{}{}
 		}
 	}

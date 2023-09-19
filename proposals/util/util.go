@@ -8,6 +8,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 )
 
@@ -27,14 +28,6 @@ func CalcEligibleLayer(epochNumber types.EpochID, layersPerEpoch uint32, vrfSig 
 	vrfInteger := binary.LittleEndian.Uint64(vrfSig[:])
 	eligibleLayerOffset := vrfInteger % uint64(layersPerEpoch)
 	return epochNumber.FirstLayer().Add(uint32(eligibleLayerOffset))
-}
-
-func GetLegacyNumEligible(lid types.LayerID, weight, minWeight, totalWeight uint64, committeeSize, layersPerEpoch uint32) (uint32, error) {
-	legacyLayer := types.GetLegacyLayer()
-	if legacyLayer != 0 && legacyLayer >= lid.Uint32() {
-		return 1, nil
-	}
-	return GetNumEligibleSlots(weight, minWeight, totalWeight, committeeSize, layersPerEpoch)
 }
 
 // GetNumEligibleSlots calculates the number of eligible slots for a smesher in an epoch.
@@ -69,16 +62,20 @@ func ComputeWeightPerEligibility(
 			return nil, fmt.Errorf("%w: missing ref ballot %s (for %s)", err, ballot.RefBallot, ballot.ID())
 		}
 	}
-	if len(refBallot.ActiveSet) == 0 {
-		return nil, fmt.Errorf("ref ballot missing active set %s (for %s)", ballot.RefBallot, ballot.ID())
-	}
 	if refBallot.EpochData == nil {
 		return nil, fmt.Errorf("epoch data is nil on ballot %d/%s", refBallot.Layer, refBallot.ID())
 	}
 	if refBallot.EpochData.EligibilityCount == 0 {
 		return nil, fmt.Errorf("eligibility count is 0 on ballot %d/%s", refBallot.Layer, refBallot.ID())
 	}
-	for _, atxID := range refBallot.ActiveSet {
+	actives, err := activesets.Get(cdb, refBallot.EpochData.ActiveSetHash)
+	if err != nil {
+		return nil, fmt.Errorf("get active set %s (%s)", refBallot.EpochData.ActiveSetHash.ShortString(), refBallot.ID())
+	}
+	if len(actives.Set) == 0 {
+		return nil, fmt.Errorf("empty active set %s (%s)", refBallot.EpochData.ActiveSetHash.ShortString(), refBallot.ID())
+	}
+	for _, atxID := range actives.Set {
 		hdr, err = cdb.GetAtxHeader(atxID)
 		if err != nil {
 			return nil, fmt.Errorf("%w: missing atx %s in active set of %s (for %s)", err, atxID, refBallot.ID(), ballot.ID())

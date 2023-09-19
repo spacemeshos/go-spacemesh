@@ -57,7 +57,7 @@ func TestDelete(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, got, numProps)
 	}
-	require.NoError(t, Delete(db, types.LayerID(maxLayers)))
+	require.NoError(t, DeleteBefore(db, types.LayerID(maxLayers)))
 	for i := 1; i < maxLayers; i++ {
 		_, err := GetByLayer(db, types.LayerID(i))
 		require.ErrorIs(t, err, sql.ErrNotFound)

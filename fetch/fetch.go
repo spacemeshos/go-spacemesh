@@ -24,12 +24,10 @@ import (
 const (
 	atxProtocol      = "ax/1"
 	lyrDataProtocol  = "ld/1"
-	lyrOpnsProtocol  = "lp/1"
 	hashProtocol     = "hs/1"
 	meshHashProtocol = "mh/1"
 	malProtocol      = "ml/1"
-
-	OpnProtocol = "lp/2"
+	OpnProtocol      = "lp/2"
 
 	cacheSize = 1000
 )
@@ -85,7 +83,6 @@ type Config struct {
 	BatchSize, QueueSize int
 	RequestTimeout       time.Duration // in seconds
 	MaxRetriesForRequest int
-	ServeNewProtocol     bool `mapstructure:"serve-new-opn"`
 }
 
 // DefaultConfig is the default config for the fetch component.
@@ -97,7 +94,6 @@ func DefaultConfig() Config {
 		BatchSize:            20,
 		RequestTimeout:       time.Second * time.Duration(10),
 		MaxRetriesForRequest: 100,
-		ServeNewProtocol:     true,
 	}
 }
 
@@ -192,16 +188,13 @@ func NewFetch(cdb *datastore.CachedDB, msh meshProvider, b system.BeaconGetter, 
 		server.WithLog(f.logger),
 	}
 	if len(f.servers) == 0 {
-		h := newHandler(cdb, bs, msh, b, f.cfg.ServeNewProtocol, f.logger)
+		h := newHandler(cdb, bs, msh, b, f.logger)
 		f.servers[atxProtocol] = server.New(host, atxProtocol, h.handleEpochInfoReq, srvOpts...)
 		f.servers[lyrDataProtocol] = server.New(host, lyrDataProtocol, h.handleLayerDataReq, srvOpts...)
-		f.servers[lyrOpnsProtocol] = server.New(host, lyrOpnsProtocol, h.handleLayerOpinionsReq, srvOpts...)
 		f.servers[hashProtocol] = server.New(host, hashProtocol, h.handleHashReq, srvOpts...)
 		f.servers[meshHashProtocol] = server.New(host, meshHashProtocol, h.handleMeshHashReq, srvOpts...)
 		f.servers[malProtocol] = server.New(host, malProtocol, h.handleMaliciousIDsReq, srvOpts...)
-		if f.cfg.ServeNewProtocol {
-			f.servers[OpnProtocol] = server.New(host, OpnProtocol, h.handleLayerOpinionsReq2, srvOpts...)
-		}
+		f.servers[OpnProtocol] = server.New(host, OpnProtocol, h.handleLayerOpinionsReq2, srvOpts...)
 	}
 	return f
 }

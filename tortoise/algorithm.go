@@ -27,8 +27,7 @@ type Config struct {
 	// MinimalActiveSetWeight denotes weight that will replace weight
 	// recorded in the first ballot, if that weight is less than minimal
 	// for purposes of eligibility computation.
-	MinimalActiveSetWeight uint64        `mapstructure:"tortoise-activeset-weight"`
-	EmitEmptyActiveSet     types.LayerID `mapstructure:"emit-empty-active-set"`
+	MinimalActiveSetWeight uint64 `mapstructure:"tortoise-activeset-weight"`
 
 	LayerSize uint32
 }
@@ -95,6 +94,9 @@ func New(opts ...Opt) (*Tortoise, error) {
 			zap.Uint32("hdist", t.cfg.Hdist),
 			zap.Uint32("zdist", t.cfg.Zdist),
 		)
+	}
+	if t.cfg.WindowSize == 0 {
+		t.logger.Panic("tortoise-window-size should not be zero")
 	}
 	t.trtl = newTurtle(t.logger, t.cfg)
 	if t.tracer != nil {

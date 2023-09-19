@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
@@ -103,7 +104,7 @@ func Test_getProposalMetadata(t *testing.T) {
 	cfg := Config{OptFilterThreshold: 70}
 	lid := types.LayerID(111)
 	_, atxs := createATXs(t, cdb, (lid.GetEpoch() - 1).FirstLayer(), 10)
-	actives := types.ToATXIDs(atxs)
+	actives := types.ATXIDList(types.ToATXIDs(atxs))
 	props := make([]*types.Proposal, 0, 10)
 	hash1 := types.Hash32{1, 2, 3}
 	hash2 := types.Hash32{3, 2, 1}
@@ -119,21 +120,19 @@ func Test_getProposalMetadata(t *testing.T) {
 		for j := 0; j <= i; j++ {
 			p.EligibilityProofs = append(p.EligibilityProofs, types.VotingEligibility{J: uint32(j + 1)})
 		}
-		p.EpochData = &types.EpochData{}
-		p.ActiveSet = actives
+		p.EpochData = &types.EpochData{ActiveSetHash: actives.Hash()}
 		p.EpochData.EligibilityCount = uint32(i + 1)
 		props = append(props, &p)
 	}
+	require.NoError(t, activesets.Add(cdb, actives.Hash(), &types.EpochActiveSet{
+		Epoch: lid.GetEpoch(),
+		Set:   actives,
+	}))
 	require.NoError(t, layers.SetMeshHash(cdb, lid-1, hash2))
 
-	types.SetOpUpgradeLayer(lid.Uint32() + 1)
-	// only 5 / 10 proposals has the same state, threshold is 70
+	// only 5 / 10 proposals has the same state
+	// eligibility wise 40 / 55 has the same state
 	md, err := getProposalMetadata(context.Background(), lg, cdb, cfg, lid, props)
-	require.NoError(t, err)
-	require.False(t, md.optFilter)
-	// eligibility wise 40 / 55 has the same state, threshold is 70
-	types.SetOpUpgradeLayer(0)
-	md, err = getProposalMetadata(context.Background(), lg, cdb, cfg, lid, props)
 	require.NoError(t, err)
 	require.True(t, md.optFilter)
 }

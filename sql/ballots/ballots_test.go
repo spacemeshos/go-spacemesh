@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -53,6 +54,13 @@ func TestLayer(t *testing.T) {
 	for _, ballot := range rst {
 		require.True(t, ballot.IsMalicious())
 	}
+
+	rst, err = LayerNoMalicious(db, start)
+	require.NoError(t, err)
+	require.Len(t, rst, len(ballots))
+	for _, ballot := range rst {
+		require.False(t, ballot.IsMalicious())
+	}
 }
 
 func TestAdd(t *testing.T) {
@@ -73,6 +81,26 @@ func TestAdd(t *testing.T) {
 	stored, err = Get(db, ballot.ID())
 	require.NoError(t, err)
 	require.True(t, stored.IsMalicious())
+}
+
+func TestUpdateBlob(t *testing.T) {
+	db := sql.InMemory()
+	nodeID := types.RandomNodeID()
+	ballot := types.NewExistingBallot(types.BallotID{1}, types.RandomEdSignature(), nodeID, types.LayerID(0))
+	ballot.EpochData = &types.EpochData{
+		ActiveSetHash: types.RandomHash(),
+	}
+	ballot.ActiveSet = types.RandomActiveSet(199)
+	require.NoError(t, Add(db, &ballot))
+	got, err := Get(db, types.BallotID{1})
+	require.NoError(t, err)
+	require.Equal(t, ballot, *got)
+
+	ballot.ActiveSet = nil
+	require.NoError(t, UpdateBlob(db, types.BallotID{1}, codec.MustEncode(&ballot)))
+	got, err = Get(db, types.BallotID{1})
+	require.NoError(t, err)
+	require.Empty(t, got.ActiveSet)
 }
 
 func TestHas(t *testing.T) {

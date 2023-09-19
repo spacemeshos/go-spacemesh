@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/benbjohnson/clock"
+	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zapcore"
@@ -109,7 +109,7 @@ type node struct {
 	t *tester
 
 	i         int
-	clock     *clock.Mock
+	clock     clockwork.FakeClock
 	nclock    *testNodeClock
 	signer    *signing.EdSigner
 	vrfsigner *signing.VRFSigner
@@ -126,8 +126,7 @@ type node struct {
 }
 
 func (n *node) withClock() *node {
-	n.clock = clock.NewMock()
-	n.clock.Set(n.t.start)
+	n.clock = clockwork.NewFakeClockAt(n.t.start)
 	return n
 }
 
@@ -326,7 +325,7 @@ func (cl *lockstepCluster) nogossip() {
 	}
 }
 
-func (cl *lockstepCluster) activeSet() []types.ATXID {
+func (cl *lockstepCluster) activeSet() types.ATXIDList {
 	var ids []types.ATXID
 	unique := map[types.ATXID]struct{}{}
 	for _, n := range cl.nodes {
@@ -351,9 +350,9 @@ func (cl *lockstepCluster) genProposals(lid types.LayerID) {
 		}
 		proposal := &types.Proposal{}
 		proposal.Layer = lid
-		proposal.ActiveSet = active
 		proposal.EpochData = &types.EpochData{
-			Beacon: cl.t.beacon,
+			Beacon:        cl.t.beacon,
+			ActiveSetHash: active.Hash(),
 		}
 		proposal.AtxID = n.atx.ID()
 		proposal.SmesherID = n.signer.NodeID()
@@ -410,7 +409,7 @@ func (cl *lockstepCluster) movePreround(layer types.LayerID) {
 		Add(cl.t.cfg.PreroundDelay)
 	for _, n := range cl.nodes {
 		n.nclock.StartLayer(layer)
-		n.clock.Set(cl.timestamp)
+		n.clock.Advance(cl.timestamp.Sub(n.clock.Now()))
 	}
 	send := 0
 	for _, n := range cl.nodes {
@@ -430,7 +429,7 @@ func (cl *lockstepCluster) moveRound() {
 	cl.timestamp = cl.timestamp.Add(cl.t.cfg.RoundDuration)
 	send := 0
 	for _, n := range cl.nodes {
-		n.clock.Set(cl.timestamp)
+		n.clock.Advance(cl.timestamp.Sub(n.clock.Now()))
 	}
 	for _, n := range cl.nodes {
 		if n.tracer.waitEligibility() != nil {
@@ -627,9 +626,9 @@ func TestHandler(t *testing.T) {
 	n.mpublisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	layer := tst.genesis + 1
 	n.nclock.StartLayer(layer)
-	n.clock.Set(tst.start.
+	n.clock.Advance((tst.start.
 		Add(tst.layerDuration * time.Duration(layer)).
-		Add(tst.cfg.PreroundDelay))
+		Add(tst.cfg.PreroundDelay)).Sub(n.clock.Now()))
 	elig := n.tracer.waitEligibility()
 	t.Run("malformed", func(t *testing.T) {
 		require.ErrorIs(t, n.hare.Handler(context.Background(), "", []byte("malformed")),

@@ -9,6 +9,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/proposals/util"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -323,7 +324,11 @@ func TestFullCountVotes(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			logger := logtest.Zap(t)
 			tortoise := defaultAlgorithm(t)
-			var activeset []types.ATXID
+			var (
+				activeset []types.ATXID
+				total     uint64
+				weights   []uint64
+			)
 			for i := range tc.activeset {
 				atxid := types.ATXID{byte(i + 1)}
 				header := &types.ActivationTxHeader{
@@ -336,6 +341,8 @@ func TestFullCountVotes(t *testing.T) {
 				header.PublishEpoch = 1
 				tortoise.OnAtx(header.ToData())
 				activeset = append(activeset, atxid)
+				weights = append(weights, header.GetWeight())
+				total += header.GetWeight()
 			}
 
 			consensus := tortoise.trtl
@@ -372,8 +379,10 @@ func TestFullCountVotes(t *testing.T) {
 					ballot := &types.Ballot{}
 					ballot.EligibilityProofs = []types.VotingEligibility{{J: uint32(j)}}
 					ballot.AtxID = activeset[b.ATX]
-					ballot.EpochData = &types.EpochData{ActiveSetHash: types.Hash32{1, 2, 3}, EligibilityCount: 1}
-					ballot.ActiveSet = activeset
+
+					elig, err := util.GetNumEligibleSlots(weights[b.ATX], 0, total, consensus.LayerSize, types.GetLayersPerEpoch())
+					require.NoError(t, err)
+					ballot.EpochData = &types.EpochData{ActiveSetHash: types.Hash32{1, 2, 3}, EligibilityCount: elig}
 					ballot.Layer = lid
 					// don't vote on genesis for simplicity,
 					// since we don't care about block goodness in this test

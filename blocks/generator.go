@@ -167,12 +167,6 @@ func (g *Generator) run() error {
 			if len(g.optimisticOutput) > 0 {
 				g.processOptimisticLayers(maxLayer)
 			}
-			if err := proposals.Delete(g.cdb, out.Layer); err != nil {
-				g.logger.With().Error("failed to delete old proposals",
-					out.Layer,
-					log.Err(err),
-				)
-			}
 		case <-time.After(g.cfg.GenBlockInterval):
 			if len(g.optimisticOutput) > 0 {
 				g.processOptimisticLayers(maxLayer)

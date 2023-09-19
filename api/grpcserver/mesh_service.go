@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 )
 
 // MeshService exposes mesh data such as accounts, blocks, and transactions.
@@ -124,8 +125,6 @@ func (s MeshService) getFilteredTransactions(from types.LayerID, address types.A
 
 func (s MeshService) getFilteredActivations(ctx context.Context, startLayer types.LayerID, addr types.Address) (activations []*types.VerifiedActivationTx, err error) {
 	// We have no way to look up activations by coinbase so we have no choice but to read all of them.
-	// TODO: index activations by layer (and maybe by coinbase)
-	// See https://github.com/spacemeshos/go-spacemesh/issues/2064.
 	var atxids []types.ATXID
 	for l := startLayer; !l.After(s.mesh.LatestLayer()); l = l.Add(1) {
 		layer, err := s.mesh.GetLayer(l)
@@ -133,8 +132,12 @@ func (s MeshService) getFilteredActivations(ctx context.Context, startLayer type
 			return nil, status.Errorf(codes.Internal, "error retrieving layer data")
 		}
 		for _, b := range layer.Ballots() {
-			if b.EpochData != nil && b.ActiveSet != nil {
-				atxids = append(atxids, b.ActiveSet...)
+			if b.EpochData != nil {
+				actives, err := activesets.Get(s.cdb, b.EpochData.ActiveSetHash)
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "error retrieving active set %s (%s)", b.ID().String(), b.EpochData.ActiveSetHash.ShortString())
+				}
+				atxids = append(atxids, actives.Set...)
 			}
 		}
 	}
@@ -334,8 +337,12 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 	}
 
 	for _, b := range layer.Ballots() {
-		if b.EpochData != nil && b.ActiveSet != nil {
-			activations = append(activations, b.ActiveSet...)
+		if b.EpochData != nil {
+			actives, err := activesets.Get(s.cdb, b.EpochData.ActiveSetHash)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "error retrieving active set %s (%s)", b.ID().String(), b.EpochData.ActiveSetHash.ShortString())
+			}
+			activations = append(activations, actives.Set...)
 		}
 	}
 
