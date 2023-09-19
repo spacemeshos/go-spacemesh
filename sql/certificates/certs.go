@@ -164,3 +164,13 @@ func SetInvalid(db sql.Executor, lid types.LayerID, bid types.BlockID) error {
 	}
 	return nil
 }
+
+func DeleteCertBefore(db sql.Executor, lid types.LayerID) error {
+	if _, err := db.Exec(`update certificates set cert = null where layer < ?1;`,
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(lid))
+		}, nil); err != nil {
+		return fmt.Errorf("delete %s: %w", lid, err)
+	}
+	return nil
+}

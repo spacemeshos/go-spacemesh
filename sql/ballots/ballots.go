@@ -70,6 +70,17 @@ func Has(db sql.Executor, id types.BallotID) (bool, error) {
 	return rows > 0, nil
 }
 
+func UpdateBlob(db sql.Executor, bid types.BallotID, blob []byte) error {
+	if _, err := db.Exec(`update ballots set ballot = ?2 where id = ?1;`,
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, bid.Bytes())
+			stmt.BindBytes(2, blob[:])
+		}, nil); err != nil {
+		return fmt.Errorf("update blob %s: %w", bid.String(), err)
+	}
+	return nil
+}
+
 // Get ballot with id from database.
 func Get(db sql.Executor, id types.BallotID) (rst *types.Ballot, err error) {
 	if rows, err := db.Exec(`select pubkey, ballot, length(identities.proof)
