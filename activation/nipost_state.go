@@ -2,7 +2,6 @@ package activation
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"hash/crc64"
 	"io"
@@ -28,18 +27,17 @@ func write(path string, data []byte) error {
 	if err != nil {
 		return fmt.Errorf("create temporary file %s: %w", tmpName, err)
 	}
+	defer tmp.Close()
 
 	checksum := crc64.New(crc64.MakeTable(crc64.ISO))
 	w := io.MultiWriter(tmp, checksum)
 	if _, err := w.Write(data); err != nil {
-		err = errors.Join(err, tmp.Close())
 		return fmt.Errorf("write data %v: %w", tmp.Name(), err)
 	}
 
 	crc := make([]byte, crc64.Size)
 	binary.BigEndian.PutUint64(crc, checksum.Sum64())
 	if _, err := tmp.Write(crc); err != nil {
-		err = errors.Join(err, tmp.Close())
 		return fmt.Errorf("write checksum %s: %w", tmp.Name(), err)
 	}
 
