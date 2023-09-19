@@ -188,7 +188,7 @@ func (v *VM) ApplyGenesis(genesis []types.Account) error {
 }
 
 // Apply transactions.
-func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error) {
+func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []types.CoinbaseReward, anyRewards []types.AnyReward) ([]types.Transaction, []types.TransactionWithResult, error) {
 	if lctx.Layer.Before(types.GetEffectiveGenesis()) {
 		return nil, nil, fmt.Errorf("%w: applying layer %s before effective genesis %s",
 			core.ErrInternal, lctx.Layer, types.GetEffectiveGenesis(),
@@ -205,7 +205,7 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []ty
 	t2 := time.Now()
 	blockDurationTxs.Observe(float64(time.Since(t1)))
 
-	rewardsResult, err := v.addRewards(lctx, ss, fees, blockRewards)
+	rewardsResult, err := v.addRewards(lctx, ss, fees, blockRewards, anyRewards)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -263,6 +263,7 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []ty
 			Total:       reward.TotalReward,
 			LayerReward: reward.LayerReward,
 			Coinbase:    reward.Coinbase,
+			AtxID:       reward.AtxID,
 		})
 	}
 

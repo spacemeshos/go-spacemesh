@@ -430,6 +430,21 @@ func (t *tester) rewards(all ...reward) []types.CoinbaseReward {
 	return rst
 }
 
+func (t *tester) anyRewards(all ...reward) []types.AnyReward {
+	var rst []types.AnyReward
+	for _, rew := range all {
+		rat := new(big.Rat).SetFloat64(rew.share)
+		rst = append(rst, types.AnyReward{
+			AtxID: types.RandomATXID(),
+			Weight: types.RatNum{
+				Num:   rat.Num().Uint64(),
+				Denom: rat.Denom().Uint64(),
+			},
+		})
+	}
+	return rst
+}
+
 func (t *tester) estimateSpawnGas(principal, target int) int {
 	args := t.accounts[target].spawnArgs()
 	tx := t.accounts[principal].spawn(t.accounts[target].getTemplate(), args, 0)
@@ -1391,7 +1406,7 @@ func runTestCases(t *testing.T, tcs []templateTestCase, genTester func(t *testin
 				if layer.gasLimit > 0 {
 					tt = tt.withGasLimit(layer.gasLimit)
 				}
-				ineffective, results, err := tt.Apply(ctx, notVerified(txs...), tt.rewards(layer.rewards...))
+				ineffective, results, err := tt.Apply(ctx, notVerified(txs...), tt.rewards(layer.rewards...), tt.anyRewards(layer.rewards...))
 				require.NoError(tt, err)
 				if layer.ineffective == nil {
 					require.Empty(tt, ineffective)
@@ -1520,13 +1535,13 @@ func TestRandomTransfers(t *testing.T) {
 		applyGenesis()
 
 	skipped, _, err := tt.Apply(testContext(types.GetEffectiveGenesis()),
-		notVerified(tt.spawnAll()...), nil)
+		notVerified(tt.spawnAll()...), nil, nil)
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
 	for i := 1; i < 100; i++ {
 		lid := types.GetEffectiveGenesis().Add(uint32(i))
 		skipped, _, err := tt.Apply(testContext(lid),
-			notVerified(tt.randSpendN(20, 10)...), nil)
+			notVerified(tt.randSpendN(20, 10)...), nil, nil)
 		require.NoError(tt, err)
 		require.Empty(tt, skipped)
 	}
@@ -1535,7 +1550,7 @@ func TestRandomTransfers(t *testing.T) {
 func testValidation(t *testing.T, tt *tester, template core.Address) {
 	t.Parallel()
 	skipped, _, err := tt.Apply(testContext(types.GetEffectiveGenesis()),
-		notVerified(tt.selfSpawn(0)), nil)
+		notVerified(tt.selfSpawn(0)), nil, nil)
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
 
@@ -1997,7 +2012,7 @@ func TestVaultValidation(t *testing.T) {
 		addVault(2, 100, 10, types.LayerID(1), types.LayerID(10)).
 		applyGenesis()
 	_, _, err := tt.Apply(ApplyContext{Layer: types.GetEffectiveGenesis()},
-		notVerified(tt.selfSpawn(0), tt.spawn(0, 1)), nil)
+		notVerified(tt.selfSpawn(0), tt.spawn(0, 1)), nil, nil)
 	require.NoError(t, err)
 
 	t.Run("self spawn", func(t *testing.T) {
@@ -2051,7 +2066,7 @@ func BenchmarkTransactions(b *testing.B) {
 		lid := types.GetEffectiveGenesis().Add(2)
 		for i := 0; i < b.N; i++ {
 			b.StartTimer()
-			ineffective, txs, err := tt.Apply(ApplyContext{Layer: lid}, txs, nil)
+			ineffective, txs, err := tt.Apply(ApplyContext{Layer: lid}, txs, nil, nil)
 			b.StopTimer()
 			require.NoError(b, err)
 			require.Empty(b, ineffective)
@@ -2080,6 +2095,7 @@ func BenchmarkTransactions(b *testing.B) {
 			ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
 			notVerified(tt.spawnAll()...),
 			nil,
+			nil,
 		)
 		tt = tt.addSingleSig(n)
 
@@ -2097,6 +2113,7 @@ func BenchmarkTransactions(b *testing.B) {
 		ineffective, _, err := tt.Apply(
 			ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
 			notVerified(tt.spawnAll()...),
+			nil,
 			nil,
 		)
 		tt = tt.addSingleSig(n)
@@ -2135,6 +2152,7 @@ func BenchmarkTransactions(b *testing.B) {
 				ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
 				notVerified(tt.spawnAll()...),
 				nil,
+				nil,
 			)
 			tt = tt.addMultisig(n, v.k, v.n)
 
@@ -2152,6 +2170,7 @@ func BenchmarkTransactions(b *testing.B) {
 			ineffective, _, err := tt.Apply(
 				ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
 				notVerified(tt.spawnAll()...),
+				nil,
 				nil,
 			)
 			tt = tt.addMultisig(n, 3, 5)
@@ -2173,6 +2192,7 @@ func BenchmarkTransactions(b *testing.B) {
 		ineffective, _, err := tt.Apply(
 			ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
 			notVerified(tt.spawnAll()...),
+			nil,
 			nil,
 		)
 		tt = tt.addVault(n, 200000, 100000, types.GetEffectiveGenesis(), types.GetEffectiveGenesis().Add(100))
@@ -2202,6 +2222,7 @@ func BenchmarkTransactions(b *testing.B) {
 			ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
 			txs,
 			nil,
+			nil,
 		)
 		require.NoError(b, err)
 		require.Empty(b, ineffective)
@@ -2218,7 +2239,7 @@ func BenchmarkTransactions(b *testing.B) {
 func BenchmarkValidation(b *testing.B) {
 	tt := newTester(b).addSingleSig(2).applyGenesis()
 	skipped, _, err := tt.Apply(ApplyContext{Layer: types.LayerID(3)},
-		notVerified(tt.selfSpawn(0)), nil)
+		notVerified(tt.selfSpawn(0)), nil, nil)
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
 
@@ -2250,7 +2271,7 @@ func BenchmarkValidation(b *testing.B) {
 func TestBeforeEffectiveGenesis(t *testing.T) {
 	// sanity check that layers before effective genesis are not pushed to vm
 	tt := newTester(t)
-	_, _, err := tt.Apply(ApplyContext{Layer: types.GetEffectiveGenesis().Sub(1)}, nil, nil)
+	_, _, err := tt.Apply(ApplyContext{Layer: types.GetEffectiveGenesis().Sub(1)}, nil, nil, nil)
 	require.ErrorIs(t, err, core.ErrInternal)
 }
 
@@ -2267,7 +2288,7 @@ func TestStateHashFromUpdatedAccounts(t *testing.T) {
 		tt.selfSpawn(1),
 		tt.spend(0, 2, 100),
 		tt.spend(1, 4, 100),
-	), nil)
+	), nil, nil)
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
 
@@ -2304,7 +2325,7 @@ func benchmarkWallet(b *testing.B, accounts, n int) {
 		addSingleSig(accounts).applyGenesis().withSeed(101)
 	lid := types.LayerID(3)
 	skipped, _, err := tt.Apply(ApplyContext{Layer: lid},
-		notVerified(tt.spawnAll()...), nil)
+		notVerified(tt.spawnAll()...), nil, nil)
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
 
@@ -2329,7 +2350,7 @@ func benchmarkWallet(b *testing.B, accounts, n int) {
 
 	for _, txs := range layers {
 		lid = lid.Add(1)
-		skipped, _, err := tt.Apply(testContext(lid), txs, nil)
+		skipped, _, err := tt.Apply(testContext(lid), txs, nil, nil)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -2357,7 +2378,7 @@ func FuzzParse(f *testing.F) {
 		addVesting(1, 1, 1).
 		applyGenesis()
 	skipped, _, err := tt.Apply(ApplyContext{Layer: types.LayerID(3)},
-		notVerified(tt.spawnAll()...), nil)
+		notVerified(tt.spawnAll()...), nil, nil)
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
 
@@ -2498,12 +2519,14 @@ func TestVestingData(t *testing.T) {
 			ineffective, _, err := vm.Apply(ApplyContext{Layer: genesis + 1},
 				notVerified(types.NewRawTx(vestaccount.selfSpawn(nonce))),
 				nil,
+				nil,
 			)
 			require.Empty(t, ineffective)
 			require.NoError(t, err)
 			nonce++
 			ineffective, _, err = vm.Apply(ApplyContext{Layer: genesis + 2},
 				notVerified(types.NewRawTx(vestaccount.spawn(vault.TemplateAddress, vaultArgs, nonce))),
+				nil,
 				nil,
 			)
 			require.Empty(t, ineffective)
@@ -2514,6 +2537,7 @@ func TestVestingData(t *testing.T) {
 			require.NoError(t, err)
 			ineffective, rst, err := vm.Apply(ApplyContext{Layer: constants.VestStart},
 				notVerified(types.NewRawTx(vestaccount.drainVault(vaultaddr, vestaddr, uint64(meta.Initial), nonce))),
+				nil,
 				nil,
 			)
 			require.Empty(t, ineffective)
@@ -2539,6 +2563,7 @@ func TestVestingData(t *testing.T) {
 				ineffective, rst, err = vm.Apply(ApplyContext{Layer: types.LayerID(i)},
 					notVerified(types.NewRawTx(vestaccount.drainVault(vaultaddr, vestaddr, uint64(drain.Uint64()), nonce))),
 					nil,
+					nil,
 				)
 				require.Empty(t, ineffective)
 				require.NoError(t, err)
@@ -2553,6 +2578,7 @@ func TestVestingData(t *testing.T) {
 			}
 			ineffective, _, err = vm.Apply(ApplyContext{Layer: constants.VestEnd},
 				notVerified(types.NewRawTx(vestaccount.drainVault(vaultaddr, vestaddr, uint64(remaining), nonce))),
+				nil,
 				nil,
 			)
 			require.Empty(t, ineffective)

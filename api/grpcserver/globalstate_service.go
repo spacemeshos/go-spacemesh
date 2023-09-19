@@ -140,6 +140,7 @@ func (s GlobalStateService) AccountDataQuery(ctx context.Context, in *pb.Account
 					// See https://github.com/spacemeshos/go-spacemesh/issues/2275
 					// LayerComputed: 0,
 					Coinbase: &pb.AccountId{Address: addr.String()},
+					Smesher:  nil,
 				},
 			}})
 		}
@@ -272,6 +273,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 						// See https://github.com/spacemeshos/go-spacemesh/issues/2275
 						// LayerComputed: 0,
 						Coinbase: &pb.AccountId{Address: addr.String()},
+						Smesher:  nil,
 					},
 				}}}
 				if err := stream.Send(resp); err != nil {

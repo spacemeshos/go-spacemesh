@@ -1,11 +1,9 @@
 package mesh
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"sort"
 	"sync"
 	"time"
 
@@ -87,7 +85,7 @@ func (e *Executor) ExecuteOptimistic(
 	if err != nil {
 		return nil, err
 	}
-	ineffective, executed, err := e.vm.Apply(vm.ApplyContext{Layer: lid}, executable, crewards)
+	ineffective, executed, err := e.vm.Apply(vm.ApplyContext{Layer: lid}, executable, crewards, rewards)
 	if err != nil {
 		return nil, fmt.Errorf("apply txs optimistically: %w", err)
 	}
@@ -142,7 +140,7 @@ func (e *Executor) Execute(ctx context.Context, lid types.LayerID, block *types.
 	if err != nil {
 		return err
 	}
-	ineffective, executed, err := e.vm.Apply(vm.ApplyContext{Layer: block.LayerIndex}, executable, rewards)
+	ineffective, executed, err := e.vm.Apply(vm.ApplyContext{Layer: block.LayerIndex}, executable, rewards, block.Rewards)
 	if err != nil {
 		return fmt.Errorf("apply block: %w", err)
 	}
@@ -175,16 +173,13 @@ func (e *Executor) convertRewards(rewards []types.AnyReward) ([]types.CoinbaseRe
 			Weight:   r.Weight,
 		})
 	}
-	sort.Slice(res, func(i, j int) bool {
-		return bytes.Compare(res[i].Coinbase.Bytes(), res[j].Coinbase.Bytes()) < 0
-	})
 	return res, nil
 }
 
 func (e *Executor) executeEmpty(ctx context.Context, lid types.LayerID) error {
 	start := time.Now()
 	logger := e.logger.WithContext(ctx).WithFields(lid)
-	if _, _, err := e.vm.Apply(vm.ApplyContext{Layer: lid}, nil, nil); err != nil {
+	if _, _, err := e.vm.Apply(vm.ApplyContext{Layer: lid}, nil, nil, nil); err != nil {
 		return fmt.Errorf("apply empty layer: %w", err)
 	}
 	if err := e.cs.UpdateCache(ctx, lid, types.EmptyBlockID, nil, nil); err != nil {

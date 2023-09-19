@@ -10,16 +10,13 @@ import (
 // Add reward to the database.
 func Add(db sql.Executor, reward *types.Reward) error {
 	if _, err := db.Exec(`
-		insert into rewards (coinbase, layer, total_reward, layer_reward) values (?1, ?2, ?3, ?4)
-		on conflict(coinbase, layer)
-			do update set
-				total_reward=add_uint64(total_reward, ?3),
-				layer_reward=add_uint64(layer_reward, ?4);`,
+		insert into rewards_atxs (coinbase, layer, total_reward, layer_reward, atx_id) values (?1, ?2, ?3, ?4, ?5);`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, reward.Coinbase[:])
 			stmt.BindInt64(2, int64(reward.Layer.Uint32()))
 			stmt.BindInt64(3, int64(reward.TotalReward))
 			stmt.BindInt64(4, int64(reward.LayerReward))
+			stmt.BindBytes(5, reward.AtxID.Bytes())
 		}, nil); err != nil {
 		return fmt.Errorf("insert %+x: %w", reward, err)
 	}
@@ -28,7 +25,7 @@ func Add(db sql.Executor, reward *types.Reward) error {
 
 // Revert the rewards to the specified layer.
 func Revert(db sql.Executor, revertTo types.LayerID) error {
-	if _, err := db.Exec(`delete from rewards where layer > ?1;`,
+	if _, err := db.Exec(`delete from rewards_atxs where layer > ?1;`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(revertTo.Uint32()))
 		}, nil); err != nil {
@@ -39,7 +36,7 @@ func Revert(db sql.Executor, revertTo types.LayerID) error {
 
 // List rewards from all layers for the coinbase address.
 func List(db sql.Executor, coinbase types.Address) (rst []*types.Reward, err error) {
-	_, err = db.Exec("select layer, total_reward, layer_reward from rewards where coinbase = ?1 order by layer;",
+	_, err = db.Exec("select layer, total_reward, layer_reward from rewards_atxs where coinbase = ?1 order by layer;",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, coinbase[:])
 		}, func(stmt *sql.Statement) bool {

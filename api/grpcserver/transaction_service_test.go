@@ -235,7 +235,7 @@ func TestParseTransactions(t *testing.T) {
 	}
 	require.NoError(t, vminst.ApplyGenesis(accounts))
 	_, _, err := vminst.Apply(vm.ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
-		[]types.Transaction{{RawTx: types.NewRawTx(wallet.SelfSpawn(keys[0], 0))}}, nil)
+		[]types.Transaction{{RawTx: types.NewRawTx(wallet.SelfSpawn(keys[0], 0))}}, nil, nil)
 	require.NoError(t, err)
 	mangled := wallet.Spend(keys[0], accounts[3].Address, 100, 0)
 	mangled[len(mangled)-1] -= 1

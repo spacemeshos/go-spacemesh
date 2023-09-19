@@ -2542,8 +2542,10 @@ func TestEventsReceived(t *testing.T) {
 	weight := new(big.Rat).SetFloat64(18.7)
 	require.NoError(t, err)
 	rewards := []types.CoinbaseReward{{Coinbase: addr2, Weight: types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()}}}
+	anyRewards := []types.AnyReward{{AtxID: types.RandomATXID(), Weight: types.RatNumFromBigRat(weight)}}
+
 	svm.Apply(vm.ApplyContext{Layer: types.GetEffectiveGenesis()},
-		[]types.Transaction{*globalTx}, rewards)
+		[]types.Transaction{*globalTx}, rewards, anyRewards)
 
 	txRes, err := txStream.Recv()
 	require.NoError(t, err)
@@ -2575,6 +2577,7 @@ func TestTransactionsRewards(t *testing.T) {
 	address := newAddress(t)
 	weight := new(big.Rat).SetFloat64(18.7)
 	rewards := []types.CoinbaseReward{{Coinbase: address, Weight: types.RatNumFromBigRat(weight)}}
+	anyRewards := []types.AnyReward{{AtxID: types.RandomATXID(), Weight: types.RatNumFromBigRat(weight)}}
 
 	t.Run("Get rewards from AccountDataStream", func(t *testing.T) {
 		t.Parallel()
@@ -2589,7 +2592,7 @@ func TestTransactionsRewards(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 
 		svm := vm.New(sql.InMemory(), vm.WithLogger(logtest.New(t)))
-		_, _, err = svm.Apply(vm.ApplyContext{Layer: types.LayerID(17)}, []types.Transaction{*globalTx}, rewards)
+		_, _, err = svm.Apply(vm.ApplyContext{Layer: types.LayerID(17)}, []types.Transaction{*globalTx}, rewards, anyRewards)
 		req.NoError(err)
 
 		data, err := stream.Recv()
@@ -2610,7 +2613,7 @@ func TestTransactionsRewards(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 
 		svm := vm.New(sql.InMemory(), vm.WithLogger(logtest.New(t)))
-		_, _, err = svm.Apply(vm.ApplyContext{Layer: types.LayerID(17)}, []types.Transaction{*globalTx}, rewards)
+		_, _, err = svm.Apply(vm.ApplyContext{Layer: types.LayerID(17)}, []types.Transaction{*globalTx}, rewards, anyRewards)
 		req.NoError(err)
 
 		data, err := stream.Recv()
@@ -2654,7 +2657,7 @@ func TestVMAccountUpdates(t *testing.T) {
 		})
 	}
 	lid := types.GetEffectiveGenesis().Add(1)
-	_, _, err = svm.Apply(vm.ApplyContext{Layer: lid}, spawns, nil)
+	_, _, err = svm.Apply(vm.ApplyContext{Layer: lid}, spawns, nil, nil)
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -2691,7 +2694,7 @@ func TestVMAccountUpdates(t *testing.T) {
 			)),
 		})
 	}
-	_, _, err = svm.Apply(vm.ApplyContext{Layer: lid.Add(1)}, spends, nil)
+	_, _, err = svm.Apply(vm.ApplyContext{Layer: lid.Add(1)}, spends, nil, nil)
 	require.NoError(t, err)
 	require.NoError(t, eg.Wait())
 	close(states)

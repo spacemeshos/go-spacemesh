@@ -326,7 +326,7 @@ func GetIDWithMaxHeight(db sql.Executor, pref types.NodeID) (types.ATXID, error)
 		select id, base_tick_height, tick_count, pubkey
 		from atxs left join identities using(pubkey)
 		where identities.pubkey is null and epoch >= (select max(epoch) from atxs)-1
-		order by epoch desc;`, nil, dec); err != nil {
+		order by epoch, pubkey desc;`, nil, dec); err != nil {
 		return types.ATXID{}, fmt.Errorf("select positioning atx: %w", err)
 	} else if rows == 0 {
 		return types.ATXID{}, sql.ErrNotFound
