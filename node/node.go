@@ -1338,7 +1338,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	sqlDB, err := sql.Open("file:"+filepath.Join(dbPath, dbFile),
 		sql.WithConnections(app.Config.DatabaseConnections),
 		sql.WithLatencyMetering(app.Config.DatabaseLatencyMetering),
-		sql.WithV4Migration(util.ExtractActiveSet),
+		sql.WithV5Migration(util.ExtractActiveSet),
 	)
 	if err != nil {
 		return fmt.Errorf("open sqlite db %w", err)
