@@ -2,6 +2,15 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## v1.1.7
+
+### Improvements
+
+- [#5038](https://github.com/spacemeshos/go-spacemesh/pull/5038) add index for faster query to refballot
+
+there was a regression in proposal builder that started to use codepath that was used in different domain, which was executed once per runtime. now this is executed on every proposal creation and might be too slow.
+
+
 ## v1.1.6
 
 ### Upgrade information
