@@ -313,9 +313,7 @@ func (cl *lockstepCluster) addEquivocators(n int) *lockstepCluster {
 func (cl *lockstepCluster) nogossip() {
 	for _, n := range cl.nodes {
 		require.NoError(cl.t, beacons.Add(n.db, cl.t.genesis.GetEpoch()+1, cl.t.beacon))
-		n.mpublisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ctx context.Context, _ string, msg []byte) error {
-			return nil
-		}).AnyTimes()
+		n.mpublisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	}
 }
 
