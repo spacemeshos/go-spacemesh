@@ -2,6 +2,16 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## v1.1.8
+
+### Improvements
+
+- [#5040](https://github.com/spacemeshos/go-spacemesh/pull/5040) lift restriction on when node goes out of sync
+
+with this change node will go out of sync only if it can't download layers from peers for 3h (36 layers).
+it should help to mitigate node falling out of consensus (not submitting proposals) due to unexpected issues in sync.
+
+
 ## v1.1.7
 
 ### Improvements
