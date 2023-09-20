@@ -1056,7 +1056,7 @@ func TestNIPostBuilder_Mainnet_PoetRound3_Workaround(t *testing.T) {
 			epoch: 4,
 		},
 		{
-			// TODO(mafa): remove after epoch 4 end; https://github.com/spacemeshos/go-spacemesh/issues/5030
+			// TODO(mafa): remove after epoch 5 end; https://github.com/spacemeshos/go-spacemesh/issues/5030
 			name:  "epoch 5: PoET 112 restore with PoET 110",
 			from:  "https://poet-110.spacemesh.network",
 			to:    "https://poet-112.spacemesh.network",
