@@ -319,6 +319,14 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 	return nb.state.NIPost, nil
 }
 
+// withConditionalTimeout returns a context.WithTimeout if the timeout is greater than 0, otherwise it returns the original context.
+func withConditionalTimeout(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	if timeout > 0 {
+		return context.WithTimeout(ctx, timeout)
+	}
+	return ctx, func() {}
+}
+
 // Submit the challenge to a single PoET.
 func (nb *NIPostBuilder) submitPoetChallenge(ctx context.Context, client PoetProvingServiceClient, prefix, challenge []byte, signature types.EdSignature, nodeID types.NodeID) (*types.PoetRequest, error) {
 	poetServiceID, err := client.PoetServiceID(ctx)
@@ -328,7 +336,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(ctx context.Context, client PoetPro
 	logger := nb.log.WithContext(ctx).WithFields(log.String("poet_id", hex.EncodeToString(poetServiceID.ServiceID)))
 
 	logger.Debug("querying for poet pow parameters")
-	powCtx, cancel := context.WithTimeout(ctx, nb.poetCfg.RequestTimeout)
+	powCtx, cancel := withConditionalTimeout(ctx, nb.poetCfg.RequestTimeout)
 	defer cancel()
 	powParams, err := client.PowParams(powCtx)
 	if err != nil {
@@ -345,7 +353,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(ctx context.Context, client PoetPro
 
 	logger.Debug("submitting challenge to poet proving service")
 
-	submitCtx, cancel := context.WithTimeout(ctx, nb.poetCfg.RequestTimeout)
+	submitCtx, cancel := withConditionalTimeout(ctx, nb.poetCfg.RequestTimeout)
 	defer cancel()
 	round, err := client.Submit(submitCtx, prefix, challenge, signature, nodeID, PoetPoW{
 		Nonce:  nonce,
@@ -484,7 +492,7 @@ func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge types.Hash3
 			case <-time.After(time.Until(waitDeadline)):
 			}
 
-			getProofsCtx, cancel := context.WithTimeout(ctx, nb.poetCfg.RequestTimeout)
+			getProofsCtx, cancel := withConditionalTimeout(ctx, nb.poetCfg.RequestTimeout)
 			defer cancel()
 			proof, members, err := client.Proof(getProofsCtx, round)
 			if err != nil {
