@@ -39,7 +39,7 @@ require (
 	github.com/spacemeshos/fixed v0.1.1
 	github.com/spacemeshos/go-scale v1.1.11
 	github.com/spacemeshos/merkle-tree v0.2.3
-	github.com/spacemeshos/poet v0.9.3
+	github.com/spacemeshos/poet v0.9.5
 	github.com/spacemeshos/post v0.9.4
 	github.com/spf13/afero v1.9.5
 	github.com/spf13/cobra v1.7.0
@@ -49,12 +49,12 @@ require (
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
 	github.com/zeebo/blake3 v0.2.3
 	go.uber.org/atomic v1.11.0
-	go.uber.org/mock v0.2.0
-	go.uber.org/zap v1.25.0
+	go.uber.org/mock v0.3.0
+	go.uber.org/zap v1.26.0
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9
 	golang.org/x/sync v0.3.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20230911183012-2d3300fd4832
-	google.golang.org/grpc v1.58.0
+	google.golang.org/grpc v1.58.1
 	google.golang.org/protobuf v1.31.0
 	k8s.io/api v0.28.1
 	k8s.io/apimachinery v0.28.1

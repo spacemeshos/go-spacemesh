@@ -980,11 +980,7 @@ func (app *App) launchStandalone(ctx context.Context) error {
 	cfg.Round.EpochDuration = app.Config.LayerDuration * time.Duration(app.Config.LayersPerEpoch)
 	cfg.Round.CycleGap = app.Config.POET.CycleGap
 	cfg.Round.PhaseShift = app.Config.POET.PhaseShift
-
-	cfg, err = server.SetupConfig(cfg)
-	if err != nil {
-		return fmt.Errorf("setup poet config: %w", err)
-	}
+	server.SetupConfig(cfg)
 
 	srv, err := server.New(ctx, *cfg)
 	if err != nil {
