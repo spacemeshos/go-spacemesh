@@ -19,7 +19,7 @@ package graphql
 const schema string = `
     # Bytes32 is a 32 byte binary string, represented as 0x-prefixed hexadecimal.
     scalar Bytes32
-    # Address is a 20 byte Ethereum address, represented as 0x-prefixed hexadecimal.
+    # Address is a 20 byte address, represented as 0x-prefixed hexadecimal.
     scalar Address
     # Bytes is an arbitrary length binary string, represented as 0x-prefixed hexadecimal.
     # An empty byte string is represented as '0x'. Byte strings must have an even number of hexadecimal nybbles.
@@ -38,7 +38,7 @@ const schema string = `
         mutation: Mutation
     }
 
-    # Account is a Spacemesh account at a particular block.
+    # Account is an account at a particular block.
     type Account {
         # Address is the address owning the account.
         address: Address!
@@ -50,7 +50,7 @@ const schema string = `
         transactionCount: Long!
     }
 
-    # Transaction is a Spacemesh transaction.
+    # Transaction is a transaction.
     type Transaction {
         # Hash is the hash of this transaction.
         hash: Bytes32!
@@ -81,7 +81,7 @@ const schema string = `
         raw: Bytes!
     }
 
-    # Block is a Spacemesh block.
+    # Block is a block.
     type Block {
         # Number is the number of this block, starting at 0 for the genesis block.
         number: Long!
@@ -105,7 +105,7 @@ const schema string = `
         # transactions are unavailable for this block, or if the index is out of
         # bounds, this field will be null.
         transactionAt(index: Long!): Transaction
-        # Account fetches a Spacemesh account at the current block's state.
+        # Account fetches an account at the current block's state.
         account(address: Address!): Account!
         # RawHeader is the RLP encoding of the block's header.
         rawHeader: Bytes!
@@ -129,12 +129,12 @@ const schema string = `
         transactionCount: Long!
         # Transactions is a list of transactions in the current pending state.
         transactions: [Transaction!]
-        # Account fetches a Spacemesh account for the pending state.
+        # Account fetches an account for the pending state.
         account(address: Address!): Account!
     }
 
     type Query {
-        # Block fetches an Ethereum block by number or by hash. If neither is
+        # Block fetches a block by number or by hash. If neither is
         # supplied, the most recent known block is returned.
         block(number: Long, hash: Bytes32): Block
         # Blocks returns all the blocks between two numbers, inclusive. If
