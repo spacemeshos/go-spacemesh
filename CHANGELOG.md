@@ -19,10 +19,12 @@ Support for old certificate sync protocol is dropped. This update is incompatibl
 ### Features
 
 ### Improvements
+
 * [#4998](https://github.com/spacemeshos/go-spacemesh/pull/4998) First phase of state size reduction.
   Ephemeral data are deleted and state compacted at the time of upgrade. In steady-state, data is pruned periodically.
 * [#5021](https://github.com/spacemeshos/go-spacemesh/pull/5021) Drop support for old certificate sync protocol.
 * [#5024](https://github.com/spacemeshos/go-spacemesh/pull/5024) Active set will be saved in state separately from ballots.
+* [#5035](https://github.com/spacemeshos/go-spacemesh/pull/5035) Fix possible nil pointer panic when node fails to persist nipost builder state.
 
 ## v1.1.5
 
