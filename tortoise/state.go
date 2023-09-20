@@ -508,10 +508,10 @@ func (s *layerSlice) get(offset, index types.LayerID) *layerInfo {
 		return s.data[i]
 	}
 	last := offset + lth
-	for j := types.LayerID(0); j <= i-lth; j++ {
-		s.data = append(s.data, &layerInfo{lid: last + j + 1, opinions: map[types.Hash32]votes{}})
+	for lid := last + 1; lid <= index; lid++ {
+		s.data = append(s.data, &layerInfo{lid: lid, opinions: map[types.Hash32]votes{}})
 	}
-	return s.get(offset, index)
+	return s.data[i]
 }
 
 func (s *layerSlice) pop() {
