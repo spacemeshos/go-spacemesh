@@ -25,6 +25,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
@@ -192,10 +193,10 @@ func createProposal(
 					EpochData: &types.EpochData{
 						Beacon:           types.RandomBeacon(),
 						EligibilityCount: uint32(layerSize * epochSize / len(activeSet)),
+						ActiveSetHash:    activeSet.Hash(),
 					},
 				},
 				EligibilityProofs: make([]types.VotingEligibility, numEligibility),
-				ActiveSet:         activeSet,
 			},
 			TxIDs:    txIDs,
 			MeshHash: meshHash,
@@ -207,6 +208,7 @@ func createProposal(
 	require.NoError(t, p.Initialize())
 	require.NoError(t, ballots.Add(db, &p.Ballot))
 	require.NoError(t, proposals.Add(db, p))
+	activesets.Add(db, activeSet.Hash(), &types.EpochActiveSet{Set: activeSet})
 	return p
 }
 
@@ -342,17 +344,7 @@ func Test_run(t *testing.T) {
 			txIDs := createAndSaveTxs(t, numTXs, tg.cdb)
 			signers, atxes := createATXs(t, tg.cdb, (layerID.GetEpoch() - 1).FirstLayer(), numProposals)
 			activeSet := types.ToATXIDs(atxes)
-			// generate some proposals before this layer
-			oldest := layerID - 10
-			for lid := oldest; lid < layerID; lid++ {
-				createProposals(t, tg.cdb, lid, types.EmptyLayerHash, signers, activeSet, txIDs)
-			}
 			plist := createProposals(t, tg.cdb, layerID, meshHash, signers, activeSet, txIDs)
-			for lid := oldest; lid <= layerID; lid++ {
-				got, err := proposals.GetByLayer(tg.cdb, lid)
-				require.NoError(t, err)
-				require.Len(t, got, len(signers))
-			}
 			pids := types.ToProposalIDs(plist)
 			tg.mockFetch.EXPECT().GetProposals(gomock.Any(), pids)
 
@@ -411,13 +403,6 @@ func Test_run(t *testing.T) {
 			tg.hareCh <- hare.LayerOutput{Ctx: context.Background(), Layer: layerID, Proposals: pids}
 			require.Eventually(t, func() bool { return len(tg.hareCh) == 0 }, time.Second, 100*time.Millisecond)
 			tg.Stop()
-			for lid := oldest; lid < layerID; lid++ {
-				_, err := proposals.GetByLayer(tg.cdb, lid)
-				require.ErrorIs(t, err, sql.ErrNotFound)
-			}
-			got, err := proposals.GetByLayer(tg.cdb, layerID)
-			require.NoError(t, err)
-			require.Len(t, got, len(signers))
 		})
 	}
 }

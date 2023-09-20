@@ -78,6 +78,8 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.DatabaseConnections, "configure number of active connections to enable parallel read requests")
 	cmd.PersistentFlags().BoolVar(&cfg.DatabaseLatencyMetering, "db-latency-metering",
 		cfg.DatabaseLatencyMetering, "if enabled collect latency histogram for every database query")
+	cmd.PersistentFlags().DurationVar(&cfg.DatabasePruneInterval, "db-prune-interval",
+		cfg.DatabasePruneInterval, "configure interval for database pruning")
 
 	/** ======================== P2P Flags ========================== **/
 

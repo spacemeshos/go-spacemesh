@@ -25,7 +25,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
-	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/tortoise/opinionhash"
 	"github.com/spacemeshos/go-spacemesh/tortoise/sim"
@@ -862,7 +861,6 @@ func TestDecodeVotes(t *testing.T) {
 		require.NoError(t, err)
 		ballot := types.NewExistingBallot(types.BallotID{3, 3, 3}, types.EmptyEdSignature, types.EmptyNodeID, ballots[0].Layer)
 		ballot.InnerBallot = ballots[0].InnerBallot
-		ballot.ActiveSet = ballots[0].ActiveSet
 		hasher := opinionhash.New()
 		supported := types.BlockID{2, 2, 2}
 		hasher.WriteSupport(supported, 0)
@@ -1094,6 +1092,7 @@ func TestBaseBallotPrioritization(t *testing.T) {
 				sim.WithSequence(5),
 			},
 			expected: genesis.Add(5),
+			window:   1,
 		},
 		{
 			desc: "BadBlocksIgnored",
@@ -1885,7 +1884,7 @@ func TestMaliciousBallotsAreIgnored(t *testing.T) {
 	blts, err := ballots.Layer(s.GetState(0).DB, last)
 	require.NoError(t, err)
 	for _, ballot := range blts {
-		require.NoError(t, identities.SetMalicious(s.GetState(0).DB, ballot.SmesherID, []byte("proof"), time.Now()))
+		tortoise.OnMalfeasance(ballot.SmesherID)
 	}
 
 	tortoise.TallyVotes(ctx, s.Next())
@@ -1933,9 +1932,7 @@ func TestStateManagement(t *testing.T) {
 
 	evicted := tortoise.trtl.evicted
 	require.Equal(t, verified.Sub(window).Sub(1), evicted)
-	for lid := types.GetEffectiveGenesis(); !lid.After(evicted); lid = lid.Add(1) {
-		require.Empty(t, tortoise.trtl.layers[lid])
-	}
+	require.EqualValues(t, evicted+1, tortoise.trtl.layers.data[0].lid)
 
 	for lid := evicted.Add(1); !lid.After(last); lid = lid.Add(1) {
 		for _, ballot := range tortoise.trtl.ballots[lid] {
@@ -2284,7 +2281,6 @@ func TestSwitchMode(t *testing.T) {
 			ballot := types.NewExistingBallot(types.BallotID{byte(i)}, types.EmptyEdSignature, types.EmptyNodeID, template.Layer)
 			ballot.InnerBallot = template.InnerBallot
 			ballot.EligibilityProofs = template.EligibilityProofs
-			ballot.ActiveSet = template.ActiveSet
 			tortoise.OnBallot(ballot.ToTortoiseData())
 		}
 		tortoise.TallyVotes(ctx, last)
@@ -2332,7 +2328,6 @@ func TestOnBallotComputeOpinion(t *testing.T) {
 		ballot := types.NewExistingBallot(id, types.EmptyEdSignature, types.EmptyNodeID, rst[0].Layer)
 		ballot.InnerBallot = rst[0].InnerBallot
 		ballot.EligibilityProofs = rst[0].EligibilityProofs
-		ballot.ActiveSet = rst[0].ActiveSet
 		ballot.Votes.Base = types.EmptyBallotID
 		ballot.Votes.Support = nil
 		ballot.Votes.Against = nil

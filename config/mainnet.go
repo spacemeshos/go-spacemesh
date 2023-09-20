@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"time"
 
+	"go.uber.org/zap/zapcore"
+
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
@@ -36,14 +38,16 @@ func MainnetConfig() Config {
 	if smeshing.ProvingOpts.Threads < 1 {
 		smeshing.ProvingOpts.Threads = 1
 	}
-
+	logging := DefaultLoggingConfig()
+	logging.TrtlLoggerLevel = zapcore.WarnLevel.String()
 	return Config{
 		BaseConfig: BaseConfig{
-			DataDirParent:       defaultDataDir,
-			FileLock:            filepath.Join(os.TempDir(), "spacemesh.lock"),
-			MetricsPort:         1010,
-			DatabaseConnections: 16,
-			NetworkHRP:          "sm",
+			DataDirParent:         defaultDataDir,
+			FileLock:              filepath.Join(os.TempDir(), "spacemesh.lock"),
+			MetricsPort:           1010,
+			DatabaseConnections:   16,
+			DatabasePruneInterval: 30 * time.Minute,
+			NetworkHRP:            "sm",
 
 			LayerDuration:  5 * time.Minute,
 			LayerAvgSize:   50,
@@ -77,7 +81,6 @@ func MainnetConfig() Config {
 			// 1000 - is assumed minimal number of units
 			// 5000 - half of the expected poet ticks
 			MinimalActiveSetWeight: 1000 * 5000,
-			EmitEmptyActiveSet:     20000,
 		},
 		HARE: hareConfig.Config{
 			N:               200,
@@ -131,7 +134,7 @@ func MainnetConfig() Config {
 		TIME:     timeConfig.DefaultConfig(),
 		SMESHING: smeshing,
 		FETCH:    fetch.DefaultConfig(),
-		LOGGING:  DefaultLoggingConfig(),
+		LOGGING:  logging,
 		Sync: syncer.Config{
 			Interval:         time.Minute,
 			EpochEndFraction: 0.8,

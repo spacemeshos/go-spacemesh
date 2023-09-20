@@ -289,12 +289,12 @@ func (b *Ballot) IsMalicious() bool {
 // MarshalLogObject implements logging encoder for Ballot.
 func (b *Ballot) MarshalLogObject(encoder log.ObjectEncoder) error {
 	var (
-		activeSetSize = 0
-		beacon        Beacon
+		activeHash Hash32
+		beacon     Beacon
 	)
 
 	if b.EpochData != nil {
-		activeSetSize = len(b.ActiveSet)
+		activeHash = b.EpochData.ActiveSetHash
 		beacon = b.EpochData.Beacon
 	}
 
@@ -309,7 +309,7 @@ func (b *Ballot) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddInt("abstain", len(b.Votes.Abstain))
 	encoder.AddString("atx_id", b.AtxID.String())
 	encoder.AddString("ref_ballot", b.RefBallot.String())
-	encoder.AddInt("active_set_size", activeSetSize)
+	encoder.AddString("active set hash", activeHash.ShortString())
 	encoder.AddString("beacon", beacon.ShortString())
 	encoder.AddObject("votes", &b.Votes)
 	return nil

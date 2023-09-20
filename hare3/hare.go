@@ -381,24 +381,24 @@ func (h *Hare) run(layer types.LayerID, beacon types.Beacon, proto *protocol) er
 	if err := h.onOutput(layer, current, proto.Next(vrf != nil), vrf); err != nil {
 		return err
 	}
-	walltime = walltime.Add(h.config.RoundDuration)
 	result := false
 	for {
+		walltime = walltime.Add(h.config.RoundDuration)
+		current := proto.IterRound
+		var vrf *types.HareEligibility
+		if current.IsMessageRound() {
+			start := time.Now()
+			vrf = h.oracle.active(h.signer.NodeID(), layer, current)
+			activeLatency.Observe(time.Since(start).Seconds())
+		}
+		h.tracer.OnActive(vrf)
 		select {
 		case <-h.wallclock.After(walltime.Sub(h.wallclock.Now())):
 			h.log.Debug("execute round",
 				zap.Uint32("lid", layer.Uint32()),
 				zap.Uint8("iter", proto.Iter), zap.Stringer("round", proto.Round),
+				zap.Bool("active", vrf != nil),
 			)
-			current := proto.IterRound
-			var vrf *types.HareEligibility
-			if current.IsMessageRound() {
-				start := time.Now()
-				vrf = h.oracle.active(h.signer.NodeID(), layer, current)
-				activeLatency.Observe(time.Since(start).Seconds())
-			}
-			h.tracer.OnActive(vrf)
-
 			out := proto.Next(vrf != nil)
 			if out.result != nil {
 				result = true
@@ -416,7 +416,6 @@ func (h *Hare) run(layer types.LayerID, beacon types.Beacon, proto *protocol) er
 				return fmt.Errorf("hare failed to reach consensus in %d iterations",
 					h.config.IterationsLimit)
 			}
-			walltime = walltime.Add(h.config.RoundDuration)
 		case <-h.ctx.Done():
 			return nil
 		}
@@ -428,23 +427,17 @@ func (h *Hare) onOutput(layer types.LayerID, ir IterRound, out output, vrf *type
 		out.message.Layer = layer
 		out.message.Eligibility = *vrf
 		out.message.Sender = h.signer.NodeID()
+		out.message.Signature = h.signer.Sign(signing.HARE, out.message.ToMetadata().ToBytes())
+		if err := h.pubsub.Publish(h.ctx, h.config.ProtocolName, out.message.ToBytes()); err != nil {
+			h.log.Error("failed to publish", zap.Inline(out.message), zap.Error(err))
+		}
 	}
 	h.log.Debug("round output",
 		zap.Uint32("lid", layer.Uint32()),
 		zap.Uint8("iter", ir.Iter), zap.Stringer("round", ir.Round),
 		zap.Inline(&out),
-		zap.Bool("active", vrf != nil),
 	)
-	if out.message != nil {
-		h.eg.Go(func() error {
-			out.message.Signature = h.signer.Sign(signing.HARE, out.message.ToMetadata().ToBytes())
-			if err := h.pubsub.Publish(h.ctx, h.config.ProtocolName, out.message.ToBytes()); err != nil {
-				h.log.Error("failed to publish", zap.Inline(out.message), zap.Error(err))
-			}
-			h.tracer.OnMessageSent(out.message)
-			return nil
-		})
-	}
+	h.tracer.OnMessageSent(out.message)
 	if out.coin != nil {
 		select {
 		case <-h.ctx.Done():

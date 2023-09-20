@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
@@ -102,7 +103,6 @@ func genBallotWithEligibility(
 				EligibilityCount: ee.Slots,
 			},
 		},
-		ActiveSet:         ee.ActiveSet,
 		EligibilityProofs: ee.Proofs[lid],
 	}
 	ballot.Signature = signer.Sign(signing.BALLOT, ballot.SignedBytes())
@@ -216,6 +216,7 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize, layersPerEpoch
 		require.True(t, ok)
 		ee, err := o.ProposalEligibility(layer, info.beacon, nonce)
 		require.NoError(t, err)
+		activesets.Add(o.cdb, ee.ActiveSet.Hash(), &types.EpochActiveSet{Epoch: ee.Epoch, Set: ee.ActiveSet})
 
 		for _, proof := range ee.Proofs[layer] {
 			b := genBallotWithEligibility(t, o.edSigner, info.beacon, layer, ee)
@@ -223,7 +224,7 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize, layersPerEpoch
 			o.mClock.EXPECT().CurrentLayer().Return(layer)
 			mbc.EXPECT().ReportBeaconFromBallot(layer.GetEpoch(), b, info.beacon, gomock.Any()).Times(1)
 			nonceFetcher.EXPECT().VRFNonce(b.SmesherID, layer.GetEpoch()).Return(nonce, nil).Times(1)
-			eligible, err := validator.CheckEligibility(context.Background(), b)
+			eligible, err := validator.CheckEligibility(context.Background(), b, ee.ActiveSet)
 			require.NoError(t, err, "at layer %d, with layersPerEpoch %d", layer, layersPerEpoch)
 			require.True(t, eligible, "should be eligible at layer %d, but isn't", layer)
 			counterValuesSeen[proof.J]++
@@ -380,11 +381,16 @@ func createBallots(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, nu
 		b.Layer = lid
 		b.AtxID = types.RandomATXID()
 		b.RefBallot = types.EmptyBallotID
-		b.EpochData = &types.EpochData{}
-		b.ActiveSet = common
-		b.ActiveSet = append(b.ActiveSet, b.AtxID)
+		b.EpochData = &types.EpochData{
+			ActiveSetHash: types.RandomHash(),
+		}
 		b.Signature = types.RandomEdSignature()
 		b.SmesherID = types.RandomNodeID()
+		actives := append(common, b.AtxID)
+		require.NoError(tb, activesets.Add(cdb, b.EpochData.ActiveSetHash, &types.EpochActiveSet{
+			Epoch: lid.GetEpoch(),
+			Set:   actives,
+		}))
 		require.NoError(tb, b.Initialize())
 		require.NoError(tb, ballots.Add(cdb, b))
 		result = append(result, b)
@@ -480,10 +486,14 @@ func TestRefBallot(t *testing.T) {
 	ballot.Layer = layer
 	ballot.AtxID = atx.ID()
 	ballot.SmesherID = o.edSigner.NodeID()
-	ballot.EpochData = &types.EpochData{EligibilityCount: 1}
-	ballot.ActiveSet = []types.ATXID{ballot.AtxID}
+	actives := types.ATXIDList{ballot.AtxID}
+	ballot.EpochData = &types.EpochData{EligibilityCount: 1, ActiveSetHash: actives.Hash()}
 	ballot.SetID(types.BallotID{1})
 	require.NoError(t, ballots.Add(o.cdb, &ballot))
+	activesets.Add(o.cdb, ballot.EpochData.ActiveSetHash, &types.EpochActiveSet{
+		Epoch: layer.GetEpoch(),
+		Set:   actives,
+	})
 
 	genATXForTargetEpochs(t, o.cdb, layer.GetEpoch(), layer.GetEpoch()+1, o.edSigner, layersPerEpoch, time.Now().Add(-1*time.Hour))
 	ee, err := o.calcEligibilityProofs(layer, layer.GetEpoch(), types.Beacon{}, types.VRFPostIndex(101))
@@ -491,5 +501,5 @@ func TestRefBallot(t *testing.T) {
 	require.NotEmpty(t, ee)
 	require.Equal(t, 1, int(ee.Slots))
 	require.Equal(t, atx.ID(), ee.Atx)
-	require.ElementsMatch(t, ballot.ActiveSet, ee.ActiveSet)
+	require.ElementsMatch(t, actives, ee.ActiveSet)
 }

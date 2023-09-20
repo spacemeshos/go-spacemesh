@@ -57,10 +57,8 @@ func newTurtle(logger *zap.Logger, config Config) *turtle {
 	t.evicted = genesis.Sub(1)
 
 	t.epochs[genesis.GetEpoch()] = &epochInfo{atxs: map[types.ATXID]atxInfo{}}
-	t.layers[genesis] = &layerInfo{
-		lid:            genesis,
-		hareTerminated: true,
-	}
+	genlayer := t.layer(genesis)
+	genlayer.hareTerminated = true
 	t.verifying = newVerifying(config, t.state)
 	t.full = newFullTortoise(config, t.state)
 	t.full.counted = genesis
@@ -91,6 +89,7 @@ func (t *turtle) evict(ctx context.Context) {
 		zap.Stringer("from_layer", t.evicted.Add(1)),
 		zap.Stringer("upto_layer", windowStart),
 	)
+	layersNumber.Set(float64(len(t.layers.data)))
 	if !windowStart.After(t.evicted) {
 		return
 	}
@@ -99,21 +98,17 @@ func (t *turtle) evict(ctx context.Context) {
 	}
 	for lid := t.evicted.Add(1); lid.Before(windowStart); lid = lid.Add(1) {
 		for _, ballot := range t.ballots[lid] {
-			ballotsNumber.Dec()
 			delete(t.ballotRefs, ballot.id)
 		}
-		for range t.layers[lid].blocks {
-			blocksNumber.Dec()
-		}
-		layersNumber.Dec()
-		delete(t.layers, lid)
+
+		ballotsNumber.Sub(float64(len(t.ballots[lid])))
+		blocksNumber.Sub(float64(len(t.layer(lid).blocks)))
+		t.layers.pop()
+
 		delete(t.ballots, lid)
 		if lid.OrdinalInEpoch() == types.GetLayersPerEpoch()-1 {
-			layersNumber.Dec()
 			epoch := t.epoch(lid.GetEpoch())
-			for range epoch.atxs {
-				atxsNumber.Dec()
-			}
+			atxsNumber.Sub(float64(len(epoch.atxs)))
 			delete(t.epochs, lid.GetEpoch())
 		}
 	}
@@ -748,11 +743,23 @@ func (t *turtle) decodeBallot(ballot *types.BallotTortoiseData) (*ballotInfo, ty
 		zap.Uint32("lid", ballot.Layer.Uint32()),
 	)
 
-	votes, min, err := decodeVotes(t.evicted, binfo.layer, base, ballot.Opinion.Votes)
-	if err != nil {
-		return nil, 0, err
+	layer := t.layer(binfo.layer)
+
+	existing, exists := layer.opinions[ballot.Opinion.Hash]
+	var min types.LayerID
+	if exists {
+		binfo.votes = existing
+	} else {
+		var (
+			votes votes
+			err   error
+		)
+		votes, min, err = decodeVotes(t.evicted, binfo.layer, base, ballot.Opinion.Votes)
+		if err != nil {
+			return nil, 0, err
+		}
+		binfo.votes = votes
 	}
-	binfo.votes = votes
 	t.logger.Debug("decoded exceptions",
 		zap.Stringer("block", binfo.id),
 		zap.Uint32("lid", binfo.layer.Uint32()),
@@ -771,15 +778,22 @@ func (t *turtle) storeBallot(ballot *ballotInfo, min types.LayerID) error {
 	}
 
 	t.state.addBallot(ballot)
-	for current := ballot.votes.tail; current != nil && !current.lid.Before(min); current = current.prev {
-		for i, block := range current.supported {
-			existing := t.getBlock(block.header())
-			if existing != nil {
-				current.supported[i] = existing
-			} else {
-				t.addBlock(block)
+	layer := t.layer(ballot.layer)
+	existing, exists := layer.opinions[ballot.opinion()]
+	if exists {
+		ballot.votes = existing
+	} else {
+		for current := ballot.votes.tail; current != nil && !current.lid.Before(min); current = current.prev {
+			for i, block := range current.supported {
+				existing := t.getBlock(block.header())
+				if existing != nil {
+					current.supported[i] = existing
+				} else {
+					t.addBlock(block)
+				}
 			}
 		}
+		layer.opinions[ballot.opinion()] = ballot.votes
 	}
 	if !ballot.layer.After(t.processed) {
 		if err := t.countBallot(ballot); err != nil {

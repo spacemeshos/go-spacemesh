@@ -176,18 +176,18 @@ func (m *MockeligibilityValidator) EXPECT() *MockeligibilityValidatorMockRecorde
 }
 
 // CheckEligibility mocks base method.
-func (m *MockeligibilityValidator) CheckEligibility(arg0 context.Context, arg1 *types.Ballot) (bool, error) {
+func (m *MockeligibilityValidator) CheckEligibility(arg0 context.Context, arg1 *types.Ballot, arg2 []types.ATXID) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CheckEligibility", arg0, arg1)
+	ret := m.ctrl.Call(m, "CheckEligibility", arg0, arg1, arg2)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CheckEligibility indicates an expected call of CheckEligibility.
-func (mr *MockeligibilityValidatorMockRecorder) CheckEligibility(arg0, arg1 interface{}) *eligibilityValidatorCheckEligibilityCall {
+func (mr *MockeligibilityValidatorMockRecorder) CheckEligibility(arg0, arg1, arg2 interface{}) *eligibilityValidatorCheckEligibilityCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckEligibility", reflect.TypeOf((*MockeligibilityValidator)(nil).CheckEligibility), arg0, arg1)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckEligibility", reflect.TypeOf((*MockeligibilityValidator)(nil).CheckEligibility), arg0, arg1, arg2)
 	return &eligibilityValidatorCheckEligibilityCall{Call: call}
 }
 
@@ -203,13 +203,13 @@ func (c *eligibilityValidatorCheckEligibilityCall) Return(arg0 bool, arg1 error)
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *eligibilityValidatorCheckEligibilityCall) Do(f func(context.Context, *types.Ballot) (bool, error)) *eligibilityValidatorCheckEligibilityCall {
+func (c *eligibilityValidatorCheckEligibilityCall) Do(f func(context.Context, *types.Ballot, []types.ATXID) (bool, error)) *eligibilityValidatorCheckEligibilityCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *eligibilityValidatorCheckEligibilityCall) DoAndReturn(f func(context.Context, *types.Ballot) (bool, error)) *eligibilityValidatorCheckEligibilityCall {
+func (c *eligibilityValidatorCheckEligibilityCall) DoAndReturn(f func(context.Context, *types.Ballot, []types.ATXID) (bool, error)) *eligibilityValidatorCheckEligibilityCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

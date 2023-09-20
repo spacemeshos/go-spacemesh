@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -216,7 +217,11 @@ func (o *Oracle) calcEligibilityProofs(lid types.LayerID, epoch types.EpochID, b
 	if ref == nil {
 		minerWeight, totalWeight, ownAtx, activeSet, err = o.activeSet(epoch)
 	} else {
-		activeSet = ref.ActiveSet
+		if epochActives, err := activesets.Get(o.cdb, ref.EpochData.ActiveSetHash); err != nil {
+			return nil, err
+		} else {
+			activeSet = epochActives.Set
+		}
 		o.log.With().Info("use active set from ref ballot",
 			ref.ID(),
 			log.Int("num atx", len(activeSet)),

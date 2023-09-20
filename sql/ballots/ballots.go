@@ -70,6 +70,17 @@ func Has(db sql.Executor, id types.BallotID) (bool, error) {
 	return rows > 0, nil
 }
 
+func UpdateBlob(db sql.Executor, bid types.BallotID, blob []byte) error {
+	if _, err := db.Exec(`update ballots set ballot = ?2 where id = ?1;`,
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, bid.Bytes())
+			stmt.BindBytes(2, blob[:])
+		}, nil); err != nil {
+		return fmt.Errorf("update blob %s: %w", bid.String(), err)
+	}
+	return nil
+}
+
 // Get ballot with id from database.
 func Get(db sql.Executor, id types.BallotID) (rst *types.Ballot, err error) {
 	if rows, err := db.Exec(`select pubkey, ballot, length(identities.proof)
@@ -114,6 +125,31 @@ func Layer(db sql.Executor, lid types.LayerID) (rst []*types.Ballot, err error) 
 		return true
 	}); err != nil {
 		return nil, fmt.Errorf("ballots for layer %s: %w", lid, err)
+	}
+	return rst, err
+}
+
+// LayerNoMalicious returns full ballot without joining malicious identities.
+func LayerNoMalicious(db sql.Executor, lid types.LayerID) (rst []*types.Ballot, err error) {
+	var derr error
+	if _, err = db.Exec(`select id, ballot from ballots where layer = ?1;`,
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(lid))
+		}, func(stmt *sql.Statement) bool {
+			id := types.BallotID{}
+			stmt.ColumnBytes(0, id[:])
+			var ballot types.Ballot
+			_, derr := codec.DecodeFrom(stmt.ColumnReader(1), &ballot)
+			if derr != nil {
+				return false
+			}
+			ballot.SetID(id)
+			rst = append(rst, &ballot)
+			return true
+		}); err != nil {
+		return nil, fmt.Errorf("selecting %d: %w", lid, err)
+	} else if derr != nil {
+		return nil, fmt.Errorf("decoding %d: %w", lid, err)
 	}
 	return rst, err
 }
