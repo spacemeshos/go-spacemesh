@@ -515,7 +515,5 @@ func (s *layerSlice) get(offset, index types.LayerID) *layerInfo {
 }
 
 func (s *layerSlice) pop() {
-	copy(s.data[:], s.data[1:])
-	s.data[len(s.data)-1] = nil
-	s.data = s.data[:len(s.data)-1]
+	s.data = s.data[1:]
 }
