@@ -46,7 +46,7 @@ install:
 	git lfs install
 	go mod download
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.54.2
-	go install github.com/spacemeshos/go-scale/scalegen@v1.1.11
+	go install github.com/spacemeshos/go-scale/scalegen@v1.1.12
 	go install go.uber.org/mock/mockgen@v0.2.0
 	go install gotest.tools/gotestsum@v1.10.1
 	go install honnef.co/go/tools/cmd/staticcheck@v0.4.5
