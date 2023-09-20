@@ -13,6 +13,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
 func TestOffloadingPostVerifier(t *testing.T) {
@@ -40,7 +41,7 @@ func TestOffloadingPostVerifier(t *testing.T) {
 }
 
 func TestPostVerifierDetectsInvalidProof(t *testing.T) {
-	verifier, err := activation.NewPostVerifier(activation.PostConfig{}, log.NewDefault(t.Name()))
+	verifier, err := activation.NewPostVerifier(activation.PostConfig{}, logtest.New(t))
 	require.NoError(t, err)
 	defer verifier.Close()
 	require.Error(t, verifier.Verify(context.Background(), &shared.Proof{}, &shared.ProofMetadata{}))

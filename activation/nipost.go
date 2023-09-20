@@ -12,7 +12,6 @@ import (
 	"github.com/spacemeshos/merkle-tree"
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/proving"
-	"github.com/spacemeshos/post/verifying"
 	"golang.org/x/exp/slices"
 	"golang.org/x/sync/errgroup"
 
@@ -301,7 +300,6 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 			proof,
 			proofMetadata,
 			nb.postSetupProvider.LastOpts().NumUnits,
-			verifying.WithLabelScryptParams(nb.postSetupProvider.LastOpts().Scrypt),
 		); err != nil {
 			events.EmitInvalidPostProof()
 			return nil, fmt.Errorf("failed to verify Post: %w", err)
@@ -479,7 +477,7 @@ func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge types.Hash3
 		round := r.PoetRound.ID
 		waitDeadline := proofDeadline(r.PoetRound.End.IntoTime(), nb.poetCfg.CycleGap)
 		eg.Go(func() error {
-			logger.With().Info("waiting till poet round end", log.Duration("wait time", time.Until(waitDeadline)))
+			logger.With().Info("waiting until poet round end", log.Duration("wait time", time.Until(waitDeadline)))
 			select {
 			case <-ctx.Done():
 				return fmt.Errorf("waiting to query proof: %w", ctx.Err())

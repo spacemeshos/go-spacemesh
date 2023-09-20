@@ -54,14 +54,12 @@ var (
 		"total requests for block certificate received",
 		[]string{}).WithLabelValues()
 
-	opnReq = metrics.NewCounter(
+	opnReqV2 = metrics.NewCounter(
 		"opn_reqs",
 		subsystem,
 		"total layer opinion requests received",
 		[]string{"version"},
-	)
-	opnReqV1 = opnReq.WithLabelValues("v1")
-	opnReqV2 = opnReq.WithLabelValues("v2")
+	).WithLabelValues("v2")
 )
 
 // logCacheHit logs cache hit.

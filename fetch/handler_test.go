@@ -39,7 +39,7 @@ func createTestHandler(t testing.TB) *testHandler {
 	mm := mocks.NewMockmeshProvider(ctrl)
 	mb := smocks.NewMockBeaconGetter(ctrl)
 	return &testHandler{
-		handler: newHandler(cdb, datastore.NewBlobStore(cdb.Database), mm, mb, true, lg),
+		handler: newHandler(cdb, datastore.NewBlobStore(cdb.Database), mm, mb, lg),
 		cdb:     cdb,
 		mm:      mm,
 		mb:      mb,
@@ -142,58 +142,6 @@ func TestHandleLayerOpinionsReq(t *testing.T) {
 
 			th := createTestHandler(t)
 			lid := types.LayerID(111)
-			certified, aggHash := createOpinions(t, th.cdb, lid, !tc.missingCert)
-			if tc.multipleCerts {
-				require.NoError(t, certificates.Add(th.cdb, lid, &types.Certificate{
-					BlockID: types.RandomBlockID(),
-				}))
-			}
-
-			lidBytes, err := codec.Encode(&lid)
-			require.NoError(t, err)
-
-			out, err := th.handleLayerOpinionsReq(context.Background(), lidBytes)
-			require.NoError(t, err)
-
-			var got LayerOpinion
-			err = codec.Decode(out, &got)
-			require.NoError(t, err)
-			require.Equal(t, aggHash, got.PrevAggHash)
-			if tc.missingCert || tc.multipleCerts {
-				require.Nil(t, got.Cert)
-			} else {
-				require.NotNil(t, got.Cert)
-				require.Equal(t, certified, got.Cert.BlockID)
-			}
-		})
-	}
-}
-
-func TestHandleLayerOpinionsReq2(t *testing.T) {
-	tt := []struct {
-		name                       string
-		missingCert, multipleCerts bool
-	}{
-		{
-			name: "all good",
-		},
-		{
-			name:        "cert missing",
-			missingCert: true,
-		},
-		{
-			name:          "multiple certs",
-			multipleCerts: true,
-		},
-	}
-
-	for _, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			th := createTestHandler(t)
-			lid := types.LayerID(111)
 			_, aggHash := createOpinions(t, th.cdb, lid, !tc.missingCert)
 			if tc.multipleCerts {
 				bid := types.RandomBlockID()
@@ -210,7 +158,7 @@ func TestHandleLayerOpinionsReq2(t *testing.T) {
 			out, err := th.handleLayerOpinionsReq2(context.Background(), reqBytes)
 			require.NoError(t, err)
 
-			var got LayerOpinion2
+			var got LayerOpinion
 			err = codec.Decode(out, &got)
 			require.NoError(t, err)
 			require.Equal(t, aggHash, got.PrevAggHash)
@@ -247,10 +195,6 @@ func TestHandleCertReq(t *testing.T) {
 	var got types.Certificate
 	require.NoError(t, codec.Decode(resp, &got))
 	require.Equal(t, *cert, got)
-
-	th.serveNewOpn = false
-	_, err = th.handleLayerOpinionsReq2(context.Background(), reqData)
-	require.ErrorContains(t, err, "new opn protocol not supported")
 }
 
 func TestHandleMeshHashReq(t *testing.T) {

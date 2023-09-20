@@ -23,6 +23,17 @@ type migration struct {
 // Migrations is interface for migrations provider.
 type Migrations func(Executor) error
 
+func version(db Executor) (int, error) {
+	var current int
+	if _, err := db.Exec("PRAGMA user_version;", nil, func(stmt *Statement) bool {
+		current = stmt.ColumnInt(0)
+		return true
+	}); err != nil {
+		return 0, fmt.Errorf("read user_version %w", err)
+	}
+	return current, nil
+}
+
 func embeddedMigrations(db Executor) error {
 	var migrations []migration
 	fs.WalkDir(embedded, "migrations", func(path string, d fs.DirEntry, err error) error {
@@ -62,13 +73,9 @@ func embeddedMigrations(db Executor) error {
 		return migrations[i].order < migrations[j].order
 	})
 
-	var current int
-
-	if _, err := db.Exec("PRAGMA user_version;", nil, func(stmt *Statement) bool {
-		current = stmt.ColumnInt(0)
-		return true
-	}); err != nil {
-		return fmt.Errorf("read user_version %w", err)
+	current, err := version(db)
+	if err != nil {
+		return err
 	}
 
 	for _, m := range migrations {

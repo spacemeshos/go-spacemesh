@@ -16,6 +16,7 @@ import (
 	putil "github.com/spacemeshos/go-spacemesh/proposals/util"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 )
@@ -72,7 +73,6 @@ func createBallots(tb testing.TB, signer *signing.EdSigner, activeSet types.ATXI
 				Beacon:           beacon,
 				EligibilityCount: eligibleSlots,
 			}
-			b.ActiveSet = activeSet
 		} else {
 			b.RefBallot = blts[0].ID()
 		}
@@ -90,12 +90,14 @@ func TestComputeWeightPerEligibility(t *testing.T) {
 		signing.WithKeyFromRand(rand.New(rand.NewSource(1001))),
 	)
 	require.NoError(t, err)
-	beacon := types.Beacon{1, 1, 1}
-	blts := createBallots(t, signer, genActiveSet(), beacon)
-	rb := blts[0]
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+	beacon := types.Beacon{1, 1, 1}
+	actives := genActiveSet()
+	blts := createBallots(t, signer, actives, beacon)
+	rb := blts[0]
+	activesets.Add(cdb, rb.EpochData.ActiveSetHash, &types.EpochActiveSet{Set: actives})
 	require.NoError(t, ballots.Add(cdb, rb))
-	for _, id := range rb.ActiveSet {
+	for _, id := range actives {
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
 				PublishEpoch: epoch - 1,
@@ -158,9 +160,12 @@ func TestComputeWeightPerEligibility_FailATX(t *testing.T) {
 	)
 	require.NoError(t, err)
 	beacon := types.Beacon{1, 1, 1}
-	blts := createBallots(t, signer, genActiveSet(), beacon)
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
-	got, err := ComputeWeightPerEligibility(cdb, blts[0])
+	actives := genActiveSet()
+	blts := createBallots(t, signer, actives, beacon)
+	rb := blts[0]
+	activesets.Add(cdb, rb.EpochData.ActiveSetHash, &types.EpochActiveSet{Set: actives})
+	got, err := ComputeWeightPerEligibility(cdb, rb)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.True(t, strings.Contains(err.Error(), "missing atx"))
 	require.Nil(t, got)

@@ -6,8 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/spacemeshos/poet/config"
 	rpcapi "github.com/spacemeshos/poet/release/proto/go/rpc/api/v1"
+	"github.com/spacemeshos/poet/server"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 
@@ -15,12 +15,12 @@ import (
 )
 
 func Test_HTTPPoetClient_ParsesURL(t *testing.T) {
-	cfg := config.DefaultConfig()
+	cfg := server.DefaultRoundConfig()
 
 	t.Run("add http if missing", func(t *testing.T) {
 		client, err := NewHTTPPoetClient("bla", PoetConfig{
-			PhaseShift: cfg.Service.PhaseShift,
-			CycleGap:   cfg.Service.CycleGap,
+			PhaseShift: cfg.PhaseShift,
+			CycleGap:   cfg.CycleGap,
 		})
 		require.NoError(t, err)
 		require.Equal(t, "http://bla", client.baseURL.String())
@@ -28,8 +28,8 @@ func Test_HTTPPoetClient_ParsesURL(t *testing.T) {
 
 	t.Run("do not change scheme if present", func(t *testing.T) {
 		client, err := NewHTTPPoetClient("https://bla", PoetConfig{
-			PhaseShift: cfg.Service.PhaseShift,
-			CycleGap:   cfg.Service.CycleGap,
+			PhaseShift: cfg.PhaseShift,
+			CycleGap:   cfg.CycleGap,
 		})
 		require.NoError(t, err)
 		require.Equal(t, "https://bla", client.baseURL.String())
@@ -49,10 +49,10 @@ func Test_HTTPPoetClient_Submit(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	cfg := config.DefaultConfig()
+	cfg := server.DefaultRoundConfig()
 	client, err := NewHTTPPoetClient(ts.URL, PoetConfig{
-		PhaseShift: cfg.Service.PhaseShift,
-		CycleGap:   cfg.Service.CycleGap,
+		PhaseShift: cfg.PhaseShift,
+		CycleGap:   cfg.CycleGap,
 	}, withCustomHttpClient(ts.Client()))
 	require.NoError(t, err)
 
@@ -73,10 +73,10 @@ func Test_HTTPPoetClient_Address(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	cfg := config.DefaultConfig()
+	cfg := server.DefaultRoundConfig()
 	client, err := NewHTTPPoetClient(ts.URL, PoetConfig{
-		PhaseShift: cfg.Service.PhaseShift,
-		CycleGap:   cfg.Service.CycleGap,
+		PhaseShift: cfg.PhaseShift,
+		CycleGap:   cfg.CycleGap,
 	}, withCustomHttpClient(ts.Client()))
 	require.NoError(t, err)
 
@@ -84,7 +84,7 @@ func Test_HTTPPoetClient_Address(t *testing.T) {
 }
 
 func Test_HTTPPoetClient_Address_Mainnet(t *testing.T) {
-	poetCfg := config.DefaultConfig()
+	poetCfg := server.DefaultRoundConfig()
 
 	poETServers := []string{
 		"https://mainnet-poet-0.spacemesh.network",
@@ -97,8 +97,8 @@ func Test_HTTPPoetClient_Address_Mainnet(t *testing.T) {
 	for _, url := range poETServers {
 		t.Run(url, func(t *testing.T) {
 			client, err := NewHTTPPoetClient(url, PoetConfig{
-				PhaseShift: poetCfg.Service.PhaseShift,
-				CycleGap:   poetCfg.Service.CycleGap,
+				PhaseShift: poetCfg.PhaseShift,
+				CycleGap:   poetCfg.CycleGap,
 			})
 			require.NoError(t, err)
 			require.Equal(t, url, client.Address())
@@ -119,10 +119,10 @@ func Test_HTTPPoetClient_Proof(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	cfg := config.DefaultConfig()
+	cfg := server.DefaultRoundConfig()
 	client, err := NewHTTPPoetClient(ts.URL, PoetConfig{
-		PhaseShift: cfg.Service.PhaseShift,
-		CycleGap:   cfg.Service.CycleGap,
+		PhaseShift: cfg.PhaseShift,
+		CycleGap:   cfg.CycleGap,
 	}, withCustomHttpClient(ts.Client()))
 	require.NoError(t, err)
 
@@ -143,10 +143,10 @@ func Test_HTTPPoetClient_PoetServiceID(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	cfg := config.DefaultConfig()
+	cfg := server.DefaultRoundConfig()
 	client, err := NewHTTPPoetClient(ts.URL, PoetConfig{
-		PhaseShift: cfg.Service.PhaseShift,
-		CycleGap:   cfg.Service.CycleGap,
+		PhaseShift: cfg.PhaseShift,
+		CycleGap:   cfg.CycleGap,
 	}, withCustomHttpClient(ts.Client()))
 	require.NoError(t, err)
 

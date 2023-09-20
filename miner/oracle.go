@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -62,10 +63,6 @@ func newMinerOracle(cfg config, c layerClock, cdb *datastore.CachedDB, vrfSigner
 func (o *Oracle) ProposalEligibility(lid types.LayerID, beacon types.Beacon, nonce types.VRFPostIndex) (*EpochEligibility, error) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-
-	if legacy := types.GetLegacyLayer(); legacy != 0 && lid.Uint32() == legacy+1 {
-		o.cache = &EpochEligibility{}
-	}
 
 	epoch := lid.GetEpoch()
 	if lid <= types.GetEffectiveGenesis() {
@@ -220,7 +217,11 @@ func (o *Oracle) calcEligibilityProofs(lid types.LayerID, epoch types.EpochID, b
 	if ref == nil {
 		minerWeight, totalWeight, ownAtx, activeSet, err = o.activeSet(epoch)
 	} else {
-		activeSet = ref.ActiveSet
+		if epochActives, err := activesets.Get(o.cdb, ref.EpochData.ActiveSetHash); err != nil {
+			return nil, err
+		} else {
+			activeSet = epochActives.Set
+		}
 		o.log.With().Info("use active set from ref ballot",
 			ref.ID(),
 			log.Int("num atx", len(activeSet)),
@@ -244,7 +245,7 @@ func (o *Oracle) calcEligibilityProofs(lid types.LayerID, epoch types.EpochID, b
 	)
 	var numEligibleSlots uint32
 	if ref == nil {
-		numEligibleSlots, err = proposals.GetLegacyNumEligible(lid, minerWeight, o.cfg.minActiveSetWeight, totalWeight, o.cfg.layerSize, o.cfg.layersPerEpoch)
+		numEligibleSlots, err = proposals.GetNumEligibleSlots(minerWeight, o.cfg.minActiveSetWeight, totalWeight, o.cfg.layerSize, o.cfg.layersPerEpoch)
 		if err != nil {
 			return nil, fmt.Errorf("oracle get num slots: %w", err)
 		}

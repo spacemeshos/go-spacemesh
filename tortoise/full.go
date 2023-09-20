@@ -46,9 +46,10 @@ func (f *full) countBallot(logger *zap.Logger, ballot *ballotInfo) {
 			continue
 		}
 		layer := f.layer(lvote.lid)
+		height := ballot.reference.height
 		empty := true
 		for _, block := range layer.blocks {
-			if block.height > ballot.reference.height {
+			if block.height > height {
 				continue
 			}
 			vote := lvote.getVote(block)

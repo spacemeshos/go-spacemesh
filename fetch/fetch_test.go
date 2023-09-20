@@ -28,7 +28,6 @@ type testFetch struct {
 	mMalS   *mocks.Mockrequester
 	mAtxS   *mocks.Mockrequester
 	mLyrS   *mocks.Mockrequester
-	mOpnS   *mocks.Mockrequester
 	mHashS  *mocks.Mockrequester
 	mMHashS *mocks.Mockrequester
 	mOpn2S  *mocks.Mockrequester
@@ -53,7 +52,6 @@ func createFetch(tb testing.TB) *testFetch {
 		mMalS:        mocks.NewMockrequester(ctrl),
 		mAtxS:        mocks.NewMockrequester(ctrl),
 		mLyrS:        mocks.NewMockrequester(ctrl),
-		mOpnS:        mocks.NewMockrequester(ctrl),
 		mHashS:       mocks.NewMockrequester(ctrl),
 		mMHashS:      mocks.NewMockrequester(ctrl),
 		mOpn2S:       mocks.NewMockrequester(ctrl),
@@ -74,7 +72,6 @@ func createFetch(tb testing.TB) *testFetch {
 		QueueSize:            1000,
 		RequestTimeout:       time.Second * time.Duration(3),
 		MaxRetriesForRequest: 3,
-		ServeNewProtocol:     true,
 	}
 	lg := logtest.New(tb)
 	tf.Fetch = NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), tf.mMesh, nil, nil,
@@ -85,7 +82,6 @@ func createFetch(tb testing.TB) *testFetch {
 			malProtocol:      tf.mMalS,
 			atxProtocol:      tf.mAtxS,
 			lyrDataProtocol:  tf.mLyrS,
-			lyrOpnsProtocol:  tf.mOpnS,
 			hashProtocol:     tf.mHashS,
 			meshHashProtocol: tf.mMHashS,
 			OpnProtocol:      tf.mOpn2S,
@@ -365,7 +361,6 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 		QueueSize:            1000,
 		RequestTimeout:       time.Second * time.Duration(3),
 		MaxRetriesForRequest: 3,
-		ServeNewProtocol:     true,
 	}
 	p2pconf := p2p.DefaultConfig()
 	p2pconf.Listen = "/ip4/127.0.0.1/tcp/0"
