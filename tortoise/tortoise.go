@@ -89,6 +89,7 @@ func (t *turtle) evict(ctx context.Context) {
 		zap.Stringer("from_layer", t.evicted.Add(1)),
 		zap.Stringer("upto_layer", windowStart),
 	)
+	layersNumber.Set(float64(len(t.layers.data)))
 	if !windowStart.After(t.evicted) {
 		return
 	}
@@ -97,21 +98,17 @@ func (t *turtle) evict(ctx context.Context) {
 	}
 	for lid := t.evicted.Add(1); lid.Before(windowStart); lid = lid.Add(1) {
 		for _, ballot := range t.ballots[lid] {
-			ballotsNumber.Dec()
 			delete(t.ballotRefs, ballot.id)
 		}
-		for range t.layer(lid).blocks {
-			blocksNumber.Dec()
-		}
+
+		ballotsNumber.Sub(float64(len(t.ballots[lid])))
+		blocksNumber.Sub(float64(len(t.layer(lid).blocks)))
 		t.layers.pop()
 
 		delete(t.ballots, lid)
 		if lid.OrdinalInEpoch() == types.GetLayersPerEpoch()-1 {
-			layersNumber.Dec()
 			epoch := t.epoch(lid.GetEpoch())
-			for range epoch.atxs {
-				atxsNumber.Dec()
-			}
+			atxsNumber.Sub(float64(len(epoch.atxs)))
 			delete(t.epochs, lid.GetEpoch())
 		}
 	}
