@@ -15,8 +15,6 @@ import (
 )
 
 var (
-	errTargetEpochMismatch = errors.New("ATX target epoch and ballot publish epoch mismatch")
-	errPublicKeyMismatch   = errors.New("ballot smesher key and ATX node key mismatch")
 	errIncorrectCounter    = errors.New("proof counter larger than number of slots available")
 	errInvalidProofsOrder  = errors.New("proofs are out of order")
 	errIncorrectVRFSig     = errors.New("proof contains incorrect VRF signature")
@@ -83,12 +81,12 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot, 
 		if err != nil {
 			return false, fmt.Errorf("failed to load atx %v: %w", ballot.AtxID, err)
 		}
+		fmt.Println(owned.TargetEpoch(), epoch)
 		if owned.TargetEpoch() != epoch {
-			return false, fmt.Errorf("%w: ATX target epoch (%v), ballot publication epoch (%v)",
-				errTargetEpochMismatch, owned.TargetEpoch(), epoch)
+			return false, fmt.Errorf("atx and ballot epochs mismatch. atx %d/%s is not from %d/%s", owned.TargetEpoch(), ballot.AtxID.ShortString(), epoch, ballot.SmesherID.ShortString())
 		}
 		if ballot.SmesherID != owned.NodeID {
-			return false, fmt.Errorf("%w: public key (%v), ATX node key (%v)", errPublicKeyMismatch, ballot.SmesherID.String(), owned.NodeID)
+			return false, fmt.Errorf("atx and ballot key mismatch: public key (%v), ATX node key (%v)", ballot.SmesherID.String(), owned.NodeID)
 		}
 		nonce, err := v.nonceFetcher.VRFNonce(ballot.SmesherID, epoch)
 		if err != nil {

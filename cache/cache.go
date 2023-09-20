@@ -40,7 +40,7 @@ type Cache struct {
 	evicted atomic.Uint32
 
 	// number of epochs to keep
-	// capacity is used for informational purposes.
+	// capacity is enforced by the cache itself
 	capacity types.EpochID
 
 	mu     sync.RWMutex
@@ -109,7 +109,7 @@ func (c *Cache) Add(epoch types.EpochID, node types.NodeID, atx types.ATXID, dat
 	ecache.identities[node] = atxs
 }
 
-func (c *Cache) Malicious(node types.NodeID) {
+func (c *Cache) SetMalicious(node types.NodeID) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for _, ecache := range c.epochs {
@@ -150,11 +150,13 @@ func (c *Cache) GetByNode(epoch types.EpochID, node types.NodeID) *ATXData {
 	if !exists {
 		return nil
 	}
-	data, exists := ecache.atxs[atxids[0]]
-	if !exists {
-		return nil
+	for _, atxid := range atxids {
+		data, exists := ecache.atxs[atxid]
+		if exists {
+			return data
+		}
 	}
-	return data
+	return nil
 }
 
 // NodeHasAtx returns true if atx was registered with a given node id.

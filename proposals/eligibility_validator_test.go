@@ -152,6 +152,21 @@ func TestEligibilityValidator(t *testing.T) {
 			),
 		},
 		{
+			desc:    "ref ballot in current slowpath",
+			current: epoch.FirstLayer(),
+			evicted: epoch,
+			atxs: []types.VerifiedActivationTx{
+				gatx(types.ATXID{1}, publish, types.NodeID{1}, 10, 10),
+				gatx(types.ATXID{2}, publish, types.NodeID{2}, 10, 10),
+			},
+			actives: gactiveset(types.ATXID{1}, types.ATXID{2}),
+			executed: gballot(
+				types.BallotID{1}, types.ATXID{1},
+				types.NodeID{1}, epoch.FirstLayer(), gdata(15, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
+				geligibilities(1, 2),
+			),
+		},
+		{
 			desc:      "ref ballot in current low activeset",
 			current:   epoch.FirstLayer(),
 			minWeight: 10000,
@@ -205,6 +220,17 @@ func TestEligibilityValidator(t *testing.T) {
 		},
 		{
 			desc: "no atx",
+			executed: gballot(
+				types.BallotID{1}, types.ATXID{1},
+				types.NodeID{1}, publish.FirstLayer(), gdata(15, types.Beacon{1}, types.Hash32{}),
+				geligibilities(1, 2),
+			),
+			fail: true,
+			err:  "failed to load atx",
+		},
+		{
+			desc:    "no atx slowpath",
+			evicted: epoch,
 			executed: gballot(
 				types.BallotID{1}, types.ATXID{1},
 				types.NodeID{1}, publish.FirstLayer(), gdata(15, types.Beacon{1}, types.Hash32{}),
@@ -286,6 +312,22 @@ func TestEligibilityValidator(t *testing.T) {
 			err:  "atx in active set is missing",
 		},
 		{
+			desc:    "ref ballot in current atx in set missing slowpath",
+			evicted: epoch,
+			current: epoch.FirstLayer(),
+			atxs: []types.VerifiedActivationTx{
+				gatx(types.ATXID{1}, epoch-1, types.NodeID{1}, 10, 10),
+			},
+			actives: gactiveset(types.ATXID{1}, types.ATXID{2}),
+			executed: gballot(
+				types.BallotID{1}, types.ATXID{1},
+				types.NodeID{1}, epoch.FirstLayer(), gdata(10, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
+				geligibilities(1, 2),
+			),
+			fail: true,
+			err:  "atx in active set is missing",
+		},
+		{
 			desc:    "mismatched num eligible",
 			current: epoch.FirstLayer(),
 			atxs: []types.VerifiedActivationTx{
@@ -316,7 +358,40 @@ func TestEligibilityValidator(t *testing.T) {
 			err:  "failed to load atx from cache",
 		},
 		{
+			desc:    "ballot targets wrong epoch slowpath",
+			current: epoch.FirstLayer(),
+			evicted: epoch + 1,
+			atxs: []types.VerifiedActivationTx{
+				gatx(types.ATXID{1}, epoch-1, types.NodeID{1}, 10, 0),
+			},
+			actives: gactiveset(types.ATXID{1}),
+			executed: gballot(
+				types.BallotID{1}, types.ATXID{1},
+				types.NodeID{1}, (epoch + 1).FirstLayer(), gdata(10, types.Beacon{1}, gactiveset(types.ATXID{1}).Hash()),
+				geligibilities(1, 2),
+			),
+			fail: true,
+			err:  "atx and ballot epochs mismatch",
+		},
+		{
 			desc:    "ballot uses wrong atx",
+			current: epoch.FirstLayer(),
+			atxs: []types.VerifiedActivationTx{
+				gatx(types.ATXID{1}, epoch-1, types.NodeID{2}, 10, 0),
+			},
+			actives: gactiveset(types.ATXID{1}),
+			executed: gballot(
+				types.BallotID{1}, types.ATXID{1},
+				types.NodeID{1}, epoch.FirstLayer(), gdata(10, types.Beacon{1}, gactiveset(types.ATXID{1}).Hash()),
+				geligibilities(1, 2),
+			),
+			fail: true,
+			err:  "atx and ballot key mismatch",
+		},
+
+		{
+			desc:    "ballot uses wrong atx slowpath",
+			evicted: epoch,
 			current: epoch.FirstLayer(),
 			atxs: []types.VerifiedActivationTx{
 				gatx(types.ATXID{1}, epoch-1, types.NodeID{2}, 10, 0),
