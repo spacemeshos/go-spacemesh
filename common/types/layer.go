@@ -19,33 +19,12 @@ var (
 
 	// EmptyLayerHash is the layer hash for an empty layer.
 	EmptyLayerHash = Hash32{}
-
-	legacyLayer uint32
-
-	// layer at which optimistic filtering majority calculation is upgraded.
-	opUpgradeLayer uint32
 )
 
 // SetLayersPerEpoch sets global parameter of layers per epoch, all conversions from layer to epoch use this param.
 func SetLayersPerEpoch(layers uint32) {
 	atomic.StoreUint32(&layersPerEpoch, layers)
 	SetEffectiveGenesis(layers*2 - 1)
-}
-
-func SetLegacyLayers(layer uint32) {
-	legacyLayer = layer
-}
-
-func GetLegacyLayer() uint32 {
-	return legacyLayer
-}
-
-func SetOpUpgradeLayer(layer uint32) {
-	opUpgradeLayer = layer
-}
-
-func OpUpgradeLayer() uint32 {
-	return opUpgradeLayer
 }
 
 func SetEffectiveGenesis(layer uint32) {

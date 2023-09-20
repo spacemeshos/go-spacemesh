@@ -14,7 +14,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/proposals/util"
 )
 
 var (
@@ -700,21 +699,13 @@ func (t *turtle) decodeBallot(ballot *types.BallotTortoiseData) (*ballotInfo, ty
 		if !exists {
 			return nil, 0, fmt.Errorf("atx %s/%d not in state", ballot.AtxID, ballot.Layer.GetEpoch())
 		}
-		total, err := activeSetWeight(epoch, ballot.EpochData.ActiveSet)
-		if err != nil {
-			return nil, 0, err
-		}
-		expected, err := util.GetLegacyNumEligible(ballot.Layer, atx.weight, t.MinimalActiveSetWeight, total, t.LayerSize, types.GetLayersPerEpoch())
-		if err != nil {
-			return nil, 0, err
-		}
 		refinfo = &referenceInfo{
 			smesher:         ballot.Smesher,
 			atxid:           ballot.AtxID,
 			expectedBallots: ballot.EpochData.Eligibilities,
 			beacon:          ballot.EpochData.Beacon,
 			height:          atx.height,
-			weight:          big.NewRat(int64(atx.weight), int64(expected)),
+			weight:          big.NewRat(int64(atx.weight), int64(ballot.EpochData.Eligibilities)),
 		}
 	} else if ballot.Ref != nil {
 		ptr := *ballot.Ref

@@ -66,7 +66,6 @@ type config struct {
 	layersPerEpoch     uint32
 	hdist              uint32
 	minActiveSetWeight uint64
-	emitEmptyActiveSet types.LayerID
 	nodeID             types.NodeID
 	networkDelay       time.Duration
 
@@ -79,7 +78,6 @@ func (c *config) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("epoch size", c.layersPerEpoch)
 	encoder.AddUint32("hdist", c.hdist)
 	encoder.AddUint64("min active weight", c.minActiveSetWeight)
-	encoder.AddUint32("emit empty set", c.emitEmptyActiveSet.Uint32())
 	encoder.AddDuration("network delay", c.networkDelay)
 	encoder.AddInt("good atx percent", c.goodAtxPct)
 	return nil
@@ -149,12 +147,6 @@ func WithNetworkDelay(delay time.Duration) Opt {
 func WithMinGoodAtxPct(pct int) Opt {
 	return func(pb *ProposalBuilder) {
 		pb.cfg.goodAtxPct = pct
-	}
-}
-
-func WithEmitEmptyActiveSet(lid types.LayerID) Opt {
-	return func(pb *ProposalBuilder) {
-		pb.cfg.emitEmptyActiveSet = lid
 	}
 }
 
@@ -301,9 +293,6 @@ func (pb *ProposalBuilder) createProposal(
 			TxIDs:    txIDs,
 			MeshHash: pb.decideMeshHash(ctx, layerID),
 		},
-	}
-	if p.EpochData != nil && layerID < pb.cfg.emitEmptyActiveSet {
-		p.ActiveSet = epochEligibility.ActiveSet
 	}
 	p.Ballot.Signature = pb.signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
 	p.SmesherID = pb.signer.NodeID()

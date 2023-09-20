@@ -83,7 +83,6 @@ type Config struct {
 	DisableNatPort           bool        `mapstructure:"disable-natport"`
 	DisableConnectionManager bool        `mapstructure:"disable-connection-manager"`
 	DisableResourceManager   bool        `mapstructure:"disable-resource-manager"`
-	DisableDHT               bool        `mapstructure:"disable-dht"`
 	Flood                    bool        `mapstructure:"flood"`
 	Listen                   string      `mapstructure:"listen"`
 	Bootnodes                []string    `mapstructure:"bootnodes"`
@@ -100,7 +99,6 @@ type Config struct {
 	Bootnode                 bool        `mapstructure:"p2p-bootnode"`
 	ForceReachability        string      `mapstructure:"p2p-reachability"`
 	EnableHolepunching       bool        `mapstructure:"p2p-holepunching"`
-	DisableLegacyDiscovery   bool        `mapstructure:"p2p-disable-legacy-discovery"`
 	PrivateNetwork           bool        `mapstructure:"p2p-private-network"`
 	RelayServer              RelayServer `mapstructure:"relay-server"`
 	IP4Blocklist             []string    `mapstructure:"ip4-blocklist"`

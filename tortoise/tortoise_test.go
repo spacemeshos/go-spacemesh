@@ -25,7 +25,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
-	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/tortoise/opinionhash"
 	"github.com/spacemeshos/go-spacemesh/tortoise/sim"
@@ -862,7 +861,6 @@ func TestDecodeVotes(t *testing.T) {
 		require.NoError(t, err)
 		ballot := types.NewExistingBallot(types.BallotID{3, 3, 3}, types.EmptyEdSignature, types.EmptyNodeID, ballots[0].Layer)
 		ballot.InnerBallot = ballots[0].InnerBallot
-		ballot.ActiveSet = ballots[0].ActiveSet
 		hasher := opinionhash.New()
 		supported := types.BlockID{2, 2, 2}
 		hasher.WriteSupport(supported, 0)
@@ -1094,6 +1092,7 @@ func TestBaseBallotPrioritization(t *testing.T) {
 				sim.WithSequence(5),
 			},
 			expected: genesis.Add(5),
+			window:   1,
 		},
 		{
 			desc: "BadBlocksIgnored",
@@ -1420,18 +1419,11 @@ func TestComputeLocalOpinion(t *testing.T) {
 
 func TestComputeBallotWeight(t *testing.T) {
 	type testBallot struct {
-		ActiveSet      []int // optional index to atx's to form an active set
-		RefBallot      int   // optional index to the ballot, use it in test if active set is nil
-		ATX            int   // non optional index to this ballot atx
-		ExpectedWeight float64
-		Eligibilities  int
-	}
-	createActiveSet := func(pos []int, atxdis []types.ATXID) []types.ATXID {
-		var rst []types.ATXID
-		for _, i := range pos {
-			rst = append(rst, atxdis[i])
-		}
-		return rst
+		TotalEligibilities int
+		RefBallot          int // optional index to the ballot, use it in test if active set is nil
+		ATX                int // non optional index to this ballot atx
+		ExpectedWeight     float64
+		Eligibilities      int
 	}
 
 	for _, tc := range []struct {
@@ -1441,63 +1433,63 @@ func TestComputeBallotWeight(t *testing.T) {
 		layerSize, layersPerEpoch uint32
 	}{
 		{
-			desc:           "FromActiveSet",
+			desc:           "total eligibilities",
 			atxs:           []uint{50, 50, 50},
 			layerSize:      5,
 			layersPerEpoch: 3,
 			ballots: []testBallot{
-				{ActiveSet: []int{0, 1, 2}, ATX: 0, ExpectedWeight: 10, Eligibilities: 1},
-				{ActiveSet: []int{0, 1, 2}, ATX: 1, ExpectedWeight: 10, Eligibilities: 1},
+				{TotalEligibilities: 5, ATX: 0, ExpectedWeight: 10, Eligibilities: 1},
+				{TotalEligibilities: 5, ATX: 1, ExpectedWeight: 10, Eligibilities: 1},
 			},
 		},
 		{
-			desc:           "FromRefBallot",
+			desc:           "ref ballot",
 			atxs:           []uint{50, 50, 50},
 			layerSize:      5,
 			layersPerEpoch: 3,
 			ballots: []testBallot{
-				{ActiveSet: []int{0, 1, 2}, ATX: 0, ExpectedWeight: 10, Eligibilities: 1},
+				{TotalEligibilities: 5, ATX: 0, ExpectedWeight: 10, Eligibilities: 1},
 				{RefBallot: 0, ATX: 0, ExpectedWeight: 10, Eligibilities: 1},
 			},
 		},
 		{
-			desc:           "FromRefBallotMultipleEligibilities",
+			desc:           "ref ballot multiple",
 			atxs:           []uint{50, 50, 50},
 			layerSize:      5,
 			layersPerEpoch: 3,
 			ballots: []testBallot{
-				{ActiveSet: []int{0, 1, 2}, ATX: 0, ExpectedWeight: 10, Eligibilities: 1},
+				{TotalEligibilities: 5, ATX: 0, ExpectedWeight: 10, Eligibilities: 1},
 				{RefBallot: 0, ATX: 0, ExpectedWeight: 20, Eligibilities: 2},
 			},
 		},
 		{
-			desc:           "FromRefBallotMultipleEligibilities",
+			desc:           "ref ballot multiple",
 			atxs:           []uint{50, 50, 50},
 			layerSize:      5,
 			layersPerEpoch: 3,
 			ballots: []testBallot{
-				{ActiveSet: []int{0, 1, 2}, ATX: 0, ExpectedWeight: 20, Eligibilities: 2},
+				{TotalEligibilities: 5, ATX: 0, ExpectedWeight: 20, Eligibilities: 2},
 				{RefBallot: 0, ATX: 0, ExpectedWeight: 10, Eligibilities: 1},
 			},
 		},
 		{
-			desc:           "FromRefBallotMultipleEligibilities",
+			desc:           "ref ballot multiple",
 			atxs:           []uint{50, 50, 50},
 			layerSize:      5,
 			layersPerEpoch: 3,
 			ballots: []testBallot{
-				{ActiveSet: []int{0, 1, 2}, ATX: 0, ExpectedWeight: 20, Eligibilities: 2},
+				{TotalEligibilities: 5, ATX: 0, ExpectedWeight: 20, Eligibilities: 2},
 				{RefBallot: 0, ATX: 0, ExpectedWeight: 30, Eligibilities: 3},
 			},
 		},
 		{
-			desc:           "DifferentActiveSets",
+			desc:           "different weight",
 			atxs:           []uint{50, 50, 100, 100},
 			layerSize:      5,
 			layersPerEpoch: 2,
 			ballots: []testBallot{
-				{ActiveSet: []int{0, 1}, ATX: 0, ExpectedWeight: 10, Eligibilities: 1},
-				{ActiveSet: []int{2, 3}, ATX: 2, ExpectedWeight: 20, Eligibilities: 1},
+				{TotalEligibilities: 5, ATX: 0, ExpectedWeight: 10, Eligibilities: 1},
+				{TotalEligibilities: 5, ATX: 2, ExpectedWeight: 20, Eligibilities: 1},
 			},
 		},
 	} {
@@ -1546,11 +1538,11 @@ func TestComputeBallotWeight(t *testing.T) {
 						types.VotingEligibility{J: uint32(currentJ)})
 					currentJ++
 				}
-				if b.ActiveSet != nil {
+				if b.TotalEligibilities != 0 {
 					ballot.EpochData = &types.EpochData{
-						ActiveSetHash: types.Hash32{1, 2, 3},
+						ActiveSetHash:    types.Hash32{1, 2, 3},
+						EligibilityCount: uint32(b.TotalEligibilities),
 					}
-					ballot.ActiveSet = createActiveSet(b.ActiveSet, atxids)
 				} else {
 					ballot.RefBallot = blts[b.RefBallot].ID()
 				}
@@ -1892,7 +1884,7 @@ func TestMaliciousBallotsAreIgnored(t *testing.T) {
 	blts, err := ballots.Layer(s.GetState(0).DB, last)
 	require.NoError(t, err)
 	for _, ballot := range blts {
-		require.NoError(t, identities.SetMalicious(s.GetState(0).DB, ballot.SmesherID, []byte("proof"), time.Now()))
+		tortoise.OnMalfeasance(ballot.SmesherID)
 	}
 
 	tortoise.TallyVotes(ctx, s.Next())
@@ -2291,7 +2283,6 @@ func TestSwitchMode(t *testing.T) {
 			ballot := types.NewExistingBallot(types.BallotID{byte(i)}, types.EmptyEdSignature, types.EmptyNodeID, template.Layer)
 			ballot.InnerBallot = template.InnerBallot
 			ballot.EligibilityProofs = template.EligibilityProofs
-			ballot.ActiveSet = template.ActiveSet
 			tortoise.OnBallot(ballot.ToTortoiseData())
 		}
 		tortoise.TallyVotes(ctx, last)
@@ -2339,7 +2330,6 @@ func TestOnBallotComputeOpinion(t *testing.T) {
 		ballot := types.NewExistingBallot(id, types.EmptyEdSignature, types.EmptyNodeID, rst[0].Layer)
 		ballot.InnerBallot = rst[0].InnerBallot
 		ballot.EligibilityProofs = rst[0].EligibilityProofs
-		ballot.ActiveSet = rst[0].ActiveSet
 		ballot.Votes.Base = types.EmptyBallotID
 		ballot.Votes.Support = nil
 		ballot.Votes.Against = nil
@@ -2763,8 +2753,10 @@ func TestEncodeVotes(t *testing.T) {
 		tortoise.OnAtx(header.ToData())
 		tortoise.OnBeacon(lid.GetEpoch(), types.EmptyBeacon)
 
-		ballot.EpochData = &types.EpochData{ActiveSetHash: types.Hash32{1, 2, 3}}
-		ballot.ActiveSet = []types.ATXID{atxid}
+		ballot.EpochData = &types.EpochData{
+			ActiveSetHash:    types.Hash32{1, 2, 3},
+			EligibilityCount: 1,
+		}
 		ballot.AtxID = atxid
 		ballot.Layer = lid
 		ballot.Votes.Support = []types.Vote{
@@ -3062,7 +3054,7 @@ func TestMinimalActiveSetWeight(t *testing.T) {
 	s.smesher(0).atx(1, new(aopt).height(10).weight(2))
 	s.beacon(1, "a")
 	s.smesher(0).atx(1).ballot(1, new(bopt).
-		activeset(s.smesher(0).atx(1)).
+		totalEligibilities(s.epochEligibilities()).
 		beacon("a").
 		eligibilities(1),
 	)
@@ -3076,11 +3068,11 @@ func TestDuplicateBallot(t *testing.T) {
 	s.smesher(0).atx(1, new(aopt).height(10).weight(2))
 	id := types.BallotID{1}
 	s.smesher(0).atx(1).rawballot(id, 1, new(bopt).
-		activeset(s.smesher(0).atx(1)).
+		totalEligibilities(s.epochEligibilities()).
 		eligibilities(1),
 	)
 	s.smesher(0).atx(1).rawballot(id, 1, new(bopt).
-		activeset(s.smesher(0).atx(1)).
+		totalEligibilities(s.epochEligibilities()).
 		eligibilities(1).assert(
 		func(db *DecodedBallot, err error) {
 			require.NotEmpty(t, db)
@@ -3099,21 +3091,15 @@ func TestSwitch(t *testing.T) {
 		withHdist(4).
 		withZdist(2)
 	const smeshers = 4
-	var (
-		elig      = s.layerSize / smeshers
-		activeset []*atxAction
-	)
+	elig := s.layerSize / smeshers
 	for i := 0; i < smeshers; i++ {
-		activeset = append(
-			activeset,
-			s.smesher(i).atx(1, new(aopt).height(10).weight(100)),
-		)
+		s.smesher(i).atx(1, new(aopt).height(10).weight(100))
 	}
 	s.beacon(1, "a")
 	for i := 0; i < smeshers; i++ {
 		s.smesher(i).atx(1).ballot(1, new(bopt).
 			beacon("a").
-			activeset(activeset...).
+			totalEligibilities(s.epochEligibilities()).
 			eligibilities(elig))
 	}
 
@@ -3150,21 +3136,15 @@ func TestOnMalfeasance(t *testing.T) {
 	t.Run("atxs", func(t *testing.T) {
 		s := newSession(t)
 		const smeshers = 3
-		var (
-			elig      = s.layerSize / smeshers
-			activeset []*atxAction
-		)
+		elig := s.layerSize / smeshers
 		for i := 0; i < smeshers; i++ {
-			activeset = append(
-				activeset,
-				s.smesher(i).atx(1, new(aopt).height(10).weight(100)),
-			)
+			s.smesher(i).atx(1, new(aopt).height(10).weight(100))
 		}
 		s.beacon(1, "a")
 		for i := 0; i < smeshers; i++ {
 			s.smesher(i).atx(1).ballot(1, new(bopt).
 				beacon("a").
-				activeset(activeset...).
+				totalEligibilities(s.epochEligibilities()).
 				eligibilities(elig))
 		}
 		s.smesher(0).malfeasant() // without this call threshold will be very large, and s.updates fail
@@ -3180,21 +3160,15 @@ func TestOnMalfeasance(t *testing.T) {
 			withHdist(1).
 			withZdist(1)
 		const smeshers = 3
-		var (
-			elig      = s.layerSize / smeshers
-			activeset []*atxAction
-		)
+		elig := s.layerSize / smeshers
 		for i := 0; i < smeshers; i++ {
-			activeset = append(
-				activeset,
-				s.smesher(i).atx(1, new(aopt).height(10).weight(100)),
-			)
+			s.smesher(i).atx(1, new(aopt).height(10).weight(100))
 		}
 		s.beacon(1, "a")
 		for i := 0; i < smeshers; i++ {
 			s.smesher(i).atx(1).ballot(1, new(bopt).
 				beacon("a").
-				activeset(activeset...).
+				totalEligibilities(s.epochEligibilities()).
 				eligibilities(elig))
 		}
 		for i := 0; i < smeshers; i++ {
@@ -3218,13 +3192,13 @@ func TestOnMalfeasance(t *testing.T) {
 
 func TestBaseAbstain(t *testing.T) {
 	s := newSession(t)
-	activeset := []*atxAction{
-		s.smesher(0).atx(1, new(aopt).height(10).weight(100)),
-	}
+
+	s.smesher(0).atx(1, new(aopt).height(10).weight(100))
+
 	s.beacon(1, "a")
 	s.smesher(0).atx(1).ballot(1, new(bopt).
 		beacon("a").
-		activeset(activeset...).
+		totalEligibilities(s.epochEligibilities()).
 		eligibilities(s.layerSize))
 	s.smesher(0).atx(1).ballot(2, new(bopt).
 		eligibilities(s.layerSize).

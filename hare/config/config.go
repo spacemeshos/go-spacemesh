@@ -14,7 +14,6 @@ type Config struct {
 	ExpectedLeaders int           `mapstructure:"hare-exp-leaders"`      // the expected number of leaders
 	LimitIterations int           `mapstructure:"hare-limit-iterations"` // limit on number of iterations
 	LimitConcurrent int           `mapstructure:"hare-limit-concurrent"` // limit number of concurrent CPs
-	StopAtxGrading  uint32        `mapstructure:"stop-atx-grading"`
 
 	Hdist uint32
 

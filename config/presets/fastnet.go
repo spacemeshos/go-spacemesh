@@ -22,6 +22,7 @@ func fastnet() config.Config {
 	conf.NetworkHRP = "stest"
 	types.SetNetworkHRP(conf.NetworkHRP) // set to generate coinbase
 	conf.BaseConfig.OptFilterThreshold = 90
+	conf.BaseConfig.DatabasePruneInterval = time.Minute
 
 	// set for systest TestEquivocation
 	conf.BaseConfig.MinerGoodAtxsPercent = 50
@@ -72,7 +73,8 @@ func fastnet() config.Config {
 	conf.SMESHING.Start = false
 	conf.SMESHING.Opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
 	conf.SMESHING.Opts.NumUnits = 2
-	conf.SMESHING.Opts.Throttle = true
+	conf.SMESHING.Opts.ComputeBatchSize = 128
+	conf.SMESHING.Opts.Scrypt.N = 2 // faster scrypt
 	// Override proof of work flags to use light mode (less memory intensive)
 	conf.SMESHING.ProvingOpts.Flags = postCfg.RecommendedPowFlags()
 

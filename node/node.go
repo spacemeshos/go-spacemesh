@@ -22,7 +22,6 @@ import (
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	grpctags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
 	"github.com/mitchellh/mapstructure"
-	poetconfig "github.com/spacemeshos/poet/config"
 	"github.com/spacemeshos/poet/server"
 	"github.com/spacemeshos/post/verifying"
 	"github.com/spf13/afero"
@@ -64,8 +63,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/proposals"
+	"github.com/spacemeshos/go-spacemesh/prune"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/ballots/util"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
 	"github.com/spacemeshos/go-spacemesh/syncer"
@@ -142,9 +143,6 @@ func GetCommand() *cobra.Command {
 
 			run := func(ctx context.Context) error {
 				types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
-				types.SetLegacyLayers(app.Config.LegacyLayer)
-				// starting on 2023-09-14 20:00:00 +0000 UTC (~1 week into 4th epoch)
-				types.SetOpUpgradeLayer(18000)
 				// ensure all data folders exist
 				if err := os.MkdirAll(app.Config.DataDir(), 0o700); err != nil {
 					return fmt.Errorf("ensure folders exist: %w", err)
@@ -564,7 +562,7 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	app.postVerifier = activation.NewOffloadingPostVerifier(postVerifiers, nipostValidatorLogger)
 
-	validator := activation.NewValidator(poetDb, app.Config.POST, nipostValidatorLogger, app.postVerifier)
+	validator := activation.NewValidator(poetDb, app.Config.POST, app.Config.SMESHING.Opts.Scrypt, nipostValidatorLogger, app.postVerifier)
 	app.validator = validator
 
 	cfg := vm.DefaultConfig()
@@ -623,6 +621,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.log.With().Info("tortoise will trace execution")
 		trtlopts = append(trtlopts, tortoise.WithTracer())
 	}
+	start := time.Now()
 	trtl, err := tortoise.Recover(
 		app.cachedDB,
 		app.clock.CurrentLayer(), beaconProtocol, trtlopts...,
@@ -630,6 +629,7 @@ func (app *App) initServices(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("can't recover tortoise state: %w", err)
 	}
+	app.log.With().Info("tortoise initialized", log.Duration("duration", time.Since(start)))
 	app.eg.Go(func() error {
 		for rst := range beaconProtocol.Results() {
 			events.EmitBeacon(rst.Epoch, rst.Beacon)
@@ -640,10 +640,16 @@ func (app *App) initServices(ctx context.Context) error {
 	})
 
 	executor := mesh.NewExecutor(app.cachedDB, state, app.conState, app.addLogger(ExecutorLogger, lg))
-	msh, err := mesh.NewMesh(app.cachedDB, app.clock, trtl, executor, app.conState, app.addLogger(MeshLogger, lg))
+	mlog := app.addLogger(MeshLogger, lg)
+	msh, err := mesh.NewMesh(app.cachedDB, app.clock, trtl, executor, app.conState, mlog)
 	if err != nil {
 		return fmt.Errorf("failed to create mesh: %w", err)
 	}
+
+	app.eg.Go(func() error {
+		prune.Prune(ctx, mlog.Zap(), app.db, app.clock, app.Config.Tortoise.Hdist, app.Config.DatabasePruneInterval)
+		return nil
+	})
 
 	fetcherWrapped := &layerFetcher{}
 	atxHandler := activation.NewHandler(
@@ -677,7 +683,6 @@ func (app *App) initServices(ctx context.Context) error {
 			MaxExceptions:          trtlCfg.MaxExceptions,
 			Hdist:                  trtlCfg.Hdist,
 			MinimalActiveSetWeight: trtlCfg.MinimalActiveSetWeight,
-			AllowEmptyActiveSet:    trtlCfg.EmitEmptyActiveSet,
 		}),
 	)
 
@@ -750,7 +755,6 @@ func (app *App) initServices(ctx context.Context) error {
 
 	hareCfg := app.Config.HARE
 	hareCfg.Hdist = app.Config.Tortoise.Hdist
-	hareCfg.StopAtxGrading = types.GetLegacyLayer()
 	app.hare = hare.New(
 		app.cachedDB,
 		hareCfg,
@@ -808,7 +812,6 @@ func (app *App) initServices(ctx context.Context) error {
 		miner.WithLayerSize(layerSize),
 		miner.WithLayerPerEpoch(layersPerEpoch),
 		miner.WithMinimalActiveSetWeight(app.Config.Tortoise.MinimalActiveSetWeight),
-		miner.WithEmitEmptyActiveSet(app.Config.Tortoise.EmitEmptyActiveSet),
 		miner.WithHdist(app.Config.Tortoise.Hdist),
 		miner.WithNetworkDelay(app.Config.HARE.WakeupDelta),
 		miner.WithMinGoodAtxPct(minerGoodAtxPct),
@@ -965,7 +968,7 @@ func (app *App) launchStandalone(ctx context.Context) error {
 	if err := app.beaconProtocol.UpdateBeacon(epoch, value); err != nil {
 		return fmt.Errorf("update standalone beacon: %w", err)
 	}
-	cfg := poetconfig.DefaultConfig()
+	cfg := server.DefaultConfig()
 	cfg.PoetDir = filepath.Join(app.Config.DataDir(), "poet")
 
 	parsed, err := url.Parse(app.Config.PoETServers[0])
@@ -973,12 +976,12 @@ func (app *App) launchStandalone(ctx context.Context) error {
 		return err
 	}
 	cfg.RawRESTListener = parsed.Host
-	cfg.Service.Genesis.UnmarshalFlag(app.Config.Genesis.GenesisTime)
-	cfg.Service.EpochDuration = app.Config.LayerDuration * time.Duration(app.Config.LayersPerEpoch)
-	cfg.Service.CycleGap = app.Config.POET.CycleGap
-	cfg.Service.PhaseShift = app.Config.POET.PhaseShift
+	cfg.Genesis.UnmarshalFlag(app.Config.Genesis.GenesisTime)
+	cfg.Round.EpochDuration = app.Config.LayerDuration * time.Duration(app.Config.LayersPerEpoch)
+	cfg.Round.CycleGap = app.Config.POET.CycleGap
+	cfg.Round.PhaseShift = app.Config.POET.PhaseShift
 
-	cfg, err = poetconfig.SetupConfig(cfg)
+	cfg, err = server.SetupConfig(cfg)
 	if err != nil {
 		return fmt.Errorf("setup poet config: %w", err)
 	}
@@ -1327,13 +1330,15 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 	return edSgn, nil
 }
 
-func (app *App) setupDBs(ctx context.Context, lg log.Log, dbPath string) error {
+func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
+	dbPath := app.Config.DataDir()
 	if err := os.MkdirAll(dbPath, os.ModePerm); err != nil {
 		return fmt.Errorf("failed to create %s: %w", dbPath, err)
 	}
 	sqlDB, err := sql.Open("file:"+filepath.Join(dbPath, dbFile),
 		sql.WithConnections(app.Config.DatabaseConnections),
 		sql.WithLatencyMetering(app.Config.DatabaseLatencyMetering),
+		sql.WithV4Migration(util.ExtractActiveSet),
 	)
 	if err != nil {
 		return fmt.Errorf("open sqlite db %w", err)
@@ -1412,7 +1417,6 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 	}
 
 	if app.Config.ProfilerURL != "" {
-
 		app.profilerService, err = pyroscope.Start(pyroscope.Config{
 			ApplicationName: app.Config.ProfilerName,
 			// app.Config.ProfilerURL should be the pyroscope server address
@@ -1461,7 +1465,7 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 		return fmt.Errorf("failed to initialize p2p host: %w", err)
 	}
 
-	if err := app.setupDBs(ctx, lg, app.Config.DataDir()); err != nil {
+	if err := app.setupDBs(ctx, lg); err != nil {
 		return err
 	}
 	if err := app.initServices(ctx); err != nil {
