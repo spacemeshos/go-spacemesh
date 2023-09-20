@@ -410,16 +410,21 @@ func membersContainChallenge(members []types.Member, challenge types.Hash32) (ui
 func (nb *NIPostBuilder) addPoETMitigation(ctx context.Context, from, to string, pubEpoch types.EpochID) error {
 	clientTo, ok := nb.poetProvers[to]
 	if !ok {
-		// poet 111 is not in the list, no action necessary
+		// Target PoET is not in the list, no action necessary
 		return nil
 	}
 
-	nb.log.With().Info("poet mitigation: target PoET is in the list of PoETs, adding it to the state as well",
+	clientFrom, ok := nb.poetProvers[from]
+	if !ok {
+		// Source PoET is not in the list, cannot apply mitigation
+		return nil
+	}
+
+	nb.log.With().Info("poet mitigation: target and source are in the list of PoETs, applying mitigation",
 		log.String("state_from", from),
 		log.String("target_poet", to),
 		log.Uint32("pub_epoch", pubEpoch.Uint32()),
 	)
-	clientFrom := nb.poetProvers[from]
 
 	idFrom, err := clientFrom.PoetServiceID(ctx)
 	if err != nil {
