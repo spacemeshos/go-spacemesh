@@ -618,8 +618,8 @@ github.com/spacemeshos/economics v0.1.1 h1:BPgMoTaeQ05ME6wEA1+MvXMp+wvXr51bIuN23
 github.com/spacemeshos/economics v0.1.1/go.mod h1:76nTjugYRiQ5/eD/DQs2dXPPilp28URMswUKncfdanY=
 github.com/spacemeshos/fixed v0.1.1 h1:N1y4SUpq1EV+IdJrWJwUCt1oBFzeru/VKVcBsvPc2Fk=
 github.com/spacemeshos/fixed v0.1.1/go.mod h1:B/moObha9wGnwljZP+w/dYAwzv097aL9VV8Oyv2cM/E=
-github.com/spacemeshos/go-scale v1.1.11 h1:esFyFSwSvZe+uian2oMUk0cmKWT8IxVt7jjGWkM1SPI=
-github.com/spacemeshos/go-scale v1.1.11/go.mod h1:loK9wrj9IHxATTrVqIyR2o9SB+E9/SAsiDDXuUfvbA8=
+github.com/spacemeshos/go-scale v1.1.12 h1:O66yfIBaXSCqbxJYlDP6QSI2s9Lz8rvZjPe3qZZABLo=
+github.com/spacemeshos/go-scale v1.1.12/go.mod h1:loK9wrj9IHxATTrVqIyR2o9SB+E9/SAsiDDXuUfvbA8=
 github.com/spacemeshos/merkle-tree v0.2.3 h1:zGEgOR9nxAzJr0EWjD39QFngwFEOxfxMloEJZtAysas=
 github.com/spacemeshos/merkle-tree v0.2.3/go.mod h1:VomOcQ5pCBXz7goiWMP5hReyqOfDXGSKbrH2GB9Htww=
 github.com/spacemeshos/poet v0.9.3 h1:l6nkmKzrMkdSfugh262xXFe0x2UfgfZVm7DSOvi39M8=
