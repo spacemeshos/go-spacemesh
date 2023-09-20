@@ -408,5 +408,4 @@ func TestLayersSliceBoundaries(t *testing.T) {
 		require.True(t, cap(slice.data) < capacity+capacity/2, "slice expected to double on append: cap=%d", cap(slice.data))
 		require.Equal(t, capacity-1, len(slice.data))
 	}
-
 }
