@@ -21,26 +21,26 @@ import (
 
 // Config is the config params for syncer.
 type Config struct {
-	Interval           time.Duration
-	EpochEndFraction   float64
-	HareDelayLayers    uint32
-	SyncCertDistance   uint32
-	MaxStaleDuration   time.Duration
-	Standalone         bool
-	GossipDuration     time.Duration
-	OutOfSyncThreshold uint32 `mapstructure:"out-of-sync-threshold"`
+	Interval                 time.Duration
+	EpochEndFraction         float64
+	HareDelayLayers          uint32
+	SyncCertDistance         uint32
+	MaxStaleDuration         time.Duration
+	Standalone               bool
+	GossipDuration           time.Duration
+	OutOfSyncThresholdLayers uint32 `mapstructure:"out-of-sync-threshold"`
 }
 
 // DefaultConfig for the syncer.
 func DefaultConfig() Config {
 	return Config{
-		Interval:           10 * time.Second,
-		EpochEndFraction:   0.8,
-		HareDelayLayers:    10,
-		SyncCertDistance:   10,
-		MaxStaleDuration:   time.Second,
-		GossipDuration:     15 * time.Second,
-		OutOfSyncThreshold: 3,
+		Interval:                 10 * time.Second,
+		EpochEndFraction:         0.8,
+		HareDelayLayers:          10,
+		SyncCertDistance:         10,
+		MaxStaleDuration:         time.Second,
+		GossipDuration:           15 * time.Second,
+		OutOfSyncThresholdLayers: 3,
 	}
 }
 
@@ -470,7 +470,7 @@ func (s *Syncer) setStateBeforeSync(ctx context.Context) {
 		}
 		return
 	}
-	if isTooFarBehind(ctx, s.logger, current, s.getLastSyncedLayer(), s.cfg.OutOfSyncThreshold) {
+	if isTooFarBehind(ctx, s.logger, current, s.getLastSyncedLayer(), s.cfg.OutOfSyncThresholdLayers) {
 		s.setSyncState(ctx, notSynced)
 	}
 }
@@ -490,7 +490,7 @@ func (s *Syncer) setStateAfterSync(ctx context.Context, success bool) {
 	// network outage.
 	switch currSyncState {
 	case synced:
-		if !success && isTooFarBehind(ctx, s.logger, current, s.getLastSyncedLayer(), s.cfg.OutOfSyncThreshold) {
+		if !success && isTooFarBehind(ctx, s.logger, current, s.getLastSyncedLayer(), s.cfg.OutOfSyncThresholdLayers) {
 			s.setSyncState(ctx, notSynced)
 		}
 	case gossipSync:

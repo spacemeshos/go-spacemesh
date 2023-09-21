@@ -95,12 +95,12 @@ func newTestSyncer(t *testing.T, interval time.Duration) *testSyncer {
 	require.NoError(t, err)
 
 	cfg := Config{
-		Interval:           interval,
-		GossipDuration:     5 * time.Millisecond,
-		EpochEndFraction:   0.66,
-		SyncCertDistance:   4,
-		HareDelayLayers:    5,
-		OutOfSyncThreshold: outOfSyncThreshold,
+		Interval:                 interval,
+		GossipDuration:           5 * time.Millisecond,
+		EpochEndFraction:         0.66,
+		SyncCertDistance:         4,
+		HareDelayLayers:          5,
+		OutOfSyncThresholdLayers: outOfSyncThreshold,
 	}
 	ts.syncer = NewSyncer(ts.cdb, ts.mTicker, ts.mBeacon, ts.msh, nil, nil, ts.mLyrPatrol, ts.mCertHdr,
 		WithConfig(cfg),
