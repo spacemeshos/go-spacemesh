@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -12,13 +13,18 @@ import (
 
 func Warm(db *sql.Database, opts ...Opt) (*Cache, error) {
 	cache := New(opts...)
-	if err := Warmup(db, cache); err != nil {
+	tx, err := db.Tx(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Release()
+	if err := Warmup(tx, cache); err != nil {
 		return nil, fmt.Errorf("warmup %w", err)
 	}
 	return cache, nil
 }
 
-func Warmup(db *sql.Database, cache *Cache) error {
+func Warmup(db sql.Executor, cache *Cache) error {
 	latest, err := atxs.LatestEpoch(db)
 	if err != nil {
 		return err
@@ -27,13 +33,13 @@ func Warmup(db *sql.Database, cache *Cache) error {
 	if err != nil {
 		return err
 	}
-	evicted := applied.GetEpoch() - cache.TargetCapacity()
-	cache.Evict(evicted)
+	cache.OnApplied(applied.GetEpoch())
+
 	var ierr error
-	if err := atxs.IterateAtxs(db, evicted+1, latest, func(vatx *types.VerifiedActivationTx) bool {
+	if err := atxs.IterateAtxs(db, cache.Evicted(), latest, func(vatx *types.VerifiedActivationTx) bool {
 		nonce, err := atxs.VRFNonce(db, vatx.SmesherID, vatx.TargetEpoch())
 		if err != nil {
-			ierr = err
+			ierr = fmt.Errorf("missing nonce %w", err)
 			return false
 		}
 		malicious, err := identities.IsMalicious(db, vatx.SmesherID)

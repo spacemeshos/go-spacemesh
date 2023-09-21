@@ -19,6 +19,8 @@ type ATXData struct {
 
 type Opt func(*Cache)
 
+// WithCapacity sets the number of epochs from the latest applied
+// that cache will maintain in memory.
 func WithCapacity(capacity types.EpochID) Opt {
 	return func(cache *Cache) {
 		cache.capacity = capacity
@@ -52,25 +54,27 @@ type epochCache struct {
 	identities map[types.NodeID][]types.ATXID
 }
 
-func (c *Cache) TargetCapacity() types.EpochID {
-	return c.capacity
+func (c *Cache) Evicted() types.EpochID {
+	return types.EpochID(c.evicted.Load())
 }
 
 func (c *Cache) IsEvicted(epoch types.EpochID) bool {
 	return c.evicted.Load() >= epoch.Uint32()
 }
 
-// Evict supposed to be called when application knows that keeping epoch in memory is not useful.
-//
-// Good heuristic is when layer from higher epoch was applied, at that point it is unlikely
-// that we will see a lot of data from past epochs.
-func (c *Cache) Evict(evict types.EpochID) {
+// OnApplied is a notification for cache to evict epochs that are not useful
+// to keep in memory.
+func (c *Cache) OnApplied(applied types.EpochID) {
+	if applied < c.capacity {
+		return
+	}
+	evict := applied - c.capacity
 	if c.IsEvicted(evict) {
 		return
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.evicted.Load() < evict.Uint32() {
+	if c.evicted.Load() < applied.Uint32() {
 		c.evicted.Store(evict.Uint32())
 	}
 	for epoch := range c.epochs {
@@ -150,13 +154,7 @@ func (c *Cache) GetByNode(epoch types.EpochID, node types.NodeID) *ATXData {
 	if !exists {
 		return nil
 	}
-	for _, atxid := range atxids {
-		data, exists := ecache.atxs[atxid]
-		if exists {
-			return data
-		}
-	}
-	return nil
+	return ecache.atxs[atxids[0]]
 }
 
 // NodeHasAtx returns true if atx was registered with a given node id.

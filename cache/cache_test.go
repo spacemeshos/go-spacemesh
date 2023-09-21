@@ -1,0 +1,114 @@
+package cache
+
+import (
+	"math/rand"
+	"testing"
+
+	fuzz "github.com/google/gofuzz"
+	"github.com/stretchr/testify/require"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+)
+
+func TestCache(t *testing.T) {
+	t.Run("sanity", func(t *testing.T) {
+		const (
+			epochs = 10
+			ids    = 100
+		)
+		c := New()
+		f := fuzz.New()
+		f.RandSource(rand.NewSource(101))
+		nodes := [epochs][ids]types.NodeID{}
+		atxids := [epochs][ids]types.ATXID{}
+		data := [epochs][ids]ATXData{}
+		f.Fuzz(&data)
+
+		for repeat := 0; repeat < 10; repeat++ {
+			for epoch := 0; epoch < epochs; epoch++ {
+				for i := range nodes[epoch] {
+					nodes[epoch][i][0] = byte(epoch + i)
+					atxids[epoch][i][0] = byte(epoch + i)
+					c.Add(types.EpochID(epoch)+1, nodes[epoch][i], atxids[epoch][i], &data[epoch][i])
+				}
+			}
+			for epoch := 0; epoch < epochs; epoch++ {
+				for i := range nodes[epoch] {
+					bynode := c.GetByNode(types.EpochID(epoch)+1, nodes[epoch][i])
+					require.Equal(t, &data[epoch][i], bynode)
+					byatxid := c.Get(types.EpochID(epoch)+1, atxids[epoch][i])
+					require.Equal(t, &data[epoch][i], byatxid)
+					require.True(t, c.NodeHasAtx(types.EpochID(epoch)+1, nodes[epoch][i], atxids[epoch][i]))
+				}
+			}
+		}
+	})
+	t.Run("malicious", func(t *testing.T) {
+		c := New()
+		node := types.NodeID{1}
+		for epoch := 1; epoch <= 10; epoch++ {
+			c.Add(types.EpochID(epoch), node, types.ATXID{}, &ATXData{})
+			data := c.GetByNode(types.EpochID(epoch), node)
+			require.NotNil(t, data)
+			require.False(t, data.Malicious)
+		}
+		c.SetMalicious(node)
+		for epoch := 1; epoch <= 10; epoch++ {
+			data := c.GetByNode(types.EpochID(epoch), node)
+			require.True(t, data.Malicious)
+		}
+	})
+	t.Run("eviction", func(t *testing.T) {
+		const (
+			epochs   = 10
+			capacity = 3
+			applied  = epochs / 2
+		)
+		c := New(WithCapacity(capacity))
+		node := types.NodeID{1}
+		for epoch := 1; epoch <= epochs; epoch++ {
+			c.Add(types.EpochID(epoch), node, types.ATXID{}, &ATXData{})
+			data := c.GetByNode(types.EpochID(epoch), node)
+			require.NotNil(t, data)
+		}
+		c.OnApplied(applied)
+		evicted := applied - capacity
+		require.EqualValues(t, evicted, c.Evicted())
+		for epoch := 1; epoch <= epochs; epoch++ {
+			require.Equal(t, epoch <= evicted, c.IsEvicted(types.EpochID(epoch)), "epoch=%v", epoch)
+		}
+		for epoch := 1; epoch <= evicted; epoch++ {
+			data := c.GetByNode(types.EpochID(epoch), node)
+			require.Nil(t, data)
+		}
+	})
+	t.Run("nil responses", func(t *testing.T) {
+		c := New()
+		require.Nil(t, c.Get(0, types.ATXID{}))
+		require.Nil(t, c.Get(1, types.ATXID{}))
+		require.Nil(t, c.GetByNode(1, types.NodeID{}))
+		require.False(t, c.NodeHasAtx(1, types.NodeID{}, types.ATXID{}))
+
+		c.Add(1, types.NodeID{1}, types.ATXID{1}, &ATXData{})
+		require.Nil(t, c.Get(1, types.ATXID{}))
+		require.Nil(t, c.GetByNode(1, types.NodeID{2}))
+		require.False(t, c.NodeHasAtx(1, types.NodeID{}, types.ATXID{}))
+		require.False(t, c.NodeHasAtx(1, types.NodeID{1}, types.ATXID{}))
+	})
+	t.Run("multiple atxs", func(t *testing.T) {
+		c := New()
+		c.Add(1, types.NodeID{1}, types.ATXID{1}, &ATXData{Weight: 1})
+		c.Add(1, types.NodeID{1}, types.ATXID{2}, &ATXData{Weight: 2})
+		require.NotNil(t, c.Get(1, types.ATXID{1}))
+		require.NotNil(t, c.Get(1, types.ATXID{2}))
+		require.EqualValues(t, 1, c.GetByNode(1, types.NodeID{1}).Weight)
+	})
+	t.Run("adding after eviction", func(t *testing.T) {
+		c := New()
+		c.OnApplied(0)
+		c.OnApplied(3)
+		c.Add(1, types.NodeID{1}, types.ATXID{1}, &ATXData{})
+		require.Nil(t, c.Get(3, types.ATXID{1}))
+		c.OnApplied(3)
+	})
+}

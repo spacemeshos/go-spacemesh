@@ -442,8 +442,8 @@ func (msh *Mesh) applyResults(ctx context.Context, results []result.Layer) error
 			log.Stringer("layer", layer.Layer),
 			log.Stringer("applied", target),
 		)
+		msh.cache.OnApplied(layer.Layer.GetEpoch())
 		if layer.Layer > msh.LatestLayerInState() {
-			msh.cache.Evict(layer.Layer.GetEpoch() - 1)
 			msh.setLatestLayerInState(layer.Layer)
 		}
 	}
