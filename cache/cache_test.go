@@ -1,11 +1,14 @@
 package cache
 
 import (
+	"encoding/binary"
 	"math/rand"
+	"runtime"
 	"testing"
 
 	fuzz "github.com/google/gofuzz"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/atomic"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
@@ -110,5 +113,74 @@ func TestCache(t *testing.T) {
 		c.Add(1, types.NodeID{1}, types.ATXID{1}, &ATXData{})
 		require.Nil(t, c.Get(3, types.ATXID{1}))
 		c.OnApplied(3)
+	})
+}
+
+func TestMemory(t *testing.T) {
+	test := func(t *testing.T, size int, memory, delta uint64) {
+		runtime.GC()
+		var before runtime.MemStats
+		runtime.ReadMemStats(&before)
+
+		c := New()
+		for i := 1; i <= size; i++ {
+			var (
+				node types.NodeID
+				atx  types.ATXID
+				data = &ATXData{Weight: 500, BaseHeight: 100}
+			)
+			binary.PutUvarint(node[:], uint64(i))
+			binary.PutUvarint(atx[:], uint64(i))
+			c.Add(1, node, atx, data)
+		}
+		runtime.GC()
+		var after runtime.MemStats
+		runtime.ReadMemStats(&after)
+		require.InDelta(t, after.HeapInuse-before.HeapInuse, memory, float64(delta))
+
+		c.OnApplied(0) // otherwise cache will be gc'ed
+	}
+	t.Run("1_000_000", func(t *testing.T) {
+		test(t, 1_000_000, 303_000_000, 100_000)
+	})
+	t.Run("100_000", func(t *testing.T) {
+		test(t, 100_000, 51_000_000, 100_000)
+	})
+}
+
+func BenchmarkConcurrentReadWrite(b *testing.B) {
+	c := New()
+	const epoch = 1
+	const size = 200_000
+	for i := 1; i <= 200_000; i++ {
+		var (
+			node types.NodeID
+			atx  types.ATXID
+			data = &ATXData{Weight: 500, BaseHeight: 100}
+		)
+		binary.PutUvarint(node[:], uint64(i))
+		binary.PutUvarint(atx[:], uint64(i))
+		c.Add(epoch, node, atx, data)
+	}
+	b.ResetTimer()
+
+	var parallel atomic.Uint64
+	const writeFraction = 10
+	b.RunParallel(func(pb *testing.PB) {
+		var i uint64
+		core := parallel.Add(1)
+		var atx types.ATXID
+		for pb.Next() {
+			if i%writeFraction == 0 {
+				var node types.NodeID
+				binary.PutUvarint(node[:], size+i*core)
+				binary.PutUvarint(atx[:], size+i*core)
+				c.Add(epoch, node, atx, &ATXData{})
+			} else {
+				binary.PutUvarint(atx[:], i%size)
+				_ = c.Get(epoch, atx)
+			}
+			i++
+		}
 	})
 }
