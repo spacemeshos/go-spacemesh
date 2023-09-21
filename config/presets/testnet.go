@@ -66,7 +66,7 @@ func testnet() config.Config {
 			PoETServers: []string{},
 		},
 		Genesis: &config.GenesisConfig{
-			GenesisTime: "2023-09-13T18:00:00Z",
+			GenesisTime: "2023-09-21T18:00:00Z",
 			ExtraData:   "0000000000000000000000c76c58ebac180989673fd6d237b40e66ed5c976ec3",
 		},
 
