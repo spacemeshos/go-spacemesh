@@ -80,6 +80,8 @@ func (c *Cache) OnApplied(applied types.EpochID) {
 	for epoch := range c.epochs {
 		if epoch <= evict {
 			delete(c.epochs, epoch)
+			atxsCounter.DeleteLabelValues(epoch.String())
+			identitiesCounter.DeleteLabelValues(epoch.String())
 		}
 	}
 }
@@ -103,6 +105,12 @@ func (c *Cache) Add(epoch types.EpochID, node types.NodeID, atx types.ATXID, dat
 	}
 	ecache.atxs[atx] = data
 	atxs := ecache.identities[node]
+
+	atxsCounter.WithLabelValues(epoch.String()).Add(1)
+	if atxs == nil {
+		identitiesCounter.WithLabelValues(epoch.String()).Add(1)
+	}
+
 	atxs = append(atxs, atx)
 	// NOTE(dshulyak) doesn't make sense, as we don't guarantee that every node
 	// will see same atxs. it actually should see atmost one and malfeasence proof if node equivocated.

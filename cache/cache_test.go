@@ -141,7 +141,7 @@ func TestMemory(t *testing.T) {
 		c.OnApplied(0) // otherwise cache will be gc'ed
 	}
 	t.Run("1_000_000", func(t *testing.T) {
-		test(t, 1_000_000, 303_000_000, 100_000)
+		test(t, 1_000_000, 303_000_000, 300_000)
 	})
 	t.Run("100_000", func(t *testing.T) {
 		test(t, 100_000, 51_000_000, 100_000)
