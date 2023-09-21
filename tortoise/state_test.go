@@ -395,3 +395,17 @@ func TestStateDecodeVotes(t *testing.T) {
 		})
 	}
 }
+
+func TestLayersSliceBoundaries(t *testing.T) {
+	slice := layerSlice{}
+	const (
+		total    = 100_000
+		capacity = 10_000
+	)
+	for i := types.LayerID(0); i < total; i++ {
+		slice.get(i, i+capacity)
+		slice.pop()
+		require.True(t, cap(slice.data) < capacity+capacity/2, "slice expected to double on append: cap=%d", cap(slice.data))
+		require.Equal(t, capacity-1, len(slice.data))
+	}
+}

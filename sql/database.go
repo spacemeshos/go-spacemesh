@@ -63,7 +63,7 @@ type conf struct {
 	enableLatency bool
 
 	// TODO: remove after state is pruned for majority
-	v4Migration func(Executor) error
+	v5Migration func(Executor) error
 }
 
 // WithConnections overwrites number of pooled connections.
@@ -80,9 +80,9 @@ func WithMigrations(migrations Migrations) Opt {
 	}
 }
 
-func WithV4Migration(cb func(Executor) error) Opt {
+func WithV5Migration(cb func(Executor) error) Opt {
 	return func(c *conf) {
-		c.v4Migration = cb
+		c.v5Migration = cb
 	}
 }
 
@@ -147,9 +147,9 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 		if err != nil {
 			return nil, err
 		}
-		if before <= 3 && after == 4 && config.v4Migration != nil {
-			// v4 migration (active set extraction) needs the 3rd migration to execute first
-			if err := config.v4Migration(db); err != nil {
+		if before <= 4 && after == 5 && config.v5Migration != nil {
+			// v5 migration (active set extraction) needs the 4rd migration to execute first
+			if err := config.v5Migration(db); err != nil {
 				return nil, err
 			}
 			if err := Vacuum(db); err != nil {
