@@ -29,7 +29,7 @@ func WithCapacity(capacity types.EpochID) Opt {
 
 func New(opts ...Opt) *Cache {
 	cache := &Cache{
-		capacity: 1,
+		capacity: 2,
 		epochs:   map[types.EpochID]epochCache{},
 	}
 	for _, opt := range opts {
