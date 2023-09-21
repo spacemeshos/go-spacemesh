@@ -7,7 +7,7 @@ require (
 	github.com/ALTree/bigfloat v0.2.0
 	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20230921024434-5dc1c2e7b958
 	github.com/cosmos/btcutil v1.0.5
-	github.com/go-llsqlite/crawshaw v0.0.0-20230910110433-7e901377eb6c
+	github.com/go-llsqlite/crawshaw v0.4.0
 	github.com/gofrs/flock v0.8.1
 	github.com/golang/protobuf v1.5.3
 	github.com/google/go-cmp v0.5.9
@@ -68,6 +68,10 @@ require (
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	cloud.google.com/go/iam v1.1.1 // indirect
 	github.com/alecthomas/units v0.0.0-20211218093645-b94a6e3cc137 // indirect
+	github.com/anacrolix/chansync v0.3.0 // indirect
+	github.com/anacrolix/missinggo v1.2.1 // indirect
+	github.com/anacrolix/missinggo/perf v1.0.0 // indirect
+	github.com/anacrolix/sync v0.3.0 // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/c0mm4nd/go-ripemd v0.0.0-20200326052756-bd1759ad7d10 // indirect
@@ -111,6 +115,7 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
+	github.com/huandu/xstrings v1.2.0 // indirect
 	github.com/huin/goupnp v1.2.0 // indirect
 	github.com/imdario/mergo v0.3.13 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
