@@ -58,6 +58,8 @@ func genMinerATX(tb testing.TB, cdb *datastore.CachedDB, id types.ATXID, publish
 		},
 		NumUnits: defaultNumUnits,
 	}}
+	nonce := types.VRFPostIndex(1)
+	atx.VRFNonce = &nonce
 	atx.SetID(id)
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(received)
@@ -213,7 +215,10 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize, layersPerEpoch
 	o.mClock.EXPECT().LayerToTime(gomock.Any()).Return(epochStart).AnyTimes()
 	received := epochStart.Add(-5 * networkDelay)
 	epochInfo := genATXForTargetEpochs(t, o.cdb, types.EpochID(startEpoch), types.EpochID(startEpoch+numberOfEpochsToTest), o.edSigner, layersPerEpoch, received)
-	require.NoError(t, cache.Warmup(o.cdb.Database, c), "should load generated state")
+	tx, err := o.cdb.Tx(context.TODO())
+	require.NoError(t, err)
+	require.NoError(t, cache.Warmup(tx, c), "should load generated state")
+	tx.Release()
 	for layer := types.LayerID(startLayer); layer.Before(endLayer); layer = layer.Add(1) {
 		info, ok := epochInfo[layer.GetEpoch()]
 		require.True(t, ok)
@@ -226,7 +231,6 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize, layersPerEpoch
 			b.SmesherID = o.edSigner.NodeID()
 			o.mClock.EXPECT().CurrentLayer().Return(layer)
 			mbc.EXPECT().ReportBeaconFromBallot(layer.GetEpoch(), b, info.beacon, gomock.Any()).Times(1)
-			nonceFetcher.EXPECT().VRFNonce(b.SmesherID, layer.GetEpoch()).Return(nonce, nil).Times(1)
 			eligible, err := validator.CheckEligibility(context.Background(), b, ee.ActiveSet)
 			require.NoError(t, err, "at layer %d, with layersPerEpoch %d", layer, layersPerEpoch)
 			require.True(t, eligible, "should be eligible at layer %d, but isn't", layer)
