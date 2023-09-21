@@ -21,30 +21,28 @@ import (
 
 // Config is the config params for syncer.
 type Config struct {
-	Interval         time.Duration
-	EpochEndFraction float64
-	HareDelayLayers  uint32
-	SyncCertDistance uint32
-	MaxStaleDuration time.Duration
-	Standalone       bool
-	GossipDuration   time.Duration
+	Interval                 time.Duration
+	EpochEndFraction         float64
+	HareDelayLayers          uint32
+	SyncCertDistance         uint32
+	MaxStaleDuration         time.Duration
+	Standalone               bool
+	GossipDuration           time.Duration
+	OutOfSyncThresholdLayers uint32 `mapstructure:"out-of-sync-threshold"`
 }
 
 // DefaultConfig for the syncer.
 func DefaultConfig() Config {
 	return Config{
-		Interval:         10 * time.Second,
-		EpochEndFraction: 0.8,
-		HareDelayLayers:  10,
-		SyncCertDistance: 10,
-		MaxStaleDuration: time.Second,
-		GossipDuration:   15 * time.Second,
+		Interval:                 10 * time.Second,
+		EpochEndFraction:         0.8,
+		HareDelayLayers:          10,
+		SyncCertDistance:         10,
+		MaxStaleDuration:         time.Second,
+		GossipDuration:           15 * time.Second,
+		OutOfSyncThresholdLayers: 3,
 	}
 }
-
-const (
-	outOfSyncThreshold uint32 = 3 // see notSynced
-)
 
 type syncState uint32
 
@@ -452,7 +450,7 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 	return nil
 }
 
-func isTooFarBehind(ctx context.Context, logger log.Log, current, lastSynced types.LayerID) bool {
+func isTooFarBehind(ctx context.Context, logger log.Log, current, lastSynced types.LayerID, outOfSyncThreshold uint32) bool {
 	if current.After(lastSynced) && current.Difference(lastSynced) >= outOfSyncThreshold {
 		logger.WithContext(ctx).With().Info("node is too far behind",
 			log.Stringer("current", current),
@@ -472,7 +470,7 @@ func (s *Syncer) setStateBeforeSync(ctx context.Context) {
 		}
 		return
 	}
-	if isTooFarBehind(ctx, s.logger, current, s.getLastSyncedLayer()) {
+	if isTooFarBehind(ctx, s.logger, current, s.getLastSyncedLayer(), s.cfg.OutOfSyncThresholdLayers) {
 		s.setSyncState(ctx, notSynced)
 	}
 }
@@ -492,7 +490,7 @@ func (s *Syncer) setStateAfterSync(ctx context.Context, success bool) {
 	// network outage.
 	switch currSyncState {
 	case synced:
-		if !success && isTooFarBehind(ctx, s.logger, current, s.getLastSyncedLayer()) {
+		if !success && isTooFarBehind(ctx, s.logger, current, s.getLastSyncedLayer(), s.cfg.OutOfSyncThresholdLayers) {
 			s.setSyncState(ctx, notSynced)
 		}
 	case gossipSync:
