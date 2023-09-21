@@ -319,6 +319,14 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 	return nb.state.NIPost, nil
 }
 
+// withConditionalTimeout returns a context.WithTimeout if the timeout is greater than 0, otherwise it returns the original context.
+func withConditionalTimeout(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	if timeout > 0 {
+		return context.WithTimeout(ctx, timeout)
+	}
+	return ctx, func() {}
+}
+
 // Submit the challenge to a single PoET.
 func (nb *NIPostBuilder) submitPoetChallenge(ctx context.Context, client PoetProvingServiceClient, prefix, challenge []byte, signature types.EdSignature, nodeID types.NodeID) (*types.PoetRequest, error) {
 	poetServiceID, err := client.PoetServiceID(ctx)
@@ -328,7 +336,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(ctx context.Context, client PoetPro
 	logger := nb.log.WithContext(ctx).WithFields(log.String("poet_id", hex.EncodeToString(poetServiceID.ServiceID)))
 
 	logger.Debug("querying for poet pow parameters")
-	powCtx, cancel := context.WithTimeout(ctx, nb.poetCfg.RequestTimeout)
+	powCtx, cancel := withConditionalTimeout(ctx, nb.poetCfg.RequestTimeout)
 	defer cancel()
 	powParams, err := client.PowParams(powCtx)
 	if err != nil {
@@ -345,7 +353,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(ctx context.Context, client PoetPro
 
 	logger.Debug("submitting challenge to poet proving service")
 
-	submitCtx, cancel := context.WithTimeout(ctx, nb.poetCfg.RequestTimeout)
+	submitCtx, cancel := withConditionalTimeout(ctx, nb.poetCfg.RequestTimeout)
 	defer cancel()
 	round, err := client.Submit(submitCtx, prefix, challenge, signature, nodeID, PoetPoW{
 		Nonce:  nonce,
@@ -407,57 +415,77 @@ func membersContainChallenge(members []types.Member, challenge types.Hash32) (ui
 	return 0, fmt.Errorf("challenge is not a member of the proof")
 }
 
-// TODO(mafa): remove after epoch 4 ends; https://github.com/spacemeshos/go-spacemesh/issues/4968
-func (nb *NIPostBuilder) addPoet111ForPubEpoch4(ctx context.Context) error {
-	// because PoET 111 had a hardware issue when challenges for round 3 were submitted, no node could submit to it
-	// 111 was recovered with the PoET 110 DB, so all successful submissions to 110 should be able to be fetched from there as well
-
-	client111, ok := nb.poetProvers["https://poet-111.spacemesh.network"]
+func (nb *NIPostBuilder) addPoETMitigation(ctx context.Context, from, to string, pubEpoch types.EpochID) error {
+	clientTo, ok := nb.poetProvers[to]
 	if !ok {
-		// poet 111 is not in the list, no action necessary
+		// Target PoET is not in the list, no action necessary
 		return nil
 	}
 
-	nb.log.Info("pub epoch 4 mitigation: PoET 111 is in the list of PoETs, adding it to the state as well")
-	client110 := nb.poetProvers["https://poet-110.spacemesh.network"]
-
-	ID110, err := client110.PoetServiceID(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get PoET 110 id: %w", err)
+	clientFrom, ok := nb.poetProvers[from]
+	if !ok {
+		// Source PoET is not in the list, cannot apply mitigation
+		return nil
 	}
 
-	ID111, err := client111.PoetServiceID(ctx)
+	nb.log.With().Info("poet mitigation: target and source are in the list of PoETs, applying mitigation",
+		log.String("state_from", from),
+		log.String("target_poet", to),
+		log.Uint32("pub_epoch", pubEpoch.Uint32()),
+	)
+
+	idFrom, err := clientFrom.PoetServiceID(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get PoET 111 id: %w", err)
+		return fmt.Errorf("failed to get id for PoET %s: %w", from, err)
 	}
 
-	if slices.IndexFunc(nb.state.PoetRequests, func(r types.PoetRequest) bool { return bytes.Equal(r.PoetServiceID.ServiceID, ID111.ServiceID) }) != -1 {
+	idTo, err := clientTo.PoetServiceID(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get id for PoET %s: %w", to, err)
+	}
+
+	if slices.IndexFunc(nb.state.PoetRequests, func(r types.PoetRequest) bool { return bytes.Equal(r.PoetServiceID.ServiceID, idTo.ServiceID) }) != -1 {
 		nb.log.Info("PoET 111 is already in the state, no action necessary")
 		return nil
 	}
 
-	poet110 := slices.IndexFunc(nb.state.PoetRequests, func(r types.PoetRequest) bool {
-		return bytes.Equal(r.PoetServiceID.ServiceID, ID110.ServiceID)
+	poetFromIdx := slices.IndexFunc(nb.state.PoetRequests, func(r types.PoetRequest) bool {
+		return bytes.Equal(r.PoetServiceID.ServiceID, idFrom.ServiceID)
 	})
-	if poet110 == -1 {
+	if poetFromIdx == -1 {
 		return fmt.Errorf("poet 110 is not in the state, cannot add poet 111")
 	}
 
-	poet111 := nb.state.PoetRequests[poet110]
-	poet111.PoetServiceID.ServiceID = ID111.ServiceID
-	nb.state.PoetRequests = append(nb.state.PoetRequests, poet111)
+	poetToReq := nb.state.PoetRequests[poetFromIdx]
+	poetToReq.PoetServiceID.ServiceID = idTo.ServiceID
+	nb.state.PoetRequests = append(nb.state.PoetRequests, poetToReq)
 	nb.persistState()
-	nb.log.Info("pub epoch 4 mitigation: PoET 111 added to the state")
+	nb.log.With().Info("poet mitigation: target PoET added to the state",
+		log.String("target_poet", to),
+		log.Uint32("pub_epoch", pubEpoch.Uint32()),
+	)
 	return nil
 }
 
 func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge types.Hash32, publishEpoch types.EpochID) (types.PoetProofRef, *types.MerkleProof, error) {
-	// TODO(mafa): remove after next PoET round; https://github.com/spacemeshos/go-spacemesh/issues/4968
-	if publishEpoch == 4 {
-		err := nb.addPoet111ForPubEpoch4(ctx)
+	switch publishEpoch {
+	case 4:
+		// because PoET 111 had a hardware issue when challenges for round 3 were submitted, no node could submit to it
+		// 111 was recovered with the PoET 110 DB, so all successful submissions to 110 should be able to be fetched from there as well
+		// TODO(mafa): remove after next PoET round; https://github.com/spacemeshos/go-spacemesh/issues/4968
+		err := nb.addPoETMitigation(ctx, "https://poet-110.spacemesh.network", "https://poet-111.spacemesh.network", 4)
 		if err != nil {
 			nb.log.With().Error("pub epoch 4 mitigation: failed to add PoET 111 to state for pub epoch 4", log.Err(err))
 		}
+	case 5:
+		// PoET 112 came online after the registration window for round 4 ended, so no node could submit to it
+		// 112 was initialized with the PoET 110 DB, so all successful submissions to 110 should be able to be fetched from there as well
+		// TODO(mafa): remove after next PoET round; https://github.com/spacemeshos/go-spacemesh/issues/5030
+		err := nb.addPoETMitigation(ctx, "https://poet-110.spacemesh.network", "https://poet-112.spacemesh.network", 5)
+		if err != nil {
+			nb.log.With().Error("pub epoch 5 mitigation: failed to add PoET 112 to state for pub epoch 5", log.Err(err))
+		}
+	default:
 	}
 
 	type poetProof struct {
@@ -484,7 +512,7 @@ func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge types.Hash3
 			case <-time.After(time.Until(waitDeadline)):
 			}
 
-			getProofsCtx, cancel := context.WithTimeout(ctx, nb.poetCfg.RequestTimeout)
+			getProofsCtx, cancel := withConditionalTimeout(ctx, nb.poetCfg.RequestTimeout)
 			defer cancel()
 			proof, members, err := client.Proof(getProofsCtx, round)
 			if err != nil {

@@ -980,11 +980,7 @@ func (app *App) launchStandalone(ctx context.Context) error {
 	cfg.Round.EpochDuration = app.Config.LayerDuration * time.Duration(app.Config.LayersPerEpoch)
 	cfg.Round.CycleGap = app.Config.POET.CycleGap
 	cfg.Round.PhaseShift = app.Config.POET.PhaseShift
-
-	cfg, err = server.SetupConfig(cfg)
-	if err != nil {
-		return fmt.Errorf("setup poet config: %w", err)
-	}
+	server.SetupConfig(cfg)
 
 	srv, err := server.New(ctx, *cfg)
 	if err != nil {
@@ -1338,7 +1334,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	sqlDB, err := sql.Open("file:"+filepath.Join(dbPath, dbFile),
 		sql.WithConnections(app.Config.DatabaseConnections),
 		sql.WithLatencyMetering(app.Config.DatabaseLatencyMetering),
-		sql.WithV4Migration(util.ExtractActiveSet),
+		sql.WithV5Migration(util.ExtractActiveSet),
 	)
 	if err != nil {
 		return fmt.Errorf("open sqlite db %w", err)
