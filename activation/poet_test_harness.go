@@ -58,10 +58,7 @@ func NewHTTPPoetTestHarness(ctx context.Context, poetdir string, opts ...HTTPPoe
 		opt(cfg)
 	}
 
-	cfg, err := server.SetupConfig(cfg)
-	if err != nil {
-		return nil, err
-	}
+	server.SetupConfig(cfg)
 
 	poet, err := server.New(ctx, *cfg)
 	if err != nil {
