@@ -135,15 +135,12 @@ func (b *bopt) eligibilities(value int) *bopt {
 	return b
 }
 
-func (b *bopt) activeset(values ...*atxAction) *bopt {
+func (b *bopt) totalEligibilities(n int) *bopt {
 	b.opts = append(b.opts, func(ballot *ballotAction) {
-		ballot.activeset = values
-		for _, val := range values {
-			if ballot.EpochData == nil {
-				ballot.EpochData = &types.ReferenceData{}
-			}
-			ballot.EpochData.ActiveSet = append(ballot.EpochData.ActiveSet, val.header.ID)
+		if ballot.EpochData == nil {
+			ballot.EpochData = &types.ReferenceData{}
 		}
+		ballot.EpochData.Eligibilities = uint32(n)
 	})
 	return b
 }
@@ -233,6 +230,7 @@ func (a *atxAction) rawballot(id types.BallotID, n int, opts ...*bopt) *ballotAc
 	}
 	if a.reference == nil {
 		a.reference = val
+		val.before = append(val.before, a)
 	} else {
 		val.Ref = &a.reference.ID
 		val.before = append(val.before, a.reference)
@@ -243,12 +241,6 @@ func (a *atxAction) rawballot(id types.BallotID, n int, opts ...*bopt) *ballotAc
 
 	if val.base != nil {
 		val.before = append(val.before, val.base)
-	}
-	for _, atx := range val.activeset {
-		val.before = append(val.before, atx)
-	}
-	if len(val.activeset) == 0 {
-		val.before = append(val.before, a)
 	}
 
 	a.reg.register(val)
@@ -268,9 +260,8 @@ func (a *atxAction) ballot(n int, opts ...*bopt) *ballotAction {
 
 type ballotAction struct {
 	types.BallotTortoiseData
-	base      *ballotAction
-	activeset []*atxAction
-	before    []action
+	base   *ballotAction
+	before []action
 
 	onDecoded func(*DecodedBallot, error)
 	onStored  func(error)
@@ -405,6 +396,10 @@ func (s *session) smesher(id int) *smesher {
 	val := &smesher{reg: s, id: id, atxs: map[types.ATXID]*atxAction{}}
 	s.smeshers[id] = val
 	return val
+}
+
+func (s *session) epochEligibilities() int {
+	return s.layerSize * s.epochSize / len(s.smeshers)
 }
 
 func (s *session) register(actions ...action) {
@@ -740,19 +735,15 @@ func (s *session) tortoise() *Tortoise {
 
 func TestSanity(t *testing.T) {
 	const n = 2
-	var activeset []*atxAction
 	s := newSession(t)
 	for i := 0; i < n; i++ {
-		activeset = append(
-			activeset,
-			s.smesher(i).atx(1, new(aopt).height(100).weight(400)),
-		)
+		s.smesher(i).atx(1, new(aopt).height(100).weight(400))
 	}
 	s.beacon(1, "a")
 	for i := 0; i < n; i++ {
 		s.smesher(i).atx(1).ballot(1, new(bopt).
 			beacon("a").
-			activeset(activeset...).
+			totalEligibilities(s.epochEligibilities()).
 			eligibilities(s.layerSize/n))
 	}
 	s.tally(1)
@@ -776,19 +767,15 @@ func TestSanity(t *testing.T) {
 
 func TestDisagreement(t *testing.T) {
 	const n = 5
-	var activeset []*atxAction
 	s := newSession(t)
 	for i := 0; i < n; i++ {
-		activeset = append(
-			activeset,
-			s.smesher(i).atx(1, new(aopt).height(100).weight(400)),
-		)
+		s.smesher(i).atx(1, new(aopt).height(100).weight(400))
 	}
 	s.beacon(1, "a")
 	for i := 0; i < n; i++ {
 		s.smesher(i).atx(1).ballot(1, new(bopt).
 			beacon("a").
-			activeset(activeset...).
+			totalEligibilities(s.epochEligibilities()).
 			eligibilities(s.layerSize/n))
 	}
 	s.hareblock(1, "aa", 0)
@@ -816,15 +803,14 @@ func TestDisagreement(t *testing.T) {
 
 func TestOpinion(t *testing.T) {
 	s := newSession(t)
-	var activeset []*atxAction
-	activeset = append(activeset,
-		s.smesher(0).atx(1, new(aopt).height(100).weight(2000)),
-	)
+
+	s.smesher(0).atx(1, new(aopt).height(100).weight(2000))
+
 	s.beacon(1, "a")
 	s.smesher(0).atx(1).ballot(1, new(bopt).
 		eligibilities(s.layerSize).
 		beacon("a").
-		activeset(activeset...),
+		totalEligibilities(s.epochEligibilities()),
 	)
 	for i := 2; i < s.epochSize; i++ {
 		id := strconv.Itoa(i)
@@ -842,19 +828,15 @@ func TestOpinion(t *testing.T) {
 }
 
 func TestEpochGap(t *testing.T) {
-	var activeset []*atxAction
 	s := newSession(t).withEpochSize(4)
 	for i := 0; i < 2; i++ {
-		activeset = append(
-			activeset,
-			s.smesher(i).atx(1, new(aopt).height(1).weight(10)),
-		)
+		s.smesher(i).atx(1, new(aopt).height(1).weight(10))
 	}
 	s.beacon(1, "a")
 	for i := 0; i < 2; i++ {
 		s.smesher(i).atx(1).ballot(1, new(bopt).
 			beacon("a").
-			activeset(activeset...).
+			totalEligibilities(s.epochEligibilities()).
 			eligibilities(s.layerSize/2))
 	}
 	rst := new(results).

@@ -44,14 +44,12 @@ func (b *BallotTortoiseData) MarshalLogObject(encoder log.ObjectEncoder) error {
 }
 
 type ReferenceData struct {
-	Beacon        Beacon  `json:"beacon"`
-	ActiveSet     []ATXID `json:"set"`
-	Eligibilities uint32  `json:"elig"`
+	Beacon        Beacon `json:"beacon"`
+	Eligibilities uint32 `json:"elig"`
 }
 
 func (r *ReferenceData) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("beacon", r.Beacon.String())
-	encoder.AddInt("set size", len(r.ActiveSet))
 	encoder.AddUint32("elig", r.Eligibilities)
 	return nil
 }

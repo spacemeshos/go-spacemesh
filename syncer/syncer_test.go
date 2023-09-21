@@ -9,14 +9,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	mmocks "github.com/spacemeshos/go-spacemesh/mesh/mocks"
@@ -100,7 +98,6 @@ func newTestSyncer(t *testing.T, interval time.Duration) *testSyncer {
 		EpochEndFraction: 0.66,
 		SyncCertDistance: 4,
 		HareDelayLayers:  5,
-		UseNewProtocol:   true,
 	}
 	ts.syncer = NewSyncer(ts.cdb, ts.mTicker, ts.mBeacon, ts.msh, nil, nil, ts.mLyrPatrol, ts.mCertHdr,
 		WithConfig(cfg),
@@ -189,8 +186,7 @@ func advanceState(t testing.TB, ts *testSyncer, from, to types.LayerID) {
 	for lid := from; lid <= to; lid++ {
 		require.NoError(t, certificates.Add(ts.cdb, lid, &types.Certificate{BlockID: types.EmptyBlockID}))
 		ts.mLyrPatrol.EXPECT().IsHareInCharge(lid)
-		ts.mDataFetcher.EXPECT().PeerProtocols(gomock.Any()).Return([]protocol.ID{fetch.OpnProtocol}, nil)
-		ts.mDataFetcher.EXPECT().PollLayerOpinions2(gomock.Any(), lid, false, gomock.Any())
+		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid, false, gomock.Any())
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
 		ts.mTortoise.EXPECT().Updates().Return(fixture.RLayers(fixture.RLayer(lid)))
 		ts.mVm.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any())

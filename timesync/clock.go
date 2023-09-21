@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/benbjohnson/clock"
+	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/sync/errgroup"
 
@@ -25,7 +25,7 @@ var tickDistance = metrics.NewHistogramWithBuckets(
 type NodeClock struct {
 	LayerConverter // layer conversions provider
 
-	clock        clock.Clock // provides the time
+	clock        clockwork.Clock // provides the time
 	genesis      time.Time
 	tickInterval time.Duration
 
@@ -44,7 +44,7 @@ type NodeClock struct {
 // NewClock return TimeClock struct that notifies tickInterval has passed.
 func NewClock(opts ...OptionFunc) (*NodeClock, error) {
 	cfg := &option{
-		clock: clock.New(),
+		clock: clockwork.NewRealClock(),
 	}
 	for _, opt := range opts {
 		opt(cfg)
@@ -81,7 +81,7 @@ func (t *NodeClock) startClock() error {
 		log.Duration("tick_interval", t.tickInterval),
 	)
 
-	ticker := t.clock.Ticker(t.tickInterval)
+	ticker := t.clock.NewTicker(t.tickInterval)
 	for {
 		currLayer := t.TimeToLayer(t.clock.Now())
 		t.log.With().Debug("global clock going to sleep before next tick",
@@ -89,7 +89,7 @@ func (t *NodeClock) startClock() error {
 		)
 
 		select {
-		case <-ticker.C:
+		case <-ticker.Chan():
 		case <-t.stop:
 			t.log.Info("stopping global clock")
 			ticker.Stop()

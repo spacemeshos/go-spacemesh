@@ -25,6 +25,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
@@ -69,6 +70,7 @@ func createTestGenerator(t *testing.T) *testGenerator {
 		mockCert:   mocks.NewMockcertifier(ctrl),
 		mockPatrol: mocks.NewMocklayerPatrol(ctrl),
 	}
+	tg.mockMesh.EXPECT().ProcessedLayer().Return(types.LayerID(1)).AnyTimes()
 	lg := logtest.New(t)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
 	tg.Generator = NewGenerator(cdb, tg.mockExec, tg.mockMesh, tg.mockFetch, tg.mockCert, tg.mockPatrol,
@@ -191,10 +193,10 @@ func createProposal(
 					EpochData: &types.EpochData{
 						Beacon:           types.RandomBeacon(),
 						EligibilityCount: uint32(layerSize * epochSize / len(activeSet)),
+						ActiveSetHash:    activeSet.Hash(),
 					},
 				},
 				EligibilityProofs: make([]types.VotingEligibility, numEligibility),
-				ActiveSet:         activeSet,
 			},
 			TxIDs:    txIDs,
 			MeshHash: meshHash,
@@ -206,6 +208,7 @@ func createProposal(
 	require.NoError(t, p.Initialize())
 	require.NoError(t, ballots.Add(db, &p.Ballot))
 	require.NoError(t, proposals.Add(db, p))
+	activesets.Add(db, activeSet.Hash(), &types.EpochActiveSet{Set: activeSet})
 	return p
 }
 
@@ -325,7 +328,11 @@ func Test_run(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			tg := createTestGenerator(t)
 			tg.cfg.BlockGasLimit = tc.gasLimit
+			tg.mockMesh = mocks.NewMockmeshProvider(gomock.NewController(t))
+			tg.msh = tg.mockMesh
 			layerID := types.GetEffectiveGenesis().Add(100)
+			processed := layerID - 1
+			tg.mockMesh.EXPECT().ProcessedLayer().DoAndReturn(func() types.LayerID { return processed }).AnyTimes()
 			require.NoError(t, layers.SetApplied(tg.cdb, layerID-1, types.EmptyBlockID))
 			var meshHash types.Hash32
 			if tc.optimistic {
@@ -337,17 +344,7 @@ func Test_run(t *testing.T) {
 			txIDs := createAndSaveTxs(t, numTXs, tg.cdb)
 			signers, atxes := createATXs(t, tg.cdb, (layerID.GetEpoch() - 1).FirstLayer(), numProposals)
 			activeSet := types.ToATXIDs(atxes)
-			// generate some proposals before this layer
-			oldest := layerID - 10
-			for lid := oldest; lid < layerID; lid++ {
-				createProposals(t, tg.cdb, lid, types.EmptyLayerHash, signers, activeSet, txIDs)
-			}
 			plist := createProposals(t, tg.cdb, layerID, meshHash, signers, activeSet, txIDs)
-			for lid := oldest; lid <= layerID; lid++ {
-				got, err := proposals.GetByLayer(tg.cdb, lid)
-				require.NoError(t, err)
-				require.Len(t, got, len(signers))
-			}
 			pids := types.ToProposalIDs(plist)
 			tg.mockFetch.EXPECT().GetProposals(gomock.Any(), pids)
 
@@ -398,6 +395,7 @@ func Test_run(t *testing.T) {
 			tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, gomock.Any(), tc.optimistic).DoAndReturn(
 				func(_ context.Context, _ types.LayerID, got types.BlockID, _ bool) error {
 					require.Equal(t, block.ID(), got)
+					processed = layerID
 					return nil
 				})
 			tg.mockPatrol.EXPECT().CompleteHare(layerID)
@@ -405,13 +403,6 @@ func Test_run(t *testing.T) {
 			tg.hareCh <- hare.LayerOutput{Ctx: context.Background(), Layer: layerID, Proposals: pids}
 			require.Eventually(t, func() bool { return len(tg.hareCh) == 0 }, time.Second, 100*time.Millisecond)
 			tg.Stop()
-			for lid := oldest; lid < layerID; lid++ {
-				_, err := proposals.GetByLayer(tg.cdb, lid)
-				require.ErrorIs(t, err, sql.ErrNotFound)
-			}
-			got, err := proposals.GetByLayer(tg.cdb, layerID)
-			require.NoError(t, err)
-			require.Len(t, got, len(signers))
 		})
 	}
 }

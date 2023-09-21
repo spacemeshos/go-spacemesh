@@ -59,6 +59,9 @@ type conf struct {
 	connections   int
 	migrations    Migrations
 	enableLatency bool
+
+	// TODO: remove after state is pruned for majority
+	v5Migration func(Executor) error
 }
 
 // WithConnections overwrites number of pooled connections.
@@ -72,6 +75,12 @@ func WithConnections(n int) Opt {
 func WithMigrations(migrations Migrations) Opt {
 	return func(c *conf) {
 		c.migrations = migrations
+	}
+}
+
+func WithV5Migration(cb func(Executor) error) Opt {
+	return func(c *conf) {
+		c.v5Migration = cb
 	}
 }
 
@@ -116,6 +125,10 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 		db.latency = newQueryLatency()
 	}
 	if config.migrations != nil {
+		before, err := version(db)
+		if err != nil {
+			return nil, err
+		}
 		tx, err := db.Tx(context.Background())
 		if err != nil {
 			return nil, err
@@ -128,13 +141,26 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 		if err != nil {
 			return nil, err
 		}
+		after, err := version(db)
+		if err != nil {
+			return nil, err
+		}
+		if before <= 4 && after == 5 && config.v5Migration != nil {
+			// v5 migration (active set extraction) needs the 4rd migration to execute first
+			if err := config.v5Migration(db); err != nil {
+				return nil, err
+			}
+			if err := Vacuum(db); err != nil {
+				return nil, err
+			}
+		}
 	}
 	for i := 0; i < config.connections; i++ {
 		conn := pool.Get(context.Background())
 		if err := registerFunctions(conn); err != nil {
 			return nil, err
 		}
-		defer pool.Put(conn)
+		pool.Put(conn)
 	}
 	return db, nil
 }

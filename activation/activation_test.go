@@ -261,7 +261,7 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 	tab.mpost.EXPECT().LastOpts().Return(&PostSetupOpts{}).AnyTimes()
 	tab.mpost.EXPECT().CommitmentAtx().Return(tab.goldenATXID, nil).AnyTimes()
 	tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(&types.Post{}, &types.PostMetadata{}, nil)
-	tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
+	tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
 	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(make(chan struct{})).AnyTimes()
 	require.NoError(t, tab.StartSmeshing(coinbase, postSetupOpts))
 	require.Equal(t, coinbase, tab.Coinbase())
@@ -285,7 +285,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 			Challenge: shared.ZeroChallenge,
 		}, nil)
 		tab.mpost.EXPECT().Reset().AnyTimes()
-		tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
+		tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
 		tab.mpost.EXPECT().Config().AnyTimes()
 		ch := make(chan struct{})
 		close(ch)
@@ -441,7 +441,7 @@ func TestBuilder_StopSmeshing_OnPoSTError(t *testing.T) {
 	tab.mpost.EXPECT().CommitmentAtx().Return(types.EmptyATXID, nil).AnyTimes()
 	tab.mpost.EXPECT().LastOpts().Return(&PostSetupOpts{}).AnyTimes()
 	tab.mpost.EXPECT().GenerateProof(gomock.Any(), gomock.Any(), gomock.Any()).Return(&types.Post{}, &types.PostMetadata{}, nil).AnyTimes()
-	tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
+	tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
 	ch := make(chan struct{})
 	close(ch)
 	now := time.Now()
@@ -1146,7 +1146,7 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	tab.mpost.EXPECT().GenerateProof(gomock.Any(), shared.ZeroChallenge, gomock.Any()).Return(&types.Post{}, &types.PostMetadata{}, nil)
 	tab.mpost.EXPECT().LastOpts().Return(&PostSetupOpts{})
 	tab.mpost.EXPECT().CommitmentAtx().Return(tab.goldenATXID, nil)
-	tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
+	tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
 	require.NoError(t, tab.generateInitialPost(context.Background()))
 
 	posEpoch := postGenesisEpoch + 1
@@ -1173,12 +1173,12 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 func TestBuilder_InitialPostIsPersisted(t *testing.T) {
 	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
 	tab.mpost.EXPECT().Config().AnyTimes().Return(PostConfig{})
-	tab.mpost.EXPECT().LastOpts().Return(&PostSetupOpts{}).Times(3)
+	tab.mpost.EXPECT().LastOpts().Return(&PostSetupOpts{}).AnyTimes()
 	tab.mpost.EXPECT().CommitmentAtx().Return(tab.goldenATXID, nil).Times(3)
 	tab.mpost.EXPECT().GenerateProof(gomock.Any(), shared.ZeroChallenge, gomock.Any()).Return(&types.Post{}, &types.PostMetadata{
 		Challenge: shared.ZeroChallenge,
 	}, nil)
-	tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
+	tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
 	require.NoError(t, tab.generateInitialPost(context.Background()))
 
 	// GenerateProof() should not be called again

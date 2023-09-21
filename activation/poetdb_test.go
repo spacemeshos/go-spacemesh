@@ -28,9 +28,7 @@ var (
 
 func getPoetProof(t *testing.T) types.PoetProofMessage {
 	createProofOnce.Do(func() {
-		members := [][]byte{memberHash[:]}
-		challenge, err := prover.CalcTreeRoot(members)
-		require.NoError(t, err)
+		challenge := memberHash[:]
 
 		leaves, merkleProof, err := prover.GenerateProofWithoutPersistency(
 			context.Background(),

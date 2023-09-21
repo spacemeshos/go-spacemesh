@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/spacemeshos/poet/shared"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
@@ -41,14 +42,29 @@ func TestHTTPPoet(t *testing.T) {
 	client, err := NewHTTPPoetClient(c.RestURL().String(), DefaultPoetConfig(), WithLogger(zaptest.NewLogger(t)))
 	require.NoError(t, err)
 
+	resp, err := client.PowParams(context.Background())
+	r.NoError(err)
+
 	signer, err := signing.NewEdSigner(signing.WithPrefix([]byte("prefix")))
 	require.NoError(t, err)
 	ch := types.RandomHash()
 
+	nonce, err := shared.FindSubmitPowNonce(
+		context.Background(),
+		resp.Challenge,
+		ch.Bytes(),
+		signer.NodeID().Bytes(),
+		uint(resp.Difficulty),
+	)
+	r.NoError(err)
+
 	signature := signer.Sign(signing.POET, ch.Bytes())
 	prefix := bytes.Join([][]byte{signer.Prefix(), {byte(signing.POET)}}, nil)
 
-	poetRound, err := client.Submit(context.Background(), prefix, ch.Bytes(), signature, signer.NodeID(), PoetPoW{})
+	poetRound, err := client.Submit(context.Background(), prefix, ch.Bytes(), signature, signer.NodeID(), PoetPoW{
+		Nonce:  nonce,
+		Params: *resp,
+	})
 	r.NoError(err)
 	r.NotNil(poetRound)
 }

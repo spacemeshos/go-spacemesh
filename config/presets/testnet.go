@@ -108,6 +108,7 @@ func testnet() config.Config {
 			PhaseShift:        12 * time.Hour,
 			CycleGap:          2 * time.Hour,
 			GracePeriod:       10 * time.Minute,
+			RequestTimeout:    550 * time.Second, // RequestRetryDelay * 2 * MaxRequestRetries*(MaxRequestRetries+1)/2
 			RequestRetryDelay: 5 * time.Second,
 			MaxRequestRetries: 10,
 		},
@@ -136,7 +137,6 @@ func testnet() config.Config {
 			Interval:         time.Minute,
 			EpochEndFraction: 0.8,
 			MaxStaleDuration: time.Hour,
-			UseNewProtocol:   true,
 			GossipDuration:   50 * time.Second,
 		},
 		Recovery: checkpoint.DefaultConfig(),

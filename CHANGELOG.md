@@ -9,11 +9,24 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 A new config `poet-request-timeout` has been added, that defines the timeout for requesting PoET proofs.
 It defaults to 9 minutes so there is enough time to retry if the request fails.
 
+Config option and flag `p2p-disable-legacy-discovery` and `disable-dht` have been dropped. DHT has been the
+only p2p discovery mechanism since release v1.1.2.
+
+Support for old certificate sync protocol is dropped. This update is incompatible with v1.0.x series.
+
 ### Highlights
 
 ### Features
 
+* [#5031](https://github.com/spacemeshos/go-spacemesh/pull/5031) Nodes will also fetch from PoET 112 for round 4 if they were able to register to PoET 110.
+
 ### Improvements
+
+* [#4998](https://github.com/spacemeshos/go-spacemesh/pull/4998) First phase of state size reduction.
+  Ephemeral data are deleted and state compacted at the time of upgrade. In steady-state, data is pruned periodically.
+* [#5021](https://github.com/spacemeshos/go-spacemesh/pull/5021) Drop support for old certificate sync protocol.
+* [#5024](https://github.com/spacemeshos/go-spacemesh/pull/5024) Active set will be saved in state separately from ballots.
+* [#5035](https://github.com/spacemeshos/go-spacemesh/pull/5035) Fix possible nil pointer panic when node fails to persist nipost builder state.
 
 ## v1.1.5
 
@@ -35,7 +48,7 @@ active set will not be gossipped together with proposals. That was the main netw
   * `postdata_metadata.json` is now updated atomically to prevent corruption of the file.
 * [#4956](https://github.com/spacemeshos/go-spacemesh/pull/4956) Active set is will not be gossipped in every proposal.
   Active set usually contains list of atxs that targets current epoch. As the number of atxs grows this object grows as well.
-* [#4993](https://github.com/spacemeshos/go-spacemesh/pull/4993) Drop proposals after genering a block. This limits growth of the state.
+* [#4993](https://github.com/spacemeshos/go-spacemesh/pull/4993) Drop proposals after generating a block. This limits growth of the state.
 
 ## v1.1.4
 
@@ -53,7 +66,7 @@ to set lower expected latency in the network, eventually reducing layer time.
 
 ### Improvements
 
-* [#4879](https://github.com/spacemeshos/go-spacemesh/pull/4795) Makes majority calculation weighted for optimistic filtering.
+* [#4879](https://github.com/spacemeshos/go-spacemesh/pull/4879) Makes majority calculation weighted for optimistic filtering.
 The network will start using the new algorithm at layer 18_000 (2023-09-14 20:00:00 +0000 UTC)
 * [#4923](https://github.com/spacemeshos/go-spacemesh/pull/4923) Faster ballot eligibility validation. Improves sync speed.
 * [#4934](https://github.com/spacemeshos/go-spacemesh/pull/4934) Ensure state is synced before participating in tortoise consensus.
