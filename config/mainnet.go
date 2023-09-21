@@ -136,11 +136,12 @@ func MainnetConfig() Config {
 		FETCH:    fetch.DefaultConfig(),
 		LOGGING:  logging,
 		Sync: syncer.Config{
-			Interval:         time.Minute,
-			EpochEndFraction: 0.8,
-			MaxStaleDuration: time.Hour,
-			Standalone:       false,
-			GossipDuration:   50 * time.Second,
+			Interval:                 time.Minute,
+			EpochEndFraction:         0.8,
+			MaxStaleDuration:         time.Hour,
+			Standalone:               false,
+			GossipDuration:           50 * time.Second,
+			OutOfSyncThresholdLayers: 36, // 3h
 		},
 		Recovery: checkpoint.DefaultConfig(),
 		Cache:    datastore.DefaultConfig(),

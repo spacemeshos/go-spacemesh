@@ -28,6 +28,8 @@ import (
 const (
 	layersPerEpoch = 3
 	never          = time.Second * 60 * 24
+
+	outOfSyncThreshold = 3
 )
 
 func TestMain(m *testing.M) {
@@ -93,11 +95,12 @@ func newTestSyncer(t *testing.T, interval time.Duration) *testSyncer {
 	require.NoError(t, err)
 
 	cfg := Config{
-		Interval:         interval,
-		GossipDuration:   5 * time.Millisecond,
-		EpochEndFraction: 0.66,
-		SyncCertDistance: 4,
-		HareDelayLayers:  5,
+		Interval:                 interval,
+		GossipDuration:           5 * time.Millisecond,
+		EpochEndFraction:         0.66,
+		SyncCertDistance:         4,
+		HareDelayLayers:          5,
+		OutOfSyncThresholdLayers: outOfSyncThreshold,
 	}
 	ts.syncer = NewSyncer(ts.cdb, ts.mTicker, ts.mBeacon, ts.msh, nil, nil, ts.mLyrPatrol, ts.mCertHdr,
 		WithConfig(cfg),
@@ -535,7 +538,7 @@ func TestNetworkHasNoData(t *testing.T) {
 		require.True(t, ts.syncer.IsSynced(context.Background()))
 	}
 	// the network hasn't received any data
-	require.Greater(t, ts.syncer.ticker.CurrentLayer()-ts.msh.LatestLayer(), outOfSyncThreshold)
+	require.Greater(t, int(ts.syncer.ticker.CurrentLayer()-ts.msh.LatestLayer()), outOfSyncThreshold)
 }
 
 // test the case where the node was originally synced, and somehow gets out of sync, but
