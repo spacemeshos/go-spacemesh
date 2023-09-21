@@ -328,6 +328,7 @@ type App struct {
 	proposalListener   *proposals.Handler
 	proposalBuilder    *miner.ProposalBuilder
 	mesh               *mesh.Mesh
+	cache              *cache.Cache
 	cachedDB           *datastore.CachedDB
 	clock              *timesync.NodeClock
 	hare               *hare.Hare
@@ -639,16 +640,10 @@ func (app *App) initServices(ctx context.Context) error {
 		app.log.Debug("beacon results watcher exited")
 		return nil
 	})
-	start = time.Now()
-	cache, err := cache.Warm(app.db)
-	if err != nil {
-		return err
-	}
-	app.log.With().Info("cache warmup", log.Duration("duration", time.Since(start)))
 
 	executor := mesh.NewExecutor(app.cachedDB, state, app.conState, app.addLogger(ExecutorLogger, lg))
 	mlog := app.addLogger(MeshLogger, lg)
-	msh, err := mesh.NewMesh(app.cachedDB, cache, app.clock, trtl, executor, app.conState, mlog)
+	msh, err := mesh.NewMesh(app.cachedDB, app.cache, app.clock, trtl, executor, app.conState, mlog)
 	if err != nil {
 		return fmt.Errorf("failed to create mesh: %w", err)
 	}
@@ -661,7 +656,7 @@ func (app *App) initServices(ctx context.Context) error {
 	fetcherWrapped := &layerFetcher{}
 	atxHandler := activation.NewHandler(
 		app.cachedDB,
-		cache,
+		app.cache,
 		app.edVerifier,
 		app.clock,
 		app.host,
@@ -682,7 +677,7 @@ func (app *App) initServices(ctx context.Context) error {
 			app.Config.HareEligibility.ConfidenceParam, app.Config.BaseConfig.LayersPerEpoch)
 	}
 
-	proposalListener := proposals.NewHandler(app.cachedDB, cache, app.edVerifier, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifier, app.clock,
+	proposalListener := proposals.NewHandler(app.cachedDB, app.cache, app.edVerifier, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifier, app.clock,
 		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
 		proposals.WithConfig(proposals.Config{
 			LayerSize:              layerSize,
@@ -1355,7 +1350,17 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	if app.Config.CollectMetrics {
 		app.dbMetrics = dbmetrics.NewDBMetricsCollector(ctx, sqlDB, app.addLogger(StateDbLogger, lg), 5*time.Minute)
 	}
-	app.cachedDB = datastore.NewCachedDB(sqlDB, app.addLogger(CachedDBLogger, lg), datastore.WithConfig(app.Config.Cache))
+	start := time.Now()
+	cache, err := cache.Warm(app.db)
+	if err != nil {
+		return err
+	}
+	app.cache = cache
+	app.log.With().Info("cache warmup", log.Duration("duration", time.Since(start)))
+	app.cachedDB = datastore.NewCachedDB(sqlDB, app.addLogger(CachedDBLogger, lg),
+		datastore.WithConfig(app.Config.Cache),
+		datastore.WithConsensusCache(cache),
+	)
 	return nil
 }
 

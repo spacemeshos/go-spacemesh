@@ -7,6 +7,7 @@ import (
 
 	lru "github.com/hashicorp/golang-lru/v2"
 
+	"github.com/spacemeshos/go-spacemesh/cache"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -31,6 +32,9 @@ type CachedDB struct {
 	*sql.Database
 	logger log.Log
 
+	// cache is optional
+	cache *cache.Cache
+
 	atxHdrCache   *lru.Cache[types.ATXID, *types.ActivationTxHeader]
 	vrfNonceCache *lru.Cache[VrfNonceKey, *types.VRFPostIndex]
 
@@ -52,7 +56,8 @@ func DefaultConfig() Config {
 }
 
 type cacheOpts struct {
-	cfg Config
+	cfg   Config
+	cache *cache.Cache
 }
 
 type Opt func(*cacheOpts)
@@ -60,6 +65,12 @@ type Opt func(*cacheOpts)
 func WithConfig(cfg Config) Opt {
 	return func(o *cacheOpts) {
 		o.cfg = cfg
+	}
+}
+
+func WithConsensusCache(c *cache.Cache) Opt {
+	return func(o *cacheOpts) {
+		o.cache = c
 	}
 }
 
@@ -88,6 +99,7 @@ func NewCachedDB(db *sql.Database, lg log.Log, opts ...Opt) *CachedDB {
 
 	return &CachedDB{
 		Database:         db,
+		cache:            o.cache,
 		logger:           lg,
 		atxHdrCache:      atxHdrCache,
 		malfeasanceCache: malfeasanceCache,
@@ -152,7 +164,9 @@ func (db *CachedDB) CacheMalfeasanceProof(id types.NodeID, proof *types.Malfeasa
 	if id == types.EmptyNodeID {
 		db.logger.Fatal("invalid argument to CacheMalfeasanceProof")
 	}
-
+	if db.cache != nil {
+		db.cache.SetMalicious(id)
+	}
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	db.malfeasanceCache.Add(id, proof)
