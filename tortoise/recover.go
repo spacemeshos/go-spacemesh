@@ -18,7 +18,7 @@ import (
 )
 
 // Recover tortoise state from database.
-func Recover(db *datastore.CachedDB, latest types.LayerID, beacon system.BeaconGetter, opts ...Opt) (*Tortoise, error) {
+func Recover(ctx context.Context, db *datastore.CachedDB, latest types.LayerID, beacon system.BeaconGetter, opts ...Opt) (*Tortoise, error) {
 	trtl, err := New(opts...)
 	if err != nil {
 		return nil, err
@@ -57,7 +57,12 @@ func Recover(db *datastore.CachedDB, latest types.LayerID, beacon system.BeaconG
 		}
 	}
 	for lid := types.GetEffectiveGenesis().Add(1); !lid.After(last); lid = lid.Add(1) {
-		if err := RecoverLayer(context.Background(), trtl, db, beacon, lid, last, min(last, latest)); err != nil {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+		if err := RecoverLayer(ctx, trtl, db, beacon, lid, last, min(last, latest)); err != nil {
 			return nil, fmt.Errorf("failed to load tortoise state at layer %d: %w", lid, err)
 		}
 	}

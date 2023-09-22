@@ -52,7 +52,7 @@ func TestRecoverState(t *testing.T) {
 	}
 	require.Equal(t, last.Sub(1), verified)
 
-	tortoise2, err := Recover(s.GetState(0).DB, last, s.GetState(0).Beacons, WithLogger(logtest.New(t)), WithConfig(cfg))
+	tortoise2, err := Recover(context.Background(), s.GetState(0).DB, last, s.GetState(0).Beacons, WithLogger(logtest.New(t)), WithConfig(cfg))
 	require.NoError(t, err)
 	verified = tortoise2.LatestComplete()
 	require.Equal(t, last.Sub(1), verified)
@@ -69,7 +69,7 @@ func TestRecoverEmpty(t *testing.T) {
 
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
-	tortoise, err := Recover(s.GetState(0).DB, 100, s.GetState(0).Beacons, WithLogger(logtest.New(t)), WithConfig(cfg))
+	tortoise, err := Recover(context.Background(), s.GetState(0).DB, 100, s.GetState(0).Beacons, WithLogger(logtest.New(t)), WithConfig(cfg))
 	require.NoError(t, err)
 	require.NotNil(t, tortoise)
 }
@@ -93,7 +93,7 @@ func TestRecoverWithOpinion(t *testing.T) {
 		}
 		last = rst
 	}
-	tortoise, err := Recover(s.GetState(0).DB, last.Layer, s.GetState(0).Beacons, WithLogger(logtest.New(t)), WithConfig(cfg))
+	tortoise, err := Recover(context.Background(), s.GetState(0).DB, last.Layer, s.GetState(0).Beacons, WithLogger(logtest.New(t)), WithConfig(cfg))
 	require.NoError(t, err)
 	require.NotNil(t, tortoise)
 	updates := tortoise.Updates()
