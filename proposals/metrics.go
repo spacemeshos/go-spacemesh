@@ -94,6 +94,7 @@ var (
 	failedInit     = processErrors.WithLabelValues("init")
 	known          = processErrors.WithLabelValues("known")
 	tooLate        = processErrors.WithLabelValues("late")
+	tooFuture      = processErrors.WithLabelValues("future")
 	preGenesis     = processErrors.WithLabelValues("genesis")
 	badSigProposal = processErrors.WithLabelValues("sigp")
 	badSigBallot   = processErrors.WithLabelValues("sigb")
