@@ -503,11 +503,6 @@ func (h *Handler) handleAtx(ctx context.Context, expHash types.Hash32, peer p2p.
 		return fmt.Errorf("%w: %w", errMalformedData, err)
 	}
 
-	epochStart := h.clock.LayerToTime(atx.PublishEpoch.FirstLayer())
-	poetRoundEnd := epochStart.Add(h.poetCfg.PhaseShift - h.poetCfg.CycleGap)
-	latency := receivedTime.Sub(poetRoundEnd)
-	metrics.ReportMessageLatency(pubsub.AtxProtocol, pubsub.AtxProtocol, latency)
-
 	atx.SetReceived(receivedTime.Local())
 	if err := atx.Initialize(); err != nil {
 		return fmt.Errorf("failed to derive ID from atx: %w", err)
@@ -545,6 +540,9 @@ func (h *Handler) handleAtx(ctx context.Context, expHash types.Hash32, peer p2p.
 	}
 	events.ReportNewActivation(vAtx)
 	h.log.WithContext(ctx).With().Info("new atx", log.Inline(vAtx), log.Int("size", len(msg)))
+
+	poetRoundEnd := h.clock.LayerToTime(atx.PublishEpoch.FirstLayer()).Add(h.poetCfg.PhaseShift - h.poetCfg.CycleGap)
+	metrics.ReportMessageLatency(pubsub.AtxProtocol, pubsub.AtxProtocol, time.Since(poetRoundEnd))
 	return nil
 }
 
