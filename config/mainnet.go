@@ -42,12 +42,13 @@ func MainnetConfig() Config {
 	logging.TrtlLoggerLevel = zapcore.WarnLevel.String()
 	return Config{
 		BaseConfig: BaseConfig{
-			DataDirParent:         defaultDataDir,
-			FileLock:              filepath.Join(os.TempDir(), "spacemesh.lock"),
-			MetricsPort:           1010,
-			DatabaseConnections:   16,
-			DatabasePruneInterval: 30 * time.Minute,
-			NetworkHRP:            "sm",
+			DataDirParent:                defaultDataDir,
+			FileLock:                     filepath.Join(os.TempDir(), "spacemesh.lock"),
+			MetricsPort:                  1010,
+			DatabaseConnections:          16,
+			DatabaseSizeMeteringInterval: 60 * time.Minute,
+			DatabasePruneInterval:        30 * time.Minute,
+			NetworkHRP:                   "sm",
 
 			LayerDuration:  5 * time.Minute,
 			LayerAvgSize:   50,

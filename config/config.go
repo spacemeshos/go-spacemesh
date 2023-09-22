@@ -108,9 +108,10 @@ type BaseConfig struct {
 	OptFilterThreshold int    `mapstructure:"optimistic-filtering-threshold"`
 	TickSize           uint64 `mapstructure:"tick-size"`
 
-	DatabaseConnections     int           `mapstructure:"db-connections"`
-	DatabaseLatencyMetering bool          `mapstructure:"db-latency-metering"`
-	DatabasePruneInterval   time.Duration `mapstructure:"db-prune-interval"`
+	DatabaseConnections          int           `mapstructure:"db-connections"`
+	DatabaseLatencyMetering      bool          `mapstructure:"db-latency-metering"`
+	DatabaseSizeMeteringInterval time.Duration `mapstructure:"db-size-metering-interval"`
+	DatabasePruneInterval        time.Duration `mapstructure:"db-prune-interval"`
 
 	NetworkHRP string `mapstructure:"network-hrp"`
 
@@ -174,21 +175,22 @@ func DefaultTestConfig() Config {
 // DefaultBaseConfig returns a default configuration for spacemesh.
 func defaultBaseConfig() BaseConfig {
 	return BaseConfig{
-		DataDirParent:         defaultDataDir,
-		FileLock:              filepath.Join(os.TempDir(), "spacemesh.lock"),
-		CollectMetrics:        false,
-		MetricsPort:           1010,
-		ProfilerName:          "gp-spacemesh",
-		LayerDuration:         30 * time.Second,
-		LayersPerEpoch:        3,
-		PoETServers:           []string{"127.0.0.1"},
-		TxsPerProposal:        100,
-		BlockGasLimit:         math.MaxUint64,
-		OptFilterThreshold:    90,
-		TickSize:              100,
-		DatabaseConnections:   16,
-		DatabasePruneInterval: 30 * time.Minute,
-		NetworkHRP:            "sm",
+		DataDirParent:                defaultDataDir,
+		FileLock:                     filepath.Join(os.TempDir(), "spacemesh.lock"),
+		CollectMetrics:               false,
+		MetricsPort:                  1010,
+		ProfilerName:                 "gp-spacemesh",
+		LayerDuration:                30 * time.Second,
+		LayersPerEpoch:               3,
+		PoETServers:                  []string{"127.0.0.1"},
+		TxsPerProposal:               100,
+		BlockGasLimit:                math.MaxUint64,
+		OptFilterThreshold:           90,
+		TickSize:                     100,
+		DatabaseConnections:          16,
+		DatabaseSizeMeteringInterval: 10 * time.Minute,
+		DatabasePruneInterval:        30 * time.Minute,
+		NetworkHRP:                   "sm",
 	}
 }
 
