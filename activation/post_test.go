@@ -44,9 +44,10 @@ func TestPostSetupManager(t *testing.T) {
 				status := mgr.Status()
 				req.GreaterOrEqual(status.NumLabelsWritten, lastStatus.NumLabelsWritten)
 
-				if status.NumLabelsWritten < uint64(mgr.opts.NumUnits)*mgr.cfg.LabelsPerUnit {
-					req.Equal(PostSetupStateInProgress, status.State)
+				if status.NumLabelsWritten == uint64(mgr.opts.NumUnits)*mgr.cfg.LabelsPerUnit {
+					return nil
 				}
+				req.Equal(PostSetupStateInProgress, status.State)
 			}
 		}
 	})
@@ -54,8 +55,7 @@ func TestPostSetupManager(t *testing.T) {
 	// Create data.
 	req.NoError(mgr.PrepareInitializer(context.Background(), mgr.opts))
 	req.NoError(mgr.StartSession(context.Background()))
-	cancel()
-	_ = eg.Wait()
+	require.NoError(t, eg.Wait())
 
 	req.Equal(PostSetupStateComplete, mgr.Status().State)
 
