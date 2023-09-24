@@ -5,7 +5,6 @@ import (
 	"io"
 	"time"
 
-	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 
@@ -56,18 +55,24 @@ type atxProvider interface {
 }
 
 // PostSetupProvider defines the functionality required for Post setup.
+// This interface is used by the atx builder and currently implemented by the PostSetupManager.
+// Eventually most of the functionality will be moved to the PoSTClient.
 type postSetupProvider interface {
-	Status() *PostSetupStatus
-	Providers() ([]PostSetupProvider, error)
-	Benchmark(p PostSetupProvider) (int, error)
 	PrepareInitializer(ctx context.Context, opts PostSetupOpts) error
 	StartSession(context context.Context) error
 	Reset() error
-	GenerateProof(ctx context.Context, challenge []byte, options ...proving.OptionFunc) (*types.Post, *types.PostMetadata, error)
 	CommitmentAtx() (types.ATXID, error)
 	VRFNonce() (*types.VRFPostIndex, error)
 	LastOpts() *PostSetupOpts
 	Config() PostConfig
+}
+
+// nipostClient is a temporary interface for the NIPostBuilder.
+// it is implemented by the PostSetupManager but will eventually merge with the PoSTClient.
+type nipostClient interface {
+	Status() *PostSetupStatus
+	CommitmentAtx() (types.ATXID, error)
+	LastOpts() *PostSetupOpts
 }
 
 // SmeshingProvider defines the functionality required for the node's Smesher API.

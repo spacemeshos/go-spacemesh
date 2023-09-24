@@ -8,11 +8,11 @@ import (
 	"fmt"
 	"math/rand"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/spacemeshos/merkle-tree"
 	"github.com/spacemeshos/poet/shared"
-	"github.com/spacemeshos/post/proving"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
@@ -83,17 +83,20 @@ func (nb *NIPostBuilder) persistState() {
 
 // NIPostBuilder holds the required state and dependencies to create Non-Interactive Proofs of Space-Time (NIPost).
 type NIPostBuilder struct {
-	nodeID            types.NodeID
-	dataDir           string
-	postSetupProvider postSetupProvider
-	poetProvers       map[string]PoetProvingServiceClient
-	poetDB            poetDbAPI
-	state             *types.NIPostBuilderState
-	log               log.Log
-	signer            *signing.EdSigner
-	layerClock        layerClock
-	poetCfg           PoetConfig
-	validator         nipostValidator
+	nodeID       types.NodeID
+	dataDir      string
+	nipostClient nipostClient
+	poetProvers  map[string]PoetProvingServiceClient
+	poetDB       poetDbAPI
+	state        *types.NIPostBuilderState
+	log          log.Log
+	signer       *signing.EdSigner
+	layerClock   layerClock
+	poetCfg      PoetConfig
+	validator    nipostValidator
+
+	postMux    sync.Mutex
+	postClient PostClient
 }
 
 type NIPostBuilderOption func(*NIPostBuilder)
@@ -122,7 +125,7 @@ type poetDbAPI interface {
 // NewNIPostBuilder returns a NIPostBuilder.
 func NewNIPostBuilder(
 	nodeID types.NodeID,
-	postSetupProvider postSetupProvider,
+	nipostClient nipostClient,
 	poetDB poetDbAPI,
 	poetServers []string,
 	dataDir string,
@@ -142,16 +145,16 @@ func NewNIPostBuilder(
 	}
 
 	b := &NIPostBuilder{
-		nodeID:            nodeID,
-		postSetupProvider: postSetupProvider,
-		poetProvers:       poetClients,
-		poetDB:            poetDB,
-		state:             &types.NIPostBuilderState{NIPost: &types.NIPost{}},
-		dataDir:           dataDir,
-		log:               lg,
-		signer:            signer,
-		poetCfg:           poetCfg,
-		layerClock:        layerClock,
+		nodeID:       nodeID,
+		nipostClient: nipostClient,
+		poetProvers:  poetClients,
+		poetDB:       poetDB,
+		state:        &types.NIPostBuilderState{NIPost: &types.NIPost{}},
+		dataDir:      dataDir,
+		log:          lg,
+		signer:       signer,
+		poetCfg:      poetCfg,
+		layerClock:   layerClock,
 	}
 
 	for _, opt := range opts {
@@ -162,6 +165,41 @@ func NewNIPostBuilder(
 
 func (nb *NIPostBuilder) DataDir() string {
 	return nb.dataDir
+}
+
+func (nb *NIPostBuilder) Connected(client PostClient) {
+	nb.postMux.Lock()
+	defer nb.postMux.Unlock()
+
+	if nb.postClient != nil {
+		nb.log.With().Error("post service already connected")
+		return
+	}
+
+	nb.postClient = client
+}
+
+func (nb *NIPostBuilder) Disconnected(client PostClient) {
+	nb.postMux.Lock()
+	defer nb.postMux.Unlock()
+
+	if nb.postClient != client {
+		nb.log.With().Debug("post service not connected")
+		return
+	}
+
+	nb.postClient = nil
+}
+
+func (nb *NIPostBuilder) proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error) {
+	nb.postMux.Lock()
+	defer nb.postMux.Unlock()
+
+	if nb.postClient == nil {
+		return nil, nil, errors.New("post service not connected")
+	}
+
+	return nb.postClient.Proof(ctx, challenge)
 }
 
 // UpdatePoETProvers updates poetProver reference. It should not be executed concurrently with BuildNIPoST.
@@ -221,7 +259,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 	challengeHash := challenge.Hash()
 	nb.loadState(challengeHash)
 
-	if s := nb.postSetupProvider.Status(); s.State != PostSetupStateComplete {
+	if s := nb.nipostClient.Status(); s.State != PostSetupStateComplete {
 		return nil, errors.New("post setup not complete")
 	}
 
@@ -287,12 +325,12 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 		startTime := time.Now()
 		events.EmitPostStart(nb.state.PoetProofRef[:])
 
-		proof, proofMetadata, err := nb.postSetupProvider.GenerateProof(postCtx, nb.state.PoetProofRef[:], proving.WithPowCreator(nb.nodeID.Bytes()))
+		proof, proofMetadata, err := nb.proof(postCtx, nb.state.PoetProofRef[:])
 		if err != nil {
 			events.EmitPostFailure()
 			return nil, fmt.Errorf("failed to generate Post: %w", err)
 		}
-		commitmentAtxId, err := nb.postSetupProvider.CommitmentAtx()
+		commitmentAtxId, err := nb.nipostClient.CommitmentAtx()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get commitment ATX: %w", err)
 		}
@@ -302,7 +340,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 			commitmentAtxId,
 			proof,
 			proofMetadata,
-			nb.postSetupProvider.LastOpts().NumUnits,
+			nb.nipostClient.LastOpts().NumUnits,
 		); err != nil {
 			events.EmitInvalidPostProof()
 			return nil, fmt.Errorf("failed to verify Post: %w", err)

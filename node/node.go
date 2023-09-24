@@ -336,6 +336,7 @@ type App struct {
 	certifier          *blocks.Certifier
 	postSetupMgr       *activation.PostSetupManager
 	atxBuilder         *activation.Builder
+	nipostBuilder      *activation.NIPostBuilder
 	atxHandler         *activation.Handler
 	txHandler          *txs.TxHandler
 	validator          *activation.Validator
@@ -943,6 +944,7 @@ func (app *App) initServices(ctx context.Context) error {
 	app.syncer = newSyncer
 	app.svm = state
 	app.atxBuilder = atxBuilder
+	app.nipostBuilder = nipostBuilder
 	app.postSetupMgr = postSetupMgr
 	app.atxHandler = atxHandler
 	app.poetDb = poetDb
