@@ -987,13 +987,13 @@ func (app *App) launchStandalone(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("init poet server: %w", err)
 	}
-	app.log.With().Warning("lauching poet in standalone mode", log.Any("config", cfg))
+	app.log.With().Warning("launching poet in standalone mode", log.Any("config", cfg))
 	app.eg.Go(func() error {
 		if err := srv.Start(ctx); err != nil {
 			app.log.With().Error("poet server failed", log.Err(err))
 			return err
 		}
-		return nil
+		return srv.Close()
 	})
 	return nil
 }
