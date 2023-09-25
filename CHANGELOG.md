@@ -3,7 +3,7 @@
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
 
-## UNRELEASED
+## v1.1.9
 
 ### Features
 
@@ -17,6 +17,8 @@ In order to enable provide following configuration:
 ```
 
 ### Improvements
+
+* [#5072](https://github.com/spacemeshos/go-spacemesh/pull/5072) change p2p default log level to warn.
 
 ## v1.1.8
 
