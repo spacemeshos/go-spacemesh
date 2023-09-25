@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/spacemeshos/go-spacemesh/cache"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -19,16 +20,18 @@ import (
 
 type handler struct {
 	logger log.Log
-	cdb    *datastore.CachedDB
+	db     *sql.Database
+	cache  *cache.Cache
 	bs     *datastore.BlobStore
 	msh    meshProvider
 	beacon system.BeaconGetter
 }
 
-func newHandler(cdb *datastore.CachedDB, bs *datastore.BlobStore, m meshProvider, b system.BeaconGetter, lg log.Log) *handler {
+func newHandler(db *sql.Database, c *cache.Cache, bs *datastore.BlobStore, m meshProvider, b system.BeaconGetter, lg log.Log) *handler {
 	return &handler{
 		logger: lg,
-		cdb:    cdb,
+		db:     db,
+		cache:  c,
 		bs:     bs,
 		msh:    m,
 		beacon: b,
@@ -37,7 +40,7 @@ func newHandler(cdb *datastore.CachedDB, bs *datastore.BlobStore, m meshProvider
 
 // handleMaliciousIDsReq returns the IDs of all known malicious nodes.
 func (h *handler) handleMaliciousIDsReq(ctx context.Context, _ []byte) ([]byte, error) {
-	nodes, err := identities.GetMalicious(h.cdb)
+	nodes, err := identities.GetMalicious(h.db)
 	if err != nil {
 		h.logger.WithContext(ctx).With().Warning("serve: failed to get malicious IDs", log.Err(err))
 		return nil, err
@@ -59,10 +62,14 @@ func (h *handler) handleEpochInfoReq(ctx context.Context, msg []byte) ([]byte, e
 	if err := codec.Decode(msg, &epoch); err != nil {
 		return nil, err
 	}
-	atxids, err := atxs.GetIDsByEpoch(h.cdb, epoch)
-	if err != nil {
-		h.logger.WithContext(ctx).With().Warning("serve: failed to get epoch atx IDs", epoch, log.Err(err))
-		return nil, err
+	atxids := h.cache.List(epoch + 1) // indexed by target epoch
+	if atxids == nil {
+		var err error
+		atxids, err = atxs.GetIDsByEpoch(h.db, epoch)
+		if err != nil {
+			h.logger.WithContext(ctx).With().Warning("serve: failed to get epoch atx IDs", epoch, log.Err(err))
+			return nil, err
+		}
 	}
 	ed := EpochData{
 		AtxIDs: atxids,
@@ -87,7 +94,7 @@ func (h *handler) handleLayerDataReq(ctx context.Context, req []byte) ([]byte, e
 	if err := codec.Decode(req, &lid); err != nil {
 		return nil, err
 	}
-	ld.Ballots, err = ballots.IDsInLayer(h.cdb, lid)
+	ld.Ballots, err = ballots.IDsInLayer(h.db, lid)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		h.logger.WithContext(ctx).With().Warning("serve: failed to get layer ballots", lid, log.Err(err))
 		return nil, err
@@ -117,12 +124,12 @@ func (h *handler) handleLayerOpinionsReq2(ctx context.Context, data []byte) ([]b
 	)
 
 	opnReqV2.Inc()
-	lo.PrevAggHash, err = layers.GetAggregatedHash(h.cdb, lid.Sub(1))
+	lo.PrevAggHash, err = layers.GetAggregatedHash(h.db, lid.Sub(1))
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		h.logger.WithContext(ctx).With().Error("serve: failed to get prev agg hash", lid, log.Err(err))
 		return nil, err
 	}
-	bid, err := certificates.CertifiedBlock(h.cdb, lid)
+	bid, err := certificates.CertifiedBlock(h.db, lid)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		h.logger.WithContext(ctx).With().Error("serve: failed to get layer certified block", lid, log.Err(err))
 		return nil, err
@@ -139,7 +146,7 @@ func (h *handler) handleLayerOpinionsReq2(ctx context.Context, data []byte) ([]b
 
 func (h *handler) handleCertReq(ctx context.Context, lid types.LayerID, bid types.BlockID) ([]byte, error) {
 	certReq.Inc()
-	certs, err := certificates.Get(h.cdb, lid)
+	certs, err := certificates.Get(h.db, lid)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		h.logger.WithContext(ctx).With().Error("serve: failed to get certificate", lid, log.Err(err))
 		return nil, err
@@ -227,7 +234,7 @@ func (h *handler) handleMeshHashReq(ctx context.Context, reqData []byte) ([]byte
 		h.logger.WithContext(ctx).With().Debug("failed to validate mesh hash request", log.Err(err))
 		return nil, err
 	}
-	hashes, err = layers.GetAggHashes(h.cdb, req.From, req.To, req.Step)
+	hashes, err = layers.GetAggHashes(h.db, req.From, req.To, req.Step)
 	if err != nil {
 		h.logger.WithContext(ctx).With().Warning("serve: failed to get mesh hashes", log.Err(err))
 		return nil, err

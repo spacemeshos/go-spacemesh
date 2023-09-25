@@ -165,6 +165,24 @@ func (c *Cache) GetByNode(epoch types.EpochID, node types.NodeID) *ATXData {
 	return ecache.atxs[atxids[0]]
 }
 
+// List all known atxs.
+func (c *Cache) List(epoch types.EpochID) []types.ATXID {
+	if c.IsEvicted(epoch) {
+		return nil
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	ecache, exists := c.epochs[epoch]
+	if !exists {
+		return nil
+	}
+	ids := make([]types.ATXID, 0, len(ecache.atxs))
+	for id := range ecache.atxs {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
 // NodeHasAtx returns true if atx was registered with a given node id.
 func (c *Cache) NodeHasAtx(epoch types.EpochID, node types.NodeID, atx types.ATXID) bool {
 	c.mu.RLock()

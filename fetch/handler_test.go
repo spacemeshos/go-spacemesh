@@ -9,6 +9,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/cache"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -27,26 +28,26 @@ import (
 
 type testHandler struct {
 	*handler
-	cdb *datastore.CachedDB
-	mm  *mocks.MockmeshProvider
-	mb  *smocks.MockBeaconGetter
+	db *sql.Database
+	mm *mocks.MockmeshProvider
+	mb *smocks.MockBeaconGetter
 }
 
 func createTestHandler(t testing.TB) *testHandler {
 	lg := logtest.New(t)
-	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
 	ctrl := gomock.NewController(t)
 	mm := mocks.NewMockmeshProvider(ctrl)
 	mb := smocks.NewMockBeaconGetter(ctrl)
+	db := sql.InMemory()
 	return &testHandler{
-		handler: newHandler(cdb, datastore.NewBlobStore(cdb.Database), mm, mb, lg),
-		cdb:     cdb,
+		handler: newHandler(db, cache.New(), datastore.NewBlobStore(db), mm, mb, lg),
+		db:      db,
 		mm:      mm,
 		mb:      mb,
 	}
 }
 
-func createLayer(tb testing.TB, db *datastore.CachedDB, lid types.LayerID) ([]types.BallotID, []types.BlockID) {
+func createLayer(tb testing.TB, db *sql.Database, lid types.LayerID) ([]types.BallotID, []types.BlockID) {
 	num := 5
 	blts := make([]types.BallotID, 0, num)
 	blks := make([]types.BlockID, 0, num)
@@ -69,7 +70,7 @@ func createLayer(tb testing.TB, db *datastore.CachedDB, lid types.LayerID) ([]ty
 	return blts, blks
 }
 
-func createOpinions(t *testing.T, db *datastore.CachedDB, lid types.LayerID, genCert bool) (types.BlockID, types.Hash32) {
+func createOpinions(t *testing.T, db *sql.Database, lid types.LayerID, genCert bool) (types.BlockID, types.Hash32) {
 	_, blks := createLayer(t, db, lid)
 	certified := types.EmptyBlockID
 	if genCert {
@@ -102,7 +103,7 @@ func TestHandleLayerDataReq(t *testing.T) {
 
 			lid := types.LayerID(111)
 			th := createTestHandler(t)
-			blts, _ := createLayer(t, th.cdb, lid)
+			blts, _ := createLayer(t, th.db, lid)
 
 			lidBytes, err := codec.Encode(&lid)
 			require.NoError(t, err)
@@ -142,13 +143,13 @@ func TestHandleLayerOpinionsReq(t *testing.T) {
 
 			th := createTestHandler(t)
 			lid := types.LayerID(111)
-			_, aggHash := createOpinions(t, th.cdb, lid, !tc.missingCert)
+			_, aggHash := createOpinions(t, th.db, lid, !tc.missingCert)
 			if tc.multipleCerts {
 				bid := types.RandomBlockID()
-				require.NoError(t, certificates.Add(th.cdb, lid, &types.Certificate{
+				require.NoError(t, certificates.Add(th.db, lid, &types.Certificate{
 					BlockID: bid,
 				}))
-				require.NoError(t, certificates.SetInvalid(th.cdb, lid, bid))
+				require.NoError(t, certificates.SetInvalid(th.db, lid, bid))
 			}
 
 			req := OpinionRequest{Layer: lid}
@@ -187,7 +188,7 @@ func TestHandleCertReq(t *testing.T) {
 	require.Nil(t, resp)
 
 	cert := &types.Certificate{BlockID: bid}
-	require.NoError(t, certificates.Add(th.cdb, lid, cert))
+	require.NoError(t, certificates.Add(th.db, lid, cert))
 
 	resp, err = th.handleLayerOpinionsReq2(context.Background(), reqData)
 	require.NoError(t, err)
@@ -244,7 +245,7 @@ func TestHandleMeshHashReq(t *testing.T) {
 			}
 			if !tc.hashMissing {
 				for lid := req.From; !lid.After(req.To); lid = lid.Add(1) {
-					require.NoError(t, layers.SetMeshHash(th.cdb, lid, types.RandomHash()))
+					require.NoError(t, layers.SetMeshHash(th.db, lid, types.RandomHash()))
 				}
 			}
 			reqData, err := codec.Encode(req)
@@ -286,15 +287,23 @@ func newAtx(t *testing.T, published types.EpochID) *types.VerifiedActivationTx {
 }
 
 func TestHandleEpochInfoReq(t *testing.T) {
+	const epoch = types.EpochID(11)
 	tt := []struct {
 		name        string
+		applied     types.EpochID
 		missingData bool
 	}{
 		{
-			name: "all good",
+			name:    "fetched fastpath",
+			applied: epoch,
+		},
+		{
+			name:    "fetched slowpath",
+			applied: epoch + 10,
 		},
 		{
 			name:        "no epoch data",
+			applied:     epoch,
 			missingData: true,
 		},
 	}
@@ -305,12 +314,13 @@ func TestHandleEpochInfoReq(t *testing.T) {
 			t.Parallel()
 
 			th := createTestHandler(t)
-			epoch := types.EpochID(11)
+			th.cache.OnApplied(tc.applied)
 			var expected EpochData
 			if !tc.missingData {
 				for i := 0; i < 10; i++ {
 					vatx := newAtx(t, epoch)
-					require.NoError(t, atxs.Add(th.cdb, vatx))
+					require.NoError(t, atxs.Add(th.db, vatx))
+					th.cache.Add(vatx.TargetEpoch(), vatx.SmesherID, vatx.ID(), cache.ToATXData(vatx.ToHeader(), 1, false))
 					expected.AtxIDs = append(expected.AtxIDs, vatx.ID())
 				}
 			}
@@ -351,7 +361,7 @@ func TestHandleMaliciousIDsReq(t *testing.T) {
 			for i := 0; i < tc.numBad; i++ {
 				nid := types.NodeID{byte(i + 1)}
 				bad = append(bad, nid)
-				require.NoError(t, identities.SetMalicious(th.cdb, nid, types.RandomBytes(11), time.Now()))
+				require.NoError(t, identities.SetMalicious(th.db, nid, types.RandomBytes(11), time.Now()))
 			}
 
 			out, err := th.handleMaliciousIDsReq(context.TODO(), []byte{})

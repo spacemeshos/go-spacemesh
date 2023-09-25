@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
+	"github.com/spacemeshos/go-spacemesh/cache"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -74,7 +75,7 @@ func createFetch(tb testing.TB) *testFetch {
 		MaxRetriesForRequest: 3,
 	}
 	lg := logtest.New(tb)
-	tf.Fetch = NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), tf.mMesh, nil, nil,
+	tf.Fetch = NewFetch(sql.InMemory(), cache.New(), tf.mMesh, nil, nil,
 		WithContext(context.TODO()),
 		WithConfig(cfg),
 		WithLogger(lg),
@@ -101,7 +102,7 @@ func badReceiver(context.Context, types.Hash32, p2p.Peer, []byte) error {
 
 func TestFetch_Start(t *testing.T) {
 	lg := logtest.New(t)
-	f := NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), nil, nil, nil,
+	f := NewFetch(sql.InMemory(), cache.New(), nil, nil, nil,
 		WithContext(context.TODO()),
 		WithConfig(DefaultConfig()),
 		WithLogger(lg),
@@ -403,7 +404,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	}
 	server.New(badPeerHost, hashProtocol, badPeerHandler)
 
-	fetcher := NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), nil, nil, h,
+	fetcher := NewFetch(sql.InMemory(), cache.New(), nil, nil, h,
 		WithContext(ctx),
 		WithConfig(cfg),
 		WithLogger(lg),

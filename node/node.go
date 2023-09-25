@@ -723,7 +723,7 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 
 	flog := app.addLogger(Fetcher, lg)
-	fetcher := fetch.NewFetch(app.cachedDB, msh, beaconProtocol, app.host,
+	fetcher := fetch.NewFetch(app.db, app.cache, msh, beaconProtocol, app.host,
 		fetch.WithContext(ctx),
 		fetch.WithConfig(app.Config.FETCH),
 		fetch.WithLogger(flog),

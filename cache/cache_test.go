@@ -114,6 +114,15 @@ func TestCache(t *testing.T) {
 		require.Nil(t, c.Get(3, types.ATXID{1}))
 		c.OnApplied(3)
 	})
+	t.Run("list atxs", func(t *testing.T) {
+		c := New()
+		require.Nil(t, c.List(3))
+		c.Add(3, types.NodeID{1}, types.ATXID{1}, &ATXData{})
+		c.Add(3, types.NodeID{2}, types.ATXID{2}, &ATXData{})
+		require.ElementsMatch(t, []types.ATXID{{1}, {2}}, c.List(3))
+		c.OnApplied(5)
+		require.Nil(t, c.List(3))
+	})
 }
 
 func TestMemory(t *testing.T) {
