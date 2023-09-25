@@ -36,7 +36,8 @@ func TestHTTPPoet(t *testing.T) {
 	r.NotNil(c)
 
 	eg.Go(func() error {
-		return c.Service.Start(ctx)
+		err := c.Service.Start(ctx)
+		return errors.Join(err, c.Service.Close())
 	})
 
 	client, err := NewHTTPPoetClient(c.RestURL().String(), DefaultPoetConfig(), WithLogger(zaptest.NewLogger(t)))
