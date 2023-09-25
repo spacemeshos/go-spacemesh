@@ -141,7 +141,7 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 		if err != nil {
 			return nil, err
 		}
-		if before <= 3 && config.v5Migration != nil {
+		if before <= 4 && config.v5Migration != nil {
 			// v5 migration (active set extraction) needs the 3rd migration to execute first
 			if err := config.v5Migration(db); err != nil {
 				return nil, err
