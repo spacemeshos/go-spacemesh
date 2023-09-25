@@ -625,6 +625,7 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	start := time.Now()
 	trtl, err := tortoise.Recover(
+		ctx,
 		app.cachedDB,
 		app.clock.CurrentLayer(), beaconProtocol, trtlopts...,
 	)

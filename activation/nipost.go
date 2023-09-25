@@ -7,12 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"slices"
 	"time"
 
 	"github.com/spacemeshos/merkle-tree"
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/proving"
-	"golang.org/x/exp/slices"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
@@ -469,14 +469,6 @@ func (nb *NIPostBuilder) addPoETMitigation(ctx context.Context, from, to string,
 
 func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge types.Hash32, publishEpoch types.EpochID) (types.PoetProofRef, *types.MerkleProof, error) {
 	switch publishEpoch {
-	case 4:
-		// because PoET 111 had a hardware issue when challenges for round 3 were submitted, no node could submit to it
-		// 111 was recovered with the PoET 110 DB, so all successful submissions to 110 should be able to be fetched from there as well
-		// TODO(mafa): remove after next PoET round; https://github.com/spacemeshos/go-spacemesh/issues/4968
-		err := nb.addPoETMitigation(ctx, "https://poet-110.spacemesh.network", "https://poet-111.spacemesh.network", 4)
-		if err != nil {
-			nb.log.With().Error("pub epoch 4 mitigation: failed to add PoET 111 to state for pub epoch 4", log.Err(err))
-		}
 	case 5:
 		// PoET 112 came online after the registration window for round 4 ended, so no node could submit to it
 		// 112 was initialized with the PoET 110 DB, so all successful submissions to 110 should be able to be fetched from there as well
