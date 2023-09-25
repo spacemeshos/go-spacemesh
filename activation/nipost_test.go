@@ -180,7 +180,8 @@ func spawnPoet(tb testing.TB, opts ...HTTPPoetOpt) *HTTPPoetTestHarness {
 		eg.Wait()
 	})
 	eg.Go(func() error {
-		return poetProver.Service.Start(ctx)
+		err := poetProver.Service.Start(ctx)
+		return errors.Join(err, poetProver.Service.Close())
 	})
 
 	return poetProver
