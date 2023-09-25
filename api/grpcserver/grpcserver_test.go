@@ -486,11 +486,9 @@ func launchServer(tb testing.TB, services ...ServiceAPI) (Config, func()) {
 	}
 
 	// start gRPC and json servers
-	err := grpcService.Start()
-	require.NoError(tb, err)
+	require.NoError(tb, grpcService.Start())
 	if len(services) > 0 {
-		err = jsonService.StartService(context.Background(), services...)
-		require.NoError(tb, err)
+		require.NoError(tb, jsonService.StartService(context.Background(), services...))
 	}
 
 	// update config with bound addresses
@@ -498,8 +496,8 @@ func launchServer(tb testing.TB, services ...ServiceAPI) (Config, func()) {
 	cfg.JSONListener = jsonService.BoundAddress
 
 	return cfg, func() {
-		assert.NoError(tb, jsonService.Shutdown(context.Background()))
 		assert.NoError(tb, grpcService.Close())
+		assert.NoError(tb, jsonService.Shutdown(context.Background()))
 	}
 }
 
@@ -2359,6 +2357,8 @@ func TestJsonApi(t *testing.T) {
 	// we cannot start the gateway service without enabling at least one service
 	cfg, shutDown := launchServer(t)
 	t.Cleanup(shutDown)
+	time.Sleep(time.Second)
+
 	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
 	url := fmt.Sprintf("http://%s/%s", cfg.JSONListener, "v1/node/echo")
 	_, err := http.Post(url, "application/json", strings.NewReader(payload))

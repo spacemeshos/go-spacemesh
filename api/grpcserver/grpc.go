@@ -60,7 +60,7 @@ func (s *Server) Start() error {
 	reflection.Register(s.GrpcServer)
 	s.grp.Go(func() error {
 		if err := s.GrpcServer.Serve(lis); err != nil {
-			s.logger.Error("error stopping grpc server: %v", err)
+			s.logger.Error("error serving grpc server: %v", err)
 			return err
 		}
 		return nil

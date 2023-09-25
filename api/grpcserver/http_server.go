@@ -112,7 +112,7 @@ func (s *JSONHTTPServer) StartService(
 	s.grp.Go(func() error {
 		if err := s.server.Serve(lis); err != nil {
 			s.logger.Error("error from grpc http server: %v", err)
-			return err
+			return nil
 		}
 		return nil
 	})
