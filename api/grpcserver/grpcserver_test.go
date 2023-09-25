@@ -10,7 +10,6 @@ import (
 	"log"
 	"math"
 	"math/big"
-	"math/rand"
 	"net"
 	"net/http"
 	"os"
@@ -477,14 +476,9 @@ func marshalProto(t *testing.T, msg proto.Message) string {
 func launchServer(tb testing.TB, services ...ServiceAPI) (Config, func()) {
 	cfg := DefaultTestConfig()
 
-	// run on a random port
-	port := 1024 + rand.Intn(9997)
-	cfg.PublicListener = fmt.Sprintf("127.0.0.1:%d", port)
-	cfg.PrivateListener = fmt.Sprintf("127.0.0.1:%d", port+1)
-	cfg.JSONListener = fmt.Sprintf("127.0.0.1:%d", port+2)
-
-	grpcService := New(cfg.PublicListener, logtest.New(tb).Named("grpc"))
-	jsonService := NewJSONHTTPServer(cfg.JSONListener, logtest.New(tb).WithName("grpc.JSON"))
+	// run on random ports
+	grpcService := New("127.0.0.1:0", logtest.New(tb).Named("grpc"))
+	jsonService := NewJSONHTTPServer("127.0.0.1:0", logtest.New(tb).WithName("grpc.JSON"))
 
 	// attach services
 	for _, svc := range services {
@@ -498,6 +492,10 @@ func launchServer(tb testing.TB, services ...ServiceAPI) (Config, func()) {
 		err = jsonService.StartService(context.Background(), services...)
 		require.NoError(tb, err)
 	}
+
+	// update config with bound addresses
+	cfg.PublicListener = grpcService.BoundAddress
+	cfg.JSONListener = jsonService.BoundAddress
 
 	return cfg, func() {
 		assert.NoError(tb, jsonService.Shutdown(context.Background()))
@@ -539,7 +537,7 @@ func TestNewServersConfig(t *testing.T) {
 	grpcService := New(fmt.Sprintf(":%d", port1), logtest.New(t).Named("grpc"))
 	jsonService := NewJSONHTTPServer(fmt.Sprintf(":%d", port2), logtest.New(t).WithName("grpc.JSON"))
 
-	require.Contains(t, grpcService.Listener, strconv.Itoa(port1), "Expected same port")
+	require.Contains(t, grpcService.listener, strconv.Itoa(port1), "Expected same port")
 	require.Contains(t, jsonService.listener, strconv.Itoa(port2), "Expected same port")
 }
 
