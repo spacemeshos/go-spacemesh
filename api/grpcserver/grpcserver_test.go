@@ -503,8 +503,7 @@ func launchServer(tb testing.TB, services ...ServiceAPI) (Config, func()) {
 	}
 }
 
-func callEndpoint(t *testing.T, cfg Config, endpoint, payload string) (string, int) {
-	url := fmt.Sprintf("http://%s/%s", cfg.JSONListener, endpoint)
+func callEndpoint(t *testing.T, url, payload string) (string, int) {
 	resp, err := http.Post(url, "application/json", strings.NewReader(payload))
 	require.NoError(t, err)
 	require.Equal(t, "application/json", resp.Header.Get("Content-Type"))
@@ -2382,14 +2381,14 @@ func TestJsonApi(t *testing.T) {
 
 	// generate request payload (api input params)
 	payload = marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
-	respBody, respStatus := callEndpoint(t, cfg, "v1/node/echo", payload)
+	respBody, respStatus := callEndpoint(t, fmt.Sprintf("http://%s/%s", cfg.JSONListener, "v1/node/echo"), payload)
 	require.Equal(t, http.StatusOK, respStatus)
 	var msg pb.EchoResponse
 	require.NoError(t, jsonpb.UnmarshalString(respBody, &msg))
 	require.Equal(t, message, msg.Msg.Value)
 
 	// Test MeshService
-	respBody2, respStatus2 := callEndpoint(t, cfg, "v1/mesh/genesistime", "")
+	respBody2, respStatus2 := callEndpoint(t, fmt.Sprintf("http://%s/%s", cfg.JSONListener, "v1/mesh/genesistime"), "")
 	require.Equal(t, http.StatusOK, respStatus2)
 	var msg2 pb.GenesisTimeResponse
 	require.NoError(t, jsonpb.UnmarshalString(respBody2, &msg2))

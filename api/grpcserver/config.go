@@ -47,8 +47,8 @@ func DefaultConfig() Config {
 // DefaultTestConfig returns the default config for tests.
 func DefaultTestConfig() Config {
 	conf := DefaultConfig()
-	conf.PublicListener = "127.0.0.1:19092"
-	conf.PrivateListener = "127.0.0.1:19093"
-	conf.JSONListener = "127.0.0.1:19094"
+	conf.PublicListener = "127.0.0.1:0"
+	conf.PrivateListener = "127.0.0.1:0"
+	conf.JSONListener = "127.0.0.1:0"
 	return conf
 }
