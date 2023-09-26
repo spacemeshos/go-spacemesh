@@ -15,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -540,9 +539,6 @@ func (h *Handler) handleAtx(ctx context.Context, expHash types.Hash32, peer p2p.
 	}
 	events.ReportNewActivation(vAtx)
 	h.log.WithContext(ctx).With().Info("new atx", log.Inline(vAtx), log.Int("size", len(msg)))
-
-	poetRoundEnd := h.clock.LayerToTime(atx.PublishEpoch.FirstLayer()).Add(h.poetCfg.PhaseShift - h.poetCfg.CycleGap)
-	metrics.ReportMessageLatency(pubsub.AtxProtocol, pubsub.AtxProtocol, time.Since(poetRoundEnd))
 	return nil
 }
 
