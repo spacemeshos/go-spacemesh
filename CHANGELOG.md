@@ -6,6 +6,12 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ### Upgrade information
 
+This upgrade is incompatible with versions older than v1.1.6.
+
+At the start of the upgrade, mesh data will be pruned and compacted/vacuumed. Pruning takes longer for
+nodes that joined the network earlier. For 1-week-old nodes, it takes ~20 minutes. for 3-week-old
+nodes it takes ~40 minutes. Vacuum takes ~5 minutes.
+
 A new config `poet-request-timeout` has been added, that defines the timeout for requesting PoET proofs.
 It defaults to 9 minutes so there is enough time to retry if the request fails.
 
