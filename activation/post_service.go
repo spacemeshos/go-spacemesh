@@ -21,7 +21,7 @@ func DefaultPostServiceConfig() PostServiceConfig {
 	cfg := PostServiceConfig{
 		PostServiceCmd:  "/bin/service",
 		DataDir:         config.DefaultDataDir,
-		NodeAddress:     "127.0.0.1:9093",
+		NodeAddress:     "http://127.0.0.1:9093",
 		PowDifficulty:   config.DefaultConfig().PowDifficulty,
 		PostServiceMode: "light",
 	}
