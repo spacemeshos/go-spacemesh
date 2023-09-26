@@ -101,7 +101,12 @@ func Test_PostService_StartsServiceCmd(t *testing.T) {
 	require.NotNil(t, ps)
 	t.Cleanup(func() { assert.NoError(t, ps.Close()) })
 
+	time.Sleep(time.Second) // to ensure cmd actually started
+
+	ps.cmdMtx.Lock()
 	pid := ps.cmd.Process.Pid
+	ps.cmdMtx.Unlock()
+
 	process, err := os.FindProcess(pid)
 	require.NoError(t, err)
 	require.NotNil(t, process)
@@ -139,7 +144,11 @@ func Test_PostService_RestartsOnCrash(t *testing.T) {
 	require.NotNil(t, ps)
 	t.Cleanup(func() { assert.NoError(t, ps.Close()) })
 
+	time.Sleep(time.Second) // to ensure cmd actually started
+
+	ps.cmdMtx.Lock()
 	ps.cmd.Process.Kill()
+	ps.cmdMtx.Unlock()
 
 	time.Sleep(500 * time.Millisecond)
 
