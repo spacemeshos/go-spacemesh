@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -155,6 +156,7 @@ func DefaultConfig() Config {
 		TIME:            timeConfig.DefaultConfig(),
 		VM:              vm.DefaultConfig(),
 		POST:            activation.DefaultPostConfig(),
+		POSTService:     activation.DefaultPostServiceConfig(),
 		POET:            activation.DefaultPoetConfig(),
 		SMESHING:        DefaultSmeshingConfig(),
 		FETCH:           fetch.DefaultConfig(),
@@ -172,6 +174,12 @@ func DefaultTestConfig() Config {
 	conf.BaseConfig = defaultTestConfig()
 	conf.P2P = p2p.DefaultConfig()
 	conf.API = grpcserver.DefaultTestConfig()
+
+	path, err := exec.Command("go", "env", "GOMOD").Output()
+	if err != nil {
+		panic(err)
+	}
+	conf.POSTService.PostServiceCmd = filepath.Join(filepath.Dir(string(path)), "build", "service")
 	return conf
 }
 

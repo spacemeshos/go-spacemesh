@@ -9,14 +9,41 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/spacemeshos/post/config"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/events"
 )
 
+// DefaultPostServiceConfig returns the default config for post service. These are intended for testing.
+func DefaultPostServiceConfig() PostServiceConfig {
+	cfg := PostServiceConfig{
+		PostServiceCmd:  "./service",
+		DataDir:         config.DefaultDataDir,
+		NodeAddress:     "127.0.0.1:9093",
+		PowDifficulty:   config.DefaultConfig().PowDifficulty,
+		PostServiceMode: "light",
+	}
+
+	return cfg
+}
+
+// MainnetPostServiceConfig returns the default config for mainnet.
+func MainnetPostServiceConfig() PostServiceConfig {
+	cfg := PostServiceConfig{
+		PostServiceCmd:  "./service",
+		DataDir:         config.DefaultDataDir,
+		NodeAddress:     "127.0.0.1:9093",
+		PowDifficulty:   config.DefaultConfig().PowDifficulty,
+		PostServiceMode: "fast",
+	}
+
+	return cfg
+}
+
 type PostServiceConfig struct {
-	PostServiceCmd string `mapstructure:"post-opts-post-service"` // TODO(mafa): if unset don't start local post service and ignore other opts.
+	PostServiceCmd string `mapstructure:"post-opts-post-service"`
 
 	DataDir         string        `mapstructure:"post-opts-datadir"`
 	NodeAddress     string        `mapstructure:"post-opts-node-address"`

@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"sync"
@@ -1089,10 +1090,17 @@ func TestAdminEvents(t *testing.T) {
 	cfg.DataDirParent = t.TempDir()
 	cfg.FileLock = filepath.Join(cfg.DataDirParent, "LOCK")
 	cfg.SMESHING.Opts.DataDir = t.TempDir()
+
+	path, err := exec.Command("go", "env", "GOMOD").Output()
+	if err != nil {
+		panic(err)
+	}
+	cfg.POSTService.PostServiceCmd = filepath.Join(filepath.Dir(string(path)), "build", "service")
+
 	cfg.Genesis.GenesisTime = time.Now().Add(5 * time.Second).Format(time.RFC3339)
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 
-	app := New(WithConfig(&cfg), WithLog(logtest.New(t)))
+	app := New(WithConfig(&cfg), WithLog(logtest.New(t, zap.DebugLevel)))
 	signer, err := app.LoadOrCreateEdSigner()
 	require.NoError(t, err)
 	app.edSgn = signer // https://github.com/spacemeshos/go-spacemesh/issues/4653
@@ -1131,6 +1139,7 @@ func TestAdminEvents(t *testing.T) {
 		stream, err := client.EventsStream(tctx, &pb.EventStreamRequest{})
 		require.NoError(t, err)
 		success := []pb.IsEventDetails{
+			&pb.Event_PostServiceStarted{},
 			&pb.Event_Beacon{},
 			&pb.Event_InitStart{},
 			&pb.Event_InitComplete{},
