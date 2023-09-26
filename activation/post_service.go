@@ -19,7 +19,7 @@ import (
 // DefaultPostServiceConfig returns the default config for post service. These are intended for testing.
 func DefaultPostServiceConfig() PostServiceConfig {
 	cfg := PostServiceConfig{
-		PostServiceCmd:  "./service",
+		PostServiceCmd:  "/bin/service",
 		DataDir:         config.DefaultDataDir,
 		NodeAddress:     "127.0.0.1:9093",
 		PowDifficulty:   config.DefaultConfig().PowDifficulty,
@@ -32,9 +32,9 @@ func DefaultPostServiceConfig() PostServiceConfig {
 // MainnetPostServiceConfig returns the default config for mainnet.
 func MainnetPostServiceConfig() PostServiceConfig {
 	cfg := PostServiceConfig{
-		PostServiceCmd:  "./service",
+		PostServiceCmd:  "/bin/service",
 		DataDir:         config.DefaultDataDir,
-		NodeAddress:     "127.0.0.1:9093",
+		NodeAddress:     "http://127.0.0.1:9093",
 		PowDifficulty:   config.MainnetConfig().PowDifficulty,
 		PostServiceMode: "fast",
 	}
