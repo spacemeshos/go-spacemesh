@@ -14,7 +14,7 @@ import (
 // to send challenges and receive proofs.
 type PostService struct {
 	log       *zap.Logger
-	callbacks []postConnection
+	callbacks []postConnectionListener
 
 	// connections is a map of IDs -> channel of commands for every connected node.
 	// the node calls functions on this service which build API requests for every
@@ -31,7 +31,7 @@ func (s *PostService) RegisterService(server *Server) {
 }
 
 // NewPostService creates a new grpc service using config data.
-func NewPostService(log *zap.Logger, callbacks ...postConnection) *PostService {
+func NewPostService(log *zap.Logger, callbacks ...postConnectionListener) *PostService {
 	return &PostService{
 		log:       log,
 		callbacks: callbacks,

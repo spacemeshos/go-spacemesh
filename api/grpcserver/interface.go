@@ -87,7 +87,7 @@ type oracle interface {
 	ActiveSet(context.Context, types.EpochID) ([]types.ATXID, error)
 }
 
-type postConnection interface {
+type postConnectionListener interface {
 	Connected(client activation.PostClient)
 	Disconnected(client activation.PostClient)
 }
