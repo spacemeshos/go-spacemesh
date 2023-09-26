@@ -52,10 +52,10 @@ install:
 	go install honnef.co/go/tools/cmd/staticcheck@v0.4.5
 .PHONY: install
 
-build: go-spacemesh get-profiler
+build: go-spacemesh get-profiler get-postrs-service
 .PHONY: build
 
-get-libs: get-postrs-lib
+get-libs: get-postrs-lib get-postrs-service
 .PHONY: get-libs
 
 get-profiler: get-postrs-profiler
