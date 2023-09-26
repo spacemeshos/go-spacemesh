@@ -216,8 +216,8 @@ func (e *Executor) checkOrder(lid types.LayerID) error {
 }
 
 func updateResults(bid types.BlockID, executed []types.TransactionWithResult) {
-	for _, tx := range executed {
-		tx.Block = bid
+	for i := range executed {
+		executed[i].Block = bid
 	}
 }
 
