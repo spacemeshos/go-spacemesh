@@ -1,6 +1,5 @@
 package grpcserver
 
-//lint:file-ignore SA1019 hide deprecated protobuf version error
 import (
 	"bytes"
 	"context"
@@ -15,13 +14,10 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/jsonpb"
-	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/merkle-tree"
@@ -35,6 +31,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -466,11 +464,10 @@ func (*SmeshingAPIMock) Coinbase() types.Address {
 func (*SmeshingAPIMock) SetCoinbase(coinbase types.Address) {
 }
 
-func marshalProto(t *testing.T, msg proto.Message) string {
-	var buf bytes.Buffer
-	var m jsonpb.Marshaler
-	require.NoError(t, m.Marshal(&buf, msg))
-	return buf.String()
+func marshalProto(t *testing.T, msg proto.Message) []byte {
+	buf, err := protojson.Marshal(msg)
+	require.NoError(t, err)
+	return buf
 }
 
 func launchServer(tb testing.TB, services ...ServiceAPI) (Config, func()) {
@@ -501,15 +498,15 @@ func launchServer(tb testing.TB, services ...ServiceAPI) (Config, func()) {
 	}
 }
 
-func callEndpoint(t *testing.T, url, payload string) (string, int) {
-	resp, err := http.Post(url, "application/json", strings.NewReader(payload))
+func callEndpoint(t *testing.T, url string, payload []byte) ([]byte, int) {
+	resp, err := http.Post(url, "application/json", bytes.NewReader(payload))
 	require.NoError(t, err)
 	require.Equal(t, "application/json", resp.Header.Get("Content-Type"))
 	buf, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.NoError(t, resp.Body.Close())
 
-	return string(buf), resp.StatusCode
+	return buf, resp.StatusCode
 }
 
 func getFreePort(optionalPort int) (int, error) {
@@ -2361,7 +2358,7 @@ func TestJsonApi(t *testing.T) {
 
 	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
 	url := fmt.Sprintf("http://%s/%s", cfg.JSONListener, "v1/node/echo")
-	_, err := http.Post(url, "application/json", strings.NewReader(payload))
+	_, err := http.Post(url, "application/json", bytes.NewReader(payload))
 	require.Error(t, err)
 	shutDown()
 
@@ -2384,14 +2381,14 @@ func TestJsonApi(t *testing.T) {
 	respBody, respStatus := callEndpoint(t, fmt.Sprintf("http://%s/%s", cfg.JSONListener, "v1/node/echo"), payload)
 	require.Equal(t, http.StatusOK, respStatus)
 	var msg pb.EchoResponse
-	require.NoError(t, jsonpb.UnmarshalString(respBody, &msg))
+	require.NoError(t, protojson.Unmarshal(respBody, &msg))
 	require.Equal(t, message, msg.Msg.Value)
 
 	// Test MeshService
-	respBody2, respStatus2 := callEndpoint(t, fmt.Sprintf("http://%s/%s", cfg.JSONListener, "v1/mesh/genesistime"), "")
+	respBody2, respStatus2 := callEndpoint(t, fmt.Sprintf("http://%s/%s", cfg.JSONListener, "v1/mesh/genesistime"), nil)
 	require.Equal(t, http.StatusOK, respStatus2)
 	var msg2 pb.GenesisTimeResponse
-	require.NoError(t, jsonpb.UnmarshalString(respBody2, &msg2))
+	require.NoError(t, protojson.Unmarshal(respBody2, &msg2))
 	require.Equal(t, uint64(genesis.Unix()), msg2.Unixtime.Value)
 }
 
