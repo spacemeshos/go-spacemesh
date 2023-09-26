@@ -36,7 +36,7 @@ func DefaultConfig() Config {
 	return Config{
 		PublicServices:        []Service{Debug, GlobalState, Mesh, Transaction, Node, Activation},
 		PublicListener:        "0.0.0.0:9092",
-		PrivateServices:       []Service{Admin, Smesher, Post},
+		PrivateServices:       []Service{Admin, Smesher, Post}, // TODO(mafa): move from private to public with authentication (probably new service category)
 		PrivateListener:       "127.0.0.1:9093",
 		JSONListener:          "",
 		GrpcSendMsgSize:       1024 * 1024 * 10,
