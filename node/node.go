@@ -823,7 +823,7 @@ func (app *App) initServices(ctx context.Context) error {
 	postSetupMgr, err := activation.NewPostSetupManager(
 		app.edSgn.NodeID(),
 		app.Config.POST,
-		app.addLogger(PostLogger, lg),
+		app.addLogger(PostLogger, lg).Zap(),
 		app.cachedDB, goldenATXID,
 		app.Config.SMESHING.ProvingOpts,
 	)
