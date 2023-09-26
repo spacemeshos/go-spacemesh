@@ -35,7 +35,7 @@ func MainnetPostServiceConfig() PostServiceConfig {
 		PostServiceCmd:  "./service",
 		DataDir:         config.DefaultDataDir,
 		NodeAddress:     "127.0.0.1:9093",
-		PowDifficulty:   config.DefaultConfig().PowDifficulty,
+		PowDifficulty:   config.MainnetConfig().PowDifficulty,
 		PostServiceMode: "fast",
 	}
 
@@ -48,7 +48,7 @@ type PostServiceConfig struct {
 	DataDir         string        `mapstructure:"post-opts-datadir"`
 	NodeAddress     string        `mapstructure:"post-opts-node-address"`
 	PowDifficulty   PowDifficulty `mapstructure:"post-opts-pow-difficulty"`
-	PostServiceMode string        `mapstructure:"post-opts-post-service-mode"` // TODO(mafa): consider enum
+	PostServiceMode string        `mapstructure:"post-opts-post-service-mode"`
 }
 
 // PostService manages a local post service.

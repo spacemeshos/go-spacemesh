@@ -1100,7 +1100,7 @@ func TestAdminEvents(t *testing.T) {
 	cfg.Genesis.GenesisTime = time.Now().Add(5 * time.Second).Format(time.RFC3339)
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 
-	app := New(WithConfig(&cfg), WithLog(logtest.New(t, zap.DebugLevel)))
+	app := New(WithConfig(&cfg), WithLog(logtest.New(t)))
 	signer, err := app.LoadOrCreateEdSigner()
 	require.NoError(t, err)
 	app.edSgn = signer // https://github.com/spacemeshos/go-spacemesh/issues/4653
