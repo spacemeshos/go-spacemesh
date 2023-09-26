@@ -160,9 +160,9 @@ func TestExecutor_Execute(t *testing.T) {
 	errInconceivable := errors.New("inconceivable")
 	t.Run("vm failure", func(t *testing.T) {
 		te.mvm.EXPECT().Apply(vm.ApplyContext{Layer: block.LayerIndex}, gomock.Any(), expRewards).DoAndReturn(
-			func(_ vm.ApplyContext, got []types.Transaction, _ []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error) {
-				tids := make([]types.TransactionID, 0, len(got))
-				for _, tx := range got {
+			func(_ vm.ApplyContext, gotTxs []types.Transaction, _ []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error) {
+				tids := make([]types.TransactionID, 0, len(gotTxs))
+				for _, tx := range gotTxs {
 					tids = append(tids, tx.ID)
 				}
 				require.Equal(t, block.TxIDs, tids)
@@ -175,23 +175,23 @@ func TestExecutor_Execute(t *testing.T) {
 	var ineffective []types.Transaction
 	t.Run("conservative cache failure", func(t *testing.T) {
 		te.mvm.EXPECT().Apply(vm.ApplyContext{Layer: block.LayerIndex}, gomock.Any(), expRewards).DoAndReturn(
-			func(_ vm.ApplyContext, got []types.Transaction, _ []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error) {
-				tids := make([]types.TransactionID, 0, len(got))
-				for _, tx := range got {
+			func(_ vm.ApplyContext, gotTxs []types.Transaction, _ []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error) {
+				tids := make([]types.TransactionID, 0, len(gotTxs))
+				for _, tx := range gotTxs {
 					tids = append(tids, tx.ID)
 				}
 				require.Equal(t, block.TxIDs, tids)
 				// make first tx ineffective
-				ineffective = got[:1]
-				executed = makeResults(block.LayerIndex, got[1:]...)
+				ineffective = gotTxs[:1]
+				executed = makeResults(block.LayerIndex, gotTxs[1:]...)
 				return ineffective, executed, nil
 			})
 		te.mcs.EXPECT().UpdateCache(gomock.Any(), block.LayerIndex, block.ID(), gomock.Any(), gomock.Any()).DoAndReturn(
-			func(_ context.Context, _ types.LayerID, gotB types.BlockID, gotE []types.TransactionWithResult, gotI []types.Transaction) error {
-				require.Equal(t, executed, gotE)
-				require.Equal(t, ineffective, gotI)
-				for _, tr := range gotE {
-					require.Equal(t, tr.Block, gotB)
+			func(_ context.Context, _ types.LayerID, gotBid types.BlockID, gotExecuted []types.TransactionWithResult, gotIneffective []types.Transaction) error {
+				require.Equal(t, executed, gotExecuted)
+				require.Equal(t, ineffective, gotIneffective)
+				for _, tr := range executed {
+					require.Equal(t, tr.Block, gotBid)
 				}
 				return errInconceivable
 			})
@@ -200,23 +200,23 @@ func TestExecutor_Execute(t *testing.T) {
 
 	t.Run("applied block", func(t *testing.T) {
 		te.mvm.EXPECT().Apply(vm.ApplyContext{Layer: block.LayerIndex}, gomock.Any(), expRewards).DoAndReturn(
-			func(_ vm.ApplyContext, got []types.Transaction, _ []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error) {
-				tids := make([]types.TransactionID, 0, len(got))
-				for _, tx := range got {
+			func(_ vm.ApplyContext, gotTxs []types.Transaction, _ []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error) {
+				tids := make([]types.TransactionID, 0, len(gotTxs))
+				for _, tx := range gotTxs {
 					tids = append(tids, tx.ID)
 				}
 				require.Equal(t, block.TxIDs, tids)
 				// make first tx ineffective
-				ineffective = got[:1]
-				executed = makeResults(block.LayerIndex, got[1:]...)
+				ineffective = gotTxs[:1]
+				executed = makeResults(block.LayerIndex, gotTxs[1:]...)
 				return ineffective, executed, nil
 			})
 		te.mcs.EXPECT().UpdateCache(gomock.Any(), block.LayerIndex, block.ID(), gomock.Any(), gomock.Any()).DoAndReturn(
-			func(_ context.Context, _ types.LayerID, gotB types.BlockID, gotE []types.TransactionWithResult, gotI []types.Transaction) error {
-				require.Equal(t, executed, gotE)
-				require.Equal(t, ineffective, gotI)
-				for _, tr := range gotE {
-					require.Equal(t, tr.Block, gotB)
+			func(_ context.Context, _ types.LayerID, gotBid types.BlockID, gotExecuted []types.TransactionWithResult, gotIneffective []types.Transaction) error {
+				require.Equal(t, executed, gotExecuted)
+				require.Equal(t, ineffective, gotIneffective)
+				for _, tr := range gotExecuted {
+					require.Equal(t, tr.Block, gotBid)
 				}
 				return nil
 			})
@@ -280,9 +280,9 @@ func TestExecutor_ExecuteOptimistic(t *testing.T) {
 	errInconceivable := errors.New("inconceivable")
 	t.Run("vm failure", func(t *testing.T) {
 		te.mvm.EXPECT().Apply(vm.ApplyContext{Layer: lid}, gomock.Any(), expRewards).DoAndReturn(
-			func(_ vm.ApplyContext, got []types.Transaction, _ []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error) {
-				gotTids := make([]types.TransactionID, 0, len(got))
-				for _, tx := range got {
+			func(_ vm.ApplyContext, gotTxs []types.Transaction, _ []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error) {
+				gotTids := make([]types.TransactionID, 0, len(gotTxs))
+				for _, tx := range gotTxs {
 					gotTids = append(gotTids, tx.ID)
 				}
 				require.Equal(t, tids, gotTids)
@@ -297,15 +297,15 @@ func TestExecutor_ExecuteOptimistic(t *testing.T) {
 	var ineffective []types.Transaction
 	t.Run("conservative cache failure", func(t *testing.T) {
 		te.mvm.EXPECT().Apply(vm.ApplyContext{Layer: lid}, gomock.Any(), expRewards).DoAndReturn(
-			func(_ vm.ApplyContext, got []types.Transaction, _ []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error) {
-				gotTids := make([]types.TransactionID, 0, len(got))
-				for _, tx := range got {
+			func(_ vm.ApplyContext, gotTxs []types.Transaction, _ []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error) {
+				gotTids := make([]types.TransactionID, 0, len(gotTxs))
+				for _, tx := range gotTxs {
 					gotTids = append(gotTids, tx.ID)
 				}
 				require.Equal(t, tids, gotTids)
 				// make first tx ineffective
-				ineffective = got[:1]
-				executed = makeResults(lid, got[1:]...)
+				ineffective = gotTxs[:1]
+				executed = makeResults(lid, gotTxs[1:]...)
 				return ineffective, executed, nil
 			})
 		expBlock := &types.Block{
@@ -318,11 +318,11 @@ func TestExecutor_ExecuteOptimistic(t *testing.T) {
 		}
 		expBlock.Initialize()
 		te.mcs.EXPECT().UpdateCache(gomock.Any(), lid, expBlock.ID(), gomock.Any(), gomock.Any()).DoAndReturn(
-			func(_ context.Context, _ types.LayerID, gotB types.BlockID, gotE []types.TransactionWithResult, gotI []types.Transaction) error {
-				require.Equal(t, executed, gotE)
-				require.Equal(t, ineffective, gotI)
-				for _, tr := range gotE {
-					require.Equal(t, tr.Block, gotB)
+			func(_ context.Context, _ types.LayerID, gotBid types.BlockID, gotExecuted []types.TransactionWithResult, gotIneffective []types.Transaction) error {
+				require.Equal(t, executed, gotExecuted)
+				require.Equal(t, ineffective, gotIneffective)
+				for _, tr := range gotExecuted {
+					require.Equal(t, tr.Block, gotBid)
 				}
 				return errInconceivable
 			})
@@ -333,15 +333,15 @@ func TestExecutor_ExecuteOptimistic(t *testing.T) {
 
 	t.Run("executed in situ", func(t *testing.T) {
 		te.mvm.EXPECT().Apply(vm.ApplyContext{Layer: lid}, gomock.Any(), expRewards).DoAndReturn(
-			func(_ vm.ApplyContext, got []types.Transaction, _ []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error) {
-				gotTids := make([]types.TransactionID, 0, len(got))
-				for _, tx := range got {
+			func(_ vm.ApplyContext, gotTxs []types.Transaction, _ []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error) {
+				gotTids := make([]types.TransactionID, 0, len(gotTxs))
+				for _, tx := range gotTxs {
 					gotTids = append(gotTids, tx.ID)
 				}
 				require.Equal(t, tids, gotTids)
 				// make first tx ineffective
-				ineffective = got[:1]
-				executed = makeResults(lid, got[1:]...)
+				ineffective = gotTxs[:1]
+				executed = makeResults(lid, gotTxs[1:]...)
 				return ineffective, executed, nil
 			})
 		expBlock := &types.Block{
@@ -354,11 +354,11 @@ func TestExecutor_ExecuteOptimistic(t *testing.T) {
 		}
 		expBlock.Initialize()
 		te.mcs.EXPECT().UpdateCache(gomock.Any(), expBlock.LayerIndex, expBlock.ID(), gomock.Any(), gomock.Any()).DoAndReturn(
-			func(_ context.Context, _ types.LayerID, gotB types.BlockID, gotE []types.TransactionWithResult, gotI []types.Transaction) error {
-				require.Equal(t, executed, gotE)
-				require.Equal(t, ineffective, gotI)
-				for _, tr := range gotE {
-					require.Equal(t, tr.Block, gotB)
+			func(_ context.Context, _ types.LayerID, gotBid types.BlockID, gotExecuted []types.TransactionWithResult, gotIneffective []types.Transaction) error {
+				require.Equal(t, executed, gotExecuted)
+				require.Equal(t, ineffective, gotIneffective)
+				for _, tr := range gotExecuted {
+					require.Equal(t, tr.Block, gotBid)
 				}
 				return nil
 			})
