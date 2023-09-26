@@ -1545,3 +1545,98 @@ func (c *oracleActiveSetCall) DoAndReturn(f func(context.Context, types.EpochID)
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
+
+// MockpostConnection is a mock of postConnection interface.
+type MockpostConnection struct {
+	ctrl     *gomock.Controller
+	recorder *MockpostConnectionMockRecorder
+}
+
+// MockpostConnectionMockRecorder is the mock recorder for MockpostConnection.
+type MockpostConnectionMockRecorder struct {
+	mock *MockpostConnection
+}
+
+// NewMockpostConnection creates a new mock instance.
+func NewMockpostConnection(ctrl *gomock.Controller) *MockpostConnection {
+	mock := &MockpostConnection{ctrl: ctrl}
+	mock.recorder = &MockpostConnectionMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockpostConnection) EXPECT() *MockpostConnectionMockRecorder {
+	return m.recorder
+}
+
+// Connected mocks base method.
+func (m *MockpostConnection) Connected(client activation.PostClient) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Connected", client)
+}
+
+// Connected indicates an expected call of Connected.
+func (mr *MockpostConnectionMockRecorder) Connected(client any) *postConnectionConnectedCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connected", reflect.TypeOf((*MockpostConnection)(nil).Connected), client)
+	return &postConnectionConnectedCall{Call: call}
+}
+
+// postConnectionConnectedCall wrap *gomock.Call
+type postConnectionConnectedCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *postConnectionConnectedCall) Return() *postConnectionConnectedCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *postConnectionConnectedCall) Do(f func(activation.PostClient)) *postConnectionConnectedCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *postConnectionConnectedCall) DoAndReturn(f func(activation.PostClient)) *postConnectionConnectedCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Disconnected mocks base method.
+func (m *MockpostConnection) Disconnected(client activation.PostClient) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Disconnected", client)
+}
+
+// Disconnected indicates an expected call of Disconnected.
+func (mr *MockpostConnectionMockRecorder) Disconnected(client any) *postConnectionDisconnectedCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Disconnected", reflect.TypeOf((*MockpostConnection)(nil).Disconnected), client)
+	return &postConnectionDisconnectedCall{Call: call}
+}
+
+// postConnectionDisconnectedCall wrap *gomock.Call
+type postConnectionDisconnectedCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *postConnectionDisconnectedCall) Return() *postConnectionDisconnectedCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *postConnectionDisconnectedCall) Do(f func(activation.PostClient)) *postConnectionDisconnectedCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *postConnectionDisconnectedCall) DoAndReturn(f func(activation.PostClient)) *postConnectionDisconnectedCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
