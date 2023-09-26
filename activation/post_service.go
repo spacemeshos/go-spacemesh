@@ -1,10 +1,9 @@
 package activation
 
 import (
-	"errors"
+	"context"
 	"fmt"
 	"io"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"sync"
@@ -55,14 +54,19 @@ type PostServiceConfig struct {
 type PostService struct {
 	logger *zap.Logger
 
-	cmdMtx sync.Mutex     // protects concurrent access to cmd.
-	cmd    *exec.Cmd      // cmd holds the post service command.
-	eg     errgroup.Group // eg manages post service goroutines.
+	cmdMtx sync.Mutex         // protects concurrent access to cmd and stop.
+	cmd    *exec.Cmd          // cmd holds the post service command.
+	stop   context.CancelFunc // stops the running command.
+
+	eg errgroup.Group // eg manages post service goroutines.
 }
 
 // NewPostService returns a new post service.
 func NewPostService(logger *zap.Logger, opts PostServiceConfig) (*PostService, error) {
-	cmd := exec.Command(opts.PostServiceCmd,
+	ctx, stop := context.WithCancel(context.Background())
+	cmd := exec.CommandContext(
+		ctx,
+		opts.PostServiceCmd,
 		"--dir", opts.DataDir,
 		"--address", opts.NodeAddress,
 		"--pow-difficulty", opts.PowDifficulty.String(),
@@ -71,16 +75,19 @@ func NewPostService(logger *zap.Logger, opts PostServiceConfig) (*PostService, e
 	cmd.Dir = filepath.Dir(opts.PostServiceCmd)
 	pipe, err := cmd.StderrPipe()
 	if err != nil {
+		stop()
 		return nil, fmt.Errorf("setup stderr pipe for post service: %w", err)
 	}
 
 	ps := &PostService{
 		logger: logger,
 		cmd:    cmd,
+		stop:   stop,
 	}
 	ps.eg.Go(ps.captureCmdOutput(pipe))
 	if err := ps.cmd.Start(); err != nil {
 		pipe.Close()
+		stop()
 		return nil, fmt.Errorf("start post service: %w", err)
 	}
 	ps.eg.Go(ps.monitorCmd(opts))
@@ -91,14 +98,7 @@ func (ps *PostService) Close() error {
 	ps.cmdMtx.Lock()
 	defer ps.cmdMtx.Unlock()
 
-	err := ps.cmd.Process.Kill()
-	switch {
-	case err == nil:
-	case errors.Is(err, os.ErrProcessDone):
-	default:
-		return fmt.Errorf("kill post service: %w", err)
-	}
-
+	ps.stop()
 	ps.eg.Wait()
 	return nil
 }
@@ -136,7 +136,10 @@ func (ps *PostService) monitorCmd(opts PostServiceConfig) func() error {
 		defer ps.cmdMtx.Unlock()
 
 		ps.logger.Warn("post service crashed, restarting")
-		ps.cmd = exec.Command(opts.PostServiceCmd,
+		ctx, stop := context.WithCancel(context.Background())
+		ps.cmd = exec.CommandContext(
+			ctx,
+			opts.PostServiceCmd,
 			"--dir", opts.DataDir,
 			"--address", opts.NodeAddress,
 			"--pow-difficulty", opts.PowDifficulty.String(),
@@ -145,15 +148,18 @@ func (ps *PostService) monitorCmd(opts PostServiceConfig) func() error {
 		ps.cmd.Dir = filepath.Dir(opts.PostServiceCmd)
 		pipe, err := ps.cmd.StderrPipe()
 		if err != nil {
+			stop()
 			ps.logger.Error("setup stderr pipe for post service", zap.Error(err))
 			return nil
 		}
 		ps.eg.Go(ps.captureCmdOutput(pipe))
 		if err := ps.cmd.Start(); err != nil {
 			pipe.Close()
+			stop()
 			ps.logger.Error("restart post service", zap.Error(err))
 			return nil
 		}
+		ps.stop = stop
 		ps.eg.Go(ps.monitorCmd(opts))
 		return nil
 	}

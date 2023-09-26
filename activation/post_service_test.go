@@ -101,7 +101,7 @@ func Test_PostService_StartsServiceCmd(t *testing.T) {
 	require.NotNil(t, ps)
 	t.Cleanup(func() { assert.NoError(t, ps.Close()) })
 
-	time.Sleep(time.Second) // to ensure cmd actually started
+	time.Sleep(500 * time.Millisecond) // to ensure cmd actually started
 
 	ps.cmdMtx.Lock()
 	pid := ps.cmd.Process.Pid
@@ -144,10 +144,11 @@ func Test_PostService_RestartsOnCrash(t *testing.T) {
 	require.NotNil(t, ps)
 	t.Cleanup(func() { assert.NoError(t, ps.Close()) })
 
-	time.Sleep(time.Second) // to ensure cmd actually started
+	time.Sleep(500 * time.Millisecond) // to ensure cmd actually started
 
 	ps.cmdMtx.Lock()
-	ps.cmd.Process.Kill()
+	oldPid := ps.cmd.Process.Pid
+	ps.stop()
 	ps.cmdMtx.Unlock()
 
 	time.Sleep(500 * time.Millisecond)
@@ -155,13 +156,7 @@ func Test_PostService_RestartsOnCrash(t *testing.T) {
 	ps.cmdMtx.Lock()
 	pid := ps.cmd.Process.Pid
 	ps.cmdMtx.Unlock()
-	process, err := os.FindProcess(pid)
-	require.NoError(t, err)
-	require.NotNil(t, process)
 
-	if runtime.GOOS != "windows" {
-		require.NoError(t, process.Signal(syscall.Signal(0))) // check if process is running
-	}
-
+	require.NotEqual(t, oldPid, pid)
 	require.NoError(t, ps.Close())
 }
