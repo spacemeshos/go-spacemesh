@@ -88,7 +88,7 @@ func Test_PostService_StartsServiceCmd(t *testing.T) {
 	path, err := exec.Command("go", "env", "GOMOD").Output()
 	require.NoError(t, err)
 
-	opts := PostServiceOpts{
+	opts := PostServiceConfig{
 		PostServiceCmd:  filepath.Join(filepath.Dir(string(path)), "build", "service"),
 		DataDir:         postDir,
 		NodeAddress:     "http://127.0.0.1:12345", // node isn't listening, but also not relevant for test
@@ -126,7 +126,7 @@ func Test_PostService_RestartsOnCrash(t *testing.T) {
 	path, err := exec.Command("go", "env", "GOMOD").Output()
 	require.NoError(t, err)
 
-	opts := PostServiceOpts{
+	opts := PostServiceConfig{
 		PostServiceCmd:  filepath.Join(filepath.Dir(string(path)), "build", "service"),
 		DataDir:         postDir,
 		NodeAddress:     "http://127.0.0.1:12345", // node isn't listening, but also not relevant for test

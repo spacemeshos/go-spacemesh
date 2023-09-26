@@ -11,9 +11,11 @@ import (
 
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/spacemeshos/go-spacemesh/events"
 )
 
-type PostServiceOpts struct {
+type PostServiceConfig struct {
 	PostServiceCmd string `mapstructure:"post-opts-post-service"` // TODO(mafa): if unset don't start local post service and ignore other opts.
 
 	DataDir         string        `mapstructure:"post-opts-datadir"`
@@ -32,7 +34,7 @@ type PostService struct {
 }
 
 // NewPostService returns a new post service.
-func NewPostService(logger *zap.Logger, opts PostServiceOpts) (*PostService, error) {
+func NewPostService(logger *zap.Logger, opts PostServiceConfig) (*PostService, error) {
 	cmd := exec.Command(opts.PostServiceCmd,
 		"--dir", opts.DataDir,
 		"--address", opts.NodeAddress,
@@ -95,9 +97,11 @@ func (ps *PostService) captureCmdOutput(pipe io.ReadCloser) func() error {
 	}
 }
 
-func (ps *PostService) monitorCmd(opts PostServiceOpts) func() error {
+func (ps *PostService) monitorCmd(opts PostServiceConfig) func() error {
 	return func() error {
+		events.EmitPostServiceStarted()
 		ps.cmd.Wait()
+		events.EmitPostServiceStopped()
 		if !ps.cmdMtx.TryLock() {
 			// command is closing down, no need to restart.
 			return nil
