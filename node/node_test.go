@@ -260,8 +260,7 @@ func marshalProto(t *testing.T, msg proto.Message) []byte {
 	return buf
 }
 
-func callEndpoint(t *testing.T, endpoint string, payload []byte, address string) ([]byte, int) {
-	url := fmt.Sprintf("http://%s/%s", address, endpoint)
+func callEndpoint(t *testing.T, url string, payload []byte) ([]byte, int) {
 	resp, err := http.Post(url, "application/json", bytes.NewReader(payload))
 	require.NoError(t, err)
 	require.Equal(t, "application/json", resp.Header.Get("Content-Type"))
@@ -397,7 +396,7 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 		respStatus int
 	)
 	require.Eventually(t, func() bool {
-		respBody, respStatus = callEndpoint(t, "v1/node/echo", payload, app.Config.API.JSONListener)
+		respBody, respStatus = callEndpoint(t, fmt.Sprintf("http://%s/v1/node/echo", app.Config.API.JSONListener), payload)
 		return respStatus == http.StatusOK
 	}, 2*time.Second, 100*time.Millisecond)
 	var msg pb.EchoResponse
