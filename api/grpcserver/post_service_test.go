@@ -125,7 +125,7 @@ func Test_GenerateProof(t *testing.T) {
 
 	log := zaptest.NewLogger(t)
 	ctrl := gomock.NewController(t)
-	con := NewMockpostConnection(ctrl)
+	con := NewMockpostConnectionListener(ctrl)
 	svc := NewPostService(log, con)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
@@ -174,7 +174,7 @@ func Test_Cancel_GenerateProof(t *testing.T) {
 
 	log := zaptest.NewLogger(t)
 	ctrl := gomock.NewController(t)
-	con := NewMockpostConnection(ctrl)
+	con := NewMockpostConnectionListener(ctrl)
 	svc := NewPostService(log, con)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
@@ -217,7 +217,7 @@ func Test_GenerateProof_MultipleServices(t *testing.T) {
 
 	log := zaptest.NewLogger(t)
 	ctrl := gomock.NewController(t)
-	con := NewMockpostConnection(ctrl)
+	con := NewMockpostConnectionListener(ctrl)
 	svc := NewPostService(log, con)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
