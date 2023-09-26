@@ -90,6 +90,7 @@ func launchPostService(tb testing.TB, log *zap.Logger, cfg Config, postDir strin
 		"--address", fmt.Sprintf("http://%s", cfg.PublicListener),
 		"--pow-difficulty", "ffffffffffffffffff0000000000000000000000000000000000000000000000",
 		"--randomx-mode", "light",
+		"-n", "2", // Speedup initialization in tests.
 	)
 	cmd.Dir = dir
 	pipe, err := cmd.StderrPipe()
