@@ -1287,8 +1287,9 @@ func TestRegossip(t *testing.T) {
 		blob, err := atxs.GetBlob(h.cdb.Database, atx.ID().Bytes())
 		require.NoError(t, err)
 		h.mclock.EXPECT().CurrentLayer().Return(layer)
-		h.mpub.EXPECT().Publish(gomock.Any(), gomock.Any(), blob)
-		require.NoError(t, h.Regossip(context.Background()))
+		ctx := context.Background()
+		h.mpub.EXPECT().Publish(ctx, pubsub.AtxProtocol, blob)
+		require.NoError(t, h.Regossip(ctx))
 	})
 	t.Run("checkpointed", func(t *testing.T) {
 		h := newTestBuilder(t)
