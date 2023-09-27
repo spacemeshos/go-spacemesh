@@ -115,7 +115,7 @@ func MainnetConfig() Config {
 			GracePeriodDuration:      10 * time.Minute,
 			ProposalDuration:         4 * time.Minute,
 			FirstVotingRoundDuration: 30 * time.Minute,
-			RoundsNumber:             300,
+			RoundsNumber:             0,
 			VotingRoundDuration:      4 * time.Minute,
 			WeakCoinRoundDuration:    4 * time.Minute,
 			VotesLimit:               100,
