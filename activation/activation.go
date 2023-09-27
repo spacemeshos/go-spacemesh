@@ -59,9 +59,10 @@ const (
 
 // Config defines configuration for Builder.
 type Config struct {
-	CoinbaseAccount types.Address
-	GoldenATXID     types.ATXID
-	LayersPerEpoch  uint32
+	CoinbaseAccount  types.Address
+	GoldenATXID      types.ATXID
+	LayersPerEpoch   uint32
+	RegossipInterval time.Duration
 }
 
 // Builder struct is the struct that orchestrates the creation of activation transactions
@@ -79,6 +80,7 @@ type Builder struct {
 	coinbaseAccount   types.Address
 	goldenATXID       types.ATXID
 	layersPerEpoch    uint32
+	regossipInterval  time.Duration
 	cdb               *datastore.CachedDB
 	atxHandler        atxHandler
 	publisher         pubsub.Publisher
@@ -165,6 +167,7 @@ func NewBuilder(
 		coinbaseAccount:       conf.CoinbaseAccount,
 		goldenATXID:           conf.GoldenATXID,
 		layersPerEpoch:        conf.LayersPerEpoch,
+		regossipInterval:      conf.RegossipInterval,
 		cdb:                   cdb,
 		atxHandler:            hdlr,
 		publisher:             publisher,
@@ -235,7 +238,22 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 		b.run(ctx)
 		return nil
 	})
-
+	if b.regossipInterval != 0 {
+		b.eg.Go(func() error {
+			ticker := time.NewTicker(b.regossipInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-ticker.C:
+					if err := b.Regossip(ctx); err != nil {
+						b.log.With().Warning("failed to regossip", log.Context(ctx), log.Err(err))
+					}
+				}
+			}
+		})
+	}
 	return nil
 }
 
@@ -722,6 +740,28 @@ func (b *Builder) GetPositioningAtx() (types.ATXID, error) {
 		return types.ATXID{}, fmt.Errorf("cannot find pos atx: %w", err)
 	}
 	return id, nil
+}
+
+func (b *Builder) Regossip(ctx context.Context) error {
+	epoch := b.layerClock.CurrentLayer().GetEpoch()
+	atx, err := atxs.GetIDByEpochAndNodeID(b.cdb, epoch, b.signer.NodeID())
+	if errors.Is(err, sql.ErrNotFound) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	blob, err := atxs.GetBlob(b.cdb, atx[:])
+	if err != nil {
+		return fmt.Errorf("get blob %s: %w", atx.ShortString(), err)
+	}
+	if len(blob) == 0 {
+		return nil // checkpoint
+	}
+	if err := b.publisher.Publish(ctx, pubsub.AtxProtocol, blob); err != nil {
+		return fmt.Errorf("republish %s: %w", atx.ShortString(), err)
+	}
+	b.log.With().Debug("regossipped atx", log.Context(ctx), log.ShortStringer("atx", atx))
+	return nil
 }
 
 // SignAndFinalizeAtx signs the atx with specified signer and calculates the ID of the ATX.

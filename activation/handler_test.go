@@ -31,7 +31,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
-const layersPerEpochBig = 1000
+const (
+	layersPerEpochBig = 1000
+	localID           = "local"
+)
 
 func newMerkleProof(t testing.TB, challenge types.Hash32, otherLeafs []types.Hash32) (types.MerkleProof, types.Hash32) {
 	t.Helper()
@@ -101,7 +104,7 @@ func newTestHandler(tb testing.TB, goldenATXID types.ATXID) *testHandler {
 	mbeacon := NewMockAtxReceiver(ctrl)
 	mtortoise := mocks.NewMockTortoise(ctrl)
 
-	atxHdlr := NewHandler(cdb, verifier, mclock, mpub, mockFetch, 1, goldenATXID, mValidator, mbeacon, mtortoise, lg, PoetConfig{})
+	atxHdlr := NewHandler(localID, cdb, verifier, mclock, mpub, mockFetch, 1, goldenATXID, mValidator, mbeacon, mtortoise, lg, PoetConfig{})
 	return &testHandler{
 		Handler: atxHdlr,
 
@@ -1001,6 +1004,26 @@ func TestHandler_HandleSyncedAtx(t *testing.T) {
 
 		atxHdlr.mclock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now())
 		require.Error(t, atxHdlr.HandleGossipAtx(context.Background(), "", buf))
+	})
+	t.Run("known atx from local id is allowed", func(t *testing.T) {
+		t.Parallel()
+
+		atxHdlr := newTestHandler(t, goldenATXID)
+
+		atx := newActivationTx(t, sig, 0, types.EmptyATXID, types.EmptyATXID, nil, 0, 0, 0, types.Address{2, 4, 5}, 2, nil)
+
+		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
+		atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
+		require.NoError(t, atxHdlr.ProcessAtx(context.Background(), atx))
+
+		buf, err := codec.Encode(atx)
+		require.NoError(t, err)
+
+		atxHdlr.mclock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now())
+		require.NoError(t, atxHdlr.HandleSyncedAtx(context.Background(), atx.ID().Hash32(), p2p.NoPeer, buf))
+
+		atxHdlr.mclock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now())
+		require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), localID, buf))
 	})
 
 	t.Run("atx with invalid signature", func(t *testing.T) {

@@ -66,6 +66,7 @@ func MainnetConfig() Config {
 				"https://poet-110.spacemesh.network",
 				"https://poet-111.spacemesh.network",
 			},
+			RegossipAtxInterval: 2 * time.Hour,
 		},
 		Genesis: &GenesisConfig{
 			GenesisTime: "2023-07-14T08:00:00Z",
