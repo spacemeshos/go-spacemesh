@@ -13,8 +13,6 @@ import (
 
 const (
 	numOfClients = 100
-	strLen       = 128
-	letterBytes  = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 )
 
 func TestFixedRolacle_Eligible(t *testing.T) {
