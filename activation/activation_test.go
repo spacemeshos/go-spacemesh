@@ -1287,14 +1287,15 @@ func TestRegossip(t *testing.T) {
 		blob, err := atxs.GetBlob(h.cdb.Database, atx.ID().Bytes())
 		require.NoError(t, err)
 		h.mclock.EXPECT().CurrentLayer().Return(layer)
+
 		ctx := context.Background()
 		h.mpub.EXPECT().Publish(ctx, pubsub.AtxProtocol, blob)
 		require.NoError(t, h.Regossip(ctx))
 	})
 	t.Run("checkpointed", func(t *testing.T) {
 		h := newTestBuilder(t)
-		require.NoError(t, atxs.AddCheckpointed(h.cdb.Database, &atxs.CheckpointAtx{
-			ID: types.ATXID{1}, Epoch: layer.GetEpoch(), SmesherID: h.sig.NodeID()}))
+		require.NoError(t, atxs.AddCheckpointed(h.cdb.Database,
+			&atxs.CheckpointAtx{ID: types.ATXID{1}, Epoch: layer.GetEpoch(), SmesherID: h.sig.NodeID()}))
 		h.mclock.EXPECT().CurrentLayer().Return(layer)
 		require.NoError(t, h.Regossip(context.Background()))
 	})
