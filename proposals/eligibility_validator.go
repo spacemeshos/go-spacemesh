@@ -9,8 +9,9 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/cache"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -29,36 +30,28 @@ type Validator struct {
 	avgLayerSize       uint32
 	layersPerEpoch     uint32
 	tortoise           tortoiseProvider
-	cdb                *datastore.CachedDB
+	db                 *sql.Database
 	cache              *cache.Cache
 	clock              layerClock
 	beacons            system.BeaconCollector
 	logger             log.Log
 	vrfVerifier        vrfVerifier
-	nonceFetcher       nonceFetcher
 }
 
 // ValidatorOpt for configuring Validator.
 type ValidatorOpt func(h *Validator)
 
-func WithNonceFetcher(nf nonceFetcher) ValidatorOpt {
-	return func(h *Validator) {
-		h.nonceFetcher = nf
-	}
-}
-
 // NewEligibilityValidator returns a new EligibilityValidator.
 func NewEligibilityValidator(
-	avgLayerSize, layersPerEpoch uint32, minActiveSetWeight uint64, clock layerClock, tortoise tortoiseProvider, cdb *datastore.CachedDB, cache *cache.Cache, bc system.BeaconCollector, lg log.Log, vrfVerifier vrfVerifier, opts ...ValidatorOpt,
+	avgLayerSize, layersPerEpoch uint32, minActiveSetWeight uint64, clock layerClock, tortoise tortoiseProvider, db *sql.Database, cache *cache.Cache, bc system.BeaconCollector, lg log.Log, vrfVerifier vrfVerifier, opts ...ValidatorOpt,
 ) *Validator {
 	v := &Validator{
 		minActiveSetWeight: minActiveSetWeight,
 		avgLayerSize:       avgLayerSize,
 		layersPerEpoch:     layersPerEpoch,
 		tortoise:           tortoise,
-		cdb:                cdb,
+		db:                 db,
 		cache:              cache,
-		nonceFetcher:       cdb,
 		clock:              clock,
 		beacons:            bc,
 		logger:             lg,
@@ -77,21 +70,21 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot, 
 	}
 	var atx *cache.ATXData
 	if epoch := ballot.Layer.GetEpoch(); v.cache.IsEvicted(epoch) {
-		owned, err := v.cdb.GetAtxHeader(ballot.AtxID)
+		owned, err := atxs.Get(v.db, ballot.AtxID)
 		if err != nil {
 			return false, fmt.Errorf("failed to load atx %v: %w", ballot.AtxID, err)
 		}
 		if owned.TargetEpoch() != epoch {
 			return false, fmt.Errorf("atx and ballot epochs mismatch. atx %d/%s is not from %d/%s", owned.TargetEpoch(), ballot.AtxID.ShortString(), epoch, ballot.SmesherID.ShortString())
 		}
-		if ballot.SmesherID != owned.NodeID {
+		if ballot.SmesherID != owned.SmesherID {
 			return false, fmt.Errorf("atx and ballot key mismatch: public key (%v), ATX node key (%v)", ballot.SmesherID.String(), owned.NodeID)
 		}
-		nonce, err := v.nonceFetcher.VRFNonce(ballot.SmesherID, epoch)
+		nonce, err := atxs.VRFNonce(v.db, ballot.SmesherID, epoch)
 		if err != nil {
 			return false, fmt.Errorf("no vrf nonce for %v in epoch %v: %w", ballot.SmesherID, ballot.Layer.GetEpoch(), err)
 		}
-		atx = cache.ToATXData(owned, nonce, false)
+		atx = cache.ToATXData(owned.ToHeader(), nonce, false)
 	} else {
 		atx = v.cache.Get(epoch, ballot.AtxID)
 		if atx == nil {
@@ -156,7 +149,7 @@ func (v *Validator) validateReference(ballot *types.Ballot, actives []types.ATXI
 	var totalWeight uint64
 	for _, atxid := range actives {
 		if epoch := ballot.Layer.GetEpoch(); v.cache.IsEvicted(epoch) {
-			atx, err := v.cdb.GetAtxHeader(atxid)
+			atx, err := atxs.Get(v.db, atxid)
 			if err != nil {
 				return nil, fmt.Errorf("atx in active set is missing %v: %w", atxid, err)
 			}

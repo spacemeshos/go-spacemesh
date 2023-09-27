@@ -17,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/cache"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -90,7 +89,7 @@ func createTestHandler(t *testing.T) *testHandler {
 	ms := fullMockSet(t)
 	edVerifier, err := signing.NewEdVerifier()
 	require.NoError(t, err)
-	db := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+	db := sql.InMemory()
 	ms.md.EXPECT().GetBallot(gomock.Any()).AnyTimes().DoAndReturn(func(id types.BallotID) *tortoise.BallotData {
 		ballot, err := ballots.Get(db, id)
 		if err != nil {

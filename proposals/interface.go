@@ -30,10 +30,6 @@ type vrfVerifier interface {
 	Verify(types.NodeID, []byte, types.VrfSignature) bool
 }
 
-type nonceFetcher interface {
-	VRFNonce(types.NodeID, types.EpochID) (types.VRFPostIndex, error)
-}
-
 type layerClock interface {
 	CurrentLayer() types.LayerID
 	LayerToTime(types.LayerID) time.Time

@@ -73,7 +73,6 @@ func (o *Oracle) ProposalEligibility(lid types.LayerID, beacon types.Beacon, non
 		log.Stringer("requested epoch", epoch),
 		log.Stringer("cached epoch", o.cache.Epoch),
 	)
-
 	var layerProofs []types.VotingEligibility
 	if o.cache.Epoch == epoch { // use the cached value
 		layerProofs = o.cache.Proofs[lid]

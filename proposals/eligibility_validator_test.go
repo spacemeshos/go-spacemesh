@@ -11,7 +11,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/cache"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -638,13 +637,12 @@ func TestEligibilityValidator(t *testing.T) {
 			}).AnyTimes()
 
 			lg := logtest.New(t)
-			db := datastore.NewCachedDB(sql.InMemory(), lg)
+			db := sql.InMemory()
 			const capacity = 2
 			c := cache.New(cache.WithCapacity(capacity))
 			c.OnEpoch(tc.evicted + capacity)
 			tv := NewEligibilityValidator(layerAvgSize, layersPerEpoch, tc.minWeight, ms.mclock, ms.md,
 				db, c, ms.mbc, lg, ms.mvrf,
-				WithNonceFetcher(db),
 			)
 			for _, atx := range tc.atxs {
 				require.NoError(t, atxs.Add(db, &atx))

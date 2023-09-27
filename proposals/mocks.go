@@ -417,68 +417,6 @@ func (c *vrfVerifierVerifyCall) DoAndReturn(f func(types.NodeID, []byte, types.V
 	return c
 }
 
-// MocknonceFetcher is a mock of nonceFetcher interface.
-type MocknonceFetcher struct {
-	ctrl     *gomock.Controller
-	recorder *MocknonceFetcherMockRecorder
-}
-
-// MocknonceFetcherMockRecorder is the mock recorder for MocknonceFetcher.
-type MocknonceFetcherMockRecorder struct {
-	mock *MocknonceFetcher
-}
-
-// NewMocknonceFetcher creates a new mock instance.
-func NewMocknonceFetcher(ctrl *gomock.Controller) *MocknonceFetcher {
-	mock := &MocknonceFetcher{ctrl: ctrl}
-	mock.recorder = &MocknonceFetcherMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MocknonceFetcher) EXPECT() *MocknonceFetcherMockRecorder {
-	return m.recorder
-}
-
-// VRFNonce mocks base method.
-func (m *MocknonceFetcher) VRFNonce(arg0 types.NodeID, arg1 types.EpochID) (types.VRFPostIndex, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "VRFNonce", arg0, arg1)
-	ret0, _ := ret[0].(types.VRFPostIndex)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// VRFNonce indicates an expected call of VRFNonce.
-func (mr *MocknonceFetcherMockRecorder) VRFNonce(arg0, arg1 any) *nonceFetcherVRFNonceCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRFNonce", reflect.TypeOf((*MocknonceFetcher)(nil).VRFNonce), arg0, arg1)
-	return &nonceFetcherVRFNonceCall{Call: call}
-}
-
-// nonceFetcherVRFNonceCall wrap *gomock.Call
-type nonceFetcherVRFNonceCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *nonceFetcherVRFNonceCall) Return(arg0 types.VRFPostIndex, arg1 error) *nonceFetcherVRFNonceCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *nonceFetcherVRFNonceCall) Do(f func(types.NodeID, types.EpochID) (types.VRFPostIndex, error)) *nonceFetcherVRFNonceCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *nonceFetcherVRFNonceCall) DoAndReturn(f func(types.NodeID, types.EpochID) (types.VRFPostIndex, error)) *nonceFetcherVRFNonceCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // MocklayerClock is a mock of layerClock interface.
 type MocklayerClock struct {
 	ctrl     *gomock.Controller

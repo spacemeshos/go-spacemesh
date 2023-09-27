@@ -2,7 +2,6 @@ package miner
 
 import (
 	"context"
-	"math/rand"
 	"testing"
 	"time"
 
@@ -199,13 +198,8 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize, layersPerEpoch
 		}
 	})
 
-	nonceFetcher := proposals.NewMocknonceFetcher(ctrl)
-	nonce := types.VRFPostIndex(rand.Uint64())
-
 	c := cache.New()
-	validator := proposals.NewEligibilityValidator(layerSize, layersPerEpoch, 0, o.mClock, tmock, o.cdb, c, mbc, o.log.WithName("blkElgValidator"), vrfVerifier,
-		proposals.WithNonceFetcher(nonceFetcher),
-	)
+	validator := proposals.NewEligibilityValidator(layerSize, layersPerEpoch, 0, o.mClock, tmock, o.cdb, c, mbc, o.log.WithName("blkElgValidator"), vrfVerifier)
 
 	startEpoch, numberOfEpochsToTest := uint32(2), uint32(2)
 	startLayer := layersPerEpoch * startEpoch
@@ -222,7 +216,7 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize, layersPerEpoch
 	for layer := types.LayerID(startLayer); layer.Before(endLayer); layer = layer.Add(1) {
 		info, ok := epochInfo[layer.GetEpoch()]
 		require.True(t, ok)
-		ee, err := o.ProposalEligibility(layer, info.beacon, nonce)
+		ee, err := o.ProposalEligibility(layer, info.beacon, 1)
 		require.NoError(t, err)
 		activesets.Add(o.cdb, ee.ActiveSet.Hash(), &types.EpochActiveSet{Epoch: ee.Epoch, Set: ee.ActiveSet})
 

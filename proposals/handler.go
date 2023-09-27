@@ -12,7 +12,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/cache"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -103,7 +102,7 @@ func WithConfig(cfg Config) Opt {
 
 // NewHandler creates new Handler.
 func NewHandler(
-	cdb *datastore.CachedDB,
+	db *sql.Database,
 	cache *cache.Cache,
 	edVerifier *signing.EdVerifier,
 	p pubsub.Publisher,
@@ -118,7 +117,7 @@ func NewHandler(
 	b := &Handler{
 		logger:     log.NewNop(),
 		cfg:        defaultConfig(),
-		db:         cdb.Database,
+		db:         db,
 		cache:      cache,
 		edVerifier: edVerifier,
 		publisher:  p,
@@ -131,7 +130,7 @@ func NewHandler(
 		opt(b)
 	}
 	if b.validator == nil {
-		b.validator = NewEligibilityValidator(b.cfg.LayerSize, b.cfg.LayersPerEpoch, b.cfg.MinimalActiveSetWeight, clock, tortoise, cdb, cache, bc, b.logger, verifier)
+		b.validator = NewEligibilityValidator(b.cfg.LayerSize, b.cfg.LayersPerEpoch, b.cfg.MinimalActiveSetWeight, clock, tortoise, db, cache, bc, b.logger, verifier)
 	}
 	return b
 }
