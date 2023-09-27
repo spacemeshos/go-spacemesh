@@ -1,6 +1,5 @@
 package tests
 
-//lint:file-ignore U1000 func waitAll is unused
 import (
 	"context"
 	"errors"
@@ -9,12 +8,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/genproto/googleapis/rpc/code"
+	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
@@ -252,7 +251,7 @@ func watchTransactionResults(ctx context.Context,
 func watchProposals(ctx context.Context, eg *errgroup.Group, client *cluster.NodeClient, collector func(*pb.Proposal) (bool, error)) {
 	eg.Go(func() error {
 		dbg := pb.NewDebugServiceClient(client)
-		proposals, err := dbg.ProposalsStream(ctx, &empty.Empty{})
+		proposals, err := dbg.ProposalsStream(ctx, &emptypb.Empty{})
 		if err != nil {
 			return fmt.Errorf("proposal stream for %s: %w", client.Name, err)
 		}

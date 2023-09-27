@@ -1,6 +1,5 @@
 package grpcserver
 
-//lint:file-ignore SA1019 hide deprecated protobuf version error
 import (
 	"bytes"
 	"context"
@@ -15,14 +14,10 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/jsonpb"
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/merkle-tree"
 	"github.com/spacemeshos/poet/shared"
@@ -35,6 +30,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -466,11 +464,10 @@ func (*SmeshingAPIMock) Coinbase() types.Address {
 func (*SmeshingAPIMock) SetCoinbase(coinbase types.Address) {
 }
 
-func marshalProto(t *testing.T, msg proto.Message) string {
-	var buf bytes.Buffer
-	var m jsonpb.Marshaler
-	require.NoError(t, m.Marshal(&buf, msg))
-	return buf.String()
+func marshalProto(t *testing.T, msg proto.Message) []byte {
+	buf, err := protojson.Marshal(msg)
+	require.NoError(t, err)
+	return buf
 }
 
 func launchServer(tb testing.TB, services ...ServiceAPI) (Config, func()) {
@@ -501,15 +498,15 @@ func launchServer(tb testing.TB, services ...ServiceAPI) (Config, func()) {
 	}
 }
 
-func callEndpoint(t *testing.T, url, payload string) (string, int) {
-	resp, err := http.Post(url, "application/json", strings.NewReader(payload))
+func callEndpoint(t *testing.T, url string, payload []byte) ([]byte, int) {
+	resp, err := http.Post(url, "application/json", bytes.NewReader(payload))
 	require.NoError(t, err)
 	require.Equal(t, "application/json", resp.Header.Get("Content-Type"))
 	buf, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.NoError(t, resp.Body.Close())
 
-	return string(buf), resp.StatusCode
+	return buf, resp.StatusCode
 }
 
 func getFreePort(optionalPort int) (int, error) {
@@ -587,12 +584,12 @@ func TestNodeService(t *testing.T) {
 			require.Equal(t, "Must include `Msg`", grpcStatus.Message())
 		}},
 		{"Version", func(t *testing.T) {
-			res, err := c.Version(context.Background(), &empty.Empty{})
+			res, err := c.Version(context.Background(), &emptypb.Empty{})
 			require.NoError(t, err)
 			require.Equal(t, version, res.VersionString.Value)
 		}},
 		{"Build", func(t *testing.T) {
-			res, err := c.Build(context.Background(), &empty.Empty{})
+			res, err := c.Build(context.Background(), &emptypb.Empty{})
 			require.NoError(t, err)
 			require.Equal(t, build, res.BuildString.Value)
 		}},
@@ -623,7 +620,7 @@ func TestNodeService(t *testing.T) {
 			require.Equal(t, layerVerified.Uint32(), res.Status.VerifiedLayer.Number)
 		}},
 		{"NodeInfo", func(t *testing.T) {
-			resp, err := c.NodeInfo(ctx, &empty.Empty{})
+			resp, err := c.NodeInfo(ctx, &emptypb.Empty{})
 			require.NoError(t, err)
 			require.Equal(t, resp.Hrp, types.NetworkHRP())
 			require.Equal(t, resp.FirstGenesis, types.FirstEffectiveGenesis().Uint32())
@@ -924,7 +921,7 @@ func TestSmesherService(t *testing.T) {
 	c := pb.NewSmesherServiceClient(conn)
 
 	t.Run("IsSmeshing", func(t *testing.T) {
-		res, err := c.IsSmeshing(context.Background(), &empty.Empty{})
+		res, err := c.IsSmeshing(context.Background(), &emptypb.Empty{})
 		require.NoError(t, err)
 		require.False(t, res.IsSmeshing, "expected IsSmeshing to be false")
 	})
@@ -957,7 +954,7 @@ func TestSmesherService(t *testing.T) {
 	})
 
 	t.Run("SmesherID", func(t *testing.T) {
-		res, err := c.SmesherID(context.Background(), &empty.Empty{})
+		res, err := c.SmesherID(context.Background(), &emptypb.Empty{})
 		require.NoError(t, err)
 		require.NoError(t, err)
 		require.Equal(t, signer.NodeID().Bytes(), res.PublicKey)
@@ -979,7 +976,7 @@ func TestSmesherService(t *testing.T) {
 	})
 
 	t.Run("Coinbase", func(t *testing.T) {
-		res, err := c.Coinbase(context.Background(), &empty.Empty{})
+		res, err := c.Coinbase(context.Background(), &emptypb.Empty{})
 		require.NoError(t, err)
 		addr, err := types.StringToAddress(res.AccountId.Address)
 		require.NoError(t, err)
@@ -987,7 +984,7 @@ func TestSmesherService(t *testing.T) {
 	})
 
 	t.Run("MinGas", func(t *testing.T) {
-		_, err := c.MinGas(context.Background(), &empty.Empty{})
+		_, err := c.MinGas(context.Background(), &emptypb.Empty{})
 		require.Error(t, err)
 		statusCode := status.Code(err)
 		require.Equal(t, codes.Unimplemented, statusCode)
@@ -1008,7 +1005,7 @@ func TestSmesherService(t *testing.T) {
 	t.Run("PostSetupStatusStream", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		stream, err := c.PostSetupStatusStream(ctx, &empty.Empty{})
+		stream, err := c.PostSetupStatusStream(ctx, &emptypb.Empty{})
 		require.NoError(t, err)
 
 		// Expecting the stream to return updates before closing.
@@ -2361,7 +2358,7 @@ func TestJsonApi(t *testing.T) {
 
 	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
 	url := fmt.Sprintf("http://%s/%s", cfg.JSONListener, "v1/node/echo")
-	_, err := http.Post(url, "application/json", strings.NewReader(payload))
+	_, err := http.Post(url, "application/json", bytes.NewReader(payload))
 	require.Error(t, err)
 	shutDown()
 
@@ -2384,14 +2381,14 @@ func TestJsonApi(t *testing.T) {
 	respBody, respStatus := callEndpoint(t, fmt.Sprintf("http://%s/%s", cfg.JSONListener, "v1/node/echo"), payload)
 	require.Equal(t, http.StatusOK, respStatus)
 	var msg pb.EchoResponse
-	require.NoError(t, jsonpb.UnmarshalString(respBody, &msg))
+	require.NoError(t, protojson.Unmarshal(respBody, &msg))
 	require.Equal(t, message, msg.Msg.Value)
 
 	// Test MeshService
-	respBody2, respStatus2 := callEndpoint(t, fmt.Sprintf("http://%s/%s", cfg.JSONListener, "v1/mesh/genesistime"), "")
+	respBody2, respStatus2 := callEndpoint(t, fmt.Sprintf("http://%s/%s", cfg.JSONListener, "v1/mesh/genesistime"), nil)
 	require.Equal(t, http.StatusOK, respStatus2)
 	var msg2 pb.GenesisTimeResponse
-	require.NoError(t, jsonpb.UnmarshalString(respBody2, &msg2))
+	require.NoError(t, protojson.Unmarshal(respBody2, &msg2))
 	require.Equal(t, uint64(genesis.Unix()), msg2.Unixtime.Value)
 }
 
@@ -2453,7 +2450,7 @@ func TestDebugService(t *testing.T) {
 		id := p2p.Peer("test")
 		identity.EXPECT().ID().Return(id)
 
-		response, err := c.NetworkInfo(context.Background(), &empty.Empty{})
+		response, err := c.NetworkInfo(context.Background(), &emptypb.Empty{})
 		require.NoError(t, err)
 		require.NotNil(t, response)
 		require.Equal(t, id.String(), response.Id)
@@ -2480,7 +2477,7 @@ func TestDebugService(t *testing.T) {
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
-		stream, err := c.ProposalsStream(ctx, &empty.Empty{})
+		stream, err := c.ProposalsStream(ctx, &emptypb.Empty{})
 		require.NoError(t, err)
 
 		_, err = stream.Header()
