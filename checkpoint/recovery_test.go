@@ -228,6 +228,7 @@ func validateAndPreserveData(tb testing.TB, db *sql.Database, deps []*types.Veri
 	mtrtl := smocks.NewMockTortoise(ctrl)
 	cdb := datastore.NewCachedDB(db, lg)
 	atxHandler := activation.NewHandler(
+		"",
 		cdb,
 		edVerifier,
 		mclock,

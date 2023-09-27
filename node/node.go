@@ -654,6 +654,7 @@ func (app *App) initServices(ctx context.Context) error {
 
 	fetcherWrapped := &layerFetcher{}
 	atxHandler := activation.NewHandler(
+		app.host.ID(),
 		app.cachedDB,
 		app.edVerifier,
 		app.clock,
@@ -858,9 +859,10 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 
 	builderConfig := activation.Config{
-		CoinbaseAccount: coinbaseAddr,
-		GoldenATXID:     goldenATXID,
-		LayersPerEpoch:  layersPerEpoch,
+		CoinbaseAccount:  coinbaseAddr,
+		GoldenATXID:      goldenATXID,
+		LayersPerEpoch:   layersPerEpoch,
+		RegossipInterval: app.Config.RegossipAtxInterval,
 	}
 	atxBuilder := activation.NewBuilder(
 		builderConfig,
