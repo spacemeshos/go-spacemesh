@@ -26,7 +26,6 @@ type HareWrapper struct {
 	termination chan struct{}
 	clock       *mockClock
 	hare        []*Hare
-	//lint:ignore U1000 pending https://github.com/spacemeshos/go-spacemesh/issues/4001
 	initialSets []*Set
 	outputs     map[types.LayerID][]*Set
 }

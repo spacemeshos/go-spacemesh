@@ -18,7 +18,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/merkle-tree"
 	"github.com/spacemeshos/poet/shared"
@@ -33,6 +32,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -584,12 +584,12 @@ func TestNodeService(t *testing.T) {
 			require.Equal(t, "Must include `Msg`", grpcStatus.Message())
 		}},
 		{"Version", func(t *testing.T) {
-			res, err := c.Version(context.Background(), &empty.Empty{})
+			res, err := c.Version(context.Background(), &emptypb.Empty{})
 			require.NoError(t, err)
 			require.Equal(t, version, res.VersionString.Value)
 		}},
 		{"Build", func(t *testing.T) {
-			res, err := c.Build(context.Background(), &empty.Empty{})
+			res, err := c.Build(context.Background(), &emptypb.Empty{})
 			require.NoError(t, err)
 			require.Equal(t, build, res.BuildString.Value)
 		}},
@@ -620,7 +620,7 @@ func TestNodeService(t *testing.T) {
 			require.Equal(t, layerVerified.Uint32(), res.Status.VerifiedLayer.Number)
 		}},
 		{"NodeInfo", func(t *testing.T) {
-			resp, err := c.NodeInfo(ctx, &empty.Empty{})
+			resp, err := c.NodeInfo(ctx, &emptypb.Empty{})
 			require.NoError(t, err)
 			require.Equal(t, resp.Hrp, types.NetworkHRP())
 			require.Equal(t, resp.FirstGenesis, types.FirstEffectiveGenesis().Uint32())
@@ -921,7 +921,7 @@ func TestSmesherService(t *testing.T) {
 	c := pb.NewSmesherServiceClient(conn)
 
 	t.Run("IsSmeshing", func(t *testing.T) {
-		res, err := c.IsSmeshing(context.Background(), &empty.Empty{})
+		res, err := c.IsSmeshing(context.Background(), &emptypb.Empty{})
 		require.NoError(t, err)
 		require.False(t, res.IsSmeshing, "expected IsSmeshing to be false")
 	})
@@ -954,7 +954,7 @@ func TestSmesherService(t *testing.T) {
 	})
 
 	t.Run("SmesherID", func(t *testing.T) {
-		res, err := c.SmesherID(context.Background(), &empty.Empty{})
+		res, err := c.SmesherID(context.Background(), &emptypb.Empty{})
 		require.NoError(t, err)
 		require.NoError(t, err)
 		require.Equal(t, signer.NodeID().Bytes(), res.PublicKey)
@@ -976,7 +976,7 @@ func TestSmesherService(t *testing.T) {
 	})
 
 	t.Run("Coinbase", func(t *testing.T) {
-		res, err := c.Coinbase(context.Background(), &empty.Empty{})
+		res, err := c.Coinbase(context.Background(), &emptypb.Empty{})
 		require.NoError(t, err)
 		addr, err := types.StringToAddress(res.AccountId.Address)
 		require.NoError(t, err)
@@ -984,7 +984,7 @@ func TestSmesherService(t *testing.T) {
 	})
 
 	t.Run("MinGas", func(t *testing.T) {
-		_, err := c.MinGas(context.Background(), &empty.Empty{})
+		_, err := c.MinGas(context.Background(), &emptypb.Empty{})
 		require.Error(t, err)
 		statusCode := status.Code(err)
 		require.Equal(t, codes.Unimplemented, statusCode)
@@ -1005,7 +1005,7 @@ func TestSmesherService(t *testing.T) {
 	t.Run("PostSetupStatusStream", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		stream, err := c.PostSetupStatusStream(ctx, &empty.Empty{})
+		stream, err := c.PostSetupStatusStream(ctx, &emptypb.Empty{})
 		require.NoError(t, err)
 
 		// Expecting the stream to return updates before closing.
@@ -2450,7 +2450,7 @@ func TestDebugService(t *testing.T) {
 		id := p2p.Peer("test")
 		identity.EXPECT().ID().Return(id)
 
-		response, err := c.NetworkInfo(context.Background(), &empty.Empty{})
+		response, err := c.NetworkInfo(context.Background(), &emptypb.Empty{})
 		require.NoError(t, err)
 		require.NotNil(t, response)
 		require.Equal(t, id.String(), response.Id)
@@ -2477,7 +2477,7 @@ func TestDebugService(t *testing.T) {
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
-		stream, err := c.ProposalsStream(ctx, &empty.Empty{})
+		stream, err := c.ProposalsStream(ctx, &emptypb.Empty{})
 		require.NoError(t, err)
 
 		_, err = stream.Header()
