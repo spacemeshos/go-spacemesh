@@ -73,6 +73,7 @@ func NewHandler(
 	poetCfg PoetConfig,
 ) *Handler {
 	return &Handler{
+		local:           local,
 		cdb:             cdb,
 		edVerifier:      edVerifier,
 		clock:           c,

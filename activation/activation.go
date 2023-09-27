@@ -752,7 +752,10 @@ func (b *Builder) Regossip(ctx context.Context) error {
 	}
 	blob, err := atxs.GetBlob(b.cdb, atx[:])
 	if err != nil {
-		return fmt.Errorf("blob for %s not found: %w", atx.ShortString(), err)
+		return fmt.Errorf("get blob %s: %w", atx.ShortString(), err)
+	}
+	if len(blob) == 0 {
+		return nil // checkpoint
 	}
 	if err := b.publisher.Publish(ctx, pubsub.AtxProtocol, blob); err != nil {
 		return fmt.Errorf("republish %s: %w", atx.ShortString(), err)
