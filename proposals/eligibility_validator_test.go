@@ -641,7 +641,7 @@ func TestEligibilityValidator(t *testing.T) {
 			db := datastore.NewCachedDB(sql.InMemory(), lg)
 			const capacity = 2
 			c := cache.New(cache.WithCapacity(capacity))
-			c.OnApplied(tc.evicted + capacity)
+			c.OnEpoch(tc.evicted + capacity)
 			tv := NewEligibilityValidator(layerAvgSize, layersPerEpoch, tc.minWeight, ms.mclock, ms.md,
 				db, c, ms.mbc, lg, ms.mvrf,
 				WithNonceFetcher(db),

@@ -33,7 +33,7 @@ func Warmup(db sql.Executor, cache *Cache) error {
 	if err != nil {
 		return err
 	}
-	cache.OnApplied(applied.GetEpoch())
+	cache.OnEpoch(applied.GetEpoch())
 
 	var ierr error
 	if err := atxs.IterateAtxs(db, cache.Evicted(), latest, func(vatx *types.VerifiedActivationTx) bool {

@@ -81,7 +81,6 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot, 
 		if err != nil {
 			return false, fmt.Errorf("failed to load atx %v: %w", ballot.AtxID, err)
 		}
-		fmt.Println(owned.TargetEpoch(), epoch)
 		if owned.TargetEpoch() != epoch {
 			return false, fmt.Errorf("atx and ballot epochs mismatch. atx %d/%s is not from %d/%s", owned.TargetEpoch(), ballot.AtxID.ShortString(), epoch, ballot.SmesherID.ShortString())
 		}

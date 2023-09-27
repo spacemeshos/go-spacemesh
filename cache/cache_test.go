@@ -74,7 +74,7 @@ func TestCache(t *testing.T) {
 			data := c.GetByNode(types.EpochID(epoch), node)
 			require.NotNil(t, data)
 		}
-		c.OnApplied(applied)
+		c.OnEpoch(applied)
 		evicted := applied - capacity
 		require.EqualValues(t, evicted, c.Evicted())
 		for epoch := 1; epoch <= epochs; epoch++ {
@@ -108,11 +108,11 @@ func TestCache(t *testing.T) {
 	})
 	t.Run("adding after eviction", func(t *testing.T) {
 		c := New()
-		c.OnApplied(0)
-		c.OnApplied(3)
+		c.OnEpoch(0)
+		c.OnEpoch(3)
 		c.Add(1, types.NodeID{1}, types.ATXID{1}, &ATXData{})
 		require.Nil(t, c.Get(3, types.ATXID{1}))
-		c.OnApplied(3)
+		c.OnEpoch(3)
 	})
 }
 
@@ -138,7 +138,7 @@ func TestMemory(t *testing.T) {
 		runtime.ReadMemStats(&after)
 		require.InDelta(t, after.HeapInuse-before.HeapInuse, memory, float64(delta))
 
-		c.OnApplied(0) // otherwise cache will be gc'ed
+		c.OnEpoch(0) // otherwise cache will be gc'ed
 	}
 	t.Run("1_000_000", func(t *testing.T) {
 		test(t, 1_000_000, 303_000_000, 300_000)

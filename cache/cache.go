@@ -62,9 +62,9 @@ func (c *Cache) IsEvicted(epoch types.EpochID) bool {
 	return c.evicted.Load() >= epoch.Uint32()
 }
 
-// OnApplied is a notification for cache to evict epochs that are not useful
+// OnEpoch is a notification for cache to evict epochs that are not useful
 // to keep in memory.
-func (c *Cache) OnApplied(applied types.EpochID) {
+func (c *Cache) OnEpoch(applied types.EpochID) {
 	if applied < c.capacity {
 		return
 	}
@@ -74,7 +74,7 @@ func (c *Cache) OnApplied(applied types.EpochID) {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.evicted.Load() < applied.Uint32() {
+	if c.evicted.Load() < evict.Uint32() {
 		c.evicted.Store(evict.Uint32())
 	}
 	for epoch := range c.epochs {
