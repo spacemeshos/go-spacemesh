@@ -52,7 +52,7 @@ type PoetProvingServiceClient interface {
 	PowParams(ctx context.Context) (*PoetPowParams, error)
 
 	// Submit registers a challenge in the proving service current open round.
-	Submit(ctx context.Context, prefix, challenge []byte, signature types.EdSignature, nodeID types.NodeID, pow PoetPoW) (*types.PoetRound, error)
+	Submit(ctx context.Context, deadline time.Time, prefix, challenge []byte, signature types.EdSignature, nodeID types.NodeID, pow PoetPoW) (*types.PoetRound, error)
 
 	// PoetServiceID returns the public key of the PoET proving service.
 	PoetServiceID(context.Context) (types.PoetServiceID, error)
@@ -237,7 +237,10 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 		prefix := bytes.Join([][]byte{nb.signer.Prefix(), {byte(signing.POET)}}, nil)
 		submitCtx, cancel := context.WithDeadline(ctx, poetRoundStart)
 		defer cancel()
-		poetRequests := nb.submitPoetChallenges(submitCtx, prefix, challengeHash.Bytes(), signature, nb.signer.NodeID())
+		poetRequests, err := nb.submitPoetChallenges(submitCtx, poetProofDeadline, prefix, challengeHash.Bytes(), signature, nb.signer.NodeID())
+		if err != nil {
+			return nil, fmt.Errorf("submitting to poets: %w", err)
+		}
 		if len(poetRequests) == 0 {
 			return nil, &PoetSvcUnstableError{msg: "failed to submit challenge to any PoET", source: submitCtx.Err()}
 		}
@@ -328,7 +331,7 @@ func withConditionalTimeout(ctx context.Context, timeout time.Duration) (context
 }
 
 // Submit the challenge to a single PoET.
-func (nb *NIPostBuilder) submitPoetChallenge(ctx context.Context, client PoetProvingServiceClient, prefix, challenge []byte, signature types.EdSignature, nodeID types.NodeID) (*types.PoetRequest, error) {
+func (nb *NIPostBuilder) submitPoetChallenge(ctx context.Context, deadline time.Time, client PoetProvingServiceClient, prefix, challenge []byte, signature types.EdSignature, nodeID types.NodeID) (*types.PoetRequest, error) {
 	poetServiceID, err := client.PoetServiceID(ctx)
 	if err != nil {
 		return nil, &PoetSvcUnstableError{msg: "failed to get PoET service ID", source: err}
@@ -355,7 +358,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(ctx context.Context, client PoetPro
 
 	submitCtx, cancel := withConditionalTimeout(ctx, nb.poetCfg.RequestTimeout)
 	defer cancel()
-	round, err := client.Submit(submitCtx, prefix, challenge, signature, nodeID, PoetPoW{
+	round, err := client.Submit(submitCtx, deadline, prefix, challenge, signature, nodeID, PoetPoW{
 		Nonce:  nonce,
 		Params: *powParams,
 	})
@@ -372,16 +375,20 @@ func (nb *NIPostBuilder) submitPoetChallenge(ctx context.Context, client PoetPro
 }
 
 // Submit the challenge to all registered PoETs.
-func (nb *NIPostBuilder) submitPoetChallenges(ctx context.Context, prefix, challenge []byte, signature types.EdSignature, nodeID types.NodeID) []types.PoetRequest {
+func (nb *NIPostBuilder) submitPoetChallenges(ctx context.Context, deadline time.Time, prefix, challenge []byte, signature types.EdSignature, nodeID types.NodeID) ([]types.PoetRequest, error) {
 	g, ctx := errgroup.WithContext(ctx)
-	poetRequestsChannel := make(chan types.PoetRequest, len(nb.poetProvers))
+	type submitResult struct {
+		request *types.PoetRequest
+		err     error
+	}
+	poetRequestsChannel := make(chan submitResult, len(nb.poetProvers))
 	for _, poetProver := range nb.poetProvers {
 		poet := poetProver
 		g.Go(func() error {
-			if poetRequest, err := nb.submitPoetChallenge(ctx, poet, prefix, challenge, signature, nodeID); err == nil {
-				poetRequestsChannel <- *poetRequest
-			} else {
-				nb.log.With().Warning("failed to submit challenge to PoET", log.Err(err))
+			poetRequest, err := nb.submitPoetChallenge(ctx, deadline, poet, prefix, challenge, signature, nodeID)
+			poetRequestsChannel <- submitResult{
+				request: poetRequest,
+				err:     err,
 			}
 			return nil
 		})
@@ -389,11 +396,24 @@ func (nb *NIPostBuilder) submitPoetChallenges(ctx context.Context, prefix, chall
 	g.Wait()
 	close(poetRequestsChannel)
 
+	allTooLate := true
 	poetRequests := make([]types.PoetRequest, 0, len(nb.poetProvers))
-	for request := range poetRequestsChannel {
-		poetRequests = append(poetRequests, request)
+	for result := range poetRequestsChannel {
+		if result.err == nil {
+			poetRequests = append(poetRequests, *result.request)
+			allTooLate = false
+		} else {
+			nb.log.With().Warning("failed to submit challenge to poet", log.Err(result.err))
+			if !errors.Is(result.err, ErrSubmitTooLate) {
+				allTooLate = false
+			}
+		}
 	}
-	return poetRequests
+	if allTooLate {
+		nb.log.Warning("all poet submits were too late. ATX challenge expires")
+		return nil, ErrATXChallengeExpired
+	}
+	return poetRequests, nil
 }
 
 func (nb *NIPostBuilder) getPoetClient(ctx context.Context, id types.PoetServiceID) PoetProvingServiceClient {

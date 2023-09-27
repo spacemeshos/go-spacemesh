@@ -7,14 +7,17 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/go-retryablehttp"
+	"github.com/spacemeshos/poet/registration"
 	rpcapi "github.com/spacemeshos/poet/release/proto/go/rpc/api/v1"
 	"github.com/spacemeshos/poet/shared"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
@@ -23,6 +26,7 @@ var (
 	ErrNotFound       = errors.New("not found")
 	ErrUnavailable    = errors.New("unavailable")
 	ErrInvalidRequest = errors.New("invalid request")
+	ErrSubmitTooLate  = errors.New("too late to submit")
 )
 
 type PoetPowParams struct {
@@ -153,7 +157,7 @@ func (c *HTTPPoetClient) PowParams(ctx context.Context) (*PoetPowParams, error) 
 }
 
 // Submit registers a challenge in the proving service current open round.
-func (c *HTTPPoetClient) Submit(ctx context.Context, prefix, challenge []byte, signature types.EdSignature, nodeID types.NodeID, pow PoetPoW) (*types.PoetRound, error) {
+func (c *HTTPPoetClient) Submit(ctx context.Context, deadline time.Time, prefix, challenge []byte, signature types.EdSignature, nodeID types.NodeID, pow PoetPoW) (*types.PoetRound, error) {
 	request := rpcapi.SubmitRequest{
 		Prefix:    prefix,
 		Challenge: challenge,
@@ -164,6 +168,7 @@ func (c *HTTPPoetClient) Submit(ctx context.Context, prefix, challenge []byte, s
 			Challenge:  pow.Params.Challenge,
 			Difficulty: uint32(pow.Params.Difficulty),
 		},
+		Deadline: timestamppb.New(deadline),
 	}
 	resBody := rpcapi.SubmitResponse{}
 	if err := c.req(ctx, http.MethodPost, "/v1/submit", &request, &resBody); err != nil {
@@ -257,13 +262,15 @@ func (c *HTTPPoetClient) req(ctx context.Context, method, path string, reqBody, 
 	if res.StatusCode != http.StatusOK {
 		c.logger.Info("got poet response != 200 OK", zap.String("status", res.Status), zap.String("body", string(data)))
 	}
-	switch res.StatusCode {
-	case http.StatusOK:
-	case http.StatusNotFound:
+	switch {
+	case res.StatusCode == http.StatusOK:
+	case res.StatusCode == http.StatusNotFound:
 		return fmt.Errorf("%w: response status code: %s, body: %s", ErrNotFound, res.Status, string(data))
-	case http.StatusServiceUnavailable:
+	case res.StatusCode == http.StatusServiceUnavailable:
 		return fmt.Errorf("%w: response status code: %s, body: %s", ErrUnavailable, res.Status, string(data))
-	case http.StatusBadRequest:
+	case res.StatusCode == http.StatusBadRequest && strings.Contains(string(data), registration.ErrTooLateToRegister.Error()):
+		return fmt.Errorf("%w: response status code: %s, body: %s", ErrSubmitTooLate, res.Status, string(data))
+	case res.StatusCode == http.StatusBadRequest:
 		return fmt.Errorf("%w: response status code: %s, body: %s", ErrInvalidRequest, res.Status, string(data))
 	default:
 		return fmt.Errorf("unrecognized error: status code: %s, body: %s", res.Status, string(data))
