@@ -10,11 +10,12 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/cache"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -31,7 +32,8 @@ type Generator struct {
 	ctx    context.Context
 	cancel func()
 
-	cdb      *datastore.CachedDB
+	db       *sql.Database
+	cache    *cache.Cache
 	msh      meshProvider
 	executor executor
 	fetcher  system.ProposalFetcher
@@ -90,7 +92,8 @@ func WithHareOutputChan(ch chan hare.LayerOutput) GeneratorOpt {
 
 // NewGenerator creates new block generator.
 func NewGenerator(
-	cdb *datastore.CachedDB,
+	db *sql.Database,
+	cache *cache.Cache,
 	exec executor,
 	m meshProvider,
 	f system.ProposalFetcher,
@@ -102,7 +105,8 @@ func NewGenerator(
 		logger:           log.NewNop(),
 		cfg:              defaultConfig(),
 		ctx:              context.Background(),
-		cdb:              cdb,
+		db:               db,
+		cache:            cache,
 		msh:              m,
 		executor:         exec,
 		fetcher:          f,
@@ -182,7 +186,7 @@ func (g *Generator) getProposals(pids []types.ProposalID) ([]*types.Proposal, er
 		err    error
 	)
 	for _, pid := range pids {
-		if p, err = proposals.Get(g.cdb, pid); err != nil {
+		if p, err = proposals.Get(g.db, pid); err != nil {
 			return nil, err
 		}
 		result = append(result, p)
@@ -205,7 +209,7 @@ func (g *Generator) processHareOutput(out hare.LayerOutput) (*types.Block, error
 				failErrCnt.Inc()
 				return fmt.Errorf("preprocess get layer %d proposals: %w", out.Layer, err)
 			}
-			md, err = getProposalMetadata(out.Ctx, g.logger, g.cdb, g.cfg, out.Layer, props)
+			md, err = getProposalMetadata(out.Ctx, g.logger, g.db, g.cache, g.cfg, out.Layer, props)
 			if err != nil {
 				return err
 			}
@@ -250,7 +254,7 @@ func (g *Generator) processHareOutput(out hare.LayerOutput) (*types.Block, error
 }
 
 func (g *Generator) processOptimisticLayers(max types.LayerID) {
-	lastApplied, err := layers.GetLastApplied(g.cdb)
+	lastApplied, err := layers.GetLastApplied(g.db)
 	if err != nil {
 		g.logger.Error("failed to get latest applied layer", log.Err(err))
 		return

@@ -13,11 +13,12 @@ import (
 
 	"github.com/seehuhn/mt19937"
 
+	"github.com/spacemeshos/go-spacemesh/cache"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/proposals"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/txs"
@@ -48,7 +49,8 @@ type proposalMetadata struct {
 func getProposalMetadata(
 	ctx context.Context,
 	logger log.Log,
-	cdb *datastore.CachedDB,
+	db *sql.Database,
+	cache *cache.Cache,
 	cfg Config,
 	lid types.LayerID,
 	proposals []*types.Proposal,
@@ -64,7 +66,7 @@ func getProposalMetadata(
 		meshHashes = make(map[types.Hash32]*meshState)
 		err        error
 	)
-	md.tickHeight, md.rewards, err = rewardInfoAndHeight(logger, cdb, cfg, proposals)
+	md.tickHeight, md.rewards, err = rewardInfoAndHeight(logger, db, cache, cfg, proposals)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +88,7 @@ func getProposalMetadata(
 			if _, ok := seen[tid]; ok {
 				continue
 			}
-			mtx, err := transactions.Get(cdb, tid)
+			mtx, err := transactions.Get(db, tid)
 			if err != nil {
 				return nil, fmt.Errorf("%w: get proposal tx: %w", errProposalTxMissing, err)
 			}
@@ -113,7 +115,7 @@ func getProposalMetadata(
 	if majorityState == nil {
 		logger.With().Info("no consensus on mesh hash. NOT doing optimistic filtering", lid)
 	} else {
-		ownMeshHash, err := layers.GetAggregatedHash(cdb, lid.Sub(1))
+		ownMeshHash, err := layers.GetAggregatedHash(db, lid.Sub(1))
 		if err != nil {
 			return nil, fmt.Errorf("get prev mesh hash %w", err)
 		}
@@ -207,7 +209,7 @@ func toUint64Slice(b []byte) []uint64 {
 	return s
 }
 
-func rewardInfoAndHeight(logger log.Log, cdb *datastore.CachedDB, cfg Config, props []*types.Proposal) (uint64, []types.AnyReward, error) {
+func rewardInfoAndHeight(logger log.Log, db *sql.Database, cache *cache.Cache, cfg Config, props []*types.Proposal) (uint64, []types.AnyReward, error) {
 	weights := make(map[types.ATXID]*big.Rat)
 	atxids := make([]types.ATXID, 0, len(props))
 	max := uint64(0)
@@ -217,28 +219,37 @@ func rewardInfoAndHeight(logger log.Log, cdb *datastore.CachedDB, cfg Config, pr
 			logger.With().Error("proposal with invalid ATXID, skipping reward distribution", p.Layer, p.ID())
 			return 0, nil, errInvalidATXID
 		}
-		atx, err := cdb.GetAtxHeader(p.AtxID)
-		if err != nil {
-			logger.With().Warning("proposal ATX not found", p.ID(), p.AtxID, log.Err(err))
-			return 0, nil, fmt.Errorf("block gen get ATX: %w", err)
+		atx := cache.Get(p.Layer.GetEpoch(), p.AtxID)
+		if atx == nil {
+			return 0, nil, fmt.Errorf("unknown atx %s", p.AtxID.ShortString())
 		}
-		if atx.BaseTickHeight > max {
-			max = atx.BaseTickHeight
+		if atx.BaseHeight > max {
+			max = atx.BaseHeight
 		}
-		ballot := &p.Ballot
-		weightPer, err := proposals.ComputeWeightPerEligibility(cdb, ballot)
-		if err != nil {
-			logger.With().Error("failed to calculate weight per eligibility", p.ID(), log.Err(err))
-			return 0, nil, err
-		}
-		logger.With().Debug("weight per eligibility", p.ID(), log.Stringer("weight_per", weightPer))
-		actual := weightPer.Mul(weightPer, new(big.Rat).SetUint64(uint64(len(ballot.EligibilityProofs))))
-		if _, ok := weights[atx.ID]; !ok {
-			weights[atx.ID] = actual
-			atxids = append(atxids, atx.ID)
+		var count uint32
+		if p.Ballot.EpochData != nil {
+			count = p.Ballot.EpochData.EligibilityCount
 		} else {
-			logger.With().Error("multiple proposals with the same ATX", atx.ID, p.ID())
-			return 0, nil, fmt.Errorf("%w: atx %v proposal %v", errDuplicateATX, atx.ID, p.ID())
+			ref, err := ballots.Get(db, p.RefBallot)
+			if err != nil {
+				return 0, nil, fmt.Errorf("get ref ballot %s: %w", p.RefBallot.String(), err)
+			}
+			// TODO(dshulyak) this should panic instead
+			if ref.EpochData == nil {
+				return 0, nil, fmt.Errorf("corrupted state. ballot %s has no epoch data", ref.ID().String())
+			}
+			count = ref.EpochData.EligibilityCount
+		}
+		weight := new(big.Rat).SetFrac(
+			new(big.Int).SetUint64(atx.Weight),
+			new(big.Int).SetUint64(uint64(count)),
+		)
+		weight = weight.Mul(weight, new(big.Rat).SetUint64(uint64(len(p.Ballot.EligibilityProofs))))
+		if _, ok := weights[p.AtxID]; !ok {
+			weights[p.AtxID] = weight
+			atxids = append(atxids, p.AtxID)
+		} else {
+			return 0, nil, fmt.Errorf("%w: atx %v proposal %v", errDuplicateATX, p.AtxID, p.ID())
 		}
 		events.ReportProposal(events.ProposalIncluded, p)
 	}

@@ -199,7 +199,7 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize, layersPerEpoch
 	})
 
 	c := cache.New()
-	validator := proposals.NewEligibilityValidator(layerSize, layersPerEpoch, 0, o.mClock, tmock, o.cdb, c, mbc, o.log.WithName("blkElgValidator"), vrfVerifier)
+	validator := proposals.NewEligibilityValidator(layerSize, layersPerEpoch, 0, o.mClock, tmock, o.cdb.Database, c, mbc, o.log.WithName("blkElgValidator"), vrfVerifier)
 
 	startEpoch, numberOfEpochsToTest := uint32(2), uint32(2)
 	startLayer := layersPerEpoch * startEpoch
