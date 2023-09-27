@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
@@ -128,7 +129,7 @@ func (s *Syncer) needCert(ctx context.Context, lid types.LayerID) (bool, error) 
 	if !lid.After(cutoff) {
 		return false, nil
 	}
-	_, err := certificates.Get(s.cdb, lid)
+	_, err := certificates.Get(s.db, lid)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		s.logger.WithContext(ctx).With().Error("state sync failed to get cert", lid, log.Err(err))
 		return false, err
@@ -170,7 +171,7 @@ func (s *Syncer) layerOpinions(ctx context.Context, lid types.LayerID) ([]*peerO
 }
 
 func (s *Syncer) checkMeshAgreement(ctx context.Context, lid types.LayerID, opinions []*peerOpinion) error {
-	prevHash, err := layers.GetAggregatedHash(s.cdb, lid.Sub(1))
+	prevHash, err := layers.GetAggregatedHash(s.db, lid.Sub(1))
 	if err != nil {
 		s.logger.WithContext(ctx).With().Error("failed to get prev agg hash", lid, log.Err(err))
 		return fmt.Errorf("opinions prev hash: %w", err)
@@ -236,7 +237,7 @@ func (s *Syncer) ensureMeshAgreement(
 	resyncPeers map[p2p.Peer]struct{},
 ) error {
 	prevLid := diffLayer.Sub(1)
-	prevHash, err := layers.GetAggregatedHash(s.cdb, prevLid)
+	prevHash, err := layers.GetAggregatedHash(s.db, prevLid)
 	if err != nil {
 		return fmt.Errorf("mesh hash check previous: %w", err)
 	}
@@ -276,7 +277,8 @@ func (s *Syncer) ensureMeshAgreement(
 		}
 
 		// getting the atx IDs targeting this epoch
-		ed, err = s.dataFetcher.PeerEpochInfo(ctx, peer, diffLayer.GetEpoch()-1)
+		target := diffLayer.GetEpoch()
+		ed, err = s.dataFetcher.PeerEpochInfo(ctx, peer, target-1)
 		if err != nil {
 			s.logger.WithContext(ctx).With().Warning("failed to get epoch info",
 				log.Stringer("peer", peer),
@@ -289,10 +291,14 @@ func (s *Syncer) ensureMeshAgreement(
 			if _, ok := missing[id]; ok {
 				continue
 			}
-			hdr, _ := s.cdb.GetAtxHeader(id)
-			if hdr == nil {
-				missing[id] = struct{}{}
-				continue
+			if s.cache.IsEvicted(target) {
+				if has, _ := atxs.Has(s.db, id); !has {
+					missing[id] = struct{}{}
+				}
+			} else {
+				if s.cache.Get(target, id) == nil {
+					missing[id] = struct{}{}
+				}
 			}
 		}
 		if len(missing) > 0 {

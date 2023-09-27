@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
+	"github.com/spacemeshos/go-spacemesh/cache"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
@@ -20,22 +21,22 @@ import (
 
 type testDataFetch struct {
 	*syncer.DataFetch
-	mMesh     *mocks.MockmeshProvider
-	mFetcher  *mocks.Mockfetcher
-	mIDs      *mocks.MockidProvider
-	mAtxCache *mocks.MockactiveSetCache
+	mMesh    *mocks.MockmeshProvider
+	mFetcher *mocks.Mockfetcher
+	mIDs     *mocks.MockidProvider
+	cache    *cache.Cache
 }
 
 func newTestDataFetch(t *testing.T) *testDataFetch {
 	ctrl := gomock.NewController(t)
 	lg := logtest.New(t)
 	tl := &testDataFetch{
-		mMesh:     mocks.NewMockmeshProvider(ctrl),
-		mFetcher:  mocks.NewMockfetcher(ctrl),
-		mIDs:      mocks.NewMockidProvider(ctrl),
-		mAtxCache: mocks.NewMockactiveSetCache(ctrl),
+		mMesh:    mocks.NewMockmeshProvider(ctrl),
+		mFetcher: mocks.NewMockfetcher(ctrl),
+		mIDs:     mocks.NewMockidProvider(ctrl),
+		cache:    cache.New(),
 	}
-	tl.DataFetch = syncer.NewDataFetch(tl.mMesh, tl.mFetcher, tl.mIDs, tl.mAtxCache, lg)
+	tl.DataFetch = syncer.NewDataFetch(tl.mMesh, tl.mFetcher, tl.mIDs, tl.cache, lg)
 	return tl
 }
 
@@ -353,10 +354,8 @@ func TestDataFetch_GetEpochATXs(t *testing.T) {
 			ed := &fetch.EpochData{
 				AtxIDs: types.RandomActiveSet(11),
 			}
+			td.cache.Add(epoch+1, types.NodeID{1}, ed.AtxIDs[0], &cache.ATXData{})
 			td.mFetcher.EXPECT().GetPeers().Return(peers)
-			if tc.getErr == nil {
-				td.mAtxCache.EXPECT().GetMissingActiveSet(epoch+1, ed.AtxIDs).Return(ed.AtxIDs[1:])
-			}
 			td.mFetcher.EXPECT().PeerEpochInfo(gomock.Any(), gomock.Any(), epoch).DoAndReturn(
 				func(_ context.Context, peer p2p.Peer, _ types.EpochID) (*fetch.EpochData, error) {
 					require.Contains(t, peers, peer)

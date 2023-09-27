@@ -10,12 +10,14 @@ import (
 	"go.uber.org/atomic"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/cache"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -111,7 +113,8 @@ type Syncer struct {
 	logger log.Log
 
 	cfg          Config
-	cdb          *datastore.CachedDB
+	db           *sql.Database
+	cache        *cache.Cache
 	ticker       layerTicker
 	beacon       system.BeaconGetter
 	mesh         *mesh.Mesh
@@ -139,10 +142,10 @@ type Syncer struct {
 // NewSyncer creates a new Syncer instance.
 func NewSyncer(
 	cdb *datastore.CachedDB,
+	cache *cache.Cache,
 	ticker layerTicker,
 	beacon system.BeaconGetter,
 	mesh *mesh.Mesh,
-	cache activeSetCache,
 	fetcher fetcher,
 	patrol layerPatrol,
 	ch certHandler,
@@ -151,7 +154,8 @@ func NewSyncer(
 	s := &Syncer{
 		logger:           log.NewNop(),
 		cfg:              DefaultConfig(),
-		cdb:              cdb,
+		db:               cdb.Database,
+		cache:            cache,
 		ticker:           ticker,
 		beacon:           beacon,
 		mesh:             mesh,

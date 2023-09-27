@@ -61,6 +61,7 @@ func (mlt *mockLayerTicker) CurrentLayer() types.LayerID {
 type testSyncer struct {
 	syncer  *Syncer
 	cdb     *datastore.CachedDB
+	cache   *cache.Cache
 	msh     *mesh.Mesh
 	mTicker *mockLayerTicker
 
@@ -79,6 +80,8 @@ func newTestSyncer(t *testing.T, interval time.Duration) *testSyncer {
 	mt := newMockLayerTicker()
 	ctrl := gomock.NewController(t)
 	ts := &testSyncer{
+		cdb:          datastore.NewCachedDB(sql.InMemory(), lg),
+		cache:        cache.New(),
 		mTicker:      mt,
 		mDataFetcher: mocks.NewMockfetchLogic(ctrl),
 		mBeacon:      smocks.NewMockBeaconGetter(ctrl),
@@ -89,10 +92,9 @@ func newTestSyncer(t *testing.T, interval time.Duration) *testSyncer {
 		mCertHdr:     mocks.NewMockcertHandler(ctrl),
 		mForkFinder:  mocks.NewMockforkFinder(ctrl),
 	}
-	ts.cdb = datastore.NewCachedDB(sql.InMemory(), lg)
 	var err error
 	exec := mesh.NewExecutor(ts.cdb, ts.mVm, ts.mConState, lg)
-	ts.msh, err = mesh.NewMesh(ts.cdb, cache.New(), ts.mTicker, ts.mTortoise, exec, ts.mConState, lg)
+	ts.msh, err = mesh.NewMesh(ts.cdb, ts.cache, ts.mTicker, ts.mTortoise, exec, ts.mConState, lg)
 	require.NoError(t, err)
 
 	cfg := Config{
@@ -103,7 +105,7 @@ func newTestSyncer(t *testing.T, interval time.Duration) *testSyncer {
 		HareDelayLayers:          5,
 		OutOfSyncThresholdLayers: outOfSyncThreshold,
 	}
-	ts.syncer = NewSyncer(ts.cdb, ts.mTicker, ts.mBeacon, ts.msh, nil, nil, ts.mLyrPatrol, ts.mCertHdr,
+	ts.syncer = NewSyncer(ts.cdb, ts.cache, ts.mTicker, ts.mBeacon, ts.msh, nil, ts.mLyrPatrol, ts.mCertHdr,
 		WithConfig(cfg),
 		WithLogger(lg),
 		withDataFetcher(ts.mDataFetcher),
@@ -657,7 +659,7 @@ func TestSynchronize_RecoverFromCheckpoint(t *testing.T) {
 	// recover from a checkpoint
 	types.SetEffectiveGenesis(current.Uint32())
 	ts.mTicker.advanceToLayer(current)
-	ts.syncer = NewSyncer(ts.cdb, ts.mTicker, ts.mBeacon, ts.msh, nil, nil, ts.mLyrPatrol, ts.mCertHdr,
+	ts.syncer = NewSyncer(ts.cdb, ts.cache, ts.mTicker, ts.mBeacon, ts.msh, nil, ts.mLyrPatrol, ts.mCertHdr,
 		WithConfig(ts.syncer.cfg),
 		WithLogger(ts.syncer.logger),
 		withDataFetcher(ts.mDataFetcher),

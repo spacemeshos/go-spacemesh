@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/spacemeshos/go-spacemesh/cache"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
@@ -54,23 +55,23 @@ type (
 type DataFetch struct {
 	fetcher
 
-	logger  log.Log
-	msh     meshProvider
-	ids     idProvider
-	asCache activeSetCache
+	logger log.Log
+	msh    meshProvider
+	ids    idProvider
+	cache  *cache.Cache
 
 	mu        sync.Mutex
 	atxSynced map[types.EpochID]map[p2p.Peer]struct{}
 }
 
 // NewDataFetch creates a new DataFetch instance.
-func NewDataFetch(msh meshProvider, fetch fetcher, ids idProvider, cache activeSetCache, lg log.Log) *DataFetch {
+func NewDataFetch(msh meshProvider, fetch fetcher, ids idProvider, cache *cache.Cache, lg log.Log) *DataFetch {
 	return &DataFetch{
 		fetcher:   fetch,
 		logger:    lg,
 		msh:       msh,
 		ids:       ids,
-		asCache:   cache,
+		cache:     cache,
 		atxSynced: map[types.EpochID]map[p2p.Peer]struct{}{},
 	}
 }
@@ -457,7 +458,12 @@ func (d *DataFetch) GetEpochATXs(ctx context.Context, epoch types.EpochID) error
 	}
 	d.updateAtxPeer(epoch, peer)
 	d.fetcher.RegisterPeerHashes(peer, types.ATXIDsToHashes(ed.AtxIDs))
-	missing := d.asCache.GetMissingActiveSet(epoch+1, ed.AtxIDs)
+	var missing []types.ATXID
+	for _, id := range ed.AtxIDs {
+		if d.cache.Get(epoch+1, id) == nil {
+			missing = append(missing, id)
+		}
+	}
 	d.logger.WithContext(ctx).With().Debug("fetching atxs",
 		epoch,
 		log.Stringer("peer", peer),
