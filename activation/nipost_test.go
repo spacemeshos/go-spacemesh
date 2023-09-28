@@ -93,7 +93,6 @@ func TestNIPostBuilderWithMocks(t *testing.T) {
 }
 
 func TestPostSetup(t *testing.T) {
-	t.Parallel()
 	r := require.New(t)
 
 	postProvider := newTestPostManager(t)
@@ -139,8 +138,6 @@ func TestPostSetup(t *testing.T) {
 }
 
 func TestNIPostBuilderWithClients(t *testing.T) {
-	t.Parallel()
-
 	challenge := types.NIPostChallenge{
 		PublishEpoch: postGenesisEpoch + 2,
 	}
@@ -228,7 +225,6 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	t.Parallel()
 
 	r := require.New(t)
 
