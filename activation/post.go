@@ -94,7 +94,7 @@ type PostProviderID struct {
 }
 
 // String implements pflag.Value.String.
-func (id *PostProviderID) String() string {
+func (id PostProviderID) String() string {
 	if id.value == nil {
 		return ""
 	}
@@ -362,9 +362,9 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context) error {
 		zap.Stringer("node_id", mgr.id),
 		zap.Stringer("commitment_atx", mgr.commitmentAtxId),
 		zap.String("data_dir", mgr.lastOpts.DataDir),
-		zap.String("num_units", fmt.Sprintf("%d", mgr.lastOpts.NumUnits)),
-		zap.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
-		zap.String("provider", fmt.Sprintf("%d", mgr.lastOpts.ProviderID)),
+		zap.Uint32("num_units", mgr.lastOpts.NumUnits),
+		zap.Uint64("labels_per_unit", mgr.cfg.LabelsPerUnit),
+		zap.Stringer("provider", mgr.lastOpts.ProviderID),
 	)
 	public.InitStart.Set(float64(mgr.lastOpts.NumUnits))
 	events.EmitInitStart(mgr.id, mgr.commitmentAtxId)
@@ -396,9 +396,9 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context) error {
 		zap.Stringer("node_id", mgr.id),
 		zap.Stringer("commitment_atx", mgr.commitmentAtxId),
 		zap.String("data_dir", mgr.lastOpts.DataDir),
-		zap.String("num_units", fmt.Sprintf("%d", mgr.lastOpts.NumUnits)),
-		zap.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
-		zap.String("provider", fmt.Sprintf("%d", mgr.lastOpts.ProviderID)),
+		zap.Uint32("num_units", mgr.lastOpts.NumUnits),
+		zap.Uint64("labels_per_unit", mgr.cfg.LabelsPerUnit),
+		zap.Stringer("provider", mgr.lastOpts.ProviderID),
 	)
 	mgr.state = PostSetupStateComplete
 	return nil
