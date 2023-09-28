@@ -249,8 +249,10 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 		MaxRequestRetries: 10,
 	}
 
-	genesis := time.Now()
-	poetProver := spawnPoet(t, WithGenesis(genesis), WithEpochDuration(epoch), WithPhaseShift(poetCfg.PhaseShift), WithCycleGap(poetCfg.CycleGap))
+	poetProvider := defaultPoetServiceMock(t, []byte("poet"), "http://localhost:9999")
+	poetProvider.EXPECT().Proof(gomock.Any(), "").Return(&types.PoetProofMessage{
+		PoetProof: types.PoetProof{},
+	}, []types.Member{types.Member(challenge.Hash())}, nil)
 
 	ctrl := gomock.NewController(t)
 	poetDb := NewMockpoetDbAPI(ctrl)
@@ -267,13 +269,14 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 		postProvider.id,
 		postProvider,
 		poetDb,
-		[]string{poetProver.RestURL().String()},
+		[]string{},
 		t.TempDir(),
 		logtest.New(t),
 		postProvider.signer,
 		poetCfg,
 		mclock,
 		WithNipostValidator(nipostValidator),
+		withPoetClients([]PoetProvingServiceClient{poetProvider}),
 	)
 	require.NoError(t, err)
 
