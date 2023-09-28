@@ -83,6 +83,7 @@ type Config struct {
 	DisableNatPort           bool        `mapstructure:"disable-natport"`
 	DisableConnectionManager bool        `mapstructure:"disable-connection-manager"`
 	DisableResourceManager   bool        `mapstructure:"disable-resource-manager"`
+	DisableDHT               bool        `mapstructure:"disable-dht"`
 	Flood                    bool        `mapstructure:"flood"`
 	Listen                   string      `mapstructure:"listen"`
 	Bootnodes                []string    `mapstructure:"bootnodes"`
