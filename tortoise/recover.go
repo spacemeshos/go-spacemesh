@@ -145,11 +145,3 @@ func RecoverLayer(ctx context.Context, trtl *Tortoise, db *datastore.CachedDB, b
 	}
 	return nil
 }
-
-func FastRecover(ctx context.Context, db *datastore.CachedDB, opts ...Opt) (*Tortoise, error) {
-	// slow recovery runs starting from genesis.
-	// it guarantees that tortoise will not be in corrupted state, but it will only grow in time.
-	// we need to allow dangling pointers and use opinion stored in the database
-	// if it inserts a vote before evicted, we have to skip it
-	return nil, nil
-}

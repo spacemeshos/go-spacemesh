@@ -242,6 +242,10 @@ func (b *ballotInfo) opinion() types.Hash32 {
 	return b.votes.opinion()
 }
 
+func (b *ballotInfo) overwriteOpinion(opinion types.Hash32) {
+	b.votes.tail.opinion = opinion
+}
+
 type votes struct {
 	tail *layerVote
 }

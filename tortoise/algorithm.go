@@ -300,6 +300,22 @@ func (t *Tortoise) OnBallot(ballot *types.BallotTortoiseData) {
 	if t.tracer != nil {
 		t.tracer.On(&BallotTrace{Ballot: ballot})
 	}
+}
+
+// OnRecoveredBallot is called for ballots recovered from database.
+//
+// For recovered ballots base ballot is not required to be in state therefore
+// opinion is not recomputed, but instead recovered from database state.
+func (t *Tortoise) OnRecoveredBallot(ballot *types.BallotTortoiseData) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	err := t.trtl.onRecoveredBallot(ballot)
+	if err != nil {
+		errorsCounter.Inc()
+		t.logger.Error("failed to save state from recovered ballot",
+			zap.Stringer("ballot", ballot.ID),
+			zap.Error(err))
+	}
 	if t.tracer != nil {
 		t.tracer.On(&BallotTrace{Ballot: ballot})
 	}
@@ -359,7 +375,7 @@ func (t *Tortoise) DecodeBallot(ballot *types.BallotTortoiseData) (*DecodedBallo
 }
 
 func (t *Tortoise) decodeBallot(ballot *types.BallotTortoiseData) (*DecodedBallot, error) {
-	info, min, err := t.trtl.decodeBallot(ballot)
+	info, min, err := t.trtl.decodeBallot(ballot, false)
 	if err != nil {
 		errorsCounter.Inc()
 		return nil, err
@@ -413,6 +429,21 @@ func (t *Tortoise) OnHareOutput(lid types.LayerID, bid types.BlockID) {
 	if t.tracer != nil {
 		t.tracer.On(&HareTrace{Layer: lid, Vote: bid})
 	}
+}
+
+// OnPrevOpinion is called to bootstrap opinion for recovery from database.
+//
+// It should be called for the first recovered layer with opinion from previous layer.
+// As an example if recovery starts from layyer 25_000, we should get opinion on layer 24999
+// and submit it as previous opinion for layer 25_000.
+func (t *Tortoise) OnPrevOpinion(lid types.LayerID, opinion types.Hash32) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if lid <= t.trtl.evicted {
+		return
+	}
+	layer := t.trtl.layer(lid)
+	layer.prevOpinion = &opinion
 }
 
 // GetMissingActiveSet returns unknown atxs from the original list. It is done for a specific epoch

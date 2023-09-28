@@ -651,7 +651,7 @@ func (t *turtle) onAtx(atx *types.AtxTortoiseData) {
 	addAtxDuration.Observe(float64(time.Since(start).Nanoseconds()))
 }
 
-func (t *turtle) decodeBallot(ballot *types.BallotTortoiseData) (*ballotInfo, types.LayerID, error) {
+func (t *turtle) decodeBallot(ballot *types.BallotTortoiseData, dangling bool) (*ballotInfo, types.LayerID, error) {
 	start := time.Now()
 
 	if !ballot.Layer.After(t.evicted) {
@@ -673,14 +673,13 @@ func (t *turtle) decodeBallot(ballot *types.BallotTortoiseData) (*ballotInfo, ty
 
 	if ballot.Opinion.Votes.Base == types.EmptyBallotID {
 		base = &ballotInfo{layer: types.GetEffectiveGenesis()}
-	} else {
-		base = t.state.ballotRefs[ballot.Opinion.Votes.Base]
-		if base == nil {
-			t.logger.Warn("base ballot not in state",
-				zap.Stringer("base", ballot.Opinion.Votes.Base),
-			)
-			return nil, 0, nil
-		}
+	} else if stored := t.state.ballotRefs[ballot.Opinion.Votes.Base]; stored != nil {
+		base = stored
+	} else if dangling {
+		base = &ballotInfo{layer: t.evicted}
+	}
+	if base == nil {
+		return nil, 0, fmt.Errorf("base ballot %s not in state", ballot.Opinion.Base)
 	}
 	if !base.layer.Before(ballot.Layer) {
 		return nil, 0, fmt.Errorf("votes for ballot (%s/%s) should be encoded with base ballot (%s/%s) from previous layers",
@@ -807,8 +806,17 @@ func (t *turtle) storeBallot(ballot *ballotInfo, min types.LayerID) error {
 	return nil
 }
 
+func (t *turtle) onRecoveredBallot(ballot *types.BallotTortoiseData) error {
+	decoded, min, err := t.decodeBallot(ballot, true) // allow dangling base
+	if decoded == nil || err != nil {
+		return err
+	}
+	decoded.overwriteOpinion(ballot.Opinion.Hash)
+	return t.storeBallot(decoded, min)
+}
+
 func (t *turtle) onBallot(ballot *types.BallotTortoiseData) error {
-	decoded, min, err := t.decodeBallot(ballot)
+	decoded, min, err := t.decodeBallot(ballot, false)
 	if decoded == nil || err != nil {
 		return err
 	}
