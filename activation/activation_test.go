@@ -1271,6 +1271,36 @@ func TestWaitPositioningAtx(t *testing.T) {
 	}
 }
 
+func TestRegossip(t *testing.T) {
+	layer := types.LayerID(10)
+	t.Run("not found", func(t *testing.T) {
+		h := newTestBuilder(t)
+		h.mclock.EXPECT().CurrentLayer().Return(layer)
+		require.NoError(t, h.Regossip(context.Background()))
+	})
+	t.Run("success", func(t *testing.T) {
+		h := newTestBuilder(t)
+		atx := newActivationTx(t,
+			h.signer, 0, types.EmptyATXID, types.EmptyATXID, nil,
+			layer.GetEpoch(), 0, 1, types.Address{}, 1, &types.NIPost{})
+		require.NoError(t, atxs.Add(h.cdb.Database, atx))
+		blob, err := atxs.GetBlob(h.cdb.Database, atx.ID().Bytes())
+		require.NoError(t, err)
+		h.mclock.EXPECT().CurrentLayer().Return(layer)
+
+		ctx := context.Background()
+		h.mpub.EXPECT().Publish(ctx, pubsub.AtxProtocol, blob)
+		require.NoError(t, h.Regossip(ctx))
+	})
+	t.Run("checkpointed", func(t *testing.T) {
+		h := newTestBuilder(t)
+		require.NoError(t, atxs.AddCheckpointed(h.cdb.Database,
+			&atxs.CheckpointAtx{ID: types.ATXID{1}, Epoch: layer.GetEpoch(), SmesherID: h.sig.NodeID()}))
+		h.mclock.EXPECT().CurrentLayer().Return(layer)
+		require.NoError(t, h.Regossip(context.Background()))
+	})
+}
+
 func TestWaitingToBuildNipostChallengeWithJitter(t *testing.T) {
 	t.Run("before grace period", func(t *testing.T) {
 		//          ┌──grace period──┐

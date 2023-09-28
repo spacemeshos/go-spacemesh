@@ -55,6 +55,7 @@ func fastnet() config.Config {
 	conf.Sync.Interval = 5 * time.Second
 	conf.Sync.GossipDuration = 10 * time.Second
 	conf.LayersPerEpoch = 4
+	conf.RegossipAtxInterval = 30 * time.Second
 
 	conf.Tortoise.Hdist = 4
 	conf.Tortoise.Zdist = 2

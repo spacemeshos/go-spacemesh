@@ -6,6 +6,16 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ### Upgrade information
 
+This upgrade is incompatible with versions older than v1.1.6.
+
+At the start of the upgrade, mesh data will be pruned and compacted/vacuumed. Pruning takes longer for
+nodes that joined the network earlier. For 1-week-old nodes, it takes ~20 minutes. for 3-week-old
+nodes it takes ~40 minutes. The vacuum operation takes ~5 minutes and requires extra disk space
+to complete successfully. If the size of state.sql is 25 GiB at the beginning of upgrade, the WAL file
+(state.sql-wal) will grow to 25 GiB and then drop to 0 when the vacuum is complete. The node will resume
+its normal startup routine after the pruning and vacuum is complete. The final size of state.sql is
+expected to be ~1.5 GiB.
+
 A new config `poet-request-timeout` has been added, that defines the timeout for requesting PoET proofs.
 It defaults to 9 minutes so there is enough time to retry if the request fails.
 
@@ -37,6 +47,7 @@ In order to enable provide following configuration:
 * [#5032](https://github.com/spacemeshos/go-spacemesh/pull/5032) Ativeset data pruned from ballots.
 * [#5035](https://github.com/spacemeshos/go-spacemesh/pull/5035) Fix possible nil pointer panic when node fails to persist nipost builder state.
 * [#5079](https://github.com/spacemeshos/go-spacemesh/pull/5079) increase atx cache to 50 000 to reduce disk reads.
+* [#5083](https://github.com/spacemeshos/go-spacemesh/pull/5083) Disable beacon protocol temporarily.
 
 ## v1.1.5
 

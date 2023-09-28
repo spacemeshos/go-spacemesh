@@ -38,6 +38,7 @@ type atxChan struct {
 
 // Handler processes the atxs received from all nodes and their validity status.
 type Handler struct {
+	local           p2p.Peer
 	cdb             *datastore.CachedDB
 	edVerifier      *signing.EdVerifier
 	clock           layerClock
@@ -56,6 +57,7 @@ type Handler struct {
 
 // NewHandler returns a data handler for ATX.
 func NewHandler(
+	local p2p.Peer,
 	cdb *datastore.CachedDB,
 	edVerifier *signing.EdVerifier,
 	c layerClock,
@@ -70,6 +72,7 @@ func NewHandler(
 	poetCfg PoetConfig,
 ) *Handler {
 	return &Handler{
+		local:           local,
 		cdb:             cdb,
 		edVerifier:      edVerifier,
 		clock:           c,
@@ -491,6 +494,9 @@ func (h *Handler) HandleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte
 			log.Stringer("sender", peer),
 			log.Err(err),
 		)
+	}
+	if errors.Is(err, errKnownAtx) && peer == h.local {
+		return nil
 	}
 	return err
 }
