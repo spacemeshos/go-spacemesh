@@ -48,7 +48,8 @@ func TestTransactionService_StreamResults(t *testing.T) {
 	}))
 
 	svc := NewTransactionService(db, nil, nil, nil, nil, nil)
-	t.Cleanup(launchServer(t, cfg, svc))
+	cfg, cleanup := launchServer(t, svc)
+	t.Cleanup(cleanup)
 
 	conn := dialGrpc(ctx, t, cfg.PublicListener)
 	client := pb.NewTransactionServiceClient(conn)
@@ -163,7 +164,8 @@ func BenchmarkStreamResults(b *testing.B) {
 	require.NoError(b, tx.Commit())
 	require.NoError(b, tx.Release())
 	svc := NewTransactionService(db, nil, nil, nil, nil, nil)
-	b.Cleanup(launchServer(b, cfg, svc))
+	cfg, cleanup := launchServer(b, svc)
+	b.Cleanup(cleanup)
 
 	conn := dialGrpc(ctx, b, cfg.PublicListener)
 	client := pb.NewTransactionServiceClient(conn)
@@ -219,7 +221,8 @@ func TestParseTransactions(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	t.Cleanup(cancel)
 	vminst := vm.New(db)
-	t.Cleanup(launchServer(t, cfg, NewTransactionService(db, nil, nil, txs.NewConservativeState(vminst, db), nil, nil)))
+	cfg, cleanup := launchServer(t, NewTransactionService(db, nil, nil, txs.NewConservativeState(vminst, db), nil, nil))
+	t.Cleanup(cleanup)
 	var (
 		conn     = dialGrpc(ctx, t, cfg.PublicListener)
 		client   = pb.NewTransactionServiceClient(conn)

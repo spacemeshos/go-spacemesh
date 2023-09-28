@@ -184,6 +184,13 @@ func withTransactions(ids ...types.TransactionID) createProposalOpt {
 	}
 }
 
+func withProposalLayer(layer types.LayerID) createProposalOpt {
+	return func(p *types.Proposal) {
+		p.Layer = layer
+		p.Ballot.Layer = layer
+	}
+}
+
 func createProposal(t *testing.T, opts ...any) *types.Proposal {
 	t.Helper()
 	b := types.RandomBallot()
@@ -844,7 +851,7 @@ func TestBallot_DecodedStoreFailure(t *testing.T) {
 
 func TestProposal_MalformedData(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
-	p := createProposal(t)
+	p := createProposal(t, withProposalLayer(th.clock.CurrentLayer()))
 	data, err := codec.Encode(&p.InnerProposal)
 	require.NoError(t, err)
 	require.ErrorIs(t, th.HandleSyncedProposal(context.Background(), p.ID().AsHash32(), p2p.NoPeer, data), errMalformedData)
@@ -854,7 +861,7 @@ func TestProposal_MalformedData(t *testing.T) {
 
 func TestProposal_BeforeEffectiveGenesis(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
-	p := createProposal(t)
+	p := createProposal(t, withProposalLayer(th.clock.CurrentLayer()))
 	p.Layer = types.GetEffectiveGenesis()
 	data := encodeProposal(t, p)
 	got := th.HandleSyncedProposal(context.Background(), p.ID().AsHash32(), p2p.NoPeer, data)
@@ -868,7 +875,7 @@ func TestProposal_TooOld(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
 	lid := types.LayerID(11)
 	th.mockSet.setCurrentLayer(lid)
-	p := createProposal(t)
+	p := createProposal(t, withProposalLayer(th.clock.CurrentLayer()))
 	p.Layer = lid - 1
 	data := encodeProposal(t, p)
 	got := th.HandleSyncedProposal(context.Background(), p.ID().AsHash32(), p2p.NoPeer, data)
@@ -878,9 +885,17 @@ func TestProposal_TooOld(t *testing.T) {
 	checkProposal(t, th.cdb, p, false)
 }
 
+func TestProposal_TooFuture(t *testing.T) {
+	th := createTestHandlerNoopDecoder(t)
+	p := createProposal(t, withProposalLayer(th.clock.CurrentLayer()+10))
+	data := encodeProposal(t, p)
+	got := th.HandleSyncedProposal(context.Background(), p.ID().AsHash32(), p2p.NoPeer, data)
+	require.ErrorContains(t, got, "proposal from future")
+}
+
 func TestProposal_BadSignature(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
-	p := createProposal(t)
+	p := createProposal(t, withProposalLayer(th.clock.CurrentLayer()))
 	p.Signature = types.EmptyEdSignature
 	data := encodeProposal(t, p)
 	got := th.HandleSyncedProposal(context.Background(), p.ID().AsHash32(), p2p.NoPeer, data)
@@ -918,7 +933,7 @@ func TestProposal_InconsistentSmeshers(t *testing.T) {
 
 func TestProposal_WrongHash(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
-	p := createProposal(t)
+	p := createProposal(t, withProposalLayer(th.clock.CurrentLayer()))
 	data := encodeProposal(t, p)
 	err := th.HandleSyncedProposal(context.Background(), types.RandomHash(), p2p.NoPeer, data)
 	require.ErrorIs(t, err, errWrongHash)
@@ -927,7 +942,7 @@ func TestProposal_WrongHash(t *testing.T) {
 
 func TestProposal_KnownProposal(t *testing.T) {
 	th := createTestHandlerNoopDecoder(t)
-	p := createProposal(t)
+	p := createProposal(t, withProposalLayer(th.clock.CurrentLayer()))
 	createAtx(t, th.cdb.Database, p.Layer.GetEpoch()-1, p.AtxID, p.SmesherID)
 	require.NoError(t, ballots.Add(th.cdb, &p.Ballot))
 	require.NoError(t, proposals.Add(th.cdb, p))
@@ -1430,6 +1445,7 @@ func TestHandleSyncedProposalActiveSet(t *testing.T) {
 	th := createTestHandler(t)
 	pid := p2p.Peer("any")
 
+	th.mclock.EXPECT().CurrentLayer().Return(lid).AnyTimes()
 	th.mm.EXPECT().ProcessedLayer().Return(lid - 2).AnyTimes()
 	th.mclock.EXPECT().LayerToTime(gomock.Any())
 	th.mf.EXPECT().RegisterPeerHashes(pid, gomock.Any()).AnyTimes()

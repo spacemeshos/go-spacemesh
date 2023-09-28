@@ -1,6 +1,5 @@
 package node
 
-//lint:file-ignore SA1019 hide deprecated protobuf version error
 import (
 	"bytes"
 	"context"
@@ -12,13 +11,10 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/jsonpb"
-	"github.com/golang/protobuf/proto"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/post/initialization"
@@ -34,6 +30,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
@@ -256,23 +254,21 @@ func TestSpacemeshApp_Cmd(t *testing.T) {
 	r.Equal(config.JSONLogEncoder, app.Config.LOGGING.Encoder)
 }
 
-func marshalProto(t *testing.T, msg proto.Message) string {
-	var buf bytes.Buffer
-	var m jsonpb.Marshaler
-	require.NoError(t, m.Marshal(&buf, msg))
-	return buf.String()
+func marshalProto(t *testing.T, msg proto.Message) []byte {
+	buf, err := protojson.Marshal(msg)
+	require.NoError(t, err)
+	return buf
 }
 
-func callEndpoint(t *testing.T, endpoint, payload, address string) (string, int) {
-	url := fmt.Sprintf("http://%s/%s", address, endpoint)
-	resp, err := http.Post(url, "application/json", strings.NewReader(payload))
+func callEndpoint(t *testing.T, url string, payload []byte) ([]byte, int) {
+	resp, err := http.Post(url, "application/json", bytes.NewReader(payload))
 	require.NoError(t, err)
 	require.Equal(t, "application/json", resp.Header.Get("Content-Type"))
 	buf, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.NoError(t, resp.Body.Close())
 
-	return string(buf), resp.StatusCode
+	return buf, resp.StatusCode
 }
 
 func TestSpacemeshApp_GrpcService(t *testing.T) {
@@ -300,11 +296,13 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	r.NoError(err)
 	r.Empty(app.Config.API.PublicServices)
 
-	_, err = grpc.Dial(
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_, err = grpc.DialContext(
+		ctx,
 		listener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
-		grpc.WithTimeout(2*time.Second),
 	)
 	r.ErrorContains(err, "context deadline exceeded")
 
@@ -317,11 +315,13 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	r.Equal(listener, app.Config.API.PublicListener)
 	r.Contains(app.Config.API.PublicServices, "node")
 
-	conn, err := grpc.Dial(
+	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	conn, err := grpc.DialContext(
+		ctx,
 		listener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
-		grpc.WithTimeout(2*time.Second),
 	)
 	r.NoError(err)
 	t.Cleanup(func() { r.NoError(conn.Close()) })
@@ -361,7 +361,7 @@ func TestSpacemeshApp_JsonServiceNotRunning(t *testing.T) {
 
 	// We expect this one to fail
 	url := fmt.Sprintf("http://%s/%s", app.Config.API.JSONListener, "v1/node/echo")
-	_, err = http.Post(url, "application/json", strings.NewReader(payload))
+	_, err = http.Post(url, "application/json", bytes.NewReader(payload))
 	r.Error(err)
 
 	events.CloseEventReporter()
@@ -392,18 +392,18 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	r.Contains(app.Config.API.PublicServices, "node")
 
 	var (
-		respBody   string
+		respBody   []byte
 		respStatus int
 	)
 	require.Eventually(t, func() bool {
-		respBody, respStatus = callEndpoint(t, "v1/node/echo", payload, app.Config.API.JSONListener)
+		respBody, respStatus = callEndpoint(t, fmt.Sprintf("http://%s/v1/node/echo", app.Config.API.JSONListener), payload)
 		return respStatus == http.StatusOK
 	}, 2*time.Second, 100*time.Millisecond)
 	var msg pb.EchoResponse
-	require.NoError(t, jsonpb.UnmarshalString(respBody, &msg))
+	require.NoError(t, protojson.Unmarshal(respBody, &msg))
 	require.Equal(t, message, msg.Msg.Value)
 	require.Equal(t, http.StatusOK, respStatus)
-	require.NoError(t, jsonpb.UnmarshalString(respBody, &msg))
+	require.NoError(t, protojson.Unmarshal(respBody, &msg))
 	require.Equal(t, message, msg.Msg.Value)
 }
 
@@ -594,11 +594,14 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 
 	<-app.Started()
 	require.Eventually(t, func() bool { return app.syncer.IsSynced(ctx) }, 4*time.Second, 10*time.Millisecond)
-	conn, err := grpc.Dial(
+
+	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	conn, err := grpc.DialContext(
+		ctx,
 		listener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
-		grpc.WithTimeout(5*time.Second),
 	)
 	r.NoError(err)
 	t.Cleanup(func() { r.NoError(conn.Close()) })

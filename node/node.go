@@ -623,6 +623,7 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	start := time.Now()
 	trtl, err := tortoise.Recover(
+		ctx,
 		app.cachedDB,
 		app.clock.CurrentLayer(), beaconProtocol, trtlopts...,
 	)
@@ -986,13 +987,13 @@ func (app *App) launchStandalone(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("init poet server: %w", err)
 	}
-	app.log.With().Warning("lauching poet in standalone mode", log.Any("config", cfg))
+	app.log.With().Warning("launching poet in standalone mode", log.Any("config", cfg))
 	app.eg.Go(func() error {
 		if err := srv.Start(ctx); err != nil {
 			app.log.With().Error("poet server failed", log.Err(err))
 			return err
 		}
-		return nil
+		return srv.Close()
 	})
 	return nil
 }
@@ -1340,8 +1341,8 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		return fmt.Errorf("open sqlite db %w", err)
 	}
 	app.db = sqlDB
-	if app.Config.CollectMetrics {
-		app.dbMetrics = dbmetrics.NewDBMetricsCollector(ctx, sqlDB, app.addLogger(StateDbLogger, lg), 5*time.Minute)
+	if app.Config.CollectMetrics && app.Config.DatabaseSizeMeteringInterval != 0 {
+		app.dbMetrics = dbmetrics.NewDBMetricsCollector(ctx, sqlDB, app.addLogger(StateDbLogger, lg), app.Config.DatabaseSizeMeteringInterval)
 	}
 	app.cachedDB = datastore.NewCachedDB(sqlDB, app.addLogger(CachedDBLogger, lg), datastore.WithConfig(app.Config.Cache))
 	return nil

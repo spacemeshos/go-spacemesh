@@ -47,11 +47,12 @@ func testnet() config.Config {
 	defaultdir := filepath.Join(home, "spacemesh-testnet", "/")
 	return config.Config{
 		BaseConfig: config.BaseConfig{
-			DataDirParent:       defaultdir,
-			FileLock:            filepath.Join(os.TempDir(), "spacemesh.lock"),
-			MetricsPort:         1010,
-			DatabaseConnections: 16,
-			NetworkHRP:          "stest",
+			DataDirParent:                defaultdir,
+			FileLock:                     filepath.Join(os.TempDir(), "spacemesh.lock"),
+			MetricsPort:                  1010,
+			DatabaseConnections:          16,
+			DatabaseSizeMeteringInterval: 10 * time.Minute,
+			NetworkHRP:                   "stest",
 
 			LayerDuration:  5 * time.Minute,
 			LayerAvgSize:   50,

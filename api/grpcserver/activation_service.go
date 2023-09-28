@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -68,7 +68,7 @@ func (s *activationService) Get(ctx context.Context, request *pb.GetRequest) (*p
 	return resp, nil
 }
 
-func (s *activationService) Highest(ctx context.Context, req *empty.Empty) (*pb.HighestResponse, error) {
+func (s *activationService) Highest(ctx context.Context, req *emptypb.Empty) (*pb.HighestResponse, error) {
 	highest, err := s.atxProvider.MaxHeightAtx()
 	if err != nil {
 		return &pb.HighestResponse{

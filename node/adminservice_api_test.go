@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/libp2p/go-libp2p/core/peer"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/config"
@@ -34,7 +34,7 @@ func TestPeerInfoApi(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		defer cancel()
 
-		streamClient, err := adminapi.PeerInfoStream(ctx, &empty.Empty{})
+		streamClient, err := adminapi.PeerInfoStream(ctx, &emptypb.Empty{})
 		require.NoError(t, err)
 		for {
 			info, err := streamClient.Recv()

@@ -19,6 +19,14 @@ Support for old certificate sync protocol is dropped. This update is incompatibl
 ### Features
 
 * [#5031](https://github.com/spacemeshos/go-spacemesh/pull/5031) Nodes will also fetch from PoET 112 for round 4 if they were able to register to PoET 110.
+* [#5067](https://github.com/spacemeshos/go-spacemesh/pull/5067) dbstat virtual table can be read periodically to collect table/index sizes.
+
+In order to enable provide following configuration:
+```json
+"main": {
+    "db-size-metering-interval": "10m"
+}
+```
 
 ### Improvements
 
@@ -26,7 +34,9 @@ Support for old certificate sync protocol is dropped. This update is incompatibl
   Ephemeral data are deleted and state compacted at the time of upgrade. In steady-state, data is pruned periodically.
 * [#5021](https://github.com/spacemeshos/go-spacemesh/pull/5021) Drop support for old certificate sync protocol.
 * [#5024](https://github.com/spacemeshos/go-spacemesh/pull/5024) Active set will be saved in state separately from ballots.
+* [#5032](https://github.com/spacemeshos/go-spacemesh/pull/5032) Ativeset data pruned from ballots.
 * [#5035](https://github.com/spacemeshos/go-spacemesh/pull/5035) Fix possible nil pointer panic when node fails to persist nipost builder state.
+* [#5079](https://github.com/spacemeshos/go-spacemesh/pull/5079) increase atx cache to 50 000 to reduce disk reads.
 
 ## v1.1.5
 

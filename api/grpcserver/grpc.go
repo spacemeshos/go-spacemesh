@@ -19,7 +19,7 @@ type ServiceAPI interface {
 
 // Server is a very basic grpc server.
 type Server struct {
-	Listener string
+	listener string
 	logger   log.Logger
 	// BoundAddress contains the address that the server bound to, useful if
 	// the server uses a dynamic port. It is set during startup and can be
@@ -34,7 +34,7 @@ type Server struct {
 func New(listener string, lg log.Logger, opts ...grpc.ServerOption) *Server {
 	opts = append(opts, ServerOptions...)
 	return &Server{
-		Listener:   listener,
+		listener:   listener,
 		logger:     lg,
 		GrpcServer: grpc.NewServer(opts...),
 	}
@@ -43,7 +43,7 @@ func New(listener string, lg log.Logger, opts ...grpc.ServerOption) *Server {
 // Start starts the server.
 func (s *Server) Start() error {
 	s.logger.With().Info("starting grpc server",
-		log.String("address", s.Listener),
+		log.String("address", s.listener),
 		log.Array("services", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
 			for svc := range s.GrpcServer.GetServiceInfo() {
 				encoder.AppendString(svc)
@@ -51,7 +51,7 @@ func (s *Server) Start() error {
 			return nil
 		})),
 	)
-	lis, err := net.Listen("tcp", s.Listener)
+	lis, err := net.Listen("tcp", s.listener)
 	if err != nil {
 		s.logger.Error("error listening: %v", err)
 		return err
@@ -60,7 +60,7 @@ func (s *Server) Start() error {
 	reflection.Register(s.GrpcServer)
 	s.grp.Go(func() error {
 		if err := s.GrpcServer.Serve(lis); err != nil {
-			s.logger.Error("error stopping grpc server: %v", err)
+			s.logger.Error("error serving grpc server: %v", err)
 			return err
 		}
 		return nil
