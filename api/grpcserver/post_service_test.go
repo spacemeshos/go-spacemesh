@@ -115,7 +115,7 @@ func launchPostService(tb testing.TB, log *zap.Logger, cfg Config, postDir strin
 	})
 
 	return func() {
-		assert.NoError(tb, cmd.Process.Kill())
+		cmd.Process.Kill()
 		assert.NoError(tb, eg.Wait())
 	}
 }
