@@ -1012,11 +1012,7 @@ func TestHandler_HandleSyncedAtx(t *testing.T) {
 
 		buf, err := codec.Encode(atx)
 		require.NoError(t, err)
-
-		atxHdlr.mclock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now())
 		require.NoError(t, atxHdlr.HandleSyncedAtx(context.Background(), atx.ID().Hash32(), p2p.NoPeer, buf))
-
-		atxHdlr.mclock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now())
 		require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), localID, buf))
 	})
 
