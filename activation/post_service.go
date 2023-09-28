@@ -54,50 +54,26 @@ type PostServiceConfig struct {
 type PostService struct {
 	logger *zap.Logger
 
-	cmdMtx sync.Mutex         // protects concurrent access to cmd and stop.
-	cmd    *exec.Cmd          // cmd holds the post service command.
-	stop   context.CancelFunc // stops the running command.
+	pidMtx sync.RWMutex
+	pid    int // pid of the running post service.
 
-	eg errgroup.Group // eg manages post service goroutines.
+	stop context.CancelFunc // stops the running command.
+	eg   errgroup.Group     // eg manages post service goroutines.
 }
 
 // NewPostService returns a new post service.
 func NewPostService(logger *zap.Logger, opts PostServiceConfig) (*PostService, error) {
 	ctx, stop := context.WithCancel(context.Background())
-	cmd := exec.CommandContext(
-		ctx,
-		opts.PostServiceCmd,
-		"--dir", opts.DataDir,
-		"--address", opts.NodeAddress,
-		"--pow-difficulty", opts.PowDifficulty.String(),
-		"--randomx-mode", opts.PostServiceMode,
-	)
-	cmd.Dir = filepath.Dir(opts.PostServiceCmd)
-	pipe, err := cmd.StderrPipe()
-	if err != nil {
-		stop()
-		return nil, fmt.Errorf("setup stderr pipe for post service: %w", err)
-	}
 
 	ps := &PostService{
 		logger: logger,
-		cmd:    cmd,
 		stop:   stop,
 	}
-	ps.eg.Go(ps.captureCmdOutput(pipe))
-	if err := ps.cmd.Start(); err != nil {
-		pipe.Close()
-		stop()
-		return nil, fmt.Errorf("start post service: %w", err)
-	}
-	ps.eg.Go(ps.monitorCmd(opts))
+	ps.eg.Go(func() error { return ps.runCmd(ctx, opts) })
 	return ps, nil
 }
 
 func (ps *PostService) Close() error {
-	ps.cmdMtx.Lock()
-	defer ps.cmdMtx.Unlock()
-
 	ps.stop()
 	ps.eg.Wait()
 	return nil
@@ -124,20 +100,9 @@ func (ps *PostService) captureCmdOutput(pipe io.ReadCloser) func() error {
 	}
 }
 
-func (ps *PostService) monitorCmd(opts PostServiceConfig) func() error {
-	return func() error {
-		events.EmitPostServiceStarted()
-		ps.cmd.Wait()
-		events.EmitPostServiceStopped()
-		if !ps.cmdMtx.TryLock() {
-			// command is closing down, no need to restart.
-			return nil
-		}
-		defer ps.cmdMtx.Unlock()
-
-		ps.logger.Warn("post service crashed, restarting")
-		ctx, stop := context.WithCancel(context.Background())
-		ps.cmd = exec.CommandContext(
+func (ps *PostService) runCmd(ctx context.Context, opts PostServiceConfig) error {
+	for {
+		cmd := exec.CommandContext(
 			ctx,
 			opts.PostServiceCmd,
 			"--dir", opts.DataDir,
@@ -145,22 +110,39 @@ func (ps *PostService) monitorCmd(opts PostServiceConfig) func() error {
 			"--pow-difficulty", opts.PowDifficulty.String(),
 			"--randomx-mode", opts.PostServiceMode,
 		)
-		ps.cmd.Dir = filepath.Dir(opts.PostServiceCmd)
-		pipe, err := ps.cmd.StderrPipe()
+		cmd.Dir = filepath.Dir(opts.PostServiceCmd)
+		pipe, err := cmd.StderrPipe()
 		if err != nil {
-			stop()
-			ps.logger.Error("setup stderr pipe for post service", zap.Error(err))
-			return nil
+			return fmt.Errorf("setup stderr pipe for post service: %w", err)
 		}
-		ps.eg.Go(ps.captureCmdOutput(pipe))
-		if err := ps.cmd.Start(); err != nil {
+
+		var eg errgroup.Group
+		eg.Go(ps.captureCmdOutput(pipe))
+		if cmd.Start(); err != nil {
 			pipe.Close()
-			stop()
-			ps.logger.Error("restart post service", zap.Error(err))
-			return nil
+			return fmt.Errorf("start post service: %w", err)
 		}
-		ps.stop = stop
-		ps.eg.Go(ps.monitorCmd(opts))
-		return nil
+		ps.pidMtx.Lock()
+		ps.pid = cmd.Process.Pid
+		ps.pidMtx.Unlock()
+		events.EmitPostServiceStarted()
+		err = cmd.Wait()
+		if err := ctx.Err(); err != nil {
+			events.EmitPostServiceStopped()
+			if err := eg.Wait(); err != nil {
+				ps.logger.Warn("output reading goroutine failed", zap.Error(err))
+			}
+			return ctx.Err()
+		}
+		ps.logger.Warn("post service exited", zap.Error(err))
+		if err := eg.Wait(); err != nil {
+			ps.logger.Warn("output reading goroutine failed", zap.Error(err))
+		}
 	}
+}
+
+func (ps *PostService) Pid() int {
+	ps.pidMtx.RLock()
+	defer ps.pidMtx.RUnlock()
+	return ps.pid
 }
