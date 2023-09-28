@@ -5,11 +5,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
-	"syscall"
 	"testing"
 	"time"
 
+	"github.com/shirou/gopsutil/process"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/stretchr/testify/assert"
@@ -104,19 +103,18 @@ func Test_PostService_StartsServiceCmd(t *testing.T) {
 	time.Sleep(500 * time.Millisecond) // to ensure cmd actually started
 
 	pid := ps.Pid()
-	process, err := os.FindProcess(pid)
+	proc, err := process.NewProcess(int32(pid))
 	require.NoError(t, err)
-	require.NotNil(t, process)
+	require.NotNil(t, proc)
 
-	if runtime.GOOS != "windows" {
-		require.NoError(t, process.Signal(syscall.Signal(0))) // check if process is running
-	}
+	running, err := proc.IsRunning()
+	require.NoError(t, err)
+	require.True(t, running)
 
 	require.NoError(t, ps.Close())
-
-	if runtime.GOOS != "windows" {
-		require.Error(t, process.Signal(syscall.Signal(0))) // check if process is closed
-	}
+	running, err = proc.IsRunning()
+	require.NoError(t, err)
+	require.False(t, running)
 }
 
 func Test_PostService_RestartsOnCrash(t *testing.T) {
@@ -152,7 +150,7 @@ func Test_PostService_RestartsOnCrash(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	pid := ps.Pid()
-	process, err = os.FindProcess(oldPid)
+	process, err = os.FindProcess(pid)
 	require.NoError(t, err)
 	require.NotNil(t, process)
 
