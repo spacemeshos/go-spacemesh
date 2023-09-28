@@ -132,6 +132,9 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 	if cfg.PrivateNetwork {
 		dopts = append(dopts, discovery.Private())
 	}
+	if cfg.DisableDHT {
+		dopts = append(dopts, discovery.DisableDHT())
+	}
 	if cfg.Bootnode {
 		dopts = append(dopts, discovery.Server())
 	} else {

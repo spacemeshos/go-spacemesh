@@ -57,7 +57,7 @@ for them if needed.
 
 ### Configuration for private node
 
-Set min-peers to the number of peers in the config.
+Set min-peers to the number of peers in the config and disable-dht.
 low-peers and high-peers should not be lower than min-peers.
 
 ```json
@@ -67,6 +67,7 @@ low-peers and high-peers should not be lower than min-peers.
         "min-peers": 1,
         "low-peers": 10,
         "high-peers": 20,
+        "disable-dht": true,
         "bootnodes": [],
         "direct": [
             "/ip4/0.0.0.0/tcp/7513/p2p/12D3KooWRfy4Sj4rDHDuBaYw3Mg5d2puwiCyqBCWMziFquaGQ5g8"

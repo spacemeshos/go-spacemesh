@@ -19,8 +19,8 @@ expected to be ~1.5 GiB.
 A new config `poet-request-timeout` has been added, that defines the timeout for requesting PoET proofs.
 It defaults to 9 minutes so there is enough time to retry if the request fails.
 
-Config option and flag `p2p-disable-legacy-discovery` and `disable-dht` have been dropped. DHT has been the
-only p2p discovery mechanism since release v1.1.2.
+Config option and flag `p2p-disable-legacy-discovery` is dropped. DHT has been the only p2p discovery
+mechanism since release v1.1.2.
 
 Support for old certificate sync protocol is dropped. This update is incompatible with v1.0.x series.
 

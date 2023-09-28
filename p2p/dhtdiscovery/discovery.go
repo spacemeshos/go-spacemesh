@@ -84,6 +84,12 @@ func WithDir(path string) Opt {
 	}
 }
 
+func DisableDHT() Opt {
+	return func(d *Discovery) {
+		d.disableDht = true
+	}
+}
+
 func New(h host.Host, opts ...Opt) (*Discovery, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	d := Discovery{
@@ -104,17 +110,20 @@ func New(h host.Host, opts ...Opt) (*Discovery, error) {
 	if len(d.bootnodes) == 0 {
 		d.logger.Warn("no bootnodes in the config")
 	}
-	err := d.newDht(ctx, h, d.public, d.server, d.dir)
-	if err != nil {
-		return nil, err
+	if !d.disableDht {
+		err := d.newDht(ctx, h, d.public, d.server, d.dir)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return &d, nil
 }
 
 type Discovery struct {
-	public bool
-	server bool
-	dir    string
+	public     bool
+	server     bool
+	disableDht bool
+	dir        string
 
 	logger *zap.Logger
 	eg     errgroup.Group
@@ -180,11 +189,13 @@ func (d *Discovery) Start() {
 func (d *Discovery) Stop() {
 	d.cancel()
 	d.eg.Wait()
-	if err := d.dht.Close(); err != nil {
-		d.logger.Error("error closing dht", zap.Error(err))
-	}
-	if err := d.datastore.Close(); err != nil {
-		d.logger.Error("error closing level datastore", zap.Error(err))
+	if !d.disableDht {
+		if err := d.dht.Close(); err != nil {
+			d.logger.Error("error closing dht", zap.Error(err))
+		}
+		if err := d.datastore.Close(); err != nil {
+			d.logger.Error("error closing level datastore", zap.Error(err))
+		}
 	}
 }
 
