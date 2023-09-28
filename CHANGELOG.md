@@ -4,6 +4,12 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ## UNRELEASED
 
+### Upgrade information
+
+### Highlights
+
+### Features
+
 ### Improvements
 
 * [#5118](https://github.com/spacemeshos/go-spacemesh/pull/5118) reduce number of tortoise results returned after recovery.
@@ -42,6 +48,7 @@ Support for old certificate sync protocol is dropped. This update is incompatibl
 * [#5067](https://github.com/spacemeshos/go-spacemesh/pull/5067) dbstat virtual table can be read periodically to collect table/index sizes.
 
 In order to enable provide following configuration:
+
 ```json
 "main": {
     "db-size-metering-interval": "10m"
