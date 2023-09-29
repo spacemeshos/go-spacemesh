@@ -208,8 +208,7 @@ func Test_GenerateProof_MultipleServices(t *testing.T) {
 	}).Times(1)
 	con.EXPECT().Disconnected(gomock.Any()).Times(1)
 
-	// all but one should fail to connect but the node should be able to generate a proof
-	// from the one that does connect
+	// all but one should not be able to register to the node (i.e. open a stream to it).
 	postDir1 := t.TempDir()
 	initPost(t, log.Named("post1"), postDir1)
 	t.Cleanup(launchPostSupervisor(t, log.Named("supervisor1"), cfg, postDir1))
