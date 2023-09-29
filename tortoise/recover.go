@@ -10,15 +10,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
+	"github.com/spacemeshos/go-spacemesh/sql/beacons"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
-	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 // Recover tortoise state from database.
-func Recover(ctx context.Context, db *datastore.CachedDB, latest types.LayerID, beacon system.BeaconGetter, opts ...Opt) (*Tortoise, error) {
+func Recover(ctx context.Context, db *datastore.CachedDB, latest types.LayerID, opts ...Opt) (*Tortoise, error) {
 	trtl, err := New(opts...)
 	if err != nil {
 		return nil, err
@@ -39,7 +39,7 @@ func Recover(ctx context.Context, db *datastore.CachedDB, latest types.LayerID, 
 
 	if types.GetEffectiveGenesis() != types.FirstEffectiveGenesis() {
 		// need to load the golden atxs after a checkpoint recovery
-		if err := recoverEpoch(types.GetEffectiveGenesis().Add(1).GetEpoch(), trtl, db, beacon); err != nil {
+		if err := recoverEpoch(types.GetEffectiveGenesis().Add(1).GetEpoch(), trtl, db); err != nil {
 			return nil, err
 		}
 	}
@@ -51,7 +51,7 @@ func Recover(ctx context.Context, db *datastore.CachedDB, latest types.LayerID, 
 	epoch++ // recoverEpoch expects target epoch, rather than publish
 	if last.GetEpoch() != epoch {
 		for eid := last.GetEpoch(); eid <= epoch; eid++ {
-			if err := recoverEpoch(eid, trtl, db, beacon); err != nil {
+			if err := recoverEpoch(eid, trtl, db); err != nil {
 				return nil, err
 			}
 		}
@@ -62,30 +62,30 @@ func Recover(ctx context.Context, db *datastore.CachedDB, latest types.LayerID, 
 			return nil, ctx.Err()
 		default:
 		}
-		if err := RecoverLayer(ctx, trtl, db, beacon, lid, last, min(last, latest)); err != nil {
+		if err := RecoverLayer(ctx, trtl, db, lid, last, min(last, latest)); err != nil {
 			return nil, fmt.Errorf("failed to load tortoise state at layer %d: %w", lid, err)
 		}
 	}
 	return trtl, nil
 }
 
-func recoverEpoch(epoch types.EpochID, trtl *Tortoise, db *datastore.CachedDB, beacondb system.BeaconGetter) error {
+func recoverEpoch(epoch types.EpochID, trtl *Tortoise, db *datastore.CachedDB) error {
 	if err := db.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) error {
 		trtl.OnAtx(header.ToData())
 		return nil
 	}); err != nil {
 		return err
 	}
-	beacon, err := beacondb.GetBeacon(epoch)
-	if err == nil {
+	beacon, err := beacons.Get(db, epoch)
+	if err == nil && beacon != types.EmptyBeacon {
 		trtl.OnBeacon(epoch, beacon)
 	}
 	return nil
 }
 
-func RecoverLayer(ctx context.Context, trtl *Tortoise, db *datastore.CachedDB, beacon system.BeaconGetter, lid, last, current types.LayerID) error {
+func RecoverLayer(ctx context.Context, trtl *Tortoise, db *datastore.CachedDB, lid, last, current types.LayerID) error {
 	if lid.FirstInEpoch() {
-		if err := recoverEpoch(lid.GetEpoch(), trtl, db, beacon); err != nil {
+		if err := recoverEpoch(lid.GetEpoch(), trtl, db); err != nil {
 			return err
 		}
 	}

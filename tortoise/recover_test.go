@@ -11,15 +11,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
-	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/tortoise/sim"
 )
 
 type recoveryAdapter struct {
 	testing.TB
 	*Tortoise
-	db     *datastore.CachedDB
-	beacon system.BeaconGetter
+	db *datastore.CachedDB
 
 	prev types.LayerID
 }
@@ -30,7 +28,7 @@ func (a *recoveryAdapter) TallyVotes(ctx context.Context, current types.LayerID)
 		a.prev = genesis
 	}
 	for lid := a.prev; lid <= current; lid++ {
-		require.NoError(a, RecoverLayer(ctx, a.Tortoise, a.db, a.beacon, lid, current, current))
+		require.NoError(a, RecoverLayer(ctx, a.Tortoise, a.db, lid, current, current))
 		a.prev = lid
 	}
 }
@@ -52,7 +50,7 @@ func TestRecoverState(t *testing.T) {
 	}
 	require.Equal(t, last.Sub(1), verified)
 
-	tortoise2, err := Recover(context.Background(), s.GetState(0).DB, last, s.GetState(0).Beacons, WithLogger(logtest.New(t)), WithConfig(cfg))
+	tortoise2, err := Recover(context.Background(), s.GetState(0).DB, last, WithLogger(logtest.New(t)), WithConfig(cfg))
 	require.NoError(t, err)
 	verified = tortoise2.LatestComplete()
 	require.Equal(t, last.Sub(1), verified)
@@ -69,7 +67,7 @@ func TestRecoverEmpty(t *testing.T) {
 
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
-	tortoise, err := Recover(context.Background(), s.GetState(0).DB, 100, s.GetState(0).Beacons, WithLogger(logtest.New(t)), WithConfig(cfg))
+	tortoise, err := Recover(context.Background(), s.GetState(0).DB, 100, WithLogger(logtest.New(t)), WithConfig(cfg))
 	require.NoError(t, err)
 	require.NotNil(t, tortoise)
 }
@@ -93,7 +91,7 @@ func TestRecoverWithOpinion(t *testing.T) {
 		}
 		last = rst
 	}
-	tortoise, err := Recover(context.Background(), s.GetState(0).DB, last.Layer, s.GetState(0).Beacons, WithLogger(logtest.New(t)), WithConfig(cfg))
+	tortoise, err := Recover(context.Background(), s.GetState(0).DB, last.Layer, WithLogger(logtest.New(t)), WithConfig(cfg))
 	require.NoError(t, err)
 	require.NotNil(t, tortoise)
 	updates := tortoise.Updates()

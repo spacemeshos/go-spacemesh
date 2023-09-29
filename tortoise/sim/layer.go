@@ -5,6 +5,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/proposals/util"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql/beacons"
 )
 
 // DefaultNumBlocks is a number of blocks in a layer by default.
@@ -176,7 +177,7 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 		for j := uint32(0); j < maxj; j++ {
 			proofs = append(proofs, types.VotingEligibility{J: j})
 		}
-		beacon, err := g.states[0].Beacons.GetBeacon(g.nextLayer.GetEpoch())
+		beacon, err := beacons.Get(g.states[0].DB, g.nextLayer.GetEpoch())
 		if err != nil {
 			g.logger.With().Panic("failed to get a beacon", log.Err(err))
 		}
