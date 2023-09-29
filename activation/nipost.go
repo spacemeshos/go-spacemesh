@@ -402,11 +402,12 @@ func (nb *NIPostBuilder) submitPoetChallenges(ctx context.Context, deadline time
 		if result.err == nil {
 			poetRequests = append(poetRequests, *result.request)
 			allTooLate = false
-		} else {
-			nb.log.With().Warning("failed to submit challenge to poet", log.Err(result.err))
-			if !errors.Is(result.err, ErrSubmitTooLate) {
-				allTooLate = false
-			}
+			continue
+		}
+		
+		nb.log.With().Warning("failed to submit challenge to poet", log.Err(result.err))
+		if !errors.Is(result.err, ErrSubmitTooLate) {
+			allTooLate = false
 		}
 	}
 	if allTooLate {
