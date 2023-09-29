@@ -758,6 +758,9 @@ func (t *turtle) decodeBallot(ballot *types.BallotTortoiseData, dangling bool) (
 			return nil, 0, err
 		}
 		binfo.votes = votes
+		if base.layer == t.evicted {
+			binfo.overwriteOpinion(ballot.Opinion.Hash)
+		}
 	}
 	t.logger.Debug("decoded exceptions",
 		zap.Stringer("block", binfo.id),
@@ -811,7 +814,6 @@ func (t *turtle) onRecoveredBallot(ballot *types.BallotTortoiseData) error {
 	if decoded == nil || err != nil {
 		return err
 	}
-	decoded.overwriteOpinion(ballot.Opinion.Hash)
 	return t.storeBallot(decoded, min)
 }
 

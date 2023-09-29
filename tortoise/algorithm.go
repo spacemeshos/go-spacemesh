@@ -309,8 +309,7 @@ func (t *Tortoise) OnBallot(ballot *types.BallotTortoiseData) {
 func (t *Tortoise) OnRecoveredBallot(ballot *types.BallotTortoiseData) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	err := t.trtl.onRecoveredBallot(ballot)
-	if err != nil {
+	if err := t.trtl.onRecoveredBallot(ballot); err != nil {
 		errorsCounter.Inc()
 		t.logger.Error("failed to save state from recovered ballot",
 			zap.Stringer("ballot", ballot.ID),
@@ -436,6 +435,7 @@ func (t *Tortoise) OnHareOutput(lid types.LayerID, bid types.BlockID) {
 // It should be called for the first recovered layer with opinion from previous layer.
 // As an example if recovery starts from layyer 25_000, we should get opinion on layer 24999
 // and submit it as previous opinion for layer 25_000.
+
 func (t *Tortoise) OnPrevOpinion(lid types.LayerID, opinion types.Hash32) {
 	t.mu.Lock()
 	defer t.mu.Unlock()

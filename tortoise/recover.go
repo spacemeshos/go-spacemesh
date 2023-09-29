@@ -18,7 +18,7 @@ import (
 )
 
 // Recover tortoise state from database.
-func Recover(ctx context.Context, db *datastore.CachedDB, latest types.LayerID, opts ...Opt) (*Tortoise, error) {
+func Recover(ctx context.Context, db *datastore.CachedDB, current types.LayerID, opts ...Opt) (*Tortoise, error) {
 	trtl, err := New(opts...)
 	if err != nil {
 		return nil, err
@@ -27,6 +27,21 @@ func Recover(ctx context.Context, db *datastore.CachedDB, latest types.LayerID, 
 	last, err := ballots.LatestLayer(db)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load latest known layer: %w", err)
+	}
+
+	applied, err := layers.GetLastApplied(db)
+	if err != nil {
+		return nil, fmt.Errorf("get last applied: %w", err)
+	}
+	start := types.GetEffectiveGenesis() + 1
+	if applied > types.LayerID(trtl.cfg.WindowSize) {
+		window := applied - types.LayerID(trtl.cfg.WindowSize)
+		window = window.GetEpoch().FirstLayer()
+		opinion, err := layers.GetAggregatedHash(db, window-1)
+		if err == nil {
+			trtl.OnPrevOpinion(window-1, opinion)
+			start = window
+		}
 	}
 
 	malicious, err := identities.GetMalicious(db)
@@ -56,13 +71,13 @@ func Recover(ctx context.Context, db *datastore.CachedDB, latest types.LayerID, 
 			}
 		}
 	}
-	for lid := types.GetEffectiveGenesis().Add(1); !lid.After(last); lid = lid.Add(1) {
+	for lid := start; !lid.After(last); lid = lid.Add(1) {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		default:
 		}
-		if err := RecoverLayer(ctx, trtl, db, lid, last, min(last, latest)); err != nil {
+		if err := RecoverLayer(ctx, trtl, db, lid, last, min(last, current)); err != nil {
 			return nil, fmt.Errorf("failed to load tortoise state at layer %d: %w", lid, err)
 		}
 	}
@@ -118,12 +133,12 @@ func RecoverLayer(ctx context.Context, trtl *Tortoise, db *datastore.CachedDB, l
 	}
 	for _, ballot := range ballotsrst {
 		if ballot.EpochData != nil {
-			trtl.OnBallot(ballot.ToTortoiseData())
+			trtl.OnRecoveredBallot(ballot.ToTortoiseData())
 		}
 	}
 	for _, ballot := range ballotsrst {
 		if ballot.EpochData == nil {
-			trtl.OnBallot(ballot.ToTortoiseData())
+			trtl.OnRecoveredBallot(ballot.ToTortoiseData())
 		}
 	}
 	coin, err := layers.GetWeakCoin(db, lid)
