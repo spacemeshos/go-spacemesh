@@ -262,15 +262,17 @@ func (c *HTTPPoetClient) req(ctx context.Context, method, path string, reqBody, 
 	if res.StatusCode != http.StatusOK {
 		c.logger.Info("got poet response != 200 OK", zap.String("status", res.Status), zap.String("body", string(data)))
 	}
-	switch {
-	case res.StatusCode == http.StatusOK:
-	case res.StatusCode == http.StatusNotFound:
+
+	switch res.StatusCode {
+	case http.StatusOK:
+	case http.StatusNotFound:
 		return fmt.Errorf("%w: response status code: %s, body: %s", ErrNotFound, res.Status, string(data))
-	case res.StatusCode == http.StatusServiceUnavailable:
+	case http.StatusServiceUnavailable:
 		return fmt.Errorf("%w: response status code: %s, body: %s", ErrUnavailable, res.Status, string(data))
-	case res.StatusCode == http.StatusBadRequest && strings.Contains(string(data), registration.ErrTooLateToRegister.Error()):
-		return fmt.Errorf("%w: response status code: %s, body: %s", ErrSubmitTooLate, res.Status, string(data))
-	case res.StatusCode == http.StatusBadRequest:
+	case http.StatusBadRequest:
+		if strings.Contains(string(data), registration.ErrTooLateToRegister.Error()) {
+			return fmt.Errorf("%w: response status code: %s, body: %s", ErrSubmitTooLate, res.Status, string(data))
+		}
 		return fmt.Errorf("%w: response status code: %s, body: %s", ErrInvalidRequest, res.Status, string(data))
 	default:
 		return fmt.Errorf("unrecognized error: status code: %s, body: %s", res.Status, string(data))
