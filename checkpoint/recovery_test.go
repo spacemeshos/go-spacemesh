@@ -228,6 +228,7 @@ func validateAndPreserveData(tb testing.TB, db *sql.Database, deps []*types.Veri
 	mtrtl := smocks.NewMockTortoise(ctrl)
 	cdb := datastore.NewCachedDB(db, lg)
 	atxHandler := activation.NewHandler(
+		"",
 		cdb,
 		edVerifier,
 		mclock,
@@ -245,7 +246,6 @@ func validateAndPreserveData(tb testing.TB, db *sql.Database, deps []*types.Veri
 	for i, vatx := range deps {
 		encoded, err := codec.Encode(vatx)
 		require.NoError(tb, err)
-		mclock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now())
 		mclock.EXPECT().CurrentLayer().Return(vatx.PublishEpoch.FirstLayer())
 		mfetch.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any())
 		mfetch.EXPECT().GetPoetProof(gomock.Any(), vatx.GetPoetProofRef())

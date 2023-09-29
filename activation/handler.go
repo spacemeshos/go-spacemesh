@@ -15,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -39,6 +38,7 @@ type atxChan struct {
 
 // Handler processes the atxs received from all nodes and their validity status.
 type Handler struct {
+	local           p2p.Peer
 	cdb             *datastore.CachedDB
 	edVerifier      *signing.EdVerifier
 	clock           layerClock
@@ -57,6 +57,7 @@ type Handler struct {
 
 // NewHandler returns a data handler for ATX.
 func NewHandler(
+	local p2p.Peer,
 	cdb *datastore.CachedDB,
 	edVerifier *signing.EdVerifier,
 	c layerClock,
@@ -71,6 +72,7 @@ func NewHandler(
 	poetCfg PoetConfig,
 ) *Handler {
 	return &Handler{
+		local:           local,
 		cdb:             cdb,
 		edVerifier:      edVerifier,
 		clock:           c,
@@ -493,6 +495,9 @@ func (h *Handler) HandleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte
 			log.Err(err),
 		)
 	}
+	if errors.Is(err, errKnownAtx) && peer == h.local {
+		return nil
+	}
 	return err
 }
 
@@ -502,11 +507,6 @@ func (h *Handler) handleAtx(ctx context.Context, expHash types.Hash32, peer p2p.
 	if err := codec.Decode(msg, &atx); err != nil {
 		return fmt.Errorf("%w: %w", errMalformedData, err)
 	}
-
-	epochStart := h.clock.LayerToTime(atx.PublishEpoch.FirstLayer())
-	poetRoundEnd := epochStart.Add(h.poetCfg.PhaseShift - h.poetCfg.CycleGap)
-	latency := receivedTime.Sub(poetRoundEnd)
-	metrics.ReportMessageLatency(pubsub.AtxProtocol, pubsub.AtxProtocol, latency)
 
 	atx.SetReceived(receivedTime.Local())
 	if err := atx.Initialize(); err != nil {
