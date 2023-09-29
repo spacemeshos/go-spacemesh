@@ -111,7 +111,7 @@ func TestSumbmitTooLate(t *testing.T) {
 		Nonce:  nonce,
 		Params: *resp,
 	})
-	r.ErrorIs(err, ErrSubmitTooLate)
+	r.ErrorIs(err, ErrInvalidRequest)
 }
 
 func TestCheckRetry(t *testing.T) {

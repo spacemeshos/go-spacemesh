@@ -7,11 +7,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/hashicorp/go-retryablehttp"
-	"github.com/spacemeshos/poet/registration"
 	rpcapi "github.com/spacemeshos/poet/release/proto/go/rpc/api/v1"
 	"github.com/spacemeshos/poet/shared"
 	"go.uber.org/zap"
@@ -26,7 +24,6 @@ var (
 	ErrNotFound       = errors.New("not found")
 	ErrUnavailable    = errors.New("unavailable")
 	ErrInvalidRequest = errors.New("invalid request")
-	ErrSubmitTooLate  = errors.New("too late to submit")
 )
 
 type PoetPowParams struct {
@@ -270,9 +267,6 @@ func (c *HTTPPoetClient) req(ctx context.Context, method, path string, reqBody, 
 	case http.StatusServiceUnavailable:
 		return fmt.Errorf("%w: response status code: %s, body: %s", ErrUnavailable, res.Status, string(data))
 	case http.StatusBadRequest:
-		if strings.Contains(string(data), registration.ErrTooLateToRegister.Error()) {
-			return fmt.Errorf("%w: response status code: %s, body: %s", ErrSubmitTooLate, res.Status, string(data))
-		}
 		return fmt.Errorf("%w: response status code: %s, body: %s", ErrInvalidRequest, res.Status, string(data))
 	default:
 		return fmt.Errorf("unrecognized error: status code: %s, body: %s", res.Status, string(data))

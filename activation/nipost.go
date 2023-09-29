@@ -396,21 +396,21 @@ func (nb *NIPostBuilder) submitPoetChallenges(ctx context.Context, deadline time
 	g.Wait()
 	close(poetRequestsChannel)
 
-	allTooLate := true
+	allInvalid := true
 	poetRequests := make([]types.PoetRequest, 0, len(nb.poetProvers))
 	for result := range poetRequestsChannel {
 		if result.err == nil {
 			poetRequests = append(poetRequests, *result.request)
-			allTooLate = false
+			allInvalid = false
 			continue
 		}
-		
+
 		nb.log.With().Warning("failed to submit challenge to poet", log.Err(result.err))
-		if !errors.Is(result.err, ErrSubmitTooLate) {
-			allTooLate = false
+		if !errors.Is(result.err, ErrInvalidRequest) {
+			allInvalid = false
 		}
 	}
-	if allTooLate {
+	if allInvalid {
 		nb.log.Warning("all poet submits were too late. ATX challenge expires")
 		return nil, ErrATXChallengeExpired
 	}

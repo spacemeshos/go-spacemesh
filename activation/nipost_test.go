@@ -508,7 +508,7 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 	req.EqualValues(ref[:], nipost.PostMetadata.Challenge)
 }
 
-func TestNIPostBuilder_PoetSubmitTooLate(t *testing.T) {
+func TestNIPostBuilder_PoetInvalidRequest(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	req := require.New(t)
@@ -520,7 +520,7 @@ func TestNIPostBuilder_PoetSubmitTooLate(t *testing.T) {
 
 	poet := NewMockPoetProvingServiceClient(ctrl)
 	poet.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().Return(types.PoetServiceID{ServiceID: []byte("poet0")}, nil)
-	poet.EXPECT().Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&types.PoetRound{}, ErrSubmitTooLate)
+	poet.EXPECT().Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&types.PoetRound{}, ErrInvalidRequest)
 	poet.EXPECT().PowParams(gomock.Any()).Return(&PoetPowParams{}, nil)
 	poet.EXPECT().Address().Return("http://localhost:9999")
 
@@ -551,7 +551,7 @@ func TestNIPostBuilder_PoetSubmitTooLate(t *testing.T) {
 	req.ErrorIs(err, ErrATXChallengeExpired)
 }
 
-func TestNIPostBuilder_OnePoetSubmitTooLate(t *testing.T) {
+func TestNIPostBuilder_OnePoetInvalidRequest(t *testing.T) {
 	t.Parallel()
 	// Arrange
 	req := require.New(t)
@@ -565,13 +565,12 @@ func TestNIPostBuilder_OnePoetSubmitTooLate(t *testing.T) {
 	nipostValidator := NewMocknipostValidator(ctrl)
 	poetDb := NewMockpoetDbAPI(ctrl)
 	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
-	mclock := defaultLayerClockMock(t)
 
 	poets := make([]PoetProvingServiceClient, 0, 2)
 	{
 		poet := NewMockPoetProvingServiceClient(ctrl)
 		poet.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().Return(types.PoetServiceID{ServiceID: []byte("poet0")}, nil)
-		poet.EXPECT().Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&types.PoetRound{}, ErrSubmitTooLate)
+		poet.EXPECT().Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&types.PoetRound{}, ErrInvalidRequest)
 		poet.EXPECT().PowParams(gomock.Any()).Return(&PoetPowParams{}, nil)
 		poet.EXPECT().Address().Return("http://localhost:9999")
 		poets = append(poets, poet)
@@ -609,7 +608,7 @@ func TestNIPostBuilder_OnePoetSubmitTooLate(t *testing.T) {
 		logtest.New(t),
 		sig,
 		PoetConfig{PhaseShift: layerDuration * layersPerEpoch / 2},
-		mclock,
+		defaultLayerClockMock(t),
 		WithNipostValidator(nipostValidator),
 		withPoetClients(poets),
 	)
