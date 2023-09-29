@@ -3,7 +3,6 @@ package grpcserver
 import (
 	"context"
 	"fmt"
-	"io"
 	"os/exec"
 	"path/filepath"
 	"testing"
@@ -26,7 +25,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-func initPost(tb *testing.T, log *zap.Logger, dir string) {
+func initPost(tb testing.TB, log *zap.Logger, dir string) {
 	tb.Helper()
 
 	cfg := activation.DefaultPostConfig()
@@ -45,7 +44,7 @@ func initPost(tb *testing.T, log *zap.Logger, dir string) {
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
 	provingOpts := activation.DefaultPostProvingOpts()
 	provingOpts.Flags = config.RecommendedPowFlags()
-	mgr, err := activation.NewPostSetupManager(id, cfg, log.Named("post mgr"), cdb, goldenATXID, provingOpts)
+	mgr, err := activation.NewPostSetupManager(id, cfg, log.Named("manager"), cdb, goldenATXID, provingOpts)
 	require.NoError(tb, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -80,44 +79,23 @@ func initPost(tb *testing.T, log *zap.Logger, dir string) {
 	require.Equal(tb, activation.PostSetupStateComplete, mgr.Status().State)
 }
 
-func launchPostService(tb testing.TB, log *zap.Logger, cfg Config, postDir string) func() {
+func launchPostSupervisor(tb testing.TB, log *zap.Logger, cfg Config, postDir string) func() {
 	path, err := exec.Command("go", "env", "GOMOD").Output()
 	require.NoError(tb, err)
 
-	dir := filepath.Dir(string(path))
-	cmd := exec.Command("./build/service",
-		"--dir", postDir,
-		"--address", fmt.Sprintf("http://%s", cfg.PublicListener),
-		"--pow-difficulty", "ffffffffffffffffff0000000000000000000000000000000000000000000000",
-		"--randomx-mode", "light",
-		"-n", "2", // Speedup initialization in tests.
-	)
-	cmd.Dir = dir
-	pipe, err := cmd.StderrPipe()
-	require.NoError(tb, err)
-	require.NoError(tb, cmd.Start())
-
-	var eg errgroup.Group
-	eg.Go(func() error {
-		for {
-			buf := make([]byte, 1024)
-			n, err := pipe.Read(buf)
-			switch err {
-			case nil:
-			case io.EOF:
-				return nil
-			default:
-				return err
-			}
-
-			tb.Log(string(buf[:n]))
-		}
-	})
-
-	return func() {
-		cmd.Process.Kill()
-		assert.NoError(tb, eg.Wait())
+	opts := activation.PostSupervisorConfig{
+		PostServiceCmd:  filepath.Join(filepath.Dir(string(path)), "build", "service"),
+		DataDir:         postDir,
+		NodeAddress:     fmt.Sprintf("http://%s", cfg.PublicListener),
+		PowDifficulty:   activation.DefaultPostConfig().PowDifficulty,
+		PostServiceMode: "light",
+		N:               "2",
 	}
+
+	ps, err := activation.NewPostSupervisor(log, opts)
+	require.NoError(tb, err)
+	require.NotNil(tb, ps)
+	return func() { assert.NoError(tb, ps.Close()) }
 }
 
 func Test_GenerateProof(t *testing.T) {
@@ -140,7 +118,7 @@ func Test_GenerateProof(t *testing.T) {
 
 	postDir := t.TempDir()
 	initPost(t, log.Named("post"), postDir)
-	postCleanup := launchPostService(t, log.Named("post"), cfg, postDir)
+	postCleanup := launchPostSupervisor(t, log.Named("supervisor"), cfg, postDir)
 	t.Cleanup(postCleanup)
 
 	select {
@@ -189,7 +167,7 @@ func Test_Cancel_GenerateProof(t *testing.T) {
 
 	postDir := t.TempDir()
 	initPost(t, log.Named("post"), postDir)
-	t.Cleanup(launchPostService(t, log.Named("post"), cfg, postDir))
+	t.Cleanup(launchPostSupervisor(t, log.Named("supervisor"), cfg, postDir))
 
 	select {
 	case <-connected:
@@ -234,15 +212,15 @@ func Test_GenerateProof_MultipleServices(t *testing.T) {
 	// from the one that does connect
 	postDir1 := t.TempDir()
 	initPost(t, log.Named("post1"), postDir1)
-	t.Cleanup(launchPostService(t, log.Named("post1"), cfg, postDir1))
+	t.Cleanup(launchPostSupervisor(t, log.Named("supervisor1"), cfg, postDir1))
 
 	postDir2 := t.TempDir()
 	initPost(t, log.Named("post2"), postDir2)
-	t.Cleanup(launchPostService(t, log.Named("post2"), cfg, postDir2))
+	t.Cleanup(launchPostSupervisor(t, log.Named("supervisor2"), cfg, postDir2))
 
 	postDir3 := t.TempDir()
 	initPost(t, log.Named("post3"), postDir3)
-	t.Cleanup(launchPostService(t, log.Named("post3"), cfg, postDir3))
+	t.Cleanup(launchPostSupervisor(t, log.Named("supervisor3"), cfg, postDir3))
 
 	select {
 	case <-connected:

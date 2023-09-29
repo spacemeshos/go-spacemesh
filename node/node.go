@@ -350,7 +350,7 @@ type App struct {
 	updater            *bootstrap.Updater
 	poetDb             *activation.PoetDb
 	postVerifier       *activation.OffloadingPostVerifier
-	postService        *activation.PostService
+	postService        *activation.PostSupervisor
 	preserve           *checkpoint.PreservedData
 	errCh              chan error
 
@@ -564,7 +564,7 @@ func (app *App) initServices(ctx context.Context) error {
 	app.postVerifier = activation.NewOffloadingPostVerifier(postVerifiers, nipostValidatorLogger)
 
 	if app.Config.POSTService.PostServiceCmd != "" {
-		app.postService, err = activation.NewPostService(app.log.Zap(), app.Config.POSTService)
+		app.postService, err = activation.NewPostSupervisor(app.log.Zap(), app.Config.POSTService)
 		if err != nil {
 			return fmt.Errorf("start post service: %w", err)
 		}

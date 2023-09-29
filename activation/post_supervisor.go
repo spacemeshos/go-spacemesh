@@ -1,12 +1,14 @@
 package activation
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
 	"os/exec"
 	"path/filepath"
-	"sync"
+	"strings"
+	"sync/atomic"
 
 	"github.com/spacemeshos/post/config"
 	"go.uber.org/zap"
@@ -16,8 +18,8 @@ import (
 )
 
 // DefaultPostServiceConfig returns the default config for post service. These are intended for testing.
-func DefaultPostServiceConfig() PostServiceConfig {
-	cfg := PostServiceConfig{
+func DefaultPostServiceConfig() PostSupervisorConfig {
+	cfg := PostSupervisorConfig{
 		PostServiceCmd:  "/bin/service",
 		DataDir:         config.DefaultDataDir,
 		NodeAddress:     "http://127.0.0.1:9093",
@@ -29,8 +31,8 @@ func DefaultPostServiceConfig() PostServiceConfig {
 }
 
 // MainnetPostServiceConfig returns the default config for mainnet.
-func MainnetPostServiceConfig() PostServiceConfig {
-	cfg := PostServiceConfig{
+func MainnetPostServiceConfig() PostSupervisorConfig {
+	cfg := PostSupervisorConfig{
 		PostServiceCmd:  "/bin/service",
 		DataDir:         config.DefaultDataDir,
 		NodeAddress:     "http://127.0.0.1:9093",
@@ -41,31 +43,32 @@ func MainnetPostServiceConfig() PostServiceConfig {
 	return cfg
 }
 
-type PostServiceConfig struct {
+type PostSupervisorConfig struct {
 	PostServiceCmd string `mapstructure:"post-opts-post-service"`
 
 	DataDir         string        `mapstructure:"post-opts-datadir"`
 	NodeAddress     string        `mapstructure:"post-opts-node-address"`
 	PowDifficulty   PowDifficulty `mapstructure:"post-opts-pow-difficulty"`
 	PostServiceMode string        `mapstructure:"post-opts-post-service-mode"`
+
+	N string `mapstructure:"post-opts-n"`
 }
 
-// PostService manages a local post service.
-type PostService struct {
+// PostSupervisor manages a local post service.
+type PostSupervisor struct {
 	logger *zap.Logger
 
-	pidMtx sync.RWMutex
-	pid    int // pid of the running post service.
+	pid atomic.Int64 // pid of the running post service, only for tests.
 
 	stop context.CancelFunc // stops the running command.
 	eg   errgroup.Group     // eg manages post service goroutines.
 }
 
-// NewPostService returns a new post service.
-func NewPostService(logger *zap.Logger, opts PostServiceConfig) (*PostService, error) {
+// NewPostSupervisor returns a new post service.
+func NewPostSupervisor(logger *zap.Logger, opts PostSupervisorConfig) (*PostSupervisor, error) {
 	ctx, stop := context.WithCancel(context.Background())
 
-	ps := &PostService{
+	ps := &PostSupervisor{
 		logger: logger,
 		stop:   stop,
 	}
@@ -73,7 +76,7 @@ func NewPostService(logger *zap.Logger, opts PostServiceConfig) (*PostService, e
 	return ps, nil
 }
 
-func (ps *PostService) Close() error {
+func (ps *PostSupervisor) Close() error {
 	ps.stop()
 	ps.eg.Wait()
 	return nil
@@ -81,34 +84,43 @@ func (ps *PostService) Close() error {
 
 // captureCmdOutput returns a function that reads from the given pipe and logs the output.
 // it returns when the pipe is closed.
-func (ps *PostService) captureCmdOutput(pipe io.ReadCloser) func() error {
+func (ps *PostSupervisor) captureCmdOutput(pipe io.ReadCloser) func() error {
 	return func() error {
+		buf := bufio.NewReader(pipe)
 		for {
-			buf := make([]byte, 1024)
-			n, err := pipe.Read(buf)
+			line, err := buf.ReadString('\n')
+			line = strings.TrimRight(line, "\r\n") // remove line delimiters at end of input
 			switch err {
 			case nil:
+				ps.logger.Info(line)
 			case io.EOF:
+				ps.logger.Info(line)
 				return nil
 			default:
+				ps.logger.Info(line)
 				ps.logger.Warn("read from post service pipe", zap.Error(err))
 				return nil
 			}
-
-			ps.logger.Debug(string(buf[:n]))
 		}
 	}
 }
 
-func (ps *PostService) runCmd(ctx context.Context, opts PostServiceConfig) error {
+func (ps *PostSupervisor) runCmd(ctx context.Context, opts PostSupervisorConfig) error {
 	for {
-		cmd := exec.CommandContext(
-			ctx,
-			opts.PostServiceCmd,
+		args := []string{
 			"--dir", opts.DataDir,
 			"--address", opts.NodeAddress,
 			"--pow-difficulty", opts.PowDifficulty.String(),
 			"--randomx-mode", opts.PostServiceMode,
+		}
+		if opts.N != "" {
+			args = append(args, "-n", opts.N)
+		}
+
+		cmd := exec.CommandContext(
+			ctx,
+			opts.PostServiceCmd,
+			args...,
 		)
 		cmd.Dir = filepath.Dir(opts.PostServiceCmd)
 		pipe, err := cmd.StderrPipe()
@@ -122,9 +134,7 @@ func (ps *PostService) runCmd(ctx context.Context, opts PostServiceConfig) error
 			pipe.Close()
 			return fmt.Errorf("start post service: %w", err)
 		}
-		ps.pidMtx.Lock()
-		ps.pid = cmd.Process.Pid
-		ps.pidMtx.Unlock()
+		ps.pid.Store(int64(cmd.Process.Pid))
 		events.EmitPostServiceStarted()
 		err = cmd.Wait()
 		if err := ctx.Err(); err != nil {
@@ -135,14 +145,6 @@ func (ps *PostService) runCmd(ctx context.Context, opts PostServiceConfig) error
 			return ctx.Err()
 		}
 		ps.logger.Warn("post service exited", zap.Error(err))
-		if err := eg.Wait(); err != nil {
-			ps.logger.Warn("output reading goroutine failed", zap.Error(err))
-		}
+		eg.Wait()
 	}
-}
-
-func (ps *PostService) Pid() int {
-	ps.pidMtx.RLock()
-	defer ps.pidMtx.RUnlock()
-	return ps.pid
 }
