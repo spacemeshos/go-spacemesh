@@ -39,8 +39,8 @@ func Recover(ctx context.Context, db *datastore.CachedDB, current types.LayerID,
 		window = window.GetEpoch().FirstLayer()
 		opinion, err := layers.GetAggregatedHash(db, window-1)
 		if err == nil {
-			trtl.OnPrevOpinion(window-1, opinion)
 			start = window
+			trtl.RecoverFrom(window-1, opinion)
 		}
 	}
 
@@ -125,6 +125,10 @@ func RecoverLayer(ctx context.Context, trtl *Tortoise, db *datastore.CachedDB, l
 		if err == nil {
 			trtl.OnHareOutput(lid, hare)
 		}
+	}
+	opinion, err := layers.GetAggregatedHash(db, lid)
+	if err == nil {
+		trtl.OnOpinion(lid, opinion)
 	}
 	// NOTE(dshulyak) we loaded information about malicious identities earlier.
 	ballotsrst, err := ballots.LayerNoMalicious(db, lid)

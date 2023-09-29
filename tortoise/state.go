@@ -470,7 +470,7 @@ func decodeVotes(evicted, blid types.LayerID, base *ballotInfo, exceptions types
 			return votes{}, 0, fmt.Errorf("votes on layer %d conflict with abstain", lid)
 		}
 	}
-	if from <= evicted {
+	if from <= evicted && base.layer != evicted {
 		return votes{}, 0, fmt.Errorf("votes for a block in the layer (%d) outside the window (evicted %d)", from, evicted)
 	}
 

@@ -114,6 +114,22 @@ func New(opts ...Opt) (*Tortoise, error) {
 	return t, nil
 }
 
+func (t *Tortoise) RecoverFrom(lid types.LayerID, opinion types.Hash32) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.trtl.evicted = lid - 1
+	t.trtl.verified = lid
+	t.trtl.processed = lid
+	t.trtl.last = lid
+	t.trtl.layer(lid).opinion = opinion
+}
+
+func (t *Tortoise) OnOpinion(lid types.LayerID, opinion types.Hash32) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.trtl.layer(lid).opinion = opinion
+}
+
 // LatestComplete returns the latest verified layer.
 func (t *Tortoise) LatestComplete() types.LayerID {
 	t.mu.Lock()
@@ -428,22 +444,6 @@ func (t *Tortoise) OnHareOutput(lid types.LayerID, bid types.BlockID) {
 	if t.tracer != nil {
 		t.tracer.On(&HareTrace{Layer: lid, Vote: bid})
 	}
-}
-
-// OnPrevOpinion is called to bootstrap opinion for recovery from database.
-//
-// It should be called for the first recovered layer with opinion from previous layer.
-// As an example if recovery starts from layyer 25_000, we should get opinion on layer 24999
-// and submit it as previous opinion for layer 25_000.
-
-func (t *Tortoise) OnPrevOpinion(lid types.LayerID, opinion types.Hash32) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if lid <= t.trtl.evicted {
-		return
-	}
-	layer := t.trtl.layer(lid)
-	layer.prevOpinion = &opinion
 }
 
 // GetMissingActiveSet returns unknown atxs from the original list. It is done for a specific epoch
