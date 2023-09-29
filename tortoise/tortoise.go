@@ -362,8 +362,9 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) {
 
 		t.logger.Debug("initial local opinion",
 			zap.Uint32("lid", layer.lid.Uint32()),
-			zap.Stringer("local opinion", layer.opinion))
-
+			log.ZShortStringer("previous", opinion),
+			log.ZShortStringer("opinion", layer.opinion),
+		)
 		// terminate layer that falls out of the zdist window and wasn't terminated
 		// by any other component
 		if process.After(types.LayerID(t.Zdist)) {

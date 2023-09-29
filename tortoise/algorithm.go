@@ -117,16 +117,11 @@ func New(opts ...Opt) (*Tortoise, error) {
 func (t *Tortoise) RecoverFrom(lid types.LayerID, opinion types.Hash32) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	t.logger.Debug("recover from", zap.Uint32("lid", lid.Uint32()), log.ZShortStringer("opinion", opinion))
 	t.trtl.evicted = lid - 1
 	t.trtl.verified = lid
 	t.trtl.processed = lid
 	t.trtl.last = lid
-	t.trtl.layer(lid).opinion = opinion
-}
-
-func (t *Tortoise) OnOpinion(lid types.LayerID, opinion types.Hash32) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
 	t.trtl.layer(lid).opinion = opinion
 }
 

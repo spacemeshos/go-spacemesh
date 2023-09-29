@@ -39,8 +39,9 @@ func Recover(ctx context.Context, db *datastore.CachedDB, current types.LayerID,
 		window = window.GetEpoch().FirstLayer()
 		opinion, err := layers.GetAggregatedHash(db, window-1)
 		if err == nil {
-			start = window
+			// tortoise will need reference to previous layer
 			trtl.RecoverFrom(window-1, opinion)
+			start = window
 		}
 	}
 
@@ -126,10 +127,6 @@ func RecoverLayer(ctx context.Context, trtl *Tortoise, db *datastore.CachedDB, l
 			trtl.OnHareOutput(lid, hare)
 		}
 	}
-	opinion, err := layers.GetAggregatedHash(db, lid)
-	if err == nil {
-		trtl.OnOpinion(lid, opinion)
-	}
 	// NOTE(dshulyak) we loaded information about malicious identities earlier.
 	ballotsrst, err := ballots.LayerNoMalicious(db, lid)
 	if err != nil {
@@ -152,9 +149,8 @@ func RecoverLayer(ctx context.Context, trtl *Tortoise, db *datastore.CachedDB, l
 	if err == nil {
 		trtl.OnWeakCoin(lid, coin)
 	}
-	if lid <= current && (lid%types.LayerID(trtl.cfg.WindowSize) == 0 || lid == last) {
+	if lid <= current && lid == last {
 		trtl.TallyVotes(ctx, lid)
-
 		opinion, err := layers.GetAggregatedHash(db, lid-1)
 		if err == nil {
 			trtl.resetPending(lid-1, opinion)
