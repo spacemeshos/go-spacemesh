@@ -100,3 +100,34 @@ func TestRecoverWithOpinion(t *testing.T) {
 	require.Len(t, updates, 1)
 	require.Equal(t, updates[0], last)
 }
+
+func TestResetPending(t *testing.T) {
+	const size = 10
+	s := sim.New(sim.WithLayerSize(size))
+	s.Setup()
+
+	cfg := defaultTestConfig()
+	cfg.LayerSize = size
+
+	trt := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+	const n = 10
+	var last types.LayerID
+	for _, lid := range sim.GenLayers(s, sim.WithSequence(n)) {
+		last = lid
+		trt.TallyVotes(context.Background(), lid)
+	}
+	updates1 := trt.Updates()
+	require.Len(t, updates1, n+1)
+	require.Equal(t, types.GetEffectiveGenesis(), updates1[0].Layer)
+	require.Equal(t, last, updates1[n].Layer)
+	for _, item := range updates1[:n/2] {
+		require.NoError(t, layers.SetMeshHash(s.GetState(0).DB, item.Layer, item.Opinion))
+	}
+
+	recovered, err := Recover(context.Background(), s.GetState(0).DB, last, s.GetState(0).Beacons, WithLogger(logtest.New(t)), WithConfig(cfg))
+	require.NoError(t, err)
+	updates2 := recovered.Updates()
+	require.Len(t, updates2, n/2+1)
+	require.Equal(t, last-n/2, updates2[0].Layer)
+	require.Equal(t, last, updates2[n/2].Layer)
+}
