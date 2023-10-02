@@ -135,13 +135,19 @@ func RecoverLayer(ctx context.Context, trtl *Tortoise, db *datastore.CachedDB, b
 	}
 	if lid <= current && (lid%types.LayerID(trtl.cfg.WindowSize) == 0 || lid == last) {
 		trtl.TallyVotes(ctx, lid)
-
-		opinion, err := layers.GetAggregatedHash(db, lid-1)
-		if err == nil {
-			trtl.resetPending(lid-1, opinion)
-		} else if !errors.Is(err, sql.ErrNotFound) {
-			return fmt.Errorf("check opinion %w", err)
+		// find topmost layer that was already applied and reset pending
+		// so that result for that layer is not returned
+		for prev := lid - 1; prev > types.GetEffectiveGenesis(); prev-- {
+			opinion, err := layers.GetAggregatedHash(db, prev)
+			if err == nil {
+				if trtl.resetPending(prev, opinion) {
+					return nil
+				}
+			} else if !errors.Is(err, sql.ErrNotFound) {
+				return fmt.Errorf("check opinion %w", err)
+			}
 		}
+
 	}
 	return nil
 }
