@@ -34,7 +34,7 @@ func Test_PostSupervisor_StartsServiceCmd(t *testing.T) {
 	require.NotNil(t, ps)
 	t.Cleanup(func() { assert.NoError(t, ps.Close()) })
 
-	time.Sleep(500 * time.Millisecond) // to ensure cmd actually started
+	require.Eventually(t, func() bool { return (ps.pid.Load() != 0) }, 5*time.Second, 100*time.Millisecond)
 
 	pid := int(ps.pid.Load())
 	process, err := os.FindProcess(pid)
@@ -72,7 +72,7 @@ func Test_PostSupervisor_RestartsOnCrash(t *testing.T) {
 	require.NotNil(t, ps)
 	t.Cleanup(func() { assert.NoError(t, ps.Close()) })
 
-	time.Sleep(500 * time.Millisecond) // to ensure cmd actually started
+	require.Eventually(t, func() bool { return (ps.pid.Load() != 0) }, 5*time.Second, 100*time.Millisecond)
 
 	oldPid := int(ps.pid.Load())
 	process, err := os.FindProcess(oldPid)
@@ -80,7 +80,7 @@ func Test_PostSupervisor_RestartsOnCrash(t *testing.T) {
 	require.NotNil(t, process)
 	require.NoError(t, process.Kill())
 
-	time.Sleep(500 * time.Millisecond)
+	require.Eventually(t, func() bool { return (ps.pid.Load() != int64(oldPid)) }, 5*time.Second, 100*time.Millisecond)
 
 	pid := int(ps.pid.Load())
 	process, err = os.FindProcess(pid)

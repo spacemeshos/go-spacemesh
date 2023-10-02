@@ -139,9 +139,11 @@ func Test_GenerateProof(t *testing.T) {
 
 	// drop connection
 	postCleanup()
-	time.Sleep(1 * time.Second) // wait for connection to be dropped
+	require.Eventually(t, func() bool {
+		proof, meta, err = client.Proof(context.Background(), challenge)
+		return err != nil
+	}, 5*time.Second, 100*time.Millisecond)
 
-	proof, meta, err = client.Proof(context.Background(), challenge)
 	require.ErrorContains(t, err, "client closed")
 	require.Nil(t, proof)
 	require.Nil(t, meta)
