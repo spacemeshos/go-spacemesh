@@ -56,13 +56,14 @@ func Recover(ctx context.Context, db *datastore.CachedDB, latest types.LayerID, 
 			}
 		}
 	}
-	for lid := types.GetEffectiveGenesis().Add(1); !lid.After(last); lid = lid.Add(1) {
+	start := types.GetEffectiveGenesis().Add(1)
+	for lid := start; !lid.After(last); lid = lid.Add(1) {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		default:
 		}
-		if err := RecoverLayer(ctx, trtl, db, beacon, lid, last, min(last, latest)); err != nil {
+		if err := RecoverLayer(ctx, trtl, db, beacon, start, lid, last, min(last, latest)); err != nil {
 			return nil, fmt.Errorf("failed to load tortoise state at layer %d: %w", lid, err)
 		}
 	}
@@ -83,7 +84,7 @@ func recoverEpoch(epoch types.EpochID, trtl *Tortoise, db *datastore.CachedDB, b
 	return nil
 }
 
-func RecoverLayer(ctx context.Context, trtl *Tortoise, db *datastore.CachedDB, beacon system.BeaconGetter, lid, last, current types.LayerID) error {
+func RecoverLayer(ctx context.Context, trtl *Tortoise, db *datastore.CachedDB, beacon system.BeaconGetter, start, lid, last, current types.LayerID) error {
 	if lid.FirstInEpoch() {
 		if err := recoverEpoch(lid.GetEpoch(), trtl, db, beacon); err != nil {
 			return err
@@ -135,13 +136,19 @@ func RecoverLayer(ctx context.Context, trtl *Tortoise, db *datastore.CachedDB, b
 	}
 	if lid <= current && (lid%types.LayerID(trtl.cfg.WindowSize) == 0 || lid == last) {
 		trtl.TallyVotes(ctx, lid)
-
-		opinion, err := layers.GetAggregatedHash(db, lid-1)
-		if err == nil {
-			trtl.resetPending(lid-1, opinion)
-		} else if !errors.Is(err, sql.ErrNotFound) {
-			return fmt.Errorf("check opinion %w", err)
+		// find topmost layer that was already applied and reset pending
+		// so that result for that layer is not returned
+		for prev := lid - 1; prev >= start; prev-- {
+			opinion, err := layers.GetAggregatedHash(db, prev)
+			if err == nil {
+				if trtl.resetPending(prev, opinion) {
+					return nil
+				}
+			} else if !errors.Is(err, sql.ErrNotFound) {
+				return fmt.Errorf("check opinion %w", err)
+			}
 		}
+
 	}
 	return nil
 }

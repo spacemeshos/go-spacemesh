@@ -535,8 +535,10 @@ func (t *Tortoise) Mode() Mode {
 // resetPending compares stored opinion with computed opinion and sets
 // pending layer to the layer above equal layer.
 // this method is meant to be used only in recovery from disk codepath.
-func (t *Tortoise) resetPending(lid types.LayerID, opinion types.Hash32) {
+func (t *Tortoise) resetPending(lid types.LayerID, opinion types.Hash32) bool {
 	if t.trtl.layer(lid).opinion == opinion {
 		t.trtl.pending = lid + 1
+		return true
 	}
+	return false
 }
