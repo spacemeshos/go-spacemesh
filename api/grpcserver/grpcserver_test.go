@@ -2378,14 +2378,14 @@ func TestJsonApi(t *testing.T) {
 
 	// generate request payload (api input params)
 	payload = marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
-	respBody, respStatus := callEndpoint(t, fmt.Sprintf("http://%s/%s", cfg.JSONListener, "v1/node/echo"), payload)
+	respBody, respStatus := callEndpoint(t, fmt.Sprintf("http://%s/v1/node/echo", cfg.JSONListener), payload)
 	require.Equal(t, http.StatusOK, respStatus)
 	var msg pb.EchoResponse
 	require.NoError(t, protojson.Unmarshal(respBody, &msg))
 	require.Equal(t, message, msg.Msg.Value)
 
 	// Test MeshService
-	respBody2, respStatus2 := callEndpoint(t, fmt.Sprintf("http://%s/%s", cfg.JSONListener, "v1/mesh/genesistime"), nil)
+	respBody2, respStatus2 := callEndpoint(t, fmt.Sprintf("http://%s/v1/mesh/genesistime", cfg.JSONListener), nil)
 	require.Equal(t, http.StatusOK, respStatus2)
 	var msg2 pb.GenesisTimeResponse
 	require.NoError(t, protojson.Unmarshal(respBody2, &msg2))
