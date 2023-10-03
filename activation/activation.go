@@ -618,7 +618,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	)
 
 	if err := b.discardChallenge(); err != nil {
-		return fmt.Errorf("%w: after published atx", err)
+		return fmt.Errorf("discarding challenge after published ATX: %w", err)
 	}
 	return nil
 }

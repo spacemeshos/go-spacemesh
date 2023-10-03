@@ -1000,7 +1000,6 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 			require.Equal(t, &gotAtx, built)
 			return nil
 		})
-	// This 👇 ensures that handing of the challenge succeeded and the code moved on to the next part
 	require.NoError(t, tab.PublishActivationTx(context.Background()))
 	got, err = LoadNipostChallenge(tab.nipostBuilder.DataDir())
 	require.ErrorIs(t, err, os.ErrNotExist)
