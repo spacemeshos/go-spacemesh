@@ -82,7 +82,6 @@ type Builder struct {
 	layersPerEpoch    uint32
 	regossipInterval  time.Duration
 	cdb               *datastore.CachedDB
-	atxHandler        atxHandler
 	publisher         pubsub.Publisher
 	nipostBuilder     nipostBuilder
 	postSetupProvider postSetupProvider
@@ -151,7 +150,6 @@ func NewBuilder(
 	nodeID types.NodeID,
 	signer *signing.EdSigner,
 	cdb *datastore.CachedDB,
-	hdlr atxHandler,
 	publisher pubsub.Publisher,
 	nipostBuilder nipostBuilder,
 	postSetupProvider postSetupProvider,
@@ -169,7 +167,6 @@ func NewBuilder(
 		layersPerEpoch:        conf.LayersPerEpoch,
 		regossipInterval:      conf.RegossipInterval,
 		cdb:                   cdb,
-		atxHandler:            hdlr,
 		publisher:             publisher,
 		nipostBuilder:         nipostBuilder,
 		postSetupProvider:     postSetupProvider,
@@ -608,13 +605,10 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	}
 
 	atx := b.pendingATX
-	atxReceived := b.atxHandler.AwaitAtx(atx.ID())
-	defer b.atxHandler.UnsubscribeAtx(atx.ID())
 	size, err := b.broadcast(ctx, atx)
 	if err != nil {
 		return fmt.Errorf("broadcast: %w", err)
 	}
-
 	logger.Event().Info("atx published", log.Inline(atx), log.Int("size", size))
 
 	events.EmitAtxPublished(
@@ -623,19 +617,8 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 		time.Until(b.layerClock.LayerToTime(atx.TargetEpoch().FirstLayer())),
 	)
 
-	select {
-	case <-atxReceived:
-		logger.With().Info("received atx in db", atx.ID())
-		if err := b.discardChallenge(); err != nil {
-			return fmt.Errorf("%w: after published atx", err)
-		}
-	case <-b.layerClock.AwaitLayer((atx.TargetEpoch()).FirstLayer()):
-		if err := b.discardChallenge(); err != nil {
-			return fmt.Errorf("%w: publish epoch has passed", err)
-		}
-		return fmt.Errorf("%w: publish epoch has passed", ErrATXChallengeExpired)
-	case <-ctx.Done():
-		return ctx.Err()
+	if err := b.discardChallenge(); err != nil {
+		return fmt.Errorf("%w: after published atx", err)
 	}
 	return nil
 }

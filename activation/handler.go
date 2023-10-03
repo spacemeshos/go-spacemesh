@@ -31,11 +31,6 @@ var (
 	errMaliciousATX  = errors.New("malicious atx")
 )
 
-type atxChan struct {
-	ch        chan struct{}
-	listeners int
-}
-
 // Handler processes the atxs received from all nodes and their validity status.
 type Handler struct {
 	local           p2p.Peer
@@ -50,7 +45,6 @@ type Handler struct {
 	tortoise        system.Tortoise
 	log             log.Log
 	mu              sync.Mutex
-	atxChannels     map[types.ATXID]*atxChan
 	fetcher         system.Fetcher
 	poetCfg         PoetConfig
 }
@@ -81,7 +75,6 @@ func NewHandler(
 		goldenATXID:     goldenATXID,
 		nipostValidator: nipostValidator,
 		log:             log,
-		atxChannels:     make(map[types.ATXID]*atxChan),
 		fetcher:         fetcher,
 		beacon:          beacon,
 		tortoise:        tortoise,
@@ -93,42 +86,6 @@ var closedChan = make(chan struct{})
 
 func init() {
 	close(closedChan)
-}
-
-// AwaitAtx returns a channel that will receive notification when the specified atx with id is received via gossip.
-func (h *Handler) AwaitAtx(id types.ATXID) chan struct{} {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	if has, err := atxs.Has(h.cdb, id); err == nil && has {
-		return closedChan
-	}
-
-	ch, found := h.atxChannels[id]
-	if !found {
-		ch = &atxChan{
-			ch:        make(chan struct{}),
-			listeners: 0,
-		}
-		h.atxChannels[id] = ch
-	}
-	ch.listeners++
-	return ch.ch
-}
-
-// UnsubscribeAtx un subscribes the waiting for a specific atx with atx id id to arrive via gossip.
-func (h *Handler) UnsubscribeAtx(id types.ATXID) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	ch, found := h.atxChannels[id]
-	if !found {
-		return
-	}
-	ch.listeners--
-	if ch.listeners < 1 {
-		delete(h.atxChannels, id)
-	}
 }
 
 // ProcessAtx validates the active set size declared in the atx, and contextually validates the atx according to atx
@@ -423,12 +380,6 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 	}
 	h.beacon.OnAtx(header)
 	h.tortoise.OnAtx(header.ToData())
-
-	// notify subscribers
-	if ch, found := h.atxChannels[atx.ID()]; found {
-		close(ch.ch)
-		delete(h.atxChannels, atx.ID())
-	}
 
 	h.log.WithContext(ctx).With().Debug("finished storing atx in epoch", atx.ID(), atx.PublishEpoch)
 
