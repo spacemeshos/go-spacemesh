@@ -47,11 +47,6 @@ type nipostBuilder interface {
 	DataDir() string
 }
 
-type atxHandler interface {
-	AwaitAtx(id types.ATXID) chan struct{}
-	UnsubscribeAtx(id types.ATXID)
-}
-
 type syncer interface {
 	RegisterForATXSynced() chan struct{}
 }

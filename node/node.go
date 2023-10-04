@@ -869,7 +869,6 @@ func (app *App) initServices(ctx context.Context) error {
 		app.edSgn.NodeID(),
 		app.edSgn,
 		app.cachedDB,
-		atxHandler,
 		app.host,
 		nipostBuilder,
 		postSetupMgr,
