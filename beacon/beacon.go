@@ -231,13 +231,16 @@ func (pd *ProtocolDriver) setMetricsRegistry(registry *prometheus.Registry) {
 // Start starts listening for layers and outputs.
 func (pd *ProtocolDriver) Start(ctx context.Context) {
 	pd.startOnce.Do(func() {
-		pd.logger.With().Info("starting beacon protocol", log.String("config", fmt.Sprintf("%+v", pd.config)))
 		if pd.sync == nil {
 			pd.logger.Fatal("update sync state provider can't be nil")
 		}
-
 		pd.metricsCollector.Start(nil)
 
+		if pd.config.RoundsNumber == 0 {
+			pd.logger.Info("beacon protocol disabled")
+			return
+		}
+		pd.logger.With().Info("starting beacon protocol", log.String("config", fmt.Sprintf("%+v", pd.config)))
 		pd.setProposalTimeForNextEpoch()
 		pd.eg.Go(func() error {
 			pd.listenEpochs(ctx)

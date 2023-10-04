@@ -14,5 +14,8 @@
             "transaction", "activation", "admin", "smesher"
         ],
         "grpc-private-services": []
+    },
+    "logging": {
+        "hare": "debug"
     }
 }

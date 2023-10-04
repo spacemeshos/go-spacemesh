@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -28,7 +28,6 @@ type testFetch struct {
 	mMalS   *mocks.Mockrequester
 	mAtxS   *mocks.Mockrequester
 	mLyrS   *mocks.Mockrequester
-	mOpnS   *mocks.Mockrequester
 	mHashS  *mocks.Mockrequester
 	mMHashS *mocks.Mockrequester
 	mOpn2S  *mocks.Mockrequester
@@ -37,6 +36,7 @@ type testFetch struct {
 	mMalH        *mocks.MockSyncValidator
 	mAtxH        *mocks.MockSyncValidator
 	mBallotH     *mocks.MockSyncValidator
+	mActiveSetH  *mocks.MockSyncValidator
 	mBlocksH     *mocks.MockSyncValidator
 	mProposalH   *mocks.MockSyncValidator
 	method       int
@@ -52,13 +52,13 @@ func createFetch(tb testing.TB) *testFetch {
 		mMalS:        mocks.NewMockrequester(ctrl),
 		mAtxS:        mocks.NewMockrequester(ctrl),
 		mLyrS:        mocks.NewMockrequester(ctrl),
-		mOpnS:        mocks.NewMockrequester(ctrl),
 		mHashS:       mocks.NewMockrequester(ctrl),
 		mMHashS:      mocks.NewMockrequester(ctrl),
 		mOpn2S:       mocks.NewMockrequester(ctrl),
 		mMalH:        mocks.NewMockSyncValidator(ctrl),
 		mAtxH:        mocks.NewMockSyncValidator(ctrl),
 		mBallotH:     mocks.NewMockSyncValidator(ctrl),
+		mActiveSetH:  mocks.NewMockSyncValidator(ctrl),
 		mBlocksH:     mocks.NewMockSyncValidator(ctrl),
 		mProposalH:   mocks.NewMockSyncValidator(ctrl),
 		mTxBlocksH:   mocks.NewMockSyncValidator(ctrl),
@@ -72,7 +72,6 @@ func createFetch(tb testing.TB) *testFetch {
 		QueueSize:            1000,
 		RequestTimeout:       time.Second * time.Duration(3),
 		MaxRetriesForRequest: 3,
-		ServeNewProtocol:     true,
 	}
 	lg := logtest.New(tb)
 	tf.Fetch = NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), tf.mMesh, nil, nil,
@@ -83,13 +82,12 @@ func createFetch(tb testing.TB) *testFetch {
 			malProtocol:      tf.mMalS,
 			atxProtocol:      tf.mAtxS,
 			lyrDataProtocol:  tf.mLyrS,
-			lyrOpnsProtocol:  tf.mOpnS,
 			hashProtocol:     tf.mHashS,
 			meshHashProtocol: tf.mMHashS,
 			OpnProtocol:      tf.mOpn2S,
 		}),
 		withHost(tf.mh))
-	tf.Fetch.SetValidators(tf.mAtxH, tf.mPoetH, tf.mBallotH, tf.mBlocksH, tf.mProposalH, tf.mTxBlocksH, tf.mTxProposalH, tf.mMalH)
+	tf.Fetch.SetValidators(tf.mAtxH, tf.mPoetH, tf.mBallotH, tf.mActiveSetH, tf.mBlocksH, tf.mProposalH, tf.mTxBlocksH, tf.mTxProposalH, tf.mMalH)
 	return tf
 }
 
@@ -363,7 +361,6 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 		QueueSize:            1000,
 		RequestTimeout:       time.Second * time.Duration(3),
 		MaxRetriesForRequest: 3,
-		ServeNewProtocol:     true,
 	}
 	p2pconf := p2p.DefaultConfig()
 	p2pconf.Listen = "/ip4/127.0.0.1/tcp/0"
@@ -415,7 +412,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 
 	// We set a validatior just for atxs, this validator does not drop connections
 	vf := ValidatorFunc(func(context.Context, types.Hash32, peer.ID, []byte) error { return pubsub.ErrValidationReject })
-	fetcher.SetValidators(vf, nil, nil, nil, nil, nil, nil, nil)
+	fetcher.SetValidators(vf, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	// Request an atx by hash
 	_, err = fetcher.getHash(ctx, types.Hash32{}, datastore.ATXDB, fetcher.validators.atx.HandleMessage)
@@ -430,7 +427,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	}
 
 	// Now wrap the atx validator with  DropPeerOnValidationReject and set it again
-	fetcher.SetValidators(ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(vf, h, lg)), nil, nil, nil, nil, nil, nil, nil)
+	fetcher.SetValidators(ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(vf, h, lg)), nil, nil, nil, nil, nil, nil, nil, nil)
 
 	// Request an atx by hash
 	_, err = fetcher.getHash(ctx, types.Hash32{}, datastore.ATXDB, fetcher.validators.atx.HandleMessage)

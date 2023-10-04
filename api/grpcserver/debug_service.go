@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"go.uber.org/zap"
@@ -78,7 +77,7 @@ func (d DebugService) Accounts(ctx context.Context, in *pb.AccountsRequest) (*pb
 }
 
 // NetworkInfo query provides NetworkInfoResponse.
-func (d DebugService) NetworkInfo(ctx context.Context, _ *empty.Empty) (*pb.NetworkInfoResponse, error) {
+func (d DebugService) NetworkInfo(ctx context.Context, _ *emptypb.Empty) (*pb.NetworkInfoResponse, error) {
 	return &pb.NetworkInfoResponse{Id: d.identity.ID().String()}, nil
 }
 

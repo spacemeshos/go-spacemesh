@@ -5,47 +5,51 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/spacemeshos/poet/config"
 	"github.com/spacemeshos/poet/server"
-	"github.com/spacemeshos/poet/service"
 )
 
 // HTTPPoetTestHarness utilizes a local self-contained poet server instance
 // targeted by an HTTP client. It is intended to be used in tests only.
 type HTTPPoetTestHarness struct {
-	*HTTPPoetClient
 	Service *server.Server
 }
 
-type HTTPPoetOpt func(*config.Config)
+func (h *HTTPPoetTestHarness) RestURL() *url.URL {
+	return &url.URL{
+		Scheme: "http",
+		Host:   h.Service.GrpcRestProxyAddr().String(),
+	}
+}
+
+type HTTPPoetOpt func(*server.Config)
 
 func WithGenesis(genesis time.Time) HTTPPoetOpt {
-	return func(cfg *config.Config) {
-		cfg.Service.Genesis = service.Genesis(genesis)
+	return func(cfg *server.Config) {
+		cfg.Genesis = server.Genesis(genesis)
 	}
 }
 
 func WithEpochDuration(epoch time.Duration) HTTPPoetOpt {
-	return func(cfg *config.Config) {
-		cfg.Service.EpochDuration = epoch
+	return func(cfg *server.Config) {
+		cfg.Round.EpochDuration = epoch
 	}
 }
 
 func WithPhaseShift(phase time.Duration) HTTPPoetOpt {
-	return func(cfg *config.Config) {
-		cfg.Service.PhaseShift = phase
+	return func(cfg *server.Config) {
+		cfg.Round.PhaseShift = phase
 	}
 }
 
 func WithCycleGap(gap time.Duration) HTTPPoetOpt {
-	return func(cfg *config.Config) {
-		cfg.Service.CycleGap = gap
+	return func(cfg *server.Config) {
+		cfg.Round.CycleGap = gap
 	}
 }
 
 // NewHTTPPoetTestHarness returns a new instance of HTTPPoetHarness.
-func NewHTTPPoetTestHarness(ctx context.Context, poetdir string, clientCfg PoetConfig, opts ...HTTPPoetOpt) (*HTTPPoetTestHarness, error) {
-	cfg := config.DefaultConfig()
+func NewHTTPPoetTestHarness(ctx context.Context, poetdir string, opts ...HTTPPoetOpt) (*HTTPPoetTestHarness, error) {
+	cfg := server.DefaultConfig()
 	cfg.PoetDir = poetdir
 	cfg.RawRESTListener = "localhost:0"
 	cfg.RawRPCListener = "localhost:0"
@@ -54,31 +58,14 @@ func NewHTTPPoetTestHarness(ctx context.Context, poetdir string, clientCfg PoetC
 		opt(cfg)
 	}
 
-	cfg, err := config.SetupConfig(cfg)
-	if err != nil {
-		return nil, err
-	}
+	server.SetupConfig(cfg)
 
 	poet, err := server.New(ctx, *cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	// NewHTTPPoetClient takes an URL as connection string. Server speaks HTTP.
-	url := &url.URL{
-		Scheme: "http",
-		Host:   poet.GrpcRestProxyAddr().String(),
-	}
-
-	client, err := NewHTTPPoetClient(url.String(), clientCfg)
-	if err != nil {
-		return nil, err
-	}
-
-	// TODO: query for the REST address to allow dynamic port allocation.
-	// It needs changes in poet.
 	return &HTTPPoetTestHarness{
-		HTTPPoetClient: client,
-		Service:        poet,
+		Service: poet,
 	}, nil
 }

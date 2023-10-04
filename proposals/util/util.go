@@ -3,12 +3,8 @@ package util
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
-	"math/big"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 )
 
 var (
@@ -29,77 +25,14 @@ func CalcEligibleLayer(epochNumber types.EpochID, layersPerEpoch uint32, vrfSig 
 	return epochNumber.FirstLayer().Add(uint32(eligibleLayerOffset))
 }
 
-func maxWeight(a, b uint64) uint64 {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func GetLegacyNumEligible(lid types.LayerID, weight, minWeight, totalWeight uint64, committeeSize, layersPerEpoch uint32) (uint32, error) {
-	legacyLayer := types.GetLegacyLayer()
-	if legacyLayer != 0 && legacyLayer >= lid.Uint32() {
-		return 1, nil
-	}
-	return GetNumEligibleSlots(weight, minWeight, totalWeight, committeeSize, layersPerEpoch)
-}
-
 // GetNumEligibleSlots calculates the number of eligible slots for a smesher in an epoch.
 func GetNumEligibleSlots(weight, minWeight, totalWeight uint64, committeeSize, layersPerEpoch uint32) (uint32, error) {
 	if totalWeight == 0 {
 		return 0, ErrZeroTotalWeight
 	}
-	numEligible := weight * uint64(committeeSize) * uint64(layersPerEpoch) / maxWeight(minWeight, totalWeight) // TODO: ensure no overflow
+	numEligible := weight * uint64(committeeSize) * uint64(layersPerEpoch) / max(minWeight, totalWeight) // TODO: ensure no overflow
 	if numEligible == 0 {
 		numEligible = 1
 	}
 	return uint32(numEligible), nil
-}
-
-// ComputeWeightPerEligibility computes the ballot weight per eligibility w.r.t the active set recorded in its reference ballot.
-func ComputeWeightPerEligibility(
-	cdb *datastore.CachedDB,
-	ballot *types.Ballot,
-) (*big.Rat, error) {
-	var (
-		refBallot = ballot
-		hdr       *types.ActivationTxHeader
-		err       error
-		atxWeight uint64
-	)
-	if ballot.EpochData == nil {
-		if ballot.RefBallot == types.EmptyBallotID {
-			return nil, fmt.Errorf("%w: empty ref ballot but no epoch data %s", ErrBadBallotData, ballot.ID())
-		}
-		refBallot, err = ballots.Get(cdb, ballot.RefBallot)
-		if err != nil {
-			return nil, fmt.Errorf("%w: missing ref ballot %s (for %s)", err, ballot.RefBallot, ballot.ID())
-		}
-	}
-	if len(refBallot.ActiveSet) == 0 {
-		return nil, fmt.Errorf("ref ballot missing active set %s (for %s)", ballot.RefBallot, ballot.ID())
-	}
-	if refBallot.EpochData == nil {
-		return nil, fmt.Errorf("epoch data is nil on ballot %d/%s", refBallot.Layer, refBallot.ID())
-	}
-	if refBallot.EpochData.EligibilityCount == 0 {
-		return nil, fmt.Errorf("eligibility count is 0 on ballot %d/%s", refBallot.Layer, refBallot.ID())
-	}
-	for _, atxID := range refBallot.ActiveSet {
-		hdr, err = cdb.GetAtxHeader(atxID)
-		if err != nil {
-			return nil, fmt.Errorf("%w: missing atx %s in active set of %s (for %s)", err, atxID, refBallot.ID(), ballot.ID())
-		}
-		if atxID == ballot.AtxID {
-			atxWeight = hdr.GetWeight()
-			break
-		}
-	}
-	if atxWeight == 0 {
-		return nil, fmt.Errorf("atx id %v is not found in the active set of the reference ballot %v with atxid %v", ballot.AtxID, refBallot.ID(), refBallot.AtxID)
-	}
-	return new(big.Rat).SetFrac(
-		new(big.Int).SetUint64(atxWeight),
-		new(big.Int).SetUint64(uint64(refBallot.EpochData.EligibilityCount)),
-	), nil
 }

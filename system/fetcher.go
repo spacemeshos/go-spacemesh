@@ -7,7 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 )
 
-//go:generate mockgen -package=mocks -destination=./mocks/fetcher.go -source=./fetcher.go
+//go:generate mockgen -typed -package=mocks -destination=./mocks/fetcher.go -source=./fetcher.go
 
 // Fetcher is a general interface that defines a component capable of fetching data from remote peers.
 type Fetcher interface {
@@ -15,6 +15,7 @@ type Fetcher interface {
 	BlockFetcher
 	PoetProofFetcher
 	BallotFetcher
+	ActiveSetFetcher
 	ProposalFetcher
 	TxFetcher
 	PeerTracker
@@ -49,6 +50,11 @@ type BallotFetcher interface {
 // ProposalFetcher defines an interface for fetching Proposal from remote peers.
 type ProposalFetcher interface {
 	GetProposals(context.Context, []types.ProposalID) error
+}
+
+// ActiveSetFetcher defines an interface downloading active set.
+type ActiveSetFetcher interface {
+	GetActiveSet(context.Context, types.Hash32) error
 }
 
 // PeerTracker defines an interface to track peer hashes.

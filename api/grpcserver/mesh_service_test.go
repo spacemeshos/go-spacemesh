@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -142,7 +142,8 @@ func TestMeshService_MalfeasanceQuery(t *testing.T) {
 	genTime := NewMockgenesisTimeAPI(ctrl)
 	db := sql.InMemory()
 	srv := NewMeshService(datastore.NewCachedDB(db, logtest.New(t)), meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
-	t.Cleanup(launchServer(t, cfg, srv))
+	cfg, cleanup := launchServer(t, srv)
+	t.Cleanup(cleanup)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -184,7 +185,8 @@ func TestMeshService_MalfeasanceStream(t *testing.T) {
 	genTime := NewMockgenesisTimeAPI(ctrl)
 	db := sql.InMemory()
 	srv := NewMeshService(datastore.NewCachedDB(db, logtest.New(t)), meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
-	t.Cleanup(launchServer(t, cfg, srv))
+	cfg, cleanup := launchServer(t, srv)
+	t.Cleanup(cleanup)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()

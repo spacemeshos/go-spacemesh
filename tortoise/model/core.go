@@ -107,10 +107,6 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		if c.refBallot != nil {
 			ballot.RefBallot = *c.refBallot
 		} else {
-			_, activeset, err := c.cdb.GetEpochWeight(ev.LayerID.GetEpoch())
-			if err != nil {
-				panic(err)
-			}
 			beacon, err := c.beacons.GetBeacon(ev.LayerID.GetEpoch())
 			if err != nil {
 				beacon = types.Beacon{}
@@ -118,10 +114,10 @@ func (c *core) OnMessage(m Messenger, event Message) {
 				c.beacons.StoreBeacon(ev.LayerID.GetEpoch(), beacon)
 			}
 			ballot.EpochData = &types.EpochData{
-				ActiveSetHash: types.Hash32{1, 2, 3},
-				Beacon:        beacon,
+				ActiveSetHash:    types.Hash32{1, 2, 3},
+				Beacon:           beacon,
+				EligibilityCount: c.eligibilities,
 			}
-			ballot.ActiveSet = activeset
 		}
 		ballot.Signature = c.signer.Sign(signing.BALLOT, ballot.SignedBytes())
 		ballot.SmesherID = c.signer.NodeID()
@@ -133,7 +129,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		m.Send(MessageBallot{Ballot: ballot})
 	case MessageLayerEnd:
 		if ev.LayerID.After(types.GetEffectiveGenesis()) {
-			tortoise.RecoverLayer(context.Background(), c.tortoise, c.cdb, c.beacons, ev.LayerID, ev.LayerID)
+			tortoise.RecoverLayer(context.Background(), c.tortoise, c.cdb, c.beacons, ev.LayerID, ev.LayerID, ev.LayerID, ev.LayerID)
 			m.Notify(EventVerified{ID: c.id, Verified: c.tortoise.LatestComplete(), Layer: ev.LayerID})
 		}
 
@@ -202,11 +198,4 @@ func (b *beaconStore) GetBeacon(eid types.EpochID) (types.Beacon, error) {
 
 func (b *beaconStore) StoreBeacon(eid types.EpochID, beacon types.Beacon) {
 	b.beacons[eid] = beacon
-}
-
-func max(i, j uint32) uint32 {
-	if i > j {
-		return i
-	}
-	return j
 }

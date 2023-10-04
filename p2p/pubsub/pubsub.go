@@ -110,7 +110,7 @@ func New(ctx context.Context, logger log.Log, h host.Host, cfg Config) (*PubSub,
 	}, nil
 }
 
-//go:generate mockgen -package=mocks -destination=./mocks/publisher.go -source=./pubsub.go
+//go:generate mockgen -typed -package=mocks -destination=./mocks/publisher.go -source=./pubsub.go
 
 // Publisher interface for publishing messages.
 type Publisher interface {

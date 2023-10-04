@@ -46,6 +46,7 @@ func NewTestNetwork(t *testing.T, conf config.Config, l log.Log, size int) []*Te
 		c.DataDirParent = dir
 		c.SMESHING.Opts.DataDir = dir
 		c.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte(strconv.Itoa(i))).String()
+
 		c.FileLock = filepath.Join(c.DataDirParent, "LOCK")
 
 		app := NewApp(t, &c, l)

@@ -16,7 +16,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/malfeasance"
-	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -393,7 +392,7 @@ func (h *Hare) onTick(ctx context.Context, lid types.LayerID) (bool, error) {
 		report: h.outputChan,
 		wc:     h.wcChan,
 	}
-	props := goodProposals(ctx, h.Log, h.msh, h.nodeID, lid, types.LayerID(h.config.StopAtxGrading), beacon, h.layerClock.LayerToTime(lid.GetEpoch().FirstLayer()), h.config.WakeupDelta)
+	props := goodProposals(ctx, h.Log, h.msh, h.nodeID, lid, beacon)
 	preNumProposals.Add(float64(len(props)))
 	set := NewSet(props)
 	cp := h.factory(ctx, h.config, lid, set, h.rolacle, et, h.sign, h.publisher, comm, clock)
@@ -456,10 +455,8 @@ func goodProposals(
 	logger log.Log,
 	msh mesh,
 	nodeID types.NodeID,
-	lid, stopGrading types.LayerID,
+	lid types.LayerID,
 	epochBeacon types.Beacon,
-	epochStart time.Time,
-	networkDelay time.Duration,
 ) []types.ProposalID {
 	props, err := msh.Proposals(lid)
 	if err != nil {
@@ -473,7 +470,6 @@ func goodProposals(
 
 	var (
 		beacon        types.Beacon
-		activeSet     []types.ATXID
 		result        []types.ProposalID
 		ownHdr        *types.ActivationTxHeader
 		ownTickHeight = uint64(math.MaxUint64)
@@ -492,7 +488,6 @@ func goodProposals(
 	for _, p := range props {
 		atxs[p.AtxID]++
 	}
-	cache := map[types.ATXID]miner.AtxGrade{}
 	for _, p := range props {
 		if p.IsMalicious() {
 			logger.With().Warning("not voting on proposal from malicious identity",
@@ -527,7 +522,6 @@ func goodProposals(
 		}
 		if p.EpochData != nil {
 			beacon = p.EpochData.Beacon
-			activeSet = p.ActiveSet
 		} else if p.RefBallot == types.EmptyBallotID {
 			logger.With().Error("proposal missing ref ballot",
 				log.Context(ctx),
@@ -553,37 +547,7 @@ func goodProposals(
 			return []types.ProposalID{}
 		} else {
 			beacon = refBallot.EpochData.Beacon
-			activeSet = refBallot.ActiveSet
 		}
-
-		if len(activeSet) == 0 {
-			logger.With().Error("proposal missing active set",
-				log.Context(ctx),
-				p.ID(),
-				lid,
-			)
-			return []types.ProposalID{}
-		}
-		if lid < stopGrading {
-			if evil, err := gradeActiveSet(cache, activeSet, msh, epochStart, networkDelay); err != nil {
-				logger.With().Error("failed to grade active set",
-					log.Context(ctx),
-					lid,
-					p.ID(),
-					log.Err(err),
-				)
-				return []types.ProposalID{}
-			} else if evil != types.EmptyATXID {
-				logger.With().Warning("proposal has grade 0 active set",
-					log.Context(ctx),
-					lid,
-					p.ID(),
-					log.Stringer("evil atx", evil),
-				)
-				continue
-			}
-		}
-
 		if beacon == epochBeacon {
 			result = append(result, p.ID())
 		} else {
@@ -596,29 +560,6 @@ func goodProposals(
 		}
 	}
 	return result
-}
-
-func gradeActiveSet(cache map[types.ATXID]miner.AtxGrade, activeSet []types.ATXID, msh mesh, epochStart time.Time, networkDelay time.Duration) (types.ATXID, error) {
-	for _, id := range activeSet {
-		var grade miner.AtxGrade
-		if g, ok := cache[id]; ok {
-			grade = g
-		} else {
-			hdr, err := msh.GetAtxHeader(id)
-			if err != nil {
-				return types.EmptyATXID, fmt.Errorf("get header %v: %w", id, err)
-			}
-			grade, err = miner.GradeAtx(msh, hdr.NodeID, hdr.Received, epochStart, networkDelay)
-			if err != nil {
-				return types.EmptyATXID, fmt.Errorf("grade %v: %w", id, err)
-			}
-			cache[id] = grade
-		}
-		if grade == miner.Evil {
-			return id, nil
-		}
-	}
-	return types.EmptyATXID, nil
 }
 
 var (

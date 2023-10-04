@@ -110,10 +110,14 @@ type LayerData struct {
 	Ballots []types.BallotID `scale:"max=500"` // expected are 50 proposals per layer + safety margin
 }
 
-// LayerOpinion is the response for opinion for a given layer.
+type OpinionRequest struct {
+	Layer types.LayerID
+	Block *types.BlockID
+}
+
 type LayerOpinion struct {
 	PrevAggHash types.Hash32
-	Cert        *types.Certificate
+	Certified   *types.BlockID
 
 	peer p2p.Peer
 }
@@ -130,38 +134,6 @@ func (lo *LayerOpinion) Peer() p2p.Peer {
 
 // MarshalLogObject implements logging encoder for LayerOpinion.
 func (lo *LayerOpinion) MarshalLogObject(encoder log.ObjectEncoder) error {
-	encoder.AddString("peer", lo.peer.String())
-	encoder.AddString("prev_hash", lo.PrevAggHash.String())
-	if lo.Cert != nil {
-		encoder.AddString("cert_block_id", lo.Cert.BlockID.String())
-	}
-	return nil
-}
-
-type OpinionRequest struct {
-	Layer types.LayerID
-	Block *types.BlockID
-}
-
-type LayerOpinion2 struct {
-	PrevAggHash types.Hash32
-	Certified   *types.BlockID
-
-	peer p2p.Peer
-}
-
-// SetPeer ...
-func (lo *LayerOpinion2) SetPeer(p p2p.Peer) {
-	lo.peer = p
-}
-
-// Peer ...
-func (lo *LayerOpinion2) Peer() p2p.Peer {
-	return lo.peer
-}
-
-// MarshalLogObject implements logging encoder for LayerOpinion.
-func (lo *LayerOpinion2) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("peer", lo.peer.String())
 	encoder.AddString("prev hash", lo.PrevAggHash.String())
 	encoder.AddBool("has cert", lo.Certified != nil)

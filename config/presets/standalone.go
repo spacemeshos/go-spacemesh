@@ -76,9 +76,12 @@ func standalone() config.Config {
 	conf.Beacon.VotesLimit = 100
 
 	conf.PoETServers = []string{"http://0.0.0.0:10010"}
-	conf.POET.GracePeriod = 5 * time.Second
+	conf.POET.GracePeriod = 12 * time.Second
 	conf.POET.CycleGap = 30 * time.Second
 	conf.POET.PhaseShift = 30 * time.Second
+	conf.POET.RequestTimeout = 12 * time.Second // RequestRetryDelay * 2 * MaxRequestRetries*(MaxRequestRetries+1)/2
+	conf.POET.RequestRetryDelay = 1 * time.Second
+	conf.POET.MaxRequestRetries = 3
 
 	conf.P2P.DisableNatPort = true
 

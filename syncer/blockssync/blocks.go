@@ -9,7 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-//go:generate mockgen -package=blockssync -destination=./mocks.go -source=./blocks.go
+//go:generate mockgen -typed -package=blockssync -destination=./mocks.go -source=./blocks.go
 
 type blockFetcher interface {
 	GetBlocks(context.Context, []types.BlockID) error

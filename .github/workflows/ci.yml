@@ -1,6 +1,7 @@
 name: CI
 
 env:
+  go-version: "1.21"
   GCLOUD_KEY: ${{ secrets.GCLOUD_KEY }}
   PROJECT_NAME: ${{ secrets.PROJECT_NAME }}
   CLUSTER_NAME: ${{ secrets.CLUSTER_NAME }}
@@ -36,7 +37,7 @@ jobs:
     outputs:
       nondocchanges: ${{ steps.filter.outputs.nondoc }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v2
         id: filter
         with:
@@ -60,12 +61,12 @@ jobs:
       - name: Add OpenCL support
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: set up go
         uses: actions/setup-go@v4
         with:
           check-latest: true
-          go-version-file: "go.mod"
+          go-version: ${{ env.go-version }}
       - name: fmt, tidy, generate
         run: |
           make install
@@ -83,12 +84,12 @@ jobs:
       - name: Add OpenCL support
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: set up go
         uses: actions/setup-go@v4
         with:
           check-latest: true
-          go-version-file: "go.mod"
+          go-version: ${{ env.go-version }}
       - name: setup env
         run: make install
       - name: staticcheck
@@ -121,12 +122,12 @@ jobs:
         run: |
           Set-MpPreference -DisableRealtimeMonitoring $true
       - name: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: set up go
         uses: actions/setup-go@v4
         with:
           check-latest: true
-          go-version-file: "go.mod"
+          go-version: ${{ env.go-version }}
           cache: ${{ runner.arch != 'arm64' }}
       - name: setup env
         run: make install
@@ -167,14 +168,14 @@ jobs:
         run: |
           Set-MpPreference -DisableRealtimeMonitoring $true
       - name: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           lfs: true
       - name: set up go
         uses: actions/setup-go@v4
         with:
           check-latest: true
-          go-version-file: "go.mod"
+          go-version: ${{ env.go-version }}
           cache: ${{ runner.arch != 'arm64' }}
       - name: Add OpenCL support - Ubuntu
         if: ${{ matrix.os == 'ubuntu-latest' }}
@@ -196,7 +197,7 @@ jobs:
           GOTESTSUM_JUNITFILE: unit-tests.xml
         run: make test
       - name: Publish Test Report
-        uses: mikepenz/action-junit-report@v3
+        uses: mikepenz/action-junit-report@v4
         # always run even if the previous step fails
         if: always()
         with:
@@ -235,14 +236,14 @@ jobs:
         run: |
           Set-MpPreference -DisableRealtimeMonitoring $true
       - name: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           lfs: true
       - name: set up go
         uses: actions/setup-go@v4
         with:
           check-latest: true
-          go-version-file: "go.mod"
+          go-version: ${{ env.go-version }}
           cache: ${{ runner.arch != 'arm64' }}
       - name: Add OpenCL support - Ubuntu
         if: ${{ matrix.os == 'ubuntu-latest' }}
@@ -264,7 +265,7 @@ jobs:
           GOTESTSUM_JUNITFILE: unit-tests.xml
         run: make test
       - name: Publish Test Report
-        uses: mikepenz/action-junit-report@v3
+        uses: mikepenz/action-junit-report@v4
         # always run even if the previous step fails
         if: always()
         with:

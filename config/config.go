@@ -74,8 +74,7 @@ func (cfg *Config) DataDir() string {
 }
 
 type TestConfig struct {
-	SmesherKey      string `mapstructure:"testing-smesher-key"`
-	MinerGoodAtxPct int
+	SmesherKey string `mapstructure:"testing-smesher-key"`
 }
 
 // BaseConfig defines the default configuration options for spacemesh app.
@@ -95,7 +94,6 @@ type BaseConfig struct {
 	ProfilerURL  string `mapstructure:"profiler-url"`
 
 	LayerDuration  time.Duration `mapstructure:"layer-duration"`
-	LegacyLayer    uint32        `mapstructure:"legacy-layer"`
 	LayerAvgSize   uint32        `mapstructure:"layer-average-size"`
 	LayersPerEpoch uint32        `mapstructure:"layers-per-epoch"`
 
@@ -110,10 +108,18 @@ type BaseConfig struct {
 	OptFilterThreshold int    `mapstructure:"optimistic-filtering-threshold"`
 	TickSize           uint64 `mapstructure:"tick-size"`
 
-	DatabaseConnections     int  `mapstructure:"db-connections"`
-	DatabaseLatencyMetering bool `mapstructure:"db-latency-metering"`
+	DatabaseConnections          int           `mapstructure:"db-connections"`
+	DatabaseLatencyMetering      bool          `mapstructure:"db-latency-metering"`
+	DatabaseSizeMeteringInterval time.Duration `mapstructure:"db-size-metering-interval"`
+	DatabasePruneInterval        time.Duration `mapstructure:"db-prune-interval"`
 
 	NetworkHRP string `mapstructure:"network-hrp"`
+
+	// MinerGoodAtxsPercent is a threshold to decide if tortoise activeset should be
+	// picked from first block insted of synced data.
+	MinerGoodAtxsPercent int `mapstructure:"miner-good-atxs-percent"`
+
+	RegossipAtxInterval time.Duration `mapstructure:"regossip-atx-interval"`
 }
 
 type PublicMetrics struct {
@@ -151,7 +157,7 @@ func DefaultConfig() Config {
 		POET:            activation.DefaultPoetConfig(),
 		SMESHING:        DefaultSmeshingConfig(),
 		FETCH:           fetch.DefaultConfig(),
-		LOGGING:         defaultLoggingConfig(),
+		LOGGING:         DefaultLoggingConfig(),
 		Bootstrap:       bootstrap.DefaultConfig(),
 		Sync:            syncer.DefaultConfig(),
 		Recovery:        checkpoint.DefaultConfig(),
@@ -171,20 +177,22 @@ func DefaultTestConfig() Config {
 // DefaultBaseConfig returns a default configuration for spacemesh.
 func defaultBaseConfig() BaseConfig {
 	return BaseConfig{
-		DataDirParent:       defaultDataDir,
-		FileLock:            filepath.Join(os.TempDir(), "spacemesh.lock"),
-		CollectMetrics:      false,
-		MetricsPort:         1010,
-		ProfilerName:        "gp-spacemesh",
-		LayerDuration:       30 * time.Second,
-		LayersPerEpoch:      3,
-		PoETServers:         []string{"127.0.0.1"},
-		TxsPerProposal:      100,
-		BlockGasLimit:       math.MaxUint64,
-		OptFilterThreshold:  90,
-		TickSize:            100,
-		DatabaseConnections: 16,
-		NetworkHRP:          "sm",
+		DataDirParent:                defaultDataDir,
+		FileLock:                     filepath.Join(os.TempDir(), "spacemesh.lock"),
+		CollectMetrics:               false,
+		MetricsPort:                  1010,
+		ProfilerName:                 "gp-spacemesh",
+		LayerDuration:                30 * time.Second,
+		LayersPerEpoch:               3,
+		PoETServers:                  []string{"127.0.0.1"},
+		TxsPerProposal:               100,
+		BlockGasLimit:                math.MaxUint64,
+		OptFilterThreshold:           90,
+		TickSize:                     100,
+		DatabaseConnections:          16,
+		DatabaseSizeMeteringInterval: 10 * time.Minute,
+		DatabasePruneInterval:        30 * time.Minute,
+		NetworkHRP:                   "sm",
 	}
 }
 

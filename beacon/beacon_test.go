@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/spacemeshos/fixed"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -500,7 +500,7 @@ func TestBeacon_BeaconsWithDatabase(t *testing.T) {
 	// clear out the in-memory map
 	// the database should still give us values
 	pd.mu.Lock()
-	pd.beacons = make(map[types.EpochID]types.Beacon)
+	clear(pd.beacons)
 	pd.mu.Unlock()
 
 	got, err = pd.GetBeacon(epoch3)

@@ -8,7 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 )
 
-//go:generate mockgen -package=beacon -destination=./mocks.go -source=./interface.go
+//go:generate mockgen -typed -package=beacon -destination=./mocks.go -source=./interface.go
 
 type coin interface {
 	StartEpoch(context.Context, types.EpochID)

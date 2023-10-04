@@ -78,6 +78,8 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.DatabaseConnections, "configure number of active connections to enable parallel read requests")
 	cmd.PersistentFlags().BoolVar(&cfg.DatabaseLatencyMetering, "db-latency-metering",
 		cfg.DatabaseLatencyMetering, "if enabled collect latency histogram for every database query")
+	cmd.PersistentFlags().DurationVar(&cfg.DatabasePruneInterval, "db-prune-interval",
+		cfg.DatabasePruneInterval, "configure interval for database pruning")
 
 	/** ======================== P2P Flags ========================== **/
 
@@ -115,7 +117,6 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.P2P.AdvertiseAddress, "libp2p address with identity (example: /dns4/bootnode.spacemesh.io/tcp/5003)")
 	cmd.PersistentFlags().BoolVar(&cfg.P2P.Bootnode, "p2p-bootnode", cfg.P2P.Bootnode,
 		"gossipsub and discovery will be running in a mode suitable for bootnode")
-	cmd.PersistentFlags().BoolVar(&cfg.P2P.DisableLegacyDiscovery, "p2p-disable-legacy-discovery", cfg.P2P.DisableLegacyDiscovery, "custom legacy discovery is disabled")
 	cmd.PersistentFlags().BoolVar(&cfg.P2P.PrivateNetwork, "p2p-private-network", cfg.P2P.PrivateNetwork, "discovery will work in private mode. mostly useful for testing, don't set in public networks")
 	/** ======================== TIME Flags ========================== **/
 
@@ -256,7 +257,9 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().DurationVar(&cfg.POET.CycleGap, "cycle-gap",
 		cfg.POET.CycleGap, "cycle gap of poet server")
 	cmd.PersistentFlags().DurationVar(&cfg.POET.GracePeriod, "grace-period",
-		cfg.POET.GracePeriod, "propagation time for ATXs in the network")
+		cfg.POET.GracePeriod, "time before PoET round starts when the node builds and submits a challenge")
+	cmd.PersistentFlags().DurationVar(&cfg.POET.RequestTimeout, "poet-request-timeout",
+		cfg.POET.RequestTimeout, "timeout for poet requests")
 
 	/**======================== bootstrap data updater Flags ========================== **/
 	cmd.PersistentFlags().StringVar(&cfg.Bootstrap.URL, "bootstrap-url",
@@ -267,14 +270,6 @@ func AddCommands(cmd *cobra.Command) {
 	/**======================== testing related flags ========================== **/
 	cmd.PersistentFlags().StringVar(&cfg.TestConfig.SmesherKey, "testing-smesher-key",
 		"", "import private smesher key for testing",
-	)
-	// TODO remove after sync protocol update
-	cmd.PersistentFlags().BoolVar(&cfg.Sync.UseNewProtocol, "use-new-opn",
-		cfg.Sync.UseNewProtocol, "use new opinions sync protocol",
-	)
-	// TODO remove after sync protocol update
-	cmd.PersistentFlags().BoolVar(&cfg.FETCH.ServeNewProtocol, "serve-new-opn",
-		cfg.FETCH.ServeNewProtocol, "serve new opinions sync protocol",
 	)
 
 	// Bind Flags to config

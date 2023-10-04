@@ -9,14 +9,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
-	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	mmocks "github.com/spacemeshos/go-spacemesh/mesh/mocks"
@@ -30,6 +28,8 @@ import (
 const (
 	layersPerEpoch = 3
 	never          = time.Second * 60 * 24
+
+	outOfSyncThreshold = 3
 )
 
 func TestMain(m *testing.M) {
@@ -95,12 +95,12 @@ func newTestSyncer(t *testing.T, interval time.Duration) *testSyncer {
 	require.NoError(t, err)
 
 	cfg := Config{
-		Interval:         interval,
-		GossipDuration:   5 * time.Millisecond,
-		EpochEndFraction: 0.66,
-		SyncCertDistance: 4,
-		HareDelayLayers:  5,
-		UseNewProtocol:   true,
+		Interval:                 interval,
+		GossipDuration:           5 * time.Millisecond,
+		EpochEndFraction:         0.66,
+		SyncCertDistance:         4,
+		HareDelayLayers:          5,
+		OutOfSyncThresholdLayers: outOfSyncThreshold,
 	}
 	ts.syncer = NewSyncer(ts.cdb, ts.mTicker, ts.mBeacon, ts.msh, nil, nil, ts.mLyrPatrol, ts.mCertHdr,
 		WithConfig(cfg),
@@ -189,8 +189,7 @@ func advanceState(t testing.TB, ts *testSyncer, from, to types.LayerID) {
 	for lid := from; lid <= to; lid++ {
 		require.NoError(t, certificates.Add(ts.cdb, lid, &types.Certificate{BlockID: types.EmptyBlockID}))
 		ts.mLyrPatrol.EXPECT().IsHareInCharge(lid)
-		ts.mDataFetcher.EXPECT().PeerProtocols(gomock.Any()).Return([]protocol.ID{fetch.OpnProtocol}, nil)
-		ts.mDataFetcher.EXPECT().PollLayerOpinions2(gomock.Any(), lid, false, gomock.Any())
+		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid, false, gomock.Any())
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
 		ts.mTortoise.EXPECT().Updates().Return(fixture.RLayers(fixture.RLayer(lid)))
 		ts.mVm.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any())
@@ -539,7 +538,7 @@ func TestNetworkHasNoData(t *testing.T) {
 		require.True(t, ts.syncer.IsSynced(context.Background()))
 	}
 	// the network hasn't received any data
-	require.Greater(t, ts.syncer.ticker.CurrentLayer()-ts.msh.LatestLayer(), outOfSyncThreshold)
+	require.Greater(t, int(ts.syncer.ticker.CurrentLayer()-ts.msh.LatestLayer()), outOfSyncThreshold)
 }
 
 // test the case where the node was originally synced, and somehow gets out of sync, but

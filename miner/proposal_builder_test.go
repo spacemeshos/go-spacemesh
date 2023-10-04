@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -21,6 +21,7 @@ import (
 	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
@@ -195,7 +196,7 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 			require.Equal(t, atxID, p.AtxID)
 			require.Equal(t, p.Layer, layerID)
 			require.NotNil(t, p.EpochData)
-			require.Equal(t, activeSet, types.ATXIDList(p.ActiveSet))
+			require.Empty(t, p.ActiveSet)
 			require.Equal(t, beacon, p.EpochData.Beacon)
 			require.Equal(t, ee.Slots, p.EpochData.EligibilityCount)
 			require.Equal(t, []types.TransactionID{tx1.ID}, p.TxIDs)
@@ -268,7 +269,8 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 			require.Equal(t, p.Layer, layerID)
 			require.NotNil(t, p.EpochData)
 			require.Equal(t, ee.Slots, p.EpochData.EligibilityCount)
-			require.Equal(t, activeSet, types.ATXIDList(p.ActiveSet))
+			require.Empty(t, p.ActiveSet)
+			require.Equal(t, activeSet.Hash(), p.EpochData.ActiveSetHash)
 			require.Equal(t, beacon, p.EpochData.Beacon)
 			require.Equal(t, []types.TransactionID{tx.ID}, p.TxIDs)
 			require.Equal(t, meshHash, p.MeshHash)
@@ -398,7 +400,11 @@ func TestBuilder_HandleLayer_NoRefBallot(t *testing.T) {
 			require.NoError(t, codec.Decode(data, &got))
 			require.Equal(t, types.EmptyBallotID, got.RefBallot)
 			require.Equal(t, types.EpochData{ActiveSetHash: activeSet.Hash(), Beacon: beacon, EligibilityCount: ee.Slots}, *got.EpochData)
-			require.Equal(t, activeSet, types.ATXIDList(got.ActiveSet))
+			require.Empty(t, got.ActiveSet)
+			saved, err := activesets.Get(b.cdb, activeSet.Hash())
+			require.NoError(t, err)
+			require.Equal(t, activeSet, types.ATXIDList(saved.Set))
+			require.Equal(t, got.Layer.GetEpoch(), saved.Epoch)
 			require.Equal(t, ee.Slots, got.EpochData.EligibilityCount)
 			return nil
 		})
@@ -411,7 +417,10 @@ func TestBuilder_HandleLayer_RefBallot(t *testing.T) {
 	b := createBuilder(t)
 
 	layerID := types.LayerID(layersPerEpoch * 3).Add(1)
+	atx := types.ATXID{1, 2, 3}
 	refBallot := types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, b.ProposalBuilder.signer.NodeID(), layerID.Sub(1))
+	refBallot.EpochData = &types.EpochData{}
+	refBallot.AtxID = atx
 	require.NoError(t, ballots.Add(b.cdb, &refBallot))
 	beacon := types.RandomBeacon()
 	sig, err := signing.NewEdSigner()
@@ -423,7 +432,7 @@ func TestBuilder_HandleLayer_RefBallot(t *testing.T) {
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil)
 	b.mNonce.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).Return(nonce, nil)
 	ee := &EpochEligibility{
-		Atx:       types.RandomATXID(),
+		Atx:       atx,
 		ActiveSet: genActiveSet(t),
 		Proofs:    map[types.LayerID][]types.VotingEligibility{layerID: genProofs(t, 1)},
 		Slots:     4,

@@ -12,7 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-//go:generate mockgen -package=activation -destination=./mocks.go -source=./interface.go
+//go:generate mockgen -typed -package=activation -destination=./mocks.go -source=./interface.go
 
 type AtxReceiver interface {
 	OnAtx(*types.ActivationTxHeader)
@@ -25,14 +25,14 @@ type PostVerifier interface {
 type nipostValidator interface {
 	InitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, goldenATXID types.ATXID) error
 	NIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, nodeID types.NodeID) error
-	NIPost(ctx context.Context, publishEpoch types.EpochID, nodeId types.NodeID, atxId types.ATXID, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32, opts ...verifying.OptionFunc) (uint64, error)
+	NIPost(ctx context.Context, nodeId types.NodeID, atxId types.ATXID, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32) (uint64, error)
 
 	NumUnits(cfg *PostConfig, numUnits uint32) error
-	Post(ctx context.Context, publishEpoch types.EpochID, nodeId types.NodeID, atxId types.ATXID, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint32, opts ...verifying.OptionFunc) error
+	Post(ctx context.Context, nodeId types.NodeID, atxId types.ATXID, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint32) error
 	PostMetadata(cfg *PostConfig, metadata *types.PostMetadata) error
 
 	VRFNonce(nodeId types.NodeID, commitmentAtxId types.ATXID, vrfNonce *types.VRFPostIndex, PostMetadata *types.PostMetadata, numUnits uint32) error
-	PositioningAtx(id *types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubepoch types.EpochID, layersPerEpoch uint32) error
+	PositioningAtx(id types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubepoch types.EpochID) error
 }
 
 type layerClock interface {
@@ -45,11 +45,6 @@ type nipostBuilder interface {
 	UpdatePoETProvers([]PoetProvingServiceClient)
 	BuildNIPost(ctx context.Context, challenge *types.NIPostChallenge) (*types.NIPost, error)
 	DataDir() string
-}
-
-type atxHandler interface {
-	AwaitAtx(id types.ATXID) chan struct{}
-	UnsubscribeAtx(id types.ATXID)
 }
 
 type syncer interface {

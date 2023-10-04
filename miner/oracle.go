@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -62,10 +63,6 @@ func newMinerOracle(cfg config, c layerClock, cdb *datastore.CachedDB, vrfSigner
 func (o *Oracle) ProposalEligibility(lid types.LayerID, beacon types.Beacon, nonce types.VRFPostIndex) (*EpochEligibility, error) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-
-	if legacy := types.GetLegacyLayer(); legacy != 0 && lid.Uint32() == legacy+1 {
-		o.cache = &EpochEligibility{}
-	}
 
 	epoch := lid.GetEpoch()
 	if lid <= types.GetEffectiveGenesis() {
@@ -155,7 +152,7 @@ func (o *Oracle) activeSet(targetEpoch types.EpochID) (uint64, uint64, types.ATX
 		if err != nil {
 			return err
 		}
-		if grade != Good {
+		if grade != Good && header.NodeID != o.cfg.nodeID {
 			o.log.With().Info("atx omitted from active set",
 				header.ID,
 				log.Int("grade", int(grade)),
@@ -204,26 +201,11 @@ func (o *Oracle) activeSet(targetEpoch types.EpochID) (uint64, uint64, types.ATX
 	return ownWeight, totalWeight, ownAtx, atxids, nil
 }
 
-func refBallot(db sql.Executor, epoch types.EpochID, nodeID types.NodeID) (*types.Ballot, error) {
-	ref, err := ballots.GetRefBallot(db, epoch, nodeID)
-	if errors.Is(err, sql.ErrNotFound) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("miner get refballot: %w", err)
-	}
-	ballot, err := ballots.Get(db, ref)
-	if err != nil {
-		return nil, fmt.Errorf("miner get ballot: %w", err)
-	}
-	return ballot, nil
-}
-
 // calcEligibilityProofs calculates the eligibility proofs of proposals for the miner in the given epoch
 // and returns the proofs along with the epoch's active set.
 func (o *Oracle) calcEligibilityProofs(lid types.LayerID, epoch types.EpochID, beacon types.Beacon, nonce types.VRFPostIndex) (*EpochEligibility, error) {
-	ref, err := refBallot(o.cdb, epoch, o.vrfSigner.NodeID())
-	if err != nil {
+	ref, err := ballots.RefBallot(o.cdb, epoch, o.vrfSigner.NodeID())
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return nil, err
 	}
 
@@ -235,7 +217,11 @@ func (o *Oracle) calcEligibilityProofs(lid types.LayerID, epoch types.EpochID, b
 	if ref == nil {
 		minerWeight, totalWeight, ownAtx, activeSet, err = o.activeSet(epoch)
 	} else {
-		activeSet = ref.ActiveSet
+		if epochActives, err := activesets.Get(o.cdb, ref.EpochData.ActiveSetHash); err != nil {
+			return nil, err
+		} else {
+			activeSet = epochActives.Set
+		}
 		o.log.With().Info("use active set from ref ballot",
 			ref.ID(),
 			log.Int("num atx", len(activeSet)),
@@ -259,7 +245,7 @@ func (o *Oracle) calcEligibilityProofs(lid types.LayerID, epoch types.EpochID, b
 	)
 	var numEligibleSlots uint32
 	if ref == nil {
-		numEligibleSlots, err = proposals.GetLegacyNumEligible(lid, minerWeight, o.cfg.minActiveSetWeight, totalWeight, o.cfg.layerSize, o.cfg.layersPerEpoch)
+		numEligibleSlots, err = proposals.GetNumEligibleSlots(minerWeight, o.cfg.minActiveSetWeight, totalWeight, o.cfg.layerSize, o.cfg.layersPerEpoch)
 		if err != nil {
 			return nil, fmt.Errorf("oracle get num slots: %w", err)
 		}

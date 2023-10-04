@@ -16,13 +16,12 @@ import (
 	"time"
 
 	"github.com/gofrs/flock"
+	"github.com/grafana/pyroscope-go"
 	grpc_logsettable "github.com/grpc-ecosystem/go-grpc-middleware/logging/settable"
 	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	grpctags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
 	"github.com/mitchellh/mapstructure"
-	"github.com/pyroscope-io/pyroscope/pkg/agent/profiler"
-	poetconfig "github.com/spacemeshos/poet/config"
 	"github.com/spacemeshos/poet/server"
 	"github.com/spacemeshos/post/verifying"
 	"github.com/spf13/afero"
@@ -64,8 +63,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/proposals"
+	"github.com/spacemeshos/go-spacemesh/prune"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/ballots/util"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
 	"github.com/spacemeshos/go-spacemesh/syncer"
@@ -142,9 +143,6 @@ func GetCommand() *cobra.Command {
 
 			run := func(ctx context.Context) error {
 				types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
-				types.SetLegacyLayers(app.Config.LegacyLayer)
-				// starting on 2023-09-14 20:00:00 +0000 UTC (~1 week into 4th epoch)
-				types.SetOpUpgradeLayer(18000)
 				// ensure all data folders exist
 				if err := os.MkdirAll(app.Config.DataDir(), 0o700); err != nil {
 					return fmt.Errorf("ensure folders exist: %w", err)
@@ -324,7 +322,7 @@ type App struct {
 	grpcPrivateService *grpcserver.Server
 	jsonAPIService     *grpcserver.JSONHTTPServer
 	pprofService       *http.Server
-	profilerService    *profiler.Profiler
+	profilerService    *pyroscope.Profiler
 	syncer             *syncer.Syncer
 	proposalListener   *proposals.Handler
 	proposalBuilder    *miner.ProposalBuilder
@@ -564,7 +562,7 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	app.postVerifier = activation.NewOffloadingPostVerifier(postVerifiers, nipostValidatorLogger)
 
-	validator := activation.NewValidator(poetDb, app.Config.POST, nipostValidatorLogger, app.postVerifier)
+	validator := activation.NewValidator(poetDb, app.Config.POST, app.Config.SMESHING.Opts.Scrypt, nipostValidatorLogger, app.postVerifier)
 	app.validator = validator
 
 	cfg := vm.DefaultConfig()
@@ -623,13 +621,16 @@ func (app *App) initServices(ctx context.Context) error {
 		app.log.With().Info("tortoise will trace execution")
 		trtlopts = append(trtlopts, tortoise.WithTracer())
 	}
+	start := time.Now()
 	trtl, err := tortoise.Recover(
+		ctx,
 		app.cachedDB,
 		app.clock.CurrentLayer(), beaconProtocol, trtlopts...,
 	)
 	if err != nil {
 		return fmt.Errorf("can't recover tortoise state: %w", err)
 	}
+	app.log.With().Info("tortoise initialized", log.Duration("duration", time.Since(start)))
 	app.eg.Go(func() error {
 		for rst := range beaconProtocol.Results() {
 			events.EmitBeacon(rst.Epoch, rst.Beacon)
@@ -640,19 +641,25 @@ func (app *App) initServices(ctx context.Context) error {
 	})
 
 	executor := mesh.NewExecutor(app.cachedDB, state, app.conState, app.addLogger(ExecutorLogger, lg))
-	msh, err := mesh.NewMesh(app.cachedDB, app.clock, trtl, executor, app.conState, app.addLogger(MeshLogger, lg))
+	mlog := app.addLogger(MeshLogger, lg)
+	msh, err := mesh.NewMesh(app.cachedDB, app.clock, trtl, executor, app.conState, mlog)
 	if err != nil {
 		return fmt.Errorf("failed to create mesh: %w", err)
 	}
 
+	app.eg.Go(func() error {
+		prune.Prune(ctx, mlog.Zap(), app.db, app.clock, app.Config.Tortoise.Hdist, app.Config.DatabasePruneInterval)
+		return nil
+	})
+
 	fetcherWrapped := &layerFetcher{}
 	atxHandler := activation.NewHandler(
+		app.host.ID(),
 		app.cachedDB,
 		app.edVerifier,
 		app.clock,
 		app.host,
 		fetcherWrapped,
-		layersPerEpoch,
 		app.Config.TickSize,
 		goldenATXID,
 		validator,
@@ -681,7 +688,7 @@ func (app *App) initServices(ctx context.Context) error {
 		}),
 	)
 
-	blockHandler := blocks.NewHandler(fetcherWrapped, app.db, msh,
+	blockHandler := blocks.NewHandler(fetcherWrapped, app.db, trtl, msh,
 		blocks.WithLogger(app.addLogger(BlockHandlerLogger, lg)))
 
 	app.txHandler = txs.NewTxHandler(
@@ -750,7 +757,6 @@ func (app *App) initServices(ctx context.Context) error {
 
 	hareCfg := app.Config.HARE
 	hareCfg.Hdist = app.Config.Tortoise.Hdist
-	hareCfg.StopAtxGrading = types.GetLegacyLayer()
 	app.hare = hare.New(
 		app.cachedDB,
 		hareCfg,
@@ -790,9 +796,8 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 
 	minerGoodAtxPct := 90
-	if app.Config.TestConfig.MinerGoodAtxPct > 0 {
-		// only set this for systest TestEquivocation.
-		minerGoodAtxPct = app.Config.TestConfig.MinerGoodAtxPct
+	if app.Config.MinerGoodAtxsPercent > 0 {
+		minerGoodAtxPct = app.Config.MinerGoodAtxsPercent
 	}
 	proposalBuilder := miner.NewProposalBuilder(
 		ctx,
@@ -854,16 +859,16 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 
 	builderConfig := activation.Config{
-		CoinbaseAccount: coinbaseAddr,
-		GoldenATXID:     goldenATXID,
-		LayersPerEpoch:  layersPerEpoch,
+		CoinbaseAccount:  coinbaseAddr,
+		GoldenATXID:      goldenATXID,
+		LayersPerEpoch:   layersPerEpoch,
+		RegossipInterval: app.Config.RegossipAtxInterval,
 	}
 	atxBuilder := activation.NewBuilder(
 		builderConfig,
 		app.edSgn.NodeID(),
 		app.edSgn,
 		app.cachedDB,
-		atxHandler,
 		app.host,
 		nipostBuilder,
 		postSetupMgr,
@@ -889,6 +894,7 @@ func (app *App) initServices(ctx context.Context) error {
 		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(atxHandler.HandleSyncedAtx, app.host, lg)),
 		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(poetDb.ValidateAndStoreMsg, app.host, lg)),
 		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(proposalListener.HandleSyncedBallot, app.host, lg)),
+		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(proposalListener.HandleActiveSet, app.host, lg)),
 		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(blockHandler.HandleSyncedBlock, app.host, lg)),
 		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(proposalListener.HandleSyncedProposal, app.host, lg)),
 		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(app.txHandler.HandleBlockTransaction, app.host, lg)),
@@ -909,10 +915,12 @@ func (app *App) initServices(ctx context.Context) error {
 		return errors.New("not synced for gossip")
 	}
 
-	app.host.Register(pubsub.BeaconWeakCoinProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleWeakCoinProposal))
-	app.host.Register(pubsub.BeaconProposalProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleProposal))
-	app.host.Register(pubsub.BeaconFirstVotesProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFirstVotes))
-	app.host.Register(pubsub.BeaconFollowingVotesProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFollowingVotes))
+	if app.Config.Beacon.RoundsNumber > 0 {
+		app.host.Register(pubsub.BeaconWeakCoinProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleWeakCoinProposal), pubsub.WithValidatorInline(true))
+		app.host.Register(pubsub.BeaconProposalProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleProposal), pubsub.WithValidatorInline(true))
+		app.host.Register(pubsub.BeaconFirstVotesProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFirstVotes), pubsub.WithValidatorInline(true))
+		app.host.Register(pubsub.BeaconFollowingVotesProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFollowingVotes), pubsub.WithValidatorInline(true))
+	}
 	app.host.Register(pubsub.ProposalProtocol, pubsub.ChainGossipHandler(syncHandler, proposalListener.HandleProposal))
 	app.host.Register(pubsub.AtxProtocol, pubsub.ChainGossipHandler(atxSyncHandler, atxHandler.HandleGossipAtx))
 	app.host.Register(pubsub.TxProtocol, pubsub.ChainGossipHandler(syncHandler, app.txHandler.HandleGossipTransaction))
@@ -964,7 +972,7 @@ func (app *App) launchStandalone(ctx context.Context) error {
 	if err := app.beaconProtocol.UpdateBeacon(epoch, value); err != nil {
 		return fmt.Errorf("update standalone beacon: %w", err)
 	}
-	cfg := poetconfig.DefaultConfig()
+	cfg := server.DefaultConfig()
 	cfg.PoetDir = filepath.Join(app.Config.DataDir(), "poet")
 
 	parsed, err := url.Parse(app.Config.PoETServers[0])
@@ -972,27 +980,23 @@ func (app *App) launchStandalone(ctx context.Context) error {
 		return err
 	}
 	cfg.RawRESTListener = parsed.Host
-	cfg.Service.Genesis.UnmarshalFlag(app.Config.Genesis.GenesisTime)
-	cfg.Service.EpochDuration = app.Config.LayerDuration * time.Duration(app.Config.LayersPerEpoch)
-	cfg.Service.CycleGap = app.Config.POET.CycleGap
-	cfg.Service.PhaseShift = app.Config.POET.PhaseShift
-
-	cfg, err = poetconfig.SetupConfig(cfg)
-	if err != nil {
-		return fmt.Errorf("setup poet config: %w", err)
-	}
+	cfg.Genesis.UnmarshalFlag(app.Config.Genesis.GenesisTime)
+	cfg.Round.EpochDuration = app.Config.LayerDuration * time.Duration(app.Config.LayersPerEpoch)
+	cfg.Round.CycleGap = app.Config.POET.CycleGap
+	cfg.Round.PhaseShift = app.Config.POET.PhaseShift
+	server.SetupConfig(cfg)
 
 	srv, err := server.New(ctx, *cfg)
 	if err != nil {
 		return fmt.Errorf("init poet server: %w", err)
 	}
-	app.log.With().Warning("lauching poet in standalone mode", log.Any("config", cfg))
+	app.log.With().Warning("launching poet in standalone mode", log.Any("config", cfg))
 	app.eg.Go(func() error {
 		if err := srv.Start(ctx); err != nil {
 			app.log.With().Error("poet server failed", log.Err(err))
 			return err
 		}
-		return nil
+		return srv.Close()
 	})
 	return nil
 }
@@ -1032,13 +1036,6 @@ func (app *App) startServices(ctx context.Context) error {
 	if err := app.fetcher.Start(); err != nil {
 		return fmt.Errorf("failed to start fetcher: %w", err)
 	}
-	app.eg.Go(func() error {
-		app.postVerifier.Start(ctx)
-		// Start only returns when the context expires (which means the system
-		// is shutting down). We do the closing of the post verifier here so
-		// it's ensured that start has returned before we call Close.
-		return app.postVerifier.Close()
-	})
 	app.syncer.Start()
 	app.beaconProtocol.Start(ctx)
 
@@ -1211,6 +1208,10 @@ func (app *App) stopServices(ctx context.Context) {
 		_ = app.atxBuilder.StopSmeshing(false)
 	}
 
+	if app.postVerifier != nil {
+		app.postVerifier.Close()
+	}
+
 	if app.hare != nil {
 		app.hare.Close()
 	}
@@ -1329,20 +1330,22 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 	return edSgn, nil
 }
 
-func (app *App) setupDBs(ctx context.Context, lg log.Log, dbPath string) error {
+func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
+	dbPath := app.Config.DataDir()
 	if err := os.MkdirAll(dbPath, os.ModePerm); err != nil {
 		return fmt.Errorf("failed to create %s: %w", dbPath, err)
 	}
 	sqlDB, err := sql.Open("file:"+filepath.Join(dbPath, dbFile),
 		sql.WithConnections(app.Config.DatabaseConnections),
 		sql.WithLatencyMetering(app.Config.DatabaseLatencyMetering),
+		sql.WithV5Migration(util.ExtractActiveSet),
 	)
 	if err != nil {
 		return fmt.Errorf("open sqlite db %w", err)
 	}
 	app.db = sqlDB
-	if app.Config.CollectMetrics {
-		app.dbMetrics = dbmetrics.NewDBMetricsCollector(ctx, sqlDB, app.addLogger(StateDbLogger, lg), 5*time.Minute)
+	if app.Config.CollectMetrics && app.Config.DatabaseSizeMeteringInterval != 0 {
+		app.dbMetrics = dbmetrics.NewDBMetricsCollector(ctx, sqlDB, app.addLogger(StateDbLogger, lg), app.Config.DatabaseSizeMeteringInterval)
 	}
 	app.cachedDB = datastore.NewCachedDB(sqlDB, app.addLogger(CachedDBLogger, lg), datastore.WithConfig(app.Config.Cache))
 	return nil
@@ -1414,8 +1417,7 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 	}
 
 	if app.Config.ProfilerURL != "" {
-
-		app.profilerService, err = profiler.Start(profiler.Config{
+		app.profilerService, err = pyroscope.Start(pyroscope.Config{
 			ApplicationName: app.Config.ProfilerName,
 			// app.Config.ProfilerURL should be the pyroscope server address
 			// TODO: AuthToken? no need right now since server isn't public
@@ -1463,7 +1465,7 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 		return fmt.Errorf("failed to initialize p2p host: %w", err)
 	}
 
-	if err := app.setupDBs(ctx, lg, app.Config.DataDir()); err != nil {
+	if err := app.setupDBs(ctx, lg); err != nil {
 		return err
 	}
 	if err := app.initServices(ctx); err != nil {

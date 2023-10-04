@@ -7,7 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 )
 
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interfaces.go
+//go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./interfaces.go
 
 type layerPatrol interface {
 	SetHareInCharge(types.LayerID)

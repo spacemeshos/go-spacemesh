@@ -30,7 +30,7 @@ func (a *recoveryAdapter) TallyVotes(ctx context.Context, current types.LayerID)
 		a.prev = genesis
 	}
 	for lid := a.prev; lid <= current; lid++ {
-		require.NoError(a, RecoverLayer(ctx, a.Tortoise, a.db, a.beacon, lid, current))
+		require.NoError(a, RecoverLayer(ctx, a.Tortoise, a.db, a.beacon, lid, lid, current, current))
 		a.prev = lid
 	}
 }
@@ -52,7 +52,7 @@ func TestRecoverState(t *testing.T) {
 	}
 	require.Equal(t, last.Sub(1), verified)
 
-	tortoise2, err := Recover(s.GetState(0).DB, last, s.GetState(0).Beacons, WithLogger(logtest.New(t)), WithConfig(cfg))
+	tortoise2, err := Recover(context.Background(), s.GetState(0).DB, last, s.GetState(0).Beacons, WithLogger(logtest.New(t)), WithConfig(cfg))
 	require.NoError(t, err)
 	verified = tortoise2.LatestComplete()
 	require.Equal(t, last.Sub(1), verified)
@@ -69,7 +69,7 @@ func TestRecoverEmpty(t *testing.T) {
 
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
-	tortoise, err := Recover(s.GetState(0).DB, 100, s.GetState(0).Beacons, WithLogger(logtest.New(t)), WithConfig(cfg))
+	tortoise, err := Recover(context.Background(), s.GetState(0).DB, 100, s.GetState(0).Beacons, WithLogger(logtest.New(t)), WithConfig(cfg))
 	require.NoError(t, err)
 	require.NotNil(t, tortoise)
 }
@@ -93,10 +93,41 @@ func TestRecoverWithOpinion(t *testing.T) {
 		}
 		last = rst
 	}
-	tortoise, err := Recover(s.GetState(0).DB, last.Layer, s.GetState(0).Beacons, WithLogger(logtest.New(t)), WithConfig(cfg))
+	tortoise, err := Recover(context.Background(), s.GetState(0).DB, last.Layer, s.GetState(0).Beacons, WithLogger(logtest.New(t)), WithConfig(cfg))
 	require.NoError(t, err)
 	require.NotNil(t, tortoise)
 	updates := tortoise.Updates()
 	require.Len(t, updates, 1)
 	require.Equal(t, updates[0], last)
+}
+
+func TestResetPending(t *testing.T) {
+	const size = 10
+	s := sim.New(sim.WithLayerSize(size))
+	s.Setup()
+
+	cfg := defaultTestConfig()
+	cfg.LayerSize = size
+
+	trt := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+	const n = 10
+	var last types.LayerID
+	for _, lid := range sim.GenLayers(s, sim.WithSequence(n)) {
+		last = lid
+		trt.TallyVotes(context.Background(), lid)
+	}
+	updates1 := trt.Updates()
+	require.Len(t, updates1, n+1)
+	require.Equal(t, types.GetEffectiveGenesis(), updates1[0].Layer)
+	require.Equal(t, last, updates1[n].Layer)
+	for _, item := range updates1[:n/2] {
+		require.NoError(t, layers.SetMeshHash(s.GetState(0).DB, item.Layer, item.Opinion))
+	}
+
+	recovered, err := Recover(context.Background(), s.GetState(0).DB, last, s.GetState(0).Beacons, WithLogger(logtest.New(t)), WithConfig(cfg))
+	require.NoError(t, err)
+	updates2 := recovered.Updates()
+	require.Len(t, updates2, n/2+1)
+	require.Equal(t, last-n/2, updates2[0].Layer)
+	require.Equal(t, last, updates2[n/2].Layer)
 }

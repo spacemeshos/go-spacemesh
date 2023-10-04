@@ -65,6 +65,12 @@ func (f *Fetch) getHashes(ctx context.Context, hashes []types.Hash32, hint datas
 	return errors.Join(errs, err)
 }
 
+// GetActiveSet downloads activeset.
+func (f *Fetch) GetActiveSet(ctx context.Context, set types.Hash32) error {
+	f.logger.WithContext(ctx).With().Debug("request active set", log.ShortStringer("id", set))
+	return f.getHashes(ctx, []types.Hash32{set}, datastore.ActiveSet, f.validators.activeset.HandleMessage)
+}
+
 // GetMalfeasanceProofs gets malfeasance proofs for the specified NodeIDs and validates them.
 func (f *Fetch) GetMalfeasanceProofs(ctx context.Context, ids []types.NodeID) error {
 	if len(ids) == 0 {
@@ -172,16 +178,7 @@ func (f *Fetch) GetLayerData(ctx context.Context, peers []p2p.Peer, lid types.La
 	return poll(ctx, f.servers[lyrDataProtocol], peers, lidBytes, okCB, errCB)
 }
 
-// GetLayerOpinions get opinions on data in the specified layer from peers.
 func (f *Fetch) GetLayerOpinions(ctx context.Context, peers []p2p.Peer, lid types.LayerID, okCB func([]byte, p2p.Peer), errCB func(error, p2p.Peer)) error {
-	lidBytes, err := codec.Encode(&lid)
-	if err != nil {
-		return err
-	}
-	return poll(ctx, f.servers[lyrOpnsProtocol], peers, lidBytes, okCB, errCB)
-}
-
-func (f *Fetch) GetLayerOpinions2(ctx context.Context, peers []p2p.Peer, lid types.LayerID, okCB func([]byte, p2p.Peer), errCB func(error, p2p.Peer)) error {
 	req := OpinionRequest{
 		Layer: lid,
 	}

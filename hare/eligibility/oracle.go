@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -462,11 +463,24 @@ func (o *Oracle) activeSetFromRefBallots(epoch types.EpochID) ([]types.ATXID, er
 			o.Log.With().Debug("beacon mismatch", log.Stringer("local", beacon), log.Object("ballot", ballot))
 			continue
 		}
-		for _, id := range ballot.ActiveSet {
+		actives, err := activesets.Get(o.cdb, ballot.EpochData.ActiveSetHash)
+		if err != nil {
+			o.Log.With().Error("failed to get active set",
+				log.String("actives hash", ballot.EpochData.ActiveSetHash.ShortString()),
+				log.String("ballot ", ballot.ID().String()),
+				log.Err(err),
+			)
+			continue
+		}
+		for _, id := range actives.Set {
 			activeMap[id] = struct{}{}
 		}
 	}
-	o.Log.With().Warning("using tortoise active set", log.Uint32("epoch", epoch.Uint32()), log.Stringer("beacon", beacon))
+	o.Log.With().Warning("using tortoise active set",
+		log.Int("actives size", len(activeMap)),
+		log.Uint32("epoch", epoch.Uint32()),
+		log.Stringer("beacon", beacon),
+	)
 	return maps.Keys(activeMap), nil
 }
 

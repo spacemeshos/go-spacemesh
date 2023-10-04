@@ -5,7 +5,7 @@ tmpfile := $(shell mktemp /tmp/systest-XXX)
 test_name ?= TestSmeshing
 org ?= spacemeshos
 image_name ?= $(org)/systest:$(version_info)
-poet_image ?= spacemeshos/poet:v0.9.1
+poet_image ?= spacemeshos/poet:v0.9.3
 smesher_image ?= $(org)/go-spacemesh-dev:$(version_info)
 bs_image ?= $(org)/go-spacemesh-dev-bs:$(version_info)
 test_id ?= systest-$(version_info)
@@ -68,7 +68,7 @@ config: template
 
 .PHONY: gomplate
 gomplate:
-	@go install github.com/hairyhenderson/gomplate/v3/cmd/gomplate@latest
+	@go install github.com/hairyhenderson/gomplate/v4/cmd/gomplate@v4.0.0-pre-1
 
 .PHONY: run
 run: gomplate $(run_deps)

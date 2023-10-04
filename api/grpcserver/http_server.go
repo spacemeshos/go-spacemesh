@@ -17,11 +17,16 @@ import (
 // JSONHTTPServer is a JSON http server providing the Spacemesh API.
 // It is implemented using a grpc-gateway. See https://github.com/grpc-ecosystem/grpc-gateway .
 type JSONHTTPServer struct {
-	logger log.Logger
-
 	listener string
-	server   *http.Server
-	grp      errgroup.Group
+	logger   log.Logger
+
+	// BoundAddress contains the address that the server bound to, useful if
+	// the server uses a dynamic port. It is set during startup and can be
+	// safely accessed after Start has completed (I.E. the returned channel has
+	// been waited on)
+	BoundAddress string
+	server       *http.Server
+	grp          errgroup.Group
 }
 
 // NewJSONHTTPServer creates a new json http server.
@@ -100,13 +105,14 @@ func (s *JSONHTTPServer) StartService(
 		s.logger.Error("error listening: %v", err)
 		return err
 	}
+	s.BoundAddress = lis.Addr().String()
 	s.server = &http.Server{
 		Handler: mux,
 	}
 	s.grp.Go(func() error {
 		if err := s.server.Serve(lis); err != nil {
 			s.logger.Error("error from grpc http server: %v", err)
-			return err
+			return nil
 		}
 		return nil
 	})

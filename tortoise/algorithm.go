@@ -95,6 +95,9 @@ func New(opts ...Opt) (*Tortoise, error) {
 			zap.Uint32("zdist", t.cfg.Zdist),
 		)
 	}
+	if t.cfg.WindowSize == 0 {
+		t.logger.Panic("tortoise-window-size should not be zero")
+	}
 	t.trtl = newTurtle(t.logger, t.cfg)
 	if t.tracer != nil {
 		t.tracer.On(&ConfigTrace{
@@ -532,8 +535,10 @@ func (t *Tortoise) Mode() Mode {
 // resetPending compares stored opinion with computed opinion and sets
 // pending layer to the layer above equal layer.
 // this method is meant to be used only in recovery from disk codepath.
-func (t *Tortoise) resetPending(lid types.LayerID, opinion types.Hash32) {
+func (t *Tortoise) resetPending(lid types.LayerID, opinion types.Hash32) bool {
 	if t.trtl.layer(lid).opinion == opinion {
 		t.trtl.pending = lid + 1
+		return true
 	}
+	return false
 }

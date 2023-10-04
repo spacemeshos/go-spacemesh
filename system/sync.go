@@ -6,7 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-//go:generate mockgen -package=mocks -destination=./mocks/sync.go -source=./sync.go
+//go:generate mockgen -typed -package=mocks -destination=./mocks/sync.go -source=./sync.go
 
 // SyncStateProvider defines the interface that provides the node's sync state.
 type SyncStateProvider interface {

@@ -160,6 +160,22 @@ func TestCertifiedBlock(t *testing.T) {
 	require.Equal(t, types.EmptyBlockID, got)
 }
 
+func TestDeleteCert(t *testing.T) {
+	db := sql.InMemory()
+	require.NoError(t, Add(db, types.LayerID(2), &types.Certificate{BlockID: types.BlockID{2}}))
+	require.NoError(t, Add(db, types.LayerID(3), &types.Certificate{BlockID: types.BlockID{3}}))
+	require.NoError(t, Add(db, types.LayerID(4), &types.Certificate{BlockID: types.BlockID{4}}))
+	require.NoError(t, DeleteCertBefore(db, 4))
+
+	_, err := CertifiedBlock(db, types.LayerID(2))
+	require.ErrorIs(t, err, sql.ErrNotFound)
+	_, err = CertifiedBlock(db, types.LayerID(3))
+	require.ErrorIs(t, err, sql.ErrNotFound)
+	got, err := CertifiedBlock(db, types.LayerID(4))
+	require.NoError(t, err)
+	require.Equal(t, types.BlockID{4}, got)
+}
+
 func TestFirstInEpoch(t *testing.T) {
 	db := sql.InMemory()
 

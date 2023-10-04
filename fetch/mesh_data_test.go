@@ -7,8 +7,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -397,6 +397,19 @@ func TestGetATXs(t *testing.T) {
 	require.NoError(t, eg.Wait())
 }
 
+func TestGetActiveSet(t *testing.T) {
+	f := createFetch(t)
+	f.mActiveSetH.EXPECT().HandleMessage(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+
+	stop := make(chan struct{}, 1)
+	var eg errgroup.Group
+	startTestLoop(t, f.Fetch, &eg, stop)
+
+	require.NoError(t, f.GetActiveSet(context.Background(), types.Hash32{1, 2, 3}))
+	close(stop)
+	require.NoError(t, eg.Wait())
+}
+
 func TestGetPoetProof(t *testing.T) {
 	f := createFetch(t)
 	h := types.RandomHash()
@@ -528,87 +541,6 @@ func TestFetch_GetLayerData(t *testing.T) {
 					})
 			}
 			require.NoError(t, f.GetLayerData(context.Background(), peers, types.LayerID(111), okFunc, errFunc))
-			wg.Wait()
-			require.Len(t, oks, expOk)
-			require.Len(t, errs, expErr)
-		})
-	}
-}
-
-func TestFetch_GetLayerOpinions(t *testing.T) {
-	peers := []p2p.Peer{"p0", "p1", "p3", "p4"}
-	errUnknown := errors.New("unknown")
-	tt := []struct {
-		name string
-		errs []error
-		v2   bool
-	}{
-		{
-			name: "all peers returns",
-			errs: []error{nil, nil, nil, nil},
-		},
-		{
-			name: "all peers returns v2",
-			v2:   true,
-			errs: []error{nil, nil, nil, nil},
-		},
-		{
-			name: "some peers errors",
-			errs: []error{nil, errUnknown, nil, errUnknown},
-		},
-		{
-			name: "some peers errors v2",
-			v2:   true,
-			errs: []error{nil, errUnknown, nil, errUnknown},
-		},
-	}
-
-	for _, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			require.Equal(t, len(peers), len(tc.errs))
-			f := createFetch(t)
-			oks := make(chan struct{}, len(peers))
-			errs := make(chan struct{}, len(peers))
-			var wg sync.WaitGroup
-			wg.Add(len(peers))
-			okFunc := func(data []byte, peer p2p.Peer) {
-				oks <- struct{}{}
-				wg.Done()
-			}
-			errFunc := func(err error, peer p2p.Peer) {
-				errs <- struct{}{}
-				wg.Done()
-			}
-			var expOk, expErr int
-			for i, p := range peers {
-				if tc.errs[i] == nil {
-					expOk++
-				} else {
-					expErr++
-				}
-				idx := i
-				ms := f.mOpnS
-				if tc.v2 {
-					ms = f.mOpn2S
-				}
-				ms.EXPECT().Request(gomock.Any(), p, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-					func(_ context.Context, _ p2p.Peer, _ []byte, okCB func([]byte), errCB func(error)) error {
-						if tc.errs[idx] == nil {
-							go okCB([]byte("data"))
-						} else {
-							go errCB(tc.errs[idx])
-						}
-						return nil
-					})
-			}
-			if tc.v2 {
-				require.NoError(t, f.GetLayerOpinions2(context.Background(), peers, types.LayerID(111), okFunc, errFunc))
-			} else {
-				require.NoError(t, f.GetLayerOpinions(context.Background(), peers, types.LayerID(111), okFunc, errFunc))
-			}
 			wg.Wait()
 			require.Len(t, oks, expOk)
 			require.Len(t, errs, expErr)
