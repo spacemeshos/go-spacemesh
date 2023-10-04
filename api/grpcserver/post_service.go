@@ -42,15 +42,15 @@ func NewPostService(log *zap.Logger, callbacks ...postConnectionListener) *PostS
 // The other functions on this service are called by services of the node to send
 // requests to the PoST node and receive responses.
 func (s *PostService) Register(stream pb.PostService_RegisterServer) error {
-	ch := make(chan postCommand)
-	s.setConnection(ch)
+	con := make(chan postCommand)
+	s.setConnection(con)
 	defer s.dropConnection()
 
 	for {
 		select {
 		case <-stream.Context().Done():
 			return stream.Context().Err()
-		case cmd := <-ch:
+		case cmd := <-con:
 			if err := stream.SendMsg(cmd.req); err != nil {
 				s.log.Error("failed to send request", zap.Error(err))
 				continue
@@ -66,7 +66,7 @@ func (s *PostService) Register(stream pb.PostService_RegisterServer) error {
 	}
 }
 
-func (s *PostService) setConnection(ch chan postCommand) error {
+func (s *PostService) setConnection(con chan postCommand) error {
 	s.conMtx.Lock()
 	defer s.conMtx.Unlock()
 
@@ -74,8 +74,8 @@ func (s *PostService) setConnection(ch chan postCommand) error {
 		return fmt.Errorf("connection already established")
 	}
 
-	s.con = ch
-	s.client = newPostClient(ch) // consider passing the channel instead of the service
+	s.con = con
+	s.client = newPostClient(con)
 	s.log.Info("post service registered")
 
 	for _, cb := range s.callbacks {
@@ -97,7 +97,7 @@ func (s *PostService) dropConnection() error {
 	defer s.conMtx.Unlock()
 
 	if s.con == nil {
-		return fmt.Errorf("connection not established")
+		return nil
 	}
 
 	err := s.client.Close()

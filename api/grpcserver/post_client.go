@@ -21,7 +21,7 @@ type postClient struct {
 	closed chan struct{}
 }
 
-func newPostClient(con chan postCommand) *postClient {
+func newPostClient(con chan<- postCommand) *postClient {
 	return &postClient{
 		con:    con,
 		closed: make(chan struct{}),
