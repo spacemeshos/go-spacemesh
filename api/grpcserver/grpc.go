@@ -71,6 +71,16 @@ func (s *Server) Start() error {
 // Close stops the server.
 func (s *Server) Close() error {
 	s.logger.Info("stopping the grpc server")
+	// GracefulStop waits for all connections to be closed before closing the
+	// server and returning. If there are long running stream connections then
+	// GracefulStop will never return. So we call it in a background thread,
+	// wait a bit and then call Stop which will forcefully close any remaining
+	// connections.
+	s.grp.Go(func() error {
+		s.GrpcServer.GracefulStop()
+		return nil
+	})
+	time.Sleep(time.Second * 1)
 	s.GrpcServer.Stop()
 	return s.grp.Wait()
 }
