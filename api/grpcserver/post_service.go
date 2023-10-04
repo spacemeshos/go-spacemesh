@@ -1,7 +1,6 @@
 package grpcserver
 
 import (
-	"context"
 	"fmt"
 	"sync"
 
@@ -76,7 +75,7 @@ func (s *PostService) setConnection(ch chan postCommand) error {
 	}
 
 	s.con = ch
-	s.client = newPostClient(s)
+	s.client = newPostClient(ch) // consider passing the channel instead of the service
 	s.log.Info("post service registered")
 
 	for _, cb := range s.callbacks {
@@ -101,32 +100,15 @@ func (s *PostService) dropConnection() error {
 		return fmt.Errorf("connection not established")
 	}
 
-	close(s.con)
+	err := s.client.Close()
 	s.con = nil
-	s.client.Close()
 
 	for _, cb := range s.callbacks {
 		cb.Disconnected(s.client)
 	}
 
 	s.client = nil
-	return nil
-}
-
-func (s *PostService) Send(ctx context.Context, cmd postCommand) error {
-	s.conMtx.Lock()
-	defer s.conMtx.Unlock()
-
-	if s.con == nil {
-		return fmt.Errorf("connection not established")
-	}
-
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case s.con <- cmd:
-		return nil
-	}
+	return err
 }
 
 type postCommand struct {

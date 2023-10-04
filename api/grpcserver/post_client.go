@@ -16,15 +16,15 @@ import (
 // Additionally if instructed it will start the post service and connect it to
 // the node.
 type postClient struct {
-	service *PostService
+	con chan<- postCommand
 
 	closed chan struct{}
 }
 
-func newPostClient(service *PostService) *postClient {
+func newPostClient(con chan postCommand) *postClient {
 	return &postClient{
-		service: service,
-		closed:  make(chan struct{}),
+		con:    con,
+		closed: make(chan struct{}),
 	}
 }
 
@@ -44,11 +44,9 @@ func (pc *postClient) Proof(ctx context.Context, challenge []byte) (*types.Post,
 	select {
 	case <-pc.closed:
 		return nil, nil, fmt.Errorf("post client closed")
-	default:
-	}
-
-	if err := pc.service.Send(ctx, cmd); err != nil {
-		return nil, nil, fmt.Errorf("failed to send request: %w", err)
+	case <-ctx.Done():
+		return nil, nil, ctx.Err()
+	case pc.con <- cmd:
 	}
 
 	for {
@@ -97,5 +95,6 @@ func (pc *postClient) Close() error {
 	default:
 		close(pc.closed)
 	}
+
 	return nil
 }
