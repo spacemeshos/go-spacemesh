@@ -15,13 +15,8 @@ type PostService struct {
 	log       *zap.Logger
 	callbacks []postConnectionListener
 
-	// conn is a channel of commands for a service connected to the node.
-	// the node calls functions on this service which build API requests for every
-	// connected node and send them on the channel. The PoST node receives the requests
-	// and sends responses back on the response channel of the command.
-	conMtx sync.Mutex
-	con    chan postCommand
-	client *postClient
+	clientMtx sync.Mutex
+	client    *postClient
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -67,14 +62,13 @@ func (s *PostService) Register(stream pb.PostService_RegisterServer) error {
 }
 
 func (s *PostService) setConnection(con chan postCommand) error {
-	s.conMtx.Lock()
-	defer s.conMtx.Unlock()
+	s.clientMtx.Lock()
+	defer s.clientMtx.Unlock()
 
-	if s.con != nil {
-		return fmt.Errorf("connection already established")
+	if s.client != nil {
+		return fmt.Errorf("post service already registered")
 	}
 
-	s.con = con
 	s.client = newPostClient(con)
 	s.log.Info("post service registered")
 
@@ -85,29 +79,19 @@ func (s *PostService) setConnection(con chan postCommand) error {
 	return nil
 }
 
-func (s *PostService) Connected() bool {
-	s.conMtx.Lock()
-	defer s.conMtx.Unlock()
-
-	return s.con != nil
-}
-
 func (s *PostService) dropConnection() error {
-	s.conMtx.Lock()
-	defer s.conMtx.Unlock()
-
-	if s.con == nil {
-		return nil
-	}
+	s.clientMtx.Lock()
 
 	err := s.client.Close()
-	s.con = nil
+	c := s.client
+	s.client = nil
+
+	s.clientMtx.Unlock()
 
 	for _, cb := range s.callbacks {
-		cb.Disconnected(s.client)
+		cb.Disconnected(c)
 	}
 
-	s.client = nil
 	return err
 }
 
