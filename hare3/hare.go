@@ -149,6 +149,7 @@ func New(
 		cancel:   cancel,
 		results:  make(chan ConsensusOutput, 32),
 		coins:    make(chan WeakCoinOutput, 32),
+		signers:  map[string]*signing.EdSigner{},
 		sessions: map[types.LayerID]*protocol{},
 
 		config:    DefaultConfig(),
@@ -183,6 +184,7 @@ type Hare struct {
 	results  chan ConsensusOutput
 	coins    chan WeakCoinOutput
 	mu       sync.Mutex
+	signers  map[string]*signing.EdSigner
 	sessions map[types.LayerID]*protocol
 
 	// options
@@ -200,6 +202,12 @@ type Hare struct {
 	sync      system.SyncStateProvider
 	patrol    *layerpatrol.LayerPatrol
 	tracer    Tracer
+}
+
+func (h *Hare) Register(signer *signing.EdSigner) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.signers[string(signer.PublicKey().Bytes())] = signer
 }
 
 func (h *Hare) Results() <-chan ConsensusOutput {
@@ -361,7 +369,7 @@ func (h *Hare) run(layer types.LayerID, beacon types.Beacon, proto *protocol) er
 	current := IterRound{Round: preround}
 
 	start := time.Now()
-	vrf := h.oracle.active(h.signer.NodeID(), layer, current)
+	vrf := h.oracle.active(h.signer, beacon, layer, current)
 	activeLatency.Observe(time.Since(start).Seconds())
 	h.tracer.OnActive(vrf)
 
@@ -388,7 +396,7 @@ func (h *Hare) run(layer types.LayerID, beacon types.Beacon, proto *protocol) er
 		var vrf *types.HareEligibility
 		if current.IsMessageRound() {
 			start := time.Now()
-			vrf = h.oracle.active(h.signer.NodeID(), layer, current)
+			vrf = h.oracle.active(h.signer, beacon, layer, current)
 			activeLatency.Observe(time.Since(start).Seconds())
 		}
 		h.tracer.OnActive(vrf)
