@@ -23,11 +23,6 @@ type legacyOracle struct {
 	config Config
 }
 
-type gradedEligibility struct {
-	eligibility types.HareEligibility
-	grade       grade
-}
-
 func (lg *legacyOracle) validate(msg *Message) grade {
 	if msg.Eligibility.Count == 0 {
 		return grade0

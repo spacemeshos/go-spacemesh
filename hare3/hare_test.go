@@ -910,7 +910,11 @@ func TestProposals(t *testing.T) {
 			for _, id := range tc.malicious {
 				require.NoError(t, identities.SetMalicious(db, id, []byte("non empty"), time.Time{}))
 			}
-			require.Equal(t, tc.expect, hare.proposals(tc.layer, tc.beacon))
+			require.Equal(t, tc.expect, hare.proposals(&session{
+				lid:     tc.layer,
+				beacon:  tc.beacon,
+				signers: []*signing.EdSigner{signer},
+			}))
 		})
 	}
 }
