@@ -29,7 +29,7 @@ func newPostClient(service *PostService) *postClient {
 }
 
 func (pc *postClient) Proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error) {
-	ch := make(chan *pb.ServiceResponse, 1)
+	resp := make(chan *pb.ServiceResponse, 1)
 	cmd := postCommand{
 		req: &pb.NodeRequest{
 			Kind: &pb.NodeRequest_GenProof{
@@ -38,7 +38,7 @@ func (pc *postClient) Proof(ctx context.Context, challenge []byte) (*types.Post,
 				},
 			},
 		},
-		ch: ch,
+		resp: resp,
 	}
 
 	select {
@@ -57,14 +57,14 @@ func (pc *postClient) Proof(ctx context.Context, challenge []byte) (*types.Post,
 			return nil, nil, fmt.Errorf("post client closed")
 		case <-ctx.Done():
 			return nil, nil, ctx.Err()
-		case resp := <-ch:
-			proofResp, ok := resp.GetKind().(*pb.ServiceResponse_GenProof)
-			if !ok {
+		case resp := <-resp:
+			proofResp := resp.GetGenProof()
+			if proofResp == nil {
 				return nil, nil, fmt.Errorf("unexpected response of type: %T", resp.GetKind())
 			}
-			switch proofResp.GenProof.GetStatus() {
+			switch proofResp.GetStatus() {
 			case pb.GenProofStatus_GEN_PROOF_STATUS_OK:
-				if proofResp.GenProof.GetProof() == nil {
+				if proofResp.GetProof() == nil {
 					select {
 					case <-ctx.Done():
 						return nil, nil, ctx.Err()
@@ -72,8 +72,8 @@ func (pc *postClient) Proof(ctx context.Context, challenge []byte) (*types.Post,
 					}
 				}
 
-				proof := proofResp.GenProof.GetProof()
-				meta := proofResp.GenProof.GetMetadata()
+				proof := proofResp.GetProof()
+				meta := proofResp.GetMetadata()
 				return &types.Post{
 						Nonce:   proof.GetNonce(),
 						Indices: proof.GetIndices(),
@@ -83,9 +83,9 @@ func (pc *postClient) Proof(ctx context.Context, challenge []byte) (*types.Post,
 						LabelsPerUnit: meta.GetLabelsPerUnit(),
 					}, nil
 			case pb.GenProofStatus_GEN_PROOF_STATUS_ERROR:
-				return nil, nil, fmt.Errorf("error generating proof: %s", proofResp.GenProof)
+				return nil, nil, fmt.Errorf("error generating proof: %s", proofResp)
 			case pb.GenProofStatus_GEN_PROOF_STATUS_UNSPECIFIED:
-				return nil, nil, fmt.Errorf("unspecified error generating proof: %s", proofResp.GenProof)
+				return nil, nil, fmt.Errorf("unspecified error generating proof: %s", proofResp)
 			}
 		}
 	}

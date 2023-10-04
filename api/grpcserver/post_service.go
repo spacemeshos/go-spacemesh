@@ -16,7 +16,7 @@ type PostService struct {
 	log       *zap.Logger
 	callbacks []postConnectionListener
 
-	// connections is a map of IDs -> channel of commands for every connected node.
+	// conn is a channel of commands for a service connected to the node.
 	// the node calls functions on this service which build API requests for every
 	// connected node and send them on the channel. The PoST node receives the requests
 	// and sends responses back on the response channel of the command.
@@ -62,7 +62,7 @@ func (s *PostService) Register(stream pb.PostService_RegisterServer) error {
 				return fmt.Errorf("failed to receive response: %w", err)
 			}
 
-			cmd.ch <- resp
+			cmd.resp <- resp
 		}
 	}
 }
@@ -130,6 +130,6 @@ func (s *PostService) Send(ctx context.Context, cmd postCommand) error {
 }
 
 type postCommand struct {
-	req *pb.NodeRequest
-	ch  chan<- *pb.ServiceResponse
+	req  *pb.NodeRequest
+	resp chan<- *pb.ServiceResponse
 }
