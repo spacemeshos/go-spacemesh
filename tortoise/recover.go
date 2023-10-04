@@ -78,7 +78,7 @@ func Recover(ctx context.Context, db *datastore.CachedDB, current types.LayerID,
 			return nil, ctx.Err()
 		default:
 		}
-		if err := RecoverLayer(ctx, trtl, db, start, lid, last, min(last, current)); err != nil {
+		if err := RecoverLayer(ctx, trtl, db, start, lid, last, min(last, current), trtl.OnRecoveredBallot); err != nil {
 			return nil, fmt.Errorf("failed to load tortoise state at layer %d: %w", lid, err)
 		}
 	}
@@ -99,7 +99,9 @@ func recoverEpoch(epoch types.EpochID, trtl *Tortoise, db *datastore.CachedDB) e
 	return nil
 }
 
-func RecoverLayer(ctx context.Context, trtl *Tortoise, db *datastore.CachedDB, start, lid, last, current types.LayerID) error {
+type ballotFunc func(*types.BallotTortoiseData)
+
+func RecoverLayer(ctx context.Context, trtl *Tortoise, db *datastore.CachedDB, start, lid, last, current types.LayerID, onBallot ballotFunc) error {
 	if lid.FirstInEpoch() {
 		if err := recoverEpoch(lid.GetEpoch(), trtl, db); err != nil {
 			return err
@@ -134,12 +136,12 @@ func RecoverLayer(ctx context.Context, trtl *Tortoise, db *datastore.CachedDB, s
 	}
 	for _, ballot := range ballotsrst {
 		if ballot.EpochData != nil {
-			trtl.OnRecoveredBallot(ballot.ToTortoiseData())
+			onBallot(ballot.ToTortoiseData())
 		}
 	}
 	for _, ballot := range ballotsrst {
 		if ballot.EpochData == nil {
-			trtl.OnRecoveredBallot(ballot.ToTortoiseData())
+			onBallot(ballot.ToTortoiseData())
 		}
 	}
 	coin, err := layers.GetWeakCoin(db, lid)

@@ -119,6 +119,7 @@ func (t *Tortoise) RecoverFrom(lid types.LayerID, opinion types.Hash32) {
 	defer t.mu.Unlock()
 	t.logger.Debug("recover from", zap.Uint32("lid", lid.Uint32()), log.ZShortStringer("opinion", opinion))
 	t.trtl.evicted = lid - 1
+	t.trtl.pending = lid
 	t.trtl.verified = lid
 	t.trtl.processed = lid
 	t.trtl.last = lid
@@ -385,7 +386,7 @@ func (t *Tortoise) DecodeBallot(ballot *types.BallotTortoiseData) (*DecodedBallo
 }
 
 func (t *Tortoise) decodeBallot(ballot *types.BallotTortoiseData) (*DecodedBallot, error) {
-	info, min, err := t.trtl.decodeBallot(ballot, false)
+	info, min, err := t.trtl.decodeBallot(ballot)
 	if err != nil {
 		errorsCounter.Inc()
 		return nil, err

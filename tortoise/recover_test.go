@@ -28,7 +28,7 @@ func (a *recoveryAdapter) TallyVotes(ctx context.Context, current types.LayerID)
 		a.prev = genesis
 	}
 	for lid := a.prev; lid <= current; lid++ {
-		require.NoError(a, RecoverLayer(ctx, a.Tortoise, a.db, lid, lid, current, current))
+		require.NoError(a, RecoverLayer(ctx, a.Tortoise, a.db, lid, lid, current, current, a.OnBallot))
 		a.prev = lid
 	}
 }
@@ -128,4 +128,40 @@ func TestResetPending(t *testing.T) {
 	require.Len(t, updates2, n/2+1)
 	require.Equal(t, last-n/2, updates2[0].Layer)
 	require.Equal(t, last, updates2[n/2].Layer)
+}
+
+func TestWindowRecovery(t *testing.T) {
+	const size = 10
+	s := sim.New(sim.WithLayerSize(size))
+	s.Setup()
+
+	const epochSize = 4
+	require.EqualValues(t, epochSize, types.GetLayersPerEpoch())
+	cfg := defaultTestConfig()
+	cfg.LayerSize = size
+	cfg.WindowSize = epochSize*2 + epochSize/2 // to test that window extends to full 3rd epoch
+
+	const n = epochSize * 5
+	trt := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+	var last types.LayerID
+	for _, lid := range sim.GenLayers(s, sim.WithSequence(n)) {
+		last = lid
+		trt.TallyVotes(context.Background(), lid)
+	}
+	updates1 := trt.Updates()
+	require.Len(t, updates1, n+1)
+	require.Equal(t, types.GetEffectiveGenesis(), updates1[0].Layer)
+	require.Equal(t, last, updates1[n].Layer)
+	for _, item := range updates1[:epochSize*4] {
+		require.NoError(t, layers.SetMeshHash(s.GetState(0).DB, item.Layer, item.Opinion))
+	}
+
+	recovered, err := Recover(context.Background(), s.GetState(0).DB, last, WithLogger(logtest.New(t)), WithConfig(cfg))
+	require.NoError(t, err)
+	updates2 := recovered.Updates()
+	require.Len(t, updates2, epochSize+1)
+
+	for i := range updates1[epochSize*4:] {
+		require.Equal(t, updates1[epochSize*4+i].Opinion, updates2[i].Opinion)
+	}
 }
