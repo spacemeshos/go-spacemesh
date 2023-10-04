@@ -137,7 +137,6 @@ func New(
 	pubsub pubsub.PublishSubsciber,
 	db *datastore.CachedDB,
 	verifier *signing.EdVerifier,
-	signer *signing.EdSigner,
 	oracle oracle,
 	sync system.SyncStateProvider,
 	patrol *layerpatrol.LayerPatrol,
@@ -169,7 +168,6 @@ func New(
 		patrol: patrol,
 		tracer: noopTracer{},
 	}
-	hr.Register(signer)
 	for _, opt := range opts {
 		opt(hr)
 	}

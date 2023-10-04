@@ -213,12 +213,13 @@ func (n *node) withHare() *node {
 	tracer := newTestTracer(n.t)
 	n.tracer = tracer
 	n.patrol = layerpatrol.New()
-	n.hare = New(n.nclock, n.mpublisher, n.db, verifier, n.signer, n.oracle, n.msyncer, n.patrol,
+	n.hare = New(n.nclock, n.mpublisher, n.db, verifier, n.oracle, n.msyncer, n.patrol,
 		WithConfig(n.t.cfg),
 		WithLogger(logger.Zap()),
 		WithWallclock(n.clock),
 		WithTracer(tracer),
 	)
+	n.hare.Register(n.signer)
 	return n
 }
 
@@ -899,7 +900,7 @@ func TestProposals(t *testing.T) {
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			db := datastore.NewCachedDB(sql.InMemory(), log.NewNop())
-			hare := New(nil, nil, db, nil, signer, nil, nil, layerpatrol.New(), WithLogger(logtest.New(t).Zap()))
+			hare := New(nil, nil, db, nil, nil, nil, layerpatrol.New(), WithLogger(logtest.New(t).Zap()))
 			for _, atx := range tc.atxs {
 				require.NoError(t, atxs.Add(db, &atx))
 			}
