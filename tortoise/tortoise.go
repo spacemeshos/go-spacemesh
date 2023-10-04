@@ -401,6 +401,9 @@ func (t *turtle) switchModes() {
 }
 
 func (t *turtle) countBallot(ballot *ballotInfo) error {
+	if ballot.layer-1 <= t.evicted {
+		return nil
+	}
 	bad, err := t.compareBeacons(ballot.id, ballot.layer, ballot.reference.beacon)
 	if err != nil {
 		return fmt.Errorf("%w: %s", errBeaconUnavailable, err.Error())
@@ -600,6 +603,7 @@ func (t *turtle) onOpinionChange(lid types.LayerID, early bool) {
 			zap.Uint32("lid", layer.lid.Uint32()),
 			log.ZShortStringer("previous", opinion),
 			log.ZShortStringer("new", layer.opinion),
+			log.ZShortStringer("prev layer", layer.prevOpinion),
 			zapBlocks(layer.blocks),
 		)
 		if opinion != layer.opinion {
@@ -760,9 +764,6 @@ func (t *turtle) decodeBallot(ballot *types.BallotTortoiseData) (*ballotInfo, ty
 			return nil, 0, err
 		}
 		binfo.votes = votes
-		if base.layer == t.evicted {
-			binfo.overwriteOpinion(ballot.Opinion.Hash)
-		}
 		if min <= t.evicted {
 			verr = errors.Join(verr, fmt.Errorf("%w: layer (%d) outside the window (evicted %d)", errEvictedBlocks, min, t.evicted))
 		}
@@ -776,7 +777,7 @@ func (t *turtle) decodeBallot(ballot *types.BallotTortoiseData) (*ballotInfo, ty
 	return binfo, min, verr
 }
 
-func (t *turtle) storeBallot(ballot *ballotInfo, min types.LayerID) error {
+func (t *turtle) storeBallot(ballot *ballotInfo, offset types.LayerID) error {
 	if !ballot.layer.After(t.evicted) {
 		return nil
 	}
@@ -790,7 +791,10 @@ func (t *turtle) storeBallot(ballot *ballotInfo, min types.LayerID) error {
 	if exists {
 		ballot.votes = existing
 	} else {
-		for current := ballot.votes.tail; current != nil && !current.lid.Before(min); current = current.prev {
+		for current := ballot.votes.tail; current != nil && !current.lid.Before(offset); current = current.prev {
+			if current.lid <= t.evicted {
+				continue
+			}
 			for i, block := range current.supported {
 				existing := t.getBlock(block.header())
 				if existing != nil {
@@ -819,6 +823,7 @@ func (t *turtle) onRecoveredBallot(ballot *types.BallotTortoiseData) error {
 	if decoded == nil || err != nil && !(errors.Is(err, errDanglingBase) || errors.Is(err, errEvictedBlocks)) {
 		return err
 	}
+	decoded.overwriteOpinion(ballot.Opinion.Hash)
 	return t.storeBallot(decoded, min)
 }
 

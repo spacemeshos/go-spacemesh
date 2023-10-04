@@ -36,11 +36,12 @@ func Recover(ctx context.Context, db *datastore.CachedDB, current types.LayerID,
 	start := types.GetEffectiveGenesis() + 1
 	if applied > types.LayerID(trtl.cfg.WindowSize) {
 		window := applied - types.LayerID(trtl.cfg.WindowSize)
-		window = window.GetEpoch().FirstLayer()
-		opinion, err := layers.GetAggregatedHash(db, window-1)
-		if err == nil {
+		window = window.GetEpoch().FirstLayer() // windback to the start of the epoch to load ref ballots
+		prev, err1 := layers.GetAggregatedHash(db, window-1)
+		opinion, err2 := layers.GetAggregatedHash(db, window)
+		if err1 == nil && err2 == nil {
 			// tortoise will need reference to previous layer
-			trtl.RecoverFrom(window-1, opinion)
+			trtl.RecoverFrom(window, opinion, prev)
 			start = window
 		}
 	}
@@ -92,11 +93,12 @@ func Recover(ctx context.Context, db *datastore.CachedDB, current types.LayerID,
 	// so that result for that layer is not returned
 	for prev := last - 1; prev >= start; prev-- {
 		opinion, err := layers.GetAggregatedHash(db, prev)
-		if err == nil {
+		if err == nil && opinion != types.EmptyLayerHash {
 			if trtl.resetPending(prev, opinion) {
 				break
 			}
-		} else if !errors.Is(err, sql.ErrNotFound) {
+		}
+		if err != nil && !errors.Is(err, sql.ErrNotFound) {
 			return nil, fmt.Errorf("check opinion %w", err)
 		}
 	}

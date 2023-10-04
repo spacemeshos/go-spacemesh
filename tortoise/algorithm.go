@@ -114,16 +114,22 @@ func New(opts ...Opt) (*Tortoise, error) {
 	return t, nil
 }
 
-func (t *Tortoise) RecoverFrom(lid types.LayerID, opinion types.Hash32) {
+func (t *Tortoise) RecoverFrom(lid types.LayerID, opinion, prev types.Hash32) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.logger.Debug("recover from", zap.Uint32("lid", lid.Uint32()), log.ZShortStringer("opinion", opinion))
+	t.logger.Debug("recover from",
+		zap.Uint32("lid", lid.Uint32()),
+		log.ZShortStringer("opinion", opinion),
+		log.ZShortStringer("prev opinion", prev),
+	)
 	t.trtl.evicted = lid - 1
 	t.trtl.pending = lid
 	t.trtl.verified = lid
 	t.trtl.processed = lid
 	t.trtl.last = lid
-	t.trtl.layer(lid).opinion = opinion
+	layer := t.trtl.layer(lid)
+	layer.opinion = opinion
+	layer.prevOpinion = &prev
 }
 
 // LatestComplete returns the latest verified layer.
@@ -563,10 +569,10 @@ func (t *Tortoise) Mode() Mode {
 // pending layer to the layer above equal layer.
 // this method is meant to be used only in recovery from disk codepath.
 func (t *Tortoise) resetPending(lid types.LayerID, opinion types.Hash32) bool {
-	t.logger.Warn("reset pending",
+	t.logger.Debug("reset pending",
 		zap.Uint32("lid", lid.Uint32()),
-		zap.String("computed", t.trtl.layer(lid).opinion.ShortString()),
-		zap.String("stored", opinion.ShortString()),
+		log.ZShortStringer("computed", t.trtl.layer(lid).opinion),
+		log.ZShortStringer("stored", opinion),
 	)
 	if t.trtl.layer(lid).opinion == opinion {
 		t.trtl.pending = lid + 1
