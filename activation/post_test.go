@@ -420,6 +420,7 @@ func withPostConfig(cfg PostConfig) newPostSetupMgrOptionFunc {
 	}
 }
 
+// TODO(mafa): start post service with supervisor.
 func newTestPostManager(tb testing.TB, o ...newPostSetupMgrOptionFunc) *testPostManager {
 	tb.Helper()
 
