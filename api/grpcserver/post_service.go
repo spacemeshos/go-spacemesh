@@ -38,7 +38,9 @@ func NewPostService(log *zap.Logger, callbacks ...postConnectionListener) *PostS
 // requests to the PoST node and receive responses.
 func (s *PostService) Register(stream pb.PostService_RegisterServer) error {
 	con := make(chan postCommand)
-	s.setConnection(con)
+	if err := s.setConnection(con); err != nil {
+		return err
+	}
 	defer s.dropConnection()
 
 	for {
