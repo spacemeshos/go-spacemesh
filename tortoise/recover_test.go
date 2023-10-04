@@ -28,7 +28,8 @@ func (a *recoveryAdapter) TallyVotes(ctx context.Context, current types.LayerID)
 		a.prev = genesis
 	}
 	for lid := a.prev; lid <= current; lid++ {
-		require.NoError(a, RecoverLayer(ctx, a.Tortoise, a.db, lid, lid, current, current, a.OnBallot))
+		require.NoError(a, RecoverLayer(ctx, a.Tortoise, a.db, lid, a.OnBallot))
+		a.Tortoise.TallyVotes(ctx, lid)
 		a.prev = lid
 	}
 }

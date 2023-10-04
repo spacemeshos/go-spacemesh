@@ -78,8 +78,26 @@ func Recover(ctx context.Context, db *datastore.CachedDB, current types.LayerID,
 			return nil, ctx.Err()
 		default:
 		}
-		if err := RecoverLayer(ctx, trtl, db, start, lid, last, min(last, current), trtl.OnRecoveredBallot); err != nil {
+		if err := RecoverLayer(ctx, trtl, db, lid, trtl.OnRecoveredBallot); err != nil {
 			return nil, fmt.Errorf("failed to load tortoise state at layer %d: %w", lid, err)
+		}
+	}
+	if last == 0 {
+		last = current
+	} else {
+		last = min(last, current)
+	}
+	trtl.TallyVotes(ctx, last)
+	// find topmost layer that was already applied and reset pending
+	// so that result for that layer is not returned
+	for prev := last - 1; prev >= start; prev-- {
+		opinion, err := layers.GetAggregatedHash(db, prev)
+		if err == nil {
+			if trtl.resetPending(prev, opinion) {
+				break
+			}
+		} else if !errors.Is(err, sql.ErrNotFound) {
+			return nil, fmt.Errorf("check opinion %w", err)
 		}
 	}
 	return trtl, nil
@@ -101,7 +119,7 @@ func recoverEpoch(epoch types.EpochID, trtl *Tortoise, db *datastore.CachedDB) e
 
 type ballotFunc func(*types.BallotTortoiseData)
 
-func RecoverLayer(ctx context.Context, trtl *Tortoise, db *datastore.CachedDB, start, lid, last, current types.LayerID, onBallot ballotFunc) error {
+func RecoverLayer(ctx context.Context, trtl *Tortoise, db *datastore.CachedDB, lid types.LayerID, onBallot ballotFunc) error {
 	if lid.FirstInEpoch() {
 		if err := recoverEpoch(lid.GetEpoch(), trtl, db); err != nil {
 			return err
@@ -147,25 +165,8 @@ func RecoverLayer(ctx context.Context, trtl *Tortoise, db *datastore.CachedDB, s
 	coin, err := layers.GetWeakCoin(db, lid)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return err
-	}
-	if err == nil {
+	} else if err == nil {
 		trtl.OnWeakCoin(lid, coin)
-	}
-	if lid <= current && lid == last {
-		trtl.TallyVotes(ctx, lid)
-		// find topmost layer that was already applied and reset pending
-		// so that result for that layer is not returned
-		for prev := lid - 1; prev >= start; prev-- {
-			opinion, err := layers.GetAggregatedHash(db, prev)
-			if err == nil {
-				if trtl.resetPending(prev, opinion) {
-					return nil
-				}
-			} else if !errors.Is(err, sql.ErrNotFound) {
-				return fmt.Errorf("check opinion %w", err)
-			}
-		}
-
 	}
 	return nil
 }

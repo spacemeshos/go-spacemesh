@@ -563,6 +563,11 @@ func (t *Tortoise) Mode() Mode {
 // pending layer to the layer above equal layer.
 // this method is meant to be used only in recovery from disk codepath.
 func (t *Tortoise) resetPending(lid types.LayerID, opinion types.Hash32) bool {
+	t.logger.Warn("reset pending",
+		zap.Uint32("lid", lid.Uint32()),
+		zap.String("computed", t.trtl.layer(lid).opinion.ShortString()),
+		zap.String("stored", opinion.ShortString()),
+	)
 	if t.trtl.layer(lid).opinion == opinion {
 		t.trtl.pending = lid + 1
 		return true
