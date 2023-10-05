@@ -263,7 +263,7 @@ func FirstInEpoch(db sql.Executor, atx types.ATXID, epoch types.EpochID) (*types
 		select id, pubkey, ballot, length(identities.proof) from ballots
 	    left join identities using(pubkey)
 		where atx = ?1 and layer between ?2 and ?3
-		limit 1 order by layer asc;`, enc, dec)
+		order by layer asc;`, enc, dec)
 	if err != nil {
 		return nil, fmt.Errorf("ballot by atx %s: %w", atx, err)
 	}
