@@ -136,29 +136,6 @@ func TestLatest(t *testing.T) {
 	require.Equal(t, newBallot.Layer, latest)
 }
 
-func TestCountByPubkeyLayer(t *testing.T) {
-	db := sql.InMemory()
-	lid := types.LayerID(1)
-	nodeID1 := types.RandomNodeID()
-	nodeID2 := types.RandomNodeID()
-	ballots := []types.Ballot{
-		types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, nodeID1, lid),
-		types.NewExistingBallot(types.BallotID{2}, types.EmptyEdSignature, nodeID1, lid.Add(1)),
-		types.NewExistingBallot(types.BallotID{3}, types.EmptyEdSignature, nodeID2, lid),
-		types.NewExistingBallot(types.BallotID{4}, types.EmptyEdSignature, nodeID2, lid),
-	}
-	for _, ballot := range ballots {
-		require.NoError(t, Add(db, &ballot))
-	}
-
-	count, err := CountByPubkeyLayer(db, lid, nodeID1)
-	require.NoError(t, err)
-	require.Equal(t, 1, count)
-	count, err = CountByPubkeyLayer(db, lid, nodeID2)
-	require.NoError(t, err)
-	require.Equal(t, 2, count)
-}
-
 func TestLayerBallotBySmesher(t *testing.T) {
 	db := sql.InMemory()
 	lid := types.LayerID(1)

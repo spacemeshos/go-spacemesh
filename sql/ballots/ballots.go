@@ -169,18 +169,6 @@ func IDsInLayer(db sql.Executor, lid types.LayerID) (rst []types.BallotID, err e
 	return rst, err
 }
 
-// CountByPubkeyLayer counts number of ballots in the layer for the nodeID.
-func CountByPubkeyLayer(db sql.Executor, lid types.LayerID, nodeID types.NodeID) (int, error) {
-	rows, err := db.Exec("select 1 from ballots where layer = ?1 and pubkey = ?2;", func(stmt *sql.Statement) {
-		stmt.BindInt64(1, int64(lid))
-		stmt.BindBytes(2, nodeID.Bytes())
-	}, nil)
-	if err != nil {
-		return 0, fmt.Errorf("counting layer %s: %w", lid, err)
-	}
-	return rows, nil
-}
-
 // LayerBallotByNodeID returns any ballot by the specified NodeID in a given layer.
 func LayerBallotByNodeID(db sql.Executor, lid types.LayerID, nodeID types.NodeID) (*types.Ballot, error) {
 	var (

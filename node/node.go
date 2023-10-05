@@ -799,18 +799,15 @@ func (app *App) initServices(ctx context.Context) error {
 	if app.Config.MinerGoodAtxsPercent > 0 {
 		minerGoodAtxPct = app.Config.MinerGoodAtxsPercent
 	}
-	proposalBuilder := miner.NewProposalBuilder(
+	proposalBuilder := miner.New(
 		ctx,
 		app.clock,
 		app.edSgn,
-		vrfSigner,
 		app.cachedDB,
 		app.host,
 		trtl,
-		beaconProtocol,
 		newSyncer,
 		app.conState,
-		miner.WithNodeID(app.edSgn.NodeID()),
 		miner.WithLayerSize(layerSize),
 		miner.WithLayerPerEpoch(layersPerEpoch),
 		miner.WithMinimalActiveSetWeight(app.Config.Tortoise.MinimalActiveSetWeight),

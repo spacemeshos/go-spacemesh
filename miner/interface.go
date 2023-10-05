@@ -10,10 +10,6 @@ import (
 
 //go:generate mockgen -typed -package=miner -destination=./mocks.go -source=./interface.go
 
-type proposalOracle interface {
-	ProposalEligibility(types.LayerID, types.Beacon, types.VRFPostIndex) (*EpochEligibility, error)
-}
-
 type conservativeState interface {
 	SelectProposalTXs(types.LayerID, int) []types.TransactionID
 }
@@ -22,10 +18,6 @@ type votesEncoder interface {
 	LatestComplete() types.LayerID
 	TallyVotes(context.Context, types.LayerID)
 	EncodeVotes(context.Context, ...tortoise.EncodeVotesOpts) (*types.Opinion, error)
-}
-
-type nonceFetcher interface {
-	VRFNonce(types.NodeID, types.EpochID) (types.VRFPostIndex, error)
 }
 
 type mesh interface {

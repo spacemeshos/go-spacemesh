@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -17,10 +18,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
+	"github.com/spacemeshos/go-spacemesh/sql/beacons"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -42,22 +46,74 @@ var (
 type ProposalBuilder struct {
 	logger log.Log
 	cfg    config
-	cdb    *datastore.CachedDB
+
+	cdb       *datastore.CachedDB
+	clock     layerClock
+	publisher pubsub.Publisher
+	conState  conservativeState
+	tortoise  votesEncoder
+	syncer    system.SyncStateProvider
+
+	signer  *signing.EdSigner
+	session *session
 
 	startOnce sync.Once
 	ctx       context.Context
 	cancel    context.CancelFunc
 	eg        errgroup.Group
+}
 
-	clock          layerClock
-	publisher      pubsub.Publisher
-	signer         *signing.EdSigner
-	nonceFetcher   nonceFetcher
-	conState       conservativeState
-	tortoise       votesEncoder
-	proposalOracle proposalOracle
-	beaconProvider system.BeaconGetter
-	syncer         system.SyncStateProvider
+// session per every signing key for the whole epoch.
+type session struct {
+	epoch     types.EpochID
+	beacon    types.Beacon
+	atx       types.ATXID
+	atxWeight uint64
+	ref       types.BallotID
+	prev      types.LayerID
+	nonce     types.VRFPostIndex
+	active    struct {
+		set    types.ATXIDList
+		weight uint64
+	}
+	eligibilities struct {
+		proofs map[types.LayerID][]types.VotingEligibility
+		slots  uint32
+	}
+}
+
+func (s *session) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddUint32("epoch", s.epoch.Uint32())
+	encoder.AddString("beacon", s.beacon.String())
+	encoder.AddString("atx", s.atx.ShortString())
+	encoder.AddUint64("weight", s.atxWeight)
+	if s.ref != types.EmptyBallotID {
+		encoder.AddString("ref", s.ref.String())
+	}
+	encoder.AddUint32("prev", s.prev.Uint32())
+	if s.eligibilities.proofs != nil {
+		encoder.AddUint32("slots", s.eligibilities.slots)
+		encoder.AddInt("eligible", len(s.eligibilities.proofs))
+		encoder.AddArray("eligible by layer", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+			// Sort the layer map to log the layer data in order
+			keys := make([]types.LayerID, 0, len(s.eligibilities.proofs))
+			for k := range s.eligibilities.proofs {
+				keys = append(keys, k)
+			}
+			sort.Slice(keys, func(i, j int) bool {
+				return keys[i].Before(keys[j])
+			})
+			for _, lyr := range keys {
+				encoder.AppendObject(log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
+					encoder.AddUint32("layer", lyr.Uint32())
+					encoder.AddInt("slots", len(s.eligibilities.proofs[lyr]))
+					return nil
+				}))
+			}
+			return nil
+		}))
+	}
+	return nil
 }
 
 // config defines configuration for the ProposalBuilder.
@@ -66,7 +122,6 @@ type config struct {
 	layersPerEpoch     uint32
 	hdist              uint32
 	minActiveSetWeight uint64
-	nodeID             types.NodeID
 	networkDelay       time.Duration
 
 	// used to determine whether a node has enough information on the active set this epoch
@@ -81,18 +136,6 @@ func (c *config) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddDuration("network delay", c.networkDelay)
 	encoder.AddInt("good atx percent", c.goodAtxPct)
 	return nil
-}
-
-type defaultFetcher struct {
-	cdb *datastore.CachedDB
-}
-
-func (f defaultFetcher) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
-	nonce, err := f.cdb.VRFNonce(nodeID, epoch)
-	if err != nil {
-		return types.VRFPostIndex(0), fmt.Errorf("get vrf nonce: %w", err)
-	}
-	return nonce, nil
 }
 
 // Opt for configuring ProposalBuilder.
@@ -115,13 +158,6 @@ func WithLayerPerEpoch(layers uint32) Opt {
 func WithMinimalActiveSetWeight(weight uint64) Opt {
 	return func(pb *ProposalBuilder) {
 		pb.cfg.minActiveSetWeight = weight
-	}
-}
-
-// WithNodeID defines the miner's NodeID.
-func WithNodeID(id types.NodeID) Opt {
-	return func(pb *ProposalBuilder) {
-		pb.cfg.nodeID = id
 	}
 }
 
@@ -150,54 +186,33 @@ func WithMinGoodAtxPct(pct int) Opt {
 	}
 }
 
-func withOracle(o proposalOracle) Opt {
-	return func(pb *ProposalBuilder) {
-		pb.proposalOracle = o
-	}
-}
-
-func withNonceFetcher(nf nonceFetcher) Opt {
-	return func(pb *ProposalBuilder) {
-		pb.nonceFetcher = nf
-	}
-}
-
-// NewProposalBuilder creates a struct of block builder type.
-func NewProposalBuilder(
+// New creates a struct of block builder type.
+func New(
 	ctx context.Context,
 	clock layerClock,
 	signer *signing.EdSigner,
-	vrfSigner *signing.VRFSigner,
 	cdb *datastore.CachedDB,
 	publisher pubsub.Publisher,
 	trtl votesEncoder,
-	beaconProvider system.BeaconGetter,
 	syncer system.SyncStateProvider,
 	conState conservativeState,
 	opts ...Opt,
 ) *ProposalBuilder {
 	sctx, cancel := context.WithCancel(ctx)
 	pb := &ProposalBuilder{
-		logger:         log.NewNop(),
-		ctx:            sctx,
-		cancel:         cancel,
-		signer:         signer,
-		clock:          clock,
-		cdb:            cdb,
-		publisher:      publisher,
-		tortoise:       trtl,
-		beaconProvider: beaconProvider,
-		syncer:         syncer,
-		conState:       conState,
+		logger:    log.NewNop(),
+		ctx:       sctx,
+		cancel:    cancel,
+		signer:    signer,
+		clock:     clock,
+		cdb:       cdb,
+		publisher: publisher,
+		tortoise:  trtl,
+		syncer:    syncer,
+		conState:  conState,
 	}
 	for _, opt := range opts {
 		opt(pb)
-	}
-	if pb.proposalOracle == nil {
-		pb.proposalOracle = newMinerOracle(pb.cfg, clock, cdb, vrfSigner, syncer, pb.logger)
-	}
-	if pb.nonceFetcher == nil {
-		pb.nonceFetcher = defaultFetcher{pb.cdb}
 	}
 	return pb
 }
@@ -206,7 +221,7 @@ func NewProposalBuilder(
 func (pb *ProposalBuilder) Start(ctx context.Context) error {
 	pb.startOnce.Do(func() {
 		pb.eg.Go(func() error {
-			pb.createProposalLoop(log.WithNewSessionID(ctx))
+			pb.loop(log.WithNewSessionID(ctx))
 			return nil
 		})
 	})
@@ -217,100 +232,6 @@ func (pb *ProposalBuilder) Start(ctx context.Context) error {
 func (pb *ProposalBuilder) Close() {
 	pb.cancel()
 	_ = pb.eg.Wait()
-}
-
-// stopped returns if we should stop.
-func (pb *ProposalBuilder) stopped() bool {
-	select {
-	case <-pb.ctx.Done():
-		return true
-	default:
-		return false
-	}
-}
-
-func (pb *ProposalBuilder) createProposal(
-	ctx context.Context,
-	layerID types.LayerID,
-	epochEligibility *EpochEligibility,
-	beacon types.Beacon,
-	txIDs []types.TransactionID,
-	opinion types.Opinion,
-) (*types.Proposal, error) {
-	if !layerID.After(types.GetEffectiveGenesis()) {
-		pb.logger.With().Fatal("attempt to create proposal during genesis",
-			log.Context(ctx),
-			layerID,
-		)
-	}
-
-	ib := &types.InnerBallot{
-		Layer:       layerID,
-		AtxID:       epochEligibility.Atx,
-		OpinionHash: opinion.Hash,
-	}
-
-	epoch := layerID.GetEpoch()
-	ref, err := ballots.FirstInEpoch(pb.cdb, epochEligibility.Atx, epoch)
-	if err != nil {
-		if !errors.Is(err, sql.ErrNotFound) {
-			return nil, fmt.Errorf("get ref ballot: %w", err)
-		}
-
-		pb.logger.With().Debug("creating ballot with active set (reference ballot in epoch)",
-			log.Context(ctx),
-			layerID,
-			log.Int("active_set_size", len(epochEligibility.ActiveSet)),
-		)
-		ib.RefBallot = types.EmptyBallotID
-		ib.EpochData = &types.EpochData{
-			ActiveSetHash:    epochEligibility.ActiveSet.Hash(),
-			Beacon:           beacon,
-			EligibilityCount: epochEligibility.Slots,
-		}
-		if err := activesets.Add(pb.cdb, ib.EpochData.ActiveSetHash, &types.EpochActiveSet{
-			Epoch: epoch,
-			Set:   epochEligibility.ActiveSet,
-		}); err != nil && !errors.Is(err, sql.ErrObjectExists) {
-			return nil, err
-		}
-	} else {
-		pb.logger.With().Debug("creating ballot with reference ballot (no active set)",
-			log.Context(ctx),
-			layerID,
-			log.Stringer("ref_ballot", ref.ID()),
-		)
-		ib.RefBallot = ref.ID()
-	}
-
-	p := &types.Proposal{
-		InnerProposal: types.InnerProposal{
-			Ballot: types.Ballot{
-				InnerBallot:       *ib,
-				Votes:             opinion.Votes,
-				EligibilityProofs: epochEligibility.Proofs[layerID],
-			},
-			TxIDs:    txIDs,
-			MeshHash: pb.decideMeshHash(ctx, layerID),
-		},
-	}
-	p.Ballot.Signature = pb.signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
-	p.SmesherID = pb.signer.NodeID()
-	p.Signature = pb.signer.Sign(signing.PROPOSAL, p.SignedBytes())
-	if err := p.Initialize(); err != nil {
-		pb.logger.With().Fatal("proposal failed to initialize",
-			log.Context(ctx),
-			layerID,
-			log.Err(err),
-		)
-	}
-	pb.logger.Event().Info("proposal created",
-		log.Context(ctx),
-		layerID,
-		p.ID(),
-		log.Int("num txs", len(p.TxIDs)),
-	)
-	return p, nil
 }
 
 // only output the mesh hash in the proposal when the following conditions are met:
@@ -374,106 +295,153 @@ func (pb *ProposalBuilder) decideMeshHash(ctx context.Context, current types.Lay
 	return mesh
 }
 
-func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerID) error {
-	var (
-		beacon types.Beacon
-		err    error
-		epoch  = layerID.GetEpoch()
-	)
+func (pb *ProposalBuilder) loadSessionData(ctx context.Context, lid types.LayerID) error {
+	if pb.session.nonce == 0 {
+		if nonce, err := pb.cdb.VRFNonce(pb.signer.NodeID(), pb.session.epoch); err != nil {
+			if errors.Is(err, sql.ErrNotFound) {
+				pb.logger.WithContext(ctx).With().Info("miner has no valid vrf nonce, not building proposal", lid)
+				return nil
+			}
+			return err
+		} else {
+			pb.session.nonce = nonce
+		}
+	}
+	if pb.session.beacon == types.EmptyBeacon {
+		if beacon, err := beacons.Get(pb.cdb, pb.session.epoch); err != nil {
+			return errNoBeacon
+		} else {
+			pb.session.beacon = beacon
+		}
+	}
+	if pb.session.atx == types.EmptyATXID {
+		atx, err := atxs.GetByEpochAndNodeID(pb.cdb, pb.session.epoch-1, pb.signer.NodeID())
+		if err != nil {
+			return fmt.Errorf("get atx in epoch %v: %w", pb.session.epoch-1, err)
+		}
+		pb.session.atx = atx.ID()
+		pb.session.atxWeight = atx.GetWeight()
+	}
+	vrf, err := pb.signer.VRFSigner()
+	if err != nil {
+		panic(err)
+	}
+	if pb.session.ref == types.EmptyBallotID {
+		ballot, err := ballots.RefBallot(pb.cdb, pb.session.epoch, pb.signer.NodeID())
+		if err != nil && errors.Is(err, sql.ErrNotFound) {
+			return fmt.Errorf("get refballot %w", err)
+		}
+		if errors.Is(err, sql.ErrNotFound) {
+			weight, set, err := generateActiveSet(
+				pb.logger, pb.cdb, vrf, pb.session.epoch, pb.clock.LayerToTime(pb.session.epoch.FirstLayer()),
+				pb.cfg.goodAtxPct, pb.cfg.networkDelay, pb.session.atx, pb.session.atxWeight)
+			if err != nil {
+				return err
+			}
+			pb.session.active.set = set
+			pb.session.active.weight = weight
+			slots, err := proposals.GetNumEligibleSlots(pb.session.atxWeight, pb.cfg.minActiveSetWeight, weight, pb.cfg.layerSize, pb.cfg.layersPerEpoch)
+			if err != nil {
+				return fmt.Errorf("get slots: %w", err)
+			}
+			pb.session.eligibilities.slots = slots
+		} else {
+			pb.session.ref = ballot.ID()
+			hash := ballot.EpochData.ActiveSetHash
+			set, err := activesets.Get(pb.cdb, hash)
+			if err != nil {
+				return fmt.Errorf("get activeset %s: %w", hash.String(), err)
+			}
+			var weight uint64
+			for _, id := range set.Set {
+				atx, err := pb.cdb.GetAtxHeader(id)
+				if err != nil {
+					return err
+				}
+				weight += atx.GetWeight()
+			}
+			pb.session.active.set = set.Set
+			pb.session.active.weight = weight
+			pb.session.eligibilities.slots = ballot.EpochData.EligibilityCount
+		}
+	}
+	if pb.session.eligibilities.proofs == nil {
+		pb.session.eligibilities.proofs = calcEligibilityProofs(vrf, pb.session.epoch, pb.session.beacon, pb.session.nonce, pb.session.eligibilities.slots, pb.cfg.layersPerEpoch)
+		pb.logger.With().Info("proposal eligibilities for an epoch", log.Inline(pb.session))
+		events.EmitEligibilities(pb.session.epoch, pb.session.beacon, pb.session.atx, uint32(len(pb.session.active.set)), pb.session.eligibilities.proofs)
+	}
+	return nil
+}
 
-	if layerID <= types.GetEffectiveGenesis() {
+func (pb *ProposalBuilder) Build(ctx context.Context, lid types.LayerID) error {
+	start := time.Now()
+
+	if lid.FirstInEpoch() {
+		pb.session = &session{epoch: lid.GetEpoch()}
+	}
+	if lid <= types.GetEffectiveGenesis() {
 		return errGenesis
 	}
 	if !pb.syncer.IsSynced(ctx) {
 		return errNotSynced
 	}
-
-	// make sure the miner is eligible first
-	nonce, err := pb.nonceFetcher.VRFNonce(pb.signer.NodeID(), layerID.GetEpoch())
-	if err != nil {
-		if errors.Is(err, sql.ErrNotFound) {
-			pb.logger.WithContext(ctx).With().Info("miner has no valid vrf nonce, not building proposal", layerID)
-			return nil
-		}
+	if err := pb.loadSessionData(ctx, lid); err != nil {
 		return err
 	}
-
-	if beacon, err = pb.beaconProvider.GetBeacon(epoch); err != nil {
-		return errNoBeacon
-	}
-
-	started := time.Now()
-
-	count, err := ballots.CountByPubkeyLayer(pb.cdb, layerID, pb.signer.NodeID())
-	if err != nil {
-		return err
-	} else if count != 0 {
+	if lid <= pb.session.prev {
 		return errDuplicateLayer
 	}
+	pb.session.prev = lid
 
-	epochEligibility, err := pb.proposalOracle.ProposalEligibility(layerID, beacon, nonce)
-	if err != nil {
-		if errors.Is(err, errMinerHasNoATXInPreviousEpoch) {
-			return fmt.Errorf("miner no ATX: %w", err)
-		}
-		return fmt.Errorf("proposal eligibility: %w", err)
-	}
-	proofs := epochEligibility.Proofs[layerID]
+	proofs := pb.session.eligibilities.proofs[lid]
 	if len(proofs) == 0 {
-		pb.logger.WithContext(ctx).With().Debug("not eligible for proposal in layer", layerID)
+		pb.logger.WithContext(ctx).With().Debug("not eligible for proposal in layer", lid)
 		return nil
 	}
 	pb.logger.WithContext(ctx).With().Debug("eligible for proposals in layer",
-		layerID,
-		epochEligibility.Atx,
-		log.Int("num proposals", len(proofs)),
+		log.Uint32("lid", lid.Uint32()), log.Int("num proposals", len(proofs)),
 	)
 
-	pb.tortoise.TallyVotes(ctx, layerID)
+	pb.tortoise.TallyVotes(ctx, lid)
 	// TODO(dshulyak) will get rid from the EncodeVotesWithCurrent option in a followup
 	// there are some dependencies in the tests
-	opinion, err := pb.tortoise.EncodeVotes(ctx, tortoise.EncodeVotesWithCurrent(layerID))
+	opinion, err := pb.tortoise.EncodeVotes(ctx, tortoise.EncodeVotesWithCurrent(lid))
 	if err != nil {
-		pb.logger.WithContext(ctx).With().Error("failed to encode votes",
-			layerID,
-			log.Err(err),
-		)
 		return fmt.Errorf("encode votes: %w", err)
 	}
+	txs := pb.conState.SelectProposalTXs(lid, len(proofs))
+	mesh := pb.decideMeshHash(ctx, lid)
+	p := createProposal(ctx, pb.logger, pb.session, pb.signer, lid, txs, *opinion, proofs, mesh)
 
-	txList := pb.conState.SelectProposalTXs(layerID, len(proofs))
-	p, err := pb.createProposal(ctx, layerID, epochEligibility, beacon, txList, *opinion)
-	if err != nil {
-		return err
+	elapsed := time.Since(start)
+	if elapsed > buildDurationErrorThreshold {
+		pb.logger.WithContext(ctx).WithFields(lid, lid.GetEpoch()).With().
+			Error("proposal building took too long ", log.Duration("elapsed", elapsed))
+	}
+	metrics.ProposalBuildDuration.WithLabelValues().Observe(float64(elapsed / time.Millisecond))
+
+	// needs to be saved before publishing, as we will query it in handler
+	if pb.session.ref == types.EmptyBallotID {
+		if err := activesets.Add(pb.cdb, p.EpochData.ActiveSetHash, &types.EpochActiveSet{
+			Epoch: pb.session.epoch,
+			Set:   pb.session.active.set,
+		}); err != nil && !errors.Is(err, sql.ErrObjectExists) {
+			return err
+		}
 	}
 
-	pb.saveMetrics(ctx, started, layerID)
-
-	if pb.stopped() {
-		return nil
+	// generate a new requestID for the new proposal message
+	newCtx := log.WithNewRequestID(ctx, lid, p.ID())
+	if err = pb.publisher.Publish(newCtx, pubsub.ProposalProtocol, codec.MustEncode(p)); err != nil {
+		pb.logger.WithContext(newCtx).With().Error("failed to send proposal", log.Err(err))
+	} else {
+		events.EmitProposal(lid, p.ID())
+		events.ReportProposal(events.ProposalCreated, p)
 	}
-
-	pb.eg.Go(func() error {
-		// generate a new requestID for the new proposal message
-		newCtx := log.WithNewRequestID(ctx, layerID, p.ID())
-		// validation handler, where proposal is persisted, is applied synchronously before
-		// proposal is sent over the network
-		data, err := codec.Encode(p)
-		if err != nil {
-			pb.logger.WithContext(newCtx).With().Fatal("failed to serialize proposal", log.Err(err))
-		}
-		if err = pb.publisher.Publish(newCtx, pubsub.ProposalProtocol, data); err != nil {
-			pb.logger.WithContext(newCtx).With().Error("failed to send proposal", log.Err(err))
-		} else {
-			events.EmitProposal(layerID, p.ID())
-			events.ReportProposal(events.ProposalCreated, p)
-		}
-		return nil
-	})
 	return nil
 }
 
-func (pb *ProposalBuilder) createProposalLoop(ctx context.Context) {
+func (pb *ProposalBuilder) loop(ctx context.Context) {
 	next := pb.clock.CurrentLayer().Add(1)
 	pb.logger.With().Info("started", log.Inline(&pb.cfg), log.Uint32("current", next.Uint32()))
 	for {
@@ -488,7 +456,7 @@ func (pb *ProposalBuilder) createProposalLoop(ctx context.Context) {
 			}
 			next = current.Add(1)
 			lyrCtx := log.WithNewSessionID(ctx)
-			if err := pb.handleLayer(lyrCtx, current); err != nil {
+			if err := pb.Build(lyrCtx, current); err != nil {
 				switch {
 				case errors.Is(err, errGenesis), errors.Is(err, errNotSynced):
 				default:
@@ -499,12 +467,69 @@ func (pb *ProposalBuilder) createProposalLoop(ctx context.Context) {
 	}
 }
 
-func (pb *ProposalBuilder) saveMetrics(ctx context.Context, started time.Time, layerID types.LayerID) {
-	elapsed := time.Since(started)
-	if elapsed > buildDurationErrorThreshold {
-		pb.logger.WithContext(ctx).WithFields(layerID, layerID.GetEpoch()).With().
-			Error("proposal building took too long ", log.Duration("elapsed", elapsed))
+func createProposal(
+	ctx context.Context,
+	logger log.Log,
+	session *session,
+	signer *signing.EdSigner,
+	lid types.LayerID,
+	txs []types.TransactionID,
+	opinion types.Opinion,
+	eligibility []types.VotingEligibility,
+	meshHash types.Hash32,
+) *types.Proposal {
+	ib := &types.InnerBallot{
+		Layer:       lid,
+		AtxID:       session.atx,
+		OpinionHash: opinion.Hash,
+	}
+	if session.ref == types.EmptyBallotID {
+		logger.With().Debug("creating ballot with active set (reference ballot in epoch)",
+			log.Context(ctx),
+			lid,
+			log.Int("active_set_size", len(session.active.set)),
+		)
+		ib.RefBallot = types.EmptyBallotID
+		ib.EpochData = &types.EpochData{
+			ActiveSetHash:    session.active.set.Hash(),
+			Beacon:           session.beacon,
+			EligibilityCount: session.eligibilities.slots,
+		}
+	} else {
+		logger.With().Debug("creating ballot with reference ballot (no active set)",
+			log.Context(ctx),
+			lid,
+			log.Stringer("ref_ballot", session.ref),
+		)
+		ib.RefBallot = session.ref
 	}
 
-	metrics.ProposalBuildDuration.WithLabelValues().Observe(float64(elapsed / time.Millisecond))
+	p := &types.Proposal{
+		InnerProposal: types.InnerProposal{
+			Ballot: types.Ballot{
+				InnerBallot:       *ib,
+				Votes:             opinion.Votes,
+				EligibilityProofs: eligibility,
+			},
+			TxIDs:    txs,
+			MeshHash: meshHash,
+		},
+	}
+	p.Ballot.Signature = signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
+	p.SmesherID = signer.NodeID()
+	p.Signature = signer.Sign(signing.PROPOSAL, p.SignedBytes())
+	if err := p.Initialize(); err != nil {
+		logger.With().Fatal("proposal failed to initialize",
+			log.Context(ctx),
+			lid,
+			log.Err(err),
+		)
+	}
+	logger.With().Info("proposal created",
+		log.Context(ctx),
+		lid,
+		p.ID(),
+		log.Int("num txs", len(p.TxIDs)),
+	)
+	return p
 }
