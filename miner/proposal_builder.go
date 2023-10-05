@@ -35,13 +35,6 @@ const (
 	buildDurationErrorThreshold = 10 * time.Second
 )
 
-var (
-	errGenesis        = errors.New("not building proposals: genesis")
-	errNotSynced      = errors.New("not building proposals: node not synced")
-	errNoBeacon       = errors.New("not building proposals: missing beacon")
-	errDuplicateLayer = errors.New("not building proposals: duplicate layer event")
-)
-
 // ProposalBuilder builds Proposals for a miner.
 type ProposalBuilder struct {
 	logger log.Log
@@ -312,7 +305,7 @@ func (pb *ProposalBuilder) initSessionData(ctx context.Context, lid types.LayerI
 	}
 	if pb.session.beacon == types.EmptyBeacon {
 		if beacon, err := beacons.Get(pb.cdb, pb.session.epoch); err != nil {
-			return errNoBeacon
+			return fmt.Errorf("missing beacon for epoch %d", pb.session.epoch)
 		} else {
 			pb.session.beacon = beacon
 		}
@@ -324,6 +317,9 @@ func (pb *ProposalBuilder) initSessionData(ctx context.Context, lid types.LayerI
 		}
 		pb.session.atx = atx.ID()
 		pb.session.atxWeight = atx.GetWeight()
+	}
+	if pb.session.prev == 0 {
+		// TODO(dshulyak) load latest ballot from this smesher to avoid equivocation
 	}
 	vrf, err := pb.signer.VRFSigner()
 	if err != nil {
@@ -378,17 +374,11 @@ func (pb *ProposalBuilder) initSessionData(ctx context.Context, lid types.LayerI
 
 func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 	start := time.Now()
-	if lid <= types.GetEffectiveGenesis() {
-		return errGenesis
-	}
-	if !pb.syncer.IsSynced(ctx) {
-		return errNotSynced
-	}
 	if err := pb.initSessionData(ctx, lid); err != nil {
 		return err
 	}
 	if lid <= pb.session.prev {
-		return errDuplicateLayer
+		return fmt.Errorf("layer %d was already built", lid)
 	}
 	pb.session.prev = lid
 
@@ -444,9 +434,6 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 func (pb *ProposalBuilder) loop(ctx context.Context) {
 	next := pb.clock.CurrentLayer().Add(1)
 	pb.logger.With().Info("started", log.Inline(&pb.cfg), log.Uint32("current", next.Uint32()))
-	if err := pb.initSessionData(ctx, next); err != nil {
-		pb.logger.With().Error("failed to init session data", log.Err(err))
-	}
 	for {
 		select {
 		case <-pb.ctx.Done():
@@ -459,12 +446,11 @@ func (pb *ProposalBuilder) loop(ctx context.Context) {
 			}
 			next = current.Add(1)
 			lyrCtx := log.WithNewSessionID(ctx)
+			if current <= types.GetEffectiveGenesis() || !pb.syncer.IsSynced(ctx) {
+				continue
+			}
 			if err := pb.build(lyrCtx, current); err != nil {
-				switch {
-				case errors.Is(err, errGenesis), errors.Is(err, errNotSynced):
-				default:
-					pb.logger.WithContext(lyrCtx).With().Warning("failed to build proposal", current, log.Err(err))
-				}
+				pb.logger.WithContext(lyrCtx).With().Warning("failed to build proposal", current, log.Err(err))
 			}
 		}
 	}
