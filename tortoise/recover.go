@@ -37,12 +37,14 @@ func Recover(ctx context.Context, db *datastore.CachedDB, current types.LayerID,
 	if applied > types.LayerID(trtl.cfg.WindowSize) {
 		window := applied - types.LayerID(trtl.cfg.WindowSize)
 		window = window.GetEpoch().FirstLayer() // windback to the start of the epoch to load ref ballots
-		prev, err1 := layers.GetAggregatedHash(db, window-1)
-		opinion, err2 := layers.GetAggregatedHash(db, window)
-		if err1 == nil && err2 == nil {
-			// tortoise will need reference to previous layer
-			trtl.RecoverFrom(window, opinion, prev)
-			start = window
+		if window > start {
+			prev, err1 := layers.GetAggregatedHash(db, window-1)
+			opinion, err2 := layers.GetAggregatedHash(db, window)
+			if err1 == nil && err2 == nil {
+				// tortoise will need reference to previous layer
+				trtl.RecoverFrom(window, opinion, prev)
+				start = window
+			}
 		}
 	}
 
@@ -87,6 +89,9 @@ func Recover(ctx context.Context, db *datastore.CachedDB, current types.LayerID,
 		last = current
 	} else {
 		last = min(last, current)
+	}
+	if last < start {
+		return trtl, nil
 	}
 	trtl.TallyVotes(ctx, last)
 	// find topmost layer that was already applied and reset pending
