@@ -158,39 +158,6 @@ func TestLayerBallotBySmesher(t *testing.T) {
 	require.Equal(t, ballots[1], *prev)
 }
 
-func TestRefBallot(t *testing.T) {
-	db := sql.InMemory()
-	ballots := []types.Ballot{
-		types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, types.NodeID{1}, types.EpochID(1).FirstLayer()-1),
-		types.NewExistingBallot(types.BallotID{2}, types.EmptyEdSignature, types.NodeID{1}, types.EpochID(1).FirstLayer()),
-		types.NewExistingBallot(types.BallotID{3}, types.EmptyEdSignature, types.NodeID{2}, types.EpochID(1).FirstLayer()),
-		types.NewExistingBallot(types.BallotID{4}, types.EmptyEdSignature, types.NodeID{2}, types.EpochID(1).FirstLayer()+1),
-		types.NewExistingBallot(types.BallotID{5}, types.EmptyEdSignature, types.NodeID{3}, types.EpochID(1).FirstLayer()+2),
-		types.NewExistingBallot(types.BallotID{6}, types.EmptyEdSignature, types.NodeID{4}, types.EpochID(2).FirstLayer()),
-	}
-	for _, i := range []int{0, 1, 2, 4, 5} {
-		ballots[i].EpochData = &types.EpochData{Beacon: types.Beacon{1, 2}}
-	}
-	for _, ballot := range ballots {
-		require.NoError(t, Add(db, &ballot))
-	}
-
-	got, err := RefBallot(db, 1, types.NodeID{1})
-	require.NoError(t, err)
-	require.Equal(t, ballots[1], *got)
-
-	got, err = RefBallot(db, 1, types.NodeID{2})
-	require.NoError(t, err)
-	require.Equal(t, ballots[2], *got)
-
-	got, err = RefBallot(db, 1, types.NodeID{3})
-	require.NoError(t, err)
-	require.Equal(t, ballots[4], *got)
-
-	_, err = RefBallot(db, 1, types.NodeID{4})
-	require.ErrorIs(t, err, sql.ErrNotFound)
-}
-
 func newAtx(signer *signing.EdSigner, layerID types.LayerID) (*types.VerifiedActivationTx, error) {
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{

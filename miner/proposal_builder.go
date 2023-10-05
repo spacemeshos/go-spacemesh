@@ -295,7 +295,10 @@ func (pb *ProposalBuilder) decideMeshHash(ctx context.Context, current types.Lay
 	return mesh
 }
 
-func (pb *ProposalBuilder) loadSessionData(ctx context.Context, lid types.LayerID) error {
+func (pb *ProposalBuilder) initSessionData(ctx context.Context, lid types.LayerID) error {
+	if lid.FirstInEpoch() || pb.session == nil {
+		pb.session = &session{epoch: lid.GetEpoch()}
+	}
 	if pb.session.nonce == 0 {
 		if nonce, err := pb.cdb.VRFNonce(pb.signer.NodeID(), pb.session.epoch); err != nil {
 			if errors.Is(err, sql.ErrNotFound) {
@@ -327,7 +330,7 @@ func (pb *ProposalBuilder) loadSessionData(ctx context.Context, lid types.LayerI
 		panic(err)
 	}
 	if pb.session.ref == types.EmptyBallotID {
-		ballot, err := ballots.RefBallot(pb.cdb, pb.session.epoch, pb.signer.NodeID())
+		ballot, err := ballots.FirstInEpoch(pb.cdb, pb.session.atx, pb.session.epoch)
 		if err != nil && errors.Is(err, sql.ErrNotFound) {
 			return fmt.Errorf("get refballot %w", err)
 		}
@@ -373,19 +376,15 @@ func (pb *ProposalBuilder) loadSessionData(ctx context.Context, lid types.LayerI
 	return nil
 }
 
-func (pb *ProposalBuilder) Build(ctx context.Context, lid types.LayerID) error {
+func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 	start := time.Now()
-
-	if lid.FirstInEpoch() {
-		pb.session = &session{epoch: lid.GetEpoch()}
-	}
 	if lid <= types.GetEffectiveGenesis() {
 		return errGenesis
 	}
 	if !pb.syncer.IsSynced(ctx) {
 		return errNotSynced
 	}
-	if err := pb.loadSessionData(ctx, lid); err != nil {
+	if err := pb.initSessionData(ctx, lid); err != nil {
 		return err
 	}
 	if lid <= pb.session.prev {
@@ -398,7 +397,8 @@ func (pb *ProposalBuilder) Build(ctx context.Context, lid types.LayerID) error {
 		pb.logger.WithContext(ctx).With().Debug("not eligible for proposal in layer", lid)
 		return nil
 	}
-	pb.logger.WithContext(ctx).With().Debug("eligible for proposals in layer",
+	pb.logger.With().Debug("eligible for proposals in layer",
+		log.Context(ctx),
 		log.Uint32("lid", lid.Uint32()), log.Int("num proposals", len(proofs)),
 	)
 
@@ -415,8 +415,8 @@ func (pb *ProposalBuilder) Build(ctx context.Context, lid types.LayerID) error {
 
 	elapsed := time.Since(start)
 	if elapsed > buildDurationErrorThreshold {
-		pb.logger.WithContext(ctx).WithFields(lid, lid.GetEpoch()).With().
-			Error("proposal building took too long ", log.Duration("elapsed", elapsed))
+		pb.logger.WithFields(lid, lid.GetEpoch()).With().
+			Error("proposal building took too long ", log.Duration("elapsed", elapsed), log.Context(ctx))
 	}
 	metrics.ProposalBuildDuration.WithLabelValues().Observe(float64(elapsed / time.Millisecond))
 
@@ -444,6 +444,9 @@ func (pb *ProposalBuilder) Build(ctx context.Context, lid types.LayerID) error {
 func (pb *ProposalBuilder) loop(ctx context.Context) {
 	next := pb.clock.CurrentLayer().Add(1)
 	pb.logger.With().Info("started", log.Inline(&pb.cfg), log.Uint32("current", next.Uint32()))
+	if err := pb.initSessionData(ctx, next); err != nil {
+		pb.logger.With().Error("failed to init session data", log.Err(err))
+	}
 	for {
 		select {
 		case <-pb.ctx.Done():
@@ -456,7 +459,7 @@ func (pb *ProposalBuilder) loop(ctx context.Context) {
 			}
 			next = current.Add(1)
 			lyrCtx := log.WithNewSessionID(ctx)
-			if err := pb.Build(lyrCtx, current); err != nil {
+			if err := pb.build(lyrCtx, current); err != nil {
 				switch {
 				case errors.Is(err, errGenesis), errors.Is(err, errNotSynced):
 				default:
