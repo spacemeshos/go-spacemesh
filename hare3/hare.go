@@ -11,6 +11,7 @@ import (
 	"github.com/jonboulle/clockwork"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -330,26 +331,18 @@ func (h *Hare) onLayer(layer types.LayerID) {
 	}
 	h.patrol.SetHareInCharge(layer)
 
-	var (
-		signers []*signing.EdSigner
-		proto   = newProtocol(h.config.Committee/2 + 1)
-	)
 	h.mu.Lock()
 	// signer can't join mid session
-	signers = make([]*signing.EdSigner, 0, len(h.signers))
-	for _, signer := range h.signers {
-		signers = append(signers, signer)
-	}
-	h.sessions[layer] = proto
-	h.mu.Unlock()
-
 	s := &session{
 		lid:     layer,
 		beacon:  beacon,
-		signers: signers,
-		vrfs:    make([]*types.HareEligibility, len(signers)),
-		proto:   proto,
+		signers: maps.Values(h.signers),
+		vrfs:    make([]*types.HareEligibility, len(h.signers)),
+		proto:   newProtocol(h.config.Committee/2 + 1),
 	}
+	h.sessions[layer] = s.proto
+	h.mu.Unlock()
+
 	sessionStart.Inc()
 	h.tracer.OnStart(layer)
 	h.log.Debug("registered layer", zap.Uint32("lid", layer.Uint32()))
@@ -415,6 +408,7 @@ func (h *Hare) run(session *session) error {
 		current := session.proto.IterRound
 
 		start := time.Now()
+		active = false
 		for i := range session.signers {
 			if current.IsMessageRound() {
 				session.vrfs[i] = h.oracle.active(session.signers[i], session.beacon, session.lid, current)

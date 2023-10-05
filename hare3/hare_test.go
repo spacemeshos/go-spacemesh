@@ -309,8 +309,8 @@ func (cl *lockstepCluster) partitionSigners() {
 func (cl *lockstepCluster) addSigner(n int) *lockstepCluster {
 	last := len(cl.signers)
 	for i := last; i < last+n; i++ {
-		cl.signers = append(cl.signers, (&node{t: cl.t, i: i}).
-			withSigner().withAtx(cl.units.min, cl.units.max))
+		n := (&node{t: cl.t, i: i}).withSigner().withAtx(cl.units.min, cl.units.max)
+		cl.signers = append(cl.signers, n)
 	}
 	return cl
 }
