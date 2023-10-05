@@ -273,7 +273,8 @@ func (c *HTTPPoetClient) req(ctx context.Context, method, path string, reqBody, 
 	}
 
 	if resBody != nil {
-		if err := protojson.Unmarshal(data, resBody); err != nil {
+		unmarshaler := protojson.UnmarshalOptions{DiscardUnknown: true}
+		if err := unmarshaler.Unmarshal(data, resBody); err != nil {
 			return fmt.Errorf("decoding response body to proto: %w", err)
 		}
 	}
