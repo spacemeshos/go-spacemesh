@@ -351,7 +351,7 @@ type App struct {
 	updater            *bootstrap.Updater
 	poetDb             *activation.PoetDb
 	postVerifier       *activation.OffloadingPostVerifier
-	postService        *activation.PostSupervisor
+	postSupervisor     *activation.PostSupervisor
 	preserve           *checkpoint.PreservedData
 	errCh              chan error
 
@@ -554,7 +554,7 @@ func (app *App) initServices(ctx context.Context) error {
 	nipostValidatorLogger := app.addLogger(NipostValidatorLogger, lg)
 	postVerifiers := make([]activation.PostVerifier, 0, app.Config.SMESHING.VerifyingOpts.Workers)
 	lg.Debug("creating post verifier")
-	verifier, err := activation.NewPostVerifier(app.Config.POST, nipostValidatorLogger, verifying.WithPowFlags(app.Config.SMESHING.VerifyingOpts.Flags))
+	verifier, err := activation.NewPostVerifier(app.Config.POST, nipostValidatorLogger.Zap(), verifying.WithPowFlags(app.Config.SMESHING.VerifyingOpts.Flags))
 	lg.With().Debug("created post verifier", log.Err(err))
 	if err != nil {
 		return err
@@ -565,13 +565,13 @@ func (app *App) initServices(ctx context.Context) error {
 	app.postVerifier = activation.NewOffloadingPostVerifier(postVerifiers, nipostValidatorLogger)
 
 	if app.Config.POSTService.PostServiceCmd != "" {
-		app.postService, err = activation.NewPostSupervisor(app.log.Zap(), app.Config.POSTService)
+		app.postSupervisor, err = activation.NewPostSupervisor(app.log.Zap(), app.Config.POSTService)
 		if err != nil {
 			return fmt.Errorf("start post service: %w", err)
 		}
 	}
 
-	validator := activation.NewValidator(poetDb, app.Config.POST, app.Config.SMESHING.Opts.Scrypt, nipostValidatorLogger, app.postVerifier)
+	validator := activation.NewValidator(poetDb, app.Config.POST, app.Config.SMESHING.Opts.Scrypt, app.postVerifier)
 	app.validator = validator
 
 	cfg := vm.DefaultConfig()
@@ -1248,8 +1248,8 @@ func (app *App) stopServices(ctx context.Context) {
 		app.syncer.Close()
 	}
 
-	if app.postService != nil {
-		if err := app.postService.Close(); err != nil {
+	if app.postSupervisor != nil {
+		if err := app.postSupervisor.Close(); err != nil {
 			app.log.With().Error("error stopping local post service", log.Err(err))
 		}
 	}

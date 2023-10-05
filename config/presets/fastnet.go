@@ -97,5 +97,10 @@ func fastnet() config.Config {
 	conf.POET.RequestRetryDelay = 1 * time.Second
 	conf.POET.MaxRequestRetries = 3
 
+	conf.POSTService.N = conf.SMESHING.Opts.Scrypt.N
+
+	conf.POSTService.K1 = conf.POST.K1
+	conf.POSTService.K2 = conf.POST.K2
+	conf.POSTService.K3 = conf.POST.K3
 	return conf
 }

@@ -408,28 +408,9 @@ type testPostManager struct {
 	cdb    *datastore.CachedDB
 }
 
-type newPostSetupMgrOptions struct {
-	cfg PostConfig
-}
-
-type newPostSetupMgrOptionFunc func(*newPostSetupMgrOptions)
-
-func withPostConfig(cfg PostConfig) newPostSetupMgrOptionFunc {
-	return func(o *newPostSetupMgrOptions) {
-		o.cfg = cfg
-	}
-}
-
 // TODO(mafa): start post service with supervisor.
-func newTestPostManager(tb testing.TB, o ...newPostSetupMgrOptionFunc) *testPostManager {
+func newTestPostManager(tb testing.TB) *testPostManager {
 	tb.Helper()
-
-	options := newPostSetupMgrOptions{
-		cfg: DefaultPostConfig(),
-	}
-	for _, opt := range o {
-		opt(&options)
-	}
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
@@ -445,7 +426,7 @@ func newTestPostManager(tb testing.TB, o ...newPostSetupMgrOptionFunc) *testPost
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
 	provingOpts := DefaultPostProvingOpts()
 	provingOpts.Flags = config.RecommendedPowFlags()
-	mgr, err := NewPostSetupManager(id, options.cfg, zaptest.NewLogger(tb), cdb, goldenATXID, provingOpts)
+	mgr, err := NewPostSetupManager(id, DefaultPostConfig(), zaptest.NewLogger(tb), cdb, goldenATXID, provingOpts)
 	require.NoError(tb, err)
 
 	return &testPostManager{

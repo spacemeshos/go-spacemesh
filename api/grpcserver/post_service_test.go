@@ -89,7 +89,7 @@ func launchPostSupervisor(tb testing.TB, log *zap.Logger, cfg Config, postDir st
 		NodeAddress:     fmt.Sprintf("http://%s", cfg.PublicListener),
 		PowDifficulty:   activation.DefaultPostConfig().PowDifficulty,
 		PostServiceMode: "light",
-		N:               "2",
+		N:               2,
 	}
 
 	ps, err := activation.NewPostSupervisor(log, opts)

@@ -8,18 +8,14 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-scale/tester"
-	"github.com/spacemeshos/poet/logging"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zapcore"
-	"go.uber.org/zap/zaptest"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 func defaultPoetServiceMock(tb testing.TB, id []byte, address string) *MockPoetProvingServiceClient {
@@ -143,168 +139,6 @@ func TestPostSetup(t *testing.T) {
 	nipost, err := nb.BuildNIPost(context.Background(), &challenge)
 	r.NoError(err)
 	r.NotNil(nipost)
-}
-
-func TestNIPostBuilderWithClients(t *testing.T) {
-	challenge := types.NIPostChallenge{
-		PublishEpoch: postGenesisEpoch + 2,
-	}
-	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t).WithName("poetDb"))
-	postCfg := DefaultPostConfig()
-	postCfg.PowDifficulty[0] = 1
-	postProvider := newTestPostManager(t, withPostConfig(postCfg))
-	logger := logtest.New(t).WithName("validator")
-	verifier, err := NewPostVerifier(postProvider.Config(), logger)
-	require.NoError(t, err)
-	defer verifier.Close()
-
-	v := NewValidator(poetDb, postProvider.Config(), postProvider.opts.Scrypt, logger, verifier)
-	nipost := buildNIPost(t, postProvider, challenge, poetDb, v)
-	_, err = v.NIPost(
-		context.Background(),
-		postProvider.id,
-		postProvider.commitmentAtxId,
-		nipost,
-		challenge.Hash(),
-		postProvider.opts.NumUnits,
-	)
-	require.NoError(t, err)
-}
-
-func spawnPoet(tb testing.TB, opts ...HTTPPoetOpt) *HTTPPoetTestHarness {
-	tb.Helper()
-	ctx, cancel := context.WithCancel(logging.NewContext(context.Background(), zaptest.NewLogger(tb)))
-
-	poetProver, err := NewHTTPPoetTestHarness(ctx, tb.TempDir(), opts...)
-	require.NoError(tb, err)
-	require.NotNil(tb, poetProver)
-
-	var eg errgroup.Group
-	tb.Cleanup(func() {
-		cancel()
-		eg.Wait()
-	})
-	eg.Go(func() error {
-		err := poetProver.Service.Start(ctx)
-		return errors.Join(err, poetProver.Service.Close())
-	})
-
-	return poetProver
-}
-
-// TODO(mafa): start post service with supervisor.
-func buildNIPost(tb testing.TB, postProvider *testPostManager, nipostChallenge types.NIPostChallenge, poetDb poetDbAPI, validator nipostValidator) *types.NIPost {
-	require.NoError(tb, postProvider.PrepareInitializer(context.Background(), postProvider.opts))
-	require.NoError(tb, postProvider.StartSession(context.Background()))
-	mclock := defaultLayerClockMock(tb)
-
-	epoch := layersPerEpoch * layerDuration
-	poetCfg := PoetConfig{
-		PhaseShift:        epoch / 2,
-		CycleGap:          epoch / 5,
-		GracePeriod:       epoch / 5,
-		RequestTimeout:    epoch / 5,
-		RequestRetryDelay: epoch / 50,
-		MaxRequestRetries: 10,
-	}
-
-	poetProver := spawnPoet(tb, WithGenesis(time.Now()), WithEpochDuration(epoch), WithPhaseShift(poetCfg.PhaseShift), WithCycleGap(poetCfg.CycleGap))
-
-	signer, err := signing.NewEdSigner()
-	require.NoError(tb, err)
-	nb, err := NewNIPostBuilder(
-		postProvider.id,
-		postProvider,
-		poetDb,
-		[]string{poetProver.RestURL().String()},
-		tb.TempDir(),
-		logtest.New(tb, zapcore.DebugLevel),
-		signer,
-		poetCfg,
-		mclock,
-		WithNipostValidator(validator),
-	)
-	require.NoError(tb, err)
-	nipost, err := nb.BuildNIPost(context.Background(), &nipostChallenge)
-	require.NoError(tb, err)
-	return nipost
-}
-
-func TestNewNIPostBuilderNotInitialized(t *testing.T) {
-	r := require.New(t)
-
-	challenge := types.NIPostChallenge{
-		PublishEpoch: postGenesisEpoch + 2,
-	}
-	challengeHash := challenge.Hash()
-
-	postProvider := newTestPostManager(t)
-
-	epoch := layersPerEpoch * layerDuration
-	poetCfg := PoetConfig{
-		PhaseShift:        epoch / 5,
-		CycleGap:          epoch / 10,
-		GracePeriod:       epoch / 10,
-		RequestTimeout:    epoch / 10,
-		RequestRetryDelay: epoch / 100,
-		MaxRequestRetries: 10,
-	}
-
-	poetProvider := defaultPoetServiceMock(t, []byte("poet"), "http://localhost:9999")
-	poetProvider.EXPECT().Proof(gomock.Any(), "").Return(&types.PoetProofMessage{
-		PoetProof: types.PoetProof{},
-	}, []types.Member{types.Member(challenge.Hash())}, nil)
-
-	ctrl := gomock.NewController(t)
-	poetDb := NewMockpoetDbAPI(ctrl)
-	poetDb.EXPECT().GetProof(gomock.Any()).Return(
-		&types.PoetProof{}, &challengeHash, nil,
-	)
-	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
-	mclock := defaultLayerClockMock(t)
-
-	nipostValidator := NewMocknipostValidator(ctrl)
-	nipostValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return(nil)
-
-	nb, err := NewNIPostBuilder(
-		postProvider.id,
-		postProvider,
-		poetDb,
-		[]string{},
-		t.TempDir(),
-		logtest.New(t),
-		postProvider.signer,
-		poetCfg,
-		mclock,
-		WithNipostValidator(nipostValidator),
-		withPoetClients([]PoetProvingServiceClient{poetProvider}),
-	)
-	require.NoError(t, err)
-
-	nipost, err := nb.BuildNIPost(context.Background(), &challenge)
-	r.EqualError(err, "post setup not complete")
-	r.Nil(nipost)
-
-	r.NoError(postProvider.PrepareInitializer(context.Background(), postProvider.opts))
-	r.NoError(postProvider.StartSession(context.Background()))
-
-	nipost, err = nb.BuildNIPost(context.Background(), &challenge)
-	r.NoError(err)
-	r.NotNil(nipost)
-
-	verifier, err := NewPostVerifier(postProvider.cfg, zaptest.NewLogger(t).Named("verifier"))
-	r.NoError(err)
-	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
-	v := NewValidator(poetDb, postProvider.cfg, postProvider.opts.Scrypt, verifier)
-	_, err = v.NIPost(
-		context.Background(),
-		postProvider.id,
-		postProvider.goldenATXID,
-		nipost,
-		challenge.Hash(),
-		postProvider.opts.NumUnits,
-	)
-	r.NoError(err)
 }
 
 func TestNIPostBuilder_BuildNIPost(t *testing.T) {
@@ -714,42 +548,6 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 	// Verify
 	ref, _ := proofBetter.Ref()
 	req.EqualValues(ref[:], nipost.PostMetadata.Challenge)
-}
-
-func TestNIPostBuilder_Close(t *testing.T) {
-	t.Parallel()
-	r := require.New(t)
-
-	ctrl := gomock.NewController(t)
-	nipostClient := NewMocknipostClient(ctrl)
-	nipostClient.EXPECT().Status().Return(&PostSetupStatus{State: PostSetupStateComplete})
-	poetProver := spawnPoet(t, WithGenesis(time.Now()), WithEpochDuration(time.Second))
-	poetDb := NewMockpoetDbAPI(ctrl)
-	challenge := types.NIPostChallenge{
-		PublishEpoch: postGenesisEpoch + 2,
-	}
-	mclock := defaultLayerClockMock(t)
-
-	sig, err := signing.NewEdSigner()
-	r.NoError(err)
-	nb, err := NewNIPostBuilder(
-		types.NodeID{1},
-		nipostClient,
-		poetDb,
-		[]string{poetProver.RestURL().String()},
-		t.TempDir(),
-		logtest.New(t),
-		sig,
-		PoetConfig{},
-		mclock,
-	)
-	r.NoError(err)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	nipost, err := nb.BuildNIPost(ctx, &challenge)
-	r.ErrorIs(err, context.Canceled)
-	r.Nil(nipost)
 }
 
 func TestNIPSTBuilder_PoetUnstable(t *testing.T) {

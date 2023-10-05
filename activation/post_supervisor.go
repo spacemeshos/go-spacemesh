@@ -7,6 +7,7 @@ import (
 	"io"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 
@@ -46,12 +47,18 @@ func MainnetPostServiceConfig() PostSupervisorConfig {
 type PostSupervisorConfig struct {
 	PostServiceCmd string `mapstructure:"post-opts-post-service"`
 
-	DataDir         string        `mapstructure:"post-opts-datadir"`
-	NodeAddress     string        `mapstructure:"post-opts-node-address"`
-	PowDifficulty   PowDifficulty `mapstructure:"post-opts-pow-difficulty"`
-	PostServiceMode string        `mapstructure:"post-opts-post-service-mode"`
+	DataDir         string `mapstructure:"post-opts-datadir"`
+	NodeAddress     string `mapstructure:"post-opts-node-address"`
+	PostServiceMode string `mapstructure:"post-opts-post-service-mode"`
 
-	N string `mapstructure:"post-opts-n"`
+	PowDifficulty PowDifficulty `mapstructure:"post-opts-pow-difficulty"`
+	K1            uint32        `mapstructure:"post-opts-k1"`
+	K2            uint32        `mapstructure:"post-opts-k2"`
+	K3            uint32        `mapstructure:"post-opts-k3"`
+
+	N uint `mapstructure:"post-opts-n"`
+	R uint `mapstructure:"post-opts-r"`
+	P uint `mapstructure:"post-opts-p"`
 }
 
 // PostSupervisor manages a local post service.
@@ -113,8 +120,23 @@ func (ps *PostSupervisor) runCmd(ctx context.Context, opts PostSupervisorConfig)
 			"--pow-difficulty", opts.PowDifficulty.String(),
 			"--randomx-mode", opts.PostServiceMode,
 		}
-		if opts.N != "" {
-			args = append(args, "-n", opts.N)
+		if opts.K1 != 0 {
+			args = append(args, "--k1", strconv.FormatUint(uint64(opts.K1), 10))
+		}
+		if opts.K2 != 0 {
+			args = append(args, "--k2", strconv.FormatUint(uint64(opts.K2), 10))
+		}
+		if opts.K3 != 0 {
+			args = append(args, "--k3", strconv.FormatUint(uint64(opts.K3), 10))
+		}
+		if opts.N != 0 {
+			args = append(args, "-n", strconv.FormatUint(uint64(opts.N), 10))
+		}
+		if opts.R != 0 {
+			args = append(args, "-r", strconv.FormatUint(uint64(opts.R), 10))
+		}
+		if opts.P != 0 {
+			args = append(args, "-p", strconv.FormatUint(uint64(opts.P), 10))
 		}
 
 		cmd := exec.CommandContext(

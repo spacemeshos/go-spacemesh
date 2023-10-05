@@ -1,6 +1,7 @@
 package presets
 
 import (
+	"fmt"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -88,6 +89,11 @@ func standalone() config.Config {
 	conf.API.PublicListener = "0.0.0.0:10092"
 	conf.API.PrivateListener = "0.0.0.0:10093"
 
-	conf.POSTService.NodeAddress = "http://0.0.0.0:10093"
+	conf.POSTService.NodeAddress = fmt.Sprintf("http://%s", conf.API.PrivateListener)
+	conf.POSTService.DataDir = conf.SMESHING.Opts.DataDir
+
+	conf.POSTService.K1 = conf.POST.K1
+	conf.POSTService.K2 = conf.POST.K2
+	conf.POSTService.K3 = conf.POST.K3
 	return conf
 }

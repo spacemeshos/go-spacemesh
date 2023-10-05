@@ -137,7 +137,7 @@ type SmeshingConfig struct {
 	Start           bool                              `mapstructure:"smeshing-start"`
 	CoinbaseAccount string                            `mapstructure:"smeshing-coinbase"`
 	Opts            activation.PostSetupOpts          `mapstructure:"smeshing-opts"`
-	ProvingOpts     activation.PostProvingOpts        `mapstructure:"smeshing-proving-opts"`
+	ProvingOpts     activation.PostProvingOpts        `mapstructure:"smeshing-proving-opts"` // TODO(mafa): remove?
 	VerifyingOpts   activation.PostProofVerifyingOpts `mapstructure:"smeshing-verifying-opts"`
 }
 
