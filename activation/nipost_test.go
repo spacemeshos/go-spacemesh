@@ -292,11 +292,10 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	r.NoError(err)
 	r.NotNil(nipost)
 
-	logger := logtest.New(t).WithName("validator")
-	verifier, err := NewPostVerifier(postProvider.cfg, logger)
+	verifier, err := NewPostVerifier(postProvider.cfg, zaptest.NewLogger(t).Named("verifier"))
 	r.NoError(err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
-	v := NewValidator(poetDb, postProvider.cfg, postProvider.opts.Scrypt, logger, verifier)
+	v := NewValidator(poetDb, postProvider.cfg, postProvider.opts.Scrypt, verifier)
 	_, err = v.NIPost(
 		context.Background(),
 		postProvider.id,
