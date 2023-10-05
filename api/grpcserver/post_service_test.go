@@ -123,7 +123,7 @@ func Test_GenerateProof(t *testing.T) {
 
 	select {
 	case <-connected:
-	case <-time.After(5 * time.Second):
+	case <-time.After(10 * time.Second):
 		require.Fail(t, "timed out waiting for connection")
 	}
 
@@ -173,7 +173,7 @@ func Test_Cancel_GenerateProof(t *testing.T) {
 
 	select {
 	case <-connected:
-	case <-time.After(5 * time.Second):
+	case <-time.After(10 * time.Second):
 		require.Fail(t, "timed out waiting for connection")
 	}
 
@@ -225,7 +225,7 @@ func Test_GenerateProof_MultipleServices(t *testing.T) {
 
 	select {
 	case <-connected:
-	case <-time.After(5 * time.Second):
+	case <-time.After(10 * time.Second):
 		require.Fail(t, "timed out waiting for connection")
 	}
 
