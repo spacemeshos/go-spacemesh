@@ -204,6 +204,7 @@ type Hare struct {
 func (h *Hare) Register(signer *signing.EdSigner) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	h.log.Info("register signing key", zap.Stringer("node", signer.NodeID()))
 	h.signers[string(signer.PublicKey().Bytes())] = signer
 }
 
@@ -388,8 +389,8 @@ func (h *Hare) run(session *session) error {
 	for i := range session.signers {
 		session.vrfs[i] = h.oracle.active(session.signers[i], session.beacon, session.lid, current)
 		active = active || session.vrfs[i] != nil
-		h.tracer.OnActive(session.vrfs[i])
 	}
+	h.tracer.OnActive(session.vrfs)
 	activeLatency.Observe(time.Since(start).Seconds())
 
 	walltime := h.nodeclock.LayerToTime(session.lid).Add(h.config.PreroundDelay)
@@ -421,8 +422,8 @@ func (h *Hare) run(session *session) error {
 				session.vrfs[i] = nil
 			}
 			active = active || session.vrfs[i] != nil
-			h.tracer.OnActive(session.vrfs[i])
 		}
+		h.tracer.OnActive(session.vrfs)
 		activeLatency.Observe(time.Since(start).Seconds())
 
 		select {
@@ -469,13 +470,12 @@ func (h *Hare) onOutput(session *session, ir IterRound, out output) error {
 			h.log.Error("failed to publish", zap.Inline(out.message), zap.Error(err))
 		}
 	}
-
+	h.tracer.OnMessageSent(out.message)
 	h.log.Debug("round output",
 		zap.Uint32("lid", session.lid.Uint32()),
 		zap.Uint8("iter", ir.Iter), zap.Stringer("round", ir.Round),
 		zap.Inline(&out),
 	)
-	h.tracer.OnMessageSent(out.message)
 	if out.coin != nil {
 		select {
 		case <-h.ctx.Done():
