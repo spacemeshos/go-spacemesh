@@ -68,7 +68,8 @@ func (pc *postClient) Proof(ctx context.Context, challenge []byte) (*types.Post,
 					select {
 					case <-ctx.Done():
 						return nil, nil, ctx.Err()
-					case <-time.After(2 * time.Second): // TODO(mafa): make polling interval configurable
+					case <-time.After(2 * time.Second):
+						// TODO(mafa): make polling interval configurable
 						continue
 					}
 				}
