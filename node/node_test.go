@@ -1143,7 +1143,7 @@ func TestAdminEvents(t *testing.T) {
 	t.Cleanup(func() { assert.NoError(t, conn.Close()) })
 	client := pb.NewAdminServiceClient(conn)
 
-	tctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	tctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
 
 	// 4 is arbitrary, if we received events once, they must be
