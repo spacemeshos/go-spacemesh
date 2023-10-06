@@ -16,7 +16,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/miner/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -29,10 +28,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
-)
-
-const (
-	buildDurationErrorThreshold = 10 * time.Second
 )
 
 // ProposalBuilder builds Proposals for a miner.
@@ -289,26 +284,26 @@ func (pb *ProposalBuilder) decideMeshHash(ctx context.Context, current types.Lay
 }
 
 func (pb *ProposalBuilder) initSessionData(ctx context.Context, lid types.LayerID) error {
-	if lid.FirstInEpoch() || pb.session == nil {
+	if pb.session == nil || pb.session.epoch != lid.GetEpoch() {
 		pb.session = &session{epoch: lid.GetEpoch()}
 	}
 	if pb.session.nonce == 0 {
-		if nonce, err := pb.cdb.VRFNonce(pb.signer.NodeID(), pb.session.epoch); err != nil {
+		nonce, err := pb.cdb.VRFNonce(pb.signer.NodeID(), pb.session.epoch)
+		if err != nil {
 			if errors.Is(err, sql.ErrNotFound) {
 				pb.logger.WithContext(ctx).With().Info("miner has no valid vrf nonce, not building proposal", lid)
 				return nil
 			}
 			return err
-		} else {
-			pb.session.nonce = nonce
 		}
+		pb.session.nonce = nonce
 	}
 	if pb.session.beacon == types.EmptyBeacon {
-		if beacon, err := beacons.Get(pb.cdb, pb.session.epoch); err != nil {
+		beacon, err := beacons.Get(pb.cdb, pb.session.epoch)
+		if err != nil || beacon == types.EmptyBeacon {
 			return fmt.Errorf("missing beacon for epoch %d", pb.session.epoch)
-		} else {
-			pb.session.beacon = beacon
 		}
+		pb.session.beacon = beacon
 	}
 	if pb.session.atx == types.EmptyATXID {
 		atx, err := atxs.GetByEpochAndNodeID(pb.cdb, pb.session.epoch-1, pb.signer.NodeID())
@@ -373,10 +368,12 @@ func (pb *ProposalBuilder) initSessionData(ctx context.Context, lid types.LayerI
 }
 
 func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
-	start := time.Now()
+	latency := latencyTracker{start: time.Now()}
 	if err := pb.initSessionData(ctx, lid); err != nil {
 		return err
 	}
+	latency.data = time.Now()
+
 	if lid <= pb.session.prev {
 		return fmt.Errorf("layer %d was already built", lid)
 	}
@@ -388,8 +385,7 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 		return nil
 	}
 	pb.logger.With().Debug("eligible for proposals in layer",
-		log.Context(ctx),
-		log.Uint32("lid", lid.Uint32()), log.Int("num proposals", len(proofs)),
+		log.Context(ctx), log.Uint32("lid", lid.Uint32()), log.Int("num proposals", len(proofs)),
 	)
 
 	pb.tortoise.TallyVotes(ctx, lid)
@@ -399,35 +395,34 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 	if err != nil {
 		return fmt.Errorf("encode votes: %w", err)
 	}
-	txs := pb.conState.SelectProposalTXs(lid, len(proofs))
-	mesh := pb.decideMeshHash(ctx, lid)
-	p := createProposal(ctx, pb.logger, pb.session, pb.signer, lid, txs, *opinion, proofs, mesh)
+	latency.tortoise = time.Now()
 
-	elapsed := time.Since(start)
-	if elapsed > buildDurationErrorThreshold {
-		pb.logger.WithFields(lid, lid.GetEpoch()).With().
-			Error("proposal building took too long ", log.Duration("elapsed", elapsed), log.Context(ctx))
-	}
-	metrics.ProposalBuildDuration.WithLabelValues().Observe(float64(elapsed / time.Millisecond))
+	txs := pb.conState.SelectProposalTXs(lid, len(proofs))
+	latency.txs = time.Now()
+
+	meshHash := pb.decideMeshHash(ctx, lid)
+	latency.hash = time.Now()
+
+	proposal := createProposal(pb.session, pb.signer, lid, txs, opinion, proofs, meshHash)
 
 	// needs to be saved before publishing, as we will query it in handler
 	if pb.session.ref == types.EmptyBallotID {
-		if err := activesets.Add(pb.cdb, p.EpochData.ActiveSetHash, &types.EpochActiveSet{
+		if err := activesets.Add(pb.cdb, proposal.EpochData.ActiveSetHash, &types.EpochActiveSet{
 			Epoch: pb.session.epoch,
 			Set:   pb.session.active.set,
 		}); err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return err
 		}
 	}
-
-	// generate a new requestID for the new proposal message
-	newCtx := log.WithNewRequestID(ctx, lid, p.ID())
-	if err = pb.publisher.Publish(newCtx, pubsub.ProposalProtocol, codec.MustEncode(p)); err != nil {
-		pb.logger.WithContext(newCtx).With().Error("failed to send proposal", log.Err(err))
-	} else {
-		events.EmitProposal(lid, p.ID())
-		events.ReportProposal(events.ProposalCreated, p)
+	if err = pb.publisher.Publish(ctx, pubsub.ProposalProtocol, codec.MustEncode(proposal)); err != nil {
+		return fmt.Errorf("failed to publish proposal %d/%s: %w", proposal.Layer, proposal.ID(), err)
 	}
+	latency.publish = time.Now()
+
+	pb.logger.With().Info("proposal created", log.Context(ctx), log.Inline(proposal), log.Object("latency", &latency))
+	proposalBuild.Observe(latency.total().Seconds())
+	events.EmitProposal(lid, proposal.ID())
+	events.ReportProposal(events.ProposalCreated, proposal)
 	return nil
 }
 
@@ -457,46 +452,22 @@ func (pb *ProposalBuilder) loop(ctx context.Context) {
 }
 
 func createProposal(
-	ctx context.Context,
-	logger log.Log,
 	session *session,
 	signer *signing.EdSigner,
 	lid types.LayerID,
 	txs []types.TransactionID,
-	opinion types.Opinion,
+	opinion *types.Opinion,
 	eligibility []types.VotingEligibility,
 	meshHash types.Hash32,
 ) *types.Proposal {
-	ib := &types.InnerBallot{
-		Layer:       lid,
-		AtxID:       session.atx,
-		OpinionHash: opinion.Hash,
-	}
-	if session.ref == types.EmptyBallotID {
-		logger.With().Debug("creating ballot with active set (reference ballot in epoch)",
-			log.Context(ctx),
-			lid,
-			log.Int("active_set_size", len(session.active.set)),
-		)
-		ib.RefBallot = types.EmptyBallotID
-		ib.EpochData = &types.EpochData{
-			ActiveSetHash:    session.active.set.Hash(),
-			Beacon:           session.beacon,
-			EligibilityCount: session.eligibilities.slots,
-		}
-	} else {
-		logger.With().Debug("creating ballot with reference ballot (no active set)",
-			log.Context(ctx),
-			lid,
-			log.Stringer("ref_ballot", session.ref),
-		)
-		ib.RefBallot = session.ref
-	}
-
 	p := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot: types.Ballot{
-				InnerBallot:       *ib,
+				InnerBallot: types.InnerBallot{
+					Layer:       lid,
+					AtxID:       session.atx,
+					OpinionHash: opinion.Hash,
+				},
 				Votes:             opinion.Votes,
 				EligibilityProofs: eligibility,
 			},
@@ -504,21 +475,21 @@ func createProposal(
 			MeshHash: meshHash,
 		},
 	}
+	if session.ref == types.EmptyBallotID {
+		p.Ballot.RefBallot = types.EmptyBallotID
+		p.Ballot.EpochData = &types.EpochData{
+			ActiveSetHash:    session.active.set.Hash(),
+			Beacon:           session.beacon,
+			EligibilityCount: session.eligibilities.slots,
+		}
+	} else {
+		p.Ballot.RefBallot = session.ref
+	}
 	p.Ballot.Signature = signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
 	p.SmesherID = signer.NodeID()
 	p.Signature = signer.Sign(signing.PROPOSAL, p.SignedBytes())
 	if err := p.Initialize(); err != nil {
-		logger.With().Fatal("proposal failed to initialize",
-			log.Context(ctx),
-			lid,
-			log.Err(err),
-		)
+		panic(err)
 	}
-	logger.With().Info("proposal created",
-		log.Context(ctx),
-		lid,
-		p.ID(),
-		log.Int("num txs", len(p.TxIDs)),
-	)
 	return p
 }
