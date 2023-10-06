@@ -120,13 +120,8 @@ func (p *Proposal) SetID(pid ProposalID) {
 // MarshalLogObject implements logging interface.
 func (p *Proposal) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("proposal_id", p.ID().String())
-	encoder.AddArray("transactions", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-		for _, id := range p.TxIDs {
-			encoder.AppendString(id.String())
-		}
-		return nil
-	}))
-	encoder.AddString("mesh_hash", p.MeshHash.String())
+	encoder.AddInt("transactions", len(p.TxIDs))
+	encoder.AddString("mesh_hash", p.MeshHash.ShortString())
 	p.Ballot.MarshalLogObject(encoder)
 	return nil
 }

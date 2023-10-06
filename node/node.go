@@ -800,7 +800,6 @@ func (app *App) initServices(ctx context.Context) error {
 		minerGoodAtxPct = app.Config.MinerGoodAtxsPercent
 	}
 	proposalBuilder := miner.New(
-		ctx,
 		app.clock,
 		app.edSgn,
 		app.cachedDB,
@@ -1041,9 +1040,7 @@ func (app *App) startServices(ctx context.Context) error {
 	if err := app.hare.Start(ctx); err != nil {
 		return fmt.Errorf("cannot start hare: %w", err)
 	}
-	if err := app.proposalBuilder.Start(ctx); err != nil {
-		return fmt.Errorf("cannot start block producer: %w", err)
-	}
+	app.proposalBuilder.Start()
 
 	if app.Config.SMESHING.Start {
 		coinbaseAddr, err := types.StringToAddress(app.Config.SMESHING.CoinbaseAccount)
@@ -1190,7 +1187,7 @@ func (app *App) stopServices(ctx context.Context) {
 	}
 
 	if app.proposalBuilder != nil {
-		app.proposalBuilder.Close()
+		app.proposalBuilder.Stop()
 	}
 
 	if app.clock != nil {

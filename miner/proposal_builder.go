@@ -176,7 +176,6 @@ func WithMinGoodAtxPct(pct int) Opt {
 
 // New creates a struct of block builder type.
 func New(
-	ctx context.Context,
 	clock layerClock,
 	signer *signing.EdSigner,
 	cdb *datastore.CachedDB,
@@ -186,10 +185,10 @@ func New(
 	conState conservativeState,
 	opts ...Opt,
 ) *ProposalBuilder {
-	sctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancel(context.Background())
 	pb := &ProposalBuilder{
 		logger:    log.NewNop(),
-		ctx:       sctx,
+		ctx:       ctx,
 		cancel:    cancel,
 		signer:    signer,
 		clock:     clock,
@@ -205,19 +204,38 @@ func New(
 	return pb
 }
 
-// Start starts the loop that listens to layers and build proposals.
-func (pb *ProposalBuilder) Start(ctx context.Context) error {
+// Start the loop that listens to layers and build proposals.
+func (pb *ProposalBuilder) Start() {
 	pb.startOnce.Do(func() {
 		pb.eg.Go(func() error {
-			pb.loop(log.WithNewSessionID(ctx))
-			return nil
+			next := pb.clock.CurrentLayer().Add(1)
+			pb.logger.With().Info("started", log.Inline(&pb.cfg), log.Uint32("current", next.Uint32()))
+			for {
+				select {
+				case <-pb.ctx.Done():
+					return nil
+				case <-pb.clock.AwaitLayer(next):
+					current := pb.clock.CurrentLayer()
+					if current.Before(next) {
+						pb.logger.Info("time sync detected, realigning ProposalBuilder")
+						continue
+					}
+					next = current.Add(1)
+					ctx := log.WithNewSessionID(pb.ctx)
+					if current <= types.GetEffectiveGenesis() || !pb.syncer.IsSynced(ctx) {
+						continue
+					}
+					if err := pb.build(ctx, current); err != nil {
+						pb.logger.With().Warning("failed to build proposal", log.Context(ctx), current, log.Err(err))
+					}
+				}
+			}
 		})
 	})
-	return nil
 }
 
-// Close stops the loop that listens to layers and build proposals.
-func (pb *ProposalBuilder) Close() {
+// Stop the loop that listens to layers and build proposals.
+func (pb *ProposalBuilder) Stop() {
 	pb.cancel()
 	_ = pb.eg.Wait()
 }
@@ -322,7 +340,7 @@ func (pb *ProposalBuilder) initSessionData(ctx context.Context, lid types.LayerI
 	}
 	if pb.session.ref == types.EmptyBallotID {
 		ballot, err := ballots.FirstInEpoch(pb.cdb, pb.session.atx, pb.session.epoch)
-		if err != nil && errors.Is(err, sql.ErrNotFound) {
+		if err != nil && !errors.Is(err, sql.ErrNotFound) {
 			return fmt.Errorf("get refballot %w", err)
 		}
 		if errors.Is(err, sql.ErrNotFound) {
@@ -381,7 +399,8 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 
 	proofs := pb.session.eligibilities.proofs[lid]
 	if len(proofs) == 0 {
-		pb.logger.WithContext(ctx).With().Debug("not eligible for proposal in layer", lid)
+		pb.logger.WithContext(ctx).With().Debug("not eligible for proposal in layer",
+			log.Uint32("lid", lid.Uint32()), log.Uint32("epoch", lid.GetEpoch().Uint32()))
 		return nil
 	}
 	pb.logger.With().Debug("eligible for proposals in layer",
@@ -389,7 +408,7 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 	)
 
 	pb.tortoise.TallyVotes(ctx, lid)
-	// TODO(dshulyak) will get rid from the EncodeVotesWithCurrent option in a followup
+	// TODO(dshulyak) get rid from the EncodeVotesWithCurrent option in a followup
 	// there are some dependencies in the tests
 	opinion, err := pb.tortoise.EncodeVotes(ctx, tortoise.EncodeVotesWithCurrent(lid))
 	if err != nil {
@@ -424,31 +443,6 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 	events.EmitProposal(lid, proposal.ID())
 	events.ReportProposal(events.ProposalCreated, proposal)
 	return nil
-}
-
-func (pb *ProposalBuilder) loop(ctx context.Context) {
-	next := pb.clock.CurrentLayer().Add(1)
-	pb.logger.With().Info("started", log.Inline(&pb.cfg), log.Uint32("current", next.Uint32()))
-	for {
-		select {
-		case <-pb.ctx.Done():
-			return
-		case <-pb.clock.AwaitLayer(next):
-			current := pb.clock.CurrentLayer()
-			if current.Before(next) {
-				pb.logger.Info("time sync detected, realigning ProposalBuilder")
-				continue
-			}
-			next = current.Add(1)
-			lyrCtx := log.WithNewSessionID(ctx)
-			if current <= types.GetEffectiveGenesis() || !pb.syncer.IsSynced(ctx) {
-				continue
-			}
-			if err := pb.build(lyrCtx, current); err != nil {
-				pb.logger.WithContext(lyrCtx).With().Warning("failed to build proposal", current, log.Err(err))
-			}
-		}
-	}
 }
 
 func createProposal(
