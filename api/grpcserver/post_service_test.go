@@ -99,8 +99,6 @@ func launchPostSupervisor(tb testing.TB, log *zap.Logger, cfg Config, postDir st
 }
 
 func Test_GenerateProof(t *testing.T) {
-	t.Parallel()
-
 	log := zaptest.NewLogger(t)
 	ctrl := gomock.NewController(t)
 	con := NewMockpostConnectionListener(ctrl)
@@ -123,7 +121,7 @@ func Test_GenerateProof(t *testing.T) {
 
 	select {
 	case <-connected:
-	case <-time.After(10 * time.Second):
+	case <-time.After(5 * time.Second):
 		require.Fail(t, "timed out waiting for connection")
 	}
 
@@ -150,8 +148,6 @@ func Test_GenerateProof(t *testing.T) {
 }
 
 func Test_Cancel_GenerateProof(t *testing.T) {
-	t.Parallel()
-
 	log := zaptest.NewLogger(t)
 	ctrl := gomock.NewController(t)
 	con := NewMockpostConnectionListener(ctrl)
@@ -173,7 +169,7 @@ func Test_Cancel_GenerateProof(t *testing.T) {
 
 	select {
 	case <-connected:
-	case <-time.After(10 * time.Second):
+	case <-time.After(5 * time.Second):
 		require.Fail(t, "timed out waiting for connection")
 	}
 
@@ -193,8 +189,6 @@ func Test_Cancel_GenerateProof(t *testing.T) {
 }
 
 func Test_GenerateProof_MultipleServices(t *testing.T) {
-	t.Parallel()
-
 	log := zaptest.NewLogger(t)
 	ctrl := gomock.NewController(t)
 	con := NewMockpostConnectionListener(ctrl)
@@ -225,7 +219,7 @@ func Test_GenerateProof_MultipleServices(t *testing.T) {
 
 	select {
 	case <-connected:
-	case <-time.After(10 * time.Second):
+	case <-time.After(5 * time.Second):
 		require.Fail(t, "timed out waiting for connection")
 	}
 
