@@ -405,10 +405,10 @@ func (h *Hare) run(session *session) error {
 	result := false
 	for {
 		walltime = walltime.Add(h.config.RoundDuration)
-		current := session.proto.IterRound
-
-		start := time.Now()
 		active = false
+		current = session.proto.IterRound
+		start = time.Now()
+
 		for i := range session.signers {
 			if current.IsMessageRound() {
 				session.vrfs[i] = h.oracle.active(session.signers[i], session.beacon, session.lid, current)
@@ -452,7 +452,7 @@ func (h *Hare) run(session *session) error {
 
 func (h *Hare) onOutput(session *session, ir IterRound, out output) error {
 	for i, vrf := range session.vrfs {
-		if vrf == nil {
+		if vrf == nil || out.message == nil {
 			continue
 		}
 		msg := *out.message // shallow copy
@@ -461,7 +461,7 @@ func (h *Hare) onOutput(session *session, ir IterRound, out output) error {
 		msg.Sender = session.signers[i].NodeID()
 		msg.Signature = session.signers[i].Sign(signing.HARE, msg.ToMetadata().ToBytes())
 		if err := h.pubsub.Publish(h.ctx, h.config.ProtocolName, msg.ToBytes()); err != nil {
-			h.log.Error("failed to publish", zap.Inline(out.message), zap.Error(err))
+			h.log.Error("failed to publish", zap.Inline(&msg), zap.Error(err))
 		}
 	}
 	h.tracer.OnMessageSent(out.message)
@@ -520,7 +520,7 @@ func (h *Hare) proposals(session *session) []types.ProposalID {
 		}
 	}
 	if min == nil {
-		h.log.Warn("no atxs in the requested epoch", zap.Uint32("epoch", session.lid.GetEpoch().Uint32()-1))
+		h.log.Debug("no atxs in the requested epoch", zap.Uint32("epoch", session.lid.GetEpoch().Uint32()-1))
 		return []types.ProposalID{}
 	}
 	atxs := map[types.ATXID]int{}
