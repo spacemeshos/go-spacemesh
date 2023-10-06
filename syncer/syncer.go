@@ -112,6 +112,7 @@ type Syncer struct {
 
 	cfg          Config
 	cdb          *datastore.CachedDB
+	asCache      activeSetCache
 	ticker       layerTicker
 	beacon       system.BeaconGetter
 	mesh         *mesh.Mesh
@@ -152,6 +153,7 @@ func NewSyncer(
 		logger:           log.NewNop(),
 		cfg:              DefaultConfig(),
 		cdb:              cdb,
+		asCache:          cache,
 		ticker:           ticker,
 		beacon:           beacon,
 		mesh:             mesh,

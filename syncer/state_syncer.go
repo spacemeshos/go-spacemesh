@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"go.uber.org/zap/zapcore"
-	"golang.org/x/exp/maps"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
@@ -284,35 +283,24 @@ func (s *Syncer) ensureMeshAgreement(
 			)
 			continue
 		}
-		missing := make(map[types.ATXID]struct{})
-		for _, id := range ed.AtxIDs {
-			if _, ok := missing[id]; ok {
-				continue
-			}
-			hdr, _ := s.cdb.GetAtxHeader(id)
-			if hdr == nil {
-				missing[id] = struct{}{}
-				continue
-			}
-		}
+		missing := s.asCache.GetMissingActiveSet(diffLayer.GetEpoch(), ed.AtxIDs)
 		if len(missing) > 0 {
-			toFetch := maps.Keys(missing)
 			s.logger.WithContext(ctx).With().Debug("fetching missing atxs from peer",
 				log.Stringer("peer", peer),
 				log.Array("missing_atxs", log.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
-					for _, id := range toFetch {
+					for _, id := range missing {
 						encoder.AppendString(id.ShortString())
 					}
 					return nil
 				})),
 			)
 			// node and peer has different state. check if peer has valid ATXs to back up its opinions
-			if err = s.dataFetcher.GetAtxs(ctx, toFetch); err != nil {
+			if err = s.dataFetcher.GetAtxs(ctx, missing); err != nil {
 				// if the node cannot download the ATXs claimed by this peer, it does not trust this peer's mesh
 				s.logger.WithContext(ctx).With().Warning("failed to download missing ATX claimed by peer",
 					log.Stringer("peer", peer),
 					log.Array("missing_atxs", log.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
-						for _, id := range toFetch {
+						for _, id := range missing {
 							encoder.AppendString(id.ShortString())
 						}
 						return nil

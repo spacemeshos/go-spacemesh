@@ -71,6 +71,7 @@ type testSyncer struct {
 	mTortoise    *smocks.MockTortoise
 	mCertHdr     *mocks.MockcertHandler
 	mForkFinder  *mocks.MockforkFinder
+	mAtxCache    *mocks.MockactiveSetCache
 }
 
 func newTestSyncer(t *testing.T, interval time.Duration) *testSyncer {
@@ -87,6 +88,7 @@ func newTestSyncer(t *testing.T, interval time.Duration) *testSyncer {
 		mTortoise:    smocks.NewMockTortoise(ctrl),
 		mCertHdr:     mocks.NewMockcertHandler(ctrl),
 		mForkFinder:  mocks.NewMockforkFinder(ctrl),
+		mAtxCache:    mocks.NewMockactiveSetCache(ctrl),
 	}
 	ts.cdb = datastore.NewCachedDB(sql.InMemory(), lg)
 	var err error
@@ -102,7 +104,7 @@ func newTestSyncer(t *testing.T, interval time.Duration) *testSyncer {
 		HareDelayLayers:          5,
 		OutOfSyncThresholdLayers: outOfSyncThreshold,
 	}
-	ts.syncer = NewSyncer(ts.cdb, ts.mTicker, ts.mBeacon, ts.msh, nil, nil, ts.mLyrPatrol, ts.mCertHdr,
+	ts.syncer = NewSyncer(ts.cdb, ts.mTicker, ts.mBeacon, ts.msh, ts.mAtxCache, nil, ts.mLyrPatrol, ts.mCertHdr,
 		WithConfig(cfg),
 		WithLogger(lg),
 		withDataFetcher(ts.mDataFetcher),
