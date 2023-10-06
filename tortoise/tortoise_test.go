@@ -23,6 +23,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
+	"github.com/spacemeshos/go-spacemesh/sql/beacons"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
@@ -315,7 +316,6 @@ func tortoiseFromSimState(tb testing.TB, state sim.State, opts ...Opt) *recovery
 		TB:       tb,
 		Tortoise: trtl,
 		db:       state.DB,
-		beacon:   state.Beacons,
 	}
 }
 
@@ -793,15 +793,15 @@ func TestBallotsNotProcessedWithoutBeacon(t *testing.T) {
 	tortoise := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 	last := s.Next()
 
-	beacon, err := s.GetState(0).Beacons.GetBeacon(last.GetEpoch())
+	beacon, err := beacons.Get(s.GetState(0).DB, last.GetEpoch())
 	require.NoError(t, err)
 
-	s.GetState(0).Beacons.Delete(last.GetEpoch() - 1)
+	require.NoError(t, beacons.Set(s.GetState(0).DB, last.GetEpoch(), types.EmptyBeacon))
 	tortoise.TallyVotes(ctx, last)
 	_, err = tortoise.EncodeVotes(ctx)
 	require.Error(t, err)
 
-	s.GetState(0).Beacons.StoreBeacon(last.GetEpoch()-1, beacon)
+	require.NoError(t, beacons.Set(s.GetState(0).DB, last.GetEpoch(), beacon))
 	tortoise.TallyVotes(ctx, last)
 	_, err = tortoise.EncodeVotes(ctx)
 	require.NoError(t, err)

@@ -114,6 +114,24 @@ func New(opts ...Opt) (*Tortoise, error) {
 	return t, nil
 }
 
+func (t *Tortoise) RecoverFrom(lid types.LayerID, opinion, prev types.Hash32) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.logger.Debug("recover from",
+		zap.Uint32("lid", lid.Uint32()),
+		log.ZShortStringer("opinion", opinion),
+		log.ZShortStringer("prev opinion", prev),
+	)
+	t.trtl.evicted = lid - 1
+	t.trtl.pending = lid
+	t.trtl.verified = lid
+	t.trtl.processed = lid
+	t.trtl.last = lid
+	layer := t.trtl.layer(lid)
+	layer.opinion = opinion
+	layer.prevOpinion = &prev
+}
+
 // LatestComplete returns the latest verified layer.
 func (t *Tortoise) LatestComplete() types.LayerID {
 	t.mu.Lock()
@@ -299,6 +317,21 @@ func (t *Tortoise) OnBallot(ballot *types.BallotTortoiseData) {
 	}
 	if t.tracer != nil {
 		t.tracer.On(&BallotTrace{Ballot: ballot})
+	}
+}
+
+// OnRecoveredBallot is called for ballots recovered from database.
+//
+// For recovered ballots base ballot is not required to be in state therefore
+// opinion is not recomputed, but instead recovered from database state.
+func (t *Tortoise) OnRecoveredBallot(ballot *types.BallotTortoiseData) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if err := t.trtl.onRecoveredBallot(ballot); err != nil {
+		errorsCounter.Inc()
+		t.logger.Error("failed to save state from recovered ballot",
+			zap.Stringer("ballot", ballot.ID),
+			zap.Error(err))
 	}
 	if t.tracer != nil {
 		t.tracer.On(&BallotTrace{Ballot: ballot})
@@ -536,6 +569,11 @@ func (t *Tortoise) Mode() Mode {
 // pending layer to the layer above equal layer.
 // this method is meant to be used only in recovery from disk codepath.
 func (t *Tortoise) resetPending(lid types.LayerID, opinion types.Hash32) bool {
+	t.logger.Debug("reset pending",
+		zap.Uint32("lid", lid.Uint32()),
+		log.ZShortStringer("computed", t.trtl.layer(lid).opinion),
+		log.ZShortStringer("stored", opinion),
+	)
 	if t.trtl.layer(lid).opinion == opinion {
 		t.trtl.pending = lid + 1
 		return true

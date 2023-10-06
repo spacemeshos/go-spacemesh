@@ -242,6 +242,10 @@ func (b *ballotInfo) opinion() types.Hash32 {
 	return b.votes.opinion()
 }
 
+func (b *ballotInfo) overwriteOpinion(opinion types.Hash32) {
+	b.votes.tail.opinion = opinion
+}
+
 type votes struct {
 	tail *layerVote
 }
@@ -466,9 +470,10 @@ func decodeVotes(evicted, blid types.LayerID, base *ballotInfo, exceptions types
 			return votes{}, 0, fmt.Errorf("votes on layer %d conflict with abstain", lid)
 		}
 	}
-	if from <= evicted {
-		return votes{}, 0, fmt.Errorf("votes for a block in the layer (%d) outside the window (evicted %d)", from, evicted)
-	}
+	// FIXME(dshulyak) this needs to be ignored when recovering from disk
+	// if from <= evicted {
+	// 	return votes{}, 0, fmt.Errorf("votes for a block in the layer (%d) outside the window (evicted %d)", from, evicted)
+	// }
 
 	// inherit opinion from the base ballot by copying votes
 	decoded, err := base.votes.update(from, diff)
