@@ -399,7 +399,7 @@ func TestPostSetupManager_Providers_includesCPU(t *testing.T) {
 func TestPostSetupManager_BestProvider(t *testing.T) {
 	mgr := newTestPostManager(t)
 
-	providers, err := mgr.BestProvider()
+	providers, err := mgr.bestProvider()
 	require.NoError(t, err)
 	require.NotNil(t, providers)
 }

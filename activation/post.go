@@ -278,8 +278,8 @@ func (*PostSetupManager) Providers() ([]PostSetupProvider, error) {
 	return providersAlias, nil
 }
 
-// BestProvider returns the most performant compute provider based on a short benchmarking session.
-func (mgr *PostSetupManager) BestProvider() (*PostSetupProvider, error) {
+// bestProvider returns the most performant compute provider based on a short benchmarking session.
+func (mgr *PostSetupManager) bestProvider() (*PostSetupProvider, error) {
 	providers, err := mgr.Providers()
 	if err != nil {
 		return nil, fmt.Errorf("fetch best provider: %w", err)
@@ -392,7 +392,7 @@ func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSe
 	if opts.ProviderID.Value() != nil && *opts.ProviderID.Value() == -1 {
 		mgr.logger.Warn("DEPRECATED: auto-determining compute provider is deprecated, please specify a valid provider ID in the config file")
 
-		p, err := mgr.BestProvider()
+		p, err := mgr.bestProvider()
 		if err != nil {
 			return err
 		}
