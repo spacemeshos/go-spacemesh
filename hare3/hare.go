@@ -206,7 +206,7 @@ func (h *Hare) Register(signer *signing.EdSigner) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.log.Info("register signing key", zap.Stringer("node", signer.NodeID()))
-	h.signers[string(signer.PublicKey().Bytes())] = signer
+	h.signers[string(signer.NodeID().Bytes())] = signer
 }
 
 func (h *Hare) Results() <-chan ConsensusOutput {
