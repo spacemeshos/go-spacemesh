@@ -12,7 +12,7 @@ import (
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -491,7 +491,7 @@ func newTestPostManager(tb testing.TB, o ...newPostSetupMgrOptionFunc) *testPost
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
 	provingOpts := DefaultPostProvingOpts()
 	provingOpts.Flags = config.RecommendedPowFlags()
-	mgr, err := NewPostSetupManager(id, options.cfg, logtest.New(tb, zapcore.DebugLevel), cdb, goldenATXID, provingOpts)
+	mgr, err := NewPostSetupManager(id, options.cfg, zaptest.NewLogger(tb), cdb, goldenATXID, provingOpts)
 	require.NoError(tb, err)
 
 	return &testPostManager{

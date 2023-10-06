@@ -350,6 +350,7 @@ type App struct {
 	updater            *bootstrap.Updater
 	poetDb             *activation.PoetDb
 	postVerifier       *activation.OffloadingPostVerifier
+	postService        *activation.PostSupervisor
 	preserve           *checkpoint.PreservedData
 	errCh              chan error
 
@@ -561,6 +562,13 @@ func (app *App) initServices(ctx context.Context) error {
 		postVerifiers = append(postVerifiers, verifier)
 	}
 	app.postVerifier = activation.NewOffloadingPostVerifier(postVerifiers, nipostValidatorLogger)
+
+	if app.Config.POSTService.PostServiceCmd != "" {
+		app.postService, err = activation.NewPostSupervisor(app.log.Zap(), app.Config.POSTService)
+		if err != nil {
+			return fmt.Errorf("start post service: %w", err)
+		}
+	}
 
 	validator := activation.NewValidator(poetDb, app.Config.POST, app.Config.SMESHING.Opts.Scrypt, nipostValidatorLogger, app.postVerifier)
 	app.validator = validator
@@ -824,7 +832,7 @@ func (app *App) initServices(ctx context.Context) error {
 	postSetupMgr, err := activation.NewPostSetupManager(
 		app.edSgn.NodeID(),
 		app.Config.POST,
-		app.addLogger(PostLogger, lg),
+		app.addLogger(PostLogger, lg).Zap(),
 		app.cachedDB, goldenATXID,
 		app.Config.SMESHING.ProvingOpts,
 	)
@@ -1085,6 +1093,8 @@ func (app *App) initService(ctx context.Context, svc grpcserver.Service) (grpcse
 		return grpcserver.NewAdminService(app.db, app.Config.DataDir(), app.host), nil
 	case grpcserver.Smesher:
 		return grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, app.Config.API.SmesherStreamInterval, app.Config.SMESHING.Opts), nil
+	case grpcserver.Post:
+		return grpcserver.NewPostService(app.log.Zap()), nil
 	case grpcserver.Transaction:
 		return grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer, app.txHandler), nil
 	case grpcserver.Activation:
@@ -1234,6 +1244,12 @@ func (app *App) stopServices(ctx context.Context) {
 
 	if app.syncer != nil {
 		app.syncer.Close()
+	}
+
+	if app.postService != nil {
+		if err := app.postService.Close(); err != nil {
+			app.log.With().Error("error stopping local post service", log.Err(err))
+		}
 	}
 
 	if app.ptimesync != nil {
