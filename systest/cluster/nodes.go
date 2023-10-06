@@ -473,6 +473,7 @@ func deployNode(ctx *testcontext.Context, id string, labels map[string]string, f
 		"-c=" + configDir + attachedSmesherConfig,
 		"--pprof-server",
 		"--smeshing-opts-datadir=/data/post",
+		"--post-opts-datadir=/data/post",
 		"-d=/data/state",
 		"--log-encoder=json",
 		"--metrics",
