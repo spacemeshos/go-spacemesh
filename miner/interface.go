@@ -8,7 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
-//go:generate mockgen -typed -package=miner -destination=./mocks.go -source=./interface.go
+//go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./interface.go
 
 type conservativeState interface {
 	SelectProposalTXs(types.LayerID, int) []types.TransactionID

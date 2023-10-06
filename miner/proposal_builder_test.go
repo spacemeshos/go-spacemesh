@@ -2,6 +2,7 @@ package miner
 
 import (
 	"context"
+	"errors"
 	"math/rand"
 	"testing"
 	"time"
@@ -13,20 +14,18 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/miner/mocks"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	pmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/beacons"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
-
-func gatxs(atxs ...*types.VerifiedActivationTx) []*types.VerifiedActivationTx {
-	return atxs
-}
 
 type genAtxOpt func(*types.ActivationTx)
 
@@ -58,16 +57,8 @@ func gactiveset(atxs ...types.ATXID) types.ATXIDList {
 	return atxs
 }
 
-func gdata(slots uint32, beacon types.Beacon, hash types.Hash32) *types.EpochData {
-	return &types.EpochData{
-		Beacon:           beacon,
-		EligibilityCount: slots,
-		ActiveSetHash:    hash,
-	}
-}
-
-func gballot(id types.BallotID, atxid types.ATXID, smesher types.NodeID, layer types.LayerID, edata *types.EpochData) types.Ballot {
-	ballot := types.Ballot{}
+func gballot(id types.BallotID, atxid types.ATXID, smesher types.NodeID, layer types.LayerID, edata *types.EpochData) *types.Ballot {
+	ballot := &types.Ballot{}
 	ballot.Layer = layer
 	ballot.EpochData = edata
 	ballot.AtxID = atxid
@@ -85,6 +76,12 @@ func expectEpochData(set types.ATXIDList, slots uint32, beacon types.Beacon) exp
 			EligibilityCount: slots,
 			Beacon:           beacon,
 		}
+	}
+}
+
+func expectRef(id types.BallotID) expectOpt {
+	return func(p *types.Proposal) {
+		p.RefBallot = id
 	}
 }
 
@@ -144,14 +141,17 @@ func TestBuild(t *testing.T) {
 	}
 
 	type step struct {
-		lid     types.LayerID
-		beacon  types.Beacon
-		atxs    []*types.VerifiedActivationTx
-		ballots []*types.Ballot
+		lid       types.LayerID
+		beacon    types.Beacon
+		atxs      []*types.VerifiedActivationTx
+		ballot    *types.Ballot
+		activeset types.ATXIDList
 
 		txs            []types.TransactionID
 		latestComplete types.LayerID
 		opinion        *types.Opinion
+
+		encodeVotesErr, publishErr error
 
 		expectProposal *types.Proposal
 		expectErr      string
@@ -161,17 +161,17 @@ func TestBuild(t *testing.T) {
 		steps []step
 	}{
 		{
-			desc: "sanity",
+			desc: "sanity reference",
 			steps: []step{
 				{
 					lid:    10,
 					beacon: types.Beacon{1},
-					atxs: gatxs(
-						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(1)),
+					atxs: []*types.VerifiedActivationTx{
+						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
 						gatx(types.ATXID{2}, 2, types.NodeID{2}, 1),
 						gatx(types.ATXID{3}, 2, types.NodeID{3}, 1),
 						gatx(types.ATXID{4}, 2, types.NodeID{4}, 1),
-					),
+					},
 					opinion:        &types.Opinion{Hash: types.Hash32{1}},
 					txs:            []types.TransactionID{{1}, {2}},
 					latestComplete: 10,
@@ -183,8 +183,150 @@ func TestBuild(t *testing.T) {
 							types.Beacon{1},
 						),
 						expectTxs([]types.TransactionID{{1}, {2}}),
-						expectCounters(signer, 3, types.Beacon{1}, 1, 1),
+						expectCounters(signer, 3, types.Beacon{1}, 777, 4, 5),
 					),
+				},
+			},
+		},
+		{
+			desc: "sanity secondary",
+			steps: []step{
+				{
+					lid:    11,
+					beacon: types.Beacon{1},
+					atxs: []*types.VerifiedActivationTx{
+						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
+						gatx(types.ATXID{2}, 2, types.NodeID{2}, 1),
+					},
+					ballot: gballot(types.BallotID{1}, types.ATXID{1}, signer.NodeID(), 10, &types.EpochData{
+						ActiveSetHash:    types.ATXIDList{{1}, {2}}.Hash(),
+						EligibilityCount: 5,
+					}),
+					activeset:      types.ATXIDList{{1}, {2}},
+					txs:            []types.TransactionID{},
+					opinion:        &types.Opinion{Hash: types.Hash32{1}},
+					latestComplete: 10,
+					expectProposal: expectProposal(
+						signer, 11, types.ATXID{1}, types.Opinion{Hash: types.Hash32{1}},
+						expectRef(types.BallotID{1}),
+						expectCounters(signer, 3, types.Beacon{1}, 777, 1),
+					),
+				},
+			},
+		},
+		{
+			desc: "no data",
+			steps: []step{
+				{
+					lid:       11,
+					expectErr: "atx not available",
+				},
+				{
+					lid: 11,
+					atxs: []*types.VerifiedActivationTx{
+						gatx(types.ATXID{10}, 2, signer.NodeID(), 1),
+					},
+					expectErr: "missing nonce",
+				},
+				{
+					lid: 11,
+					atxs: []*types.VerifiedActivationTx{
+						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
+					},
+					expectErr: "missing beacon",
+				},
+				{
+					lid:    11,
+					beacon: types.Beacon{1},
+					ballot: gballot(types.BallotID{1}, types.ATXID{10}, signer.NodeID(), 10, &types.EpochData{
+						ActiveSetHash:    types.ATXIDList{{10}, {2}}.Hash(),
+						EligibilityCount: 5,
+					}),
+					expectErr: "get activeset",
+				},
+				{
+					lid:       11,
+					activeset: types.ATXIDList{{10}, {2}},
+					expectErr: "get ATXs from DB",
+				},
+				{
+					lid: 11,
+					atxs: []*types.VerifiedActivationTx{
+						gatx(types.ATXID{2}, 2, types.NodeID{1}, 1),
+					},
+					opinion:        &types.Opinion{Hash: types.Hash32{1}},
+					txs:            []types.TransactionID{{1}},
+					latestComplete: 10,
+					expectProposal: expectProposal(
+						signer, 11, types.ATXID{10}, types.Opinion{Hash: types.Hash32{1}},
+						expectRef(types.BallotID{1}),
+						expectTxs([]types.TransactionID{{1}}),
+						expectCounters(signer, 3, types.Beacon{1}, 777, 1),
+					),
+				},
+			},
+		},
+		{
+			desc: "not eligible",
+			steps: []step{
+				{
+					lid:    11,
+					beacon: types.Beacon{1},
+					atxs: []*types.VerifiedActivationTx{
+						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
+						gatx(types.ATXID{2}, 2, types.NodeID{2}, 100),
+					},
+					ballot: gballot(types.BallotID{1}, types.ATXID{1}, signer.NodeID(), 10, &types.EpochData{
+						ActiveSetHash:    types.ATXIDList{{1}, {2}}.Hash(),
+						EligibilityCount: 1,
+					}),
+					activeset: types.ATXIDList{{1}, {2}},
+				},
+				{
+					lid:       11,
+					expectErr: "was already built",
+				},
+			},
+		},
+		{
+			desc: "encode votes error",
+			steps: []step{
+				{
+					lid:    11,
+					beacon: types.Beacon{1},
+					atxs: []*types.VerifiedActivationTx{
+						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
+					},
+					ballot: gballot(types.BallotID{1}, types.ATXID{1}, signer.NodeID(), 10, &types.EpochData{
+						ActiveSetHash:    types.ATXIDList{{1}}.Hash(),
+						EligibilityCount: 10,
+					}),
+					activeset:      types.ATXIDList{{1}},
+					opinion:        &types.Opinion{},
+					encodeVotesErr: errors.New("test votes"),
+					expectErr:      "test votes",
+				},
+			},
+		},
+		{
+			desc: "publish error",
+			steps: []step{
+				{
+					lid:    11,
+					beacon: types.Beacon{1},
+					atxs: []*types.VerifiedActivationTx{
+						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
+					},
+					ballot: gballot(types.BallotID{1}, types.ATXID{1}, signer.NodeID(), 10, &types.EpochData{
+						ActiveSetHash:    types.ATXIDList{{1}}.Hash(),
+						EligibilityCount: 10,
+					}),
+					activeset:      types.ATXIDList{{1}},
+					latestComplete: 10,
+					opinion:        &types.Opinion{},
+					txs:            []types.TransactionID{},
+					publishErr:     errors.New("test publish"),
+					expectErr:      "test publish",
 				},
 			},
 		},
@@ -194,27 +336,13 @@ func TestBuild(t *testing.T) {
 			var (
 				ctx       = context.Background()
 				ctrl      = gomock.NewController(t)
-				conState  = NewMockconservativeState(ctrl)
-				clock     = NewMocklayerClock(ctrl)
+				conState  = mocks.NewMockconservativeState(ctrl)
+				clock     = mocks.NewMocklayerClock(ctrl)
 				publisher = pmocks.NewMockPublisher(ctrl)
-				tortoise  = NewMockvotesEncoder(ctrl)
+				tortoise  = mocks.NewMockvotesEncoder(ctrl)
 				syncer    = smocks.NewMockSyncStateProvider(ctrl)
 				cdb       = datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
-
-				decoded *types.Proposal
 			)
-
-			publisher.EXPECT().Publish(ctx, pubsub.ProposalProtocol, gomock.Any()).DoAndReturn(func(_ context.Context, _ string, msg []byte) error {
-				var proposal types.Proposal
-				if err := codec.Decode(msg, &proposal); err != nil {
-					return err
-				}
-				if err := proposal.Initialize(); err != nil {
-					return err
-				}
-				decoded = &proposal
-				return nil
-			}).AnyTimes()
 
 			clock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(func(lid types.LayerID) time.Time {
 				return time.Unix(int64(lid.Uint32()), 0)
@@ -223,19 +351,21 @@ func TestBuild(t *testing.T) {
 			builder := New(clock, signer, cdb, publisher, tortoise, syncer, conState,
 				append(defaults, WithLogger(logtest.New(t)))...)
 			for _, step := range tc.steps {
-				decoded = nil
 				if step.beacon != types.EmptyBeacon {
 					require.NoError(t, beacons.Add(cdb, step.lid.GetEpoch(), step.beacon))
 				}
 				for _, atx := range step.atxs {
 					require.NoError(t, atxs.Add(cdb, atx))
 				}
-				for _, ballot := range step.ballots {
-					require.NoError(t, ballots.Add(cdb, ballot))
+				if step.ballot != nil {
+					require.NoError(t, ballots.Add(cdb, step.ballot))
+				}
+				if step.activeset != nil {
+					require.NoError(t, activesets.Add(cdb, step.activeset.Hash(), &types.EpochActiveSet{Set: step.activeset}))
 				}
 				if step.opinion != nil {
 					tortoise.EXPECT().TallyVotes(ctx, step.lid)
-					tortoise.EXPECT().EncodeVotes(ctx, gomock.Any()).Return(step.opinion, nil)
+					tortoise.EXPECT().EncodeVotes(ctx, gomock.Any()).Return(step.opinion, step.encodeVotesErr)
 				}
 				if step.txs != nil {
 					conState.EXPECT().SelectProposalTXs(step.lid, gomock.Any()).Return(step.txs)
@@ -243,14 +373,26 @@ func TestBuild(t *testing.T) {
 				if step.latestComplete != 0 {
 					tortoise.EXPECT().LatestComplete().Return(step.latestComplete)
 				}
+				var decoded *types.Proposal
+				if step.expectProposal != nil || step.publishErr != nil {
+					publisher.EXPECT().Publish(ctx, pubsub.ProposalProtocol, gomock.Any()).DoAndReturn(func(_ context.Context, _ string, msg []byte) error {
+						var proposal types.Proposal
+						codec.MustDecode(msg, &proposal)
+						proposal.MustInitialize()
+						decoded = &proposal
+						return step.publishErr
+					})
+				}
 				err := builder.build(ctx, step.lid)
 				if len(step.expectErr) > 0 {
 					require.ErrorContains(t, err, step.expectErr)
 				} else {
 					require.NoError(t, err)
-				}
-				if step.expectProposal != nil {
-					require.Equal(t, *step.expectProposal, *decoded)
+					if step.expectProposal != nil {
+						require.Equal(t, *step.expectProposal, *decoded)
+					} else {
+						require.Nil(t, decoded)
+					}
 				}
 			}
 		})

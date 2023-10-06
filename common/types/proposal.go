@@ -85,6 +85,12 @@ func (p *Proposal) Initialize() error {
 	return nil
 }
 
+func (p *Proposal) MustInitialize() {
+	if err := p.Initialize(); err != nil {
+		panic(err)
+	}
+}
+
 // SignedBytes returns the serialization of the InnerProposal.
 func (p *Proposal) SignedBytes() []byte {
 	data, err := codec.Encode(&BallotMetadata{
