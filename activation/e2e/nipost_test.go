@@ -101,16 +101,16 @@ func launchServer(tb testing.TB, services ...grpcserver.ServiceAPI) (grpcserver.
 	return cfg, func() { assert.NoError(tb, grpcService.Close()) }
 }
 
-func initPost(tb testing.TB, logger *zap.Logger, mgr *activation.PostSetupManager, opts activation.PostSetupOpts) *activation.PostSetupManager {
+func initPost(tb testing.TB, logger *zap.Logger, mgr *activation.PostSetupManager, opts activation.PostSetupOpts) {
 	tb.Helper()
 
 	ctx, cancel := context.WithCancel(context.Background())
-	tb.Cleanup(cancel)
+	defer cancel()
 
 	var eg errgroup.Group
 	lastStatus := &activation.PostSetupStatus{}
 	eg.Go(func() error {
-		timer := time.NewTicker(50 * time.Millisecond)
+		timer := time.NewTicker(100 * time.Millisecond)
 		defer timer.Stop()
 
 		for {
@@ -134,8 +134,6 @@ func initPost(tb testing.TB, logger *zap.Logger, mgr *activation.PostSetupManage
 	require.NoError(tb, mgr.StartSession(context.Background()))
 	require.NoError(tb, eg.Wait())
 	require.Equal(tb, activation.PostSetupStateComplete, mgr.Status().State)
-
-	return mgr
 }
 
 func TestNIPostBuilderWithClients(t *testing.T) {

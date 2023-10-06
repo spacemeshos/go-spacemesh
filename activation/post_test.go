@@ -33,7 +33,7 @@ func TestPostSetupManager(t *testing.T) {
 	var eg errgroup.Group
 	lastStatus := &PostSetupStatus{}
 	eg.Go(func() error {
-		timer := time.NewTicker(50 * time.Millisecond)
+		timer := time.NewTicker(100 * time.Millisecond)
 		defer timer.Stop()
 
 		for {
@@ -55,9 +55,7 @@ func TestPostSetupManager(t *testing.T) {
 	// Create data.
 	req.NoError(mgr.PrepareInitializer(context.Background(), mgr.opts))
 	req.NoError(mgr.StartSession(context.Background()))
-	cancel()
 	require.NoError(t, eg.Wait())
-
 	req.Equal(PostSetupStateComplete, mgr.Status().State)
 
 	// Create data (same opts).

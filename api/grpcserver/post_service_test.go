@@ -48,12 +48,12 @@ func initPost(tb testing.TB, log *zap.Logger, dir string) {
 	require.NoError(tb, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	tb.Cleanup(cancel)
+	defer cancel()
 
 	var eg errgroup.Group
 	lastStatus := &activation.PostSetupStatus{}
 	eg.Go(func() error {
-		timer := time.NewTicker(50 * time.Millisecond)
+		timer := time.NewTicker(100 * time.Millisecond)
 		defer timer.Stop()
 
 		for {
