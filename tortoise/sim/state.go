@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
+	"github.com/spacemeshos/go-spacemesh/sql/beacons"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
@@ -16,9 +17,8 @@ import (
 
 func newState(logger log.Log, conf config) State {
 	return State{
-		logger:  logger,
-		DB:      newCacheDB(logger, conf),
-		Beacons: newBeaconStore(),
+		logger: logger,
+		DB:     newCacheDB(logger, conf),
 	}
 }
 
@@ -26,13 +26,14 @@ func newState(logger log.Log, conf config) State {
 type State struct {
 	logger log.Log
 
-	DB      *datastore.CachedDB
-	Beacons *beaconStore
+	DB *datastore.CachedDB
 }
 
 // OnBeacon callback to store generated beacon.
 func (s *State) OnBeacon(eid types.EpochID, beacon types.Beacon) {
-	s.Beacons.StoreBeacon(eid, beacon)
+	if err := beacons.Add(s.DB, eid+1, beacon); err != nil {
+		s.logger.With().Panic("failed to add beacon", log.Err(err))
+	}
 }
 
 // OnActivationTx callback to store activation transaction.
