@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/shared"
+	"github.com/spacemeshos/post/verifying"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
@@ -220,6 +221,53 @@ func TestPostSetupManager_InitialStatus(t *testing.T) {
 	req.Zero(status.NumLabelsWritten)
 }
 
+func TestPostSetupManager_GenerateProof(t *testing.T) {
+	req := require.New(t)
+	ch := make([]byte, 32)
+
+	mgr := newTestPostManager(t)
+
+	// Attempt to generate proof.
+	_, _, err := mgr.GenerateProof(context.Background(), ch)
+	req.EqualError(err, errNotComplete.Error())
+
+	// Create data.
+	req.NoError(mgr.PrepareInitializer(context.Background(), mgr.opts))
+	req.NoError(mgr.StartSession(context.Background()))
+
+	// Generate proof.
+	p, m, err := mgr.GenerateProof(context.Background(), ch)
+	req.NoError(err)
+
+	// Verify the proof
+	verifier, err := verifying.NewProofVerifier()
+	req.NoError(err)
+	defer verifier.Close()
+	err = verifier.Verify(&shared.Proof{
+		Nonce:   p.Nonce,
+		Indices: p.Indices,
+		Pow:     p.Pow,
+	}, &shared.ProofMetadata{
+		NodeId:          mgr.id.Bytes(),
+		CommitmentAtxId: mgr.goldenATXID.Bytes(),
+		Challenge:       ch,
+		NumUnits:        mgr.opts.NumUnits,
+		LabelsPerUnit:   m.LabelsPerUnit,
+	},
+		config.DefaultConfig(),
+		logtest.New(t).WithName("verifying").Zap(),
+		verifying.WithLabelScryptParams(mgr.opts.Scrypt),
+	)
+	req.NoError(err)
+
+	// Re-instantiate `PostSetupManager`.
+	mgr = newTestPostManager(t)
+
+	// Attempt to generate proof.
+	_, _, err = mgr.GenerateProof(context.Background(), ch)
+	req.ErrorIs(err, errNotComplete)
+}
+
 func TestPostSetupManager_VRFNonce(t *testing.T) {
 	req := require.New(t)
 
@@ -408,7 +456,6 @@ type testPostManager struct {
 	cdb    *datastore.CachedDB
 }
 
-// TODO(mafa): start post service with supervisor.
 func newTestPostManager(tb testing.TB) *testPostManager {
 	tb.Helper()
 

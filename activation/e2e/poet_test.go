@@ -82,14 +82,10 @@ func NewHTTPPoetTestHarness(ctx context.Context, poetdir string, opts ...HTTPPoe
 }
 
 func TestHTTPPoet(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
 	t.Parallel()
 	r := require.New(t)
 
 	var eg errgroup.Group
-
 	poetDir := t.TempDir()
 	t.Cleanup(func() { r.NoError(eg.Wait()) })
 
@@ -126,10 +122,58 @@ func TestHTTPPoet(t *testing.T) {
 	signature := signer.Sign(signing.POET, ch.Bytes())
 	prefix := bytes.Join([][]byte{signer.Prefix(), {byte(signing.POET)}}, nil)
 
-	poetRound, err := client.Submit(context.Background(), prefix, ch.Bytes(), signature, signer.NodeID(), activation.PoetPoW{
+	poetRound, err := client.Submit(context.Background(), time.Time{}, prefix, ch.Bytes(), signature, signer.NodeID(), activation.PoetPoW{
 		Nonce:  nonce,
 		Params: *resp,
 	})
 	r.NoError(err)
 	r.NotNil(poetRound)
+}
+
+func TestSubmitTooLate(t *testing.T) {
+	t.Parallel()
+	r := require.New(t)
+
+	var eg errgroup.Group
+	poetDir := t.TempDir()
+	t.Cleanup(func() { r.NoError(eg.Wait()) })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c, err := NewHTTPPoetTestHarness(ctx, poetDir)
+	r.NoError(err)
+	r.NotNil(c)
+
+	eg.Go(func() error {
+		err := c.Service.Start(ctx)
+		return errors.Join(err, c.Service.Close())
+	})
+
+	client, err := activation.NewHTTPPoetClient(c.RestURL().String(), activation.DefaultPoetConfig(), activation.WithLogger(zaptest.NewLogger(t)))
+	require.NoError(t, err)
+
+	resp, err := client.PowParams(context.Background())
+	r.NoError(err)
+
+	signer, err := signing.NewEdSigner(signing.WithPrefix([]byte("prefix")))
+	require.NoError(t, err)
+	ch := types.RandomHash()
+
+	nonce, err := shared.FindSubmitPowNonce(
+		context.Background(),
+		resp.Challenge,
+		ch.Bytes(),
+		signer.NodeID().Bytes(),
+		uint(resp.Difficulty),
+	)
+	r.NoError(err)
+
+	signature := signer.Sign(signing.POET, ch.Bytes())
+	prefix := bytes.Join([][]byte{signer.Prefix(), {byte(signing.POET)}}, nil)
+
+	_, err = client.Submit(context.Background(), time.Now(), prefix, ch.Bytes(), signature, signer.NodeID(), activation.PoetPoW{
+		Nonce:  nonce,
+		Params: *resp,
+	})
+	r.ErrorIs(err, activation.ErrInvalidRequest)
 }
