@@ -138,19 +138,13 @@ func (o *Oracle) resetCacheOnSynced(ctx context.Context) {
 	}
 }
 
-// buildVRFMessage builds the VRF message used as input for the BLS (msg=Beacon##Layer##Round).
+// buildVRFMessage builds the VRF message used as input for hare eligibility validation.
 func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round uint32) ([]byte, error) {
 	beacon, err := o.beacons.GetBeacon(layer.GetEpoch())
 	if err != nil {
 		return nil, fmt.Errorf("get beacon: %w", err)
 	}
-
-	msg := VrfMessage{Type: types.EligibilityHare, Beacon: beacon, Round: round, Layer: layer}
-	buf, err := codec.Encode(&msg)
-	if err != nil {
-		o.WithContext(ctx).With().Fatal("failed to encode", log.Err(err))
-	}
-	return buf, nil
+	return codec.MustEncode(&VrfMessage{Type: types.EligibilityHare, Beacon: beacon, Round: round, Layer: layer}), nil
 }
 
 func (o *Oracle) totalWeight(ctx context.Context, layer types.LayerID) (uint64, error) {
@@ -344,11 +338,16 @@ func (o *Oracle) CalcEligibility(
 
 // Proof returns the role proof for the current Layer & Round.
 func (o *Oracle) Proof(ctx context.Context, layer types.LayerID, round uint32) (types.VrfSignature, error) {
-	msg, err := o.buildVRFMessage(ctx, layer, round)
+	beacon, err := o.beacons.GetBeacon(layer.GetEpoch())
 	if err != nil {
-		return types.EmptyVrfSignature, err
+		return types.EmptyVrfSignature, fmt.Errorf("get beacon: %w", err)
 	}
-	return o.vrfSigner.Sign(msg), nil
+	return o.GenVRF(ctx, o.vrfSigner, beacon, layer, round), nil
+}
+
+// GenVRF generates vrf for hare eligibility.
+func (o *Oracle) GenVRF(ctx context.Context, signer *signing.VRFSigner, beacon types.Beacon, layer types.LayerID, round uint32) types.VrfSignature {
+	return signer.Sign(codec.MustEncode(&VrfMessage{Type: types.EligibilityHare, Beacon: beacon, Round: round, Layer: layer}))
 }
 
 // Returns a map of all active node IDs in the specified layer id.

@@ -780,10 +780,11 @@ func (app *App) initServices(ctx context.Context) error {
 		}
 		logger := app.addLogger(HareLogger, lg).Zap()
 		app.hare3 = hare3.New(
-			app.clock, app.host, app.cachedDB, app.edVerifier, app.edSgn, app.hOracle, newSyncer, patrol,
+			app.clock, app.host, app.cachedDB, app.edVerifier, app.hOracle, newSyncer, patrol,
 			hare3.WithLogger(logger),
 			hare3.WithConfig(app.Config.HARE3),
 		)
+		app.hare3.Register(app.edSgn)
 		app.hare3.Start()
 		app.eg.Go(func() error {
 			compat.ReportWeakcoin(ctx, logger, app.hare3.Coins(), tortoiseWeakCoin{db: app.cachedDB, tortoise: trtl})
