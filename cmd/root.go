@@ -245,6 +245,31 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().BoolVar(&cfg.SMESHING.Opts.Throttle, "smeshing-opts-throttle",
 		cfg.SMESHING.Opts.Throttle, "")
 
+	/**======================== PoST service Flags ========================== **/
+
+	cmd.PersistentFlags().StringVar(&cfg.POSTService.PostServiceCmd, "post-opts-post-service",
+		cfg.POSTService.PostServiceCmd, "")
+	cmd.PersistentFlags().StringVar(&cfg.POSTService.DataDir, "post-opts-datadir",
+		cfg.POSTService.DataDir, "")
+	cmd.PersistentFlags().StringVar(&cfg.POSTService.NodeAddress, "post-opts-node-address",
+		cfg.POSTService.NodeAddress, "")
+	cmd.PersistentFlags().StringVar(&cfg.POSTService.PostServiceMode, "post-opts-post-service-mode",
+		cfg.POSTService.PostServiceMode, "")
+	cmd.PersistentFlags().VarP(&cfg.POSTService.PowDifficulty, "post-opts-pow-difficulty",
+		"", "")
+	cmd.PersistentFlags().Uint32Var(&cfg.POSTService.K1, "post-opts-k1",
+		cfg.POSTService.K1, "")
+	cmd.PersistentFlags().Uint32Var(&cfg.POSTService.K2, "post-opts-k2",
+		cfg.POSTService.K2, "")
+	cmd.PersistentFlags().Uint32Var(&cfg.POSTService.K3, "post-opts-k3",
+		cfg.POSTService.K3, "")
+	cmd.PersistentFlags().UintVar(&cfg.POSTService.N, "post-opts-n",
+		cfg.POSTService.N, "")
+	cmd.PersistentFlags().UintVar(&cfg.POSTService.R, "post-opts-r",
+		cfg.POSTService.R, "")
+	cmd.PersistentFlags().UintVar(&cfg.POSTService.P, "post-opts-p",
+		cfg.POSTService.P, "")
+
 	/**======================== Consensus Flags ========================== **/
 
 	cmd.PersistentFlags().Uint32Var(&cfg.LayersPerEpoch, "layers-per-epoch",

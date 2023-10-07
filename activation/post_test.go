@@ -39,7 +39,7 @@ func TestPostSetupManager(t *testing.T) {
 		for {
 			select {
 			case <-ctx.Done():
-				return nil
+				return ctx.Err()
 			case <-timer.C:
 				status := mgr.Status()
 				req.GreaterOrEqual(status.NumLabelsWritten, lastStatus.NumLabelsWritten)
