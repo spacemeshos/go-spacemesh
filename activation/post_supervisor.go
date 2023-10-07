@@ -157,6 +157,7 @@ func (ps *PostSupervisor) runCmd(ctx context.Context, opts PostSupervisorConfig)
 			return fmt.Errorf("start post service: %w", err)
 		}
 		ps.pid.Store(int64(cmd.Process.Pid))
+		ps.logger.Info("post service started", zap.Int("pid", cmd.Process.Pid), zap.String("cmd", cmd.String()))
 		events.EmitPostServiceStarted()
 		err = cmd.Wait()
 		if err := ctx.Err(); err != nil {
