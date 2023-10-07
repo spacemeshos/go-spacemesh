@@ -51,11 +51,11 @@ func initPost(tb testing.TB, log *zap.Logger, dir string) {
 	defer cancel()
 
 	var eg errgroup.Group
-	lastStatus := &activation.PostSetupStatus{}
 	eg.Go(func() error {
-		timer := time.NewTicker(100 * time.Millisecond)
+		timer := time.NewTicker(50 * time.Millisecond)
 		defer timer.Stop()
 
+		lastStatus := &activation.PostSetupStatus{}
 		for {
 			select {
 			case <-ctx.Done():
@@ -67,7 +67,8 @@ func initPost(tb testing.TB, log *zap.Logger, dir string) {
 				if status.NumLabelsWritten == uint64(opts.NumUnits)*cfg.LabelsPerUnit {
 					return nil
 				}
-				require.Equal(tb, activation.PostSetupStateInProgress, status.State)
+				require.Contains(tb, []activation.PostSetupState{activation.PostSetupStatePrepared, activation.PostSetupStateInProgress}, status.State)
+				lastStatus = status
 			}
 		}
 	})

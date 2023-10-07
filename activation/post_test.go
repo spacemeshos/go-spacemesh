@@ -23,52 +23,51 @@ import (
 )
 
 func TestPostSetupManager(t *testing.T) {
-	req := require.New(t)
-
 	mgr := newTestPostManager(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	var eg errgroup.Group
-	lastStatus := &PostSetupStatus{}
 	eg.Go(func() error {
-		timer := time.NewTicker(100 * time.Millisecond)
+		timer := time.NewTicker(50 * time.Millisecond)
 		defer timer.Stop()
 
+		lastStatus := &PostSetupStatus{}
 		for {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
 			case <-timer.C:
 				status := mgr.Status()
-				req.GreaterOrEqual(status.NumLabelsWritten, lastStatus.NumLabelsWritten)
+				require.GreaterOrEqual(t, status.NumLabelsWritten, lastStatus.NumLabelsWritten)
 
 				if status.NumLabelsWritten == uint64(mgr.opts.NumUnits)*mgr.cfg.LabelsPerUnit {
 					return nil
 				}
-				req.Equal(PostSetupStateInProgress, status.State)
+				require.Contains(t, []PostSetupState{PostSetupStatePrepared, PostSetupStateInProgress}, status.State)
+				lastStatus = status
 			}
 		}
 	})
 
 	// Create data.
-	req.NoError(mgr.PrepareInitializer(context.Background(), mgr.opts))
-	req.NoError(mgr.StartSession(context.Background()))
+	require.NoError(t, mgr.PrepareInitializer(context.Background(), mgr.opts))
+	require.NoError(t, mgr.StartSession(context.Background()))
 	require.NoError(t, eg.Wait())
-	req.Equal(PostSetupStateComplete, mgr.Status().State)
+	require.Equal(t, PostSetupStateComplete, mgr.Status().State)
 
 	// Create data (same opts).
-	req.NoError(mgr.PrepareInitializer(context.Background(), mgr.opts))
-	req.NoError(mgr.StartSession(context.Background()))
+	require.NoError(t, mgr.PrepareInitializer(context.Background(), mgr.opts))
+	require.NoError(t, mgr.StartSession(context.Background()))
 
 	// Cleanup.
-	req.NoError(mgr.Reset())
+	require.NoError(t, mgr.Reset())
 
 	// Create data (same opts, after deletion).
-	req.NoError(mgr.PrepareInitializer(context.Background(), mgr.opts))
-	req.NoError(mgr.StartSession(context.Background()))
-	req.Equal(PostSetupStateComplete, mgr.Status().State)
+	require.NoError(t, mgr.PrepareInitializer(context.Background(), mgr.opts))
+	require.NoError(t, mgr.StartSession(context.Background()))
+	require.Equal(t, PostSetupStateComplete, mgr.Status().State)
 }
 
 // Checks that PrepareInitializer returns an error when invalid opts are given.
@@ -109,15 +108,13 @@ func TestPostSetupManager_PrepareInitializer(t *testing.T) {
 
 // TODO(mafa): remove, see https://github.com/spacemeshos/go-spacemesh/issues/4801
 func TestPostSetupManager_PrepareInitializer_BestProvider(t *testing.T) {
-	req := require.New(t)
-
 	mgr := newTestPostManager(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 
 	mgr.opts.ProviderID.SetInt64(-1)
-	req.NoError(mgr.PrepareInitializer(ctx, mgr.opts))
+	require.NoError(t, mgr.PrepareInitializer(ctx, mgr.opts))
 }
 
 func TestPostSetupManager_StartSession_WithoutProvider_Error(t *testing.T) {
