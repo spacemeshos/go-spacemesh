@@ -72,7 +72,7 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.OptFilterThreshold, "threshold for optimistic filtering in percentage")
 
 	cmd.PersistentFlags().VarP(flags.NewStringToUint64Value(map[string]uint64{}), "accounts", "a",
-		"List of prefunded accounts")
+		"List of pre-funded accounts")
 
 	cmd.PersistentFlags().IntVar(&cfg.DatabaseConnections, "db-connections",
 		cfg.DatabaseConnections, "configure number of active connections to enable parallel read requests")
@@ -118,6 +118,7 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().BoolVar(&cfg.P2P.Bootnode, "p2p-bootnode", cfg.P2P.Bootnode,
 		"gossipsub and discovery will be running in a mode suitable for bootnode")
 	cmd.PersistentFlags().BoolVar(&cfg.P2P.PrivateNetwork, "p2p-private-network", cfg.P2P.PrivateNetwork, "discovery will work in private mode. mostly useful for testing, don't set in public networks")
+
 	/** ======================== TIME Flags ========================== **/
 
 	cmd.PersistentFlags().BoolVar(&cfg.TIME.Peersync.Disable, "peersync-disable", cfg.TIME.Peersync.Disable,
@@ -134,6 +135,7 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.TIME.Peersync.MaxOffsetErrors, "the node will exit when max number of consecutive offset errors will be reached")
 	cmd.PersistentFlags().IntVar(&cfg.TIME.Peersync.RequiredResponses, "peersync-required-responses",
 		cfg.TIME.Peersync.RequiredResponses, "min number of clock samples from other that need to be collected to verify time")
+
 	/** ======================== API Flags ========================== **/
 
 	cmd.PersistentFlags().StringSliceVar(&cfg.API.PublicServices, "grpc-public-services",
@@ -209,7 +211,7 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().Uint32Var(&cfg.Tortoise.BadBeaconVoteDelayLayers, "tortoise-delay-layers",
 		cfg.Tortoise.BadBeaconVoteDelayLayers, "number of layers to ignore a ballot with a different beacon")
 	cmd.PersistentFlags().BoolVar(&cfg.Tortoise.EnableTracer, "tortoise-enable-tracer",
-		cfg.Tortoise.EnableTracer, "recovrd every tortoise input/output into the loggin output")
+		cfg.Tortoise.EnableTracer, "record every tortoise input/output to the logging output")
 
 	// TODO(moshababo): add usage desc
 	cmd.PersistentFlags().Uint64Var(&cfg.POST.LabelsPerUnit, "post-labels-per-unit",
@@ -287,6 +289,7 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.POET.RequestTimeout, "timeout for poet requests")
 
 	/**======================== bootstrap data updater Flags ========================== **/
+
 	cmd.PersistentFlags().StringVar(&cfg.Bootstrap.URL, "bootstrap-url",
 		cfg.Bootstrap.URL, "the url to query bootstrap data update")
 	cmd.PersistentFlags().StringVar(&cfg.Bootstrap.Version, "bootstrap-version",

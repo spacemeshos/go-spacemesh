@@ -148,6 +148,10 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *config.Config) error {
 			elem = reflect.ValueOf(&appCFG.POST).Elem()
 			assignFields(ff, elem, name)
 
+			ff = reflect.TypeOf(appCFG.POSTService)
+			elem = reflect.ValueOf(&appCFG.POSTService).Elem()
+			assignFields(ff, elem, name)
+
 			ff = reflect.TypeOf(appCFG.SMESHING)
 			elem = reflect.ValueOf(&appCFG.SMESHING).Elem()
 			assignFields(ff, elem, name)
