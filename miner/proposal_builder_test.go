@@ -413,7 +413,11 @@ func TestBuild(t *testing.T) {
 					opinion:        &types.Opinion{},
 					txs:            []types.TransactionID{},
 					publishErr:     errors.New("test publish"),
-					expectErr:      "test publish",
+					expectProposal: expectProposal(
+						signer, 16, types.ATXID{1}, types.Opinion{},
+						expectRef(types.BallotID{1}),
+						expectCounters(signer, 3, types.Beacon{1}, 777, 2, 5),
+					),
 				},
 			},
 		},
@@ -618,8 +622,8 @@ func TestBuild(t *testing.T) {
 			clock.EXPECT().LayerToTime(gomock.Any()).Return(time.Unix(0, 0)).AnyTimes()
 
 			full := append(defaults, tc.opts...)
-			full = append(full, WithLogger(logtest.New(t)))
-			builder := New(clock, signer, cdb, publisher, tortoise, syncer, conState, full...)
+			full = append(full, WithLogger(logtest.New(t)), WithSigners(signer))
+			builder := New(clock, cdb, publisher, tortoise, syncer, conState, full...)
 			for _, step := range tc.steps {
 				{
 					if step.beacon != types.EmptyBeacon {
@@ -750,7 +754,8 @@ func TestStartStop(t *testing.T) {
 	}).AnyTimes()
 	syncer.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 
-	builder := New(clock, signer, cdb, publisher, tortoise, syncer, conState, WithLogger(logtest.New(t)))
+	builder := New(clock, cdb, publisher, tortoise, syncer, conState, WithLogger(logtest.New(t)))
+	builder.Register(signer)
 	builder.Start()
 	t.Cleanup(builder.Stop)
 	select {

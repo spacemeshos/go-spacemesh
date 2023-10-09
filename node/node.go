@@ -810,7 +810,6 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	proposalBuilder := miner.New(
 		app.clock,
-		app.edSgn,
 		app.cachedDB,
 		app.host,
 		trtl,
@@ -824,6 +823,7 @@ func (app *App) initServices(ctx context.Context) error {
 		miner.WithMinGoodAtxPercent(minerGoodAtxPct),
 		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)),
 	)
+	proposalBuilder.Register(app.edSgn)
 
 	postSetupMgr, err := activation.NewPostSetupManager(
 		app.edSgn.NodeID(),
