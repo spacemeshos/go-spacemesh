@@ -236,7 +236,7 @@ func (pb *ProposalBuilder) Start() {
 	pb.startOnce.Do(func() {
 		pb.eg.Go(func() error {
 			next := pb.clock.CurrentLayer().Add(1)
-			pb.logger.With().Info("started", log.Inline(&pb.cfg), log.Uint32("current", next.Uint32()))
+			pb.logger.With().Info("started", log.Inline(&pb.cfg), log.Uint32("next", next.Uint32()))
 			for {
 				select {
 				case <-pb.ctx.Done():
@@ -244,7 +244,10 @@ func (pb *ProposalBuilder) Start() {
 				case <-pb.clock.AwaitLayer(next):
 					current := pb.clock.CurrentLayer()
 					if current.Before(next) {
-						pb.logger.Info("time sync detected, realigning ProposalBuilder")
+						pb.logger.With().Info("time sync detected, realigning ProposalBuilder",
+							log.Uint32("current", current.Uint32()),
+							log.Uint32("next", next.Uint32()),
+						)
 						continue
 					}
 					next = current.Add(1)
@@ -254,9 +257,9 @@ func (pb *ProposalBuilder) Start() {
 					}
 					if err := pb.build(ctx, current); err != nil {
 						if errors.Is(err, errAtxNotAvailable) {
-							pb.logger.With().Debug("signer is not active in epoch", log.Err(err))
+							pb.logger.With().Debug("signer is not active in epoch", log.Context(ctx), log.Uint32("lid", current.Uint32()), log.Err(err))
 						} else {
-							pb.logger.With().Warning("failed to build proposal", log.Context(ctx), current, log.Err(err))
+							pb.logger.With().Warning("failed to build proposal", log.Context(ctx), log.Uint32("lid", current.Uint32()), log.Err(err))
 						}
 					}
 				}

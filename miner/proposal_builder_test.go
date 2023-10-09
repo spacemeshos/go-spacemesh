@@ -688,6 +688,7 @@ func TestMarshalLog(t *testing.T) {
 		session.ref = types.BallotID{1}
 		session.eligibilities.proofs = map[types.LayerID][]types.VotingEligibility{
 			10: {{J: 5}},
+			12: {{J: 7}},
 		}
 		require.NoError(t, session.MarshalLogObject(encoder))
 	})
@@ -695,4 +696,56 @@ func TestMarshalLog(t *testing.T) {
 		latency := &latencyTracker{start: time.Unix(0, 0), publish: time.Unix(1000, 0)}
 		require.NoError(t, latency.MarshalLogObject(encoder))
 	})
+}
+
+func TestStartStop(t *testing.T) {
+	var (
+		ctrl      = gomock.NewController(t)
+		conState  = mocks.NewMockconservativeState(ctrl)
+		clock     = mocks.NewMocklayerClock(ctrl)
+		publisher = pmocks.NewMockPublisher(ctrl)
+		tortoise  = mocks.NewMockvotesEncoder(ctrl)
+		syncer    = smocks.NewMockSyncStateProvider(ctrl)
+		cdb       = datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+	)
+	signer, err := signing.NewEdSigner(signing.WithKeyFromRand(rand.New(rand.NewSource(10101))))
+	require.NoError(t, err)
+
+	layers := [...]types.LayerID{
+		1, 2, 3, 5, 10, 9, 11, 12, 13,
+	}
+	current := 0
+
+	clock.EXPECT().CurrentLayer().DoAndReturn(func() types.LayerID {
+		rst := layers[current]
+		if current < len(layers)-1 {
+			current++
+		}
+		return rst
+	}).AnyTimes()
+
+	wait := make(chan struct{})
+	clock.EXPECT().AwaitLayer(gomock.Any()).DoAndReturn(func(lid types.LayerID) <-chan struct{} {
+		closed := make(chan struct{})
+		close(closed)
+		if lid <= layers[len(layers)-1] {
+			return closed
+		}
+		select {
+		case <-wait:
+		default:
+			close(wait)
+		}
+		return make(chan struct{})
+	}).AnyTimes()
+	syncer.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+
+	builder := New(clock, signer, cdb, publisher, tortoise, syncer, conState, WithLogger(logtest.New(t)))
+	builder.Start()
+	t.Cleanup(builder.Stop)
+	select {
+	case <-time.After(time.Second):
+		require.FailNow(t, "test didn't complete in 1s")
+	case <-wait:
+	}
 }
