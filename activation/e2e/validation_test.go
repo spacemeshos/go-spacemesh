@@ -73,11 +73,9 @@ func TestValidator_Validate(t *testing.T) {
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
 
 	poetDb := activation.NewPoetDb(sql.InMemory(), log.NewFromLog(logger).Named("poetDb"))
-	v := activation.NewValidator(poetDb, mgr.Config(), mgr.LastOpts().Scrypt, verifier)
 
 	nb, err := activation.NewNIPostBuilder(
 		sig.NodeID(),
-		mgr,
 		poetDb,
 		[]string{poetProver.RestURL().String()},
 		t.TempDir(),
@@ -85,7 +83,6 @@ func TestValidator_Validate(t *testing.T) {
 		sig,
 		poetCfg,
 		mclock,
-		activation.WithNipostValidator(v),
 	)
 	require.NoError(t, err)
 
@@ -116,6 +113,7 @@ func TestValidator_Validate(t *testing.T) {
 	nipost, err := nb.BuildNIPost(context.Background(), &challenge)
 	require.NoError(t, err)
 
+	v := activation.NewValidator(poetDb, mgr.Config(), mgr.LastOpts().Scrypt, verifier)
 	_, err = v.NIPost(context.Background(), sig.NodeID(), goldenATX, nipost, challengeHash, mgr.LastOpts().NumUnits)
 	require.NoError(t, err)
 

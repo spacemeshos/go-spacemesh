@@ -186,11 +186,9 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
 
 	poetDb := activation.NewPoetDb(sql.InMemory(), log.NewFromLog(logger).Named("poetDb"))
-	v := activation.NewValidator(poetDb, mgr.Config(), mgr.LastOpts().Scrypt, verifier)
 
 	nb, err := activation.NewNIPostBuilder(
 		sig.NodeID(),
-		mgr,
 		poetDb,
 		[]string{poetProver.RestURL().String()},
 		t.TempDir(),
@@ -198,7 +196,6 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 		sig,
 		poetCfg,
 		mclock,
-		activation.WithNipostValidator(v),
 	)
 	require.NoError(t, err)
 
@@ -227,6 +224,8 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 
 	nipost, err := nb.BuildNIPost(context.Background(), &challenge)
 	require.NoError(t, err)
+
+	v := activation.NewValidator(poetDb, mgr.Config(), mgr.LastOpts().Scrypt, verifier)
 	_, err = v.NIPost(
 		context.Background(),
 		sig.NodeID(),
@@ -246,10 +245,7 @@ func TestNIPostBuilder_Close(t *testing.T) {
 
 	logger := zaptest.NewLogger(t)
 
-	nipostClient := activation.NewMocknipostClient(ctrl)
-	nipostClient.EXPECT().Status().Return(&activation.PostSetupStatus{State: activation.PostSetupStateComplete})
 	poetProver := spawnPoet(t, WithGenesis(time.Now()), WithEpochDuration(time.Second))
-
 	poetDb := activation.NewMockpoetDbAPI(ctrl)
 
 	mclock := activation.NewMocklayerClock(ctrl)
@@ -263,7 +259,6 @@ func TestNIPostBuilder_Close(t *testing.T) {
 
 	nb, err := activation.NewNIPostBuilder(
 		sig.NodeID(),
-		nipostClient,
 		poetDb,
 		[]string{poetProver.RestURL().String()},
 		t.TempDir(),
@@ -322,12 +317,9 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	)
 
 	poetDb := activation.NewPoetDb(sql.InMemory(), log.NewFromLog(logger).Named("poetDb"))
-	nipostValidator := activation.NewMocknipostValidator(ctrl)
-	nipostValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return(nil)
 
 	nb, err := activation.NewNIPostBuilder(
 		sig.NodeID(),
-		mgr,
 		poetDb,
 		[]string{poetProver.RestURL().String()},
 		t.TempDir(),
@@ -335,7 +327,6 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 		sig,
 		poetCfg,
 		mclock,
-		activation.WithNipostValidator(nipostValidator),
 	)
 	require.NoError(t, err)
 
@@ -364,7 +355,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	}
 
 	nipost, err := nb.BuildNIPost(context.Background(), &challenge)
-	require.EqualError(t, err, "post setup not complete")
+	require.ErrorContains(t, err, "failed to generate Post: error generating proof")
 	require.Nil(t, nipost)
 
 	opts := activation.DefaultPostSetupOpts()
