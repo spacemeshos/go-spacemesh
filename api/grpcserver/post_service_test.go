@@ -24,7 +24,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-func initPost(tb testing.TB, log *zap.Logger, dir string) {
+func initPost(tb testing.TB, log *zap.Logger, opts activation.PostSetupOpts) {
 	tb.Helper()
 
 	cfg := activation.DefaultPostConfig()
@@ -32,11 +32,6 @@ func initPost(tb testing.TB, log *zap.Logger, dir string) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
 	id := sig.NodeID()
-
-	opts := activation.DefaultPostSetupOpts()
-	opts.DataDir = dir
-	opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
-	opts.Scrypt.N = 2 // Speedup initialization in tests.
 
 	goldenATXID := types.ATXID{2, 3, 4}
 
@@ -77,20 +72,19 @@ func initPost(tb testing.TB, log *zap.Logger, dir string) {
 	require.Equal(tb, activation.PostSetupStateComplete, mgr.Status().State)
 }
 
-func launchPostSupervisor(tb testing.TB, log *zap.Logger, cfg Config, postDir string) func() {
+func launchPostSupervisor(tb testing.TB, log *zap.Logger, cfg Config, postOpts activation.PostSetupOpts) func() {
 	path, err := exec.Command("go", "env", "GOMOD").Output()
 	require.NoError(tb, err)
 
 	opts := activation.PostSupervisorConfig{
-		PostServiceCmd:  filepath.Join(filepath.Dir(string(path)), "build", "service"),
-		DataDir:         postDir,
-		NodeAddress:     fmt.Sprintf("http://%s", cfg.PublicListener),
-		PowDifficulty:   activation.DefaultPostConfig().PowDifficulty,
-		PostServiceMode: "light",
-		N:               2,
+		PostServiceCmd: filepath.Join(filepath.Dir(string(path)), "build", "service"),
+		NodeAddress:    fmt.Sprintf("http://%s", cfg.PublicListener),
 	}
+	postCfg := activation.DefaultPostConfig()
+	provingOpts := activation.DefaultPostProvingOpts()
+	provingOpts.RandomXMode = activation.PostRandomXModeLight
 
-	ps, err := activation.NewPostSupervisor(log, opts)
+	ps, err := activation.NewPostSupervisor(log, opts, postCfg, postOpts, provingOpts)
 	require.NoError(tb, err)
 	require.NotNil(tb, ps)
 	return func() { assert.NoError(tb, ps.Close()) }
@@ -112,9 +106,12 @@ func Test_GenerateProof(t *testing.T) {
 	}).Times(1)
 	con.EXPECT().Disconnected(gomock.Any()).Times(1)
 
-	postDir := t.TempDir()
-	initPost(t, log.Named("post"), postDir)
-	postCleanup := launchPostSupervisor(t, log.Named("supervisor"), cfg, postDir)
+	opts := activation.DefaultPostSetupOpts()
+	opts.DataDir = t.TempDir()
+	opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
+	opts.Scrypt.N = 2 // Speedup initialization in tests.
+	initPost(t, log.Named("post"), opts)
+	postCleanup := launchPostSupervisor(t, log.Named("supervisor"), cfg, opts)
 	t.Cleanup(postCleanup)
 
 	select {
@@ -161,9 +158,12 @@ func Test_Cancel_GenerateProof(t *testing.T) {
 	}).Times(1)
 	con.EXPECT().Disconnected(gomock.Any()).Times(1)
 
-	postDir := t.TempDir()
-	initPost(t, log.Named("post"), postDir)
-	t.Cleanup(launchPostSupervisor(t, log.Named("supervisor"), cfg, postDir))
+	opts := activation.DefaultPostSetupOpts()
+	opts.DataDir = t.TempDir()
+	opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
+	opts.Scrypt.N = 2 // Speedup initialization in tests.
+	initPost(t, log.Named("post"), opts)
+	t.Cleanup(launchPostSupervisor(t, log.Named("supervisor"), cfg, opts))
 
 	select {
 	case <-connected:
@@ -202,18 +202,22 @@ func Test_GenerateProof_MultipleServices(t *testing.T) {
 	}).Times(1)
 	con.EXPECT().Disconnected(gomock.Any()).Times(1)
 
+	opts := activation.DefaultPostSetupOpts()
+	opts.DataDir = t.TempDir()
+	opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
+	opts.Scrypt.N = 2 // Speedup initialization in tests.
+
 	// all but one should not be able to register to the node (i.e. open a stream to it).
-	postDir1 := t.TempDir()
-	initPost(t, log.Named("post1"), postDir1)
-	t.Cleanup(launchPostSupervisor(t, log.Named("supervisor1"), cfg, postDir1))
+	initPost(t, log.Named("post1"), opts)
+	t.Cleanup(launchPostSupervisor(t, log.Named("supervisor1"), cfg, opts))
 
-	postDir2 := t.TempDir()
-	initPost(t, log.Named("post2"), postDir2)
-	t.Cleanup(launchPostSupervisor(t, log.Named("supervisor2"), cfg, postDir2))
+	opts.DataDir = t.TempDir()
+	initPost(t, log.Named("post2"), opts)
+	t.Cleanup(launchPostSupervisor(t, log.Named("supervisor2"), cfg, opts))
 
-	postDir3 := t.TempDir()
-	initPost(t, log.Named("post3"), postDir3)
-	t.Cleanup(launchPostSupervisor(t, log.Named("supervisor3"), cfg, postDir3))
+	opts.DataDir = t.TempDir()
+	initPost(t, log.Named("post3"), opts)
+	t.Cleanup(launchPostSupervisor(t, log.Named("supervisor3"), cfg, opts))
 
 	select {
 	case <-connected:

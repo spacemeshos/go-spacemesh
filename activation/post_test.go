@@ -1,9 +1,7 @@
 package activation
 
 import (
-	"bytes"
 	"context"
-	"encoding/hex"
 	"testing"
 	"time"
 
@@ -427,66 +425,4 @@ func newTestPostManager(tb testing.TB) *testPostManager {
 		signer:           sig,
 		cdb:              cdb,
 	}
-}
-
-func TestSettingPowDifficulty(t *testing.T) {
-	t.Parallel()
-	expected := bytes.Repeat([]byte{0x01, 0x02, 0x03, 0x04}, 8)
-	encoded := hex.EncodeToString(expected)
-	t.Run("parse 32B hex", func(t *testing.T) {
-		t.Parallel()
-		d := PowDifficulty{}
-		err := d.Set(encoded)
-		require.NoError(t, err)
-		require.Equal(t, expected, d[:])
-	})
-	t.Run("input too short", func(t *testing.T) {
-		t.Parallel()
-		d := PowDifficulty{}
-		require.Error(t, d.Set("123"))
-		require.Equal(t, PowDifficulty{}, d)
-	})
-	t.Run("input too long", func(t *testing.T) {
-		t.Parallel()
-		d := PowDifficulty{}
-		require.Error(t, d.Set(hex.EncodeToString(bytes.Repeat([]byte{0x01}, 33))))
-		require.Equal(t, PowDifficulty{}, d)
-	})
-	t.Run("not a hex string", func(t *testing.T) {
-		t.Parallel()
-		encoded := encoded[:len(encoded)-1] + "G"
-		d := PowDifficulty{}
-		require.Error(t, d.Set(encoded))
-		require.Equal(t, PowDifficulty{}, d)
-	})
-}
-
-func TestSettingProviderID(t *testing.T) {
-	t.Parallel()
-
-	t.Run("valid value", func(t *testing.T) {
-		t.Parallel()
-		id := new(PostProviderID)
-		require.NoError(t, id.Set("1234"))
-		require.Equal(t, int64(1234), *id.Value())
-	})
-	t.Run("no value", func(t *testing.T) {
-		t.Parallel()
-		id := new(PostProviderID)
-		require.NoError(t, id.Set(""))
-		require.Nil(t, id.Value())
-	})
-	t.Run("not a number", func(t *testing.T) {
-		t.Parallel()
-		id := new(PostProviderID)
-		require.Error(t, id.Set("asdf"))
-		require.Nil(t, id.Value())
-	})
-	// TODO(mafa): re-enable test, see https://github.com/spacemeshos/go-spacemesh/issues/4801
-	// t.Run("negative", func(t *testing.T) {
-	// 	t.Parallel()
-	// 	id := new(PostProviderID)
-	// 	require.Error(t, id.Set("-1"))
-	// 	require.Nil(t, id.Value())
-	// })
 }

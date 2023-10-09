@@ -554,7 +554,7 @@ func (app *App) initServices(ctx context.Context) error {
 	nipostValidatorLogger := app.addLogger(NipostValidatorLogger, lg)
 	postVerifiers := make([]activation.PostVerifier, 0, app.Config.SMESHING.VerifyingOpts.Workers)
 	lg.Debug("creating post verifier")
-	verifier, err := activation.NewPostVerifier(app.Config.POST, nipostValidatorLogger.Zap(), verifying.WithPowFlags(app.Config.SMESHING.VerifyingOpts.Flags))
+	verifier, err := activation.NewPostVerifier(app.Config.POST, nipostValidatorLogger.Zap(), verifying.WithPowFlags(app.Config.SMESHING.VerifyingOpts.Flags.Value()))
 	lg.With().Debug("created post verifier", log.Err(err))
 	if err != nil {
 		return err
@@ -564,8 +564,8 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	app.postVerifier = activation.NewOffloadingPostVerifier(postVerifiers, nipostValidatorLogger)
 
-	if app.Config.POSTService.PostServiceCmd != "" {
-		app.postSupervisor, err = activation.NewPostSupervisor(app.log.Zap(), app.Config.POSTService)
+	if app.Config.SMESHING.Start {
+		app.postSupervisor, err = activation.NewPostSupervisor(app.log.Zap(), app.Config.POSTService, app.Config.POST, app.Config.SMESHING.Opts, app.Config.SMESHING.ProvingOpts)
 		if err != nil {
 			return fmt.Errorf("start post service: %w", err)
 		}

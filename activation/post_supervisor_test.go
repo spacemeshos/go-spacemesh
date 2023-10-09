@@ -14,22 +14,37 @@ import (
 	"go.uber.org/zap/zaptest"
 )
 
+func Test_PostSupervisor_ErrOnMissingBinary(t *testing.T) {
+	log := zaptest.NewLogger(t)
+
+	cmdCfg := PostSupervisorConfig{
+		PostServiceCmd: filepath.Join(t.TempDir(), "service"),
+		NodeAddress:    "http://127.0.0.1:12345", // node isn't listening and not relevant for test
+	}
+	postCfg := DefaultPostConfig()
+	postOpts := DefaultPostSetupOpts()
+	provingOpts := DefaultPostProvingOpts()
+
+	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, postOpts, provingOpts)
+	require.ErrorContains(t, err, "post service binary not found")
+	require.Nil(t, ps)
+}
+
 func Test_PostSupervisor_StartsServiceCmd(t *testing.T) {
 	log := zaptest.NewLogger(t)
 
-	postDir := t.TempDir()
 	path, err := exec.Command("go", "env", "GOMOD").Output()
 	require.NoError(t, err)
 
-	opts := PostSupervisorConfig{
-		PostServiceCmd:  filepath.Join(filepath.Dir(string(path)), "build", "service"),
-		DataDir:         postDir,
-		NodeAddress:     "http://127.0.0.1:12345", // node isn't listening, but also not relevant for test
-		PowDifficulty:   DefaultPostConfig().PowDifficulty,
-		PostServiceMode: "light",
+	cmdCfg := PostSupervisorConfig{
+		PostServiceCmd: filepath.Join(filepath.Dir(string(path)), "build", "service"),
+		NodeAddress:    "http://127.0.0.1:12345", // node isn't listening and not relevant for test
 	}
+	postCfg := DefaultPostConfig()
+	postOpts := DefaultPostSetupOpts()
+	provingOpts := DefaultPostProvingOpts()
 
-	ps, err := NewPostSupervisor(log.Named("supervisor"), opts)
+	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, postOpts, provingOpts)
 	require.NoError(t, err)
 	require.NotNil(t, ps)
 	t.Cleanup(func() { assert.NoError(t, ps.Close()) })
@@ -55,19 +70,18 @@ func Test_PostSupervisor_StartsServiceCmd(t *testing.T) {
 func Test_PostSupervisor_RestartsOnCrash(t *testing.T) {
 	log := zaptest.NewLogger(t)
 
-	postDir := t.TempDir()
 	path, err := exec.Command("go", "env", "GOMOD").Output()
 	require.NoError(t, err)
 
-	opts := PostSupervisorConfig{
-		PostServiceCmd:  filepath.Join(filepath.Dir(string(path)), "build", "service"),
-		DataDir:         postDir,
-		NodeAddress:     "http://127.0.0.1:12345", // node isn't listening, but also not relevant for test
-		PowDifficulty:   DefaultPostConfig().PowDifficulty,
-		PostServiceMode: "light",
+	cmdCfg := PostSupervisorConfig{
+		PostServiceCmd: filepath.Join(filepath.Dir(string(path)), "build", "service"),
+		NodeAddress:    "http://127.0.0.1:12345", // node isn't listening and not relevant for test
 	}
+	postCfg := DefaultPostConfig()
+	postOpts := DefaultPostSetupOpts()
+	provingOpts := DefaultPostProvingOpts()
 
-	ps, err := NewPostSupervisor(log.Named("supervisor"), opts)
+	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, postOpts, provingOpts)
 	require.NoError(t, err)
 	require.NotNil(t, ps)
 	t.Cleanup(func() { assert.NoError(t, ps.Close()) })

@@ -427,8 +427,6 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		panic(err)
 	}
 	app.Config.POSTService.PostServiceCmd = filepath.Join(filepath.Dir(string(path)), "build", "service")
-	app.Config.POSTService.DataDir = app.Config.SMESHING.Opts.DataDir
-	app.Config.POSTService.N = app.Config.SMESHING.Opts.Scrypt.N
 
 	edSgn, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -1106,8 +1104,6 @@ func TestAdminEvents(t *testing.T) {
 		panic(err)
 	}
 	cfg.POSTService.PostServiceCmd = filepath.Join(filepath.Dir(string(path)), "build", "service")
-	cfg.POSTService.DataDir = cfg.SMESHING.Opts.DataDir
-	cfg.POSTService.N = cfg.SMESHING.Opts.Scrypt.N
 
 	cfg.Genesis.GenesisTime = time.Now().Add(5 * time.Second).Format(time.RFC3339)
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)

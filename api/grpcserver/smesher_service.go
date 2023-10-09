@@ -50,6 +50,7 @@ func (s SmesherService) IsSmeshing(context.Context, *emptypb.Empty) (*pb.IsSmesh
 }
 
 // StartSmeshing requests that the node begin smeshing.
+// TODO(mafa): stop post supervisor.
 func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingRequest) (*pb.StartSmeshingResponse, error) {
 	if in.Coinbase == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "`Coinbase` must be provided")
@@ -98,6 +99,7 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 }
 
 // StopSmeshing requests that the node stop smeshing.
+// TODO(mafa): stop post supervisor.
 func (s SmesherService) StopSmeshing(ctx context.Context, in *pb.StopSmeshingRequest) (*pb.StopSmeshingResponse, error) {
 	errchan := make(chan error, 1)
 	go func() {

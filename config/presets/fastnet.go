@@ -7,6 +7,7 @@ import (
 
 	"github.com/spacemeshos/post/initialization"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 )
@@ -76,7 +77,7 @@ func fastnet() config.Config {
 	conf.SMESHING.Opts.ComputeBatchSize = 128
 	conf.SMESHING.Opts.Scrypt.N = 2 // faster scrypt
 	// Override proof of work flags to use light mode (less memory intensive)
-	conf.SMESHING.ProvingOpts.RandomXMode = "light"
+	conf.SMESHING.ProvingOpts.RandomXMode = activation.PostRandomXModeLight
 
 	conf.Beacon.Kappa = 40
 	conf.Beacon.Theta = big.NewRat(1, 4)
@@ -95,11 +96,5 @@ func fastnet() config.Config {
 	conf.POET.RequestTimeout = 12 * time.Second // RequestRetryDelay * 2 * MaxRequestRetries*(MaxRequestRetries+1)/2
 	conf.POET.RequestRetryDelay = 1 * time.Second
 	conf.POET.MaxRequestRetries = 3
-
-	conf.POSTService.N = conf.SMESHING.Opts.Scrypt.N
-
-	conf.POSTService.K1 = conf.POST.K1
-	conf.POSTService.K2 = conf.POST.K2
-	conf.POSTService.K3 = conf.POST.K3
 	return conf
 }

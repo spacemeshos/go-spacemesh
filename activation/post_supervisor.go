@@ -5,13 +5,13 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync/atomic"
 
-	"github.com/spacemeshos/post/config"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
@@ -20,45 +20,16 @@ import (
 
 // DefaultPostServiceConfig returns the default config for post service. These are intended for testing.
 func DefaultPostServiceConfig() PostSupervisorConfig {
-	cfg := PostSupervisorConfig{
-		PostServiceCmd:  "/bin/service",
-		DataDir:         config.DefaultDataDir,
-		NodeAddress:     "http://127.0.0.1:9093",
-		PowDifficulty:   config.DefaultConfig().PowDifficulty,
-		PostServiceMode: "light",
+	return PostSupervisorConfig{
+		PostServiceCmd: "/bin/service",
+		NodeAddress:    "http://127.0.0.1:9093",
 	}
-
-	return cfg
-}
-
-// MainnetPostServiceConfig returns the default config for mainnet.
-func MainnetPostServiceConfig() PostSupervisorConfig {
-	cfg := PostSupervisorConfig{
-		PostServiceCmd:  "/bin/service",
-		DataDir:         config.DefaultDataDir,
-		NodeAddress:     "http://127.0.0.1:9093",
-		PowDifficulty:   config.MainnetConfig().PowDifficulty,
-		PostServiceMode: "fast",
-	}
-
-	return cfg
 }
 
 type PostSupervisorConfig struct {
 	PostServiceCmd string `mapstructure:"post-opts-post-service"`
 
-	DataDir         string `mapstructure:"post-opts-datadir"`
-	NodeAddress     string `mapstructure:"post-opts-node-address"`
-	PostServiceMode string `mapstructure:"post-opts-post-service-mode"`
-
-	PowDifficulty PowDifficulty `mapstructure:"post-opts-pow-difficulty"`
-	K1            uint32        `mapstructure:"post-opts-k1"`
-	K2            uint32        `mapstructure:"post-opts-k2"`
-	K3            uint32        `mapstructure:"post-opts-k3"`
-
-	N uint `mapstructure:"post-opts-n"`
-	R uint `mapstructure:"post-opts-r"`
-	P uint `mapstructure:"post-opts-p"`
+	NodeAddress string `mapstructure:"post-opts-node-address"`
 }
 
 // PostSupervisor manages a local post service.
@@ -72,14 +43,17 @@ type PostSupervisor struct {
 }
 
 // NewPostSupervisor returns a new post service.
-func NewPostSupervisor(logger *zap.Logger, opts PostSupervisorConfig) (*PostSupervisor, error) {
-	ctx, stop := context.WithCancel(context.Background())
+func NewPostSupervisor(logger *zap.Logger, cmdCfg PostSupervisorConfig, postCfg PostConfig, postOpts PostSetupOpts, provingOpts PostProvingOpts) (*PostSupervisor, error) {
+	if _, err := os.Stat(cmdCfg.PostServiceCmd); err != nil {
+		return nil, fmt.Errorf("post service binary not found: %s", cmdCfg.PostServiceCmd)
+	}
 
+	ctx, stop := context.WithCancel(context.Background())
 	ps := &PostSupervisor{
 		logger: logger,
 		stop:   stop,
 	}
-	ps.eg.Go(func() error { return ps.runCmd(ctx, opts) })
+	ps.eg.Go(func() error { return ps.runCmd(ctx, cmdCfg, postCfg, postOpts, provingOpts) })
 	return ps, nil
 }
 
@@ -112,39 +86,32 @@ func (ps *PostSupervisor) captureCmdOutput(pipe io.ReadCloser) func() error {
 	}
 }
 
-func (ps *PostSupervisor) runCmd(ctx context.Context, opts PostSupervisorConfig) error {
+func (ps *PostSupervisor) runCmd(ctx context.Context, cmdCfg PostSupervisorConfig, postCfg PostConfig, postOpts PostSetupOpts, provingOpts PostProvingOpts) error {
 	for {
 		args := []string{
-			"--dir", opts.DataDir,
-			"--address", opts.NodeAddress,
-			"--pow-difficulty", opts.PowDifficulty.String(),
-			"--randomx-mode", opts.PostServiceMode,
-		}
-		if opts.K1 != 0 {
-			args = append(args, "--k1", strconv.FormatUint(uint64(opts.K1), 10))
-		}
-		if opts.K2 != 0 {
-			args = append(args, "--k2", strconv.FormatUint(uint64(opts.K2), 10))
-		}
-		if opts.K3 != 0 {
-			args = append(args, "--k3", strconv.FormatUint(uint64(opts.K3), 10))
-		}
-		if opts.N != 0 {
-			args = append(args, "-n", strconv.FormatUint(uint64(opts.N), 10))
-		}
-		if opts.R != 0 {
-			args = append(args, "-r", strconv.FormatUint(uint64(opts.R), 10))
-		}
-		if opts.P != 0 {
-			args = append(args, "-p", strconv.FormatUint(uint64(opts.P), 10))
+			"--address", cmdCfg.NodeAddress,
+
+			"--k1", strconv.FormatUint(uint64(postCfg.K1), 10),
+			"--k2", strconv.FormatUint(uint64(postCfg.K2), 10),
+			"--k3", strconv.FormatUint(uint64(postCfg.K3), 10),
+			"--pow-difficulty", postCfg.PowDifficulty.String(),
+
+			"--dir", postOpts.DataDir,
+			"-n", strconv.FormatUint(uint64(postOpts.Scrypt.N), 10),
+			"-r", strconv.FormatUint(uint64(postOpts.Scrypt.R), 10),
+			"-p", strconv.FormatUint(uint64(postOpts.Scrypt.P), 10),
+
+			"--threads", strconv.FormatUint(uint64(provingOpts.Threads), 10),
+			"--nonces", strconv.FormatUint(uint64(provingOpts.Nonces), 10),
+			"--randomx-mode", provingOpts.RandomXMode.String(),
 		}
 
 		cmd := exec.CommandContext(
 			ctx,
-			opts.PostServiceCmd,
+			cmdCfg.PostServiceCmd,
 			args...,
 		)
-		cmd.Dir = filepath.Dir(opts.PostServiceCmd)
+		cmd.Dir = filepath.Dir(cmdCfg.PostServiceCmd)
 		pipe, err := cmd.StderrPipe()
 		if err != nil {
 			return fmt.Errorf("setup stderr pipe for post service: %w", err)

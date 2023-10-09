@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -226,7 +227,12 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.POST.K2, "number of labels to prove")
 	cmd.PersistentFlags().Uint32Var(&cfg.POST.K3, "post-k3",
 		cfg.POST.K3, "subset of labels to verify in a proof")
-	cmd.PersistentFlags().VarP(&cfg.POST.PowDifficulty, "post-pow-difficulty", "", "difficulty of randomx-based proof of work")
+	cmd.PersistentFlags().AddFlag(&pflag.Flag{
+		Name:     "post-pow-difficulty",
+		Value:    &cfg.POST.PowDifficulty,
+		DefValue: cfg.POST.PowDifficulty.String(),
+		Usage:    "difficulty of randomx-based proof of work",
+	})
 
 	/**======================== Smeshing Flags ========================== **/
 
@@ -242,35 +248,44 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.SMESHING.Opts.NumUnits, "")
 	cmd.PersistentFlags().Uint64Var(&cfg.SMESHING.Opts.MaxFileSize, "smeshing-opts-maxfilesize",
 		cfg.SMESHING.Opts.MaxFileSize, "")
-	cmd.PersistentFlags().VarP(&cfg.SMESHING.Opts.ProviderID, "smeshing-opts-provider",
-		"", "")
+	cmd.PersistentFlags().AddFlag(&pflag.Flag{
+		Name:     "smeshing-opts-provider",
+		Value:    &cfg.SMESHING.Opts.ProviderID,
+		DefValue: cfg.SMESHING.Opts.ProviderID.String(),
+	})
 	cmd.PersistentFlags().BoolVar(&cfg.SMESHING.Opts.Throttle, "smeshing-opts-throttle",
 		cfg.SMESHING.Opts.Throttle, "")
+
+	// TODO(mafa): add Scrypt-Opts?
+
+	/**======================== PoST Proving Flags ========================== **/
+
+	cmd.PersistentFlags().UintVar(&cfg.SMESHING.ProvingOpts.Threads, "smeshing-opts-proving-threads",
+		cfg.SMESHING.ProvingOpts.Threads, "")
+	cmd.PersistentFlags().UintVar(&cfg.SMESHING.ProvingOpts.Nonces, "smeshing-opts-proving-nonces",
+		cfg.SMESHING.ProvingOpts.Nonces, "")
+	cmd.PersistentFlags().AddFlag(&pflag.Flag{
+		Name:     "smeshing-opts-proving-randomx-mode",
+		Value:    &cfg.SMESHING.ProvingOpts.RandomXMode,
+		DefValue: cfg.SMESHING.ProvingOpts.RandomXMode.String(),
+	})
+
+	/**======================== PoST Verifying Flags ========================== **/
+
+	cmd.PersistentFlags().IntVar(&cfg.SMESHING.VerifyingOpts.Workers, "smeshing-opts-verifying-threads",
+		cfg.SMESHING.VerifyingOpts.Workers, "")
+	cmd.PersistentFlags().AddFlag(&pflag.Flag{
+		Name:     "smeshing-opts-verifying-powflags",
+		Value:    &cfg.SMESHING.VerifyingOpts.Flags,
+		DefValue: cfg.SMESHING.VerifyingOpts.Flags.String(),
+	})
 
 	/**======================== PoST service Flags ========================== **/
 
 	cmd.PersistentFlags().StringVar(&cfg.POSTService.PostServiceCmd, "post-opts-post-service",
 		cfg.POSTService.PostServiceCmd, "")
-	cmd.PersistentFlags().StringVar(&cfg.POSTService.DataDir, "post-opts-datadir",
-		cfg.POSTService.DataDir, "")
 	cmd.PersistentFlags().StringVar(&cfg.POSTService.NodeAddress, "post-opts-node-address",
 		cfg.POSTService.NodeAddress, "")
-	cmd.PersistentFlags().StringVar(&cfg.POSTService.PostServiceMode, "post-opts-post-service-mode",
-		cfg.POSTService.PostServiceMode, "")
-	cmd.PersistentFlags().VarP(&cfg.POSTService.PowDifficulty, "post-opts-pow-difficulty",
-		"", "")
-	cmd.PersistentFlags().Uint32Var(&cfg.POSTService.K1, "post-opts-k1",
-		cfg.POSTService.K1, "")
-	cmd.PersistentFlags().Uint32Var(&cfg.POSTService.K2, "post-opts-k2",
-		cfg.POSTService.K2, "")
-	cmd.PersistentFlags().Uint32Var(&cfg.POSTService.K3, "post-opts-k3",
-		cfg.POSTService.K3, "")
-	cmd.PersistentFlags().UintVar(&cfg.POSTService.N, "post-opts-n",
-		cfg.POSTService.N, "")
-	cmd.PersistentFlags().UintVar(&cfg.POSTService.R, "post-opts-r",
-		cfg.POSTService.R, "")
-	cmd.PersistentFlags().UintVar(&cfg.POSTService.P, "post-opts-p",
-		cfg.POSTService.P, "")
 
 	/**======================== Consensus Flags ========================== **/
 

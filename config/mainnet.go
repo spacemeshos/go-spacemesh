@@ -148,7 +148,7 @@ func MainnetConfig() Config {
 		API:         grpcserver.DefaultConfig(),
 		TIME:        timeConfig.DefaultConfig(),
 		SMESHING:    smeshing,
-		POSTService: activation.MainnetPostServiceConfig(),
+		POSTService: activation.DefaultPostServiceConfig(),
 		FETCH:       fetch.DefaultConfig(),
 		LOGGING:     logging,
 		Sync: syncer.Config{

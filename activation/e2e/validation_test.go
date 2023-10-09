@@ -37,9 +37,8 @@ func TestValidator_Validate(t *testing.T) {
 	mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX)
 	require.NoError(t, err)
 
-	postDir := t.TempDir()
 	opts := activation.DefaultPostSetupOpts()
-	opts.DataDir = postDir
+	opts.DataDir = t.TempDir()
 	opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
 	initPost(t, logger.Named("manager"), mgr, opts)
@@ -93,7 +92,7 @@ func TestValidator_Validate(t *testing.T) {
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	t.Cleanup(launchPostSupervisor(t, logger, grpcCfg, postDir))
+	t.Cleanup(launchPostSupervisor(t, logger, grpcCfg, opts))
 
 	select {
 	case <-connected:

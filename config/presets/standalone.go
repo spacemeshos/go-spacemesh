@@ -8,6 +8,7 @@ import (
 
 	"github.com/spacemeshos/post/initialization"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 )
@@ -61,7 +62,7 @@ func standalone() config.Config {
 	conf.SMESHING.Opts.NumUnits = 1
 	conf.SMESHING.Opts.Throttle = true
 	conf.SMESHING.Opts.DataDir = conf.DataDirParent
-	conf.SMESHING.ProvingOpts.RandomXMode = "light"
+	conf.SMESHING.ProvingOpts.RandomXMode = activation.PostRandomXModeLight
 
 	conf.Beacon.Kappa = 40
 	conf.Beacon.Theta = big.NewRat(1, 4)
@@ -88,10 +89,5 @@ func standalone() config.Config {
 	conf.API.PrivateListener = "0.0.0.0:10093"
 
 	conf.POSTService.NodeAddress = "http://127.0.0.1:10093"
-	conf.POSTService.DataDir = conf.SMESHING.Opts.DataDir
-
-	conf.POSTService.K1 = conf.POST.K1
-	conf.POSTService.K2 = conf.POST.K2
-	conf.POSTService.K3 = conf.POST.K3
 	return conf
 }
