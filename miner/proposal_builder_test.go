@@ -24,6 +24,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/beacons"
+	"github.com/spacemeshos/go-spacemesh/sql/blocks"
+	"github.com/spacemeshos/go-spacemesh/sql/certificates"
+	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
@@ -32,6 +36,12 @@ type genAtxOpt func(*types.ActivationTx)
 func genAtxWithNonce(nonce types.VRFPostIndex) genAtxOpt {
 	return func(atx *types.ActivationTx) {
 		atx.VRFNonce = &nonce
+	}
+}
+
+func genAtxWithReceived(received time.Time) genAtxOpt {
+	return func(atx *types.ActivationTx) {
+		atx.SetReceived(received)
 	}
 }
 
@@ -67,6 +77,16 @@ func gballot(id types.BallotID, atxid types.ATXID, smesher types.NodeID, layer t
 	return ballot
 }
 
+func gblock(lid types.LayerID, atxs ...types.ATXID) *types.Block {
+	block := types.Block{}
+	block.LayerIndex = lid
+	for _, atx := range atxs {
+		block.Rewards = append(block.Rewards, types.AnyReward{AtxID: atx})
+	}
+	block.Initialize()
+	return &block
+}
+
 type expectOpt func(p *types.Proposal)
 
 func expectEpochData(set types.ATXIDList, slots uint32, beacon types.Beacon) expectOpt {
@@ -88,6 +108,12 @@ func expectRef(id types.BallotID) expectOpt {
 func expectTxs(txs []types.TransactionID) expectOpt {
 	return func(p *types.Proposal) {
 		p.TxIDs = txs
+	}
+}
+
+func expectMeshHash(hash types.Hash32) expectOpt {
+	return func(p *types.Proposal) {
+		p.MeshHash = hash
 	}
 }
 
@@ -132,6 +158,38 @@ func expectProposal(signer *signing.EdSigner, lid types.LayerID, atx types.ATXID
 	return p
 }
 
+type identity struct {
+	id       types.NodeID
+	proof    types.MalfeasanceProof
+	received time.Time
+}
+
+type aggHash struct {
+	lid  types.LayerID
+	hash types.Hash32
+}
+
+type step struct {
+	lid          types.LayerID
+	beacon       types.Beacon
+	atxs         []*types.VerifiedActivationTx
+	ballots      []*types.Ballot
+	activeset    types.ATXIDList
+	identitities []identity
+	blocks       []*types.Block
+	hare         []types.LayerID
+	aggHashes    []aggHash
+
+	txs            []types.TransactionID
+	latestComplete types.LayerID
+	opinion        *types.Opinion
+
+	encodeVotesErr, publishErr error
+
+	expectProposal *types.Proposal
+	expectErr      string
+}
+
 func TestBuild(t *testing.T) {
 	signer, err := signing.NewEdSigner(signing.WithKeyFromRand(rand.New(rand.NewSource(10101))))
 	require.NoError(t, err)
@@ -139,25 +197,9 @@ func TestBuild(t *testing.T) {
 		WithLayerPerEpoch(3),
 		WithLayerSize(10),
 	}
-
-	type step struct {
-		lid       types.LayerID
-		beacon    types.Beacon
-		atxs      []*types.VerifiedActivationTx
-		ballot    *types.Ballot
-		activeset types.ATXIDList
-
-		txs            []types.TransactionID
-		latestComplete types.LayerID
-		opinion        *types.Opinion
-
-		encodeVotesErr, publishErr error
-
-		expectProposal *types.Proposal
-		expectErr      string
-	}
 	for _, tc := range []struct {
 		desc  string
+		opts  []Opt
 		steps []step
 	}{
 		{
@@ -189,6 +231,31 @@ func TestBuild(t *testing.T) {
 			},
 		},
 		{
+			desc: "min active weight",
+			opts: []Opt{WithMinimalActiveSetWeight(1000)},
+			steps: []step{
+				{
+					lid:    9,
+					beacon: types.Beacon{1},
+					atxs: []*types.VerifiedActivationTx{
+						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
+					},
+					opinion:        &types.Opinion{Hash: types.Hash32{1}},
+					txs:            []types.TransactionID{},
+					latestComplete: 8,
+					expectProposal: expectProposal(
+						signer, 9, types.ATXID{1}, types.Opinion{Hash: types.Hash32{1}},
+						expectEpochData(
+							gactiveset(types.ATXID{1}),
+							3,
+							types.Beacon{1},
+						),
+						expectCounters(signer, 3, types.Beacon{1}, 777, 0, 2),
+					),
+				},
+			},
+		},
+		{
 			desc: "sanity secondary",
 			steps: []step{
 				{
@@ -198,10 +265,12 @@ func TestBuild(t *testing.T) {
 						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
 						gatx(types.ATXID{2}, 2, types.NodeID{2}, 1),
 					},
-					ballot: gballot(types.BallotID{1}, types.ATXID{1}, signer.NodeID(), 10, &types.EpochData{
-						ActiveSetHash:    types.ATXIDList{{1}, {2}}.Hash(),
-						EligibilityCount: 5,
-					}),
+					ballots: []*types.Ballot{
+						gballot(types.BallotID{1}, types.ATXID{1}, signer.NodeID(), 10, &types.EpochData{
+							ActiveSetHash:    types.ATXIDList{{1}, {2}}.Hash(),
+							EligibilityCount: 5,
+						}),
+					},
 					activeset:      types.ATXIDList{{1}, {2}},
 					txs:            []types.TransactionID{},
 					opinion:        &types.Opinion{Hash: types.Hash32{1}},
@@ -238,10 +307,12 @@ func TestBuild(t *testing.T) {
 				{
 					lid:    11,
 					beacon: types.Beacon{1},
-					ballot: gballot(types.BallotID{1}, types.ATXID{10}, signer.NodeID(), 10, &types.EpochData{
-						ActiveSetHash:    types.ATXIDList{{10}, {2}}.Hash(),
-						EligibilityCount: 5,
-					}),
+					ballots: []*types.Ballot{
+						gballot(types.BallotID{1}, types.ATXID{10}, signer.NodeID(), 10, &types.EpochData{
+							ActiveSetHash:    types.ATXIDList{{10}, {2}}.Hash(),
+							EligibilityCount: 5,
+						}),
+					},
 					expectErr: "get activeset",
 				},
 				{
@@ -276,10 +347,12 @@ func TestBuild(t *testing.T) {
 						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
 						gatx(types.ATXID{2}, 2, types.NodeID{2}, 100),
 					},
-					ballot: gballot(types.BallotID{1}, types.ATXID{1}, signer.NodeID(), 10, &types.EpochData{
-						ActiveSetHash:    types.ATXIDList{{1}, {2}}.Hash(),
-						EligibilityCount: 1,
-					}),
+					ballots: []*types.Ballot{
+						gballot(types.BallotID{1}, types.ATXID{1}, signer.NodeID(), 10, &types.EpochData{
+							ActiveSetHash:    types.ATXIDList{{1}, {2}}.Hash(),
+							EligibilityCount: 1,
+						}),
+					},
 					activeset: types.ATXIDList{{1}, {2}},
 				},
 				{
@@ -297,10 +370,12 @@ func TestBuild(t *testing.T) {
 					atxs: []*types.VerifiedActivationTx{
 						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
 					},
-					ballot: gballot(types.BallotID{1}, types.ATXID{1}, signer.NodeID(), 10, &types.EpochData{
-						ActiveSetHash:    types.ATXIDList{{1}}.Hash(),
-						EligibilityCount: 10,
-					}),
+					ballots: []*types.Ballot{
+						gballot(types.BallotID{1}, types.ATXID{1}, signer.NodeID(), 10, &types.EpochData{
+							ActiveSetHash:    types.ATXIDList{{1}}.Hash(),
+							EligibilityCount: 10,
+						}),
+					},
 					activeset:      types.ATXIDList{{1}},
 					opinion:        &types.Opinion{},
 					encodeVotesErr: errors.New("test votes"),
@@ -317,16 +392,201 @@ func TestBuild(t *testing.T) {
 					atxs: []*types.VerifiedActivationTx{
 						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
 					},
-					ballot: gballot(types.BallotID{1}, types.ATXID{1}, signer.NodeID(), 10, &types.EpochData{
-						ActiveSetHash:    types.ATXIDList{{1}}.Hash(),
-						EligibilityCount: 10,
-					}),
+					ballots: []*types.Ballot{
+						gballot(types.BallotID{1}, types.ATXID{1}, signer.NodeID(), 10, &types.EpochData{
+							ActiveSetHash:    types.ATXIDList{{1}}.Hash(),
+							EligibilityCount: 10,
+						}),
+					},
 					activeset:      types.ATXIDList{{1}},
 					latestComplete: 10,
 					opinion:        &types.Opinion{},
 					txs:            []types.TransactionID{},
 					publishErr:     errors.New("test publish"),
 					expectErr:      "test publish",
+				},
+			},
+		},
+		{
+			desc: "malicious is not added to activeset",
+			steps: []step{
+				{
+					lid:    10,
+					beacon: types.Beacon{1},
+					atxs: []*types.VerifiedActivationTx{
+						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
+						gatx(types.ATXID{2}, 2, types.NodeID{2}, 1),
+					},
+					identitities: []identity{{
+						id: types.NodeID{2},
+						proof: types.MalfeasanceProof{Proof: types.Proof{
+							Type: types.HareEquivocation,
+							Data: &types.HareProof{},
+						}},
+					}},
+					opinion:        &types.Opinion{Hash: types.Hash32{1}},
+					txs:            []types.TransactionID{},
+					latestComplete: 10,
+					expectProposal: expectProposal(
+						signer, 10, types.ATXID{1}, types.Opinion{Hash: types.Hash32{1}},
+						expectEpochData(
+							gactiveset(types.ATXID{1}),
+							30,
+							types.Beacon{1},
+						),
+						expectCounters(signer, 3, types.Beacon{1}, 777, 4, 5, 8, 13, 18, 19, 21, 24, 25, 26),
+					),
+				},
+			},
+		},
+		{
+			desc: "first block activeset",
+			opts: []Opt{
+				WithNetworkDelay(10 * time.Second),
+				WithMinGoodAtxPercent(50),
+			},
+			steps: []step{
+				{
+					lid:    11,
+					beacon: types.Beacon{1},
+					atxs: []*types.VerifiedActivationTx{
+						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
+						gatx(types.ATXID{2}, 2, types.NodeID{2}, 1, genAtxWithReceived(time.Unix(20, 0))),
+						gatx(types.ATXID{3}, 2, types.NodeID{3}, 1, genAtxWithReceived(time.Unix(20, 0))),
+					},
+					expectErr: "first block",
+				},
+				{
+					lid: 11,
+					blocks: []*types.Block{
+						gblock(10, types.ATXID{4}), // this atx and ballot doesn't exist
+					},
+					expectErr: "actives get ballot",
+				},
+				{
+					lid: 11,
+					ballots: []*types.Ballot{
+						gballot(types.BallotID{11}, types.ATXID{4}, types.NodeID{5}, 10, &types.EpochData{
+							ActiveSetHash: gactiveset(types.ATXID{1}, types.ATXID{2}).Hash(),
+						}),
+					},
+					expectErr: "get active hash for ballot",
+				},
+				{
+					lid:       11,
+					activeset: gactiveset(types.ATXID{1}, types.ATXID{2}),
+					expectErr: "get ATXs from DB: get id 0400000000",
+				},
+				{
+					lid: 11,
+					atxs: []*types.VerifiedActivationTx{
+						gatx(types.ATXID{4}, 2, types.NodeID{4}, 1, genAtxWithReceived(time.Unix(20, 0))),
+					},
+					opinion:        &types.Opinion{Hash: types.Hash32{1}},
+					txs:            []types.TransactionID{},
+					latestComplete: 10,
+					expectProposal: expectProposal(
+						signer, 11, types.ATXID{1}, types.Opinion{Hash: types.Hash32{1}},
+						expectEpochData(
+							gactiveset(types.ATXID{1}, types.ATXID{2}, types.ATXID{4}),
+							10,
+							types.Beacon{1},
+						),
+						expectCounters(signer, 3, types.Beacon{1}, 777, 1, 6, 7),
+					),
+				},
+			},
+		},
+		{
+			desc: "mesh hash selection",
+			opts: []Opt{WithHdist(2)},
+			steps: []step{
+				{
+					lid:    9,
+					beacon: types.Beacon{1},
+					atxs: []*types.VerifiedActivationTx{
+						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
+					},
+					ballots: []*types.Ballot{
+						gballot(types.BallotID{1}, types.ATXID{1}, signer.NodeID(), 9, &types.EpochData{
+							ActiveSetHash:    types.ATXIDList{{1}}.Hash(),
+							EligibilityCount: 10,
+						}),
+					},
+					activeset:      types.ATXIDList{{1}},
+					txs:            []types.TransactionID{},
+					opinion:        &types.Opinion{Hash: types.Hash32{1}},
+					latestComplete: 5, // layers outside hdist not verified
+					expectProposal: expectProposal(
+						signer, 9, types.ATXID{1}, types.Opinion{Hash: types.Hash32{1}},
+						expectRef(types.BallotID{1}),
+						expectCounters(signer, 3, types.Beacon{1}, 777, 0, 2, 3, 9),
+					),
+				},
+				{
+					lid:            10,
+					txs:            []types.TransactionID{},
+					opinion:        &types.Opinion{Hash: types.Hash32{1}},
+					latestComplete: 8, // missing hare output for layer within hdist
+					expectProposal: expectProposal(
+						signer, 10, types.ATXID{1}, types.Opinion{Hash: types.Hash32{1}},
+						expectRef(types.BallotID{1}),
+						expectCounters(signer, 3, types.Beacon{1}, 777, 4, 5, 8),
+					),
+				},
+				{
+					lid:            11,
+					txs:            []types.TransactionID{},
+					opinion:        &types.Opinion{Hash: types.Hash32{1}},
+					latestComplete: 8,
+					hare:           []types.LayerID{9, 10}, // failed to get mesh hash
+					expectProposal: expectProposal(
+						signer, 11, types.ATXID{1}, types.Opinion{Hash: types.Hash32{1}},
+						expectRef(types.BallotID{1}),
+						expectCounters(signer, 3, types.Beacon{1}, 777, 1, 6, 7),
+					),
+				},
+			},
+		},
+		{
+			desc: "mesh hash selection",
+			opts: []Opt{WithHdist(6)},
+			steps: []step{
+				{
+					lid:    9,
+					beacon: types.Beacon{1},
+					atxs: []*types.VerifiedActivationTx{
+						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
+					},
+					ballots: []*types.Ballot{
+						gballot(types.BallotID{1}, types.ATXID{1}, signer.NodeID(), 9, &types.EpochData{
+							ActiveSetHash:    types.ATXIDList{{1}}.Hash(),
+							EligibilityCount: 10,
+						}),
+					},
+					activeset:      types.ATXIDList{{1}},
+					txs:            []types.TransactionID{},
+					opinion:        &types.Opinion{Hash: types.Hash32{1}},
+					latestComplete: 8, // genesis case
+					expectProposal: expectProposal(
+						signer, 9, types.ATXID{1}, types.Opinion{Hash: types.Hash32{1}},
+						expectRef(types.BallotID{1}),
+						expectCounters(signer, 3, types.Beacon{1}, 777, 0, 2, 3, 9),
+					),
+				},
+				{
+					lid:            10,
+					txs:            []types.TransactionID{},
+					opinion:        &types.Opinion{Hash: types.Hash32{1}},
+					latestComplete: 8,
+					hare:           []types.LayerID{6, 7, 8, 9},
+					aggHashes:      []aggHash{{lid: 9, hash: types.Hash32{9, 9, 9}}},
+					expectProposal: expectProposal(
+						signer, 10, types.ATXID{1}, types.Opinion{Hash: types.Hash32{1}},
+						expectRef(types.BallotID{1}),
+						expectMeshHash(types.Hash32{9, 9, 9}),
+						expectCounters(signer, 3, types.Beacon{1}, 777, 4, 5, 8),
+					),
 				},
 			},
 		},
@@ -344,34 +604,51 @@ func TestBuild(t *testing.T) {
 				cdb       = datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 			)
 
-			clock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(func(lid types.LayerID) time.Time {
-				return time.Unix(int64(lid.Uint32()), 0)
-			}).AnyTimes()
+			clock.EXPECT().LayerToTime(gomock.Any()).Return(time.Unix(0, 0)).AnyTimes()
 
-			builder := New(clock, signer, cdb, publisher, tortoise, syncer, conState,
-				append(defaults, WithLogger(logtest.New(t)))...)
+			full := append(defaults, tc.opts...)
+			full = append(full, WithLogger(logtest.New(t)))
+			builder := New(clock, signer, cdb, publisher, tortoise, syncer, conState, full...)
 			for _, step := range tc.steps {
-				if step.beacon != types.EmptyBeacon {
-					require.NoError(t, beacons.Add(cdb, step.lid.GetEpoch(), step.beacon))
+				{
+					if step.beacon != types.EmptyBeacon {
+						require.NoError(t, beacons.Add(cdb, step.lid.GetEpoch(), step.beacon))
+					}
+					for _, iden := range step.identitities {
+						require.NoError(t, identities.SetMalicious(cdb, iden.id, codec.MustEncode(&iden.proof), iden.received))
+					}
+					for _, atx := range step.atxs {
+						require.NoError(t, atxs.Add(cdb, atx))
+					}
+					for _, ballot := range step.ballots {
+						require.NoError(t, ballots.Add(cdb, ballot))
+					}
+					for _, block := range step.blocks {
+						require.NoError(t, blocks.Add(cdb, block))
+						require.NoError(t, layers.SetApplied(cdb, block.LayerIndex, block.ID()))
+					}
+					for _, lid := range step.hare {
+						// block id is irrelevant for this test
+						require.NoError(t, certificates.SetHareOutput(cdb, lid, types.EmptyBlockID))
+					}
+					for _, ahash := range step.aggHashes {
+						require.NoError(t, layers.SetMeshHash(cdb, ahash.lid, ahash.hash))
+					}
+					if step.activeset != nil {
+						require.NoError(t, activesets.Add(cdb, step.activeset.Hash(), &types.EpochActiveSet{Set: step.activeset}))
+					}
 				}
-				for _, atx := range step.atxs {
-					require.NoError(t, atxs.Add(cdb, atx))
-				}
-				if step.ballot != nil {
-					require.NoError(t, ballots.Add(cdb, step.ballot))
-				}
-				if step.activeset != nil {
-					require.NoError(t, activesets.Add(cdb, step.activeset.Hash(), &types.EpochActiveSet{Set: step.activeset}))
-				}
-				if step.opinion != nil {
-					tortoise.EXPECT().TallyVotes(ctx, step.lid)
-					tortoise.EXPECT().EncodeVotes(ctx, gomock.Any()).Return(step.opinion, step.encodeVotesErr)
-				}
-				if step.txs != nil {
-					conState.EXPECT().SelectProposalTXs(step.lid, gomock.Any()).Return(step.txs)
-				}
-				if step.latestComplete != 0 {
-					tortoise.EXPECT().LatestComplete().Return(step.latestComplete)
+				{
+					if step.opinion != nil {
+						tortoise.EXPECT().TallyVotes(ctx, step.lid)
+						tortoise.EXPECT().EncodeVotes(ctx, gomock.Any()).Return(step.opinion, step.encodeVotesErr)
+					}
+					if step.txs != nil {
+						conState.EXPECT().SelectProposalTXs(step.lid, gomock.Any()).Return(step.txs)
+					}
+					if step.latestComplete != 0 {
+						tortoise.EXPECT().LatestComplete().Return(step.latestComplete)
+					}
 				}
 				var decoded *types.Proposal
 				if step.expectProposal != nil || step.publishErr != nil {

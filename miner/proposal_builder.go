@@ -140,7 +140,7 @@ type config struct {
 	networkDelay       time.Duration
 
 	// used to determine whether a node has enough information on the active set this epoch
-	goodAtxPct int
+	GoodAtxPercent int
 }
 
 func (c *config) MarshalLogObject(encoder log.ObjectEncoder) error {
@@ -149,7 +149,7 @@ func (c *config) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("hdist", c.hdist)
 	encoder.AddUint64("min active weight", c.minActiveSetWeight)
 	encoder.AddDuration("network delay", c.networkDelay)
-	encoder.AddInt("good atx percent", c.goodAtxPct)
+	encoder.AddInt("good atx percent", c.GoodAtxPercent)
 	return nil
 }
 
@@ -195,9 +195,9 @@ func WithNetworkDelay(delay time.Duration) Opt {
 	}
 }
 
-func WithMinGoodAtxPct(pct int) Opt {
+func WithMinGoodAtxPercent(percent int) Opt {
 	return func(pb *ProposalBuilder) {
-		pb.cfg.goodAtxPct = pct
+		pb.cfg.GoodAtxPercent = percent
 	}
 }
 
@@ -372,7 +372,7 @@ func (pb *ProposalBuilder) initSessionData(ctx context.Context, lid types.LayerI
 		if errors.Is(err, sql.ErrNotFound) {
 			weight, set, err := generateActiveSet(
 				pb.logger, pb.cdb, pb.signer.MustVRFSigner(), pb.session.epoch, pb.clock.LayerToTime(pb.session.epoch.FirstLayer()),
-				pb.cfg.goodAtxPct, pb.cfg.networkDelay, pb.session.atx, pb.session.atxWeight)
+				pb.cfg.GoodAtxPercent, pb.cfg.networkDelay, pb.session.atx, pb.session.atxWeight)
 			if err != nil {
 				return err
 			}
@@ -511,7 +511,7 @@ func createProposal(
 func ActiveSetFromEpochFirstBlock(db sql.Executor, epoch types.EpochID) ([]types.ATXID, error) {
 	bid, err := layers.FirstAppliedInEpoch(db, epoch)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("first block in epoch %d not found: %w", epoch, err)
 	}
 	return activeSetFromBlock(db, bid)
 }
