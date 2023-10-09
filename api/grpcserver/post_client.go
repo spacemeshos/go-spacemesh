@@ -1,6 +1,7 @@
 package grpcserver
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"time"
@@ -74,8 +75,12 @@ func (pc *postClient) Proof(ctx context.Context, challenge []byte) (*types.Post,
 					}
 				}
 
-				proof := proofResp.GetProof()
 				meta := proofResp.GetMetadata()
+				if !bytes.Equal(meta.GetChallenge(), challenge) {
+					return nil, nil, fmt.Errorf("unexpected challenge: %x", meta.GetChallenge())
+				}
+
+				proof := proofResp.GetProof()
 				return &types.Post{
 						Nonce:   proof.GetNonce(),
 						Indices: proof.GetIndices(),
