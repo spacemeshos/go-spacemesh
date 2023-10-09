@@ -10,7 +10,6 @@ import (
 
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/initialization"
-	"github.com/spacemeshos/post/proving"
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -494,37 +493,6 @@ func (mgr *PostSetupManager) Reset() error {
 	// Reset internal state.
 	mgr.state = PostSetupStateNotStarted
 	return nil
-}
-
-// Deprecated: GenerateProof generates a new Post.
-func (mgr *PostSetupManager) GenerateProof(ctx context.Context, challenge []byte, options ...proving.OptionFunc) (*types.Post, *types.PostMetadata, error) {
-	mgr.mu.Lock()
-
-	if mgr.state != PostSetupStateComplete {
-		mgr.mu.Unlock()
-		return nil, nil, errNotComplete
-	}
-	mgr.mu.Unlock()
-
-	opts := []proving.OptionFunc{
-		proving.WithDataSource(mgr.cfg.ToConfig(), mgr.id.Bytes(), mgr.commitmentAtxId.Bytes(), mgr.lastOpts.DataDir),
-		proving.WithNonces(mgr.provingOpts.Nonces),
-		proving.WithThreads(mgr.provingOpts.Threads),
-		proving.WithPowFlags(mgr.provingOpts.Flags),
-	}
-	opts = append(opts, options...)
-
-	proof, proofMetadata, err := proving.Generate(ctx, challenge, mgr.cfg.ToConfig(), mgr.logger, opts...)
-	if err != nil {
-		return nil, nil, fmt.Errorf("generate proof: %w", err)
-	}
-
-	p := (*types.Post)(proof)
-	m := &types.PostMetadata{
-		Challenge:     proofMetadata.Challenge,
-		LabelsPerUnit: proofMetadata.LabelsPerUnit,
-	}
-	return p, m, nil
 }
 
 // VRFNonce returns the VRF nonce found during initialization.
