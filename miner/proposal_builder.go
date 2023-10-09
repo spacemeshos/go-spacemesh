@@ -35,6 +35,28 @@ import (
 
 var errAtxNotAvailable = errors.New("atx not available")
 
+//go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./proposal_builder.go
+
+type conservativeState interface {
+	SelectProposalTXs(types.LayerID, int) []types.TransactionID
+}
+
+type votesEncoder interface {
+	LatestComplete() types.LayerID
+	TallyVotes(context.Context, types.LayerID)
+	EncodeVotes(context.Context, ...tortoise.EncodeVotesOpts) (*types.Opinion, error)
+}
+
+type mesh interface {
+	GetMalfeasanceProof(nodeID types.NodeID) (*types.MalfeasanceProof, error)
+}
+
+type layerClock interface {
+	AwaitLayer(layerID types.LayerID) <-chan struct{}
+	CurrentLayer() types.LayerID
+	LayerToTime(types.LayerID) time.Time
+}
+
 // ProposalBuilder builds Proposals for a miner.
 type ProposalBuilder struct {
 	logger log.Log
