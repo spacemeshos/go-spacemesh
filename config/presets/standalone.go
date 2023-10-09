@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"time"
 
-	postCfg "github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/initialization"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -62,7 +61,7 @@ func standalone() config.Config {
 	conf.SMESHING.Opts.NumUnits = 1
 	conf.SMESHING.Opts.Throttle = true
 	conf.SMESHING.Opts.DataDir = conf.DataDirParent
-	conf.SMESHING.ProvingOpts.Flags = postCfg.RecommendedPowFlags()
+	conf.SMESHING.ProvingOpts.RandomXMode = "light"
 
 	conf.Beacon.Kappa = 40
 	conf.Beacon.Theta = big.NewRat(1, 4)

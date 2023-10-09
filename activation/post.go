@@ -106,17 +106,19 @@ func (id *PostProviderID) Value() *int64 {
 type PostProvingOpts struct {
 	// Number of threads used in POST proving process.
 	Threads uint `mapstructure:"smeshing-opts-proving-threads"`
+
 	// Number of nonces tried in parallel in POST proving process.
 	Nonces uint `mapstructure:"smeshing-opts-proving-nonces"`
-	// Flags used in the PoW computation.
-	Flags config.PowFlags `mapstructure:"smeshing-opts-proving-powflags"`
+
+	// RandomXMode is the mode used for RandomX computations.
+	RandomXMode string `mapstructure:"smeshing-opts-proving-randomx-mode"`
 }
 
 func DefaultPostProvingOpts() PostProvingOpts {
 	return PostProvingOpts{
-		Threads: 1,
-		Nonces:  16,
-		Flags:   config.DefaultProvingPowFlags(),
+		Threads:     1,
+		Nonces:      16,
+		RandomXMode: "fast",
 	}
 }
 

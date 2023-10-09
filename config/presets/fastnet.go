@@ -5,7 +5,6 @@ import (
 	"math/big"
 	"time"
 
-	postCfg "github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/initialization"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -77,7 +76,7 @@ func fastnet() config.Config {
 	conf.SMESHING.Opts.ComputeBatchSize = 128
 	conf.SMESHING.Opts.Scrypt.N = 2 // faster scrypt
 	// Override proof of work flags to use light mode (less memory intensive)
-	conf.SMESHING.ProvingOpts.Flags = postCfg.RecommendedPowFlags()
+	conf.SMESHING.ProvingOpts.RandomXMode = "light"
 
 	conf.Beacon.Kappa = 40
 	conf.Beacon.Theta = big.NewRat(1, 4)
