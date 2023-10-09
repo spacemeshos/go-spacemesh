@@ -496,7 +496,7 @@ func (mgr *PostSetupManager) Reset() error {
 	return nil
 }
 
-// GenerateProof generates a new Post.
+// Deprecated: GenerateProof generates a new Post.
 func (mgr *PostSetupManager) GenerateProof(ctx context.Context, challenge []byte, options ...proving.OptionFunc) (*types.Post, *types.PostMetadata, error) {
 	mgr.mu.Lock()
 
