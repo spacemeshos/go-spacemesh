@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math/rand"
+	"os"
 	"testing"
 	"time"
 
@@ -31,6 +32,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
+
+const layersPerEpoch = 5
+
+func TestMain(m *testing.M) {
+	types.SetLayersPerEpoch(layersPerEpoch)
+
+	res := m.Run()
+	os.Exit(res)
+}
 
 type genAtxOpt func(*types.ActivationTx)
 
@@ -747,5 +757,90 @@ func TestStartStop(t *testing.T) {
 	case <-time.After(time.Second):
 		require.FailNow(t, "test didn't complete in 1s")
 	case <-wait:
+	}
+}
+
+func TestGradeAtx(t *testing.T) {
+	const delta = 10
+	for _, tc := range []struct {
+		desc      string
+		malicious bool
+		// distance in second from the epoch start time
+		atxReceived, malReceived int
+		result                   atxGrade
+	}{
+		{
+			desc:        "very early atx",
+			atxReceived: -41,
+			result:      good,
+		},
+		{
+			desc:        "very early atx, late malfeasance",
+			atxReceived: -41,
+			malicious:   true,
+			malReceived: 0,
+			result:      good,
+		},
+		{
+			desc:        "very early atx, malicious",
+			atxReceived: -41,
+			malicious:   true,
+			malReceived: -10,
+			result:      acceptable,
+		},
+		{
+			desc:        "very early atx, early malicious",
+			atxReceived: -41,
+			malicious:   true,
+			malReceived: -11,
+			result:      evil,
+		},
+		{
+			desc:        "early atx",
+			atxReceived: -31,
+			result:      acceptable,
+		},
+		{
+			desc:        "early atx, late malicious",
+			atxReceived: -31,
+			malicious:   true,
+			malReceived: -10,
+			result:      acceptable,
+		},
+		{
+			desc:        "early atx, early malicious",
+			atxReceived: -31,
+			malicious:   true,
+			malReceived: -11,
+			result:      evil,
+		},
+		{
+			desc:        "late atx",
+			atxReceived: -30,
+			result:      evil,
+		},
+		{
+			desc:        "very late atx",
+			atxReceived: 0,
+			result:      evil,
+		},
+	} {
+		tc := tc
+		t.Run(tc.desc, func(t *testing.T) {
+			mockMsh := mocks.NewMockmesh(gomock.NewController(t))
+			epochStart := time.Now()
+			nodeID := types.RandomNodeID()
+			if tc.malicious {
+				proof := &types.MalfeasanceProof{}
+				proof.SetReceived(epochStart.Add(time.Duration(tc.malReceived) * time.Second))
+				mockMsh.EXPECT().GetMalfeasanceProof(nodeID).Return(proof, nil)
+			} else {
+				mockMsh.EXPECT().GetMalfeasanceProof(nodeID).Return(nil, sql.ErrNotFound)
+			}
+			atxReceived := epochStart.Add(time.Duration(tc.atxReceived) * time.Second)
+			got, err := gradeAtx(mockMsh, nodeID, atxReceived, epochStart, delta*time.Second)
+			require.NoError(t, err)
+			require.Equal(t, tc.result, got)
+		})
 	}
 }

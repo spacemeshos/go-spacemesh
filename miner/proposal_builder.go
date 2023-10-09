@@ -597,11 +597,11 @@ func generateActiveSet(
 		numOmitted  = 0
 	)
 	if err := cdb.IterateEpochATXHeaders(target, func(header *types.ActivationTxHeader) error {
-		grade, err := GradeAtx(cdb, header.NodeID, header.Received, epochStart, networkDelay)
+		grade, err := gradeAtx(cdb, header.NodeID, header.Received, epochStart, networkDelay)
 		if err != nil {
 			return err
 		}
-		if grade != Good && header.NodeID != signer.NodeID() {
+		if grade != good && header.NodeID != signer.NodeID() {
 			logger.With().Info("atx omitted from active set",
 				header.ID,
 				log.Int("grade", int(grade)),
@@ -669,4 +669,33 @@ func calcEligibilityProofs(
 		})
 	}
 	return proofs
+}
+
+// atxGrade describes the grade of an ATX as described in
+// https://community.spacemesh.io/t/grading-atxs-for-the-active-set/335
+//
+// let s be the start of the epoch, and δ the network propagation time.
+// grade 0: ATX was received at time t >= s-3δ, or an equivocation proof was received by time s-δ.
+// grade 1: ATX was received at time t < s-3δ before the start of the epoch, and no equivocation proof was received by time s-δ.
+// grade 2: ATX was received at time t < s-4δ, and no equivocation proof was received for that id until time s.
+type atxGrade int
+
+const (
+	evil atxGrade = iota
+	acceptable
+	good
+)
+
+func gradeAtx(msh mesh, nodeID types.NodeID, atxReceived, epochStart time.Time, delta time.Duration) (atxGrade, error) {
+	proof, err := msh.GetMalfeasanceProof(nodeID)
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
+		return good, err
+	}
+	if atxReceived.Before(epochStart.Add(-4*delta)) && (proof == nil || !proof.Received().Before(epochStart)) {
+		return good, nil
+	}
+	if atxReceived.Before(epochStart.Add(-3*delta)) && (proof == nil || !proof.Received().Before(epochStart.Add(-delta))) {
+		return acceptable, nil
+	}
+	return evil, nil
 }
