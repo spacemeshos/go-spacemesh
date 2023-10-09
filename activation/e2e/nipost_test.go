@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/spacemeshos/poet/logging"
-	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -148,10 +147,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	cfg := activation.DefaultPostConfig()
 	cdb := datastore.NewCachedDB(sql.InMemory(), log.NewFromLog(logger))
 
-	provingOpts := activation.DefaultPostProvingOpts()
-	provingOpts.Flags = config.RecommendedPowFlags()
-
-	mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX, provingOpts)
+	mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX)
 	require.NoError(t, err)
 
 	postDir := t.TempDir()
@@ -290,10 +286,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	cfg := activation.DefaultPostConfig()
 	cdb := datastore.NewCachedDB(sql.InMemory(), log.NewFromLog(logger))
 
-	provingOpts := activation.DefaultPostProvingOpts()
-	provingOpts.Flags = config.RecommendedPowFlags()
-
-	mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX, provingOpts)
+	mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX)
 	require.NoError(t, err)
 
 	epoch := layersPerEpoch * layerDuration

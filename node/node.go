@@ -835,7 +835,6 @@ func (app *App) initServices(ctx context.Context) error {
 		app.Config.POST,
 		app.addLogger(PostLogger, lg).Zap(),
 		app.cachedDB, goldenATXID,
-		app.Config.SMESHING.ProvingOpts,
 	)
 	if err != nil {
 		app.log.Panic("failed to create post setup manager: %v", err)

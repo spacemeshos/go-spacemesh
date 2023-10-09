@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -42,9 +41,7 @@ func initPost(tb testing.TB, log *zap.Logger, dir string) {
 	goldenATXID := types.ATXID{2, 3, 4}
 
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
-	provingOpts := activation.DefaultPostProvingOpts()
-	provingOpts.Flags = config.RecommendedPowFlags()
-	mgr, err := activation.NewPostSetupManager(id, cfg, log.Named("manager"), cdb, goldenATXID, provingOpts)
+	mgr, err := activation.NewPostSetupManager(id, cfg, log.Named("manager"), cdb, goldenATXID)
 	require.NoError(tb, err)
 
 	ctx, cancel := context.WithCancel(context.Background())

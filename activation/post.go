@@ -217,15 +217,14 @@ type PostSetupManager struct {
 	db          *datastore.CachedDB
 	goldenATXID types.ATXID
 
-	mu          sync.Mutex                  // mu protects setting the values below.
-	lastOpts    *PostSetupOpts              // the last options used to initiate a Post setup session.
-	state       PostSetupState              // state is the current state of the Post setup.
-	init        *initialization.Initializer // init is the current initializer instance.
-	provingOpts PostProvingOpts
+	mu       sync.Mutex                  // mu protects setting the values below.
+	lastOpts *PostSetupOpts              // the last options used to initiate a Post setup session.
+	state    PostSetupState              // state is the current state of the Post setup.
+	init     *initialization.Initializer // init is the current initializer instance.
 }
 
 // NewPostSetupManager creates a new instance of PostSetupManager.
-func NewPostSetupManager(id types.NodeID, cfg PostConfig, logger *zap.Logger, db *datastore.CachedDB, goldenATXID types.ATXID, provingOpts PostProvingOpts) (*PostSetupManager, error) {
+func NewPostSetupManager(id types.NodeID, cfg PostConfig, logger *zap.Logger, db *datastore.CachedDB, goldenATXID types.ATXID) (*PostSetupManager, error) {
 	mgr := &PostSetupManager{
 		id:          id,
 		cfg:         cfg,
@@ -233,7 +232,6 @@ func NewPostSetupManager(id types.NodeID, cfg PostConfig, logger *zap.Logger, db
 		db:          db,
 		goldenATXID: goldenATXID,
 		state:       PostSetupStateNotStarted,
-		provingOpts: provingOpts,
 	}
 
 	return mgr, nil

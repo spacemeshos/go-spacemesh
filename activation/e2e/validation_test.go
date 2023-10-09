@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -35,10 +34,7 @@ func TestValidator_Validate(t *testing.T) {
 	cfg := activation.DefaultPostConfig()
 	cdb := datastore.NewCachedDB(sql.InMemory(), log.NewFromLog(logger))
 
-	provingOpts := activation.DefaultPostProvingOpts()
-	provingOpts.Flags = config.RecommendedPowFlags()
-
-	mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX, provingOpts)
+	mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX)
 	require.NoError(t, err)
 
 	postDir := t.TempDir()

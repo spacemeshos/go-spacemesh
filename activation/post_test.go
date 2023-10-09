@@ -418,9 +418,7 @@ func newTestPostManager(tb testing.TB) *testPostManager {
 	goldenATXID := types.ATXID{2, 3, 4}
 
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
-	provingOpts := DefaultPostProvingOpts()
-	provingOpts.Flags = config.RecommendedPowFlags()
-	mgr, err := NewPostSetupManager(id, DefaultPostConfig(), zaptest.NewLogger(tb), cdb, goldenATXID, provingOpts)
+	mgr, err := NewPostSetupManager(id, DefaultPostConfig(), zaptest.NewLogger(tb), cdb, goldenATXID)
 	require.NoError(tb, err)
 
 	return &testPostManager{
