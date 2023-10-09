@@ -470,7 +470,6 @@ func Test_Validate_PostMetadata(t *testing.T) {
 }
 
 func TestValidator_Validate(t *testing.T) {
-	t.Parallel()
 	r := require.New(t)
 
 	challenge := types.NIPostChallenge{

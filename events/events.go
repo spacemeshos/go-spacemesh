@@ -107,6 +107,24 @@ func EmitPoetWaitProof(publish, target types.EpochID, wait time.Duration) {
 	)
 }
 
+func EmitPostServiceStarted() {
+	const help = "Node started local PoST service."
+	emitUserEvent(
+		help,
+		false,
+		&pb.Event_PostServiceStarted{},
+	)
+}
+
+func EmitPostServiceStopped() {
+	const help = "Node stopped local PoST service."
+	emitUserEvent(
+		help,
+		false,
+		&pb.Event_PostServiceStopped{},
+	)
+}
+
 func EmitPostStart(challenge []byte) {
 	const help = "Node started PoST execution using the challenge from PoET."
 	emitUserEvent(

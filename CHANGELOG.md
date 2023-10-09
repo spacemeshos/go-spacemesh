@@ -4,6 +4,12 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ## UNRELEASED
 
+### Upgrade information
+
+### Highlights
+
+### Features
+
 ### Improvements
 
 * [#5118](https://github.com/spacemeshos/go-spacemesh/pull/5118) reduce number of tortoise results returned after recovery.
@@ -11,6 +17,8 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 this is hotfix for a bug introduced in v1.2.0. in rare conditions node may loop with the following warning:
 
 > 2023-10-02T15:28:14.002+0200 WARN fd68b.sync mesh failed to process layer from sync {"node_id": "fd68b9397572556c2f329f3e5af2faf23aef85dbbbb7e38447fae2f4ef38899f", "module": "sync", "sessionId": "29422935-68d6-47d1-87a8-02293aa181f3", "layer_id": 23104, "errmsg": "requested layer 8063 is before evicted 13102", "name": "sync"}
+
+* [#5091](https://github.com/spacemeshos/go-spacemesh/pull/5091) First stage of separating PoST from the node into its own service.
 
 ## v1.2.0
 
@@ -42,6 +50,7 @@ Support for old certificate sync protocol is dropped. This update is incompatibl
 * [#5067](https://github.com/spacemeshos/go-spacemesh/pull/5067) dbstat virtual table can be read periodically to collect table/index sizes.
 
 In order to enable provide following configuration:
+
 ```json
 "main": {
     "db-size-metering-interval": "10m"

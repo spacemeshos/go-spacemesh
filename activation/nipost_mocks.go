@@ -11,6 +11,7 @@ package activation
 import (
 	context "context"
 	reflect "reflect"
+	time "time"
 
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	gomock "go.uber.org/mock/gomock"
@@ -196,18 +197,18 @@ func (c *PoetProvingServiceClientProofCall) DoAndReturn(f func(context.Context, 
 }
 
 // Submit mocks base method.
-func (m *MockPoetProvingServiceClient) Submit(ctx context.Context, prefix, challenge []byte, signature types.EdSignature, nodeID types.NodeID, pow PoetPoW) (*types.PoetRound, error) {
+func (m *MockPoetProvingServiceClient) Submit(ctx context.Context, deadline time.Time, prefix, challenge []byte, signature types.EdSignature, nodeID types.NodeID, pow PoetPoW) (*types.PoetRound, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Submit", ctx, prefix, challenge, signature, nodeID, pow)
+	ret := m.ctrl.Call(m, "Submit", ctx, deadline, prefix, challenge, signature, nodeID, pow)
 	ret0, _ := ret[0].(*types.PoetRound)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Submit indicates an expected call of Submit.
-func (mr *MockPoetProvingServiceClientMockRecorder) Submit(ctx, prefix, challenge, signature, nodeID, pow any) *PoetProvingServiceClientSubmitCall {
+func (mr *MockPoetProvingServiceClientMockRecorder) Submit(ctx, deadline, prefix, challenge, signature, nodeID, pow any) *PoetProvingServiceClientSubmitCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Submit", reflect.TypeOf((*MockPoetProvingServiceClient)(nil).Submit), ctx, prefix, challenge, signature, nodeID, pow)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Submit", reflect.TypeOf((*MockPoetProvingServiceClient)(nil).Submit), ctx, deadline, prefix, challenge, signature, nodeID, pow)
 	return &PoetProvingServiceClientSubmitCall{Call: call}
 }
 
@@ -223,13 +224,13 @@ func (c *PoetProvingServiceClientSubmitCall) Return(arg0 *types.PoetRound, arg1 
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *PoetProvingServiceClientSubmitCall) Do(f func(context.Context, []byte, []byte, types.EdSignature, types.NodeID, PoetPoW) (*types.PoetRound, error)) *PoetProvingServiceClientSubmitCall {
+func (c *PoetProvingServiceClientSubmitCall) Do(f func(context.Context, time.Time, []byte, []byte, types.EdSignature, types.NodeID, PoetPoW) (*types.PoetRound, error)) *PoetProvingServiceClientSubmitCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *PoetProvingServiceClientSubmitCall) DoAndReturn(f func(context.Context, []byte, []byte, types.EdSignature, types.NodeID, PoetPoW) (*types.PoetRound, error)) *PoetProvingServiceClientSubmitCall {
+func (c *PoetProvingServiceClientSubmitCall) DoAndReturn(f func(context.Context, time.Time, []byte, []byte, types.EdSignature, types.NodeID, PoetPoW) (*types.PoetRound, error)) *PoetProvingServiceClientSubmitCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

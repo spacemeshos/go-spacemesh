@@ -12,11 +12,11 @@ import (
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/proving"
+	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/metrics/public"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -94,7 +94,7 @@ type PostProviderID struct {
 }
 
 // String implements pflag.Value.String.
-func (id *PostProviderID) String() string {
+func (id PostProviderID) String() string {
 	if id.value == nil {
 		return ""
 	}
@@ -244,7 +244,7 @@ type PostSetupManager struct {
 	commitmentAtxId types.ATXID
 
 	cfg         PostConfig
-	logger      log.Log
+	logger      *zap.Logger
 	db          *datastore.CachedDB
 	goldenATXID types.ATXID
 
@@ -256,7 +256,7 @@ type PostSetupManager struct {
 }
 
 // NewPostSetupManager creates a new instance of PostSetupManager.
-func NewPostSetupManager(id types.NodeID, cfg PostConfig, logger log.Log, db *datastore.CachedDB, goldenATXID types.ATXID, provingOpts PostProvingOpts) (*PostSetupManager, error) {
+func NewPostSetupManager(id types.NodeID, cfg PostConfig, logger *zap.Logger, db *datastore.CachedDB, goldenATXID types.ATXID, provingOpts PostProvingOpts) (*PostSetupManager, error) {
 	mgr := &PostSetupManager{
 		id:          id,
 		cfg:         cfg,
@@ -358,13 +358,13 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	mgr.logger.With().Info("post setup session starting",
-		log.String("node_id", mgr.id.String()),
-		log.String("commitment_atx", mgr.commitmentAtxId.String()),
-		log.String("data_dir", mgr.lastOpts.DataDir),
-		log.String("num_units", fmt.Sprintf("%d", mgr.lastOpts.NumUnits)),
-		log.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
-		log.String("provider", fmt.Sprintf("%d", mgr.lastOpts.ProviderID)),
+	mgr.logger.Info("post setup session starting",
+		zap.Stringer("node_id", mgr.id),
+		zap.Stringer("commitment_atx", mgr.commitmentAtxId),
+		zap.String("data_dir", mgr.lastOpts.DataDir),
+		zap.Uint32("num_units", mgr.lastOpts.NumUnits),
+		zap.Uint64("labels_per_unit", mgr.cfg.LabelsPerUnit),
+		zap.Stringer("provider", mgr.lastOpts.ProviderID),
 	)
 	public.InitStart.Set(float64(mgr.lastOpts.NumUnits))
 	events.EmitInitStart(mgr.id, mgr.commitmentAtxId)
@@ -379,12 +379,12 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context) error {
 		mgr.state = PostSetupStateStopped
 		return err
 	case errors.As(err, &errLabelMismatch):
-		mgr.logger.With().Error("post setup session failed due to an issue with the initialization provider", log.Err(errLabelMismatch))
+		mgr.logger.Error("post setup session failed due to an issue with the initialization provider", zap.Error(errLabelMismatch))
 		mgr.state = PostSetupStateError
 		events.EmitInitFailure(mgr.id, mgr.commitmentAtxId, errLabelMismatch)
 		return nil
 	case err != nil:
-		mgr.logger.With().Error("post setup session failed", log.Err(err))
+		mgr.logger.Error("post setup session failed", zap.Error(err))
 		mgr.state = PostSetupStateError
 		events.EmitInitFailure(mgr.id, mgr.commitmentAtxId, err)
 		return err
@@ -392,13 +392,13 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context) error {
 	public.InitEnd.Set(float64(mgr.lastOpts.NumUnits))
 	events.EmitInitComplete()
 
-	mgr.logger.With().Info("post setup completed",
-		log.String("node_id", mgr.id.String()),
-		log.String("commitment_atx", mgr.commitmentAtxId.String()),
-		log.String("data_dir", mgr.lastOpts.DataDir),
-		log.String("num_units", fmt.Sprintf("%d", mgr.lastOpts.NumUnits)),
-		log.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
-		log.String("provider", fmt.Sprintf("%d", mgr.lastOpts.ProviderID)),
+	mgr.logger.Info("post setup completed",
+		zap.Stringer("node_id", mgr.id),
+		zap.Stringer("commitment_atx", mgr.commitmentAtxId),
+		zap.String("data_dir", mgr.lastOpts.DataDir),
+		zap.Uint32("num_units", mgr.lastOpts.NumUnits),
+		zap.Uint64("labels_per_unit", mgr.cfg.LabelsPerUnit),
+		zap.Stringer("provider", mgr.lastOpts.ProviderID),
 	)
 	mgr.state = PostSetupStateComplete
 	return nil
@@ -420,15 +420,19 @@ func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSe
 
 	// TODO(mafa): remove this, see https://github.com/spacemeshos/go-spacemesh/issues/4801
 	if opts.ProviderID.Value() != nil && *opts.ProviderID.Value() == -1 {
-		mgr.logger.Warning("DEPRECATED: auto-determining compute provider is deprecated, please specify a valid provider ID in the config file")
+		mgr.logger.Warn("DEPRECATED: auto-determining compute provider is deprecated, please specify a valid provider ID in the config file")
 
 		p, err := mgr.BestProvider()
 		if err != nil {
 			return err
 		}
 
-		mgr.logger.Warning("DEPRECATED: found best compute provider: id: %d, model: %v, device type: %v", p.ID, p.Model, p.DeviceType)
-		mgr.logger.Warning("DEPRECATED: please update your config file: {\"smeshing\": {\"smeshing-opts\": {\"smeshing-opts-provider\": %d }}}", p.ID)
+		mgr.logger.Warn("DEPRECATED: found best compute provider",
+			zap.Uint32("id", p.ID),
+			zap.String("model", p.Model),
+			zap.Stringer("device type", p.DeviceType),
+		)
+		mgr.logger.Sugar().Warnf("DEPRECATED: please update your config file: {\"smeshing\": {\"smeshing-opts\": {\"smeshing-opts-provider\": %d }}}", p.ID)
 		opts.ProviderID.SetInt64(int64(p.ID))
 	}
 
@@ -443,7 +447,7 @@ func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSe
 		initialization.WithCommitmentAtxId(mgr.commitmentAtxId.Bytes()),
 		initialization.WithConfig(mgr.cfg.ToConfig()),
 		initialization.WithInitOpts(opts.ToInitOpts()),
-		initialization.WithLogger(mgr.logger.Zap()),
+		initialization.WithLogger(mgr.logger),
 	)
 	if err != nil {
 		mgr.state = PostSetupStateError
@@ -499,7 +503,7 @@ func (mgr *PostSetupManager) findCommitmentAtx(ctx context.Context) (types.ATXID
 	atx, err := atxs.GetIDWithMaxHeight(mgr.db, types.EmptyNodeID)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
-		mgr.logger.With().Info("using golden atx as commitment atx")
+		mgr.logger.Info("using golden atx as commitment atx")
 		return mgr.goldenATXID, nil
 	case err != nil:
 		return types.EmptyATXID, fmt.Errorf("get commitment atx: %w", err)
@@ -540,7 +544,7 @@ func (mgr *PostSetupManager) GenerateProof(ctx context.Context, challenge []byte
 	}
 	opts = append(opts, options...)
 
-	proof, proofMetadata, err := proving.Generate(ctx, challenge, mgr.cfg.ToConfig(), mgr.logger.Zap(), opts...)
+	proof, proofMetadata, err := proving.Generate(ctx, challenge, mgr.cfg.ToConfig(), mgr.logger, opts...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("generate proof: %w", err)
 	}

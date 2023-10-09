@@ -80,3 +80,7 @@ type SmeshingProvider interface {
 	SetCoinbase(coinbase types.Address)
 	UpdatePoETServers(ctx context.Context, endpoints []string) error
 }
+
+type PostClient interface {
+	Proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error)
+}

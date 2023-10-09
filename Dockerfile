@@ -56,6 +56,7 @@ FROM linux AS spacemesh
 
 # Finally we copy the statically compiled Go binary.
 COPY --from=builder /src/build/go-spacemesh /bin/
+COPY --from=builder /src/build/service /bin/
 COPY --from=builder /src/build/libpost.so /bin/
 COPY --from=builder /src/build/gen-p2p-identity /bin/
 

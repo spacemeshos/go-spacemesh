@@ -1645,3 +1645,66 @@ func (c *SmeshingProviderUpdatePoETServersCall) DoAndReturn(f func(context.Conte
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
+
+// MockPostClient is a mock of PostClient interface.
+type MockPostClient struct {
+	ctrl     *gomock.Controller
+	recorder *MockPostClientMockRecorder
+}
+
+// MockPostClientMockRecorder is the mock recorder for MockPostClient.
+type MockPostClientMockRecorder struct {
+	mock *MockPostClient
+}
+
+// NewMockPostClient creates a new mock instance.
+func NewMockPostClient(ctrl *gomock.Controller) *MockPostClient {
+	mock := &MockPostClient{ctrl: ctrl}
+	mock.recorder = &MockPostClientMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockPostClient) EXPECT() *MockPostClientMockRecorder {
+	return m.recorder
+}
+
+// Proof mocks base method.
+func (m *MockPostClient) Proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Proof", ctx, challenge)
+	ret0, _ := ret[0].(*types.Post)
+	ret1, _ := ret[1].(*types.PostMetadata)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// Proof indicates an expected call of Proof.
+func (mr *MockPostClientMockRecorder) Proof(ctx, challenge any) *PostClientProofCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Proof", reflect.TypeOf((*MockPostClient)(nil).Proof), ctx, challenge)
+	return &PostClientProofCall{Call: call}
+}
+
+// PostClientProofCall wrap *gomock.Call
+type PostClientProofCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *PostClientProofCall) Return(arg0 *types.Post, arg1 *types.PostMetadata, arg2 error) *PostClientProofCall {
+	c.Call = c.Call.Return(arg0, arg1, arg2)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *PostClientProofCall) Do(f func(context.Context, []byte) (*types.Post, *types.PostMetadata, error)) *PostClientProofCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *PostClientProofCall) DoAndReturn(f func(context.Context, []byte) (*types.Post, *types.PostMetadata, error)) *PostClientProofCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}

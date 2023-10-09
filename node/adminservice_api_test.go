@@ -28,6 +28,7 @@ func TestPeerInfoApi(t *testing.T) {
 	l := logtest.New(t)
 	networkSize := 3
 	network := NewTestNetwork(t, cfg, l, networkSize)
+	time.Sleep(time.Second) // wait for network to start, ensures connection uptimes will be > 0 on windows
 	infos := make([][]*pb.PeerInfo, networkSize)
 	for i, app := range network {
 		adminapi := pb.NewAdminServiceClient(app.Conn)

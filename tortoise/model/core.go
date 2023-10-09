@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
+	"github.com/spacemeshos/go-spacemesh/sql/beacons"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
@@ -32,13 +33,12 @@ func newCore(rng *rand.Rand, id string, logger log.Log) *core {
 		panic(err)
 	}
 	c := &core{
-		id:      id,
-		logger:  logger,
-		rng:     rng,
-		cdb:     cdb,
-		beacons: newBeaconStore(),
-		units:   units,
-		signer:  sig,
+		id:     id,
+		logger: logger,
+		rng:    rng,
+		cdb:    cdb,
+		units:  units,
+		signer: sig,
 	}
 	cfg := tortoise.DefaultConfig()
 	cfg.LayerSize = layerSize
@@ -59,7 +59,6 @@ type core struct {
 	rng    *rand.Rand
 
 	cdb      *datastore.CachedDB
-	beacons  *beaconStore
 	tortoise *tortoise.Tortoise
 
 	// generated on setup
@@ -107,11 +106,11 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		if c.refBallot != nil {
 			ballot.RefBallot = *c.refBallot
 		} else {
-			beacon, err := c.beacons.GetBeacon(ev.LayerID.GetEpoch())
+			beacon, err := beacons.Get(c.cdb, ev.LayerID.GetEpoch())
 			if err != nil {
 				beacon = types.Beacon{}
 				c.rng.Read(beacon[:])
-				c.beacons.StoreBeacon(ev.LayerID.GetEpoch(), beacon)
+				beacons.Set(c.cdb, ev.LayerID.GetEpoch(), beacon)
 			}
 			ballot.EpochData = &types.EpochData{
 				ActiveSetHash:    types.Hash32{1, 2, 3},
@@ -129,7 +128,8 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		m.Send(MessageBallot{Ballot: ballot})
 	case MessageLayerEnd:
 		if ev.LayerID.After(types.GetEffectiveGenesis()) {
-			tortoise.RecoverLayer(context.Background(), c.tortoise, c.cdb, c.beacons, ev.LayerID, ev.LayerID, ev.LayerID, ev.LayerID)
+			tortoise.RecoverLayer(context.Background(), c.tortoise, c.cdb, ev.LayerID, c.tortoise.OnBallot)
+			c.tortoise.TallyVotes(context.Background(), ev.LayerID)
 			m.Notify(EventVerified{ID: c.id, Verified: c.tortoise.LatestComplete(), Layer: ev.LayerID})
 		}
 
@@ -172,30 +172,8 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		}
 		atxs.Add(c.cdb, vAtx)
 	case MessageBeacon:
-		c.beacons.StoreBeacon(ev.EpochID, ev.Beacon)
+		beacons.Add(c.cdb, ev.EpochID+1, ev.Beacon)
 	case MessageCoinflip:
 		layers.SetWeakCoin(c.cdb, ev.LayerID, ev.Coinflip)
 	}
-}
-
-func newBeaconStore() *beaconStore {
-	return &beaconStore{
-		beacons: map[types.EpochID]types.Beacon{},
-	}
-}
-
-type beaconStore struct {
-	beacons map[types.EpochID]types.Beacon
-}
-
-func (b *beaconStore) GetBeacon(eid types.EpochID) (types.Beacon, error) {
-	beacon, exist := b.beacons[eid-1]
-	if !exist {
-		return types.Beacon{}, sql.ErrNotFound
-	}
-	return beacon, nil
-}
-
-func (b *beaconStore) StoreBeacon(eid types.EpochID, beacon types.Beacon) {
-	b.beacons[eid] = beacon
 }

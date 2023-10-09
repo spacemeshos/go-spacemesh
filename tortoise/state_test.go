@@ -361,14 +361,6 @@ func TestStateDecodeVotes(t *testing.T) {
 			nil,
 			"conflict with abstain",
 		},
-		{
-			"vote outside window",
-			[]*testOpinion{
-				newTestOpinion(genesis.Sub(2)).against("a", 100),
-			},
-			nil,
-			"outside the window",
-		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
