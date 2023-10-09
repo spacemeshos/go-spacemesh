@@ -83,29 +83,21 @@ func (nb *NIPostBuilder) persistState() {
 
 // NIPostBuilder holds the required state and dependencies to create Non-Interactive Proofs of Space-Time (NIPost).
 type NIPostBuilder struct {
-	nodeID       types.NodeID
-	dataDir      string
-	nipostClient nipostClient
-	poetProvers  map[string]PoetProvingServiceClient
-	poetDB       poetDbAPI
-	state        *types.NIPostBuilderState
-	log          log.Log
-	signer       *signing.EdSigner
-	layerClock   layerClock
-	poetCfg      PoetConfig
-	validator    nipostValidator
+	nodeID      types.NodeID
+	dataDir     string
+	poetProvers map[string]PoetProvingServiceClient
+	poetDB      poetDbAPI
+	state       *types.NIPostBuilderState
+	log         log.Log
+	signer      *signing.EdSigner
+	layerClock  layerClock
+	poetCfg     PoetConfig
 
 	postMux    sync.Mutex
 	postClient PostClient
 }
 
 type NIPostBuilderOption func(*NIPostBuilder)
-
-func WithNipostValidator(v nipostValidator) NIPostBuilderOption {
-	return func(nb *NIPostBuilder) {
-		nb.validator = v
-	}
-}
 
 // withPoetClients allows to pass in clients directly (for testing purposes).
 func withPoetClients(clients []PoetProvingServiceClient) NIPostBuilderOption {
@@ -125,7 +117,6 @@ type poetDbAPI interface {
 // NewNIPostBuilder returns a NIPostBuilder.
 func NewNIPostBuilder(
 	nodeID types.NodeID,
-	nipostClient nipostClient,
 	poetDB poetDbAPI,
 	poetServers []string,
 	dataDir string,
@@ -145,16 +136,15 @@ func NewNIPostBuilder(
 	}
 
 	b := &NIPostBuilder{
-		nodeID:       nodeID,
-		nipostClient: nipostClient,
-		poetProvers:  poetClients,
-		poetDB:       poetDB,
-		state:        &types.NIPostBuilderState{NIPost: &types.NIPost{}},
-		dataDir:      dataDir,
-		log:          lg,
-		signer:       signer,
-		poetCfg:      poetCfg,
-		layerClock:   layerClock,
+		nodeID:      nodeID,
+		poetProvers: poetClients,
+		poetDB:      poetDB,
+		state:       &types.NIPostBuilderState{NIPost: &types.NIPost{}},
+		dataDir:     dataDir,
+		log:         lg,
+		signer:      signer,
+		poetCfg:     poetCfg,
+		layerClock:  layerClock,
 	}
 
 	for _, opt := range opts {
@@ -259,10 +249,6 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 	challengeHash := challenge.Hash()
 	nb.loadState(challengeHash)
 
-	if s := nb.nipostClient.Status(); s.State != PostSetupStateComplete {
-		return nil, errors.New("post setup not complete")
-	}
-
 	// Phase 0: Submit challenge to PoET services.
 	if len(nb.state.PoetRequests) == 0 {
 		now := time.Now()
@@ -329,21 +315,6 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 		if err != nil {
 			events.EmitPostFailure()
 			return nil, fmt.Errorf("failed to generate Post: %w", err)
-		}
-		commitmentAtxId, err := nb.nipostClient.CommitmentAtx()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get commitment ATX: %w", err)
-		}
-		if err := nb.validator.Post(
-			postCtx,
-			nb.nodeID,
-			commitmentAtxId,
-			proof,
-			proofMetadata,
-			nb.nipostClient.LastOpts().NumUnits,
-		); err != nil {
-			events.EmitInvalidPostProof()
-			return nil, fmt.Errorf("failed to verify Post: %w", err)
 		}
 		events.EmitPostComplete(nb.state.PoetProofRef[:])
 		postGenDuration := time.Since(startTime)

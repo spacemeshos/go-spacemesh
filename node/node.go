@@ -843,7 +843,6 @@ func (app *App) initServices(ctx context.Context) error {
 
 	nipostBuilder, err := activation.NewNIPostBuilder(
 		app.edSgn.NodeID(),
-		postSetupMgr,
 		poetDb,
 		app.Config.PoETServers,
 		app.Config.SMESHING.Opts.DataDir,
@@ -851,7 +850,6 @@ func (app *App) initServices(ctx context.Context) error {
 		app.edSgn,
 		app.Config.POET,
 		app.clock,
-		activation.WithNipostValidator(app.validator),
 	)
 	if err != nil {
 		app.log.Panic("failed to create nipost builder: %v", err)

@@ -67,14 +67,6 @@ type postSetupProvider interface {
 	Config() PostConfig
 }
 
-// nipostClient is a temporary interface for the NIPostBuilder.
-// it is implemented by the PostSetupManager but will eventually merge with the PoSTClient.
-type nipostClient interface {
-	Status() *PostSetupStatus
-	CommitmentAtx() (types.ATXID, error)
-	LastOpts() *PostSetupOpts
-}
-
 // SmeshingProvider defines the functionality required for the node's Smesher API.
 type SmeshingProvider interface {
 	Smeshing() bool
