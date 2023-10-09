@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -130,7 +131,6 @@ func expectCounters(signer *signing.EdSigner, epoch types.EpochID, beacon types.
 			})
 		}
 	}
-
 }
 
 func expectProposal(signer *signing.EdSigner, lid types.LayerID, atx types.ATXID, opinion types.Opinion, opts ...expectOpt) *types.Proposal {
@@ -675,4 +675,24 @@ func TestBuild(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMarshalLog(t *testing.T) {
+	encoder := zapcore.NewMapObjectEncoder()
+	t.Run("config", func(t *testing.T) {
+		cfg := &config{}
+		require.NoError(t, cfg.MarshalLogObject(encoder))
+	})
+	t.Run("session", func(t *testing.T) {
+		session := &session{}
+		session.ref = types.BallotID{1}
+		session.eligibilities.proofs = map[types.LayerID][]types.VotingEligibility{
+			10: {{J: 5}},
+		}
+		require.NoError(t, session.MarshalLogObject(encoder))
+	})
+	t.Run("latency", func(t *testing.T) {
+		latency := &latencyTracker{start: time.Unix(0, 0), publish: time.Unix(1000, 0)}
+		require.NoError(t, latency.MarshalLogObject(encoder))
+	})
 }
