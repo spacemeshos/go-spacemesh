@@ -21,7 +21,7 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 * [#5091](https://github.com/spacemeshos/go-spacemesh/pull/5091) First stage of separating PoST from the node into its own service.
 * [#5061](https://github.com/spacemeshos/go-spacemesh/pull/5061) Proof generation is now done via a dedicated service instead of the node.
 
-  Usage is unchanged for now, the service runs within the container and is started automatically when deployed via docker. When used via smapp the node starts the service automatically.
+  Operating a node doesn't require any changes at the moment. The service will be automatically started by the node if needed and will be stopped when the node is stopped.
 
 * [#5138](https://github.com/spacemeshos/go-spacemesh/pull/5138) Bump poet to v0.9.7
 
