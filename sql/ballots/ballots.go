@@ -224,6 +224,14 @@ func LatestLayer(db sql.Executor) (types.LayerID, error) {
 }
 
 func FirstInEpoch(db sql.Executor, atx types.ATXID, epoch types.EpochID) (*types.Ballot, error) {
+	return inEpoch(db, atx, epoch, "asc")
+}
+
+func LastInEpoch(db sql.Executor, atx types.ATXID, epoch types.EpochID) (*types.Ballot, error) {
+	return inEpoch(db, atx, epoch, "desc")
+}
+
+func inEpoch(db sql.Executor, atx types.ATXID, epoch types.EpochID, order string) (*types.Ballot, error) {
 	var (
 		bid     types.BallotID
 		ballot  types.Ballot
@@ -259,11 +267,11 @@ func FirstInEpoch(db sql.Executor, atx types.ATXID, epoch types.EpochID) (*types
 		}
 		return true
 	}
-	rows, err = db.Exec(`
+	rows, err = db.Exec(fmt.Sprintf(`
 		select id, pubkey, ballot, length(identities.proof) from ballots
 	    left join identities using(pubkey)
 		where atx = ?1 and layer between ?2 and ?3
-		order by layer asc;`, enc, dec)
+		order by layer %s limit 1;`, order), enc, dec)
 	if err != nil {
 		return nil, fmt.Errorf("ballot by atx %s: %w", atx, err)
 	}

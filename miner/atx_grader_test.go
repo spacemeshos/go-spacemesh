@@ -14,7 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-const layersPerEpoch = 3
+const layersPerEpoch = 5
 
 func TestMain(m *testing.M) {
 	types.SetLayersPerEpoch(layersPerEpoch)

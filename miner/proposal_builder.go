@@ -362,7 +362,13 @@ func (pb *ProposalBuilder) initSessionData(ctx context.Context, lid types.LayerI
 		pb.session.beacon = beacon
 	}
 	if pb.session.prev == 0 {
-		// TODO(dshulyak) load latest ballot from this smesher to avoid equivocation
+		prev, err := ballots.LastInEpoch(pb.cdb, pb.session.atx, pb.session.epoch)
+		if err != nil && !errors.Is(err, sql.ErrNotFound) {
+			return err
+		}
+		if err == nil {
+			pb.session.prev = prev.Layer
+		}
 	}
 	if pb.session.ref == types.EmptyBallotID {
 		ballot, err := ballots.FirstInEpoch(pb.cdb, pb.session.atx, pb.session.epoch)

@@ -205,14 +205,18 @@ func TestFirstInEpoch(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, got.IsMalicious())
 	require.Equal(t, got.AtxID, atx.ID())
-	require.Equal(t, got.ID(), b2.ID())
+	require.Equal(t, got.ID(), b1.ID())
+
+	last, err := LastInEpoch(db, atx.ID(), 2)
+	require.NoError(t, err)
+	require.Equal(t, b3.ID(), last.ID())
 
 	require.NoError(t, identities.SetMalicious(db, sig.NodeID(), []byte("bad"), time.Now()))
 	got, err = FirstInEpoch(db, atx.ID(), 2)
 	require.NoError(t, err)
 	require.True(t, got.IsMalicious())
 	require.Equal(t, got.AtxID, atx.ID())
-	require.Equal(t, got.ID(), b2.ID())
+	require.Equal(t, got.ID(), b1.ID())
 }
 
 func TestAllFirstInEpoch(t *testing.T) {
