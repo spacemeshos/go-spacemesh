@@ -422,12 +422,6 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	app.Config.SMESHING.Opts.DataDir = t.TempDir()
 	app.Config.SMESHING.Opts.Scrypt.N = 2
 
-	path, err := exec.Command("go", "env", "GOMOD").Output()
-	if err != nil {
-		panic(err)
-	}
-	app.Config.POSTService.PostServiceCmd = filepath.Join(filepath.Dir(string(path)), "build", "service")
-
 	edSgn, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	app.edSgn = edSgn
@@ -1220,6 +1214,8 @@ func getTestDefaultConfig(tb testing.TB) *config.Config {
 	cfg.Beacon = beacon.NodeSimUnitTestConfig()
 
 	cfg.Genesis = config.DefaultTestGenesisConfig()
+
+	cfg.POSTService = config.DefaultTestConfig().POSTService
 
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 

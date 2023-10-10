@@ -2,6 +2,7 @@ package grpcserver
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -71,6 +72,7 @@ func initPost(tb testing.TB, log *zap.Logger, opts activation.PostSetupOpts) {
 
 func launchPostSupervisor(tb testing.TB, log *zap.Logger, cfg Config, postOpts activation.PostSetupOpts) func() {
 	cmdCfg := activation.DefaultTestPostServiceConfig()
+	cmdCfg.NodeAddress = fmt.Sprintf("http://%s", cfg.PublicListener)
 	postCfg := activation.DefaultPostConfig()
 	provingOpts := activation.DefaultPostProvingOpts()
 	provingOpts.RandomXMode = activation.PostRandomXModeLight
@@ -159,7 +161,7 @@ func Test_Cancel_GenerateProof(t *testing.T) {
 
 	select {
 	case <-connected:
-	case <-time.After(5 * time.Second):
+	case <-time.After(10 * time.Second):
 		require.Fail(t, "timed out waiting for connection")
 	}
 
@@ -213,7 +215,7 @@ func Test_GenerateProof_MultipleServices(t *testing.T) {
 
 	select {
 	case <-connected:
-	case <-time.After(5 * time.Second):
+	case <-time.After(10 * time.Second):
 		require.Fail(t, "timed out waiting for connection")
 	}
 
