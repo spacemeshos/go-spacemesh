@@ -438,6 +438,8 @@ func membersContainChallenge(members []types.Member, challenge types.Hash32) (ui
 
 // addPoETMitigation adds a mitigation if one of the PoETs crashed and was restored with the member list of a different PoET.
 // for an example see: https://github.com/spacemeshos/go-spacemesh/pull/5031
+
+//lint:ignore U1000 we keep this method in case we need it for a future mitigation
 func (nb *NIPostBuilder) addPoETMitigation(ctx context.Context, from, to string, pubEpoch types.EpochID) error { //nolint:unused
 	clientTo, ok := nb.poetProvers[to]
 	if !ok {
