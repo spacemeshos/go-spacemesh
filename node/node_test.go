@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"sync"
@@ -1092,12 +1091,7 @@ func TestAdminEvents(t *testing.T) {
 	cfg.FileLock = filepath.Join(cfg.DataDirParent, "LOCK")
 	cfg.SMESHING.Opts.DataDir = cfg.DataDirParent
 	cfg.SMESHING.Opts.Scrypt.N = 2
-
-	path, err := exec.Command("go", "env", "GOMOD").Output()
-	if err != nil {
-		panic(err)
-	}
-	cfg.POSTService.PostServiceCmd = filepath.Join(filepath.Dir(string(path)), "build", "service")
+	cfg.POSTService.PostServiceCmd = activation.DefaultTestPostServiceConfig().PostServiceCmd
 
 	cfg.Genesis.GenesisTime = time.Now().Add(5 * time.Second).Format(time.RFC3339)
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
