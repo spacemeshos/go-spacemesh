@@ -1154,7 +1154,7 @@ func TestConstructingMerkleProof(t *testing.T) {
 	})
 }
 
-func TestNIPostBuilder_Mainnet_PoetRound3_Workaround(t *testing.T) {
+func TestNIPostBuilder_Mainnet_Poet_Workaround(t *testing.T) {
 	t.Parallel()
 
 	tt := []struct {
@@ -1163,13 +1163,7 @@ func TestNIPostBuilder_Mainnet_PoetRound3_Workaround(t *testing.T) {
 		to    string
 		epoch types.EpochID
 	}{
-		{
-			// TODO(mafa): remove after epoch 5 end; https://github.com/spacemeshos/go-spacemesh/issues/5030
-			name:  "epoch 5: PoET 112 restore with PoET 110",
-			from:  "https://poet-110.spacemesh.network",
-			to:    "https://poet-112.spacemesh.network",
-			epoch: 5,
-		},
+		// no mitigation needed at the moment
 	}
 
 	for _, tc := range tt {

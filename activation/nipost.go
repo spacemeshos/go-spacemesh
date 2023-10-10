@@ -436,7 +436,9 @@ func membersContainChallenge(members []types.Member, challenge types.Hash32) (ui
 	return 0, fmt.Errorf("challenge is not a member of the proof")
 }
 
-func (nb *NIPostBuilder) addPoETMitigation(ctx context.Context, from, to string, pubEpoch types.EpochID) error {
+// addPoETMitigation adds a mitigation if one of the PoETs crashed and was restored with the member list of a different PoET.
+// for an example see: https://github.com/spacemeshos/go-spacemesh/pull/5031
+func (nb *NIPostBuilder) addPoETMitigation(ctx context.Context, from, to string, pubEpoch types.EpochID) error { //nolint:unused
 	clientTo, ok := nb.poetProvers[to]
 	if !ok {
 		// Target PoET is not in the list, no action necessary
@@ -489,18 +491,6 @@ func (nb *NIPostBuilder) addPoETMitigation(ctx context.Context, from, to string,
 }
 
 func (nb *NIPostBuilder) getBestProof(ctx context.Context, challenge types.Hash32, publishEpoch types.EpochID) (types.PoetProofRef, *types.MerkleProof, error) {
-	switch publishEpoch {
-	case 5:
-		// PoET 112 came online after the registration window for round 4 ended, so no node could submit to it
-		// 112 was initialized with the PoET 110 DB, so all successful submissions to 110 should be able to be fetched from there as well
-		// TODO(mafa): remove after next PoET round; https://github.com/spacemeshos/go-spacemesh/issues/5030
-		err := nb.addPoETMitigation(ctx, "https://poet-110.spacemesh.network", "https://poet-112.spacemesh.network", 5)
-		if err != nil {
-			nb.log.With().Error("pub epoch 5 mitigation: failed to add PoET 112 to state for pub epoch 5", log.Err(err))
-		}
-	default:
-	}
-
 	type poetProof struct {
 		poet       *types.PoetProofMessage
 		membership *types.MerkleProof
