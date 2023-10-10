@@ -513,6 +513,22 @@ func TestBuild(t *testing.T) {
 			},
 		},
 		{
+			desc: "invalid first ballot",
+			steps: []step{
+				{
+					lid:    16,
+					beacon: types.Beacon{1},
+					atxs: []*types.VerifiedActivationTx{
+						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
+					},
+					ballots: []*types.Ballot{
+						gballot(types.BallotID{11}, types.ATXID{1}, signer.NodeID(), 15, nil),
+					},
+					expectErr: "first ballot",
+				},
+			},
+		},
+		{
 			desc: "mesh hash selection",
 			opts: []Opt{WithHdist(2)},
 			steps: []step{
