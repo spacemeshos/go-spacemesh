@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime"
 	"sort"
 	"sync"
 	"time"
@@ -150,6 +151,7 @@ type config struct {
 	hdist              uint32
 	minActiveSetWeight uint64
 	networkDelay       time.Duration
+	workersLimit       int
 
 	// used to determine whether a node has enough information on the active set this epoch
 	GoodAtxPercent int
@@ -172,6 +174,14 @@ type Opt func(h *ProposalBuilder)
 func WithLayerSize(size uint32) Opt {
 	return func(pb *ProposalBuilder) {
 		pb.cfg.layerSize = size
+	}
+}
+
+// WithWorkersLimit configures paralelization factor for builder operation when working with
+// more than one signer.
+func WithWorkersLimit(limit int) Opt {
+	return func(pb *ProposalBuilder) {
+		pb.cfg.workersLimit = limit
 	}
 }
 
@@ -235,6 +245,9 @@ func New(
 ) *ProposalBuilder {
 	ctx, cancel := context.WithCancel(context.Background())
 	pb := &ProposalBuilder{
+		cfg: config{
+			workersLimit: runtime.NumCPU(),
+		},
 		logger:        log.NewNop(),
 		ctx:           ctx,
 		cancel:        cancel,
@@ -456,30 +469,49 @@ func (pb *ProposalBuilder) initSignerData(ctx context.Context, ss *signerSession
 }
 
 func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
+	start := time.Now()
 	if err := pb.initSharedData(ctx, lid); err != nil {
 		return err
 	}
-	for _, ss := range pb.signers {
-		ss.latency.start = time.Now()
-		if err := pb.initSignerData(ctx, ss, lid); err != nil {
-			return err
-		}
-		if lid <= ss.session.prev {
-			return fmt.Errorf("layer %d was already built by signer %s", lid, ss.signer.NodeID().ShortString())
-		}
-		ss.session.prev = lid
-		ss.latency.data = time.Now()
+	var (
+		signers = maps.Values(pb.signers)
+		eg      errgroup.Group
+	)
+	eg.SetLimit(pb.cfg.workersLimit)
+	for _, ss := range signers {
+		ss := ss
+		ss.latency.start = start
+		eg.Go(func() error {
+			if err := pb.initSignerData(ctx, ss, lid); err != nil {
+				if errors.Is(err, errAtxNotAvailable) {
+					ss.log.With().Info("smesher doesn't have atx that targets this epoch",
+						log.Context(ctx), log.Uint32("epoch", ss.session.epoch.Uint32()),
+					)
+				} else {
+					return err
+				}
+			}
+			if lid <= ss.session.prev {
+				return fmt.Errorf("layer %d was already built by signer %s", lid, ss.signer.NodeID().ShortString())
+			}
+			ss.session.prev = lid
+			ss.latency.data = time.Now()
+			return nil
+		})
+	}
+	if err := eg.Wait(); err != nil {
+		return err
 	}
 
 	any := false
-	for _, ss := range pb.signers {
+	for _, ss := range signers {
 		ss.layerProofs = ss.session.eligibilities.proofs[lid]
 		if len(ss.layerProofs) == 0 {
-			pb.logger.WithContext(ctx).With().Debug("not eligible for proposal in layer",
-				log.Uint32("lid", lid.Uint32()), log.Uint32("epoch", lid.GetEpoch().Uint32()))
+			ss.log.With().Debug("not eligible for proposal in layer",
+				log.Context(ctx), log.Uint32("lid", lid.Uint32()), log.Uint32("epoch", lid.GetEpoch().Uint32()))
 			continue
 		}
-		pb.logger.With().Debug("eligible for proposals in layer",
+		ss.log.With().Debug("eligible for proposals in layer",
 			log.Context(ctx), log.Uint32("lid", lid.Uint32()), log.Int("num proposals", len(ss.layerProofs)),
 		)
 		any = any || len(ss.layerProofs) > 0
@@ -495,56 +527,60 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 	if err != nil {
 		return fmt.Errorf("encode votes: %w", err)
 	}
-	for _, ss := range pb.signers {
+	for _, ss := range signers {
 		ss.latency.tortoise = time.Now()
 	}
 
 	meshHash := pb.decideMeshHash(ctx, lid)
-	for _, ss := range pb.signers {
+	for _, ss := range signers {
 		ss.latency.hash = time.Now()
 	}
 
-	for _, ss := range pb.signers {
+	for _, ss := range signers {
 		proofs := ss.session.eligibilities.proofs[lid]
 		if len(proofs) == 0 {
-			pb.logger.WithContext(ctx).With().Debug("not eligible for proposal in layer",
-				log.Uint32("lid", lid.Uint32()), log.Uint32("epoch", lid.GetEpoch().Uint32()))
+			ss.log.With().Debug("not eligible for proposal in layer",
+				log.Context(ctx), log.Uint32("lid", lid.Uint32()), log.Uint32("epoch", lid.GetEpoch().Uint32()))
 			continue
 		}
-		pb.logger.With().Debug("eligible for proposals in layer",
+		ss.log.With().Debug("eligible for proposals in layer",
 			log.Context(ctx), log.Uint32("lid", lid.Uint32()), log.Int("num proposals", len(proofs)),
 		)
 
 		txs := pb.conState.SelectProposalTXs(lid, len(proofs))
 		ss.latency.txs = time.Now()
 
-		proposal := createProposal(&ss.session, pb.shared.beacon, pb.shared.active.set, ss.signer, lid, txs, opinion, proofs, meshHash)
-
 		// needs to be saved before publishing, as we will query it in handler
 		if ss.session.ref == types.EmptyBallotID {
-			if err := activesets.Add(pb.cdb, proposal.EpochData.ActiveSetHash, &types.EpochActiveSet{
+			if err := activesets.Add(pb.cdb, pb.shared.active.set.Hash(), &types.EpochActiveSet{
 				Epoch: ss.session.epoch,
 				Set:   pb.shared.active.set,
 			}); err != nil && !errors.Is(err, sql.ErrObjectExists) {
 				return err
 			}
 		}
-		if err = pb.publisher.Publish(ctx, pubsub.ProposalProtocol, codec.MustEncode(proposal)); err != nil {
-			ss.log.Error("failed to publish proposal",
-				log.Context(ctx),
-				log.Uint32("lid", proposal.Layer.Uint32()),
-				log.Stringer("id", proposal.ID()),
-				log.Err(err),
-			)
-		} else {
-			ss.latency.publish = time.Now()
-			ss.log.With().Info("proposal created", log.Context(ctx), log.Inline(proposal), log.Object("latency", &ss.latency))
-			proposalBuild.Observe(ss.latency.total().Seconds())
-			events.EmitProposal(lid, proposal.ID())
-			events.ReportProposal(events.ProposalCreated, proposal)
-		}
+
+		ss := ss
+		eg.Go(func() error {
+			proposal := createProposal(&ss.session, pb.shared.beacon, pb.shared.active.set, ss.signer, lid, txs, opinion, proofs, meshHash)
+			if err = pb.publisher.Publish(ctx, pubsub.ProposalProtocol, codec.MustEncode(proposal)); err != nil {
+				ss.log.Error("failed to publish proposal",
+					log.Context(ctx),
+					log.Uint32("lid", proposal.Layer.Uint32()),
+					log.Stringer("id", proposal.ID()),
+					log.Err(err),
+				)
+			} else {
+				ss.latency.publish = time.Now()
+				ss.log.With().Info("proposal created", log.Context(ctx), log.Inline(proposal), log.Object("latency", &ss.latency))
+				proposalBuild.Observe(ss.latency.total().Seconds())
+				events.EmitProposal(lid, proposal.ID())
+				events.ReportProposal(events.ProposalCreated, proposal)
+			}
+			return nil
+		})
 	}
-	return nil
+	return eg.Wait()
 }
 
 func createProposal(

@@ -33,8 +33,8 @@ func (lt *latencyTracker) total() time.Duration {
 func (lt *latencyTracker) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddDuration("data", lt.data.Sub(lt.start))
 	encoder.AddDuration("tortoise", lt.tortoise.Sub(lt.data))
-	encoder.AddDuration("txs", lt.txs.Sub(lt.tortoise))
-	encoder.AddDuration("hash", lt.hash.Sub(lt.txs))
+	encoder.AddDuration("hash", lt.hash.Sub(lt.tortoise))
+	encoder.AddDuration("txs", lt.txs.Sub(lt.hash))
 	encoder.AddDuration("publish", lt.publish.Sub(lt.hash))
 	total := lt.total()
 	encoder.AddDuration("total", total)
