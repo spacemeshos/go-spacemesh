@@ -71,6 +71,7 @@ type ProposalBuilder struct {
 
 	registrations chan *signing.EdSigner
 	signers       map[string]*signerSession
+	shared        epochSession
 
 	startOnce sync.Once
 	ctx       context.Context
@@ -86,19 +87,23 @@ type signerSession struct {
 	layerProofs []types.VotingEligibility
 }
 
-// session per every signing key for the whole epoch.
-type session struct {
-	epoch     types.EpochID
-	beacon    types.Beacon
-	atx       types.ATXID
-	atxWeight uint64
-	ref       types.BallotID
-	prev      types.LayerID
-	nonce     types.VRFPostIndex
-	active    struct {
+type epochSession struct {
+	epoch  types.EpochID
+	beacon types.Beacon
+	active struct {
 		set    types.ATXIDList
 		weight uint64
 	}
+}
+
+// session per every signing key for the whole epoch.
+type session struct {
+	epoch         types.EpochID
+	atx           types.ATXID
+	atxWeight     uint64
+	ref           types.BallotID
+	prev          types.LayerID
+	nonce         types.VRFPostIndex
 	eligibilities struct {
 		proofs map[types.LayerID][]types.VotingEligibility
 		slots  uint32
@@ -107,7 +112,6 @@ type session struct {
 
 func (s *session) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("epoch", s.epoch.Uint32())
-	encoder.AddString("beacon", s.beacon.String())
 	encoder.AddString("atx", s.atx.ShortString())
 	encoder.AddUint64("weight", s.atxWeight)
 	if s.ref != types.EmptyBallotID {
@@ -373,7 +377,31 @@ func (pb *ProposalBuilder) decideMeshHash(ctx context.Context, current types.Lay
 	return mesh
 }
 
-func (pb *ProposalBuilder) initSessionData(ctx context.Context, ss *signerSession, lid types.LayerID) error {
+func (pb *ProposalBuilder) initSharedData(ctx context.Context, lid types.LayerID) error {
+	if pb.shared.epoch != lid.GetEpoch() {
+		pb.shared = epochSession{epoch: lid.GetEpoch()}
+	}
+	if pb.shared.beacon == types.EmptyBeacon {
+		beacon, err := beacons.Get(pb.cdb, pb.shared.epoch)
+		if err != nil || beacon == types.EmptyBeacon {
+			return fmt.Errorf("missing beacon for epoch %d", pb.shared.epoch)
+		}
+		pb.shared.beacon = beacon
+	}
+	if pb.shared.active.set == nil {
+		weight, set, err := generateActiveSet(
+			pb.logger, pb.cdb, pb.shared.epoch, pb.clock.LayerToTime(pb.shared.epoch.FirstLayer()),
+			pb.cfg.GoodAtxPercent, pb.cfg.networkDelay)
+		if err != nil {
+			return err
+		}
+		pb.shared.active.set = set
+		pb.shared.active.weight = weight
+	}
+	return nil
+}
+
+func (pb *ProposalBuilder) initSignerData(ctx context.Context, ss *signerSession, lid types.LayerID) error {
 	if ss.session.epoch != lid.GetEpoch() {
 		ss.session = session{epoch: lid.GetEpoch()}
 	}
@@ -395,13 +423,6 @@ func (pb *ProposalBuilder) initSessionData(ctx context.Context, ss *signerSessio
 		}
 		ss.session.nonce = nonce
 	}
-	if ss.session.beacon == types.EmptyBeacon {
-		beacon, err := beacons.Get(pb.cdb, ss.session.epoch)
-		if err != nil || beacon == types.EmptyBeacon {
-			return fmt.Errorf("missing beacon for epoch %d", ss.session.epoch)
-		}
-		ss.session.beacon = beacon
-	}
 	if ss.session.prev == 0 {
 		prev, err := ballots.LastInEpoch(pb.cdb, ss.session.atx, ss.session.epoch)
 		if err != nil && !errors.Is(err, sql.ErrNotFound) {
@@ -417,50 +438,30 @@ func (pb *ProposalBuilder) initSessionData(ctx context.Context, ss *signerSessio
 			return fmt.Errorf("get refballot %w", err)
 		}
 		if errors.Is(err, sql.ErrNotFound) {
-			weight, set, err := generateActiveSet(
-				ss.log, pb.cdb, ss.signer.MustVRFSigner(), ss.session.epoch, pb.clock.LayerToTime(ss.session.epoch.FirstLayer()),
-				pb.cfg.GoodAtxPercent, pb.cfg.networkDelay, ss.session.atx, ss.session.atxWeight)
-			if err != nil {
-				return err
-			}
-			ss.session.active.set = set
-			ss.session.active.weight = weight
-			ss.session.eligibilities.slots = proposals.MustGeetNumEligibleSlots(ss.session.atxWeight, pb.cfg.minActiveSetWeight, weight, pb.cfg.layerSize, pb.cfg.layersPerEpoch)
+			ss.session.eligibilities.slots = proposals.MustGeetNumEligibleSlots(ss.session.atxWeight, pb.cfg.minActiveSetWeight, pb.shared.active.weight, pb.cfg.layerSize, pb.cfg.layersPerEpoch)
 		} else {
 			if ballot.EpochData == nil {
-				return fmt.Errorf("atx %d created invalid first ballot", pb.session.atx)
-			}
-			hash := ballot.EpochData.ActiveSetHash
-			set, err := activesets.Get(pb.cdb, hash)
-			if err != nil {
-				return fmt.Errorf("get activeset %s: %w", hash.String(), err)
-			}
-			var weight uint64
-			for _, id := range set.Set {
-				atx, err := pb.cdb.GetAtxHeader(id)
-				if err != nil {
-					return err
-				}
-				weight += atx.GetWeight()
+				return fmt.Errorf("atx %d created invalid first ballot", ss.session.atx)
 			}
 			ss.session.ref = ballot.ID()
-			ss.session.active.set = set.Set
-			ss.session.active.weight = weight
 			ss.session.eligibilities.slots = ballot.EpochData.EligibilityCount
 		}
 	}
 	if ss.session.eligibilities.proofs == nil {
-		ss.session.eligibilities.proofs = calcEligibilityProofs(ss.signer.MustVRFSigner(), ss.session.epoch, ss.session.beacon, ss.session.nonce, ss.session.eligibilities.slots, pb.cfg.layersPerEpoch)
+		ss.session.eligibilities.proofs = calcEligibilityProofs(ss.signer.MustVRFSigner(), ss.session.epoch, pb.shared.beacon, ss.session.nonce, ss.session.eligibilities.slots, pb.cfg.layersPerEpoch)
 		ss.log.With().Info("proposal eligibilities for an epoch", log.Inline(&ss.session))
-		events.EmitEligibilities(ss.session.epoch, ss.session.beacon, ss.session.atx, uint32(len(ss.session.active.set)), ss.session.eligibilities.proofs)
+		events.EmitEligibilities(ss.session.epoch, pb.shared.beacon, ss.session.atx, uint32(len(pb.shared.active.set)), ss.session.eligibilities.proofs)
 	}
 	return nil
 }
 
 func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
+	if err := pb.initSharedData(ctx, lid); err != nil {
+		return err
+	}
 	for _, ss := range pb.signers {
 		ss.latency.start = time.Now()
-		if err := pb.initSessionData(ctx, ss, lid); err != nil {
+		if err := pb.initSignerData(ctx, ss, lid); err != nil {
 			return err
 		}
 		if lid <= ss.session.prev {
@@ -517,13 +518,13 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 		txs := pb.conState.SelectProposalTXs(lid, len(proofs))
 		ss.latency.txs = time.Now()
 
-		proposal := createProposal(&ss.session, ss.signer, lid, txs, opinion, proofs, meshHash)
+		proposal := createProposal(&ss.session, pb.shared.beacon, pb.shared.active.set, ss.signer, lid, txs, opinion, proofs, meshHash)
 
 		// needs to be saved before publishing, as we will query it in handler
 		if ss.session.ref == types.EmptyBallotID {
 			if err := activesets.Add(pb.cdb, proposal.EpochData.ActiveSetHash, &types.EpochActiveSet{
 				Epoch: ss.session.epoch,
-				Set:   ss.session.active.set,
+				Set:   pb.shared.active.set,
 			}); err != nil && !errors.Is(err, sql.ErrObjectExists) {
 				return err
 			}
@@ -548,6 +549,8 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 
 func createProposal(
 	session *session,
+	beacon types.Beacon,
+	activeset types.ATXIDList,
 	signer *signing.EdSigner,
 	lid types.LayerID,
 	txs []types.TransactionID,
@@ -573,8 +576,8 @@ func createProposal(
 	if session.ref == types.EmptyBallotID {
 		p.Ballot.RefBallot = types.EmptyBallotID
 		p.Ballot.EpochData = &types.EpochData{
-			ActiveSetHash:    session.active.set.Hash(),
-			Beacon:           session.beacon,
+			ActiveSetHash:    activeset.Hash(),
+			Beacon:           beacon,
 			EligibilityCount: session.eligibilities.slots,
 		}
 	} else {
@@ -621,31 +624,19 @@ func activeSetFromBlock(db sql.Executor, bid types.BlockID) ([]types.ATXID, erro
 
 func activesFromFirstBlock(
 	cdb *datastore.CachedDB,
-	signer *signing.VRFSigner,
 	target types.EpochID,
-	ownAtx types.ATXID,
-	ownWeight uint64,
 ) (uint64, []types.ATXID, error) {
 	set, err := ActiveSetFromEpochFirstBlock(cdb, target)
 	if err != nil {
 		return 0, nil, err
 	}
-	var (
-		totalWeight uint64
-		ownIncluded bool
-	)
+	var totalWeight uint64
 	for _, id := range set {
-		ownIncluded = ownIncluded || id == ownAtx
 		atx, err := cdb.GetAtxHeader(id)
 		if err != nil {
 			return 0, nil, err
 		}
 		totalWeight += atx.GetWeight()
-	}
-	if !ownIncluded {
-		// miner is not included in the active set derived from the epoch's first block
-		set = append(set, ownAtx)
-		totalWeight += ownWeight
 	}
 	return totalWeight, set, nil
 }
@@ -653,13 +644,10 @@ func activesFromFirstBlock(
 func generateActiveSet(
 	logger log.Log,
 	cdb *datastore.CachedDB,
-	signer *signing.VRFSigner,
 	target types.EpochID,
 	epochStart time.Time,
 	goodAtxPercent int,
 	networkDelay time.Duration,
-	ownAtx types.ATXID,
-	ownWeight uint64,
 ) (uint64, []types.ATXID, error) {
 	var (
 		totalWeight uint64
@@ -671,12 +659,11 @@ func generateActiveSet(
 		if err != nil {
 			return err
 		}
-		if grade != good && header.NodeID != signer.NodeID() {
+		if grade != good {
 			logger.With().Info("atx omitted from active set",
 				header.ID,
 				log.Int("grade", int(grade)),
 				log.Stringer("smesher", header.NodeID),
-				log.Bool("own", header.NodeID == signer.NodeID()),
 				log.Time("received", header.Received),
 				log.Time("epoch_start", epochStart),
 			)
@@ -697,7 +684,7 @@ func generateActiveSet(
 		// for all the atx and malfeasance proof. this active set is not usable.
 		// TODO: change after timing info of ATXs and malfeasance proofs is sync'ed from peers as well
 		var err error
-		totalWeight, set, err = activesFromFirstBlock(cdb, signer, target, ownAtx, ownWeight)
+		totalWeight, set, err = activesFromFirstBlock(cdb, target)
 		if err != nil {
 			return 0, nil, err
 		}

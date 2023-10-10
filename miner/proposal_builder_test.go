@@ -298,6 +298,18 @@ func TestBuild(t *testing.T) {
 			steps: []step{
 				{
 					lid:       15,
+					expectErr: "missing beacon",
+				},
+				{
+					lid:       15,
+					beacon:    types.Beacon{1},
+					expectErr: "empty active set",
+				},
+				{
+					lid: 15,
+					atxs: []*types.VerifiedActivationTx{
+						gatx(types.ATXID{20}, 2, types.NodeID{20}, 1),
+					},
 					expectErr: "atx not available",
 				},
 				{
@@ -308,36 +320,19 @@ func TestBuild(t *testing.T) {
 					expectErr: "missing nonce",
 				},
 				{
-					lid: 15,
+					lid: 16,
 					atxs: []*types.VerifiedActivationTx{
 						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
 					},
-					expectErr: "missing beacon",
-				},
-				{
-					lid:    16,
-					beacon: types.Beacon{1},
 					ballots: []*types.Ballot{
 						gballot(types.BallotID{1}, types.ATXID{10}, signer.NodeID(), 15, &types.EpochData{
 							ActiveSetHash:    types.ATXIDList{{10}, {2}}.Hash(),
 							EligibilityCount: 5,
 						}),
 					},
-					expectErr: "get activeset",
-				},
-				{
-					lid:       16,
-					activeset: types.ATXIDList{{10}, {2}},
-					expectErr: "get ATXs from DB",
-				},
-				{
-					lid: 16,
-					atxs: []*types.VerifiedActivationTx{
-						gatx(types.ATXID{2}, 2, types.NodeID{1}, 1),
-					},
 					opinion:        &types.Opinion{Hash: types.Hash32{1}},
 					txs:            []types.TransactionID{{1}},
-					latestComplete: 10,
+					latestComplete: 14,
 					expectProposal: expectProposal(
 						signer, 16, types.ATXID{10}, types.Opinion{Hash: types.Hash32{1}},
 						expectRef(types.BallotID{1}),
