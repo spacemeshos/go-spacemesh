@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 
 	"go.uber.org/zap"
@@ -17,14 +18,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/events"
 )
-
-// DefaultPostServiceConfig returns the default config for post service. These are intended for testing.
-func DefaultPostServiceConfig() PostSupervisorConfig {
-	return PostSupervisorConfig{
-		PostServiceCmd: "/bin/service",
-		NodeAddress:    "http://127.0.0.1:9093",
-	}
-}
 
 type PostSupervisorConfig struct {
 	PostServiceCmd string `mapstructure:"post-opts-post-service"`
@@ -36,10 +29,16 @@ type PostSupervisorConfig struct {
 type PostSupervisor struct {
 	logger *zap.Logger
 
+	cmdCfg      PostSupervisorConfig
+	postCfg     PostConfig
+	postOpts    PostSetupOpts
+	provingOpts PostProvingOpts
+
 	pid atomic.Int64 // pid of the running post service, only for tests.
 
-	stop context.CancelFunc // stops the running command.
+	mtx  sync.Mutex         // protects fields below
 	eg   errgroup.Group     // eg manages post service goroutines.
+	stop context.CancelFunc // stops the running command.
 }
 
 // NewPostSupervisor returns a new post service.
@@ -48,19 +47,42 @@ func NewPostSupervisor(logger *zap.Logger, cmdCfg PostSupervisorConfig, postCfg 
 		return nil, fmt.Errorf("post service binary not found: %s", cmdCfg.PostServiceCmd)
 	}
 
-	ctx, stop := context.WithCancel(context.Background())
-	ps := &PostSupervisor{
-		logger: logger,
-		stop:   stop,
-	}
-	ps.eg.Go(func() error { return ps.runCmd(ctx, cmdCfg, postCfg, postOpts, provingOpts) })
-	return ps, nil
+	return &PostSupervisor{
+		logger:      logger,
+		cmdCfg:      cmdCfg,
+		postCfg:     postCfg,
+		postOpts:    postOpts,
+		provingOpts: provingOpts,
+	}, nil
 }
 
-func (ps *PostSupervisor) Close() error {
-	ps.stop()
-	ps.eg.Wait()
+func (ps *PostSupervisor) Start() error {
+	ps.mtx.Lock()
+	defer ps.mtx.Unlock()
+	if ps.stop != nil {
+		return fmt.Errorf("post service already started")
+	}
+
+	ctx, stop := context.WithCancel(context.Background())
+	ps.stop = stop
+	ps.eg = errgroup.Group{} // reset errgroup to allow restarts.
+	ps.eg.Go(func() error { return ps.runCmd(ctx, ps.cmdCfg, ps.postCfg, ps.postOpts, ps.provingOpts) })
 	return nil
+}
+
+// Stop stops the post service.
+func (ps *PostSupervisor) Stop() error {
+	ps.mtx.Lock()
+	defer ps.mtx.Unlock()
+
+	if ps.stop == nil {
+		return nil
+	}
+
+	ps.stop()
+	ps.stop = nil
+	ps.pid.Store(0)
+	return ps.eg.Wait()
 }
 
 // captureCmdOutput returns a function that reads from the given pipe and logs the output.
@@ -132,7 +154,7 @@ func (ps *PostSupervisor) runCmd(ctx context.Context, cmdCfg PostSupervisorConfi
 			if err := eg.Wait(); err != nil {
 				ps.logger.Warn("output reading goroutine failed", zap.Error(err))
 			}
-			return ctx.Err()
+			return nil
 		}
 		ps.logger.Warn("post service exited", zap.Error(err))
 		eg.Wait()

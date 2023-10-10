@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -166,21 +165,6 @@ func DefaultConfig() Config {
 		Recovery:        checkpoint.DefaultConfig(),
 		Cache:           datastore.DefaultConfig(),
 	}
-}
-
-// DefaultTestConfig returns the default config for tests.
-func DefaultTestConfig() Config {
-	conf := DefaultConfig()
-	conf.BaseConfig = defaultTestConfig()
-	conf.P2P = p2p.DefaultConfig()
-	conf.API = grpcserver.DefaultTestConfig()
-
-	path, err := exec.Command("go", "env", "GOMOD").Output()
-	if err != nil {
-		panic(err)
-	}
-	conf.POSTService.PostServiceCmd = filepath.Join(filepath.Dir(string(path)), "build", "service")
-	return conf
 }
 
 // DefaultBaseConfig returns a default configuration for spacemesh.

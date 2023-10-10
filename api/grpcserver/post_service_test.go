@@ -2,9 +2,6 @@ package grpcserver
 
 import (
 	"context"
-	"fmt"
-	"os/exec"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -73,21 +70,16 @@ func initPost(tb testing.TB, log *zap.Logger, opts activation.PostSetupOpts) {
 }
 
 func launchPostSupervisor(tb testing.TB, log *zap.Logger, cfg Config, postOpts activation.PostSetupOpts) func() {
-	path, err := exec.Command("go", "env", "GOMOD").Output()
-	require.NoError(tb, err)
-
-	opts := activation.PostSupervisorConfig{
-		PostServiceCmd: filepath.Join(filepath.Dir(string(path)), "build", "service"),
-		NodeAddress:    fmt.Sprintf("http://%s", cfg.PublicListener),
-	}
+	cmdCfg := activation.DefaultTestPostServiceConfig()
 	postCfg := activation.DefaultPostConfig()
 	provingOpts := activation.DefaultPostProvingOpts()
 	provingOpts.RandomXMode = activation.PostRandomXModeLight
 
-	ps, err := activation.NewPostSupervisor(log, opts, postCfg, postOpts, provingOpts)
+	ps, err := activation.NewPostSupervisor(log, cmdCfg, postCfg, postOpts, provingOpts)
 	require.NoError(tb, err)
 	require.NotNil(tb, ps)
-	return func() { assert.NoError(tb, ps.Close()) }
+	require.NoError(tb, ps.Start())
+	return func() { assert.NoError(tb, ps.Stop()) }
 }
 
 func Test_GenerateProof(t *testing.T) {

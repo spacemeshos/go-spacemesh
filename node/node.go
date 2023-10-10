@@ -569,6 +569,9 @@ func (app *App) initServices(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("start post service: %w", err)
 		}
+		if err := app.postSupervisor.Start(); err != nil {
+			return fmt.Errorf("start post service: %w", err)
+		}
 	}
 
 	validator := activation.NewValidator(poetDb, app.Config.POST, app.Config.SMESHING.Opts.Scrypt, app.postVerifier)
@@ -1246,7 +1249,7 @@ func (app *App) stopServices(ctx context.Context) {
 	}
 
 	if app.postSupervisor != nil {
-		if err := app.postSupervisor.Close(); err != nil {
+		if err := app.postSupervisor.Stop(); err != nil {
 			app.log.With().Error("error stopping local post service", log.Err(err))
 		}
 	}

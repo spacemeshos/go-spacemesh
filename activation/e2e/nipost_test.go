@@ -3,10 +3,7 @@ package activation_test
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -63,13 +60,7 @@ func spawnPoet(tb testing.TB, opts ...HTTPPoetOpt) *HTTPPoetTestHarness {
 }
 
 func launchPostSupervisor(tb testing.TB, log *zap.Logger, cfg grpcserver.Config, postOpts activation.PostSetupOpts) func() {
-	path, err := exec.Command("go", "env", "GOMOD").Output()
-	require.NoError(tb, err)
-
-	cmdCfg := activation.PostSupervisorConfig{
-		PostServiceCmd: filepath.Join(filepath.Dir(string(path)), "build", "service"),
-		NodeAddress:    fmt.Sprintf("http://%s", cfg.PublicListener),
-	}
+	cmdCfg := activation.DefaultTestPostServiceConfig()
 	postCfg := activation.DefaultPostConfig()
 	provingOpts := activation.DefaultPostProvingOpts()
 	provingOpts.RandomXMode = activation.PostRandomXModeLight
@@ -77,7 +68,8 @@ func launchPostSupervisor(tb testing.TB, log *zap.Logger, cfg grpcserver.Config,
 	ps, err := activation.NewPostSupervisor(log, cmdCfg, postCfg, postOpts, provingOpts)
 	require.NoError(tb, err)
 	require.NotNil(tb, ps)
-	return func() { assert.NoError(tb, ps.Close()) }
+	require.NoError(tb, ps.Start())
+	return func() { assert.NoError(tb, ps.Stop()) }
 }
 
 func launchServer(tb testing.TB, services ...grpcserver.ServiceAPI) (grpcserver.Config, func()) {
