@@ -256,8 +256,6 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().BoolVar(&cfg.SMESHING.Opts.Throttle, "smeshing-opts-throttle",
 		cfg.SMESHING.Opts.Throttle, "")
 
-	// TODO(mafa): add Scrypt-Opts?
-
 	/**======================== PoST Proving Flags ========================== **/
 
 	cmd.PersistentFlags().UintVar(&cfg.SMESHING.ProvingOpts.Threads, "smeshing-opts-proving-threads",
