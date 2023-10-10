@@ -1094,7 +1094,7 @@ func (app *App) initService(ctx context.Context, svc grpcserver.Service) (grpcse
 	case grpcserver.Admin:
 		return grpcserver.NewAdminService(app.db, app.Config.DataDir(), app.host), nil
 	case grpcserver.Smesher:
-		return grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, app.Config.API.SmesherStreamInterval, app.Config.SMESHING.Opts), nil
+		return grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, app.postSupervisor, app.Config.API.SmesherStreamInterval, app.Config.SMESHING.Opts), nil
 	case grpcserver.Post:
 		return grpcserver.NewPostService(app.log.Zap(), app.nipostBuilder, app.atxBuilder), nil
 	case grpcserver.Transaction:
