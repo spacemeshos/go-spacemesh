@@ -389,6 +389,9 @@ func (pb *ProposalBuilder) initSessionData(ctx context.Context, lid types.LayerI
 			pb.session.active.weight = weight
 			pb.session.eligibilities.slots = proposals.MustGeetNumEligibleSlots(pb.session.atxWeight, pb.cfg.minActiveSetWeight, weight, pb.cfg.layerSize, pb.cfg.layersPerEpoch)
 		} else {
+			if ballot.EpochData == nil {
+				return fmt.Errorf("atx %d created invalid first ballot", pb.session.atx)
+			}
 			hash := ballot.EpochData.ActiveSetHash
 			set, err := activesets.Get(pb.cdb, hash)
 			if err != nil {
