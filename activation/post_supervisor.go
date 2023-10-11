@@ -19,6 +19,32 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 )
 
+// DefaultPostServiceConfig returns the default config for post service.
+func DefaultPostServiceConfig() PostSupervisorConfig {
+	path, err := os.Executable()
+	if err != nil {
+		panic(err)
+	}
+
+	return PostSupervisorConfig{
+		PostServiceCmd: filepath.Join(filepath.Dir(path), DefaultPostServiceName),
+		NodeAddress:    "http://127.0.0.1:9093",
+	}
+}
+
+// DefaultTestPostServiceConfig returns the default config for post service in tests.
+func DefaultTestPostServiceConfig() PostSupervisorConfig {
+	path, err := exec.Command("go", "env", "GOMOD").Output()
+	if err != nil {
+		panic(err)
+	}
+
+	return PostSupervisorConfig{
+		PostServiceCmd: filepath.Join(filepath.Dir(string(path)), "build", DefaultPostServiceName),
+		NodeAddress:    "http://127.0.0.1:9093",
+	}
+}
+
 type PostSupervisorConfig struct {
 	PostServiceCmd string `mapstructure:"post-opts-post-service"`
 

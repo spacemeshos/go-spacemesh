@@ -167,6 +167,16 @@ func DefaultConfig() Config {
 	}
 }
 
+// DefaultTestConfig returns the default config for tests.
+func DefaultTestConfig() Config {
+	conf := DefaultConfig()
+	conf.BaseConfig = defaultTestConfig()
+	conf.P2P = p2p.DefaultConfig()
+	conf.API = grpcserver.DefaultTestConfig()
+	conf.POSTService = activation.DefaultTestPostServiceConfig()
+	return conf
+}
+
 // DefaultBaseConfig returns a default configuration for spacemesh.
 func defaultBaseConfig() BaseConfig {
 	return BaseConfig{
