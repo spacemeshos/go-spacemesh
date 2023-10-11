@@ -748,7 +748,7 @@ func (c *nipostBuilderDataDirCall) DoAndReturn(f func() string) *nipostBuilderDa
 }
 
 // UpdatePoETProvers mocks base method.
-func (m *MocknipostBuilder) UpdatePoETProvers(arg0 []PoetProvingServiceClient) {
+func (m *MocknipostBuilder) UpdatePoETProvers(arg0 []poetProvingServiceClient) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "UpdatePoETProvers", arg0)
 }
@@ -772,13 +772,13 @@ func (c *nipostBuilderUpdatePoETProversCall) Return() *nipostBuilderUpdatePoETPr
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *nipostBuilderUpdatePoETProversCall) Do(f func([]PoetProvingServiceClient)) *nipostBuilderUpdatePoETProversCall {
+func (c *nipostBuilderUpdatePoETProversCall) Do(f func([]poetProvingServiceClient)) *nipostBuilderUpdatePoETProversCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *nipostBuilderUpdatePoETProversCall) DoAndReturn(f func([]PoetProvingServiceClient)) *nipostBuilderUpdatePoETProversCall {
+func (c *nipostBuilderUpdatePoETProversCall) DoAndReturn(f func([]poetProvingServiceClient)) *nipostBuilderUpdatePoETProversCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -1480,6 +1480,387 @@ func (c *SmeshingProviderUpdatePoETServersCall) Do(f func(context.Context, []str
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *SmeshingProviderUpdatePoETServersCall) DoAndReturn(f func(context.Context, []string) error) *SmeshingProviderUpdatePoETServersCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// MockpoetProvingServiceClient is a mock of poetProvingServiceClient interface.
+type MockpoetProvingServiceClient struct {
+	ctrl     *gomock.Controller
+	recorder *MockpoetProvingServiceClientMockRecorder
+}
+
+// MockpoetProvingServiceClientMockRecorder is the mock recorder for MockpoetProvingServiceClient.
+type MockpoetProvingServiceClientMockRecorder struct {
+	mock *MockpoetProvingServiceClient
+}
+
+// NewMockpoetProvingServiceClient creates a new mock instance.
+func NewMockpoetProvingServiceClient(ctrl *gomock.Controller) *MockpoetProvingServiceClient {
+	mock := &MockpoetProvingServiceClient{ctrl: ctrl}
+	mock.recorder = &MockpoetProvingServiceClientMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockpoetProvingServiceClient) EXPECT() *MockpoetProvingServiceClientMockRecorder {
+	return m.recorder
+}
+
+// Address mocks base method.
+func (m *MockpoetProvingServiceClient) Address() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Address")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// Address indicates an expected call of Address.
+func (mr *MockpoetProvingServiceClientMockRecorder) Address() *poetProvingServiceClientAddressCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Address", reflect.TypeOf((*MockpoetProvingServiceClient)(nil).Address))
+	return &poetProvingServiceClientAddressCall{Call: call}
+}
+
+// poetProvingServiceClientAddressCall wrap *gomock.Call
+type poetProvingServiceClientAddressCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *poetProvingServiceClientAddressCall) Return(arg0 string) *poetProvingServiceClientAddressCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *poetProvingServiceClientAddressCall) Do(f func() string) *poetProvingServiceClientAddressCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *poetProvingServiceClientAddressCall) DoAndReturn(f func() string) *poetProvingServiceClientAddressCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// PoetServiceID mocks base method.
+func (m *MockpoetProvingServiceClient) PoetServiceID(arg0 context.Context) (types.PoetServiceID, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PoetServiceID", arg0)
+	ret0, _ := ret[0].(types.PoetServiceID)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PoetServiceID indicates an expected call of PoetServiceID.
+func (mr *MockpoetProvingServiceClientMockRecorder) PoetServiceID(arg0 any) *poetProvingServiceClientPoetServiceIDCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PoetServiceID", reflect.TypeOf((*MockpoetProvingServiceClient)(nil).PoetServiceID), arg0)
+	return &poetProvingServiceClientPoetServiceIDCall{Call: call}
+}
+
+// poetProvingServiceClientPoetServiceIDCall wrap *gomock.Call
+type poetProvingServiceClientPoetServiceIDCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *poetProvingServiceClientPoetServiceIDCall) Return(arg0 types.PoetServiceID, arg1 error) *poetProvingServiceClientPoetServiceIDCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *poetProvingServiceClientPoetServiceIDCall) Do(f func(context.Context) (types.PoetServiceID, error)) *poetProvingServiceClientPoetServiceIDCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *poetProvingServiceClientPoetServiceIDCall) DoAndReturn(f func(context.Context) (types.PoetServiceID, error)) *poetProvingServiceClientPoetServiceIDCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// PowParams mocks base method.
+func (m *MockpoetProvingServiceClient) PowParams(ctx context.Context) (*PoetPowParams, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PowParams", ctx)
+	ret0, _ := ret[0].(*PoetPowParams)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PowParams indicates an expected call of PowParams.
+func (mr *MockpoetProvingServiceClientMockRecorder) PowParams(ctx any) *poetProvingServiceClientPowParamsCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PowParams", reflect.TypeOf((*MockpoetProvingServiceClient)(nil).PowParams), ctx)
+	return &poetProvingServiceClientPowParamsCall{Call: call}
+}
+
+// poetProvingServiceClientPowParamsCall wrap *gomock.Call
+type poetProvingServiceClientPowParamsCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *poetProvingServiceClientPowParamsCall) Return(arg0 *PoetPowParams, arg1 error) *poetProvingServiceClientPowParamsCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *poetProvingServiceClientPowParamsCall) Do(f func(context.Context) (*PoetPowParams, error)) *poetProvingServiceClientPowParamsCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *poetProvingServiceClientPowParamsCall) DoAndReturn(f func(context.Context) (*PoetPowParams, error)) *poetProvingServiceClientPowParamsCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Proof mocks base method.
+func (m *MockpoetProvingServiceClient) Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Member, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Proof", ctx, roundID)
+	ret0, _ := ret[0].(*types.PoetProofMessage)
+	ret1, _ := ret[1].([]types.Member)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// Proof indicates an expected call of Proof.
+func (mr *MockpoetProvingServiceClientMockRecorder) Proof(ctx, roundID any) *poetProvingServiceClientProofCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Proof", reflect.TypeOf((*MockpoetProvingServiceClient)(nil).Proof), ctx, roundID)
+	return &poetProvingServiceClientProofCall{Call: call}
+}
+
+// poetProvingServiceClientProofCall wrap *gomock.Call
+type poetProvingServiceClientProofCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *poetProvingServiceClientProofCall) Return(arg0 *types.PoetProofMessage, arg1 []types.Member, arg2 error) *poetProvingServiceClientProofCall {
+	c.Call = c.Call.Return(arg0, arg1, arg2)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *poetProvingServiceClientProofCall) Do(f func(context.Context, string) (*types.PoetProofMessage, []types.Member, error)) *poetProvingServiceClientProofCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *poetProvingServiceClientProofCall) DoAndReturn(f func(context.Context, string) (*types.PoetProofMessage, []types.Member, error)) *poetProvingServiceClientProofCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Submit mocks base method.
+func (m *MockpoetProvingServiceClient) Submit(ctx context.Context, deadline time.Time, prefix, challenge []byte, signature types.EdSignature, nodeID types.NodeID, pow PoetPoW) (*types.PoetRound, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Submit", ctx, deadline, prefix, challenge, signature, nodeID, pow)
+	ret0, _ := ret[0].(*types.PoetRound)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Submit indicates an expected call of Submit.
+func (mr *MockpoetProvingServiceClientMockRecorder) Submit(ctx, deadline, prefix, challenge, signature, nodeID, pow any) *poetProvingServiceClientSubmitCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Submit", reflect.TypeOf((*MockpoetProvingServiceClient)(nil).Submit), ctx, deadline, prefix, challenge, signature, nodeID, pow)
+	return &poetProvingServiceClientSubmitCall{Call: call}
+}
+
+// poetProvingServiceClientSubmitCall wrap *gomock.Call
+type poetProvingServiceClientSubmitCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *poetProvingServiceClientSubmitCall) Return(arg0 *types.PoetRound, arg1 error) *poetProvingServiceClientSubmitCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *poetProvingServiceClientSubmitCall) Do(f func(context.Context, time.Time, []byte, []byte, types.EdSignature, types.NodeID, PoetPoW) (*types.PoetRound, error)) *poetProvingServiceClientSubmitCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *poetProvingServiceClientSubmitCall) DoAndReturn(f func(context.Context, time.Time, []byte, []byte, types.EdSignature, types.NodeID, PoetPoW) (*types.PoetRound, error)) *poetProvingServiceClientSubmitCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// MockpoetDbAPI is a mock of poetDbAPI interface.
+type MockpoetDbAPI struct {
+	ctrl     *gomock.Controller
+	recorder *MockpoetDbAPIMockRecorder
+}
+
+// MockpoetDbAPIMockRecorder is the mock recorder for MockpoetDbAPI.
+type MockpoetDbAPIMockRecorder struct {
+	mock *MockpoetDbAPI
+}
+
+// NewMockpoetDbAPI creates a new mock instance.
+func NewMockpoetDbAPI(ctrl *gomock.Controller) *MockpoetDbAPI {
+	mock := &MockpoetDbAPI{ctrl: ctrl}
+	mock.recorder = &MockpoetDbAPIMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockpoetDbAPI) EXPECT() *MockpoetDbAPIMockRecorder {
+	return m.recorder
+}
+
+// GetProof mocks base method.
+func (m *MockpoetDbAPI) GetProof(arg0 types.PoetProofRef) (*types.PoetProof, *types.Hash32, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetProof", arg0)
+	ret0, _ := ret[0].(*types.PoetProof)
+	ret1, _ := ret[1].(*types.Hash32)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// GetProof indicates an expected call of GetProof.
+func (mr *MockpoetDbAPIMockRecorder) GetProof(arg0 any) *poetDbAPIGetProofCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProof", reflect.TypeOf((*MockpoetDbAPI)(nil).GetProof), arg0)
+	return &poetDbAPIGetProofCall{Call: call}
+}
+
+// poetDbAPIGetProofCall wrap *gomock.Call
+type poetDbAPIGetProofCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *poetDbAPIGetProofCall) Return(arg0 *types.PoetProof, arg1 *types.Hash32, arg2 error) *poetDbAPIGetProofCall {
+	c.Call = c.Call.Return(arg0, arg1, arg2)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *poetDbAPIGetProofCall) Do(f func(types.PoetProofRef) (*types.PoetProof, *types.Hash32, error)) *poetDbAPIGetProofCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *poetDbAPIGetProofCall) DoAndReturn(f func(types.PoetProofRef) (*types.PoetProof, *types.Hash32, error)) *poetDbAPIGetProofCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// ValidateAndStore mocks base method.
+func (m *MockpoetDbAPI) ValidateAndStore(ctx context.Context, proofMessage *types.PoetProofMessage) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ValidateAndStore", ctx, proofMessage)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ValidateAndStore indicates an expected call of ValidateAndStore.
+func (mr *MockpoetDbAPIMockRecorder) ValidateAndStore(ctx, proofMessage any) *poetDbAPIValidateAndStoreCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateAndStore", reflect.TypeOf((*MockpoetDbAPI)(nil).ValidateAndStore), ctx, proofMessage)
+	return &poetDbAPIValidateAndStoreCall{Call: call}
+}
+
+// poetDbAPIValidateAndStoreCall wrap *gomock.Call
+type poetDbAPIValidateAndStoreCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *poetDbAPIValidateAndStoreCall) Return(arg0 error) *poetDbAPIValidateAndStoreCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *poetDbAPIValidateAndStoreCall) Do(f func(context.Context, *types.PoetProofMessage) error) *poetDbAPIValidateAndStoreCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *poetDbAPIValidateAndStoreCall) DoAndReturn(f func(context.Context, *types.PoetProofMessage) error) *poetDbAPIValidateAndStoreCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// MockpostService is a mock of postService interface.
+type MockpostService struct {
+	ctrl     *gomock.Controller
+	recorder *MockpostServiceMockRecorder
+}
+
+// MockpostServiceMockRecorder is the mock recorder for MockpostService.
+type MockpostServiceMockRecorder struct {
+	mock *MockpostService
+}
+
+// NewMockpostService creates a new mock instance.
+func NewMockpostService(ctrl *gomock.Controller) *MockpostService {
+	mock := &MockpostService{ctrl: ctrl}
+	mock.recorder = &MockpostServiceMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockpostService) EXPECT() *MockpostServiceMockRecorder {
+	return m.recorder
+}
+
+// Client mocks base method.
+func (m *MockpostService) Client(nodeId types.NodeID) (PostClient, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Client", nodeId)
+	ret0, _ := ret[0].(PostClient)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Client indicates an expected call of Client.
+func (mr *MockpostServiceMockRecorder) Client(nodeId any) *postServiceClientCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Client", reflect.TypeOf((*MockpostService)(nil).Client), nodeId)
+	return &postServiceClientCall{Call: call}
+}
+
+// postServiceClientCall wrap *gomock.Call
+type postServiceClientCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *postServiceClientCall) Return(arg0 PostClient, arg1 error) *postServiceClientCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *postServiceClientCall) Do(f func(types.NodeID) (PostClient, error)) *postServiceClientCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *postServiceClientCall) DoAndReturn(f func(types.NodeID) (PostClient, error)) *postServiceClientCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

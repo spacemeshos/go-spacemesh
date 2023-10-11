@@ -6,17 +6,24 @@ import (
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"go.uber.org/zap"
+
+	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 // PostService is a grpc server that PoST nodes can connect to in order to register.
 // The bidirectional stream established between the node and the PoST node can be used
 // to send challenges and receive proofs.
 type PostService struct {
-	log       *zap.Logger
-	callbacks []postConnectionListener
+	log *zap.Logger
 
 	clientMtx sync.Mutex
 	client    *postClient
+}
+
+type postCommand struct {
+	req  *pb.NodeRequest
+	resp chan<- *pb.ServiceResponse
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -25,10 +32,9 @@ func (s *PostService) RegisterService(server *Server) {
 }
 
 // NewPostService creates a new grpc service using config data.
-func NewPostService(log *zap.Logger, callbacks ...postConnectionListener) *PostService {
+func NewPostService(log *zap.Logger) *PostService {
 	return &PostService{
-		log:       log,
-		callbacks: callbacks,
+		log: log,
 	}
 }
 
@@ -73,31 +79,26 @@ func (s *PostService) setConnection(con chan postCommand) error {
 
 	s.client = newPostClient(con)
 	s.log.Info("post service registered")
-
-	for _, cb := range s.callbacks {
-		cb.Connected(s.client)
-	}
-
 	return nil
 }
 
 func (s *PostService) dropConnection() error {
 	s.clientMtx.Lock()
+	defer s.clientMtx.Unlock()
 
 	err := s.client.Close()
-	c := s.client
 	s.client = nil
-
-	s.clientMtx.Unlock()
-
-	for _, cb := range s.callbacks {
-		cb.Disconnected(c)
-	}
-
 	return err
 }
 
-type postCommand struct {
-	req  *pb.NodeRequest
-	resp chan<- *pb.ServiceResponse
+func (s *PostService) Client(nodeId types.NodeID) (activation.PostClient, error) {
+	s.clientMtx.Lock()
+	defer s.clientMtx.Unlock()
+
+	// TODO(mafa): select correct client based on node id
+	if s.client == nil {
+		return nil, fmt.Errorf("post service not registered")
+	}
+
+	return s.client, nil
 }

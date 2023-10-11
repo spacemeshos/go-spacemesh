@@ -69,9 +69,21 @@ func TestValidator_Validate(t *testing.T) {
 
 	poetDb := activation.NewPoetDb(sql.InMemory(), log.NewFromLog(logger).Named("poetDb"))
 
+	svc := grpcserver.NewPostService(logger)
+	grpcCfg, cleanup := launchServer(t, svc)
+	t.Cleanup(cleanup)
+
+	t.Cleanup(launchPostSupervisor(t, logger, grpcCfg, opts))
+
+	require.Eventually(t, func() bool {
+		_, err := svc.Client(sig.NodeID())
+		return err == nil
+	}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
+
 	nb, err := activation.NewNIPostBuilder(
 		sig.NodeID(),
 		poetDb,
+		svc,
 		[]string{poetProver.RestURL().String()},
 		t.TempDir(),
 		logtest.New(t, zapcore.DebugLevel),
@@ -80,25 +92,6 @@ func TestValidator_Validate(t *testing.T) {
 		mclock,
 	)
 	require.NoError(t, err)
-
-	connected := make(chan struct{})
-	con := grpcserver.NewMockpostConnectionListener(ctrl)
-	con.EXPECT().Connected(gomock.Any()).DoAndReturn(func(c activation.PostClient) {
-		close(connected)
-	}).Times(1)
-	con.EXPECT().Disconnected(gomock.Any()).Times(1)
-
-	svc := grpcserver.NewPostService(logger, nb, con)
-	grpcCfg, cleanup := launchServer(t, svc)
-	t.Cleanup(cleanup)
-
-	t.Cleanup(launchPostSupervisor(t, logger, grpcCfg, opts))
-
-	select {
-	case <-connected:
-	case <-time.After(10 * time.Second):
-		require.Fail(t, "timed out waiting for connection")
-	}
 
 	challenge := types.NIPostChallenge{
 		PublishEpoch: postGenesisEpoch + 2,

@@ -9,7 +9,6 @@ import (
 	"github.com/spacemeshos/post/initialization"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
@@ -22,7 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-func initPost(tb testing.TB, log *zap.Logger, opts activation.PostSetupOpts) {
+func initPost(tb testing.TB, log *zap.Logger, opts activation.PostSetupOpts) types.NodeID {
 	tb.Helper()
 
 	cfg := activation.DefaultPostConfig()
@@ -68,6 +67,7 @@ func initPost(tb testing.TB, log *zap.Logger, opts activation.PostSetupOpts) {
 	require.NoError(tb, mgr.StartSession(context.Background()))
 	require.NoError(tb, eg.Wait())
 	require.Equal(tb, activation.PostSetupStateComplete, mgr.Status().State)
+	return id
 }
 
 func launchPostSupervisor(tb testing.TB, log *zap.Logger, cfg Config, postOpts activation.PostSetupOpts) func() {
@@ -86,33 +86,24 @@ func launchPostSupervisor(tb testing.TB, log *zap.Logger, cfg Config, postOpts a
 
 func Test_GenerateProof(t *testing.T) {
 	log := zaptest.NewLogger(t)
-	ctrl := gomock.NewController(t)
-	con := NewMockpostConnectionListener(ctrl)
-	svc := NewPostService(log, con)
+	svc := NewPostService(log)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
-
-	var client activation.PostClient
-	connected := make(chan struct{})
-	con.EXPECT().Connected(gomock.Any()).DoAndReturn(func(c activation.PostClient) {
-		client = c
-		close(connected)
-	}).Times(1)
-	con.EXPECT().Disconnected(gomock.Any()).Times(1)
 
 	opts := activation.DefaultPostSetupOpts()
 	opts.DataDir = t.TempDir()
 	opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
-	initPost(t, log.Named("post"), opts)
+	id := initPost(t, log.Named("post"), opts)
 	postCleanup := launchPostSupervisor(t, log.Named("supervisor"), cfg, opts)
 	t.Cleanup(postCleanup)
 
-	select {
-	case <-connected:
-	case <-time.After(5 * time.Second):
-		require.Fail(t, "timed out waiting for connection")
-	}
+	var client activation.PostClient
+	require.Eventually(t, func() bool {
+		var err error
+		client, err = svc.Client(id)
+		return err == nil
+	}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
 
 	challenge := make([]byte, 32)
 	for i := range challenge {
@@ -131,39 +122,30 @@ func Test_GenerateProof(t *testing.T) {
 		return err != nil
 	}, 5*time.Second, 100*time.Millisecond)
 
-	require.ErrorContains(t, err, "client closed")
+	require.ErrorContains(t, err, "post client closed")
 	require.Nil(t, proof)
 	require.Nil(t, meta)
 }
 
 func Test_Cancel_GenerateProof(t *testing.T) {
 	log := zaptest.NewLogger(t)
-	ctrl := gomock.NewController(t)
-	con := NewMockpostConnectionListener(ctrl)
-	svc := NewPostService(log, con)
+	svc := NewPostService(log)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
-
-	var client activation.PostClient
-	connected := make(chan struct{})
-	con.EXPECT().Connected(gomock.Any()).DoAndReturn(func(c activation.PostClient) {
-		client = c
-		close(connected)
-	}).Times(1)
-	con.EXPECT().Disconnected(gomock.Any()).Times(1)
 
 	opts := activation.DefaultPostSetupOpts()
 	opts.DataDir = t.TempDir()
 	opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
-	initPost(t, log.Named("post"), opts)
+	id := initPost(t, log.Named("post"), opts)
 	t.Cleanup(launchPostSupervisor(t, log.Named("supervisor"), cfg, opts))
 
-	select {
-	case <-connected:
-	case <-time.After(10 * time.Second):
-		require.Fail(t, "timed out waiting for connection")
-	}
+	var client activation.PostClient
+	require.Eventually(t, func() bool {
+		var err error
+		client, err = svc.Client(id)
+		return err == nil
+	}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
 
 	challenge := make([]byte, 32)
 	for i := range challenge {
@@ -182,19 +164,9 @@ func Test_Cancel_GenerateProof(t *testing.T) {
 
 func Test_GenerateProof_MultipleServices(t *testing.T) {
 	log := zaptest.NewLogger(t)
-	ctrl := gomock.NewController(t)
-	con := NewMockpostConnectionListener(ctrl)
-	svc := NewPostService(log, con)
+	svc := NewPostService(log)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
-
-	var client activation.PostClient
-	connected := make(chan struct{})
-	con.EXPECT().Connected(gomock.Any()).DoAndReturn(func(c activation.PostClient) {
-		client = c
-		close(connected)
-	}).Times(1)
-	con.EXPECT().Disconnected(gomock.Any()).Times(1)
 
 	opts := activation.DefaultPostSetupOpts()
 	opts.DataDir = t.TempDir()
@@ -202,7 +174,7 @@ func Test_GenerateProof_MultipleServices(t *testing.T) {
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
 
 	// all but one should not be able to register to the node (i.e. open a stream to it).
-	initPost(t, log.Named("post1"), opts)
+	id := initPost(t, log.Named("post1"), opts)
 	t.Cleanup(launchPostSupervisor(t, log.Named("supervisor1"), cfg, opts))
 
 	opts.DataDir = t.TempDir()
@@ -213,11 +185,12 @@ func Test_GenerateProof_MultipleServices(t *testing.T) {
 	initPost(t, log.Named("post3"), opts)
 	t.Cleanup(launchPostSupervisor(t, log.Named("supervisor3"), cfg, opts))
 
-	select {
-	case <-connected:
-	case <-time.After(10 * time.Second):
-		require.Fail(t, "timed out waiting for connection")
-	}
+	var client activation.PostClient
+	require.Eventually(t, func() bool {
+		var err error
+		client, err = svc.Client(id)
+		return err == nil
+	}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
 
 	challenge := make([]byte, 32)
 	for i := range challenge {

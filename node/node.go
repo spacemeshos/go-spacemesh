@@ -321,6 +321,7 @@ type App struct {
 	grpcPublicService  *grpcserver.Server
 	grpcPrivateService *grpcserver.Server
 	jsonAPIService     *grpcserver.JSONHTTPServer
+	grpcPostService    *grpcserver.PostService
 	pprofService       *http.Server
 	profilerService    *pyroscope.Profiler
 	syncer             *syncer.Syncer
@@ -843,9 +844,12 @@ func (app *App) initServices(ctx context.Context) error {
 		app.log.Panic("failed to create post setup manager: %v", err)
 	}
 
+	app.grpcPostService = grpcserver.NewPostService(app.log.Zap())
+
 	nipostBuilder, err := activation.NewNIPostBuilder(
 		app.edSgn.NodeID(),
 		poetDb,
+		app.grpcPostService,
 		app.Config.PoETServers,
 		app.Config.SMESHING.Opts.DataDir,
 		app.addLogger(NipostBuilderLogger, lg),
@@ -880,6 +884,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.edSgn,
 		app.cachedDB,
 		app.host,
+		app.grpcPostService,
 		nipostBuilder,
 		postSetupMgr,
 		app.clock,
@@ -1096,7 +1101,7 @@ func (app *App) initService(ctx context.Context, svc grpcserver.Service) (grpcse
 	case grpcserver.Smesher:
 		return grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, app.postSupervisor, app.Config.API.SmesherStreamInterval, app.Config.SMESHING.Opts), nil
 	case grpcserver.Post:
-		return grpcserver.NewPostService(app.log.Zap(), app.nipostBuilder, app.atxBuilder), nil
+		return app.grpcPostService, nil
 	case grpcserver.Transaction:
 		return grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer, app.txHandler), nil
 	case grpcserver.Activation:
