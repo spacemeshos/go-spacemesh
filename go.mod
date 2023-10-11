@@ -9,7 +9,7 @@ require (
 	github.com/cosmos/btcutil v1.0.5
 	github.com/go-llsqlite/crawshaw v0.4.0
 	github.com/gofrs/flock v0.8.1
-	github.com/google/go-cmp v0.5.9
+	github.com/google/go-cmp v0.6.0
 	github.com/google/gofuzz v1.2.0
 	github.com/google/uuid v1.3.1
 	github.com/grafana/pyroscope-go v1.0.4
