@@ -371,7 +371,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 			s.setATXSynced()
 			return true
 		}
-		if len(s.dataFetcher.GetPeers()) == 0 {
+		if len(s.dataFetcher.SelectBest(1)) == 0 {
 			return false
 		}
 

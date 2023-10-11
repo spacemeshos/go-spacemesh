@@ -4,12 +4,11 @@ package fetch
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math/rand"
 	"sync"
 	"time"
 
-	"github.com/libp2p/go-libp2p/core/protocol"
+	"github.com/libp2p/go-libp2p/core/network"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -18,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
+	"github.com/spacemeshos/go-spacemesh/syncer/peers"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -144,6 +144,7 @@ type Fetch struct {
 	logger log.Log
 	bs     *datastore.BlobStore
 	host   host
+	peers  *peers.Peers
 
 	servers    map[string]requester
 	validators *dataValidators
@@ -172,6 +173,7 @@ func NewFetch(cdb *datastore.CachedDB, msh meshProvider, b system.BeaconGetter, 
 		logger:      log.NewNop(),
 		bs:          bs,
 		host:        host,
+		peers:       peers.New(),
 		servers:     map[string]requester{},
 		unprocessed: make(map[types.Hash32]*request),
 		ongoing:     make(map[types.Hash32]*request),
@@ -181,6 +183,16 @@ func NewFetch(cdb *datastore.CachedDB, msh meshProvider, b system.BeaconGetter, 
 	for _, opt := range opts {
 		opt(f)
 	}
+
+	notify := &network.NotifyBundle{
+		ConnectedF: func(_ network.Network, c network.Conn) {
+			f.peers.Add(c.RemotePeer())
+		},
+		DisconnectedF: func(_ network.Network, c network.Conn) {
+			f.peers.Delete(c.RemotePeer())
+		},
+	}
+	host.Network().Notify(notify)
 
 	f.batchTimeout = time.NewTicker(f.cfg.BatchTimeout)
 	srvOpts := []server.Opt{
@@ -255,9 +267,6 @@ func (f *Fetch) Stop() {
 	f.logger.Info("stopping fetch")
 	f.batchTimeout.Stop()
 	f.cancel()
-	if err := f.host.Close(); err != nil {
-		f.logger.With().Warning("error closing host", log.Err(err))
-	}
 	f.mu.Lock()
 	for _, req := range f.unprocessed {
 		close(req.promise.completed)
@@ -458,8 +467,9 @@ func (f *Fetch) send(requests []RequestMessage) {
 func (f *Fetch) organizeRequests(requests []RequestMessage) map[p2p.Peer][][]RequestMessage {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	peer2requests := make(map[p2p.Peer][]RequestMessage)
-	peers := f.host.GetPeers()
-	if len(peers) == 0 {
+
+	best := f.peers.SelectBest(10)
+	if len(best) == 0 {
 		f.logger.Info("cannot send batch: no peers found")
 		f.mu.Lock()
 		defer f.mu.Unlock()
@@ -479,16 +489,10 @@ func (f *Fetch) organizeRequests(requests []RequestMessage) map[p2p.Peer][][]Req
 		return nil
 	}
 	for _, req := range requests {
-		target := p2p.NoPeer
 		hashPeers := f.hashToPeers.GetRandom(req.Hash, req.Hint, rng)
-		for _, p := range hashPeers {
-			if f.host.Connected(p) {
-				target = p
-				break
-			}
-		}
-		if target == p2p.NoPeer {
-			target = randomPeer(peers)
+		target := f.peers.SelectBestFrom(hashPeers)
+		if target == p2p.NoPeer || !f.host.Connected(target) {
+			target = randomPeer(best)
 		}
 		_, ok := peer2requests[target]
 		if !ok {
@@ -519,51 +523,35 @@ func (f *Fetch) organizeRequests(requests []RequestMessage) map[p2p.Peer][][]Req
 }
 
 // sendBatch dispatches batched request messages to provided peer.
-func (f *Fetch) sendBatch(p p2p.Peer, batch *batchInfo) error {
+func (f *Fetch) sendBatch(peer p2p.Peer, batch *batchInfo) error {
+	if f.stopped() {
+		return nil
+	}
 	f.mu.Lock()
 	f.batched[batch.ID] = batch
 	f.mu.Unlock()
-
-	f.logger.With().Debug("sending batch request",
+	f.logger.With().Debug("sending batched request to peer",
 		log.Stringer("batch_hash", batch.ID),
-		log.Stringer("peer", batch.peer))
-	// timeout function will be called if no response was received for the hashes sent
-	errorFunc := func(err error) {
-		f.logger.With().Warning("failed to send batch",
-			log.Stringer("batch_hash", batch.ID),
-			log.Err(err))
-		f.handleHashError(batch.ID, err)
-	}
-
-	bytes, err := codec.Encode(&batch.RequestBatch)
-	if err != nil {
-		f.logger.With().Panic("failed to encode batch", log.Err(err))
-	}
-
-	// try sending batch to provided peer
-	retries := 0
-	for {
-		if f.stopped() {
-			return nil
-		}
-
-		f.logger.With().Debug("sending batched request to peer",
-			log.Stringer("batch_hash", batch.ID),
-			log.Int("num_requests", len(batch.Requests)),
-			log.Stringer("peer", p))
-
-		err = f.servers[hashProtocol].Request(f.shutdownCtx, p, bytes, f.receiveResponse, errorFunc)
-		if err == nil {
-			break
-		}
-
-		retries++
-		if retries > f.cfg.MaxRetriesForPeer {
-			f.handleHashError(batch.ID, fmt.Errorf("batched request failed w retries: %w", err))
-			break
-		}
-	}
-	return err
+		log.Int("num_requests", len(batch.Requests)),
+		log.Stringer("peer", peer),
+	)
+	// Request is asynchronous,
+	// it will return errors only if size of the bytes buffer is large
+	// or target peer is not connected
+	start := time.Now()
+	return f.servers[hashProtocol].Request(f.shutdownCtx, peer, codec.MustEncode(&batch.RequestBatch),
+		func(buf []byte) {
+			f.peers.OnLatency(peer, time.Since(start))
+			f.receiveResponse(buf)
+		},
+		func(err error) {
+			f.logger.With().Warning("failed to send batch",
+				log.Stringer("batch_hash", peer), log.Err(err),
+			)
+			f.peers.OnFailure(peer)
+			f.handleHashError(batch.ID, err)
+		},
+	)
 }
 
 // handleHashError is called when an error occurred processing batches of the following hashes.
@@ -650,10 +638,6 @@ func (f *Fetch) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32) {
 	f.hashToPeers.RegisterPeerHashes(peer, hashes)
 }
 
-func (f *Fetch) GetPeers() []p2p.Peer {
-	return f.host.GetPeers()
-}
-
-func (f *Fetch) PeerProtocols(p p2p.Peer) ([]protocol.ID, error) {
-	return f.host.PeerProtocols(p)
+func (f *Fetch) SelectBest(n int) []p2p.Peer {
+	return f.peers.SelectBest(n)
 }

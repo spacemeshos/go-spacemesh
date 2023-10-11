@@ -136,7 +136,7 @@ func (s *Syncer) needCert(ctx context.Context, lid types.LayerID) (bool, error) 
 }
 
 func (s *Syncer) layerOpinions(ctx context.Context, lid types.LayerID) ([]*peerOpinion, []*types.Certificate, error) {
-	peers := s.dataFetcher.GetPeers()
+	peers := s.dataFetcher.SelectBest(10)
 	if len(peers) == 0 {
 		return nil, nil, errNoPeers
 	}
