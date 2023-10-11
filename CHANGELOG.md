@@ -20,6 +20,10 @@ this is hotfix for a bug introduced in v1.2.0. in rare conditions node may loop 
 
 * [#5091](https://github.com/spacemeshos/go-spacemesh/pull/5091) First stage of separating PoST from the node into its own service.
 
+* [#5138](https://github.com/spacemeshos/go-spacemesh/pull/5138) Bump poet to v0.9.7
+
+  The submit proof of work should now be up to 40% faster thanks to [code optimization](https://github.com/spacemeshos/poet/pull/419).
+
 ## v1.2.0
 
 ### Upgrade information
