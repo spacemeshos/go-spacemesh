@@ -11,7 +11,7 @@ var (
 	GetNumEligibleSlots = util.GetNumEligibleSlots
 )
 
-func MustGeetNumEligibleSlots(weight, minWeight, totalWeight uint64, committeeSize, layersPerEpoch uint32) uint32 {
+func MustGetNumEligibleSlots(weight, minWeight, totalWeight uint64, committeeSize, layersPerEpoch uint32) uint32 {
 	slots, err := GetNumEligibleSlots(weight, minWeight, totalWeight, committeeSize, layersPerEpoch)
 	if err != nil {
 		panic(err)

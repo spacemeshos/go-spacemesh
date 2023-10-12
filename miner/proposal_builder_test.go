@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zapcore"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -767,8 +768,17 @@ func TestStartStop(t *testing.T) {
 	syncer.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 
 	builder := New(clock, signer, cdb, publisher, tortoise, syncer, conState, WithLogger(logtest.New(t)))
-	builder.Start()
-	t.Cleanup(builder.Stop)
+	var (
+		ctx, cancel = context.WithCancel(context.Background())
+		eg          errgroup.Group
+	)
+	eg.Go(func() error {
+		return builder.Run(ctx)
+	})
+	t.Cleanup(func() {
+		cancel()
+		require.NoError(t, eg.Wait())
+	})
 	select {
 	case <-time.After(time.Second):
 		require.FailNow(t, "test didn't complete in 1s")

@@ -7,11 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"sync"
 	"time"
 
 	"golang.org/x/exp/maps"
-	"golang.org/x/sync/errgroup"
+	"golang.org/x/exp/slices"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -71,11 +70,6 @@ type ProposalBuilder struct {
 
 	signer  *signing.EdSigner
 	session *session
-
-	startOnce sync.Once
-	ctx       context.Context
-	cancel    context.CancelFunc
-	eg        errgroup.Group
 }
 
 // session per every signing key for the whole epoch.
@@ -111,13 +105,8 @@ func (s *session) MarshalLogObject(encoder log.ObjectEncoder) error {
 		encoder.AddInt("eligible", len(s.eligibilities.proofs))
 		encoder.AddArray("eligible by layer", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
 			// Sort the layer map to log the layer data in order
-			keys := make([]types.LayerID, 0, len(s.eligibilities.proofs))
-			for k := range s.eligibilities.proofs {
-				keys = append(keys, k)
-			}
-			sort.Slice(keys, func(i, j int) bool {
-				return keys[i].Before(keys[j])
-			})
+			keys := maps.Keys(s.eligibilities.proofs)
+			slices.Sort(keys)
 			for _, lyr := range keys {
 				encoder.AppendObject(log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
 					encoder.AddUint32("layer", lyr.Uint32())
@@ -212,11 +201,8 @@ func New(
 	conState conservativeState,
 	opts ...Opt,
 ) *ProposalBuilder {
-	ctx, cancel := context.WithCancel(context.Background())
 	pb := &ProposalBuilder{
 		logger:    log.NewNop(),
-		ctx:       ctx,
-		cancel:    cancel,
 		signer:    signer,
 		clock:     clock,
 		cdb:       cdb,
@@ -232,46 +218,36 @@ func New(
 }
 
 // Start the loop that listens to layers and build proposals.
-func (pb *ProposalBuilder) Start() {
-	pb.startOnce.Do(func() {
-		pb.eg.Go(func() error {
-			next := pb.clock.CurrentLayer().Add(1)
-			pb.logger.With().Info("started", log.Inline(&pb.cfg), log.Uint32("next", next.Uint32()))
-			for {
-				select {
-				case <-pb.ctx.Done():
-					return nil
-				case <-pb.clock.AwaitLayer(next):
-					current := pb.clock.CurrentLayer()
-					if current.Before(next) {
-						pb.logger.With().Info("time sync detected, realigning ProposalBuilder",
-							log.Uint32("current", current.Uint32()),
-							log.Uint32("next", next.Uint32()),
-						)
-						continue
-					}
-					next = current.Add(1)
-					ctx := log.WithNewSessionID(pb.ctx)
-					if current <= types.GetEffectiveGenesis() || !pb.syncer.IsSynced(ctx) {
-						continue
-					}
-					if err := pb.build(ctx, current); err != nil {
-						if errors.Is(err, errAtxNotAvailable) {
-							pb.logger.With().Debug("signer is not active in epoch", log.Context(ctx), log.Uint32("lid", current.Uint32()), log.Err(err))
-						} else {
-							pb.logger.With().Warning("failed to build proposal", log.Context(ctx), log.Uint32("lid", current.Uint32()), log.Err(err))
-						}
-					}
+func (pb *ProposalBuilder) Run(ctx context.Context) error {
+	next := pb.clock.CurrentLayer().Add(1)
+	pb.logger.With().Info("started", log.Inline(&pb.cfg), log.Uint32("next", next.Uint32()))
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-pb.clock.AwaitLayer(next):
+			current := pb.clock.CurrentLayer()
+			if current.Before(next) {
+				pb.logger.With().Info("time sync detected, realigning ProposalBuilder",
+					log.Uint32("current", current.Uint32()),
+					log.Uint32("next", next.Uint32()),
+				)
+				continue
+			}
+			next = current.Add(1)
+			sctx := log.WithNewSessionID(ctx)
+			if current <= types.GetEffectiveGenesis() || !pb.syncer.IsSynced(sctx) {
+				continue
+			}
+			if err := pb.build(ctx, current); err != nil {
+				if errors.Is(err, errAtxNotAvailable) {
+					pb.logger.With().Debug("signer is not active in epoch", log.Context(sctx), log.Uint32("lid", current.Uint32()), log.Err(err))
+				} else {
+					pb.logger.With().Warning("failed to build proposal", log.Context(sctx), log.Uint32("lid", current.Uint32()), log.Err(err))
 				}
 			}
-		})
-	})
-}
-
-// Stop the loop that listens to layers and build proposals.
-func (pb *ProposalBuilder) Stop() {
-	pb.cancel()
-	_ = pb.eg.Wait()
+		}
+	}
 }
 
 // only output the mesh hash in the proposal when the following conditions are met:
@@ -366,11 +342,12 @@ func (pb *ProposalBuilder) initSessionData(ctx context.Context, lid types.LayerI
 	}
 	if pb.session.prev == 0 {
 		prev, err := ballots.LastInEpoch(pb.cdb, pb.session.atx, pb.session.epoch)
-		if err != nil && !errors.Is(err, sql.ErrNotFound) {
-			return err
-		}
-		if err == nil {
+		switch {
+		case err == nil:
 			pb.session.prev = prev.Layer
+		case errors.Is(err, sql.ErrNotFound):
+		default:
+			return err
 		}
 	}
 	if pb.session.ref == types.EmptyBallotID {
@@ -387,7 +364,7 @@ func (pb *ProposalBuilder) initSessionData(ctx context.Context, lid types.LayerI
 			}
 			pb.session.active.set = set
 			pb.session.active.weight = weight
-			pb.session.eligibilities.slots = proposals.MustGeetNumEligibleSlots(pb.session.atxWeight, pb.cfg.minActiveSetWeight, weight, pb.cfg.layerSize, pb.cfg.layersPerEpoch)
+			pb.session.eligibilities.slots = proposals.MustGetNumEligibleSlots(pb.session.atxWeight, pb.cfg.minActiveSetWeight, weight, pb.cfg.layerSize, pb.cfg.layersPerEpoch)
 		} else {
 			if ballot.EpochData == nil {
 				return fmt.Errorf("atx %d created invalid first ballot", pb.session.atx)
@@ -433,8 +410,10 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 
 	proofs := pb.session.eligibilities.proofs[lid]
 	if len(proofs) == 0 {
-		pb.logger.WithContext(ctx).With().Debug("not eligible for proposal in layer",
-			log.Uint32("lid", lid.Uint32()), log.Uint32("epoch", lid.GetEpoch().Uint32()))
+		pb.logger.With().Debug("not eligible for proposal in layer",
+			log.Context(ctx), log.Uint32("lid", lid.Uint32()),
+			log.Uint32("epoch", lid.GetEpoch().Uint32()),
+		)
 		return nil
 	}
 	pb.logger.With().Debug("eligible for proposals in layer",

@@ -1049,7 +1049,9 @@ func (app *App) startServices(ctx context.Context) error {
 	if err := app.hare.Start(ctx); err != nil {
 		return fmt.Errorf("cannot start hare: %w", err)
 	}
-	app.proposalBuilder.Start()
+	app.eg.Go(func() error {
+		return app.proposalBuilder.Run(ctx)
+	})
 
 	if app.Config.SMESHING.Start {
 		coinbaseAddr, err := types.StringToAddress(app.Config.SMESHING.CoinbaseAccount)
@@ -1195,10 +1197,6 @@ func (app *App) stopServices(ctx context.Context) {
 	if app.updater != nil {
 		app.log.Info("stopping updater")
 		app.updater.Close()
-	}
-
-	if app.proposalBuilder != nil {
-		app.proposalBuilder.Stop()
 	}
 
 	if app.clock != nil {
