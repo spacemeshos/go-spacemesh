@@ -313,6 +313,7 @@ func TestBuild(t *testing.T) {
 						gballot(types.BallotID{1}, types.ATXID{1}, signer.NodeID(), 15, &types.EpochData{
 							ActiveSetHash:    types.ATXIDList{{1}, {2}}.Hash(),
 							EligibilityCount: 5,
+							Beacon:           types.Beacon{1},
 						}),
 					},
 					activeset:      types.ATXIDList{{1}, {2}},
@@ -361,6 +362,7 @@ func TestBuild(t *testing.T) {
 						gballot(types.BallotID{1}, types.ATXID{10}, signer.NodeID(), 15, &types.EpochData{
 							ActiveSetHash:    types.ATXIDList{{10}, {2}}.Hash(),
 							EligibilityCount: 5,
+							Beacon:           types.Beacon{1},
 						}),
 					},
 					opinion:        &types.Opinion{Hash: types.Hash32{1}},
@@ -412,6 +414,7 @@ func TestBuild(t *testing.T) {
 						gballot(types.BallotID{1}, types.ATXID{1}, signer.NodeID(), 15, &types.EpochData{
 							ActiveSetHash:    types.ATXIDList{{1}}.Hash(),
 							EligibilityCount: 10,
+							Beacon:           types.Beacon{1},
 						}),
 					},
 					activeset:      types.ATXIDList{{1}},
@@ -434,6 +437,7 @@ func TestBuild(t *testing.T) {
 						gballot(types.BallotID{1}, types.ATXID{1}, signer.NodeID(), 15, &types.EpochData{
 							ActiveSetHash:    types.ATXIDList{{1}}.Hash(),
 							EligibilityCount: 10,
+							Beacon:           types.Beacon{1},
 						}),
 					},
 					activeset:      types.ATXIDList{{1}},
@@ -570,6 +574,7 @@ func TestBuild(t *testing.T) {
 						gballot(types.BallotID{1}, types.ATXID{1}, signer.NodeID(), 15, &types.EpochData{
 							ActiveSetHash:    types.ATXIDList{{1}}.Hash(),
 							EligibilityCount: 10,
+							Beacon:           types.Beacon{1},
 						}),
 					},
 					activeset:      types.ATXIDList{{1}},
@@ -621,6 +626,7 @@ func TestBuild(t *testing.T) {
 						gballot(types.BallotID{1}, types.ATXID{1}, signer.NodeID(), 15, &types.EpochData{
 							ActiveSetHash:    types.ATXIDList{{1}}.Hash(),
 							EligibilityCount: 10,
+							Beacon:           types.Beacon{1},
 						}),
 					},
 					activeset:      types.ATXIDList{{1}},

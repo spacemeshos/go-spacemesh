@@ -73,18 +73,18 @@ type ProposalBuilder struct {
 
 	mu      sync.Mutex
 	signers map[string]*signerSession
-	shared  epochSession
+	shared  sharedSession
 }
 
 type signerSession struct {
-	signer      *signing.EdSigner
-	log         log.Log
-	session     session
-	latency     latencyTracker
-	layerProofs []types.VotingEligibility
+	signer  *signing.EdSigner
+	log     log.Log
+	session session
+	latency latencyTracker
 }
 
-type epochSession struct {
+// shared data for all signers in the epoch
+type sharedSession struct {
 	epoch  types.EpochID
 	beacon types.Beacon
 	active struct {
@@ -99,6 +99,7 @@ type session struct {
 	atx           types.ATXID
 	atxWeight     uint64
 	ref           types.BallotID
+	beacon        types.Beacon
 	prev          types.LayerID
 	nonce         types.VRFPostIndex
 	eligibilities struct {
@@ -367,7 +368,7 @@ func (pb *ProposalBuilder) decideMeshHash(ctx context.Context, current types.Lay
 
 func (pb *ProposalBuilder) initSharedData(ctx context.Context, lid types.LayerID) error {
 	if pb.shared.epoch != lid.GetEpoch() {
-		pb.shared = epochSession{epoch: lid.GetEpoch()}
+		pb.shared = sharedSession{epoch: lid.GetEpoch()}
 	}
 	if pb.shared.beacon == types.EmptyBeacon {
 		beacon, err := beacons.Get(pb.cdb, pb.shared.epoch)
@@ -430,6 +431,7 @@ func (pb *ProposalBuilder) initSignerData(
 			return fmt.Errorf("get refballot %w", err)
 		}
 		if errors.Is(err, sql.ErrNotFound) {
+			ss.session.beacon = pb.shared.beacon
 			ss.session.eligibilities.slots = proposals.MustGetNumEligibleSlots(
 				ss.session.atxWeight,
 				pb.cfg.minActiveSetWeight,
@@ -442,6 +444,7 @@ func (pb *ProposalBuilder) initSignerData(
 				return fmt.Errorf("atx %d created invalid first ballot", ss.session.atx)
 			}
 			ss.session.ref = ballot.ID()
+			ss.session.beacon = ballot.EpochData.Beacon
 			ss.session.eligibilities.slots = ballot.EpochData.EligibilityCount
 		}
 	}
@@ -449,7 +452,7 @@ func (pb *ProposalBuilder) initSignerData(
 		ss.session.eligibilities.proofs = calcEligibilityProofs(
 			ss.signer.MustVRFSigner(),
 			ss.session.epoch,
-			pb.shared.beacon,
+			ss.session.beacon,
 			ss.session.nonce,
 			ss.session.eligibilities.slots,
 			pb.cfg.layersPerEpoch,
@@ -457,7 +460,7 @@ func (pb *ProposalBuilder) initSignerData(
 		ss.log.With().Info("proposal eligibilities for an epoch", log.Inline(&ss.session))
 		events.EmitEligibilities(
 			ss.session.epoch,
-			pb.shared.beacon,
+			ss.session.beacon,
 			ss.session.atx,
 			uint32(len(pb.shared.active.set)),
 			ss.session.eligibilities.proofs,
@@ -473,6 +476,7 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 	}
 
 	pb.mu.Lock()
+	// don't accept registration in the middle of computing proposals
 	signers := maps.Values(pb.signers)
 	pb.mu.Unlock()
 
@@ -509,18 +513,18 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 
 	any := false
 	for _, ss := range signers {
-		ss.layerProofs = ss.session.eligibilities.proofs[lid]
-		if len(ss.layerProofs) == 0 {
+		if n := len(ss.session.eligibilities.proofs[lid]); n == 0 {
 			ss.log.With().Debug("not eligible for proposal in layer",
 				log.Context(ctx),
 				log.Uint32("lid", lid.Uint32()), log.Uint32("epoch", lid.GetEpoch().Uint32()))
 			continue
+		} else {
+			ss.log.With().Debug("eligible for proposals in layer",
+				log.Context(ctx),
+				log.Uint32("lid", lid.Uint32()), log.Int("num proposals", n),
+			)
+			any = true
 		}
-		ss.log.With().Debug("eligible for proposals in layer",
-			log.Context(ctx),
-			log.Uint32("lid", lid.Uint32()), log.Int("num proposals", len(ss.layerProofs)),
-		)
-		any = any || len(ss.layerProofs) > 0
 	}
 	if !any {
 		return nil
