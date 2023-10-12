@@ -103,19 +103,24 @@ func (s *session) MarshalLogObject(encoder log.ObjectEncoder) error {
 	if s.eligibilities.proofs != nil {
 		encoder.AddUint32("slots", s.eligibilities.slots)
 		encoder.AddInt("eligible", len(s.eligibilities.proofs))
-		encoder.AddArray("eligible by layer", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-			// Sort the layer map to log the layer data in order
-			keys := maps.Keys(s.eligibilities.proofs)
-			slices.Sort(keys)
-			for _, lyr := range keys {
-				encoder.AppendObject(log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
-					encoder.AddUint32("layer", lyr.Uint32())
-					encoder.AddInt("slots", len(s.eligibilities.proofs[lyr]))
-					return nil
-				}))
-			}
-			return nil
-		}))
+		encoder.AddArray(
+			"eligible by layer",
+			log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+				// Sort the layer map to log the layer data in order
+				keys := maps.Keys(s.eligibilities.proofs)
+				slices.Sort(keys)
+				for _, lyr := range keys {
+					encoder.AppendObject(
+						log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
+							encoder.AddUint32("layer", lyr.Uint32())
+							encoder.AddInt("slots", len(s.eligibilities.proofs[lyr]))
+							return nil
+						}),
+					)
+				}
+				return nil
+			}),
+		)
 	}
 	return nil
 }
@@ -241,7 +246,8 @@ func (pb *ProposalBuilder) Run(ctx context.Context) error {
 			}
 			if err := pb.build(ctx, current); err != nil {
 				if errors.Is(err, errAtxNotAvailable) {
-					pb.logger.With().Debug("signer is not active in epoch", log.Context(sctx), log.Uint32("lid", current.Uint32()), log.Err(err))
+					pb.logger.With().
+						Debug("signer is not active in epoch", log.Context(sctx), log.Uint32("lid", current.Uint32()), log.Err(err))
 				} else {
 					pb.logger.With().Warning("failed to build proposal", log.Context(sctx), log.Uint32("lid", current.Uint32()), log.Err(err))
 				}
@@ -357,14 +363,28 @@ func (pb *ProposalBuilder) initSessionData(ctx context.Context, lid types.LayerI
 		}
 		if errors.Is(err, sql.ErrNotFound) {
 			weight, set, err := generateActiveSet(
-				pb.logger, pb.cdb, pb.signer.MustVRFSigner(), pb.session.epoch, pb.clock.LayerToTime(pb.session.epoch.FirstLayer()),
-				pb.cfg.GoodAtxPercent, pb.cfg.networkDelay, pb.session.atx, pb.session.atxWeight)
+				pb.logger,
+				pb.cdb,
+				pb.signer.MustVRFSigner(),
+				pb.session.epoch,
+				pb.clock.LayerToTime(pb.session.epoch.FirstLayer()),
+				pb.cfg.GoodAtxPercent,
+				pb.cfg.networkDelay,
+				pb.session.atx,
+				pb.session.atxWeight,
+			)
 			if err != nil {
 				return err
 			}
 			pb.session.active.set = set
 			pb.session.active.weight = weight
-			pb.session.eligibilities.slots = proposals.MustGetNumEligibleSlots(pb.session.atxWeight, pb.cfg.minActiveSetWeight, weight, pb.cfg.layerSize, pb.cfg.layersPerEpoch)
+			pb.session.eligibilities.slots = proposals.MustGetNumEligibleSlots(
+				pb.session.atxWeight,
+				pb.cfg.minActiveSetWeight,
+				weight,
+				pb.cfg.layerSize,
+				pb.cfg.layersPerEpoch,
+			)
 		} else {
 			if ballot.EpochData == nil {
 				return fmt.Errorf("atx %d created invalid first ballot", pb.session.atx)
@@ -389,9 +409,22 @@ func (pb *ProposalBuilder) initSessionData(ctx context.Context, lid types.LayerI
 		}
 	}
 	if pb.session.eligibilities.proofs == nil {
-		pb.session.eligibilities.proofs = calcEligibilityProofs(pb.signer.MustVRFSigner(), pb.session.epoch, pb.session.beacon, pb.session.nonce, pb.session.eligibilities.slots, pb.cfg.layersPerEpoch)
+		pb.session.eligibilities.proofs = calcEligibilityProofs(
+			pb.signer.MustVRFSigner(),
+			pb.session.epoch,
+			pb.session.beacon,
+			pb.session.nonce,
+			pb.session.eligibilities.slots,
+			pb.cfg.layersPerEpoch,
+		)
 		pb.logger.With().Info("proposal eligibilities for an epoch", log.Inline(pb.session))
-		events.EmitEligibilities(pb.session.epoch, pb.session.beacon, pb.session.atx, uint32(len(pb.session.active.set)), pb.session.eligibilities.proofs)
+		events.EmitEligibilities(
+			pb.session.epoch,
+			pb.session.beacon,
+			pb.session.atx,
+			uint32(len(pb.session.active.set)),
+			pb.session.eligibilities.proofs,
+		)
 	}
 	return nil
 }
@@ -447,11 +480,17 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 		}
 	}
 	if err = pb.publisher.Publish(ctx, pubsub.ProposalProtocol, codec.MustEncode(proposal)); err != nil {
-		return fmt.Errorf("failed to publish proposal %d/%s: %w", proposal.Layer, proposal.ID(), err)
+		return fmt.Errorf(
+			"failed to publish proposal %d/%s: %w",
+			proposal.Layer,
+			proposal.ID(),
+			err,
+		)
 	}
 	latency.publish = time.Now()
 
-	pb.logger.With().Info("proposal created", log.Context(ctx), log.Inline(proposal), log.Object("latency", &latency))
+	pb.logger.With().
+		Info("proposal created", log.Context(ctx), log.Inline(proposal), log.Object("latency", &latency))
 	proposalBuild.Observe(latency.total().Seconds())
 	events.EmitProposal(lid, proposal.ID())
 	events.ReportProposal(events.ProposalCreated, proposal)
@@ -522,7 +561,11 @@ func activeSetFromBlock(db sql.Executor, bid types.BlockID) ([]types.ATXID, erro
 		}
 		actives, err := activesets.Get(db, ballot.EpochData.ActiveSetHash)
 		if err != nil {
-			return nil, fmt.Errorf("actives get active hash for ballot %s: %w", ballot.ID().String(), err)
+			return nil, fmt.Errorf(
+				"actives get active hash for ballot %s: %w",
+				ballot.ID().String(),
+				err,
+			)
 		}
 		for _, id := range actives.Set {
 			activeMap[id] = struct{}{}
@@ -668,15 +711,22 @@ const (
 	good
 )
 
-func gradeAtx(msh mesh, nodeID types.NodeID, atxReceived, epochStart time.Time, delta time.Duration) (atxGrade, error) {
+func gradeAtx(
+	msh mesh,
+	nodeID types.NodeID,
+	atxReceived, epochStart time.Time,
+	delta time.Duration,
+) (atxGrade, error) {
 	proof, err := msh.GetMalfeasanceProof(nodeID)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return good, err
 	}
-	if atxReceived.Before(epochStart.Add(-4*delta)) && (proof == nil || !proof.Received().Before(epochStart)) {
+	if atxReceived.Before(epochStart.Add(-4*delta)) &&
+		(proof == nil || !proof.Received().Before(epochStart)) {
 		return good, nil
 	}
-	if atxReceived.Before(epochStart.Add(-3*delta)) && (proof == nil || !proof.Received().Before(epochStart.Add(-delta))) {
+	if atxReceived.Before(epochStart.Add(-3*delta)) &&
+		(proof == nil || !proof.Received().Before(epochStart.Add(-delta))) {
 		return acceptable, nil
 	}
 	return evil, nil
