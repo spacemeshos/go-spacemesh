@@ -103,14 +103,13 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher) *testProtocolD
 	tpd.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).AnyTimes().Return(types.VRFPostIndex(1), nil)
 
 	tpd.cdb = datastore.NewCachedDB(sql.InMemory(), lg)
-	tpd.ProtocolDriver = New(minerID, p, edSgn, edVerify, tpd.mVerifier, tpd.cdb, tpd.mClock,
+	tpd.ProtocolDriver = New(p, edSgn, edVerify, tpd.mVerifier, tpd.cdb, tpd.mClock,
 		WithConfig(cfg),
 		WithLogger(lg),
 		withWeakCoin(coinValueMock(tb, true)),
 		withNonceFetcher(tpd.mNonceFetcher),
 	)
 	tpd.ProtocolDriver.SetSyncState(tpd.mSync)
-	tpd.ProtocolDriver.setMetricsRegistry(prometheus.NewPedanticRegistry())
 	return tpd
 }
 
@@ -159,11 +158,11 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 			for _, node := range testNodes {
 				switch protocol {
 				case pubsub.BeaconProposalProtocol:
-					require.NoError(t, node.HandleProposal(ctx, p2p.Peer(node.nodeID.ShortString()), data))
+					require.NoError(t, node.HandleProposal(ctx, p2p.Peer(node.edSigner.NodeID().ShortString()), data))
 				case pubsub.BeaconFirstVotesProtocol:
-					require.NoError(t, node.HandleFirstVotes(ctx, p2p.Peer(node.nodeID.ShortString()), data))
+					require.NoError(t, node.HandleFirstVotes(ctx, p2p.Peer(node.edSigner.NodeID().ShortString()), data))
 				case pubsub.BeaconFollowingVotesProtocol:
-					require.NoError(t, node.HandleFollowingVotes(ctx, p2p.Peer(node.nodeID.ShortString()), data))
+					require.NoError(t, node.HandleFollowingVotes(ctx, p2p.Peer(node.edSigner.NodeID().ShortString()), data))
 				case pubsub.BeaconWeakCoinProtocol:
 				}
 			}
@@ -228,11 +227,11 @@ func TestBeacon_MultipleNodes_OnlyOneHonest(t *testing.T) {
 			for _, node := range testNodes {
 				switch protocol {
 				case pubsub.BeaconProposalProtocol:
-					require.NoError(t, node.HandleProposal(ctx, p2p.Peer(node.nodeID.ShortString()), data))
+					require.NoError(t, node.HandleProposal(ctx, p2p.Peer(node.edSigner.NodeID().ShortString()), data))
 				case pubsub.BeaconFirstVotesProtocol:
-					require.NoError(t, node.HandleFirstVotes(ctx, p2p.Peer(node.nodeID.ShortString()), data))
+					require.NoError(t, node.HandleFirstVotes(ctx, p2p.Peer(node.edSigner.NodeID().ShortString()), data))
 				case pubsub.BeaconFollowingVotesProtocol:
-					require.NoError(t, node.HandleFollowingVotes(ctx, p2p.Peer(node.nodeID.ShortString()), data))
+					require.NoError(t, node.HandleFollowingVotes(ctx, p2p.Peer(node.edSigner.NodeID().ShortString()), data))
 				case pubsub.BeaconWeakCoinProtocol:
 				}
 			}
@@ -264,7 +263,7 @@ func TestBeacon_MultipleNodes_OnlyOneHonest(t *testing.T) {
 		for _, db := range dbs {
 			createATX(t, db, atxPublishLid, node.edSigner, 1, time.Now().Add(-1*time.Second))
 			if i != 0 {
-				require.NoError(t, identities.SetMalicious(db, node.nodeID, []byte("bad"), time.Now()))
+				require.NoError(t, identities.SetMalicious(db, node.edSigner.NodeID(), []byte("bad"), time.Now()))
 			}
 		}
 	}

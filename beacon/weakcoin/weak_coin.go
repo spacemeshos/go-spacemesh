@@ -266,12 +266,7 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, nonce types.VRFPostInde
 				NodeID:       wc.signer.NodeID(),
 				VRFSignature: signature,
 			}
-			msg, err := codec.Encode(&message)
-			if err != nil {
-				wc.logger.With().Fatal("failed to serialize weak coin message", log.Err(err))
-			}
-
-			broadcast = msg
+			broadcast = codec.MustEncode(&message)
 			smallest = &signature
 		}
 	}
@@ -354,10 +349,5 @@ func (wc *WeakCoin) encodeProposal(epoch types.EpochID, nonce types.VRFPostIndex
 		Round: round,
 		Unit:  unit,
 	}
-
-	b, err := codec.Encode(message)
-	if err != nil {
-		wc.logger.With().Fatal("failed to encode weak coin vrf msg", log.Err(err))
-	}
-	return b
+	return codec.MustEncode(message)
 }
