@@ -146,3 +146,9 @@ func (p *Peers) SelectBest(n int) []peer.ID {
 	}
 	return rst
 }
+
+func (p *Peers) Total() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return len(p.peers)
+}

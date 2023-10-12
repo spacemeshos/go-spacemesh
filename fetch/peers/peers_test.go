@@ -1,6 +1,8 @@
 package peers
 
 import (
+	"math/rand"
+	"strconv"
 	"testing"
 	"time"
 
@@ -189,5 +191,36 @@ func TestSelect(t *testing.T) {
 				)
 			}
 		})
+	}
+}
+
+func BenchmarkSelectBest(b *testing.B) {
+	const (
+		total  = 10000
+		target = 10
+	)
+	events := []event{}
+	rng := rand.New(rand.NewSource(10001))
+
+	for i := 0; i < total; i++ {
+		events = append(
+			events,
+			event{
+				id:      peer.ID(strconv.Itoa(i)),
+				success: rng.Intn(100),
+				failure: rng.Intn(100),
+				add:     true,
+			},
+		)
+	}
+	tracker := withEvents(events)
+	require.Equal(b, total, tracker.Total())
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		best := tracker.SelectBest(target)
+		if len(best) != target {
+			b.Fail()
+		}
 	}
 }
