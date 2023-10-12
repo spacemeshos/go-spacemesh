@@ -75,7 +75,6 @@ type testProtocolDriver struct {
 	cdb           *datastore.CachedDB
 	mClock        *MocklayerClock
 	mSync         *mocks.MockSyncStateProvider
-	mSigner       *MockvrfSigner
 	mVerifier     *MockvrfVerifier
 	mNonceFetcher *MocknonceFetcher
 }
@@ -90,7 +89,6 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher) *testProtocolD
 		ctrl:          ctrl,
 		mClock:        NewMocklayerClock(ctrl),
 		mSync:         mocks.NewMockSyncStateProvider(ctrl),
-		mSigner:       NewMockvrfSigner(ctrl),
 		mVerifier:     NewMockvrfVerifier(ctrl),
 		mNonceFetcher: NewMocknonceFetcher(ctrl),
 	}
@@ -101,12 +99,11 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher) *testProtocolD
 	minerID := edSgn.NodeID()
 	lg := logtest.New(tb).WithName(minerID.ShortString())
 
-	tpd.mSigner.EXPECT().Sign(gomock.Any()).AnyTimes().Return(types.EmptyVrfSignature)
 	tpd.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(true)
 	tpd.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).AnyTimes().Return(types.VRFPostIndex(1), nil)
 
 	tpd.cdb = datastore.NewCachedDB(sql.InMemory(), lg)
-	tpd.ProtocolDriver = New(minerID, p, edSgn, edVerify, tpd.mSigner, tpd.mVerifier, tpd.cdb, tpd.mClock,
+	tpd.ProtocolDriver = New(minerID, p, edSgn, edVerify, tpd.mVerifier, tpd.cdb, tpd.mClock,
 		WithConfig(cfg),
 		WithLogger(lg),
 		withWeakCoin(coinValueMock(tb, true)),
@@ -988,9 +985,7 @@ func TestBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
 			for i := 0; i < tc.wEarly; i++ {
 				signer, err := signing.NewEdSigner()
 				require.NoError(t, err)
-				vrfSigner, err := signer.VRFSigner()
-				require.NoError(t, err)
-				proposal := buildSignedProposal(context.Background(), logtest.New(t), vrfSigner, 3, types.VRFPostIndex(1))
+				proposal := buildSignedProposal(context.Background(), logtest.New(t), signer.VRFSigner(), 3, types.VRFPostIndex(1))
 				if checker.PassThreshold(proposal) {
 					numEligible++
 				}
@@ -1036,8 +1031,6 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 
 	edSgn, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	vrfSigner, err := edSgn.VRFSigner()
-	require.NoError(t, err)
 
 	tt := []struct {
 		name   string
@@ -1047,12 +1040,12 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 		{
 			name:   "Case 1",
 			epoch:  1,
-			result: vrfSigner.Sign([]byte{0x04, 0x04, 0x04}),
+			result: edSgn.VRFSigner().Sign([]byte{0x04, 0x04, 0x04}),
 		},
 		{
 			name:   "Case 2",
 			epoch:  2,
-			result: vrfSigner.Sign([]byte{0x04, 0x04, 0x08}),
+			result: edSgn.VRFSigner().Sign([]byte{0x04, 0x04, 0x08}),
 		},
 	}
 
@@ -1061,7 +1054,7 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := buildSignedProposal(context.Background(), logtest.New(t), vrfSigner, tc.epoch, types.VRFPostIndex(1))
+			result := buildSignedProposal(context.Background(), logtest.New(t), edSgn.VRFSigner(), tc.epoch, types.VRFPostIndex(1))
 			require.Equal(t, tc.result, result)
 		})
 	}

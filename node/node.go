@@ -539,10 +539,7 @@ func (app *App) SetLogLevel(name, loglevel string) error {
 }
 
 func (app *App) initServices(ctx context.Context) error {
-	vrfSigner, err := app.edSgn.VRFSigner()
-	if err != nil {
-		return fmt.Errorf("could not create vrf signer: %w", err)
-	}
+	vrfSigner := app.edSgn.VRFSigner()
 	layerSize := app.Config.LayerAvgSize
 	layersPerEpoch := types.GetLayersPerEpoch()
 	lg := app.log.Named(app.edSgn.NodeID().ShortString()).WithFields(app.edSgn.NodeID())
@@ -602,7 +599,7 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 
 	vrfVerifier := signing.NewVRFVerifier()
-	beaconProtocol := beacon.New(app.edSgn.NodeID(), app.host, app.edSgn, app.edVerifier, vrfSigner, vrfVerifier, app.cachedDB, app.clock,
+	beaconProtocol := beacon.New(app.edSgn.NodeID(), app.host, app.edSgn, app.edVerifier, vrfVerifier, app.cachedDB, app.clock,
 		beacon.WithContext(ctx),
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)),

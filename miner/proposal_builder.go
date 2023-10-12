@@ -365,7 +365,7 @@ func (pb *ProposalBuilder) initSessionData(ctx context.Context, lid types.LayerI
 			weight, set, err := generateActiveSet(
 				pb.logger,
 				pb.cdb,
-				pb.signer.MustVRFSigner(),
+				pb.signer.VRFSigner(),
 				pb.session.epoch,
 				pb.clock.LayerToTime(pb.session.epoch.FirstLayer()),
 				pb.cfg.GoodAtxPercent,
@@ -410,7 +410,7 @@ func (pb *ProposalBuilder) initSessionData(ctx context.Context, lid types.LayerI
 	}
 	if pb.session.eligibilities.proofs == nil {
 		pb.session.eligibilities.proofs = calcEligibilityProofs(
-			pb.signer.MustVRFSigner(),
+			pb.signer.VRFSigner(),
 			pb.session.epoch,
 			pb.session.beacon,
 			pb.session.nonce,
