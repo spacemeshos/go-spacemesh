@@ -36,13 +36,6 @@ func noopBroadcaster(tb testing.TB, ctrl *gomock.Controller) *mocks.MockPublishe
 	return bc
 }
 
-func encoded(tb testing.TB, msg weakcoin.Message) []byte {
-	tb.Helper()
-	buf, err := codec.Encode(&msg)
-	require.NoError(tb, err)
-	return buf
-}
-
 func staticSigner(tb testing.TB, ctrl *gomock.Controller, nodeId types.NodeID, sig types.VrfSignature) *weakcoin.MockvrfSigner {
 	tb.Helper()
 	signer := weakcoin.NewMockvrfSigner(ctrl)
@@ -100,7 +93,7 @@ func TestWeakCoin(t *testing.T) {
 			nodeSig:  oneLSBSig,
 			mining:   false,
 			expected: false,
-			msg: encoded(t, weakcoin.Message{
+			msg: codec.MustEncode(&weakcoin.Message{
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         1,
@@ -114,7 +107,7 @@ func TestWeakCoin(t *testing.T) {
 			nodeSig:  oneLSBSig,
 			mining:   true,
 			expected: true,
-			msg: encoded(t, weakcoin.Message{
+			msg: codec.MustEncode(&weakcoin.Message{
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         1,
@@ -128,7 +121,7 @@ func TestWeakCoin(t *testing.T) {
 			nodeSig:  higherThreshold,
 			mining:   true,
 			expected: false,
-			msg: encoded(t, weakcoin.Message{
+			msg: codec.MustEncode(&weakcoin.Message{
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         1,
@@ -223,7 +216,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 			desc:         "ValidProposal",
 			startedEpoch: epoch,
 			startedRound: round,
-			msg: encoded(t, weakcoin.Message{
+			msg: codec.MustEncode(&weakcoin.Message{
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         allowance,
@@ -243,7 +236,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 			desc:         "ExceedAllowance",
 			startedEpoch: epoch,
 			startedRound: round,
-			msg: encoded(t, weakcoin.Message{
+			msg: codec.MustEncode(&weakcoin.Message{
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         allowance + 1,
@@ -256,7 +249,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 			desc:         "ExceedThreshold",
 			startedEpoch: epoch,
 			startedRound: round,
-			msg: encoded(t, weakcoin.Message{
+			msg: codec.MustEncode(&weakcoin.Message{
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         allowance,
@@ -269,7 +262,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 			desc:         "PreviousEpoch",
 			startedEpoch: epoch,
 			startedRound: round,
-			msg: encoded(t, weakcoin.Message{
+			msg: codec.MustEncode(&weakcoin.Message{
 				Epoch:        epoch - 1,
 				Round:        round,
 				Unit:         allowance,
@@ -282,7 +275,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 			desc:         "NextEpoch",
 			startedEpoch: epoch,
 			startedRound: round,
-			msg: encoded(t, weakcoin.Message{
+			msg: codec.MustEncode(&weakcoin.Message{
 				Epoch:        epoch + 1,
 				Round:        round,
 				Unit:         allowance,
@@ -295,7 +288,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 			desc:         "PreviousRound",
 			startedEpoch: epoch,
 			startedRound: round,
-			msg: encoded(t, weakcoin.Message{
+			msg: codec.MustEncode(&weakcoin.Message{
 				Epoch:        epoch,
 				Round:        round - 1,
 				Unit:         allowance,
@@ -308,7 +301,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 			desc:         "NextRound",
 			startedEpoch: epoch,
 			startedRound: round,
-			msg: encoded(t, weakcoin.Message{
+			msg: codec.MustEncode(&weakcoin.Message{
 				Epoch:        epoch,
 				Round:        round + 1,
 				Unit:         allowance,
@@ -374,7 +367,7 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 	wc.StartEpoch(context.Background(), epoch)
 	wc.StartRound(context.Background(), round, nil)
 	for i := 0; i < bufSize; i++ {
-		wc.HandleProposal(context.Background(), "", encoded(t, weakcoin.Message{
+		wc.HandleProposal(context.Background(), "", codec.MustEncode(&weakcoin.Message{
 			Epoch:        epoch,
 			Round:        nextRound,
 			Unit:         1,
@@ -382,7 +375,7 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 			VRFSignature: oneLSBSig,
 		}))
 	}
-	wc.HandleProposal(context.Background(), "", encoded(t, weakcoin.Message{
+	wc.HandleProposal(context.Background(), "", codec.MustEncode(&weakcoin.Message{
 		Epoch:        epoch,
 		Round:        nextRound,
 		Unit:         1,
