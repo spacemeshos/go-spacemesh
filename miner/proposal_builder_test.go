@@ -760,7 +760,10 @@ func TestBuild(t *testing.T) {
 							Return(step.opinion, step.encodeVotesErr)
 					}
 					if step.txs != nil {
-						conState.EXPECT().SelectProposalTXs(step.lid, gomock.Any()).Return(step.txs)
+						conState.EXPECT().
+							SelectProposalTXs(step.lid, gomock.Any()).
+							Return(step.txs).
+							AnyTimes()
 					}
 					if step.latestComplete != 0 {
 						tortoise.EXPECT().LatestComplete().Return(step.latestComplete)

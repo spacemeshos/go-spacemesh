@@ -224,7 +224,7 @@ func WithMinGoodAtxPercent(percent int) Opt {
 func WithSigners(signers ...*signing.EdSigner) Opt {
 	return func(pb *ProposalBuilder) {
 		for _, signer := range signers {
-			pb.register(signer)
+			pb.Register(signer)
 		}
 	}
 }
@@ -268,10 +268,6 @@ func (pb *ProposalBuilder) Register(signer *signing.EdSigner) {
 			log:    pb.logger.WithFields(log.String("signer", signer.NodeID().ShortString())),
 		}
 	}
-}
-
-func (pb *ProposalBuilder) register(signer *signing.EdSigner) {
-
 }
 
 // Start the loop that listens to layers and build proposals.
