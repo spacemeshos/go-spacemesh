@@ -97,6 +97,7 @@ type testAtxBuilder struct {
 	goldenATXID types.ATXID
 
 	mpub        *mocks.MockPublisher
+	mpostSvc    *MockpostService
 	mnipost     *MocknipostBuilder
 	mpost       *MockpostSetupProvider
 	mpostClient *MockPostClient
@@ -117,6 +118,7 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 		coinbase:    types.GenerateAddress([]byte("33333")),
 		goldenATXID: types.ATXID(types.HexToHash32("77777")),
 		mpub:        mocks.NewMockPublisher(ctrl),
+		mpostSvc:    NewMockpostService(ctrl),
 		mnipost:     NewMocknipostBuilder(ctrl),
 		mpost:       NewMockpostSetupProvider(ctrl),
 		mpostClient: NewMockPostClient(ctrl),
@@ -138,14 +140,14 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 		close(ch)
 		return ch
 	}).AnyTimes()
+	tab.mpostSvc.EXPECT().Client(tab.nodeID).Return(tab.mpostClient, nil).AnyTimes()
 
-	b := NewBuilder(cfg, tab.nodeID, tab.sig, tab.cdb, tab.mpub, tab.mnipost, tab.mpost,
+	b := NewBuilder(cfg, tab.nodeID, tab.sig, tab.cdb, tab.mpub, tab.mpostSvc, tab.mnipost, tab.mpost,
 		tab.mclock, tab.msync, lg, opts...)
 	b.initialPost = &types.Post{
 		Nonce:   0,
 		Indices: make([]byte, 10),
 	}
-	b.Connected(tab.mpostClient)
 	tab.Builder = b
 	dir := tb.TempDir()
 	tab.mnipost.EXPECT().DataDir().Return(dir).AnyTimes()
@@ -1142,8 +1144,8 @@ func TestBuilder_InitialPostIsPersisted(t *testing.T) {
 func TestBuilder_UpdatePoets(t *testing.T) {
 	r := require.New(t)
 
-	tab := newTestBuilder(t, WithPoETClientInitializer(func(string, PoetConfig) (PoetProvingServiceClient, error) {
-		poet := NewMockPoetProvingServiceClient(gomock.NewController(t))
+	tab := newTestBuilder(t, WithPoETClientInitializer(func(string, PoetConfig) (poetClient, error) {
+		poet := NewMockpoetClient(gomock.NewController(t))
 		poet.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().Return(types.PoetServiceID{ServiceID: []byte("poetid")}, nil)
 		return poet, nil
 	}))
@@ -1162,8 +1164,8 @@ func TestBuilder_UpdatePoets(t *testing.T) {
 func TestBuilder_UpdatePoetsUnstable(t *testing.T) {
 	r := require.New(t)
 
-	tab := newTestBuilder(t, WithPoETClientInitializer(func(string, PoetConfig) (PoetProvingServiceClient, error) {
-		poet := NewMockPoetProvingServiceClient(gomock.NewController(t))
+	tab := newTestBuilder(t, WithPoETClientInitializer(func(string, PoetConfig) (poetClient, error) {
+		poet := NewMockpoetClient(gomock.NewController(t))
 		poet.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().Return(types.PoetServiceID{ServiceID: []byte("poetid")}, errors.New("ERROR"))
 		return poet, nil
 	}))
