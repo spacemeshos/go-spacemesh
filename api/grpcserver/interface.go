@@ -55,6 +55,11 @@ type postSetupProvider interface {
 	Config() activation.PostConfig
 }
 
+type postSupervisor interface {
+	Start() error
+	Stop() error
+}
+
 // peerCounter is an api to get amount of connected peers.
 type peerCounter interface {
 	PeerCount() uint64
@@ -85,9 +90,4 @@ type meshAPI interface {
 
 type oracle interface {
 	ActiveSet(context.Context, types.EpochID) ([]types.ATXID, error)
-}
-
-type postConnectionListener interface {
-	Connected(client activation.PostClient)
-	Disconnected(client activation.PostClient)
 }

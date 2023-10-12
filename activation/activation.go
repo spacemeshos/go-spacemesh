@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/post/shared"
 	"go.uber.org/atomic"
 	"golang.org/x/sync/errgroup"
@@ -69,7 +68,7 @@ type Config struct {
 // it is responsible for initializing post, receiving poet proof and orchestrating nipst. after which it will
 // calculate total weight and providing relevant view as proof.
 type Builder struct {
-	pendingPoetClients atomic.Pointer[[]PoetProvingServiceClient]
+	pendingPoetClients atomic.Pointer[[]poetClient]
 	started            *atomic.Bool
 
 	eg errgroup.Group
@@ -83,6 +82,7 @@ type Builder struct {
 	regossipInterval  time.Duration
 	cdb               *datastore.CachedDB
 	publisher         pubsub.Publisher
+	postService       postService
 	nipostBuilder     nipostBuilder
 	postSetupProvider postSetupProvider
 	initialPost       *types.Post
@@ -115,7 +115,7 @@ func WithPoetRetryInterval(interval time.Duration) BuilderOption {
 }
 
 // PoETClientInitializer interfaces for creating PoetProvingServiceClient.
-type PoETClientInitializer func(string, PoetConfig) (PoetProvingServiceClient, error)
+type PoETClientInitializer func(string, PoetConfig) (poetClient, error)
 
 // WithPoETClientInitializer modifies initialization logic for PoET client. Used during client update.
 func WithPoETClientInitializer(initializer PoETClientInitializer) BuilderOption {
@@ -151,6 +151,7 @@ func NewBuilder(
 	signer *signing.EdSigner,
 	cdb *datastore.CachedDB,
 	publisher pubsub.Publisher,
+	postService postService,
 	nipostBuilder nipostBuilder,
 	postSetupProvider postSetupProvider,
 	layerClock layerClock,
@@ -168,6 +169,7 @@ func NewBuilder(
 		regossipInterval:      conf.RegossipInterval,
 		cdb:                   cdb,
 		publisher:             publisher,
+		postService:           postService,
 		nipostBuilder:         nipostBuilder,
 		postSetupProvider:     postSetupProvider,
 		layerClock:            layerClock,
@@ -181,6 +183,15 @@ func NewBuilder(
 		opt(b)
 	}
 	return b
+}
+
+func (b *Builder) proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error) {
+	client, err := b.postService.Client(b.nodeID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return client.Proof(ctx, challenge)
 }
 
 // Smeshing returns true iff atx builder is smeshing.
@@ -333,7 +344,7 @@ func (b *Builder) generateInitialPost(ctx context.Context) error {
 	startTime := time.Now()
 	var err error
 	events.EmitPostStart(shared.ZeroChallenge)
-	post, metadata, err := b.postSetupProvider.GenerateProof(ctx, shared.ZeroChallenge, proving.WithPowCreator(b.nodeID.Bytes()))
+	post, metadata, err := b.proof(ctx, shared.ZeroChallenge)
 	if err != nil {
 		events.EmitPostFailure()
 		return fmt.Errorf("post execution: %w", err)
@@ -380,7 +391,7 @@ func (b *Builder) verifyInitialPost(ctx context.Context, post *types.Post, metad
 	}
 }
 
-func (b *Builder) receivePendingPoetClients() *[]PoetProvingServiceClient {
+func (b *Builder) receivePendingPoetClients() *[]poetClient {
 	return b.pendingPoetClients.Swap(nil)
 }
 
@@ -515,7 +526,7 @@ func (b *Builder) UpdatePoETServers(ctx context.Context, endpoints []string) err
 			return nil
 		})))
 
-	clients := make([]PoetProvingServiceClient, 0, len(endpoints))
+	clients := make([]poetClient, 0, len(endpoints))
 	for _, endpoint := range endpoints {
 		client, err := b.poetClientInitializer(endpoint, b.poetCfg)
 		if err != nil {

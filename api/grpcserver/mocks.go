@@ -932,6 +932,105 @@ func (c *postSetupProviderStatusCall) DoAndReturn(f func() *activation.PostSetup
 	return c
 }
 
+// MockpostSupervisor is a mock of postSupervisor interface.
+type MockpostSupervisor struct {
+	ctrl     *gomock.Controller
+	recorder *MockpostSupervisorMockRecorder
+}
+
+// MockpostSupervisorMockRecorder is the mock recorder for MockpostSupervisor.
+type MockpostSupervisorMockRecorder struct {
+	mock *MockpostSupervisor
+}
+
+// NewMockpostSupervisor creates a new mock instance.
+func NewMockpostSupervisor(ctrl *gomock.Controller) *MockpostSupervisor {
+	mock := &MockpostSupervisor{ctrl: ctrl}
+	mock.recorder = &MockpostSupervisorMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockpostSupervisor) EXPECT() *MockpostSupervisorMockRecorder {
+	return m.recorder
+}
+
+// Start mocks base method.
+func (m *MockpostSupervisor) Start() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Start")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Start indicates an expected call of Start.
+func (mr *MockpostSupervisorMockRecorder) Start() *postSupervisorStartCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockpostSupervisor)(nil).Start))
+	return &postSupervisorStartCall{Call: call}
+}
+
+// postSupervisorStartCall wrap *gomock.Call
+type postSupervisorStartCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *postSupervisorStartCall) Return(arg0 error) *postSupervisorStartCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *postSupervisorStartCall) Do(f func() error) *postSupervisorStartCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *postSupervisorStartCall) DoAndReturn(f func() error) *postSupervisorStartCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Stop mocks base method.
+func (m *MockpostSupervisor) Stop() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Stop")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Stop indicates an expected call of Stop.
+func (mr *MockpostSupervisorMockRecorder) Stop() *postSupervisorStopCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*MockpostSupervisor)(nil).Stop))
+	return &postSupervisorStopCall{Call: call}
+}
+
+// postSupervisorStopCall wrap *gomock.Call
+type postSupervisorStopCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *postSupervisorStopCall) Return(arg0 error) *postSupervisorStopCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *postSupervisorStopCall) Do(f func() error) *postSupervisorStopCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *postSupervisorStopCall) DoAndReturn(f func() error) *postSupervisorStopCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // MockpeerCounter is a mock of peerCounter interface.
 type MockpeerCounter struct {
 	ctrl     *gomock.Controller
@@ -1542,101 +1641,6 @@ func (c *oracleActiveSetCall) Do(f func(context.Context, types.EpochID) ([]types
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *oracleActiveSetCall) DoAndReturn(f func(context.Context, types.EpochID) ([]types.ATXID, error)) *oracleActiveSetCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// MockpostConnectionListener is a mock of postConnectionListener interface.
-type MockpostConnectionListener struct {
-	ctrl     *gomock.Controller
-	recorder *MockpostConnectionListenerMockRecorder
-}
-
-// MockpostConnectionListenerMockRecorder is the mock recorder for MockpostConnectionListener.
-type MockpostConnectionListenerMockRecorder struct {
-	mock *MockpostConnectionListener
-}
-
-// NewMockpostConnectionListener creates a new mock instance.
-func NewMockpostConnectionListener(ctrl *gomock.Controller) *MockpostConnectionListener {
-	mock := &MockpostConnectionListener{ctrl: ctrl}
-	mock.recorder = &MockpostConnectionListenerMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockpostConnectionListener) EXPECT() *MockpostConnectionListenerMockRecorder {
-	return m.recorder
-}
-
-// Connected mocks base method.
-func (m *MockpostConnectionListener) Connected(client activation.PostClient) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Connected", client)
-}
-
-// Connected indicates an expected call of Connected.
-func (mr *MockpostConnectionListenerMockRecorder) Connected(client any) *postConnectionListenerConnectedCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connected", reflect.TypeOf((*MockpostConnectionListener)(nil).Connected), client)
-	return &postConnectionListenerConnectedCall{Call: call}
-}
-
-// postConnectionListenerConnectedCall wrap *gomock.Call
-type postConnectionListenerConnectedCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *postConnectionListenerConnectedCall) Return() *postConnectionListenerConnectedCall {
-	c.Call = c.Call.Return()
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *postConnectionListenerConnectedCall) Do(f func(activation.PostClient)) *postConnectionListenerConnectedCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *postConnectionListenerConnectedCall) DoAndReturn(f func(activation.PostClient)) *postConnectionListenerConnectedCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// Disconnected mocks base method.
-func (m *MockpostConnectionListener) Disconnected(client activation.PostClient) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Disconnected", client)
-}
-
-// Disconnected indicates an expected call of Disconnected.
-func (mr *MockpostConnectionListenerMockRecorder) Disconnected(client any) *postConnectionListenerDisconnectedCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Disconnected", reflect.TypeOf((*MockpostConnectionListener)(nil).Disconnected), client)
-	return &postConnectionListenerDisconnectedCall{Call: call}
-}
-
-// postConnectionListenerDisconnectedCall wrap *gomock.Call
-type postConnectionListenerDisconnectedCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *postConnectionListenerDisconnectedCall) Return() *postConnectionListenerDisconnectedCall {
-	c.Call = c.Call.Return()
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *postConnectionListenerDisconnectedCall) Do(f func(activation.PostClient)) *postConnectionListenerDisconnectedCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *postConnectionListenerDisconnectedCall) DoAndReturn(f func(activation.PostClient)) *postConnectionListenerDisconnectedCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

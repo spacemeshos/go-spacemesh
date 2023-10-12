@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zapcore"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -58,7 +59,13 @@ func genAtxWithReceived(received time.Time) genAtxOpt {
 	}
 }
 
-func gatx(id types.ATXID, epoch types.EpochID, smesher types.NodeID, units uint32, opts ...genAtxOpt) *types.VerifiedActivationTx {
+func gatx(
+	id types.ATXID,
+	epoch types.EpochID,
+	smesher types.NodeID,
+	units uint32,
+	opts ...genAtxOpt,
+) *types.VerifiedActivationTx {
 	atx := &types.ActivationTx{}
 	atx.NumUnits = units
 	atx.PublishEpoch = epoch
@@ -80,7 +87,13 @@ func gactiveset(atxs ...types.ATXID) types.ATXIDList {
 	return atxs
 }
 
-func gballot(id types.BallotID, atxid types.ATXID, smesher types.NodeID, layer types.LayerID, edata *types.EpochData) *types.Ballot {
+func gballot(
+	id types.BallotID,
+	atxid types.ATXID,
+	smesher types.NodeID,
+	layer types.LayerID,
+	edata *types.EpochData,
+) *types.Ballot {
 	ballot := &types.Ballot{}
 	ballot.Layer = layer
 	ballot.EpochData = edata
@@ -130,7 +143,13 @@ func expectMeshHash(hash types.Hash32) expectOpt {
 	}
 }
 
-func expectCounters(signer *signing.EdSigner, epoch types.EpochID, beacon types.Beacon, nonce types.VRFPostIndex, js ...uint32) expectOpt {
+func expectCounters(
+	signer *signing.EdSigner,
+	epoch types.EpochID,
+	beacon types.Beacon,
+	nonce types.VRFPostIndex,
+	js ...uint32,
+) expectOpt {
 	return func(p *types.Proposal) {
 		vsigner, err := signer.VRFSigner()
 		if err != nil {
@@ -145,7 +164,13 @@ func expectCounters(signer *signing.EdSigner, epoch types.EpochID, beacon types.
 	}
 }
 
-func expectProposal(signer *signing.EdSigner, lid types.LayerID, atx types.ATXID, opinion types.Opinion, opts ...expectOpt) *types.Proposal {
+func expectProposal(
+	signer *signing.EdSigner,
+	lid types.LayerID,
+	atx types.ATXID,
+	opinion types.Opinion,
+	opts ...expectOpt,
+) *types.Proposal {
 	p := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot: types.Ballot{
@@ -689,7 +714,15 @@ func TestBuild(t *testing.T) {
 						require.NoError(t, beacons.Add(cdb, step.lid.GetEpoch(), step.beacon))
 					}
 					for _, iden := range step.identitities {
-						require.NoError(t, identities.SetMalicious(cdb, iden.id, codec.MustEncode(&iden.proof), iden.received))
+						require.NoError(
+							t,
+							identities.SetMalicious(
+								cdb,
+								iden.id,
+								codec.MustEncode(&iden.proof),
+								iden.received,
+							),
+						)
 					}
 					for _, atx := range step.atxs {
 						require.NoError(t, atxs.Add(cdb, atx))
@@ -709,34 +742,53 @@ func TestBuild(t *testing.T) {
 						require.NoError(t, layers.SetMeshHash(cdb, ahash.lid, ahash.hash))
 					}
 					if step.activeset != nil {
-						require.NoError(t, activesets.Add(cdb, step.activeset.Hash(), &types.EpochActiveSet{Set: step.activeset}))
+						require.NoError(
+							t,
+							activesets.Add(
+								cdb,
+								step.activeset.Hash(),
+								&types.EpochActiveSet{Set: step.activeset},
+							),
+						)
 					}
 				}
 				{
 					if step.opinion != nil {
 						tortoise.EXPECT().TallyVotes(ctx, step.lid)
-						tortoise.EXPECT().EncodeVotes(ctx, gomock.Any()).Return(step.opinion, step.encodeVotesErr)
+						tortoise.EXPECT().
+							EncodeVotes(ctx, gomock.Any()).
+							Return(step.opinion, step.encodeVotesErr)
 					}
 					if step.txs != nil {
-						conState.EXPECT().SelectProposalTXs(step.lid, gomock.Any()).Return(step.txs).AnyTimes()
+						conState.EXPECT().SelectProposalTXs(step.lid, gomock.Any()).Return(step.txs)
 					}
 					if step.latestComplete != 0 {
 						tortoise.EXPECT().LatestComplete().Return(step.latestComplete)
 					}
 				}
-				decoded = make(chan *types.Proposal, len(signers)) // set the maximum possible capacity
-				if step.expectProposal != nil || len(step.expectProposals) > 0 || step.publishErr != nil {
-					publisher.EXPECT().Publish(ctx, pubsub.ProposalProtocol, gomock.Any()).DoAndReturn(func(_ context.Context, _ string, msg []byte) error {
-						var proposal types.Proposal
-						codec.MustDecode(msg, &proposal)
-						proposal.MustInitialize()
-						select {
-						case decoded <- &proposal:
-						default:
-							require.FailNow(t, "blocking in Publish. check decoded channel capacity")
-						}
-						return step.publishErr
-					}).AnyTimes()
+				decoded = make(
+					chan *types.Proposal,
+					len(signers),
+				) // set the maximum possible capacity
+				if step.expectProposal != nil || len(step.expectProposals) > 0 ||
+					step.publishErr != nil {
+					publisher.EXPECT().
+						Publish(ctx, pubsub.ProposalProtocol, gomock.Any()).
+						DoAndReturn(func(_ context.Context, _ string, msg []byte) error {
+							var proposal types.Proposal
+							codec.MustDecode(msg, &proposal)
+							proposal.MustInitialize()
+							select {
+							case decoded <- &proposal:
+							default:
+								require.FailNow(
+									t,
+									"blocking in Publish. check decoded channel capacity",
+								)
+							}
+							return step.publishErr
+						}).
+						AnyTimes()
 				}
 				err := builder.build(ctx, step.lid)
 				close(decoded)
@@ -828,10 +880,27 @@ func TestStartStop(t *testing.T) {
 	}).AnyTimes()
 	syncer.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 
-	builder := New(clock, cdb, publisher, tortoise, syncer, conState, WithLogger(logtest.New(t)))
+	builder := New(
+		clock,
+		cdb,
+		publisher,
+		tortoise,
+		syncer,
+		conState,
+		WithLogger(logtest.New(t)),
+	)
 	builder.Register(signer)
-	builder.Start()
-	t.Cleanup(builder.Stop)
+	var (
+		ctx, cancel = context.WithCancel(context.Background())
+		eg          errgroup.Group
+	)
+	eg.Go(func() error {
+		return builder.Run(ctx)
+	})
+	t.Cleanup(func() {
+		cancel()
+		require.NoError(t, eg.Wait())
+	})
 	select {
 	case <-time.After(time.Second):
 		require.FailNow(t, "test didn't complete in 1s")

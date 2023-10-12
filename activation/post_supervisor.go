@@ -5,81 +5,110 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 
-	"github.com/spacemeshos/post/config"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/events"
 )
 
-// DefaultPostServiceConfig returns the default config for post service. These are intended for testing.
+// DefaultPostServiceConfig returns the default config for post service.
 func DefaultPostServiceConfig() PostSupervisorConfig {
-	cfg := PostSupervisorConfig{
-		PostServiceCmd:  "/bin/service",
-		DataDir:         config.DefaultDataDir,
-		NodeAddress:     "http://127.0.0.1:9093",
-		PowDifficulty:   config.DefaultConfig().PowDifficulty,
-		PostServiceMode: "light",
+	path, err := os.Executable()
+	if err != nil {
+		panic(err)
 	}
 
-	return cfg
+	return PostSupervisorConfig{
+		PostServiceCmd: filepath.Join(filepath.Dir(path), DefaultPostServiceName),
+		NodeAddress:    "http://127.0.0.1:9093",
+	}
 }
 
-// MainnetPostServiceConfig returns the default config for mainnet.
-func MainnetPostServiceConfig() PostSupervisorConfig {
-	cfg := PostSupervisorConfig{
-		PostServiceCmd:  "/bin/service",
-		DataDir:         config.DefaultDataDir,
-		NodeAddress:     "http://127.0.0.1:9093",
-		PowDifficulty:   config.MainnetConfig().PowDifficulty,
-		PostServiceMode: "fast",
+// DefaultTestPostServiceConfig returns the default config for post service in tests.
+func DefaultTestPostServiceConfig() PostSupervisorConfig {
+	path, err := exec.Command("go", "env", "GOMOD").Output()
+	if err != nil {
+		panic(err)
 	}
 
-	return cfg
+	return PostSupervisorConfig{
+		PostServiceCmd: filepath.Join(filepath.Dir(string(path)), "build", DefaultPostServiceName),
+		NodeAddress:    "http://127.0.0.1:9093",
+	}
 }
 
 type PostSupervisorConfig struct {
 	PostServiceCmd string `mapstructure:"post-opts-post-service"`
 
-	DataDir         string        `mapstructure:"post-opts-datadir"`
-	NodeAddress     string        `mapstructure:"post-opts-node-address"`
-	PowDifficulty   PowDifficulty `mapstructure:"post-opts-pow-difficulty"`
-	PostServiceMode string        `mapstructure:"post-opts-post-service-mode"`
-
-	N string `mapstructure:"post-opts-n"`
+	NodeAddress string `mapstructure:"post-opts-node-address"`
 }
 
 // PostSupervisor manages a local post service.
 type PostSupervisor struct {
 	logger *zap.Logger
 
+	cmdCfg      PostSupervisorConfig
+	postCfg     PostConfig
+	postOpts    PostSetupOpts
+	provingOpts PostProvingOpts
+
 	pid atomic.Int64 // pid of the running post service, only for tests.
 
-	stop context.CancelFunc // stops the running command.
+	mtx  sync.Mutex         // protects fields below
 	eg   errgroup.Group     // eg manages post service goroutines.
+	stop context.CancelFunc // stops the running command.
 }
 
 // NewPostSupervisor returns a new post service.
-func NewPostSupervisor(logger *zap.Logger, opts PostSupervisorConfig) (*PostSupervisor, error) {
-	ctx, stop := context.WithCancel(context.Background())
-
-	ps := &PostSupervisor{
-		logger: logger,
-		stop:   stop,
+func NewPostSupervisor(logger *zap.Logger, cmdCfg PostSupervisorConfig, postCfg PostConfig, postOpts PostSetupOpts, provingOpts PostProvingOpts) (*PostSupervisor, error) {
+	if _, err := os.Stat(cmdCfg.PostServiceCmd); err != nil {
+		return nil, fmt.Errorf("post service binary not found: %s", cmdCfg.PostServiceCmd)
 	}
-	ps.eg.Go(func() error { return ps.runCmd(ctx, opts) })
-	return ps, nil
+
+	return &PostSupervisor{
+		logger:      logger,
+		cmdCfg:      cmdCfg,
+		postCfg:     postCfg,
+		postOpts:    postOpts,
+		provingOpts: provingOpts,
+	}, nil
 }
 
-func (ps *PostSupervisor) Close() error {
-	ps.stop()
-	ps.eg.Wait()
+func (ps *PostSupervisor) Start() error {
+	ps.mtx.Lock()
+	defer ps.mtx.Unlock()
+	if ps.stop != nil {
+		return fmt.Errorf("post service already started")
+	}
+
+	ctx, stop := context.WithCancel(context.Background())
+	ps.stop = stop
+	ps.eg = errgroup.Group{} // reset errgroup to allow restarts.
+	ps.eg.Go(func() error { return ps.runCmd(ctx, ps.cmdCfg, ps.postCfg, ps.postOpts, ps.provingOpts) })
 	return nil
+}
+
+// Stop stops the post service.
+func (ps *PostSupervisor) Stop() error {
+	ps.mtx.Lock()
+	defer ps.mtx.Unlock()
+
+	if ps.stop == nil {
+		return nil
+	}
+
+	ps.stop()
+	ps.stop = nil
+	ps.pid.Store(0)
+	return ps.eg.Wait()
 }
 
 // captureCmdOutput returns a function that reads from the given pipe and logs the output.
@@ -105,24 +134,32 @@ func (ps *PostSupervisor) captureCmdOutput(pipe io.ReadCloser) func() error {
 	}
 }
 
-func (ps *PostSupervisor) runCmd(ctx context.Context, opts PostSupervisorConfig) error {
+func (ps *PostSupervisor) runCmd(ctx context.Context, cmdCfg PostSupervisorConfig, postCfg PostConfig, postOpts PostSetupOpts, provingOpts PostProvingOpts) error {
 	for {
 		args := []string{
-			"--dir", opts.DataDir,
-			"--address", opts.NodeAddress,
-			"--pow-difficulty", opts.PowDifficulty.String(),
-			"--randomx-mode", opts.PostServiceMode,
-		}
-		if opts.N != "" {
-			args = append(args, "-n", opts.N)
+			"--address", cmdCfg.NodeAddress,
+
+			"--k1", strconv.FormatUint(uint64(postCfg.K1), 10),
+			"--k2", strconv.FormatUint(uint64(postCfg.K2), 10),
+			"--k3", strconv.FormatUint(uint64(postCfg.K3), 10),
+			"--pow-difficulty", postCfg.PowDifficulty.String(),
+
+			"--dir", postOpts.DataDir,
+			"-n", strconv.FormatUint(uint64(postOpts.Scrypt.N), 10),
+			"-r", strconv.FormatUint(uint64(postOpts.Scrypt.R), 10),
+			"-p", strconv.FormatUint(uint64(postOpts.Scrypt.P), 10),
+
+			"--threads", strconv.FormatUint(uint64(provingOpts.Threads), 10),
+			"--nonces", strconv.FormatUint(uint64(provingOpts.Nonces), 10),
+			"--randomx-mode", provingOpts.RandomXMode.String(),
 		}
 
 		cmd := exec.CommandContext(
 			ctx,
-			opts.PostServiceCmd,
+			cmdCfg.PostServiceCmd,
 			args...,
 		)
-		cmd.Dir = filepath.Dir(opts.PostServiceCmd)
+		cmd.Dir = filepath.Dir(cmdCfg.PostServiceCmd)
 		pipe, err := cmd.StderrPipe()
 		if err != nil {
 			return fmt.Errorf("setup stderr pipe for post service: %w", err)
@@ -134,6 +171,7 @@ func (ps *PostSupervisor) runCmd(ctx context.Context, opts PostSupervisorConfig)
 			pipe.Close()
 			return fmt.Errorf("start post service: %w", err)
 		}
+		ps.logger.Info("post service started", zap.Int("pid", cmd.Process.Pid), zap.String("cmd", cmd.String()))
 		ps.pid.Store(int64(cmd.Process.Pid))
 		events.EmitPostServiceStarted()
 		err = cmd.Wait()
@@ -142,7 +180,7 @@ func (ps *PostSupervisor) runCmd(ctx context.Context, opts PostSupervisorConfig)
 			if err := eg.Wait(); err != nil {
 				ps.logger.Warn("output reading goroutine failed", zap.Error(err))
 			}
-			return ctx.Err()
+			return nil
 		}
 		ps.logger.Warn("post service exited", zap.Error(err))
 		eg.Wait()

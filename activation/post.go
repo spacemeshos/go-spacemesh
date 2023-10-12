@@ -2,16 +2,13 @@ package activation
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"runtime"
-	"strconv"
 	"sync"
 
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/initialization"
-	"github.com/spacemeshos/post/proving"
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -48,35 +45,6 @@ func (c PostConfig) ToConfig() config.Config {
 	}
 }
 
-type PowDifficulty [32]byte
-
-func (d PowDifficulty) String() string {
-	return fmt.Sprintf("%X", d[:])
-}
-
-// Set implements pflag.Value.Set.
-func (f *PowDifficulty) Set(value string) error {
-	return f.UnmarshalText([]byte(value))
-}
-
-// Type implements pflag.Value.Type.
-func (PowDifficulty) Type() string {
-	return "PowDifficulty"
-}
-
-func (d *PowDifficulty) UnmarshalText(text []byte) error {
-	decodedLen := hex.DecodedLen(len(text))
-	if decodedLen != 32 {
-		return fmt.Errorf("expected 32 bytes, got %d", decodedLen)
-	}
-	var dst [32]byte
-	if _, err := hex.Decode(dst[:], text); err != nil {
-		return err
-	}
-	*d = PowDifficulty(dst)
-	return nil
-}
-
 // PostSetupOpts are the options used to initiate a Post setup data creation session,
 // either via the public smesher API, or on node launch (via cmd args).
 type PostSetupOpts struct {
@@ -89,65 +57,23 @@ type PostSetupOpts struct {
 	ComputeBatchSize uint64              `mapstructure:"smeshing-opts-compute-batch-size"`
 }
 
-type PostProviderID struct {
-	value *int64
-}
-
-// String implements pflag.Value.String.
-func (id PostProviderID) String() string {
-	if id.value == nil {
-		return ""
-	}
-	return fmt.Sprintf("%d", *id.value)
-}
-
-// Type implements pflag.Value.Type.
-func (PostProviderID) Type() string {
-	return "PostProviderID"
-}
-
-// Set implements pflag.Value.Set.
-func (id *PostProviderID) Set(value string) error {
-	if len(value) == 0 {
-		id.value = nil
-		return nil
-	}
-
-	i, err := strconv.ParseInt(value, 10, 33)
-	if err != nil {
-		return fmt.Errorf("failed to parse PoST Provider ID (\"%s\"): %w", value, err)
-	}
-
-	id.value = new(int64)
-	*id.value = int64(i)
-	return nil
-}
-
-// SetInt64 sets the value of the PostProviderID to the given int64.
-func (id *PostProviderID) SetInt64(value int64) {
-	id.value = &value
-}
-
-// Value returns the value of the PostProviderID as a pointer to uint32.
-func (id *PostProviderID) Value() *int64 {
-	return id.value
-}
-
 // PostProvingOpts are the options controlling POST proving process.
 type PostProvingOpts struct {
 	// Number of threads used in POST proving process.
 	Threads uint `mapstructure:"smeshing-opts-proving-threads"`
+
 	// Number of nonces tried in parallel in POST proving process.
 	Nonces uint `mapstructure:"smeshing-opts-proving-nonces"`
-	// Flags used in the PoW computation.
-	Flags config.PowFlags `mapstructure:"smeshing-opts-proving-powflags"`
+
+	// RandomXMode is the mode used for RandomX computations.
+	RandomXMode PostRandomXMode `mapstructure:"smeshing-opts-proving-randomx-mode"`
 }
 
 func DefaultPostProvingOpts() PostProvingOpts {
 	return PostProvingOpts{
-		Threads: 1,
-		Nonces:  16,
-		Flags:   config.DefaultProvingPowFlags(),
+		Threads:     1,
+		Nonces:      16,
+		RandomXMode: PostRandomXModeFast,
 	}
 }
 
@@ -156,7 +82,7 @@ type PostProofVerifyingOpts struct {
 	// Number of workers spawned to verify proofs.
 	Workers int `mapstructure:"smeshing-opts-verifying-workers"`
 	// Flags used for the PoW verification.
-	Flags config.PowFlags `mapstructure:"smeshing-opts-verifying-powflags"`
+	Flags PostPowFlags `mapstructure:"smeshing-opts-verifying-powflags"`
 }
 
 func DefaultPostVerifyingOpts() PostProofVerifyingOpts {
@@ -166,7 +92,7 @@ func DefaultPostVerifyingOpts() PostProofVerifyingOpts {
 	}
 	return PostProofVerifyingOpts{
 		Workers: workers,
-		Flags:   config.DefaultVerifyingPowFlags(),
+		Flags:   PostPowFlags(config.DefaultVerifyingPowFlags()),
 	}
 }
 
@@ -248,15 +174,14 @@ type PostSetupManager struct {
 	db          *datastore.CachedDB
 	goldenATXID types.ATXID
 
-	mu          sync.Mutex                  // mu protects setting the values below.
-	lastOpts    *PostSetupOpts              // the last options used to initiate a Post setup session.
-	state       PostSetupState              // state is the current state of the Post setup.
-	init        *initialization.Initializer // init is the current initializer instance.
-	provingOpts PostProvingOpts
+	mu       sync.Mutex                  // mu protects setting the values below.
+	lastOpts *PostSetupOpts              // the last options used to initiate a Post setup session.
+	state    PostSetupState              // state is the current state of the Post setup.
+	init     *initialization.Initializer // init is the current initializer instance.
 }
 
 // NewPostSetupManager creates a new instance of PostSetupManager.
-func NewPostSetupManager(id types.NodeID, cfg PostConfig, logger *zap.Logger, db *datastore.CachedDB, goldenATXID types.ATXID, provingOpts PostProvingOpts) (*PostSetupManager, error) {
+func NewPostSetupManager(id types.NodeID, cfg PostConfig, logger *zap.Logger, db *datastore.CachedDB, goldenATXID types.ATXID) (*PostSetupManager, error) {
 	mgr := &PostSetupManager{
 		id:          id,
 		cfg:         cfg,
@@ -264,7 +189,6 @@ func NewPostSetupManager(id types.NodeID, cfg PostConfig, logger *zap.Logger, db
 		db:          db,
 		goldenATXID: goldenATXID,
 		state:       PostSetupStateNotStarted,
-		provingOpts: provingOpts,
 	}
 
 	return mgr, nil
@@ -308,8 +232,8 @@ func (*PostSetupManager) Providers() ([]PostSetupProvider, error) {
 	return providersAlias, nil
 }
 
-// BestProvider returns the most performant compute provider based on a short benchmarking session.
-func (mgr *PostSetupManager) BestProvider() (*PostSetupProvider, error) {
+// bestProvider returns the most performant compute provider based on a short benchmarking session.
+func (mgr *PostSetupManager) bestProvider() (*PostSetupProvider, error) {
 	providers, err := mgr.Providers()
 	if err != nil {
 		return nil, fmt.Errorf("fetch best provider: %w", err)
@@ -422,7 +346,7 @@ func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSe
 	if opts.ProviderID.Value() != nil && *opts.ProviderID.Value() == -1 {
 		mgr.logger.Warn("DEPRECATED: auto-determining compute provider is deprecated, please specify a valid provider ID in the config file")
 
-		p, err := mgr.BestProvider()
+		p, err := mgr.bestProvider()
 		if err != nil {
 			return err
 		}
@@ -524,37 +448,6 @@ func (mgr *PostSetupManager) Reset() error {
 	// Reset internal state.
 	mgr.state = PostSetupStateNotStarted
 	return nil
-}
-
-// GenerateProof generates a new Post.
-func (mgr *PostSetupManager) GenerateProof(ctx context.Context, challenge []byte, options ...proving.OptionFunc) (*types.Post, *types.PostMetadata, error) {
-	mgr.mu.Lock()
-
-	if mgr.state != PostSetupStateComplete {
-		mgr.mu.Unlock()
-		return nil, nil, errNotComplete
-	}
-	mgr.mu.Unlock()
-
-	opts := []proving.OptionFunc{
-		proving.WithDataSource(mgr.cfg.ToConfig(), mgr.id.Bytes(), mgr.commitmentAtxId.Bytes(), mgr.lastOpts.DataDir),
-		proving.WithNonces(mgr.provingOpts.Nonces),
-		proving.WithThreads(mgr.provingOpts.Threads),
-		proving.WithPowFlags(mgr.provingOpts.Flags),
-	}
-	opts = append(opts, options...)
-
-	proof, proofMetadata, err := proving.Generate(ctx, challenge, mgr.cfg.ToConfig(), mgr.logger, opts...)
-	if err != nil {
-		return nil, nil, fmt.Errorf("generate proof: %w", err)
-	}
-
-	p := (*types.Post)(proof)
-	m := &types.PostMetadata{
-		Challenge:     proofMetadata.Challenge,
-		LabelsPerUnit: proofMetadata.LabelsPerUnit,
-	}
-	return p, m, nil
 }
 
 // VRFNonce returns the VRF nonce found during initialization.

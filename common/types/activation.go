@@ -16,6 +16,12 @@ import (
 
 //go:generate scalegen
 
+// BytesToATXID is a helper to copy buffer into a ATXID.
+func BytesToATXID(buf []byte) (id ATXID) {
+	copy(id[:], buf)
+	return id
+}
+
 // ATXID is a 32-bit hash used to identify an activation transaction.
 type ATXID Hash32
 
