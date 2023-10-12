@@ -20,7 +20,12 @@ type requester interface {
 // directly and do away with both ValidatorFunc and SyncValidator.
 type ValidatorFunc pubsub.SyncHandler
 
-func (f ValidatorFunc) HandleMessage(ctx context.Context, hash types.Hash32, peer p2p.Peer, msg []byte) error {
+func (f ValidatorFunc) HandleMessage(
+	ctx context.Context,
+	hash types.Hash32,
+	peer p2p.Peer,
+	msg []byte,
+) error {
 	return f(ctx, hash, peer, msg)
 }
 
@@ -40,5 +45,4 @@ type meshProvider interface {
 
 type host interface {
 	ID() p2p.Peer
-	Connected(p2p.Peer) bool
 }

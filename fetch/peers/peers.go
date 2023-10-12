@@ -1,6 +1,7 @@
 package peers
 
 import (
+	"strings"
 	"sync"
 	"time"
 
@@ -37,7 +38,7 @@ func (p *data) cmp(other *data) int {
 	case p.averageLatency > other.averageLatency:
 		return -1
 	}
-	return 0
+	return strings.Compare(string(p.id), string(other.id))
 }
 
 func New() *Peers {
@@ -47,7 +48,6 @@ func New() *Peers {
 type Peers struct {
 	mu    sync.Mutex
 	peers map[peer.ID]*data
-	best  *data
 }
 
 func (p *Peers) Add(id peer.ID) {
@@ -75,19 +75,6 @@ func (p *Peers) OnFailure(id peer.ID) {
 		return
 	}
 	peer.failures++
-}
-
-func (p *Peers) OnSuccess(id peer.ID) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	peer, exist := p.peers[id]
-	if !exist {
-		return
-	}
-	peer.success++
-	if p.best.cmp(peer) == -1 {
-		p.best = peer
-	}
 }
 
 // OnLatency records success and latency. Latency is not reported with every success
@@ -126,7 +113,6 @@ func (p *Peers) SelectBestFrom(peers []peer.ID) peer.ID {
 		return best.id
 	}
 	return ""
-
 }
 
 // SelectNBest selects at most n peers sorted by responsiveness and latency.
