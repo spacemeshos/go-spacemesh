@@ -4,8 +4,9 @@ import (
 	"encoding/hex"
 	"math/big"
 
-	"github.com/spacemeshos/go-spacemesh/log"
 	"go.uber.org/zap/zapcore"
+
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 func calcVotes(logger log.Log, theta *big.Float, s *state) (allVotes, proposalList) {
