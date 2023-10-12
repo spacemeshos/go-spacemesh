@@ -105,7 +105,6 @@ func withNonceFetcher(nf nonceFetcher) Opt {
 
 // New returns a new ProtocolDriver.
 func New(
-	nodeID types.NodeID,
 	publisher pubsub.Publisher,
 	edSigner *signing.EdSigner,
 	edVerifier *signing.EdVerifier,
@@ -118,7 +117,6 @@ func New(
 		ctx:            context.Background(),
 		logger:         log.NewNop(),
 		config:         DefaultConfig(),
-		nodeID:         nodeID,
 		publisher:      publisher,
 		edSigner:       edSigner,
 		edVerifier:     edVerifier,
@@ -166,7 +164,6 @@ type ProtocolDriver struct {
 	startOnce  sync.Once
 
 	config       Config
-	nodeID       types.NodeID
 	sync         system.SyncStateProvider
 	publisher    pubsub.Publisher
 	edSigner     *signing.EdSigner
@@ -586,7 +583,8 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 				log.Bool("malicious", malicious),
 				log.Stringer("smesher", header.NodeID))
 		}
-		if header.NodeID == pd.nodeID {
+		if header.NodeID == pd.edSigner.NodeID() {
+			// TODO(poszu): support many IDs
 			active = true
 		}
 		return nil
@@ -600,7 +598,7 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 	}
 
 	if active {
-		nnc, err := pd.nonceFetcher.VRFNonce(pd.nodeID, epoch)
+		nnc, err := pd.nonceFetcher.VRFNonce(pd.edSigner.NodeID(), epoch)
 		if err != nil {
 			logger.With().Error("failed to get own VRF nonce", log.Err(err))
 			return nil, fmt.Errorf("get own VRF nonce: %w", err)
@@ -835,7 +833,7 @@ func (pd *ProtocolDriver) sendProposal(ctx context.Context, epoch types.EpochID,
 	proposal := ProposalFromVrf(vrfSig)
 	m := ProposalMessage{
 		EpochID:      epoch,
-		NodeID:       pd.nodeID,
+		NodeID:       pd.edSigner.NodeID(),
 		VRFSignature: vrfSig,
 	}
 
