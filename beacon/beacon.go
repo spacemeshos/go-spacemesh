@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/ALTree/bigfloat"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spacemeshos/fixed"
 	"golang.org/x/sync/errgroup"
 
@@ -204,7 +203,6 @@ type ProtocolDriver struct {
 
 	// metrics
 	metricsCollector *metrics.BeaconMetricsCollector
-	metricsRegistry  *prometheus.Registry
 }
 
 // SetSyncState updates sync state provider. Must be executed only once.
@@ -213,13 +211,6 @@ func (pd *ProtocolDriver) SetSyncState(sync system.SyncStateProvider) {
 		pd.logger.Fatal("sync state provider can be updated only once")
 	}
 	pd.sync = sync
-}
-
-// for testing.
-func (pd *ProtocolDriver) setMetricsRegistry(registry *prometheus.Registry) {
-	pd.mu.Lock()
-	defer pd.mu.Unlock()
-	pd.metricsRegistry = registry
 }
 
 // Start starts listening for layers and outputs.
