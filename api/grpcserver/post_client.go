@@ -1,6 +1,7 @@
 package grpcserver
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"time"
@@ -41,15 +42,17 @@ func (pc *postClient) Proof(ctx context.Context, challenge []byte) (*types.Post,
 		resp: resp,
 	}
 
-	select {
-	case <-pc.closed:
-		return nil, nil, fmt.Errorf("post client closed")
-	case <-ctx.Done():
-		return nil, nil, ctx.Err()
-	case pc.con <- cmd:
-	}
-
 	for {
+		// send command
+		select {
+		case <-pc.closed:
+			return nil, nil, fmt.Errorf("post client closed")
+		case <-ctx.Done():
+			return nil, nil, ctx.Err()
+		case pc.con <- cmd:
+		}
+
+		// receive response
 		select {
 		case <-pc.closed:
 			return nil, nil, fmt.Errorf("post client closed")
@@ -66,12 +69,18 @@ func (pc *postClient) Proof(ctx context.Context, challenge []byte) (*types.Post,
 					select {
 					case <-ctx.Done():
 						return nil, nil, ctx.Err()
-					case <-time.After(2 * time.Second): // TODO(mafa): make polling interval configurable
+					case <-time.After(2 * time.Second):
+						// TODO(mafa): make polling interval configurable
+						continue
 					}
 				}
 
-				proof := proofResp.GetProof()
 				meta := proofResp.GetMetadata()
+				if !bytes.Equal(meta.GetChallenge(), challenge) {
+					return nil, nil, fmt.Errorf("unexpected challenge: %x", meta.GetChallenge())
+				}
+
+				proof := proofResp.GetProof()
 				return &types.Post{
 						Nonce:   proof.GetNonce(),
 						Indices: proof.GetIndices(),

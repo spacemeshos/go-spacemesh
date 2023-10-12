@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"sync"
@@ -453,6 +452,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	app.Config = getTestDefaultConfig(t)
 	app.Config.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte{1}).String()
 	app.Config.SMESHING.Opts.DataDir = t.TempDir()
+	app.Config.SMESHING.Opts.Scrypt.N = 2
 
 	edSgn, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -1155,18 +1155,15 @@ func TestAdminEvents(t *testing.T) {
 	require.NoError(t, err)
 	cfg.DataDirParent = t.TempDir()
 	cfg.FileLock = filepath.Join(cfg.DataDirParent, "LOCK")
-	cfg.SMESHING.Opts.DataDir = t.TempDir()
-
-	path, err := exec.Command("go", "env", "GOMOD").Output()
-	if err != nil {
-		panic(err)
-	}
-	cfg.POSTService.PostServiceCmd = filepath.Join(filepath.Dir(string(path)), "build", "service")
+	cfg.SMESHING.Opts.DataDir = cfg.DataDirParent
+	cfg.SMESHING.Opts.Scrypt.N = 2
+	cfg.POSTService.PostServiceCmd = activation.DefaultTestPostServiceConfig().PostServiceCmd
 
 	cfg.Genesis.GenesisTime = time.Now().Add(5 * time.Second).Format(time.RFC3339)
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 
-	app := New(WithConfig(&cfg), WithLog(logtest.New(t)))
+	logger := logtest.New(t, zapcore.DebugLevel)
+	app := New(WithConfig(&cfg), WithLog(logger))
 	signer, err := app.LoadOrCreateEdSigner()
 	require.NoError(t, err)
 	app.edSgn = signer // https://github.com/spacemeshos/go-spacemesh/issues/4653
@@ -1184,7 +1181,7 @@ func TestAdminEvents(t *testing.T) {
 	})
 	t.Cleanup(func() { eg.Wait() })
 
-	grpcCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	grpcCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	conn, err := grpc.DialContext(
 		grpcCtx,
@@ -1196,7 +1193,7 @@ func TestAdminEvents(t *testing.T) {
 	t.Cleanup(func() { assert.NoError(t, conn.Close()) })
 	client := pb.NewAdminServiceClient(conn)
 
-	tctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	tctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
 
 	// 4 is arbitrary, if we received events once, they must be
@@ -1276,6 +1273,8 @@ func getTestDefaultConfig(tb testing.TB) *config.Config {
 	cfg.Beacon = beacon.NodeSimUnitTestConfig()
 
 	cfg.Genesis = config.DefaultTestGenesisConfig()
+
+	cfg.POSTService = config.DefaultTestConfig().POSTService
 
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 

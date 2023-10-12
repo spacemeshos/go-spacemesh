@@ -5,7 +5,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ .Env.job_name}}
+  name: {{ .Env.job_name }}
   labels:
     testid: {{ .Env.testid }}
 spec:

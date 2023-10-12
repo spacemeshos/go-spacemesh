@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/post/shared"
 	"go.uber.org/atomic"
 	"golang.org/x/sync/errgroup"
@@ -87,6 +86,9 @@ type Builder struct {
 	postSetupProvider postSetupProvider
 	initialPost       *types.Post
 	validator         nipostValidator
+
+	postMux    sync.Mutex
+	postClient PostClient
 
 	// smeshingMutex protects `StartSmeshing` and `StopSmeshing` from concurrent access
 	smeshingMutex sync.Mutex
@@ -181,6 +183,41 @@ func NewBuilder(
 		opt(b)
 	}
 	return b
+}
+
+func (b *Builder) Connected(client PostClient) {
+	b.postMux.Lock()
+	defer b.postMux.Unlock()
+
+	if b.postClient != nil {
+		b.log.With().Error("post service already connected")
+		return
+	}
+
+	b.postClient = client
+}
+
+func (b *Builder) Disconnected(client PostClient) {
+	b.postMux.Lock()
+	defer b.postMux.Unlock()
+
+	if b.postClient != client {
+		b.log.With().Debug("post service not connected")
+		return
+	}
+
+	b.postClient = nil
+}
+
+func (b *Builder) proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error) {
+	b.postMux.Lock()
+	defer b.postMux.Unlock()
+
+	if b.postClient == nil {
+		return nil, nil, errors.New("post service not connected")
+	}
+
+	return b.postClient.Proof(ctx, challenge)
 }
 
 // Smeshing returns true iff atx builder is smeshing.
@@ -333,7 +370,7 @@ func (b *Builder) generateInitialPost(ctx context.Context) error {
 	startTime := time.Now()
 	var err error
 	events.EmitPostStart(shared.ZeroChallenge)
-	post, metadata, err := b.postSetupProvider.GenerateProof(ctx, shared.ZeroChallenge, proving.WithPowCreator(b.nodeID.Bytes()))
+	post, metadata, err := b.proof(ctx, shared.ZeroChallenge)
 	if err != nil {
 		events.EmitPostFailure()
 		return fmt.Errorf("post execution: %w", err)

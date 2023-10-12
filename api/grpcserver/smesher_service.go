@@ -24,6 +24,7 @@ import (
 type SmesherService struct {
 	postSetupProvider postSetupProvider
 	smeshingProvider  activation.SmeshingProvider
+	postSupervisor    postSupervisor
 
 	streamInterval time.Duration
 	postOpts       activation.PostSetupOpts
@@ -35,10 +36,11 @@ func (s SmesherService) RegisterService(server *Server) {
 }
 
 // NewSmesherService creates a new grpc service using config data.
-func NewSmesherService(post postSetupProvider, smeshing activation.SmeshingProvider, streamInterval time.Duration, postOpts activation.PostSetupOpts) *SmesherService {
+func NewSmesherService(post postSetupProvider, smeshing activation.SmeshingProvider, postSupervisor postSupervisor, streamInterval time.Duration, postOpts activation.PostSetupOpts) *SmesherService {
 	return &SmesherService{
 		postSetupProvider: post,
 		smeshingProvider:  smeshing,
+		postSupervisor:    postSupervisor,
 		streamInterval:    streamInterval,
 		postOpts:          postOpts,
 	}
@@ -86,12 +88,14 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse in.Coinbase.Address `%s`: %w", in.Coinbase.Address, err)
 	}
-	if err := s.smeshingProvider.StartSmeshing(coinbaseAddr, opts); err != nil {
-		err := fmt.Sprintf("failed to start smeshing: %v", err)
-		ctxzap.Error(ctx, err)
-		return nil, status.Error(codes.Internal, err)
+	if err := s.postSupervisor.Start(); err != nil {
+		ctxzap.Error(ctx, "failed to start post supervisor", zap.Error(err))
+		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to start post supervisor: %v", err))
 	}
-
+	if err := s.smeshingProvider.StartSmeshing(coinbaseAddr, opts); err != nil {
+		ctxzap.Error(ctx, "failed to start smeshing", zap.Error(err))
+		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to start smeshing: %v", err))
+	}
 	return &pb.StartSmeshingResponse{
 		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
 	}, nil
@@ -99,19 +103,13 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 
 // StopSmeshing requests that the node stop smeshing.
 func (s SmesherService) StopSmeshing(ctx context.Context, in *pb.StopSmeshingRequest) (*pb.StopSmeshingResponse, error) {
-	errchan := make(chan error, 1)
-	go func() {
-		errchan <- s.smeshingProvider.StopSmeshing(in.DeleteFiles)
-	}()
-	select {
-	case <-ctx.Done():
-		return nil, fmt.Errorf("context done: %w", ctx.Err())
-	case err := <-errchan:
-		if err != nil {
-			err := fmt.Sprintf("failed to stop smeshing: %v", err)
-			ctxzap.Error(ctx, err)
-			return nil, status.Error(codes.Internal, err)
-		}
+	if err := s.smeshingProvider.StopSmeshing(in.DeleteFiles); err != nil {
+		ctxzap.Error(ctx, "failed to stop smeshing", zap.Error(err))
+		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to stop smeshing: %v", err))
+	}
+	if err := s.postSupervisor.Stop(); err != nil {
+		ctxzap.Error(ctx, "failed to stop post supervisor", zap.Error(err))
+		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to stop post supervisor: %v", err))
 	}
 	return &pb.StopSmeshingResponse{
 		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},

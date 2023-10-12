@@ -336,6 +336,7 @@ type App struct {
 	certifier          *blocks.Certifier
 	postSetupMgr       *activation.PostSetupManager
 	atxBuilder         *activation.Builder
+	nipostBuilder      *activation.NIPostBuilder
 	atxHandler         *activation.Handler
 	txHandler          *txs.TxHandler
 	validator          *activation.Validator
@@ -350,7 +351,7 @@ type App struct {
 	updater            *bootstrap.Updater
 	poetDb             *activation.PoetDb
 	postVerifier       *activation.OffloadingPostVerifier
-	postService        *activation.PostSupervisor
+	postSupervisor     *activation.PostSupervisor
 	preserve           *checkpoint.PreservedData
 	errCh              chan error
 
@@ -553,7 +554,7 @@ func (app *App) initServices(ctx context.Context) error {
 	nipostValidatorLogger := app.addLogger(NipostValidatorLogger, lg)
 	postVerifiers := make([]activation.PostVerifier, 0, app.Config.SMESHING.VerifyingOpts.Workers)
 	lg.Debug("creating post verifier")
-	verifier, err := activation.NewPostVerifier(app.Config.POST, nipostValidatorLogger, verifying.WithPowFlags(app.Config.SMESHING.VerifyingOpts.Flags))
+	verifier, err := activation.NewPostVerifier(app.Config.POST, nipostValidatorLogger.Zap(), verifying.WithPowFlags(app.Config.SMESHING.VerifyingOpts.Flags.Value()))
 	lg.With().Debug("created post verifier", log.Err(err))
 	if err != nil {
 		return err
@@ -563,14 +564,17 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	app.postVerifier = activation.NewOffloadingPostVerifier(postVerifiers, nipostValidatorLogger)
 
-	if app.Config.POSTService.PostServiceCmd != "" {
-		app.postService, err = activation.NewPostSupervisor(app.log.Zap(), app.Config.POSTService)
+	if app.Config.SMESHING.Start {
+		app.postSupervisor, err = activation.NewPostSupervisor(app.log.Zap(), app.Config.POSTService, app.Config.POST, app.Config.SMESHING.Opts, app.Config.SMESHING.ProvingOpts)
 		if err != nil {
+			return fmt.Errorf("start post service: %w", err)
+		}
+		if err := app.postSupervisor.Start(); err != nil {
 			return fmt.Errorf("start post service: %w", err)
 		}
 	}
 
-	validator := activation.NewValidator(poetDb, app.Config.POST, app.Config.SMESHING.Opts.Scrypt, nipostValidatorLogger, app.postVerifier)
+	validator := activation.NewValidator(poetDb, app.Config.POST, app.Config.SMESHING.Opts.Scrypt, app.postVerifier)
 	app.validator = validator
 
 	cfg := vm.DefaultConfig()
@@ -834,7 +838,6 @@ func (app *App) initServices(ctx context.Context) error {
 		app.Config.POST,
 		app.addLogger(PostLogger, lg).Zap(),
 		app.cachedDB, goldenATXID,
-		app.Config.SMESHING.ProvingOpts,
 	)
 	if err != nil {
 		app.log.Panic("failed to create post setup manager: %v", err)
@@ -842,7 +845,6 @@ func (app *App) initServices(ctx context.Context) error {
 
 	nipostBuilder, err := activation.NewNIPostBuilder(
 		app.edSgn.NodeID(),
-		postSetupMgr,
 		poetDb,
 		app.Config.PoETServers,
 		app.Config.SMESHING.Opts.DataDir,
@@ -850,7 +852,6 @@ func (app *App) initServices(ctx context.Context) error {
 		app.edSgn,
 		app.Config.POET,
 		app.clock,
-		activation.WithNipostValidator(app.validator),
 	)
 	if err != nil {
 		app.log.Panic("failed to create nipost builder: %v", err)
@@ -943,6 +944,7 @@ func (app *App) initServices(ctx context.Context) error {
 	app.syncer = newSyncer
 	app.svm = state
 	app.atxBuilder = atxBuilder
+	app.nipostBuilder = nipostBuilder
 	app.postSetupMgr = postSetupMgr
 	app.atxHandler = atxHandler
 	app.poetDb = poetDb
@@ -1092,9 +1094,9 @@ func (app *App) initService(ctx context.Context, svc grpcserver.Service) (grpcse
 	case grpcserver.Admin:
 		return grpcserver.NewAdminService(app.db, app.Config.DataDir(), app.host), nil
 	case grpcserver.Smesher:
-		return grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, app.Config.API.SmesherStreamInterval, app.Config.SMESHING.Opts), nil
+		return grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, app.postSupervisor, app.Config.API.SmesherStreamInterval, app.Config.SMESHING.Opts), nil
 	case grpcserver.Post:
-		return grpcserver.NewPostService(app.log.Zap()), nil
+		return grpcserver.NewPostService(app.log.Zap(), app.nipostBuilder, app.atxBuilder), nil
 	case grpcserver.Transaction:
 		return grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer, app.txHandler), nil
 	case grpcserver.Activation:
@@ -1246,8 +1248,8 @@ func (app *App) stopServices(ctx context.Context) {
 		app.syncer.Close()
 	}
 
-	if app.postService != nil {
-		if err := app.postService.Close(); err != nil {
+	if app.postSupervisor != nil {
+		if err := app.postSupervisor.Stop(); err != nil {
 			app.log.With().Error("error stopping local post service", log.Err(err))
 		}
 	}
