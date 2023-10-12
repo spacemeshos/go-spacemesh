@@ -44,7 +44,7 @@ type HTTPPoetClient struct {
 	logger        *zap.Logger
 }
 
-func defaultPoetClientFunc(address string, cfg PoetConfig) (poetProvingServiceClient, error) {
+func defaultPoetClientFunc(address string, cfg PoetConfig) (poetClient, error) {
 	return NewHTTPPoetClient(address, cfg)
 }
 

@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/gofrs/flock"
-	"github.com/grafana/pyroscope-go"
+	pyroscope "github.com/grafana/pyroscope-go"
 	grpc_logsettable "github.com/grpc-ecosystem/go-grpc-middleware/logging/settable"
 	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
@@ -90,6 +90,7 @@ const (
 	ClockLogger            = "clock"
 	P2PLogger              = "p2p"
 	PostLogger             = "post"
+	PostServiceLogger      = "postService"
 	StateDbLogger          = "stateDbStore"
 	BeaconLogger           = "beacon"
 	CachedDBLogger         = "cachedDB"
@@ -844,7 +845,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.log.Panic("failed to create post setup manager: %v", err)
 	}
 
-	app.grpcPostService = grpcserver.NewPostService(app.log.Zap())
+	app.grpcPostService = grpcserver.NewPostService(app.addLogger(PostServiceLogger, lg).Zap())
 
 	nipostBuilder, err := activation.NewNIPostBuilder(
 		app.edSgn.NodeID(),

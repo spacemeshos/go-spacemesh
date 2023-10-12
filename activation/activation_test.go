@@ -1144,8 +1144,8 @@ func TestBuilder_InitialPostIsPersisted(t *testing.T) {
 func TestBuilder_UpdatePoets(t *testing.T) {
 	r := require.New(t)
 
-	tab := newTestBuilder(t, WithPoETClientInitializer(func(string, PoetConfig) (poetProvingServiceClient, error) {
-		poet := NewMockpoetProvingServiceClient(gomock.NewController(t))
+	tab := newTestBuilder(t, WithPoETClientInitializer(func(string, PoetConfig) (poetClient, error) {
+		poet := NewMockpoetClient(gomock.NewController(t))
 		poet.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().Return(types.PoetServiceID{ServiceID: []byte("poetid")}, nil)
 		return poet, nil
 	}))
@@ -1164,8 +1164,8 @@ func TestBuilder_UpdatePoets(t *testing.T) {
 func TestBuilder_UpdatePoetsUnstable(t *testing.T) {
 	r := require.New(t)
 
-	tab := newTestBuilder(t, WithPoETClientInitializer(func(string, PoetConfig) (poetProvingServiceClient, error) {
-		poet := NewMockpoetProvingServiceClient(gomock.NewController(t))
+	tab := newTestBuilder(t, WithPoETClientInitializer(func(string, PoetConfig) (poetClient, error) {
+		poet := NewMockpoetClient(gomock.NewController(t))
 		poet.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().Return(types.PoetServiceID{ServiceID: []byte("poetid")}, errors.New("ERROR"))
 		return poet, nil
 	}))

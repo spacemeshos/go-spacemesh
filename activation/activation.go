@@ -68,7 +68,7 @@ type Config struct {
 // it is responsible for initializing post, receiving poet proof and orchestrating nipst. after which it will
 // calculate total weight and providing relevant view as proof.
 type Builder struct {
-	pendingPoetClients atomic.Pointer[[]poetProvingServiceClient]
+	pendingPoetClients atomic.Pointer[[]poetClient]
 	started            *atomic.Bool
 
 	eg errgroup.Group
@@ -115,7 +115,7 @@ func WithPoetRetryInterval(interval time.Duration) BuilderOption {
 }
 
 // PoETClientInitializer interfaces for creating PoetProvingServiceClient.
-type PoETClientInitializer func(string, PoetConfig) (poetProvingServiceClient, error)
+type PoETClientInitializer func(string, PoetConfig) (poetClient, error)
 
 // WithPoETClientInitializer modifies initialization logic for PoET client. Used during client update.
 func WithPoETClientInitializer(initializer PoETClientInitializer) BuilderOption {
@@ -391,7 +391,7 @@ func (b *Builder) verifyInitialPost(ctx context.Context, post *types.Post, metad
 	}
 }
 
-func (b *Builder) receivePendingPoetClients() *[]poetProvingServiceClient {
+func (b *Builder) receivePendingPoetClients() *[]poetClient {
 	return b.pendingPoetClients.Swap(nil)
 }
 
@@ -526,7 +526,7 @@ func (b *Builder) UpdatePoETServers(ctx context.Context, endpoints []string) err
 			return nil
 		})))
 
-	clients := make([]poetProvingServiceClient, 0, len(endpoints))
+	clients := make([]poetClient, 0, len(endpoints))
 	for _, endpoint := range endpoints {
 		client, err := b.poetClientInitializer(endpoint, b.poetCfg)
 		if err != nil {

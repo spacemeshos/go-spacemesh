@@ -41,7 +41,7 @@ type layerClock interface {
 }
 
 type nipostBuilder interface {
-	UpdatePoETProvers([]poetProvingServiceClient)
+	UpdatePoETProvers([]poetClient)
 	BuildNIPost(ctx context.Context, challenge *types.NIPostChallenge) (*types.NIPost, error)
 	DataDir() string
 }
@@ -78,10 +78,9 @@ type SmeshingProvider interface {
 	UpdatePoETServers(ctx context.Context, endpoints []string) error
 }
 
-// poetProvingServiceClient provides a gateway to a trust-less public proving service, which may serve many PoET
-// proving clients, and thus enormously reduce the cost-per-proof for PoET since each additional proof adds only
-// a small number of hash evaluations to the total cost.
-type poetProvingServiceClient interface {
+// poetClient servers as an interface to communicate with a PoET server.
+// It is used to submit challenges and fetch proofs.
+type poetClient interface {
 	Address() string
 
 	PowParams(ctx context.Context) (*PoetPowParams, error)

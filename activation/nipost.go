@@ -64,7 +64,7 @@ func (nb *NIPostBuilder) persistState() {
 type NIPostBuilder struct {
 	nodeID      types.NodeID
 	dataDir     string
-	poetProvers map[string]poetProvingServiceClient
+	poetProvers map[string]poetClient
 	poetDB      poetDbAPI
 	postService postService
 	state       *types.NIPostBuilderState
@@ -77,9 +77,9 @@ type NIPostBuilder struct {
 type NIPostBuilderOption func(*NIPostBuilder)
 
 // withPoetClients allows to pass in clients directly (for testing purposes).
-func withPoetClients(clients []poetProvingServiceClient) NIPostBuilderOption {
+func withPoetClients(clients []poetClient) NIPostBuilderOption {
 	return func(nb *NIPostBuilder) {
-		nb.poetProvers = make(map[string]poetProvingServiceClient, len(clients))
+		nb.poetProvers = make(map[string]poetClient, len(clients))
 		for _, client := range clients {
 			nb.poetProvers[client.Address()] = client
 		}
@@ -99,7 +99,7 @@ func NewNIPostBuilder(
 	layerClock layerClock,
 	opts ...NIPostBuilderOption,
 ) (*NIPostBuilder, error) {
-	poetClients := make(map[string]poetProvingServiceClient, len(poetServers))
+	poetClients := make(map[string]poetClient, len(poetServers))
 	for _, address := range poetServers {
 		client, err := NewHTTPPoetClient(address, poetCfg, WithLogger(lg.Zap().Named("poet")))
 		if err != nil {
@@ -141,7 +141,7 @@ func (nb *NIPostBuilder) proof(ctx context.Context, challenge []byte) (*types.Po
 }
 
 // UpdatePoETProvers updates poetProver reference. It should not be executed concurrently with BuildNIPoST.
-func (nb *NIPostBuilder) UpdatePoETProvers(poetProvers []poetProvingServiceClient) {
+func (nb *NIPostBuilder) UpdatePoETProvers(poetProvers []poetClient) {
 	// TODO(mafa): this seems incorrect - this makes it impossible for the node to fetch a submitted challenge
 	// thereby skipping an epoch they could have published an ATX for
 
@@ -149,7 +149,7 @@ func (nb *NIPostBuilder) UpdatePoETProvers(poetProvers []poetProvingServiceClien
 	nb.state = &types.NIPostBuilderState{
 		NIPost: &types.NIPost{},
 	}
-	nb.poetProvers = make(map[string]poetProvingServiceClient, len(poetProvers))
+	nb.poetProvers = make(map[string]poetClient, len(poetProvers))
 	for _, poetProver := range poetProvers {
 		nb.poetProvers[poetProver.Address()] = poetProver
 	}
@@ -288,7 +288,7 @@ func withConditionalTimeout(ctx context.Context, timeout time.Duration) (context
 }
 
 // Submit the challenge to a single PoET.
-func (nb *NIPostBuilder) submitPoetChallenge(ctx context.Context, deadline time.Time, client poetProvingServiceClient, prefix, challenge []byte, signature types.EdSignature, nodeID types.NodeID) (*types.PoetRequest, error) {
+func (nb *NIPostBuilder) submitPoetChallenge(ctx context.Context, deadline time.Time, client poetClient, prefix, challenge []byte, signature types.EdSignature, nodeID types.NodeID) (*types.PoetRequest, error) {
 	poetServiceID, err := client.PoetServiceID(ctx)
 	if err != nil {
 		return nil, &PoetSvcUnstableError{msg: "failed to get PoET service ID", source: err}
@@ -374,7 +374,7 @@ func (nb *NIPostBuilder) submitPoetChallenges(ctx context.Context, deadline time
 	return poetRequests, nil
 }
 
-func (nb *NIPostBuilder) getPoetClient(ctx context.Context, id types.PoetServiceID) poetProvingServiceClient {
+func (nb *NIPostBuilder) getPoetClient(ctx context.Context, id types.PoetServiceID) poetClient {
 	for _, client := range nb.poetProvers {
 		if clientId, err := client.PoetServiceID(ctx); err == nil && bytes.Equal(id.ServiceID, clientId.ServiceID) {
 			return client
