@@ -115,7 +115,12 @@ func (p *Peers) SelectBestFrom(peers []peer.ID) peer.ID {
 	return ""
 }
 
-// SelectNBest selects at most n peers sorted by responsiveness and latency.
+// SelectBest selects at most n peers sorted by responsiveness and latency.
+//
+// SelectBest parametrized by N because sync protocol relies on receiving data from redundant
+// connections to guarantee that it will get complete data set.
+// If it doesn't get complete data set it will have to fallback into hash resolution, which is
+// generally more expensive.
 func (p *Peers) SelectBest(n int) []peer.ID {
 	p.mu.Lock()
 	defer p.mu.Unlock()

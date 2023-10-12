@@ -371,6 +371,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 			s.setATXSynced()
 			return true
 		}
+		// check that we have any peers
 		if len(s.dataFetcher.SelectBest(1)) == 0 {
 			return false
 		}
@@ -443,7 +444,11 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 
 	// steady state atx syncing
 	curr := s.ticker.CurrentLayer()
-	if float64((curr - curr.GetEpoch().FirstLayer()).Uint32()) >= float64(types.GetLayersPerEpoch())*s.cfg.EpochEndFraction {
+	if float64(
+		(curr - curr.GetEpoch().FirstLayer()).Uint32(),
+	) >= float64(
+		types.GetLayersPerEpoch(),
+	)*s.cfg.EpochEndFraction {
 		s.logger.WithContext(ctx).With().Debug("at end of epoch, syncing atx", curr.GetEpoch())
 		if err := s.fetchATXsForEpoch(ctx, curr.GetEpoch()); err != nil {
 			return err
@@ -452,7 +457,12 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 	return nil
 }
 
-func isTooFarBehind(ctx context.Context, logger log.Log, current, lastSynced types.LayerID, outOfSyncThreshold uint32) bool {
+func isTooFarBehind(
+	ctx context.Context,
+	logger log.Log,
+	current, lastSynced types.LayerID,
+	outOfSyncThreshold uint32,
+) bool {
 	if current.After(lastSynced) && current.Difference(lastSynced) >= outOfSyncThreshold {
 		logger.WithContext(ctx).With().Info("node is too far behind",
 			log.Stringer("current", current),
@@ -472,7 +482,13 @@ func (s *Syncer) setStateBeforeSync(ctx context.Context) {
 		}
 		return
 	}
-	if isTooFarBehind(ctx, s.logger, current, s.getLastSyncedLayer(), s.cfg.OutOfSyncThresholdLayers) {
+	if isTooFarBehind(
+		ctx,
+		s.logger,
+		current,
+		s.getLastSyncedLayer(),
+		s.cfg.OutOfSyncThresholdLayers,
+	) {
 		s.setSyncState(ctx, notSynced)
 	}
 }
@@ -492,7 +508,14 @@ func (s *Syncer) setStateAfterSync(ctx context.Context, success bool) {
 	// network outage.
 	switch currSyncState {
 	case synced:
-		if !success && isTooFarBehind(ctx, s.logger, current, s.getLastSyncedLayer(), s.cfg.OutOfSyncThresholdLayers) {
+		if !success &&
+			isTooFarBehind(
+				ctx,
+				s.logger,
+				current,
+				s.getLastSyncedLayer(),
+				s.cfg.OutOfSyncThresholdLayers,
+			) {
 			s.setSyncState(ctx, notSynced)
 		}
 	case gossipSync:

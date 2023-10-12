@@ -30,6 +30,8 @@ const (
 	OpnProtocol      = "lp/2"
 
 	cacheSize = 1000
+
+	RedundantPeers = 10
 )
 
 var (
@@ -498,7 +500,7 @@ func (f *Fetch) organizeRequests(requests []RequestMessage) map[p2p.Peer][][]Req
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	peer2requests := make(map[p2p.Peer][]RequestMessage)
 
-	best := f.peers.SelectBest(10)
+	best := f.peers.SelectBest(RedundantPeers)
 	if len(best) == 0 {
 		f.logger.Info("cannot send batch: no peers found")
 		f.mu.Lock()
