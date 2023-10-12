@@ -575,7 +575,6 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 				log.Stringer("smesher", header.NodeID))
 		}
 		if header.NodeID == pd.edSigner.NodeID() {
-			// TODO(poszu): support many IDs
 			active = true
 		}
 		return nil
