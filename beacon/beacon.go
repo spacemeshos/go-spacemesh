@@ -835,12 +835,7 @@ func (pd *ProtocolDriver) sendProposal(ctx context.Context, epoch types.EpochID,
 	}
 
 	logger.With().Debug("own proposal passes threshold", log.Inline(proposal))
-	serialized, err := codec.Encode(&m)
-	if err != nil {
-		logger.With().Fatal("failed to encode beacon proposal", log.Err(err))
-	}
-
-	pd.sendToGossip(ctx, pubsub.BeaconProposalProtocol, serialized)
+	pd.sendToGossip(ctx, pubsub.BeaconProposalProtocol, codec.MustEncode(&m))
 	logger.With().Info("beacon proposal sent", log.Inline(proposal))
 }
 
@@ -960,28 +955,17 @@ func (pd *ProtocolDriver) genFirstRoundMsgBody(epoch types.EpochID) (FirstVoting
 func (pd *ProtocolDriver) sendFirstRoundVote(ctx context.Context, epoch types.EpochID) error {
 	mb, err := pd.genFirstRoundMsgBody(epoch)
 	if err != nil {
-		return err
+		return fmt.Errorf("getting first round message: %w", err)
 	}
-
-	encoded, err := codec.Encode(&mb)
-	if err != nil {
-		pd.logger.With().Fatal("failed to serialize message for signing", log.Err(err))
-	}
-	sig := pd.edSigner.Sign(signing.BEACON_FIRST_MSG, encoded)
 
 	m := FirstVotingMessage{
 		FirstVotingMessageBody: mb,
 		SmesherID:              pd.edSigner.NodeID(),
-		Signature:              sig,
+		Signature:              pd.edSigner.Sign(signing.BEACON_FIRST_MSG, codec.MustEncode(&mb)),
 	}
 
 	pd.logger.WithContext(ctx).With().Debug("sending first round vote", epoch, types.FirstRound)
-	serialized, err := codec.Encode(&m)
-	if err != nil {
-		pd.logger.With().Fatal("failed to serialize message for gossip", log.Err(err))
-	}
-
-	pd.sendToGossip(ctx, pubsub.BeaconFirstVotesProtocol, serialized)
+	pd.sendToGossip(ctx, pubsub.BeaconFirstVotesProtocol, codec.MustEncode(&m))
 	return nil
 }
 
@@ -1010,26 +994,14 @@ func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.Epo
 		VotesBitVector: bitVector,
 	}
 
-	encoded, err := codec.Encode(&mb)
-	if err != nil {
-		pd.logger.With().Fatal("failed to serialize message for signing", log.Err(err))
-	}
-	sig := pd.edSigner.Sign(signing.BEACON_FOLLOWUP_MSG, encoded)
-
 	m := FollowingVotingMessage{
 		FollowingVotingMessageBody: mb,
 		SmesherID:                  pd.edSigner.NodeID(),
-		Signature:                  sig,
+		Signature:                  pd.edSigner.Sign(signing.BEACON_FOLLOWUP_MSG, codec.MustEncode(&mb)),
 	}
 
 	pd.logger.WithContext(ctx).With().Debug("sending following round vote", epoch, round)
-
-	serialized, err := codec.Encode(&m)
-	if err != nil {
-		pd.logger.With().Fatal("failed to serialize message for gossip", log.Err(err))
-	}
-
-	pd.sendToGossip(ctx, pubsub.BeaconFollowingVotesProtocol, serialized)
+	pd.sendToGossip(ctx, pubsub.BeaconFollowingVotesProtocol, codec.MustEncode(&m))
 	return nil
 }
 
