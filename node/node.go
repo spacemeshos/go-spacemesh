@@ -812,24 +812,20 @@ func (app *App) initServices(ctx context.Context) error {
 	if app.Config.MinerGoodAtxsPercent > 0 {
 		minerGoodAtxPct = app.Config.MinerGoodAtxsPercent
 	}
-	proposalBuilder := miner.NewProposalBuilder(
-		ctx,
+	proposalBuilder := miner.New(
 		app.clock,
 		app.edSgn,
-		vrfSigner,
 		app.cachedDB,
 		app.host,
 		trtl,
-		beaconProtocol,
 		newSyncer,
 		app.conState,
-		miner.WithNodeID(app.edSgn.NodeID()),
 		miner.WithLayerSize(layerSize),
 		miner.WithLayerPerEpoch(layersPerEpoch),
 		miner.WithMinimalActiveSetWeight(app.Config.Tortoise.MinimalActiveSetWeight),
 		miner.WithHdist(app.Config.Tortoise.Hdist),
 		miner.WithNetworkDelay(app.Config.HARE.WakeupDelta),
-		miner.WithMinGoodAtxPct(minerGoodAtxPct),
+		miner.WithMinGoodAtxPercent(minerGoodAtxPct),
 		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)),
 	)
 
@@ -1055,9 +1051,9 @@ func (app *App) startServices(ctx context.Context) error {
 	if err := app.hare.Start(ctx); err != nil {
 		return fmt.Errorf("cannot start hare: %w", err)
 	}
-	if err := app.proposalBuilder.Start(ctx); err != nil {
-		return fmt.Errorf("cannot start block producer: %w", err)
-	}
+	app.eg.Go(func() error {
+		return app.proposalBuilder.Run(ctx)
+	})
 
 	if app.Config.SMESHING.Start {
 		coinbaseAddr, err := types.StringToAddress(app.Config.SMESHING.CoinbaseAccount)
@@ -1203,10 +1199,6 @@ func (app *App) stopServices(ctx context.Context) {
 	if app.updater != nil {
 		app.log.Info("stopping updater")
 		app.updater.Close()
-	}
-
-	if app.proposalBuilder != nil {
-		app.proposalBuilder.Close()
 	}
 
 	if app.clock != nil {

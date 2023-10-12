@@ -158,6 +158,14 @@ func (es *EdSigner) VRFSigner() (*VRFSigner, error) {
 	}, nil
 }
 
+func (es *EdSigner) MustVRFSigner() *VRFSigner {
+	signer, err := es.VRFSigner()
+	if err != nil {
+		panic(err)
+	}
+	return signer
+}
+
 func (es *EdSigner) Prefix() []byte {
 	return es.prefix
 }
