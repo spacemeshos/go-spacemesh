@@ -2,7 +2,6 @@ package beacon
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -12,7 +11,6 @@ import (
 
 	"github.com/ALTree/bigfloat"
 	"github.com/spacemeshos/fixed"
-	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/beacon/metrics"
@@ -771,12 +769,7 @@ func calcBeacon(logger log.Log, set proposalSet) types.Beacon {
 	logger.With().Info("calculated beacon",
 		beacon,
 		log.Int("num_hashes", len(allProposals)),
-		log.Array("proposals", zapcore.ArrayMarshalerFunc(func(enc zapcore.ArrayEncoder) error {
-			for _, h := range allProposals {
-				enc.AppendString(hex.EncodeToString(h[:]))
-			}
-			return nil
-		})),
+		log.Array("proposals", allProposals),
 	)
 	return beacon
 }
