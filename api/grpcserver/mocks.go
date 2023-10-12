@@ -932,6 +932,105 @@ func (c *postSetupProviderStatusCall) DoAndReturn(f func() *activation.PostSetup
 	return c
 }
 
+// MockpostSupervisor is a mock of postSupervisor interface.
+type MockpostSupervisor struct {
+	ctrl     *gomock.Controller
+	recorder *MockpostSupervisorMockRecorder
+}
+
+// MockpostSupervisorMockRecorder is the mock recorder for MockpostSupervisor.
+type MockpostSupervisorMockRecorder struct {
+	mock *MockpostSupervisor
+}
+
+// NewMockpostSupervisor creates a new mock instance.
+func NewMockpostSupervisor(ctrl *gomock.Controller) *MockpostSupervisor {
+	mock := &MockpostSupervisor{ctrl: ctrl}
+	mock.recorder = &MockpostSupervisorMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockpostSupervisor) EXPECT() *MockpostSupervisorMockRecorder {
+	return m.recorder
+}
+
+// Start mocks base method.
+func (m *MockpostSupervisor) Start() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Start")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Start indicates an expected call of Start.
+func (mr *MockpostSupervisorMockRecorder) Start() *postSupervisorStartCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockpostSupervisor)(nil).Start))
+	return &postSupervisorStartCall{Call: call}
+}
+
+// postSupervisorStartCall wrap *gomock.Call
+type postSupervisorStartCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *postSupervisorStartCall) Return(arg0 error) *postSupervisorStartCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *postSupervisorStartCall) Do(f func() error) *postSupervisorStartCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *postSupervisorStartCall) DoAndReturn(f func() error) *postSupervisorStartCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Stop mocks base method.
+func (m *MockpostSupervisor) Stop() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Stop")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Stop indicates an expected call of Stop.
+func (mr *MockpostSupervisorMockRecorder) Stop() *postSupervisorStopCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*MockpostSupervisor)(nil).Stop))
+	return &postSupervisorStopCall{Call: call}
+}
+
+// postSupervisorStopCall wrap *gomock.Call
+type postSupervisorStopCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *postSupervisorStopCall) Return(arg0 error) *postSupervisorStopCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *postSupervisorStopCall) Do(f func() error) *postSupervisorStopCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *postSupervisorStopCall) DoAndReturn(f func() error) *postSupervisorStopCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // MockpeerCounter is a mock of peerCounter interface.
 type MockpeerCounter struct {
 	ctrl     *gomock.Controller

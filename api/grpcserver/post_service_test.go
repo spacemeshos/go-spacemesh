@@ -3,12 +3,9 @@ package grpcserver
 import (
 	"context"
 	"fmt"
-	"os/exec"
-	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,7 +22,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-func initPost(tb testing.TB, log *zap.Logger, dir string) {
+func initPost(tb testing.TB, log *zap.Logger, opts activation.PostSetupOpts) {
 	tb.Helper()
 
 	cfg := activation.DefaultPostConfig()
@@ -34,28 +31,21 @@ func initPost(tb testing.TB, log *zap.Logger, dir string) {
 	require.NoError(tb, err)
 	id := sig.NodeID()
 
-	opts := activation.DefaultPostSetupOpts()
-	opts.DataDir = dir
-	opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
-	opts.Scrypt.N = 2 // Speedup initialization in tests.
-
 	goldenATXID := types.ATXID{2, 3, 4}
 
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
-	provingOpts := activation.DefaultPostProvingOpts()
-	provingOpts.Flags = config.RecommendedPowFlags()
-	mgr, err := activation.NewPostSetupManager(id, cfg, log.Named("manager"), cdb, goldenATXID, provingOpts)
+	mgr, err := activation.NewPostSetupManager(id, cfg, log.Named("manager"), cdb, goldenATXID)
 	require.NoError(tb, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	tb.Cleanup(cancel)
+	defer cancel()
 
 	var eg errgroup.Group
-	lastStatus := &activation.PostSetupStatus{}
 	eg.Go(func() error {
 		timer := time.NewTicker(50 * time.Millisecond)
 		defer timer.Stop()
 
+		lastStatus := &activation.PostSetupStatus{}
 		for {
 			select {
 			case <-ctx.Done():
@@ -67,7 +57,8 @@ func initPost(tb testing.TB, log *zap.Logger, dir string) {
 				if status.NumLabelsWritten == uint64(opts.NumUnits)*cfg.LabelsPerUnit {
 					return nil
 				}
-				require.Equal(tb, activation.PostSetupStateInProgress, status.State)
+				require.Contains(tb, []activation.PostSetupState{activation.PostSetupStatePrepared, activation.PostSetupStateInProgress}, status.State)
+				lastStatus = status
 			}
 		}
 	})
@@ -79,28 +70,21 @@ func initPost(tb testing.TB, log *zap.Logger, dir string) {
 	require.Equal(tb, activation.PostSetupStateComplete, mgr.Status().State)
 }
 
-func launchPostSupervisor(tb testing.TB, log *zap.Logger, cfg Config, postDir string) func() {
-	path, err := exec.Command("go", "env", "GOMOD").Output()
-	require.NoError(tb, err)
+func launchPostSupervisor(tb testing.TB, log *zap.Logger, cfg Config, postOpts activation.PostSetupOpts) func() {
+	cmdCfg := activation.DefaultTestPostServiceConfig()
+	cmdCfg.NodeAddress = fmt.Sprintf("http://%s", cfg.PublicListener)
+	postCfg := activation.DefaultPostConfig()
+	provingOpts := activation.DefaultPostProvingOpts()
+	provingOpts.RandomXMode = activation.PostRandomXModeLight
 
-	opts := activation.PostSupervisorConfig{
-		PostServiceCmd:  filepath.Join(filepath.Dir(string(path)), "build", "service"),
-		DataDir:         postDir,
-		NodeAddress:     fmt.Sprintf("http://%s", cfg.PublicListener),
-		PowDifficulty:   activation.DefaultPostConfig().PowDifficulty,
-		PostServiceMode: "light",
-		N:               "2",
-	}
-
-	ps, err := activation.NewPostSupervisor(log, opts)
+	ps, err := activation.NewPostSupervisor(log, cmdCfg, postCfg, postOpts, provingOpts)
 	require.NoError(tb, err)
 	require.NotNil(tb, ps)
-	return func() { assert.NoError(tb, ps.Close()) }
+	require.NoError(tb, ps.Start())
+	return func() { assert.NoError(tb, ps.Stop()) }
 }
 
 func Test_GenerateProof(t *testing.T) {
-	t.Parallel()
-
 	log := zaptest.NewLogger(t)
 	ctrl := gomock.NewController(t)
 	con := NewMockpostConnectionListener(ctrl)
@@ -116,9 +100,12 @@ func Test_GenerateProof(t *testing.T) {
 	}).Times(1)
 	con.EXPECT().Disconnected(gomock.Any()).Times(1)
 
-	postDir := t.TempDir()
-	initPost(t, log.Named("post"), postDir)
-	postCleanup := launchPostSupervisor(t, log.Named("supervisor"), cfg, postDir)
+	opts := activation.DefaultPostSetupOpts()
+	opts.DataDir = t.TempDir()
+	opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
+	opts.Scrypt.N = 2 // Speedup initialization in tests.
+	initPost(t, log.Named("post"), opts)
+	postCleanup := launchPostSupervisor(t, log.Named("supervisor"), cfg, opts)
 	t.Cleanup(postCleanup)
 
 	select {
@@ -150,8 +137,6 @@ func Test_GenerateProof(t *testing.T) {
 }
 
 func Test_Cancel_GenerateProof(t *testing.T) {
-	t.Parallel()
-
 	log := zaptest.NewLogger(t)
 	ctrl := gomock.NewController(t)
 	con := NewMockpostConnectionListener(ctrl)
@@ -167,13 +152,16 @@ func Test_Cancel_GenerateProof(t *testing.T) {
 	}).Times(1)
 	con.EXPECT().Disconnected(gomock.Any()).Times(1)
 
-	postDir := t.TempDir()
-	initPost(t, log.Named("post"), postDir)
-	t.Cleanup(launchPostSupervisor(t, log.Named("supervisor"), cfg, postDir))
+	opts := activation.DefaultPostSetupOpts()
+	opts.DataDir = t.TempDir()
+	opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
+	opts.Scrypt.N = 2 // Speedup initialization in tests.
+	initPost(t, log.Named("post"), opts)
+	t.Cleanup(launchPostSupervisor(t, log.Named("supervisor"), cfg, opts))
 
 	select {
 	case <-connected:
-	case <-time.After(5 * time.Second):
+	case <-time.After(10 * time.Second):
 		require.Fail(t, "timed out waiting for connection")
 	}
 
@@ -193,8 +181,6 @@ func Test_Cancel_GenerateProof(t *testing.T) {
 }
 
 func Test_GenerateProof_MultipleServices(t *testing.T) {
-	t.Parallel()
-
 	log := zaptest.NewLogger(t)
 	ctrl := gomock.NewController(t)
 	con := NewMockpostConnectionListener(ctrl)
@@ -210,22 +196,26 @@ func Test_GenerateProof_MultipleServices(t *testing.T) {
 	}).Times(1)
 	con.EXPECT().Disconnected(gomock.Any()).Times(1)
 
+	opts := activation.DefaultPostSetupOpts()
+	opts.DataDir = t.TempDir()
+	opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
+	opts.Scrypt.N = 2 // Speedup initialization in tests.
+
 	// all but one should not be able to register to the node (i.e. open a stream to it).
-	postDir1 := t.TempDir()
-	initPost(t, log.Named("post1"), postDir1)
-	t.Cleanup(launchPostSupervisor(t, log.Named("supervisor1"), cfg, postDir1))
+	initPost(t, log.Named("post1"), opts)
+	t.Cleanup(launchPostSupervisor(t, log.Named("supervisor1"), cfg, opts))
 
-	postDir2 := t.TempDir()
-	initPost(t, log.Named("post2"), postDir2)
-	t.Cleanup(launchPostSupervisor(t, log.Named("supervisor2"), cfg, postDir2))
+	opts.DataDir = t.TempDir()
+	initPost(t, log.Named("post2"), opts)
+	t.Cleanup(launchPostSupervisor(t, log.Named("supervisor2"), cfg, opts))
 
-	postDir3 := t.TempDir()
-	initPost(t, log.Named("post3"), postDir3)
-	t.Cleanup(launchPostSupervisor(t, log.Named("supervisor3"), cfg, postDir3))
+	opts.DataDir = t.TempDir()
+	initPost(t, log.Named("post3"), opts)
+	t.Cleanup(launchPostSupervisor(t, log.Named("supervisor3"), cfg, opts))
 
 	select {
 	case <-connected:
-	case <-time.After(5 * time.Second):
+	case <-time.After(10 * time.Second):
 		require.Fail(t, "timed out waiting for connection")
 	}
 

@@ -55,6 +55,11 @@ type postSetupProvider interface {
 	Config() activation.PostConfig
 }
 
+type postSupervisor interface {
+	Start() error
+	Stop() error
+}
+
 // peerCounter is an api to get amount of connected peers.
 type peerCounter interface {
 	PeerCount() uint64

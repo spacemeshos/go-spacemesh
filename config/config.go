@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -174,12 +173,7 @@ func DefaultTestConfig() Config {
 	conf.BaseConfig = defaultTestConfig()
 	conf.P2P = p2p.DefaultConfig()
 	conf.API = grpcserver.DefaultTestConfig()
-
-	path, err := exec.Command("go", "env", "GOMOD").Output()
-	if err != nil {
-		panic(err)
-	}
-	conf.POSTService.PostServiceCmd = filepath.Join(filepath.Dir(string(path)), "build", "service")
+	conf.POSTService = activation.DefaultTestPostServiceConfig()
 	return conf
 }
 

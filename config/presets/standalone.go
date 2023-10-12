@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"time"
 
-	postCfg "github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/initialization"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 )
@@ -62,7 +62,7 @@ func standalone() config.Config {
 	conf.SMESHING.Opts.NumUnits = 1
 	conf.SMESHING.Opts.Throttle = true
 	conf.SMESHING.Opts.DataDir = conf.DataDirParent
-	conf.SMESHING.ProvingOpts.Flags = postCfg.RecommendedPowFlags()
+	conf.SMESHING.ProvingOpts.RandomXMode = activation.PostRandomXModeLight
 
 	conf.Beacon.Kappa = 40
 	conf.Beacon.Theta = big.NewRat(1, 4)
@@ -88,6 +88,6 @@ func standalone() config.Config {
 	conf.API.PublicListener = "0.0.0.0:10092"
 	conf.API.PrivateListener = "0.0.0.0:10093"
 
-	conf.POSTService.NodeAddress = "http://0.0.0.0:10093"
+	conf.POSTService.NodeAddress = "http://127.0.0.1:10093"
 	return conf
 }

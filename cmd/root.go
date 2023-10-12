@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -72,7 +73,7 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.OptFilterThreshold, "threshold for optimistic filtering in percentage")
 
 	cmd.PersistentFlags().VarP(flags.NewStringToUint64Value(map[string]uint64{}), "accounts", "a",
-		"List of prefunded accounts")
+		"List of pre-funded accounts")
 
 	cmd.PersistentFlags().IntVar(&cfg.DatabaseConnections, "db-connections",
 		cfg.DatabaseConnections, "configure number of active connections to enable parallel read requests")
@@ -118,6 +119,7 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().BoolVar(&cfg.P2P.Bootnode, "p2p-bootnode", cfg.P2P.Bootnode,
 		"gossipsub and discovery will be running in a mode suitable for bootnode")
 	cmd.PersistentFlags().BoolVar(&cfg.P2P.PrivateNetwork, "p2p-private-network", cfg.P2P.PrivateNetwork, "discovery will work in private mode. mostly useful for testing, don't set in public networks")
+
 	/** ======================== TIME Flags ========================== **/
 
 	cmd.PersistentFlags().BoolVar(&cfg.TIME.Peersync.Disable, "peersync-disable", cfg.TIME.Peersync.Disable,
@@ -134,6 +136,7 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.TIME.Peersync.MaxOffsetErrors, "the node will exit when max number of consecutive offset errors will be reached")
 	cmd.PersistentFlags().IntVar(&cfg.TIME.Peersync.RequiredResponses, "peersync-required-responses",
 		cfg.TIME.Peersync.RequiredResponses, "min number of clock samples from other that need to be collected to verify time")
+
 	/** ======================== API Flags ========================== **/
 
 	cmd.PersistentFlags().StringSliceVar(&cfg.API.PublicServices, "grpc-public-services",
@@ -209,7 +212,7 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().Uint32Var(&cfg.Tortoise.BadBeaconVoteDelayLayers, "tortoise-delay-layers",
 		cfg.Tortoise.BadBeaconVoteDelayLayers, "number of layers to ignore a ballot with a different beacon")
 	cmd.PersistentFlags().BoolVar(&cfg.Tortoise.EnableTracer, "tortoise-enable-tracer",
-		cfg.Tortoise.EnableTracer, "recovrd every tortoise input/output into the loggin output")
+		cfg.Tortoise.EnableTracer, "record every tortoise input/output to the logging output")
 
 	// TODO(moshababo): add usage desc
 	cmd.PersistentFlags().Uint64Var(&cfg.POST.LabelsPerUnit, "post-labels-per-unit",
@@ -224,7 +227,12 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.POST.K2, "number of labels to prove")
 	cmd.PersistentFlags().Uint32Var(&cfg.POST.K3, "post-k3",
 		cfg.POST.K3, "subset of labels to verify in a proof")
-	cmd.PersistentFlags().VarP(&cfg.POST.PowDifficulty, "post-pow-difficulty", "", "difficulty of randomx-based proof of work")
+	cmd.PersistentFlags().AddFlag(&pflag.Flag{
+		Name:     "post-pow-difficulty",
+		Value:    &cfg.POST.PowDifficulty,
+		DefValue: cfg.POST.PowDifficulty.String(),
+		Usage:    "difficulty of randomx-based proof of work",
+	})
 
 	/**======================== Smeshing Flags ========================== **/
 
@@ -240,10 +248,42 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.SMESHING.Opts.NumUnits, "")
 	cmd.PersistentFlags().Uint64Var(&cfg.SMESHING.Opts.MaxFileSize, "smeshing-opts-maxfilesize",
 		cfg.SMESHING.Opts.MaxFileSize, "")
-	cmd.PersistentFlags().VarP(&cfg.SMESHING.Opts.ProviderID, "smeshing-opts-provider",
-		"", "")
+	cmd.PersistentFlags().AddFlag(&pflag.Flag{
+		Name:     "smeshing-opts-provider",
+		Value:    &cfg.SMESHING.Opts.ProviderID,
+		DefValue: cfg.SMESHING.Opts.ProviderID.String(),
+	})
 	cmd.PersistentFlags().BoolVar(&cfg.SMESHING.Opts.Throttle, "smeshing-opts-throttle",
 		cfg.SMESHING.Opts.Throttle, "")
+
+	/**======================== PoST Proving Flags ========================== **/
+
+	cmd.PersistentFlags().UintVar(&cfg.SMESHING.ProvingOpts.Threads, "smeshing-opts-proving-threads",
+		cfg.SMESHING.ProvingOpts.Threads, "")
+	cmd.PersistentFlags().UintVar(&cfg.SMESHING.ProvingOpts.Nonces, "smeshing-opts-proving-nonces",
+		cfg.SMESHING.ProvingOpts.Nonces, "")
+	cmd.PersistentFlags().AddFlag(&pflag.Flag{
+		Name:     "smeshing-opts-proving-randomx-mode",
+		Value:    &cfg.SMESHING.ProvingOpts.RandomXMode,
+		DefValue: cfg.SMESHING.ProvingOpts.RandomXMode.String(),
+	})
+
+	/**======================== PoST Verifying Flags ========================== **/
+
+	cmd.PersistentFlags().IntVar(&cfg.SMESHING.VerifyingOpts.Workers, "smeshing-opts-verifying-threads",
+		cfg.SMESHING.VerifyingOpts.Workers, "")
+	cmd.PersistentFlags().AddFlag(&pflag.Flag{
+		Name:     "smeshing-opts-verifying-powflags",
+		Value:    &cfg.SMESHING.VerifyingOpts.Flags,
+		DefValue: cfg.SMESHING.VerifyingOpts.Flags.String(),
+	})
+
+	/**======================== PoST service Flags ========================== **/
+
+	cmd.PersistentFlags().StringVar(&cfg.POSTService.PostServiceCmd, "post-opts-post-service",
+		cfg.POSTService.PostServiceCmd, "")
+	cmd.PersistentFlags().StringVar(&cfg.POSTService.NodeAddress, "post-opts-node-address",
+		cfg.POSTService.NodeAddress, "")
 
 	/**======================== Consensus Flags ========================== **/
 
@@ -262,6 +302,7 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.POET.RequestTimeout, "timeout for poet requests")
 
 	/**======================== bootstrap data updater Flags ========================== **/
+
 	cmd.PersistentFlags().StringVar(&cfg.Bootstrap.URL, "bootstrap-url",
 		cfg.Bootstrap.URL, "the url to query bootstrap data update")
 	cmd.PersistentFlags().StringVar(&cfg.Bootstrap.Version, "bootstrap-version",
