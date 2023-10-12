@@ -110,6 +110,7 @@ type session struct {
 
 func (s *session) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("epoch", s.epoch.Uint32())
+	encoder.AddString("beacon", s.beacon.String())
 	encoder.AddString("atx", s.atx.ShortString())
 	encoder.AddUint64("weight", s.atxWeight)
 	if s.ref != types.EmptyBallotID {
@@ -149,9 +150,8 @@ type config struct {
 	minActiveSetWeight uint64
 	networkDelay       time.Duration
 	workersLimit       int
-
 	// used to determine whether a node has enough information on the active set this epoch
-	GoodAtxPercent int
+	goodAtxPercent int
 }
 
 func (c *config) MarshalLogObject(encoder log.ObjectEncoder) error {
@@ -160,7 +160,7 @@ func (c *config) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("hdist", c.hdist)
 	encoder.AddUint64("min active weight", c.minActiveSetWeight)
 	encoder.AddDuration("network delay", c.networkDelay)
-	encoder.AddInt("good atx percent", c.GoodAtxPercent)
+	encoder.AddInt("good atx percent", c.goodAtxPercent)
 	return nil
 }
 
@@ -216,7 +216,7 @@ func WithNetworkDelay(delay time.Duration) Opt {
 
 func WithMinGoodAtxPercent(percent int) Opt {
 	return func(pb *ProposalBuilder) {
-		pb.cfg.GoodAtxPercent = percent
+		pb.cfg.goodAtxPercent = percent
 	}
 }
 
@@ -293,7 +293,7 @@ func (pb *ProposalBuilder) Run(ctx context.Context) error {
 			if current <= types.GetEffectiveGenesis() || !pb.syncer.IsSynced(sctx) {
 				continue
 			}
-			if err := pb.build(ctx, current); err != nil {
+			if err := pb.build(sctx, current); err != nil {
 				if errors.Is(err, errAtxNotAvailable) {
 					pb.logger.With().
 						Debug("signer is not active in epoch", log.Context(sctx), log.Uint32("lid", current.Uint32()), log.Err(err))
@@ -379,8 +379,13 @@ func (pb *ProposalBuilder) initSharedData(ctx context.Context, lid types.LayerID
 	}
 	if pb.shared.active.set == nil {
 		weight, set, err := generateActiveSet(
-			pb.logger, pb.cdb, pb.shared.epoch, pb.clock.LayerToTime(pb.shared.epoch.FirstLayer()),
-			pb.cfg.GoodAtxPercent, pb.cfg.networkDelay)
+			pb.logger,
+			pb.cdb,
+			pb.shared.epoch,
+			pb.clock.LayerToTime(pb.shared.epoch.FirstLayer()),
+			pb.cfg.goodAtxPercent,
+			pb.cfg.networkDelay,
+		)
 		if err != nil {
 			return err
 		}
