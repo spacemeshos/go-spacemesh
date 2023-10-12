@@ -135,17 +135,13 @@ func (n *node) withSigner() *node {
 	signer, err := signing.NewEdSigner(signing.WithKeyFromRand(n.t.rng))
 	require.NoError(n.t, err)
 	n.signer = signer
-	vrfsigner, err := signer.VRFSigner()
-	require.NoError(n.t, err)
-	n.vrfsigner = vrfsigner
+	n.vrfsigner = signer.VRFSigner()
 	return n
 }
 
 func (n *node) reuseSigner(signer *signing.EdSigner) *node {
 	n.signer = signer
-	vrfsigner, err := signer.VRFSigner()
-	require.NoError(n.t, err)
-	n.vrfsigner = vrfsigner
+	n.vrfsigner = signer.VRFSigner()
 	return n
 }
 
