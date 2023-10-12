@@ -109,7 +109,6 @@ func New(
 	publisher pubsub.Publisher,
 	edSigner *signing.EdSigner,
 	edVerifier *signing.EdVerifier,
-	vrfSigner vrfSigner,
 	vrfVerifier vrfVerifier,
 	cdb *datastore.CachedDB,
 	clock layerClock,
@@ -123,7 +122,6 @@ func New(
 		publisher:      publisher,
 		edSigner:       edSigner,
 		edVerifier:     edVerifier,
-		vrfSigner:      vrfSigner,
 		vrfVerifier:    vrfVerifier,
 		cdb:            cdb,
 		clock:          clock,
@@ -147,7 +145,7 @@ func New(
 	}
 
 	if pd.weakCoin == nil {
-		pd.weakCoin = weakcoin.New(pd.publisher, vrfSigner, vrfVerifier, pd.nonceFetcher, pd,
+		pd.weakCoin = weakcoin.New(pd.publisher, edSigner.VRFSigner(), vrfVerifier, pd.nonceFetcher, pd,
 			pd.msgTimes,
 			weakcoin.WithLog(pd.logger.WithName("weakCoin")),
 			weakcoin.WithMaxRound(pd.config.RoundsNumber),
@@ -173,7 +171,6 @@ type ProtocolDriver struct {
 	publisher    pubsub.Publisher
 	edSigner     *signing.EdSigner
 	edVerifier   *signing.EdVerifier
-	vrfSigner    vrfSigner
 	vrfVerifier  vrfVerifier
 	nonceFetcher nonceFetcher
 	weakCoin     coin
@@ -834,7 +831,7 @@ func (pd *ProtocolDriver) sendProposal(ctx context.Context, epoch types.EpochID,
 	}
 
 	logger := pd.logger.WithContext(ctx).WithFields(epoch)
-	vrfSig := buildSignedProposal(ctx, pd.logger, pd.vrfSigner, epoch, nonce)
+	vrfSig := buildSignedProposal(ctx, pd.logger, pd.edSigner.VRFSigner(), epoch, nonce)
 	proposal := ProposalFromVrf(vrfSig)
 	m := ProposalMessage{
 		EpochID:      epoch,

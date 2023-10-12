@@ -14,10 +14,7 @@ func Fuzz_VRFSignAndVerify(f *testing.F) {
 		edSig, err := NewEdSigner()
 		require.NoError(t, err, "failed to create EdSigner")
 
-		vrfSig, err := edSig.VRFSigner()
-		require.NoError(t, err, "failed to create VRF signer")
-
-		signature := vrfSig.Sign(message)
+		signature := edSig.VRFSigner().Sign(message)
 		require.NoError(t, err, "failed to sign message")
 
 		ok := VRFVerify(edSig.NodeID(), message, signature)
@@ -35,11 +32,8 @@ func Test_VRFSignAndVerify(t *testing.T) {
 	require.NoError(t, err, "failed to create EdSigner")
 
 	// Act & Assert
-	vrfSig, err := signer.VRFSigner()
-	require.NoError(t, err, "failed to create VRF signer")
-
 	message := []byte("hello world")
-	signature := vrfSig.Sign(message)
+	signature := signer.VRFSigner().Sign(message)
 
 	vrfVerify := NewVRFVerifier()
 	ok := vrfVerify.Verify(signer.NodeID(), message, signature)
@@ -52,8 +46,7 @@ func Test_VRFSigner_NodeIDAndPublicKey(t *testing.T) {
 	require.NoError(t, err, "failed to create EdSigner")
 
 	// Act
-	vrfSig, err := signer.VRFSigner()
-	require.NoError(t, err, "failed to create VRF signer")
+	vrfSig := signer.VRFSigner()
 
 	// Assert
 	require.Equal(t, signer.NodeID(), vrfSig.NodeID(), "VRF signer node ID does not match Ed signer node ID")
@@ -65,8 +58,7 @@ func Test_VRFVerifier(t *testing.T) {
 	// Arrange
 	signer, err := NewEdSigner()
 	require.NoError(t, err, "failed to create EdSigner")
-	vrfSig, err := signer.VRFSigner()
-	require.NoError(t, err, "failed to create VRF signer")
+	vrfSig := signer.VRFSigner()
 
 	// Act & Assert
 	sig := vrfSig.Sign([]byte("hello world"))
@@ -88,9 +80,6 @@ func Test_VRF_LSB_evenly_distributed(t *testing.T) {
 	// Arrange
 	signer, err := NewEdSigner()
 	require.NoError(t, err, "failed to create EdSigner")
-	vrfSig, err := signer.VRFSigner()
-	require.NoError(t, err, "failed to create VRF signer")
-
 	iterations := 10_000
 
 	// Act
@@ -100,7 +89,7 @@ func Test_VRF_LSB_evenly_distributed(t *testing.T) {
 		_, err := rand.Read(msg)
 		require.NoError(t, err, "failed to read random bytes")
 
-		sig := vrfSig.Sign(msg)
+		sig := signer.VRFSigner().Sign(msg)
 		lsb[sig.LSB()]++
 	}
 

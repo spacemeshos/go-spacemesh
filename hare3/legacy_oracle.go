@@ -45,11 +45,7 @@ func (lg *legacyOracle) validate(msg *Message) grade {
 }
 
 func (lg *legacyOracle) active(signer *signing.EdSigner, beacon types.Beacon, layer types.LayerID, ir IterRound) *types.HareEligibility {
-	vrfs, err := signer.VRFSigner()
-	if err != nil {
-		panic("can't cast ed signer to vrf signer")
-	}
-	vrf := lg.oracle.GenVRF(context.Background(), vrfs, beacon, layer, ir.Absolute())
+	vrf := lg.oracle.GenVRF(context.Background(), signer.VRFSigner(), beacon, layer, ir.Absolute())
 	committee := int(lg.config.Committee)
 	if ir.Round == propose {
 		committee = int(lg.config.Leaders)

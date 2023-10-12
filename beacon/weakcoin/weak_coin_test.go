@@ -417,8 +417,7 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 		signing.WithKeyFromRand(rng),
 	)
 	require.NoError(t, err)
-	vrfSig, err := signer.VRFSigner()
-	require.NoError(t, err)
+	vrfSig := signer.VRFSigner()
 
 	mockAllowance := weakcoin.NewMockallowance(gomock.NewController(t))
 	mockAllowance.EXPECT().MinerAllowance(epoch, gomock.Any()).DoAndReturn(
@@ -473,8 +472,7 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 
 		signer, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
 		require.NoError(t, err)
-		vrfSigner, err := signer.VRFSigner()
-		require.NoError(t, err)
+		vrfSigner := signer.VRFSigner()
 
 		vrfSigners[i] = vrfSigner
 	}
