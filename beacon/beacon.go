@@ -6,13 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/ALTree/bigfloat"
 	"github.com/spacemeshos/fixed"
+	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/beacon/metrics"
@@ -225,7 +225,7 @@ func (pd *ProtocolDriver) Start(ctx context.Context) {
 			pd.logger.Info("beacon protocol disabled")
 			return
 		}
-		pd.logger.With().Info("starting beacon protocol", log.String("config", fmt.Sprintf("%+v", pd.config)))
+		pd.logger.With().Info("starting beacon protocol", log.Any("config", pd.config))
 		pd.setProposalTimeForNextEpoch()
 		pd.eg.Go(func() error {
 			pd.listenEpochs(ctx)
@@ -729,7 +729,7 @@ func (pd *ProtocolDriver) onNewEpoch(ctx context.Context, epoch types.EpochID) e
 func (pd *ProtocolDriver) runProtocol(ctx context.Context, epoch types.EpochID, st *state) {
 	ctx = log.WithNewSessionID(ctx)
 	targetEpoch := epoch + 1
-	logger := pd.logger.WithContext(ctx).WithFields(epoch, log.Uint32("target_epoch", uint32(targetEpoch)))
+	logger := pd.logger.WithContext(ctx).WithFields(epoch, log.FieldNamed("target_epoch", targetEpoch))
 
 	pd.setBeginProtocol(ctx)
 	defer pd.setEndProtocol(ctx)
@@ -765,17 +765,19 @@ func (pd *ProtocolDriver) runProtocol(ctx context.Context, epoch types.EpochID, 
 
 func calcBeacon(logger log.Log, set proposalSet) types.Beacon {
 	allProposals := set.sort()
-	allHexes := make([]string, len(allProposals))
-	for i, h := range allProposals {
-		allHexes[i] = hex.EncodeToString(h[:])
-	}
+
 	// Beacon should appear to have the same entropy as the initial proposals, hence cropping it
 	// to the same size as the proposal
 	beacon := types.BytesToBeacon(allProposals.hash().Bytes())
 	logger.With().Info("calculated beacon",
 		beacon,
 		log.Int("num_hashes", len(allProposals)),
-		log.String("proposals", strings.Join(allHexes, ", ")),
+		log.Array("proposals", zapcore.ArrayMarshalerFunc(func(enc zapcore.ArrayEncoder) error {
+			for _, h := range allProposals {
+				enc.AppendString(hex.EncodeToString(h[:]))
+			}
+			return nil
+		})),
 	)
 	return beacon
 }
@@ -784,8 +786,7 @@ func (pd *ProtocolDriver) runProposalPhase(ctx context.Context, epoch types.Epoc
 	logger := pd.logger.WithContext(ctx).WithFields(epoch)
 	logger.Info("starting beacon proposal phase")
 
-	var cancel func()
-	ctx, cancel = context.WithTimeout(ctx, pd.config.ProposalDuration)
+	ctx, cancel := context.WithTimeout(ctx, pd.config.ProposalDuration)
 	defer cancel()
 
 	if st.nonce != nil {
@@ -829,23 +830,18 @@ func (pd *ProtocolDriver) sendProposal(ctx context.Context, epoch types.EpochID,
 	}
 
 	if invalid == pd.classifyProposal(logger, m, atx.Received, time.Now(), checker) {
-		logger.With().Debug("own proposal doesn't pass threshold",
-			log.String("proposal", hex.EncodeToString(proposal[:])),
-		)
+		logger.With().Debug("own proposal doesn't pass threshold", log.Inline(proposal))
 		return
 	}
 
-	logger.With().Debug("own proposal passes threshold",
-		log.String("proposal", hex.EncodeToString(proposal[:])),
-	)
-
+	logger.With().Debug("own proposal passes threshold", log.Inline(proposal))
 	serialized, err := codec.Encode(&m)
 	if err != nil {
 		logger.With().Fatal("failed to encode beacon proposal", log.Err(err))
 	}
 
 	pd.sendToGossip(ctx, pubsub.BeaconProposalProtocol, serialized)
-	logger.With().Info("beacon proposal sent", log.String("proposal", hex.EncodeToString(proposal[:])))
+	logger.With().Info("beacon proposal sent", log.Inline(proposal))
 }
 
 // runConsensusPhase runs K voting rounds and returns result from last weak coin round.
@@ -1004,7 +1000,7 @@ func (pd *ProtocolDriver) getFirstRoundVote(epoch types.EpochID, nodeID types.No
 func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.EpochID, round types.RoundID, ownCurrentRoundVotes allVotes) error {
 	firstRoundVotes, err := pd.getFirstRoundVote(epoch, pd.edSigner.NodeID())
 	if err != nil {
-		return fmt.Errorf("get own first round votes %v: %w", pd.edSigner.NodeID().String(), err)
+		return fmt.Errorf("get own first round votes %s: %w", pd.edSigner.NodeID(), err)
 	}
 
 	bitVector := encodeVotes(ownCurrentRoundVotes, firstRoundVotes)
@@ -1053,8 +1049,9 @@ func createProposalChecker(logger log.Log, conf Config, numEarlyATXs, numATXs in
 	logger.With().Info("created proposal checker with ATX threshold",
 		log.Int("num_early_atxs", numEarlyATXs),
 		log.Int("num_atxs", numATXs),
-		log.String("threshold", high.String()),
-		log.String("threshold_strict", low.String()))
+		log.Stringer("threshold", high),
+		log.Stringer("threshold_strict", low),
+	)
 	return &proposalChecker{threshold: high, thresholdStrict: low}
 }
 
@@ -1125,11 +1122,7 @@ func buildSignedProposal(ctx context.Context, logger log.Log, signer vrfSigner, 
 	p := buildProposal(logger, epoch, nonce)
 	vrfSig := signer.Sign(p)
 	proposal := ProposalFromVrf(vrfSig)
-	logger.WithContext(ctx).With().Debug("calculated beacon proposal",
-		epoch,
-		nonce,
-		log.String("proposal", hex.EncodeToString(proposal[:])),
-	)
+	logger.WithContext(ctx).With().Debug("calculated beacon proposal", epoch, nonce, log.Inline(proposal))
 	return vrfSig
 }
 
@@ -1139,22 +1132,14 @@ func buildProposal(logger log.Log, epoch types.EpochID, nonce types.VRFPostIndex
 		Nonce: nonce,
 		Epoch: epoch,
 	}
-
-	b, err := codec.Encode(message)
-	if err != nil {
-		logger.With().Fatal("failed to serialize proposal", log.Err(err))
-	}
-	return b
+	return codec.MustEncode(message)
 }
 
 func (pd *ProtocolDriver) sendToGossip(ctx context.Context, protocol string, serialized []byte) {
 	// NOTE(dshulyak) moved to goroutine because self-broadcast is applied synchronously
 	pd.eg.Go(func() error {
 		if err := pd.publisher.Publish(ctx, protocol, serialized); err != nil {
-			pd.logger.With().Error("failed to broadcast",
-				log.String("protocol", protocol),
-				log.Err(err),
-			)
+			pd.logger.With().Error("failed to broadcast", log.String("protocol", protocol), log.Err(err))
 		}
 		return nil
 	})

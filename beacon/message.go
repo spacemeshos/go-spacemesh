@@ -1,7 +1,10 @@
 package beacon
 
 import (
+	"encoding/hex"
+
 	"github.com/spacemeshos/go-scale"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
@@ -32,6 +35,11 @@ func (p *Proposal) EncodeScale(e *scale.Encoder) (int, error) {
 // DecodeScale implements scale codec interface.
 func (p *Proposal) DecodeScale(d *scale.Decoder) (int, error) {
 	return scale.DecodeByteArray(d, p[:])
+}
+
+func (p Proposal) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	enc.AddString("proposal", hex.EncodeToString(p[:]))
+	return nil
 }
 
 func ProposalFromVrf(vrf types.VrfSignature) Proposal {
