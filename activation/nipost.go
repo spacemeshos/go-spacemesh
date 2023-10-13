@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"math/rand"
 	"slices"
-	"sync"
 	"time"
 
 	"github.com/spacemeshos/merkle-tree"
@@ -41,26 +40,6 @@ const (
 	maxPoetGetProofJitter = 0.04
 )
 
-//go:generate mockgen -typed -package=activation -destination=./nipost_mocks.go -source=./nipost.go PoetProvingServiceClient
-
-// PoetProvingServiceClient provides a gateway to a trust-less public proving service, which may serve many PoET
-// proving clients, and thus enormously reduce the cost-per-proof for PoET since each additional proof adds only
-// a small number of hash evaluations to the total cost.
-type PoetProvingServiceClient interface {
-	Address() string
-
-	PowParams(ctx context.Context) (*PoetPowParams, error)
-
-	// Submit registers a challenge in the proving service current open round.
-	Submit(ctx context.Context, deadline time.Time, prefix, challenge []byte, signature types.EdSignature, nodeID types.NodeID, pow PoetPoW) (*types.PoetRound, error)
-
-	// PoetServiceID returns the public key of the PoET proving service.
-	PoetServiceID(context.Context) (types.PoetServiceID, error)
-
-	// Proof returns the proof for the given round ID.
-	Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Member, error)
-}
-
 func (nb *NIPostBuilder) loadState(challenge types.Hash32) {
 	state, err := loadBuilderState(nb.dataDir)
 	if err != nil {
@@ -85,39 +64,33 @@ func (nb *NIPostBuilder) persistState() {
 type NIPostBuilder struct {
 	nodeID      types.NodeID
 	dataDir     string
-	poetProvers map[string]PoetProvingServiceClient
+	poetProvers map[string]poetClient
 	poetDB      poetDbAPI
+	postService postService
 	state       *types.NIPostBuilderState
 	log         log.Log
 	signer      *signing.EdSigner
 	layerClock  layerClock
 	poetCfg     PoetConfig
-
-	postMux    sync.Mutex
-	postClient PostClient
 }
 
 type NIPostBuilderOption func(*NIPostBuilder)
 
 // withPoetClients allows to pass in clients directly (for testing purposes).
-func withPoetClients(clients []PoetProvingServiceClient) NIPostBuilderOption {
+func withPoetClients(clients []poetClient) NIPostBuilderOption {
 	return func(nb *NIPostBuilder) {
-		nb.poetProvers = make(map[string]PoetProvingServiceClient, len(clients))
+		nb.poetProvers = make(map[string]poetClient, len(clients))
 		for _, client := range clients {
 			nb.poetProvers[client.Address()] = client
 		}
 	}
 }
 
-type poetDbAPI interface {
-	GetProof(types.PoetProofRef) (*types.PoetProof, *types.Hash32, error)
-	ValidateAndStore(ctx context.Context, proofMessage *types.PoetProofMessage) error
-}
-
 // NewNIPostBuilder returns a NIPostBuilder.
 func NewNIPostBuilder(
 	nodeID types.NodeID,
 	poetDB poetDbAPI,
+	postService postService,
 	poetServers []string,
 	dataDir string,
 	lg log.Log,
@@ -126,7 +99,7 @@ func NewNIPostBuilder(
 	layerClock layerClock,
 	opts ...NIPostBuilderOption,
 ) (*NIPostBuilder, error) {
-	poetClients := make(map[string]PoetProvingServiceClient, len(poetServers))
+	poetClients := make(map[string]poetClient, len(poetServers))
 	for _, address := range poetServers {
 		client, err := NewHTTPPoetClient(address, poetCfg, WithLogger(lg.Zap().Named("poet")))
 		if err != nil {
@@ -139,6 +112,7 @@ func NewNIPostBuilder(
 		nodeID:      nodeID,
 		poetProvers: poetClients,
 		poetDB:      poetDB,
+		postService: postService,
 		state:       &types.NIPostBuilderState{NIPost: &types.NIPost{}},
 		dataDir:     dataDir,
 		log:         lg,
@@ -157,43 +131,17 @@ func (nb *NIPostBuilder) DataDir() string {
 	return nb.dataDir
 }
 
-func (nb *NIPostBuilder) Connected(client PostClient) {
-	nb.postMux.Lock()
-	defer nb.postMux.Unlock()
-
-	if nb.postClient != nil {
-		nb.log.With().Error("post service already connected")
-		return
-	}
-
-	nb.postClient = client
-}
-
-func (nb *NIPostBuilder) Disconnected(client PostClient) {
-	nb.postMux.Lock()
-	defer nb.postMux.Unlock()
-
-	if nb.postClient != client {
-		nb.log.With().Debug("post service not connected")
-		return
-	}
-
-	nb.postClient = nil
-}
-
 func (nb *NIPostBuilder) proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error) {
-	nb.postMux.Lock()
-	defer nb.postMux.Unlock()
-
-	if nb.postClient == nil {
-		return nil, nil, errors.New("post service not connected")
+	client, err := nb.postService.Client(nb.nodeID)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	return nb.postClient.Proof(ctx, challenge)
+	return client.Proof(ctx, challenge)
 }
 
 // UpdatePoETProvers updates poetProver reference. It should not be executed concurrently with BuildNIPoST.
-func (nb *NIPostBuilder) UpdatePoETProvers(poetProvers []PoetProvingServiceClient) {
+func (nb *NIPostBuilder) UpdatePoETProvers(poetProvers []poetClient) {
 	// TODO(mafa): this seems incorrect - this makes it impossible for the node to fetch a submitted challenge
 	// thereby skipping an epoch they could have published an ATX for
 
@@ -201,7 +149,7 @@ func (nb *NIPostBuilder) UpdatePoETProvers(poetProvers []PoetProvingServiceClien
 	nb.state = &types.NIPostBuilderState{
 		NIPost: &types.NIPost{},
 	}
-	nb.poetProvers = make(map[string]PoetProvingServiceClient, len(poetProvers))
+	nb.poetProvers = make(map[string]poetClient, len(poetProvers))
 	for _, poetProver := range poetProvers {
 		nb.poetProvers[poetProver.Address()] = poetProver
 	}
@@ -340,7 +288,7 @@ func withConditionalTimeout(ctx context.Context, timeout time.Duration) (context
 }
 
 // Submit the challenge to a single PoET.
-func (nb *NIPostBuilder) submitPoetChallenge(ctx context.Context, deadline time.Time, client PoetProvingServiceClient, prefix, challenge []byte, signature types.EdSignature, nodeID types.NodeID) (*types.PoetRequest, error) {
+func (nb *NIPostBuilder) submitPoetChallenge(ctx context.Context, deadline time.Time, client poetClient, prefix, challenge []byte, signature types.EdSignature, nodeID types.NodeID) (*types.PoetRequest, error) {
 	poetServiceID, err := client.PoetServiceID(ctx)
 	if err != nil {
 		return nil, &PoetSvcUnstableError{msg: "failed to get PoET service ID", source: err}
@@ -426,7 +374,7 @@ func (nb *NIPostBuilder) submitPoetChallenges(ctx context.Context, deadline time
 	return poetRequests, nil
 }
 
-func (nb *NIPostBuilder) getPoetClient(ctx context.Context, id types.PoetServiceID) PoetProvingServiceClient {
+func (nb *NIPostBuilder) getPoetClient(ctx context.Context, id types.PoetServiceID) poetClient {
 	for _, client := range nb.poetProvers {
 		if clientId, err := client.PoetServiceID(ctx); err == nil && bytes.Equal(id.ServiceID, clientId.ServiceID) {
 			return client

@@ -2,7 +2,6 @@ package beacon
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -69,7 +68,7 @@ func (pd *ProtocolDriver) HandleProposal(ctx context.Context, peer p2p.Peer, msg
 
 	logger = pd.logger.WithContext(ctx).WithFields(m.EpochID, log.Stringer("smesher", m.NodeID))
 	proposal := ProposalFromVrf(m.VRFSignature)
-	logger.With().Debug("new beacon proposal", log.String("proposal", hex.EncodeToString(proposal[:])))
+	logger.With().Debug("new beacon proposal", log.Inline(proposal))
 
 	st, err := pd.initEpochStateIfNotPresent(logger, m.EpochID)
 	if err != nil {
@@ -104,7 +103,7 @@ func (pd *ProtocolDriver) classifyProposal(
 	epochStart := pd.clock.LayerToTime(m.EpochID.FirstLayer())
 	proposal := ProposalFromVrf(m.VRFSignature)
 	logger = logger.WithFields(
-		log.String("proposal", hex.EncodeToString(proposal[:])),
+		log.Inline(proposal),
 		log.Time("atx_timestamp", atxReceived),
 		log.Stringer("next_epoch_start", epochStart),
 		log.Time("received_time", receivedTime),
@@ -144,7 +143,7 @@ func (pd *ProtocolDriver) classifyProposal(
 		logger.With().Debug("valid beacon proposal",
 			log.Duration("atx delay", atxDelay),
 			log.Duration("proposal delay", proposalDelay),
-			log.String("proposal", hex.EncodeToString(proposal[:])),
+			log.Inline(proposal),
 		)
 		return valid
 	case atxDelay <= pd.config.GracePeriodDuration &&
@@ -153,7 +152,7 @@ func (pd *ProtocolDriver) classifyProposal(
 		logger.With().Debug("potentially valid beacon proposal",
 			log.Duration("atx delay", atxDelay),
 			log.Duration("proposal delay", proposalDelay),
-			log.String("proposal", hex.EncodeToString(proposal[:])),
+			log.Inline(proposal),
 		)
 		return potentiallyValid
 	default:
@@ -161,13 +160,13 @@ func (pd *ProtocolDriver) classifyProposal(
 			logger.With().Warning("invalid beacon proposal",
 				log.Duration("atx delay", atxDelay),
 				log.Duration("proposal delay", proposalDelay),
-				log.String("proposal", hex.EncodeToString(proposal[:])),
+				log.Inline(proposal),
 			)
 		} else {
 			logger.With().Debug("proposal did not pass thresholds",
 				log.Duration("atx delay", atxDelay),
 				log.Duration("proposal delay", proposalDelay),
-				log.String("proposal", hex.EncodeToString(proposal[:])),
+				log.Inline(proposal),
 			)
 		}
 	}
@@ -357,10 +356,7 @@ func (pd *ProtocolDriver) HandleFollowingVotes(ctx context.Context, peer p2p.Pee
 }
 
 func (pd *ProtocolDriver) verifyFollowingVotes(ctx context.Context, m FollowingVotingMessage) (types.NodeID, error) {
-	messageBytes, err := codec.Encode(&m.FollowingVotingMessageBody)
-	if err != nil {
-		pd.logger.With().Fatal("failed to serialize voting message", log.Err(err))
-	}
+	messageBytes := codec.MustEncode(&m.FollowingVotingMessageBody)
 	if !pd.edVerifier.Verify(signing.BEACON_FOLLOWUP_MSG, m.SmesherID, messageBytes, m.Signature) {
 		return types.EmptyNodeID, fmt.Errorf("[round %v] verify signature %s: failed", types.FirstRound, m.Signature)
 	}

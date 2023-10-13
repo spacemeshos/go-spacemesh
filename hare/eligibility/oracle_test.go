@@ -333,8 +333,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	require.NoError(t, err)
 
 	o := defaultOracle(t)
-	o.vrfSigner, err = signer.VRFSigner()
-	require.NoError(t, err)
+	o.vrfSigner = signer.VRFSigner()
 	nid := signer.NodeID()
 
 	lid := types.EpochID(5).FirstLayer()
@@ -395,8 +394,7 @@ func Test_Proof_BeaconError(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	o.vrfSigner, err = signer.VRFSigner()
-	require.NoError(t, err)
+	o.vrfSigner = signer.VRFSigner()
 
 	layer := types.LayerID(2)
 	errUnknown := errors.New("unknown")
@@ -413,8 +411,7 @@ func Test_Proof(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	vrfSigner, err := signer.VRFSigner()
-	require.NoError(t, err)
+	vrfSigner := signer.VRFSigner()
 
 	o.vrfSigner = vrfSigner
 	sig, err := o.Proof(context.Background(), layer, 3)

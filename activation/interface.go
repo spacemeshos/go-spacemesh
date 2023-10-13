@@ -41,7 +41,7 @@ type layerClock interface {
 }
 
 type nipostBuilder interface {
-	UpdatePoETProvers([]PoetProvingServiceClient)
+	UpdatePoETProvers([]poetClient)
 	BuildNIPost(ctx context.Context, challenge *types.NIPostChallenge) (*types.NIPost, error)
 	DataDir() string
 }
@@ -76,6 +76,32 @@ type SmeshingProvider interface {
 	Coinbase() types.Address
 	SetCoinbase(coinbase types.Address)
 	UpdatePoETServers(ctx context.Context, endpoints []string) error
+}
+
+// poetClient servers as an interface to communicate with a PoET server.
+// It is used to submit challenges and fetch proofs.
+type poetClient interface {
+	Address() string
+
+	PowParams(ctx context.Context) (*PoetPowParams, error)
+
+	// Submit registers a challenge in the proving service current open round.
+	Submit(ctx context.Context, deadline time.Time, prefix, challenge []byte, signature types.EdSignature, nodeID types.NodeID, pow PoetPoW) (*types.PoetRound, error)
+
+	// PoetServiceID returns the public key of the PoET proving service.
+	PoetServiceID(context.Context) (types.PoetServiceID, error)
+
+	// Proof returns the proof for the given round ID.
+	Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Member, error)
+}
+
+type poetDbAPI interface {
+	GetProof(types.PoetProofRef) (*types.PoetProof, *types.Hash32, error)
+	ValidateAndStore(ctx context.Context, proofMessage *types.PoetProofMessage) error
+}
+
+type postService interface {
+	Client(nodeId types.NodeID) (PostClient, error)
 }
 
 type PostClient interface {

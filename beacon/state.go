@@ -1,7 +1,6 @@
 package beacon
 
 import (
-	"encoding/hex"
 	"fmt"
 	"math/big"
 	"time"
@@ -90,9 +89,7 @@ func (s *state) addVote(proposal Proposal, vote uint, voteWeight *big.Int) {
 	if _, ok := s.votesMargin[proposal]; !ok {
 		// voteMargin is updated during the proposal phase.
 		// ignore votes on proposals not in the original proposals.
-		s.logger.With().Warning("ignoring vote for unknown proposal",
-			log.String("proposal", hex.EncodeToString(proposal[:])),
-		)
+		s.logger.With().Warning("ignoring vote for unknown proposal", log.Inline(proposal))
 		return
 	}
 	if vote == up {

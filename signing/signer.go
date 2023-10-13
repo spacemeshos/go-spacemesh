@@ -151,11 +151,11 @@ func (es *EdSigner) PrivateKey() PrivateKey {
 }
 
 // VRFSigner wraps same ed25519 key to provide ecvrf.
-func (es *EdSigner) VRFSigner() (*VRFSigner, error) {
+func (es *EdSigner) VRFSigner() *VRFSigner {
 	return &VRFSigner{
 		privateKey: oasis.PrivateKey(es.priv),
 		nodeID:     es.NodeID(),
-	}, nil
+	}
 }
 
 func (es *EdSigner) Prefix() []byte {

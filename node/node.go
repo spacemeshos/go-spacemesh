@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/gofrs/flock"
-	"github.com/grafana/pyroscope-go"
+	pyroscope "github.com/grafana/pyroscope-go"
 	grpc_logsettable "github.com/grpc-ecosystem/go-grpc-middleware/logging/settable"
 	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
@@ -90,6 +90,7 @@ const (
 	ClockLogger            = "clock"
 	P2PLogger              = "p2p"
 	PostLogger             = "post"
+	PostServiceLogger      = "postService"
 	StateDbLogger          = "stateDbStore"
 	BeaconLogger           = "beacon"
 	CachedDBLogger         = "cachedDB"
@@ -321,6 +322,7 @@ type App struct {
 	grpcPublicService  *grpcserver.Server
 	grpcPrivateService *grpcserver.Server
 	jsonAPIService     *grpcserver.JSONHTTPServer
+	grpcPostService    *grpcserver.PostService
 	pprofService       *http.Server
 	profilerService    *pyroscope.Profiler
 	syncer             *syncer.Syncer
@@ -541,10 +543,7 @@ func (app *App) SetLogLevel(name, loglevel string) error {
 }
 
 func (app *App) initServices(ctx context.Context) error {
-	vrfSigner, err := app.edSgn.VRFSigner()
-	if err != nil {
-		return fmt.Errorf("could not create vrf signer: %w", err)
-	}
+	vrfSigner := app.edSgn.VRFSigner()
 	layerSize := app.Config.LayerAvgSize
 	layersPerEpoch := types.GetLayersPerEpoch()
 	lg := app.log.Named(app.edSgn.NodeID().ShortString()).WithFields(app.edSgn.NodeID())
@@ -614,7 +613,7 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 
 	vrfVerifier := signing.NewVRFVerifier()
-	beaconProtocol := beacon.New(app.edSgn.NodeID(), app.host, app.edSgn, app.edVerifier, vrfSigner, vrfVerifier, app.cachedDB, app.clock,
+	beaconProtocol := beacon.New(app.host, app.edSgn, app.edVerifier, vrfVerifier, app.cachedDB, app.clock,
 		beacon.WithContext(ctx),
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)),
@@ -812,24 +811,20 @@ func (app *App) initServices(ctx context.Context) error {
 	if app.Config.MinerGoodAtxsPercent > 0 {
 		minerGoodAtxPct = app.Config.MinerGoodAtxsPercent
 	}
-	proposalBuilder := miner.NewProposalBuilder(
-		ctx,
+	proposalBuilder := miner.New(
 		app.clock,
 		app.edSgn,
-		vrfSigner,
 		app.cachedDB,
 		app.host,
 		trtl,
-		beaconProtocol,
 		newSyncer,
 		app.conState,
-		miner.WithNodeID(app.edSgn.NodeID()),
 		miner.WithLayerSize(layerSize),
 		miner.WithLayerPerEpoch(layersPerEpoch),
 		miner.WithMinimalActiveSetWeight(app.Config.Tortoise.MinimalActiveSetWeight),
 		miner.WithHdist(app.Config.Tortoise.Hdist),
 		miner.WithNetworkDelay(app.Config.HARE.WakeupDelta),
-		miner.WithMinGoodAtxPct(minerGoodAtxPct),
+		miner.WithMinGoodAtxPercent(minerGoodAtxPct),
 		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)),
 	)
 
@@ -843,9 +838,12 @@ func (app *App) initServices(ctx context.Context) error {
 		app.log.Panic("failed to create post setup manager: %v", err)
 	}
 
+	app.grpcPostService = grpcserver.NewPostService(app.addLogger(PostServiceLogger, lg).Zap())
+
 	nipostBuilder, err := activation.NewNIPostBuilder(
 		app.edSgn.NodeID(),
 		poetDb,
+		app.grpcPostService,
 		app.Config.PoETServers,
 		app.Config.SMESHING.Opts.DataDir,
 		app.addLogger(NipostBuilderLogger, lg),
@@ -880,6 +878,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.edSgn,
 		app.cachedDB,
 		app.host,
+		app.grpcPostService,
 		nipostBuilder,
 		postSetupMgr,
 		app.clock,
@@ -1055,9 +1054,9 @@ func (app *App) startServices(ctx context.Context) error {
 	if err := app.hare.Start(ctx); err != nil {
 		return fmt.Errorf("cannot start hare: %w", err)
 	}
-	if err := app.proposalBuilder.Start(ctx); err != nil {
-		return fmt.Errorf("cannot start block producer: %w", err)
-	}
+	app.eg.Go(func() error {
+		return app.proposalBuilder.Run(ctx)
+	})
 
 	if app.Config.SMESHING.Start {
 		coinbaseAddr, err := types.StringToAddress(app.Config.SMESHING.CoinbaseAccount)
@@ -1096,7 +1095,7 @@ func (app *App) initService(ctx context.Context, svc grpcserver.Service) (grpcse
 	case grpcserver.Smesher:
 		return grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, app.postSupervisor, app.Config.API.SmesherStreamInterval, app.Config.SMESHING.Opts), nil
 	case grpcserver.Post:
-		return grpcserver.NewPostService(app.log.Zap(), app.nipostBuilder, app.atxBuilder), nil
+		return app.grpcPostService, nil
 	case grpcserver.Transaction:
 		return grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer, app.txHandler), nil
 	case grpcserver.Activation:
@@ -1203,10 +1202,6 @@ func (app *App) stopServices(ctx context.Context) {
 	if app.updater != nil {
 		app.log.Info("stopping updater")
 		app.updater.Close()
-	}
-
-	if app.proposalBuilder != nil {
-		app.proposalBuilder.Close()
 	}
 
 	if app.clock != nil {
