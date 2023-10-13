@@ -10,7 +10,6 @@ import (
 	"math"
 	"math/big"
 	"net"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -31,8 +30,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -90,9 +87,6 @@ var (
 	challenge   = newChallenge(1, prevAtxID, prevAtxID, postGenesisEpoch)
 	globalAtx   *types.VerifiedActivationTx
 	globalAtx2  *types.VerifiedActivationTx
-	signer      *signing.EdSigner
-	signer1     *signing.EdSigner
-	signer2     *signing.EdSigner
 	globalTx    *types.Transaction
 	globalTx2   *types.Transaction
 	ballot1     = genLayerBallot(types.LayerID(11))
@@ -160,17 +154,17 @@ func TestMain(m *testing.M) {
 	types.SetLayersPerEpoch(layersPerEpoch)
 
 	var err error
-	signer, err = signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
 	if err != nil {
 		log.Println("failed to create signer:", err)
 		os.Exit(1)
 	}
-	signer1, err = signing.NewEdSigner()
+	signer1, err := signing.NewEdSigner()
 	if err != nil {
 		log.Println("failed to create signer:", err)
 		os.Exit(1)
 	}
-	signer2, err = signing.NewEdSigner()
+	signer2, err := signing.NewEdSigner()
 	if err != nil {
 		log.Println("failed to create signer:", err)
 		os.Exit(1)
@@ -433,49 +427,20 @@ func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, epoch types.
 	}
 }
 
-func marshalProto(t *testing.T, msg proto.Message) []byte {
-	buf, err := protojson.Marshal(msg)
-	require.NoError(t, err)
-	return buf
-}
-
 func launchServer(tb testing.TB, services ...ServiceAPI) (Config, func()) {
 	cfg := DefaultTestConfig()
+	cfg.PublicListener = "127.0.0.1:0" // run on random port
 
-	// run on random ports
-	grpcService := New("127.0.0.1:0", zaptest.NewLogger(tb).Named("grpc"), cfg)
-	jsonService := NewJSONHTTPServer("127.0.0.1:0", zaptest.NewLogger(tb).Named("grpc.JSON"))
+	grpcService, err := NewPublic(zaptest.NewLogger(tb).Named("grpc"), cfg, services)
+	require.NoError(tb, err)
 
-	// attach services
-	for _, svc := range services {
-		svc.RegisterService(grpcService)
-	}
-
-	// start gRPC and json servers
+	// start gRPC server
 	require.NoError(tb, grpcService.Start())
-	if len(services) > 0 {
-		require.NoError(tb, jsonService.StartService(context.Background(), services...))
-	}
 
 	// update config with bound addresses
 	cfg.PublicListener = grpcService.BoundAddress
-	cfg.JSONListener = jsonService.BoundAddress
 
-	return cfg, func() {
-		assert.NoError(tb, grpcService.Close())
-		assert.NoError(tb, jsonService.Shutdown(context.Background()))
-	}
-}
-
-func callEndpoint(t *testing.T, url string, payload []byte) ([]byte, int) {
-	resp, err := http.Post(url, "application/json", bytes.NewReader(payload))
-	require.NoError(t, err)
-	require.Equal(t, "application/json", resp.Header.Get("Content-Type"))
-	buf, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	require.NoError(t, resp.Body.Close())
-
-	return buf, resp.StatusCode
+	return cfg, func() { assert.NoError(tb, grpcService.Close()) }
 }
 
 func getFreePort(optionalPort int) (int, error) {
@@ -954,10 +919,11 @@ func TestSmesherService(t *testing.T) {
 	t.Run("SmesherID", func(t *testing.T) {
 		t.Parallel()
 		c, ctx := setupSmesherService(t)
-		c.smeshingProvider.EXPECT().SmesherID().Return(signer.NodeID())
+		nodeId := types.RandomNodeID()
+		c.smeshingProvider.EXPECT().SmesherID().Return(nodeId)
 		res, err := c.SmesherID(ctx, &emptypb.Empty{})
 		require.NoError(t, err)
-		require.Equal(t, signer.NodeID().Bytes(), res.PublicKey)
+		require.Equal(t, nodeId.Bytes(), res.PublicKey)
 	})
 
 	t.Run("SetCoinbaseMissingArgs", func(t *testing.T) {
@@ -2370,50 +2336,6 @@ func TestMultiService(t *testing.T) {
 	_, err2 = c2.GenesisTime(ctx, &pb.GenesisTimeRequest{})
 	require.Error(t, err2)
 	require.Contains(t, err2.Error(), "rpc error: code = Unavailable")
-}
-
-func TestJsonApi(t *testing.T) {
-	const message = "hello world!"
-
-	// we cannot start the gateway service without enabling at least one service
-	cfg, shutDown := launchServer(t)
-	t.Cleanup(shutDown)
-	time.Sleep(time.Second)
-
-	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
-	url := fmt.Sprintf("http://%s/%s", cfg.JSONListener, "v1/node/echo")
-	_, err := http.Post(url, "application/json", bytes.NewReader(payload))
-	require.Error(t, err)
-	shutDown()
-
-	// enable services and try again
-	ctrl := gomock.NewController(t)
-	syncer := NewMocksyncer(ctrl)
-	syncer.EXPECT().IsSynced(gomock.Any()).Return(false).AnyTimes()
-	peerCounter := NewMockpeerCounter(ctrl)
-	genTime := NewMockgenesisTimeAPI(ctrl)
-	genesis := time.Unix(genTimeUnix, 0)
-	genTime.EXPECT().GenesisTime().Return(genesis)
-	svc1 := NewNodeService(peerCounter, meshAPIMock, genTime, syncer, "v0.0.0", "cafebabe")
-	svc2 := NewMeshService(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
-	cfg, cleanup := launchServer(t, svc1, svc2)
-	t.Cleanup(cleanup)
-	time.Sleep(time.Second)
-
-	// generate request payload (api input params)
-	payload = marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
-	respBody, respStatus := callEndpoint(t, fmt.Sprintf("http://%s/v1/node/echo", cfg.JSONListener), payload)
-	require.Equal(t, http.StatusOK, respStatus)
-	var msg pb.EchoResponse
-	require.NoError(t, protojson.Unmarshal(respBody, &msg))
-	require.Equal(t, message, msg.Msg.Value)
-
-	// Test MeshService
-	respBody2, respStatus2 := callEndpoint(t, fmt.Sprintf("http://%s/v1/mesh/genesistime", cfg.JSONListener), nil)
-	require.Equal(t, http.StatusOK, respStatus2)
-	var msg2 pb.GenesisTimeResponse
-	require.NoError(t, protojson.Unmarshal(respBody2, &msg2))
-	require.Equal(t, uint64(genesis.Unix()), msg2.Unixtime.Value)
 }
 
 func TestDebugService(t *testing.T) {
