@@ -12,13 +12,11 @@ import (
 type data struct {
 	id                peer.ID
 	success, failures int
+	rate              float64
 	averageLatency    float64
 }
 
 func (p *data) successRate() float64 {
-	if p.success+p.failures == 0 {
-		return 0
-	}
 	return float64(p.success) / float64(p.success+p.failures)
 }
 
@@ -28,9 +26,9 @@ func (p *data) cmp(other *data) int {
 	}
 	const rateThreshold = 0.1
 	switch {
-	case p.successRate()-other.successRate() > rateThreshold:
+	case p.rate-other.rate > rateThreshold:
 		return 1
-	case other.successRate()-p.successRate() > rateThreshold:
+	case other.rate-p.rate > rateThreshold:
 		return -1
 	}
 	switch {
@@ -76,6 +74,7 @@ func (p *Peers) OnFailure(id peer.ID) {
 		return
 	}
 	peer.failures++
+	peer.rate = peer.successRate()
 }
 
 // OnLatency records success and latency. Latency is not reported with every success
@@ -89,6 +88,7 @@ func (p *Peers) OnLatency(id peer.ID, latency time.Duration) {
 		return
 	}
 	peer.success++
+	peer.rate = peer.successRate()
 	if peer.averageLatency != 0 {
 		peer.averageLatency = 0.8*peer.averageLatency + 0.2*float64(latency)
 	} else {
