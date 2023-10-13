@@ -40,16 +40,16 @@ func WithLog(log log.Log) Opt {
 	}
 }
 
-// WithContext configures parent context for contexts that are passed to the handler.
-func WithContext(ctx context.Context) Opt {
-	return func(s *Server) {
-		s.ctx = ctx
-	}
-}
-
 func WithRequestSizeLimit(limit int) Opt {
 	return func(s *Server) {
 		s.requestLimit = limit
+	}
+}
+
+// WithMetrics will enable metrics collection in the server.
+func WithMetrics() Opt {
+	return func(s *Server) {
+		s.metrics = newTracker(s.protocol)
 	}
 }
 
@@ -108,22 +108,21 @@ type Server struct {
 	requestsPerInterval int
 	interval            time.Duration
 
-	h Host
+	metrics *tracker // metrics can be nil
 
-	ctx context.Context
+	h Host
 }
 
 // New server for the handler.
 func New(h Host, proto string, handler Handler, opts ...Opt) *Server {
 	srv := &Server{
-		ctx:                 context.Background(),
 		logger:              log.NewNop(),
 		protocol:            proto,
 		handler:             handler,
 		h:                   h,
 		timeout:             10 * time.Second,
 		requestLimit:        10240,
-		queueSize:           100,
+		queueSize:           1000,
 		requestsPerInterval: 100,
 		interval:            time.Second,
 	}
@@ -133,13 +132,29 @@ func New(h Host, proto string, handler Handler, opts ...Opt) *Server {
 	return srv
 }
 
+type request struct {
+	stream   network.Stream
+	received time.Time
+}
+
 func (s *Server) Run(ctx context.Context) error {
 	limit := rate.NewLimiter(rate.Every(s.interval), s.requestsPerInterval)
-	queue := make(chan network.Stream, s.queueSize)
+	queue := make(chan request, s.queueSize)
+	if s.metrics != nil {
+		s.metrics.targetQueue.Set(float64(s.queueSize))
+		s.metrics.targetRps.Set(float64(limit.Limit()))
+	}
 	s.h.SetStreamHandler(protocol.ID(s.protocol), func(stream network.Stream) {
 		select {
-		case queue <- stream:
+		case queue <- request{stream: stream, received: time.Now()}:
+			if s.metrics != nil {
+				s.metrics.queue.Set(float64(len(queue)))
+				s.metrics.accepted.Inc()
+			}
 		default:
+			if s.metrics != nil {
+				s.metrics.dropped.Inc()
+			}
 			stream.Close()
 		}
 	})
@@ -149,20 +164,24 @@ func (s *Server) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			eg.Wait()
 			return nil
-		case stream := <-queue:
+		case req := <-queue:
 			if err := limit.Wait(ctx); err != nil {
 				eg.Wait()
-				return err
+				return nil
 			}
 			eg.Go(func() error {
-				s.queueHandler(stream)
+				s.queueHandler(ctx, req.stream)
+				if s.metrics != nil {
+					s.metrics.serverLatency.Observe(time.Since(req.received).Seconds())
+					s.metrics.completed.Inc()
+				}
 				return nil
 			})
 		}
 	}
 }
 
-func (s *Server) queueHandler(stream network.Stream) {
+func (s *Server) queueHandler(ctx context.Context, stream network.Stream) {
 	defer stream.Close()
 	_ = stream.SetDeadline(time.Now().Add(s.timeout))
 	defer stream.SetDeadline(time.Time{})
@@ -185,7 +204,7 @@ func (s *Server) queueHandler(stream network.Stream) {
 		return
 	}
 	start := time.Now()
-	buf, err = s.handler(log.WithNewRequestID(s.ctx), buf)
+	buf, err = s.handler(log.WithNewRequestID(ctx), buf)
 	s.logger.With().Debug("protocol handler execution time",
 		log.String("protocol", s.protocol),
 		log.Duration("duration", time.Since(start)),
@@ -207,6 +226,16 @@ func (s *Server) queueHandler(stream network.Stream) {
 	}
 }
 
+func (s *Server) trackClientLatency(start time.Time, err error) {
+	if s.metrics != nil {
+		if err != nil {
+			s.metrics.clientLatencyFailure.Observe(time.Since(start).Seconds())
+		} else {
+			s.metrics.clientLatency.Observe(time.Since(start).Seconds())
+		}
+	}
+}
+
 // Request sends a binary request to the peer. Request is executed in the background, one of the callbacks
 // is guaranteed to be called on success/error.
 func (s *Server) Request(
@@ -216,6 +245,7 @@ func (s *Server) Request(
 	resp func([]byte),
 	failure func(error),
 ) error {
+	start := time.Now()
 	if len(req) > s.requestLimit {
 		return fmt.Errorf("request length (%d) is longer than limit %d", len(req), s.requestLimit)
 	}
@@ -223,16 +253,19 @@ func (s *Server) Request(
 		return fmt.Errorf("%w: %s", ErrNotConnected, pid)
 	}
 	go func() {
-		start := time.Now()
+		var err error
 		defer func() {
 			s.logger.WithContext(ctx).With().Debug("request execution time",
 				log.String("protocol", s.protocol),
 				log.Duration("duration", time.Since(start)),
 			)
+			s.trackClientLatency(start, err)
 		}()
 		ctx, cancel := context.WithTimeout(ctx, s.timeout)
 		defer cancel()
-		stream, err := s.h.NewStream(
+
+		var stream network.Stream
+		stream, err = s.h.NewStream(
 			network.WithNoDial(ctx, "existing connection"),
 			pid,
 			protocol.ID(s.protocol),
@@ -258,18 +291,21 @@ func (s *Server) Request(
 			failure(err)
 			return
 		}
-		if err := wr.Flush(); err != nil {
+		err = wr.Flush()
+		if err != nil {
 			failure(err)
 			return
 		}
 
 		rd := bufio.NewReader(stream)
 		var r Response
-		if _, err := codec.DecodeFrom(rd, &r); err != nil {
+		_, err = codec.DecodeFrom(rd, &r)
+		if err != nil {
 			failure(err)
 			return
 		}
 		if len(r.Error) > 0 {
+			// consider response with error as success for purposes of tracking latency
 			failure(errors.New(r.Error))
 		} else {
 			resp(r.Data)

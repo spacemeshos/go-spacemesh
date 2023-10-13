@@ -34,7 +34,6 @@ func TestServer(t *testing.T) {
 	}
 	opts := []Opt{
 		WithTimeout(100 * time.Millisecond),
-		WithContext(ctx),
 	}
 	client := New(mesh.Hosts()[0], proto, handler, append(opts, WithRequestSizeLimit(2*limit))...)
 	srv1 := New(mesh.Hosts()[1], proto, handler, append(opts, WithRequestSizeLimit(limit))...)
@@ -144,6 +143,7 @@ func TestQueued(t *testing.T) {
 		},
 		WithQueueSize(total/2),
 		WithRequestsPerInterval(10, time.Millisecond),
+		WithMetrics(),
 	)
 	var (
 		eg          errgroup.Group
