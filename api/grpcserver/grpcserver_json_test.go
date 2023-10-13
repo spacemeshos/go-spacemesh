@@ -55,6 +55,8 @@ func TestJsonApi(t *testing.T) {
 	const layerDuration = 10 * time.Second
 	const layerAvgSize = 10
 	const txsPerProposal = 99
+	const version = "v0.0.0"
+	const build = "cafebabe"
 
 	ctrl, ctx := gomock.WithContext(context.Background(), t)
 	peerCounter := NewMockpeerCounter(ctrl)
@@ -62,7 +64,7 @@ func TestJsonApi(t *testing.T) {
 	genTime := NewMockgenesisTimeAPI(ctrl)
 	syncer := NewMocksyncer(ctrl)
 	conStateAPI := NewMockconservativeState(ctrl)
-	svc1 := NewNodeService(peerCounter, meshAPIMock, genTime, syncer, "v0.0.0", "cafebabe")
+	svc1 := NewNodeService(peerCounter, meshAPIMock, genTime, syncer, version, build)
 	svc2 := NewMeshService(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), meshAPIMock, conStateAPI, genTime, 5, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
 	cfg, cleanup := launchJsonServer(t, svc1, svc2)
 	t.Cleanup(cleanup)
