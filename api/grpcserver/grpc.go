@@ -12,7 +12,7 @@ import (
 
 	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
-	tags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
+	grpctags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
@@ -117,8 +117,8 @@ func NewTLS(logger *zap.Logger, config Config, svc []ServiceAPI) (*Server, error
 // The server is configured with the given logger and config. Additional grpc options can be passed.
 func New(listener string, logger *zap.Logger, config Config, grpcOpts ...grpc.ServerOption) *Server {
 	opts := []grpc.ServerOption{
-		grpc.ChainStreamInterceptor(tags.StreamServerInterceptor(), grpczap.StreamServerInterceptor(logger), streamingGrpcLogStart),
-		grpc.ChainUnaryInterceptor(tags.UnaryServerInterceptor(), grpczap.UnaryServerInterceptor(logger), unaryGrpcLogStart),
+		grpc.ChainStreamInterceptor(grpctags.StreamServerInterceptor(), grpczap.StreamServerInterceptor(logger), streamingGrpcLogStart),
+		grpc.ChainUnaryInterceptor(grpctags.UnaryServerInterceptor(), grpczap.UnaryServerInterceptor(logger), unaryGrpcLogStart),
 		grpc.MaxSendMsgSize(config.GrpcSendMsgSize),
 		grpc.MaxRecvMsgSize(config.GrpcRecvMsgSize),
 	}

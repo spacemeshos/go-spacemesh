@@ -26,7 +26,7 @@ func (s GlobalStateService) RegisterService(server *Server) {
 	pb.RegisterGlobalStateServiceServer(server.GrpcServer, s)
 }
 
-// String returns the name of the service
+// String returns the name of the service.
 func (s GlobalStateService) String() string {
 	return "GlobalStateService"
 }
