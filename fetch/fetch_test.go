@@ -66,9 +66,7 @@ func createFetch(tb testing.TB) *testFetch {
 		mPoetH:       mocks.NewMockSyncValidator(ctrl),
 	}
 	cfg := Config{
-		BatchTimeout: time.Millisecond * time.Duration(
-			2000,
-		), // make sure we never hit the batch timeout
+		BatchTimeout:         2 * time.Second, // make sure we never hit the batch timeout
 		BatchSize:            3,
 		QueueSize:            1000,
 		RequestTimeout:       3 * time.Second,
@@ -330,9 +328,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 	cfg := Config{
-		BatchTimeout: time.Minute * time.Duration(
-			2000,
-		), // make sure we never hit the batch timeout
+		BatchTimeout:         2000 * time.Minute, // make sure we never hit the batch timeout
 		BatchSize:            3,
 		QueueSize:            1000,
 		RequestTimeout:       time.Second * time.Duration(3),

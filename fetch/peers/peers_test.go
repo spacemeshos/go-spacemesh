@@ -194,6 +194,17 @@ func TestSelect(t *testing.T) {
 	}
 }
 
+func TestTotal(t *testing.T) {
+	const total = 100
+	events := []event{}
+	for i := 0; i < total; i++ {
+		events = append(
+			events, event{id: peer.ID(strconv.Itoa(i)), add: true},
+		)
+	}
+	require.Equal(t, total, withEvents(events).Total())
+}
+
 func BenchmarkSelectBest(b *testing.B) {
 	const (
 		total  = 10000

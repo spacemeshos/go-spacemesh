@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 )
 
 type data struct {
@@ -89,7 +90,7 @@ func (p *Peers) OnLatency(id peer.ID, latency time.Duration) {
 	}
 	peer.success++
 	if peer.averageLatency != 0 {
-		peer.averageLatency = 0.8*float64(peer.averageLatency) + 0.2*float64(latency)
+		peer.averageLatency = 0.8*peer.averageLatency + 0.2*float64(latency)
 	} else {
 		peer.averageLatency = float64(latency)
 	}
@@ -112,7 +113,7 @@ func (p *Peers) SelectBestFrom(peers []peer.ID) peer.ID {
 	if best != nil {
 		return best.id
 	}
-	return ""
+	return p2p.NoPeer
 }
 
 // SelectBest selects at most n peers sorted by responsiveness and latency.
