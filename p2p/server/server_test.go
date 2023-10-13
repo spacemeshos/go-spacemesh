@@ -9,6 +9,7 @@ import (
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 )
 
 func TestServer(t *testing.T) {
@@ -35,9 +36,15 @@ func TestServer(t *testing.T) {
 		WithContext(ctx),
 	}
 	client := New(mesh.Hosts()[0], proto, handler, append(opts, WithRequestSizeLimit(2*limit))...)
-	_ = New(mesh.Hosts()[1], proto, handler, append(opts, WithRequestSizeLimit(limit))...)
-	_ = New(mesh.Hosts()[2], proto, errhandler, append(opts, WithRequestSizeLimit(limit))...)
-
+	srv1 := New(mesh.Hosts()[1], proto, handler, append(opts, WithRequestSizeLimit(limit))...)
+	srv2 := New(mesh.Hosts()[2], proto, errhandler, append(opts, WithRequestSizeLimit(limit))...)
+	var eg errgroup.Group
+	eg.Go(func() error {
+		return srv1.Run(ctx)
+	})
+	eg.Go(func() error {
+		return srv2.Run(ctx)
+	})
 	respHandler := func(msg []byte) {
 		select {
 		case <-ctx.Done():
@@ -51,7 +58,10 @@ func TestServer(t *testing.T) {
 		}
 	}
 	t.Run("ReceiveMessage", func(t *testing.T) {
-		require.NoError(t, client.Request(ctx, mesh.Hosts()[1].ID(), request, respHandler, respErrHandler))
+		require.NoError(
+			t,
+			client.Request(ctx, mesh.Hosts()[1].ID(), request, respHandler, respErrHandler),
+		)
 		select {
 		case <-time.After(time.Second):
 			require.FailNow(t, "timed out while waiting for message response")
@@ -61,7 +71,10 @@ func TestServer(t *testing.T) {
 		}
 	})
 	t.Run("ReceiveError", func(t *testing.T) {
-		require.NoError(t, client.Request(ctx, mesh.Hosts()[2].ID(), request, respHandler, respErrHandler))
+		require.NoError(
+			t,
+			client.Request(ctx, mesh.Hosts()[2].ID(), request, respHandler, respErrHandler),
+		)
 		select {
 		case <-time.After(time.Second):
 			require.FailNow(t, "timed out while waiting for error response")
@@ -70,7 +83,10 @@ func TestServer(t *testing.T) {
 		}
 	})
 	t.Run("DialError", func(t *testing.T) {
-		require.NoError(t, client.Request(ctx, mesh.Hosts()[3].ID(), request, respHandler, respErrHandler))
+		require.NoError(
+			t,
+			client.Request(ctx, mesh.Hosts()[3].ID(), request, respHandler, respErrHandler),
+		)
 		select {
 		case <-time.After(time.Second):
 			require.FailNow(t, "timed out while waiting for dial error")
@@ -79,10 +95,23 @@ func TestServer(t *testing.T) {
 		}
 	})
 	t.Run("NotConnected", func(t *testing.T) {
-		require.ErrorIs(t, client.Request(ctx, "unknown", request, respHandler, respErrHandler), ErrNotConnected)
+		require.ErrorIs(
+			t,
+			client.Request(ctx, "unknown", request, respHandler, respErrHandler),
+			ErrNotConnected,
+		)
 	})
 	t.Run("limit overflow", func(t *testing.T) {
-		require.NoError(t, client.Request(ctx, mesh.Hosts()[2].ID(), make([]byte, limit+1), respHandler, respErrHandler))
+		require.NoError(
+			t,
+			client.Request(
+				ctx,
+				mesh.Hosts()[2].ID(),
+				make([]byte, limit+1),
+				respHandler,
+				respErrHandler,
+			),
+		)
 		select {
 		case <-time.After(time.Second):
 			require.FailNow(t, "timed out while waiting for error response")

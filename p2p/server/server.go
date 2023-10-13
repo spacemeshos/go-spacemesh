@@ -13,6 +13,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/multiformats/go-varint"
+	"golang.org/x/sync/errgroup"
+	"golang.org/x/time/rate"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -51,6 +53,29 @@ func WithRequestSizeLimit(limit int) Opt {
 	}
 }
 
+// WithQueueSize parametrize number of message that will be kept in queue
+// and eventually processed by server. Otherwise stream is closed immediately.
+//
+// Size of the queue should be set to account for maximum expected latency, such as if expected latency is 10s
+// and server processes 1000 requests per second size should be 100.
+//
+// Defaults to 100.
+func WithQueueSize(size int) Opt {
+	return func(s *Server) {
+		s.queueSize = size
+	}
+}
+
+// WithRequestsPerSecond parametrizes server rate limit to limit maximum amount of bandwidth
+// that this handler can consume.
+//
+// Defaults to 100 requests per second.
+func WithRequestsPerSecond(n int) Opt {
+	return func(s *Server) {
+		s.requestsPerSecond = n
+	}
+}
+
 // Handler is the handler to be defined by the application.
 type Handler func(context.Context, []byte) ([]byte, error)
 
@@ -73,11 +98,13 @@ type Host interface {
 
 // Server for the Handler.
 type Server struct {
-	logger       log.Log
-	protocol     string
-	handler      Handler
-	timeout      time.Duration
-	requestLimit int
+	logger            log.Log
+	protocol          string
+	handler           Handler
+	timeout           time.Duration
+	requestLimit      int
+	queueSize         int
+	requestsPerSecond int
 
 	h Host
 
@@ -87,22 +114,48 @@ type Server struct {
 // New server for the handler.
 func New(h Host, proto string, handler Handler, opts ...Opt) *Server {
 	srv := &Server{
-		ctx:          context.Background(),
-		logger:       log.NewNop(),
-		protocol:     proto,
-		handler:      handler,
-		h:            h,
-		timeout:      10 * time.Second,
-		requestLimit: 10240,
+		ctx:               context.Background(),
+		logger:            log.NewNop(),
+		protocol:          proto,
+		handler:           handler,
+		h:                 h,
+		timeout:           10 * time.Second,
+		requestLimit:      10240,
+		queueSize:         100,
+		requestsPerSecond: 100,
 	}
 	for _, opt := range opts {
 		opt(srv)
 	}
-	h.SetStreamHandler(protocol.ID(proto), srv.streamHandler)
 	return srv
 }
 
-func (s *Server) streamHandler(stream network.Stream) {
+func (s *Server) Run(ctx context.Context) error {
+	limit := rate.NewLimiter(rate.Every(time.Second), s.requestsPerSecond)
+	queue := make(chan network.Stream, s.queueSize)
+	s.h.SetStreamHandler(protocol.ID(s.protocol), func(stream network.Stream) {
+		select {
+		case queue <- stream:
+		default:
+			stream.Close()
+		}
+	})
+	var eg errgroup.Group
+	defer eg.Wait()
+	for stream := range queue {
+		if err := limit.Wait(ctx); err != nil {
+			return err
+		}
+		stream := stream
+		eg.Go(func() error {
+			s.queueHandler(stream)
+			return nil
+		})
+	}
+	return nil
+}
+
+func (s *Server) queueHandler(stream network.Stream) {
 	defer stream.Close()
 	_ = stream.SetDeadline(time.Now().Add(s.timeout))
 	defer stream.SetDeadline(time.Time{})
@@ -149,7 +202,13 @@ func (s *Server) streamHandler(stream network.Stream) {
 
 // Request sends a binary request to the peer. Request is executed in the background, one of the callbacks
 // is guaranteed to be called on success/error.
-func (s *Server) Request(ctx context.Context, pid peer.ID, req []byte, resp func([]byte), failure func(error)) error {
+func (s *Server) Request(
+	ctx context.Context,
+	pid peer.ID,
+	req []byte,
+	resp func([]byte),
+	failure func(error),
+) error {
 	if len(req) > s.requestLimit {
 		return fmt.Errorf("request length (%d) is longer than limit %d", len(req), s.requestLimit)
 	}
@@ -166,7 +225,11 @@ func (s *Server) Request(ctx context.Context, pid peer.ID, req []byte, resp func
 		}()
 		ctx, cancel := context.WithTimeout(ctx, s.timeout)
 		defer cancel()
-		stream, err := s.h.NewStream(network.WithNoDial(ctx, "existing connection"), pid, protocol.ID(s.protocol))
+		stream, err := s.h.NewStream(
+			network.WithNoDial(ctx, "existing connection"),
+			pid,
+			protocol.ID(s.protocol),
+		)
 		if err != nil {
 			failure(err)
 			return
