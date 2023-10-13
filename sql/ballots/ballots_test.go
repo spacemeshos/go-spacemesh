@@ -66,7 +66,12 @@ func TestLayer(t *testing.T) {
 func TestAdd(t *testing.T) {
 	db := sql.InMemory()
 	nodeID := types.RandomNodeID()
-	ballot := types.NewExistingBallot(types.BallotID{1}, types.RandomEdSignature(), nodeID, types.LayerID(0))
+	ballot := types.NewExistingBallot(
+		types.BallotID{1},
+		types.RandomEdSignature(),
+		nodeID,
+		types.LayerID(0),
+	)
 	_, err := Get(db, ballot.ID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
@@ -86,7 +91,12 @@ func TestAdd(t *testing.T) {
 func TestUpdateBlob(t *testing.T) {
 	db := sql.InMemory()
 	nodeID := types.RandomNodeID()
-	ballot := types.NewExistingBallot(types.BallotID{1}, types.RandomEdSignature(), nodeID, types.LayerID(0))
+	ballot := types.NewExistingBallot(
+		types.BallotID{1},
+		types.RandomEdSignature(),
+		nodeID,
+		types.LayerID(0),
+	)
 	ballot.EpochData = &types.EpochData{
 		ActiveSetHash: types.RandomHash(),
 	}
@@ -105,7 +115,12 @@ func TestUpdateBlob(t *testing.T) {
 
 func TestHas(t *testing.T) {
 	db := sql.InMemory()
-	ballot := types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, types.EmptyNodeID, types.LayerID(0))
+	ballot := types.NewExistingBallot(
+		types.BallotID{1},
+		types.EmptyEdSignature,
+		types.EmptyNodeID,
+		types.LayerID(0),
+	)
 
 	exists, err := Has(db, ballot.ID())
 	require.NoError(t, err)
@@ -123,36 +138,48 @@ func TestLatest(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, types.LayerID(0), latest)
 
-	ballot := types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, types.EmptyNodeID, types.LayerID(11))
+	ballot := types.NewExistingBallot(
+		types.BallotID{1},
+		types.EmptyEdSignature,
+		types.EmptyNodeID,
+		types.LayerID(11),
+	)
 	require.NoError(t, Add(db, &ballot))
 	latest, err = LatestLayer(db)
 	require.NoError(t, err)
 	require.Equal(t, ballot.Layer, latest)
 
-	newBallot := types.NewExistingBallot(types.BallotID{2}, types.EmptyEdSignature, types.EmptyNodeID, types.LayerID(12))
+	newBallot := types.NewExistingBallot(
+		types.BallotID{2},
+		types.EmptyEdSignature,
+		types.EmptyNodeID,
+		types.LayerID(12),
+	)
 	require.NoError(t, Add(db, &newBallot))
 	latest, err = LatestLayer(db)
 	require.NoError(t, err)
 	require.Equal(t, newBallot.Layer, latest)
 }
 
-func TestLayerBallotBySmesher(t *testing.T) {
+func TestLayerBallotByAtxID(t *testing.T) {
 	db := sql.InMemory()
 	lid := types.LayerID(1)
-	nodeID1 := types.RandomNodeID()
-	nodeID2 := types.RandomNodeID()
+	nodeID1 := types.NodeID{1}
+	nodeID2 := types.NodeID{2}
 	ballots := []types.Ballot{
 		types.NewExistingBallot(types.BallotID{2}, types.EmptyEdSignature, nodeID1, lid.Add(1)),
 		types.NewExistingBallot(types.BallotID{3}, types.EmptyEdSignature, nodeID2, lid),
 	}
+	ballots[0].AtxID = types.ATXID{1}
+	ballots[1].AtxID = types.ATXID{2}
 	for _, ballot := range ballots {
 		require.NoError(t, Add(db, &ballot))
 	}
 
-	prev, err := LayerBallotByNodeID(db, lid, nodeID1)
+	prev, err := LayerBallotByAtxID(db, lid, ballots[0].AtxID)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.Nil(t, prev)
-	prev, err = LayerBallotByNodeID(db, lid, nodeID2)
+	prev, err = LayerBallotByAtxID(db, lid, ballots[1].AtxID)
 	require.NoError(t, err)
 	require.NotNil(t, prev)
 	require.Equal(t, ballots[1], *prev)
@@ -197,7 +224,12 @@ func TestFirstInEpoch(t *testing.T) {
 	b2.AtxID = atx.ID()
 	b2.EpochData = &types.EpochData{}
 	require.NoError(t, Add(db, &b2))
-	b3 := types.NewExistingBallot(types.BallotID{3}, types.EmptyEdSignature, sig.NodeID(), lid.Add(1))
+	b3 := types.NewExistingBallot(
+		types.BallotID{3},
+		types.EmptyEdSignature,
+		sig.NodeID(),
+		lid.Add(1),
+	)
 	b3.AtxID = atx.ID()
 	require.NoError(t, Add(db, &b3))
 

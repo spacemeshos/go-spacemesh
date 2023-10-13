@@ -60,7 +60,14 @@ type Mesh struct {
 }
 
 // NewMesh creates a new instant of a mesh.
-func NewMesh(cdb *datastore.CachedDB, c layerClock, trtl system.Tortoise, exec *Executor, state conservativeState, logger log.Log) (*Mesh, error) {
+func NewMesh(
+	cdb *datastore.CachedDB,
+	c layerClock,
+	trtl system.Tortoise,
+	exec *Executor,
+	state conservativeState,
+	logger log.Log,
+) (*Mesh, error) {
 	msh := &Mesh{
 		logger:              logger,
 		cdb:                 cdb,
@@ -128,7 +135,8 @@ func (msh *Mesh) recoverFromDB(latest types.LayerID) {
 
 	if applied.After(types.GetEffectiveGenesis()) {
 		if err = msh.executor.Revert(context.Background(), applied); err != nil {
-			msh.logger.With().Fatal("failed to load state for layer", msh.LatestLayerInState(), log.Err(err))
+			msh.logger.With().
+				Fatal("failed to load state for layer", msh.LatestLayerInState(), log.Err(err))
 		}
 	}
 	msh.logger.With().Info("recovered mesh from disk",
@@ -508,13 +516,19 @@ func (msh *Mesh) saveHareOutput(ctx context.Context, lid types.LayerID, bid type
 					encoder.AddBool("valid", cert.Valid)
 				}
 				return nil
-			})))
+			})),
+		)
 	}
 	return nil
 }
 
 // ProcessLayerPerHareOutput receives hare output once it finishes running for a given layer.
-func (msh *Mesh) ProcessLayerPerHareOutput(ctx context.Context, layerID types.LayerID, blockID types.BlockID, executed bool) error {
+func (msh *Mesh) ProcessLayerPerHareOutput(
+	ctx context.Context,
+	layerID types.LayerID,
+	blockID types.BlockID,
+	executed bool,
+) error {
 	if blockID == types.EmptyBlockID {
 		msh.logger.With().Info("received empty set from hare",
 			log.Context(ctx),
@@ -548,8 +562,14 @@ func (msh *Mesh) SetZeroBlockLayer(ctx context.Context, lid types.LayerID) {
 }
 
 // AddTXsFromProposal adds the TXs in a Proposal into the database.
-func (msh *Mesh) AddTXsFromProposal(ctx context.Context, layerID types.LayerID, proposalID types.ProposalID, txIDs []types.TransactionID) error {
-	logger := msh.logger.WithContext(ctx).WithFields(layerID, proposalID, log.Int("num_txs", len(txIDs)))
+func (msh *Mesh) AddTXsFromProposal(
+	ctx context.Context,
+	layerID types.LayerID,
+	proposalID types.ProposalID,
+	txIDs []types.TransactionID,
+) error {
+	logger := msh.logger.WithContext(ctx).
+		WithFields(layerID, proposalID, log.Int("num_txs", len(txIDs)))
 	if err := msh.conState.LinkTXsWithProposal(layerID, proposalID, txIDs); err != nil {
 		return fmt.Errorf("link proposal txs: %v/%v: %w", layerID, proposalID, err)
 	}
@@ -559,7 +579,10 @@ func (msh *Mesh) AddTXsFromProposal(ctx context.Context, layerID types.LayerID, 
 }
 
 // AddBallot to the mesh.
-func (msh *Mesh) AddBallot(ctx context.Context, ballot *types.Ballot) (*types.MalfeasanceProof, error) {
+func (msh *Mesh) AddBallot(
+	ctx context.Context,
+	ballot *types.Ballot,
+) (*types.MalfeasanceProof, error) {
 	malicious, err := msh.cdb.IsMalicious(ballot.SmesherID)
 	if err != nil {
 		return nil, err
@@ -572,7 +595,7 @@ func (msh *Mesh) AddBallot(ctx context.Context, ballot *types.Ballot) (*types.Ma
 	// otherwise concurrent ballots.Add from the same smesher may not be noticed
 	if err = msh.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
 		if !malicious {
-			prev, err := ballots.LayerBallotByNodeID(dbtx, ballot.Layer, ballot.SmesherID)
+			prev, err := ballots.LayerBallotByAtxID(dbtx, ballot.Layer, ballot.AtxID)
 			if err != nil && !errors.Is(err, sql.ErrNotFound) {
 				return err
 			}
@@ -626,7 +649,8 @@ func (msh *Mesh) AddBallot(ctx context.Context, ballot *types.Ballot) (*types.Ma
 
 // AddBlockWithTXs adds the block and its TXs in into the database.
 func (msh *Mesh) AddBlockWithTXs(ctx context.Context, block *types.Block) error {
-	logger := msh.logger.WithContext(ctx).WithFields(block.LayerIndex, block.ID(), log.Int("num_txs", len(block.TxIDs)))
+	logger := msh.logger.WithContext(ctx).
+		WithFields(block.LayerIndex, block.ID(), log.Int("num_txs", len(block.TxIDs)))
 	if err := msh.conState.LinkTXsWithBlock(block.LayerIndex, block.ID(), block.TxIDs); err != nil {
 		return fmt.Errorf("link block txs: %v/%v: %w", block.LayerIndex, block.ID(), err)
 	}
@@ -643,13 +667,18 @@ func (msh *Mesh) AddBlockWithTXs(ctx context.Context, block *types.Block) error 
 }
 
 // GetATXs uses GetFullAtx to return a list of atxs corresponding to atxIds requested.
-func (msh *Mesh) GetATXs(ctx context.Context, atxIds []types.ATXID) (map[types.ATXID]*types.VerifiedActivationTx, []types.ATXID) {
+func (msh *Mesh) GetATXs(
+	ctx context.Context,
+	atxIds []types.ATXID,
+) (map[types.ATXID]*types.VerifiedActivationTx, []types.ATXID) {
 	var mIds []types.ATXID
 	atxs := make(map[types.ATXID]*types.VerifiedActivationTx, len(atxIds))
 	for _, id := range atxIds {
 		t, err := msh.cdb.GetFullAtx(id)
 		if err != nil {
-			msh.logger.WithContext(ctx).With().Warning("could not get atx from database", id, log.Err(err))
+			msh.logger.WithContext(ctx).
+				With().
+				Warning("could not get atx from database", id, log.Err(err))
 			mIds = append(mIds, id)
 		} else {
 			atxs[t.ID()] = t

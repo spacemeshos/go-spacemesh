@@ -11,12 +11,17 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-func decodeBallot(id types.BallotID, pubkey, body *bytes.Reader, malicious bool) (*types.Ballot, error) {
+func decodeBallot(
+	id types.BallotID,
+	pubkey, body *bytes.Reader,
+	malicious bool,
+) (*types.Ballot, error) {
 	var nodeID types.NodeID
 	if n, err := pubkey.Read(nodeID[:]); err != nil {
 		if err != io.EOF {
 			return nil, fmt.Errorf("copy pubkey: %w", err)
 		}
+
 	} else if n != types.NodeIDSize {
 		return nil, errors.New("public key data missing")
 	}
@@ -169,15 +174,19 @@ func IDsInLayer(db sql.Executor, lid types.LayerID) (rst []types.BallotID, err e
 	return rst, err
 }
 
-// LayerBallotByNodeID returns any ballot by the specified NodeID in a given layer.
-func LayerBallotByNodeID(db sql.Executor, lid types.LayerID, nodeID types.NodeID) (*types.Ballot, error) {
+// LayerBallotByAtxID returns any ballot by the specified NodeID in a given layer.
+func LayerBallotByAtxID(
+	db sql.Executor,
+	lid types.LayerID,
+	atx types.ATXID,
+) (*types.Ballot, error) {
 	var (
 		ballot types.Ballot
 		err    error
 	)
 	enc := func(stmt *sql.Statement) {
 		stmt.BindInt64(1, int64(lid))
-		stmt.BindBytes(2, nodeID.Bytes())
+		stmt.BindBytes(2, atx.Bytes())
 	}
 	dec := func(stmt *sql.Statement) bool {
 		var (
@@ -187,20 +196,19 @@ func LayerBallotByNodeID(db sql.Executor, lid types.LayerID, nodeID types.NodeID
 		stmt.ColumnBytes(0, bid[:])
 		if n, err = codec.DecodeFrom(stmt.ColumnReader(1), &ballot); err != nil {
 			if err != io.EOF {
-				err = fmt.Errorf("ballot data layer %v, nodeID %v: %w", lid, nodeID, err)
+				err = fmt.Errorf("ballot data layer %v, atx %v: %w", lid, atx, err)
 				return false
 			}
 		} else if n == 0 {
-			err = fmt.Errorf("ballot data missing layer %v, nodeID %v", lid, nodeID)
+			err = fmt.Errorf("ballot data missing layer %v, atx %v", lid, atx)
 			return false
 		}
 		ballot.SetID(bid)
-		ballot.SmesherID = nodeID
 		return true
 	}
 	if rows, err := db.Exec(`
 		select id, ballot from ballots
-		where layer = ?1 and pubkey = ?2
+		where layer = ?1 and atx = ?2
 		limit 1;`, enc, dec); err != nil {
 		return nil, fmt.Errorf("same layer ballot %v: %w", lid, err)
 	} else if rows == 0 {
@@ -231,7 +239,12 @@ func LastInEpoch(db sql.Executor, atx types.ATXID, epoch types.EpochID) (*types.
 	return inEpoch(db, atx, epoch, "desc")
 }
 
-func inEpoch(db sql.Executor, atx types.ATXID, epoch types.EpochID, order string) (*types.Ballot, error) {
+func inEpoch(
+	db sql.Executor,
+	atx types.ATXID,
+	epoch types.EpochID,
+	order string,
+) (*types.Ballot, error) {
 	var (
 		bid     types.BallotID
 		ballot  types.Ballot
