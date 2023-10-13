@@ -12,7 +12,6 @@ import (
 	context "context"
 	reflect "reflect"
 
-	protocol "github.com/libp2p/go-libp2p/core/protocol"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
 	gomock "go.uber.org/mock/gomock"
@@ -285,120 +284,6 @@ func (m *Mockhost) EXPECT() *MockhostMockRecorder {
 	return m.recorder
 }
 
-// Close mocks base method.
-func (m *Mockhost) Close() error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Close")
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Close indicates an expected call of Close.
-func (mr *MockhostMockRecorder) Close() *hostCloseCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*Mockhost)(nil).Close))
-	return &hostCloseCall{Call: call}
-}
-
-// hostCloseCall wrap *gomock.Call
-type hostCloseCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *hostCloseCall) Return(arg0 error) *hostCloseCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *hostCloseCall) Do(f func() error) *hostCloseCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *hostCloseCall) DoAndReturn(f func() error) *hostCloseCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// Connected mocks base method.
-func (m *Mockhost) Connected(arg0 p2p.Peer) bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Connected", arg0)
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// Connected indicates an expected call of Connected.
-func (mr *MockhostMockRecorder) Connected(arg0 any) *hostConnectedCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connected", reflect.TypeOf((*Mockhost)(nil).Connected), arg0)
-	return &hostConnectedCall{Call: call}
-}
-
-// hostConnectedCall wrap *gomock.Call
-type hostConnectedCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *hostConnectedCall) Return(arg0 bool) *hostConnectedCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *hostConnectedCall) Do(f func(p2p.Peer) bool) *hostConnectedCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *hostConnectedCall) DoAndReturn(f func(p2p.Peer) bool) *hostConnectedCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// GetPeers mocks base method.
-func (m *Mockhost) GetPeers() []p2p.Peer {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPeers")
-	ret0, _ := ret[0].([]p2p.Peer)
-	return ret0
-}
-
-// GetPeers indicates an expected call of GetPeers.
-func (mr *MockhostMockRecorder) GetPeers() *hostGetPeersCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPeers", reflect.TypeOf((*Mockhost)(nil).GetPeers))
-	return &hostGetPeersCall{Call: call}
-}
-
-// hostGetPeersCall wrap *gomock.Call
-type hostGetPeersCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *hostGetPeersCall) Return(arg0 []p2p.Peer) *hostGetPeersCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *hostGetPeersCall) Do(f func() []p2p.Peer) *hostGetPeersCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *hostGetPeersCall) DoAndReturn(f func() []p2p.Peer) *hostGetPeersCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // ID mocks base method.
 func (m *Mockhost) ID() p2p.Peer {
 	m.ctrl.T.Helper()
@@ -433,45 +318,6 @@ func (c *hostIDCall) Do(f func() p2p.Peer) *hostIDCall {
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *hostIDCall) DoAndReturn(f func() p2p.Peer) *hostIDCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// PeerProtocols mocks base method.
-func (m *Mockhost) PeerProtocols(arg0 p2p.Peer) ([]protocol.ID, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PeerProtocols", arg0)
-	ret0, _ := ret[0].([]protocol.ID)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// PeerProtocols indicates an expected call of PeerProtocols.
-func (mr *MockhostMockRecorder) PeerProtocols(arg0 any) *hostPeerProtocolsCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PeerProtocols", reflect.TypeOf((*Mockhost)(nil).PeerProtocols), arg0)
-	return &hostPeerProtocolsCall{Call: call}
-}
-
-// hostPeerProtocolsCall wrap *gomock.Call
-type hostPeerProtocolsCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *hostPeerProtocolsCall) Return(arg0 []protocol.ID, arg1 error) *hostPeerProtocolsCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *hostPeerProtocolsCall) Do(f func(p2p.Peer) ([]protocol.ID, error)) *hostPeerProtocolsCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *hostPeerProtocolsCall) DoAndReturn(f func(p2p.Peer) ([]protocol.ID, error)) *hostPeerProtocolsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
