@@ -191,7 +191,7 @@ func (s *Server) queueHandler(ctx context.Context, stream network.Stream) {
 		return
 	}
 	if size > uint64(s.requestLimit) {
-		s.logger.Warning("request limit overflow",
+		s.logger.With().Warning("request limit overflow",
 			log.Int("limit", s.requestLimit),
 			log.Uint64("request", size),
 		)
@@ -258,6 +258,7 @@ func (s *Server) Request(
 			s.logger.WithContext(ctx).With().Debug("request execution time",
 				log.String("protocol", s.protocol),
 				log.Duration("duration", time.Since(start)),
+				log.Err(err),
 			)
 			s.trackClientLatency(start, err)
 		}()

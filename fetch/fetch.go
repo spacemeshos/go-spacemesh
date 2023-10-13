@@ -101,6 +101,7 @@ type Config struct {
 	BatchSize, QueueSize int
 	RequestTimeout       time.Duration
 	MaxRetriesForRequest int
+	EnableServesMetrics  bool                    `mapstructure:"servers-metrics"`
 	ServersConfig        map[string]ServerConfig `mapstructure:"servers"`
 }
 
@@ -264,6 +265,9 @@ func (f *Fetch) registerServer(
 	opts := []server.Opt{
 		server.WithTimeout(f.cfg.RequestTimeout),
 		server.WithLog(f.logger),
+	}
+	if f.cfg.EnableServesMetrics {
+		opts = append(opts, server.WithMetrics())
 	}
 	opts = append(opts, f.cfg.getServerConfig(protocol).toOpts()...)
 	f.servers[protocol] = server.New(host, protocol, handler, opts...)

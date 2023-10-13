@@ -11,12 +11,12 @@ import (
 	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
 func TestServer(t *testing.T) {
 	const limit = 1024
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 
 	mesh, err := mocknet.FullMeshConnected(4)
 	require.NoError(t, err)
@@ -34,10 +34,12 @@ func TestServer(t *testing.T) {
 	}
 	opts := []Opt{
 		WithTimeout(100 * time.Millisecond),
+		WithLog(logtest.New(t)),
 	}
 	client := New(mesh.Hosts()[0], proto, handler, append(opts, WithRequestSizeLimit(2*limit))...)
 	srv1 := New(mesh.Hosts()[1], proto, handler, append(opts, WithRequestSizeLimit(limit))...)
 	srv2 := New(mesh.Hosts()[2], proto, errhandler, append(opts, WithRequestSizeLimit(limit))...)
+	ctx, cancel := context.WithCancel(context.Background())
 	var eg errgroup.Group
 	eg.Go(func() error {
 		return srv1.Run(ctx)
@@ -45,7 +47,10 @@ func TestServer(t *testing.T) {
 	eg.Go(func() error {
 		return srv2.Run(ctx)
 	})
-	t.Cleanup(func() { eg.Wait() })
+	t.Cleanup(func() {
+		cancel()
+		eg.Wait()
+	})
 	respHandler := func(msg []byte) {
 		select {
 		case <-ctx.Done():
