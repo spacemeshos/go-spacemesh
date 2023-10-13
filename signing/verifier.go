@@ -43,8 +43,3 @@ func (es *EdVerifier) Verify(d Domain, nodeID types.NodeID, m []byte, sig types.
 	msg = append(msg, m...)
 	return ed25519.Verify(nodeID[:], msg, sig[:])
 }
-
-// Shortcut to verify with the default EdVerifier.
-func Verify(d Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
-	return NewEdVerifier().Verify(d, nodeID, m, sig)
-}

@@ -24,7 +24,7 @@ func TestEdVerifier_Verify(t *testing.T) {
 	var sig types.EdSignature
 	copy(sig[:], ed25519.Sign(priv, signed))
 
-	ok := signing.Verify(signing.ATX, types.BytesToNodeID(pub), m, sig)
+	ok := signing.NewEdVerifier().Verify(signing.ATX, types.BytesToNodeID(pub), m, sig)
 	require.Truef(t, ok, "failed to verify message %x with sig %x", m, sig)
 }
 

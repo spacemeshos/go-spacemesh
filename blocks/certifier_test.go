@@ -612,7 +612,7 @@ func Test_CertifyIfEligible(t *testing.T) {
 			var msg types.CertifyMessage
 			require.NoError(t, codec.Decode(got, &msg))
 
-			ok := signing.Verify(signing.HARE, msg.SmesherID, msg.Bytes(), msg.Signature)
+			ok := signing.NewEdVerifier().Verify(signing.HARE, msg.SmesherID, msg.Bytes(), msg.Signature)
 			require.True(t, ok)
 			require.Equal(t, b.LayerIndex, msg.LayerID)
 			require.Equal(t, b.ID(), msg.BlockID)
