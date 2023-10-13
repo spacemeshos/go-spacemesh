@@ -62,7 +62,7 @@ func TestAdminService_Checkpoint(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg.PublicListener)
+	conn := dialGrpc(ctx, t, cfg)
 	c := pb.NewAdminServiceClient(conn)
 
 	stream, err := c.CheckpointStream(ctx, &pb.CheckpointStreamRequest{SnapshotLayer: snapshot})
@@ -98,7 +98,7 @@ func TestAdminService_CheckpointError(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg.PublicListener)
+	conn := dialGrpc(ctx, t, cfg)
 	c := pb.NewAdminServiceClient(conn)
 
 	stream, err := c.CheckpointStream(ctx, &pb.CheckpointStreamRequest{SnapshotLayer: snapshot})
@@ -118,7 +118,7 @@ func TestAdminService_Recovery(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg.PublicListener)
+	conn := dialGrpc(ctx, t, cfg)
 	c := pb.NewAdminServiceClient(conn)
 
 	_, err := c.Recover(ctx, &pb.RecoverRequest{})

@@ -58,5 +58,6 @@ func DefaultTestConfig() Config {
 	conf.PublicListener = "127.0.0.1:0"
 	conf.PrivateListener = "127.0.0.1:0"
 	conf.JSONListener = "127.0.0.1:0"
+	conf.TLSListener = "127.0.0.1:0"
 	return conf
 }
