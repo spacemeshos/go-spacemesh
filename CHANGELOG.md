@@ -20,6 +20,10 @@ this is hotfix for a bug introduced in v1.2.0. in rare conditions node may loop 
 
   The change improves initial sync speed and any sync protocol requests required during consensus.
 
+* [#5109](https://github.com/spacemeshos/go-spacemesh/pull/5109) Limit number of layers that tortoise needs to read on startup.
+
+  Bounds the time required to restart a node.
+
 ## v1.2.0
 
 ### Upgrade information
