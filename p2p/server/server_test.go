@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -45,6 +46,7 @@ func TestServer(t *testing.T) {
 	eg.Go(func() error {
 		return srv2.Run(ctx)
 	})
+	t.Cleanup(func() { eg.Wait() })
 	respHandler := func(msg []byte) {
 		select {
 		case <-ctx.Done():
@@ -119,6 +121,58 @@ func TestServer(t *testing.T) {
 			require.Error(t, err)
 		}
 	})
+}
+
+func TestQueued(t *testing.T) {
+	mesh, err := mocknet.FullMeshConnected(2)
+	require.NoError(t, err)
+
+	var (
+		total            = 100
+		proto            = "test"
+		success, failure atomic.Int64
+		unblock          = make(chan struct{})
+		wait             = make(chan struct{}, total)
+	)
+
+	client := New(mesh.Hosts()[0], proto, nil)
+	srv := New(
+		mesh.Hosts()[1],
+		proto,
+		func(_ context.Context, msg []byte) ([]byte, error) {
+			return msg, nil
+		},
+		WithQueueSize(total/2),
+		WithRequestsPerInterval(10, time.Millisecond),
+	)
+	var (
+		eg          errgroup.Group
+		ctx, cancel = context.WithCancel(context.Background())
+	)
+	eg.Go(func() error {
+		return srv.Run(ctx)
+	})
+	t.Cleanup(func() {
+		cancel()
+		eg.Wait()
+	})
+	for i := 0; i < total; i++ {
+		require.NoError(t, client.Request(ctx, mesh.Hosts()[1].ID(), []byte("ping"),
+			func(b []byte) {
+				success.Add(1)
+				wait <- struct{}{}
+			}, func(err error) {
+				failure.Add(1)
+				wait <- struct{}{}
+			},
+		))
+	}
+	close(unblock)
+	for i := 0; i < total; i++ {
+		<-wait
+	}
+	require.NotEmpty(t, failure.Load())
+	require.Greater(t, int(success.Load()), total/2)
 }
 
 func FuzzResponseConsistency(f *testing.F) {

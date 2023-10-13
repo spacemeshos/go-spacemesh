@@ -79,8 +79,9 @@ func (b *batchInfo) toMap() map[types.Hash32]RequestMessage {
 }
 
 type ServerConfig struct {
-	Queue int `mapstructure:"queue"`
-	RPS   int `mapstructure:"rps"`
+	Queue    int           `mapstructure:"queue"`
+	Requests int           `mapstructure:"requests"`
+	Interval time.Duration `mapstructure:"interval"`
 }
 
 func (s ServerConfig) toOpts() []server.Opt {
@@ -88,8 +89,8 @@ func (s ServerConfig) toOpts() []server.Opt {
 	if s.Queue != 0 {
 		opts = append(opts, server.WithQueueSize(s.Queue))
 	}
-	if s.RPS != 0 {
-		opts = append(opts, server.WithRequestsPerSecond(s.RPS))
+	if s.Requests != 0 && s.Interval != 0 {
+		opts = append(opts, server.WithRequestsPerInterval(s.Requests, s.Interval))
 	}
 	return opts
 }
@@ -109,8 +110,9 @@ func (c Config) getServerConfig(protocol string) ServerConfig {
 		return cfg
 	}
 	return ServerConfig{
-		Queue: 10000,
-		RPS:   100,
+		Queue:    10000,
+		Requests: 100,
+		Interval: time.Second,
 	}
 }
 

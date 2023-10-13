@@ -66,13 +66,14 @@ func WithQueueSize(size int) Opt {
 	}
 }
 
-// WithRequestsPerSecond parametrizes server rate limit to limit maximum amount of bandwidth
+// WithRequestsPerInterval parametrizes server rate limit to limit maximum amount of bandwidth
 // that this handler can consume.
 //
 // Defaults to 100 requests per second.
-func WithRequestsPerSecond(n int) Opt {
+func WithRequestsPerInterval(n int, interval time.Duration) Opt {
 	return func(s *Server) {
-		s.requestsPerSecond = n
+		s.requestsPerInterval = n
+		s.interval = interval
 	}
 }
 
@@ -98,13 +99,14 @@ type Host interface {
 
 // Server for the Handler.
 type Server struct {
-	logger            log.Log
-	protocol          string
-	handler           Handler
-	timeout           time.Duration
-	requestLimit      int
-	queueSize         int
-	requestsPerSecond int
+	logger              log.Log
+	protocol            string
+	handler             Handler
+	timeout             time.Duration
+	requestLimit        int
+	queueSize           int
+	requestsPerInterval int
+	interval            time.Duration
 
 	h Host
 
@@ -114,15 +116,16 @@ type Server struct {
 // New server for the handler.
 func New(h Host, proto string, handler Handler, opts ...Opt) *Server {
 	srv := &Server{
-		ctx:               context.Background(),
-		logger:            log.NewNop(),
-		protocol:          proto,
-		handler:           handler,
-		h:                 h,
-		timeout:           10 * time.Second,
-		requestLimit:      10240,
-		queueSize:         100,
-		requestsPerSecond: 100,
+		ctx:                 context.Background(),
+		logger:              log.NewNop(),
+		protocol:            proto,
+		handler:             handler,
+		h:                   h,
+		timeout:             10 * time.Second,
+		requestLimit:        10240,
+		queueSize:           100,
+		requestsPerInterval: 100,
+		interval:            time.Second,
 	}
 	for _, opt := range opts {
 		opt(srv)
@@ -131,7 +134,7 @@ func New(h Host, proto string, handler Handler, opts ...Opt) *Server {
 }
 
 func (s *Server) Run(ctx context.Context) error {
-	limit := rate.NewLimiter(rate.Every(time.Second), s.requestsPerSecond)
+	limit := rate.NewLimiter(rate.Every(s.interval), s.requestsPerInterval)
 	queue := make(chan network.Stream, s.queueSize)
 	s.h.SetStreamHandler(protocol.ID(s.protocol), func(stream network.Stream) {
 		select {
@@ -141,18 +144,22 @@ func (s *Server) Run(ctx context.Context) error {
 		}
 	})
 	var eg errgroup.Group
-	defer eg.Wait()
-	for stream := range queue {
-		if err := limit.Wait(ctx); err != nil {
-			return err
-		}
-		stream := stream
-		eg.Go(func() error {
-			s.queueHandler(stream)
+	for {
+		select {
+		case <-ctx.Done():
+			eg.Wait()
 			return nil
-		})
+		case stream := <-queue:
+			if err := limit.Wait(ctx); err != nil {
+				eg.Wait()
+				return err
+			}
+			eg.Go(func() error {
+				s.queueHandler(stream)
+				return nil
+			})
+		}
 	}
-	return nil
 }
 
 func (s *Server) queueHandler(stream network.Stream) {
