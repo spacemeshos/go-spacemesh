@@ -151,10 +151,7 @@ func expectCounters(
 	js ...uint32,
 ) expectOpt {
 	return func(p *types.Proposal) {
-		vsigner, err := signer.VRFSigner()
-		if err != nil {
-			panic(err)
-		}
+		vsigner := signer.VRFSigner()
 		for _, j := range js {
 			p.EligibilityProofs = append(p.EligibilityProofs, types.VotingEligibility{
 				J:   j,

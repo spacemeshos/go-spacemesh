@@ -455,7 +455,7 @@ func (pb *ProposalBuilder) initSignerData(
 	}
 	if ss.session.eligibilities.proofs == nil {
 		ss.session.eligibilities.proofs = calcEligibilityProofs(
-			ss.signer.MustVRFSigner(),
+			ss.signer.VRFSigner(),
 			ss.session.epoch,
 			ss.session.beacon,
 			ss.session.nonce,
