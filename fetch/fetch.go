@@ -78,22 +78,51 @@ func (b *batchInfo) toMap() map[types.Hash32]RequestMessage {
 	return m
 }
 
+type ServerConfig struct {
+	Queue int `mapstructure:"queue"`
+	RPS   int `mapstructure:"rps"`
+}
+
+func (s ServerConfig) toOpts() []server.Opt {
+	opts := []server.Opt{}
+	if s.Queue != 0 {
+		opts = append(opts, server.WithQueueSize(s.Queue))
+	}
+	if s.RPS != 0 {
+		opts = append(opts, server.WithRequestsPerSecond(s.RPS))
+	}
+	return opts
+}
+
 // Config is the configuration file of the Fetch component.
 type Config struct {
-	BatchTimeout         time.Duration // in milliseconds
+	BatchTimeout         time.Duration
 	BatchSize, QueueSize int
-	RequestTimeout       time.Duration // in seconds
+	RequestTimeout       time.Duration
 	MaxRetriesForRequest int
+	ServersConfig        map[string]ServerConfig `mapstructure:"servers"`
+}
+
+func (c Config) getServerConfig(protocol string) ServerConfig {
+	cfg, exists := c.ServersConfig[protocol]
+	if exists {
+		return cfg
+	}
+	return ServerConfig{
+		Queue: 10000,
+		RPS:   100,
+	}
 }
 
 // DefaultConfig is the default config for the fetch component.
 func DefaultConfig() Config {
 	return Config{
-		BatchTimeout:         time.Millisecond * time.Duration(50),
+		BatchTimeout:         50 * time.Millisecond,
 		QueueSize:            20,
 		BatchSize:            20,
-		RequestTimeout:       time.Second * time.Duration(10),
+		RequestTimeout:       10 * time.Second,
 		MaxRetriesForRequest: 100,
+		ServersConfig:        map[string]ServerConfig{},
 	}
 }
 
@@ -213,32 +242,29 @@ func NewFetch(
 	}
 
 	f.batchTimeout = time.NewTicker(f.cfg.BatchTimeout)
-	srvOpts := []server.Opt{
+	if len(f.servers) == 0 {
+		h := newHandler(cdb, bs, msh, b, f.logger)
+		f.registerServer(host, atxProtocol, h.handleEpochInfoReq)
+		f.registerServer(host, lyrDataProtocol, h.handleLayerDataReq)
+		f.registerServer(host, hashProtocol, h.handleHashReq)
+		f.registerServer(host, meshHashProtocol, h.handleMeshHashReq)
+		f.registerServer(host, malProtocol, h.handleMaliciousIDsReq)
+		f.registerServer(host, OpnProtocol, h.handleLayerOpinionsReq2)
+	}
+	return f
+}
+
+func (f *Fetch) registerServer(
+	host *p2p.Host,
+	protocol string,
+	handler server.Handler,
+) {
+	opts := []server.Opt{
 		server.WithTimeout(f.cfg.RequestTimeout),
 		server.WithLog(f.logger),
 	}
-	if len(f.servers) == 0 {
-		h := newHandler(cdb, bs, msh, b, f.logger)
-		f.servers[atxProtocol] = server.New(host, atxProtocol, h.handleEpochInfoReq, srvOpts...)
-		f.servers[lyrDataProtocol] = server.New(
-			host,
-			lyrDataProtocol,
-			h.handleLayerDataReq,
-			srvOpts...)
-		f.servers[hashProtocol] = server.New(host, hashProtocol, h.handleHashReq, srvOpts...)
-		f.servers[meshHashProtocol] = server.New(
-			host,
-			meshHashProtocol,
-			h.handleMeshHashReq,
-			srvOpts...)
-		f.servers[malProtocol] = server.New(host, malProtocol, h.handleMaliciousIDsReq, srvOpts...)
-		f.servers[OpnProtocol] = server.New(
-			host,
-			OpnProtocol,
-			h.handleLayerOpinionsReq2,
-			srvOpts...)
-	}
-	return f
+	opts = append(opts, f.cfg.getServerConfig(protocol).toOpts()...)
+	f.servers[protocol] = server.New(host, protocol, handler, opts...)
 }
 
 type dataValidators struct {
@@ -288,6 +314,12 @@ func (f *Fetch) Start() error {
 			f.loop()
 			return nil
 		})
+		for _, srv := range f.servers {
+			srv := srv
+			f.eg.Go(func() error {
+				return srv.Run(f.shutdownCtx)
+			})
+		}
 	})
 	return nil
 }
