@@ -176,13 +176,13 @@ func TestLayerBallotByAtxID(t *testing.T) {
 		require.NoError(t, Add(db, &ballot))
 	}
 
-	prev, err := LayerBallotByAtxID(db, lid, ballots[0].AtxID)
+	ballot, err := LayerBallotByAtxID(db, lid, ballots[0].AtxID)
 	require.ErrorIs(t, err, sql.ErrNotFound)
-	require.Nil(t, prev)
-	prev, err = LayerBallotByAtxID(db, lid, ballots[1].AtxID)
+	require.Nil(t, ballot)
+	ballot, err = LayerBallotByAtxID(db, lid, ballots[1].AtxID)
 	require.NoError(t, err)
-	require.NotNil(t, prev)
-	require.Equal(t, ballots[1], *prev)
+	require.NotNil(t, ballot)
+	require.Equal(t, ballots[1], *ballot)
 }
 
 func newAtx(signer *signing.EdSigner, layerID types.LayerID) (*types.VerifiedActivationTx, error) {

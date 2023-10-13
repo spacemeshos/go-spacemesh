@@ -174,7 +174,7 @@ func IDsInLayer(db sql.Executor, lid types.LayerID) (rst []types.BallotID, err e
 	return rst, err
 }
 
-// LayerBallotByAtxID returns any ballot by the specified NodeID in a given layer.
+// LayerBallotByAtxID returns any ballot by the specified AtxID in a given layer.
 func LayerBallotByAtxID(
 	db sql.Executor,
 	lid types.LayerID,
