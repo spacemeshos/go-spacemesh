@@ -35,6 +35,11 @@ func (s SmesherService) RegisterService(server *Server) {
 	pb.RegisterSmesherServiceServer(server.GrpcServer, s)
 }
 
+// String returns the name of this service.
+func (s SmesherService) String() string {
+	return "SmesherService"
+}
+
 // NewSmesherService creates a new grpc service using config data.
 func NewSmesherService(post postSetupProvider, smeshing activation.SmeshingProvider, postSupervisor postSupervisor, streamInterval time.Duration, postOpts activation.PostSetupOpts) *SmesherService {
 	return &SmesherService{

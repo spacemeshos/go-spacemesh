@@ -26,6 +26,11 @@ func (s GlobalStateService) RegisterService(server *Server) {
 	pb.RegisterGlobalStateServiceServer(server.GrpcServer, s)
 }
 
+// String returns the name of the service
+func (s GlobalStateService) String() string {
+	return "GlobalStateService"
+}
+
 // NewGlobalStateService creates a new grpc service using config data.
 func NewGlobalStateService(msh meshAPI, conState conservativeState) *GlobalStateService {
 	return &GlobalStateService{

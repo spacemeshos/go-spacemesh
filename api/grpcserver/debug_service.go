@@ -31,6 +31,11 @@ func (d DebugService) RegisterService(server *Server) {
 	pb.RegisterDebugServiceServer(server.GrpcServer, d)
 }
 
+// String returns the name of this service.
+func (d DebugService) String() string {
+	return "DebugService"
+}
+
 // NewDebugService creates a new grpc service using config data.
 func NewDebugService(db *sql.Database, conState conservativeState, host networkIdentity, oracle oracle) *DebugService {
 	return &DebugService{

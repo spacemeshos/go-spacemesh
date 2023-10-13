@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"
@@ -442,8 +443,8 @@ func launchServer(tb testing.TB, services ...ServiceAPI) (Config, func()) {
 	cfg := DefaultTestConfig()
 
 	// run on random ports
-	grpcService := New("127.0.0.1:0", logtest.New(tb).Named("grpc"))
-	jsonService := NewJSONHTTPServer("127.0.0.1:0", logtest.New(tb).WithName("grpc.JSON"))
+	grpcService := New("127.0.0.1:0", zaptest.NewLogger(tb).Named("grpc"), cfg)
+	jsonService := NewJSONHTTPServer("127.0.0.1:0", zaptest.NewLogger(tb).Named("grpc.JSON"))
 
 	// attach services
 	for _, svc := range services {
@@ -496,8 +497,8 @@ func TestNewServersConfig(t *testing.T) {
 	port2, err := getFreePort(0)
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
-	grpcService := New(fmt.Sprintf(":%d", port1), logtest.New(t).Named("grpc"))
-	jsonService := NewJSONHTTPServer(fmt.Sprintf(":%d", port2), logtest.New(t).WithName("grpc.JSON"))
+	grpcService := New(fmt.Sprintf(":%d", port1), zaptest.NewLogger(t).Named("grpc"), DefaultTestConfig())
+	jsonService := NewJSONHTTPServer(fmt.Sprintf(":%d", port2), zaptest.NewLogger(t).Named("grpc.JSON"))
 
 	require.Contains(t, grpcService.listener, strconv.Itoa(port1), "Expected same port")
 	require.Contains(t, jsonService.listener, strconv.Itoa(port2), "Expected same port")

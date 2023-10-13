@@ -33,6 +33,11 @@ func (s NodeService) RegisterService(server *Server) {
 	pb.RegisterNodeServiceServer(server.GrpcServer, s)
 }
 
+// String returns the name of this service.
+func (s NodeService) String() string {
+	return "NodeService"
+}
+
 // NewNodeService creates a new grpc service using config data.
 func NewNodeService(
 	peers peerCounter,

@@ -78,7 +78,7 @@ func launchServer(tb testing.TB, services ...grpcserver.ServiceAPI) (grpcserver.
 	cfg := grpcserver.DefaultTestConfig()
 
 	// run on random ports
-	grpcService := grpcserver.New("127.0.0.1:0", logtest.New(tb).Named("grpc"))
+	grpcService := grpcserver.New("127.0.0.1:0", zaptest.NewLogger(tb).Named("grpc"), cfg)
 
 	// attach services
 	for _, svc := range services {

@@ -31,6 +31,11 @@ func (s *PostService) RegisterService(server *Server) {
 	pb.RegisterPostServiceServer(server.GrpcServer, s)
 }
 
+// String returns the name of this service.
+func (s *PostService) String() string {
+	return "PostService"
+}
+
 // NewPostService creates a new grpc service using config data.
 func NewPostService(log *zap.Logger) *PostService {
 	return &PostService{

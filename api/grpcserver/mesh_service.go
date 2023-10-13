@@ -39,6 +39,11 @@ func (s MeshService) RegisterService(server *Server) {
 	pb.RegisterMeshServiceServer(server.GrpcServer, s)
 }
 
+// String returns the name of this service.
+func (s MeshService) String() string {
+	return "MeshService"
+}
+
 // NewMeshService creates a new service using config data.
 func NewMeshService(
 	cdb *datastore.CachedDB,

@@ -34,6 +34,11 @@ func (s *activationService) RegisterService(server *Server) {
 	pb.RegisterActivationServiceServer(server.GrpcServer, s)
 }
 
+// String returns the service name.
+func (s *activationService) String() string {
+	return "ActivationService"
+}
+
 // Get implements v1.ActivationServiceServer.
 func (s *activationService) Get(ctx context.Context, request *pb.GetRequest) (*pb.GetResponse, error) {
 	if l := len(request.Id); l != types.ATXIDSize {

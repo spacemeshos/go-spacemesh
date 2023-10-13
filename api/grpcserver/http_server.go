@@ -9,16 +9,15 @@ import (
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
-
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // JSONHTTPServer is a JSON http server providing the Spacemesh API.
 // It is implemented using a grpc-gateway. See https://github.com/grpc-ecosystem/grpc-gateway .
 type JSONHTTPServer struct {
 	listener string
-	logger   log.Logger
+	logger   *zap.Logger
 
 	// BoundAddress contains the address that the server bound to, useful if
 	// the server uses a dynamic port. It is set during startup and can be
@@ -30,7 +29,7 @@ type JSONHTTPServer struct {
 }
 
 // NewJSONHTTPServer creates a new json http server.
-func NewJSONHTTPServer(listener string, lg log.Logger) *JSONHTTPServer {
+func NewJSONHTTPServer(listener string, lg *zap.Logger) *JSONHTTPServer {
 	return &JSONHTTPServer{
 		logger:   lg,
 		listener: listener,
@@ -90,19 +89,21 @@ func (s *JSONHTTPServer) StartService(
 			err = pb.RegisterTransactionServiceHandlerServer(ctx, mux, typed)
 		case *DebugService:
 			err = pb.RegisterDebugServiceHandlerServer(ctx, mux, typed)
+		default:
+			s.logger.Error("unsupported service", zap.Stringer("service", svc))
 		}
 		if err != nil {
-			s.logger.Error("registering %T with grpc gateway failed with %v", svc, err)
+			s.logger.Error("registering with grpc gateway failed", zap.Stringer("service", svc), zap.Error(err))
 			return err
 		}
 		serviceCount++
 	}
 
-	s.logger.With().Info("starting grpc gateway server", log.String("address", s.listener))
+	s.logger.Info("starting grpc gateway server", zap.String("address", s.listener))
 
 	lis, err := net.Listen("tcp", s.listener)
 	if err != nil {
-		s.logger.Error("error listening: %v", err)
+		s.logger.Error("start listen server", zap.Error(err))
 		return err
 	}
 	s.BoundAddress = lis.Addr().String()
@@ -111,7 +112,7 @@ func (s *JSONHTTPServer) StartService(
 	}
 	s.grp.Go(func() error {
 		if err := s.server.Serve(lis); err != nil {
-			s.logger.Error("error from grpc http server: %v", err)
+			s.logger.Error("serving grpc server", zap.Error(err))
 			return nil
 		}
 		return nil
