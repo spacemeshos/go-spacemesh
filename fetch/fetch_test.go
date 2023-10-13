@@ -66,14 +66,14 @@ func createFetch(tb testing.TB) *testFetch {
 		mPoetH:       mocks.NewMockSyncValidator(ctrl),
 	}
 	cfg := Config{
-		BatchTimeout:         time.Millisecond * time.Duration(2000), // make sure we never hit the batch timeout
-		MaxRetriesForPeer:    3,
+		BatchTimeout:         2 * time.Second, // make sure we never hit the batch timeout
 		BatchSize:            3,
 		QueueSize:            1000,
-		RequestTimeout:       time.Second * time.Duration(3),
+		RequestTimeout:       3 * time.Second,
 		MaxRetriesForRequest: 3,
 	}
 	lg := logtest.New(tb)
+
 	tf.Fetch = NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), tf.mMesh, nil, nil,
 		WithContext(context.TODO()),
 		WithConfig(cfg),
@@ -87,7 +87,17 @@ func createFetch(tb testing.TB) *testFetch {
 			OpnProtocol:      tf.mOpn2S,
 		}),
 		withHost(tf.mh))
-	tf.Fetch.SetValidators(tf.mAtxH, tf.mPoetH, tf.mBallotH, tf.mActiveSetH, tf.mBlocksH, tf.mProposalH, tf.mTxBlocksH, tf.mTxProposalH, tf.mMalH)
+	tf.Fetch.SetValidators(
+		tf.mAtxH,
+		tf.mPoetH,
+		tf.mBallotH,
+		tf.mActiveSetH,
+		tf.mBlocksH,
+		tf.mProposalH,
+		tf.mTxBlocksH,
+		tf.mTxProposalH,
+		tf.mMalH,
+	)
 	return tf
 }
 
@@ -114,7 +124,6 @@ func TestFetch_Start(t *testing.T) {
 
 func TestFetch_GetHash(t *testing.T) {
 	f := createFetch(t)
-	f.mh.EXPECT().Close()
 	require.NoError(t, f.Start())
 	defer f.Stop()
 	h1 := types.RandomHash()
@@ -132,43 +141,6 @@ func TestFetch_GetHash(t *testing.T) {
 	p2, err := f.getHash(context.TODO(), h2, hint2, goodReceiver)
 	require.NoError(t, err)
 	require.NotEqual(t, p1.completed, p2.completed)
-}
-
-func TestFetch_GetHashPeerNotConnected(t *testing.T) {
-	f := createFetch(t)
-	f.cfg.MaxRetriesForRequest = 0
-	f.cfg.MaxRetriesForPeer = 0
-	peer := p2p.Peer("buddy")
-	awol := p2p.Peer("notConnected")
-	f.mh.EXPECT().GetPeers().Return([]p2p.Peer{peer})
-	f.mh.EXPECT().ID().Return(p2p.Peer("self"))
-	f.mh.EXPECT().Connected(awol).Return(false)
-	hsh := types.RandomHash()
-	f.RegisterPeerHashes(awol, []types.Hash32{hsh})
-
-	res := ResponseMessage{
-		Hash: hsh,
-		Data: []byte("a"),
-	}
-	f.mHashS.EXPECT().Request(gomock.Any(), peer, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, _ p2p.Peer, req []byte, okFunc func([]byte), _ func(error)) error {
-			var rb RequestBatch
-			err := codec.Decode(req, &rb)
-			require.NoError(t, err)
-			resBatch := ResponseBatch{
-				ID:        rb.ID,
-				Responses: []ResponseMessage{res},
-			}
-			bts, err := codec.Encode(&resBatch)
-			require.NoError(t, err)
-			okFunc(bts)
-			return nil
-		})
-
-	p, err := f.getHash(context.TODO(), hsh, datastore.BlockDB, goodReceiver)
-	require.NoError(t, err)
-	f.requestHashBatchFromPeers()
-	<-p.completed
 }
 
 func TestFetch_RequestHashBatchFromPeers(t *testing.T) {
@@ -196,10 +168,8 @@ func TestFetch_RequestHashBatchFromPeers(t *testing.T) {
 
 			f := createFetch(t)
 			f.cfg.MaxRetriesForRequest = 0
-			f.cfg.MaxRetriesForPeer = 0
 			peer := p2p.Peer("buddy")
-			f.mh.EXPECT().GetPeers().Return([]p2p.Peer{peer})
-			f.mh.EXPECT().Connected(peer).Return(true).AnyTimes()
+			f.peers.Add(peer)
 
 			hsh0 := types.RandomHash()
 			res0 := ResponseMessage{
@@ -211,23 +181,25 @@ func TestFetch_RequestHashBatchFromPeers(t *testing.T) {
 				Hash: hsh1,
 				Data: []byte("b"),
 			}
-			f.mHashS.EXPECT().Request(gomock.Any(), peer, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-				func(_ context.Context, _ p2p.Peer, req []byte, okFunc func([]byte), _ func(error)) error {
-					if tc.nErr != nil {
-						return tc.nErr
-					}
-					var rb RequestBatch
-					err := codec.Decode(req, &rb)
-					require.NoError(t, err)
-					resBatch := ResponseBatch{
-						ID:        rb.ID,
-						Responses: []ResponseMessage{res0, res1},
-					}
-					bts, err := codec.Encode(&resBatch)
-					require.NoError(t, err)
-					okFunc(bts)
-					return nil
-				})
+			f.mHashS.EXPECT().
+				Request(gomock.Any(), peer, gomock.Any(), gomock.Any(), gomock.Any()).
+				DoAndReturn(
+					func(_ context.Context, _ p2p.Peer, req []byte, okFunc func([]byte), _ func(error)) error {
+						if tc.nErr != nil {
+							return tc.nErr
+						}
+						var rb RequestBatch
+						err := codec.Decode(req, &rb)
+						require.NoError(t, err)
+						resBatch := ResponseBatch{
+							ID:        rb.ID,
+							Responses: []ResponseMessage{res0, res1},
+						}
+						bts, err := codec.Encode(&resBatch)
+						require.NoError(t, err)
+						okFunc(bts)
+						return nil
+					})
 
 			var p0, p1 []*promise
 			// query each hash twice
@@ -262,7 +234,6 @@ func TestFetch_RequestHashBatchFromPeers(t *testing.T) {
 
 func TestFetch_GetHash_StartStopSanity(t *testing.T) {
 	f := createFetch(t)
-	f.mh.EXPECT().Close()
 	require.NoError(t, f.Start())
 	f.Stop()
 }
@@ -270,39 +241,41 @@ func TestFetch_GetHash_StartStopSanity(t *testing.T) {
 func TestFetch_Loop_BatchRequestMax(t *testing.T) {
 	f := createFetch(t)
 	f.cfg.BatchTimeout = 1
-	f.cfg.MaxRetriesForPeer = 2
 	f.cfg.BatchSize = 2
 	peer := p2p.Peer("buddy")
-	f.mh.EXPECT().GetPeers().Return([]p2p.Peer{peer})
+	f.peers.Add(peer)
 
 	h1 := types.RandomHash()
 	h2 := types.RandomHash()
 	h3 := types.RandomHash()
-	f.mHashS.EXPECT().Request(gomock.Any(), peer, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, _ p2p.Peer, req []byte, okFunc func([]byte), _ func(error)) error {
-			var rb RequestBatch
-			err := codec.Decode(req, &rb)
-			require.NoError(t, err)
-			resps := make([]ResponseMessage, 0, len(rb.Requests))
-			for _, r := range rb.Requests {
-				resps = append(resps, ResponseMessage{
-					Hash: r.Hash,
-					Data: []byte("a"),
-				})
-			}
-			resBatch := ResponseBatch{
-				ID:        rb.ID,
-				Responses: resps,
-			}
-			bts, err := codec.Encode(&resBatch)
-			require.NoError(t, err)
-			okFunc(bts)
-			return nil
-		}).Times(2) // 3 requests with batch size 2 -> 2 sends
+	f.mHashS.EXPECT().
+		Request(gomock.Any(), peer, gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(
+			func(_ context.Context, _ p2p.Peer, req []byte, okFunc func([]byte), _ func(error)) error {
+				var rb RequestBatch
+				err := codec.Decode(req, &rb)
+				require.NoError(t, err)
+				resps := make([]ResponseMessage, 0, len(rb.Requests))
+				for _, r := range rb.Requests {
+					resps = append(resps, ResponseMessage{
+						Hash: r.Hash,
+						Data: []byte("a"),
+					})
+				}
+				resBatch := ResponseBatch{
+					ID:        rb.ID,
+					Responses: resps,
+				}
+				bts, err := codec.Encode(&resBatch)
+				require.NoError(t, err)
+				okFunc(bts)
+				return nil
+			}).
+		Times(2)
+		// 3 requests with batch size 2 -> 2 sends
 
 	hint := datastore.POETDB
 
-	f.mh.EXPECT().Close()
 	defer f.Stop()
 	require.NoError(t, f.Start())
 	p1, err := f.getHash(context.TODO(), h1, hint, goodReceiver)
@@ -355,8 +328,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 	cfg := Config{
-		BatchTimeout:         time.Minute * time.Duration(2000), // make sure we never hit the batch timeout
-		MaxRetriesForPeer:    3,
+		BatchTimeout:         2000 * time.Minute, // make sure we never hit the batch timeout
 		BatchSize:            3,
 		QueueSize:            1000,
 		RequestTimeout:       time.Second * time.Duration(3),
@@ -411,11 +383,18 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	t.Cleanup(fetcher.Stop)
 
 	// We set a validatior just for atxs, this validator does not drop connections
-	vf := ValidatorFunc(func(context.Context, types.Hash32, peer.ID, []byte) error { return pubsub.ErrValidationReject })
+	vf := ValidatorFunc(
+		func(context.Context, types.Hash32, peer.ID, []byte) error { return pubsub.ErrValidationReject },
+	)
 	fetcher.SetValidators(vf, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	// Request an atx by hash
-	_, err = fetcher.getHash(ctx, types.Hash32{}, datastore.ATXDB, fetcher.validators.atx.HandleMessage)
+	_, err = fetcher.getHash(
+		ctx,
+		types.Hash32{},
+		datastore.ATXDB,
+		fetcher.validators.atx.HandleMessage,
+	)
 	require.NoError(t, err)
 	fetcher.requestHashBatchFromPeers()
 
@@ -427,10 +406,25 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	}
 
 	// Now wrap the atx validator with  DropPeerOnValidationReject and set it again
-	fetcher.SetValidators(ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(vf, h, lg)), nil, nil, nil, nil, nil, nil, nil, nil)
+	fetcher.SetValidators(
+		ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(vf, h, lg)),
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+	)
 
 	// Request an atx by hash
-	_, err = fetcher.getHash(ctx, types.Hash32{}, datastore.ATXDB, fetcher.validators.atx.HandleMessage)
+	_, err = fetcher.getHash(
+		ctx,
+		types.Hash32{},
+		datastore.ATXDB,
+		fetcher.validators.atx.HandleMessage,
+	)
 	require.NoError(t, err)
 	fetcher.requestHashBatchFromPeers()
 

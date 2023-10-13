@@ -44,7 +44,7 @@ func TestProcessLayers_MultiLayers(t *testing.T) {
 	ts.mTicker.advanceToLayer(current)
 
 	peers := test.GeneratePeerIDs(3)
-	ts.mDataFetcher.EXPECT().GetPeers().Return(peers).AnyTimes()
+	ts.mDataFetcher.EXPECT().SelectBest(gomock.Any()).Return(peers).AnyTimes()
 	ts.mForkFinder.EXPECT().UpdateAgreement(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	adopted := make(map[types.LayerID]types.BlockID)
 	for lid := gLid.Add(1); lid.Before(current); lid = lid.Add(1) {
@@ -145,7 +145,7 @@ func TestProcessLayers_OpinionsNotAdopted(t *testing.T) {
 			ts.syncer.setLastSyncedLayer(current.Sub(1))
 			ts.mTicker.advanceToLayer(current)
 			peers := test.GeneratePeerIDs(3)
-			ts.mDataFetcher.EXPECT().GetPeers().Return(peers).AnyTimes()
+			ts.mDataFetcher.EXPECT().SelectBest(gomock.Any()).Return(peers).AnyTimes()
 
 			hasCert := false
 			for _, opn := range tc.opns {
@@ -231,7 +231,7 @@ func TestProcessLayers_HareIsStillWorking(t *testing.T) {
 
 	ts.mLyrPatrol.EXPECT().IsHareInCharge(lastSynced).Return(false)
 	peers := test.GeneratePeerIDs(3)
-	ts.mDataFetcher.EXPECT().GetPeers().Return(peers)
+	ts.mDataFetcher.EXPECT().SelectBest(gomock.Any()).Return(peers)
 	ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lastSynced, true, peers).Return(nil, nil, nil)
 	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lastSynced)
 	ts.mTortoise.EXPECT().Updates().Return(fixture.RLayers(fixture.RLayer(lastSynced)))
@@ -257,7 +257,7 @@ func TestProcessLayers_HareTakesTooLong(t *testing.T) {
 			ts.mLyrPatrol.EXPECT().IsHareInCharge(lid).Return(false)
 		}
 		peers := test.GeneratePeerIDs(3)
-		ts.mDataFetcher.EXPECT().GetPeers().Return(peers)
+		ts.mDataFetcher.EXPECT().SelectBest(gomock.Any()).Return(peers)
 		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid, gomock.Any(), peers).Return(nil, nil, nil)
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
 		ts.mTortoise.EXPECT().Updates().Return(fixture.RLayers(fixture.RLayer(lid)))
@@ -277,7 +277,7 @@ func TestProcessLayers_OpinionsOptional(t *testing.T) {
 	ts.mTicker.advanceToLayer(lastSynced.Add(1))
 	ts.mLyrPatrol.EXPECT().IsHareInCharge(lastSynced).Return(false)
 	peers := test.GeneratePeerIDs(5)
-	ts.mDataFetcher.EXPECT().GetPeers().Return(peers)
+	ts.mDataFetcher.EXPECT().SelectBest(gomock.Any()).Return(peers)
 	ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lastSynced, true, peers).Return(nil, nil, errors.New("meh"))
 	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lastSynced)
 	ts.mTortoise.EXPECT().Updates().Return(fixture.RLayers(fixture.RLayer(lastSynced)))
@@ -334,7 +334,7 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 
 	ts.mLyrPatrol.EXPECT().IsHareInCharge(instate).Return(false)
 	peers := test.GeneratePeerIDs(3)
-	ts.mDataFetcher.EXPECT().GetPeers().Return(peers)
+	ts.mDataFetcher.EXPECT().SelectBest(gomock.Any()).Return(peers)
 	ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), instate, false, peers).Return(opns, nil, nil)
 	ts.mForkFinder.EXPECT().UpdateAgreement(opns[1].Peer(), instate.Sub(1), prevHash, gomock.Any())
 	for i := 0; i < numPeers; i++ {
@@ -434,7 +434,7 @@ func TestProcessLayers_NoHashResolutionForNewlySyncedNode(t *testing.T) {
 	for lid := instate; lid <= current; lid++ {
 		ts.mLyrPatrol.EXPECT().IsHareInCharge(lid)
 		peers := test.GeneratePeerIDs(3)
-		ts.mDataFetcher.EXPECT().GetPeers().Return(peers)
+		ts.mDataFetcher.EXPECT().SelectBest(gomock.Any()).Return(peers)
 		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid, gomock.Any(), peers).Return(opns, nil, nil)
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
 		ts.mTortoise.EXPECT().Updates().Return(fixture.RLayers(fixture.ROpinion(lid.Sub(1), opns[2].PrevAggHash)))
