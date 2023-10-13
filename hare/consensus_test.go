@@ -185,8 +185,6 @@ func createConsensusProcess(
 	output := make(chan report, 1)
 	wc := make(chan wcReport, 1)
 	oracle.Register(isHonest, sig.NodeID())
-	edVerifier, err := signing.NewEdVerifier()
-	require.NoError(tb, err)
 	c, et, err := broker.Register(ctx, layer)
 	require.NoError(tb, err)
 	mch := make(chan *types.MalfeasanceGossip, cfg.N)
@@ -204,7 +202,7 @@ func createConsensusProcess(
 		oracle,
 		broker.mockStateQ,
 		sig,
-		edVerifier,
+		signing.NewEdVerifier(),
 		et,
 		sig.NodeID(),
 		network,
