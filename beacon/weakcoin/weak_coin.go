@@ -70,7 +70,7 @@ type OptionFunc func(*WeakCoin)
 // WithLog changes logger.
 func WithLog(logger log.Log) OptionFunc {
 	return func(wc *WeakCoin) {
-		wc.logger = logger
+		wc.logger = logger.WithFields(log.FieldNamed("id", wc.signer.NodeID()))
 	}
 }
 
@@ -193,7 +193,7 @@ func (wc *WeakCoin) FinishEpoch(ctx context.Context, epoch types.EpochID) {
 	if epoch != wc.epoch {
 		logger.With().Fatal("attempted to finish beacon weak coin for the wrong epoch",
 			epoch,
-			log.Stringer("weak_coin_epoch", wc.epoch),
+			log.FieldNamed("weak_coin_epoch", wc.epoch),
 		)
 	}
 	wc.epochStarted = false

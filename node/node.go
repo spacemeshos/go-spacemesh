@@ -610,11 +610,12 @@ func (app *App) initServices(ctx context.Context) error {
 	app.edVerifier = signing.NewEdVerifier(signing.WithVerifierPrefix(app.Config.Genesis.GenesisID().Bytes()))
 
 	vrfVerifier := signing.NewVRFVerifier()
-	beaconProtocol := beacon.New(app.host, app.edSgn, app.edVerifier, vrfVerifier, app.cachedDB, app.clock,
+	beaconProtocol := beacon.New(app.host, app.edVerifier, vrfVerifier, app.cachedDB, app.clock,
 		beacon.WithContext(ctx),
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)),
 	)
+	beaconProtocol.Register(app.edSgn)
 
 	trtlCfg := app.Config.Tortoise
 	trtlCfg.LayerSize = layerSize

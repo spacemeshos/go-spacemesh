@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"golang.org/x/sync/errgroup"
 )
 
 type category uint8
@@ -38,12 +39,21 @@ var (
 )
 
 // HandleWeakCoinProposal handles weakcoin proposal from gossip.
-func (pd *ProtocolDriver) HandleWeakCoinProposal(ctx context.Context, peer p2p.Peer, msg []byte) error {
+func (pd *ProtocolDriver) HandleWeakCoinProposal(ctx context.Context, peer p2p.Peer, msg []byte) (err error) {
 	if !pd.isInProtocol() {
 		return errBeaconProtocolInactive
 	}
+	var eg errgroup.Group
+	pd.mu.RLock()
+	for _, signer := range pd.signers {
+		coin := signer.coin
+		eg.Go(func() error {
+			return coin.HandleProposal(ctx, peer, msg)
+		})
+	}
+	pd.mu.Unlock()
 
-	return pd.weakCoin.HandleProposal(ctx, peer, msg)
+	return eg.Wait()
 }
 
 // HandleProposal handles beacon proposal from gossip.
@@ -229,8 +239,8 @@ func (pd *ProtocolDriver) HandleFirstVotes(ctx context.Context, peer p2p.Peer, m
 	currentEpoch := pd.currentEpoch()
 	if m.EpochID != currentEpoch {
 		logger.With().Debug("first votes from different epoch",
-			log.Uint32("current_epoch", uint32(currentEpoch)),
-			log.Uint32("message_epoch", uint32(m.EpochID)))
+			log.FieldNamed("current_epoch", currentEpoch),
+			log.FieldNamed("message_epoch", m.EpochID))
 		return errEpochNotActive
 	}
 
@@ -238,8 +248,8 @@ func (pd *ProtocolDriver) HandleFirstVotes(ctx context.Context, peer p2p.Peer, m
 	currentRound := pd.currentRound()
 	if currentRound > types.FirstRound {
 		logger.With().Debug("first votes too late",
-			log.Uint32("current_round", uint32(currentRound)),
-			log.Uint32("message_round", uint32(types.FirstRound)))
+			log.FieldNamed("current_round", currentRound),
+			log.FieldNamed("message_round", types.FirstRound))
 		return errUntimelyMessage
 	}
 
