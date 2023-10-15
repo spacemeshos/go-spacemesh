@@ -84,12 +84,6 @@ func withWeakCoinFactory(f weakCoinFactory) Opt {
 	}
 }
 
-func withNonceFetcher(nf nonceFetcher) Opt {
-	return func(pd *ProtocolDriver) {
-		pd.nonceFetcher = nf
-	}
-}
-
 // New returns a new ProtocolDriver.
 func New(
 	publisher pubsub.Publisher,

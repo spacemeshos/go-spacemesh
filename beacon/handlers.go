@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	bcnmetrics "github.com/spacemeshos/go-spacemesh/beacon/metrics"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -15,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"golang.org/x/sync/errgroup"
 )
 
 type category uint8
