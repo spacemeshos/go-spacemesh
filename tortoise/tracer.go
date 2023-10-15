@@ -362,38 +362,11 @@ func (h *HareTrace) Run(r *traceRunner) error {
 	return nil
 }
 
-type ResultsTrace struct {
+type UpdatesTrace struct {
 	From    types.LayerID  `json:"from"`
 	To      types.LayerID  `json:"to"`
 	Error   string         `json:"e"`
 	Results []result.Layer `json:"results"`
-}
-
-func (r *ResultsTrace) Type() eventType {
-	return traceResults
-}
-
-func (r *ResultsTrace) New() traceEvent {
-	return &ResultsTrace{}
-}
-
-func (r *ResultsTrace) Run(rt *traceRunner) error {
-	rst, err := rt.trt.Results(r.From, r.To)
-	if rt.assertErrors {
-		if err := assertErrors(err, r.Error); err != nil {
-			return err
-		}
-	}
-	if err == nil {
-		if diff := cmp.Diff(rst, r.Results, cmpopts.EquateEmpty()); len(diff) > 0 && rt.assertOutputs {
-			return errors.New(diff)
-		}
-	}
-	return nil
-}
-
-type UpdatesTrace struct {
-	ResultsTrace `json:",inline"`
 }
 
 func (u *UpdatesTrace) Type() eventType {
@@ -475,7 +448,6 @@ func newEventEnum() eventEnum {
 	enum.Register(&TallyTrace{})
 	enum.Register(&BlockTrace{})
 	enum.Register(&HareTrace{})
-	enum.Register(&ResultsTrace{})
 	enum.Register(&UpdatesTrace{})
 	enum.Register(&MalfeasanceTrace{})
 	return enum
