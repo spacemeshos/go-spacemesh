@@ -91,10 +91,6 @@ type testHandler struct {
 func newTestHandler(tb testing.TB, goldenATXID types.ATXID) *testHandler {
 	lg := logtest.New(tb)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
-
-	verifier, err := signing.NewEdVerifier()
-	require.NoError(tb, err)
-
 	ctrl := gomock.NewController(tb)
 	mclock := NewMocklayerClock(ctrl)
 	mpub := pubsubmocks.NewMockPublisher(ctrl)
@@ -104,7 +100,7 @@ func newTestHandler(tb testing.TB, goldenATXID types.ATXID) *testHandler {
 	mbeacon := NewMockAtxReceiver(ctrl)
 	mtortoise := mocks.NewMockTortoise(ctrl)
 
-	atxHdlr := NewHandler(localID, cdb, verifier, mclock, mpub, mockFetch, 1, goldenATXID, mValidator, mbeacon, mtortoise, lg, PoetConfig{})
+	atxHdlr := NewHandler(localID, cdb, signing.NewEdVerifier(), mclock, mpub, mockFetch, 1, goldenATXID, mValidator, mbeacon, mtortoise, lg, PoetConfig{})
 	return &testHandler{
 		Handler: atxHdlr,
 
