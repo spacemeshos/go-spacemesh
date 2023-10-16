@@ -19,7 +19,7 @@ type event struct {
 }
 
 func withEvents(events []event) *Peers {
-	tracker := New()
+	tracker := New(WithRateThreshold(0.1))
 	for _, ev := range events {
 		if ev.delete {
 			tracker.Delete(ev.id)
