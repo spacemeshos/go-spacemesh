@@ -385,6 +385,28 @@ func (u *UpdatesTrace) Run(r *traceRunner) error {
 	return nil
 }
 
+type AppliedTrace struct {
+	Layer   types.LayerID `json:"layer"`
+	Opinion types.Hash32  `json:"opinion"`
+	Result  bool          `json:"rst"`
+}
+
+func (a *AppliedTrace) Type() eventType {
+	return traceUpdates
+}
+
+func (a *AppliedTrace) New() traceEvent {
+	return &AppliedTrace{}
+}
+
+func (a *AppliedTrace) Run(r *traceRunner) error {
+	rst := r.trt.OnApplied(a.Layer, a.Opinion)
+	if rst != a.Result {
+		return fmt.Errorf("on applied: expected %v got %v", a.Result, rst)
+	}
+	return nil
+}
+
 type BlockTrace struct {
 	Header types.BlockHeader `json:",inline"`
 	Valid  bool              `json:"v"`
@@ -449,6 +471,7 @@ func newEventEnum() eventEnum {
 	enum.Register(&BlockTrace{})
 	enum.Register(&HareTrace{})
 	enum.Register(&UpdatesTrace{})
+	enum.Register(&AppliedTrace{})
 	enum.Register(&MalfeasanceTrace{})
 	return enum
 }

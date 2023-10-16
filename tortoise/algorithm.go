@@ -486,11 +486,15 @@ func (t *Tortoise) OnApplied(lid types.LayerID, opinion types.Hash32) bool {
 		log.ZShortStringer("computed", layer.opinion),
 		log.ZShortStringer("stored", opinion),
 	)
+	rst := false
 	if layer.opinion == opinion {
 		t.trtl.pending = min(lid+1, t.trtl.processed)
-		return true
+		rst = true
 	}
-	return false
+	if t.tracer != nil {
+		t.tracer.On(&AppliedTrace{Layer: lid, Opinion: opinion, Result: rst})
+	}
+	return rst
 }
 
 // Updates returns list of layers where opinion was changed since previous call.
