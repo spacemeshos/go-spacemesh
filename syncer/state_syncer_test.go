@@ -87,7 +87,7 @@ func TestProcessLayers_MultiLayers(t *testing.T) {
 				fixture.RLayer(lid, fixture.RBlock(adopted[lid], fixture.Good())),
 			)
 		})
-		ts.mTortoise.EXPECT().OnApplied(gomock.Any(), gomock.Any()).AnyTimes()
+		ts.mTortoise.EXPECT().OnApplied(lid, gomock.Any())
 		ts.mVm.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any())
 		ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, gomock.Any(), nil, nil).DoAndReturn(
 			func(_ context.Context, _ types.LayerID, got types.BlockID, _ []types.TransactionWithResult, _ []types.Transaction) error {
@@ -155,7 +155,6 @@ func TestProcessLayers_OpinionsNotAdopted(t *testing.T) {
 			current := lid.Add(1)
 			ts.syncer.setLastSyncedLayer(current.Sub(1))
 			ts.mTicker.advanceToLayer(current)
-			ts.mTortoise.EXPECT().OnApplied(gomock.Any(), gomock.Any()).AnyTimes()
 			peers := test.GeneratePeerIDs(3)
 			ts.mDataFetcher.EXPECT().SelectBest(gomock.Any()).Return(peers).AnyTimes()
 
@@ -211,6 +210,7 @@ func TestProcessLayers_OpinionsNotAdopted(t *testing.T) {
 				)
 			}
 			ts.mTortoise.EXPECT().Updates().Return(results)
+			ts.mTortoise.EXPECT().OnApplied(lid, gomock.Any())
 
 			require.False(t, ts.syncer.stateSynced())
 			require.NoError(t, ts.syncer.processLayers(context.Background()))
@@ -264,7 +264,7 @@ func TestProcessLayers_HareIsStillWorking(t *testing.T) {
 		Return(nil, nil, nil)
 	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lastSynced)
 	ts.mTortoise.EXPECT().Updates().Return(fixture.RLayers(fixture.RLayer(lastSynced)))
-	ts.mTortoise.EXPECT().OnApplied(gomock.Any(), gomock.Any()).AnyTimes()
+	ts.mTortoise.EXPECT().OnApplied(lastSynced, gomock.Any())
 	ts.mVm.EXPECT().Apply(gomock.Any(), nil, nil)
 	ts.mConState.EXPECT().UpdateCache(gomock.Any(), lastSynced, types.EmptyBlockID, nil, nil)
 	ts.mVm.EXPECT().GetStateRoot()
@@ -293,7 +293,7 @@ func TestProcessLayers_HareTakesTooLong(t *testing.T) {
 			Return(nil, nil, nil)
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
 		ts.mTortoise.EXPECT().Updates().Return(fixture.RLayers(fixture.RLayer(lid)))
-		ts.mTortoise.EXPECT().OnApplied(gomock.Any(), gomock.Any()).AnyTimes()
+		ts.mTortoise.EXPECT().OnApplied(lid, gomock.Any())
 		ts.mVm.EXPECT().Apply(vm.ApplyContext{Layer: lid}, nil, nil)
 		ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, types.EmptyBlockID, nil, nil)
 		ts.mVm.EXPECT().GetStateRoot()
@@ -338,7 +338,7 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 		ts.mTortoise.EXPECT().
 			Updates().
 			Return(fixture.RLayers(fixture.ROpinion(lid, types.RandomHash())))
-		ts.mTortoise.EXPECT().OnApplied(gomock.Any(), gomock.Any()).AnyTimes()
+		ts.mTortoise.EXPECT().OnApplied(lid, gomock.Any())
 		ts.mVm.EXPECT().Apply(gomock.Any(), nil, nil)
 		ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, types.EmptyBlockID, nil, nil)
 		ts.mVm.EXPECT().GetStateRoot()
@@ -460,6 +460,7 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 	ts.mTortoise.EXPECT().
 		Updates().
 		Return(fixture.RLayers(fixture.ROpinion(instate.Sub(1), opns[2].PrevAggHash)))
+	ts.mTortoise.EXPECT().OnApplied(instate.Sub(1), gomock.Any())
 	require.NoError(t, ts.syncer.processLayers(context.Background()))
 }
 
@@ -475,7 +476,7 @@ func TestProcessLayers_NoHashResolutionForNewlySyncedNode(t *testing.T) {
 		ts.mTortoise.EXPECT().
 			Updates().
 			Return(fixture.RLayers(fixture.ROpinion(lid, types.RandomHash())))
-		ts.mTortoise.EXPECT().OnApplied(gomock.Any(), gomock.Any()).AnyTimes()
+		ts.mTortoise.EXPECT().OnApplied(lid, gomock.Any())
 		ts.mVm.EXPECT().Apply(gomock.Any(), nil, nil)
 		ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, types.EmptyBlockID, nil, nil)
 		ts.mVm.EXPECT().GetStateRoot()
@@ -510,6 +511,7 @@ func TestProcessLayers_NoHashResolutionForNewlySyncedNode(t *testing.T) {
 		ts.mTortoise.EXPECT().
 			Updates().
 			Return(fixture.RLayers(fixture.ROpinion(lid.Sub(1), opns[2].PrevAggHash)))
+		ts.mTortoise.EXPECT().OnApplied(lid.Sub(1), gomock.Any())
 		if lid != instate && lid != current {
 			ts.mVm.EXPECT().Apply(gomock.Any(), nil, nil)
 			ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, types.EmptyBlockID, nil, nil)

@@ -206,7 +206,7 @@ func advanceState(t testing.TB, ts *testSyncer, from, to types.LayerID) {
 		ts.mLyrPatrol.EXPECT().IsHareInCharge(lid)
 		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid, false, gomock.Any())
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
-		ts.mTortoise.EXPECT().OnApplied(gomock.Any(), gomock.Any())
+		ts.mTortoise.EXPECT().OnApplied(lid, gomock.Any())
 		ts.mTortoise.EXPECT().Updates().Return(fixture.RLayers(fixture.RLayer(lid)))
 		ts.mVm.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any())
 		ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, gomock.Any(), nil, nil)
