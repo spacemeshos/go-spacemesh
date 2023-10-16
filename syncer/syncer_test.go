@@ -104,11 +104,20 @@ func newTestSyncer(t *testing.T, interval time.Duration) *testSyncer {
 		HareDelayLayers:          5,
 		OutOfSyncThresholdLayers: outOfSyncThreshold,
 	}
-	ts.syncer = NewSyncer(ts.cdb, ts.mTicker, ts.mBeacon, ts.msh, ts.mAtxCache, nil, ts.mLyrPatrol, ts.mCertHdr,
+	ts.syncer = NewSyncer(
+		ts.cdb,
+		ts.mTicker,
+		ts.mBeacon,
+		ts.msh,
+		ts.mAtxCache,
+		nil,
+		ts.mLyrPatrol,
+		ts.mCertHdr,
 		WithConfig(cfg),
 		WithLogger(lg),
 		withDataFetcher(ts.mDataFetcher),
-		withForkFinder(ts.mForkFinder))
+		withForkFinder(ts.mForkFinder),
+	)
 	return ts
 }
 
@@ -138,7 +147,8 @@ func TestStartAndShutdown(t *testing.T) {
 	ts.mForkFinder.EXPECT().Purge(false).AnyTimes()
 	ts.mDataFetcher.EXPECT().SelectBest(gomock.Any()).Return(nil).AnyTimes()
 	require.Eventually(t, func() bool {
-		return ts.syncer.ListenToATXGossip() && ts.syncer.ListenToGossip() && ts.syncer.IsSynced(ctx)
+		return ts.syncer.ListenToATXGossip() && ts.syncer.ListenToGossip() &&
+			ts.syncer.IsSynced(ctx)
 	}, time.Second, 10*time.Millisecond)
 
 	cancel()
@@ -189,10 +199,14 @@ func TestSynchronize_OnlyOneSynchronize(t *testing.T) {
 func advanceState(t testing.TB, ts *testSyncer, from, to types.LayerID) {
 	t.Helper()
 	for lid := from; lid <= to; lid++ {
-		require.NoError(t, certificates.Add(ts.cdb, lid, &types.Certificate{BlockID: types.EmptyBlockID}))
+		require.NoError(
+			t,
+			certificates.Add(ts.cdb, lid, &types.Certificate{BlockID: types.EmptyBlockID}),
+		)
 		ts.mLyrPatrol.EXPECT().IsHareInCharge(lid)
 		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid, false, gomock.Any())
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
+		ts.mTortoise.EXPECT().OnApplied(gomock.Any(), gomock.Any())
 		ts.mTortoise.EXPECT().Updates().Return(fixture.RLayers(fixture.RLayer(lid)))
 		ts.mVm.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any())
 		ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, gomock.Any(), nil, nil)
@@ -297,7 +311,9 @@ func TestSynchronize_FailedInitialATXsSync(t *testing.T) {
 	for epoch := types.GetEffectiveGenesis().GetEpoch(); epoch < failedEpoch; epoch++ {
 		ts.mDataFetcher.EXPECT().GetEpochATXs(gomock.Any(), epoch)
 	}
-	ts.mDataFetcher.EXPECT().GetEpochATXs(gomock.Any(), failedEpoch).Return(errors.New("no ATXs. should fail sync"))
+	ts.mDataFetcher.EXPECT().
+		GetEpochATXs(gomock.Any(), failedEpoch).
+		Return(errors.New("no ATXs. should fail sync"))
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -540,7 +556,11 @@ func TestNetworkHasNoData(t *testing.T) {
 		require.True(t, ts.syncer.IsSynced(context.Background()))
 	}
 	// the network hasn't received any data
-	require.Greater(t, int(ts.syncer.ticker.CurrentLayer()-ts.msh.LatestLayer()), outOfSyncThreshold)
+	require.Greater(
+		t,
+		int(ts.syncer.ticker.CurrentLayer()-ts.msh.LatestLayer()),
+		outOfSyncThreshold,
+	)
 }
 
 // test the case where the node was originally synced, and somehow gets out of sync, but
@@ -607,11 +627,15 @@ func TestSync_AlsoSyncProcessedLayer(t *testing.T) {
 	// simulate hare advancing the mesh forward
 	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lyr)
 	ts.mTortoise.EXPECT().Updates().Return(fixture.RLayers(fixture.RLayer(lyr)))
+	ts.mTortoise.EXPECT().OnApplied(lyr, gomock.Any())
 	ts.mVm.EXPECT().Apply(gomock.Any(), nil, nil)
 	ts.mConState.EXPECT().UpdateCache(gomock.Any(), lyr, types.EmptyBlockID, nil, nil)
 	ts.mVm.EXPECT().GetStateRoot()
 	ts.mTortoise.EXPECT().OnHareOutput(lyr, types.EmptyBlockID)
-	require.NoError(t, ts.msh.ProcessLayerPerHareOutput(context.Background(), lyr, types.EmptyBlockID, false))
+	require.NoError(
+		t,
+		ts.msh.ProcessLayerPerHareOutput(context.Background(), lyr, types.EmptyBlockID, false),
+	)
 	require.Equal(t, lyr, ts.msh.ProcessedLayer())
 
 	// no data sync should happen
@@ -658,11 +682,20 @@ func TestSynchronize_RecoverFromCheckpoint(t *testing.T) {
 	// recover from a checkpoint
 	types.SetEffectiveGenesis(current.Uint32())
 	ts.mTicker.advanceToLayer(current)
-	ts.syncer = NewSyncer(ts.cdb, ts.mTicker, ts.mBeacon, ts.msh, nil, nil, ts.mLyrPatrol, ts.mCertHdr,
+	ts.syncer = NewSyncer(
+		ts.cdb,
+		ts.mTicker,
+		ts.mBeacon,
+		ts.msh,
+		nil,
+		nil,
+		ts.mLyrPatrol,
+		ts.mCertHdr,
 		WithConfig(ts.syncer.cfg),
 		WithLogger(ts.syncer.logger),
 		withDataFetcher(ts.mDataFetcher),
-		withForkFinder(ts.mForkFinder))
+		withForkFinder(ts.mForkFinder),
+	)
 	// should not sync any atxs before current epoch
 	ts.mDataFetcher.EXPECT().GetEpochATXs(gomock.Any(), current.GetEpoch())
 	ts.mDataFetcher.EXPECT().PollMaliciousProofs(gomock.Any())
