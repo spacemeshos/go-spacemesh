@@ -158,7 +158,9 @@ func (s *Server) Run(ctx context.Context) error {
 			stream.Close()
 		}
 	})
-	var eg errgroup.Group
+
+	eg, ctx := errgroup.WithContext(ctx)
+	eg.SetLimit(s.queueSize)
 	for {
 		select {
 		case <-ctx.Done():
