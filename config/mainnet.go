@@ -53,7 +53,6 @@ func MainnetConfig() Config {
 	}
 	logging := DefaultLoggingConfig()
 	logging.TrtlLoggerLevel = zapcore.WarnLevel.String()
-	logging.MeshLoggerLevel = zapcore.WarnLevel.String()
 	logging.AtxHandlerLevel = zapcore.WarnLevel.String()
 	logging.ProposalListenerLevel = zapcore.WarnLevel.String()
 	return Config{
