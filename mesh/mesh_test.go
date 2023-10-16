@@ -370,13 +370,11 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, malProof)
 	require.True(t, blts[1].IsMalicious())
-	edVerifier, err := signing.NewEdVerifier()
-	require.NoError(t, err)
 	nodeID, err := malfeasance.Validate(
 		context.Background(),
 		tm.logger,
 		tm.cdb,
-		edVerifier,
+		signing.NewEdVerifier(),
 		nil,
 		&types.MalfeasanceGossip{MalfeasanceProof: *malProof},
 	)

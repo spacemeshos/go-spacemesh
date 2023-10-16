@@ -152,11 +152,9 @@ func buildBrokerWithLimit(tb testing.TB, testName string, limit int) *testBroker
 	mockStateQ := mocks.NewMockstateQuerier(ctrl)
 	mockSyncS := smocks.NewMockSyncStateProvider(ctrl)
 	mockMesh := mocks.NewMockmesh(ctrl)
-	edVerifier, err := signing.NewEdVerifier()
-	require.NoError(tb, err)
 	mpub := pubsubmocks.NewMockPublisher(ctrl)
 	return &testBroker{
-		Broker: newBroker(config.DefaultConfig(), mockMesh, edVerifier, &mockEligibilityValidator{valid: 1}, mockStateQ, mockSyncS,
+		Broker: newBroker(config.DefaultConfig(), mockMesh, signing.NewEdVerifier(), &mockEligibilityValidator{valid: 1}, mockStateQ, mockSyncS,
 			mpub, limit, logtest.New(tb).WithName(testName)),
 		mockMesh:      mockMesh,
 		mockSyncS:     mockSyncS,
@@ -348,8 +346,6 @@ func generateConsensusProcessWithConfig(tb testing.TB, cfg config.Config, inbox 
 	oracle := eligibility.New(logger)
 	edSigner, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	edVerifier, err := signing.NewEdVerifier()
-	require.NoError(tb, err)
 	edPubkey := edSigner.PublicKey()
 	nid := types.BytesToNodeID(edPubkey.Bytes())
 	oracle.Register(true, nid)
@@ -372,7 +368,7 @@ func generateConsensusProcessWithConfig(tb testing.TB, cfg config.Config, inbox 
 		oracle,
 		sq,
 		edSigner,
-		edVerifier,
+		signing.NewEdVerifier(),
 		NewEligibilityTracker(cfg.N),
 		types.BytesToNodeID(edPubkey.Bytes()),
 		noopPubSub(tb),

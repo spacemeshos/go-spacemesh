@@ -123,9 +123,6 @@ func TestHare_New(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	edVerifier, err := signing.NewEdVerifier()
-	require.NoError(t, err)
-
 	logger := logtest.New(t).WithName(t.Name())
 	cfg := config.Config{N: 10, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000, Hdist: 20}
 	h := New(
@@ -133,7 +130,7 @@ func TestHare_New(t *testing.T) {
 		cfg,
 		noopPubSub(t),
 		signer,
-		edVerifier,
+		signing.NewEdVerifier(),
 		signer.NodeID(),
 		make(chan LayerOutput, 1),
 		smocks.NewMockSyncStateProvider(ctrl), smocks.NewMockBeaconGetter(ctrl),
