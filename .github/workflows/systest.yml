@@ -69,6 +69,8 @@ jobs:
 
       - name: Configure gcloud
         uses: "google-github-actions/setup-gcloud@v1"
+        with:
+          version: "450.0.0"
 
       - name: Configure gke authentication plugin
         run: gcloud components install gke-gcloud-auth-plugin --quiet
