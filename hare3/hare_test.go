@@ -200,8 +200,6 @@ func (n *node) withPublisher() *node {
 
 func (n *node) withHare() *node {
 	logger := logtest.New(n.t).Named(fmt.Sprintf("hare=%d", n.i))
-	verifier, err := signing.NewEdVerifier()
-	require.NoError(n.t, err)
 
 	n.nclock = &testNodeClock{
 		genesis:       n.t.start,
@@ -210,7 +208,7 @@ func (n *node) withHare() *node {
 	tracer := newTestTracer(n.t)
 	n.tracer = tracer
 	n.patrol = layerpatrol.New()
-	n.hare = New(n.nclock, n.mpublisher, n.db, verifier, n.oracle, n.msyncer, n.patrol,
+	n.hare = New(n.nclock, n.mpublisher, n.db, signing.NewEdVerifier(), n.oracle, n.msyncer, n.patrol,
 		WithConfig(n.t.cfg),
 		WithLogger(logger.Zap()),
 		WithWallclock(n.clock),

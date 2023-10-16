@@ -217,8 +217,6 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 
 func validateAndPreserveData(tb testing.TB, db *sql.Database, deps []*types.VerifiedActivationTx, proofs []*types.PoetProofMessage) {
 	lg := logtest.New(tb)
-	edVerifier, err := signing.NewEdVerifier()
-	require.NoError(tb, err)
 	poetDb := activation.NewPoetDb(db, lg)
 	ctrl := gomock.NewController(tb)
 	mclock := activation.NewMocklayerClock(ctrl)
@@ -230,7 +228,7 @@ func validateAndPreserveData(tb testing.TB, db *sql.Database, deps []*types.Veri
 	atxHandler := activation.NewHandler(
 		"",
 		cdb,
-		edVerifier,
+		signing.NewEdVerifier(),
 		mclock,
 		nil,
 		mfetch,

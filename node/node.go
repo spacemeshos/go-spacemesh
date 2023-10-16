@@ -605,10 +605,7 @@ func (app *App) initServices(ctx context.Context) error {
 		return errors.New("invalid golden atx id")
 	}
 
-	app.edVerifier, err = signing.NewEdVerifier(signing.WithVerifierPrefix(app.Config.Genesis.GenesisID().Bytes()))
-	if err != nil {
-		return fmt.Errorf("failed to create signature verifier: %w", err)
-	}
+	app.edVerifier = signing.NewEdVerifier(signing.WithVerifierPrefix(app.Config.Genesis.GenesisID().Bytes()))
 
 	vrfVerifier := signing.NewVRFVerifier()
 	beaconProtocol := beacon.New(app.host, app.edSgn, app.edVerifier, vrfVerifier, app.cachedDB, app.clock,
