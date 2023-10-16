@@ -132,8 +132,6 @@ func createTestHare(tb testing.TB, msh mesh, tcfg config.Config, clock *mockCloc
 	tb.Helper()
 	signer, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	edVerifier, err := signing.NewEdVerifier()
-	require.NoError(tb, err)
 
 	ctrl := gomock.NewController(tb)
 	patrol := mocks.NewMocklayerPatrol(ctrl)
@@ -153,7 +151,7 @@ func createTestHare(tb testing.TB, msh mesh, tcfg config.Config, clock *mockCloc
 		tcfg,
 		p2p,
 		signer,
-		edVerifier,
+		signing.NewEdVerifier(),
 		signer.NodeID(),
 		make(chan LayerOutput, 100),
 		mockSyncS,

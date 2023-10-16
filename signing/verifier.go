@@ -11,13 +11,12 @@ type edVerifierOption struct {
 }
 
 // VerifierOptionFunc to modify verifier.
-type VerifierOptionFunc func(*edVerifierOption) error
+type VerifierOptionFunc func(*edVerifierOption)
 
 // WithVerifierPrefix sets the prefix used by PubKeyVerifier. This usually is the Network ID.
 func WithVerifierPrefix(prefix []byte) VerifierOptionFunc {
-	return func(opts *edVerifierOption) error {
+	return func(opts *edVerifierOption) {
 		opts.prefix = prefix
-		return nil
 	}
 }
 
@@ -26,17 +25,14 @@ type EdVerifier struct {
 	prefix []byte
 }
 
-func NewEdVerifier(opts ...VerifierOptionFunc) (*EdVerifier, error) {
+func NewEdVerifier(opts ...VerifierOptionFunc) *EdVerifier {
 	cfg := &edVerifierOption{}
 	for _, opt := range opts {
-		if err := opt(cfg); err != nil {
-			return nil, err
-		}
+		opt(cfg)
 	}
-	Verifier := &EdVerifier{
+	return &EdVerifier{
 		prefix: cfg.prefix,
 	}
-	return Verifier, nil
 }
 
 // Verify verifies that a signature matches public key and message.

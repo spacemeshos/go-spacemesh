@@ -27,6 +27,14 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
   The submit proof of work should now be up to 40% faster thanks to [code optimization](https://github.com/spacemeshos/poet/pull/419).
 
+* [#5143](https://github.com/spacemeshos/go-spacemesh/pull/5143) Select good peers for sync requests.
+
+  The change improves initial sync speed and any sync protocol requests required during consensus.
+
+* [#5109](https://github.com/spacemeshos/go-spacemesh/pull/5109) Limit number of layers that tortoise needs to read on startup.
+
+  Bounds the time required to restart a node.
+
 ## v1.2.0
 
 ### Upgrade information
