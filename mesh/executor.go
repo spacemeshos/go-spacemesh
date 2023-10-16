@@ -46,7 +46,6 @@ func (e *Executor) Revert(ctx context.Context, revertTo types.LayerID) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	logger := e.logger.WithContext(ctx).WithFields(log.Stringer("revert_to", revertTo))
 	if err := e.vm.Revert(revertTo); err != nil {
 		return fmt.Errorf("revert state: %w", err)
 	}
@@ -57,7 +56,11 @@ func (e *Executor) Revert(ctx context.Context, revertTo types.LayerID) error {
 	if err != nil {
 		return fmt.Errorf("get state hash: %w", err)
 	}
-	logger.Event().Info("reverted state", log.Stringer("state_hash", root))
+	e.logger.With().Info("reverted state",
+		log.Context(ctx),
+		log.Stringer("state_hash", root),
+		log.Uint32("revert_to", revertTo.Uint32()),
+	)
 	return nil
 }
 
@@ -75,7 +78,6 @@ func (e *Executor) ExecuteOptimistic(
 
 	start := time.Now()
 
-	logger := e.logger.WithContext(ctx).WithFields(lid)
 	if err := e.checkOrder(lid); err != nil {
 		return nil, err
 	}
@@ -110,7 +112,9 @@ func (e *Executor) ExecuteOptimistic(
 	if err != nil {
 		return nil, fmt.Errorf("get state hash: %w", err)
 	}
-	logger.Event().Info("optimistically executed block",
+	e.logger.With().Info("optimistically executed block",
+		log.Context(ctx),
+		log.Uint32("lid", lid.Uint32()),
 		log.Stringer("block", b.ID()),
 		log.Stringer("state_hash", state),
 		log.Duration("duration", time.Since(start)),
@@ -133,7 +137,6 @@ func (e *Executor) Execute(ctx context.Context, lid types.LayerID, block *types.
 		return e.executeEmpty(ctx, lid)
 	}
 
-	logger := e.logger.WithContext(ctx).WithFields(lid, block.ID())
 	executable, err := e.getExecutableTxs(block.TxIDs)
 	if err != nil {
 		return err
@@ -142,7 +145,11 @@ func (e *Executor) Execute(ctx context.Context, lid types.LayerID, block *types.
 	if err != nil {
 		return err
 	}
-	ineffective, executed, err := e.vm.Apply(vm.ApplyContext{Layer: block.LayerIndex}, executable, rewards)
+	ineffective, executed, err := e.vm.Apply(
+		vm.ApplyContext{Layer: block.LayerIndex},
+		executable,
+		rewards,
+	)
 	if err != nil {
 		return fmt.Errorf("apply block: %w", err)
 	}
@@ -154,11 +161,14 @@ func (e *Executor) Execute(ctx context.Context, lid types.LayerID, block *types.
 	if err != nil {
 		return fmt.Errorf("get state hash: %w", err)
 	}
-	logger.Event().Info("executed block",
+	e.logger.With().Info("executed block",
+		log.Context(ctx),
+		log.Uint32("lid", lid.Uint32()),
 		log.Stringer("block", block.ID()),
 		log.Stringer("state_hash", state),
 		log.Duration("duration", time.Since(start)),
 		log.Int("count", len(executed)),
+		log.Int("rewards", len(rewards)),
 	)
 	return nil
 }
@@ -183,7 +193,6 @@ func (e *Executor) convertRewards(rewards []types.AnyReward) ([]types.CoinbaseRe
 
 func (e *Executor) executeEmpty(ctx context.Context, lid types.LayerID) error {
 	start := time.Now()
-	logger := e.logger.WithContext(ctx).WithFields(lid)
 	if _, _, err := e.vm.Apply(vm.ApplyContext{Layer: lid}, nil, nil); err != nil {
 		return fmt.Errorf("apply empty layer: %w", err)
 	}
@@ -194,7 +203,9 @@ func (e *Executor) executeEmpty(ctx context.Context, lid types.LayerID) error {
 	if err != nil {
 		return fmt.Errorf("get state hash: %w", err)
 	}
-	logger.Event().Info("executed empty layer",
+	e.logger.With().Info("executed empty layer",
+		log.Context(ctx),
+		log.Uint32("lid", lid.Uint32()),
 		log.Stringer("state_hash", state),
 		log.Duration("duration", time.Since(start)),
 	)

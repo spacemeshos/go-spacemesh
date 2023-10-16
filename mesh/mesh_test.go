@@ -280,12 +280,11 @@ func TestMesh_GetLayer(t *testing.T) {
 
 func TestMesh_LatestKnownLayer(t *testing.T) {
 	tm := createTestMesh(t)
-	lg := logtest.New(t)
-	tm.setLatestLayer(lg, types.LayerID(3))
-	tm.setLatestLayer(lg, types.LayerID(7))
-	tm.setLatestLayer(lg, types.LayerID(10))
-	tm.setLatestLayer(lg, types.LayerID(1))
-	tm.setLatestLayer(lg, types.LayerID(2))
+	tm.setLatestLayer(types.LayerID(3))
+	tm.setLatestLayer(types.LayerID(7))
+	tm.setLatestLayer(types.LayerID(10))
+	tm.setLatestLayer(types.LayerID(1))
+	tm.setLatestLayer(types.LayerID(2))
 	require.Equal(t, types.LayerID(10), tm.LatestLayer(), "wrong layer")
 }
 
@@ -459,7 +458,7 @@ func TestProcessLayer(t *testing.T) {
 					applied:  map[types.LayerID]types.BlockID{start: idg("1"), start + 1: idg("2")},
 				},
 				{
-					results: rlayers(
+					updates: rlayers(
 						rlayer(start+2, rblock(idg("3"), fixture.Valid(), fixture.Data())),
 						rlayer(start+3, rblock(idg("4"), fixture.Valid(), fixture.Data())),
 					),
@@ -478,7 +477,7 @@ func TestProcessLayer(t *testing.T) {
 					err: "missing",
 				},
 				{
-					results: rlayers(
+					updates: rlayers(
 						rlayer(start, rblock(idg("1"), fixture.Data(), fixture.Valid())),
 					),
 					executed: map[types.LayerID]types.BlockID{start: idg("1")},
@@ -499,7 +498,7 @@ func TestProcessLayer(t *testing.T) {
 					err: "missing",
 				},
 				{
-					results: rlayers(
+					updates: rlayers(
 						rlayer(start, rblock(idg("1"), fixture.Invalid())),
 					),
 					executed: map[types.LayerID]types.BlockID{start: {}},
@@ -626,7 +625,7 @@ func TestProcessLayer(t *testing.T) {
 					err: "missing",
 				},
 				{
-					results: rlayers(
+					updates: rlayers(
 						rlayer(start,
 							rblock(idg("1"), fixture.Invalid(), fixture.Data()),
 							rblock(idg("3"), fixture.Valid(), fixture.Data()),
@@ -650,9 +649,6 @@ func TestProcessLayer(t *testing.T) {
 				},
 				{
 					updates: rlayers(
-						rlayer(start+1, rblock(idg("2"), fixture.Valid(), fixture.Data())),
-					),
-					results: rlayers(
 						rlayer(start, rblock(idg("1"), fixture.Valid(), fixture.Data())),
 						rlayer(start+1, rblock(idg("2"), fixture.Valid(), fixture.Data())),
 					),
@@ -683,11 +679,6 @@ func TestProcessLayer(t *testing.T) {
 			[]call{
 				{
 					updates: rlayers(
-						fixture.RLayerNonFinal(start.Add(1),
-							fixture.RBlock(fixture.IDGen("2"), fixture.Valid(), fixture.Data()),
-						),
-					),
-					results: rlayers(
 						rlayer(start,
 							fixture.RBlock(fixture.IDGen("1"), fixture.Valid(), fixture.Data()),
 						),
@@ -740,6 +731,7 @@ func TestProcessLayer(t *testing.T) {
 
 			tm := createTestMesh(t)
 			tm.mockTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any()).AnyTimes()
+			tm.mockTortoise.EXPECT().OnApplied(gomock.Any(), gomock.Any()).AnyTimes()
 			tm.mockVM.EXPECT().GetStateRoot().AnyTimes()
 			tm.mockVM.EXPECT().Revert(gomock.Any()).AnyTimes()
 			tm.mockState.EXPECT().RevertCache(gomock.Any()).AnyTimes()

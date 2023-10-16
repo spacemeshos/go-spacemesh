@@ -104,14 +104,14 @@ func NewMesh(
 		msh.logger.With().Panic("error initialize genesis data", log.Err(err))
 	}
 
-	msh.setLatestLayer(msh.logger, genesis)
+	msh.setLatestLayer(genesis)
 	msh.processedLayer.Store(genesis)
 	msh.setLatestLayerInState(genesis)
 	return msh, nil
 }
 
 func (msh *Mesh) recoverFromDB(latest types.LayerID) {
-	msh.setLatestLayer(msh.logger, latest)
+	msh.setLatestLayer(latest)
 
 	lyr, err := layers.GetProcessed(msh.cdb)
 	if err != nil {
@@ -158,7 +158,7 @@ func (msh *Mesh) MeshHash(lid types.LayerID) (types.Hash32, error) {
 }
 
 // setLatestLayer sets the latest layer we saw from the network.
-func (msh *Mesh) setLatestLayer(logger log.Log, lid types.LayerID) {
+func (msh *Mesh) setLatestLayer(lid types.LayerID) {
 	events.ReportLayerUpdate(events.LayerUpdate{
 		LayerID: lid,
 		Status:  events.LayerStatusTypeUnknown,
@@ -170,7 +170,6 @@ func (msh *Mesh) setLatestLayer(logger log.Log, lid types.LayerID) {
 		}
 		if msh.latestLayer.CompareAndSwap(current, lid) {
 			events.ReportNodeStatusUpdate()
-			logger.With().Debug("set latest known layer", lid)
 		}
 	}
 }
@@ -229,7 +228,6 @@ func (msh *Mesh) setProcessedLayer(layerID types.LayerID) error {
 	}
 	msh.processedLayer.Store(processed)
 	events.ReportNodeStatusUpdate()
-	msh.logger.Event().Debug("processed layer set", processed)
 	return nil
 }
 
@@ -261,10 +259,6 @@ func (msh *Mesh) ensureStateConsistent(ctx context.Context, results []result.Lay
 		return nil
 	}
 	revert := changed.Sub(1)
-	msh.logger.With().Info("reverting state",
-		log.Context(ctx),
-		log.Uint32("revert_to", revert.Uint32()),
-	)
 	if err := msh.executor.Revert(ctx, revert); err != nil {
 		return fmt.Errorf("revert state to layer %v: %w", revert, err)
 	}
@@ -282,11 +276,6 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, lid types.LayerID) error {
 	msh.mu.Lock()
 	defer msh.mu.Unlock()
 
-	msh.logger.With().Debug("processing layer",
-		log.Context(ctx),
-		log.Uint32("layer_id", lid.Uint32()),
-	)
-
 	msh.trtl.TallyVotes(ctx, lid)
 
 	if err := msh.setProcessedLayer(lid); err != nil {
@@ -296,7 +285,7 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, lid types.LayerID) error {
 	next := msh.LatestLayerInState() + 1
 	// TODO(dshulyak) https://github.com/spacemeshos/go-spacemesh/issues/4425
 	if len(results) > 0 {
-		msh.logger.With().Info("consensus results",
+		msh.logger.With().Debug("consensus results",
 			log.Context(ctx),
 			log.Uint32("layer_id", lid.Uint32()),
 			log.Array("results", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
@@ -412,10 +401,10 @@ func (msh *Mesh) applyResults(ctx context.Context, results []result.Layer) error
 }
 
 func (msh *Mesh) saveHareOutput(ctx context.Context, lid types.LayerID, bid types.BlockID) error {
-	msh.logger.With().Debug("saving hare output for layer",
+	msh.logger.With().Debug("saving hare output",
 		log.Context(ctx),
-		log.Uint32("layer_id", lid.Uint32()),
-		log.Stringer("block_id", bid),
+		log.Uint32("lid", lid.Uint32()),
+		log.Stringer("block", bid),
 	)
 	var (
 		certs []certificates.CertValidity
@@ -460,7 +449,7 @@ func (msh *Mesh) saveHareOutput(ctx context.Context, lid types.LayerID, bid type
 	case 0:
 		msh.trtl.OnHareOutput(lid, bid)
 	case 1:
-		msh.logger.With().Info("already synced certificate",
+		msh.logger.With().Debug("already synced certificate",
 			log.Context(ctx),
 			log.Stringer("cert_block_id", certs[0].Block),
 			log.Bool("cert_valid", certs[0].Valid))
@@ -508,7 +497,7 @@ func (msh *Mesh) setLatestLayerInState(lyr types.LayerID) {
 // SetZeroBlockLayer advances the latest layer in the network with a layer
 // that has no data.
 func (msh *Mesh) SetZeroBlockLayer(ctx context.Context, lid types.LayerID) {
-	msh.setLatestLayer(msh.logger.WithContext(ctx), lid)
+	msh.setLatestLayer(lid)
 }
 
 // AddTXsFromProposal adds the TXs in a Proposal into the database.
@@ -518,13 +507,10 @@ func (msh *Mesh) AddTXsFromProposal(
 	proposalID types.ProposalID,
 	txIDs []types.TransactionID,
 ) error {
-	logger := msh.logger.WithContext(ctx).
-		WithFields(layerID, proposalID, log.Int("num_txs", len(txIDs)))
 	if err := msh.conState.LinkTXsWithProposal(layerID, proposalID, txIDs); err != nil {
 		return fmt.Errorf("link proposal txs: %v/%v: %w", layerID, proposalID, err)
 	}
-	msh.setLatestLayer(logger, layerID)
-	logger.Debug("associated txs to proposal")
+	msh.setLatestLayer(layerID)
 	return nil
 }
 
@@ -599,13 +585,10 @@ func (msh *Mesh) AddBallot(
 
 // AddBlockWithTXs adds the block and its TXs in into the database.
 func (msh *Mesh) AddBlockWithTXs(ctx context.Context, block *types.Block) error {
-	logger := msh.logger.WithContext(ctx).
-		WithFields(block.LayerIndex, block.ID(), log.Int("num_txs", len(block.TxIDs)))
 	if err := msh.conState.LinkTXsWithBlock(block.LayerIndex, block.ID(), block.TxIDs); err != nil {
 		return fmt.Errorf("link block txs: %v/%v: %w", block.LayerIndex, block.ID(), err)
 	}
-	msh.setLatestLayer(logger, block.LayerIndex)
-	logger.Debug("associated txs to block")
+	msh.setLatestLayer(block.LayerIndex)
 
 	// add block to the tortoise before storing it
 	// otherwise fetcher will not wait until data is stored in the tortoise
