@@ -17,7 +17,7 @@ type Tortoise interface {
 	TallyVotes(context.Context, types.LayerID)
 	LatestComplete() types.LayerID
 	Updates() []result.Layer
-	Results(from, to types.LayerID) ([]result.Layer, error)
+	OnApplied(types.LayerID, types.Hash32) bool
 	OnMalfeasance(types.NodeID)
 	OnAtx(*types.AtxTortoiseData)
 }
