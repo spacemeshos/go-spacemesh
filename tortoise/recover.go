@@ -18,7 +18,12 @@ import (
 )
 
 // Recover tortoise state from database.
-func Recover(ctx context.Context, db *datastore.CachedDB, current types.LayerID, opts ...Opt) (*Tortoise, error) {
+func Recover(
+	ctx context.Context,
+	db *datastore.CachedDB,
+	current types.LayerID,
+	opts ...Opt,
+) (*Tortoise, error) {
 	trtl, err := New(opts...)
 	if err != nil {
 		return nil, err
@@ -36,7 +41,9 @@ func Recover(ctx context.Context, db *datastore.CachedDB, current types.LayerID,
 	start := types.GetEffectiveGenesis() + 1
 	if applied > types.LayerID(trtl.cfg.WindowSize) {
 		window := applied - types.LayerID(trtl.cfg.WindowSize)
-		window = window.GetEpoch().FirstLayer() // windback to the start of the epoch to load ref ballots
+		window = window.GetEpoch().
+			FirstLayer()
+			// windback to the start of the epoch to load ref ballots
 		if window > start {
 			prev, err1 := layers.GetAggregatedHash(db, window-1)
 			opinion, err2 := layers.GetAggregatedHash(db, window)
@@ -99,7 +106,7 @@ func Recover(ctx context.Context, db *datastore.CachedDB, current types.LayerID,
 	for prev := last - 1; prev >= start; prev-- {
 		opinion, err := layers.GetAggregatedHash(db, prev)
 		if err == nil && opinion != types.EmptyLayerHash {
-			if trtl.resetPending(prev, opinion) {
+			if trtl.OnApplied(prev, opinion) {
 				break
 			}
 		}
@@ -126,7 +133,13 @@ func recoverEpoch(epoch types.EpochID, trtl *Tortoise, db *datastore.CachedDB) e
 
 type ballotFunc func(*types.BallotTortoiseData)
 
-func RecoverLayer(ctx context.Context, trtl *Tortoise, db *datastore.CachedDB, lid types.LayerID, onBallot ballotFunc) error {
+func RecoverLayer(
+	ctx context.Context,
+	trtl *Tortoise,
+	db *datastore.CachedDB,
+	lid types.LayerID,
+	onBallot ballotFunc,
+) error {
 	if lid.FirstInEpoch() {
 		if err := recoverEpoch(lid.GetEpoch(), trtl, db); err != nil {
 			return err

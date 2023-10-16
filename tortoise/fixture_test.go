@@ -574,6 +574,7 @@ func (u *updateActions) execute(trt *Tortoise) {
 	u.tb.Helper()
 	updates := trt.Updates()
 	for i := range updates {
+		trt.OnApplied(updates[i].Layer, updates[i].Opinion)
 		// TODO(dshulyak) don't know yet how to implement
 		updates[i].Opinion = types.Hash32{}
 	}
