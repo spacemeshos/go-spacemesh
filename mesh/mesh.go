@@ -195,9 +195,6 @@ func (msh *Mesh) ProcessedLayer() types.LayerID {
 func (msh *Mesh) setProcessedLayer(layerID types.LayerID) error {
 	processed := msh.ProcessedLayer()
 	if !layerID.After(processed) {
-		msh.logger.With().Debug("trying to set processed layer to an older layer",
-			log.Uint32("processed", processed.Uint32()),
-			layerID)
 		return nil
 	}
 
@@ -206,9 +203,6 @@ func (msh *Mesh) setProcessedLayer(layerID types.LayerID) error {
 	}
 
 	if layerID != processed.Add(1) {
-		msh.logger.With().Debug("trying to set processed layer out of order",
-			log.Uint32("processed", processed.Uint32()),
-			layerID)
 		msh.nextProcessedLayers[layerID] = struct{}{}
 		return nil
 	}
