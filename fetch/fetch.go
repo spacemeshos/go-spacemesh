@@ -95,6 +95,7 @@ func DefaultConfig() Config {
 		BatchSize:            20,
 		RequestTimeout:       time.Second * time.Duration(10),
 		MaxRetriesForRequest: 100,
+		PeersRateThreshold:   0.02,
 	}
 }
 
