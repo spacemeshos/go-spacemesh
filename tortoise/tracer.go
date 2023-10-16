@@ -122,6 +122,7 @@ const (
 	traceActiveset
 	traceResults
 	traceUpdates
+	traceApplied
 	traceMalfeasence
 )
 
@@ -392,7 +393,7 @@ type AppliedTrace struct {
 }
 
 func (a *AppliedTrace) Type() eventType {
-	return traceUpdates
+	return traceApplied
 }
 
 func (a *AppliedTrace) New() traceEvent {
