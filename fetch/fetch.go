@@ -84,6 +84,7 @@ type Config struct {
 	BatchSize, QueueSize int
 	RequestTimeout       time.Duration // in seconds
 	MaxRetriesForRequest int
+	PeersRateThreshold   float64 `mapstructure:"peers-rate-threshold"`
 }
 
 // DefaultConfig is the default config for the fetch component.
