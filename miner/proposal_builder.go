@@ -590,7 +590,7 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 				proofs,
 				meshHash,
 			)
-			if err = pb.publisher.Publish(ctx, pubsub.ProposalProtocol, codec.MustEncode(proposal)); err != nil {
+			if err := pb.publisher.Publish(ctx, pubsub.ProposalProtocol, codec.MustEncode(proposal)); err != nil {
 				ss.log.Error("failed to publish proposal",
 					log.Context(ctx),
 					log.Uint32("lid", proposal.Layer.Uint32()),
