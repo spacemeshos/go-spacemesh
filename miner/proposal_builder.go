@@ -83,7 +83,7 @@ type signerSession struct {
 	latency latencyTracker
 }
 
-// shared data for all signers in the epoch
+// shared data for all signers in the epoch.
 type sharedSession struct {
 	epoch  types.EpochID
 	beacon types.Beacon
