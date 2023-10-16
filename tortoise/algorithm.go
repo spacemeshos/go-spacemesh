@@ -512,7 +512,6 @@ func (t *Tortoise) Updates() []result.Layer {
 			zap.Error(err),
 		)
 	}
-	t.trtl.pending = 0
 	if t.tracer != nil {
 		t.tracer.On(&UpdatesTrace{
 			From: t.trtl.pending, To: t.trtl.processed,

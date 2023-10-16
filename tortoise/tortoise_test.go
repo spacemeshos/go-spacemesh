@@ -222,13 +222,14 @@ func TestAbstainLateBlock(t *testing.T) {
 	for _, v := range events[1].Blocks {
 		require.True(t, v.Valid)
 	}
+	require.True(t, tortoise.OnApplied(events[3].Layer, events[3].Opinion))
 
 	block := types.BlockHeader{ID: types.BlockID{1}, LayerID: last.Sub(1)}
 	tortoise.OnBlock(block)
 	tortoise.TallyVotes(ctx, last)
 
 	events = tortoise.Updates()
-	require.Empty(t, events)
+	require.Len(t, events, 1)
 }
 
 func TestEncodeAbstainVotesForZdist(t *testing.T) {
@@ -1133,7 +1134,8 @@ func TestBaseBallotEvictedBlock(t *testing.T) {
 		sim.WithSequence(2),
 	) {
 		last = lid
-		tortoise.Updates() // drain pending
+		updates := tortoise.Updates() // drain pending
+		tortoise.OnApplied(updates[0].Layer, updates[0].Opinion)
 		tortoise.TallyVotes(ctx, lid)
 		verified = tortoise.LatestComplete()
 	}
@@ -2027,7 +2029,8 @@ func TestStateManagement(t *testing.T) {
 		"should not be evicted unless pending is drained",
 	)
 
-	tortoise.Updates()
+	updates := tortoise.Updates()
+	tortoise.OnApplied(updates[len(updates)-1].Layer, updates[len(updates)-1].Opinion)
 	tortoise.TallyVotes(ctx, last)
 
 	evicted := tortoise.trtl.evicted
@@ -2378,6 +2381,7 @@ func TestSwitchMode(t *testing.T) {
 			require.False(t, v.Valid)
 			require.True(t, v.Hare)
 		}
+		tortoise.OnApplied(events[len(events)-1].Layer, events[len(events)-1].Opinion)
 
 		templates, err := ballots.Layer(s.GetState(0).DB, nohare.Add(1))
 		require.NoError(t, err)
@@ -3192,6 +3196,7 @@ func TestUpdates(t *testing.T) {
 			ID:      id,
 			LayerID: lid,
 		})
+		require.True(t, trt.OnApplied(updates[0].Layer, updates[0].Opinion))
 		trt.OnHareOutput(lid, id)
 		updates = trt.Updates()
 		require.Len(t, updates, 1)
