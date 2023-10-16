@@ -103,8 +103,7 @@ func (s *JSONHTTPServer) StartService(
 
 	lis, err := net.Listen("tcp", s.listener)
 	if err != nil {
-		s.logger.Error("start listen server", zap.Error(err))
-		return err
+		return fmt.Errorf("listening on %s: %w", s.listener, err)
 	}
 	s.BoundAddress = lis.Addr().String()
 	s.server = &http.Server{

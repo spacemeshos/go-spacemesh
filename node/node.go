@@ -1181,7 +1181,9 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			return fmt.Errorf("start json server without public services")
 		}
 		app.jsonAPIServer = grpcserver.NewJSONHTTPServer(app.Config.API.JSONListener, logger.Zap().Named("JSON"))
-		app.jsonAPIServer.StartService(ctx, public...)
+		if err := app.jsonAPIServer.StartService(ctx, public...); err != nil {
+			app.log.With().Error("start listen server", log.Err(err))
+		}
 	}
 	return nil
 }
