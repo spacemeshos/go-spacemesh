@@ -21,11 +21,10 @@ func (p *data) successRate() float64 {
 	return float64(p.success) / float64(p.success+p.failures)
 }
 
-func (p *data) cmp(other *data) int {
+func (p *data) cmp(other *data, rateThreshold float64) int {
 	if p == nil && other != nil {
 		return -1
 	}
-	const rateThreshold = 0.1
 	switch {
 	case p.rate-other.rate > rateThreshold:
 		return 1
@@ -41,13 +40,30 @@ func (p *data) cmp(other *data) int {
 	return strings.Compare(string(p.id), string(other.id))
 }
 
-func New() *Peers {
-	return &Peers{peers: map[peer.ID]*data{}}
+type Opt func(*Peers)
+
+func WithRateThreshold(rate float64) Opt {
+	return func(p *Peers) {
+		p.rateThreshold = rate
+	}
+}
+
+func New(opts ...Opt) *Peers {
+	p := &Peers{
+		peers:         map[peer.ID]*data{},
+		rateThreshold: 0.1,
+	}
+	for _, opt := range opts {
+		opt(p)
+	}
+	return p
 }
 
 type Peers struct {
 	mu    sync.Mutex
 	peers map[peer.ID]*data
+
+	rateThreshold float64
 }
 
 func (p *Peers) Add(id peer.ID) {
@@ -107,7 +123,7 @@ func (p *Peers) SelectBestFrom(peers []peer.ID) peer.ID {
 		if !exist {
 			continue
 		}
-		if best.cmp(pdata) == -1 {
+		if best.cmp(pdata, p.rateThreshold) == -1 {
 			best = pdata
 		}
 	}
@@ -134,7 +150,7 @@ func (p *Peers) SelectBest(n int) []peer.ID {
 	for _, peer := range p.peers {
 		worst := peer
 		for i := range cache {
-			if cache[i].cmp(worst) == -1 {
+			if cache[i].cmp(worst, p.rateThreshold) == -1 {
 				cache[i], worst = worst, cache[i]
 			}
 		}
