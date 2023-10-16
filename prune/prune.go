@@ -30,31 +30,41 @@ func Prune(
 		case <-ctx.Done():
 			return
 		case <-time.After(interval):
-			oldest := lc.CurrentLayer() - types.LayerID(safeDist)
-			t0 := time.Now()
-			if err := proposals.DeleteBefore(db, oldest); err != nil {
-				logger.Error("failed to delete proposals",
-					zap.Stringer("lid", oldest),
-					zap.Error(err),
-				)
-			}
-			proposalLatency.Observe(time.Since(t0).Seconds())
-			t1 := time.Now()
-			if err := certificates.DeleteCertBefore(db, oldest); err != nil {
-				logger.Error("failed to delete certificates",
-					zap.Stringer("lid", oldest),
-					zap.Error(err),
-				)
-			}
-			certLatency.Observe(time.Since(t1).Seconds())
-			t2 := time.Now()
-			if err := transactions.DeleteProposalTxsBefore(db, oldest); err != nil {
-				logger.Error("failed to delete proposal tx mapping",
-					zap.Stringer("lid", oldest),
-					zap.Error(err),
-				)
-			}
-			propTxLatency.Observe(time.Since(t2).Seconds())
+			prune(logger, db, lc, safeDist)
 		}
 	}
+}
+
+func prune(
+	logger *zap.Logger,
+	db sql.Executor,
+	lc layerClock,
+	safeDist uint32,
+) {
+	oldest := lc.CurrentLayer() - types.LayerID(safeDist)
+	time.Sleep(100 * time.Millisecond)
+	t0 := time.Now()
+	if err := proposals.DeleteBefore(db, oldest); err != nil {
+		logger.Error("failed to delete proposals",
+			zap.Stringer("lid", oldest),
+			zap.Error(err),
+		)
+	}
+	proposalLatency.Observe(time.Since(t0).Seconds())
+	t1 := time.Now()
+	if err := certificates.DeleteCertBefore(db, oldest); err != nil {
+		logger.Error("failed to delete certificates",
+			zap.Stringer("lid", oldest),
+			zap.Error(err),
+		)
+	}
+	certLatency.Observe(time.Since(t1).Seconds())
+	t2 := time.Now()
+	if err := transactions.DeleteProposalTxsBefore(db, oldest); err != nil {
+		logger.Error("failed to delete proposal tx mapping",
+			zap.Stringer("lid", oldest),
+			zap.Error(err),
+		)
+	}
+	propTxLatency.Observe(time.Since(t2).Seconds())
 }
