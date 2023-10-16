@@ -22,40 +22,8 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 * [#5061](https://github.com/spacemeshos/go-spacemesh/pull/5061) Proof generation is now done via a dedicated service instead of the node.
 * [#5154](https://github.com/spacemeshos/go-spacemesh/pull/5154) Enable TLS connections between node and PoST service.
 
-  PoST proofs are now done via a dedicated process / service that the node communicates with via gRPC. Smapp users can continue to smash as they are used to. The node will
+  PoST proofs are now done via a dedicated process / service that the node communicates with via gRPC. Smapp users can continue to smesh as they used to. The node will
   automatically start the PoST service when it starts and will shut it down when it shuts down.
-
-  Operators that do not use Smapp running a node with PoST on the same machine requires the following configuration parameters to be set up correctly:
-
-  ```json
-  "post-service": {
-    "post-opts-post-service": "/path/to/service-binary", // defaults to service in the same directory as the node binary
-    "post-opts-node-address": "http://domain:port",      // defaults to 127.0.0.1:9093 - the same default value as for "grpc-private-listener"
-    
-    // the following settings are optional but allow to expose the post service publicly and connect via TLS if needed
-    "post-opts-tls-ca-cert": "/path/to/ca.pem",  // CA certificate that signed the node's and the PoST service's certificates
-    "post-opts-tls-cert": "/path/to/cert.pem",   // certificate for the PoST service
-    "post-opts-tls-key": "/path/to/key.pem",     // private key for the PoST service
-  }
-  ```
-
-  By default the node listens for the PoST service on `grpc-private-listener` (defaults to 127.0.0.1:9093). This endpoint is not require authentication and
-  should only be accessible from the same machine. If you want to allow connections from post services on other hosts to your node, you should do so via the
-  `grpc-tls-listener` (defaults to 0.0.0.0:9094) and setup TLS for the connection.
-  
-  This is useful for example if you want to run a node on a cloud provider with fewer resources and run PoST on a local machine with more resources. The post
-  service only needs to be online for the initial proof (i.e. when joining the network for the first time) and during the cyclegap in every epoch.
-
-  To setup TLS-secured public connections the API config has been extended with the following options:
-
-  ```json
-  "api": {
-    "grpc-tls-services": [],               // list of services that should be exposed via TLS
-    "grpc-tls-listener": "0.0.0.0:9094",   // address to listen on for TLS connections
-    "gprc-tls-ca-cert": "/path/to/ca.pem", // CA certificate that signed the node's and the PoST service's certificates
-    "grpc-tls-cert": "/path/to/cert.pem",  // certificate for the node
-    "grpc-tls-key": "/path/to/key.pem",    // private key for the node
-  }
 
 * [#5138](https://github.com/spacemeshos/go-spacemesh/pull/5138) Bump poet to v0.9.7
 
