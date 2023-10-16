@@ -175,12 +175,12 @@ func NewFetch(
 	opts ...Option,
 ) *Fetch {
 	bs := datastore.NewBlobStore(cdb.Database)
+
 	f := &Fetch{
 		cfg:         DefaultConfig(),
 		logger:      log.NewNop(),
 		bs:          bs,
 		host:        host,
-		peers:       peers.New(),
 		servers:     map[string]requester{},
 		unprocessed: make(map[types.Hash32]*request),
 		ongoing:     make(map[types.Hash32]*request),
@@ -190,6 +190,11 @@ func NewFetch(
 	for _, opt := range opts {
 		opt(f)
 	}
+	popts := []peers.Opt{}
+	if f.cfg.PeersRateThreshold != 0 {
+		popts = append(popts, peers.WithRateThreshold(f.cfg.PeersRateThreshold))
+	}
+	f.peers = peers.New(popts...)
 	// NOTE(dshulyak) this is to avoid tests refactoring.
 	// there is one test that covers this part.
 	if host != nil {
