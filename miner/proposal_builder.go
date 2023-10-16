@@ -72,7 +72,7 @@ type ProposalBuilder struct {
 	syncer    system.SyncStateProvider
 
 	mu      sync.Mutex
-	signers map[string]*signerSession
+	signers map[types.NodeID]*signerSession
 	shared  sharedSession
 }
 
@@ -251,7 +251,7 @@ func New(
 		tortoise:  trtl,
 		syncer:    syncer,
 		conState:  conState,
-		signers:   map[string]*signerSession{},
+		signers:   map[types.NodeID]*signerSession{},
 	}
 	for _, opt := range opts {
 		opt(pb)
@@ -262,9 +262,9 @@ func New(
 func (pb *ProposalBuilder) Register(signer *signing.EdSigner) {
 	pb.mu.Lock()
 	defer pb.mu.Unlock()
-	_, exist := pb.signers[signer.NodeID().String()]
+	_, exist := pb.signers[signer.NodeID()]
 	if !exist {
-		pb.signers[string(signer.NodeID().Bytes())] = &signerSession{
+		pb.signers[signer.NodeID()] = &signerSession{
 			signer: signer,
 			log:    pb.logger.WithFields(log.String("signer", signer.NodeID().ShortString())),
 		}
@@ -289,16 +289,16 @@ func (pb *ProposalBuilder) Run(ctx context.Context) error {
 				continue
 			}
 			next = current.Add(1)
-			sctx := log.WithNewSessionID(ctx)
-			if current <= types.GetEffectiveGenesis() || !pb.syncer.IsSynced(sctx) {
+			ctx := log.WithNewSessionID(ctx)
+			if current <= types.GetEffectiveGenesis() || !pb.syncer.IsSynced(ctx) {
 				continue
 			}
-			if err := pb.build(sctx, current); err != nil {
+			if err := pb.build(ctx, current); err != nil {
 				if errors.Is(err, errAtxNotAvailable) {
 					pb.logger.With().
-						Debug("signer is not active in epoch", log.Context(sctx), log.Uint32("lid", current.Uint32()), log.Err(err))
+						Debug("signer is not active in epoch", log.Context(ctx), log.Uint32("lid", current.Uint32()), log.Err(err))
 				} else {
-					pb.logger.With().Warning("failed to build proposal", log.Context(sctx), log.Uint32("lid", current.Uint32()), log.Err(err))
+					pb.logger.With().Warning("failed to build proposal", log.Context(ctx), log.Uint32("lid", current.Uint32()), log.Err(err))
 				}
 			}
 		}
@@ -494,7 +494,7 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 			if err := pb.initSignerData(ctx, ss, lid); err != nil {
 				if errors.Is(err, errAtxNotAvailable) {
 					ss.log.With().Info("smesher doesn't have atx that targets this epoch",
-						log.Context(ctx), log.Uint32("epoch", ss.session.epoch.Uint32()),
+						log.Context(ctx), ss.session.epoch.Field(),
 					)
 				} else {
 					return err
@@ -521,12 +521,12 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 		if n := len(ss.session.eligibilities.proofs[lid]); n == 0 {
 			ss.log.With().Debug("not eligible for proposal in layer",
 				log.Context(ctx),
-				log.Uint32("lid", lid.Uint32()), log.Uint32("epoch", lid.GetEpoch().Uint32()))
+				lid.Field(), lid.GetEpoch().Field())
 			continue
 		} else {
 			ss.log.With().Debug("eligible for proposals in layer",
 				log.Context(ctx),
-				log.Uint32("lid", lid.Uint32()), log.Int("num proposals", n),
+				lid.Field(), log.Int("num proposals", n),
 			)
 			any = true
 		}
@@ -556,12 +556,12 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 		if len(proofs) == 0 {
 			ss.log.With().Debug("not eligible for proposal in layer",
 				log.Context(ctx),
-				log.Uint32("lid", lid.Uint32()), log.Uint32("epoch", lid.GetEpoch().Uint32()))
+				lid.Field(), lid.GetEpoch().Field())
 			continue
 		}
 		ss.log.With().Debug("eligible for proposals in layer",
 			log.Context(ctx),
-			log.Uint32("lid", lid.Uint32()), log.Int("num proposals", len(proofs)),
+			lid.Field(), log.Int("num proposals", len(proofs)),
 		)
 
 		txs := pb.conState.SelectProposalTXs(lid, len(proofs))
