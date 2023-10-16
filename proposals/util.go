@@ -11,7 +11,10 @@ var (
 	GetNumEligibleSlots = util.GetNumEligibleSlots
 )
 
-func MustGetNumEligibleSlots(weight, minWeight, totalWeight uint64, committeeSize, layersPerEpoch uint32) uint32 {
+func MustGetNumEligibleSlots(
+	weight, minWeight, totalWeight uint64,
+	committeeSize, layersPerEpoch uint32,
+) uint32 {
 	slots, err := GetNumEligibleSlots(weight, minWeight, totalWeight, committeeSize, layersPerEpoch)
 	if err != nil {
 		panic(err)
@@ -31,7 +34,12 @@ type VrfMessage struct {
 }
 
 // MustSerializeVRFMessage serializes a message for generating/verifying a VRF signature.
-func MustSerializeVRFMessage(beacon types.Beacon, epoch types.EpochID, nonce types.VRFPostIndex, counter uint32) []byte {
+func MustSerializeVRFMessage(
+	beacon types.Beacon,
+	epoch types.EpochID,
+	nonce types.VRFPostIndex,
+	counter uint32,
+) []byte {
 	m := VrfMessage{
 		Type:    types.EligibilityVoting,
 		Beacon:  beacon,
