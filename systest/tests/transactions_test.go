@@ -13,7 +13,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
-func testTransactions(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster, sendFor uint32) {
+func testTransactions(
+	t *testing.T,
+	tctx *testcontext.Context,
+	cl *cluster.Cluster,
+	sendFor uint32,
+) {
 	var (
 		// start sending transactions after two layers or after genesis
 		first       = max(currentLayer(tctx, t, cl.Client(0))+2, 8)
@@ -32,36 +37,47 @@ func testTransactions(t *testing.T, tctx *testcontext.Context, cl *cluster.Clust
 	)
 	receiver := types.GenerateAddress([]byte{11, 1, 1})
 	state := pb.NewGlobalStateServiceClient(cl.Client(0))
-	response, err := state.Account(tctx, &pb.AccountRequest{AccountId: &pb.AccountId{Address: receiver.String()}})
+	response, err := state.Account(
+		tctx,
+		&pb.AccountRequest{AccountId: &pb.AccountId{Address: receiver.String()}},
+	)
 	require.NoError(t, err)
 	before := response.AccountWrapper.StateCurrent.Balance
 
 	eg, ctx := errgroup.WithContext(tctx)
-	require.NoError(t, sendTransactions(ctx, eg, tctx.Log, cl, first, stopSending, receiver, batch, amount))
+	require.NoError(
+		t,
+		sendTransactions(ctx, eg, tctx.Log, cl, first, stopSending, receiver, batch, amount),
+	)
 	txs := make([][]*pb.Transaction, cl.Total())
 
 	for i := 0; i < cl.Total(); i++ {
 		i := i
 		client := cl.Client(i)
-		watchTransactionResults(tctx.Context, eg, client, func(rst *pb.TransactionResult) (bool, error) {
-			txs[i] = append(txs[i], rst.Tx)
-			count := len(txs[i])
-			tctx.Log.Debugw("received transaction client",
-				"layer", rst.Layer,
-				"client", client.Name,
-				"tx", "0x"+hex.EncodeToString(rst.Tx.Id),
-				"count", count,
-			)
-			return len(txs[i]) < expectedCount, nil
-		})
+		watchTransactionResults(
+			tctx.Context,
+			eg,
+			client,
+			func(rst *pb.TransactionResult) (bool, error) {
+				txs[i] = append(txs[i], rst.Tx)
+				count := len(txs[i])
+				tctx.Log.Debugw("received transaction client",
+					"layer", rst.Layer,
+					"client", client.Name,
+					"tx", "0x"+hex.EncodeToString(rst.Tx.Id),
+					"count", count,
+				)
+				return len(txs[i]) < expectedCount, nil
+			},
+		)
 	}
 	require.NoError(t, eg.Wait())
 
 	reference := txs[0]
-	for _, tested := range txs[1:] {
+	for i, tested := range txs[1:] {
 		require.Len(t, tested, len(reference))
-		for i := range reference {
-			require.Equal(t, reference[i], tested[i])
+		for j := range reference {
+			require.Equal(t, reference[j], tested[j], "%s", cl.Client(i+1).Name)
 		}
 	}
 
@@ -69,7 +85,10 @@ func testTransactions(t *testing.T, tctx *testcontext.Context, cl *cluster.Clust
 	for i := 0; i < cl.Total(); i++ {
 		client := cl.Client(i)
 		state := pb.NewGlobalStateServiceClient(client)
-		response, err := state.Account(tctx, &pb.AccountRequest{AccountId: &pb.AccountId{Address: receiver.String()}})
+		response, err := state.Account(
+			tctx,
+			&pb.AccountRequest{AccountId: &pb.AccountId{Address: receiver.String()}},
+		)
 		require.NoError(t, err)
 		after := response.AccountWrapper.StateCurrent.Balance
 		tctx.Log.Debugw("receiver state",

@@ -219,7 +219,10 @@ func EncodeVotesWithCurrent(current types.LayerID) EncodeVotesOpts {
 }
 
 // EncodeVotes chooses a base ballot and creates a differences list. needs the hare results for latest layers.
-func (t *Tortoise) EncodeVotes(ctx context.Context, opts ...EncodeVotesOpts) (*types.Opinion, error) {
+func (t *Tortoise) EncodeVotes(
+	ctx context.Context,
+	opts ...EncodeVotesOpts,
+) (*types.Opinion, error) {
 	start := time.Now()
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -405,7 +408,11 @@ func (t *Tortoise) decodeBallot(ballot *types.BallotTortoiseData) (*DecodedBallo
 		errorsCounter.Inc()
 		return nil, fmt.Errorf(
 			"computed opinion hash %s doesn't match signed %s for ballot %d / %s",
-			info.opinion().ShortString(), ballot.Opinion.Hash.ShortString(), ballot.Layer, ballot.ID,
+			info.opinion().
+				ShortString(),
+			ballot.Opinion.Hash.ShortString(),
+			ballot.Layer,
+			ballot.ID,
 		)
 	}
 	return &DecodedBallot{BallotTortoiseData: ballot, info: info, minHint: min}, nil
@@ -467,6 +474,29 @@ func (t *Tortoise) GetMissingActiveSet(epoch types.EpochID, atxs []types.ATXID) 
 	return missing
 }
 
+// OnApplied compares stored opinion with computed opinion and sets
+// pending layer to the layer above equal layer.
+// this method is meant to be used only in recovery from disk codepath.
+func (t *Tortoise) OnApplied(lid types.LayerID, opinion types.Hash32) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	layer := t.trtl.layer(lid)
+	t.logger.Debug("on applied",
+		zap.Uint32("lid", lid.Uint32()),
+		log.ZShortStringer("computed", layer.opinion),
+		log.ZShortStringer("stored", opinion),
+	)
+	rst := false
+	if layer.opinion == opinion {
+		t.trtl.pending = min(lid+1, t.trtl.processed)
+		rst = true
+	}
+	if t.tracer != nil {
+		t.tracer.On(&AppliedTrace{Layer: lid, Opinion: opinion, Result: rst})
+	}
+	return rst
+}
+
 // Updates returns list of layers where opinion was changed since previous call.
 func (t *Tortoise) Updates() []result.Layer {
 	t.mu.Lock()
@@ -482,32 +512,13 @@ func (t *Tortoise) Updates() []result.Layer {
 			zap.Error(err),
 		)
 	}
-	t.trtl.pending = 0
 	if t.tracer != nil {
-		t.tracer.On(&UpdatesTrace{ResultsTrace{
+		t.tracer.On(&UpdatesTrace{
 			From: t.trtl.pending, To: t.trtl.processed,
 			Results: rst,
-		}})
+		})
 	}
 	return rst
-}
-
-// Results returns layers that crossed threshold in range [from, to].
-func (t *Tortoise) Results(from, to types.LayerID) ([]result.Layer, error) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	rst, err := t.results(from, to)
-	if t.tracer != nil {
-		ev := &ResultsTrace{
-			From: from, To: to,
-			Results: rst,
-		}
-		if err != nil {
-			ev.Error = err.Error()
-		}
-		t.tracer.On(ev)
-	}
-	return rst, err
 }
 
 func (t *Tortoise) results(from, to types.LayerID) ([]result.Layer, error) {
@@ -563,20 +574,4 @@ func (t *Tortoise) Mode() Mode {
 		return Full
 	}
 	return Verifying
-}
-
-// resetPending compares stored opinion with computed opinion and sets
-// pending layer to the layer above equal layer.
-// this method is meant to be used only in recovery from disk codepath.
-func (t *Tortoise) resetPending(lid types.LayerID, opinion types.Hash32) bool {
-	t.logger.Debug("reset pending",
-		zap.Uint32("lid", lid.Uint32()),
-		log.ZShortStringer("computed", t.trtl.layer(lid).opinion),
-		log.ZShortStringer("stored", opinion),
-	)
-	if t.trtl.layer(lid).opinion == opinion {
-		t.trtl.pending = lid + 1
-		return true
-	}
-	return false
 }

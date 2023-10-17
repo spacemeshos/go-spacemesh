@@ -24,10 +24,7 @@ func TestEdVerifier_Verify(t *testing.T) {
 	var sig types.EdSignature
 	copy(sig[:], ed25519.Sign(priv, signed))
 
-	ed, err := signing.NewEdVerifier()
-	require.NoError(t, err)
-
-	ok := ed.Verify(signing.ATX, types.BytesToNodeID(pub), m, sig)
+	ok := signing.NewEdVerifier().Verify(signing.ATX, types.BytesToNodeID(pub), m, sig)
 	require.Truef(t, ok, "failed to verify message %x with sig %x", m, sig)
 }
 
@@ -36,8 +33,7 @@ func TestVerifier_WithPrefix(t *testing.T) {
 		signer, err := signing.NewEdSigner(signing.WithPrefix([]byte("one")))
 		require.NoError(t, err)
 
-		verifier, err := signing.NewEdVerifier(signing.WithVerifierPrefix([]byte("one")))
-		require.NoError(t, err)
+		verifier := signing.NewEdVerifier(signing.WithVerifierPrefix([]byte("one")))
 		msg := []byte("test")
 		sig := signer.Sign(signing.ATX, msg)
 
@@ -49,8 +45,7 @@ func TestVerifier_WithPrefix(t *testing.T) {
 		signer, err := signing.NewEdSigner(signing.WithPrefix([]byte("one")))
 		require.NoError(t, err)
 
-		verifier, err := signing.NewEdVerifier(signing.WithVerifierPrefix([]byte("two")))
-		require.NoError(t, err)
+		verifier := signing.NewEdVerifier(signing.WithVerifierPrefix([]byte("two")))
 		msg := []byte("test")
 		sig := signer.Sign(signing.ATX, msg)
 
@@ -62,8 +57,7 @@ func TestVerifier_WithPrefix(t *testing.T) {
 		signer, err := signing.NewEdSigner(signing.WithPrefix([]byte("one")))
 		require.NoError(t, err)
 
-		verifier, err := signing.NewEdVerifier(signing.WithVerifierPrefix([]byte("one")))
-		require.NoError(t, err)
+		verifier := signing.NewEdVerifier(signing.WithVerifierPrefix([]byte("one")))
 		msg := []byte("test")
 		sig := signer.Sign(signing.ATX, msg)
 
@@ -77,8 +71,7 @@ func Fuzz_EdVerifier(f *testing.F) {
 		signer, err := signing.NewEdSigner(signing.WithPrefix(prefix))
 		require.NoError(t, err)
 
-		verifier, err := signing.NewEdVerifier(signing.WithVerifierPrefix(prefix))
-		require.NoError(t, err)
+		verifier := signing.NewEdVerifier(signing.WithVerifierPrefix(prefix))
 
 		sig := signer.Sign(signing.ATX, msg)
 
