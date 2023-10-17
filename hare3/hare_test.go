@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/benbjohnson/clock"
+	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zapcore"
@@ -108,14 +108,15 @@ func (t *testNodeClock) AwaitLayer(lid types.LayerID) <-chan struct{} {
 type node struct {
 	t *tester
 
-	i         int
-	clock     *clock.Mock
-	nclock    *testNodeClock
-	signer    *signing.EdSigner
-	vrfsigner *signing.VRFSigner
-	atx       *types.VerifiedActivationTx
-	oracle    *eligibility.Oracle
-	db        *datastore.CachedDB
+	i          int
+	clock      clockwork.FakeClock
+	nclock     *testNodeClock
+	signer     *signing.EdSigner
+	registered []*signing.EdSigner
+	vrfsigner  *signing.VRFSigner
+	atx        *types.VerifiedActivationTx
+	oracle     *eligibility.Oracle
+	db         *datastore.CachedDB
 
 	ctrl       *gomock.Controller
 	mpublisher *pmocks.MockPublishSubsciber
@@ -126,8 +127,7 @@ type node struct {
 }
 
 func (n *node) withClock() *node {
-	n.clock = clock.NewMock()
-	n.clock.Set(n.t.start)
+	n.clock = clockwork.NewFakeClockAt(n.t.start)
 	return n
 }
 
@@ -135,17 +135,13 @@ func (n *node) withSigner() *node {
 	signer, err := signing.NewEdSigner(signing.WithKeyFromRand(n.t.rng))
 	require.NoError(n.t, err)
 	n.signer = signer
-	vrfsigner, err := signer.VRFSigner()
-	require.NoError(n.t, err)
-	n.vrfsigner = vrfsigner
+	n.vrfsigner = signer.VRFSigner()
 	return n
 }
 
 func (n *node) reuseSigner(signer *signing.EdSigner) *node {
 	n.signer = signer
-	vrfsigner, err := signer.VRFSigner()
-	require.NoError(n.t, err)
-	n.vrfsigner = vrfsigner
+	n.vrfsigner = signer.VRFSigner()
 	return n
 }
 
@@ -204,8 +200,6 @@ func (n *node) withPublisher() *node {
 
 func (n *node) withHare() *node {
 	logger := logtest.New(n.t).Named(fmt.Sprintf("hare=%d", n.i))
-	verifier, err := signing.NewEdVerifier()
-	require.NoError(n.t, err)
 
 	n.nclock = &testNodeClock{
 		genesis:       n.t.start,
@@ -214,13 +208,27 @@ func (n *node) withHare() *node {
 	tracer := newTestTracer(n.t)
 	n.tracer = tracer
 	n.patrol = layerpatrol.New()
-	n.hare = New(n.nclock, n.mpublisher, n.db, verifier, n.signer, n.oracle, n.msyncer, n.patrol,
+	n.hare = New(n.nclock, n.mpublisher, n.db, signing.NewEdVerifier(), n.oracle, n.msyncer, n.patrol,
 		WithConfig(n.t.cfg),
 		WithLogger(logger.Zap()),
 		WithWallclock(n.clock),
 		WithTracer(tracer),
 	)
+	n.register(n.signer)
 	return n
+}
+
+func (n *node) waitEligibility() {
+	n.tracer.waitEligibility()
+}
+
+func (n *node) waitSent() {
+	n.tracer.waitSent()
+}
+
+func (n *node) register(signer *signing.EdSigner) {
+	n.hare.Register(signer)
+	n.registered = append(n.registered, signer)
 }
 
 type clusterOpt func(*lockstepCluster)
@@ -239,6 +247,14 @@ func withProposals(fraction float64) clusterOpt {
 	}
 }
 
+// withSigners creates N signers in addition to regular active nodes.
+// this signeres will be partitioned in fair fashion across regular active nodes.
+func withSigners(n int) clusterOpt {
+	return func(cluster *lockstepCluster) {
+		cluster.signersCount = n
+	}
+}
+
 func newLockstepCluster(t *tester, opts ...clusterOpt) *lockstepCluster {
 	cluster := &lockstepCluster{t: t}
 	cluster.units.min = 10
@@ -254,8 +270,9 @@ func newLockstepCluster(t *tester, opts ...clusterOpt) *lockstepCluster {
 // lockstepCluster allows to run rounds in lockstep
 // as no peer will be able to start around until test allows it.
 type lockstepCluster struct {
-	t     *tester
-	nodes []*node
+	t       *tester
+	nodes   []*node
+	signers []*node // nodes that active on consensus but don't run hare instance
 
 	units struct {
 		min, max int
@@ -264,10 +281,9 @@ type lockstepCluster struct {
 		fraction float64
 		shuffle  bool
 	}
+	signersCount int
 
 	timestamp time.Time
-	start     chan struct{}
-	complete  chan struct{}
 }
 
 func (cl *lockstepCluster) addNode(n *node) {
@@ -276,6 +292,21 @@ func (cl *lockstepCluster) addNode(n *node) {
 		n.hare.Stop()
 	})
 	cl.nodes = append(cl.nodes, n)
+}
+
+func (cl *lockstepCluster) partitionSigners() {
+	for i, signer := range cl.signers {
+		cl.nodes[i%len(cl.nodes)].register(signer.signer)
+	}
+}
+
+func (cl *lockstepCluster) addSigner(n int) *lockstepCluster {
+	last := len(cl.signers)
+	for i := last; i < last+n; i++ {
+		n := (&node{t: cl.t, i: i}).withSigner().withAtx(cl.units.min, cl.units.max)
+		cl.signers = append(cl.signers, n)
+	}
+	return cl
 }
 
 func (cl *lockstepCluster) addActive(n int) *lockstepCluster {
@@ -314,22 +345,16 @@ func (cl *lockstepCluster) addEquivocators(n int) *lockstepCluster {
 }
 
 func (cl *lockstepCluster) nogossip() {
-	cl.start = make(chan struct{}, len(cl.nodes))
-	cl.complete = make(chan struct{}, len(cl.nodes))
 	for _, n := range cl.nodes {
 		require.NoError(cl.t, beacons.Add(n.db, cl.t.genesis.GetEpoch()+1, cl.t.beacon))
-		n.mpublisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ctx context.Context, _ string, msg []byte) error {
-			cl.timedReceive(cl.start)
-			cl.timedSend(cl.complete)
-			return nil
-		}).AnyTimes()
+		n.mpublisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	}
 }
 
-func (cl *lockstepCluster) activeSet() []types.ATXID {
+func (cl *lockstepCluster) activeSet() types.ATXIDList {
 	var ids []types.ATXID
 	unique := map[types.ATXID]struct{}{}
-	for _, n := range cl.nodes {
+	for _, n := range append(cl.nodes, cl.signers...) {
 		if n.atx == nil {
 			continue
 		}
@@ -345,15 +370,15 @@ func (cl *lockstepCluster) activeSet() []types.ATXID {
 func (cl *lockstepCluster) genProposals(lid types.LayerID) {
 	active := cl.activeSet()
 	all := []*types.Proposal{}
-	for _, n := range cl.nodes {
+	for _, n := range append(cl.nodes, cl.signers...) {
 		if n.atx == nil {
 			continue
 		}
 		proposal := &types.Proposal{}
 		proposal.Layer = lid
-		proposal.ActiveSet = active
 		proposal.EpochData = &types.EpochData{
-			Beacon: cl.t.beacon,
+			Beacon:        cl.t.beacon,
+			ActiveSetHash: active.Hash(),
 		}
 		proposal.AtxID = n.atx.ID()
 		proposal.SmesherID = n.signer.NodeID()
@@ -381,12 +406,10 @@ func (cl *lockstepCluster) genProposals(lid types.LayerID) {
 }
 
 func (cl *lockstepCluster) setup() {
-	cl.start = make(chan struct{}, len(cl.nodes))
-	cl.complete = make(chan struct{}, len(cl.nodes))
 	active := cl.activeSet()
 	for _, n := range cl.nodes {
 		require.NoError(cl.t, beacons.Add(n.db, cl.t.genesis.GetEpoch()+1, cl.t.beacon))
-		for _, other := range cl.nodes {
+		for _, other := range append(cl.nodes, cl.signers...) {
 			if other.atx == nil {
 				continue
 			}
@@ -394,11 +417,9 @@ func (cl *lockstepCluster) setup() {
 		}
 		n.oracle.UpdateActiveSet(cl.t.genesis.GetEpoch()+1, active)
 		n.mpublisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ctx context.Context, _ string, msg []byte) error {
-			cl.timedReceive(cl.start)
 			for _, other := range cl.nodes {
 				other.hare.Handler(ctx, "self", msg)
 			}
-			cl.timedSend(cl.complete)
 			return nil
 		}).AnyTimes()
 	}
@@ -410,54 +431,32 @@ func (cl *lockstepCluster) movePreround(layer types.LayerID) {
 		Add(cl.t.cfg.PreroundDelay)
 	for _, n := range cl.nodes {
 		n.nclock.StartLayer(layer)
-		n.clock.Set(cl.timestamp)
+		n.clock.Advance(cl.timestamp.Sub(n.clock.Now()))
 	}
-	send := 0
 	for _, n := range cl.nodes {
-		if n.tracer.waitEligibility() != nil {
-			send++
-		}
+		n.waitEligibility()
 	}
-	for i := 0; i < send; i++ {
-		cl.timedSend(cl.start)
-	}
-	for i := 0; i < send; i++ {
-		cl.timedReceive(cl.complete)
+	for _, n := range cl.nodes {
+		n.waitSent()
 	}
 }
 
 func (cl *lockstepCluster) moveRound() {
 	cl.timestamp = cl.timestamp.Add(cl.t.cfg.RoundDuration)
-	send := 0
 	for _, n := range cl.nodes {
-		n.clock.Set(cl.timestamp)
+		n.clock.Advance(cl.timestamp.Sub(n.clock.Now()))
 	}
 	for _, n := range cl.nodes {
-		if n.tracer.waitEligibility() != nil {
-			send++
-		}
+		n.waitEligibility()
 	}
-	for i := 0; i < send; i++ {
-		cl.timedSend(cl.start)
-	}
-	for i := 0; i < send; i++ {
-		cl.timedReceive(cl.complete)
+	for _, n := range cl.nodes {
+		n.waitSent()
 	}
 }
 
-func (cl *lockstepCluster) timedSend(ch chan struct{}) {
-	select {
-	case ch <- struct{}{}:
-	case <-time.After(time.Second):
-		require.FailNow(cl.t, "send timed out")
-	}
-}
-
-func (cl *lockstepCluster) timedReceive(ch chan struct{}) {
-	select {
-	case <-ch:
-	case <-time.After(time.Second):
-		require.FailNow(cl.t, "receive timed out")
+func (cl *lockstepCluster) waitStopped() {
+	for _, n := range cl.nodes {
+		n.tracer.waitStopped()
 	}
 }
 
@@ -465,14 +464,16 @@ func newTestTracer(tb testing.TB) *testTracer {
 	return &testTracer{
 		TB:          tb,
 		stopped:     make(chan types.LayerID, 100),
-		eligibility: make(chan *types.HareEligibility, 100),
+		eligibility: make(chan []*types.HareEligibility),
+		sent:        make(chan *Message),
 	}
 }
 
 type testTracer struct {
 	testing.TB
 	stopped     chan types.LayerID
-	eligibility chan *types.HareEligibility
+	eligibility chan []*types.HareEligibility
+	sent        chan *Message
 }
 
 func (t *testTracer) waitStopped() types.LayerID {
@@ -486,13 +487,24 @@ func (t *testTracer) waitStopped() types.LayerID {
 	return 0
 }
 
-func (t *testTracer) waitEligibility() *types.HareEligibility {
+func (t *testTracer) waitEligibility() []*types.HareEligibility {
 	wait := time.Second
 	select {
 	case <-time.After(wait):
 		require.FailNow(t, "no eligibility", "wait %v", wait)
 	case el := <-t.eligibility:
 		return el
+	}
+	return nil
+}
+
+func (t *testTracer) waitSent() *Message {
+	wait := time.Second
+	select {
+	case <-time.After(wait):
+		require.FailNow(t, "no message", "wait %v", wait)
+	case m := <-t.sent:
+		return m
 	}
 	return nil
 }
@@ -506,14 +518,23 @@ func (t *testTracer) OnStop(lid types.LayerID) {
 	}
 }
 
-func (t *testTracer) OnActive(el *types.HareEligibility) {
+func (t *testTracer) OnActive(el []*types.HareEligibility) {
+	wait := time.Second
 	select {
+	case <-time.After(wait):
+		require.FailNow(t, "eligibility can't be sent", "wait %v", wait)
 	case t.eligibility <- el:
-	default:
 	}
 }
 
-func (*testTracer) OnMessageSent(*Message) {}
+func (t *testTracer) OnMessageSent(m *Message) {
+	wait := time.Second
+	select {
+	case <-time.After(wait):
+		require.FailNow(t, "message can't be sent", "wait %v", wait)
+	case t.sent <- m:
+	}
+}
 
 func (*testTracer) OnMessageReceived(*Message) {}
 
@@ -532,6 +553,10 @@ func testHare(t *testing.T, active, inactive, equivocators int, opts ...clusterO
 		addActive(active).
 		addInactive(inactive).
 		addEquivocators(equivocators)
+	if cluster.signersCount > 0 {
+		cluster = cluster.addSigner(cluster.signersCount)
+		cluster.partitionSigners()
+	}
 
 	layer := tst.genesis + 1
 	cluster.setup()
@@ -541,8 +566,8 @@ func testHare(t *testing.T, active, inactive, equivocators int, opts ...clusterO
 		cluster.moveRound()
 	}
 	var consistent []types.ProposalID
+	cluster.waitStopped()
 	for _, n := range cluster.nodes {
-		n.tracer.waitStopped()
 		select {
 		case coin := <-n.hare.Coins():
 			require.Equal(t, coin.Layer, layer)
@@ -574,6 +599,8 @@ func TestHare(t *testing.T) {
 	t.Run("with units", func(t *testing.T) { testHare(t, 5, 0, 0, withUnits(10, 50)) })
 	t.Run("with inactive", func(t *testing.T) { testHare(t, 3, 2, 0) })
 	t.Run("equivocators", func(t *testing.T) { testHare(t, 4, 0, 1, withProposals(0.75)) })
+	t.Run("one active multi signers", func(t *testing.T) { testHare(t, 1, 0, 0, withSigners(2)) })
+	t.Run("three active multi signers", func(t *testing.T) { testHare(t, 3, 0, 0, withSigners(10)) })
 }
 
 func TestIterationLimit(t *testing.T) {
@@ -597,6 +624,7 @@ func TestIterationLimit(t *testing.T) {
 	for i := 0; i < int(tst.cfg.IterationsLimit)*int(notify); i++ {
 		cluster.moveRound()
 	}
+	cluster.waitStopped()
 	require.Empty(t, cluster.nodes[0].hare.Running())
 	require.False(t, cluster.nodes[0].patrol.IsHareInCharge(layer))
 }
@@ -627,10 +655,14 @@ func TestHandler(t *testing.T) {
 	n.mpublisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	layer := tst.genesis + 1
 	n.nclock.StartLayer(layer)
-	n.clock.Set(tst.start.
+	n.clock.Advance((tst.start.
 		Add(tst.layerDuration * time.Duration(layer)).
-		Add(tst.cfg.PreroundDelay))
-	elig := n.tracer.waitEligibility()
+		Add(tst.cfg.PreroundDelay)).Sub(n.clock.Now()))
+	elig := n.tracer.waitEligibility()[0]
+
+	n.tracer.waitSent()
+	n.tracer.waitEligibility()
+
 	t.Run("malformed", func(t *testing.T) {
 		require.ErrorIs(t, n.hare.Handler(context.Background(), "", []byte("malformed")),
 			pubsub.ErrValidationReject)
@@ -908,7 +940,7 @@ func TestProposals(t *testing.T) {
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			db := datastore.NewCachedDB(sql.InMemory(), log.NewNop())
-			hare := New(nil, nil, db, nil, signer, nil, nil, layerpatrol.New(), WithLogger(logtest.New(t).Zap()))
+			hare := New(nil, nil, db, nil, nil, nil, layerpatrol.New(), WithLogger(logtest.New(t).Zap()))
 			for _, atx := range tc.atxs {
 				require.NoError(t, atxs.Add(db, &atx))
 			}
@@ -919,7 +951,11 @@ func TestProposals(t *testing.T) {
 			for _, id := range tc.malicious {
 				require.NoError(t, identities.SetMalicious(db, id, []byte("non empty"), time.Time{}))
 			}
-			require.Equal(t, tc.expect, hare.proposals(tc.layer, tc.beacon))
+			require.Equal(t, tc.expect, hare.proposals(&session{
+				lid:     tc.layer,
+				beacon:  tc.beacon,
+				signers: []*signing.EdSigner{signer},
+			}))
 		})
 	}
 }

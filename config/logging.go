@@ -22,6 +22,7 @@ type LoggerConfig struct {
 	PostLoggerLevel           string     `mapstructure:"post"`
 	StateDbLoggerLevel        string     `mapstructure:"stateDb"`
 	StateLoggerLevel          string     `mapstructure:"state"`
+	AtxHandlerLevel           string     `mapstructure:"atxHandler"`
 	AtxDbStoreLoggerLevel     string     `mapstructure:"atxDbStore"`
 	BeaconLoggerLevel         string     `mapstructure:"beacon"`
 	WeakCoinLoggerLevel       string     `mapstructure:"weakCoin"`
@@ -45,6 +46,7 @@ type LoggerConfig struct {
 	HareBeaconLoggerLevel     string     `mapstructure:"hare-beacon"`
 	TimeSyncLoggerLevel       string     `mapstructure:"timesync"`
 	VMLogLevel                string     `mapstructure:"vm"`
+	ProposalListenerLevel     string     `mapstructure:"proposalListener"`
 }
 
 func DefaultLoggingConfig() LoggerConfig {
@@ -52,11 +54,12 @@ func DefaultLoggingConfig() LoggerConfig {
 		Encoder:                   ConsoleLogEncoder,
 		AppLoggerLevel:            defaultLoggingLevel.String(),
 		GrpcLoggerLevel:           defaultLoggingLevel.String(),
-		P2PLoggerLevel:            defaultLoggingLevel.String(),
+		P2PLoggerLevel:            zapcore.WarnLevel.String(),
 		PostLoggerLevel:           defaultLoggingLevel.String(),
 		StateDbLoggerLevel:        defaultLoggingLevel.String(),
 		StateLoggerLevel:          defaultLoggingLevel.String(),
 		AtxDbStoreLoggerLevel:     defaultLoggingLevel.String(),
+		AtxHandlerLevel:           defaultLoggingLevel.String(),
 		BeaconLoggerLevel:         defaultLoggingLevel.String(),
 		WeakCoinLoggerLevel:       defaultLoggingLevel.String(),
 		PoetDbStoreLoggerLevel:    defaultLoggingLevel.String(),
@@ -79,5 +82,6 @@ func DefaultLoggingConfig() LoggerConfig {
 		HareBeaconLoggerLevel:     defaultLoggingLevel.String(),
 		TimeSyncLoggerLevel:       defaultLoggingLevel.String(),
 		VMLogLevel:                defaultLoggingLevel.String(),
+		ProposalListenerLevel:     defaultLoggingLevel.String(),
 	}
 }

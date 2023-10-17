@@ -6,12 +6,12 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -26,7 +26,7 @@ func Test_Highest_ReturnsGoldenAtxOnError(t *testing.T) {
 	activationService := grpcserver.NewActivationService(atxProvider, goldenAtx)
 
 	atxProvider.EXPECT().MaxHeightAtx().Return(types.EmptyATXID, errors.New("blah"))
-	response, err := activationService.Highest(context.Background(), &empty.Empty{})
+	response, err := activationService.Highest(context.Background(), &emptypb.Empty{})
 	require.NoError(t, err)
 	require.Equal(t, goldenAtx.Bytes(), response.Atx.Id.Id)
 	require.Nil(t, response.Atx.Layer)
@@ -62,7 +62,7 @@ func Test_Highest_ReturnsMaxTickHeight(t *testing.T) {
 	atxProvider.EXPECT().MaxHeightAtx().Return(id, nil)
 	atxProvider.EXPECT().GetFullAtx(id).Return(&atx, nil)
 
-	response, err := activationService.Highest(context.Background(), &empty.Empty{})
+	response, err := activationService.Highest(context.Background(), &emptypb.Empty{})
 	require.NoError(t, err)
 	require.Equal(t, atx.ID().Bytes(), response.Atx.Id.Id)
 	require.Equal(t, atx.PublishEpoch.Uint32(), response.Atx.Layer.Number)

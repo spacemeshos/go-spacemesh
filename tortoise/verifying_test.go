@@ -584,9 +584,12 @@ func TestVerifying_Verify(t *testing.T) {
 			state.verified = verified
 			state.processed = processed
 			state.last = processed
-			state.layers = tc.layers
+			for lid, info := range tc.layers {
+				layer := state.layers.get(state.evicted, lid)
+				*layer = *info
+			}
 			refs := map[types.BlockID]*blockInfo{}
-			for _, layer := range state.layers {
+			for _, layer := range state.layers.data {
 				for _, block := range layer.blocks {
 					refs[block.id] = block
 					state.updateRefHeight(layer, block)

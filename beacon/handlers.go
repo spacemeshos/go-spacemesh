@@ -2,7 +2,6 @@ package beacon
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -62,9 +61,6 @@ func (pd *ProtocolDriver) HandleProposal(ctx context.Context, peer p2p.Peer, msg
 		return errMalformedMessage
 	}
 
-	latency := receivedTime.Sub(pd.msgTimes.proposalSendTime(m.EpochID))
-	metrics.ReportMessageLatency(pubsub.BeaconProtocol, pubsub.BeaconProposalProtocol, latency)
-
 	if !pd.isProposalTimely(&m, receivedTime) {
 		logger.With().Debug("proposal too early", m.EpochID, log.Time("received_at", receivedTime))
 		return errUntimelyMessage
@@ -72,7 +68,7 @@ func (pd *ProtocolDriver) HandleProposal(ctx context.Context, peer p2p.Peer, msg
 
 	logger = pd.logger.WithContext(ctx).WithFields(m.EpochID, log.Stringer("smesher", m.NodeID))
 	proposal := ProposalFromVrf(m.VRFSignature)
-	logger.With().Debug("new beacon proposal", log.String("proposal", hex.EncodeToString(proposal[:])))
+	logger.With().Debug("new beacon proposal", log.Inline(proposal))
 
 	st, err := pd.initEpochStateIfNotPresent(logger, m.EpochID)
 	if err != nil {
@@ -94,6 +90,7 @@ func (pd *ProtocolDriver) HandleProposal(ctx context.Context, peer p2p.Peer, msg
 		logger.With().Debug("malicious miner proposal potentially valid", log.Stringer("smesher", m.NodeID))
 		cat = potentiallyValid
 	}
+	metrics.ReportMessageLatency(pubsub.BeaconProtocol, pubsub.BeaconProposalProtocol, time.Since(pd.msgTimes.proposalSendTime(m.EpochID)))
 	return pd.addProposal(m, cat)
 }
 
@@ -106,7 +103,7 @@ func (pd *ProtocolDriver) classifyProposal(
 	epochStart := pd.clock.LayerToTime(m.EpochID.FirstLayer())
 	proposal := ProposalFromVrf(m.VRFSignature)
 	logger = logger.WithFields(
-		log.String("proposal", hex.EncodeToString(proposal[:])),
+		log.Inline(proposal),
 		log.Time("atx_timestamp", atxReceived),
 		log.Stringer("next_epoch_start", epochStart),
 		log.Time("received_time", receivedTime),
@@ -146,7 +143,7 @@ func (pd *ProtocolDriver) classifyProposal(
 		logger.With().Debug("valid beacon proposal",
 			log.Duration("atx delay", atxDelay),
 			log.Duration("proposal delay", proposalDelay),
-			log.String("proposal", hex.EncodeToString(proposal[:])),
+			log.Inline(proposal),
 		)
 		return valid
 	case atxDelay <= pd.config.GracePeriodDuration &&
@@ -155,7 +152,7 @@ func (pd *ProtocolDriver) classifyProposal(
 		logger.With().Debug("potentially valid beacon proposal",
 			log.Duration("atx delay", atxDelay),
 			log.Duration("proposal delay", proposalDelay),
-			log.String("proposal", hex.EncodeToString(proposal[:])),
+			log.Inline(proposal),
 		)
 		return potentiallyValid
 	default:
@@ -163,13 +160,13 @@ func (pd *ProtocolDriver) classifyProposal(
 			logger.With().Warning("invalid beacon proposal",
 				log.Duration("atx delay", atxDelay),
 				log.Duration("proposal delay", proposalDelay),
-				log.String("proposal", hex.EncodeToString(proposal[:])),
+				log.Inline(proposal),
 			)
 		} else {
 			logger.With().Debug("proposal did not pass thresholds",
 				log.Duration("atx delay", atxDelay),
 				log.Duration("proposal delay", proposalDelay),
-				log.String("proposal", hex.EncodeToString(proposal[:])),
+				log.Inline(proposal),
 			)
 		}
 	}
@@ -223,16 +220,11 @@ func (pd *ProtocolDriver) HandleFirstVotes(ctx context.Context, peer p2p.Peer, m
 	logger := pd.logger.WithContext(ctx).WithFields(types.FirstRound, log.Stringer("sender", peer))
 	logger.Debug("new first votes")
 
-	receivedTime := time.Now()
-
 	var m FirstVotingMessage
 	if err := codec.Decode(msg, &m); err != nil {
 		logger.With().Warning("received invalid first votes", log.Err(err))
 		return errMalformedMessage
 	}
-
-	latency := receivedTime.Sub(pd.msgTimes.firstVoteSendTime(m.EpochID))
-	metrics.ReportMessageLatency(pubsub.BeaconProtocol, pubsub.BeaconFirstVotesProtocol, latency)
 
 	currentEpoch := pd.currentEpoch()
 	if m.EpochID != currentEpoch {
@@ -257,6 +249,7 @@ func (pd *ProtocolDriver) HandleFirstVotes(ctx context.Context, peer p2p.Peer, m
 	}
 
 	logger.Debug("received first voting message, storing its votes")
+	metrics.ReportMessageLatency(pubsub.BeaconProtocol, pubsub.BeaconFirstVotesProtocol, time.Since(pd.msgTimes.firstVoteSendTime(m.EpochID)))
 	return pd.storeFirstVotes(m, minerPK)
 }
 
@@ -342,9 +335,6 @@ func (pd *ProtocolDriver) HandleFollowingVotes(ctx context.Context, peer p2p.Pee
 		return errEpochNotActive
 	}
 
-	latency := receivedTime.Sub(pd.msgTimes.followupVoteSendTime(m.EpochID, m.RoundID))
-	metrics.ReportMessageLatency(pubsub.BeaconProtocol, pubsub.BeaconFollowingVotesProtocol, latency)
-
 	// don't accept votes from future rounds
 	if !pd.isVoteTimely(&m, receivedTime) {
 		logger.With().Debug("following votes too early", m.RoundID, log.Time("received_at", receivedTime))
@@ -356,20 +346,17 @@ func (pd *ProtocolDriver) HandleFollowingVotes(ctx context.Context, peer p2p.Pee
 		return err
 	}
 
+	metrics.ReportMessageLatency(pubsub.BeaconProtocol, pubsub.BeaconFollowingVotesProtocol, time.Since(pd.msgTimes.followupVoteSendTime(m.EpochID, m.RoundID)))
 	logger.Debug("received following voting message, counting its votes")
 	if err = pd.storeFollowingVotes(m, nodeID); err != nil {
 		logger.With().Warning("failed to store following votes", log.Err(err))
 		return err
 	}
-
 	return nil
 }
 
 func (pd *ProtocolDriver) verifyFollowingVotes(ctx context.Context, m FollowingVotingMessage) (types.NodeID, error) {
-	messageBytes, err := codec.Encode(&m.FollowingVotingMessageBody)
-	if err != nil {
-		pd.logger.With().Fatal("failed to serialize voting message", log.Err(err))
-	}
+	messageBytes := codec.MustEncode(&m.FollowingVotingMessageBody)
 	if !pd.edVerifier.Verify(signing.BEACON_FOLLOWUP_MSG, m.SmesherID, messageBytes, m.Signature) {
 		return types.EmptyNodeID, fmt.Errorf("[round %v] verify signature %s: failed", types.FirstRound, m.Signature)
 	}

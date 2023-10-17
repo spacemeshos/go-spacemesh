@@ -16,7 +16,6 @@ import (
 
 // HandleProposal defines method to handle Beacon Weak Coin Messages from gossip.
 func (wc *WeakCoin) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byte) error {
-	receivedTime := time.Now()
 	logger := wc.logger.WithContext(ctx)
 
 	var message Message
@@ -24,9 +23,6 @@ func (wc *WeakCoin) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byt
 		logger.With().Warning("malformed weak coin message", log.Err(err))
 		return pubsub.ErrValidationReject
 	}
-
-	latency := receivedTime.Sub(wc.msgTime.WeakCoinProposalSendTime(message.Epoch, message.Round))
-	metrics.ReportMessageLatency(pubsub.BeaconProtocol, pubsub.BeaconWeakCoinProtocol, latency)
 
 	if err := wc.receiveMessage(ctx, message); err != nil {
 		if !errors.Is(err, errNotSmallest) {
@@ -39,6 +35,7 @@ func (wc *WeakCoin) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byt
 		}
 		return err
 	}
+	metrics.ReportMessageLatency(pubsub.BeaconProtocol, pubsub.BeaconWeakCoinProtocol, time.Since(wc.msgTime.WeakCoinProposalSendTime(message.Epoch, message.Round)))
 	return nil
 }
 

@@ -10,23 +10,49 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
+	"github.com/spacemeshos/go-spacemesh/sql/beacons"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
-	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 // Recover tortoise state from database.
-func Recover(db *datastore.CachedDB, latest types.LayerID, beacon system.BeaconGetter, opts ...Opt) (*Tortoise, error) {
+func Recover(
+	ctx context.Context,
+	db *datastore.CachedDB,
+	current types.LayerID,
+	opts ...Opt,
+) (*Tortoise, error) {
 	trtl, err := New(opts...)
 	if err != nil {
 		return nil, err
 	}
 
-	layer, err := ballots.LatestLayer(db)
+	last, err := ballots.LatestLayer(db)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load latest known layer: %w", err)
+	}
+
+	applied, err := layers.GetLastApplied(db)
+	if err != nil {
+		return nil, fmt.Errorf("get last applied: %w", err)
+	}
+	start := types.GetEffectiveGenesis() + 1
+	if applied > types.LayerID(trtl.cfg.WindowSize) {
+		window := applied - types.LayerID(trtl.cfg.WindowSize)
+		window = window.GetEpoch().
+			FirstLayer()
+			// windback to the start of the epoch to load ref ballots
+		if window > start {
+			prev, err1 := layers.GetAggregatedHash(db, window-1)
+			opinion, err2 := layers.GetAggregatedHash(db, window)
+			if err1 == nil && err2 == nil {
+				// tortoise will need reference to previous layer
+				trtl.RecoverFrom(window, opinion, prev)
+				start = window
+			}
+		}
 	}
 
 	malicious, err := identities.GetMalicious(db)
@@ -39,7 +65,7 @@ func Recover(db *datastore.CachedDB, latest types.LayerID, beacon system.BeaconG
 
 	if types.GetEffectiveGenesis() != types.FirstEffectiveGenesis() {
 		// need to load the golden atxs after a checkpoint recovery
-		if err := recoverEpoch(types.GetEffectiveGenesis().Add(1).GetEpoch(), trtl, db, beacon); err != nil {
+		if err := recoverEpoch(types.GetEffectiveGenesis().Add(1).GetEpoch(), trtl, db); err != nil {
 			return nil, err
 		}
 	}
@@ -49,38 +75,73 @@ func Recover(db *datastore.CachedDB, latest types.LayerID, beacon system.BeaconG
 		return nil, fmt.Errorf("failed to load latest epoch: %w", err)
 	}
 	epoch++ // recoverEpoch expects target epoch, rather than publish
-	if layer.GetEpoch() != epoch {
-		for eid := layer.GetEpoch(); eid <= epoch; eid++ {
-			if err := recoverEpoch(eid, trtl, db, beacon); err != nil {
+	if last.GetEpoch() != epoch {
+		for eid := last.GetEpoch(); eid <= epoch; eid++ {
+			if err := recoverEpoch(eid, trtl, db); err != nil {
 				return nil, err
 			}
 		}
 	}
-	for lid := types.GetEffectiveGenesis().Add(1); !lid.After(layer); lid = lid.Add(1) {
-		if err := RecoverLayer(context.Background(), trtl, db, beacon, lid, min(layer, latest)); err != nil {
+	for lid := start; !lid.After(last); lid = lid.Add(1) {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+		if err := RecoverLayer(ctx, trtl, db, lid, trtl.OnRecoveredBallot); err != nil {
 			return nil, fmt.Errorf("failed to load tortoise state at layer %d: %w", lid, err)
+		}
+	}
+	if last == 0 {
+		last = current
+	} else {
+		last = min(last, current)
+	}
+	if last < start {
+		return trtl, nil
+	}
+	trtl.TallyVotes(ctx, last)
+	// find topmost layer that was already applied and reset pending
+	// so that result for that layer is not returned
+	for prev := last - 1; prev >= start; prev-- {
+		opinion, err := layers.GetAggregatedHash(db, prev)
+		if err == nil && opinion != types.EmptyLayerHash {
+			if trtl.OnApplied(prev, opinion) {
+				break
+			}
+		}
+		if err != nil && !errors.Is(err, sql.ErrNotFound) {
+			return nil, fmt.Errorf("check opinion %w", err)
 		}
 	}
 	return trtl, nil
 }
 
-func recoverEpoch(epoch types.EpochID, trtl *Tortoise, db *datastore.CachedDB, beacondb system.BeaconGetter) error {
+func recoverEpoch(epoch types.EpochID, trtl *Tortoise, db *datastore.CachedDB) error {
 	if err := db.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) error {
 		trtl.OnAtx(header.ToData())
 		return nil
 	}); err != nil {
 		return err
 	}
-	beacon, err := beacondb.GetBeacon(epoch)
-	if err == nil {
+	beacon, err := beacons.Get(db, epoch)
+	if err == nil && beacon != types.EmptyBeacon {
 		trtl.OnBeacon(epoch, beacon)
 	}
 	return nil
 }
 
-func RecoverLayer(ctx context.Context, trtl *Tortoise, db *datastore.CachedDB, beacon system.BeaconGetter, lid, current types.LayerID) error {
+type ballotFunc func(*types.BallotTortoiseData)
+
+func RecoverLayer(
+	ctx context.Context,
+	trtl *Tortoise,
+	db *datastore.CachedDB,
+	lid types.LayerID,
+	onBallot ballotFunc,
+) error {
 	if lid.FirstInEpoch() {
-		if err := recoverEpoch(lid.GetEpoch(), trtl, db, beacon); err != nil {
+		if err := recoverEpoch(lid.GetEpoch(), trtl, db); err != nil {
 			return err
 		}
 	}
@@ -106,36 +167,26 @@ func RecoverLayer(ctx context.Context, trtl *Tortoise, db *datastore.CachedDB, b
 			trtl.OnHareOutput(lid, hare)
 		}
 	}
-	ballotsrst, err := ballots.Layer(db, lid)
+	// NOTE(dshulyak) we loaded information about malicious identities earlier.
+	ballotsrst, err := ballots.LayerNoMalicious(db, lid)
 	if err != nil {
 		return err
 	}
 	for _, ballot := range ballotsrst {
 		if ballot.EpochData != nil {
-			trtl.OnBallot(ballot.ToTortoiseData())
+			onBallot(ballot.ToTortoiseData())
 		}
 	}
 	for _, ballot := range ballotsrst {
 		if ballot.EpochData == nil {
-			trtl.OnBallot(ballot.ToTortoiseData())
+			onBallot(ballot.ToTortoiseData())
 		}
 	}
 	coin, err := layers.GetWeakCoin(db, lid)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return err
-	}
-	if err == nil {
+	} else if err == nil {
 		trtl.OnWeakCoin(lid, coin)
-	}
-	if lid <= current {
-		trtl.TallyVotes(ctx, lid)
-
-		opinion, err := layers.GetAggregatedHash(db, lid-1)
-		if err == nil {
-			trtl.resetPending(lid-1, opinion)
-		} else if !errors.Is(err, sql.ErrNotFound) {
-			return fmt.Errorf("check opinion %w", err)
-		}
 	}
 	return nil
 }

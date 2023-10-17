@@ -56,7 +56,7 @@ type (
 		evicted types.LayerID
 
 		epochs map[types.EpochID]*epochInfo
-		layers map[types.LayerID]*layerInfo
+		layers layerSlice
 		// ballots should not be referenced by other ballots
 		// each ballot stores references (votes) for X previous layers
 		// those X layers may reference another set of ballots that will
@@ -75,7 +75,6 @@ type (
 func newState() *state {
 	return &state{
 		epochs:     map[types.EpochID]*epochInfo{},
-		layers:     map[types.LayerID]*layerInfo{},
 		ballots:    map[types.LayerID][]*ballotInfo{},
 		ballotRefs: map[types.BallotID]*ballotInfo{},
 		malnodes:   map[types.NodeID]struct{}{},
@@ -91,13 +90,7 @@ func (s *state) expectedWeight(cfg Config, target types.LayerID) weight {
 }
 
 func (s *state) layer(lid types.LayerID) *layerInfo {
-	layer, exist := s.layers[lid]
-	if !exist {
-		layersNumber.Inc()
-		layer = &layerInfo{lid: lid}
-		s.layers[lid] = layer
-	}
-	return layer
+	return s.layers.get(s.evicted, lid)
 }
 
 func (s *state) epoch(eid types.EpochID) *epochInfo {
@@ -179,6 +172,10 @@ type layerInfo struct {
 	verifying      verifyingInfo
 	coinflip       sign
 
+	// unique opinions recorded from the ballots in this layer.
+	// ballot votes an opinion and encodes sidecar
+	opinions map[types.Hash32]votes
+
 	opinion types.Hash32
 	// a pointer to the value stored on the previous layerInfo object
 	// it is stored as a pointer so that when previous layerInfo is evicted
@@ -243,6 +240,10 @@ type (
 
 func (b *ballotInfo) opinion() types.Hash32 {
 	return b.votes.opinion()
+}
+
+func (b *ballotInfo) overwriteOpinion(opinion types.Hash32) {
+	b.votes.tail.opinion = opinion
 }
 
 type votes struct {
@@ -469,9 +470,10 @@ func decodeVotes(evicted, blid types.LayerID, base *ballotInfo, exceptions types
 			return votes{}, 0, fmt.Errorf("votes on layer %d conflict with abstain", lid)
 		}
 	}
-	if from <= evicted {
-		return votes{}, 0, fmt.Errorf("votes for a block in the layer (%d) outside the window (evicted %d)", from, evicted)
-	}
+	// FIXME(dshulyak) this needs to be ignored when recovering from disk
+	// if from <= evicted {
+	// 	return votes{}, 0, fmt.Errorf("votes for a block in the layer (%d) outside the window (evicted %d)", from, evicted)
+	// }
 
 	// inherit opinion from the base ballot by copying votes
 	decoded, err := base.votes.update(from, diff)
@@ -498,4 +500,25 @@ func decodeVotes(evicted, blid types.LayerID, base *ballotInfo, exceptions types
 		decoded.append(&lvote)
 	}
 	return decoded, from, nil
+}
+
+type layerSlice struct {
+	data []*layerInfo
+}
+
+func (s *layerSlice) get(offset, index types.LayerID) *layerInfo {
+	i := index - offset - 1
+	lth := types.LayerID(len(s.data))
+	if i < lth {
+		return s.data[i]
+	}
+	last := offset + lth
+	for lid := last + 1; lid <= index; lid++ {
+		s.data = append(s.data, &layerInfo{lid: lid, opinions: map[types.Hash32]votes{}})
+	}
+	return s.data[i]
+}
+
+func (s *layerSlice) pop() {
+	s.data = s.data[1:]
 }

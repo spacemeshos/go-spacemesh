@@ -9,11 +9,11 @@ import (
 	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
 func TestOffloadingPostVerifier(t *testing.T) {
@@ -41,7 +41,7 @@ func TestOffloadingPostVerifier(t *testing.T) {
 }
 
 func TestPostVerifierDetectsInvalidProof(t *testing.T) {
-	verifier, err := activation.NewPostVerifier(activation.PostConfig{}, logtest.New(t))
+	verifier, err := activation.NewPostVerifier(activation.PostConfig{}, zaptest.NewLogger(t))
 	require.NoError(t, err)
 	defer verifier.Close()
 	require.Error(t, verifier.Verify(context.Background(), &shared.Proof{}, &shared.ProofMetadata{}))

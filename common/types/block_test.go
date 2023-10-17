@@ -41,9 +41,7 @@ func Test_CertifyMessage(t *testing.T) {
 	require.NoError(t, codec.Decode(data, &decoded))
 	require.Equal(t, msg, decoded)
 
-	pke, err := signing.NewEdVerifier()
-	require.NoError(t, err)
-	ok := pke.Verify(signing.HARE, decoded.SmesherID, msg.Bytes(), decoded.Signature)
+	ok := signing.NewEdVerifier().Verify(signing.HARE, decoded.SmesherID, msg.Bytes(), decoded.Signature)
 	require.True(t, ok)
 }
 

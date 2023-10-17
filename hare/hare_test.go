@@ -88,11 +88,9 @@ func randomProposal(lyrID types.LayerID, beacon types.Beacon) *types.Proposal {
 					Layer: lyrID,
 					AtxID: types.RandomATXID(),
 					EpochData: &types.EpochData{
-						ActiveSetHash: types.RandomHash(),
-						Beacon:        beacon,
+						Beacon: beacon,
 					},
 				},
-				ActiveSet: types.RandomActiveSet(10),
 			},
 		},
 	}
@@ -125,9 +123,6 @@ func TestHare_New(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	edVerifier, err := signing.NewEdVerifier()
-	require.NoError(t, err)
-
 	logger := logtest.New(t).WithName(t.Name())
 	cfg := config.Config{N: 10, RoundDuration: 2 * time.Second, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000, Hdist: 20}
 	h := New(
@@ -135,7 +130,7 @@ func TestHare_New(t *testing.T) {
 		cfg,
 		noopPubSub(t),
 		signer,
-		edVerifier,
+		signing.NewEdVerifier(),
 		signer.NodeID(),
 		make(chan LayerOutput, 1),
 		smocks.NewMockSyncStateProvider(ctrl), smocks.NewMockBeaconGetter(ctrl),
@@ -570,11 +565,6 @@ func TestHare_goodProposals(t *testing.T) {
 					pList[i].EpochData = nil
 					pList[i].RefBallot = refBallot.ID()
 					mockMesh.EXPECT().Ballot(pList[1].RefBallot).Return(refBallot, nil)
-					for _, id := range refBallot.ActiveSet {
-						nodeID := types.RandomNodeID()
-						mockMesh.EXPECT().GetAtxHeader(id).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1, NodeID: nodeID}, nil).AnyTimes()
-						mockMesh.EXPECT().GetMalfeasanceProof(nodeID).AnyTimes()
-					}
 				}
 			}
 			for i, p := range pList {
@@ -585,13 +575,6 @@ func TestHare_goodProposals(t *testing.T) {
 				} else {
 					mockMesh.EXPECT().GetAtxHeader(p.AtxID).Return(&types.ActivationTxHeader{BaseTickHeight: tc.baseHeights[i], TickCount: 1}, nil)
 				}
-				if p.EpochData != nil {
-					for _, id := range p.ActiveSet {
-						nodeID := types.RandomNodeID()
-						mockMesh.EXPECT().GetAtxHeader(id).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1, NodeID: nodeID}, nil).AnyTimes()
-						mockMesh.EXPECT().GetMalfeasanceProof(nodeID).AnyTimes()
-					}
-				}
 			}
 			nodeID := types.NodeID{1, 2, 3}
 			mockMesh.EXPECT().GetEpochAtx(lyrID.GetEpoch()-1, nodeID).Return(&types.ActivationTxHeader{BaseTickHeight: nodeBaseHeight, TickCount: 1}, nil)
@@ -601,88 +584,10 @@ func TestHare_goodProposals(t *testing.T) {
 			for _, i := range tc.expected {
 				expected = append(expected, pList[i].ID())
 			}
-			got := goodProposals(context.Background(), logtest.New(t), mockMesh, nodeID, lyrID, types.LayerID(0), nodeBeacon, time.Now(), time.Second)
+			got := goodProposals(context.Background(), logtest.New(t), mockMesh, nodeID, lyrID, nodeBeacon)
 			require.ElementsMatch(t, expected, got)
 		})
 	}
-}
-
-func TestHare_goodProposals_gradedAtxs(t *testing.T) {
-	beacon := types.RandomBeacon()
-	tickHeight := uint64(11)
-	lyrID := types.GetEffectiveGenesis().Add(1)
-	epochStart := time.Now()
-	mockMesh := newMockMesh(t)
-	activeSet := types.RandomActiveSet(10)
-	pList := []*types.Proposal{
-		randomProposal(lyrID, beacon),
-		randomProposal(lyrID, beacon),
-		randomProposal(lyrID, beacon),
-		randomProposal(lyrID, beacon),
-		randomProposal(lyrID, beacon),
-		randomProposal(lyrID, beacon),
-		randomProposal(lyrID, beacon),
-	}
-	for _, p := range pList {
-		mockMesh.EXPECT().GetAtxHeader(p.AtxID).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1, NodeID: p.SmesherID}, nil)
-	}
-
-	delay := time.Second
-	goodTime := epochStart.Add(-4*delay - time.Nanosecond)
-	acceptableTime := epochStart.Add(-3*delay - time.Nanosecond)
-	evilTime := epochStart.Add(-3 * delay)
-
-	for i := 0; i < 4; i++ {
-		good := &types.ActivationTxHeader{BaseTickHeight: tickHeight, TickCount: 1, Received: goodTime, NodeID: types.NodeID{byte(i + 1)}}
-		mockMesh.EXPECT().GetAtxHeader(activeSet[i]).Return(good, nil).AnyTimes()
-		mockMesh.EXPECT().GetMalfeasanceProof(good.NodeID).Return(nil, nil).AnyTimes()
-	}
-
-	earlyAtxLateMalicious := &types.ActivationTxHeader{BaseTickHeight: tickHeight, TickCount: 1, Received: goodTime, NodeID: types.NodeID{5}}
-	mockMesh.EXPECT().GetAtxHeader(activeSet[4]).Return(earlyAtxLateMalicious, nil).AnyTimes()
-	proof1 := &types.MalfeasanceProof{}
-	proof1.SetReceived(epochStart)
-	mockMesh.EXPECT().GetMalfeasanceProof(earlyAtxLateMalicious.NodeID).Return(proof1, nil).AnyTimes()
-
-	earlyAtxMalicious := &types.ActivationTxHeader{BaseTickHeight: tickHeight, TickCount: 1, Received: goodTime, NodeID: types.NodeID{6}}
-	mockMesh.EXPECT().GetAtxHeader(activeSet[5]).Return(earlyAtxMalicious, nil).AnyTimes()
-	proof2 := &types.MalfeasanceProof{}
-	proof2.SetReceived(epochStart.Add(-delay))
-	mockMesh.EXPECT().GetMalfeasanceProof(earlyAtxMalicious.NodeID).Return(proof2, nil).AnyTimes()
-
-	acceptable := &types.ActivationTxHeader{BaseTickHeight: tickHeight, TickCount: 1, Received: acceptableTime, NodeID: types.NodeID{7}}
-	mockMesh.EXPECT().GetAtxHeader(activeSet[6]).Return(acceptable, nil).AnyTimes()
-	mockMesh.EXPECT().GetMalfeasanceProof(acceptable.NodeID).Return(nil, nil).AnyTimes()
-
-	acceptableMalicious := &types.ActivationTxHeader{BaseTickHeight: tickHeight, TickCount: 1, Received: acceptableTime, NodeID: types.NodeID{8}}
-	mockMesh.EXPECT().GetAtxHeader(activeSet[7]).Return(acceptableMalicious, nil).AnyTimes()
-	proof3 := &types.MalfeasanceProof{}
-	proof3.SetReceived(epochStart.Add(-delay))
-	mockMesh.EXPECT().GetMalfeasanceProof(acceptableMalicious.NodeID).Return(proof3, nil).AnyTimes()
-
-	malicious := &types.ActivationTxHeader{BaseTickHeight: tickHeight, TickCount: 1, Received: goodTime, NodeID: types.NodeID{9}}
-	mockMesh.EXPECT().GetAtxHeader(activeSet[8]).Return(malicious, nil).AnyTimes()
-	proof4 := &types.MalfeasanceProof{}
-	proof4.SetReceived(epochStart.Add(-delay - time.Nanosecond))
-	mockMesh.EXPECT().GetMalfeasanceProof(malicious.NodeID).Return(proof4, nil).AnyTimes()
-
-	evil := &types.ActivationTxHeader{BaseTickHeight: tickHeight, TickCount: 1, Received: evilTime, NodeID: types.NodeID{10}}
-	mockMesh.EXPECT().GetAtxHeader(activeSet[9]).Return(evil, nil).AnyTimes()
-	mockMesh.EXPECT().GetMalfeasanceProof(evil.NodeID).Return(nil, nil).AnyTimes()
-
-	pList[0].ActiveSet = activeSet[:4]
-	pList[1].ActiveSet = activeSet[:5]
-	pList[2].ActiveSet = activeSet[:6]
-	pList[3].ActiveSet = activeSet[:7]
-	pList[4].ActiveSet = activeSet[:8]
-	pList[5].ActiveSet = activeSet[:9]
-	pList[6].ActiveSet = activeSet
-
-	nodeID := types.NodeID{1, 2, 3}
-	mockMesh.EXPECT().GetEpochAtx(lyrID.GetEpoch()-1, nodeID).Return(&types.ActivationTxHeader{BaseTickHeight: tickHeight, TickCount: 1}, nil)
-	mockMesh.EXPECT().Proposals(lyrID).Return(pList, nil)
-	got := goodProposals(context.Background(), logtest.New(t), mockMesh, nodeID, lyrID, lyrID+1, beacon, epochStart, delay)
-	require.ElementsMatch(t, types.ToProposalIDs(pList[:5]), got)
 }
 
 func TestHare_outputBuffer(t *testing.T) {

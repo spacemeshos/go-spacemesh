@@ -50,22 +50,28 @@ else
 	endif
 endif
 
-POSTRS_SETUP_REV = 0.4.4
+POSTRS_SETUP_REV = 0.5.0-alpha2
 POSTRS_SETUP_ZIP = libpost-$(platform)-v$(POSTRS_SETUP_REV).zip
 POSTRS_SETUP_URL_ZIP ?= https://github.com/spacemeshos/post-rs/releases/download/v$(POSTRS_SETUP_REV)/$(POSTRS_SETUP_ZIP)
 POSTRS_PROFILER_ZIP = profiler-$(platform)-v$(POSTRS_SETUP_REV).zip
 POSTRS_PROFILER_URL ?= https://github.com/spacemeshos/post-rs/releases/download/v$(POSTRS_SETUP_REV)/$(POSTRS_PROFILER_ZIP)
+POSTRS_SERVICE_ZIP = service-$(platform)-v$(POSTRS_SETUP_REV).zip
+POSTRS_SERVICE_URL ?= https://github.com/spacemeshos/post-rs/releases/download/v$(POSTRS_SETUP_REV)/$(POSTRS_SERVICE_ZIP)
 
 ifeq ($(platform), windows)
 	POSTRS_SETUP_LIBS = post.h post.dll
+
 	POSTRS_PROFILER_BIN = profiler.exe
+	POSTRS_SERVICE_BIN = service.exe
 else
-	POSTRS_PROFILER_BIN = profiler
 	ifeq ($(platform), $(filter $(platform), macos macos-m1))
 		POSTRS_SETUP_LIBS = post.h libpost.dylib
 	else
 		POSTRS_SETUP_LIBS = post.h libpost.so
 	endif
+
+	POSTRS_PROFILER_BIN = profiler
+	POSTRS_SERVICE_BIN = service
 endif
 
 BINDIR_POSTRS_SETUP_LIBS = $(foreach X,$(POSTRS_SETUP_LIBS),$(BIN_DIR)$(X))
@@ -86,9 +92,16 @@ $(PROJ_DIR)$(POSTRS_SETUP_ZIP):
 $(BIN_DIR)$(POSTRS_PROFILER_BIN):
 	curl -sSL $(CURL_OPTIONS) $(POSTRS_PROFILER_URL) -o $(PROJ_DIR)$(POSTRS_PROFILER_ZIP)
 	unzip -o -j $(PROJ_DIR)$(POSTRS_PROFILER_ZIP) -d $(BIN_DIR)
+	chmod +x $(BIN_DIR)$(POSTRS_PROFILER_BIN)
+
+$(BIN_DIR)$(POSTRS_SERVICE_BIN):
+	curl -sSL $(CURL_OPTIONS) $(POSTRS_SERVICE_URL) -o $(PROJ_DIR)$(POSTRS_SERVICE_ZIP)
+	unzip -o -j $(PROJ_DIR)$(POSTRS_SERVICE_ZIP) -d $(BIN_DIR)
+	chmod +x $(BIN_DIR)$(POSTRS_SERVICE_BIN)
 
 get-postrs-lib: $(PROJ_DIR)$(POSTRS_SETUP_ZIP) $(BINDIR_POSTRS_SETUP_LIBS)
 get-postrs-profiler: $(BIN_DIR)$(POSTRS_PROFILER_BIN)
+get-postrs-service: $(BIN_DIR)$(POSTRS_SERVICE_BIN)
 
 go-env: get-postrs-lib
 	go env -w CGO_CFLAGS="$(CGO_CFLAGS)"

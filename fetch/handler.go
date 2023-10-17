@@ -23,18 +23,15 @@ type handler struct {
 	bs     *datastore.BlobStore
 	msh    meshProvider
 	beacon system.BeaconGetter
-
-	serveNewOpn bool
 }
 
-func newHandler(cdb *datastore.CachedDB, bs *datastore.BlobStore, m meshProvider, b system.BeaconGetter, newOpn bool, lg log.Log) *handler {
+func newHandler(cdb *datastore.CachedDB, bs *datastore.BlobStore, m meshProvider, b system.BeaconGetter, lg log.Log) *handler {
 	return &handler{
-		logger:      lg,
-		cdb:         cdb,
-		bs:          bs,
-		msh:         m,
-		beacon:      b,
-		serveNewOpn: newOpn,
+		logger: lg,
+		cdb:    cdb,
+		bs:     bs,
+		msh:    m,
+		beacon: b,
 	}
 }
 
@@ -103,55 +100,7 @@ func (h *handler) handleLayerDataReq(ctx context.Context, req []byte) ([]byte, e
 	return out, nil
 }
 
-// handleLayerOpinionsReq returns the opinions on data in the specified layer, described in LayerOpinion.
-func (h *handler) handleLayerOpinionsReq(ctx context.Context, req []byte) ([]byte, error) {
-	opnReqV1.Inc()
-	var (
-		lid types.LayerID
-		lo  LayerOpinion
-		out []byte
-		err error
-	)
-	if err := codec.Decode(req, &lid); err != nil {
-		return nil, err
-	}
-	lo.PrevAggHash, err = layers.GetAggregatedHash(h.cdb, lid.Sub(1))
-	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		h.logger.WithContext(ctx).With().Warning("serve: failed to get prev agg hash", lid, log.Err(err))
-		return nil, err
-	}
-
-	certs, err := certificates.Get(h.cdb, lid)
-	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		h.logger.WithContext(ctx).With().Warning("serve: failed to get certificate", lid, log.Err(err))
-		return nil, err
-	}
-	if err == nil {
-		var validCert *types.Certificate
-		for _, cert := range certs {
-			if !cert.Valid {
-				continue
-			}
-			if validCert != nil {
-				validCert = nil
-				break
-			}
-			validCert = cert.Cert
-		}
-		lo.Cert = validCert
-	}
-
-	out, err = codec.Encode(&lo)
-	if err != nil {
-		h.logger.WithContext(ctx).With().Fatal("serve: failed to encode layer opinions response", log.Err(err))
-	}
-	return out, nil
-}
-
 func (h *handler) handleLayerOpinionsReq2(ctx context.Context, data []byte) ([]byte, error) {
-	if !h.serveNewOpn {
-		return nil, errors.New("new opn protocol not supported")
-	}
 	var req OpinionRequest
 	if err := codec.Decode(data, &req); err != nil {
 		return nil, err
@@ -162,7 +111,7 @@ func (h *handler) handleLayerOpinionsReq2(ctx context.Context, data []byte) ([]b
 
 	var (
 		lid = req.Layer
-		lo  LayerOpinion2
+		lo  LayerOpinion
 		out []byte
 		err error
 	)

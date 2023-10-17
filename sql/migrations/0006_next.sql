@@ -1,0 +1,1 @@
+DROP INDEX rewards_by_coinbase;

@@ -40,7 +40,6 @@ for them if needed.
         "min-peers": 30,
         "low-peers": 60,
         "high-peers": 100,
-        "p2p-disable-legacy-discovery": true,
         "direct": [
             "/ip4/0.0.0.0/tcp/6000/p2p/12D3KooWRkBh6QayKLb1pDRJGMHE94Lix4ZBVh2BJJeX6mghk8VH"
         ],
@@ -68,7 +67,6 @@ low-peers and high-peers should not be lower than min-peers.
         "min-peers": 1,
         "low-peers": 10,
         "high-peers": 20,
-        "p2p-disable-legacy-discovery": true,
         "disable-dht": true,
         "bootnodes": [],
         "direct": [

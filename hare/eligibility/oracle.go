@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -137,19 +138,13 @@ func (o *Oracle) resetCacheOnSynced(ctx context.Context) {
 	}
 }
 
-// buildVRFMessage builds the VRF message used as input for the BLS (msg=Beacon##Layer##Round).
+// buildVRFMessage builds the VRF message used as input for hare eligibility validation.
 func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round uint32) ([]byte, error) {
 	beacon, err := o.beacons.GetBeacon(layer.GetEpoch())
 	if err != nil {
 		return nil, fmt.Errorf("get beacon: %w", err)
 	}
-
-	msg := VrfMessage{Type: types.EligibilityHare, Beacon: beacon, Round: round, Layer: layer}
-	buf, err := codec.Encode(&msg)
-	if err != nil {
-		o.WithContext(ctx).With().Fatal("failed to encode", log.Err(err))
-	}
-	return buf, nil
+	return codec.MustEncode(&VrfMessage{Type: types.EligibilityHare, Beacon: beacon, Round: round, Layer: layer}), nil
 }
 
 func (o *Oracle) totalWeight(ctx context.Context, layer types.LayerID) (uint64, error) {
@@ -343,11 +338,16 @@ func (o *Oracle) CalcEligibility(
 
 // Proof returns the role proof for the current Layer & Round.
 func (o *Oracle) Proof(ctx context.Context, layer types.LayerID, round uint32) (types.VrfSignature, error) {
-	msg, err := o.buildVRFMessage(ctx, layer, round)
+	beacon, err := o.beacons.GetBeacon(layer.GetEpoch())
 	if err != nil {
-		return types.EmptyVrfSignature, err
+		return types.EmptyVrfSignature, fmt.Errorf("get beacon: %w", err)
 	}
-	return o.vrfSigner.Sign(msg), nil
+	return o.GenVRF(ctx, o.vrfSigner, beacon, layer, round), nil
+}
+
+// GenVRF generates vrf for hare eligibility.
+func (o *Oracle) GenVRF(ctx context.Context, signer *signing.VRFSigner, beacon types.Beacon, layer types.LayerID, round uint32) types.VrfSignature {
+	return signer.Sign(codec.MustEncode(&VrfMessage{Type: types.EligibilityHare, Beacon: beacon, Round: round, Layer: layer}))
 }
 
 // Returns a map of all active node IDs in the specified layer id.
@@ -462,11 +462,24 @@ func (o *Oracle) activeSetFromRefBallots(epoch types.EpochID) ([]types.ATXID, er
 			o.Log.With().Debug("beacon mismatch", log.Stringer("local", beacon), log.Object("ballot", ballot))
 			continue
 		}
-		for _, id := range ballot.ActiveSet {
+		actives, err := activesets.Get(o.cdb, ballot.EpochData.ActiveSetHash)
+		if err != nil {
+			o.Log.With().Error("failed to get active set",
+				log.String("actives hash", ballot.EpochData.ActiveSetHash.ShortString()),
+				log.String("ballot ", ballot.ID().String()),
+				log.Err(err),
+			)
+			continue
+		}
+		for _, id := range actives.Set {
 			activeMap[id] = struct{}{}
 		}
 	}
-	o.Log.With().Warning("using tortoise active set", log.Uint32("epoch", epoch.Uint32()), log.Stringer("beacon", beacon))
+	o.Log.With().Warning("using tortoise active set",
+		log.Int("actives size", len(activeMap)),
+		log.Uint32("epoch", epoch.Uint32()),
+		log.Stringer("beacon", beacon),
+	)
 	return maps.Keys(activeMap), nil
 }
 

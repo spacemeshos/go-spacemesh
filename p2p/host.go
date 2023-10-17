@@ -100,7 +100,6 @@ type Config struct {
 	Bootnode                 bool        `mapstructure:"p2p-bootnode"`
 	ForceReachability        string      `mapstructure:"p2p-reachability"`
 	EnableHolepunching       bool        `mapstructure:"p2p-holepunching"`
-	DisableLegacyDiscovery   bool        `mapstructure:"p2p-disable-legacy-discovery"`
 	PrivateNetwork           bool        `mapstructure:"p2p-private-network"`
 	RelayServer              RelayServer `mapstructure:"relay-server"`
 	IP4Blocklist             []string    `mapstructure:"ip4-blocklist"`

@@ -13,8 +13,6 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 func Test_Validation_VRFNonce(t *testing.T) {
@@ -48,7 +46,7 @@ func Test_Validation_VRFNonce(t *testing.T) {
 
 	nonce := (*types.VRFPostIndex)(init.Nonce())
 
-	v := NewValidator(poetDbAPI, postCfg, initOpts.Scrypt, logtest.New(t).WithName("validator"), nil)
+	v := NewValidator(poetDbAPI, postCfg, initOpts.Scrypt, nil)
 
 	// Act & Assert
 	t.Run("valid vrf nonce", func(t *testing.T) {
@@ -89,7 +87,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 	postCfg := DefaultPostConfig()
 	goldenATXID := types.ATXID{2, 3, 4}
 
-	v := NewValidator(poetDbAPI, postCfg, config.ScryptParams{}, logtest.New(t).WithName("validator"), nil)
+	v := NewValidator(poetDbAPI, postCfg, config.ScryptParams{}, nil)
 
 	// Act & Assert
 	t.Run("valid initial nipost challenge passes", func(t *testing.T) {
@@ -157,7 +155,7 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 	poetDbAPI := NewMockpoetDbAPI(ctrl)
 	postCfg := DefaultPostConfig()
 
-	v := NewValidator(poetDbAPI, postCfg, config.ScryptParams{}, logtest.New(t).WithName("validator"), nil)
+	v := NewValidator(poetDbAPI, postCfg, config.ScryptParams{}, nil)
 
 	// Act & Assert
 	t.Run("valid nipost challenge passes", func(t *testing.T) {
@@ -283,7 +281,7 @@ func Test_Validation_Post(t *testing.T) {
 	postCfg := DefaultPostConfig()
 	postVerifier := NewMockPostVerifier(ctrl)
 
-	v := NewValidator(poetDbAPI, postCfg, config.ScryptParams{}, logtest.New(t).WithName("validator"), postVerifier)
+	v := NewValidator(poetDbAPI, postCfg, config.ScryptParams{}, postVerifier)
 
 	post := types.Post{}
 	meta := types.PostMetadata{}
@@ -305,7 +303,7 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 	poetDbAPI := NewMockpoetDbAPI(ctrl)
 	postCfg := DefaultPostConfig()
 
-	v := NewValidator(poetDbAPI, postCfg, config.ScryptParams{}, logtest.New(t).WithName("validator"), nil)
+	v := NewValidator(poetDbAPI, postCfg, config.ScryptParams{}, nil)
 
 	// Act & Assert
 	t.Run("valid nipost challenge passes", func(t *testing.T) {
@@ -409,7 +407,7 @@ func Test_Validate_NumUnits(t *testing.T) {
 	poetDbAPI := NewMockpoetDbAPI(ctrl)
 	postCfg := DefaultPostConfig()
 
-	v := NewValidator(poetDbAPI, postCfg, config.ScryptParams{}, logtest.New(t).WithName("validator"), nil)
+	v := NewValidator(poetDbAPI, postCfg, config.ScryptParams{}, nil)
 
 	// Act & Assert
 	t.Run("valid number of num units passes", func(t *testing.T) {
@@ -443,7 +441,7 @@ func Test_Validate_PostMetadata(t *testing.T) {
 	poetDbAPI := NewMockpoetDbAPI(ctrl)
 	postCfg := DefaultPostConfig()
 
-	v := NewValidator(poetDbAPI, postCfg, config.ScryptParams{}, logtest.New(t).WithName("validator"), nil)
+	v := NewValidator(poetDbAPI, postCfg, config.ScryptParams{}, nil)
 
 	// Act & Assert
 	t.Run("valid post metadata", func(t *testing.T) {
@@ -467,56 +465,6 @@ func Test_Validate_PostMetadata(t *testing.T) {
 		err := v.PostMetadata(&postCfg, meta)
 		require.EqualError(t, err, fmt.Sprintf("invalid `LabelsPerUnit`; expected: >=%d, given: %d", postCfg.LabelsPerUnit, postCfg.LabelsPerUnit-1))
 	})
-}
-
-func TestValidator_Validate(t *testing.T) {
-	t.Parallel()
-	r := require.New(t)
-
-	challenge := types.NIPostChallenge{
-		PublishEpoch: postGenesisEpoch + 2,
-	}
-	challengeHash := challenge.Hash()
-	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t).WithName("poetDb"))
-
-	logger := logtest.New(t).WithName("validator")
-	postProvider := newTestPostManager(t)
-	verifier, err := NewPostVerifier(postProvider.cfg, logger)
-	r.NoError(err)
-	defer verifier.Close()
-
-	v := NewValidator(poetDb, postProvider.cfg, postProvider.opts.Scrypt, logger, verifier)
-
-	nipost := buildNIPost(t, postProvider, challenge, poetDb, v)
-
-	_, err = v.NIPost(context.Background(), postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, postProvider.opts.NumUnits)
-	r.NoError(err)
-
-	_, err = v.NIPost(context.Background(), postProvider.id, postProvider.commitmentAtxId, nipost, types.BytesToHash([]byte("lerner")), postProvider.opts.NumUnits)
-	r.Contains(err.Error(), "invalid membership proof")
-
-	newNIPost := *nipost
-	newNIPost.Post = &types.Post{}
-	_, err = v.NIPost(context.Background(), postProvider.id, postProvider.commitmentAtxId, &newNIPost, challengeHash, postProvider.opts.NumUnits)
-	r.Contains(err.Error(), "invalid Post")
-
-	newPostCfg := postProvider.cfg
-	newPostCfg.MinNumUnits = postProvider.opts.NumUnits + 1
-	v = NewValidator(poetDb, newPostCfg, postProvider.opts.Scrypt, logtest.New(t).WithName("validator"), nil)
-	_, err = v.NIPost(context.Background(), postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, postProvider.opts.NumUnits)
-	r.EqualError(err, fmt.Sprintf("invalid `numUnits`; expected: >=%d, given: %d", newPostCfg.MinNumUnits, postProvider.opts.NumUnits))
-
-	newPostCfg = postProvider.cfg
-	newPostCfg.MaxNumUnits = postProvider.opts.NumUnits - 1
-	v = NewValidator(poetDb, newPostCfg, postProvider.opts.Scrypt, logtest.New(t).WithName("validator"), nil)
-	_, err = v.NIPost(context.Background(), postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, postProvider.opts.NumUnits)
-	r.EqualError(err, fmt.Sprintf("invalid `numUnits`; expected: <=%d, given: %d", newPostCfg.MaxNumUnits, postProvider.opts.NumUnits))
-
-	newPostCfg = postProvider.cfg
-	newPostCfg.LabelsPerUnit = nipost.PostMetadata.LabelsPerUnit + 1
-	v = NewValidator(poetDb, newPostCfg, postProvider.opts.Scrypt, logtest.New(t).WithName("validator"), nil)
-	_, err = v.NIPost(context.Background(), postProvider.id, postProvider.commitmentAtxId, nipost, challengeHash, postProvider.opts.NumUnits)
-	r.EqualError(err, fmt.Sprintf("invalid `LabelsPerUnit`; expected: >=%d, given: %d", newPostCfg.LabelsPerUnit, nipost.PostMetadata.LabelsPerUnit))
 }
 
 func TestValidateMerkleProof(t *testing.T) {

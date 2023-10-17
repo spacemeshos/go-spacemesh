@@ -59,6 +59,17 @@ func AddToProposal(db sql.Executor, tid types.TransactionID, lid types.LayerID, 
 	return nil
 }
 
+func DeleteProposalTxsBefore(db sql.Executor, lid types.LayerID) error {
+	if _, err := db.Exec(`
+		delete from proposal_transactions where layer < ?1;`,
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(lid))
+		}, nil); err != nil {
+		return fmt.Errorf("DeleteProposalTxs %d: %w", lid, err)
+	}
+	return nil
+}
+
 // HasProposalTX returns true if the given transaction is included in the given proposal.
 func HasProposalTX(db sql.Executor, pid types.ProposalID, tid types.TransactionID) (bool, error) {
 	rows, err := db.Exec("select 1 from proposal_transactions where pid = ?1 and tid = ?2",

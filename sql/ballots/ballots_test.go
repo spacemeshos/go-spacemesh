@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -53,6 +54,13 @@ func TestLayer(t *testing.T) {
 	for _, ballot := range rst {
 		require.True(t, ballot.IsMalicious())
 	}
+
+	rst, err = LayerNoMalicious(db, start)
+	require.NoError(t, err)
+	require.Len(t, rst, len(ballots))
+	for _, ballot := range rst {
+		require.False(t, ballot.IsMalicious())
+	}
 }
 
 func TestAdd(t *testing.T) {
@@ -73,6 +81,26 @@ func TestAdd(t *testing.T) {
 	stored, err = Get(db, ballot.ID())
 	require.NoError(t, err)
 	require.True(t, stored.IsMalicious())
+}
+
+func TestUpdateBlob(t *testing.T) {
+	db := sql.InMemory()
+	nodeID := types.RandomNodeID()
+	ballot := types.NewExistingBallot(types.BallotID{1}, types.RandomEdSignature(), nodeID, types.LayerID(0))
+	ballot.EpochData = &types.EpochData{
+		ActiveSetHash: types.RandomHash(),
+	}
+	ballot.ActiveSet = types.RandomActiveSet(199)
+	require.NoError(t, Add(db, &ballot))
+	got, err := Get(db, types.BallotID{1})
+	require.NoError(t, err)
+	require.Equal(t, ballot, *got)
+
+	ballot.ActiveSet = nil
+	require.NoError(t, UpdateBlob(db, types.BallotID{1}, codec.MustEncode(&ballot)))
+	got, err = Get(db, types.BallotID{1})
+	require.NoError(t, err)
+	require.Empty(t, got.ActiveSet)
 }
 
 func TestHas(t *testing.T) {
@@ -108,29 +136,6 @@ func TestLatest(t *testing.T) {
 	require.Equal(t, newBallot.Layer, latest)
 }
 
-func TestCountByPubkeyLayer(t *testing.T) {
-	db := sql.InMemory()
-	lid := types.LayerID(1)
-	nodeID1 := types.RandomNodeID()
-	nodeID2 := types.RandomNodeID()
-	ballots := []types.Ballot{
-		types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, nodeID1, lid),
-		types.NewExistingBallot(types.BallotID{2}, types.EmptyEdSignature, nodeID1, lid.Add(1)),
-		types.NewExistingBallot(types.BallotID{3}, types.EmptyEdSignature, nodeID2, lid),
-		types.NewExistingBallot(types.BallotID{4}, types.EmptyEdSignature, nodeID2, lid),
-	}
-	for _, ballot := range ballots {
-		require.NoError(t, Add(db, &ballot))
-	}
-
-	count, err := CountByPubkeyLayer(db, lid, nodeID1)
-	require.NoError(t, err)
-	require.Equal(t, 1, count)
-	count, err = CountByPubkeyLayer(db, lid, nodeID2)
-	require.NoError(t, err)
-	require.Equal(t, 2, count)
-}
-
 func TestLayerBallotBySmesher(t *testing.T) {
 	db := sql.InMemory()
 	lid := types.LayerID(1)
@@ -151,39 +156,6 @@ func TestLayerBallotBySmesher(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, prev)
 	require.Equal(t, ballots[1], *prev)
-}
-
-func TestRefBallot(t *testing.T) {
-	db := sql.InMemory()
-	ballots := []types.Ballot{
-		types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, types.NodeID{1}, types.EpochID(1).FirstLayer()-1),
-		types.NewExistingBallot(types.BallotID{2}, types.EmptyEdSignature, types.NodeID{1}, types.EpochID(1).FirstLayer()),
-		types.NewExistingBallot(types.BallotID{3}, types.EmptyEdSignature, types.NodeID{2}, types.EpochID(1).FirstLayer()),
-		types.NewExistingBallot(types.BallotID{4}, types.EmptyEdSignature, types.NodeID{2}, types.EpochID(1).FirstLayer()+1),
-		types.NewExistingBallot(types.BallotID{5}, types.EmptyEdSignature, types.NodeID{3}, types.EpochID(1).FirstLayer()+2),
-		types.NewExistingBallot(types.BallotID{6}, types.EmptyEdSignature, types.NodeID{4}, types.EpochID(2).FirstLayer()),
-	}
-	for _, i := range []int{0, 1, 2, 4, 5} {
-		ballots[i].EpochData = &types.EpochData{Beacon: types.Beacon{1, 2}}
-	}
-	for _, ballot := range ballots {
-		require.NoError(t, Add(db, &ballot))
-	}
-
-	got, err := RefBallot(db, 1, types.NodeID{1})
-	require.NoError(t, err)
-	require.Equal(t, ballots[1], *got)
-
-	got, err = RefBallot(db, 1, types.NodeID{2})
-	require.NoError(t, err)
-	require.Equal(t, ballots[2], *got)
-
-	got, err = RefBallot(db, 1, types.NodeID{3})
-	require.NoError(t, err)
-	require.Equal(t, ballots[4], *got)
-
-	_, err = RefBallot(db, 1, types.NodeID{4})
-	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
 func newAtx(signer *signing.EdSigner, layerID types.LayerID) (*types.VerifiedActivationTx, error) {
@@ -233,14 +205,18 @@ func TestFirstInEpoch(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, got.IsMalicious())
 	require.Equal(t, got.AtxID, atx.ID())
-	require.Equal(t, got.ID(), b2.ID())
+	require.Equal(t, got.ID(), b1.ID())
+
+	last, err := LastInEpoch(db, atx.ID(), 2)
+	require.NoError(t, err)
+	require.Equal(t, b3.ID(), last.ID())
 
 	require.NoError(t, identities.SetMalicious(db, sig.NodeID(), []byte("bad"), time.Now()))
 	got, err = FirstInEpoch(db, atx.ID(), 2)
 	require.NoError(t, err)
 	require.True(t, got.IsMalicious())
 	require.Equal(t, got.AtxID, atx.ID())
-	require.Equal(t, got.ID(), b2.ID())
+	require.Equal(t, got.ID(), b1.ID())
 }
 
 func TestAllFirstInEpoch(t *testing.T) {

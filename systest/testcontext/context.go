@@ -25,6 +25,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+	k8szap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/spacemeshos/go-spacemesh/systest/parameters"
 )
@@ -288,6 +290,8 @@ func New(t *testing.T, opts ...Opt) *Context {
 	scheme := runtime.NewScheme()
 	require.NoError(t, chaos.AddToScheme(scheme))
 
+	// prevent sigs.k8s.io/controller-runtime from complaining about log.SetLogger never being called
+	log.SetLogger(k8szap.New())
 	generic, err := client.New(config, client.Options{Scheme: scheme})
 	require.NoError(t, err)
 

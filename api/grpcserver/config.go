@@ -27,6 +27,7 @@ const (
 	Transaction Service = "transaction"
 	Activation  Service = "activation"
 	Smesher     Service = "smesher"
+	Post        Service = "post"
 	Node        Service = "node"
 )
 
@@ -35,7 +36,7 @@ func DefaultConfig() Config {
 	return Config{
 		PublicServices:        []Service{Debug, GlobalState, Mesh, Transaction, Node, Activation},
 		PublicListener:        "0.0.0.0:9092",
-		PrivateServices:       []Service{Admin, Smesher},
+		PrivateServices:       []Service{Admin, Smesher, Post}, // TODO(mafa): move from private to public with authentication (probably new service category)
 		PrivateListener:       "127.0.0.1:9093",
 		JSONListener:          "",
 		GrpcSendMsgSize:       1024 * 1024 * 10,
@@ -47,8 +48,8 @@ func DefaultConfig() Config {
 // DefaultTestConfig returns the default config for tests.
 func DefaultTestConfig() Config {
 	conf := DefaultConfig()
-	conf.PublicListener = "127.0.0.1:19092"
-	conf.PrivateListener = "127.0.0.1:19093"
-	conf.JSONListener = "127.0.0.1:19094"
+	conf.PublicListener = "127.0.0.1:0"
+	conf.PrivateListener = "127.0.0.1:0"
+	conf.JSONListener = "127.0.0.1:0"
 	return conf
 }

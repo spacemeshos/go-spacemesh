@@ -70,7 +70,7 @@ func NewEligibilityValidator(
 }
 
 // CheckEligibility checks that a ballot is eligible in the layer that it specifies.
-func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) (bool, error) {
+func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot, actives []types.ATXID) (bool, error) {
 	if len(ballot.EligibilityProofs) == 0 {
 		return false, fmt.Errorf("empty eligibility list is invalid (ballot %s)", ballot.ID())
 	}
@@ -92,7 +92,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 	var data *types.EpochData
 	if ballot.EpochData != nil && ballot.Layer.GetEpoch() == v.clock.CurrentLayer().GetEpoch() {
 		var err error
-		data, err = v.validateReference(ballot, owned)
+		data, err = v.validateReference(ballot, actives, owned)
 		if err != nil {
 			return false, err
 		}
@@ -136,15 +136,15 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 }
 
 // validateReference executed for reference ballots in latest epoch.
-func (v *Validator) validateReference(ballot *types.Ballot, owned *types.ActivationTxHeader) (*types.EpochData, error) {
+func (v *Validator) validateReference(ballot *types.Ballot, actives []types.ATXID, owned *types.ActivationTxHeader) (*types.EpochData, error) {
 	if ballot.EpochData.Beacon == types.EmptyBeacon {
 		return nil, fmt.Errorf("%w: ref ballot %v", errMissingBeacon, ballot.ID())
 	}
-	if len(ballot.ActiveSet) == 0 {
+	if len(actives) == 0 {
 		return nil, fmt.Errorf("%w: ref ballot %v", errEmptyActiveSet, ballot.ID())
 	}
 	var totalWeight uint64
-	for _, atxID := range ballot.ActiveSet {
+	for _, atxID := range actives {
 		atx, err := v.cdb.GetAtxHeader(atxID)
 		if err != nil {
 			return nil, fmt.Errorf("atx in active set is missing %v: %w", atxID, err)
