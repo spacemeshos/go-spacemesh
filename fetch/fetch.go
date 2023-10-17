@@ -128,20 +128,20 @@ func DefaultConfig() Config {
 		MaxRetriesForRequest: 100,
 		ServersConfig: map[string]ServerConfig{
 			// serves 1 MB of data
-			atxProtocol: ServerConfig{Queue: 10, Requests: 1, Interval: time.Second},
+			atxProtocol: {Queue: 10, Requests: 1, Interval: time.Second},
 			// serves 1 KB of data
-			lyrDataProtocol: ServerConfig{Queue: 1000, Requests: 100, Interval: time.Second},
+			lyrDataProtocol: {Queue: 1000, Requests: 100, Interval: time.Second},
 			// serves atxs, ballots, active sets
 			// atx - 1 KB
 			// ballots > 300 bytes
 			// often queried after receiving gossip message
-			hashProtocol: ServerConfig{Queue: 2000, Requests: 200, Interval: time.Second},
+			hashProtocol: {Queue: 2000, Requests: 200, Interval: time.Second},
 			// serves at most 100 hashes - 3KB
-			meshHashProtocol: ServerConfig{Queue: 1000, Requests: 100, Interval: time.Second},
+			meshHashProtocol: {Queue: 1000, Requests: 100, Interval: time.Second},
 			// serves all malicious ids (id - 32 byte) - 10KB
-			malProtocol: ServerConfig{Queue: 100, Requests: 10, Interval: time.Second},
+			malProtocol: {Queue: 100, Requests: 10, Interval: time.Second},
 			// 64 bytes
-			OpnProtocol: ServerConfig{Queue: 10000, Requests: 1000, Interval: time.Second},
+			OpnProtocol: {Queue: 10000, Requests: 1000, Interval: time.Second},
 		},
 		PeersRateThreshold: 0.02,
 	}
