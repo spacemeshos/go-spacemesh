@@ -17,6 +17,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -39,10 +40,9 @@ func coinValueMock(tb testing.TB, value bool) coin {
 		gomock.AssignableToTypeOf(types.EpochID(0)),
 	).AnyTimes()
 	coinMock.EXPECT().FinishEpoch(gomock.Any(), gomock.AssignableToTypeOf(types.EpochID(0))).AnyTimes()
-	nonce := types.VRFPostIndex(0)
 	coinMock.EXPECT().StartRound(gomock.Any(),
 		gomock.AssignableToTypeOf(types.RoundID(0)),
-		gomock.AssignableToTypeOf(&nonce),
+		gomock.AssignableToTypeOf([]weakcoin.Participant{}),
 	).AnyTimes()
 	coinMock.EXPECT().FinishRound(gomock.Any()).AnyTimes()
 	coinMock.EXPECT().Get(
@@ -94,7 +94,7 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher, miners int, id
 	tpd.ProtocolDriver = New(p, signing.NewEdVerifier(), tpd.mVerifier, tpd.cdb, tpd.mClock,
 		WithConfig(cfg),
 		WithLogger(lg),
-		withWeakCoinFactory(func(signer *signing.EdSigner) coin { return coinValueMock(tb, true) }),
+		withWeakCoin(coinValueMock(tb, true)),
 	)
 	tpd.ProtocolDriver.SetSyncState(tpd.mSync)
 	for i := 0; i < miners; i++ {
@@ -192,7 +192,7 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 
 		for _, db := range dbs {
 			for _, s := range node.signers {
-				createATX(t, db, atxPublishLid, s.signer, 1, time.Now().Add(-1*time.Second))
+				createATX(t, db, atxPublishLid, s, 1, time.Now().Add(-1*time.Second))
 			}
 		}
 	}
@@ -259,9 +259,9 @@ func TestBeacon_MultipleNodes_OnlyOneHonest(t *testing.T) {
 	for i, node := range testNodes {
 		for _, db := range dbs {
 			for _, s := range node.signers {
-				createATX(t, db, atxPublishLid, s.signer, 1, time.Now().Add(-1*time.Second))
+				createATX(t, db, atxPublishLid, s, 1, time.Now().Add(-1*time.Second))
 				if i != 0 {
-					require.NoError(t, identities.SetMalicious(db, s.signer.NodeID(), []byte("bad"), time.Now()))
+					require.NoError(t, identities.SetMalicious(db, s.NodeID(), []byte("bad"), time.Now()))
 				}
 			}
 		}
@@ -315,7 +315,7 @@ func TestBeacon_NoProposals(t *testing.T) {
 	for _, node := range testNodes {
 		for _, db := range dbs {
 			for _, s := range node.signers {
-				createATX(t, db, atxPublishLid, s.signer, 1, time.Now().Add(-1*time.Second))
+				createATX(t, db, atxPublishLid, s, 1, time.Now().Add(-1*time.Second))
 			}
 		}
 	}
@@ -409,7 +409,7 @@ func TestBeaconWithMetrics(t *testing.T) {
 	for i := types.EpochID(2); i < epoch; i++ {
 		lid := i.FirstLayer().Sub(1)
 		for _, s := range tpd.signers {
-			createATX(t, tpd.cdb, lid, s.signer, 199, time.Now())
+			createATX(t, tpd.cdb, lid, s, 199, time.Now())
 		}
 		createRandomATXs(t, tpd.cdb, lid, 9)
 	}

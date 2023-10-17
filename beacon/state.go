@@ -19,7 +19,7 @@ type minerInfo struct {
 type state struct {
 	cfg         Config
 	logger      log.Log
-	active      map[types.NodeID]signerSession
+	active      map[types.NodeID]participant
 	epochWeight uint64
 	// the original proposals as received, bucketed by validity.
 	incomingProposals proposals
@@ -38,7 +38,7 @@ type state struct {
 func newState(
 	logger log.Log,
 	cfg Config,
-	active map[types.NodeID]signerSession,
+	active map[types.NodeID]participant,
 	epochWeight uint64,
 	miners map[types.NodeID]*minerInfo,
 	checker eligibilityChecker,

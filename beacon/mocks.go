@@ -13,6 +13,7 @@ import (
 	reflect "reflect"
 	time "time"
 
+	weakcoin "github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
 	gomock "go.uber.org/mock/gomock"
@@ -227,7 +228,7 @@ func (c *coinStartEpochCall) DoAndReturn(f func(context.Context, types.EpochID))
 }
 
 // StartRound mocks base method.
-func (m *Mockcoin) StartRound(arg0 context.Context, arg1 types.RoundID, arg2 *types.VRFPostIndex) {
+func (m *Mockcoin) StartRound(arg0 context.Context, arg1 types.RoundID, arg2 []weakcoin.Participant) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "StartRound", arg0, arg1, arg2)
 }
@@ -251,13 +252,13 @@ func (c *coinStartRoundCall) Return() *coinStartRoundCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *coinStartRoundCall) Do(f func(context.Context, types.RoundID, *types.VRFPostIndex)) *coinStartRoundCall {
+func (c *coinStartRoundCall) Do(f func(context.Context, types.RoundID, []weakcoin.Participant)) *coinStartRoundCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *coinStartRoundCall) DoAndReturn(f func(context.Context, types.RoundID, *types.VRFPostIndex)) *coinStartRoundCall {
+func (c *coinStartRoundCall) DoAndReturn(f func(context.Context, types.RoundID, []weakcoin.Participant)) *coinStartRoundCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

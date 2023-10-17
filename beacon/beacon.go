@@ -76,11 +76,9 @@ func WithConfig(cfg Config) Opt {
 	}
 }
 
-type weakCoinFactory func(signer *signing.EdSigner) coin
-
-func withWeakCoinFactory(f weakCoinFactory) Opt {
+func withWeakCoin(wc coin) Opt {
 	return func(pd *ProtocolDriver) {
-		pd.createWeakCoin = f
+		pd.weakCoin = wc
 	}
 }
 
@@ -103,8 +101,7 @@ func New(
 		nonceFetcher:   cdb,
 		cdb:            cdb,
 		clock:          clock,
-		signers:        make(map[types.NodeID]participant),
-		createWeakCoin: nil,
+		signers:        make(map[types.NodeID]*signing.EdSigner),
 		beacons:        make(map[types.EpochID]types.Beacon),
 		ballotsBeacons: make(map[types.EpochID]map[types.Beacon]*beaconWeight),
 		states:         make(map[types.EpochID]*state),
@@ -121,20 +118,18 @@ func New(
 	pd.ctx, pd.cancel = context.WithCancel(pd.ctx)
 	pd.theta = new(big.Float).SetRat(pd.config.Theta)
 
-	if pd.createWeakCoin == nil {
-		pd.createWeakCoin = func(signer *signing.EdSigner) coin {
-			return weakcoin.New(
-				pd.publisher,
-				signer.VRFSigner(),
-				pd.vrfVerifier,
-				pd.nonceFetcher,
-				pd,
-				pd.msgTimes,
-				weakcoin.WithLog(pd.logger.WithName("weakCoin").WithName(signer.NodeID().ShortString())),
-				weakcoin.WithMaxRound(pd.config.RoundsNumber),
-			)
-		}
+	if pd.weakCoin == nil {
+		pd.weakCoin = weakcoin.New(
+			pd.publisher,
+			pd.vrfVerifier,
+			pd.nonceFetcher,
+			pd,
+			pd.msgTimes,
+			weakcoin.WithLog(pd.logger.WithName("weakCoin")),
+			weakcoin.WithMaxRound(pd.config.RoundsNumber),
+		)
 	}
+
 	pd.metricsCollector = metrics.NewBeaconMetricsCollector(pd.gatherMetricsData, pd.logger.WithName("metrics"))
 	return pd
 }
@@ -143,35 +138,21 @@ func (pd *ProtocolDriver) Register(s *signing.EdSigner) {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 	if _, exists := pd.signers[s.NodeID()]; exists {
-		pd.logger.With().Error("signing key already registered", log.ShortStringer("key", s.NodeID()))
+		pd.logger.With().Error("signing key already registered", log.ShortStringer("id", s.NodeID()))
 		return
 	}
-	p := participant{
-		signer: s,
-		coin:   pd.createWeakCoin(s),
-	}
-	pd.logger.With().Info("registered signing key", p.Id())
-	pd.signers[s.NodeID()] = p
+
+	pd.logger.With().Info("registered signing key", log.ShortStringer("id", s.NodeID()))
+	pd.signers[s.NodeID()] = s
 }
 
 type participant struct {
 	signer *signing.EdSigner
-	coin   coin
+	nonce  types.VRFPostIndex
 }
 
-type signerSession struct {
-	participant
-	nonce types.VRFPostIndex
-}
-
-func (s *participant) Id() signerID {
-	return signerID(s.signer.NodeID())
-}
-
-type signerID types.NodeID
-
-func (id signerID) Field() log.Field {
-	return log.ShortStringer("id", types.NodeID(id))
+func (s *participant) Id() log.Field {
+	return log.ShortStringer("id", s.signer.NodeID())
 }
 
 // ProtocolDriver is the driver for the beacon protocol.
@@ -187,8 +168,8 @@ type ProtocolDriver struct {
 	sync      system.SyncStateProvider
 	publisher pubsub.Publisher
 
-	signers        map[types.NodeID]participant
-	createWeakCoin weakCoinFactory
+	signers  map[types.NodeID]*signing.EdSigner
+	weakCoin coin
 
 	edVerifier   *signing.EdVerifier
 	vrfVerifier  vrfVerifier
@@ -563,7 +544,7 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 	var (
 		epochWeight       uint64
 		miners            = make(map[types.NodeID]*minerInfo)
-		potentiallyActive = make(map[types.NodeID]participant)
+		potentiallyActive = make(map[types.NodeID]*signing.EdSigner)
 		// w1 is the weight units at δ before the end of the previous epoch, used to calculate `thresholdStrict`
 		// w2 is the weight units at the end of the previous epoch, used to calculate `threshold`
 		w1, w2 int
@@ -609,14 +590,14 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 		return nil, errZeroEpochWeight
 	}
 
-	active := map[types.NodeID]signerSession{}
+	active := map[types.NodeID]participant{}
 	for id, signer := range potentiallyActive {
-		if nnc, err := pd.nonceFetcher.VRFNonce(id, epoch); err != nil {
+		if nonce, err := pd.nonceFetcher.VRFNonce(id, epoch); err != nil {
 			logger.With().Error("getting own VRF nonce", id, log.Err(err))
 		} else {
-			active[id] = signerSession{
-				participant: signer,
-				nonce:       nnc,
+			active[id] = participant{
+				signer: signer,
+				nonce:  nonce,
 			}
 		}
 	}
@@ -759,10 +740,8 @@ func (pd *ProtocolDriver) runProtocol(ctx context.Context, epoch types.EpochID, 
 	pd.setBeginProtocol(ctx)
 	defer pd.setEndProtocol(ctx)
 
-	for _, participant := range st.active {
-		participant.coin.StartEpoch(ctx, epoch)
-		defer participant.coin.FinishEpoch(ctx, epoch)
-	}
+	pd.weakCoin.StartEpoch(ctx, epoch)
+	defer pd.weakCoin.FinishEpoch(ctx, epoch)
 
 	if err := pd.runProposalPhase(ctx, epoch, st); err != nil {
 		logger.With().Warning("proposal phase failed", log.Err(err))
@@ -831,7 +810,7 @@ func (pd *ProtocolDriver) runProposalPhase(ctx context.Context, epoch types.Epoc
 	return nil
 }
 
-func (pd *ProtocolDriver) sendProposal(ctx context.Context, epoch types.EpochID, s signerSession, checker eligibilityChecker) {
+func (pd *ProtocolDriver) sendProposal(ctx context.Context, epoch types.EpochID, s participant, checker eligibilityChecker) {
 	if pd.isClosed() {
 		return
 	}
@@ -878,7 +857,6 @@ func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.Epo
 	var (
 		ownVotes  allVotes
 		undecided proposalList
-		err       error
 	)
 
 	// First round
@@ -937,31 +915,33 @@ func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.Epo
 		ownVotes, undecided = pd.calcVotesBeforeWeakCoin(rLogger, st)
 
 		timer.Reset(pd.config.WeakCoinRoundDuration)
-		for _, session := range st.active {
-			session := session
-			pd.eg.Go(func() error {
-				session.coin.StartRound(ctx, round, &session.nonce)
-				return nil
-			})
-		}
+
+		pd.eg.Go(func() error {
+			participants := make([]weakcoin.Participant, 0, len(st.active))
+			for _, session := range st.active {
+				participants = append(participants, weakcoin.Participant{
+					Signer: session.signer.VRFSigner(),
+					Nonce:  session.nonce,
+				})
+			}
+			pd.weakCoin.StartRound(ctx, round, participants)
+			return nil
+		})
+
 		select {
 		case <-timer.C:
 		case <-ctx.Done():
 			return allVotes{}, fmt.Errorf("context done: %w", ctx.Err())
 		}
-		for _, session := range st.active {
-			session.coin.FinishRound(ctx)
+
+		pd.weakCoin.FinishRound(ctx)
+
+		flip, err := pd.weakCoin.Get(ctx, epoch, round)
+		if err != nil {
+			rLogger.With().Error("failed to generate weak coin", log.Err(err))
+			return allVotes{}, err
 		}
-		// All weak coin should have the same result, so we can just take the first one
-		var flip bool
-		for _, session := range st.active {
-			flip, err = session.coin.Get(ctx, epoch, round)
-			if err != nil {
-				rLogger.With().Error("failed to generate weak coin", log.Err(err))
-				return allVotes{}, err
-			}
-			break
-		}
+
 		tallyUndecided(&ownVotes, undecided, flip)
 	}
 
@@ -978,7 +958,6 @@ func (pd *ProtocolDriver) markProposalPhaseFinished(st *state, finishedAt time.T
 func (pd *ProtocolDriver) calcVotesBeforeWeakCoin(logger log.Log, st *state) (allVotes, proposalList) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
-
 	return calcVotes(logger, pd.theta, st)
 }
 
@@ -989,7 +968,7 @@ func (pd *ProtocolDriver) sendFirstRoundVote(ctx context.Context, msg FirstVotin
 		Signature:              signer.Sign(signing.BEACON_FIRST_MSG, codec.MustEncode(&msg)),
 	}
 
-	pd.logger.WithContext(ctx).With().Debug("sending first round vote", msg.EpochID, types.FirstRound, signerID(signer.NodeID()))
+	pd.logger.WithContext(ctx).With().Debug("sending first round vote", msg.EpochID, types.FirstRound, log.ShortStringer("id", signer.NodeID()))
 	return pd.sendToGossip(ctx, pubsub.BeaconFirstVotesProtocol, codec.MustEncode(&m))
 }
 
@@ -1024,7 +1003,7 @@ func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.Epo
 		Signature:                  signer.Sign(signing.BEACON_FOLLOWUP_MSG, codec.MustEncode(&mb)),
 	}
 
-	pd.logger.WithContext(ctx).With().Debug("sending following round vote", epoch, round, signerID(signer.NodeID()))
+	pd.logger.WithContext(ctx).With().Debug("sending following round vote", epoch, round, log.ShortStringer("id", signer.NodeID()))
 	return pd.sendToGossip(ctx, pubsub.BeaconFollowingVotesProtocol, codec.MustEncode(&m))
 }
 
@@ -1117,7 +1096,7 @@ func buildSignedProposal(ctx context.Context, logger log.Log, signer vrfSigner, 
 	p := buildProposal(logger, epoch, nonce)
 	vrfSig := signer.Sign(p)
 	proposal := ProposalFromVrf(vrfSig)
-	logger.WithContext(ctx).With().Debug("calculated beacon proposal", epoch, nonce, log.Inline(proposal), signerID(signer.NodeID()))
+	logger.WithContext(ctx).With().Debug("calculated beacon proposal", epoch, nonce, log.Inline(proposal), log.ShortStringer("id", signer.NodeID()))
 	return vrfSig
 }
 

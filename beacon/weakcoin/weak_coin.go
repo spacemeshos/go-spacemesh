@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -70,7 +72,7 @@ type OptionFunc func(*WeakCoin)
 // WithLog changes logger.
 func WithLog(logger log.Log) OptionFunc {
 	return func(wc *WeakCoin) {
-		wc.logger = logger.WithFields(log.FieldNamed("id", wc.signer.NodeID()))
+		wc.logger = logger
 	}
 }
 
@@ -107,7 +109,6 @@ type messageTime interface {
 // New creates an instance of weak coin protocol.
 func New(
 	publisher pubsub.Publisher,
-	signer vrfSigner,
 	verifier vrfVerifier,
 	nonceFetcher nonceFetcher,
 	allowance allowance,
@@ -117,7 +118,6 @@ func New(
 	wc := &WeakCoin{
 		logger:       log.NewNop(),
 		config:       defaultConfig(),
-		signer:       signer,
 		nonceFetcher: nonceFetcher,
 		allowance:    allowance,
 		publisher:    publisher,
@@ -138,7 +138,6 @@ type WeakCoin struct {
 	logger       log.Log
 	config       config
 	verifier     vrfVerifier
-	signer       vrfSigner
 	nonceFetcher nonceFetcher
 	publisher    pubsub.Publisher
 
@@ -202,8 +201,13 @@ func (wc *WeakCoin) FinishEpoch(ctx context.Context, epoch types.EpochID) {
 	logger.Info("weak coin finished epoch")
 }
 
+type Participant struct {
+	Signer vrfSigner
+	Nonce  types.VRFPostIndex
+}
+
 // StartRound process any buffered messages for this round and broadcast our proposal.
-func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID, nonce *types.VRFPostIndex) {
+func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID, participants []Participant) {
 	wc.mu.Lock()
 	logger := wc.logger.WithContext(ctx).WithFields(wc.epoch, round)
 	logger.Info("started beacon weak coin round")
@@ -221,9 +225,15 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID, nonce *
 	wc.nextRoundBuffer = wc.nextRoundBuffer[:0]
 	wc.mu.Unlock()
 
-	if nonce != nil {
-		wc.publishProposal(ctx, wc.epoch, *nonce, wc.round)
+	var eg errgroup.Group
+	for _, p := range participants {
+		p := p
+		eg.Go(func() error {
+			wc.publishProposal(ctx, wc.epoch, p.Signer, p.Nonce, round)
+			return nil
+		})
 	}
+	eg.Wait()
 }
 
 func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
@@ -245,8 +255,8 @@ func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
 	return wc.updateSmallest(ctx, message.VRFSignature)
 }
 
-func (wc *WeakCoin) prepareProposal(epoch types.EpochID, nonce types.VRFPostIndex, round types.RoundID) ([]byte, types.VrfSignature) {
-	minerAllowance := wc.allowance.MinerAllowance(wc.epoch, wc.signer.NodeID())
+func (wc *WeakCoin) prepareProposal(epoch types.EpochID, signer vrfSigner, nonce types.VRFPostIndex, round types.RoundID) ([]byte, types.VrfSignature) {
+	minerAllowance := wc.allowance.MinerAllowance(wc.epoch, signer.NodeID())
 	if minerAllowance == 0 {
 		return nil, types.EmptyVrfSignature
 	}
@@ -254,7 +264,7 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, nonce types.VRFPostInde
 	var smallest *types.VrfSignature
 	for unit := uint32(0); unit < minerAllowance; unit++ {
 		proposal := wc.encodeProposal(epoch, nonce, round, unit)
-		signature := wc.signer.Sign(proposal)
+		signature := signer.Sign(proposal)
 		if wc.aboveThreshold(signature) {
 			continue
 		}
@@ -263,7 +273,7 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, nonce types.VRFPostInde
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         unit,
-				NodeID:       wc.signer.NodeID(),
+				NodeID:       signer.NodeID(),
 				VRFSignature: signature,
 			}
 			broadcast = codec.MustEncode(&message)
@@ -279,8 +289,8 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, nonce types.VRFPostInde
 	return broadcast, *smallest
 }
 
-func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, nonce types.VRFPostIndex, round types.RoundID) {
-	msg, proposal := wc.prepareProposal(epoch, nonce, round)
+func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, signer vrfSigner, nonce types.VRFPostIndex, round types.RoundID) {
+	msg, proposal := wc.prepareProposal(epoch, signer, nonce, round)
 	if msg == nil {
 		return
 	}

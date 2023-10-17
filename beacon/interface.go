@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 )
@@ -12,7 +13,7 @@ import (
 
 type coin interface {
 	StartEpoch(context.Context, types.EpochID)
-	StartRound(context.Context, types.RoundID, *types.VRFPostIndex)
+	StartRound(context.Context, types.RoundID, []weakcoin.Participant)
 	FinishRound(context.Context)
 	Get(context.Context, types.EpochID, types.RoundID) (bool, error)
 	FinishEpoch(context.Context, types.EpochID)

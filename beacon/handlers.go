@@ -7,8 +7,6 @@ import (
 	"math/big"
 	"time"
 
-	"golang.org/x/sync/errgroup"
-
 	bcnmetrics "github.com/spacemeshos/go-spacemesh/beacon/metrics"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -44,17 +42,7 @@ func (pd *ProtocolDriver) HandleWeakCoinProposal(ctx context.Context, peer p2p.P
 	if !pd.isInProtocol() {
 		return errBeaconProtocolInactive
 	}
-	var eg errgroup.Group
-	pd.mu.RLock()
-	for _, signer := range pd.signers {
-		coin := signer.coin
-		eg.Go(func() error {
-			return coin.HandleProposal(ctx, peer, msg)
-		})
-	}
-	pd.mu.Unlock()
-
-	return eg.Wait()
+	return pd.weakCoin.HandleProposal(ctx, peer, msg)
 }
 
 // HandleProposal handles beacon proposal from gossip.
