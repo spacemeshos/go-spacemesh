@@ -9,8 +9,8 @@ import (
 
 type proposalSet map[Proposal]struct{}
 
-func (vs proposalSet) sort() proposalList {
-	return proposalList(maps.Keys(vs)).sort()
+func (p proposalSet) sorted() proposalList {
+	return proposalList(maps.Keys(p)).sort()
 }
 
 func (p proposalSet) MarshalLogArray(enc zapcore.ArrayEncoder) error {

@@ -42,11 +42,12 @@ func createProtocolDriverWithFirstRoundVotes(
 	return tpd, plist
 }
 
-func createEpochState(tb testing.TB, pd *ProtocolDriver, epoch types.EpochID, minerAtxs map[types.NodeID]*minerInfo, checker eligibilityChecker) {
+func createEpochState(tb testing.TB, pd *ProtocolDriver, epoch types.EpochID, minerAtxs map[types.NodeID]*minerInfo, checker eligibilityChecker) *state {
 	tb.Helper()
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 	pd.states[epoch] = newState(pd.logger, pd.config, nil, epochWeight, minerAtxs, checker)
+	return pd.states[epoch]
 }
 
 func setOwnFirstRoundVotes(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, ownFirstRound proposalList) {
@@ -225,7 +226,7 @@ func Test_HandleProposal_Success(t *testing.T) {
 		signer1.NodeID(): {atxid: createATX(t, tpd.cdb, epoch.FirstLayer().Sub(1), signer1, 10, epochStart.Add(-1*time.Minute))},
 		signer2.NodeID(): {atxid: createATX(t, tpd.cdb, epoch.FirstLayer().Sub(1), signer2, 10, epochStart.Add(-2*time.Minute))},
 	}
-	createEpochState(t, tpd.ProtocolDriver, epoch, minerAtxs, mockChecker)
+	st := createEpochState(t, tpd.ProtocolDriver, epoch, minerAtxs, mockChecker)
 	tpd.mClock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(epochStart).AnyTimes()
 
 	msg1 := createProposal(t, vrfSigner1, epoch, false)
@@ -236,7 +237,7 @@ func Test_HandleProposal_Success(t *testing.T) {
 	mockChecker.EXPECT().PassStrictThreshold(gomock.Any()).Return(true)
 	require.NoError(t, tpd.HandleProposal(context.Background(), "peerID", msgBytes1))
 
-	require.NoError(t, tpd.markProposalPhaseFinished(epoch, time.Now().Add(-20*time.Millisecond)))
+	tpd.markProposalPhaseFinished(st, time.Now().Add(-20*time.Millisecond))
 
 	msg2 := createProposal(t, vrfSigner2, epoch, false)
 	msgBytes2, err := codec.Encode(msg2)
@@ -278,7 +279,7 @@ func Test_HandleProposal_Malicious(t *testing.T) {
 		signer1.NodeID(): {atxid: createATX(t, tpd.cdb, epoch.FirstLayer().Sub(1), signer1, 10, epochStart.Add(-2*time.Minute)), malicious: true},
 		signer2.NodeID(): {atxid: createATX(t, tpd.cdb, epoch.FirstLayer().Sub(1), signer2, 10, epochStart.Add(-1*time.Minute))},
 	}
-	createEpochState(t, tpd.ProtocolDriver, epoch, minerAtxs, mockChecker)
+	st := createEpochState(t, tpd.ProtocolDriver, epoch, minerAtxs, mockChecker)
 	tpd.mClock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(epochStart).AnyTimes()
 
 	msg1 := createProposal(t, vrfSigner1, epoch, false)
@@ -289,7 +290,7 @@ func Test_HandleProposal_Malicious(t *testing.T) {
 	mockChecker.EXPECT().PassStrictThreshold(gomock.Any()).Return(true)
 	require.NoError(t, tpd.HandleProposal(context.Background(), "peerID", msgBytes1))
 
-	require.NoError(t, tpd.markProposalPhaseFinished(epoch, time.Now().Add(-20*time.Millisecond)))
+	tpd.markProposalPhaseFinished(st, time.Now().Add(-20*time.Millisecond))
 
 	msg2 := createProposal(t, vrfSigner2, epoch, false)
 	msgBytes2, err := codec.Encode(msg2)

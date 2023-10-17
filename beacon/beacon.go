@@ -768,7 +768,7 @@ func (pd *ProtocolDriver) runProtocol(ctx context.Context, epoch types.EpochID, 
 		logger.With().Warning("proposal phase failed", log.Err(err))
 		return
 	}
-	lastRoundOwnVotes, err := pd.runConsensusPhase(ctx, epoch, st.active)
+	lastRoundOwnVotes, err := pd.runConsensusPhase(ctx, epoch, st)
 	if err != nil {
 		logger.With().Warning("consensus phase failed", log.Err(err))
 		return
@@ -791,7 +791,7 @@ func (pd *ProtocolDriver) runProtocol(ctx context.Context, epoch types.EpochID, 
 }
 
 func calcBeacon(logger log.Log, set proposalSet) types.Beacon {
-	allProposals := set.sort()
+	allProposals := set.sorted()
 
 	// Beacon should appear to have the same entropy as the initial proposals, hence cropping it
 	// to the same size as the proposal
@@ -825,11 +825,9 @@ func (pd *ProtocolDriver) runProposalPhase(ctx context.Context, epoch types.Epoc
 		return pd.ctx.Err()
 	}
 
-	if err := pd.markProposalPhaseFinished(epoch, time.Now()); err != nil {
-		return err
-	}
-
-	logger.Info("beacon proposal phase finished")
+	finished := time.Now()
+	pd.markProposalPhaseFinished(st, finished)
+	logger.With().Info("proposal phase finished", log.Time("finished_at", finished))
 	return nil
 }
 
@@ -863,7 +861,7 @@ func (pd *ProtocolDriver) sendProposal(ctx context.Context, epoch types.EpochID,
 }
 
 // runConsensusPhase runs K voting rounds and returns result from last weak coin round.
-func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.EpochID, active map[types.NodeID]signerSession) (allVotes, error) {
+func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.EpochID, st *state) (allVotes, error) {
 	logger := pd.logger.WithContext(ctx).WithFields(epoch)
 	logger.Info("starting consensus phase")
 
@@ -883,19 +881,23 @@ func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.Epo
 	// First round
 	round := types.FirstRound
 	pd.setRoundInProgress(round)
-	if msg, err := pd.genFirstRoundMsgBody(epoch); err != nil {
-		logger.With().Error("failed to get firstround message", log.Err(err), round)
-	} else {
-		for _, session := range active {
-			session := session
-			pd.eg.Go(func() error {
-				if err := pd.sendFirstRoundVote(ctx, msg, session.signer); err != nil {
-					logger.With().Error("failed to send proposal vote", log.Err(err), session.Id(), round)
-				}
-				return nil
-			})
-		}
+	pd.mu.RLock() // shared lock is fine as sorting doesn't modify the state
+	msg := FirstVotingMessageBody{
+		EpochID:                   epoch,
+		ValidProposals:            st.incomingProposals.valid.sorted(),
+		PotentiallyValidProposals: st.incomingProposals.potentiallyValid.sorted(),
 	}
+	pd.mu.RUnlock()
+	for _, session := range st.active {
+		session := session
+		pd.eg.Go(func() error {
+			if err := pd.sendFirstRoundVote(ctx, msg, session.signer); err != nil {
+				logger.With().Error("failed to send proposal vote", log.Err(err), session.Id(), round)
+			}
+			return nil
+		})
+	}
+
 	select {
 	case <-timer.C:
 	case <-ctx.Done():
@@ -910,7 +912,7 @@ func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.Epo
 		timer.Reset(pd.config.VotingRoundDuration)
 
 		votes := ownVotes
-		for _, session := range active {
+		for _, session := range st.active {
 			session := session
 			pd.eg.Go(func() error {
 				if err := pd.sendFollowingVote(ctx, epoch, round, votes, session.signer); err != nil {
@@ -926,17 +928,13 @@ func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.Epo
 			return allVotes{}, fmt.Errorf("context done: %w", ctx.Err())
 		}
 
-		// note that votes after this calcVotes() call will _not_ be counted towards our votes
+		// note that votes after this call will _not_ be counted towards our votes
 		// for this round, as the late votes can be cast after the weak coin is revealed. we
 		// count them towards our votes in the next round.
-		ownVotes, undecided, err = pd.calcVotesBeforeWeakCoin(rLogger, epoch)
-		if err != nil {
-			return allVotes{}, err
-		}
+		ownVotes, undecided = pd.calcVotesBeforeWeakCoin(rLogger, st)
 
 		timer.Reset(pd.config.WeakCoinRoundDuration)
-
-		for _, session := range active {
+		for _, session := range st.active {
 			session := session
 			pd.eg.Go(func() error {
 				session.coin.StartRound(ctx, round, &session.nonce)
@@ -948,12 +946,12 @@ func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.Epo
 		case <-ctx.Done():
 			return allVotes{}, fmt.Errorf("context done: %w", ctx.Err())
 		}
-		for _, session := range active {
+		for _, session := range st.active {
 			session.coin.FinishRound(ctx)
 		}
 		// All weak coin should have the same result, so we can just take the first one
 		var flip bool
-		for _, session := range active {
+		for _, session := range st.active {
 			flip, err = session.coin.Get(ctx, epoch, round)
 			if err != nil {
 				rLogger.With().Error("failed to generate weak coin", log.Err(err))
@@ -968,40 +966,17 @@ func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.Epo
 	return ownVotes, nil
 }
 
-func (pd *ProtocolDriver) markProposalPhaseFinished(epoch types.EpochID, finishedAt time.Time) error {
-	pd.logger.With().Debug("proposal phase finished", epoch, log.Time("finished_at", finishedAt))
+func (pd *ProtocolDriver) markProposalPhaseFinished(st *state, finishedAt time.Time) {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
-	if _, ok := pd.states[epoch]; !ok {
-		return errEpochNotActive
-	}
-	pd.states[epoch].proposalPhaseFinishedTime = finishedAt
-	return nil
+	st.proposalPhaseFinishedTime = finishedAt
 }
 
-func (pd *ProtocolDriver) calcVotesBeforeWeakCoin(logger log.Log, epoch types.EpochID) (allVotes, proposalList, error) {
-	pd.mu.RLock()
-	defer pd.mu.RUnlock()
-	if _, ok := pd.states[epoch]; !ok {
-		return allVotes{}, nil, errEpochNotActive
-	}
-	decided, undecided := calcVotes(logger, pd.theta, pd.states[epoch])
-	return decided, undecided, nil
-}
-
-func (pd *ProtocolDriver) genFirstRoundMsgBody(epoch types.EpochID) (FirstVotingMessageBody, error) {
+func (pd *ProtocolDriver) calcVotesBeforeWeakCoin(logger log.Log, st *state) (allVotes, proposalList) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 
-	if _, ok := pd.states[epoch]; !ok {
-		return FirstVotingMessageBody{}, errEpochNotActive
-	}
-	s := pd.states[epoch]
-	return FirstVotingMessageBody{
-		EpochID:                   epoch,
-		ValidProposals:            s.incomingProposals.valid.sort(),
-		PotentiallyValidProposals: s.incomingProposals.potentiallyValid.sort(),
-	}, nil
+	return calcVotes(logger, pd.theta, st)
 }
 
 func (pd *ProtocolDriver) sendFirstRoundVote(ctx context.Context, msg FirstVotingMessageBody, signer *signing.EdSigner) error {
