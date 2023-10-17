@@ -856,8 +856,11 @@ func (pd *ProtocolDriver) sendProposal(ctx context.Context, epoch types.EpochID,
 	}
 
 	logger.With().Debug("own proposal passes threshold", log.Inline(proposal), s.Id())
-	pd.sendToGossip(ctx, pubsub.BeaconProposalProtocol, codec.MustEncode(&m))
-	logger.With().Info("beacon proposal sent", log.Inline(proposal), s.Id())
+	if err := pd.sendToGossip(ctx, pubsub.BeaconProposalProtocol, codec.MustEncode(&m)); err != nil {
+		logger.With().Error("failed to broadcast", log.Err(err), log.Inline(proposal), s.Id())
+	} else {
+		logger.With().Info("beacon proposal sent", log.Inline(proposal), s.Id())
+	}
 }
 
 // runConsensusPhase runs K voting rounds and returns result from last weak coin round.
@@ -987,8 +990,7 @@ func (pd *ProtocolDriver) sendFirstRoundVote(ctx context.Context, msg FirstVotin
 	}
 
 	pd.logger.WithContext(ctx).With().Debug("sending first round vote", msg.EpochID, types.FirstRound, signerID(signer.NodeID()))
-	pd.sendToGossip(ctx, pubsub.BeaconFirstVotesProtocol, codec.MustEncode(&m))
-	return nil
+	return pd.sendToGossip(ctx, pubsub.BeaconFirstVotesProtocol, codec.MustEncode(&m))
 }
 
 func (pd *ProtocolDriver) getFirstRoundVote(epoch types.EpochID, nodeID types.NodeID) (proposalList, error) {
@@ -1023,8 +1025,7 @@ func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.Epo
 	}
 
 	pd.logger.WithContext(ctx).With().Debug("sending following round vote", epoch, round, signerID(signer.NodeID()))
-	pd.sendToGossip(ctx, pubsub.BeaconFollowingVotesProtocol, codec.MustEncode(&m))
-	return nil
+	return pd.sendToGossip(ctx, pubsub.BeaconFollowingVotesProtocol, codec.MustEncode(&m))
 }
 
 type proposalChecker struct {
@@ -1129,14 +1130,11 @@ func buildProposal(logger log.Log, epoch types.EpochID, nonce types.VRFPostIndex
 	return codec.MustEncode(message)
 }
 
-func (pd *ProtocolDriver) sendToGossip(ctx context.Context, protocol string, serialized []byte) {
-	// NOTE(dshulyak) moved to goroutine because self-broadcast is applied synchronously
-	pd.eg.Go(func() error {
-		if err := pd.publisher.Publish(ctx, protocol, serialized); err != nil {
-			pd.logger.With().Error("failed to broadcast", log.String("protocol", protocol), log.Err(err))
-		}
-		return nil
-	})
+func (pd *ProtocolDriver) sendToGossip(ctx context.Context, protocol string, serialized []byte) error {
+	if err := pd.publisher.Publish(ctx, protocol, serialized); err != nil {
+		return fmt.Errorf("publishing on protocol %s: %w", protocol, err)
+	}
+	return nil
 }
 
 func (pd *ProtocolDriver) gatherMetricsData() ([]*metrics.BeaconStats, *metrics.BeaconStats) {
