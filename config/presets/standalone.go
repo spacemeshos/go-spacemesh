@@ -75,7 +75,7 @@ func standalone() config.Config {
 	conf.Beacon.BeaconSyncWeightUnits = 10
 	conf.Beacon.VotesLimit = 100
 
-	conf.PoETServers = []string{"http://0.0.0.0:10010"}
+	conf.PoETServers = []string{"http://127.0.0.1:10010"}
 	conf.POET.GracePeriod = 12 * time.Second
 	conf.POET.CycleGap = 30 * time.Second
 	conf.POET.PhaseShift = 30 * time.Second
@@ -86,7 +86,7 @@ func standalone() config.Config {
 	conf.P2P.DisableNatPort = true
 
 	conf.API.PublicListener = "0.0.0.0:10092"
-	conf.API.PrivateListener = "0.0.0.0:10093"
+	conf.API.PrivateListener = "127.0.0.1:10093"
 
 	conf.POSTService.NodeAddress = "http://127.0.0.1:10093"
 	return conf
