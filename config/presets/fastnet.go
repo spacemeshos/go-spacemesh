@@ -20,7 +20,6 @@ func fastnet() config.Config {
 	conf := config.DefaultConfig()
 
 	conf.NetworkHRP = "stest"
-	types.SetNetworkHRP(conf.NetworkHRP) // set to generate coinbase
 	conf.BaseConfig.OptFilterThreshold = 90
 	conf.BaseConfig.DatabasePruneInterval = time.Minute
 

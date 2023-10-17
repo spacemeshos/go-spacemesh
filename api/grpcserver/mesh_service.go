@@ -8,8 +8,10 @@ import (
 	"time"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -35,8 +37,12 @@ type MeshService struct {
 }
 
 // RegisterService registers this service with a grpc server instance.
-func (s MeshService) RegisterService(server *Server) {
-	pb.RegisterMeshServiceServer(server.GrpcServer, s)
+func (s MeshService) RegisterService(server *grpc.Server) {
+	pb.RegisterMeshServiceServer(server, s)
+}
+
+func (s MeshService) RegisterHandlerService(mux *runtime.ServeMux) error {
+	return pb.RegisterMeshServiceHandlerServer(context.Background(), mux, s)
 }
 
 // String returns the name of this service.

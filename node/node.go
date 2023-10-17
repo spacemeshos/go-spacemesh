@@ -1397,7 +1397,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			logger.Zap().Named("JSON"),
 		)
 		if err := app.jsonAPIServer.StartService(ctx, public...); err != nil {
-			app.log.With().Error("start listen server", log.Err(err))
+			return fmt.Errorf("start listen server: %w", err)
 		}
 	}
 	return nil

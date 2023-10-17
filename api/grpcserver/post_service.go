@@ -1,11 +1,14 @@
 package grpcserver
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -27,8 +30,12 @@ type postCommand struct {
 }
 
 // RegisterService registers this service with a grpc server instance.
-func (s *PostService) RegisterService(server *Server) {
-	pb.RegisterPostServiceServer(server.GrpcServer, s)
+func (s *PostService) RegisterService(server *grpc.Server) {
+	pb.RegisterPostServiceServer(server, s)
+}
+
+func (s *PostService) RegisterHandlerService(mux *runtime.ServeMux) error {
+	return pb.RegisterPostServiceHandlerServer(context.Background(), mux, s)
 }
 
 // String returns the name of this service.

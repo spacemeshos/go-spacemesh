@@ -1179,7 +1179,7 @@ func TestAdminEvents(t *testing.T) {
 		app.eg.Wait() // https://github.com/spacemeshos/go-spacemesh/issues/4653
 		return nil
 	})
-	t.Cleanup(func() { eg.Wait() })
+	t.Cleanup(func() { assert.NoError(t, eg.Wait()) })
 
 	grpcCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()

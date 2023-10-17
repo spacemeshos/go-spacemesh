@@ -13,6 +13,7 @@ import (
 	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	grpctags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
@@ -24,7 +25,8 @@ import (
 
 // ServiceAPI allows individual grpc services to register the grpc server.
 type ServiceAPI interface {
-	RegisterService(*Server)
+	RegisterService(*grpc.Server)
+	RegisterHandlerService(*runtime.ServeMux) error
 	String() string
 }
 
@@ -60,7 +62,7 @@ func NewPublic(logger *zap.Logger, config Config, svc []ServiceAPI) (*Server, er
 
 	server := New(config.PublicListener, logger, config)
 	for _, s := range svc {
-		s.RegisterService(server)
+		s.RegisterService(server.GrpcServer)
 	}
 	return server, nil
 }
@@ -74,7 +76,7 @@ func NewPrivate(logger *zap.Logger, config Config, svc []ServiceAPI) (*Server, e
 
 	server := New(config.PrivateListener, logger, config)
 	for _, s := range svc {
-		s.RegisterService(server)
+		s.RegisterService(server.GrpcServer)
 	}
 	return server, nil
 }
@@ -108,7 +110,7 @@ func NewTLS(logger *zap.Logger, config Config, svc []ServiceAPI) (*Server, error
 
 	server := New(config.TLSListener, logger, config, grpc.Creds(credentials.NewTLS(tlsConfig)))
 	for _, s := range svc {
-		s.RegisterService(server)
+		s.RegisterService(server.GrpcServer)
 	}
 	return server, nil
 }
