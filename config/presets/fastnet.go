@@ -18,8 +18,8 @@ func init() {
 
 func fastnet() config.Config {
 	conf := config.DefaultConfig()
-
 	conf.NetworkHRP = "stest"
+
 	conf.BaseConfig.OptFilterThreshold = 90
 	conf.BaseConfig.DatabasePruneInterval = time.Minute
 
@@ -69,6 +69,7 @@ func fastnet() config.Config {
 	conf.POST.MaxNumUnits = 4
 	conf.POST.MinNumUnits = 2
 
+	types.SetNetworkHRP(conf.NetworkHRP) // ensure that the correct HRP is set when generating the address below
 	conf.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte("1")).String()
 	conf.SMESHING.Start = false
 	conf.SMESHING.Opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
