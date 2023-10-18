@@ -35,7 +35,7 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
   Bounds the time required to restart a node.
 
-* []() Support prunning activesets.
+* [#5169](https://github.com/spacemeshos/go-spacemesh/pull/5169) Support prunning activesets.
 
   As of epoch 6 activesets storage size is about ~1.5GB. They are not useful after verifying eligibilities
   for ballots in the current epoch and can be pruned.
