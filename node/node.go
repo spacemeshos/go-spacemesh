@@ -1159,6 +1159,7 @@ func (app *App) launchStandalone(ctx context.Context) error {
 		return err
 	}
 	cfg.RawRESTListener = parsed.Host
+	cfg.RawRPCListener = parsed.Hostname() + ":0"
 	cfg.Genesis.UnmarshalFlag(app.Config.Genesis.GenesisTime)
 	cfg.Round.EpochDuration = app.Config.LayerDuration * time.Duration(app.Config.LayersPerEpoch)
 	cfg.Round.CycleGap = app.Config.POET.CycleGap
