@@ -35,6 +35,19 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
   Bounds the time required to restart a node.
 
+* []() Support prunning activesets.
+
+  As of epoch 6 activesets storage size is about ~1.5GB. They are not useful after verifying eligibilities
+  for ballots in the current epoch and can be pruned.
+
+  Pruning will be enabled starting from epoch 8, e.g in epoch 8 we will prune all activesets for epochs 7 and below.
+  We should also run an archival node that doesn't prune them. To disable pruning we should configure
+  ```json
+  "main": {
+      "prune-activesets-from": 4294967295
+  }
+  ``` 
+
 ## v1.2.0
 
 ### Upgrade information

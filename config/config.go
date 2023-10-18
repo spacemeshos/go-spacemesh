@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
@@ -113,6 +114,8 @@ type BaseConfig struct {
 	DatabaseLatencyMetering      bool          `mapstructure:"db-latency-metering"`
 	DatabaseSizeMeteringInterval time.Duration `mapstructure:"db-size-metering-interval"`
 	DatabasePruneInterval        time.Duration `mapstructure:"db-prune-interval"`
+
+	PruneActivesetsFrom types.EpochID `mapstructure:"prune-activesets-from"`
 
 	NetworkHRP string `mapstructure:"network-hrp"`
 

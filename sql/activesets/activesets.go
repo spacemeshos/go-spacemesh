@@ -10,11 +10,12 @@ import (
 
 func Add(db sql.Executor, id types.Hash32, set *types.EpochActiveSet) error {
 	_, err := db.Exec(`insert into activesets
-		(id, active_set)
-		values (?1, ?2);`,
+		(id, epoch, active_set)
+		values (?1, ?2, ?3);`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, id[:])
-			stmt.BindBytes(2, codec.MustEncode(set))
+			stmt.BindInt64(2, int64(set.Epoch))
+			stmt.BindBytes(3, codec.MustEncode(set))
 		}, nil)
 	if err != nil {
 		return fmt.Errorf("add active set %v: %w", id.String(), err)
@@ -68,4 +69,17 @@ func GetBlob(db sql.Executor, id []byte) ([]byte, error) {
 		return nil, fmt.Errorf("get active set blob %x: %w", id, err)
 	}
 	return rst, nil
+}
+
+func DeleteBeforeEpoch(db sql.Executor, epoch types.EpochID) error {
+	_, err := db.Exec("delete from activesets where epoch < ?1;",
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(epoch))
+		},
+		nil,
+	)
+	if err != nil {
+		return fmt.Errorf("delete activesets before %v: %w", epoch, err)
+	}
+	return nil
 }
