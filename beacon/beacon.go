@@ -11,6 +11,7 @@ import (
 
 	"github.com/ALTree/bigfloat"
 	"github.com/spacemeshos/fixed"
+	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/beacon/metrics"
@@ -153,6 +154,12 @@ type participant struct {
 
 func (s *participant) Id() log.Field {
 	return log.ShortStringer("id", s.signer.NodeID())
+}
+
+func (s participant) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	enc.AddString("id", s.signer.NodeID().ShortString())
+	enc.AddUint64("nonce", uint64(s.nonce))
+	return nil
 }
 
 // ProtocolDriver is the driver for the beacon protocol.
@@ -602,6 +609,17 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 		}
 	}
 
+	logger.With().Info(
+		"selected active signers",
+		log.Int("count", len(active)),
+		log.Array("signers", zapcore.ArrayMarshalerFunc(func(enc zapcore.ArrayEncoder) error {
+			for _, p := range active {
+				enc.AppendObject(p)
+			}
+			return nil
+		})),
+	)
+
 	checker := createProposalChecker(logger, pd.config, w1, w1+w2)
 	pd.states[epoch] = newState(logger, pd.config, active, epochWeight, miners, checker)
 	return pd.states[epoch], nil
@@ -884,6 +902,7 @@ func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.Epo
 	case <-ctx.Done():
 		return allVotes{}, fmt.Errorf("context done: %w", ctx.Err())
 	}
+	ownVotes, _ = pd.calcVotesBeforeWeakCoin(logger, st)
 
 	// Subsequent rounds
 	for round := types.FirstRound + 1; round < pd.config.RoundsNumber; round++ {
