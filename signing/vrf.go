@@ -28,11 +28,6 @@ func (s VRFSigner) PublicKey() *PublicKey {
 	return NewPublicKey(s.nodeID.Bytes())
 }
 
-// LittleEndian indicates whether byte order in a signature is little-endian.
-func (s VRFSigner) LittleEndian() bool {
-	return true
-}
-
 type VRFVerifier func(types.NodeID, []byte, types.VrfSignature) bool
 
 func NewVRFVerifier() VRFVerifier {
