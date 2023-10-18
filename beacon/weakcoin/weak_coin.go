@@ -192,7 +192,7 @@ func (wc *WeakCoin) FinishEpoch(ctx context.Context, epoch types.EpochID) {
 	if epoch != wc.epoch {
 		logger.With().Fatal("attempted to finish beacon weak coin for the wrong epoch",
 			epoch,
-			log.FieldNamed("weak_coin_epoch", wc.epoch),
+			log.Uint32("weak_coin_epoch", uint32(wc.epoch)),
 		)
 	}
 	wc.epochStarted = false

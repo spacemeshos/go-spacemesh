@@ -228,8 +228,9 @@ func (pd *ProtocolDriver) HandleFirstVotes(ctx context.Context, peer p2p.Peer, m
 	currentEpoch := pd.currentEpoch()
 	if m.EpochID != currentEpoch {
 		logger.With().Debug("first votes from different epoch",
-			log.FieldNamed("current_epoch", currentEpoch),
-			log.FieldNamed("message_epoch", m.EpochID))
+			log.Uint32("current_epoch", uint32((currentEpoch))),
+			log.Uint32("message_epoch", uint32((m.EpochID))),
+		)
 		return errEpochNotActive
 	}
 
@@ -237,8 +238,8 @@ func (pd *ProtocolDriver) HandleFirstVotes(ctx context.Context, peer p2p.Peer, m
 	currentRound := pd.currentRound()
 	if currentRound > types.FirstRound {
 		logger.With().Debug("first votes too late",
-			log.FieldNamed("current_round", currentRound),
-			log.FieldNamed("message_round", types.FirstRound))
+			log.Uint32("current_round", uint32(currentRound)),
+			log.Uint32("message_round", uint32(types.FirstRound)))
 		return errUntimelyMessage
 	}
 

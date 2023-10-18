@@ -714,7 +714,7 @@ func (pd *ProtocolDriver) setRoundInProgress(round types.RoundID) {
 	earliestVoteTime := nextRoundStartTime.Add(-pd.config.GracePeriodDuration)
 	pd.logger.With().Debug("earliest vote time for next round",
 		round,
-		log.FieldNamed("next_round", round+1),
+		log.Uint32("next_round", uint32(round+1)),
 		log.Time("earliest_time", earliestVoteTime))
 
 	pd.mu.Lock()
@@ -753,7 +753,7 @@ func (pd *ProtocolDriver) onNewEpoch(ctx context.Context, epoch types.EpochID) e
 func (pd *ProtocolDriver) runProtocol(ctx context.Context, epoch types.EpochID, st *state) {
 	ctx = log.WithNewSessionID(ctx)
 	targetEpoch := epoch + 1
-	logger := pd.logger.WithContext(ctx).WithFields(epoch, log.FieldNamed("target_epoch", targetEpoch))
+	logger := pd.logger.WithContext(ctx).WithFields(epoch, log.Uint32("target_epoch", uint32(targetEpoch)))
 
 	pd.setBeginProtocol(ctx)
 	defer pd.setEndProtocol(ctx)
