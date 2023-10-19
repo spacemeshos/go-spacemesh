@@ -841,7 +841,6 @@ func (app *App) initServices(ctx context.Context) error {
 		fetcherWrapped,
 		app.certifier,
 		patrol,
-		blocks.WithContext(ctx),
 		blocks.WithConfig(blocks.Config{
 			BlockGasLimit:      app.Config.BlockGasLimit,
 			OptFilterThreshold: app.Config.OptFilterThreshold,
@@ -1218,7 +1217,7 @@ func (app *App) startServices(ctx context.Context) error {
 	app.syncer.Start()
 	app.beaconProtocol.Start(ctx)
 
-	app.blockGen.Start()
+	app.blockGen.Start(ctx)
 	app.certifier.Start()
 	if err := app.hare.Start(ctx); err != nil {
 		return fmt.Errorf("cannot start hare: %w", err)
