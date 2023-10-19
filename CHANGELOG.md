@@ -35,6 +35,10 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
   Bounds the time required to restart a node.
 
+* [#5171](https://github.com/spacemeshos/go-spacemesh/pull/5171) Set minimal active set according to the observed number of atxs.
+
+  It will prevent ballots that underreport observed atxs from spamming the network. It doesn't have impact on rewards.
+
 ## v1.2.0
 
 ### Upgrade information

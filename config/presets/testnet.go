@@ -79,9 +79,7 @@ func testnet() config.Config {
 			WindowSize:               10000,
 			MaxExceptions:            1000,
 			BadBeaconVoteDelayLayers: 4032,
-			// 100 - is assumed minimal number of units
-			// 100 - half of the expected poet ticks
-			MinimalActiveSetWeight: network.TestnetMinimalActiveSetWeight,
+			MinimalActiveSetWeight:   network.TestnetMinimalActiveSetWeight,
 		},
 		HARE: hareConfig.Config{
 			N:               200,

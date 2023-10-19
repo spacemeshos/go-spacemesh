@@ -14,7 +14,9 @@ func NoopMinimalActiveSetWeight(epoch types.EpochID) uint64 {
 
 func MainnetMinimalActiveSetWeight(epoch types.EpochID) uint64 {
 	if epoch >= 8 {
-		return 7_837_104_244
+		// generated using ./cmd/activeset for publish epoch 6
+		// it will be used starting from epoch 8, because we will only release it in 7th
+		return 7_879_129_244
 	}
 	return 5_000_000
 }
