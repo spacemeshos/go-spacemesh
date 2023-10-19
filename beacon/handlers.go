@@ -38,11 +38,10 @@ var (
 )
 
 // HandleWeakCoinProposal handles weakcoin proposal from gossip.
-func (pd *ProtocolDriver) HandleWeakCoinProposal(ctx context.Context, peer p2p.Peer, msg []byte) error {
+func (pd *ProtocolDriver) HandleWeakCoinProposal(ctx context.Context, peer p2p.Peer, msg []byte) (err error) {
 	if !pd.isInProtocol() {
 		return errBeaconProtocolInactive
 	}
-
 	return pd.weakCoin.HandleProposal(ctx, peer, msg)
 }
 
@@ -229,8 +228,9 @@ func (pd *ProtocolDriver) HandleFirstVotes(ctx context.Context, peer p2p.Peer, m
 	currentEpoch := pd.currentEpoch()
 	if m.EpochID != currentEpoch {
 		logger.With().Debug("first votes from different epoch",
-			log.Uint32("current_epoch", uint32(currentEpoch)),
-			log.Uint32("message_epoch", uint32(m.EpochID)))
+			log.Uint32("current_epoch", uint32((currentEpoch))),
+			log.Uint32("message_epoch", uint32((m.EpochID))),
+		)
 		return errEpochNotActive
 	}
 
