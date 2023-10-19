@@ -56,7 +56,7 @@ type stored struct {
 }
 
 type epochCache struct {
-	index *btree.BTreeG[stored]
+	index *btree.BTreeG[*stored]
 }
 
 func (c *Cache) Evicted() types.EpochID {
@@ -99,7 +99,7 @@ func (c *Cache) Add(epoch types.EpochID, node types.NodeID, atx types.ATXID, dat
 	ecache, exists := c.epochs[epoch]
 	if !exists {
 		ecache = epochCache{
-			index: btree.NewG(64, func(left, right stored) bool {
+			index: btree.NewG(64, func(left, right *stored) bool {
 				nodecmp := bytes.Compare(left.node[:], right.node[:])
 				if nodecmp == 0 {
 					return bytes.Compare(left.atx[:], right.atx[:]) == -1
@@ -109,7 +109,7 @@ func (c *Cache) Add(epoch types.EpochID, node types.NodeID, atx types.ATXID, dat
 		}
 		c.epochs[epoch] = ecache
 	}
-	if _, exists := ecache.index.ReplaceOrInsert(stored{node: node, atx: atx, data: data}); !exists {
+	if _, exists := ecache.index.ReplaceOrInsert(&stored{node: node, atx: atx, data: data}); !exists {
 		atxsCounter.WithLabelValues(epoch.String()).Inc()
 	}
 
@@ -119,12 +119,14 @@ func (c *Cache) SetMalicious(node types.NodeID) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for _, ecache := range c.epochs {
-		ecache.index.AscendGreaterOrEqual(stored{node: node}, func(s stored) bool {
+		ecache.index.AscendGreaterOrEqual(&stored{node: node}, func(s *stored) bool {
 			if node != s.node {
 				return false
 			}
 			// TODO(dshulyak) how to copy on update here?
-			s.data.Malicious = true
+			update := *s.data
+			update.Malicious = true
+			s.data = &update
 			return true
 		})
 	}
@@ -138,7 +140,7 @@ func (c *Cache) Get(epoch types.EpochID, node types.NodeID, atx types.ATXID) *AT
 	if !exists {
 		return nil
 	}
-	data, exists := ecache.index.Get(stored{node: node, atx: atx})
+	data, exists := ecache.index.Get(&stored{node: node, atx: atx})
 	if !exists {
 		return nil
 	}
@@ -154,7 +156,7 @@ func (c *Cache) GetByNode(epoch types.EpochID, node types.NodeID) *ATXData {
 		return nil
 	}
 	var data *ATXData
-	ecache.index.AscendGreaterOrEqual(stored{node: node}, func(s stored) bool {
+	ecache.index.AscendGreaterOrEqual(&stored{node: node}, func(s *stored) bool {
 		if s.node != node {
 			return false // reachable only if node is not stored
 		}
