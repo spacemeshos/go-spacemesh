@@ -8,21 +8,45 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
-func Prune(
-	ctx context.Context,
-	logger *zap.Logger,
-	db sql.Executor,
-	lc layerClock,
-	safeDist uint32,
-	interval time.Duration,
-) {
-	logger.With().Info("db pruning launched",
-		zap.Uint32("dist", safeDist),
+type Opt func(*Pruner)
+
+func WithLogger(logger *zap.Logger) Opt {
+	return func(p *Pruner) {
+		p.logger = logger
+	}
+}
+
+func New(db *sql.Database, safeDist uint32, activesetEpoch types.EpochID, opts ...Opt) *Pruner {
+	p := &Pruner{
+		logger:         zap.NewNop(),
+		db:             db,
+		safeDist:       safeDist,
+		activesetEpoch: activesetEpoch,
+	}
+	for _, opt := range opts {
+		opt(p)
+	}
+	return p
+}
+
+type Pruner struct {
+	logger         *zap.Logger
+	db             *sql.Database
+	safeDist       uint32
+	activesetEpoch types.EpochID
+}
+
+func Run(ctx context.Context, p *Pruner, clock *timesync.NodeClock, interval time.Duration) {
+	p.logger.With().Info("db pruning launched",
+		zap.Uint32("dist", p.safeDist),
+		zap.Uint32("active set epoch", p.activesetEpoch.Uint32()),
 		zap.Duration("interval", interval),
 	)
 	for {
@@ -30,41 +54,41 @@ func Prune(
 		case <-ctx.Done():
 			return
 		case <-time.After(interval):
-			prune(logger, db, lc, safeDist)
+			current := clock.CurrentLayer()
+			if err := p.Prune(current); err != nil {
+				p.logger.Error("failed to prune",
+					current.Field().Zap(),
+					zap.Uint32("dist", p.safeDist),
+					zap.Error(err),
+				)
+			}
 		}
 	}
 }
 
-func prune(
-	logger *zap.Logger,
-	db sql.Executor,
-	lc layerClock,
-	safeDist uint32,
-) {
-	oldest := lc.CurrentLayer() - types.LayerID(safeDist)
-	time.Sleep(100 * time.Millisecond)
-	t0 := time.Now()
-	if err := proposals.DeleteBefore(db, oldest); err != nil {
-		logger.Error("failed to delete proposals",
-			zap.Stringer("lid", oldest),
-			zap.Error(err),
-		)
+func (p *Pruner) Prune(current types.LayerID) error {
+	oldest := current - types.LayerID(p.safeDist)
+	start := time.Now()
+	if err := proposals.DeleteBefore(p.db, oldest); err != nil {
+		return err
 	}
-	proposalLatency.Observe(time.Since(t0).Seconds())
-	t1 := time.Now()
-	if err := certificates.DeleteCertBefore(db, oldest); err != nil {
-		logger.Error("failed to delete certificates",
-			zap.Stringer("lid", oldest),
-			zap.Error(err),
-		)
+	proposalLatency.Observe(time.Since(start).Seconds())
+	start = time.Now()
+	if err := certificates.DeleteCertBefore(p.db, oldest); err != nil {
+		return err
 	}
-	certLatency.Observe(time.Since(t1).Seconds())
-	t2 := time.Now()
-	if err := transactions.DeleteProposalTxsBefore(db, oldest); err != nil {
-		logger.Error("failed to delete proposal tx mapping",
-			zap.Stringer("lid", oldest),
-			zap.Error(err),
-		)
+	certLatency.Observe(time.Since(start).Seconds())
+	start = time.Now()
+	if err := transactions.DeleteProposalTxsBefore(p.db, oldest); err != nil {
+		return err
 	}
-	propTxLatency.Observe(time.Since(t2).Seconds())
+	propTxLatency.Observe(time.Since(start).Seconds())
+	if current.GetEpoch() > p.activesetEpoch {
+		start = time.Now()
+		if err := activesets.DeleteBeforeEpoch(p.db, current.GetEpoch()); err != nil {
+			return err
+		}
+		activeSetLatency.Observe(time.Since(start).Seconds())
+	}
+	return nil
 }

@@ -115,6 +115,8 @@ type BaseConfig struct {
 	DatabaseSizeMeteringInterval time.Duration `mapstructure:"db-size-metering-interval"`
 	DatabasePruneInterval        time.Duration `mapstructure:"db-prune-interval"`
 
+	PruneActivesetsFrom types.EpochID `mapstructure:"prune-activesets-from"`
+
 	NetworkHRP string `mapstructure:"network-hrp"`
 
 	// MinerGoodAtxsPercent is a threshold to decide if tortoise activeset should be

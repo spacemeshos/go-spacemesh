@@ -134,7 +134,11 @@ func (s MeshService) getFilteredTransactions(from types.LayerID, address types.A
 	return txs, nil
 }
 
-func (s MeshService) getFilteredActivations(ctx context.Context, startLayer types.LayerID, addr types.Address) (activations []*types.VerifiedActivationTx, err error) {
+func (s MeshService) getFilteredActivations(
+	ctx context.Context,
+	startLayer types.LayerID,
+	addr types.Address,
+) (activations []*types.VerifiedActivationTx, err error) {
 	// We have no way to look up activations by coinbase so we have no choice but to read all of them.
 	var atxids []types.ATXID
 	for l := startLayer; !l.After(s.mesh.LatestLayer()); l = l.Add(1) {
@@ -350,10 +354,12 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 	for _, b := range layer.Ballots() {
 		if b.EpochData != nil {
 			actives, err := activesets.Get(s.cdb, b.EpochData.ActiveSetHash)
-			if err != nil {
+			if err != nil && !errors.Is(err, sql.ErrNotFound) {
 				return nil, status.Errorf(codes.Internal, "error retrieving active set %s (%s)", b.ID().String(), b.EpochData.ActiveSetHash.ShortString())
 			}
-			activations = append(activations, actives.Set...)
+			if actives != nil {
+				activations = append(activations, actives.Set...)
+			}
 		}
 	}
 

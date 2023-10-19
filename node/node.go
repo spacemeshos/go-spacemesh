@@ -690,15 +690,12 @@ func (app *App) initServices(ctx context.Context) error {
 		return fmt.Errorf("failed to create mesh: %w", err)
 	}
 
+	pruner := prune.New(app.db, app.Config.Tortoise.Hdist, app.Config.PruneActivesetsFrom, prune.WithLogger(mlog.Zap()))
+	if err := pruner.Prune(app.clock.CurrentLayer()); err != nil {
+		return fmt.Errorf("pruner %w", err)
+	}
 	app.eg.Go(func() error {
-		prune.Prune(
-			ctx,
-			mlog.Zap(),
-			app.db,
-			app.clock,
-			app.Config.Tortoise.Hdist,
-			app.Config.DatabasePruneInterval,
-		)
+		prune.Run(ctx, pruner, app.clock, app.Config.DatabasePruneInterval)
 		return nil
 	})
 
