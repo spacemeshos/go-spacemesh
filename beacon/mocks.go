@@ -13,6 +13,7 @@ import (
 	reflect "reflect"
 	time "time"
 
+	weakcoin "github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
 	gomock "go.uber.org/mock/gomock"
@@ -227,7 +228,7 @@ func (c *coinStartEpochCall) DoAndReturn(f func(context.Context, types.EpochID))
 }
 
 // StartRound mocks base method.
-func (m *Mockcoin) StartRound(arg0 context.Context, arg1 types.RoundID, arg2 *types.VRFPostIndex) {
+func (m *Mockcoin) StartRound(arg0 context.Context, arg1 types.RoundID, arg2 []weakcoin.Participant) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "StartRound", arg0, arg1, arg2)
 }
@@ -251,13 +252,13 @@ func (c *coinStartRoundCall) Return() *coinStartRoundCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *coinStartRoundCall) Do(f func(context.Context, types.RoundID, *types.VRFPostIndex)) *coinStartRoundCall {
+func (c *coinStartRoundCall) Do(f func(context.Context, types.RoundID, []weakcoin.Participant)) *coinStartRoundCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *coinStartRoundCall) DoAndReturn(f func(context.Context, types.RoundID, *types.VRFPostIndex)) *coinStartRoundCall {
+func (c *coinStartRoundCall) DoAndReturn(f func(context.Context, types.RoundID, []weakcoin.Participant)) *coinStartRoundCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -519,44 +520,6 @@ func NewMockvrfSigner(ctrl *gomock.Controller) *MockvrfSigner {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockvrfSigner) EXPECT() *MockvrfSignerMockRecorder {
 	return m.recorder
-}
-
-// LittleEndian mocks base method.
-func (m *MockvrfSigner) LittleEndian() bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LittleEndian")
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// LittleEndian indicates an expected call of LittleEndian.
-func (mr *MockvrfSignerMockRecorder) LittleEndian() *vrfSignerLittleEndianCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LittleEndian", reflect.TypeOf((*MockvrfSigner)(nil).LittleEndian))
-	return &vrfSignerLittleEndianCall{Call: call}
-}
-
-// vrfSignerLittleEndianCall wrap *gomock.Call
-type vrfSignerLittleEndianCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *vrfSignerLittleEndianCall) Return(arg0 bool) *vrfSignerLittleEndianCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *vrfSignerLittleEndianCall) Do(f func() bool) *vrfSignerLittleEndianCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *vrfSignerLittleEndianCall) DoAndReturn(f func() bool) *vrfSignerLittleEndianCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
 }
 
 // NodeID mocks base method.
