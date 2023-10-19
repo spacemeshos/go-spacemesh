@@ -450,6 +450,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 	app := New(WithLog(logger))
 	app.Config = getTestDefaultConfig(t)
+	types.SetNetworkHRP(app.Config.NetworkHRP) // ensure that the correct HRP is set when generating the address below
 	app.Config.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte{1}).String()
 	app.Config.SMESHING.Opts.DataDir = t.TempDir()
 	app.Config.SMESHING.Opts.Scrypt.N = 2
@@ -1179,7 +1180,7 @@ func TestAdminEvents(t *testing.T) {
 		app.eg.Wait() // https://github.com/spacemeshos/go-spacemesh/issues/4653
 		return nil
 	})
-	t.Cleanup(func() { eg.Wait() })
+	t.Cleanup(func() { assert.NoError(t, eg.Wait()) })
 
 	grpcCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()

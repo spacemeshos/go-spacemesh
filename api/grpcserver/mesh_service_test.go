@@ -147,7 +147,7 @@ func TestMeshService_MalfeasanceQuery(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg.PublicListener)
+	conn := dialGrpc(ctx, t, cfg)
 	client := pb.NewMeshServiceClient(conn)
 	nodeID, proof := BallotMalfeasance(t, db)
 
@@ -190,7 +190,7 @@ func TestMeshService_MalfeasanceStream(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg.PublicListener)
+	conn := dialGrpc(ctx, t, cfg)
 	client := pb.NewMeshServiceClient(conn)
 
 	for i := 0; i < 10; i++ {

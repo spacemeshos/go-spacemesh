@@ -20,7 +20,6 @@ func init() {
 func standalone() config.Config {
 	conf := config.DefaultConfig()
 	conf.NetworkHRP = "standalone"
-	types.SetNetworkHRP(conf.NetworkHRP) // set to generate coinbase
 
 	conf.TIME.Peersync.Disable = true
 	conf.Standalone = true
@@ -56,6 +55,7 @@ func standalone() config.Config {
 	conf.POST.MaxNumUnits = 2
 	conf.POST.MinNumUnits = 1
 
+	types.SetNetworkHRP(conf.NetworkHRP) // ensure that the correct HRP is set when generating the address below
 	conf.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte("1")).String()
 	conf.SMESHING.Start = true
 	conf.SMESHING.Opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))

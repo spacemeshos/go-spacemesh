@@ -64,7 +64,7 @@ func NewTestNetwork(t *testing.T, conf config.Config, l log.Log, size int) []*Te
 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		conn, err := grpc.DialContext(ctx, app.grpcPublicService.BoundAddress,
+		conn, err := grpc.DialContext(ctx, app.grpcPublicServer.BoundAddress,
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithBlock(),
 		)

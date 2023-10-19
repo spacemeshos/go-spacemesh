@@ -5,8 +5,10 @@ import (
 	"fmt"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"go.uber.org/zap/zapcore"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -29,8 +31,17 @@ type NodeService struct {
 }
 
 // RegisterService registers this service with a grpc server instance.
-func (s NodeService) RegisterService(server *Server) {
-	pb.RegisterNodeServiceServer(server.GrpcServer, s)
+func (s NodeService) RegisterService(server *grpc.Server) {
+	pb.RegisterNodeServiceServer(server, s)
+}
+
+func (s NodeService) RegisterHandlerService(mux *runtime.ServeMux) error {
+	return pb.RegisterNodeServiceHandlerServer(context.Background(), mux, s)
+}
+
+// String returns the name of this service.
+func (s NodeService) String() string {
+	return "NodeService"
 }
 
 // NewNodeService creates a new grpc service using config data.
