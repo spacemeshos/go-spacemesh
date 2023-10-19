@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
+	"github.com/spacemeshos/go-spacemesh/network"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
@@ -95,9 +96,7 @@ func MainnetConfig() Config {
 			WindowSize:               10000,
 			MaxExceptions:            1000,
 			BadBeaconVoteDelayLayers: 4032,
-			// 1000 - is assumed minimal number of units
-			// 5000 - half of the expected poet ticks
-			MinimalActiveSetWeight: 1000 * 5000,
+			MinimalActiveSetWeight:   network.MainnetMinimalActiveSetWeight,
 		},
 		HARE: hareConfig.Config{
 			N:               200,

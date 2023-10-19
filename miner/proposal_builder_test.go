@@ -273,7 +273,9 @@ func TestBuild(t *testing.T) {
 		},
 		{
 			desc: "min active weight",
-			opts: []Opt{WithMinimalActiveSetWeight(1000)},
+			opts: []Opt{WithMinimalActiveSetWeight(func(types.EpochID) uint64 {
+				return 1000
+			})},
 			steps: []step{
 				{
 					lid:    15,

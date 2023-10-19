@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/network"
 )
 
 // Config for protocol parameters.
@@ -23,11 +24,8 @@ type Config struct {
 	// number of layers to delay votes for blocks with bad beacon values during self-healing. ideally a full epoch.
 	BadBeaconVoteDelayLayers uint32 `mapstructure:"tortoise-delay-layers"`
 	// EnableTracer will write tortoise traces to the stderr.
-	EnableTracer bool `mapstructure:"tortoise-enable-tracer"`
-	// MinimalActiveSetWeight denotes weight that will replace weight
-	// recorded in the first ballot, if that weight is less than minimal
-	// for purposes of eligibility computation.
-	MinimalActiveSetWeight uint64 `mapstructure:"tortoise-activeset-weight"`
+	EnableTracer           bool `mapstructure:"tortoise-enable-tracer"`
+	MinimalActiveSetWeight network.GetMinimalActiveSetWeight
 
 	LayerSize uint32
 }

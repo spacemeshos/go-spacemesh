@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/metrics"
+	"github.com/spacemeshos/go-spacemesh/network"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -65,7 +66,7 @@ type Config struct {
 	GoldenATXID            types.ATXID
 	MaxExceptions          int
 	Hdist                  uint32
-	MinimalActiveSetWeight uint64
+	MinimalActiveSetWeight network.GetMinimalActiveSetWeight
 }
 
 // defaultConfig for BlockHandler.

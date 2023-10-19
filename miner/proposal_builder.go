@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/network"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -64,12 +65,13 @@ type ProposalBuilder struct {
 	logger log.Log
 	cfg    config
 
-	cdb       *datastore.CachedDB
-	clock     layerClock
-	publisher pubsub.Publisher
-	conState  conservativeState
-	tortoise  votesEncoder
-	syncer    system.SyncStateProvider
+	cdb          *datastore.CachedDB
+	weightGetter network.GetMinimalActiveSetWeight
+	clock        layerClock
+	publisher    pubsub.Publisher
+	conState     conservativeState
+	tortoise     votesEncoder
+	syncer       system.SyncStateProvider
 
 	mu      sync.Mutex
 	signers map[types.NodeID]*signerSession
@@ -144,12 +146,11 @@ func (s *session) MarshalLogObject(encoder log.ObjectEncoder) error {
 
 // config defines configuration for the ProposalBuilder.
 type config struct {
-	layerSize          uint32
-	layersPerEpoch     uint32
-	hdist              uint32
-	minActiveSetWeight uint64
-	networkDelay       time.Duration
-	workersLimit       int
+	layerSize      uint32
+	layersPerEpoch uint32
+	hdist          uint32
+	networkDelay   time.Duration
+	workersLimit   int
 	// used to determine whether a node has enough information on the active set this epoch
 	goodAtxPercent int
 }
@@ -158,7 +159,6 @@ func (c *config) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("layer size", c.layerSize)
 	encoder.AddUint32("epoch size", c.layersPerEpoch)
 	encoder.AddUint32("hdist", c.hdist)
-	encoder.AddUint64("min active weight", c.minActiveSetWeight)
 	encoder.AddDuration("network delay", c.networkDelay)
 	encoder.AddInt("good atx percent", c.goodAtxPercent)
 	return nil
@@ -189,9 +189,9 @@ func WithLayerPerEpoch(layers uint32) Opt {
 	}
 }
 
-func WithMinimalActiveSetWeight(weight uint64) Opt {
+func WithMinimalActiveSetWeight(getter network.GetMinimalActiveSetWeight) Opt {
 	return func(pb *ProposalBuilder) {
-		pb.cfg.minActiveSetWeight = weight
+		pb.weightGetter = getter
 	}
 }
 
@@ -244,14 +244,15 @@ func New(
 		cfg: config{
 			workersLimit: runtime.NumCPU(),
 		},
-		logger:    log.NewNop(),
-		clock:     clock,
-		cdb:       cdb,
-		publisher: publisher,
-		tortoise:  trtl,
-		syncer:    syncer,
-		conState:  conState,
-		signers:   map[types.NodeID]*signerSession{},
+		logger:       log.NewNop(),
+		clock:        clock,
+		cdb:          cdb,
+		weightGetter: network.NoopMinimalActiveSetWeight,
+		publisher:    publisher,
+		tortoise:     trtl,
+		syncer:       syncer,
+		conState:     conState,
+		signers:      map[types.NodeID]*signerSession{},
 	}
 	for _, opt := range opts {
 		opt(pb)
@@ -439,7 +440,7 @@ func (pb *ProposalBuilder) initSignerData(
 			ss.session.beacon = pb.shared.beacon
 			ss.session.eligibilities.slots = proposals.MustGetNumEligibleSlots(
 				ss.session.atxWeight,
-				pb.cfg.minActiveSetWeight,
+				pb.weightGetter(lid.GetEpoch()),
 				pb.shared.active.weight,
 				pb.cfg.layerSize,
 				pb.cfg.layersPerEpoch,
