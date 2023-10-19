@@ -58,6 +58,7 @@ func (v *VM) addRewards(lctx ApplyContext, ss *core.StagedCache, fees uint64, bl
 			Coinbase:    blockReward.Coinbase,
 			TotalReward: totalReward.Uint64(),
 			LayerReward: subsidyReward.Uint64(),
+			NodeID: blockReward.NodeID,
 		}
 		result = append(result, reward)
 		account, err := ss.Get(blockReward.Coinbase)

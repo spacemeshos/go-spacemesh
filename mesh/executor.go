@@ -182,6 +182,7 @@ func (e *Executor) convertRewards(rewards []types.AnyReward) ([]types.CoinbaseRe
 		}
 		res = append(res, types.CoinbaseReward{
 			Coinbase: atx.Coinbase,
+			NodeID: atx.NodeID,
 			Weight:   r.Weight,
 		})
 	}

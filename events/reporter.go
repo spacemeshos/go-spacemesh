@@ -386,6 +386,7 @@ type Reward struct {
 	Total       uint64
 	LayerReward uint64
 	Coinbase    types.Address
+	NodeID      types.NodeID
 }
 
 // Transaction wraps a tx with its layer ID and validity info.

@@ -396,6 +396,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 					// See https://github.com/spacemeshos/go-spacemesh/issues/2275
 					// LayerComputed: 0,
 					Coinbase: &pb.AccountId{Address: reward.Coinbase.String()},
+					Smesher: &pb.SmesherId{Id: reward.NodeID[:]},
 				},
 			}}}
 			if err := stream.Send(resp); err != nil {
