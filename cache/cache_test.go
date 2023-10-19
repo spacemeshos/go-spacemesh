@@ -39,7 +39,7 @@ func TestCache(t *testing.T) {
 				for i := range nodes[epoch] {
 					bynode := c.GetByNode(types.EpochID(epoch)+1, nodes[epoch][i])
 					require.Equal(t, &data[epoch][i], bynode)
-					byatxid := c.Get(types.EpochID(epoch)+1, atxids[epoch][i])
+					byatxid := c.Get(types.EpochID(epoch)+1, nodes[epoch][i], atxids[epoch][i])
 					require.Equal(t, &data[epoch][i], byatxid)
 					require.True(t, c.NodeHasAtx(types.EpochID(epoch)+1, nodes[epoch][i], atxids[epoch][i]))
 				}
@@ -87,13 +87,13 @@ func TestCache(t *testing.T) {
 	})
 	t.Run("nil responses", func(t *testing.T) {
 		c := New()
-		require.Nil(t, c.Get(0, types.ATXID{}))
-		require.Nil(t, c.Get(1, types.ATXID{}))
+		require.Nil(t, c.Get(0, types.NodeID{}, types.ATXID{}))
+		require.Nil(t, c.Get(1, types.NodeID{}, types.ATXID{}))
 		require.Nil(t, c.GetByNode(1, types.NodeID{}))
 		require.False(t, c.NodeHasAtx(1, types.NodeID{}, types.ATXID{}))
 
 		c.Add(1, types.NodeID{1}, types.ATXID{1}, &ATXData{})
-		require.Nil(t, c.Get(1, types.ATXID{}))
+		require.Nil(t, c.Get(1, types.NodeID{}, types.ATXID{}))
 		require.Nil(t, c.GetByNode(1, types.NodeID{2}))
 		require.False(t, c.NodeHasAtx(1, types.NodeID{}, types.ATXID{}))
 		require.False(t, c.NodeHasAtx(1, types.NodeID{1}, types.ATXID{}))
@@ -102,8 +102,8 @@ func TestCache(t *testing.T) {
 		c := New()
 		c.Add(1, types.NodeID{1}, types.ATXID{1}, &ATXData{Weight: 1})
 		c.Add(1, types.NodeID{1}, types.ATXID{2}, &ATXData{Weight: 2})
-		require.NotNil(t, c.Get(1, types.ATXID{1}))
-		require.NotNil(t, c.Get(1, types.ATXID{2}))
+		require.NotNil(t, c.Get(1, types.NodeID{1}, types.ATXID{1}))
+		require.NotNil(t, c.Get(1, types.NodeID{1}, types.ATXID{2}))
 		require.EqualValues(t, 1, c.GetByNode(1, types.NodeID{1}).Weight)
 	})
 	t.Run("adding after eviction", func(t *testing.T) {
@@ -111,7 +111,7 @@ func TestCache(t *testing.T) {
 		c.OnEpoch(0)
 		c.OnEpoch(3)
 		c.Add(1, types.NodeID{1}, types.ATXID{1}, &ATXData{})
-		require.Nil(t, c.Get(3, types.ATXID{1}))
+		require.Nil(t, c.Get(3, types.NodeID{1}, types.ATXID{1}))
 		c.OnEpoch(3)
 	})
 }
@@ -141,18 +141,18 @@ func TestMemory(t *testing.T) {
 		c.OnEpoch(0) // otherwise cache will be gc'ed
 	}
 	t.Run("1_000_000", func(t *testing.T) {
-		test(t, 1_000_000, 303_000_000, 300_000)
+		test(t, 1_000_000, 132_939_776, 300_000)
 	})
 	t.Run("100_000", func(t *testing.T) {
-		test(t, 100_000, 51_000_000, 200_000)
+		test(t, 100_000, 17_645_568, 200_000)
 	})
 }
 
 func BenchmarkConcurrentReadWrite(b *testing.B) {
 	c := New()
 	const epoch = 1
-	const size = 200_000
-	for i := 1; i <= 200_000; i++ {
+	const size = 1_000_000
+	for i := 1; i <= size; i++ {
 		var (
 			node types.NodeID
 			atx  types.ATXID
@@ -169,16 +169,19 @@ func BenchmarkConcurrentReadWrite(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		var i uint64
 		core := parallel.Add(1)
-		var atx types.ATXID
+		var (
+			node types.NodeID
+			atx  types.ATXID
+		)
 		for pb.Next() {
 			if i%writeFraction == 0 {
-				var node types.NodeID
 				binary.PutUvarint(node[:], size+i*core)
 				binary.PutUvarint(atx[:], size+i*core)
 				c.Add(epoch, node, atx, &ATXData{})
 			} else {
+				binary.PutUvarint(node[:], i%size)
 				binary.PutUvarint(atx[:], i%size)
-				_ = c.Get(epoch, atx)
+				_ = c.Get(epoch, node, atx)
 			}
 			i++
 		}

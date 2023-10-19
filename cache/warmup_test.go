@@ -54,7 +54,7 @@ func TestWarmup(t *testing.T) {
 		c, err := Warm(db, WithCapacity(1))
 		require.NoError(t, err)
 		for _, atx := range data[2:] {
-			require.NotNil(t, c.Get(atx.TargetEpoch(), atx.ID()))
+			require.NotNil(t, c.Get(atx.TargetEpoch(), atx.SmesherID, atx.ID()))
 		}
 	})
 	t.Run("no data", func(t *testing.T) {
