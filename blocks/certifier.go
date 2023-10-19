@@ -220,7 +220,7 @@ func (c *Certifier) RegisterForCert(ctx context.Context, lid types.LayerID, bid 
 
 // CertifyIfEligible signs the hare output, along with its role proof as a certifier, and gossip the CertifyMessage
 // if the node is eligible to be a certifier.
-func (c *Certifier) CertifyIfEligible(ctx context.Context, logger log.Log, lid types.LayerID, bid types.BlockID) error {
+func (c *Certifier) CertifyIfEligible(ctx context.Context, lid types.LayerID, bid types.BlockID) error {
 	if _, err := c.beacon.GetBeacon(lid.GetEpoch()); err != nil {
 		return errBeaconNotAvailable
 	}
@@ -234,7 +234,7 @@ func (c *Certifier) CertifyIfEligible(ctx context.Context, logger log.Log, lid t
 	for _, s := range c.signers {
 		s := s
 		eg.Go(func() error {
-			if err := c.certifySingleSigner(ctx, logger, s, lid, bid); err != nil {
+			if err := c.certifySingleSigner(ctx, s, lid, bid); err != nil {
 				errsMu.Lock()
 				errs = errors.Join(errs, fmt.Errorf("certifying block %v/%v by %s: %w", lid, bid, s.NodeID().ShortString(), err))
 				errsMu.Unlock()
@@ -247,7 +247,7 @@ func (c *Certifier) CertifyIfEligible(ctx context.Context, logger log.Log, lid t
 	return errs
 }
 
-func (c *Certifier) certifySingleSigner(ctx context.Context, logger log.Log, s *signing.EdSigner, lid types.LayerID, bid types.BlockID) error {
+func (c *Certifier) certifySingleSigner(ctx context.Context, s *signing.EdSigner, lid types.LayerID, bid types.BlockID) error {
 	// check if the signer is eligible to certify the hare output
 	proof, err := c.oracle.Proof(ctx, s.VRFSigner(), lid, eligibility.CertifyRound)
 	if err != nil {
