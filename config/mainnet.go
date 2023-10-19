@@ -15,11 +15,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
-	"github.com/spacemeshos/go-spacemesh/network"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
@@ -96,7 +96,12 @@ func MainnetConfig() Config {
 			WindowSize:               10000,
 			MaxExceptions:            1000,
 			BadBeaconVoteDelayLayers: 4032,
-			MinimalActiveSetWeight:   network.MainnetMinimalActiveSetWeight,
+			MinimalActiveSetWeight: []types.EpochMinimalActiveWeight{
+				{Weight: 1_000_000},
+				// generated using ./cmd/activeset for publish epoch 6
+				// it will be used starting from epoch 8, because we will only release it in 7th
+				{Epoch: 8, Weight: 7_879_129_244},
+			},
 		},
 		HARE: hareConfig.Config{
 			N:               200,

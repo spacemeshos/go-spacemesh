@@ -503,3 +503,8 @@ type EpochActiveSet struct {
 	Epoch EpochID
 	Set   []ATXID `scale:"max=1000000"`
 }
+
+type EpochMinimalActiveWeight struct {
+	Epoch  EpochID
+	Weight uint64
+}
