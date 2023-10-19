@@ -638,7 +638,6 @@ func (app *App) initServices(ctx context.Context) error {
 	vrfVerifier := signing.NewVRFVerifier()
 	beaconProtocol := beacon.New(
 		app.host,
-		app.edSgn,
 		app.edVerifier,
 		vrfVerifier,
 		app.cachedDB,
@@ -647,6 +646,7 @@ func (app *App) initServices(ctx context.Context) error {
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)),
 	)
+	beaconProtocol.Register(app.edSgn)
 
 	trtlCfg := app.Config.Tortoise
 	trtlCfg.LayerSize = layerSize
