@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"go.uber.org/atomic"
+	"golang.org/x/exp/maps"
 
 	"github.com/google/btree"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -170,4 +171,26 @@ func (c *Cache) GetByNode(epoch types.EpochID, node types.NodeID) *ATXData {
 func (c *Cache) NodeHasAtx(epoch types.EpochID, node types.NodeID, atx types.ATXID) bool {
 	data := c.Get(epoch, node, atx)
 	return data != nil
+}
+
+func (c *Cache) WeightForSet(epoch types.EpochID, set []types.ATXID) (uint64, []types.ATXID) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	ecache, exists := c.epochs[epoch]
+	if !exists {
+		return 0, set
+	}
+	keyed := make(map[types.ATXID]struct{}, len(set))
+	for _, id := range set {
+		keyed[id] = struct{}{}
+	}
+	var weight uint64
+	ecache.index.Ascend(func(s *stored) bool {
+		if _, exists := keyed[s.atx]; exists {
+			delete(keyed, s.atx)
+			weight += s.data.Weight
+		}
+		return true
+	})
+	return weight, maps.Keys(keyed)
 }

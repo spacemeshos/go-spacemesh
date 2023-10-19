@@ -43,7 +43,16 @@ type ValidatorOpt func(h *Validator)
 
 // NewEligibilityValidator returns a new EligibilityValidator.
 func NewEligibilityValidator(
-	avgLayerSize, layersPerEpoch uint32, minActiveSetWeight uint64, clock layerClock, tortoise tortoiseProvider, db *sql.Database, cache *cache.Cache, bc system.BeaconCollector, lg log.Log, vrfVerifier vrfVerifier, opts ...ValidatorOpt,
+	avgLayerSize, layersPerEpoch uint32,
+	minActiveSetWeight uint64,
+	clock layerClock,
+	tortoise tortoiseProvider,
+	db *sql.Database,
+	cache *cache.Cache,
+	bc system.BeaconCollector,
+	lg log.Log,
+	vrfVerifier vrfVerifier,
+	opts ...ValidatorOpt,
 ) *Validator {
 	v := &Validator{
 		minActiveSetWeight: minActiveSetWeight,
@@ -75,7 +84,13 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot, 
 			return false, fmt.Errorf("failed to load atx %v: %w", ballot.AtxID, err)
 		}
 		if owned.TargetEpoch() != epoch {
-			return false, fmt.Errorf("atx and ballot epochs mismatch. atx %d/%s is not from %d/%s", owned.TargetEpoch(), ballot.AtxID.ShortString(), epoch, ballot.SmesherID.ShortString())
+			return false, fmt.Errorf(
+				"atx and ballot epochs mismatch. atx %d/%s is not from %d/%s",
+				owned.TargetEpoch(),
+				ballot.AtxID.ShortString(),
+				epoch,
+				ballot.SmesherID.ShortString(),
+			)
 		}
 		if ballot.SmesherID != owned.SmesherID {
 			return false, fmt.Errorf("atx and ballot key mismatch: public key (%v), ATX node key (%v)", ballot.SmesherID.String(), owned.NodeID)
@@ -86,12 +101,9 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot, 
 		}
 		atx = cache.ToATXData(owned.ToHeader(), nonce, false)
 	} else {
-		atx = v.cache.Get(epoch, ballot.AtxID)
+		atx = v.cache.Get(epoch, ballot.SmesherID, ballot.AtxID)
 		if atx == nil {
 			return false, fmt.Errorf("failed to load atx from cache with epoch %d %s", epoch, ballot.AtxID.ShortString())
-		}
-		if !v.cache.NodeHasAtx(epoch, ballot.SmesherID, ballot.AtxID) {
-			return false, fmt.Errorf("atx and ballot key mismatch. atx %s is not from %s", ballot.AtxID.ShortString(), ballot.SmesherID.ShortString())
 		}
 	}
 	var (

@@ -130,7 +130,18 @@ func NewHandler(
 		opt(b)
 	}
 	if b.validator == nil {
-		b.validator = NewEligibilityValidator(b.cfg.LayerSize, b.cfg.LayersPerEpoch, b.cfg.MinimalActiveSetWeight, clock, tortoise, db, cache, bc, b.logger, verifier)
+		b.validator = NewEligibilityValidator(
+			b.cfg.LayerSize,
+			b.cfg.LayersPerEpoch,
+			b.cfg.MinimalActiveSetWeight,
+			clock,
+			tortoise,
+			db,
+			cache,
+			bc,
+			b.logger,
+			verifier,
+		)
 	}
 	return b
 }
@@ -558,7 +569,7 @@ func (h *Handler) checkBallotDataAvailability(ctx context.Context, b *types.Ball
 	if err := h.fetcher.GetBallots(ctx, blts); err != nil {
 		return fmt.Errorf("fetch ballots: %w", err)
 	}
-	if h.cache.Get(b.Layer.GetEpoch(), b.AtxID) == nil {
+	if h.cache.Get(b.Layer.GetEpoch(), b.SmesherID, b.AtxID) == nil {
 		if err := h.fetcher.GetAtxs(ctx, []types.ATXID{b.AtxID}); err != nil {
 			return fmt.Errorf("proposal get ATXs: %w", err)
 		}
