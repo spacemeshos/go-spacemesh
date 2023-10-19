@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -42,11 +43,10 @@ func ExtractActiveSet(db sql.Executor) error {
 			} else if err == nil {
 				unique++
 			}
-			// TODO: prune ballot active set after migration 4 is released
-			//b.ActiveSet = nil
-			//if err := ballots.UpdateBlob(db, b.ID(), codec.MustEncode(b)); err != nil {
-			//	return fmt.Errorf("update ballot %s: %w", b.ID().String(), err)
-			//}
+			b.ActiveSet = nil
+			if err := ballots.UpdateBlob(db, b.ID(), codec.MustEncode(b)); err != nil {
+				return fmt.Errorf("update ballot %s: %w", b.ID().String(), err)
+			}
 			extracted++
 		}
 	}

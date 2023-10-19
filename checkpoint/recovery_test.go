@@ -218,8 +218,6 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 
 func validateAndPreserveData(tb testing.TB, db *sql.Database, deps []*types.VerifiedActivationTx, proofs []*types.PoetProofMessage) {
 	lg := logtest.New(tb)
-	edVerifier, err := signing.NewEdVerifier()
-	require.NoError(tb, err)
 	poetDb := activation.NewPoetDb(db, lg)
 	ctrl := gomock.NewController(tb)
 	mclock := activation.NewMocklayerClock(ctrl)
@@ -229,9 +227,10 @@ func validateAndPreserveData(tb testing.TB, db *sql.Database, deps []*types.Veri
 	mtrtl := smocks.NewMockTortoise(ctrl)
 	cdb := datastore.NewCachedDB(db, lg)
 	atxHandler := activation.NewHandler(
+		"",
 		cdb,
 		cache.New(),
-		edVerifier,
+		signing.NewEdVerifier(),
 		mclock,
 		nil,
 		mfetch,
@@ -247,7 +246,6 @@ func validateAndPreserveData(tb testing.TB, db *sql.Database, deps []*types.Veri
 	for i, vatx := range deps {
 		encoded, err := codec.Encode(vatx)
 		require.NoError(tb, err)
-		mclock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now())
 		mclock.EXPECT().CurrentLayer().Return(vatx.PublishEpoch.FirstLayer())
 		mfetch.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any())
 		mfetch.EXPECT().GetPoetProof(gomock.Any(), vatx.GetPoetProofRef())
@@ -268,7 +266,14 @@ func validateAndPreserveData(tb testing.TB, db *sql.Database, deps []*types.Veri
 	}
 }
 
-func newChainedAtx(tb testing.TB, prev, pos types.ATXID, commitAtx *types.ATXID, epoch uint32, seq, vrfnonce uint64, sig *signing.EdSigner) *types.VerifiedActivationTx {
+func newChainedAtx(
+	tb testing.TB,
+	prev, pos types.ATXID,
+	commitAtx *types.ATXID,
+	epoch uint32,
+	seq, vrfnonce uint64,
+	sig *signing.EdSigner,
+) *types.VerifiedActivationTx {
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{

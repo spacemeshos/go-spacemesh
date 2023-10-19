@@ -69,7 +69,12 @@ func createTestMesh(t *testing.T) *testMesh {
 	return tm
 }
 
-func genTx(t testing.TB, signer *signing.EdSigner, dest types.Address, amount, nonce, price uint64) types.Transaction {
+func genTx(
+	t testing.TB,
+	signer *signing.EdSigner,
+	dest types.Address,
+	amount, nonce, price uint64,
+) types.Transaction {
 	t.Helper()
 	raw := wallet.Spend(signer.PrivateKey(), dest, amount, nonce)
 	tx := types.Transaction{
@@ -98,7 +103,13 @@ func CreateAndSaveTxs(t testing.TB, db sql.Executor, numOfTxs int) []types.Trans
 	return txIDs
 }
 
-func createBlock(t testing.TB, db sql.Executor, mesh *Mesh, layerID types.LayerID, nodeID types.NodeID) *types.Block {
+func createBlock(
+	t testing.TB,
+	db sql.Executor,
+	mesh *Mesh,
+	layerID types.LayerID,
+	nodeID types.NodeID,
+) *types.Block {
 	t.Helper()
 	txIDs := CreateAndSaveTxs(t, db, numTXs)
 	b := &types.Block{
@@ -125,7 +136,12 @@ func createIdentity(t *testing.T, db sql.Executor, sig *signing.EdSigner) {
 	require.NoError(t, atxs.Add(db, vAtx))
 }
 
-func createLayerBlocks(t *testing.T, db sql.Executor, mesh *Mesh, lyrID types.LayerID) []*types.Block {
+func createLayerBlocks(
+	t *testing.T,
+	db sql.Executor,
+	mesh *Mesh,
+	lyrID types.LayerID,
+) []*types.Block {
 	t.Helper()
 	blks := make([]*types.Block, 0, numBlocks)
 	for i := 0; i < numBlocks; i++ {
@@ -207,7 +223,12 @@ func TestMesh_WakeUpWhileGenesis(t *testing.T) {
 func TestMesh_WakeUp(t *testing.T) {
 	tm := createTestMesh(t)
 	latest := types.LayerID(11)
-	b := types.NewExistingBallot(types.BallotID{1, 2, 3}, types.EmptyEdSignature, types.EmptyNodeID, latest)
+	b := types.NewExistingBallot(
+		types.BallotID{1, 2, 3},
+		types.EmptyEdSignature,
+		types.EmptyNodeID,
+		latest,
+	)
 	require.NoError(t, ballots.Add(tm.cdb, &b))
 	require.NoError(t, layers.SetProcessed(tm.cdb, latest))
 	latestState := latest.Sub(1)
@@ -246,12 +267,11 @@ func TestMesh_GetLayer(t *testing.T) {
 
 func TestMesh_LatestKnownLayer(t *testing.T) {
 	tm := createTestMesh(t)
-	lg := logtest.New(t)
-	tm.setLatestLayer(lg, types.LayerID(3))
-	tm.setLatestLayer(lg, types.LayerID(7))
-	tm.setLatestLayer(lg, types.LayerID(10))
-	tm.setLatestLayer(lg, types.LayerID(1))
-	tm.setLatestLayer(lg, types.LayerID(2))
+	tm.setLatestLayer(types.LayerID(3))
+	tm.setLatestLayer(types.LayerID(7))
+	tm.setLatestLayer(types.LayerID(10))
+	tm.setLatestLayer(types.LayerID(1))
+	tm.setLatestLayer(types.LayerID(2))
 	require.Equal(t, types.LayerID(10), tm.LatestLayer(), "wrong layer")
 }
 
@@ -337,9 +357,14 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, malProof)
 	require.True(t, blts[1].IsMalicious())
-	edVerifier, err := signing.NewEdVerifier()
-	require.NoError(t, err)
-	nodeID, err := malfeasance.Validate(context.Background(), tm.logger, tm.cdb, edVerifier, nil, &types.MalfeasanceGossip{MalfeasanceProof: *malProof})
+	nodeID, err := malfeasance.Validate(
+		context.Background(),
+		tm.logger,
+		tm.cdb,
+		signing.NewEdVerifier(),
+		nil,
+		&types.MalfeasanceGossip{MalfeasanceProof: *malProof},
+	)
 	require.NoError(t, err)
 	require.Equal(t, sig.NodeID(), nodeID)
 	mal, err = identities.IsMalicious(tm.cdb, sig.NodeID())
@@ -372,7 +397,6 @@ func TestProcessLayer(t *testing.T) {
 	type call struct {
 		// inputs
 		updates []result.Layer
-		results []result.Layer
 
 		// outputs
 		err      string
@@ -419,7 +443,7 @@ func TestProcessLayer(t *testing.T) {
 					applied:  map[types.LayerID]types.BlockID{start: idg("1"), start + 1: idg("2")},
 				},
 				{
-					results: rlayers(
+					updates: rlayers(
 						rlayer(start+2, rblock(idg("3"), fixture.Valid(), fixture.Data())),
 						rlayer(start+3, rblock(idg("4"), fixture.Valid(), fixture.Data())),
 					),
@@ -438,7 +462,7 @@ func TestProcessLayer(t *testing.T) {
 					err: "missing",
 				},
 				{
-					results: rlayers(
+					updates: rlayers(
 						rlayer(start, rblock(idg("1"), fixture.Data(), fixture.Valid())),
 					),
 					executed: map[types.LayerID]types.BlockID{start: idg("1")},
@@ -459,7 +483,7 @@ func TestProcessLayer(t *testing.T) {
 					err: "missing",
 				},
 				{
-					results: rlayers(
+					updates: rlayers(
 						rlayer(start, rblock(idg("1"), fixture.Invalid())),
 					),
 					executed: map[types.LayerID]types.BlockID{start: {}},
@@ -586,7 +610,7 @@ func TestProcessLayer(t *testing.T) {
 					err: "missing",
 				},
 				{
-					results: rlayers(
+					updates: rlayers(
 						rlayer(start,
 							rblock(idg("1"), fixture.Invalid(), fixture.Data()),
 							rblock(idg("3"), fixture.Valid(), fixture.Data()),
@@ -610,9 +634,6 @@ func TestProcessLayer(t *testing.T) {
 				},
 				{
 					updates: rlayers(
-						rlayer(start+1, rblock(idg("2"), fixture.Valid(), fixture.Data())),
-					),
-					results: rlayers(
 						rlayer(start, rblock(idg("1"), fixture.Valid(), fixture.Data())),
 						rlayer(start+1, rblock(idg("2"), fixture.Valid(), fixture.Data())),
 					),
@@ -643,11 +664,6 @@ func TestProcessLayer(t *testing.T) {
 			[]call{
 				{
 					updates: rlayers(
-						fixture.RLayerNonFinal(start.Add(1),
-							fixture.RBlock(fixture.IDGen("2"), fixture.Valid(), fixture.Data()),
-						),
-					),
-					results: rlayers(
 						rlayer(start,
 							fixture.RBlock(fixture.IDGen("1"), fixture.Valid(), fixture.Data()),
 						),
@@ -700,6 +716,7 @@ func TestProcessLayer(t *testing.T) {
 
 			tm := createTestMesh(t)
 			tm.mockTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any()).AnyTimes()
+			tm.mockTortoise.EXPECT().OnApplied(gomock.Any(), gomock.Any()).AnyTimes()
 			tm.mockVM.EXPECT().GetStateRoot().AnyTimes()
 			tm.mockVM.EXPECT().Revert(gomock.Any()).AnyTimes()
 			tm.mockState.EXPECT().RevertCache(gomock.Any()).AnyTimes()
@@ -708,14 +725,12 @@ func TestProcessLayer(t *testing.T) {
 			for _, c := range tc.calls {
 				for _, executed := range c.executed {
 					tm.mockVM.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any())
-					tm.mockState.EXPECT().UpdateCache(gomock.Any(), gomock.Any(), executed, gomock.Any(), gomock.Any()).Return(nil)
+					tm.mockState.EXPECT().
+						UpdateCache(gomock.Any(), gomock.Any(), executed, gomock.Any(), gomock.Any()).
+						Return(nil)
 				}
 				tm.mockTortoise.EXPECT().Updates().Return(c.updates)
-				if c.results != nil {
-					tm.mockTortoise.EXPECT().Results(gomock.Any(), gomock.Any()).Return(c.results, nil)
-				}
 				ensuresDatabaseConsistent(t, tm.cdb, c.updates)
-				ensuresDatabaseConsistent(t, tm.cdb, c.results)
 				err := tm.ProcessLayer(context.TODO(), lid)
 				if len(c.err) > 0 {
 					require.ErrorContains(t, err, c.err)
@@ -899,7 +914,11 @@ func TestProcessLayerPerHareOutput(t *testing.T) {
 			t.Parallel()
 			tm := createTestMesh(t)
 			tm.mockTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any()).AnyTimes()
-			tm.mockTortoise.EXPECT().Updates().Return(nil).AnyTimes() // this makes ProcessLayer noop
+			tm.mockTortoise.EXPECT().
+				Updates().
+				Return(nil).
+				AnyTimes()
+				// this makes ProcessLayer noop
 			for _, c := range tc.certs {
 				if c.cert.Cert != nil {
 					require.NoError(t, certificates.Add(tm.cdb, c.layer, c.cert.Cert))

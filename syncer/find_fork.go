@@ -82,7 +82,7 @@ func (ff *ForkFinder) Purge(all bool, toPurge ...p2p.Peer) {
 		return
 	}
 
-	peers := ff.fetcher.GetPeers()
+	peers := ff.fetcher.SelectBest(fetch.RedundantPeers)
 	uniquePeers := make(map[p2p.Peer]struct{})
 	for _, p := range peers {
 		uniquePeers[p] = struct{}{}
@@ -134,7 +134,12 @@ func (ff *ForkFinder) NeedResync(lid types.LayerID, hash types.Hash32) bool {
 
 // FindFork finds the point of divergence in layer opinions between the node and the specified peer
 // from a given disagreed layer.
-func (ff *ForkFinder) FindFork(ctx context.Context, peer p2p.Peer, diffLid types.LayerID, diffHash types.Hash32) (types.LayerID, error) {
+func (ff *ForkFinder) FindFork(
+	ctx context.Context,
+	peer p2p.Peer,
+	diffLid types.LayerID,
+	diffHash types.Hash32,
+) (types.LayerID, error) {
 	logger := ff.logger.WithContext(ctx).WithFields(
 		log.Stringer("diff_layer", diffLid),
 		log.Stringer("diff_hash", diffHash),
@@ -213,7 +218,12 @@ func (ff *ForkFinder) FindFork(ctx context.Context, peer p2p.Peer, diffLid types
 }
 
 // UpdateAgreement updates the layer at which the peer agreed with the node.
-func (ff *ForkFinder) UpdateAgreement(peer p2p.Peer, lid types.LayerID, hash types.Hash32, created time.Time) {
+func (ff *ForkFinder) UpdateAgreement(
+	peer p2p.Peer,
+	lid types.LayerID,
+	hash types.Hash32,
+	created time.Time,
+) {
 	ff.updateAgreement(peer, &layerHash{layer: lid, hash: hash}, created)
 }
 
@@ -273,7 +283,12 @@ func (ff *ForkFinder) setupBoundary(peer p2p.Peer, oldestDiff *layerHash) (*boun
 // if the number of hashes is less than maxHashesInReq, then request every hash.
 // otherwise, set appropriate params such that the number of hashes requested is maxHashesInReq
 // while ensuring hashes for the boundary layers are requested.
-func (ff *ForkFinder) sendRequest(ctx context.Context, logger log.Log, peer p2p.Peer, bnd *boundary) (*fetch.MeshHashes, error) {
+func (ff *ForkFinder) sendRequest(
+	ctx context.Context,
+	logger log.Log,
+	peer p2p.Peer,
+	bnd *boundary,
+) (*fetch.MeshHashes, error) {
 	if bnd == nil {
 		logger.Fatal("invalid args")
 	} else if bnd.from == nil || bnd.to == nil || !bnd.to.layer.After(bnd.from.layer) {

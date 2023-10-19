@@ -47,11 +47,12 @@ func testnet() config.Config {
 	defaultdir := filepath.Join(home, "spacemesh-testnet", "/")
 	return config.Config{
 		BaseConfig: config.BaseConfig{
-			DataDirParent:       defaultdir,
-			FileLock:            filepath.Join(os.TempDir(), "spacemesh.lock"),
-			MetricsPort:         1010,
-			DatabaseConnections: 16,
-			NetworkHRP:          "stest",
+			DataDirParent:                defaultdir,
+			FileLock:                     filepath.Join(os.TempDir(), "spacemesh.lock"),
+			MetricsPort:                  1010,
+			DatabaseConnections:          16,
+			DatabaseSizeMeteringInterval: 10 * time.Minute,
+			NetworkHRP:                   "stest",
 
 			LayerDuration:  5 * time.Minute,
 			LayerAvgSize:   50,
@@ -62,8 +63,9 @@ func testnet() config.Config {
 
 			OptFilterThreshold: 90,
 
-			TickSize:    666514,
-			PoETServers: []string{},
+			TickSize:            666514,
+			PoETServers:         []string{},
+			RegossipAtxInterval: time.Hour,
 		},
 		Genesis: &config.GenesisConfig{
 			GenesisTime: "2023-09-13T18:00:00Z",
@@ -134,10 +136,11 @@ func testnet() config.Config {
 		FETCH:    fetch.DefaultConfig(),
 		LOGGING:  config.DefaultLoggingConfig(),
 		Sync: syncer.Config{
-			Interval:         time.Minute,
-			EpochEndFraction: 0.8,
-			MaxStaleDuration: time.Hour,
-			GossipDuration:   50 * time.Second,
+			Interval:                 time.Minute,
+			EpochEndFraction:         0.8,
+			MaxStaleDuration:         time.Hour,
+			GossipDuration:           50 * time.Second,
+			OutOfSyncThresholdLayers: 10,
 		},
 		Recovery: checkpoint.DefaultConfig(),
 		Cache:    datastore.DefaultConfig(),

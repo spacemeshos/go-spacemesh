@@ -57,7 +57,8 @@ func TestAdminService_Checkpoint(t *testing.T) {
 	db := sql.InMemory()
 	createMesh(t, db)
 	svc := NewAdminService(db, t.TempDir(), nil)
-	t.Cleanup(launchServer(t, cfg, svc))
+	cfg, cleanup := launchServer(t, svc)
+	t.Cleanup(cleanup)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -92,7 +93,8 @@ func TestAdminService_Checkpoint(t *testing.T) {
 func TestAdminService_CheckpointError(t *testing.T) {
 	db := sql.InMemory()
 	svc := NewAdminService(db, t.TempDir(), nil)
-	t.Cleanup(launchServer(t, cfg, svc))
+	cfg, cleanup := launchServer(t, svc)
+	t.Cleanup(cleanup)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -111,7 +113,8 @@ func TestAdminService_Recovery(t *testing.T) {
 	svc := NewAdminService(db, t.TempDir(), nil)
 	svc.recover = func() { recoveryCalled.Store(true) }
 
-	t.Cleanup(launchServer(t, cfg, svc))
+	cfg, cleanup := launchServer(t, svc)
+	t.Cleanup(cleanup)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

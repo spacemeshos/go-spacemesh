@@ -257,7 +257,6 @@ func (h *Handler) HandleProposal(ctx context.Context, peer p2p.Peer, data []byte
 
 // HandleProposal is the gossip receiver for Proposal.
 func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer p2p.Peer, data []byte) error {
-	receivedTime := time.Now()
 	logger := h.logger.WithContext(ctx)
 
 	t0 := time.Now()
@@ -276,9 +275,6 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 		tooFuture.Inc()
 		return fmt.Errorf("proposal from future: %d/%s", p.Layer, p.ID().String())
 	}
-
-	latency := receivedTime.Sub(h.clock.LayerToTime(p.Layer))
-	metrics.ReportMessageLatency(pubsub.ProposalProtocol, pubsub.ProposalProtocol, latency)
 
 	if !h.edVerifier.Verify(signing.PROPOSAL, p.SmesherID, p.SignedBytes(), p.Signature) {
 		badSigProposal.Inc()
@@ -376,6 +372,7 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 		}
 		return errMaliciousBallot
 	}
+	metrics.ReportMessageLatency(pubsub.ProposalProtocol, pubsub.ProposalProtocol, time.Since(h.clock.LayerToTime(p.Layer)))
 	return nil
 }
 

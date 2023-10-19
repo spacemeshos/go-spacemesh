@@ -1,6 +1,5 @@
 package node
 
-//lint:file-ignore SA1019 hide deprecated protobuf version error
 import (
 	"bytes"
 	"context"
@@ -12,13 +11,10 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/jsonpb"
-	"github.com/golang/protobuf/proto"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/post/initialization"
@@ -34,6 +30,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
@@ -159,7 +157,10 @@ func TestSpacemeshApp_SetLoggers(t *testing.T) {
 	app.log = app.addLogger(mylogger, myLog)
 	msg1 := "hi there"
 	app.log.Info(msg1)
-	r.Equal(fmt.Sprintf("INFO\t%s\t%s\t{\"module\": \"%s\"}\n", mylogger, msg1, mylogger), buf1.String())
+	r.Equal(
+		fmt.Sprintf("INFO\t%s\t%s\t{\"module\": \"%s\"}\n", mylogger, msg1, mylogger),
+		buf1.String(),
+	)
 	r.NoError(app.SetLogLevel(mylogger, "warn"))
 	r.Equal("warn", app.loggers[mylogger].String())
 	buf1.Reset()
@@ -172,7 +173,10 @@ func TestSpacemeshApp_SetLoggers(t *testing.T) {
 	app.log.Info(msg2)
 	// This one should be printed
 	app.log.Warning(msg3)
-	r.Equal(fmt.Sprintf("WARN\t%s\t%s\t{\"module\": \"%s\"}\n", mylogger, msg3, mylogger), buf1.String())
+	r.Equal(
+		fmt.Sprintf("WARN\t%s\t%s\t{\"module\": \"%s\"}\n", mylogger, msg3, mylogger),
+		buf1.String(),
+	)
 	r.Equal(fmt.Sprintf("INFO\t%s\n", msg1), buf2.String())
 	buf1.Reset()
 
@@ -181,7 +185,10 @@ func TestSpacemeshApp_SetLoggers(t *testing.T) {
 	msg4 := "nihao"
 	app.log.Info(msg4)
 	r.Equal("info", app.loggers[mylogger].String())
-	r.Equal(fmt.Sprintf("INFO\t%s\t%s\t{\"module\": \"%s\"}\n", mylogger, msg4, mylogger), buf1.String())
+	r.Equal(
+		fmt.Sprintf("INFO\t%s\t%s\t{\"module\": \"%s\"}\n", mylogger, msg4, mylogger),
+		buf1.String(),
+	)
 
 	// test bad logger name
 	r.Error(app.SetLogLevel("anton3", "warn"))
@@ -203,7 +210,10 @@ func TestSpacemeshApp_AddLogger(t *testing.T) {
 	subLogger.Debug("should not get printed")
 	teststr := "should get printed"
 	subLogger.Info(teststr)
-	r.Equal(fmt.Sprintf("INFO\t%s\t%s\t{\"module\": \"%s\"}\n", mylogger, teststr, mylogger), buf.String())
+	r.Equal(
+		fmt.Sprintf("INFO\t%s\t%s\t{\"module\": \"%s\"}\n", mylogger, teststr, mylogger),
+		buf.String(),
+	)
 }
 
 func testArgs(ctx context.Context, root *cobra.Command, args ...string) (string, error) {
@@ -256,23 +266,21 @@ func TestSpacemeshApp_Cmd(t *testing.T) {
 	r.Equal(config.JSONLogEncoder, app.Config.LOGGING.Encoder)
 }
 
-func marshalProto(t *testing.T, msg proto.Message) string {
-	var buf bytes.Buffer
-	var m jsonpb.Marshaler
-	require.NoError(t, m.Marshal(&buf, msg))
-	return buf.String()
+func marshalProto(t *testing.T, msg proto.Message) []byte {
+	buf, err := protojson.Marshal(msg)
+	require.NoError(t, err)
+	return buf
 }
 
-func callEndpoint(t *testing.T, endpoint, payload, address string) (string, int) {
-	url := fmt.Sprintf("http://%s/%s", address, endpoint)
-	resp, err := http.Post(url, "application/json", strings.NewReader(payload))
+func callEndpoint(t *testing.T, url string, payload []byte) ([]byte, int) {
+	resp, err := http.Post(url, "application/json", bytes.NewReader(payload))
 	require.NoError(t, err)
 	require.Equal(t, "application/json", resp.Header.Get("Content-Type"))
 	buf, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.NoError(t, resp.Body.Close())
 
-	return string(buf), resp.StatusCode
+	return buf, resp.StatusCode
 }
 
 func TestSpacemeshApp_GrpcService(t *testing.T) {
@@ -300,28 +308,39 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	r.NoError(err)
 	r.Empty(app.Config.API.PublicServices)
 
-	_, err = grpc.Dial(
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_, err = grpc.DialContext(
+		ctx,
 		listener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
-		grpc.WithTimeout(2*time.Second),
 	)
 	r.ErrorContains(err, "context deadline exceeded")
 
 	events.CloseEventReporter()
 
 	// Test starting the server from the command line
-	str, err = testArgs(context.Background(), cmdWithRun(run), "--grpc-public-listener", listener, "--grpc-public-services", "node")
+	str, err = testArgs(
+		context.Background(),
+		cmdWithRun(run),
+		"--grpc-public-listener",
+		listener,
+		"--grpc-public-services",
+		"node",
+	)
 	r.Empty(str)
 	r.NoError(err)
 	r.Equal(listener, app.Config.API.PublicListener)
 	r.Contains(app.Config.API.PublicServices, "node")
 
-	conn, err := grpc.Dial(
+	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	conn, err := grpc.DialContext(
+		ctx,
 		listener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
-		grpc.WithTimeout(2*time.Second),
 	)
 	r.NoError(err)
 	t.Cleanup(func() { r.NoError(conn.Close()) })
@@ -361,7 +380,7 @@ func TestSpacemeshApp_JsonServiceNotRunning(t *testing.T) {
 
 	// We expect this one to fail
 	url := fmt.Sprintf("http://%s/%s", app.Config.API.JSONListener, "v1/node/echo")
-	_, err = http.Post(url, "application/json", strings.NewReader(payload))
+	_, err = http.Post(url, "application/json", bytes.NewReader(payload))
 	r.Error(err)
 
 	events.CloseEventReporter()
@@ -384,7 +403,14 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	// Test starting the JSON server from the commandline
 	// uses Cmd.Run from above
 	listener := "127.0.0.1:1234"
-	str, err := testArgs(context.Background(), cmdWithRun(run), "--grpc-public-services", "node", "--grpc-json-listener", listener)
+	str, err := testArgs(
+		context.Background(),
+		cmdWithRun(run),
+		"--grpc-public-services",
+		"node",
+		"--grpc-json-listener",
+		listener,
+	)
 	r.Empty(str)
 	r.NoError(err)
 	defer app.stopServices(context.Background())
@@ -392,25 +418,32 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	r.Contains(app.Config.API.PublicServices, "node")
 
 	var (
-		respBody   string
+		respBody   []byte
 		respStatus int
 	)
 	require.Eventually(t, func() bool {
-		respBody, respStatus = callEndpoint(t, "v1/node/echo", payload, app.Config.API.JSONListener)
+		respBody, respStatus = callEndpoint(
+			t,
+			fmt.Sprintf("http://%s/v1/node/echo", app.Config.API.JSONListener),
+			payload,
+		)
 		return respStatus == http.StatusOK
 	}, 2*time.Second, 100*time.Millisecond)
 	var msg pb.EchoResponse
-	require.NoError(t, jsonpb.UnmarshalString(respBody, &msg))
+	require.NoError(t, protojson.Unmarshal(respBody, &msg))
 	require.Equal(t, message, msg.Msg.Value)
 	require.Equal(t, http.StatusOK, respStatus)
-	require.NoError(t, jsonpb.UnmarshalString(respBody, &msg))
+	require.NoError(t, protojson.Unmarshal(respBody, &msg))
 	require.Equal(t, message, msg.Msg.Value)
 }
 
 // E2E app test of the stream endpoints in the NodeService.
 func TestSpacemeshApp_NodeService(t *testing.T) {
 	logger := logtest.New(t)
-	errlog := log.RegisterHooks(logtest.New(t, zap.ErrorLevel), events.EventHook()) // errlog is used to simulate errors in the app
+	errlog := log.RegisterHooks(
+		logtest.New(t, zap.ErrorLevel),
+		events.EventHook(),
+	) // errlog is used to simulate errors in the app
 
 	// Use a unique port
 	port := 1240
@@ -419,6 +452,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	app.Config = getTestDefaultConfig(t)
 	app.Config.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte{1}).String()
 	app.Config.SMESHING.Opts.DataDir = t.TempDir()
+	app.Config.SMESHING.Opts.Scrypt.N = 2
 
 	edSgn, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -455,7 +489,16 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	// If there's an error in the args, it will return immediately.
 	var eg errgroup.Group
 	eg.Go(func() error {
-		str, err := testArgs(ctx, cmdWithRun(run), "--grpc-private-listener", fmt.Sprintf("localhost:%d", port), "--grpc-private-services", "node", "--grpc-public-services", "debug")
+		str, err := testArgs(
+			ctx,
+			cmdWithRun(run),
+			"--grpc-private-listener",
+			fmt.Sprintf("localhost:%d", port),
+			"--grpc-private-services",
+			"node",
+			"--grpc-public-services",
+			"debug",
+		)
 		assert.Empty(t, str)
 		assert.NoError(t, err)
 		return nil
@@ -593,18 +636,28 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	}()
 
 	<-app.Started()
-	require.Eventually(t, func() bool { return app.syncer.IsSynced(ctx) }, 4*time.Second, 10*time.Millisecond)
-	conn, err := grpc.Dial(
+	require.Eventually(
+		t,
+		func() bool { return app.syncer.IsSynced(ctx) },
+		4*time.Second,
+		10*time.Millisecond,
+	)
+
+	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	conn, err := grpc.DialContext(
+		ctx,
 		listener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
-		grpc.WithTimeout(5*time.Second),
 	)
 	r.NoError(err)
 	t.Cleanup(func() { r.NoError(conn.Close()) })
 	c := pb.NewTransactionServiceClient(conn)
 
-	tx1 := types.NewRawTx(wallet.SelfSpawn(signer.PrivateKey(), 0, sdk.WithGenesisID(cfg.Genesis.GenesisID())))
+	tx1 := types.NewRawTx(
+		wallet.SelfSpawn(signer.PrivateKey(), 0, sdk.WithGenesisID(cfg.Genesis.GenesisID())),
+	)
 
 	stream, err := c.TransactionsStateStream(ctx, &pb.TransactionsStateStreamRequest{
 		TransactionId:       []*pb.TransactionId{{Id: tx1.ID.Bytes()}},
@@ -791,7 +844,9 @@ func TestConfig_CustomTypes(t *testing.T) {
 			cli:    "--post-pow-difficulty=00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
 			config: `{"post": {"post-pow-difficulty": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"}}`,
 			updatePreset: func(t *testing.T, c *config.Config) {
-				diff, err := hex.DecodeString("00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff")
+				diff, err := hex.DecodeString(
+					"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+				)
 				require.NoError(t, err)
 				copy(c.POST.PowDifficulty[:], diff)
 			},
@@ -918,7 +973,19 @@ func TestConfig_PostProviderID_InvalidValues(t *testing.T) {
 			cmd.AddCommands(c)
 
 			path := filepath.Join(t.TempDir(), "config.json")
-			require.NoError(t, os.WriteFile(path, []byte(fmt.Sprintf(`{"smeshing": {"smeshing-opts": {"smeshing-opts-provider": %s}}}`, tc.configValue)), 0o600))
+			require.NoError(
+				t,
+				os.WriteFile(
+					path,
+					[]byte(
+						fmt.Sprintf(
+							`{"smeshing": {"smeshing-opts": {"smeshing-opts-provider": %s}}}`,
+							tc.configValue,
+						),
+					),
+					0o600,
+				),
+			)
 			require.NoError(t, c.ParseFlags([]string{"--config=" + path}))
 
 			t.Cleanup(cmd.ResetConfig)
@@ -1005,7 +1072,10 @@ func TestGenesisConfig(t *testing.T) {
 		t.Cleanup(func() { app.Cleanup(context.Background()) })
 
 		var existing config.GenesisConfig
-		require.NoError(t, existing.LoadFromFile(filepath.Join(app.Config.DataDir(), genesisFileName)))
+		require.NoError(
+			t,
+			existing.LoadFromFile(filepath.Join(app.Config.DataDir(), genesisFileName)),
+		)
 		require.Empty(t, existing.Diff(app.Config.Genesis))
 	})
 
@@ -1085,11 +1155,15 @@ func TestAdminEvents(t *testing.T) {
 	require.NoError(t, err)
 	cfg.DataDirParent = t.TempDir()
 	cfg.FileLock = filepath.Join(cfg.DataDirParent, "LOCK")
-	cfg.SMESHING.Opts.DataDir = t.TempDir()
+	cfg.SMESHING.Opts.DataDir = cfg.DataDirParent
+	cfg.SMESHING.Opts.Scrypt.N = 2
+	cfg.POSTService.PostServiceCmd = activation.DefaultTestPostServiceConfig().PostServiceCmd
+
 	cfg.Genesis.GenesisTime = time.Now().Add(5 * time.Second).Format(time.RFC3339)
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 
-	app := New(WithConfig(&cfg), WithLog(logtest.New(t)))
+	logger := logtest.New(t, zapcore.DebugLevel)
+	app := New(WithConfig(&cfg), WithLog(logger))
 	signer, err := app.LoadOrCreateEdSigner()
 	require.NoError(t, err)
 	app.edSgn = signer // https://github.com/spacemeshos/go-spacemesh/issues/4653
@@ -1107,7 +1181,7 @@ func TestAdminEvents(t *testing.T) {
 	})
 	t.Cleanup(func() { eg.Wait() })
 
-	grpcCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	grpcCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	conn, err := grpc.DialContext(
 		grpcCtx,
@@ -1119,7 +1193,7 @@ func TestAdminEvents(t *testing.T) {
 	t.Cleanup(func() { assert.NoError(t, conn.Close()) })
 	client := pb.NewAdminServiceClient(conn)
 
-	tctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	tctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
 
 	// 4 is arbitrary, if we received events once, they must be
@@ -1128,6 +1202,7 @@ func TestAdminEvents(t *testing.T) {
 		stream, err := client.EventsStream(tctx, &pb.EventStreamRequest{})
 		require.NoError(t, err)
 		success := []pb.IsEventDetails{
+			&pb.Event_PostServiceStarted{},
 			&pb.Event_Beacon{},
 			&pb.Event_InitStart{},
 			&pb.Event_InitComplete{},
@@ -1192,13 +1267,14 @@ func getTestDefaultConfig(tb testing.TB) *config.Config {
 	cfg.FileLock = filepath.Join(tmp, "LOCK")
 
 	cfg.FETCH.RequestTimeout = 10
-	cfg.FETCH.MaxRetriesForPeer = 5
 	cfg.FETCH.BatchSize = 5
 	cfg.FETCH.BatchTimeout = 5
 
 	cfg.Beacon = beacon.NodeSimUnitTestConfig()
 
 	cfg.Genesis = config.DefaultTestGenesisConfig()
+
+	cfg.POSTService = config.DefaultTestConfig().POSTService
 
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 

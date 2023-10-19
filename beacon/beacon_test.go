@@ -17,6 +17,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -31,10 +32,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
-const (
-	numATXs = 10
-)
-
 func coinValueMock(tb testing.TB, value bool) coin {
 	ctrl := gomock.NewController(tb)
 	coinMock := NewMockcoin(ctrl)
@@ -43,10 +40,9 @@ func coinValueMock(tb testing.TB, value bool) coin {
 		gomock.AssignableToTypeOf(types.EpochID(0)),
 	).AnyTimes()
 	coinMock.EXPECT().FinishEpoch(gomock.Any(), gomock.AssignableToTypeOf(types.EpochID(0))).AnyTimes()
-	nonce := types.VRFPostIndex(0)
 	coinMock.EXPECT().StartRound(gomock.Any(),
 		gomock.AssignableToTypeOf(types.RoundID(0)),
-		gomock.AssignableToTypeOf(&nonce),
+		gomock.AssignableToTypeOf([]weakcoin.Participant{}),
 	).AnyTimes()
 	coinMock.EXPECT().FinishRound(gomock.Any()).AnyTimes()
 	coinMock.EXPECT().Get(
@@ -71,49 +67,41 @@ func newPublisher(tb testing.TB) pubsub.Publisher {
 
 type testProtocolDriver struct {
 	*ProtocolDriver
-	ctrl          *gomock.Controller
-	cdb           *datastore.CachedDB
-	mClock        *MocklayerClock
-	mSync         *mocks.MockSyncStateProvider
-	mSigner       *MockvrfSigner
-	mVerifier     *MockvrfVerifier
-	mNonceFetcher *MocknonceFetcher
+	ctrl      *gomock.Controller
+	cdb       *datastore.CachedDB
+	mClock    *MocklayerClock
+	mSync     *mocks.MockSyncStateProvider
+	mVerifier *MockvrfVerifier
 }
 
 func setUpProtocolDriver(tb testing.TB) *testProtocolDriver {
-	return newTestDriver(tb, UnitTestConfig(), newPublisher(tb))
+	return newTestDriver(tb, UnitTestConfig(), newPublisher(tb), 3, "")
 }
 
-func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher) *testProtocolDriver {
+func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher, miners int, id string) *testProtocolDriver {
 	ctrl := gomock.NewController(tb)
 	tpd := &testProtocolDriver{
-		ctrl:          ctrl,
-		mClock:        NewMocklayerClock(ctrl),
-		mSync:         mocks.NewMockSyncStateProvider(ctrl),
-		mSigner:       NewMockvrfSigner(ctrl),
-		mVerifier:     NewMockvrfVerifier(ctrl),
-		mNonceFetcher: NewMocknonceFetcher(ctrl),
+		ctrl:      ctrl,
+		mClock:    NewMocklayerClock(ctrl),
+		mSync:     mocks.NewMockSyncStateProvider(ctrl),
+		mVerifier: NewMockvrfVerifier(ctrl),
 	}
-	edSgn, err := signing.NewEdSigner()
-	require.NoError(tb, err)
-	edVerify, err := signing.NewEdVerifier()
-	require.NoError(tb, err)
-	minerID := edSgn.NodeID()
-	lg := logtest.New(tb).WithName(minerID.ShortString())
+	lg := logtest.New(tb).Named(id)
 
-	tpd.mSigner.EXPECT().Sign(gomock.Any()).AnyTimes().Return(types.EmptyVrfSignature)
 	tpd.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(true)
-	tpd.mNonceFetcher.EXPECT().VRFNonce(gomock.Any(), gomock.Any()).AnyTimes().Return(types.VRFPostIndex(1), nil)
 
 	tpd.cdb = datastore.NewCachedDB(sql.InMemory(), lg)
-	tpd.ProtocolDriver = New(minerID, p, edSgn, edVerify, tpd.mSigner, tpd.mVerifier, tpd.cdb, tpd.mClock,
+	tpd.ProtocolDriver = New(p, signing.NewEdVerifier(), tpd.mVerifier, tpd.cdb, tpd.mClock,
 		WithConfig(cfg),
 		WithLogger(lg),
 		withWeakCoin(coinValueMock(tb, true)),
-		withNonceFetcher(tpd.mNonceFetcher),
 	)
 	tpd.ProtocolDriver.SetSyncState(tpd.mSync)
-	tpd.ProtocolDriver.setMetricsRegistry(prometheus.NewPedanticRegistry())
+	for i := 0; i < miners; i++ {
+		edSgn, err := signing.NewEdSigner()
+		require.NoError(tb, err)
+		tpd.ProtocolDriver.Register(edSgn)
+	}
 	return tpd
 }
 
@@ -155,18 +143,20 @@ func TestMain(m *testing.M) {
 
 func TestBeacon_MultipleNodes(t *testing.T) {
 	numNodes := 5
+	numMinersPerNode := 7
 	testNodes := make([]*testProtocolDriver, 0, numNodes)
 	publisher := pubsubmocks.NewMockPublisher(gomock.NewController(t))
 	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 		func(ctx context.Context, protocol string, data []byte) error {
-			for _, node := range testNodes {
+			for i, node := range testNodes {
+				peer := p2p.Peer(fmt.Sprint(i))
 				switch protocol {
 				case pubsub.BeaconProposalProtocol:
-					require.NoError(t, node.HandleProposal(ctx, p2p.Peer(node.nodeID.ShortString()), data))
+					require.NoError(t, node.HandleProposal(ctx, peer, data))
 				case pubsub.BeaconFirstVotesProtocol:
-					require.NoError(t, node.HandleFirstVotes(ctx, p2p.Peer(node.nodeID.ShortString()), data))
+					require.NoError(t, node.HandleFirstVotes(ctx, peer, data))
 				case pubsub.BeaconFollowingVotesProtocol:
-					require.NoError(t, node.HandleFollowingVotes(ctx, p2p.Peer(node.nodeID.ShortString()), data))
+					require.NoError(t, node.HandleFollowingVotes(ctx, peer, data))
 				case pubsub.BeaconWeakCoinProtocol:
 				}
 			}
@@ -180,7 +170,7 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 	bootstrap := types.Beacon{1, 2, 3, 4}
 	now := time.Now()
 	for i := 0; i < numNodes; i++ {
-		node := newTestDriver(t, cfg, publisher)
+		node := newTestDriver(t, cfg, publisher, numMinersPerNode, fmt.Sprintf("node-%d", i))
 		require.NoError(t, node.UpdateBeacon(types.EpochID(2), bootstrap))
 		node.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 		node.mClock.EXPECT().CurrentLayer().Return(current).AnyTimes()
@@ -199,8 +189,11 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 			// make the first node non-smeshing node
 			continue
 		}
+
 		for _, db := range dbs {
-			createATX(t, db, atxPublishLid, node.edSigner, 1, time.Now().Add(-1*time.Second))
+			for _, s := range node.signers {
+				createATX(t, db, atxPublishLid, s, 1, time.Now().Add(-1*time.Second))
+			}
 		}
 	}
 	var wg sync.WaitGroup
@@ -228,14 +221,14 @@ func TestBeacon_MultipleNodes_OnlyOneHonest(t *testing.T) {
 	publisher := pubsubmocks.NewMockPublisher(gomock.NewController(t))
 	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 		func(ctx context.Context, protocol string, data []byte) error {
-			for _, node := range testNodes {
+			for i, node := range testNodes {
 				switch protocol {
 				case pubsub.BeaconProposalProtocol:
-					require.NoError(t, node.HandleProposal(ctx, p2p.Peer(node.nodeID.ShortString()), data))
+					require.NoError(t, node.HandleProposal(ctx, p2p.Peer(fmt.Sprint(i)), data))
 				case pubsub.BeaconFirstVotesProtocol:
-					require.NoError(t, node.HandleFirstVotes(ctx, p2p.Peer(node.nodeID.ShortString()), data))
+					require.NoError(t, node.HandleFirstVotes(ctx, p2p.Peer(fmt.Sprint(i)), data))
 				case pubsub.BeaconFollowingVotesProtocol:
-					require.NoError(t, node.HandleFollowingVotes(ctx, p2p.Peer(node.nodeID.ShortString()), data))
+					require.NoError(t, node.HandleFollowingVotes(ctx, p2p.Peer(fmt.Sprint(i)), data))
 				case pubsub.BeaconWeakCoinProtocol:
 				}
 			}
@@ -249,7 +242,7 @@ func TestBeacon_MultipleNodes_OnlyOneHonest(t *testing.T) {
 	bootstrap := types.Beacon{1, 2, 3, 4}
 	now := time.Now()
 	for i := 0; i < numNodes; i++ {
-		node := newTestDriver(t, cfg, publisher)
+		node := newTestDriver(t, cfg, publisher, 3, fmt.Sprintf("node-%d", i))
 		require.NoError(t, node.UpdateBeacon(types.EpochID(2), bootstrap))
 		node.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 		node.mClock.EXPECT().CurrentLayer().Return(current).AnyTimes()
@@ -265,9 +258,11 @@ func TestBeacon_MultipleNodes_OnlyOneHonest(t *testing.T) {
 	}
 	for i, node := range testNodes {
 		for _, db := range dbs {
-			createATX(t, db, atxPublishLid, node.edSigner, 1, time.Now().Add(-1*time.Second))
-			if i != 0 {
-				require.NoError(t, identities.SetMalicious(db, node.nodeID, []byte("bad"), time.Now()))
+			for _, s := range node.signers {
+				createATX(t, db, atxPublishLid, s, 1, time.Now().Add(-1*time.Second))
+				if i != 0 {
+					require.NoError(t, identities.SetMalicious(db, s.NodeID(), []byte("bad"), time.Now()))
+				}
 			}
 		}
 	}
@@ -303,7 +298,7 @@ func TestBeacon_NoProposals(t *testing.T) {
 	now := time.Now()
 	bootstrap := types.Beacon{1, 2, 3, 4}
 	for i := 0; i < numNodes; i++ {
-		node := newTestDriver(t, cfg, publisher)
+		node := newTestDriver(t, cfg, publisher, 3, fmt.Sprintf("node-%d", i))
 		require.NoError(t, node.UpdateBeacon(types.EpochID(2), bootstrap))
 		node.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 		node.mClock.EXPECT().CurrentLayer().Return(current).AnyTimes()
@@ -319,7 +314,9 @@ func TestBeacon_NoProposals(t *testing.T) {
 	}
 	for _, node := range testNodes {
 		for _, db := range dbs {
-			createATX(t, db, atxPublishLid, node.edSigner, 1, time.Now().Add(-1*time.Second))
+			for _, s := range node.signers {
+				createATX(t, db, atxPublishLid, s, 1, time.Now().Add(-1*time.Second))
+			}
 		}
 	}
 	var wg sync.WaitGroup
@@ -411,8 +408,10 @@ func TestBeaconWithMetrics(t *testing.T) {
 	epoch := types.EpochID(3)
 	for i := types.EpochID(2); i < epoch; i++ {
 		lid := i.FirstLayer().Sub(1)
-		createATX(t, tpd.cdb, lid, tpd.edSigner, 199, time.Now())
-		createRandomATXs(t, tpd.cdb, lid, numATXs-1)
+		for _, s := range tpd.signers {
+			createATX(t, tpd.cdb, lid, s, 199, time.Now())
+		}
+		createRandomATXs(t, tpd.cdb, lid, 9)
 	}
 	finalLayer := types.LayerID(types.GetLayersPerEpoch() * uint32(epoch))
 	beacon1 := types.RandomBeacon()
@@ -988,9 +987,7 @@ func TestBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
 			for i := 0; i < tc.wEarly; i++ {
 				signer, err := signing.NewEdSigner()
 				require.NoError(t, err)
-				vrfSigner, err := signer.VRFSigner()
-				require.NoError(t, err)
-				proposal := buildSignedProposal(context.Background(), logtest.New(t), vrfSigner, 3, types.VRFPostIndex(1))
+				proposal := buildSignedProposal(context.Background(), logtest.New(t), signer.VRFSigner(), 3, types.VRFPostIndex(1))
 				if checker.PassThreshold(proposal) {
 					numEligible++
 				}
@@ -1036,8 +1033,6 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 
 	edSgn, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	vrfSigner, err := edSgn.VRFSigner()
-	require.NoError(t, err)
 
 	tt := []struct {
 		name   string
@@ -1047,12 +1042,12 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 		{
 			name:   "Case 1",
 			epoch:  1,
-			result: vrfSigner.Sign([]byte{0x04, 0x04, 0x04}),
+			result: edSgn.VRFSigner().Sign([]byte{0x04, 0x04, 0x04}),
 		},
 		{
 			name:   "Case 2",
 			epoch:  2,
-			result: vrfSigner.Sign([]byte{0x04, 0x04, 0x08}),
+			result: edSgn.VRFSigner().Sign([]byte{0x04, 0x04, 0x08}),
 		},
 	}
 
@@ -1061,7 +1056,7 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := buildSignedProposal(context.Background(), logtest.New(t), vrfSigner, tc.epoch, types.VRFPostIndex(1))
+			result := buildSignedProposal(context.Background(), logtest.New(t), edSgn.VRFSigner(), tc.epoch, types.VRFPostIndex(1))
 			require.Equal(t, tc.result, result)
 		})
 	}

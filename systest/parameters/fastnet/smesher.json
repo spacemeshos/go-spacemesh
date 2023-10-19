@@ -13,7 +13,9 @@
             "debug", "global", "mesh", "node",
             "transaction", "activation", "admin", "smesher"
         ],
-        "grpc-private-services": []
+        "grpc-private-services": [
+            "post"
+        ]
     },
     "logging": {
         "hare": "debug"

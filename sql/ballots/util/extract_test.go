@@ -45,9 +45,7 @@ func TestExtractActiveSet(t *testing.T) {
 	for _, b := range blts {
 		got, err := ballots.Get(db, b.ID())
 		require.NoError(t, err)
-		if b.Layer%3 != 2 {
-			require.NotEmpty(t, got.ActiveSet)
-		}
+		require.Nil(t, got.ActiveSet)
 	}
 	for i, h := range hashes {
 		got, err := activesets.Get(db, h)

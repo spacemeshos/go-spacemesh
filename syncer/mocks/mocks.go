@@ -566,44 +566,6 @@ func (c *fetchLogicGetMaliciousIDsCall) DoAndReturn(f func(context.Context, []p2
 	return c
 }
 
-// GetPeers mocks base method.
-func (m *MockfetchLogic) GetPeers() []p2p.Peer {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPeers")
-	ret0, _ := ret[0].([]p2p.Peer)
-	return ret0
-}
-
-// GetPeers indicates an expected call of GetPeers.
-func (mr *MockfetchLogicMockRecorder) GetPeers() *fetchLogicGetPeersCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPeers", reflect.TypeOf((*MockfetchLogic)(nil).GetPeers))
-	return &fetchLogicGetPeersCall{Call: call}
-}
-
-// fetchLogicGetPeersCall wrap *gomock.Call
-type fetchLogicGetPeersCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *fetchLogicGetPeersCall) Return(arg0 []p2p.Peer) *fetchLogicGetPeersCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *fetchLogicGetPeersCall) Do(f func() []p2p.Peer) *fetchLogicGetPeersCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *fetchLogicGetPeersCall) DoAndReturn(f func() []p2p.Peer) *fetchLogicGetPeersCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // PeerEpochInfo mocks base method.
 func (m *MockfetchLogic) PeerEpochInfo(arg0 context.Context, arg1 p2p.Peer, arg2 types.EpochID) (*fetch.EpochData, error) {
 	m.ctrl.T.Helper()
@@ -835,6 +797,44 @@ func (c *fetchLogicRegisterPeerHashesCall) Do(f func(p2p.Peer, []types.Hash32)) 
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *fetchLogicRegisterPeerHashesCall) DoAndReturn(f func(p2p.Peer, []types.Hash32)) *fetchLogicRegisterPeerHashesCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// SelectBest mocks base method.
+func (m *MockfetchLogic) SelectBest(arg0 int) []p2p.Peer {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SelectBest", arg0)
+	ret0, _ := ret[0].([]p2p.Peer)
+	return ret0
+}
+
+// SelectBest indicates an expected call of SelectBest.
+func (mr *MockfetchLogicMockRecorder) SelectBest(arg0 any) *fetchLogicSelectBestCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectBest", reflect.TypeOf((*MockfetchLogic)(nil).SelectBest), arg0)
+	return &fetchLogicSelectBestCall{Call: call}
+}
+
+// fetchLogicSelectBestCall wrap *gomock.Call
+type fetchLogicSelectBestCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *fetchLogicSelectBestCall) Return(arg0 []p2p.Peer) *fetchLogicSelectBestCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *fetchLogicSelectBestCall) Do(f func(int) []p2p.Peer) *fetchLogicSelectBestCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *fetchLogicSelectBestCall) DoAndReturn(f func(int) []p2p.Peer) *fetchLogicSelectBestCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -1167,44 +1167,6 @@ func (c *fetcherGetMaliciousIDsCall) DoAndReturn(f func(context.Context, []p2p.P
 	return c
 }
 
-// GetPeers mocks base method.
-func (m *Mockfetcher) GetPeers() []p2p.Peer {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPeers")
-	ret0, _ := ret[0].([]p2p.Peer)
-	return ret0
-}
-
-// GetPeers indicates an expected call of GetPeers.
-func (mr *MockfetcherMockRecorder) GetPeers() *fetcherGetPeersCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPeers", reflect.TypeOf((*Mockfetcher)(nil).GetPeers))
-	return &fetcherGetPeersCall{Call: call}
-}
-
-// fetcherGetPeersCall wrap *gomock.Call
-type fetcherGetPeersCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *fetcherGetPeersCall) Return(arg0 []p2p.Peer) *fetcherGetPeersCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *fetcherGetPeersCall) Do(f func() []p2p.Peer) *fetcherGetPeersCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *fetcherGetPeersCall) DoAndReturn(f func() []p2p.Peer) *fetcherGetPeersCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // PeerEpochInfo mocks base method.
 func (m *Mockfetcher) PeerEpochInfo(arg0 context.Context, arg1 p2p.Peer, arg2 types.EpochID) (*fetch.EpochData, error) {
 	m.ctrl.T.Helper()
@@ -1315,6 +1277,44 @@ func (c *fetcherRegisterPeerHashesCall) Do(f func(p2p.Peer, []types.Hash32)) *fe
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *fetcherRegisterPeerHashesCall) DoAndReturn(f func(p2p.Peer, []types.Hash32)) *fetcherRegisterPeerHashesCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// SelectBest mocks base method.
+func (m *Mockfetcher) SelectBest(arg0 int) []p2p.Peer {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SelectBest", arg0)
+	ret0, _ := ret[0].([]p2p.Peer)
+	return ret0
+}
+
+// SelectBest indicates an expected call of SelectBest.
+func (mr *MockfetcherMockRecorder) SelectBest(arg0 any) *fetcherSelectBestCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectBest", reflect.TypeOf((*Mockfetcher)(nil).SelectBest), arg0)
+	return &fetcherSelectBestCall{Call: call}
+}
+
+// fetcherSelectBestCall wrap *gomock.Call
+type fetcherSelectBestCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *fetcherSelectBestCall) Return(arg0 []p2p.Peer) *fetcherSelectBestCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *fetcherSelectBestCall) Do(f func(int) []p2p.Peer) *fetcherSelectBestCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *fetcherSelectBestCall) DoAndReturn(f func(int) []p2p.Peer) *fetcherSelectBestCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

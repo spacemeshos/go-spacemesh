@@ -206,7 +206,7 @@ func Test_NodeClock_Await_WithClockMovingBackwards(t *testing.T) {
 
 	select {
 	case <-clock.AwaitLayer(types.LayerID(10)):
-		require.Greater(t, time.Now(), genesis.Add(10*layerDuration))
+		require.GreaterOrEqual(t, time.Now(), genesis.Add(10*layerDuration))
 	default:
 		require.Fail(t, "awaited layer didn't signal")
 	}

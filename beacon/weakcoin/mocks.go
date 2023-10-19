@@ -38,44 +38,6 @@ func (m *MockvrfSigner) EXPECT() *MockvrfSignerMockRecorder {
 	return m.recorder
 }
 
-// LittleEndian mocks base method.
-func (m *MockvrfSigner) LittleEndian() bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LittleEndian")
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// LittleEndian indicates an expected call of LittleEndian.
-func (mr *MockvrfSignerMockRecorder) LittleEndian() *vrfSignerLittleEndianCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LittleEndian", reflect.TypeOf((*MockvrfSigner)(nil).LittleEndian))
-	return &vrfSignerLittleEndianCall{Call: call}
-}
-
-// vrfSignerLittleEndianCall wrap *gomock.Call
-type vrfSignerLittleEndianCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *vrfSignerLittleEndianCall) Return(arg0 bool) *vrfSignerLittleEndianCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *vrfSignerLittleEndianCall) Do(f func() bool) *vrfSignerLittleEndianCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *vrfSignerLittleEndianCall) DoAndReturn(f func() bool) *vrfSignerLittleEndianCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // NodeID mocks base method.
 func (m *MockvrfSigner) NodeID() types.NodeID {
 	m.ctrl.T.Helper()

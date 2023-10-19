@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -61,14 +61,14 @@ func (s NodeService) Echo(_ context.Context, in *pb.EchoRequest) (*pb.EchoRespon
 }
 
 // Version returns the version of the node software as a semver string.
-func (s NodeService) Version(context.Context, *empty.Empty) (*pb.VersionResponse, error) {
+func (s NodeService) Version(context.Context, *emptypb.Empty) (*pb.VersionResponse, error) {
 	return &pb.VersionResponse{
 		VersionString: &pb.SimpleString{Value: s.appVersion},
 	}, nil
 }
 
 // Build returns the build of the node software.
-func (s NodeService) Build(context.Context, *empty.Empty) (*pb.BuildResponse, error) {
+func (s NodeService) Build(context.Context, *emptypb.Empty) (*pb.BuildResponse, error) {
 	return &pb.BuildResponse{
 		BuildString: &pb.SimpleString{Value: s.appCommit},
 	}, nil
@@ -89,7 +89,7 @@ func (s NodeService) Status(ctx context.Context, _ *pb.StatusRequest) (*pb.Statu
 	}, nil
 }
 
-func (s NodeService) NodeInfo(context.Context, *empty.Empty) (*pb.NodeInfoResponse, error) {
+func (s NodeService) NodeInfo(context.Context, *emptypb.Empty) (*pb.NodeInfoResponse, error) {
 	return &pb.NodeInfoResponse{
 		Hrp:              types.NetworkHRP(),
 		FirstGenesis:     types.FirstEffectiveGenesis().Uint32(),

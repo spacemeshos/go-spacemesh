@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/gofrs/flock"
-	"github.com/grafana/pyroscope-go"
+	pyroscope "github.com/grafana/pyroscope-go"
 	grpc_logsettable "github.com/grpc-ecosystem/go-grpc-middleware/logging/settable"
 	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
@@ -91,6 +91,7 @@ const (
 	ClockLogger            = "clock"
 	P2PLogger              = "p2p"
 	PostLogger             = "post"
+	PostServiceLogger      = "postService"
 	StateDbLogger          = "stateDbStore"
 	BeaconLogger           = "beacon"
 	CachedDBLogger         = "cachedDB"
@@ -170,7 +171,10 @@ func GetCommand() *cobra.Command {
 
 				// This blocks until the context is finished or until an error is produced
 				err = app.Start(ctx)
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+				cleanupCtx, cleanupCancel := context.WithTimeout(
+					context.Background(),
+					30*time.Second,
+				)
 				defer cleanupCancel()
 				done := make(chan struct{}, 1)
 				// FIXME: per https://github.com/spacemeshos/go-spacemesh/issues/3830
@@ -322,6 +326,7 @@ type App struct {
 	grpcPublicService  *grpcserver.Server
 	grpcPrivateService *grpcserver.Server
 	jsonAPIService     *grpcserver.JSONHTTPServer
+	grpcPostService    *grpcserver.PostService
 	pprofService       *http.Server
 	profilerService    *pyroscope.Profiler
 	syncer             *syncer.Syncer
@@ -338,6 +343,7 @@ type App struct {
 	certifier          *blocks.Certifier
 	postSetupMgr       *activation.PostSetupManager
 	atxBuilder         *activation.Builder
+	nipostBuilder      *activation.NIPostBuilder
 	atxHandler         *activation.Handler
 	txHandler          *txs.TxHandler
 	validator          *activation.Validator
@@ -352,6 +358,7 @@ type App struct {
 	updater            *bootstrap.Updater
 	poetDb             *activation.PoetDb
 	postVerifier       *activation.OffloadingPostVerifier
+	postSupervisor     *activation.PostSupervisor
 	preserve           *checkpoint.PreservedData
 	errCh              chan error
 
@@ -450,7 +457,9 @@ func (app *App) Initialize() error {
 	// vote against all blocks in that layer. so it's important to make sure zdist takes longer than
 	// hare's max time duration to run consensus for a layer
 	maxHareRoundsPerLayer := 1 + app.Config.HARE.LimitIterations*hare.RoundsPerIteration // pre-round + 4 rounds per iteration
-	maxHareLayerDuration := app.Config.HARE.WakeupDelta + time.Duration(maxHareRoundsPerLayer)*app.Config.HARE.RoundDuration
+	maxHareLayerDuration := app.Config.HARE.WakeupDelta + time.Duration(
+		maxHareRoundsPerLayer,
+	)*app.Config.HARE.RoundDuration
 	if app.Config.LayerDuration*time.Duration(app.Config.Tortoise.Zdist) <= maxHareLayerDuration {
 		app.log.With().Error("incompatible params",
 			log.Uint32("tortoise_zdist", app.Config.Tortoise.Zdist),
@@ -541,10 +550,7 @@ func (app *App) SetLogLevel(name, loglevel string) error {
 }
 
 func (app *App) initServices(ctx context.Context) error {
-	vrfSigner, err := app.edSgn.VRFSigner()
-	if err != nil {
-		return fmt.Errorf("could not create vrf signer: %w", err)
-	}
+	vrfSigner := app.edSgn.VRFSigner()
 	layerSize := app.Config.LayerAvgSize
 	layersPerEpoch := types.GetLayersPerEpoch()
 	lg := app.log.Named(app.edSgn.NodeID().ShortString()).WithFields(app.edSgn.NodeID())
@@ -554,7 +560,11 @@ func (app *App) initServices(ctx context.Context) error {
 	nipostValidatorLogger := app.addLogger(NipostValidatorLogger, lg)
 	postVerifiers := make([]activation.PostVerifier, 0, app.Config.SMESHING.VerifyingOpts.Workers)
 	lg.Debug("creating post verifier")
-	verifier, err := activation.NewPostVerifier(app.Config.POST, nipostValidatorLogger, verifying.WithPowFlags(app.Config.SMESHING.VerifyingOpts.Flags))
+	verifier, err := activation.NewPostVerifier(
+		app.Config.POST,
+		nipostValidatorLogger.Zap(),
+		verifying.WithPowFlags(app.Config.SMESHING.VerifyingOpts.Flags.Value()),
+	)
 	lg.With().Debug("created post verifier", log.Err(err))
 	if err != nil {
 		return err
@@ -564,7 +574,28 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	app.postVerifier = activation.NewOffloadingPostVerifier(postVerifiers, nipostValidatorLogger)
 
-	validator := activation.NewValidator(poetDb, app.Config.POST, app.Config.SMESHING.Opts.Scrypt, nipostValidatorLogger, app.postVerifier)
+	if app.Config.SMESHING.Start {
+		app.postSupervisor, err = activation.NewPostSupervisor(
+			app.log.Zap(),
+			app.Config.POSTService,
+			app.Config.POST,
+			app.Config.SMESHING.Opts,
+			app.Config.SMESHING.ProvingOpts,
+		)
+		if err != nil {
+			return fmt.Errorf("start post service: %w", err)
+		}
+		if err := app.postSupervisor.Start(); err != nil {
+			return fmt.Errorf("start post service: %w", err)
+		}
+	}
+
+	validator := activation.NewValidator(
+		poetDb,
+		app.Config.POST,
+		app.Config.SMESHING.Opts.Scrypt,
+		app.postVerifier,
+	)
 	app.validator = validator
 
 	cfg := vm.DefaultConfig()
@@ -584,7 +615,11 @@ func (app *App) initServices(ctx context.Context) error {
 	if len(genesisAccts) > 0 {
 		exists, err := state.AccountExists(genesisAccts[0].Address)
 		if err != nil {
-			return fmt.Errorf("failed to check genesis account %v: %w", genesisAccts[0].Address, err)
+			return fmt.Errorf(
+				"failed to check genesis account %v: %w",
+				genesisAccts[0].Address,
+				err,
+			)
 		}
 		if !exists {
 			if err = state.ApplyGenesis(genesisAccts); err != nil {
@@ -598,17 +633,22 @@ func (app *App) initServices(ctx context.Context) error {
 		return errors.New("invalid golden atx id")
 	}
 
-	app.edVerifier, err = signing.NewEdVerifier(signing.WithVerifierPrefix(app.Config.Genesis.GenesisID().Bytes()))
-	if err != nil {
-		return fmt.Errorf("failed to create signature verifier: %w", err)
-	}
+	app.edVerifier = signing.NewEdVerifier(
+		signing.WithVerifierPrefix(app.Config.Genesis.GenesisID().Bytes()),
+	)
 
 	vrfVerifier := signing.NewVRFVerifier()
-	beaconProtocol := beacon.New(app.edSgn.NodeID(), app.host, app.edSgn, app.edVerifier, vrfSigner, vrfVerifier, app.cachedDB, app.clock,
+	beaconProtocol := beacon.New(
+		app.host,
+		app.edVerifier,
+		vrfVerifier,
+		app.cachedDB,
+		app.clock,
 		beacon.WithContext(ctx),
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)),
 	)
+	beaconProtocol.Register(app.edSgn)
 
 	trtlCfg := app.Config.Tortoise
 	trtlCfg.LayerSize = layerSize
@@ -627,7 +667,7 @@ func (app *App) initServices(ctx context.Context) error {
 	trtl, err := tortoise.Recover(
 		ctx,
 		app.cachedDB,
-		app.clock.CurrentLayer(), beaconProtocol, trtlopts...,
+		app.clock.CurrentLayer(), trtlopts...,
 	)
 	if err != nil {
 		return fmt.Errorf("can't recover tortoise state: %w", err)
@@ -642,7 +682,12 @@ func (app *App) initServices(ctx context.Context) error {
 		return nil
 	})
 
-	executor := mesh.NewExecutor(app.cachedDB, state, app.conState, app.addLogger(ExecutorLogger, lg))
+	executor := mesh.NewExecutor(
+		app.cachedDB,
+		state,
+		app.conState,
+		app.addLogger(ExecutorLogger, lg),
+	)
 	mlog := app.addLogger(MeshLogger, lg)
 	msh, err := mesh.NewMesh(app.cachedDB, app.cache, app.clock, trtl, executor, app.conState, mlog)
 	if err != nil {
@@ -650,12 +695,20 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 
 	app.eg.Go(func() error {
-		prune.Prune(ctx, mlog.Zap(), app.db, app.clock, app.Config.Tortoise.Hdist, app.Config.DatabasePruneInterval)
+		prune.Prune(
+			ctx,
+			mlog.Zap(),
+			app.db,
+			app.clock,
+			app.Config.Tortoise.Hdist,
+			app.Config.DatabasePruneInterval,
+		)
 		return nil
 	})
 
 	fetcherWrapped := &layerFetcher{}
 	atxHandler := activation.NewHandler(
+		app.host.ID(),
 		app.cachedDB,
 		app.cache,
 		app.edVerifier,
@@ -674,8 +727,11 @@ func (app *App) initServices(ctx context.Context) error {
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
 
 	if app.Config.HareEligibility.ConfidenceParam >= app.Config.BaseConfig.LayersPerEpoch {
-		return fmt.Errorf("confidence param should be smaller than layers per epoch. eligibility-confidence-param: %d. layers-per-epoch: %d",
-			app.Config.HareEligibility.ConfidenceParam, app.Config.BaseConfig.LayersPerEpoch)
+		return fmt.Errorf(
+			"confidence param should be smaller than layers per epoch. eligibility-confidence-param: %d. layers-per-epoch: %d",
+			app.Config.HareEligibility.ConfidenceParam,
+			app.Config.BaseConfig.LayersPerEpoch,
+		)
 	}
 
 	proposalListener := proposals.NewHandler(app.db, app.cache, app.edVerifier, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifier, app.clock,
@@ -699,7 +755,15 @@ func (app *App) initServices(ctx context.Context) error {
 		app.addLogger(TxHandlerLogger, lg),
 	)
 
-	app.hOracle = eligibility.New(beaconProtocol, app.cachedDB, vrfVerifier, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
+	app.hOracle = eligibility.New(
+		beaconProtocol,
+		app.cachedDB,
+		vrfVerifier,
+		vrfSigner,
+		app.Config.LayersPerEpoch,
+		app.Config.HareEligibility,
+		app.addLogger(HareOracleLogger, lg),
+	)
 	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 
 	bscfg := app.Config.Bootstrap
@@ -711,7 +775,16 @@ func (app *App) initServices(ctx context.Context) error {
 		bootstrap.WithLogger(app.addLogger(BootstrapLogger, lg)),
 	)
 
-	app.certifier = blocks.NewCertifier(app.cachedDB, app.hOracle, app.edSgn.NodeID(), app.edSgn, app.edVerifier, app.host, app.clock, beaconProtocol, trtl,
+	app.certifier = blocks.NewCertifier(
+		app.cachedDB,
+		app.hOracle,
+		app.edSgn.NodeID(),
+		app.edSgn,
+		app.edVerifier,
+		app.host,
+		app.clock,
+		beaconProtocol,
+		trtl,
 		blocks.WithCertContext(ctx),
 		blocks.WithCertConfig(blocks.CertConfig{
 			CommitteeSize:    app.Config.HARE.N,
@@ -738,7 +811,15 @@ func (app *App) initServices(ctx context.Context) error {
 	syncerConf.HareDelayLayers = app.Config.Tortoise.Zdist
 	syncerConf.SyncCertDistance = app.Config.Tortoise.Hdist
 	syncerConf.Standalone = app.Config.Standalone
-	newSyncer := syncer.NewSyncer(app.cachedDB, app.clock, beaconProtocol, msh, trtl, fetcher, patrol, app.certifier,
+	newSyncer := syncer.NewSyncer(
+		app.cachedDB,
+		app.clock,
+		beaconProtocol,
+		msh,
+		trtl,
+		fetcher,
+		patrol,
+		app.certifier,
 		syncer.WithConfig(syncerConf),
 		syncer.WithLogger(app.addLogger(SyncLogger, lg)),
 	)
@@ -747,7 +828,13 @@ func (app *App) initServices(ctx context.Context) error {
 	app.hOracle.SetSync(newSyncer)
 
 	hareOutputCh := make(chan hare.LayerOutput, app.Config.HARE.LimitConcurrent)
-	app.blockGen = blocks.NewGenerator(app.cachedDB, executor, msh, fetcherWrapped, app.certifier, patrol,
+	app.blockGen = blocks.NewGenerator(
+		app.cachedDB,
+		executor,
+		msh,
+		fetcherWrapped,
+		app.certifier,
+		patrol,
 		blocks.WithContext(ctx),
 		blocks.WithConfig(blocks.Config{
 			BlockGasLimit:      app.Config.BlockGasLimit,
@@ -755,7 +842,8 @@ func (app *App) initServices(ctx context.Context) error {
 			GenBlockInterval:   500 * time.Millisecond,
 		}),
 		blocks.WithHareOutputChan(hareOutputCh),
-		blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg)))
+		blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg)),
+	)
 
 	hareCfg := app.Config.HARE
 	hareCfg.Hdist = app.Config.Tortoise.Hdist
@@ -782,13 +870,19 @@ func (app *App) initServices(ctx context.Context) error {
 		}
 		logger := app.addLogger(HareLogger, lg).Zap()
 		app.hare3 = hare3.New(
-			app.clock, app.host, app.cachedDB, app.edVerifier, app.edSgn, app.hOracle, newSyncer, patrol,
+			app.clock, app.host, app.cachedDB, app.edVerifier, app.hOracle, newSyncer, patrol,
 			hare3.WithLogger(logger),
 			hare3.WithConfig(app.Config.HARE3),
 		)
+		app.hare3.Register(app.edSgn)
 		app.hare3.Start()
 		app.eg.Go(func() error {
-			compat.ReportWeakcoin(ctx, logger, app.hare3.Coins(), tortoiseWeakCoin{db: app.cachedDB, tortoise: trtl})
+			compat.ReportWeakcoin(
+				ctx,
+				logger,
+				app.hare3.Coins(),
+				tortoiseWeakCoin{db: app.cachedDB, tortoise: trtl},
+			)
 			return nil
 		})
 		app.eg.Go(func() error {
@@ -801,49 +895,45 @@ func (app *App) initServices(ctx context.Context) error {
 	if app.Config.MinerGoodAtxsPercent > 0 {
 		minerGoodAtxPct = app.Config.MinerGoodAtxsPercent
 	}
-	proposalBuilder := miner.NewProposalBuilder(
-		ctx,
+	proposalBuilder := miner.New(
 		app.clock,
-		app.edSgn,
-		vrfSigner,
 		app.cachedDB,
 		app.host,
 		trtl,
-		beaconProtocol,
 		newSyncer,
 		app.conState,
-		miner.WithNodeID(app.edSgn.NodeID()),
 		miner.WithLayerSize(layerSize),
 		miner.WithLayerPerEpoch(layersPerEpoch),
 		miner.WithMinimalActiveSetWeight(app.Config.Tortoise.MinimalActiveSetWeight),
 		miner.WithHdist(app.Config.Tortoise.Hdist),
 		miner.WithNetworkDelay(app.Config.HARE.WakeupDelta),
-		miner.WithMinGoodAtxPct(minerGoodAtxPct),
+		miner.WithMinGoodAtxPercent(minerGoodAtxPct),
 		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)),
 	)
+	proposalBuilder.Register(app.edSgn)
 
 	postSetupMgr, err := activation.NewPostSetupManager(
 		app.edSgn.NodeID(),
 		app.Config.POST,
-		app.addLogger(PostLogger, lg),
+		app.addLogger(PostLogger, lg).Zap(),
 		app.cachedDB, goldenATXID,
-		app.Config.SMESHING.ProvingOpts,
 	)
 	if err != nil {
 		app.log.Panic("failed to create post setup manager: %v", err)
 	}
 
+	app.grpcPostService = grpcserver.NewPostService(app.addLogger(PostServiceLogger, lg).Zap())
+
 	nipostBuilder, err := activation.NewNIPostBuilder(
 		app.edSgn.NodeID(),
-		postSetupMgr,
 		poetDb,
+		app.grpcPostService,
 		app.Config.PoETServers,
 		app.Config.SMESHING.Opts.DataDir,
 		app.addLogger(NipostBuilderLogger, lg),
 		app.edSgn,
 		app.Config.POET,
 		app.clock,
-		activation.WithNipostValidator(app.validator),
 	)
 	if err != nil {
 		app.log.Panic("failed to create nipost builder: %v", err)
@@ -853,7 +943,11 @@ func (app *App) initServices(ctx context.Context) error {
 	if app.Config.SMESHING.Start {
 		coinbaseAddr, err = types.StringToAddress(app.Config.SMESHING.CoinbaseAccount)
 		if err != nil {
-			app.log.Panic("failed to parse CoinbaseAccount address `%s`: %v", app.Config.SMESHING.CoinbaseAccount, err)
+			app.log.Panic(
+				"failed to parse CoinbaseAccount address `%s`: %v",
+				app.Config.SMESHING.CoinbaseAccount,
+				err,
+			)
 		}
 		if coinbaseAddr.IsEmpty() {
 			app.log.Panic("invalid coinbase account")
@@ -861,17 +955,18 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 
 	builderConfig := activation.Config{
-		CoinbaseAccount: coinbaseAddr,
-		GoldenATXID:     goldenATXID,
-		LayersPerEpoch:  layersPerEpoch,
+		CoinbaseAccount:  coinbaseAddr,
+		GoldenATXID:      goldenATXID,
+		LayersPerEpoch:   layersPerEpoch,
+		RegossipInterval: app.Config.RegossipAtxInterval,
 	}
 	atxBuilder := activation.NewBuilder(
 		builderConfig,
 		app.edSgn.NodeID(),
 		app.edSgn,
 		app.cachedDB,
-		atxHandler,
 		app.host,
+		app.grpcPostService,
 		nipostBuilder,
 		postSetupMgr,
 		app.clock,
@@ -893,15 +988,53 @@ func (app *App) initServices(ctx context.Context) error {
 		trtl,
 	)
 	fetcher.SetValidators(
-		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(atxHandler.HandleSyncedAtx, app.host, lg)),
-		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(poetDb.ValidateAndStoreMsg, app.host, lg)),
-		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(proposalListener.HandleSyncedBallot, app.host, lg)),
-		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(proposalListener.HandleActiveSet, app.host, lg)),
-		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(blockHandler.HandleSyncedBlock, app.host, lg)),
-		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(proposalListener.HandleSyncedProposal, app.host, lg)),
-		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(app.txHandler.HandleBlockTransaction, app.host, lg)),
-		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(app.txHandler.HandleProposalTransaction, app.host, lg)),
-		fetch.ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(malfeasanceHandler.HandleSyncedMalfeasanceProof, app.host, lg)),
+		fetch.ValidatorFunc(
+			pubsub.DropPeerOnSyncValidationReject(atxHandler.HandleSyncedAtx, app.host, lg),
+		),
+		fetch.ValidatorFunc(
+			pubsub.DropPeerOnSyncValidationReject(poetDb.ValidateAndStoreMsg, app.host, lg),
+		),
+		fetch.ValidatorFunc(
+			pubsub.DropPeerOnSyncValidationReject(
+				proposalListener.HandleSyncedBallot,
+				app.host,
+				lg,
+			),
+		),
+		fetch.ValidatorFunc(
+			pubsub.DropPeerOnSyncValidationReject(proposalListener.HandleActiveSet, app.host, lg),
+		),
+		fetch.ValidatorFunc(
+			pubsub.DropPeerOnSyncValidationReject(blockHandler.HandleSyncedBlock, app.host, lg),
+		),
+		fetch.ValidatorFunc(
+			pubsub.DropPeerOnSyncValidationReject(
+				proposalListener.HandleSyncedProposal,
+				app.host,
+				lg,
+			),
+		),
+		fetch.ValidatorFunc(
+			pubsub.DropPeerOnSyncValidationReject(
+				app.txHandler.HandleBlockTransaction,
+				app.host,
+				lg,
+			),
+		),
+		fetch.ValidatorFunc(
+			pubsub.DropPeerOnSyncValidationReject(
+				app.txHandler.HandleProposalTransaction,
+				app.host,
+				lg,
+			),
+		),
+		fetch.ValidatorFunc(
+			pubsub.DropPeerOnSyncValidationReject(
+				malfeasanceHandler.HandleSyncedMalfeasanceProof,
+				app.host,
+				lg,
+			),
+		),
 	)
 
 	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) error {
@@ -917,16 +1050,52 @@ func (app *App) initServices(ctx context.Context) error {
 		return errors.New("not synced for gossip")
 	}
 
-	app.host.Register(pubsub.BeaconWeakCoinProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleWeakCoinProposal), pubsub.WithValidatorInline(true))
-	app.host.Register(pubsub.BeaconProposalProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleProposal), pubsub.WithValidatorInline(true))
-	app.host.Register(pubsub.BeaconFirstVotesProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFirstVotes), pubsub.WithValidatorInline(true))
-	app.host.Register(pubsub.BeaconFollowingVotesProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFollowingVotes), pubsub.WithValidatorInline(true))
-	app.host.Register(pubsub.ProposalProtocol, pubsub.ChainGossipHandler(syncHandler, proposalListener.HandleProposal))
-	app.host.Register(pubsub.AtxProtocol, pubsub.ChainGossipHandler(atxSyncHandler, atxHandler.HandleGossipAtx))
-	app.host.Register(pubsub.TxProtocol, pubsub.ChainGossipHandler(syncHandler, app.txHandler.HandleGossipTransaction))
-	app.host.Register(pubsub.HareProtocol, pubsub.ChainGossipHandler(syncHandler, app.hare.GetHareMsgHandler()))
-	app.host.Register(pubsub.BlockCertify, pubsub.ChainGossipHandler(syncHandler, app.certifier.HandleCertifyMessage))
-	app.host.Register(pubsub.MalfeasanceProof, pubsub.ChainGossipHandler(atxSyncHandler, malfeasanceHandler.HandleMalfeasanceProof))
+	if app.Config.Beacon.RoundsNumber > 0 {
+		app.host.Register(
+			pubsub.BeaconWeakCoinProtocol,
+			pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleWeakCoinProposal),
+			pubsub.WithValidatorInline(true),
+		)
+		app.host.Register(
+			pubsub.BeaconProposalProtocol,
+			pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleProposal),
+			pubsub.WithValidatorInline(true),
+		)
+		app.host.Register(
+			pubsub.BeaconFirstVotesProtocol,
+			pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFirstVotes),
+			pubsub.WithValidatorInline(true),
+		)
+		app.host.Register(
+			pubsub.BeaconFollowingVotesProtocol,
+			pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFollowingVotes),
+			pubsub.WithValidatorInline(true),
+		)
+	}
+	app.host.Register(
+		pubsub.ProposalProtocol,
+		pubsub.ChainGossipHandler(syncHandler, proposalListener.HandleProposal),
+	)
+	app.host.Register(
+		pubsub.AtxProtocol,
+		pubsub.ChainGossipHandler(atxSyncHandler, atxHandler.HandleGossipAtx),
+	)
+	app.host.Register(
+		pubsub.TxProtocol,
+		pubsub.ChainGossipHandler(syncHandler, app.txHandler.HandleGossipTransaction),
+	)
+	app.host.Register(
+		pubsub.HareProtocol,
+		pubsub.ChainGossipHandler(syncHandler, app.hare.GetHareMsgHandler()),
+	)
+	app.host.Register(
+		pubsub.BlockCertify,
+		pubsub.ChainGossipHandler(syncHandler, app.certifier.HandleCertifyMessage),
+	)
+	app.host.Register(
+		pubsub.MalfeasanceProof,
+		pubsub.ChainGossipHandler(atxSyncHandler, malfeasanceHandler.HandleMalfeasanceProof),
+	)
 
 	app.proposalBuilder = proposalBuilder
 	app.proposalListener = proposalListener
@@ -934,6 +1103,7 @@ func (app *App) initServices(ctx context.Context) error {
 	app.syncer = newSyncer
 	app.svm = state
 	app.atxBuilder = atxBuilder
+	app.nipostBuilder = nipostBuilder
 	app.postSetupMgr = postSetupMgr
 	app.atxHandler = atxHandler
 	app.poetDb = poetDb
@@ -959,7 +1129,10 @@ func (app *App) launchStandalone(ctx context.Context) error {
 		return nil
 	}
 	if len(app.Config.PoETServers) != 1 {
-		return fmt.Errorf("to launch in a standalone mode provide single local address for poet: %v", app.Config.PoETServers)
+		return fmt.Errorf(
+			"to launch in a standalone mode provide single local address for poet: %v",
+			app.Config.PoETServers,
+		)
 	}
 	value := types.Beacon{}
 	genesis := app.Config.Genesis.GenesisID()
@@ -990,13 +1163,13 @@ func (app *App) launchStandalone(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("init poet server: %w", err)
 	}
-	app.log.With().Warning("lauching poet in standalone mode", log.Any("config", cfg))
+	app.log.With().Warning("launching poet in standalone mode", log.Any("config", cfg))
 	app.eg.Go(func() error {
 		if err := srv.Start(ctx); err != nil {
 			app.log.With().Error("poet server failed", log.Err(err))
 			return err
 		}
-		return nil
+		return srv.Close()
 	})
 	return nil
 }
@@ -1044,14 +1217,18 @@ func (app *App) startServices(ctx context.Context) error {
 	if err := app.hare.Start(ctx); err != nil {
 		return fmt.Errorf("cannot start hare: %w", err)
 	}
-	if err := app.proposalBuilder.Start(ctx); err != nil {
-		return fmt.Errorf("cannot start block producer: %w", err)
-	}
+	app.eg.Go(func() error {
+		return app.proposalBuilder.Run(ctx)
+	})
 
 	if app.Config.SMESHING.Start {
 		coinbaseAddr, err := types.StringToAddress(app.Config.SMESHING.CoinbaseAccount)
 		if err != nil {
-			app.log.Panic("failed to parse CoinbaseAccount address on start `%s`: %v", app.Config.SMESHING.CoinbaseAccount, err)
+			app.log.Panic(
+				"failed to parse CoinbaseAccount address on start `%s`: %v",
+				app.Config.SMESHING.CoinbaseAccount,
+				err,
+			)
 		}
 		if err := app.atxBuilder.StartSmeshing(coinbaseAddr, app.Config.SMESHING.Opts); err != nil {
 			app.log.Panic("failed to start smeshing: %v", err)
@@ -1070,42 +1247,100 @@ func (app *App) startServices(ctx context.Context) error {
 	return nil
 }
 
-func (app *App) initService(ctx context.Context, svc grpcserver.Service) (grpcserver.ServiceAPI, error) {
+func (app *App) initService(
+	ctx context.Context,
+	svc grpcserver.Service,
+) (grpcserver.ServiceAPI, error) {
 	switch svc {
 	case grpcserver.Debug:
 		return grpcserver.NewDebugService(app.db, app.conState, app.host, app.hOracle), nil
 	case grpcserver.GlobalState:
 		return grpcserver.NewGlobalStateService(app.mesh, app.conState), nil
 	case grpcserver.Mesh:
-		return grpcserver.NewMeshService(app.cachedDB, app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.Genesis.GenesisID(), app.Config.LayerDuration, app.Config.LayerAvgSize, uint32(app.Config.TxsPerProposal)), nil
+		return grpcserver.NewMeshService(
+			app.cachedDB,
+			app.mesh,
+			app.conState,
+			app.clock,
+			app.Config.LayersPerEpoch,
+			app.Config.Genesis.GenesisID(),
+			app.Config.LayerDuration,
+			app.Config.LayerAvgSize,
+			uint32(app.Config.TxsPerProposal),
+		), nil
 	case grpcserver.Node:
-		return grpcserver.NewNodeService(app.host, app.mesh, app.clock, app.syncer, cmd.Version, cmd.Commit), nil
+		return grpcserver.NewNodeService(
+			app.host,
+			app.mesh,
+			app.clock,
+			app.syncer,
+			cmd.Version,
+			cmd.Commit,
+		), nil
 	case grpcserver.Admin:
 		return grpcserver.NewAdminService(app.db, app.Config.DataDir(), app.host), nil
 	case grpcserver.Smesher:
-		return grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder, app.Config.API.SmesherStreamInterval, app.Config.SMESHING.Opts), nil
+		return grpcserver.NewSmesherService(
+			app.postSetupMgr,
+			app.atxBuilder,
+			app.postSupervisor,
+			app.Config.API.SmesherStreamInterval,
+			app.Config.SMESHING.Opts,
+		), nil
+	case grpcserver.Post:
+		return app.grpcPostService, nil
 	case grpcserver.Transaction:
-		return grpcserver.NewTransactionService(app.db, app.host, app.mesh, app.conState, app.syncer, app.txHandler), nil
+		return grpcserver.NewTransactionService(
+			app.db,
+			app.host,
+			app.mesh,
+			app.conState,
+			app.syncer,
+			app.txHandler,
+		), nil
 	case grpcserver.Activation:
-		return grpcserver.NewActivationService(app.cachedDB, types.ATXID(app.Config.Genesis.GoldenATX())), nil
+		return grpcserver.NewActivationService(
+			app.cachedDB,
+			types.ATXID(app.Config.Genesis.GoldenATX()),
+		), nil
 	}
 	return nil, fmt.Errorf("unknown service %s", svc)
 }
 
-func unaryGrpcLogStart(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+func unaryGrpcLogStart(
+	ctx context.Context,
+	req any,
+	_ *grpc.UnaryServerInfo,
+	handler grpc.UnaryHandler,
+) (any, error) {
 	ctxzap.Info(ctx, "started unary call")
 	return handler(ctx, req)
 }
 
-func streamingGrpcLogStart(srv any, stream grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+func streamingGrpcLogStart(
+	srv any,
+	stream grpc.ServerStream,
+	_ *grpc.StreamServerInfo,
+	handler grpc.StreamHandler,
+) error {
 	ctxzap.Info(stream.Context(), "started streaming call")
 	return handler(srv, stream)
 }
 
 func (app *App) newGrpc(logger log.Log, endpoint string) *grpcserver.Server {
-	return grpcserver.New(endpoint, logger,
-		grpc.ChainStreamInterceptor(grpctags.StreamServerInterceptor(), grpczap.StreamServerInterceptor(logger.Zap()), streamingGrpcLogStart),
-		grpc.ChainUnaryInterceptor(grpctags.UnaryServerInterceptor(), grpczap.UnaryServerInterceptor(logger.Zap()), unaryGrpcLogStart),
+	return grpcserver.New(
+		endpoint,
+		logger,
+		grpc.ChainStreamInterceptor(
+			grpctags.StreamServerInterceptor(),
+			grpczap.StreamServerInterceptor(logger.Zap()),
+			streamingGrpcLogStart,
+		),
+		grpc.ChainUnaryInterceptor(
+			grpctags.UnaryServerInterceptor(),
+			grpczap.UnaryServerInterceptor(logger.Zap()),
+			unaryGrpcLogStart,
+		),
 		grpc.MaxSendMsgSize(app.Config.API.GrpcSendMsgSize),
 		grpc.MaxRecvMsgSize(app.Config.API.GrpcRecvMsgSize),
 	)
@@ -1153,7 +1388,10 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		if len(public) == 0 {
 			return fmt.Errorf("can't start json server without public services")
 		}
-		app.jsonAPIService = grpcserver.NewJSONHTTPServer(app.Config.API.JSONListener, logger.WithName("JSON"))
+		app.jsonAPIService = grpcserver.NewJSONHTTPServer(
+			app.Config.API.JSONListener,
+			logger.WithName("JSON"),
+		)
 		app.jsonAPIService.StartService(ctx, public...)
 	}
 	if app.grpcPublicService != nil {
@@ -1190,10 +1428,6 @@ func (app *App) stopServices(ctx context.Context) {
 	if app.updater != nil {
 		app.log.Info("stopping updater")
 		app.updater.Close()
-	}
-
-	if app.proposalBuilder != nil {
-		app.proposalBuilder.Close()
 	}
 
 	if app.clock != nil {
@@ -1233,6 +1467,12 @@ func (app *App) stopServices(ctx context.Context) {
 
 	if app.syncer != nil {
 		app.syncer.Close()
+	}
+
+	if app.postSupervisor != nil {
+		if err := app.postSupervisor.Stop(); err != nil {
+			app.log.With().Error("error stopping local post service", log.Err(err))
+		}
 	}
 
 	if app.ptimesync != nil {
@@ -1344,8 +1584,13 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		return fmt.Errorf("open sqlite db %w", err)
 	}
 	app.db = sqlDB
-	if app.Config.CollectMetrics {
-		app.dbMetrics = dbmetrics.NewDBMetricsCollector(ctx, sqlDB, app.addLogger(StateDbLogger, lg), 5*time.Minute)
+	if app.Config.CollectMetrics && app.Config.DatabaseSizeMeteringInterval != 0 {
+		app.dbMetrics = dbmetrics.NewDBMetricsCollector(
+			ctx,
+			sqlDB,
+			app.addLogger(StateDbLogger, lg),
+			app.Config.DatabaseSizeMeteringInterval,
+		)
 	}
 	start := time.Now()
 	cache, err := cache.Warm(app.db)
@@ -1410,7 +1655,11 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 	)
 
 	if err := os.MkdirAll(app.Config.DataDir(), 0o700); err != nil {
-		return fmt.Errorf("data-dir %s not found or could not be created: %w", app.Config.DataDir(), err)
+		return fmt.Errorf(
+			"data-dir %s not found or could not be created: %w",
+			app.Config.DataDir(),
+			err,
+		)
 	}
 
 	/* Setup monitoring */

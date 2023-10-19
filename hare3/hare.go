@@ -11,6 +11,7 @@ import (
 	"github.com/jonboulle/clockwork"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -137,7 +138,6 @@ func New(
 	pubsub pubsub.PublishSubsciber,
 	db *datastore.CachedDB,
 	verifier *signing.EdVerifier,
-	signer *signing.EdSigner,
 	oracle oracle,
 	sync system.SyncStateProvider,
 	patrol *layerpatrol.LayerPatrol,
@@ -149,6 +149,7 @@ func New(
 		cancel:   cancel,
 		results:  make(chan ConsensusOutput, 32),
 		coins:    make(chan WeakCoinOutput, 32),
+		signers:  map[string]*signing.EdSigner{},
 		sessions: map[types.LayerID]*protocol{},
 
 		config:    DefaultConfig(),
@@ -159,7 +160,6 @@ func New(
 		pubsub:    pubsub,
 		db:        db,
 		verifier:  verifier,
-		signer:    signer,
 		oracle: &legacyOracle{
 			log:    zap.NewNop(),
 			oracle: oracle,
@@ -183,6 +183,7 @@ type Hare struct {
 	results  chan ConsensusOutput
 	coins    chan WeakCoinOutput
 	mu       sync.Mutex
+	signers  map[string]*signing.EdSigner
 	sessions map[types.LayerID]*protocol
 
 	// options
@@ -195,11 +196,17 @@ type Hare struct {
 	pubsub    pubsub.PublishSubsciber
 	db        *datastore.CachedDB
 	verifier  *signing.EdVerifier
-	signer    *signing.EdSigner
 	oracle    *legacyOracle
 	sync      system.SyncStateProvider
 	patrol    *layerpatrol.LayerPatrol
 	tracer    Tracer
+}
+
+func (h *Hare) Register(signer *signing.EdSigner) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.log.Info("register signing key", zap.Stringer("node", signer.NodeID()))
+	h.signers[string(signer.NodeID().Bytes())] = signer
 }
 
 func (h *Hare) Results() <-chan ConsensusOutput {
@@ -323,15 +330,24 @@ func (h *Hare) onLayer(layer types.LayerID) {
 		return
 	}
 	h.patrol.SetHareInCharge(layer)
-	proto := newProtocol(h.config.Committee/2 + 1)
+
 	h.mu.Lock()
-	h.sessions[layer] = proto
+	// signer can't join mid session
+	s := &session{
+		lid:     layer,
+		beacon:  beacon,
+		signers: maps.Values(h.signers),
+		vrfs:    make([]*types.HareEligibility, len(h.signers)),
+		proto:   newProtocol(h.config.Committee/2 + 1),
+	}
+	h.sessions[layer] = s.proto
 	h.mu.Unlock()
+
 	sessionStart.Inc()
 	h.tracer.OnStart(layer)
 	h.log.Debug("registered layer", zap.Uint32("lid", layer.Uint32()))
 	h.eg.Go(func() error {
-		if err := h.run(layer, beacon, proto); err != nil {
+		if err := h.run(s); err != nil {
 			h.log.Warn("failed",
 				zap.Uint32("lid", layer.Uint32()),
 				zap.Error(err),
@@ -354,20 +370,25 @@ func (h *Hare) onLayer(layer types.LayerID) {
 	})
 }
 
-func (h *Hare) run(layer types.LayerID, beacon types.Beacon, proto *protocol) error {
+func (h *Hare) run(session *session) error {
 	// oracle may load non-negligible amount of data from disk
 	// we do it before preround starts, so that load can have some slack time
 	// before it needs to be used in validation
-	current := IterRound{Round: preround}
-
-	start := time.Now()
-	vrf := h.oracle.active(h.signer.NodeID(), layer, current)
+	var (
+		current = IterRound{Round: preround}
+		start   = time.Now()
+		active  bool
+	)
+	for i := range session.signers {
+		session.vrfs[i] = h.oracle.active(session.signers[i], session.beacon, session.lid, current)
+		active = active || session.vrfs[i] != nil
+	}
+	h.tracer.OnActive(session.vrfs)
 	activeLatency.Observe(time.Since(start).Seconds())
-	h.tracer.OnActive(vrf)
 
-	walltime := h.nodeclock.LayerToTime(layer).Add(h.config.PreroundDelay)
-	if vrf != nil {
-		h.log.Debug("active in preround", zap.Uint32("lid", layer.Uint32()))
+	walltime := h.nodeclock.LayerToTime(session.lid).Add(h.config.PreroundDelay)
+	if active {
+		h.log.Debug("active in preround", zap.Uint32("lid", session.lid.Uint32()))
 		// initial set is not needed if node is not active in preround
 		select {
 		case <-h.wallclock.After(walltime.Sub(h.wallclock.Now())):
@@ -375,35 +396,42 @@ func (h *Hare) run(layer types.LayerID, beacon types.Beacon, proto *protocol) er
 			return h.ctx.Err()
 		}
 		start := time.Now()
-		proto.OnInitial(h.proposals(layer, beacon))
+		session.proto.OnInitial(h.proposals(session))
 		proposalsLatency.Observe(time.Since(start).Seconds())
 	}
-	if err := h.onOutput(layer, current, proto.Next(vrf != nil), vrf); err != nil {
+	if err := h.onOutput(session, current, session.proto.Next(active)); err != nil {
 		return err
 	}
 	result := false
 	for {
 		walltime = walltime.Add(h.config.RoundDuration)
-		current := proto.IterRound
-		var vrf *types.HareEligibility
-		if current.IsMessageRound() {
-			start := time.Now()
-			vrf = h.oracle.active(h.signer.NodeID(), layer, current)
-			activeLatency.Observe(time.Since(start).Seconds())
+		active = false
+		current = session.proto.IterRound
+		start = time.Now()
+
+		for i := range session.signers {
+			if current.IsMessageRound() {
+				session.vrfs[i] = h.oracle.active(session.signers[i], session.beacon, session.lid, current)
+			} else {
+				session.vrfs[i] = nil
+			}
+			active = active || session.vrfs[i] != nil
 		}
-		h.tracer.OnActive(vrf)
+		h.tracer.OnActive(session.vrfs)
+		activeLatency.Observe(time.Since(start).Seconds())
+
 		select {
 		case <-h.wallclock.After(walltime.Sub(h.wallclock.Now())):
 			h.log.Debug("execute round",
-				zap.Uint32("lid", layer.Uint32()),
-				zap.Uint8("iter", proto.Iter), zap.Stringer("round", proto.Round),
-				zap.Bool("active", vrf != nil),
+				zap.Uint32("lid", session.lid.Uint32()),
+				zap.Uint8("iter", session.proto.Iter), zap.Stringer("round", session.proto.Round),
+				zap.Bool("active", active),
 			)
-			out := proto.Next(vrf != nil)
+			out := session.proto.Next(active)
 			if out.result != nil {
 				result = true
 			}
-			if err := h.onOutput(layer, current, out, vrf); err != nil {
+			if err := h.onOutput(session, current, out); err != nil {
 				return err
 			}
 			if out.terminated {
@@ -422,27 +450,31 @@ func (h *Hare) run(layer types.LayerID, beacon types.Beacon, proto *protocol) er
 	}
 }
 
-func (h *Hare) onOutput(layer types.LayerID, ir IterRound, out output, vrf *types.HareEligibility) error {
-	if out.message != nil {
-		out.message.Layer = layer
-		out.message.Eligibility = *vrf
-		out.message.Sender = h.signer.NodeID()
-		out.message.Signature = h.signer.Sign(signing.HARE, out.message.ToMetadata().ToBytes())
-		if err := h.pubsub.Publish(h.ctx, h.config.ProtocolName, out.message.ToBytes()); err != nil {
-			h.log.Error("failed to publish", zap.Inline(out.message), zap.Error(err))
+func (h *Hare) onOutput(session *session, ir IterRound, out output) error {
+	for i, vrf := range session.vrfs {
+		if vrf == nil || out.message == nil {
+			continue
+		}
+		msg := *out.message // shallow copy
+		msg.Layer = session.lid
+		msg.Eligibility = *vrf
+		msg.Sender = session.signers[i].NodeID()
+		msg.Signature = session.signers[i].Sign(signing.HARE, msg.ToMetadata().ToBytes())
+		if err := h.pubsub.Publish(h.ctx, h.config.ProtocolName, msg.ToBytes()); err != nil {
+			h.log.Error("failed to publish", zap.Inline(&msg), zap.Error(err))
 		}
 	}
+	h.tracer.OnMessageSent(out.message)
 	h.log.Debug("round output",
-		zap.Uint32("lid", layer.Uint32()),
+		zap.Uint32("lid", session.lid.Uint32()),
 		zap.Uint8("iter", ir.Iter), zap.Stringer("round", ir.Round),
 		zap.Inline(&out),
 	)
-	h.tracer.OnMessageSent(out.message)
 	if out.coin != nil {
 		select {
 		case <-h.ctx.Done():
 			return h.ctx.Err()
-		case h.coins <- WeakCoinOutput{Layer: layer, Coin: *out.coin}:
+		case h.coins <- WeakCoinOutput{Layer: session.lid, Coin: *out.coin}:
 		}
 		sessionCoin.Inc()
 	}
@@ -450,38 +482,45 @@ func (h *Hare) onOutput(layer types.LayerID, ir IterRound, out output, vrf *type
 		select {
 		case <-h.ctx.Done():
 			return h.ctx.Err()
-		case h.results <- ConsensusOutput{Layer: layer, Proposals: out.result}:
+		case h.results <- ConsensusOutput{Layer: session.lid, Proposals: out.result}:
 		}
 		sessionResult.Inc()
 	}
 	return nil
 }
 
-func (h *Hare) proposals(lid types.LayerID, epochBeacon types.Beacon) []types.ProposalID {
+func (h *Hare) proposals(session *session) []types.ProposalID {
 	h.log.Debug("requested proposals",
-		zap.Uint32("lid", lid.Uint32()),
-		zap.Stringer("beacon", epochBeacon),
+		zap.Uint32("lid", session.lid.Uint32()),
+		zap.Stringer("beacon", session.beacon),
 	)
-	props, err := proposals.GetByLayer(h.db, lid)
+	props, err := proposals.GetByLayer(h.db, session.lid)
 	if err != nil {
 		if errors.Is(err, sql.ErrNotFound) {
 			h.log.Warn("no proposals found for hare, using empty set",
-				zap.Uint32("lid", lid.Uint32()), zap.Error(err))
+				zap.Uint32("lid", session.lid.Uint32()), zap.Error(err))
 		} else {
 			h.log.Error("failed to get proposals for hare",
-				zap.Uint32("lid", lid.Uint32()), zap.Error(err))
+				zap.Uint32("lid", session.lid.Uint32()), zap.Error(err))
 		}
 		return []types.ProposalID{}
 	}
 	var (
-		beacon types.Beacon
-		result []types.ProposalID
+		beacon   types.Beacon
+		result   []types.ProposalID
+		min, own *types.ActivationTxHeader
 	)
-	own, err := h.db.GetEpochAtx(lid.GetEpoch()-1, h.signer.NodeID())
-	if err != nil {
-		h.log.Warn("no atxs in the requested epoch",
-			zap.Uint32("epoch", lid.GetEpoch().Uint32()-1),
-			zap.Error(err))
+	for _, signer := range session.signers {
+		own, err = h.db.GetEpochAtx(session.lid.GetEpoch()-1, signer.NodeID())
+		if err != nil && !errors.Is(err, sql.ErrNotFound) {
+			return []types.ProposalID{}
+		}
+		if min == nil || (min != nil && own != nil && own.TickHeight() < min.TickHeight()) {
+			min = own
+		}
+	}
+	if min == nil {
+		h.log.Debug("no atxs in the requested epoch", zap.Uint32("epoch", session.lid.GetEpoch().Uint32()-1))
 		return []types.ProposalID{}
 	}
 	atxs := map[types.ATXID]int{}
@@ -508,10 +547,10 @@ func (h *Hare) proposals(lid types.LayerID, epochBeacon types.Beacon) []types.Pr
 			h.log.Error("atx is not loaded", zap.Error(err), zap.Stringer("atxid", p.AtxID))
 			return []types.ProposalID{}
 		}
-		if hdr.BaseTickHeight >= own.TickHeight() {
+		if hdr.BaseTickHeight >= min.TickHeight() {
 			// does not vote for future proposal
 			h.log.Warn("proposal base tick height too high. skipping",
-				zap.Uint32("lid", lid.Uint32()),
+				zap.Uint32("lid", session.lid.Uint32()),
 				zap.Uint64("proposal_height", hdr.BaseTickHeight),
 				zap.Uint64("own_height", own.TickHeight()),
 			)
@@ -532,14 +571,14 @@ func (h *Hare) proposals(lid types.LayerID, epochBeacon types.Beacon) []types.Pr
 		} else {
 			beacon = refBallot.EpochData.Beacon
 		}
-		if beacon == epochBeacon {
+		if beacon == session.beacon {
 			result = append(result, p.ID())
 		} else {
 			h.log.Warn("proposal has different beacon value",
-				zap.Uint32("lid", lid.Uint32()),
+				zap.Uint32("lid", session.lid.Uint32()),
 				zap.Stringer("id", p.ID()),
 				zap.String("proposal_beacon", beacon.ShortString()),
-				zap.String("epoch_beacon", epochBeacon.ShortString()),
+				zap.String("epoch_beacon", session.beacon.ShortString()),
 			)
 		}
 	}
@@ -552,4 +591,12 @@ func (h *Hare) Stop() {
 	close(h.results)
 	close(h.coins)
 	h.log.Info("stopped")
+}
+
+type session struct {
+	proto   *protocol
+	lid     types.LayerID
+	beacon  types.Beacon
+	signers []*signing.EdSigner
+	vrfs    []*types.HareEligibility
 }

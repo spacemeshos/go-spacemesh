@@ -6,11 +6,54 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ### Upgrade information
 
+### Highlights
+
+### Features
+
+### Improvements
+
+* [#5118](https://github.com/spacemeshos/go-spacemesh/pull/5118) reduce number of tortoise results returned after recovery.
+
+  this is hotfix for a bug introduced in v1.2.0. in rare conditions node may loop with the following warning:
+
+  > 2023-10-02T15:28:14.002+0200 WARN fd68b.sync mesh failed to process layer from sync {"node_id": "fd68b9397572556c2f329f3e5af2faf23aef85dbbbb7e38447fae2f4ef38899f", "module": "sync", "sessionId": "29422935-68d6-47d1-87a8-02293aa181f3", "layer_id": 23104, "errmsg": "requested layer 8063 is before evicted 13102", "name": "sync"}
+
+* [#5091](https://github.com/spacemeshos/go-spacemesh/pull/5091) First stage of separating PoST from the node into its own service.
+* [#5061](https://github.com/spacemeshos/go-spacemesh/pull/5061) Proof generation is now done via a dedicated service instead of the node.
+
+  Operating a node doesn't require any changes at the moment. The service will be automatically started by the node if needed and will be stopped when the node is stopped.
+
+* [#5138](https://github.com/spacemeshos/go-spacemesh/pull/5138) Bump poet to v0.9.7
+
+  The submit proof of work should now be up to 40% faster thanks to [code optimization](https://github.com/spacemeshos/poet/pull/419).
+
+* [#5143](https://github.com/spacemeshos/go-spacemesh/pull/5143) Select good peers for sync requests.
+
+  The change improves initial sync speed and any sync protocol requests required during consensus.
+
+* [#5109](https://github.com/spacemeshos/go-spacemesh/pull/5109) Limit number of layers that tortoise needs to read on startup.
+
+  Bounds the time required to restart a node.
+
+## v1.2.0
+
+### Upgrade information
+
+This upgrade is incompatible with versions older than v1.1.6.
+
+At the start of the upgrade, mesh data will be pruned and compacted/vacuumed. Pruning takes longer for
+nodes that joined the network earlier. For 1-week-old nodes, it takes ~20 minutes. for 3-week-old
+nodes it takes ~40 minutes. The vacuum operation takes ~5 minutes and requires extra disk space
+to complete successfully. If the size of state.sql is 25 GiB at the beginning of upgrade, the WAL file
+(state.sql-wal) will grow to 25 GiB and then drop to 0 when the vacuum is complete. The node will resume
+its normal startup routine after the pruning and vacuum is complete. The final size of state.sql is
+expected to be ~1.5 GiB.
+
 A new config `poet-request-timeout` has been added, that defines the timeout for requesting PoET proofs.
 It defaults to 9 minutes so there is enough time to retry if the request fails.
 
-Config option and flag `p2p-disable-legacy-discovery` and `disable-dht` have been dropped. DHT has been the
-only p2p discovery mechanism since release v1.1.2.
+Config option and flag `p2p-disable-legacy-discovery` is dropped. DHT has been the only p2p discovery
+mechanism since release v1.1.2.
 
 Support for old certificate sync protocol is dropped. This update is incompatible with v1.0.x series.
 
@@ -19,6 +62,15 @@ Support for old certificate sync protocol is dropped. This update is incompatibl
 ### Features
 
 * [#5031](https://github.com/spacemeshos/go-spacemesh/pull/5031) Nodes will also fetch from PoET 112 for round 4 if they were able to register to PoET 110.
+* [#5067](https://github.com/spacemeshos/go-spacemesh/pull/5067) dbstat virtual table can be read periodically to collect table/index sizes.
+
+In order to enable provide following configuration:
+
+```json
+"main": {
+    "db-size-metering-interval": "10m"
+}
+```
 
 ### Improvements
 
@@ -26,7 +78,10 @@ Support for old certificate sync protocol is dropped. This update is incompatibl
   Ephemeral data are deleted and state compacted at the time of upgrade. In steady-state, data is pruned periodically.
 * [#5021](https://github.com/spacemeshos/go-spacemesh/pull/5021) Drop support for old certificate sync protocol.
 * [#5024](https://github.com/spacemeshos/go-spacemesh/pull/5024) Active set will be saved in state separately from ballots.
+* [#5032](https://github.com/spacemeshos/go-spacemesh/pull/5032) Ativeset data pruned from ballots.
 * [#5035](https://github.com/spacemeshos/go-spacemesh/pull/5035) Fix possible nil pointer panic when node fails to persist nipost builder state.
+* [#5079](https://github.com/spacemeshos/go-spacemesh/pull/5079) increase atx cache to 50 000 to reduce disk reads.
+* [#5083](https://github.com/spacemeshos/go-spacemesh/pull/5083) Disable beacon protocol temporarily.
 
 ## v1.1.5
 

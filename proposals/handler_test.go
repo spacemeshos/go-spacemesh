@@ -87,8 +87,6 @@ func fullMockSet(tb testing.TB) *mockSet {
 func createTestHandler(t *testing.T) *testHandler {
 	types.SetLayersPerEpoch(layersPerEpoch)
 	ms := fullMockSet(t)
-	edVerifier, err := signing.NewEdVerifier()
-	require.NoError(t, err)
 	db := sql.InMemory()
 	ms.md.EXPECT().GetBallot(gomock.Any()).AnyTimes().DoAndReturn(func(id types.BallotID) *tortoise.BallotData {
 		ballot, err := ballots.Get(db, id)
@@ -109,7 +107,7 @@ func createTestHandler(t *testing.T) *testHandler {
 		return data
 	})
 	return &testHandler{
-		Handler: NewHandler(db, cache.New(), edVerifier, ms.mpub, ms.mf, ms.mbc, ms.mm, ms.md, ms.mvrf, ms.mclock,
+		Handler: NewHandler(db, cache.New(), signing.NewEdVerifier(), ms.mpub, ms.mf, ms.mbc, ms.mm, ms.md, ms.mvrf, ms.mclock,
 			WithLogger(logtest.New(t)),
 			WithConfig(Config{
 				LayerSize:      layerAvgSize,

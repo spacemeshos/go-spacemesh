@@ -5,7 +5,6 @@ import (
 	"io"
 	"time"
 
-	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 
@@ -42,14 +41,9 @@ type layerClock interface {
 }
 
 type nipostBuilder interface {
-	UpdatePoETProvers([]PoetProvingServiceClient)
+	UpdatePoETProvers([]poetClient)
 	BuildNIPost(ctx context.Context, challenge *types.NIPostChallenge) (*types.NIPost, error)
 	DataDir() string
-}
-
-type atxHandler interface {
-	AwaitAtx(id types.ATXID) chan struct{}
-	UnsubscribeAtx(id types.ATXID)
 }
 
 type syncer interface {
@@ -61,14 +55,12 @@ type atxProvider interface {
 }
 
 // PostSetupProvider defines the functionality required for Post setup.
+// This interface is used by the atx builder and currently implemented by the PostSetupManager.
+// Eventually most of the functionality will be moved to the PoSTClient.
 type postSetupProvider interface {
-	Status() *PostSetupStatus
-	Providers() ([]PostSetupProvider, error)
-	Benchmark(p PostSetupProvider) (int, error)
 	PrepareInitializer(ctx context.Context, opts PostSetupOpts) error
 	StartSession(context context.Context) error
 	Reset() error
-	GenerateProof(ctx context.Context, challenge []byte, options ...proving.OptionFunc) (*types.Post, *types.PostMetadata, error)
 	CommitmentAtx() (types.ATXID, error)
 	VRFNonce() (*types.VRFPostIndex, error)
 	LastOpts() *PostSetupOpts
@@ -84,4 +76,34 @@ type SmeshingProvider interface {
 	Coinbase() types.Address
 	SetCoinbase(coinbase types.Address)
 	UpdatePoETServers(ctx context.Context, endpoints []string) error
+}
+
+// poetClient servers as an interface to communicate with a PoET server.
+// It is used to submit challenges and fetch proofs.
+type poetClient interface {
+	Address() string
+
+	PowParams(ctx context.Context) (*PoetPowParams, error)
+
+	// Submit registers a challenge in the proving service current open round.
+	Submit(ctx context.Context, deadline time.Time, prefix, challenge []byte, signature types.EdSignature, nodeID types.NodeID, pow PoetPoW) (*types.PoetRound, error)
+
+	// PoetServiceID returns the public key of the PoET proving service.
+	PoetServiceID(context.Context) (types.PoetServiceID, error)
+
+	// Proof returns the proof for the given round ID.
+	Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Member, error)
+}
+
+type poetDbAPI interface {
+	GetProof(types.PoetProofRef) (*types.PoetProof, *types.Hash32, error)
+	ValidateAndStore(ctx context.Context, proofMessage *types.PoetProofMessage) error
+}
+
+type postService interface {
+	Client(nodeId types.NodeID) (PostClient, error)
+}
+
+type PostClient interface {
+	Proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error)
 }

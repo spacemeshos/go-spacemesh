@@ -50,7 +50,7 @@ type Config struct {
 
 func DefaultConfig() Config {
 	return Config{
-		ATXSize:         20_000,
+		ATXSize:         100_000,
 		MalfeasenceSize: 1_000,
 	}
 }
@@ -251,7 +251,10 @@ func (db *CachedDB) GetEpochWeight(epoch types.EpochID) (uint64, []types.ATXID, 
 }
 
 // IterateEpochATXHeaders iterates over ActivationTxs that target an epoch.
-func (db *CachedDB) IterateEpochATXHeaders(epoch types.EpochID, iter func(*types.ActivationTxHeader) error) error {
+func (db *CachedDB) IterateEpochATXHeaders(
+	epoch types.EpochID,
+	iter func(*types.ActivationTxHeader) error,
+) error {
 	ids, err := atxs.GetIDsByEpoch(db, epoch-1)
 	if err != nil {
 		return err
@@ -268,7 +271,9 @@ func (db *CachedDB) IterateEpochATXHeaders(epoch types.EpochID, iter func(*types
 	return nil
 }
 
-func (db *CachedDB) IterateMalfeasanceProofs(iter func(types.NodeID, *types.MalfeasanceProof) error) error {
+func (db *CachedDB) IterateMalfeasanceProofs(
+	iter func(types.NodeID, *types.MalfeasanceProof) error,
+) error {
 	ids, err := identities.GetMalicious(db)
 	if err != nil {
 		return err
@@ -297,7 +302,10 @@ func (db *CachedDB) GetLastAtx(nodeID types.NodeID) (*types.ActivationTxHeader, 
 }
 
 // GetEpochAtx gets the atx header of specified node ID published in the specified epoch.
-func (db *CachedDB) GetEpochAtx(epoch types.EpochID, nodeID types.NodeID) (*types.ActivationTxHeader, error) {
+func (db *CachedDB) GetEpochAtx(
+	epoch types.EpochID,
+	nodeID types.NodeID,
+) (*types.ActivationTxHeader, error) {
 	vatx, err := atxs.GetByEpochAndNodeID(db, epoch, nodeID)
 	if err != nil {
 		return nil, fmt.Errorf("no epoch atx found: %w", err)

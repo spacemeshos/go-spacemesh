@@ -36,19 +36,11 @@ func noopBroadcaster(tb testing.TB, ctrl *gomock.Controller) *mocks.MockPublishe
 	return bc
 }
 
-func encoded(tb testing.TB, msg weakcoin.Message) []byte {
-	tb.Helper()
-	buf, err := codec.Encode(&msg)
-	require.NoError(tb, err)
-	return buf
-}
-
 func staticSigner(tb testing.TB, ctrl *gomock.Controller, nodeId types.NodeID, sig types.VrfSignature) *weakcoin.MockvrfSigner {
 	tb.Helper()
 	signer := weakcoin.NewMockvrfSigner(ctrl)
 	signer.EXPECT().Sign(gomock.Any()).Return(sig).AnyTimes()
 	signer.EXPECT().NodeID().Return(nodeId).AnyTimes()
-	signer.EXPECT().LittleEndian().Return(true).AnyTimes()
 	return signer
 }
 
@@ -89,18 +81,16 @@ func TestWeakCoin(t *testing.T) {
 	higherThreshold[79] = 0xff
 
 	for _, tc := range []struct {
-		desc             string
-		nodeSig          types.VrfSignature
-		mining, expected bool
-		msg              []byte
-		result           func(error) bool
+		desc         string
+		participants []weakcoin.Participant
+		expected     bool
+		msg          []byte
+		result       func(error) bool
 	}{
 		{
 			desc:     "node not mining",
-			nodeSig:  oneLSBSig,
-			mining:   false,
 			expected: false,
-			msg: encoded(t, weakcoin.Message{
+			msg: codec.MustEncode(&weakcoin.Message{
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         1,
@@ -110,11 +100,13 @@ func TestWeakCoin(t *testing.T) {
 			result: nilErr,
 		},
 		{
-			desc:     "node mining",
-			nodeSig:  oneLSBSig,
-			mining:   true,
+			desc: "node mining",
+			participants: []weakcoin.Participant{{
+				Signer: staticSigner(t, ctrl, types.RandomNodeID(), oneLSBSig),
+				Nonce:  types.VRFPostIndex(1),
+			}},
 			expected: true,
-			msg: encoded(t, weakcoin.Message{
+			msg: codec.MustEncode(&weakcoin.Message{
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         1,
@@ -124,11 +116,13 @@ func TestWeakCoin(t *testing.T) {
 			result: isErr,
 		},
 		{
-			desc:     "node mining but exceed threshold",
-			nodeSig:  higherThreshold,
-			mining:   true,
+			desc: "node mining but exceed threshold",
+			participants: []weakcoin.Participant{{
+				Signer: staticSigner(t, ctrl, types.RandomNodeID(), higherThreshold),
+				Nonce:  types.VRFPostIndex(1),
+			}},
 			expected: false,
-			msg: encoded(t, weakcoin.Message{
+			msg: codec.MustEncode(&weakcoin.Message{
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         1,
@@ -138,19 +132,31 @@ func TestWeakCoin(t *testing.T) {
 			result: nilErr,
 		},
 		{
-			desc:     "node only miner",
-			nodeSig:  oneLSBSig,
-			mining:   true,
+			desc: "node only miner",
+			participants: []weakcoin.Participant{{
+				Signer: staticSigner(t, ctrl, types.RandomNodeID(), oneLSBSig),
+				Nonce:  types.VRFPostIndex(1),
+			}},
 			expected: true,
+		},
+		{
+			desc: "two signers",
+			participants: []weakcoin.Participant{
+				{
+					Signer: staticSigner(t, ctrl, types.RandomNodeID(), types.VrfSignature{0b111}),
+					Nonce:  types.VRFPostIndex(1),
+				},
+				{
+					Signer: staticSigner(t, ctrl, types.RandomNodeID(), types.VrfSignature{0b110}),
+					Nonce:  types.VRFPostIndex(2),
+				},
+			},
+			expected: false,
 		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
-			miner := 0
-			if tc.mining {
-				// once for generating, once for pubsub validation
-				miner += 2
-			}
+			miner := len(tc.participants) * 2
 			if len(tc.msg) > 0 {
 				miner++
 			}
@@ -167,7 +173,6 @@ func TestWeakCoin(t *testing.T) {
 			threshold[79] = 0xfe
 			wc = weakcoin.New(
 				mockPublisher,
-				staticSigner(t, ctrl, types.RandomNodeID(), tc.nodeSig),
 				sigVerifier(t, ctrl),
 				nonceFetcher(t, ctrl),
 				mockAllowance,
@@ -177,12 +182,7 @@ func TestWeakCoin(t *testing.T) {
 			)
 
 			wc.StartEpoch(context.Background(), epoch)
-			nonce := types.VRFPostIndex(1)
-			if tc.mining {
-				wc.StartRound(context.Background(), round, &nonce)
-			} else {
-				wc.StartRound(context.Background(), round, nil)
-			}
+			wc.StartRound(context.Background(), round, tc.participants)
 
 			if len(tc.msg) > 0 {
 				require.True(t, tc.result(wc.HandleProposal(context.Background(), "", tc.msg)))
@@ -206,7 +206,6 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 
 		oneLSBMiner     = types.NodeID{0b0001}
 		oneLSBSig       = types.VrfSignature{0b0001}
-		zeroLSBSig      = types.VrfSignature{0b0110}
 		highLSBMiner    = types.NodeID{0xff}
 		higherThreshold types.VrfSignature
 	)
@@ -223,7 +222,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 			desc:         "ValidProposal",
 			startedEpoch: epoch,
 			startedRound: round,
-			msg: encoded(t, weakcoin.Message{
+			msg: codec.MustEncode(&weakcoin.Message{
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         allowance,
@@ -243,7 +242,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 			desc:         "ExceedAllowance",
 			startedEpoch: epoch,
 			startedRound: round,
-			msg: encoded(t, weakcoin.Message{
+			msg: codec.MustEncode(&weakcoin.Message{
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         allowance + 1,
@@ -256,7 +255,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 			desc:         "ExceedThreshold",
 			startedEpoch: epoch,
 			startedRound: round,
-			msg: encoded(t, weakcoin.Message{
+			msg: codec.MustEncode(&weakcoin.Message{
 				Epoch:        epoch,
 				Round:        round,
 				Unit:         allowance,
@@ -269,7 +268,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 			desc:         "PreviousEpoch",
 			startedEpoch: epoch,
 			startedRound: round,
-			msg: encoded(t, weakcoin.Message{
+			msg: codec.MustEncode(&weakcoin.Message{
 				Epoch:        epoch - 1,
 				Round:        round,
 				Unit:         allowance,
@@ -282,7 +281,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 			desc:         "NextEpoch",
 			startedEpoch: epoch,
 			startedRound: round,
-			msg: encoded(t, weakcoin.Message{
+			msg: codec.MustEncode(&weakcoin.Message{
 				Epoch:        epoch + 1,
 				Round:        round,
 				Unit:         allowance,
@@ -295,7 +294,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 			desc:         "PreviousRound",
 			startedEpoch: epoch,
 			startedRound: round,
-			msg: encoded(t, weakcoin.Message{
+			msg: codec.MustEncode(&weakcoin.Message{
 				Epoch:        epoch,
 				Round:        round - 1,
 				Unit:         allowance,
@@ -308,7 +307,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 			desc:         "NextRound",
 			startedEpoch: epoch,
 			startedRound: round,
-			msg: encoded(t, weakcoin.Message{
+			msg: codec.MustEncode(&weakcoin.Message{
 				Epoch:        epoch,
 				Round:        round + 1,
 				Unit:         allowance,
@@ -327,7 +326,6 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 			threshold[79] = 0xfe
 			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
-				staticSigner(t, ctrl, types.RandomNodeID(), zeroLSBSig),
 				sigVerifier(t, ctrl),
 				nonceFetcher(t, ctrl),
 				mockAllowance,
@@ -337,7 +335,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 			)
 
 			wc.StartEpoch(context.Background(), tc.startedEpoch)
-			wc.StartRound(context.Background(), tc.startedRound, nil)
+			wc.StartRound(context.Background(), tc.startedRound, []weakcoin.Participant{})
 
 			require.True(t, tc.expected(wc.HandleProposal(context.Background(), "", tc.msg)))
 			wc.FinishRound(context.Background())
@@ -363,7 +361,6 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 	mockAllowance.EXPECT().MinerAllowance(epoch, gomock.Any()).Return(uint32(1)).AnyTimes()
 	wc := weakcoin.New(
 		noopBroadcaster(t, ctrl),
-		staticSigner(t, ctrl, types.RandomNodeID(), oneLSBSig),
 		sigVerifier(t, ctrl),
 		nonceFetcher(t, ctrl),
 		mockAllowance,
@@ -374,7 +371,7 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 	wc.StartEpoch(context.Background(), epoch)
 	wc.StartRound(context.Background(), round, nil)
 	for i := 0; i < bufSize; i++ {
-		wc.HandleProposal(context.Background(), "", encoded(t, weakcoin.Message{
+		wc.HandleProposal(context.Background(), "", codec.MustEncode(&weakcoin.Message{
 			Epoch:        epoch,
 			Round:        nextRound,
 			Unit:         1,
@@ -382,7 +379,7 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 			VRFSignature: oneLSBSig,
 		}))
 	}
-	wc.HandleProposal(context.Background(), "", encoded(t, weakcoin.Message{
+	wc.HandleProposal(context.Background(), "", codec.MustEncode(&weakcoin.Message{
 		Epoch:        epoch,
 		Round:        nextRound,
 		Unit:         1,
@@ -417,8 +414,7 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 		signing.WithKeyFromRand(rng),
 	)
 	require.NoError(t, err)
-	vrfSig, err := signer.VRFSigner()
-	require.NoError(t, err)
+	vrfSig := signer.VRFSigner()
 
 	mockAllowance := weakcoin.NewMockallowance(gomock.NewController(t))
 	mockAllowance.EXPECT().MinerAllowance(epoch, gomock.Any()).DoAndReturn(
@@ -430,7 +426,6 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 		})
 	instance := weakcoin.New(
 		broadcaster,
-		vrfSig,
 		signing.NewVRFVerifier(),
 		nonceFetcher(t, ctrl),
 		mockAllowance,
@@ -438,8 +433,12 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 		weakcoin.WithLog(logtest.New(t)),
 	)
 	instance.StartEpoch(context.Background(), epoch)
-	nonce := types.VRFPostIndex(1)
-	instance.StartRound(context.Background(), round, &nonce)
+	instance.StartRound(context.Background(), round, []weakcoin.Participant{
+		{
+			Signer: vrfSig,
+			Nonce:  types.VRFPostIndex(1),
+		},
+	})
 
 	require.Equal(t,
 		"78f523319fd2cdf3812a3bc3905561acb2f7f1b7e47de71f92811d7bb82460e5999a048051cefa2d1b6f3f16656de83c2756b7539b33fa563a3e8fea5130235e66e8dce914d69bd40f13174f3914ad07",
@@ -473,8 +472,7 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 
 		signer, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
 		require.NoError(t, err)
-		vrfSigner, err := signer.VRFSigner()
-		require.NoError(t, err)
+		vrfSigner := signer.VRFSigner()
 
 		vrfSigners[i] = vrfSigner
 	}
@@ -485,7 +483,6 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 	for i := range instances {
 		instances[i] = weakcoin.New(
 			broadcasters[i],
-			vrfSigners[i],
 			signing.NewVRFVerifier(),
 			nonceFetcher(t, ctrl),
 			mockAllowance,
@@ -494,7 +491,6 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 		)
 	}
 
-	nonce := types.VRFPostIndex(1)
 	for epoch := epochStart; epoch <= epochEnd; epoch++ {
 		for _, instance := range instances {
 			instance.StartEpoch(context.Background(), epoch)
@@ -504,7 +500,12 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 				if i == 0 {
 					instance.StartRound(context.Background(), current, nil)
 				} else {
-					instance.StartRound(context.Background(), current, &nonce)
+					instance.StartRound(context.Background(), current, []weakcoin.Participant{
+						{
+							Signer: vrfSigners[i],
+							Nonce:  types.VRFPostIndex(1),
+						},
+					})
 				}
 			}
 			for _, instance := range instances {

@@ -43,10 +43,14 @@ func TestTracer(t *testing.T) {
 	t.Run("recover", func(t *testing.T) {
 		t.Parallel()
 		path := filepath.Join(t.TempDir(), "tortoise.trace")
-		trt, err := Recover(context.Background(), s.GetState(0).DB, last, s.GetState(0).Beacons, WithTracer(WithOutput(path)))
+		trt, err := Recover(
+			context.Background(),
+			s.GetState(0).DB,
+			last,
+			WithTracer(WithOutput(path)),
+		)
 		require.NoError(t, err)
 		trt.Updates()
-		trt.Results(types.GetEffectiveGenesis(), trt.LatestComplete())
 		require.NoError(t, RunTrace(path, nil, WithLogger(logtest.New(t))))
 	})
 	t.Run("errors", func(t *testing.T) {
@@ -78,7 +82,10 @@ func TestData(t *testing.T) {
 		}
 		t.Run(entry.Name(), func(t *testing.T) {
 			t.Parallel()
-			require.NoError(t, RunTrace(filepath.Join(data, entry.Name()), nil, WithLogger(logtest.New(t))))
+			require.NoError(
+				t,
+				RunTrace(filepath.Join(data, entry.Name()), nil, WithLogger(logtest.New(t))),
+			)
 		})
 	}
 }

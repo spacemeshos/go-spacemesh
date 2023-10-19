@@ -8,12 +8,13 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 type oracle interface {
 	Validate(context.Context, types.LayerID, uint32, int, types.NodeID, types.VrfSignature, uint16) (bool, error)
 	CalcEligibility(context.Context, types.LayerID, uint32, int, types.NodeID, types.VrfSignature) (uint16, error)
-	Proof(context.Context, types.LayerID, uint32) (types.VrfSignature, error)
+	GenVRF(context.Context, *signing.VRFSigner, types.Beacon, types.LayerID, uint32) types.VrfSignature
 }
 
 type legacyOracle struct {
@@ -43,17 +44,13 @@ func (lg *legacyOracle) validate(msg *Message) grade {
 	return grade5
 }
 
-func (lg *legacyOracle) active(smesher types.NodeID, layer types.LayerID, ir IterRound) *types.HareEligibility {
-	vrf, err := lg.oracle.Proof(context.Background(), layer, ir.Absolute())
-	if err != nil {
-		lg.log.Error("failed to compute vrf", zap.Error(err))
-		return nil
-	}
+func (lg *legacyOracle) active(signer *signing.EdSigner, beacon types.Beacon, layer types.LayerID, ir IterRound) *types.HareEligibility {
+	vrf := lg.oracle.GenVRF(context.Background(), signer.VRFSigner(), beacon, layer, ir.Absolute())
 	committee := int(lg.config.Committee)
 	if ir.Round == propose {
 		committee = int(lg.config.Leaders)
 	}
-	count, err := lg.oracle.CalcEligibility(context.Background(), layer, ir.Absolute(), committee, smesher, vrf)
+	count, err := lg.oracle.CalcEligibility(context.Background(), layer, ir.Absolute(), committee, signer.NodeID(), vrf)
 	if err != nil {
 		if !errors.Is(err, eligibility.ErrNotActive) {
 			lg.log.Error("failed to compute eligibilities", zap.Error(err))

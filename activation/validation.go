@@ -15,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type ErrAtxNotFound struct {
@@ -42,13 +41,12 @@ type Validator struct {
 	poetDb       poetDbAPI
 	cfg          PostConfig
 	scrypt       config.ScryptParams
-	log          log.Log
 	postVerifier PostVerifier
 }
 
 // NewValidator returns a new NIPost validator.
-func NewValidator(poetDb poetDbAPI, cfg PostConfig, scrypt config.ScryptParams, log log.Log, postVerifier PostVerifier) *Validator {
-	return &Validator{poetDb, cfg, scrypt, log, postVerifier}
+func NewValidator(poetDb poetDbAPI, cfg PostConfig, scrypt config.ScryptParams, postVerifier PostVerifier) *Validator {
+	return &Validator{poetDb, cfg, scrypt, postVerifier}
 }
 
 // NIPost validates a NIPost, given a node id and expected challenge. It returns an error if the NIPost is invalid.

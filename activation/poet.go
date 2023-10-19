@@ -15,6 +15,7 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
@@ -43,7 +44,7 @@ type HTTPPoetClient struct {
 	logger        *zap.Logger
 }
 
-func defaultPoetClientFunc(address string, cfg PoetConfig) (PoetProvingServiceClient, error) {
+func defaultPoetClientFunc(address string, cfg PoetConfig) (poetClient, error) {
 	return NewHTTPPoetClient(address, cfg)
 }
 
@@ -153,7 +154,7 @@ func (c *HTTPPoetClient) PowParams(ctx context.Context) (*PoetPowParams, error) 
 }
 
 // Submit registers a challenge in the proving service current open round.
-func (c *HTTPPoetClient) Submit(ctx context.Context, prefix, challenge []byte, signature types.EdSignature, nodeID types.NodeID, pow PoetPoW) (*types.PoetRound, error) {
+func (c *HTTPPoetClient) Submit(ctx context.Context, deadline time.Time, prefix, challenge []byte, signature types.EdSignature, nodeID types.NodeID, pow PoetPoW) (*types.PoetRound, error) {
 	request := rpcapi.SubmitRequest{
 		Prefix:    prefix,
 		Challenge: challenge,
@@ -164,6 +165,7 @@ func (c *HTTPPoetClient) Submit(ctx context.Context, prefix, challenge []byte, s
 			Challenge:  pow.Params.Challenge,
 			Difficulty: uint32(pow.Params.Difficulty),
 		},
+		Deadline: timestamppb.New(deadline),
 	}
 	resBody := rpcapi.SubmitResponse{}
 	if err := c.req(ctx, http.MethodPost, "/v1/submit", &request, &resBody); err != nil {
@@ -257,6 +259,7 @@ func (c *HTTPPoetClient) req(ctx context.Context, method, path string, reqBody, 
 	if res.StatusCode != http.StatusOK {
 		c.logger.Info("got poet response != 200 OK", zap.String("status", res.Status), zap.String("body", string(data)))
 	}
+
 	switch res.StatusCode {
 	case http.StatusOK:
 	case http.StatusNotFound:
@@ -270,7 +273,8 @@ func (c *HTTPPoetClient) req(ctx context.Context, method, path string, reqBody, 
 	}
 
 	if resBody != nil {
-		if err := protojson.Unmarshal(data, resBody); err != nil {
+		unmarshaler := protojson.UnmarshalOptions{DiscardUnknown: true}
+		if err := unmarshaler.Unmarshal(data, resBody); err != nil {
 			return fmt.Errorf("decoding response body to proto: %w", err)
 		}
 	}

@@ -32,6 +32,19 @@ func MainnetConfig() Config {
 	}
 	p2pconfig := p2p.DefaultConfig()
 
+	p2pconfig.Bootnodes = []string{
+		"/dns4/mainnet-bootnode-0.spacemesh.network/tcp/5000/p2p/12D3KooWPStnitMbLyWAGr32gHmPr538mT658Thp6zTUujZt3LRf",
+		"/dns4/mainnet-bootnode-2.spacemesh.network/tcp/5000/p2p/12D3KooWAsMgXLpyGdsRNjHBF3FaXwnXhyMEqWQYBXUpvCHNzFNK",
+		"/dns4/mainnet-bootnode-4.spacemesh.network/tcp/5000/p2p/12D3KooWRcTWDHzptnhJn5h6CtwnokzzMaDLcXv6oM9CxQEXd5FL",
+		"/dns4/mainnet-bootnode-6.spacemesh.network/tcp/5000/p2p/12D3KooWRS47KAs3ZLkBtE2AqjJCwxRYqZKmyLkvombJJdrca8Hz",
+		"/dns4/mainnet-bootnode-8.spacemesh.network/tcp/5000/p2p/12D3KooWFYv99aGbtXnZQy6UZxyf72NpkWJp3K4HS8Py35WhKtzE",
+		"/dns4/mainnet-bootnode-10.spacemesh.network/tcp/5000/p2p/12D3KooWHK5m83sNj2eNMJMGAngcS9gBja27ho83t79Q2CD4iRjQ",
+		"/dns4/mainnet-bootnode-12.spacemesh.network/tcp/5000/p2p/12D3KooWG4gk8GtMsAjYxHtbNC7oEoBTMRLbLDpKgSQMQkYBFRsw",
+		"/dns4/mainnet-bootnode-14.spacemesh.network/tcp/5000/p2p/12D3KooWRkZMjGNrQfRyeKQC9U58cUwAfyQMtjNsupixkBFag8AY",
+		"/dns4/mainnet-bootnode-16.spacemesh.network/tcp/5000/p2p/12D3KooWDAFRuFrMNgVQMDy8cgD71GLtPyYyfQzFxMZr2yUBgjHK",
+		"/dns4/mainnet-bootnode-18.spacemesh.network/tcp/5000/p2p/12D3KooWMJmdfwxDctuGGoTYJD8Wj9jubQBbPfrgrzzXaQ1RTKE6",
+	}
+
 	smeshing := DefaultSmeshingConfig()
 	smeshing.ProvingOpts.Nonces = 288
 	smeshing.ProvingOpts.Threads = uint(runtime.NumCPU() * 3 / 4)
@@ -40,6 +53,8 @@ func MainnetConfig() Config {
 	}
 	logging := DefaultLoggingConfig()
 	logging.TrtlLoggerLevel = zapcore.WarnLevel.String()
+	logging.AtxHandlerLevel = zapcore.WarnLevel.String()
+	logging.ProposalListenerLevel = zapcore.WarnLevel.String()
 	return Config{
 		BaseConfig: BaseConfig{
 			DataDirParent:         defaultDataDir,
@@ -65,7 +80,9 @@ func MainnetConfig() Config {
 				"https://mainnet-poet-2.spacemesh.network",
 				"https://poet-110.spacemesh.network",
 				"https://poet-111.spacemesh.network",
+				"https://poet-112.spacemesh.network",
 			},
+			RegossipAtxInterval: 2 * time.Hour,
 		},
 		Genesis: &GenesisConfig{
 			GenesisTime: "2023-07-14T08:00:00Z",
@@ -100,7 +117,7 @@ func MainnetConfig() Config {
 			GracePeriodDuration:      10 * time.Minute,
 			ProposalDuration:         4 * time.Minute,
 			FirstVotingRoundDuration: 30 * time.Minute,
-			RoundsNumber:             300,
+			RoundsNumber:             0,
 			VotingRoundDuration:      4 * time.Minute,
 			WeakCoinRoundDuration:    4 * time.Minute,
 			VotesLimit:               100,
@@ -129,12 +146,13 @@ func MainnetConfig() Config {
 			DataDir:  os.TempDir(),
 			Interval: 30 * time.Second,
 		},
-		P2P:      p2pconfig,
-		API:      grpcserver.DefaultConfig(),
-		TIME:     timeConfig.DefaultConfig(),
-		SMESHING: smeshing,
-		FETCH:    fetch.DefaultConfig(),
-		LOGGING:  logging,
+		P2P:         p2pconfig,
+		API:         grpcserver.DefaultConfig(),
+		TIME:        timeConfig.DefaultConfig(),
+		SMESHING:    smeshing,
+		POSTService: activation.DefaultPostServiceConfig(),
+		FETCH:       fetch.DefaultConfig(),
+		LOGGING:     logging,
 		Sync: syncer.Config{
 			Interval:                 time.Minute,
 			EpochEndFraction:         0.8,
