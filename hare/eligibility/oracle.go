@@ -72,7 +72,6 @@ type Oracle struct {
 
 	beacons        system.BeaconGetter
 	cdb            *datastore.CachedDB
-	vrfSigner      *signing.VRFSigner
 	vrfVerifier    vrfVerifier
 	layersPerEpoch uint32
 	cfg            config.Config
@@ -84,7 +83,6 @@ func New(
 	beacons system.BeaconGetter,
 	db *datastore.CachedDB,
 	vrfVerifier vrfVerifier,
-	vrfSigner *signing.VRFSigner,
 	layersPerEpoch uint32,
 	cfg config.Config,
 	logger log.Log,
@@ -98,7 +96,6 @@ func New(
 		beacons:        beacons,
 		cdb:            db,
 		vrfVerifier:    vrfVerifier,
-		vrfSigner:      vrfSigner,
 		layersPerEpoch: layersPerEpoch,
 		activesCache:   ac,
 		fallback:       map[types.EpochID][]types.ATXID{},
@@ -337,12 +334,12 @@ func (o *Oracle) CalcEligibility(
 }
 
 // Proof returns the role proof for the current Layer & Round.
-func (o *Oracle) Proof(ctx context.Context, layer types.LayerID, round uint32) (types.VrfSignature, error) {
+func (o *Oracle) Proof(ctx context.Context, signer *signing.VRFSigner, layer types.LayerID, round uint32) (types.VrfSignature, error) {
 	beacon, err := o.beacons.GetBeacon(layer.GetEpoch())
 	if err != nil {
 		return types.EmptyVrfSignature, fmt.Errorf("get beacon: %w", err)
 	}
-	return o.GenVRF(ctx, o.vrfSigner, beacon, layer, round), nil
+	return o.GenVRF(ctx, signer, beacon, layer, round), nil
 }
 
 // GenVRF generates vrf for hare eligibility.

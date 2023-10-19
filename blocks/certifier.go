@@ -7,6 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -83,8 +84,7 @@ type Certifier struct {
 
 	db         *datastore.CachedDB
 	oracle     hare.Rolacle
-	nodeID     types.NodeID
-	signer     *signing.EdSigner
+	signers    map[types.NodeID]*signing.EdSigner
 	edVerifier *signing.EdVerifier
 	publisher  pubsub.Publisher
 	layerClock layerClock
@@ -102,8 +102,7 @@ type Certifier struct {
 func NewCertifier(
 	db *datastore.CachedDB,
 	o hare.Rolacle,
-	n types.NodeID,
-	s *signing.EdSigner,
+
 	v *signing.EdVerifier,
 	p pubsub.Publisher,
 	lc layerClock,
@@ -116,8 +115,7 @@ func NewCertifier(
 		cfg:         defaultCertConfig(),
 		db:          db,
 		oracle:      o,
-		nodeID:      n,
-		signer:      s,
+		signers:     make(map[types.NodeID]*signing.EdSigner),
 		edVerifier:  v,
 		publisher:   p,
 		layerClock:  lc,
@@ -132,6 +130,18 @@ func NewCertifier(
 	c.collector = newCollector(c)
 
 	return c
+}
+
+func (c *Certifier) Register(s *signing.EdSigner) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, exists := c.signers[s.NodeID()]; exists {
+		c.logger.With().Error("signing key already registered", log.ShortStringer("id", s.NodeID()))
+		return
+	}
+
+	c.logger.With().Info("registered signing key", log.ShortStringer("id", s.NodeID()))
+	c.signers[s.NodeID()] = s
 }
 
 // Start starts the background goroutine for periodic pruning.
@@ -214,16 +224,39 @@ func (c *Certifier) CertifyIfEligible(ctx context.Context, logger log.Log, lid t
 	if _, err := c.beacon.GetBeacon(lid.GetEpoch()); err != nil {
 		return errBeaconNotAvailable
 	}
-	// check if the node is eligible to certify the hare output
-	proof, err := c.oracle.Proof(ctx, lid, eligibility.CertifyRound)
+
+	var (
+		errsMu sync.Mutex
+		errs   error
+		eg     errgroup.Group
+	)
+	c.mu.Lock()
+	for _, s := range c.signers {
+		s := s
+		eg.Go(func() error {
+			if err := c.certifySingleSigner(ctx, logger, s, lid, bid); err != nil {
+				errsMu.Lock()
+				errs = errors.Join(errs, fmt.Errorf("certifying block %v/%v by %s: %w", lid, bid, s.NodeID().ShortString(), err))
+				errsMu.Unlock()
+			}
+			return nil
+		})
+	}
+	c.mu.Unlock()
+	eg.Wait()
+	return errs
+}
+
+func (c *Certifier) certifySingleSigner(ctx context.Context, logger log.Log, s *signing.EdSigner, lid types.LayerID, bid types.BlockID) error {
+	// check if the signer is eligible to certify the hare output
+	proof, err := c.oracle.Proof(ctx, s.VRFSigner(), lid, eligibility.CertifyRound)
 	if err != nil {
-		logger.With().Error("failed to get eligibility proof to certify", log.Err(err))
-		return err
+		return fmt.Errorf("getting eligibility proof: %w", err)
 	}
 
-	eligibilityCount, err := c.oracle.CalcEligibility(ctx, lid, eligibility.CertifyRound, c.cfg.CommitteeSize, c.nodeID, proof)
+	eligibilityCount, err := c.oracle.CalcEligibility(ctx, lid, eligibility.CertifyRound, c.cfg.CommitteeSize, s.NodeID(), proof)
 	if err != nil {
-		return err
+		return fmt.Errorf("calculating eligibility: %w", err)
 	}
 	if eligibilityCount == 0 { // not eligible
 		return nil
@@ -236,17 +269,11 @@ func (c *Certifier) CertifyIfEligible(ctx context.Context, logger log.Log, lid t
 			EligibilityCnt: eligibilityCount,
 			Proof:          proof,
 		},
-		SmesherID: c.nodeID,
+		SmesherID: s.NodeID(),
 	}
-	msg.Signature = c.signer.Sign(signing.HARE, msg.Bytes())
-	data, err := codec.Encode(&msg)
-	if err != nil {
-		logger.With().Panic("failed to serialize certify message", log.Err(err))
-		return err
-	}
-	if err = c.publisher.Publish(ctx, pubsub.BlockCertify, data); err != nil {
-		logger.With().Error("failed to send certify message", log.Err(err))
-		return err
+	msg.Signature = s.Sign(signing.HARE, msg.Bytes())
+	if err = c.publisher.Publish(ctx, pubsub.BlockCertify, codec.MustEncode(&msg)); err != nil {
+		return fmt.Errorf("publishing block certification message: %w", err)
 	}
 	return nil
 }
@@ -487,11 +514,7 @@ func (c *Certifier) addCertCount(epoch types.EpochID) {
 func (c *Certifier) CertCount() map[types.EpochID]int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	result := map[types.EpochID]int{}
-	for epoch, count := range c.certCount {
-		result[epoch] = count
-	}
-	return result
+	return maps.Clone(c.certCount)
 }
 
 func (c *Certifier) save(ctx context.Context, lid types.LayerID, cert *types.Certificate, valid, invalid []types.BlockID) error {
