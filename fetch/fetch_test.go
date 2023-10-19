@@ -383,6 +383,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 		badsrv.Run(ctx)
 		return nil
 	})
+	defer eg.Wait()
 
 	fetcher := NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), nil, nil, h,
 		WithContext(ctx),
