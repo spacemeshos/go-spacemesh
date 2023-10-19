@@ -159,7 +159,7 @@ func (s *Server) Run(ctx context.Context) error {
 		}
 	})
 
-	eg, ctx := errgroup.WithContext(ctx)
+	var eg errgroup.Group
 	eg.SetLimit(s.queueSize)
 	for {
 		select {
@@ -229,12 +229,13 @@ func (s *Server) queueHandler(ctx context.Context, stream network.Stream) {
 }
 
 func (s *Server) trackClientLatency(start time.Time, err error) {
-	if s.metrics != nil {
-		if err != nil {
-			s.metrics.clientLatencyFailure.Observe(time.Since(start).Seconds())
-		} else {
-			s.metrics.clientLatency.Observe(time.Since(start).Seconds())
-		}
+	switch {
+	case s.metrics == nil:
+		return
+	case err != nil:
+		s.metrics.clientLatencyFailure.Observe(time.Since(start).Seconds())
+	case err == nil:
+		s.metrics.clientLatency.Observe(time.Since(start).Seconds())
 	}
 }
 
