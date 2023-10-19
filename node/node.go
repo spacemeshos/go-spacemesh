@@ -791,7 +791,6 @@ func (app *App) initServices(ctx context.Context) error {
 		app.clock,
 		beaconProtocol,
 		trtl,
-		blocks.WithCertContext(ctx),
 		blocks.WithCertConfig(blocks.CertConfig{
 			CommitteeSize:    app.Config.HARE.N,
 			CertifyThreshold: app.Config.HARE.N/2 + 1,
@@ -1218,7 +1217,7 @@ func (app *App) startServices(ctx context.Context) error {
 	app.beaconProtocol.Start(ctx)
 
 	app.blockGen.Start(ctx)
-	app.certifier.Start()
+	app.certifier.Start(ctx)
 	if err := app.hare.Start(ctx); err != nil {
 		return fmt.Errorf("cannot start hare: %w", err)
 	}
