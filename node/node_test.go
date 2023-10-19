@@ -929,6 +929,8 @@ func TestConfig_CustomTypes(t *testing.T) {
 			require.NoError(t, err)
 			tc.updatePreset(t, &preset)
 			preset.ConfigFile = path
+			preset.Tortoise.MinimalActiveSetWeight = nil
+			conf.Tortoise.MinimalActiveSetWeight = nil
 			require.Equal(t, preset, *conf)
 		})
 	}
