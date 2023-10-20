@@ -195,7 +195,7 @@ func (c *Certifier) prune() {
 	}
 }
 
-func (c *Certifier) createIfNeeded(lid types.LayerID, bid types.BlockID) {
+func (c *Certifier) createIfNeeded(lid types.LayerID, bid types.BlockID) *certInfo {
 	if _, ok := c.certifyMsgs[lid]; !ok {
 		c.certifyMsgs[lid] = make(map[types.BlockID]*certInfo)
 	}
@@ -204,6 +204,7 @@ func (c *Certifier) createIfNeeded(lid types.LayerID, bid types.BlockID) {
 			signatures: make([]types.CertifyMessage, 0, c.cfg.CommitteeSize),
 		}
 	}
+	return c.certifyMsgs[lid][bid]
 }
 
 // RegisterForCert register to generate a certificate for the specified layer/block.
@@ -213,9 +214,9 @@ func (c *Certifier) RegisterForCert(ctx context.Context, lid types.LayerID, bid 
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.createIfNeeded(lid, bid)
-	c.certifyMsgs[lid][bid].registered = true
-	return c.tryGenCert(ctx, logger, lid, bid)
+	info := c.createIfNeeded(lid, bid)
+	info.registered = true
+	return c.tryGenCert(ctx, logger, lid, bid, info)
 }
 
 // CertifyIfEligible signs the hare output, along with its role proof as a certifier, and gossip the CertifyMessage
@@ -411,35 +412,27 @@ func (c *Certifier) saveMessage(ctx context.Context, logger log.Log, msg types.C
 
 	lid := msg.LayerID
 	bid := msg.BlockID
-	c.createIfNeeded(lid, bid)
+	info := c.createIfNeeded(lid, bid)
 
-	c.certifyMsgs[lid][bid].signatures = append(c.certifyMsgs[lid][bid].signatures, msg)
-	c.certifyMsgs[lid][bid].totalEligibility += msg.EligibilityCnt
+	info.signatures = append(info.signatures, msg)
+	info.totalEligibility += msg.EligibilityCnt
 	logger.With().Debug("saved certify msg",
-		log.Uint16("eligibility_count", c.certifyMsgs[lid][bid].totalEligibility),
-		log.Int("num_msg", len(c.certifyMsgs[lid][bid].signatures)),
+		log.Uint16("eligibility_count", info.totalEligibility),
+		log.Int("num_msg", len(info.signatures)),
 	)
 
-	if c.certifyMsgs[lid][bid].registered {
-		return c.tryGenCert(ctx, logger, lid, bid)
+	if info.registered {
+		return c.tryGenCert(ctx, logger, lid, bid, info)
 	}
 	return nil
 }
 
-func (c *Certifier) tryGenCert(ctx context.Context, logger log.Log, lid types.LayerID, bid types.BlockID) error {
-	if _, ok := c.certifyMsgs[lid]; !ok {
-		logger.Fatal("missing layer in cache")
-	}
-	if _, ok := c.certifyMsgs[lid][bid]; !ok {
-		logger.Fatal("missing block in cache")
-	}
-
-	if c.certifyMsgs[lid][bid].done ||
-		c.certifyMsgs[lid][bid].totalEligibility < uint16(c.cfg.CertifyThreshold) {
+func (c *Certifier) tryGenCert(ctx context.Context, logger log.Log, lid types.LayerID, bid types.BlockID, info *certInfo) error {
+	if info.done || info.totalEligibility < uint16(c.cfg.CertifyThreshold) {
 		return nil
 	}
 
-	if !c.certifyMsgs[lid][bid].registered {
+	if !info.registered {
 		// do not try to generate a certificate for this block.
 		// wait for syncer to download from peers
 		return nil
