@@ -11,6 +11,7 @@ import (
 
 	"github.com/ALTree/bigfloat"
 	"github.com/spacemeshos/fixed"
+	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/beacon/metrics"
@@ -52,18 +53,6 @@ type (
 	}
 )
 
-type defaultFetcher struct {
-	cdb *datastore.CachedDB
-}
-
-func (f defaultFetcher) VRFNonce(nodeID types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
-	nonce, err := f.cdb.VRFNonce(nodeID, epoch)
-	if err != nil {
-		return types.VRFPostIndex(0), fmt.Errorf("get vrf nonce: %w", err)
-	}
-	return nonce, nil
-}
-
 // Opt for configuring beacon protocol.
 type Opt func(*ProtocolDriver)
 
@@ -94,16 +83,9 @@ func withWeakCoin(wc coin) Opt {
 	}
 }
 
-func withNonceFetcher(nf nonceFetcher) Opt {
-	return func(pd *ProtocolDriver) {
-		pd.nonceFetcher = nf
-	}
-}
-
 // New returns a new ProtocolDriver.
 func New(
 	publisher pubsub.Publisher,
-	edSigner *signing.EdSigner,
 	edVerifier *signing.EdVerifier,
 	vrfVerifier vrfVerifier,
 	cdb *datastore.CachedDB,
@@ -115,11 +97,12 @@ func New(
 		logger:         log.NewNop(),
 		config:         DefaultConfig(),
 		publisher:      publisher,
-		edSigner:       edSigner,
 		edVerifier:     edVerifier,
 		vrfVerifier:    vrfVerifier,
+		nonceFetcher:   cdb,
 		cdb:            cdb,
 		clock:          clock,
+		signers:        make(map[types.NodeID]*signing.EdSigner),
 		beacons:        make(map[types.EpochID]types.Beacon),
 		ballotsBeacons: make(map[types.EpochID]map[types.Beacon]*beaconWeight),
 		states:         make(map[types.EpochID]*state),
@@ -135,12 +118,13 @@ func New(
 
 	pd.ctx, pd.cancel = context.WithCancel(pd.ctx)
 	pd.theta = new(big.Float).SetRat(pd.config.Theta)
-	if pd.nonceFetcher == nil {
-		pd.nonceFetcher = defaultFetcher{cdb: cdb}
-	}
 
 	if pd.weakCoin == nil {
-		pd.weakCoin = weakcoin.New(pd.publisher, edSigner.VRFSigner(), vrfVerifier, pd.nonceFetcher, pd,
+		pd.weakCoin = weakcoin.New(
+			pd.publisher,
+			pd.vrfVerifier,
+			pd.nonceFetcher,
+			pd,
 			pd.msgTimes,
 			weakcoin.WithLog(pd.logger.WithName("weakCoin")),
 			weakcoin.WithMaxRound(pd.config.RoundsNumber),
@@ -149,6 +133,33 @@ func New(
 
 	pd.metricsCollector = metrics.NewBeaconMetricsCollector(pd.gatherMetricsData, pd.logger.WithName("metrics"))
 	return pd
+}
+
+func (pd *ProtocolDriver) Register(s *signing.EdSigner) {
+	pd.mu.Lock()
+	defer pd.mu.Unlock()
+	if _, exists := pd.signers[s.NodeID()]; exists {
+		pd.logger.With().Error("signing key already registered", log.ShortStringer("id", s.NodeID()))
+		return
+	}
+
+	pd.logger.With().Info("registered signing key", log.ShortStringer("id", s.NodeID()))
+	pd.signers[s.NodeID()] = s
+}
+
+type participant struct {
+	signer *signing.EdSigner
+	nonce  types.VRFPostIndex
+}
+
+func (s *participant) Id() log.Field {
+	return log.ShortStringer("id", s.signer.NodeID())
+}
+
+func (s participant) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	enc.AddString("id", s.signer.NodeID().ShortString())
+	enc.AddUint64("nonce", uint64(s.nonce))
+	return nil
 }
 
 // ProtocolDriver is the driver for the beacon protocol.
@@ -160,14 +171,16 @@ type ProtocolDriver struct {
 	cancel     context.CancelFunc
 	startOnce  sync.Once
 
-	config       Config
-	sync         system.SyncStateProvider
-	publisher    pubsub.Publisher
-	edSigner     *signing.EdSigner
+	config    Config
+	sync      system.SyncStateProvider
+	publisher pubsub.Publisher
+
+	signers  map[types.NodeID]*signing.EdSigner
+	weakCoin coin
+
 	edVerifier   *signing.EdVerifier
 	vrfVerifier  vrfVerifier
 	nonceFetcher nonceFetcher
-	weakCoin     coin
 	theta        *big.Float
 
 	clock    layerClock
@@ -536,10 +549,9 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 	}
 
 	var (
-		epochWeight uint64
-		miners      = make(map[types.NodeID]*minerInfo)
-		active      bool
-		nonce       *types.VRFPostIndex
+		epochWeight       uint64
+		miners            = make(map[types.NodeID]*minerInfo)
+		potentiallyActive = make(map[types.NodeID]*signing.EdSigner)
 		// w1 is the weight units at δ before the end of the previous epoch, used to calculate `thresholdStrict`
 		// w2 is the weight units at the end of the previous epoch, used to calculate `threshold`
 		w1, w2 int
@@ -554,7 +566,7 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 		if !malicious {
 			epochWeight += header.GetWeight()
 		} else {
-			pd.logger.With().Debug("malicious miner get 0 weight", log.Stringer("smesher", header.NodeID))
+			logger.With().Debug("malicious miner get 0 weight", log.Stringer("smesher", header.NodeID))
 		}
 		if _, ok := miners[header.NodeID]; !ok {
 			miners[header.NodeID] = &minerInfo{
@@ -567,13 +579,14 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 				w2++
 			}
 		} else {
-			pd.logger.With().Warning("ignoring malicious atx from miner",
+			logger.With().Warning("ignoring malicious atx from miner",
 				header.ID,
 				log.Bool("malicious", malicious),
 				log.Stringer("smesher", header.NodeID))
 		}
-		if header.NodeID == pd.edSigner.NodeID() {
-			active = true
+
+		if s, ok := pd.signers[header.NodeID]; ok {
+			potentiallyActive[header.NodeID] = s
 		}
 		return nil
 	}); err != nil {
@@ -581,20 +594,34 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 	}
 
 	if epochWeight == 0 {
-		logger.With().Error("zero weight targeting epoch", log.Err(errZeroEpochWeight))
 		return nil, errZeroEpochWeight
 	}
 
-	if active {
-		nnc, err := pd.nonceFetcher.VRFNonce(pd.edSigner.NodeID(), epoch)
-		if err != nil {
-			logger.With().Error("failed to get own VRF nonce", log.Err(err))
-			return nil, fmt.Errorf("get own VRF nonce: %w", err)
+	active := map[types.NodeID]participant{}
+	for id, signer := range potentiallyActive {
+		if nonce, err := pd.nonceFetcher.VRFNonce(id, epoch); err != nil {
+			logger.With().Error("getting own VRF nonce", id, log.Err(err))
+		} else {
+			active[id] = participant{
+				signer: signer,
+				nonce:  nonce,
+			}
 		}
-		nonce = &nnc
 	}
+
+	logger.With().Info(
+		"selected active signers",
+		log.Int("count", len(active)),
+		log.Array("signers", zapcore.ArrayMarshalerFunc(func(enc zapcore.ArrayEncoder) error {
+			for _, p := range active {
+				enc.AppendObject(p)
+			}
+			return nil
+		})),
+	)
+
 	checker := createProposalChecker(logger, pd.config, w1, w1+w2)
-	pd.states[epoch] = newState(logger, pd.config, nonce, epochWeight, miners, checker)
+	pd.states[epoch] = newState(logger, pd.config, active, epochWeight, miners, checker)
 	return pd.states[epoch], nil
 }
 
@@ -726,7 +753,7 @@ func (pd *ProtocolDriver) onNewEpoch(ctx context.Context, epoch types.EpochID) e
 func (pd *ProtocolDriver) runProtocol(ctx context.Context, epoch types.EpochID, st *state) {
 	ctx = log.WithNewSessionID(ctx)
 	targetEpoch := epoch + 1
-	logger := pd.logger.WithContext(ctx).WithFields(epoch, log.FieldNamed("target_epoch", targetEpoch))
+	logger := pd.logger.WithContext(ctx).WithFields(epoch, log.Uint32("target_epoch", uint32(targetEpoch)))
 
 	pd.setBeginProtocol(ctx)
 	defer pd.setEndProtocol(ctx)
@@ -738,7 +765,7 @@ func (pd *ProtocolDriver) runProtocol(ctx context.Context, epoch types.EpochID, 
 		logger.With().Warning("proposal phase failed", log.Err(err))
 		return
 	}
-	lastRoundOwnVotes, err := pd.runConsensusPhase(ctx, epoch, st.nonce)
+	lastRoundOwnVotes, err := pd.runConsensusPhase(ctx, epoch, st)
 	if err != nil {
 		logger.With().Warning("consensus phase failed", log.Err(err))
 		return
@@ -761,7 +788,7 @@ func (pd *ProtocolDriver) runProtocol(ctx context.Context, epoch types.EpochID, 
 }
 
 func calcBeacon(logger log.Log, set proposalSet) types.Beacon {
-	allProposals := set.sort()
+	allProposals := set.sorted()
 
 	// Beacon should appear to have the same entropy as the initial proposals, hence cropping it
 	// to the same size as the proposal
@@ -781,9 +808,10 @@ func (pd *ProtocolDriver) runProposalPhase(ctx context.Context, epoch types.Epoc
 	ctx, cancel := context.WithTimeout(ctx, pd.config.ProposalDuration)
 	defer cancel()
 
-	if st.nonce != nil {
+	for _, session := range st.active {
+		session := session
 		pd.eg.Go(func() error {
-			pd.sendProposal(ctx, epoch, *st.nonce, st.proposalChecker)
+			pd.sendProposal(ctx, epoch, session, st.proposalChecker)
 			return nil
 		})
 	}
@@ -794,45 +822,46 @@ func (pd *ProtocolDriver) runProposalPhase(ctx context.Context, epoch types.Epoc
 		return pd.ctx.Err()
 	}
 
-	if err := pd.markProposalPhaseFinished(epoch, time.Now()); err != nil {
-		return err
-	}
-
-	logger.Info("beacon proposal phase finished")
+	finished := time.Now()
+	pd.markProposalPhaseFinished(st, finished)
+	logger.With().Info("proposal phase finished", log.Time("finished_at", finished))
 	return nil
 }
 
-func (pd *ProtocolDriver) sendProposal(ctx context.Context, epoch types.EpochID, nonce types.VRFPostIndex, checker eligibilityChecker) {
+func (pd *ProtocolDriver) sendProposal(ctx context.Context, epoch types.EpochID, s participant, checker eligibilityChecker) {
 	if pd.isClosed() {
 		return
 	}
 
-	atx, malicious, err := pd.minerAtxHdr(epoch, pd.edSigner.NodeID())
+	atx, malicious, err := pd.minerAtxHdr(epoch, s.signer.NodeID())
 	if err != nil || malicious {
 		return
 	}
 
 	logger := pd.logger.WithContext(ctx).WithFields(epoch)
-	vrfSig := buildSignedProposal(ctx, pd.logger, pd.edSigner.VRFSigner(), epoch, nonce)
+	vrfSig := buildSignedProposal(ctx, pd.logger, s.signer.VRFSigner(), epoch, s.nonce)
 	proposal := ProposalFromVrf(vrfSig)
 	m := ProposalMessage{
 		EpochID:      epoch,
-		NodeID:       pd.edSigner.NodeID(),
+		NodeID:       s.signer.NodeID(),
 		VRFSignature: vrfSig,
 	}
 
 	if invalid == pd.classifyProposal(logger, m, atx.Received, time.Now(), checker) {
-		logger.With().Debug("own proposal doesn't pass threshold", log.Inline(proposal))
+		logger.With().Debug("own proposal doesn't pass threshold", log.Inline(proposal), s.Id())
 		return
 	}
 
-	logger.With().Debug("own proposal passes threshold", log.Inline(proposal))
-	pd.sendToGossip(ctx, pubsub.BeaconProposalProtocol, codec.MustEncode(&m))
-	logger.With().Info("beacon proposal sent", log.Inline(proposal))
+	logger.With().Debug("own proposal passes threshold", log.Inline(proposal), s.Id())
+	if err := pd.sendToGossip(ctx, pubsub.BeaconProposalProtocol, codec.MustEncode(&m)); err != nil {
+		logger.With().Error("failed to broadcast", log.Err(err), log.Inline(proposal), s.Id())
+	} else {
+		logger.With().Info("beacon proposal sent", log.Inline(proposal), s.Id())
+	}
 }
 
 // runConsensusPhase runs K voting rounds and returns result from last weak coin round.
-func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.EpochID, nonce *types.VRFPostIndex) (allVotes, error) {
+func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.EpochID, st *state) (allVotes, error) {
 	logger := pd.logger.WithContext(ctx).WithFields(epoch)
 	logger.Info("starting consensus phase")
 
@@ -846,23 +875,48 @@ func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.Epo
 	var (
 		ownVotes  allVotes
 		undecided proposalList
-		err       error
 	)
-	for round := types.FirstRound; round < pd.config.RoundsNumber; round++ {
+
+	// First round
+	round := types.FirstRound
+	pd.setRoundInProgress(round)
+	pd.mu.RLock() // shared lock is fine as sorting doesn't modify the state
+	msg := FirstVotingMessageBody{
+		EpochID:                   epoch,
+		ValidProposals:            st.incomingProposals.valid.sorted(),
+		PotentiallyValidProposals: st.incomingProposals.potentiallyValid.sorted(),
+	}
+	pd.mu.RUnlock()
+	for _, session := range st.active {
+		session := session
+		pd.eg.Go(func() error {
+			if err := pd.sendFirstRoundVote(ctx, msg, session.signer); err != nil {
+				logger.With().Error("failed to send proposal vote", log.Err(err), session.Id(), round)
+			}
+			return nil
+		})
+	}
+
+	select {
+	case <-timer.C:
+	case <-ctx.Done():
+		return allVotes{}, fmt.Errorf("context done: %w", ctx.Err())
+	}
+	ownVotes, _ = pd.calcVotesBeforeWeakCoin(logger, st)
+
+	// Subsequent rounds
+	for round := types.FirstRound + 1; round < pd.config.RoundsNumber; round++ {
 		round := round
 		pd.setRoundInProgress(round)
 		rLogger := logger.WithFields(round)
+		timer.Reset(pd.config.VotingRoundDuration)
+
 		votes := ownVotes
-		if nonce != nil {
+		for _, session := range st.active {
+			session := session
 			pd.eg.Go(func() error {
-				if round == types.FirstRound {
-					if err := pd.sendFirstRoundVote(ctx, epoch); err != nil {
-						rLogger.With().Error("failed to send proposal vote", log.Err(err))
-					}
-				} else {
-					if err := pd.sendFollowingVote(ctx, epoch, round, votes); err != nil {
-						rLogger.With().Error("failed to send following vote", log.Err(err))
-					}
+				if err := pd.sendFollowingVote(ctx, epoch, round, votes, session.signer); err != nil {
+					rLogger.With().Error("failed to send following vote", log.Err(err), session.Id())
 				}
 				return nil
 			})
@@ -874,91 +928,67 @@ func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.Epo
 			return allVotes{}, fmt.Errorf("context done: %w", ctx.Err())
 		}
 
-		// note that votes after this calcVotes() call will _not_ be counted towards our votes
+		// note that votes after this call will _not_ be counted towards our votes
 		// for this round, as the late votes can be cast after the weak coin is revealed. we
 		// count them towards our votes in the next round.
-		ownVotes, undecided, err = pd.calcVotesBeforeWeakCoin(rLogger, epoch)
+		ownVotes, undecided = pd.calcVotesBeforeWeakCoin(rLogger, st)
+
+		timer.Reset(pd.config.WeakCoinRoundDuration)
+
+		pd.eg.Go(func() error {
+			participants := make([]weakcoin.Participant, 0, len(st.active))
+			for _, session := range st.active {
+				participants = append(participants, weakcoin.Participant{
+					Signer: session.signer.VRFSigner(),
+					Nonce:  session.nonce,
+				})
+			}
+			pd.weakCoin.StartRound(ctx, round, participants)
+			return nil
+		})
+
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			return allVotes{}, fmt.Errorf("context done: %w", ctx.Err())
+		}
+
+		pd.weakCoin.FinishRound(ctx)
+
+		flip, err := pd.weakCoin.Get(ctx, epoch, round)
 		if err != nil {
+			rLogger.With().Error("failed to generate weak coin", log.Err(err))
 			return allVotes{}, err
 		}
-		if round != types.FirstRound {
-			timer.Reset(pd.config.WeakCoinRoundDuration)
 
-			pd.eg.Go(func() error {
-				pd.weakCoin.StartRound(ctx, round, nonce)
-				return nil
-			})
-			select {
-			case <-timer.C:
-			case <-ctx.Done():
-				return allVotes{}, fmt.Errorf("context done: %w", ctx.Err())
-			}
-			pd.weakCoin.FinishRound(ctx)
-			flip, err := pd.weakCoin.Get(ctx, epoch, round)
-			if err != nil {
-				rLogger.With().Error("failed to generate weak coin", log.Err(err))
-				return allVotes{}, err
-			}
-			tallyUndecided(&ownVotes, undecided, flip)
-		}
-		timer.Reset(pd.config.VotingRoundDuration)
+		tallyUndecided(&ownVotes, undecided, flip)
 	}
 
 	logger.Info("consensus phase finished")
 	return ownVotes, nil
 }
 
-func (pd *ProtocolDriver) markProposalPhaseFinished(epoch types.EpochID, finishedAt time.Time) error {
-	pd.logger.With().Debug("proposal phase finished", epoch, log.Time("finished_at", finishedAt))
+func (pd *ProtocolDriver) markProposalPhaseFinished(st *state, finishedAt time.Time) {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
-	if _, ok := pd.states[epoch]; !ok {
-		return errEpochNotActive
-	}
-	pd.states[epoch].proposalPhaseFinishedTime = finishedAt
-	return nil
+	st.proposalPhaseFinishedTime = finishedAt
 }
 
-func (pd *ProtocolDriver) calcVotesBeforeWeakCoin(logger log.Log, epoch types.EpochID) (allVotes, proposalList, error) {
+func (pd *ProtocolDriver) calcVotesBeforeWeakCoin(logger log.Log, st *state) (allVotes, proposalList) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
-	if _, ok := pd.states[epoch]; !ok {
-		return allVotes{}, nil, errEpochNotActive
-	}
-	decided, undecided := calcVotes(logger, pd.theta, pd.states[epoch])
-	return decided, undecided, nil
+	return calcVotes(logger, pd.theta, st)
 }
 
-func (pd *ProtocolDriver) genFirstRoundMsgBody(epoch types.EpochID) (FirstVotingMessageBody, error) {
-	pd.mu.RLock()
-	defer pd.mu.RUnlock()
-
-	if _, ok := pd.states[epoch]; !ok {
-		return FirstVotingMessageBody{}, errEpochNotActive
-	}
-	s := pd.states[epoch]
-	return FirstVotingMessageBody{
-		EpochID:                   epoch,
-		ValidProposals:            s.incomingProposals.valid.sort(),
-		PotentiallyValidProposals: s.incomingProposals.potentiallyValid.sort(),
-	}, nil
-}
-
-func (pd *ProtocolDriver) sendFirstRoundVote(ctx context.Context, epoch types.EpochID) error {
-	mb, err := pd.genFirstRoundMsgBody(epoch)
-	if err != nil {
-		return fmt.Errorf("getting first round message: %w", err)
-	}
-
+func (pd *ProtocolDriver) sendFirstRoundVote(ctx context.Context, msg FirstVotingMessageBody, signer *signing.EdSigner) error {
 	m := FirstVotingMessage{
-		FirstVotingMessageBody: mb,
-		SmesherID:              pd.edSigner.NodeID(),
-		Signature:              pd.edSigner.Sign(signing.BEACON_FIRST_MSG, codec.MustEncode(&mb)),
+		FirstVotingMessageBody: msg,
+		SmesherID:              signer.NodeID(),
+		Signature:              signer.Sign(signing.BEACON_FIRST_MSG, codec.MustEncode(&msg)),
 	}
 
-	pd.logger.WithContext(ctx).With().Debug("sending first round vote", epoch, types.FirstRound)
-	pd.sendToGossip(ctx, pubsub.BeaconFirstVotesProtocol, codec.MustEncode(&m))
-	return nil
+	pd.logger.WithContext(ctx).With().Debug("sending first round vote", msg.EpochID, types.FirstRound, log.ShortStringer("id", signer.NodeID()))
+	return pd.sendToGossip(ctx, pubsub.BeaconFirstVotesProtocol, codec.MustEncode(&m))
 }
 
 func (pd *ProtocolDriver) getFirstRoundVote(epoch types.EpochID, nodeID types.NodeID) (proposalList, error) {
@@ -973,10 +1003,10 @@ func (pd *ProtocolDriver) getFirstRoundVote(epoch types.EpochID, nodeID types.No
 	return st.getMinerFirstRoundVote(nodeID)
 }
 
-func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.EpochID, round types.RoundID, ownCurrentRoundVotes allVotes) error {
-	firstRoundVotes, err := pd.getFirstRoundVote(epoch, pd.edSigner.NodeID())
+func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.EpochID, round types.RoundID, ownCurrentRoundVotes allVotes, signer *signing.EdSigner) error {
+	firstRoundVotes, err := pd.getFirstRoundVote(epoch, signer.NodeID())
 	if err != nil {
-		return fmt.Errorf("get own first round votes %s: %w", pd.edSigner.NodeID(), err)
+		return fmt.Errorf("get own first round votes %s: %w", signer.NodeID(), err)
 	}
 
 	bitVector := encodeVotes(ownCurrentRoundVotes, firstRoundVotes)
@@ -988,13 +1018,12 @@ func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.Epo
 
 	m := FollowingVotingMessage{
 		FollowingVotingMessageBody: mb,
-		SmesherID:                  pd.edSigner.NodeID(),
-		Signature:                  pd.edSigner.Sign(signing.BEACON_FOLLOWUP_MSG, codec.MustEncode(&mb)),
+		SmesherID:                  signer.NodeID(),
+		Signature:                  signer.Sign(signing.BEACON_FOLLOWUP_MSG, codec.MustEncode(&mb)),
 	}
 
-	pd.logger.WithContext(ctx).With().Debug("sending following round vote", epoch, round)
-	pd.sendToGossip(ctx, pubsub.BeaconFollowingVotesProtocol, codec.MustEncode(&m))
-	return nil
+	pd.logger.WithContext(ctx).With().Debug("sending following round vote", epoch, round, log.ShortStringer("id", signer.NodeID()))
+	return pd.sendToGossip(ctx, pubsub.BeaconFollowingVotesProtocol, codec.MustEncode(&m))
 }
 
 type proposalChecker struct {
@@ -1086,7 +1115,7 @@ func buildSignedProposal(ctx context.Context, logger log.Log, signer vrfSigner, 
 	p := buildProposal(logger, epoch, nonce)
 	vrfSig := signer.Sign(p)
 	proposal := ProposalFromVrf(vrfSig)
-	logger.WithContext(ctx).With().Debug("calculated beacon proposal", epoch, nonce, log.Inline(proposal))
+	logger.WithContext(ctx).With().Debug("calculated beacon proposal", epoch, nonce, log.Inline(proposal), log.ShortStringer("id", signer.NodeID()))
 	return vrfSig
 }
 
@@ -1099,14 +1128,11 @@ func buildProposal(logger log.Log, epoch types.EpochID, nonce types.VRFPostIndex
 	return codec.MustEncode(message)
 }
 
-func (pd *ProtocolDriver) sendToGossip(ctx context.Context, protocol string, serialized []byte) {
-	// NOTE(dshulyak) moved to goroutine because self-broadcast is applied synchronously
-	pd.eg.Go(func() error {
-		if err := pd.publisher.Publish(ctx, protocol, serialized); err != nil {
-			pd.logger.With().Error("failed to broadcast", log.String("protocol", protocol), log.Err(err))
-		}
-		return nil
-	})
+func (pd *ProtocolDriver) sendToGossip(ctx context.Context, protocol string, serialized []byte) error {
+	if err := pd.publisher.Publish(ctx, protocol, serialized); err != nil {
+		return fmt.Errorf("publishing on protocol %s: %w", protocol, err)
+	}
+	return nil
 }
 
 func (pd *ProtocolDriver) gatherMetricsData() ([]*metrics.BeaconStats, *metrics.BeaconStats) {

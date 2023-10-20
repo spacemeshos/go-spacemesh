@@ -51,7 +51,7 @@ func TestTransactionService_StreamResults(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	conn := dialGrpc(ctx, t, cfg.PublicListener)
+	conn := dialGrpc(ctx, t, cfg)
 	client := pb.NewTransactionServiceClient(conn)
 
 	t.Run("All", func(t *testing.T) {
@@ -167,7 +167,7 @@ func BenchmarkStreamResults(b *testing.B) {
 	cfg, cleanup := launchServer(b, svc)
 	b.Cleanup(cleanup)
 
-	conn := dialGrpc(ctx, b, cfg.PublicListener)
+	conn := dialGrpc(ctx, b, cfg)
 	client := pb.NewTransactionServiceClient(conn)
 
 	b.Logf("setup took %s", time.Since(start))
@@ -224,7 +224,7 @@ func TestParseTransactions(t *testing.T) {
 	cfg, cleanup := launchServer(t, NewTransactionService(db, nil, nil, txs.NewConservativeState(vminst, db), nil, nil))
 	t.Cleanup(cleanup)
 	var (
-		conn     = dialGrpc(ctx, t, cfg.PublicListener)
+		conn     = dialGrpc(ctx, t, cfg)
 		client   = pb.NewTransactionServiceClient(conn)
 		keys     = make([]signing.PrivateKey, 4)
 		accounts = make([]types.Account, len(keys))

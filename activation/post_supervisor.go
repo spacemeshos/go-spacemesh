@@ -47,8 +47,11 @@ func DefaultTestPostServiceConfig() PostSupervisorConfig {
 
 type PostSupervisorConfig struct {
 	PostServiceCmd string `mapstructure:"post-opts-post-service"`
+	NodeAddress    string `mapstructure:"post-opts-node-address"`
 
-	NodeAddress string `mapstructure:"post-opts-node-address"`
+	CACert string `mapstructure:"post-opts-ca-cert"`
+	Cert   string `mapstructure:"post-opts-cert"`
+	Key    string `mapstructure:"post-opts-key"`
 }
 
 // PostSupervisor manages a local post service.
@@ -152,6 +155,15 @@ func (ps *PostSupervisor) runCmd(ctx context.Context, cmdCfg PostSupervisorConfi
 			"--threads", strconv.FormatUint(uint64(provingOpts.Threads), 10),
 			"--nonces", strconv.FormatUint(uint64(provingOpts.Nonces), 10),
 			"--randomx-mode", provingOpts.RandomXMode.String(),
+		}
+		if cmdCfg.CACert != "" {
+			args = append(args, "--ca-cert", cmdCfg.CACert)
+		}
+		if cmdCfg.Cert != "" {
+			args = append(args, "--cert", cmdCfg.Cert)
+		}
+		if cmdCfg.Key != "" {
+			args = append(args, "--key", cmdCfg.Key)
 		}
 
 		cmd := exec.CommandContext(

@@ -463,17 +463,7 @@ func (h *Handler) checkBallotDataIntegrity(ctx context.Context, b *types.Ballot)
 		if b.EpochData.Beacon == types.EmptyBeacon {
 			return nil, errMissingBeacon
 		}
-		// TODO: remove after the network no longer populate ActiveSet in ballot.
-		if len(b.ActiveSet) != 0 {
-			set := types.EpochActiveSet{
-				Epoch: b.Layer.GetEpoch(),
-				Set:   b.ActiveSet,
-			}
-			if err := h.handleSet(ctx, b.EpochData.ActiveSetHash, set); err != nil {
-				return nil, err
-			}
-			actives = set.Set
-		} else {
+		if b.Layer.GetEpoch() == h.clock.CurrentLayer().GetEpoch() {
 			if err := h.fetcher.GetActiveSet(ctx, b.EpochData.ActiveSetHash); err != nil {
 				return nil, err
 			}

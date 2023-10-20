@@ -63,6 +63,7 @@ func MainnetConfig() Config {
 			MetricsPort:           1010,
 			DatabaseConnections:   16,
 			DatabasePruneInterval: 30 * time.Minute,
+			PruneActivesetsFrom:   8,
 			NetworkHRP:            "sm",
 
 			LayerDuration:  5 * time.Minute,

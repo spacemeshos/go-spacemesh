@@ -18,10 +18,12 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
   > 2023-10-02T15:28:14.002+0200 WARN fd68b.sync mesh failed to process layer from sync {"node_id": "fd68b9397572556c2f329f3e5af2faf23aef85dbbbb7e38447fae2f4ef38899f", "module": "sync", "sessionId": "29422935-68d6-47d1-87a8-02293aa181f3", "layer_id": 23104, "errmsg": "requested layer 8063 is before evicted 13102", "name": "sync"}
 
-* [#5091](https://github.com/spacemeshos/go-spacemesh/pull/5091) First stage of separating PoST from the node into its own service.
+* [#5091](https://github.com/spacemeshos/go-spacemesh/pull/5091) Separating PoST from the node into its own service.
 * [#5061](https://github.com/spacemeshos/go-spacemesh/pull/5061) Proof generation is now done via a dedicated service instead of the node.
+* [#5154](https://github.com/spacemeshos/go-spacemesh/pull/5154) Enable TLS connections between node and PoST service.
 
-  Operating a node doesn't require any changes at the moment. The service will be automatically started by the node if needed and will be stopped when the node is stopped.
+  PoST proofs are now done via a dedicated process / service that the node communicates with via gRPC. Smapp users can continue to smesh as they used to. The node will
+  automatically start the PoST service when it starts and will shut it down when it shuts down.
 
 * [#5138](https://github.com/spacemeshos/go-spacemesh/pull/5138) Bump poet to v0.9.7
 
@@ -38,6 +40,19 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 * [#5171](https://github.com/spacemeshos/go-spacemesh/pull/5171) Set minimal active set according to the observed number of atxs.
 
   It will prevent ballots that underreport observed atxs from spamming the network. It doesn't have impact on rewards.
+
+* [#5169](https://github.com/spacemeshos/go-spacemesh/pull/5169) Support prunning activesets.
+
+  As of epoch 6 activesets storage size is about ~1.5GB. They are not useful after verifying eligibilities
+  for ballots in the current epoch and can be pruned.
+
+  Pruning will be enabled starting from epoch 8, e.g in epoch 8 we will prune all activesets for epochs 7 and below.
+  We should also run an archival node that doesn't prune them. To disable pruning we should configure
+  ```json
+  "main": {
+      "prune-activesets-from": 4294967295
+  }
+  ``` 
 
 ## v1.2.0
 

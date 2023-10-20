@@ -8,8 +8,10 @@ import (
 	"time"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -35,8 +37,17 @@ type MeshService struct {
 }
 
 // RegisterService registers this service with a grpc server instance.
-func (s MeshService) RegisterService(server *Server) {
-	pb.RegisterMeshServiceServer(server.GrpcServer, s)
+func (s MeshService) RegisterService(server *grpc.Server) {
+	pb.RegisterMeshServiceServer(server, s)
+}
+
+func (s MeshService) RegisterHandlerService(mux *runtime.ServeMux) error {
+	return pb.RegisterMeshServiceHandlerServer(context.Background(), mux, s)
+}
+
+// String returns the name of this service.
+func (s MeshService) String() string {
+	return "MeshService"
 }
 
 // NewMeshService creates a new service using config data.
@@ -123,7 +134,11 @@ func (s MeshService) getFilteredTransactions(from types.LayerID, address types.A
 	return txs, nil
 }
 
-func (s MeshService) getFilteredActivations(ctx context.Context, startLayer types.LayerID, addr types.Address) (activations []*types.VerifiedActivationTx, err error) {
+func (s MeshService) getFilteredActivations(
+	ctx context.Context,
+	startLayer types.LayerID,
+	addr types.Address,
+) (activations []*types.VerifiedActivationTx, err error) {
 	// We have no way to look up activations by coinbase so we have no choice but to read all of them.
 	var atxids []types.ATXID
 	for l := startLayer; !l.After(s.mesh.LatestLayer()); l = l.Add(1) {
@@ -339,10 +354,12 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 	for _, b := range layer.Ballots() {
 		if b.EpochData != nil {
 			actives, err := activesets.Get(s.cdb, b.EpochData.ActiveSetHash)
-			if err != nil {
+			if err != nil && !errors.Is(err, sql.ErrNotFound) {
 				return nil, status.Errorf(codes.Internal, "error retrieving active set %s (%s)", b.ID().String(), b.EpochData.ActiveSetHash.ShortString())
 			}
-			activations = append(activations, actives.Set...)
+			if actives != nil {
+				activations = append(activations, actives.Set...)
+			}
 		}
 	}
 

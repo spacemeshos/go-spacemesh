@@ -8,10 +8,12 @@ import (
 	"io"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"go.uber.org/zap"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -35,8 +37,17 @@ type TransactionService struct {
 }
 
 // RegisterService registers this service with a grpc server instance.
-func (s TransactionService) RegisterService(server *Server) {
-	pb.RegisterTransactionServiceServer(server.GrpcServer, s)
+func (s TransactionService) RegisterService(server *grpc.Server) {
+	pb.RegisterTransactionServiceServer(server, s)
+}
+
+func (s TransactionService) RegisterHandlerService(mux *runtime.ServeMux) error {
+	return pb.RegisterTransactionServiceHandlerServer(context.Background(), mux, s)
+}
+
+// String returns the name of this service.
+func (s TransactionService) String() string {
+	return "TransactionService"
 }
 
 // NewTransactionService creates a new grpc service using config data.

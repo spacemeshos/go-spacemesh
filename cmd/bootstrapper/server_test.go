@@ -98,12 +98,13 @@ func updateCheckpoint(t *testing.T, ctx context.Context, data string) {
 
 func TestServer(t *testing.T) {
 	db := sql.InMemory()
-	t.Cleanup(launchServer(t, datastore.NewCachedDB(db, logtest.New(t))))
+	cfg, cleanup := launchServer(t, datastore.NewCachedDB(db, logtest.New(t)))
+	t.Cleanup(cleanup)
 
 	fs := afero.NewMemMapFs()
 	g := NewGenerator(
 		"",
-		fmt.Sprintf("%s:%d", target, grpcPort),
+		cfg.PublicListener,
 		WithLogger(logtest.New(t)),
 		WithFilesystem(fs),
 	)

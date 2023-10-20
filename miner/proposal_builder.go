@@ -493,7 +493,7 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 		eg.Go(func() error {
 			if err := pb.initSignerData(ctx, ss, lid); err != nil {
 				if errors.Is(err, errAtxNotAvailable) {
-					ss.log.With().Info("smesher doesn't have atx that targets this epoch",
+					ss.log.With().Debug("smesher doesn't have atx that targets this epoch",
 						log.Context(ctx), ss.session.epoch.Field(),
 					)
 				} else {
@@ -727,7 +727,7 @@ func generateActiveSet(
 			return err
 		}
 		if grade != good {
-			logger.With().Info("atx omitted from active set",
+			logger.With().Debug("atx omitted from active set",
 				header.ID,
 				log.Int("grade", int(grade)),
 				log.Stringer("smesher", header.NodeID),

@@ -19,7 +19,7 @@ type minerInfo struct {
 type state struct {
 	cfg         Config
 	logger      log.Log
-	nonce       *types.VRFPostIndex
+	active      map[types.NodeID]participant
 	epochWeight uint64
 	// the original proposals as received, bucketed by validity.
 	incomingProposals proposals
@@ -38,7 +38,7 @@ type state struct {
 func newState(
 	logger log.Log,
 	cfg Config,
-	nonce *types.VRFPostIndex,
+	active map[types.NodeID]participant,
 	epochWeight uint64,
 	miners map[types.NodeID]*minerInfo,
 	checker eligibilityChecker,
@@ -47,7 +47,7 @@ func newState(
 		cfg:                     cfg,
 		logger:                  logger,
 		epochWeight:             epochWeight,
-		nonce:                   nonce,
+		active:                  active,
 		minerAtxs:               miners,
 		firstRoundIncomingVotes: make(map[types.NodeID]proposalList),
 		votesMargin:             map[Proposal]*big.Int{},
@@ -101,8 +101,6 @@ func (s *state) addVote(proposal Proposal, vote uint, voteWeight *big.Int) {
 
 func (s *state) registerProposed(logger log.Log, nodeID types.NodeID) error {
 	if _, ok := s.hasProposed[nodeID]; ok {
-		// see TODOs for registerVoted()
-		logger.Warning("already received proposal from miner")
 		return fmt.Errorf("already made proposal (miner ID %v): %w", nodeID.ShortString(), errAlreadyProposed)
 	}
 
