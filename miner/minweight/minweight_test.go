@@ -3,8 +3,9 @@ package minweight
 import (
 	"testing"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/stretchr/testify/require"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 func TestSelect(t *testing.T) {
