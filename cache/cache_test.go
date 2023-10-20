@@ -2,6 +2,7 @@ package cache
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math/rand"
 	"runtime"
 	"testing"
@@ -41,7 +42,6 @@ func TestCache(t *testing.T) {
 					require.Equal(t, &data[epoch][i], bynode)
 					byatxid := c.Get(types.EpochID(epoch)+1, nodes[epoch][i], atxids[epoch][i])
 					require.Equal(t, &data[epoch][i], byatxid)
-					require.True(t, c.NodeHasAtx(types.EpochID(epoch)+1, nodes[epoch][i], atxids[epoch][i]))
 				}
 			}
 		}
@@ -90,13 +90,10 @@ func TestCache(t *testing.T) {
 		require.Nil(t, c.Get(0, types.NodeID{}, types.ATXID{}))
 		require.Nil(t, c.Get(1, types.NodeID{}, types.ATXID{}))
 		require.Nil(t, c.GetByNode(1, types.NodeID{}))
-		require.False(t, c.NodeHasAtx(1, types.NodeID{}, types.ATXID{}))
 
 		c.Add(1, types.NodeID{1}, types.ATXID{1}, &ATXData{})
 		require.Nil(t, c.Get(1, types.NodeID{}, types.ATXID{}))
 		require.Nil(t, c.GetByNode(1, types.NodeID{2}))
-		require.False(t, c.NodeHasAtx(1, types.NodeID{}, types.ATXID{}))
-		require.False(t, c.NodeHasAtx(1, types.NodeID{1}, types.ATXID{}))
 	})
 	t.Run("multiple atxs", func(t *testing.T) {
 		c := New()
@@ -105,6 +102,19 @@ func TestCache(t *testing.T) {
 		require.NotNil(t, c.Get(1, types.NodeID{1}, types.ATXID{1}))
 		require.NotNil(t, c.Get(1, types.NodeID{1}, types.ATXID{2}))
 		require.EqualValues(t, 1, c.GetByNode(1, types.NodeID{1}).Weight)
+	})
+	t.Run("weight for set", func(t *testing.T) {
+		c := New()
+		c.Add(1, types.NodeID{1}, types.ATXID{1}, &ATXData{Weight: 1})
+		c.Add(1, types.NodeID{1}, types.ATXID{2}, &ATXData{Weight: 2})
+
+		weight, missing := c.WeightForSet(1, []types.ATXID{{1}, {2}, {3}})
+		require.Equal(t, []types.ATXID{{3}}, missing)
+		require.EqualValues(t, 3, weight)
+
+		weight, missing = c.WeightForSet(1, []types.ATXID{{1}})
+		require.Empty(t, missing)
+		require.EqualValues(t, 1, weight)
 	})
 	t.Run("adding after eviction", func(t *testing.T) {
 		c := New()
@@ -150,8 +160,10 @@ func TestMemory(t *testing.T) {
 
 func BenchmarkConcurrentReadWrite(b *testing.B) {
 	c := New()
-	const epoch = 1
-	const size = 1_000_000
+	const (
+		epoch = 1
+		size  = 1_000_000
+	)
 	for i := 1; i <= size; i++ {
 		var (
 			node types.NodeID
@@ -186,4 +198,54 @@ func BenchmarkConcurrentReadWrite(b *testing.B) {
 			i++
 		}
 	})
+}
+
+func benchmarkkWeightForSet(b *testing.B, size, setSize int) {
+	c := New()
+	const epoch = 1
+	atxs := make([]types.ATXID, 0, size)
+	rng := rand.New(rand.NewSource(10101))
+	for i := 1; i <= size; i++ {
+		var (
+			node types.NodeID
+			atx  types.ATXID
+			data = &ATXData{Weight: 500, BaseHeight: 100}
+		)
+		binary.PutUvarint(node[:], uint64(i))
+		binary.PutUvarint(atx[:], uint64(i))
+		atxs = append(atxs, atx)
+		c.Add(epoch, node, atx, data)
+	}
+	rng.Shuffle(size, func(i, j int) {
+		atxs[i], atxs[j] = atxs[j], atxs[i]
+	})
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		weight, missing := c.WeightForSet(epoch, atxs[:setSize])
+		if weight == 0 {
+			b.Fatalf("weight can't be zero")
+		}
+		if len(missing) > 0 {
+			b.Fatalf("missing should be empty")
+		}
+	}
+}
+
+func BenchmarkWeightForSet(b *testing.B) {
+	for _, bc := range []struct {
+		size, setSize int
+	}{
+		{100_000, 100_000},
+		{200_000, 200_000},
+		{400_000, 400_000},
+		{1_000_000, 100_000},
+		{1_000_000, 200_000},
+		{1_000_000, 400_000},
+		{1_000_000, 1_000_000},
+	} {
+		bc := bc
+		b.Run(fmt.Sprintf("size=%d set_size=%d", bc.size, bc.setSize), func(b *testing.B) {
+			benchmarkkWeightForSet(b, bc.size, bc.setSize)
+		})
+	}
 }

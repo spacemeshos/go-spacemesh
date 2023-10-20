@@ -167,12 +167,6 @@ func (c *Cache) GetByNode(epoch types.EpochID, node types.NodeID) *ATXData {
 	return data
 }
 
-// NodeHasAtx returns true if atx was registered with a given node id.
-func (c *Cache) NodeHasAtx(epoch types.EpochID, node types.NodeID, atx types.ATXID) bool {
-	data := c.Get(epoch, node, atx)
-	return data != nil
-}
-
 func (c *Cache) WeightForSet(epoch types.EpochID, set []types.ATXID) (uint64, []types.ATXID) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
