@@ -226,8 +226,8 @@ func checkRewards(t *testing.T, atxs []*types.ActivationTx, expWeightPer *big.Ra
 
 func Test_StartStop(t *testing.T) {
 	tg := createTestGenerator(t)
-	tg.Start()
-	tg.Start() // start for the second time is ok.
+	tg.Start(context.Background())
+	tg.Start(context.Background()) // start for the second time is ok.
 	tg.Stop()
 }
 
@@ -252,7 +252,7 @@ func genData(t *testing.T, cdb *datastore.CachedDB, lid types.LayerID, optimisti
 
 func Test_SerialExecution(t *testing.T) {
 	tg := createTestGenerator(t)
-	tg.Start()
+	tg.Start(context.Background())
 	tg.mockFetch.EXPECT().GetProposals(gomock.Any(), gomock.Any()).AnyTimes()
 	layerID := types.GetEffectiveGenesis().Add(100)
 	require.NoError(t, layers.SetApplied(tg.cdb, layerID-1, types.EmptyBlockID))
@@ -399,7 +399,7 @@ func Test_run(t *testing.T) {
 					return nil
 				})
 			tg.mockPatrol.EXPECT().CompleteHare(layerID)
-			tg.Start()
+			tg.Start(context.Background())
 			tg.hareCh <- hare.LayerOutput{Ctx: context.Background(), Layer: layerID, Proposals: pids}
 			require.Eventually(t, func() bool { return len(tg.hareCh) == 0 }, time.Second, 100*time.Millisecond)
 			tg.Stop()
@@ -411,7 +411,7 @@ func Test_processHareOutput_EmptyOutput(t *testing.T) {
 	tg := createTestGenerator(t)
 	layerID := types.GetEffectiveGenesis().Add(100)
 	require.NoError(t, layers.SetApplied(tg.cdb, layerID-1, types.EmptyBlockID))
-	tg.Start()
+	tg.Start(context.Background())
 	tg.mockCert.EXPECT().RegisterForCert(gomock.Any(), layerID, types.EmptyBlockID)
 	tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), gomock.Any(), layerID, types.EmptyBlockID)
 	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, types.EmptyBlockID, false)
@@ -425,7 +425,7 @@ func Test_run_FetchFailed(t *testing.T) {
 	tg := createTestGenerator(t)
 	layerID := types.GetEffectiveGenesis().Add(100)
 	require.NoError(t, layers.SetApplied(tg.cdb, layerID-1, types.EmptyBlockID))
-	tg.Start()
+	tg.Start(context.Background())
 	pids := []types.ProposalID{{1}, {2}, {3}}
 	tg.mockFetch.EXPECT().GetProposals(gomock.Any(), pids).DoAndReturn(
 		func(_ context.Context, _ []types.ProposalID) error {
@@ -441,7 +441,7 @@ func Test_run_DiffHasFromConsensus(t *testing.T) {
 	tg := createTestGenerator(t)
 	layerID := types.GetEffectiveGenesis().Add(100)
 	require.NoError(t, layers.SetApplied(tg.cdb, layerID-1, types.EmptyBlockID))
-	tg.Start()
+	tg.Start(context.Background())
 
 	// create multiple proposals with overlapping TXs
 	txIDs := createAndSaveTxs(t, 100, tg.cdb)
@@ -463,7 +463,7 @@ func Test_run_ExecuteFailed(t *testing.T) {
 	tg := createTestGenerator(t)
 	layerID := types.GetEffectiveGenesis().Add(100)
 	require.NoError(t, layers.SetApplied(tg.cdb, layerID-1, types.EmptyBlockID))
-	tg.Start()
+	tg.Start(context.Background())
 	txIDs := createAndSaveTxs(t, 100, tg.cdb)
 	signers, atxes := createATXs(t, tg.cdb, (layerID.GetEpoch() - 1).FirstLayer(), 10)
 	activeSet := types.ToATXIDs(atxes)
@@ -488,7 +488,7 @@ func Test_run_AddBlockFailed(t *testing.T) {
 	tg := createTestGenerator(t)
 	layerID := types.GetEffectiveGenesis().Add(100)
 	require.NoError(t, layers.SetApplied(tg.cdb, layerID-1, types.EmptyBlockID))
-	tg.Start()
+	tg.Start(context.Background())
 	txIDs := createAndSaveTxs(t, 100, tg.cdb)
 	signers, atxes := createATXs(t, tg.cdb, (layerID.GetEpoch() - 1).FirstLayer(), 10)
 	activeSet := types.ToATXIDs(atxes)
@@ -511,7 +511,7 @@ func Test_run_RegisterCertFailureIgnored(t *testing.T) {
 	tg := createTestGenerator(t)
 	layerID := types.GetEffectiveGenesis().Add(100)
 	require.NoError(t, layers.SetApplied(tg.cdb, layerID-1, types.EmptyBlockID))
-	tg.Start()
+	tg.Start(context.Background())
 	txIDs := createAndSaveTxs(t, 100, tg.cdb)
 	signers, atxes := createATXs(t, tg.cdb, (layerID.GetEpoch() - 1).FirstLayer(), 10)
 	activeSet := types.ToATXIDs(atxes)
@@ -537,7 +537,7 @@ func Test_run_CertifyFailureIgnored(t *testing.T) {
 	tg := createTestGenerator(t)
 	layerID := types.GetEffectiveGenesis().Add(100)
 	require.NoError(t, layers.SetApplied(tg.cdb, layerID-1, types.EmptyBlockID))
-	tg.Start()
+	tg.Start(context.Background())
 	txIDs := createAndSaveTxs(t, 100, tg.cdb)
 	signers, atxes := createATXs(t, tg.cdb, (layerID.GetEpoch() - 1).FirstLayer(), 10)
 	activeSet := types.ToATXIDs(atxes)
@@ -563,7 +563,7 @@ func Test_run_ProcessLayerFailed(t *testing.T) {
 	tg := createTestGenerator(t)
 	layerID := types.GetEffectiveGenesis().Add(100)
 	require.NoError(t, layers.SetApplied(tg.cdb, layerID-1, types.EmptyBlockID))
-	tg.Start()
+	tg.Start(context.Background())
 	txIDs := createAndSaveTxs(t, 100, tg.cdb)
 	signers, atxes := createATXs(t, tg.cdb, (layerID.GetEpoch() - 1).FirstLayer(), 10)
 	activeSet := types.ToATXIDs(atxes)
