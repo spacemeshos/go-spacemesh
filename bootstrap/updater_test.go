@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
@@ -136,12 +136,12 @@ func TestLoad(t *testing.T) {
 			desc: "recovery required",
 			persisted: map[types.EpochID][]string{
 				current - 2: {bootstrap.SuffixBoostrap, update1},
-				current - 1: {bootstrap.SuffixBoostrap, update2},
+				current - 1: {bootstrap.SuffixActiveSet, update2},
 				current:     {bootstrap.SuffixBeacon, update3},
 				current + 1: {bootstrap.SuffixActiveSet, update4},
 			},
 			cached: map[types.EpochID]string{
-				current - 1: bootstrap.SuffixBoostrap,
+				current - 1: bootstrap.SuffixActiveSet,
 				current:     bootstrap.SuffixBeacon,
 				current + 1: bootstrap.SuffixActiveSet,
 			},

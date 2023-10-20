@@ -64,7 +64,13 @@ type DataFetch struct {
 }
 
 // NewDataFetch creates a new DataFetch instance.
-func NewDataFetch(msh meshProvider, fetch fetcher, ids idProvider, cache activeSetCache, lg log.Log) *DataFetch {
+func NewDataFetch(
+	msh meshProvider,
+	fetch fetcher,
+	ids idProvider,
+	cache activeSetCache,
+	lg log.Log,
+) *DataFetch {
 	return &DataFetch{
 		fetcher:   fetch,
 		logger:    lg,
@@ -77,7 +83,7 @@ func NewDataFetch(msh meshProvider, fetch fetcher, ids idProvider, cache activeS
 
 // PollMaliciousProofs polls all peers for malicious NodeIDs.
 func (d *DataFetch) PollMaliciousProofs(ctx context.Context) error {
-	peers := d.fetcher.GetPeers()
+	peers := d.fetcher.SelectBest(fetch.RedundantPeers)
 	logger := d.logger.WithContext(ctx)
 	req := &maliciousIDRequest{
 		peers: peers,
@@ -131,7 +137,7 @@ func (d *DataFetch) PollMaliciousProofs(ctx context.Context) error {
 // PollLayerData polls all peers for data in the specified layer.
 func (d *DataFetch) PollLayerData(ctx context.Context, lid types.LayerID, peers ...p2p.Peer) error {
 	if len(peers) == 0 {
-		peers = d.fetcher.GetPeers()
+		peers = d.fetcher.SelectBest(fetch.RedundantPeers)
 	}
 	if len(peers) == 0 {
 		return errNoPeers
@@ -190,9 +196,15 @@ func (d *DataFetch) PollLayerData(ctx context.Context, lid types.LayerID, peers 
 	}
 }
 
-func (d *DataFetch) receiveMaliciousIDs(ctx context.Context, req *maliciousIDRequest, peer p2p.Peer, data []byte, peerErr error) {
-	logger := d.logger.WithContext(ctx).WithFields(req.lid, log.Stringer("peer", peer))
-	logger.Debug("received layer data from peer")
+func (d *DataFetch) receiveMaliciousIDs(
+	ctx context.Context,
+	req *maliciousIDRequest,
+	peer p2p.Peer,
+	data []byte,
+	peerErr error,
+) {
+	logger := d.logger.WithContext(ctx).WithFields(log.Stringer("peer", peer))
+	logger.Debug("received malicious id from peer")
 	var (
 		result = peerResult[fetch.MaliciousIDs]{peer: peer, err: peerErr}
 		malIDs fetch.MaliciousIDs
@@ -211,7 +223,13 @@ func (d *DataFetch) receiveMaliciousIDs(ctx context.Context, req *maliciousIDReq
 	}
 }
 
-func (d *DataFetch) receiveData(ctx context.Context, req *dataRequest, peer p2p.Peer, data []byte, peerErr error) {
+func (d *DataFetch) receiveData(
+	ctx context.Context,
+	req *dataRequest,
+	peer p2p.Peer,
+	data []byte,
+	peerErr error,
+) {
 	logger := d.logger.WithContext(ctx).WithFields(req.lid, log.Stringer("peer", peer))
 	logger.Debug("received layer data from peer")
 	var (
@@ -248,7 +266,14 @@ func registerLayerHashes(fetcher fetcher, peer p2p.Peer, data *fetch.LayerData) 
 	fetcher.RegisterPeerHashes(peer, layerHashes)
 }
 
-func fetchMalfeasanceProof(ctx context.Context, logger log.Log, ids idProvider, fetcher fetcher, req *maliciousIDRequest, data *fetch.MaliciousIDs) {
+func fetchMalfeasanceProof(
+	ctx context.Context,
+	logger log.Log,
+	ids idProvider,
+	fetcher fetcher,
+	req *maliciousIDRequest,
+	data *fetch.MaliciousIDs,
+) {
 	var idsToFetch []types.NodeID
 	for _, nodeID := range data.NodeIDs {
 		if _, ok := req.response.ids[nodeID]; !ok {
@@ -281,7 +306,13 @@ func fetchMalfeasanceProof(ctx context.Context, logger log.Log, ids idProvider, 
 	}
 }
 
-func fetchLayerData(ctx context.Context, logger log.Log, fetcher fetcher, req *dataRequest, data *fetch.LayerData) {
+func fetchLayerData(
+	ctx context.Context,
+	logger log.Log,
+	fetcher fetcher,
+	req *dataRequest,
+	data *fetch.LayerData,
+) {
 	var ballotsToFetch []types.BallotID
 	for _, ballotID := range data.Ballots {
 		if _, ok := req.response.ballots[ballotID]; !ok {
@@ -302,19 +333,18 @@ func fetchLayerData(ctx context.Context, logger log.Log, fetcher fetcher, req *d
 					return nil
 				})),
 				log.Err(err))
+
 			// syntactically invalid ballots are expected from malicious peers
 		}
 	}
 }
 
-// PollLayerOpinions polls all peers for opinions in the specified layer.
-func (d *DataFetch) PollLayerOpinions(ctx context.Context, lid types.LayerID) ([]*fetch.LayerOpinion, error) {
-	peers := d.fetcher.GetPeers()
-	if len(peers) == 0 {
-		return nil, errNoPeers
-	}
-
-	logger := d.logger.WithContext(ctx).WithFields(lid)
+func (d *DataFetch) PollLayerOpinions(
+	ctx context.Context,
+	lid types.LayerID,
+	needCert bool,
+	peers []p2p.Peer,
+) ([]*fetch.LayerOpinion, []*types.Certificate, error) {
 	req := &opinionRequest{
 		lid:   lid,
 		peers: peers,
@@ -328,7 +358,7 @@ func (d *DataFetch) PollLayerOpinions(ctx context.Context, lid types.LayerID) ([
 		opnsPeerError.Inc()
 	}
 	if err := d.fetcher.GetLayerOpinions(ctx, peers, lid, okFunc, errFunc); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	req.peerResults = map[p2p.Peer]peerResult[fetch.LayerOpinion]{}
 	var (
@@ -352,15 +382,50 @@ func (d *DataFetch) PollLayerOpinions(ctx context.Context, lid types.LayerID) ([
 			if success {
 				candidateErr = nil
 			}
-			return req.response.opinions, candidateErr
+			certs := make([]*types.Certificate, 0, len(req.response.opinions))
+			if needCert {
+				peerCerts := map[types.BlockID][]p2p.Peer{}
+				for _, opns := range req.response.opinions {
+					if opns.Certified == nil {
+						continue
+					}
+					if _, ok := peerCerts[*opns.Certified]; !ok {
+						peerCerts[*opns.Certified] = []p2p.Peer{}
+					}
+					peerCerts[*opns.Certified] = append(peerCerts[*opns.Certified], opns.Peer())
+					// note that we want to fetch block certificate for types.EmptyBlockID as well
+					// but we don't need to register hash for the actual block fetching
+					if *opns.Certified != types.EmptyBlockID {
+						d.fetcher.RegisterPeerHashes(
+							opns.Peer(),
+							[]types.Hash32{opns.Certified.AsHash32()},
+						)
+					}
+				}
+				for bid, bidPeers := range peerCerts {
+					cert, err := d.fetcher.GetCert(ctx, lid, bid, bidPeers)
+					if err != nil {
+						certPeerError.Inc()
+						continue
+					}
+					certs = append(certs, cert)
+				}
+			}
+			return req.response.opinions, certs, candidateErr
 		case <-ctx.Done():
-			logger.Warning("request timed out")
-			return nil, errTimeout
+			d.logger.WithContext(ctx).Debug("request timed out", lid)
+			return nil, nil, errTimeout
 		}
 	}
 }
 
-func (d *DataFetch) receiveOpinions(ctx context.Context, req *opinionRequest, peer p2p.Peer, data []byte, peerErr error) {
+func (d *DataFetch) receiveOpinions(
+	ctx context.Context,
+	req *opinionRequest,
+	peer p2p.Peer,
+	data []byte,
+	peerErr error,
+) {
 	logger := d.logger.WithContext(ctx).WithFields(req.lid, log.Stringer("peer", peer))
 	logger.Debug("received layer opinions from peer")
 
@@ -371,7 +436,7 @@ func (d *DataFetch) receiveOpinions(ctx context.Context, req *opinionRequest, pe
 	if peerErr != nil {
 		logger.With().Debug("received peer error for layer opinions", log.Err(peerErr))
 	} else if result.err = codec.Decode(data, &lo); result.err != nil {
-		logger.With().Debug("error converting bytes to LayerOpinion", log.Err(result.err))
+		logger.With().Debug("error decoding LayerOpinion", log.Err(result.err))
 	} else {
 		lo.SetPeer(peer)
 		result.data = &lo
@@ -379,7 +444,7 @@ func (d *DataFetch) receiveOpinions(ctx context.Context, req *opinionRequest, pe
 	select {
 	case req.ch <- result:
 	case <-ctx.Done():
-		logger.Warning("request timed out")
+		logger.Debug("request timed out")
 	}
 }
 
@@ -406,7 +471,7 @@ func (d *DataFetch) updateAtxPeer(epoch types.EpochID, peer p2p.Peer) {
 
 // GetEpochATXs fetches all ATXs published in the specified epoch from a peer.
 func (d *DataFetch) GetEpochATXs(ctx context.Context, epoch types.EpochID) error {
-	peers := d.fetcher.GetPeers()
+	peers := d.fetcher.SelectBest(fetch.RedundantPeers)
 	if len(peers) == 0 {
 		return errNoPeers
 	}

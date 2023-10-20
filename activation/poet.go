@@ -12,11 +12,12 @@ import (
 	"github.com/hashicorp/go-retryablehttp"
 	rpcapi "github.com/spacemeshos/poet/release/proto/go/rpc/api/v1"
 	"github.com/spacemeshos/poet/shared"
+	"go.uber.org/zap"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 var (
@@ -40,9 +41,10 @@ type HTTPPoetClient struct {
 	baseURL       *url.URL
 	poetServiceID types.PoetServiceID
 	client        *retryablehttp.Client
+	logger        *zap.Logger
 }
 
-func defaultPoetClientFunc(address string, cfg PoetConfig) (PoetProvingServiceClient, error) {
+func defaultPoetClientFunc(address string, cfg PoetConfig) (poetClient, error) {
 	return NewHTTPPoetClient(address, cfg)
 }
 
@@ -53,6 +55,28 @@ func checkRetry(ctx context.Context, resp *http.Response, err error) (bool, erro
 	return retryablehttp.DefaultRetryPolicy(ctx, resp, err)
 }
 
+// A wrapper around zap.Logger to make it compatible with
+// retryablehttp.LeveledLogger interface.
+type retryableHttpLogger struct {
+	inner *zap.Logger
+}
+
+func (r retryableHttpLogger) Error(format string, args ...any) {
+	r.inner.Sugar().Errorw(format, args...)
+}
+
+func (r retryableHttpLogger) Info(format string, args ...any) {
+	r.inner.Sugar().Infow(format, args...)
+}
+
+func (r retryableHttpLogger) Warn(format string, args ...any) {
+	r.inner.Sugar().Warnw(format, args...)
+}
+
+func (r retryableHttpLogger) Debug(format string, args ...any) {
+	r.inner.Sugar().Debugw(format, args...)
+}
+
 type PoetClientOpts func(*HTTPPoetClient)
 
 func withCustomHttpClient(client *http.Client) PoetClientOpts {
@@ -61,11 +85,22 @@ func withCustomHttpClient(client *http.Client) PoetClientOpts {
 	}
 }
 
+func WithLogger(logger *zap.Logger) PoetClientOpts {
+	return func(c *HTTPPoetClient) {
+		c.logger = logger
+		c.client.Logger = &retryableHttpLogger{inner: logger}
+		c.client.ResponseLogHook = func(logger retryablehttp.Logger, resp *http.Response) {
+			c.logger.Info(
+				"response received",
+				zap.Stringer("url", resp.Request.URL),
+				zap.Int("status", resp.StatusCode),
+			)
+		}
+	}
+}
+
 // NewHTTPPoetClient returns new instance of HTTPPoetClient connecting to the specified url.
 func NewHTTPPoetClient(baseUrl string, cfg PoetConfig, opts ...PoetClientOpts) (*HTTPPoetClient, error) {
-	// TODO(brozansk): Take a logger and use it instead of global logger
-	log.With().Info("creating poet client", log.String("url", baseUrl), log.Int("max_retries", cfg.MaxRequestRetries), log.Stringer("retry_delay", cfg.RequestRetryDelay))
-
 	client := &retryablehttp.Client{
 		RetryMax:     cfg.MaxRequestRetries,
 		RetryWaitMin: cfg.RequestRetryDelay,
@@ -85,12 +120,25 @@ func NewHTTPPoetClient(baseUrl string, cfg PoetConfig, opts ...PoetClientOpts) (
 	poetClient := &HTTPPoetClient{
 		baseURL: baseURL,
 		client:  client,
+		logger:  zap.NewNop(),
 	}
 	for _, opt := range opts {
 		opt(poetClient)
 	}
 
+	poetClient.logger.Info(
+		"created poet client",
+		zap.Stringer("url", baseURL),
+		zap.Int("max retries", client.RetryMax),
+		zap.Duration("min retry wait", client.RetryWaitMin),
+		zap.Duration("max retry wait", client.RetryWaitMax),
+	)
+
 	return poetClient, nil
+}
+
+func (c *HTTPPoetClient) Address() string {
+	return c.baseURL.String()
 }
 
 func (c *HTTPPoetClient) PowParams(ctx context.Context) (*PoetPowParams, error) {
@@ -106,7 +154,7 @@ func (c *HTTPPoetClient) PowParams(ctx context.Context) (*PoetPowParams, error) 
 }
 
 // Submit registers a challenge in the proving service current open round.
-func (c *HTTPPoetClient) Submit(ctx context.Context, prefix, challenge []byte, signature types.EdSignature, nodeID types.NodeID, pow PoetPoW) (*types.PoetRound, error) {
+func (c *HTTPPoetClient) Submit(ctx context.Context, deadline time.Time, prefix, challenge []byte, signature types.EdSignature, nodeID types.NodeID, pow PoetPoW) (*types.PoetRound, error) {
 	request := rpcapi.SubmitRequest{
 		Prefix:    prefix,
 		Challenge: challenge,
@@ -117,6 +165,7 @@ func (c *HTTPPoetClient) Submit(ctx context.Context, prefix, challenge []byte, s
 			Challenge:  pow.Params.Challenge,
 			Difficulty: uint32(pow.Params.Difficulty),
 		},
+		Deadline: timestamppb.New(deadline),
 	}
 	resBody := rpcapi.SubmitResponse{}
 	if err := c.req(ctx, http.MethodPost, "/v1/submit", &request, &resBody); err != nil {
@@ -207,7 +256,9 @@ func (c *HTTPPoetClient) req(ctx context.Context, method, path string, reqBody, 
 		return fmt.Errorf("reading response body (%w)", err)
 	}
 
-	log.GetLogger().WithContext(ctx).With().Debug("response from poet", log.String("status", res.Status), log.String("body", string(data)))
+	if res.StatusCode != http.StatusOK {
+		c.logger.Info("got poet response != 200 OK", zap.String("status", res.Status), zap.String("body", string(data)))
+	}
 
 	switch res.StatusCode {
 	case http.StatusOK:
@@ -222,7 +273,8 @@ func (c *HTTPPoetClient) req(ctx context.Context, method, path string, reqBody, 
 	}
 
 	if resBody != nil {
-		if err := protojson.Unmarshal(data, resBody); err != nil {
+		unmarshaler := protojson.UnmarshalOptions{DiscardUnknown: true}
+		if err := unmarshaler.Unmarshal(data, resBody); err != nil {
 			return fmt.Errorf("decoding response body to proto: %w", err)
 		}
 	}

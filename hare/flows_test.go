@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
@@ -26,7 +26,6 @@ type HareWrapper struct {
 	termination chan struct{}
 	clock       *mockClock
 	hare        []*Hare
-	//lint:ignore U1000 pending https://github.com/spacemeshos/go-spacemesh/issues/4001
 	initialSets []*Set
 	outputs     map[types.LayerID][]*Set
 }
@@ -106,7 +105,7 @@ type p2pManipulator struct {
 	err          error
 }
 
-func (m *p2pManipulator) Register(protocol string, handler pubsub.GossipHandler) {
+func (m *p2pManipulator) Register(protocol string, handler pubsub.GossipHandler, opts ...pubsub.ValidatorOpt) {
 	m.nd.Register(protocol, handler)
 }
 
@@ -133,8 +132,6 @@ func createTestHare(tb testing.TB, msh mesh, tcfg config.Config, clock *mockCloc
 	tb.Helper()
 	signer, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	edVerifier, err := signing.NewEdVerifier()
-	require.NoError(tb, err)
 
 	ctrl := gomock.NewController(tb)
 	patrol := mocks.NewMocklayerPatrol(ctrl)
@@ -154,7 +151,7 @@ func createTestHare(tb testing.TB, msh mesh, tcfg config.Config, clock *mockCloc
 		tcfg,
 		p2p,
 		signer,
-		edVerifier,
+		signing.NewEdVerifier(),
 		signer.NodeID(),
 		make(chan LayerOutput, 100),
 		mockSyncS,

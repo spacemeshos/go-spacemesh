@@ -21,7 +21,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
@@ -48,10 +47,11 @@ func TestTransactionService_StreamResults(t *testing.T) {
 		return nil
 	}))
 
-	svc := NewTransactionService(db, nil, nil, nil, nil, nil, logtest.New(t).WithName("grpc.Transactions"))
-	t.Cleanup(launchServer(t, cfg, svc))
+	svc := NewTransactionService(db, nil, nil, nil, nil, nil)
+	cfg, cleanup := launchServer(t, svc)
+	t.Cleanup(cleanup)
 
-	conn := dialGrpc(ctx, t, cfg.PublicListener)
+	conn := dialGrpc(ctx, t, cfg)
 	client := pb.NewTransactionServiceClient(conn)
 
 	t.Run("All", func(t *testing.T) {
@@ -163,10 +163,11 @@ func BenchmarkStreamResults(b *testing.B) {
 	}
 	require.NoError(b, tx.Commit())
 	require.NoError(b, tx.Release())
-	svc := NewTransactionService(db, nil, nil, nil, nil, nil, logtest.New(b).WithName("grpc.Transactions"))
-	b.Cleanup(launchServer(b, cfg, svc))
+	svc := NewTransactionService(db, nil, nil, nil, nil, nil)
+	cfg, cleanup := launchServer(b, svc)
+	b.Cleanup(cleanup)
 
-	conn := dialGrpc(ctx, b, cfg.PublicListener)
+	conn := dialGrpc(ctx, b, cfg)
 	client := pb.NewTransactionServiceClient(conn)
 
 	b.Logf("setup took %s", time.Since(start))
@@ -220,9 +221,10 @@ func TestParseTransactions(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	t.Cleanup(cancel)
 	vminst := vm.New(db)
-	t.Cleanup(launchServer(t, cfg, NewTransactionService(db, nil, nil, txs.NewConservativeState(vminst, db), nil, nil, logtest.New(t).WithName("grpc.Transactions"))))
+	cfg, cleanup := launchServer(t, NewTransactionService(db, nil, nil, txs.NewConservativeState(vminst, db), nil, nil))
+	t.Cleanup(cleanup)
 	var (
-		conn     = dialGrpc(ctx, t, cfg.PublicListener)
+		conn     = dialGrpc(ctx, t, cfg)
 		client   = pb.NewTransactionServiceClient(conn)
 		keys     = make([]signing.PrivateKey, 4)
 		accounts = make([]types.Account, len(keys))

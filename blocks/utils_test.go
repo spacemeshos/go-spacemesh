@@ -1,15 +1,26 @@
 package blocks
 
 import (
+	"context"
 	"math/rand"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/activesets"
+	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
+
+func TestMain(m *testing.M) {
+	types.SetLayersPerEpoch(5)
+	os.Exit(m.Run())
+}
 
 func checkInNonceOrder(t *testing.T, tids []types.TransactionID, byTid map[types.TransactionID]*types.MeshTransaction) {
 	accounts := make(map[types.Address]uint64)
@@ -85,4 +96,43 @@ func Test_getBlockTXs(t *testing.T) {
 	got, err = getBlockTXs(logtest.New(t), nil, blockSeed, 0)
 	require.NoError(t, err)
 	require.Empty(t, got)
+}
+
+func Test_getProposalMetadata(t *testing.T) {
+	lg := logtest.New(t)
+	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
+	cfg := Config{OptFilterThreshold: 70}
+	lid := types.LayerID(111)
+	_, atxs := createATXs(t, cdb, (lid.GetEpoch() - 1).FirstLayer(), 10)
+	actives := types.ATXIDList(types.ToATXIDs(atxs))
+	props := make([]*types.Proposal, 0, 10)
+	hash1 := types.Hash32{1, 2, 3}
+	hash2 := types.Hash32{3, 2, 1}
+	for i := 0; i < 10; i++ {
+		var p types.Proposal
+		p.Layer = lid
+		p.AtxID = atxs[i].ID()
+		if i < 5 {
+			p.MeshHash = hash1
+		} else {
+			p.MeshHash = hash2
+		}
+		for j := 0; j <= i; j++ {
+			p.EligibilityProofs = append(p.EligibilityProofs, types.VotingEligibility{J: uint32(j + 1)})
+		}
+		p.EpochData = &types.EpochData{ActiveSetHash: actives.Hash()}
+		p.EpochData.EligibilityCount = uint32(i + 1)
+		props = append(props, &p)
+	}
+	require.NoError(t, activesets.Add(cdb, actives.Hash(), &types.EpochActiveSet{
+		Epoch: lid.GetEpoch(),
+		Set:   actives,
+	}))
+	require.NoError(t, layers.SetMeshHash(cdb, lid-1, hash2))
+
+	// only 5 / 10 proposals has the same state
+	// eligibility wise 40 / 55 has the same state
+	md, err := getProposalMetadata(context.Background(), lg, cdb, cfg, lid, props)
+	require.NoError(t, err)
+	require.True(t, md.optFilter)
 }

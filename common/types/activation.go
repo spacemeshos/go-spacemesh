@@ -16,6 +16,12 @@ import (
 
 //go:generate scalegen
 
+// BytesToATXID is a helper to copy buffer into a ATXID.
+func BytesToATXID(buf []byte) (id ATXID) {
+	copy(id[:], buf)
+	return id
+}
+
 // ATXID is a 32-bit hash used to identify an activation transaction.
 type ATXID Hash32
 
@@ -67,6 +73,16 @@ func (t *ATXID) UnmarshalText(buf []byte) error {
 
 // EmptyATXID is a canonical empty ATXID.
 var EmptyATXID = ATXID{}
+
+type ATXIDs []ATXID
+
+// impl zap's ArrayMarshaler interface.
+func (ids ATXIDs) MarshalLogArray(enc log.ArrayEncoder) error {
+	for _, id := range ids {
+		enc.AppendString(id.String())
+	}
+	return nil
+}
 
 // NIPostChallenge is the set of fields that's serialized, hashed and submitted to the PoET service to be included in the
 // PoET membership proof.
@@ -481,4 +497,9 @@ func ATXIDsToHashes(ids []ATXID) []Hash32 {
 		hashes = append(hashes, id.Hash32())
 	}
 	return hashes
+}
+
+type EpochActiveSet struct {
+	Epoch EpochID
+	Set   []ATXID `scale:"max=1000000"`
 }

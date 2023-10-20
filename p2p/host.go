@@ -14,7 +14,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/transport"
 	"github.com/libp2p/go-libp2p/p2p/host/peerstore/pstoremem"
 	rcmgr "github.com/libp2p/go-libp2p/p2p/host/resource-manager"
-	rcmgrObs "github.com/libp2p/go-libp2p/p2p/host/resource-manager/obs"
 	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	tptu "github.com/libp2p/go-libp2p/p2p/net/upgrader"
@@ -32,19 +31,39 @@ import (
 // DefaultConfig config.
 func DefaultConfig() Config {
 	return Config{
-		Listen:             "/ip4/0.0.0.0/tcp/7513",
-		Flood:              false,
-		MinPeers:           20,
-		LowPeers:           40,
-		HighPeers:          100,
-		AutoscalePeers:     true,
-		GracePeersShutdown: 30 * time.Second,
-		MaxMessageSize:     2 << 20,
-		AcceptQueue:        tptu.AcceptQueueLength,
-		EnableHolepunching: true,
-		InboundFraction:    0.8,
-		OutboundFraction:   1.1,
-		RelayServer:        RelayServer{TTL: 20 * time.Minute, Reservations: 512},
+		Listen:                 "/ip4/0.0.0.0/tcp/7513",
+		Flood:                  false,
+		MinPeers:               20,
+		LowPeers:               40,
+		HighPeers:              100,
+		AutoscalePeers:         true,
+		GracePeersShutdown:     30 * time.Second,
+		MaxMessageSize:         2 << 20,
+		DisableResourceManager: true,
+		AcceptQueue:            tptu.AcceptQueueLength,
+		EnableHolepunching:     true,
+		InboundFraction:        0.8,
+		OutboundFraction:       1.1,
+		RelayServer:            RelayServer{TTL: 20 * time.Minute, Reservations: 512},
+		IP4Blocklist: []string{
+			// localhost
+			"127.0.0.0/8",
+			// private networks
+			"10.0.0.0/8",
+			"100.64.0.0/10",
+			"172.16.0.0/12",
+			"192.168.0.0/16",
+			// link local
+			"169.254.0.0/16",
+		},
+		IP6Blocklist: []string{
+			// localhost
+			"::1/128",
+			// ULA reserved
+			"fc00::/7",
+			// link local
+			"fe80::/10",
+		},
 	}
 }
 
@@ -82,9 +101,10 @@ type Config struct {
 	Bootnode                 bool        `mapstructure:"p2p-bootnode"`
 	ForceReachability        string      `mapstructure:"p2p-reachability"`
 	EnableHolepunching       bool        `mapstructure:"p2p-holepunching"`
-	DisableLegacyDiscovery   bool        `mapstructure:"p2p-disable-legacy-discovery"`
 	PrivateNetwork           bool        `mapstructure:"p2p-private-network"`
 	RelayServer              RelayServer `mapstructure:"relay-server"`
+	IP4Blocklist             []string    `mapstructure:"ip4-blocklist"`
+	IP6Blocklist             []string    `mapstructure:"ip6-blocklist"`
 }
 
 type RelayServer struct {
@@ -95,7 +115,8 @@ type RelayServer struct {
 
 func (cfg *Config) Validate() error {
 	if len(cfg.ForceReachability) > 0 {
-		if cfg.ForceReachability != PublicReachability && cfg.ForceReachability != PrivateReachability {
+		if cfg.ForceReachability != PublicReachability &&
+			cfg.ForceReachability != PrivateReachability {
 			return fmt.Errorf("p2p-reachability flag is invalid. should be one of %s, %s. got %s",
 				PublicReachability, PrivateReachability, cfg.ForceReachability,
 			)
@@ -111,7 +132,13 @@ func (cfg *Config) Validate() error {
 }
 
 // New initializes libp2p host configured for spacemesh.
-func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ...Opt) (*Host, error) {
+func New(
+	_ context.Context,
+	logger log.Log,
+	cfg Config,
+	prologue []byte,
+	opts ...Opt,
+) (*Host, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -123,7 +150,11 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 	}
 	lp2plog.SetPrimaryCore(logger.Core())
 	lp2plog.SetAllLoggers(lp2plog.LogLevel(cfg.LogLevel))
-	cm, err := connmgr.NewConnManager(cfg.LowPeers, cfg.HighPeers, connmgr.WithGracePeriod(cfg.GracePeersShutdown))
+	cm, err := connmgr.NewConnManager(
+		cfg.LowPeers,
+		cfg.HighPeers,
+		connmgr.WithGracePeriod(cfg.GracePeersShutdown),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("p2p create conn mgr: %w", err)
 	}
@@ -132,41 +163,59 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 	if err != nil {
 		return nil, fmt.Errorf("can't create peer store: %w", err)
 	}
-	// leaves a small room for outbound connections in order to
-	// reduce risk of network isolation
-	g := &gater{
-		inbound:  int(float64(cfg.HighPeers) * cfg.InboundFraction),
-		outbound: int(float64(cfg.HighPeers) * cfg.OutboundFraction),
-		direct:   map[peer.ID]struct{}{},
+
+	bootnodesMap := make(map[peer.ID]struct{})
+	bootnodes, err := parseIntoAddr(cfg.Bootnodes)
+	if err != nil {
+		return nil, err
 	}
+	for _, pid := range bootnodes {
+		bootnodesMap[pid.ID] = struct{}{}
+	}
+
+	directMap := make(map[peer.ID]struct{})
 	direct, err := parseIntoAddr(cfg.Direct)
 	if err != nil {
 		return nil, err
 	}
 	for _, pid := range direct {
-		g.direct[pid.ID] = struct{}{}
+		directMap[pid.ID] = struct{}{}
 	}
+	// leaves a small room for outbound connections in order to
+	// reduce risk of network isolation
+	g := &gater{
+		inbound:  int(float64(cfg.HighPeers) * cfg.InboundFraction),
+		outbound: int(float64(cfg.HighPeers) * cfg.OutboundFraction),
+		direct:   directMap,
+	}
+
+	g.direct = directMap
 	lopts := []libp2p.Option{
 		libp2p.Identity(key),
 		libp2p.ListenAddrStrings(cfg.Listen),
 		libp2p.UserAgent("go-spacemesh"),
-		libp2p.Transport(func(upgrader transport.Upgrader, rcmgr network.ResourceManager) (transport.Transport, error) {
-			opts := []tcp.Option{}
-			if cfg.DisableReusePort {
-				opts = append(opts, tcp.DisableReuseport())
-			}
-			if cfg.Metrics {
-				opts = append(opts, tcp.WithMetrics())
-			}
-			return tcp.NewTCPTransport(upgrader, rcmgr, opts...)
-		}),
-		libp2p.Security(noise.ID, func(id protocol.ID, privkey crypto.PrivKey, muxers []tptu.StreamMuxer) (*noise.SessionTransport, error) {
-			tp, err := noise.New(id, privkey, muxers)
-			if err != nil {
-				return nil, err
-			}
-			return tp.WithSessionOptions(noise.Prologue(prologue))
-		}),
+		libp2p.Transport(
+			func(upgrader transport.Upgrader, rcmgr network.ResourceManager) (transport.Transport, error) {
+				opts := []tcp.Option{}
+				if cfg.DisableReusePort {
+					opts = append(opts, tcp.DisableReuseport())
+				}
+				if cfg.Metrics {
+					opts = append(opts, tcp.WithMetrics())
+				}
+				return tcp.NewTCPTransport(upgrader, rcmgr, opts...)
+			},
+		),
+		libp2p.Security(
+			noise.ID,
+			func(id protocol.ID, privkey crypto.PrivKey, muxers []tptu.StreamMuxer) (*noise.SessionTransport, error) {
+				tp, err := noise.New(id, privkey, muxers)
+				if err != nil {
+					return nil, err
+				}
+				return tp.WithSessionOptions(noise.Prologue(prologue))
+			},
+		),
 		libp2p.Muxer("/yamux/1.0.0", &streamer),
 		libp2p.Peerstore(ps),
 		libp2p.BandwidthReporter(p2pmetrics.NewBandwidthCollector()),
@@ -182,15 +231,14 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 		if err != nil {
 			panic(err) // validated in config
 		}
-		lopts = append(lopts, libp2p.AddrsFactory(func([]multiaddr.Multiaddr) []multiaddr.Multiaddr {
-			return []multiaddr.Multiaddr{addr}
-		}))
+		lopts = append(
+			lopts,
+			libp2p.AddrsFactory(func([]multiaddr.Multiaddr) []multiaddr.Multiaddr {
+				return []multiaddr.Multiaddr{addr}
+			}),
+		)
 	}
 	if cfg.EnableHolepunching {
-		bootnodes, err := parseIntoAddr(cfg.Bootnodes)
-		if err != nil {
-			return nil, err
-		}
 		lopts = append(lopts,
 			libp2p.EnableHolePunching(),
 			libp2p.EnableAutoRelayWithStaticRelays(bootnodes))
@@ -225,14 +273,20 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 	logger.Zap().Info("local node identity", zap.Stringer("identity", h.ID()))
 	// TODO(dshulyak) this is small mess. refactor to avoid this patching
 	// both New and Upgrade should use options.
-	opts = append(opts, WithConfig(cfg), WithLog(logger))
+	opts = append(
+		opts,
+		WithConfig(cfg),
+		WithLog(logger),
+		WithBootnodes(bootnodesMap),
+		WithDirectNodes(directMap),
+	)
 	return Upgrade(h, opts...)
 }
 
 func setupResourcesManager(hostcfg Config) func(cfg *libp2p.Config) error {
 	return func(cfg *libp2p.Config) error {
-		rcmgrObs.MustRegisterWith(prometheus.DefaultRegisterer)
-		str, err := rcmgrObs.NewStatsTraceReporter()
+		rcmgr.MustRegisterWith(prometheus.DefaultRegisterer)
+		str, err := rcmgr.NewStatsTraceReporter()
 		if err != nil {
 			return err
 		}

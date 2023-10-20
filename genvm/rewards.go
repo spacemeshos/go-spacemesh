@@ -62,11 +62,11 @@ func (v *VM) addRewards(lctx ApplyContext, ss *core.StagedCache, fees uint64, bl
 		result = append(result, reward)
 		account, err := ss.Get(blockReward.Coinbase)
 		if err != nil {
-			return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+			return nil, fmt.Errorf("%w: %w", core.ErrInternal, err)
 		}
 		account.Balance += reward.TotalReward
 		if err := ss.Update(account); err != nil {
-			return nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+			return nil, fmt.Errorf("%w: %w", core.ErrInternal, err)
 		}
 		transferred += totalReward.Uint64()
 	}

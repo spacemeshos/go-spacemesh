@@ -10,7 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
-//go:generate mockgen -package=grpcserver -destination=./mocks.go -source=./interface.go
+//go:generate mockgen -typed -package=grpcserver -destination=./mocks.go -source=./interface.go
 
 // networkIdentity interface.
 type networkIdentity interface {
@@ -45,6 +45,7 @@ type txValidator interface {
 type atxProvider interface {
 	GetFullAtx(id types.ATXID) (*types.VerifiedActivationTx, error)
 	MaxHeightAtx() (types.ATXID, error)
+	GetMalfeasanceProof(id types.NodeID) (*types.MalfeasanceProof, error)
 }
 
 type postSetupProvider interface {
@@ -54,9 +55,20 @@ type postSetupProvider interface {
 	Config() activation.PostConfig
 }
 
+type postSupervisor interface {
+	Start() error
+	Stop() error
+}
+
 // peerCounter is an api to get amount of connected peers.
 type peerCounter interface {
 	PeerCount() uint64
+}
+
+// Peers is an api to get peer related info.
+type peers interface {
+	ConnectedPeerInfo(p2p.Peer) *p2p.PeerInfo
+	GetPeers() []p2p.Peer
 }
 
 // genesisTimeAPI is an API to get genesis time and current layer of the system.

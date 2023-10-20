@@ -56,7 +56,7 @@ type (
 		evicted types.LayerID
 
 		epochs map[types.EpochID]*epochInfo
-		layers map[types.LayerID]*layerInfo
+		layers layerSlice
 		// ballots should not be referenced by other ballots
 		// each ballot stores references (votes) for X previous layers
 		// those X layers may reference another set of ballots that will
@@ -75,7 +75,6 @@ type (
 func newState() *state {
 	return &state{
 		epochs:     map[types.EpochID]*epochInfo{},
-		layers:     map[types.LayerID]*layerInfo{},
 		ballots:    map[types.LayerID][]*ballotInfo{},
 		ballotRefs: map[types.BallotID]*ballotInfo{},
 		malnodes:   map[types.NodeID]struct{}{},
@@ -91,13 +90,7 @@ func (s *state) expectedWeight(cfg Config, target types.LayerID) weight {
 }
 
 func (s *state) layer(lid types.LayerID) *layerInfo {
-	layer, exist := s.layers[lid]
-	if !exist {
-		layersNumber.Inc()
-		layer = &layerInfo{lid: lid}
-		s.layers[lid] = layer
-	}
-	return layer
+	return s.layers.get(s.evicted, lid)
 }
 
 func (s *state) epoch(eid types.EpochID) *epochInfo {
@@ -179,6 +172,10 @@ type layerInfo struct {
 	verifying      verifyingInfo
 	coinflip       sign
 
+	// unique opinions recorded from the ballots in this layer.
+	// ballot votes an opinion and encodes sidecar
+	opinions map[types.Hash32]votes
+
 	opinion types.Hash32
 	// a pointer to the value stored on the previous layerInfo object
 	// it is stored as a pointer so that when previous layerInfo is evicted
@@ -221,9 +218,12 @@ type (
 	}
 
 	referenceInfo struct {
-		weight *big.Rat
-		height uint64
-		beacon types.Beacon
+		smesher         types.NodeID
+		atxid           types.ATXID
+		expectedBallots uint32
+		beacon          types.Beacon
+		weight          *big.Rat
+		height          uint64
 	}
 
 	ballotInfo struct {
@@ -240,6 +240,10 @@ type (
 
 func (b *ballotInfo) opinion() types.Hash32 {
 	return b.votes.opinion()
+}
+
+func (b *ballotInfo) overwriteOpinion(opinion types.Hash32) {
+	b.votes.tail.opinion = opinion
 }
 
 type votes struct {
@@ -432,7 +436,7 @@ func decodeVotes(evicted, blid types.LayerID, base *ballotInfo, exceptions types
 	from := base.layer
 	diff := map[types.LayerID]map[types.BlockID]headerWithSign{}
 	for _, header := range exceptions.Against {
-		from = types.MinLayer(from, header.LayerID)
+		from = min(from, header.LayerID)
 		layerdiff, exist := diff[header.LayerID]
 		if !exist {
 			layerdiff = map[types.BlockID]headerWithSign{}
@@ -445,7 +449,7 @@ func decodeVotes(evicted, blid types.LayerID, base *ballotInfo, exceptions types
 		layerdiff[header.ID] = headerWithSign{header, against}
 	}
 	for _, header := range exceptions.Support {
-		from = types.MinLayer(from, header.LayerID)
+		from = min(from, header.LayerID)
 		layerdiff, exist := diff[header.LayerID]
 		if !exist {
 			layerdiff = map[types.BlockID]headerWithSign{}
@@ -458,7 +462,7 @@ func decodeVotes(evicted, blid types.LayerID, base *ballotInfo, exceptions types
 		layerdiff[header.ID] = headerWithSign{header, support}
 	}
 	for _, lid := range exceptions.Abstain {
-		from = types.MinLayer(from, lid)
+		from = min(from, lid)
 		_, exist := diff[lid]
 		if !exist {
 			diff[lid] = map[types.BlockID]headerWithSign{}
@@ -466,9 +470,10 @@ func decodeVotes(evicted, blid types.LayerID, base *ballotInfo, exceptions types
 			return votes{}, 0, fmt.Errorf("votes on layer %d conflict with abstain", lid)
 		}
 	}
-	if from <= evicted {
-		return votes{}, 0, fmt.Errorf("votes for a block in the layer (%d) outside the window (evicted %d)", from, evicted)
-	}
+	// FIXME(dshulyak) this needs to be ignored when recovering from disk
+	// if from <= evicted {
+	// 	return votes{}, 0, fmt.Errorf("votes for a block in the layer (%d) outside the window (evicted %d)", from, evicted)
+	// }
 
 	// inherit opinion from the base ballot by copying votes
 	decoded, err := base.votes.update(from, diff)
@@ -497,14 +502,23 @@ func decodeVotes(evicted, blid types.LayerID, base *ballotInfo, exceptions types
 	return decoded, from, nil
 }
 
-func activeSetWeight(epoch *epochInfo, aset []types.ATXID) (uint64, error) {
-	var weight uint64
-	for _, id := range aset {
-		atx, exists := epoch.atxs[id]
-		if !exists {
-			return 0, fmt.Errorf("atx %v is not in state", id)
-		}
-		weight += atx.weight
+type layerSlice struct {
+	data []*layerInfo
+}
+
+func (s *layerSlice) get(offset, index types.LayerID) *layerInfo {
+	i := index - offset - 1
+	lth := types.LayerID(len(s.data))
+	if i < lth {
+		return s.data[i]
 	}
-	return weight, nil
+	last := offset + lth
+	for lid := last + 1; lid <= index; lid++ {
+		s.data = append(s.data, &layerInfo{lid: lid, opinions: map[types.Hash32]votes{}})
+	}
+	return s.data[i]
+}
+
+func (s *layerSlice) pop() {
+	s.data = s.data[1:]
 }

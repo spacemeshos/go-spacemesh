@@ -2,22 +2,29 @@ package grpcserver
 
 import (
 	"context"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"go.uber.org/zap"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 )
 
 // MeshService exposes mesh data such as accounts, blocks, and transactions.
 type MeshService struct {
-	logger         log.Logger
 	cdb            *datastore.CachedDB
 	mesh           meshAPI // Mesh
 	conState       conservativeState
@@ -30,8 +37,17 @@ type MeshService struct {
 }
 
 // RegisterService registers this service with a grpc server instance.
-func (s MeshService) RegisterService(server *Server) {
-	pb.RegisterMeshServiceServer(server.GrpcServer, s)
+func (s MeshService) RegisterService(server *grpc.Server) {
+	pb.RegisterMeshServiceServer(server, s)
+}
+
+func (s MeshService) RegisterHandlerService(mux *runtime.ServeMux) error {
+	return pb.RegisterMeshServiceHandlerServer(context.Background(), mux, s)
+}
+
+// String returns the name of this service.
+func (s MeshService) String() string {
+	return "MeshService"
 }
 
 // NewMeshService creates a new service using config data.
@@ -45,10 +61,8 @@ func NewMeshService(
 	layerDuration time.Duration,
 	layerAvgSize,
 	txsPerProposal uint32,
-	lg log.Logger,
 ) *MeshService {
 	return &MeshService{
-		logger:         lg,
 		cdb:            cdb,
 		mesh:           msh,
 		conState:       cstate,
@@ -63,7 +77,6 @@ func NewMeshService(
 
 // GenesisTime returns the network genesis time as UNIX time.
 func (s MeshService) GenesisTime(context.Context, *pb.GenesisTimeRequest) (*pb.GenesisTimeResponse, error) {
-	s.logger.Info("GRPC MeshService.GenesisTime")
 	return &pb.GenesisTimeResponse{Unixtime: &pb.SimpleInt{
 		Value: uint64(s.genTime.GenesisTime().Unix()),
 	}}, nil
@@ -71,7 +84,6 @@ func (s MeshService) GenesisTime(context.Context, *pb.GenesisTimeRequest) (*pb.G
 
 // CurrentLayer returns the current layer number.
 func (s MeshService) CurrentLayer(context.Context, *pb.CurrentLayerRequest) (*pb.CurrentLayerResponse, error) {
-	s.logger.Info("GRPC MeshService.CurrentLayer")
 	return &pb.CurrentLayerResponse{Layernum: &pb.LayerNumber{
 		Number: s.genTime.CurrentLayer().Uint32(),
 	}}, nil
@@ -79,7 +91,6 @@ func (s MeshService) CurrentLayer(context.Context, *pb.CurrentLayerRequest) (*pb
 
 // CurrentEpoch returns the current epoch number.
 func (s MeshService) CurrentEpoch(context.Context, *pb.CurrentEpochRequest) (*pb.CurrentEpochResponse, error) {
-	s.logger.Info("GRPC MeshService.CurrentEpoch")
 	curLayer := s.genTime.CurrentLayer()
 	return &pb.CurrentEpochResponse{Epochnum: &pb.EpochNumber{
 		Number: curLayer.GetEpoch().Uint32(),
@@ -88,13 +99,11 @@ func (s MeshService) CurrentEpoch(context.Context, *pb.CurrentEpochRequest) (*pb
 
 // GenesisID returns the network ID.
 func (s MeshService) GenesisID(context.Context, *pb.GenesisIDRequest) (*pb.GenesisIDResponse, error) {
-	s.logger.Info("GRPC MeshService.NetId")
 	return &pb.GenesisIDResponse{GenesisId: s.genesisID.Bytes()}, nil
 }
 
 // EpochNumLayers returns the number of layers per epoch (a network parameter).
 func (s MeshService) EpochNumLayers(context.Context, *pb.EpochNumLayersRequest) (*pb.EpochNumLayersResponse, error) {
-	s.logger.Info("GRPC MeshService.EpochNumLayers")
 	return &pb.EpochNumLayersResponse{Numlayers: &pb.LayerNumber{
 		Number: s.layersPerEpoch,
 	}}, nil
@@ -102,7 +111,6 @@ func (s MeshService) EpochNumLayers(context.Context, *pb.EpochNumLayersRequest) 
 
 // LayerDuration returns the layer duration in seconds (a network parameter).
 func (s MeshService) LayerDuration(context.Context, *pb.LayerDurationRequest) (*pb.LayerDurationResponse, error) {
-	s.logger.Info("GRPC MeshService.LayerDuration")
 	return &pb.LayerDurationResponse{Duration: &pb.SimpleInt{
 		Value: uint64(s.layerDuration.Seconds()),
 	}}, nil
@@ -110,7 +118,6 @@ func (s MeshService) LayerDuration(context.Context, *pb.LayerDurationRequest) (*
 
 // MaxTransactionsPerSecond returns the max number of tx per sec (a network parameter).
 func (s MeshService) MaxTransactionsPerSecond(context.Context, *pb.MaxTransactionsPerSecondRequest) (*pb.MaxTransactionsPerSecondResponse, error) {
-	s.logger.Info("GRPC MeshService.MaxTransactionsPerSecond")
 	return &pb.MaxTransactionsPerSecondResponse{MaxTxsPerSecond: &pb.SimpleInt{
 		Value: uint64(s.txsPerProposal * s.layerAvgSize / uint32(s.layerDuration.Seconds())),
 	}}, nil
@@ -127,10 +134,12 @@ func (s MeshService) getFilteredTransactions(from types.LayerID, address types.A
 	return txs, nil
 }
 
-func (s MeshService) getFilteredActivations(ctx context.Context, startLayer types.LayerID, addr types.Address) (activations []*types.VerifiedActivationTx, err error) {
+func (s MeshService) getFilteredActivations(
+	ctx context.Context,
+	startLayer types.LayerID,
+	addr types.Address,
+) (activations []*types.VerifiedActivationTx, err error) {
 	// We have no way to look up activations by coinbase so we have no choice but to read all of them.
-	// TODO: index activations by layer (and maybe by coinbase)
-	// See https://github.com/spacemeshos/go-spacemesh/issues/2064.
 	var atxids []types.ATXID
 	for l := startLayer; !l.After(s.mesh.LatestLayer()); l = l.Add(1) {
 		layer, err := s.mesh.GetLayer(l)
@@ -138,8 +147,12 @@ func (s MeshService) getFilteredActivations(ctx context.Context, startLayer type
 			return nil, status.Errorf(codes.Internal, "error retrieving layer data")
 		}
 		for _, b := range layer.Ballots() {
-			if b.EpochData != nil && b.ActiveSet != nil {
-				atxids = append(atxids, b.ActiveSet...)
+			if b.EpochData != nil {
+				actives, err := activesets.Get(s.cdb, b.EpochData.ActiveSetHash)
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "error retrieving active set %s (%s)", b.ID().String(), b.EpochData.ActiveSetHash.ShortString())
+				}
+				atxids = append(atxids, actives.Set...)
 			}
 		}
 	}
@@ -147,7 +160,7 @@ func (s MeshService) getFilteredActivations(ctx context.Context, startLayer type
 	// Look up full data
 	atxs, matxs := s.mesh.GetATXs(ctx, atxids)
 	if len(matxs) != 0 {
-		s.logger.Error("could not find activations %v", matxs)
+		ctxzap.Error(ctx, "could not find activations", zap.Array("matxs", types.ATXIDs(matxs)))
 		return nil, status.Errorf(codes.Internal, "error retrieving activations data")
 	}
 	for _, atx := range atxs {
@@ -156,13 +169,11 @@ func (s MeshService) getFilteredActivations(ctx context.Context, startLayer type
 			activations = append(activations, atx)
 		}
 	}
-	return
+	return activations, nil
 }
 
 // AccountMeshDataQuery returns account data.
 func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMeshDataQueryRequest) (*pb.AccountMeshDataQueryResponse, error) {
-	s.logger.Info("GRPC MeshService.AccountMeshDataQuery")
-
 	var startLayer types.LayerID
 	if in.MinLayer != nil {
 		startLayer = types.LayerID(in.MinLayer.Number)
@@ -314,7 +325,7 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 	// internal or an input error? For now, all missing layers produce
 	// internal errors.
 	if err != nil {
-		s.logger.With().Error("could not read layer from database", layerID, log.Err(err))
+		ctxzap.Error(ctx, "could not read layer from database", layerID.Field().Zap(), zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "error reading layer data")
 	}
 
@@ -325,8 +336,8 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 		// TODO: Do we ever expect txs to be missing here?
 		// E.g., if this node has not synced/received them yet.
 		if len(missing) != 0 {
-			s.logger.With().Error("could not find transactions from layer",
-				log.String("missing", fmt.Sprint(missing)), layer.Index())
+			ctxzap.Error(ctx, "could not find transactions from layer",
+				zap.String("missing", fmt.Sprint(missing)), layer.Index().Field().Zap())
 			return nil, status.Errorf(codes.Internal, "error retrieving tx data")
 		}
 
@@ -341,8 +352,14 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 	}
 
 	for _, b := range layer.Ballots() {
-		if b.EpochData != nil && b.ActiveSet != nil {
-			activations = append(activations, b.ActiveSet...)
+		if b.EpochData != nil {
+			actives, err := activesets.Get(s.cdb, b.EpochData.ActiveSetHash)
+			if err != nil && !errors.Is(err, sql.ErrNotFound) {
+				return nil, status.Errorf(codes.Internal, "error retrieving active set %s (%s)", b.ID().String(), b.EpochData.ActiveSetHash.ShortString())
+			}
+			if actives != nil {
+				activations = append(activations, actives.Set...)
+			}
 		}
 	}
 
@@ -352,8 +369,12 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 	// Add unique ATXIDs
 	atxs, matxs := s.mesh.GetATXs(ctx, activations)
 	if len(matxs) != 0 {
-		s.logger.With().Error("could not find activations from layer",
-			log.String("missing", fmt.Sprint(matxs)), layer.Index())
+		ctxzap.Error(
+			ctx,
+			"could not find activations from layer",
+			zap.Array("missing", types.ATXIDs(matxs)),
+			layer.Index().Field().Zap(),
+		)
 		return nil, status.Errorf(codes.Internal, "error retrieving activations data")
 	}
 	for _, atx := range atxs {
@@ -364,15 +385,15 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 	if err != nil {
 		// This is expected. We can only retrieve state root for a layer that was applied to state,
 		// which only happens after it's approved/confirmed.
-		s.logger.With().Debug("no state root for layer",
-			layer, log.String("status", layerStatus.String()), log.Err(err))
+		ctxzap.Debug(ctx, "no state root for layer",
+			layer.Field().Zap(), zap.Stringer("status", layerStatus), zap.Error(err))
 	}
 	hash, err := s.mesh.MeshHash(layerID)
 	if err != nil {
 		// This is expected. We can only retrieve state root for a layer that was applied to state,
 		// which only happens after it's approved/confirmed.
-		s.logger.With().Debug("no mesh hash at layer",
-			layer, log.String("status", layerStatus.String()), log.Err(err))
+		ctxzap.Debug(ctx, "no mesh hash at layer",
+			layer.Field().Zap(), zap.Stringer("status", layerStatus), zap.Error(err))
 	}
 	return &pb.Layer{
 		Number:        &pb.LayerNumber{Number: layer.Index().Uint32()},
@@ -386,8 +407,6 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 
 // LayersQuery returns all mesh data, layer by layer.
 func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest) (*pb.LayersQueryResponse, error) {
-	s.logger.Info("GRPC MeshService.LayersQuery")
-
 	var startLayer, endLayer types.LayerID
 	if in.StartLayer != nil {
 		startLayer = types.LayerID(in.StartLayer.Number)
@@ -422,7 +441,7 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 		// internal or an input error? For now, all missing layers produce
 		// internal errors.
 		if layer == nil || err != nil {
-			s.logger.With().Error("error retrieving layer data", log.Err(err))
+			ctxzap.Error(ctx, "error retrieving layer data", zap.Error(err))
 			return nil, status.Errorf(codes.Internal, "error retrieving layer data")
 		}
 
@@ -439,8 +458,6 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 
 // AccountMeshDataStream exposes a stream of transactions and activations for an account.
 func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, stream pb.MeshService_AccountMeshDataStreamServer) error {
-	s.logger.Info("GRPC MeshService.AccountMeshDataStream")
-
 	if in.Filter == nil {
 		return status.Errorf(codes.InvalidArgument, "`Filter` must be provided")
 	}
@@ -480,10 +497,10 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 	for {
 		select {
 		case <-txBufFull:
-			s.logger.Info("tx buffer is full, shutting down")
+			ctxzap.Info(stream.Context(), "tx buffer is full, shutting down")
 			return status.Error(codes.Canceled, errTxBufferFull)
 		case <-activationsBufFull:
-			s.logger.Info("activations buffer is full, shutting down")
+			ctxzap.Info(stream.Context(), "activations buffer is full, shutting down")
 			return status.Error(codes.Canceled, errActivationsBufferFull)
 		case activationEvent := <-activationsCh:
 			activation := activationEvent.VerifiedActivationTx
@@ -518,7 +535,7 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 				}
 			}
 		case <-stream.Context().Done():
-			s.logger.Info("AccountMeshDataStream closing stream, client disconnected")
+			ctxzap.Info(stream.Context(), "AccountMeshDataStream closing stream, client disconnected")
 			return nil
 		}
 		// TODO: do we need an additional case here for a context to indicate
@@ -528,8 +545,6 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 
 // LayerStream exposes a stream of all mesh data per layer.
 func (s MeshService) LayerStream(_ *pb.LayerStreamRequest, stream pb.MeshService_LayerStreamServer) error {
-	s.logger.Info("GRPC MeshService.LayerStream")
-
 	var (
 		layerCh       <-chan events.LayerUpdate
 		layersBufFull <-chan struct{}
@@ -542,11 +557,11 @@ func (s MeshService) LayerStream(_ *pb.LayerStreamRequest, stream pb.MeshService
 	for {
 		select {
 		case <-layersBufFull:
-			s.logger.Info("layer buffer is full, shutting down")
+			ctxzap.Info(stream.Context(), "layer buffer is full, shutting down")
 			return status.Error(codes.Canceled, errAccountBufferFull)
 		case layer, ok := <-layerCh:
 			if !ok {
-				s.logger.Info("LayerStream closed, shutting down")
+				ctxzap.Info(stream.Context(), "LayerStream closed, shutting down")
 				return nil
 			}
 			pbLayer, err := s.readLayer(stream.Context(), layer.LayerID, convertLayerStatus(layer.Status))
@@ -558,7 +573,7 @@ func (s MeshService) LayerStream(_ *pb.LayerStreamRequest, stream pb.MeshService
 				return fmt.Errorf("send to stream: %w", err)
 			}
 		case <-stream.Context().Done():
-			s.logger.Info("LayerStream closing stream, client disconnected")
+			ctxzap.Info(stream.Context(), "LayerStream closing stream, client disconnected")
 			return nil
 		}
 		// TODO: do we need an additional case here for a context to indicate
@@ -603,10 +618,70 @@ func (s MeshService) EpochStream(req *pb.EpochStreamRequest, stream pb.MeshServi
 	}); err != nil {
 		return status.Error(codes.Internal, err.Error())
 	}
-	s.logger.With().Info("epoch atxs streamed",
-		log.Uint32("target epoch", (epoch+1).Uint32()),
-		log.Int("total", total),
-		log.Int("malicious", mal),
+	ctxzap.Info(stream.Context(), "epoch atxs streamed",
+		zap.Uint32("target epoch", (epoch+1).Uint32()),
+		zap.Int("total", total),
+		zap.Int("malicious", mal),
 	)
 	return nil
+}
+
+func (s MeshService) MalfeasanceQuery(ctx context.Context, req *pb.MalfeasanceRequest) (*pb.MalfeasanceResponse, error) {
+	parsed, err := hex.DecodeString(req.SmesherHex)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	if l := len(parsed); l != types.NodeIDSize {
+		return nil, status.Error(codes.InvalidArgument,
+			fmt.Sprintf("invalid smesher id length (%d), expected (%d)", l, types.NodeIDSize))
+	}
+	id := types.BytesToNodeID(parsed)
+	proof, err := s.cdb.GetMalfeasanceProof(id)
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	return &pb.MalfeasanceResponse{
+		Proof: events.ToMalfeasancePB(id, proof, req.IncludeProof),
+	}, nil
+}
+
+func (s MeshService) MalfeasanceStream(req *pb.MalfeasanceStreamRequest, stream pb.MeshService_MalfeasanceStreamServer) error {
+	sub := events.SubscribeMalfeasance()
+	if sub == nil {
+		return status.Errorf(codes.FailedPrecondition, "event reporting is not enabled")
+	}
+	eventch, fullch := consumeEvents[events.EventMalfeasance](stream.Context(), sub)
+	if err := stream.SendHeader(metadata.MD{}); err != nil {
+		return status.Errorf(codes.Unavailable, "can't send header")
+	}
+
+	// first serve those already existed locally.
+	if err := s.cdb.IterateMalfeasanceProofs(func(id types.NodeID, mp *types.MalfeasanceProof) error {
+		select {
+		case <-stream.Context().Done():
+			return nil
+		default:
+			res := &pb.MalfeasanceStreamResponse{
+				Proof: events.ToMalfeasancePB(id, mp, req.IncludeProof),
+			}
+			return stream.Send(res)
+		}
+	}); err != nil {
+		return status.Error(codes.Internal, err.Error())
+	}
+
+	for {
+		select {
+		case <-stream.Context().Done():
+			return nil
+		case <-fullch:
+			return status.Errorf(codes.Canceled, "buffer is full")
+		case ev := <-eventch:
+			if err := stream.Send(&pb.MalfeasanceStreamResponse{
+				Proof: events.ToMalfeasancePB(ev.Smesher, ev.Proof, req.IncludeProof),
+			}); err != nil {
+				return status.Error(codes.Internal, fmt.Errorf("send to stream: %w", err).Error())
+			}
+		}
+	}
 }

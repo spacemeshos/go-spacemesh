@@ -8,7 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
+//go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./interface.go
 
 type requester interface {
 	Request(context.Context, p2p.Peer, []byte, func([]byte), func(error)) error
@@ -20,7 +20,12 @@ type requester interface {
 // directly and do away with both ValidatorFunc and SyncValidator.
 type ValidatorFunc pubsub.SyncHandler
 
-func (f ValidatorFunc) HandleMessage(ctx context.Context, hash types.Hash32, peer p2p.Peer, msg []byte) error {
+func (f ValidatorFunc) HandleMessage(
+	ctx context.Context,
+	hash types.Hash32,
+	peer p2p.Peer,
+	msg []byte,
+) error {
 	return f(ctx, hash, peer, msg)
 }
 
@@ -40,6 +45,4 @@ type meshProvider interface {
 
 type host interface {
 	ID() p2p.Peer
-	GetPeers() []p2p.Peer
-	Close() error
 }

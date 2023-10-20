@@ -6,8 +6,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -44,8 +44,6 @@ func newTestCertifier(t *testing.T) *testCertifier {
 	db := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	edVerifier, err := signing.NewEdVerifier()
-	require.NoError(t, err)
 	nid := signer.NodeID()
 	ctrl := gomock.NewController(t)
 	mo := hmocks.NewMockRolacle(ctrl)
@@ -53,7 +51,7 @@ func newTestCertifier(t *testing.T) *testCertifier {
 	mc := mocks.NewMocklayerClock(ctrl)
 	mb := smocks.NewMockBeaconGetter(ctrl)
 	mtortoise := smocks.NewMockTortoise(ctrl)
-	c := NewCertifier(db, mo, nid, signer, edVerifier, mp, mc, mb, mtortoise,
+	c := NewCertifier(db, mo, nid, signer, signing.NewEdVerifier(), mp, mc, mb, mtortoise,
 		WithCertifierLogger(logtest.New(t)),
 	)
 	return &testCertifier{
@@ -607,9 +605,6 @@ func Test_CertifyIfEligible(t *testing.T) {
 	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil)
 	proof := types.RandomVrfSignature()
 
-	edVerifier, err := signing.NewEdVerifier()
-	require.NoError(t, err)
-
 	tc.mOracle.EXPECT().Proof(gomock.Any(), b.LayerIndex, eligibility.CertifyRound).Return(proof, nil)
 	tc.mOracle.EXPECT().CalcEligibility(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, tc.nodeID, proof).Return(defaultCnt, nil)
 	tc.mPub.EXPECT().Publish(gomock.Any(), pubsub.BlockCertify, gomock.Any()).DoAndReturn(
@@ -617,7 +612,7 @@ func Test_CertifyIfEligible(t *testing.T) {
 			var msg types.CertifyMessage
 			require.NoError(t, codec.Decode(got, &msg))
 
-			ok := edVerifier.Verify(signing.HARE, msg.SmesherID, msg.Bytes(), msg.Signature)
+			ok := signing.NewEdVerifier().Verify(signing.HARE, msg.SmesherID, msg.Bytes(), msg.Signature)
 			require.True(t, ok)
 			require.Equal(t, b.LayerIndex, msg.LayerID)
 			require.Equal(t, b.ID(), msg.BlockID)

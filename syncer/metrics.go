@@ -86,5 +86,20 @@ var (
 	atxPeerError   = peerError.WithLabelValues("atx")
 	layerPeerError = peerError.WithLabelValues("layer")
 	opnsPeerError  = peerError.WithLabelValues("opns")
+	certPeerError  = peerError.WithLabelValues("cert")
 	malPeerError   = peerError.WithLabelValues("mal")
+
+	v2OpnPoll = metrics.NewCounter(
+		"opn_poll",
+		namespace,
+		"number of times opinions are polled",
+		[]string{"version"},
+	).WithLabelValues("v2")
+
+	v2OpnErr = metrics.NewCounter(
+		"opn_err",
+		namespace,
+		"number of times opinions poll failed",
+		[]string{"version"},
+	).WithLabelValues("v2")
 )

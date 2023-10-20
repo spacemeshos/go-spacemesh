@@ -4,27 +4,31 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
-	"sync"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-
-	"github.com/spacemeshos/go-spacemesh/log"
+	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
 // JSONHTTPServer is a JSON http server providing the Spacemesh API.
 // It is implemented using a grpc-gateway. See https://github.com/grpc-ecosystem/grpc-gateway .
 type JSONHTTPServer struct {
-	logger log.Logger
-
-	mu       sync.RWMutex
 	listener string
-	server   *http.Server
+	logger   *zap.Logger
+
+	// BoundAddress contains the address that the server bound to, useful if
+	// the server uses a dynamic port. It is set during startup and can be
+	// safely accessed after Start has completed (I.E. the returned channel has
+	// been waited on)
+	BoundAddress string
+	server       *http.Server
+	eg           errgroup.Group
 }
 
 // NewJSONHTTPServer creates a new json http server.
-func NewJSONHTTPServer(listener string, lg log.Logger) *JSONHTTPServer {
+func NewJSONHTTPServer(listener string, lg *zap.Logger) *JSONHTTPServer {
 	return &JSONHTTPServer{
 		logger:   lg,
 		listener: listener,
@@ -34,9 +38,8 @@ func NewJSONHTTPServer(listener string, lg log.Logger) *JSONHTTPServer {
 // Shutdown stops the server.
 func (s *JSONHTTPServer) Shutdown(ctx context.Context) error {
 	s.logger.Debug("stopping json-http service...")
-	server := s.getServer()
-	if server != nil {
-		err := server.Shutdown(ctx)
+	if s.server != nil {
+		err := s.server.Shutdown(ctx)
 		if errors.Is(err, http.ErrServerClosed) {
 			return nil
 		}
@@ -44,90 +47,47 @@ func (s *JSONHTTPServer) Shutdown(ctx context.Context) error {
 			return fmt.Errorf("shutdown: %w", err)
 		}
 	}
-
-	return nil
+	err := s.eg.Wait()
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
 }
 
 // StartService starts the json api server and listens for status (started, stopped).
 func (s *JSONHTTPServer) StartService(
 	ctx context.Context,
 	services ...ServiceAPI,
-) <-chan struct{} {
-	started := make(chan struct{})
-
-	// This will block, so run it in a goroutine
-	go s.startInternal(
-		ctx,
-		started,
-		services...)
-
-	return started
-}
-
-func (s *JSONHTTPServer) startInternal(
-	ctx context.Context,
-	started chan<- struct{},
-	services ...ServiceAPI,
-) {
-	ctx, cancel := context.WithCancel(ctx)
-
-	// This will close all downstream connections when the server closes
-	defer cancel()
-
-	mux := runtime.NewServeMux()
+) error {
+	// At least one service must be enabled
+	if len(services) == 0 {
+		s.logger.Error("not starting grpc gateway service; at least one service must be enabled")
+		return errors.New("no services provided")
+	}
 
 	// register each individual, enabled service
-	serviceCount := 0
+	mux := runtime.NewServeMux()
 	for _, svc := range services {
-		var err error
-		switch typed := svc.(type) {
-		case *GlobalStateService:
-			err = pb.RegisterGlobalStateServiceHandlerServer(ctx, mux, typed)
-		case *MeshService:
-			err = pb.RegisterMeshServiceHandlerServer(ctx, mux, typed)
-		case *NodeService:
-			err = pb.RegisterNodeServiceHandlerServer(ctx, mux, typed)
-		case *SmesherService:
-			err = pb.RegisterSmesherServiceHandlerServer(ctx, mux, typed)
-		case *TransactionService:
-			err = pb.RegisterTransactionServiceHandlerServer(ctx, mux, typed)
-		case *DebugService:
-			err = pb.RegisterDebugServiceHandlerServer(ctx, mux, typed)
+		if err := svc.RegisterHandlerService(mux); err != nil {
+			return fmt.Errorf("registering service %s with grpc gateway failed: %w", svc, err)
 		}
-		if err != nil {
-			s.logger.Error("registering %T with grpc gateway failed with %v", svc, err)
-		}
-		serviceCount++
 	}
 
-	close(started)
-
-	// At least one service must be enabled
-	if serviceCount == 0 {
-		s.logger.Error("not starting grpc gateway service; at least one service must be enabled")
-		return
+	s.logger.Info("starting grpc gateway server", zap.String("address", s.listener))
+	lis, err := net.Listen("tcp", s.listener)
+	if err != nil {
+		return fmt.Errorf("listening on %s: %w", s.listener, err)
 	}
-
-	s.logger.With().Info("starting grpc gateway server", log.String("address", s.listener))
-	s.setServer(&http.Server{
-		Addr:    s.listener,
+	s.BoundAddress = lis.Addr().String()
+	s.server = &http.Server{
 		Handler: mux,
+	}
+	s.eg.Go(func() error {
+		if err := s.server.Serve(lis); err != nil {
+			s.logger.Error("serving grpc server", zap.Error(err))
+			return nil
+		}
+		return nil
 	})
-
-	// This will block
-	s.logger.Error("error from grpc http listener: %v", s.getServer().ListenAndServe())
-}
-
-func (s *JSONHTTPServer) getServer() *http.Server {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	return s.server
-}
-
-func (s *JSONHTTPServer) setServer(server *http.Server) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.server = server
+	return nil
 }

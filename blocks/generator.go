@@ -13,10 +13,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/hare"
-	heligibility "github.com/spacemeshos/go-spacemesh/hare/eligibility"
+	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
-	dbproposals "github.com/spacemeshos/go-spacemesh/sql/proposals"
+	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -44,8 +44,6 @@ type Generator struct {
 
 // Config is the config for Generator.
 type Config struct {
-	LayerSize          uint32
-	LayersPerEpoch     uint32
 	GenBlockInterval   time.Duration
 	BlockGasLimit      uint64
 	OptFilterThreshold int
@@ -53,8 +51,6 @@ type Config struct {
 
 func defaultConfig() Config {
 	return Config{
-		LayerSize:          50,
-		LayersPerEpoch:     3,
 		GenBlockInterval:   time.Second,
 		BlockGasLimit:      math.MaxUint64,
 		OptFilterThreshold: 90,
@@ -151,14 +147,22 @@ func (g *Generator) run() error {
 				out.Layer,
 				log.Int("num_proposals", len(out.Proposals)),
 			)
-			maxLayer = types.MaxLayer(maxLayer, out.Layer)
+			maxLayer = max(maxLayer, out.Layer)
 			_, err := g.processHareOutput(out)
 			if err != nil {
-				g.logger.With().Error("failed to process hare output",
-					log.Context(out.Ctx),
-					out.Layer,
-					log.Err(err),
-				)
+				if errors.Is(err, errNodeHasBadMeshHash) {
+					g.logger.With().Info("node has different mesh hash from majority, will download block instead",
+						log.Context(out.Ctx),
+						out.Layer,
+						log.Err(err),
+					)
+				} else {
+					g.logger.With().Error("failed to process hare output",
+						log.Context(out.Ctx),
+						out.Layer,
+						log.Err(err),
+					)
+				}
 			}
 			if len(g.optimisticOutput) > 0 {
 				g.processOptimisticLayers(maxLayer)
@@ -178,7 +182,7 @@ func (g *Generator) getProposals(pids []types.ProposalID) ([]*types.Proposal, er
 		err    error
 	)
 	for _, pid := range pids {
-		if p, err = dbproposals.Get(g.cdb, pid); err != nil {
+		if p, err = proposals.Get(g.cdb, pid); err != nil {
 			return nil, err
 		}
 		result = append(result, p)
@@ -305,7 +309,7 @@ func (g *Generator) saveAndCertify(ctx context.Context, lid types.LayerID, block
 		)
 	}
 
-	if err := g.cert.CertifyIfEligible(ctx, g.logger, lid, hareOutput); err != nil && !errors.Is(err, heligibility.ErrNotActive) {
+	if err := g.cert.CertifyIfEligible(ctx, g.logger, lid, hareOutput); err != nil && !errors.Is(err, eligibility.ErrNotActive) {
 		g.logger.With().Warning("failed to certify block",
 			log.Context(ctx),
 			lid,

@@ -4,8 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/golang/protobuf/ptypes/empty"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"go.uber.org/zap"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -13,7 +16,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 )
@@ -21,22 +23,29 @@ import (
 // DebugService exposes global state data, output from the STF.
 type DebugService struct {
 	db       *sql.Database
-	logger   log.Logger
 	conState conservativeState
 	identity networkIdentity
 	oracle   oracle
 }
 
 // RegisterService registers this service with a grpc server instance.
-func (d DebugService) RegisterService(server *Server) {
-	pb.RegisterDebugServiceServer(server.GrpcServer, d)
+func (d DebugService) RegisterService(server *grpc.Server) {
+	pb.RegisterDebugServiceServer(server, d)
+}
+
+func (s DebugService) RegisterHandlerService(mux *runtime.ServeMux) error {
+	return pb.RegisterDebugServiceHandlerServer(context.Background(), mux, s)
+}
+
+// String returns the name of this service.
+func (d DebugService) String() string {
+	return "DebugService"
 }
 
 // NewDebugService creates a new grpc service using config data.
-func NewDebugService(db *sql.Database, conState conservativeState, host networkIdentity, oracle oracle, lg log.Logger) *DebugService {
+func NewDebugService(db *sql.Database, conState conservativeState, host networkIdentity, oracle oracle) *DebugService {
 	return &DebugService{
 		db:       db,
-		logger:   lg,
 		conState: conState,
 		identity: host,
 		oracle:   oracle,
@@ -44,9 +53,7 @@ func NewDebugService(db *sql.Database, conState conservativeState, host networkI
 }
 
 // Accounts returns current counter and balance for all accounts.
-func (d DebugService) Accounts(_ context.Context, in *pb.AccountsRequest) (*pb.AccountsResponse, error) {
-	d.logger.Info("GRPC DebugServices.Accounts")
-
+func (d DebugService) Accounts(ctx context.Context, in *pb.AccountsRequest) (*pb.AccountsResponse, error) {
 	var (
 		accts []*types.Account
 		err   error
@@ -57,7 +64,7 @@ func (d DebugService) Accounts(_ context.Context, in *pb.AccountsRequest) (*pb.A
 		accts, err = accounts.Snapshot(d.db, types.LayerID(in.Layer))
 	}
 	if err != nil {
-		d.logger.Error("Failed to get all accounts from state: %s", err)
+		ctxzap.Error(ctx, " Failed to get all accounts from state", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "error fetching accounts state")
 	}
 
@@ -81,7 +88,7 @@ func (d DebugService) Accounts(_ context.Context, in *pb.AccountsRequest) (*pb.A
 }
 
 // NetworkInfo query provides NetworkInfoResponse.
-func (d DebugService) NetworkInfo(ctx context.Context, _ *empty.Empty) (*pb.NetworkInfoResponse, error) {
+func (d DebugService) NetworkInfo(ctx context.Context, _ *emptypb.Empty) (*pb.NetworkInfoResponse, error) {
 	return &pb.NetworkInfoResponse{Id: d.identity.ID().String()}, nil
 }
 

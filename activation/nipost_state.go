@@ -22,30 +22,30 @@ const (
 )
 
 func write(path string, data []byte) error {
-	tmp, err := os.Create(fmt.Sprintf("%s.tmp", path))
+	tmpName := fmt.Sprintf("%s.tmp", path)
+	tmp, err := os.Create(tmpName)
 	if err != nil {
-		return fmt.Errorf("create temporary file %s: %w", tmp.Name(), err)
+		return fmt.Errorf("create temporary file %s: %w", tmpName, err)
 	}
+	defer tmp.Close()
 
 	checksum := crc64.New(crc64.MakeTable(crc64.ISO))
 	w := io.MultiWriter(tmp, checksum)
-	if _, err = w.Write(data); err != nil {
-		_ = tmp.Close()
+	if _, err := w.Write(data); err != nil {
 		return fmt.Errorf("write data %v: %w", tmp.Name(), err)
 	}
 
 	crc := make([]byte, crc64.Size)
 	binary.BigEndian.PutUint64(crc, checksum.Sum64())
-	if _, err = tmp.Write(crc); err != nil {
-		_ = tmp.Close()
+	if _, err := tmp.Write(crc); err != nil {
 		return fmt.Errorf("write checksum %s: %w", tmp.Name(), err)
 	}
 
-	if err = tmp.Close(); err != nil {
+	if err := tmp.Close(); err != nil {
 		return fmt.Errorf("failed to close tmp file %s: %w", tmp.Name(), err)
 	}
 
-	if err = atomic.ReplaceFile(tmp.Name(), path); err != nil {
+	if err := atomic.ReplaceFile(tmp.Name(), path); err != nil {
 		return fmt.Errorf("save file from %s, %s: %w", tmp.Name(), path, err)
 	}
 
@@ -57,7 +57,6 @@ func read(path string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open file %s: %w", path, err)
 	}
-
 	defer file.Close()
 
 	fInfo, err := file.Stat()
@@ -70,20 +69,19 @@ func read(path string) ([]byte, error) {
 
 	data := make([]byte, fInfo.Size()-crc64.Size)
 	checksum := crc64.New(crc64.MakeTable(crc64.ISO))
-	if _, err = io.TeeReader(file, checksum).Read(data); err != nil {
+	if _, err := io.TeeReader(file, checksum).Read(data); err != nil {
 		return nil, fmt.Errorf("read file %s: %w", path, err)
 	}
 
 	saved := make([]byte, crc64.Size)
-	if _, err = file.Read(saved); err != nil {
+	if _, err := file.Read(saved); err != nil {
 		return nil, fmt.Errorf("read checksum %s: %w", path, err)
 	}
 
 	savedChecksum := binary.BigEndian.Uint64(saved)
 
 	if savedChecksum != checksum.Sum64() {
-		return nil, fmt.Errorf(
-			"wrong checksum 0x%X, computed 0x%X", savedChecksum, checksum.Sum64())
+		return nil, fmt.Errorf("wrong checksum 0x%X, computed 0x%X", savedChecksum, checksum.Sum64())
 	}
 
 	return data, nil

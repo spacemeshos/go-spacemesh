@@ -19,22 +19,12 @@ var (
 
 	// EmptyLayerHash is the layer hash for an empty layer.
 	EmptyLayerHash = Hash32{}
-
-	legacyLayer uint32
 )
 
 // SetLayersPerEpoch sets global parameter of layers per epoch, all conversions from layer to epoch use this param.
 func SetLayersPerEpoch(layers uint32) {
 	atomic.StoreUint32(&layersPerEpoch, layers)
 	SetEffectiveGenesis(layers*2 - 1)
-}
-
-func SetLegacyLayers(layer uint32) {
-	legacyLayer = layer
-}
-
-func GetLegacyLayer() uint32 {
-	return legacyLayer
 }
 
 func SetEffectiveGenesis(layer uint32) {
@@ -236,24 +226,4 @@ func NewLayer(layerIndex LayerID) *Layer {
 		ballots: make([]*Ballot, 0, 10),
 		blocks:  make([]*Block, 0, 3),
 	}
-}
-
-// MinLayer returs minimal nonzero layer.
-func MinLayer(i, j LayerID) LayerID {
-	if i == 0 {
-		return j
-	} else if j == 0 {
-		return i
-	} else if i < j {
-		return i
-	}
-	return j
-}
-
-// MaxLayer returs max layer.
-func MaxLayer(i, j LayerID) LayerID {
-	if i > j {
-		return i
-	}
-	return j
 }

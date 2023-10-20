@@ -7,6 +7,7 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -16,7 +17,7 @@ type UserEvent struct {
 }
 
 func EmitBeacon(epoch types.EpochID, beacon types.Beacon) {
-	const help = "Node computed randomness beacon, it will be used to determine eligibility to participate in the consensus."
+	const help = "Node computed randomness beacon, which will be used to determine consensus eligibility."
 	emitUserEvent(
 		help,
 		false,
@@ -30,7 +31,7 @@ func EmitBeacon(epoch types.EpochID, beacon types.Beacon) {
 }
 
 func EmitInitStart(smesher types.NodeID, commitment types.ATXID) {
-	const help = "Node started post data initialization. Note that init is noop if node restarted when init was ready."
+	const help = "Node started PoST data initialization. Initialization will not be performed again if already completed."
 	emitUserEvent(
 		help,
 		false,
@@ -44,7 +45,7 @@ func EmitInitStart(smesher types.NodeID, commitment types.ATXID) {
 }
 
 func EmitInitFailure(smesher types.NodeID, commitment types.ATXID, err error) {
-	const help = "Node failed post data initialization."
+	const help = "Node failed PoST data initialization."
 	emitUserEvent(
 		help,
 		true,
@@ -59,7 +60,7 @@ func EmitInitFailure(smesher types.NodeID, commitment types.ATXID, err error) {
 }
 
 func EmitInitComplete() {
-	const help = "Node completed post data initialization."
+	const help = "Node successfully completed PoST data initialization."
 	emitUserEvent(
 		help,
 		false,
@@ -70,8 +71,8 @@ func EmitInitComplete() {
 }
 
 func EmitPoetWaitRound(current, publish types.EpochID, wait time.Duration) {
-	const help = "Node needs to wait for poet registration window in current epoch to open. " +
-		"Once opened it will submit challenge and wait till poet round ends in publish epoch."
+	const help = "Node is waiting for PoET registration window in current epoch to open. " +
+		"After this it will submit challenge and wait until PoET round ends in publish epoch."
 	emitUserEvent(
 		help,
 		false,
@@ -90,9 +91,9 @@ type EventPoetWaitEnd struct {
 }
 
 func EmitPoetWaitProof(publish, target types.EpochID, wait time.Duration) {
-	const help = "Node needs to wait for poet to complete in publish epoch. " +
-		"Once completed, node fetches proof from poet and runs post on that proof. " +
-		"After that publish an ATX that will be eligible for rewards in target epoch."
+	const help = "Node is waiting for PoET to complete. " +
+		"After it's complete, the node will fetch the PoET proof, generate a PoST proof, " +
+		"and finally publish an ATX to establish eligibility for rewards in the target epoch."
 	emitUserEvent(
 		help,
 		false,
@@ -106,8 +107,26 @@ func EmitPoetWaitProof(publish, target types.EpochID, wait time.Duration) {
 	)
 }
 
+func EmitPostServiceStarted() {
+	const help = "Node started local PoST service."
+	emitUserEvent(
+		help,
+		false,
+		&pb.Event_PostServiceStarted{},
+	)
+}
+
+func EmitPostServiceStopped() {
+	const help = "Node stopped local PoST service."
+	emitUserEvent(
+		help,
+		false,
+		&pb.Event_PostServiceStopped{},
+	)
+}
+
 func EmitPostStart(challenge []byte) {
-	const help = "Node started post execution for the challenge from poet."
+	const help = "Node started PoST execution using the challenge from PoET."
 	emitUserEvent(
 		help,
 		false,
@@ -116,7 +135,7 @@ func EmitPostStart(challenge []byte) {
 }
 
 func EmitPostComplete(challenge []byte) {
-	const help = "Node finished post execution for challenge."
+	const help = "Node finished PoST execution using PoET challenge."
 	emitUserEvent(
 		help,
 		false,
@@ -125,7 +144,7 @@ func EmitPostComplete(challenge []byte) {
 }
 
 func EmitPostFailure() {
-	const help = "Node failed post execution."
+	const help = "Node failed PoST execution."
 	emitUserEvent(
 		help,
 		true,
@@ -147,8 +166,8 @@ func EmitAtxPublished(
 	id types.ATXID,
 	wait time.Duration,
 ) {
-	const help = "Published activation for the current epoch. " +
-		"Node needs to wait till the start of the target epoch in order to be eligible for rewards."
+	const help = "Node published activation for the current epoch. " +
+		"It now needs to wait until the target epoch when it will be eligible for rewards."
 	emitUserEvent(
 		help,
 		false,
@@ -170,9 +189,9 @@ func EmitEligibilities(
 	activeSetSize uint32,
 	eligibilities map[types.LayerID][]types.VotingEligibility,
 ) {
-	const help = "Computed eligibilities for the epoch. " +
-		"Rewards will be received after publishing proposals at specified layers. " +
-		"Total amount of rewards in SMH will be based on other participants in the layer."
+	const help = "Node computed eligibilities for the epoch. " +
+		"Rewards will be received after successfully publishing proposals at specified layers. " +
+		"The rewards actually received will be based on the number of other participants in each layer."
 	emitUserEvent(
 		help,
 		false,
@@ -200,7 +219,7 @@ func castEligibilities(proofs map[types.LayerID][]types.VotingEligibility) []*pb
 }
 
 func EmitProposal(layer types.LayerID, proposal types.ProposalID) {
-	const help = "Published proposal. Rewards will be received, once proposal is included into the block."
+	const help = "Node published proposal. Rewards will be received once proposal is included in the block."
 	emitUserEvent(
 		help,
 		false,
@@ -208,6 +227,19 @@ func EmitProposal(layer types.LayerID, proposal types.ProposalID) {
 			Proposal: &pb.EventProposal{
 				Layer:    layer.Uint32(),
 				Proposal: proposal[:],
+			},
+		},
+	)
+}
+
+func EmitOwnMalfeasanceProof(id types.NodeID, mp *types.MalfeasanceProof) {
+	const help = "Node committed malicious behavior. Identity will be canceled."
+	emitUserEvent(
+		help,
+		false,
+		&pb.Event_Malfeasance{
+			Malfeasance: &pb.EventMalfeasance{
+				Proof: ToMalfeasancePB(id, mp, false),
 			},
 		},
 	)
@@ -226,4 +258,30 @@ func emitUserEvent(help string, failure bool, details pb.IsEventDetails) {
 			log.With().Error("failed to emit event", log.Err(err))
 		}
 	}
+}
+
+func ToMalfeasancePB(smesher types.NodeID, mp *types.MalfeasanceProof, includeProof bool) *pb.MalfeasanceProof {
+	if mp == nil {
+		return &pb.MalfeasanceProof{}
+	}
+	kind := pb.MalfeasanceProof_MALFEASANCE_UNSPECIFIED
+	switch mp.Proof.Type {
+	case types.MultipleATXs:
+		kind = pb.MalfeasanceProof_MALFEASANCE_ATX
+	case types.MultipleBallots:
+		kind = pb.MalfeasanceProof_MALFEASANCE_BALLOT
+	case types.HareEquivocation:
+		kind = pb.MalfeasanceProof_MALFEASANCE_HARE
+	}
+	result := &pb.MalfeasanceProof{
+		SmesherId: &pb.SmesherId{Id: smesher.Bytes()},
+		Layer:     &pb.LayerNumber{Number: mp.Layer.Uint32()},
+		Kind:      kind,
+		DebugInfo: types.MalfeasanceInfo(smesher, mp),
+	}
+	if includeProof {
+		data, _ := codec.Encode(mp)
+		result.Proof = data
+	}
+	return result
 }

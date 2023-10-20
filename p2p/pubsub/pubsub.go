@@ -110,7 +110,7 @@ func New(ctx context.Context, logger log.Log, h host.Host, cfg Config) (*PubSub,
 	}, nil
 }
 
-//go:generate mockgen -package=mocks -destination=./mocks/publisher.go -source=./pubsub.go
+//go:generate mockgen -typed -package=mocks -destination=./mocks/publisher.go -source=./pubsub.go
 
 // Publisher interface for publishing messages.
 type Publisher interface {
@@ -119,8 +119,12 @@ type Publisher interface {
 
 // Subscriber is an interface for subcribing to messages.
 type Subscriber interface {
-	Register(string, GossipHandler)
+	Register(string, GossipHandler, ...ValidatorOpt)
 }
+
+type ValidatorOpt = pubsub.ValidatorOpt
+
+var WithValidatorInline = pubsub.WithValidatorInline
 
 // PublishSubsciber common interface for publisher and subscribing.
 type PublishSubsciber interface {

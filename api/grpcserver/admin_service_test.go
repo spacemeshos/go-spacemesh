@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -11,7 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -19,7 +19,7 @@ import (
 
 const snapshot uint32 = 15
 
-func newatx(tb testing.TB, db *sql.Database) {
+func newAtx(tb testing.TB, db *sql.Database) {
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
@@ -32,8 +32,8 @@ func newatx(tb testing.TB, db *sql.Database) {
 		},
 	}
 	atx.SetID(types.RandomATXID())
-	vrfnonce := types.VRFPostIndex(11)
-	atx.VRFNonce = &vrfnonce
+	vrfNonce := types.VRFPostIndex(11)
+	atx.VRFNonce = &vrfNonce
 	atx.SmesherID = types.BytesToNodeID(types.RandomBytes(20))
 	atx.NodeID = &atx.SmesherID
 	atx.SetEffectiveNumUnits(atx.NumUnits)
@@ -45,7 +45,7 @@ func newatx(tb testing.TB, db *sql.Database) {
 
 func createMesh(tb testing.TB, db *sql.Database) {
 	for i := 0; i < 10; i++ {
-		newatx(tb, db)
+		newAtx(tb, db)
 	}
 	acct := &types.Account{
 		Layer: types.LayerID(0), Address: types.Address{1, 1}, NextNonce: 1, Balance: 1300, TemplateAddress: &types.Address{2}, State: []byte("state10"),
@@ -56,12 +56,13 @@ func createMesh(tb testing.TB, db *sql.Database) {
 func TestAdminService_Checkpoint(t *testing.T) {
 	db := sql.InMemory()
 	createMesh(t, db)
-	svc := NewAdminService(db, t.TempDir(), logtest.New(t))
-	t.Cleanup(launchServer(t, cfg, svc))
+	svc := NewAdminService(db, t.TempDir(), nil)
+	cfg, cleanup := launchServer(t, svc)
+	t.Cleanup(cleanup)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg.PublicListener)
+	conn := dialGrpc(ctx, t, cfg)
 	c := pb.NewAdminServiceClient(conn)
 
 	stream, err := c.CheckpointStream(ctx, &pb.CheckpointStreamRequest{SnapshotLayer: snapshot})
@@ -91,16 +92,36 @@ func TestAdminService_Checkpoint(t *testing.T) {
 
 func TestAdminService_CheckpointError(t *testing.T) {
 	db := sql.InMemory()
-	svc := NewAdminService(db, t.TempDir(), logtest.New(t))
-	t.Cleanup(launchServer(t, cfg, svc))
+	svc := NewAdminService(db, t.TempDir(), nil)
+	cfg, cleanup := launchServer(t, svc)
+	t.Cleanup(cleanup)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg.PublicListener)
+	conn := dialGrpc(ctx, t, cfg)
 	c := pb.NewAdminServiceClient(conn)
 
 	stream, err := c.CheckpointStream(ctx, &pb.CheckpointStreamRequest{SnapshotLayer: snapshot})
 	require.NoError(t, err)
 	_, err = stream.Recv()
 	require.ErrorContains(t, err, sql.ErrNotFound.Error())
+}
+
+func TestAdminService_Recovery(t *testing.T) {
+	db := sql.InMemory()
+	recoveryCalled := atomic.Bool{}
+	svc := NewAdminService(db, t.TempDir(), nil)
+	svc.recover = func() { recoveryCalled.Store(true) }
+
+	cfg, cleanup := launchServer(t, svc)
+	t.Cleanup(cleanup)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	conn := dialGrpc(ctx, t, cfg)
+	c := pb.NewAdminServiceClient(conn)
+
+	_, err := c.Recover(ctx, &pb.RecoverRequest{})
+	require.NoError(t, err)
+	require.True(t, recoveryCalled.Load())
 }

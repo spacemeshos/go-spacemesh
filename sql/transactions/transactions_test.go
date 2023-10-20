@@ -154,6 +154,37 @@ func TestAddToProposal(t *testing.T) {
 	require.False(t, has)
 }
 
+func TestDeleteProposalTxs(t *testing.T) {
+	db := sql.InMemory()
+	proposals := map[types.LayerID][]types.ProposalID{
+		types.LayerID(10): {{1, 1}, {1, 2}},
+		types.LayerID(11): {{2, 1}, {2, 2}},
+	}
+	tids := []types.TransactionID{{1, 2}, {2, 3}}
+	for lid, pids := range proposals {
+		for _, tid := range tids {
+			for _, pid := range pids {
+				require.NoError(t, transactions.AddToProposal(db, tid, lid, pid))
+			}
+		}
+	}
+	require.NoError(t, transactions.DeleteProposalTxsBefore(db, types.LayerID(11)))
+	for _, pid := range proposals[types.LayerID(10)] {
+		for _, tid := range tids {
+			has, err := transactions.HasProposalTX(db, pid, tid)
+			require.NoError(t, err)
+			require.False(t, has)
+		}
+	}
+	for _, pid := range proposals[types.LayerID(11)] {
+		for _, tid := range tids {
+			has, err := transactions.HasProposalTX(db, pid, tid)
+			require.NoError(t, err)
+			require.True(t, has)
+		}
+	}
+}
+
 func TestAddToBlock(t *testing.T) {
 	db := sql.InMemory()
 

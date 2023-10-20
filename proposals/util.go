@@ -1,20 +1,26 @@
 package proposals
 
 import (
-	"fmt"
-
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/proposals/util"
 )
 
 var (
-	CalcEligibleLayer    = util.CalcEligibleLayer
-	GetNumEligibleSlots  = util.GetNumEligibleSlots
-	GetLegacyNumEligible = util.GetLegacyNumEligible
-	// ComputeWeightPerEligibility computes the ballot weight per eligibility w.r.t the active set recorded in its reference ballot.
-	ComputeWeightPerEligibility = util.ComputeWeightPerEligibility
+	CalcEligibleLayer   = util.CalcEligibleLayer
+	GetNumEligibleSlots = util.GetNumEligibleSlots
 )
+
+func MustGetNumEligibleSlots(
+	weight, minWeight, totalWeight uint64,
+	committeeSize, layersPerEpoch uint32,
+) uint32 {
+	slots, err := GetNumEligibleSlots(weight, minWeight, totalWeight, committeeSize, layersPerEpoch)
+	if err != nil {
+		panic(err)
+	}
+	return slots
+}
 
 //go:generate scalegen -types VrfMessage
 
@@ -27,8 +33,13 @@ type VrfMessage struct {
 	Counter uint32
 }
 
-// SerializeVRFMessage serializes a message for generating/verifying a VRF signature.
-func SerializeVRFMessage(beacon types.Beacon, epoch types.EpochID, nonce types.VRFPostIndex, counter uint32) ([]byte, error) {
+// MustSerializeVRFMessage serializes a message for generating/verifying a VRF signature.
+func MustSerializeVRFMessage(
+	beacon types.Beacon,
+	epoch types.EpochID,
+	nonce types.VRFPostIndex,
+	counter uint32,
+) []byte {
 	m := VrfMessage{
 		Type:    types.EligibilityVoting,
 		Beacon:  beacon,
@@ -36,9 +47,5 @@ func SerializeVRFMessage(beacon types.Beacon, epoch types.EpochID, nonce types.V
 		Nonce:   nonce,
 		Counter: counter,
 	}
-	serialized, err := codec.Encode(&m)
-	if err != nil {
-		return nil, fmt.Errorf("serialize vrf message: %w", err)
-	}
-	return serialized, nil
+	return codec.MustEncode(&m)
 }

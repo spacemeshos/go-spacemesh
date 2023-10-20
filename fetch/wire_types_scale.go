@@ -302,6 +302,44 @@ func (t *LayerData) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	return total, nil
 }
 
+func (t *OpinionRequest) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeCompact32(enc, uint32(t.Layer))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeOption(enc, t.Block)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *OpinionRequest) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		field, n, err := scale.DecodeCompact32(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Layer = types.LayerID(field)
+	}
+	{
+		field, n, err := scale.DecodeOption[types.BlockID](dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Block = field
+	}
+	return total, nil
+}
+
 func (t *LayerOpinion) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
 		n, err := scale.EncodeByteArray(enc, t.PrevAggHash[:])
@@ -311,7 +349,7 @@ func (t *LayerOpinion) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeOption(enc, t.Cert)
+		n, err := scale.EncodeOption(enc, t.Certified)
 		if err != nil {
 			return total, err
 		}
@@ -329,12 +367,12 @@ func (t *LayerOpinion) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeOption[types.Certificate](dec)
+		field, n, err := scale.DecodeOption[types.BlockID](dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.Cert = field
+		t.Certified = field
 	}
 	return total, nil
 }

@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -142,31 +142,59 @@ func TestHandleLayerOpinionsReq(t *testing.T) {
 
 			th := createTestHandler(t)
 			lid := types.LayerID(111)
-			certified, aggHash := createOpinions(t, th.cdb, lid, !tc.missingCert)
+			_, aggHash := createOpinions(t, th.cdb, lid, !tc.missingCert)
 			if tc.multipleCerts {
+				bid := types.RandomBlockID()
 				require.NoError(t, certificates.Add(th.cdb, lid, &types.Certificate{
-					BlockID: types.RandomBlockID(),
+					BlockID: bid,
 				}))
+				require.NoError(t, certificates.SetInvalid(th.cdb, lid, bid))
 			}
 
-			lidBytes, err := codec.Encode(&lid)
+			req := OpinionRequest{Layer: lid}
+			reqBytes, err := codec.Encode(&req)
 			require.NoError(t, err)
 
-			out, err := th.handleLayerOpinionsReq(context.Background(), lidBytes)
+			out, err := th.handleLayerOpinionsReq2(context.Background(), reqBytes)
 			require.NoError(t, err)
 
 			var got LayerOpinion
 			err = codec.Decode(out, &got)
 			require.NoError(t, err)
 			require.Equal(t, aggHash, got.PrevAggHash)
-			if tc.missingCert || tc.multipleCerts {
-				require.Nil(t, got.Cert)
+			if tc.missingCert {
+				require.Nil(t, got.Certified)
 			} else {
-				require.NotNil(t, got.Cert)
-				require.Equal(t, certified, got.Cert.BlockID)
+				require.NotNil(t, got.Certified)
 			}
 		})
 	}
+}
+
+func TestHandleCertReq(t *testing.T) {
+	th := createTestHandler(t)
+	lid := types.LayerID(111)
+	bid := types.RandomBlockID()
+	req := &OpinionRequest{
+		Layer: lid,
+		Block: &bid,
+	}
+	reqData, err := codec.Encode(req)
+	require.NoError(t, err)
+
+	resp, err := th.handleLayerOpinionsReq2(context.Background(), reqData)
+	require.ErrorIs(t, err, sql.ErrNotFound)
+	require.Nil(t, resp)
+
+	cert := &types.Certificate{BlockID: bid}
+	require.NoError(t, certificates.Add(th.cdb, lid, cert))
+
+	resp, err = th.handleLayerOpinionsReq2(context.Background(), reqData)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	var got types.Certificate
+	require.NoError(t, codec.Decode(resp, &got))
+	require.Equal(t, *cert, got)
 }
 
 func TestHandleMeshHashReq(t *testing.T) {

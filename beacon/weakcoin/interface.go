@@ -4,12 +4,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-//go:generate mockgen -package=weakcoin -destination=./mocks.go -source=./interface.go
+//go:generate mockgen -typed -package=weakcoin -destination=./mocks.go -source=./interface.go
 
 type vrfSigner interface {
 	Sign(msg []byte) types.VrfSignature
 	NodeID() types.NodeID
-	LittleEndian() bool
 }
 
 type vrfVerifier interface {

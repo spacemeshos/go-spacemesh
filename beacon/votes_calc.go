@@ -1,14 +1,22 @@
 package beacon
 
 import (
-	"fmt"
+	"encoding/hex"
 	"math/big"
+
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 func calcVotes(logger log.Log, theta *big.Float, s *state) (allVotes, proposalList) {
-	logger.With().Debug("calculating votes", log.String("vote_margins", fmt.Sprint(s.votesMargin)))
+	logger.With().Debug("calculating votes", log.Object("vote_margins", zapcore.ObjectMarshalerFunc(
+		func(enc zapcore.ObjectEncoder) error {
+			for vote, margin := range s.votesMargin {
+				enc.AddString(hex.EncodeToString(vote[:]), margin.String())
+			}
+			return nil
+		})))
 
 	ownCurrentRoundVotes := allVotes{
 		support: make(proposalSet),
@@ -30,8 +38,9 @@ func calcVotes(logger log.Log, theta *big.Float, s *state) (allVotes, proposalLi
 		}
 	}
 	logger.With().Debug("calculated votes for one round",
-		log.String("for_votes", fmt.Sprint(ownCurrentRoundVotes.support)),
-		log.String("against_votes", fmt.Sprint(ownCurrentRoundVotes.against)))
+		log.Array("for_votes", ownCurrentRoundVotes.support),
+		log.Array("against_votes", ownCurrentRoundVotes.against),
+	)
 
 	return ownCurrentRoundVotes, undecided
 }

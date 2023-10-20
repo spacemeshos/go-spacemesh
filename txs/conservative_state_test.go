@@ -2,18 +2,19 @@ package txs
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
+	"maps"
 	"math"
-	"math/rand"
+	mrand "math/rand"
 	"sort"
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/maps"
+	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
@@ -550,7 +551,7 @@ func TestConsistentHandling(t *testing.T) {
 		createConservativeState(t),
 	}
 
-	rng := rand.New(rand.NewSource(101))
+	rng := mrand.New(mrand.NewSource(101))
 	signers := make([]*signing.EdSigner, 30)
 	nonces := make([]uint64, len(signers))
 	for i := range signers {

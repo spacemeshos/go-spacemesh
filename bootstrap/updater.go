@@ -212,7 +212,7 @@ func (u *Updater) addUpdate(epoch types.EpochID, suffix string) {
 	switch suffix {
 	case SuffixActiveSet, SuffixBeacon, SuffixBoostrap:
 	default:
-		u.logger.With().Fatal("unexpected suffix for fallback files", log.String("suffix", suffix))
+		return
 	}
 	if _, ok := u.updates[epoch]; !ok {
 		u.updates[epoch] = map[string]struct{}{}

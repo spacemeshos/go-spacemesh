@@ -40,7 +40,6 @@ for them if needed.
         "min-peers": 30,
         "low-peers": 60,
         "high-peers": 100,
-        "p2p-disable-legacy-discovery": true,
         "direct": [
             "/ip4/0.0.0.0/tcp/6000/p2p/12D3KooWRkBh6QayKLb1pDRJGMHE94Lix4ZBVh2BJJeX6mghk8VH"
         ],
@@ -51,6 +50,10 @@ for them if needed.
     }
 }
 ```
+
+> [!NOTE]  
+> Please note that 0.0.0.0 in the above config will work ONLY if all nodes are on the same host. If you're using multiple hosts make sure that you're using proper IPs on both sides.
+> The `bootnodes` section can contain any bootnodes (or all) depending on your preference.
 
 ### Configuration for private node
 
@@ -64,7 +67,6 @@ low-peers and high-peers should not be lower than min-peers.
         "min-peers": 1,
         "low-peers": 10,
         "high-peers": 20,
-        "p2p-disable-legacy-discovery": true,
         "disable-dht": true,
         "bootnodes": [],
         "direct": [
@@ -73,6 +75,9 @@ low-peers and high-peers should not be lower than min-peers.
     }
 }
 ```
+
+> [!NOTE]  
+> Please note that 0.0.0.0 in the above config will work ONLY if all nodes are on the same host. If you're using multiple hosts make sure that you're using proper IPs on both sides.
 
 #### Expected result
 

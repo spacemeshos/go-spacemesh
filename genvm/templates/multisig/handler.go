@@ -39,7 +39,7 @@ type handler struct {
 func (h *handler) Parse(host core.Host, method uint8, decoder *scale.Decoder) (output core.ParseOutput, err error) {
 	var p core.Payload
 	if _, err = p.DecodeScale(decoder); err != nil {
-		err = fmt.Errorf("%w: %s", core.ErrMalformed, err.Error())
+		err = fmt.Errorf("%w: %w", core.ErrMalformed, err)
 		return
 	}
 	output.GasPrice = p.GasPrice
@@ -67,7 +67,7 @@ func (h *handler) Load(state []byte) (core.Template, error) {
 	decoder := scale.NewDecoder(bytes.NewReader(state))
 	var ms MultiSig
 	if _, err := ms.DecodeScale(decoder); err != nil {
-		return nil, fmt.Errorf("%w: malformed state %s", core.ErrInternal, err.Error())
+		return nil, fmt.Errorf("%w: malformed state %w", core.ErrInternal, err)
 	}
 	return &ms, nil
 }

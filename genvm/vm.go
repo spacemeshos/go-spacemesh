@@ -225,7 +225,7 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []ty
 
 	for _, reward := range rewardsResult {
 		if err := rewards.Add(tx, &reward); err != nil {
-			return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+			return nil, nil, fmt.Errorf("%w: %w", core.ErrInternal, err)
 		}
 	}
 
@@ -241,7 +241,7 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []ty
 		return true
 	})
 	if err != nil {
-		return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+		return nil, nil, fmt.Errorf("%w: %w", core.ErrInternal, err)
 	}
 	writesPerBlock.Observe(float64(total))
 
@@ -251,7 +251,7 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []ty
 		return nil, nil, err
 	}
 	if err := tx.Commit(); err != nil {
-		return nil, nil, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+		return nil, nil, fmt.Errorf("%w: %w", core.ErrInternal, err)
 	}
 	ss.IterateChanged(func(account *core.Account) bool {
 		events.ReportAccountUpdate(account.Address)
@@ -410,7 +410,7 @@ func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transa
 
 		err = ctx.Apply(ss)
 		if err != nil {
-			return nil, nil, 0, fmt.Errorf("%w: %s", core.ErrInternal, err.Error())
+			return nil, nil, 0, fmt.Errorf("%w: %w", core.ErrInternal, err)
 		}
 		fees += ctx.Fee()
 		limit -= ctx.Consumed()
@@ -467,7 +467,7 @@ func (r *Request) Verify() bool {
 func parse(logger log.Log, lid types.LayerID, reg *registry.Registry, loader core.AccountLoader, cfg Config, raw []byte, decoder *scale.Decoder) (*core.Header, *core.Context, scale.Encodable, error) {
 	version, _, err := scale.DecodeCompact8(decoder)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("%w: failed to decode version %s", core.ErrMalformed, err.Error())
+		return nil, nil, nil, fmt.Errorf("%w: failed to decode version %w", core.ErrMalformed, err)
 	}
 	if version != 0 {
 		return nil, nil, nil, fmt.Errorf("%w: unsupported version %d", core.ErrMalformed, version)
@@ -475,15 +475,15 @@ func parse(logger log.Log, lid types.LayerID, reg *registry.Registry, loader cor
 
 	var principal core.Address
 	if _, err := principal.DecodeScale(decoder); err != nil {
-		return nil, nil, nil, fmt.Errorf("%w failed to decode principal: %s", core.ErrMalformed, err)
+		return nil, nil, nil, fmt.Errorf("%w failed to decode principal: %w", core.ErrMalformed, err)
 	}
 	method, _, err := scale.DecodeCompact8(decoder)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("%w: failed to decode method selector %s", core.ErrMalformed, err.Error())
+		return nil, nil, nil, fmt.Errorf("%w: failed to decode method selector %w", core.ErrMalformed, err)
 	}
 	account, err := loader.Get(principal)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("%w: failed load state for principal %s - %s", core.ErrInternal, principal, err)
+		return nil, nil, nil, fmt.Errorf("%w: failed load state for principal %s - %w", core.ErrInternal, principal, err)
 	}
 	logger.With().Debug("loaded account state", log.Inline(&account))
 
@@ -514,7 +514,7 @@ func parse(logger log.Log, lid types.LayerID, reg *registry.Registry, loader cor
 		// the transaction is either spawn or self-spawn
 		templateAddress = &core.Address{}
 		if _, err := templateAddress.DecodeScale(decoder); err != nil {
-			return nil, nil, nil, fmt.Errorf("%w failed to decode template address %s", core.ErrMalformed, err)
+			return nil, nil, nil, fmt.Errorf("%w failed to decode template address %w", core.ErrMalformed, err)
 		}
 		handler = reg.Get(*templateAddress)
 		if handler == nil {
@@ -542,7 +542,7 @@ func parse(logger log.Log, lid types.LayerID, reg *registry.Registry, loader cor
 		return nil, nil, nil, fmt.Errorf("%w: unknown method %s %d", core.ErrMalformed, *templateAddress, method)
 	}
 	if _, err := args.DecodeScale(decoder); err != nil {
-		return nil, nil, nil, fmt.Errorf("%w failed to decode method arguments %s", core.ErrMalformed, err)
+		return nil, nil, nil, fmt.Errorf("%w failed to decode method arguments %w", core.ErrMalformed, err)
 	}
 	if method == core.MethodSpawn {
 		if core.ComputePrincipal(*templateAddress, args) == principal {

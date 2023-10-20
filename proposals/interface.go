@@ -8,18 +8,20 @@ import (
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
-//go:generate mockgen -package=proposals -destination=./mocks.go -source=./interface.go
+//go:generate mockgen -typed -package=proposals -destination=./mocks.go -source=./interface.go
 
 type meshProvider interface {
+	ProcessedLayer() types.LayerID
 	AddBallot(context.Context, *types.Ballot) (*types.MalfeasanceProof, error)
 	AddTXsFromProposal(context.Context, types.LayerID, types.ProposalID, []types.TransactionID) error
 }
 
 type eligibilityValidator interface {
-	CheckEligibility(context.Context, *types.Ballot) (bool, error)
+	CheckEligibility(context.Context, *types.Ballot, []types.ATXID) (bool, error)
 }
 
-type ballotDecoder interface {
+type tortoiseProvider interface {
+	GetBallot(types.BallotID) *tortoise.BallotData
 	GetMissingActiveSet(types.EpochID, []types.ATXID) []types.ATXID
 	DecodeBallot(*types.BallotTortoiseData) (*tortoise.DecodedBallot, error)
 	StoreBallot(*tortoise.DecodedBallot) error

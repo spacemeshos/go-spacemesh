@@ -45,7 +45,7 @@ func checkpointDB(ctx context.Context, db *sql.Database, snapshot types.LayerID,
 
 	tx, err := db.Tx(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("create db tx: %s", err)
+		return nil, fmt.Errorf("create db tx: %w", err)
 	}
 	defer tx.Release()
 

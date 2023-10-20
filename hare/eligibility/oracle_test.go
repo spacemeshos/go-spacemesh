@@ -11,11 +11,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/fixed"
 	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -23,10 +23,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
-	"github.com/spacemeshos/go-spacemesh/sql/certificates"
+	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
@@ -64,7 +65,7 @@ func defaultOracle(t testing.TB) *testOracle {
 	return to
 }
 
-func createBallots(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, activeSet []types.ATXID, miners []types.NodeID) []*types.Ballot {
+func createBallots(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, activeSet types.ATXIDList, miners []types.NodeID) []*types.Ballot {
 	tb.Helper()
 	numBallots := ballotsPerLayer
 	if len(activeSet) < numBallots {
@@ -76,12 +77,15 @@ func createBallots(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, ac
 		b.Layer = lid
 		b.AtxID = activeSet[i]
 		b.RefBallot = types.EmptyBallotID
-		b.EpochData = &types.EpochData{}
-		b.ActiveSet = activeSet
+		b.EpochData = &types.EpochData{ActiveSetHash: activeSet.Hash()}
 		b.Signature = types.RandomEdSignature()
 		b.SmesherID = miners[i]
 		require.NoError(tb, b.Initialize())
 		require.NoError(tb, ballots.Add(cdb, b))
+		activesets.Add(cdb, b.EpochData.ActiveSetHash, &types.EpochActiveSet{
+			Epoch: lid.GetEpoch(),
+			Set:   activeSet,
+		})
 		result = append(result, b)
 	}
 	return result
@@ -99,7 +103,7 @@ func createBlock(tb testing.TB, cdb *datastore.CachedDB, blts []*types.Ballot) {
 	}
 	block.Initialize()
 	require.NoError(tb, blocks.Add(cdb, block))
-	require.NoError(tb, certificates.Add(cdb, blts[0].Layer, &types.Certificate{BlockID: block.ID()}))
+	require.NoError(tb, layers.SetApplied(cdb, block.LayerIndex, block.ID()))
 }
 
 func createLayerData(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, numMiners int) []types.NodeID {
@@ -329,8 +333,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	require.NoError(t, err)
 
 	o := defaultOracle(t)
-	o.vrfSigner, err = signer.VRFSigner()
-	require.NoError(t, err)
+	o.vrfSigner = signer.VRFSigner()
 	nid := signer.NodeID()
 
 	lid := types.EpochID(5).FirstLayer()
@@ -391,8 +394,7 @@ func Test_Proof_BeaconError(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	o.vrfSigner, err = signer.VRFSigner()
-	require.NoError(t, err)
+	o.vrfSigner = signer.VRFSigner()
 
 	layer := types.LayerID(2)
 	errUnknown := errors.New("unknown")
@@ -409,8 +411,7 @@ func Test_Proof(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	vrfSigner, err := signer.VRFSigner()
-	require.NoError(t, err)
+	vrfSigner := signer.VRFSigner()
 
 	o.vrfSigner = vrfSigner
 	sig, err := o.Proof(context.Background(), layer, 3)
@@ -606,7 +607,7 @@ func TestActives_ConcurrentCalls(t *testing.T) {
 	mc := NewMockactiveSetCache(gomock.NewController(t))
 	firstCall := true
 	mc.EXPECT().Get(layer.GetEpoch() - 1).DoAndReturn(
-		func(key any) (any, bool) {
+		func(types.EpochID) (*cachedActiveSet, bool) {
 			if firstCall {
 				firstCall = false
 				return nil, false
@@ -659,11 +660,10 @@ func TestActiveSetDD(t *testing.T) {
 	t.Parallel()
 
 	target := types.EpochID(4)
-	bgen := func(id types.BallotID, lid types.LayerID, node types.NodeID, beacon types.Beacon, atxs []types.ATXID, option ...func(*types.Ballot)) types.Ballot {
+	bgen := func(id types.BallotID, lid types.LayerID, node types.NodeID, beacon types.Beacon, atxs types.ATXIDList, option ...func(*types.Ballot)) types.Ballot {
 		ballot := types.Ballot{}
 		ballot.Layer = lid
-		ballot.EpochData = &types.EpochData{Beacon: beacon}
-		ballot.ActiveSet = atxs
+		ballot.EpochData = &types.EpochData{Beacon: beacon, ActiveSetHash: atxs.Hash()}
 		ballot.SmesherID = node
 		ballot.SetID(id)
 		for _, opt := range option {
@@ -693,12 +693,13 @@ func TestActiveSetDD(t *testing.T) {
 		beacon  types.Beacon // local beacon
 		ballots []types.Ballot
 		atxs    []*types.VerifiedActivationTx
+		actives []types.ATXIDList
 		expect  any
 	}{
 		{
-			"merged activesets",
-			types.Beacon{1},
-			[]types.Ballot{
+			desc:   "merged activesets",
+			beacon: types.Beacon{1},
+			ballots: []types.Ballot{
 				bgen(
 					types.BallotID{1},
 					target.FirstLayer(),
@@ -714,17 +715,18 @@ func TestActiveSetDD(t *testing.T) {
 					[]types.ATXID{{2}, {3}},
 				),
 			},
-			[]*types.VerifiedActivationTx{
+			atxs: []*types.VerifiedActivationTx{
 				agen(types.ATXID{1}, types.NodeID{1}),
 				agen(types.ATXID{2}, types.NodeID{2}),
 				agen(types.ATXID{3}, types.NodeID{3}),
 			},
-			[]types.ATXID{{1}, {2}, {3}},
+			actives: []types.ATXIDList{{{1}, {2}}, {{2}, {3}}},
+			expect:  []types.ATXID{{1}, {2}, {3}},
 		},
 		{
-			"filter by beacon",
-			types.Beacon{1},
-			[]types.Ballot{
+			desc:   "filter by beacon",
+			beacon: types.Beacon{1},
+			ballots: []types.Ballot{
 				bgen(
 					types.BallotID{1},
 					target.FirstLayer(),
@@ -740,16 +742,17 @@ func TestActiveSetDD(t *testing.T) {
 					[]types.ATXID{{2}, {3}},
 				),
 			},
-			[]*types.VerifiedActivationTx{
+			atxs: []*types.VerifiedActivationTx{
 				agen(types.ATXID{1}, types.NodeID{1}),
 				agen(types.ATXID{2}, types.NodeID{2}),
 			},
-			[]types.ATXID{{1}, {2}},
+			actives: []types.ATXIDList{{{1}, {2}}, {{2}, {3}}},
+			expect:  []types.ATXID{{1}, {2}},
 		},
 		{
-			"no local beacon",
-			types.EmptyBeacon,
-			[]types.Ballot{
+			desc:   "no local beacon",
+			beacon: types.EmptyBeacon,
+			ballots: []types.Ballot{
 				bgen(
 					types.BallotID{1},
 					target.FirstLayer(),
@@ -765,13 +768,14 @@ func TestActiveSetDD(t *testing.T) {
 					[]types.ATXID{{2}, {3}},
 				),
 			},
-			[]*types.VerifiedActivationTx{},
-			"not found",
+			atxs:    []*types.VerifiedActivationTx{},
+			actives: []types.ATXIDList{{{1}, {2}}, {{2}, {3}}},
+			expect:  "not found",
 		},
 		{
-			"unknown atxs",
-			types.Beacon{1},
-			[]types.Ballot{
+			desc:   "unknown atxs",
+			beacon: types.Beacon{1},
+			ballots: []types.Ballot{
 				bgen(
 					types.BallotID{1},
 					target.FirstLayer(),
@@ -787,13 +791,14 @@ func TestActiveSetDD(t *testing.T) {
 					[]types.ATXID{{2}, {3}},
 				),
 			},
-			[]*types.VerifiedActivationTx{},
-			"get ATX",
+			atxs:    []*types.VerifiedActivationTx{},
+			actives: []types.ATXIDList{{{1}, {2}}, {{2}, {3}}},
+			expect:  "get ATX",
 		},
 		{
-			"ballot no epoch data",
-			types.Beacon{1},
-			[]types.Ballot{
+			desc:   "ballot no epoch data",
+			beacon: types.Beacon{1},
+			ballots: []types.Ballot{
 				bgen(
 					types.BallotID{1},
 					target.FirstLayer(),
@@ -812,16 +817,17 @@ func TestActiveSetDD(t *testing.T) {
 					[]types.ATXID{{2}, {3}},
 				),
 			},
-			[]*types.VerifiedActivationTx{
+			atxs: []*types.VerifiedActivationTx{
 				agen(types.ATXID{2}, types.NodeID{2}),
 				agen(types.ATXID{3}, types.NodeID{3}),
 			},
-			[]types.ATXID{{2}, {3}},
+			actives: []types.ATXIDList{{{2}, {3}}},
+			expect:  []types.ATXID{{2}, {3}},
 		},
 		{
-			"wrong target epoch",
-			types.Beacon{1},
-			[]types.Ballot{
+			desc:   "wrong target epoch",
+			beacon: types.Beacon{1},
+			ballots: []types.Ballot{
 				bgen(
 					types.BallotID{1},
 					target.FirstLayer(),
@@ -830,18 +836,22 @@ func TestActiveSetDD(t *testing.T) {
 					[]types.ATXID{{1}},
 				),
 			},
-			[]*types.VerifiedActivationTx{
+			atxs: []*types.VerifiedActivationTx{
 				agen(types.ATXID{1}, types.NodeID{1}, func(verified *types.VerifiedActivationTx) {
 					verified.PublishEpoch = target
 				}),
 			},
-			"no epoch atx found",
+			actives: []types.ATXIDList{{{1}}},
+			expect:  "no epoch atx found",
 		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			t.Parallel()
 			oracle := defaultOracle(t)
+			for _, actives := range tc.actives {
+				require.NoError(t, activesets.Add(oracle.cdb, actives.Hash(), &types.EpochActiveSet{Set: actives}))
+			}
 			for _, ballot := range tc.ballots {
 				require.NoError(t, ballots.Add(oracle.cdb, &ballot))
 			}
@@ -867,6 +877,35 @@ func TestActiveSetDD(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestResetCache(t *testing.T) {
+	oracle := defaultOracle(t)
+	ctrl := gomock.NewController(t)
+
+	prev := oracle.activesCache
+	prev.Add(1, nil)
+
+	oracle.resetCacheOnSynced(context.Background())
+	require.Equal(t, prev, oracle.activesCache)
+
+	sync := mocks.NewMockSyncStateProvider(ctrl)
+	oracle.SetSync(sync)
+
+	sync.EXPECT().IsSynced(gomock.Any()).Return(false)
+	oracle.resetCacheOnSynced(context.Background())
+	require.Equal(t, prev, oracle.activesCache)
+
+	sync.EXPECT().IsSynced(gomock.Any()).Return(true)
+	oracle.resetCacheOnSynced(context.Background())
+	require.NotEqual(t, prev, oracle.activesCache)
+
+	prev = oracle.activesCache
+	prev.Add(1, nil)
+
+	sync.EXPECT().IsSynced(gomock.Any()).Return(true)
+	oracle.resetCacheOnSynced(context.Background())
+	require.Equal(t, prev, oracle.activesCache)
 }
 
 func FuzzVrfMessageConsistency(f *testing.F) {

@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/post/shared"
 	"go.uber.org/atomic"
 	"golang.org/x/sync/errgroup"
@@ -35,6 +34,7 @@ type PoetConfig struct {
 	PhaseShift        time.Duration `mapstructure:"phase-shift"`
 	CycleGap          time.Duration `mapstructure:"cycle-gap"`
 	GracePeriod       time.Duration `mapstructure:"grace-period"`
+	RequestTimeout    time.Duration `mapstructure:"poet-request-timeout"`
 	RequestRetryDelay time.Duration `mapstructure:"retry-delay"`
 	MaxRequestRetries int           `mapstructure:"retry-max"`
 }
@@ -46,20 +46,29 @@ func DefaultPoetConfig() PoetConfig {
 	}
 }
 
-const defaultPoetRetryInterval = 5 * time.Second
+const (
+	defaultPoetRetryInterval = 5 * time.Second
+
+	// Jitter added to the wait time before building a nipost challenge.
+	// It is expressed as % of poet grace period which translates to:
+	//  mainnet (grace period 1h) -> 36s
+	//  systest (grace period 10s) -> 0.1s
+	maxNipostChallengeBuildJitter = 1.0
+)
 
 // Config defines configuration for Builder.
 type Config struct {
-	CoinbaseAccount types.Address
-	GoldenATXID     types.ATXID
-	LayersPerEpoch  uint32
+	CoinbaseAccount  types.Address
+	GoldenATXID      types.ATXID
+	LayersPerEpoch   uint32
+	RegossipInterval time.Duration
 }
 
 // Builder struct is the struct that orchestrates the creation of activation transactions
 // it is responsible for initializing post, receiving poet proof and orchestrating nipst. after which it will
 // calculate total weight and providing relevant view as proof.
 type Builder struct {
-	pendingPoetClients atomic.Pointer[[]PoetProvingServiceClient]
+	pendingPoetClients atomic.Pointer[[]poetClient]
 	started            *atomic.Bool
 
 	eg errgroup.Group
@@ -70,9 +79,10 @@ type Builder struct {
 	coinbaseAccount   types.Address
 	goldenATXID       types.ATXID
 	layersPerEpoch    uint32
+	regossipInterval  time.Duration
 	cdb               *datastore.CachedDB
-	atxHandler        atxHandler
 	publisher         pubsub.Publisher
+	postService       postService
 	nipostBuilder     nipostBuilder
 	postSetupProvider postSetupProvider
 	initialPost       *types.Post
@@ -105,7 +115,7 @@ func WithPoetRetryInterval(interval time.Duration) BuilderOption {
 }
 
 // PoETClientInitializer interfaces for creating PoetProvingServiceClient.
-type PoETClientInitializer func(string, PoetConfig) (PoetProvingServiceClient, error)
+type PoETClientInitializer func(string, PoetConfig) (poetClient, error)
 
 // WithPoETClientInitializer modifies initialization logic for PoET client. Used during client update.
 func WithPoETClientInitializer(initializer PoETClientInitializer) BuilderOption {
@@ -140,8 +150,8 @@ func NewBuilder(
 	nodeID types.NodeID,
 	signer *signing.EdSigner,
 	cdb *datastore.CachedDB,
-	hdlr atxHandler,
 	publisher pubsub.Publisher,
+	postService postService,
 	nipostBuilder nipostBuilder,
 	postSetupProvider postSetupProvider,
 	layerClock layerClock,
@@ -156,9 +166,10 @@ func NewBuilder(
 		coinbaseAccount:       conf.CoinbaseAccount,
 		goldenATXID:           conf.GoldenATXID,
 		layersPerEpoch:        conf.LayersPerEpoch,
+		regossipInterval:      conf.RegossipInterval,
 		cdb:                   cdb,
-		atxHandler:            hdlr,
 		publisher:             publisher,
+		postService:           postService,
 		nipostBuilder:         nipostBuilder,
 		postSetupProvider:     postSetupProvider,
 		layerClock:            layerClock,
@@ -172,6 +183,15 @@ func NewBuilder(
 		opt(b)
 	}
 	return b
+}
+
+func (b *Builder) proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error) {
+	client, err := b.postService.Client(b.nodeID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return client.Proof(ctx, challenge)
 }
 
 // Smeshing returns true iff atx builder is smeshing.
@@ -226,7 +246,22 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 		b.run(ctx)
 		return nil
 	})
-
+	if b.regossipInterval != 0 {
+		b.eg.Go(func() error {
+			ticker := time.NewTicker(b.regossipInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-ticker.C:
+					if err := b.Regossip(ctx); err != nil {
+						b.log.With().Warning("failed to regossip", log.Context(ctx), log.Err(err))
+					}
+				}
+			}
+		})
+	}
 	return nil
 }
 
@@ -309,7 +344,7 @@ func (b *Builder) generateInitialPost(ctx context.Context) error {
 	startTime := time.Now()
 	var err error
 	events.EmitPostStart(shared.ZeroChallenge)
-	post, metadata, err := b.postSetupProvider.GenerateProof(ctx, shared.ZeroChallenge, proving.WithPowCreator(b.nodeID.Bytes()))
+	post, metadata, err := b.proof(ctx, shared.ZeroChallenge)
 	if err != nil {
 		events.EmitPostFailure()
 		return fmt.Errorf("post execution: %w", err)
@@ -334,7 +369,14 @@ func (b *Builder) verifyInitialPost(ctx context.Context, post *types.Post, metad
 	if err != nil {
 		b.log.With().Panic("failed to fetch commitment ATX ID.", log.Err(err))
 	}
-	err = b.validator.Post(ctx, types.EpochID(0), b.nodeID, commitmentAtxId, post, metadata, b.postSetupProvider.LastOpts().NumUnits)
+	err = b.validator.Post(
+		ctx,
+		b.nodeID,
+		commitmentAtxId,
+		post,
+		metadata,
+		b.postSetupProvider.LastOpts().NumUnits,
+	)
 	switch {
 	case errors.Is(err, context.Canceled):
 		// If the context was canceled, we don't want to emit or log errors just propagate the cancellation signal.
@@ -349,7 +391,7 @@ func (b *Builder) verifyInitialPost(ctx context.Context, post *types.Post, metad
 	}
 }
 
-func (b *Builder) receivePendingPoetClients() *[]PoetProvingServiceClient {
+func (b *Builder) receivePendingPoetClients() *[]poetClient {
 	return b.pendingPoetClients.Swap(nil)
 }
 
@@ -428,24 +470,21 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 	until := time.Until(b.poetRoundStart(current))
 	if until <= 0 {
 		metrics.PublishLateWindowLatency.Observe(-until.Seconds())
-		return nil, fmt.Errorf("%w: builder doesn't have time to submit in epoch %d. poet round already started %v ago",
-			ErrATXChallengeExpired, current, -until)
+		return nil, fmt.Errorf("%w: builder cannot to submit in epoch %d. poet round already started %v ago", ErrATXChallengeExpired, current, -until)
 	}
 	metrics.PublishOntimeWindowLatency.Observe(until.Seconds())
-	if until > b.poetCfg.GracePeriod {
-		wait := until - b.poetCfg.GracePeriod
+	wait := buildNipostChallengeStartDeadline(b.poetRoundStart(current), b.poetCfg.GracePeriod)
+	if time.Until(wait) > 0 {
 		b.log.WithContext(ctx).With().Debug("waiting for fresh atxs",
 			log.Duration("till poet round", until),
 			log.Uint32("current epoch", current.Uint32()),
-			log.Duration("wait", wait),
+			log.Duration("wait", time.Until(wait)),
 		)
-		if wait > 0 {
-			events.EmitPoetWaitRound(current, current+1, wait)
-		}
+		events.EmitPoetWaitRound(current, current+1, time.Until(wait))
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <-time.After(wait):
+		case <-time.After(time.Until(wait)):
 		}
 	}
 
@@ -487,7 +526,7 @@ func (b *Builder) UpdatePoETServers(ctx context.Context, endpoints []string) err
 			return nil
 		})))
 
-	clients := make([]PoetProvingServiceClient, 0, len(endpoints))
+	clients := make([]poetClient, 0, len(endpoints))
 	for _, endpoint := range endpoints {
 		client, err := b.poetClientInitializer(endpoint, b.poetCfg)
 		if err != nil {
@@ -529,9 +568,8 @@ func (b *Builder) loadChallenge() (*types.NIPostChallenge, error) {
 	if err != nil {
 		return nil, err
 	}
-	if nipost.TargetEpoch() < b.currentEpoch() {
+	if nipost.PublishEpoch < b.currentEpoch() {
 		b.log.With().Info("atx nipost challenge is stale - discarding it",
-			log.Stringer("target_epoch", nipost.TargetEpoch()),
 			log.Stringer("publish_epoch", nipost.PublishEpoch),
 			log.Stringer("current_epoch", b.currentEpoch()),
 		)
@@ -569,6 +607,8 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 
 	if b.pendingATX == nil {
 		var err error
+		ctx, cancel := context.WithDeadline(ctx, b.layerClock.LayerToTime((challenge.TargetEpoch()).FirstLayer()))
+		defer cancel()
 		b.pendingATX, err = b.createAtx(ctx, challenge)
 		if err != nil {
 			return fmt.Errorf("create ATX: %w", err)
@@ -576,13 +616,10 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	}
 
 	atx := b.pendingATX
-	atxReceived := b.atxHandler.AwaitAtx(atx.ID())
-	defer b.atxHandler.UnsubscribeAtx(atx.ID())
 	size, err := b.broadcast(ctx, atx)
 	if err != nil {
 		return fmt.Errorf("broadcast: %w", err)
 	}
-
 	logger.Event().Info("atx published", log.Inline(atx), log.Int("size", size))
 
 	events.EmitAtxPublished(
@@ -591,19 +628,8 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 		time.Until(b.layerClock.LayerToTime(atx.TargetEpoch().FirstLayer())),
 	)
 
-	select {
-	case <-atxReceived:
-		logger.With().Info("received atx in db", atx.ID())
-	case <-b.layerClock.AwaitLayer((atx.TargetEpoch() + 1).FirstLayer()):
-		if err = b.discardChallenge(); err != nil {
-			return fmt.Errorf("%w: target epoch has passed", err)
-		}
-		return fmt.Errorf("%w: target epoch has passed", ErrATXChallengeExpired)
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-	if err = b.discardChallenge(); err != nil {
-		return fmt.Errorf("%w: after published atx", err)
+	if err := b.discardChallenge(); err != nil {
+		return fmt.Errorf("discarding challenge after published ATX: %w", err)
 	}
 	return nil
 }
@@ -614,16 +640,11 @@ func (b *Builder) poetRoundStart(epoch types.EpochID) time.Time {
 
 func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChallenge) (*types.ActivationTx, error) {
 	pubEpoch := challenge.PublishEpoch
-	nextPoetRoundStart := b.poetRoundStart(pubEpoch)
 
-	// NiPoST must be ready before start of the next poet round.
-	buildingNipostCtx, cancel := context.WithDeadline(ctx, nextPoetRoundStart)
-	defer cancel()
-	nipost, postDuration, err := b.nipostBuilder.BuildNIPost(buildingNipostCtx, challenge)
+	nipost, err := b.nipostBuilder.BuildNIPost(ctx, challenge)
 	if err != nil {
 		return nil, fmt.Errorf("build NIPost: %w", err)
 	}
-	metrics.PostDuration.Set(float64(postDuration.Nanoseconds()))
 
 	b.log.With().Info("awaiting atx publication epoch",
 		log.Stringer("pub_epoch", pubEpoch),
@@ -637,7 +658,7 @@ func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChalleng
 	}
 	b.log.Debug("publication epoch has arrived!")
 
-	if challenge.TargetEpoch() < b.currentEpoch() {
+	if challenge.PublishEpoch < b.currentEpoch() {
 		if err = b.discardChallenge(); err != nil {
 			return nil, fmt.Errorf("%w: atx publish epoch has passed during nipost construction", err)
 		}
@@ -715,9 +736,36 @@ func (b *Builder) GetPositioningAtx() (types.ATXID, error) {
 	return id, nil
 }
 
+func (b *Builder) Regossip(ctx context.Context) error {
+	epoch := b.layerClock.CurrentLayer().GetEpoch()
+	atx, err := atxs.GetIDByEpochAndNodeID(b.cdb, epoch, b.signer.NodeID())
+	if errors.Is(err, sql.ErrNotFound) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	blob, err := atxs.GetBlob(b.cdb, atx[:])
+	if err != nil {
+		return fmt.Errorf("get blob %s: %w", atx.ShortString(), err)
+	}
+	if len(blob) == 0 {
+		return nil // checkpoint
+	}
+	if err := b.publisher.Publish(ctx, pubsub.AtxProtocol, blob); err != nil {
+		return fmt.Errorf("republish %s: %w", atx.ShortString(), err)
+	}
+	b.log.With().Debug("regossipped atx", log.Context(ctx), log.ShortStringer("atx", atx))
+	return nil
+}
+
 // SignAndFinalizeAtx signs the atx with specified signer and calculates the ID of the ATX.
 func SignAndFinalizeAtx(signer *signing.EdSigner, atx *types.ActivationTx) error {
 	atx.Signature = signer.Sign(signing.ATX, atx.SignedBytes())
 	atx.SmesherID = signer.NodeID()
 	return atx.Initialize()
+}
+
+func buildNipostChallengeStartDeadline(roundStart time.Time, gracePeriod time.Duration) time.Time {
+	jitter := randomDurationInRange(time.Duration(0), gracePeriod*maxNipostChallengeBuildJitter/100.0)
+	return roundStart.Add(jitter).Add(-gracePeriod)
 }

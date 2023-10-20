@@ -2,35 +2,47 @@ package grpcserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
-	"github.com/golang/protobuf/ptypes/empty"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"go.uber.org/zap"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 type activationService struct {
-	logger      log.Logger
 	goldenAtx   types.ATXID
 	atxProvider atxProvider
 }
 
-func NewActivationService(atxProvider atxProvider, goldenAtx types.ATXID, lg log.Logger) *activationService {
+func NewActivationService(atxProvider atxProvider, goldenAtx types.ATXID) *activationService {
 	return &activationService{
-		logger:      lg,
 		goldenAtx:   goldenAtx,
 		atxProvider: atxProvider,
 	}
 }
 
 // RegisterService implements ServiceAPI.
-func (s *activationService) RegisterService(server *Server) {
-	s.logger.Info("registering GRPC Activation Service")
-	pb.RegisterActivationServiceServer(server.GrpcServer, s)
+func (s *activationService) RegisterService(server *grpc.Server) {
+	pb.RegisterActivationServiceServer(server, s)
+}
+
+func (s *activationService) RegisterHandlerService(mux *runtime.ServeMux) error {
+	return pb.RegisterActivationServiceHandlerServer(context.Background(), mux, s)
+}
+
+// String returns the service name.
+func (s *activationService) String() string {
+	return "ActivationService"
 }
 
 // Get implements v1.ActivationServiceServer.
@@ -42,15 +54,32 @@ func (s *activationService) Get(ctx context.Context, request *pb.GetRequest) (*p
 	atxId := types.ATXID(types.BytesToHash(request.Id))
 	atx, err := s.atxProvider.GetFullAtx(atxId)
 	if err != nil || atx == nil {
-		s.logger.With().Debug("failed to get the ATX", log.Err(err), log.Stringer("id", atxId))
+		ctxzap.Debug(ctx, "failed to get ATX",
+			zap.Stringer("id", atxId),
+			zap.Error(err),
+		)
 		return nil, status.Error(codes.NotFound, "id was not found")
 	}
-	return &pb.GetResponse{
+	proof, err := s.atxProvider.GetMalfeasanceProof(atx.SmesherID)
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
+		ctxzap.Error(ctx, "failed to get malfeasance proof",
+			zap.Stringer("smesher", atx.SmesherID),
+			zap.Stringer("smesher", atx.SmesherID),
+			zap.Stringer("id", atxId),
+			zap.Error(err),
+		)
+		return nil, status.Error(codes.NotFound, "id was not found")
+	}
+	resp := &pb.GetResponse{
 		Atx: convertActivation(atx),
-	}, nil
+	}
+	if proof != nil {
+		resp.MalfeasanceProof = events.ToMalfeasancePB(atx.SmesherID, proof, false)
+	}
+	return resp, nil
 }
 
-func (s *activationService) Highest(ctx context.Context, req *empty.Empty) (*pb.HighestResponse, error) {
+func (s *activationService) Highest(ctx context.Context, req *emptypb.Empty) (*pb.HighestResponse, error) {
 	highest, err := s.atxProvider.MaxHeightAtx()
 	if err != nil {
 		return &pb.HighestResponse{

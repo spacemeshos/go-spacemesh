@@ -45,7 +45,7 @@ jobs:
           Set-MpPreference -DisableRealtimeMonitoring $true
 
       - name: Check out Git repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           lfs: true
       - name: Setup Go
@@ -70,8 +70,9 @@ jobs:
           rm -f $OUTNAME/post.h
           zip -r $OUTNAME.zip $OUTNAME
       - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v0
+        uses: google-github-actions/setup-gcloud@v1
         with:
+          version: "450.0.0"
           project_id: ${{ secrets.GCP_PROJECT_ID }}
           service_account_key: ${{ secrets.GCP_SA_KEY }}
           export_default_credentials: true
@@ -86,7 +87,7 @@ jobs:
     needs: build-and-upload
     steps:
       - name: Check out Git repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
@@ -102,6 +103,8 @@ jobs:
             - macOS arm64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/macOS_ARM64.zip
             - Linux: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/Linux.zip
             - Linux arm64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/Linux_ARM64.zip
+
+            For information about changes in this release see the [changelog](https://github.com/spacemeshos/go-spacemesh/blob/${{ github.ref_name }}/CHANGELOG.md).
           generate_release_notes: true
           draft: false
           prerelease: true

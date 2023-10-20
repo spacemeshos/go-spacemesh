@@ -14,58 +14,60 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 	varint "github.com/multiformats/go-varint"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
-	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	ps "github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	l := logtest.New(t)
+
 	// Make 2 node instances
 	conf1 := config.DefaultTestConfig()
 	conf1.DataDirParent = t.TempDir()
 	conf1.FileLock = filepath.Join(conf1.DataDirParent, "LOCK")
 	conf1.P2P.Listen = "/ip4/127.0.0.1/tcp/0"
-	app1, err := NewApp(&conf1)
-	require.NoError(t, err)
-	conf2 := config.DefaultTestConfig()
+	// We setup the api to listen on an OS assigned port, which avoids the second instance getting stuck when
+	conf1.API.PublicListener = "0.0.0.0:0"
+	conf1.API.PrivateListener = "0.0.0.0:0"
+	app1 := NewApp(t, &conf1, l)
+
 	// We need to copy the genesis config to ensure that both nodes share the
-	// same gnenesis ID, otherwise they will not be able to connect to each
+	// same genesis ID, otherwise they will not be able to connect to each
 	// other.
+	conf2 := config.DefaultTestConfig()
 	*conf2.Genesis = *conf1.Genesis
 	conf2.DataDirParent = t.TempDir()
 	conf2.FileLock = filepath.Join(conf2.DataDirParent, "LOCK")
 	conf2.P2P.Listen = "/ip4/127.0.0.1/tcp/0"
-	app2, err := NewApp(&conf2)
-	require.NoError(t, err)
+	conf2.API.PublicListener = "0.0.0.0:0"
+	conf2.API.PrivateListener = "0.0.0.0:0"
+	app2 := NewApp(t, &conf2, l)
 
 	types.SetLayersPerEpoch(conf1.LayersPerEpoch)
 	t.Cleanup(func() {
 		app1.Cleanup(ctx)
 		app2.Cleanup(ctx)
 	})
-	g := errgroup.Group{}
-	g.Go(func() error {
-		return app1.Start(ctx)
+	eg, grpContext := errgroup.WithContext(ctx)
+	eg.Go(func() error {
+		return app1.Start(grpContext)
 	})
 	<-app1.Started()
-	g.Go(func() error {
-		return app2.Start(ctx)
+	eg.Go(func() error {
+		return app2.Start(grpContext)
 	})
 	<-app2.Started()
 
 	// Connect app2 to app1
-	err = app2.Host().Connect(context.Background(), peer.AddrInfo{
+	err := app2.Host().Connect(context.Background(), peer.AddrInfo{
 		ID:    app1.Host().ID(),
 		Addrs: app1.Host().Addrs(),
 	})
@@ -119,27 +121,7 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 	// Stop the nodes by canceling the context
 	cancel()
 	// Wait for nodes to finish
-	require.NoError(t, g.Wait())
-}
-
-func NewApp(conf *config.Config) (*App, error) {
-	app := New(
-		WithConfig(conf),
-		WithLog(log.RegisterHooks(
-			log.NewWithLevel("", zap.NewAtomicLevelAt(zapcore.DebugLevel)),
-			events.EventHook()),
-		),
-	)
-
-	var err error
-	if err = app.Initialize(); err != nil {
-		return nil, err
-	}
-	app.edSgn, err = signing.NewEdSigner()
-	if err != nil {
-		return nil, err
-	}
-	return app, err
+	require.NoError(t, eg.Wait())
 }
 
 func getStream(c network.Conn, p protocol.ID, dir network.Direction) network.Stream {

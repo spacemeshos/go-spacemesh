@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
+	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -22,6 +23,8 @@ type verifyPostJob struct {
 
 type OffloadingPostVerifier struct {
 	eg      errgroup.Group
+	stop    context.CancelFunc
+	stopped <-chan struct{}
 	log     log.Log
 	workers []*postVerifierWorker
 	channel chan<- *verifyPostJob
@@ -35,17 +38,17 @@ type postVerifierWorker struct {
 
 type postVerifier struct {
 	*verifying.ProofVerifier
-	logger log.Log
+	logger *zap.Logger
 	cfg    config.Config
 }
 
 func (v *postVerifier) Verify(ctx context.Context, p *shared.Proof, m *shared.ProofMetadata, opts ...verifying.OptionFunc) error {
-	v.logger.WithContext(ctx).With().Debug("verifying post", log.FieldNamed("proof_node_id", types.BytesToNodeID(m.NodeId)))
-	return v.ProofVerifier.Verify(p, m, v.cfg, v.logger.Zap(), opts...)
+	v.logger.Debug("verifying post", zap.Stringer("proof_node_id", types.BytesToNodeID(m.NodeId)))
+	return v.ProofVerifier.Verify(p, m, v.cfg, v.logger, opts...)
 }
 
 // NewPostVerifier creates a new post verifier.
-func NewPostVerifier(cfg PostConfig, logger log.Log, opts ...verifying.OptionFunc) (PostVerifier, error) {
+func NewPostVerifier(cfg PostConfig, logger *zap.Logger, opts ...verifying.OptionFunc) (PostVerifier, error) {
 	verifier, err := verifying.NewProofVerifier(opts...)
 	if err != nil {
 		return nil, err
@@ -71,23 +74,30 @@ func NewOffloadingPostVerifier(verifiers []PostVerifier, logger log.Log) *Offloa
 	}
 	logger.With().Info("created post verifier", log.Int("num_workers", numWorkers))
 
-	return &OffloadingPostVerifier{
+	ctx, cancel := context.WithCancel(context.Background())
+	stopped := make(chan struct{})
+	v := &OffloadingPostVerifier{
 		log:     logger,
 		workers: workers,
 		channel: channel,
+		stopped: stopped,
+		stop: func() {
+			cancel()
+			select {
+			case <-stopped:
+			default:
+				close(stopped)
+			}
+		},
 	}
-}
 
-func (v *OffloadingPostVerifier) Start(ctx context.Context) {
 	v.log.Info("starting post verifier")
 	for _, worker := range v.workers {
 		worker := worker
 		v.eg.Go(func() error { return worker.start(ctx) })
 	}
-	<-ctx.Done()
-	v.log.Info("stopping post verifier")
-	v.eg.Wait()
-	v.log.Info("stopped post verifier")
+	v.log.Info("started post verifier")
+	return v
 }
 
 func (v *OffloadingPostVerifier) Verify(ctx context.Context, p *shared.Proof, m *shared.ProofMetadata, opts ...verifying.OptionFunc) error {
@@ -97,8 +107,11 @@ func (v *OffloadingPostVerifier) Verify(ctx context.Context, p *shared.Proof, m 
 		opts:     opts,
 		result:   make(chan error, 1),
 	}
+
 	select {
 	case v.channel <- job:
+	case <-v.stopped:
+		return fmt.Errorf("verifier is closed")
 	case <-ctx.Done():
 		return fmt.Errorf("submitting verifying job: %w", ctx.Err())
 	}
@@ -106,17 +119,24 @@ func (v *OffloadingPostVerifier) Verify(ctx context.Context, p *shared.Proof, m 
 	select {
 	case res := <-job.result:
 		return res
+	case <-v.stopped:
+		return fmt.Errorf("verifier is closed")
 	case <-ctx.Done():
 		return fmt.Errorf("waiting for verification result: %w", ctx.Err())
 	}
 }
 
 func (v *OffloadingPostVerifier) Close() error {
+	v.log.Info("stopping post verifier")
+	v.stop()
+	v.eg.Wait()
+
 	for _, worker := range v.workers {
 		if err := worker.verifier.Close(); err != nil {
 			return err
 		}
 	}
+	v.log.Info("stopped post verifier")
 	return nil
 }
 

@@ -12,12 +12,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/initialization"
 	postShared "github.com/spacemeshos/post/shared"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
@@ -217,9 +217,6 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 
 func validateAndPreserveData(tb testing.TB, db *sql.Database, deps []*types.VerifiedActivationTx, proofs []*types.PoetProofMessage) {
 	lg := logtest.New(tb)
-	layersPerEpoch := uint32(3)
-	edVerifier, err := signing.NewEdVerifier()
-	require.NoError(tb, err)
 	poetDb := activation.NewPoetDb(db, lg)
 	ctrl := gomock.NewController(tb)
 	mclock := activation.NewMocklayerClock(ctrl)
@@ -229,12 +226,12 @@ func validateAndPreserveData(tb testing.TB, db *sql.Database, deps []*types.Veri
 	mtrtl := smocks.NewMockTortoise(ctrl)
 	cdb := datastore.NewCachedDB(db, lg)
 	atxHandler := activation.NewHandler(
+		"",
 		cdb,
-		edVerifier,
+		signing.NewEdVerifier(),
 		mclock,
 		nil,
 		mfetch,
-		layersPerEpoch,
 		10,
 		goldenAtx,
 		mvalidator,
@@ -247,19 +244,18 @@ func validateAndPreserveData(tb testing.TB, db *sql.Database, deps []*types.Veri
 	for i, vatx := range deps {
 		encoded, err := codec.Encode(vatx)
 		require.NoError(tb, err)
-		mclock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now())
 		mclock.EXPECT().CurrentLayer().Return(vatx.PublishEpoch.FirstLayer())
 		mfetch.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any())
 		mfetch.EXPECT().GetPoetProof(gomock.Any(), vatx.GetPoetProofRef())
 		if vatx.InitialPost != nil {
 			mvalidator.EXPECT().InitialNIPostChallenge(&vatx.ActivationTx.NIPostChallenge, gomock.Any(), goldenAtx).AnyTimes()
-			mvalidator.EXPECT().Post(gomock.Any(), vatx.PublishEpoch, vatx.SmesherID, *vatx.CommitmentATX, vatx.InitialPost, gomock.Any(), vatx.NumUnits)
+			mvalidator.EXPECT().Post(gomock.Any(), vatx.SmesherID, *vatx.CommitmentATX, vatx.InitialPost, gomock.Any(), vatx.NumUnits)
 			mvalidator.EXPECT().VRFNonce(vatx.SmesherID, *vatx.CommitmentATX, vatx.VRFNonce, gomock.Any(), vatx.NumUnits)
 		} else {
 			mvalidator.EXPECT().NIPostChallenge(&vatx.ActivationTx.NIPostChallenge, cdb, vatx.SmesherID)
 		}
-		mvalidator.EXPECT().PositioningAtx(&vatx.PositioningATX, cdb, goldenAtx, vatx.PublishEpoch, layersPerEpoch)
-		mvalidator.EXPECT().NIPost(gomock.Any(), vatx.PublishEpoch, vatx.SmesherID, gomock.Any(), vatx.NIPost, gomock.Any(), vatx.NumUnits).Return(uint64(1111111), nil)
+		mvalidator.EXPECT().PositioningAtx(vatx.PositioningATX, cdb, goldenAtx, vatx.PublishEpoch)
+		mvalidator.EXPECT().NIPost(gomock.Any(), vatx.SmesherID, gomock.Any(), vatx.NIPost, gomock.Any(), vatx.NumUnits).Return(uint64(1111111), nil)
 		mreceiver.EXPECT().OnAtx(gomock.Any())
 		mtrtl.EXPECT().OnAtx(gomock.Any())
 		require.NoError(tb, atxHandler.HandleSyncedAtx(context.Background(), vatx.ID().Hash32(), "self", encoded))

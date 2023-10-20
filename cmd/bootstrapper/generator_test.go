@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,6 +14,7 @@ import (
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
@@ -31,9 +32,6 @@ func TestMain(m *testing.M) {
 
 const (
 	epochLayers      = 3
-	grpcPort         = 9992
-	jsonport         = 9993
-	target           = "localhost"
 	activeSetSize    = 11
 	bitcoinResponse1 = `
 {
@@ -132,30 +130,30 @@ func createAtxs(tb testing.TB, db sql.Executor, epoch types.EpochID, atxids []ty
 	}
 }
 
-func launchServer(tb testing.TB, cdb *datastore.CachedDB) func() {
-	grpcService := grpcserver.New(fmt.Sprintf("127.0.0.1:%d", grpcPort), logtest.New(tb).Named("grpc"))
-	jsonService := grpcserver.NewJSONHTTPServer(fmt.Sprintf("127.0.0.1:%d", jsonport), logtest.New(tb).WithName("grpc.JSON"))
-	s := grpcserver.NewMeshService(cdb, &MeshAPIMock{}, nil, nil, 0, types.Hash20{}, 0, 0, 0, logtest.New(tb).WithName("grpc.Mesh"))
+func launchServer(tb testing.TB, cdb *datastore.CachedDB) (grpcserver.Config, func()) {
+	cfg := grpcserver.DefaultTestConfig()
+	grpcService := grpcserver.New("127.0.0.1:0", zaptest.NewLogger(tb).Named("grpc"), cfg)
+	jsonService := grpcserver.NewJSONHTTPServer("127.0.0.1:0", zaptest.NewLogger(tb).Named("grpc.JSON"))
+	s := grpcserver.NewMeshService(cdb, &MeshAPIMock{}, nil, nil, 0, types.Hash20{}, 0, 0, 0)
 
 	pb.RegisterMeshServiceServer(grpcService.GrpcServer, s)
 	// start gRPC and json servers
-	grpcStarted := grpcService.Start()
-	jsonStarted := jsonService.StartService(context.Background(), s)
+	err := grpcService.Start()
+	require.NoError(tb, err)
+	err = jsonService.StartService(context.Background(), s)
+	require.NoError(tb, err)
 
-	timer := time.NewTimer(3 * time.Second)
-	defer timer.Stop()
+	// update config with bound addresses
+	cfg.PublicListener = grpcService.BoundAddress
+	cfg.JSONListener = jsonService.BoundAddress
 
-	// wait for server to be ready (critical on CI)
-	for _, ch := range []<-chan struct{}{grpcStarted, jsonStarted} {
-		select {
-		case <-ch:
-		case <-timer.C:
+	return cfg, func() {
+		err := jsonService.Shutdown(context.Background())
+		if !errors.Is(err, http.ErrServerClosed) {
+			require.NoError(tb, err)
 		}
-	}
-
-	return func() {
-		require.NoError(tb, jsonService.Shutdown(context.Background()))
-		_ = grpcService.Close()
+		err = grpcService.Close()
+		require.NoError(tb, err)
 	}
 }
 
@@ -173,7 +171,8 @@ func TestGenerator_Generate(t *testing.T) {
 	targetEpoch := types.EpochID(3)
 	db := sql.InMemory()
 	createAtxs(t, db, targetEpoch-1, types.RandomActiveSet(activeSetSize))
-	t.Cleanup(launchServer(t, datastore.NewCachedDB(db, logtest.New(t))))
+	cfg, cleanup := launchServer(t, datastore.NewCachedDB(db, logtest.New(t)))
+	t.Cleanup(cleanup)
 
 	for _, tc := range []struct {
 		desc            string
@@ -212,7 +211,7 @@ func TestGenerator_Generate(t *testing.T) {
 			fs := afero.NewMemMapFs()
 			g := NewGenerator(
 				ts.URL,
-				fmt.Sprintf("%s:%d", target, grpcPort),
+				cfg.PublicListener,
 				WithLogger(logtest.New(t)),
 				WithFilesystem(fs),
 				WithHttpClient(ts.Client()),

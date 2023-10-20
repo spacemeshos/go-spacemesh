@@ -6,56 +6,64 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/golang/protobuf/ptypes/empty"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/post/config"
+	"go.uber.org/zap"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // SmesherService exposes endpoints to manage smeshing.
 type SmesherService struct {
-	logger log.Logger
-
 	postSetupProvider postSetupProvider
 	smeshingProvider  activation.SmeshingProvider
+	postSupervisor    postSupervisor
 
 	streamInterval time.Duration
 	postOpts       activation.PostSetupOpts
 }
 
 // RegisterService registers this service with a grpc server instance.
-func (s SmesherService) RegisterService(server *Server) {
-	pb.RegisterSmesherServiceServer(server.GrpcServer, s)
+func (s SmesherService) RegisterService(server *grpc.Server) {
+	pb.RegisterSmesherServiceServer(server, s)
+}
+
+func (s SmesherService) RegisterHandlerService(mux *runtime.ServeMux) error {
+	return pb.RegisterSmesherServiceHandlerServer(context.Background(), mux, s)
+}
+
+// String returns the name of this service.
+func (s SmesherService) String() string {
+	return "SmesherService"
 }
 
 // NewSmesherService creates a new grpc service using config data.
-func NewSmesherService(post postSetupProvider, smeshing activation.SmeshingProvider, streamInterval time.Duration, postOpts activation.PostSetupOpts, lg log.Logger) *SmesherService {
+func NewSmesherService(post postSetupProvider, smeshing activation.SmeshingProvider, postSupervisor postSupervisor, streamInterval time.Duration, postOpts activation.PostSetupOpts) *SmesherService {
 	return &SmesherService{
-		logger:            lg,
 		postSetupProvider: post,
 		smeshingProvider:  smeshing,
+		postSupervisor:    postSupervisor,
 		streamInterval:    streamInterval,
 		postOpts:          postOpts,
 	}
 }
 
 // IsSmeshing reports whether the node is smeshing.
-func (s SmesherService) IsSmeshing(context.Context, *empty.Empty) (*pb.IsSmeshingResponse, error) {
-	s.logger.Info("GRPC SmesherService.IsSmeshing")
-
+func (s SmesherService) IsSmeshing(context.Context, *emptypb.Empty) (*pb.IsSmeshingResponse, error) {
 	return &pb.IsSmeshingResponse{IsSmeshing: s.smeshingProvider.Smeshing()}, nil
 }
 
 // StartSmeshing requests that the node begin smeshing.
 func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingRequest) (*pb.StartSmeshingResponse, error) {
-	s.logger.Info("GRPC SmesherService.StartSmeshing")
 	if in.Coinbase == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "`Coinbase` must be provided")
 	}
@@ -91,12 +99,14 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse in.Coinbase.Address `%s`: %w", in.Coinbase.Address, err)
 	}
-	if err := s.smeshingProvider.StartSmeshing(coinbaseAddr, opts); err != nil {
-		err := fmt.Sprintf("failed to start smeshing: %v", err)
-		s.logger.Error(err)
-		return nil, status.Error(codes.Internal, err)
+	if err := s.postSupervisor.Start(); err != nil {
+		ctxzap.Error(ctx, "failed to start post supervisor", zap.Error(err))
+		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to start post supervisor: %v", err))
 	}
-
+	if err := s.smeshingProvider.StartSmeshing(coinbaseAddr, opts); err != nil {
+		ctxzap.Error(ctx, "failed to start smeshing", zap.Error(err))
+		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to start smeshing: %v", err))
+	}
 	return &pb.StartSmeshingResponse{
 		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
 	}, nil
@@ -104,21 +114,13 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 
 // StopSmeshing requests that the node stop smeshing.
 func (s SmesherService) StopSmeshing(ctx context.Context, in *pb.StopSmeshingRequest) (*pb.StopSmeshingResponse, error) {
-	s.logger.Info("GRPC SmesherService.StopSmeshing")
-
-	errchan := make(chan error, 1)
-	go func() {
-		errchan <- s.smeshingProvider.StopSmeshing(in.DeleteFiles)
-	}()
-	select {
-	case <-ctx.Done():
-		return nil, fmt.Errorf("context done: %w", ctx.Err())
-	case err := <-errchan:
-		if err != nil {
-			err := fmt.Sprintf("failed to stop smeshing: %v", err)
-			s.logger.Error(err)
-			return nil, status.Error(codes.Internal, err)
-		}
+	if err := s.smeshingProvider.StopSmeshing(in.DeleteFiles); err != nil {
+		ctxzap.Error(ctx, "failed to stop smeshing", zap.Error(err))
+		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to stop smeshing: %v", err))
+	}
+	if err := s.postSupervisor.Stop(); err != nil {
+		ctxzap.Error(ctx, "failed to stop post supervisor", zap.Error(err))
+		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to stop post supervisor: %v", err))
 	}
 	return &pb.StopSmeshingResponse{
 		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
@@ -126,19 +128,17 @@ func (s SmesherService) StopSmeshing(ctx context.Context, in *pb.StopSmeshingReq
 }
 
 // SmesherID returns the smesher ID of this node.
-func (s SmesherService) SmesherID(context.Context, *empty.Empty) (*pb.SmesherIDResponse, error) {
+func (s SmesherService) SmesherID(context.Context, *emptypb.Empty) (*pb.SmesherIDResponse, error) {
 	return &pb.SmesherIDResponse{PublicKey: s.smeshingProvider.SmesherID().Bytes()}, nil
 }
 
 // Coinbase returns the current coinbase setting of this node.
-func (s SmesherService) Coinbase(context.Context, *empty.Empty) (*pb.CoinbaseResponse, error) {
+func (s SmesherService) Coinbase(context.Context, *emptypb.Empty) (*pb.CoinbaseResponse, error) {
 	return &pb.CoinbaseResponse{AccountId: &pb.AccountId{Address: s.smeshingProvider.Coinbase().String()}}, nil
 }
 
 // SetCoinbase sets the current coinbase setting of this node.
 func (s SmesherService) SetCoinbase(_ context.Context, in *pb.SetCoinbaseRequest) (*pb.SetCoinbaseResponse, error) {
-	s.logger.Info("GRPC SmesherService.SetCoinbase")
-
 	if in.Id == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "`Id` must be provided")
 	}
@@ -155,35 +155,28 @@ func (s SmesherService) SetCoinbase(_ context.Context, in *pb.SetCoinbaseRequest
 }
 
 // MinGas returns the current mingas setting of this node.
-func (s SmesherService) MinGas(context.Context, *empty.Empty) (*pb.MinGasResponse, error) {
-	s.logger.Info("GRPC SmesherService.MinGas")
+func (s SmesherService) MinGas(context.Context, *emptypb.Empty) (*pb.MinGasResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "this endpoint is not implemented")
 }
 
 // SetMinGas sets the mingas setting of this node.
 func (s SmesherService) SetMinGas(context.Context, *pb.SetMinGasRequest) (*pb.SetMinGasResponse, error) {
-	s.logger.Info("GRPC SmesherService.SetMinGas")
 	return nil, status.Errorf(codes.Unimplemented, "this endpoint is not implemented")
 }
 
 // EstimatedRewards returns estimated smeshing rewards over the next epoch.
 func (s SmesherService) EstimatedRewards(context.Context, *pb.EstimatedRewardsRequest) (*pb.EstimatedRewardsResponse, error) {
-	s.logger.Info("GRPC SmesherService.EstimatedRewards")
 	return nil, status.Errorf(codes.Unimplemented, "this endpoint is not implemented")
 }
 
 // PostSetupStatus returns post data status.
-func (s SmesherService) PostSetupStatus(context.Context, *empty.Empty) (*pb.PostSetupStatusResponse, error) {
-	s.logger.Info("GRPC SmesherService.PostSetupStatus")
-
+func (s SmesherService) PostSetupStatus(ctx context.Context, _ *emptypb.Empty) (*pb.PostSetupStatusResponse, error) {
 	status := s.postSetupProvider.Status()
 	return &pb.PostSetupStatusResponse{Status: statusToPbStatus(status)}, nil
 }
 
 // PostSetupStatusStream exposes a stream of status updates during post setup.
-func (s SmesherService) PostSetupStatusStream(_ *empty.Empty, stream pb.SmesherService_PostSetupStatusStreamServer) error {
-	s.logger.Info("GRPC SmesherService.PostSetupStatusStream")
-
+func (s SmesherService) PostSetupStatusStream(_ *emptypb.Empty, stream pb.SmesherService_PostSetupStatusStreamServer) error {
 	timer := time.NewTicker(s.streamInterval)
 	defer timer.Stop()
 
@@ -202,8 +195,6 @@ func (s SmesherService) PostSetupStatusStream(_ *empty.Empty, stream pb.SmesherS
 
 // PostSetupComputeProviders returns a list of available Post setup compute providers.
 func (s SmesherService) PostSetupProviders(ctx context.Context, in *pb.PostSetupProvidersRequest) (*pb.PostSetupProvidersResponse, error) {
-	s.logger.Info("GRPC SmesherService.PostSetupProviders")
-
 	providers, err := s.postSetupProvider.Providers()
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get OpenCL providers: %v", err)
@@ -217,7 +208,7 @@ func (s SmesherService) PostSetupProviders(ctx context.Context, in *pb.PostSetup
 			var err error
 			hashesPerSec, err = s.postSetupProvider.Benchmark(p)
 			if err != nil {
-				s.logger.Error("failed to benchmark provider: %v", err)
+				ctxzap.Error(ctx, "failed to benchmark provider", zap.Error(err))
 				return nil, status.Error(codes.Internal, "failed to benchmark provider")
 			}
 		}
@@ -234,9 +225,7 @@ func (s SmesherService) PostSetupProviders(ctx context.Context, in *pb.PostSetup
 }
 
 // PostConfig returns the Post protocol config.
-func (s SmesherService) PostConfig(context.Context, *empty.Empty) (*pb.PostConfigResponse, error) {
-	s.logger.Info("GRPC SmesherService.PostConfig")
-
+func (s SmesherService) PostConfig(context.Context, *emptypb.Empty) (*pb.PostConfigResponse, error) {
 	cfg := s.postSetupProvider.Config()
 
 	return &pb.PostConfigResponse{
@@ -258,6 +247,7 @@ func statusToPbStatus(status *activation.PostSetupStatus) *pb.PostSetupStatus {
 	if status.LastOpts != nil {
 		var providerID *uint32
 		if status.LastOpts.ProviderID.Value() != nil {
+			providerID = new(uint32)
 			*providerID = uint32(*status.LastOpts.ProviderID.Value())
 		}
 

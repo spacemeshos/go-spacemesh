@@ -14,4 +14,5 @@ ignore:
   - "cmd"
   - "**/*_scale.go"
   - "**/*mock*.go"
+  - "**/mocks/*.go"
   - systest

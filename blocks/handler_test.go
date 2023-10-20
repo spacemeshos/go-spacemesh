@@ -3,19 +3,16 @@ package blocks
 import (
 	"context"
 	"errors"
-	"math/rand"
 	"testing"
 
-	"github.com/golang/mock/gomock"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
@@ -23,118 +20,156 @@ import (
 
 type testHandler struct {
 	*Handler
-	mockFetcher *smocks.MockFetcher
-	mockMesh    *mocks.MockmeshProvider
+	mockFetcher  *smocks.MockFetcher
+	mockTortoise *mocks.MocktortoiseProvider
+	mockMesh     *mocks.MockmeshProvider
 }
 
 func createTestHandler(t *testing.T) *testHandler {
 	ctrl := gomock.NewController(t)
 	th := &testHandler{
-		mockFetcher: smocks.NewMockFetcher(ctrl),
-		mockMesh:    mocks.NewMockmeshProvider(ctrl),
+		mockFetcher:  smocks.NewMockFetcher(ctrl),
+		mockTortoise: mocks.NewMocktortoiseProvider(ctrl),
+		mockMesh:     mocks.NewMockmeshProvider(ctrl),
 	}
-	th.Handler = NewHandler(th.mockFetcher, sql.InMemory(), th.mockMesh, WithLogger(logtest.New(t)))
+	th.Handler = NewHandler(th.mockFetcher, sql.InMemory(), th.mockTortoise, th.mockMesh, WithLogger(logtest.New(t)))
 	return th
 }
 
-func createBlockData(t *testing.T, layerID types.LayerID, txIDs []types.TransactionID) (*types.Block, []byte) {
-	t.Helper()
-	block := &types.Block{
-		InnerBlock: types.InnerBlock{
-			LayerIndex: layerID,
-			TxIDs:      txIDs,
-			Rewards: []types.AnyReward{
-				{Weight: types.RatNum{Num: 1, Denom: 1}},
-			},
+func TestHandleSyncedBlock(t *testing.T) {
+	layer := types.GetEffectiveGenesis() + 1
+	good := &types.Block{InnerBlock: types.InnerBlock{
+		LayerIndex: layer,
+		Rewards: []types.AnyReward{
+			{AtxID: types.ATXID{1}, Weight: types.RatNum{Num: 1, Denom: 1}},
+			{AtxID: types.ATXID{2}, Weight: types.RatNum{Num: 1, Denom: 1}},
 		},
+		TxIDs: []types.TransactionID{{1}, {2}},
+	}}
+	good.Initialize()
+
+	badrewards := &types.Block{InnerBlock: types.InnerBlock{
+		LayerIndex: layer,
+		Rewards: []types.AnyReward{
+			{AtxID: types.ATXID{1}},
+			{AtxID: types.ATXID{2}},
+		},
+	}}
+	badrewards.Initialize()
+
+	beforegenesis := &types.Block{InnerBlock: types.InnerBlock{
+		LayerIndex: types.GetEffectiveGenesis(),
+	}}
+	beforegenesis.Initialize()
+	for _, tc := range []struct {
+		desc              string
+		data              []byte
+		id                types.Hash32
+		dup               bool
+		epoch             types.EpochID
+		tortoise, missing []types.ATXID
+		failAtxs          error
+		txs               []types.TransactionID
+		failTxs           error
+		failMesh          error
+		err               string
+	}{
+		{
+			desc:     "sanity",
+			data:     codec.MustEncode(good),
+			id:       good.ID().AsHash32(),
+			epoch:    good.LayerIndex.GetEpoch(),
+			tortoise: []types.ATXID{{1}, {2}},
+			missing:  []types.ATXID{{2}},
+			txs:      []types.TransactionID{{1}, {2}},
+		},
+		{
+			desc: "malformed",
+			data: []byte("any"),
+			err:  "validation reject: malformed",
+		},
+		{
+			desc: "hash mismatch",
+			data: codec.MustEncode(good),
+			id:   types.Hash32{1, 1, 1},
+			err:  "validation reject: incorrect hash",
+		},
+		{
+			desc: "invalid rewards",
+			data: codec.MustEncode(badrewards),
+			id:   badrewards.ID().AsHash32(),
+			err:  "validation reject: reward with invalid",
+		},
+		{
+			desc: "duplicate",
+			data: codec.MustEncode(good),
+			id:   good.ID().AsHash32(),
+			dup:  true,
+		},
+		{
+			desc: "layer before genesis",
+			data: codec.MustEncode(beforegenesis),
+			id:   beforegenesis.ID().AsHash32(),
+			err:  "validation reject: block before effective genesis",
+		},
+		{
+			desc:     "fetch atxs failure",
+			data:     codec.MustEncode(good),
+			id:       good.ID().AsHash32(),
+			epoch:    good.LayerIndex.GetEpoch(),
+			tortoise: []types.ATXID{{1}, {2}},
+			missing:  []types.ATXID{{2}},
+			failAtxs: errors.New("atxs failed"),
+			err:      "atxs failed",
+		},
+		{
+			desc:     "fetch txs failure",
+			data:     codec.MustEncode(good),
+			id:       good.ID().AsHash32(),
+			epoch:    good.LayerIndex.GetEpoch(),
+			tortoise: []types.ATXID{{1}, {2}},
+			missing:  []types.ATXID{{2}},
+			txs:      []types.TransactionID{{1}, {2}},
+			failTxs:  errors.New("txs failed"),
+			err:      "txs failed",
+		},
+		{
+			desc:     "add block failure",
+			data:     codec.MustEncode(good),
+			id:       good.ID().AsHash32(),
+			epoch:    good.LayerIndex.GetEpoch(),
+			tortoise: []types.ATXID{{1}, {2}},
+			missing:  []types.ATXID{{2}},
+			txs:      []types.TransactionID{{1}, {2}},
+			failMesh: errors.New("add block failed"),
+			err:      "add block failed",
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			th := createTestHandler(t)
+			pid := p2p.Peer("test")
+			var decoded types.Block
+			codec.Decode(tc.data, &decoded)
+			decoded.Initialize()
+			if tc.dup {
+				require.NoError(t, blocks.Add(th.db, &decoded))
+			}
+
+			th.mockTortoise.EXPECT().GetMissingActiveSet(tc.epoch, tc.tortoise).Return(tc.missing).MaxTimes(1)
+			th.mockFetcher.EXPECT().RegisterPeerHashes(pid, types.ATXIDsToHashes(tc.missing)).MaxTimes(1)
+			th.mockFetcher.EXPECT().GetAtxs(gomock.Any(), tc.missing).Return(tc.failAtxs).MaxTimes(1)
+			th.mockFetcher.EXPECT().RegisterPeerHashes(pid, types.TransactionIDsToHashes(tc.txs)).MaxTimes(1)
+			th.mockFetcher.EXPECT().GetBlockTxs(gomock.Any(), tc.txs).Return(tc.failTxs).MaxTimes(1)
+			th.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), &decoded).Return(tc.failMesh).MaxTimes(1)
+
+			err := th.HandleSyncedBlock(context.Background(), tc.id, pid, tc.data)
+			if len(tc.err) > 0 {
+				require.ErrorContains(t, err, tc.err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
 	}
-	block.Initialize()
-	data, err := codec.Encode(block)
-	require.NoError(t, err)
-	return block, data
-}
-
-func Test_HandleBlockData_MalformedData(t *testing.T) {
-	th := createTestHandler(t)
-	assert.ErrorIs(t, th.HandleSyncedBlock(context.TODO(), types.Hash32{}, p2p.NoPeer, []byte("malformed")), errMalformedData)
-}
-
-func Test_HandleBlockData_InvalidRewards(t *testing.T) {
-	th := createTestHandler(t)
-	b := &types.Block{InnerBlock: types.InnerBlock{LayerIndex: 11}}
-	b.Initialize()
-	buf, err := codec.Encode(b)
-	require.NoError(t, err)
-	require.ErrorIs(t, th.HandleSyncedBlock(context.TODO(), b.ID().AsHash32(), p2p.NoPeer, buf), errInvalidRewards)
-}
-
-func Test_HandleBlockData_AlreadyHasBlock(t *testing.T) {
-	th := createTestHandler(t)
-	layerID := types.LayerID(99)
-	txIDs := createTransactions(t, max(10, rand.Intn(100)))
-
-	block, data := createBlockData(t, layerID, txIDs)
-	require.NoError(t, blocks.Add(th.db, block))
-	assert.NoError(t, th.HandleSyncedBlock(context.TODO(), block.ID().AsHash32(), p2p.NoPeer, data))
-}
-
-func Test_HandleBlockData_WrongHash(t *testing.T) {
-	th := createTestHandler(t)
-	layerID := types.LayerID(99)
-	txIDs := createTransactions(t, max(10, rand.Intn(100)))
-
-	_, data := createBlockData(t, layerID, txIDs)
-	peer := p2p.Peer("buddy")
-	err := th.HandleSyncedBlock(context.TODO(), types.RandomHash(), peer, data)
-	require.ErrorIs(t, err, errWrongHash)
-	require.ErrorIs(t, err, pubsub.ErrValidationReject)
-}
-
-func Test_HandleBlockData_FailedToFetchTXs(t *testing.T) {
-	th := createTestHandler(t)
-	layerID := types.LayerID(99)
-	txIDs := createTransactions(t, max(10, rand.Intn(100)))
-
-	block, data := createBlockData(t, layerID, txIDs)
-	errUnknown := errors.New("unknown")
-	th.mockFetcher.EXPECT().GetBlockTxs(gomock.Any(), txIDs).Return(errUnknown).Times(1)
-	peer := p2p.Peer("buddy")
-	th.mockFetcher.EXPECT().RegisterPeerHashes(peer, types.TransactionIDsToHashes(block.TxIDs))
-	assert.ErrorIs(t, th.HandleSyncedBlock(context.TODO(), block.ID().AsHash32(), peer, data), errUnknown)
-}
-
-func Test_HandleBlockData_FailedToAddBlock(t *testing.T) {
-	th := createTestHandler(t)
-	layerID := types.LayerID(99)
-	txIDs := createTransactions(t, max(10, rand.Intn(100)))
-
-	block, data := createBlockData(t, layerID, txIDs)
-	th.mockFetcher.EXPECT().GetBlockTxs(gomock.Any(), txIDs).Return(nil).Times(1)
-	errUnknown := errors.New("unknown")
-	th.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), block).Return(errUnknown).Times(1)
-	peer := p2p.Peer("buddy")
-	th.mockFetcher.EXPECT().RegisterPeerHashes(peer, types.TransactionIDsToHashes(block.TxIDs))
-	assert.ErrorIs(t, th.HandleSyncedBlock(context.TODO(), block.ID().AsHash32(), peer, data), errUnknown)
-}
-
-func Test_HandleBlockData(t *testing.T) {
-	th := createTestHandler(t)
-	layerID := types.LayerID(99)
-	txIDs := createTransactions(t, max(10, rand.Intn(100)))
-
-	block, data := createBlockData(t, layerID, txIDs)
-	th.mockFetcher.EXPECT().GetBlockTxs(gomock.Any(), txIDs).Return(nil).Times(1)
-	th.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), block).Return(nil).Times(1)
-	peer := p2p.Peer("buddy")
-	th.mockFetcher.EXPECT().RegisterPeerHashes(peer, types.TransactionIDsToHashes(block.TxIDs))
-	assert.NoError(t, th.HandleSyncedBlock(context.TODO(), block.ID().AsHash32(), peer, data))
-}
-
-func max(i, j int) int {
-	if i > j {
-		return i
-	}
-	return j
 }
 
 func TestValidateRewards(t *testing.T) {

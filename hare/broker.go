@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"sync"
 
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
+
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
@@ -395,13 +398,9 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan any, *Eli
 	if len(b.outbox) >= b.limit {
 		// unregister the earliest layer to make space for the new layer
 		// cannot call unregister here because unregister blocks and this would cause a deadlock
-		min := types.LayerID(0)
-		for lid := range b.outbox {
-			min = types.MinLayer(min, lid)
-		}
-		delete(b.outbox, min)
-		b.minDeleted = min
-		b.With().Info("unregistered layer due to maximum concurrent processes", min)
+		b.minDeleted = slices.Min(maps.Keys(b.outbox))
+		delete(b.outbox, b.minDeleted)
+		b.With().Info("unregistered layer due to maximum concurrent processes", b.minDeleted)
 	}
 	outboxCh := make(chan any, inboxCapacity)
 	b.outbox[id] = outboxCh

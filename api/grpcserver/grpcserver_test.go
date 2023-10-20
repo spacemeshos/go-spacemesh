@@ -1,6 +1,5 @@
 package grpcserver
 
-//lint:file-ignore SA1019 hide deprecated protobuf version error
 import (
 	"bytes"
 	"context"
@@ -11,29 +10,27 @@ import (
 	"math"
 	"math/big"
 	"net"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
-	"github.com/golang/protobuf/jsonpb"
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/merkle-tree"
 	"github.com/spacemeshos/poet/shared"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -46,10 +43,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
-	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
+	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -58,7 +55,6 @@ import (
 
 const (
 	labelsPerUnit  = 2048
-	bitsPerLabel   = 8
 	numUnits       = 2
 	genTimeUnix    = 1000000
 	layerDuration  = 10 * time.Second
@@ -71,7 +67,6 @@ const (
 	accountBalance = 8675301
 	accountCounter = 0
 	rewardAmount   = 5551234
-	activesetSize  = 10001
 )
 
 var (
@@ -92,9 +87,6 @@ var (
 	challenge   = newChallenge(1, prevAtxID, prevAtxID, postGenesisEpoch)
 	globalAtx   *types.VerifiedActivationTx
 	globalAtx2  *types.VerifiedActivationTx
-	signer      *signing.EdSigner
-	signer1     *signing.EdSigner
-	signer2     *signing.EdSigner
 	globalTx    *types.Transaction
 	globalTx2   *types.Transaction
 	ballot1     = genLayerBallot(types.LayerID(11))
@@ -134,10 +126,10 @@ func genLayerBlock(layerID types.LayerID, txs []types.TransactionID) *types.Bloc
 	return b
 }
 
-func dialGrpc(ctx context.Context, tb testing.TB, address string) *grpc.ClientConn {
+func dialGrpc(ctx context.Context, tb testing.TB, cfg Config) *grpc.ClientConn {
 	tb.Helper()
 	conn, err := grpc.DialContext(ctx,
-		address,
+		cfg.PublicListener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
@@ -146,37 +138,21 @@ func dialGrpc(ctx context.Context, tb testing.TB, address string) *grpc.ClientCo
 	return conn
 }
 
-func newEdSigner(t *testing.T) *signing.EdSigner {
-	t.Helper()
-	signer, err := signing.NewEdSigner()
-	require.NoError(t, err)
-	return signer
-}
-
-func newAddress(t *testing.T) types.Address {
-	t.Helper()
-	return wallet.Address(newEdSigner(t).PublicKey().Bytes())
-}
-
 func TestMain(m *testing.M) {
 	types.SetLayersPerEpoch(layersPerEpoch)
 
-	// run on a random port
-	cfg.PublicListener = fmt.Sprintf("127.0.0.1:%d", 1024+rand.Intn(9999))
-	cfg.PrivateListener = fmt.Sprintf("127.0.0.1:%d", 1024+rand.Intn(9999))
-
 	var err error
-	signer, err = signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
 	if err != nil {
 		log.Println("failed to create signer:", err)
 		os.Exit(1)
 	}
-	signer1, err = signing.NewEdSigner()
+	signer1, err := signing.NewEdSigner()
 	if err != nil {
 		log.Println("failed to create signer:", err)
 		os.Exit(1)
 	}
-	signer2, err = signing.NewEdSigner()
+	signer2, err := signing.NewEdSigner()
 	if err != nil {
 		log.Println("failed to create signer:", err)
 		os.Exit(1)
@@ -214,8 +190,7 @@ func TestMain(m *testing.M) {
 	// These create circular dependencies so they have to be initialized
 	// after the global vars
 	ballot1.AtxID = globalAtx.ID()
-	ballot1.EpochData = &types.EpochData{}
-	ballot1.ActiveSet = []types.ATXID{globalAtx.ID(), globalAtx2.ID()}
+	ballot1.EpochData = &types.EpochData{ActiveSetHash: types.ATXIDList{globalAtx.ID(), globalAtx2.ID()}.Hash()}
 
 	globalTx = NewTx(0, addr1, signer1)
 	globalTx2 = NewTx(1, addr2, signer2)
@@ -440,87 +415,20 @@ func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, epoch types.
 	}
 }
 
-// SmeshingAPIMock is a mock for Smeshing API.
-type SmeshingAPIMock struct {
-	UpdatePoETErr error
-}
+func launchServer(tb testing.TB, services ...ServiceAPI) (Config, func()) {
+	cfg := DefaultTestConfig()
+	cfg.PublicListener = "127.0.0.1:0" // run on random port
 
-func (s *SmeshingAPIMock) UpdatePoETServers(context.Context, []string) error {
-	return s.UpdatePoETErr
-}
+	grpcService, err := NewPublic(zaptest.NewLogger(tb).Named("grpc"), cfg, services)
+	require.NoError(tb, err)
 
-func (*SmeshingAPIMock) Smeshing() bool {
-	return false
-}
+	// start gRPC server
+	require.NoError(tb, grpcService.Start())
 
-func (*SmeshingAPIMock) StartSmeshing(types.Address, activation.PostSetupOpts) error {
-	return nil
-}
+	// update config with bound addresses
+	cfg.PublicListener = grpcService.BoundAddress
 
-func (*SmeshingAPIMock) StopSmeshing(bool) error {
-	return nil
-}
-
-func (*SmeshingAPIMock) SmesherID() types.NodeID {
-	return signer.NodeID()
-}
-
-func (*SmeshingAPIMock) Coinbase() types.Address {
-	return addr1
-}
-
-func (*SmeshingAPIMock) SetCoinbase(coinbase types.Address) {
-}
-
-func marshalProto(t *testing.T, msg proto.Message) string {
-	var buf bytes.Buffer
-	var m jsonpb.Marshaler
-	require.NoError(t, m.Marshal(&buf, msg))
-	return buf.String()
-}
-
-var cfg = DefaultTestConfig()
-
-func launchServer(tb testing.TB, cfg Config, services ...ServiceAPI) func() {
-	grpcService := New(cfg.PublicListener, logtest.New(tb).Named("grpc"))
-	jsonService := NewJSONHTTPServer(cfg.JSONListener, logtest.New(tb).WithName("grpc.JSON"))
-
-	// attach services
-	for _, svc := range services {
-		svc.RegisterService(grpcService)
-	}
-
-	// start gRPC and json servers
-	grpcStarted := grpcService.Start()
-	jsonStarted := jsonService.StartService(context.Background(), services...)
-
-	timer := time.NewTimer(3 * time.Second)
-	defer timer.Stop()
-
-	// wait for server to be ready (critical on CI)
-	for _, ch := range []<-chan struct{}{grpcStarted, jsonStarted} {
-		select {
-		case <-ch:
-		case <-timer.C:
-		}
-	}
-
-	return func() {
-		require.NoError(tb, jsonService.Shutdown(context.Background()))
-		_ = grpcService.Close()
-	}
-}
-
-func callEndpoint(t *testing.T, endpoint, payload string) (string, int) {
-	url := fmt.Sprintf("http://%s/%s", cfg.JSONListener, endpoint)
-	resp, err := http.Post(url, "application/json", strings.NewReader(payload))
-	require.NoError(t, err)
-	require.Equal(t, "application/json", resp.Header.Get("Content-Type"))
-	buf, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	require.NoError(t, resp.Body.Close())
-
-	return string(buf), resp.StatusCode
+	return cfg, func() { assert.NoError(tb, grpcService.Close()) }
 }
 
 func getFreePort(optionalPort int) (int, error) {
@@ -542,407 +450,63 @@ func TestNewServersConfig(t *testing.T) {
 	port2, err := getFreePort(0)
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
-	grpcService := New(fmt.Sprintf(":%d", port1), logtest.New(t).Named("grpc"))
-	jsonService := NewJSONHTTPServer(fmt.Sprintf(":%d", port2), logtest.New(t).WithName("grpc.JSON"))
+	grpcService := New(fmt.Sprintf(":%d", port1), zaptest.NewLogger(t).Named("grpc"), DefaultTestConfig())
+	jsonService := NewJSONHTTPServer(fmt.Sprintf(":%d", port2), zaptest.NewLogger(t).Named("grpc.JSON"))
 
-	require.Contains(t, grpcService.Listener, strconv.Itoa(port1), "Expected same port")
+	require.Contains(t, grpcService.listener, strconv.Itoa(port1), "Expected same port")
 	require.Contains(t, jsonService.listener, strconv.Itoa(port2), "Expected same port")
 }
 
-func TestNodeService(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	syncer := NewMocksyncer(ctrl)
-	syncer.EXPECT().IsSynced(gomock.Any()).Return(false).AnyTimes()
-	peerCounter := NewMockpeerCounter(ctrl)
-	peerCounter.EXPECT().PeerCount().Return(uint64(0)).AnyTimes()
-	genTime := NewMockgenesisTimeAPI(ctrl)
+type smesherServiceConn struct {
+	pb.SmesherServiceClient
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
-	version := "v0.0.0"
-	build := "cafebabe"
-	grpcService := NewNodeService(peerCounter, meshAPIMock, genTime, syncer, version, build, logtest.New(t).WithName("grpc.Node"))
-	t.Cleanup(launchServer(t, cfg, grpcService))
-
-	conn := dialGrpc(ctx, t, cfg.PublicListener)
-	c := pb.NewNodeServiceClient(conn)
-
-	// Construct an array of test cases to test each endpoint in turn
-	testCases := []struct {
-		name string
-		run  func(t *testing.T)
-	}{
-		{"Echo", func(t *testing.T) {
-			const message = "Hello World"
-			res, err := c.Echo(context.Background(), &pb.EchoRequest{
-				Msg: &pb.SimpleString{Value: message},
-			})
-			require.NoError(t, err)
-			require.Equal(t, message, res.Msg.Value)
-
-			// now try sending bad payloads
-			_, err = c.Echo(context.Background(), &pb.EchoRequest{Msg: nil})
-			require.Error(t, err)
-			grpcStatus, ok := status.FromError(err)
-			require.True(t, ok)
-			require.Equal(t, codes.InvalidArgument, grpcStatus.Code())
-			require.Equal(t, "Must include `Msg`", grpcStatus.Message())
-
-			_, err = c.Echo(context.Background(), &pb.EchoRequest{})
-			require.Error(t, err)
-			grpcStatus, ok = status.FromError(err)
-			require.True(t, ok)
-			require.Equal(t, codes.InvalidArgument, grpcStatus.Code())
-			require.Equal(t, "Must include `Msg`", grpcStatus.Message())
-		}},
-		{"Version", func(t *testing.T) {
-			res, err := c.Version(context.Background(), &empty.Empty{})
-			require.NoError(t, err)
-			require.Equal(t, version, res.VersionString.Value)
-		}},
-		{"Build", func(t *testing.T) {
-			res, err := c.Build(context.Background(), &empty.Empty{})
-			require.NoError(t, err)
-			require.Equal(t, build, res.BuildString.Value)
-		}},
-		{"Status", func(t *testing.T) {
-			// First do a mock checking during a genesis layer
-			// During genesis all layers should be set to current layer
-
-			layerCurrent := types.LayerID(layersPerEpoch) // end of first epoch
-			genTime.EXPECT().CurrentLayer().Return(layerCurrent)
-			req := &pb.StatusRequest{}
-			res, err := c.Status(context.Background(), req)
-			require.NoError(t, err)
-			require.Equal(t, uint64(0), res.Status.ConnectedPeers)
-			require.Equal(t, false, res.Status.IsSynced)
-			require.Equal(t, layerLatest.Uint32(), res.Status.SyncedLayer.Number)
-			require.Equal(t, layerCurrent.Uint32(), res.Status.TopLayer.Number)
-			require.Equal(t, layerLatest.Uint32(), res.Status.VerifiedLayer.Number)
-
-			// Now do a mock check post-genesis
-			layerCurrent = types.LayerID(12)
-			genTime.EXPECT().CurrentLayer().Return(layerCurrent)
-			res, err = c.Status(context.Background(), req)
-			require.NoError(t, err)
-			require.Equal(t, uint64(0), res.Status.ConnectedPeers)
-			require.Equal(t, false, res.Status.IsSynced)
-			require.Equal(t, layerLatest.Uint32(), res.Status.SyncedLayer.Number)
-			require.Equal(t, layerCurrent.Uint32(), res.Status.TopLayer.Number)
-			require.Equal(t, layerVerified.Uint32(), res.Status.VerifiedLayer.Number)
-		}},
-		{"NodeInfo", func(t *testing.T) {
-			resp, err := c.NodeInfo(ctx, &empty.Empty{})
-			require.NoError(t, err)
-			require.Equal(t, resp.Hrp, types.NetworkHRP())
-			require.Equal(t, resp.FirstGenesis, types.FirstEffectiveGenesis().Uint32())
-			require.Equal(t, resp.EffectiveGenesis, types.GetEffectiveGenesis().Uint32())
-			require.Equal(t, resp.EpochSize, types.GetLayersPerEpoch())
-		}},
-		// NOTE: ErrorStream and StatusStream have comprehensive, E2E tests in cmd/node/node_test.go.
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, tc.run)
-	}
+	postProvider     *MockpostSetupProvider
+	smeshingProvider *activation.MockSmeshingProvider
+	postSupervisor   *MockpostSupervisor
 }
 
-func TestGlobalStateService(t *testing.T) {
-	svc := NewGlobalStateService(meshAPIMock, conStateAPI, logtest.New(t).WithName("grpc.GlobalState"))
-	t.Cleanup(launchServer(t, cfg, svc))
+func setupSmesherService(t *testing.T) (*smesherServiceConn, context.Context) {
+	ctrl, mockCtx := gomock.WithContext(context.Background(), t)
+	postProvider := NewMockpostSetupProvider(ctrl)
+	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
+	postSupervisor := NewMockpostSupervisor(ctrl)
+	svc := NewSmesherService(postProvider, smeshingProvider, postSupervisor, 10*time.Millisecond, activation.DefaultPostSetupOpts())
+	cfg, cleanup := launchServer(t, svc)
+	t.Cleanup(cleanup)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg.PublicListener)
-	c := pb.NewGlobalStateServiceClient(conn)
+	conn := dialGrpc(ctx, t, cfg)
+	client := pb.NewSmesherServiceClient(conn)
 
-	// Construct an array of test cases to test each endpoint in turn
-	testCases := []struct {
-		name string
-		run  func(*testing.T)
-	}{
-		{"GlobalStateHash", func(t *testing.T) {
-			res, err := c.GlobalStateHash(context.Background(), &pb.GlobalStateHashRequest{})
-			require.NoError(t, err)
-			require.Equal(t, layerVerified.Uint32(), res.Response.Layer.Number)
-			require.Equal(t, stateRoot.Bytes(), res.Response.RootHash)
-		}},
-		{"Account", func(t *testing.T) {
-			res, err := c.Account(context.Background(), &pb.AccountRequest{
-				AccountId: &pb.AccountId{Address: addr1.String()},
-			})
-			require.NoError(t, err)
-			require.Equal(t, addr1.String(), res.AccountWrapper.AccountId.Address)
-			require.Equal(t, uint64(accountBalance), res.AccountWrapper.StateCurrent.Balance.Value)
-			require.Equal(t, uint64(accountCounter), res.AccountWrapper.StateCurrent.Counter)
-			require.Equal(t, uint64(accountBalance+1), res.AccountWrapper.StateProjected.Balance.Value)
-			require.Equal(t, uint64(accountCounter+1), res.AccountWrapper.StateProjected.Counter)
-		}},
-		{"AccountDataQuery_MissingFilter", func(t *testing.T) {
-			_, err := c.AccountDataQuery(context.Background(), &pb.AccountDataQueryRequest{})
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "`Filter` must be provided")
-		}},
-		{"AccountDataQuery_MissingFlags", func(t *testing.T) {
-			_, err := c.AccountDataQuery(context.Background(), &pb.AccountDataQueryRequest{
-				Filter: &pb.AccountDataFilter{
-					AccountId: &pb.AccountId{Address: addr1.String()},
-				},
-			})
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "`Filter.AccountMeshDataFlags` must set at least one")
-		}},
-		{"AccountDataQuery_BadOffset", func(t *testing.T) {
-			res, err := c.AccountDataQuery(context.Background(), &pb.AccountDataQueryRequest{
-				MaxResults: uint32(1),
-				Offset:     math.MaxUint32,
-				Filter: &pb.AccountDataFilter{
-					AccountId: &pb.AccountId{Address: addr1.String()},
-					AccountDataFlags: uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT |
-						pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD),
-				},
-			})
-			// huge offset is not an error, we just expect no results
-			require.NoError(t, err)
-			require.Equal(t, uint32(0), res.TotalResults)
-			require.Equal(t, 0, len(res.AccountItem))
-		}},
-		{"AccountDataQuery_ZeroMaxResults", func(t *testing.T) {
-			res, err := c.AccountDataQuery(context.Background(), &pb.AccountDataQueryRequest{
-				MaxResults: uint32(0),
-				Filter: &pb.AccountDataFilter{
-					AccountId: &pb.AccountId{Address: addr1.String()},
-					AccountDataFlags: uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT |
-						pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD),
-				},
-			})
-			// zero maxresults means return everything
-			require.NoError(t, err)
-			require.Equal(t, uint32(2), res.TotalResults)
-			require.Equal(t, 2, len(res.AccountItem))
-		}},
-		{"AccountDataQuery_OneResult", func(t *testing.T) {
-			res, err := c.AccountDataQuery(context.Background(), &pb.AccountDataQueryRequest{
-				MaxResults: uint32(1),
-				Filter: &pb.AccountDataFilter{
-					AccountId: &pb.AccountId{Address: addr1.String()},
-					AccountDataFlags: uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT |
-						pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD),
-				},
-			})
-			require.NoError(t, err)
-			require.Equal(t, uint32(2), res.TotalResults)
-			require.Equal(t, 1, len(res.AccountItem))
-			checkAccountDataQueryItemReward(t, res.AccountItem[0].Datum)
-		}},
-		{"AccountDataQuery", func(t *testing.T) {
-			res, err := c.AccountDataQuery(context.Background(), &pb.AccountDataQueryRequest{
-				Filter: &pb.AccountDataFilter{
-					AccountId: &pb.AccountId{Address: addr1.String()},
-					AccountDataFlags: uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT |
-						pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD),
-				},
-			})
-			require.NoError(t, err)
-			require.Equal(t, uint32(2), res.TotalResults)
-			require.Equal(t, 2, len(res.AccountItem))
-			checkAccountDataQueryItemReward(t, res.AccountItem[0].Datum)
-			checkAccountDataQueryItemAccount(t, res.AccountItem[1].Datum)
-		}},
-		{"AppEventStream", func(t *testing.T) {
-			stream, err := c.AppEventStream(context.Background(), &pb.AppEventStreamRequest{})
-			// We expect to be able to open the stream but for it to fail upon the first request
-			require.NoError(t, err)
-			_, err = stream.Recv()
-			statusCode := status.Code(err)
-			require.Equal(t, codes.Unimplemented, statusCode)
-		}},
-		{name: "AccountDataStream", run: func(t *testing.T) {
-			// common testing framework
-			generateRunFn := func(req *pb.AccountDataStreamRequest) func(*testing.T) {
-				return func(*testing.T) {
-					// Just try opening and immediately closing the stream
-					stream, err := c.AccountDataStream(context.Background(), req)
-					require.NoError(t, err, "unexpected error opening stream")
+	return &smesherServiceConn{
+		SmesherServiceClient: client,
 
-					// Do we need this? It doesn't seem to cause any harm
-					stream.Context().Done()
-				}
-			}
-			generateRunFnError := func(msg string, req *pb.AccountDataStreamRequest) func(*testing.T) {
-				return func(t *testing.T) {
-					// there should be no error opening the stream
-					stream, err := c.AccountDataStream(context.Background(), req)
-					require.NoError(t, err, "unexpected error opening stream")
-
-					// sending a request should generate an error
-					_, err = stream.Recv()
-					require.Error(t, err, "expected an error")
-					require.Contains(t, err.Error(), msg, "received unexpected error")
-					statusCode := status.Code(err)
-					require.Equal(t, codes.InvalidArgument, statusCode, "expected InvalidArgument error")
-
-					// Do we need this? It doesn't seem to cause any harm
-					stream.Context().Done()
-				}
-			}
-			subtests := []struct {
-				name string
-				run  func(*testing.T)
-			}{
-				// ERROR INPUTS
-				// We expect these to produce errors
-				{
-					name: "missing filter",
-					run:  generateRunFnError("`Filter` must be provided", &pb.AccountDataStreamRequest{}),
-				},
-				{
-					name: "empty filter",
-					run: generateRunFnError("`Filter.AccountId` must be provided", &pb.AccountDataStreamRequest{
-						Filter: &pb.AccountDataFilter{},
-					}),
-				},
-				{
-					name: "missing address",
-					run: generateRunFnError("`Filter.AccountId` must be provided", &pb.AccountDataStreamRequest{
-						Filter: &pb.AccountDataFilter{
-							AccountDataFlags: uint32(
-								pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD |
-									pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT),
-						},
-					}),
-				},
-				{
-					name: "filter with zero flags",
-					run: generateRunFnError("`Filter.AccountDataFlags` must set at least one bitfield", &pb.AccountDataStreamRequest{
-						Filter: &pb.AccountDataFilter{
-							AccountId:        &pb.AccountId{Address: addr1.String()},
-							AccountDataFlags: uint32(0),
-						},
-					}),
-				},
-
-				// SUCCESS
-				{
-					name: "empty address",
-					run: generateRunFn(&pb.AccountDataStreamRequest{
-						Filter: &pb.AccountDataFilter{
-							AccountId: &pb.AccountId{},
-							AccountDataFlags: uint32(
-								pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD |
-									pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT),
-						},
-					}),
-				},
-				{
-					name: "invalid address",
-					run: generateRunFn(&pb.AccountDataStreamRequest{
-						Filter: &pb.AccountDataFilter{
-							AccountId: &pb.AccountId{Address: types.GenerateAddress([]byte{'A'}).String()},
-							AccountDataFlags: uint32(
-								pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD |
-									pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT),
-						},
-					}),
-				},
-			}
-
-			// Run sub-subtests
-			for _, r := range subtests {
-				t.Run(r.name, r.run)
-			}
-		}},
-		{name: "GlobalStateStream", run: func(t *testing.T) {
-			// common testing framework
-			generateRunFn := func(req *pb.GlobalStateStreamRequest) func(*testing.T) {
-				return func(*testing.T) {
-					// Just try opening and immediately closing the stream
-					stream, err := c.GlobalStateStream(context.Background(), req)
-					require.NoError(t, err, "unexpected error opening stream")
-
-					// Do we need this? It doesn't seem to cause any harm
-					stream.Context().Done()
-				}
-			}
-			generateRunFnError := func(msg string, req *pb.GlobalStateStreamRequest) func(*testing.T) {
-				return func(t *testing.T) {
-					// there should be no error opening the stream
-					stream, err := c.GlobalStateStream(context.Background(), req)
-					require.NoError(t, err, "unexpected error opening stream")
-
-					// sending a request should generate an error
-					_, err = stream.Recv()
-					require.Error(t, err, "expected an error")
-					require.Contains(t, err.Error(), msg, "received unexpected error")
-					statusCode := status.Code(err)
-					require.Equal(t, codes.InvalidArgument, statusCode, "expected InvalidArgument error")
-
-					// Do we need this? It doesn't seem to cause any harm
-					stream.Context().Done()
-				}
-			}
-			subtests := []struct {
-				name string
-				run  func(*testing.T)
-			}{
-				// ERROR INPUTS
-				// We expect these to produce errors
-				{
-					name: "zero flags",
-					run: generateRunFnError("`GlobalStateDataFlags` must set at least one bitfield",
-						&pb.GlobalStateStreamRequest{GlobalStateDataFlags: uint32(0)}),
-				},
-
-				// SUCCESS
-				{
-					name: "nonzero flags",
-					run: generateRunFn(&pb.GlobalStateStreamRequest{
-						GlobalStateDataFlags: uint32(pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_ACCOUNT),
-					}),
-				},
-			}
-
-			// Run sub-subtests
-			for _, r := range subtests {
-				t.Run(r.name, r.run)
-			}
-		}},
-	}
-
-	// Run subtests
-	for _, tc := range testCases {
-		t.Run(tc.name, tc.run)
-	}
+		postProvider:     postProvider,
+		smeshingProvider: smeshingProvider,
+		postSupervisor:   postSupervisor,
+	}, mockCtx
 }
 
 func TestSmesherService(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	postProvider := NewMockpostSetupProvider(ctrl)
-	postProvider.EXPECT().Config().Return(activation.DefaultPostConfig()).AnyTimes()
-	postProvider.EXPECT().Status().Return(&activation.PostSetupStatus{}).AnyTimes()
-	postProvider.EXPECT().Providers().Return(nil, nil).AnyTimes()
-	smeshingAPI := &SmeshingAPIMock{}
-	svc := NewSmesherService(postProvider, smeshingAPI, 10*time.Millisecond, activation.DefaultPostSetupOpts(), logtest.New(t).WithName("grpc.Smesher"))
-	t.Cleanup(launchServer(t, cfg, svc))
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	conn := dialGrpc(ctx, t, cfg.PublicListener)
-	c := pb.NewSmesherServiceClient(conn)
-
 	t.Run("IsSmeshing", func(t *testing.T) {
-		res, err := c.IsSmeshing(context.Background(), &empty.Empty{})
+		t.Parallel()
+		c, ctx := setupSmesherService(t)
+		c.smeshingProvider.EXPECT().Smeshing().Return(false)
+		res, err := c.IsSmeshing(ctx, &emptypb.Empty{})
 		require.NoError(t, err)
 		require.False(t, res.IsSmeshing, "expected IsSmeshing to be false")
 	})
 
 	t.Run("StartSmeshingMissingArgs", func(t *testing.T) {
-		_, err := c.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{})
+		t.Parallel()
+		c, ctx := setupSmesherService(t)
+		_, err := c.StartSmeshing(ctx, &pb.StartSmeshingRequest{})
 		require.Equal(t, codes.InvalidArgument, status.Code(err))
 	})
 
 	t.Run("StartSmeshing", func(t *testing.T) {
+		t.Parallel()
 		opts := &pb.PostSetupOpts{}
 		opts.DataDir = t.TempDir()
 		opts.NumUnits = 1
@@ -950,7 +514,10 @@ func TestSmesherService(t *testing.T) {
 
 		coinbase := &pb.AccountId{Address: addr1.String()}
 
-		res, err := c.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{
+		c, ctx := setupSmesherService(t)
+		c.smeshingProvider.EXPECT().StartSmeshing(gomock.Any(), gomock.Any()).Return(nil)
+		c.postSupervisor.EXPECT().Start().Return(nil)
+		res, err := c.StartSmeshing(ctx, &pb.StartSmeshingRequest{
 			Opts:     opts,
 			Coinbase: coinbase,
 		})
@@ -959,27 +526,39 @@ func TestSmesherService(t *testing.T) {
 	})
 
 	t.Run("StopSmeshing", func(t *testing.T) {
-		res, err := c.StopSmeshing(context.Background(), &pb.StopSmeshingRequest{})
+		t.Parallel()
+		c, ctx := setupSmesherService(t)
+		c.smeshingProvider.EXPECT().StopSmeshing(gomock.Any()).Return(nil)
+		c.postSupervisor.EXPECT().Stop().Return(nil)
+		res, err := c.StopSmeshing(ctx, &pb.StopSmeshingRequest{})
 		require.NoError(t, err)
 		require.Equal(t, int32(code.Code_OK), res.Status.Code)
 	})
 
 	t.Run("SmesherID", func(t *testing.T) {
-		res, err := c.SmesherID(context.Background(), &empty.Empty{})
+		t.Parallel()
+		c, ctx := setupSmesherService(t)
+		nodeId := types.RandomNodeID()
+		c.smeshingProvider.EXPECT().SmesherID().Return(nodeId)
+		res, err := c.SmesherID(ctx, &emptypb.Empty{})
 		require.NoError(t, err)
-		require.NoError(t, err)
-		require.Equal(t, signer.NodeID().Bytes(), res.PublicKey)
+		require.Equal(t, nodeId.Bytes(), res.PublicKey)
 	})
 
 	t.Run("SetCoinbaseMissingArgs", func(t *testing.T) {
-		_, err := c.SetCoinbase(context.Background(), &pb.SetCoinbaseRequest{})
+		t.Parallel()
+		c, ctx := setupSmesherService(t)
+		_, err := c.SetCoinbase(ctx, &pb.SetCoinbaseRequest{})
 		require.Error(t, err)
 		statusCode := status.Code(err)
 		require.Equal(t, codes.InvalidArgument, statusCode)
 	})
 
 	t.Run("SetCoinbase", func(t *testing.T) {
-		res, err := c.SetCoinbase(context.Background(), &pb.SetCoinbaseRequest{
+		t.Parallel()
+		c, ctx := setupSmesherService(t)
+		c.smeshingProvider.EXPECT().SetCoinbase(addr1)
+		res, err := c.SetCoinbase(ctx, &pb.SetCoinbaseRequest{
 			Id: &pb.AccountId{Address: addr1.String()},
 		})
 		require.NoError(t, err)
@@ -987,36 +566,50 @@ func TestSmesherService(t *testing.T) {
 	})
 
 	t.Run("Coinbase", func(t *testing.T) {
-		res, err := c.Coinbase(context.Background(), &empty.Empty{})
+		t.Parallel()
+		c, ctx := setupSmesherService(t)
+		c.smeshingProvider.EXPECT().Coinbase().Return(addr1)
+		res, err := c.Coinbase(ctx, &emptypb.Empty{})
 		require.NoError(t, err)
 		addr, err := types.StringToAddress(res.AccountId.Address)
 		require.NoError(t, err)
-		require.Equal(t, addr1.Bytes(), addr.Bytes())
+		require.Equal(t, addr1, addr)
 	})
 
 	t.Run("MinGas", func(t *testing.T) {
-		_, err := c.MinGas(context.Background(), &empty.Empty{})
+		t.Parallel()
+		c, ctx := setupSmesherService(t)
+		_, err := c.MinGas(ctx, &emptypb.Empty{})
 		require.Error(t, err)
 		statusCode := status.Code(err)
 		require.Equal(t, codes.Unimplemented, statusCode)
 	})
 
 	t.Run("SetMinGas", func(t *testing.T) {
-		_, err := c.SetMinGas(context.Background(), &pb.SetMinGasRequest{})
+		t.Parallel()
+		c, ctx := setupSmesherService(t)
+		_, err := c.SetMinGas(ctx, &pb.SetMinGasRequest{})
 		require.Error(t, err)
 		statusCode := status.Code(err)
 		require.Equal(t, codes.Unimplemented, statusCode)
 	})
 
 	t.Run("PostSetupComputeProviders", func(t *testing.T) {
-		_, err := c.PostSetupProviders(context.Background(), &pb.PostSetupProvidersRequest{Benchmark: false})
+		t.Parallel()
+		c, ctx := setupSmesherService(t)
+		c.postProvider.EXPECT().Providers().Return(nil, nil)
+		_, err := c.PostSetupProviders(ctx, &pb.PostSetupProvidersRequest{Benchmark: false})
 		require.NoError(t, err)
 	})
 
 	t.Run("PostSetupStatusStream", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
+		t.Parallel()
+		c, ctx := setupSmesherService(t)
+		c.postProvider.EXPECT().Status().Return(&activation.PostSetupStatus{}).AnyTimes()
+
+		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
-		stream, err := c.PostSetupStatusStream(ctx, &empty.Empty{})
+		stream, err := c.PostSetupStatusStream(ctx, &emptypb.Empty{})
 		require.NoError(t, err)
 
 		// Expecting the stream to return updates before closing.
@@ -1029,18 +622,23 @@ func TestSmesherService(t *testing.T) {
 		_, err = stream.Recv()
 		require.ErrorContains(t, err, context.Canceled.Error())
 	})
+
 	t.Run("UpdatePoetServer", func(t *testing.T) {
-		smeshingAPI.UpdatePoETErr = nil
-		res, err := c.UpdatePoetServers(context.Background(), &pb.UpdatePoetServersRequest{Urls: []string{"test"}})
+		t.Parallel()
+		c, ctx := setupSmesherService(t)
+		c.smeshingProvider.EXPECT().UpdatePoETServers(gomock.Any(), gomock.Any()).Return(nil)
+		res, err := c.UpdatePoetServers(ctx, &pb.UpdatePoetServersRequest{Urls: []string{"test"}})
 		require.NoError(t, err)
 		require.EqualValues(t, res.Status.Code, code.Code_OK)
 	})
 	t.Run("UpdatePoetServerUnavailable", func(t *testing.T) {
-		smeshingAPI.UpdatePoETErr = activation.ErrPoetServiceUnstable
+		t.Parallel()
+		c, ctx := setupSmesherService(t)
+		c.smeshingProvider.EXPECT().UpdatePoETServers(gomock.Any(), gomock.Any()).Return(activation.ErrPoetServiceUnstable)
 		urls := []string{"test"}
-		res, err := c.UpdatePoetServers(context.Background(), &pb.UpdatePoetServersRequest{Urls: urls})
+		res, err := c.UpdatePoetServers(ctx, &pb.UpdatePoetServersRequest{Urls: urls})
 		require.Nil(t, res)
-		require.ErrorIs(t, err, status.Errorf(codes.Unavailable, "can't reach poet service (%v). retry later", smeshingAPI.UpdatePoETErr))
+		require.ErrorIs(t, err, status.Errorf(codes.Unavailable, "can't reach poet service (%v). retry later", activation.ErrPoetServiceUnstable))
 	})
 }
 
@@ -1050,12 +648,15 @@ func TestMeshService(t *testing.T) {
 	genesis := time.Unix(genTimeUnix, 0)
 	genTime.EXPECT().GenesisTime().Return(genesis)
 	genTime.EXPECT().CurrentLayer().Return(layerCurrent).AnyTimes()
-	grpcService := NewMeshService(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal, logtest.New(t).WithName("grpc.Mesh"))
-	t.Cleanup(launchServer(t, cfg, grpcService))
+	db := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+	svc := NewMeshService(db, meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
+	require.NoError(t, activesets.Add(db, ballot1.EpochData.ActiveSetHash, &types.EpochActiveSet{Set: types.ATXIDList{globalAtx.ID(), globalAtx2.ID()}}))
+	cfg, cleanup := launchServer(t, svc)
+	t.Cleanup(cleanup)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg.PublicListener)
+	conn := dialGrpc(ctx, t, cfg)
 	c := pb.NewMeshServiceClient(conn)
 
 	// Construct an array of test cases to test each endpoint in turn
@@ -1560,12 +1161,13 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	txHandler := NewMocktxValidator(ctrl)
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(nil)
 
-	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler, logtest.New(t).WithName("grpc.Transactions"))
-	t.Cleanup(launchServer(t, cfg, grpcService))
+	svc := NewTransactionService(sql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler)
+	cfg, cleanup := launchServer(t, svc)
+	t.Cleanup(cleanup)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg.PublicListener)
+	conn := dialGrpc(ctx, t, cfg)
 	c := pb.NewTransactionServiceClient(conn)
 
 	serializedTx, err := codec.Encode(globalTx)
@@ -1598,12 +1200,13 @@ func TestTransactionServiceSubmitInvalidTx(t *testing.T) {
 	txHandler := NewMocktxValidator(ctrl)
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(errors.New("failed validation"))
 
-	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler, logtest.New(t).WithName("grpc.Transactions"))
-	t.Cleanup(launchServer(t, cfg, grpcService))
+	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler)
+	cfg, cleanup := launchServer(t, grpcService)
+	t.Cleanup(cleanup)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg.PublicListener)
+	conn := dialGrpc(ctx, t, cfg)
 	c := pb.NewTransactionServiceClient(conn)
 
 	serializedTx, err := codec.Encode(globalTx)
@@ -1630,12 +1233,13 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 	txHandler := NewMocktxValidator(ctrl)
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(nil).Times(numTxs)
 
-	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler, logtest.New(t).WithName("grpc.Transactions"))
-	t.Cleanup(launchServer(t, cfg, grpcService))
+	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler)
+	cfg, cleanup := launchServer(t, grpcService)
+	t.Cleanup(cleanup)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg.PublicListener)
+	conn := dialGrpc(ctx, t, cfg)
 	c := pb.NewTransactionServiceClient(conn)
 	for i := 0; i < numTxs; i++ {
 		res, err := c.SubmitTransaction(ctx, &pb.SubmitTransactionRequest{
@@ -1657,12 +1261,13 @@ func TestTransactionService(t *testing.T) {
 	txHandler := NewMocktxValidator(ctrl)
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
-	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler, logtest.New(t).WithName("grpc.Transactions"))
-	t.Cleanup(launchServer(t, cfg, grpcService))
+	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler)
+	cfg, cleanup := launchServer(t, grpcService)
+	t.Cleanup(cleanup)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg.PublicListener)
+	conn := dialGrpc(ctx, t, cfg)
 	c := pb.NewTransactionServiceClient(conn)
 
 	// Construct an array of test cases to test each endpoint in turn
@@ -1996,12 +1601,13 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
-	grpcService := NewMeshService(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal, logtest.New(t).WithName("grpc.Mesh"))
-	t.Cleanup(launchServer(t, cfg, grpcService))
+	grpcService := NewMeshService(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
+	cfg, cleanup := launchServer(t, grpcService)
+	t.Cleanup(cleanup)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg.PublicListener)
+	conn := dialGrpc(ctx, t, cfg)
 	c := pb.NewMeshServiceClient(conn)
 
 	// set up the grpc listener stream
@@ -2040,7 +1646,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 
 	_, err = stream.Recv()
 	require.Error(t, err)
-	require.Equal(t, status.Convert(err).Code(), codes.DeadlineExceeded)
+	require.Contains(t, []codes.Code{codes.Unknown, codes.DeadlineExceeded}, status.Convert(err).Code())
 }
 
 func TestAccountDataStream_comprehensive(t *testing.T) {
@@ -2051,12 +1657,13 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 	events.InitializeReporter()
 	t.Cleanup(events.CloseEventReporter)
 
-	svc := NewGlobalStateService(meshAPIMock, conStateAPI, logtest.New(t).WithName("grpc.GlobalState"))
-	t.Cleanup(launchServer(t, cfg, svc))
+	svc := NewGlobalStateService(meshAPIMock, conStateAPI)
+	cfg, cleanup := launchServer(t, svc)
+	t.Cleanup(cleanup)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg.PublicListener)
+	conn := dialGrpc(ctx, t, cfg)
 	c := pb.NewGlobalStateServiceClient(conn)
 
 	// set up the grpc listener stream
@@ -2110,12 +1717,13 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 	events.InitializeReporter()
 	t.Cleanup(events.CloseEventReporter)
 
-	svc := NewGlobalStateService(meshAPIMock, conStateAPI, logtest.New(t).WithName("grpc.GlobalState"))
-	t.Cleanup(launchServer(t, cfg, svc))
+	svc := NewGlobalStateService(meshAPIMock, conStateAPI)
+	cfg, cleanup := launchServer(t, svc)
+	t.Cleanup(cleanup)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg.PublicListener)
+	conn := dialGrpc(ctx, t, cfg)
 	c := pb.NewGlobalStateServiceClient(conn)
 
 	// set up the grpc listener stream
@@ -2172,12 +1780,15 @@ func TestLayerStream_comprehensive(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
-	grpcService := NewMeshService(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal, logtest.New(t).WithName("grpc.Mesh"))
-	t.Cleanup(launchServer(t, cfg, grpcService))
+	db := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+	grpcService := NewMeshService(db, meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
+	require.NoError(t, activesets.Add(db, ballot1.EpochData.ActiveSetHash, &types.EpochActiveSet{Set: types.ATXIDList{globalAtx.ID(), globalAtx2.ID()}}))
+	cfg, cleanup := launchServer(t, grpcService)
+	t.Cleanup(cleanup)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg.PublicListener)
+	conn := dialGrpc(ctx, t, cfg)
 
 	// set up the grpc listener stream
 	c := pb.NewMeshServiceClient(conn)
@@ -2315,13 +1926,13 @@ func TestMultiService(t *testing.T) {
 	genTime := NewMockgenesisTimeAPI(ctrl)
 	genesis := time.Unix(genTimeUnix, 0)
 	genTime.EXPECT().GenesisTime().Return(genesis)
-	svc1 := NewNodeService(peerCounter, meshAPIMock, genTime, syncer, "v0.0.0", "cafebabe", logtest.New(t).WithName("grpc.Node"))
-	svc2 := NewMeshService(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal, logtest.New(t).WithName("grpc.Mesh"))
-	shutDown := launchServer(t, cfg, svc1, svc2)
+	svc1 := NewNodeService(peerCounter, meshAPIMock, genTime, syncer, "v0.0.0", "cafebabe")
+	svc2 := NewMeshService(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
+	cfg, shutDown := launchServer(t, svc1, svc2)
 	t.Cleanup(shutDown)
 
-	c1 := pb.NewNodeServiceClient(dialGrpc(ctx, t, cfg.PublicListener))
-	c2 := pb.NewMeshServiceClient(dialGrpc(ctx, t, cfg.PublicListener))
+	c1 := pb.NewNodeServiceClient(dialGrpc(ctx, t, cfg))
+	c2 := pb.NewMeshServiceClient(dialGrpc(ctx, t, cfg))
 
 	// call endpoints and validate results
 	const message = "Hello World"
@@ -2350,58 +1961,18 @@ func TestMultiService(t *testing.T) {
 	require.Contains(t, err2.Error(), "rpc error: code = Unavailable")
 }
 
-func TestJsonApi(t *testing.T) {
-	const message = "hello world!"
-
-	// we cannot start the gateway service without enabling at least one service
-	shutDown := launchServer(t, cfg)
-	t.Cleanup(shutDown)
-	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
-	url := fmt.Sprintf("http://%s/%s", cfg.JSONListener, "v1/node/echo")
-	_, err := http.Post(url, "application/json", strings.NewReader(payload))
-	require.Error(t, err)
-	shutDown()
-
-	// enable services and try again
-	ctrl := gomock.NewController(t)
-	syncer := NewMocksyncer(ctrl)
-	syncer.EXPECT().IsSynced(gomock.Any()).Return(false).AnyTimes()
-	peerCounter := NewMockpeerCounter(ctrl)
-	genTime := NewMockgenesisTimeAPI(ctrl)
-	genesis := time.Unix(genTimeUnix, 0)
-	genTime.EXPECT().GenesisTime().Return(genesis)
-	svc1 := NewNodeService(peerCounter, meshAPIMock, genTime, syncer, "v0.0.0", "cafebabe", logtest.New(t).WithName("grpc.Node"))
-	svc2 := NewMeshService(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal, logtest.New(t).WithName("grpc.Mesh"))
-	t.Cleanup(launchServer(t, cfg, svc1, svc2))
-	time.Sleep(time.Second)
-
-	// generate request payload (api input params)
-	payload = marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
-	respBody, respStatus := callEndpoint(t, "v1/node/echo", payload)
-	require.Equal(t, http.StatusOK, respStatus)
-	var msg pb.EchoResponse
-	require.NoError(t, jsonpb.UnmarshalString(respBody, &msg))
-	require.Equal(t, message, msg.Msg.Value)
-
-	// Test MeshService
-	respBody2, respStatus2 := callEndpoint(t, "v1/mesh/genesistime", "")
-	require.Equal(t, http.StatusOK, respStatus2)
-	var msg2 pb.GenesisTimeResponse
-	require.NoError(t, jsonpb.UnmarshalString(respBody2, &msg2))
-	require.Equal(t, uint64(genesis.Unix()), msg2.Unixtime.Value)
-}
-
 func TestDebugService(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	identity := NewMocknetworkIdentity(ctrl)
 	mOracle := NewMockoracle(ctrl)
 	db := sql.InMemory()
-	svc := NewDebugService(db, conStateAPI, identity, mOracle, logtest.New(t).WithName("grpc.Debug"))
-	t.Cleanup(launchServer(t, cfg, svc))
+	svc := NewDebugService(db, conStateAPI, identity, mOracle)
+	cfg, cleanup := launchServer(t, svc)
+	t.Cleanup(cleanup)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg.PublicListener)
+	conn := dialGrpc(ctx, t, cfg)
 	c := pb.NewDebugServiceClient(conn)
 
 	t.Run("Accounts", func(t *testing.T) {
@@ -2448,7 +2019,7 @@ func TestDebugService(t *testing.T) {
 		id := p2p.Peer("test")
 		identity.EXPECT().ID().Return(id)
 
-		response, err := c.NetworkInfo(context.Background(), &empty.Empty{})
+		response, err := c.NetworkInfo(context.Background(), &emptypb.Empty{})
 		require.NoError(t, err)
 		require.NotNil(t, response)
 		require.Equal(t, id.String(), response.Id)
@@ -2475,7 +2046,7 @@ func TestDebugService(t *testing.T) {
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
-		stream, err := c.ProposalsStream(ctx, &empty.Empty{})
+		stream, err := c.ProposalsStream(ctx, &emptypb.Empty{})
 		require.NoError(t, err)
 
 		_, err = stream.Header()
@@ -2498,15 +2069,16 @@ func TestEventsReceived(t *testing.T) {
 	events.InitializeReporter()
 	t.Cleanup(events.CloseEventReporter)
 
-	txService := NewTransactionService(sql.InMemory(), nil, meshAPIMock, conStateAPI, nil, nil, logtest.New(t).WithName("grpc.Transactions"))
-	gsService := NewGlobalStateService(meshAPIMock, conStateAPI, logtest.New(t).WithName("grpc.GlobalState"))
-	t.Cleanup(launchServer(t, cfg, txService, gsService))
+	txService := NewTransactionService(sql.InMemory(), nil, meshAPIMock, conStateAPI, nil, nil)
+	gsService := NewGlobalStateService(meshAPIMock, conStateAPI)
+	cfg, cleanup := launchServer(t, txService, gsService)
+	t.Cleanup(cleanup)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	conn1 := dialGrpc(ctx, t, cfg.PublicListener)
-	conn2 := dialGrpc(ctx, t, cfg.PublicListener)
+	conn1 := dialGrpc(ctx, t, cfg)
+	conn2 := dialGrpc(ctx, t, cfg)
 
 	txClient := pb.NewTransactionServiceClient(conn1)
 	accountClient := pb.NewGlobalStateServiceClient(conn2)
@@ -2577,13 +2149,14 @@ func TestTransactionsRewards(t *testing.T) {
 	events.InitializeReporter()
 	t.Cleanup(events.CloseEventReporter)
 
-	t.Cleanup(launchServer(t, cfg, NewGlobalStateService(meshAPIMock, conStateAPI, logtest.New(t).WithName("grpc.GlobalState"))))
+	cfg, cleanup := launchServer(t, NewGlobalStateService(meshAPIMock, conStateAPI))
+	t.Cleanup(cleanup)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	t.Cleanup(cancel)
-	client := pb.NewGlobalStateServiceClient(dialGrpc(ctx, t, cfg.PublicListener))
+	client := pb.NewGlobalStateServiceClient(dialGrpc(ctx, t, cfg))
 
-	address := newAddress(t)
+	address := wallet.Address(types.RandomNodeID().Bytes())
 	weight := new(big.Rat).SetFloat64(18.7)
 	rewards := []types.CoinbaseReward{{Coinbase: address, Weight: types.RatNumFromBigRat(weight)}}
 
@@ -2643,7 +2216,8 @@ func TestVMAccountUpdates(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	svm := vm.New(db, vm.WithLogger(logtest.New(t)))
-	t.Cleanup(launchServer(t, cfg, NewGlobalStateService(nil, txs.NewConservativeState(svm, db), logtest.New(t).WithName("grpc.GlobalState"))))
+	cfg, cleanup := launchServer(t, NewGlobalStateService(nil, txs.NewConservativeState(svm, db)))
+	t.Cleanup(cleanup)
 
 	keys := make([]*signing.EdSigner, 10)
 	accounts := make([]types.Account, len(keys))
@@ -2670,7 +2244,7 @@ func TestVMAccountUpdates(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	t.Cleanup(cancel)
-	client := pb.NewGlobalStateServiceClient(dialGrpc(ctx, t, cfg.PublicListener))
+	client := pb.NewGlobalStateServiceClient(dialGrpc(ctx, t, cfg))
 	eg, ctx := errgroup.WithContext(ctx)
 	states := make(chan *pb.AccountState, len(accounts))
 	for _, account := range accounts {
@@ -2739,8 +2313,9 @@ func TestMeshService_EpochStream(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
 	db := sql.InMemory()
-	srv := NewMeshService(datastore.NewCachedDB(db, logtest.New(t)), meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal, logtest.New(t).WithName("grpc.Mesh"))
-	t.Cleanup(launchServer(t, cfg, srv))
+	srv := NewMeshService(datastore.NewCachedDB(db, logtest.New(t)), meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
+	cfg, cleanup := launchServer(t, srv)
+	t.Cleanup(cleanup)
 
 	epoch := types.EpochID(3)
 	atxids := types.RandomActiveSet(100)
@@ -2756,7 +2331,7 @@ func TestMeshService_EpochStream(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg.PublicListener)
+	conn := dialGrpc(ctx, t, cfg)
 	client := pb.NewMeshServiceClient(conn)
 
 	stream, err := client.EpochStream(ctx, &pb.EpochStreamRequest{Epoch: epoch.Uint32()})

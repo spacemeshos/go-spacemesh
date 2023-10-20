@@ -1,5 +1,4 @@
-# go-spacemesh needs at least ubuntu 20.04 (because gpu-post and post-rs are linked to glibc 2.31)
-# newer versions of ubuntu should work as well, so far only 22.04 has been tested
+# go-spacemesh needs at least ubuntu 22.04. newer versions of ubuntu might work as well, but are untested
 FROM ubuntu:22.04 AS linux
 ENV DEBIAN_FRONTEND noninteractive
 ENV SHELL /bin/bash
@@ -27,7 +26,7 @@ ENV LANG en_US.UTF-8
 ENV LANGUAGE en_US.UTF-8
 ENV LC_ALL en_US.UTF-8
 
-FROM golang:1.19 as builder
+FROM golang:1.21 as builder
 RUN set -ex \
    && apt-get update --fix-missing \
    && apt-get install -qy --no-install-recommends \
@@ -52,11 +51,12 @@ COPY . .
 RUN --mount=type=cache,id=build,target=/root/.cache/go-build make build
 RUN --mount=type=cache,id=build,target=/root/.cache/go-build make gen-p2p-identity
 
-# In this last stage, we start from a fresh Alpine image, to reduce the image size and not ship the Go compiler in our production artifacts.
+# In this last stage, we start from a fresh image, to reduce the image size and not ship the Go compiler in our production artifacts.
 FROM linux AS spacemesh
 
 # Finally we copy the statically compiled Go binary.
 COPY --from=builder /src/build/go-spacemesh /bin/
+COPY --from=builder /src/build/service /bin/
 COPY --from=builder /src/build/libpost.so /bin/
 COPY --from=builder /src/build/gen-p2p-identity /bin/
 

@@ -7,7 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
 )
 
-//go:generate mockgen -package=mocks -destination=./mocks/tortoise.go -source=./tortoise.go
+//go:generate mockgen -typed -package=mocks -destination=./mocks/tortoise.go -source=./tortoise.go
 
 // Tortoise is an interface provided by tortoise implementation.
 type Tortoise interface {
@@ -17,7 +17,7 @@ type Tortoise interface {
 	TallyVotes(context.Context, types.LayerID)
 	LatestComplete() types.LayerID
 	Updates() []result.Layer
-	Results(from, to types.LayerID) ([]result.Layer, error)
+	OnApplied(types.LayerID, types.Hash32) bool
 	OnMalfeasance(types.NodeID)
 	OnAtx(*types.AtxTortoiseData)
 }
