@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"sync"
 
-	"go.uber.org/atomic"
-	"golang.org/x/exp/maps"
-
 	"github.com/google/btree"
+	"go.uber.org/atomic"
+	"golang.org/x/exp/slices"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
@@ -167,24 +167,26 @@ func (c *Cache) GetByNode(epoch types.EpochID, node types.NodeID) *ATXData {
 	return data
 }
 
-func (c *Cache) WeightForSet(epoch types.EpochID, set []types.ATXID) (uint64, []types.ATXID) {
+// WeightForSet computes total weight of atxs in the set and returned array with
+// atxs in the set that weren't used.
+func (c *Cache) WeightForSet(epoch types.EpochID, set []types.ATXID) (uint64, []bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	ecache, exists := c.epochs[epoch]
+
+	used := make([]bool, len(set))
 	if !exists {
-		return 0, set
-	}
-	keyed := make(map[types.ATXID]struct{}, len(set))
-	for _, id := range set {
-		keyed[id] = struct{}{}
+		return 0, used
 	}
 	var weight uint64
 	ecache.index.Ascend(func(s *stored) bool {
-		if _, exists := keyed[s.atx]; exists {
-			delete(keyed, s.atx)
+		if i, exists := slices.BinarySearchFunc(set, s.atx, func(left, right types.ATXID) int {
+			return bytes.Compare(left[:], right[:])
+		}); exists {
 			weight += s.data.Weight
+			used[i] = true
 		}
 		return true
 	})
-	return weight, maps.Keys(keyed)
+	return weight, used
 }

@@ -108,12 +108,12 @@ func TestCache(t *testing.T) {
 		c.Add(1, types.NodeID{1}, types.ATXID{1}, &ATXData{Weight: 1})
 		c.Add(1, types.NodeID{1}, types.ATXID{2}, &ATXData{Weight: 2})
 
-		weight, missing := c.WeightForSet(1, []types.ATXID{{1}, {2}, {3}})
-		require.Equal(t, []types.ATXID{{3}}, missing)
+		weight, used := c.WeightForSet(1, []types.ATXID{{1}, {2}, {3}})
+		require.Equal(t, []bool{true, true, false}, used)
 		require.EqualValues(t, 3, weight)
 
-		weight, missing = c.WeightForSet(1, []types.ATXID{{1}})
-		require.Empty(t, missing)
+		weight, used = c.WeightForSet(1, []types.ATXID{{1}})
+		require.Equal(t, []bool{true}, used)
 		require.EqualValues(t, 1, weight)
 	})
 	t.Run("adding after eviction", func(t *testing.T) {
@@ -221,12 +221,12 @@ func benchmarkkWeightForSet(b *testing.B, size, setSize int) {
 	})
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		weight, missing := c.WeightForSet(epoch, atxs[:setSize])
+		weight, used := c.WeightForSet(epoch, atxs[:setSize])
 		if weight == 0 {
 			b.Fatalf("weight can't be zero")
 		}
-		if len(missing) > 0 {
-			b.Fatalf("missing should be empty")
+		if len(used) != setSize {
+			b.Fatalf("used should be equal to set size")
 		}
 	}
 }
