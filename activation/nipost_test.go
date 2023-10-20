@@ -119,7 +119,7 @@ func TestPostSetup(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	require.NoError(t, postProvider.PrepareInitializer(context.Background(), postProvider.opts))
+	require.NoError(t, postProvider.PrepareInitializer(postProvider.opts))
 	require.NoError(t, postProvider.StartSession(context.Background()))
 	t.Cleanup(func() { assert.NoError(t, postProvider.Reset()) })
 

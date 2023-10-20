@@ -1,6 +1,7 @@
 package activation
 
 import (
+	"errors"
 	"os"
 	"runtime"
 	"syscall"
@@ -9,6 +10,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
 )
 
@@ -21,7 +25,7 @@ func Test_PostSupervisor_ErrorOnMissingBinary(t *testing.T) {
 	postOpts := DefaultPostSetupOpts()
 	provingOpts := DefaultPostProvingOpts()
 
-	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, postOpts, provingOpts)
+	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, postOpts, provingOpts, nil, nil)
 	require.ErrorContains(t, err, "post service binary not found")
 	require.Nil(t, ps)
 }
@@ -34,11 +38,72 @@ func Test_PostSupervisor_StopWithoutStart(t *testing.T) {
 	postOpts := DefaultPostSetupOpts()
 	provingOpts := DefaultPostProvingOpts()
 
-	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, postOpts, provingOpts)
+	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, postOpts, provingOpts, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ps)
 
-	require.NoError(t, ps.Stop())
+	require.NoError(t, ps.Stop(false))
+}
+
+func Test_PostSupervisor_Start_FailPrepare(t *testing.T) {
+	log := zaptest.NewLogger(t)
+
+	cmdCfg := DefaultTestPostServiceConfig()
+	postCfg := DefaultPostConfig()
+	postOpts := DefaultPostSetupOpts()
+	provingOpts := DefaultPostProvingOpts()
+
+	mgr := NewMockpostSetupProvider(gomock.NewController(t))
+	testErr := errors.New("test error")
+	mgr.EXPECT().PrepareInitializer(postOpts).Return(testErr)
+
+	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, postOpts, provingOpts, mgr, nil)
+	require.NoError(t, err)
+	require.NotNil(t, ps)
+
+	require.ErrorIs(t, ps.Start(), testErr)
+}
+
+type fatalHook struct {
+	called bool
+}
+
+func (f *fatalHook) OnWrite(*zapcore.CheckedEntry, []zapcore.Field) {
+	f.called = true
+}
+
+func calledFatal(tb testing.TB) zapcore.CheckWriteHook {
+	hook := &fatalHook{}
+	tb.Cleanup(func() { assert.True(tb, hook.called, "zap.Fatal not called") })
+	return hook
+}
+
+func Test_PostSupervisor_Start_FailStartSession(t *testing.T) {
+	log := zaptest.NewLogger(t, zaptest.WrapOptions(zap.WithFatalHook(calledFatal(t))))
+
+	cmdCfg := DefaultTestPostServiceConfig()
+	postCfg := DefaultPostConfig()
+	postOpts := DefaultPostSetupOpts()
+	provingOpts := DefaultPostProvingOpts()
+
+	ctrl := gomock.NewController(t)
+	mgr := NewMockpostSetupProvider(ctrl)
+	mgr.EXPECT().PrepareInitializer(postOpts).Return(nil)
+	mgr.EXPECT().StartSession(gomock.Any()).Return(errors.New("failed start session"))
+
+	sync := NewMocksyncer(ctrl)
+	sync.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
+		ch := make(chan struct{})
+		close(ch)
+		return ch
+	})
+
+	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, postOpts, provingOpts, mgr, sync)
+	require.NoError(t, err)
+	require.NotNil(t, ps)
+
+	require.NoError(t, ps.Start())
+	require.EqualError(t, ps.eg.Wait(), "failed start session")
 }
 
 func Test_PostSupervisor_StartsServiceCmd(t *testing.T) {
@@ -49,12 +114,24 @@ func Test_PostSupervisor_StartsServiceCmd(t *testing.T) {
 	postOpts := DefaultPostSetupOpts()
 	provingOpts := DefaultPostProvingOpts()
 
-	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, postOpts, provingOpts)
+	ctrl := gomock.NewController(t)
+	mgr := NewMockpostSetupProvider(ctrl)
+	mgr.EXPECT().PrepareInitializer(postOpts).Return(nil)
+	mgr.EXPECT().StartSession(gomock.Any()).Return(nil)
+
+	sync := NewMocksyncer(ctrl)
+	sync.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
+		ch := make(chan struct{})
+		close(ch)
+		return ch
+	})
+
+	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, postOpts, provingOpts, mgr, sync)
 	require.NoError(t, err)
 	require.NotNil(t, ps)
 
 	require.NoError(t, ps.Start())
-	t.Cleanup(func() { assert.NoError(t, ps.Stop()) })
+	t.Cleanup(func() { assert.NoError(t, ps.Stop(false)) })
 
 	require.Eventually(t, func() bool { return (ps.pid.Load() != 0) }, 5*time.Second, 100*time.Millisecond)
 
@@ -67,7 +144,7 @@ func Test_PostSupervisor_StartsServiceCmd(t *testing.T) {
 		require.NoError(t, process.Signal(syscall.Signal(0))) // check if process is running
 	}
 
-	require.NoError(t, ps.Stop())
+	require.NoError(t, ps.Stop(false))
 
 	if runtime.GOOS != "windows" {
 		require.Error(t, process.Signal(syscall.Signal(0))) // check if process is closed
@@ -82,21 +159,35 @@ func Test_PostSupervisor_Restart_Possible(t *testing.T) {
 	postOpts := DefaultPostSetupOpts()
 	provingOpts := DefaultPostProvingOpts()
 
-	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, postOpts, provingOpts)
+	ctrl := gomock.NewController(t)
+	mgr := NewMockpostSetupProvider(ctrl)
+	mgr.EXPECT().PrepareInitializer(postOpts).Return(nil)
+	mgr.EXPECT().StartSession(gomock.Any()).Return(nil)
+
+	sync := NewMocksyncer(ctrl)
+	sync.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
+		ch := make(chan struct{})
+		close(ch)
+		return ch
+	}).AnyTimes()
+
+	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, postOpts, provingOpts, mgr, sync)
 	require.NoError(t, err)
 	require.NotNil(t, ps)
 
 	require.NoError(t, ps.Start())
-	t.Cleanup(func() { assert.NoError(t, ps.Stop()) })
+	t.Cleanup(func() { assert.NoError(t, ps.Stop(false)) })
 	require.Eventually(t, func() bool { return (ps.pid.Load() != 0) }, 5*time.Second, 100*time.Millisecond)
 
-	require.NoError(t, ps.Stop())
+	require.NoError(t, ps.Stop(false))
 	require.Eventually(t, func() bool { return (ps.pid.Load() == 0) }, 5*time.Second, 100*time.Millisecond)
 
+	mgr.EXPECT().PrepareInitializer(postOpts).Return(nil)
+	mgr.EXPECT().StartSession(gomock.Any()).Return(nil)
 	require.NoError(t, ps.Start())
 	require.Eventually(t, func() bool { return (ps.pid.Load() != 0) }, 5*time.Second, 100*time.Millisecond)
 
-	require.NoError(t, ps.Stop())
+	require.NoError(t, ps.Stop(false))
 	require.Eventually(t, func() bool { return (ps.pid.Load() == 0) }, 5*time.Second, 100*time.Millisecond)
 }
 
@@ -108,12 +199,24 @@ func Test_PostSupervisor_RestartsOnCrash(t *testing.T) {
 	postOpts := DefaultPostSetupOpts()
 	provingOpts := DefaultPostProvingOpts()
 
-	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, postOpts, provingOpts)
+	ctrl := gomock.NewController(t)
+	mgr := NewMockpostSetupProvider(ctrl)
+	mgr.EXPECT().PrepareInitializer(postOpts).Return(nil)
+	mgr.EXPECT().StartSession(gomock.Any()).Return(nil)
+
+	sync := NewMocksyncer(ctrl)
+	sync.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
+		ch := make(chan struct{})
+		close(ch)
+		return ch
+	})
+
+	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, postOpts, provingOpts, mgr, sync)
 	require.NoError(t, err)
 	require.NotNil(t, ps)
 
 	require.NoError(t, ps.Start())
-	t.Cleanup(func() { assert.NoError(t, ps.Stop()) })
+	t.Cleanup(func() { assert.NoError(t, ps.Stop(false)) })
 
 	require.Eventually(t, func() bool { return (ps.pid.Load() != 0) }, 5*time.Second, 100*time.Millisecond)
 
@@ -131,5 +234,38 @@ func Test_PostSupervisor_RestartsOnCrash(t *testing.T) {
 	require.NotNil(t, process)
 
 	require.NotEqual(t, oldPid, pid)
-	require.NoError(t, ps.Stop())
+	require.NoError(t, ps.Stop(false))
+}
+
+func Test_PostSupervisor_StopOnError(t *testing.T) {
+	log := zaptest.NewLogger(t)
+
+	cmdCfg := DefaultTestPostServiceConfig()
+	postCfg := DefaultPostConfig()
+	postOpts := DefaultPostSetupOpts()
+	provingOpts := DefaultPostProvingOpts()
+
+	ctrl := gomock.NewController(t)
+	mgr := NewMockpostSetupProvider(ctrl)
+	mgr.EXPECT().PrepareInitializer(postOpts).Return(nil)
+	mgr.EXPECT().StartSession(gomock.Any()).Return(nil)
+
+	sync := NewMocksyncer(ctrl)
+	sync.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
+		ch := make(chan struct{})
+		close(ch)
+		return ch
+	})
+
+	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, postOpts, provingOpts, mgr, sync)
+	require.NoError(t, err)
+	require.NotNil(t, ps)
+
+	require.NoError(t, ps.Start())
+	t.Cleanup(func() { assert.NoError(t, ps.Stop(false)) })
+	require.Eventually(t, func() bool { return (ps.pid.Load() != 0) }, 5*time.Second, 100*time.Millisecond)
+
+	testErr := errors.New("couldn't delete files")
+	mgr.EXPECT().Reset().Return(testErr)
+	require.ErrorIs(t, ps.Stop(true), testErr)
 }

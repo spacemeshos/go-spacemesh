@@ -73,7 +73,7 @@ func TestValidator_Validate(t *testing.T) {
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	t.Cleanup(launchPostSupervisor(t, logger, grpcCfg, opts))
+	t.Cleanup(launchPostSupervisor(t, logger, mgr, grpcCfg, opts))
 
 	require.Eventually(t, func() bool {
 		_, err := svc.Client(sig.NodeID())

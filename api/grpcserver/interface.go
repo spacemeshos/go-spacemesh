@@ -57,7 +57,7 @@ type postSetupProvider interface {
 
 type postSupervisor interface {
 	Start() error
-	Stop() error
+	Stop(deleteFiles bool) error
 }
 
 // peerCounter is an api to get amount of connected peers.

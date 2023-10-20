@@ -47,7 +47,7 @@ type nipostBuilder interface {
 }
 
 type syncer interface {
-	RegisterForATXSynced() chan struct{}
+	RegisterForATXSynced() <-chan struct{}
 }
 
 type atxProvider interface {
@@ -58,13 +58,9 @@ type atxProvider interface {
 // This interface is used by the atx builder and currently implemented by the PostSetupManager.
 // Eventually most of the functionality will be moved to the PoSTClient.
 type postSetupProvider interface {
-	PrepareInitializer(ctx context.Context, opts PostSetupOpts) error
+	PrepareInitializer(opts PostSetupOpts) error
 	StartSession(context context.Context) error
 	Reset() error
-	CommitmentAtx() (types.ATXID, error)
-	VRFNonce() (*types.VRFPostIndex, error)
-	LastOpts() *PostSetupOpts
-	Config() PostConfig
 }
 
 // SmeshingProvider defines the functionality required for the node's Smesher API.

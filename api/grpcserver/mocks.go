@@ -994,17 +994,17 @@ func (c *postSupervisorStartCall) DoAndReturn(f func() error) *postSupervisorSta
 }
 
 // Stop mocks base method.
-func (m *MockpostSupervisor) Stop() error {
+func (m *MockpostSupervisor) Stop(deleteFiles bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Stop")
+	ret := m.ctrl.Call(m, "Stop", deleteFiles)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Stop indicates an expected call of Stop.
-func (mr *MockpostSupervisorMockRecorder) Stop() *postSupervisorStopCall {
+func (mr *MockpostSupervisorMockRecorder) Stop(deleteFiles any) *postSupervisorStopCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*MockpostSupervisor)(nil).Stop))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*MockpostSupervisor)(nil).Stop), deleteFiles)
 	return &postSupervisorStopCall{Call: call}
 }
 
@@ -1020,13 +1020,13 @@ func (c *postSupervisorStopCall) Return(arg0 error) *postSupervisorStopCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *postSupervisorStopCall) Do(f func() error) *postSupervisorStopCall {
+func (c *postSupervisorStopCall) Do(f func(bool) error) *postSupervisorStopCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *postSupervisorStopCall) DoAndReturn(f func() error) *postSupervisorStopCall {
+func (c *postSupervisorStopCall) DoAndReturn(f func(bool) error) *postSupervisorStopCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

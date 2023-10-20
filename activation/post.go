@@ -313,7 +313,7 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context) error {
 // (StartSession can take days to complete). After the first call to this
 // method subsequent calls to this method will return an error until
 // StartSession has completed execution.
-func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSetupOpts) error {
+func (mgr *PostSetupManager) PrepareInitializer(opts PostSetupOpts) error {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
 	if mgr.state == PostSetupStatePrepared || mgr.state == PostSetupStateInProgress {
@@ -321,7 +321,7 @@ func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSe
 	}
 
 	var err error
-	mgr.commitmentAtxId, err = mgr.commitmentAtx(ctx, opts.DataDir)
+	mgr.commitmentAtxId, err = mgr.commitmentAtx(opts.DataDir)
 	if err != nil {
 		return err
 	}
@@ -354,7 +354,7 @@ func (mgr *PostSetupManager) CommitmentAtx() (types.ATXID, error) {
 	return types.EmptyATXID, errNotStarted
 }
 
-func (mgr *PostSetupManager) commitmentAtx(ctx context.Context, dataDir string) (types.ATXID, error) {
+func (mgr *PostSetupManager) commitmentAtx(dataDir string) (types.ATXID, error) {
 	m, err := initialization.LoadMetadata(dataDir)
 	switch {
 	case err == nil:
@@ -374,7 +374,7 @@ func (mgr *PostSetupManager) commitmentAtx(ctx context.Context, dataDir string) 
 		}
 
 		// if this node has not published an ATX select the best ATX with `findCommitmentAtx`
-		return mgr.findCommitmentAtx(ctx)
+		return mgr.findCommitmentAtx()
 	default:
 		return types.EmptyATXID, fmt.Errorf("load metadata: %w", err)
 	}
@@ -383,7 +383,7 @@ func (mgr *PostSetupManager) commitmentAtx(ctx context.Context, dataDir string) 
 // findCommitmentAtx determines the best commitment ATX to use for the node.
 // It will use the ATX with the highest height seen by the node and defaults to the goldenATX,
 // when no ATXs have yet been published.
-func (mgr *PostSetupManager) findCommitmentAtx(ctx context.Context) (types.ATXID, error) {
+func (mgr *PostSetupManager) findCommitmentAtx() (types.ATXID, error) {
 	atx, err := atxs.GetIDWithMaxHeight(mgr.db, types.EmptyNodeID)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):

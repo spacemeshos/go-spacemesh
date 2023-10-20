@@ -60,18 +60,25 @@ func spawnPoet(tb testing.TB, opts ...HTTPPoetOpt) *HTTPPoetTestHarness {
 	return poetProver
 }
 
-func launchPostSupervisor(tb testing.TB, log *zap.Logger, cfg grpcserver.Config, postOpts activation.PostSetupOpts) func() {
+func launchPostSupervisor(tb testing.TB, log *zap.Logger, mgr *activation.PostSetupManager, cfg grpcserver.Config, postOpts activation.PostSetupOpts) func() {
 	cmdCfg := activation.DefaultTestPostServiceConfig()
 	cmdCfg.NodeAddress = fmt.Sprintf("http://%s", cfg.PublicListener)
 	postCfg := activation.DefaultPostConfig()
 	provingOpts := activation.DefaultPostProvingOpts()
 	provingOpts.RandomXMode = activation.PostRandomXModeLight
 
-	ps, err := activation.NewPostSupervisor(log, cmdCfg, postCfg, postOpts, provingOpts)
+	syncer := activation.NewMocksyncer(gomock.NewController(tb))
+	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
+		ch := make(chan struct{})
+		close(ch)
+		return ch
+	}).AnyTimes()
+
+	ps, err := activation.NewPostSupervisor(log, cmdCfg, postCfg, postOpts, provingOpts, mgr, syncer)
 	require.NoError(tb, err)
 	require.NotNil(tb, ps)
 	require.NoError(tb, ps.Start())
-	return func() { assert.NoError(tb, ps.Stop()) }
+	return func() { assert.NoError(tb, ps.Stop(false)) }
 }
 
 func launchServer(tb testing.TB, services ...grpcserver.ServiceAPI) (grpcserver.Config, func()) {
@@ -123,7 +130,7 @@ func initPost(tb testing.TB, logger *zap.Logger, mgr *activation.PostSetupManage
 	})
 
 	// Create data.
-	require.NoError(tb, mgr.PrepareInitializer(context.Background(), opts))
+	require.NoError(tb, mgr.PrepareInitializer(opts))
 	require.NoError(tb, mgr.StartSession(context.Background()))
 	require.NoError(tb, eg.Wait())
 	require.Equal(tb, activation.PostSetupStateComplete, mgr.Status().State)
@@ -179,7 +186,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	t.Cleanup(launchPostSupervisor(t, logger, grpcCfg, opts))
+	t.Cleanup(launchPostSupervisor(t, logger, mgr, grpcCfg, opts))
 
 	require.Eventually(t, func() bool {
 		_, err := svc.Client(sig.NodeID())
@@ -320,7 +327,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	opts.DataDir = t.TempDir()
 	opts.ProviderID.SetUint32(initialization.CPUProviderID())
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
-	t.Cleanup(launchPostSupervisor(t, logger, grpcCfg, opts))
+	t.Cleanup(launchPostSupervisor(t, logger, mgr, grpcCfg, opts))
 
 	require.Eventually(t, func() bool {
 		_, err := svc.Client(sig.NodeID())
@@ -332,12 +339,6 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	}
 
 	nipost, err := nb.BuildNIPost(context.Background(), &challenge)
-	require.ErrorContains(t, err, "failed to generate Post: error generating proof")
-	require.Nil(t, nipost)
-
-	initPost(t, logger.Named("manager"), mgr, opts)
-
-	nipost, err = nb.BuildNIPost(context.Background(), &challenge)
 	require.NoError(t, err)
 	require.NotNil(t, nipost)
 

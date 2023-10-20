@@ -118,7 +118,7 @@ func (s SmesherService) StopSmeshing(ctx context.Context, in *pb.StopSmeshingReq
 		ctxzap.Error(ctx, "failed to stop smeshing", zap.Error(err))
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to stop smeshing: %v", err))
 	}
-	if err := s.postSupervisor.Stop(); err != nil {
+	if err := s.postSupervisor.Stop(in.DeleteFiles); err != nil {
 		ctxzap.Error(ctx, "failed to stop post supervisor", zap.Error(err))
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to stop post supervisor: %v", err))
 	}

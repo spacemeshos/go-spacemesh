@@ -529,7 +529,7 @@ func TestSmesherService(t *testing.T) {
 		t.Parallel()
 		c, ctx := setupSmesherService(t)
 		c.smeshingProvider.EXPECT().StopSmeshing(gomock.Any()).Return(nil)
-		c.postSupervisor.EXPECT().Stop().Return(nil)
+		c.postSupervisor.EXPECT().Stop(false).Return(nil)
 		res, err := c.StopSmeshing(ctx, &pb.StopSmeshingRequest{})
 		require.NoError(t, err)
 		require.Equal(t, int32(code.Code_OK), res.Status.Code)

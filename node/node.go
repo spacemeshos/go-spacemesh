@@ -569,22 +569,6 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	app.postVerifier = activation.NewOffloadingPostVerifier(postVerifiers, nipostValidatorLogger)
 
-	if app.Config.SMESHING.Start {
-		app.postSupervisor, err = activation.NewPostSupervisor(
-			app.log.Zap(),
-			app.Config.POSTService,
-			app.Config.POST,
-			app.Config.SMESHING.Opts,
-			app.Config.SMESHING.ProvingOpts,
-		)
-		if err != nil {
-			return fmt.Errorf("start post service: %w", err)
-		}
-		if err := app.postSupervisor.Start(); err != nil {
-			return fmt.Errorf("start post service: %w", err)
-		}
-	}
-
 	validator := activation.NewValidator(
 		poetDb,
 		app.Config.POST,
@@ -918,6 +902,21 @@ func (app *App) initServices(ctx context.Context) error {
 		app.log.Panic("failed to create post setup manager: %v", err)
 	}
 
+	if app.Config.SMESHING.Start {
+		app.postSupervisor, err = activation.NewPostSupervisor(
+			app.log.Zap(),
+			app.Config.POSTService,
+			app.Config.POST,
+			app.Config.SMESHING.Opts,
+			app.Config.SMESHING.ProvingOpts,
+			postSetupMgr,
+			newSyncer,
+		)
+		if err != nil {
+			return fmt.Errorf("init post service: %w", err)
+		}
+	}
+
 	app.grpcPostService = grpcserver.NewPostService(app.addLogger(PostServiceLogger, lg).Zap())
 
 	nipostBuilder, err := activation.NewNIPostBuilder(
@@ -964,7 +963,6 @@ func (app *App) initServices(ctx context.Context) error {
 		app.host,
 		app.grpcPostService,
 		nipostBuilder,
-		postSetupMgr,
 		app.clock,
 		newSyncer,
 		app.addLogger("atxBuilder", lg),
@@ -1230,6 +1228,9 @@ func (app *App) startServices(ctx context.Context) error {
 		if err := app.atxBuilder.StartSmeshing(coinbaseAddr, app.Config.SMESHING.Opts); err != nil {
 			app.log.Panic("failed to start smeshing: %v", err)
 		}
+		if err := app.postSupervisor.Start(); err != nil {
+			return fmt.Errorf("start post service: %w", err)
+		}
 	} else {
 		app.log.Info("smeshing not started, waiting to be triggered via smesher api")
 	}
@@ -1430,7 +1431,7 @@ func (app *App) stopServices(ctx context.Context) {
 	}
 
 	if app.atxBuilder != nil {
-		_ = app.atxBuilder.StopSmeshing(false)
+		app.atxBuilder.StopSmeshing(false)
 	}
 
 	if app.postVerifier != nil {
@@ -1461,7 +1462,7 @@ func (app *App) stopServices(ctx context.Context) {
 	}
 
 	if app.postSupervisor != nil {
-		if err := app.postSupervisor.Stop(); err != nil {
+		if err := app.postSupervisor.Stop(false); err != nil {
 			app.log.With().Error("error stopping local post service", log.Err(err))
 		}
 	}

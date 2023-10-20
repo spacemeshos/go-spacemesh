@@ -3,6 +3,7 @@ package activation
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -63,6 +64,9 @@ type PostSupervisor struct {
 	postOpts    PostSetupOpts
 	provingOpts PostProvingOpts
 
+	postSetupProvider postSetupProvider
+	syncer            syncer
+
 	pid atomic.Int64 // pid of the running post service, only for tests.
 
 	mtx  sync.Mutex         // protects fields below
@@ -71,7 +75,12 @@ type PostSupervisor struct {
 }
 
 // NewPostSupervisor returns a new post service.
-func NewPostSupervisor(logger *zap.Logger, cmdCfg PostSupervisorConfig, postCfg PostConfig, postOpts PostSetupOpts, provingOpts PostProvingOpts) (*PostSupervisor, error) {
+func NewPostSupervisor(
+	logger *zap.Logger,
+	cmdCfg PostSupervisorConfig, postCfg PostConfig, postOpts PostSetupOpts, provingOpts PostProvingOpts,
+	postSetupProvider postSetupProvider,
+	syncer syncer,
+) (*PostSupervisor, error) {
 	if _, err := os.Stat(cmdCfg.PostServiceCmd); err != nil {
 		return nil, fmt.Errorf("post service binary not found: %s", cmdCfg.PostServiceCmd)
 	}
@@ -82,6 +91,9 @@ func NewPostSupervisor(logger *zap.Logger, cmdCfg PostSupervisorConfig, postCfg 
 		postCfg:     postCfg,
 		postOpts:    postOpts,
 		provingOpts: provingOpts,
+
+		postSetupProvider: postSetupProvider,
+		syncer:            syncer,
 	}, nil
 }
 
@@ -92,15 +104,41 @@ func (ps *PostSupervisor) Start() error {
 		return fmt.Errorf("post service already started")
 	}
 
+	err := ps.postSetupProvider.PrepareInitializer(ps.postOpts)
+	if err != nil {
+		return fmt.Errorf("prepare initializer: %w", err)
+	}
+
+	ps.eg = errgroup.Group{} // reset errgroup to allow restarts.
 	ctx, stop := context.WithCancel(context.Background())
 	ps.stop = stop
-	ps.eg = errgroup.Group{} // reset errgroup to allow restarts.
-	ps.eg.Go(func() error { return ps.runCmd(ctx, ps.cmdCfg, ps.postCfg, ps.postOpts, ps.provingOpts) })
+	ps.eg.Go(func() error {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ps.syncer.RegisterForATXSynced():
+			// ensure we are ATX synced before starting the PoST Session
+		}
+
+		// If start session returns any error other than context.Canceled
+		// (which is how we signal it to stop) then we panic.
+		err := ps.postSetupProvider.StartSession(ctx)
+		switch {
+		case errors.Is(err, context.Canceled):
+			return nil
+		case err != nil:
+			ps.logger.Fatal("initialization failed", zap.Error(err))
+			return err
+		}
+
+		ps.eg.Go(func() error { return ps.runCmd(ctx, ps.cmdCfg, ps.postCfg, ps.postOpts, ps.provingOpts) })
+		return nil
+	})
 	return nil
 }
 
 // Stop stops the post service.
-func (ps *PostSupervisor) Stop() error {
+func (ps *PostSupervisor) Stop(deleteFiles bool) error {
 	ps.mtx.Lock()
 	defer ps.mtx.Unlock()
 
@@ -111,7 +149,21 @@ func (ps *PostSupervisor) Stop() error {
 	ps.stop()
 	ps.stop = nil
 	ps.pid.Store(0)
-	return ps.eg.Wait()
+	err := ps.eg.Wait()
+	switch {
+	case err == nil || errors.Is(err, context.Canceled):
+		if !deleteFiles {
+			return nil
+		}
+
+		if err := ps.postSetupProvider.Reset(); err != nil {
+			ps.logger.Error("failed to delete post files", zap.Error(err))
+			return err
+		}
+		return nil
+	default:
+		return fmt.Errorf("stop post supervisor: %w", err)
+	}
 }
 
 // captureCmdOutput returns a function that reads from the given pipe and logs the output.

@@ -1193,10 +1193,10 @@ func TestAdminEvents(t *testing.T) {
 		stream, err := client.EventsStream(tctx, &pb.EventStreamRequest{})
 		require.NoError(t, err)
 		success := []pb.IsEventDetails{
-			&pb.Event_PostServiceStarted{},
 			&pb.Event_Beacon{},
 			&pb.Event_InitStart{},
 			&pb.Event_InitComplete{},
+			&pb.Event_PostServiceStarted{},
 			&pb.Event_PostStart{},
 			&pb.Event_PostComplete{},
 			&pb.Event_PoetWaitRound{},
@@ -1205,10 +1205,10 @@ func TestAdminEvents(t *testing.T) {
 			&pb.Event_PostComplete{},
 			&pb.Event_AtxPublished{},
 		}
-		for _, ev := range success {
+		for idx, ev := range success {
 			msg, err := stream.Recv()
 			require.NoError(t, err, "stream %d", i)
-			require.IsType(t, ev, msg.Details, "stream %d", i)
+			require.IsType(t, ev, msg.Details, "stream %d, event %d", i, idx)
 		}
 		require.NoError(t, stream.CloseSend())
 	}
