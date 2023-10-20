@@ -120,7 +120,7 @@ func initPost(tb testing.TB, logger *zap.Logger, mgr *activation.PostSetupManage
 				status := mgr.Status()
 				require.GreaterOrEqual(tb, status.NumLabelsWritten, lastStatus.NumLabelsWritten)
 
-				if status.NumLabelsWritten == uint64(mgr.LastOpts().NumUnits)*mgr.Config().LabelsPerUnit {
+				if status.NumLabelsWritten == uint64(opts.NumUnits)*mgr.Config().LabelsPerUnit {
 					return nil
 				}
 				require.Contains(tb, []activation.PostSetupState{activation.PostSetupStatePrepared, activation.PostSetupStateInProgress}, status.State)
@@ -213,14 +213,14 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	nipost, err := nb.BuildNIPost(context.Background(), &challenge)
 	require.NoError(t, err)
 
-	v := activation.NewValidator(poetDb, mgr.Config(), mgr.LastOpts().Scrypt, verifier)
+	v := activation.NewValidator(poetDb, mgr.Config(), opts.Scrypt, verifier)
 	_, err = v.NIPost(
 		context.Background(),
 		sig.NodeID(),
 		goldenATX,
 		nipost,
 		challenge.Hash(),
-		mgr.LastOpts().NumUnits,
+		opts.NumUnits,
 	)
 	require.NoError(t, err)
 }
@@ -346,14 +346,14 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
 
-	v := activation.NewValidator(poetDb, mgr.Config(), mgr.LastOpts().Scrypt, verifier)
+	v := activation.NewValidator(poetDb, mgr.Config(), opts.Scrypt, verifier)
 	_, err = v.NIPost(
 		context.Background(),
 		sig.NodeID(),
 		goldenATX,
 		nipost,
 		challenge.Hash(),
-		mgr.LastOpts().NumUnits,
+		opts.NumUnits,
 	)
 	require.NoError(t, err)
 }

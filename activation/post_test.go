@@ -199,32 +199,6 @@ func TestPostSetupManager_InitialStatus(t *testing.T) {
 	req.Zero(status.NumLabelsWritten)
 }
 
-func TestPostSetupManager_VRFNonce(t *testing.T) {
-	req := require.New(t)
-
-	mgr := newTestPostManager(t)
-
-	// Attempt to get nonce.
-	_, err := mgr.VRFNonce()
-	req.ErrorIs(err, errNotComplete)
-
-	// Create data.
-	req.NoError(mgr.PrepareInitializer(mgr.opts))
-	req.NoError(mgr.StartSession(context.Background()))
-
-	// Get nonce.
-	nonce, err := mgr.VRFNonce()
-	req.NoError(err)
-	req.NotZero(nonce)
-
-	// Re-instantiate `PostSetupManager`.
-	mgr = newTestPostManager(t)
-
-	// Attempt to get nonce.
-	_, err = mgr.VRFNonce()
-	req.ErrorIs(err, errNotComplete)
-}
-
 func TestPostSetupManager_Stop(t *testing.T) {
 	req := require.New(t)
 

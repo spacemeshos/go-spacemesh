@@ -114,11 +114,6 @@ const (
 	PostSetupStateError
 )
 
-var (
-	errNotComplete = errors.New("not complete")
-	errNotStarted  = errors.New("not started")
-)
-
 // DefaultPostConfig defines the default configuration for Post.
 func DefaultPostConfig() PostConfig {
 	cfg := config.DefaultConfig()
@@ -344,16 +339,6 @@ func (mgr *PostSetupManager) PrepareInitializer(opts PostSetupOpts) error {
 	return nil
 }
 
-func (mgr *PostSetupManager) CommitmentAtx() (types.ATXID, error) {
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
-
-	if mgr.commitmentAtxId != types.EmptyATXID {
-		return mgr.commitmentAtxId, nil
-	}
-	return types.EmptyATXID, errNotStarted
-}
-
 func (mgr *PostSetupManager) commitmentAtx(dataDir string) (types.ATXID, error) {
 	m, err := initialization.LoadMetadata(dataDir)
 	switch {
@@ -408,26 +393,6 @@ func (mgr *PostSetupManager) Reset() error {
 	// Reset internal state.
 	mgr.state = PostSetupStateNotStarted
 	return nil
-}
-
-// VRFNonce returns the VRF nonce found during initialization.
-func (mgr *PostSetupManager) VRFNonce() (*types.VRFPostIndex, error) {
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
-
-	if mgr.state != PostSetupStateComplete {
-		return nil, errNotComplete
-	}
-
-	return (*types.VRFPostIndex)(mgr.init.Nonce()), nil
-}
-
-// LastOpts returns the Post setup last session options.
-func (mgr *PostSetupManager) LastOpts() *PostSetupOpts {
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
-
-	return mgr.lastOpts
 }
 
 // Config returns the Post protocol config.

@@ -256,8 +256,12 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 	coinbase := types.Address{1, 1, 1}
 	postSetupOpts := PostSetupOpts{}
 
-	tab.mpostClient.EXPECT().Proof(gomock.Any(), gomock.Any()).AnyTimes().Return(&types.Post{}, &types.PostMetadata{}, nil)
+	tab.mpostClient.EXPECT().Proof(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, b []byte) (*types.Post, *types.PostMetadata, error) {
+		<-ctx.Done()
+		return nil, nil, ctx.Err()
+	}).AnyTimes()
 	tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
+	tab.mclock.EXPECT().CurrentLayer().Return(types.LayerID(0)).AnyTimes()
 	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(make(chan struct{})).AnyTimes()
 	require.NoError(t, tab.StartSmeshing(coinbase, postSetupOpts))
 	require.Equal(t, coinbase, tab.Coinbase())
@@ -316,7 +320,19 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 func TestBuilder_StopSmeshing_Delete(t *testing.T) {
 	tab := newTestBuilder(t)
 
+	currLayer := (postGenesisEpoch + 1).FirstLayer()
 	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(make(chan struct{})).AnyTimes()
+	tab.mclock.EXPECT().CurrentLayer().Return(currLayer).AnyTimes()
+	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
+		func(got types.LayerID) time.Time {
+			// time.Now() ~= currentLayer
+			genesis := time.Now().Add(-time.Duration(currLayer) * layerDuration)
+			return genesis.Add(layerDuration * time.Duration(got))
+		}).AnyTimes()
+	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, _ *types.NIPostChallenge) (*types.NIPost, error) {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}).AnyTimes()
 	tab.mpostClient.EXPECT().Proof(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, b []byte) (*types.Post, *types.PostMetadata, error) {
 		<-ctx.Done()
 		return nil, nil, ctx.Err()
@@ -325,7 +341,7 @@ func TestBuilder_StopSmeshing_Delete(t *testing.T) {
 	// Create state files
 	require.NoError(t, saveBuilderState(tab.nipostBuilder.DataDir(), &types.NIPostBuilderState{}))
 	require.NoError(t, savePost(tab.nipostBuilder.DataDir(), &types.Post{}))
-	require.NoError(t, SaveNipostChallenge(tab.nipostBuilder.DataDir(), &types.NIPostChallenge{}))
+	require.NoError(t, SaveNipostChallenge(tab.nipostBuilder.DataDir(), &types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2}))
 	files, err := os.ReadDir(tab.nipostBuilder.DataDir())
 	require.NoError(t, err)
 	require.Len(t, files, 3) // 3 state files created
