@@ -228,17 +228,6 @@ func (s *Server) queueHandler(ctx context.Context, stream network.Stream) {
 	}
 }
 
-func (s *Server) trackClientLatency(start time.Time, err error) {
-	switch {
-	case s.metrics == nil:
-		return
-	case err != nil:
-		s.metrics.clientLatencyFailure.Observe(time.Since(start).Seconds())
-	case err == nil:
-		s.metrics.clientLatency.Observe(time.Since(start).Seconds())
-	}
-}
-
 // Request sends a binary request to the peer. Request is executed in the background, one of the callbacks
 // is guaranteed to be called on success/error.
 func (s *Server) Request(
@@ -256,64 +245,66 @@ func (s *Server) Request(
 		return fmt.Errorf("%w: %s", ErrNotConnected, pid)
 	}
 	go func() {
-		var err error
-		defer func() {
-			s.logger.WithContext(ctx).With().Debug("request execution time",
-				log.String("protocol", s.protocol),
-				log.Duration("duration", time.Since(start)),
-				log.Err(err),
-			)
-			s.trackClientLatency(start, err)
-		}()
-		ctx, cancel := context.WithTimeout(ctx, s.timeout)
-		defer cancel()
-
-		var stream network.Stream
-		stream, err = s.h.NewStream(
-			network.WithNoDial(ctx, "existing connection"),
-			pid,
-			protocol.ID(s.protocol),
-		)
+		data, err := s.request(ctx, pid, req)
 		if err != nil {
 			failure(err)
-			return
-		}
-		defer stream.Close()
-		defer stream.SetDeadline(time.Time{})
-		_ = stream.SetDeadline(time.Now().Add(s.timeout))
-
-		wr := bufio.NewWriter(stream)
-		sz := make([]byte, binary.MaxVarintLen64)
-		n := binary.PutUvarint(sz, uint64(len(req)))
-		_, err = wr.Write(sz[:n])
-		if err != nil {
-			failure(err)
-			return
-		}
-		_, err = wr.Write(req)
-		if err != nil {
-			failure(err)
-			return
-		}
-		err = wr.Flush()
-		if err != nil {
-			failure(err)
-			return
-		}
-
-		rd := bufio.NewReader(stream)
-		var r Response
-		_, err = codec.DecodeFrom(rd, &r)
-		if err != nil {
-			failure(err)
-			return
-		}
-		if len(r.Error) > 0 {
-			// consider response with error as success for purposes of tracking latency
-			failure(errors.New(r.Error))
+		} else if len(data.Error) > 0 {
+			failure(errors.New(data.Error))
 		} else {
-			resp(r.Data)
+			resp(data.Data)
+		}
+		s.logger.WithContext(ctx).With().Debug("request execution time",
+			log.String("protocol", s.protocol),
+			log.Duration("duration", time.Since(start)),
+			log.Err(err),
+		)
+		switch {
+		case s.metrics == nil:
+			return
+		case err != nil:
+			s.metrics.clientLatencyFailure.Observe(time.Since(start).Seconds())
+		case err == nil:
+			s.metrics.clientLatency.Observe(time.Since(start).Seconds())
 		}
 	}()
 	return nil
+}
+
+func (s *Server) request(ctx context.Context, pid peer.ID, req []byte) (*Response, error) {
+	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	defer cancel()
+
+	var stream network.Stream
+	stream, err := s.h.NewStream(
+		network.WithNoDial(ctx, "existing connection"),
+		pid,
+		protocol.ID(s.protocol),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer stream.Close()
+	defer stream.SetDeadline(time.Time{})
+	_ = stream.SetDeadline(time.Now().Add(s.timeout))
+
+	wr := bufio.NewWriter(stream)
+	sz := make([]byte, binary.MaxVarintLen64)
+	n := binary.PutUvarint(sz, uint64(len(req)))
+	if _, err := wr.Write(sz[:n]); err != nil {
+		return nil, err
+	}
+	if _, err := wr.Write(req); err != nil {
+		return nil, err
+	}
+	if err := wr.Flush(); err != nil {
+		return nil, err
+	}
+
+	rd := bufio.NewReader(stream)
+	var r Response
+	if _, err = codec.DecodeFrom(rd, &r); err != nil {
+		return nil, err
+	}
+	return &r, nil
+
 }
