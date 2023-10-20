@@ -78,19 +78,19 @@ func launchServer(tb testing.TB, services ...grpcserver.ServiceAPI) (grpcserver.
 	cfg := grpcserver.DefaultTestConfig()
 
 	// run on random ports
-	grpcService := grpcserver.New("127.0.0.1:0", logtest.New(tb).Named("grpc"))
+	server := grpcserver.New("127.0.0.1:0", zaptest.NewLogger(tb).Named("grpc"), cfg)
 
 	// attach services
 	for _, svc := range services {
-		svc.RegisterService(grpcService)
+		svc.RegisterService(server.GrpcServer)
 	}
 
-	require.NoError(tb, grpcService.Start())
+	require.NoError(tb, server.Start())
 
 	// update config with bound addresses
-	cfg.PublicListener = grpcService.BoundAddress
+	cfg.PublicListener = server.BoundAddress
 
-	return cfg, func() { assert.NoError(tb, grpcService.Close()) }
+	return cfg, func() { assert.NoError(tb, server.Close()) }
 }
 
 func initPost(tb testing.TB, logger *zap.Logger, mgr *activation.PostSetupManager, opts activation.PostSetupOpts) {

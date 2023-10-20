@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"golang.org/x/sync/errgroup"
 
@@ -50,13 +51,6 @@ func defaultCertConfig() CertConfig {
 // CertifierOpt for configuring Certifier.
 type CertifierOpt func(*Certifier)
 
-// WithCertContext modifies parent context for Certifier.
-func WithCertContext(ctx context.Context) CertifierOpt {
-	return func(c *Certifier) {
-		c.ctx = ctx
-	}
-}
-
 // WithCertConfig defines cfg for Certifier.
 func WithCertConfig(cfg CertConfig) CertifierOpt {
 	return func(c *Certifier) {
@@ -83,8 +77,9 @@ type Certifier struct {
 	cfg    CertConfig
 	once   sync.Once
 	eg     errgroup.Group
-	ctx    context.Context
-	cancel func()
+
+	stop    func()
+	stopped atomic.Bool
 
 	db         *datastore.CachedDB
 	oracle     hare.Rolacle
@@ -119,7 +114,6 @@ func NewCertifier(
 	c := &Certifier{
 		logger:      log.NewNop(),
 		cfg:         defaultCertConfig(),
-		ctx:         context.Background(),
 		db:          db,
 		oracle:      o,
 		nodeID:      n,
@@ -137,44 +131,39 @@ func NewCertifier(
 	}
 	c.collector = newCollector(c)
 
-	c.ctx, c.cancel = context.WithCancel(c.ctx)
 	return c
 }
 
 // Start starts the background goroutine for periodic pruning.
-func (c *Certifier) Start() {
+func (c *Certifier) Start(ctx context.Context) {
 	c.once.Do(func() {
+		ctx, c.stop = context.WithCancel(ctx)
 		c.eg.Go(func() error {
-			return c.run()
+			return c.run(ctx)
 		})
 	})
 }
 
 // Stop stops the outstanding goroutines.
 func (c *Certifier) Stop() {
-	c.cancel()
+	c.stopped.Store(true)
+	if c.stop == nil {
+		return // not started
+	}
+	c.stop()
 	err := c.eg.Wait()
 	if err != nil && !errors.Is(err, context.Canceled) {
-		c.logger.With().Error("blockGen task failure", log.Err(err))
+		c.logger.With().Error("certifier task failure", log.Err(err))
 	}
 }
 
-func (c *Certifier) isShuttingDown() bool {
-	select {
-	case <-c.ctx.Done():
-		return true
-	default:
-		return false
-	}
-}
-
-func (c *Certifier) run() error {
+func (c *Certifier) run(ctx context.Context) error {
 	for layer := c.layerClock.CurrentLayer(); ; layer = layer.Add(1) {
 		select {
 		case <-c.layerClock.AwaitLayer(layer):
 			c.prune()
-		case <-c.ctx.Done():
-			return fmt.Errorf("context done: %w", c.ctx.Err())
+		case <-ctx.Done():
+			return fmt.Errorf("context done: %w", ctx.Err())
 		}
 	}
 }
@@ -335,7 +324,7 @@ func (c *Certifier) HandleCertifyMessage(ctx context.Context, peer p2p.Peer, dat
 
 // HandleCertifyMessage is the gossip receiver for certify message.
 func (c *Certifier) handleCertifyMessage(ctx context.Context, _ p2p.Peer, data []byte) error {
-	if c.isShuttingDown() {
+	if c.stopped.Load() {
 		return errors.New("certifier shutting down")
 	}
 

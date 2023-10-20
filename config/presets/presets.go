@@ -28,8 +28,7 @@ func Options() []string {
 func Get(name string) (config.Config, error) {
 	config, exists := presets[name]
 	if !exists {
-		return config, fmt.Errorf("preset %s is not registered. select one from the options %+s",
-			name, Options())
+		return config, fmt.Errorf("preset %s is not registered. select one from the options %+s", name, Options())
 	}
 	return config, nil
 }

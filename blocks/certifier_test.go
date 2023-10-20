@@ -143,9 +143,9 @@ func TestStartStop(t *testing.T) {
 		func(_ types.LayerID) <-chan struct{} {
 			return ch
 		}).AnyTimes()
-	tc.Start()
+	tc.Start(context.Background())
 	ch <- struct{}{}
-	tc.Start() // calling Start() for the second time have no effect
+	tc.Start(context.Background()) // calling Start() for the second time have no effect
 	tc.Stop()
 }
 
@@ -591,7 +591,7 @@ func Test_OldLayersPruned(t *testing.T) {
 			}
 			return ch
 		}).AnyTimes()
-	tc.Start()
+	tc.Start(context.Background())
 	ch <- struct{}{} // for current
 	ch <- struct{}{} // for current+1
 	<-pruned

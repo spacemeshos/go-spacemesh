@@ -9,8 +9,10 @@ import (
 	"time"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spf13/afero"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -53,8 +55,17 @@ func NewAdminService(db *sql.Database, dataDir string, p peers) *AdminService {
 }
 
 // RegisterService registers this service with a grpc server instance.
-func (a AdminService) RegisterService(server *Server) {
-	pb.RegisterAdminServiceServer(server.GrpcServer, a)
+func (a AdminService) RegisterService(server *grpc.Server) {
+	pb.RegisterAdminServiceServer(server, a)
+}
+
+func (s AdminService) RegisterHandlerService(mux *runtime.ServeMux) error {
+	return pb.RegisterAdminServiceHandlerServer(context.Background(), mux, s)
+}
+
+// String returns the name of this service.
+func (a AdminService) String() string {
+	return "AdminService"
 }
 
 func (a AdminService) CheckpointStream(req *pb.CheckpointStreamRequest, stream pb.AdminService_CheckpointStreamServer) error {

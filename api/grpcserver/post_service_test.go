@@ -3,6 +3,8 @@ package grpcserver
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -84,6 +86,32 @@ func launchPostSupervisor(tb testing.TB, log *zap.Logger, cfg Config, postOpts a
 	return func() { assert.NoError(tb, ps.Stop()) }
 }
 
+func launchPostSupervisorTLS(tb testing.TB, log *zap.Logger, cfg Config, postOpts activation.PostSetupOpts) func() {
+	pwd, err := os.Getwd()
+	require.NoError(tb, err)
+	caCert := filepath.Join(pwd, caCert)
+	require.FileExists(tb, caCert)
+	clientCert := filepath.Join(pwd, clientCert)
+	require.FileExists(tb, clientCert)
+	clientKey := filepath.Join(pwd, clientKey)
+	require.FileExists(tb, clientKey)
+
+	cmdCfg := activation.DefaultTestPostServiceConfig()
+	cmdCfg.CACert = caCert
+	cmdCfg.Cert = clientCert
+	cmdCfg.Key = clientKey
+	cmdCfg.NodeAddress = fmt.Sprintf("https://%s", cfg.TLSListener)
+	postCfg := activation.DefaultPostConfig()
+	provingOpts := activation.DefaultPostProvingOpts()
+	provingOpts.RandomXMode = activation.PostRandomXModeLight
+
+	ps, err := activation.NewPostSupervisor(log, cmdCfg, postCfg, postOpts, provingOpts)
+	require.NoError(tb, err)
+	require.NotNil(tb, ps)
+	require.NoError(tb, ps.Start())
+	return func() { assert.NoError(tb, ps.Stop()) }
+}
+
 func Test_GenerateProof(t *testing.T) {
 	log := zaptest.NewLogger(t)
 	svc := NewPostService(log)
@@ -96,6 +124,49 @@ func Test_GenerateProof(t *testing.T) {
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
 	id := initPost(t, log.Named("post"), opts)
 	postCleanup := launchPostSupervisor(t, log.Named("supervisor"), cfg, opts)
+	t.Cleanup(postCleanup)
+
+	var client activation.PostClient
+	require.Eventually(t, func() bool {
+		var err error
+		client, err = svc.Client(id)
+		return err == nil
+	}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
+
+	challenge := make([]byte, 32)
+	for i := range challenge {
+		challenge[i] = byte(0xca)
+	}
+
+	proof, meta, err := client.Proof(context.Background(), challenge)
+	require.NoError(t, err)
+	require.NotNil(t, proof)
+	require.NotNil(t, meta)
+
+	// drop connection
+	postCleanup()
+	require.Eventually(t, func() bool {
+		proof, meta, err = client.Proof(context.Background(), challenge)
+		return err != nil
+	}, 5*time.Second, 100*time.Millisecond)
+
+	require.ErrorContains(t, err, "post client closed")
+	require.Nil(t, proof)
+	require.Nil(t, meta)
+}
+
+func Test_GenerateProof_TLS(t *testing.T) {
+	log := zaptest.NewLogger(t)
+	svc := NewPostService(log)
+	cfg, cleanup := launchTLSServer(t, svc)
+	t.Cleanup(cleanup)
+
+	opts := activation.DefaultPostSetupOpts()
+	opts.DataDir = t.TempDir()
+	opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
+	opts.Scrypt.N = 2 // Speedup initialization in tests.
+	id := initPost(t, log.Named("post"), opts)
+	postCleanup := launchPostSupervisorTLS(t, log.Named("supervisor"), cfg, opts)
 	t.Cleanup(postCleanup)
 
 	var client activation.PostClient
