@@ -306,5 +306,4 @@ func (s *Server) request(ctx context.Context, pid peer.ID, req []byte) (*Respons
 		return nil, err
 	}
 	return &r, nil
-
 }
