@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/miner/minweight"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -26,7 +27,7 @@ var (
 // Validator validates the eligibility of a Ballot.
 // the validation focuses on eligibility only and assumes the Ballot to be valid otherwise.
 type Validator struct {
-	minActiveSetWeight uint64
+	minActiveSetWeight []types.EpochMinimalActiveWeight
 	avgLayerSize       uint32
 	layersPerEpoch     uint32
 	tortoise           tortoiseProvider
@@ -49,7 +50,15 @@ func WithNonceFetcher(nf nonceFetcher) ValidatorOpt {
 
 // NewEligibilityValidator returns a new EligibilityValidator.
 func NewEligibilityValidator(
-	avgLayerSize, layersPerEpoch uint32, minActiveSetWeight uint64, clock layerClock, tortoise tortoiseProvider, cdb *datastore.CachedDB, bc system.BeaconCollector, lg log.Log, vrfVerifier vrfVerifier, opts ...ValidatorOpt,
+	avgLayerSize, layersPerEpoch uint32,
+	minActiveSetWeight []types.EpochMinimalActiveWeight,
+	clock layerClock,
+	tortoise tortoiseProvider,
+	cdb *datastore.CachedDB,
+	bc system.BeaconCollector,
+	lg log.Log,
+	vrfVerifier vrfVerifier,
+	opts ...ValidatorOpt,
 ) *Validator {
 	v := &Validator{
 		minActiveSetWeight: minActiveSetWeight,
@@ -151,7 +160,13 @@ func (v *Validator) validateReference(ballot *types.Ballot, actives []types.ATXI
 		}
 		totalWeight += atx.GetWeight()
 	}
-	numEligibleSlots, err := GetNumEligibleSlots(owned.GetWeight(), v.minActiveSetWeight, totalWeight, v.avgLayerSize, v.layersPerEpoch)
+	numEligibleSlots, err := GetNumEligibleSlots(
+		owned.GetWeight(),
+		minweight.Select(ballot.Layer.GetEpoch(), v.minActiveSetWeight),
+		totalWeight,
+		v.avgLayerSize,
+		v.layersPerEpoch,
+	)
 	if err != nil {
 		return nil, err
 	}

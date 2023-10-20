@@ -65,7 +65,7 @@ type Config struct {
 	GoldenATXID            types.ATXID
 	MaxExceptions          int
 	Hdist                  uint32
-	MinimalActiveSetWeight uint64
+	MinimalActiveSetWeight []types.EpochMinimalActiveWeight
 }
 
 // defaultConfig for BlockHandler.
