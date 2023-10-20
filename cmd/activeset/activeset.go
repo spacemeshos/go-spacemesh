@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -13,7 +14,11 @@ import (
 
 func main() {
 	flag.Usage = func() {
-		fmt.Println("activeset <publish epoch> <db path>")
+		fmt.Println(`Usage:
+	> activeset <publish epoch> <db path>
+Example:
+	query atxs that are published in epoch 3 and stored in state.sql file.
+	> activeset 3 state.sql`)
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -21,6 +26,9 @@ func main() {
 	publish, err := strconv.Atoi(flag.Arg(0))
 	must(err, "publish epoch %v is not a valid integer: %s", flag.Arg(0), err)
 	dbpath := flag.Arg(1)
+	if len(dbpath) == 0 {
+		must(errors.New("dbpath is empty"), "dbpath is empty\n")
+	}
 	db, err := sql.Open("file:" + dbpath)
 	must(err, "can't open db at dbpath=%v. err=%s\n", dbpath, err)
 
@@ -38,6 +46,8 @@ func main() {
 func must(err error, msg string, vars ...any) {
 	if err != nil {
 		fmt.Printf(msg, vars...)
+		fmt.Println("")
+		flag.Usage()
 		os.Exit(1)
 	}
 }
