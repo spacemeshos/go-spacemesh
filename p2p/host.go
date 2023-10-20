@@ -31,19 +31,20 @@ import (
 // DefaultConfig config.
 func DefaultConfig() Config {
 	return Config{
-		Listen:             "/ip4/0.0.0.0/tcp/7513",
-		Flood:              false,
-		MinPeers:           20,
-		LowPeers:           40,
-		HighPeers:          100,
-		AutoscalePeers:     true,
-		GracePeersShutdown: 30 * time.Second,
-		MaxMessageSize:     2 << 20,
-		AcceptQueue:        tptu.AcceptQueueLength,
-		EnableHolepunching: true,
-		InboundFraction:    0.8,
-		OutboundFraction:   1.1,
-		RelayServer:        RelayServer{TTL: 20 * time.Minute, Reservations: 512},
+		Listen:                 "/ip4/0.0.0.0/tcp/7513",
+		Flood:                  false,
+		MinPeers:               20,
+		LowPeers:               40,
+		HighPeers:              100,
+		AutoscalePeers:         true,
+		GracePeersShutdown:     30 * time.Second,
+		MaxMessageSize:         2 << 20,
+		DisableResourceManager: true,
+		AcceptQueue:            tptu.AcceptQueueLength,
+		EnableHolepunching:     true,
+		InboundFraction:        0.8,
+		OutboundFraction:       1.1,
+		RelayServer:            RelayServer{TTL: 20 * time.Minute, Reservations: 512},
 		IP4Blocklist: []string{
 			// localhost
 			"127.0.0.0/8",
@@ -114,7 +115,8 @@ type RelayServer struct {
 
 func (cfg *Config) Validate() error {
 	if len(cfg.ForceReachability) > 0 {
-		if cfg.ForceReachability != PublicReachability && cfg.ForceReachability != PrivateReachability {
+		if cfg.ForceReachability != PublicReachability &&
+			cfg.ForceReachability != PrivateReachability {
 			return fmt.Errorf("p2p-reachability flag is invalid. should be one of %s, %s. got %s",
 				PublicReachability, PrivateReachability, cfg.ForceReachability,
 			)
@@ -130,7 +132,13 @@ func (cfg *Config) Validate() error {
 }
 
 // New initializes libp2p host configured for spacemesh.
-func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ...Opt) (*Host, error) {
+func New(
+	_ context.Context,
+	logger log.Log,
+	cfg Config,
+	prologue []byte,
+	opts ...Opt,
+) (*Host, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -142,7 +150,11 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 	}
 	lp2plog.SetPrimaryCore(logger.Core())
 	lp2plog.SetAllLoggers(lp2plog.LogLevel(cfg.LogLevel))
-	cm, err := connmgr.NewConnManager(cfg.LowPeers, cfg.HighPeers, connmgr.WithGracePeriod(cfg.GracePeersShutdown))
+	cm, err := connmgr.NewConnManager(
+		cfg.LowPeers,
+		cfg.HighPeers,
+		connmgr.WithGracePeriod(cfg.GracePeersShutdown),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("p2p create conn mgr: %w", err)
 	}
@@ -182,23 +194,28 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 		libp2p.Identity(key),
 		libp2p.ListenAddrStrings(cfg.Listen),
 		libp2p.UserAgent("go-spacemesh"),
-		libp2p.Transport(func(upgrader transport.Upgrader, rcmgr network.ResourceManager) (transport.Transport, error) {
-			opts := []tcp.Option{}
-			if cfg.DisableReusePort {
-				opts = append(opts, tcp.DisableReuseport())
-			}
-			if cfg.Metrics {
-				opts = append(opts, tcp.WithMetrics())
-			}
-			return tcp.NewTCPTransport(upgrader, rcmgr, opts...)
-		}),
-		libp2p.Security(noise.ID, func(id protocol.ID, privkey crypto.PrivKey, muxers []tptu.StreamMuxer) (*noise.SessionTransport, error) {
-			tp, err := noise.New(id, privkey, muxers)
-			if err != nil {
-				return nil, err
-			}
-			return tp.WithSessionOptions(noise.Prologue(prologue))
-		}),
+		libp2p.Transport(
+			func(upgrader transport.Upgrader, rcmgr network.ResourceManager) (transport.Transport, error) {
+				opts := []tcp.Option{}
+				if cfg.DisableReusePort {
+					opts = append(opts, tcp.DisableReuseport())
+				}
+				if cfg.Metrics {
+					opts = append(opts, tcp.WithMetrics())
+				}
+				return tcp.NewTCPTransport(upgrader, rcmgr, opts...)
+			},
+		),
+		libp2p.Security(
+			noise.ID,
+			func(id protocol.ID, privkey crypto.PrivKey, muxers []tptu.StreamMuxer) (*noise.SessionTransport, error) {
+				tp, err := noise.New(id, privkey, muxers)
+				if err != nil {
+					return nil, err
+				}
+				return tp.WithSessionOptions(noise.Prologue(prologue))
+			},
+		),
 		libp2p.Muxer("/yamux/1.0.0", &streamer),
 		libp2p.Peerstore(ps),
 		libp2p.BandwidthReporter(p2pmetrics.NewBandwidthCollector()),
@@ -214,9 +231,12 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 		if err != nil {
 			panic(err) // validated in config
 		}
-		lopts = append(lopts, libp2p.AddrsFactory(func([]multiaddr.Multiaddr) []multiaddr.Multiaddr {
-			return []multiaddr.Multiaddr{addr}
-		}))
+		lopts = append(
+			lopts,
+			libp2p.AddrsFactory(func([]multiaddr.Multiaddr) []multiaddr.Multiaddr {
+				return []multiaddr.Multiaddr{addr}
+			}),
+		)
 	}
 	if cfg.EnableHolepunching {
 		lopts = append(lopts,
@@ -253,7 +273,13 @@ func New(_ context.Context, logger log.Log, cfg Config, prologue []byte, opts ..
 	logger.Zap().Info("local node identity", zap.Stringer("identity", h.ID()))
 	// TODO(dshulyak) this is small mess. refactor to avoid this patching
 	// both New and Upgrade should use options.
-	opts = append(opts, WithConfig(cfg), WithLog(logger), WithBootnodes(bootnodesMap), WithDirectNodes(directMap))
+	opts = append(
+		opts,
+		WithConfig(cfg),
+		WithLog(logger),
+		WithBootnodes(bootnodesMap),
+		WithDirectNodes(directMap),
+	)
 	return Upgrade(h, opts...)
 }
 

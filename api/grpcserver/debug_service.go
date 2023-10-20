@@ -5,8 +5,10 @@ import (
 	"fmt"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -27,8 +29,17 @@ type DebugService struct {
 }
 
 // RegisterService registers this service with a grpc server instance.
-func (d DebugService) RegisterService(server *Server) {
-	pb.RegisterDebugServiceServer(server.GrpcServer, d)
+func (d DebugService) RegisterService(server *grpc.Server) {
+	pb.RegisterDebugServiceServer(server, d)
+}
+
+func (s DebugService) RegisterHandlerService(mux *runtime.ServeMux) error {
+	return pb.RegisterDebugServiceHandlerServer(context.Background(), mux, s)
+}
+
+// String returns the name of this service.
+func (d DebugService) String() string {
+	return "DebugService"
 }
 
 // NewDebugService creates a new grpc service using config data.

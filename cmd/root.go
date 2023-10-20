@@ -284,6 +284,12 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.POSTService.PostServiceCmd, "")
 	cmd.PersistentFlags().StringVar(&cfg.POSTService.NodeAddress, "post-opts-node-address",
 		cfg.POSTService.NodeAddress, "")
+	cmd.PersistentFlags().StringVar(&cfg.POSTService.CACert, "post-opts-ca-cert",
+		cfg.POSTService.CACert, "")
+	cmd.PersistentFlags().StringVar(&cfg.POSTService.Cert, "post-opts-cert",
+		cfg.POSTService.Cert, "")
+	cmd.PersistentFlags().StringVar(&cfg.POSTService.Key, "post-opts-key",
+		cfg.POSTService.Key, "")
 
 	/**======================== Consensus Flags ========================== **/
 

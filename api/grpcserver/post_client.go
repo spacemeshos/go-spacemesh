@@ -75,19 +75,28 @@ func (pc *postClient) Proof(ctx context.Context, challenge []byte) (*types.Post,
 					}
 				}
 
-				meta := proofResp.GetMetadata()
-				if !bytes.Equal(meta.GetChallenge(), challenge) {
-					return nil, nil, fmt.Errorf("unexpected challenge: %x", meta.GetChallenge())
+				proof := proofResp.GetProof()
+				proofMeta := proofResp.GetMetadata()
+				if proofMeta == nil {
+					return nil, nil, fmt.Errorf("proof metadata is nil")
 				}
 
-				proof := proofResp.GetProof()
+				if !bytes.Equal(proofMeta.GetChallenge(), challenge) {
+					return nil, nil, fmt.Errorf("unexpected challenge: %x", proofMeta.GetChallenge())
+				}
+
+				postMeta := proofMeta.GetMeta()
+				if postMeta == nil {
+					return nil, nil, fmt.Errorf("post metadata is nil")
+				}
+
 				return &types.Post{
 						Nonce:   proof.GetNonce(),
 						Indices: proof.GetIndices(),
 						Pow:     proof.GetPow(),
 					}, &types.PostMetadata{
-						Challenge:     meta.GetChallenge(),
-						LabelsPerUnit: meta.GetLabelsPerUnit(),
+						Challenge:     proofMeta.GetChallenge(),
+						LabelsPerUnit: postMeta.GetLabelsPerUnit(),
 					}, nil
 			case pb.GenProofStatus_GEN_PROOF_STATUS_ERROR:
 				return nil, nil, fmt.Errorf("error generating proof: %s", proofResp)

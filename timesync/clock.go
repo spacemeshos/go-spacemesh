@@ -136,7 +136,8 @@ func (t *NodeClock) tick() {
 		)
 		d := t.lastTicked.Difference(layer)
 		tickDistance.Observe(float64(-d))
-	case layer.Difference(t.lastTicked) > 1:
+	// don't warn right after fresh startup
+	case layer.Difference(t.lastTicked) > 1 && t.lastTicked > 0:
 		t.log.With().Warning("clock skipped layers",
 			log.Stringer("layer", layer),
 			log.Stringer("last_ticked_layer", t.lastTicked),

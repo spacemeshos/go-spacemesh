@@ -235,6 +235,56 @@ on Windows you can use Intel OpenAPI:
 choco install opencl-intel-cpu-runtime
 ```
 
+#### Using a remote machine as provider for PoST proofs
+
+To disable the internal PoST service and disable smeshing on your node you can use the following config:
+
+```json
+"smeshing": {
+    "smeshing-start": false,
+}
+```
+
+or use the `--smeshing-start=false` flag. This will disable smeshing on your node causing it not generate any PoST proofs until a remote post
+service connects.
+
+By default the node listens for the PoST service on `grpc-private-listener` (defaults to 127.0.0.1:9093). This endpoint does not require authentication and
+should only be accessible from the same machine. If you want to allow connections from post services on other hosts to your node, you should do so via the
+`grpc-tls-listener` (defaults to 0.0.0.0:9094) and setup TLS for the connection.
+
+This is useful for example if you want to run a node on a cloud provider with fewer resources and run PoST on a local machine with more resources. The post
+service only needs to be online for the initial proof (i.e. when joining the network for the first time) and during the cyclegap in every epoch.
+
+To setup TLS-secured public connections the API config has been extended with the following options:
+
+```json
+"api": {
+    "grpc-private-services": ["admin", "smesher"], // remove "post" from the list of services only exposed to the local machine
+    "grpc-tls-services": ["post"],                 // add "post" to the list of services that should be exposed via TLS
+    "grpc-tls-listener": "0.0.0.0:9094",           // listen address for TLS connections
+    "grpc-tls-ca-cert": "/path/to/ca.pem",         // CA certificate that signed the node's and the PoST service's certificates
+    "grpc-tls-cert": "/path/to/cert.pem",          // certificate for the node
+    "grpc-tls-key": "/path/to/key.pem",            // private key for the node
+}
+```
+
+Ensure that remote PoST services are setup to connect to your node via TLS, that they trust your node's certificate and use a certificate that is signed by the
+same CA as your node's certificate.
+
+The local (supervised) PoST service can also be configured to connect to your node via TLS if needed. The following config options are available:
+
+```json
+"post-service": {
+    "post-opts-post-service": "/path/to/service-binary", // defaults to service in the same directory as the node binary
+    "post-opts-node-address": "http://domain:port",      // defaults to 127.0.0.1:9093 - the same default value as for "grpc-private-listener"
+
+    // the following settings are mandatory when connecting to the node via TLS - when connecting via the private listener they are not needed
+    "post-opts-tls-ca-cert": "/path/to/ca.pem",  // CA certificate that signed the node's and the PoST service's certificates
+    "post-opts-tls-cert": "/path/to/cert.pem",   // certificate for the PoST service
+    "post-opts-tls-key": "/path/to/key.pem",     // private key for the PoST service
+}
+```
+
 ---
 
 ### Testing
