@@ -385,7 +385,7 @@ func TestEligibilityValidator(t *testing.T) {
 				geligibilities(1, 2),
 			),
 			fail: true,
-			err:  "atx and ballot key mismatch",
+			err:  "failed to load atx from cache with epoch",
 		},
 
 		{

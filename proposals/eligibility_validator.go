@@ -158,21 +158,24 @@ func (v *Validator) validateReference(ballot *types.Ballot, actives []types.ATXI
 	if len(actives) == 0 {
 		return nil, fmt.Errorf("%w: ref ballot %v", errEmptyActiveSet, ballot.ID())
 	}
+
 	var totalWeight uint64
-	for _, atxid := range actives {
-		if epoch := ballot.Layer.GetEpoch(); v.cache.IsEvicted(epoch) {
+	if v.cache.IsEvicted(ballot.Layer.GetEpoch()) {
+		for _, atxid := range actives {
 			atx, err := atxs.Get(v.db, atxid)
 			if err != nil {
 				return nil, fmt.Errorf("atx in active set is missing %v: %w", atxid, err)
 			}
 			totalWeight += atx.GetWeight()
-		} else {
-			atx := v.cache.Get(epoch, atxid)
-			if atx == nil {
-				return nil, fmt.Errorf("atx in active set is missing in cache %v", atxid.ShortString())
-			}
-			totalWeight += atx.Weight
 		}
+	} else {
+		weight, used := v.cache.WeightForSet(ballot.Layer.GetEpoch(), actives)
+		for i := range used {
+			if !used[i] {
+				return nil, fmt.Errorf("atx in active set is missing in cache %v", actives[i].ShortString())
+			}
+		}
+		totalWeight = weight
 	}
 	numEligibleSlots, err := GetNumEligibleSlots(atx.Weight, v.minActiveSetWeight, totalWeight, v.avgLayerSize, v.layersPerEpoch)
 	if err != nil {

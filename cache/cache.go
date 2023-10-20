@@ -174,6 +174,7 @@ func (c *Cache) WeightForSet(epoch types.EpochID, set []types.ATXID) (uint64, []
 	defer c.mu.RUnlock()
 	ecache, exists := c.epochs[epoch]
 
+	// TODO(dshulyak) bitfield is a perfect fit here
 	used := make([]bool, len(set))
 	if !exists {
 		return 0, used

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"golang.org/x/exp/slices"
 
 	"github.com/spacemeshos/go-spacemesh/cache"
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -203,19 +204,20 @@ func (h *Handler) HandleActiveSet(ctx context.Context, id types.Hash32, peer p2p
 }
 
 func (h *Handler) handleSet(ctx context.Context, id types.Hash32, set types.EpochActiveSet) error {
-	for i := 0; i < len(set.Set)-1; i++ {
-		if bytes.Compare(set.Set[i].Bytes(), set.Set[i+1].Bytes()) >= 0 {
-			return fmt.Errorf("%w: active set is not sorted", pubsub.ErrValidationReject)
-		}
+	if !slices.IsSortedFunc(set.Set, func(left, right types.ATXID) int {
+		return bytes.Compare(left[:], right[:])
+	}) {
+		return fmt.Errorf("%w: active set is not sorted", pubsub.ErrValidationReject)
 	}
 	if id != types.ATXIDList(set.Set).Hash() {
 		return fmt.Errorf("%w: response for wrong hash %s", pubsub.ErrValidationReject, id.String())
 	}
 	// active set is invalid unless all activations that it references are from the correct epoch
+	_, used := h.cache.WeightForSet(set.Epoch, set.Set)
 	var atxids []types.ATXID
-	for _, atxid := range set.Set {
-		if h.cache.Get(set.Epoch, atxid) == nil {
-			atxids = append(atxids, atxid)
+	for i := range set.Set {
+		if !used[i] {
+			atxids = append(atxids, set.Set[i])
 		}
 	}
 	if err := h.fetcher.GetAtxs(ctx, atxids); err != nil {
