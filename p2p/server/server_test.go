@@ -154,8 +154,8 @@ func TestQueued(t *testing.T) {
 		func(_ context.Context, msg []byte) ([]byte, error) {
 			return msg, nil
 		},
-		WithQueueSize(total/2),
-		WithRequestsPerInterval(10, time.Millisecond),
+		WithQueueSize(total/4),
+		WithRequestsPerInterval(25, time.Second),
 		WithMetrics(),
 	)
 	var (
