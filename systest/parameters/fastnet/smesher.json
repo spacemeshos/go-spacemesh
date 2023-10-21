@@ -10,8 +10,14 @@
     },
     "api": {
         "grpc-public-services": [
-            "debug", "global", "mesh", "node",
-            "transaction", "activation", "admin", "smesher"
+            "debug",
+            "global",
+            "mesh",
+            "node",
+            "transaction",
+            "activation",
+            "admin",
+            "smesher"
         ],
         "grpc-private-services": [
             "post"
@@ -19,5 +25,8 @@
     },
     "logging": {
         "hare": "debug"
+    },
+    "fetch": {
+        "servers-metrics": true
     }
 }
