@@ -85,7 +85,12 @@ func (p *Pruner) Prune(current types.LayerID) error {
 	propTxLatency.Observe(time.Since(start).Seconds())
 	if current.GetEpoch() > p.activesetEpoch {
 		start = time.Now()
-		if err := activesets.DeleteBeforeEpoch(p.db, current.GetEpoch()); err != nil {
+		epoch := current.GetEpoch()
+		if epoch > 0 {
+			epoch--
+		}
+		// current - 1 as activesets will be fetched in hare eligibility oracle
+		if err := activesets.DeleteBeforeEpoch(p.db, epoch); err != nil {
 			return err
 		}
 		activeSetLatency.Observe(time.Since(start).Seconds())
