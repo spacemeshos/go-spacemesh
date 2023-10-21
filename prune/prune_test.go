@@ -83,7 +83,7 @@ func TestPrune(t *testing.T) {
 	for epoch, epochSets := range sets {
 		for _, id := range epochSets {
 			_, err := activesets.Get(db, id)
-			if epoch >= current.GetEpoch() {
+			if epoch >= current.GetEpoch()-1 {
 				require.NoError(t, err)
 			} else {
 				require.ErrorIs(t, err, sql.ErrNotFound)
