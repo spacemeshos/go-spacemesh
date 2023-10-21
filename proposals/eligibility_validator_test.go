@@ -561,7 +561,7 @@ func TestEligibilityValidator(t *testing.T) {
 
 			lg := logtest.New(t)
 			db := datastore.NewCachedDB(sql.InMemory(), lg)
-			tv := NewEligibilityValidator(layerAvgSize, layersPerEpoch, tc.minWeight, ms.mclock, ms.md,
+			tv := NewEligibilityValidator(layerAvgSize, layersPerEpoch, []types.EpochMinimalActiveWeight{{Weight: tc.minWeight}}, ms.mclock, ms.md,
 				db, ms.mbc, lg, ms.mvrf,
 				WithNonceFetcher(db),
 			)

@@ -486,8 +486,8 @@ func (app *App) setupLogging() {
 }
 
 func (app *App) getAppInfo() string {
-	return fmt.Sprintf("App version: %s. Git: %s - %s . Go Version: %s. OS: %s-%s ",
-		cmd.Version, cmd.Branch, cmd.Commit, runtime.Version(), runtime.GOOS, runtime.GOARCH)
+	return fmt.Sprintf("App version: %s. Git: %s - %s . Go Version: %s. OS: %s-%s . Genesis %s",
+		cmd.Version, cmd.Branch, cmd.Commit, runtime.Version(), runtime.GOOS, runtime.GOARCH, app.Config.Genesis.GenesisID().String())
 }
 
 // Cleanup stops all app services.
@@ -786,7 +786,6 @@ func (app *App) initServices(ctx context.Context) error {
 		app.clock,
 		beaconProtocol,
 		trtl,
-		blocks.WithCertContext(ctx),
 		blocks.WithCertConfig(blocks.CertConfig{
 			CommitteeSize:    app.Config.HARE.N,
 			CertifyThreshold: app.Config.HARE.N/2 + 1,
@@ -836,7 +835,6 @@ func (app *App) initServices(ctx context.Context) error {
 		fetcherWrapped,
 		app.certifier,
 		patrol,
-		blocks.WithContext(ctx),
 		blocks.WithConfig(blocks.Config{
 			BlockGasLimit:      app.Config.BlockGasLimit,
 			OptFilterThreshold: app.Config.OptFilterThreshold,
@@ -1214,8 +1212,8 @@ func (app *App) startServices(ctx context.Context) error {
 	app.syncer.Start()
 	app.beaconProtocol.Start(ctx)
 
-	app.blockGen.Start()
-	app.certifier.Start()
+	app.blockGen.Start(ctx)
+	app.certifier.Start(ctx)
 	if err := app.hare.Start(ctx); err != nil {
 		return fmt.Errorf("cannot start hare: %w", err)
 	}

@@ -28,8 +28,7 @@ type Generator struct {
 	cfg    Config
 	once   sync.Once
 	eg     errgroup.Group
-	ctx    context.Context
-	cancel func()
+	stop   func()
 
 	cdb      *datastore.CachedDB
 	msh      meshProvider
@@ -59,13 +58,6 @@ func defaultConfig() Config {
 
 // GeneratorOpt for configuring Generator.
 type GeneratorOpt func(*Generator)
-
-// WithContext modifies default context.
-func WithContext(ctx context.Context) GeneratorOpt {
-	return func(g *Generator) {
-		g.ctx = ctx
-	}
-}
 
 // WithConfig defines cfg for Generator.
 func WithConfig(cfg Config) GeneratorOpt {
@@ -101,7 +93,6 @@ func NewGenerator(
 	g := &Generator{
 		logger:           log.NewNop(),
 		cfg:              defaultConfig(),
-		ctx:              context.Background(),
 		cdb:              cdb,
 		msh:              m,
 		executor:         exec,
@@ -113,34 +104,35 @@ func NewGenerator(
 	for _, opt := range opts {
 		opt(g)
 	}
-	g.ctx, g.cancel = context.WithCancel(g.ctx)
+
 	return g
 }
 
 // Start starts listening to hare output.
-func (g *Generator) Start() {
+func (g *Generator) Start(ctx context.Context) {
 	g.once.Do(func() {
+		ctx, g.stop = context.WithCancel(ctx)
 		g.eg.Go(func() error {
-			return g.run()
+			return g.run(ctx)
 		})
 	})
 }
 
 // Stop stops listening to hare output.
 func (g *Generator) Stop() {
-	g.cancel()
+	g.stop()
 	err := g.eg.Wait()
 	if err != nil && !errors.Is(err, context.Canceled) {
 		g.logger.With().Error("blockGen task failure", log.Err(err))
 	}
 }
 
-func (g *Generator) run() error {
+func (g *Generator) run(ctx context.Context) error {
 	var maxLayer types.LayerID
 	for {
 		select {
-		case <-g.ctx.Done():
-			return fmt.Errorf("context done: %w", g.ctx.Err())
+		case <-ctx.Done():
+			return fmt.Errorf("context done: %w", ctx.Err())
 		case out := <-g.hareCh:
 			g.logger.With().Debug("received hare output",
 				log.Context(out.Ctx),
