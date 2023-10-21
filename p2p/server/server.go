@@ -138,7 +138,7 @@ type request struct {
 }
 
 func (s *Server) Run(ctx context.Context) error {
-	limit := rate.NewLimiter(rate.Every(s.interval), s.requestsPerInterval)
+	limit := rate.NewLimiter(rate.Every(s.interval/time.Duration(s.requestsPerInterval)), s.requestsPerInterval)
 	queue := make(chan request, s.queueSize)
 	if s.metrics != nil {
 		s.metrics.targetQueue.Set(float64(s.queueSize))

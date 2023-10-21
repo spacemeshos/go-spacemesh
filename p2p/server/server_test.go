@@ -47,6 +47,14 @@ func TestServer(t *testing.T) {
 	eg.Go(func() error {
 		return srv2.Run(ctx)
 	})
+	require.Eventually(t, func() bool {
+		for _, h := range mesh.Hosts()[1:] {
+			if len(h.Mux().Protocols()) == 0 {
+				return false
+			}
+		}
+		return true
+	}, time.Second, 10*time.Millisecond)
 	t.Cleanup(func() {
 		cancel()
 		eg.Wait()
