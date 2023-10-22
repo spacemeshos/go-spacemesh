@@ -69,44 +69,44 @@ type epochCache struct {
 	index *btree.BTreeG[*stored]
 }
 
-func (c *Data) Evicted() types.EpochID {
-	return types.EpochID(c.evicted.Load())
+func (d *Data) Evicted() types.EpochID {
+	return types.EpochID(d.evicted.Load())
 }
 
-func (c *Data) IsEvicted(epoch types.EpochID) bool {
-	return c.evicted.Load() >= epoch.Uint32()
+func (d *Data) IsEvicted(epoch types.EpochID) bool {
+	return d.evicted.Load() >= epoch.Uint32()
 }
 
 // OnEpoch is a notification for cache to evict epochs that are not useful
 // to keep in memory.
-func (c *Data) OnEpoch(applied types.EpochID) {
-	if applied < c.capacity {
+func (d *Data) OnEpoch(applied types.EpochID) {
+	if applied < d.capacity {
 		return
 	}
-	evict := applied - c.capacity
-	if c.IsEvicted(evict) {
+	evict := applied - d.capacity
+	if d.IsEvicted(evict) {
 		return
 	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.evicted.Load() < evict.Uint32() {
-		c.evicted.Store(evict.Uint32())
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.evicted.Load() < evict.Uint32() {
+		d.evicted.Store(evict.Uint32())
 	}
-	for epoch := range c.epochs {
+	for epoch := range d.epochs {
 		if epoch <= evict {
-			delete(c.epochs, epoch)
+			delete(d.epochs, epoch)
 			atxsCounter.DeleteLabelValues(epoch.String())
 		}
 	}
 }
 
-func (c *Data) Add(epoch types.EpochID, node types.NodeID, atx types.ATXID, data *ATX) {
-	if c.IsEvicted(epoch) {
+func (d *Data) Add(epoch types.EpochID, node types.NodeID, atx types.ATXID, data *ATX) {
+	if d.IsEvicted(epoch) {
 		return
 	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	ecache, exists := c.epochs[epoch]
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	ecache, exists := d.epochs[epoch]
 	if !exists {
 		ecache = epochCache{
 			index: btree.NewG(64, func(left, right *stored) bool {
@@ -117,7 +117,7 @@ func (c *Data) Add(epoch types.EpochID, node types.NodeID, atx types.ATXID, data
 				return nodecmp == -1
 			}),
 		}
-		c.epochs[epoch] = ecache
+		d.epochs[epoch] = ecache
 	}
 	if _, exists := ecache.index.ReplaceOrInsert(&stored{node: node, atx: atx, data: data}); !exists {
 		atxsCounter.WithLabelValues(epoch.String()).Inc()
@@ -125,10 +125,10 @@ func (c *Data) Add(epoch types.EpochID, node types.NodeID, atx types.ATXID, data
 
 }
 
-func (c *Data) SetMalicious(node types.NodeID) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	for _, ecache := range c.epochs {
+func (d *Data) SetMalicious(node types.NodeID) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, ecache := range d.epochs {
 		ecache.index.AscendGreaterOrEqual(&stored{node: node}, func(s *stored) bool {
 			if node != s.node {
 				return false
@@ -142,10 +142,10 @@ func (c *Data) SetMalicious(node types.NodeID) {
 }
 
 // Get returns atx data.
-func (c *Data) Get(epoch types.EpochID, node types.NodeID, atx types.ATXID) *ATX {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	ecache, exists := c.epochs[epoch]
+func (d *Data) Get(epoch types.EpochID, node types.NodeID, atx types.ATXID) *ATX {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	ecache, exists := d.epochs[epoch]
 	if !exists {
 		return nil
 	}
@@ -157,10 +157,10 @@ func (c *Data) Get(epoch types.EpochID, node types.NodeID, atx types.ATXID) *ATX
 }
 
 // GetByNode returns atx data of the first atx in lexicographic order.
-func (c *Data) GetByNode(epoch types.EpochID, node types.NodeID) *ATX {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	ecache, exists := c.epochs[epoch]
+func (d *Data) GetByNode(epoch types.EpochID, node types.NodeID) *ATX {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	ecache, exists := d.epochs[epoch]
 	if !exists {
 		return nil
 	}
@@ -177,10 +177,12 @@ func (c *Data) GetByNode(epoch types.EpochID, node types.NodeID) *ATX {
 
 // WeightForSet computes total weight of atxs in the set and returned array with
 // atxs in the set that weren't used.
-func (c *Data) WeightForSet(epoch types.EpochID, set []types.ATXID) (uint64, []bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	ecache, exists := c.epochs[epoch]
+//
+// set is expected to be sorted.
+func (d *Data) WeightForSet(epoch types.EpochID, set []types.ATXID) (uint64, []bool) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	ecache, exists := d.epochs[epoch]
 
 	// TODO(dshulyak) bitfield is a perfect fit here
 	used := make([]bool, len(set))
