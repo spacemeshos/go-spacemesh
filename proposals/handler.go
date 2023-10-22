@@ -137,7 +137,6 @@ func NewHandler(
 			b.cfg.MinimalActiveSetWeight,
 			clock,
 			tortoise,
-			db,
 			cache,
 			bc,
 			b.logger,
@@ -304,7 +303,12 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 		return errInitialize
 	}
 	if expHash != (types.Hash32{}) && p.ID().AsHash32() != expHash {
-		return fmt.Errorf("%w: proposal want %s, got %s", errWrongHash, expHash.ShortString(), p.ID().AsHash32().ShortString())
+		return fmt.Errorf(
+			"%w: proposal want %s, got %s",
+			errWrongHash,
+			expHash.ShortString(),
+			p.ID().AsHash32().ShortString(),
+		)
 	}
 
 	if p.AtxID == types.EmptyATXID || p.AtxID == h.cfg.GoldenATXID {
@@ -385,7 +389,11 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 		}
 		return errMaliciousBallot
 	}
-	metrics.ReportMessageLatency(pubsub.ProposalProtocol, pubsub.ProposalProtocol, time.Since(h.clock.LayerToTime(p.Layer)))
+	metrics.ReportMessageLatency(
+		pubsub.ProposalProtocol,
+		pubsub.ProposalProtocol,
+		time.Since(h.clock.LayerToTime(p.Layer)),
+	)
 	return nil
 }
 
@@ -423,7 +431,11 @@ func (h *Handler) processBallot(ctx context.Context, logger log.Log, b *types.Ba
 	return proof, nil
 }
 
-func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, logger log.Log, b *types.Ballot) (*tortoise.DecodedBallot, error) {
+func (h *Handler) checkBallotSyntacticValidity(
+	ctx context.Context,
+	logger log.Log,
+	b *types.Ballot,
+) (*tortoise.DecodedBallot, error) {
 	t0 := time.Now()
 	actives, err := h.checkBallotDataIntegrity(ctx, b)
 	if err != nil {

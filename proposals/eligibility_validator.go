@@ -10,8 +10,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/cache"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -30,7 +28,6 @@ type Validator struct {
 	avgLayerSize       uint32
 	layersPerEpoch     uint32
 	tortoise           tortoiseProvider
-	db                 *sql.Database
 	cache              *cache.Cache
 	clock              layerClock
 	beacons            system.BeaconCollector
@@ -47,7 +44,6 @@ func NewEligibilityValidator(
 	minActiveSetWeight uint64,
 	clock layerClock,
 	tortoise tortoiseProvider,
-	db *sql.Database,
 	cache *cache.Cache,
 	bc system.BeaconCollector,
 	lg log.Log,
@@ -59,7 +55,6 @@ func NewEligibilityValidator(
 		avgLayerSize:       avgLayerSize,
 		layersPerEpoch:     layersPerEpoch,
 		tortoise:           tortoise,
-		db:                 db,
 		cache:              cache,
 		clock:              clock,
 		beacons:            bc,
@@ -77,34 +72,13 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot, 
 	if len(ballot.EligibilityProofs) == 0 {
 		return false, fmt.Errorf("empty eligibility list is invalid (ballot %s)", ballot.ID())
 	}
-	var atx *cache.ATXData
-	if epoch := ballot.Layer.GetEpoch(); v.cache.IsEvicted(epoch) {
-		owned, err := atxs.Get(v.db, ballot.AtxID)
-		if err != nil {
-			return false, fmt.Errorf("failed to load atx %v: %w", ballot.AtxID, err)
-		}
-		if owned.TargetEpoch() != epoch {
-			return false, fmt.Errorf(
-				"atx and ballot epochs mismatch. atx %d/%s is not from %d/%s",
-				owned.TargetEpoch(),
-				ballot.AtxID.ShortString(),
-				epoch,
-				ballot.SmesherID.ShortString(),
-			)
-		}
-		if ballot.SmesherID != owned.SmesherID {
-			return false, fmt.Errorf("atx and ballot key mismatch: public key (%v), ATX node key (%v)", ballot.SmesherID.String(), owned.NodeID)
-		}
-		nonce, err := atxs.VRFNonce(v.db, ballot.SmesherID, epoch)
-		if err != nil {
-			return false, fmt.Errorf("no vrf nonce for %v in epoch %v: %w", ballot.SmesherID, ballot.Layer.GetEpoch(), err)
-		}
-		atx = cache.ToATXData(owned.ToHeader(), nonce, false)
-	} else {
-		atx = v.cache.Get(epoch, ballot.SmesherID, ballot.AtxID)
-		if atx == nil {
-			return false, fmt.Errorf("failed to load atx from cache with epoch %d %s", epoch, ballot.AtxID.ShortString())
-		}
+	atx := v.cache.Get(ballot.Layer.GetEpoch(), ballot.SmesherID, ballot.AtxID)
+	if atx == nil {
+		return false, fmt.Errorf(
+			"failed to load atx from cache with epoch %d %s",
+			ballot.Layer.GetEpoch(),
+			ballot.AtxID.ShortString(),
+		)
 	}
 	var (
 		data *types.EpochData
@@ -151,38 +125,40 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot, 
 }
 
 // validateReference executed for reference ballots in latest epoch.
-func (v *Validator) validateReference(ballot *types.Ballot, actives []types.ATXID, atx *cache.ATXData) (*types.EpochData, error) {
+func (v *Validator) validateReference(
+	ballot *types.Ballot,
+	actives []types.ATXID,
+	atx *cache.ATXData,
+) (*types.EpochData, error) {
 	if ballot.EpochData.Beacon == types.EmptyBeacon {
 		return nil, fmt.Errorf("%w: ref ballot %v", errMissingBeacon, ballot.ID())
 	}
 	if len(actives) == 0 {
 		return nil, fmt.Errorf("%w: ref ballot %v", errEmptyActiveSet, ballot.ID())
 	}
-
-	var totalWeight uint64
-	if v.cache.IsEvicted(ballot.Layer.GetEpoch()) {
-		for _, atxid := range actives {
-			atx, err := atxs.Get(v.db, atxid)
-			if err != nil {
-				return nil, fmt.Errorf("atx in active set is missing %v: %w", atxid, err)
-			}
-			totalWeight += atx.GetWeight()
+	totalWeight, used := v.cache.WeightForSet(ballot.Layer.GetEpoch(), actives)
+	for i := range used {
+		if !used[i] {
+			return nil, fmt.Errorf("atx in active set is missing in cache %v", actives[i].ShortString())
 		}
-	} else {
-		weight, used := v.cache.WeightForSet(ballot.Layer.GetEpoch(), actives)
-		for i := range used {
-			if !used[i] {
-				return nil, fmt.Errorf("atx in active set is missing in cache %v", actives[i].ShortString())
-			}
-		}
-		totalWeight = weight
 	}
-	numEligibleSlots, err := GetNumEligibleSlots(atx.Weight, v.minActiveSetWeight, totalWeight, v.avgLayerSize, v.layersPerEpoch)
+	numEligibleSlots, err := GetNumEligibleSlots(
+		atx.Weight,
+		v.minActiveSetWeight,
+		totalWeight,
+		v.avgLayerSize,
+		v.layersPerEpoch,
+	)
 	if err != nil {
 		return nil, err
 	}
 	if ballot.EpochData.EligibilityCount != numEligibleSlots {
-		return nil, fmt.Errorf("%w: expected %v, got: %v", errIncorrectEligCount, numEligibleSlots, ballot.EpochData.EligibilityCount)
+		return nil, fmt.Errorf(
+			"%w: expected %v, got: %v",
+			errIncorrectEligCount,
+			numEligibleSlots,
+			ballot.EpochData.EligibilityCount,
+		)
 	}
 	return ballot.EpochData, nil
 }
@@ -200,7 +176,13 @@ func (v *Validator) validateSecondary(ballot *types.Ballot) (*types.EpochData, e
 		return nil, fmt.Errorf("ref ballot is missing %v", ballot.RefBallot)
 	}
 	if refdata.ATXID != ballot.AtxID {
-		return nil, fmt.Errorf("ballot (%v/%v) should be sharing atx with a reference ballot (%v/%v)", ballot.ID(), ballot.AtxID, refdata.ID, refdata.ATXID)
+		return nil, fmt.Errorf(
+			"ballot (%v/%v) should be sharing atx with a reference ballot (%v/%v)",
+			ballot.ID(),
+			ballot.AtxID,
+			refdata.ID,
+			refdata.ATXID,
+		)
 	}
 	if refdata.Smesher != ballot.SmesherID {
 		return nil, fmt.Errorf("mismatched smesher id with refballot in ballot %v", ballot.ID())

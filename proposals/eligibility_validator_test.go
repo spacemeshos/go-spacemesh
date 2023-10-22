@@ -6,18 +6,21 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/cache"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
-func gatx(id types.ATXID, epoch types.EpochID, smesher types.NodeID, units uint32, nonce types.VRFPostIndex) types.VerifiedActivationTx {
+func gatx(
+	id types.ATXID,
+	epoch types.EpochID,
+	smesher types.NodeID,
+	units uint32,
+	nonce types.VRFPostIndex,
+) types.VerifiedActivationTx {
 	atx := &types.ActivationTx{}
 	atx.NumUnits = units
 	atx.PublishEpoch = epoch
@@ -33,7 +36,13 @@ func gatx(id types.ATXID, epoch types.EpochID, smesher types.NodeID, units uint3
 	return *verified
 }
 
-func gatxZeroHeight(id types.ATXID, epoch types.EpochID, smesher types.NodeID, units uint32, nonce types.VRFPostIndex) types.VerifiedActivationTx {
+func gatxZeroHeight(
+	id types.ATXID,
+	epoch types.EpochID,
+	smesher types.NodeID,
+	units uint32,
+	nonce types.VRFPostIndex,
+) types.VerifiedActivationTx {
 	atx := &types.ActivationTx{}
 	atx.NumUnits = units
 	atx.PublishEpoch = epoch
@@ -151,21 +160,6 @@ func TestEligibilityValidator(t *testing.T) {
 			),
 		},
 		{
-			desc:    "ref ballot in current slowpath",
-			current: epoch.FirstLayer(),
-			evicted: epoch,
-			atxs: []types.VerifiedActivationTx{
-				gatx(types.ATXID{1}, publish, types.NodeID{1}, 10, 10),
-				gatx(types.ATXID{2}, publish, types.NodeID{2}, 10, 10),
-			},
-			actives: gactiveset(types.ATXID{1}, types.ATXID{2}),
-			executed: gballot(
-				types.BallotID{1}, types.ATXID{1},
-				types.NodeID{1}, epoch.FirstLayer(), gdata(15, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
-				geligibilities(1, 2),
-			),
-		},
-		{
 			desc:      "ref ballot in current low activeset",
 			current:   epoch.FirstLayer(),
 			minWeight: 10000,
@@ -219,17 +213,6 @@ func TestEligibilityValidator(t *testing.T) {
 		},
 		{
 			desc: "no atx",
-			executed: gballot(
-				types.BallotID{1}, types.ATXID{1},
-				types.NodeID{1}, publish.FirstLayer(), gdata(15, types.Beacon{1}, types.Hash32{}),
-				geligibilities(1, 2),
-			),
-			fail: true,
-			err:  "failed to load atx",
-		},
-		{
-			desc:    "no atx slowpath",
-			evicted: epoch,
 			executed: gballot(
 				types.BallotID{1}, types.ATXID{1},
 				types.NodeID{1}, publish.FirstLayer(), gdata(15, types.Beacon{1}, types.Hash32{}),
@@ -311,22 +294,6 @@ func TestEligibilityValidator(t *testing.T) {
 			err:  "atx in active set is missing",
 		},
 		{
-			desc:    "ref ballot in current atx in set missing slowpath",
-			evicted: epoch,
-			current: epoch.FirstLayer(),
-			atxs: []types.VerifiedActivationTx{
-				gatx(types.ATXID{1}, epoch-1, types.NodeID{1}, 10, 10),
-			},
-			actives: gactiveset(types.ATXID{1}, types.ATXID{2}),
-			executed: gballot(
-				types.BallotID{1}, types.ATXID{1},
-				types.NodeID{1}, epoch.FirstLayer(), gdata(10, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
-				geligibilities(1, 2),
-			),
-			fail: true,
-			err:  "atx in active set is missing",
-		},
-		{
 			desc:    "mismatched num eligible",
 			current: epoch.FirstLayer(),
 			atxs: []types.VerifiedActivationTx{
@@ -357,22 +324,6 @@ func TestEligibilityValidator(t *testing.T) {
 			err:  "failed to load atx from cache",
 		},
 		{
-			desc:    "ballot targets wrong epoch slowpath",
-			current: epoch.FirstLayer(),
-			evicted: epoch + 1,
-			atxs: []types.VerifiedActivationTx{
-				gatx(types.ATXID{1}, epoch-1, types.NodeID{1}, 10, 0),
-			},
-			actives: gactiveset(types.ATXID{1}),
-			executed: gballot(
-				types.BallotID{1}, types.ATXID{1},
-				types.NodeID{1}, (epoch + 1).FirstLayer(), gdata(10, types.Beacon{1}, gactiveset(types.ATXID{1}).Hash()),
-				geligibilities(1, 2),
-			),
-			fail: true,
-			err:  "atx and ballot epochs mismatch",
-		},
-		{
 			desc:    "ballot uses wrong atx",
 			current: epoch.FirstLayer(),
 			atxs: []types.VerifiedActivationTx{
@@ -386,23 +337,6 @@ func TestEligibilityValidator(t *testing.T) {
 			),
 			fail: true,
 			err:  "failed to load atx from cache with epoch",
-		},
-
-		{
-			desc:    "ballot uses wrong atx slowpath",
-			evicted: epoch,
-			current: epoch.FirstLayer(),
-			atxs: []types.VerifiedActivationTx{
-				gatx(types.ATXID{1}, epoch-1, types.NodeID{2}, 10, 0),
-			},
-			actives: gactiveset(types.ATXID{1}),
-			executed: gballot(
-				types.BallotID{1}, types.ATXID{1},
-				types.NodeID{1}, epoch.FirstLayer(), gdata(10, types.Beacon{1}, gactiveset(types.ATXID{1}).Hash()),
-				geligibilities(1, 2),
-			),
-			fail: true,
-			err:  "atx and ballot key mismatch",
 		},
 		{
 			desc:    "no vrf nonce",
@@ -418,7 +352,7 @@ func TestEligibilityValidator(t *testing.T) {
 				geligibilities(1, 2),
 			),
 			fail: true,
-			err:  "no vrf nonce",
+			err:  "failed to load atx from cache",
 		},
 		{
 			desc:    "secondary ballot",
@@ -637,15 +571,13 @@ func TestEligibilityValidator(t *testing.T) {
 			}).AnyTimes()
 
 			lg := logtest.New(t)
-			db := sql.InMemory()
 			const capacity = 2
 			c := cache.New(cache.WithCapacity(capacity))
 			c.OnEpoch(tc.evicted + capacity)
 			tv := NewEligibilityValidator(layerAvgSize, layersPerEpoch, tc.minWeight, ms.mclock, ms.md,
-				db, c, ms.mbc, lg, ms.mvrf,
+				c, ms.mbc, lg, ms.mvrf,
 			)
 			for _, atx := range tc.atxs {
-				require.NoError(t, atxs.Add(db, &atx))
 				c.Add(
 					atx.TargetEpoch(), atx.SmesherID, atx.ID(),
 					cache.ToATXData(atx.ToHeader(), 0, false),
@@ -655,7 +587,8 @@ func TestEligibilityValidator(t *testing.T) {
 				ballots[ballot.ID()] = &ballot
 			}
 			if !tc.fail {
-				ms.mbc.EXPECT().ReportBeaconFromBallot(tc.executed.Layer.GetEpoch(), &tc.executed, gomock.Any(), gomock.Any())
+				ms.mbc.EXPECT().
+					ReportBeaconFromBallot(tc.executed.Layer.GetEpoch(), &tc.executed, gomock.Any(), gomock.Any())
 			}
 			rst, err := tv.CheckEligibility(context.Background(), &tc.executed, tc.actives)
 			assert.Equal(t, !tc.fail, rst)
