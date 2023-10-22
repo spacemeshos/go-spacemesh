@@ -336,7 +336,7 @@ func TestEligibilityValidator(t *testing.T) {
 				geligibilities(1, 2),
 			),
 			fail: true,
-			err:  "failed to load atx from cache with epoch",
+			err:  "belongs to a different smesher",
 		},
 		{
 			desc:    "no vrf nonce",
@@ -587,8 +587,14 @@ func TestEligibilityValidator(t *testing.T) {
 			)
 			for _, atx := range tc.atxs {
 				c.Add(
-					atx.TargetEpoch(), atx.SmesherID, atx.ID(),
-					atxsdata.ToATXData(atx.ToHeader(), 0, false),
+					atx.TargetEpoch(),
+					atx.SmesherID,
+					atx.ID(),
+					atx.GetWeight(),
+					atx.BaseTickHeight(),
+					atx.TickHeight(),
+					0,
+					false,
 				)
 			}
 			for _, ballot := range tc.ballots {

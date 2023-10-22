@@ -573,7 +573,7 @@ func (h *Handler) checkBallotDataAvailability(ctx context.Context, b *types.Ball
 	if err := h.fetcher.GetBallots(ctx, blts); err != nil {
 		return fmt.Errorf("fetch ballots: %w", err)
 	}
-	if h.atxsdata.Get(b.Layer.GetEpoch(), b.SmesherID, b.AtxID) == nil {
+	if h.atxsdata.Get(b.Layer.GetEpoch(), b.AtxID) == nil {
 		if err := h.fetcher.GetAtxs(ctx, []types.ATXID{b.AtxID}); err != nil {
 			return fmt.Errorf("proposal get ATXs: %w", err)
 		}

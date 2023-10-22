@@ -36,14 +36,22 @@ func TestCache(t *testing.T) {
 				for i := range nodes[epoch] {
 					nodes[epoch][i][0] = byte(epoch + i)
 					atxids[epoch][i][0] = byte(epoch + i)
-					c.Add(types.EpochID(epoch)+1, nodes[epoch][i], atxids[epoch][i], &data[epoch][i])
+					d := &data[epoch][i]
+					c.Add(
+						types.EpochID(epoch)+1,
+						nodes[epoch][i],
+						atxids[epoch][i],
+						d.Weight,
+						d.BaseHeight,
+						d.Height,
+						d.Nonce,
+						d.Malicious,
+					)
 				}
 			}
 			for epoch := 0; epoch < epochs; epoch++ {
 				for i := range nodes[epoch] {
-					bynode := c.GetByNode(types.EpochID(epoch)+1, nodes[epoch][i])
-					require.Equal(t, &data[epoch][i], bynode)
-					byatxid := c.Get(types.EpochID(epoch)+1, nodes[epoch][i], atxids[epoch][i])
+					byatxid := c.Get(types.EpochID(epoch)+1, atxids[epoch][i])
 					require.Equal(t, &data[epoch][i], byatxid)
 				}
 			}
@@ -53,14 +61,14 @@ func TestCache(t *testing.T) {
 		c := New()
 		node := types.NodeID{1}
 		for epoch := 1; epoch <= 10; epoch++ {
-			c.Add(types.EpochID(epoch), node, types.ATXID{}, &ATX{})
-			data := c.GetByNode(types.EpochID(epoch), node)
+			c.Add(types.EpochID(epoch), node, types.ATXID{byte(epoch)}, 2, 0, 0, 0, false)
+			data := c.Get(types.EpochID(epoch), types.ATXID{byte(epoch)})
 			require.NotNil(t, data)
 			require.False(t, data.Malicious)
 		}
 		c.SetMalicious(node)
 		for epoch := 1; epoch <= 10; epoch++ {
-			data := c.GetByNode(types.EpochID(epoch), node)
+			data := c.Get(types.EpochID(epoch), types.ATXID{byte(epoch)})
 			require.True(t, data.Malicious)
 		}
 	})
@@ -73,8 +81,8 @@ func TestCache(t *testing.T) {
 		c := New(WithCapacity(capacity))
 		node := types.NodeID{1}
 		for epoch := 1; epoch <= epochs; epoch++ {
-			c.Add(types.EpochID(epoch), node, types.ATXID{}, &ATX{})
-			data := c.GetByNode(types.EpochID(epoch), node)
+			c.Add(types.EpochID(epoch), node, types.ATXID{}, 2, 0, 0, 0, false)
+			data := c.Get(types.EpochID(epoch), types.ATXID{})
 			require.NotNil(t, data)
 		}
 		c.OnEpoch(applied)
@@ -83,33 +91,26 @@ func TestCache(t *testing.T) {
 		for epoch := 1; epoch <= epochs; epoch++ {
 			require.Equal(t, epoch <= evicted, c.IsEvicted(types.EpochID(epoch)), "epoch=%v", epoch)
 		}
-		for epoch := 1; epoch <= evicted; epoch++ {
-			data := c.GetByNode(types.EpochID(epoch), node)
-			require.Nil(t, data)
-		}
 	})
 	t.Run("nil responses", func(t *testing.T) {
 		c := New()
-		require.Nil(t, c.Get(0, types.NodeID{}, types.ATXID{}))
-		require.Nil(t, c.Get(1, types.NodeID{}, types.ATXID{}))
-		require.Nil(t, c.GetByNode(1, types.NodeID{}))
+		require.Nil(t, c.Get(0, types.ATXID{}))
+		require.Nil(t, c.Get(1, types.ATXID{}))
 
-		c.Add(1, types.NodeID{1}, types.ATXID{1}, &ATX{})
-		require.Nil(t, c.Get(1, types.NodeID{}, types.ATXID{}))
-		require.Nil(t, c.GetByNode(1, types.NodeID{2}))
+		c.Add(1, types.NodeID{1}, types.ATXID{1}, 2, 0, 0, 0, false)
+		require.Nil(t, c.Get(1, types.ATXID{}))
 	})
 	t.Run("multiple atxs", func(t *testing.T) {
 		c := New()
-		c.Add(1, types.NodeID{1}, types.ATXID{1}, &ATX{Weight: 1})
-		c.Add(1, types.NodeID{1}, types.ATXID{2}, &ATX{Weight: 2})
-		require.NotNil(t, c.Get(1, types.NodeID{1}, types.ATXID{1}))
-		require.NotNil(t, c.Get(1, types.NodeID{1}, types.ATXID{2}))
-		require.EqualValues(t, 1, c.GetByNode(1, types.NodeID{1}).Weight)
+		c.Add(1, types.NodeID{1}, types.ATXID{1}, 1, 0, 0, 0, false)
+		c.Add(1, types.NodeID{1}, types.ATXID{2}, 2, 0, 0, 0, false)
+		require.NotNil(t, c.Get(1, types.ATXID{1}))
+		require.NotNil(t, c.Get(1, types.ATXID{2}))
 	})
 	t.Run("weight for set", func(t *testing.T) {
 		c := New()
-		c.Add(1, types.NodeID{1}, types.ATXID{1}, &ATX{Weight: 1})
-		c.Add(1, types.NodeID{1}, types.ATXID{2}, &ATX{Weight: 2})
+		c.Add(1, types.NodeID{1}, types.ATXID{1}, 1, 0, 0, 0, false)
+		c.Add(1, types.NodeID{1}, types.ATXID{2}, 2, 0, 0, 0, false)
 
 		weight, used := c.WeightForSet(1, []types.ATXID{{1}, {2}, {3}})
 		require.Equal(t, []bool{true, true, false}, used)
@@ -123,8 +124,8 @@ func TestCache(t *testing.T) {
 		c := New()
 		c.OnEpoch(0)
 		c.OnEpoch(3)
-		c.Add(1, types.NodeID{1}, types.ATXID{1}, &ATX{})
-		require.Nil(t, c.Get(3, types.NodeID{1}, types.ATXID{1}))
+		c.Add(1, types.NodeID{1}, types.ATXID{1}, 500, 100, 0, 0, false)
+		require.Nil(t, c.Get(3, types.ATXID{1}))
 		c.OnEpoch(3)
 	})
 
@@ -147,11 +148,10 @@ func TestMemory(t *testing.T) {
 			var (
 				node types.NodeID
 				atx  types.ATXID
-				data = &ATX{Weight: 500, BaseHeight: 100}
 			)
 			binary.PutUvarint(node[:], uint64(i))
 			binary.PutUvarint(atx[:], uint64(i))
-			c.Add(1, node, atx, data)
+			c.Add(1, node, atx, 500, 100, 0, 0, false)
 		}
 		runtime.GC()
 		var after runtime.MemStats
@@ -161,10 +161,10 @@ func TestMemory(t *testing.T) {
 		c.OnEpoch(0) // otherwise cache will be gc'ed
 	}
 	t.Run("1_000_000", func(t *testing.T) {
-		test(t, 1_000_000, 137_682_944, 300_000)
+		test(t, 1_000_000, 173_801_472, 300_000)
 	})
 	t.Run("100_000", func(t *testing.T) {
-		test(t, 100_000, 14_147_584, 200_000)
+		test(t, 100_000, 26_034_176, 200_000)
 	})
 }
 
@@ -178,11 +178,10 @@ func BenchmarkConcurrentReadWrite(b *testing.B) {
 		var (
 			node types.NodeID
 			atx  types.ATXID
-			data = &ATX{Weight: 500, BaseHeight: 100}
 		)
 		binary.PutUvarint(node[:], uint64(i))
 		binary.PutUvarint(atx[:], uint64(i))
-		c.Add(epoch, node, atx, data)
+		c.Add(epoch, node, atx, 500, 100, 0, 0, false)
 	}
 	b.ResetTimer()
 
@@ -199,11 +198,11 @@ func BenchmarkConcurrentReadWrite(b *testing.B) {
 			if i%writeFraction == 0 {
 				binary.PutUvarint(node[:], size+i*core)
 				binary.PutUvarint(atx[:], size+i*core)
-				c.Add(epoch, node, atx, &ATX{})
+				c.Add(epoch, node, atx, 500, 100, 0, 0, false)
 			} else {
 				binary.PutUvarint(node[:], i%size)
 				binary.PutUvarint(atx[:], i%size)
-				_ = c.Get(epoch, node, atx)
+				_ = c.Get(epoch, atx)
 			}
 			i++
 		}
@@ -219,12 +218,11 @@ func benchmarkkWeightForSet(b *testing.B, size, setSize int) {
 		var (
 			node types.NodeID
 			atx  types.ATXID
-			data = &ATX{Weight: 500, BaseHeight: 100}
 		)
 		binary.PutUvarint(node[:], uint64(i))
 		binary.PutUvarint(atx[:], uint64(i))
 		atxs = append(atxs, atx)
-		c.Add(epoch, node, atx, data)
+		c.Add(epoch, node, atx, 500, 100, 0, 0, false)
 	}
 	rng.Shuffle(size, func(i, j int) {
 		atxs[i], atxs[j] = atxs[j], atxs[i]

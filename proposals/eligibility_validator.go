@@ -73,12 +73,19 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot, 
 	if len(ballot.EligibilityProofs) == 0 {
 		return false, fmt.Errorf("empty eligibility list is invalid (ballot %s)", ballot.ID())
 	}
-	atx := v.atxsdata.Get(ballot.Layer.GetEpoch(), ballot.SmesherID, ballot.AtxID)
+	atx := v.atxsdata.Get(ballot.Layer.GetEpoch(), ballot.AtxID)
 	if atx == nil {
 		return false, fmt.Errorf(
 			"failed to load atx from cache with epoch %d %s",
 			ballot.Layer.GetEpoch(),
 			ballot.AtxID.ShortString(),
+		)
+	}
+	if atx.Node != ballot.SmesherID {
+		return false, fmt.Errorf(
+			"referenced atx %s belongs to a different smesher %s",
+			atx.Node.ShortString(),
+			ballot.SmesherID.ShortString(),
 		)
 	}
 	var (

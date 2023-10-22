@@ -1391,7 +1391,7 @@ func TestHandleActiveSet(t *testing.T) {
 				th.mf.EXPECT().RegisterPeerHashes(pid, types.ATXIDsToHashes(eset.Set))
 			}
 			for _, atxid := range tc.cached {
-				th.atxsdata.Add(eset.Epoch, types.NodeID{1}, atxid, &atxsdata.ATX{})
+				th.atxsdata.Add(eset.Epoch, types.NodeID{1}, atxid, 0, 0, 0, 0, false)
 			}
 			if tc.fetch != nil {
 				th.mf.EXPECT().GetAtxs(gomock.Any(), tc.fetch).Return(tc.fetchErr)

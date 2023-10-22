@@ -1,17 +1,15 @@
 package atxsdata
 
 import (
-	"bytes"
 	"sync"
 
-	"github.com/google/btree"
 	"go.uber.org/atomic"
-	"golang.org/x/exp/slices"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 type ATX struct {
+	Node               types.NodeID
 	Weight             uint64
 	BaseHeight, Height uint64
 	Nonce              types.VRFPostIndex
@@ -61,14 +59,8 @@ type Data struct {
 	epochs    map[types.EpochID]epochCache
 }
 
-type stored struct {
-	node types.NodeID
-	atx  types.ATXID
-	data *ATX
-}
-
 type epochCache struct {
-	index *btree.BTreeG[*stored]
+	index map[types.ATXID]*ATX
 }
 
 func (d *Data) Evicted() types.EpochID {
@@ -102,7 +94,14 @@ func (d *Data) OnEpoch(applied types.EpochID) {
 	}
 }
 
-func (d *Data) Add(epoch types.EpochID, node types.NodeID, atx types.ATXID, data *ATX) {
+func (d *Data) Add(
+	epoch types.EpochID,
+	node types.NodeID,
+	atx types.ATXID,
+	weight, baseHeight, height uint64,
+	nonce types.VRFPostIndex,
+	malicious bool,
+) {
 	if d.IsEvicted(epoch) {
 		return
 	}
@@ -111,23 +110,26 @@ func (d *Data) Add(epoch types.EpochID, node types.NodeID, atx types.ATXID, data
 	ecache, exists := d.epochs[epoch]
 	if !exists {
 		ecache = epochCache{
-			index: btree.NewG(64, func(left, right *stored) bool {
-				nodecmp := bytes.Compare(left.node[:], right.node[:])
-				if nodecmp == 0 {
-					return bytes.Compare(left.atx[:], right.atx[:]) == -1
-				}
-				return nodecmp == -1
-			}),
+			index: map[types.ATXID]*ATX{},
 		}
 		d.epochs[epoch] = ecache
 	}
-	if _, exists := ecache.index.ReplaceOrInsert(&stored{node: node, atx: atx, data: data}); !exists {
-		if data.Malicious {
-			d.malicious[node] = struct{}{}
-		}
+	_, exists = ecache.index[atx]
+	if !exists {
 		atxsCounter.WithLabelValues(epoch.String()).Inc()
 	}
-
+	data := &ATX{
+		Node:       node,
+		Weight:     weight,
+		BaseHeight: baseHeight,
+		Height:     height,
+		Nonce:      nonce,
+		Malicious:  malicious,
+	}
+	ecache.index[atx] = data
+	if data.Malicious {
+		d.malicious[node] = struct{}{}
+	}
 }
 
 func (d *Data) SetMalicious(node types.NodeID) {
@@ -137,42 +139,18 @@ func (d *Data) SetMalicious(node types.NodeID) {
 }
 
 // Get returns atx data.
-func (d *Data) Get(epoch types.EpochID, node types.NodeID, atx types.ATXID) *ATX {
+func (d *Data) Get(epoch types.EpochID, atx types.ATXID) *ATX {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	ecache, exists := d.epochs[epoch]
 	if !exists {
 		return nil
 	}
-	data, exists := ecache.index.Get(&stored{node: node, atx: atx})
+	data, exists := ecache.index[atx]
 	if !exists {
 		return nil
 	}
-	_, exists = d.malicious[node]
-	data.data.Malicious = exists
-	return data.data
-}
-
-// GetByNode returns atx data of the first atx in lexicographic order.
-func (d *Data) GetByNode(epoch types.EpochID, node types.NodeID) *ATX {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	ecache, exists := d.epochs[epoch]
-	if !exists {
-		return nil
-	}
-	var data *ATX
-	ecache.index.AscendGreaterOrEqual(&stored{node: node}, func(s *stored) bool {
-		if s.node != node {
-			return false // reachable only if node is not stored
-		}
-		data = s.data
-		return false // get the first one
-	})
-	if data == nil {
-		return nil
-	}
-	_, exists = d.malicious[node]
+	_, exists = d.malicious[data.Node]
 	data.Malicious = exists
 	return data
 }
@@ -192,14 +170,11 @@ func (d *Data) WeightForSet(epoch types.EpochID, set []types.ATXID) (uint64, []b
 		return 0, used
 	}
 	var weight uint64
-	ecache.index.Ascend(func(s *stored) bool {
-		if i, exists := slices.BinarySearchFunc(set, s.atx, func(left, right types.ATXID) int {
-			return bytes.Compare(left[:], right[:])
-		}); exists {
-			weight += s.data.Weight
+	for i, id := range set {
+		if data, exists := ecache.index[id]; exists {
+			weight += data.Weight
 			used[i] = true
 		}
-		return true
-	})
+	}
 	return weight, used
 }
