@@ -463,11 +463,7 @@ func (h *Handler) checkBallotDataIntegrity(ctx context.Context, b *types.Ballot)
 		if b.EpochData.Beacon == types.EmptyBeacon {
 			return nil, errMissingBeacon
 		}
-		epoch := h.clock.CurrentLayer().GetEpoch()
-		if epoch > 0 {
-			epoch-- // download activesets in the previous epoch too
-		}
-		if b.Layer.GetEpoch() >= epoch {
+		if b.Layer.GetEpoch() == h.clock.CurrentLayer().GetEpoch() {
 			if err := h.fetcher.GetActiveSet(ctx, b.EpochData.ActiveSetHash); err != nil {
 				return nil, err
 			}
