@@ -1,15 +1,18 @@
 package atxsdata
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"math/rand"
 	"runtime"
+	"sort"
 	"testing"
 
 	fuzz "github.com/google/gofuzz"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
+	"golang.org/x/exp/slices"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
@@ -253,6 +256,36 @@ func BenchmarkWeightForSet(b *testing.B) {
 		bc := bc
 		b.Run(fmt.Sprintf("size=%d set_size=%d", bc.size, bc.setSize), func(b *testing.B) {
 			benchmarkkWeightForSet(b, bc.size, bc.setSize)
+		})
+	}
+}
+
+type identity struct {
+	id   types.NodeID
+	data *ATX
+}
+
+func BenchmarkBinarySearch(b *testing.B) {
+	const size = 1_000_000
+	rng := rand.New(rand.NewSource(10101))
+	ids := make([]identity, 0, size)
+	for i := 0; i < size; i++ {
+		var (
+			id   types.NodeID
+			data = &ATX{Weight: 500, BaseHeight: 100}
+		)
+		rng.Read(id[:])
+		ids = append(ids, identity{id, data})
+	}
+	sort.Slice(ids, func(i, j int) bool {
+		return bytes.Compare(ids[i].id[:], ids[j].id[:]) < 0
+	})
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		target := ids[rng.Intn(size)].id
+		slices.BinarySearchFunc(ids, identity{id: target}, func(i, j identity) int {
+			return bytes.Compare(i.id[:], j.id[:])
 		})
 	}
 }

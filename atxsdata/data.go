@@ -39,8 +39,9 @@ func WithCapacityFromLayers(window, epochSize uint32) Opt {
 
 func New(opts ...Opt) *Data {
 	cache := &Data{
-		capacity: 2,
-		epochs:   map[types.EpochID]epochCache{},
+		capacity:  2,
+		malicious: map[types.NodeID]struct{}{},
+		epochs:    map[types.EpochID]epochCache{},
 	}
 	for _, opt := range opts {
 		opt(cache)
@@ -55,8 +56,9 @@ type Data struct {
 	// capacity is not enforced by the cache itself
 	capacity types.EpochID
 
-	mu     sync.RWMutex
-	epochs map[types.EpochID]epochCache
+	mu        sync.RWMutex
+	malicious map[types.NodeID]struct{}
+	epochs    map[types.EpochID]epochCache
 }
 
 type stored struct {
@@ -120,6 +122,9 @@ func (d *Data) Add(epoch types.EpochID, node types.NodeID, atx types.ATXID, data
 		d.epochs[epoch] = ecache
 	}
 	if _, exists := ecache.index.ReplaceOrInsert(&stored{node: node, atx: atx, data: data}); !exists {
+		if data.Malicious {
+			d.malicious[node] = struct{}{}
+		}
 		atxsCounter.WithLabelValues(epoch.String()).Inc()
 	}
 
@@ -128,17 +133,7 @@ func (d *Data) Add(epoch types.EpochID, node types.NodeID, atx types.ATXID, data
 func (d *Data) SetMalicious(node types.NodeID) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	for _, ecache := range d.epochs {
-		ecache.index.AscendGreaterOrEqual(&stored{node: node}, func(s *stored) bool {
-			if node != s.node {
-				return false
-			}
-			update := *s.data
-			update.Malicious = true
-			s.data = &update
-			return true
-		})
-	}
+	d.malicious[node] = struct{}{}
 }
 
 // Get returns atx data.
@@ -153,6 +148,8 @@ func (d *Data) Get(epoch types.EpochID, node types.NodeID, atx types.ATXID) *ATX
 	if !exists {
 		return nil
 	}
+	_, exists = d.malicious[node]
+	data.data.Malicious = exists
 	return data.data
 }
 
@@ -172,6 +169,11 @@ func (d *Data) GetByNode(epoch types.EpochID, node types.NodeID) *ATX {
 		data = s.data
 		return false // get the first one
 	})
+	if data == nil {
+		return nil
+	}
+	_, exists = d.malicious[node]
+	data.Malicious = exists
 	return data
 }
 
