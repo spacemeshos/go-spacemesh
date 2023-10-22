@@ -1,4 +1,4 @@
-package cache
+package atxsdata
 
 import (
 	"context"
@@ -16,7 +16,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/mocks"
 )
 
-func gatx(id types.ATXID, epoch types.EpochID, smesher types.NodeID, nonce *types.VRFPostIndex) types.VerifiedActivationTx {
+func gatx(
+	id types.ATXID,
+	epoch types.EpochID,
+	smesher types.NodeID,
+	nonce *types.VRFPostIndex,
+) types.VerifiedActivationTx {
 	atx := &types.ActivationTx{}
 	atx.NumUnits = 1
 	atx.PublishEpoch = epoch
@@ -88,13 +93,16 @@ func TestWarmup(t *testing.T) {
 		fail := 0
 		tx, err := db.Tx(context.Background())
 		require.NoError(t, err)
-		exec.EXPECT().Exec(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(q string, enc sql.Encoder, dec sql.Decoder) (int, error) {
-			if call == fail {
-				return 0, errors.New("test")
-			}
-			call++
-			return tx.Exec(q, enc, dec)
-		}).AnyTimes()
+		exec.EXPECT().
+			Exec(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(q string, enc sql.Encoder, dec sql.Decoder) (int, error) {
+				if call == fail {
+					return 0, errors.New("test")
+				}
+				call++
+				return tx.Exec(q, enc, dec)
+			}).
+			AnyTimes()
 		for i := 0; i < 5; i++ {
 			c := New()
 			require.Error(t, Warmup(exec, c))

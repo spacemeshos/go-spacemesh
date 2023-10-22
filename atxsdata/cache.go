@@ -1,4 +1,4 @@
-package cache
+package atxsdata
 
 import (
 	"bytes"
@@ -11,19 +11,19 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-type ATXData struct {
+type ATX struct {
 	Weight             uint64
 	BaseHeight, Height uint64
 	Nonce              types.VRFPostIndex
 	Malicious          bool
 }
 
-type Opt func(*Cache)
+type Opt func(*Data)
 
 // WithCapacity sets the number of epochs from the latest applied
 // that cache will maintain in memory.
 func WithCapacity(capacity types.EpochID) Opt {
-	return func(cache *Cache) {
+	return func(cache *Data) {
 		cache.capacity = capacity
 	}
 }
@@ -37,8 +37,8 @@ func WithCapacityFromLayers(window, epochSize uint32) Opt {
 	return WithCapacity(types.EpochID(capacity))
 }
 
-func New(opts ...Opt) *Cache {
-	cache := &Cache{
+func New(opts ...Opt) *Data {
+	cache := &Data{
 		capacity: 2,
 		epochs:   map[types.EpochID]epochCache{},
 	}
@@ -48,7 +48,7 @@ func New(opts ...Opt) *Cache {
 	return cache
 }
 
-type Cache struct {
+type Data struct {
 	evicted atomic.Uint32
 
 	// number of epochs to keep
@@ -62,24 +62,24 @@ type Cache struct {
 type stored struct {
 	node types.NodeID
 	atx  types.ATXID
-	data *ATXData
+	data *ATX
 }
 
 type epochCache struct {
 	index *btree.BTreeG[*stored]
 }
 
-func (c *Cache) Evicted() types.EpochID {
+func (c *Data) Evicted() types.EpochID {
 	return types.EpochID(c.evicted.Load())
 }
 
-func (c *Cache) IsEvicted(epoch types.EpochID) bool {
+func (c *Data) IsEvicted(epoch types.EpochID) bool {
 	return c.evicted.Load() >= epoch.Uint32()
 }
 
 // OnEpoch is a notification for cache to evict epochs that are not useful
 // to keep in memory.
-func (c *Cache) OnEpoch(applied types.EpochID) {
+func (c *Data) OnEpoch(applied types.EpochID) {
 	if applied < c.capacity {
 		return
 	}
@@ -100,7 +100,7 @@ func (c *Cache) OnEpoch(applied types.EpochID) {
 	}
 }
 
-func (c *Cache) Add(epoch types.EpochID, node types.NodeID, atx types.ATXID, data *ATXData) {
+func (c *Data) Add(epoch types.EpochID, node types.NodeID, atx types.ATXID, data *ATX) {
 	if c.IsEvicted(epoch) {
 		return
 	}
@@ -125,7 +125,7 @@ func (c *Cache) Add(epoch types.EpochID, node types.NodeID, atx types.ATXID, dat
 
 }
 
-func (c *Cache) SetMalicious(node types.NodeID) {
+func (c *Data) SetMalicious(node types.NodeID) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for _, ecache := range c.epochs {
@@ -142,7 +142,7 @@ func (c *Cache) SetMalicious(node types.NodeID) {
 }
 
 // Get returns atx data.
-func (c *Cache) Get(epoch types.EpochID, node types.NodeID, atx types.ATXID) *ATXData {
+func (c *Data) Get(epoch types.EpochID, node types.NodeID, atx types.ATXID) *ATX {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	ecache, exists := c.epochs[epoch]
@@ -157,14 +157,14 @@ func (c *Cache) Get(epoch types.EpochID, node types.NodeID, atx types.ATXID) *AT
 }
 
 // GetByNode returns atx data of the first atx in lexicographic order.
-func (c *Cache) GetByNode(epoch types.EpochID, node types.NodeID) *ATXData {
+func (c *Data) GetByNode(epoch types.EpochID, node types.NodeID) *ATX {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	ecache, exists := c.epochs[epoch]
 	if !exists {
 		return nil
 	}
-	var data *ATXData
+	var data *ATX
 	ecache.index.AscendGreaterOrEqual(&stored{node: node}, func(s *stored) bool {
 		if s.node != node {
 			return false // reachable only if node is not stored
@@ -177,7 +177,7 @@ func (c *Cache) GetByNode(epoch types.EpochID, node types.NodeID) *ATXData {
 
 // WeightForSet computes total weight of atxs in the set and returned array with
 // atxs in the set that weren't used.
-func (c *Cache) WeightForSet(epoch types.EpochID, set []types.ATXID) (uint64, []bool) {
+func (c *Data) WeightForSet(epoch types.EpochID, set []types.ATXID) (uint64, []bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	ecache, exists := c.epochs[epoch]

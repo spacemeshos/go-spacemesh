@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
-	"github.com/spacemeshos/go-spacemesh/cache"
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
@@ -572,7 +572,7 @@ func TestEligibilityValidator(t *testing.T) {
 
 			lg := logtest.New(t)
 			const capacity = 2
-			c := cache.New(cache.WithCapacity(capacity))
+			c := atxsdata.New(atxsdata.WithCapacity(capacity))
 			c.OnEpoch(tc.evicted + capacity)
 			tv := NewEligibilityValidator(layerAvgSize, layersPerEpoch, tc.minWeight, ms.mclock, ms.md,
 				c, ms.mbc, lg, ms.mvrf,
@@ -580,7 +580,7 @@ func TestEligibilityValidator(t *testing.T) {
 			for _, atx := range tc.atxs {
 				c.Add(
 					atx.TargetEpoch(), atx.SmesherID, atx.ID(),
-					cache.ToATXData(atx.ToHeader(), 0, false),
+					atxsdata.ToATXData(atx.ToHeader(), 0, false),
 				)
 			}
 			for _, ballot := range tc.ballots {

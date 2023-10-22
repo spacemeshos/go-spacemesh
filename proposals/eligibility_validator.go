@@ -7,7 +7,7 @@ import (
 
 	"github.com/spacemeshos/fixed"
 
-	"github.com/spacemeshos/go-spacemesh/cache"
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -28,7 +28,7 @@ type Validator struct {
 	avgLayerSize       uint32
 	layersPerEpoch     uint32
 	tortoise           tortoiseProvider
-	cache              *cache.Cache
+	atxsdata           *atxsdata.Data
 	clock              layerClock
 	beacons            system.BeaconCollector
 	logger             log.Log
@@ -44,7 +44,7 @@ func NewEligibilityValidator(
 	minActiveSetWeight uint64,
 	clock layerClock,
 	tortoise tortoiseProvider,
-	cache *cache.Cache,
+	atxsdata *atxsdata.Data,
 	bc system.BeaconCollector,
 	lg log.Log,
 	vrfVerifier vrfVerifier,
@@ -55,7 +55,7 @@ func NewEligibilityValidator(
 		avgLayerSize:       avgLayerSize,
 		layersPerEpoch:     layersPerEpoch,
 		tortoise:           tortoise,
-		cache:              cache,
+		atxsdata:           atxsdata,
 		clock:              clock,
 		beacons:            bc,
 		logger:             lg,
@@ -72,7 +72,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot, 
 	if len(ballot.EligibilityProofs) == 0 {
 		return false, fmt.Errorf("empty eligibility list is invalid (ballot %s)", ballot.ID())
 	}
-	atx := v.cache.Get(ballot.Layer.GetEpoch(), ballot.SmesherID, ballot.AtxID)
+	atx := v.atxsdata.Get(ballot.Layer.GetEpoch(), ballot.SmesherID, ballot.AtxID)
 	if atx == nil {
 		return false, fmt.Errorf(
 			"failed to load atx from cache with epoch %d %s",
@@ -85,7 +85,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot, 
 		err  error
 	)
 	if ballot.EpochData != nil && ballot.Layer.GetEpoch() == v.clock.CurrentLayer().GetEpoch() {
-		data, err = v.validateReference(ballot, actives, atx)
+		data, err = v.validateReference(ballot, actives, atx.Weight)
 	} else {
 		data, err = v.validateSecondary(ballot)
 	}
@@ -128,7 +128,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot, 
 func (v *Validator) validateReference(
 	ballot *types.Ballot,
 	actives []types.ATXID,
-	atx *cache.ATXData,
+	weight uint64,
 ) (*types.EpochData, error) {
 	if ballot.EpochData.Beacon == types.EmptyBeacon {
 		return nil, fmt.Errorf("%w: ref ballot %v", errMissingBeacon, ballot.ID())
@@ -136,14 +136,14 @@ func (v *Validator) validateReference(
 	if len(actives) == 0 {
 		return nil, fmt.Errorf("%w: ref ballot %v", errEmptyActiveSet, ballot.ID())
 	}
-	totalWeight, used := v.cache.WeightForSet(ballot.Layer.GetEpoch(), actives)
+	totalWeight, used := v.atxsdata.WeightForSet(ballot.Layer.GetEpoch(), actives)
 	for i := range used {
 		if !used[i] {
 			return nil, fmt.Errorf("atx in active set is missing in cache %v", actives[i].ShortString())
 		}
 	}
 	numEligibleSlots, err := GetNumEligibleSlots(
-		atx.Weight,
+		weight,
 		v.minActiveSetWeight,
 		totalWeight,
 		v.avgLayerSize,

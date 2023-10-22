@@ -10,7 +10,7 @@ import (
 	"github.com/spacemeshos/post/shared"
 	"golang.org/x/exp/maps"
 
-	"github.com/spacemeshos/go-spacemesh/cache"
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -36,7 +36,7 @@ var (
 type Handler struct {
 	local           p2p.Peer
 	cdb             *datastore.CachedDB
-	cache           *cache.Cache
+	atxsdata        *atxsdata.Data
 	edVerifier      *signing.EdVerifier
 	clock           layerClock
 	publisher       pubsub.Publisher
@@ -55,7 +55,7 @@ type Handler struct {
 func NewHandler(
 	local p2p.Peer,
 	cdb *datastore.CachedDB,
-	cache *cache.Cache,
+	atxsdata *atxsdata.Data,
 	edVerifier *signing.EdVerifier,
 	c layerClock,
 	pub pubsub.Publisher,
@@ -71,7 +71,7 @@ func NewHandler(
 	return &Handler{
 		local:           local,
 		cdb:             cdb,
-		cache:           cache,
+		atxsdata:        atxsdata,
 		edVerifier:      edVerifier,
 		clock:           c,
 		publisher:       pub,
@@ -182,7 +182,10 @@ func (h *Handler) SyntacticallyValidate(ctx context.Context, atx *types.Activati
 	return nil
 }
 
-func (h *Handler) SyntacticallyValidateDeps(ctx context.Context, atx *types.ActivationTx) (*types.VerifiedActivationTx, error) {
+func (h *Handler) SyntacticallyValidateDeps(
+	ctx context.Context,
+	atx *types.ActivationTx,
+) (*types.VerifiedActivationTx, error) {
 	var (
 		commitmentATX *types.ATXID
 		err           error
@@ -213,9 +216,18 @@ func (h *Handler) SyntacticallyValidateDeps(ctx context.Context, atx *types.Acti
 	}
 
 	expectedChallengeHash := atx.NIPostChallenge.Hash()
-	h.log.WithContext(ctx).With().Info("validating nipost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
+	h.log.WithContext(ctx).
+		With().
+		Info("validating nipost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
 
-	leaves, err := h.nipostValidator.NIPost(ctx, atx.SmesherID, *commitmentATX, atx.NIPost, expectedChallengeHash, atx.NumUnits)
+	leaves, err := h.nipostValidator.NIPost(
+		ctx,
+		atx.SmesherID,
+		*commitmentATX,
+		atx.NIPost,
+		expectedChallengeHash,
+		atx.NumUnits,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("invalid nipost: %w", err)
 	}
@@ -293,7 +305,11 @@ func (h *Handler) ContextuallyValidateAtx(atx *types.VerifiedActivationTx) error
 
 	if err == nil && atx.PrevATXID == types.EmptyATXID {
 		// no previous atx declared, but already seen at least one atx from node
-		return fmt.Errorf("no prev atx reported, but other atx with same node id (%v) found: %v", atx.SmesherID, lastAtx.ShortString())
+		return fmt.Errorf(
+			"no prev atx reported, but other atx with same node id (%v) found: %v",
+			atx.SmesherID,
+			lastAtx.ShortString(),
+		)
 	}
 
 	if err == nil && atx.PrevATXID != lastAtx {
@@ -320,7 +336,7 @@ func (h *Handler) ContextuallyValidateAtx(atx *types.VerifiedActivationTx) error
 }
 
 func (h *Handler) cacheAtx(ctx context.Context, atx *types.ActivationTxHeader) {
-	if !h.cache.IsEvicted(atx.TargetEpoch()) {
+	if !h.atxsdata.IsEvicted(atx.TargetEpoch()) {
 		nonce, err := h.cdb.VRFNonce(atx.NodeID, atx.TargetEpoch())
 		if err != nil {
 			h.log.With().Error("failed vrf nonce read", log.Err(err), log.Context(ctx))
@@ -331,7 +347,7 @@ func (h *Handler) cacheAtx(ctx context.Context, atx *types.ActivationTxHeader) {
 			h.log.With().Error("failed is malicious read", log.Err(err), log.Context(ctx))
 			return
 		}
-		h.cache.Add(atx.TargetEpoch(), atx.NodeID, atx.ID, cache.ToATXData(atx, nonce, malicious))
+		h.atxsdata.Add(atx.TargetEpoch(), atx.NodeID, atx.ID, atxsdata.ToATXData(atx, nonce, malicious))
 	}
 }
 
@@ -509,7 +525,12 @@ func (h *Handler) handleAtx(ctx context.Context, expHash types.Hash32, peer p2p.
 	}
 
 	if expHash != (types.Hash32{}) && vAtx.ID().Hash32() != expHash {
-		return fmt.Errorf("%w: atx want %s, got %s", errWrongHash, expHash.ShortString(), vAtx.ID().Hash32().ShortString())
+		return fmt.Errorf(
+			"%w: atx want %s, got %s",
+			errWrongHash,
+			expHash.ShortString(),
+			vAtx.ID().Hash32().ShortString(),
+		)
 	}
 
 	if err := h.ProcessAtx(ctx, vAtx); err != nil {

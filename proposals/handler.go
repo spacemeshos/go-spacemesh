@@ -10,7 +10,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/exp/slices"
 
-	"github.com/spacemeshos/go-spacemesh/cache"
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -50,7 +50,7 @@ type Handler struct {
 	cfg    Config
 
 	db         *sql.Database
-	cache      *cache.Cache
+	atxsdata   *atxsdata.Data
 	edVerifier *signing.EdVerifier
 	publisher  pubsub.Publisher
 	fetcher    system.Fetcher
@@ -104,7 +104,7 @@ func WithConfig(cfg Config) Opt {
 // NewHandler creates new Handler.
 func NewHandler(
 	db *sql.Database,
-	cache *cache.Cache,
+	atxsdata *atxsdata.Data,
 	edVerifier *signing.EdVerifier,
 	p pubsub.Publisher,
 	f system.Fetcher,
@@ -119,7 +119,7 @@ func NewHandler(
 		logger:     log.NewNop(),
 		cfg:        defaultConfig(),
 		db:         db,
-		cache:      cache,
+		atxsdata:   atxsdata,
 		edVerifier: edVerifier,
 		publisher:  p,
 		fetcher:    f,
@@ -137,7 +137,7 @@ func NewHandler(
 			b.cfg.MinimalActiveSetWeight,
 			clock,
 			tortoise,
-			cache,
+			atxsdata,
 			bc,
 			b.logger,
 			verifier,
@@ -212,7 +212,7 @@ func (h *Handler) handleSet(ctx context.Context, id types.Hash32, set types.Epoc
 		return fmt.Errorf("%w: response for wrong hash %s", pubsub.ErrValidationReject, id.String())
 	}
 	// active set is invalid unless all activations that it references are from the correct epoch
-	_, used := h.cache.WeightForSet(set.Epoch, set.Set)
+	_, used := h.atxsdata.WeightForSet(set.Epoch, set.Set)
 	var atxids []types.ATXID
 	for i := range set.Set {
 		if !used[i] {
@@ -573,7 +573,7 @@ func (h *Handler) checkBallotDataAvailability(ctx context.Context, b *types.Ball
 	if err := h.fetcher.GetBallots(ctx, blts); err != nil {
 		return fmt.Errorf("fetch ballots: %w", err)
 	}
-	if h.cache.Get(b.Layer.GetEpoch(), b.SmesherID, b.AtxID) == nil {
+	if h.atxsdata.Get(b.Layer.GetEpoch(), b.SmesherID, b.AtxID) == nil {
 		if err := h.fetcher.GetAtxs(ctx, []types.ATXID{b.AtxID}); err != nil {
 			return fmt.Errorf("proposal get ATXs: %w", err)
 		}

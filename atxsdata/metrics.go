@@ -1,4 +1,4 @@
-package cache
+package atxsdata
 
 import "github.com/spacemeshos/go-spacemesh/metrics"
 

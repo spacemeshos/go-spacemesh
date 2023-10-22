@@ -1,4 +1,4 @@
-package cache
+package atxsdata
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
-func Warm(db *sql.Database, opts ...Opt) (*Cache, error) {
+func Warm(db *sql.Database, opts ...Opt) (*Data, error) {
 	cache := New(opts...)
 	tx, err := db.Tx(context.Background())
 	if err != nil {
@@ -24,7 +24,7 @@ func Warm(db *sql.Database, opts ...Opt) (*Cache, error) {
 	return cache, nil
 }
 
-func Warmup(db sql.Executor, cache *Cache) error {
+func Warmup(db sql.Executor, cache *Data) error {
 	latest, err := atxs.LatestEpoch(db)
 	if err != nil {
 		return err
@@ -55,8 +55,8 @@ func Warmup(db sql.Executor, cache *Cache) error {
 	return ierr
 }
 
-func ToATXData(atx *types.ActivationTxHeader, nonce types.VRFPostIndex, malicious bool) *ATXData {
-	return &ATXData{
+func ToATXData(atx *types.ActivationTxHeader, nonce types.VRFPostIndex, malicious bool) *ATX {
+	return &ATX{
 		Weight:     atx.GetWeight(),
 		BaseHeight: atx.BaseTickHeight,
 		Height:     atx.TickHeight(),
