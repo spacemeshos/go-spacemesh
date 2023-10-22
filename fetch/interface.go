@@ -11,6 +11,7 @@ import (
 //go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./interface.go
 
 type requester interface {
+	Run(context.Context) error
 	Request(context.Context, p2p.Peer, []byte, func([]byte), func(error)) error
 }
 
