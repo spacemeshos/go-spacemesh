@@ -124,6 +124,13 @@ func TestCache(t *testing.T) {
 		require.Nil(t, c.Get(3, types.NodeID{1}, types.ATXID{1}))
 		c.OnEpoch(3)
 	})
+
+	t.Run("capacity from layers", func(t *testing.T) {
+		c := New(WithCapacityFromLayers(10, 3))
+		c.OnEpoch(5)
+		require.True(t, c.IsEvicted(1))
+		require.False(t, c.IsEvicted(2))
+	})
 }
 
 func TestMemory(t *testing.T) {
