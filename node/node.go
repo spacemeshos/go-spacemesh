@@ -729,7 +729,17 @@ func (app *App) initServices(ctx context.Context) error {
 		)
 	}
 
-	proposalListener := proposals.NewHandler(app.db, app.cache, app.edVerifier, app.host, fetcherWrapped, beaconProtocol, msh, trtl, vrfVerifier, app.clock,
+	proposalListener := proposals.NewHandler(
+		app.db,
+		app.cache,
+		app.edVerifier,
+		app.host,
+		fetcherWrapped,
+		beaconProtocol,
+		msh,
+		trtl,
+		vrfVerifier,
+		app.clock,
 		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
 		proposals.WithConfig(proposals.Config{
 			LayerSize:              layerSize,
@@ -1581,7 +1591,10 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		)
 	}
 	start := time.Now()
-	cache, err := cache.Warm(app.db)
+	cache, err := cache.Warm(
+		app.db,
+		cache.WithCapacityFromLayers(app.Config.Tortoise.WindowSize, app.Config.LayersPerEpoch),
+	)
 	if err != nil {
 		return err
 	}

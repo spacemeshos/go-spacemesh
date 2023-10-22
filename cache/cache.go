@@ -29,9 +29,9 @@ func WithCapacity(capacity types.EpochID) Opt {
 }
 
 // WithCapacityFromLayers sets capacity to include all layers in the window.
-func WithCapacityFromLayers(window types.LayerID, size uint32) Opt {
-	capacity := window / types.LayerID(size)
-	if window%types.LayerID(size) != 0 {
+func WithCapacityFromLayers(window, epochSize uint32) Opt {
+	capacity := window / epochSize
+	if window%epochSize != 0 {
 		capacity++
 	}
 	return WithCapacity(types.EpochID(capacity))
