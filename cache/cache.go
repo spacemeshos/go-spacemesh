@@ -133,7 +133,6 @@ func (c *Cache) SetMalicious(node types.NodeID) {
 			if node != s.node {
 				return false
 			}
-			// TODO(dshulyak) how to copy on update here?
 			update := *s.data
 			update.Malicious = true
 			s.data = &update
