@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/miner/minweight"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -24,7 +25,7 @@ var (
 // Validator validates the eligibility of a Ballot.
 // the validation focuses on eligibility only and assumes the Ballot to be valid otherwise.
 type Validator struct {
-	minActiveSetWeight uint64
+	minActiveSetWeight []types.EpochMinimalActiveWeight
 	avgLayerSize       uint32
 	layersPerEpoch     uint32
 	tortoise           tortoiseProvider
@@ -41,7 +42,7 @@ type ValidatorOpt func(h *Validator)
 // NewEligibilityValidator returns a new EligibilityValidator.
 func NewEligibilityValidator(
 	avgLayerSize, layersPerEpoch uint32,
-	minActiveSetWeight uint64,
+	minActiveSetWeight []types.EpochMinimalActiveWeight,
 	clock layerClock,
 	tortoise tortoiseProvider,
 	atxsdata *atxsdata.Data,
@@ -144,7 +145,7 @@ func (v *Validator) validateReference(
 	}
 	numEligibleSlots, err := GetNumEligibleSlots(
 		weight,
-		v.minActiveSetWeight,
+		minweight.Select(ballot.Layer.GetEpoch(), v.minActiveSetWeight),
 		totalWeight,
 		v.avgLayerSize,
 		v.layersPerEpoch,

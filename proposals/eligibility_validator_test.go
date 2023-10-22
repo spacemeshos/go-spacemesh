@@ -574,8 +574,16 @@ func TestEligibilityValidator(t *testing.T) {
 			const capacity = 2
 			c := atxsdata.New(atxsdata.WithCapacity(capacity))
 			c.OnEpoch(tc.evicted + capacity)
-			tv := NewEligibilityValidator(layerAvgSize, layersPerEpoch, tc.minWeight, ms.mclock, ms.md,
-				c, ms.mbc, lg, ms.mvrf,
+			tv := NewEligibilityValidator(
+				layerAvgSize,
+				layersPerEpoch,
+				[]types.EpochMinimalActiveWeight{{Weight: tc.minWeight}},
+				ms.mclock,
+				ms.md,
+				c,
+				ms.mbc,
+				lg,
+				ms.mvrf,
 			)
 			for _, atx := range tc.atxs {
 				c.Add(

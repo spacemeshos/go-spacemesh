@@ -37,6 +37,10 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
   Bounds the time required to restart a node.
 
+* [#5171](https://github.com/spacemeshos/go-spacemesh/pull/5171) Set minimal active set according to the observed number of atxs.
+
+  It will prevent ballots that underreport observed atxs from spamming the network. It doesn't have impact on rewards.
+
 * [#5169](https://github.com/spacemeshos/go-spacemesh/pull/5169) Support prunning activesets.
 
   As of epoch 6 activesets storage size is about ~1.5GB. They are not useful after verifying eligibilities
