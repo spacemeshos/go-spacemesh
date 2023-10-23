@@ -97,6 +97,10 @@ func NewPostSupervisor(
 	}, nil
 }
 
+func (ps *PostSupervisor) Config() PostConfig {
+	return ps.postCfg
+}
+
 func (ps *PostSupervisor) Start() error {
 	ps.mtx.Lock()
 	defer ps.mtx.Unlock()

@@ -394,11 +394,3 @@ func (mgr *PostSetupManager) Reset() error {
 	mgr.state = PostSetupStateNotStarted
 	return nil
 }
-
-// Config returns the Post protocol config.
-func (mgr *PostSetupManager) Config() PostConfig {
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
-
-	return mgr.cfg
-}

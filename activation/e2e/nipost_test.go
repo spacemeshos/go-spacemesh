@@ -103,36 +103,9 @@ func launchServer(tb testing.TB, services ...grpcserver.ServiceAPI) (grpcserver.
 func initPost(tb testing.TB, logger *zap.Logger, mgr *activation.PostSetupManager, opts activation.PostSetupOpts) {
 	tb.Helper()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	var eg errgroup.Group
-	eg.Go(func() error {
-		timer := time.NewTicker(50 * time.Millisecond)
-		defer timer.Stop()
-
-		lastStatus := &activation.PostSetupStatus{}
-		for {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-timer.C:
-				status := mgr.Status()
-				require.GreaterOrEqual(tb, status.NumLabelsWritten, lastStatus.NumLabelsWritten)
-
-				if status.NumLabelsWritten == uint64(opts.NumUnits)*mgr.Config().LabelsPerUnit {
-					return nil
-				}
-				require.Contains(tb, []activation.PostSetupState{activation.PostSetupStatePrepared, activation.PostSetupStateInProgress}, status.State)
-				lastStatus = status
-			}
-		}
-	})
-
 	// Create data.
 	require.NoError(tb, mgr.PrepareInitializer(opts))
 	require.NoError(tb, mgr.StartSession(context.Background()))
-	require.NoError(tb, eg.Wait())
 	require.Equal(tb, activation.PostSetupStateComplete, mgr.Status().State)
 }
 
@@ -176,7 +149,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 		},
 	)
 
-	verifier, err := activation.NewPostVerifier(mgr.Config(), logger.Named("verifier"))
+	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
 
@@ -213,7 +186,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	nipost, err := nb.BuildNIPost(context.Background(), &challenge)
 	require.NoError(t, err)
 
-	v := activation.NewValidator(poetDb, mgr.Config(), opts.Scrypt, verifier)
+	v := activation.NewValidator(poetDb, cfg, opts.Scrypt, verifier)
 	_, err = v.NIPost(
 		context.Background(),
 		sig.NodeID(),
@@ -342,11 +315,11 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, nipost)
 
-	verifier, err := activation.NewPostVerifier(mgr.Config(), logger.Named("verifier"))
+	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
 
-	v := activation.NewValidator(poetDb, mgr.Config(), opts.Scrypt, verifier)
+	v := activation.NewValidator(poetDb, cfg, opts.Scrypt, verifier)
 	_, err = v.NIPost(
 		context.Background(),
 		sig.NodeID(),

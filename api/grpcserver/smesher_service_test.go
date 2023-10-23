@@ -31,7 +31,7 @@ func TestPostConfig(t *testing.T) {
 		K1:            rand.Uint32(),
 		K2:            rand.Uint32(),
 	}
-	postSetupProvider.EXPECT().Config().Return(postConfig)
+	postSupervisor.EXPECT().Config().Return(postConfig)
 
 	response, err := svc.PostConfig(context.Background(), &emptypb.Empty{})
 	require.NoError(t, err)

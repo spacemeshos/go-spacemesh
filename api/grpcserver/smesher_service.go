@@ -226,7 +226,7 @@ func (s SmesherService) PostSetupProviders(ctx context.Context, in *pb.PostSetup
 
 // PostConfig returns the Post protocol config.
 func (s SmesherService) PostConfig(context.Context, *emptypb.Empty) (*pb.PostConfigResponse, error) {
-	cfg := s.postSetupProvider.Config()
+	cfg := s.postSupervisor.Config()
 
 	return &pb.PostConfigResponse{
 		BitsPerLabel:  config.BitsPerLabel,

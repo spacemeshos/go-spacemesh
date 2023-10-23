@@ -63,7 +63,7 @@ func TestValidator_Validate(t *testing.T) {
 		},
 	)
 
-	verifier, err := activation.NewPostVerifier(mgr.Config(), logger.Named("verifier"))
+	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
 
@@ -101,7 +101,7 @@ func TestValidator_Validate(t *testing.T) {
 	nipost, err := nb.BuildNIPost(context.Background(), &challenge)
 	require.NoError(t, err)
 
-	v := activation.NewValidator(poetDb, mgr.Config(), opts.Scrypt, verifier)
+	v := activation.NewValidator(poetDb, cfg, opts.Scrypt, verifier)
 	_, err = v.NIPost(context.Background(), sig.NodeID(), goldenATX, nipost, challengeHash, opts.NumUnits)
 	require.NoError(t, err)
 
@@ -113,19 +113,19 @@ func TestValidator_Validate(t *testing.T) {
 	_, err = v.NIPost(context.Background(), sig.NodeID(), goldenATX, &newNIPost, challengeHash, opts.NumUnits)
 	require.ErrorContains(t, err, "invalid Post")
 
-	newPostCfg := mgr.Config()
+	newPostCfg := cfg
 	newPostCfg.MinNumUnits = opts.NumUnits + 1
 	v = activation.NewValidator(poetDb, newPostCfg, opts.Scrypt, nil)
 	_, err = v.NIPost(context.Background(), sig.NodeID(), goldenATX, nipost, challengeHash, opts.NumUnits)
 	require.EqualError(t, err, fmt.Sprintf("invalid `numUnits`; expected: >=%d, given: %d", newPostCfg.MinNumUnits, opts.NumUnits))
 
-	newPostCfg = mgr.Config()
+	newPostCfg = cfg
 	newPostCfg.MaxNumUnits = opts.NumUnits - 1
 	v = activation.NewValidator(poetDb, newPostCfg, opts.Scrypt, nil)
 	_, err = v.NIPost(context.Background(), sig.NodeID(), goldenATX, nipost, challengeHash, opts.NumUnits)
 	require.EqualError(t, err, fmt.Sprintf("invalid `numUnits`; expected: <=%d, given: %d", newPostCfg.MaxNumUnits, opts.NumUnits))
 
-	newPostCfg = mgr.Config()
+	newPostCfg = cfg
 	newPostCfg.LabelsPerUnit = nipost.PostMetadata.LabelsPerUnit + 1
 	v = activation.NewValidator(poetDb, newPostCfg, opts.Scrypt, nil)
 	_, err = v.NIPost(context.Background(), sig.NodeID(), goldenATX, nipost, challengeHash, opts.NumUnits)

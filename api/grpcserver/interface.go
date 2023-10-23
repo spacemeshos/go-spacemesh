@@ -52,12 +52,13 @@ type postSetupProvider interface {
 	Status() *activation.PostSetupStatus
 	Providers() ([]activation.PostSetupProvider, error)
 	Benchmark(p activation.PostSetupProvider) (int, error)
-	Config() activation.PostConfig
 }
 
 type postSupervisor interface {
 	Start() error
 	Stop(deleteFiles bool) error
+
+	Config() activation.PostConfig
 }
 
 // peerCounter is an api to get amount of connected peers.

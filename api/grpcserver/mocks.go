@@ -817,44 +817,6 @@ func (c *postSetupProviderBenchmarkCall) DoAndReturn(f func(activation.PostSetup
 	return c
 }
 
-// Config mocks base method.
-func (m *MockpostSetupProvider) Config() activation.PostConfig {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Config")
-	ret0, _ := ret[0].(activation.PostConfig)
-	return ret0
-}
-
-// Config indicates an expected call of Config.
-func (mr *MockpostSetupProviderMockRecorder) Config() *postSetupProviderConfigCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Config", reflect.TypeOf((*MockpostSetupProvider)(nil).Config))
-	return &postSetupProviderConfigCall{Call: call}
-}
-
-// postSetupProviderConfigCall wrap *gomock.Call
-type postSetupProviderConfigCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *postSetupProviderConfigCall) Return(arg0 activation.PostConfig) *postSetupProviderConfigCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *postSetupProviderConfigCall) Do(f func() activation.PostConfig) *postSetupProviderConfigCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *postSetupProviderConfigCall) DoAndReturn(f func() activation.PostConfig) *postSetupProviderConfigCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // Providers mocks base method.
 func (m *MockpostSetupProvider) Providers() ([]activation.PostSetupProvider, error) {
 	m.ctrl.T.Helper()
@@ -953,6 +915,44 @@ func NewMockpostSupervisor(ctrl *gomock.Controller) *MockpostSupervisor {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockpostSupervisor) EXPECT() *MockpostSupervisorMockRecorder {
 	return m.recorder
+}
+
+// Config mocks base method.
+func (m *MockpostSupervisor) Config() activation.PostConfig {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Config")
+	ret0, _ := ret[0].(activation.PostConfig)
+	return ret0
+}
+
+// Config indicates an expected call of Config.
+func (mr *MockpostSupervisorMockRecorder) Config() *postSupervisorConfigCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Config", reflect.TypeOf((*MockpostSupervisor)(nil).Config))
+	return &postSupervisorConfigCall{Call: call}
+}
+
+// postSupervisorConfigCall wrap *gomock.Call
+type postSupervisorConfigCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *postSupervisorConfigCall) Return(arg0 activation.PostConfig) *postSupervisorConfigCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *postSupervisorConfigCall) Do(f func() activation.PostConfig) *postSupervisorConfigCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *postSupervisorConfigCall) DoAndReturn(f func() activation.PostConfig) *postSupervisorConfigCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // Start mocks base method.
