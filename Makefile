@@ -42,6 +42,14 @@ FUZZTIME ?= "10s"
 all: install build
 .PHONY: all
 
+GOLINES_VERSION ?= v0.11.0
+GOLINES ?= ./bin/golines-$(GOLINES_VERSION)
+
+$(GOLINES):
+	rm -f $(dir $@)golines-*
+	GOBIN=$(abspath $(dir $@)) go install github.com/segmentio/golines@$(GOLINES_VERSION)
+	mv $(dir $@)golines $@
+
 install:
 	git lfs install
 	go mod download
@@ -117,13 +125,21 @@ test-fmt:
 	git diff --exit-code || (git --no-pager diff && git checkout . && exit 1)
 .PHONY: test-fmt
 
-lint: get-libs
+lint: get-libs $(GOLINES)
 	./bin/golangci-lint run --config .golangci.yml
+	@output="$$($(GOLINES) -m 120 --dry-run --base-formatter=gofmt --ignore-generated .)"; \
+	if [ -n "$$output" ]; then \
+		echo "golines found formatting issues:"; \
+		echo "$$output"; \
+		exit 1; \
+	fi
+
 .PHONY: lint
 
-# Auto-fixes golangci-lint issues where possible.
-lint-fix: get-libs
+# Auto-fixes golangci-lint and golines issues where possible.
+lint-fix: get-libs $(GOLINES)
 	./bin/golangci-lint run --config .golangci.yml --fix
+	$(GOLINES) -m 120 -w --base-formatter=gofmt --ignore-generated .
 .PHONY: lint-fix
 
 lint-github-action: get-libs
