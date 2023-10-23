@@ -1228,7 +1228,7 @@ func (app *App) startServices(ctx context.Context) error {
 		if err := app.atxBuilder.StartSmeshing(coinbaseAddr, app.Config.SMESHING.Opts); err != nil {
 			app.log.Panic("failed to start smeshing: %v", err)
 		}
-		if err := app.postSupervisor.Start(); err != nil {
+		if err := app.postSupervisor.Start(app.Config.SMESHING.Opts); err != nil {
 			return fmt.Errorf("start post service: %w", err)
 		}
 	} else {
@@ -1279,7 +1279,6 @@ func (app *App) initService(
 		return grpcserver.NewAdminService(app.db, app.Config.DataDir(), app.host), nil
 	case grpcserver.Smesher:
 		return grpcserver.NewSmesherService(
-			app.postSetupMgr,
 			app.atxBuilder,
 			app.postSupervisor,
 			app.Config.API.SmesherStreamInterval,

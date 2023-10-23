@@ -14,6 +14,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/spacemeshos/post/initialization"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
@@ -77,7 +78,10 @@ type PostSupervisor struct {
 // NewPostSupervisor returns a new post service.
 func NewPostSupervisor(
 	logger *zap.Logger,
-	cmdCfg PostSupervisorConfig, postCfg PostConfig, postOpts PostSetupOpts, provingOpts PostProvingOpts,
+	cmdCfg PostSupervisorConfig,
+	postCfg PostConfig,
+	postOpts PostSetupOpts,
+	provingOpts PostProvingOpts,
 	postSetupProvider postSetupProvider,
 	syncer syncer,
 ) (*PostSupervisor, error) {
@@ -101,14 +105,45 @@ func (ps *PostSupervisor) Config() PostConfig {
 	return ps.postCfg
 }
 
-func (ps *PostSupervisor) Start() error {
+// Providers returns a list of available compute providers for Post setup.
+func (*PostSupervisor) Providers() ([]PostSetupProvider, error) {
+	providers, err := initialization.OpenCLProviders()
+	if err != nil {
+		return nil, err
+	}
+
+	providersAlias := make([]PostSetupProvider, len(providers))
+	for i, p := range providers {
+		providersAlias[i] = PostSetupProvider(p)
+	}
+
+	return providersAlias, nil
+}
+
+// Benchmark runs a short benchmarking session for a given provider to evaluate its performance.
+func (*PostSupervisor) Benchmark(p PostSetupProvider) (int, error) {
+	score, err := initialization.Benchmark(initialization.Provider(p))
+	if err != nil {
+		return score, fmt.Errorf("benchmark GPU: %w", err)
+	}
+
+	return score, nil
+}
+
+func (ps *PostSupervisor) Status() *PostSetupStatus {
+	return ps.postSetupProvider.Status()
+}
+
+func (ps *PostSupervisor) Start(opts PostSetupOpts) error {
 	ps.mtx.Lock()
 	defer ps.mtx.Unlock()
 	if ps.stop != nil {
 		return fmt.Errorf("post service already started")
 	}
 
-	err := ps.postSetupProvider.PrepareInitializer(ps.postOpts)
+	// TODO(mafa): verify that opts don't delete existing files?
+
+	err := ps.postSetupProvider.PrepareInitializer(opts)
 	if err != nil {
 		return fmt.Errorf("prepare initializer: %w", err)
 	}

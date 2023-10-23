@@ -60,6 +60,7 @@ type atxProvider interface {
 type postSetupProvider interface {
 	PrepareInitializer(opts PostSetupOpts) error
 	StartSession(context context.Context) error
+	Status() *PostSetupStatus
 	Reset() error
 }
 

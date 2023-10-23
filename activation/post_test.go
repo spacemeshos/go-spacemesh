@@ -287,33 +287,6 @@ func TestPostSetupManager_findCommitmentAtx_DefaultsToGoldenAtx(t *testing.T) {
 	require.Equal(t, mgr.goldenATXID, atx)
 }
 
-func TestPostSetupManager_Providers_includesCPU(t *testing.T) {
-	mgr := newTestPostManager(t)
-
-	providers, err := mgr.Providers()
-	require.NoError(t, err)
-
-	for _, p := range providers {
-		if p.ID == initialization.CPUProviderID() {
-			return
-		}
-	}
-	require.Fail(t, "no CPU provider found")
-}
-
-func TestPostSetupManager_Benchmark(t *testing.T) {
-	mgr := newTestPostManager(t)
-
-	providers, err := mgr.Providers()
-	require.NoError(t, err)
-
-	for _, p := range providers {
-		score, err := mgr.Benchmark(p)
-		require.NoError(t, err)
-		require.NotZero(t, score)
-	}
-}
-
 func TestPostSetupManager_getCommitmentAtx_getsCommitmentAtxFromPostMetadata(t *testing.T) {
 	mgr := newTestPostManager(t)
 

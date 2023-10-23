@@ -77,7 +77,7 @@ func launchPostSupervisor(tb testing.TB, log *zap.Logger, mgr *activation.PostSe
 	ps, err := activation.NewPostSupervisor(log, cmdCfg, postCfg, postOpts, provingOpts, mgr, syncer)
 	require.NoError(tb, err)
 	require.NotNil(tb, ps)
-	require.NoError(tb, ps.Start())
+	require.NoError(tb, ps.Start(postOpts))
 	return func() { assert.NoError(tb, ps.Stop(false)) }
 }
 

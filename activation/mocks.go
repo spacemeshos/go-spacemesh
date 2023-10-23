@@ -1043,6 +1043,44 @@ func (c *postSetupProviderStartSessionCall) DoAndReturn(f func(context.Context) 
 	return c
 }
 
+// Status mocks base method.
+func (m *MockpostSetupProvider) Status() *PostSetupStatus {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Status")
+	ret0, _ := ret[0].(*PostSetupStatus)
+	return ret0
+}
+
+// Status indicates an expected call of Status.
+func (mr *MockpostSetupProviderMockRecorder) Status() *postSetupProviderStatusCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Status", reflect.TypeOf((*MockpostSetupProvider)(nil).Status))
+	return &postSetupProviderStatusCall{Call: call}
+}
+
+// postSetupProviderStatusCall wrap *gomock.Call
+type postSetupProviderStatusCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *postSetupProviderStatusCall) Return(arg0 *PostSetupStatus) *postSetupProviderStatusCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *postSetupProviderStatusCall) Do(f func() *PostSetupStatus) *postSetupProviderStatusCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *postSetupProviderStatusCall) DoAndReturn(f func() *PostSetupStatus) *postSetupProviderStatusCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // MockSmeshingProvider is a mock of SmeshingProvider interface.
 type MockSmeshingProvider struct {
 	ctrl     *gomock.Controller

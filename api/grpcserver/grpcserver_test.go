@@ -460,17 +460,15 @@ func TestNewServersConfig(t *testing.T) {
 type smesherServiceConn struct {
 	pb.SmesherServiceClient
 
-	postProvider     *MockpostSetupProvider
 	smeshingProvider *activation.MockSmeshingProvider
 	postSupervisor   *MockpostSupervisor
 }
 
 func setupSmesherService(t *testing.T) (*smesherServiceConn, context.Context) {
 	ctrl, mockCtx := gomock.WithContext(context.Background(), t)
-	postProvider := NewMockpostSetupProvider(ctrl)
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
 	postSupervisor := NewMockpostSupervisor(ctrl)
-	svc := NewSmesherService(postProvider, smeshingProvider, postSupervisor, 10*time.Millisecond, activation.DefaultPostSetupOpts())
+	svc := NewSmesherService(smeshingProvider, postSupervisor, 10*time.Millisecond, activation.DefaultPostSetupOpts())
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
@@ -482,7 +480,6 @@ func setupSmesherService(t *testing.T) (*smesherServiceConn, context.Context) {
 	return &smesherServiceConn{
 		SmesherServiceClient: client,
 
-		postProvider:     postProvider,
 		smeshingProvider: smeshingProvider,
 		postSupervisor:   postSupervisor,
 	}, mockCtx
@@ -516,7 +513,11 @@ func TestSmesherService(t *testing.T) {
 
 		c, ctx := setupSmesherService(t)
 		c.smeshingProvider.EXPECT().StartSmeshing(gomock.Any(), gomock.Any()).Return(nil)
-		c.postSupervisor.EXPECT().Start().Return(nil)
+		c.postSupervisor.EXPECT().Start(gomock.All(
+			gomock.Cond(func(postOpts any) bool { return postOpts.(activation.PostSetupOpts).DataDir == opts.DataDir }),
+			gomock.Cond(func(postOpts any) bool { return postOpts.(activation.PostSetupOpts).NumUnits == opts.NumUnits }),
+			gomock.Cond(func(postOpts any) bool { return postOpts.(activation.PostSetupOpts).MaxFileSize == opts.MaxFileSize }),
+		)).Return(nil)
 		res, err := c.StartSmeshing(ctx, &pb.StartSmeshingRequest{
 			Opts:     opts,
 			Coinbase: coinbase,
@@ -597,7 +598,7 @@ func TestSmesherService(t *testing.T) {
 	t.Run("PostSetupComputeProviders", func(t *testing.T) {
 		t.Parallel()
 		c, ctx := setupSmesherService(t)
-		c.postProvider.EXPECT().Providers().Return(nil, nil)
+		c.postSupervisor.EXPECT().Providers().Return(nil, nil)
 		_, err := c.PostSetupProviders(ctx, &pb.PostSetupProvidersRequest{Benchmark: false})
 		require.NoError(t, err)
 	})
@@ -605,7 +606,7 @@ func TestSmesherService(t *testing.T) {
 	t.Run("PostSetupStatusStream", func(t *testing.T) {
 		t.Parallel()
 		c, ctx := setupSmesherService(t)
-		c.postProvider.EXPECT().Status().Return(&activation.PostSetupStatus{}).AnyTimes()
+		c.postSupervisor.EXPECT().Status().Return(&activation.PostSetupStatus{}).AnyTimes()
 
 		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()

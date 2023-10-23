@@ -212,31 +212,6 @@ func (mgr *PostSetupManager) Status() *PostSetupStatus {
 	}
 }
 
-// Providers returns a list of available compute providers for Post setup.
-func (*PostSetupManager) Providers() ([]PostSetupProvider, error) {
-	providers, err := initialization.OpenCLProviders()
-	if err != nil {
-		return nil, err
-	}
-
-	providersAlias := make([]PostSetupProvider, len(providers))
-	for i, p := range providers {
-		providersAlias[i] = PostSetupProvider(p)
-	}
-
-	return providersAlias, nil
-}
-
-// Benchmark runs a short benchmarking session for a given provider to evaluate its performance.
-func (mgr *PostSetupManager) Benchmark(p PostSetupProvider) (int, error) {
-	score, err := initialization.Benchmark(initialization.Provider(p))
-	if err != nil {
-		return score, fmt.Errorf("benchmark GPU: %w", err)
-	}
-
-	return score, nil
-}
-
 // StartSession starts (or continues) a PoST session. It supports resuming a
 // previously started session, and will return an error if a session is already
 // in progress. It must be ensured that PrepareInitializer is called once

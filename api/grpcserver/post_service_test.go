@@ -55,7 +55,7 @@ func launchPostSupervisor(tb testing.TB, log *zap.Logger, cfg Config, postOpts a
 	ps, err := activation.NewPostSupervisor(log, cmdCfg, postCfg, postOpts, provingOpts, mgr, syncer)
 	require.NoError(tb, err)
 	require.NotNil(tb, ps)
-	require.NoError(tb, ps.Start())
+	require.NoError(tb, ps.Start(postOpts))
 	return id, func() { assert.NoError(tb, ps.Stop(false)) }
 }
 
@@ -102,7 +102,7 @@ func launchPostSupervisorTLS(tb testing.TB, log *zap.Logger, cfg Config, postOpt
 	ps, err := activation.NewPostSupervisor(log, cmdCfg, postCfg, postOpts, provingOpts, mgr, syncer)
 	require.NoError(tb, err)
 	require.NotNil(tb, ps)
-	require.NoError(tb, ps.Start())
+	require.NoError(tb, ps.Start(postOpts))
 	return id, func() { assert.NoError(tb, ps.Stop(false)) }
 }
 
