@@ -339,11 +339,11 @@ func (o *Oracle) Proof(ctx context.Context, signer *signing.VRFSigner, layer typ
 	if err != nil {
 		return types.EmptyVrfSignature, fmt.Errorf("get beacon: %w", err)
 	}
-	return o.GenVRF(ctx, signer, beacon, layer, round), nil
+	return GenVRF(ctx, signer, beacon, layer, round), nil
 }
 
 // GenVRF generates vrf for hare eligibility.
-func (o *Oracle) GenVRF(ctx context.Context, signer *signing.VRFSigner, beacon types.Beacon, layer types.LayerID, round uint32) types.VrfSignature {
+func GenVRF(ctx context.Context, signer *signing.VRFSigner, beacon types.Beacon, layer types.LayerID, round uint32) types.VrfSignature {
 	return signer.Sign(codec.MustEncode(&VrfMessage{Type: types.EligibilityHare, Beacon: beacon, Round: round, Layer: layer}))
 }
 

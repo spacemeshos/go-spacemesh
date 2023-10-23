@@ -660,14 +660,9 @@ func Test_CertifyIfEligible(t *testing.T) {
 	tc := newTestCertifier(t, 3)
 	b := generateBlock(t, tc.db)
 	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil)
-	proof := types.RandomVrfSignature()
 
 	tc.mOracle.EXPECT().
-		Proof(gomock.Any(), gomock.Cond(func(s any) bool { _, ok := tc.signers[s.(*signing.VRFSigner).NodeID()]; return ok }), b.LayerIndex, eligibility.CertifyRound).
-		Times(numSigners).
-		Return(proof, nil)
-	tc.mOracle.EXPECT().
-		CalcEligibility(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, gomock.Any(), proof).
+		CalcEligibility(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, gomock.Any(), gomock.Any()).
 		Times(numSigners).
 		Return(defaultCnt, nil)
 	tc.mPub.EXPECT().
@@ -683,7 +678,6 @@ func Test_CertifyIfEligible(t *testing.T) {
 				require.True(t, ok)
 				require.Equal(t, b.LayerIndex, msg.LayerID)
 				require.Equal(t, b.ID(), msg.BlockID)
-				require.Equal(t, proof, msg.Proof)
 				require.Equal(t, defaultCnt, msg.EligibilityCnt)
 				return nil
 			})
@@ -694,12 +688,8 @@ func Test_CertifyIfEligible_NotEligible(t *testing.T) {
 	tc := newTestCertifier(t, 1)
 	b := generateBlock(t, tc.db)
 	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil)
-	proof := types.RandomVrfSignature()
 	tc.mOracle.EXPECT().
-		Proof(gomock.Any(), gomock.Any(), b.LayerIndex, eligibility.CertifyRound).
-		Return(proof, nil)
-	tc.mOracle.EXPECT().
-		CalcEligibility(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, gomock.Any(), proof).
+		CalcEligibility(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, gomock.Any(), gomock.Any()).
 		Return(0, nil)
 	require.NoError(t, tc.CertifyIfEligible(context.Background(), b.LayerIndex, b.ID()))
 }
@@ -709,24 +699,9 @@ func Test_CertifyIfEligible_EligibilityErr(t *testing.T) {
 	b := generateBlock(t, tc.db)
 	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil)
 	errUnknown := errors.New("unknown")
-	proof := types.RandomVrfSignature()
 	tc.mOracle.EXPECT().
-		Proof(gomock.Any(), gomock.Any(), b.LayerIndex, eligibility.CertifyRound).
-		Return(proof, nil)
-	tc.mOracle.EXPECT().
-		CalcEligibility(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, gomock.Any(), proof).
+		CalcEligibility(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, gomock.Any(), gomock.Any()).
 		Return(0, errUnknown)
-	require.ErrorIs(t, tc.CertifyIfEligible(context.Background(), b.LayerIndex, b.ID()), errUnknown)
-}
-
-func Test_CertifyIfEligible_ProofErr(t *testing.T) {
-	tc := newTestCertifier(t, 1)
-	b := generateBlock(t, tc.db)
-	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil)
-	errUnknown := errors.New("unknown")
-	tc.mOracle.EXPECT().
-		Proof(gomock.Any(), gomock.Any(), b.LayerIndex, eligibility.CertifyRound).
-		Return(types.EmptyVrfSignature, errUnknown)
 	require.ErrorIs(t, tc.CertifyIfEligible(context.Background(), b.LayerIndex, b.ID()), errUnknown)
 }
 
@@ -739,4 +714,21 @@ func Test_CertifyIfEligible_BeaconNotAvailable(t *testing.T) {
 		tc.CertifyIfEligible(context.Background(), b.LayerIndex, b.ID()),
 		errBeaconNotAvailable,
 	)
+}
+
+func TestNewCertifyMsg(t *testing.T) {
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	proof := types.RandomVrfSignature()
+	blockID := types.RandomBlockID()
+
+	msg := newCertifyMsg(signer, types.LayerID(1), blockID, proof, 77)
+
+	require.Equal(t, types.LayerID(1), msg.LayerID)
+	require.Equal(t, blockID, msg.BlockID)
+	require.Equal(t, proof, msg.Proof)
+	require.Equal(t, uint16(77), msg.EligibilityCnt)
+	require.Equal(t, signer.NodeID(), msg.SmesherID)
+
+	require.True(t, signing.NewEdVerifier().Verify(signing.HARE, msg.SmesherID, msg.Bytes(), msg.Signature))
 }

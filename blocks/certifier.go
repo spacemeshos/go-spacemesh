@@ -222,39 +222,26 @@ func (c *Certifier) RegisterForCert(ctx context.Context, lid types.LayerID, bid 
 // CertifyIfEligible signs the hare output, along with its role proof as a certifier, and gossip the CertifyMessage
 // if the node is eligible to be a certifier.
 func (c *Certifier) CertifyIfEligible(ctx context.Context, lid types.LayerID, bid types.BlockID) error {
-	if _, err := c.beacon.GetBeacon(lid.GetEpoch()); err != nil {
+	beacon, err := c.beacon.GetBeacon(lid.GetEpoch())
+	if err != nil {
 		return errBeaconNotAvailable
 	}
 
-	var (
-		errsMu sync.Mutex
-		errs   error
-		eg     errgroup.Group
-	)
 	c.mu.Lock()
-	for _, s := range c.signers {
-		s := s
-		eg.Go(func() error {
-			if err := c.certifySingleSigner(ctx, s, lid, bid); err != nil {
-				errsMu.Lock()
-				errs = errors.Join(errs, fmt.Errorf("certifying block %v/%v by %s: %w", lid, bid, s.NodeID().ShortString(), err))
-				errsMu.Unlock()
-			}
-			return nil
-		})
-	}
+	signers := maps.Values(c.signers)
 	c.mu.Unlock()
-	eg.Wait()
+
+	var errs error
+	for _, s := range signers {
+		if err := c.certifySingleSigner(ctx, s, lid, bid, beacon); err != nil {
+			errs = errors.Join(errs, fmt.Errorf("certifying block %v/%v by %s: %w", lid, bid, s.NodeID().ShortString(), err))
+		}
+	}
 	return errs
 }
 
-func (c *Certifier) certifySingleSigner(ctx context.Context, s *signing.EdSigner, lid types.LayerID, bid types.BlockID) error {
-	// check if the signer is eligible to certify the hare output
-	proof, err := c.oracle.Proof(ctx, s.VRFSigner(), lid, eligibility.CertifyRound)
-	if err != nil {
-		return fmt.Errorf("getting eligibility proof: %w", err)
-	}
-
+func (c *Certifier) certifySingleSigner(ctx context.Context, s *signing.EdSigner, lid types.LayerID, bid types.BlockID, beacon types.Beacon) error {
+	proof := eligibility.GenVRF(context.Background(), s.VRFSigner(), beacon, lid, eligibility.CertifyRound)
 	eligibilityCount, err := c.oracle.CalcEligibility(ctx, lid, eligibility.CertifyRound, c.cfg.CommitteeSize, s.NodeID(), proof)
 	if err != nil {
 		return fmt.Errorf("calculating eligibility: %w", err)
@@ -263,20 +250,25 @@ func (c *Certifier) certifySingleSigner(ctx context.Context, s *signing.EdSigner
 		return nil
 	}
 
-	msg := types.CertifyMessage{
+	msg := newCertifyMsg(s, lid, bid, proof, eligibilityCount)
+	if err = c.publisher.Publish(ctx, pubsub.BlockCertify, codec.MustEncode(msg)); err != nil {
+		return fmt.Errorf("publishing block certification message: %w", err)
+	}
+	return nil
+}
+
+func newCertifyMsg(s *signing.EdSigner, lid types.LayerID, bid types.BlockID, proof types.VrfSignature, eligibility uint16) *types.CertifyMessage {
+	msg := &types.CertifyMessage{
 		CertifyContent: types.CertifyContent{
 			LayerID:        lid,
 			BlockID:        bid,
-			EligibilityCnt: eligibilityCount,
+			EligibilityCnt: eligibility,
 			Proof:          proof,
 		},
 		SmesherID: s.NodeID(),
 	}
 	msg.Signature = s.Sign(signing.HARE, msg.Bytes())
-	if err = c.publisher.Publish(ctx, pubsub.BlockCertify, codec.MustEncode(&msg)); err != nil {
-		return fmt.Errorf("publishing block certification message: %w", err)
-	}
-	return nil
+	return msg
 }
 
 // NumCached returns the number of layers being cached in memory.
