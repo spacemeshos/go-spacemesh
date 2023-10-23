@@ -907,7 +907,6 @@ func (app *App) initServices(ctx context.Context) error {
 			app.log.Zap(),
 			app.Config.POSTService,
 			app.Config.POST,
-			app.Config.SMESHING.Opts,
 			app.Config.SMESHING.ProvingOpts,
 			postSetupMgr,
 			newSyncer,

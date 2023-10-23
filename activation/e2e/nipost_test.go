@@ -74,7 +74,7 @@ func launchPostSupervisor(tb testing.TB, log *zap.Logger, mgr *activation.PostSe
 		return ch
 	}).AnyTimes()
 
-	ps, err := activation.NewPostSupervisor(log, cmdCfg, postCfg, postOpts, provingOpts, mgr, syncer)
+	ps, err := activation.NewPostSupervisor(log, cmdCfg, postCfg, provingOpts, mgr, syncer)
 	require.NoError(tb, err)
 	require.NotNil(tb, ps)
 	require.NoError(tb, ps.Start(postOpts))

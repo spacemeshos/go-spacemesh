@@ -62,7 +62,6 @@ type PostSupervisor struct {
 
 	cmdCfg      PostSupervisorConfig
 	postCfg     PostConfig
-	postOpts    PostSetupOpts
 	provingOpts PostProvingOpts
 
 	postSetupProvider postSetupProvider
@@ -80,7 +79,6 @@ func NewPostSupervisor(
 	logger *zap.Logger,
 	cmdCfg PostSupervisorConfig,
 	postCfg PostConfig,
-	postOpts PostSetupOpts,
 	provingOpts PostProvingOpts,
 	postSetupProvider postSetupProvider,
 	syncer syncer,
@@ -93,7 +91,6 @@ func NewPostSupervisor(
 		logger:      logger,
 		cmdCfg:      cmdCfg,
 		postCfg:     postCfg,
-		postOpts:    postOpts,
 		provingOpts: provingOpts,
 
 		postSetupProvider: postSetupProvider,
@@ -170,7 +167,7 @@ func (ps *PostSupervisor) Start(opts PostSetupOpts) error {
 			return err
 		}
 
-		ps.eg.Go(func() error { return ps.runCmd(ctx, ps.cmdCfg, ps.postCfg, ps.postOpts, ps.provingOpts) })
+		ps.eg.Go(func() error { return ps.runCmd(ctx, ps.cmdCfg, ps.postCfg, opts, ps.provingOpts) })
 		return nil
 	})
 	return nil

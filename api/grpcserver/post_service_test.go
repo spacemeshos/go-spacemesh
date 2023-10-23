@@ -52,7 +52,7 @@ func launchPostSupervisor(tb testing.TB, log *zap.Logger, cfg Config, postOpts a
 	})
 
 	// start post supervisor
-	ps, err := activation.NewPostSupervisor(log, cmdCfg, postCfg, postOpts, provingOpts, mgr, syncer)
+	ps, err := activation.NewPostSupervisor(log, cmdCfg, postCfg, provingOpts, mgr, syncer)
 	require.NoError(tb, err)
 	require.NotNil(tb, ps)
 	require.NoError(tb, ps.Start(postOpts))
@@ -99,7 +99,7 @@ func launchPostSupervisorTLS(tb testing.TB, log *zap.Logger, cfg Config, postOpt
 		return ch
 	})
 
-	ps, err := activation.NewPostSupervisor(log, cmdCfg, postCfg, postOpts, provingOpts, mgr, syncer)
+	ps, err := activation.NewPostSupervisor(log, cmdCfg, postCfg, provingOpts, mgr, syncer)
 	require.NoError(tb, err)
 	require.NotNil(tb, ps)
 	require.NoError(tb, ps.Start(postOpts))

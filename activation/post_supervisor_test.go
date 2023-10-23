@@ -23,10 +23,9 @@ func Test_PostSupervisor_ErrorOnMissingBinary(t *testing.T) {
 	cmdCfg := DefaultTestPostServiceConfig()
 	cmdCfg.PostServiceCmd = "missing"
 	postCfg := DefaultPostConfig()
-	postOpts := DefaultPostSetupOpts()
 	provingOpts := DefaultPostProvingOpts()
 
-	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, postOpts, provingOpts, nil, nil)
+	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, nil, nil)
 	require.ErrorContains(t, err, "post service binary not found")
 	require.Nil(t, ps)
 }
@@ -36,10 +35,9 @@ func Test_PostSupervisor_StopWithoutStart(t *testing.T) {
 
 	cmdCfg := DefaultTestPostServiceConfig()
 	postCfg := DefaultPostConfig()
-	postOpts := DefaultPostSetupOpts()
 	provingOpts := DefaultPostProvingOpts()
 
-	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, postOpts, provingOpts, nil, nil)
+	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ps)
 
@@ -58,7 +56,7 @@ func Test_PostSupervisor_Start_FailPrepare(t *testing.T) {
 	testErr := errors.New("test error")
 	mgr.EXPECT().PrepareInitializer(postOpts).Return(testErr)
 
-	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, postOpts, provingOpts, mgr, nil)
+	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ps)
 
@@ -99,7 +97,7 @@ func Test_PostSupervisor_Start_FailStartSession(t *testing.T) {
 		return ch
 	})
 
-	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, postOpts, provingOpts, mgr, sync)
+	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr, sync)
 	require.NoError(t, err)
 	require.NotNil(t, ps)
 
@@ -127,7 +125,7 @@ func Test_PostSupervisor_StartsServiceCmd(t *testing.T) {
 		return ch
 	})
 
-	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, postOpts, provingOpts, mgr, sync)
+	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr, sync)
 	require.NoError(t, err)
 	require.NotNil(t, ps)
 
@@ -172,7 +170,7 @@ func Test_PostSupervisor_Restart_Possible(t *testing.T) {
 		return ch
 	}).AnyTimes()
 
-	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, postOpts, provingOpts, mgr, sync)
+	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr, sync)
 	require.NoError(t, err)
 	require.NotNil(t, ps)
 
@@ -212,7 +210,7 @@ func Test_PostSupervisor_RestartsOnCrash(t *testing.T) {
 		return ch
 	})
 
-	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, postOpts, provingOpts, mgr, sync)
+	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr, sync)
 	require.NoError(t, err)
 	require.NotNil(t, ps)
 
@@ -258,7 +256,7 @@ func Test_PostSupervisor_StopOnError(t *testing.T) {
 		return ch
 	})
 
-	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, postOpts, provingOpts, mgr, sync)
+	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr, sync)
 	require.NoError(t, err)
 	require.NotNil(t, ps)
 
@@ -276,14 +274,13 @@ func Test_PostSupervisor_Providers_includesCPU(t *testing.T) {
 
 	cmdCfg := DefaultTestPostServiceConfig()
 	postCfg := DefaultPostConfig()
-	postOpts := DefaultPostSetupOpts()
 	provingOpts := DefaultPostProvingOpts()
 
 	ctrl := gomock.NewController(t)
 	mgr := NewMockpostSetupProvider(ctrl)
 	sync := NewMocksyncer(ctrl)
 
-	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, postOpts, provingOpts, mgr, sync)
+	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr, sync)
 	require.NoError(t, err)
 
 	providers, err := ps.Providers()
@@ -302,14 +299,13 @@ func TestPostSetupManager_Benchmark(t *testing.T) {
 
 	cmdCfg := DefaultTestPostServiceConfig()
 	postCfg := DefaultPostConfig()
-	postOpts := DefaultPostSetupOpts()
 	provingOpts := DefaultPostProvingOpts()
 
 	ctrl := gomock.NewController(t)
 	mgr := NewMockpostSetupProvider(ctrl)
 	sync := NewMocksyncer(ctrl)
 
-	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, postOpts, provingOpts, mgr, sync)
+	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr, sync)
 	require.NoError(t, err)
 
 	providers, err := ps.Providers()
