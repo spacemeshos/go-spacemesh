@@ -20,12 +20,11 @@ func PostProviderIDDecodeFunc() mapstructure.DecodeHookFunc {
 		switch f.Kind() {
 		case reflect.Float64:
 			value := data.(float64)
-			// TODO(mafa): update check from `value < -1` to `value < 0`, see https://github.com/spacemeshos/go-spacemesh/issues/4801
-			if value > math.MaxUint32 || value < -1 || value != math.Trunc(value) {
+			if value > math.MaxUint32 || value < 0 || value != math.Trunc(value) {
 				return nil, fmt.Errorf("invalid provider ID value: %v", value)
 			}
 			id := activation.PostProviderID{}
-			id.SetInt64(int64(value))
+			id.SetUint32(uint32(value))
 			return id, nil
 		case reflect.String:
 			return nil, fmt.Errorf("invalid provider ID value: %v", data)

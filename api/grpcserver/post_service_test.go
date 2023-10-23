@@ -120,7 +120,7 @@ func Test_GenerateProof(t *testing.T) {
 
 	opts := activation.DefaultPostSetupOpts()
 	opts.DataDir = t.TempDir()
-	opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
+	opts.ProviderID.SetUint32(initialization.CPUProviderID())
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
 	id, _ := initPost(t, log.Named("post"), opts)
 	postCleanup := launchPostSupervisor(t, log.Named("supervisor"), cfg, opts)
@@ -163,7 +163,7 @@ func Test_GenerateProof_TLS(t *testing.T) {
 
 	opts := activation.DefaultPostSetupOpts()
 	opts.DataDir = t.TempDir()
-	opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
+	opts.ProviderID.SetUint32(initialization.CPUProviderID())
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
 	id, _ := initPost(t, log.Named("post"), opts)
 	postCleanup := launchPostSupervisorTLS(t, log.Named("supervisor"), cfg, opts)
@@ -206,7 +206,7 @@ func Test_GenerateProof_Cancel(t *testing.T) {
 
 	opts := activation.DefaultPostSetupOpts()
 	opts.DataDir = t.TempDir()
-	opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
+	opts.ProviderID.SetUint32(initialization.CPUProviderID())
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
 	id, _ := initPost(t, log.Named("post"), opts)
 	t.Cleanup(launchPostSupervisor(t, log.Named("supervisor"), cfg, opts))
@@ -281,7 +281,7 @@ func Test_GenerateProof_MultipleServices(t *testing.T) {
 
 	opts := activation.DefaultPostSetupOpts()
 	opts.DataDir = t.TempDir()
-	opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
+	opts.ProviderID.SetUint32(initialization.CPUProviderID())
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
 
 	// all but one should not be able to register to the node (i.e. open a stream to it).
