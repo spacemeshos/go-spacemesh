@@ -206,7 +206,7 @@ func (b *Builder) Smeshing() bool {
 // or missing, data creation session will be preceded. Changing of the post
 // options (e.g., number of labels), after initial setup, is supported. If data
 // creation fails for any reason then the go-routine will panic.
-func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) error {
+func (b *Builder) StartSmeshing(coinbase types.Address) error {
 	b.smeshingMutex.Lock()
 	defer b.smeshingMutex.Unlock()
 
@@ -233,7 +233,7 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 					return ctx.Err()
 				case <-ticker.C:
 					if err := b.Regossip(ctx); err != nil {
-						b.log.With().Warning("failed to regossip", log.Context(ctx), log.Err(err))
+						b.log.With().Warning("failed to re-gossip", log.Context(ctx), log.Err(err))
 					}
 				}
 			}

@@ -1224,7 +1224,7 @@ func (app *App) startServices(ctx context.Context) error {
 				err,
 			)
 		}
-		if err := app.atxBuilder.StartSmeshing(coinbaseAddr, app.Config.SMESHING.Opts); err != nil {
+		if err := app.atxBuilder.StartSmeshing(coinbaseAddr); err != nil {
 			app.log.Panic("failed to start smeshing: %v", err)
 		}
 		if err := app.postSupervisor.Start(app.Config.SMESHING.Opts); err != nil {

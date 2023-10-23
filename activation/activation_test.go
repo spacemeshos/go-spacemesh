@@ -254,7 +254,6 @@ func addAtx(t *testing.T, db sql.Executor, sig *signing.EdSigner, atx *types.Act
 func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 	tab := newTestBuilder(t)
 	coinbase := types.Address{1, 1, 1}
-	postSetupOpts := PostSetupOpts{}
 
 	tab.mpostClient.EXPECT().Proof(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, b []byte) (*types.Post, *types.PostMetadata, error) {
 		<-ctx.Done()
@@ -263,11 +262,11 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 	tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
 	tab.mclock.EXPECT().CurrentLayer().Return(types.LayerID(0)).AnyTimes()
 	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(make(chan struct{})).AnyTimes()
-	require.NoError(t, tab.StartSmeshing(coinbase, postSetupOpts))
+	require.NoError(t, tab.StartSmeshing(coinbase))
 	require.Equal(t, coinbase, tab.Coinbase())
 
 	// calling StartSmeshing more than once before calling StopSmeshing is an error
-	require.ErrorContains(t, tab.StartSmeshing(coinbase, postSetupOpts), "already started")
+	require.ErrorContains(t, tab.StartSmeshing(coinbase), "already started")
 
 	require.NoError(t, tab.StopSmeshing(true))
 }
@@ -291,7 +290,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 	t.Run("Single threaded", func(t *testing.T) {
 		builder := getBuilder(t)
 		for i := 0; i < 100; i++ {
-			require.NoError(t, builder.StartSmeshing(types.Address{}, PostSetupOpts{}))
+			require.NoError(t, builder.StartSmeshing(types.Address{}))
 			require.Never(t, func() bool { return !builder.Smeshing() }, 400*time.Microsecond, 50*time.Microsecond, "failed on execution %d", i)
 			require.NoError(t, builder.StopSmeshing(true))
 			require.Eventually(t, func() bool { return !builder.Smeshing() }, 100*time.Millisecond, time.Millisecond, "failed on execution %d", i)
@@ -307,7 +306,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 		for worker := 0; worker < 10; worker += 1 {
 			eg.Go(func() error {
 				for i := 0; i < 100; i++ {
-					builder.StartSmeshing(types.Address{}, PostSetupOpts{})
+					builder.StartSmeshing(types.Address{})
 					builder.StopSmeshing(true)
 				}
 				return nil
@@ -346,19 +345,19 @@ func TestBuilder_StopSmeshing_Delete(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, files, 3) // 3 state files created
 
-	require.NoError(t, tab.StartSmeshing(types.Address{}, PostSetupOpts{}))
+	require.NoError(t, tab.StartSmeshing(types.Address{}))
 	require.NoError(t, tab.StopSmeshing(false))
 	files, err = os.ReadDir(tab.nipostBuilder.DataDir())
 	require.NoError(t, err)
 	require.Len(t, files, 3) // state files still present
 
-	require.NoError(t, tab.StartSmeshing(types.Address{}, PostSetupOpts{}))
+	require.NoError(t, tab.StartSmeshing(types.Address{}))
 	require.NoError(t, tab.StopSmeshing(true))
 	files, err = os.ReadDir(tab.nipostBuilder.DataDir())
 	require.NoError(t, err)
 	require.Len(t, files, 0) // state files deleted
 
-	require.NoError(t, tab.StartSmeshing(types.Address{}, PostSetupOpts{}))
+	require.NoError(t, tab.StartSmeshing(types.Address{}))
 	require.NoError(t, tab.StopSmeshing(true)) // no-op
 	files, err = os.ReadDir(tab.nipostBuilder.DataDir())
 	require.NoError(t, err)

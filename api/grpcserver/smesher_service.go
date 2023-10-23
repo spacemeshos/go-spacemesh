@@ -78,7 +78,7 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 		ctxzap.Error(ctx, "failed to start post supervisor", zap.Error(err))
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to start post supervisor: %v", err))
 	}
-	if err := s.smeshingProvider.StartSmeshing(coinbaseAddr, opts); err != nil {
+	if err := s.smeshingProvider.StartSmeshing(coinbaseAddr); err != nil {
 		ctxzap.Error(ctx, "failed to start smeshing", zap.Error(err))
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to start smeshing: %v", err))
 	}

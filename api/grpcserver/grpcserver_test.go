@@ -512,7 +512,7 @@ func TestSmesherService(t *testing.T) {
 		coinbase := &pb.AccountId{Address: addr1.String()}
 
 		c, ctx := setupSmesherService(t)
-		c.smeshingProvider.EXPECT().StartSmeshing(gomock.Any(), gomock.Any()).Return(nil)
+		c.smeshingProvider.EXPECT().StartSmeshing(gomock.Any()).Return(nil)
 		c.postSupervisor.EXPECT().Start(gomock.All(
 			gomock.Cond(func(postOpts any) bool { return postOpts.(activation.PostSetupOpts).DataDir == opts.DataDir }),
 			gomock.Cond(func(postOpts any) bool { return postOpts.(activation.PostSetupOpts).NumUnits == opts.NumUnits }),

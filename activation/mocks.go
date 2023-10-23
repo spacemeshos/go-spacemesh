@@ -1255,17 +1255,17 @@ func (c *SmeshingProviderSmeshingCall) DoAndReturn(f func() bool) *SmeshingProvi
 }
 
 // StartSmeshing mocks base method.
-func (m *MockSmeshingProvider) StartSmeshing(arg0 types.Address, arg1 PostSetupOpts) error {
+func (m *MockSmeshingProvider) StartSmeshing(arg0 types.Address) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StartSmeshing", arg0, arg1)
+	ret := m.ctrl.Call(m, "StartSmeshing", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // StartSmeshing indicates an expected call of StartSmeshing.
-func (mr *MockSmeshingProviderMockRecorder) StartSmeshing(arg0, arg1 any) *SmeshingProviderStartSmeshingCall {
+func (mr *MockSmeshingProviderMockRecorder) StartSmeshing(arg0 any) *SmeshingProviderStartSmeshingCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSmeshing", reflect.TypeOf((*MockSmeshingProvider)(nil).StartSmeshing), arg0, arg1)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSmeshing", reflect.TypeOf((*MockSmeshingProvider)(nil).StartSmeshing), arg0)
 	return &SmeshingProviderStartSmeshingCall{Call: call}
 }
 
@@ -1281,13 +1281,13 @@ func (c *SmeshingProviderStartSmeshingCall) Return(arg0 error) *SmeshingProvider
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *SmeshingProviderStartSmeshingCall) Do(f func(types.Address, PostSetupOpts) error) *SmeshingProviderStartSmeshingCall {
+func (c *SmeshingProviderStartSmeshingCall) Do(f func(types.Address) error) *SmeshingProviderStartSmeshingCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *SmeshingProviderStartSmeshingCall) DoAndReturn(f func(types.Address, PostSetupOpts) error) *SmeshingProviderStartSmeshingCall {
+func (c *SmeshingProviderStartSmeshingCall) DoAndReturn(f func(types.Address) error) *SmeshingProviderStartSmeshingCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

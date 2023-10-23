@@ -62,7 +62,7 @@ func TestStartSmeshingPassesCorrectSmeshingOpts(t *testing.T) {
 	}
 	opts.ProviderID.SetUint32(providerID)
 	postSupervisor.EXPECT().Start(opts).Return(nil)
-	smeshingProvider.EXPECT().StartSmeshing(addr, opts).Return(nil)
+	smeshingProvider.EXPECT().StartSmeshing(addr).Return(nil)
 
 	_, err = svc.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{
 		Coinbase: &pb.AccountId{Address: "stest1qqqqqqrs60l66w5uksxzmaznwq6xnhqfv56c28qlkm4a5"},
