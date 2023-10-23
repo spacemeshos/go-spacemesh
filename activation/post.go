@@ -232,28 +232,6 @@ func (*PostSetupManager) Providers() ([]PostSetupProvider, error) {
 	return providersAlias, nil
 }
 
-// bestProvider returns the most performant compute provider based on a short benchmarking session.
-func (mgr *PostSetupManager) bestProvider() (*PostSetupProvider, error) {
-	providers, err := mgr.Providers()
-	if err != nil {
-		return nil, fmt.Errorf("fetch best provider: %w", err)
-	}
-
-	var bestProvider PostSetupProvider
-	var maxHS int
-	for _, p := range providers {
-		hs, err := mgr.Benchmark(p)
-		if err != nil {
-			return nil, err
-		}
-		if hs > maxHS {
-			maxHS = hs
-			bestProvider = p
-		}
-	}
-	return &bestProvider, nil
-}
-
 // Benchmark runs a short benchmarking session for a given provider to evaluate its performance.
 func (mgr *PostSetupManager) Benchmark(p PostSetupProvider) (int, error) {
 	score, err := initialization.Benchmark(initialization.Provider(p))
@@ -340,24 +318,6 @@ func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSe
 	defer mgr.mu.Unlock()
 	if mgr.state == PostSetupStatePrepared || mgr.state == PostSetupStateInProgress {
 		return fmt.Errorf("post setup session in progress")
-	}
-
-	// TODO(mafa): remove this, see https://github.com/spacemeshos/go-spacemesh/issues/4801
-	if opts.ProviderID.Value() != nil && *opts.ProviderID.Value() == -1 {
-		mgr.logger.Warn("DEPRECATED: auto-determining compute provider is deprecated, please specify a valid provider ID in the config file")
-
-		p, err := mgr.bestProvider()
-		if err != nil {
-			return err
-		}
-
-		mgr.logger.Warn("DEPRECATED: found best compute provider",
-			zap.Uint32("id", p.ID),
-			zap.String("model", p.Model),
-			zap.Stringer("device type", p.DeviceType),
-		)
-		mgr.logger.Sugar().Warnf("DEPRECATED: please update your config file: {\"smeshing\": {\"smeshing-opts\": {\"smeshing-opts-provider\": %d }}}", p.ID)
-		opts.ProviderID.SetInt64(int64(p.ID))
 	}
 
 	var err error
