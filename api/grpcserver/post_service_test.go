@@ -241,7 +241,7 @@ func Test_Metadata(t *testing.T) {
 
 	opts := activation.DefaultPostSetupOpts()
 	opts.DataDir = t.TempDir()
-	opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
+	opts.ProviderID.SetUint32(initialization.CPUProviderID())
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
 	id, commitmentAtxId := initPost(t, log.Named("post"), opts)
 	postCleanup := launchPostSupervisor(t, log.Named("supervisor"), cfg, opts)
