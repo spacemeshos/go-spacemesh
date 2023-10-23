@@ -21,47 +21,13 @@ import (
 )
 
 var (
-	memberHash = [32]byte{
-		0x17,
-		0x51,
-		0xac,
-		0x12,
-		0xe7,
-		0xe,
-		0x15,
-		0xb4,
-		0xf7,
-		0x6c,
-		0x16,
-		0x77,
-		0x5c,
-		0xd3,
-		0x29,
-		0xae,
-		0x55,
-		0x97,
-		0x3b,
-		0x61,
-		0x25,
-		0x21,
-		0xda,
-		0xb2,
-		0xde,
-		0x82,
-		0x8a,
-		0x5c,
-		0xdb,
-		0x6c,
-		0x8a,
-		0xb3,
-	}
 	proof           *types.PoetProofMessage
 	createProofOnce sync.Once
 )
 
 func getPoetProof(t *testing.T) types.PoetProofMessage {
 	createProofOnce.Do(func() {
-		challenge := memberHash[:]
+		challenge := []byte("hello world, this is a challenge")
 
 		leaves, merkleProof, err := prover.GenerateProofWithoutPersistency(
 			context.Background(),
