@@ -65,7 +65,13 @@ func defaultOracle(t testing.TB) *testOracle {
 	return to
 }
 
-func createBallots(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, activeSet types.ATXIDList, miners []types.NodeID) []*types.Ballot {
+func createBallots(
+	tb testing.TB,
+	cdb *datastore.CachedDB,
+	lid types.LayerID,
+	activeSet types.ATXIDList,
+	miners []types.NodeID,
+) []*types.Ballot {
 	tb.Helper()
 	numBallots := ballotsPerLayer
 	if len(activeSet) < numBallots {
@@ -115,7 +121,12 @@ func createLayerData(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, 
 	return miners
 }
 
-func createActiveSet(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, activeSet []types.ATXID) []types.NodeID {
+func createActiveSet(
+	tb testing.TB,
+	cdb *datastore.CachedDB,
+	lid types.LayerID,
+	activeSet []types.ATXID,
+) []types.NodeID {
 	var miners []types.NodeID
 	for i, id := range activeSet {
 		nodeID := types.BytesToNodeID([]byte(strconv.Itoa(i)))

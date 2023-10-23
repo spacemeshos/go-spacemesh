@@ -111,13 +111,24 @@ func createAndSaveTxs(tb testing.TB, numOfTxs int, db sql.Executor) []types.Tran
 	return txIDs
 }
 
-func createATXs(t *testing.T, cdb *datastore.CachedDB, lid types.LayerID, numATXs int) ([]*signing.EdSigner, []*types.ActivationTx) {
+func createATXs(
+	t *testing.T,
+	cdb *datastore.CachedDB,
+	lid types.LayerID,
+	numATXs int,
+) ([]*signing.EdSigner, []*types.ActivationTx) {
 	return createModifiedATXs(t, cdb, lid, numATXs, func(atx *types.ActivationTx) (*types.VerifiedActivationTx, error) {
 		return atx.Verify(baseTickHeight, 1)
 	})
 }
 
-func createModifiedATXs(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, numATXs int, onAtx func(*types.ActivationTx) (*types.VerifiedActivationTx, error)) ([]*signing.EdSigner, []*types.ActivationTx) {
+func createModifiedATXs(
+	tb testing.TB,
+	cdb *datastore.CachedDB,
+	lid types.LayerID,
+	numATXs int,
+	onAtx func(*types.ActivationTx) (*types.VerifiedActivationTx, error),
+) ([]*signing.EdSigner, []*types.ActivationTx) {
 	tb.Helper()
 	atxes := make([]*types.ActivationTx, 0, numATXs)
 	signers := make([]*signing.EdSigner, 0, numATXs)
@@ -350,20 +361,22 @@ func Test_run(t *testing.T) {
 
 			var block *types.Block
 			if tc.optimistic {
-				tg.mockExec.EXPECT().ExecuteOptimistic(gomock.Any(), layerID, uint64(baseTickHeight), gomock.Any(), gomock.Any()).DoAndReturn(
-					func(_ context.Context, lid types.LayerID, tickHeight uint64, rewards []types.AnyReward, tids []types.TransactionID) (*types.Block, error) {
-						require.Len(t, tids, len(txIDs))
-						block = &types.Block{
-							InnerBlock: types.InnerBlock{
-								LayerIndex: lid,
-								TickHeight: tickHeight,
-								Rewards:    rewards,
-								TxIDs:      tids,
-							},
-						}
-						block.Initialize()
-						return block, nil
-					})
+				tg.mockExec.EXPECT().
+					ExecuteOptimistic(gomock.Any(), layerID, uint64(baseTickHeight), gomock.Any(), gomock.Any()).
+					DoAndReturn(
+						func(_ context.Context, lid types.LayerID, tickHeight uint64, rewards []types.AnyReward, tids []types.TransactionID) (*types.Block, error) {
+							require.Len(t, tids, len(txIDs))
+							block = &types.Block{
+								InnerBlock: types.InnerBlock{
+									LayerIndex: lid,
+									TickHeight: tickHeight,
+									Rewards:    rewards,
+									TxIDs:      tids,
+								},
+							}
+							block.Initialize()
+							return block, nil
+						})
 			}
 			tg.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ context.Context, got *types.Block) error {
@@ -392,12 +405,14 @@ func Test_run(t *testing.T) {
 					require.Equal(t, block.ID(), got)
 					return nil
 				})
-			tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, gomock.Any(), tc.optimistic).DoAndReturn(
-				func(_ context.Context, _ types.LayerID, got types.BlockID, _ bool) error {
-					require.Equal(t, block.ID(), got)
-					processed = layerID
-					return nil
-				})
+			tg.mockMesh.EXPECT().
+				ProcessLayerPerHareOutput(gomock.Any(), layerID, gomock.Any(), tc.optimistic).
+				DoAndReturn(
+					func(_ context.Context, _ types.LayerID, got types.BlockID, _ bool) error {
+						require.Equal(t, block.ID(), got)
+						processed = layerID
+						return nil
+					})
 			tg.mockPatrol.EXPECT().CompleteHare(layerID)
 			tg.Start(context.Background())
 			tg.hareCh <- hare.LayerOutput{Ctx: context.Background(), Layer: layerID, Proposals: pids}
@@ -473,11 +488,13 @@ func Test_run_ExecuteFailed(t *testing.T) {
 	require.NoError(t, layers.SetMeshHash(tg.cdb, layerID.Sub(1), meshHash))
 
 	tg.mockFetch.EXPECT().GetProposals(gomock.Any(), pids)
-	tg.mockExec.EXPECT().ExecuteOptimistic(gomock.Any(), layerID, uint64(baseTickHeight), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, lid types.LayerID, tickHeight uint64, rewards []types.AnyReward, tids []types.TransactionID) (*types.Block, error) {
-			require.Len(t, tids, len(txIDs))
-			return nil, errors.New("unknown")
-		})
+	tg.mockExec.EXPECT().
+		ExecuteOptimistic(gomock.Any(), layerID, uint64(baseTickHeight), gomock.Any(), gomock.Any()).
+		DoAndReturn(
+			func(_ context.Context, lid types.LayerID, tickHeight uint64, rewards []types.AnyReward, tids []types.TransactionID) (*types.Block, error) {
+				require.Len(t, tids, len(txIDs))
+				return nil, errors.New("unknown")
+			})
 	tg.mockPatrol.EXPECT().CompleteHare(layerID)
 	tg.hareCh <- hare.LayerOutput{Ctx: context.Background(), Layer: layerID, Proposals: pids}
 	require.Eventually(t, func() bool { return len(tg.hareCh) == 0 }, time.Second, 100*time.Millisecond)
@@ -499,7 +516,9 @@ func Test_run_AddBlockFailed(t *testing.T) {
 
 	tg.mockFetch.EXPECT().GetProposals(gomock.Any(), pids)
 	block := types.NewExistingBlock(types.BlockID{1, 2, 3}, types.InnerBlock{LayerIndex: layerID})
-	tg.mockExec.EXPECT().ExecuteOptimistic(gomock.Any(), layerID, uint64(baseTickHeight), gomock.Any(), gomock.Any()).Return(block, nil)
+	tg.mockExec.EXPECT().
+		ExecuteOptimistic(gomock.Any(), layerID, uint64(baseTickHeight), gomock.Any(), gomock.Any()).
+		Return(block, nil)
 	tg.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any()).Return(errors.New("unknown"))
 	tg.mockPatrol.EXPECT().CompleteHare(layerID)
 	tg.hareCh <- hare.LayerOutput{Ctx: context.Background(), Layer: layerID, Proposals: pids}
@@ -522,7 +541,9 @@ func Test_run_RegisterCertFailureIgnored(t *testing.T) {
 
 	tg.mockFetch.EXPECT().GetProposals(gomock.Any(), pids)
 	block := types.NewExistingBlock(types.BlockID{1, 2, 3}, types.InnerBlock{LayerIndex: layerID})
-	tg.mockExec.EXPECT().ExecuteOptimistic(gomock.Any(), layerID, uint64(baseTickHeight), gomock.Any(), gomock.Any()).Return(block, nil)
+	tg.mockExec.EXPECT().
+		ExecuteOptimistic(gomock.Any(), layerID, uint64(baseTickHeight), gomock.Any(), gomock.Any()).
+		Return(block, nil)
 	tg.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any())
 	tg.mockCert.EXPECT().RegisterForCert(gomock.Any(), layerID, gomock.Any()).Return(errors.New("unknown"))
 	tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), gomock.Any(), layerID, gomock.Any())
@@ -548,10 +569,14 @@ func Test_run_CertifyFailureIgnored(t *testing.T) {
 
 	tg.mockFetch.EXPECT().GetProposals(gomock.Any(), pids)
 	block := types.NewExistingBlock(types.BlockID{1, 2, 3}, types.InnerBlock{LayerIndex: layerID})
-	tg.mockExec.EXPECT().ExecuteOptimistic(gomock.Any(), layerID, uint64(baseTickHeight), gomock.Any(), gomock.Any()).Return(block, nil)
+	tg.mockExec.EXPECT().
+		ExecuteOptimistic(gomock.Any(), layerID, uint64(baseTickHeight), gomock.Any(), gomock.Any()).
+		Return(block, nil)
 	tg.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any())
 	tg.mockCert.EXPECT().RegisterForCert(gomock.Any(), layerID, gomock.Any())
-	tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), gomock.Any(), layerID, gomock.Any()).Return(errors.New("unknown"))
+	tg.mockCert.EXPECT().
+		CertifyIfEligible(gomock.Any(), gomock.Any(), layerID, gomock.Any()).
+		Return(errors.New("unknown"))
 	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, block.ID(), true)
 	tg.mockPatrol.EXPECT().CompleteHare(layerID)
 	tg.hareCh <- hare.LayerOutput{Ctx: context.Background(), Layer: layerID, Proposals: pids}
@@ -574,11 +599,15 @@ func Test_run_ProcessLayerFailed(t *testing.T) {
 
 	tg.mockFetch.EXPECT().GetProposals(gomock.Any(), pids)
 	block := types.NewExistingBlock(types.BlockID{1, 2, 3}, types.InnerBlock{LayerIndex: layerID})
-	tg.mockExec.EXPECT().ExecuteOptimistic(gomock.Any(), layerID, uint64(baseTickHeight), gomock.Any(), gomock.Any()).Return(block, nil)
+	tg.mockExec.EXPECT().
+		ExecuteOptimistic(gomock.Any(), layerID, uint64(baseTickHeight), gomock.Any(), gomock.Any()).
+		Return(block, nil)
 	tg.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any())
 	tg.mockCert.EXPECT().RegisterForCert(gomock.Any(), layerID, gomock.Any())
 	tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), gomock.Any(), layerID, gomock.Any())
-	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, block.ID(), true).Return(errors.New("unknown"))
+	tg.mockMesh.EXPECT().
+		ProcessLayerPerHareOutput(gomock.Any(), layerID, block.ID(), true).
+		Return(errors.New("unknown"))
 	tg.mockPatrol.EXPECT().CompleteHare(layerID)
 	tg.hareCh <- hare.LayerOutput{Ctx: context.Background(), Layer: layerID, Proposals: pids}
 	require.Eventually(t, func() bool { return len(tg.hareCh) == 0 }, time.Second, 100*time.Millisecond)
@@ -591,13 +620,19 @@ func Test_processHareOutput_UnequalHeight(t *testing.T) {
 	numProposals := 10
 	rng := rand.New(rand.NewSource(10101))
 	maxHeight := uint64(0)
-	signers, atxes := createModifiedATXs(t, tg.cdb, (layerID.GetEpoch() - 1).FirstLayer(), numProposals, func(atx *types.ActivationTx) (*types.VerifiedActivationTx, error) {
-		n := rng.Uint64()
-		if n > maxHeight {
-			maxHeight = n
-		}
-		return atx.Verify(n, 1)
-	})
+	signers, atxes := createModifiedATXs(
+		t,
+		tg.cdb,
+		(layerID.GetEpoch() - 1).FirstLayer(),
+		numProposals,
+		func(atx *types.ActivationTx) (*types.VerifiedActivationTx, error) {
+			n := rng.Uint64()
+			if n > maxHeight {
+				maxHeight = n
+			}
+			return atx.Verify(n, 1)
+		},
+	)
 	activeSet := types.ToATXIDs(atxes)
 	pList := createProposals(t, tg.cdb, layerID, types.Hash32{}, signers, activeSet, nil)
 	ho := hare.LayerOutput{
@@ -646,7 +681,17 @@ func Test_processHareOutput_bad_state(t *testing.T) {
 	activeSet := types.ToATXIDs(atxes)
 
 	t.Run("tx missing", func(t *testing.T) {
-		p := createProposal(t, tg.cdb, activeSet, layerID, types.Hash32{}, activeSet[0], signers[0], []types.TransactionID{types.RandomTransactionID()}, 1)
+		p := createProposal(
+			t,
+			tg.cdb,
+			activeSet,
+			layerID,
+			types.Hash32{},
+			activeSet[0],
+			signers[0],
+			[]types.TransactionID{types.RandomTransactionID()},
+			1,
+		)
 		ho := hare.LayerOutput{
 			Ctx:       context.Background(),
 			Layer:     layerID,
@@ -664,7 +709,17 @@ func Test_processHareOutput_bad_state(t *testing.T) {
 			RawTx: types.NewRawTx([]byte{1, 1, 1}),
 		}
 		require.NoError(t, transactions.Add(tg.cdb, &tx, time.Now()))
-		p := createProposal(t, tg.cdb, activeSet, layerID, types.Hash32{}, activeSet[0], signers[0], []types.TransactionID{tx.ID}, 1)
+		p := createProposal(
+			t,
+			tg.cdb,
+			activeSet,
+			layerID,
+			types.Hash32{},
+			activeSet[0],
+			signers[0],
+			[]types.TransactionID{tx.ID},
+			1,
+		)
 		ho := hare.LayerOutput{
 			Ctx:       context.Background(),
 			Layer:     layerID,
@@ -746,7 +801,9 @@ func Test_processHareOutput_StableBlockID(t *testing.T) {
 	tg.mockFetch.EXPECT().GetProposals(ho1.Ctx, ho1.Proposals)
 	tg.mockMesh.EXPECT().AddBlockWithTXs(ho1.Ctx, gomock.Any())
 	tg.mockCert.EXPECT().RegisterForCert(ho1.Ctx, layerID, gomock.Any())
-	tg.mockCert.EXPECT().CertifyIfEligible(ho1.Ctx, gomock.Any(), layerID, gomock.Any()).Return(eligibility.ErrNotActive)
+	tg.mockCert.EXPECT().
+		CertifyIfEligible(ho1.Ctx, gomock.Any(), layerID, gomock.Any()).
+		Return(eligibility.ErrNotActive)
 	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, gomock.Any(), false)
 	tg.mockPatrol.EXPECT().CompleteHare(layerID)
 	got1, err := tg.processHareOutput(ho1)
@@ -767,7 +824,9 @@ func Test_processHareOutput_StableBlockID(t *testing.T) {
 	tg.mockFetch.EXPECT().GetProposals(ho2.Ctx, ho2.Proposals)
 	tg.mockMesh.EXPECT().AddBlockWithTXs(ho2.Ctx, gomock.Any())
 	tg.mockCert.EXPECT().RegisterForCert(ho2.Ctx, layerID, gomock.Any())
-	tg.mockCert.EXPECT().CertifyIfEligible(ho2.Ctx, gomock.Any(), layerID, gomock.Any()).Return(eligibility.ErrNotActive)
+	tg.mockCert.EXPECT().
+		CertifyIfEligible(ho2.Ctx, gomock.Any(), layerID, gomock.Any()).
+		Return(eligibility.ErrNotActive)
 	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, gomock.Any(), false)
 	tg.mockPatrol.EXPECT().CompleteHare(layerID)
 	got2, err := tg.processHareOutput(ho2)

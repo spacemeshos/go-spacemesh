@@ -221,7 +221,14 @@ func (c *Certifier) CertifyIfEligible(ctx context.Context, logger log.Log, lid t
 		return err
 	}
 
-	eligibilityCount, err := c.oracle.CalcEligibility(ctx, lid, eligibility.CertifyRound, c.cfg.CommitteeSize, c.nodeID, proof)
+	eligibilityCount, err := c.oracle.CalcEligibility(
+		ctx,
+		lid,
+		eligibility.CertifyRound,
+		c.cfg.CommitteeSize,
+		c.nodeID,
+		proof,
+	)
 	if err != nil {
 		return err
 	}
@@ -366,7 +373,15 @@ func (c *Certifier) validate(ctx context.Context, logger log.Log, msg types.Cert
 	if !c.edVerifier.Verify(signing.HARE, msg.SmesherID, msg.Bytes(), msg.Signature) {
 		return fmt.Errorf("%w: failed to verify signature", errMalformedData)
 	}
-	valid, err := c.oracle.Validate(ctx, msg.LayerID, eligibility.CertifyRound, c.cfg.CommitteeSize, msg.SmesherID, msg.Proof, msg.EligibilityCnt)
+	valid, err := c.oracle.Validate(
+		ctx,
+		msg.LayerID,
+		eligibility.CertifyRound,
+		c.cfg.CommitteeSize,
+		msg.SmesherID,
+		msg.Proof,
+		msg.EligibilityCnt,
+	)
 	if err != nil {
 		logger.With().Warning("failed to validate cert msg", log.Err(err))
 		return err
@@ -433,7 +448,12 @@ func (c *Certifier) tryGenCert(ctx context.Context, logger log.Log, lid types.La
 	return nil
 }
 
-func (c *Certifier) checkAndSave(ctx context.Context, logger log.Log, lid types.LayerID, cert *types.Certificate) error {
+func (c *Certifier) checkAndSave(
+	ctx context.Context,
+	logger log.Log,
+	lid types.LayerID,
+	cert *types.Certificate,
+) error {
 	oldCerts, err := certificates.Get(c.db, lid)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return err
@@ -494,7 +514,12 @@ func (c *Certifier) CertCount() map[types.EpochID]int {
 	return result
 }
 
-func (c *Certifier) save(ctx context.Context, lid types.LayerID, cert *types.Certificate, valid, invalid []types.BlockID) error {
+func (c *Certifier) save(
+	ctx context.Context,
+	lid types.LayerID,
+	cert *types.Certificate,
+	valid, invalid []types.BlockID,
+) error {
 	if len(valid)+len(invalid) == 0 {
 		return certificates.Add(c.db, lid, cert)
 	}

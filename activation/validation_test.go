@@ -289,7 +289,9 @@ func Test_Validation_Post(t *testing.T) {
 	postVerifier.EXPECT().Verify(gomock.Any(), (*shared.Proof)(&post), gomock.Any(), gomock.Any()).Return(nil)
 	require.NoError(t, v.Post(context.Background(), types.EmptyNodeID, types.RandomATXID(), &post, &meta, 1))
 
-	postVerifier.EXPECT().Verify(gomock.Any(), (*shared.Proof)(&post), gomock.Any(), gomock.Any()).Return(errors.New("invalid"))
+	postVerifier.EXPECT().
+		Verify(gomock.Any(), (*shared.Proof)(&post), gomock.Any(), gomock.Any()).
+		Return(errors.New("invalid"))
 	require.Error(t, v.Post(context.Background(), types.EmptyNodeID, types.RandomATXID(), &post, &meta, 1))
 }
 
@@ -424,10 +426,18 @@ func Test_Validate_NumUnits(t *testing.T) {
 		t.Parallel()
 
 		err := v.NumUnits(&postCfg, postCfg.MinNumUnits-1)
-		require.EqualError(t, err, fmt.Sprintf("invalid `numUnits`; expected: >=%d, given: %d", postCfg.MinNumUnits, postCfg.MinNumUnits-1))
+		require.EqualError(
+			t,
+			err,
+			fmt.Sprintf("invalid `numUnits`; expected: >=%d, given: %d", postCfg.MinNumUnits, postCfg.MinNumUnits-1),
+		)
 
 		err = v.NumUnits(&postCfg, postCfg.MaxNumUnits+1)
-		require.EqualError(t, err, fmt.Sprintf("invalid `numUnits`; expected: <=%d, given: %d", postCfg.MaxNumUnits, postCfg.MaxNumUnits+1))
+		require.EqualError(
+			t,
+			err,
+			fmt.Sprintf("invalid `numUnits`; expected: <=%d, given: %d", postCfg.MaxNumUnits, postCfg.MaxNumUnits+1),
+		)
 	})
 }
 
@@ -463,7 +473,15 @@ func Test_Validate_PostMetadata(t *testing.T) {
 		}
 
 		err := v.PostMetadata(&postCfg, meta)
-		require.EqualError(t, err, fmt.Sprintf("invalid `LabelsPerUnit`; expected: >=%d, given: %d", postCfg.LabelsPerUnit, postCfg.LabelsPerUnit-1))
+		require.EqualError(
+			t,
+			err,
+			fmt.Sprintf(
+				"invalid `LabelsPerUnit`; expected: >=%d, given: %d",
+				postCfg.LabelsPerUnit,
+				postCfg.LabelsPerUnit-1,
+			),
+		)
 	})
 }
 

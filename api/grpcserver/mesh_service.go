@@ -117,7 +117,10 @@ func (s MeshService) LayerDuration(context.Context, *pb.LayerDurationRequest) (*
 }
 
 // MaxTransactionsPerSecond returns the max number of tx per sec (a network parameter).
-func (s MeshService) MaxTransactionsPerSecond(context.Context, *pb.MaxTransactionsPerSecondRequest) (*pb.MaxTransactionsPerSecondResponse, error) {
+func (s MeshService) MaxTransactionsPerSecond(
+	context.Context,
+	*pb.MaxTransactionsPerSecondRequest,
+) (*pb.MaxTransactionsPerSecondResponse, error) {
 	return &pb.MaxTransactionsPerSecondResponse{MaxTxsPerSecond: &pb.SimpleInt{
 		Value: uint64(s.txsPerProposal * s.layerAvgSize / uint32(s.layerDuration.Seconds())),
 	}}, nil
@@ -125,7 +128,10 @@ func (s MeshService) MaxTransactionsPerSecond(context.Context, *pb.MaxTransactio
 
 // QUERIES
 
-func (s MeshService) getFilteredTransactions(from types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
+func (s MeshService) getFilteredTransactions(
+	from types.LayerID,
+	address types.Address,
+) ([]*types.MeshTransaction, error) {
 	latest := s.mesh.LatestLayer()
 	txs, err := s.conState.GetTransactionsByAddress(from, latest, address)
 	if err != nil {
@@ -150,7 +156,12 @@ func (s MeshService) getFilteredActivations(
 			if b.EpochData != nil {
 				actives, err := activesets.Get(s.cdb, b.EpochData.ActiveSetHash)
 				if err != nil {
-					return nil, status.Errorf(codes.Internal, "error retrieving active set %s (%s)", b.ID().String(), b.EpochData.ActiveSetHash.ShortString())
+					return nil, status.Errorf(
+						codes.Internal,
+						"error retrieving active set %s (%s)",
+						b.ID().String(),
+						b.EpochData.ActiveSetHash.ShortString(),
+					)
 				}
 				atxids = append(atxids, actives.Set...)
 			}
@@ -173,7 +184,10 @@ func (s MeshService) getFilteredActivations(
 }
 
 // AccountMeshDataQuery returns account data.
-func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMeshDataQueryRequest) (*pb.AccountMeshDataQueryResponse, error) {
+func (s MeshService) AccountMeshDataQuery(
+	ctx context.Context,
+	in *pb.AccountMeshDataQueryRequest,
+) (*pb.AccountMeshDataQueryResponse, error) {
 	var startLayer types.LayerID
 	if in.MinLayer != nil {
 		startLayer = types.LayerID(in.MinLayer.Number)
@@ -194,7 +208,9 @@ func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMes
 
 	// Read the filter flags
 	filterTx := in.Filter.AccountMeshDataFlags&uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_TRANSACTIONS) != 0
-	filterActivations := in.Filter.AccountMeshDataFlags&uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS) != 0
+	filterActivations := in.Filter.AccountMeshDataFlags&uint32(
+		pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS,
+	) != 0
 
 	// Gather transaction data
 	addr, err := types.StringToAddress(in.Filter.AccountId.Address)
@@ -308,7 +324,11 @@ func convertActivation(a *types.VerifiedActivationTx) *pb.Activation {
 	}
 }
 
-func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layerStatus pb.Layer_LayerStatus) (*pb.Layer, error) {
+func (s MeshService) readLayer(
+	ctx context.Context,
+	layerID types.LayerID,
+	layerStatus pb.Layer_LayerStatus,
+) (*pb.Layer, error) {
 	// Load all block data
 	var blocks []*pb.Block
 
@@ -355,7 +375,12 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 		if b.EpochData != nil {
 			actives, err := activesets.Get(s.cdb, b.EpochData.ActiveSetHash)
 			if err != nil && !errors.Is(err, sql.ErrNotFound) {
-				return nil, status.Errorf(codes.Internal, "error retrieving active set %s (%s)", b.ID().String(), b.EpochData.ActiveSetHash.ShortString())
+				return nil, status.Errorf(
+					codes.Internal,
+					"error retrieving active set %s (%s)",
+					b.ID().String(),
+					b.EpochData.ActiveSetHash.ShortString(),
+				)
 			}
 			if actives != nil {
 				activations = append(activations, actives.Set...)
@@ -457,7 +482,10 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 // STREAMS
 
 // AccountMeshDataStream exposes a stream of transactions and activations for an account.
-func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, stream pb.MeshService_AccountMeshDataStreamServer) error {
+func (s MeshService) AccountMeshDataStream(
+	in *pb.AccountMeshDataStreamRequest,
+	stream pb.MeshService_AccountMeshDataStreamServer,
+) error {
 	if in.Filter == nil {
 		return status.Errorf(codes.InvalidArgument, "`Filter` must be provided")
 	}
@@ -474,7 +502,9 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 
 	// Read the filter flags
 	filterTx := in.Filter.AccountMeshDataFlags&uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_TRANSACTIONS) != 0
-	filterActivations := in.Filter.AccountMeshDataFlags&uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS) != 0
+	filterActivations := in.Filter.AccountMeshDataFlags&uint32(
+		pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS,
+	) != 0
 
 	// Subscribe to the stream of transactions and activations
 	var (
@@ -490,7 +520,10 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 	}
 	if filterActivations {
 		if activationsSubscription := events.SubscribeActivations(); activationsSubscription != nil {
-			activationsCh, activationsBufFull = consumeEvents[events.ActivationTx](stream.Context(), activationsSubscription)
+			activationsCh, activationsBufFull = consumeEvents[events.ActivationTx](
+				stream.Context(),
+				activationsSubscription,
+			)
 		}
 	}
 
@@ -626,7 +659,10 @@ func (s MeshService) EpochStream(req *pb.EpochStreamRequest, stream pb.MeshServi
 	return nil
 }
 
-func (s MeshService) MalfeasanceQuery(ctx context.Context, req *pb.MalfeasanceRequest) (*pb.MalfeasanceResponse, error) {
+func (s MeshService) MalfeasanceQuery(
+	ctx context.Context,
+	req *pb.MalfeasanceRequest,
+) (*pb.MalfeasanceResponse, error) {
 	parsed, err := hex.DecodeString(req.SmesherHex)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
@@ -645,7 +681,10 @@ func (s MeshService) MalfeasanceQuery(ctx context.Context, req *pb.MalfeasanceRe
 	}, nil
 }
 
-func (s MeshService) MalfeasanceStream(req *pb.MalfeasanceStreamRequest, stream pb.MeshService_MalfeasanceStreamServer) error {
+func (s MeshService) MalfeasanceStream(
+	req *pb.MalfeasanceStreamRequest,
+	stream pb.MeshService_MalfeasanceStreamServer,
+) error {
 	sub := events.SubscribeMalfeasance()
 	if sub == nil {
 		return status.Errorf(codes.FailedPrecondition, "event reporting is not enabled")

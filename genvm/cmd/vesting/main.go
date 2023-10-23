@@ -42,7 +42,11 @@ func main() {
 		Total:    *total,
 	})
 	if *debug {
-		fmt.Printf("vesting address: %s.\nparameters: %s", output.Debug.VestingAddress, output.Debug.VestingArgs.String())
+		fmt.Printf(
+			"vesting address: %s.\nparameters: %s",
+			output.Debug.VestingAddress,
+			output.Debug.VestingArgs.String(),
+		)
 		fmt.Println("---")
 		fmt.Printf("vault address: %s.\nparameters: %s\n", output.Debug.VaultAddress, output.Debug.VaultArgs.String())
 	} else {

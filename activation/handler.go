@@ -178,7 +178,10 @@ func (h *Handler) SyntacticallyValidate(ctx context.Context, atx *types.Activati
 	return nil
 }
 
-func (h *Handler) SyntacticallyValidateDeps(ctx context.Context, atx *types.ActivationTx) (*types.VerifiedActivationTx, error) {
+func (h *Handler) SyntacticallyValidateDeps(
+	ctx context.Context,
+	atx *types.ActivationTx,
+) (*types.VerifiedActivationTx, error) {
 	var (
 		commitmentATX *types.ATXID
 		err           error
@@ -209,9 +212,18 @@ func (h *Handler) SyntacticallyValidateDeps(ctx context.Context, atx *types.Acti
 	}
 
 	expectedChallengeHash := atx.NIPostChallenge.Hash()
-	h.log.WithContext(ctx).With().Info("validating nipost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
+	h.log.WithContext(ctx).
+		With().
+		Info("validating nipost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
 
-	leaves, err := h.nipostValidator.NIPost(ctx, atx.SmesherID, *commitmentATX, atx.NIPost, expectedChallengeHash, atx.NumUnits)
+	leaves, err := h.nipostValidator.NIPost(
+		ctx,
+		atx.SmesherID,
+		*commitmentATX,
+		atx.NIPost,
+		expectedChallengeHash,
+		atx.NumUnits,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("invalid nipost: %w", err)
 	}
@@ -289,7 +301,11 @@ func (h *Handler) ContextuallyValidateAtx(atx *types.VerifiedActivationTx) error
 
 	if err == nil && atx.PrevATXID == types.EmptyATXID {
 		// no previous atx declared, but already seen at least one atx from node
-		return fmt.Errorf("no prev atx reported, but other atx with same node id (%v) found: %v", atx.SmesherID, lastAtx.ShortString())
+		return fmt.Errorf(
+			"no prev atx reported, but other atx with same node id (%v) found: %v",
+			atx.SmesherID,
+			lastAtx.ShortString(),
+		)
 	}
 
 	if err == nil && atx.PrevATXID != lastAtx {
@@ -488,7 +504,12 @@ func (h *Handler) handleAtx(ctx context.Context, expHash types.Hash32, peer p2p.
 	}
 
 	if expHash != (types.Hash32{}) && vAtx.ID().Hash32() != expHash {
-		return fmt.Errorf("%w: atx want %s, got %s", errWrongHash, expHash.ShortString(), vAtx.ID().Hash32().ShortString())
+		return fmt.Errorf(
+			"%w: atx want %s, got %s",
+			errWrongHash,
+			expHash.ShortString(),
+			vAtx.ID().Hash32().ShortString(),
+		)
 	}
 
 	if err := h.ProcessAtx(ctx, vAtx); err != nil {

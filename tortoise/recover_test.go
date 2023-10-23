@@ -92,7 +92,13 @@ func TestRecoverWithOpinion(t *testing.T) {
 		}
 		last = rst
 	}
-	tortoise, err := Recover(context.Background(), s.GetState(0).DB, last.Layer, WithLogger(logtest.New(t)), WithConfig(cfg))
+	tortoise, err := Recover(
+		context.Background(),
+		s.GetState(0).DB,
+		last.Layer,
+		WithLogger(logtest.New(t)),
+		WithConfig(cfg),
+	)
 	require.NoError(t, err)
 	require.NotNil(t, tortoise)
 	updates := tortoise.Updates()

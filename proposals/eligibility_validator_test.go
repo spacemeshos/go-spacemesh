@@ -17,7 +17,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
-func gatx(id types.ATXID, epoch types.EpochID, smesher types.NodeID, units uint32, nonce types.VRFPostIndex) types.VerifiedActivationTx {
+func gatx(
+	id types.ATXID,
+	epoch types.EpochID,
+	smesher types.NodeID,
+	units uint32,
+	nonce types.VRFPostIndex,
+) types.VerifiedActivationTx {
 	atx := &types.ActivationTx{}
 	atx.NumUnits = units
 	atx.PublishEpoch = epoch
@@ -33,7 +39,13 @@ func gatx(id types.ATXID, epoch types.EpochID, smesher types.NodeID, units uint3
 	return *verified
 }
 
-func gatxZeroHeight(id types.ATXID, epoch types.EpochID, smesher types.NodeID, units uint32, nonce types.VRFPostIndex) types.VerifiedActivationTx {
+func gatxZeroHeight(
+	id types.ATXID,
+	epoch types.EpochID,
+	smesher types.NodeID,
+	units uint32,
+	nonce types.VRFPostIndex,
+) types.VerifiedActivationTx {
 	atx := &types.ActivationTx{}
 	atx.NumUnits = units
 	atx.PublishEpoch = epoch
@@ -561,8 +573,16 @@ func TestEligibilityValidator(t *testing.T) {
 
 			lg := logtest.New(t)
 			db := datastore.NewCachedDB(sql.InMemory(), lg)
-			tv := NewEligibilityValidator(layerAvgSize, layersPerEpoch, []types.EpochMinimalActiveWeight{{Weight: tc.minWeight}}, ms.mclock, ms.md,
-				db, ms.mbc, lg, ms.mvrf,
+			tv := NewEligibilityValidator(
+				layerAvgSize,
+				layersPerEpoch,
+				[]types.EpochMinimalActiveWeight{{Weight: tc.minWeight}},
+				ms.mclock,
+				ms.md,
+				db,
+				ms.mbc,
+				lg,
+				ms.mvrf,
 				WithNonceFetcher(db),
 			)
 			for _, atx := range tc.atxs {
@@ -572,7 +592,8 @@ func TestEligibilityValidator(t *testing.T) {
 				ballots[ballot.ID()] = &ballot
 			}
 			if !tc.fail {
-				ms.mbc.EXPECT().ReportBeaconFromBallot(tc.executed.Layer.GetEpoch(), &tc.executed, gomock.Any(), gomock.Any())
+				ms.mbc.EXPECT().
+					ReportBeaconFromBallot(tc.executed.Layer.GetEpoch(), &tc.executed, gomock.Any(), gomock.Any())
 			}
 			rst, err := tv.CheckEligibility(context.Background(), &tc.executed, tc.actives)
 			assert.Equal(t, !tc.fail, rst)

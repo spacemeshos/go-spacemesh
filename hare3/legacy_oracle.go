@@ -44,7 +44,12 @@ func (lg *legacyOracle) validate(msg *Message) grade {
 	return grade5
 }
 
-func (lg *legacyOracle) active(signer *signing.EdSigner, beacon types.Beacon, layer types.LayerID, ir IterRound) *types.HareEligibility {
+func (lg *legacyOracle) active(
+	signer *signing.EdSigner,
+	beacon types.Beacon,
+	layer types.LayerID,
+	ir IterRound,
+) *types.HareEligibility {
 	vrf := lg.oracle.GenVRF(context.Background(), signer.VRFSigner(), beacon, layer, ir.Absolute())
 	committee := int(lg.config.Committee)
 	if ir.Round == propose {

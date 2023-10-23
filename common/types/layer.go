@@ -156,7 +156,10 @@ type Layer struct {
 
 // Field returns a log field. Implements the LoggableField interface.
 func (l *Layer) Field() log.Field {
-	return log.String("layer", fmt.Sprintf("layer_id %d num_ballot %d num_blocks %d", l.index, len(l.ballots), len(l.blocks)))
+	return log.String(
+		"layer",
+		fmt.Sprintf("layer_id %d num_ballot %d num_blocks %d", l.index, len(l.ballots), len(l.blocks)),
+	)
 }
 
 // Index returns the layer's ID.

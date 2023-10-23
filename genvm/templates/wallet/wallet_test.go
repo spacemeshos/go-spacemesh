@@ -54,6 +54,9 @@ func TestVerify(t *testing.T) {
 		empty := types.Hash20{}
 		body := core.SigningBody(empty[:], msg)
 		sig := ed25519.Sign(pk, body[:])
-		require.True(t, wallet.Verify(&core.Context{GenesisID: empty}, append(msg, sig...), scale.NewDecoder(bytes.NewReader(sig))))
+		require.True(
+			t,
+			wallet.Verify(&core.Context{GenesisID: empty}, append(msg, sig...), scale.NewDecoder(bytes.NewReader(sig))),
+		)
 	})
 }

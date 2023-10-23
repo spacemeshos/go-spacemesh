@@ -188,7 +188,15 @@ func (n *node) withOracle() *node {
 	beaconget.EXPECT().GetBeacon(gomock.Any()).DoAndReturn(func(epoch types.EpochID) (types.Beacon, error) {
 		return beacons.Get(n.db, epoch)
 	}).AnyTimes()
-	n.oracle = eligibility.New(beaconget, n.db, signing.NewVRFVerifier(), n.vrfsigner, layersPerEpoch, config.DefaultConfig(), log.NewNop())
+	n.oracle = eligibility.New(
+		beaconget,
+		n.db,
+		signing.NewVRFVerifier(),
+		n.vrfsigner,
+		layersPerEpoch,
+		config.DefaultConfig(),
+		log.NewNop(),
+	)
 	return n
 }
 
@@ -416,12 +424,15 @@ func (cl *lockstepCluster) setup() {
 			require.NoError(cl.t, atxs.Add(n.db, other.atx))
 		}
 		n.oracle.UpdateActiveSet(cl.t.genesis.GetEpoch()+1, active)
-		n.mpublisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ctx context.Context, _ string, msg []byte) error {
-			for _, other := range cl.nodes {
-				other.hare.Handler(ctx, "self", msg)
-			}
-			return nil
-		}).AnyTimes()
+		n.mpublisher.EXPECT().
+			Publish(gomock.Any(), gomock.Any(), gomock.Any()).
+			Do(func(ctx context.Context, _ string, msg []byte) error {
+				for _, other := range cl.nodes {
+					other.hare.Handler(ctx, "self", msg)
+				}
+				return nil
+			}).
+			AnyTimes()
 	}
 }
 
@@ -748,7 +759,13 @@ func gatx(id types.ATXID, epoch types.EpochID, smesher types.NodeID, base, heigh
 	return *verified
 }
 
-func gproposal(id types.ProposalID, atxid types.ATXID, smesher types.NodeID, layer types.LayerID, beacon types.Beacon) types.Proposal {
+func gproposal(
+	id types.ProposalID,
+	atxid types.ATXID,
+	smesher types.NodeID,
+	layer types.LayerID,
+	beacon types.Beacon,
+) types.Proposal {
 	proposal := types.Proposal{}
 	proposal.Layer = layer
 	proposal.EpochData = &types.EpochData{
@@ -762,7 +779,13 @@ func gproposal(id types.ProposalID, atxid types.ATXID, smesher types.NodeID, lay
 	return proposal
 }
 
-func gref(id types.ProposalID, atxid types.ATXID, smesher types.NodeID, layer types.LayerID, ref types.ProposalID) types.Proposal {
+func gref(
+	id types.ProposalID,
+	atxid types.ATXID,
+	smesher types.NodeID,
+	layer types.LayerID,
+	ref types.ProposalID,
+) types.Proposal {
 	proposal := types.Proposal{}
 	proposal.Layer = layer
 	proposal.RefBallot = types.BallotID(ref)

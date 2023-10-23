@@ -20,7 +20,12 @@ func WithReceived(received time.Time) MeshTransactionOption {
 	}
 }
 
-func createMeshTX(t *testing.T, signer *signing.EdSigner, lid types.LayerID, opts ...MeshTransactionOption) *types.MeshTransaction {
+func createMeshTX(
+	t *testing.T,
+	signer *signing.EdSigner,
+	lid types.LayerID,
+	opts ...MeshTransactionOption,
+) *types.MeshTransaction {
 	t.Helper()
 	nonce := uint64(223)
 	amount := uint64(rand.Int())

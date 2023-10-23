@@ -163,11 +163,11 @@ type Votes struct {
 	// Base ballot.
 	Base BallotID `json:"base"`
 	// Support block id at a particular layer and height.
-	Support []Vote `scale:"max=10000" json:"support,omitempty"` // sliding vote window size is 10k layers, vote for one block per layer
+	Support []Vote `json:"support,omitempty" scale:"max=10000"` // sliding vote window size is 10k layers, vote for one block per layer
 	// Against previously supported block.
-	Against []Vote `scale:"max=10000" json:"against,omitempty"` // sliding vote window size is 10k layers, vote for one block per layer
+	Against []Vote `json:"against,omitempty" scale:"max=10000"` // sliding vote window size is 10k layers, vote for one block per layer
 	// Abstain on layers until they are terminated.
-	Abstain []LayerID `scale:"max=10000" json:"abstain,omitempty"` // sliding vote window size is 10k layers, vote to abstain on any layer
+	Abstain []LayerID `json:"abstain,omitempty" scale:"max=10000"` // sliding vote window size is 10k layers, vote to abstain on any layer
 }
 
 // MarshalLogObject implements logging interface.
@@ -215,7 +215,7 @@ type Vote = BlockHeader
 // Opinion is a tuple from opinion hash and votes that decode to opinion hash.
 type Opinion struct {
 	Hash  Hash32 `json:"hash"`
-	Votes `json:",inline"`
+	Votes `       json:",inline"`
 }
 
 // MarshalLogObject implements logging interface.

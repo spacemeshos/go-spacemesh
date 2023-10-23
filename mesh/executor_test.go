@@ -353,15 +353,17 @@ func TestExecutor_ExecuteOptimistic(t *testing.T) {
 			},
 		}
 		expBlock.Initialize()
-		te.mcs.EXPECT().UpdateCache(gomock.Any(), expBlock.LayerIndex, expBlock.ID(), gomock.Any(), gomock.Any()).DoAndReturn(
-			func(_ context.Context, _ types.LayerID, gotBid types.BlockID, gotExecuted []types.TransactionWithResult, gotIneffective []types.Transaction) error {
-				require.Equal(t, executed, gotExecuted)
-				require.Equal(t, ineffective, gotIneffective)
-				for _, tr := range gotExecuted {
-					require.Equal(t, tr.Block, gotBid)
-				}
-				return nil
-			})
+		te.mcs.EXPECT().
+			UpdateCache(gomock.Any(), expBlock.LayerIndex, expBlock.ID(), gomock.Any(), gomock.Any()).
+			DoAndReturn(
+				func(_ context.Context, _ types.LayerID, gotBid types.BlockID, gotExecuted []types.TransactionWithResult, gotIneffective []types.Transaction) error {
+					require.Equal(t, executed, gotExecuted)
+					require.Equal(t, ineffective, gotIneffective)
+					for _, tr := range gotExecuted {
+						require.Equal(t, tr.Block, gotBid)
+					}
+					return nil
+				})
 		te.mvm.EXPECT().GetStateRoot()
 		block, err := te.exec.ExecuteOptimistic(context.Background(), lid, tickHeight, rewards, tids)
 		require.NoError(t, err)

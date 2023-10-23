@@ -22,7 +22,13 @@ type statusTracker struct {
 	tally             *CountInfo
 }
 
-func newStatusTracker(logger log.Log, round uint32, mch chan<- *types.MalfeasanceGossip, et *EligibilityTracker, threshold, expectedSize int) *statusTracker {
+func newStatusTracker(
+	logger log.Log,
+	round uint32,
+	mch chan<- *types.MalfeasanceGossip,
+	et *EligibilityTracker,
+	threshold, expectedSize int,
+) *statusTracker {
 	return &statusTracker{
 		logger:            logger,
 		malCh:             mch,

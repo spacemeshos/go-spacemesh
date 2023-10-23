@@ -107,7 +107,11 @@ func (m *MeshAPIMock) LatestLayerInState() types.LayerID                 { panic
 func (m *MeshAPIMock) ProcessedLayer() types.LayerID                     { panic("not implemented") }
 func (m *MeshAPIMock) GetRewards(types.Address) ([]*types.Reward, error) { panic("not implemented") }
 func (m *MeshAPIMock) GetLayer(types.LayerID) (*types.Layer, error)      { panic("not implemented") }
-func (m *MeshAPIMock) GetATXs(context.Context, []types.ATXID) (map[types.ATXID]*types.VerifiedActivationTx, []types.ATXID) {
+
+func (m *MeshAPIMock) GetATXs(
+	context.Context,
+	[]types.ATXID,
+) (map[types.ATXID]*types.VerifiedActivationTx, []types.ATXID) {
 	panic("not implemented")
 }
 func (m *MeshAPIMock) MeshHash(types.LayerID) (types.Hash32, error) { panic("not implemented") }

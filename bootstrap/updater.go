@@ -267,7 +267,11 @@ func makeUri(url string, epoch types.EpochID, suffix string) string {
 	return fmt.Sprintf("%s/%s", url, UpdateName(epoch, suffix))
 }
 
-func (u *Updater) checkEpochUpdate(ctx context.Context, epoch types.EpochID, suffix string) (*VerifiedUpdate, bool, error) {
+func (u *Updater) checkEpochUpdate(
+	ctx context.Context,
+	epoch types.EpochID,
+	suffix string,
+) (*VerifiedUpdate, bool, error) {
 	uri := makeUri(u.cfg.URL, epoch, suffix)
 	if u.Downloaded(epoch, suffix) {
 		return nil, true, nil

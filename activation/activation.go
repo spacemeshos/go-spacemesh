@@ -383,7 +383,8 @@ func (b *Builder) verifyInitialPost(ctx context.Context, post *types.Post, metad
 		return err
 	case err != nil:
 		events.EmitInvalidPostProof()
-		b.log.With().Fatal("initial POST proof is invalid. Probably the initialized POST data is corrupted. Please verify the data with postcli and regenerate the corrupted files.", log.Err(err))
+		b.log.With().
+			Fatal("initial POST proof is invalid. Probably the initialized POST data is corrupted. Please verify the data with postcli and regenerate the corrupted files.", log.Err(err))
 		return err
 	default:
 		b.initialPost = post
@@ -432,7 +433,9 @@ func (b *Builder) loop(ctx context.Context) {
 			case <-b.layerClock.AwaitLayer(currentLayer.Add(1)):
 			}
 		case errors.Is(err, ErrPoetServiceUnstable):
-			b.log.WithContext(ctx).With().Warning("retrying after poet retry interval", log.Duration("interval", b.poetRetryInterval))
+			b.log.WithContext(ctx).
+				With().
+				Warning("retrying after poet retry interval", log.Duration("interval", b.poetRetryInterval))
 			select {
 			case <-ctx.Done():
 				return
@@ -470,7 +473,12 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 	until := time.Until(b.poetRoundStart(current))
 	if until <= 0 {
 		metrics.PublishLateWindowLatency.Observe(-until.Seconds())
-		return nil, fmt.Errorf("%w: builder cannot to submit in epoch %d. poet round already started %v ago", ErrATXChallengeExpired, current, -until)
+		return nil, fmt.Errorf(
+			"%w: builder cannot to submit in epoch %d. poet round already started %v ago",
+			ErrATXChallengeExpired,
+			current,
+			-until,
+		)
 	}
 	metrics.PublishOntimeWindowLatency.Observe(until.Seconds())
 	wait := buildNipostChallengeStartDeadline(b.poetRoundStart(current), b.poetCfg.GracePeriod)
@@ -540,7 +548,9 @@ func (b *Builder) UpdatePoETServers(ctx context.Context, endpoints []string) err
 		if err != nil {
 			return &PoetSvcUnstableError{source: fmt.Errorf("failed to query poet '%s' for ID: %w", endpoint, err)}
 		}
-		b.log.WithContext(ctx).With().Debug("preparing to update poet service", log.String("poet_id", hex.EncodeToString(sid.ServiceID)))
+		b.log.WithContext(ctx).
+			With().
+			Debug("preparing to update poet service", log.String("poet_id", hex.EncodeToString(sid.ServiceID)))
 		clients = append(clients, client)
 	}
 

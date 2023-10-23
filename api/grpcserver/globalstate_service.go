@@ -46,7 +46,10 @@ func NewGlobalStateService(msh meshAPI, conState conservativeState) *GlobalState
 }
 
 // GlobalStateHash returns the latest layer and its computed global state hash.
-func (s GlobalStateService) GlobalStateHash(context.Context, *pb.GlobalStateHashRequest) (*pb.GlobalStateHashResponse, error) {
+func (s GlobalStateService) GlobalStateHash(
+	context.Context,
+	*pb.GlobalStateHashRequest,
+) (*pb.GlobalStateHashResponse, error) {
 	root, err := s.conState.GetStateRoot()
 	if err != nil {
 		return nil, err
@@ -109,7 +112,10 @@ func (s GlobalStateService) Account(ctx context.Context, in *pb.AccountRequest) 
 }
 
 // AccountDataQuery returns historical account data such as rewards and receipts.
-func (s GlobalStateService) AccountDataQuery(ctx context.Context, in *pb.AccountDataQueryRequest) (*pb.AccountDataQueryResponse, error) {
+func (s GlobalStateService) AccountDataQuery(
+	ctx context.Context,
+	in *pb.AccountDataQueryRequest,
+) (*pb.AccountDataQueryResponse, error) {
 	if in.Filter == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "`Filter` must be provided")
 	}
@@ -197,14 +203,20 @@ func (s GlobalStateService) AccountDataQuery(ctx context.Context, in *pb.Account
 }
 
 // SmesherDataQuery returns historical info on smesher rewards.
-func (s GlobalStateService) SmesherDataQuery(_ context.Context, in *pb.SmesherDataQueryRequest) (*pb.SmesherDataQueryResponse, error) {
+func (s GlobalStateService) SmesherDataQuery(
+	_ context.Context,
+	in *pb.SmesherDataQueryRequest,
+) (*pb.SmesherDataQueryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "DEPRECATED")
 }
 
 // STREAMS
 
 // AccountDataStream exposes a stream of account-related data.
-func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, stream pb.GlobalStateService_AccountDataStreamServer) error {
+func (s GlobalStateService) AccountDataStream(
+	in *pb.AccountDataStreamRequest,
+	stream pb.GlobalStateService_AccountDataStreamServer,
+) error {
 	if in.Filter == nil {
 		return status.Errorf(codes.InvalidArgument, "`Filter` must be provided")
 	}
@@ -321,12 +333,18 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 }
 
 // SmesherRewardStream exposes a stream of smesher rewards.
-func (s GlobalStateService) SmesherRewardStream(in *pb.SmesherRewardStreamRequest, stream pb.GlobalStateService_SmesherRewardStreamServer) error {
+func (s GlobalStateService) SmesherRewardStream(
+	in *pb.SmesherRewardStreamRequest,
+	stream pb.GlobalStateService_SmesherRewardStreamServer,
+) error {
 	return status.Errorf(codes.Unimplemented, "DEPRECATED")
 }
 
 // AppEventStream exposes a stream of emitted app events.
-func (s GlobalStateService) AppEventStream(*pb.AppEventStreamRequest, pb.GlobalStateService_AppEventStreamServer) error {
+func (s GlobalStateService) AppEventStream(
+	*pb.AppEventStreamRequest,
+	pb.GlobalStateService_AppEventStreamServer,
+) error {
 	// TODO: implement me! We don't currently have any app events
 	// See https://github.com/spacemeshos/go-spacemesh/issues/2074
 
@@ -334,7 +352,10 @@ func (s GlobalStateService) AppEventStream(*pb.AppEventStreamRequest, pb.GlobalS
 }
 
 // GlobalStateStream exposes a stream of global data data items: rewards, receipts, account info, global state hash.
-func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, stream pb.GlobalStateService_GlobalStateStreamServer) error {
+func (s GlobalStateService) GlobalStateStream(
+	in *pb.GlobalStateStreamRequest,
+	stream pb.GlobalStateService_GlobalStateStreamServer,
+) error {
 	if in.GlobalStateDataFlags == uint32(pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_UNSPECIFIED) {
 		return status.Errorf(codes.InvalidArgument, "`GlobalStateDataFlags` must set at least one bitfield")
 	}

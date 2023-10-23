@@ -52,7 +52,13 @@ func TestValidator_Validate(t *testing.T) {
 		RequestRetryDelay: epoch / 50,
 		MaxRequestRetries: 10,
 	}
-	poetProver := spawnPoet(t, WithGenesis(time.Now()), WithEpochDuration(epoch), WithPhaseShift(poetCfg.PhaseShift), WithCycleGap(poetCfg.CycleGap))
+	poetProver := spawnPoet(
+		t,
+		WithGenesis(time.Now()),
+		WithEpochDuration(epoch),
+		WithPhaseShift(poetCfg.PhaseShift),
+		WithCycleGap(poetCfg.CycleGap),
+	)
 
 	mclock := activation.NewMocklayerClock(ctrl)
 	mclock.EXPECT().LayerToTime(gomock.Any()).AnyTimes().DoAndReturn(
@@ -105,7 +111,14 @@ func TestValidator_Validate(t *testing.T) {
 	_, err = v.NIPost(context.Background(), sig.NodeID(), goldenATX, nipost, challengeHash, mgr.LastOpts().NumUnits)
 	require.NoError(t, err)
 
-	_, err = v.NIPost(context.Background(), sig.NodeID(), goldenATX, nipost, types.BytesToHash([]byte("lerner")), mgr.LastOpts().NumUnits)
+	_, err = v.NIPost(
+		context.Background(),
+		sig.NodeID(),
+		goldenATX,
+		nipost,
+		types.BytesToHash([]byte("lerner")),
+		mgr.LastOpts().NumUnits,
+	)
 	require.ErrorContains(t, err, "invalid membership proof")
 
 	newNIPost := *nipost
@@ -117,17 +130,33 @@ func TestValidator_Validate(t *testing.T) {
 	newPostCfg.MinNumUnits = mgr.LastOpts().NumUnits + 1
 	v = activation.NewValidator(poetDb, newPostCfg, mgr.LastOpts().Scrypt, nil)
 	_, err = v.NIPost(context.Background(), sig.NodeID(), goldenATX, nipost, challengeHash, mgr.LastOpts().NumUnits)
-	require.EqualError(t, err, fmt.Sprintf("invalid `numUnits`; expected: >=%d, given: %d", newPostCfg.MinNumUnits, mgr.LastOpts().NumUnits))
+	require.EqualError(
+		t,
+		err,
+		fmt.Sprintf("invalid `numUnits`; expected: >=%d, given: %d", newPostCfg.MinNumUnits, mgr.LastOpts().NumUnits),
+	)
 
 	newPostCfg = mgr.Config()
 	newPostCfg.MaxNumUnits = mgr.LastOpts().NumUnits - 1
 	v = activation.NewValidator(poetDb, newPostCfg, mgr.LastOpts().Scrypt, nil)
 	_, err = v.NIPost(context.Background(), sig.NodeID(), goldenATX, nipost, challengeHash, mgr.LastOpts().NumUnits)
-	require.EqualError(t, err, fmt.Sprintf("invalid `numUnits`; expected: <=%d, given: %d", newPostCfg.MaxNumUnits, mgr.LastOpts().NumUnits))
+	require.EqualError(
+		t,
+		err,
+		fmt.Sprintf("invalid `numUnits`; expected: <=%d, given: %d", newPostCfg.MaxNumUnits, mgr.LastOpts().NumUnits),
+	)
 
 	newPostCfg = mgr.Config()
 	newPostCfg.LabelsPerUnit = nipost.PostMetadata.LabelsPerUnit + 1
 	v = activation.NewValidator(poetDb, newPostCfg, mgr.LastOpts().Scrypt, nil)
 	_, err = v.NIPost(context.Background(), sig.NodeID(), goldenATX, nipost, challengeHash, mgr.LastOpts().NumUnits)
-	require.EqualError(t, err, fmt.Sprintf("invalid `LabelsPerUnit`; expected: >=%d, given: %d", newPostCfg.LabelsPerUnit, nipost.PostMetadata.LabelsPerUnit))
+	require.EqualError(
+		t,
+		err,
+		fmt.Sprintf(
+			"invalid `LabelsPerUnit`; expected: >=%d, given: %d",
+			newPostCfg.LabelsPerUnit,
+			nipost.PostMetadata.LabelsPerUnit,
+		),
+	)
 }

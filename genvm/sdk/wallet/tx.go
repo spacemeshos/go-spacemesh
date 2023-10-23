@@ -33,7 +33,13 @@ func SelfSpawn(pk signing.PrivateKey, nonce core.Nonce, opts ...sdk.Opt) []byte 
 }
 
 // Spawn creates a spawn transaction.
-func Spawn(pk signing.PrivateKey, template core.Address, args scale.Encodable, nonce core.Nonce, opts ...sdk.Opt) []byte {
+func Spawn(
+	pk signing.PrivateKey,
+	template core.Address,
+	args scale.Encodable,
+	nonce core.Nonce,
+	opts ...sdk.Opt,
+) []byte {
 	options := sdk.Defaults()
 	for _, opt := range opts {
 		opt(options)

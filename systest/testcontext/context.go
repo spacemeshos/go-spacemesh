@@ -37,8 +37,16 @@ const (
 )
 
 var (
-	configname  = flag.String("configname", "", "config map name. if not empty parameters will be loaded from specified configmap")
-	clusters    = flag.Int("clusters", 1, "controls tests parallelization by creating multiple spacemesh clusters at the same time")
+	configname = flag.String(
+		"configname",
+		"",
+		"config map name. if not empty parameters will be loaded from specified configmap",
+	)
+	clusters = flag.Int(
+		"clusters",
+		1,
+		"controls tests parallelization by creating multiple spacemesh clusters at the same time",
+	)
 	logLevel    = zap.LevelFlag("level", zap.InfoLevel, "verbosity of the logger")
 	testTimeout = flag.Duration("test-timeout", 60*time.Minute, "timeout for a single test")
 	labels      = stringSet{}

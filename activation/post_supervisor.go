@@ -71,7 +71,13 @@ type PostSupervisor struct {
 }
 
 // NewPostSupervisor returns a new post service.
-func NewPostSupervisor(logger *zap.Logger, cmdCfg PostSupervisorConfig, postCfg PostConfig, postOpts PostSetupOpts, provingOpts PostProvingOpts) (*PostSupervisor, error) {
+func NewPostSupervisor(
+	logger *zap.Logger,
+	cmdCfg PostSupervisorConfig,
+	postCfg PostConfig,
+	postOpts PostSetupOpts,
+	provingOpts PostProvingOpts,
+) (*PostSupervisor, error) {
 	if _, err := os.Stat(cmdCfg.PostServiceCmd); err != nil {
 		return nil, fmt.Errorf("post service binary not found: %s", cmdCfg.PostServiceCmd)
 	}
@@ -137,7 +143,13 @@ func (ps *PostSupervisor) captureCmdOutput(pipe io.ReadCloser) func() error {
 	}
 }
 
-func (ps *PostSupervisor) runCmd(ctx context.Context, cmdCfg PostSupervisorConfig, postCfg PostConfig, postOpts PostSetupOpts, provingOpts PostProvingOpts) error {
+func (ps *PostSupervisor) runCmd(
+	ctx context.Context,
+	cmdCfg PostSupervisorConfig,
+	postCfg PostConfig,
+	postOpts PostSetupOpts,
+	provingOpts PostProvingOpts,
+) error {
 	for {
 		args := []string{
 			"--address", cmdCfg.NodeAddress,

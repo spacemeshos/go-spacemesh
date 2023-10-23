@@ -105,7 +105,14 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher, miners int, id
 	return tpd
 }
 
-func createATX(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, sig *signing.EdSigner, numUnits uint32, received time.Time) types.ATXID {
+func createATX(
+	tb testing.TB,
+	db *datastore.CachedDB,
+	lid types.LayerID,
+	sig *signing.EdSigner,
+	numUnits uint32,
+	received time.Time,
+) types.ATXID {
 	nonce := types.VRFPostIndex(1)
 	atx := types.NewActivationTx(
 		types.NIPostChallenge{PublishEpoch: lid.GetEpoch()},
@@ -377,7 +384,12 @@ func TestBeaconNotSynced_ReleaseMemory(t *testing.T) {
 	end := start + numEpochsToKeep + 10
 	tpd.mClock.EXPECT().CurrentLayer().Return(start.FirstLayer()).AnyTimes()
 	for eid := start; eid <= end; eid++ {
-		b := types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, start.FirstLayer())
+		b := types.NewExistingBallot(
+			types.RandomBallotID(),
+			types.EmptyEdSignature,
+			types.EmptyNodeID,
+			start.FirstLayer(),
+		)
 		b.EligibilityProofs = []types.VotingEligibility{{J: 1}}
 		tpd.ReportBeaconFromBallot(eid, &b, types.RandomBeacon(), fixed.New64(1))
 		require.ErrorIs(t, tpd.onNewEpoch(context.Background(), eid), errNodeNotSynced)
@@ -422,10 +434,20 @@ func TestBeaconWithMetrics(t *testing.T) {
 			require.NoError(t, tpd.onNewEpoch(context.Background(), layer.GetEpoch()))
 		}
 		thisEpoch := layer.GetEpoch()
-		b := types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, thisEpoch.FirstLayer())
+		b := types.NewExistingBallot(
+			types.RandomBallotID(),
+			types.EmptyEdSignature,
+			types.EmptyNodeID,
+			thisEpoch.FirstLayer(),
+		)
 		b.EligibilityProofs = []types.VotingEligibility{{J: 1}}
 		tpd.recordBeacon(thisEpoch, &b, beacon1, fixed.New64(1))
-		b = types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, thisEpoch.FirstLayer())
+		b = types.NewExistingBallot(
+			types.RandomBallotID(),
+			types.EmptyEdSignature,
+			types.EmptyNodeID,
+			thisEpoch.FirstLayer(),
+		)
 		b.EligibilityProofs = []types.VotingEligibility{{J: 1}}
 		tpd.recordBeacon(thisEpoch, &b, beacon2, fixed.New64(1))
 
@@ -439,7 +461,11 @@ func TestBeaconWithMetrics(t *testing.T) {
 			beacon1.ShortString(), thisEpoch, count,
 			beacon2.ShortString(), thisEpoch, count,
 		)
-		err := testutil.GatherAndCompare(prometheus.DefaultGatherer, strings.NewReader(expected), "spacemesh_beacons_beacon_observed_total")
+		err := testutil.GatherAndCompare(
+			prometheus.DefaultGatherer,
+			strings.NewReader(expected),
+			"spacemesh_beacons_beacon_observed_total",
+		)
 		require.NoError(t, err)
 
 		weight := layer.OrdinalInEpoch() + 1
@@ -452,10 +478,17 @@ func TestBeaconWithMetrics(t *testing.T) {
 			beacon1.ShortString(), thisEpoch, weight,
 			beacon2.ShortString(), thisEpoch, weight,
 		)
-		err = testutil.GatherAndCompare(prometheus.DefaultGatherer, strings.NewReader(expected), "spacemesh_beacons_beacon_observed_weight")
+		err = testutil.GatherAndCompare(
+			prometheus.DefaultGatherer,
+			strings.NewReader(expected),
+			"spacemesh_beacons_beacon_observed_weight",
+		)
 		require.NoError(t, err)
 
-		calcWeightCount, err := testutil.GatherAndCount(prometheus.DefaultGatherer, "spacemesh_beacons_beacon_calculated_weight")
+		calcWeightCount, err := testutil.GatherAndCount(
+			prometheus.DefaultGatherer,
+			"spacemesh_beacons_beacon_calculated_weight",
+		)
 		require.NoError(t, err)
 		require.Zero(t, calcWeightCount)
 	}
@@ -655,7 +688,12 @@ func TestBeacon_ReportBeaconFromBallot(t *testing.T) {
 			mclock.EXPECT().CurrentLayer().Return(epoch.FirstLayer()).AnyTimes()
 			for beacon, weights := range tc.beaconBallots {
 				for _, w := range weights {
-					b := types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, epoch.FirstLayer())
+					b := types.NewExistingBallot(
+						types.RandomBallotID(),
+						types.EmptyEdSignature,
+						types.EmptyNodeID,
+						epoch.FirstLayer(),
+					)
 					b.EligibilityProofs = []types.VotingEligibility{{J: 1}}
 					pd.ReportBeaconFromBallot(epoch, &b, beacon, w)
 				}
@@ -987,7 +1025,13 @@ func TestBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
 			for i := 0; i < tc.wEarly; i++ {
 				signer, err := signing.NewEdSigner()
 				require.NoError(t, err)
-				proposal := buildSignedProposal(context.Background(), logtest.New(t), signer.VRFSigner(), 3, types.VRFPostIndex(1))
+				proposal := buildSignedProposal(
+					context.Background(),
+					logtest.New(t),
+					signer.VRFSigner(),
+					3,
+					types.VRFPostIndex(1),
+				)
 				if checker.PassThreshold(proposal) {
 					numEligible++
 				}
@@ -1056,7 +1100,13 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := buildSignedProposal(context.Background(), logtest.New(t), edSgn.VRFSigner(), tc.epoch, types.VRFPostIndex(1))
+			result := buildSignedProposal(
+				context.Background(),
+				logtest.New(t),
+				edSgn.VRFSigner(),
+				tc.epoch,
+				types.VRFPostIndex(1),
+			)
 			require.Equal(t, tc.result, result)
 		})
 	}

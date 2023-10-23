@@ -92,7 +92,12 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot, 
 			errTargetEpochMismatch, owned.TargetEpoch(), ballot.Layer.GetEpoch())
 	}
 	if ballot.SmesherID != owned.NodeID {
-		return false, fmt.Errorf("%w: public key (%v), ATX node key (%v)", errPublicKeyMismatch, ballot.SmesherID.String(), owned.NodeID)
+		return false, fmt.Errorf(
+			"%w: public key (%v), ATX node key (%v)",
+			errPublicKeyMismatch,
+			ballot.SmesherID.String(),
+			owned.NodeID,
+		)
 	}
 	nonce, err := v.nonceFetcher.VRFNonce(ballot.SmesherID, ballot.Layer.GetEpoch())
 	if err != nil {
@@ -145,7 +150,11 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot, 
 }
 
 // validateReference executed for reference ballots in latest epoch.
-func (v *Validator) validateReference(ballot *types.Ballot, actives []types.ATXID, owned *types.ActivationTxHeader) (*types.EpochData, error) {
+func (v *Validator) validateReference(
+	ballot *types.Ballot,
+	actives []types.ATXID,
+	owned *types.ActivationTxHeader,
+) (*types.EpochData, error) {
 	if ballot.EpochData.Beacon == types.EmptyBeacon {
 		return nil, fmt.Errorf("%w: ref ballot %v", errMissingBeacon, ballot.ID())
 	}
@@ -171,7 +180,12 @@ func (v *Validator) validateReference(ballot *types.Ballot, actives []types.ATXI
 		return nil, err
 	}
 	if ballot.EpochData.EligibilityCount != numEligibleSlots {
-		return nil, fmt.Errorf("%w: expected %v, got: %v", errIncorrectEligCount, numEligibleSlots, ballot.EpochData.EligibilityCount)
+		return nil, fmt.Errorf(
+			"%w: expected %v, got: %v",
+			errIncorrectEligCount,
+			numEligibleSlots,
+			ballot.EpochData.EligibilityCount,
+		)
 	}
 	return ballot.EpochData, nil
 }
@@ -189,7 +203,13 @@ func (v *Validator) validateSecondary(ballot *types.Ballot, owned *types.Activat
 		return nil, fmt.Errorf("ref ballot is missing %v", ballot.RefBallot)
 	}
 	if refdata.ATXID != ballot.AtxID {
-		return nil, fmt.Errorf("ballot (%v/%v) should be sharing atx with a reference ballot (%v/%v)", ballot.ID(), ballot.AtxID, refdata.ID, refdata.ATXID)
+		return nil, fmt.Errorf(
+			"ballot (%v/%v) should be sharing atx with a reference ballot (%v/%v)",
+			ballot.ID(),
+			ballot.AtxID,
+			refdata.ID,
+			refdata.ATXID,
+		)
 	}
 	if refdata.Smesher != ballot.SmesherID {
 		return nil, fmt.Errorf("mismatched smesher id with refballot in ballot %v", ballot.ID())

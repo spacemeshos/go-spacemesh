@@ -58,7 +58,11 @@ func initPost(tb testing.TB, log *zap.Logger, opts activation.PostSetupOpts) typ
 				if status.NumLabelsWritten == uint64(opts.NumUnits)*cfg.LabelsPerUnit {
 					return nil
 				}
-				require.Contains(tb, []activation.PostSetupState{activation.PostSetupStatePrepared, activation.PostSetupStateInProgress}, status.State)
+				require.Contains(
+					tb,
+					[]activation.PostSetupState{activation.PostSetupStatePrepared, activation.PostSetupStateInProgress},
+					status.State,
+				)
 				lastStatus = status
 			}
 		}

@@ -181,7 +181,13 @@ type PostSetupManager struct {
 }
 
 // NewPostSetupManager creates a new instance of PostSetupManager.
-func NewPostSetupManager(id types.NodeID, cfg PostConfig, logger *zap.Logger, db *datastore.CachedDB, goldenATXID types.ATXID) (*PostSetupManager, error) {
+func NewPostSetupManager(
+	id types.NodeID,
+	cfg PostConfig,
+	logger *zap.Logger,
+	db *datastore.CachedDB,
+	goldenATXID types.ATXID,
+) (*PostSetupManager, error) {
 	mgr := &PostSetupManager{
 		id:          id,
 		cfg:         cfg,
@@ -303,7 +309,10 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context) error {
 		mgr.state = PostSetupStateStopped
 		return err
 	case errors.As(err, &errLabelMismatch):
-		mgr.logger.Error("post setup session failed due to an issue with the initialization provider", zap.Error(errLabelMismatch))
+		mgr.logger.Error(
+			"post setup session failed due to an issue with the initialization provider",
+			zap.Error(errLabelMismatch),
+		)
 		mgr.state = PostSetupStateError
 		events.EmitInitFailure(mgr.id, mgr.commitmentAtxId, errLabelMismatch)
 		return nil
@@ -344,7 +353,9 @@ func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSe
 
 	// TODO(mafa): remove this, see https://github.com/spacemeshos/go-spacemesh/issues/4801
 	if opts.ProviderID.Value() != nil && *opts.ProviderID.Value() == -1 {
-		mgr.logger.Warn("DEPRECATED: auto-determining compute provider is deprecated, please specify a valid provider ID in the config file")
+		mgr.logger.Warn(
+			"DEPRECATED: auto-determining compute provider is deprecated, please specify a valid provider ID in the config file",
+		)
 
 		p, err := mgr.bestProvider()
 		if err != nil {
@@ -356,7 +367,8 @@ func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSe
 			zap.String("model", p.Model),
 			zap.Stringer("device type", p.DeviceType),
 		)
-		mgr.logger.Sugar().Warnf("DEPRECATED: please update your config file: {\"smeshing\": {\"smeshing-opts\": {\"smeshing-opts-provider\": %d }}}", p.ID)
+		mgr.logger.Sugar().
+			Warnf("DEPRECATED: please update your config file: {\"smeshing\": {\"smeshing-opts\": {\"smeshing-opts-provider\": %d }}}", p.ID)
 		opts.ProviderID.SetInt64(int64(p.ID))
 	}
 

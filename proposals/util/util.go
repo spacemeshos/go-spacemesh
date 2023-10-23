@@ -30,7 +30,14 @@ func GetNumEligibleSlots(weight, minWeight, totalWeight uint64, committeeSize, l
 	if totalWeight == 0 {
 		return 0, ErrZeroTotalWeight
 	}
-	numEligible := weight * uint64(committeeSize) * uint64(layersPerEpoch) / max(minWeight, totalWeight) // TODO: ensure no overflow
+	numEligible := weight * uint64(
+		committeeSize,
+	) * uint64(
+		layersPerEpoch,
+	) / max(
+		minWeight,
+		totalWeight,
+	) // TODO: ensure no overflow
 	if numEligible == 0 {
 		numEligible = 1
 	}

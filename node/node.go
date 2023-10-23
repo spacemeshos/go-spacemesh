@@ -486,8 +486,16 @@ func (app *App) setupLogging() {
 }
 
 func (app *App) getAppInfo() string {
-	return fmt.Sprintf("App version: %s. Git: %s - %s . Go Version: %s. OS: %s-%s . Genesis %s",
-		cmd.Version, cmd.Branch, cmd.Commit, runtime.Version(), runtime.GOOS, runtime.GOARCH, app.Config.Genesis.GenesisID().String())
+	return fmt.Sprintf(
+		"App version: %s. Git: %s - %s . Go Version: %s. OS: %s-%s . Genesis %s",
+		cmd.Version,
+		cmd.Branch,
+		cmd.Commit,
+		runtime.Version(),
+		runtime.GOOS,
+		runtime.GOARCH,
+		app.Config.Genesis.GenesisID().String(),
+	)
 }
 
 // Cleanup stops all app services.

@@ -328,7 +328,10 @@ func (l *layerVote) append(lv *layerVote) *layerVote {
 	return lv
 }
 
-func (l *layerVote) update(from types.LayerID, diff map[types.LayerID]map[types.BlockID]headerWithSign) (*layerVote, error) {
+func (l *layerVote) update(
+	from types.LayerID,
+	diff map[types.LayerID]map[types.BlockID]headerWithSign,
+) (*layerVote, error) {
 	if l.lid.Before(from) {
 		return l, nil
 	}
@@ -444,7 +447,12 @@ func decodeVotes(evicted, blid types.LayerID, base *ballotInfo, exceptions types
 		}
 		existing, exist := layerdiff[header.ID]
 		if exist {
-			return votes{}, 0, fmt.Errorf("conflicting votes on the same id %v with different heights %d conflict with %d", existing.header.ID, existing.header.Height, header.Height)
+			return votes{}, 0, fmt.Errorf(
+				"conflicting votes on the same id %v with different heights %d conflict with %d",
+				existing.header.ID,
+				existing.header.Height,
+				header.Height,
+			)
 		}
 		layerdiff[header.ID] = headerWithSign{header, against}
 	}
@@ -457,7 +465,12 @@ func decodeVotes(evicted, blid types.LayerID, base *ballotInfo, exceptions types
 		}
 		existing, exist := layerdiff[header.ID]
 		if exist {
-			return votes{}, 0, fmt.Errorf("conflicting votes on the same id %v with different heights %d conflict with %d", existing.header.ID, existing.header.Height, header.Height)
+			return votes{}, 0, fmt.Errorf(
+				"conflicting votes on the same id %v with different heights %d conflict with %d",
+				existing.header.ID,
+				existing.header.Height,
+				header.Height,
+			)
 		}
 		layerdiff[header.ID] = headerWithSign{header, support}
 	}

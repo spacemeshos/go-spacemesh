@@ -154,7 +154,14 @@ func (c *HTTPPoetClient) PowParams(ctx context.Context) (*PoetPowParams, error) 
 }
 
 // Submit registers a challenge in the proving service current open round.
-func (c *HTTPPoetClient) Submit(ctx context.Context, deadline time.Time, prefix, challenge []byte, signature types.EdSignature, nodeID types.NodeID, pow PoetPoW) (*types.PoetRound, error) {
+func (c *HTTPPoetClient) Submit(
+	ctx context.Context,
+	deadline time.Time,
+	prefix, challenge []byte,
+	signature types.EdSignature,
+	nodeID types.NodeID,
+	pow PoetPoW,
+) (*types.PoetRound, error) {
 	request := rpcapi.SubmitRequest{
 		Prefix:    prefix,
 		Challenge: challenge,
