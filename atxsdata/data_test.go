@@ -14,7 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-func TestCache(t *testing.T) {
+func TestData(t *testing.T) {
 	t.Run("sanity", func(t *testing.T) {
 		const (
 			epochs = 10
@@ -23,20 +23,19 @@ func TestCache(t *testing.T) {
 		c := New()
 		f := fuzz.New()
 		f.RandSource(rand.NewSource(101))
-		nodes := [epochs][ids]types.NodeID{}
 		atxids := [epochs][ids]types.ATXID{}
 		data := [epochs][ids]ATX{}
 		f.Fuzz(&data)
 
 		for repeat := 0; repeat < 10; repeat++ {
 			for epoch := 0; epoch < epochs; epoch++ {
-				for i := range nodes[epoch] {
-					nodes[epoch][i][0] = byte(epoch + i)
-					atxids[epoch][i][0] = byte(epoch + i)
-					d := &data[epoch][i]
+				for i := range atxids[epoch] {
+					atxids[epoch][i] = types.ATXID{byte(epoch), byte(i)}
+					data[epoch][i].Node = types.NodeID{byte(epoch), byte(i)}
+					d := data[epoch][i]
 					c.Add(
 						types.EpochID(epoch)+1,
-						nodes[epoch][i],
+						d.Node,
 						atxids[epoch][i],
 						d.Weight,
 						d.BaseHeight,
@@ -47,7 +46,7 @@ func TestCache(t *testing.T) {
 				}
 			}
 			for epoch := 0; epoch < epochs; epoch++ {
-				for i := range nodes[epoch] {
+				for i := range atxids[epoch] {
 					byatxid := c.Get(types.EpochID(epoch)+1, atxids[epoch][i])
 					require.Equal(t, &data[epoch][i], byatxid)
 				}
