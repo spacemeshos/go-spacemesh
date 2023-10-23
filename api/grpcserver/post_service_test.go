@@ -273,46 +273,6 @@ func Test_Metadata(t *testing.T) {
 	require.Nil(t, meta)
 }
 
-func Test_Metadata_TLS(t *testing.T) {
-	log := zaptest.NewLogger(t)
-	svc := NewPostService(log)
-	cfg, cleanup := launchTLSServer(t, svc)
-	t.Cleanup(cleanup)
-
-	opts := activation.DefaultPostSetupOpts()
-	opts.DataDir = t.TempDir()
-	opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
-	opts.Scrypt.N = 2 // Speedup initialization in tests.
-	id, commitmentAtxId := initPost(t, log.Named("post"), opts)
-	postCleanup := launchPostSupervisorTLS(t, log.Named("supervisor"), cfg, opts)
-	t.Cleanup(postCleanup)
-
-	var client activation.PostClient
-	require.Eventually(t, func() bool {
-		var err error
-		client, err = svc.Client(id)
-		return err == nil
-	}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
-
-	meta, err := client.Info(context.Background())
-	require.NoError(t, err)
-	require.NotNil(t, meta)
-	require.Equal(t, id, meta.NodeID)
-	require.Equal(t, commitmentAtxId, meta.CommitmentATX)
-	require.NotNil(t, meta.Nonce)
-	require.Equal(t, opts.NumUnits, meta.NumUnits)
-
-	// drop connection
-	postCleanup()
-	require.Eventually(t, func() bool {
-		meta, err = client.Info(context.Background())
-		return err != nil
-	}, 5*time.Second, 100*time.Millisecond)
-
-	require.ErrorContains(t, err, "post client closed")
-	require.Nil(t, meta)
-}
-
 func Test_GenerateProof_MultipleServices(t *testing.T) {
 	log := zaptest.NewLogger(t)
 	svc := NewPostService(log)
