@@ -2,8 +2,7 @@ package atxsdata
 
 import (
 	"sync"
-
-	"go.uber.org/atomic"
+	"sync/atomic"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
