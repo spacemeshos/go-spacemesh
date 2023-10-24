@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/spacemeshos/go-spacemesh/api"
 	"net/http"
 	"strconv"
 	"sync"
@@ -104,14 +105,14 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // New constructs a new GraphQL service instance.
-func New(stack *node.Node, backend ethapi.Backend, cors, vhosts []string) error {
+func New(stack *node.Node, backend api.Backend, cors, vhosts []string) error {
 	_, err := newHandler(stack, backend, cors, vhosts)
 	return err
 }
 
 // newHandler returns a new `http.Handler` that will answer GraphQL queries.
 // It additionally exports an interactive query browser on the / endpoint.
-func newHandler(stack *node.Node, backend ethapi.Backend, cors, vhosts []string) (*handler, error) {
+func newHandler(stack *node.Node, backend api.Backend, cors, vhosts []string) (*handler, error) {
 	q := Resolver{backend}
 
 	s, err := graphql.ParseSchema(schema, &q)

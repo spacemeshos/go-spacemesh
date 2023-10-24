@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/api"
 	"io"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
@@ -31,7 +32,7 @@ type TransactionService struct {
 	db        *sql.Database
 	publisher pubsub.Publisher // P2P Swarm
 	mesh      meshAPI          // Mesh
-	conState  conservativeState
+	conState  api.ConservativeState
 	syncer    syncer
 	txHandler txValidator
 }
@@ -55,7 +56,7 @@ func NewTransactionService(
 	db *sql.Database,
 	publisher pubsub.Publisher,
 	msh meshAPI,
-	conState conservativeState,
+	conState api.ConservativeState,
 	syncer syncer,
 	txHandler txValidator,
 ) *TransactionService {

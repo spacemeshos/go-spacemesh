@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/spacemeshos/go-spacemesh/api"
@@ -71,33 +70,29 @@ func (b *Long) UnmarshalGraphQL(input interface{}) error {
 	return err
 }
 
-// Account represents an Ethereum account at a particular block.
+// Account represents a Spacemesh account at a particular layer.
 type Account struct {
-	r             *Resolver
-	address       common.Address
-	blockNrOrHash rpc.BlockNumberOrHash
+	r       *Resolver
+	address types.Address
+	layerID types.LayerID
 }
 
-// getState fetches the StateDB object for an account.
-func (a *Account) getState(ctx context.Context) (*state.StateDB, error) {
-	state, _, err := a.r.backend.StateAndHeaderByNumberOrHash(ctx, a.blockNrOrHash)
-	return state, err
+// getAccount fetches the account object for an account given its address.
+func (a *Account) getAccount(ctx context.Context) (*types.Account, error) {
+	account, err := a.r.backend.AccountByLayer(ctx, a.layerID)
+	return account, err
 }
 
-func (a *Account) Address(ctx context.Context) (common.Address, error) {
+func (a *Account) Address(ctx context.Context) (types.Address, error) {
 	return a.address, nil
 }
 
-func (a *Account) Balance(ctx context.Context) (hexutil.Big, error) {
-	state, err := a.getState(ctx)
+func (a *Account) Balance(ctx context.Context) (uint64, error) {
+	account, err := a.getAccount(ctx)
 	if err != nil {
-		return hexutil.Big{}, err
+		return 0, err
 	}
-	balance := state.GetBalance(a.address)
-	if balance == nil {
-		return hexutil.Big{}, fmt.Errorf("failed to load balance %x", a.address)
-	}
-	return hexutil.Big(*balance), nil
+	return account.Balance, nil
 }
 
 func (a *Account) TransactionCount(ctx context.Context) (hexutil.Uint64, error) {
@@ -109,7 +104,7 @@ func (a *Account) TransactionCount(ctx context.Context) (hexutil.Uint64, error) 
 		}
 		return hexutil.Uint64(nonce), nil
 	}
-	state, err := a.getState(ctx)
+	state, err := a.getAccount(ctx)
 	if err != nil {
 		return 0, err
 	}

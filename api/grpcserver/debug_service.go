@@ -3,6 +3,7 @@ package grpcserver
 import (
 	"context"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/api"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -23,7 +24,7 @@ import (
 // DebugService exposes global state data, output from the STF.
 type DebugService struct {
 	db       *sql.Database
-	conState conservativeState
+	conState api.ConservativeState
 	identity networkIdentity
 	oracle   oracle
 }
@@ -43,7 +44,7 @@ func (d DebugService) String() string {
 }
 
 // NewDebugService creates a new grpc service using config data.
-func NewDebugService(db *sql.Database, conState conservativeState, host networkIdentity, oracle oracle) *DebugService {
+func NewDebugService(db *sql.Database, conState api.ConservativeState, host networkIdentity, oracle oracle) *DebugService {
 	return &DebugService{
 		db:       db,
 		conState: conState,
