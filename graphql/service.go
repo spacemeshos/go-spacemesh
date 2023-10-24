@@ -19,11 +19,14 @@ package graphql
 import (
 	"context"
 	"encoding/json"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/rpc"
 	"net/http"
 	"strconv"
 	"sync"
 	"time"
 
+	"github.com/graph-gophers/graphql-go"
 	gqlErrors "github.com/graph-gophers/graphql-go/errors"
 )
 
@@ -101,15 +104,15 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // New constructs a new GraphQL service instance.
-func New(stack *node.Node, backend ethapi.Backend, filterSystem *filters.FilterSystem, cors, vhosts []string) error {
-	_, err := newHandler(stack, backend, filterSystem, cors, vhosts)
+func New(stack *node.Node, backend ethapi.Backend, cors, vhosts []string) error {
+	_, err := newHandler(stack, backend, cors, vhosts)
 	return err
 }
 
 // newHandler returns a new `http.Handler` that will answer GraphQL queries.
 // It additionally exports an interactive query browser on the / endpoint.
-func newHandler(stack *node.Node, backend ethapi.Backend, filterSystem *filters.FilterSystem, cors, vhosts []string) (*handler, error) {
-	q := Resolver{backend, filterSystem}
+func newHandler(stack *node.Node, backend ethapi.Backend, cors, vhosts []string) (*handler, error) {
+	q := Resolver{backend}
 
 	s, err := graphql.ParseSchema(schema, &q)
 	if err != nil {

@@ -21,21 +21,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"strconv"
 	"strings"
 	"sync"
-	//"github.com/ethereum/go-ethereum"
-	//"github.com/ethereum/go-ethereum/common"
-	//"github.com/ethereum/go-ethereum/common/hexutil"
-	//"github.com/ethereum/go-ethereum/common/math"
-	//"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
-	//"github.com/ethereum/go-ethereum/core/state"
-	//"github.com/ethereum/go-ethereum/core/types"
-	//"github.com/ethereum/go-ethereum/eth/filters"
-	//"github.com/ethereum/go-ethereum/internal/ethapi"
-	//"github.com/ethereum/go-ethereum/rlp"
-	//"github.com/ethereum/go-ethereum/rpc"
 )
 
 var (
@@ -287,7 +283,7 @@ func (t *Transaction) Raw(ctx context.Context) (hexutil.Bytes, error) {
 
 type BlockType int
 
-// Block represents an Ethereum block.
+// Block represents a Spacemesh block.
 // backend, and numberOrHash are mandatory. All other fields are lazily fetched
 // when required.
 type Block struct {
@@ -537,8 +533,7 @@ func (p *Pending) Account(ctx context.Context, args struct {
 
 // Resolver is the top-level object in the GraphQL hierarchy.
 type Resolver struct {
-	backend      ethapi.Backend
-	filterSystem *filters.FilterSystem
+	backend api.Backend
 }
 
 func (r *Resolver) Block(ctx context.Context, args struct {

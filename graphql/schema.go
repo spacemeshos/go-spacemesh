@@ -19,7 +19,7 @@ package graphql
 const schema string = `
     # Bytes32 is a 32 byte binary string, represented as 0x-prefixed hexadecimal.
     scalar Bytes32
-    # Address is a 20 byte address, represented as 0x-prefixed hexadecimal.
+    # Address is a 24 byte address, represented as 0x-prefixed hexadecimal.
     scalar Address
     # Bytes is an arbitrary length binary string, represented as 0x-prefixed hexadecimal.
     # An empty byte string is represented as '0x'. Byte strings must have an even number of hexadecimal nybbles.
@@ -44,27 +44,23 @@ const schema string = `
         address: Address!
         # Balance is the balance of the account, in wei.
         balance: BigInt!
-        # TransactionCount is the number of transactions sent from this account,
-        # or in the case of a contract, the number of contracts created. Otherwise
-        # known as the nonce.
-        transactionCount: Long!
+		# Counter is the counter value of the account, otherwise known as the nonce value.
+        counter: Long!
     }
 
     # Transaction is a transaction.
     type Transaction {
         # Hash is the hash of this transaction.
         hash: Bytes32!
-        # Nonce is the nonce of the account this transaction was generated with.
-        nonce: Long!
+        # Counter is the counter value of the account this transaction was generated with.
+        counter: Long!
         # Index is the index of this transaction in the parent block. This will
         # be null if the transaction has not yet been mined.
         index: Long
-        # From is the account that sent this transaction - this will always be
-        # an externally owned account.
-        from(block: Long): Account!
-        # To is the account the transaction was sent to. This is null for
-        # contract-creating transactions.
-        to(block: Long): Account
+        # From is the principal account that funded this transaction.
+        principal(block: Long): Account!
+        # Template is the template address the transaction was sent to.
+        template(block: Long): Account
         # Block is the block this transaction was mined in. This will be null if
         # the transaction has not yet been mined.
         block: Block
@@ -83,14 +79,14 @@ const schema string = `
 
     # Block is a block.
     type Block {
-        # Number is the number of this block, starting at 0 for the genesis block.
+        # Number is the layer height of this block, starting at 0 for the genesis layer.
         number: Long!
         # Hash is the block hash of this block.
         hash: Bytes32!
         # TransactionCount is the number of transactions in this block. if
         # transactions are not available for this block, this field will be null.
         transactionCount: Long
-        # StateRoot is the keccak256 hash of the state trie after this block was processed.
+        # StateRoot is the hash of the state trie after this block was processed.
         stateRoot: Bytes32!
         # GasLimit is the maximum amount of gas that was available to transactions in this block.
         gasLimit: Long!
@@ -137,7 +133,7 @@ const schema string = `
         # Block fetches a block by number or by hash. If neither is
         # supplied, the most recent known block is returned.
         block(number: Long, hash: Bytes32): Block
-        # Blocks returns all the blocks between two numbers, inclusive. If
+        # Blocks returns all the blocks between two layers, inclusive. If
         # to is not supplied, it defaults to the most recent known block.
         blocks(from: Long, to: Long): [Block!]!
         # Pending returns the current pending state.
