@@ -74,6 +74,8 @@ func (d *Data) IsEvicted(epoch types.EpochID) bool {
 // OnEpoch is a notification for cache to evict epochs that are not useful
 // to keep in memory.
 func (d *Data) OnEpoch(applied types.EpochID) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	if applied < d.capacity {
 		return
 	}
@@ -81,8 +83,6 @@ func (d *Data) OnEpoch(applied types.EpochID) {
 	if d.IsEvicted(evict) {
 		return
 	}
-	d.mu.Lock()
-	defer d.mu.Unlock()
 	if d.evicted.Load() < evict.Uint32() {
 		d.evicted.Store(evict.Uint32())
 	}
@@ -102,11 +102,11 @@ func (d *Data) Add(
 	nonce types.VRFPostIndex,
 	malicious bool,
 ) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	if d.IsEvicted(epoch) {
 		return
 	}
-	d.mu.Lock()
-	defer d.mu.Unlock()
 	ecache, exists := d.epochs[epoch]
 	if !exists {
 		ecache = epochCache{
@@ -157,8 +157,6 @@ func (d *Data) Get(epoch types.EpochID, atx types.ATXID) *ATX {
 
 // WeightForSet computes total weight of atxs in the set and returned array with
 // atxs in the set that weren't used.
-//
-// set is expected to be sorted.
 func (d *Data) WeightForSet(epoch types.EpochID, set []types.ATXID) (uint64, []bool) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
