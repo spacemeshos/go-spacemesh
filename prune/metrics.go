@@ -16,7 +16,8 @@ var (
 		[]string{"step"},
 		prometheus.ExponentialBuckets(0.01, 2, 10),
 	)
-	proposalLatency = pruneLatency.WithLabelValues("proposal")
-	certLatency     = pruneLatency.WithLabelValues("cert")
-	propTxLatency   = pruneLatency.WithLabelValues("proptxs")
+	proposalLatency  = pruneLatency.WithLabelValues("proposal")
+	certLatency      = pruneLatency.WithLabelValues("cert")
+	propTxLatency    = pruneLatency.WithLabelValues("proptxs")
+	activeSetLatency = pruneLatency.WithLabelValues("activeset")
 )

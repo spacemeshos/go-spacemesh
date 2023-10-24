@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 //go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./interface.go
@@ -30,7 +29,7 @@ type layerClock interface {
 
 type certifier interface {
 	RegisterForCert(context.Context, types.LayerID, types.BlockID) error
-	CertifyIfEligible(context.Context, log.Log, types.LayerID, types.BlockID) error
+	CertifyIfEligible(context.Context, types.LayerID, types.BlockID) error
 }
 
 type tortoiseProvider interface {

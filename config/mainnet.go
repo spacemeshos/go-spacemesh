@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
@@ -62,6 +63,7 @@ func MainnetConfig() Config {
 			MetricsPort:           1010,
 			DatabaseConnections:   16,
 			DatabasePruneInterval: 30 * time.Minute,
+			PruneActivesetsFrom:   8,
 			NetworkHRP:            "sm",
 
 			LayerDuration:  5 * time.Minute,
@@ -95,9 +97,12 @@ func MainnetConfig() Config {
 			WindowSize:               10000,
 			MaxExceptions:            1000,
 			BadBeaconVoteDelayLayers: 4032,
-			// 1000 - is assumed minimal number of units
-			// 5000 - half of the expected poet ticks
-			MinimalActiveSetWeight: 1000 * 5000,
+			MinimalActiveSetWeight: []types.EpochMinimalActiveWeight{
+				{Weight: 1_000_000},
+				// generated using ./cmd/activeset for publish epoch 6
+				// it will be used starting from epoch 8, because we will only release it in 7th
+				{Epoch: 8, Weight: 7_879_129_244},
+			},
 		},
 		HARE: hareConfig.Config{
 			N:               200,

@@ -26,6 +26,8 @@ const (
 	beginImmediate = "BEGIN IMMEDIATE;"
 )
 
+//go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./database.go
+
 // Executor is an interface for executing raw statement.
 type Executor interface {
 	Exec(string, Encoder, Decoder) (int, error)

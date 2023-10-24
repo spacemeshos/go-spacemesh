@@ -5,8 +5,10 @@ import (
 	"fmt"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -22,8 +24,17 @@ type GlobalStateService struct {
 }
 
 // RegisterService registers this service with a grpc server instance.
-func (s GlobalStateService) RegisterService(server *Server) {
-	pb.RegisterGlobalStateServiceServer(server.GrpcServer, s)
+func (s GlobalStateService) RegisterService(server *grpc.Server) {
+	pb.RegisterGlobalStateServiceServer(server, s)
+}
+
+func (s GlobalStateService) RegisterHandlerService(mux *runtime.ServeMux) error {
+	return pb.RegisterGlobalStateServiceHandlerServer(context.Background(), mux, s)
+}
+
+// String returns the name of the service.
+func (s GlobalStateService) String() string {
+	return "GlobalStateService"
 }
 
 // NewGlobalStateService creates a new grpc service using config data.

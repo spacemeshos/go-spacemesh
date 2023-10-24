@@ -9,7 +9,6 @@ import (
 type vrfSigner interface {
 	Sign(msg []byte) types.VrfSignature
 	NodeID() types.NodeID
-	LittleEndian() bool
 }
 
 type vrfVerifier interface {

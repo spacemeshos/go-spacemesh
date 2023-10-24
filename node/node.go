@@ -19,8 +19,6 @@ import (
 	pyroscope "github.com/grafana/pyroscope-go"
 	grpc_logsettable "github.com/grpc-ecosystem/go-grpc-middleware/logging/settable"
 	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
-	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
-	grpctags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
 	"github.com/mitchellh/mapstructure"
 	"github.com/spacemeshos/poet/server"
 	"github.com/spacemeshos/post/verifying"
@@ -30,10 +28,10 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
-	"google.golang.org/grpc"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
@@ -317,48 +315,50 @@ func New(opts ...Option) *App {
 // App is the cli app singleton.
 type App struct {
 	*cobra.Command
-	fileLock           *flock.Flock
-	edSgn              *signing.EdSigner
-	Config             *config.Config
-	db                 *sql.Database
-	dbMetrics          *dbmetrics.DBMetricsCollector
-	grpcPublicService  *grpcserver.Server
-	grpcPrivateService *grpcserver.Server
-	jsonAPIService     *grpcserver.JSONHTTPServer
-	grpcPostService    *grpcserver.PostService
-	pprofService       *http.Server
-	profilerService    *pyroscope.Profiler
-	syncer             *syncer.Syncer
-	proposalListener   *proposals.Handler
-	proposalBuilder    *miner.ProposalBuilder
-	mesh               *mesh.Mesh
-	cachedDB           *datastore.CachedDB
-	clock              *timesync.NodeClock
-	hare               *hare.Hare
-	hare3              *hare3.Hare
-	hOracle            *eligibility.Oracle
-	blockGen           *blocks.Generator
-	certifier          *blocks.Certifier
-	postSetupMgr       *activation.PostSetupManager
-	atxBuilder         *activation.Builder
-	nipostBuilder      *activation.NIPostBuilder
-	atxHandler         *activation.Handler
-	txHandler          *txs.TxHandler
-	validator          *activation.Validator
-	edVerifier         *signing.EdVerifier
-	beaconProtocol     *beacon.ProtocolDriver
-	log                log.Log
-	svm                *vm.VM
-	conState           *txs.ConservativeState
-	fetcher            *fetch.Fetch
-	ptimesync          *peersync.Sync
-	tortoise           *tortoise.Tortoise
-	updater            *bootstrap.Updater
-	poetDb             *activation.PoetDb
-	postVerifier       *activation.OffloadingPostVerifier
-	postSupervisor     *activation.PostSupervisor
-	preserve           *checkpoint.PreservedData
-	errCh              chan error
+	fileLock          *flock.Flock
+	edSgn             *signing.EdSigner
+	Config            *config.Config
+	db                *sql.Database
+	dbMetrics         *dbmetrics.DBMetricsCollector
+	grpcPublicServer  *grpcserver.Server
+	grpcPrivateServer *grpcserver.Server
+	grpcTLSServer     *grpcserver.Server
+	jsonAPIServer     *grpcserver.JSONHTTPServer
+	grpcPostService   *grpcserver.PostService
+	pprofService      *http.Server
+	profilerService   *pyroscope.Profiler
+	syncer            *syncer.Syncer
+	proposalListener  *proposals.Handler
+	proposalBuilder   *miner.ProposalBuilder
+	mesh              *mesh.Mesh
+	cachedDB          *datastore.CachedDB
+	atxsdata          *atxsdata.Data
+	clock             *timesync.NodeClock
+	hare              *hare.Hare
+	hare3             *hare3.Hare
+	hOracle           *eligibility.Oracle
+	blockGen          *blocks.Generator
+	certifier         *blocks.Certifier
+	postSetupMgr      *activation.PostSetupManager
+	atxBuilder        *activation.Builder
+	nipostBuilder     *activation.NIPostBuilder
+	atxHandler        *activation.Handler
+	txHandler         *txs.TxHandler
+	validator         *activation.Validator
+	edVerifier        *signing.EdVerifier
+	beaconProtocol    *beacon.ProtocolDriver
+	log               log.Log
+	svm               *vm.VM
+	conState          *txs.ConservativeState
+	fetcher           *fetch.Fetch
+	ptimesync         *peersync.Sync
+	tortoise          *tortoise.Tortoise
+	updater           *bootstrap.Updater
+	poetDb            *activation.PoetDb
+	postVerifier      *activation.OffloadingPostVerifier
+	postSupervisor    *activation.PostSupervisor
+	preserve          *checkpoint.PreservedData
+	errCh             chan error
 
 	host *p2p.Host
 
@@ -488,8 +488,8 @@ func (app *App) setupLogging() {
 }
 
 func (app *App) getAppInfo() string {
-	return fmt.Sprintf("App version: %s. Git: %s - %s . Go Version: %s. OS: %s-%s ",
-		cmd.Version, cmd.Branch, cmd.Commit, runtime.Version(), runtime.GOOS, runtime.GOARCH)
+	return fmt.Sprintf("App version: %s. Git: %s - %s . Go Version: %s. OS: %s-%s . Genesis %s",
+		cmd.Version, cmd.Branch, cmd.Commit, runtime.Version(), runtime.GOOS, runtime.GOARCH, app.Config.Genesis.GenesisID().String())
 }
 
 // Cleanup stops all app services.
@@ -548,7 +548,6 @@ func (app *App) SetLogLevel(name, loglevel string) error {
 }
 
 func (app *App) initServices(ctx context.Context) error {
-	vrfSigner := app.edSgn.VRFSigner()
 	layerSize := app.Config.LayerAvgSize
 	layersPerEpoch := types.GetLayersPerEpoch()
 	lg := app.log.Named(app.edSgn.NodeID().ShortString()).WithFields(app.edSgn.NodeID())
@@ -638,7 +637,6 @@ func (app *App) initServices(ctx context.Context) error {
 	vrfVerifier := signing.NewVRFVerifier()
 	beaconProtocol := beacon.New(
 		app.host,
-		app.edSgn,
 		app.edVerifier,
 		vrfVerifier,
 		app.cachedDB,
@@ -647,6 +645,7 @@ func (app *App) initServices(ctx context.Context) error {
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)),
 	)
+	beaconProtocol.Register(app.edSgn)
 
 	trtlCfg := app.Config.Tortoise
 	trtlCfg.LayerSize = layerSize
@@ -687,20 +686,17 @@ func (app *App) initServices(ctx context.Context) error {
 		app.addLogger(ExecutorLogger, lg),
 	)
 	mlog := app.addLogger(MeshLogger, lg)
-	msh, err := mesh.NewMesh(app.cachedDB, app.clock, trtl, executor, app.conState, mlog)
+	msh, err := mesh.NewMesh(app.cachedDB, app.atxsdata, app.clock, trtl, executor, app.conState, mlog)
 	if err != nil {
 		return fmt.Errorf("failed to create mesh: %w", err)
 	}
 
+	pruner := prune.New(app.db, app.Config.Tortoise.Hdist, app.Config.PruneActivesetsFrom, prune.WithLogger(mlog.Zap()))
+	if err := pruner.Prune(app.clock.CurrentLayer()); err != nil {
+		return fmt.Errorf("pruner %w", err)
+	}
 	app.eg.Go(func() error {
-		prune.Prune(
-			ctx,
-			mlog.Zap(),
-			app.db,
-			app.clock,
-			app.Config.Tortoise.Hdist,
-			app.Config.DatabasePruneInterval,
-		)
+		prune.Run(ctx, pruner, app.clock, app.Config.DatabasePruneInterval)
 		return nil
 	})
 
@@ -708,6 +704,7 @@ func (app *App) initServices(ctx context.Context) error {
 	atxHandler := activation.NewHandler(
 		app.host.ID(),
 		app.cachedDB,
+		app.atxsdata,
 		app.edVerifier,
 		app.clock,
 		app.host,
@@ -732,7 +729,8 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 
 	proposalListener := proposals.NewHandler(
-		app.cachedDB,
+		app.db,
+		app.atxsdata,
 		app.edVerifier,
 		app.host,
 		fetcherWrapped,
@@ -765,7 +763,6 @@ func (app *App) initServices(ctx context.Context) error {
 		beaconProtocol,
 		app.cachedDB,
 		vrfVerifier,
-		vrfSigner,
 		app.Config.LayersPerEpoch,
 		app.Config.HareEligibility,
 		app.addLogger(HareOracleLogger, lg),
@@ -784,14 +781,11 @@ func (app *App) initServices(ctx context.Context) error {
 	app.certifier = blocks.NewCertifier(
 		app.cachedDB,
 		app.hOracle,
-		app.edSgn.NodeID(),
-		app.edSgn,
 		app.edVerifier,
 		app.host,
 		app.clock,
 		beaconProtocol,
 		trtl,
-		blocks.WithCertContext(ctx),
 		blocks.WithCertConfig(blocks.CertConfig{
 			CommitteeSize:    app.Config.HARE.N,
 			CertifyThreshold: app.Config.HARE.N/2 + 1,
@@ -800,6 +794,7 @@ func (app *App) initServices(ctx context.Context) error {
 		}),
 		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg)),
 	)
+	app.certifier.Register(app.edSgn)
 
 	flog := app.addLogger(Fetcher, lg)
 	fetcher := fetch.NewFetch(app.cachedDB, msh, beaconProtocol, app.host,
@@ -841,7 +836,6 @@ func (app *App) initServices(ctx context.Context) error {
 		fetcherWrapped,
 		app.certifier,
 		patrol,
-		blocks.WithContext(ctx),
 		blocks.WithConfig(blocks.Config{
 			BlockGasLimit:      app.Config.BlockGasLimit,
 			OptFilterThreshold: app.Config.OptFilterThreshold,
@@ -1159,6 +1153,7 @@ func (app *App) launchStandalone(ctx context.Context) error {
 		return err
 	}
 	cfg.RawRESTListener = parsed.Host
+	cfg.RawRPCListener = parsed.Hostname() + ":0"
 	cfg.Genesis.UnmarshalFlag(app.Config.Genesis.GenesisTime)
 	cfg.Round.EpochDuration = app.Config.LayerDuration * time.Duration(app.Config.LayersPerEpoch)
 	cfg.Round.CycleGap = app.Config.POET.CycleGap
@@ -1218,8 +1213,8 @@ func (app *App) startServices(ctx context.Context) error {
 	app.syncer.Start()
 	app.beaconProtocol.Start(ctx)
 
-	app.blockGen.Start()
-	app.certifier.Start()
+	app.blockGen.Start(ctx)
+	app.certifier.Start(ctx)
 	if err := app.hare.Start(ctx); err != nil {
 		return fmt.Errorf("cannot start hare: %w", err)
 	}
@@ -1313,58 +1308,17 @@ func (app *App) initService(
 	return nil, fmt.Errorf("unknown service %s", svc)
 }
 
-func unaryGrpcLogStart(
-	ctx context.Context,
-	req any,
-	_ *grpc.UnaryServerInfo,
-	handler grpc.UnaryHandler,
-) (any, error) {
-	ctxzap.Info(ctx, "started unary call")
-	return handler(ctx, req)
-}
-
-func streamingGrpcLogStart(
-	srv any,
-	stream grpc.ServerStream,
-	_ *grpc.StreamServerInfo,
-	handler grpc.StreamHandler,
-) error {
-	ctxzap.Info(stream.Context(), "started streaming call")
-	return handler(srv, stream)
-}
-
-func (app *App) newGrpc(logger log.Log, endpoint string) *grpcserver.Server {
-	return grpcserver.New(
-		endpoint,
-		logger,
-		grpc.ChainStreamInterceptor(
-			grpctags.StreamServerInterceptor(),
-			grpczap.StreamServerInterceptor(logger.Zap()),
-			streamingGrpcLogStart,
-		),
-		grpc.ChainUnaryInterceptor(
-			grpctags.UnaryServerInterceptor(),
-			grpczap.UnaryServerInterceptor(logger.Zap()),
-			unaryGrpcLogStart,
-		),
-		grpc.MaxSendMsgSize(app.Config.API.GrpcSendMsgSize),
-		grpc.MaxRecvMsgSize(app.Config.API.GrpcRecvMsgSize),
-	)
-}
-
 func (app *App) startAPIServices(ctx context.Context) error {
 	logger := app.addLogger(GRPCLogger, app.log)
 	grpczap.SetGrpcLoggerV2(grpclog, logger.Zap())
 	var (
-		unique = map[grpcserver.Service]struct{}{}
-		public []grpcserver.ServiceAPI
+		unique        = map[grpcserver.Service]struct{}{}
+		public        []grpcserver.ServiceAPI
+		private       []grpcserver.ServiceAPI
+		authenticated []grpcserver.ServiceAPI
 	)
-	if len(app.Config.API.PublicServices) > 0 {
-		app.grpcPublicService = app.newGrpc(logger, app.Config.API.PublicListener)
-	}
-	if len(app.Config.API.PrivateServices) > 0 {
-		app.grpcPrivateService = app.newGrpc(logger, app.Config.API.PrivateListener)
-	}
+
+	// check services for uniques across all endpoints
 	for _, svc := range app.Config.API.PublicServices {
 		if _, exists := unique[svc]; exists {
 			return fmt.Errorf("can't start more than one %s", svc)
@@ -1374,7 +1328,6 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			return err
 		}
 		logger.Info("registering public service %s", svc)
-		gsvc.RegisterService(app.grpcPublicService)
 		public = append(public, gsvc)
 		unique[svc] = struct{}{}
 	}
@@ -1387,48 +1340,84 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			return err
 		}
 		logger.Info("registering private service %s", svc)
-		gsvc.RegisterService(app.grpcPrivateService)
+		private = append(private, gsvc)
 		unique[svc] = struct{}{}
 	}
+	for _, svc := range app.Config.API.TLSServices {
+		if _, exists := unique[svc]; exists {
+			return fmt.Errorf("can't start more than one %s", svc)
+		}
+		gsvc, err := app.initService(ctx, svc)
+		if err != nil {
+			return err
+		}
+		logger.Info("registering authenticated service %s", svc)
+		authenticated = append(authenticated, gsvc)
+		unique[svc] = struct{}{}
+	}
+
+	// start servers if at least one endpoint is defined for them
+	if len(public) > 0 {
+		var err error
+		app.grpcPublicServer, err = grpcserver.NewPublic(logger.Zap(), app.Config.API, public)
+		if err != nil {
+			return err
+		}
+		if err := app.grpcPublicServer.Start(); err != nil {
+			return err
+		}
+	}
+	if len(private) > 0 {
+		var err error
+		app.grpcPrivateServer, err = grpcserver.NewPrivate(logger.Zap(), app.Config.API, private)
+		if err != nil {
+			return err
+		}
+		if err := app.grpcPrivateServer.Start(); err != nil {
+			return err
+		}
+	}
+	if len(authenticated) > 0 {
+		var err error
+		app.grpcTLSServer, err = grpcserver.NewTLS(logger.Zap(), app.Config.API, authenticated)
+		if err != nil {
+			return err
+		}
+	}
+
 	if len(app.Config.API.JSONListener) > 0 {
 		if len(public) == 0 {
-			return fmt.Errorf("can't start json server without public services")
+			return fmt.Errorf("start json server without public services")
 		}
-		app.jsonAPIService = grpcserver.NewJSONHTTPServer(
+		app.jsonAPIServer = grpcserver.NewJSONHTTPServer(
 			app.Config.API.JSONListener,
-			logger.WithName("JSON"),
+			logger.Zap().Named("JSON"),
 		)
-		app.jsonAPIService.StartService(ctx, public...)
-	}
-	if app.grpcPublicService != nil {
-		if err := app.grpcPublicService.Start(); err != nil {
-			return err
-		}
-	}
-	if app.grpcPrivateService != nil {
-		if err := app.grpcPrivateService.Start(); err != nil {
-			return err
+		if err := app.jsonAPIServer.StartService(ctx, public...); err != nil {
+			return fmt.Errorf("start listen server: %w", err)
 		}
 	}
 	return nil
 }
 
 func (app *App) stopServices(ctx context.Context) {
-	if app.jsonAPIService != nil {
-		if err := app.jsonAPIService.Shutdown(ctx); err != nil {
+	if app.jsonAPIServer != nil {
+		if err := app.jsonAPIServer.Shutdown(ctx); err != nil {
 			app.log.With().Error("error stopping json gateway server", log.Err(err))
 		}
 	}
 
-	if app.grpcPublicService != nil {
+	if app.grpcPublicServer != nil {
 		app.log.Info("stopping public grpc service")
-		// does not return any errors
-		_ = app.grpcPublicService.Close()
+		app.grpcPublicServer.Close() // err is always nil
 	}
-	if app.grpcPrivateService != nil {
+	if app.grpcPrivateServer != nil {
 		app.log.Info("stopping private grpc service")
-		// does not return any errors
-		_ = app.grpcPrivateService.Close()
+		app.grpcPrivateServer.Close() // err is always nil
+	}
+	if app.grpcTLSServer != nil {
+		app.log.Info("stopping tls grpc service")
+		app.grpcTLSServer.Close() // err is always nil
 	}
 
 	if app.updater != nil {
@@ -1598,10 +1587,19 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 			app.Config.DatabaseSizeMeteringInterval,
 		)
 	}
-	app.cachedDB = datastore.NewCachedDB(
-		sqlDB,
-		app.addLogger(CachedDBLogger, lg),
+	start := time.Now()
+	data, err := atxsdata.Warm(
+		app.db,
+		atxsdata.WithCapacityFromLayers(app.Config.Tortoise.WindowSize, app.Config.LayersPerEpoch),
+	)
+	if err != nil {
+		return err
+	}
+	app.atxsdata = data
+	app.log.With().Info("cache warmup", log.Duration("duration", time.Since(start)))
+	app.cachedDB = datastore.NewCachedDB(sqlDB, app.addLogger(CachedDBLogger, lg),
 		datastore.WithConfig(app.Config.Cache),
+		datastore.WithConsensusCache(data),
 	)
 	return nil
 }

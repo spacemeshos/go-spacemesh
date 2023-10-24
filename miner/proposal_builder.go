@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/miner/minweight"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -147,9 +148,9 @@ type config struct {
 	layerSize          uint32
 	layersPerEpoch     uint32
 	hdist              uint32
-	minActiveSetWeight uint64
 	networkDelay       time.Duration
 	workersLimit       int
+	minActiveSetWeight []types.EpochMinimalActiveWeight
 	// used to determine whether a node has enough information on the active set this epoch
 	goodAtxPercent int
 }
@@ -158,7 +159,6 @@ func (c *config) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("layer size", c.layerSize)
 	encoder.AddUint32("epoch size", c.layersPerEpoch)
 	encoder.AddUint32("hdist", c.hdist)
-	encoder.AddUint64("min active weight", c.minActiveSetWeight)
 	encoder.AddDuration("network delay", c.networkDelay)
 	encoder.AddInt("good atx percent", c.goodAtxPercent)
 	return nil
@@ -189,7 +189,7 @@ func WithLayerPerEpoch(layers uint32) Opt {
 	}
 }
 
-func WithMinimalActiveSetWeight(weight uint64) Opt {
+func WithMinimalActiveSetWeight(weight []types.EpochMinimalActiveWeight) Opt {
 	return func(pb *ProposalBuilder) {
 		pb.cfg.minActiveSetWeight = weight
 	}
@@ -439,7 +439,7 @@ func (pb *ProposalBuilder) initSignerData(
 			ss.session.beacon = pb.shared.beacon
 			ss.session.eligibilities.slots = proposals.MustGetNumEligibleSlots(
 				ss.session.atxWeight,
-				pb.cfg.minActiveSetWeight,
+				minweight.Select(lid.GetEpoch(), pb.cfg.minActiveSetWeight),
 				pb.shared.active.weight,
 				pb.cfg.layerSize,
 				pb.cfg.layersPerEpoch,
@@ -493,7 +493,7 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 		eg.Go(func() error {
 			if err := pb.initSignerData(ctx, ss, lid); err != nil {
 				if errors.Is(err, errAtxNotAvailable) {
-					ss.log.With().Info("smesher doesn't have atx that targets this epoch",
+					ss.log.With().Debug("smesher doesn't have atx that targets this epoch",
 						log.Context(ctx), ss.session.epoch.Field(),
 					)
 				} else {
@@ -727,7 +727,7 @@ func generateActiveSet(
 			return err
 		}
 		if grade != good {
-			logger.With().Info("atx omitted from active set",
+			logger.With().Debug("atx omitted from active set",
 				header.ID,
 				log.Int("grade", int(grade)),
 				log.Stringer("smesher", header.NodeID),

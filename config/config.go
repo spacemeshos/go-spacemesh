@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
@@ -114,6 +115,8 @@ type BaseConfig struct {
 	DatabaseSizeMeteringInterval time.Duration `mapstructure:"db-size-metering-interval"`
 	DatabasePruneInterval        time.Duration `mapstructure:"db-prune-interval"`
 
+	PruneActivesetsFrom types.EpochID `mapstructure:"prune-activesets-from"`
+
 	NetworkHRP string `mapstructure:"network-hrp"`
 
 	// MinerGoodAtxsPercent is a threshold to decide if tortoise activeset should be
@@ -171,6 +174,7 @@ func DefaultConfig() Config {
 func DefaultTestConfig() Config {
 	conf := DefaultConfig()
 	conf.BaseConfig = defaultTestConfig()
+	conf.Genesis = DefaultTestGenesisConfig()
 	conf.P2P = p2p.DefaultConfig()
 	conf.API = grpcserver.DefaultTestConfig()
 	conf.POSTService = activation.DefaultTestPostServiceConfig()
@@ -184,7 +188,7 @@ func defaultBaseConfig() BaseConfig {
 		FileLock:                     filepath.Join(os.TempDir(), "spacemesh.lock"),
 		CollectMetrics:               false,
 		MetricsPort:                  1010,
-		ProfilerName:                 "gp-spacemesh",
+		ProfilerName:                 "go-spacemesh",
 		LayerDuration:                30 * time.Second,
 		LayersPerEpoch:               3,
 		PoETServers:                  []string{"127.0.0.1"},
@@ -214,6 +218,7 @@ func defaultTestConfig() BaseConfig {
 	conf := defaultBaseConfig()
 	conf.MetricsPort += 10000
 	conf.NetworkHRP = "stest"
+	types.SetNetworkHRP(conf.NetworkHRP)
 	return conf
 }
 

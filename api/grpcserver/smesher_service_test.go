@@ -62,7 +62,7 @@ func TestStartSmeshingPassesCorrectSmeshingOpts(t *testing.T) {
 		Scrypt:           config.DefaultLabelParams(),
 		ComputeBatchSize: config.DefaultComputeBatchSize,
 	}
-	opts.ProviderID.SetInt64(int64(providerID))
+	opts.ProviderID.SetUint32(providerID)
 	postSupervisor.EXPECT().Start().Return(nil)
 	smeshingProvider.EXPECT().StartSmeshing(addr, opts).Return(nil)
 
@@ -148,7 +148,7 @@ func TestSmesherService_PostSetupStatus(t *testing.T) {
 		svc := grpcserver.NewSmesherService(postSetupProvider, smeshingProvider, postSupervisor, time.Second, activation.DefaultPostSetupOpts())
 
 		id := activation.PostProviderID{}
-		id.SetInt64(1)
+		id.SetUint32(1)
 		opts := activation.PostSetupOpts{
 			DataDir:     "data-dir",
 			NumUnits:    4,
@@ -180,7 +180,7 @@ func TestSmesherService_PostSetupStatus(t *testing.T) {
 		svc := grpcserver.NewSmesherService(postSetupProvider, smeshingProvider, postSupervisor, time.Second, activation.DefaultPostSetupOpts())
 
 		id := activation.PostProviderID{}
-		id.SetInt64(100)
+		id.SetUint32(100)
 		opts := activation.PostSetupOpts{
 			DataDir:     "data-dir",
 			NumUnits:    4,

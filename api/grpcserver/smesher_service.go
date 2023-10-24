@@ -7,11 +7,13 @@ import (
 	"time"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/post/config"
 	"go.uber.org/zap"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -31,8 +33,17 @@ type SmesherService struct {
 }
 
 // RegisterService registers this service with a grpc server instance.
-func (s SmesherService) RegisterService(server *Server) {
-	pb.RegisterSmesherServiceServer(server.GrpcServer, s)
+func (s SmesherService) RegisterService(server *grpc.Server) {
+	pb.RegisterSmesherServiceServer(server, s)
+}
+
+func (s SmesherService) RegisterHandlerService(mux *runtime.ServeMux) error {
+	return pb.RegisterSmesherServiceHandlerServer(context.Background(), mux, s)
+}
+
+// String returns the name of this service.
+func (s SmesherService) String() string {
+	return "SmesherService"
 }
 
 // NewSmesherService creates a new grpc service using config data.
@@ -80,7 +91,7 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 	opts.NumUnits = in.Opts.NumUnits
 	opts.MaxFileSize = in.Opts.MaxFileSize
 	if in.Opts.ProviderId != nil {
-		opts.ProviderID.SetInt64(int64(*in.Opts.ProviderId))
+		opts.ProviderID.SetUint32(*in.Opts.ProviderId)
 	}
 	opts.Throttle = in.Opts.Throttle
 

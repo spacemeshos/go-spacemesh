@@ -38,4 +38,14 @@ func TestActiveSet(t *testing.T) {
 	require.ErrorIs(t, err, sql.ErrNotFound)
 	_, err = GetBlob(db, ids[3].Bytes())
 	require.ErrorIs(t, err, sql.ErrNotFound)
+
+	require.NoError(t, DeleteBeforeEpoch(db, set.Epoch))
+	blob, err = GetBlob(db, ids[0].Bytes())
+	require.NoError(t, err)
+	require.NotEmpty(t, blob)
+
+	require.NoError(t, DeleteBeforeEpoch(db, set.Epoch+1))
+	blob, err = GetBlob(db, ids[0].Bytes())
+	require.ErrorIs(t, err, sql.ErrNotFound)
+	require.Empty(t, blob)
 }

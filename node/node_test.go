@@ -450,6 +450,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 	app := New(WithLog(logger))
 	app.Config = getTestDefaultConfig(t)
+	types.SetNetworkHRP(app.Config.NetworkHRP) // ensure that the correct HRP is set when generating the address below
 	app.Config.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte{1}).String()
 	app.Config.SMESHING.Opts.DataDir = t.TempDir()
 	app.Config.SMESHING.Opts.Scrypt.N = 2
@@ -827,16 +828,7 @@ func TestConfig_CustomTypes(t *testing.T) {
 			cli:    "--smeshing-opts-provider=1337",
 			config: `{"smeshing": {"smeshing-opts": {"smeshing-opts-provider": 1337}}}`,
 			updatePreset: func(t *testing.T, c *config.Config) {
-				c.SMESHING.Opts.ProviderID.SetInt64(1337)
-			},
-		},
-		{
-			// TODO(mafa): remove this test case, see https://github.com/spacemeshos/go-spacemesh/issues/4801
-			name:   "smeshing-opts-provider",
-			cli:    "--smeshing-opts-provider=-1",
-			config: `{"smeshing": {"smeshing-opts": {"smeshing-opts-provider": -1}}}`,
-			updatePreset: func(t *testing.T, c *config.Config) {
-				c.SMESHING.Opts.ProviderID.SetInt64(-1)
+				c.SMESHING.Opts.ProviderID.SetUint32(1337)
 			},
 		},
 		{
@@ -945,12 +937,11 @@ func TestConfig_PostProviderID_InvalidValues(t *testing.T) {
 			cliValue:    "not-a-number",
 			configValue: "\"not-a-number\"",
 		},
-		// TODO(mafa): still accepted for backward compatibility, see https://github.com/spacemeshos/go-spacemesh/issues/4801
-		// {
-		// 	name:        "negative number",
-		// 	cliValue:    "-1",
-		// 	configValue: "-1",
-		// },
+		{
+			name:        "negative number",
+			cliValue:    "-1",
+			configValue: "-1",
+		},
 		{
 			name:        "number too large for uint32",
 			cliValue:    "4294967296",
@@ -1179,7 +1170,7 @@ func TestAdminEvents(t *testing.T) {
 		app.eg.Wait() // https://github.com/spacemeshos/go-spacemesh/issues/4653
 		return nil
 	})
-	t.Cleanup(func() { eg.Wait() })
+	t.Cleanup(func() { assert.NoError(t, eg.Wait()) })
 
 	grpcCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
@@ -1246,7 +1237,7 @@ func getTestDefaultConfig(tb testing.TB) *config.Config {
 	cfg.SMESHING = config.DefaultSmeshingConfig()
 	cfg.SMESHING.Start = true
 	cfg.SMESHING.Opts.NumUnits = cfg.POST.MinNumUnits + 1
-	cfg.SMESHING.Opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
+	cfg.SMESHING.Opts.ProviderID.SetUint32(initialization.CPUProviderID())
 
 	// note: these need to be set sufficiently low enough that turbohare finishes well before the LayerDurationSec
 	cfg.HARE.RoundDuration = 2
