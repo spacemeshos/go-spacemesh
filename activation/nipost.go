@@ -271,7 +271,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 		public.PostSeconds.Set(postGenDuration.Seconds())
 		nb.state.NIPost.Post = proof
 		nb.state.NIPost.PostMetadata = &types.PostMetadata{
-			Challenge:     postInfo.Challenge,
+			Challenge:     nb.state.PoetProofRef[:],
 			LabelsPerUnit: postInfo.LabelsPerUnit,
 		}
 

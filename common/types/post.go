@@ -6,7 +6,6 @@ type PostInfo struct {
 	CommitmentATX ATXID
 	Nonce         *VRFPostIndex
 
-	Challenge     []byte
 	NumUnits      uint32
 	LabelsPerUnit uint64
 }

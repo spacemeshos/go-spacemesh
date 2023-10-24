@@ -133,11 +133,7 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 		LayersPerEpoch:  layersPerEpoch,
 	}
 
-	tab.msync.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
-		ch := make(chan struct{})
-		close(ch)
-		return ch
-	}).AnyTimes()
+	tab.msync.EXPECT().RegisterForATXSynced().DoAndReturn(closedChan).AnyTimes()
 	tab.mpostSvc.EXPECT().Client(tab.nodeID).Return(tab.mpostClient, nil).AnyTimes()
 
 	b := NewBuilder(cfg, tab.nodeID, tab.sig, tab.cdb, tab.mpub, tab.mpostSvc, tab.mnipost, tab.mclock, tab.msync, lg, opts...)
@@ -275,9 +271,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 	now := time.Now()
 	getBuilder := func(t *testing.T) *Builder {
 		tab := newTestBuilder(t)
-		tab.mpostClient.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).AnyTimes().Return(&types.Post{}, &types.PostInfo{
-			Challenge: shared.ZeroChallenge,
-		}, nil)
+		tab.mpostClient.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).AnyTimes().Return(&types.Post{}, &types.PostInfo{}, nil)
 		tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
 		ch := make(chan struct{})
 		close(ch)
@@ -660,11 +654,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	r.NoError(atxs.Add(tab.cdb, vPrevAtx))
 
 	// Act
-	tab.msync.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
-		ch := make(chan struct{})
-		close(ch)
-		return ch
-	}).AnyTimes()
+	tab.msync.EXPECT().RegisterForATXSynced().DoAndReturn(closedChan).AnyTimes()
 
 	tab.mclock.EXPECT().CurrentLayer().Return(currentLayer).AnyTimes()
 	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
@@ -744,11 +734,7 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	r.NoError(atxs.Add(tab.cdb, vPosAtx))
 
 	// Act & Assert
-	tab.msync.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
-		ch := make(chan struct{})
-		close(ch)
-		return ch
-	}).AnyTimes()
+	tab.msync.EXPECT().RegisterForATXSynced().DoAndReturn(closedChan).AnyTimes()
 
 	tab.mclock.EXPECT().CurrentLayer().Return(currentLayer).AnyTimes()
 	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
@@ -1032,9 +1018,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 
 func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
-	tab.mpostClient.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).Return(&types.Post{}, &types.PostInfo{
-		Challenge: shared.ZeroChallenge,
-	}, nil)
+	tab.mpostClient.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).Return(&types.Post{}, &types.PostInfo{}, nil)
 	tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
 	require.NoError(t, tab.generateInitialPost(context.Background()))
 
@@ -1061,9 +1045,7 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 
 func TestBuilder_InitialPostIsPersisted(t *testing.T) {
 	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
-	tab.mpostClient.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).Return(&types.Post{}, &types.PostInfo{
-		Challenge: shared.ZeroChallenge,
-	}, nil)
+	tab.mpostClient.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).Return(&types.Post{}, &types.PostInfo{}, nil)
 	tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
 	require.NoError(t, tab.generateInitialPost(context.Background()))
 
@@ -1072,9 +1054,7 @@ func TestBuilder_InitialPostIsPersisted(t *testing.T) {
 
 	// Remove the persisted post file and try again
 	require.NoError(t, os.Remove(filepath.Join(tab.nipostBuilder.DataDir(), postFilename)))
-	tab.mpostClient.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).Return(&types.Post{}, &types.PostInfo{
-		Challenge: shared.ZeroChallenge,
-	}, nil)
+	tab.mpostClient.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).Return(&types.Post{}, &types.PostInfo{}, nil)
 	require.NoError(t, tab.generateInitialPost(context.Background()))
 }
 

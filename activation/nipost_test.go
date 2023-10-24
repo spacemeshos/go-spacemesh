@@ -61,13 +61,7 @@ func TestNIPostBuilderWithMocks(t *testing.T) {
 	require.NoError(t, err)
 
 	postClient := NewMockPostClient(ctrl)
-	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error) {
-			return &types.Post{}, &types.PostInfo{
-				Challenge: challenge,
-			}, nil
-		},
-	)
+	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(&types.Post{}, &types.PostInfo{}, nil)
 	postService := NewMockpostService(ctrl)
 	postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil)
 
@@ -107,13 +101,7 @@ func TestPostSetup(t *testing.T) {
 	mclock := defaultLayerClockMock(ctrl)
 
 	postClient := NewMockPostClient(ctrl)
-	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error) {
-			return &types.Post{}, &types.PostInfo{
-				Challenge: challenge,
-			}, nil
-		},
-	)
+	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(&types.Post{}, &types.PostInfo{}, nil)
 	postService := NewMockpostService(ctrl)
 	postService.EXPECT().Client(postProvider.id).Return(postClient, nil)
 
@@ -176,14 +164,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	require.NoError(t, err)
 
 	postClient := NewMockPostClient(ctrl)
-	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error) {
-			fmt.Printf("%x\n", challenge)
-			return &types.Post{}, &types.PostInfo{
-				Challenge: challenge,
-			}, nil
-		},
-	).Times(1)
+	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(&types.Post{}, &types.PostInfo{}, nil).Times(1)
 	postService := NewMockpostService(ctrl)
 	postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil).AnyTimes()
 
@@ -246,13 +227,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 		withPoetClients([]poetClient{poetProver}),
 	)
 	require.NoError(t, err)
-	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error) {
-			fmt.Printf("%x\n", challenge)
-			return &types.Post{}, &types.PostInfo{
-				Challenge: challenge,
-			}, nil
-		}).Times(1)
+	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(&types.Post{}, &types.PostInfo{}, nil).Times(1)
 
 	// check that proof ref is not called again
 	nipost, err = nb.BuildNIPost(context.Background(), &challenge2)
@@ -261,13 +236,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 
 	// test state not loading if other challenge provided
 	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
-	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error) {
-			fmt.Printf("%x\n", challenge)
-			return &types.Post{}, &types.PostInfo{
-				Challenge: challenge,
-			}, nil
-		}).Times(1)
+	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(&types.Post{}, &types.PostInfo{}, nil).Times(1)
 	nipost, err = nb.BuildNIPost(context.Background(), &challenge3)
 	require.NoError(t, err)
 	require.NotNil(t, nipost)
@@ -319,13 +288,7 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 	require.NoError(t, err)
 
 	postClient := NewMockPostClient(ctrl)
-	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error) {
-			return &types.Post{}, &types.PostInfo{
-				Challenge: challenge,
-			}, nil
-		},
-	)
+	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(&types.Post{}, &types.PostInfo{}, nil)
 	postService := NewMockpostService(ctrl)
 	postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil)
 	nb, err := NewNIPostBuilder(
@@ -391,13 +354,7 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 	require.NoError(t, err)
 
 	postClient := NewMockPostClient(ctrl)
-	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error) {
-			return &types.Post{}, &types.PostInfo{
-				Challenge: challenge,
-			}, nil
-		},
-	)
+	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(&types.Post{}, &types.PostInfo{}, nil)
 	postService := NewMockpostService(ctrl)
 	postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil)
 
@@ -750,13 +707,7 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 	require.NoError(t, err)
 
 	postClient := NewMockPostClient(ctrl)
-	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error) {
-			return &types.Post{}, &types.PostInfo{
-				Challenge: challenge,
-			}, nil
-		},
-	)
+	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(&types.Post{}, &types.PostInfo{}, nil)
 	postService := NewMockpostService(ctrl)
 	postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil)
 

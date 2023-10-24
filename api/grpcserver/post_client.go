@@ -133,7 +133,6 @@ func (pc *postClient) Proof(ctx context.Context, challenge []byte) (*types.Post,
 		CommitmentATX: types.BytesToATXID(proofMeta.CommitmentAtxId),
 		Nonce:         nonce,
 
-		Challenge:     challenge,
 		NumUnits:      proofMeta.GetNumUnits(),
 		LabelsPerUnit: proofMeta.GetLabelsPerUnit(),
 	}

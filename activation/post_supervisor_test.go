@@ -17,6 +17,12 @@ import (
 	"go.uber.org/zap/zaptest"
 )
 
+func closedChan() <-chan struct{} {
+	ch := make(chan struct{})
+	close(ch)
+	return ch
+}
+
 func Test_PostSupervisor_ErrorOnMissingBinary(t *testing.T) {
 	log := zaptest.NewLogger(t)
 
@@ -91,11 +97,7 @@ func Test_PostSupervisor_Start_FailStartSession(t *testing.T) {
 	mgr.EXPECT().StartSession(gomock.Any()).Return(errors.New("failed start session"))
 
 	sync := NewMocksyncer(ctrl)
-	sync.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
-		ch := make(chan struct{})
-		close(ch)
-		return ch
-	})
+	sync.EXPECT().RegisterForATXSynced().DoAndReturn(closedChan)
 
 	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr, sync)
 	require.NoError(t, err)
@@ -119,11 +121,7 @@ func Test_PostSupervisor_StartsServiceCmd(t *testing.T) {
 	mgr.EXPECT().StartSession(gomock.Any()).Return(nil)
 
 	sync := NewMocksyncer(ctrl)
-	sync.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
-		ch := make(chan struct{})
-		close(ch)
-		return ch
-	})
+	sync.EXPECT().RegisterForATXSynced().DoAndReturn(closedChan)
 
 	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr, sync)
 	require.NoError(t, err)
@@ -164,11 +162,7 @@ func Test_PostSupervisor_Restart_Possible(t *testing.T) {
 	mgr.EXPECT().StartSession(gomock.Any()).Return(nil)
 
 	sync := NewMocksyncer(ctrl)
-	sync.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
-		ch := make(chan struct{})
-		close(ch)
-		return ch
-	}).AnyTimes()
+	sync.EXPECT().RegisterForATXSynced().DoAndReturn(closedChan).AnyTimes()
 
 	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr, sync)
 	require.NoError(t, err)
@@ -204,11 +198,7 @@ func Test_PostSupervisor_RestartsOnCrash(t *testing.T) {
 	mgr.EXPECT().StartSession(gomock.Any()).Return(nil)
 
 	sync := NewMocksyncer(ctrl)
-	sync.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
-		ch := make(chan struct{})
-		close(ch)
-		return ch
-	})
+	sync.EXPECT().RegisterForATXSynced().DoAndReturn(closedChan)
 
 	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr, sync)
 	require.NoError(t, err)
@@ -250,11 +240,7 @@ func Test_PostSupervisor_StopOnError(t *testing.T) {
 	mgr.EXPECT().StartSession(gomock.Any()).Return(nil)
 
 	sync := NewMocksyncer(ctrl)
-	sync.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
-		ch := make(chan struct{})
-		close(ch)
-		return ch
-	})
+	sync.EXPECT().RegisterForATXSynced().DoAndReturn(closedChan)
 
 	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr, sync)
 	require.NoError(t, err)
