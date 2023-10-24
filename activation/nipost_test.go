@@ -176,7 +176,14 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	require.NoError(t, err)
 
 	postClient := NewMockPostClient(ctrl)
-	postClient.EXPECT().Proof(gomock.Any(), gomock.Any())
+	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error) {
+			fmt.Printf("%x\n", challenge)
+			return &types.Post{}, &types.PostInfo{
+				Challenge: challenge,
+			}, nil
+		},
+	).Times(1)
 	postService := NewMockpostService(ctrl)
 	postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil).AnyTimes()
 
@@ -239,7 +246,13 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 		withPoetClients([]poetClient{poetProver}),
 	)
 	require.NoError(t, err)
-	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Times(1)
+	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error) {
+			fmt.Printf("%x\n", challenge)
+			return &types.Post{}, &types.PostInfo{
+				Challenge: challenge,
+			}, nil
+		}).Times(1)
 
 	// check that proof ref is not called again
 	nipost, err = nb.BuildNIPost(context.Background(), &challenge2)
@@ -248,7 +261,13 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 
 	// test state not loading if other challenge provided
 	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
-	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Times(1)
+	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error) {
+			fmt.Printf("%x\n", challenge)
+			return &types.Post{}, &types.PostInfo{
+				Challenge: challenge,
+			}, nil
+		}).Times(1)
 	nipost, err = nb.BuildNIPost(context.Background(), &challenge3)
 	require.NoError(t, err)
 	require.NotNil(t, nipost)
