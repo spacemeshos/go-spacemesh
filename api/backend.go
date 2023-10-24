@@ -28,6 +28,34 @@ type ConservativeState interface {
 	Validation(raw types.RawTx) system.ValidationRequest
 }
 
+type BlockLayerOrHash struct {
+	BlockLayer       *BlockLayer    `json:"blockLayer,omitempty"`
+	BlockHash        *types.BlockID `json:"blockHash,omitempty"`
+	RequireCanonical bool           `json:"requireCanonical,omitempty"`
+}
+
+type BlockLayer int64
+
+const (
+	LatestBlockLayer = BlockLayer(-1)
+)
+
+func BlockLayerOrHashWithNumber(blockLayer BlockLayer) BlockLayerOrHash {
+	return BlockLayerOrHash{
+		BlockLayer:       &blockLayer,
+		BlockHash:        nil,
+		RequireCanonical: false,
+	}
+}
+
+func BlockLayerOrHashWithHash(hash types.BlockID, canonical bool) BlockLayerOrHash {
+	return BlockLayerOrHash{
+		BlockLayer:       nil,
+		BlockHash:        &hash,
+		RequireCanonical: canonical,
+	}
+}
+
 // Implements the general Spacemesh API functions.
 
 type Backend interface {
@@ -39,11 +67,13 @@ type Backend interface {
 	CurrentBlock() *types.Block
 	BlocksByLayer(ctx context.Context, layerid types.LayerID) ([]*types.Block, error)
 	BlockByHash(ctx context.Context, hash types.BlockID) (*types.Block, error)
+	BlocksByLayerOrHash(ctx context.Context, blockLayerOrHash BlockLayerOrHash) ([]*types.Block, error)
 	AccountByLayer(ctx context.Context, layerid types.LayerID) (*types.Account, error)
 
 	// Transaction pool API
-	GetPoolCounter(ctx context.Context, addr types.Address) (uint64, error)
-	GetTransaction(ctx context.Context, txHash types.TransactionID) (*types.Transaction, types.TransactionID, uint64, uint64, error)
+	// note: there is currently no way to get pool txs by account. is this needed?
+	GetProjection(types.Address) (uint64, uint64)
+	GetTransaction(ctx context.Context, txHash types.TransactionID) (*types.Transaction, types.BlockID, uint64, uint64, error)
 	GetPoolTransaction(txHash types.TransactionID) *types.Transaction
 	GetPoolTransactions() ([]*types.Transaction, error)
 

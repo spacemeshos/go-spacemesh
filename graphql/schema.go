@@ -79,8 +79,8 @@ const schema string = `
 
     # Block is a block.
     type Block {
-        # Number is the layer height of this block, starting at 0 for the genesis layer.
-        number: Long!
+        # Layer is the layer height of this block, starting at 0 for the genesis layer.
+        layer: Long!
         # Hash is the block hash of this block.
         hash: Bytes32!
         # TransactionCount is the number of transactions in this block. if
@@ -121,8 +121,6 @@ const schema string = `
 
     # Pending represents the current pending state.
     type Pending {
-        # TransactionCount is the number of transactions in the pending state.
-        transactionCount: Long!
         # Transactions is a list of transactions in the current pending state.
         transactions: [Transaction!]
         # Account fetches an account for the pending state.

@@ -95,59 +95,11 @@ func (a *Account) Balance(ctx context.Context) (uint64, error) {
 	return account.Balance, nil
 }
 
-func (a *Account) TransactionCount(ctx context.Context) (hexutil.Uint64, error) {
-	// Ask transaction pool for the nonce which includes pending transactions
-	if blockNr, ok := a.blockNrOrHash.Number(); ok && blockNr == rpc.PendingBlockNumber {
-		nonce, err := a.r.backend.GetPoolNonce(ctx, a.address)
-		if err != nil {
-			return 0, err
-		}
-		return hexutil.Uint64(nonce), nil
-	}
-	state, err := a.getAccount(ctx)
-	if err != nil {
-		return 0, err
-	}
-	return hexutil.Uint64(state.GetNonce(a.address)), nil
-}
-
-// Log represents an individual log message. All arguments are mandatory.
-type Log struct {
-	r           *Resolver
-	transaction *Transaction
-}
-
-func (l *Log) Transaction(ctx context.Context) *Transaction {
-	return l.transaction
-}
-
-func (l *Log) Account(ctx context.Context, args BlockNumberArgs) *Account {
-	return &Account{
-		r:             l.r,
-		address:       l.log.Address,
-		blockNrOrHash: args.NumberOrLatest(),
-	}
-}
-
-func (l *Log) Index(ctx context.Context) hexutil.Uint64 {
-	return hexutil.Uint64(l.log.Index)
-}
-
-// AccessTuple represents EIP-2930
-type AccessTuple struct {
-	address     common.Address
-	storageKeys []common.Hash
-}
-
-func (at *AccessTuple) Address(ctx context.Context) common.Address {
-	return at.address
-}
-
-// Transaction represents an Ethereum transaction.
+// Transaction represents a Spacemesh transaction.
 // backend and hash are mandatory; all others will be fetched when required.
 type Transaction struct {
 	r    *Resolver
-	hash common.Hash // Must be present after initialization
+	hash types.TransactionID // Must be present after initialization
 	mu   sync.Mutex
 	// mu protects following resources
 	tx    *types.Transaction
@@ -167,11 +119,11 @@ func (t *Transaction) resolve(ctx context.Context) (*types.Transaction, *Block) 
 	tx, blockHash, _, index, err := t.r.backend.GetTransaction(ctx, t.hash)
 	if err == nil && tx != nil {
 		t.tx = tx
-		blockNrOrHash := rpc.BlockNumberOrHashWithHash(blockHash, false)
+		blockNrOrHash := api.BlockLayerOrHashWithHash(blockHash, false)
 		t.block = &Block{
-			r:            t.r,
-			numberOrHash: &blockNrOrHash,
-			hash:         blockHash,
+			r:           t.r,
+			layerOrHash: &blockNrOrHash,
+			hash:        blockHash,
 		}
 		t.index = index
 		return t.tx, t.block
@@ -282,14 +234,12 @@ type BlockType int
 // backend, and numberOrHash are mandatory. All other fields are lazily fetched
 // when required.
 type Block struct {
-	r            *Resolver
-	numberOrHash *rpc.BlockNumberOrHash // Field resolvers assume numberOrHash is always present
-	mu           sync.Mutex
+	r           *Resolver
+	layerOrHash *api.BlockLayerOrHash // Field resolvers assume layerOrHash is always present
+	mu          sync.Mutex
 	// mu protects following resources
-	hash     common.Hash // Must be resolved during initialization
-	header   *types.Header
-	block    *types.Block
-	receipts []*types.Receipt
+	hash  types.BlockID // Must be resolved during initialization
+	block *types.Block
 }
 
 // resolve returns the internal Block object representing this block, fetching
@@ -300,54 +250,33 @@ func (b *Block) resolve(ctx context.Context) (*types.Block, error) {
 	if b.block != nil {
 		return b.block, nil
 	}
-	if b.numberOrHash == nil {
-		latest := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
-		b.numberOrHash = &latest
+	if b.layerOrHash == nil {
+		latest := api.BlockLayerOrHashWithNumber(api.LatestBlockLayer)
+		b.layerOrHash = &latest
 	}
 	var err error
-	b.block, err = b.r.backend.BlockByNumberOrHash(ctx, *b.numberOrHash)
-	if b.block != nil {
-		b.hash = b.block.Hash()
-		if b.header == nil {
-			b.header = b.block.Header()
+	blocks, err := b.r.backend.BlocksByLayerOrHash(ctx, *b.layerOrHash)
+	if blocks != nil {
+		if len(blocks) == 1 {
+			b.block = blocks[0]
+			b.hash = b.block.ID()
+		} else {
+			err = fmt.Errorf("found multiple blocks for layer or hash")
 		}
 	}
 	return b.block, err
 }
 
-// resolveHeader returns the internal Header object for this block, fetching it
-// if necessary. Call this function instead of `resolve` unless you need the
-// additional data (transactions and uncles).
-func (b *Block) resolveHeader(ctx context.Context) (*types.Header, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if b.header != nil {
-		return b.header, nil
-	}
-	if b.numberOrHash == nil && b.hash == (common.Hash{}) {
-		return nil, errBlockInvariant
-	}
-	var err error
-	b.header, err = b.r.backend.HeaderByNumberOrHash(ctx, *b.numberOrHash)
-	if err != nil {
-		return nil, err
-	}
-	if b.hash == (common.Hash{}) {
-		b.hash = b.header.Hash()
-	}
-	return b.header, nil
-}
-
-func (b *Block) Number(ctx context.Context) (hexutil.Uint64, error) {
-	header, err := b.resolveHeader(ctx)
+func (b *Block) Layer(ctx context.Context) (types.LayerID, error) {
+	block, err := b.resolve(ctx)
 	if err != nil {
 		return 0, err
 	}
 
-	return hexutil.Uint64(header.Number.Uint64()), nil
+	return block.LayerIndex, nil
 }
 
-func (b *Block) Hash(ctx context.Context) (common.Hash, error) {
+func (b *Block) Hash(ctx context.Context) (types.BlockID, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.hash, nil
@@ -630,26 +559,6 @@ func (r *Resolver) SendRawTransaction(ctx context.Context, args struct{ Data hex
 	}
 	hash, err := ethapi.SubmitTransaction(ctx, r.backend, tx)
 	return hash, err
-}
-
-// FilterCriteria encapsulates the arguments to `logs` on the root resolver object.
-type FilterCriteria struct {
-	FromBlock *Long             // beginning of the queried range, nil means genesis block
-	ToBlock   *Long             // end of the range, nil means latest block
-	Addresses *[]common.Address // restricts matches to events created by specific contracts
-
-	// The Topic list restricts matches to particular event topics. Each event has a list
-	// of topics. Topics matches a prefix of that list. An empty element slice matches any
-	// topic. Non-empty elements represent an alternative that matches any of the
-	// contained topics.
-	//
-	// Examples:
-	// {} or nil          matches any topic list
-	// {{A}}              matches topic A in first position
-	// {{}, {B}}          matches any topic in first position, B in second position
-	// {{A}, {B}}         matches topic A in first position, B in second position
-	// {{A, B}}, {C, D}}  matches topic (A OR B) in first position, (C OR D) in second position
-	Topics *[][]common.Hash
 }
 
 func (r *Resolver) GasPrice(ctx context.Context) (hexutil.Big, error) {
