@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-scale/tester"
+	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -101,7 +102,9 @@ func TestPostSetup(t *testing.T) {
 	mclock := defaultLayerClockMock(ctrl)
 
 	postClient := NewMockPostClient(ctrl)
-	postClient.EXPECT().Proof(gomock.Any(), gomock.Any())
+	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(&types.Post{}, &types.PostInfo{
+		Challenge: shared.ZeroChallenge,
+	}, nil)
 	postService := NewMockpostService(ctrl)
 	postService.EXPECT().Client(postProvider.id).Return(postClient, nil)
 

@@ -275,7 +275,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 	now := time.Now()
 	getBuilder := func(t *testing.T) *Builder {
 		tab := newTestBuilder(t)
-		tab.mpostClient.EXPECT().Proof(gomock.Any(), gomock.Any()).AnyTimes().Return(&types.Post{}, &types.PostMetadata{
+		tab.mpostClient.EXPECT().Proof(gomock.Any(), gomock.Any()).AnyTimes().Return(&types.Post{}, &types.PostInfo{
 			Challenge: shared.ZeroChallenge,
 		}, nil)
 		tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
