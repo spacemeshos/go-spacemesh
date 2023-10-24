@@ -294,7 +294,7 @@ func Test_PostSupervisor_Providers_includesCPU(t *testing.T) {
 	require.Fail(t, "no CPU provider found")
 }
 
-func TestPostSetupManager_Benchmark(t *testing.T) {
+func Test_PostSupervisor_Benchmark(t *testing.T) {
 	log := zaptest.NewLogger(t)
 
 	cmdCfg := DefaultTestPostServiceConfig()
