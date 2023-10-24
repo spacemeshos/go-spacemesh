@@ -275,7 +275,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 	now := time.Now()
 	getBuilder := func(t *testing.T) *Builder {
 		tab := newTestBuilder(t)
-		tab.mpostClient.EXPECT().Proof(gomock.Any(), gomock.Any()).AnyTimes().Return(&types.Post{}, &types.PostInfo{
+		tab.mpostClient.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).AnyTimes().Return(&types.Post{}, &types.PostInfo{
 			Challenge: shared.ZeroChallenge,
 		}, nil)
 		tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
@@ -1032,7 +1032,9 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 
 func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
-	tab.mpostClient.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).Return(&types.Post{}, &types.PostInfo{}, nil)
+	tab.mpostClient.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).Return(&types.Post{}, &types.PostInfo{
+		Challenge: shared.ZeroChallenge,
+	}, nil)
 	tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
 	require.NoError(t, tab.generateInitialPost(context.Background()))
 
@@ -1070,7 +1072,9 @@ func TestBuilder_InitialPostIsPersisted(t *testing.T) {
 
 	// Remove the persisted post file and try again
 	require.NoError(t, os.Remove(filepath.Join(tab.nipostBuilder.DataDir(), postFilename)))
-	tab.mpostClient.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).Return(&types.Post{}, &types.PostInfo{}, nil)
+	tab.mpostClient.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).Return(&types.Post{}, &types.PostInfo{
+		Challenge: shared.ZeroChallenge,
+	}, nil)
 	require.NoError(t, tab.generateInitialPost(context.Background()))
 }
 
