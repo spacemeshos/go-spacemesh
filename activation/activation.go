@@ -84,6 +84,7 @@ type Builder struct {
 	postService      postService
 	nipostBuilder    nipostBuilder
 	initialPost      *types.Post
+	initialPostInfo  *types.PostInfo
 	validator        nipostValidator
 
 	// smeshingMutex protects `StartSmeshing` and `StopSmeshing` from concurrent access
@@ -180,7 +181,7 @@ func NewBuilder(
 	return b
 }
 
-func (b *Builder) proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error) {
+func (b *Builder) proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error) {
 	for {
 		client, err := b.postService.Client(b.nodeID)
 		if err == nil {
@@ -293,18 +294,20 @@ func (b *Builder) generateInitialPost(ctx context.Context) error {
 	if post, err := loadPost(b.nipostBuilder.DataDir()); err == nil {
 		b.log.Info("loaded the initial post from disk")
 		b.initialPost = post
+		// TODO(mafa): initial post info?
 		return nil
 	}
 
 	// Create the initial post and save it.
 	startTime := time.Now()
-	post, _, err := b.proof(ctx, shared.ZeroChallenge)
+	post, postInfo, err := b.proof(ctx, shared.ZeroChallenge)
 	if err != nil {
 		events.EmitPostFailure()
 		return fmt.Errorf("post execution: %w", err)
 	}
 	events.EmitPostComplete(shared.ZeroChallenge)
 	b.initialPost = post
+	b.initialPostInfo = postInfo
 	metrics.PostDuration.Set(float64(time.Since(startTime).Nanoseconds()))
 	public.PostSeconds.Set(float64(time.Since(startTime)))
 	b.log.Info("created the initial post")
@@ -440,11 +443,20 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch commitment ATX: %w", err)
 		}
-		info, err := client.Info(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get commitment ATX: %w", err)
+		if b.initialPostInfo == nil {
+			// This is a temporary workaround for the case where an initial post has been generated,
+			// persisted to and loaded from disk. In this case we don't have a post info object
+			// and need to fetch it from the post service
+			//
+			// In a future PR all data that is persisted to disk will instead be persisted to db and
+			// the initial post data will be extended with post info to not require this any more
+			info, err := client.Info(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get commitment ATX: %w", err)
+			}
+			b.initialPostInfo = info
 		}
-		challenge.CommitmentATX = &info.CommitmentATX
+		challenge.CommitmentATX = &b.initialPostInfo.CommitmentATX
 		challenge.InitialPost = b.initialPost
 	} else {
 		challenge.PrevATXID = prevAtx.ID

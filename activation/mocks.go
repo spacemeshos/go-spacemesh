@@ -1812,11 +1812,11 @@ func (c *PostClientInfoCall) DoAndReturn(f func(context.Context) (*types.PostInf
 }
 
 // Proof mocks base method.
-func (m *MockPostClient) Proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error) {
+func (m *MockPostClient) Proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Proof", ctx, challenge)
 	ret0, _ := ret[0].(*types.Post)
-	ret1, _ := ret[1].(*types.PostMetadata)
+	ret1, _ := ret[1].(*types.PostInfo)
 	ret2, _ := ret[2].(error)
 	return ret0, ret1, ret2
 }
@@ -1834,19 +1834,19 @@ type PostClientProofCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *PostClientProofCall) Return(arg0 *types.Post, arg1 *types.PostMetadata, arg2 error) *PostClientProofCall {
+func (c *PostClientProofCall) Return(arg0 *types.Post, arg1 *types.PostInfo, arg2 error) *PostClientProofCall {
 	c.Call = c.Call.Return(arg0, arg1, arg2)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *PostClientProofCall) Do(f func(context.Context, []byte) (*types.Post, *types.PostMetadata, error)) *PostClientProofCall {
+func (c *PostClientProofCall) Do(f func(context.Context, []byte) (*types.Post, *types.PostInfo, error)) *PostClientProofCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *PostClientProofCall) DoAndReturn(f func(context.Context, []byte) (*types.Post, *types.PostMetadata, error)) *PostClientProofCall {
+func (c *PostClientProofCall) DoAndReturn(f func(context.Context, []byte) (*types.Post, *types.PostInfo, error)) *PostClientProofCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

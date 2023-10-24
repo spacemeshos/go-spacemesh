@@ -289,8 +289,8 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 
 	postClient := NewMockPostClient(ctrl)
 	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error) {
-			return &types.Post{}, &types.PostMetadata{
+		func(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error) {
+			return &types.Post{}, &types.PostInfo{
 				Challenge: challenge,
 			}, nil
 		},
@@ -361,8 +361,8 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 
 	postClient := NewMockPostClient(ctrl)
 	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error) {
-			return &types.Post{}, &types.PostMetadata{
+		func(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error) {
+			return &types.Post{}, &types.PostInfo{
 				Challenge: challenge,
 			}, nil
 		},
@@ -720,8 +720,8 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 
 	postClient := NewMockPostClient(ctrl)
 	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error) {
-			return &types.Post{}, &types.PostMetadata{
+		func(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error) {
+			return &types.Post{}, &types.PostInfo{
 				Challenge: challenge,
 			}, nil
 		},
