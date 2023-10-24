@@ -301,7 +301,7 @@ func (g *Generator) saveAndCertify(ctx context.Context, lid types.LayerID, block
 		)
 	}
 
-	if err := g.cert.CertifyIfEligible(ctx, g.logger, lid, hareOutput); err != nil && !errors.Is(err, eligibility.ErrNotActive) {
+	if err := g.cert.CertifyIfEligible(ctx, lid, hareOutput); err != nil && !errors.Is(err, eligibility.ErrNotActive) {
 		g.logger.With().Warning("failed to certify block",
 			log.Context(ctx),
 			lid,

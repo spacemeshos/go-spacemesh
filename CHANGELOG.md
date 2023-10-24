@@ -39,20 +39,28 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 * [#5171](https://github.com/spacemeshos/go-spacemesh/pull/5171) Set minimal active set according to the observed number of atxs.
 
-  It will prevent ballots that underreport observed atxs from spamming the network. It doesn't have impact on rewards.
+  It will prevent ballots that under report observed atxs from spamming the network. It doesn't have impact on rewards.
 
-* [#5169](https://github.com/spacemeshos/go-spacemesh/pull/5169) Support prunning activesets.
+* [#5169](https://github.com/spacemeshos/go-spacemesh/pull/5169) Support pruning activesets.
 
   As of epoch 6 activesets storage size is about ~1.5GB. They are not useful after verifying eligibilities
   for ballots in the current epoch and can be pruned.
 
   Pruning will be enabled starting from epoch 8, e.g in epoch 8 we will prune all activesets for epochs 7 and below.
   We should also run an archival node that doesn't prune them. To disable pruning we should configure
+  
   ```json
   "main": {
       "prune-activesets-from": 4294967295
   }
-  ``` 
+  ```
+
+* [#5189](https://github.com/spacemeshos/go-spacemesh/pull/5189) Removed deprecated "Best Provider" option for initialization.
+
+  With v1.1.0 (<https://github.com/spacemeshos/go-spacemesh/releases/tag/v1.1.0>) selecting `-1` as `smeshing-opts-provider` has been deprecated. This option has now been removed.
+  Nodes that already finished initialization can leave this setting empty, as it is not required any more to be set when no initialization is performed. For nodes that have not
+  yet created their initial proof the operator has to specify which provider to use. For Smapp users this is done automatically by Smapp, users that do not use Smapp may use
+  `postcli -printProviders` (<https://github.com/spacemeshos/post/releases>) to list their OpenCL providers and associated IDs.
 
 ## v1.2.0
 

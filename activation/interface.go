@@ -105,5 +105,6 @@ type postService interface {
 }
 
 type PostClient interface {
+	Info(ctx context.Context) (*types.PostInfo, error)
 	Proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error)
 }

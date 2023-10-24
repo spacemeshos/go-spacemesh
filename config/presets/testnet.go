@@ -35,7 +35,7 @@ func testnet() config.Config {
 	p2pconfig := p2p.DefaultConfig()
 
 	smeshing := config.DefaultSmeshingConfig()
-	smeshing.Opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
+	smeshing.Opts.ProviderID.SetUint32(initialization.CPUProviderID())
 	smeshing.ProvingOpts.Nonces = 288
 	smeshing.ProvingOpts.Threads = uint(runtime.NumCPU() * 3 / 4)
 	if smeshing.ProvingOpts.Threads < 1 {

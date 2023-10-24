@@ -39,7 +39,7 @@ func TestValidator_Validate(t *testing.T) {
 
 	opts := activation.DefaultPostSetupOpts()
 	opts.DataDir = t.TempDir()
-	opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
+	opts.ProviderID.SetUint32(initialization.CPUProviderID())
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
 	initPost(t, logger.Named("manager"), mgr, opts)
 

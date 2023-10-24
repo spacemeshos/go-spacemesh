@@ -72,7 +72,7 @@ func fastnet() config.Config {
 	types.SetNetworkHRP(conf.NetworkHRP) // ensure that the correct HRP is set when generating the address below
 	conf.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte("1")).String()
 	conf.SMESHING.Start = false
-	conf.SMESHING.Opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
+	conf.SMESHING.Opts.ProviderID.SetUint32(initialization.CPUProviderID())
 	conf.SMESHING.Opts.NumUnits = 2
 	conf.SMESHING.Opts.ComputeBatchSize = 128
 	conf.SMESHING.Opts.Scrypt.N = 2 // faster scrypt
