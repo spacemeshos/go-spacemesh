@@ -7,6 +7,7 @@ import (
 
 	lru "github.com/hashicorp/golang-lru/v2"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -31,6 +32,9 @@ type CachedDB struct {
 	*sql.Database
 	logger log.Log
 
+	// cache is optional
+	atxsdata *atxsdata.Data
+
 	atxHdrCache   *lru.Cache[types.ATXID, *types.ActivationTxHeader]
 	vrfNonceCache *lru.Cache[VrfNonceKey, *types.VRFPostIndex]
 
@@ -52,7 +56,8 @@ func DefaultConfig() Config {
 }
 
 type cacheOpts struct {
-	cfg Config
+	cfg      Config
+	atxsdata *atxsdata.Data
 }
 
 type Opt func(*cacheOpts)
@@ -60,6 +65,12 @@ type Opt func(*cacheOpts)
 func WithConfig(cfg Config) Opt {
 	return func(o *cacheOpts) {
 		o.cfg = cfg
+	}
+}
+
+func WithConsensusCache(c *atxsdata.Data) Opt {
+	return func(o *cacheOpts) {
+		o.atxsdata = c
 	}
 }
 
@@ -88,6 +99,7 @@ func NewCachedDB(db *sql.Database, lg log.Log, opts ...Opt) *CachedDB {
 
 	return &CachedDB{
 		Database:         db,
+		atxsdata:         o.atxsdata,
 		logger:           lg,
 		atxHdrCache:      atxHdrCache,
 		malfeasanceCache: malfeasanceCache,
@@ -152,7 +164,9 @@ func (db *CachedDB) CacheMalfeasanceProof(id types.NodeID, proof *types.Malfeasa
 	if id == types.EmptyNodeID {
 		db.logger.Fatal("invalid argument to CacheMalfeasanceProof")
 	}
-
+	if db.atxsdata != nil {
+		db.atxsdata.SetMalicious(id)
+	}
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	db.malfeasanceCache.Add(id, proof)
@@ -201,7 +215,7 @@ func (db *CachedDB) GetFullAtx(id types.ATXID) (*types.VerifiedActivationTx, err
 		return nil, fmt.Errorf("get ATXs from DB: %w", err)
 	}
 
-	db.atxHdrCache.Add(id, getHeader(atx))
+	db.atxHdrCache.Add(id, atx.ToHeader())
 	return atx, nil
 }
 
@@ -296,9 +310,9 @@ func (db *CachedDB) GetEpochAtx(
 	if err != nil {
 		return nil, fmt.Errorf("no epoch atx found: %w", err)
 	}
-	hdr := getHeader(vatx)
-	db.atxHdrCache.Add(vatx.ID(), hdr)
-	return hdr, nil
+	header := vatx.ToHeader()
+	db.atxHdrCache.Add(vatx.ID(), header)
+	return header, nil
 }
 
 // IdentityExists returns true if this NodeID has published any ATX.
@@ -383,22 +397,4 @@ func (bs *BlobStore) Get(hint Hint, key []byte) ([]byte, error) {
 		return activesets.GetBlob(bs.DB, key)
 	}
 	return nil, fmt.Errorf("blob store not found %s", hint)
-}
-
-func getHeader(vatx *types.VerifiedActivationTx) *types.ActivationTxHeader {
-	return &types.ActivationTxHeader{
-		NIPostChallenge:   vatx.NIPostChallenge,
-		Coinbase:          vatx.Coinbase,
-		NumUnits:          vatx.NumUnits,
-		EffectiveNumUnits: vatx.EffectiveNumUnits(),
-		VRFNonce:          vatx.VRFNonce,
-		Received:          vatx.Received(),
-
-		ID:     vatx.ID(),
-		NodeID: vatx.SmesherID,
-
-		BaseTickHeight: vatx.BaseTickHeight(),
-		TickCount:      vatx.TickCount(),
-		Golden:         vatx.Golden(),
-	}
 }
