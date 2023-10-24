@@ -97,7 +97,7 @@ func runNodesFor(t *testing.T, ctx context.Context, nodes, leaders, maxLayers, l
 
 		th := &testHare{createTestHare(t, mockMesh, cfg, w.clock, mp2p, t.Name()), i}
 		th.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
-		th.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any()).Return(types.EmptyVrfSignature, nil).AnyTimes()
+		th.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(types.EmptyVrfSignature, nil).AnyTimes()
 		th.mockRoracle.EXPECT().CalcEligibility(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 			func(_ context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig types.VrfSignature) (uint16, error) {
 				return oracle(layer, round, committeeSize, id, sig, th)

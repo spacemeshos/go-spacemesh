@@ -6,18 +6,21 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
-func gatx(id types.ATXID, epoch types.EpochID, smesher types.NodeID, units uint32, nonce types.VRFPostIndex) types.VerifiedActivationTx {
+func gatx(
+	id types.ATXID,
+	epoch types.EpochID,
+	smesher types.NodeID,
+	units uint32,
+	nonce types.VRFPostIndex,
+) types.VerifiedActivationTx {
 	atx := &types.ActivationTx{}
 	atx.NumUnits = units
 	atx.PublishEpoch = epoch
@@ -33,7 +36,13 @@ func gatx(id types.ATXID, epoch types.EpochID, smesher types.NodeID, units uint3
 	return *verified
 }
 
-func gatxZeroHeight(id types.ATXID, epoch types.EpochID, smesher types.NodeID, units uint32, nonce types.VRFPostIndex) types.VerifiedActivationTx {
+func gatxZeroHeight(
+	id types.ATXID,
+	epoch types.EpochID,
+	smesher types.NodeID,
+	units uint32,
+	nonce types.VRFPostIndex,
+) types.VerifiedActivationTx {
 	atx := &types.ActivationTx{}
 	atx.NumUnits = units
 	atx.PublishEpoch = epoch
@@ -125,6 +134,7 @@ func TestEligibilityValidator(t *testing.T) {
 
 	for _, tc := range []struct {
 		desc      string
+		evicted   types.EpochID
 		current   types.LayerID
 		minWeight uint64
 		atxs      []types.VerifiedActivationTx
@@ -311,7 +321,7 @@ func TestEligibilityValidator(t *testing.T) {
 				geligibilities(1, 2),
 			),
 			fail: true,
-			err:  "target epoch and ballot publish epoch mismatch",
+			err:  "failed to load atx from cache",
 		},
 		{
 			desc:    "ballot uses wrong atx",
@@ -326,10 +336,11 @@ func TestEligibilityValidator(t *testing.T) {
 				geligibilities(1, 2),
 			),
 			fail: true,
-			err:  "ballot smesher key and ATX node key mismatch",
+			err:  "belongs to a different smesher",
 		},
 		{
 			desc:    "no vrf nonce",
+			evicted: epoch,
 			current: epoch.FirstLayer(),
 			atxs: []types.VerifiedActivationTx{
 				gatxNilNonce(types.ATXID{1}, epoch-1, types.NodeID{1}, 10),
@@ -341,7 +352,7 @@ func TestEligibilityValidator(t *testing.T) {
 				geligibilities(1, 2),
 			),
 			fail: true,
-			err:  "no vrf nonce",
+			err:  "failed to load atx from cache",
 		},
 		{
 			desc:    "secondary ballot",
@@ -560,19 +571,38 @@ func TestEligibilityValidator(t *testing.T) {
 			}).AnyTimes()
 
 			lg := logtest.New(t)
-			db := datastore.NewCachedDB(sql.InMemory(), lg)
-			tv := NewEligibilityValidator(layerAvgSize, layersPerEpoch, []types.EpochMinimalActiveWeight{{Weight: tc.minWeight}}, ms.mclock, ms.md,
-				db, ms.mbc, lg, ms.mvrf,
-				WithNonceFetcher(db),
+			const capacity = 2
+			c := atxsdata.New(atxsdata.WithCapacity(capacity))
+			c.OnEpoch(tc.evicted + capacity)
+			tv := NewEligibilityValidator(
+				layerAvgSize,
+				layersPerEpoch,
+				[]types.EpochMinimalActiveWeight{{Weight: tc.minWeight}},
+				ms.mclock,
+				ms.md,
+				c,
+				ms.mbc,
+				lg,
+				ms.mvrf,
 			)
 			for _, atx := range tc.atxs {
-				require.NoError(t, atxs.Add(db, &atx))
+				c.Add(
+					atx.TargetEpoch(),
+					atx.SmesherID,
+					atx.ID(),
+					atx.GetWeight(),
+					atx.BaseTickHeight(),
+					atx.TickHeight(),
+					0,
+					false,
+				)
 			}
 			for _, ballot := range tc.ballots {
 				ballots[ballot.ID()] = &ballot
 			}
 			if !tc.fail {
-				ms.mbc.EXPECT().ReportBeaconFromBallot(tc.executed.Layer.GetEpoch(), &tc.executed, gomock.Any(), gomock.Any())
+				ms.mbc.EXPECT().
+					ReportBeaconFromBallot(tc.executed.Layer.GetEpoch(), &tc.executed, gomock.Any(), gomock.Any())
 			}
 			rst, err := tv.CheckEligibility(context.Background(), &tc.executed, tc.actives)
 			assert.Equal(t, !tc.fail, rst)

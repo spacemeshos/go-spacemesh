@@ -1888,6 +1888,45 @@ func (m *MockPostClient) EXPECT() *MockPostClientMockRecorder {
 	return m.recorder
 }
 
+// Info mocks base method.
+func (m *MockPostClient) Info(ctx context.Context) (*types.PostInfo, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Info", ctx)
+	ret0, _ := ret[0].(*types.PostInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Info indicates an expected call of Info.
+func (mr *MockPostClientMockRecorder) Info(ctx any) *PostClientInfoCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Info", reflect.TypeOf((*MockPostClient)(nil).Info), ctx)
+	return &PostClientInfoCall{Call: call}
+}
+
+// PostClientInfoCall wrap *gomock.Call
+type PostClientInfoCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *PostClientInfoCall) Return(arg0 *types.PostInfo, arg1 error) *PostClientInfoCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *PostClientInfoCall) Do(f func(context.Context) (*types.PostInfo, error)) *PostClientInfoCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *PostClientInfoCall) DoAndReturn(f func(context.Context) (*types.PostInfo, error)) *PostClientInfoCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // Proof mocks base method.
 func (m *MockPostClient) Proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error) {
 	m.ctrl.T.Helper()

@@ -91,7 +91,7 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 	opts.NumUnits = in.Opts.NumUnits
 	opts.MaxFileSize = in.Opts.MaxFileSize
 	if in.Opts.ProviderId != nil {
-		opts.ProviderID.SetInt64(int64(*in.Opts.ProviderId))
+		opts.ProviderID.SetUint32(*in.Opts.ProviderId)
 	}
 	opts.Throttle = in.Opts.Throttle
 

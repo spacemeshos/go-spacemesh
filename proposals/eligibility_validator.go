@@ -7,16 +7,14 @@ import (
 
 	"github.com/spacemeshos/fixed"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner/minweight"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 var (
-	errTargetEpochMismatch = errors.New("ATX target epoch and ballot publish epoch mismatch")
-	errPublicKeyMismatch   = errors.New("ballot smesher key and ATX node key mismatch")
 	errIncorrectCounter    = errors.New("proof counter larger than number of slots available")
 	errInvalidProofsOrder  = errors.New("proofs are out of order")
 	errIncorrectVRFSig     = errors.New("proof contains incorrect VRF signature")
@@ -31,22 +29,15 @@ type Validator struct {
 	avgLayerSize       uint32
 	layersPerEpoch     uint32
 	tortoise           tortoiseProvider
-	cdb                *datastore.CachedDB
+	atxsdata           *atxsdata.Data
 	clock              layerClock
 	beacons            system.BeaconCollector
 	logger             log.Log
 	vrfVerifier        vrfVerifier
-	nonceFetcher       nonceFetcher
 }
 
 // ValidatorOpt for configuring Validator.
 type ValidatorOpt func(h *Validator)
-
-func WithNonceFetcher(nf nonceFetcher) ValidatorOpt {
-	return func(h *Validator) {
-		h.nonceFetcher = nf
-	}
-}
 
 // NewEligibilityValidator returns a new EligibilityValidator.
 func NewEligibilityValidator(
@@ -54,7 +45,7 @@ func NewEligibilityValidator(
 	minActiveSetWeight []types.EpochMinimalActiveWeight,
 	clock layerClock,
 	tortoise tortoiseProvider,
-	cdb *datastore.CachedDB,
+	atxsdata *atxsdata.Data,
 	bc system.BeaconCollector,
 	lg log.Log,
 	vrfVerifier vrfVerifier,
@@ -65,8 +56,7 @@ func NewEligibilityValidator(
 		avgLayerSize:       avgLayerSize,
 		layersPerEpoch:     layersPerEpoch,
 		tortoise:           tortoise,
-		cdb:                cdb,
-		nonceFetcher:       cdb,
+		atxsdata:           atxsdata,
 		clock:              clock,
 		beacons:            bc,
 		logger:             lg,
@@ -83,34 +73,32 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot, 
 	if len(ballot.EligibilityProofs) == 0 {
 		return false, fmt.Errorf("empty eligibility list is invalid (ballot %s)", ballot.ID())
 	}
-	owned, err := v.cdb.GetAtxHeader(ballot.AtxID)
-	if err != nil {
-		return false, fmt.Errorf("failed to load atx %v: %w", ballot.AtxID, err)
+	atx := v.atxsdata.Get(ballot.Layer.GetEpoch(), ballot.AtxID)
+	if atx == nil {
+		return false, fmt.Errorf(
+			"failed to load atx from cache with epoch %d %s",
+			ballot.Layer.GetEpoch(),
+			ballot.AtxID.ShortString(),
+		)
 	}
-	if owned.TargetEpoch() != ballot.Layer.GetEpoch() {
-		return false, fmt.Errorf("%w: ATX target epoch (%v), ballot publication epoch (%v)",
-			errTargetEpochMismatch, owned.TargetEpoch(), ballot.Layer.GetEpoch())
+	if atx.Node != ballot.SmesherID {
+		return false, fmt.Errorf(
+			"referenced atx %s belongs to a different smesher %s",
+			atx.Node.ShortString(),
+			ballot.SmesherID.ShortString(),
+		)
 	}
-	if ballot.SmesherID != owned.NodeID {
-		return false, fmt.Errorf("%w: public key (%v), ATX node key (%v)", errPublicKeyMismatch, ballot.SmesherID.String(), owned.NodeID)
-	}
-	nonce, err := v.nonceFetcher.VRFNonce(ballot.SmesherID, ballot.Layer.GetEpoch())
-	if err != nil {
-		return false, fmt.Errorf("no vrf nonce for %v in epoch %v: %w", ballot.SmesherID, ballot.Layer.GetEpoch(), err)
-	}
-	var data *types.EpochData
+	var (
+		data *types.EpochData
+		err  error
+	)
 	if ballot.EpochData != nil && ballot.Layer.GetEpoch() == v.clock.CurrentLayer().GetEpoch() {
-		var err error
-		data, err = v.validateReference(ballot, actives, owned)
-		if err != nil {
-			return false, err
-		}
+		data, err = v.validateReference(ballot, actives, atx.Weight)
 	} else {
-		var err error
-		data, err = v.validateSecondary(ballot, owned)
-		if err != nil {
-			return false, err
-		}
+		data, err = v.validateSecondary(ballot)
+	}
+	if err != nil {
+		return false, err
 	}
 	for i, proof := range ballot.EligibilityProofs {
 		if proof.J >= data.EligibilityCount {
@@ -121,7 +109,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot, 
 			return false, fmt.Errorf("%w: %d <= %d", errInvalidProofsOrder, proof.J, ballot.EligibilityProofs[i-1].J)
 		}
 		if !v.vrfVerifier.Verify(ballot.SmesherID,
-			MustSerializeVRFMessage(data.Beacon, ballot.Layer.GetEpoch(), nonce, proof.J), proof.Sig) {
+			MustSerializeVRFMessage(data.Beacon, ballot.Layer.GetEpoch(), atx.Nonce, proof.J), proof.Sig) {
 			return false, fmt.Errorf("%w: beacon: %v, epoch: %v, counter: %v, vrfSig: %s",
 				errIncorrectVRFSig, data.Beacon.ShortString(), ballot.Layer.GetEpoch(), proof.J, proof.Sig,
 			)
@@ -140,28 +128,30 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot, 
 	)
 
 	v.beacons.ReportBeaconFromBallot(ballot.Layer.GetEpoch(), ballot, data.Beacon,
-		fixed.DivUint64(owned.GetWeight(), uint64(data.EligibilityCount)))
+		fixed.DivUint64(atx.Weight, uint64(data.EligibilityCount)))
 	return true, nil
 }
 
 // validateReference executed for reference ballots in latest epoch.
-func (v *Validator) validateReference(ballot *types.Ballot, actives []types.ATXID, owned *types.ActivationTxHeader) (*types.EpochData, error) {
+func (v *Validator) validateReference(
+	ballot *types.Ballot,
+	actives []types.ATXID,
+	weight uint64,
+) (*types.EpochData, error) {
 	if ballot.EpochData.Beacon == types.EmptyBeacon {
 		return nil, fmt.Errorf("%w: ref ballot %v", errMissingBeacon, ballot.ID())
 	}
 	if len(actives) == 0 {
 		return nil, fmt.Errorf("%w: ref ballot %v", errEmptyActiveSet, ballot.ID())
 	}
-	var totalWeight uint64
-	for _, atxID := range actives {
-		atx, err := v.cdb.GetAtxHeader(atxID)
-		if err != nil {
-			return nil, fmt.Errorf("atx in active set is missing %v: %w", atxID, err)
+	totalWeight, used := v.atxsdata.WeightForSet(ballot.Layer.GetEpoch(), actives)
+	for i := range used {
+		if !used[i] {
+			return nil, fmt.Errorf("atx in active set is missing in cache %v", actives[i].ShortString())
 		}
-		totalWeight += atx.GetWeight()
 	}
 	numEligibleSlots, err := GetNumEligibleSlots(
-		owned.GetWeight(),
+		weight,
 		minweight.Select(ballot.Layer.GetEpoch(), v.minActiveSetWeight),
 		totalWeight,
 		v.avgLayerSize,
@@ -171,13 +161,18 @@ func (v *Validator) validateReference(ballot *types.Ballot, actives []types.ATXI
 		return nil, err
 	}
 	if ballot.EpochData.EligibilityCount != numEligibleSlots {
-		return nil, fmt.Errorf("%w: expected %v, got: %v", errIncorrectEligCount, numEligibleSlots, ballot.EpochData.EligibilityCount)
+		return nil, fmt.Errorf(
+			"%w: expected %v, got: %v",
+			errIncorrectEligCount,
+			numEligibleSlots,
+			ballot.EpochData.EligibilityCount,
+		)
 	}
 	return ballot.EpochData, nil
 }
 
 // validateSecondary executed for non-reference ballots in latest epoch and all ballots in past epochs.
-func (v *Validator) validateSecondary(ballot *types.Ballot, owned *types.ActivationTxHeader) (*types.EpochData, error) {
+func (v *Validator) validateSecondary(ballot *types.Ballot) (*types.EpochData, error) {
 	if ballot.RefBallot == types.EmptyBallotID {
 		if ballot.EpochData == nil {
 			return nil, fmt.Errorf("%w: ref ballot %v", errMissingEpochData, ballot.ID())
@@ -189,7 +184,13 @@ func (v *Validator) validateSecondary(ballot *types.Ballot, owned *types.Activat
 		return nil, fmt.Errorf("ref ballot is missing %v", ballot.RefBallot)
 	}
 	if refdata.ATXID != ballot.AtxID {
-		return nil, fmt.Errorf("ballot (%v/%v) should be sharing atx with a reference ballot (%v/%v)", ballot.ID(), ballot.AtxID, refdata.ID, refdata.ATXID)
+		return nil, fmt.Errorf(
+			"ballot (%v/%v) should be sharing atx with a reference ballot (%v/%v)",
+			ballot.ID(),
+			ballot.AtxID,
+			refdata.ID,
+			refdata.ATXID,
+		)
 	}
 	if refdata.Smesher != ballot.SmesherID {
 		return nil, fmt.Errorf("mismatched smesher id with refballot in ballot %v", ballot.ID())

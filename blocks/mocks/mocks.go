@@ -13,7 +13,6 @@ import (
 	reflect "reflect"
 
 	types "github.com/spacemeshos/go-spacemesh/common/types"
-	log "github.com/spacemeshos/go-spacemesh/log"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -398,17 +397,17 @@ func (m *Mockcertifier) EXPECT() *MockcertifierMockRecorder {
 }
 
 // CertifyIfEligible mocks base method.
-func (m *Mockcertifier) CertifyIfEligible(arg0 context.Context, arg1 log.Log, arg2 types.LayerID, arg3 types.BlockID) error {
+func (m *Mockcertifier) CertifyIfEligible(arg0 context.Context, arg1 types.LayerID, arg2 types.BlockID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CertifyIfEligible", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "CertifyIfEligible", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // CertifyIfEligible indicates an expected call of CertifyIfEligible.
-func (mr *MockcertifierMockRecorder) CertifyIfEligible(arg0, arg1, arg2, arg3 any) *certifierCertifyIfEligibleCall {
+func (mr *MockcertifierMockRecorder) CertifyIfEligible(arg0, arg1, arg2 any) *certifierCertifyIfEligibleCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CertifyIfEligible", reflect.TypeOf((*Mockcertifier)(nil).CertifyIfEligible), arg0, arg1, arg2, arg3)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CertifyIfEligible", reflect.TypeOf((*Mockcertifier)(nil).CertifyIfEligible), arg0, arg1, arg2)
 	return &certifierCertifyIfEligibleCall{Call: call}
 }
 
@@ -424,13 +423,13 @@ func (c *certifierCertifyIfEligibleCall) Return(arg0 error) *certifierCertifyIfE
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *certifierCertifyIfEligibleCall) Do(f func(context.Context, log.Log, types.LayerID, types.BlockID) error) *certifierCertifyIfEligibleCall {
+func (c *certifierCertifyIfEligibleCall) Do(f func(context.Context, types.LayerID, types.BlockID) error) *certifierCertifyIfEligibleCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *certifierCertifyIfEligibleCall) DoAndReturn(f func(context.Context, log.Log, types.LayerID, types.BlockID) error) *certifierCertifyIfEligibleCall {
+func (c *certifierCertifyIfEligibleCall) DoAndReturn(f func(context.Context, types.LayerID, types.BlockID) error) *certifierCertifyIfEligibleCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
