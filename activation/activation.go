@@ -186,7 +186,13 @@ func (b *Builder) proof(ctx context.Context, challenge []byte) (*types.Post, *ty
 		client, err := b.postService.Client(b.nodeID)
 		if err == nil {
 			events.EmitPostStart(challenge)
-			return client.Proof(ctx, challenge)
+			post, postInfo, err := client.Proof(ctx, challenge)
+			if err != nil {
+				events.EmitPostFailure()
+				return nil, nil, err
+			}
+			events.EmitPostComplete(challenge)
+			return post, postInfo, err
 		}
 		select {
 		case <-ctx.Done():
@@ -302,10 +308,8 @@ func (b *Builder) generateInitialPost(ctx context.Context) error {
 	startTime := time.Now()
 	post, postInfo, err := b.proof(ctx, shared.ZeroChallenge)
 	if err != nil {
-		events.EmitPostFailure()
 		return fmt.Errorf("post execution: %w", err)
 	}
-	events.EmitPostComplete(shared.ZeroChallenge)
 	b.initialPost = post
 	b.initialPostInfo = postInfo
 	metrics.PostDuration.Set(float64(time.Since(startTime).Nanoseconds()))
