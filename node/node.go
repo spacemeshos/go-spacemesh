@@ -548,7 +548,6 @@ func (app *App) SetLogLevel(name, loglevel string) error {
 }
 
 func (app *App) initServices(ctx context.Context) error {
-	vrfSigner := app.edSgn.VRFSigner()
 	layerSize := app.Config.LayerAvgSize
 	layersPerEpoch := types.GetLayersPerEpoch()
 	lg := app.log.Named(app.edSgn.NodeID().ShortString()).WithFields(app.edSgn.NodeID())
@@ -764,7 +763,6 @@ func (app *App) initServices(ctx context.Context) error {
 		beaconProtocol,
 		app.cachedDB,
 		vrfVerifier,
-		vrfSigner,
 		app.Config.LayersPerEpoch,
 		app.Config.HareEligibility,
 		app.addLogger(HareOracleLogger, lg),
@@ -783,8 +781,6 @@ func (app *App) initServices(ctx context.Context) error {
 	app.certifier = blocks.NewCertifier(
 		app.cachedDB,
 		app.hOracle,
-		app.edSgn.NodeID(),
-		app.edSgn,
 		app.edVerifier,
 		app.host,
 		app.clock,
@@ -798,6 +794,7 @@ func (app *App) initServices(ctx context.Context) error {
 		}),
 		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg)),
 	)
+	app.certifier.Register(app.edSgn)
 
 	flog := app.addLogger(Fetcher, lg)
 	fetcher := fetch.NewFetch(app.cachedDB, msh, beaconProtocol, app.host,

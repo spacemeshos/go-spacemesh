@@ -14,7 +14,6 @@ import (
 type oracle interface {
 	Validate(context.Context, types.LayerID, uint32, int, types.NodeID, types.VrfSignature, uint16) (bool, error)
 	CalcEligibility(context.Context, types.LayerID, uint32, int, types.NodeID, types.VrfSignature) (uint16, error)
-	GenVRF(context.Context, *signing.VRFSigner, types.Beacon, types.LayerID, uint32) types.VrfSignature
 }
 
 type legacyOracle struct {
@@ -45,7 +44,7 @@ func (lg *legacyOracle) validate(msg *Message) grade {
 }
 
 func (lg *legacyOracle) active(signer *signing.EdSigner, beacon types.Beacon, layer types.LayerID, ir IterRound) *types.HareEligibility {
-	vrf := lg.oracle.GenVRF(context.Background(), signer.VRFSigner(), beacon, layer, ir.Absolute())
+	vrf := eligibility.GenVRF(context.Background(), signer.VRFSigner(), beacon, layer, ir.Absolute())
 	committee := int(lg.config.Committee)
 	if ir.Round == propose {
 		committee = int(lg.config.Leaders)

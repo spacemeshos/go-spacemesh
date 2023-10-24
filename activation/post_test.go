@@ -103,17 +103,6 @@ func TestPostSetupManager_PrepareInitializer(t *testing.T) {
 	req.Error(mgr.PrepareInitializer(ctx, opts))
 }
 
-// TODO(mafa): remove, see https://github.com/spacemeshos/go-spacemesh/issues/4801
-func TestPostSetupManager_PrepareInitializer_BestProvider(t *testing.T) {
-	mgr := newTestPostManager(t)
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
-
-	mgr.opts.ProviderID.SetInt64(-1)
-	require.NoError(t, mgr.PrepareInitializer(ctx, mgr.opts))
-}
-
 func TestPostSetupManager_StartSession_WithoutProvider_Error(t *testing.T) {
 	req := require.New(t)
 
@@ -341,14 +330,6 @@ func TestPostSetupManager_Providers_includesCPU(t *testing.T) {
 	require.Fail(t, "no CPU provider found")
 }
 
-func TestPostSetupManager_BestProvider(t *testing.T) {
-	mgr := newTestPostManager(t)
-
-	providers, err := mgr.bestProvider()
-	require.NoError(t, err)
-	require.NotNil(t, providers)
-}
-
 func TestPostSetupManager_Benchmark(t *testing.T) {
 	mgr := newTestPostManager(t)
 
@@ -410,7 +391,7 @@ func newTestPostManager(tb testing.TB) *testPostManager {
 
 	opts := DefaultPostSetupOpts()
 	opts.DataDir = tb.TempDir()
-	opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
+	opts.ProviderID.SetUint32(initialization.CPUProviderID())
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
 
 	goldenATXID := types.ATXID{2, 3, 4}

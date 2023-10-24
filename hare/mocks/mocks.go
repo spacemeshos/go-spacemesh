@@ -14,6 +14,7 @@ import (
 
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	datastore "github.com/spacemeshos/go-spacemesh/datastore"
+	signing "github.com/spacemeshos/go-spacemesh/signing"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -178,18 +179,18 @@ func (c *RolacleIsIdentityActiveOnConsensusViewCall) DoAndReturn(f func(context.
 }
 
 // Proof mocks base method.
-func (m *MockRolacle) Proof(arg0 context.Context, arg1 types.LayerID, arg2 uint32) (types.VrfSignature, error) {
+func (m *MockRolacle) Proof(arg0 context.Context, arg1 *signing.VRFSigner, arg2 types.LayerID, arg3 uint32) (types.VrfSignature, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Proof", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "Proof", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(types.VrfSignature)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Proof indicates an expected call of Proof.
-func (mr *MockRolacleMockRecorder) Proof(arg0, arg1, arg2 any) *RolacleProofCall {
+func (mr *MockRolacleMockRecorder) Proof(arg0, arg1, arg2, arg3 any) *RolacleProofCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Proof", reflect.TypeOf((*MockRolacle)(nil).Proof), arg0, arg1, arg2)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Proof", reflect.TypeOf((*MockRolacle)(nil).Proof), arg0, arg1, arg2, arg3)
 	return &RolacleProofCall{Call: call}
 }
 
@@ -205,13 +206,13 @@ func (c *RolacleProofCall) Return(arg0 types.VrfSignature, arg1 error) *RolacleP
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *RolacleProofCall) Do(f func(context.Context, types.LayerID, uint32) (types.VrfSignature, error)) *RolacleProofCall {
+func (c *RolacleProofCall) Do(f func(context.Context, *signing.VRFSigner, types.LayerID, uint32) (types.VrfSignature, error)) *RolacleProofCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *RolacleProofCall) DoAndReturn(f func(context.Context, types.LayerID, uint32) (types.VrfSignature, error)) *RolacleProofCall {
+func (c *RolacleProofCall) DoAndReturn(f func(context.Context, *signing.VRFSigner, types.LayerID, uint32) (types.VrfSignature, error)) *RolacleProofCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
