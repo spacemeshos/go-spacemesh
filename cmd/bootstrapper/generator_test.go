@@ -102,11 +102,17 @@ const (
 
 type MeshAPIMock struct{}
 
-func (m *MeshAPIMock) LatestLayer() types.LayerID                        { panic("not implemented") }
-func (m *MeshAPIMock) LatestLayerInState() types.LayerID                 { panic("not implemented") }
-func (m *MeshAPIMock) ProcessedLayer() types.LayerID                     { panic("not implemented") }
-func (m *MeshAPIMock) GetRewards(types.Address) ([]*types.Reward, error) { panic("not implemented") }
-func (m *MeshAPIMock) GetLayer(types.LayerID) (*types.Layer, error)      { panic("not implemented") }
+func (m *MeshAPIMock) LatestLayer() types.LayerID        { panic("not implemented") }
+func (m *MeshAPIMock) LatestLayerInState() types.LayerID { panic("not implemented") }
+func (m *MeshAPIMock) ProcessedLayer() types.LayerID     { panic("not implemented") }
+func (m *MeshAPIMock) GetRewardsByCoinbase(types.Address) ([]*types.Reward, error) {
+	panic("not implemented")
+}
+
+func (m *MeshAPIMock) GetRewardsBySmesherId(types.NodeID) ([]*types.Reward, error) {
+	panic("not implemented")
+}
+func (m *MeshAPIMock) GetLayer(types.LayerID) (*types.Layer, error) { panic("not implemented") }
 func (m *MeshAPIMock) GetATXs(context.Context, []types.ATXID) (map[types.ATXID]*types.VerifiedActivationTx, []types.ATXID) {
 	panic("not implemented")
 }

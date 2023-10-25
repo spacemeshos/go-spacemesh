@@ -56,6 +56,7 @@ func (v *VM) addRewards(lctx ApplyContext, ss *core.StagedCache, fees uint64, bl
 		reward := types.Reward{
 			Layer:       lctx.Layer,
 			Coinbase:    blockReward.Coinbase,
+			SmesherID:   blockReward.SmesherID,
 			TotalReward: totalReward.Uint64(),
 			LayerReward: subsidyReward.Uint64(),
 		}

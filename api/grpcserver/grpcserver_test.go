@@ -260,7 +260,18 @@ func (m *MeshAPIMock) ProcessedLayer() types.LayerID {
 	return layerVerified
 }
 
-func (m *MeshAPIMock) GetRewards(types.Address) (rewards []*types.Reward, err error) {
+func (m *MeshAPIMock) GetRewardsByCoinbase(types.Address) (rewards []*types.Reward, err error) {
+	return []*types.Reward{
+		{
+			Layer:       layerFirst,
+			TotalReward: rewardAmount,
+			LayerReward: rewardAmount,
+			Coinbase:    addr1,
+		},
+	}, nil
+}
+
+func (m *MeshAPIMock) GetRewardsBySmesherId(types.NodeID) (rewards []*types.Reward, err error) {
 	return []*types.Reward{
 		{
 			Layer:       layerFirst,

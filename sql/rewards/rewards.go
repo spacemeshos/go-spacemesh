@@ -10,16 +10,13 @@ import (
 // Add reward to the database.
 func Add(db sql.Executor, reward *types.Reward) error {
 	if _, err := db.Exec(`
-		insert into rewards (coinbase, layer, total_reward, layer_reward) values (?1, ?2, ?3, ?4)
-		on conflict(coinbase, layer)
-			do update set
-				total_reward=add_uint64(total_reward, ?3),
-				layer_reward=add_uint64(layer_reward, ?4);`,
+		insert into rewards (pubkey, coinbase, layer, total_reward, layer_reward) values (?1, ?2, ?3, ?4, ?5)`,
 		func(stmt *sql.Statement) {
-			stmt.BindBytes(1, reward.Coinbase[:])
-			stmt.BindInt64(2, int64(reward.Layer.Uint32()))
-			stmt.BindInt64(3, int64(reward.TotalReward))
-			stmt.BindInt64(4, int64(reward.LayerReward))
+			stmt.BindBytes(1, reward.SmesherID[:])
+			stmt.BindBytes(2, reward.Coinbase[:])
+			stmt.BindInt64(3, int64(reward.Layer.Uint32()))
+			stmt.BindInt64(4, int64(reward.TotalReward))
+			stmt.BindInt64(5, int64(reward.LayerReward))
 		}, nil); err != nil {
 		return fmt.Errorf("insert %+x: %w", reward, err)
 	}
@@ -37,14 +34,32 @@ func Revert(db sql.Executor, revertTo types.LayerID) error {
 	return nil
 }
 
-// List rewards from all layers for the coinbase address.
-func List(db sql.Executor, coinbase types.Address) (rst []*types.Reward, err error) {
+// ListByCoinbase lists rewards from all layers for the coinbase address.
+func ListByCoinbase(db sql.Executor, coinbase types.Address) (rst []*types.Reward, err error) {
 	_, err = db.Exec("select layer, total_reward, layer_reward from rewards where coinbase = ?1 order by layer;",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, coinbase[:])
 		}, func(stmt *sql.Statement) bool {
 			reward := &types.Reward{
 				Coinbase:    coinbase,
+				Layer:       types.LayerID(uint32(stmt.ColumnInt64(0))),
+				TotalReward: uint64(stmt.ColumnInt64(1)),
+				LayerReward: uint64(stmt.ColumnInt64(2)),
+			}
+			rst = append(rst, reward)
+			return true
+		})
+	return
+}
+
+// ListBySmesherId lists rewards from all layers for the smesher ID.
+func ListBySmesherId(db sql.Executor, smesherID types.NodeID) (rst []*types.Reward, err error) {
+	_, err = db.Exec("select layer, total_reward, layer_reward from rewards where pubkey = ?1 order by layer;",
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, smesherID[:])
+		}, func(stmt *sql.Statement) bool {
+			reward := &types.Reward{
+				SmesherID:   smesherID,
 				Layer:       types.LayerID(uint32(stmt.ColumnInt64(0))),
 				TotalReward: uint64(stmt.ColumnInt64(1)),
 				LayerReward: uint64(stmt.ColumnInt64(2)),

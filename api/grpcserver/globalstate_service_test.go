@@ -100,7 +100,7 @@ func TestGlobalStateService(t *testing.T) {
 		t.Parallel()
 		c, ctx := setupGlobalStateService(t)
 
-		c.meshAPI.EXPECT().GetRewards(addr1).Return([]*types.Reward{
+		c.meshAPI.EXPECT().GetRewardsByCoinbase(addr1).Return([]*types.Reward{
 			{
 				Layer:       layerFirst,
 				TotalReward: rewardAmount,
@@ -130,7 +130,7 @@ func TestGlobalStateService(t *testing.T) {
 		t.Parallel()
 		c, ctx := setupGlobalStateService(t)
 
-		c.meshAPI.EXPECT().GetRewards(addr1).Return([]*types.Reward{
+		c.meshAPI.EXPECT().GetRewardsByCoinbase(addr1).Return([]*types.Reward{
 			{
 				Layer:       layerFirst,
 				TotalReward: rewardAmount,
@@ -159,7 +159,7 @@ func TestGlobalStateService(t *testing.T) {
 		t.Parallel()
 		c, ctx := setupGlobalStateService(t)
 
-		c.meshAPI.EXPECT().GetRewards(addr1).Return([]*types.Reward{
+		c.meshAPI.EXPECT().GetRewardsByCoinbase(addr1).Return([]*types.Reward{
 			{
 				Layer:       layerFirst,
 				TotalReward: rewardAmount,
@@ -188,7 +188,7 @@ func TestGlobalStateService(t *testing.T) {
 		t.Parallel()
 		c, ctx := setupGlobalStateService(t)
 
-		c.meshAPI.EXPECT().GetRewards(addr1).Return([]*types.Reward{
+		c.meshAPI.EXPECT().GetRewardsByCoinbase(addr1).Return([]*types.Reward{
 			{
 				Layer:       layerFirst,
 				TotalReward: rewardAmount,
