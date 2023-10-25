@@ -86,6 +86,7 @@ func DefaultConfig() Config {
 		RoundDuration:   10 * time.Second,
 		// can be bumped to 3.1 when oracle upgrades
 		ProtocolName: "/h/3.0",
+		DisableLayer: math.MaxUint32,
 	}
 }
 
