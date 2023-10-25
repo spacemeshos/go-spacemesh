@@ -12,7 +12,7 @@ import (
 // DefaultPostServiceName is the default name of the post service executable.
 const DefaultPostServiceName = "service.exe"
 
-// process is used to retrieve process information from the handle in an unsafe way.
+// process is used to retrieve the process handle from the process ID in an unsafe way.
 type process struct {
 	Pid    int
 	Handle uintptr
