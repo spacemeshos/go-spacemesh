@@ -1,6 +1,7 @@
 ALTER TABLE activesets ADD epoch INT DEFAULT 0 NOT NULL;
 CREATE INDEX activesets_by_epoch ON activesets (epoch asc);
 UPDATE activesets SET epoch = 7 WHERE epoch = 0;
+DROP INDEX rewards_by_layer;
 ALTER TABLE rewards RENAME TO rewards_old;
 CREATE TABLE rewards
 (
@@ -13,5 +14,5 @@ CREATE TABLE rewards
 ) WITHOUT ROWID;
 CREATE INDEX rewards_by_coinbase ON rewards (coinbase, layer);
 CREATE INDEX rewards_by_layer ON rewards (layer asc);
-INSERT INTO rewards SELECT * FROM rewards_old;
+INSERT INTO rewards (coinbase, layer, total_reward, layer_reward) SELECT coinbase, layer, total_reward, layer_reward FROM rewards_old;
 DROP TABLE rewards_old;
