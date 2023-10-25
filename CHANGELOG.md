@@ -2,6 +2,15 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## v1.2.3
+
+### Upgrade information
+
+This release enables hare3 on testnet networks. And schedules plannned upgrade on mainnet.
+Network will have downtime if majority of nodes don't upgrade before layer 33101.
+Starting at layer 33101 network is expected to start using hare3, which reduces total bandwidth
+requirements. 
+
 ## v1.2.2
 
 ### Improvements
