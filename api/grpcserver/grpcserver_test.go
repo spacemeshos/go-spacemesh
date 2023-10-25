@@ -1696,6 +1696,12 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 	// Give the server-side time to subscribe to events
 	time.Sleep(time.Millisecond * 50)
 
+	signer1, err := signing.NewEdSigner()
+	if err != nil {
+		log.Println("failed to create signer:", err)
+		os.Exit(1)
+	}
+
 	events.ReportRewardReceived(events.Reward{
 		Layer:       layerFirst,
 		Total:       rewardAmount,
@@ -1750,6 +1756,12 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 	require.NoError(t, err, "stream request returned unexpected error")
 	// Give the server-side time to subscribe to events
 	time.Sleep(time.Millisecond * 50)
+
+	signer1, err := signing.NewEdSigner()
+	if err != nil {
+		log.Println("failed to create signer:", err)
+		os.Exit(1)
+	}
 
 	// publish a reward
 	events.ReportRewardReceived(events.Reward{
@@ -1879,6 +1891,11 @@ func checkAccountDataItemReward(t *testing.T, dataItem any) {
 	t.Helper()
 	require.IsType(t, &pb.AccountData_Reward{}, dataItem)
 	x := dataItem.(*pb.AccountData_Reward)
+	signer1, err := signing.NewEdSigner()
+	if err != nil {
+		log.Println("failed to create signer:", err)
+		os.Exit(1)
+	}
 	require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
 	require.Equal(t, layerFirst.Uint32(), x.Reward.Layer.Number)
 	require.Equal(t, uint64(rewardAmount*2), x.Reward.LayerReward.Value)
@@ -1901,6 +1918,11 @@ func checkGlobalStateDataReward(t *testing.T, dataItem any) {
 	t.Helper()
 	require.IsType(t, &pb.GlobalStateData_Reward{}, dataItem)
 	x := dataItem.(*pb.GlobalStateData_Reward)
+	signer1, err := signing.NewEdSigner()
+	if err != nil {
+		log.Println("failed to create signer:", err)
+		os.Exit(1)
+	}
 	require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
 	require.Equal(t, layerFirst.Uint32(), x.Reward.Layer.Number)
 	require.Equal(t, uint64(rewardAmount*2), x.Reward.LayerReward.Value)
