@@ -7,6 +7,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
+// minCapacity is set to 2 epochs because we are using data from current epoch for tortoise
+// and at the start of current epoch we still need data from previous epoch for hare oracle
+const minCapacity = 2
+
 type ATX struct {
 	Node               types.NodeID
 	Weight             uint64
@@ -21,7 +25,7 @@ type Opt func(*Data)
 // that cache will maintain in memory.
 func WithCapacity(capacity types.EpochID) Opt {
 	return func(cache *Data) {
-		cache.capacity = capacity
+		cache.capacity = max(minCapacity, capacity)
 	}
 }
 
