@@ -148,6 +148,7 @@ func (s GlobalStateService) AccountDataQuery(ctx context.Context, in *pb.Account
 					Total:       &pb.Amount{Value: r.TotalReward},
 					LayerReward: &pb.Amount{Value: r.LayerReward},
 					Coinbase:    &pb.AccountId{Address: addr.String()},
+					Smesher:     &pb.SmesherId{Id: r.SmesherID[:]},
 				},
 			}})
 		}

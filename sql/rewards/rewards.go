@@ -36,15 +36,18 @@ func Revert(db sql.Executor, revertTo types.LayerID) error {
 
 // ListByCoinbase lists rewards from all layers for the coinbase address.
 func ListByCoinbase(db sql.Executor, coinbase types.Address) (rst []*types.Reward, err error) {
-	_, err = db.Exec("select layer, total_reward, layer_reward from rewards where coinbase = ?1 order by layer;",
+	_, err = db.Exec("select pubkey, layer, total_reward, layer_reward from rewards where coinbase = ?1 order by layer;",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, coinbase[:])
 		}, func(stmt *sql.Statement) bool {
+			smesherId := types.NodeID{}
+			stmt.ColumnBytes(0, smesherId[:])
 			reward := &types.Reward{
+				SmesherID:   smesherId,
 				Coinbase:    coinbase,
-				Layer:       types.LayerID(uint32(stmt.ColumnInt64(0))),
-				TotalReward: uint64(stmt.ColumnInt64(1)),
-				LayerReward: uint64(stmt.ColumnInt64(2)),
+				Layer:       types.LayerID(uint32(stmt.ColumnInt64(1))),
+				TotalReward: uint64(stmt.ColumnInt64(2)),
+				LayerReward: uint64(stmt.ColumnInt64(3)),
 			}
 			rst = append(rst, reward)
 			return true
@@ -54,15 +57,18 @@ func ListByCoinbase(db sql.Executor, coinbase types.Address) (rst []*types.Rewar
 
 // ListBySmesherId lists rewards from all layers for the smesher ID.
 func ListBySmesherId(db sql.Executor, smesherID types.NodeID) (rst []*types.Reward, err error) {
-	_, err = db.Exec("select layer, total_reward, layer_reward from rewards where pubkey = ?1 order by layer;",
+	_, err = db.Exec("select coinbase, layer, total_reward, layer_reward from rewards where pubkey = ?1 order by layer;",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, smesherID[:])
 		}, func(stmt *sql.Statement) bool {
+			coinbase := types.Address{}
+			stmt.ColumnBytes(0, coinbase[:])
 			reward := &types.Reward{
 				SmesherID:   smesherID,
-				Layer:       types.LayerID(uint32(stmt.ColumnInt64(0))),
-				TotalReward: uint64(stmt.ColumnInt64(1)),
-				LayerReward: uint64(stmt.ColumnInt64(2)),
+				Coinbase:    coinbase,
+				Layer:       types.LayerID(uint32(stmt.ColumnInt64(1))),
+				TotalReward: uint64(stmt.ColumnInt64(2)),
+				LayerReward: uint64(stmt.ColumnInt64(3)),
 			}
 			rst = append(rst, reward)
 			return true
