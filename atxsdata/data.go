@@ -8,7 +8,7 @@ import (
 )
 
 // minCapacity is set to 2 epochs because we are using data from current epoch for tortoise
-// and at the start of current epoch we still need data from previous epoch for hare oracle
+// and at the start of current epoch we still need data from previous epoch for hare oracle.
 const minCapacity = 2
 
 type ATX struct {
