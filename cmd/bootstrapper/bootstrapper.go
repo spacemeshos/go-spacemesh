@@ -218,6 +218,7 @@ func queryNetworkParams(ctx context.Context, endpoint string) (*NetworkParam, er
 	if err != nil {
 		return nil, fmt.Errorf("dial grpc endpoint %v: %w", endpoint, err)
 	}
+	defer conn.Close()
 
 	svc := pb.NewMeshServiceClient(conn)
 	genResp, err := svc.GenesisTime(ctx, &pb.GenesisTimeRequest{})

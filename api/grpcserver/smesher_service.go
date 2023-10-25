@@ -24,9 +24,8 @@ import (
 
 // SmesherService exposes endpoints to manage smeshing.
 type SmesherService struct {
-	postSetupProvider postSetupProvider
-	smeshingProvider  activation.SmeshingProvider
-	postSupervisor    postSupervisor
+	smeshingProvider activation.SmeshingProvider
+	postSupervisor   postSupervisor
 
 	streamInterval time.Duration
 	postOpts       activation.PostSetupOpts
@@ -47,13 +46,12 @@ func (s SmesherService) String() string {
 }
 
 // NewSmesherService creates a new grpc service using config data.
-func NewSmesherService(post postSetupProvider, smeshing activation.SmeshingProvider, postSupervisor postSupervisor, streamInterval time.Duration, postOpts activation.PostSetupOpts) *SmesherService {
+func NewSmesherService(smeshing activation.SmeshingProvider, postSupervisor postSupervisor, streamInterval time.Duration, postOpts activation.PostSetupOpts) *SmesherService {
 	return &SmesherService{
-		postSetupProvider: post,
-		smeshingProvider:  smeshing,
-		postSupervisor:    postSupervisor,
-		streamInterval:    streamInterval,
-		postOpts:          postOpts,
+		smeshingProvider: smeshing,
+		postSupervisor:   postSupervisor,
+		streamInterval:   streamInterval,
+		postOpts:         postOpts,
 	}
 }
 
@@ -67,43 +65,20 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 	if in.Coinbase == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "`Coinbase` must be provided")
 	}
-
-	if in.Opts == nil {
-		return nil, status.Error(codes.InvalidArgument, "`Opts` must be provided")
-	}
-
-	if in.Opts.DataDir == "" {
-		return nil, status.Error(codes.InvalidArgument, "`Opts.DataDir` must be provided")
-	}
-
-	if in.Opts.NumUnits == 0 {
-		return nil, status.Error(codes.InvalidArgument, "`Opts.NumUnits` must be provided")
-	}
-
-	if in.Opts.MaxFileSize == 0 {
-		return nil, status.Error(codes.InvalidArgument, "`Opts.MaxFileSize` must be provided")
-	}
-
-	// Copy provided post opts
-	opts := s.postOpts
-	// Overlay api provided opts
-	opts.DataDir = in.Opts.DataDir
-	opts.NumUnits = in.Opts.NumUnits
-	opts.MaxFileSize = in.Opts.MaxFileSize
-	if in.Opts.ProviderId != nil {
-		opts.ProviderID.SetUint32(*in.Opts.ProviderId)
-	}
-	opts.Throttle = in.Opts.Throttle
-
 	coinbaseAddr, err := types.StringToAddress(in.Coinbase.Address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse in.Coinbase.Address `%s`: %w", in.Coinbase.Address, err)
 	}
-	if err := s.postSupervisor.Start(); err != nil {
+
+	opts, err := s.postSetupOpts(in.Opts)
+	if err != nil {
+		status.Error(codes.InvalidArgument, err.Error())
+	}
+	if err := s.postSupervisor.Start(opts); err != nil {
 		ctxzap.Error(ctx, "failed to start post supervisor", zap.Error(err))
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to start post supervisor: %v", err))
 	}
-	if err := s.smeshingProvider.StartSmeshing(coinbaseAddr, opts); err != nil {
+	if err := s.smeshingProvider.StartSmeshing(coinbaseAddr); err != nil {
 		ctxzap.Error(ctx, "failed to start smeshing", zap.Error(err))
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to start smeshing: %v", err))
 	}
@@ -112,13 +87,39 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 	}, nil
 }
 
+func (s SmesherService) postSetupOpts(in *pb.PostSetupOpts) (activation.PostSetupOpts, error) {
+	if in == nil {
+		return activation.PostSetupOpts{}, fmt.Errorf("`Opts` must be provided")
+	}
+	if in.DataDir == "" {
+		return activation.PostSetupOpts{}, fmt.Errorf("`Opts.DataDir` must be provided")
+	}
+	if in.NumUnits == 0 {
+		return activation.PostSetupOpts{}, fmt.Errorf("`Opts.NumUnits` must be provided")
+	}
+	if in.MaxFileSize == 0 {
+		return activation.PostSetupOpts{}, fmt.Errorf("`Opts.MaxFileSize` must be provided")
+	}
+
+	// Overlay default with api provided opts
+	opts := s.postOpts // TODO(mafa): fetch from post supervisor instead
+	opts.DataDir = in.DataDir
+	opts.NumUnits = in.NumUnits
+	opts.MaxFileSize = in.MaxFileSize
+	if in.ProviderId != nil {
+		opts.ProviderID.SetUint32(*in.ProviderId)
+	}
+	opts.Throttle = in.Throttle
+	return opts, nil
+}
+
 // StopSmeshing requests that the node stop smeshing.
 func (s SmesherService) StopSmeshing(ctx context.Context, in *pb.StopSmeshingRequest) (*pb.StopSmeshingResponse, error) {
 	if err := s.smeshingProvider.StopSmeshing(in.DeleteFiles); err != nil {
 		ctxzap.Error(ctx, "failed to stop smeshing", zap.Error(err))
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to stop smeshing: %v", err))
 	}
-	if err := s.postSupervisor.Stop(); err != nil {
+	if err := s.postSupervisor.Stop(in.DeleteFiles); err != nil {
 		ctxzap.Error(ctx, "failed to stop post supervisor", zap.Error(err))
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to stop post supervisor: %v", err))
 	}
@@ -171,7 +172,7 @@ func (s SmesherService) EstimatedRewards(context.Context, *pb.EstimatedRewardsRe
 
 // PostSetupStatus returns post data status.
 func (s SmesherService) PostSetupStatus(ctx context.Context, _ *emptypb.Empty) (*pb.PostSetupStatusResponse, error) {
-	status := s.postSetupProvider.Status()
+	status := s.postSupervisor.Status()
 	return &pb.PostSetupStatusResponse{Status: statusToPbStatus(status)}, nil
 }
 
@@ -183,7 +184,7 @@ func (s SmesherService) PostSetupStatusStream(_ *emptypb.Empty, stream pb.Smeshe
 	for {
 		select {
 		case <-timer.C:
-			status := s.postSetupProvider.Status()
+			status := s.postSupervisor.Status()
 			if err := stream.Send(&pb.PostSetupStatusStreamResponse{Status: statusToPbStatus(status)}); err != nil {
 				return fmt.Errorf("send to stream: %w", err)
 			}
@@ -195,7 +196,7 @@ func (s SmesherService) PostSetupStatusStream(_ *emptypb.Empty, stream pb.Smeshe
 
 // PostSetupComputeProviders returns a list of available Post setup compute providers.
 func (s SmesherService) PostSetupProviders(ctx context.Context, in *pb.PostSetupProvidersRequest) (*pb.PostSetupProvidersResponse, error) {
-	providers, err := s.postSetupProvider.Providers()
+	providers, err := s.postSupervisor.Providers()
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get OpenCL providers: %v", err)
 	}
@@ -206,7 +207,7 @@ func (s SmesherService) PostSetupProviders(ctx context.Context, in *pb.PostSetup
 		var hashesPerSec int
 		if in.Benchmark {
 			var err error
-			hashesPerSec, err = s.postSetupProvider.Benchmark(p)
+			hashesPerSec, err = s.postSupervisor.Benchmark(p)
 			if err != nil {
 				ctxzap.Error(ctx, "failed to benchmark provider", zap.Error(err))
 				return nil, status.Error(codes.Internal, "failed to benchmark provider")
@@ -226,7 +227,7 @@ func (s SmesherService) PostSetupProviders(ctx context.Context, in *pb.PostSetup
 
 // PostConfig returns the Post protocol config.
 func (s SmesherService) PostConfig(context.Context, *emptypb.Empty) (*pb.PostConfigResponse, error) {
-	cfg := s.postSetupProvider.Config()
+	cfg := s.postSupervisor.Config()
 
 	return &pb.PostConfigResponse{
 		BitsPerLabel:  config.BitsPerLabel,

@@ -86,12 +86,6 @@ func NewHandler(
 	}
 }
 
-var closedChan = make(chan struct{})
-
-func init() {
-	close(closedChan)
-}
-
 // ProcessAtx validates the active set size declared in the atx, and contextually validates the atx according to atx
 // validation rules it then stores the atx with flag set to validity of the atx.
 //

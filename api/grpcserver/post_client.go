@@ -62,7 +62,7 @@ func (pc *postClient) Info(ctx context.Context) (*types.PostInfo, error) {
 	}, nil
 }
 
-func (pc *postClient) Proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error) {
+func (pc *postClient) Proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error) {
 	req := &pb.NodeRequest{
 		Kind: &pb.NodeRequest_GenProof{
 			GenProof: &pb.GenProofRequest{
@@ -123,11 +123,20 @@ func (pc *postClient) Proof(ctx context.Context, challenge []byte) (*types.Post,
 		Indices: proof.GetIndices(),
 		Pow:     proof.GetPow(),
 	}
-	postMeta := &types.PostMetadata{
-		Challenge:     metadata.GetChallenge(),
+	var nonce *types.VRFPostIndex
+	if proofMeta.Nonce != nil {
+		nonce = new(types.VRFPostIndex)
+		*nonce = types.VRFPostIndex(proofMeta.GetNonce())
+	}
+	postInfo := &types.PostInfo{
+		NodeID:        types.BytesToNodeID(proofMeta.NodeId),
+		CommitmentATX: types.BytesToATXID(proofMeta.CommitmentAtxId),
+		Nonce:         nonce,
+
+		NumUnits:      proofMeta.GetNumUnits(),
 		LabelsPerUnit: proofMeta.GetLabelsPerUnit(),
 	}
-	return post, postMeta, nil
+	return post, postInfo, nil
 }
 
 func (pc *postClient) send(ctx context.Context, req *pb.NodeRequest) (*pb.ServiceResponse, error) {

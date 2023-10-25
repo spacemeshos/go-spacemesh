@@ -188,7 +188,7 @@ func (s *Syncer) Close() {
 }
 
 // RegisterForATXSynced returns a channel for notification when the node enters ATX synced state.
-func (s *Syncer) RegisterForATXSynced() chan struct{} {
+func (s *Syncer) RegisterForATXSynced() <-chan struct{} {
 	return s.awaitATXSyncedCh
 }
 
