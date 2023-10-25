@@ -828,16 +828,7 @@ func TestConfig_CustomTypes(t *testing.T) {
 			cli:    "--smeshing-opts-provider=1337",
 			config: `{"smeshing": {"smeshing-opts": {"smeshing-opts-provider": 1337}}}`,
 			updatePreset: func(t *testing.T, c *config.Config) {
-				c.SMESHING.Opts.ProviderID.SetInt64(1337)
-			},
-		},
-		{
-			// TODO(mafa): remove this test case, see https://github.com/spacemeshos/go-spacemesh/issues/4801
-			name:   "smeshing-opts-provider",
-			cli:    "--smeshing-opts-provider=-1",
-			config: `{"smeshing": {"smeshing-opts": {"smeshing-opts-provider": -1}}}`,
-			updatePreset: func(t *testing.T, c *config.Config) {
-				c.SMESHING.Opts.ProviderID.SetInt64(-1)
+				c.SMESHING.Opts.ProviderID.SetUint32(1337)
 			},
 		},
 		{
@@ -946,12 +937,11 @@ func TestConfig_PostProviderID_InvalidValues(t *testing.T) {
 			cliValue:    "not-a-number",
 			configValue: "\"not-a-number\"",
 		},
-		// TODO(mafa): still accepted for backward compatibility, see https://github.com/spacemeshos/go-spacemesh/issues/4801
-		// {
-		// 	name:        "negative number",
-		// 	cliValue:    "-1",
-		// 	configValue: "-1",
-		// },
+		{
+			name:        "negative number",
+			cliValue:    "-1",
+			configValue: "-1",
+		},
 		{
 			name:        "number too large for uint32",
 			cliValue:    "4294967296",
@@ -1203,10 +1193,10 @@ func TestAdminEvents(t *testing.T) {
 		stream, err := client.EventsStream(tctx, &pb.EventStreamRequest{})
 		require.NoError(t, err)
 		success := []pb.IsEventDetails{
-			&pb.Event_PostServiceStarted{},
 			&pb.Event_Beacon{},
 			&pb.Event_InitStart{},
 			&pb.Event_InitComplete{},
+			&pb.Event_PostServiceStarted{},
 			&pb.Event_PostStart{},
 			&pb.Event_PostComplete{},
 			&pb.Event_PoetWaitRound{},
@@ -1215,10 +1205,10 @@ func TestAdminEvents(t *testing.T) {
 			&pb.Event_PostComplete{},
 			&pb.Event_AtxPublished{},
 		}
-		for _, ev := range success {
+		for idx, ev := range success {
 			msg, err := stream.Recv()
 			require.NoError(t, err, "stream %d", i)
-			require.IsType(t, ev, msg.Details, "stream %d", i)
+			require.IsType(t, ev, msg.Details, "stream %d, event %d", i, idx)
 		}
 		require.NoError(t, stream.CloseSend())
 	}
@@ -1247,13 +1237,17 @@ func getTestDefaultConfig(tb testing.TB) *config.Config {
 	cfg.SMESHING = config.DefaultSmeshingConfig()
 	cfg.SMESHING.Start = true
 	cfg.SMESHING.Opts.NumUnits = cfg.POST.MinNumUnits + 1
-	cfg.SMESHING.Opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
+	cfg.SMESHING.Opts.ProviderID.SetUint32(initialization.CPUProviderID())
 
 	// note: these need to be set sufficiently low enough that turbohare finishes well before the LayerDurationSec
 	cfg.HARE.RoundDuration = 2
 	cfg.HARE.WakeupDelta = 1
 	cfg.HARE.N = 5
 	cfg.HARE.ExpectedLeaders = 5
+
+	cfg.HARE3.RoundDuration = 2
+	cfg.HARE3.PreroundDelay = 1
+
 	cfg.LayerAvgSize = 5
 	cfg.LayersPerEpoch = 3
 	cfg.TxsPerProposal = 100

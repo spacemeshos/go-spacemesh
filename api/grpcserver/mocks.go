@@ -755,183 +755,6 @@ func (c *atxProviderMaxHeightAtxCall) DoAndReturn(f func() (types.ATXID, error))
 	return c
 }
 
-// MockpostSetupProvider is a mock of postSetupProvider interface.
-type MockpostSetupProvider struct {
-	ctrl     *gomock.Controller
-	recorder *MockpostSetupProviderMockRecorder
-}
-
-// MockpostSetupProviderMockRecorder is the mock recorder for MockpostSetupProvider.
-type MockpostSetupProviderMockRecorder struct {
-	mock *MockpostSetupProvider
-}
-
-// NewMockpostSetupProvider creates a new mock instance.
-func NewMockpostSetupProvider(ctrl *gomock.Controller) *MockpostSetupProvider {
-	mock := &MockpostSetupProvider{ctrl: ctrl}
-	mock.recorder = &MockpostSetupProviderMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockpostSetupProvider) EXPECT() *MockpostSetupProviderMockRecorder {
-	return m.recorder
-}
-
-// Benchmark mocks base method.
-func (m *MockpostSetupProvider) Benchmark(p activation.PostSetupProvider) (int, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Benchmark", p)
-	ret0, _ := ret[0].(int)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Benchmark indicates an expected call of Benchmark.
-func (mr *MockpostSetupProviderMockRecorder) Benchmark(p any) *postSetupProviderBenchmarkCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Benchmark", reflect.TypeOf((*MockpostSetupProvider)(nil).Benchmark), p)
-	return &postSetupProviderBenchmarkCall{Call: call}
-}
-
-// postSetupProviderBenchmarkCall wrap *gomock.Call
-type postSetupProviderBenchmarkCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *postSetupProviderBenchmarkCall) Return(arg0 int, arg1 error) *postSetupProviderBenchmarkCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *postSetupProviderBenchmarkCall) Do(f func(activation.PostSetupProvider) (int, error)) *postSetupProviderBenchmarkCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *postSetupProviderBenchmarkCall) DoAndReturn(f func(activation.PostSetupProvider) (int, error)) *postSetupProviderBenchmarkCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// Config mocks base method.
-func (m *MockpostSetupProvider) Config() activation.PostConfig {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Config")
-	ret0, _ := ret[0].(activation.PostConfig)
-	return ret0
-}
-
-// Config indicates an expected call of Config.
-func (mr *MockpostSetupProviderMockRecorder) Config() *postSetupProviderConfigCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Config", reflect.TypeOf((*MockpostSetupProvider)(nil).Config))
-	return &postSetupProviderConfigCall{Call: call}
-}
-
-// postSetupProviderConfigCall wrap *gomock.Call
-type postSetupProviderConfigCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *postSetupProviderConfigCall) Return(arg0 activation.PostConfig) *postSetupProviderConfigCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *postSetupProviderConfigCall) Do(f func() activation.PostConfig) *postSetupProviderConfigCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *postSetupProviderConfigCall) DoAndReturn(f func() activation.PostConfig) *postSetupProviderConfigCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// Providers mocks base method.
-func (m *MockpostSetupProvider) Providers() ([]activation.PostSetupProvider, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Providers")
-	ret0, _ := ret[0].([]activation.PostSetupProvider)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Providers indicates an expected call of Providers.
-func (mr *MockpostSetupProviderMockRecorder) Providers() *postSetupProviderProvidersCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Providers", reflect.TypeOf((*MockpostSetupProvider)(nil).Providers))
-	return &postSetupProviderProvidersCall{Call: call}
-}
-
-// postSetupProviderProvidersCall wrap *gomock.Call
-type postSetupProviderProvidersCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *postSetupProviderProvidersCall) Return(arg0 []activation.PostSetupProvider, arg1 error) *postSetupProviderProvidersCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *postSetupProviderProvidersCall) Do(f func() ([]activation.PostSetupProvider, error)) *postSetupProviderProvidersCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *postSetupProviderProvidersCall) DoAndReturn(f func() ([]activation.PostSetupProvider, error)) *postSetupProviderProvidersCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// Status mocks base method.
-func (m *MockpostSetupProvider) Status() *activation.PostSetupStatus {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Status")
-	ret0, _ := ret[0].(*activation.PostSetupStatus)
-	return ret0
-}
-
-// Status indicates an expected call of Status.
-func (mr *MockpostSetupProviderMockRecorder) Status() *postSetupProviderStatusCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Status", reflect.TypeOf((*MockpostSetupProvider)(nil).Status))
-	return &postSetupProviderStatusCall{Call: call}
-}
-
-// postSetupProviderStatusCall wrap *gomock.Call
-type postSetupProviderStatusCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *postSetupProviderStatusCall) Return(arg0 *activation.PostSetupStatus) *postSetupProviderStatusCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *postSetupProviderStatusCall) Do(f func() *activation.PostSetupStatus) *postSetupProviderStatusCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *postSetupProviderStatusCall) DoAndReturn(f func() *activation.PostSetupStatus) *postSetupProviderStatusCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // MockpostSupervisor is a mock of postSupervisor interface.
 type MockpostSupervisor struct {
 	ctrl     *gomock.Controller
@@ -955,18 +778,134 @@ func (m *MockpostSupervisor) EXPECT() *MockpostSupervisorMockRecorder {
 	return m.recorder
 }
 
-// Start mocks base method.
-func (m *MockpostSupervisor) Start() error {
+// Benchmark mocks base method.
+func (m *MockpostSupervisor) Benchmark(p activation.PostSetupProvider) (int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Start")
+	ret := m.ctrl.Call(m, "Benchmark", p)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Benchmark indicates an expected call of Benchmark.
+func (mr *MockpostSupervisorMockRecorder) Benchmark(p any) *postSupervisorBenchmarkCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Benchmark", reflect.TypeOf((*MockpostSupervisor)(nil).Benchmark), p)
+	return &postSupervisorBenchmarkCall{Call: call}
+}
+
+// postSupervisorBenchmarkCall wrap *gomock.Call
+type postSupervisorBenchmarkCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *postSupervisorBenchmarkCall) Return(arg0 int, arg1 error) *postSupervisorBenchmarkCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *postSupervisorBenchmarkCall) Do(f func(activation.PostSetupProvider) (int, error)) *postSupervisorBenchmarkCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *postSupervisorBenchmarkCall) DoAndReturn(f func(activation.PostSetupProvider) (int, error)) *postSupervisorBenchmarkCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Config mocks base method.
+func (m *MockpostSupervisor) Config() activation.PostConfig {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Config")
+	ret0, _ := ret[0].(activation.PostConfig)
+	return ret0
+}
+
+// Config indicates an expected call of Config.
+func (mr *MockpostSupervisorMockRecorder) Config() *postSupervisorConfigCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Config", reflect.TypeOf((*MockpostSupervisor)(nil).Config))
+	return &postSupervisorConfigCall{Call: call}
+}
+
+// postSupervisorConfigCall wrap *gomock.Call
+type postSupervisorConfigCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *postSupervisorConfigCall) Return(arg0 activation.PostConfig) *postSupervisorConfigCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *postSupervisorConfigCall) Do(f func() activation.PostConfig) *postSupervisorConfigCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *postSupervisorConfigCall) DoAndReturn(f func() activation.PostConfig) *postSupervisorConfigCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Providers mocks base method.
+func (m *MockpostSupervisor) Providers() ([]activation.PostSetupProvider, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Providers")
+	ret0, _ := ret[0].([]activation.PostSetupProvider)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Providers indicates an expected call of Providers.
+func (mr *MockpostSupervisorMockRecorder) Providers() *postSupervisorProvidersCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Providers", reflect.TypeOf((*MockpostSupervisor)(nil).Providers))
+	return &postSupervisorProvidersCall{Call: call}
+}
+
+// postSupervisorProvidersCall wrap *gomock.Call
+type postSupervisorProvidersCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *postSupervisorProvidersCall) Return(arg0 []activation.PostSetupProvider, arg1 error) *postSupervisorProvidersCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *postSupervisorProvidersCall) Do(f func() ([]activation.PostSetupProvider, error)) *postSupervisorProvidersCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *postSupervisorProvidersCall) DoAndReturn(f func() ([]activation.PostSetupProvider, error)) *postSupervisorProvidersCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Start mocks base method.
+func (m *MockpostSupervisor) Start(opts activation.PostSetupOpts) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Start", opts)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Start indicates an expected call of Start.
-func (mr *MockpostSupervisorMockRecorder) Start() *postSupervisorStartCall {
+func (mr *MockpostSupervisorMockRecorder) Start(opts any) *postSupervisorStartCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockpostSupervisor)(nil).Start))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockpostSupervisor)(nil).Start), opts)
 	return &postSupervisorStartCall{Call: call}
 }
 
@@ -982,29 +921,67 @@ func (c *postSupervisorStartCall) Return(arg0 error) *postSupervisorStartCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *postSupervisorStartCall) Do(f func() error) *postSupervisorStartCall {
+func (c *postSupervisorStartCall) Do(f func(activation.PostSetupOpts) error) *postSupervisorStartCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *postSupervisorStartCall) DoAndReturn(f func() error) *postSupervisorStartCall {
+func (c *postSupervisorStartCall) DoAndReturn(f func(activation.PostSetupOpts) error) *postSupervisorStartCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Status mocks base method.
+func (m *MockpostSupervisor) Status() *activation.PostSetupStatus {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Status")
+	ret0, _ := ret[0].(*activation.PostSetupStatus)
+	return ret0
+}
+
+// Status indicates an expected call of Status.
+func (mr *MockpostSupervisorMockRecorder) Status() *postSupervisorStatusCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Status", reflect.TypeOf((*MockpostSupervisor)(nil).Status))
+	return &postSupervisorStatusCall{Call: call}
+}
+
+// postSupervisorStatusCall wrap *gomock.Call
+type postSupervisorStatusCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *postSupervisorStatusCall) Return(arg0 *activation.PostSetupStatus) *postSupervisorStatusCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *postSupervisorStatusCall) Do(f func() *activation.PostSetupStatus) *postSupervisorStatusCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *postSupervisorStatusCall) DoAndReturn(f func() *activation.PostSetupStatus) *postSupervisorStatusCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // Stop mocks base method.
-func (m *MockpostSupervisor) Stop() error {
+func (m *MockpostSupervisor) Stop(deleteFiles bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Stop")
+	ret := m.ctrl.Call(m, "Stop", deleteFiles)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Stop indicates an expected call of Stop.
-func (mr *MockpostSupervisorMockRecorder) Stop() *postSupervisorStopCall {
+func (mr *MockpostSupervisorMockRecorder) Stop(deleteFiles any) *postSupervisorStopCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*MockpostSupervisor)(nil).Stop))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*MockpostSupervisor)(nil).Stop), deleteFiles)
 	return &postSupervisorStopCall{Call: call}
 }
 
@@ -1020,13 +997,13 @@ func (c *postSupervisorStopCall) Return(arg0 error) *postSupervisorStopCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *postSupervisorStopCall) Do(f func() error) *postSupervisorStopCall {
+func (c *postSupervisorStopCall) Do(f func(bool) error) *postSupervisorStopCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *postSupervisorStopCall) DoAndReturn(f func() error) *postSupervisorStopCall {
+func (c *postSupervisorStopCall) DoAndReturn(f func(bool) error) *postSupervisorStopCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

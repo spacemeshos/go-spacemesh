@@ -60,18 +60,25 @@ func spawnPoet(tb testing.TB, opts ...HTTPPoetOpt) *HTTPPoetTestHarness {
 	return poetProver
 }
 
-func launchPostSupervisor(tb testing.TB, log *zap.Logger, cfg grpcserver.Config, postOpts activation.PostSetupOpts) func() {
+func launchPostSupervisor(tb testing.TB, log *zap.Logger, mgr *activation.PostSetupManager, cfg grpcserver.Config, postOpts activation.PostSetupOpts) func() {
 	cmdCfg := activation.DefaultTestPostServiceConfig()
 	cmdCfg.NodeAddress = fmt.Sprintf("http://%s", cfg.PublicListener)
 	postCfg := activation.DefaultPostConfig()
 	provingOpts := activation.DefaultPostProvingOpts()
 	provingOpts.RandomXMode = activation.PostRandomXModeLight
 
-	ps, err := activation.NewPostSupervisor(log, cmdCfg, postCfg, postOpts, provingOpts)
+	syncer := activation.NewMocksyncer(gomock.NewController(tb))
+	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
+		ch := make(chan struct{})
+		close(ch)
+		return ch
+	}).AnyTimes()
+
+	ps, err := activation.NewPostSupervisor(log, cmdCfg, postCfg, provingOpts, mgr, syncer)
 	require.NoError(tb, err)
 	require.NotNil(tb, ps)
-	require.NoError(tb, ps.Start())
-	return func() { assert.NoError(tb, ps.Stop()) }
+	require.NoError(tb, ps.Start(postOpts))
+	return func() { assert.NoError(tb, ps.Stop(false)) }
 }
 
 func launchServer(tb testing.TB, services ...grpcserver.ServiceAPI) (grpcserver.Config, func()) {
@@ -96,36 +103,9 @@ func launchServer(tb testing.TB, services ...grpcserver.ServiceAPI) (grpcserver.
 func initPost(tb testing.TB, logger *zap.Logger, mgr *activation.PostSetupManager, opts activation.PostSetupOpts) {
 	tb.Helper()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	var eg errgroup.Group
-	eg.Go(func() error {
-		timer := time.NewTicker(50 * time.Millisecond)
-		defer timer.Stop()
-
-		lastStatus := &activation.PostSetupStatus{}
-		for {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-timer.C:
-				status := mgr.Status()
-				require.GreaterOrEqual(tb, status.NumLabelsWritten, lastStatus.NumLabelsWritten)
-
-				if status.NumLabelsWritten == uint64(mgr.LastOpts().NumUnits)*mgr.Config().LabelsPerUnit {
-					return nil
-				}
-				require.Contains(tb, []activation.PostSetupState{activation.PostSetupStatePrepared, activation.PostSetupStateInProgress}, status.State)
-				lastStatus = status
-			}
-		}
-	})
-
 	// Create data.
-	require.NoError(tb, mgr.PrepareInitializer(context.Background(), opts))
+	require.NoError(tb, mgr.PrepareInitializer(opts))
 	require.NoError(tb, mgr.StartSession(context.Background()))
-	require.NoError(tb, eg.Wait())
 	require.Equal(tb, activation.PostSetupStateComplete, mgr.Status().State)
 }
 
@@ -145,7 +125,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 
 	opts := activation.DefaultPostSetupOpts()
 	opts.DataDir = t.TempDir()
-	opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
+	opts.ProviderID.SetUint32(initialization.CPUProviderID())
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
 	initPost(t, logger.Named("manager"), mgr, opts)
 
@@ -169,7 +149,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 		},
 	)
 
-	verifier, err := activation.NewPostVerifier(mgr.Config(), logger.Named("verifier"))
+	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
 
@@ -179,7 +159,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	t.Cleanup(launchPostSupervisor(t, logger, grpcCfg, opts))
+	t.Cleanup(launchPostSupervisor(t, logger, mgr, grpcCfg, opts))
 
 	require.Eventually(t, func() bool {
 		_, err := svc.Client(sig.NodeID())
@@ -206,14 +186,14 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	nipost, err := nb.BuildNIPost(context.Background(), &challenge)
 	require.NoError(t, err)
 
-	v := activation.NewValidator(poetDb, mgr.Config(), mgr.LastOpts().Scrypt, verifier)
+	v := activation.NewValidator(poetDb, cfg, opts.Scrypt, verifier)
 	_, err = v.NIPost(
 		context.Background(),
 		sig.NodeID(),
 		goldenATX,
 		nipost,
 		challenge.Hash(),
-		mgr.LastOpts().NumUnits,
+		opts.NumUnits,
 	)
 	require.NoError(t, err)
 }
@@ -318,9 +298,9 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 
 	opts := activation.DefaultPostSetupOpts()
 	opts.DataDir = t.TempDir()
-	opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
+	opts.ProviderID.SetUint32(initialization.CPUProviderID())
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
-	t.Cleanup(launchPostSupervisor(t, logger, grpcCfg, opts))
+	t.Cleanup(launchPostSupervisor(t, logger, mgr, grpcCfg, opts))
 
 	require.Eventually(t, func() bool {
 		_, err := svc.Client(sig.NodeID())
@@ -332,27 +312,21 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	}
 
 	nipost, err := nb.BuildNIPost(context.Background(), &challenge)
-	require.ErrorContains(t, err, "failed to generate Post: error generating proof")
-	require.Nil(t, nipost)
-
-	initPost(t, logger.Named("manager"), mgr, opts)
-
-	nipost, err = nb.BuildNIPost(context.Background(), &challenge)
 	require.NoError(t, err)
 	require.NotNil(t, nipost)
 
-	verifier, err := activation.NewPostVerifier(mgr.Config(), logger.Named("verifier"))
+	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
 
-	v := activation.NewValidator(poetDb, mgr.Config(), mgr.LastOpts().Scrypt, verifier)
+	v := activation.NewValidator(poetDb, cfg, opts.Scrypt, verifier)
 	_, err = v.NIPost(
 		context.Background(),
 		sig.NodeID(),
 		goldenATX,
 		nipost,
 		challenge.Hash(),
-		mgr.LastOpts().NumUnits,
+		opts.NumUnits,
 	)
 	require.NoError(t, err)
 }

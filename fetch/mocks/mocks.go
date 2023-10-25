@@ -78,6 +78,44 @@ func (c *requesterRequestCall) DoAndReturn(f func(context.Context, p2p.Peer, []b
 	return c
 }
 
+// Run mocks base method.
+func (m *Mockrequester) Run(arg0 context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Run", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Run indicates an expected call of Run.
+func (mr *MockrequesterMockRecorder) Run(arg0 any) *requesterRunCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Run", reflect.TypeOf((*Mockrequester)(nil).Run), arg0)
+	return &requesterRunCall{Call: call}
+}
+
+// requesterRunCall wrap *gomock.Call
+type requesterRunCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *requesterRunCall) Return(arg0 error) *requesterRunCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *requesterRunCall) Do(f func(context.Context) error) *requesterRunCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *requesterRunCall) DoAndReturn(f func(context.Context) error) *requesterRunCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // MockSyncValidator is a mock of SyncValidator interface.
 type MockSyncValidator struct {
 	ctrl     *gomock.Controller

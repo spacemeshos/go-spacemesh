@@ -807,10 +807,10 @@ func (m *Mocksyncer) EXPECT() *MocksyncerMockRecorder {
 }
 
 // RegisterForATXSynced mocks base method.
-func (m *Mocksyncer) RegisterForATXSynced() chan struct{} {
+func (m *Mocksyncer) RegisterForATXSynced() <-chan struct{} {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "RegisterForATXSynced")
-	ret0, _ := ret[0].(chan struct{})
+	ret0, _ := ret[0].(<-chan struct{})
 	return ret0
 }
 
@@ -827,19 +827,19 @@ type syncerRegisterForATXSyncedCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *syncerRegisterForATXSyncedCall) Return(arg0 chan struct{}) *syncerRegisterForATXSyncedCall {
+func (c *syncerRegisterForATXSyncedCall) Return(arg0 <-chan struct{}) *syncerRegisterForATXSyncedCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *syncerRegisterForATXSyncedCall) Do(f func() chan struct{}) *syncerRegisterForATXSyncedCall {
+func (c *syncerRegisterForATXSyncedCall) Do(f func() <-chan struct{}) *syncerRegisterForATXSyncedCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *syncerRegisterForATXSyncedCall) DoAndReturn(f func() chan struct{}) *syncerRegisterForATXSyncedCall {
+func (c *syncerRegisterForATXSyncedCall) DoAndReturn(f func() <-chan struct{}) *syncerRegisterForATXSyncedCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -929,133 +929,18 @@ func (m *MockpostSetupProvider) EXPECT() *MockpostSetupProviderMockRecorder {
 	return m.recorder
 }
 
-// CommitmentAtx mocks base method.
-func (m *MockpostSetupProvider) CommitmentAtx() (types.ATXID, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CommitmentAtx")
-	ret0, _ := ret[0].(types.ATXID)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// CommitmentAtx indicates an expected call of CommitmentAtx.
-func (mr *MockpostSetupProviderMockRecorder) CommitmentAtx() *postSetupProviderCommitmentAtxCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CommitmentAtx", reflect.TypeOf((*MockpostSetupProvider)(nil).CommitmentAtx))
-	return &postSetupProviderCommitmentAtxCall{Call: call}
-}
-
-// postSetupProviderCommitmentAtxCall wrap *gomock.Call
-type postSetupProviderCommitmentAtxCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *postSetupProviderCommitmentAtxCall) Return(arg0 types.ATXID, arg1 error) *postSetupProviderCommitmentAtxCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *postSetupProviderCommitmentAtxCall) Do(f func() (types.ATXID, error)) *postSetupProviderCommitmentAtxCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *postSetupProviderCommitmentAtxCall) DoAndReturn(f func() (types.ATXID, error)) *postSetupProviderCommitmentAtxCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// Config mocks base method.
-func (m *MockpostSetupProvider) Config() PostConfig {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Config")
-	ret0, _ := ret[0].(PostConfig)
-	return ret0
-}
-
-// Config indicates an expected call of Config.
-func (mr *MockpostSetupProviderMockRecorder) Config() *postSetupProviderConfigCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Config", reflect.TypeOf((*MockpostSetupProvider)(nil).Config))
-	return &postSetupProviderConfigCall{Call: call}
-}
-
-// postSetupProviderConfigCall wrap *gomock.Call
-type postSetupProviderConfigCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *postSetupProviderConfigCall) Return(arg0 PostConfig) *postSetupProviderConfigCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *postSetupProviderConfigCall) Do(f func() PostConfig) *postSetupProviderConfigCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *postSetupProviderConfigCall) DoAndReturn(f func() PostConfig) *postSetupProviderConfigCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// LastOpts mocks base method.
-func (m *MockpostSetupProvider) LastOpts() *PostSetupOpts {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LastOpts")
-	ret0, _ := ret[0].(*PostSetupOpts)
-	return ret0
-}
-
-// LastOpts indicates an expected call of LastOpts.
-func (mr *MockpostSetupProviderMockRecorder) LastOpts() *postSetupProviderLastOptsCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LastOpts", reflect.TypeOf((*MockpostSetupProvider)(nil).LastOpts))
-	return &postSetupProviderLastOptsCall{Call: call}
-}
-
-// postSetupProviderLastOptsCall wrap *gomock.Call
-type postSetupProviderLastOptsCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *postSetupProviderLastOptsCall) Return(arg0 *PostSetupOpts) *postSetupProviderLastOptsCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *postSetupProviderLastOptsCall) Do(f func() *PostSetupOpts) *postSetupProviderLastOptsCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *postSetupProviderLastOptsCall) DoAndReturn(f func() *PostSetupOpts) *postSetupProviderLastOptsCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // PrepareInitializer mocks base method.
-func (m *MockpostSetupProvider) PrepareInitializer(ctx context.Context, opts PostSetupOpts) error {
+func (m *MockpostSetupProvider) PrepareInitializer(opts PostSetupOpts) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PrepareInitializer", ctx, opts)
+	ret := m.ctrl.Call(m, "PrepareInitializer", opts)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // PrepareInitializer indicates an expected call of PrepareInitializer.
-func (mr *MockpostSetupProviderMockRecorder) PrepareInitializer(ctx, opts any) *postSetupProviderPrepareInitializerCall {
+func (mr *MockpostSetupProviderMockRecorder) PrepareInitializer(opts any) *postSetupProviderPrepareInitializerCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PrepareInitializer", reflect.TypeOf((*MockpostSetupProvider)(nil).PrepareInitializer), ctx, opts)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PrepareInitializer", reflect.TypeOf((*MockpostSetupProvider)(nil).PrepareInitializer), opts)
 	return &postSetupProviderPrepareInitializerCall{Call: call}
 }
 
@@ -1071,13 +956,13 @@ func (c *postSetupProviderPrepareInitializerCall) Return(arg0 error) *postSetupP
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *postSetupProviderPrepareInitializerCall) Do(f func(context.Context, PostSetupOpts) error) *postSetupProviderPrepareInitializerCall {
+func (c *postSetupProviderPrepareInitializerCall) Do(f func(PostSetupOpts) error) *postSetupProviderPrepareInitializerCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *postSetupProviderPrepareInitializerCall) DoAndReturn(f func(context.Context, PostSetupOpts) error) *postSetupProviderPrepareInitializerCall {
+func (c *postSetupProviderPrepareInitializerCall) DoAndReturn(f func(PostSetupOpts) error) *postSetupProviderPrepareInitializerCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -1158,41 +1043,40 @@ func (c *postSetupProviderStartSessionCall) DoAndReturn(f func(context.Context) 
 	return c
 }
 
-// VRFNonce mocks base method.
-func (m *MockpostSetupProvider) VRFNonce() (*types.VRFPostIndex, error) {
+// Status mocks base method.
+func (m *MockpostSetupProvider) Status() *PostSetupStatus {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "VRFNonce")
-	ret0, _ := ret[0].(*types.VRFPostIndex)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "Status")
+	ret0, _ := ret[0].(*PostSetupStatus)
+	return ret0
 }
 
-// VRFNonce indicates an expected call of VRFNonce.
-func (mr *MockpostSetupProviderMockRecorder) VRFNonce() *postSetupProviderVRFNonceCall {
+// Status indicates an expected call of Status.
+func (mr *MockpostSetupProviderMockRecorder) Status() *postSetupProviderStatusCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRFNonce", reflect.TypeOf((*MockpostSetupProvider)(nil).VRFNonce))
-	return &postSetupProviderVRFNonceCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Status", reflect.TypeOf((*MockpostSetupProvider)(nil).Status))
+	return &postSetupProviderStatusCall{Call: call}
 }
 
-// postSetupProviderVRFNonceCall wrap *gomock.Call
-type postSetupProviderVRFNonceCall struct {
+// postSetupProviderStatusCall wrap *gomock.Call
+type postSetupProviderStatusCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *postSetupProviderVRFNonceCall) Return(arg0 *types.VRFPostIndex, arg1 error) *postSetupProviderVRFNonceCall {
-	c.Call = c.Call.Return(arg0, arg1)
+func (c *postSetupProviderStatusCall) Return(arg0 *PostSetupStatus) *postSetupProviderStatusCall {
+	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *postSetupProviderVRFNonceCall) Do(f func() (*types.VRFPostIndex, error)) *postSetupProviderVRFNonceCall {
+func (c *postSetupProviderStatusCall) Do(f func() *PostSetupStatus) *postSetupProviderStatusCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *postSetupProviderVRFNonceCall) DoAndReturn(f func() (*types.VRFPostIndex, error)) *postSetupProviderVRFNonceCall {
+func (c *postSetupProviderStatusCall) DoAndReturn(f func() *PostSetupStatus) *postSetupProviderStatusCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -1371,17 +1255,17 @@ func (c *SmeshingProviderSmeshingCall) DoAndReturn(f func() bool) *SmeshingProvi
 }
 
 // StartSmeshing mocks base method.
-func (m *MockSmeshingProvider) StartSmeshing(arg0 types.Address, arg1 PostSetupOpts) error {
+func (m *MockSmeshingProvider) StartSmeshing(arg0 types.Address) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StartSmeshing", arg0, arg1)
+	ret := m.ctrl.Call(m, "StartSmeshing", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // StartSmeshing indicates an expected call of StartSmeshing.
-func (mr *MockSmeshingProviderMockRecorder) StartSmeshing(arg0, arg1 any) *SmeshingProviderStartSmeshingCall {
+func (mr *MockSmeshingProviderMockRecorder) StartSmeshing(arg0 any) *SmeshingProviderStartSmeshingCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSmeshing", reflect.TypeOf((*MockSmeshingProvider)(nil).StartSmeshing), arg0, arg1)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSmeshing", reflect.TypeOf((*MockSmeshingProvider)(nil).StartSmeshing), arg0)
 	return &SmeshingProviderStartSmeshingCall{Call: call}
 }
 
@@ -1397,13 +1281,13 @@ func (c *SmeshingProviderStartSmeshingCall) Return(arg0 error) *SmeshingProvider
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *SmeshingProviderStartSmeshingCall) Do(f func(types.Address, PostSetupOpts) error) *SmeshingProviderStartSmeshingCall {
+func (c *SmeshingProviderStartSmeshingCall) Do(f func(types.Address) error) *SmeshingProviderStartSmeshingCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *SmeshingProviderStartSmeshingCall) DoAndReturn(f func(types.Address, PostSetupOpts) error) *SmeshingProviderStartSmeshingCall {
+func (c *SmeshingProviderStartSmeshingCall) DoAndReturn(f func(types.Address) error) *SmeshingProviderStartSmeshingCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -1888,12 +1772,51 @@ func (m *MockPostClient) EXPECT() *MockPostClientMockRecorder {
 	return m.recorder
 }
 
+// Info mocks base method.
+func (m *MockPostClient) Info(ctx context.Context) (*types.PostInfo, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Info", ctx)
+	ret0, _ := ret[0].(*types.PostInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Info indicates an expected call of Info.
+func (mr *MockPostClientMockRecorder) Info(ctx any) *PostClientInfoCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Info", reflect.TypeOf((*MockPostClient)(nil).Info), ctx)
+	return &PostClientInfoCall{Call: call}
+}
+
+// PostClientInfoCall wrap *gomock.Call
+type PostClientInfoCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *PostClientInfoCall) Return(arg0 *types.PostInfo, arg1 error) *PostClientInfoCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *PostClientInfoCall) Do(f func(context.Context) (*types.PostInfo, error)) *PostClientInfoCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *PostClientInfoCall) DoAndReturn(f func(context.Context) (*types.PostInfo, error)) *PostClientInfoCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // Proof mocks base method.
-func (m *MockPostClient) Proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error) {
+func (m *MockPostClient) Proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Proof", ctx, challenge)
 	ret0, _ := ret[0].(*types.Post)
-	ret1, _ := ret[1].(*types.PostMetadata)
+	ret1, _ := ret[1].(*types.PostInfo)
 	ret2, _ := ret[2].(error)
 	return ret0, ret1, ret2
 }
@@ -1911,19 +1834,19 @@ type PostClientProofCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *PostClientProofCall) Return(arg0 *types.Post, arg1 *types.PostMetadata, arg2 error) *PostClientProofCall {
+func (c *PostClientProofCall) Return(arg0 *types.Post, arg1 *types.PostInfo, arg2 error) *PostClientProofCall {
 	c.Call = c.Call.Return(arg0, arg1, arg2)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *PostClientProofCall) Do(f func(context.Context, []byte) (*types.Post, *types.PostMetadata, error)) *PostClientProofCall {
+func (c *PostClientProofCall) Do(f func(context.Context, []byte) (*types.Post, *types.PostInfo, error)) *PostClientProofCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *PostClientProofCall) DoAndReturn(f func(context.Context, []byte) (*types.Post, *types.PostMetadata, error)) *PostClientProofCall {
+func (c *PostClientProofCall) DoAndReturn(f func(context.Context, []byte) (*types.Post, *types.PostInfo, error)) *PostClientProofCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

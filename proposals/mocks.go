@@ -318,44 +318,6 @@ func (c *tortoiseProviderGetBallotCall) DoAndReturn(f func(types.BallotID) *tort
 	return c
 }
 
-// GetMissingActiveSet mocks base method.
-func (m *MocktortoiseProvider) GetMissingActiveSet(arg0 types.EpochID, arg1 []types.ATXID) []types.ATXID {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMissingActiveSet", arg0, arg1)
-	ret0, _ := ret[0].([]types.ATXID)
-	return ret0
-}
-
-// GetMissingActiveSet indicates an expected call of GetMissingActiveSet.
-func (mr *MocktortoiseProviderMockRecorder) GetMissingActiveSet(arg0, arg1 any) *tortoiseProviderGetMissingActiveSetCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMissingActiveSet", reflect.TypeOf((*MocktortoiseProvider)(nil).GetMissingActiveSet), arg0, arg1)
-	return &tortoiseProviderGetMissingActiveSetCall{Call: call}
-}
-
-// tortoiseProviderGetMissingActiveSetCall wrap *gomock.Call
-type tortoiseProviderGetMissingActiveSetCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *tortoiseProviderGetMissingActiveSetCall) Return(arg0 []types.ATXID) *tortoiseProviderGetMissingActiveSetCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *tortoiseProviderGetMissingActiveSetCall) Do(f func(types.EpochID, []types.ATXID) []types.ATXID) *tortoiseProviderGetMissingActiveSetCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *tortoiseProviderGetMissingActiveSetCall) DoAndReturn(f func(types.EpochID, []types.ATXID) []types.ATXID) *tortoiseProviderGetMissingActiveSetCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // StoreBallot mocks base method.
 func (m *MocktortoiseProvider) StoreBallot(arg0 *tortoise.DecodedBallot) error {
 	m.ctrl.T.Helper()
@@ -451,68 +413,6 @@ func (c *vrfVerifierVerifyCall) Do(f func(types.NodeID, []byte, types.VrfSignatu
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *vrfVerifierVerifyCall) DoAndReturn(f func(types.NodeID, []byte, types.VrfSignature) bool) *vrfVerifierVerifyCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// MocknonceFetcher is a mock of nonceFetcher interface.
-type MocknonceFetcher struct {
-	ctrl     *gomock.Controller
-	recorder *MocknonceFetcherMockRecorder
-}
-
-// MocknonceFetcherMockRecorder is the mock recorder for MocknonceFetcher.
-type MocknonceFetcherMockRecorder struct {
-	mock *MocknonceFetcher
-}
-
-// NewMocknonceFetcher creates a new mock instance.
-func NewMocknonceFetcher(ctrl *gomock.Controller) *MocknonceFetcher {
-	mock := &MocknonceFetcher{ctrl: ctrl}
-	mock.recorder = &MocknonceFetcherMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MocknonceFetcher) EXPECT() *MocknonceFetcherMockRecorder {
-	return m.recorder
-}
-
-// VRFNonce mocks base method.
-func (m *MocknonceFetcher) VRFNonce(arg0 types.NodeID, arg1 types.EpochID) (types.VRFPostIndex, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "VRFNonce", arg0, arg1)
-	ret0, _ := ret[0].(types.VRFPostIndex)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// VRFNonce indicates an expected call of VRFNonce.
-func (mr *MocknonceFetcherMockRecorder) VRFNonce(arg0, arg1 any) *nonceFetcherVRFNonceCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRFNonce", reflect.TypeOf((*MocknonceFetcher)(nil).VRFNonce), arg0, arg1)
-	return &nonceFetcherVRFNonceCall{Call: call}
-}
-
-// nonceFetcherVRFNonceCall wrap *gomock.Call
-type nonceFetcherVRFNonceCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *nonceFetcherVRFNonceCall) Return(arg0 types.VRFPostIndex, arg1 error) *nonceFetcherVRFNonceCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *nonceFetcherVRFNonceCall) Do(f func(types.NodeID, types.EpochID) (types.VRFPostIndex, error)) *nonceFetcherVRFNonceCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *nonceFetcherVRFNonceCall) DoAndReturn(f func(types.NodeID, types.EpochID) (types.VRFPostIndex, error)) *nonceFetcherVRFNonceCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

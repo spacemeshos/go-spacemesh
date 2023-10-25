@@ -31,6 +31,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
@@ -331,6 +332,7 @@ type App struct {
 	proposalBuilder   *miner.ProposalBuilder
 	mesh              *mesh.Mesh
 	cachedDB          *datastore.CachedDB
+	atxsdata          *atxsdata.Data
 	clock             *timesync.NodeClock
 	hare              *hare.Hare
 	hare3             *hare3.Hare
@@ -486,8 +488,8 @@ func (app *App) setupLogging() {
 }
 
 func (app *App) getAppInfo() string {
-	return fmt.Sprintf("App version: %s. Git: %s - %s . Go Version: %s. OS: %s-%s ",
-		cmd.Version, cmd.Branch, cmd.Commit, runtime.Version(), runtime.GOOS, runtime.GOARCH)
+	return fmt.Sprintf("App version: %s. Git: %s - %s . Go Version: %s. OS: %s-%s . Genesis %s",
+		cmd.Version, cmd.Branch, cmd.Commit, runtime.Version(), runtime.GOOS, runtime.GOARCH, app.Config.Genesis.GenesisID().String())
 }
 
 // Cleanup stops all app services.
@@ -546,7 +548,6 @@ func (app *App) SetLogLevel(name, loglevel string) error {
 }
 
 func (app *App) initServices(ctx context.Context) error {
-	vrfSigner := app.edSgn.VRFSigner()
 	layerSize := app.Config.LayerAvgSize
 	layersPerEpoch := types.GetLayersPerEpoch()
 	lg := app.log.Named(app.edSgn.NodeID().ShortString()).WithFields(app.edSgn.NodeID())
@@ -569,22 +570,6 @@ func (app *App) initServices(ctx context.Context) error {
 		postVerifiers = append(postVerifiers, verifier)
 	}
 	app.postVerifier = activation.NewOffloadingPostVerifier(postVerifiers, nipostValidatorLogger)
-
-	if app.Config.SMESHING.Start {
-		app.postSupervisor, err = activation.NewPostSupervisor(
-			app.log.Zap(),
-			app.Config.POSTService,
-			app.Config.POST,
-			app.Config.SMESHING.Opts,
-			app.Config.SMESHING.ProvingOpts,
-		)
-		if err != nil {
-			return fmt.Errorf("start post service: %w", err)
-		}
-		if err := app.postSupervisor.Start(); err != nil {
-			return fmt.Errorf("start post service: %w", err)
-		}
-	}
 
 	validator := activation.NewValidator(
 		poetDb,
@@ -685,7 +670,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.addLogger(ExecutorLogger, lg),
 	)
 	mlog := app.addLogger(MeshLogger, lg)
-	msh, err := mesh.NewMesh(app.cachedDB, app.clock, trtl, executor, app.conState, mlog)
+	msh, err := mesh.NewMesh(app.cachedDB, app.atxsdata, app.clock, trtl, executor, app.conState, mlog)
 	if err != nil {
 		return fmt.Errorf("failed to create mesh: %w", err)
 	}
@@ -703,6 +688,7 @@ func (app *App) initServices(ctx context.Context) error {
 	atxHandler := activation.NewHandler(
 		app.host.ID(),
 		app.cachedDB,
+		app.atxsdata,
 		app.edVerifier,
 		app.clock,
 		app.host,
@@ -727,7 +713,8 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 
 	proposalListener := proposals.NewHandler(
-		app.cachedDB,
+		app.db,
+		app.atxsdata,
 		app.edVerifier,
 		app.host,
 		fetcherWrapped,
@@ -760,7 +747,6 @@ func (app *App) initServices(ctx context.Context) error {
 		beaconProtocol,
 		app.cachedDB,
 		vrfVerifier,
-		vrfSigner,
 		app.Config.LayersPerEpoch,
 		app.Config.HareEligibility,
 		app.addLogger(HareOracleLogger, lg),
@@ -779,14 +765,11 @@ func (app *App) initServices(ctx context.Context) error {
 	app.certifier = blocks.NewCertifier(
 		app.cachedDB,
 		app.hOracle,
-		app.edSgn.NodeID(),
-		app.edSgn,
 		app.edVerifier,
 		app.host,
 		app.clock,
 		beaconProtocol,
 		trtl,
-		blocks.WithCertContext(ctx),
 		blocks.WithCertConfig(blocks.CertConfig{
 			CommitteeSize:    app.Config.HARE.N,
 			CertifyThreshold: app.Config.HARE.N/2 + 1,
@@ -795,6 +778,7 @@ func (app *App) initServices(ctx context.Context) error {
 		}),
 		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg)),
 	)
+	app.certifier.Register(app.edSgn)
 
 	flog := app.addLogger(Fetcher, lg)
 	fetcher := fetch.NewFetch(app.cachedDB, msh, beaconProtocol, app.host,
@@ -836,7 +820,6 @@ func (app *App) initServices(ctx context.Context) error {
 		fetcherWrapped,
 		app.certifier,
 		patrol,
-		blocks.WithContext(ctx),
 		blocks.WithConfig(blocks.Config{
 			BlockGasLimit:      app.Config.BlockGasLimit,
 			OptFilterThreshold: app.Config.OptFilterThreshold,
@@ -923,6 +906,20 @@ func (app *App) initServices(ctx context.Context) error {
 		app.log.Panic("failed to create post setup manager: %v", err)
 	}
 
+	if app.Config.SMESHING.Start {
+		app.postSupervisor, err = activation.NewPostSupervisor(
+			app.log.Zap(),
+			app.Config.POSTService,
+			app.Config.POST,
+			app.Config.SMESHING.ProvingOpts,
+			postSetupMgr,
+			newSyncer,
+		)
+		if err != nil {
+			return fmt.Errorf("init post service: %w", err)
+		}
+	}
+
 	app.grpcPostService = grpcserver.NewPostService(app.addLogger(PostServiceLogger, lg).Zap())
 
 	nipostBuilder, err := activation.NewNIPostBuilder(
@@ -969,7 +966,6 @@ func (app *App) initServices(ctx context.Context) error {
 		app.host,
 		app.grpcPostService,
 		nipostBuilder,
-		postSetupMgr,
 		app.clock,
 		newSyncer,
 		app.addLogger("atxBuilder", lg),
@@ -1214,8 +1210,8 @@ func (app *App) startServices(ctx context.Context) error {
 	app.syncer.Start()
 	app.beaconProtocol.Start(ctx)
 
-	app.blockGen.Start()
-	app.certifier.Start()
+	app.blockGen.Start(ctx)
+	app.certifier.Start(ctx)
 	if err := app.hare.Start(ctx); err != nil {
 		return fmt.Errorf("cannot start hare: %w", err)
 	}
@@ -1232,8 +1228,11 @@ func (app *App) startServices(ctx context.Context) error {
 				err,
 			)
 		}
-		if err := app.atxBuilder.StartSmeshing(coinbaseAddr, app.Config.SMESHING.Opts); err != nil {
+		if err := app.atxBuilder.StartSmeshing(coinbaseAddr); err != nil {
 			app.log.Panic("failed to start smeshing: %v", err)
+		}
+		if err := app.postSupervisor.Start(app.Config.SMESHING.Opts); err != nil {
+			return fmt.Errorf("start post service: %w", err)
 		}
 	} else {
 		app.log.Info("smeshing not started, waiting to be triggered via smesher api")
@@ -1283,7 +1282,6 @@ func (app *App) initService(
 		return grpcserver.NewAdminService(app.db, app.Config.DataDir(), app.host), nil
 	case grpcserver.Smesher:
 		return grpcserver.NewSmesherService(
-			app.postSetupMgr,
 			app.atxBuilder,
 			app.postSupervisor,
 			app.Config.API.SmesherStreamInterval,
@@ -1435,7 +1433,7 @@ func (app *App) stopServices(ctx context.Context) {
 	}
 
 	if app.atxBuilder != nil {
-		_ = app.atxBuilder.StopSmeshing(false)
+		app.atxBuilder.StopSmeshing(false)
 	}
 
 	if app.postVerifier != nil {
@@ -1466,7 +1464,7 @@ func (app *App) stopServices(ctx context.Context) {
 	}
 
 	if app.postSupervisor != nil {
-		if err := app.postSupervisor.Stop(); err != nil {
+		if err := app.postSupervisor.Stop(false); err != nil {
 			app.log.With().Error("error stopping local post service", log.Err(err))
 		}
 	}
@@ -1588,10 +1586,19 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 			app.Config.DatabaseSizeMeteringInterval,
 		)
 	}
-	app.cachedDB = datastore.NewCachedDB(
-		sqlDB,
-		app.addLogger(CachedDBLogger, lg),
+	start := time.Now()
+	data, err := atxsdata.Warm(
+		app.db,
+		atxsdata.WithCapacityFromLayers(app.Config.Tortoise.WindowSize, app.Config.LayersPerEpoch),
+	)
+	if err != nil {
+		return err
+	}
+	app.atxsdata = data
+	app.log.With().Info("cache warmup", log.Duration("duration", time.Since(start)))
+	app.cachedDB = datastore.NewCachedDB(sqlDB, app.addLogger(CachedDBLogger, lg),
 		datastore.WithConfig(app.Config.Cache),
+		datastore.WithConsensusCache(data),
 	)
 	return nil
 }

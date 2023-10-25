@@ -58,7 +58,7 @@ func defaultOracle(t testing.TB) *testOracle {
 	verifier := NewMockvrfVerifier(ctrl)
 
 	to := &testOracle{
-		Oracle:    New(mb, cdb, verifier, nil, defLayersPerEpoch, config.Config{ConfidenceParam: confidenceParam}, lg),
+		Oracle:    New(mb, cdb, verifier, defLayersPerEpoch, config.Config{ConfidenceParam: confidenceParam}, lg),
 		mBeacon:   mb,
 		mVerifier: verifier,
 	}
@@ -333,7 +333,6 @@ func Test_VrfSignVerify(t *testing.T) {
 	require.NoError(t, err)
 
 	o := defaultOracle(t)
-	o.vrfSigner = signer.VRFSigner()
 	nid := signer.NodeID()
 
 	lid := types.EpochID(5).FirstLayer()
@@ -377,7 +376,7 @@ func Test_VrfSignVerify(t *testing.T) {
 
 	o.vrfVerifier = signing.NewVRFVerifier()
 
-	proof, err := o.Proof(context.Background(), lid, 1)
+	proof, err := o.Proof(context.Background(), signer.VRFSigner(), lid, 1)
 	require.NoError(t, err)
 
 	res, err := o.CalcEligibility(context.Background(), lid, 1, 10, nid, proof)
@@ -394,13 +393,12 @@ func Test_Proof_BeaconError(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	o.vrfSigner = signer.VRFSigner()
 
 	layer := types.LayerID(2)
 	errUnknown := errors.New("unknown")
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(types.EmptyBeacon, errUnknown).Times(1)
 
-	_, err = o.Proof(context.Background(), layer, 3)
+	_, err = o.Proof(context.Background(), signer.VRFSigner(), layer, 3)
 	require.ErrorIs(t, err, errUnknown)
 }
 
@@ -411,10 +409,8 @@ func Test_Proof(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	vrfSigner := signer.VRFSigner()
 
-	o.vrfSigner = vrfSigner
-	sig, err := o.Proof(context.Background(), layer, 3)
+	sig, err := o.Proof(context.Background(), signer.VRFSigner(), layer, 3)
 	require.Nil(t, err)
 	require.NotNil(t, sig)
 }

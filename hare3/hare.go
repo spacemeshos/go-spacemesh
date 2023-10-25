@@ -80,12 +80,13 @@ func (cfg *Config) roundStart(round IterRound) time.Duration {
 func DefaultConfig() Config {
 	return Config{
 		Committee:       800,
-		Leaders:         10,
-		IterationsLimit: 40,
+		Leaders:         5,
+		IterationsLimit: 4,
 		PreroundDelay:   25 * time.Second,
-		RoundDuration:   10 * time.Second,
+		RoundDuration:   12 * time.Second,
 		// can be bumped to 3.1 when oracle upgrades
 		ProtocolName: "/h/3.0",
+		DisableLayer: math.MaxUint32,
 	}
 }
 

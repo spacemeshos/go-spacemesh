@@ -15,11 +15,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
+	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
@@ -34,7 +36,7 @@ func testnet() config.Config {
 	p2pconfig := p2p.DefaultConfig()
 
 	smeshing := config.DefaultSmeshingConfig()
-	smeshing.Opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
+	smeshing.Opts.ProviderID.SetUint32(initialization.CPUProviderID())
 	smeshing.ProvingOpts.Nonces = 288
 	smeshing.ProvingOpts.Threads = uint(runtime.NumCPU() * 3 / 4)
 	if smeshing.ProvingOpts.Threads < 1 {
@@ -44,6 +46,12 @@ func testnet() config.Config {
 	if err != nil {
 		panic("can't read homedir: " + err.Error())
 	}
+	hare3conf := hare3.DefaultConfig()
+	hare3conf.Enable = true
+	hare3conf.EnableLayer = 7366
+	// NOTE(dshulyak) i forgot to set protocol name for testnet when we configured it manually.
+	// we can't do rolling upgrade if protocol name changes, so lets keep it like that temporarily.
+	hare3conf.ProtocolName = ""
 	defaultdir := filepath.Join(home, "spacemesh-testnet", "/")
 	return config.Config{
 		BaseConfig: config.BaseConfig{
@@ -71,18 +79,16 @@ func testnet() config.Config {
 			GenesisTime: "2023-09-13T18:00:00Z",
 			ExtraData:   "0000000000000000000000c76c58ebac180989673fd6d237b40e66ed5c976ec3",
 		},
-
 		Tortoise: tortoise.Config{
 			Hdist:                    10,
 			Zdist:                    2,
 			WindowSize:               10000,
 			MaxExceptions:            1000,
 			BadBeaconVoteDelayLayers: 4032,
-			// 100 - is assumed minimal number of units
-			// 100 - half of the expected poet ticks
-			MinimalActiveSetWeight: 100 * 100,
+			MinimalActiveSetWeight:   []types.EpochMinimalActiveWeight{{Weight: 10_000}},
 		},
 		HARE: hareConfig.Config{
+			Disable:         hare3conf.EnableLayer,
 			N:               200,
 			ExpectedLeaders: 5,
 			RoundDuration:   25 * time.Second,
@@ -90,6 +96,7 @@ func testnet() config.Config {
 			LimitConcurrent: 2,
 			LimitIterations: 4,
 		},
+		HARE3: hare3conf,
 		HareEligibility: eligConfig.Config{
 			ConfidenceParam: 20,
 		},

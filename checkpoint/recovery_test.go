@@ -20,6 +20,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -39,7 +40,13 @@ const recoverLayer uint32 = 18
 
 var goldenAtx = types.ATXID{1}
 
-func atxequal(tb testing.TB, satx types.AtxSnapshot, vatx *types.VerifiedActivationTx, commitAtx types.ATXID, vrfnonce types.VRFPostIndex) {
+func atxequal(
+	tb testing.TB,
+	satx types.AtxSnapshot,
+	vatx *types.VerifiedActivationTx,
+	commitAtx types.ATXID,
+	vrfnonce types.VRFPostIndex,
+) {
 	require.True(tb, bytes.Equal(satx.ID, vatx.ID().Bytes()))
 	require.EqualValues(tb, satx.Epoch, vatx.PublishEpoch)
 	require.True(tb, bytes.Equal(satx.CommitmentAtx, commitAtx.Bytes()))
@@ -215,7 +222,12 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 	require.True(t, exist)
 }
 
-func validateAndPreserveData(tb testing.TB, db *sql.Database, deps []*types.VerifiedActivationTx, proofs []*types.PoetProofMessage) {
+func validateAndPreserveData(
+	tb testing.TB,
+	db *sql.Database,
+	deps []*types.VerifiedActivationTx,
+	proofs []*types.PoetProofMessage,
+) {
 	lg := logtest.New(tb)
 	poetDb := activation.NewPoetDb(db, lg)
 	ctrl := gomock.NewController(tb)
@@ -228,6 +240,7 @@ func validateAndPreserveData(tb testing.TB, db *sql.Database, deps []*types.Veri
 	atxHandler := activation.NewHandler(
 		"",
 		cdb,
+		atxsdata.New(),
 		signing.NewEdVerifier(),
 		mclock,
 		nil,
@@ -248,14 +261,20 @@ func validateAndPreserveData(tb testing.TB, db *sql.Database, deps []*types.Veri
 		mfetch.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any())
 		mfetch.EXPECT().GetPoetProof(gomock.Any(), vatx.GetPoetProofRef())
 		if vatx.InitialPost != nil {
-			mvalidator.EXPECT().InitialNIPostChallenge(&vatx.ActivationTx.NIPostChallenge, gomock.Any(), goldenAtx).AnyTimes()
-			mvalidator.EXPECT().Post(gomock.Any(), vatx.SmesherID, *vatx.CommitmentATX, vatx.InitialPost, gomock.Any(), vatx.NumUnits)
-			mvalidator.EXPECT().VRFNonce(vatx.SmesherID, *vatx.CommitmentATX, vatx.VRFNonce, gomock.Any(), vatx.NumUnits)
+			mvalidator.EXPECT().
+				InitialNIPostChallenge(&vatx.ActivationTx.NIPostChallenge, gomock.Any(), goldenAtx).
+				AnyTimes()
+			mvalidator.EXPECT().
+				Post(gomock.Any(), vatx.SmesherID, *vatx.CommitmentATX, vatx.InitialPost, gomock.Any(), vatx.NumUnits)
+			mvalidator.EXPECT().
+				VRFNonce(vatx.SmesherID, *vatx.CommitmentATX, vatx.VRFNonce, gomock.Any(), vatx.NumUnits)
 		} else {
 			mvalidator.EXPECT().NIPostChallenge(&vatx.ActivationTx.NIPostChallenge, cdb, vatx.SmesherID)
 		}
 		mvalidator.EXPECT().PositioningAtx(vatx.PositioningATX, cdb, goldenAtx, vatx.PublishEpoch)
-		mvalidator.EXPECT().NIPost(gomock.Any(), vatx.SmesherID, gomock.Any(), vatx.NIPost, gomock.Any(), vatx.NumUnits).Return(uint64(1111111), nil)
+		mvalidator.EXPECT().
+			NIPost(gomock.Any(), vatx.SmesherID, gomock.Any(), vatx.NIPost, gomock.Any(), vatx.NumUnits).
+			Return(uint64(1111111), nil)
 		mreceiver.EXPECT().OnAtx(gomock.Any())
 		mtrtl.EXPECT().OnAtx(gomock.Any())
 		require.NoError(tb, atxHandler.HandleSyncedAtx(context.Background(), vatx.ID().Hash32(), "self", encoded))
@@ -264,7 +283,14 @@ func validateAndPreserveData(tb testing.TB, db *sql.Database, deps []*types.Veri
 	}
 }
 
-func newChainedAtx(tb testing.TB, prev, pos types.ATXID, commitAtx *types.ATXID, epoch uint32, seq, vrfnonce uint64, sig *signing.EdSigner) *types.VerifiedActivationTx {
+func newChainedAtx(
+	tb testing.TB,
+	prev, pos types.ATXID,
+	commitAtx *types.ATXID,
+	epoch uint32,
+	seq, vrfnonce uint64,
+	sig *signing.EdSigner,
+) *types.VerifiedActivationTx {
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
@@ -321,7 +347,18 @@ func createAtxChain(tb testing.TB, sig *signing.EdSigner) ([]*types.VerifiedActi
 	// epoch 9
 	othAtx7 := newChainedAtx(tb, othAtx6.ID(), atx3.ID(), nil, 9, 6, 0, other)
 
-	vatxs := []*types.VerifiedActivationTx{othAtx1, othAtx2, othAtx3, atx1, othAtx4, othAtx5, atx2, othAtx6, atx3, othAtx7}
+	vatxs := []*types.VerifiedActivationTx{
+		othAtx1,
+		othAtx2,
+		othAtx3,
+		atx1,
+		othAtx4,
+		othAtx5,
+		atx2,
+		othAtx6,
+		atx3,
+		othAtx7,
+	}
 	var proofs []*types.PoetProofMessage
 	for range vatxs {
 		proofMessage := &types.PoetProofMessage{
@@ -412,7 +449,16 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve(t *testing.T) {
 	for i, vatx := range vatxs {
 		encoded, err := codec.Encode(proofs[i])
 		require.NoError(t, err)
-		require.NoError(t, poets.Add(olddb, types.PoetProofRef(vatx.GetPoetProofRef()), encoded, proofs[i].PoetServiceID, proofs[i].RoundID))
+		require.NoError(
+			t,
+			poets.Add(
+				olddb,
+				types.PoetProofRef(vatx.GetPoetProofRef()),
+				encoded,
+				proofs[i].PoetServiceID,
+				proofs[i].RoundID,
+			),
+		)
 	}
 	require.NoError(t, olddb.Close())
 
@@ -475,7 +521,16 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
 	for i, vatx := range vatxs {
 		encoded, err := codec.Encode(proofs[i])
 		require.NoError(t, err)
-		require.NoError(t, poets.Add(olddb, types.PoetProofRef(vatx.GetPoetProofRef()), encoded, proofs[i].PoetServiceID, proofs[i].RoundID))
+		require.NoError(
+			t,
+			poets.Add(
+				olddb,
+				types.PoetProofRef(vatx.GetPoetProofRef()),
+				encoded,
+				proofs[i].PoetServiceID,
+				proofs[i].RoundID,
+			),
+		)
 	}
 	require.NoError(t, olddb.Close())
 
@@ -548,7 +603,16 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_Still_Initializing(t *testing.T)
 	for i, vatx := range vatxs {
 		encoded, err := codec.Encode(proofs[i])
 		require.NoError(t, err)
-		require.NoError(t, poets.Add(olddb, types.PoetProofRef(vatx.GetPoetProofRef()), encoded, proofs[i].PoetServiceID, proofs[i].RoundID))
+		require.NoError(
+			t,
+			poets.Add(
+				olddb,
+				types.PoetProofRef(vatx.GetPoetProofRef()),
+				encoded,
+				proofs[i].PoetServiceID,
+				proofs[i].RoundID,
+			),
+		)
 	}
 
 	commitment, err := atxs.GetIDWithMaxHeight(olddb, types.EmptyNodeID)
@@ -637,7 +701,16 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 		}
 		encoded, err := codec.Encode(proof)
 		require.NoError(t, err)
-		require.NoError(t, poets.Add(olddb, types.PoetProofRef(vatxs[i].GetPoetProofRef()), encoded, proof.PoetServiceID, proof.RoundID))
+		require.NoError(
+			t,
+			poets.Add(
+				olddb,
+				types.PoetProofRef(vatxs[i].GetPoetProofRef()),
+				encoded,
+				proof.PoetServiceID,
+				proof.RoundID,
+			),
+		)
 	}
 	require.NoError(t, olddb.Close())
 
@@ -693,7 +766,16 @@ func TestRecover_OwnAtxNotInCheckpoint_DontPreserve(t *testing.T) {
 	for i, vatx := range vatxs {
 		encoded, err := codec.Encode(proofs[i])
 		require.NoError(t, err)
-		require.NoError(t, poets.Add(olddb, types.PoetProofRef(vatx.GetPoetProofRef()), encoded, proofs[i].PoetServiceID, proofs[i].RoundID))
+		require.NoError(
+			t,
+			poets.Add(
+				olddb,
+				types.PoetProofRef(vatx.GetPoetProofRef()),
+				encoded,
+				proofs[i].PoetServiceID,
+				proofs[i].RoundID,
+			),
+		)
 	}
 	require.NoError(t, olddb.Close())
 

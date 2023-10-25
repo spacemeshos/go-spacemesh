@@ -194,6 +194,7 @@ func getActiveSet(ctx context.Context, endpoint string, epoch types.EpochID) ([]
 	if err != nil {
 		return nil, fmt.Errorf("grpc dial %v: %w", endpoint, err)
 	}
+	defer conn.Close()
 
 	client := pb.NewMeshServiceClient(conn)
 	stream, err := client.EpochStream(ctx, &pb.EpochStreamRequest{Epoch: uint32(epoch)})

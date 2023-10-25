@@ -15,10 +15,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
+	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
@@ -55,6 +57,10 @@ func MainnetConfig() Config {
 	logging.TrtlLoggerLevel = zapcore.WarnLevel.String()
 	logging.AtxHandlerLevel = zapcore.WarnLevel.String()
 	logging.ProposalListenerLevel = zapcore.WarnLevel.String()
+	hare3conf := hare3.DefaultConfig()
+	hare3conf.Committee = 400
+	hare3conf.Enable = true
+	hare3conf.EnableLayer = 33101
 	return Config{
 		BaseConfig: BaseConfig{
 			DataDirParent:         defaultDataDir,
@@ -96,11 +102,15 @@ func MainnetConfig() Config {
 			WindowSize:               10000,
 			MaxExceptions:            1000,
 			BadBeaconVoteDelayLayers: 4032,
-			// 1000 - is assumed minimal number of units
-			// 5000 - half of the expected poet ticks
-			MinimalActiveSetWeight: 1000 * 5000,
+			MinimalActiveSetWeight: []types.EpochMinimalActiveWeight{
+				{Weight: 1_000_000},
+				// generated using ./cmd/activeset for publish epoch 6
+				// it will be used starting from epoch 8, because we will only release it in 7th
+				{Epoch: 8, Weight: 7_879_129_244},
+			},
 		},
 		HARE: hareConfig.Config{
+			Disable:         hare3conf.EnableLayer,
 			N:               200,
 			ExpectedLeaders: 5,
 			RoundDuration:   25 * time.Second,
@@ -108,6 +118,7 @@ func MainnetConfig() Config {
 			LimitConcurrent: 2,
 			LimitIterations: 4,
 		},
+		HARE3: hare3conf,
 		HareEligibility: eligConfig.Config{
 			ConfidenceParam: 200,
 		},
