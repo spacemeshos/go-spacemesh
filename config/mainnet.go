@@ -58,6 +58,7 @@ func MainnetConfig() Config {
 	logging.AtxHandlerLevel = zapcore.WarnLevel.String()
 	logging.ProposalListenerLevel = zapcore.WarnLevel.String()
 	hare3conf := hare3.DefaultConfig()
+	hare3conf.Committee = 400
 	hare3conf.Enable = true
 	hare3conf.EnableLayer = 33101
 	return Config{
