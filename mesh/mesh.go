@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"math"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	"go.uber.org/atomic"
 	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
