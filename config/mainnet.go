@@ -59,7 +59,7 @@ func MainnetConfig() Config {
 	logging.ProposalListenerLevel = zapcore.WarnLevel.String()
 	hare3conf := hare3.DefaultConfig()
 	hare3conf.Enable = true
-	hare3conf.EnableLayer = 31085
+	hare3conf.EnableLayer = 33101
 	return Config{
 		BaseConfig: BaseConfig{
 			DataDirParent:         defaultDataDir,

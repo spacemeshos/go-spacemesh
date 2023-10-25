@@ -49,6 +49,9 @@ func testnet() config.Config {
 	hare3conf := hare3.DefaultConfig()
 	hare3conf.Enable = true
 	hare3conf.EnableLayer = 7366
+	// NOTE(dshulyak) i forgot to set protocol name for testnet when we configured it manually.
+	// we can't do rolling upgrade if protocol name changes, so lets keep it like that temporarily.
+	hare3conf.ProtocolName = ""
 	defaultdir := filepath.Join(home, "spacemesh-testnet", "/")
 	return config.Config{
 		BaseConfig: config.BaseConfig{
