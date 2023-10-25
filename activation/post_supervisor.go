@@ -226,6 +226,12 @@ func (ps *PostSupervisor) captureCmdOutput(pipe io.ReadCloser) func() error {
 }
 
 func (ps *PostSupervisor) runCmd(ctx context.Context, cmdCfg PostSupervisorConfig, postCfg PostConfig, postOpts PostSetupOpts, provingOpts PostProvingOpts) error {
+	g, err := NewProcessExitGroup()
+	if err != nil {
+		return err
+	}
+	defer g.Dispose()
+
 	for {
 		args := []string{
 			"--address", cmdCfg.NodeAddress,
@@ -267,9 +273,9 @@ func (ps *PostSupervisor) runCmd(ctx context.Context, cmdCfg PostSupervisorConfi
 
 		var eg errgroup.Group
 		eg.Go(ps.captureCmdOutput(pipe))
-		if cmd.Start(); err != nil {
+		if err := g.StartCommand(cmd); err != nil {
 			pipe.Close()
-			return fmt.Errorf("start post service: %w", err)
+			return err
 		}
 		ps.logger.Info("post service started", zap.Int("pid", cmd.Process.Pid), zap.String("cmd", cmd.String()))
 		ps.pid.Store(int64(cmd.Process.Pid))
