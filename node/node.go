@@ -31,6 +31,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
@@ -331,6 +332,7 @@ type App struct {
 	proposalBuilder   *miner.ProposalBuilder
 	mesh              *mesh.Mesh
 	cachedDB          *datastore.CachedDB
+	atxsdata          *atxsdata.Data
 	clock             *timesync.NodeClock
 	hare              *hare.Hare
 	hare3             *hare3.Hare
@@ -668,7 +670,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.addLogger(ExecutorLogger, lg),
 	)
 	mlog := app.addLogger(MeshLogger, lg)
-	msh, err := mesh.NewMesh(app.cachedDB, app.clock, trtl, executor, app.conState, mlog)
+	msh, err := mesh.NewMesh(app.cachedDB, app.atxsdata, app.clock, trtl, executor, app.conState, mlog)
 	if err != nil {
 		return fmt.Errorf("failed to create mesh: %w", err)
 	}
@@ -686,6 +688,7 @@ func (app *App) initServices(ctx context.Context) error {
 	atxHandler := activation.NewHandler(
 		app.host.ID(),
 		app.cachedDB,
+		app.atxsdata,
 		app.edVerifier,
 		app.clock,
 		app.host,
@@ -710,7 +713,8 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 
 	proposalListener := proposals.NewHandler(
-		app.cachedDB,
+		app.db,
+		app.atxsdata,
 		app.edVerifier,
 		app.host,
 		fetcherWrapped,
@@ -1582,10 +1586,19 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 			app.Config.DatabaseSizeMeteringInterval,
 		)
 	}
-	app.cachedDB = datastore.NewCachedDB(
-		sqlDB,
-		app.addLogger(CachedDBLogger, lg),
+	start := time.Now()
+	data, err := atxsdata.Warm(
+		app.db,
+		atxsdata.WithCapacityFromLayers(app.Config.Tortoise.WindowSize, app.Config.LayersPerEpoch),
+	)
+	if err != nil {
+		return err
+	}
+	app.atxsdata = data
+	app.log.With().Info("cache warmup", log.Duration("duration", time.Since(start)))
+	app.cachedDB = datastore.NewCachedDB(sqlDB, app.addLogger(CachedDBLogger, lg),
 		datastore.WithConfig(app.Config.Cache),
+		datastore.WithConsensusCache(data),
 	)
 	return nil
 }

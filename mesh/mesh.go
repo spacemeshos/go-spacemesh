@@ -8,11 +8,12 @@ import (
 	"fmt"
 	"math"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	"go.uber.org/atomic"
 	"go.uber.org/zap/zapcore"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
@@ -34,9 +35,10 @@ var ErrMissingBlock = errors.New("missing blocks")
 
 // Mesh is the logic layer above our mesh.DB database.
 type Mesh struct {
-	logger log.Log
-	cdb    *datastore.CachedDB
-	clock  layerClock
+	logger   log.Log
+	cdb      *datastore.CachedDB
+	atxsdata *atxsdata.Data
+	clock    layerClock
 
 	executor *Executor
 	conState conservativeState
@@ -58,6 +60,7 @@ type Mesh struct {
 // NewMesh creates a new instant of a mesh.
 func NewMesh(
 	cdb *datastore.CachedDB,
+	atxsdata *atxsdata.Data,
 	c layerClock,
 	trtl system.Tortoise,
 	exec *Executor,
@@ -67,6 +70,7 @@ func NewMesh(
 	msh := &Mesh{
 		logger:              logger,
 		cdb:                 cdb,
+		atxsdata:            atxsdata,
 		clock:               c,
 		trtl:                trtl,
 		executor:            exec,
@@ -387,6 +391,8 @@ func (msh *Mesh) applyResults(ctx context.Context, results []result.Layer) error
 				Status:  events.LayerStatusTypeApplied,
 			})
 		}
+
+		msh.atxsdata.OnEpoch(layer.Layer.GetEpoch())
 		if layer.Layer > msh.LatestLayerInState() {
 			msh.setLatestLayerInState(layer.Layer)
 		}

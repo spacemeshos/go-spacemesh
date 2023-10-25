@@ -34,6 +34,24 @@ func (vatx *VerifiedActivationTx) TickHeight() uint64 {
 	return vatx.baseTickHeight + vatx.tickCount
 }
 
+func (vatx *VerifiedActivationTx) ToHeader() *ActivationTxHeader {
+	return &ActivationTxHeader{
+		NIPostChallenge:   vatx.NIPostChallenge,
+		Coinbase:          vatx.Coinbase,
+		NumUnits:          vatx.NumUnits,
+		EffectiveNumUnits: vatx.EffectiveNumUnits(),
+		VRFNonce:          vatx.VRFNonce,
+		Received:          vatx.Received(),
+
+		ID:     vatx.ID(),
+		NodeID: vatx.SmesherID,
+
+		BaseTickHeight: vatx.BaseTickHeight(),
+		TickCount:      vatx.TickCount(),
+		Golden:         vatx.Golden(),
+	}
+}
+
 // MarshalLogObject implements logging interface.
 func (vatx *VerifiedActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("atx_id", vatx.id.String())

@@ -10,10 +10,10 @@ import (
 	"io/fs"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/spacemeshos/post/shared"
-	"go.uber.org/atomic"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
@@ -69,7 +69,7 @@ type Config struct {
 // calculate total weight and providing relevant view as proof.
 type Builder struct {
 	pendingPoetClients atomic.Pointer[[]poetClient]
-	started            *atomic.Bool
+	started            atomic.Bool
 
 	eg errgroup.Group
 
@@ -170,7 +170,6 @@ func NewBuilder(
 		nipostBuilder:         nipostBuilder,
 		layerClock:            layerClock,
 		syncer:                syncer,
-		started:               atomic.NewBool(false),
 		log:                   log,
 		poetRetryInterval:     defaultPoetRetryInterval,
 		poetClientInitializer: defaultPoetClientFunc,

@@ -22,17 +22,12 @@ type eligibilityValidator interface {
 
 type tortoiseProvider interface {
 	GetBallot(types.BallotID) *tortoise.BallotData
-	GetMissingActiveSet(types.EpochID, []types.ATXID) []types.ATXID
 	DecodeBallot(*types.BallotTortoiseData) (*tortoise.DecodedBallot, error)
 	StoreBallot(*tortoise.DecodedBallot) error
 }
 
 type vrfVerifier interface {
 	Verify(types.NodeID, []byte, types.VrfSignature) bool
-}
-
-type nonceFetcher interface {
-	VRFNonce(types.NodeID, types.EpochID) (types.VRFPostIndex, error)
 }
 
 type layerClock interface {
