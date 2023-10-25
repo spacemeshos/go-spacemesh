@@ -388,7 +388,7 @@ func (h *Hare) run(session *session) error {
 
 	walltime := h.nodeclock.LayerToTime(session.lid).Add(h.config.PreroundDelay)
 	if active {
-		h.log.Debug("active in preround", zap.Uint32("lid", session.lid.Uint32()))
+		h.log.Debug("active in preround. waiting for preround delay", zap.Uint32("lid", session.lid.Uint32()))
 		// initial set is not needed if node is not active in preround
 		select {
 		case <-h.wallclock.After(walltime.Sub(h.wallclock.Now())):
@@ -399,13 +399,12 @@ func (h *Hare) run(session *session) error {
 		session.proto.OnInitial(h.proposals(session))
 		proposalsLatency.Observe(time.Since(start).Seconds())
 	}
-	if err := h.onOutput(session, current, session.proto.Next(active)); err != nil {
+	if err := h.onOutput(session, current, session.proto.Next()); err != nil {
 		return err
 	}
 	result := false
 	for {
 		walltime = walltime.Add(h.config.RoundDuration)
-		active = false
 		current = session.proto.IterRound
 		start = time.Now()
 
@@ -415,7 +414,6 @@ func (h *Hare) run(session *session) error {
 			} else {
 				session.vrfs[i] = nil
 			}
-			active = active || session.vrfs[i] != nil
 		}
 		h.tracer.OnActive(session.vrfs)
 		activeLatency.Observe(time.Since(start).Seconds())
@@ -427,7 +425,7 @@ func (h *Hare) run(session *session) error {
 				zap.Uint8("iter", session.proto.Iter), zap.Stringer("round", session.proto.Round),
 				zap.Bool("active", active),
 			)
-			out := session.proto.Next(active)
+			out := session.proto.Next()
 			if out.result != nil {
 				result = true
 			}

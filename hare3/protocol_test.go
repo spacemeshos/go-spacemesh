@@ -523,7 +523,10 @@ func TestProtocol(t *testing.T) {
 					}
 				case *toutput:
 					before := proto.Round
-					require.Equal(t, casted.output, proto.Next(casted.act), "%d", i)
+					out := proto.Next()
+					if casted.act {
+						require.Equal(t, casted.output, out, "%d", i)
+					}
 					logger.Debug("output",
 						zap.Int("i", i),
 						zap.Inline(casted),
