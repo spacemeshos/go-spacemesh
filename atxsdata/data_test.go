@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"math/rand"
 	"runtime"
+	"sync/atomic"
 	"testing"
 
 	fuzz "github.com/google/gofuzz"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/atomic"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
