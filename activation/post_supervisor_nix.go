@@ -3,7 +3,6 @@
 package activation
 
 import (
-	"fmt"
 	"os"
 	"os/exec"
 	"syscall"
@@ -29,7 +28,7 @@ func (g ProcessExitGroup) Dispose() error {
 func (g ProcessExitGroup) StartCommand(cmd *exec.Cmd) error {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pgid: os.Getpid()}
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("start post service: %w", err)
+		return err
 	}
 	return nil
 }

@@ -3,7 +3,6 @@
 package activation
 
 import (
-	"fmt"
 	"os/exec"
 	"unsafe"
 
@@ -53,7 +52,7 @@ func (g ProcessExitGroup) Dispose() error {
 // StartCommand starts the given command and adds it to the ProcessExitGroup.
 func (g ProcessExitGroup) StartCommand(cmd *exec.Cmd) error {
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("start post service: %w", err)
+		return err
 	}
 	return windows.AssignProcessToJobObject(
 		windows.Handle(g),
