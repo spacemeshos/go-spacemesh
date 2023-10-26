@@ -354,7 +354,12 @@ func (o *Oracle) CalcEligibility(
 }
 
 // Proof returns the role proof for the current Layer & Round.
-func (o *Oracle) Proof(ctx context.Context, signer *signing.VRFSigner, layer types.LayerID, round uint32) (types.VrfSignature, error) {
+func (o *Oracle) Proof(
+	ctx context.Context,
+	signer *signing.VRFSigner,
+	layer types.LayerID,
+	round uint32,
+) (types.VrfSignature, error) {
 	beacon, err := o.beacons.GetBeacon(layer.GetEpoch())
 	if err != nil {
 		return types.EmptyVrfSignature, fmt.Errorf("get beacon: %w", err)
@@ -363,8 +368,16 @@ func (o *Oracle) Proof(ctx context.Context, signer *signing.VRFSigner, layer typ
 }
 
 // GenVRF generates vrf for hare eligibility.
-func GenVRF(ctx context.Context, signer *signing.VRFSigner, beacon types.Beacon, layer types.LayerID, round uint32) types.VrfSignature {
-	return signer.Sign(codec.MustEncode(&VrfMessage{Type: types.EligibilityHare, Beacon: beacon, Round: round, Layer: layer}))
+func GenVRF(
+	ctx context.Context,
+	signer *signing.VRFSigner,
+	beacon types.Beacon,
+	layer types.LayerID,
+	round uint32,
+) types.VrfSignature {
+	return signer.Sign(
+		codec.MustEncode(&VrfMessage{Type: types.EligibilityHare, Beacon: beacon, Round: round, Layer: layer}),
+	)
 }
 
 // Returns a map of all active node IDs in the specified layer id.

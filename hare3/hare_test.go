@@ -188,7 +188,14 @@ func (n *node) withOracle() *node {
 	beaconget.EXPECT().GetBeacon(gomock.Any()).DoAndReturn(func(epoch types.EpochID) (types.Beacon, error) {
 		return beacons.Get(n.db, epoch)
 	}).AnyTimes()
-	n.oracle = eligibility.New(beaconget, n.db, signing.NewVRFVerifier(), layersPerEpoch, config.DefaultConfig(), log.NewNop())
+	n.oracle = eligibility.New(
+		beaconget,
+		n.db,
+		signing.NewVRFVerifier(),
+		layersPerEpoch,
+		config.DefaultConfig(),
+		log.NewNop(),
+	)
 	return n
 }
 

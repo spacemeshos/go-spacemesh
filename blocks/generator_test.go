@@ -603,7 +603,9 @@ func Test_run_ProcessLayerFailed(t *testing.T) {
 	tg.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any())
 	tg.mockCert.EXPECT().RegisterForCert(gomock.Any(), layerID, gomock.Any())
 	tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), layerID, gomock.Any())
-	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, block.ID(), true).Return(errors.New("unknown"))
+	tg.mockMesh.EXPECT().
+		ProcessLayerPerHareOutput(gomock.Any(), layerID, block.ID(), true).
+		Return(errors.New("unknown"))
 	tg.mockPatrol.EXPECT().CompleteHare(layerID)
 	tg.hareCh <- hare.LayerOutput{Ctx: context.Background(), Layer: layerID, Proposals: pids}
 	require.Eventually(t, func() bool { return len(tg.hareCh) == 0 }, time.Second, 100*time.Millisecond)

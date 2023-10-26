@@ -60,7 +60,13 @@ func spawnPoet(tb testing.TB, opts ...HTTPPoetOpt) *HTTPPoetTestHarness {
 	return poetProver
 }
 
-func launchPostSupervisor(tb testing.TB, log *zap.Logger, mgr *activation.PostSetupManager, cfg grpcserver.Config, postOpts activation.PostSetupOpts) func() {
+func launchPostSupervisor(
+	tb testing.TB,
+	log *zap.Logger,
+	mgr *activation.PostSetupManager,
+	cfg grpcserver.Config,
+	postOpts activation.PostSetupOpts,
+) func() {
 	cmdCfg := activation.DefaultTestPostServiceConfig()
 	cmdCfg.NodeAddress = fmt.Sprintf("http://%s", cfg.PublicListener)
 	postCfg := activation.DefaultPostConfig()

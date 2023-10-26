@@ -385,10 +385,15 @@ func Test_HandleCertifyMessage(t *testing.T) {
 				GetBeacon(b.LayerIndex.GetEpoch()).
 				Return(types.RandomBeacon(), nil)
 			require.NoError(t, testCert.RegisterForCert(context.Background(), b.LayerIndex, b.ID()))
-			testCert.mOracle.EXPECT().
-				Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, testCert.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
-				Return(true, nil).
-				AnyTimes()
+			testCert.mOracle.EXPECT().Validate(
+				gomock.Any(),
+				b.LayerIndex,
+				eligibility.CertifyRound,
+				testCert.cfg.CommitteeSize,
+				nid,
+				msg.Proof,
+				defaultCnt,
+			).Return(true, nil).AnyTimes()
 			res := testCert.HandleCertifyMessage(context.Background(), "peer", encoded)
 			require.True(t, tc.expected(res))
 			require.Empty(t, testCert.CertCount())
@@ -425,11 +430,14 @@ func Test_HandleCertifyMessage_Certified(t *testing.T) {
 				AnyTimes()
 			require.NoError(t, tcc.RegisterForCert(context.Background(), b.LayerIndex, b.ID()))
 			if tc.concurrent {
-				tcc.mOracle.EXPECT().
-					Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tcc.cfg.CommitteeSize, gomock.Any(), gomock.Any(), defaultCnt).
-					Return(true, nil).
-					MinTimes(cutoff).
-					MaxTimes(numMsgs)
+				tcc.mOracle.EXPECT().Validate(gomock.Any(),
+					b.LayerIndex,
+					eligibility.CertifyRound,
+					tcc.cfg.CommitteeSize,
+					gomock.Any(),
+					gomock.Any(),
+					defaultCnt,
+				).Return(true, nil).MinTimes(cutoff).MaxTimes(numMsgs)
 			}
 			tcc.mTortoise.EXPECT().OnHareOutput(b.LayerIndex, b.ID())
 			var wg sync.WaitGroup
@@ -661,10 +669,13 @@ func Test_CertifyIfEligible(t *testing.T) {
 	b := generateBlock(t, tc.db)
 	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil)
 
-	tc.mOracle.EXPECT().
-		CalcEligibility(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, gomock.Any(), gomock.Any()).
-		Times(numSigners).
-		Return(defaultCnt, nil)
+	tc.mOracle.EXPECT().CalcEligibility(gomock.Any(),
+		b.LayerIndex,
+		eligibility.CertifyRound,
+		tc.cfg.CommitteeSize,
+		gomock.Any(),
+		gomock.Any(),
+	).Times(numSigners).Return(defaultCnt, nil)
 	tc.mPub.EXPECT().
 		Publish(gomock.Any(), pubsub.BlockCertify, gomock.Any()).
 		Times(numSigners).
@@ -688,9 +699,13 @@ func Test_CertifyIfEligible_NotEligible(t *testing.T) {
 	tc := newTestCertifier(t, 1)
 	b := generateBlock(t, tc.db)
 	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil)
-	tc.mOracle.EXPECT().
-		CalcEligibility(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, gomock.Any(), gomock.Any()).
-		Return(0, nil)
+	tc.mOracle.EXPECT().CalcEligibility(gomock.Any(),
+		b.LayerIndex,
+		eligibility.CertifyRound,
+		tc.cfg.CommitteeSize,
+		gomock.Any(),
+		gomock.Any(),
+	).Return(0, nil)
 	require.NoError(t, tc.CertifyIfEligible(context.Background(), b.LayerIndex, b.ID()))
 }
 
@@ -699,9 +714,13 @@ func Test_CertifyIfEligible_EligibilityErr(t *testing.T) {
 	b := generateBlock(t, tc.db)
 	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil)
 	errUnknown := errors.New("unknown")
-	tc.mOracle.EXPECT().
-		CalcEligibility(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, gomock.Any(), gomock.Any()).
-		Return(0, errUnknown)
+	tc.mOracle.EXPECT().CalcEligibility(gomock.Any(),
+		b.LayerIndex,
+		eligibility.CertifyRound,
+		tc.cfg.CommitteeSize,
+		gomock.Any(),
+		gomock.Any(),
+	).Return(0, errUnknown)
 	require.ErrorIs(t, tc.CertifyIfEligible(context.Background(), b.LayerIndex, b.ID()), errUnknown)
 }
 

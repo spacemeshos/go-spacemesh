@@ -523,8 +523,12 @@ func TestSmesherService(t *testing.T) {
 		c.smeshingProvider.EXPECT().StartSmeshing(gomock.Any()).Return(nil)
 		c.postSupervisor.EXPECT().Start(gomock.All(
 			gomock.Cond(func(postOpts any) bool { return postOpts.(activation.PostSetupOpts).DataDir == opts.DataDir }),
-			gomock.Cond(func(postOpts any) bool { return postOpts.(activation.PostSetupOpts).NumUnits == opts.NumUnits }),
-			gomock.Cond(func(postOpts any) bool { return postOpts.(activation.PostSetupOpts).MaxFileSize == opts.MaxFileSize }),
+			gomock.Cond(
+				func(postOpts any) bool { return postOpts.(activation.PostSetupOpts).NumUnits == opts.NumUnits },
+			),
+			gomock.Cond(
+				func(postOpts any) bool { return postOpts.(activation.PostSetupOpts).MaxFileSize == opts.MaxFileSize },
+			),
 		)).Return(nil)
 		res, err := c.StartSmeshing(ctx, &pb.StartSmeshingRequest{
 			Opts:     opts,

@@ -46,7 +46,12 @@ func (s SmesherService) String() string {
 }
 
 // NewSmesherService creates a new grpc service using config data.
-func NewSmesherService(smeshing activation.SmeshingProvider, postSupervisor postSupervisor, streamInterval time.Duration, postOpts activation.PostSetupOpts) *SmesherService {
+func NewSmesherService(
+	smeshing activation.SmeshingProvider,
+	postSupervisor postSupervisor,
+	streamInterval time.Duration,
+	postOpts activation.PostSetupOpts,
+) *SmesherService {
 	return &SmesherService{
 		smeshingProvider: smeshing,
 		postSupervisor:   postSupervisor,
@@ -207,7 +212,10 @@ func (s SmesherService) PostSetupStatusStream(
 }
 
 // PostSetupComputeProviders returns a list of available Post setup compute providers.
-func (s SmesherService) PostSetupProviders(ctx context.Context, in *pb.PostSetupProvidersRequest) (*pb.PostSetupProvidersResponse, error) {
+func (s SmesherService) PostSetupProviders(
+	ctx context.Context,
+	in *pb.PostSetupProvidersRequest,
+) (*pb.PostSetupProvidersResponse, error) {
 	providers, err := s.postSupervisor.Providers()
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get OpenCL providers: %v", err)

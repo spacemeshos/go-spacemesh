@@ -234,15 +234,31 @@ func (c *Certifier) CertifyIfEligible(ctx context.Context, lid types.LayerID, bi
 	var errs error
 	for _, s := range signers {
 		if err := c.certifySingleSigner(ctx, s, lid, bid, beacon); err != nil {
-			errs = errors.Join(errs, fmt.Errorf("certifying block %v/%v by %s: %w", lid, bid, s.NodeID().ShortString(), err))
+			errs = errors.Join(
+				errs,
+				fmt.Errorf("certifying block %v/%v by %s: %w", lid, bid, s.NodeID().ShortString(), err),
+			)
 		}
 	}
 	return errs
 }
 
-func (c *Certifier) certifySingleSigner(ctx context.Context, s *signing.EdSigner, lid types.LayerID, bid types.BlockID, beacon types.Beacon) error {
+func (c *Certifier) certifySingleSigner(
+	ctx context.Context,
+	s *signing.EdSigner,
+	lid types.LayerID,
+	bid types.BlockID,
+	beacon types.Beacon,
+) error {
 	proof := eligibility.GenVRF(context.Background(), s.VRFSigner(), beacon, lid, eligibility.CertifyRound)
-	eligibilityCount, err := c.oracle.CalcEligibility(ctx, lid, eligibility.CertifyRound, c.cfg.CommitteeSize, s.NodeID(), proof)
+	eligibilityCount, err := c.oracle.CalcEligibility(
+		ctx,
+		lid,
+		eligibility.CertifyRound,
+		c.cfg.CommitteeSize,
+		s.NodeID(),
+		proof,
+	)
 	if err != nil {
 		return fmt.Errorf("calculating eligibility: %w", err)
 	}
@@ -257,7 +273,13 @@ func (c *Certifier) certifySingleSigner(ctx context.Context, s *signing.EdSigner
 	return nil
 }
 
-func newCertifyMsg(s *signing.EdSigner, lid types.LayerID, bid types.BlockID, proof types.VrfSignature, eligibility uint16) *types.CertifyMessage {
+func newCertifyMsg(
+	s *signing.EdSigner,
+	lid types.LayerID,
+	bid types.BlockID,
+	proof types.VrfSignature,
+	eligibility uint16,
+) *types.CertifyMessage {
 	msg := &types.CertifyMessage{
 		CertifyContent: types.CertifyContent{
 			LayerID:        lid,
@@ -427,7 +449,13 @@ func (c *Certifier) saveMessage(ctx context.Context, logger log.Log, msg types.C
 	return nil
 }
 
-func (c *Certifier) tryGenCert(ctx context.Context, logger log.Log, lid types.LayerID, bid types.BlockID, info *certInfo) error {
+func (c *Certifier) tryGenCert(
+	ctx context.Context,
+	logger log.Log,
+	lid types.LayerID,
+	bid types.BlockID,
+	info *certInfo,
+) error {
 	if info.done || info.totalEligibility < uint16(c.cfg.CertifyThreshold) {
 		return nil
 	}

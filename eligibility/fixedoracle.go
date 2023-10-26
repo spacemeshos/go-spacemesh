@@ -253,7 +253,12 @@ func (fo *FixedRolacle) eligible(
 }
 
 // Proof generates a proof for the round. used to satisfy interface.
-func (fo *FixedRolacle) Proof(ctx context.Context, _ *signing.VRFSigner, layer types.LayerID, round uint32) (types.VrfSignature, error) {
+func (fo *FixedRolacle) Proof(
+	ctx context.Context,
+	_ *signing.VRFSigner,
+	layer types.LayerID,
+	round uint32,
+) (types.VrfSignature, error) {
 	kInBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(kInBytes, round)
 	h := hash.New()
