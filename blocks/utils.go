@@ -122,7 +122,8 @@ func getProposalMetadata(
 			return nil, fmt.Errorf("get prev mesh hash %w", err)
 		}
 		if ownMeshHash != majorityState.hash {
-			return nil, fmt.Errorf("%w: majority %v, node %v", errNodeHasBadMeshHash, majorityState.hash.ShortString(), ownMeshHash.ShortString())
+			return nil, fmt.Errorf("%w: majority %v, node %v",
+				errNodeHasBadMeshHash, majorityState.hash.ShortString(), ownMeshHash.ShortString())
 		}
 		logger.With().Debug("consensus on mesh hash. doing optimistic filtering",
 			lid,

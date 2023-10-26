@@ -59,10 +59,9 @@ func Latest(db sql.Executor, address types.Address) (types.Account, error) {
 
 // Get account data that was valid at the specified layer.
 func Get(db sql.Executor, address types.Address, layer types.LayerID) (types.Account, error) {
-	account, err := load(
-		db,
-		address,
-		"select balance, next_nonce, layer_updated, template, state from accounts where address = ?1 and layer_updated <= ?2;",
+	account, err := load(db, address,
+		`select balance, next_nonce, layer_updated, template, state
+		 from accounts where address = ?1 and layer_updated <= ?2;`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, address.Bytes())
 			stmt.BindInt64(2, int64(layer))

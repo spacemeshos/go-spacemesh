@@ -28,7 +28,8 @@ import (
 
 func MainnetConfig() Config {
 	var postPowDifficulty activation.PowDifficulty
-	if err := postPowDifficulty.UnmarshalText([]byte("000dfb23b0979b4b000000000000000000000000000000000000000000000000")); err != nil {
+	difficulty := []byte("000dfb23b0979b4b000000000000000000000000000000000000000000000000")
+	if err := postPowDifficulty.UnmarshalText(difficulty); err != nil {
 		panic(err)
 	}
 	p2pconfig := p2p.DefaultConfig()

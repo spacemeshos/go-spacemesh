@@ -188,7 +188,18 @@ func New(
 		h.config.Hdist,
 	) // we keep results about LayerBuffer past layers
 	h.cps = make(map[types.LayerID]Consensus, h.config.LimitConcurrent)
-	h.factory = func(ctx context.Context, conf config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, et *EligibilityTracker, signing *signing.EdSigner, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
+	h.factory = func(
+		ctx context.Context,
+		conf config.Config,
+		instanceId types.LayerID,
+		s *Set,
+		oracle Rolacle,
+		et *EligibilityTracker,
+		signing *signing.EdSigner,
+		p2p pubsub.Publisher,
+		comm communication,
+		clock RoundClock,
+	) Consensus {
 		return newConsensusProcess(
 			ctx,
 			conf,

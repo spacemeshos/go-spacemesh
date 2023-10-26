@@ -342,7 +342,8 @@ func deleteServiceAndPod(ctx *testcontext.Context, id string) error {
 		Deployments(ctx.Namespace).
 		DeleteCollection(ctx, apimetav1.DeleteOptions{}, apimetav1.ListOptions{LabelSelector: labelSelector(id)})
 	var errSvc error
-	if svcs, err := ctx.Client.CoreV1().Services(ctx.Namespace).List(ctx, apimetav1.ListOptions{LabelSelector: labelSelector(id)}); err == nil {
+	if svcs, err := ctx.Client.CoreV1().Services(ctx.Namespace).
+		List(ctx, apimetav1.ListOptions{LabelSelector: labelSelector(id)}); err == nil {
 		for _, svc := range svcs.Items {
 			err = ctx.Client.CoreV1().
 				Services(ctx.Namespace).

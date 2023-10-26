@@ -354,7 +354,8 @@ func (l *layerVote) update(
 			if !exist {
 				supported = append(supported, block)
 			} else if vote.sign == against && vote.header != block.header() {
-				return nil, fmt.Errorf("wrong target. last supported is (%s/%d), but is against (%s,%d)", block.id, block.height, vote.header.ID, vote.header.Height)
+				return nil, fmt.Errorf("wrong target. last supported is (%s/%d), but is against (%s/%d)",
+					block.id, block.height, vote.header.ID, vote.header.Height)
 			}
 		}
 		for _, vote := range layerdiff {

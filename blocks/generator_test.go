@@ -363,20 +363,25 @@ func Test_run(t *testing.T) {
 			if tc.optimistic {
 				tg.mockExec.EXPECT().
 					ExecuteOptimistic(gomock.Any(), layerID, uint64(baseTickHeight), gomock.Any(), gomock.Any()).
-					DoAndReturn(
-						func(_ context.Context, lid types.LayerID, tickHeight uint64, rewards []types.AnyReward, tids []types.TransactionID) (*types.Block, error) {
-							require.Len(t, tids, len(txIDs))
-							block = &types.Block{
-								InnerBlock: types.InnerBlock{
-									LayerIndex: lid,
-									TickHeight: tickHeight,
-									Rewards:    rewards,
-									TxIDs:      tids,
-								},
-							}
-							block.Initialize()
-							return block, nil
-						})
+					DoAndReturn(func(
+						_ context.Context,
+						lid types.LayerID,
+						tickHeight uint64,
+						rewards []types.AnyReward,
+						tids []types.TransactionID,
+					) (*types.Block, error) {
+						require.Len(t, tids, len(txIDs))
+						block = &types.Block{
+							InnerBlock: types.InnerBlock{
+								LayerIndex: lid,
+								TickHeight: tickHeight,
+								Rewards:    rewards,
+								TxIDs:      tids,
+							},
+						}
+						block.Initialize()
+						return block, nil
+					})
 			}
 			tg.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ context.Context, got *types.Block) error {
@@ -489,12 +494,8 @@ func Test_run_ExecuteFailed(t *testing.T) {
 
 	tg.mockFetch.EXPECT().GetProposals(gomock.Any(), pids)
 	tg.mockExec.EXPECT().
-		ExecuteOptimistic(gomock.Any(), layerID, uint64(baseTickHeight), gomock.Any(), gomock.Any()).
-		DoAndReturn(
-			func(_ context.Context, lid types.LayerID, tickHeight uint64, rewards []types.AnyReward, tids []types.TransactionID) (*types.Block, error) {
-				require.Len(t, tids, len(txIDs))
-				return nil, errors.New("unknown")
-			})
+		ExecuteOptimistic(gomock.Any(), layerID, uint64(baseTickHeight), gomock.Any(), gomock.Len(len(txIDs))).
+		Return(nil, errors.New("unknown"))
 	tg.mockPatrol.EXPECT().CompleteHare(layerID)
 	tg.hareCh <- hare.LayerOutput{Ctx: context.Background(), Layer: layerID, Proposals: pids}
 	require.Eventually(t, func() bool { return len(tg.hareCh) == 0 }, time.Second, 100*time.Millisecond)

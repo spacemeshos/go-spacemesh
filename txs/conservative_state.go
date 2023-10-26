@@ -216,7 +216,8 @@ func (cs *ConservativeState) GetMeshTransactions(
 }
 
 // GetTransactionsByAddress retrieves txs for a single address in between layers [from, to].
-// Guarantees that transaction will appear exactly once, even if origin and recipient is the same, and in insertion order.
+// Guarantees that transaction will appear exactly once, even if origin and recipient is the same,
+// and in insertion order.
 func (cs *ConservativeState) GetTransactionsByAddress(
 	from, to types.LayerID,
 	address types.Address,

@@ -268,12 +268,17 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 			Return(types.PoetServiceID{ServiceID: []byte("poet0")}, nil)
 		poet.EXPECT().
 			Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			DoAndReturn(
-				func(ctx context.Context, _ time.Time, _, _ []byte, _ types.EdSignature, _ types.NodeID, _ PoetPoW) (*types.PoetRound, error) {
-					<-ctx.Done()
-					return nil, ctx.Err()
-				},
-			)
+			DoAndReturn(func(
+				ctx context.Context,
+				_ time.Time,
+				_, _ []byte,
+				_ types.EdSignature,
+				_ types.NodeID,
+				_ PoetPoW,
+			) (*types.PoetRound, error) {
+				<-ctx.Done()
+				return nil, ctx.Err()
+			})
 		poet.EXPECT().PowParams(gomock.Any()).Return(&PoetPowParams{}, nil)
 		poet.EXPECT().Address().Return("http://localhost:9999")
 		poets = append(poets, poet)
@@ -488,12 +493,17 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		poetProver.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().Return(types.PoetServiceID{ServiceID: []byte{}}, nil)
 		poetProver.EXPECT().
 			Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			DoAndReturn(
-				func(ctx context.Context, _ time.Time, _, _ []byte, _ types.EdSignature, _ types.NodeID, _ PoetPoW) (*types.PoetRound, error) {
-					<-ctx.Done()
-					return nil, ctx.Err()
-				},
-			)
+			DoAndReturn(func(
+				ctx context.Context,
+				_ time.Time,
+				_, _ []byte,
+				_ types.EdSignature,
+				_ types.NodeID,
+				_ PoetPoW,
+			) (*types.PoetRound, error) {
+				<-ctx.Done()
+				return nil, ctx.Err()
+			})
 		poetProver.EXPECT().PowParams(gomock.Any()).Return(&PoetPowParams{}, nil)
 		poetProver.EXPECT().Address().Return("http://localhost:9999")
 		postService := NewMockpostService(ctrl)
@@ -724,12 +734,17 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 	poet.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().Return(types.PoetServiceID{ServiceID: []byte("poet0")}, nil)
 	poet.EXPECT().
 		Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		DoAndReturn(
-			func(ctx context.Context, _ time.Time, _, _ []byte, _ types.EdSignature, _ types.NodeID, _ PoetPoW) (*types.PoetRound, error) {
-				cancel()
-				return &types.PoetRound{}, context.Canceled
-			},
-		)
+		DoAndReturn(func(
+			_ context.Context,
+			_ time.Time,
+			_, _ []byte,
+			_ types.EdSignature,
+			_ types.NodeID,
+			_ PoetPoW,
+		) (*types.PoetRound, error) {
+			cancel()
+			return &types.PoetRound{}, context.Canceled
+		})
 	poet.EXPECT().PowParams(gomock.Any()).Times(2).Return(&PoetPowParams{}, nil)
 	poet.EXPECT().Proof(gomock.Any(), "").Return(proof, []types.Member{types.Member(challenge.Hash())}, nil)
 	poet.EXPECT().Address().Return("http://localhost:9999")

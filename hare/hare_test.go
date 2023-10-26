@@ -332,7 +332,18 @@ func TestHare_onTick(t *testing.T) {
 	createdChan := make(chan struct{}, 1)
 	startedChan := make(chan struct{}, 1)
 	var nmcp *mockConsensusProcess
-	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, et *EligibilityTracker, sig *signing.EdSigner, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
+	h.factory = func(
+		_ context.Context,
+		cfg config.Config,
+		instanceId types.LayerID,
+		s *Set,
+		oracle Rolacle,
+		_ *EligibilityTracker,
+		sig *signing.EdSigner,
+		p2p pubsub.Publisher,
+		comm communication,
+		_ RoundClock,
+	) Consensus {
 		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, sig, p2p, comm.report, comm.wc, startedChan)
 		close(createdChan)
 		return nmcp
@@ -421,7 +432,17 @@ func TestHare_onTick_notMining(t *testing.T) {
 	startedChan := make(chan struct{}, 1)
 	wcSaved := make(chan struct{}, 1)
 	var nmcp *mockConsensusProcess
-	h.factory = func(ctx context.Context, cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, et *EligibilityTracker, sig *signing.EdSigner, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
+	h.factory = func(
+		_ context.Context,
+		cfg config.Config,
+		instanceId types.LayerID,
+		s *Set, oracle Rolacle,
+		_ *EligibilityTracker,
+		sig *signing.EdSigner,
+		p2p pubsub.Publisher,
+		comm communication,
+		_ RoundClock,
+	) Consensus {
 		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, sig, p2p, comm.report, comm.wc, startedChan)
 		close(createdChan)
 		return nmcp
@@ -603,7 +624,8 @@ func TestHare_goodProposals(t *testing.T) {
 				} else if tc.atxids[i] != nil {
 					p.AtxID = *tc.atxids[i]
 				} else {
-					mockMesh.EXPECT().GetAtxHeader(p.AtxID).Return(&types.ActivationTxHeader{BaseTickHeight: tc.baseHeights[i], TickCount: 1}, nil)
+					mockMesh.EXPECT().GetAtxHeader(p.AtxID).
+						Return(&types.ActivationTxHeader{BaseTickHeight: tc.baseHeights[i], TickCount: 1}, nil)
 				}
 			}
 			nodeID := types.NodeID{1, 2, 3}

@@ -641,7 +641,8 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 		})
 	require.NoError(t, tab.PublishActivationTx(context.Background()))
 
-	// if the network works and we try to publish a new ATX, the timeout should result in a clean state (so a NIPost should be built)
+	// if the network works and we try to publish a new ATX, the timeout should result in a clean
+	// state (so a NIPost should be built)
 	posEpoch = posEpoch + 1
 	challenge = newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posEpoch, nil)
 	posAtx := newAtx(t, tab.sig, challenge, nipost, 2, types.Address{})

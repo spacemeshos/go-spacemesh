@@ -305,7 +305,8 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 	return nb.state.NIPost, nil
 }
 
-// withConditionalTimeout returns a context.WithTimeout if the timeout is greater than 0, otherwise it returns the original context.
+// withConditionalTimeout returns a context.WithTimeout if the timeout is greater than 0, otherwise it returns
+// the original context.
 func withConditionalTimeout(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
 	if timeout > 0 {
 		return context.WithTimeout(ctx, timeout)
@@ -432,8 +433,8 @@ func membersContainChallenge(members []types.Member, challenge types.Hash32) (ui
 	return 0, fmt.Errorf("challenge is not a member of the proof")
 }
 
-// addPoETMitigation adds a mitigation if one of the PoETs crashed and was restored with the member list of a different PoET.
-// for an example see: https://github.com/spacemeshos/go-spacemesh/pull/5031
+// addPoETMitigation adds a mitigation if one of the PoETs crashed and was restored with the member list of a
+// different PoET; for an example see: https://github.com/spacemeshos/go-spacemesh/pull/5031
 
 //
 //lint:ignore U1000 we keep this method in case we need it for a future mitigation

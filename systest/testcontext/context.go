@@ -85,7 +85,8 @@ var (
 	)
 	bootstrapDuration = parameters.Duration(
 		"bootstrap-duration",
-		"bootstrap time is added to the genesis time. it may take longer on cloud environmens due to the additional resource management",
+		"bootstrap time is added to genesis time. "+
+			"it may take longer in cloud environments due to additional resource management",
 		30*time.Second,
 	)
 	clusterSize = parameters.Int(

@@ -445,14 +445,19 @@ func (app *App) Initialize() error {
 	} else {
 		diff := existing.Diff(app.Config.Genesis)
 		if len(diff) > 0 {
-			return fmt.Errorf("genesis config was updated after initializing a node, if you know that update is required delete config at %s.\ndiff:\n%s", gpath, diff)
+			app.log.Error("genesis config updated after node initialization, if this update is required delete config"+
+				" at %s.\ndiff:\n%s", gpath, diff,
+			)
+			return fmt.Errorf("genesis config updated after node initialization")
 		}
 	}
 
 	// tortoise wait zdist layers for hare to timeout for a layer. once hare timeout, tortoise will
 	// vote against all blocks in that layer. so it's important to make sure zdist takes longer than
 	// hare's max time duration to run consensus for a layer
-	maxHareRoundsPerLayer := 1 + app.Config.HARE.LimitIterations*hare.RoundsPerIteration // pre-round + 4 rounds per iteration
+
+	// maxHareRoundsPerLayer is pre-round + 4 rounds per iteration
+	maxHareRoundsPerLayer := 1 + app.Config.HARE.LimitIterations*hare.RoundsPerIteration
 	maxHareLayerDuration := app.Config.HARE.WakeupDelta + time.Duration(
 		maxHareRoundsPerLayer,
 	)*app.Config.HARE.RoundDuration
@@ -462,7 +467,8 @@ func (app *App) Initialize() error {
 			log.Duration("layer_duration", app.Config.LayerDuration),
 			log.Duration("hare_wakeup_delta", app.Config.HARE.WakeupDelta),
 			log.Int("hare_limit_iterations", app.Config.HARE.LimitIterations),
-			log.Duration("hare_round_duration", app.Config.HARE.RoundDuration))
+			log.Duration("hare_round_duration", app.Config.HARE.RoundDuration),
+		)
 
 		return errors.New("incompatible tortoise hare params")
 	}

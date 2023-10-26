@@ -149,12 +149,14 @@ func requireEqualEligibilities(tctx *testcontext.Context, tb testing.TB, proposa
 	}
 
 	tctx.Log.Desugar().
-		Info("aggregated eligibilities", zap.Object("per-smesher", zapcore.ObjectMarshalerFunc(func(enc zapcore.ObjectEncoder) error {
-			for smesher, eligibilities := range aggregated {
-				enc.AddInt(prettyHex([]byte(smesher)), eligibilities)
-			}
-			return nil
-		})))
+		Info("aggregated eligibilities", zap.Object("per-smesher",
+			zapcore.ObjectMarshalerFunc(func(enc zapcore.ObjectEncoder) error {
+				for smesher, eligibilities := range aggregated {
+					enc.AddInt(prettyHex([]byte(smesher)), eligibilities)
+				}
+				return nil
+			}),
+		))
 
 	referenceEligibilities := -1
 	for smesher, eligibilities := range aggregated {

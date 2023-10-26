@@ -9,7 +9,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-const fullQuery = "select id, atx, base_tick_height, tick_count, pubkey, effective_num_units, received, epoch, sequence, coinbase from atxs"
+const fullQuery = `select id, atx, base_tick_height, tick_count, pubkey,
+	effective_num_units, received, epoch, sequence, coinbase from atxs`
 
 func load(db sql.Executor, query string, enc sql.Encoder) (*types.VerifiedActivationTx, error) {
 	var (
@@ -290,7 +291,8 @@ func Add(db sql.Executor, atx *types.VerifiedActivationTx) error {
 	}
 
 	_, err = db.Exec(`
-		insert into atxs (id, epoch, effective_num_units, commitment_atx, nonce, pubkey, atx, received, base_tick_height, tick_count, sequence, coinbase)
+		insert into atxs (id, epoch, effective_num_units, commitment_atx, nonce,
+			 pubkey, atx, received, base_tick_height, tick_count, sequence, coinbase)
 		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12);`, enc, nil)
 	if err != nil {
 		return fmt.Errorf("insert ATX ID %v: %w", atx.ID(), err)
@@ -298,11 +300,11 @@ func Add(db sql.Executor, atx *types.VerifiedActivationTx) error {
 	return nil
 }
 
-// GetIDWithMaxHeight returns the ID of the atx from the last 2 epoch with the highest (or tied for the highest) tick height.
-// it is possible that some poet servers are faster than others and the network ends up having its highest ticked atx still in
-// previous epoch and the atxs building on top of it have not been published yet. selecting from the last two epochs to strike
-// a balance between being fair to honest miners while not giving unfair advantage for malicious actors who retroactively
-// publish a high tick atx many epochs back.
+// GetIDWithMaxHeight returns the ID of the atx from the last 2 epoch with the highest (or tied for the highest)
+// tick height. It is possible that some poet servers are faster than others and the network ends up having its
+// highest ticked atx still in previous epoch and the atxs building on top of it have not been published yet.
+// Selecting from the last two epochs to strike a balance between being fair to honest miners while not giving
+// unfair advantage for malicious actors who retroactively publish a high tick atx many epochs back.
 func GetIDWithMaxHeight(db sql.Executor, pref types.NodeID) (types.ATXID, error) {
 	var (
 		rst types.ATXID
@@ -400,7 +402,8 @@ func AddCheckpointed(db sql.Executor, catx *CheckpointAtx) error {
 	}
 
 	_, err := db.Exec(`
-		insert into atxs (id, epoch, effective_num_units, commitment_atx, nonce, base_tick_height, tick_count, sequence, pubkey, coinbase, received)
+		insert into atxs (id, epoch, effective_num_units, commitment_atx, nonce,
+			base_tick_height, tick_count, sequence, pubkey, coinbase, received)
 		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0);`, enc, nil)
 	if err != nil {
 		return fmt.Errorf("insert checkpoint ATX %v: %w", catx.ID, err)

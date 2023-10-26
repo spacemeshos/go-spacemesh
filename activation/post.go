@@ -367,8 +367,10 @@ func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSe
 			zap.String("model", p.Model),
 			zap.Stringer("device type", p.DeviceType),
 		)
-		mgr.logger.Sugar().
-			Warnf("DEPRECATED: please update your config file: {\"smeshing\": {\"smeshing-opts\": {\"smeshing-opts-provider\": %d }}}", p.ID)
+		mgr.logger.Sugar().Warnf(
+			"DEPRECATED: please update your config file: {\"smeshing\": {\"smeshing-opts\": {\"smeshing-opts-provider\": %d }}}",
+			p.ID,
+		)
 		opts.ProviderID.SetInt64(int64(p.ID))
 	}
 

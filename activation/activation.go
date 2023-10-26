@@ -383,8 +383,10 @@ func (b *Builder) verifyInitialPost(ctx context.Context, post *types.Post, metad
 		return err
 	case err != nil:
 		events.EmitInvalidPostProof()
-		b.log.With().
-			Fatal("initial POST proof is invalid. Probably the initialized POST data is corrupted. Please verify the data with postcli and regenerate the corrupted files.", log.Err(err))
+		b.log.With().Fatal(
+			"initial POST proof is invalid. Probably the initialized POST data is corrupted. "+
+				"Please verify the data with postcli and regenerate the corrupted files.", log.Err(err),
+		)
 		return err
 	default:
 		b.initialPost = post
