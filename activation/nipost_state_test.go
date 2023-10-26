@@ -8,6 +8,12 @@ import (
 
 	"github.com/natefinch/atomic"
 	"github.com/stretchr/testify/require"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/nipost"
 )
 
 func TestWriteCRC(t *testing.T) {
@@ -112,4 +118,49 @@ func TestCorrupted(t *testing.T) {
 	got, err := read(path)
 	require.ErrorContains(t, err, "wrong checksum")
 	require.Nil(t, got)
+}
+
+func TestMigrateNiPostChallenge(t *testing.T) {
+	db := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+	dir := t.TempDir()
+	nodeID := types.RandomNodeID()
+
+	commitmentAtx := types.RandomATXID()
+	ch1 := &types.NIPostChallenge{
+		PublishEpoch:   4,
+		Sequence:       0,
+		PrevATXID:      types.RandomATXID(),
+		PositioningATX: types.RandomATXID(),
+		CommitmentATX:  &commitmentAtx,
+		InitialPost:    &types.Post{Nonce: 1, Indices: []byte{1, 2, 3}, Pow: 1},
+	}
+	require.NoError(t, SaveNipostChallenge(dir, ch1))
+	require.FileExists(t, filepath.Join(dir, challengeFilename))
+
+	require.NoError(t, MoveNipostChallengeToDb(db, nodeID, dir))
+
+	challenge1, err := nipost.ByNodeIDAndEpoch(db, nodeID, ch1.PublishEpoch)
+	require.NoError(t, err)
+	require.NotNil(t, challenge1)
+	require.Equal(t, ch1, challenge1)
+	require.NoFileExists(t, filepath.Join(dir, challengeFilename))
+
+	ch2 := &types.NIPostChallenge{
+		PublishEpoch:   77,
+		Sequence:       0,
+		PrevATXID:      types.RandomATXID(),
+		PositioningATX: types.RandomATXID(),
+		CommitmentATX:  nil,
+		InitialPost:    nil,
+	}
+	require.NoError(t, SaveNipostChallenge(dir, ch2))
+	require.FileExists(t, filepath.Join(dir, challengeFilename))
+
+	require.NoError(t, MoveNipostChallengeToDb(db, nodeID, dir))
+
+	challenge2, err := nipost.ByNodeIDAndEpoch(db, nodeID, ch2.PublishEpoch)
+	require.NoError(t, err)
+	require.NotNil(t, challenge2)
+	require.Equal(t, ch2, challenge2)
+	require.NoFileExists(t, filepath.Join(dir, challengeFilename))
 }
