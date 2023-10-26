@@ -400,7 +400,7 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 		app.startAPIServices(context.Background())
 	}
 
-	// Test starting the JSON server from the commandline
+	// Test starting the JSON server from the command line
 	// uses Cmd.Run from above
 	listener := "127.0.0.1:1234"
 	str, err := testArgs(

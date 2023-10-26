@@ -54,7 +54,9 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 	types.SetLayersPerEpoch(conf1.LayersPerEpoch)
 	t.Cleanup(func() {
 		app1.Cleanup(ctx)
+		app1.eg.Wait()
 		app2.Cleanup(ctx)
+		app2.eg.Wait()
 	})
 	eg, grpContext := errgroup.WithContext(ctx)
 	eg.Go(func() error {
