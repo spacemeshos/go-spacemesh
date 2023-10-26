@@ -13,8 +13,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/sql/nipost"
 )
 
 const (
@@ -113,22 +111,6 @@ func save(filename string, src scale.Encodable) error {
 		return fmt.Errorf("writing file: %w", err)
 	}
 	return nil
-}
-
-func MoveNipostChallengeToDb(db *datastore.CachedDB, nodeID types.NodeID, dir string) error {
-	ch, err := LoadNipostChallenge(dir)
-	switch {
-	case os.IsNotExist(err):
-		return nil // no challenge file, nothing to do
-	case err != nil:
-		return fmt.Errorf("loading nipost challenge: %w", err)
-	default:
-	}
-
-	if err := nipost.AddChallenge(db, nodeID, ch); err != nil {
-		return fmt.Errorf("adding challenge to db: %w", err)
-	}
-	return discardNipostChallenge(dir)
 }
 
 func SaveNipostChallenge(dir string, ch *types.NIPostChallenge) error {

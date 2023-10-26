@@ -13,5 +13,6 @@ CREATE TABLE nipost
     post_nonce    UNSIGNED INT,
     post_indices  VARCHAR,
     post_pow      UNSIGNED LONG INT,
-    PRIMARY KEY (id, epoch)
+    PRIMARY KEY (id, epoch),
+    CONSTRAINT UC_nipost UNIQUE (id, sequence)
 ) WITHOUT ROWID;
