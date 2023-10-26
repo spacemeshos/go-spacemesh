@@ -243,6 +243,8 @@ func (ps *PostSupervisor) runCmd(ctx context.Context, cmdCfg PostSupervisorConfi
 			"--threads", strconv.FormatUint(uint64(provingOpts.Threads), 10),
 			"--nonces", strconv.FormatUint(uint64(provingOpts.Nonces), 10),
 			"--randomx-mode", provingOpts.RandomXMode.String(),
+
+			"--watch-pid", strconv.Itoa(os.Getpid()),
 		}
 		if cmdCfg.CACert != "" {
 			args = append(args, "--ca-cert", cmdCfg.CACert)
