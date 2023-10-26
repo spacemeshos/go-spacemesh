@@ -264,14 +264,16 @@ func (ps *PostSupervisor) runCmd(ctx context.Context, cmdCfg PostSupervisorConfi
 		cmd.Dir = filepath.Dir(cmdCfg.PostServiceCmd)
 		pipe, err := cmd.StderrPipe()
 		if err != nil {
-			return fmt.Errorf("setup stderr pipe for post service: %w", err)
+			ps.logger.Error("setup stderr pipe for post service", zap.Error(err))
+			return nil
 		}
 
 		var eg errgroup.Group
 		eg.Go(ps.captureCmdOutput(pipe))
-		if cmd.Start(); err != nil {
+		if err := cmd.Start(); err != nil {
 			pipe.Close()
-			return fmt.Errorf("start post service: %w", err)
+			ps.logger.Error("start post service", zap.Error(err))
+			return nil
 		}
 		ps.logger.Info("post service started", zap.Int("pid", cmd.Process.Pid), zap.String("cmd", cmd.String()))
 		ps.pid.Store(int64(cmd.Process.Pid))
