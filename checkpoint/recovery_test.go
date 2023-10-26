@@ -20,6 +20,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -239,6 +240,7 @@ func validateAndPreserveData(
 	atxHandler := activation.NewHandler(
 		"",
 		cdb,
+		atxsdata.New(),
 		signing.NewEdVerifier(),
 		mclock,
 		nil,

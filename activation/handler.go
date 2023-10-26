@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/post/shared"
 	"golang.org/x/exp/maps"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -35,6 +36,7 @@ var (
 type Handler struct {
 	local           p2p.Peer
 	cdb             *datastore.CachedDB
+	atxsdata        *atxsdata.Data
 	edVerifier      *signing.EdVerifier
 	clock           layerClock
 	publisher       pubsub.Publisher
@@ -53,6 +55,7 @@ type Handler struct {
 func NewHandler(
 	local p2p.Peer,
 	cdb *datastore.CachedDB,
+	atxsdata *atxsdata.Data,
 	edVerifier *signing.EdVerifier,
 	c layerClock,
 	pub pubsub.Publisher,
@@ -68,6 +71,7 @@ func NewHandler(
 	return &Handler{
 		local:           local,
 		cdb:             cdb,
+		atxsdata:        atxsdata,
 		edVerifier:      edVerifier,
 		clock:           c,
 		publisher:       pub,
@@ -329,6 +333,31 @@ func (h *Handler) ContextuallyValidateAtx(atx *types.VerifiedActivationTx) error
 	return err
 }
 
+func (h *Handler) cacheAtx(ctx context.Context, atx *types.ActivationTxHeader) {
+	if !h.atxsdata.IsEvicted(atx.TargetEpoch()) {
+		nonce, err := h.cdb.VRFNonce(atx.NodeID, atx.TargetEpoch())
+		if err != nil {
+			h.log.With().Error("failed vrf nonce read", log.Err(err), log.Context(ctx))
+			return
+		}
+		malicious, err := h.cdb.IsMalicious(atx.NodeID)
+		if err != nil {
+			h.log.With().Error("failed is malicious read", log.Err(err), log.Context(ctx))
+			return
+		}
+		h.atxsdata.Add(
+			atx.TargetEpoch(),
+			atx.NodeID,
+			atx.ID,
+			atx.GetWeight(),
+			atx.BaseTickHeight,
+			atx.TickHeight(),
+			nonce,
+			malicious,
+		)
+	}
+}
+
 // storeAtx stores an ATX and notifies subscribers of the ATXID.
 func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx) error {
 	malicious, err := h.cdb.IsMalicious(atx.SmesherID)
@@ -394,6 +423,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 	}
 	h.beacon.OnAtx(header)
 	h.tortoise.OnAtx(header.ToData())
+	h.cacheAtx(ctx, header)
 
 	h.log.WithContext(ctx).With().Debug("finished storing atx in epoch", atx.ID(), atx.PublishEpoch)
 

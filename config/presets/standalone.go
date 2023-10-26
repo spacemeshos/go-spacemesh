@@ -58,7 +58,7 @@ func standalone() config.Config {
 	types.SetNetworkHRP(conf.NetworkHRP) // ensure that the correct HRP is set when generating the address below
 	conf.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte("1")).String()
 	conf.SMESHING.Start = true
-	conf.SMESHING.Opts.ProviderID.SetInt64(int64(initialization.CPUProviderID()))
+	conf.SMESHING.Opts.ProviderID.SetUint32(initialization.CPUProviderID())
 	conf.SMESHING.Opts.NumUnits = 1
 	conf.SMESHING.Opts.Throttle = true
 	conf.SMESHING.Opts.DataDir = conf.DataDirParent

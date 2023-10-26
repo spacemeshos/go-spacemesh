@@ -12,12 +12,10 @@ import (
 const fullQuery = `select id, atx, base_tick_height, tick_count, pubkey,
 	effective_num_units, received, epoch, sequence, coinbase from atxs`
 
-func load(db sql.Executor, query string, enc sql.Encoder) (*types.VerifiedActivationTx, error) {
-	var (
-		v     *types.VerifiedActivationTx
-		myerr error
-	)
-	_, err := db.Exec(query, enc, func(stmt *sql.Statement) bool {
+type decoderCallback func(*types.VerifiedActivationTx, error) bool
+
+func decoder(fn decoderCallback) sql.Decoder {
+	return func(stmt *sql.Statement) bool {
 		var (
 			a  types.ActivationTx
 			id types.ATXID
@@ -25,9 +23,8 @@ func load(db sql.Executor, query string, enc sql.Encoder) (*types.VerifiedActiva
 		stmt.ColumnBytes(0, id[:])
 		checkpointed := stmt.ColumnLen(1) == 0
 		if !checkpointed {
-			if _, decodeErr := codec.DecodeFrom(stmt.ColumnReader(1), &a); decodeErr != nil {
-				myerr = fmt.Errorf("decode %w", decodeErr)
-				return true
+			if _, err := codec.DecodeFrom(stmt.ColumnReader(1), &a); err != nil {
+				return fn(nil, fmt.Errorf("decode %w", err))
 			}
 		}
 		a.SetID(id)
@@ -46,11 +43,26 @@ func load(db sql.Executor, query string, enc sql.Encoder) (*types.VerifiedActiva
 		a.PublishEpoch = types.EpochID(uint32(stmt.ColumnInt(7)))
 		a.Sequence = uint64(stmt.ColumnInt64(8))
 		stmt.ColumnBytes(9, a.Coinbase[:])
-		v, myerr = a.Verify(baseTickHeight, tickCount)
-		return myerr == nil
-	})
-	if err == nil && myerr != nil {
-		err = myerr
+		v, err := a.Verify(baseTickHeight, tickCount)
+		if err != nil {
+			return fn(nil, err)
+		}
+		return fn(v, nil)
+	}
+}
+
+func load(db sql.Executor, query string, enc sql.Encoder) (*types.VerifiedActivationTx, error) {
+	var (
+		v    *types.VerifiedActivationTx
+		derr error
+	)
+	_, err := db.Exec(query, enc, decoder(func(atx *types.VerifiedActivationTx, err error) bool {
+		v = atx
+		derr = err
+		return derr == nil
+	}))
+	if err == nil && derr != nil {
+		err = derr
 	}
 	return v, err
 }
@@ -438,4 +450,22 @@ func LatestEpoch(db sql.Executor) (types.EpochID, error) {
 		return epoch, fmt.Errorf("latest epoch: %w", err)
 	}
 	return epoch, nil
+}
+
+func IterateAtxs(db sql.Executor, from, to types.EpochID, fn func(*types.VerifiedActivationTx) bool) error {
+	var derr error
+	_, err := db.Exec(fullQuery+" where epoch between ?1 and ?2", func(stmt *sql.Statement) {
+		stmt.BindInt64(1, int64(from.Uint32()))
+		stmt.BindInt64(2, int64(to.Uint32()))
+	}, decoder(func(atx *types.VerifiedActivationTx, err error) bool {
+		if atx != nil {
+			return fn(atx)
+		}
+		derr = err
+		return derr == nil
+	}))
+	if err != nil {
+		return err
+	}
+	return derr
 }

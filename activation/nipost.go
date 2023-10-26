@@ -131,7 +131,7 @@ func (nb *NIPostBuilder) DataDir() string {
 	return nb.dataDir
 }
 
-func (nb *NIPostBuilder) proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error) {
+func (nb *NIPostBuilder) proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error) {
 	client, err := nb.postService.Client(nb.nodeID)
 	if err != nil {
 		return nil, nil, err
@@ -285,7 +285,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 		startTime := time.Now()
 		events.EmitPostStart(nb.state.PoetProofRef[:])
 
-		proof, proofMetadata, err := nb.proof(postCtx, nb.state.PoetProofRef[:])
+		proof, postInfo, err := nb.proof(postCtx, nb.state.PoetProofRef[:])
 		if err != nil {
 			events.EmitPostFailure()
 			return nil, fmt.Errorf("failed to generate Post: %w", err)
@@ -296,7 +296,10 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 		metrics.PostDuration.Set(float64(postGenDuration.Nanoseconds()))
 		public.PostSeconds.Set(postGenDuration.Seconds())
 		nb.state.NIPost.Post = proof
-		nb.state.NIPost.PostMetadata = proofMetadata
+		nb.state.NIPost.PostMetadata = &types.PostMetadata{
+			Challenge:     nb.state.PoetProofRef[:],
+			LabelsPerUnit: postInfo.LabelsPerUnit,
+		}
 
 		nb.persistState()
 	}

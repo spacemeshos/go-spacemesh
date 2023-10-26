@@ -38,7 +38,7 @@ func (d *PowDifficulty) UnmarshalText(text []byte) error {
 }
 
 type PostProviderID struct {
-	value *int64
+	value *uint32
 }
 
 // String implements pflag.Value.String.
@@ -61,23 +61,23 @@ func (id *PostProviderID) Set(value string) error {
 		return nil
 	}
 
-	i, err := strconv.ParseInt(value, 10, 33)
+	i, err := strconv.ParseUint(value, 10, 32)
 	if err != nil {
 		return fmt.Errorf("failed to parse PoST Provider ID (\"%s\"): %w", value, err)
 	}
 
-	id.value = new(int64)
-	*id.value = int64(i)
+	id.value = new(uint32)
+	*id.value = uint32(i)
 	return nil
 }
 
 // SetInt64 sets the value of the PostProviderID to the given int64.
-func (id *PostProviderID) SetInt64(value int64) {
+func (id *PostProviderID) SetUint32(value uint32) {
 	id.value = &value
 }
 
 // Value returns the value of the PostProviderID as a pointer to uint32.
-func (id *PostProviderID) Value() *int64 {
+func (id *PostProviderID) Value() *uint32 {
 	return id.value
 }
 

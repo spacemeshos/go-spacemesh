@@ -9,6 +9,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
@@ -59,7 +60,7 @@ func createTestMesh(t *testing.T) *testMesh {
 		mockTortoise: smocks.NewMockTortoise(ctrl),
 	}
 	exec := NewExecutor(db, tm.mockVM, tm.mockState, lg)
-	msh, err := NewMesh(db, tm.mockClock, tm.mockTortoise, exec, tm.mockState, lg)
+	msh, err := NewMesh(db, atxsdata.New(), tm.mockClock, tm.mockTortoise, exec, tm.mockState, lg)
 	require.NoError(t, err)
 	gLid := types.GetEffectiveGenesis()
 	checkLastAppliedInDB(t, msh, gLid)
@@ -208,6 +209,7 @@ func TestMesh_WakeUpWhileGenesis(t *testing.T) {
 	tm := createTestMesh(t)
 	msh, err := NewMesh(
 		tm.cdb,
+		atxsdata.New(),
 		tm.mockClock,
 		tm.mockTortoise,
 		tm.executor,
@@ -245,6 +247,7 @@ func TestMesh_WakeUp(t *testing.T) {
 	tm.mockVM.EXPECT().GetStateRoot()
 	msh, err := NewMesh(
 		tm.cdb,
+		atxsdata.New(),
 		tm.mockClock,
 		tm.mockTortoise,
 		tm.executor,

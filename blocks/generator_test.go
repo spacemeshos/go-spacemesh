@@ -21,7 +21,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -277,7 +276,7 @@ func Test_SerialExecution(t *testing.T) {
 	lid := layerID + 3
 	tg.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any())
 	tg.mockCert.EXPECT().RegisterForCert(gomock.Any(), lid, gomock.Any())
-	tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), gomock.Any(), lid, gomock.Any())
+	tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), lid, gomock.Any())
 	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), lid, gomock.Any(), false)
 	tg.mockPatrol.EXPECT().CompleteHare(lid)
 	tg.hareCh <- genData(t, tg.cdb, lid, false)
@@ -290,7 +289,7 @@ func Test_SerialExecution(t *testing.T) {
 	lid = layerID + 2
 	tg.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any())
 	tg.mockCert.EXPECT().RegisterForCert(gomock.Any(), lid, gomock.Any())
-	tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), gomock.Any(), lid, gomock.Any())
+	tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), lid, gomock.Any())
 	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), lid, gomock.Any(), false)
 	tg.mockPatrol.EXPECT().CompleteHare(lid)
 	tg.hareCh <- genData(t, tg.cdb, lid, false)
@@ -301,7 +300,7 @@ func Test_SerialExecution(t *testing.T) {
 			Return(types.NewExistingBlock(types.RandomBlockID(), types.InnerBlock{LayerIndex: lyr}), nil)
 		tg.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any())
 		tg.mockCert.EXPECT().RegisterForCert(gomock.Any(), lyr, gomock.Any())
-		tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), gomock.Any(), lyr, gomock.Any())
+		tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), lyr, gomock.Any())
 		tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), lyr, gomock.Any(), true)
 		tg.mockPatrol.EXPECT().CompleteHare(lyr)
 	}
@@ -405,8 +404,8 @@ func Test_run(t *testing.T) {
 					require.Equal(t, block.ID(), got)
 					return nil
 				})
-			tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), gomock.Any(), layerID, gomock.Any()).DoAndReturn(
-				func(_ context.Context, _ log.Log, _ types.LayerID, got types.BlockID) error {
+			tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), layerID, gomock.Any()).DoAndReturn(
+				func(_ context.Context, _ types.LayerID, got types.BlockID) error {
 					require.Equal(t, block.ID(), got)
 					return nil
 				})
@@ -433,7 +432,7 @@ func Test_processHareOutput_EmptyOutput(t *testing.T) {
 	require.NoError(t, layers.SetApplied(tg.cdb, layerID-1, types.EmptyBlockID))
 	tg.Start(context.Background())
 	tg.mockCert.EXPECT().RegisterForCert(gomock.Any(), layerID, types.EmptyBlockID)
-	tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), gomock.Any(), layerID, types.EmptyBlockID)
+	tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), layerID, types.EmptyBlockID)
 	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, types.EmptyBlockID, false)
 	tg.mockPatrol.EXPECT().CompleteHare(layerID)
 	tg.hareCh <- hare.LayerOutput{Ctx: context.Background(), Layer: layerID}
@@ -547,7 +546,7 @@ func Test_run_RegisterCertFailureIgnored(t *testing.T) {
 		Return(block, nil)
 	tg.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any())
 	tg.mockCert.EXPECT().RegisterForCert(gomock.Any(), layerID, gomock.Any()).Return(errors.New("unknown"))
-	tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), gomock.Any(), layerID, gomock.Any())
+	tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), layerID, gomock.Any())
 	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, block.ID(), true)
 	tg.mockPatrol.EXPECT().CompleteHare(layerID)
 	tg.hareCh <- hare.LayerOutput{Ctx: context.Background(), Layer: layerID, Proposals: pids}
@@ -575,9 +574,7 @@ func Test_run_CertifyFailureIgnored(t *testing.T) {
 		Return(block, nil)
 	tg.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any())
 	tg.mockCert.EXPECT().RegisterForCert(gomock.Any(), layerID, gomock.Any())
-	tg.mockCert.EXPECT().
-		CertifyIfEligible(gomock.Any(), gomock.Any(), layerID, gomock.Any()).
-		Return(errors.New("unknown"))
+	tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), layerID, gomock.Any()).Return(errors.New("unknown"))
 	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, block.ID(), true)
 	tg.mockPatrol.EXPECT().CompleteHare(layerID)
 	tg.hareCh <- hare.LayerOutput{Ctx: context.Background(), Layer: layerID, Proposals: pids}
@@ -605,10 +602,8 @@ func Test_run_ProcessLayerFailed(t *testing.T) {
 		Return(block, nil)
 	tg.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any())
 	tg.mockCert.EXPECT().RegisterForCert(gomock.Any(), layerID, gomock.Any())
-	tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), gomock.Any(), layerID, gomock.Any())
-	tg.mockMesh.EXPECT().
-		ProcessLayerPerHareOutput(gomock.Any(), layerID, block.ID(), true).
-		Return(errors.New("unknown"))
+	tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), layerID, gomock.Any())
+	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, block.ID(), true).Return(errors.New("unknown"))
 	tg.mockPatrol.EXPECT().CompleteHare(layerID)
 	tg.hareCh <- hare.LayerOutput{Ctx: context.Background(), Layer: layerID, Proposals: pids}
 	require.Eventually(t, func() bool { return len(tg.hareCh) == 0 }, time.Second, 100*time.Millisecond)
@@ -653,8 +648,8 @@ func Test_processHareOutput_UnequalHeight(t *testing.T) {
 			require.Equal(t, block.ID(), bid)
 			return nil
 		})
-	tg.mockCert.EXPECT().CertifyIfEligible(ho.Ctx, gomock.Any(), layerID, gomock.Any()).DoAndReturn(
-		func(_ context.Context, _ log.Log, _ types.LayerID, bid types.BlockID) error {
+	tg.mockCert.EXPECT().CertifyIfEligible(ho.Ctx, layerID, gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ types.LayerID, bid types.BlockID) error {
 			require.Equal(t, block.ID(), bid)
 			return eligibility.ErrNotActive
 		})
@@ -762,8 +757,8 @@ func Test_processHareOutput_EmptyProposals(t *testing.T) {
 			require.Equal(t, block.ID(), bid)
 			return nil
 		})
-	tg.mockCert.EXPECT().CertifyIfEligible(ho.Ctx, gomock.Any(), lid, gomock.Any()).DoAndReturn(
-		func(_ context.Context, _ log.Log, _ types.LayerID, bid types.BlockID) error {
+	tg.mockCert.EXPECT().CertifyIfEligible(ho.Ctx, lid, gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ types.LayerID, bid types.BlockID) error {
 			require.Equal(t, block.ID(), bid)
 			return eligibility.ErrNotActive
 		})
@@ -802,9 +797,7 @@ func Test_processHareOutput_StableBlockID(t *testing.T) {
 	tg.mockFetch.EXPECT().GetProposals(ho1.Ctx, ho1.Proposals)
 	tg.mockMesh.EXPECT().AddBlockWithTXs(ho1.Ctx, gomock.Any())
 	tg.mockCert.EXPECT().RegisterForCert(ho1.Ctx, layerID, gomock.Any())
-	tg.mockCert.EXPECT().
-		CertifyIfEligible(ho1.Ctx, gomock.Any(), layerID, gomock.Any()).
-		Return(eligibility.ErrNotActive)
+	tg.mockCert.EXPECT().CertifyIfEligible(ho1.Ctx, layerID, gomock.Any()).Return(eligibility.ErrNotActive)
 	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, gomock.Any(), false)
 	tg.mockPatrol.EXPECT().CompleteHare(layerID)
 	got1, err := tg.processHareOutput(ho1)
@@ -825,9 +818,7 @@ func Test_processHareOutput_StableBlockID(t *testing.T) {
 	tg.mockFetch.EXPECT().GetProposals(ho2.Ctx, ho2.Proposals)
 	tg.mockMesh.EXPECT().AddBlockWithTXs(ho2.Ctx, gomock.Any())
 	tg.mockCert.EXPECT().RegisterForCert(ho2.Ctx, layerID, gomock.Any())
-	tg.mockCert.EXPECT().
-		CertifyIfEligible(ho2.Ctx, gomock.Any(), layerID, gomock.Any()).
-		Return(eligibility.ErrNotActive)
+	tg.mockCert.EXPECT().CertifyIfEligible(ho2.Ctx, layerID, gomock.Any()).Return(eligibility.ErrNotActive)
 	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, gomock.Any(), false)
 	tg.mockPatrol.EXPECT().CompleteHare(layerID)
 	got2, err := tg.processHareOutput(ho2)
@@ -902,7 +893,7 @@ func Test_processHareOutput_MultipleEligibilities(t *testing.T) {
 	tg.mockFetch.EXPECT().GetProposals(ho.Ctx, ho.Proposals)
 	tg.mockMesh.EXPECT().AddBlockWithTXs(ho.Ctx, gomock.Any())
 	tg.mockCert.EXPECT().RegisterForCert(ho.Ctx, layerID, gomock.Any())
-	tg.mockCert.EXPECT().CertifyIfEligible(ho.Ctx, gomock.Any(), layerID, gomock.Any()).Return(eligibility.ErrNotActive)
+	tg.mockCert.EXPECT().CertifyIfEligible(ho.Ctx, layerID, gomock.Any()).Return(eligibility.ErrNotActive)
 	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, gomock.Any(), false)
 	tg.mockPatrol.EXPECT().CompleteHare(layerID)
 	got, err := tg.processHareOutput(ho)

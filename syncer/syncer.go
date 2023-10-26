@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	"go.uber.org/atomic"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -125,7 +125,7 @@ type Syncer struct {
 	atxSyncState atomic.Value
 	isBusy       atomic.Bool
 	// syncedTargetTime is used to signal at which time we can set this node to synced state
-	syncedTargetTime atomic.Time
+	syncedTargetTime time.Time
 	lastLayerSynced  atomic.Uint32
 	lastEpochSynced  atomic.Uint32
 	stateErr         atomic.Bool
@@ -174,7 +174,6 @@ func NewSyncer(
 	s.syncState.Store(notSynced)
 	s.atxSyncState.Store(notSynced)
 	s.isBusy.Store(false)
-	s.syncedTargetTime.Store(time.Time{})
 	s.lastLayerSynced.Store(s.mesh.LatestLayer().Uint32())
 	s.lastEpochSynced.Store(types.GetEffectiveGenesis().GetEpoch().Uint32() - 1)
 	return s
@@ -189,7 +188,7 @@ func (s *Syncer) Close() {
 }
 
 // RegisterForATXSynced returns a channel for notification when the node enters ATX synced state.
-func (s *Syncer) RegisterForATXSynced() chan struct{} {
+func (s *Syncer) RegisterForATXSynced() <-chan struct{} {
 	return s.awaitATXSyncedCh
 }
 
@@ -363,7 +362,6 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		log.Stringer("processed", s.mesh.ProcessedLayer()),
 	)
 	// TODO
-	// https://github.com/spacemeshos/go-spacemesh/issues/3970
 	// https://github.com/spacemeshos/go-spacemesh/issues/3987
 	syncFunc := func() bool {
 		if s.cfg.Standalone {
@@ -521,7 +519,7 @@ func (s *Syncer) setStateAfterSync(ctx context.Context, success bool) {
 	case gossipSync:
 		if !success || !s.dataSynced() || !s.stateSynced() {
 			// push out the target synced layer
-			s.syncedTargetTime.Store(time.Now().Add(s.cfg.GossipDuration))
+			s.syncedTargetTime = time.Now().Add(s.cfg.GossipDuration)
 			s.logger.With().Info("extending gossip sync",
 				log.Bool("success", success),
 				log.Bool("data", s.dataSynced()),
@@ -530,14 +528,14 @@ func (s *Syncer) setStateAfterSync(ctx context.Context, success bool) {
 			break
 		}
 		// if we have gossip-synced long enough, we are ready to participate in consensus
-		if !time.Now().Before(s.syncedTargetTime.Load()) {
+		if !time.Now().Before(s.syncedTargetTime) {
 			s.setSyncState(ctx, synced)
 		}
 	case notSynced:
 		if success && s.dataSynced() && s.stateSynced() {
 			// wait till s.ticker.GetCurrentLayer() + numGossipSyncLayers to participate in consensus
 			s.setSyncState(ctx, gossipSync)
-			s.syncedTargetTime.Store(time.Now().Add(s.cfg.GossipDuration))
+			s.syncedTargetTime = time.Now().Add(s.cfg.GossipDuration)
 		}
 	}
 }

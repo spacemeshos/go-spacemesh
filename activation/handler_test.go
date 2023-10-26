@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -103,6 +104,7 @@ func newTestHandler(tb testing.TB, goldenATXID types.ATXID) *testHandler {
 	atxHdlr := NewHandler(
 		localID,
 		cdb,
+		atxsdata.New(),
 		signing.NewEdVerifier(),
 		mclock,
 		mpub,

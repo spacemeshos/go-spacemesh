@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // FixedRolacle is an eligibility simulator with pre-determined honest and faulty participants.
@@ -252,7 +253,7 @@ func (fo *FixedRolacle) eligible(
 }
 
 // Proof generates a proof for the round. used to satisfy interface.
-func (fo *FixedRolacle) Proof(ctx context.Context, layer types.LayerID, round uint32) (types.VrfSignature, error) {
+func (fo *FixedRolacle) Proof(ctx context.Context, _ *signing.VRFSigner, layer types.LayerID, round uint32) (types.VrfSignature, error) {
 	kInBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(kInBytes, round)
 	h := hash.New()
