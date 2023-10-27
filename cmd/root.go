@@ -88,8 +88,8 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.P2P.Listen, "address for listening")
 	cmd.PersistentFlags().BoolVar(&cfg.P2P.Flood, "flood",
 		cfg.P2P.Flood, "flood created messages to all peers")
-	cmd.PersistentFlags().BoolVar(&cfg.P2P.DisableNatPort, "disable-natport",
-		cfg.P2P.DisableNatPort, "disable nat port-mapping (if enabled upnp protocol is used to negotiate external port with router)")
+	cmd.PersistentFlags().BoolVar(&cfg.P2P.DisableNatPort, "disable-natport", cfg.P2P.DisableNatPort,
+		"disable nat port-mapping (if enabled upnp protocol is used to negotiate external port with router)")
 	cmd.PersistentFlags().BoolVar(&cfg.P2P.DisableReusePort,
 		"disable-reuseport",
 		cfg.P2P.DisableReusePort,
@@ -118,7 +118,8 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.P2P.AdvertiseAddress, "libp2p address with identity (example: /dns4/bootnode.spacemesh.io/tcp/5003)")
 	cmd.PersistentFlags().BoolVar(&cfg.P2P.Bootnode, "p2p-bootnode", cfg.P2P.Bootnode,
 		"gossipsub and discovery will be running in a mode suitable for bootnode")
-	cmd.PersistentFlags().BoolVar(&cfg.P2P.PrivateNetwork, "p2p-private-network", cfg.P2P.PrivateNetwork, "discovery will work in private mode. mostly useful for testing, don't set in public networks")
+	cmd.PersistentFlags().BoolVar(&cfg.P2P.PrivateNetwork, "p2p-private-network", cfg.P2P.PrivateNetwork,
+		"discovery will work in private mode. mostly useful for testing, don't set in public networks")
 
 	/** ======================== TIME Flags ========================== **/
 
@@ -135,7 +136,7 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVar(&cfg.TIME.Peersync.MaxOffsetErrors, "peersync-max-offset-errors",
 		cfg.TIME.Peersync.MaxOffsetErrors, "the node will exit when max number of consecutive offset errors will be reached")
 	cmd.PersistentFlags().IntVar(&cfg.TIME.Peersync.RequiredResponses, "peersync-required-responses",
-		cfg.TIME.Peersync.RequiredResponses, "min number of clock samples from other that need to be collected to verify time")
+		cfg.TIME.Peersync.RequiredResponses, "min number of clock samples fetched from others to verify time")
 
 	/** ======================== API Flags ========================== **/
 
@@ -151,8 +152,9 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.API.GrpcRecvMsgSize, "GRPC api recv message size")
 	cmd.PersistentFlags().IntVar(&cfg.API.GrpcSendMsgSize, "grpc-send-msg-size",
 		cfg.API.GrpcSendMsgSize, "GRPC api send message size")
-	cmd.PersistentFlags().StringVar(&cfg.API.JSONListener, "grpc-json-listener",
-		cfg.API.JSONListener, "Socket for the grpc gateway for the list of services in grpc-public-services. If left empty - grpc gateway won't be enabled.")
+	cmd.PersistentFlags().StringVar(&cfg.API.JSONListener, "grpc-json-listener", cfg.API.JSONListener,
+		"Endpoint for services in grpc-public-services. If left empty - grpc gateway won't be enabled.")
+
 	/**======================== Hare Flags ========================== **/
 
 	// N determines the size of the hare committee
@@ -173,7 +175,8 @@ func AddCommands(cmd *cobra.Command) {
 	/**======================== Hare Eligibility Oracle Flags ========================== **/
 
 	cmd.PersistentFlags().Uint32Var(&cfg.HareEligibility.ConfidenceParam, "eligibility-confidence-param",
-		cfg.HareEligibility.ConfidenceParam, "The relative layer (with respect to the current layer) we are confident to have consensus about")
+		cfg.HareEligibility.ConfidenceParam,
+		"The relative layer (with respect to the current layer) we are confident to have consensus about")
 
 	/**======================== Beacon Flags ========================== **/
 

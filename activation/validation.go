@@ -54,7 +54,14 @@ func NewValidator(poetDb poetDbAPI, cfg PostConfig, scrypt config.ScryptParams, 
 // Some of the Post metadata fields validation values is ought to eventually be derived from
 // consensus instead of local configuration. If so, their validation should be removed to contextual validation,
 // while still syntactically-validate them here according to locally configured min/max values.
-func (v *Validator) NIPost(ctx context.Context, nodeId types.NodeID, commitmentAtxId types.ATXID, nipost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32) (uint64, error) {
+func (v *Validator) NIPost(
+	ctx context.Context,
+	nodeId types.NodeID,
+	commitmentAtxId types.ATXID,
+	nipost *types.NIPost,
+	expectedChallenge types.Hash32,
+	numUnits uint32,
+) (uint64, error) {
 	if err := v.NumUnits(&v.cfg, numUnits); err != nil {
 		return 0, err
 	}
@@ -113,7 +120,14 @@ func validateMerkleProof(leaf []byte, proof *types.MerkleProof, expectedRoot []b
 
 // Post validates a Proof of Space-Time (PoST). It returns nil if validation passed or an error indicating why
 // validation failed.
-func (v *Validator) Post(ctx context.Context, nodeId types.NodeID, commitmentAtxId types.ATXID, PoST *types.Post, PostMetadata *types.PostMetadata, numUnits uint32) error {
+func (v *Validator) Post(
+	ctx context.Context,
+	nodeId types.NodeID,
+	commitmentAtxId types.ATXID,
+	PoST *types.Post,
+	PostMetadata *types.PostMetadata,
+	numUnits uint32,
+) error {
 	p := (*shared.Proof)(PoST)
 
 	m := &shared.ProofMetadata{
@@ -125,7 +139,9 @@ func (v *Validator) Post(ctx context.Context, nodeId types.NodeID, commitmentAtx
 	}
 
 	start := time.Now()
-	if err := v.postVerifier.Verify(ctx, p, m, verifying.WithPowCreator(nodeId.Bytes()), verifying.WithLabelScryptParams(v.scrypt)); err != nil {
+	if err := v.postVerifier.Verify(ctx, p, m,
+		verifying.WithPowCreator(nodeId.Bytes()), verifying.WithLabelScryptParams(v.scrypt),
+	); err != nil {
 		return fmt.Errorf("verify PoST: %w", err)
 	}
 	metrics.PostVerificationLatency.Observe(time.Since(start).Seconds())
@@ -145,12 +161,22 @@ func (*Validator) NumUnits(cfg *PostConfig, numUnits uint32) error {
 
 func (*Validator) PostMetadata(cfg *PostConfig, metadata *types.PostMetadata) error {
 	if metadata.LabelsPerUnit < cfg.LabelsPerUnit {
-		return fmt.Errorf("invalid `LabelsPerUnit`; expected: >=%d, given: %d", cfg.LabelsPerUnit, metadata.LabelsPerUnit)
+		return fmt.Errorf(
+			"invalid `LabelsPerUnit`; expected: >=%d, given: %d",
+			cfg.LabelsPerUnit,
+			metadata.LabelsPerUnit,
+		)
 	}
 	return nil
 }
 
-func (v *Validator) VRFNonce(nodeId types.NodeID, commitmentAtxId types.ATXID, vrfNonce *types.VRFPostIndex, PostMetadata *types.PostMetadata, numUnits uint32) error {
+func (v *Validator) VRFNonce(
+	nodeId types.NodeID,
+	commitmentAtxId types.ATXID,
+	vrfNonce *types.VRFPostIndex,
+	PostMetadata *types.PostMetadata,
+	numUnits uint32,
+) error {
 	if vrfNonce == nil {
 		return errors.New("VRFNonce is nil")
 	}
@@ -162,13 +188,19 @@ func (v *Validator) VRFNonce(nodeId types.NodeID, commitmentAtxId types.ATXID, v
 		LabelsPerUnit:   PostMetadata.LabelsPerUnit,
 	}
 
-	if err := verifying.VerifyVRFNonce((*uint64)(vrfNonce), meta, verifying.WithPowCreator(nodeId.Bytes()), verifying.WithLabelScryptParams(v.scrypt)); err != nil {
+	if err := verifying.VerifyVRFNonce((*uint64)(vrfNonce), meta,
+		verifying.WithPowCreator(nodeId.Bytes()), verifying.WithLabelScryptParams(v.scrypt),
+	); err != nil {
 		return fmt.Errorf("verify VRF nonce: %w", err)
 	}
 	return nil
 }
 
-func (v *Validator) InitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, goldenATXID types.ATXID) error {
+func (v *Validator) InitialNIPostChallenge(
+	challenge *types.NIPostChallenge,
+	atxs atxProvider,
+	goldenATXID types.ATXID,
+) error {
 	if challenge.CommitmentATX == nil {
 		return errors.New("nil commitment atx in initial post challenge")
 	}
@@ -179,7 +211,11 @@ func (v *Validator) InitialNIPostChallenge(challenge *types.NIPostChallenge, atx
 			return &ErrAtxNotFound{Id: *challenge.CommitmentATX, source: err}
 		}
 		if challenge.PublishEpoch <= commitmentAtx.PublishEpoch {
-			return fmt.Errorf("challenge pubepoch (%v) must be after commitment atx pubepoch (%v)", challenge.PublishEpoch, commitmentAtx.PublishEpoch)
+			return fmt.Errorf(
+				"challenge pubepoch (%v) must be after commitment atx pubepoch (%v)",
+				challenge.PublishEpoch,
+				commitmentAtx.PublishEpoch,
+			)
 		}
 	}
 	return nil
@@ -211,7 +247,12 @@ func (*Validator) NIPostChallenge(challenge *types.NIPostChallenge, atxs atxProv
 	return nil
 }
 
-func (v *Validator) PositioningAtx(id types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubepoch types.EpochID) error {
+func (v *Validator) PositioningAtx(
+	id types.ATXID,
+	atxs atxProvider,
+	goldenATXID types.ATXID,
+	pubepoch types.EpochID,
+) error {
 	if id == types.EmptyATXID {
 		return errors.New("positioning atx id is empty")
 	}

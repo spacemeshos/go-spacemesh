@@ -273,30 +273,61 @@ func MalfeasanceInfo(smesher NodeID, mp *MalfeasanceProof) string {
 	case MultipleATXs:
 		p, ok := mp.Proof.Data.(*AtxProof)
 		if ok {
-			b.WriteString(fmt.Sprintf("cause: smesher published multiple ATXs in epoch %d\n", p.Messages[0].InnerMsg.PublishEpoch))
-			b.WriteString(fmt.Sprintf("1st message hash: %s\n", hex.EncodeToString(p.Messages[0].InnerMsg.MsgHash.Bytes())))
-			b.WriteString(fmt.Sprintf("1st message signature: %s\n", hex.EncodeToString(p.Messages[0].Signature.Bytes())))
-			b.WriteString(fmt.Sprintf("2nd message hash: %s\n", hex.EncodeToString(p.Messages[1].InnerMsg.MsgHash.Bytes())))
-			b.WriteString(fmt.Sprintf("2nd message signature: %s\n", hex.EncodeToString(p.Messages[1].Signature.Bytes())))
+			b.WriteString(
+				fmt.Sprintf(
+					"cause: smesher published multiple ATXs in epoch %d\n",
+					p.Messages[0].InnerMsg.PublishEpoch,
+				),
+			)
+			b.WriteString(
+				fmt.Sprintf("1st message hash: %s\n", hex.EncodeToString(p.Messages[0].InnerMsg.MsgHash.Bytes())),
+			)
+			b.WriteString(
+				fmt.Sprintf("1st message signature: %s\n", hex.EncodeToString(p.Messages[0].Signature.Bytes())),
+			)
+			b.WriteString(
+				fmt.Sprintf("2nd message hash: %s\n", hex.EncodeToString(p.Messages[1].InnerMsg.MsgHash.Bytes())),
+			)
+			b.WriteString(
+				fmt.Sprintf("2nd message signature: %s\n", hex.EncodeToString(p.Messages[1].Signature.Bytes())),
+			)
 		}
 	case MultipleBallots:
 		p, ok := mp.Proof.Data.(*BallotProof)
 		if ok {
-			b.WriteString(fmt.Sprintf("cause: smesher published multiple ballots in layer %d\n", p.Messages[0].InnerMsg.Layer))
-			b.WriteString(fmt.Sprintf("1st message hash: %s\n", hex.EncodeToString(p.Messages[0].InnerMsg.MsgHash.Bytes())))
-			b.WriteString(fmt.Sprintf("1st message signature: %s\n", hex.EncodeToString(p.Messages[0].Signature.Bytes())))
-			b.WriteString(fmt.Sprintf("2nd message hash: %s\n", hex.EncodeToString(p.Messages[1].InnerMsg.MsgHash.Bytes())))
-			b.WriteString(fmt.Sprintf("2nd message signature: %s\n", hex.EncodeToString(p.Messages[1].Signature.Bytes())))
+			b.WriteString(
+				fmt.Sprintf("cause: smesher published multiple ballots in layer %d\n", p.Messages[0].InnerMsg.Layer),
+			)
+			b.WriteString(
+				fmt.Sprintf("1st message hash: %s\n", hex.EncodeToString(p.Messages[0].InnerMsg.MsgHash.Bytes())),
+			)
+			b.WriteString(
+				fmt.Sprintf("1st message signature: %s\n", hex.EncodeToString(p.Messages[0].Signature.Bytes())),
+			)
+			b.WriteString(
+				fmt.Sprintf("2nd message hash: %s\n", hex.EncodeToString(p.Messages[1].InnerMsg.MsgHash.Bytes())),
+			)
+			b.WriteString(
+				fmt.Sprintf("2nd message signature: %s\n", hex.EncodeToString(p.Messages[1].Signature.Bytes())),
+			)
 		}
 	case HareEquivocation:
 		p, ok := mp.Proof.Data.(*HareProof)
 		if ok {
 			b.WriteString(fmt.Sprintf("cause: smesher published multiple hare messages in layer %d round %d\n",
 				p.Messages[0].InnerMsg.Layer, p.Messages[0].InnerMsg.Round))
-			b.WriteString(fmt.Sprintf("1st message hash: %s\n", hex.EncodeToString(p.Messages[0].InnerMsg.MsgHash.Bytes())))
-			b.WriteString(fmt.Sprintf("1st message signature: %s\n", hex.EncodeToString(p.Messages[0].Signature.Bytes())))
-			b.WriteString(fmt.Sprintf("2nd message hash: %s\n", hex.EncodeToString(p.Messages[1].InnerMsg.MsgHash.Bytes())))
-			b.WriteString(fmt.Sprintf("2nd message signature: %s\n", hex.EncodeToString(p.Messages[1].Signature.Bytes())))
+			b.WriteString(
+				fmt.Sprintf("1st message hash: %s\n", hex.EncodeToString(p.Messages[0].InnerMsg.MsgHash.Bytes())),
+			)
+			b.WriteString(
+				fmt.Sprintf("1st message signature: %s\n", hex.EncodeToString(p.Messages[0].Signature.Bytes())),
+			)
+			b.WriteString(
+				fmt.Sprintf("2nd message hash: %s\n", hex.EncodeToString(p.Messages[1].InnerMsg.MsgHash.Bytes())),
+			)
+			b.WriteString(
+				fmt.Sprintf("2nd message signature: %s\n", hex.EncodeToString(p.Messages[1].Signature.Bytes())),
+			)
 		}
 	}
 	return b.String()

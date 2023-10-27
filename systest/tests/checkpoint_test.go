@@ -214,7 +214,14 @@ func ensureSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster
 	for proposal := range createdch {
 		uniqueSmeshers[types.BytesToNodeID(proposal.Smesher.Id)] = struct{}{}
 	}
-	require.Lenf(t, uniqueSmeshers, numSmeshers, "not all miners are smeshing, expected %d, got %d", numSmeshers, len(uniqueSmeshers))
+	require.Lenf(
+		t,
+		uniqueSmeshers,
+		numSmeshers,
+		"not all miners are smeshing, expected %d, got %d",
+		numSmeshers,
+		len(uniqueSmeshers),
+	)
 }
 
 func query(ctx context.Context, endpoint string) ([]byte, error) {

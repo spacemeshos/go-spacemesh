@@ -176,7 +176,13 @@ type PostSetupManager struct {
 }
 
 // NewPostSetupManager creates a new instance of PostSetupManager.
-func NewPostSetupManager(id types.NodeID, cfg PostConfig, logger *zap.Logger, db *datastore.CachedDB, goldenATXID types.ATXID) (*PostSetupManager, error) {
+func NewPostSetupManager(
+	id types.NodeID,
+	cfg PostConfig,
+	logger *zap.Logger,
+	db *datastore.CachedDB,
+	goldenATXID types.ATXID,
+) (*PostSetupManager, error) {
 	mgr := &PostSetupManager{
 		id:          id,
 		cfg:         cfg,
@@ -251,7 +257,10 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context) error {
 		mgr.state = PostSetupStateStopped
 		return err
 	case errors.As(err, &errLabelMismatch):
-		mgr.logger.Error("post setup session failed due to an issue with the initialization provider", zap.Error(errLabelMismatch))
+		mgr.logger.Error(
+			"post setup session failed due to an issue with the initialization provider",
+			zap.Error(errLabelMismatch),
+		)
 		mgr.state = PostSetupStateError
 		events.EmitInitFailure(mgr.id, mgr.commitmentAtxId, errLabelMismatch)
 		return nil

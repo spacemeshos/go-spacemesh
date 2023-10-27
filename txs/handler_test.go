@@ -103,7 +103,9 @@ func Test_HandleBlock(t *testing.T) {
 				cstate.EXPECT().Validation(tx.RawTx).Times(1).Return(req)
 				if tc.parseErr == nil {
 					req.EXPECT().Verify().Times(1).Return(true)
-					cstate.EXPECT().AddToDB(&types.Transaction{RawTx: tx.RawTx, TxHeader: tx.TxHeader}).Return(tc.addErr)
+					cstate.EXPECT().
+						AddToDB(&types.Transaction{RawTx: tx.RawTx, TxHeader: tx.TxHeader}).
+						Return(tc.addErr)
 				} else {
 					cstate.EXPECT().AddToDB(&types.Transaction{RawTx: tx.RawTx}).Return(tc.addErr)
 				}
@@ -118,7 +120,12 @@ func Test_HandleBlock(t *testing.T) {
 	}
 }
 
-func gossipExpectations(t *testing.T, fee uint64, hasErr, parseErr, addErr error, has, verify, noHeader bool) (*TxHandler, *types.Transaction) {
+func gossipExpectations(
+	t *testing.T,
+	fee uint64,
+	hasErr, parseErr, addErr error,
+	has, verify, noHeader bool,
+) (*TxHandler, *types.Transaction) {
 	ctrl := gomock.NewController(t)
 	cstate := NewMockconservativeState(ctrl)
 	_, pub, err := crypto.GenerateEd25519Key(nil)

@@ -24,13 +24,33 @@ type PostVerifier interface {
 type nipostValidator interface {
 	InitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, goldenATXID types.ATXID) error
 	NIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, nodeID types.NodeID) error
-	NIPost(ctx context.Context, nodeId types.NodeID, atxId types.ATXID, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32) (uint64, error)
+	NIPost(
+		ctx context.Context,
+		nodeId types.NodeID,
+		atxId types.ATXID,
+		NIPost *types.NIPost,
+		expectedChallenge types.Hash32,
+		numUnits uint32,
+	) (uint64, error)
 
 	NumUnits(cfg *PostConfig, numUnits uint32) error
-	Post(ctx context.Context, nodeId types.NodeID, atxId types.ATXID, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint32) error
+	Post(
+		ctx context.Context,
+		nodeId types.NodeID,
+		atxId types.ATXID,
+		Post *types.Post,
+		PostMetadata *types.PostMetadata,
+		numUnits uint32,
+	) error
 	PostMetadata(cfg *PostConfig, metadata *types.PostMetadata) error
 
-	VRFNonce(nodeId types.NodeID, commitmentAtxId types.ATXID, vrfNonce *types.VRFPostIndex, PostMetadata *types.PostMetadata, numUnits uint32) error
+	VRFNonce(
+		nodeId types.NodeID,
+		commitmentAtxId types.ATXID,
+		vrfNonce *types.VRFPostIndex,
+		PostMetadata *types.PostMetadata,
+		numUnits uint32,
+	) error
 	PositioningAtx(id types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubepoch types.EpochID) error
 }
 
@@ -83,7 +103,14 @@ type poetClient interface {
 	PowParams(ctx context.Context) (*PoetPowParams, error)
 
 	// Submit registers a challenge in the proving service current open round.
-	Submit(ctx context.Context, deadline time.Time, prefix, challenge []byte, signature types.EdSignature, nodeID types.NodeID, pow PoetPoW) (*types.PoetRound, error)
+	Submit(
+		ctx context.Context,
+		deadline time.Time,
+		prefix, challenge []byte,
+		signature types.EdSignature,
+		nodeID types.NodeID,
+		pow PoetPoW,
+	) (*types.PoetRound, error)
 
 	// PoetServiceID returns the public key of the PoET proving service.
 	PoetServiceID(context.Context) (types.PoetServiceID, error)

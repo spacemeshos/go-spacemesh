@@ -30,7 +30,12 @@ func (f *Fetch) GetAtxs(ctx context.Context, ids []types.ATXID) error {
 
 type dataReceiver func(context.Context, types.Hash32, p2p.Peer, []byte) error
 
-func (f *Fetch) getHashes(ctx context.Context, hashes []types.Hash32, hint datastore.Hint, receiver dataReceiver) error {
+func (f *Fetch) getHashes(
+	ctx context.Context,
+	hashes []types.Hash32,
+	hint datastore.Hint,
+	receiver dataReceiver,
+) error {
 	var eg errgroup.Group
 	var errs error
 	var mu sync.Mutex
@@ -165,12 +170,23 @@ func (f *Fetch) GetPoetProof(ctx context.Context, id types.Hash32) error {
 	}
 }
 
-func (f *Fetch) GetMaliciousIDs(ctx context.Context, peers []p2p.Peer, okCB func([]byte, p2p.Peer), errCB func(error, p2p.Peer)) error {
+func (f *Fetch) GetMaliciousIDs(
+	ctx context.Context,
+	peers []p2p.Peer,
+	okCB func([]byte, p2p.Peer),
+	errCB func(error, p2p.Peer),
+) error {
 	return poll(ctx, f.servers[malProtocol], peers, []byte{}, okCB, errCB)
 }
 
 // GetLayerData get layer data from peers.
-func (f *Fetch) GetLayerData(ctx context.Context, peers []p2p.Peer, lid types.LayerID, okCB func([]byte, p2p.Peer), errCB func(error, p2p.Peer)) error {
+func (f *Fetch) GetLayerData(
+	ctx context.Context,
+	peers []p2p.Peer,
+	lid types.LayerID,
+	okCB func([]byte, p2p.Peer),
+	errCB func(error, p2p.Peer),
+) error {
 	lidBytes, err := codec.Encode(&lid)
 	if err != nil {
 		return err
@@ -178,7 +194,13 @@ func (f *Fetch) GetLayerData(ctx context.Context, peers []p2p.Peer, lid types.La
 	return poll(ctx, f.servers[lyrDataProtocol], peers, lidBytes, okCB, errCB)
 }
 
-func (f *Fetch) GetLayerOpinions(ctx context.Context, peers []p2p.Peer, lid types.LayerID, okCB func([]byte, p2p.Peer), errCB func(error, p2p.Peer)) error {
+func (f *Fetch) GetLayerOpinions(
+	ctx context.Context,
+	peers []p2p.Peer,
+	lid types.LayerID,
+	okCB func([]byte, p2p.Peer),
+	errCB func(error, p2p.Peer),
+) error {
 	req := OpinionRequest{
 		Layer: lid,
 	}
@@ -189,7 +211,14 @@ func (f *Fetch) GetLayerOpinions(ctx context.Context, peers []p2p.Peer, lid type
 	return poll(ctx, f.servers[OpnProtocol], peers, reqData, okCB, errCB)
 }
 
-func poll(ctx context.Context, srv requester, peers []p2p.Peer, req []byte, okCB func([]byte, p2p.Peer), errCB func(error, p2p.Peer)) error {
+func poll(
+	ctx context.Context,
+	srv requester,
+	peers []p2p.Peer,
+	req []byte,
+	okCB func([]byte, p2p.Peer),
+	errCB func(error, p2p.Peer),
+) error {
 	for _, p := range peers {
 		peer := p
 		okFunc := func(data []byte) {
@@ -281,7 +310,12 @@ func (f *Fetch) PeerMeshHashes(ctx context.Context, peer p2p.Peer, req *MeshHash
 	}
 }
 
-func (f *Fetch) GetCert(ctx context.Context, lid types.LayerID, bid types.BlockID, peers []p2p.Peer) (*types.Certificate, error) {
+func (f *Fetch) GetCert(
+	ctx context.Context,
+	lid types.LayerID,
+	bid types.BlockID,
+	peers []p2p.Peer,
+) (*types.Certificate, error) {
 	f.logger.WithContext(ctx).With().Debug("requesting block certificate from peers",
 		lid, bid, log.Int("num peer", len(peers)))
 	req := &OpinionRequest{

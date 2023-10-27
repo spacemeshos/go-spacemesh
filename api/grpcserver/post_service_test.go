@@ -23,7 +23,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-func launchPostSupervisor(tb testing.TB, log *zap.Logger, cfg Config, postOpts activation.PostSetupOpts) (types.NodeID, func()) {
+func launchPostSupervisor(
+	tb testing.TB,
+	log *zap.Logger,
+	cfg Config,
+	postOpts activation.PostSetupOpts,
+) (types.NodeID, func()) {
 	cmdCfg := activation.DefaultTestPostServiceConfig()
 	cmdCfg.NodeAddress = fmt.Sprintf("http://%s", cfg.PublicListener)
 	postCfg := activation.DefaultPostConfig()
@@ -59,7 +64,12 @@ func launchPostSupervisor(tb testing.TB, log *zap.Logger, cfg Config, postOpts a
 	return id, func() { assert.NoError(tb, ps.Stop(false)) }
 }
 
-func launchPostSupervisorTLS(tb testing.TB, log *zap.Logger, cfg Config, postOpts activation.PostSetupOpts) (types.NodeID, func()) {
+func launchPostSupervisorTLS(
+	tb testing.TB,
+	log *zap.Logger,
+	cfg Config,
+	postOpts activation.PostSetupOpts,
+) (types.NodeID, func()) {
 	pwd, err := os.Getwd()
 	require.NoError(tb, err)
 	caCert := filepath.Join(pwd, caCert)

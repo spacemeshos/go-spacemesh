@@ -61,7 +61,8 @@ func SetApplied(db sql.Executor, lid types.LayerID, applied types.BlockID) error
 
 // UnsetAppliedFrom updates the applied block to nil for layer >= `lid`.
 func UnsetAppliedFrom(db sql.Executor, lid types.LayerID) error {
-	if _, err := db.Exec("update layers set applied_block = null, state_hash = null, aggregated_hash = null where id >= ?1;",
+	if _, err := db.Exec(
+		"update layers set applied_block = null, state_hash = null, aggregated_hash = null where id >= ?1;",
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(lid))
 		}, nil); err != nil {

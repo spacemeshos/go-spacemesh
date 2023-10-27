@@ -33,7 +33,11 @@ func (h *handler) Parse(host core.Host, method uint8, decoder *scale.Decoder) (c
 func (h *handler) New(args any) (core.Template, error) {
 	spawn := args.(*SpawnArguments)
 	if spawn.InitialUnlockAmount > spawn.TotalAmount {
-		return nil, fmt.Errorf("initial %d should be less or equal to total %d", spawn.InitialUnlockAmount, spawn.TotalAmount)
+		return nil, fmt.Errorf(
+			"initial %d should be less or equal to total %d",
+			spawn.InitialUnlockAmount,
+			spawn.TotalAmount,
+		)
 	}
 	if spawn.VestingEnd.Before(spawn.VestingStart) {
 		return nil, fmt.Errorf("vesting end %s should be atleast equal to start %s",

@@ -59,7 +59,8 @@ func (proc *consensusProcess) reportWeakCoin() {
 
 // State holds the current state of the consensus process (aka the participant).
 type State struct {
-	round          uint32       // the round counter (round%4 is the round number); it should be first in struct for alignment because atomics are used (K)
+	// round counter (round%4 is the round number); should be first in struct for alignment because atomics are used (K)
+	round          uint32
 	committedRound uint32       // indicates when value (S) was first committed upon (Ki)
 	value          *Set         // the set of values (S)
 	certificate    *Certificate // the certificate
@@ -226,8 +227,24 @@ func newConsensusProcess(
 		clock:     clock,
 	}
 	proc.ctx, proc.cancel = context.WithCancel(ctx)
-	proc.preRoundTracker = newPreRoundTracker(logger.WithContext(proc.ctx).WithFields(proc.layer), comm.mchOut, proc.eTracker, cfg.N/2+1, cfg.N)
-	proc.validator = newSyntaxContextValidator(signing, edVerifier, cfg.N/2+1, proc.statusValidator(), stateQuerier, ev, proc.mTracker, proc.eTracker, logger)
+	proc.preRoundTracker = newPreRoundTracker(
+		logger.WithContext(proc.ctx).WithFields(proc.layer),
+		comm.mchOut,
+		proc.eTracker,
+		cfg.N/2+1,
+		cfg.N,
+	)
+	proc.validator = newSyntaxContextValidator(
+		signing,
+		edVerifier,
+		cfg.N/2+1,
+		proc.statusValidator(),
+		stateQuerier,
+		ev,
+		proc.mTracker,
+		proc.eTracker,
+		logger,
+	)
 
 	return proc
 }
@@ -237,8 +254,8 @@ func inferIteration(roundCounter uint32) uint32 {
 	return roundCounter / RoundsPerIteration
 }
 
-// Start the consensus process.
-// It starts the PreRound round and then iterates through the rounds until consensus is reached or the instance is canceled.
+// Start the consensus process. It starts the PreRound round and then iterates through the rounds
+// until consensus is reached or the instance is canceled.
 // It is assumed that the inbox is set before the call to Start.
 // It returns an error if Start has been called more than once or the inbox is nil.
 func (proc *consensusProcess) Start() {

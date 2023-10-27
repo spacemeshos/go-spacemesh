@@ -89,7 +89,11 @@ func (pd *ProtocolDriver) HandleProposal(ctx context.Context, peer p2p.Peer, msg
 		logger.With().Debug("malicious miner proposal potentially valid", log.Stringer("smesher", m.NodeID))
 		cat = potentiallyValid
 	}
-	metrics.ReportMessageLatency(pubsub.BeaconProtocol, pubsub.BeaconProposalProtocol, time.Since(pd.msgTimes.proposalSendTime(m.EpochID)))
+	metrics.ReportMessageLatency(
+		pubsub.BeaconProtocol,
+		pubsub.BeaconProposalProtocol,
+		time.Since(pd.msgTimes.proposalSendTime(m.EpochID)),
+	)
 	return pd.addProposal(m, cat)
 }
 
@@ -249,20 +253,32 @@ func (pd *ProtocolDriver) HandleFirstVotes(ctx context.Context, peer p2p.Peer, m
 	}
 
 	logger.Debug("received first voting message, storing its votes")
-	metrics.ReportMessageLatency(pubsub.BeaconProtocol, pubsub.BeaconFirstVotesProtocol, time.Since(pd.msgTimes.firstVoteSendTime(m.EpochID)))
+	metrics.ReportMessageLatency(
+		pubsub.BeaconProtocol,
+		pubsub.BeaconFirstVotesProtocol,
+		time.Since(pd.msgTimes.firstVoteSendTime(m.EpochID)),
+	)
 	return pd.storeFirstVotes(m, minerPK)
 }
 
 func (pd *ProtocolDriver) verifyFirstVotes(ctx context.Context, m FirstVotingMessage) (types.NodeID, error) {
 	messageBytes, err := codec.Encode(&m.FirstVotingMessageBody)
 	if err != nil {
-		pd.logger.WithContext(ctx).WithFields(m.EpochID, types.FirstRound).With().Fatal("failed to serialize first voting message", log.Err(err))
+		pd.logger.WithContext(ctx).
+			WithFields(m.EpochID, types.FirstRound).
+			With().
+			Fatal("failed to serialize first voting message", log.Err(err))
 	}
 	if !pd.edVerifier.Verify(signing.BEACON_FIRST_MSG, m.SmesherID, messageBytes, m.Signature) {
 		return types.EmptyNodeID, fmt.Errorf("[round %v] verify signature %s: failed", types.FirstRound, m.Signature)
 	}
 	if err = pd.registerVoted(m.EpochID, m.SmesherID, types.FirstRound); err != nil {
-		return types.EmptyNodeID, fmt.Errorf("[round %v] register proposal (miner ID %v): %w", types.FirstRound, m.SmesherID.ShortString(), err)
+		return types.EmptyNodeID, fmt.Errorf(
+			"[round %v] register proposal (miner ID %v): %w",
+			types.FirstRound,
+			m.SmesherID.ShortString(),
+			err,
+		)
 	}
 	return m.SmesherID, nil
 }
@@ -346,7 +362,11 @@ func (pd *ProtocolDriver) HandleFollowingVotes(ctx context.Context, peer p2p.Pee
 		return err
 	}
 
-	metrics.ReportMessageLatency(pubsub.BeaconProtocol, pubsub.BeaconFollowingVotesProtocol, time.Since(pd.msgTimes.followupVoteSendTime(m.EpochID, m.RoundID)))
+	metrics.ReportMessageLatency(
+		pubsub.BeaconProtocol,
+		pubsub.BeaconFollowingVotesProtocol,
+		time.Since(pd.msgTimes.followupVoteSendTime(m.EpochID, m.RoundID)),
+	)
 	logger.Debug("received following voting message, counting its votes")
 	if err = pd.storeFollowingVotes(m, nodeID); err != nil {
 		logger.With().Warning("failed to store following votes", log.Err(err))

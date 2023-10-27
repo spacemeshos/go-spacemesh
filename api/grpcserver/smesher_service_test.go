@@ -21,7 +21,12 @@ func TestPostConfig(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
 	postSupervisor := grpcserver.NewMockpostSupervisor(ctrl)
-	svc := grpcserver.NewSmesherService(smeshingProvider, postSupervisor, time.Second, activation.DefaultPostSetupOpts())
+	svc := grpcserver.NewSmesherService(
+		smeshingProvider,
+		postSupervisor,
+		time.Second,
+		activation.DefaultPostSetupOpts(),
+	)
 
 	postConfig := activation.PostConfig{
 		MinNumUnits:   rand.Uint32(),
@@ -46,7 +51,12 @@ func TestStartSmeshingPassesCorrectSmeshingOpts(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
 	postSupervisor := grpcserver.NewMockpostSupervisor(ctrl)
-	svc := grpcserver.NewSmesherService(smeshingProvider, postSupervisor, time.Second, activation.DefaultPostSetupOpts())
+	svc := grpcserver.NewSmesherService(
+		smeshingProvider,
+		postSupervisor,
+		time.Second,
+		activation.DefaultPostSetupOpts(),
+	)
 
 	types.SetNetworkHRP("stest")
 	addr, err := types.StringToAddress("stest1qqqqqqrs60l66w5uksxzmaznwq6xnhqfv56c28qlkm4a5")
@@ -81,7 +91,12 @@ func TestSmesherService_PostSetupProviders(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
 	postSupervisor := grpcserver.NewMockpostSupervisor(ctrl)
-	svc := grpcserver.NewSmesherService(smeshingProvider, postSupervisor, time.Second, activation.DefaultPostSetupOpts())
+	svc := grpcserver.NewSmesherService(
+		smeshingProvider,
+		postSupervisor,
+		time.Second,
+		activation.DefaultPostSetupOpts(),
+	)
 
 	providers := []activation.PostSetupProvider{
 		{
@@ -122,7 +137,12 @@ func TestSmesherService_PostSetupStatus(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
 		postSupervisor := grpcserver.NewMockpostSupervisor(ctrl)
-		svc := grpcserver.NewSmesherService(smeshingProvider, postSupervisor, time.Second, activation.DefaultPostSetupOpts())
+		svc := grpcserver.NewSmesherService(
+			smeshingProvider,
+			postSupervisor,
+			time.Second,
+			activation.DefaultPostSetupOpts(),
+		)
 
 		postSupervisor.EXPECT().Status().Return(&activation.PostSetupStatus{
 			State:            activation.PostSetupStateComplete,
@@ -140,7 +160,12 @@ func TestSmesherService_PostSetupStatus(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
 		postSupervisor := grpcserver.NewMockpostSupervisor(ctrl)
-		svc := grpcserver.NewSmesherService(smeshingProvider, postSupervisor, time.Second, activation.DefaultPostSetupOpts())
+		svc := grpcserver.NewSmesherService(
+			smeshingProvider,
+			postSupervisor,
+			time.Second,
+			activation.DefaultPostSetupOpts(),
+		)
 
 		id := activation.PostProviderID{}
 		id.SetUint32(1)
@@ -171,7 +196,12 @@ func TestSmesherService_PostSetupStatus(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
 		postSupervisor := grpcserver.NewMockpostSupervisor(ctrl)
-		svc := grpcserver.NewSmesherService(smeshingProvider, postSupervisor, time.Second, activation.DefaultPostSetupOpts())
+		svc := grpcserver.NewSmesherService(
+			smeshingProvider,
+			postSupervisor,
+			time.Second,
+			activation.DefaultPostSetupOpts(),
+		)
 
 		id := activation.PostProviderID{}
 		id.SetUint32(100)

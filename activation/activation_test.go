@@ -43,7 +43,12 @@ func TestMain(m *testing.M) {
 
 // ========== Helper functions ==========
 
-func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, PublishEpoch types.EpochID, cATX *types.ATXID) types.NIPostChallenge {
+func newChallenge(
+	sequence uint64,
+	prevAtxID, posAtxID types.ATXID,
+	PublishEpoch types.EpochID,
+	cATX *types.ATXID,
+) types.NIPostChallenge {
 	return types.NIPostChallenge{
 		Sequence:       sequence,
 		PrevATXID:      prevAtxID,
@@ -53,7 +58,14 @@ func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, PublishEpoch
 	}
 }
 
-func newAtx(t testing.TB, sig *signing.EdSigner, challenge types.NIPostChallenge, nipost *types.NIPost, numUnits uint32, coinbase types.Address) *types.ActivationTx {
+func newAtx(
+	t testing.TB,
+	sig *signing.EdSigner,
+	challenge types.NIPostChallenge,
+	nipost *types.NIPost,
+	numUnits uint32,
+	coinbase types.Address,
+) *types.ActivationTx {
 	atx := types.NewActivationTx(challenge, coinbase, nipost, numUnits, nil)
 	atx.SetEffectiveNumUnits(numUnits)
 	atx.SetReceived(time.Now())
@@ -136,7 +148,18 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 	tab.msync.EXPECT().RegisterForATXSynced().DoAndReturn(closedChan).AnyTimes()
 	tab.mpostSvc.EXPECT().Client(tab.nodeID).Return(tab.mpostClient, nil).AnyTimes()
 
-	b := NewBuilder(cfg, tab.nodeID, tab.sig, tab.cdb, tab.mpub, tab.mpostSvc, tab.mnipost, tab.mclock, tab.msync, lg, opts...)
+	b := NewBuilder(
+		cfg,
+		tab.nodeID,
+		tab.sig,
+		tab.cdb,
+		tab.mpub,
+		tab.mpostSvc,
+		tab.mnipost,
+		tab.mclock,
+		tab.msync,
+		lg,
+		opts...)
 	b.initialPost = &types.Post{
 		Nonce:   0,
 		Indices: make([]byte, 10),
@@ -147,7 +170,14 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 	return tab
 }
 
-func assertLastAtx(r *require.Assertions, nodeID types.NodeID, poetRef types.Hash32, newAtx *types.ActivationTx, posAtx, prevAtx *types.VerifiedActivationTx, layersPerEpoch uint32) {
+func assertLastAtx(
+	r *require.Assertions,
+	nodeID types.NodeID,
+	poetRef types.Hash32,
+	newAtx *types.ActivationTx,
+	posAtx, prevAtx *types.VerifiedActivationTx,
+	layersPerEpoch uint32,
+) {
 	atx := newAtx
 	r.Equal(nodeID, atx.SmesherID)
 	if prevAtx != nil {
@@ -251,11 +281,17 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 	tab := newTestBuilder(t)
 	coinbase := types.Address{1, 1, 1}
 
-	tab.mpostClient.EXPECT().Proof(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, b []byte) (*types.Post, *types.PostInfo, error) {
-		<-ctx.Done()
-		return nil, nil, ctx.Err()
-	}).AnyTimes()
-	tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
+	tab.mpostClient.EXPECT().
+		Proof(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, b []byte) (*types.Post, *types.PostInfo, error) {
+			<-ctx.Done()
+			return nil, nil, ctx.Err()
+		}).
+		AnyTimes()
+	tab.mValidator.EXPECT().
+		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		AnyTimes().
+		Return(nil)
 	tab.mclock.EXPECT().CurrentLayer().Return(types.LayerID(0)).AnyTimes()
 	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(make(chan struct{})).AnyTimes()
 	require.NoError(t, tab.StartSmeshing(coinbase))
@@ -271,8 +307,14 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 	now := time.Now()
 	getBuilder := func(t *testing.T) *Builder {
 		tab := newTestBuilder(t)
-		tab.mpostClient.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).AnyTimes().Return(&types.Post{}, &types.PostInfo{}, nil)
-		tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
+		tab.mpostClient.EXPECT().
+			Proof(gomock.Any(), shared.ZeroChallenge).
+			AnyTimes().
+			Return(&types.Post{}, &types.PostInfo{}, nil)
+		tab.mValidator.EXPECT().
+			Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			AnyTimes().
+			Return(nil)
 		ch := make(chan struct{})
 		close(ch)
 		tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(ch).AnyTimes()
@@ -285,9 +327,23 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 		builder := getBuilder(t)
 		for i := 0; i < 100; i++ {
 			require.NoError(t, builder.StartSmeshing(types.Address{}))
-			require.Never(t, func() bool { return !builder.Smeshing() }, 400*time.Microsecond, 50*time.Microsecond, "failed on execution %d", i)
+			require.Never(
+				t,
+				func() bool { return !builder.Smeshing() },
+				400*time.Microsecond,
+				50*time.Microsecond,
+				"failed on execution %d",
+				i,
+			)
 			require.NoError(t, builder.StopSmeshing(true))
-			require.Eventually(t, func() bool { return !builder.Smeshing() }, 100*time.Millisecond, time.Millisecond, "failed on execution %d", i)
+			require.Eventually(
+				t,
+				func() bool { return !builder.Smeshing() },
+				100*time.Millisecond,
+				time.Millisecond,
+				"failed on execution %d",
+				i,
+			)
 		}
 	})
 
@@ -322,19 +378,28 @@ func TestBuilder_StopSmeshing_Delete(t *testing.T) {
 			genesis := time.Now().Add(-time.Duration(currLayer) * layerDuration)
 			return genesis.Add(layerDuration * time.Duration(got))
 		}).AnyTimes()
-	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, _ *types.NIPostChallenge) (*types.NIPost, error) {
-		<-ctx.Done()
-		return nil, ctx.Err()
-	}).AnyTimes()
-	tab.mpostClient.EXPECT().Proof(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, b []byte) (*types.Post, *types.PostInfo, error) {
-		<-ctx.Done()
-		return nil, nil, ctx.Err()
-	}).AnyTimes()
+	tab.mnipost.EXPECT().
+		BuildNIPost(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, _ *types.NIPostChallenge) (*types.NIPost, error) {
+			<-ctx.Done()
+			return nil, ctx.Err()
+		}).
+		AnyTimes()
+	tab.mpostClient.EXPECT().
+		Proof(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, b []byte) (*types.Post, *types.PostInfo, error) {
+			<-ctx.Done()
+			return nil, nil, ctx.Err()
+		}).
+		AnyTimes()
 
 	// Create state files
 	require.NoError(t, saveBuilderState(tab.nipostBuilder.DataDir(), &types.NIPostBuilderState{}))
 	require.NoError(t, savePost(tab.nipostBuilder.DataDir(), &types.Post{}))
-	require.NoError(t, SaveNipostChallenge(tab.nipostBuilder.DataDir(), &types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2}))
+	require.NoError(
+		t,
+		SaveNipostChallenge(tab.nipostBuilder.DataDir(), &types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2}),
+	)
 	files, err := os.ReadDir(tab.nipostBuilder.DataDir())
 	require.NoError(t, err)
 	require.Len(t, files, 3) // 3 state files created
@@ -507,7 +572,8 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 		})
 	require.NoError(t, tab.PublishActivationTx(context.Background()))
 
-	// if the network works and we try to publish a new ATX, the timeout should result in a clean state (so a NIPost should be built)
+	// if the network works and we try to publish a new ATX, the timeout should result in a clean
+	// state (so a NIPost should be built)
 	posEpoch = posEpoch + 1
 	challenge = newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posEpoch, nil)
 	posAtx := newAtx(t, tab.sig, challenge, nipost, 2, types.Address{})
@@ -663,11 +729,14 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 			genesis := time.Now().Add(-time.Duration(currentLayer) * layerDuration)
 			return genesis.Add(layerDuration * time.Duration(layer))
 		}).AnyTimes()
-	tab.mclock.EXPECT().AwaitLayer(vPosAtx.PublishEpoch.FirstLayer().Add(layersPerEpoch)).DoAndReturn(func(layer types.LayerID) <-chan struct{} {
-		ch := make(chan struct{})
-		close(ch)
-		return ch
-	}).Times(1)
+	tab.mclock.EXPECT().
+		AwaitLayer(vPosAtx.PublishEpoch.FirstLayer().Add(layersPerEpoch)).
+		DoAndReturn(func(layer types.LayerID) <-chan struct{} {
+			ch := make(chan struct{})
+			close(ch)
+			return ch
+		}).
+		Times(1)
 
 	nonce := types.VRFPostIndex(123)
 	commitmentATX := types.RandomATXID()
@@ -686,30 +755,32 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 			return newNIPostWithChallenge(t, challenge.Hash(), poetBytes), nil
 		})
 
-	tab.mpub.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, _ string, msg []byte) error {
-		var atx types.ActivationTx
-		require.NoError(t, codec.Decode(msg, &atx))
-		atx.SetReceived(time.Now().Local())
+	tab.mpub.EXPECT().
+		Publish(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, _ string, msg []byte) error {
+			var atx types.ActivationTx
+			require.NoError(t, codec.Decode(msg, &atx))
+			atx.SetReceived(time.Now().Local())
 
-		atx.SetEffectiveNumUnits(atx.NumUnits)
-		vAtx, err := atx.Verify(0, 1)
-		r.NoError(err)
-		r.Equal(tab.nodeID, vAtx.SmesherID)
+			atx.SetEffectiveNumUnits(atx.NumUnits)
+			vAtx, err := atx.Verify(0, 1)
+			r.NoError(err)
+			r.Equal(tab.nodeID, vAtx.SmesherID)
 
-		r.NoError(atxs.Add(tab.cdb, vAtx))
+			r.NoError(atxs.Add(tab.cdb, vAtx))
 
-		r.Equal(prevAtx.Sequence+1, atx.Sequence)
-		r.Equal(prevAtx.ID(), atx.PrevATXID)
-		r.Nil(atx.InitialPost)
-		r.Nil(atx.CommitmentATX)
-		r.Nil(atx.VRFNonce)
+			r.Equal(prevAtx.Sequence+1, atx.Sequence)
+			r.Equal(prevAtx.ID(), atx.PrevATXID)
+			r.Nil(atx.InitialPost)
+			r.Nil(atx.CommitmentATX)
+			r.Nil(atx.VRFNonce)
 
-		r.Equal(posAtx.ID(), atx.PositioningATX)
-		r.Equal(postAtxPubEpoch+1, atx.PublishEpoch)
-		r.Equal(types.BytesToHash(poetBytes), atx.GetPoetProofRef())
+			r.Equal(posAtx.ID(), atx.PositioningATX)
+			r.Equal(postAtxPubEpoch+1, atx.PublishEpoch)
+			r.Equal(types.BytesToHash(poetBytes), atx.GetPoetProofRef())
 
-		return nil
-	})
+			return nil
+		})
 
 	r.NoError(tab.PublishActivationTx(context.Background()))
 }
@@ -743,11 +814,14 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 			genesis := time.Now().Add(-time.Duration(currentLayer) * layerDuration)
 			return genesis.Add(layerDuration * time.Duration(layer))
 		}).AnyTimes()
-	tab.mclock.EXPECT().AwaitLayer(vPosAtx.PublishEpoch.FirstLayer().Add(layersPerEpoch)).DoAndReturn(func(types.LayerID) <-chan struct{} {
-		ch := make(chan struct{})
-		close(ch)
-		return ch
-	}).Times(1)
+	tab.mclock.EXPECT().
+		AwaitLayer(vPosAtx.PublishEpoch.FirstLayer().Add(layersPerEpoch)).
+		DoAndReturn(func(types.LayerID) <-chan struct{} {
+			ch := make(chan struct{})
+			close(ch)
+			return ch
+		}).
+		Times(1)
 
 	nonce := types.VRFPostIndex(123)
 	commitmentATX := types.RandomATXID()
@@ -766,28 +840,30 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 			return newNIPostWithChallenge(t, challenge.Hash(), poetBytes), nil
 		})
 
-	tab.mpub.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, _ string, msg []byte) error {
-		var atx types.ActivationTx
-		require.NoError(t, codec.Decode(msg, &atx))
-		atx.SetReceived(time.Now().Local())
+	tab.mpub.EXPECT().
+		Publish(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, _ string, msg []byte) error {
+			var atx types.ActivationTx
+			require.NoError(t, codec.Decode(msg, &atx))
+			atx.SetReceived(time.Now().Local())
 
-		atx.SetEffectiveNumUnits(atx.NumUnits)
-		vAtx, err := atx.Verify(0, 1)
-		r.NoError(err)
-		r.Equal(tab.nodeID, vAtx.SmesherID)
+			atx.SetEffectiveNumUnits(atx.NumUnits)
+			vAtx, err := atx.Verify(0, 1)
+			r.NoError(err)
+			r.Equal(tab.nodeID, vAtx.SmesherID)
 
-		r.NoError(atxs.Add(tab.cdb, vAtx))
+			r.NoError(atxs.Add(tab.cdb, vAtx))
 
-		r.Zero(atx.Sequence)
-		r.Equal(types.EmptyATXID, atx.PrevATXID)
-		r.NotNil(atx.InitialPost)
+			r.Zero(atx.Sequence)
+			r.Equal(types.EmptyATXID, atx.PrevATXID)
+			r.NotNil(atx.InitialPost)
 
-		r.Equal(posAtx.ID(), atx.PositioningATX)
-		r.Equal(posEpoch+1, atx.PublishEpoch)
-		r.Equal(types.BytesToHash(poetBytes), atx.GetPoetProofRef())
+			r.Equal(posAtx.ID(), atx.PositioningATX)
+			r.Equal(posEpoch+1, atx.PublishEpoch)
+			r.Equal(types.BytesToHash(poetBytes), atx.GetPoetProofRef())
 
-		return nil
-	})
+			return nil
+		})
 
 	r.NoError(tab.PublishActivationTx(context.Background()))
 }
@@ -823,7 +899,20 @@ func TestBuilder_PublishActivationTx_Serialize(t *testing.T) {
 
 	nipost := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
 	coinbase := types.Address{4, 5, 6}
-	atx := newActivationTx(t, sig, 1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, nil, types.EpochID(5), 1, 100, coinbase, 100, nipost)
+	atx := newActivationTx(
+		t,
+		sig,
+		1,
+		types.ATXID{1, 2, 3},
+		types.ATXID{1, 2, 3},
+		nil,
+		types.EpochID(5),
+		1,
+		100,
+		coinbase,
+		100,
+		nipost,
+	)
 	require.NoError(t, atxs.Add(cdb, atx))
 
 	act := newActivationTx(t, sig, 2, atx.ID(), atx.ID(), nil, atx.PublishEpoch.Add(10), 0, 100, coinbase, 100, nipost)
@@ -958,7 +1047,11 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	retryInterval := 50 * time.Microsecond
 	genesis := time.Now()
-	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: 150 * time.Millisecond}), WithPoetRetryInterval(retryInterval))
+	tab := newTestBuilder(
+		t,
+		WithPoetConfig(PoetConfig{PhaseShift: 150 * time.Millisecond}),
+		WithPoetRetryInterval(retryInterval),
+	)
 	tab.log = logtest.New(t, zap.InfoLevel)
 	posEpoch := types.EpochID(0)
 	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posEpoch, nil)
@@ -1019,7 +1112,10 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
 	tab.mpostClient.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).Return(&types.Post{}, &types.PostInfo{}, nil)
-	tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
+	tab.mValidator.EXPECT().
+		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		AnyTimes().
+		Return(nil)
 	require.NoError(t, tab.generateInitialPost(context.Background()))
 
 	posEpoch := postGenesisEpoch + 1
@@ -1046,7 +1142,10 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 func TestBuilder_InitialPostIsPersisted(t *testing.T) {
 	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
 	tab.mpostClient.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).Return(&types.Post{}, &types.PostInfo{}, nil)
-	tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
+	tab.mValidator.EXPECT().
+		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		AnyTimes().
+		Return(nil)
 	require.NoError(t, tab.generateInitialPost(context.Background()))
 
 	// GenerateProof() should not be called again
@@ -1063,7 +1162,10 @@ func TestBuilder_UpdatePoets(t *testing.T) {
 
 	tab := newTestBuilder(t, WithPoETClientInitializer(func(string, PoetConfig) (poetClient, error) {
 		poet := NewMockpoetClient(gomock.NewController(t))
-		poet.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().Return(types.PoetServiceID{ServiceID: []byte("poetid")}, nil)
+		poet.EXPECT().
+			PoetServiceID(gomock.Any()).
+			AnyTimes().
+			Return(types.PoetServiceID{ServiceID: []byte("poetid")}, nil)
 		return poet, nil
 	}))
 
@@ -1083,7 +1185,10 @@ func TestBuilder_UpdatePoetsUnstable(t *testing.T) {
 
 	tab := newTestBuilder(t, WithPoETClientInitializer(func(string, PoetConfig) (poetClient, error) {
 		poet := NewMockpoetClient(gomock.NewController(t))
-		poet.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().Return(types.PoetServiceID{ServiceID: []byte("poetid")}, errors.New("ERROR"))
+		poet.EXPECT().
+			PoetServiceID(gomock.Any()).
+			AnyTimes().
+			Return(types.PoetServiceID{ServiceID: []byte("poetid")}, errors.New("ERROR"))
 		return poet, nil
 	}))
 

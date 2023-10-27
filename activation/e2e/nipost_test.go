@@ -60,7 +60,13 @@ func spawnPoet(tb testing.TB, opts ...HTTPPoetOpt) *HTTPPoetTestHarness {
 	return poetProver
 }
 
-func launchPostSupervisor(tb testing.TB, log *zap.Logger, mgr *activation.PostSetupManager, cfg grpcserver.Config, postOpts activation.PostSetupOpts) func() {
+func launchPostSupervisor(
+	tb testing.TB,
+	log *zap.Logger,
+	mgr *activation.PostSetupManager,
+	cfg grpcserver.Config,
+	postOpts activation.PostSetupOpts,
+) func() {
 	cmdCfg := activation.DefaultTestPostServiceConfig()
 	cmdCfg.NodeAddress = fmt.Sprintf("http://%s", cfg.PublicListener)
 	postCfg := activation.DefaultPostConfig()
@@ -138,7 +144,13 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 		RequestRetryDelay: epoch / 50,
 		MaxRequestRetries: 10,
 	}
-	poetProver := spawnPoet(t, WithGenesis(time.Now()), WithEpochDuration(epoch), WithPhaseShift(poetCfg.PhaseShift), WithCycleGap(poetCfg.CycleGap))
+	poetProver := spawnPoet(
+		t,
+		WithGenesis(time.Now()),
+		WithEpochDuration(epoch),
+		WithPhaseShift(poetCfg.PhaseShift),
+		WithCycleGap(poetCfg.CycleGap),
+	)
 
 	mclock := activation.NewMocklayerClock(ctrl)
 	mclock.EXPECT().LayerToTime(gomock.Any()).AnyTimes().DoAndReturn(
@@ -264,7 +276,13 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 		RequestRetryDelay: epoch / 100,
 		MaxRequestRetries: 10,
 	}
-	poetProver := spawnPoet(t, WithGenesis(time.Now()), WithEpochDuration(epoch), WithPhaseShift(poetCfg.PhaseShift), WithCycleGap(poetCfg.CycleGap))
+	poetProver := spawnPoet(
+		t,
+		WithGenesis(time.Now()),
+		WithEpochDuration(epoch),
+		WithPhaseShift(poetCfg.PhaseShift),
+		WithCycleGap(poetCfg.CycleGap),
+	)
 
 	mclock := activation.NewMocklayerClock(ctrl)
 	mclock.EXPECT().LayerToTime(gomock.Any()).AnyTimes().DoAndReturn(

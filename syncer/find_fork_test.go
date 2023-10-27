@@ -56,7 +56,12 @@ func TestResynced(t *testing.T) {
 func TestForkFinder_Purge(t *testing.T) {
 	tf := newTestForkFinderWithDuration(t, time.Hour, logtest.New(t))
 	numCached := 10
-	tf.UpdateAgreement(p2p.Peer(strconv.Itoa(0)), types.LayerID(uint32(1)), types.RandomHash(), time.Now().Add(-2*time.Hour))
+	tf.UpdateAgreement(
+		p2p.Peer(strconv.Itoa(0)),
+		types.LayerID(uint32(1)),
+		types.RandomHash(),
+		time.Now().Add(-2*time.Hour),
+	)
 	for i := 1; i < numCached; i++ {
 		tf.UpdateAgreement(p2p.Peer(strconv.Itoa(i)), types.LayerID(uint32(i+1)), types.RandomHash(), time.Now())
 	}
@@ -232,7 +237,12 @@ func TestForkFinder_FindFork_Edges(t *testing.T) {
 					return serveHashReq(t, req)
 				}).Times(tc.expReqs)
 
-			fork, err := tf.FindFork(context.Background(), peer, types.LayerID(uint32(tc.lastDiff)), layerHash(tc.lastDiff, true))
+			fork, err := tf.FindFork(
+				context.Background(),
+				peer,
+				types.LayerID(uint32(tc.lastDiff)),
+				layerHash(tc.lastDiff, true),
+			)
 			require.NoError(t, err)
 			require.Equal(t, types.LayerID(11), fork)
 		})

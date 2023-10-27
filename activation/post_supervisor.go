@@ -225,7 +225,13 @@ func (ps *PostSupervisor) captureCmdOutput(pipe io.ReadCloser) func() error {
 	}
 }
 
-func (ps *PostSupervisor) runCmd(ctx context.Context, cmdCfg PostSupervisorConfig, postCfg PostConfig, postOpts PostSetupOpts, provingOpts PostProvingOpts) error {
+func (ps *PostSupervisor) runCmd(
+	ctx context.Context,
+	cmdCfg PostSupervisorConfig,
+	postCfg PostConfig,
+	postOpts PostSetupOpts,
+	provingOpts PostProvingOpts,
+) error {
 	for {
 		args := []string{
 			"--address", cmdCfg.NodeAddress,

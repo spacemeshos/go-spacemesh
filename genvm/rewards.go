@@ -11,7 +11,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-func (v *VM) addRewards(lctx ApplyContext, ss *core.StagedCache, fees uint64, blockRewards []types.CoinbaseReward) ([]types.Reward, error) {
+func (v *VM) addRewards(
+	lctx ApplyContext,
+	ss *core.StagedCache,
+	fees uint64,
+	blockRewards []types.CoinbaseReward,
+) ([]types.Reward, error) {
 	var (
 		layersAfterEffectiveGenesis = lctx.Layer.Difference(types.FirstEffectiveGenesis())
 		subsidy                     = rewards.TotalSubsidyAtLayer(layersAfterEffectiveGenesis)

@@ -91,7 +91,11 @@ func getProposalMetadata(
 				return nil, fmt.Errorf("%w: get proposal tx: %w", errProposalTxMissing, err)
 			}
 			if mtx.TxHeader == nil {
-				return nil, fmt.Errorf("%w: inconsistent state: tx %s is missing header", errProposalTxHdrMissing, mtx.ID)
+				return nil, fmt.Errorf(
+					"%w: inconsistent state: tx %s is missing header",
+					errProposalTxHdrMissing,
+					mtx.ID,
+				)
 			}
 			seen[tid] = struct{}{}
 			mtxs = append(mtxs, mtx)
@@ -118,7 +122,8 @@ func getProposalMetadata(
 			return nil, fmt.Errorf("get prev mesh hash %w", err)
 		}
 		if ownMeshHash != majorityState.hash {
-			return nil, fmt.Errorf("%w: majority %v, node %v", errNodeHasBadMeshHash, majorityState.hash.ShortString(), ownMeshHash.ShortString())
+			return nil, fmt.Errorf("%w: majority %v, node %v",
+				errNodeHasBadMeshHash, majorityState.hash.ShortString(), ownMeshHash.ShortString())
 		}
 		logger.With().Debug("consensus on mesh hash. doing optimistic filtering",
 			lid,
@@ -139,7 +144,12 @@ func getProposalMetadata(
 	return md, nil
 }
 
-func getBlockTXs(logger log.Log, mtxs []*types.MeshTransaction, blockSeed []byte, gasLimit uint64) ([]types.TransactionID, error) {
+func getBlockTXs(
+	logger log.Log,
+	mtxs []*types.MeshTransaction,
+	blockSeed []byte,
+	gasLimit uint64,
+) ([]types.TransactionID, error) {
 	stateF := func(_ types.Address) (uint64, uint64) {
 		return 0, math.MaxUint64
 	}
@@ -173,7 +183,12 @@ func getBlockTXs(logger log.Log, mtxs []*types.MeshTransaction, blockSeed []byte
 	return ordered, nil
 }
 
-func prune(logger log.Log, tids []types.TransactionID, byTid map[types.TransactionID]*txs.NanoTX, gasLimit uint64) []types.TransactionID {
+func prune(
+	logger log.Log,
+	tids []types.TransactionID,
+	byTid map[types.TransactionID]*txs.NanoTX,
+	gasLimit uint64,
+) []types.TransactionID {
 	var (
 		gasRemaining = gasLimit
 		idx          int
@@ -207,7 +222,12 @@ func toUint64Slice(b []byte) []uint64 {
 	return s
 }
 
-func rewardInfoAndHeight(logger log.Log, cdb *datastore.CachedDB, cfg Config, props []*types.Proposal) (uint64, []types.AnyReward, error) {
+func rewardInfoAndHeight(
+	logger log.Log,
+	cdb *datastore.CachedDB,
+	cfg Config,
+	props []*types.Proposal,
+) (uint64, []types.AnyReward, error) {
 	weights := make(map[types.ATXID]*big.Rat)
 	atxids := make([]types.ATXID, 0, len(props))
 	max := uint64(0)

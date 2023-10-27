@@ -117,7 +117,12 @@ func ValidateRewards(rewards []types.AnyReward) error {
 	unique := map[types.ATXID]struct{}{}
 	for _, reward := range rewards {
 		if reward.Weight.Num == 0 || reward.Weight.Denom == 0 {
-			return fmt.Errorf("reward with invalid (zeroed) weight (%d/%d) included into the block for %v", reward.Weight.Num, reward.Weight.Denom, reward.AtxID)
+			return fmt.Errorf(
+				"reward with invalid (zeroed) weight (%d/%d) included into the block for %v",
+				reward.Weight.Num,
+				reward.Weight.Denom,
+				reward.AtxID,
+			)
 		}
 		if _, exists := unique[reward.AtxID]; exists {
 			return fmt.Errorf("multiple rewards for the same atx %v", reward.AtxID)

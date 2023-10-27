@@ -9,7 +9,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare3"
 )
 
-func ReportResult(ctx context.Context, logger *zap.Logger, from <-chan hare3.ConsensusOutput, to chan<- hare.LayerOutput) {
+func ReportResult(
+	ctx context.Context,
+	logger *zap.Logger,
+	from <-chan hare3.ConsensusOutput,
+	to chan<- hare.LayerOutput,
+) {
 	for {
 		select {
 		case <-ctx.Done():

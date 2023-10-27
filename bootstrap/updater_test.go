@@ -93,16 +93,32 @@ func checkUpdate1(t *testing.T, got *bootstrap.VerifiedUpdate) {
 	require.EqualValues(t, 1, got.Data.Epoch)
 	require.EqualValues(t, "0x6fe7c971", got.Data.Beacon.String())
 	require.Len(t, got.Data.ActiveSet, 2)
-	require.Equal(t, types.HexToHash32("85de8823d6a0cd251aa62ce9315459302ea31ce9701531d3677ac8ba548a4210"), got.Data.ActiveSet[0].Hash32())
-	require.Equal(t, types.HexToHash32("65af4350d28f3d953c6c6660e37954698839125fbda7aac3edcef469b2ad9e64"), got.Data.ActiveSet[1].Hash32())
+	require.Equal(
+		t,
+		types.HexToHash32("85de8823d6a0cd251aa62ce9315459302ea31ce9701531d3677ac8ba548a4210"),
+		got.Data.ActiveSet[0].Hash32(),
+	)
+	require.Equal(
+		t,
+		types.HexToHash32("65af4350d28f3d953c6c6660e37954698839125fbda7aac3edcef469b2ad9e64"),
+		got.Data.ActiveSet[1].Hash32(),
+	)
 }
 
 func checkUpdate2(t *testing.T, got *bootstrap.VerifiedUpdate) {
 	require.EqualValues(t, 2, got.Data.Epoch)
 	require.Equal(t, types.EmptyBeacon, got.Data.Beacon)
 	require.Len(t, got.Data.ActiveSet, 2)
-	require.Equal(t, types.HexToHash32("e46b23d64140357b16d18eace600b28ab767bfd7b51c8e9977a342b71c3a23dd"), got.Data.ActiveSet[0].Hash32())
-	require.Equal(t, types.HexToHash32("39125fbda7aac3edcef469b2ad9e6465af4350d28f3d953c6c6660e379546988"), got.Data.ActiveSet[1].Hash32())
+	require.Equal(
+		t,
+		types.HexToHash32("e46b23d64140357b16d18eace600b28ab767bfd7b51c8e9977a342b71c3a23dd"),
+		got.Data.ActiveSet[0].Hash32(),
+	)
+	require.Equal(
+		t,
+		types.HexToHash32("39125fbda7aac3edcef469b2ad9e6465af4350d28f3d953c6c6660e379546988"),
+		got.Data.ActiveSet[1].Hash32(),
+	)
 }
 
 func checkUpdate3(t *testing.T, got *bootstrap.VerifiedUpdate) {
@@ -115,9 +131,21 @@ func checkUpdate4(t *testing.T, got *bootstrap.VerifiedUpdate) {
 	require.EqualValues(t, 4, got.Data.Epoch)
 	require.Equal(t, types.EmptyBeacon, got.Data.Beacon)
 	require.Len(t, got.Data.ActiveSet, 3)
-	require.Equal(t, types.HexToHash32("65af4350d28f3d953c6c6660e37954698839125fbda7aac3edcef469b2ad9e64"), got.Data.ActiveSet[0].Hash32())
-	require.Equal(t, types.HexToHash32("e46b23d64140357b16d18eace600b28ab767bfd7b51c8e9977a342b71c3a23dd"), got.Data.ActiveSet[1].Hash32())
-	require.Equal(t, types.HexToHash32("85de8823d6a0cd251aa62ce9315459302ea31ce9701531d3677ac8ba548a4210"), got.Data.ActiveSet[2].Hash32())
+	require.Equal(
+		t,
+		types.HexToHash32("65af4350d28f3d953c6c6660e37954698839125fbda7aac3edcef469b2ad9e64"),
+		got.Data.ActiveSet[0].Hash32(),
+	)
+	require.Equal(
+		t,
+		types.HexToHash32("e46b23d64140357b16d18eace600b28ab767bfd7b51c8e9977a342b71c3a23dd"),
+		got.Data.ActiveSet[1].Hash32(),
+	)
+	require.Equal(
+		t,
+		types.HexToHash32("85de8823d6a0cd251aa62ce9315459302ea31ce9701531d3677ac8ba548a4210"),
+		got.Data.ActiveSet[2].Hash32(),
+	)
 }
 
 type checkFunc func(*testing.T, *bootstrap.VerifiedUpdate)
@@ -156,7 +184,9 @@ func TestLoad(t *testing.T) {
 			cfg := bootstrap.DefaultConfig()
 			fs := afero.NewMemMapFs()
 			for epoch, update := range tc.persisted {
-				path := filepath.Join(bootstrap.PersistFilename(cfg.DataDir, epoch, fmt.Sprintf("update-%s", update[0])))
+				path := filepath.Join(
+					bootstrap.PersistFilename(cfg.DataDir, epoch, fmt.Sprintf("update-%s", update[0])),
+				)
 				require.NoError(t, fs.MkdirAll(path, 0o700))
 				require.NoError(t, afero.WriteFile(fs, path, []byte(update[1]), 0o400))
 			}
@@ -200,7 +230,12 @@ func TestLoadedNotDownloadedAgain(t *testing.T) {
 		current + 1: update4,
 	}
 	for epoch, update := range persisted {
-		persisted := filepath.Join(cfg.DataDir, bootstrap.DirName, strconv.Itoa(int(epoch)), bootstrap.UpdateName(epoch, bootstrap.SuffixBoostrap))
+		persisted := filepath.Join(
+			cfg.DataDir,
+			bootstrap.DirName,
+			strconv.Itoa(int(epoch)),
+			bootstrap.UpdateName(epoch, bootstrap.SuffixBoostrap),
+		)
 		require.NoError(t, fs.MkdirAll(filepath.Dir(persisted), 0o700))
 		require.NoError(t, afero.WriteFile(fs, persisted, []byte(update), 0o400))
 	}

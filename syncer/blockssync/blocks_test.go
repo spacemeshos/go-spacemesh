@@ -30,10 +30,13 @@ func TestCanBeAggregated(t *testing.T) {
 	eg.Go(func() error {
 		return Sync(ctx, logtest.New(t).Zap(), req, fetch)
 	})
-	fetch.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, blocks []types.BlockID) error {
-		out <- blocks
-		return nil
-	}).AnyTimes()
+	fetch.EXPECT().
+		GetBlocks(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, blocks []types.BlockID) error {
+			out <- blocks
+			return nil
+		}).
+		AnyTimes()
 	first := []types.BlockID{{1}, {2}, {3}}
 	second := []types.BlockID{{2}, {3}, {4}}
 	req <- first
@@ -61,10 +64,13 @@ func TestErrorDoesntExit(t *testing.T) {
 	eg.Go(func() error {
 		return Sync(ctx, logtest.New(t).Zap(), req, fetch)
 	})
-	fetch.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, blocks []types.BlockID) error {
-		out <- blocks
-		return errors.New("test")
-	}).AnyTimes()
+	fetch.EXPECT().
+		GetBlocks(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, blocks []types.BlockID) error {
+			out <- blocks
+			return errors.New("test")
+		}).
+		AnyTimes()
 	first := []types.BlockID{{1}, {2}, {3}}
 	req <- first
 	require.Subset(t, timedRead(t, out), first)

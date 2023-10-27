@@ -85,14 +85,24 @@ func TestFallback(t *testing.T) {
 		refActives, err := queryEpochAtxs(tctx, cl.Client(0), epoch)
 		cutoff := len(refActives)
 		if epoch > 2 {
-			cutoff = len(refActives) * 3 / 4 // bootstrapper only sets 3/4 of the epoch atx to be the fallback active set
+			cutoff = len(
+				refActives,
+			) * 3 / 4 // bootstrapper only sets 3/4 of the epoch atx to be the fallback active set
 		}
 		require.NoError(t, err, "query atxs from client", cl.Client(0).Name)
 		tctx.Log.Debugw("got atx ids from client", "epoch", epoch, "client", cl.Client(0).Name, "size", len(refActives))
 		for i := 0; i < cl.Total(); i++ {
 			actives, err := queryActiveSet(tctx, cl.Client(i), epoch)
 			require.NoError(t, err, "query actives from client", cl.Client(i).Name)
-			tctx.Log.Debugw("got activeset ids from client", "epoch", epoch, "client", cl.Client(i).Name, "size", len(actives))
+			tctx.Log.Debugw(
+				"got activeset ids from client",
+				"epoch",
+				epoch,
+				"client",
+				cl.Client(i).Name,
+				"size",
+				len(actives),
+			)
 			require.ElementsMatchf(t, refActives[:cutoff], actives, "epoch=%v, client=%v", epoch, cl.Client(i).Name)
 		}
 	}

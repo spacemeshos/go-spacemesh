@@ -97,10 +97,12 @@ func (g *GenesisConfig) ToAccounts() []types.Account {
 }
 
 // Account1Private is the private key for test account.
-const Account1Private = "0x2dcddb8e0ddd2269f536da5768e890790f2b84366e0fb8396bdcd15c0d7c30b90002abedccd3ffcbf46f35f11b314d17c05a2905f918d0d72f2f6989640fbb43"
+const Account1Private = "0x2dcddb8e0ddd2269f536da5768e890790f2b84366e0fb8396bdcd15c0d7c30b" +
+	"90002abedccd3ffcbf46f35f11b314d17c05a2905f918d0d72f2f6989640fbb43"
 
 // Account2Private is the private key for second test account.
-const Account2Private = "0x0bb3f2936d42f463e597f5fb2c48bbd8475ce74ba91f1eaae97df4084d306b49feaf3d38b6ef430933ebedeb073af7bec018e8d2e379fa47df6a9fa07a6a8344"
+const Account2Private = "0x0bb3f2936d42f463e597f5fb2c48bbd8475ce74ba91f1eaae97df4084d306b4" +
+	"9feaf3d38b6ef430933ebedeb073af7bec018e8d2e379fa47df6a9fa07a6a8344"
 
 // DefaultGenesisConfig is the default configuration for the node.
 func DefaultGenesisConfig() *GenesisConfig {

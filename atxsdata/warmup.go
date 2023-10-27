@@ -47,7 +47,16 @@ func Warmup(db sql.Executor, cache *Data) error {
 			ierr = err
 			return false
 		}
-		cache.Add(vatx.TargetEpoch(), vatx.SmesherID, vatx.ID(), vatx.GetWeight(), vatx.BaseTickHeight(), vatx.TickHeight(), nonce, malicious)
+		cache.Add(
+			vatx.TargetEpoch(),
+			vatx.SmesherID,
+			vatx.ID(),
+			vatx.GetWeight(),
+			vatx.BaseTickHeight(),
+			vatx.TickHeight(),
+			nonce,
+			malicious,
+		)
 		return true
 	}); err != nil {
 		return err

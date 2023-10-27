@@ -48,7 +48,12 @@ func unaryGrpcLogStart(ctx context.Context, req any, _ *grpc.UnaryServerInfo, ha
 	return handler(ctx, req)
 }
 
-func streamingGrpcLogStart(srv any, stream grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+func streamingGrpcLogStart(
+	srv any,
+	stream grpc.ServerStream,
+	_ *grpc.StreamServerInfo,
+	handler grpc.StreamHandler,
+) error {
 	ctxzap.Info(stream.Context(), "started streaming call")
 	return handler(srv, stream)
 }
@@ -119,8 +124,16 @@ func NewTLS(logger *zap.Logger, config Config, svc []ServiceAPI) (*Server, error
 // The server is configured with the given logger and config. Additional grpc options can be passed.
 func New(listener string, logger *zap.Logger, config Config, grpcOpts ...grpc.ServerOption) *Server {
 	opts := []grpc.ServerOption{
-		grpc.ChainStreamInterceptor(grpctags.StreamServerInterceptor(), grpczap.StreamServerInterceptor(logger), streamingGrpcLogStart),
-		grpc.ChainUnaryInterceptor(grpctags.UnaryServerInterceptor(), grpczap.UnaryServerInterceptor(logger), unaryGrpcLogStart),
+		grpc.ChainStreamInterceptor(
+			grpctags.StreamServerInterceptor(),
+			grpczap.StreamServerInterceptor(logger),
+			streamingGrpcLogStart,
+		),
+		grpc.ChainUnaryInterceptor(
+			grpctags.UnaryServerInterceptor(),
+			grpczap.UnaryServerInterceptor(logger),
+			unaryGrpcLogStart,
+		),
 		grpc.MaxSendMsgSize(config.GrpcSendMsgSize),
 		grpc.MaxRecvMsgSize(config.GrpcRecvMsgSize),
 	}

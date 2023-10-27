@@ -183,10 +183,40 @@ func New(
 	h.networkDelta = conf.WakeupDelta
 	h.outputChan = make(chan report, h.config.Hdist)
 	h.wcChan = make(chan wcReport, h.config.Hdist)
-	h.outputs = make(map[types.LayerID][]types.ProposalID, h.config.Hdist) // we keep results about LayerBuffer past layers
+	h.outputs = make(
+		map[types.LayerID][]types.ProposalID,
+		h.config.Hdist,
+	) // we keep results about LayerBuffer past layers
 	h.cps = make(map[types.LayerID]Consensus, h.config.LimitConcurrent)
-	h.factory = func(ctx context.Context, conf config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, et *EligibilityTracker, signing *signing.EdSigner, p2p pubsub.Publisher, comm communication, clock RoundClock) Consensus {
-		return newConsensusProcess(ctx, conf, instanceId, s, oracle, stateQ, signing, edVerifier, et, nid, p2p, comm, ev, clock, logger)
+	h.factory = func(
+		ctx context.Context,
+		conf config.Config,
+		instanceId types.LayerID,
+		s *Set,
+		oracle Rolacle,
+		et *EligibilityTracker,
+		signing *signing.EdSigner,
+		p2p pubsub.Publisher,
+		comm communication,
+		clock RoundClock,
+	) Consensus {
+		return newConsensusProcess(
+			ctx,
+			conf,
+			instanceId,
+			s,
+			oracle,
+			stateQ,
+			signing,
+			edVerifier,
+			et,
+			nid,
+			p2p,
+			comm,
+			ev,
+			clock,
+			logger,
+		)
 	}
 
 	h.nodeID = nid
@@ -274,7 +304,9 @@ func (h *Hare) collectOutput(ctx context.Context, output report) error {
 	var pids []types.ProposalID
 	if output.completed {
 		consensusOkCnt.Inc()
-		h.WithContext(ctx).With().Info("hare terminated with success", layerID, log.Int("num_proposals", output.set.Size()))
+		h.WithContext(ctx).
+			With().
+			Info("hare terminated with success", layerID, log.Int("num_proposals", output.set.Size()))
 		set := output.set
 		postNumProposals.Add(float64(set.Size()))
 		pids = set.ToSlice()

@@ -35,7 +35,8 @@ const (
 )
 
 var (
-	// errExceedMaxRetries is returned when MaxRetriesForRequest attempts has been made to fetch data for a hash and failed.
+	// errExceedMaxRetries is returned when MaxRetriesForRequest attempts has been made to fetch
+	// data for a hash and failed.
 	errExceedMaxRetries = errors.New("fetch failed after max retries for request")
 
 	errValidatorsNotSet = errors.New("validators not set")
@@ -684,7 +685,8 @@ func (f *Fetch) handleHashError(batchHash types.Hash32, err error) {
 }
 
 // getHash is the regular buffered call to get a specific hash, using provided hash, h as hint the receiving end will
-// know where to look for the hash, this function returns HashDataPromiseResult channel that will hold Data received or error.
+// know where to look for the hash, this function returns HashDataPromiseResult channel that will hold Data received
+// or error.
 func (f *Fetch) getHash(
 	ctx context.Context,
 	hash types.Hash32,

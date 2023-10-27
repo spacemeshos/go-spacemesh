@@ -114,12 +114,16 @@ func HasBlockTX(db sql.Executor, bid types.BlockID, tid types.TransactionID) (bo
 // GetAppliedLayer returns layer when transaction was applied.
 func GetAppliedLayer(db sql.Executor, tid types.TransactionID) (types.LayerID, error) {
 	var rst types.LayerID
-	rows, err := db.Exec("select layer from transactions where id = ?1 and result is not null", func(stmt *sql.Statement) {
-		stmt.BindBytes(1, tid[:])
-	}, func(stmt *sql.Statement) bool {
-		rst = types.LayerID(uint32(stmt.ColumnInt64(0)))
-		return false
-	})
+	rows, err := db.Exec(
+		"select layer from transactions where id = ?1 and result is not null",
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, tid[:])
+		},
+		func(stmt *sql.Statement) bool {
+			rst = types.LayerID(uint32(stmt.ColumnInt64(0)))
+			return false
+		},
+	)
 	if err != nil {
 		return 0, fmt.Errorf("failed to load applied layer for tx %s: %w", tid, err)
 	}
@@ -262,7 +266,8 @@ func GetByAddress(db sql.Executor, from, to types.LayerID, address types.Address
 func AddressesWithPendingTransactions(db sql.Executor) ([]types.AddressNonce, error) {
 	var rst []types.AddressNonce
 	if _, err := db.Exec(`select principal as current, min(nonce) from transactions
-	where result is null and nonce > (select coalesce(max(nonce), 0) from transactions where result is not null and principal = current)
+	where result is null and nonce > (select coalesce(max(nonce), 0) from transactions
+	where result is not null and principal = current)
 	group by principal
 	;`,
 		nil,
@@ -294,7 +299,12 @@ func GetAcctPendingFromNonce(db sql.Executor, address types.Address, from uint64
 }
 
 // query MUST ensure that this order of fields tx, header, layer, block, timestamp, id.
-func queryPending(db sql.Executor, query string, encoder func(*sql.Statement), errStr string) (rst []*types.MeshTransaction, err error) {
+func queryPending(
+	db sql.Executor,
+	query string,
+	encoder func(*sql.Statement),
+	errStr string,
+) (rst []*types.MeshTransaction, err error) {
 	if _, err = db.Exec(query, encoder, func(stmt *sql.Statement) bool {
 		var (
 			tx *types.MeshTransaction
@@ -354,14 +364,17 @@ func AddResult(db *sql.Tx, id types.TransactionID, rst *types.TransactionResult)
 // TransactionInProposal returns lowest layer of the proposal where tx is included after the specified layer.
 func TransactionInProposal(db sql.Executor, id types.TransactionID, after types.LayerID) (types.LayerID, error) {
 	var rst types.LayerID
-	rows, err := db.Exec("select layer from proposal_transactions where tid = ?1 and layer > ?2 order by layer asc limit 1",
+	rows, err := db.Exec(
+		"select layer from proposal_transactions where tid = ?1 and layer > ?2 order by layer asc limit 1",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, id.Bytes())
 			stmt.BindInt64(2, int64(after))
-		}, func(s *sql.Statement) bool {
+		},
+		func(s *sql.Statement) bool {
 			rst = types.LayerID(uint32(s.ColumnInt64(0)))
 			return false
-		})
+		},
+	)
 	if rows == 0 {
 		return rst, fmt.Errorf("%w no proposal after %s with tx %s", sql.ErrNotFound, after, id)
 	}
@@ -372,20 +385,27 @@ func TransactionInProposal(db sql.Executor, id types.TransactionID, after types.
 }
 
 // TransactionInBlock returns lowest layer and id of the block where tx is included after the specified layer.
-func TransactionInBlock(db sql.Executor, id types.TransactionID, after types.LayerID) (types.BlockID, types.LayerID, error) {
+func TransactionInBlock(
+	db sql.Executor,
+	id types.TransactionID,
+	after types.LayerID,
+) (types.BlockID, types.LayerID, error) {
 	var (
 		rst types.LayerID
 		bid types.BlockID
 	)
-	rows, err := db.Exec("select layer, bid from block_transactions where tid = ?1 and layer > ?2 order by layer asc limit 1",
+	rows, err := db.Exec(
+		"select layer, bid from block_transactions where tid = ?1 and layer > ?2 order by layer asc limit 1",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, id.Bytes())
 			stmt.BindInt64(2, int64(after))
-		}, func(s *sql.Statement) bool {
+		},
+		func(s *sql.Statement) bool {
 			rst = types.LayerID(uint32(s.ColumnInt64(0)))
 			s.ColumnBytes(1, bid[:])
 			return false
-		})
+		},
+	)
 	if err != nil {
 		return bid, rst, fmt.Errorf("tx in block %s: %w", id, err)
 	}

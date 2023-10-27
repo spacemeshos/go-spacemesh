@@ -48,7 +48,10 @@ func (s *activationService) String() string {
 // Get implements v1.ActivationServiceServer.
 func (s *activationService) Get(ctx context.Context, request *pb.GetRequest) (*pb.GetResponse, error) {
 	if l := len(request.Id); l != types.ATXIDSize {
-		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("invalid ATX ID length (%d), expected (%d)", l, types.ATXIDSize))
+		return nil, status.Error(
+			codes.InvalidArgument,
+			fmt.Sprintf("invalid ATX ID length (%d), expected (%d)", l, types.ATXIDSize),
+		)
 	}
 
 	atxId := types.ATXID(types.BytesToHash(request.Id))
