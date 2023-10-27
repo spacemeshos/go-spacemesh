@@ -62,7 +62,6 @@ func (nb *NIPostBuilder) persistState() {
 
 // NIPostBuilder holds the required state and dependencies to create Non-Interactive Proofs of Space-Time (NIPost).
 type NIPostBuilder struct {
-	nodeID      types.NodeID
 	dataDir     string
 	poetProvers map[string]poetClient
 	poetDB      poetDbAPI
@@ -88,7 +87,6 @@ func withPoetClients(clients []poetClient) NIPostBuilderOption {
 
 // NewNIPostBuilder returns a NIPostBuilder.
 func NewNIPostBuilder(
-	nodeID types.NodeID,
 	poetDB poetDbAPI,
 	postService postService,
 	poetServers []string,
@@ -109,7 +107,6 @@ func NewNIPostBuilder(
 	}
 
 	b := &NIPostBuilder{
-		nodeID:      nodeID,
 		poetProvers: poetClients,
 		poetDB:      poetDB,
 		postService: postService,
@@ -132,7 +129,7 @@ func (nb *NIPostBuilder) DataDir() string {
 }
 
 func (nb *NIPostBuilder) proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error) {
-	client, err := nb.postService.Client(nb.nodeID)
+	client, err := nb.postService.Client(nb.signer.NodeID())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -212,18 +209,9 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 			)
 		}
 
-		signature := nb.signer.Sign(signing.POET, challengeHash.Bytes())
-		prefix := bytes.Join([][]byte{nb.signer.Prefix(), {byte(signing.POET)}}, nil)
 		submitCtx, cancel := context.WithDeadline(ctx, poetRoundStart)
 		defer cancel()
-		poetRequests, err := nb.submitPoetChallenges(
-			submitCtx,
-			poetProofDeadline,
-			prefix,
-			challengeHash.Bytes(),
-			signature,
-			nb.signer.NodeID(),
-		)
+		poetRequests, err := nb.submitPoetChallenges(submitCtx, poetProofDeadline, challengeHash.Bytes())
 		if err != nil {
 			return nil, fmt.Errorf("submitting to poets: %w", err)
 		}
@@ -324,7 +312,6 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 	client poetClient,
 	prefix, challenge []byte,
 	signature types.EdSignature,
-	nodeID types.NodeID,
 ) (*types.PoetRequest, error) {
 	poetServiceID, err := client.PoetServiceID(ctx)
 	if err != nil {
@@ -342,7 +329,13 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 
 	logger.Debug("doing pow with params: %v", powParams)
 	startTime := time.Now()
-	nonce, err := shared.FindSubmitPowNonce(ctx, powParams.Challenge, challenge, nodeID.Bytes(), powParams.Difficulty)
+	nonce, err := shared.FindSubmitPowNonce(
+		ctx,
+		powParams.Challenge,
+		challenge,
+		nb.signer.NodeID().Bytes(),
+		powParams.Difficulty,
+	)
 	metrics.PoetPowDuration.Set(float64(time.Since(startTime).Nanoseconds()))
 	if err != nil {
 		return nil, fmt.Errorf("running poet PoW: %w", err)
@@ -352,7 +345,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 
 	submitCtx, cancel := withConditionalTimeout(ctx, nb.poetCfg.RequestTimeout)
 	defer cancel()
-	round, err := client.Submit(submitCtx, deadline, prefix, challenge, signature, nodeID, PoetPoW{
+	round, err := client.Submit(submitCtx, deadline, prefix, challenge, signature, nb.signer.NodeID(), PoetPoW{
 		Nonce:  nonce,
 		Params: *powParams,
 	})
@@ -372,10 +365,11 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 func (nb *NIPostBuilder) submitPoetChallenges(
 	ctx context.Context,
 	deadline time.Time,
-	prefix, challenge []byte,
-	signature types.EdSignature,
-	nodeID types.NodeID,
+	challenge []byte,
 ) ([]types.PoetRequest, error) {
+	signature := nb.signer.Sign(signing.POET, challenge)
+	prefix := bytes.Join([][]byte{nb.signer.Prefix(), {byte(signing.POET)}}, nil)
+
 	g, ctx := errgroup.WithContext(ctx)
 	type submitResult struct {
 		request *types.PoetRequest
@@ -385,7 +379,7 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 	for _, poetProver := range nb.poetProvers {
 		poet := poetProver
 		g.Go(func() error {
-			poetRequest, err := nb.submitPoetChallenge(ctx, deadline, poet, prefix, challenge, signature, nodeID)
+			poetRequest, err := nb.submitPoetChallenge(ctx, deadline, poet, prefix, challenge, signature)
 			poetRequestsChannel <- submitResult{
 				request: poetRequest,
 				err:     err,

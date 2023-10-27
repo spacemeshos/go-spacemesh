@@ -69,7 +69,6 @@ func TestNIPostBuilderWithMocks(t *testing.T) {
 	postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil)
 
 	nb, err := NewNIPostBuilder(
-		sig.NodeID(),
 		poetDb,
 		postService,
 		[]string{},
@@ -109,7 +108,6 @@ func TestPostSetup(t *testing.T) {
 	postService.EXPECT().Client(postProvider.id).Return(postClient, nil)
 
 	nb, err := NewNIPostBuilder(
-		postProvider.id,
 		poetDb,
 		postService,
 		[]string{},
@@ -172,7 +170,6 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil).AnyTimes()
 
 	nb, err := NewNIPostBuilder(
-		sig.NodeID(),
 		poetDb,
 		postService,
 		[]string{},
@@ -194,7 +191,6 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 
 	// fail post exec
 	nb, err = NewNIPostBuilder(
-		sig.NodeID(),
 		poetDb,
 		postService,
 		[]string{},
@@ -218,7 +214,6 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	poetDb = NewMockpoetDbAPI(ctrl)
 
 	nb, err = NewNIPostBuilder(
-		sig.NodeID(),
 		poetDb,
 		postService,
 		[]string{},
@@ -312,7 +307,6 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 	postService := NewMockpostService(ctrl)
 	postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil)
 	nb, err := NewNIPostBuilder(
-		sig.NodeID(),
 		poetDb,
 		postService,
 		[]string{},
@@ -379,7 +373,6 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 	postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil)
 
 	nb, err := NewNIPostBuilder(
-		sig.NodeID(),
 		poetDb,
 		postService,
 		[]string{},
@@ -424,7 +417,6 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		postService := NewMockpostService(ctrl)
 
 		nb, err := NewNIPostBuilder(
-			sig.NodeID(),
 			poetDb,
 			postService,
 			[]string{},
@@ -455,7 +447,6 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		postService := NewMockpostService(ctrl)
 
 		nb, err := NewNIPostBuilder(
-			sig.NodeID(),
 			poetDb,
 			postService,
 			[]string{},
@@ -497,7 +488,6 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		postService := NewMockpostService(ctrl)
 
 		nb, err := NewNIPostBuilder(
-			sig.NodeID(),
 			poetDb,
 			postService,
 			[]string{},
@@ -523,7 +513,6 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		postService := NewMockpostService(ctrl)
 
 		nb, err := NewNIPostBuilder(
-			sig.NodeID(),
 			poetDb,
 			postService,
 			[]string{},
@@ -552,7 +541,6 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		postService := NewMockpostService(ctrl)
 
 		nb, err := NewNIPostBuilder(
-			sig.NodeID(),
 			poetDb,
 			postService,
 			[]string{},
@@ -596,7 +584,6 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 		postService := NewMockpostService(ctrl)
 
 		nb, err := NewNIPostBuilder(
-			sig.NodeID(),
 			poetDb,
 			postService,
 			[]string{},
@@ -629,7 +616,6 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 
 		dir := t.TempDir()
 		nb, err := NewNIPostBuilder(
-			sig.NodeID(),
 			poetDb,
 			postService,
 			[]string{},
@@ -667,7 +653,6 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 
 		dir := t.TempDir()
 		nb, err := NewNIPostBuilder(
-			sig.NodeID(),
 			poetDb,
 			postService,
 			[]string{},
@@ -750,7 +735,6 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 	postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil)
 
 	nb, err := NewNIPostBuilder(
-		sig.NodeID(),
 		poetDb,
 		postService,
 		[]string{},
@@ -913,7 +897,6 @@ func TestNIPostBuilder_Mainnet_Poet_Workaround(t *testing.T) {
 			postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil)
 
 			nb, err := NewNIPostBuilder(
-				sig.NodeID(),
 				poetDb,
 				postService,
 				[]string{},
