@@ -923,7 +923,6 @@ func (app *App) initServices(ctx context.Context) error {
 	app.grpcPostService = grpcserver.NewPostService(app.addLogger(PostServiceLogger, lg).Zap())
 
 	nipostBuilder, err := activation.NewNIPostBuilder(
-		app.edSgn.NodeID(),
 		poetDb,
 		app.grpcPostService,
 		app.Config.PoETServers,

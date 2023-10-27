@@ -167,7 +167,6 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
 
 	nb, err := activation.NewNIPostBuilder(
-		sig.NodeID(),
 		poetDb,
 		svc,
 		[]string{poetProver.RestURL().String()},
@@ -221,7 +220,6 @@ func TestNIPostBuilder_Close(t *testing.T) {
 	svc := grpcserver.NewPostService(logger)
 
 	nb, err := activation.NewNIPostBuilder(
-		sig.NodeID(),
 		poetDb,
 		svc,
 		[]string{poetProver.RestURL().String()},
@@ -284,7 +282,6 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	t.Cleanup(cleanup)
 
 	nb, err := activation.NewNIPostBuilder(
-		sig.NodeID(),
 		poetDb,
 		svc,
 		[]string{poetProver.RestURL().String()},
