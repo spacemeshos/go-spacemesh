@@ -148,7 +148,19 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 	tab.msync.EXPECT().RegisterForATXSynced().DoAndReturn(closedChan).AnyTimes()
 	tab.mpostSvc.EXPECT().Client(tab.sig.NodeID()).Return(tab.mpostClient, nil).AnyTimes()
 
-	b := NewBuilder(cfg, tab.sig, tab.cdb, tab.localDb, tab.mpub, tab.mpostSvc, tab.mnipost, tab.mclock, tab.msync, lg, opts...)
+	b := NewBuilder(
+		cfg,
+		tab.sig,
+		tab.cdb,
+		tab.localDb,
+		tab.mpub,
+		tab.mpostSvc,
+		tab.mnipost,
+		tab.mclock,
+		tab.msync,
+		lg,
+		opts...,
+	)
 	b.initialPost = &types.Post{
 		Nonce:   0,
 		Indices: make([]byte, 10),
@@ -302,7 +314,14 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 				return nil, nil, ctx.Err()
 			},
 		)
-		tab.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
+		tab.mValidator.EXPECT().Post(
+			gomock.Any(),
+			gomock.Any(),
+			gomock.Any(),
+			gomock.Any(),
+			gomock.Any(),
+			gomock.Any(),
+		).AnyTimes().Return(nil)
 		ch := make(chan struct{})
 		close(ch)
 		tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(ch).AnyTimes()
