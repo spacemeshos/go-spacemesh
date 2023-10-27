@@ -67,11 +67,9 @@ type Config struct {
 }
 
 // Builder struct is the struct that orchestrates the creation of activation transactions
-// it is responsible for initializing post, receiving poet proof and orchestrating nipst. after which it will
-// calculate total weight and providing relevant view as proof.
+// it is responsible for receiving poet and post proofs and orchestrating nipost.
 type Builder struct {
 	pendingPoetClients atomic.Pointer[[]poetClient]
-	started            atomic.Bool
 
 	eg errgroup.Group
 
@@ -91,6 +89,7 @@ type Builder struct {
 
 	// smeshingMutex protects `StartSmeshing` and `StopSmeshing` from concurrent access
 	smeshingMutex sync.Mutex
+	started       bool
 
 	// pendingATX is created with current commitment and nipost from current challenge.
 	pendingATX            *types.ActivationTx
@@ -205,7 +204,9 @@ func (b *Builder) proof(ctx context.Context, challenge []byte) (*types.Post, *ty
 
 // Smeshing returns true iff atx builder is smeshing.
 func (b *Builder) Smeshing() bool {
-	return b.started.Load()
+	b.smeshingMutex.Lock()
+	defer b.smeshingMutex.Unlock()
+	return b.started
 }
 
 // StartSmeshing is the main entry point of the atx builder. It runs the main
@@ -218,16 +219,16 @@ func (b *Builder) StartSmeshing(coinbase types.Address) error {
 	b.smeshingMutex.Lock()
 	defer b.smeshingMutex.Unlock()
 
-	if !b.started.CompareAndSwap(false, true) {
+	if b.started {
 		return errors.New("already started")
 	}
+	b.started = true
 
 	b.coinbaseAccount = coinbase
 	ctx, stop := context.WithCancel(b.parentCtx)
 	b.stop = stop
 
 	b.eg.Go(func() error {
-		defer b.started.Store(false)
 		b.run(ctx)
 		return nil
 	})
@@ -256,12 +257,13 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 	b.smeshingMutex.Lock()
 	defer b.smeshingMutex.Unlock()
 
-	if !b.started.Load() {
+	if !b.started {
 		return errors.New("not started")
 	}
 
 	b.stop()
 	err := b.eg.Wait()
+	b.started = false
 	switch {
 	case err == nil || errors.Is(err, context.Canceled):
 		if !deleteFiles {
@@ -485,8 +487,13 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 		}
 	}
 
+	if challenge, err := nipost.ChallengeByEpoch(b.cdb, b.nodeID, current); err == nil {
+		// use existing challenge for current publish epoch
+		return challenge, nil
+	}
+
 	if challenge, err := nipost.ChallengeByEpoch(b.cdb, b.nodeID, current+1); err == nil {
-		// use existing challenge
+		// use existing challenge for current publish epoch
 		return challenge, nil
 	}
 
