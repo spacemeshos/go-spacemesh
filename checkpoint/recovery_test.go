@@ -537,7 +537,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
 	// write pending nipost challenge to simulate a pending atx still waiting for poet proof.
 	prevAtx := vatxs[len(vatxs)-2]
 	posAtx := vatxs[len(vatxs)-1]
-	require.NoError(t, activation.SaveNipostChallenge(cfg.PostDataDir, &types.NIPostChallenge{
+	require.NoError(t, activation.SaveNipostChallenge(cfg.PostDataDir, &types.NIPostChallenge{ // TODO(mafa): safe to DB instead
 		PublishEpoch:   posAtx.PublishEpoch + 1,
 		Sequence:       prevAtx.Sequence + 1,
 		PrevATXID:      prevAtx.ID(),

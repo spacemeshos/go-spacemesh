@@ -316,7 +316,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 }
 
 func TestBuilder_StopSmeshing_Delete(t *testing.T) {
-	tab := newTestBuilder(t)
+	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
 
 	currLayer := (postGenesisEpoch + 1).FirstLayer()
 	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(make(chan struct{})).AnyTimes()
@@ -337,30 +337,47 @@ func TestBuilder_StopSmeshing_Delete(t *testing.T) {
 	}).AnyTimes()
 
 	// Create state files
+	// TODO(mafa): fully migrate to DB
 	require.NoError(t, saveBuilderState(tab.nipostBuilder.DataDir(), &types.NIPostBuilderState{}))
-	require.NoError(t, savePost(tab.nipostBuilder.DataDir(), &types.Post{}))
-	require.NoError(t, SaveNipostChallenge(tab.nipostBuilder.DataDir(), &types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2}))
 	files, err := os.ReadDir(tab.nipostBuilder.DataDir())
 	require.NoError(t, err)
-	require.Len(t, files, 3) // 3 state files created
+	require.Len(t, files, 1) // 1 state file created
+
+	// add challenge to DB
+	require.NoError(t, nipost.AddChallenge(tab.cdb, tab.nodeID, &types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2, CommitmentATX: &types.ATXID{1, 2, 3}}))
+	challenge, err := nipost.ChallengeByEpoch(tab.cdb, tab.nodeID, postGenesisEpoch+2)
+	require.NoError(t, err)
+	require.NotNil(t, challenge)
 
 	require.NoError(t, tab.StartSmeshing(types.Address{}))
 	require.NoError(t, tab.StopSmeshing(false))
 	files, err = os.ReadDir(tab.nipostBuilder.DataDir())
 	require.NoError(t, err)
-	require.Len(t, files, 3) // state files still present
+	require.Len(t, files, 1) // state file still present
+
+	challenge, err = nipost.ChallengeByEpoch(tab.cdb, tab.nodeID, postGenesisEpoch+2)
+	require.NoError(t, err)
+	require.NotNil(t, challenge) // challenge still present
 
 	require.NoError(t, tab.StartSmeshing(types.Address{}))
 	require.NoError(t, tab.StopSmeshing(true))
 	files, err = os.ReadDir(tab.nipostBuilder.DataDir())
 	require.NoError(t, err)
-	require.Len(t, files, 0) // state files deleted
+	require.Len(t, files, 0) // state file deleted
+
+	challenge, err = nipost.ChallengeByEpoch(tab.cdb, tab.nodeID, postGenesisEpoch+2)
+	require.ErrorIs(t, err, sql.ErrNotFound)
+	require.Nil(t, challenge) // challenge deleted
 
 	require.NoError(t, tab.StartSmeshing(types.Address{}))
 	require.NoError(t, tab.StopSmeshing(true)) // no-op
 	files, err = os.ReadDir(tab.nipostBuilder.DataDir())
 	require.NoError(t, err)
 	require.Len(t, files, 0) // state files still deleted
+
+	challenge, err = nipost.ChallengeByEpoch(tab.cdb, tab.nodeID, postGenesisEpoch+2)
+	require.ErrorIs(t, err, sql.ErrNotFound)
+	require.Nil(t, challenge) // challenge still deleted
 }
 
 func TestBuilder_StopSmeshing_failsWhenNotStarted(t *testing.T) {
@@ -951,8 +968,8 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 			return nil
 		})
 	require.NoError(t, tab.PublishActivationTx(context.Background()))
-	got, err = LoadNipostChallenge(tab.nipostBuilder.DataDir())
-	require.ErrorIs(t, err, os.ErrNotExist)
+	got, err = nipost.ChallengeByEpoch(tab.cdb, tab.nodeID, publishEpoch)
+	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.Empty(t, got)
 
 	posEpoch = posEpoch + 1
@@ -969,8 +986,8 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	require.NotEqual(t, built.NIPostChallenge, built2.NIPostChallenge)
 	require.Equal(t, built.TargetEpoch()+1, built2.TargetEpoch())
 
-	got, err = LoadNipostChallenge(tab.nipostBuilder.DataDir())
-	require.ErrorIs(t, err, os.ErrNotExist)
+	got, err = nipost.ChallengeByEpoch(tab.cdb, tab.nodeID, publishEpoch+1)
+	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.Empty(t, got)
 }
 

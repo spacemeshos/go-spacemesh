@@ -270,16 +270,13 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 			return nil
 		}
 
+		if err := nipost.RemoveChallenge(b.cdb, b.nodeID); err != nil {
+			b.log.With().Error("failed to remove nipost challenge", log.Err(err))
+			return err
+		}
+
 		if err := discardBuilderState(b.nipostBuilder.DataDir()); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			b.log.With().Error("failed to delete builder state", log.Err(err))
-			return err
-		}
-		if err := discardNipostChallenge(b.nipostBuilder.DataDir()); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			b.log.With().Error("failed to delete nipost challenge", log.Err(err))
-			return err
-		}
-		if err := discardPost(b.nipostBuilder.DataDir()); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			b.log.With().Error("failed to delete post", log.Err(err))
 			return err
 		}
 
