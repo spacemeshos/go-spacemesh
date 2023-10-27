@@ -88,6 +88,7 @@ func NewTestNetwork(t *testing.T, conf config.Config, l log.Log, size int) []*Te
 		defer cancel()
 		for _, a := range apps {
 			a.Cleanup(ctx)
+			a.eg.Wait()
 		}
 	})
 
