@@ -202,11 +202,9 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 			return nil, fmt.Errorf("%w: poet round has already started at %s (now: %s)", ErrATXChallengeExpired, poetRoundStart, now)
 		}
 
-		signature := nb.signer.Sign(signing.POET, challengeHash.Bytes())
-		prefix := bytes.Join([][]byte{nb.signer.Prefix(), {byte(signing.POET)}}, nil)
 		submitCtx, cancel := context.WithDeadline(ctx, poetRoundStart)
 		defer cancel()
-		poetRequests, err := nb.submitPoetChallenges(submitCtx, poetProofDeadline, prefix, challengeHash.Bytes(), signature)
+		poetRequests, err := nb.submitPoetChallenges(submitCtx, poetProofDeadline, challengeHash.Bytes())
 		if err != nil {
 			return nil, fmt.Errorf("submitting to poets: %w", err)
 		}
@@ -332,7 +330,10 @@ func (nb *NIPostBuilder) submitPoetChallenge(ctx context.Context, deadline time.
 }
 
 // Submit the challenge to all registered PoETs.
-func (nb *NIPostBuilder) submitPoetChallenges(ctx context.Context, deadline time.Time, prefix, challenge []byte, signature types.EdSignature) ([]types.PoetRequest, error) {
+func (nb *NIPostBuilder) submitPoetChallenges(ctx context.Context, deadline time.Time, challenge []byte) ([]types.PoetRequest, error) {
+	signature := nb.signer.Sign(signing.POET, challenge)
+	prefix := bytes.Join([][]byte{nb.signer.Prefix(), {byte(signing.POET)}}, nil)
+
 	g, ctx := errgroup.WithContext(ctx)
 	type submitResult struct {
 		request *types.PoetRequest
