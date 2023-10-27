@@ -6,7 +6,6 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -45,7 +44,7 @@ func LocalMigrations(db Executor) error {
 
 func embeddedMigrations(db Executor, dbname string) error {
 	var migrations []migration
-	fs.WalkDir(embedded, filepath.Join("migrations", dbname), func(path string, d fs.DirEntry, err error) error {
+	fs.WalkDir(embedded, fmt.Sprintf("migrations/%s", dbname), func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return fmt.Errorf("walkdir %s: %w", path, err)
 		}
