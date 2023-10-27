@@ -6,12 +6,13 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 )
 
-//go:embed migrations/*.sql
+//go:embed migrations/**/*.sql
 var embedded embed.FS
 
 type migration struct {
@@ -21,7 +22,7 @@ type migration struct {
 }
 
 // Migrations is interface for migrations provider.
-type Migrations func(Executor) error
+type Migrations func(db Executor) error
 
 func version(db Executor) (int, error) {
 	var current int
@@ -34,9 +35,17 @@ func version(db Executor) (int, error) {
 	return current, nil
 }
 
-func embeddedMigrations(db Executor) error {
+func StateMigrations(db Executor) error {
+	return embeddedMigrations(db, "state")
+}
+
+func LocalMigrations(db Executor) error {
+	return embeddedMigrations(db, "local")
+}
+
+func embeddedMigrations(db Executor, dbname string) error {
 	var migrations []migration
-	fs.WalkDir(embedded, "migrations", func(path string, d fs.DirEntry, err error) error {
+	fs.WalkDir(embedded, filepath.Join("migrations", dbname), func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return fmt.Errorf("walkdir %s: %w", path, err)
 		}

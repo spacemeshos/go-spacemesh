@@ -44,6 +44,7 @@ type RecoverConfig struct {
 	PostDataDir    string
 	DataDir        string
 	DbFile         string
+	LocalDbFile    string // TODO(mafa): use me!
 	PreserveOwnAtx bool
 	NodeID         types.NodeID
 	Uri            string
@@ -331,7 +332,7 @@ func collectOwnAtxDeps(
 	}
 
 	// check for if miner is building any atx
-	nipostCh, _ := activation.LoadNipostChallenge(cfg.PostDataDir)
+	nipostCh, _ := activation.LoadNipostChallenge(cfg.PostDataDir) // TODO(mafa): fetch from DB instead
 	if ref == types.EmptyATXID && nipostCh == nil {
 		return nil, nil, nil
 	}
