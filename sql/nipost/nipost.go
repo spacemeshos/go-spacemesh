@@ -39,7 +39,7 @@ func AddChallenge(db sql.Executor, nodeID types.NodeID, ch *types.NIPostChalleng
 	return nil
 }
 
-func UpdateChallengeBySequence(db sql.Executor, nodeID types.NodeID, ch *types.NIPostChallenge) error {
+func UpdateChallenge(db sql.Executor, nodeID types.NodeID, ch *types.NIPostChallenge) error {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, nodeID.Bytes())
 		stmt.BindInt64(2, int64(ch.PublishEpoch))
@@ -63,8 +63,9 @@ func UpdateChallengeBySequence(db sql.Executor, nodeID types.NodeID, ch *types.N
 	}
 
 	if _, err := db.Exec(`
-		update nipost set epoch = ?2, prev_atx = ?4, pos_atx = ?5, commit_atx = ?6, post_nonce = ?7, post_indices = ?8, post_pow = ?9
-		where id = ?1 and sequence = ?3;`, enc, nil,
+		update nipost set epoch = ?2, sequence = ?3, prev_atx = ?4, pos_atx = ?5,
+		commit_atx = ?6, post_nonce = ?7, post_indices = ?8, post_pow = ?9
+		where id = ?1;`, enc, nil,
 	); err != nil {
 		return fmt.Errorf("update nipost challenge for %s pub-epoch %d: %w", nodeID, ch.PublishEpoch, err)
 	}
@@ -83,82 +84,41 @@ func RemoveChallenge(db sql.Executor, nodeID types.NodeID) error {
 }
 
 // ChallengeByEpoch gets any ATX by the specified NodeID published in the given epoch.
-func ChallengeByEpoch(db sql.Executor, nodeID types.NodeID, epoch types.EpochID) (*types.NIPostChallenge, error) {
+func Challenge(db sql.Executor, nodeID types.NodeID) (*types.NIPostChallenge, error) {
 	var ch *types.NIPostChallenge
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, nodeID.Bytes())
-		stmt.BindInt64(2, int64(epoch))
-	}
-	dec := func(stmt *sql.Statement) bool {
-		ch = &types.NIPostChallenge{}
-		ch.PublishEpoch = epoch
-		ch.Sequence = uint64(stmt.ColumnInt64(0))
-		stmt.ColumnBytes(1, ch.PrevATXID[:])
-		stmt.ColumnBytes(2, ch.PositioningATX[:])
-		ch.CommitmentATX = &types.ATXID{}
-		if n := stmt.ColumnBytes(3, ch.CommitmentATX[:]); n == 0 {
-			ch.CommitmentATX = nil
-		}
-		ch.InitialPost = &types.Post{}
-		if n := stmt.ColumnLen(5); n > 0 {
-			ch.InitialPost.Nonce = uint32(stmt.ColumnInt64(4))
-			ch.InitialPost.Indices = make([]byte, n)
-			stmt.ColumnBytes(5, ch.InitialPost.Indices)
-			ch.InitialPost.Pow = uint64(stmt.ColumnInt64(6))
-			return true
-		}
-
-		ch.InitialPost = nil
-		return true
-	}
-	query := `select sequence, prev_atx, pos_atx, commit_atx, post_nonce, post_indices, post_pow
-	 from nipost where id = ?1 and epoch = ?2 limit 1;`
-	_, err := db.Exec(query, enc, dec)
-	if err != nil {
-		return nil, fmt.Errorf("get by epoch %v node id %s: %w", epoch, nodeID.ShortString(), err)
-	}
-	if ch == nil {
-		return nil, fmt.Errorf("get by epoch %v node id %s: %w", epoch, nodeID.ShortString(), sql.ErrNotFound)
-	}
-	return ch, nil
-}
-
-func ChallengeBySequence(db sql.Executor, nodeID types.NodeID, sequence uint64) (*types.NIPostChallenge, error) {
-	var ch *types.NIPostChallenge
-	enc := func(stmt *sql.Statement) {
-		stmt.BindBytes(1, nodeID.Bytes())
-		stmt.BindInt64(2, int64(sequence))
 	}
 	dec := func(stmt *sql.Statement) bool {
 		ch = &types.NIPostChallenge{}
 		ch.PublishEpoch = types.EpochID(stmt.ColumnInt64(0))
-		ch.Sequence = sequence
-		stmt.ColumnBytes(1, ch.PrevATXID[:])
-		stmt.ColumnBytes(2, ch.PositioningATX[:])
+		ch.Sequence = uint64(stmt.ColumnInt64(1))
+		stmt.ColumnBytes(2, ch.PrevATXID[:])
+		stmt.ColumnBytes(3, ch.PositioningATX[:])
 		ch.CommitmentATX = &types.ATXID{}
-		if n := stmt.ColumnBytes(3, ch.CommitmentATX[:]); n == 0 {
+		if n := stmt.ColumnBytes(4, ch.CommitmentATX[:]); n == 0 {
 			ch.CommitmentATX = nil
 		}
 		ch.InitialPost = &types.Post{}
-		if n := stmt.ColumnLen(5); n > 0 {
-			ch.InitialPost.Nonce = uint32(stmt.ColumnInt64(4))
+		if n := stmt.ColumnLen(6); n > 0 {
+			ch.InitialPost.Nonce = uint32(stmt.ColumnInt64(5))
 			ch.InitialPost.Indices = make([]byte, n)
-			stmt.ColumnBytes(5, ch.InitialPost.Indices)
-			ch.InitialPost.Pow = uint64(stmt.ColumnInt64(6))
+			stmt.ColumnBytes(6, ch.InitialPost.Indices)
+			ch.InitialPost.Pow = uint64(stmt.ColumnInt64(7))
 			return true
 		}
 
 		ch.InitialPost = nil
 		return true
 	}
-	query := `select epoch, prev_atx, pos_atx, commit_atx, post_nonce, post_indices, post_pow
-	 from nipost where id = ?1 and sequence = ?2 limit 1;`
+	query := `select epoch, sequence, prev_atx, pos_atx, commit_atx, post_nonce, post_indices, post_pow
+	 from nipost where id = ?1 limit 1;`
 	_, err := db.Exec(query, enc, dec)
 	if err != nil {
-		return nil, fmt.Errorf("get by sequence %d node id %s: %w", sequence, nodeID, err)
+		return nil, fmt.Errorf("get challenge from node id %s: %w", nodeID.ShortString(), err)
 	}
 	if ch == nil {
-		return nil, fmt.Errorf("get by sequence %d node id %s: %w", sequence, nodeID, sql.ErrNotFound)
+		return nil, fmt.Errorf("get challenge from node id %s: %w", nodeID.ShortString(), sql.ErrNotFound)
 	}
 	return ch, nil
 }

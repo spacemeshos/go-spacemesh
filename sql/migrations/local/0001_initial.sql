@@ -1,6 +1,6 @@
 CREATE TABLE nipost
 (
-    id            CHAR(32) NOT NULL,
+    id            CHAR(32) PRIMARY KEY,
     epoch         UNSIGNED INT NOT NULL,
     sequence      UNSIGNED INT NOT NULL,
     prev_atx      CHAR(32) NOT NULL,
@@ -8,7 +8,5 @@ CREATE TABLE nipost
     commit_atx    CHAR(32),
     post_nonce    UNSIGNED INT,
     post_indices  VARCHAR,
-    post_pow      UNSIGNED LONG INT,
-    PRIMARY KEY (id, epoch),
-    CONSTRAINT UC_nipost UNIQUE (id, sequence)
+    post_pow      UNSIGNED LONG INT
 ) WITHOUT ROWID;
