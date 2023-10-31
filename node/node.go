@@ -322,7 +322,7 @@ type App struct {
 	db                *sql.Database
 	cachedDB          *datastore.CachedDB
 	dbMetrics         *dbmetrics.DBMetricsCollector
-	localDb           *sql.Database
+	localDB           *datastore.LocalDB
 	grpcPublicServer  *grpcserver.Server
 	grpcPrivateServer *grpcserver.Server
 	grpcTLSServer     *grpcserver.Server
@@ -977,7 +977,7 @@ func (app *App) initServices(ctx context.Context) error {
 		builderConfig,
 		app.edSgn,
 		app.cachedDB,
-		app.localDb,
+		app.localDB,
 		app.host,
 		app.grpcPostService,
 		nipostBuilder,
@@ -1507,8 +1507,8 @@ func (app *App) stopServices(ctx context.Context) {
 	if app.dbMetrics != nil {
 		app.dbMetrics.Close()
 	}
-	if app.localDb != nil {
-		if err := app.localDb.Close(); err != nil {
+	if app.localDB != nil {
+		if err := app.localDB.Close(); err != nil {
 			app.log.With().Warning("local db exited with error", log.Err(err))
 		}
 	}
@@ -1626,14 +1626,14 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		datastore.WithConfig(app.Config.Cache),
 		datastore.WithConsensusCache(data),
 	)
-	localDb, err := sql.Open("file:"+filepath.Join(dbPath, localDbFile),
+	localDB, err := sql.Open("file:"+filepath.Join(dbPath, localDbFile),
 		sql.WithMigrations(sql.LocalMigrations),
 		sql.WithConnections(app.Config.DatabaseConnections),
 	)
 	if err != nil {
 		return fmt.Errorf("open sqlite db %w", err)
 	}
-	app.localDb = localDb
+	app.localDB = datastore.NewLocalDB(localDB)
 	return nil
 }
 

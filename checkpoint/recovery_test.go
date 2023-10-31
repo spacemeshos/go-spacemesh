@@ -24,12 +24,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/datastore/nipost"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
-	"github.com/spacemeshos/go-spacemesh/sql/nipost"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
 	"github.com/spacemeshos/go-spacemesh/sql/recovery"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
@@ -163,8 +163,8 @@ func TestRecover(t *testing.T) {
 			bsdir := filepath.Join(cfg.DataDir, bootstrap.DirName)
 			require.NoError(t, fs.MkdirAll(bsdir, 0o700))
 			db := sql.InMemory()
-			localDb := sql.InMemory(sql.WithMigrations(sql.LocalMigrations))
-			preserve, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, localDb, fs, cfg)
+			localDB := datastore.NewLocalDB(sql.InMemory(sql.WithMigrations(sql.LocalMigrations)))
+			preserve, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, localDB, fs, cfg)
 			if tc.expErr != nil {
 				require.ErrorIs(t, err, tc.expErr)
 				return
@@ -210,10 +210,10 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 	bsdir := filepath.Join(cfg.DataDir, bootstrap.DirName)
 	require.NoError(t, fs.MkdirAll(bsdir, 0o700))
 	db := sql.InMemory()
-	localDb := sql.InMemory(sql.WithMigrations(sql.LocalMigrations))
+	localDB := datastore.NewLocalDB(sql.InMemory(sql.WithMigrations(sql.LocalMigrations)))
 	types.SetEffectiveGenesis(0)
 	require.NoError(t, recovery.SetCheckpoint(db, types.LayerID(recoverLayer)))
-	preserve, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, localDb, fs, cfg)
+	preserve, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, localDB, fs, cfg)
 	require.NoError(t, err)
 	require.Nil(t, preserve)
 	require.EqualValues(t, recoverLayer-1, types.GetEffectiveGenesis())
@@ -538,11 +538,12 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
 	prevAtx := vatxs[len(vatxs)-2]
 	posAtx := vatxs[len(vatxs)-1]
 
-	localDb, err := sql.Open("file:"+filepath.Join(cfg.DataDir, cfg.LocalDbFile), sql.WithMigrations(sql.LocalMigrations))
+	localDBFile, err := sql.Open("file:"+filepath.Join(cfg.DataDir, cfg.LocalDbFile), sql.WithMigrations(sql.LocalMigrations))
 	require.NoError(t, err)
-	require.NotNil(t, localDb)
+	require.NotNil(t, localDBFile)
+	localDB := datastore.NewLocalDB(localDBFile)
 
-	err = nipost.AddChallenge(localDb, sig.NodeID(), &types.NIPostChallenge{
+	err = nipost.AddChallenge(localDB, sig.NodeID(), &types.NIPostChallenge{
 		PublishEpoch:   posAtx.PublishEpoch + 1,
 		Sequence:       prevAtx.Sequence + 1,
 		PrevATXID:      prevAtx.ID(),
@@ -623,15 +624,16 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_Still_Initializing(t *testing.T)
 
 	require.NoError(t, olddb.Close())
 
-	localDb, err := sql.Open("file:"+filepath.Join(cfg.DataDir, cfg.LocalDbFile), sql.WithMigrations(sql.LocalMigrations))
+	localDBFile, err := sql.Open("file:"+filepath.Join(cfg.DataDir, cfg.LocalDbFile), sql.WithMigrations(sql.LocalMigrations))
 	require.NoError(t, err)
-	require.NotNil(t, localDb)
+	require.NotNil(t, localDBFile)
+	localDB := datastore.NewLocalDB(localDBFile)
 
 	post := types.Post{
 		Indices: []byte{1, 2, 3},
 	}
 	commitmentAtx := types.RandomATXID()
-	err = nipost.AddChallenge(localDb, sig.NodeID(), &types.NIPostChallenge{
+	err = nipost.AddChallenge(localDB, sig.NodeID(), &types.NIPostChallenge{
 		PublishEpoch:   0, // will be updated later
 		Sequence:       0,
 		PrevATXID:      types.EmptyATXID, // initial has no previous ATX

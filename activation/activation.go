@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/datastore/nipost"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/metrics/public"
@@ -27,7 +28,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
-	"github.com/spacemeshos/go-spacemesh/sql/nipost"
 )
 
 // PoetConfig is the configuration to interact with the poet server.
@@ -79,7 +79,7 @@ type Builder struct {
 	goldenATXID      types.ATXID
 	regossipInterval time.Duration
 	cdb              *datastore.CachedDB
-	localDb          *sql.Database
+	localDB          *datastore.LocalDB
 	publisher        pubsub.Publisher
 	postService      postService
 	nipostBuilder    nipostBuilder
@@ -147,7 +147,7 @@ func NewBuilder(
 	conf Config,
 	signer *signing.EdSigner,
 	cdb *datastore.CachedDB,
-	localDb *sql.Database,
+	localDB *datastore.LocalDB,
 	publisher pubsub.Publisher,
 	postService postService,
 	nipostBuilder nipostBuilder,
@@ -163,7 +163,7 @@ func NewBuilder(
 		goldenATXID:           conf.GoldenATXID,
 		regossipInterval:      conf.RegossipInterval,
 		cdb:                   cdb,
-		localDb:               localDb,
+		localDB:               localDB,
 		publisher:             publisher,
 		postService:           postService,
 		nipostBuilder:         nipostBuilder,
@@ -267,7 +267,7 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 		if !deleteFiles {
 			return nil
 		}
-		if err := nipost.RemoveChallenge(b.localDb, b.signer.NodeID()); err != nil {
+		if err := nipost.RemoveChallenge(b.localDB, b.signer.NodeID()); err != nil {
 			b.log.With().Error("failed to remove nipost challenge", log.Err(err))
 			return err
 		}
@@ -301,7 +301,7 @@ func (b *Builder) MovePostToDb() error {
 		InitialPost:   post,
 		CommitmentATX: &commitmentAtxId,
 	}
-	if err := nipost.AddChallenge(b.localDb, b.signer.NodeID(), ch); err != nil {
+	if err := nipost.AddChallenge(b.localDB, b.signer.NodeID(), ch); err != nil {
 		return fmt.Errorf("adding post to db: %w", err)
 	}
 	return discardPost(b.nipostBuilder.DataDir())
@@ -317,7 +317,7 @@ func (b *Builder) MoveNipostChallengeToDb() error {
 	default:
 	}
 
-	if err := nipost.AddChallenge(b.localDb, b.signer.NodeID(), ch); err != nil {
+	if err := nipost.AddChallenge(b.localDB, b.signer.NodeID(), ch); err != nil {
 		return fmt.Errorf("adding challenge to db: %w", err)
 	}
 	return discardNipostChallenge(b.nipostBuilder.DataDir())
@@ -334,7 +334,7 @@ func (b *Builder) generateInitialPost(ctx context.Context) error {
 		return nil
 	}
 	// ...and if we haven't stored an initial post yet.
-	state, err := nipost.Challenge(b.localDb, b.signer.NodeID())
+	state, err := nipost.Challenge(b.localDB, b.signer.NodeID())
 	switch {
 	case err == nil && state.InitialPost != nil:
 		b.log.Info("load initial post from db")
@@ -353,7 +353,7 @@ func (b *Builder) generateInitialPost(ctx context.Context) error {
 	public.PostSeconds.Set(float64(time.Since(startTime)))
 	b.log.Info("created the initial post")
 
-	if err := nipost.AddChallenge(b.localDb, b.signer.NodeID(), &types.NIPostChallenge{
+	if err := nipost.AddChallenge(b.localDB, b.signer.NodeID(), &types.NIPostChallenge{
 		PublishEpoch:   0, // will be updated later
 		Sequence:       0,
 		PrevATXID:      types.EmptyATXID, // initial has no previous ATX
@@ -489,7 +489,7 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 		return nil, fmt.Errorf("failed to get positioning ATX: %w", err)
 	}
 
-	challenge, err := nipost.Challenge(b.localDb, b.signer.NodeID())
+	challenge, err := nipost.Challenge(b.localDB, b.signer.NodeID())
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
 		// build new challenge
@@ -503,7 +503,7 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 	case challenge.PublishEpoch < current:
 		// challenge is stale
 		b.pendingATX = nil
-		if err := nipost.RemoveChallenge(b.localDb, b.signer.NodeID()); err != nil {
+		if err := nipost.RemoveChallenge(b.localDB, b.signer.NodeID()); err != nil {
 			return nil, fmt.Errorf("remove stale nipost challenge: %w", err)
 		}
 	default:
@@ -522,7 +522,7 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 		PositioningATX: posAtx,
 	}
 
-	if err := nipost.AddChallenge(b.localDb, b.signer.NodeID(), challenge); err != nil {
+	if err := nipost.AddChallenge(b.localDB, b.signer.NodeID(), challenge); err != nil {
 		return nil, fmt.Errorf("add nipost challenge: %w", err)
 	}
 	return challenge, nil
@@ -690,7 +690,7 @@ func (b *Builder) currentEpoch() types.EpochID {
 
 func (b *Builder) discardChallenge() error {
 	b.pendingATX = nil
-	return nipost.RemoveChallenge(b.localDb, b.signer.NodeID())
+	return nipost.RemoveChallenge(b.localDB, b.signer.NodeID())
 }
 
 func (b *Builder) broadcast(ctx context.Context, atx *types.ActivationTx) (int, error) {

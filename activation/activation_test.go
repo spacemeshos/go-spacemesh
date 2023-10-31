@@ -20,13 +20,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/datastore/nipost"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
-	"github.com/spacemeshos/go-spacemesh/sql/nipost"
 )
 
 // ========== Vars / Consts ==========
@@ -105,7 +105,7 @@ func newActivationTx(
 type testAtxBuilder struct {
 	*Builder
 	cdb         *datastore.CachedDB
-	localDb     *sql.Database
+	localDb     *datastore.LocalDB
 	sig         *signing.EdSigner
 	coinbase    types.Address
 	goldenATXID types.ATXID
@@ -126,7 +126,7 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 	ctrl := gomock.NewController(tb)
 	tab := &testAtxBuilder{
 		cdb:         datastore.NewCachedDB(sql.InMemory(), lg),
-		localDb:     sql.InMemory(sql.WithMigrations(sql.LocalMigrations)),
+		localDb:     datastore.NewLocalDB(sql.InMemory(sql.WithMigrations(sql.LocalMigrations))),
 		sig:         edSigner,
 		coinbase:    types.GenerateAddress([]byte("33333")),
 		goldenATXID: types.ATXID(types.HexToHash32("77777")),
