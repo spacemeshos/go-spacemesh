@@ -409,6 +409,7 @@ func labelSelector(id string) string {
 }
 
 func deployNodes(ctx *testcontext.Context, kind string, from, to int, opts ...DeploymentOpt) ([]*NodeClient, error) {
+	ctx.Log.Debugw("deploying nodes", "kind", kind, "from", from, "to", to)
 	var (
 		eg      errgroup.Group
 		clients = make(chan *NodeClient, to-from)
@@ -429,8 +430,10 @@ func deployNodes(ctx *testcontext.Context, kind string, from, to int, opts ...De
 		i := i
 		finalFlags := make([]DeploymentFlag, len(cfg.flags), len(cfg.flags)+ctx.PoetSize)
 		copy(finalFlags, cfg.flags)
-		for idx := 0; idx < ctx.PoetSize; idx++ {
-			finalFlags = append(finalFlags, PoetEndpoint(MakePoetEndpoint(idx)))
+		if !cfg.noDefaultPoets {
+			for idx := 0; idx < ctx.PoetSize; idx++ {
+				finalFlags = append(finalFlags, PoetEndpoint(MakePoetEndpoint(idx)))
+			}
 		}
 		if ctx.BootstrapperSize > 1 {
 			finalFlags = append(finalFlags, BootstrapperUrl(BootstrapperEndpoint(i%ctx.BootstrapperSize)))
@@ -485,6 +488,7 @@ func deleteNode(ctx *testcontext.Context, id string) error {
 }
 
 func deployNode(ctx *testcontext.Context, id string, labels map[string]string, flags []DeploymentFlag) error {
+	ctx.Log.Debugw("deploying node", "id", id)
 	cmd := []string{
 		"/bin/go-spacemesh",
 		"-c=" + configDir + attachedSmesherConfig,
@@ -681,7 +685,7 @@ func (d DeploymentFlag) Flag() string {
 	return d.Name + "=" + d.Value
 }
 
-// PoetEndpoint flag.
+// PoetEndpoint flag can be used multiple times to add multiple poets.
 func PoetEndpoint(endpoint string) DeploymentFlag {
 	return DeploymentFlag{Name: "--poet-server", Value: endpoint}
 }

@@ -61,7 +61,6 @@ type layerClock interface {
 }
 
 type nipostBuilder interface {
-	UpdatePoETProvers([]poetClient)
 	BuildNIPost(ctx context.Context, challenge *types.NIPostChallenge) (*types.NIPost, error)
 	DataDir() string
 }
@@ -92,7 +91,6 @@ type SmeshingProvider interface {
 	SmesherID() types.NodeID
 	Coinbase() types.Address
 	SetCoinbase(coinbase types.Address)
-	UpdatePoETServers(ctx context.Context, endpoints []string) error
 }
 
 // poetClient servers as an interface to communicate with a PoET server.

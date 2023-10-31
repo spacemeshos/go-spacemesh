@@ -54,7 +54,7 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
   Pruning will be enabled starting from epoch 8, e.g in epoch 8 we will prune all activesets for epochs 7 and below.
   We should also run an archival node that doesn't prune them. To disable pruning we should configure
-  
+
   ```json
   "main": {
       "prune-activesets-from": 4294967295
@@ -77,6 +77,8 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
   With this change `post.bin` and `nipost_challenge.bin` files are no longer used. The node will automatically migrate
   the data from disk and store it in the database. The migration will take place at the first startup after the upgrade.
+
+* [#5209](https://github.com/spacemeshos/go-spacemesh/pull/5209) Removed API to update poet servers from SmesherService.
 
 ## v1.2.0
 
