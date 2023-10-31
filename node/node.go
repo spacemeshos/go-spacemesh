@@ -828,7 +828,8 @@ func (app *App) initServices(ctx context.Context) error {
 
 	hareOutputCh := make(chan hare.LayerOutput, app.Config.HARE.LimitConcurrent)
 	app.blockGen = blocks.NewGenerator(
-		app.cachedDB,
+		app.db,
+		app.atxsdata,
 		executor,
 		msh,
 		fetcherWrapped,
