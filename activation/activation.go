@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -285,7 +284,7 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 func (b *Builder) MovePostToDb() error {
 	post, err := loadPost(b.nipostBuilder.DataDir())
 	switch {
-	case os.IsNotExist(err):
+	case errors.Is(err, fs.ErrNotExist):
 		return nil // no post file, nothing to do
 	case err != nil:
 		return fmt.Errorf("loading post: %w", err)
@@ -311,7 +310,7 @@ func (b *Builder) MovePostToDb() error {
 func (b *Builder) MoveNipostChallengeToDb() error {
 	ch, err := LoadNipostChallenge(b.nipostBuilder.DataDir())
 	switch {
-	case os.IsNotExist(err):
+	case errors.Is(err, fs.ErrNotExist):
 		return nil // no challenge file, nothing to do
 	case err != nil:
 		return fmt.Errorf("loading nipost challenge: %w", err)

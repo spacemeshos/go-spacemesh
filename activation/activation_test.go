@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1400,10 +1401,9 @@ func TestBuilder_MovePostToDb(t *testing.T) {
 	require.FileExists(t, filepath.Join(tab.nipostBuilder.DataDir(), postFilename))
 
 	commitmentAtx := types.RandomATXID()
-	tab.mpostClient.EXPECT().Info(gomock.Any()).Return(&types.PostInfo{
-		NodeID:        tab.sig.NodeID(),
-		CommitmentATX: commitmentAtx,
-	}, nil)
+	initialization.SaveMetadata(tab.nipostBuilder.DataDir(), &shared.PostMetadata{
+		CommitmentAtxId: commitmentAtx.Bytes(),
+	})
 	require.NoError(t, tab.MovePostToDb())
 
 	challenge, err := nipost.Challenge(tab.localDb, tab.sig.NodeID())
@@ -1415,6 +1415,8 @@ func TestBuilder_MovePostToDb(t *testing.T) {
 	require.NotNil(t, challenge.CommitmentATX) // TODO(mafa): also add VRFNonce
 	require.Equal(t, commitmentAtx, *challenge.CommitmentATX)
 	require.NoFileExists(t, filepath.Join(tab.nipostBuilder.DataDir(), postFilename))
+
+	require.NoError(t, tab.MovePostToDb()) // should not fail if post is already in db
 }
 
 func TestBuilder_MoveNipostChallengeToDb(t *testing.T) {
@@ -1438,4 +1440,6 @@ func TestBuilder_MoveNipostChallengeToDb(t *testing.T) {
 	require.NotNil(t, challenge)
 	require.Equal(t, ch, challenge)
 	require.NoFileExists(t, filepath.Join(tab.nipostBuilder.DataDir(), challengeFilename))
+
+	require.NoError(t, tab.MoveNipostChallengeToDb()) // should not fail if challenge is already in db
 }
