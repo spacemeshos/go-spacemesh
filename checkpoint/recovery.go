@@ -107,7 +107,9 @@ func Recover(
 		return nil, fmt.Errorf("open old database: %w", err)
 	}
 	defer db.Close()
-	localDBFile, err := sql.Open("file:"+filepath.Join(cfg.DataDir, cfg.LocalDbFile), sql.WithMigrations(sql.LocalMigrations))
+	localDBFile, err := sql.Open("file:"+filepath.Join(cfg.DataDir, cfg.LocalDbFile),
+		sql.WithMigrations(sql.LocalMigrations),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("open old local database: %w", err)
 	}

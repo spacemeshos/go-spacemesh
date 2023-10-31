@@ -538,7 +538,9 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
 	prevAtx := vatxs[len(vatxs)-2]
 	posAtx := vatxs[len(vatxs)-1]
 
-	localDBFile, err := sql.Open("file:"+filepath.Join(cfg.DataDir, cfg.LocalDbFile), sql.WithMigrations(sql.LocalMigrations))
+	localDBFile, err := sql.Open("file:"+filepath.Join(cfg.DataDir, cfg.LocalDbFile),
+		sql.WithMigrations(sql.LocalMigrations),
+	)
 	require.NoError(t, err)
 	require.NotNil(t, localDBFile)
 	localDB := datastore.NewLocalDB(localDBFile)
@@ -624,7 +626,9 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_Still_Initializing(t *testing.T)
 
 	require.NoError(t, olddb.Close())
 
-	localDBFile, err := sql.Open("file:"+filepath.Join(cfg.DataDir, cfg.LocalDbFile), sql.WithMigrations(sql.LocalMigrations))
+	localDBFile, err := sql.Open("file:"+filepath.Join(cfg.DataDir, cfg.LocalDbFile),
+		sql.WithMigrations(sql.LocalMigrations),
+	)
 	require.NoError(t, err)
 	require.NotNil(t, localDBFile)
 	localDB := datastore.NewLocalDB(localDBFile)
