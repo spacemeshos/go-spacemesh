@@ -19,7 +19,11 @@ type conservativeState interface {
 type vmState interface {
 	GetStateRoot() (types.Hash32, error)
 	Revert(types.LayerID) error
-	Apply(vm.ApplyContext, []types.Transaction, []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error)
+	Apply(
+		vm.ApplyContext,
+		[]types.Transaction,
+		[]types.CoinbaseReward,
+	) ([]types.Transaction, []types.TransactionWithResult, error)
 }
 
 type layerClock interface {

@@ -50,8 +50,18 @@ func Test_VRFSigner_NodeIDAndPublicKey(t *testing.T) {
 
 	// Assert
 	require.Equal(t, signer.NodeID(), vrfSig.NodeID(), "VRF signer node ID does not match Ed signer node ID")
-	require.Equal(t, signer.PublicKey(), vrfSig.PublicKey(), "VRF signer public key does not match Ed signer public key")
-	require.Equal(t, types.BytesToNodeID(signer.PublicKey().Bytes()), vrfSig.NodeID(), "VRF signer node ID does not match Ed signer node ID")
+	require.Equal(
+		t,
+		signer.PublicKey(),
+		vrfSig.PublicKey(),
+		"VRF signer public key does not match Ed signer public key",
+	)
+	require.Equal(
+		t,
+		types.BytesToNodeID(signer.PublicKey().Bytes()),
+		vrfSig.NodeID(),
+		"VRF signer node ID does not match Ed signer node ID",
+	)
 }
 
 func Test_VRFVerifier(t *testing.T) {

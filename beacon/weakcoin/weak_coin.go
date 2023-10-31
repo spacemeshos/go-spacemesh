@@ -249,13 +249,23 @@ func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
 
 	allowance := wc.allowance.MinerAllowance(wc.epoch, message.NodeID)
 	if allowance < message.Unit {
-		return fmt.Errorf("miner %x is not allowed to submit proposal for unit %d (allowed %d)", message.NodeID, message.Unit, allowance)
+		return fmt.Errorf(
+			"miner %x is not allowed to submit proposal for unit %d (allowed %d)",
+			message.NodeID,
+			message.Unit,
+			allowance,
+		)
 	}
 
 	return wc.updateSmallest(ctx, message.VRFSignature)
 }
 
-func (wc *WeakCoin) prepareProposal(epoch types.EpochID, signer vrfSigner, nonce types.VRFPostIndex, round types.RoundID) ([]byte, types.VrfSignature) {
+func (wc *WeakCoin) prepareProposal(
+	epoch types.EpochID,
+	signer vrfSigner,
+	nonce types.VRFPostIndex,
+	round types.RoundID,
+) ([]byte, types.VrfSignature) {
 	minerAllowance := wc.allowance.MinerAllowance(wc.epoch, signer.NodeID())
 	if minerAllowance == 0 {
 		return nil, types.EmptyVrfSignature
@@ -289,7 +299,13 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, signer vrfSigner, nonce
 	return broadcast, *smallest
 }
 
-func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, signer vrfSigner, nonce types.VRFPostIndex, round types.RoundID) {
+func (wc *WeakCoin) publishProposal(
+	ctx context.Context,
+	epoch types.EpochID,
+	signer vrfSigner,
+	nonce types.VRFPostIndex,
+	round types.RoundID,
+) {
 	msg, proposal := wc.prepareProposal(epoch, signer, nonce, round)
 	if msg == nil {
 		return
@@ -351,7 +367,12 @@ func (wc *WeakCoin) aboveThreshold(proposal types.VrfSignature) bool {
 	return proposal.Cmp(&wc.config.Threshold) == 1
 }
 
-func (wc *WeakCoin) encodeProposal(epoch types.EpochID, nonce types.VRFPostIndex, round types.RoundID, unit uint32) []byte {
+func (wc *WeakCoin) encodeProposal(
+	epoch types.EpochID,
+	nonce types.VRFPostIndex,
+	round types.RoundID,
+	unit uint32,
+) []byte {
 	message := &VrfMessage{
 		Type:  types.EligibilityBeaconWC,
 		Nonce: nonce,

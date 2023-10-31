@@ -26,7 +26,12 @@ type preRoundTracker struct {
 	eTracker  *EligibilityTracker
 }
 
-func newPreRoundTracker(logger log.Log, mch chan<- *types.MalfeasanceGossip, et *EligibilityTracker, threshold, expectedSize int) *preRoundTracker {
+func newPreRoundTracker(
+	logger log.Log,
+	mch chan<- *types.MalfeasanceGossip,
+	et *EligibilityTracker,
+	threshold, expectedSize int,
+) *preRoundTracker {
 	return &preRoundTracker{
 		logger:    logger,
 		malCh:     mch,

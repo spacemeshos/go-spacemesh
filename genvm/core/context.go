@@ -134,7 +134,12 @@ func (c *Context) Relay(remoteTemplate, address Address, call func(Host) error) 
 		return ErrNotSpawned
 	}
 	if *account.TemplateAddress != remoteTemplate {
-		return fmt.Errorf("%w: %s != %s", ErrTemplateMismatch, remoteTemplate.String(), account.TemplateAddress.String())
+		return fmt.Errorf(
+			"%w: %s != %s",
+			ErrTemplateMismatch,
+			remoteTemplate.String(),
+			account.TemplateAddress.String(),
+		)
 	}
 	handler := c.Registry.Get(remoteTemplate)
 	if handler == nil {

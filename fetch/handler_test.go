@@ -69,7 +69,12 @@ func createLayer(tb testing.TB, db *datastore.CachedDB, lid types.LayerID) ([]ty
 	return blts, blks
 }
 
-func createOpinions(t *testing.T, db *datastore.CachedDB, lid types.LayerID, genCert bool) (types.BlockID, types.Hash32) {
+func createOpinions(
+	t *testing.T,
+	db *datastore.CachedDB,
+	lid types.LayerID,
+	genCert bool,
+) (types.BlockID, types.Hash32) {
 	_, blks := createLayer(t, db, lid)
 	certified := types.EmptyBlockID
 	if genCert {

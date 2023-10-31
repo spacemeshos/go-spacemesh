@@ -447,14 +447,19 @@ func (app *App) Initialize() error {
 	} else {
 		diff := existing.Diff(app.Config.Genesis)
 		if len(diff) > 0 {
-			return fmt.Errorf("genesis config was updated after initializing a node, if you know that update is required delete config at %s.\ndiff:\n%s", gpath, diff)
+			app.log.Error("genesis config updated after node initialization, if this update is required delete config"+
+				" at %s.\ndiff:\n%s", gpath, diff,
+			)
+			return fmt.Errorf("genesis config updated after node initialization")
 		}
 	}
 
 	// tortoise wait zdist layers for hare to timeout for a layer. once hare timeout, tortoise will
 	// vote against all blocks in that layer. so it's important to make sure zdist takes longer than
 	// hare's max time duration to run consensus for a layer
-	maxHareRoundsPerLayer := 1 + app.Config.HARE.LimitIterations*hare.RoundsPerIteration // pre-round + 4 rounds per iteration
+
+	// maxHareRoundsPerLayer is pre-round + 4 rounds per iteration
+	maxHareRoundsPerLayer := 1 + app.Config.HARE.LimitIterations*hare.RoundsPerIteration
 	maxHareLayerDuration := app.Config.HARE.WakeupDelta + time.Duration(
 		maxHareRoundsPerLayer,
 	)*app.Config.HARE.RoundDuration
@@ -464,7 +469,8 @@ func (app *App) Initialize() error {
 			log.Duration("layer_duration", app.Config.LayerDuration),
 			log.Duration("hare_wakeup_delta", app.Config.HARE.WakeupDelta),
 			log.Int("hare_limit_iterations", app.Config.HARE.LimitIterations),
-			log.Duration("hare_round_duration", app.Config.HARE.RoundDuration))
+			log.Duration("hare_round_duration", app.Config.HARE.RoundDuration),
+		)
 
 		return errors.New("incompatible tortoise hare params")
 	}
@@ -578,22 +584,6 @@ func (app *App) initServices(ctx context.Context) error {
 		postVerifiers = append(postVerifiers, verifier)
 	}
 	app.postVerifier = activation.NewOffloadingPostVerifier(postVerifiers, nipostValidatorLogger)
-
-	if app.Config.SMESHING.Start {
-		app.postSupervisor, err = activation.NewPostSupervisor(
-			app.log.Zap(),
-			app.Config.POSTService,
-			app.Config.POST,
-			app.Config.SMESHING.Opts,
-			app.Config.SMESHING.ProvingOpts,
-		)
-		if err != nil {
-			return fmt.Errorf("start post service: %w", err)
-		}
-		if err := app.postSupervisor.Start(); err != nil {
-			return fmt.Errorf("start post service: %w", err)
-		}
-	}
 
 	validator := activation.NewValidator(
 		poetDb,
@@ -931,10 +921,23 @@ func (app *App) initServices(ctx context.Context) error {
 		app.log.Panic("failed to create post setup manager: %v", err)
 	}
 
+	if app.Config.SMESHING.Start {
+		app.postSupervisor, err = activation.NewPostSupervisor(
+			app.log.Zap(),
+			app.Config.POSTService,
+			app.Config.POST,
+			app.Config.SMESHING.ProvingOpts,
+			postSetupMgr,
+			newSyncer,
+		)
+		if err != nil {
+			return fmt.Errorf("init post service: %w", err)
+		}
+	}
+
 	app.grpcPostService = grpcserver.NewPostService(app.addLogger(PostServiceLogger, lg).Zap())
 
 	nipostBuilder, err := activation.NewNIPostBuilder(
-		app.edSgn.NodeID(),
 		poetDb,
 		app.grpcPostService,
 		app.Config.PoETServers,
@@ -977,7 +980,6 @@ func (app *App) initServices(ctx context.Context) error {
 		app.host,
 		app.grpcPostService,
 		nipostBuilder,
-		postSetupMgr,
 		app.clock,
 		newSyncer,
 		app.addLogger("atxBuilder", lg),
@@ -1240,8 +1242,11 @@ func (app *App) startServices(ctx context.Context) error {
 				err,
 			)
 		}
-		if err := app.atxBuilder.StartSmeshing(coinbaseAddr, app.Config.SMESHING.Opts); err != nil {
+		if err := app.atxBuilder.StartSmeshing(coinbaseAddr); err != nil {
 			app.log.Panic("failed to start smeshing: %v", err)
+		}
+		if err := app.postSupervisor.Start(app.Config.SMESHING.Opts); err != nil {
+			return fmt.Errorf("start post service: %w", err)
 		}
 	} else {
 		app.log.Info("smeshing not started, waiting to be triggered via smesher api")
@@ -1291,7 +1296,6 @@ func (app *App) initService(
 		return grpcserver.NewAdminService(app.db, app.Config.DataDir(), app.host), nil
 	case grpcserver.Smesher:
 		return grpcserver.NewSmesherService(
-			app.postSetupMgr,
 			app.atxBuilder,
 			app.postSupervisor,
 			app.Config.API.SmesherStreamInterval,
@@ -1443,7 +1447,7 @@ func (app *App) stopServices(ctx context.Context) {
 	}
 
 	if app.atxBuilder != nil {
-		_ = app.atxBuilder.StopSmeshing(false)
+		app.atxBuilder.StopSmeshing(false)
 	}
 
 	if app.postVerifier != nil {
@@ -1474,7 +1478,7 @@ func (app *App) stopServices(ctx context.Context) {
 	}
 
 	if app.postSupervisor != nil {
-		if err := app.postSupervisor.Stop(); err != nil {
+		if err := app.postSupervisor.Stop(false); err != nil {
 			app.log.With().Error("error stopping local post service", log.Err(err))
 		}
 	}

@@ -129,8 +129,28 @@ const (
 func txs() []tx {
 	txs := []tx{
 		describe("singlesig/selfspawn", sizeSpawn+32+64, store(48), edverify(1), spawn()),
-		describe("singlesig/spawn", sizeSpawn+32+64, accountaccess(), accountaccess(), load(48), store(48), update(16), edverify(1), spawn()),
-		describe("singlesig/spend", sizeSpend+64, accountaccess(), accountaccess(), load(48), load(8), update(16), update(8), edverify(1)),
+		describe(
+			"singlesig/spawn",
+			sizeSpawn+32+64,
+			accountaccess(),
+			accountaccess(),
+			load(48),
+			store(48),
+			update(16),
+			edverify(1),
+			spawn(),
+		),
+		describe(
+			"singlesig/spend",
+			sizeSpend+64,
+			accountaccess(),
+			accountaccess(),
+			load(48),
+			load(8),
+			update(16),
+			update(8),
+			edverify(1),
+		),
 	}
 	for n := 1; n <= 3; n++ {
 		for k := 1; k <= 10; k++ {
@@ -139,12 +159,57 @@ func txs() []tx {
 			}
 			sigs := n * 64
 			pubs := k * 32
-			txs = append(txs,
-				describe(fmt.Sprintf("multisig/%d/%d/selfspawn", n, k), sizeSpawn+sigs+pubs, store(16+pubs), edverify(n), spawn()),
-				describe(fmt.Sprintf("multisig/%d/%d/spawn", n, k), sizeSpawn+sigs+pubs, load(16+pubs), accountaccess(), store(16+pubs), update(16), edverify(n), spawn()),
-				describe(fmt.Sprintf("multisig/%d/%d/spend", n, k), sizeSpend+sigs, load(16+pubs), accountaccess(), accountaccess(), load(8), update(16), update(8), edverify(n)),
-				describe(fmt.Sprintf("vesting/%d/%d/spawnvault", n, k), sizeSpawn+sigs+56, accountaccess(), load(sizeSpawn+sigs), store(80), update(16), edverify(n), spawn()),
-				describe(fmt.Sprintf("vesting/%d/%d/drain", n, k), sizeSpend+24+sigs, accountaccess(), accountaccess(), load(16+pubs), load(80), edverify(n), update(16), update(16)),
+			txs = append(
+				txs,
+				describe(
+					fmt.Sprintf("multisig/%d/%d/selfspawn", n, k),
+					sizeSpawn+sigs+pubs,
+					store(16+pubs),
+					edverify(n),
+					spawn(),
+				),
+				describe(
+					fmt.Sprintf("multisig/%d/%d/spawn", n, k),
+					sizeSpawn+sigs+pubs,
+					load(16+pubs),
+					accountaccess(),
+					store(16+pubs),
+					update(16),
+					edverify(n),
+					spawn(),
+				),
+				describe(
+					fmt.Sprintf("multisig/%d/%d/spend", n, k),
+					sizeSpend+sigs,
+					load(16+pubs),
+					accountaccess(),
+					accountaccess(),
+					load(8),
+					update(16),
+					update(8),
+					edverify(n),
+				),
+				describe(
+					fmt.Sprintf("vesting/%d/%d/spawnvault", n, k),
+					sizeSpawn+sigs+56,
+					accountaccess(),
+					load(sizeSpawn+sigs),
+					store(80),
+					update(16),
+					edverify(n),
+					spawn(),
+				),
+				describe(
+					fmt.Sprintf("vesting/%d/%d/drain", n, k),
+					sizeSpend+24+sigs,
+					accountaccess(),
+					accountaccess(),
+					load(16+pubs),
+					load(80),
+					edverify(n),
+					update(16),
+					update(16),
+				),
 			)
 		}
 	}

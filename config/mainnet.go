@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
+	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
@@ -28,7 +29,8 @@ import (
 
 func MainnetConfig() Config {
 	var postPowDifficulty activation.PowDifficulty
-	if err := postPowDifficulty.UnmarshalText([]byte("000dfb23b0979b4b000000000000000000000000000000000000000000000000")); err != nil {
+	difficulty := []byte("000dfb23b0979b4b000000000000000000000000000000000000000000000000")
+	if err := postPowDifficulty.UnmarshalText(difficulty); err != nil {
 		panic(err)
 	}
 	p2pconfig := p2p.DefaultConfig()
@@ -56,6 +58,10 @@ func MainnetConfig() Config {
 	logging.TrtlLoggerLevel = zapcore.WarnLevel.String()
 	logging.AtxHandlerLevel = zapcore.WarnLevel.String()
 	logging.ProposalListenerLevel = zapcore.WarnLevel.String()
+	hare3conf := hare3.DefaultConfig()
+	hare3conf.Committee = 400
+	hare3conf.Enable = true
+	hare3conf.EnableLayer = 33101
 	return Config{
 		BaseConfig: BaseConfig{
 			DataDirParent:         defaultDataDir,
@@ -105,6 +111,7 @@ func MainnetConfig() Config {
 			},
 		},
 		HARE: hareConfig.Config{
+			Disable:         hare3conf.EnableLayer,
 			N:               200,
 			ExpectedLeaders: 5,
 			RoundDuration:   25 * time.Second,
@@ -112,6 +119,7 @@ func MainnetConfig() Config {
 			LimitConcurrent: 2,
 			LimitIterations: 4,
 		},
+		HARE3: hare3conf,
 		HareEligibility: eligConfig.Config{
 			ConfidenceParam: 200,
 		},

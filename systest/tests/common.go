@@ -27,7 +27,15 @@ const (
 	attempts = 3
 )
 
-func sendTransactions(ctx context.Context, eg *errgroup.Group, logger *zap.SugaredLogger, cl *cluster.Cluster, first, stop uint32, receiver types.Address, batch, amount int) error {
+func sendTransactions(
+	ctx context.Context,
+	eg *errgroup.Group,
+	logger *zap.SugaredLogger,
+	cl *cluster.Cluster,
+	first, stop uint32,
+	receiver types.Address,
+	batch, amount int,
+) error {
 	for i := 0; i < cl.Accounts(); i++ {
 		i := i
 		client := cl.Client(i % cl.Total())
@@ -71,7 +79,17 @@ func sendTransactions(ctx context.Context, eg *errgroup.Group, logger *zap.Sugar
 					if err == nil {
 						break
 					}
-					logger.Warnw("failed to spend", "client", spendClient.Name, "account", i, "nonce", nonce+uint64(j), "err", err.Error())
+					logger.Warnw(
+						"failed to spend",
+						"client",
+						spendClient.Name,
+						"account",
+						i,
+						"nonce",
+						nonce+uint64(j),
+						"err",
+						err.Error(),
+					)
 					spendClient = cl.Client((i + k + 1) % cl.Total())
 				}
 				if err != nil {
@@ -191,7 +209,8 @@ func waitLayer(ctx *testcontext.Context, node *cluster.NodeClient, lid uint32) e
 	if err != nil {
 		return err
 	}
-	lyrTime := time.Unix(int64(resp.Unixtime.Value), 0).Add(time.Duration(lid) * testcontext.LayerDuration.Get(ctx.Parameters))
+	lyrTime := time.Unix(int64(resp.Unixtime.Value), 0).
+		Add(time.Duration(lid) * testcontext.LayerDuration.Get(ctx.Parameters))
 
 	now := time.Now()
 	if !lyrTime.After(now) {
@@ -248,7 +267,12 @@ func watchTransactionResults(ctx context.Context,
 	})
 }
 
-func watchProposals(ctx context.Context, eg *errgroup.Group, client *cluster.NodeClient, collector func(*pb.Proposal) (bool, error)) {
+func watchProposals(
+	ctx context.Context,
+	eg *errgroup.Group,
+	client *cluster.NodeClient,
+	collector func(*pb.Proposal) (bool, error),
+) {
 	eg.Go(func() error {
 		dbg := pb.NewDebugServiceClient(client)
 		proposals, err := dbg.ProposalsStream(ctx, &emptypb.Empty{})
@@ -271,7 +295,13 @@ func prettyHex(buf []byte) string {
 	return fmt.Sprintf("0x%x", buf)
 }
 
-func scheduleChaos(ctx context.Context, eg *errgroup.Group, client *cluster.NodeClient, from, to uint32, action func(context.Context) (chaos.Teardown, error)) {
+func scheduleChaos(
+	ctx context.Context,
+	eg *errgroup.Group,
+	client *cluster.NodeClient,
+	from, to uint32,
+	action func(context.Context) (chaos.Teardown, error),
+) {
 	var teardown chaos.Teardown
 	watchLayers(ctx, eg, client, func(layer *pb.LayerStreamResponse) (bool, error) {
 		if layer.Layer.Number.Number == from && teardown == nil {
@@ -343,7 +373,14 @@ func submitSpawn(ctx context.Context, cluster *cluster.Cluster, account int, cli
 	return err
 }
 
-func submitSpend(ctx context.Context, cluster *cluster.Cluster, account int, receiver types.Address, amount, nonce uint64, client *cluster.NodeClient) error {
+func submitSpend(
+	ctx context.Context,
+	cluster *cluster.Cluster,
+	account int,
+	receiver types.Address,
+	amount, nonce uint64,
+	client *cluster.NodeClient,
+) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	_, err := submitTransaction(ctx,

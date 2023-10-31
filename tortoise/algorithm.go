@@ -18,8 +18,9 @@ type Config struct {
 	Hdist uint32 `mapstructure:"tortoise-hdist"` // hare output lookback distance
 	Zdist uint32 `mapstructure:"tortoise-zdist"` // hare result wait distance
 	// how long we are waiting for a switch from verifying to full. relevant during rerun.
-	WindowSize    uint32 `mapstructure:"tortoise-window-size"`    // size of the tortoise sliding window (in layers)
-	MaxExceptions int    `mapstructure:"tortoise-max-exceptions"` // if candidate for base ballot has more than max exceptions it will be ignored
+	WindowSize uint32 `mapstructure:"tortoise-window-size"` // size of the tortoise sliding window (in layers)
+	// ignored if candidate for base ballot has more than max exceptions
+	MaxExceptions int `mapstructure:"tortoise-max-exceptions"`
 	// number of layers to delay votes for blocks with bad beacon values during self-healing. ideally a full epoch.
 	BadBeaconVoteDelayLayers uint32 `mapstructure:"tortoise-delay-layers"`
 	// EnableTracer will write tortoise traces to the stderr.

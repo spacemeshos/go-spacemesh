@@ -9,17 +9,29 @@ import (
 
 // Config is the configuration of the beacon.
 type Config struct {
-	Kappa                    int           `mapstructure:"beacon-kappa"`                       // Security parameter (for calculating ATX threshold)
-	Q                        *big.Rat      `mapstructure:"beacon-q"`                           // Ratio of dishonest spacetime (for calculating ATX threshold). It should be a string representing a rational number.
-	RoundsNumber             types.RoundID `mapstructure:"beacon-rounds-number"`               // Amount of rounds in every epoch
-	GracePeriodDuration      time.Duration `mapstructure:"beacon-grace-period-duration"`       // Grace period duration
-	ProposalDuration         time.Duration `mapstructure:"beacon-proposal-duration"`           // Proposal phase duration
-	FirstVotingRoundDuration time.Duration `mapstructure:"beacon-first-voting-round-duration"` // First voting round duration
-	VotingRoundDuration      time.Duration `mapstructure:"beacon-voting-round-duration"`       // Voting round duration
-	WeakCoinRoundDuration    time.Duration `mapstructure:"beacon-weak-coin-round-duration"`    // Weak coin round duration
-	Theta                    *big.Rat      `mapstructure:"beacon-theta"`                       // Ratio of votes for reaching consensus
-	VotesLimit               uint32        `mapstructure:"beacon-votes-limit"`                 // Maximum allowed number of votes to be sent
-	BeaconSyncWeightUnits    int           `mapstructure:"beacon-sync-weight-units"`           // Numbers of layers to wait before determining beacon values from ballots when the node didn't participate in previous epoch.
+	// Security parameter (for calculating ATX threshold)
+	Kappa int `mapstructure:"beacon-kappa"`
+	// Ratio of dishonest spacetime (for calculating ATX threshold). It should be a string representing a rational number.
+	Q *big.Rat `mapstructure:"beacon-q"`
+	// Amount of rounds in every epoch
+	RoundsNumber types.RoundID `mapstructure:"beacon-rounds-number"`
+	// Grace period duration
+	GracePeriodDuration time.Duration `mapstructure:"beacon-grace-period-duration"`
+	// Proposal phase duration
+	ProposalDuration time.Duration `mapstructure:"beacon-proposal-duration"`
+	// First voting round duration
+	FirstVotingRoundDuration time.Duration `mapstructure:"beacon-first-voting-round-duration"`
+	// Voting round duration
+	VotingRoundDuration time.Duration `mapstructure:"beacon-voting-round-duration"`
+	// Weak coin round duration
+	WeakCoinRoundDuration time.Duration `mapstructure:"beacon-weak-coin-round-duration"`
+	// Ratio of votes for reaching consensus
+	Theta *big.Rat `mapstructure:"beacon-theta"`
+	// Maximum allowed number of votes to be sent
+	VotesLimit uint32 `mapstructure:"beacon-votes-limit"`
+	// Numbers of layers to wait before determining beacon values from ballots when the node didn't participate
+	// in previous epoch.
+	BeaconSyncWeightUnits int `mapstructure:"beacon-sync-weight-units"`
 }
 
 // DefaultConfig returns the default configuration for the beacon.

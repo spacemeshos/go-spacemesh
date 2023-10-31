@@ -25,7 +25,13 @@ type handler struct {
 	beacon system.BeaconGetter
 }
 
-func newHandler(cdb *datastore.CachedDB, bs *datastore.BlobStore, m meshProvider, b system.BeaconGetter, lg log.Log) *handler {
+func newHandler(
+	cdb *datastore.CachedDB,
+	bs *datastore.BlobStore,
+	m meshProvider,
+	b system.BeaconGetter,
+	lg log.Log,
+) *handler {
 	return &handler{
 		logger: lg,
 		cdb:    cdb,
@@ -42,7 +48,9 @@ func (h *handler) handleMaliciousIDsReq(ctx context.Context, _ []byte) ([]byte, 
 		h.logger.WithContext(ctx).With().Warning("serve: failed to get malicious IDs", log.Err(err))
 		return nil, err
 	}
-	h.logger.WithContext(ctx).With().Debug("serve: responded to malicious IDs request", log.Int("num_malicious", len(nodes)))
+	h.logger.WithContext(ctx).
+		With().
+		Debug("serve: responded to malicious IDs request", log.Int("num_malicious", len(nodes)))
 	malicious := &MaliciousIDs{
 		NodeIDs: nodes,
 	}

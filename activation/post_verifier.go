@@ -42,7 +42,12 @@ type postVerifier struct {
 	cfg    config.Config
 }
 
-func (v *postVerifier) Verify(ctx context.Context, p *shared.Proof, m *shared.ProofMetadata, opts ...verifying.OptionFunc) error {
+func (v *postVerifier) Verify(
+	ctx context.Context,
+	p *shared.Proof,
+	m *shared.ProofMetadata,
+	opts ...verifying.OptionFunc,
+) error {
 	v.logger.Debug("verifying post", zap.Stringer("proof_node_id", types.BytesToNodeID(m.NodeId)))
 	return v.ProofVerifier.Verify(p, m, v.cfg, v.logger, opts...)
 }
@@ -100,7 +105,12 @@ func NewOffloadingPostVerifier(verifiers []PostVerifier, logger log.Log) *Offloa
 	return v
 }
 
-func (v *OffloadingPostVerifier) Verify(ctx context.Context, p *shared.Proof, m *shared.ProofMetadata, opts ...verifying.OptionFunc) error {
+func (v *OffloadingPostVerifier) Verify(
+	ctx context.Context,
+	p *shared.Proof,
+	m *shared.ProofMetadata,
+	opts ...verifying.OptionFunc,
+) error {
 	job := &verifyPostJob{
 		proof:    p,
 		metadata: m,

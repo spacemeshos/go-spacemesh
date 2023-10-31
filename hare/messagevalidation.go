@@ -27,8 +27,23 @@ func newEligibilityValidator(oracle Rolacle, maxExpActives, expLeaders int, logg
 	return &eligibilityValidator{oracle, maxExpActives, expLeaders, logger}
 }
 
-func (ev *eligibilityValidator) validateRole(ctx context.Context, nodeID types.NodeID, layer types.LayerID, round uint32, proof types.VrfSignature, eligibilityCount uint16) (bool, error) {
-	return ev.oracle.Validate(ctx, layer, round, expectedCommitteeSize(round, ev.maxExpActives, ev.expLeaders), nodeID, proof, eligibilityCount)
+func (ev *eligibilityValidator) validateRole(
+	ctx context.Context,
+	nodeID types.NodeID,
+	layer types.LayerID,
+	round uint32,
+	proof types.VrfSignature,
+	eligibilityCount uint16,
+) (bool, error) {
+	return ev.oracle.Validate(
+		ctx,
+		layer,
+		round,
+		expectedCommitteeSize(round, ev.maxExpActives, ev.expLeaders),
+		nodeID,
+		proof,
+		eligibilityCount,
+	)
 }
 
 func (ev *eligibilityValidator) ValidateEligibilityGossip(ctx context.Context, em *types.HareEligibilityGossip) bool {
@@ -282,7 +297,11 @@ var (
 )
 
 // validate the provided aggregated messages by the provided validators.
-func (v *syntaxContextValidator) validateAggregatedMessage(ctx context.Context, aggMsg *AggregatedMessages, validators []func(m *Message) bool) error {
+func (v *syntaxContextValidator) validateAggregatedMessage(
+	ctx context.Context,
+	aggMsg *AggregatedMessages,
+	validators []func(m *Message) bool,
+) error {
 	if validators == nil {
 		return errNilValidators
 	}

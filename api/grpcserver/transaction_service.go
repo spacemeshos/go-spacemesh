@@ -69,7 +69,10 @@ func NewTransactionService(
 	}
 }
 
-func (s TransactionService) ParseTransaction(ctx context.Context, in *pb.ParseTransactionRequest) (*pb.ParseTransactionResponse, error) {
+func (s TransactionService) ParseTransaction(
+	ctx context.Context,
+	in *pb.ParseTransactionRequest,
+) (*pb.ParseTransactionResponse, error) {
 	if len(in.Transaction) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "empty transaction")
 	}
@@ -91,13 +94,19 @@ func (s TransactionService) ParseTransaction(ctx context.Context, in *pb.ParseTr
 }
 
 // SubmitTransaction allows a new tx to be submitted.
-func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.SubmitTransactionRequest) (*pb.SubmitTransactionResponse, error) {
+func (s TransactionService) SubmitTransaction(
+	ctx context.Context,
+	in *pb.SubmitTransactionRequest,
+) (*pb.SubmitTransactionResponse, error) {
 	if len(in.Transaction) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "`Transaction` payload empty")
 	}
 
 	if !s.syncer.IsSynced(ctx) {
-		return nil, status.Error(codes.FailedPrecondition, "Cannot submit transaction, node is not in sync yet, try again later")
+		return nil, status.Error(
+			codes.FailedPrecondition,
+			"Cannot submit transaction, node is not in sync yet, try again later",
+		)
 	}
 
 	if err := s.txHandler.VerifyAndCacheTx(ctx, in.Transaction); err != nil {
@@ -120,7 +129,9 @@ func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.Submit
 
 // Get transaction and status for a given txid. It's not an error if we cannot find the tx,
 // we just return all nils.
-func (s TransactionService) getTransactionAndStatus(txID types.TransactionID) (*types.Transaction, pb.TransactionState_TransactionState) {
+func (s TransactionService) getTransactionAndStatus(
+	txID types.TransactionID,
+) (*types.Transaction, pb.TransactionState_TransactionState) {
 	var state pb.TransactionState_TransactionState
 	tx, err := s.conState.GetMeshTransaction(txID)
 	if err != nil {
@@ -138,7 +149,10 @@ func (s TransactionService) getTransactionAndStatus(txID types.TransactionID) (*
 }
 
 // TransactionsState returns current tx data for one or more txs.
-func (s TransactionService) TransactionsState(_ context.Context, in *pb.TransactionsStateRequest) (*pb.TransactionsStateResponse, error) {
+func (s TransactionService) TransactionsState(
+	_ context.Context,
+	in *pb.TransactionsStateRequest,
+) (*pb.TransactionsStateResponse, error) {
 	if in.TransactionId == nil || len(in.TransactionId) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "`TransactionId` must include one or more transaction IDs")
 	}
@@ -172,7 +186,10 @@ func (s TransactionService) TransactionsState(_ context.Context, in *pb.Transact
 // STREAMS
 
 // TransactionsStateStream exposes a stream of tx data.
-func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStreamRequest, stream pb.TransactionService_TransactionsStateStreamServer) error {
+func (s TransactionService) TransactionsStateStream(
+	in *pb.TransactionsStateStreamRequest,
+	stream pb.TransactionService_TransactionsStateStreamServer,
+) error {
 	if in.TransactionId == nil || len(in.TransactionId) == 0 {
 		return status.Error(codes.InvalidArgument, "`TransactionId` must include one or more transaction IDs")
 	}
@@ -245,7 +262,12 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 			// In order to read transactions, we first need to read layer blocks
 			layerObj, err := s.mesh.GetLayer(layer.LayerID)
 			if err != nil {
-				ctxzap.Error(stream.Context(), "error reading layer data for updated layer", layer.LayerID.Field().Zap(), zap.Error(err))
+				ctxzap.Error(
+					stream.Context(),
+					"error reading layer data for updated layer",
+					layer.LayerID.Field().Zap(),
+					zap.Error(err),
+				)
 				return status.Error(codes.Internal, "error reading layer data")
 			}
 
@@ -288,7 +310,13 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 						if in.IncludeTransactions {
 							tx, err := s.conState.GetMeshTransaction(txid)
 							if err != nil {
-								ctxzap.Error(stream.Context(), "could not find transaction from layer", txid.Field().Zap(), layer.Field().Zap(), zap.Error(err))
+								ctxzap.Error(
+									stream.Context(),
+									"could not find transaction from layer",
+									txid.Field().Zap(),
+									layer.Field().Zap(),
+									zap.Error(err),
+								)
 								return status.Error(codes.Internal, "error retrieving tx data")
 							}
 
@@ -310,7 +338,10 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 }
 
 // StreamResults allows to query historical results and subscribe to live data using the same filter.
-func (s TransactionService) StreamResults(in *pb.TransactionResultsRequest, stream pb.TransactionService_StreamResultsServer) error {
+func (s TransactionService) StreamResults(
+	in *pb.TransactionResultsRequest,
+	stream pb.TransactionService_StreamResultsServer,
+) error {
 	var (
 		filter    transactions.ResultsFilter
 		sub       *events.BufferedSubscription[types.TransactionWithResult]

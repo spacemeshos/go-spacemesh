@@ -80,7 +80,11 @@ func (g *Generator) SmEndpoint() string {
 	return g.smEndpoint
 }
 
-func (g *Generator) Generate(ctx context.Context, targetEpoch types.EpochID, genBeacon, genActiveSet bool) (string, error) {
+func (g *Generator) Generate(
+	ctx context.Context,
+	targetEpoch types.EpochID,
+	genBeacon, genActiveSet bool,
+) (string, error) {
 	if err := g.fs.MkdirAll(dataDir, 0o700); err != nil {
 		return "", fmt.Errorf("create persist dir %v: %w", dataDir, err)
 	}
@@ -194,6 +198,7 @@ func getActiveSet(ctx context.Context, endpoint string, epoch types.EpochID) ([]
 	if err != nil {
 		return nil, fmt.Errorf("grpc dial %v: %w", endpoint, err)
 	}
+	defer conn.Close()
 
 	client := pb.NewMeshServiceClient(conn)
 	stream, err := client.EpochStream(ctx, &pb.EpochStreamRequest{Epoch: uint32(epoch)})
@@ -214,7 +219,12 @@ func getActiveSet(ctx context.Context, endpoint string, epoch types.EpochID) ([]
 	return activeSet, nil
 }
 
-func (g *Generator) GenUpdate(epoch types.EpochID, beacon types.Beacon, activeSet []types.ATXID, suffix string) (string, error) {
+func (g *Generator) GenUpdate(
+	epoch types.EpochID,
+	beacon types.Beacon,
+	activeSet []types.ATXID,
+	suffix string,
+) (string, error) {
 	as := make([]string, 0, len(activeSet))
 	for _, atx := range activeSet {
 		as = append(as, hex.EncodeToString(atx.Hash32().Bytes())) // no leading 0x

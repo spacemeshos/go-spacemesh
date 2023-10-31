@@ -56,7 +56,10 @@ func TestBroker_Received(t *testing.T) {
 	broker := buildBroker(t, t.Name())
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
-	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
+	broker.mockStateQ.EXPECT().
+		IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(true, nil).
+		AnyTimes()
 	broker.mockMesh.EXPECT().GetMalfeasanceProof(gomock.Any())
 	broker.Start(context.Background())
 	t.Cleanup(broker.Close)
@@ -76,7 +79,10 @@ func TestBroker_MaxConcurrentProcesses(t *testing.T) {
 	broker := buildBrokerWithLimit(t, t.Name(), 4)
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
-	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
+	broker.mockStateQ.EXPECT().
+		IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(true, nil).
+		AnyTimes()
 	broker.mockMesh.EXPECT().GetMalfeasanceProof(gomock.Any()).AnyTimes()
 	broker.Start(context.Background())
 	t.Cleanup(broker.Close)
@@ -171,7 +177,10 @@ func TestBroker_MultipleInstanceIds(t *testing.T) {
 	broker := buildBroker(t, t.Name())
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
-	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
+	broker.mockStateQ.EXPECT().
+		IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(true, nil).
+		AnyTimes()
 	broker.mockMesh.EXPECT().GetMalfeasanceProof(gomock.Any()).AnyTimes()
 	broker.Start(context.Background())
 	t.Cleanup(broker.Close)
@@ -237,7 +246,10 @@ func TestBroker_Send(t *testing.T) {
 	broker.roleValidator = mev
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
-	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
+	broker.mockStateQ.EXPECT().
+		IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(true, nil).
+		AnyTimes()
 	broker.mockMesh.EXPECT().GetMalfeasanceProof(gomock.Any()).AnyTimes()
 	broker.Start(ctx)
 	t.Cleanup(broker.Close)
@@ -265,7 +277,10 @@ func TestBroker_HandleMaliciousHareMessage(t *testing.T) {
 	broker.roleValidator = mev
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
-	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
+	broker.mockStateQ.EXPECT().
+		IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(true, nil).
+		AnyTimes()
 	broker.Start(ctx)
 	t.Cleanup(broker.Close)
 
@@ -370,7 +385,9 @@ func TestBroker_HandleEligibility(t *testing.T) {
 		inbox, _, err = broker.Register(context.Background(), instanceID1)
 		require.NoError(t, err)
 		require.NotNil(t, inbox)
-		broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, errUnknown)
+		broker.mockStateQ.EXPECT().
+			IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(false, errUnknown)
 		require.False(t, broker.HandleEligibility(context.Background(), em))
 		require.Len(t, inbox, 0)
 	})
@@ -381,7 +398,9 @@ func TestBroker_HandleEligibility(t *testing.T) {
 		inbox, _, err = broker.Register(context.Background(), instanceID1)
 		require.NoError(t, err)
 		require.NotNil(t, inbox)
-		broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, nil)
+		broker.mockStateQ.EXPECT().
+			IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(false, nil)
 		require.False(t, broker.HandleEligibility(context.Background(), em))
 		require.Len(t, inbox, 0)
 	})
@@ -392,7 +411,9 @@ func TestBroker_HandleEligibility(t *testing.T) {
 		inbox, _, err = broker.Register(context.Background(), instanceID1)
 		require.NoError(t, err)
 		require.NotNil(t, inbox)
-		broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
+		broker.mockStateQ.EXPECT().
+			IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(true, nil)
 		require.False(t, broker.HandleEligibility(context.Background(), em))
 		require.Len(t, inbox, 0)
 	})
@@ -403,7 +424,9 @@ func TestBroker_HandleEligibility(t *testing.T) {
 		inbox, _, err = broker.Register(context.Background(), instanceID1)
 		require.NoError(t, err)
 		require.NotNil(t, inbox)
-		broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
+		broker.mockStateQ.EXPECT().
+			IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(true, nil)
 		atomic.StoreInt32(&mev.valid, 1)
 		require.True(t, broker.HandleEligibility(context.Background(), em))
 		require.Len(t, inbox, 1)
@@ -441,7 +464,10 @@ func TestBroker_Register2(t *testing.T) {
 	broker := buildBroker(t, t.Name())
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
-	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
+	broker.mockStateQ.EXPECT().
+		IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(true, nil).
+		AnyTimes()
 	broker.mockMesh.EXPECT().GetMalfeasanceProof(gomock.Any()).AnyTimes()
 	broker.Start(context.Background())
 	t.Cleanup(broker.Close)
@@ -464,7 +490,10 @@ func TestBroker_Register3(t *testing.T) {
 	broker := buildBroker(t, t.Name())
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
-	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
+	broker.mockStateQ.EXPECT().
+		IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(true, nil).
+		AnyTimes()
 	broker.mockMesh.EXPECT().GetMalfeasanceProof(gomock.Any())
 	broker.Start(context.Background())
 	t.Cleanup(broker.Close)
@@ -493,7 +522,10 @@ func TestBroker_PubkeyExtraction(t *testing.T) {
 	broker := buildBroker(t, t.Name())
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()
-	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
+	broker.mockStateQ.EXPECT().
+		IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(true, nil).
+		AnyTimes()
 	broker.mockMesh.EXPECT().GetMalfeasanceProof(gomock.Any())
 	broker.Start(context.Background())
 	t.Cleanup(broker.Close)
@@ -586,7 +618,10 @@ func TestBroker_Register4(t *testing.T) {
 func TestBroker_eventLoop(t *testing.T) {
 	r := require.New(t)
 	b := buildBroker(t, t.Name())
-	b.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
+	b.mockStateQ.EXPECT().
+		IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(true, nil).
+		AnyTimes()
 	b.mockMesh.EXPECT().GetMalfeasanceProof(gomock.Any()).AnyTimes()
 	b.Start(context.Background())
 	t.Cleanup(b.Close)
@@ -730,7 +765,10 @@ func TestBroker_Flow(t *testing.T) {
 	r := require.New(t)
 	b := buildBroker(t, t.Name())
 
-	b.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
+	b.mockStateQ.EXPECT().
+		IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(true, nil).
+		AnyTimes()
 	b.mockMesh.EXPECT().GetMalfeasanceProof(gomock.Any()).AnyTimes()
 	b.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	b.mockSyncS.EXPECT().IsBeaconSynced(gomock.Any()).Return(true).AnyTimes()

@@ -21,7 +21,10 @@ var (
 	errErrorsBufferFull      = "errors buffer is full"
 )
 
-func consumeEvents[T any](ctx context.Context, subscription event.Subscription) (out <-chan T, bufFull <-chan struct{}) {
+func consumeEvents[T any](
+	ctx context.Context,
+	subscription event.Subscription,
+) (out <-chan T, bufFull <-chan struct{}) {
 	outCh := make(chan T, subscriptionChanBufSize)
 	bufFullCh := make(chan struct{})
 

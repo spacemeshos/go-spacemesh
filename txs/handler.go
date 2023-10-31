@@ -72,7 +72,12 @@ func (th *TxHandler) HandleGossipTransaction(ctx context.Context, peer p2p.Peer,
 }
 
 // HandleProposalTransaction handles data received on the transactions synced as a part of proposal.
-func (th *TxHandler) HandleProposalTransaction(ctx context.Context, expHash types.Hash32, _ p2p.Peer, msg []byte) error {
+func (th *TxHandler) HandleProposalTransaction(
+	ctx context.Context,
+	expHash types.Hash32,
+	_ p2p.Peer,
+	msg []byte,
+) error {
 	err := th.verifyAndCache(ctx, expHash, msg)
 	updateMetrics(err, proposalTxCount)
 	if errors.Is(err, errDuplicateTX) {

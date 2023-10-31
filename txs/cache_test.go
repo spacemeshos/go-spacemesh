@@ -51,7 +51,13 @@ func getStateFunc(states map[types.Address]*testAcct) stateFunc {
 	}
 }
 
-func newMeshTX(t *testing.T, nonce uint64, signer *signing.EdSigner, amt uint64, received time.Time) *types.MeshTransaction {
+func newMeshTX(
+	t *testing.T,
+	nonce uint64,
+	signer *signing.EdSigner,
+	amt uint64,
+	received time.Time,
+) *types.MeshTransaction {
 	t.Helper()
 	return &types.MeshTransaction{
 		Transaction: *newTx(t, nonce, amt, defaultFee, signer),
@@ -59,7 +65,13 @@ func newMeshTX(t *testing.T, nonce uint64, signer *signing.EdSigner, amt uint64,
 	}
 }
 
-func genAndSaveTXs(t *testing.T, db *sql.Database, signer *signing.EdSigner, from, to uint64, startTime time.Time) []*types.MeshTransaction {
+func genAndSaveTXs(
+	t *testing.T,
+	db *sql.Database,
+	signer *signing.EdSigner,
+	from, to uint64,
+	startTime time.Time,
+) []*types.MeshTransaction {
 	t.Helper()
 	mtxs := genTXs(t, signer, from, to, startTime)
 	saveTXs(t, db, mtxs)
@@ -180,7 +192,12 @@ func createSingleAccountTestCache(tb testing.TB) (*testCache, *testAcct) {
 	}, ta
 }
 
-func buildCache(t *testing.T, tc *testCache, accounts map[types.Address]*testAcct, accountTXs map[types.Address][]*types.MeshTransaction) {
+func buildCache(
+	t *testing.T,
+	tc *testCache,
+	accounts map[types.Address]*testAcct,
+	accountTXs map[types.Address][]*types.MeshTransaction,
+) {
 	t.Helper()
 	for principal, ta := range accounts {
 		if _, ok := accountTXs[principal]; ok {
@@ -209,7 +226,12 @@ func buildCache(t *testing.T, tc *testCache, accounts map[types.Address]*testAcc
 	checkMempool(t, tc.Cache, expectedMempool)
 }
 
-func buildSingleAccountCache(t *testing.T, tc *testCache, ta *testAcct, mtxs []*types.MeshTransaction) (uint64, uint64) {
+func buildSingleAccountCache(
+	t *testing.T,
+	tc *testCache,
+	ta *testAcct,
+	mtxs []*types.MeshTransaction,
+) (uint64, uint64) {
 	t.Helper()
 	checkProjection(t, tc.Cache, ta.principal, ta.nonce, ta.balance)
 
@@ -1017,7 +1039,14 @@ func TestCache_BuildFromScratch_AllHaveTooManyNonce_OK(t *testing.T) {
 		if ta.balance < minBalance {
 			ta.balance = minBalance
 		}
-		byAddrAndNonce[principal] = genAndSaveTXs(t, tc.db, ta.signer, ta.nonce, ta.nonce+uint64(numTXsEach)-1, time.Now())
+		byAddrAndNonce[principal] = genAndSaveTXs(
+			t,
+			tc.db,
+			ta.signer,
+			ta.nonce,
+			ta.nonce+uint64(numTXsEach)-1,
+			time.Now(),
+		)
 	}
 	buildCache(t, tc, accounts, byAddrAndNonce)
 	for principal := range accounts {
@@ -1025,7 +1054,12 @@ func TestCache_BuildFromScratch_AllHaveTooManyNonce_OK(t *testing.T) {
 	}
 }
 
-func buildSmallCache(t *testing.T, tc *testCache, accounts map[types.Address]*testAcct, maxTX int) map[types.Address][]*types.MeshTransaction {
+func buildSmallCache(
+	t *testing.T,
+	tc *testCache,
+	accounts map[types.Address]*testAcct,
+	maxTX int,
+) map[types.Address][]*types.MeshTransaction {
 	t.Helper()
 	mtxsByAccount := make(map[types.Address][]*types.MeshTransaction)
 	for principal, ta := range accounts {

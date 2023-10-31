@@ -3,6 +3,7 @@ package activation
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/spacemeshos/post/initialization"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
@@ -60,8 +62,10 @@ type PostSupervisor struct {
 
 	cmdCfg      PostSupervisorConfig
 	postCfg     PostConfig
-	postOpts    PostSetupOpts
 	provingOpts PostProvingOpts
+
+	postSetupProvider postSetupProvider
+	syncer            syncer
 
 	pid atomic.Int64 // pid of the running post service, only for tests.
 
@@ -71,7 +75,14 @@ type PostSupervisor struct {
 }
 
 // NewPostSupervisor returns a new post service.
-func NewPostSupervisor(logger *zap.Logger, cmdCfg PostSupervisorConfig, postCfg PostConfig, postOpts PostSetupOpts, provingOpts PostProvingOpts) (*PostSupervisor, error) {
+func NewPostSupervisor(
+	logger *zap.Logger,
+	cmdCfg PostSupervisorConfig,
+	postCfg PostConfig,
+	provingOpts PostProvingOpts,
+	postSetupProvider postSetupProvider,
+	syncer syncer,
+) (*PostSupervisor, error) {
 	if _, err := os.Stat(cmdCfg.PostServiceCmd); err != nil {
 		return nil, fmt.Errorf("post service binary not found: %s", cmdCfg.PostServiceCmd)
 	}
@@ -80,27 +91,90 @@ func NewPostSupervisor(logger *zap.Logger, cmdCfg PostSupervisorConfig, postCfg 
 		logger:      logger,
 		cmdCfg:      cmdCfg,
 		postCfg:     postCfg,
-		postOpts:    postOpts,
 		provingOpts: provingOpts,
+
+		postSetupProvider: postSetupProvider,
+		syncer:            syncer,
 	}, nil
 }
 
-func (ps *PostSupervisor) Start() error {
+func (ps *PostSupervisor) Config() PostConfig {
+	return ps.postCfg
+}
+
+// Providers returns a list of available compute providers for Post setup.
+func (*PostSupervisor) Providers() ([]PostSetupProvider, error) {
+	providers, err := initialization.OpenCLProviders()
+	if err != nil {
+		return nil, err
+	}
+
+	providersAlias := make([]PostSetupProvider, len(providers))
+	for i, p := range providers {
+		providersAlias[i] = PostSetupProvider(p)
+	}
+
+	return providersAlias, nil
+}
+
+// Benchmark runs a short benchmarking session for a given provider to evaluate its performance.
+func (*PostSupervisor) Benchmark(p PostSetupProvider) (int, error) {
+	score, err := initialization.Benchmark(initialization.Provider(p))
+	if err != nil {
+		return score, fmt.Errorf("benchmark GPU: %w", err)
+	}
+
+	return score, nil
+}
+
+func (ps *PostSupervisor) Status() *PostSetupStatus {
+	return ps.postSetupProvider.Status()
+}
+
+func (ps *PostSupervisor) Start(opts PostSetupOpts) error {
 	ps.mtx.Lock()
 	defer ps.mtx.Unlock()
 	if ps.stop != nil {
 		return fmt.Errorf("post service already started")
 	}
 
+	// TODO(mafa): verify that opts don't delete existing files?
+
+	err := ps.postSetupProvider.PrepareInitializer(opts)
+	if err != nil {
+		return fmt.Errorf("prepare initializer: %w", err)
+	}
+
+	ps.eg = errgroup.Group{} // reset errgroup to allow restarts.
 	ctx, stop := context.WithCancel(context.Background())
 	ps.stop = stop
-	ps.eg = errgroup.Group{} // reset errgroup to allow restarts.
-	ps.eg.Go(func() error { return ps.runCmd(ctx, ps.cmdCfg, ps.postCfg, ps.postOpts, ps.provingOpts) })
+	ps.eg.Go(func() error {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ps.syncer.RegisterForATXSynced():
+			// ensure we are ATX synced before starting the PoST Session
+		}
+
+		// If start session returns any error other than context.Canceled
+		// (which is how we signal it to stop) then we panic.
+		err := ps.postSetupProvider.StartSession(ctx)
+		switch {
+		case errors.Is(err, context.Canceled):
+			return nil
+		case err != nil:
+			ps.logger.Fatal("initialization failed", zap.Error(err))
+			return err
+		}
+
+		ps.eg.Go(func() error { return ps.runCmd(ctx, ps.cmdCfg, ps.postCfg, opts, ps.provingOpts) })
+		return nil
+	})
 	return nil
 }
 
 // Stop stops the post service.
-func (ps *PostSupervisor) Stop() error {
+func (ps *PostSupervisor) Stop(deleteFiles bool) error {
 	ps.mtx.Lock()
 	defer ps.mtx.Unlock()
 
@@ -111,7 +185,21 @@ func (ps *PostSupervisor) Stop() error {
 	ps.stop()
 	ps.stop = nil
 	ps.pid.Store(0)
-	return ps.eg.Wait()
+	err := ps.eg.Wait()
+	switch {
+	case err == nil || errors.Is(err, context.Canceled):
+		if !deleteFiles {
+			return nil
+		}
+
+		if err := ps.postSetupProvider.Reset(); err != nil {
+			ps.logger.Error("failed to delete post files", zap.Error(err))
+			return err
+		}
+		return nil
+	default:
+		return fmt.Errorf("stop post supervisor: %w", err)
+	}
 }
 
 // captureCmdOutput returns a function that reads from the given pipe and logs the output.
@@ -137,7 +225,13 @@ func (ps *PostSupervisor) captureCmdOutput(pipe io.ReadCloser) func() error {
 	}
 }
 
-func (ps *PostSupervisor) runCmd(ctx context.Context, cmdCfg PostSupervisorConfig, postCfg PostConfig, postOpts PostSetupOpts, provingOpts PostProvingOpts) error {
+func (ps *PostSupervisor) runCmd(
+	ctx context.Context,
+	cmdCfg PostSupervisorConfig,
+	postCfg PostConfig,
+	postOpts PostSetupOpts,
+	provingOpts PostProvingOpts,
+) error {
 	for {
 		args := []string{
 			"--address", cmdCfg.NodeAddress,
@@ -155,6 +249,8 @@ func (ps *PostSupervisor) runCmd(ctx context.Context, cmdCfg PostSupervisorConfi
 			"--threads", strconv.FormatUint(uint64(provingOpts.Threads), 10),
 			"--nonces", strconv.FormatUint(uint64(provingOpts.Nonces), 10),
 			"--randomx-mode", provingOpts.RandomXMode.String(),
+
+			"--watch-pid", strconv.Itoa(os.Getpid()),
 		}
 		if cmdCfg.CACert != "" {
 			args = append(args, "--ca-cert", cmdCfg.CACert)
@@ -174,14 +270,16 @@ func (ps *PostSupervisor) runCmd(ctx context.Context, cmdCfg PostSupervisorConfi
 		cmd.Dir = filepath.Dir(cmdCfg.PostServiceCmd)
 		pipe, err := cmd.StderrPipe()
 		if err != nil {
-			return fmt.Errorf("setup stderr pipe for post service: %w", err)
+			ps.logger.Error("setup stderr pipe for post service", zap.Error(err))
+			return nil
 		}
 
 		var eg errgroup.Group
 		eg.Go(ps.captureCmdOutput(pipe))
-		if cmd.Start(); err != nil {
+		if err := cmd.Start(); err != nil {
 			pipe.Close()
-			return fmt.Errorf("start post service: %w", err)
+			ps.logger.Error("start post service", zap.Error(err))
+			return nil
 		}
 		ps.logger.Info("post service started", zap.Int("pid", cmd.Process.Pid), zap.String("cmd", cmd.String()))
 		ps.pid.Store(int64(cmd.Process.Pid))

@@ -13,7 +13,12 @@ import (
 
 func buildProposalMsg(sig *signing.EdSigner, s *Set, signature types.VrfSignature) *Message {
 	builder := newMessageBuilder().SetRoleProof(signature)
-	builder.SetType(proposal).SetLayer(instanceID1).SetRoundCounter(proposalRound).SetCommittedRound(ki).SetValues(s).SetSVP(buildSVP(ki, NewSetFromValues(types.ProposalID{1})))
+	builder.SetType(proposal).
+		SetLayer(instanceID1).
+		SetRoundCounter(proposalRound).
+		SetCommittedRound(ki).
+		SetValues(s).
+		SetSVP(buildSVP(ki, NewSetFromValues(types.ProposalID{1})))
 	builder.SetEligibilityCount(1)
 	m := builder.Sign(sig).Build()
 	m.signedHash = types.BytesToHash(m.InnerMessage.HashBytes())

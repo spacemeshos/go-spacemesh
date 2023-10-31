@@ -57,7 +57,15 @@ func Test_HTTPPoetClient_Submit(t *testing.T) {
 	}, withCustomHttpClient(ts.Client()))
 	require.NoError(t, err)
 
-	_, err = client.Submit(context.Background(), time.Time{}, nil, nil, types.EmptyEdSignature, types.NodeID{}, PoetPoW{})
+	_, err = client.Submit(
+		context.Background(),
+		time.Time{},
+		nil,
+		nil,
+		types.EmptyEdSignature,
+		types.NodeID{},
+		PoetPoW{},
+	)
 	require.NoError(t, err)
 }
 

@@ -39,7 +39,12 @@ func ExtractActiveSet(db sql.Executor) error {
 				Epoch: b.Layer.GetEpoch(),
 				Set:   b.ActiveSet,
 			}); err != nil && !errors.Is(err, sql.ErrObjectExists) {
-				return fmt.Errorf("add active set %s (%s): %w", b.ID().String(), b.EpochData.ActiveSetHash.ShortString(), err)
+				return fmt.Errorf(
+					"add active set %s (%s): %w",
+					b.ID().String(),
+					b.EpochData.ActiveSetHash.ShortString(),
+					err,
+				)
 			} else if err == nil {
 				unique++
 			}

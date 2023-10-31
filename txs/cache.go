@@ -314,7 +314,12 @@ func (ac *accountCache) add(logger log.Log, tx *types.Transaction, received time
 	return nil
 }
 
-func (ac *accountCache) addPendingFromNonce(logger log.Log, db *sql.Database, nonce uint64, applied types.LayerID) error {
+func (ac *accountCache) addPendingFromNonce(
+	logger log.Log,
+	db *sql.Database,
+	nonce uint64,
+	applied types.LayerID,
+) error {
 	mtxs, err := transactions.GetAcctPendingFromNonce(db, ac.addr, nonce)
 	if err != nil {
 		logger.With().Error("failed to get more pending txs from db", log.Err(err))
@@ -390,7 +395,12 @@ func (ac *accountCache) getMempool(logger log.Log) []*NanoTX {
 
 // NOTE: this is the only point in time when we reconsider those previously rejected txs,
 // because applying a layer changes the conservative balance in the cache.
-func (ac *accountCache) resetAfterApply(logger log.Log, db *sql.Database, nextNonce, newBalance uint64, applied types.LayerID) error {
+func (ac *accountCache) resetAfterApply(
+	logger log.Log,
+	db *sql.Database,
+	nextNonce, newBalance uint64,
+	applied types.LayerID,
+) error {
 	logger = logger.WithFields(ac.addr)
 	logger.With().Debug("resetting to nonce", log.Uint64("nonce", nextNonce))
 	for e := ac.txsByNonce.Front(); e != nil; e = e.Next() {
@@ -556,7 +566,13 @@ func acceptable(err error) bool {
 	return err == nil || errors.Is(err, errInsufficientBalance) || errors.Is(err, errTooManyNonce)
 }
 
-func (c *Cache) Add(ctx context.Context, db *sql.Database, tx *types.Transaction, received time.Time, mustPersist bool) error {
+func (c *Cache) Add(
+	ctx context.Context,
+	db *sql.Database,
+	tx *types.Transaction,
+	received time.Time,
+	mustPersist bool,
+) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	principal := tx.Principal
@@ -595,7 +611,12 @@ func (c *Cache) has(tid types.TransactionID) bool {
 }
 
 // LinkTXsWithProposal associates the transactions to a proposal.
-func (c *Cache) LinkTXsWithProposal(db *sql.Database, lid types.LayerID, pid types.ProposalID, tids []types.TransactionID) error {
+func (c *Cache) LinkTXsWithProposal(
+	db *sql.Database,
+	lid types.LayerID,
+	pid types.ProposalID,
+	tids []types.TransactionID,
+) error {
 	if len(tids) == 0 {
 		return nil
 	}
@@ -607,7 +628,12 @@ func (c *Cache) LinkTXsWithProposal(db *sql.Database, lid types.LayerID, pid typ
 }
 
 // LinkTXsWithBlock associates the transactions to a block.
-func (c *Cache) LinkTXsWithBlock(db *sql.Database, lid types.LayerID, bid types.BlockID, tids []types.TransactionID) error {
+func (c *Cache) LinkTXsWithBlock(
+	db *sql.Database,
+	lid types.LayerID,
+	bid types.BlockID,
+	tids []types.TransactionID,
+) error {
 	if len(tids) == 0 {
 		return nil
 	}
@@ -848,7 +874,11 @@ func undoLayers(db *sql.Database, from types.LayerID) error {
 	})
 }
 
-func getNextIncluded(db sql.Executor, id types.TransactionID, after types.LayerID) (types.LayerID, types.BlockID, error) {
+func getNextIncluded(
+	db sql.Executor,
+	id types.TransactionID,
+	after types.LayerID,
+) (types.LayerID, types.BlockID, error) {
 	bid, lid, err := transactions.TransactionInBlock(db, id, after)
 	if err != nil && errors.Is(err, sql.ErrNotFound) {
 		lid, err = transactions.TransactionInProposal(db, id, after)

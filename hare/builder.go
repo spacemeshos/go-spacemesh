@@ -79,7 +79,8 @@ func (m *Message) SignedBytes() []byte {
 // Certificate is a collection of messages and the set of values.
 // Typically used as a collection of commit messages.
 type Certificate struct {
-	Values  []types.ProposalID `scale:"max=500"` // the committed set S - expected are 50 proposals per layer + safety margin
+	// Values is the committed set - expected are 50 proposals per layer + safety margin
+	Values  []types.ProposalID `scale:"max=500"`
 	AggMsgs *AggregatedMessages
 }
 
@@ -93,10 +94,12 @@ type InnerMessage struct {
 	Layer          types.LayerID
 	Round          uint32 // the round counter (K)
 	Type           MessageType
-	CommittedRound uint32              // the round Values (S) is committed (Ki)
-	Values         []types.ProposalID  `scale:"max=500"` // the set S. optional for commit InnerMsg in a certificate - expected are 50 proposals per layer + safety margin
-	Svp            *AggregatedMessages // optional. only for proposal Messages
-	Cert           *Certificate        // optional
+	CommittedRound uint32 // the round Values (S) is committed (Ki)
+	// Values is the set S. optional for commit InnerMsg in a certificate -
+	// expected are 50 proposals per layer + safety margin
+	Values []types.ProposalID  `scale:"max=500"`
+	Svp    *AggregatedMessages // optional. only for proposal Messages
+	Cert   *Certificate        // optional
 }
 
 // HashBytes returns the message as bytes.

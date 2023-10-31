@@ -21,14 +21,13 @@ import (
 )
 
 var (
-	memberHash      = [32]byte{0x17, 0x51, 0xac, 0x12, 0xe7, 0xe, 0x15, 0xb4, 0xf7, 0x6c, 0x16, 0x77, 0x5c, 0xd3, 0x29, 0xae, 0x55, 0x97, 0x3b, 0x61, 0x25, 0x21, 0xda, 0xb2, 0xde, 0x82, 0x8a, 0x5c, 0xdb, 0x6c, 0x8a, 0xb3}
 	proof           *types.PoetProofMessage
 	createProofOnce sync.Once
 )
 
 func getPoetProof(t *testing.T) types.PoetProofMessage {
 	createProofOnce.Do(func() {
-		challenge := memberHash[:]
+		challenge := []byte("hello world, this is a challenge")
 
 		leaves, merkleProof, err := prover.GenerateProofWithoutPersistency(
 			context.Background(),
@@ -89,7 +88,13 @@ func TestPoetDbInvalidPoetProof(t *testing.T) {
 	msg.PoetProof.Root = []byte("some other root")
 
 	err := poetDb.Validate(msg.Statement[:], msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.EmptyEdSignature)
-	r.EqualError(err, fmt.Sprintf("failed to validate poet proof for poetID %x round 1337: validate PoET: merkle proof not valid", msg.PoetServiceID[:5]))
+	r.EqualError(
+		err,
+		fmt.Sprintf(
+			"failed to validate poet proof for poetID %x round 1337: validate PoET: merkle proof not valid",
+			msg.PoetServiceID[:5],
+		),
+	)
 	var pErr types.ProcessingError
 	r.False(errors.As(err, &pErr))
 }
@@ -101,7 +106,13 @@ func TestPoetDbInvalidPoetStatement(t *testing.T) {
 	msg.Statement = types.CalcHash32([]byte("some other statement"))
 
 	err := poetDb.Validate(msg.Statement[:], msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.EmptyEdSignature)
-	r.EqualError(err, fmt.Sprintf("failed to validate poet proof for poetID %x round 1337: validate PoET: merkle proof not valid", msg.PoetServiceID[:5]))
+	r.EqualError(
+		err,
+		fmt.Sprintf(
+			"failed to validate poet proof for poetID %x round 1337: validate PoET: merkle proof not valid",
+			msg.PoetServiceID[:5],
+		),
+	)
 	var pErr types.ProcessingError
 	r.False(errors.As(err, &pErr))
 }
@@ -112,5 +123,12 @@ func TestPoetDbNonExistingKeys(t *testing.T) {
 	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t))
 
 	_, err := poetDb.GetProofRef(msg.PoetServiceID, "0")
-	r.EqualError(err, fmt.Sprintf("could not fetch poet proof for poet ID %x in round %v: get value: database: not found", msg.PoetServiceID[:5], "0"))
+	r.EqualError(
+		err,
+		fmt.Sprintf(
+			"could not fetch poet proof for poet ID %x in round %v: get value: database: not found",
+			msg.PoetServiceID[:5],
+			"0",
+		),
+	)
 }

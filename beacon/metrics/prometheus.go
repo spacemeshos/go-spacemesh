@@ -93,15 +93,33 @@ func (bmc *BeaconMetricsCollector) Collect(ch chan<- prometheus.Metric) {
 	observed, calculated := bmc.gather()
 	for _, ob := range observed {
 		epochStr := ob.Epoch.String()
-		ch <- prometheus.MustNewConstMetric(bmc.observedBeaconCount, prometheus.CounterValue, float64(ob.WeightUnit), epochStr, ob.Beacon)
-		ch <- prometheus.MustNewConstMetric(bmc.observedBeaconWeight, prometheus.CounterValue, ob.Weight.Float(), epochStr, ob.Beacon)
+		ch <- prometheus.MustNewConstMetric(
+			bmc.observedBeaconCount,
+			prometheus.CounterValue,
+			float64(ob.WeightUnit),
+			epochStr,
+			ob.Beacon,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			bmc.observedBeaconWeight,
+			prometheus.CounterValue,
+			ob.Weight.Float(),
+			epochStr,
+			ob.Beacon,
+		)
 	}
 
 	if calculated == nil {
 		return
 	}
 	// export the calculated beacon for the target epoch for ease of monitoring along with the observed beacons
-	ch <- prometheus.MustNewConstMetric(bmc.calculatedBeaconWeight, prometheus.CounterValue, float64(0), calculated.Epoch.String(), calculated.Beacon)
+	ch <- prometheus.MustNewConstMetric(
+		bmc.calculatedBeaconWeight,
+		prometheus.CounterValue,
+		float64(0),
+		calculated.Epoch.String(),
+		calculated.Beacon,
+	)
 }
 
 var NumMaliciousProps = metrics.NewCounter(

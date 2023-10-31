@@ -17,7 +17,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
 
-func createTX(t *testing.T, principal *signing.EdSigner, dest types.Address, nonce, amount, fee uint64) *types.Transaction {
+func createTX(
+	t *testing.T,
+	principal *signing.EdSigner,
+	dest types.Address,
+	nonce, amount, fee uint64,
+) *types.Transaction {
 	t.Helper()
 
 	var raw []byte
@@ -40,7 +45,13 @@ func createTX(t *testing.T, principal *signing.EdSigner, dest types.Address, non
 	return &parsed
 }
 
-func makeMeshTX(tx *types.Transaction, lid types.LayerID, bid types.BlockID, received time.Time, state types.TXState) *types.MeshTransaction {
+func makeMeshTX(
+	tx *types.Transaction,
+	lid types.LayerID,
+	bid types.BlockID,
+	received time.Time,
+	state types.TXState,
+) *types.MeshTransaction {
 	return &types.MeshTransaction{
 		Transaction: *tx,
 		LayerID:     lid,
@@ -231,7 +242,11 @@ func TestApply_AlreadyApplied(t *testing.T) {
 
 	// different block applied again
 	require.Error(t, db.WithTx(context.Background(), func(dtx *sql.Tx) error {
-		return transactions.AddResult(dtx, tx.ID, &types.TransactionResult{Layer: lid.Add(1), Block: types.RandomBlockID()})
+		return transactions.AddResult(
+			dtx,
+			tx.ID,
+			&types.TransactionResult{Layer: lid.Add(1), Block: types.RandomBlockID()},
+		)
 	}))
 }
 

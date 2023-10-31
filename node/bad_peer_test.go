@@ -52,19 +52,23 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 	app2 := NewApp(t, &conf2, l)
 
 	types.SetLayersPerEpoch(conf1.LayersPerEpoch)
-	t.Cleanup(func() {
-		app1.Cleanup(ctx)
-		app2.Cleanup(ctx)
-	})
 	eg, grpContext := errgroup.WithContext(ctx)
 	eg.Go(func() error {
 		return app1.Start(grpContext)
 	})
 	<-app1.Started()
+	t.Cleanup(func() {
+		app1.Cleanup(ctx)
+		app1.eg.Wait()
+	})
 	eg.Go(func() error {
 		return app2.Start(grpContext)
 	})
 	<-app2.Started()
+	t.Cleanup(func() {
+		app2.Cleanup(ctx)
+		app2.eg.Wait()
+	})
 
 	// Connect app2 to app1
 	err := app2.Host().Connect(context.Background(), peer.AddrInfo{
