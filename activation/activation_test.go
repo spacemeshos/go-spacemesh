@@ -1390,7 +1390,7 @@ func TestBuilder_MoveNipostChallengeToDb(t *testing.T) {
 		CommitmentATX:  nil,
 		InitialPost:    nil,
 	}
-	require.NoError(t, SaveNipostChallenge(tab.nipostBuilder.DataDir(), ch))
+	require.NoError(t, saveNipostChallenge(tab.nipostBuilder.DataDir(), ch))
 	require.FileExists(t, filepath.Join(tab.nipostBuilder.DataDir(), challengeFilename))
 
 	require.NoError(t, tab.MoveNipostChallengeToDb())

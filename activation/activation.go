@@ -308,7 +308,7 @@ func (b *Builder) MovePostToDb() error {
 }
 
 func (b *Builder) MoveNipostChallengeToDb() error {
-	ch, err := LoadNipostChallenge(b.nipostBuilder.DataDir())
+	ch, err := loadNipostChallenge(b.nipostBuilder.DataDir())
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
 		return nil // no challenge file, nothing to do
