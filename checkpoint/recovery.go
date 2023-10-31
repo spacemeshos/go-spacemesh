@@ -333,7 +333,6 @@ func collectOwnAtxDeps(
 		}
 		if nipostCh.CommitmentATX != nil {
 			ref = *nipostCh.CommitmentATX
-			// TODO(mafa): if nil query post service for commitment atx (in case it is currently initializing)
 		}
 	}
 

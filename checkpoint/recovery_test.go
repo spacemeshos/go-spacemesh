@@ -621,38 +621,35 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_Still_Initializing(t *testing.T)
 		)
 	}
 
-	commitment, err := atxs.GetIDWithMaxHeight(olddb, types.EmptyNodeID)
-	require.NoError(t, err)
 	require.NoError(t, olddb.Close())
 
 	localDb, err := sql.Open("file:"+filepath.Join(cfg.DataDir, cfg.LocalDbFile), sql.WithMigrations(sql.LocalMigrations))
 	require.NoError(t, err)
 	require.NotNil(t, localDb)
 
-	// create post metadata to indicate that miner is still initializing
-	require.Equal(t, commitment, vatxs[len(vatxs)-1].ID())
-	// TODO(mafa): fix me
-	// err = nipost.AddChallenge(localDb, sig.NodeID(), &types.NIPostChallenge{
-	// 	NodeId:          sig.NodeID(),
-	// 	CommitmentAtxId: commitment,
-	// })
+	post := types.Post{
+		Indices: []byte{1, 2, 3},
+	}
+	commitmentAtx := types.RandomATXID()
+	err = nipost.AddChallenge(localDb, sig.NodeID(), &types.NIPostChallenge{
+		PublishEpoch:   0, // will be updated later
+		Sequence:       0,
+		PrevATXID:      types.EmptyATXID, // initial has no previous ATX
+		PositioningATX: types.EmptyATXID, // will be updated later
+		InitialPost:    &post,
+		CommitmentATX:  &commitmentAtx,
+	})
 	require.NoError(t, err)
 
 	preserve, err := checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg)
 	require.NoError(t, err)
-	require.NotNil(t, preserve)
-	// the two set of atxs have different received time. just compare IDs
-	require.ElementsMatch(t, atxIDs(vatxs), atxIDs(preserve.Deps))
-	require.ElementsMatch(t, proofs, preserve.Proofs)
+	require.Nil(t, preserve)
 
 	newdb, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
 	require.NotNil(t, newdb)
 	t.Cleanup(func() { require.NoError(t, newdb.Close()) })
 	verifyDbContent(t, newdb)
-	validateAndPreserveData(t, newdb, preserve.Deps, preserve.Proofs)
-	// note that poet proofs are not saved to newdb due to verification errors
-
 	restore, err := recovery.CheckpointInfo(newdb)
 	require.NoError(t, err)
 	require.EqualValues(t, recoverLayer, restore)
