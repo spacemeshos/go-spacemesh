@@ -119,7 +119,7 @@ type testAtxBuilder struct {
 }
 
 func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
-	lg := logtest.New(tb, zap.InfoLevel)
+	lg := logtest.New(tb)
 	edSigner, err := signing.NewEdSigner()
 	require.NoError(tb, err)
 	ctrl := gomock.NewController(tb)

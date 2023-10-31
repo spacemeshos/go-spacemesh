@@ -154,6 +154,7 @@ func TestRecover(t *testing.T) {
 				GoldenAtx:      goldenAtx,
 				DataDir:        t.TempDir(),
 				DbFile:         "test.sql",
+				LocalDbFile:    "local.sql",
 				PreserveOwnAtx: true,
 				NodeID:         types.NodeID{2, 3, 4},
 				Uri:            tc.uri,
@@ -725,11 +726,6 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 	}
 	require.NoError(t, olddb.Close())
 
-	localDb, err := sql.Open("file:"+filepath.Join(cfg.DataDir, cfg.LocalDbFile), sql.WithMigrations(sql.LocalMigrations))
-	require.NoError(t, err)
-	require.NotNil(t, localDb)
-	require.NoError(t, localDb.Close())
-
 	preserve, err := checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg)
 	require.NoError(t, err)
 	require.Nil(t, preserve)
@@ -795,11 +791,6 @@ func TestRecover_OwnAtxNotInCheckpoint_DontPreserve(t *testing.T) {
 	}
 	require.NoError(t, olddb.Close())
 
-	localDb, err := sql.Open("file:"+filepath.Join(cfg.DataDir, cfg.LocalDbFile), sql.WithMigrations(sql.LocalMigrations))
-	require.NoError(t, err)
-	require.NotNil(t, localDb)
-	require.NoError(t, localDb.Close())
-
 	preserve, err := checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg)
 	require.NoError(t, err)
 	require.Nil(t, preserve)
@@ -853,11 +844,6 @@ func TestRecover_OwnAtxInCheckpoint(t *testing.T) {
 	require.NotNil(t, olddb)
 	require.NoError(t, atxs.Add(olddb, newvatx(t, atx)))
 	require.NoError(t, olddb.Close())
-
-	localDb, err := sql.Open("file:"+filepath.Join(cfg.DataDir, cfg.LocalDbFile), sql.WithMigrations(sql.LocalMigrations))
-	require.NoError(t, err)
-	require.NotNil(t, localDb)
-	require.NoError(t, localDb.Close())
 
 	preserve, err := checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg)
 	require.NoError(t, err)
