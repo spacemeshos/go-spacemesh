@@ -552,6 +552,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
 		PositioningATX: posAtx.ID(),
 	})
 	require.NoError(t, err)
+	require.NoError(t, localDBFile.Close())
 
 	preserve, err := checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg)
 	require.NoError(t, err)
@@ -646,6 +647,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_Still_Initializing(t *testing.T)
 		CommitmentATX:  &commitmentAtx,
 	})
 	require.NoError(t, err)
+	require.NoError(t, localDBFile.Close())
 
 	preserve, err := checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg)
 	require.NoError(t, err)
