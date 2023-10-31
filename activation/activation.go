@@ -453,12 +453,8 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 	until := time.Until(b.poetRoundStart(current))
 	if until <= 0 {
 		metrics.PublishLateWindowLatency.Observe(-until.Seconds())
-		return nil, fmt.Errorf(
-			"%w: builder cannot to submit in epoch %d. poet round already started %v ago",
-			ErrATXChallengeExpired,
-			current,
-			-until,
-		)
+		current++
+		until = time.Until(b.poetRoundStart(current))
 	}
 	metrics.PublishOntimeWindowLatency.Observe(until.Seconds())
 	wait := buildNipostChallengeStartDeadline(b.poetRoundStart(current), b.poetCfg.GracePeriod)

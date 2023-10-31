@@ -1239,11 +1239,11 @@ func TestWaitPositioningAtx(t *testing.T) {
 		desc         string
 		shift, grace time.Duration
 
-		expect string
+		targetEpoch types.EpochID
 	}{
-		{"no wait", 100 * time.Millisecond, 100 * time.Millisecond, ""},
-		{"wait", 100 * time.Millisecond, 0, ""},
-		{"round started", 0, 0, "poet round already started"},
+		{"no wait", 100 * time.Millisecond, 100 * time.Millisecond, 2},
+		{"wait", 100 * time.Millisecond, 0, 2},
+		{"round started", 0, 0, 3},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
@@ -1253,7 +1253,8 @@ func TestWaitPositioningAtx(t *testing.T) {
 			}))
 			tab.mclock.EXPECT().CurrentLayer().Return(types.LayerID(0)).AnyTimes()
 			tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(func(lid types.LayerID) time.Time {
-				return genesis.Add(time.Duration(lid) * layerDuration)
+				// layer duration is 10ms to speed up test
+				return genesis.Add(time.Duration(lid) * 10 * time.Millisecond)
 			}).AnyTimes()
 
 			// everything else are stubs that are irrelevant for the test
@@ -1262,8 +1263,14 @@ func TestWaitPositioningAtx(t *testing.T) {
 			closed := make(chan struct{})
 			close(closed)
 			tab.mclock.EXPECT().AwaitLayer(types.EpochID(1).FirstLayer()).Return(closed).AnyTimes()
-			tab.mclock.EXPECT().AwaitLayer(types.EpochID(2).FirstLayer()).Return(make(chan struct{})).AnyTimes()
-			tab.mpub.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			tab.mclock.EXPECT().AwaitLayer(types.EpochID(2).FirstLayer()).Return(closed).AnyTimes()
+			tab.mpub.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, _ string, got []byte) error {
+					var gotAtx types.ActivationTx
+					require.NoError(t, codec.Decode(got, &gotAtx))
+					require.Equal(t, gotAtx.TargetEpoch(), tc.targetEpoch)
+					return nil
+				})
 
 			commitmentATX := types.RandomATXID()
 			require.NoError(t, nipost.AddChallenge(tab.localDb, tab.sig.NodeID(), &types.NIPostChallenge{
@@ -1277,11 +1284,7 @@ func TestWaitPositioningAtx(t *testing.T) {
 			}))
 
 			err := tab.PublishActivationTx(context.Background())
-			if len(tc.expect) > 0 {
-				require.ErrorContains(t, err, tc.expect)
-			} else {
-				require.NoError(t, err)
-			}
+			require.NoError(t, err)
 		})
 	}
 }
