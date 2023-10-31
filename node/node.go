@@ -989,6 +989,12 @@ func (app *App) initServices(ctx context.Context) error {
 		activation.WithPoetRetryInterval(app.Config.HARE.WakeupDelta),
 		activation.WithValidator(app.validator),
 	)
+	if err := atxBuilder.MovePostToDb(); err != nil {
+		app.log.Panic("failed to move initial post state to db: %v", err)
+	}
+	if err := atxBuilder.MoveNipostChallengeToDb(); err != nil {
+		app.log.Panic("failed to move nipost challenge to db: %v", err)
+	}
 
 	malfeasanceHandler := malfeasance.NewHandler(
 		app.cachedDB,
