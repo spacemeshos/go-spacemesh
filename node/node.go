@@ -379,7 +379,6 @@ func (app *App) LoadCheckpoint(ctx context.Context) (*checkpoint.PreservedData, 
 	}
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      types.ATXID(app.Config.Genesis.GoldenATX()),
-		PostDataDir:    app.Config.SMESHING.Opts.DataDir,
 		DataDir:        app.Config.DataDir(),
 		DbFile:         dbFile,
 		LocalDbFile:    localDbFile,
@@ -1629,7 +1628,6 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	localDb, err := sql.Open("file:"+filepath.Join(dbPath, localDbFile),
 		sql.WithMigrations(sql.LocalMigrations),
 		sql.WithConnections(app.Config.DatabaseConnections),
-		// TODO(mafa): add data migration to DB here
 	)
 	if err != nil {
 		return fmt.Errorf("open sqlite db %w", err)
