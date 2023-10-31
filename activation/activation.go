@@ -638,8 +638,9 @@ func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChalleng
 	b.log.Debug("publication epoch has arrived!")
 
 	if challenge.PublishEpoch < b.currentEpoch() {
-		if err = b.discardChallenge(); err != nil {
-			return nil, fmt.Errorf("%w: atx publish epoch has passed during nipost construction", err)
+		if challenge.InitialPost != nil {
+			// initial post is not discarded; don't return ErrATXChallengeExpired
+			return nil, errors.New("atx publish epoch has passed during nipost construction")
 		}
 		return nil, fmt.Errorf("%w: atx publish epoch has passed during nipost construction", ErrATXChallengeExpired)
 	}
