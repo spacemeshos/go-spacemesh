@@ -10,7 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-func TestChallenge(t *testing.T) {
+func Test_AddChallenge(t *testing.T) {
 	commitmentATX := types.RandomATXID()
 	tt := []struct {
 		name string
@@ -63,7 +63,7 @@ func TestChallenge(t *testing.T) {
 	}
 }
 
-func TestAdd_NoDuplicates(t *testing.T) {
+func Test_AddState_NoDuplicates(t *testing.T) {
 	db := datastore.NewLocalDB(sql.InMemory(sql.WithMigrations(sql.LocalMigrations)))
 
 	ch1 := &types.NIPostChallenge{
@@ -92,11 +92,11 @@ func TestAdd_NoDuplicates(t *testing.T) {
 	require.Error(t, err)
 
 	// succeed to add challenge for different node
-	err = AddChallenge(db, types.RandomNodeID(), ch1)
+	err = AddChallenge(db, types.RandomNodeID(), ch2)
 	require.NoError(t, err)
 }
 
-func TestUpdateChallenge(t *testing.T) {
+func Test_UpdateState(t *testing.T) {
 	db := datastore.NewLocalDB(sql.InMemory(sql.WithMigrations(sql.LocalMigrations)))
 
 	commitmentATX := types.RandomATXID()
@@ -122,37 +122,4 @@ func TestUpdateChallenge(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, challenge)
 	require.Equal(t, ch, challenge)
-}
-
-func TestAdd_NoDuplicate(t *testing.T) {
-	db := datastore.NewLocalDB(sql.InMemory(sql.WithMigrations(sql.LocalMigrations)))
-
-	ch1 := &types.NIPostChallenge{
-		PublishEpoch:   4,
-		Sequence:       2,
-		PrevATXID:      types.RandomATXID(),
-		PositioningATX: types.RandomATXID(),
-		CommitmentATX:  nil,
-		InitialPost:    nil,
-	}
-	ch2 := &types.NIPostChallenge{
-		PublishEpoch:   5,
-		Sequence:       2,
-		PrevATXID:      types.RandomATXID(),
-		PositioningATX: types.RandomATXID(),
-		CommitmentATX:  nil,
-		InitialPost:    nil,
-	}
-
-	nodeID := types.RandomNodeID()
-	err := AddChallenge(db, nodeID, ch1)
-	require.NoError(t, err)
-
-	// fail to add second challenge for same node
-	err = AddChallenge(db, nodeID, ch2)
-	require.Error(t, err)
-
-	// succeed to add challenge for different node
-	err = AddChallenge(db, types.RandomNodeID(), ch2)
-	require.NoError(t, err)
 }
