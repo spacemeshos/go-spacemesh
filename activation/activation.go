@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/shared"
 	"golang.org/x/sync/errgroup"
 
@@ -291,20 +292,15 @@ func (b *Builder) MovePostToDb() error {
 	default:
 	}
 
-	// TODO(mafa): for migration instead use initialization.LoadMetadata?
-	client, err := b.postService.Client(b.signer.NodeID())
-	if err != nil {
-		return fmt.Errorf("getting post client: %w", err)
-	}
-
-	info, err := client.Info(context.Background())
+	meta, err := initialization.LoadMetadata(b.nipostBuilder.DataDir())
 	if err != nil {
 		return fmt.Errorf("getting post info: %w", err)
 	}
+	commitmentAtxId := types.BytesToATXID(meta.CommitmentAtxId)
 
 	ch := &types.NIPostChallenge{
 		InitialPost:   post,
-		CommitmentATX: &info.CommitmentATX,
+		CommitmentATX: &commitmentAtxId,
 	}
 	if err := nipost.AddChallenge(b.localDb, b.signer.NodeID(), ch); err != nil {
 		return fmt.Errorf("adding post to db: %w", err)
