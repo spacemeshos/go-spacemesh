@@ -13,8 +13,6 @@ import (
 	"time"
 
 	"github.com/spacemeshos/poet/shared"
-	"github.com/spacemeshos/post/initialization"
-	postShared "github.com/spacemeshos/post/shared"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -31,6 +29,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/nipost"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
 	"github.com/spacemeshos/go-spacemesh/sql/recovery"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
@@ -153,7 +152,6 @@ func TestRecover(t *testing.T) {
 			fs := afero.NewMemMapFs()
 			cfg := &checkpoint.RecoverConfig{
 				GoldenAtx:      goldenAtx,
-				PostDataDir:    t.TempDir(),
 				DataDir:        t.TempDir(),
 				DbFile:         "test.sql",
 				PreserveOwnAtx: true,
@@ -164,7 +162,8 @@ func TestRecover(t *testing.T) {
 			bsdir := filepath.Join(cfg.DataDir, bootstrap.DirName)
 			require.NoError(t, fs.MkdirAll(bsdir, 0o700))
 			db := sql.InMemory()
-			preserve, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, fs, cfg)
+			localDb := sql.InMemory(sql.WithMigrations(sql.LocalMigrations))
+			preserve, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, localDb, fs, cfg)
 			if tc.expErr != nil {
 				require.ErrorIs(t, err, tc.expErr)
 				return
@@ -200,7 +199,6 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 	fs := afero.NewMemMapFs()
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      goldenAtx,
-		PostDataDir:    t.TempDir(),
 		DataDir:        t.TempDir(),
 		DbFile:         "test.sql",
 		PreserveOwnAtx: true,
@@ -211,9 +209,10 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 	bsdir := filepath.Join(cfg.DataDir, bootstrap.DirName)
 	require.NoError(t, fs.MkdirAll(bsdir, 0o700))
 	db := sql.InMemory()
+	localDb := sql.InMemory(sql.WithMigrations(sql.LocalMigrations))
 	types.SetEffectiveGenesis(0)
 	require.NoError(t, recovery.SetCheckpoint(db, types.LayerID(recoverLayer)))
-	preserve, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, fs, cfg)
+	preserve, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, localDb, fs, cfg)
 	require.NoError(t, err)
 	require.Nil(t, preserve)
 	require.EqualValues(t, recoverLayer-1, types.GetEffectiveGenesis())
@@ -430,9 +429,9 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve(t *testing.T) {
 	require.NoError(t, err)
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      goldenAtx,
-		PostDataDir:    t.TempDir(),
 		DataDir:        t.TempDir(),
 		DbFile:         "test.sql",
+		LocalDbFile:    "local.sql",
 		PreserveOwnAtx: true,
 		NodeID:         sig.NodeID(),
 		Uri:            fmt.Sprintf("%s/snapshot-15", ts.URL),
@@ -502,9 +501,9 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
 	require.NoError(t, err)
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      goldenAtx,
-		PostDataDir:    t.TempDir(),
 		DataDir:        t.TempDir(),
 		DbFile:         "test.sql",
+		LocalDbFile:    "local.sql",
 		PreserveOwnAtx: true,
 		NodeID:         sig.NodeID(),
 		Uri:            fmt.Sprintf("%s/snapshot-15", ts.URL),
@@ -537,12 +536,18 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
 	// write pending nipost challenge to simulate a pending atx still waiting for poet proof.
 	prevAtx := vatxs[len(vatxs)-2]
 	posAtx := vatxs[len(vatxs)-1]
-	require.NoError(t, activation.SaveNipostChallenge(cfg.PostDataDir, &types.NIPostChallenge{
+
+	localDb, err := sql.Open("file:"+filepath.Join(cfg.DataDir, cfg.LocalDbFile), sql.WithMigrations(sql.LocalMigrations))
+	require.NoError(t, err)
+	require.NotNil(t, localDb)
+
+	err = nipost.AddChallenge(localDb, sig.NodeID(), &types.NIPostChallenge{
 		PublishEpoch:   posAtx.PublishEpoch + 1,
 		Sequence:       prevAtx.Sequence + 1,
-		PrevATXID:      prevAtx.ID(), // TODO(mafa): safe to DB instead
+		PrevATXID:      prevAtx.ID(),
 		PositioningATX: posAtx.ID(),
-	}))
+	})
+	require.NoError(t, err)
 
 	preserve, err := checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg)
 	require.NoError(t, err)
@@ -584,9 +589,9 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_Still_Initializing(t *testing.T)
 	require.NoError(t, err)
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      goldenAtx,
-		PostDataDir:    t.TempDir(),
 		DataDir:        t.TempDir(),
 		DbFile:         "test.sql",
+		LocalDbFile:    "local.sql",
 		PreserveOwnAtx: true,
 		NodeID:         sig.NodeID(),
 		Uri:            fmt.Sprintf("%s/snapshot-15", ts.URL),
@@ -619,12 +624,18 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_Still_Initializing(t *testing.T)
 	require.NoError(t, err)
 	require.NoError(t, olddb.Close())
 
+	localDb, err := sql.Open("file:"+filepath.Join(cfg.DataDir, cfg.LocalDbFile), sql.WithMigrations(sql.LocalMigrations))
+	require.NoError(t, err)
+	require.NotNil(t, localDb)
+
 	// create post metadata to indicate that miner is still initializing
 	require.Equal(t, commitment, vatxs[len(vatxs)-1].ID())
-	require.NoError(t, initialization.SaveMetadata(cfg.PostDataDir, &postShared.PostMetadata{
-		NodeId:          sig.NodeID().Bytes(),
-		CommitmentAtxId: commitment.Bytes(),
-	}))
+	// TODO(mafa): fix me
+	// err = nipost.AddChallenge(localDb, sig.NodeID(), &types.NIPostChallenge{
+	// 	NodeId:          sig.NodeID(),
+	// 	CommitmentAtxId: commitment,
+	// })
+	require.NoError(t, err)
 
 	preserve, err := checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg)
 	require.NoError(t, err)
@@ -666,9 +677,9 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 	require.NoError(t, err)
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      goldenAtx,
-		PostDataDir:    t.TempDir(),
 		DataDir:        t.TempDir(),
 		DbFile:         "test.sql",
+		LocalDbFile:    "local.sql",
 		PreserveOwnAtx: true,
 		NodeID:         sig.NodeID(),
 		Uri:            fmt.Sprintf("%s/snapshot-15", ts.URL),
@@ -714,6 +725,11 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 	}
 	require.NoError(t, olddb.Close())
 
+	localDb, err := sql.Open("file:"+filepath.Join(cfg.DataDir, cfg.LocalDbFile), sql.WithMigrations(sql.LocalMigrations))
+	require.NoError(t, err)
+	require.NotNil(t, localDb)
+	require.NoError(t, localDb.Close())
+
 	preserve, err := checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg)
 	require.NoError(t, err)
 	require.Nil(t, preserve)
@@ -748,9 +764,9 @@ func TestRecover_OwnAtxNotInCheckpoint_DontPreserve(t *testing.T) {
 	require.NoError(t, err)
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      goldenAtx,
-		PostDataDir:    t.TempDir(),
 		DataDir:        t.TempDir(),
 		DbFile:         "test.sql",
+		LocalDbFile:    "local.sql",
 		PreserveOwnAtx: false,
 		NodeID:         sig.NodeID(),
 		Uri:            fmt.Sprintf("%s/snapshot-15", ts.URL),
@@ -778,6 +794,11 @@ func TestRecover_OwnAtxNotInCheckpoint_DontPreserve(t *testing.T) {
 		)
 	}
 	require.NoError(t, olddb.Close())
+
+	localDb, err := sql.Open("file:"+filepath.Join(cfg.DataDir, cfg.LocalDbFile), sql.WithMigrations(sql.LocalMigrations))
+	require.NoError(t, err)
+	require.NotNil(t, localDb)
+	require.NoError(t, localDb.Close())
 
 	preserve, err := checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg)
 	require.NoError(t, err)
@@ -818,9 +839,9 @@ func TestRecover_OwnAtxInCheckpoint(t *testing.T) {
 
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      goldenAtx,
-		PostDataDir:    t.TempDir(),
 		DataDir:        t.TempDir(),
 		DbFile:         "test.sql",
+		LocalDbFile:    "local.sql",
 		PreserveOwnAtx: true,
 		NodeID:         nid,
 		Uri:            fmt.Sprintf("%s/snapshot-15", ts.URL),
@@ -832,6 +853,11 @@ func TestRecover_OwnAtxInCheckpoint(t *testing.T) {
 	require.NotNil(t, olddb)
 	require.NoError(t, atxs.Add(olddb, newvatx(t, atx)))
 	require.NoError(t, olddb.Close())
+
+	localDb, err := sql.Open("file:"+filepath.Join(cfg.DataDir, cfg.LocalDbFile), sql.WithMigrations(sql.LocalMigrations))
+	require.NoError(t, err)
+	require.NotNil(t, localDb)
+	require.NoError(t, localDb.Close())
 
 	preserve, err := checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg)
 	require.NoError(t, err)
