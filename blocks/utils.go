@@ -262,7 +262,10 @@ func rewardInfoAndHeight(
 			weight.Mul(weight, new(big.Rat).SetUint64(uint64(len(p.Ballot.EligibilityProofs))))
 			weights[p.AtxID] = weight
 		} else {
-			return 0, nil, fmt.Errorf("%w: multiple proposals with the same ATX atx %v proposal %v", errDuplicateATX, p.AtxID, p.ID())
+			return 0, nil, fmt.Errorf(
+				"%w: multiple proposals with the same ATX atx %v proposal %v",
+				errDuplicateATX, p.AtxID, p.ID(),
+			)
 		}
 		events.ReportProposal(events.ProposalIncluded, p)
 	}

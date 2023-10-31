@@ -378,7 +378,13 @@ func Test_run(t *testing.T) {
 				tg.mockExec.EXPECT().
 					ExecuteOptimistic(gomock.Any(), layerID, uint64(baseTickHeight), gomock.Any(), gomock.Any()).
 					DoAndReturn(
-						func(_ context.Context, lid types.LayerID, tickHeight uint64, rewards []types.AnyReward, tids []types.TransactionID) (*types.Block, error) {
+						func(
+							_ context.Context,
+							lid types.LayerID,
+							tickHeight uint64,
+							rewards []types.AnyReward,
+							tids []types.TransactionID,
+						) (*types.Block, error) {
 							require.Len(t, tids, len(txIDs))
 							block = &types.Block{
 								InnerBlock: types.InnerBlock{
@@ -505,7 +511,13 @@ func Test_run_ExecuteFailed(t *testing.T) {
 	tg.mockExec.EXPECT().
 		ExecuteOptimistic(gomock.Any(), layerID, uint64(baseTickHeight), gomock.Any(), gomock.Any()).
 		DoAndReturn(
-			func(_ context.Context, lid types.LayerID, tickHeight uint64, rewards []types.AnyReward, tids []types.TransactionID) (*types.Block, error) {
+			func(
+				_ context.Context,
+				lid types.LayerID,
+				tickHeight uint64,
+				rewards []types.AnyReward,
+				tids []types.TransactionID,
+			) (*types.Block, error) {
 				require.Len(t, tids, len(txIDs))
 				return nil, errors.New("unknown")
 			})
