@@ -321,10 +321,6 @@ func (b *Builder) generateInitialPost(ctx context.Context) error {
 	return nil
 }
 
-func (b *Builder) receivePendingPoetClients() *[]poetClient {
-	return b.pendingPoetClients.Swap(nil)
-}
-
 func (b *Builder) run(ctx context.Context) {
 	defer b.log.Info("atx builder stopped")
 
@@ -343,10 +339,6 @@ func (b *Builder) run(ctx context.Context) {
 	}
 
 	for {
-		if poetClients := b.receivePendingPoetClients(); poetClients != nil {
-			b.nipostBuilder.UpdatePoETProvers(*poetClients)
-		}
-
 		ctx := log.WithNewSessionID(ctx)
 		err := b.PublishActivationTx(ctx)
 		if err == nil {
