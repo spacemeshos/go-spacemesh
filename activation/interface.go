@@ -3,6 +3,7 @@ package activation
 import (
 	"context"
 	"io"
+	"net/url"
 	"time"
 
 	"github.com/spacemeshos/post/shared"
@@ -61,7 +62,7 @@ type layerClock interface {
 }
 
 type nipostBuilder interface {
-	BuildNIPost(ctx context.Context, challenge *types.NIPostChallenge) (*types.NIPost, error)
+	BuildNIPost(ctx context.Context, challenge *types.NIPostChallenge, certifier certifierService) (*types.NIPost, error)
 	DataDir() string
 }
 
@@ -93,13 +94,24 @@ type SmeshingProvider interface {
 	SetCoinbase(coinbase types.Address)
 }
 
-// poetClient servers as an interface to communicate with a PoET server.
+type PoetCert struct {
+	Signature []byte
+}
+
+type PoetAuth struct {
+	*PoetPoW
+	*PoetCert
+}
+
+// PoetClient servers as an interface to communicate with a PoET server.
 // It is used to submit challenges and fetch proofs.
-type poetClient interface {
+type PoetClient interface {
 	Address() string
 
+	// FIXME: remove support for deprecated poet PoW
 	PowParams(ctx context.Context) (*PoetPowParams, error)
 
+	// FIXME: remove support for deprecated poet PoW
 	// Submit registers a challenge in the proving service current open round.
 	Submit(
 		ctx context.Context,
@@ -107,14 +119,35 @@ type poetClient interface {
 		prefix, challenge []byte,
 		signature types.EdSignature,
 		nodeID types.NodeID,
-		pow PoetPoW,
+		auth PoetAuth,
 	) (*types.PoetRound, error)
 
 	// PoetServiceID returns the public key of the PoET proving service.
 	PoetServiceID(context.Context) (types.PoetServiceID, error)
 
+	CertifierInfo(context.Context) (*CertifierInfo, error)
+
 	// Proof returns the proof for the given round ID.
 	Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Member, error)
+}
+
+type CertifierInfo struct {
+	URL    *url.URL
+	PubKey []byte
+}
+
+// certifierService is used to certify nodeID for registerting in the poet.
+type certifierService interface {
+	// Acquire a certificate for the given poet.
+	GetCertificate(poet string) *PoetCert
+	// Recertify the nodeID and return a certificate confirming that
+	// it is verified. The certificate can be later used to submit in poet.
+	Recertify(ctx context.Context, poet PoetClient) (*PoetCert, error)
+
+	// Certify the nodeID for all given poets.
+	// It won't recertify poets that already have a certificate.
+	// It returns a map of a poet address to a certificate for it.
+	CertifyAll(ctx context.Context, poets []PoetClient) map[string]PoetCert
 }
 
 type poetDbAPI interface {

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/post/initialization"
+	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -84,6 +85,11 @@ func TestValidator_Validate(t *testing.T) {
 		return err == nil
 	}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
 
+	postClient, err := svc.Client(sig.NodeID())
+	require.NoError(t, err)
+	post, info, err := postClient.Proof(context.Background(), shared.ZeroChallenge)
+	require.NoError(t, err)
+
 	nb, err := activation.NewNIPostBuilder(
 		poetDb,
 		svc,
@@ -101,7 +107,8 @@ func TestValidator_Validate(t *testing.T) {
 	}
 	challengeHash := challenge.Hash()
 
-	nipost, err := nb.BuildNIPost(context.Background(), &challenge)
+	certifier := activation.NewCertifier(t.TempDir(), logger, post, info)
+	nipost, err := nb.BuildNIPost(context.Background(), &challenge, certifier)
 	require.NoError(t, err)
 
 	v := activation.NewValidator(poetDb, cfg, opts.Scrypt, verifier)

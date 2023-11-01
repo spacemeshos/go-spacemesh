@@ -24,6 +24,7 @@ var (
 	ErrNotFound       = errors.New("not found")
 	ErrUnavailable    = errors.New("unavailable")
 	ErrInvalidRequest = errors.New("invalid request")
+	ErrUnathorized    = errors.New("unauthorized")
 )
 
 type PoetPowParams struct {
@@ -149,6 +150,25 @@ func (c *HTTPPoetClient) PowParams(ctx context.Context) (*PoetPowParams, error) 
 	}, nil
 }
 
+func (c *HTTPPoetClient) CertifierInfo(ctx context.Context) (*CertifierInfo, error) {
+	info, err := c.info(ctx)
+	if err != nil {
+		return nil, err
+	}
+	certifierInfo := info.GetCertifier()
+	if certifierInfo == nil {
+		return nil, errors.New("poet doesn't support certifier")
+	}
+	url, err := url.Parse(certifierInfo.Url)
+	if err != nil {
+		return nil, fmt.Errorf("parsing certifier address: %w", err)
+	}
+	return &CertifierInfo{
+		PubKey: certifierInfo.Pubkey,
+		URL:    url,
+	}, nil
+}
+
 // Submit registers a challenge in the proving service current open round.
 func (c *HTTPPoetClient) Submit(
 	ctx context.Context,
@@ -156,20 +176,28 @@ func (c *HTTPPoetClient) Submit(
 	prefix, challenge []byte,
 	signature types.EdSignature,
 	nodeID types.NodeID,
-	pow PoetPoW,
+	auth PoetAuth,
 ) (*types.PoetRound, error) {
 	request := rpcapi.SubmitRequest{
 		Prefix:    prefix,
 		Challenge: challenge,
 		Signature: signature.Bytes(),
 		Pubkey:    nodeID.Bytes(),
-		Nonce:     pow.Nonce,
-		PowParams: &rpcapi.PowParams{
-			Challenge:  pow.Params.Challenge,
-			Difficulty: uint32(pow.Params.Difficulty),
-		},
-		Deadline: timestamppb.New(deadline),
+		Deadline:  timestamppb.New(deadline),
 	}
+	if auth.PoetPoW != nil {
+		request.PowParams = &rpcapi.PowParams{
+			Challenge:  auth.PoetPoW.Params.Challenge,
+			Difficulty: uint32(auth.PoetPoW.Params.Difficulty),
+		}
+		request.Nonce = auth.PoetPoW.Nonce
+	}
+	if auth.PoetCert != nil {
+		request.Certificate = &rpcapi.SubmitRequest_Certificate{
+			Signature: auth.PoetCert.Signature,
+		}
+	}
+
 	resBody := rpcapi.SubmitResponse{}
 	if err := c.req(ctx, http.MethodPost, "/v1/submit", &request, &resBody); err != nil {
 		return nil, fmt.Errorf("submitting challenge: %w", err)
@@ -182,18 +210,25 @@ func (c *HTTPPoetClient) Submit(
 	return &types.PoetRound{ID: resBody.RoundId, End: types.RoundEnd(roundEnd)}, nil
 }
 
+func (c *HTTPPoetClient) info(ctx context.Context) (*rpcapi.InfoResponse, error) {
+	resBody := rpcapi.InfoResponse{}
+	if err := c.req(ctx, http.MethodGet, "/v1/info", nil, &resBody); err != nil {
+		return nil, fmt.Errorf("getting poet ID: %w", err)
+	}
+	// cache the poet service ID
+	c.poetServiceID.ServiceID = resBody.ServicePubkey
+	return &resBody, nil
+}
+
 // PoetServiceID returns the public key of the PoET proving service.
 func (c *HTTPPoetClient) PoetServiceID(ctx context.Context) (types.PoetServiceID, error) {
 	if c.poetServiceID.ServiceID != nil {
 		return c.poetServiceID, nil
 	}
-	resBody := rpcapi.InfoResponse{}
-
-	if err := c.req(ctx, http.MethodGet, "/v1/info", nil, &resBody); err != nil {
-		return types.PoetServiceID{}, fmt.Errorf("getting poet ID: %w", err)
+	if _, err := c.info(ctx); err != nil {
+		return types.PoetServiceID{}, err
 	}
 
-	c.poetServiceID.ServiceID = resBody.ServicePubkey
 	return c.poetServiceID, nil
 }
 
@@ -271,6 +306,8 @@ func (c *HTTPPoetClient) req(ctx context.Context, method, path string, reqBody, 
 		return fmt.Errorf("%w: response status code: %s, body: %s", ErrUnavailable, res.Status, string(data))
 	case http.StatusBadRequest:
 		return fmt.Errorf("%w: response status code: %s, body: %s", ErrInvalidRequest, res.Status, string(data))
+	case http.StatusUnauthorized:
+		return fmt.Errorf("%w: response status code: %s, body: %s", ErrUnathorized, res.Status, string(data))
 	default:
 		return fmt.Errorf("unrecognized error: status code: %s, body: %s", res.Status, string(data))
 	}
