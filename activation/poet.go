@@ -44,10 +44,6 @@ type HTTPPoetClient struct {
 	logger        *zap.Logger
 }
 
-func defaultPoetClientFunc(address string, cfg PoetConfig) (poetClient, error) {
-	return NewHTTPPoetClient(address, cfg)
-}
-
 func checkRetry(ctx context.Context, resp *http.Response, err error) (bool, error) {
 	if resp != nil && resp.StatusCode == http.StatusNotFound {
 		return true, nil
