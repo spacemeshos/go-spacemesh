@@ -324,7 +324,7 @@ func (b *Builder) generateInitialPost(ctx context.Context) error {
 		b.log.Info("load initial post from db")
 		return nil
 	default:
-		b.log.With().Info("creating initial post")
+		b.log.Info("creating initial post")
 	}
 
 	// Create the initial post and save it.
