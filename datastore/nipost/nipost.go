@@ -84,7 +84,7 @@ func RemoveChallenge(db *datastore.LocalDB, nodeID types.NodeID) error {
 	return nil
 }
 
-// ChallengeByEpoch gets any ATX by the specified NodeID published in the given epoch.
+// Challenge returns the NIPost challenge for the given nodeID.
 func Challenge(db *datastore.LocalDB, nodeID types.NodeID) (*types.NIPostChallenge, error) {
 	var ch *types.NIPostChallenge
 	enc := func(stmt *sql.Statement) {
