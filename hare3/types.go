@@ -2,6 +2,7 @@ package hare3
 
 import (
 	"fmt"
+	"math"
 
 	"go.uber.org/zap/zapcore"
 
@@ -42,7 +43,7 @@ type IterRound struct {
 func (ir IterRound) Delay(since IterRound) int {
 	delay := int(ir.Absolute()) - int(since.Absolute())
 	if delay < 0 {
-		return 0
+		return math.MaxInt32
 	}
 	return delay
 }

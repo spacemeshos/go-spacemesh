@@ -517,7 +517,7 @@ func TestProtocol(t *testing.T) {
 			new(toutput), // propose
 			new(toutput), // wait1
 			new(toutput), // wait2
-			new(toutput).active().round(commit).ref("a", "b"),
+			new(toutput).active(),
 		),
 	} {
 		tc := tc
