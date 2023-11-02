@@ -59,14 +59,70 @@ var allAtxs = map[types.NodeID][]*types.ActivationTx{
 }
 
 var allAccounts = []*types.Account{
-	{Layer: types.LayerID(0), Address: types.Address{1, 1}, NextNonce: 1, Balance: 1300, TemplateAddress: &types.Address{2}, State: []byte("state10")},
-	{Layer: types.LayerID(1), Address: types.Address{1, 1}, NextNonce: 4, Balance: 3111, TemplateAddress: &types.Address{2}, State: []byte("state11")},
-	{Layer: types.LayerID(5), Address: types.Address{1, 1}, NextNonce: 5, Balance: 111, TemplateAddress: &types.Address{2}, State: []byte("state15")},
-	{Layer: types.LayerID(2), Address: types.Address{2, 2}, NextNonce: 1, Balance: 300, TemplateAddress: &types.Address{2}, State: []byte("state22")},
-	{Layer: types.LayerID(4), Address: types.Address{2, 2}, NextNonce: 14, Balance: 311, TemplateAddress: &types.Address{2}, State: []byte("state24")},
-	{Layer: types.LayerID(6), Address: types.Address{2, 2}, NextNonce: 15, Balance: 111, TemplateAddress: &types.Address{2}, State: []byte("state26")},
-	{Layer: types.LayerID(5), Address: types.Address{3, 3}, NextNonce: 1, Balance: 124, TemplateAddress: &types.Address{3}, State: []byte("state35")},
-	{Layer: types.LayerID(7), Address: types.Address{4, 4}, NextNonce: 1, Balance: 31, TemplateAddress: &types.Address{3}, State: []byte("state47")},
+	{
+		Layer:           types.LayerID(0),
+		Address:         types.Address{1, 1},
+		NextNonce:       1,
+		Balance:         1300,
+		TemplateAddress: &types.Address{2},
+		State:           []byte("state10"),
+	},
+	{
+		Layer:           types.LayerID(1),
+		Address:         types.Address{1, 1},
+		NextNonce:       4,
+		Balance:         3111,
+		TemplateAddress: &types.Address{2},
+		State:           []byte("state11"),
+	},
+	{
+		Layer:           types.LayerID(5),
+		Address:         types.Address{1, 1},
+		NextNonce:       5,
+		Balance:         111,
+		TemplateAddress: &types.Address{2},
+		State:           []byte("state15"),
+	},
+	{
+		Layer:           types.LayerID(2),
+		Address:         types.Address{2, 2},
+		NextNonce:       1,
+		Balance:         300,
+		TemplateAddress: &types.Address{2},
+		State:           []byte("state22"),
+	},
+	{
+		Layer:           types.LayerID(4),
+		Address:         types.Address{2, 2},
+		NextNonce:       14,
+		Balance:         311,
+		TemplateAddress: &types.Address{2},
+		State:           []byte("state24"),
+	},
+	{
+		Layer:           types.LayerID(6),
+		Address:         types.Address{2, 2},
+		NextNonce:       15,
+		Balance:         111,
+		TemplateAddress: &types.Address{2},
+		State:           []byte("state26"),
+	},
+	{
+		Layer:           types.LayerID(5),
+		Address:         types.Address{3, 3},
+		NextNonce:       1,
+		Balance:         124,
+		TemplateAddress: &types.Address{3},
+		State:           []byte("state35"),
+	},
+	{
+		Layer:           types.LayerID(7),
+		Address:         types.Address{4, 4},
+		NextNonce:       1,
+		Balance:         31,
+		TemplateAddress: &types.Address{3},
+		State:           []byte("state47"),
+	},
 }
 
 func expectedCheckpoint(t *testing.T, snapshot types.LayerID, numAtxs int) *types.Checkpoint {
@@ -97,7 +153,10 @@ func expectedCheckpoint(t *testing.T, snapshot types.LayerID, numAtxs int) *type
 			n = numAtxs
 		}
 		for i := 0; i < n; i++ {
-			atxData = append(atxData, toShortAtx(newvatx(t, atxs[i]), atxs[len(atxs)-1].CommitmentATX, atxs[len(atxs)-1].VRFNonce))
+			atxData = append(
+				atxData,
+				toShortAtx(newvatx(t, atxs[i]), atxs[len(atxs)-1].CommitmentATX, atxs[len(atxs)-1].VRFNonce),
+			)
 		}
 	}
 
@@ -129,7 +188,13 @@ func expectedCheckpoint(t *testing.T, snapshot types.LayerID, numAtxs int) *type
 	return result
 }
 
-func newatx(id types.ATXID, commitAtx *types.ATXID, epoch uint32, seq, vrfnonce uint64, nodeID types.NodeID) *types.ActivationTx {
+func newatx(
+	id types.ATXID,
+	commitAtx *types.ATXID,
+	epoch uint32,
+	seq, vrfnonce uint64,
+	nodeID types.NodeID,
+) *types.ActivationTx {
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
@@ -258,9 +323,14 @@ func TestRunner_Generate(t *testing.T) {
 			expected := expectedCheckpoint(t, snapshot, tc.numAtxs)
 			require.NoError(t, json.Unmarshal(persisted, &got))
 
-			require.True(t, cmp.Equal(*expected, got, cmpopts.EquateEmpty(),
+			require.True(t, cmp.Equal(
+				*expected,
+				got,
+				cmpopts.EquateEmpty(),
 				cmpopts.SortSlices(func(a, b types.AtxSnapshot) bool { return bytes.Compare(a.ID, b.ID) < 0 }),
-				cmpopts.SortSlices(func(a, b types.AccountSnapshot) bool { return bytes.Compare(a.Address, b.Address) < 0 }),
+				cmpopts.SortSlices(
+					func(a, b types.AccountSnapshot) bool { return bytes.Compare(a.Address, b.Address) < 0 },
+				),
 			), cmp.Diff(*expected, got))
 		})
 	}

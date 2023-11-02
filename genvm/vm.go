@@ -188,7 +188,11 @@ func (v *VM) ApplyGenesis(genesis []types.Account) error {
 }
 
 // Apply transactions.
-func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error) {
+func (v *VM) Apply(
+	lctx ApplyContext,
+	txs []types.Transaction,
+	blockRewards []types.CoinbaseReward,
+) ([]types.Transaction, []types.TransactionWithResult, error) {
 	if lctx.Layer.Before(types.GetEffectiveGenesis()) {
 		return nil, nil, fmt.Errorf("%w: applying layer %s before effective genesis %s",
 			core.ErrInternal, lctx.Layer, types.GetEffectiveGenesis(),
@@ -280,7 +284,11 @@ func (v *VM) Apply(lctx ApplyContext, txs []types.Transaction, blockRewards []ty
 	return skipped, results, nil
 }
 
-func (v *VM) execute(lctx ApplyContext, ss *core.StagedCache, txs []types.Transaction) ([]types.TransactionWithResult, []types.Transaction, uint64, error) {
+func (v *VM) execute(
+	lctx ApplyContext,
+	ss *core.StagedCache,
+	txs []types.Transaction,
+) ([]types.TransactionWithResult, []types.Transaction, uint64, error) {
 	var (
 		rd          bytes.Reader
 		decoder     = scale.NewDecoder(&rd)
@@ -463,7 +471,15 @@ func (r *Request) Verify() bool {
 	return rst
 }
 
-func parse(logger log.Log, lid types.LayerID, reg *registry.Registry, loader core.AccountLoader, cfg Config, raw []byte, decoder *scale.Decoder) (*core.Header, *core.Context, scale.Encodable, error) {
+func parse(
+	logger log.Log,
+	lid types.LayerID,
+	reg *registry.Registry,
+	loader core.AccountLoader,
+	cfg Config,
+	raw []byte,
+	decoder *scale.Decoder,
+) (*core.Header, *core.Context, scale.Encodable, error) {
 	version, _, err := scale.DecodeCompact8(decoder)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("%w: failed to decode version %w", core.ErrMalformed, err)
@@ -482,7 +498,12 @@ func parse(logger log.Log, lid types.LayerID, reg *registry.Registry, loader cor
 	}
 	account, err := loader.Get(principal)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("%w: failed load state for principal %s - %w", core.ErrInternal, principal, err)
+		return nil, nil, nil, fmt.Errorf(
+			"%w: failed load state for principal %s - %w",
+			core.ErrInternal,
+			principal,
+			err,
+		)
 	}
 	logger.With().Debug("loaded account state", log.Inline(&account))
 

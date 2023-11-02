@@ -31,38 +31,6 @@ func TestStepCreate(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestStepDeletePoets(t *testing.T) {
-	tctx := testcontext.New(t, testcontext.SkipClusterLimits())
-	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
-	require.NoError(t, err)
-
-	tctx.Log.Debugw("deleting poet servers", "poets", cl.Poets())
-	require.NoError(t, cl.DeletePoets(tctx))
-}
-
-func TestStepRedeployPoets(t *testing.T) {
-	tctx := testcontext.New(t, testcontext.SkipClusterLimits())
-	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
-	require.NoError(t, err)
-
-	require.Zero(t, cl.Poets())
-	tctx.Log.Debug("adding poet servers")
-	require.NoError(t, cl.AddPoets(tctx))
-
-	poetEndpoints := make([]string, 0, tctx.PoetSize)
-	for i := 0; i < tctx.PoetSize; i++ {
-		poetEndpoints = append(poetEndpoints, cluster.MakePoetEndpoint(i))
-	}
-
-	for i := 0; i < cl.Total(); i++ {
-		node := cl.Client(i)
-		tctx.Log.Debugw("updating node's poet server", "node", node.Name, "poets", poetEndpoints)
-		updated, err := updatePoetServers(tctx, node, poetEndpoints)
-		require.NoError(t, err)
-		require.True(t, updated)
-	}
-}
-
 func TestStepShortDisconnect(t *testing.T) {
 	tctx := testcontext.New(t, testcontext.SkipClusterLimits())
 	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
@@ -138,7 +106,10 @@ func TestStepTransactions(t *testing.T) {
 				tctx.Log.Debugw("spawning wallet", "address", client.account)
 				ctx, cancel := context.WithTimeout(tctx, 5*time.Minute)
 				defer cancel()
-				req, err := client.submit(ctx, wallet.SelfSpawn(client.account.PrivateKey, 0, sdk.WithGenesisID(cl.GenesisID())))
+				req, err := client.submit(
+					ctx,
+					wallet.SelfSpawn(client.account.PrivateKey, 0, sdk.WithGenesisID(cl.GenesisID())),
+				)
 				if err != nil {
 					return err
 				}

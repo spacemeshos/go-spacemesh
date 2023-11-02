@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
@@ -69,6 +70,7 @@ func NewTestNetwork(t *testing.T, conf config.Config, l log.Log, size int) []*Te
 			grpc.WithBlock(),
 		)
 		require.NoError(t, err)
+		t.Cleanup(func() { assert.NoError(t, conn.Close()) })
 		apps = append(apps, &TestApp{app, conn})
 	}
 
@@ -86,6 +88,7 @@ func NewTestNetwork(t *testing.T, conf config.Config, l log.Log, size int) []*Te
 		defer cancel()
 		for _, a := range apps {
 			a.Cleanup(ctx)
+			a.eg.Wait()
 		}
 	})
 

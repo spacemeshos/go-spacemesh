@@ -91,7 +91,12 @@ func (a *singlesigAccount) selfSpawn(nonce core.Nonce, opts ...sdk.Opt) []byte {
 	return sdkwallet.SelfSpawn(signing.PrivateKey(a.pk), nonce, opts...)
 }
 
-func (a *singlesigAccount) spawn(template core.Address, args scale.Encodable, nonce core.Nonce, opts ...sdk.Opt) []byte {
+func (a *singlesigAccount) spawn(
+	template core.Address,
+	args scale.Encodable,
+	nonce core.Nonce,
+	opts ...sdk.Opt,
+) []byte {
 	return sdkwallet.Spawn(signing.PrivateKey(a.pk), template, args, nonce, opts...)
 }
 
@@ -190,7 +195,12 @@ type vestingAccount struct {
 	multisigAccount
 }
 
-func (a *vestingAccount) drainVault(vault, recipient core.Address, amount uint64, nonce core.Nonce, opts ...sdk.Opt) []byte {
+func (a *vestingAccount) drainVault(
+	vault, recipient core.Address,
+	amount uint64,
+	nonce core.Nonce,
+	opts ...sdk.Opt,
+) []byte {
 	agg := sdkvesting.DrainVault(0, a.pks[0], a.address, vault, recipient, amount, nonce, opts...)
 	for i := 1; i < a.k; i++ {
 		part := sdkvesting.DrainVault(uint8(i), a.pks[i], a.address, vault, recipient, amount, nonce, opts...)
@@ -1029,7 +1039,9 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 					expected: map[int]change{
 						0: spawned{
 							template: template,
-							change:   spent{amount: 100 + defaultGasPrice*(ref.estimateSpawnGas(0, 0)+ref.estimateSpendGas(0, 11, 100, 2))},
+							change: spent{
+								amount: 100 + defaultGasPrice*(ref.estimateSpawnGas(0, 0)+ref.estimateSpendGas(0, 11, 100, 2)),
+							},
 						},
 						10: same{},
 						11: earned{amount: 100},
@@ -1410,7 +1422,14 @@ func runTestCases(t *testing.T, tcs []templateTestCase, genTester func(t *testin
 				for i, rst := range results {
 					expected, exists := layer.failed[i]
 					if !exists {
-						require.Equal(t, types.TransactionSuccess.String(), rst.Status.String(), "layer=%s ith=%d", lid, i)
+						require.Equal(
+							t,
+							types.TransactionSuccess.String(),
+							rst.Status.String(),
+							"layer=%s ith=%d",
+							lid,
+							i,
+						)
 					} else {
 						require.Equal(t, types.TransactionFailure.String(), rst.Status.String(), "layer=%s ith=%d", lid, i)
 						require.Equal(t, expected.Error(), rst.Message)
@@ -2482,7 +2501,10 @@ func TestVestingData(t *testing.T) {
 			vm := New(sql.InMemory(), WithLogger(logtest.New(t)))
 			require.NoError(t, vm.ApplyGenesis(
 				[]core.Account{
-					{Address: vestaddr, Balance: 300_000}, // give a bit to vesting account as it needs to get funds for 2 spawns and drain vault
+					{
+						Address: vestaddr,
+						Balance: 300_000,
+					}, // give a bit to vesting account as it needs to get funds for 2 spawns and drain vault
 					{Address: vaultaddr, Balance: uint64(meta.Total)},
 				},
 			))
@@ -2536,8 +2558,11 @@ func TestVestingData(t *testing.T) {
 				drain.Div(drain, new(big.Int).SetUint64(constants.VestEnd-constants.VestStart))
 				drain.Sub(drain, new(big.Int).SetUint64(drained))
 
-				ineffective, rst, err = vm.Apply(ApplyContext{Layer: types.LayerID(i)},
-					notVerified(types.NewRawTx(vestaccount.drainVault(vaultaddr, vestaddr, uint64(drain.Uint64()), nonce))),
+				ineffective, rst, err = vm.Apply(
+					ApplyContext{Layer: types.LayerID(i)},
+					notVerified(
+						types.NewRawTx(vestaccount.drainVault(vaultaddr, vestaddr, uint64(drain.Uint64()), nonce)),
+					),
 					nil,
 				)
 				require.Empty(t, ineffective)

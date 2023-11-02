@@ -19,7 +19,13 @@ type meshProvider interface {
 }
 
 type executor interface {
-	ExecuteOptimistic(context.Context, types.LayerID, uint64, []types.AnyReward, []types.TransactionID) (*types.Block, error)
+	ExecuteOptimistic(
+		context.Context,
+		types.LayerID,
+		uint64,
+		[]types.AnyReward,
+		[]types.TransactionID,
+	) (*types.Block, error)
 }
 
 type layerClock interface {

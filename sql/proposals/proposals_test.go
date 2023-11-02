@@ -40,7 +40,12 @@ func TestDelete(t *testing.T) {
 	numProps := 3
 	for i := 1; i <= maxLayers; i++ {
 		for j := 0; j < numProps; j++ {
-			ballot := types.NewExistingBallot(types.RandomBallotID(), types.RandomEdSignature(), nodeID, types.LayerID(i))
+			ballot := types.NewExistingBallot(
+				types.RandomBallotID(),
+				types.RandomEdSignature(),
+				nodeID,
+				types.LayerID(i),
+			)
 			require.NoError(t, ballots.Add(db, &ballot))
 			proposal := &types.Proposal{
 				InnerProposal: types.InnerProposal{

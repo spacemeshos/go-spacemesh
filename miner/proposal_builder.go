@@ -298,7 +298,9 @@ func (pb *ProposalBuilder) Run(ctx context.Context) error {
 					pb.logger.With().
 						Debug("signer is not active in epoch", log.Context(ctx), log.Uint32("lid", current.Uint32()), log.Err(err))
 				} else {
-					pb.logger.With().Warning("failed to build proposal", log.Context(ctx), log.Uint32("lid", current.Uint32()), log.Err(err))
+					pb.logger.With().Warning("failed to build proposal",
+						log.Context(ctx), log.Uint32("lid", current.Uint32()), log.Err(err),
+					)
 				}
 			}
 		}
@@ -800,7 +802,7 @@ func calcEligibilityProofs(
 //
 // let s be the start of the epoch, and δ the network propagation time.
 // grade 0: ATX was received at time t >= s-3δ, or an equivocation proof was received by time s-δ.
-// grade 1: ATX was received at time t < s-3δ before the start of the epoch, and no equivocation proof was received by time s-δ.
+// grade 1: ATX was received at time t < s-3δ before the start of the epoch, and no equivocation proof by time s-δ.
 // grade 2: ATX was received at time t < s-4δ, and no equivocation proof was received for that id until time s.
 type atxGrade int
 

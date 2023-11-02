@@ -172,8 +172,8 @@ func (db *CachedDB) CacheMalfeasanceProof(id types.NodeID, proof *types.Malfeasa
 	db.malfeasanceCache.Add(id, proof)
 }
 
-// VRFNonce returns the VRF nonce of for the given node in the given epoch. This function is thread safe and will return an error if the
-// nonce is not found in the ATX DB.
+// VRFNonce returns the VRF nonce of for the given node in the given epoch. This function is thread safe and will
+// return an error if the nonce is not found in the ATX DB.
 func (db *CachedDB) VRFNonce(id types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
 	key := VrfNonceKey{id, epoch}
 	if nonce, ok := db.vrfNonceCache.Get(key); ok {

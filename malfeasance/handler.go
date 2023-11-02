@@ -65,7 +65,12 @@ func (h *Handler) reportMalfeasance(smesher types.NodeID, mp *types.MalfeasanceP
 }
 
 // HandleSyncedMalfeasanceProof is the sync validator for MalfeasanceProof.
-func (h *Handler) HandleSyncedMalfeasanceProof(ctx context.Context, expHash types.Hash32, _ p2p.Peer, data []byte) error {
+func (h *Handler) HandleSyncedMalfeasanceProof(
+	ctx context.Context,
+	expHash types.Hash32,
+	_ p2p.Peer,
+	data []byte,
+) error {
 	var p types.MalfeasanceProof
 	if err := codec.Decode(data, &p); err != nil {
 		numMalformed.Inc()
@@ -74,7 +79,12 @@ func (h *Handler) HandleSyncedMalfeasanceProof(ctx context.Context, expHash type
 	}
 	nodeID, err := h.validateAndSave(ctx, &types.MalfeasanceGossip{MalfeasanceProof: p})
 	if err == nil && types.Hash32(nodeID) != expHash {
-		return fmt.Errorf("%w: malfesance proof want %s, got %s", errWrongHash, expHash.ShortString(), nodeID.ShortString())
+		return fmt.Errorf(
+			"%w: malfesance proof want %s, got %s",
+			errWrongHash,
+			expHash.ShortString(),
+			nodeID.ShortString(),
+		)
 	}
 	return err
 }
@@ -242,7 +252,11 @@ func validateHareEquivocation(
 	proof *types.MalfeasanceProof,
 ) (types.NodeID, error) {
 	if proof.Proof.Type != types.HareEquivocation {
-		return types.EmptyNodeID, fmt.Errorf("wrong malfeasance type. want %v, got %v", types.HareEquivocation, proof.Proof.Type)
+		return types.EmptyNodeID, fmt.Errorf(
+			"wrong malfeasance type. want %v, got %v",
+			types.HareEquivocation,
+			proof.Proof.Type,
+		)
 	}
 	var (
 		firstNid types.NodeID
@@ -289,7 +303,11 @@ func validateMultipleATXs(
 	proof *types.MalfeasanceProof,
 ) (types.NodeID, error) {
 	if proof.Proof.Type != types.MultipleATXs {
-		return types.EmptyNodeID, fmt.Errorf("wrong malfeasance type. want %v, got %v", types.MultipleATXs, proof.Proof.Type)
+		return types.EmptyNodeID, fmt.Errorf(
+			"wrong malfeasance type. want %v, got %v",
+			types.MultipleATXs,
+			proof.Proof.Type,
+		)
 	}
 	var (
 		firstNid types.NodeID
@@ -335,7 +353,11 @@ func validateMultipleBallots(
 	proof *types.MalfeasanceProof,
 ) (types.NodeID, error) {
 	if proof.Proof.Type != types.MultipleBallots {
-		return types.EmptyNodeID, fmt.Errorf("wrong malfeasance type. want %v, got %v", types.MultipleBallots, proof.Proof.Type)
+		return types.EmptyNodeID, fmt.Errorf(
+			"wrong malfeasance type. want %v, got %v",
+			types.MultipleBallots,
+			proof.Proof.Type,
+		)
 	}
 	var (
 		firstNid types.NodeID

@@ -230,7 +230,13 @@ func TestGetAggHashes(t *testing.T) {
 		layers []types.LayerID
 	}{
 		{"from=to", types.LayerID(10), types.LayerID(10), 1, []types.LayerID{10}},
-		{"from<to", types.LayerID(10), types.LayerID(20), 1, []types.LayerID{10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}},
+		{
+			"from<to",
+			types.LayerID(10),
+			types.LayerID(20),
+			1,
+			[]types.LayerID{10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20},
+		},
 		{"from<to, by=2", types.LayerID(10), types.LayerID(20), 2, []types.LayerID{10, 12, 14, 16, 18, 20}},
 		{"from<to, by=3", types.LayerID(10), types.LayerID(20), 3, []types.LayerID{10, 13, 16, 19, 20}},
 	}

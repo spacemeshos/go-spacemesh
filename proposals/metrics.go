@@ -38,7 +38,8 @@ var numTxsInProposal = metrics.NewHistogramWithBuckets(
 	prometheus.ExponentialBuckets(1, 2, 8),
 )
 
-// numBlocksInException records the number of blocks encoded in a ballot for a given exception type (against, for, and neutral).
+// numBlocksInException records the number of blocks encoded in a ballot for a given exception type
+// (against, for, and neutral).
 var numBlocksInException = metrics.NewHistogramWithBuckets(
 	"num_blocks_in_exception",
 	subsystem,

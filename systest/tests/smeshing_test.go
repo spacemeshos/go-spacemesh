@@ -148,12 +148,15 @@ func requireEqualEligibilities(tctx *testcontext.Context, tb testing.TB, proposa
 		}
 	}
 
-	tctx.Log.Desugar().Info("aggregated eligibilities", zap.Object("per-smesher", zapcore.ObjectMarshalerFunc(func(enc zapcore.ObjectEncoder) error {
-		for smesher, eligibilities := range aggregated {
-			enc.AddInt(prettyHex([]byte(smesher)), eligibilities)
-		}
-		return nil
-	})))
+	tctx.Log.Desugar().
+		Info("aggregated eligibilities", zap.Object("per-smesher",
+			zapcore.ObjectMarshalerFunc(func(enc zapcore.ObjectEncoder) error {
+				for smesher, eligibilities := range aggregated {
+					enc.AddInt(prettyHex([]byte(smesher)), eligibilities)
+				}
+				return nil
+			}),
+		))
 
 	referenceEligibilities := -1
 	for smesher, eligibilities := range aggregated {
@@ -260,7 +263,11 @@ func testVesting(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster, 
 				return fmt.Errorf("vault at %v must be empty, instead has %d", acc.vault, remaining)
 			}
 			if delta := int(current - initial); delta+1e7 < acc.total {
-				return fmt.Errorf("account at %v should drain all values from vault (compensated for tx gas), instead has %d", acc.address, delta)
+				return fmt.Errorf(
+					"account at %v should drain all values from vault (compensated for tx gas), instead has %d",
+					acc.address,
+					delta,
+				)
 			}
 			return nil
 		})
@@ -293,7 +300,15 @@ func (v vestingAcc) selfSpawn(genesis types.Hash20, nonce uint64) []byte {
 	var agg *sdkmultisig.Aggregator
 	for i := 0; i < v.required; i++ {
 		pk := v.pks[i]
-		part := sdkmultisig.SelfSpawn(uint8(i), pk, vesting.TemplateAddress, uint8(v.required), v.pubs, nonce, sdk.WithGenesisID(genesis))
+		part := sdkmultisig.SelfSpawn(
+			uint8(i),
+			pk,
+			vesting.TemplateAddress,
+			uint8(v.required),
+			v.pubs,
+			nonce,
+			sdk.WithGenesisID(genesis),
+		)
 		if agg == nil {
 			agg = part
 		} else {
@@ -314,7 +329,15 @@ func (v vestingAcc) spawnVault(genesis types.Hash20, nonce uint64) []byte {
 	var agg *sdkmultisig.Aggregator
 	for i := 0; i < v.required; i++ {
 		pk := v.pks[i]
-		part := sdkmultisig.Spawn(uint8(i), pk, v.address, vault.TemplateAddress, &args, nonce, sdk.WithGenesisID(genesis))
+		part := sdkmultisig.Spawn(
+			uint8(i),
+			pk,
+			v.address,
+			vault.TemplateAddress,
+			&args,
+			nonce,
+			sdk.WithGenesisID(genesis),
+		)
 		if agg == nil {
 			agg = part
 		} else {
@@ -328,7 +351,16 @@ func (v vestingAcc) drain(genesis types.Hash20, amount, nonce uint64) []byte {
 	var agg *sdkvesting.Aggregator
 	for i := 0; i < v.required; i++ {
 		pk := v.pks[i]
-		part := sdkvesting.DrainVault(uint8(i), pk, v.address, v.vault, v.address, amount, nonce, sdk.WithGenesisID(genesis))
+		part := sdkvesting.DrainVault(
+			uint8(i),
+			pk,
+			v.address,
+			v.vault,
+			v.address,
+			amount,
+			nonce,
+			sdk.WithGenesisID(genesis),
+		)
 		if agg == nil {
 			agg = part
 		} else {

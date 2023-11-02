@@ -886,12 +886,13 @@ func TestVotesDecodingWithoutBaseBallot(t *testing.T) {
 		)
 
 		var last, verified types.LayerID
-		for _, last = range sim.GenLayers(s, sim.WithSequence(2, sim.WithVoteGenerator(func(rng *rand.Rand, layers []*types.Layer, i int) sim.Voting {
+		generator := sim.WithVoteGenerator(func(rng *rand.Rand, layers []*types.Layer, i int) sim.Voting {
 			if i >= breakpoint {
 				return voteWithBaseBallot(types.BallotID{1, 1, 1})(rng, layers, i)
 			}
 			return sim.ConsistentVoting(rng, layers, i)
-		}))) {
+		})
+		for _, last = range sim.GenLayers(s, sim.WithSequence(2, generator)) {
 			tortoise.TallyVotes(ctx, last)
 			verified = tortoise.LatestComplete()
 		}

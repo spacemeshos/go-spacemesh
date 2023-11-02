@@ -114,11 +114,6 @@ const (
 	PostSetupStateError
 )
 
-var (
-	errNotComplete = errors.New("not complete")
-	errNotStarted  = errors.New("not started")
-)
-
 // DefaultPostConfig defines the default configuration for Post.
 func DefaultPostConfig() PostConfig {
 	cfg := config.DefaultConfig()
@@ -181,7 +176,13 @@ type PostSetupManager struct {
 }
 
 // NewPostSetupManager creates a new instance of PostSetupManager.
-func NewPostSetupManager(id types.NodeID, cfg PostConfig, logger *zap.Logger, db *datastore.CachedDB, goldenATXID types.ATXID) (*PostSetupManager, error) {
+func NewPostSetupManager(
+	id types.NodeID,
+	cfg PostConfig,
+	logger *zap.Logger,
+	db *datastore.CachedDB,
+	goldenATXID types.ATXID,
+) (*PostSetupManager, error) {
 	mgr := &PostSetupManager{
 		id:          id,
 		cfg:         cfg,
@@ -215,31 +216,6 @@ func (mgr *PostSetupManager) Status() *PostSetupStatus {
 			LastOpts:         mgr.lastOpts,
 		}
 	}
-}
-
-// Providers returns a list of available compute providers for Post setup.
-func (*PostSetupManager) Providers() ([]PostSetupProvider, error) {
-	providers, err := initialization.OpenCLProviders()
-	if err != nil {
-		return nil, err
-	}
-
-	providersAlias := make([]PostSetupProvider, len(providers))
-	for i, p := range providers {
-		providersAlias[i] = PostSetupProvider(p)
-	}
-
-	return providersAlias, nil
-}
-
-// Benchmark runs a short benchmarking session for a given provider to evaluate its performance.
-func (mgr *PostSetupManager) Benchmark(p PostSetupProvider) (int, error) {
-	score, err := initialization.Benchmark(initialization.Provider(p))
-	if err != nil {
-		return score, fmt.Errorf("benchmark GPU: %w", err)
-	}
-
-	return score, nil
 }
 
 // StartSession starts (or continues) a PoST session. It supports resuming a
@@ -281,7 +257,10 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context) error {
 		mgr.state = PostSetupStateStopped
 		return err
 	case errors.As(err, &errLabelMismatch):
-		mgr.logger.Error("post setup session failed due to an issue with the initialization provider", zap.Error(errLabelMismatch))
+		mgr.logger.Error(
+			"post setup session failed due to an issue with the initialization provider",
+			zap.Error(errLabelMismatch),
+		)
 		mgr.state = PostSetupStateError
 		events.EmitInitFailure(mgr.id, mgr.commitmentAtxId, errLabelMismatch)
 		return nil
@@ -313,7 +292,7 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context) error {
 // (StartSession can take days to complete). After the first call to this
 // method subsequent calls to this method will return an error until
 // StartSession has completed execution.
-func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSetupOpts) error {
+func (mgr *PostSetupManager) PrepareInitializer(opts PostSetupOpts) error {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
 	if mgr.state == PostSetupStatePrepared || mgr.state == PostSetupStateInProgress {
@@ -321,7 +300,7 @@ func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSe
 	}
 
 	var err error
-	mgr.commitmentAtxId, err = mgr.commitmentAtx(ctx, opts.DataDir)
+	mgr.commitmentAtxId, err = mgr.commitmentAtx(opts.DataDir)
 	if err != nil {
 		return err
 	}
@@ -344,17 +323,7 @@ func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSe
 	return nil
 }
 
-func (mgr *PostSetupManager) CommitmentAtx() (types.ATXID, error) {
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
-
-	if mgr.commitmentAtxId != types.EmptyATXID {
-		return mgr.commitmentAtxId, nil
-	}
-	return types.EmptyATXID, errNotStarted
-}
-
-func (mgr *PostSetupManager) commitmentAtx(ctx context.Context, dataDir string) (types.ATXID, error) {
+func (mgr *PostSetupManager) commitmentAtx(dataDir string) (types.ATXID, error) {
 	m, err := initialization.LoadMetadata(dataDir)
 	switch {
 	case err == nil:
@@ -374,7 +343,7 @@ func (mgr *PostSetupManager) commitmentAtx(ctx context.Context, dataDir string) 
 		}
 
 		// if this node has not published an ATX select the best ATX with `findCommitmentAtx`
-		return mgr.findCommitmentAtx(ctx)
+		return mgr.findCommitmentAtx()
 	default:
 		return types.EmptyATXID, fmt.Errorf("load metadata: %w", err)
 	}
@@ -383,7 +352,7 @@ func (mgr *PostSetupManager) commitmentAtx(ctx context.Context, dataDir string) 
 // findCommitmentAtx determines the best commitment ATX to use for the node.
 // It will use the ATX with the highest height seen by the node and defaults to the goldenATX,
 // when no ATXs have yet been published.
-func (mgr *PostSetupManager) findCommitmentAtx(ctx context.Context) (types.ATXID, error) {
+func (mgr *PostSetupManager) findCommitmentAtx() (types.ATXID, error) {
 	atx, err := atxs.GetIDWithMaxHeight(mgr.db, types.EmptyNodeID)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
@@ -408,32 +377,4 @@ func (mgr *PostSetupManager) Reset() error {
 	// Reset internal state.
 	mgr.state = PostSetupStateNotStarted
 	return nil
-}
-
-// VRFNonce returns the VRF nonce found during initialization.
-func (mgr *PostSetupManager) VRFNonce() (*types.VRFPostIndex, error) {
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
-
-	if mgr.state != PostSetupStateComplete {
-		return nil, errNotComplete
-	}
-
-	return (*types.VRFPostIndex)(mgr.init.Nonce()), nil
-}
-
-// LastOpts returns the Post setup last session options.
-func (mgr *PostSetupManager) LastOpts() *PostSetupOpts {
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
-
-	return mgr.lastOpts
-}
-
-// Config returns the Post protocol config.
-func (mgr *PostSetupManager) Config() PostConfig {
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
-
-	return mgr.cfg
 }

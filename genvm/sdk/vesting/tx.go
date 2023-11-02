@@ -22,7 +22,14 @@ var (
 )
 
 // DrainVault creates drain vault transaction.
-func DrainVault(ref uint8, pk ed25519.PrivateKey, principal, vault, receiver types.Address, amount uint64, nonce core.Nonce, opts ...sdk.Opt) *Aggregator {
+func DrainVault(
+	ref uint8,
+	pk ed25519.PrivateKey,
+	principal, vault, receiver types.Address,
+	amount uint64,
+	nonce core.Nonce,
+	opts ...sdk.Opt,
+) *Aggregator {
 	options := sdk.Defaults()
 	for _, opt := range opts {
 		opt(options)

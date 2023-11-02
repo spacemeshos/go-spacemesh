@@ -12,11 +12,13 @@ import (
 	"sort"
 
 	"github.com/seehuhn/mt19937"
+	"golang.org/x/exp/maps"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
@@ -48,7 +50,8 @@ type proposalMetadata struct {
 func getProposalMetadata(
 	ctx context.Context,
 	logger log.Log,
-	cdb *datastore.CachedDB,
+	db *sql.Database,
+	atxs *atxsdata.Data,
 	cfg Config,
 	lid types.LayerID,
 	proposals []*types.Proposal,
@@ -64,7 +67,7 @@ func getProposalMetadata(
 		meshHashes = make(map[types.Hash32]*meshState)
 		err        error
 	)
-	md.tickHeight, md.rewards, err = rewardInfoAndHeight(logger, cdb, cfg, proposals)
+	md.tickHeight, md.rewards, err = rewardInfoAndHeight(cfg, db, atxs, proposals)
 	if err != nil {
 		return nil, err
 	}
@@ -86,12 +89,16 @@ func getProposalMetadata(
 			if _, ok := seen[tid]; ok {
 				continue
 			}
-			mtx, err := transactions.Get(cdb, tid)
+			mtx, err := transactions.Get(db, tid)
 			if err != nil {
 				return nil, fmt.Errorf("%w: get proposal tx: %w", errProposalTxMissing, err)
 			}
 			if mtx.TxHeader == nil {
-				return nil, fmt.Errorf("%w: inconsistent state: tx %s is missing header", errProposalTxHdrMissing, mtx.ID)
+				return nil, fmt.Errorf(
+					"%w: inconsistent state: tx %s is missing header",
+					errProposalTxHdrMissing,
+					mtx.ID,
+				)
 			}
 			seen[tid] = struct{}{}
 			mtxs = append(mtxs, mtx)
@@ -113,12 +120,13 @@ func getProposalMetadata(
 	if majorityState == nil {
 		logger.With().Info("no consensus on mesh hash. NOT doing optimistic filtering", lid)
 	} else {
-		ownMeshHash, err := layers.GetAggregatedHash(cdb, lid.Sub(1))
+		ownMeshHash, err := layers.GetAggregatedHash(db, lid.Sub(1))
 		if err != nil {
 			return nil, fmt.Errorf("get prev mesh hash %w", err)
 		}
 		if ownMeshHash != majorityState.hash {
-			return nil, fmt.Errorf("%w: majority %v, node %v", errNodeHasBadMeshHash, majorityState.hash.ShortString(), ownMeshHash.ShortString())
+			return nil, fmt.Errorf("%w: majority %v, node %v",
+				errNodeHasBadMeshHash, majorityState.hash.ShortString(), ownMeshHash.ShortString())
 		}
 		logger.With().Debug("consensus on mesh hash. doing optimistic filtering",
 			lid,
@@ -139,7 +147,12 @@ func getProposalMetadata(
 	return md, nil
 }
 
-func getBlockTXs(logger log.Log, mtxs []*types.MeshTransaction, blockSeed []byte, gasLimit uint64) ([]types.TransactionID, error) {
+func getBlockTXs(
+	logger log.Log,
+	mtxs []*types.MeshTransaction,
+	blockSeed []byte,
+	gasLimit uint64,
+) ([]types.TransactionID, error) {
 	stateF := func(_ types.Address) (uint64, uint64) {
 		return 0, math.MaxUint64
 	}
@@ -173,7 +186,12 @@ func getBlockTXs(logger log.Log, mtxs []*types.MeshTransaction, blockSeed []byte
 	return ordered, nil
 }
 
-func prune(logger log.Log, tids []types.TransactionID, byTid map[types.TransactionID]*txs.NanoTX, gasLimit uint64) []types.TransactionID {
+func prune(
+	logger log.Log,
+	tids []types.TransactionID,
+	byTid map[types.TransactionID]*txs.NanoTX,
+	gasLimit uint64,
+) []types.TransactionID {
 	var (
 		gasRemaining = gasLimit
 		idx          int
@@ -207,29 +225,27 @@ func toUint64Slice(b []byte) []uint64 {
 	return s
 }
 
-func rewardInfoAndHeight(logger log.Log, cdb *datastore.CachedDB, cfg Config, props []*types.Proposal) (uint64, []types.AnyReward, error) {
+func rewardInfoAndHeight(
+	cfg Config,
+	db *sql.Database,
+	atxs *atxsdata.Data,
+	props []*types.Proposal,
+) (uint64, []types.AnyReward, error) {
 	weights := make(map[types.ATXID]*big.Rat)
-	atxids := make([]types.ATXID, 0, len(props))
-	max := uint64(0)
+	maxHeight := uint64(0)
 	for _, p := range props {
-		if p.AtxID == types.EmptyATXID {
-			// this proposal would not have been validated
-			logger.With().Error("proposal with invalid ATXID, skipping reward distribution", p.Layer, p.ID())
-			return 0, nil, errInvalidATXID
+		atx := atxs.Get(p.Layer.GetEpoch(), p.AtxID)
+		if atx == nil {
+			return 0, nil, fmt.Errorf(
+				"proposal ATX not found: atx %s proposal %s", p.AtxID.ShortString(), p.ID().String(),
+			)
 		}
-		atx, err := cdb.GetAtxHeader(p.AtxID)
-		if err != nil {
-			logger.With().Warning("proposal ATX not found", p.ID(), p.AtxID, log.Err(err))
-			return 0, nil, fmt.Errorf("block gen get ATX: %w", err)
-		}
-		if atx.BaseTickHeight > max {
-			max = atx.BaseTickHeight
-		}
+		maxHeight = max(maxHeight, atx.BaseHeight)
 		var count uint32
 		if p.Ballot.EpochData != nil {
 			count = p.Ballot.EpochData.EligibilityCount
 		} else {
-			ref, err := ballots.Get(cdb, p.RefBallot)
+			ref, err := ballots.Get(db, p.RefBallot)
 			if err != nil {
 				return 0, nil, fmt.Errorf("get ballot %s: %w", p.RefBallot.String(), err)
 			}
@@ -238,30 +254,29 @@ func rewardInfoAndHeight(logger log.Log, cdb *datastore.CachedDB, cfg Config, pr
 			}
 			count = ref.EpochData.EligibilityCount
 		}
-		if _, ok := weights[atx.ID]; !ok {
+		if _, ok := weights[p.AtxID]; !ok {
 			weight := new(big.Rat).SetFrac(
-				new(big.Int).SetUint64(atx.GetWeight()),
+				new(big.Int).SetUint64(atx.Weight),
 				new(big.Int).SetUint64(uint64(count)),
 			)
 			weight.Mul(weight, new(big.Rat).SetUint64(uint64(len(p.Ballot.EligibilityProofs))))
-			weights[atx.ID] = weight
-			atxids = append(atxids, atx.ID)
+			weights[p.AtxID] = weight
 		} else {
-			logger.With().Error("multiple proposals with the same ATX", atx.ID, p.ID())
-			return 0, nil, fmt.Errorf("%w: atx %v proposal %v", errDuplicateATX, atx.ID, p.ID())
+			return 0, nil, fmt.Errorf(
+				"%w: multiple proposals with the same ATX atx %v proposal %v",
+				errDuplicateATX, p.AtxID, p.ID(),
+			)
 		}
 		events.ReportProposal(events.ProposalIncluded, p)
 	}
-	// make sure we output coinbase in a stable order.
+	atxids := maps.Keys(weights)
+	// keys in order so that everyone generates same block
 	sort.Slice(atxids, func(i, j int) bool {
 		return bytes.Compare(atxids[i].Bytes(), atxids[j].Bytes()) < 0
 	})
 	rewards := make([]types.AnyReward, 0, len(weights))
 	for _, id := range atxids {
-		weight, ok := weights[id]
-		if !ok {
-			logger.With().Fatal("atx missing", id)
-		}
+		weight := weights[id]
 		rewards = append(rewards, types.AnyReward{
 			AtxID: id,
 			Weight: types.RatNum{
@@ -269,9 +284,6 @@ func rewardInfoAndHeight(logger log.Log, cdb *datastore.CachedDB, cfg Config, pr
 				Denom: weight.Denom().Uint64(),
 			},
 		})
-		logger.With().Debug("adding atx weight",
-			log.Stringer("atx", id),
-			log.Stringer("weight", weight))
 	}
-	return max, rewards, nil
+	return maxHeight, rewards, nil
 }

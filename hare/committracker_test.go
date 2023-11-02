@@ -66,7 +66,11 @@ func TestCommitTracker_OnCommit_TooManyDishonest(t *testing.T) {
 	et.Track(m.SmesherID, m.Round, m.Eligibility.Count, false)
 	tracker.OnCommit(context.Background(), m)
 	require.False(t, tracker.HasEnoughCommits())
-	require.Equal(t, CountInfo{dhCount: 1, keCount: lowThresh10, numDishonest: 1, numKE: lowThresh10}, *tracker.CommitCount())
+	require.Equal(
+		t,
+		CountInfo{dhCount: 1, keCount: lowThresh10, numDishonest: 1, numKE: lowThresh10},
+		*tracker.CommitCount(),
+	)
 	require.Empty(t, mch)
 }
 
@@ -90,7 +94,11 @@ func TestCommitTracker_OnCommit_JustEnough(t *testing.T) {
 	et.Track(m.SmesherID, m.Round, m.Eligibility.Count, true)
 	tracker.OnCommit(context.Background(), m)
 	require.True(t, tracker.HasEnoughCommits())
-	require.Equal(t, CountInfo{hCount: 1, keCount: lowThresh10, numHonest: 1, numKE: lowThresh10}, *tracker.CommitCount())
+	require.Equal(
+		t,
+		CountInfo{hCount: 1, keCount: lowThresh10, numHonest: 1, numKE: lowThresh10},
+		*tracker.CommitCount(),
+	)
 	require.Empty(t, mch)
 }
 
@@ -115,7 +123,11 @@ func TestCommitTracker_OnCommit_KnownEquivocator(t *testing.T) {
 	et.Track(signer.NodeID(), commitRound, 1, false)
 	require.True(t, tracker.HasEnoughCommits())
 	require.Empty(t, mch)
-	require.Equal(t, CountInfo{hCount: lowThresh10, keCount: 1, numHonest: lowThresh10, numKE: 1}, *tracker.CommitCount())
+	require.Equal(
+		t,
+		CountInfo{hCount: lowThresh10, keCount: 1, numHonest: lowThresh10, numKE: 1},
+		*tracker.CommitCount(),
+	)
 }
 
 func TestCommitTracker_OnCommitDuplicate(t *testing.T) {

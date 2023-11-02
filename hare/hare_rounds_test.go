@@ -58,7 +58,14 @@ type (
 	}
 )
 
-func runNodesFor(t *testing.T, ctx context.Context, nodes, leaders, maxLayers, limitIterations int, createProposal bool, oracle funcOracle, validate funcValidate) *TestHareWrapper {
+func runNodesFor(
+	t *testing.T,
+	ctx context.Context,
+	nodes, leaders, maxLayers, limitIterations int,
+	createProposal bool,
+	oracle funcOracle,
+	validate funcValidate,
+) *TestHareWrapper {
 	r := require.New(t)
 	w := newTestHareWrapper(maxLayers)
 	cfg := config.Config{
@@ -76,17 +83,24 @@ func runNodesFor(t *testing.T, ctx context.Context, nodes, leaders, maxLayers, l
 
 	mockMesh := mocks.NewMockmesh(gomock.NewController(t))
 	if createProposal {
-		for lid := types.GetEffectiveGenesis().Add(1); !lid.After(types.GetEffectiveGenesis().Add(uint32(maxLayers))); lid = lid.Add(1) {
+		lid := types.GetEffectiveGenesis().Add(1)
+		for ; !lid.After(types.GetEffectiveGenesis().Add(uint32(maxLayers))); lid = lid.Add(1) {
 			p := randomProposal(lid, types.RandomBeacon())
 			mockMesh.EXPECT().Ballot(p.Ballot.ID()).Return(&p.Ballot, nil).AnyTimes()
 			mockMesh.EXPECT().Proposals(lid).Return([]*types.Proposal{p}, nil).AnyTimes()
-			mockMesh.EXPECT().GetAtxHeader(p.AtxID).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1, NodeID: p.SmesherID}, nil).AnyTimes()
+			mockMesh.EXPECT().
+				GetAtxHeader(p.AtxID).
+				Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1, NodeID: p.SmesherID}, nil).
+				AnyTimes()
 			mockMesh.EXPECT().GetMalfeasanceProof(p.SmesherID)
 		}
 	} else {
 		mockMesh.EXPECT().Proposals(gomock.Any()).Return([]*types.Proposal{}, nil).AnyTimes()
 	}
-	mockMesh.EXPECT().GetEpochAtx(gomock.Any(), gomock.Any()).Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil).AnyTimes()
+	mockMesh.EXPECT().
+		GetEpochAtx(gomock.Any(), gomock.Any()).
+		Return(&types.ActivationTxHeader{BaseTickHeight: 11, TickCount: 1}, nil).
+		AnyTimes()
 	mockMesh.EXPECT().GetMalfeasanceProof(gomock.Any()).Return(nil, nil).AnyTimes()
 
 	for i := 0; i < nodes; i++ {
@@ -96,13 +110,30 @@ func runNodesFor(t *testing.T, ctx context.Context, nodes, leaders, maxLayers, l
 		mp2p := &p2pManipulator{nd: ps, stalledLayer: types.LayerID(1), err: errors.New("fake err")}
 
 		th := &testHare{createTestHare(t, mockMesh, cfg, w.clock, mp2p, t.Name()), i}
-		th.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
-		th.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(types.EmptyVrfSignature, nil).AnyTimes()
-		th.mockRoracle.EXPECT().CalcEligibility(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-			func(_ context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig types.VrfSignature) (uint16, error) {
+		th.mockRoracle.EXPECT().
+			IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(true, nil).
+			AnyTimes()
+		th.mockRoracle.EXPECT().
+			Proof(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(types.EmptyVrfSignature, nil).
+			AnyTimes()
+		th.mockRoracle.EXPECT().
+			CalcEligibility(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(
+				_ context.Context,
+				layer types.LayerID,
+				round uint32,
+				committeeSize int,
+				id types.NodeID,
+				sig types.VrfSignature,
+			) (uint16, error) {
 				return oracle(layer, round, committeeSize, id, sig, th)
 			}).AnyTimes()
-		th.mockRoracle.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
+		th.mockRoracle.EXPECT().
+			Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(true, nil).
+			AnyTimes()
 		th.mockCoin.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
 		go func() {
 			for out := range th.blockGenCh {
@@ -134,8 +165,15 @@ func Test_HarePreRoundEmptySet(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	w := runNodesFor(t, ctx, nodes, 2, layers, 2, false,
-		func(layer types.LayerID, round uint32, committee int, id types.NodeID, sig types.VrfSignature, hare *testHare) (uint16, error) {
+	w := runNodesFor(
+		t,
+		ctx,
+		nodes,
+		2,
+		layers,
+		2,
+		false,
+		func(_ types.LayerID, round uint32, _ int, _ types.NodeID, _ types.VrfSignature, _ *testHare) (uint16, error) {
 			if round/4 > 1 && round != preRound {
 				t.Fatalf("out of round %d limit", round)
 			}
@@ -144,7 +182,8 @@ func Test_HarePreRoundEmptySet(t *testing.T) {
 		func(layer types.LayerID, hare *testHare) {
 			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 			close(m[l][hare.N])
-		})
+		},
+	)
 
 	w.LayerTicker(100 * time.Millisecond)
 
@@ -170,8 +209,22 @@ func Test_HareNotEnoughStatuses(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	w := runNodesFor(t, ctx, nodes, 2, layers, 1, false,
-		func(layer types.LayerID, round uint32, committee int, id types.NodeID, sig types.VrfSignature, hare *testHare) (uint16, error) {
+	w := runNodesFor(
+		t,
+		ctx,
+		nodes,
+		2,
+		layers,
+		1,
+		false,
+		func(
+			_ types.LayerID,
+			round uint32,
+			committee int,
+			_ types.NodeID,
+			_ types.VrfSignature,
+			hare *testHare,
+		) (uint16, error) {
 			if round%4 == statusRound && hare.N >= committee/2-1 {
 				return 0, nil
 			}
@@ -180,7 +233,8 @@ func Test_HareNotEnoughStatuses(t *testing.T) {
 		func(layer types.LayerID, hare *testHare) {
 			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 			m[l][hare.N] = 1
-		})
+		},
+	)
 
 	w.LayerTicker(1 * time.Second)
 	time.Sleep(time.Second * 6)
@@ -202,8 +256,15 @@ func Test_HareNotEnoughLeaders(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	w := runNodesFor(t, ctx, nodes, 2, layers, 1, false,
-		func(layer types.LayerID, round uint32, committee int, id types.NodeID, sig types.VrfSignature, hare *testHare) (uint16, error) {
+	w := runNodesFor(
+		t,
+		ctx,
+		nodes,
+		2,
+		layers,
+		1,
+		false,
+		func(_ types.LayerID, round uint32, _ int, _ types.NodeID, _ types.VrfSignature, _ *testHare) (uint16, error) {
 			if round%4 == proposalRound {
 				return 0, nil
 			}
@@ -212,7 +273,8 @@ func Test_HareNotEnoughLeaders(t *testing.T) {
 		func(layer types.LayerID, hare *testHare) {
 			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 			m[l][hare.N] = 1
-		})
+		},
+	)
 
 	w.LayerTicker(1 * time.Second)
 	time.Sleep(time.Second * 6)
@@ -235,8 +297,22 @@ func Test_HareNotEnoughCommits(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	w := runNodesFor(t, ctx, nodes, 2, layers, 1, true,
-		func(layer types.LayerID, round uint32, committee int, id types.NodeID, sig types.VrfSignature, hare *testHare) (uint16, error) {
+	w := runNodesFor(
+		t,
+		ctx,
+		nodes,
+		2,
+		layers,
+		1,
+		true,
+		func(
+			_ types.LayerID,
+			round uint32,
+			committee int,
+			_ types.NodeID,
+			_ types.VrfSignature,
+			hare *testHare,
+		) (uint16, error) {
 			if round%4 == commitRound && hare.N >= committee/2-1 {
 				return 0, nil
 			}
@@ -245,7 +321,8 @@ func Test_HareNotEnoughCommits(t *testing.T) {
 		func(layer types.LayerID, hare *testHare) {
 			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 			m[l][hare.N] = 1
-		})
+		},
+	)
 
 	w.LayerTicker(100 * time.Millisecond)
 	time.Sleep(time.Second * 6)
@@ -268,8 +345,22 @@ func Test_HareNotEnoughNotifications(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	w := runNodesFor(t, ctx, nodes, 2, layers, 1, true,
-		func(layer types.LayerID, round uint32, committee int, id types.NodeID, sig types.VrfSignature, hare *testHare) (uint16, error) {
+	w := runNodesFor(
+		t,
+		ctx,
+		nodes,
+		2,
+		layers,
+		1,
+		true,
+		func(
+			_ types.LayerID,
+			round uint32,
+			committee int,
+			_ types.NodeID,
+			sig types.VrfSignature,
+			hare *testHare,
+		) (uint16, error) {
 			if round%4 == notifyRound && hare.N >= committee/2-1 {
 				return 0, nil
 			}
@@ -278,7 +369,8 @@ func Test_HareNotEnoughNotifications(t *testing.T) {
 		func(layer types.LayerID, hare *testHare) {
 			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 			m[l][hare.N] = 1
-		})
+		},
+	)
 
 	w.LayerTicker(100 * time.Millisecond)
 	time.Sleep(time.Second * 6)
@@ -301,14 +393,22 @@ func Test_HareComplete(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	w := runNodesFor(t, ctx, nodes, 2, layers, 1, true,
-		func(layer types.LayerID, round uint32, committee int, id types.NodeID, sig types.VrfSignature, hare *testHare) (uint16, error) {
+	w := runNodesFor(
+		t,
+		ctx,
+		nodes,
+		2,
+		layers,
+		1,
+		true,
+		func(_ types.LayerID, _ uint32, _ int, _ types.NodeID, _ types.VrfSignature, _ *testHare) (uint16, error) {
 			return 1, nil
 		},
 		func(layer types.LayerID, hare *testHare) {
 			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 			m[l][hare.N] = 1
-		})
+		},
+	)
 
 	w.LayerTicker(100 * time.Millisecond)
 	time.Sleep(time.Second * 6)

@@ -34,20 +34,23 @@ func (ps *PubSub) Register(topic string, handler GossipHandler, opts ...Validato
 	}
 	// Drop peers on ValidationRejectErr
 	handler = DropPeerOnValidationReject(handler, ps.host, ps.logger)
-	ps.pubsub.RegisterTopicValidator(topic, func(ctx context.Context, pid peer.ID, msg *pubsub.Message) pubsub.ValidationResult {
-		start := time.Now()
-		err := handler(log.WithNewRequestID(ctx), pid, msg.Data)
-		metrics.ProcessedMessagesDuration.WithLabelValues(topic, castResult(err)).
-			Observe(float64(time.Since(start)))
-		switch {
-		case errors.Is(err, ErrValidationReject):
-			return pubsub.ValidationReject
-		case err != nil:
-			return pubsub.ValidationIgnore
-		default:
-			return pubsub.ValidationAccept
-		}
-	}, opts...)
+	ps.pubsub.RegisterTopicValidator(
+		topic,
+		func(ctx context.Context, pid peer.ID, msg *pubsub.Message) pubsub.ValidationResult {
+			start := time.Now()
+			err := handler(log.WithNewRequestID(ctx), pid, msg.Data)
+			metrics.ProcessedMessagesDuration.WithLabelValues(topic, castResult(err)).
+				Observe(float64(time.Since(start)))
+			switch {
+			case errors.Is(err, ErrValidationReject):
+				return pubsub.ValidationReject
+			case err != nil:
+				return pubsub.ValidationIgnore
+			default:
+				return pubsub.ValidationAccept
+			}
+		},
+		opts...)
 	topich, err := ps.pubsub.Join(topic)
 	if err != nil {
 		ps.logger.With().Panic("failed to join a topic", log.String("topic", topic), log.Err(err))

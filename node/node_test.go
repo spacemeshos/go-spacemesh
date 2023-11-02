@@ -400,7 +400,7 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 		app.startAPIServices(context.Background())
 	}
 
-	// Test starting the JSON server from the commandline
+	// Test starting the JSON server from the command line
 	// uses Cmd.Run from above
 	listener := "127.0.0.1:1234"
 	str, err := testArgs(
@@ -1193,10 +1193,10 @@ func TestAdminEvents(t *testing.T) {
 		stream, err := client.EventsStream(tctx, &pb.EventStreamRequest{})
 		require.NoError(t, err)
 		success := []pb.IsEventDetails{
-			&pb.Event_PostServiceStarted{},
 			&pb.Event_Beacon{},
 			&pb.Event_InitStart{},
 			&pb.Event_InitComplete{},
+			&pb.Event_PostServiceStarted{},
 			&pb.Event_PostStart{},
 			&pb.Event_PostComplete{},
 			&pb.Event_PoetWaitRound{},
@@ -1205,10 +1205,10 @@ func TestAdminEvents(t *testing.T) {
 			&pb.Event_PostComplete{},
 			&pb.Event_AtxPublished{},
 		}
-		for _, ev := range success {
+		for idx, ev := range success {
 			msg, err := stream.Recv()
 			require.NoError(t, err, "stream %d", i)
-			require.IsType(t, ev, msg.Details, "stream %d", i)
+			require.IsType(t, ev, msg.Details, "stream %d, event %d", i, idx)
 		}
 		require.NoError(t, stream.CloseSend())
 	}
@@ -1244,6 +1244,10 @@ func getTestDefaultConfig(tb testing.TB) *config.Config {
 	cfg.HARE.WakeupDelta = 1
 	cfg.HARE.N = 5
 	cfg.HARE.ExpectedLeaders = 5
+
+	cfg.HARE3.RoundDuration = 2
+	cfg.HARE3.PreroundDelay = 1
+
 	cfg.LayerAvgSize = 5
 	cfg.LayersPerEpoch = 3
 	cfg.TxsPerProposal = 100

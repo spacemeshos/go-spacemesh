@@ -356,7 +356,12 @@ func TestGlobalStateService(t *testing.T) {
 			// sending a request should generate an error
 			_, err = stream.Recv()
 			require.Error(t, err, "expected an error")
-			require.ErrorContains(t, err, "`GlobalStateDataFlags` must set at least one bitfield", "received unexpected error")
+			require.ErrorContains(
+				t,
+				err,
+				"`GlobalStateDataFlags` must set at least one bitfield",
+				"received unexpected error",
+			)
 			statusCode := status.Code(err)
 			require.Equal(t, codes.InvalidArgument, statusCode, "expected InvalidArgument error")
 		})

@@ -57,7 +57,12 @@ func TestPeerInfoApi(t *testing.T) {
 			peer := getPeerInfo(peers, innerApp.host.ID())
 			require.NotNil(t, peer, "info is missing connection to %v")
 			require.Len(t, peer.Connections, 1, "expecting only 1 connection to each peer")
-			require.Equal(t, innerApp.host.Addrs()[0].String(), peer.Connections[0].Address, "connection address should match address of peer")
+			require.Equal(
+				t,
+				innerApp.host.Addrs()[0].String(),
+				peer.Connections[0].Address,
+				"connection address should match address of peer",
+			)
 			require.Greater(t, peer.Connections[0].Uptime.AsDuration(), time.Duration(0), "uptime should be set")
 			outbound := peer.Connections[0].Outbound
 
@@ -65,7 +70,12 @@ func TestPeerInfoApi(t *testing.T) {
 			otherSide := getPeerInfo(infos[j], app.host.ID())
 			require.NotNil(t, peer, "one side missing peer connection")
 			require.Len(t, otherSide.Connections, 1, "expecting only 1 connection to each peer")
-			require.Equal(t, outbound, !otherSide.Connections[0].Outbound, "expecting pairwise connections to agree on outbound direction")
+			require.Equal(
+				t,
+				outbound,
+				!otherSide.Connections[0].Outbound,
+				"expecting pairwise connections to agree on outbound direction",
+			)
 		}
 	}
 }

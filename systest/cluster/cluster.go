@@ -209,7 +209,7 @@ func (c *Cluster) GenesisID() types.Hash20 {
 }
 
 func (c *Cluster) nextSmesher() int {
-	if c.smeshers <= c.bootnodes {
+	if c.smeshers == 0 {
 		return 0
 	}
 	return decodeOrdinal(c.clients[len(c.clients)-1].Name) + 1
@@ -351,7 +351,17 @@ func (c *Cluster) reuse(cctx *testcontext.Context) error {
 		cctx.Log.Debugw("discovered existing bootstrapper", "name", bs.Name)
 	}
 
-	cctx.Log.Debugw("discovered cluster", "bootnodes", c.bootnodes, "smeshers", c.smeshers, "poets", len(c.poets), "bootstrappers", len(c.bootstrappers))
+	cctx.Log.Debugw(
+		"discovered cluster",
+		"bootnodes",
+		c.bootnodes,
+		"smeshers",
+		c.smeshers,
+		"poets",
+		len(c.poets),
+		"bootstrappers",
+		len(c.bootstrappers),
+	)
 	if err := c.accounts.Recover(cctx); err != nil {
 		return err
 	}
@@ -445,9 +455,17 @@ func (c *Cluster) AddBootnodes(cctx *testcontext.Context, n int) error {
 type SmesherDeploymentConfig struct {
 	flags []DeploymentFlag
 	keys  []ed25519.PrivateKey
+
+	noDefaultPoets bool
 }
 
 type DeploymentOpt func(cfg *SmesherDeploymentConfig)
+
+func NoDefaultPoets() DeploymentOpt {
+	return func(cfg *SmesherDeploymentConfig) {
+		cfg.noDefaultPoets = true
+	}
+}
 
 func WithFlags(flags ...DeploymentFlag) DeploymentOpt {
 	return func(cfg *SmesherDeploymentConfig) {
@@ -679,7 +697,9 @@ func (a *accounts) Persist(ctx *testcontext.Context) error {
 	}
 	cfgmap := corev1.ConfigMap("accounts", ctx.Namespace).
 		WithBinaryData(data)
-	_, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(ctx, cfgmap, apimetav1.ApplyOptions{FieldManager: "test"})
+	_, err := ctx.Client.CoreV1().
+		ConfigMaps(ctx.Namespace).
+		Apply(ctx, cfgmap, apimetav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
 		return fmt.Errorf("failed to persist accounts %+v %w", data, err)
 	}
@@ -776,7 +796,9 @@ func persistFlags(ctx *testcontext.Context, name string, config map[string]Deplo
 	}
 	cfgmap := corev1.ConfigMap(name, ctx.Namespace).
 		WithData(data)
-	_, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(ctx, cfgmap, apimetav1.ApplyOptions{FieldManager: "test"})
+	_, err := ctx.Client.CoreV1().
+		ConfigMaps(ctx.Namespace).
+		Apply(ctx, cfgmap, apimetav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
 		return fmt.Errorf("failed to persist accounts %+v %w", data, err)
 	}

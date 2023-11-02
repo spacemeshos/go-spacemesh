@@ -48,7 +48,12 @@ func createMesh(tb testing.TB, db *sql.Database) {
 		newAtx(tb, db)
 	}
 	acct := &types.Account{
-		Layer: types.LayerID(0), Address: types.Address{1, 1}, NextNonce: 1, Balance: 1300, TemplateAddress: &types.Address{2}, State: []byte("state10"),
+		Layer:           types.LayerID(0),
+		Address:         types.Address{1, 1},
+		NextNonce:       1,
+		Balance:         1300,
+		TemplateAddress: &types.Address{2},
+		State:           []byte("state10"),
 	}
 	require.NoError(tb, accounts.Update(db, acct))
 }

@@ -62,12 +62,22 @@ func StringToAddress(src string) (Address, error) {
 		return addr, fmt.Errorf("expected %d bytes, got %d: %w", AddressLength, len(data), ErrWrongAddressLength)
 	}
 	if networkHrp != hrp {
-		return addr, fmt.Errorf("wrong network id: expected `%s`, got `%s`: %w", NetworkHRP(), hrp, ErrUnsupportedNetwork)
+		return addr, fmt.Errorf(
+			"wrong network id: expected `%s`, got `%s`: %w",
+			NetworkHRP(),
+			hrp,
+			ErrUnsupportedNetwork,
+		)
 	}
 	// check that first 4 bytes are 0.
 	for i := 0; i < AddressReservedSpace; i++ {
 		if dataConverted[i] != 0 {
-			return addr, fmt.Errorf("expected first %d bytes to be 0, got %d: %w", AddressReservedSpace, dataConverted[i], ErrMissingReservedSpace)
+			return addr, fmt.Errorf(
+				"expected first %d bytes to be 0, got %d: %w",
+				AddressReservedSpace,
+				dataConverted[i],
+				ErrMissingReservedSpace,
+			)
 		}
 	}
 

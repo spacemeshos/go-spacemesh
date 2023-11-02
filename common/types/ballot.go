@@ -58,7 +58,8 @@ type Ballot struct {
 	// the proof of the smeshers eligibility to vote and propose block content in this epoch.
 	// Eligibilities must be produced in the ascending order.
 	// the proofs are vrf signatures and need not be included in the ballot's signature.
-	EligibilityProofs []VotingEligibility `scale:"max=500"` // according to protocol there are 50 per layer, the rest is safety margin
+	// according to protocol there are 50 per layer, the rest is safety margin
+	EligibilityProofs []VotingEligibility `scale:"max=500"`
 	// from the smesher's view, the set of ATXs eligible to vote and propose block content in this epoch
 	// only present in smesher's first ballot of the epoch
 	ActiveSet []ATXID `scale:"max=100000"`
@@ -163,11 +164,14 @@ type Votes struct {
 	// Base ballot.
 	Base BallotID `json:"base"`
 	// Support block id at a particular layer and height.
-	Support []Vote `scale:"max=10000" json:"support,omitempty"` // sliding vote window size is 10k layers, vote for one block per layer
+	// sliding vote window size is 10k layers, vote for one block per layer
+	Support []Vote `json:"support,omitempty" scale:"max=10000"`
 	// Against previously supported block.
-	Against []Vote `scale:"max=10000" json:"against,omitempty"` // sliding vote window size is 10k layers, vote for one block per layer
+	// sliding vote window size is 10k layers, vote for one block per layer
+	Against []Vote `json:"against,omitempty" scale:"max=10000"`
 	// Abstain on layers until they are terminated.
-	Abstain []LayerID `scale:"max=10000" json:"abstain,omitempty"` // sliding vote window size is 10k layers, vote to abstain on any layer
+	// sliding vote window size is 10k layers, vote to abstain on any layer
+	Abstain []LayerID `json:"abstain,omitempty" scale:"max=10000"`
 }
 
 // MarshalLogObject implements logging interface.
@@ -215,7 +219,7 @@ type Vote = BlockHeader
 // Opinion is a tuple from opinion hash and votes that decode to opinion hash.
 type Opinion struct {
 	Hash  Hash32 `json:"hash"`
-	Votes `json:",inline"`
+	Votes `       json:",inline"`
 }
 
 // MarshalLogObject implements logging interface.

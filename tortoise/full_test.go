@@ -380,7 +380,13 @@ func TestFullCountVotes(t *testing.T) {
 					ballot.EligibilityProofs = []types.VotingEligibility{{J: uint32(j)}}
 					ballot.AtxID = activeset[b.ATX]
 
-					elig, err := util.GetNumEligibleSlots(weights[b.ATX], 0, total, consensus.LayerSize, types.GetLayersPerEpoch())
+					elig, err := util.GetNumEligibleSlots(
+						weights[b.ATX],
+						0,
+						total,
+						consensus.LayerSize,
+						types.GetLayersPerEpoch(),
+					)
 					require.NoError(t, err)
 					ballot.EpochData = &types.EpochData{ActiveSetHash: types.Hash32{1, 2, 3}, EligibilityCount: elig}
 					ballot.Layer = lid

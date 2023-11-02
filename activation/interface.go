@@ -24,13 +24,33 @@ type PostVerifier interface {
 type nipostValidator interface {
 	InitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, goldenATXID types.ATXID) error
 	NIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, nodeID types.NodeID) error
-	NIPost(ctx context.Context, nodeId types.NodeID, atxId types.ATXID, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32) (uint64, error)
+	NIPost(
+		ctx context.Context,
+		nodeId types.NodeID,
+		atxId types.ATXID,
+		NIPost *types.NIPost,
+		expectedChallenge types.Hash32,
+		numUnits uint32,
+	) (uint64, error)
 
 	NumUnits(cfg *PostConfig, numUnits uint32) error
-	Post(ctx context.Context, nodeId types.NodeID, atxId types.ATXID, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint32) error
+	Post(
+		ctx context.Context,
+		nodeId types.NodeID,
+		atxId types.ATXID,
+		Post *types.Post,
+		PostMetadata *types.PostMetadata,
+		numUnits uint32,
+	) error
 	PostMetadata(cfg *PostConfig, metadata *types.PostMetadata) error
 
-	VRFNonce(nodeId types.NodeID, commitmentAtxId types.ATXID, vrfNonce *types.VRFPostIndex, PostMetadata *types.PostMetadata, numUnits uint32) error
+	VRFNonce(
+		nodeId types.NodeID,
+		commitmentAtxId types.ATXID,
+		vrfNonce *types.VRFPostIndex,
+		PostMetadata *types.PostMetadata,
+		numUnits uint32,
+	) error
 	PositioningAtx(id types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubepoch types.EpochID) error
 }
 
@@ -41,13 +61,12 @@ type layerClock interface {
 }
 
 type nipostBuilder interface {
-	UpdatePoETProvers([]poetClient)
 	BuildNIPost(ctx context.Context, challenge *types.NIPostChallenge) (*types.NIPost, error)
 	DataDir() string
 }
 
 type syncer interface {
-	RegisterForATXSynced() chan struct{}
+	RegisterForATXSynced() <-chan struct{}
 }
 
 type atxProvider interface {
@@ -58,24 +77,20 @@ type atxProvider interface {
 // This interface is used by the atx builder and currently implemented by the PostSetupManager.
 // Eventually most of the functionality will be moved to the PoSTClient.
 type postSetupProvider interface {
-	PrepareInitializer(ctx context.Context, opts PostSetupOpts) error
+	PrepareInitializer(opts PostSetupOpts) error
 	StartSession(context context.Context) error
+	Status() *PostSetupStatus
 	Reset() error
-	CommitmentAtx() (types.ATXID, error)
-	VRFNonce() (*types.VRFPostIndex, error)
-	LastOpts() *PostSetupOpts
-	Config() PostConfig
 }
 
 // SmeshingProvider defines the functionality required for the node's Smesher API.
 type SmeshingProvider interface {
 	Smeshing() bool
-	StartSmeshing(types.Address, PostSetupOpts) error
+	StartSmeshing(types.Address) error
 	StopSmeshing(bool) error
 	SmesherID() types.NodeID
 	Coinbase() types.Address
 	SetCoinbase(coinbase types.Address)
-	UpdatePoETServers(ctx context.Context, endpoints []string) error
 }
 
 // poetClient servers as an interface to communicate with a PoET server.
@@ -86,7 +101,14 @@ type poetClient interface {
 	PowParams(ctx context.Context) (*PoetPowParams, error)
 
 	// Submit registers a challenge in the proving service current open round.
-	Submit(ctx context.Context, deadline time.Time, prefix, challenge []byte, signature types.EdSignature, nodeID types.NodeID, pow PoetPoW) (*types.PoetRound, error)
+	Submit(
+		ctx context.Context,
+		deadline time.Time,
+		prefix, challenge []byte,
+		signature types.EdSignature,
+		nodeID types.NodeID,
+		pow PoetPoW,
+	) (*types.PoetRound, error)
 
 	// PoetServiceID returns the public key of the PoET proving service.
 	PoetServiceID(context.Context) (types.PoetServiceID, error)
@@ -106,5 +128,5 @@ type postService interface {
 
 type PostClient interface {
 	Info(ctx context.Context) (*types.PostInfo, error)
-	Proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostMetadata, error)
+	Proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error)
 }

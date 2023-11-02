@@ -196,7 +196,12 @@ func (n *NodeClient) Invoke(ctx context.Context, method string, args, reply any,
 	return err
 }
 
-func (n *NodeClient) NewStream(ctx context.Context, desc *grpc.StreamDesc, method string, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+func (n *NodeClient) NewStream(
+	ctx context.Context,
+	desc *grpc.StreamDesc,
+	method string,
+	opts ...grpc.CallOption,
+) (grpc.ClientStream, error) {
 	conn, err := n.ensureConn(ctx)
 	if err != nil {
 		return nil, err
@@ -249,7 +254,9 @@ func deployPoetD(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (
 					),
 				)))
 
-	_, err := ctx.Client.AppsV1().Deployments(ctx.Namespace).Apply(ctx, deployment, apimetav1.ApplyOptions{FieldManager: "test"})
+	_, err := ctx.Client.AppsV1().
+		Deployments(ctx.Namespace).
+		Apply(ctx, deployment, apimetav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
 		return nil, fmt.Errorf("create poet: %w", err)
 	}
@@ -331,11 +338,16 @@ func deployPoet(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (*
 }
 
 func deleteServiceAndPod(ctx *testcontext.Context, id string) error {
-	errPod := ctx.Client.AppsV1().Deployments(ctx.Namespace).DeleteCollection(ctx, apimetav1.DeleteOptions{}, apimetav1.ListOptions{LabelSelector: labelSelector(id)})
+	errPod := ctx.Client.AppsV1().
+		Deployments(ctx.Namespace).
+		DeleteCollection(ctx, apimetav1.DeleteOptions{}, apimetav1.ListOptions{LabelSelector: labelSelector(id)})
 	var errSvc error
-	if svcs, err := ctx.Client.CoreV1().Services(ctx.Namespace).List(ctx, apimetav1.ListOptions{LabelSelector: labelSelector(id)}); err == nil {
+	if svcs, err := ctx.Client.CoreV1().Services(ctx.Namespace).
+		List(ctx, apimetav1.ListOptions{LabelSelector: labelSelector(id)}); err == nil {
 		for _, svc := range svcs.Items {
-			err = ctx.Client.CoreV1().Services(ctx.Namespace).Delete(ctx, svc.ObjectMeta.Name, apimetav1.DeleteOptions{})
+			err = ctx.Client.CoreV1().
+				Services(ctx.Namespace).
+				Delete(ctx, svc.ObjectMeta.Name, apimetav1.DeleteOptions{})
 			if errSvc == nil {
 				errSvc = err
 			}
@@ -397,6 +409,7 @@ func labelSelector(id string) string {
 }
 
 func deployNodes(ctx *testcontext.Context, kind string, from, to int, opts ...DeploymentOpt) ([]*NodeClient, error) {
+	ctx.Log.Debugw("deploying nodes", "kind", kind, "from", from, "to", to)
 	var (
 		eg      errgroup.Group
 		clients = make(chan *NodeClient, to-from)
@@ -406,14 +419,21 @@ func deployNodes(ctx *testcontext.Context, kind string, from, to int, opts ...De
 		opt(&cfg)
 	}
 	if delta := to - from; len(cfg.keys) > 0 && len(cfg.keys) != delta {
-		return nil, fmt.Errorf("keys must be overwritten for all or none members of the cluster: delta %d, keys %d %v", delta, len(cfg.keys), cfg.keys)
+		return nil, fmt.Errorf(
+			"keys must be overwritten for all or none members of the cluster: delta %d, keys %d %v",
+			delta,
+			len(cfg.keys),
+			cfg.keys,
+		)
 	}
 	for i := from; i < to; i++ {
 		i := i
 		finalFlags := make([]DeploymentFlag, len(cfg.flags), len(cfg.flags)+ctx.PoetSize)
 		copy(finalFlags, cfg.flags)
-		for idx := 0; idx < ctx.PoetSize; idx++ {
-			finalFlags = append(finalFlags, PoetEndpoint(MakePoetEndpoint(idx)))
+		if !cfg.noDefaultPoets {
+			for idx := 0; idx < ctx.PoetSize; idx++ {
+				finalFlags = append(finalFlags, PoetEndpoint(MakePoetEndpoint(idx)))
+			}
 		}
 		if ctx.BootstrapperSize > 1 {
 			finalFlags = append(finalFlags, BootstrapperUrl(BootstrapperEndpoint(i%ctx.BootstrapperSize)))
@@ -468,6 +488,7 @@ func deleteNode(ctx *testcontext.Context, id string) error {
 }
 
 func deployNode(ctx *testcontext.Context, id string, labels map[string]string, flags []DeploymentFlag) error {
+	ctx.Log.Debugw("deploying node", "id", id)
 	cmd := []string{
 		"/bin/go-spacemesh",
 		"-c=" + configDir + attachedSmesherConfig,
@@ -547,7 +568,12 @@ func deployNode(ctx *testcontext.Context, id string, labels map[string]string, f
 	return nil
 }
 
-func deployBootstrapper(ctx *testcontext.Context, id string, bsEpochs []int, flags ...DeploymentFlag) (*NodeClient, error) {
+func deployBootstrapper(
+	ctx *testcontext.Context,
+	id string,
+	bsEpochs []int,
+	flags ...DeploymentFlag,
+) (*NodeClient, error) {
 	if _, err := deployBootstrapperSvc(ctx, id); err != nil {
 		return nil, fmt.Errorf("apply poet service: %w", err)
 	}
@@ -586,7 +612,12 @@ func commaSeparatedList(epochs []int) string {
 	return b.String()
 }
 
-func deployBootstrapperD(ctx *testcontext.Context, id string, bsEpochs []int, flags ...DeploymentFlag) (*NodeClient, error) {
+func deployBootstrapperD(
+	ctx *testcontext.Context,
+	id string,
+	bsEpochs []int,
+	flags ...DeploymentFlag,
+) (*NodeClient, error) {
 	cmd := []string{
 		"/bin/go-bootstrapper",
 		commaSeparatedList(bsEpochs),
@@ -617,7 +648,10 @@ func deployBootstrapperD(ctx *testcontext.Context, id string, bsEpochs []int, fl
 						WithName("bootstrapper").
 						WithImage(ctx.BootstrapperImage).
 						WithPorts(
-							corev1.ContainerPort().WithName("rest").WithProtocol("TCP").WithContainerPort(bootstrapperPort),
+							corev1.ContainerPort().
+								WithName("rest").
+								WithProtocol("TCP").
+								WithContainerPort(bootstrapperPort),
 						).
 						WithResources(corev1.ResourceRequirements().
 							WithRequests(bootstrapperResources.Get(ctx.Parameters).Requests).
@@ -627,7 +661,9 @@ func deployBootstrapperD(ctx *testcontext.Context, id string, bsEpochs []int, fl
 					),
 				)))
 
-	_, err := ctx.Client.AppsV1().Deployments(ctx.Namespace).Apply(ctx, deployment, apimetav1.ApplyOptions{FieldManager: "test"})
+	_, err := ctx.Client.AppsV1().
+		Deployments(ctx.Namespace).
+		Apply(ctx, deployment, apimetav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
 		return nil, fmt.Errorf("create bootstrapper: %w", err)
 	}
@@ -649,7 +685,7 @@ func (d DeploymentFlag) Flag() string {
 	return d.Name + "=" + d.Value
 }
 
-// PoetEndpoint flag.
+// PoetEndpoint flag can be used multiple times to add multiple poets.
 func PoetEndpoint(endpoint string) DeploymentFlag {
 	return DeploymentFlag{Name: "--poet-server", Value: endpoint}
 }

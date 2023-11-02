@@ -65,7 +65,13 @@ func defaultOracle(t testing.TB) *testOracle {
 	return to
 }
 
-func createBallots(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, activeSet types.ATXIDList, miners []types.NodeID) []*types.Ballot {
+func createBallots(
+	tb testing.TB,
+	cdb *datastore.CachedDB,
+	lid types.LayerID,
+	activeSet types.ATXIDList,
+	miners []types.NodeID,
+) []*types.Ballot {
 	tb.Helper()
 	numBallots := ballotsPerLayer
 	if len(activeSet) < numBallots {
@@ -115,7 +121,12 @@ func createLayerData(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, 
 	return miners
 }
 
-func createActiveSet(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, activeSet []types.ATXID) []types.NodeID {
+func createActiveSet(
+	tb testing.TB,
+	cdb *datastore.CachedDB,
+	lid types.LayerID,
+	activeSet []types.ATXID,
+) []types.NodeID {
 	var miners []types.NodeID
 	for i, id := range activeSet {
 		nodeID := types.BytesToNodeID([]byte(strconv.Itoa(i)))
@@ -220,11 +231,16 @@ func TestCalcEligibility(t *testing.T) {
 		beacon := types.Beacon{1, 0, 0, 0}
 		miners := createLayerData(t, o.cdb, lid.Sub(defLayersPerEpoch), 5)
 		sigs := map[string]uint16{
-			"0516a574aef37257d6811ea53ef55d4cbb0e14674900a0d5165bd6742513840d02442d979fdabc7059645d1e8f8a0f44d0db2aa90f23374dd74a3636d4ecdab7": 1,
-			"73929b4b69090bb6133e2f8cd73989b35228e7e6d8c6745e4100d9c5eb48ca2624ee2889e55124195a130f74ea56e53a73a1c4dee60baa13ad3b1c0ed4f80d9c": 0,
-			"e2c27ad65b752b763173b588518764b6c1e42896d57e0eabef9bcac68e07b87729a4ef9e5f17d8c1cb34ffd0d65ee9a7e63e63b77a7bcab1140a76fc04c271de": 0,
-			"384460966938c87644987fe00c0f9d4f9a5e2dcd4bdc08392ed94203895ba325036725a22346e35aa707993babef716aa1b6b3dfc653a44cb23ac8f743cbbc3d": 1,
-			"15c5f565a75888970059b070bfaed1998a9d423ddac9f6af83da51db02149044ea6aeb86294341c7a950ac5de2855bbebc11cc28b02c08bc903e4cf41439717d": 1,
+			"0516a574aef37257d6811ea53ef55d4cbb0e14674900a0d5165bd6742513840d" +
+				"02442d979fdabc7059645d1e8f8a0f44d0db2aa90f23374dd74a3636d4ecdab7": 1,
+			"73929b4b69090bb6133e2f8cd73989b35228e7e6d8c6745e4100d9c5eb48ca26" +
+				"24ee2889e55124195a130f74ea56e53a73a1c4dee60baa13ad3b1c0ed4f80d9c": 0,
+			"e2c27ad65b752b763173b588518764b6c1e42896d57e0eabef9bcac68e07b877" +
+				"29a4ef9e5f17d8c1cb34ffd0d65ee9a7e63e63b77a7bcab1140a76fc04c271de": 0,
+			"384460966938c87644987fe00c0f9d4f9a5e2dcd4bdc08392ed94203895ba325" +
+				"036725a22346e35aa707993babef716aa1b6b3dfc653a44cb23ac8f743cbbc3d": 1,
+			"15c5f565a75888970059b070bfaed1998a9d423ddac9f6af83da51db02149044" +
+				"ea6aeb86294341c7a950ac5de2855bbebc11cc28b02c08bc903e4cf41439717d": 1,
 		}
 		for vrf, exp := range sigs {
 			sig, err := hex.DecodeString(vrf)
@@ -656,7 +672,14 @@ func TestActiveSetDD(t *testing.T) {
 	t.Parallel()
 
 	target := types.EpochID(4)
-	bgen := func(id types.BallotID, lid types.LayerID, node types.NodeID, beacon types.Beacon, atxs types.ATXIDList, option ...func(*types.Ballot)) types.Ballot {
+	bgen := func(
+		id types.BallotID,
+		lid types.LayerID,
+		node types.NodeID,
+		beacon types.Beacon,
+		atxs types.ATXIDList,
+		option ...func(*types.Ballot),
+	) types.Ballot {
 		ballot := types.Ballot{}
 		ballot.Layer = lid
 		ballot.EpochData = &types.EpochData{Beacon: beacon, ActiveSetHash: atxs.Hash()}
@@ -667,7 +690,11 @@ func TestActiveSetDD(t *testing.T) {
 		}
 		return ballot
 	}
-	agen := func(id types.ATXID, node types.NodeID, option ...func(*types.VerifiedActivationTx)) *types.VerifiedActivationTx {
+	agen := func(
+		id types.ATXID,
+		node types.NodeID,
+		option ...func(*types.VerifiedActivationTx),
+	) *types.VerifiedActivationTx {
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{},
 		}}

@@ -99,7 +99,13 @@ func TestSet_Size(t *testing.T) {
 func TestSet_Union(t *testing.T) {
 	g := NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{3}, types.ProposalID{4})
 	s := NewSetFromValues(types.ProposalID{1}, types.ProposalID{5})
-	exp := NewSetFromValues(types.ProposalID{1}, types.ProposalID{2}, types.ProposalID{3}, types.ProposalID{4}, types.ProposalID{5})
+	exp := NewSetFromValues(
+		types.ProposalID{1},
+		types.ProposalID{2},
+		types.ProposalID{3},
+		types.ProposalID{4},
+		types.ProposalID{5},
+	)
 	require.True(t, exp.Equals(s.Union(g)))
 }
 

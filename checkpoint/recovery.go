@@ -58,7 +58,13 @@ func RecoveryFilename(dataDir, base string, restore types.LayerID) string {
 	return filepath.Join(RecoveryDir(dataDir), fmt.Sprintf("%s-restore-%d", base, restore.Uint32()))
 }
 
-func copyToLocalFile(ctx context.Context, logger log.Log, fs afero.Fs, dataDir, uri string, restore types.LayerID) (string, error) {
+func copyToLocalFile(
+	ctx context.Context,
+	logger log.Log,
+	fs afero.Fs,
+	dataDir, uri string,
+	restore types.LayerID,
+) (string, error) {
 	parsed, err := url.Parse(uri)
 	if err != nil {
 		return "", fmt.Errorf("%w: parse recovery URI %v", err, uri)
