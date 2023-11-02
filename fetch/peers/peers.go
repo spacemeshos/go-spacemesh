@@ -13,57 +13,45 @@ import (
 type data struct {
 	id                peer.ID
 	success, failures int
-	rate              float64
+	failRate          float64
 	averageLatency    float64
 }
 
-func (p *data) successRate() float64 {
-	return float64(p.success) / float64(p.success+p.failures)
+func (d *data) latency(global float64) float64 {
+	if d.success+d.failures == 0 {
+		return 0.8 * global // to prioritize trying out new peer
+	}
+	if d.success == 0 {
+		return global + d.failRate*global
+	}
+	return d.averageLatency + d.failRate*global
 }
 
-func (p *data) cmp(other *data, rateThreshold float64) int {
-	if p == nil && other != nil {
-		return -1
+func (p *data) less(other *data, global float64) bool {
+	peerLatency := p.latency(global)
+	otherLatency := other.latency(global)
+	if peerLatency < otherLatency {
+		return true
+	} else if peerLatency > otherLatency {
+		return false
 	}
-	switch {
-	case p.rate-other.rate > rateThreshold:
-		return 1
-	case other.rate-p.rate > rateThreshold:
-		return -1
-	}
-	switch {
-	case p.averageLatency < other.averageLatency:
-		return 1
-	case p.averageLatency > other.averageLatency:
-		return -1
-	}
-	return strings.Compare(string(p.id), string(other.id))
+	return strings.Compare(string(p.id), string(other.id)) == -1
 }
 
-type Opt func(*Peers)
-
-func WithRateThreshold(rate float64) Opt {
-	return func(p *Peers) {
-		p.rateThreshold = rate
+func New() *Peers {
+	return &Peers{
+		peers: map[peer.ID]*data{},
 	}
-}
-
-func New(opts ...Opt) *Peers {
-	p := &Peers{
-		peers:         map[peer.ID]*data{},
-		rateThreshold: 0.1,
-	}
-	for _, opt := range opts {
-		opt(p)
-	}
-	return p
 }
 
 type Peers struct {
 	mu    sync.Mutex
 	peers map[peer.ID]*data
 
-	rateThreshold float64
+	// globalLatency is the average latency of all successful responses from peers.
+	// It is used as a reference value for new peers.
+	// And to adjust average peer latency based on failure rate.
+	globalLatency float64
 }
 
 func (p *Peers) Add(id peer.ID) {
@@ -73,8 +61,7 @@ func (p *Peers) Add(id peer.ID) {
 	if exist {
 		return
 	}
-	peer := &data{id: id}
-	p.peers[id] = peer
+	p.peers[id] = &data{id: id}
 }
 
 func (p *Peers) Delete(id peer.ID) {
@@ -91,12 +78,10 @@ func (p *Peers) OnFailure(id peer.ID) {
 		return
 	}
 	peer.failures++
-	peer.rate = peer.successRate()
+	peer.failRate = float64(peer.failures) / float64(peer.success+peer.failures)
 }
 
-// OnLatency records success and latency. Latency is not reported with every success
-// as some requests has different amount of work and data, and we want to measure something
-// comparable.
+// OnLatency updates average peer and global latency.
 func (p *Peers) OnLatency(id peer.ID, latency time.Duration) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -105,11 +90,16 @@ func (p *Peers) OnLatency(id peer.ID, latency time.Duration) {
 		return
 	}
 	peer.success++
-	peer.rate = peer.successRate()
+	peer.failRate = float64(peer.failures) / float64(peer.success+peer.failures)
 	if peer.averageLatency != 0 {
 		peer.averageLatency = 0.8*peer.averageLatency + 0.2*float64(latency)
 	} else {
 		peer.averageLatency = float64(latency)
+	}
+	if p.globalLatency != 0 {
+		p.globalLatency = 0.8*p.globalLatency + 0.2*float64(latency)
+	} else {
+		p.globalLatency = float64(latency)
 	}
 }
 
@@ -123,7 +113,9 @@ func (p *Peers) SelectBestFrom(peers []peer.ID) peer.ID {
 		if !exist {
 			continue
 		}
-		if best.cmp(pdata, p.rateThreshold) == -1 {
+		if best == nil {
+			best = pdata
+		} else if pdata.less(best, p.globalLatency) {
 			best = pdata
 		}
 	}
@@ -146,21 +138,21 @@ func (p *Peers) SelectBest(n int) []peer.ID {
 	if lth == 0 {
 		return nil
 	}
-	cache := make([]*data, 0, lth)
+	best := make([]*data, 0, lth)
 	for _, peer := range p.peers {
 		worst := peer
-		for i := range cache {
-			if cache[i].cmp(worst, p.rateThreshold) == -1 {
-				cache[i], worst = worst, cache[i]
+		for i := range best {
+			if worst.less(best[i], p.globalLatency) {
+				best[i], worst = worst, best[i]
 			}
 		}
-		if len(cache) < cap(cache) {
-			cache = append(cache, worst)
+		if len(best) < cap(best) {
+			best = append(best, worst)
 		}
 	}
-	rst := make([]peer.ID, len(cache))
+	rst := make([]peer.ID, len(best))
 	for i := range rst {
-		rst[i] = cache[i].id
+		rst[i] = best[i].id
 	}
 	return rst
 }
