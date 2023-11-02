@@ -40,7 +40,7 @@ type IterRound struct {
 
 // Delay returns number of network delays since specified iterround.
 func (ir IterRound) Delay(since IterRound) int {
-	delay := int(ir.Absolute() - since.Absolute())
+	delay := int(ir.Absolute()) - int(since.Absolute())
 	if delay < 0 {
 		return 0
 	}
