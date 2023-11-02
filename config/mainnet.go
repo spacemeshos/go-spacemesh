@@ -59,7 +59,7 @@ func MainnetConfig() Config {
 	hare3conf := hare3.DefaultConfig()
 	hare3conf.Committee = 400
 	hare3conf.Enable = true
-	hare3conf.EnableLayer = 33101
+	hare3conf.EnableLayer = 35117
 	return Config{
 		BaseConfig: BaseConfig{
 			DataDirParent:         defaultDataDir,
