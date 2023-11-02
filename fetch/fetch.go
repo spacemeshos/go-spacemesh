@@ -191,11 +191,7 @@ func NewFetch(
 	for _, opt := range opts {
 		opt(f)
 	}
-	popts := []peers.Opt{}
-	if f.cfg.PeersRateThreshold != 0 {
-		popts = append(popts, peers.WithRateThreshold(f.cfg.PeersRateThreshold))
-	}
-	f.peers = peers.New(popts...)
+	f.peers = peers.New()
 	// NOTE(dshulyak) this is to avoid tests refactoring.
 	// there is one test that covers this part.
 	if host != nil {
