@@ -533,6 +533,9 @@ func TestProtocol(t *testing.T) {
 						zap.Stringer("before", before),
 						zap.Stringer("after", proto.Round),
 					)
+					stats := proto.Stats()
+					enc := zapcore.NewMapObjectEncoder()
+					require.NoError(t, stats.MarshalLogObject(enc))
 				}
 			}
 		})
