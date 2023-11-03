@@ -265,7 +265,17 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 	}
 }
 
-func (b *Builder) MovePostToDb() error {
+func (b *Builder) MigrateDiskToLocalDB() error {
+	if err := b.movePostToDb(); err != nil {
+		return fmt.Errorf("moving post to db: %w", err)
+	}
+	if err := b.moveNipostChallengeToDb(); err != nil {
+		return fmt.Errorf("moving nipost challenge to db: %w", err)
+	}
+	return nil
+}
+
+func (b *Builder) movePostToDb() error {
 	post, err := loadPost(b.nipostBuilder.DataDir())
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
@@ -285,13 +295,19 @@ func (b *Builder) MovePostToDb() error {
 		InitialPost:   post,
 		CommitmentATX: &commitmentAtxId,
 	}
-	if err := nipost.AddChallenge(b.localDB, b.signer.NodeID(), ch); err != nil {
-		return fmt.Errorf("adding post to db: %w", err)
-	}
-	return discardPost(b.nipostBuilder.DataDir())
+
+	return b.localDB.WithTx(context.Background(), func(tx *sql.Tx) error {
+		if err := nipost.RemoveChallenge(tx, b.signer.NodeID()); err != nil {
+			return fmt.Errorf("removing existing challenge from db: %w", err)
+		}
+		if err := nipost.AddChallenge(tx, b.signer.NodeID(), ch); err != nil {
+			return fmt.Errorf("adding post to db: %w", err)
+		}
+		return discardPost(b.nipostBuilder.DataDir())
+	})
 }
 
-func (b *Builder) MoveNipostChallengeToDb() error {
+func (b *Builder) moveNipostChallengeToDb() error {
 	ch, err := loadNipostChallenge(b.nipostBuilder.DataDir())
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
@@ -300,11 +316,16 @@ func (b *Builder) MoveNipostChallengeToDb() error {
 		return fmt.Errorf("loading nipost challenge: %w", err)
 	default:
 	}
+	return b.localDB.WithTx(context.Background(), func(tx *sql.Tx) error {
+		if err := nipost.RemoveChallenge(tx, b.signer.NodeID()); err != nil {
+			return fmt.Errorf("removing existing challenge from db: %w", err)
+		}
 
-	if err := nipost.AddChallenge(b.localDB, b.signer.NodeID(), ch); err != nil {
-		return fmt.Errorf("adding challenge to db: %w", err)
-	}
-	return discardNipostChallenge(b.nipostBuilder.DataDir())
+		if err := nipost.AddChallenge(tx, b.signer.NodeID(), ch); err != nil {
+			return fmt.Errorf("adding challenge to db: %w", err)
+		}
+		return discardNipostChallenge(b.nipostBuilder.DataDir())
+	})
 }
 
 // SmesherID returns the ID of the smesher that created this activation.

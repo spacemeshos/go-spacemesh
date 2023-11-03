@@ -1367,7 +1367,7 @@ func TestBuilder_MovePostToDb(t *testing.T) {
 	initialization.SaveMetadata(tab.nipostBuilder.DataDir(), &shared.PostMetadata{
 		CommitmentAtxId: commitmentAtx.Bytes(),
 	})
-	require.NoError(t, tab.MovePostToDb())
+	require.NoError(t, tab.movePostToDb())
 
 	challenge, err := nipost.Challenge(tab.localDb, tab.sig.NodeID())
 	require.NoError(t, err)
@@ -1379,7 +1379,10 @@ func TestBuilder_MovePostToDb(t *testing.T) {
 	require.Equal(t, commitmentAtx, *challenge.CommitmentATX)
 	require.NoFileExists(t, filepath.Join(tab.nipostBuilder.DataDir(), postFilename))
 
-	require.NoError(t, tab.MovePostToDb()) // should not fail if post is already in db
+	require.NoError(t, tab.movePostToDb()) // should not fail if post is already in db
+	challenge2, err := nipost.Challenge(tab.localDb, tab.sig.NodeID())
+	require.NoError(t, err)
+	require.Equal(t, challenge, challenge2) // challenge is unchanged
 }
 
 func TestBuilder_MoveNipostChallengeToDb(t *testing.T) {
@@ -1396,7 +1399,7 @@ func TestBuilder_MoveNipostChallengeToDb(t *testing.T) {
 	require.NoError(t, saveNipostChallenge(tab.nipostBuilder.DataDir(), ch))
 	require.FileExists(t, filepath.Join(tab.nipostBuilder.DataDir(), challengeFilename))
 
-	require.NoError(t, tab.MoveNipostChallengeToDb())
+	require.NoError(t, tab.moveNipostChallengeToDb())
 
 	challenge, err := nipost.Challenge(tab.localDb, tab.sig.NodeID())
 	require.NoError(t, err)
@@ -1404,5 +1407,49 @@ func TestBuilder_MoveNipostChallengeToDb(t *testing.T) {
 	require.Equal(t, ch, challenge)
 	require.NoFileExists(t, filepath.Join(tab.nipostBuilder.DataDir(), challengeFilename))
 
-	require.NoError(t, tab.MoveNipostChallengeToDb()) // should not fail if challenge is already in db
+	require.NoError(t, tab.moveNipostChallengeToDb()) // should not fail if challenge is already in db
+	challenge2, err := nipost.Challenge(tab.localDb, tab.sig.NodeID())
+	require.NoError(t, err)
+	require.Equal(t, challenge, challenge2) // challenge is unchanged
+}
+
+func TestBuilder_MigrateDiskToLocalDB(t *testing.T) {
+	tab := newTestBuilder(t)
+
+	ch := &types.NIPostChallenge{
+		PublishEpoch:   4,
+		Sequence:       0,
+		PrevATXID:      types.RandomATXID(),
+		PositioningATX: types.RandomATXID(),
+		CommitmentATX:  nil,
+		InitialPost:    nil,
+	}
+	require.NoError(t, saveNipostChallenge(tab.nipostBuilder.DataDir(), ch))
+	require.FileExists(t, filepath.Join(tab.nipostBuilder.DataDir(), challengeFilename))
+
+	post := &types.Post{
+		Nonce:   1,
+		Indices: []byte{1, 2, 3},
+		Pow:     1,
+	}
+	require.NoError(t, savePost(tab.nipostBuilder.DataDir(), post))
+	require.FileExists(t, filepath.Join(tab.nipostBuilder.DataDir(), postFilename))
+
+	commitmentAtx := types.RandomATXID()
+	initialization.SaveMetadata(tab.nipostBuilder.DataDir(), &shared.PostMetadata{
+		CommitmentAtxId: commitmentAtx.Bytes(),
+	})
+
+	require.NoError(t, tab.MigrateDiskToLocalDB())
+
+	// local post doesn't need to be migrated to db if we have a nipost challenge
+	challenge, err := nipost.Challenge(tab.localDb, tab.sig.NodeID())
+	require.NoError(t, err)
+	require.NotNil(t, challenge)
+	require.Equal(t, ch, challenge)
+
+	require.NoError(t, tab.MigrateDiskToLocalDB()) // should not fail if challenge and post are already in db
+	challenge2, err := nipost.Challenge(tab.localDb, tab.sig.NodeID())
+	require.NoError(t, err)
+	require.Equal(t, challenge, challenge2) // challenge is unchanged
 }

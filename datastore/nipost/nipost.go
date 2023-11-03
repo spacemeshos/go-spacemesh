@@ -8,7 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-func AddChallenge(db *datastore.LocalDB, nodeID types.NodeID, ch *types.NIPostChallenge) error {
+func AddChallenge(db sql.Executor, nodeID types.NodeID, ch *types.NIPostChallenge) error {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, nodeID.Bytes())
 		stmt.BindInt64(2, int64(ch.PublishEpoch))
@@ -74,7 +74,7 @@ func UpdateChallenge(db *datastore.LocalDB, nodeID types.NodeID, ch *types.NIPos
 }
 
 // RemoveChallenge removes the NIPost challenge for the given nodeID.
-func RemoveChallenge(db *datastore.LocalDB, nodeID types.NodeID) error {
+func RemoveChallenge(db sql.Executor, nodeID types.NodeID) error {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, nodeID.Bytes())
 	}
@@ -85,7 +85,7 @@ func RemoveChallenge(db *datastore.LocalDB, nodeID types.NodeID) error {
 }
 
 // Challenge returns the NIPost challenge for the given nodeID.
-func Challenge(db *datastore.LocalDB, nodeID types.NodeID) (*types.NIPostChallenge, error) {
+func Challenge(db sql.Executor, nodeID types.NodeID) (*types.NIPostChallenge, error) {
 	var ch *types.NIPostChallenge
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, nodeID.Bytes())
