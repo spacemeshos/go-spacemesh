@@ -339,29 +339,31 @@ func (g *gossip) gradecast(target IterRound) []gset {
 	var rst []gset
 	for key, value := range g.state {
 		if key.IterRound == target && (!value.malicious || value.otherReceived != nil) {
-			g := grade0
 			if value.atxgrade == grade5 && value.received.Delay(target) <= 1 &&
 				// 2 (a)
 				(value.otherReceived == nil || value.otherReceived.Delay(target) > 3) {
 				// 2 (b)
-				g = grade2
+				rst = append(rst, gset{
+					grade:    grade2,
+					values:   value.Value.Proposals,
+					smallest: value.Eligibility.Proof,
+				})
 			} else if value.atxgrade >= grade4 && value.received.Delay(target) <= 2 &&
 				// 3 (a)
 				(value.otherReceived == nil || value.otherReceived.Delay(target) > 2) {
 				// 3 (b)
-				g = grade1
-			}
-			if g > grade0 {
 				rst = append(rst, gset{
-					grade:    g,
+					grade:    grade1,
 					values:   value.Value.Proposals,
 					smallest: value.Eligibility.Proof,
 				})
 			}
 		}
 	}
-	// it satisfies p-Weak leader election
-	// inconsistent order of proposals may cause participants to commit on different proposals
+	// hare expects to receive multiple proposals. expected number of leaders is set to 5.
+	// we need to choose the same one for commit across the cluster.
+	// we do that by ordering them by vrf value, and picking one that passes other checks (see commit in execution).
+	// in hare3 paper look for p-Weak leader election property.
 	slices.SortFunc(rst, func(i, j gset) int {
 		return i.smallest.Cmp(&j.smallest)
 	})
