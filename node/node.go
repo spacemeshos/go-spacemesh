@@ -983,7 +983,7 @@ func (app *App) initServices(ctx context.Context) error {
 		nipostBuilder,
 		app.clock,
 		newSyncer,
-		app.addLogger("atxBuilder", lg),
+		app.addLogger("atxBuilder", lg).Zap(),
 		activation.WithContext(ctx),
 		activation.WithPoetConfig(app.Config.POET),
 		activation.WithPoetRetryInterval(app.Config.HARE.WakeupDelta),

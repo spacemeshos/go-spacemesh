@@ -8,40 +8,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-func AddChallenge(db sql.Executor, nodeID types.NodeID, ch *types.NIPostChallenge) error {
-	enc := func(stmt *sql.Statement) {
-		stmt.BindBytes(1, nodeID.Bytes())
-		stmt.BindInt64(2, int64(ch.PublishEpoch))
-		stmt.BindInt64(3, int64(ch.Sequence))
-		stmt.BindBytes(4, ch.PrevATXID.Bytes())
-		stmt.BindBytes(5, ch.PositioningATX.Bytes())
-		if ch.CommitmentATX != nil {
-			stmt.BindBytes(6, ch.CommitmentATX.Bytes())
-		} else {
-			stmt.BindNull(6)
-		}
-		if ch.InitialPost != nil {
-			stmt.BindInt64(7, int64(ch.InitialPost.Nonce))
-			stmt.BindBytes(8, ch.InitialPost.Indices)
-			stmt.BindInt64(9, int64(ch.InitialPost.Pow))
-		} else {
-			stmt.BindInt64(7, -1)
-			stmt.BindNull(8)
-			stmt.BindInt64(9, -1)
-		}
-	}
-
-	if _, err := db.Exec(`
-		insert into nipost (id, epoch, sequence, prev_atx, pos_atx, commit_atx, post_nonce, post_indices, post_pow)
-		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9);`, enc, nil,
-	); err != nil {
-		return fmt.Errorf("insert nipost challenge for %s pub-epoch %d: %w", nodeID, ch.PublishEpoch, err)
-	}
-	return nil
-}
-
-func UpdateChallenge(db *datastore.LocalDB, nodeID types.NodeID, ch *types.NIPostChallenge) error {
-	enc := func(stmt *sql.Statement) {
+func encodeNipostChallenge(nodeID types.NodeID, ch *types.NIPostChallenge) func(stmt *sql.Statement) {
+	return func(stmt *sql.Statement) {
 		stmt.BindBytes(1, nodeID.Bytes())
 		stmt.BindInt64(2, int64(ch.PublishEpoch))
 		stmt.BindInt64(3, int64(ch.Sequence))
@@ -62,11 +30,23 @@ func UpdateChallenge(db *datastore.LocalDB, nodeID types.NodeID, ch *types.NIPos
 			stmt.BindNull(9)
 		}
 	}
+}
 
+func AddChallenge(db sql.Executor, nodeID types.NodeID, ch *types.NIPostChallenge) error {
+	if _, err := db.Exec(`
+		insert into nipost (id, epoch, sequence, prev_atx, pos_atx, commit_atx, post_nonce, post_indices, post_pow)
+		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9);`, encodeNipostChallenge(nodeID, ch), nil,
+	); err != nil {
+		return fmt.Errorf("insert nipost challenge for %s pub-epoch %d: %w", nodeID, ch.PublishEpoch, err)
+	}
+	return nil
+}
+
+func UpdateChallenge(db *datastore.LocalDB, nodeID types.NodeID, ch *types.NIPostChallenge) error {
 	if _, err := db.Exec(`
 		update nipost set epoch = ?2, sequence = ?3, prev_atx = ?4, pos_atx = ?5,
 		commit_atx = ?6, post_nonce = ?7, post_indices = ?8, post_pow = ?9
-		where id = ?1;`, enc, nil,
+		where id = ?1;`, encodeNipostChallenge(nodeID, ch), nil,
 	); err != nil {
 		return fmt.Errorf("update nipost challenge for %s pub-epoch %d: %w", nodeID, ch.PublishEpoch, err)
 	}
@@ -100,16 +80,14 @@ func Challenge(db sql.Executor, nodeID types.NodeID) (*types.NIPostChallenge, er
 		if n := stmt.ColumnBytes(4, ch.CommitmentATX[:]); n == 0 {
 			ch.CommitmentATX = nil
 		}
-		ch.InitialPost = &types.Post{}
 		if n := stmt.ColumnLen(6); n > 0 {
-			ch.InitialPost.Nonce = uint32(stmt.ColumnInt64(5))
-			ch.InitialPost.Indices = make([]byte, n)
+			ch.InitialPost = &types.Post{
+				Nonce:   uint32(stmt.ColumnInt64(5)),
+				Indices: make([]byte, n),
+				Pow:     uint64(stmt.ColumnInt64(7)),
+			}
 			stmt.ColumnBytes(6, ch.InitialPost.Indices)
-			ch.InitialPost.Pow = uint64(stmt.ColumnInt64(7))
-			return true
 		}
-
-		ch.InitialPost = nil
 		return true
 	}
 	query := `select epoch, sequence, prev_atx, pos_atx, commit_atx, post_nonce, post_indices, post_pow
