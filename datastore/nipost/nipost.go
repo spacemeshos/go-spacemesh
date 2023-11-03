@@ -57,9 +57,9 @@ func UpdateChallenge(db *datastore.LocalDB, nodeID types.NodeID, ch *types.NIPos
 			stmt.BindBytes(8, ch.InitialPost.Indices)
 			stmt.BindInt64(9, int64(ch.InitialPost.Pow))
 		} else {
-			stmt.BindInt64(7, -1)
+			stmt.BindNull(7)
 			stmt.BindNull(8)
-			stmt.BindInt64(9, -1)
+			stmt.BindNull(9)
 		}
 	}
 
