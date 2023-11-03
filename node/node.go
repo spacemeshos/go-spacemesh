@@ -939,15 +939,27 @@ func (app *App) initServices(ctx context.Context) error {
 
 	app.grpcPostService = grpcserver.NewPostService(app.addLogger(PostServiceLogger, lg).Zap())
 
+	poetClients := make([]activation.PoetClient, 0, len(app.Config.PoETServers))
+	for _, address := range app.Config.PoETServers {
+		client, err := activation.NewHTTPPoetClient(
+			address,
+			app.Config.POET,
+			activation.WithLogger(lg.Zap().Named("poet")),
+		)
+		if err != nil {
+			app.log.Panic("failed to create poet client: %v", err)
+		}
+		poetClients = append(poetClients, client)
+	}
 	nipostBuilder, err := activation.NewNIPostBuilder(
 		poetDb,
 		app.grpcPostService,
-		app.Config.PoETServers,
 		app.Config.SMESHING.Opts.DataDir,
 		app.addLogger(NipostBuilderLogger, lg).Zap(),
 		app.edSgn,
 		app.Config.POET,
 		app.clock,
+		activation.WithPoetClients(poetClients...),
 	)
 	if err != nil {
 		app.log.Panic("failed to create nipost builder: %v", err)
@@ -989,6 +1001,7 @@ func (app *App) initServices(ctx context.Context) error {
 		activation.WithPoetConfig(app.Config.POET),
 		activation.WithPoetRetryInterval(app.Config.HARE.WakeupDelta),
 		activation.WithValidator(app.validator),
+		activation.WithPoets(poetClients...),
 	)
 	if err := atxBuilder.MigrateDiskToLocalDB(); err != nil {
 		app.log.Panic("failed to migrate state of atx builder: %v", err)

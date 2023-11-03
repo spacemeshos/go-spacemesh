@@ -76,8 +76,7 @@ type NIPostBuilder struct {
 
 type NIPostBuilderOption func(*NIPostBuilder)
 
-// withPoetClients allows to pass in clients directly (for testing purposes).
-func withPoetClients(clients []PoetClient) NIPostBuilderOption {
+func WithPoetClients(clients ...PoetClient) NIPostBuilderOption {
 	return func(nb *NIPostBuilder) {
 		nb.poetProvers = make(map[string]PoetClient, len(clients))
 		for _, client := range clients {
@@ -90,7 +89,6 @@ func withPoetClients(clients []PoetClient) NIPostBuilderOption {
 func NewNIPostBuilder(
 	poetDB poetDbAPI,
 	postService postService,
-	poetServers []string,
 	dataDir string,
 	lg *zap.Logger,
 	signer *signing.EdSigner,
@@ -98,17 +96,7 @@ func NewNIPostBuilder(
 	layerClock layerClock,
 	opts ...NIPostBuilderOption,
 ) (*NIPostBuilder, error) {
-	poetClients := make(map[string]PoetClient, len(poetServers))
-	for _, address := range poetServers {
-		client, err := NewHTTPPoetClient(address, poetCfg, WithLogger(lg.Named("poet")))
-		if err != nil {
-			return nil, fmt.Errorf("cannot create poet client: %w", err)
-		}
-		poetClients[client.Address()] = client
-	}
-
 	b := &NIPostBuilder{
-		poetProvers: poetClients,
 		poetDB:      poetDB,
 		postService: postService,
 		state:       &types.NIPostBuilderState{NIPost: &types.NIPost{}},
@@ -157,7 +145,11 @@ func (nb *NIPostBuilder) UpdatePoETProvers(poetProvers []PoetClient) {
 // BuildNIPost uses the given challenge to build a NIPost.
 // The process can take considerable time, because it includes waiting for the poet service to
 // publish a proof - a process that takes about an epoch.
-func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPostChallenge, certifier certifierService) (*types.NIPost, error) {
+func (nb *NIPostBuilder) BuildNIPost(
+	ctx context.Context,
+	challenge *types.NIPostChallenge,
+	certifier certifierService,
+) (*types.NIPost, error) {
 	logger := nb.log.With(log.ZContext(ctx))
 	// Note: to avoid missing next PoET round, we need to publish the ATX before the next PoET round starts.
 	//   We can still publish an ATX late (i.e. within publish epoch) and receive rewards, but we will miss one

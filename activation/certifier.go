@@ -17,10 +17,11 @@ import (
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/natefinch/atomic"
 	"github.com/sourcegraph/conc/iter"
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/post/shared"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 type ProofToCertify struct {
@@ -49,28 +50,17 @@ type CertifyResponse struct {
 }
 
 type Certifier struct {
-	client *retryablehttp.Client
 	logger *zap.Logger
 	store  *certificateStore
-
-	post     *types.Post
-	postInfo *types.PostInfo
+	client certifierClient
 }
 
-func NewCertifier(datadir string, logger *zap.Logger, post *types.Post, postInfo *types.PostInfo) *Certifier {
-	c := &Certifier{
-		client:   retryablehttp.NewClient(),
-		logger:   logger,
-		store:    openCertificateStore(datadir, logger),
-		post:     post,
-		postInfo: postInfo,
+func NewCertifier(datadir string, logger *zap.Logger, client certifierClient) *Certifier {
+	return &Certifier{
+		client: client,
+		logger: logger,
+		store:  openCertificateStore(datadir, logger),
 	}
-	c.client.Logger = &retryableHttpLogger{logger}
-	c.client.ResponseLogHook = func(logger retryablehttp.Logger, resp *http.Response) {
-		c.logger.Info("response received", zap.Stringer("url", resp.Request.URL), zap.Int("status", resp.StatusCode))
-	}
-
-	return c
 }
 
 func (c *Certifier) GetCertificate(poet string) *PoetCert {
@@ -85,11 +75,14 @@ func (c *Certifier) Recertify(ctx context.Context, poet PoetClient) (*PoetCert, 
 	if err != nil {
 		return nil, fmt.Errorf("querying certifier info: %w", err)
 	}
-	cert, err := c.certifyPost(ctx, info.URL, info.PubKey)
+	cert, err := c.client.Certify(ctx, info.URL, info.PubKey)
 	if err != nil {
-		return nil, fmt.Errorf("certifying POST for %s at %v: %w", poet.Address(), info.URL, info.PubKey)
+		return nil, fmt.Errorf("certifying POST for %s at %v: %w", poet.Address(), info.URL, err)
 	}
 	c.store.put(poet.Address(), *cert)
+	if err := c.store.persist(); err != nil {
+		c.logger.Warn("failed to persist poet certs", zap.Error(err))
+	}
 
 	return cert, nil
 }
@@ -162,13 +155,13 @@ func (c *Certifier) CertifyAll(ctx context.Context, poets []PoetClient) map[stri
 			})),
 		)
 
-		cert, err := c.certifyPost(ctx, svc.URL, svc.PubKey)
+		cert, err := c.client.Certify(ctx, svc.URL, svc.PubKey)
 		if err != nil {
 			c.logger.Warn("failed to certify", zap.Error(err), zap.Stringer("certifier", svc.URL))
 			continue
 		}
 		c.logger.Info(
-			"sucessfully obtained certificate",
+			"successfully obtained certificate",
 			zap.Stringer("certifier", svc.URL),
 			zap.Binary("cert", cert.Signature),
 		)
@@ -181,7 +174,29 @@ func (c *Certifier) CertifyAll(ctx context.Context, poets []PoetClient) map[stri
 	return certs
 }
 
-func (c *Certifier) certifyPost(ctx context.Context, url *url.URL, pubkey []byte) (*PoetCert, error) {
+type CertifierClient struct {
+	client   *retryablehttp.Client
+	post     *types.Post
+	postInfo *types.PostInfo
+	logger   *zap.Logger
+}
+
+func NewCertifierClient(logger *zap.Logger, post *types.Post, postInfo *types.PostInfo) *CertifierClient {
+	c := &CertifierClient{
+		client:   retryablehttp.NewClient(),
+		logger:   logger,
+		post:     post,
+		postInfo: postInfo,
+	}
+	c.client.Logger = &retryableHttpLogger{logger}
+	c.client.ResponseLogHook = func(logger retryablehttp.Logger, resp *http.Response) {
+		c.logger.Info("response received", zap.Stringer("url", resp.Request.URL), zap.Int("status", resp.StatusCode))
+	}
+
+	return c
+}
+
+func (c *CertifierClient) Certify(ctx context.Context, url *url.URL, pubkey []byte) (*PoetCert, error) {
 	request := CertifyRequest{
 		Proof: ProofToCertify{
 			Pow:     c.post.Pow,

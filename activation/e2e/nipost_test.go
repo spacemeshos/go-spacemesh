@@ -150,7 +150,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	pubKey, addr := spawnTestCertifier(t, cfg, verifying.WithLabelScryptParams(opts.Scrypt))
 	certifierCfg := &registration.CertifierConfig{
 		URL:    "http://" + addr.String(),
-		PubKey: pubKey,
+		PubKey: registration.Base64Enc(pubKey),
 	}
 
 	poetProver := spawnPoet(
@@ -200,18 +200,19 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	certifier := activation.NewCertifier(t.TempDir(), logger, post, info)
+	certifierClient := activation.NewCertifierClient(zaptest.NewLogger(t), post, info)
+	certifier := activation.NewCertifier(t.TempDir(), logger, certifierClient)
 	certifier.CertifyAll(context.Background(), []activation.PoetClient{client})
 
 	nb, err := activation.NewNIPostBuilder(
 		poetDb,
 		svc,
-		[]string{poetProver.RestURL().String()},
 		t.TempDir(),
 		logger.Named("nipostBuilder"),
 		sig,
 		poetCfg,
 		mclock,
+		activation.WithPoetClients(client),
 	)
 	require.NoError(t, err)
 
@@ -232,52 +233,4 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 		opts.NumUnits,
 	)
 	require.NoError(t, err)
-}
-
-func TestNIPostBuilder_Close(t *testing.T) {
-	ctrl := gomock.NewController(t)
-
-	sig, err := signing.NewEdSigner()
-	require.NoError(t, err)
-
-	logger := zaptest.NewLogger(t)
-
-	poetProver := spawnPoet(t, WithGenesis(time.Now()), WithEpochDuration(time.Second))
-	poetDb := activation.NewMockpoetDbAPI(ctrl)
-
-	mclock := activation.NewMocklayerClock(ctrl)
-	mclock.EXPECT().LayerToTime(gomock.Any()).AnyTimes().DoAndReturn(
-		func(got types.LayerID) time.Time {
-			// time.Now() ~= currentLayer
-			genesis := time.Now().Add(-time.Duration(postGenesisEpoch.FirstLayer()) * layerDuration)
-			return genesis.Add(layerDuration * time.Duration(got))
-		},
-	)
-
-	svc := grpcserver.NewPostService(logger)
-
-	nb, err := activation.NewNIPostBuilder(
-		poetDb,
-		svc,
-		[]string{poetProver.RestURL().String()},
-		t.TempDir(),
-		logger.Named("nipostBuilder"),
-		sig,
-		activation.PoetConfig{},
-		mclock,
-	)
-	require.NoError(t, err)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	challenge := types.NIPostChallenge{
-		PublishEpoch: postGenesisEpoch + 2,
-	}
-
-	certifier := activation.NewMockcertifierService(ctrl)
-	certifier.EXPECT().CertifyAll(gomock.Any(), gomock.Any()).Return(nil)
-
-	nipost, err := nb.BuildNIPost(ctx, &challenge, certifier)
-	require.ErrorIs(t, err, context.Canceled)
-	require.Nil(t, nipost)
 }

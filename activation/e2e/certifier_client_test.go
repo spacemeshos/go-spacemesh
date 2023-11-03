@@ -64,7 +64,7 @@ func TestCertification(t *testing.T) {
 	pubKey, addr := spawnTestCertifier(t, cfg, verifying.WithLabelScryptParams(opts.Scrypt))
 	certifierCfg := &registration.CertifierConfig{
 		URL:    "http://" + addr.String(),
-		PubKey: pubKey,
+		PubKey: registration.Base64Enc(pubKey),
 	}
 
 	for i := 0; i < 2; i++ {
@@ -78,7 +78,7 @@ func TestCertification(t *testing.T) {
 	pubKey, addr = spawnTestCertifier(t, cfg, verifying.WithLabelScryptParams(opts.Scrypt))
 	certifierCfg = &registration.CertifierConfig{
 		URL:    "http://" + addr.String(),
-		PubKey: pubKey,
+		PubKey: registration.Base64Enc(pubKey),
 	}
 
 	poet := spawnPoet(t, WithCertifier(certifierCfg))
@@ -92,8 +92,9 @@ func TestCertification(t *testing.T) {
 	require.NoError(t, err)
 	poets = append(poets, client)
 
-	certifierClient := activation.NewCertifier(t.TempDir(), zaptest.NewLogger(t), post, info)
-	certs := certifierClient.CertifyAll(context.Background(), poets)
+	certifierClient := activation.NewCertifierClient(zaptest.NewLogger(t), post, info)
+	certifier := activation.NewCertifier(t.TempDir(), zaptest.NewLogger(t), certifierClient)
+	certs := certifier.CertifyAll(context.Background(), poets)
 	require.Len(t, certs, 3)
 	require.Contains(t, certs, poets[0].Address())
 	require.Contains(t, certs, poets[1].Address())

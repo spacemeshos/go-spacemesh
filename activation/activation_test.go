@@ -1140,7 +1140,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	var last time.Time
 	builderConfirmation := make(chan struct{})
 	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any()).Times(expectedTries).DoAndReturn(
-		func(_ context.Context, challenge *types.NIPostChallenge) (*types.NIPost, error) {
+		func(_ context.Context, challenge *types.NIPostChallenge, _ certifierService) (*types.NIPost, error) {
 			now := time.Now()
 			if now.Sub(last) < retryInterval {
 				require.FailNow(t, "retry interval not respected")

@@ -10,6 +10,7 @@ package activation
 
 import (
 	context "context"
+	url "net/url"
 	reflect "reflect"
 	time "time"
 
@@ -1547,6 +1548,68 @@ func (c *PoetClientSubmitCall) Do(f func(context.Context, time.Time, []byte, []b
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *PoetClientSubmitCall) DoAndReturn(f func(context.Context, time.Time, []byte, []byte, types.EdSignature, types.NodeID, PoetAuth) (*types.PoetRound, error)) *PoetClientSubmitCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// MockcertifierClient is a mock of certifierClient interface.
+type MockcertifierClient struct {
+	ctrl     *gomock.Controller
+	recorder *MockcertifierClientMockRecorder
+}
+
+// MockcertifierClientMockRecorder is the mock recorder for MockcertifierClient.
+type MockcertifierClientMockRecorder struct {
+	mock *MockcertifierClient
+}
+
+// NewMockcertifierClient creates a new mock instance.
+func NewMockcertifierClient(ctrl *gomock.Controller) *MockcertifierClient {
+	mock := &MockcertifierClient{ctrl: ctrl}
+	mock.recorder = &MockcertifierClientMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockcertifierClient) EXPECT() *MockcertifierClientMockRecorder {
+	return m.recorder
+}
+
+// Certify mocks base method.
+func (m *MockcertifierClient) Certify(ctx context.Context, url *url.URL, pubkey []byte) (*PoetCert, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Certify", ctx, url, pubkey)
+	ret0, _ := ret[0].(*PoetCert)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Certify indicates an expected call of Certify.
+func (mr *MockcertifierClientMockRecorder) Certify(ctx, url, pubkey any) *certifierClientCertifyCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Certify", reflect.TypeOf((*MockcertifierClient)(nil).Certify), ctx, url, pubkey)
+	return &certifierClientCertifyCall{Call: call}
+}
+
+// certifierClientCertifyCall wrap *gomock.Call
+type certifierClientCertifyCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *certifierClientCertifyCall) Return(arg0 *PoetCert, arg1 error) *certifierClientCertifyCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *certifierClientCertifyCall) Do(f func(context.Context, *url.URL, []byte) (*PoetCert, error)) *certifierClientCertifyCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *certifierClientCertifyCall) DoAndReturn(f func(context.Context, *url.URL, []byte) (*PoetCert, error)) *certifierClientCertifyCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

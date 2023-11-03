@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -30,11 +31,13 @@ var errNotInitialized = errors.New("cluster: not initialized")
 const (
 	initBalance      = 100000000000000000
 	defaultExtraData = "systest"
+	certifierApp     = "certifier"
 	poetApp          = "poet"
 	bootnodeApp      = "boot"
 	smesherApp       = "smesher"
 	bootstrapperApp  = "bootstrapper"
 	bootstrapperPort = 80
+	certifierPort    = 80
 	poetPort         = 80
 
 	poetFlags    = "poetflags"
@@ -144,6 +147,16 @@ func Default(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 	if err := cl.AddBootstrappers(cctx); err != nil {
 		return nil, err
 	}
+	pubkey, privkey, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		return nil, fmt.Errorf("generating keys for certifier: %w", err)
+	}
+	if err := cl.AddCertifier(cctx, base64.StdEncoding.EncodeToString(privkey.Seed())); err != nil {
+		return nil, err
+	}
+	cl.addPoetFlag(PoetCertifierURL("http://certifier-0"))
+	cl.addPoetFlag(PoetCertifierPubkey(base64.StdEncoding.EncodeToString(pubkey)))
+
 	if err := cl.AddPoets(cctx); err != nil {
 		return nil, err
 	}
@@ -190,6 +203,7 @@ type Cluster struct {
 	bootnodes     int
 	smeshers      int
 	clients       []*NodeClient
+	certifiers    []*NodeClient
 	poets         []*NodeClient
 	bootstrappers []*NodeClient
 
@@ -242,6 +256,16 @@ func (c *Cluster) persistConfigs(ctx *testcontext.Context) error {
 	)
 	if err != nil {
 		return fmt.Errorf("apply cfgmap %v/%v: %w", ctx.Namespace, spacemeshConfigMapName, err)
+	}
+	_, err = ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(
+		ctx,
+		corev1.ConfigMap(certifierConfigMapName, ctx.Namespace).WithData(map[string]string{
+			attachedCertifierConfig: certifierConfig.Get(ctx.Parameters),
+		}),
+		apimetav1.ApplyOptions{FieldManager: "test"},
+	)
+	if err != nil {
+		return fmt.Errorf("apply cfgmap %v/%v: %w", ctx.Namespace, poetConfigMapName, err)
 	}
 	_, err = ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(
 		ctx,
@@ -400,6 +424,22 @@ func (c *Cluster) firstFreePoetId() int {
 			return id
 		}
 	}
+}
+
+// AddCertifier spawns a single certifier with the first available id.
+// Id is of form "certifier-N", where N ∈ [0, ∞).
+func (c *Cluster) AddCertifier(cctx *testcontext.Context, privkey string) error {
+	if err := c.persist(cctx); err != nil {
+		return err
+	}
+	id := fmt.Sprintf("certifier-%d", len(c.certifiers))
+	cctx.Log.Debugw("deploying poet", "id", id)
+	pod, err := deployCertifier(cctx, id, privkey)
+	if err != nil {
+		return err
+	}
+	c.certifiers = append(c.certifiers, pod)
+	return nil
 }
 
 // AddPoet spawns a single poet with the first available id.

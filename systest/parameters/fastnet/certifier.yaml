@@ -1,0 +1,17 @@
+listen: "0.0.0.0:80"
+# Same as fastnet
+post_cfg:
+  k1: 12
+  k2: 4
+  k3: 4
+  pow_difficulty: "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+init_cfg:
+  min_num_units: 2
+  max_num_units: 4
+  labels_per_unit: 128
+  scrypt:
+    n: 2
+    r: 1
+    p: 1
+
+metrics: true
