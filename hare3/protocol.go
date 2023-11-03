@@ -1,7 +1,8 @@
 package hare3
 
 import (
-	"sort"
+	"bytes"
+	"slices"
 	"sync"
 
 	"go.uber.org/zap/zapcore"
@@ -361,56 +362,61 @@ func (g *gossip) gradecast(target IterRound) []gset {
 	}
 	// it satisfies p-Weak leader election
 	// inconsistent order of proposals may cause participants to commit on different proposals
-	sort.Slice(rst, func(i, j int) bool {
-		return rst[i].smallest.Cmp(&rst[j].smallest) == -1
+	slices.SortFunc(rst, func(i, j gset) int {
+		return i.smallest.Cmp(&j.smallest)
 	})
 	return rst
+}
+
+func tallyProposals(total, valid map[types.ProposalID]uint16, inp *gossipInput) {
+	for _, id := range inp.Value.Proposals {
+		total[id] += inp.Eligibility.Count
+		if !inp.malicious {
+			valid[id] += inp.Eligibility.Count
+		}
+	}
 }
 
 // Protocol 3. thresh-gossip. Page 15.
 // output returns union of sorted proposals received
 // in the given round with minimal specified grade.
 func (g *gossip) thresholdGossip(filter IterRound, grade grade) []types.ProposalID {
-	rst := thresholdGossip(g.state, g.threshold, filter, grade,
-		func(total map[types.ProposalID]uint16, valid map[types.ProposalID]struct{}, inp *gossipInput) {
-			for _, id := range inp.Value.Proposals {
-				total[id] += inp.Eligibility.Count
-				if !inp.malicious {
-					valid[id] = struct{}{}
-				}
-			}
-		})
-	return types.SortProposalIDs(rst)
+	rst := thresholdGossip(g.state, g.threshold, filter, grade, tallyProposals)
+	slices.SortFunc(rst, func(i, j types.ProposalID) int {
+		return bytes.Compare(i.Bytes(), j.Bytes())
+	})
+	return rst
+}
+
+func tallyRefs(total, valid map[types.Hash32]uint16, inp *gossipInput) {
+	total[*inp.Value.Reference] += inp.Eligibility.Count
+	if !inp.malicious {
+		valid[*inp.Value.Reference] += inp.Eligibility.Count
+	}
 }
 
 // thresholdGossipRef returns all references to proposals in the given round with minimal grade.
 func (g *gossip) thresholdGossipRef(filter IterRound, grade grade) []types.Hash32 {
-	return thresholdGossip(g.state, g.threshold, filter, grade,
-		func(total map[types.Hash32]uint16, valid map[types.Hash32]struct{}, inp *gossipInput) {
-			total[*inp.Value.Reference] += inp.Eligibility.Count
-			if !inp.malicious {
-				valid[*inp.Value.Reference] = struct{}{}
-			}
-		})
+	return thresholdGossip(g.state, g.threshold, filter, grade, tallyRefs)
 }
 
 func thresholdGossip[T comparable](
-	state map[messageKey]*gossipInput, threshold uint16, filter IterRound, grade grade,
-	tally func(all map[T]uint16, good map[T]struct{}, inp *gossipInput),
+	state map[messageKey]*gossipInput, threshold uint16, filter IterRound, msgGrade grade,
+	tally func(all, good map[T]uint16, inp *gossipInput),
 ) []T {
 	total := map[T]uint16{}
-	valid := map[T]struct{}{}
+	valid := map[T]uint16{}
 	min := grade5
 	// pick min atx grade from non equivocating identity.
 	for key, value := range state {
 		if key.IterRound == filter && value.atxgrade < min && !value.malicious &&
-			value.received.Grade(filter) >= grade {
+			value.received.Grade(filter) >= msgGrade {
 			min = value.atxgrade
 		}
 	}
 	// tally votes for valid and malicious messages
 	for key, value := range state {
-		if key.IterRound == filter && value.atxgrade >= min && value.received.Grade(filter) >= grade {
+		if key.IterRound == filter && value.atxgrade >= min && value.received.Grade(filter) >= msgGrade {
 			tally(total, valid, value)
 		}
 	}
