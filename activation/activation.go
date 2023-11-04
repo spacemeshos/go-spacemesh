@@ -290,16 +290,11 @@ func (b *Builder) movePostToDb() error {
 	}
 	commitmentAtxId := types.BytesToATXID(meta.CommitmentAtxId)
 
-	ch := &types.NIPostChallenge{
-		InitialPost:   post,
-		CommitmentATX: &commitmentAtxId,
-	}
-
 	return b.localDB.WithTx(context.Background(), func(tx *sql.Tx) error {
-		if err := nipost.RemoveChallenge(tx, b.signer.NodeID()); err != nil {
+		if err := nipost.RemoveInitialPost(tx, b.signer.NodeID()); err != nil {
 			return fmt.Errorf("removing existing challenge from db: %w", err)
 		}
-		if err := nipost.AddChallenge(tx, b.signer.NodeID(), ch); err != nil {
+		if err := nipost.AddInitialPost(tx, b.signer.NodeID(), post, commitmentAtxId); err != nil {
 			return fmt.Errorf("adding post to db: %w", err)
 		}
 		return discardPost(b.nipostBuilder.DataDir())
@@ -338,13 +333,15 @@ func (b *Builder) initialPost(ctx context.Context) error {
 		return nil
 	}
 	// ...and if we haven't stored an initial post yet.
-	state, err := nipost.Challenge(b.localDB, b.signer.NodeID())
+	_, _, err := nipost.InitialPost(b.localDB, b.signer.NodeID())
 	switch {
-	case err == nil && state.InitialPost != nil:
+	case err == nil:
 		b.log.Info("load initial post from db")
 		return nil
-	default:
+	case errors.Is(err, sql.ErrNotFound):
 		b.log.Info("creating initial post")
+	default:
+		return fmt.Errorf("get initial post: %w", err)
 	}
 
 	// Create the initial post and save it.
@@ -357,17 +354,7 @@ func (b *Builder) initialPost(ctx context.Context) error {
 	public.PostSeconds.Set(float64(time.Since(startTime)))
 	b.log.Info("created the initial post")
 
-	if err := nipost.AddChallenge(b.localDB, b.signer.NodeID(), &types.NIPostChallenge{
-		PublishEpoch:   0, // will be updated later
-		Sequence:       0,
-		PrevATXID:      types.EmptyATXID, // initial has no previous ATX
-		PositioningATX: types.EmptyATXID, // will be updated later
-		InitialPost:    post,
-		CommitmentATX:  &postInfo.CommitmentATX,
-	}); err != nil {
-		b.log.Warn("failed to save initial post: %w", zap.Error(err))
-	}
-	return nil
+	return nipost.AddInitialPost(b.localDB, b.signer.NodeID(), post, postInfo.CommitmentATX)
 }
 
 func (b *Builder) run(ctx context.Context) {
@@ -480,11 +467,6 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 		// build new challenge
 	case err != nil:
 		return nil, fmt.Errorf("get nipost challenge: %w", err)
-	case challenge.InitialPost != nil:
-		// challenge for initial ATX
-		challenge.PublishEpoch = current + 1
-		challenge.PositioningATX = posAtx
-		return challenge, nil
 	case challenge.PublishEpoch < current:
 		// challenge is stale
 		if err := nipost.RemoveChallenge(b.localDB, b.signer.NodeID()); err != nil {
@@ -496,14 +478,31 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 	}
 
 	prevAtx, err := b.cdb.GetLastAtx(b.signer.NodeID())
-	if err != nil {
+	switch {
+	case errors.Is(err, sql.ErrNotFound):
+		// initial ATX challenge
+		post, commitmentATX, err := nipost.InitialPost(b.localDB, b.signer.NodeID())
+		if err != nil {
+			return nil, fmt.Errorf("get initial post: %w", err)
+		}
+		challenge = &types.NIPostChallenge{
+			PublishEpoch:   current + 1,
+			Sequence:       0,
+			PrevATXID:      types.EmptyATXID,
+			PositioningATX: posAtx,
+			CommitmentATX:  &commitmentATX,
+			InitialPost:    post,
+		}
+	case err != nil:
 		return nil, fmt.Errorf("get last ATX: %w", err)
-	}
-	challenge = &types.NIPostChallenge{
-		PublishEpoch:   current + 1,
-		Sequence:       prevAtx.Sequence + 1,
-		PrevATXID:      prevAtx.ID,
-		PositioningATX: posAtx,
+	default:
+		// regular ATX challenge
+		challenge = &types.NIPostChallenge{
+			PublishEpoch:   current + 1,
+			Sequence:       prevAtx.Sequence + 1,
+			PrevATXID:      prevAtx.ID,
+			PositioningATX: posAtx,
+		}
 	}
 
 	if err := nipost.AddChallenge(b.localDB, b.signer.NodeID(), challenge); err != nil {
@@ -539,7 +538,6 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 		zap.Stringer("publish_epoch", challenge.PublishEpoch),
 		zap.Stringer("target_epoch", challenge.TargetEpoch()),
 	)
-
 	ctx, cancel := context.WithDeadline(ctx, b.layerClock.LayerToTime((challenge.TargetEpoch()).FirstLayer()))
 	defer cancel()
 	atx, err := b.createAtx(ctx, challenge)
@@ -573,6 +571,9 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 
 	if err := nipost.RemoveChallenge(b.localDB, b.signer.NodeID()); err != nil {
 		return fmt.Errorf("discarding challenge after published ATX: %w", err)
+	}
+	if err := nipost.RemoveInitialPost(b.localDB, b.signer.NodeID()); err != nil {
+		return fmt.Errorf("discarding initial post after published ATX: %w", err)
 	}
 	return nil
 }

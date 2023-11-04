@@ -10,3 +10,13 @@ CREATE TABLE nipost
     post_indices  VARCHAR,
     post_pow      UNSIGNED LONG INT
 ) WITHOUT ROWID;
+
+CREATE TABLE initial_post
+(
+    id            CHAR(32) PRIMARY KEY,
+    post_nonce    UNSIGNED INT NOT NULL,
+    post_indices  VARCHAR NOT NULL,
+    post_pow      UNSIGNED LONG INT NOT NULL,
+
+    commit_atx    CHAR(32)
+) WITHOUT ROWID;

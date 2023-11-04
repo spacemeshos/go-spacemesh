@@ -8,6 +8,62 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
+func AddInitialPost(db sql.Executor, nodeID types.NodeID, post *types.Post, commitmentATX types.ATXID) error {
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, nodeID.Bytes())
+		stmt.BindInt64(2, int64(post.Nonce))
+		stmt.BindBytes(3, post.Indices)
+		stmt.BindInt64(4, int64(post.Pow))
+		stmt.BindBytes(5, commitmentATX.Bytes())
+	}
+	if _, err := db.Exec(`
+		insert into initial_post (id, post_nonce, post_indices, post_pow, commit_atx)
+		values (?1, ?2, ?3, ?4, ?5);`, enc, nil,
+	); err != nil {
+		return fmt.Errorf("insert initial post for %s: %w", nodeID.ShortString(), err)
+	}
+	return nil
+}
+
+func RemoveInitialPost(db sql.Executor, nodeID types.NodeID) error {
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, nodeID.Bytes())
+	}
+	if _, err := db.Exec(`delete from initial_post where id = ?1;`, enc, nil); err != nil {
+		return fmt.Errorf("remove initial post for %s: %w", nodeID, err)
+	}
+	return nil
+}
+
+func InitialPost(db sql.Executor, nodeID types.NodeID) (*types.Post, types.ATXID, error) {
+	var post *types.Post
+	var commitmentATX types.ATXID
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, nodeID.Bytes())
+	}
+	dec := func(stmt *sql.Statement) bool {
+		post = &types.Post{
+			Nonce:   uint32(stmt.ColumnInt64(0)),
+			Indices: make([]byte, stmt.ColumnLen(1)),
+			Pow:     uint64(stmt.ColumnInt64(2)),
+		}
+		stmt.ColumnBytes(1, post.Indices)
+		stmt.ColumnBytes(3, commitmentATX[:])
+		return true
+	}
+	if _, err := db.Exec(`
+		select post_nonce, post_indices, post_pow, commit_atx
+		from initial_post where id = ?1 limit 1;`, enc, dec,
+	); err != nil {
+		return nil, types.EmptyATXID, fmt.Errorf("get initial post from node id %s: %w", nodeID.ShortString(), err)
+	}
+	if post == nil {
+		return nil, types.EmptyATXID,
+			fmt.Errorf("get initial post from node id %s: %w", nodeID.ShortString(), sql.ErrNotFound)
+	}
+	return post, commitmentATX, nil
+}
+
 func encodeNipostChallenge(nodeID types.NodeID, ch *types.NIPostChallenge) func(stmt *sql.Statement) {
 	return func(stmt *sql.Statement) {
 		stmt.BindBytes(1, nodeID.Bytes())
@@ -34,7 +90,8 @@ func encodeNipostChallenge(nodeID types.NodeID, ch *types.NIPostChallenge) func(
 
 func AddChallenge(db sql.Executor, nodeID types.NodeID, ch *types.NIPostChallenge) error {
 	if _, err := db.Exec(`
-		insert into nipost (id, epoch, sequence, prev_atx, pos_atx, commit_atx, post_nonce, post_indices, post_pow)
+		insert into nipost (id, epoch, sequence, prev_atx, pos_atx, commit_atx,
+			post_nonce, post_indices, post_pow)
 		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9);`, encodeNipostChallenge(nodeID, ch), nil,
 	); err != nil {
 		return fmt.Errorf("insert nipost challenge for %s pub-epoch %d: %w", nodeID, ch.PublishEpoch, err)
@@ -45,7 +102,7 @@ func AddChallenge(db sql.Executor, nodeID types.NodeID, ch *types.NIPostChalleng
 func UpdateChallenge(db *datastore.LocalDB, nodeID types.NodeID, ch *types.NIPostChallenge) error {
 	if _, err := db.Exec(`
 		update nipost set epoch = ?2, sequence = ?3, prev_atx = ?4, pos_atx = ?5,
-		commit_atx = ?6, post_nonce = ?7, post_indices = ?8, post_pow = ?9
+			commit_atx = ?6, post_nonce = ?7, post_indices = ?8, post_pow = ?9
 		where id = ?1;`, encodeNipostChallenge(nodeID, ch), nil,
 	); err != nil {
 		return fmt.Errorf("update nipost challenge for %s pub-epoch %d: %w", nodeID, ch.PublishEpoch, err)
@@ -53,7 +110,6 @@ func UpdateChallenge(db *datastore.LocalDB, nodeID types.NodeID, ch *types.NIPos
 	return nil
 }
 
-// RemoveChallenge removes the NIPost challenge for the given nodeID.
 func RemoveChallenge(db sql.Executor, nodeID types.NodeID) error {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, nodeID.Bytes())
@@ -64,7 +120,6 @@ func RemoveChallenge(db sql.Executor, nodeID types.NodeID) error {
 	return nil
 }
 
-// Challenge returns the NIPost challenge for the given nodeID.
 func Challenge(db sql.Executor, nodeID types.NodeID) (*types.NIPostChallenge, error) {
 	var ch *types.NIPostChallenge
 	enc := func(stmt *sql.Statement) {
@@ -90,10 +145,11 @@ func Challenge(db sql.Executor, nodeID types.NodeID) (*types.NIPostChallenge, er
 		}
 		return true
 	}
-	query := `select epoch, sequence, prev_atx, pos_atx, commit_atx, post_nonce, post_indices, post_pow
-	 from nipost where id = ?1 limit 1;`
-	_, err := db.Exec(query, enc, dec)
-	if err != nil {
+	if _, err := db.Exec(`
+		select epoch, sequence, prev_atx, pos_atx, commit_atx,
+			post_nonce, post_indices, post_pow
+		from nipost where id = ?1 limit 1;`, enc, dec,
+	); err != nil {
 		return nil, fmt.Errorf("get challenge from node id %s: %w", nodeID.ShortString(), err)
 	}
 	if ch == nil {
