@@ -265,18 +265,18 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 	}
 }
 
-func (b *Builder) MigrateDiskToLocalDB() error {
-	if err := b.movePostToDb(); err != nil {
+func (b *Builder) MigrateDiskToLocalDB(dataDir string) error {
+	if err := b.movePostToDb(dataDir); err != nil {
 		return fmt.Errorf("moving post to db: %w", err)
 	}
-	if err := b.moveNipostChallengeToDb(); err != nil {
+	if err := b.moveNipostChallengeToDb(dataDir); err != nil {
 		return fmt.Errorf("moving nipost challenge to db: %w", err)
 	}
 	return nil
 }
 
-func (b *Builder) movePostToDb() error {
-	post, err := loadPost(b.nipostBuilder.DataDir())
+func (b *Builder) movePostToDb(dataDir string) error {
+	post, err := loadPost(dataDir)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
 		return nil // no post file, nothing to do
@@ -285,7 +285,7 @@ func (b *Builder) movePostToDb() error {
 	default:
 	}
 
-	meta, err := initialization.LoadMetadata(b.nipostBuilder.DataDir())
+	meta, err := initialization.LoadMetadata(dataDir)
 	if err != nil {
 		return fmt.Errorf("getting post info: %w", err)
 	}
@@ -307,12 +307,12 @@ func (b *Builder) movePostToDb() error {
 		if err := nipost.AddInitialPost(tx, b.signer.NodeID(), initialPost); err != nil {
 			return fmt.Errorf("adding post to db: %w", err)
 		}
-		return discardPost(b.nipostBuilder.DataDir())
+		return discardPost(dataDir)
 	})
 }
 
-func (b *Builder) moveNipostChallengeToDb() error {
-	ch, err := loadNipostChallenge(b.nipostBuilder.DataDir())
+func (b *Builder) moveNipostChallengeToDb(dataDir string) error {
+	ch, err := loadNipostChallenge(dataDir)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
 		return nil // no challenge file, nothing to do
@@ -328,7 +328,7 @@ func (b *Builder) moveNipostChallengeToDb() error {
 		if err := nipost.AddChallenge(tx, b.signer.NodeID(), ch); err != nil {
 			return fmt.Errorf("adding challenge to db: %w", err)
 		}
-		return discardNipostChallenge(b.nipostBuilder.DataDir())
+		return discardNipostChallenge(dataDir)
 	})
 }
 

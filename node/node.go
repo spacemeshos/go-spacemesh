@@ -990,7 +990,7 @@ func (app *App) initServices(ctx context.Context) error {
 		activation.WithPoetRetryInterval(app.Config.HARE.WakeupDelta),
 		activation.WithValidator(app.validator),
 	)
-	if err := atxBuilder.MigrateDiskToLocalDB(); err != nil {
+	if err := atxBuilder.MigrateDiskToLocalDB(app.Config.SMESHING.Opts.DataDir); err != nil {
 		app.log.Panic("failed to migrate state of atx builder: %v", err)
 	}
 
