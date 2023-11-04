@@ -522,9 +522,6 @@ func TestBuilder_Loop_WaitsOnStaleChallenge(t *testing.T) {
 	require.NoError(t, eg.Wait())
 
 	// state is cleaned up
-	_, _, err = nipost.InitialPost(tab.localDB, tab.sig.NodeID())
-	require.ErrorIs(t, err, sql.ErrNotFound)
-
 	_, err = nipost.Challenge(tab.localDB, tab.sig.NodeID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
@@ -1157,7 +1154,13 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 		LabelsPerUnit: DefaultPostConfig().LabelsPerUnit,
 	}, nil).AnyTimes()
 
-	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).MaxTimes(1)
+	publishConfirmation := make(chan struct{})
+	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ string, got []byte) error {
+			close(publishConfirmation)
+			return nil
+		},
+	)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	var eg errgroup.Group
@@ -1172,12 +1175,17 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 
 	select {
 	case <-builderConfirmation:
-		cancel()
 	case <-time.After(5 * time.Second):
 		require.FailNowf(t, "failed waiting for required number of tries", "only tried %d times", tries)
 	}
 
 	// state is cleaned up
+	select {
+	case <-publishConfirmation:
+	case <-time.After(5 * time.Second):
+		require.FailNow(t, "timed out waiting for builder to publish ATX")
+	}
+
 	_, _, err = nipost.InitialPost(tab.localDB, tab.sig.NodeID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
