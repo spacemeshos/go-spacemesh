@@ -18,12 +18,8 @@ env:
 on:
   # Allow manually triggering this workflow
   workflow_dispatch:
-  # run for all pull requests and pushes to certain branches
+  # run for all pull requests and merge groups
   pull_request:
-  push:
-    branches:
-      - staging
-      - trying
   merge_group:
 
 concurrency:
