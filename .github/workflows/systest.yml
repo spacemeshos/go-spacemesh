@@ -50,6 +50,8 @@ jobs:
       - filter-changes
     timeout-minutes: 70
     steps:
+      - name: quickly fail
+        run: exit 1
       - uses: actions/checkout@v3
 
       - name: Setup kubectl
