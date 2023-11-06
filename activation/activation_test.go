@@ -1208,7 +1208,7 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		AnyTimes().
 		Return(nil)
-	require.NoError(t, tab.initialPost(context.Background()))
+	require.NoError(t, tab.buildInitialPost(context.Background()))
 
 	posEpoch := postGenesisEpoch + 1
 	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posEpoch, nil)
@@ -1228,7 +1228,7 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	assertLastAtx(require.New(t), tab.sig.NodeID(), types.BytesToHash(poetByte), atx, vPrevAtx, vPrevAtx, layersPerEpoch)
 
 	// postClient.Proof() should not be called again
-	require.NoError(t, tab.initialPost(context.Background()))
+	require.NoError(t, tab.buildInitialPost(context.Background()))
 }
 
 func TestBuilder_InitialPostIsPersisted(t *testing.T) {
@@ -1243,10 +1243,10 @@ func TestBuilder_InitialPostIsPersisted(t *testing.T) {
 		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		AnyTimes().
 		Return(nil)
-	require.NoError(t, tab.initialPost(context.Background()))
+	require.NoError(t, tab.buildInitialPost(context.Background()))
 
 	// postClient.Proof() should not be called again
-	require.NoError(t, tab.initialPost(context.Background()))
+	require.NoError(t, tab.buildInitialPost(context.Background()))
 
 	// Remove the persisted post file and try again
 	require.NoError(t, nipost.RemoveInitialPost(tab.localDb, tab.signer.NodeID()))
@@ -1256,7 +1256,7 @@ func TestBuilder_InitialPostIsPersisted(t *testing.T) {
 			&types.PostInfo{CommitmentATX: types.RandomATXID()},
 			nil,
 		)
-	require.NoError(t, tab.initialPost(context.Background()))
+	require.NoError(t, tab.buildInitialPost(context.Background()))
 }
 
 func TestWaitPositioningAtx(t *testing.T) {

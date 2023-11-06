@@ -328,7 +328,7 @@ func (b *Builder) SmesherID() types.NodeID {
 	return b.signer.NodeID()
 }
 
-func (b *Builder) initialPost(ctx context.Context) error {
+func (b *Builder) buildInitialPost(ctx context.Context) error {
 	// Generate the initial POST if we don't have an ATX...
 	if _, err := b.cdb.GetLastAtx(b.signer.NodeID()); err == nil {
 		return nil
@@ -362,7 +362,7 @@ func (b *Builder) run(ctx context.Context) {
 	defer b.log.Info("atx builder stopped")
 
 	for {
-		err := b.initialPost(ctx)
+		err := b.buildInitialPost(ctx)
 		if err == nil {
 			break
 		}
