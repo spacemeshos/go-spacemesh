@@ -82,7 +82,7 @@ func DefaultConfig() Config {
 		// NOTE(talm) We aim for a 2^{-40} error probability; if the population at large has a 2/3 honest majority,
 		// we need a committee of size ~800 to guarantee this error rate (at least,
 		// this is what the Chernoff bound gives you; the actual value is a bit lower,
-		// so we can probably get away with a smaller committee).For a committee of size 400,
+		// so we can probably get away with a smaller committee). For a committee of size 400,
 		// the Chernoff bound gives 2^{-20} probability of a dishonest majority when 1/3 of the population is dishonest.
 		Committee:       800,
 		Leaders:         5,
