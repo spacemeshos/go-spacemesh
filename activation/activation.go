@@ -552,9 +552,6 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 			b.log.Info("atx published", zap.Inline(atx), zap.Int("size", size))
 			break
 		}
-		if errors.Is(err, context.DeadlineExceeded) {
-			return fmt.Errorf("broadcast: %w", err)
-		}
 
 		select {
 		case <-ctx.Done():

@@ -573,7 +573,6 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 			return done
 		})
 	var built *types.ActivationTx
-	publishErr := errors.New("blah")
 	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
 		// first publish fails
 		func(_ context.Context, _ string, got []byte) error {
@@ -582,7 +581,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 			gotAtx.SetReceived(time.Now().Local())
 			built = &gotAtx
 			require.NoError(t, built.Initialize())
-			return publishErr
+			return errors.New("something went wrong")
 		},
 	)
 
@@ -649,6 +648,8 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 			}
 			return done
 		})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	var built *types.ActivationTx
 	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, got []byte) error {
@@ -660,12 +661,13 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 
 			// advance time to the next epoch to trigger the context timeout
 			currLayer = currLayer.Add(layersPerEpoch)
-			return context.DeadlineExceeded
+			cancel()
+			return errors.New("something went wrong")
 		},
 	)
 	// create and publish ATX
-	err = tab.PublishActivationTx(context.Background())
-	require.ErrorIs(t, err, context.DeadlineExceeded)
+	err = tab.PublishActivationTx(ctx)
+	require.ErrorIs(t, err, context.Canceled) // publish returning an error will just cause a retry if not canceled
 	require.NotNil(t, built)
 
 	// state is preserved for a retry
