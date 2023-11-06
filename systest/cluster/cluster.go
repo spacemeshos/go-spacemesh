@@ -209,7 +209,7 @@ func (c *Cluster) GenesisID() types.Hash20 {
 }
 
 func (c *Cluster) nextSmesher() int {
-	if c.smeshers <= c.bootnodes {
+	if c.smeshers == 0 {
 		return 0
 	}
 	return decodeOrdinal(c.clients[len(c.clients)-1].Name) + 1
@@ -455,9 +455,17 @@ func (c *Cluster) AddBootnodes(cctx *testcontext.Context, n int) error {
 type SmesherDeploymentConfig struct {
 	flags []DeploymentFlag
 	keys  []ed25519.PrivateKey
+
+	noDefaultPoets bool
 }
 
 type DeploymentOpt func(cfg *SmesherDeploymentConfig)
+
+func NoDefaultPoets() DeploymentOpt {
+	return func(cfg *SmesherDeploymentConfig) {
+		cfg.noDefaultPoets = true
+	}
+}
 
 func WithFlags(flags ...DeploymentFlag) DeploymentOpt {
 	return func(cfg *SmesherDeploymentConfig) {
