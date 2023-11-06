@@ -127,19 +127,33 @@ func TestHTTPPoet(t *testing.T) {
 	signature := signer.Sign(signing.POET, ch.Bytes())
 	prefix := bytes.Join([][]byte{signer.Prefix(), {byte(signing.POET)}}, nil)
 
-	poetRound, err := client.Submit(
-		context.Background(),
-		time.Time{},
-		prefix,
-		ch.Bytes(),
-		signature,
-		signer.NodeID(),
-		activation.PoetAuth{
-			PoetCert: &activation.PoetCert{Signature: ed25519.Sign(certPrivKey, signer.NodeID().Bytes())},
-		},
-	)
-	r.NoError(err)
-	r.NotNil(poetRound)
+	t.Run("submit with cert", func(t *testing.T) {
+		poetRound, err := client.Submit(
+			context.Background(),
+			time.Time{},
+			prefix,
+			ch.Bytes(),
+			signature,
+			signer.NodeID(),
+			activation.PoetAuth{
+				PoetCert: &activation.PoetCert{Signature: ed25519.Sign(certPrivKey, signer.NodeID().Bytes())},
+			},
+		)
+		require.NoError(t, err)
+		require.NotNil(t, poetRound)
+	})
+	t.Run("return proper error code on rejected cert", func(t *testing.T) {
+		_, err := client.Submit(
+			context.Background(),
+			time.Time{},
+			prefix,
+			ch.Bytes(),
+			signature,
+			signer.NodeID(),
+			activation.PoetAuth{PoetCert: &activation.PoetCert{Signature: []byte("oops")}},
+		)
+		require.ErrorIs(t, err, activation.ErrUnathorized)
+	})
 }
 
 func TestSubmitTooLate(t *testing.T) {

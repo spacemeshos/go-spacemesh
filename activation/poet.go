@@ -21,8 +21,6 @@ import (
 )
 
 var (
-	ErrNotFound       = errors.New("not found")
-	ErrUnavailable    = errors.New("unavailable")
 	ErrInvalidRequest = errors.New("invalid request")
 	ErrUnathorized    = errors.New("unauthorized")
 )
@@ -300,10 +298,6 @@ func (c *HTTPPoetClient) req(ctx context.Context, method, path string, reqBody, 
 
 	switch res.StatusCode {
 	case http.StatusOK:
-	case http.StatusNotFound:
-		return fmt.Errorf("%w: response status code: %s, body: %s", ErrNotFound, res.Status, string(data))
-	case http.StatusServiceUnavailable:
-		return fmt.Errorf("%w: response status code: %s, body: %s", ErrUnavailable, res.Status, string(data))
 	case http.StatusBadRequest:
 		return fmt.Errorf("%w: response status code: %s, body: %s", ErrInvalidRequest, res.Status, string(data))
 	case http.StatusUnauthorized:
