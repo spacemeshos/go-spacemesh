@@ -1,5 +1,5 @@
 # Generate latest build and push it to dockerhub on push to develop branch.
-# NOTE: This workflow does not include any tests, nor any dependencies, since bors guarantees
+# NOTE: This workflow does not include any tests, nor any dependencies, since github merge queues ensure
 # that only code that passes all tests is ever pushed to develop.
 name: Push to Dockerhub
 run-name: Pushing ${{ github.ref_name }} to Dockerhub
