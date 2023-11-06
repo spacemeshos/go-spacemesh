@@ -48,7 +48,7 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
   Pruning will be enabled starting from epoch 8, e.g in epoch 8 we will prune all activesets for epochs 7 and below.
   We should also run an archival node that doesn't prune them. To disable pruning we should configure
-  
+
   ```json
   "main": {
       "prune-activesets-from": 4294967295
@@ -61,6 +61,8 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
   Nodes that already finished initialization can leave this setting empty, as it is not required any more to be set when no initialization is performed. For nodes that have not
   yet created their initial proof the operator has to specify which provider to use. For Smapp users this is done automatically by Smapp, users that do not use Smapp may use
   `postcli -printProviders` (<https://github.com/spacemeshos/post/releases>) to list their OpenCL providers and associated IDs.
+
+* [#5209](https://github.com/spacemeshos/go-spacemesh/pull/5209) Removed API to update poet servers from SmesherService.
 
 ## v1.2.0
 

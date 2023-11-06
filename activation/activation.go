@@ -4,7 +4,6 @@ package activation
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -68,8 +67,7 @@ type Config struct {
 // it is responsible for initializing post, receiving poet proof and orchestrating nipst. after which it will
 // calculate total weight and providing relevant view as proof.
 type Builder struct {
-	pendingPoetClients atomic.Pointer[[]poetClient]
-	started            atomic.Bool
+	started atomic.Bool
 
 	eg errgroup.Group
 
@@ -91,15 +89,14 @@ type Builder struct {
 	smeshingMutex sync.Mutex
 
 	// pendingATX is created with current commitment and nipost from current challenge.
-	pendingATX            *types.ActivationTx
-	layerClock            layerClock
-	syncer                syncer
-	log                   log.Logger
-	parentCtx             context.Context
-	stop                  context.CancelFunc
-	poetCfg               PoetConfig
-	poetRetryInterval     time.Duration
-	poetClientInitializer PoETClientInitializer
+	pendingATX        *types.ActivationTx
+	layerClock        layerClock
+	syncer            syncer
+	log               log.Logger
+	parentCtx         context.Context
+	stop              context.CancelFunc
+	poetCfg           PoetConfig
+	poetRetryInterval time.Duration
 }
 
 // BuilderOption ...
@@ -110,16 +107,6 @@ type BuilderOption func(*Builder)
 func WithPoetRetryInterval(interval time.Duration) BuilderOption {
 	return func(b *Builder) {
 		b.poetRetryInterval = interval
-	}
-}
-
-// PoETClientInitializer interfaces for creating PoetProvingServiceClient.
-type PoETClientInitializer func(string, PoetConfig) (poetClient, error)
-
-// WithPoETClientInitializer modifies initialization logic for PoET client. Used during client update.
-func WithPoETClientInitializer(initializer PoETClientInitializer) BuilderOption {
-	return func(b *Builder) {
-		b.poetClientInitializer = initializer
 	}
 }
 
@@ -158,21 +145,20 @@ func NewBuilder(
 	opts ...BuilderOption,
 ) *Builder {
 	b := &Builder{
-		parentCtx:             context.Background(),
-		signer:                signer,
-		nodeID:                nodeID,
-		coinbaseAccount:       conf.CoinbaseAccount,
-		goldenATXID:           conf.GoldenATXID,
-		regossipInterval:      conf.RegossipInterval,
-		cdb:                   cdb,
-		publisher:             publisher,
-		postService:           postService,
-		nipostBuilder:         nipostBuilder,
-		layerClock:            layerClock,
-		syncer:                syncer,
-		log:                   log,
-		poetRetryInterval:     defaultPoetRetryInterval,
-		poetClientInitializer: defaultPoetClientFunc,
+		parentCtx:         context.Background(),
+		signer:            signer,
+		nodeID:            nodeID,
+		coinbaseAccount:   conf.CoinbaseAccount,
+		goldenATXID:       conf.GoldenATXID,
+		regossipInterval:  conf.RegossipInterval,
+		cdb:               cdb,
+		publisher:         publisher,
+		postService:       postService,
+		nipostBuilder:     nipostBuilder,
+		layerClock:        layerClock,
+		syncer:            syncer,
+		log:               log,
+		poetRetryInterval: defaultPoetRetryInterval,
 	}
 	for _, opt := range opts {
 		opt(b)
@@ -321,10 +307,6 @@ func (b *Builder) generateInitialPost(ctx context.Context) error {
 	return nil
 }
 
-func (b *Builder) receivePendingPoetClients() *[]poetClient {
-	return b.pendingPoetClients.Swap(nil)
-}
-
 func (b *Builder) run(ctx context.Context) {
 	defer b.log.Info("atx builder stopped")
 
@@ -343,10 +325,6 @@ func (b *Builder) run(ctx context.Context) {
 	}
 
 	for {
-		if poetClients := b.receivePendingPoetClients(); poetClients != nil {
-			b.nipostBuilder.UpdatePoETProvers(*poetClients)
-		}
-
 		ctx := log.WithNewSessionID(ctx)
 		err := b.PublishActivationTx(ctx)
 		if err == nil {
@@ -477,40 +455,6 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 		return nil, err
 	}
 	return challenge, nil
-}
-
-// UpdatePoETServers updates poet client. Context is used to verify that the target is responsive.
-func (b *Builder) UpdatePoETServers(ctx context.Context, endpoints []string) error {
-	b.log.WithContext(ctx).With().Debug("request to update poet services",
-		log.Array("endpoints", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-			for _, endpoint := range endpoints {
-				encoder.AppendString(endpoint)
-			}
-			return nil
-		})))
-
-	clients := make([]poetClient, 0, len(endpoints))
-	for _, endpoint := range endpoints {
-		client, err := b.poetClientInitializer(endpoint, b.poetCfg)
-		if err != nil {
-			return &PoetSvcUnstableError{source: fmt.Errorf("initial poet client '%s': %w", endpoint, err)}
-		}
-		// TODO(dshulyak) not enough information to verify that PoetServiceID matches with an expected one.
-		// Maybe it should be provided during update.
-		ctx, cancel := context.WithTimeout(ctx, time.Second*10)
-		defer cancel()
-		sid, err := client.PoetServiceID(ctx)
-		if err != nil {
-			return &PoetSvcUnstableError{source: fmt.Errorf("failed to query poet '%s' for ID: %w", endpoint, err)}
-		}
-		b.log.WithContext(ctx).
-			With().
-			Debug("preparing to update poet service", log.String("poet_id", hex.EncodeToString(sid.ServiceID)))
-		clients = append(clients, client)
-	}
-
-	b.pendingPoetClients.Store(&clients)
-	return nil
 }
 
 // SetCoinbase sets the address rewardAddress to be the coinbase account written into the activation transaction

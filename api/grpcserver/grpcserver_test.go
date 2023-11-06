@@ -635,34 +635,6 @@ func TestSmesherService(t *testing.T) {
 		_, err = stream.Recv()
 		require.ErrorContains(t, err, context.Canceled.Error())
 	})
-
-	t.Run("UpdatePoetServer", func(t *testing.T) {
-		t.Parallel()
-		c, ctx := setupSmesherService(t)
-		c.smeshingProvider.EXPECT().UpdatePoETServers(gomock.Any(), gomock.Any()).Return(nil)
-		res, err := c.UpdatePoetServers(ctx, &pb.UpdatePoetServersRequest{Urls: []string{"test"}})
-		require.NoError(t, err)
-		require.EqualValues(t, res.Status.Code, code.Code_OK)
-	})
-	t.Run("UpdatePoetServerUnavailable", func(t *testing.T) {
-		t.Parallel()
-		c, ctx := setupSmesherService(t)
-		c.smeshingProvider.EXPECT().
-			UpdatePoETServers(gomock.Any(), gomock.Any()).
-			Return(activation.ErrPoetServiceUnstable)
-		urls := []string{"test"}
-		res, err := c.UpdatePoetServers(ctx, &pb.UpdatePoetServersRequest{Urls: urls})
-		require.Nil(t, res)
-		require.ErrorIs(
-			t,
-			err,
-			status.Errorf(
-				codes.Unavailable,
-				"can't reach poet service (%v). retry later",
-				activation.ErrPoetServiceUnstable,
-			),
-		)
-	})
 }
 
 func TestMeshService(t *testing.T) {

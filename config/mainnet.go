@@ -61,7 +61,7 @@ func MainnetConfig() Config {
 	hare3conf := hare3.DefaultConfig()
 	hare3conf.Committee = 400
 	hare3conf.Enable = true
-	hare3conf.EnableLayer = 33101
+	hare3conf.EnableLayer = 35117
 	return Config{
 		BaseConfig: BaseConfig{
 			DataDirParent:         defaultDataDir,
@@ -100,7 +100,7 @@ func MainnetConfig() Config {
 		Tortoise: tortoise.Config{
 			Hdist:                    10,
 			Zdist:                    2,
-			WindowSize:               10000,
+			WindowSize:               4032,
 			MaxExceptions:            1000,
 			BadBeaconVoteDelayLayers: 4032,
 			MinimalActiveSetWeight: []types.EpochMinimalActiveWeight{
