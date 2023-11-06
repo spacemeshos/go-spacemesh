@@ -3,6 +3,7 @@ package p2p
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	lp2plog "github.com/ipfs/go-log/v2"
@@ -19,6 +20,7 @@ import (
 	tptu "github.com/libp2p/go-libp2p/p2p/net/upgrader"
 	"github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/relay"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
+	quic "github.com/libp2p/go-libp2p/p2p/transport/quic"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/prometheus/client_golang/prometheus"
@@ -192,7 +194,10 @@ func New(
 	g.direct = directMap
 	lopts := []libp2p.Option{
 		libp2p.Identity(key),
-		libp2p.ListenAddrStrings(cfg.Listen),
+		// TODO: use separate "multiListen" field or smth,
+		// using the space-separated list is ugly (just for
+		// testing)
+		libp2p.ListenAddrStrings(strings.Fields(cfg.Listen)...),
 		libp2p.UserAgent("go-spacemesh"),
 		libp2p.Transport(
 			func(upgrader transport.Upgrader, rcmgr network.ResourceManager) (transport.Transport, error) {
@@ -206,6 +211,7 @@ func New(
 				return tcp.NewTCPTransport(upgrader, rcmgr, opts...)
 			},
 		),
+		libp2p.Transport(quic.NewTransport),
 		libp2p.Security(
 			noise.ID,
 			func(id protocol.ID, privkey crypto.PrivKey, muxers []tptu.StreamMuxer) (*noise.SessionTransport, error) {
