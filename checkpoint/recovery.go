@@ -13,12 +13,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/datastore/nipost"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
 	"github.com/spacemeshos/go-spacemesh/sql/recovery"
 )
@@ -107,14 +107,11 @@ func Recover(
 		return nil, fmt.Errorf("open old database: %w", err)
 	}
 	defer db.Close()
-	localDBFile, err := sql.Open("file:"+filepath.Join(cfg.DataDir, cfg.LocalDbFile),
-		sql.WithMigrations(sql.LocalMigrations),
-	)
+	localDB, err := localsql.Open("file:" + filepath.Join(cfg.DataDir, cfg.LocalDbFile))
 	if err != nil {
 		return nil, fmt.Errorf("open old local database: %w", err)
 	}
-	defer localDBFile.Close()
-	localDB := datastore.NewLocalDB(localDBFile)
+	defer localDB.Close()
 	preserve, err := RecoverWithDb(ctx, logger, db, localDB, fs, cfg)
 	switch {
 	case errors.Is(err, ErrCheckpointNotFound):
@@ -132,7 +129,7 @@ func RecoverWithDb(
 	ctx context.Context,
 	logger log.Log,
 	db *sql.Database,
-	localDB *datastore.LocalDB,
+	localDB *localsql.Database,
 	fs afero.Fs,
 	cfg *RecoverConfig,
 ) (*PreservedData, error) {
@@ -164,7 +161,7 @@ func recoverFromLocalFile(
 	ctx context.Context,
 	logger log.Log,
 	db *sql.Database,
-	localDB *datastore.LocalDB,
+	localDB *localsql.Database,
 	fs afero.Fs,
 	cfg *RecoverConfig,
 	file string,
@@ -313,7 +310,7 @@ func checkpointData(fs afero.Fs, file string, newGenesis types.LayerID) (*recove
 func collectOwnAtxDeps(
 	logger log.Log,
 	db *sql.Database,
-	localDB *datastore.LocalDB,
+	localDB *localsql.Database,
 	cfg *RecoverConfig,
 	data *recoverydata,
 ) ([]*types.VerifiedActivationTx, []*types.PoetProofMessage, error) {

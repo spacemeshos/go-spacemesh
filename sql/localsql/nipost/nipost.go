@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -99,7 +98,7 @@ func AddChallenge(db sql.Executor, nodeID types.NodeID, ch *types.NIPostChalleng
 	return nil
 }
 
-func UpdateChallenge(db *datastore.LocalDB, nodeID types.NodeID, ch *types.NIPostChallenge) error {
+func UpdateChallenge(db sql.Executor, nodeID types.NodeID, ch *types.NIPostChallenge) error {
 	if _, err := db.Exec(`
 		update nipost set epoch = ?2, sequence = ?3, prev_atx = ?4, pos_atx = ?5,
 			commit_atx = ?6, post_nonce = ?7, post_indices = ?8, post_pow = ?9

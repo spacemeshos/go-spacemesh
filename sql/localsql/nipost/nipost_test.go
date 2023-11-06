@@ -6,12 +6,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 )
 
 func Test_AddInitialPost(t *testing.T) {
-	db := datastore.NewLocalDB(sql.InMemory(sql.WithMigrations(sql.LocalMigrations)))
+	db := localsql.InMemory()
 
 	nodeID := types.RandomNodeID()
 	post := &types.Post{
@@ -39,7 +39,7 @@ func Test_AddInitialPost(t *testing.T) {
 }
 
 func Test_AddInitialPost_NoDuplicates(t *testing.T) {
-	db := datastore.NewLocalDB(sql.InMemory(sql.WithMigrations(sql.LocalMigrations)))
+	db := localsql.InMemory()
 
 	nodeID := types.RandomNodeID()
 	post := &types.Post{
@@ -98,7 +98,7 @@ func Test_AddChallenge(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			db := datastore.NewLocalDB(sql.InMemory(sql.WithMigrations(sql.LocalMigrations)))
+			db := localsql.InMemory()
 
 			nodeID := types.RandomNodeID()
 			err := AddChallenge(db, nodeID, tc.ch)
@@ -120,7 +120,7 @@ func Test_AddChallenge(t *testing.T) {
 }
 
 func Test_AddState_NoDuplicates(t *testing.T) {
-	db := datastore.NewLocalDB(sql.InMemory(sql.WithMigrations(sql.LocalMigrations)))
+	db := localsql.InMemory()
 
 	ch1 := &types.NIPostChallenge{
 		PublishEpoch:   4,
@@ -153,7 +153,7 @@ func Test_AddState_NoDuplicates(t *testing.T) {
 }
 
 func Test_UpdateState(t *testing.T) {
-	db := datastore.NewLocalDB(sql.InMemory(sql.WithMigrations(sql.LocalMigrations)))
+	db := localsql.InMemory()
 
 	commitmentATX := types.RandomATXID()
 	ch := &types.NIPostChallenge{

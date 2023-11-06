@@ -19,7 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/datastore/nipost"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/metrics/public"
@@ -27,6 +26,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
 
 // PoetConfig is the configuration to interact with the poet server.
@@ -76,7 +77,7 @@ type Builder struct {
 	goldenATXID      types.ATXID
 	regossipInterval time.Duration
 	cdb              *datastore.CachedDB
-	localDB          *datastore.LocalDB
+	localDB          *localsql.Database
 	publisher        pubsub.Publisher
 	postService      postService
 	nipostBuilder    nipostBuilder
@@ -131,7 +132,7 @@ func NewBuilder(
 	conf Config,
 	signer *signing.EdSigner,
 	cdb *datastore.CachedDB,
-	localDB *datastore.LocalDB,
+	localDB *localsql.Database,
 	publisher pubsub.Publisher,
 	postService postService,
 	nipostBuilder nipostBuilder,

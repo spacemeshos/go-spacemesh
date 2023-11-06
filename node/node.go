@@ -66,6 +66,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots/util"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/syncer/blockssync"
@@ -322,7 +323,7 @@ type App struct {
 	db                *sql.Database
 	cachedDB          *datastore.CachedDB
 	dbMetrics         *dbmetrics.DBMetricsCollector
-	localDB           *datastore.LocalDB
+	localDB           *localsql.Database
 	grpcPublicServer  *grpcserver.Server
 	grpcPrivateServer *grpcserver.Server
 	grpcTLSServer     *grpcserver.Server
@@ -1623,14 +1624,14 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		datastore.WithConfig(app.Config.Cache),
 		datastore.WithConsensusCache(data),
 	)
-	localDB, err := sql.Open("file:"+filepath.Join(dbPath, localDbFile),
+	localDB, err := localsql.Open("file:"+filepath.Join(dbPath, localDbFile),
 		sql.WithMigrations(sql.LocalMigrations),
 		sql.WithConnections(app.Config.DatabaseConnections),
 	)
 	if err != nil {
 		return fmt.Errorf("open sqlite db %w", err)
 	}
-	app.localDB = datastore.NewLocalDB(localDB)
+	app.localDB = localDB
 	return nil
 }
 
