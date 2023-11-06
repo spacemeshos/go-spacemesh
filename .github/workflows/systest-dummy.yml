@@ -1,0 +1,15 @@
+## This is a dummy worklfow that is executed on pull requests to set the required `systest-status`
+## to passed. It is not executed during a merge group run; instead the real job will be executed
+## to prevent a merge group from passing if the system tests fail.
+
+name: System tests dummy workflow
+on:
+  # Trigger this workflow on pull requests
+  pull_request:
+
+jobs:
+  systest-status:
+    runs-on: ubuntu-latest
+    steps:
+      - name: System tests are skipped during PR trigger
+        run: exit 0
