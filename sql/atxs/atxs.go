@@ -127,7 +127,7 @@ func CommitmentATX(db sql.Executor, nodeID types.NodeID) (id types.ATXID, err er
 	}
 
 	if rows, err := db.Exec(`
-		select commitment_atx from atxs 
+		select commitment_atx from atxs
 		where pubkey = ?1 and commitment_atx is not null
 		order by epoch desc
 		limit 1;`, enc, dec); err != nil {
@@ -150,7 +150,7 @@ func GetFirstIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, e
 	}
 
 	if rows, err := db.Exec(`
-		select id from atxs 
+		select id from atxs
 		where pubkey = ?1
 		order by epoch asc
 		limit 1;`, enc, dec); err != nil {
@@ -173,7 +173,7 @@ func GetLastIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, er
 	}
 
 	if rows, err := db.Exec(`
-		select id from atxs 
+		select id from atxs
 		where pubkey = ?1
 		order by epoch desc, received desc
 		limit 1;`, enc, dec); err != nil {
@@ -386,7 +386,7 @@ func LatestN(db sql.Executor, n int) ([]CheckpointAtx, error) {
 	}
 
 	if rows, err := db.Exec(`
-		select id, epoch, effective_num_units, base_tick_height, tick_count, pubkey, sequence, coinbase 
+		select id, epoch, effective_num_units, base_tick_height, tick_count, pubkey, sequence, coinbase
 		from (
 			select row_number() over (partition by pubkey order by epoch desc) RowNum,
 			id, epoch, effective_num_units, base_tick_height, tick_count, pubkey, sequence, coinbase from atxs

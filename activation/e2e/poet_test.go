@@ -3,6 +3,7 @@ package activation_test
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"errors"
 	"net/url"
 	"testing"
@@ -97,7 +98,13 @@ func TestHTTPPoet(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	c, err := NewHTTPPoetTestHarness(ctx, poetDir)
+
+	certPubKey, certPrivKey, err := ed25519.GenerateKey(nil)
+	r.NoError(err)
+
+	c, err := NewHTTPPoetTestHarness(ctx, poetDir, WithCertifier(&registration.CertifierConfig{
+		PubKey: registration.Base64Enc(certPubKey),
+	}))
 	r.NoError(err)
 	r.NotNil(c)
 
@@ -127,7 +134,9 @@ func TestHTTPPoet(t *testing.T) {
 		ch.Bytes(),
 		signature,
 		signer.NodeID(),
-		activation.PoetAuth{},
+		activation.PoetAuth{
+			PoetCert: &activation.PoetCert{Signature: ed25519.Sign(certPrivKey, signer.NodeID().Bytes())},
+		},
 	)
 	r.NoError(err)
 	r.NotNil(poetRound)

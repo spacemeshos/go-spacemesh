@@ -769,8 +769,8 @@ func TestBuilder_PublishActivationTx_NoPrevATX_PublishFails_InitialPost_preserve
 			genesis := time.Now().Add(-time.Duration(currLayer) * layerDuration)
 			return genesis.Add(layerDuration * time.Duration(got))
 		}).AnyTimes()
-	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, challenge *types.NIPostChallenge) (*types.NIPost, error) {
+	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ *types.NIPostChallenge, _ certifierService) (*types.NIPost, error) {
 			return nil, ErrATXChallengeExpired
 		},
 	)
@@ -999,6 +999,8 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 		nipost.Post{Indices: make([]byte, 10)},
 	))
 
+	tab.mpostClient.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).Return(&types.Post{}, &types.PostInfo{}, nil)
+	r.NoError(tab.buildInitialPost(context.Background()))
 	r.NoError(tab.PublishActivationTx(context.Background()))
 
 	// state is cleaned up
@@ -1248,6 +1250,56 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 
 	// postClient.Proof() should not be called again
 	require.NoError(t, tab.buildInitialPost(context.Background()))
+}
+
+func TestBuilder_ObtainPostForCertification(t *testing.T) {
+	t.Run("no POST or ATX - fail", func(t *testing.T) {
+		tab := newTestBuilder(t)
+		_, _, err := tab.obtainPostForCertification()
+		require.Error(t, err)
+	})
+	t.Run("initial POST available", func(t *testing.T) {
+		tab := newTestBuilder(t)
+		tab.mpostClient.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).Return(&types.Post{}, &types.PostInfo{}, nil)
+		require.NoError(t, tab.buildInitialPost(context.Background()))
+
+		_, _, err := tab.obtainPostForCertification()
+		require.NoError(t, err)
+	})
+	t.Run("initial POST unavailable but ATX exists", func(t *testing.T) {
+		tab := newTestBuilder(t)
+		commitmentAtxId := types.RandomATXID()
+		challenge := types.NIPostChallenge{
+			PublishEpoch:   2,
+			Sequence:       0,
+			PrevATXID:      types.EmptyATXID,
+			PositioningATX: types.RandomATXID(),
+			CommitmentATX:  &commitmentAtxId,
+			InitialPost:    &types.Post{},
+		}
+		nipost := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
+		nipost.Post = &types.Post{
+			Nonce:   5,
+			Indices: []byte{1, 2, 3, 4},
+			Pow:     7,
+		}
+		nipost.PostMetadata.LabelsPerUnit = 777
+		atx := types.NewActivationTx(challenge, types.Address{}, nipost, 2, nil)
+		atx.SetEffectiveNumUnits(2)
+		atx.SetReceived(time.Now())
+		SignAndFinalizeAtx(tab.sig, atx)
+		vAtx, err := atx.Verify(0, 1)
+		require.NoError(t, err)
+		require.NoError(t, atxs.Add(tab.cdb, vAtx))
+
+		post, meta, err := tab.obtainPostForCertification()
+		require.NoError(t, err)
+		require.Equal(t, commitmentAtxId, meta.CommitmentATX)
+		require.Equal(t, uint32(2), meta.NumUnits)
+		require.Equal(t, tab.sig.NodeID(), meta.NodeID)
+		require.Equal(t, uint64(777), meta.LabelsPerUnit)
+		require.Equal(t, nipost.Post, post)
+	})
 }
 
 func TestBuilder_InitialPostIsPersisted(t *testing.T) {
