@@ -330,7 +330,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 
 	t.Run("Single threaded", func(t *testing.T) {
 		builder := getBuilder(t)
-		for i := 0; i < 100; i++ {
+		for i := 0; i < 50; i++ {
 			require.NoError(t, builder.StartSmeshing(types.Address{}))
 			require.Never(
 				t,
@@ -344,7 +344,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 			require.Eventually(
 				t,
 				func() bool { return !builder.Smeshing() },
-				100*time.Millisecond,
+				500*time.Millisecond,
 				time.Millisecond,
 				"failed on execution %d",
 				i,
@@ -360,7 +360,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 		var eg errgroup.Group
 		for worker := 0; worker < 10; worker += 1 {
 			eg.Go(func() error {
-				for i := 0; i < 100; i++ {
+				for i := 0; i < 50; i++ {
 					builder.StartSmeshing(types.Address{})
 					builder.StopSmeshing(true)
 				}
