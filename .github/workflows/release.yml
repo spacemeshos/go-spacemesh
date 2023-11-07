@@ -17,18 +17,18 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
+            outname_sufix: "linux-amd64"
           - os: [self-hosted, linux, arm64]
+            outname_sufix: "linux-arm64"
           - os: macos-latest
+            outname_sufix: "mac-amd64"
           - os: [self-hosted, macos, arm64]
+            outname_sufix: "mac-arm64"
           - os: windows-latest
+            outname_sufix: "win-amd64"
     steps:
       - shell: bash
-        run: |
-          if [[ ${{ runner.arch }} == "ARM64" ]]; then
-            echo "OUTNAME=${{ runner.os }}_${{ runner.arch }}" >> $GITHUB_ENV
-          else
-            echo "OUTNAME=${{ runner.os }}" >> $GITHUB_ENV
-          fi
+        run: echo "OUTNAME=go-spacemesh-${{ github.ref_name }}-${{ matrix.outname_sufix }}" >> $GITHUB_ENV
       
       - name: Install dependencies in windows
         if: ${{ matrix.os == 'windows-latest' }}
@@ -85,20 +85,46 @@ jobs:
   release:
     runs-on: ubuntu-latest
     needs: build-and-upload
+    
     steps:
+      - name: Generate the files names
+        shell: bash
+        run: |
+          echo "OUTNAME_WIN_AMD64=go-spacemesh-${{ github.ref_name }}-win-amd64" >> $GITHUB_ENV
+          echo "OUTNAME_LINUX_AMD64=go-spacemesh-${{ github.ref_name }}-linux-amd64" >> $GITHUB_ENV
+          echo "OUTNAME_LINUX_ARM64=go-spacemesh-${{ github.ref_name }}-linux-arm64" >> $GITHUB_ENV
+          echo "OUTNAME_MAC_AMD64=go-spacemesh-${{ github.ref_name }}-mac-amd64" >> $GITHUB_ENV
+          echo "OUTNAME_MAC_ARM64=go-spacemesh-${{ github.ref_name }}-mac-arm64" >> $GITHUB_ENV
+
       - name: Calculate hashsums of release files
         shell: bash
         run: |
-          wget https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/Windows.zip
-          wget https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/macOS.zip
-          wget https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/macOS_ARM64.zip
-          wget https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/Linux.zip
-          wget https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/Linux_ARM64.zip
-          sha256sum * > sha256sum.txt
+          wget https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/${{ env.OUTNAME_WIN_AMD64 }}.zip
+          wget https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/${{ env.OUTNAME_LINUX_AMD64 }}.zip
+          wget https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/${{ env.OUTNAME_LINUX_ARM64 }}.zip
+          wget https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/${{ env.OUTNAME_MAC_AMD64 }}.zip
+          wget https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/${{ env.OUTNAME_MAC_ARM64 }}.zip
+          
+          echo "SHA256_WIN_AMD64=$(sha256sum ${{ env.OUTNAME_WIN_AMD64 }}.zip)" >> $GITHUB_ENV
+          echo "SHA256_LINUX_AMD64=$(sha256sum ${{ env.OUTNAME_LINUX_AMD64 }}.zip)" >> $GITHUB_ENV
+          echo "SHA256_LINUX_ARM64=$(sha256sum ${{ env.OUTNAME_LINUX_ARM64 }}.zip)" >> $GITHUB_ENV
+          echo "SHA256_MAC_AMD64=$(sha256sum ${{ env.OUTNAME_MAC_AMD64 }}.zip)" >> $GITHUB_ENV
+          echo "SHA256_MAC_ARM64=$(sha256sum ${{ env.OUTNAME_MAC_ARM64 }}.zip)" >> $GITHUB_ENV
+
+      - name: Generate the sha356sums yaml
+        shell: bash
+        run: |
+          echo "win-amd64: ${{ env.SHA256_WIN_AMD64 }}" >> sha256sum.yaml
+          echo "linux-amd64: ${{ env.SHA256_LINUX_AMD64 }}" >> sha256sum.yaml
+          echo "linux-arm64: ${{ env.SHA256_LINUX_ARM64 }}" >> sha256sum.yaml
+          echo "mac-amd64: ${{ env.SHA256_MAC_AMD64 }}" >> sha256sum.yaml
+          echo "mac-arm64: ${{ env.SHA256_MAC_ARM64 }}" >> sha256sum.yaml
+
+
       - name: Upload sha256sums
         uses: google-github-actions/upload-cloud-storage@v1
         with:
-          path: sha256sum.txt
+          path: sha256sum.yaml
           destination: ${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/
 
       - name: Create Release
@@ -110,14 +136,19 @@ jobs:
           tag_name:  ${{ github.ref_name }}
           body: |
             ## Zip Files
-            - Windows: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/Windows.zip
-            - macOS: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/macOS.zip
-            - macOS arm64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/macOS_ARM64.zip
-            - Linux: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/Linux.zip
-            - Linux arm64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/Linux_ARM64.zip
+            - Windows amd64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/${{ env.OUTNAME_WIN_AMD64 }}.zip
+            - macOS amd64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/${{ env.OUTNAME_MAC_AMD64 }}.zip
+            - macOS arm64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/${{ env.OUTNAME_MAC_ARM64 }}.zip
+            - Linux amd64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/${{ env.OUTNAME_LINUX_AMD64 }}.zip
+            - Linux arm64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/${{ env.OUTNAME_LINUX_ARM64 }}.zip
 
-            ## Hashsums
-            SHA256: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/sha256sum.txt
+            ## checksum - Zip files
+            YAML with all the checksums of this version :  https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/sha256sum.yaml
+            - Windows amd64 - sha256 : ${{ env.SHA256_WIN_AMD64 }}
+            - Linux amd64 - sha256: ${{ env.SHA256_LINUX_AMD64 }}
+            - Linux arm64 - sha256: ${{ env.SHA256_LINUX_ARM64 }}
+            - macOS amd64 - sha256: ${{ env.SHA256_MAC_AMD64 }}
+            - macOS arm64 - sha256: ${{ env.SHA256_MAC_ARM64 }}
 
             For information about changes in this release see the [changelog](https://github.com/spacemeshos/go-spacemesh/blob/${{ github.ref_name }}/CHANGELOG.md).
           generate_release_notes: true
