@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -468,4 +469,103 @@ func IterateAtxs(db sql.Executor, from, to types.EpochID, fn func(*types.Verifie
 		return err
 	}
 	return derr
+}
+
+func IterateAtxGRPC(
+	db sql.Executor,
+	filter *spacemeshv1.ActivationStreamRequest,
+	fn func(*spacemeshv1.ActivationStreamResponse) bool,
+) error {
+	query := queryFrom(filter)
+	bindings, err := bindingsFrom(filter)
+	if err != nil {
+		return err
+	}
+	var derr error
+	_, err = db.Exec(query, bindings,
+		decoder(func(atx *types.VerifiedActivationTx, err error) bool {
+			if atx != nil {
+				v1 := &spacemeshv1.ActivationV1{
+					Id:             atx.ID().Bytes(),
+					NodeId:         atx.SmesherID.Bytes(),
+					Signature:      atx.Signature.Bytes(),
+					PublishEpoch:   atx.PublishEpoch.Uint32(),
+					Sequence:       atx.Sequence,
+					PrevAtx:        atx.PrevATXID[:],
+					PositioningAtx: atx.PositioningATX[:],
+					Coinbase:       atx.Coinbase.String(),
+					Units:          atx.NumUnits,
+					BaseTick:       uint32(atx.BaseTickHeight()),
+					Ticks:          uint32(atx.TickCount()),
+				}
+				return fn(&spacemeshv1.ActivationStreamResponse{V1: v1})
+			}
+			derr = err
+			return derr == nil
+		}))
+	if err != nil {
+		return err
+	}
+	return derr
+}
+
+// queryFrom and bindingsFrom should decode fields in the same order.
+
+func queryFrom(filter *spacemeshv1.ActivationStreamRequest) string {
+	query := fullQuery
+	if filter != nil {
+		return query
+	}
+	i := 1
+	if filter.Epochs != nil {
+		query += fmt.Sprintf(" where epoch between ?%d and ?%d", i, i+1)
+		i += 2
+	}
+	if filter.Id != nil {
+		query += fmt.Sprintf(" and id = ?%d", i)
+		i++
+	}
+	if filter.NodeId != nil {
+		query += fmt.Sprintf(" and pubkey = ?%d", i)
+		i++
+	}
+	if filter.Coinbase != nil {
+		query += fmt.Sprintf(" and coinbase = ?%d", i)
+		i++
+	}
+	return query
+}
+
+func bindingsFrom(filter *spacemeshv1.ActivationStreamRequest) (sql.Encoder, error) {
+	if filter == nil {
+		return nil, nil
+	}
+	var coinbase *types.Address
+	if filter.Coinbase != nil {
+		address, err := types.StringToAddress(filter.Coinbase.Coinbase)
+		if err != nil {
+			return nil, fmt.Errorf("invalid coinbase address: %w", err)
+		}
+		coinbase = &address
+	}
+	i := 1
+	return func(stmt *sql.Statement) {
+		if filter.Epochs != nil {
+			stmt.BindInt64(i, int64(filter.Epochs.StartEpoch))
+			stmt.BindInt64(i+1, int64(filter.Epochs.EndEpoch))
+			i += 2
+		}
+		if filter.Id != nil {
+			stmt.BindBytes(i, filter.Id.Id)
+			i++
+		}
+		if filter.NodeId != nil {
+			stmt.BindBytes(i, filter.NodeId.NodeId)
+			i++
+		}
+		if coinbase != nil {
+			stmt.BindBytes(i, coinbase.Bytes())
+			i++
+		}
+	}, nil
 }
