@@ -17,15 +17,18 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 type activationService struct {
 	goldenAtx   types.ATXID
+	db          *sql.Database
 	atxProvider atxProvider
 }
 
-func NewActivationService(atxProvider atxProvider, goldenAtx types.ATXID) *activationService {
+func NewActivationService(db *sql.Database, atxProvider atxProvider, goldenAtx types.ATXID) *activationService {
 	return &activationService{
+		db:          db,
 		goldenAtx:   goldenAtx,
 		atxProvider: atxProvider,
 	}
@@ -98,4 +101,18 @@ func (s *activationService) Highest(ctx context.Context, req *emptypb.Empty) (*p
 	return &pb.HighestResponse{
 		Atx: convertActivation(atx),
 	}, nil
+}
+
+func (s *activationService) Stream(filter *pb.ActivationStreamRequest, stream pb.ActivationService_StreamServer) error {
+	if filter.Watch {
+		return status.Error(codes.InvalidArgument, "watch is not supported")
+	}
+	var ierr error
+	if err := atxs.IterateAtxGRPC(s.db, filter, func(atx *pb.ActivationStreamResponse) bool {
+		ierr = stream.Send(atx)
+		return ierr == nil
+	}); err != nil {
+		return status.Error(codes.Internal, err.Error())
+	}
+	return nil
 }

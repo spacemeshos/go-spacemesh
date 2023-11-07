@@ -1314,6 +1314,7 @@ func (app *App) initService(
 		), nil
 	case grpcserver.Activation:
 		return grpcserver.NewActivationService(
+			app.cachedDB.Database,
 			app.cachedDB,
 			types.ATXID(app.Config.Genesis.GoldenATX()),
 		), nil

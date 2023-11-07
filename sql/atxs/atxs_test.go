@@ -1,12 +1,14 @@
 package atxs_test
 
 import (
+	"fmt"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
+	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -745,6 +747,15 @@ func TestLatest(t *testing.T) {
 			latest, err := atxs.LatestEpoch(db)
 			require.NoError(t, err)
 			require.EqualValues(t, tc.expect, latest)
+
+			require.NoError(t, atxs.IterateAtxGRPC(
+				db,
+				&spacemeshv1.ActivationStreamRequest{StartEpoch: 7, EndEpoch: 7},
+				func(asr *spacemeshv1.ActivationStreamResponse) bool {
+					fmt.Println(asr)
+					return true
+				},
+			))
 		})
 	}
 }

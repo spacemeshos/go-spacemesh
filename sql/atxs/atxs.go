@@ -476,13 +476,18 @@ func IterateAtxGRPC(
 	filter *spacemeshv1.ActivationStreamRequest,
 	fn func(*spacemeshv1.ActivationStreamResponse) bool,
 ) error {
+	full := fullQuery
 	query := queryFrom(filter)
+	if query != "" {
+		full += " where " + query
+	}
+	full += " order by epoch asc"
 	bindings, err := bindingsFrom(filter)
 	if err != nil {
 		return err
 	}
 	var derr error
-	_, err = db.Exec(query, bindings,
+	_, err = db.Exec(full, bindings,
 		decoder(func(atx *types.VerifiedActivationTx, err error) bool {
 			if atx != nil {
 				v1 := &spacemeshv1.ActivationV1{
@@ -512,26 +517,31 @@ func IterateAtxGRPC(
 // queryFrom and bindingsFrom should decode fields in the same order.
 
 func queryFrom(filter *spacemeshv1.ActivationStreamRequest) string {
-	query := fullQuery
-	if filter != nil {
+	query := ""
+	if filter == nil {
 		return query
 	}
 	i := 1
-	if filter.Epochs != nil {
-		query += fmt.Sprintf(" where epoch between ?%d and ?%d", i, i+1)
+	and := ""
+	if filter.StartEpoch != 0 || filter.EndEpoch != 0 {
+		query += fmt.Sprintf(" epoch between ?%d and ?%d", i, i+1)
+		and = "and"
 		i += 2
 	}
-	if filter.Id != nil {
-		query += fmt.Sprintf(" and id = ?%d", i)
+	if len(filter.Id) != 0 {
+		query += fmt.Sprintf(" %s id = ?%d", and, i)
 		i++
+		and = "and"
 	}
-	if filter.NodeId != nil {
-		query += fmt.Sprintf(" and pubkey = ?%d", i)
+	if len(filter.NodeId) != 0 {
+		query += fmt.Sprintf(" %s pubkey = ?%d", and, i)
 		i++
+		and = "and"
 	}
-	if filter.Coinbase != nil {
-		query += fmt.Sprintf(" and coinbase = ?%d", i)
+	if len(filter.Coinbase) != 0 {
+		query += fmt.Sprintf(" %s coinbase = ?%d", and, i)
 		i++
+		and = "and"
 	}
 	return query
 }
@@ -541,8 +551,8 @@ func bindingsFrom(filter *spacemeshv1.ActivationStreamRequest) (sql.Encoder, err
 		return nil, nil
 	}
 	var coinbase *types.Address
-	if filter.Coinbase != nil {
-		address, err := types.StringToAddress(filter.Coinbase.Coinbase)
+	if len(filter.Coinbase) != 0 {
+		address, err := types.StringToAddress(filter.Coinbase)
 		if err != nil {
 			return nil, fmt.Errorf("invalid coinbase address: %w", err)
 		}
@@ -550,17 +560,18 @@ func bindingsFrom(filter *spacemeshv1.ActivationStreamRequest) (sql.Encoder, err
 	}
 	i := 1
 	return func(stmt *sql.Statement) {
-		if filter.Epochs != nil {
-			stmt.BindInt64(i, int64(filter.Epochs.StartEpoch))
-			stmt.BindInt64(i+1, int64(filter.Epochs.EndEpoch))
-			i += 2
-		}
-		if filter.Id != nil {
-			stmt.BindBytes(i, filter.Id.Id)
+		if filter.StartEpoch != 0 || filter.EndEpoch != 0 {
+			stmt.BindInt64(i, int64(filter.StartEpoch))
+			i++
+			stmt.BindInt64(i, int64(filter.EndEpoch))
 			i++
 		}
-		if filter.NodeId != nil {
-			stmt.BindBytes(i, filter.NodeId.NodeId)
+		if len(filter.Id) != 0 {
+			stmt.BindBytes(i, filter.Id)
+			i++
+		}
+		if len(filter.NodeId) != 0 {
+			stmt.BindBytes(i, filter.NodeId)
 			i++
 		}
 		if coinbase != nil {
