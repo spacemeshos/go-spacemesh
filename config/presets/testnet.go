@@ -48,7 +48,6 @@ func testnet() config.Config {
 	}
 	hare3conf := hare3.DefaultConfig()
 	hare3conf.Enable = true
-	hare3conf.EnableLayer = 7366
 	// NOTE(dshulyak) i forgot to set protocol name for testnet when we configured it manually.
 	// we can't do rolling upgrade if protocol name changes, so lets keep it like that temporarily.
 	hare3conf.ProtocolName = ""
@@ -60,6 +59,7 @@ func testnet() config.Config {
 			MetricsPort:                  1010,
 			DatabaseConnections:          16,
 			DatabaseSizeMeteringInterval: 10 * time.Minute,
+			DatabasePruneInterval:        60 * time.Minute,
 			NetworkHRP:                   "stest",
 
 			LayerDuration:  5 * time.Minute,
@@ -82,13 +82,13 @@ func testnet() config.Config {
 		Tortoise: tortoise.Config{
 			Hdist:                    10,
 			Zdist:                    2,
-			WindowSize:               10000,
+			WindowSize:               400,
 			MaxExceptions:            1000,
 			BadBeaconVoteDelayLayers: 4032,
 			MinimalActiveSetWeight:   []types.EpochMinimalActiveWeight{{Weight: 10_000}},
 		},
 		HARE: hareConfig.Config{
-			Disable:         hare3conf.EnableLayer,
+			Disable:         1,
 			N:               200,
 			ExpectedLeaders: 5,
 			RoundDuration:   25 * time.Second,
@@ -127,7 +127,7 @@ func testnet() config.Config {
 			LabelsPerUnit: 1024,
 			K1:            26,
 			K2:            37,
-			K3:            37,
+			K3:            1,
 			PowDifficulty: activation.DefaultPostConfig().PowDifficulty,
 		},
 		Bootstrap: bootstrap.Config{
