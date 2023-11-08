@@ -148,20 +148,18 @@ func checkProjection(t *testing.T, c *Cache, addr types.Address, nonce, balance 
 
 func createState(tb testing.TB, numAccounts int) map[types.Address]*testAcct {
 	tb.Helper()
+	const maxBalance = 100_000_000
 	const minBalance = 1_000_000
 	accounts := make(map[types.Address]*testAcct)
 	for i := 0; i < numAccounts; i++ {
 		signer, err := signing.NewEdSigner()
 		require.NoError(tb, err)
 		principal := types.GenerateAddress(signer.PublicKey().Bytes())
-		bal := uint64(rand.Int63n(100_000_000))
-		if bal < minBalance {
-			bal = minBalance
-		}
+		bal := rand.Uint64()%(maxBalance-minBalance) + minBalance
 		accounts[principal] = &testAcct{
 			signer:    signer,
 			principal: principal,
-			nonce:     uint64(rand.Int63n(1000)),
+			nonce:     rand.Uint64()%1000 + 1,
 			balance:   bal,
 		}
 	}
@@ -674,7 +672,7 @@ func TestCache_Account_Add_NonceTooSmall(t *testing.T) {
 	buildSingleAccountCache(t, tc, ta, nil)
 
 	tx := newTx(t, ta.nonce-1, defaultAmount, defaultFee, ta.signer)
-	require.ErrorIsf(t, tc.Add(context.Background(), tc.db, tx, time.Now(), false), errBadNonce, "tx: %v", tx)
+	require.ErrorIs(t, tc.Add(context.Background(), tc.db, tx, time.Now(), false), errBadNonce)
 	checkNoTX(t, tc.Cache, tx.ID)
 	checkProjection(t, tc.Cache, ta.principal, ta.nonce, ta.balance)
 	checkMempool(t, tc.Cache, nil)
@@ -1015,7 +1013,7 @@ func TestCache_BuildFromScratch(t *testing.T) {
 	mtxs := make(map[types.Address][]*types.MeshTransaction)
 	totalNumTXs := 0
 	for principal, ta := range accounts {
-		numTXs := uint64(rand.Intn(100))
+		numTXs := rand.Uint64() % 100
 		if numTXs == 0 {
 			continue
 		}
@@ -1058,12 +1056,12 @@ func buildSmallCache(
 	t *testing.T,
 	tc *testCache,
 	accounts map[types.Address]*testAcct,
-	maxTX int,
+	maxTX uint64,
 ) map[types.Address][]*types.MeshTransaction {
 	t.Helper()
 	mtxsByAccount := make(map[types.Address][]*types.MeshTransaction)
 	for principal, ta := range accounts {
-		numTXs := uint64(rand.Intn(maxTX))
+		numTXs := rand.Uint64() % maxTX
 		if numTXs == 0 {
 			continue
 		}
