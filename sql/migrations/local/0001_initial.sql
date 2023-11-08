@@ -18,5 +18,7 @@ CREATE TABLE initial_post
     post_indices  VARCHAR NOT NULL,
     post_pow      UNSIGNED LONG INT NOT NULL,
 
-    commit_atx    CHAR(32)
+    num_units     UNSIGNED INT NOT NULL,
+    commit_atx    CHAR(32) NOT NULL,
+    vrf_nonce     UNSIGNED LONG INT NOT NULL
 ) WITHOUT ROWID;
