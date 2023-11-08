@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/assert"
@@ -1087,6 +1088,17 @@ func TestBuilder_SignAtx(t *testing.T) {
 }
 
 func TestBuilder_RetryPublishActivationTx(t *testing.T) {
+	events.InitializeReporter()
+	sub, err := events.SubscribeMatched(func(t *events.UserEvent) bool {
+		switch t.Event.Details.(type) {
+		case (*pb.Event_AtxPublished):
+			return true
+		default:
+			return false
+		}
+	}, events.WithBuffer(100))
+	require.NoError(t, err)
+
 	retryInterval := 50 * time.Microsecond
 	tab := newTestBuilder(
 		t,
@@ -1163,43 +1175,37 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 			atx.SetReceived(time.Now().Local())
 			require.NoError(t, atx.Initialize())
 
-			// advance time to the next epoch to trigger the context timeout
+			// advance time to the next epoch
 			currLayer = currLayer.Add(layersPerEpoch)
 			return nil
 		},
 	)
 
-	events.InitializeReporter()
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	var eg errgroup.Group
 	eg.Go(func() error {
 		tab.run(ctx)
 		return nil
 	})
-	t.Cleanup(func() {
-		cancel()
-		assert.NoError(t, eg.Wait())
-	})
+	t.Cleanup(func() { assert.NoError(t, eg.Wait()) })
 
 	select {
 	case <-builderConfirmation:
-		cancel()
 	case <-time.After(5 * time.Second):
 		require.FailNowf(t, "failed waiting for required number of tries", "only tried %d times", tries)
 	}
 
-	// state is cleaned up
-	sub, _, err := events.SubscribeUserEvents()
-	require.NoError(t, err)
-
 	select {
 	case ev := <-sub.Out():
+		cancel()
 		atxEvent := ev.Event.GetAtxPublished()
 		require.Equal(t, atx.ID(), types.BytesToATXID(atxEvent.GetId()))
 	case <-time.After(5 * time.Second):
 		require.FailNow(t, "timed out waiting for activation event")
 	}
 
+	// state is cleaned up
 	_, _, err = nipost.InitialPost(tab.localDB, tab.sig.NodeID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
