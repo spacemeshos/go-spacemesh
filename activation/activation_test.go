@@ -767,15 +767,13 @@ func TestBuilder_PublishActivationTx_NoPrevATX_PublishFails_InitialPost_preserve
 			genesis := time.Now().Add(-time.Duration(currLayer) * layerDuration)
 			return genesis.Add(layerDuration * time.Duration(got))
 		}).AnyTimes()
-	builderConfirmation := make(chan struct{})
 	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, challenge *types.NIPostChallenge) (*types.NIPost, error) {
-			close(builderConfirmation)
 			return nil, ErrATXChallengeExpired
 		},
 	)
+	ch := make(chan struct{})
 	tab.mclock.EXPECT().AwaitLayer(currLayer.Add(1)).Do(func(got types.LayerID) <-chan struct{} {
-		ch := make(chan struct{})
 		close(ch)
 		return ch
 	})
@@ -792,7 +790,7 @@ func TestBuilder_PublishActivationTx_NoPrevATX_PublishFails_InitialPost_preserve
 	})
 
 	select {
-	case <-builderConfirmation:
+	case <-ch:
 	case <-time.After(10 * time.Second):
 		require.FailNow(t, "timed out waiting for builder to publish ATX")
 	}
