@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
@@ -1155,14 +1156,20 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 		LabelsPerUnit: DefaultPostConfig().LabelsPerUnit,
 	}, nil).AnyTimes()
 
-	publishConfirmation := make(chan struct{})
+	var atx types.ActivationTx
 	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
-		func(_ context.Context, _ string, got []byte) error {
-			close(publishConfirmation)
+		func(ctx context.Context, s string, b []byte) error {
+			require.NoError(t, codec.Decode(b, &atx))
+			atx.SetReceived(time.Now().Local())
+			require.NoError(t, atx.Initialize())
+
+			// advance time to the next epoch to trigger the context timeout
+			currLayer = currLayer.Add(layersPerEpoch)
 			return nil
 		},
 	)
 
+	events.InitializeReporter()
 	ctx, cancel := context.WithCancel(context.Background())
 	var eg errgroup.Group
 	eg.Go(func() error {
@@ -1176,15 +1183,21 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 
 	select {
 	case <-builderConfirmation:
+		cancel()
 	case <-time.After(5 * time.Second):
 		require.FailNowf(t, "failed waiting for required number of tries", "only tried %d times", tries)
 	}
 
 	// state is cleaned up
+	sub, _, err := events.SubscribeUserEvents()
+	require.NoError(t, err)
+
 	select {
-	case <-publishConfirmation:
+	case ev := <-sub.Out():
+		atxEvent := ev.Event.GetAtxPublished()
+		require.Equal(t, atx.ID(), types.BytesToATXID(atxEvent.GetId()))
 	case <-time.After(5 * time.Second):
-		require.FailNow(t, "timed out waiting for builder to publish ATX")
+		require.FailNow(t, "timed out waiting for activation event")
 	}
 
 	_, _, err = nipost.InitialPost(tab.localDB, tab.sig.NodeID())
