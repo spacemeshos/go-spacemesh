@@ -431,6 +431,9 @@ func (t *tester) rewards(all ...reward) []types.CoinbaseReward {
 		rat := new(big.Rat).SetFloat64(rew.share)
 		rst = append(rst, types.CoinbaseReward{
 			Coinbase: t.accounts[rew.address].getAddress(),
+			// there can be many rewards per coinbase in the same layer,
+			// but each must have a distinct smesherID.
+			SmesherID: types.RandomNodeID(),
 			Weight: types.RatNum{
 				Num:   rat.Num().Uint64(),
 				Denom: rat.Denom().Uint64(),
