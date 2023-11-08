@@ -168,12 +168,12 @@ func createState(tb testing.TB, numAccounts int) map[types.Address]*testAcct {
 	return accounts
 }
 
-func createCache(t *testing.T, numAccounts int) (*testCache, map[types.Address]*testAcct) {
-	t.Helper()
-	accounts := createState(t, numAccounts)
+func createCache(tb testing.TB, numAccounts int) (*testCache, map[types.Address]*testAcct) {
+	tb.Helper()
+	accounts := createState(tb, numAccounts)
 	db := sql.InMemory()
 	return &testCache{
-		Cache: NewCache(getStateFunc(accounts), logtest.New(t)),
+		Cache: NewCache(getStateFunc(accounts), logtest.New(tb)),
 		db:    db,
 	}, accounts
 }
@@ -183,7 +183,7 @@ func createSingleAccountTestCache(tb testing.TB) (*testCache, *testAcct) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(tb, err)
 	principal := types.GenerateAddress(signer.PublicKey().Bytes())
-	ta := &testAcct{signer: signer, principal: principal, nonce: uint64(rand.Int63n(1000)), balance: defaultBalance}
+	ta := &testAcct{signer: signer, principal: principal, nonce: rand.Uint64()%1000 + 1, balance: defaultBalance}
 	states := map[types.Address]*testAcct{principal: ta}
 	db := sql.InMemory()
 	return &testCache{
@@ -674,7 +674,7 @@ func TestCache_Account_Add_NonceTooSmall(t *testing.T) {
 	buildSingleAccountCache(t, tc, ta, nil)
 
 	tx := newTx(t, ta.nonce-1, defaultAmount, defaultFee, ta.signer)
-	require.ErrorIs(t, tc.Add(context.Background(), tc.db, tx, time.Now(), false), errBadNonce)
+	require.ErrorIsf(t, tc.Add(context.Background(), tc.db, tx, time.Now(), false), errBadNonce, "tx: %v", tx)
 	checkNoTX(t, tc.Cache, tx.ID)
 	checkProjection(t, tc.Cache, ta.principal, ta.nonce, ta.balance)
 	checkMempool(t, tc.Cache, nil)
