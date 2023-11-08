@@ -17,7 +17,6 @@ import (
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/natefinch/atomic"
 	"github.com/sourcegraph/conc/iter"
-	"github.com/spacemeshos/post/shared"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
@@ -178,15 +177,22 @@ type CertifierClient struct {
 	client   *retryablehttp.Client
 	post     *types.Post
 	postInfo *types.PostInfo
+	postCh   []byte
 	logger   *zap.Logger
 }
 
-func NewCertifierClient(logger *zap.Logger, post *types.Post, postInfo *types.PostInfo) *CertifierClient {
+func NewCertifierClient(
+	logger *zap.Logger,
+	post *types.Post,
+	postInfo *types.PostInfo,
+	postCh []byte,
+) *CertifierClient {
 	c := &CertifierClient{
 		client:   retryablehttp.NewClient(),
 		logger:   logger,
 		post:     post,
 		postInfo: postInfo,
+		postCh:   postCh,
 	}
 	c.client.Logger = &retryableHttpLogger{logger}
 	c.client.ResponseLogHook = func(logger retryablehttp.Logger, resp *http.Response) {
@@ -208,7 +214,7 @@ func (c *CertifierClient) Certify(ctx context.Context, url *url.URL, pubkey []by
 			CommitmentAtxId: c.postInfo.CommitmentATX[:],
 			LabelsPerUnit:   c.postInfo.LabelsPerUnit,
 			NumUnits:        c.postInfo.NumUnits,
-			Challenge:       shared.ZeroChallenge,
+			Challenge:       c.postCh,
 		},
 	}
 

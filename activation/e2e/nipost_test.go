@@ -200,7 +200,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	certifierClient := activation.NewCertifierClient(zaptest.NewLogger(t), post, info)
+	certifierClient := activation.NewCertifierClient(zaptest.NewLogger(t), post, info, shared.ZeroChallenge)
 	certifier := activation.NewCertifier(t.TempDir(), logger, certifierClient)
 	certifier.CertifyAll(context.Background(), []activation.PoetClient{client})
 

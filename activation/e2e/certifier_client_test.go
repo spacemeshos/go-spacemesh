@@ -92,7 +92,7 @@ func TestCertification(t *testing.T) {
 	require.NoError(t, err)
 	poets = append(poets, client)
 
-	certifierClient := activation.NewCertifierClient(zaptest.NewLogger(t), post, info)
+	certifierClient := activation.NewCertifierClient(zaptest.NewLogger(t), post, info, shared.ZeroChallenge)
 	certifier := activation.NewCertifier(t.TempDir(), zaptest.NewLogger(t), certifierClient)
 	certs := certifier.CertifyAll(context.Background(), poets)
 	require.Len(t, certs, 3)

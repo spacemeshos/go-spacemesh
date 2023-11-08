@@ -109,7 +109,7 @@ func TestValidator_Validate(t *testing.T) {
 	}
 	challengeHash := challenge.Hash()
 
-	certifierClient := activation.NewCertifierClient(zaptest.NewLogger(t), post, info)
+	certifierClient := activation.NewCertifierClient(zaptest.NewLogger(t), post, info, shared.ZeroChallenge)
 	certifier := activation.NewCertifier(t.TempDir(), logger, certifierClient)
 	nipost, err := nb.BuildNIPost(context.Background(), &challenge, certifier)
 	require.NoError(t, err)

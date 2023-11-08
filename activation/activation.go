@@ -392,17 +392,17 @@ func (b *Builder) buildInitialPost(ctx context.Context) error {
 //
 // New nodes should call it after the initial POST is created.
 func (b *Builder) certifyPost(ctx context.Context) {
-	post, meta, err := b.obtainPostForCertification()
+	post, meta, ch, err := b.obtainPostForCertification()
 	if err != nil {
 		b.log.With().Error("failed to obtain post for certification", zap.Error(err))
 	}
 
-	client := NewCertifierClient(b.log, post, meta)
+	client := NewCertifierClient(b.log, post, meta, ch)
 	b.certifier = NewCertifier(b.nipostBuilder.DataDir(), b.log, client)
 	b.certifier.CertifyAll(ctx, b.poets)
 }
 
-func (b *Builder) obtainPostForCertification() (*types.Post, *types.PostInfo, error) {
+func (b *Builder) obtainPostForCertification() (*types.Post, *types.PostInfo, []byte, error) {
 	var (
 		post *types.Post
 		meta *types.PostInfo
@@ -413,27 +413,27 @@ func (b *Builder) obtainPostForCertification() (*types.Post, *types.PostInfo, er
 	case err == nil:
 		b.log.Info("certifying using the initial post")
 		// TODO fix metadata
-		return post, nil, nil
+		return post, nil, shared.ZeroChallenge, nil
 	case errors.Is(err, sql.ErrNotFound):
 		// no initial post
 	default:
-		return nil, nil, fmt.Errorf("loading initial post from db: %w", err)
+		return nil, nil, nil, fmt.Errorf("loading initial post from db: %w", err)
 	}
 
 	b.log.Info("certifying using an existing ATX")
 	atxid, err := atxs.GetFirstIDByNodeID(b.cdb, b.SmesherID())
 	if err != nil {
-		return nil, nil, fmt.Errorf("cannot certify - no existing ATX found: %w", err)
+		return nil, nil, nil, fmt.Errorf("cannot certify - no existing ATX found: %w", err)
 	}
 	atx, err := b.cdb.GetFullAtx(atxid)
 	if err != nil {
-		return nil, nil, fmt.Errorf("cannot certify - failed to retrieve ATX: %w", err)
+		return nil, nil, nil, fmt.Errorf("cannot certify - failed to retrieve ATX: %w", err)
 	}
 	var commitmentAtx *types.ATXID
 	if commitmentAtx = atx.CommitmentATX; commitmentAtx == nil {
 		atx, err := atxs.CommitmentATX(b.cdb, b.SmesherID())
 		if err != nil {
-			return nil, nil, fmt.Errorf("cannot determine own commitment ATX: %w", err)
+			return nil, nil, nil, fmt.Errorf("cannot determine own commitment ATX: %w", err)
 		}
 		commitmentAtx = &atx
 	}
@@ -446,7 +446,7 @@ func (b *Builder) obtainPostForCertification() (*types.Post, *types.PostInfo, er
 		LabelsPerUnit: atx.NIPost.PostMetadata.LabelsPerUnit,
 	}
 
-	return post, meta, nil
+	return post, meta, atx.NIPost.PostMetadata.Challenge, nil
 }
 
 func (b *Builder) run(ctx context.Context) {
