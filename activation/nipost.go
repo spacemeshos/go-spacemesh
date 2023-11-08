@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/fs"
 	"math/rand"
 	"slices"
 	"time"
@@ -125,8 +126,11 @@ func NewNIPostBuilder(
 	return b, nil
 }
 
-func (nb *NIPostBuilder) DataDir() string {
-	return nb.dataDir
+func (nb *NIPostBuilder) ResetState() error {
+	if err := discardBuilderState(nb.dataDir); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	return nil
 }
 
 func (nb *NIPostBuilder) proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error) {

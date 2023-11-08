@@ -167,8 +167,7 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 		opts...,
 	)
 	tab.Builder = b
-	dir := tb.TempDir()
-	tab.mnipost.EXPECT().DataDir().Return(dir).AnyTimes()
+	tab.mnipost.EXPECT().ResetState().Return(nil).AnyTimes()
 	return tab
 }
 
@@ -403,8 +402,9 @@ func TestBuilder_StopSmeshing_Delete(t *testing.T) {
 
 	// Create state files
 	// TODO(mafa): fully migrate to DB
-	require.NoError(t, saveBuilderState(tab.nipostBuilder.DataDir(), &types.NIPostBuilderState{}))
-	files, err := os.ReadDir(tab.nipostBuilder.DataDir())
+	dataDir := t.TempDir()
+	require.NoError(t, saveBuilderState(dataDir, &types.NIPostBuilderState{}))
+	files, err := os.ReadDir(dataDir)
 	require.NoError(t, err)
 	require.Len(t, files, 1) // 1 state file created
 
@@ -418,7 +418,7 @@ func TestBuilder_StopSmeshing_Delete(t *testing.T) {
 
 	require.NoError(t, tab.StartSmeshing(types.Address{}))
 	require.NoError(t, tab.StopSmeshing(false))
-	files, err = os.ReadDir(tab.nipostBuilder.DataDir())
+	files, err = os.ReadDir(dataDir)
 	require.NoError(t, err)
 	require.Len(t, files, 1) // state file still present
 
@@ -428,7 +428,7 @@ func TestBuilder_StopSmeshing_Delete(t *testing.T) {
 
 	require.NoError(t, tab.StartSmeshing(types.Address{}))
 	require.NoError(t, tab.StopSmeshing(true))
-	files, err = os.ReadDir(tab.nipostBuilder.DataDir())
+	files, err = os.ReadDir(dataDir)
 	require.NoError(t, err)
 	require.Len(t, files, 0) // state file deleted
 
@@ -438,7 +438,7 @@ func TestBuilder_StopSmeshing_Delete(t *testing.T) {
 
 	require.NoError(t, tab.StartSmeshing(types.Address{}))
 	require.NoError(t, tab.StopSmeshing(true)) // no-op
-	files, err = os.ReadDir(tab.nipostBuilder.DataDir())
+	files, err = os.ReadDir(dataDir)
 	require.NoError(t, err)
 	require.Len(t, files, 0) // state files still deleted
 
@@ -1514,7 +1514,7 @@ func TestBuilder_MigrateDiskToLocalDB(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, challenge)
 	require.Equal(t, ch, challenge)
-	require.NoFileExists(t, filepath.Join(tab.nipostBuilder.DataDir(), challengeFilename))
+	require.NoFileExists(t, filepath.Join(dataDir, challengeFilename))
 
 	require.NoError(t, tab.MigrateDiskToLocalDB(dataDir)) // should not fail if challenge and post are already in db
 

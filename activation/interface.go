@@ -62,7 +62,7 @@ type layerClock interface {
 
 type nipostBuilder interface {
 	BuildNIPost(ctx context.Context, challenge *types.NIPostChallenge) (*types.NIPost, error)
-	DataDir() string
+	ResetState() error
 }
 
 type syncer interface {

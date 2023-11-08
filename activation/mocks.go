@@ -709,40 +709,40 @@ func (c *nipostBuilderBuildNIPostCall) DoAndReturn(f func(context.Context, *type
 	return c
 }
 
-// DataDir mocks base method.
-func (m *MocknipostBuilder) DataDir() string {
+// ResetState mocks base method.
+func (m *MocknipostBuilder) ResetState() error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DataDir")
-	ret0, _ := ret[0].(string)
+	ret := m.ctrl.Call(m, "ResetState")
+	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// DataDir indicates an expected call of DataDir.
-func (mr *MocknipostBuilderMockRecorder) DataDir() *nipostBuilderDataDirCall {
+// ResetState indicates an expected call of ResetState.
+func (mr *MocknipostBuilderMockRecorder) ResetState() *nipostBuilderResetStateCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DataDir", reflect.TypeOf((*MocknipostBuilder)(nil).DataDir))
-	return &nipostBuilderDataDirCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetState", reflect.TypeOf((*MocknipostBuilder)(nil).ResetState))
+	return &nipostBuilderResetStateCall{Call: call}
 }
 
-// nipostBuilderDataDirCall wrap *gomock.Call
-type nipostBuilderDataDirCall struct {
+// nipostBuilderResetStateCall wrap *gomock.Call
+type nipostBuilderResetStateCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *nipostBuilderDataDirCall) Return(arg0 string) *nipostBuilderDataDirCall {
+func (c *nipostBuilderResetStateCall) Return(arg0 error) *nipostBuilderResetStateCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *nipostBuilderDataDirCall) Do(f func() string) *nipostBuilderDataDirCall {
+func (c *nipostBuilderResetStateCall) Do(f func() error) *nipostBuilderResetStateCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *nipostBuilderDataDirCall) DoAndReturn(f func() string) *nipostBuilderDataDirCall {
+func (c *nipostBuilderResetStateCall) DoAndReturn(f func() error) *nipostBuilderResetStateCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
