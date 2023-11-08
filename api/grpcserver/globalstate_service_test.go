@@ -165,6 +165,7 @@ func TestGlobalStateService(t *testing.T) {
 				TotalReward: rewardAmount,
 				LayerReward: rewardAmount,
 				Coinbase:    addr1,
+				SmesherID:   rewardSmesherID,
 			},
 		}, nil)
 		c.conStateAPI.EXPECT().GetBalance(addr1).Return(accountBalance, nil)
@@ -194,6 +195,7 @@ func TestGlobalStateService(t *testing.T) {
 				TotalReward: rewardAmount,
 				LayerReward: rewardAmount,
 				Coinbase:    addr1,
+				SmesherID:   rewardSmesherID,
 			},
 		}, nil)
 		c.conStateAPI.EXPECT().GetBalance(addr1).Return(accountBalance, nil)
