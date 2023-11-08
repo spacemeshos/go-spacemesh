@@ -19,6 +19,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
 
 func TestValidator_Validate(t *testing.T) {
@@ -41,6 +43,7 @@ func TestValidator_Validate(t *testing.T) {
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
 	initPost(t, logger.Named("manager"), mgr, opts)
 
+	genesis := time.Now()
 	epoch := layersPerEpoch * layerDuration
 	poetCfg := activation.PoetConfig{
 		PhaseShift:        epoch / 2,
@@ -52,7 +55,7 @@ func TestValidator_Validate(t *testing.T) {
 	}
 	poetProver := spawnPoet(
 		t,
-		WithGenesis(time.Now()),
+		WithGenesis(genesis),
 		WithEpochDuration(epoch),
 		WithPhaseShift(poetCfg.PhaseShift),
 		WithCycleGap(poetCfg.CycleGap),
@@ -61,8 +64,6 @@ func TestValidator_Validate(t *testing.T) {
 	mclock := activation.NewMocklayerClock(ctrl)
 	mclock.EXPECT().LayerToTime(gomock.Any()).AnyTimes().DoAndReturn(
 		func(got types.LayerID) time.Time {
-			// time.Now() ~= currentLayer
-			genesis := time.Now().Add(-time.Duration(postGenesisEpoch.FirstLayer()) * layerDuration)
 			return genesis.Add(layerDuration * time.Duration(got))
 		},
 	)
@@ -84,11 +85,17 @@ func TestValidator_Validate(t *testing.T) {
 		return err == nil
 	}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
 
+	db := localsql.InMemory()
+	challenge := types.NIPostChallenge{
+		PublishEpoch: postGenesisEpoch + 2,
+	}
+	require.NoError(t, nipost.AddChallenge(db, sig.NodeID(), &challenge))
+
 	nb, err := activation.NewNIPostBuilder(
+		localsql.InMemory(),
 		poetDb,
 		svc,
 		[]string{poetProver.RestURL().String()},
-		t.TempDir(),
 		logger.Named("nipostBuilder"),
 		sig,
 		poetCfg,
@@ -96,16 +103,11 @@ func TestValidator_Validate(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	challenge := types.NIPostChallenge{
-		PublishEpoch: postGenesisEpoch + 2,
-	}
-	challengeHash := challenge.Hash()
-
 	nipost, err := nb.BuildNIPost(context.Background(), &challenge)
 	require.NoError(t, err)
 
 	v := activation.NewValidator(poetDb, cfg, opts.Scrypt, verifier)
-	_, err = v.NIPost(context.Background(), sig.NodeID(), goldenATX, nipost, challengeHash, opts.NumUnits)
+	_, err = v.NIPost(context.Background(), sig.NodeID(), goldenATX, nipost, challenge.Hash(), opts.NumUnits)
 	require.NoError(t, err)
 
 	_, err = v.NIPost(
@@ -120,13 +122,13 @@ func TestValidator_Validate(t *testing.T) {
 
 	newNIPost := *nipost
 	newNIPost.Post = &types.Post{}
-	_, err = v.NIPost(context.Background(), sig.NodeID(), goldenATX, &newNIPost, challengeHash, opts.NumUnits)
+	_, err = v.NIPost(context.Background(), sig.NodeID(), goldenATX, &newNIPost, challenge.Hash(), opts.NumUnits)
 	require.ErrorContains(t, err, "invalid Post")
 
 	newPostCfg := cfg
 	newPostCfg.MinNumUnits = opts.NumUnits + 1
 	v = activation.NewValidator(poetDb, newPostCfg, opts.Scrypt, nil)
-	_, err = v.NIPost(context.Background(), sig.NodeID(), goldenATX, nipost, challengeHash, opts.NumUnits)
+	_, err = v.NIPost(context.Background(), sig.NodeID(), goldenATX, nipost, challenge.Hash(), opts.NumUnits)
 	require.EqualError(
 		t,
 		err,
@@ -136,7 +138,7 @@ func TestValidator_Validate(t *testing.T) {
 	newPostCfg = cfg
 	newPostCfg.MaxNumUnits = opts.NumUnits - 1
 	v = activation.NewValidator(poetDb, newPostCfg, opts.Scrypt, nil)
-	_, err = v.NIPost(context.Background(), sig.NodeID(), goldenATX, nipost, challengeHash, opts.NumUnits)
+	_, err = v.NIPost(context.Background(), sig.NodeID(), goldenATX, nipost, challenge.Hash(), opts.NumUnits)
 	require.EqualError(
 		t,
 		err,
@@ -146,7 +148,7 @@ func TestValidator_Validate(t *testing.T) {
 	newPostCfg = cfg
 	newPostCfg.LabelsPerUnit = nipost.PostMetadata.LabelsPerUnit + 1
 	v = activation.NewValidator(poetDb, newPostCfg, opts.Scrypt, nil)
-	_, err = v.NIPost(context.Background(), sig.NodeID(), goldenATX, nipost, challengeHash, opts.NumUnits)
+	_, err = v.NIPost(context.Background(), sig.NodeID(), goldenATX, nipost, challenge.Hash(), opts.NumUnits)
 	require.EqualError(
 		t,
 		err,

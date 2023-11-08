@@ -940,10 +940,10 @@ func (app *App) initServices(ctx context.Context) error {
 	app.grpcPostService = grpcserver.NewPostService(app.addLogger(PostServiceLogger, lg).Zap())
 
 	nipostBuilder, err := activation.NewNIPostBuilder(
+		app.localDB,
 		poetDb,
 		app.grpcPostService,
 		app.Config.PoETServers,
-		app.Config.SMESHING.Opts.DataDir,
 		app.addLogger(NipostBuilderLogger, lg).Zap(),
 		app.edSgn,
 		app.Config.POET,

@@ -167,7 +167,6 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 		opts...,
 	)
 	tab.Builder = b
-	tab.mnipost.EXPECT().ResetState().Return(nil).AnyTimes()
 	return tab
 }
 
@@ -301,6 +300,7 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 	// calling StartSmeshing more than once before calling StopSmeshing is an error
 	require.ErrorContains(t, tab.StartSmeshing(coinbase), "already started")
 
+	tab.mnipost.EXPECT().ResetState().Return(nil)
 	require.NoError(t, tab.StopSmeshing(true))
 }
 
@@ -342,7 +342,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 				"failed on execution %d",
 				i,
 			)
-			require.NoError(t, builder.StopSmeshing(true))
+			require.NoError(t, builder.StopSmeshing(false))
 			require.Eventually(
 				t,
 				func() bool { return !builder.Smeshing() },
@@ -364,7 +364,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 			eg.Go(func() error {
 				for i := 0; i < 50; i++ {
 					builder.StartSmeshing(types.Address{})
-					builder.StopSmeshing(true)
+					builder.StopSmeshing(false)
 				}
 				return nil
 			})
@@ -400,51 +400,32 @@ func TestBuilder_StopSmeshing_Delete(t *testing.T) {
 		}).
 		AnyTimes()
 
-	// Create state files
-	// TODO(mafa): fully migrate to DB
-	dataDir := t.TempDir()
-	require.NoError(t, saveBuilderState(dataDir, &types.NIPostBuilderState{}))
-	files, err := os.ReadDir(dataDir)
-	require.NoError(t, err)
-	require.Len(t, files, 1) // 1 state file created
-
 	// add challenge to DB
 	refChallenge := &types.NIPostChallenge{
 		PublishEpoch:  postGenesisEpoch + 2,
 		CommitmentATX: &types.ATXID{1, 2, 3},
 	}
-	err = nipost.AddChallenge(tab.localDb, tab.sig.NodeID(), refChallenge)
+	err := nipost.AddChallenge(tab.localDb, tab.sig.NodeID(), refChallenge)
 	require.NoError(t, err)
 
 	require.NoError(t, tab.StartSmeshing(types.Address{}))
 	require.NoError(t, tab.StopSmeshing(false))
-	files, err = os.ReadDir(dataDir)
-	require.NoError(t, err)
-	require.Len(t, files, 1) // state file still present
 
 	challenge, err := nipost.Challenge(tab.localDb, tab.sig.NodeID())
 	require.NoError(t, err)
 	require.Equal(t, refChallenge, challenge) // challenge still present
 
+	tab.mnipost.EXPECT().ResetState().Return(nil)
 	require.NoError(t, tab.StartSmeshing(types.Address{}))
 	require.NoError(t, tab.StopSmeshing(true))
-	files, err = os.ReadDir(dataDir)
-	require.NoError(t, err)
-	require.Len(t, files, 0) // state file deleted
 
 	challenge, err = nipost.Challenge(tab.localDb, tab.sig.NodeID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.Nil(t, challenge) // challenge deleted
 
+	tab.mnipost.EXPECT().ResetState().Return(nil)
 	require.NoError(t, tab.StartSmeshing(types.Address{}))
 	require.NoError(t, tab.StopSmeshing(true)) // no-op
-	files, err = os.ReadDir(dataDir)
-	require.NoError(t, err)
-	require.Len(t, files, 0) // state files still deleted
-
-	challenge, err = nipost.Challenge(tab.localDb, tab.sig.NodeID())
-	require.ErrorIs(t, err, sql.ErrNotFound)
-	require.Nil(t, challenge) // challenge still deleted
 }
 
 func TestBuilder_StopSmeshing_failsWhenNotStarted(t *testing.T) {
@@ -1426,7 +1407,7 @@ func TestBuilder_MovePostToDb(t *testing.T) {
 	require.Equal(t, refPost.Pow, post.Pow)
 	require.Equal(t, refCommitmentATX, post.CommitmentATX)
 	require.Equal(t, types.VRFPostIndex(nonce), post.VRFNonce)
-	require.NoFileExists(t, filepath.Join(tab.nipostBuilder.DataDir(), postFilename))
+	require.NoFileExists(t, filepath.Join(dataDir, postFilename))
 
 	require.NoError(t, tab.movePostToDb(dataDir)) // should not fail if post is already in db
 	post2, err := nipost.InitialPost(tab.localDb, tab.sig.NodeID())
@@ -1508,7 +1489,7 @@ func TestBuilder_MigrateDiskToLocalDB(t *testing.T) {
 	require.Equal(t, refPost.Pow, post.Pow)
 	require.Equal(t, refCommitmentATX, post.CommitmentATX)
 	require.Equal(t, types.VRFPostIndex(nonce), post.VRFNonce)
-	require.NoFileExists(t, filepath.Join(tab.nipostBuilder.DataDir(), postFilename))
+	require.NoFileExists(t, filepath.Join(dataDir, postFilename))
 
 	challenge, err := nipost.Challenge(tab.localDb, tab.sig.NodeID())
 	require.NoError(t, err)

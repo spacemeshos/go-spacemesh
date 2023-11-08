@@ -3,6 +3,7 @@ package nipost
 import (
 	"fmt"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
@@ -33,7 +34,7 @@ func encodeNipostChallenge(nodeID types.NodeID, ch *types.NIPostChallenge) func(
 
 func AddChallenge(db sql.Executor, nodeID types.NodeID, ch *types.NIPostChallenge) error {
 	if _, err := db.Exec(`
-		insert into nipost (id, epoch, sequence, prev_atx, pos_atx, commit_atx,
+		insert into challenge (id, epoch, sequence, prev_atx, pos_atx, commit_atx,
 			post_nonce, post_indices, post_pow)
 		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9);`, encodeNipostChallenge(nodeID, ch), nil,
 	); err != nil {
@@ -44,7 +45,7 @@ func AddChallenge(db sql.Executor, nodeID types.NodeID, ch *types.NIPostChalleng
 
 func UpdateChallenge(db sql.Executor, nodeID types.NodeID, ch *types.NIPostChallenge) error {
 	if _, err := db.Exec(`
-		update nipost set epoch = ?2, sequence = ?3, prev_atx = ?4, pos_atx = ?5,
+		update challenge set epoch = ?2, sequence = ?3, prev_atx = ?4, pos_atx = ?5,
 			commit_atx = ?6, post_nonce = ?7, post_indices = ?8, post_pow = ?9
 		where id = ?1;`, encodeNipostChallenge(nodeID, ch), nil,
 	); err != nil {
@@ -57,7 +58,7 @@ func RemoveChallenge(db sql.Executor, nodeID types.NodeID) error {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, nodeID.Bytes())
 	}
-	if _, err := db.Exec(`delete from nipost where id = ?1;`, enc, nil); err != nil {
+	if _, err := db.Exec(`delete from challenge where id = ?1;`, enc, nil); err != nil {
 		return fmt.Errorf("remove nipost challenge for %s: %w", nodeID, err)
 	}
 	return nil
@@ -91,7 +92,7 @@ func Challenge(db sql.Executor, nodeID types.NodeID) (*types.NIPostChallenge, er
 	if _, err := db.Exec(`
 		select epoch, sequence, prev_atx, pos_atx, commit_atx,
 			post_nonce, post_indices, post_pow
-		from nipost where id = ?1 limit 1;`, enc, dec,
+		from challenge where id = ?1 limit 1;`, enc, dec,
 	); err != nil {
 		return nil, fmt.Errorf("get challenge from node id %s: %w", nodeID.ShortString(), err)
 	}
@@ -99,4 +100,61 @@ func Challenge(db sql.Executor, nodeID types.NodeID) (*types.NIPostChallenge, er
 		return nil, fmt.Errorf("get challenge from node id %s: %w", nodeID.ShortString(), sql.ErrNotFound)
 	}
 	return ch, nil
+}
+
+func UpdatePoetProofRef(
+	db sql.Executor,
+	nodeID types.NodeID,
+	ref types.PoetProofRef,
+	membership *types.MerkleProof,
+) error {
+	buf, err := codec.Encode(membership)
+	if err != nil {
+		return fmt.Errorf("encode: %w", err)
+	}
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, nodeID.Bytes())
+		stmt.BindBytes(2, ref[:])
+		stmt.BindBytes(3, buf)
+	}
+	rows, err := db.Exec(`
+		update challenge set poet_proof_ref = ?2, poet_proof_membership = ?3
+		where id = ?1 returning id;`, enc, nil)
+	if err != nil {
+		return fmt.Errorf("set poet proof ref for node id %s: %w", nodeID.ShortString(), err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("set poet proof ref for node id %s: %w", nodeID.ShortString(), sql.ErrNotFound)
+	}
+	return nil
+}
+
+func PoetProofRef(db sql.Executor, nodeID types.NodeID) (types.PoetProofRef, *types.MerkleProof, error) {
+	var ref types.PoetProofRef
+	var membership *types.MerkleProof
+	var decodeErr error
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, nodeID.Bytes())
+	}
+	dec := func(stmt *sql.Statement) bool {
+		stmt.ColumnBytes(0, ref[:])
+		if stmt.ColumnLen(1) > 0 {
+			membership = &types.MerkleProof{}
+			_, decodeErr = codec.DecodeFrom(stmt.ColumnReader(1), membership)
+		}
+		return true
+	}
+	_, err := db.Exec(`select poet_proof_ref, poet_proof_membership from challenge where id = ?1 limit 1;`, enc, dec)
+	if err != nil {
+		return types.PoetProofRef{}, nil, fmt.Errorf("get poet proof ref from node id %s: %w", nodeID.ShortString(), err)
+	}
+	if membership == nil {
+		return types.PoetProofRef{}, nil,
+			fmt.Errorf("get poet proof ref from node id %s: %w", nodeID.ShortString(), sql.ErrNotFound)
+	}
+	if decodeErr != nil {
+		return types.PoetProofRef{}, nil,
+			fmt.Errorf("decode proof membership for node id %s: %w", nodeID.ShortString(), decodeErr)
+	}
+	return ref, membership, nil
 }

@@ -24,6 +24,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
 
 const (
@@ -134,6 +136,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
 	initPost(t, logger.Named("manager"), mgr, opts)
 
+	genesis := time.Now()
 	epoch := layersPerEpoch * layerDuration
 	poetCfg := activation.PoetConfig{
 		PhaseShift:        epoch / 2,
@@ -145,7 +148,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	}
 	poetProver := spawnPoet(
 		t,
-		WithGenesis(time.Now()),
+		WithGenesis(genesis),
 		WithEpochDuration(epoch),
 		WithPhaseShift(poetCfg.PhaseShift),
 		WithCycleGap(poetCfg.CycleGap),
@@ -154,8 +157,6 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	mclock := activation.NewMocklayerClock(ctrl)
 	mclock.EXPECT().LayerToTime(gomock.Any()).AnyTimes().DoAndReturn(
 		func(got types.LayerID) time.Time {
-			// time.Now() ~= currentLayer
-			genesis := time.Now().Add(-time.Duration(postGenesisEpoch.FirstLayer()) * layerDuration)
 			return genesis.Add(layerDuration * time.Duration(got))
 		},
 	)
@@ -177,21 +178,23 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 		return err == nil
 	}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
 
+	db := localsql.InMemory()
+	challenge := types.NIPostChallenge{
+		PublishEpoch: postGenesisEpoch + 2,
+	}
+	require.NoError(t, nipost.AddChallenge(db, sig.NodeID(), &challenge))
+
 	nb, err := activation.NewNIPostBuilder(
+		db,
 		poetDb,
 		svc,
 		[]string{poetProver.RestURL().String()},
-		t.TempDir(),
 		logger.Named("nipostBuilder"),
 		sig,
 		poetCfg,
 		mclock,
 	)
 	require.NoError(t, err)
-
-	challenge := types.NIPostChallenge{
-		PublishEpoch: postGenesisEpoch + 2,
-	}
 
 	nipost, err := nb.BuildNIPost(context.Background(), &challenge)
 	require.NoError(t, err)
@@ -230,11 +233,16 @@ func TestNIPostBuilder_Close(t *testing.T) {
 
 	svc := grpcserver.NewPostService(logger)
 
+	db := localsql.InMemory()
+	challenge := types.NIPostChallenge{
+		PublishEpoch: postGenesisEpoch + 2,
+	}
+	require.NoError(t, nipost.AddChallenge(db, sig.NodeID(), &challenge))
 	nb, err := activation.NewNIPostBuilder(
+		db,
 		poetDb,
 		svc,
 		[]string{poetProver.RestURL().String()},
-		t.TempDir(),
 		logger.Named("nipostBuilder"),
 		sig,
 		activation.PoetConfig{},
@@ -244,9 +252,6 @@ func TestNIPostBuilder_Close(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	challenge := types.NIPostChallenge{
-		PublishEpoch: postGenesisEpoch + 2,
-	}
 	nipost, err := nb.BuildNIPost(ctx, &challenge)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Nil(t, nipost)
@@ -266,6 +271,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX)
 	require.NoError(t, err)
 
+	genesis := time.Now()
 	epoch := layersPerEpoch * layerDuration
 	poetCfg := activation.PoetConfig{
 		PhaseShift:        epoch / 5,
@@ -277,7 +283,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	}
 	poetProver := spawnPoet(
 		t,
-		WithGenesis(time.Now()),
+		WithGenesis(genesis),
 		WithEpochDuration(epoch),
 		WithPhaseShift(poetCfg.PhaseShift),
 		WithCycleGap(poetCfg.CycleGap),
@@ -286,8 +292,6 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	mclock := activation.NewMocklayerClock(ctrl)
 	mclock.EXPECT().LayerToTime(gomock.Any()).AnyTimes().DoAndReturn(
 		func(got types.LayerID) time.Time {
-			// time.Now() ~= currentLayer
-			genesis := time.Now().Add(-time.Duration(postGenesisEpoch.FirstLayer()) * layerDuration)
 			return genesis.Add(layerDuration * time.Duration(got))
 		},
 	)
@@ -298,11 +302,16 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
+	db := localsql.InMemory()
+	challenge := types.NIPostChallenge{
+		PublishEpoch: postGenesisEpoch + 2,
+	}
+	require.NoError(t, nipost.AddChallenge(db, sig.NodeID(), &challenge))
 	nb, err := activation.NewNIPostBuilder(
+		db,
 		poetDb,
 		svc,
 		[]string{poetProver.RestURL().String()},
-		t.TempDir(),
 		logger.Named("nipostBuilder"),
 		sig,
 		poetCfg,
@@ -320,10 +329,6 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 		_, err := svc.Client(sig.NodeID())
 		return err == nil
 	}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
-
-	challenge := types.NIPostChallenge{
-		PublishEpoch: postGenesisEpoch + 2,
-	}
 
 	nipost, err := nb.BuildNIPost(context.Background(), &challenge)
 	require.NoError(t, err)

@@ -136,15 +136,15 @@ func discardNipostChallenge(dir string) error {
 	return nil
 }
 
-func saveBuilderState(dir string, state *types.NIPostBuilderState) error {
+func saveBuilderState(dir string, state *NIPostBuilderState) error {
 	if err := save(filepath.Join(dir, builderFilename), state); err != nil {
 		return fmt.Errorf("saving builder state: %w", err)
 	}
 	return nil
 }
 
-func loadBuilderState(dir string) (*types.NIPostBuilderState, error) {
-	var state types.NIPostBuilderState
+func loadBuilderState(dir string) (*NIPostBuilderState, error) {
+	var state NIPostBuilderState
 	if err := load(filepath.Join(dir, builderFilename), &state); err != nil {
 		return nil, fmt.Errorf("loading builder state: %w", err)
 	}
