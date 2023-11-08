@@ -106,7 +106,7 @@ func MainnetConfig() Config {
 			MinimalActiveSetWeight: []types.EpochMinimalActiveWeight{
 				{Weight: 1_000_000},
 				// generated using ./cmd/activeset for publish epoch 6
-				// it will be used starting from epoch 10, so that there is plenty of time
+				// it will be used starting from epoch 11, so that there is plenty of time
 				// for participants to update software
 				{Epoch: 11, Weight: 7_879_129_244},
 			},

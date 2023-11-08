@@ -7,7 +7,7 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 ### Upgrade information
 
 Current release is expected to be adopted by majority of the network participants before epoch 11 starts.
-Those that will not update before that epoch risking proposals being rejected.
+Nodes that do not update before epoch 11 risk their proposals being rejected by the rest of the network.
 
 ### Highlights
 
