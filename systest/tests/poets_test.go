@@ -122,55 +122,52 @@ func testPoetDies(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 }
 
 func TestNodesUsingDifferentPoets(t *testing.T) {
-	t.Parallel()
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))
 	if tctx.PoetSize < 2 {
 		t.Skip("Skipping test for using different poets - test configured with less then 2 poets")
 	}
-	logger := tctx.Log.Named("TestNodesUsingDifferentPoets")
 
-	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(10))
-	require.NoError(t, err)
-	logger.Debug("Obtained cluster")
+	cl := cluster.New(tctx, cluster.WithKeys(10))
+	require.NoError(t, cl.AddBootnodes(tctx, 2))
+	require.NoError(t, cl.AddBootstrappers(tctx))
+	require.NoError(t, cl.AddPoets(tctx))
 
-	poetEndpoints := make([]string, 0, tctx.PoetSize)
-	for i := 0; i < tctx.PoetSize; i++ {
-		poetEndpoints = append(poetEndpoints, cluster.MakePoetEndpoint(i))
-	}
-
-	for i := 0; i < cl.Total(); i++ {
-		node := cl.Client(i)
-		endpoint := poetEndpoints[i%len(poetEndpoints)]
-		logger.Debugw("updating node's poet server", "node", node.Name, "poet", endpoint)
-		updated, err := updatePoetServers(tctx, node, []string{endpoint})
+	for i := 0; i < tctx.ClusterSize-2; i++ {
+		poet := cluster.MakePoetEndpoint(i % tctx.PoetSize)
+		tctx.Log.Debugw("adding smesher node", "id", i, "poet", poet)
+		err := cl.AddSmeshers(
+			tctx,
+			1,
+			cluster.NoDefaultPoets(),
+			cluster.WithFlags(cluster.PoetEndpoint(poet)),
+		)
 		require.NoError(t, err)
-		require.True(t, updated)
 	}
+	require.NoError(t, cl.WaitAll(tctx))
 
 	layersCount := uint32(layersToCheck.Get(tctx.Parameters))
 	layersPerEpoch := uint32(testcontext.LayersPerEpoch.Get(tctx.Parameters))
 	first := nextFirstLayer(currentLayer(tctx, t, cl.Client(0)), layersPerEpoch)
 	last := first + layersCount - 1
-	logger.Debugw("watching layers between", "first", first, "last", last)
+	tctx.Log.Debugw("watching layers between", "first", first, "last", last)
 
 	createdch := make(chan *pb.Proposal, cl.Total()*(int(layersCount)))
 
 	eg, ctx := errgroup.WithContext(tctx)
 	for i := 0; i < cl.Total(); i++ {
-		clientId := i
-		client := cl.Client(clientId)
-		logger.Debugw("watching", "client", client.Name, "clientId", clientId)
+		client := cl.Client(i)
+		tctx.Log.Debugw("watching", "client", client.Name)
 		watchProposals(ctx, eg, client, func(proposal *pb.Proposal) (bool, error) {
 			if proposal.Layer.Number < first {
 				return true, nil
 			}
 			if proposal.Layer.Number > last {
-				logger.Debugw("proposal watcher is done", "client", client.Name)
+				tctx.Log.Debugw("proposal watcher is done", "client", client.Name)
 				return false, nil
 			}
 
 			if proposal.Status == pb.Proposal_Created {
-				logger.Debugw("received proposal event",
+				tctx.Log.Debugw("received proposal event",
 					"client", client.Name,
 					"id", hex.EncodeToString(proposal.Smesher.Id),
 					"layer", proposal.Layer.Number,
@@ -198,6 +195,11 @@ func TestNodesUsingDifferentPoets(t *testing.T) {
 	firstEpochWithEligibility := uint32(math.Max(2.0, float64(first/layersPerEpoch)))
 	epochsInTest := last/layersPerEpoch - firstEpochWithEligibility + 1
 	for id, eligibleEpochs := range smeshers {
-		assert.EqualValues(t, epochsInTest, len(eligibleEpochs), fmt.Sprintf("smesher ID: %v, its epochs: %v", hex.EncodeToString([]byte(id)), eligibleEpochs))
+		assert.EqualValues(
+			t,
+			epochsInTest,
+			len(eligibleEpochs),
+			fmt.Sprintf("smesher ID: %v, its epochs: %v", hex.EncodeToString([]byte(id)), eligibleEpochs),
+		)
 	}
 }

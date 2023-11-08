@@ -70,7 +70,15 @@ func (tx *Aggregator) Raw() []byte {
 }
 
 // SelfSpawn returns accumulator for self-spawn transaction.
-func SelfSpawn(ref uint8, pk ed25519.PrivateKey, template types.Address, required uint8, pubs []ed25519.PublicKey, nonce core.Nonce, opts ...sdk.Opt) *Aggregator {
+func SelfSpawn(
+	ref uint8,
+	pk ed25519.PrivateKey,
+	template types.Address,
+	required uint8,
+	pubs []ed25519.PublicKey,
+	nonce core.Nonce,
+	opts ...sdk.Opt,
+) *Aggregator {
 	args := multisig.SpawnArguments{Required: required}
 	args.PublicKeys = make([]core.PublicKey, len(pubs))
 	for i := range pubs {
@@ -81,7 +89,14 @@ func SelfSpawn(ref uint8, pk ed25519.PrivateKey, template types.Address, require
 }
 
 // Spawn returns accumulator for spawn transaction.
-func Spawn(ref uint8, pk ed25519.PrivateKey, principal, template types.Address, args scale.Encodable, nonce core.Nonce, opts ...sdk.Opt) *Aggregator {
+func Spawn(
+	ref uint8,
+	pk ed25519.PrivateKey,
+	principal, template types.Address,
+	args scale.Encodable,
+	nonce core.Nonce,
+	opts ...sdk.Opt,
+) *Aggregator {
 	options := sdk.Defaults()
 	for _, opt := range opts {
 		opt(options)
@@ -101,7 +116,14 @@ func Spawn(ref uint8, pk ed25519.PrivateKey, principal, template types.Address, 
 }
 
 // Spend creates spend transaction.
-func Spend(ref uint8, pk ed25519.PrivateKey, principal, to types.Address, amount uint64, nonce types.Nonce, opts ...sdk.Opt) *Aggregator {
+func Spend(
+	ref uint8,
+	pk ed25519.PrivateKey,
+	principal, to types.Address,
+	amount uint64,
+	nonce types.Nonce,
+	opts ...sdk.Opt,
+) *Aggregator {
 	options := sdk.Defaults()
 	for _, opt := range opts {
 		opt(options)

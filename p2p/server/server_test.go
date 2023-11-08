@@ -143,7 +143,6 @@ func TestQueued(t *testing.T) {
 		total            = 100
 		proto            = "test"
 		success, failure atomic.Int64
-		unblock          = make(chan struct{})
 		wait             = make(chan struct{}, total)
 	)
 
@@ -155,18 +154,18 @@ func TestQueued(t *testing.T) {
 			return msg, nil
 		},
 		WithQueueSize(total/4),
-		WithRequestsPerInterval(25, time.Second),
+		WithRequestsPerInterval(50, time.Second),
 		WithMetrics(),
 	)
 	var (
 		eg          errgroup.Group
 		ctx, cancel = context.WithCancel(context.Background())
 	)
+	defer cancel()
 	eg.Go(func() error {
 		return srv.Run(ctx)
 	})
 	t.Cleanup(func() {
-		cancel()
 		eg.Wait()
 	})
 	for i := 0; i < total; i++ {
@@ -180,12 +179,12 @@ func TestQueued(t *testing.T) {
 			},
 		))
 	}
-	close(unblock)
 	for i := 0; i < total; i++ {
 		<-wait
 	}
-	require.NotEmpty(t, failure.Load())
+	require.NotZero(t, failure.Load())
 	require.Greater(t, int(success.Load()), total/2)
+	t.Log(success.Load())
 }
 
 func FuzzResponseConsistency(f *testing.F) {

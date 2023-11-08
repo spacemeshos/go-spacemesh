@@ -2,9 +2,12 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
-## UNRELEASED
+## 1.3.0
 
 ### Upgrade information
+
+Current release is expected to be adopted by majority of the network participants before epoch 11 starts.
+Nodes that do not update before epoch 11 risk their proposals being rejected by the rest of the network.
 
 ### Highlights
 
@@ -16,14 +19,19 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
   this is hotfix for a bug introduced in v1.2.0. in rare conditions node may loop with the following warning:
 
-  > 2023-10-02T15:28:14.002+0200 WARN fd68b.sync mesh failed to process layer from sync {"node_id": "fd68b9397572556c2f329f3e5af2faf23aef85dbbbb7e38447fae2f4ef38899f", "module": "sync", "sessionId": "29422935-68d6-47d1-87a8-02293aa181f3", "layer_id": 23104, "errmsg": "requested layer 8063 is before evicted 13102", "name": "sync"}
+  > 2023-10-02T15:28:14.002+0200 WARN fd68b.sync mesh failed to process layer from sync {"node_id":
+  "fd68b9397572556c2f329f3e5af2faf23aef85dbbbb7e38447fae2f4ef38899f", "module": "sync", "sessionId":
+  "29422935-68d6-47d1-87a8-02293aa181f3", "layer_id": 23104, "errmsg": "requested layer 8063 is before evicted 13102",
+  "name": "sync"}
 
 * [#5091](https://github.com/spacemeshos/go-spacemesh/pull/5091) Separating PoST from the node into its own service.
-* [#5061](https://github.com/spacemeshos/go-spacemesh/pull/5061) Proof generation is now done via a dedicated service instead of the node.
+* [#5061](https://github.com/spacemeshos/go-spacemesh/pull/5061) Proof generation is now done via a dedicated service
+  instead of the node.
 * [#5154](https://github.com/spacemeshos/go-spacemesh/pull/5154) Enable TLS connections between node and PoST service.
 
-  PoST proofs are now done via a dedicated process / service that the node communicates with via gRPC. Smapp users can continue to smesh as they used to. The node will
-  automatically start the PoST service when it starts and will shut it down when it shuts down.
+  PoST proofs are now done via a dedicated process / service that the node communicates with via gRPC. Smapp users can
+  continue to smesh as they used to. The node will automatically start the PoST service when it starts and will shut it
+  down when it shuts down.
 
 * [#5138](https://github.com/spacemeshos/go-spacemesh/pull/5138) Bump poet to v0.9.7
 
@@ -37,7 +45,8 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
   Bounds the time required to restart a node.
 
-* [#5171](https://github.com/spacemeshos/go-spacemesh/pull/5171) Set minimal active set according to the observed number of atxs.
+* [#5171](https://github.com/spacemeshos/go-spacemesh/pull/5171) Set minimal active set according to the observed number
+  of atxs.
 
   It will prevent ballots that under report observed atxs from spamming the network. It doesn't have impact on rewards.
 
@@ -48,7 +57,7 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
   Pruning will be enabled starting from epoch 8, e.g in epoch 8 we will prune all activesets for epochs 7 and below.
   We should also run an archival node that doesn't prune them. To disable pruning we should configure
-  
+
   ```json
   "main": {
       "prune-activesets-from": 4294967295
@@ -57,10 +66,22 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 * [#5189](https://github.com/spacemeshos/go-spacemesh/pull/5189) Removed deprecated "Best Provider" option for initialization.
 
-  With v1.1.0 (<https://github.com/spacemeshos/go-spacemesh/releases/tag/v1.1.0>) selecting `-1` as `smeshing-opts-provider` has been deprecated. This option has now been removed.
-  Nodes that already finished initialization can leave this setting empty, as it is not required any more to be set when no initialization is performed. For nodes that have not
-  yet created their initial proof the operator has to specify which provider to use. For Smapp users this is done automatically by Smapp, users that do not use Smapp may use
-  `postcli -printProviders` (<https://github.com/spacemeshos/post/releases>) to list their OpenCL providers and associated IDs.
+  With v1.1.0 (<https://github.com/spacemeshos/go-spacemesh/releases/tag/v1.1.0>) selecting `-1` as `smeshing-opts-provider`
+  has been deprecated. This option has now been removed. Nodes that already finished initialization can leave this setting
+  empty, as it is not required any more to be set when no initialization is performed. For nodes that have not yet created
+  their initial proof the operator has to specify which provider to use. For Smapp users this is done automatically by
+  Smapp, users that do not use Smapp may use `postcli -printProviders` (<https://github.com/spacemeshos/post/releases>)
+  to list their OpenCL providers and associated IDs.
+
+* [#5207](https://github.com/spacemeshos/go-spacemesh/pull/5207) Move the NiPoST state of a node into a new node-local database.
+  
+  The node now uses 2 databases: `state.sql` which holds the node's view on the global state of the network and `node_state.sql`
+  which holds ephemeral data of the node.
+
+  With this change `post.bin` and `nipost_challenge.bin` files are no longer used. The node will automatically migrate
+  the data from disk and store it in the database. The migration will take place at the first startup after the upgrade.
+
+* [#5209](https://github.com/spacemeshos/go-spacemesh/pull/5209) Removed API to update poet servers from SmesherService.
 
 ## v1.2.0
 
@@ -88,8 +109,10 @@ Support for old certificate sync protocol is dropped. This update is incompatibl
 
 ### Features
 
-* [#5031](https://github.com/spacemeshos/go-spacemesh/pull/5031) Nodes will also fetch from PoET 112 for round 4 if they were able to register to PoET 110.
-* [#5067](https://github.com/spacemeshos/go-spacemesh/pull/5067) dbstat virtual table can be read periodically to collect table/index sizes.
+* [#5031](https://github.com/spacemeshos/go-spacemesh/pull/5031) Nodes will also fetch from PoET 112 for round 4 if they
+  were able to register to PoET 110.
+* [#5067](https://github.com/spacemeshos/go-spacemesh/pull/5067) dbstat virtual table can be read periodically to collect
+  table/index sizes.
 
 In order to enable provide following configuration:
 
@@ -106,7 +129,8 @@ In order to enable provide following configuration:
 * [#5021](https://github.com/spacemeshos/go-spacemesh/pull/5021) Drop support for old certificate sync protocol.
 * [#5024](https://github.com/spacemeshos/go-spacemesh/pull/5024) Active set will be saved in state separately from ballots.
 * [#5032](https://github.com/spacemeshos/go-spacemesh/pull/5032) Ativeset data pruned from ballots.
-* [#5035](https://github.com/spacemeshos/go-spacemesh/pull/5035) Fix possible nil pointer panic when node fails to persist nipost builder state.
+* [#5035](https://github.com/spacemeshos/go-spacemesh/pull/5035) Fix possible nil pointer panic when node fails to persist
+  nipost builder state.
 * [#5079](https://github.com/spacemeshos/go-spacemesh/pull/5079) increase atx cache to 50 000 to reduce disk reads.
 * [#5083](https://github.com/spacemeshos/go-spacemesh/pull/5083) Disable beacon protocol temporarily.
 
@@ -121,7 +145,8 @@ active set will not be gossipped together with proposals. That was the main netw
 
 ### Features
 
-* [#4969](https://github.com/spacemeshos/go-spacemesh/pull/4969) Nodes will also fetch from PoET 111 for round 3 if they were able to register to PoET 110.
+* [#4969](https://github.com/spacemeshos/go-spacemesh/pull/4969) Nodes will also fetch from PoET 111 for round 3 if they
+  were able to register to PoET 110.
 
 ### Improvements
 
@@ -130,7 +155,8 @@ active set will not be gossipped together with proposals. That was the main netw
   * `postdata_metadata.json` is now updated atomically to prevent corruption of the file.
 * [#4956](https://github.com/spacemeshos/go-spacemesh/pull/4956) Active set is will not be gossipped in every proposal.
   Active set usually contains list of atxs that targets current epoch. As the number of atxs grows this object grows as well.
-* [#4993](https://github.com/spacemeshos/go-spacemesh/pull/4993) Drop proposals after generating a block. This limits growth of the state.
+* [#4993](https://github.com/spacemeshos/go-spacemesh/pull/4993) Drop proposals after generating a block. This limits
+  growth of the state.
 
 ## v1.1.4
 
@@ -151,9 +177,11 @@ to set lower expected latency in the network, eventually reducing layer time.
 * [#4879](https://github.com/spacemeshos/go-spacemesh/pull/4879) Makes majority calculation weighted for optimistic filtering.
 The network will start using the new algorithm at layer 18_000 (2023-09-14 20:00:00 +0000 UTC)
 * [#4923](https://github.com/spacemeshos/go-spacemesh/pull/4923) Faster ballot eligibility validation. Improves sync speed.
-* [#4934](https://github.com/spacemeshos/go-spacemesh/pull/4934) Ensure state is synced before participating in tortoise consensus.
+* [#4934](https://github.com/spacemeshos/go-spacemesh/pull/4934) Ensure state is synced before participating in tortoise
+  consensus.
 * [#4939](https://github.com/spacemeshos/go-spacemesh/pull/4939) Make sure to fetch data from peers that are already connected.
-* [#4936](https://github.com/spacemeshos/go-spacemesh/pull/4936) Use correct hare active set after node was synced. Otherwise applied layer may lag slightly behind the rest.
+* [#4936](https://github.com/spacemeshos/go-spacemesh/pull/4936) Use correct hare active set after node was synced.
+  Otherwise applied layer may lag slightly behind the rest.
 
 ## v1.1.2
 
@@ -218,5 +246,6 @@ Doesn't affect direct peers. In order to disable:
 
 * [#4882](https://github.com/spacemeshos/go-spacemesh/pull/4882) Increase cache size and parametrize datastore.
 * [#4887](https://github.com/spacemeshos/go-spacemesh/pull/4887) Fixed crashes on API call.
-* [#4871](https://github.com/spacemeshos/go-spacemesh/pull/4871) Add jitter to spread out requests to get poet proof and submit challenge
+* [#4871](https://github.com/spacemeshos/go-spacemesh/pull/4871) Add jitter to spread out requests to get poet proof and
+  submit challenge
 * [#4988](https://github.com/spacemeshos/go-spacemesh/pull/4988) Improve logging around communication with PoET services

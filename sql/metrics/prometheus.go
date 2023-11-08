@@ -33,7 +33,12 @@ type DBMetricsCollector struct {
 }
 
 // NewDBMetricsCollector creates new DBMetricsCollector.
-func NewDBMetricsCollector(ctx context.Context, db *sql.Database, logger log.Logger, checkInterval time.Duration) *DBMetricsCollector {
+func NewDBMetricsCollector(
+	ctx context.Context,
+	db *sql.Database,
+	logger log.Logger,
+	checkInterval time.Duration,
+) *DBMetricsCollector {
 	ctx, cancel := context.WithCancel(ctx)
 	collector := &DBMetricsCollector{
 		checkInterval: checkInterval,
@@ -94,10 +99,14 @@ func (d *DBMetricsCollector) CollectMetrics(ctx context.Context) {
 
 func (d *DBMetricsCollector) collect() error {
 	sizes := make(map[string]int64, 30)
-	_, err := d.db.Exec("SELECT name, sum(pgsize) as sum FROM dbstat GROUP BY name", nil, func(stmt *sql.Statement) bool {
-		sizes[stmt.ColumnText(0)] = stmt.ColumnInt64(1)
-		return true
-	})
+	_, err := d.db.Exec(
+		"SELECT name, sum(pgsize) as sum FROM dbstat GROUP BY name",
+		nil,
+		func(stmt *sql.Statement) bool {
+			sizes[stmt.ColumnText(0)] = stmt.ColumnInt64(1)
+			return true
+		},
+	)
 	if err != nil {
 		return fmt.Errorf("error execute stat metrics: %w", err)
 	}

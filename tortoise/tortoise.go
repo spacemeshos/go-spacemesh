@@ -765,7 +765,8 @@ func (t *turtle) decodeBallot(ballot *types.BallotTortoiseData) (*ballotInfo, ty
 		}
 		binfo.votes = votes
 		if min <= t.evicted {
-			verr = errors.Join(verr, fmt.Errorf("%w: layer (%d) outside the window (evicted %d)", errEvictedBlocks, min, t.evicted))
+			err := fmt.Errorf("%w: layer (%d) outside the window (evicted %d)", errEvictedBlocks, min, t.evicted)
+			verr = errors.Join(verr, err)
 		}
 	}
 	t.logger.Debug("decoded exceptions",

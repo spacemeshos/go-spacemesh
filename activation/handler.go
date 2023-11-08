@@ -156,10 +156,14 @@ func (h *Handler) SyntacticallyValidate(ctx context.Context, atx *types.Activati
 		// as expected from the initial Post.
 		initialPostMetadata := *atx.NIPost.PostMetadata
 		initialPostMetadata.Challenge = shared.ZeroChallenge
-		if err := h.nipostValidator.VRFNonce(atx.SmesherID, *atx.CommitmentATX, atx.VRFNonce, &initialPostMetadata, atx.NumUnits); err != nil {
+		if err := h.nipostValidator.VRFNonce(
+			atx.SmesherID, *atx.CommitmentATX, atx.VRFNonce, &initialPostMetadata, atx.NumUnits,
+		); err != nil {
 			return fmt.Errorf("invalid vrf nonce: %w", err)
 		}
-		if err := h.nipostValidator.Post(ctx, atx.SmesherID, *atx.CommitmentATX, atx.InitialPost, &initialPostMetadata, atx.NumUnits); err != nil {
+		if err := h.nipostValidator.Post(
+			ctx, atx.SmesherID, *atx.CommitmentATX, atx.InitialPost, &initialPostMetadata, atx.NumUnits,
+		); err != nil {
 			return fmt.Errorf("invalid initial post: %w", err)
 		}
 	default:

@@ -71,7 +71,11 @@ func testWindowCounting(tb testing.TB, maliciousLayers, windowSize int, expected
 		// next N-1 layers are not voting for layer 9 as well
 		sim.WithSequence(maliciousLayers-1, sim.WithEmptyHareOutput(), sim.WithNumBlocks(1)),
 		// starting from this layer ballots will support layer 9
-		sim.WithSequence(1, sim.WithVoteGenerator(skipLayers(maliciousLayers)), sim.WithEmptyHareOutput(), sim.WithNumBlocks(1)),
+		sim.WithSequence(1,
+			sim.WithVoteGenerator(skipLayers(maliciousLayers)),
+			sim.WithEmptyHareOutput(),
+			sim.WithNumBlocks(1),
+		),
 		sim.WithSequence(10, sim.WithEmptyHareOutput(), sim.WithNumBlocks(1)),
 	) {
 		tortoise.TallyVotes(ctx, last)

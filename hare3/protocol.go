@@ -147,7 +147,7 @@ func (p *protocol) commitExists(iter uint8, match types.Hash32) bool {
 	return false
 }
 
-func (p *protocol) execution(out *output, active bool) {
+func (p *protocol) execution(out *output) {
 	// 4.3 Protocol Execution
 	if p.Iter == 0 && p.Round >= softlock && p.Round <= wait2 {
 		// -1 - skipped hardlock round in iter 0
@@ -155,38 +155,43 @@ func (p *protocol) execution(out *output, active bool) {
 		g := grade5 - grade(p.Round-2)
 		p.validValues[g] = p.gossip.thresholdGossip(IterRound{Round: preround})
 	}
-	if p.Round == preround && active {
+	switch p.Round {
+	case preround:
 		out.message = &Message{Body: Body{
 			IterRound: p.IterRound,
 			Value:     Value{Proposals: p.initial},
 		}}
-	} else if p.Round == hardlock && p.Iter > 0 {
-		if p.result != nil {
-			out.terminated = true
-		}
-		ref, values := p.thresholdProposals(IterRound{Iter: p.Iter - 1, Round: notify})
-		if ref != nil && p.result == nil {
-			p.result = ref
-			out.result = values
-			if values == nil {
-				// receiver expects non-nil result
-				out.result = []types.ProposalID{}
+	case hardlock:
+		if p.Iter > 0 {
+			if p.result != nil {
+				out.terminated = true
+			}
+			ref, values := p.thresholdProposals(IterRound{Iter: p.Iter - 1, Round: notify})
+			if ref != nil && p.result == nil {
+				p.result = ref
+				out.result = values
+				if values == nil {
+					// receiver expects non-nil result
+					out.result = []types.ProposalID{}
+				}
+			}
+			if ref, _ := p.thresholdProposals(IterRound{Iter: p.Iter - 1, Round: commit}); ref != nil {
+				p.locked = ref
+				p.hardLocked = true
+			} else {
+				p.locked = nil
+				p.hardLocked = false
 			}
 		}
-		if ref, _ := p.thresholdProposals(IterRound{Iter: p.Iter - 1, Round: commit}); ref != nil {
-			p.locked = ref
-			p.hardLocked = true
-		} else {
-			p.locked = nil
-			p.hardLocked = false
+	case softlock:
+		if p.Iter > 0 && !p.hardLocked {
+			if ref, _ := p.thresholdProposals(IterRound{Iter: p.Iter - 1, Round: commit}); ref != nil {
+				p.locked = ref
+			} else {
+				p.locked = nil
+			}
 		}
-	} else if p.Round == softlock && p.Iter > 0 && !p.hardLocked {
-		if ref, _ := p.thresholdProposals(IterRound{Iter: p.Iter - 1, Round: commit}); ref != nil {
-			p.locked = ref
-		} else {
-			p.locked = nil
-		}
-	} else if p.Round == propose && active {
+	case propose:
 		values := p.validValues[grade4]
 		if p.Iter > 0 {
 			ref, overwrite := p.thresholdProposals(IterRound{Iter: p.Iter - 1, Round: commit})
@@ -198,7 +203,7 @@ func (p *protocol) execution(out *output, active bool) {
 			IterRound: p.IterRound,
 			Value:     Value{Proposals: values},
 		}}
-	} else if p.Round == commit {
+	case commit:
 		// condition (d) is realized by ordering proposals by vrf
 		proposed := p.gossip.gradecast(IterRound{Iter: p.Iter, Round: propose})
 		for _, graded := range proposed {
@@ -208,46 +213,44 @@ func (p *protocol) execution(out *output, active bool) {
 			}
 			p.validProposals[toHash(graded.values)] = graded.values
 		}
-		if active {
-			var ref *types.Hash32
-			if p.hardLocked && p.locked != nil {
-				ref = p.locked
-			} else {
-				for _, graded := range proposed {
-					id := toHash(graded.values)
-					// condition (c)
-					if _, exist := p.validProposals[id]; !exist {
-						continue
-					}
-					// condition (e)
-					if graded.grade != grade2 {
-						continue
-					}
-					// condition (f)
-					if !isSubset(graded.values, p.validValues[grade3]) {
-						continue
-					}
-					// condition (g)
-					if !isSubset(p.validValues[grade5], graded.values) &&
-						!p.commitExists(p.Iter-1, id) {
-						continue
-					}
-					// condition (h)
-					if p.locked != nil && *p.locked != id {
-						continue
-					}
-					ref = &id
-					break
+		var ref *types.Hash32
+		if p.hardLocked && p.locked != nil {
+			ref = p.locked
+		} else {
+			for _, graded := range proposed {
+				id := toHash(graded.values)
+				// condition (c)
+				if _, exist := p.validProposals[id]; !exist {
+					continue
 				}
-			}
-			if ref != nil {
-				out.message = &Message{Body: Body{
-					IterRound: p.IterRound,
-					Value:     Value{Reference: ref},
-				}}
+				// condition (e)
+				if graded.grade != grade2 {
+					continue
+				}
+				// condition (f)
+				if !isSubset(graded.values, p.validValues[grade3]) {
+					continue
+				}
+				// condition (g)
+				if !isSubset(p.validValues[grade5], graded.values) &&
+					!p.commitExists(p.Iter-1, id) {
+					continue
+				}
+				// condition (h)
+				if p.locked != nil && *p.locked != id {
+					continue
+				}
+				ref = &id
+				break
 			}
 		}
-	} else if p.Round == notify && active {
+		if ref != nil {
+			out.message = &Message{Body: Body{
+				IterRound: p.IterRound,
+				Value:     Value{Reference: ref},
+			}}
+		}
+	case notify:
 		ref := p.result
 		if ref == nil {
 			ref, _ = p.thresholdProposals(IterRound{Iter: p.Iter, Round: commit})
@@ -261,12 +264,12 @@ func (p *protocol) execution(out *output, active bool) {
 	}
 }
 
-func (p *protocol) Next(active bool) output {
+func (p *protocol) Next() output {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	out := output{}
-	p.execution(&out, active)
+	p.execution(&out)
 	if p.Round >= softlock && p.coin != nil && !p.coinout {
 		coin := p.coin.LSB() != 0
 		out.coin = &coin

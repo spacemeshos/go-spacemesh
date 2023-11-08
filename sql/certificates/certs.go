@@ -100,26 +100,27 @@ type CertValidity struct {
 
 func Get(db sql.Executor, lid types.LayerID) ([]CertValidity, error) {
 	var result []CertValidity
-	if rows, err := db.Exec("select block, cert, valid from certificates where layer = ?1 order by length(cert) desc;", func(stmt *sql.Statement) {
-		stmt.BindInt64(1, int64(lid))
-	}, func(stmt *sql.Statement) bool {
-		var (
-			cv   CertValidity
-			cert types.Certificate
-		)
-		stmt.ColumnBytes(0, cv.Block[:])
-		if stmt.ColumnLen(1) > 0 {
-			data := make([]byte, stmt.ColumnLen(1))
-			stmt.ColumnBytes(1, data[:])
-			if err := codec.Decode(data, &cert); err != nil {
-				return false
+	if rows, err := db.Exec("select block, cert, valid from certificates where layer = ?1 order by length(cert) desc;",
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(lid))
+		}, func(stmt *sql.Statement) bool {
+			var (
+				cv   CertValidity
+				cert types.Certificate
+			)
+			stmt.ColumnBytes(0, cv.Block[:])
+			if stmt.ColumnLen(1) > 0 {
+				data := make([]byte, stmt.ColumnLen(1))
+				stmt.ColumnBytes(1, data[:])
+				if err := codec.Decode(data, &cert); err != nil {
+					return false
+				}
+				cv.Cert = &cert
 			}
-			cv.Cert = &cert
-		}
-		cv.Valid = stmt.ColumnInt(2) > 0
-		result = append(result, cv)
-		return true
-	}); err != nil {
+			cv.Valid = stmt.ColumnInt(2) > 0
+			result = append(result, cv)
+			return true
+		}); err != nil {
 		return nil, fmt.Errorf("get certs %s: %w", lid, err)
 	} else if rows == 0 {
 		return nil, fmt.Errorf("get certs %s: %w", lid, sql.ErrNotFound)

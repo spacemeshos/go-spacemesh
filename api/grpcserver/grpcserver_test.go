@@ -294,7 +294,10 @@ func (m *MeshAPIMock) GetLayer(tid types.LayerID) (*types.Layer, error) {
 	return types.NewExistingLayer(tid, ballots, blocks), nil
 }
 
-func (m *MeshAPIMock) GetATXs(context.Context, []types.ATXID) (map[types.ATXID]*types.VerifiedActivationTx, []types.ATXID) {
+func (m *MeshAPIMock) GetATXs(
+	context.Context,
+	[]types.ATXID,
+) (map[types.ATXID]*types.VerifiedActivationTx, []types.ATXID) {
 	atxs := map[types.ATXID]*types.VerifiedActivationTx{
 		globalAtx.ID():  globalAtx,
 		globalAtx2.ID(): globalAtx2,
@@ -357,7 +360,10 @@ func (t *ConStateAPIMock) GetMeshTransaction(id types.TransactionID) (*types.Mes
 	return nil, errors.New("it ain't there")
 }
 
-func (t *ConStateAPIMock) GetTransactionsByAddress(from, to types.LayerID, account types.Address) ([]*types.MeshTransaction, error) {
+func (t *ConStateAPIMock) GetTransactionsByAddress(
+	from, to types.LayerID,
+	account types.Address,
+) ([]*types.MeshTransaction, error) {
 	if from.After(txReturnLayer) {
 		return nil, nil
 	}
@@ -370,7 +376,9 @@ func (t *ConStateAPIMock) GetTransactionsByAddress(from, to types.LayerID, accou
 	return txs, nil
 }
 
-func (t *ConStateAPIMock) GetMeshTransactions(txIds []types.TransactionID) (txs []*types.MeshTransaction, missing map[types.TransactionID]struct{}) {
+func (t *ConStateAPIMock) GetMeshTransactions(
+	txIds []types.TransactionID,
+) (txs []*types.MeshTransaction, missing map[types.TransactionID]struct{}) {
 	for _, txId := range txIds {
 		for _, tx := range t.returnTx {
 			if tx.ID == txId {
@@ -526,8 +534,12 @@ func TestSmesherService(t *testing.T) {
 		c.smeshingProvider.EXPECT().StartSmeshing(gomock.Any()).Return(nil)
 		c.postSupervisor.EXPECT().Start(gomock.All(
 			gomock.Cond(func(postOpts any) bool { return postOpts.(activation.PostSetupOpts).DataDir == opts.DataDir }),
-			gomock.Cond(func(postOpts any) bool { return postOpts.(activation.PostSetupOpts).NumUnits == opts.NumUnits }),
-			gomock.Cond(func(postOpts any) bool { return postOpts.(activation.PostSetupOpts).MaxFileSize == opts.MaxFileSize }),
+			gomock.Cond(
+				func(postOpts any) bool { return postOpts.(activation.PostSetupOpts).NumUnits == opts.NumUnits },
+			),
+			gomock.Cond(
+				func(postOpts any) bool { return postOpts.(activation.PostSetupOpts).MaxFileSize == opts.MaxFileSize },
+			),
 		)).Return(nil)
 		res, err := c.StartSmeshing(ctx, &pb.StartSmeshingRequest{
 			Opts:     opts,
@@ -634,24 +646,6 @@ func TestSmesherService(t *testing.T) {
 		_, err = stream.Recv()
 		require.ErrorContains(t, err, context.Canceled.Error())
 	})
-
-	t.Run("UpdatePoetServer", func(t *testing.T) {
-		t.Parallel()
-		c, ctx := setupSmesherService(t)
-		c.smeshingProvider.EXPECT().UpdatePoETServers(gomock.Any(), gomock.Any()).Return(nil)
-		res, err := c.UpdatePoetServers(ctx, &pb.UpdatePoetServersRequest{Urls: []string{"test"}})
-		require.NoError(t, err)
-		require.EqualValues(t, res.Status.Code, code.Code_OK)
-	})
-	t.Run("UpdatePoetServerUnavailable", func(t *testing.T) {
-		t.Parallel()
-		c, ctx := setupSmesherService(t)
-		c.smeshingProvider.EXPECT().UpdatePoETServers(gomock.Any(), gomock.Any()).Return(activation.ErrPoetServiceUnstable)
-		urls := []string{"test"}
-		res, err := c.UpdatePoetServers(ctx, &pb.UpdatePoetServersRequest{Urls: urls})
-		require.Nil(t, res)
-		require.ErrorIs(t, err, status.Errorf(codes.Unavailable, "can't reach poet service (%v). retry later", activation.ErrPoetServiceUnstable))
-	})
 }
 
 func TestMeshService(t *testing.T) {
@@ -661,8 +655,25 @@ func TestMeshService(t *testing.T) {
 	genTime.EXPECT().GenesisTime().Return(genesis)
 	genTime.EXPECT().CurrentLayer().Return(layerCurrent).AnyTimes()
 	db := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
-	svc := NewMeshService(db, meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
-	require.NoError(t, activesets.Add(db, ballot1.EpochData.ActiveSetHash, &types.EpochActiveSet{Set: types.ATXIDList{globalAtx.ID(), globalAtx2.ID()}}))
+	svc := NewMeshService(
+		db,
+		meshAPIMock,
+		conStateAPI,
+		genTime,
+		layersPerEpoch,
+		types.Hash20{},
+		layerDuration,
+		layerAvgSize,
+		txsPerProposal,
+	)
+	require.NoError(
+		t,
+		activesets.Add(
+			db,
+			ballot1.EpochData.ActiveSetHash,
+			&types.EpochActiveSet{Set: types.ATXIDList{globalAtx.ID(), globalAtx2.ID()}},
+		),
+	)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
@@ -704,7 +715,11 @@ func TestMeshService(t *testing.T) {
 		{"MaxTransactionsPerSecond", func(t *testing.T) {
 			response, err := c.MaxTransactionsPerSecond(context.Background(), &pb.MaxTransactionsPerSecondRequest{})
 			require.NoError(t, err)
-			require.Equal(t, uint64(layerAvgSize*txsPerProposal/layerDuration.Seconds()), response.MaxTxsPerSecond.Value)
+			require.Equal(
+				t,
+				uint64(layerAvgSize*txsPerProposal/layerDuration.Seconds()),
+				response.MaxTxsPerSecond.Value,
+			)
 		}},
 		{"AccountMeshDataQuery", func(t *testing.T) {
 			subtests := []struct {
@@ -832,8 +847,10 @@ func TestMeshService(t *testing.T) {
 						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(10),
 							Filter: &pb.AccountMeshDataFilter{
-								AccountId:            &pb.AccountId{Address: addr1.String()},
-								AccountMeshDataFlags: uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_TRANSACTIONS),
+								AccountId: &pb.AccountId{Address: addr1.String()},
+								AccountMeshDataFlags: uint32(
+									pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_TRANSACTIONS,
+								),
 							},
 						})
 						require.NoError(t, err)
@@ -979,12 +996,15 @@ func TestMeshService(t *testing.T) {
 				},
 				{
 					name: "filter_with_zero_flags",
-					run: generateRunFnError("`Filter.AccountMeshDataFlags` must set at least one bitfield", &pb.AccountMeshDataStreamRequest{
-						Filter: &pb.AccountMeshDataFilter{
-							AccountId:            &pb.AccountId{Address: addr1.String()},
-							AccountMeshDataFlags: uint32(0),
+					run: generateRunFnError(
+						"`Filter.AccountMeshDataFlags` must set at least one bitfield",
+						&pb.AccountMeshDataStreamRequest{
+							Filter: &pb.AccountMeshDataFilter{
+								AccountId:            &pb.AccountId{Address: addr1.String()},
+								AccountMeshDataFlags: uint32(0),
+							},
 						},
-					}),
+					),
 				},
 
 				// SUCCESS
@@ -1116,10 +1136,13 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "end_layer_after_last_approved_confirmed_layer",
 					// expect difference + 1 return layers
-					run: generateRunFn(int(layerVerified.Add(2).Sub(layerFirst.Uint32()).Add(1).Uint32()), &pb.LayersQueryRequest{
-						StartLayer: &pb.LayerNumber{Number: layerFirst.Uint32()},
-						EndLayer:   &pb.LayerNumber{Number: layerVerified.Add(2).Uint32()},
-					}),
+					run: generateRunFn(
+						int(layerVerified.Add(2).Sub(layerFirst.Uint32()).Add(1).Uint32()),
+						&pb.LayersQueryRequest{
+							StartLayer: &pb.LayerNumber{Number: layerFirst.Uint32()},
+							EndLayer:   &pb.LayerNumber{Number: layerVerified.Add(2).Uint32()},
+						},
+					),
 				},
 
 				// comprehensive valid test
@@ -1142,7 +1165,12 @@ func TestMeshService(t *testing.T) {
 						resLayerNine := res.Layer[9]
 						require.Equal(t, uint32(9), resLayerNine.Number.Number, "layer nine is ninth")
 						require.NotEmpty(t, resLayerNine.Hash)
-						require.Equal(t, pb.Layer_LAYER_STATUS_UNSPECIFIED, resLayerNine.Status, "later layer is unconfirmed")
+						require.Equal(
+							t,
+							pb.Layer_LAYER_STATUS_UNSPECIFIED,
+							resLayerNine.Status,
+							"later layer is unconfirmed",
+						)
 					},
 				},
 			}
@@ -1613,7 +1641,17 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
-	grpcService := NewMeshService(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
+	grpcService := NewMeshService(
+		datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
+		meshAPIMock,
+		conStateAPI,
+		genTime,
+		layersPerEpoch,
+		types.Hash20{},
+		layerDuration,
+		layerAvgSize,
+		txsPerProposal,
+	)
 	cfg, cleanup := launchServer(t, grpcService)
 	t.Cleanup(cleanup)
 
@@ -1805,8 +1843,25 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
 	db := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
-	grpcService := NewMeshService(db, meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
-	require.NoError(t, activesets.Add(db, ballot1.EpochData.ActiveSetHash, &types.EpochActiveSet{Set: types.ATXIDList{globalAtx.ID(), globalAtx2.ID()}}))
+	grpcService := NewMeshService(
+		db,
+		meshAPIMock,
+		conStateAPI,
+		genTime,
+		layersPerEpoch,
+		types.Hash20{},
+		layerDuration,
+		layerAvgSize,
+		txsPerProposal,
+	)
+	require.NoError(
+		t,
+		activesets.Add(
+			db,
+			ballot1.EpochData.ActiveSetHash,
+			&types.EpochActiveSet{Set: types.ATXIDList{globalAtx.ID(), globalAtx2.ID()}},
+		),
+	)
 	cfg, cleanup := launchServer(t, grpcService)
 	t.Cleanup(cleanup)
 
@@ -1961,7 +2016,17 @@ func TestMultiService(t *testing.T) {
 	genesis := time.Unix(genTimeUnix, 0)
 	genTime.EXPECT().GenesisTime().Return(genesis)
 	svc1 := NewNodeService(peerCounter, meshAPIMock, genTime, syncer, "v0.0.0", "cafebabe")
-	svc2 := NewMeshService(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
+	svc2 := NewMeshService(
+		datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
+		meshAPIMock,
+		conStateAPI,
+		genTime,
+		layersPerEpoch,
+		types.Hash20{},
+		layerDuration,
+		layerAvgSize,
+		txsPerProposal,
+	)
 	cfg, shutDown := launchServer(t, svc1, svc2)
 	t.Cleanup(shutDown)
 
@@ -2158,7 +2223,9 @@ func TestEventsReceived(t *testing.T) {
 
 	weight := new(big.Rat).SetFloat64(18.7)
 	require.NoError(t, err)
-	rewards := []types.CoinbaseReward{{Coinbase: addr2, Weight: types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()}}}
+	rewards := []types.CoinbaseReward{
+		{Coinbase: addr2, Weight: types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()}},
+	}
 	svm.Apply(vm.ApplyContext{Layer: types.GetEffectiveGenesis()},
 		[]types.Transaction{*globalTx}, rewards)
 
@@ -2170,11 +2237,19 @@ func TestEventsReceived(t *testing.T) {
 
 	acc1Res, err := principalStream.Recv()
 	require.NoError(t, err)
-	require.Equal(t, addr1.String(), acc1Res.Datum.Datum.(*pb.AccountData_AccountWrapper).AccountWrapper.AccountId.Address)
+	require.Equal(
+		t,
+		addr1.String(),
+		acc1Res.Datum.Datum.(*pb.AccountData_AccountWrapper).AccountWrapper.AccountId.Address,
+	)
 
 	receiverRes, err := receiverStream.Recv()
 	require.NoError(t, err)
-	require.Equal(t, addr2.String(), receiverRes.Datum.Datum.(*pb.AccountData_AccountWrapper).AccountWrapper.AccountId.Address)
+	require.Equal(
+		t,
+		addr2.String(),
+		receiverRes.Datum.Datum.(*pb.AccountData_AccountWrapper).AccountWrapper.AccountId.Address,
+	)
 }
 
 func TestTransactionsRewards(t *testing.T) {
@@ -2347,7 +2422,17 @@ func TestMeshService_EpochStream(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
 	db := sql.InMemory()
-	srv := NewMeshService(datastore.NewCachedDB(db, logtest.New(t)), meshAPIMock, conStateAPI, genTime, layersPerEpoch, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
+	srv := NewMeshService(
+		datastore.NewCachedDB(db, logtest.New(t)),
+		meshAPIMock,
+		conStateAPI,
+		genTime,
+		layersPerEpoch,
+		types.Hash20{},
+		layerDuration,
+		layerAvgSize,
+		txsPerProposal,
+	)
 	cfg, cleanup := launchServer(t, srv)
 	t.Cleanup(cleanup)
 

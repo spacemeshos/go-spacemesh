@@ -58,7 +58,10 @@ func Test_BlockIDsToHashes(t *testing.T) {
 }
 
 func Test_NewExistingBlock(t *testing.T) {
-	expectedNewExistingBlock := types.NewExistingBlock(types.BlockID{1, 1}, types.InnerBlock{LayerIndex: types.LayerID(1)})
+	expectedNewExistingBlock := types.NewExistingBlock(
+		types.BlockID{1, 1},
+		types.InnerBlock{LayerIndex: types.LayerID(1)},
+	)
 
 	actualNewExistingBlock := types.NewExistingBlock(
 		types.BlockID{1, 1},

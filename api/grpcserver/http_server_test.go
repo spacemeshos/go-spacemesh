@@ -65,7 +65,17 @@ func TestJsonApi(t *testing.T) {
 	syncer := NewMocksyncer(ctrl)
 	conStateAPI := NewMockconservativeState(ctrl)
 	svc1 := NewNodeService(peerCounter, meshAPIMock, genTime, syncer, version, build)
-	svc2 := NewMeshService(datastore.NewCachedDB(sql.InMemory(), logtest.New(t)), meshAPIMock, conStateAPI, genTime, 5, types.Hash20{}, layerDuration, layerAvgSize, txsPerProposal)
+	svc2 := NewMeshService(
+		datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
+		meshAPIMock,
+		conStateAPI,
+		genTime,
+		5,
+		types.Hash20{},
+		layerDuration,
+		layerAvgSize,
+		txsPerProposal,
+	)
 	cfg, cleanup := launchJsonServer(t, svc1, svc2)
 	t.Cleanup(cleanup)
 	time.Sleep(time.Second)

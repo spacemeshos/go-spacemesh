@@ -1384,7 +1384,8 @@ func BenchmarkGetAtxHeaderWithConcurrentProcessAtx(b *testing.B) {
 	wg.Wait()
 }
 
-// Check that we're not trying to sync an ATX that references the golden ATX or an empty ATX (i.e. not adding it to the sync queue).
+// Check that we're not trying to sync an ATX that references the golden ATX or an empty ATX
+// (i.e. not adding it to the sync queue).
 func TestHandler_FetchReferences(t *testing.T) {
 	goldenATXID := types.ATXID{2, 3, 4}
 

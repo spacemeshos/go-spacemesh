@@ -317,7 +317,10 @@ func (pd *ProtocolDriver) OnAtx(atx *types.ActivationTxHeader) {
 	}
 }
 
-func (pd *ProtocolDriver) minerAtxHdr(epoch types.EpochID, nodeID types.NodeID) (*types.ActivationTxHeader, bool, error) {
+func (pd *ProtocolDriver) minerAtxHdr(
+	epoch types.EpochID,
+	nodeID types.NodeID,
+) (*types.ActivationTxHeader, bool, error) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 
@@ -350,7 +353,12 @@ func (pd *ProtocolDriver) MinerAllowance(epoch types.EpochID, nodeID types.NodeI
 }
 
 // ReportBeaconFromBallot reports the beacon value in a ballot along with the smesher's weight unit.
-func (pd *ProtocolDriver) ReportBeaconFromBallot(epoch types.EpochID, ballot *types.Ballot, beacon types.Beacon, weightPer fixed.Fixed) {
+func (pd *ProtocolDriver) ReportBeaconFromBallot(
+	epoch types.EpochID,
+	ballot *types.Ballot,
+	beacon types.Beacon,
+	weightPer fixed.Fixed,
+) {
 	pd.recordBeacon(epoch, ballot, beacon, weightPer)
 
 	if _, err := pd.GetBeacon(epoch); err == nil {
@@ -365,7 +373,12 @@ func (pd *ProtocolDriver) ReportBeaconFromBallot(epoch types.EpochID, ballot *ty
 	}
 }
 
-func (pd *ProtocolDriver) recordBeacon(epochID types.EpochID, ballot *types.Ballot, beacon types.Beacon, weightPer fixed.Fixed) {
+func (pd *ProtocolDriver) recordBeacon(
+	epochID types.EpochID,
+	ballot *types.Ballot,
+	beacon types.Beacon,
+	weightPer fixed.Fixed,
+) {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 
@@ -828,7 +841,12 @@ func (pd *ProtocolDriver) runProposalPhase(ctx context.Context, epoch types.Epoc
 	return nil
 }
 
-func (pd *ProtocolDriver) sendProposal(ctx context.Context, epoch types.EpochID, s participant, checker eligibilityChecker) {
+func (pd *ProtocolDriver) sendProposal(
+	ctx context.Context,
+	epoch types.EpochID,
+	s participant,
+	checker eligibilityChecker,
+) {
 	if pd.isClosed() {
 		return
 	}
@@ -980,14 +998,20 @@ func (pd *ProtocolDriver) calcVotesBeforeWeakCoin(logger log.Log, st *state) (al
 	return calcVotes(logger, pd.theta, st)
 }
 
-func (pd *ProtocolDriver) sendFirstRoundVote(ctx context.Context, msg FirstVotingMessageBody, signer *signing.EdSigner) error {
+func (pd *ProtocolDriver) sendFirstRoundVote(
+	ctx context.Context,
+	msg FirstVotingMessageBody,
+	signer *signing.EdSigner,
+) error {
 	m := FirstVotingMessage{
 		FirstVotingMessageBody: msg,
 		SmesherID:              signer.NodeID(),
 		Signature:              signer.Sign(signing.BEACON_FIRST_MSG, codec.MustEncode(&msg)),
 	}
 
-	pd.logger.WithContext(ctx).With().Debug("sending first round vote", msg.EpochID, types.FirstRound, log.ShortStringer("id", signer.NodeID()))
+	pd.logger.WithContext(ctx).
+		With().
+		Debug("sending first round vote", msg.EpochID, types.FirstRound, log.ShortStringer("id", signer.NodeID()))
 	return pd.sendToGossip(ctx, pubsub.BeaconFirstVotesProtocol, codec.MustEncode(&m))
 }
 
@@ -1003,7 +1027,13 @@ func (pd *ProtocolDriver) getFirstRoundVote(epoch types.EpochID, nodeID types.No
 	return st.getMinerFirstRoundVote(nodeID)
 }
 
-func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.EpochID, round types.RoundID, ownCurrentRoundVotes allVotes, signer *signing.EdSigner) error {
+func (pd *ProtocolDriver) sendFollowingVote(
+	ctx context.Context,
+	epoch types.EpochID,
+	round types.RoundID,
+	ownCurrentRoundVotes allVotes,
+	signer *signing.EdSigner,
+) error {
 	firstRoundVotes, err := pd.getFirstRoundVote(epoch, signer.NodeID())
 	if err != nil {
 		return fmt.Errorf("get own first round votes %s: %w", signer.NodeID(), err)
@@ -1022,7 +1052,9 @@ func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.Epo
 		Signature:                  signer.Sign(signing.BEACON_FOLLOWUP_MSG, codec.MustEncode(&mb)),
 	}
 
-	pd.logger.WithContext(ctx).With().Debug("sending following round vote", epoch, round, log.ShortStringer("id", signer.NodeID()))
+	pd.logger.WithContext(ctx).
+		With().
+		Debug("sending following round vote", epoch, round, log.ShortStringer("id", signer.NodeID()))
 	return pd.sendToGossip(ctx, pubsub.BeaconFollowingVotesProtocol, codec.MustEncode(&m))
 }
 
@@ -1111,11 +1143,19 @@ func atxThreshold(kappa int, q *big.Rat, numATXs int) *big.Int {
 	return threshold
 }
 
-func buildSignedProposal(ctx context.Context, logger log.Log, signer vrfSigner, epoch types.EpochID, nonce types.VRFPostIndex) types.VrfSignature {
+func buildSignedProposal(
+	ctx context.Context,
+	logger log.Log,
+	signer vrfSigner,
+	epoch types.EpochID,
+	nonce types.VRFPostIndex,
+) types.VrfSignature {
 	p := buildProposal(logger, epoch, nonce)
 	vrfSig := signer.Sign(p)
 	proposal := ProposalFromVrf(vrfSig)
-	logger.WithContext(ctx).With().Debug("calculated beacon proposal", epoch, nonce, log.Inline(proposal), log.ShortStringer("id", signer.NodeID()))
+	logger.WithContext(ctx).
+		With().
+		Debug("calculated beacon proposal", epoch, nonce, log.Inline(proposal), log.ShortStringer("id", signer.NodeID()))
 	return vrfSig
 }
 
@@ -1184,11 +1224,15 @@ func (mt *messageTimes) firstVoteSendTime(epoch types.EpochID) time.Time {
 // followupVoteSendTime returns the time at which the followup votes are sent for an epoch and round.
 func (mt *messageTimes) followupVoteSendTime(epoch types.EpochID, round types.RoundID) time.Time {
 	subsequentRoundDuration := mt.conf.VotingRoundDuration + mt.conf.WeakCoinRoundDuration
-	return mt.firstVoteSendTime(epoch).Add(mt.conf.FirstVotingRoundDuration).Add(subsequentRoundDuration * time.Duration(round-1))
+	return mt.firstVoteSendTime(epoch).
+		Add(mt.conf.FirstVotingRoundDuration).
+		Add(subsequentRoundDuration * time.Duration(round-1))
 }
 
 // WeakCoinProposalSendTime returns the time at which the weak coin proposals are sent for an epoch and round.
 func (mt *messageTimes) WeakCoinProposalSendTime(epoch types.EpochID, round types.RoundID) time.Time {
 	subsequentRoundDuration := mt.conf.VotingRoundDuration + mt.conf.WeakCoinRoundDuration
-	return mt.firstVoteSendTime(epoch).Add(mt.conf.FirstVotingRoundDuration + mt.conf.VotingRoundDuration).Add(subsequentRoundDuration * time.Duration(round-1))
+	return mt.firstVoteSendTime(epoch).
+		Add(mt.conf.FirstVotingRoundDuration + mt.conf.VotingRoundDuration).
+		Add(subsequentRoundDuration * time.Duration(round-1))
 }

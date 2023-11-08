@@ -68,7 +68,10 @@ func (a AdminService) String() string {
 	return "AdminService"
 }
 
-func (a AdminService) CheckpointStream(req *pb.CheckpointStreamRequest, stream pb.AdminService_CheckpointStreamServer) error {
+func (a AdminService) CheckpointStream(
+	req *pb.CheckpointStreamRequest,
+	stream pb.AdminService_CheckpointStreamServer,
+) error {
 	// checkpoint data can be more than 4MB, it can cause stress
 	// - on the client side (default limit on the receiving end)
 	// - locally as the node already loads db query result in memory

@@ -2,7 +2,6 @@ package grpcserver
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -46,7 +45,12 @@ func (s SmesherService) String() string {
 }
 
 // NewSmesherService creates a new grpc service using config data.
-func NewSmesherService(smeshing activation.SmeshingProvider, postSupervisor postSupervisor, streamInterval time.Duration, postOpts activation.PostSetupOpts) *SmesherService {
+func NewSmesherService(
+	smeshing activation.SmeshingProvider,
+	postSupervisor postSupervisor,
+	streamInterval time.Duration,
+	postOpts activation.PostSetupOpts,
+) *SmesherService {
 	return &SmesherService{
 		smeshingProvider: smeshing,
 		postSupervisor:   postSupervisor,
@@ -61,7 +65,10 @@ func (s SmesherService) IsSmeshing(context.Context, *emptypb.Empty) (*pb.IsSmesh
 }
 
 // StartSmeshing requests that the node begin smeshing.
-func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingRequest) (*pb.StartSmeshingResponse, error) {
+func (s SmesherService) StartSmeshing(
+	ctx context.Context,
+	in *pb.StartSmeshingRequest,
+) (*pb.StartSmeshingResponse, error) {
 	if in.Coinbase == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "`Coinbase` must be provided")
 	}
@@ -114,7 +121,10 @@ func (s SmesherService) postSetupOpts(in *pb.PostSetupOpts) (activation.PostSetu
 }
 
 // StopSmeshing requests that the node stop smeshing.
-func (s SmesherService) StopSmeshing(ctx context.Context, in *pb.StopSmeshingRequest) (*pb.StopSmeshingResponse, error) {
+func (s SmesherService) StopSmeshing(
+	ctx context.Context,
+	in *pb.StopSmeshingRequest,
+) (*pb.StopSmeshingResponse, error) {
 	if err := s.smeshingProvider.StopSmeshing(in.DeleteFiles); err != nil {
 		ctxzap.Error(ctx, "failed to stop smeshing", zap.Error(err))
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to stop smeshing: %v", err))
@@ -166,7 +176,10 @@ func (s SmesherService) SetMinGas(context.Context, *pb.SetMinGasRequest) (*pb.Se
 }
 
 // EstimatedRewards returns estimated smeshing rewards over the next epoch.
-func (s SmesherService) EstimatedRewards(context.Context, *pb.EstimatedRewardsRequest) (*pb.EstimatedRewardsResponse, error) {
+func (s SmesherService) EstimatedRewards(
+	context.Context,
+	*pb.EstimatedRewardsRequest,
+) (*pb.EstimatedRewardsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "this endpoint is not implemented")
 }
 
@@ -177,7 +190,10 @@ func (s SmesherService) PostSetupStatus(ctx context.Context, _ *emptypb.Empty) (
 }
 
 // PostSetupStatusStream exposes a stream of status updates during post setup.
-func (s SmesherService) PostSetupStatusStream(_ *emptypb.Empty, stream pb.SmesherService_PostSetupStatusStreamServer) error {
+func (s SmesherService) PostSetupStatusStream(
+	_ *emptypb.Empty,
+	stream pb.SmesherService_PostSetupStatusStreamServer,
+) error {
 	timer := time.NewTicker(s.streamInterval)
 	defer timer.Stop()
 
@@ -195,7 +211,10 @@ func (s SmesherService) PostSetupStatusStream(_ *emptypb.Empty, stream pb.Smeshe
 }
 
 // PostSetupComputeProviders returns a list of available Post setup compute providers.
-func (s SmesherService) PostSetupProviders(ctx context.Context, in *pb.PostSetupProvidersRequest) (*pb.PostSetupProvidersResponse, error) {
+func (s SmesherService) PostSetupProviders(
+	ctx context.Context,
+	in *pb.PostSetupProvidersRequest,
+) (*pb.PostSetupProvidersResponse, error) {
 	providers, err := s.postSupervisor.Providers()
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get OpenCL providers: %v", err)
@@ -262,19 +281,4 @@ func statusToPbStatus(status *activation.PostSetupStatus) *pb.PostSetupStatus {
 	}
 
 	return pbStatus
-}
-
-// UpdatePoetServers update server that is used for generating PoETs.
-func (s SmesherService) UpdatePoetServers(ctx context.Context, req *pb.UpdatePoetServersRequest) (*pb.UpdatePoetServersResponse, error) {
-	err := s.smeshingProvider.UpdatePoETServers(ctx, req.Urls)
-	if err == nil {
-		return &pb.UpdatePoetServersResponse{
-			Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
-		}, nil
-	}
-	switch {
-	case errors.Is(err, activation.ErrPoetServiceUnstable):
-		return nil, status.Errorf(codes.Unavailable, "can't reach poet service (%v). retry later", err)
-	}
-	return nil, status.Errorf(codes.Internal, "failed to update poet server")
 }

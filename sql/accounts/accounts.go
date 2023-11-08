@@ -43,9 +43,14 @@ func Has(db sql.Executor, address types.Address) (bool, error) {
 
 // Latest latest account data for an address.
 func Latest(db sql.Executor, address types.Address) (types.Account, error) {
-	account, err := load(db, address, "select balance, next_nonce, layer_updated, template, state from accounts where address = ?1;", func(stmt *sql.Statement) {
-		stmt.BindBytes(1, address.Bytes())
-	})
+	account, err := load(
+		db,
+		address,
+		"select balance, next_nonce, layer_updated, template, state from accounts where address = ?1;",
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, address.Bytes())
+		},
+	)
 	if err != nil {
 		return types.Account{}, fmt.Errorf("failed to load %v: %w", address, err)
 	}
@@ -54,10 +59,14 @@ func Latest(db sql.Executor, address types.Address) (types.Account, error) {
 
 // Get account data that was valid at the specified layer.
 func Get(db sql.Executor, address types.Address, layer types.LayerID) (types.Account, error) {
-	account, err := load(db, address, "select balance, next_nonce, layer_updated, template, state from accounts where address = ?1 and layer_updated <= ?2;", func(stmt *sql.Statement) {
-		stmt.BindBytes(1, address.Bytes())
-		stmt.BindInt64(2, int64(layer))
-	})
+	account, err := load(db, address,
+		`select balance, next_nonce, layer_updated, template, state
+		 from accounts where address = ?1 and layer_updated <= ?2;`,
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, address.Bytes())
+			stmt.BindInt64(2, int64(layer))
+		},
+	)
 	if err != nil {
 		return types.Account{}, fmt.Errorf("failed to load %v for layer %v: %w", address, layer, err)
 	}
@@ -67,22 +76,26 @@ func Get(db sql.Executor, address types.Address, layer types.LayerID) (types.Acc
 // All returns all latest accounts.
 func All(db sql.Executor) ([]*types.Account, error) {
 	var rst []*types.Account
-	_, err := db.Exec("select address, balance, next_nonce, max(layer_updated), template, state from accounts group by address;", nil, func(stmt *sql.Statement) bool {
-		var account types.Account
-		stmt.ColumnBytes(0, account.Address[:])
-		account.Balance = uint64(stmt.ColumnInt64(1))
-		account.NextNonce = uint64(stmt.ColumnInt64(2))
-		account.Layer = types.LayerID(uint32(stmt.ColumnInt64(3)))
-		if stmt.ColumnLen(4) > 0 {
-			var template types.Address
-			stmt.ColumnBytes(4, template[:])
-			account.TemplateAddress = &template
-			account.State = make([]byte, stmt.ColumnLen(5))
-			stmt.ColumnBytes(5, account.State)
-		}
-		rst = append(rst, &account)
-		return true
-	})
+	_, err := db.Exec(
+		"select address, balance, next_nonce, max(layer_updated), template, state from accounts group by address;",
+		nil,
+		func(stmt *sql.Statement) bool {
+			var account types.Account
+			stmt.ColumnBytes(0, account.Address[:])
+			account.Balance = uint64(stmt.ColumnInt64(1))
+			account.NextNonce = uint64(stmt.ColumnInt64(2))
+			account.Layer = types.LayerID(uint32(stmt.ColumnInt64(3)))
+			if stmt.ColumnLen(4) > 0 {
+				var template types.Address
+				stmt.ColumnBytes(4, template[:])
+				account.TemplateAddress = &template
+				account.State = make([]byte, stmt.ColumnLen(5))
+				stmt.ColumnBytes(5, account.State)
+			}
+			rst = append(rst, &account)
+			return true
+		},
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load all accounts %w", err)
 	}

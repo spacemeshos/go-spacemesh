@@ -89,11 +89,16 @@ func TestProcessLayers_MultiLayers(t *testing.T) {
 		})
 		ts.mTortoise.EXPECT().OnApplied(lid, gomock.Any())
 		ts.mVm.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any())
-		ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, gomock.Any(), nil, nil).DoAndReturn(
-			func(_ context.Context, _ types.LayerID, got types.BlockID, _ []types.TransactionWithResult, _ []types.Transaction) error {
-				require.Equal(t, adopted[lid], got)
-				return nil
-			})
+		ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, gomock.Any(), nil, nil).DoAndReturn(func(
+			_ context.Context,
+			_ types.LayerID,
+			got types.BlockID,
+			_ []types.TransactionWithResult,
+			_ []types.Transaction,
+		) error {
+			require.Equal(t, adopted[lid], got)
+			return nil
+		})
 		ts.mVm.EXPECT().GetStateRoot()
 	}
 	require.False(t, ts.syncer.stateSynced())

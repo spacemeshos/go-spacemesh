@@ -172,8 +172,8 @@ func (db *CachedDB) CacheMalfeasanceProof(id types.NodeID, proof *types.Malfeasa
 	db.malfeasanceCache.Add(id, proof)
 }
 
-// VRFNonce returns the VRF nonce of for the given node in the given epoch. This function is thread safe and will return an error if the
-// nonce is not found in the ATX DB.
+// VRFNonce returns the VRF nonce of for the given node in the given epoch. This function is thread safe and will
+// return an error if the nonce is not found in the ATX DB.
 func (db *CachedDB) VRFNonce(id types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
 	key := VrfNonceKey{id, epoch}
 	if nonce, ok := db.vrfNonceCache.Get(key); ok {
@@ -295,7 +295,7 @@ func (db *CachedDB) GetLastAtx(nodeID types.NodeID) (*types.ActivationTxHeader, 
 	if atxid, err := atxs.GetLastIDByNodeID(db, nodeID); err != nil {
 		return nil, fmt.Errorf("no prev atx found: %w", err)
 	} else if atx, err := db.GetAtxHeader(atxid); err != nil {
-		return nil, fmt.Errorf("inconsistent state: failed to get atx header: %v", err)
+		return nil, fmt.Errorf("inconsistent state: failed to get atx header: %w", err)
 	} else {
 		return atx, nil
 	}

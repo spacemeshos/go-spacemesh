@@ -47,7 +47,12 @@ func newTx(tb testing.TB, nonce, amount, fee uint64, signer *signing.EdSigner) *
 	return newTxWthRecipient(tb, dest, nonce, amount, fee, signer)
 }
 
-func newTxWthRecipient(tb testing.TB, dest types.Address, nonce, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
+func newTxWthRecipient(
+	tb testing.TB,
+	dest types.Address,
+	nonce, amount, fee uint64,
+	signer *signing.EdSigner,
+) *types.Transaction {
 	tb.Helper()
 	raw := wallet.Spend(signer.PrivateKey(), dest, amount,
 		nonce,
@@ -589,8 +594,16 @@ func TestConsistentHandling(t *testing.T) {
 			failed.EXPECT().Parse().Times(1).Return(nil, errors.New("test"))
 			instances[1].mvm.EXPECT().Validation(txs[i].RawTx).Times(1).Return(failed)
 
-			require.Equal(t, nil, instances[0].handler().HandleGossipTransaction(context.Background(), p2p.NoPeer, txs[i].Raw))
-			require.NoError(t, instances[1].handler().HandleBlockTransaction(context.Background(), txs[i].ID.Hash32(), p2p.NoPeer, txs[i].Raw))
+			require.Equal(
+				t,
+				nil,
+				instances[0].handler().HandleGossipTransaction(context.Background(), p2p.NoPeer, txs[i].Raw),
+			)
+			require.NoError(
+				t,
+				instances[1].handler().
+					HandleBlockTransaction(context.Background(), txs[i].ID.Hash32(), p2p.NoPeer, txs[i].Raw),
+			)
 		}
 		block := types.NewExistingBlock(types.BlockID{byte(lid)},
 			types.InnerBlock{

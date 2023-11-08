@@ -40,7 +40,8 @@ const (
 	// PublishScoreThreshold when a peer's score drops below this threshold, self published messages are not propagated
 	// towards this peer when (flood) publishing.
 	PublishScoreThreshold = -1000
-	// GraylistScoreThreshold when a peer's score drops below this threshold, the peer is graylisted and its RPCs are ignored.
+	// GraylistScoreThreshold when a peer's score drops below this threshold, the peer is graylisted and its RPCs
+	// are ignored.
 	GraylistScoreThreshold = -2500
 	// AcceptPXScoreThreshold when a peer sends us PX information with a prune, we only accept it and connect to the
 	// supplied peers if the originating peer's score exceeds this threshold.
