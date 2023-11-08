@@ -69,13 +69,15 @@ jobs:
           mv ./build/* $OUTNAME
           rm -f $OUTNAME/post.h
           zip -r $OUTNAME.zip $OUTNAME
+
+      - name: 'Setup GCP Auth'
+        uses: 'google-github-actions/auth@v1'
+        with:
+          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
-        with:
-          version: "450.0.0"
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
-          service_account_key: ${{ secrets.GCP_SA_KEY }}
-          export_default_credentials: true
+
       - name: Upload zip
         uses: google-github-actions/upload-cloud-storage@v1
         with:
