@@ -111,7 +111,7 @@ jobs:
           echo "SHA256_MAC_AMD64=$(sha256sum ${{ env.OUTNAME_MAC_AMD64 }}.zip)" >> $GITHUB_ENV
           echo "SHA256_MAC_ARM64=$(sha256sum ${{ env.OUTNAME_MAC_ARM64 }}.zip)" >> $GITHUB_ENV
 
-      - name: Generate the sha356sums yaml
+      - name: Generate the sha256sums yaml
         shell: bash
         run: |
           echo "win-amd64: ${{ env.SHA256_WIN_AMD64 }}" >> sha256sum.yaml
