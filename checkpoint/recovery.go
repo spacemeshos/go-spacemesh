@@ -8,10 +8,8 @@ import (
 	"net/url"
 	"path/filepath"
 
-	"github.com/spacemeshos/post/initialization"
 	"github.com/spf13/afero"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -19,6 +17,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
 	"github.com/spacemeshos/go-spacemesh/sql/recovery"
 )
@@ -41,9 +41,9 @@ func DefaultConfig() Config {
 
 type RecoverConfig struct {
 	GoldenAtx      types.ATXID
-	PostDataDir    string
 	DataDir        string
 	DbFile         string
+	LocalDbFile    string
 	PreserveOwnAtx bool
 	NodeID         types.NodeID
 	Uri            string
@@ -107,7 +107,12 @@ func Recover(
 		return nil, fmt.Errorf("open old database: %w", err)
 	}
 	defer db.Close()
-	preserve, err := RecoverWithDb(ctx, logger, db, fs, cfg)
+	localDB, err := localsql.Open("file:" + filepath.Join(cfg.DataDir, cfg.LocalDbFile))
+	if err != nil {
+		return nil, fmt.Errorf("open old local database: %w", err)
+	}
+	defer localDB.Close()
+	preserve, err := RecoverWithDb(ctx, logger, db, localDB, fs, cfg)
 	switch {
 	case errors.Is(err, ErrCheckpointNotFound):
 		logger.With().Info("no checkpoint file available. not recovering",
@@ -124,6 +129,7 @@ func RecoverWithDb(
 	ctx context.Context,
 	logger log.Log,
 	db *sql.Database,
+	localDB *localsql.Database,
 	fs afero.Fs,
 	cfg *RecoverConfig,
 ) (*PreservedData, error) {
@@ -143,7 +149,7 @@ func RecoverWithDb(
 	if err != nil {
 		return nil, err
 	}
-	return recoverFromLocalFile(ctx, logger, db, fs, cfg, cpfile)
+	return recoverFromLocalFile(ctx, logger, db, localDB, fs, cfg, cpfile)
 }
 
 type recoverydata struct {
@@ -155,6 +161,7 @@ func recoverFromLocalFile(
 	ctx context.Context,
 	logger log.Log,
 	db *sql.Database,
+	localDB *localsql.Database,
 	fs afero.Fs,
 	cfg *RecoverConfig,
 	file string,
@@ -169,7 +176,7 @@ func recoverFromLocalFile(
 		log.Int("num accounts", len(data.accounts)),
 		log.Int("num atxs", len(data.atxs)),
 	)
-	deps, proofs, err := collectOwnAtxDeps(logger, db, cfg, data)
+	deps, proofs, err := collectOwnAtxDeps(logger, db, localDB, cfg, data)
 	if err != nil {
 		logger.With().Error("failed to collect deps for own atx", log.Err(err))
 		// continue to recover from checkpoint despite failure to preserve own atx
@@ -303,6 +310,7 @@ func checkpointData(fs afero.Fs, file string, newGenesis types.LayerID) (*recove
 func collectOwnAtxDeps(
 	logger log.Log,
 	db *sql.Database,
+	localDB *localsql.Database,
 	cfg *RecoverConfig,
 	data *recoverydata,
 ) ([]*types.VerifiedActivationTx, []*types.PoetProofMessage, error) {
@@ -315,25 +323,21 @@ func collectOwnAtxDeps(
 	}
 	var ref types.ATXID
 	var own bool
-	if atxid == types.EmptyATXID {
-		if m, _ := initialization.LoadMetadata(cfg.PostDataDir); m != nil {
-			ref = types.ATXID(types.BytesToHash(m.CommitmentAtxId))
-			logger.With().Debug("found commitment atx from metadata",
-				log.Stringer("commitment atx", ref),
-			)
-		}
-	} else {
+	if atxid != types.EmptyATXID {
 		ref = atxid
-		logger.With().Debug("found own atx",
-			log.Stringer("own atx", ref),
-		)
+		logger.With().Debug("found own atx", log.Stringer("own atx", ref))
 		own = true
 	}
 
 	// check for if miner is building any atx
-	nipostCh, _ := activation.LoadNipostChallenge(cfg.PostDataDir)
-	if ref == types.EmptyATXID && nipostCh == nil {
-		return nil, nil, nil
+	nipostCh, _ := nipost.Challenge(localDB, cfg.NodeID)
+	if ref == types.EmptyATXID {
+		if nipostCh == nil {
+			return nil, nil, nil
+		}
+		if nipostCh.CommitmentATX != nil {
+			ref = *nipostCh.CommitmentATX
+		}
 	}
 
 	all := map[types.ATXID]struct{}{cfg.GoldenAtx: {}, types.EmptyATXID: {}}

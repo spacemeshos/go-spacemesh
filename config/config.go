@@ -120,7 +120,7 @@ type BaseConfig struct {
 	NetworkHRP string `mapstructure:"network-hrp"`
 
 	// MinerGoodAtxsPercent is a threshold to decide if tortoise activeset should be
-	// picked from first block insted of synced data.
+	// picked from first block instead of synced data.
 	MinerGoodAtxsPercent int `mapstructure:"miner-good-atxs-percent"`
 
 	RegossipAtxInterval time.Duration `mapstructure:"regossip-atx-interval"`
