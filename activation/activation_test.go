@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/assert"
@@ -19,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
@@ -767,15 +769,13 @@ func TestBuilder_PublishActivationTx_NoPrevATX_PublishFails_InitialPost_preserve
 			genesis := time.Now().Add(-time.Duration(currLayer) * layerDuration)
 			return genesis.Add(layerDuration * time.Duration(got))
 		}).AnyTimes()
-	builderConfirmation := make(chan struct{})
 	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, challenge *types.NIPostChallenge) (*types.NIPost, error) {
-			close(builderConfirmation)
 			return nil, ErrATXChallengeExpired
 		},
 	)
+	ch := make(chan struct{})
 	tab.mclock.EXPECT().AwaitLayer(currLayer.Add(1)).Do(func(got types.LayerID) <-chan struct{} {
-		ch := make(chan struct{})
 		close(ch)
 		return ch
 	})
@@ -792,7 +792,7 @@ func TestBuilder_PublishActivationTx_NoPrevATX_PublishFails_InitialPost_preserve
 	})
 
 	select {
-	case <-builderConfirmation:
+	case <-ch:
 	case <-time.After(10 * time.Second):
 		require.FailNow(t, "timed out waiting for builder to publish ATX")
 	}
@@ -1088,6 +1088,17 @@ func TestBuilder_SignAtx(t *testing.T) {
 }
 
 func TestBuilder_RetryPublishActivationTx(t *testing.T) {
+	events.InitializeReporter()
+	sub, err := events.SubscribeMatched(func(t *events.UserEvent) bool {
+		switch t.Event.Details.(type) {
+		case (*pb.Event_AtxPublished):
+			return true
+		default:
+			return false
+		}
+	}, events.WithBuffer(100))
+	require.NoError(t, err)
+
 	retryInterval := 50 * time.Microsecond
 	tab := newTestBuilder(
 		t,
@@ -1157,24 +1168,27 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 		LabelsPerUnit: DefaultPostConfig().LabelsPerUnit,
 	}, nil).AnyTimes()
 
-	publishConfirmation := make(chan struct{})
+	var atx types.ActivationTx
 	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
-		func(_ context.Context, _ string, got []byte) error {
-			close(publishConfirmation)
+		func(ctx context.Context, s string, b []byte) error {
+			require.NoError(t, codec.Decode(b, &atx))
+			atx.SetReceived(time.Now().Local())
+			require.NoError(t, atx.Initialize())
+
+			// advance time to the next epoch
+			currLayer = currLayer.Add(layersPerEpoch)
 			return nil
 		},
 	)
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	var eg errgroup.Group
 	eg.Go(func() error {
 		tab.run(ctx)
 		return nil
 	})
-	t.Cleanup(func() {
-		cancel()
-		assert.NoError(t, eg.Wait())
-	})
+	t.Cleanup(func() { assert.NoError(t, eg.Wait()) })
 
 	select {
 	case <-builderConfirmation:
@@ -1182,13 +1196,16 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 		require.FailNowf(t, "failed waiting for required number of tries", "only tried %d times", tries)
 	}
 
-	// state is cleaned up
 	select {
-	case <-publishConfirmation:
+	case ev := <-sub.Out():
+		cancel()
+		atxEvent := ev.Event.GetAtxPublished()
+		require.Equal(t, atx.ID(), types.BytesToATXID(atxEvent.GetId()))
 	case <-time.After(5 * time.Second):
-		require.FailNow(t, "timed out waiting for builder to publish ATX")
+		require.FailNow(t, "timed out waiting for activation event")
 	}
 
+	// state is cleaned up
 	_, _, err = nipost.InitialPost(tab.localDB, tab.sig.NodeID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 

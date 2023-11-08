@@ -14,6 +14,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
 func TestOffloadingPostVerifier(t *testing.T) {
@@ -78,13 +79,13 @@ func TestPostVerifierNoRaceOnClose(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	proof := shared.Proof{}
-	metadata := shared.ProofMetadata{}
+	var proof shared.Proof
+	var metadata shared.ProofMetadata
 
 	verifier := activation.NewMockPostVerifier(gomock.NewController(t))
 	offloadingVerifier := activation.NewOffloadingPostVerifier(
 		[]activation.PostVerifier{verifier},
-		log.NewDefault(t.Name()),
+		logtest.New(t),
 	)
 	defer offloadingVerifier.Close()
 	verifier.EXPECT().Close().AnyTimes().Return(nil)
@@ -97,7 +98,7 @@ func TestPostVerifierNoRaceOnClose(t *testing.T) {
 		return offloadingVerifier.Close()
 	})
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 50; i++ {
 		ms := 10 * i
 		eg.Go(func() error {
 			time.Sleep(time.Duration(ms) * time.Millisecond)
