@@ -533,15 +533,16 @@ func IterateAtxsOps(
 }
 
 func filterFrom(operations Operations) string {
-	query := " "
-	if len(operations.Filter) > 0 {
-		query = "where "
-	}
+	// TODO(dshulyak) using string writer will be more efficient
+	query := ""
 	for i, op := range operations.Filter {
-		if i != 0 {
-			query += " " + string(And) + " "
+		if i == 0 {
+			query += " " + string(Where)
 		}
-		query += string(op.Field) + " " + string(op.Token) + " ?" + strconv.Itoa(i+1)
+		if i != 0 {
+			query += " " + string(And)
+		}
+		query += " " + string(op.Field) + " " + string(op.Token) + " ?" + strconv.Itoa(i+1)
 	}
 	for i, op := range operations.Other {
 		query += " " + string(op.Field) + " " + string(op.Token) + " ?" + strconv.Itoa(i+1+len(operations.Filter))
