@@ -274,7 +274,7 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 				return nil, ctx.Err()
 			})
 		poet.EXPECT().PowParams(gomock.Any()).Return(&PoetPowParams{}, nil)
-		poet.EXPECT().Address().Return("http://localhost:9999")
+		poet.EXPECT().Address().AnyTimes().Return("http://localhost:9999")
 		poets = append(poets, poet)
 	}
 	{
@@ -290,7 +290,7 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 			Proof(gomock.Any(), gomock.Any()).
 			Return(proof, []types.Member{types.Member(challenge.Hash())}, nil)
 		poet.EXPECT().PowParams(gomock.Any()).Return(&PoetPowParams{}, nil)
-		poet.EXPECT().Address().Return("http://localhost:9998")
+		poet.EXPECT().Address().AnyTimes().Return("http://localhost:9998")
 		poets = append(poets, poet)
 	}
 
@@ -442,7 +442,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(nil, errors.New("test"))
 		poetProver.EXPECT().PowParams(gomock.Any()).Return(&PoetPowParams{}, nil)
-		poetProver.EXPECT().Address().Return("http://localhost:9999")
+		poetProver.EXPECT().Address().AnyTimes().Return("http://localhost:9999")
 		postService := NewMockpostService(ctrl)
 
 		nb, err := NewNIPostBuilder(
@@ -483,7 +483,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 				return nil, ctx.Err()
 			})
 		poetProver.EXPECT().PowParams(gomock.Any()).Return(&PoetPowParams{}, nil)
-		poetProver.EXPECT().Address().Return("http://localhost:9999")
+		poetProver.EXPECT().Address().AnyTimes().Return("http://localhost:9999")
 		postService := NewMockpostService(ctrl)
 
 		nb, err := NewNIPostBuilder(
@@ -719,7 +719,7 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 		})
 	poet.EXPECT().PowParams(gomock.Any()).Times(2).Return(&PoetPowParams{}, nil)
 	poet.EXPECT().Proof(gomock.Any(), "").Return(proof, []types.Member{types.Member(challenge.Hash())}, nil)
-	poet.EXPECT().Address().Return("http://localhost:9999")
+	poet.EXPECT().Address().AnyTimes().Return("http://localhost:9999")
 
 	poetCfg := PoetConfig{
 		PhaseShift: layerDuration * layersPerEpoch / 2,
