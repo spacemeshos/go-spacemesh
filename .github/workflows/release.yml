@@ -161,6 +161,5 @@ jobs:
             - macOS arm64 - sha256: ${{ env.SHA256_MAC_ARM64 }}
 
             For information about changes in this release see the [changelog](https://github.com/spacemeshos/go-spacemesh/blob/${{ github.ref_name }}/CHANGELOG.md).
-          generate_release_notes: true
           draft: false
           prerelease: true

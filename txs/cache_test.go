@@ -148,32 +148,30 @@ func checkProjection(t *testing.T, c *Cache, addr types.Address, nonce, balance 
 
 func createState(tb testing.TB, numAccounts int) map[types.Address]*testAcct {
 	tb.Helper()
+	const maxBalance = 100_000_000
 	const minBalance = 1_000_000
 	accounts := make(map[types.Address]*testAcct)
 	for i := 0; i < numAccounts; i++ {
 		signer, err := signing.NewEdSigner()
 		require.NoError(tb, err)
 		principal := types.GenerateAddress(signer.PublicKey().Bytes())
-		bal := uint64(rand.Int63n(100_000_000))
-		if bal < minBalance {
-			bal = minBalance
-		}
+		bal := rand.Uint64()%(maxBalance-minBalance) + minBalance
 		accounts[principal] = &testAcct{
 			signer:    signer,
 			principal: principal,
-			nonce:     uint64(rand.Int63n(1000)),
+			nonce:     rand.Uint64()%1000 + 1,
 			balance:   bal,
 		}
 	}
 	return accounts
 }
 
-func createCache(t *testing.T, numAccounts int) (*testCache, map[types.Address]*testAcct) {
-	t.Helper()
-	accounts := createState(t, numAccounts)
+func createCache(tb testing.TB, numAccounts int) (*testCache, map[types.Address]*testAcct) {
+	tb.Helper()
+	accounts := createState(tb, numAccounts)
 	db := sql.InMemory()
 	return &testCache{
-		Cache: NewCache(getStateFunc(accounts), logtest.New(t)),
+		Cache: NewCache(getStateFunc(accounts), logtest.New(tb)),
 		db:    db,
 	}, accounts
 }
@@ -183,7 +181,7 @@ func createSingleAccountTestCache(tb testing.TB) (*testCache, *testAcct) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(tb, err)
 	principal := types.GenerateAddress(signer.PublicKey().Bytes())
-	ta := &testAcct{signer: signer, principal: principal, nonce: uint64(rand.Int63n(1000)), balance: defaultBalance}
+	ta := &testAcct{signer: signer, principal: principal, nonce: rand.Uint64()%1000 + 1, balance: defaultBalance}
 	states := map[types.Address]*testAcct{principal: ta}
 	db := sql.InMemory()
 	return &testCache{
@@ -1015,7 +1013,7 @@ func TestCache_BuildFromScratch(t *testing.T) {
 	mtxs := make(map[types.Address][]*types.MeshTransaction)
 	totalNumTXs := 0
 	for principal, ta := range accounts {
-		numTXs := uint64(rand.Intn(100))
+		numTXs := rand.Uint64() % 100
 		if numTXs == 0 {
 			continue
 		}
@@ -1058,12 +1056,12 @@ func buildSmallCache(
 	t *testing.T,
 	tc *testCache,
 	accounts map[types.Address]*testAcct,
-	maxTX int,
+	maxTX uint64,
 ) map[types.Address][]*types.MeshTransaction {
 	t.Helper()
 	mtxsByAccount := make(map[types.Address][]*types.MeshTransaction)
 	for principal, ta := range accounts {
-		numTXs := uint64(rand.Intn(maxTX))
+		numTXs := rand.Uint64() % maxTX
 		if numTXs == 0 {
 			continue
 		}

@@ -66,6 +66,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots/util"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/syncer/blockssync"
@@ -81,6 +82,7 @@ const (
 	edKeyFileName   = "key.bin"
 	genesisFileName = "genesis.json"
 	dbFile          = "state.sql"
+	localDbFile     = "node_state.sql"
 )
 
 // Logger names.
@@ -319,7 +321,9 @@ type App struct {
 	edSgn             *signing.EdSigner
 	Config            *config.Config
 	db                *sql.Database
+	cachedDB          *datastore.CachedDB
 	dbMetrics         *dbmetrics.DBMetricsCollector
+	localDB           *localsql.Database
 	grpcPublicServer  *grpcserver.Server
 	grpcPrivateServer *grpcserver.Server
 	grpcTLSServer     *grpcserver.Server
@@ -331,7 +335,6 @@ type App struct {
 	proposalListener  *proposals.Handler
 	proposalBuilder   *miner.ProposalBuilder
 	mesh              *mesh.Mesh
-	cachedDB          *datastore.CachedDB
 	atxsdata          *atxsdata.Data
 	clock             *timesync.NodeClock
 	hare              *hare.Hare
@@ -339,7 +342,6 @@ type App struct {
 	hOracle           *eligibility.Oracle
 	blockGen          *blocks.Generator
 	certifier         *blocks.Certifier
-	postSetupMgr      *activation.PostSetupManager
 	atxBuilder        *activation.Builder
 	nipostBuilder     *activation.NIPostBuilder
 	atxHandler        *activation.Handler
@@ -378,9 +380,9 @@ func (app *App) LoadCheckpoint(ctx context.Context) (*checkpoint.PreservedData, 
 	}
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      types.ATXID(app.Config.Genesis.GoldenATX()),
-		PostDataDir:    app.Config.SMESHING.Opts.DataDir,
 		DataDir:        app.Config.DataDir(),
 		DbFile:         dbFile,
+		LocalDbFile:    localDbFile,
 		PreserveOwnAtx: app.Config.Recovery.PreserveOwnAtx,
 		NodeID:         app.edSgn.NodeID(),
 		Uri:            checkpointFile,
@@ -911,17 +913,17 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 	proposalBuilder.Register(app.edSgn)
 
-	postSetupMgr, err := activation.NewPostSetupManager(
-		app.edSgn.NodeID(),
-		app.Config.POST,
-		app.addLogger(PostLogger, lg).Zap(),
-		app.cachedDB, goldenATXID,
-	)
-	if err != nil {
-		app.log.Panic("failed to create post setup manager: %v", err)
-	}
-
 	if app.Config.SMESHING.Start {
+		postSetupMgr, err := activation.NewPostSetupManager(
+			app.edSgn.NodeID(),
+			app.Config.POST,
+			app.addLogger(PostLogger, lg).Zap(),
+			app.cachedDB, goldenATXID,
+		)
+		if err != nil {
+			app.log.Panic("failed to create post setup manager: %v", err)
+		}
+
 		app.postSupervisor, err = activation.NewPostSupervisor(
 			app.log.Zap(),
 			app.Config.POSTService,
@@ -942,7 +944,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.grpcPostService,
 		app.Config.PoETServers,
 		app.Config.SMESHING.Opts.DataDir,
-		app.addLogger(NipostBuilderLogger, lg),
+		app.addLogger(NipostBuilderLogger, lg).Zap(),
 		app.edSgn,
 		app.Config.POET,
 		app.clock,
@@ -974,20 +976,23 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	atxBuilder := activation.NewBuilder(
 		builderConfig,
-		app.edSgn.NodeID(),
 		app.edSgn,
 		app.cachedDB,
+		app.localDB,
 		app.host,
 		app.grpcPostService,
 		nipostBuilder,
 		app.clock,
 		newSyncer,
-		app.addLogger("atxBuilder", lg),
+		app.addLogger("atxBuilder", lg).Zap(),
 		activation.WithContext(ctx),
 		activation.WithPoetConfig(app.Config.POET),
 		activation.WithPoetRetryInterval(app.Config.HARE.WakeupDelta),
 		activation.WithValidator(app.validator),
 	)
+	if err := atxBuilder.MigrateDiskToLocalDB(); err != nil {
+		app.log.Panic("failed to migrate state of atx builder: %v", err)
+	}
 
 	malfeasanceHandler := malfeasance.NewHandler(
 		app.cachedDB,
@@ -1115,7 +1120,6 @@ func (app *App) initServices(ctx context.Context) error {
 	app.svm = state
 	app.atxBuilder = atxBuilder
 	app.nipostBuilder = nipostBuilder
-	app.postSetupMgr = postSetupMgr
 	app.atxHandler = atxHandler
 	app.poetDb = poetDb
 	app.fetcher = fetcher
@@ -1501,6 +1505,11 @@ func (app *App) stopServices(ctx context.Context) {
 	if app.dbMetrics != nil {
 		app.dbMetrics.Close()
 	}
+	if app.localDB != nil {
+		if err := app.localDB.Close(); err != nil {
+			app.log.With().Warning("local db exited with error", log.Err(err))
+		}
+	}
 
 	if app.pprofService != nil {
 		if err := app.pprofService.Close(); err != nil {
@@ -1584,6 +1593,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		return fmt.Errorf("failed to create %s: %w", dbPath, err)
 	}
 	sqlDB, err := sql.Open("file:"+filepath.Join(dbPath, dbFile),
+		sql.WithMigrations(sql.StateMigrations),
 		sql.WithConnections(app.Config.DatabaseConnections),
 		sql.WithLatencyMetering(app.Config.DatabaseLatencyMetering),
 		sql.WithV5Migration(util.ExtractActiveSet),
@@ -1595,7 +1605,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	if app.Config.CollectMetrics && app.Config.DatabaseSizeMeteringInterval != 0 {
 		app.dbMetrics = dbmetrics.NewDBMetricsCollector(
 			ctx,
-			sqlDB,
+			app.db,
 			app.addLogger(StateDbLogger, lg),
 			app.Config.DatabaseSizeMeteringInterval,
 		)
@@ -1614,6 +1624,14 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		datastore.WithConfig(app.Config.Cache),
 		datastore.WithConsensusCache(data),
 	)
+	localDB, err := localsql.Open("file:"+filepath.Join(dbPath, localDbFile),
+		sql.WithMigrations(sql.LocalMigrations),
+		sql.WithConnections(app.Config.DatabaseConnections),
+	)
+	if err != nil {
+		return fmt.Errorf("open sqlite db %w", err)
+	}
+	app.localDB = localDB
 	return nil
 }
 
