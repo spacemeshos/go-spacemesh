@@ -471,6 +471,8 @@ func IterateAtxs(db sql.Executor, from, to types.EpochID, fn func(*types.Verifie
 	return derr
 }
 
+// TODO(dshulyak) extract code for query building into separate module
+
 type token string
 
 const (
