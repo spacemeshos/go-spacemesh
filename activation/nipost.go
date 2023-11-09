@@ -318,10 +318,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 	if err != nil {
 		return nil, &PoetSvcUnstableError{msg: "failed to get PoET service ID", source: err}
 	}
-	logger := nb.log.With(
-		log.ZContext(ctx),
-		zap.String("poet_id", hex.EncodeToString(poetServiceID.ServiceID)),
-	)
+	logger := nb.log.With(log.ZContext(ctx), zap.String("poet", client.Address()))
 
 	logger.Debug("querying for poet pow parameters")
 	powCtx, cancel := withConditionalTimeout(ctx, nb.poetCfg.RequestTimeout)
