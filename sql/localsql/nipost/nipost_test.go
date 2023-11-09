@@ -14,55 +14,62 @@ func Test_AddInitialPost(t *testing.T) {
 	db := localsql.InMemory()
 
 	nodeID := types.RandomNodeID()
-	post := &types.Post{
+	post := Post{
 		Nonce:   1,
 		Indices: []byte{1, 2, 3},
 		Pow:     1,
+
+		NumUnits:      2,
+		CommitmentATX: types.RandomATXID(),
+		VRFNonce:      3,
 	}
-	commitmentATX := types.RandomATXID()
-	err := AddInitialPost(db, nodeID, post, commitmentATX)
+	err := AddInitialPost(db, nodeID, post)
 	require.NoError(t, err)
 
-	post, atx, err := InitialPost(db, nodeID)
+	got, err := InitialPost(db, nodeID)
 	require.NoError(t, err)
-	require.NotNil(t, post)
-	require.Equal(t, post, post)
-	require.Equal(t, commitmentATX, atx)
+	require.NotNil(t, got)
+	require.Equal(t, post, *got)
 
 	err = RemoveInitialPost(db, nodeID)
 	require.NoError(t, err)
 
-	post, atx, err = InitialPost(db, nodeID)
+	got, err = InitialPost(db, nodeID)
 	require.ErrorIs(t, err, sql.ErrNotFound)
-	require.Nil(t, post)
-	require.Equal(t, types.EmptyATXID, atx)
+	require.Nil(t, got)
 }
 
 func Test_AddInitialPost_NoDuplicates(t *testing.T) {
 	db := localsql.InMemory()
 
 	nodeID := types.RandomNodeID()
-	post := &types.Post{
+	post := Post{
 		Nonce:   1,
 		Indices: []byte{1, 2, 3},
 		Pow:     1,
+
+		NumUnits:      2,
+		CommitmentATX: types.RandomATXID(),
+		VRFNonce:      3,
 	}
-	commitmentATX := types.RandomATXID()
-	err := AddInitialPost(db, nodeID, post, commitmentATX)
+	err := AddInitialPost(db, nodeID, post)
 	require.NoError(t, err)
 
 	// fail to add new initial post for same node
-	post2 := &types.Post{
+	post2 := Post{
 		Nonce:   2,
 		Indices: []byte{1, 2, 3},
 		Pow:     1,
+
+		NumUnits:      4,
+		CommitmentATX: types.RandomATXID(),
+		VRFNonce:      5,
 	}
-	commitmentATX2 := types.RandomATXID()
-	err = AddInitialPost(db, nodeID, post2, commitmentATX2)
+	err = AddInitialPost(db, nodeID, post2)
 	require.Error(t, err)
 
 	// succeed to add initial post for different node
-	err = AddInitialPost(db, types.RandomNodeID(), post2, commitmentATX2)
+	err = AddInitialPost(db, types.RandomNodeID(), post2)
 	require.NoError(t, err)
 }
 

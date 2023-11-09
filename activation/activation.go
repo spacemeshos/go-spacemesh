@@ -295,7 +295,16 @@ func (b *Builder) movePostToDb() error {
 		if err := nipost.RemoveInitialPost(tx, b.signer.NodeID()); err != nil {
 			return fmt.Errorf("removing existing challenge from db: %w", err)
 		}
-		if err := nipost.AddInitialPost(tx, b.signer.NodeID(), post, commitmentAtxId); err != nil {
+		initialPost := nipost.Post{
+			Nonce:   post.Nonce,
+			Indices: post.Indices,
+			Pow:     post.Pow,
+
+			NumUnits:      meta.NumUnits,
+			CommitmentATX: commitmentAtxId,
+			VRFNonce:      types.VRFPostIndex(*meta.Nonce),
+		}
+		if err := nipost.AddInitialPost(tx, b.signer.NodeID(), initialPost); err != nil {
 			return fmt.Errorf("adding post to db: %w", err)
 		}
 		return discardPost(b.nipostBuilder.DataDir())
@@ -334,7 +343,7 @@ func (b *Builder) buildInitialPost(ctx context.Context) error {
 		return nil
 	}
 	// ...and if we haven't stored an initial post yet.
-	_, _, err := nipost.InitialPost(b.localDB, b.signer.NodeID())
+	_, err := nipost.InitialPost(b.localDB, b.signer.NodeID())
 	switch {
 	case err == nil:
 		b.log.Info("load initial post from db")
@@ -355,7 +364,16 @@ func (b *Builder) buildInitialPost(ctx context.Context) error {
 	public.PostSeconds.Set(float64(time.Since(startTime)))
 	b.log.Info("created the initial post")
 
-	return nipost.AddInitialPost(b.localDB, b.signer.NodeID(), post, postInfo.CommitmentATX)
+	initialPost := nipost.Post{
+		Nonce:   post.Nonce,
+		Indices: post.Indices,
+		Pow:     post.Pow,
+
+		NumUnits:      postInfo.NumUnits,
+		CommitmentATX: postInfo.CommitmentATX,
+		VRFNonce:      *postInfo.Nonce,
+	}
+	return nipost.AddInitialPost(b.localDB, b.signer.NodeID(), initialPost)
 }
 
 func (b *Builder) run(ctx context.Context) {
@@ -482,7 +500,7 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
 		// initial ATX challenge
-		post, commitmentATX, err := nipost.InitialPost(b.localDB, b.signer.NodeID())
+		post, err := nipost.InitialPost(b.localDB, b.signer.NodeID())
 		if err != nil {
 			return nil, fmt.Errorf("get initial post: %w", err)
 		}
@@ -491,8 +509,12 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 			Sequence:       0,
 			PrevATXID:      types.EmptyATXID,
 			PositioningATX: posAtx,
-			CommitmentATX:  &commitmentATX,
-			InitialPost:    post,
+			CommitmentATX:  &post.CommitmentATX,
+			InitialPost: &types.Post{
+				Nonce:   post.Nonce,
+				Indices: post.Indices,
+				Pow:     post.Pow,
+			},
 		}
 	case err != nil:
 		return nil, fmt.Errorf("get last ATX: %w", err)
