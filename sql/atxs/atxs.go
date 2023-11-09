@@ -517,7 +517,7 @@ func IterateAtxsOps(
 ) error {
 	var derr error
 	_, err := db.Exec(
-		fullQuery+filterFrom(operations)+" order by epoch asc, id",
+		fullQuery+filterFrom(operations),
 		bindingsFrom(operations),
 		decoder(func(atx *types.VerifiedActivationTx, err error) bool {
 			if atx != nil {
@@ -544,6 +544,7 @@ func filterFrom(operations Operations) string {
 		}
 		query += " " + string(op.Field) + " " + string(op.Token) + " ?" + strconv.Itoa(i+1)
 	}
+	query += " order by epoch asc, id"
 	for _, op := range operations.Other {
 		query += fmt.Sprintf(" %s %v", string(op.Field), op.Value)
 	}

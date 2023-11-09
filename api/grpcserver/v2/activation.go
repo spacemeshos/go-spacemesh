@@ -341,16 +341,16 @@ func toOperations(filter *spacemeshv2.ActivationRequest) (atxs.Operations, error
 			Value: int64(filter.EndEpoch),
 		})
 	}
-	if filter.Offset != 0 {
-		ops.Other = append(ops.Other, atxs.Op{
-			Field: atxs.Offset,
-			Value: int64(filter.Offset),
-		})
-	}
 	if filter.Limit != 0 {
 		ops.Other = append(ops.Other, atxs.Op{
 			Field: atxs.Limit,
 			Value: int64(filter.Limit),
+		})
+	}
+	if filter.Offset != 0 {
+		ops.Other = append(ops.Other, atxs.Op{
+			Field: atxs.Offset,
+			Value: int64(filter.Offset),
 		})
 	}
 	return ops, nil
