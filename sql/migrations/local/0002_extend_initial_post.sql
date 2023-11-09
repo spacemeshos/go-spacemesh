@@ -1,0 +1,3 @@
+ALTER TABLE initial_post ADD COLUMN num_units   UNSIGNED INT NOT NULL;
+ALTER TABLE initial_post ADD COLUMN commit_atx  CHAR(32) NOT NULL;
+ALTER TABLE initial_post ADD COLUMN vrf_nonce   UNSIGNED LONG INT NOT NULL;
