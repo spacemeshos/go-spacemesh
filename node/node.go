@@ -944,7 +944,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.grpcPostService,
 		app.Config.PoETServers,
 		app.Config.SMESHING.Opts.DataDir,
-		app.addLogger(NipostBuilderLogger, lg),
+		app.addLogger(NipostBuilderLogger, lg).Zap(),
 		app.edSgn,
 		app.Config.POET,
 		app.clock,
