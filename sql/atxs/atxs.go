@@ -178,7 +178,7 @@ func GetLastIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, er
 		where pubkey = ?1
 		order by epoch desc, received desc
 		limit 1;`, enc, dec); err != nil {
-		return types.ATXID{}, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
+		return types.ATXID{}, fmt.Errorf("exec nodeID %s: %w", nodeID, err)
 	} else if rows == 0 {
 		return types.ATXID{}, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
 	}

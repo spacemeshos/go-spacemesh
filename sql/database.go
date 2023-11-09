@@ -52,7 +52,7 @@ type Decoder func(*Statement) bool
 func defaultConf() *conf {
 	return &conf{
 		connections: 16,
-		migrations:  embeddedMigrations,
+		migrations:  StateMigrations,
 	}
 }
 

@@ -39,12 +39,11 @@ type IterRound struct {
 }
 
 // Delay returns number of network delays since specified iterround.
-func (ir IterRound) Delay(since IterRound) int {
-	delay := int(ir.Absolute() - since.Absolute())
-	if delay < 0 {
-		return 0
+func (ir IterRound) Delay(since IterRound) uint32 {
+	if ir.Absolute() > since.Absolute() {
+		return ir.Absolute() - since.Absolute()
 	}
-	return delay
+	return 0
 }
 
 func (ir IterRound) IsMessageRound() bool {
