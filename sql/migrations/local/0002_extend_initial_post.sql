@@ -1,5 +1,5 @@
 --- sqlite doesn't support just adding a NOT NULL constraint, so we create a new column,
---- copy the data, and drop the old column
+--- copy the data, drop the old column, and rename the new column to the old name
 ALTER TABLE initial_post ADD COLUMN commit_atx_new CHAR(32) NOT NULL;
 UPDATE initial_post SET commit_atx_new = commit_atx;
 ALTER TABLE initial_post DROP COLUMN commit_atx;
