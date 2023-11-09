@@ -22,7 +22,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
@@ -183,7 +182,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 		svc,
 		[]string{poetProver.RestURL().String()},
 		t.TempDir(),
-		log.NewFromLog(logger),
+		logger.Named("nipostBuilder"),
 		sig,
 		poetCfg,
 		mclock,
@@ -236,7 +235,7 @@ func TestNIPostBuilder_Close(t *testing.T) {
 		svc,
 		[]string{poetProver.RestURL().String()},
 		t.TempDir(),
-		log.NewFromLog(logger),
+		logger.Named("nipostBuilder"),
 		sig,
 		activation.PoetConfig{},
 		mclock,
@@ -304,7 +303,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 		svc,
 		[]string{poetProver.RestURL().String()},
 		t.TempDir(),
-		logtest.New(t),
+		logger.Named("nipostBuilder"),
 		sig,
 		poetCfg,
 		mclock,
