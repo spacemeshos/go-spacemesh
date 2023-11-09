@@ -179,4 +179,20 @@ func TestRewards(t *testing.T) {
 	require.Equal(t, smesherID3, got[0].SmesherID)
 	require.Equal(t, part, got[0].TotalReward)
 	require.Equal(t, lyrReward, got[0].LayerReward)
+
+	// This should fail: there cannot be two (smesherID, layer) rows.
+	require.ErrorIs(t, Add(db, &types.Reward{
+		Layer:     lid1,
+		SmesherID: smesherID2,
+	}), sql.ErrObjectExists)
+
+	// This should succeed. SmesherID can be NULL.
+	require.NoError(t, Add(db, &types.Reward{
+		Layer: lid1,
+	}))
+
+	// This should fail: there cannot be two (NULL, layer) rows.
+	require.ErrorIs(t, Add(db, &types.Reward{
+		Layer: lid1,
+	}), sql.ErrObjectExists)
 }
