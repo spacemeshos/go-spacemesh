@@ -301,7 +301,6 @@ func (b *Builder) movePostToDb() error {
 			Pow:     post.Pow,
 
 			NumUnits:      meta.NumUnits,
-			LabelsPerUnit: meta.LabelsPerUnit,
 			CommitmentATX: commitmentAtxId,
 			VRFNonce:      types.VRFPostIndex(*meta.Nonce),
 		}
@@ -371,7 +370,6 @@ func (b *Builder) buildInitialPost(ctx context.Context) error {
 		Pow:     post.Pow,
 
 		NumUnits:      postInfo.NumUnits,
-		LabelsPerUnit: postInfo.LabelsPerUnit,
 		CommitmentATX: postInfo.CommitmentATX,
 		VRFNonce:      *postInfo.Nonce,
 	}

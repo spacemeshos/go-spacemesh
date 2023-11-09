@@ -20,7 +20,6 @@ func Test_AddInitialPost(t *testing.T) {
 		Pow:     1,
 
 		NumUnits:      2,
-		LabelsPerUnit: 1024,
 		CommitmentATX: types.RandomATXID(),
 		VRFNonce:      3,
 	}
@@ -50,7 +49,6 @@ func Test_AddInitialPost_NoDuplicates(t *testing.T) {
 		Pow:     1,
 
 		NumUnits:      2,
-		LabelsPerUnit: 1024,
 		CommitmentATX: types.RandomATXID(),
 		VRFNonce:      3,
 	}
@@ -64,7 +62,6 @@ func Test_AddInitialPost_NoDuplicates(t *testing.T) {
 		Pow:     1,
 
 		NumUnits:      4,
-		LabelsPerUnit: 2048,
 		CommitmentATX: types.RandomATXID(),
 		VRFNonce:      5,
 	}

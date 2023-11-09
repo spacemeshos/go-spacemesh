@@ -6,5 +6,4 @@ ALTER TABLE initial_post DROP COLUMN commit_atx;
 ALTER TABLE initial_post RENAME COLUMN commit_atx_new TO commit_atx;
 
 ALTER TABLE initial_post ADD COLUMN num_units        UNSIGNED INT NOT NULL;
-ALTER TABLE initial_post ADD COLUMN labels_per_unit  UNSIGNED LONG INT NOT NULL;
 ALTER TABLE initial_post ADD COLUMN vrf_nonce        UNSIGNED LONG INT NOT NULL;
