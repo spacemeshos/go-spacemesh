@@ -107,8 +107,12 @@ func (s *activationService) Stream(filter *pb.ActivationStreamRequest, stream pb
 	if filter.Watch {
 		return status.Error(codes.InvalidArgument, "watch is not supported")
 	}
+	ops, err := toOperations(filter)
+	if err != nil {
+		return status.Error(codes.InvalidArgument, err.Error())
+	}
 	var ierr error
-	if err := atxs.IterateAtxsOps(s.db, toOperations(filter), func(atx *types.VerifiedActivationTx) bool {
+	if err := atxs.IterateAtxsOps(s.db, ops, func(atx *types.VerifiedActivationTx) bool {
 		v1 := &pb.ActivationV1{
 			Id:             atx.ID().Bytes(),
 			NodeId:         atx.SmesherID.Bytes(),
@@ -130,6 +134,49 @@ func (s *activationService) Stream(filter *pb.ActivationStreamRequest, stream pb
 	return nil
 }
 
-func toOperations(filter *pb.ActivationStreamRequest) atxs.Operations {
-	return atxs.Operations{}
+func toOperations(filter *pb.ActivationStreamRequest) (atxs.Operations, error) {
+	ops := atxs.Operations{}
+	if filter == nil {
+		return ops, nil
+	}
+	if filter.NodeId != nil {
+		ops.Filter = append(ops.Filter, atxs.Op{
+			Field: atxs.Smesher,
+			Token: atxs.Eq,
+			Value: filter.NodeId,
+		})
+	}
+	if filter.Id != nil {
+		ops.Filter = append(ops.Filter, atxs.Op{
+			Field: atxs.Id,
+			Token: atxs.Eq,
+			Value: filter.Id,
+		})
+	}
+	if len(filter.Coinbase) > 0 {
+		addr, err := types.StringToAddress(filter.Coinbase)
+		if err != nil {
+			return atxs.Operations{}, err
+		}
+		ops.Filter = append(ops.Filter, atxs.Op{
+			Field: atxs.Coinbase,
+			Token: atxs.Eq,
+			Value: addr.Bytes(),
+		})
+	}
+	if filter.StartEpoch != 0 {
+		ops.Filter = append(ops.Filter, atxs.Op{
+			Field: atxs.Epoch,
+			Token: atxs.Gte,
+			Value: int64(filter.StartEpoch),
+		})
+	}
+	if filter.EndEpoch != 0 {
+		ops.Filter = append(ops.Filter, atxs.Op{
+			Field: atxs.Epoch,
+			Token: atxs.Lte,
+			Value: int64(filter.EndEpoch),
+		})
+	}
+	return atxs.Operations{}, nil
 }
