@@ -491,6 +491,8 @@ const (
 	Smesher  field = "pubkey"
 	Coinbase field = "coinbase"
 	Id       field = "id"
+	Offset   field = "offset"
+	Limit    field = "limit"
 )
 
 type Op struct {
@@ -513,8 +515,8 @@ func IterateAtxsOps(
 ) error {
 	var derr error
 	_, err := db.Exec(
-		fullQuery+filterFrom(operations.Filter)+" order by epoch asc, id",
-		bindingsFrom(operations.Filter),
+		fullQuery+filterFrom(operations)+" order by epoch asc, id",
+		bindingsFrom(operations),
 		decoder(func(atx *types.VerifiedActivationTx, err error) bool {
 			if atx != nil {
 				return fn(atx)
@@ -528,26 +530,26 @@ func IterateAtxsOps(
 	return derr
 }
 
-func filterFrom(filter []Op) string {
-	if len(filter) == 0 {
-		return ""
+func filterFrom(operations Operations) string {
+	query := " "
+	if len(operations.Filter) > 0 {
+		query = "where "
 	}
-	query := "where "
-	for i, op := range filter {
+	for i, op := range operations.Filter {
 		if i != 0 {
 			query += " " + string(And) + " "
 		}
 		query += string(op.Field) + " " + string(op.Token) + " ?" + strconv.Itoa(i+1)
 	}
+	for i, op := range operations.Other {
+		query += " " + string(op.Field) + " " + string(op.Token) + " ?" + strconv.Itoa(i+1+len(operations.Filter))
+	}
 	return query
 }
 
-func bindingsFrom(filter []Op) sql.Encoder {
-	if len(filter) == 0 {
-		return nil
-	}
+func bindingsFrom(operations Operations) sql.Encoder {
 	return func(stmt *sql.Statement) {
-		for i, op := range filter {
+		for i, op := range append(operations.Filter, operations.Other...) {
 			switch value := op.Value.(type) {
 			case int64:
 				stmt.BindInt64(i+1, value)

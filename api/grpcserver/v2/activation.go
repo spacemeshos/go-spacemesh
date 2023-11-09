@@ -50,7 +50,7 @@ func (s *ActivationStreamService) Stream(
 	if request.Watch {
 		return status.Error(codes.InvalidArgument, "watch is not supported")
 	}
-	ops, err := toOperations(request)
+	ops, err := toOperations(toRequest(request))
 	if err != nil {
 		return status.Error(codes.InvalidArgument, err.Error())
 	}
@@ -71,7 +71,7 @@ func (s *ActivationStreamService) StreamHeaders(
 	if request.Watch {
 		return status.Error(codes.InvalidArgument, "watch is not supported")
 	}
-	ops, err := toOperations(request)
+	ops, err := toOperations(toRequest(request))
 	if err != nil {
 		return status.Error(codes.InvalidArgument, err.Error())
 	}
@@ -141,13 +141,15 @@ func (s *ActivationService) List(
 	ctx context.Context,
 	request *spacemeshv2.ActivationRequest,
 ) (*spacemeshv2.ActivationList, error) {
-	ops, err := toOperations2(request)
+	ops, err := toOperations(request)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 	// every full atx is ~1KB. 100 atxs is ~100KB.
 	if request.Limit > 100 {
 		return nil, status.Error(codes.InvalidArgument, "limit is capped at 100")
+	} else if request.Limit == 0 {
+		return nil, status.Error(codes.InvalidArgument, "limit must be set to a value below 100")
 	}
 	rst := make([]*spacemeshv2.Activation, 0, request.Limit)
 	if err := atxs.IterateAtxsOps(s.db, ops, func(atx *types.VerifiedActivationTx) bool {
@@ -163,12 +165,14 @@ func (s *ActivationService) ListHeaders(
 	ctx context.Context,
 	request *spacemeshv2.ActivationRequest,
 ) (*spacemeshv2.ActivationHeaderList, error) {
-	ops, err := toOperations2(request)
+	ops, err := toOperations(request)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 	if request.Limit > 10000 {
 		return nil, status.Error(codes.InvalidArgument, "limit is capped at 10000")
+	} else if request.Limit == 0 {
+		return nil, status.Error(codes.InvalidArgument, "limit must be set to a value below 10000")
 	}
 	rst := make([]*spacemeshv2.ActivationHeader, 0, request.Limit)
 	if err := atxs.IterateAtxsOps(s.db, ops, func(atx *types.VerifiedActivationTx) bool {
@@ -180,54 +184,17 @@ func (s *ActivationService) ListHeaders(
 	return &spacemeshv2.ActivationHeaderList{Headers: rst}, nil
 }
 
-func toOperations(filter *spacemeshv2.ActivationStreamRequest) (atxs.Operations, error) {
-	ops := atxs.Operations{}
-	if filter == nil {
-		return ops, nil
+func toRequest(filter *spacemeshv2.ActivationStreamRequest) *spacemeshv2.ActivationRequest {
+	return &spacemeshv2.ActivationRequest{
+		NodeId:     filter.NodeId,
+		Id:         filter.Id,
+		Coinbase:   filter.Coinbase,
+		StartEpoch: filter.StartEpoch,
+		EndEpoch:   filter.EndEpoch,
 	}
-	if filter.NodeId != nil {
-		ops.Filter = append(ops.Filter, atxs.Op{
-			Field: atxs.Smesher,
-			Token: atxs.Eq,
-			Value: filter.NodeId,
-		})
-	}
-	if filter.Id != nil {
-		ops.Filter = append(ops.Filter, atxs.Op{
-			Field: atxs.Id,
-			Token: atxs.Eq,
-			Value: filter.Id,
-		})
-	}
-	if len(filter.Coinbase) > 0 {
-		addr, err := types.StringToAddress(filter.Coinbase)
-		if err != nil {
-			return atxs.Operations{}, err
-		}
-		ops.Filter = append(ops.Filter, atxs.Op{
-			Field: atxs.Coinbase,
-			Token: atxs.Eq,
-			Value: addr.Bytes(),
-		})
-	}
-	if filter.StartEpoch != 0 {
-		ops.Filter = append(ops.Filter, atxs.Op{
-			Field: atxs.Epoch,
-			Token: atxs.Gte,
-			Value: int64(filter.StartEpoch),
-		})
-	}
-	if filter.EndEpoch != 0 {
-		ops.Filter = append(ops.Filter, atxs.Op{
-			Field: atxs.Epoch,
-			Token: atxs.Lte,
-			Value: int64(filter.EndEpoch),
-		})
-	}
-	return atxs.Operations{}, nil
 }
 
-func toOperations2(filter *spacemeshv2.ActivationRequest) (atxs.Operations, error) {
+func toOperations(filter *spacemeshv2.ActivationRequest) (atxs.Operations, error) {
 	ops := atxs.Operations{}
 	if filter == nil {
 		return ops, nil
@@ -271,5 +238,17 @@ func toOperations2(filter *spacemeshv2.ActivationRequest) (atxs.Operations, erro
 			Value: int64(filter.EndEpoch),
 		})
 	}
-	return atxs.Operations{}, nil
+	if filter.Offset != 0 {
+		ops.Other = append(ops.Other, atxs.Op{
+			Field: atxs.Offset,
+			Value: int64(filter.Offset),
+		})
+	}
+	if filter.Limit != 0 {
+		ops.Other = append(ops.Other, atxs.Op{
+			Field: atxs.Limit,
+			Value: int64(filter.Limit),
+		})
+	}
+	return ops, nil
 }
