@@ -25,6 +25,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 )
 
 func TestCertification(t *testing.T) {
@@ -93,7 +94,7 @@ func TestCertification(t *testing.T) {
 	poets = append(poets, client)
 
 	certifierClient := activation.NewCertifierClient(zaptest.NewLogger(t), post, info, shared.ZeroChallenge)
-	certifier := activation.NewCertifier(t.TempDir(), zaptest.NewLogger(t), certifierClient)
+	certifier := activation.NewCertifier(localsql.InMemory(), zaptest.NewLogger(t), certifierClient)
 	certs := certifier.CertifyAll(context.Background(), poets)
 	require.Len(t, certs, 3)
 	require.Contains(t, certs, poets[0].Address())

@@ -398,7 +398,7 @@ func (b *Builder) certifyPost(ctx context.Context) {
 	}
 
 	client := NewCertifierClient(b.log, post, meta, ch)
-	b.certifier = NewCertifier(b.nipostBuilder.DataDir(), b.log, client)
+	b.certifier = NewCertifier(b.localDB, b.log, client)
 	b.certifier.CertifyAll(ctx, b.poets)
 }
 

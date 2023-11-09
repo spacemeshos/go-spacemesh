@@ -136,11 +136,18 @@ type CertifierInfo struct {
 	PubKey []byte
 }
 
+// A certifier client that the certifierService uses to obtain certificates
+// The implementation can use any method to obtain the certificate,
+// for example, POST verification.
 type certifierClient interface {
+	// The ID for which this client certifies.
+	Id() types.NodeID
+	// Certify the ID in the given certifier.
 	Certify(ctx context.Context, url *url.URL, pubkey []byte) (*PoetCert, error)
 }
 
 // certifierService is used to certify nodeID for registerting in the poet.
+// It holds the certificates and can recertify if needed.
 type certifierService interface {
 	// Acquire a certificate for the given poet.
 	GetCertificate(poet string) *PoetCert

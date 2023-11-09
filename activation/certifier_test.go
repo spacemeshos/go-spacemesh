@@ -10,14 +10,16 @@ import (
 	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 )
 
 func TestPersistsCerts(t *testing.T) {
 	client := activation.NewMockcertifierClient(gomock.NewController(t))
-	datadir := t.TempDir()
-
+	client.EXPECT().Id().AnyTimes().Return(types.RandomNodeID())
+	db := localsql.InMemory()
 	{
-		certifier := activation.NewCertifier(datadir, zaptest.NewLogger(t), client)
+		certifier := activation.NewCertifier(db, zaptest.NewLogger(t), client)
 
 		poetMock := activation.NewMockPoetClient(gomock.NewController(t))
 		poetMock.EXPECT().Address().Return("http://poet")
@@ -41,7 +43,7 @@ func TestPersistsCerts(t *testing.T) {
 	}
 	{
 		// Create new certifier and check that it loads the certs back.
-		certifier := activation.NewCertifier(datadir, zaptest.NewLogger(t), client)
+		certifier := activation.NewCertifier(db, zaptest.NewLogger(t), client)
 		cert := certifier.GetCertificate("http://poet")
 		require.Equal(t, []byte("cert"), cert.Signature)
 	}

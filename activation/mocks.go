@@ -1614,6 +1614,44 @@ func (c *certifierClientCertifyCall) DoAndReturn(f func(context.Context, *url.UR
 	return c
 }
 
+// Id mocks base method.
+func (m *MockcertifierClient) Id() types.NodeID {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Id")
+	ret0, _ := ret[0].(types.NodeID)
+	return ret0
+}
+
+// Id indicates an expected call of Id.
+func (mr *MockcertifierClientMockRecorder) Id() *certifierClientIdCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Id", reflect.TypeOf((*MockcertifierClient)(nil).Id))
+	return &certifierClientIdCall{Call: call}
+}
+
+// certifierClientIdCall wrap *gomock.Call
+type certifierClientIdCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *certifierClientIdCall) Return(arg0 types.NodeID) *certifierClientIdCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *certifierClientIdCall) Do(f func() types.NodeID) *certifierClientIdCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *certifierClientIdCall) DoAndReturn(f func() types.NodeID) *certifierClientIdCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // MockcertifierService is a mock of certifierService interface.
 type MockcertifierService struct {
 	ctrl     *gomock.Controller

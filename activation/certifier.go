@@ -10,17 +10,15 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
-	"sync"
 
 	"github.com/hashicorp/go-retryablehttp"
-	"github.com/natefinch/atomic"
 	"github.com/sourcegraph/conc/iter"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	certifier_db "github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
 )
 
 type ProofToCertify struct {
@@ -49,21 +47,25 @@ type CertifyResponse struct {
 
 type Certifier struct {
 	logger *zap.Logger
-	store  *certificateStore
+	db     *localsql.Database
 	client certifierClient
 }
 
-func NewCertifier(datadir string, logger *zap.Logger, client certifierClient) *Certifier {
+func NewCertifier(db *localsql.Database, logger *zap.Logger, client certifierClient) *Certifier {
 	return &Certifier{
 		client: client,
 		logger: logger,
-		store:  openCertificateStore(datadir, logger),
+		db:     db,
 	}
 }
 
 func (c *Certifier) GetCertificate(poet string) *PoetCert {
-	if cert, ok := c.store.get(poet); ok {
-		return &cert
+	cert, err := certifier_db.Certificate(c.db, c.client.Id(), poet)
+	switch {
+	case err == nil:
+		return &PoetCert{Signature: cert}
+	case !errors.Is(err, sql.ErrNotFound):
+		c.logger.Warn("failed to get certificate", zap.Error(err))
 	}
 	return nil
 }
@@ -77,9 +79,9 @@ func (c *Certifier) Recertify(ctx context.Context, poet PoetClient) (*PoetCert, 
 	if err != nil {
 		return nil, fmt.Errorf("certifying POST for %s at %v: %w", poet.Address(), info.URL, err)
 	}
-	c.store.put(poet.Address(), *cert)
-	if err := c.store.persist(); err != nil {
-		c.logger.Warn("failed to persist poet certs", zap.Error(err))
+
+	if err := certifier_db.AddCertificate(c.db, c.client.Id(), cert.Signature, poet.Address()); err != nil {
+		c.logger.Warn("failed to persist poet cert", zap.Error(err))
 	}
 
 	return cert, nil
@@ -145,12 +147,7 @@ func (c *Certifier) CertifyAll(ctx context.Context, poets []PoetClient) map[stri
 		c.logger.Info(
 			"certifying for poets",
 			zap.Stringer("certifier", svc.URL),
-			zap.Array("poets", zapcore.ArrayMarshalerFunc(func(enc zapcore.ArrayEncoder) error {
-				for _, poet := range svc.poets {
-					enc.AppendString(poet)
-				}
-				return nil
-			})),
+			zap.Strings("poets", svc.poets),
 		)
 
 		cert, err := c.client.Certify(ctx, svc.URL, svc.PubKey)
@@ -164,11 +161,12 @@ func (c *Certifier) CertifyAll(ctx context.Context, poets []PoetClient) map[stri
 			zap.Binary("cert", cert.Signature),
 		)
 		for _, poet := range svc.poets {
-			c.store.put(poet, *cert)
+			if err := certifier_db.AddCertificate(c.db, c.client.Id(), cert.Signature, poet); err != nil {
+				c.logger.Warn("failed to persist poet cert", zap.Error(err))
+			}
 			certs[poet] = *cert
 		}
 	}
-	c.store.persist()
 	return certs
 }
 
@@ -199,6 +197,10 @@ func NewCertifierClient(
 	}
 
 	return c
+}
+
+func (c *CertifierClient) Id() types.NodeID {
+	return c.postInfo.NodeID
 }
 
 func (c *CertifierClient) Certify(ctx context.Context, url *url.URL, pubkey []byte) (*PoetCert, error) {
@@ -252,60 +254,4 @@ func (c *CertifierClient) Certify(ctx context.Context, url *url.URL, pubkey []by
 		return nil, errors.New("signature is invalid")
 	}
 	return &PoetCert{Signature: certRespose.Signature}, nil
-}
-
-type certificateStore struct {
-	// protects certs map
-	mu sync.RWMutex
-	// map of certifier public key to PoET certificate
-	certs map[string]PoetCert
-	dir   string
-}
-
-func openCertificateStore(dir string, logger *zap.Logger) *certificateStore {
-	store := &certificateStore{
-		dir:   dir,
-		certs: map[string]PoetCert{},
-	}
-
-	file, err := os.Open(filepath.Join(dir, "poet_certs.json"))
-	switch {
-	case errors.Is(err, os.ErrNotExist):
-		return store
-	case err != nil:
-		logger.Warn("failed to open poet certs file", zap.Error(err))
-		return store
-	}
-	certs := make(map[string]PoetCert)
-	if err := json.NewDecoder(file).Decode(&certs); err != nil {
-		logger.Warn("failed to decode poet certs", zap.Error(err))
-		return store
-	}
-	return &certificateStore{
-		certs: certs,
-		dir:   dir,
-	}
-}
-
-func (s *certificateStore) get(poet string) (PoetCert, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	cert, ok := s.certs[poet]
-	return cert, ok
-}
-
-func (s *certificateStore) put(poet string, cert PoetCert) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.certs[poet] = cert
-}
-
-func (s *certificateStore) persist() error {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	buf := &bytes.Buffer{}
-	if err := json.NewEncoder(buf).Encode(s.certs); err != nil {
-		return err
-	}
-	return atomic.WriteFile(filepath.Join(s.dir, "poet_certs.json"), buf)
 }

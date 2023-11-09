@@ -7,3 +7,10 @@ ALTER TABLE initial_post RENAME COLUMN commit_atx_new TO commit_atx;
 
 ALTER TABLE initial_post ADD COLUMN num_units        UNSIGNED INT NOT NULL;
 ALTER TABLE initial_post ADD COLUMN vrf_nonce        UNSIGNED LONG INT NOT NULL;
+
+CREATE TABLE poet_certificates
+(
+    node_id     CHAR(32),
+    poet_url    VARCHAR NOT NULL,
+    certificate VARCHAR NOT NULL
+);

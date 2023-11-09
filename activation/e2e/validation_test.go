@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 )
 
 func TestValidator_Validate(t *testing.T) {
@@ -110,7 +111,7 @@ func TestValidator_Validate(t *testing.T) {
 	challengeHash := challenge.Hash()
 
 	certifierClient := activation.NewCertifierClient(zaptest.NewLogger(t), post, info, shared.ZeroChallenge)
-	certifier := activation.NewCertifier(t.TempDir(), logger, certifierClient)
+	certifier := activation.NewCertifier(localsql.InMemory(), logger, certifierClient)
 	nipost, err := nb.BuildNIPost(context.Background(), &challenge, certifier)
 	require.NoError(t, err)
 
