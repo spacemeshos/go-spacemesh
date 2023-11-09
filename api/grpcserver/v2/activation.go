@@ -2,16 +2,20 @@ package v2
 
 import (
 	"context"
+	"errors"
+	"io"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	spacemeshv2 "github.com/spacemeshos/api/release/go/spacemesh/v2"
 
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
@@ -47,8 +51,18 @@ func (s *ActivationStreamService) Stream(
 	request *spacemeshv2.ActivationStreamRequest,
 	stream spacemeshv2.ActivationStreamService_StreamServer,
 ) error {
+	// TODO(dshulyak) implement matcher based on filter
+	var sub *events.BufferedSubscription[events.ActivationTx]
 	if request.Watch {
-		return status.Error(codes.InvalidArgument, "watch is not supported")
+		var err error
+		sub, err = events.Subscribe[events.ActivationTx]()
+		if err != nil {
+			return status.Error(codes.Internal, err.Error())
+		}
+		defer sub.Close()
+		if err := stream.SendHeader(metadata.MD{}); err != nil {
+			return status.Errorf(codes.Unavailable, "can't send header")
+		}
 	}
 	ops, err := toOperations(toRequest(request))
 	if err != nil {
@@ -61,15 +75,47 @@ func (s *ActivationStreamService) Stream(
 	}); err != nil {
 		return status.Error(codes.Internal, err.Error())
 	}
-	return nil
+	if sub == nil {
+		return nil
+	}
+	for {
+		select {
+		case <-stream.Context().Done():
+			return nil
+		case <-sub.Full():
+			return status.Error(codes.Canceled, "buffer overflow")
+		case rst := <-sub.Out():
+			if err := stream.Send(&spacemeshv2.Activation{
+				Versioned: &spacemeshv2.Activation_V1{V1: toAtx(rst.VerifiedActivationTx)}},
+			); err != nil {
+				if errors.Is(err, io.EOF) {
+					return nil
+				}
+				return status.Error(codes.Internal, err.Error())
+			}
+		}
+	}
 }
 
 func (s *ActivationStreamService) StreamHeaders(
 	request *spacemeshv2.ActivationStreamRequest,
 	stream spacemeshv2.ActivationStreamService_StreamHeadersServer,
 ) error {
+	// TODO(dshulyak) the code below is almost the same as code in Stream
+	// it can be refactored by implementing generic with toAtx/toHeader
+
+	// TODO(dshulyak) implement matcher based on filter
+	var sub *events.BufferedSubscription[events.ActivationTx]
 	if request.Watch {
-		return status.Error(codes.InvalidArgument, "watch is not supported")
+		var err error
+		sub, err = events.Subscribe[events.ActivationTx]()
+		if err != nil {
+			return status.Error(codes.Internal, err.Error())
+		}
+		defer sub.Close()
+		if err := stream.SendHeader(metadata.MD{}); err != nil {
+			return status.Errorf(codes.Unavailable, "can't send header")
+		}
 	}
 	ops, err := toOperations(toRequest(request))
 	if err != nil {
@@ -83,7 +129,26 @@ func (s *ActivationStreamService) StreamHeaders(
 	}); err != nil {
 		return status.Error(codes.Internal, err.Error())
 	}
-	return nil
+	if sub == nil {
+		return nil
+	}
+	for {
+		select {
+		case <-stream.Context().Done():
+			return nil
+		case <-sub.Full():
+			return status.Error(codes.Canceled, "buffer overflow")
+		case rst := <-sub.Out():
+			if err := stream.Send(&spacemeshv2.ActivationHeader{
+				Versioned: &spacemeshv2.ActivationHeader_V1{V1: toHeader(rst.VerifiedActivationTx)}},
+			); err != nil {
+				if errors.Is(err, io.EOF) {
+					return nil
+				}
+				return status.Error(codes.Internal, err.Error())
+			}
+		}
+	}
 }
 
 func toAtx(atx *types.VerifiedActivationTx) *spacemeshv2.ActivationV1 {
