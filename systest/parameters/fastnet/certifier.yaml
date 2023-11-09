@@ -1,4 +1,5 @@
 listen: "0.0.0.0:80"
+metrics: "0.0.0.0:2112"
 # Same as fastnet
 post_cfg:
   k1: 12
@@ -13,5 +14,3 @@ init_cfg:
     n: 2
     r: 1
     p: 1
-
-metrics: true
