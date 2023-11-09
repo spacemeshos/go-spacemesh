@@ -148,23 +148,20 @@ func (c *HTTPPoetClient) PowParams(ctx context.Context) (*PoetPowParams, error) 
 	}, nil
 }
 
-func (c *HTTPPoetClient) CertifierInfo(ctx context.Context) (*CertifierInfo, error) {
+func (c *HTTPPoetClient) CertifierInfo(ctx context.Context) (*url.URL, []byte, error) {
 	info, err := c.info(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	certifierInfo := info.GetCertifier()
 	if certifierInfo == nil {
-		return nil, errors.New("poet doesn't support certifier")
+		return nil, nil, errors.New("poet doesn't support certifier")
 	}
 	url, err := url.Parse(certifierInfo.Url)
 	if err != nil {
-		return nil, fmt.Errorf("parsing certifier address: %w", err)
+		return nil, nil, fmt.Errorf("parsing certifier address: %w", err)
 	}
-	return &CertifierInfo{
-		PubKey: certifierInfo.Pubkey,
-		URL:    url,
-	}, nil
+	return url, certifierInfo.Pubkey, nil
 }
 
 // Submit registers a challenge in the proving service current open round.

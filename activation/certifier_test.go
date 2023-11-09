@@ -23,10 +23,9 @@ func TestPersistsCerts(t *testing.T) {
 
 		poetMock := activation.NewMockPoetClient(gomock.NewController(t))
 		poetMock.EXPECT().Address().Return("http://poet")
-		poetMock.EXPECT().CertifierInfo(gomock.Any()).Return(&activation.CertifierInfo{
-			URL:    &url.URL{Scheme: "http", Host: "certifier.org"},
-			PubKey: []byte("pubkey"),
-		}, nil)
+		poetMock.EXPECT().
+			CertifierInfo(gomock.Any()).
+			Return(&url.URL{Scheme: "http", Host: "certifier.org"}, []byte("pubkey"), nil)
 
 		client.EXPECT().
 			Certify(gomock.Any(), &url.URL{Scheme: "http", Host: "certifier.org"}, []byte("pubkey")).

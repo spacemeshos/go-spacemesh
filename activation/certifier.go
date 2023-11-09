@@ -71,13 +71,13 @@ func (c *Certifier) GetCertificate(poet string) *PoetCert {
 }
 
 func (c *Certifier) Recertify(ctx context.Context, poet PoetClient) (*PoetCert, error) {
-	info, err := poet.CertifierInfo(ctx)
+	url, pubkey, err := poet.CertifierInfo(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("querying certifier info: %w", err)
 	}
-	cert, err := c.client.Certify(ctx, info.URL, info.PubKey)
+	cert, err := c.client.Certify(ctx, url, pubkey)
 	if err != nil {
-		return nil, fmt.Errorf("certifying POST for %s at %v: %w", poet.Address(), info.URL, err)
+		return nil, fmt.Errorf("certifying POST for %s at %v: %w", poet.Address(), url, err)
 	}
 
 	if err := certifier_db.AddCertificate(c.db, c.client.Id(), cert.Signature, poet.Address()); err != nil {
@@ -106,26 +106,29 @@ func (c *Certifier) CertifyAll(ctx context.Context, poets []PoetClient) map[stri
 	}
 
 	type certInfo struct {
-		CertifierInfo
-		poet string
+		url    *url.URL
+		pubkey []byte
+		poet   string
 	}
 
 	certifierInfos := iter.Map(poetsToCertify, func(p *PoetClient) *certInfo {
 		poet := *p
-		info, err := poet.CertifierInfo(ctx)
+		url, pubkey, err := poet.CertifierInfo(ctx)
 		if err != nil {
 			c.logger.Warn("failed to query for certifier info", zap.Error(err), zap.String("poet", poet.Address()))
 			return nil
 		}
 		return &certInfo{
-			CertifierInfo: *info,
-			poet:          poet.Address(),
+			url:    url,
+			pubkey: pubkey,
+			poet:   poet.Address(),
 		}
 	})
 
 	type certService struct {
-		CertifierInfo
-		poets []string
+		url    *url.URL
+		pubkey []byte
+		poets  []string
 	}
 	certSvcs := make(map[string]*certService)
 	for _, info := range certifierInfos {
@@ -133,10 +136,11 @@ func (c *Certifier) CertifyAll(ctx context.Context, poets []PoetClient) map[stri
 			continue
 		}
 
-		if svc, ok := certSvcs[string(info.PubKey)]; !ok {
-			certSvcs[string(info.PubKey)] = &certService{
-				CertifierInfo: info.CertifierInfo,
-				poets:         []string{info.poet},
+		if svc, ok := certSvcs[string(info.pubkey)]; !ok {
+			certSvcs[string(info.pubkey)] = &certService{
+				url:    info.url,
+				pubkey: info.pubkey,
+				poets:  []string{info.poet},
 			}
 		} else {
 			svc.poets = append(svc.poets, info.poet)
@@ -146,18 +150,18 @@ func (c *Certifier) CertifyAll(ctx context.Context, poets []PoetClient) map[stri
 	for _, svc := range certSvcs {
 		c.logger.Info(
 			"certifying for poets",
-			zap.Stringer("certifier", svc.URL),
+			zap.Stringer("certifier", svc.url),
 			zap.Strings("poets", svc.poets),
 		)
 
-		cert, err := c.client.Certify(ctx, svc.URL, svc.PubKey)
+		cert, err := c.client.Certify(ctx, svc.url, svc.pubkey)
 		if err != nil {
-			c.logger.Warn("failed to certify", zap.Error(err), zap.Stringer("certifier", svc.URL))
+			c.logger.Warn("failed to certify", zap.Error(err), zap.Stringer("certifier", svc.url))
 			continue
 		}
 		c.logger.Info(
 			"successfully obtained certificate",
-			zap.Stringer("certifier", svc.URL),
+			zap.Stringer("certifier", svc.url),
 			zap.Binary("cert", cert.Signature),
 		)
 		for _, poet := range svc.poets {

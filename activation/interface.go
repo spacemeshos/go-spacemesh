@@ -125,15 +125,10 @@ type PoetClient interface {
 	// PoetServiceID returns the public key of the PoET proving service.
 	PoetServiceID(context.Context) (types.PoetServiceID, error)
 
-	CertifierInfo(context.Context) (*CertifierInfo, error)
+	CertifierInfo(context.Context) (*url.URL, []byte, error)
 
 	// Proof returns the proof for the given round ID.
 	Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Member, error)
-}
-
-type CertifierInfo struct {
-	URL    *url.URL
-	PubKey []byte
 }
 
 // A certifier client that the certifierService uses to obtain certificates
