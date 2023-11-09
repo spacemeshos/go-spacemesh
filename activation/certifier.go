@@ -33,9 +33,8 @@ type ProoToCertifyfMetadata struct {
 	NodeId          []byte `json:"node_id"`
 	CommitmentAtxId []byte `json:"commitment_atx_id"`
 
-	Challenge     []byte `json:"challenge"`
-	NumUnits      uint32 `json:"num_units"`
-	LabelsPerUnit uint64 `json:"labels_per_unit"`
+	Challenge []byte `json:"challenge"`
+	NumUnits  uint32 `json:"num_units"`
 }
 
 type CertifyRequest struct {
@@ -212,7 +211,6 @@ func (c *CertifierClient) Certify(ctx context.Context, url *url.URL, pubkey []by
 		Metadata: ProoToCertifyfMetadata{
 			NodeId:          c.postInfo.NodeID[:],
 			CommitmentAtxId: c.postInfo.CommitmentATX[:],
-			LabelsPerUnit:   c.postInfo.LabelsPerUnit,
 			NumUnits:        c.postInfo.NumUnits,
 			Challenge:       c.postCh,
 		},

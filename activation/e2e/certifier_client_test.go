@@ -107,6 +107,7 @@ type testCertifier struct {
 	privKey      ed25519.PrivateKey
 	postVerifier activation.PostVerifier
 	opts         []verifying.OptionFunc
+	cfg          activation.PostConfig
 }
 
 func (c *testCertifier) certify(w http.ResponseWriter, r *http.Request) {
@@ -127,7 +128,7 @@ func (c *testCertifier) certify(w http.ResponseWriter, r *http.Request) {
 		CommitmentAtxId: req.Metadata.CommitmentAtxId,
 		Challenge:       req.Metadata.Challenge,
 		NumUnits:        req.Metadata.NumUnits,
-		LabelsPerUnit:   req.Metadata.LabelsPerUnit,
+		LabelsPerUnit:   c.cfg.LabelsPerUnit,
 	}
 	if err := c.postVerifier.Verify(context.Background(), proof, metadata, c.opts...); err != nil {
 		http.Error(w, fmt.Sprintf("verifying POST: %v", err), http.StatusBadRequest)
@@ -169,6 +170,7 @@ func spawnTestCertifier(
 			privKey:      private,
 			postVerifier: postVerifier,
 			opts:         opts,
+			cfg:          cfg,
 		}
 
 		mux := http.NewServeMux()

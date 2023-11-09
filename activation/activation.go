@@ -403,17 +403,22 @@ func (b *Builder) certifyPost(ctx context.Context) {
 }
 
 func (b *Builder) obtainPostForCertification() (*types.Post, *types.PostInfo, []byte, error) {
-	var (
-		post *types.Post
-		meta *types.PostInfo
-	)
-
-	post, _, err := nipost.InitialPost(b.localDB, b.signer.NodeID())
+	post, err := nipost.InitialPost(b.localDB, b.signer.NodeID())
 	switch {
 	case err == nil:
 		b.log.Info("certifying using the initial post")
-		// TODO fix metadata
-		return post, nil, shared.ZeroChallenge, nil
+		meta := &types.PostInfo{
+			NodeID:        b.SmesherID(),
+			CommitmentATX: post.CommitmentATX,
+			Nonce:         &post.VRFNonce,
+			NumUnits:      post.NumUnits,
+		}
+		post := &types.Post{
+			Nonce:   post.Nonce,
+			Indices: post.Indices,
+			Pow:     post.Pow,
+		}
+		return post, meta, shared.ZeroChallenge, nil
 	case errors.Is(err, sql.ErrNotFound):
 		// no initial post
 	default:
@@ -437,8 +442,7 @@ func (b *Builder) obtainPostForCertification() (*types.Post, *types.PostInfo, []
 		}
 		commitmentAtx = &atx
 	}
-	post = atx.NIPost.Post
-	meta = &types.PostInfo{
+	meta := &types.PostInfo{
 		NodeID:        b.SmesherID(),
 		CommitmentATX: *commitmentAtx,
 		Nonce:         atx.VRFNonce,
@@ -446,7 +450,7 @@ func (b *Builder) obtainPostForCertification() (*types.Post, *types.PostInfo, []
 		LabelsPerUnit: atx.NIPost.PostMetadata.LabelsPerUnit,
 	}
 
-	return post, meta, atx.NIPost.PostMetadata.Challenge, nil
+	return atx.NIPost.Post, meta, atx.NIPost.PostMetadata.Challenge, nil
 }
 
 func (b *Builder) run(ctx context.Context) {

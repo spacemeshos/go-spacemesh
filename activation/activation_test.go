@@ -999,8 +999,6 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 		nipost.Post{Indices: make([]byte, 10)},
 	))
 
-	tab.mpostClient.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).Return(&types.Post{}, &types.PostInfo{}, nil)
-	r.NoError(tab.buildInitialPost(context.Background()))
 	r.NoError(tab.PublishActivationTx(context.Background()))
 
 	// state is cleaned up
@@ -1260,7 +1258,9 @@ func TestBuilder_ObtainPostForCertification(t *testing.T) {
 	})
 	t.Run("initial POST available", func(t *testing.T) {
 		tab := newTestBuilder(t)
-		tab.mpostClient.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).Return(&types.Post{}, &types.PostInfo{}, nil)
+		tab.mpostClient.EXPECT().
+			Proof(gomock.Any(), shared.ZeroChallenge).
+			Return(&types.Post{Indices: []byte{1, 2, 3}}, &types.PostInfo{Nonce: new(types.VRFPostIndex)}, nil)
 		require.NoError(t, tab.buildInitialPost(context.Background()))
 
 		_, _, ch, err := tab.obtainPostForCertification()
