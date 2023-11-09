@@ -31,6 +31,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+	v2 "github.com/spacemeshos/go-spacemesh/api/grpcserver/v2"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/blocks"
@@ -1314,10 +1315,13 @@ func (app *App) initService(
 		), nil
 	case grpcserver.Activation:
 		return grpcserver.NewActivationService(
-			app.cachedDB.Database,
 			app.cachedDB,
 			types.ATXID(app.Config.Genesis.GoldenATX()),
 		), nil
+	case v2.Activation:
+		return v2.NewActivationService(app.db), nil
+	case v2.ActivationStream:
+		return v2.NewActivationStreamService(app.db), nil
 	}
 	return nil, fmt.Errorf("unknown service %s", svc)
 }

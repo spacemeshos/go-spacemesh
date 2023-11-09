@@ -17,18 +17,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 type activationService struct {
 	goldenAtx   types.ATXID
-	db          *sql.Database
 	atxProvider atxProvider
 }
 
-func NewActivationService(db *sql.Database, atxProvider atxProvider, goldenAtx types.ATXID) *activationService {
+func NewActivationService(atxProvider atxProvider, goldenAtx types.ATXID) *activationService {
 	return &activationService{
-		db:          db,
 		goldenAtx:   goldenAtx,
 		atxProvider: atxProvider,
 	}
@@ -101,82 +98,4 @@ func (s *activationService) Highest(ctx context.Context, req *emptypb.Empty) (*p
 	return &pb.HighestResponse{
 		Atx: convertActivation(atx),
 	}, nil
-}
-
-func (s *activationService) Stream(filter *pb.ActivationStreamRequest, stream pb.ActivationService_StreamServer) error {
-	if filter.Watch {
-		return status.Error(codes.InvalidArgument, "watch is not supported")
-	}
-	ops, err := toOperations(filter)
-	if err != nil {
-		return status.Error(codes.InvalidArgument, err.Error())
-	}
-	var ierr error
-	if err := atxs.IterateAtxsOps(s.db, ops, func(atx *types.VerifiedActivationTx) bool {
-		v1 := &pb.ActivationV1{
-			Id:             atx.ID().Bytes(),
-			NodeId:         atx.SmesherID.Bytes(),
-			Signature:      atx.Signature.Bytes(),
-			PublishEpoch:   atx.PublishEpoch.Uint32(),
-			Sequence:       atx.Sequence,
-			PrevAtx:        atx.PrevATXID[:],
-			PositioningAtx: atx.PositioningATX[:],
-			Coinbase:       atx.Coinbase.String(),
-			Units:          atx.NumUnits,
-			BaseTick:       uint32(atx.BaseTickHeight()),
-			Ticks:          uint32(atx.TickCount()),
-		}
-		ierr = stream.Send(&pb.ActivationStreamResponse{V1: v1})
-		return ierr == nil
-	}); err != nil {
-		return status.Error(codes.Internal, err.Error())
-	}
-	return nil
-}
-
-func toOperations(filter *pb.ActivationStreamRequest) (atxs.Operations, error) {
-	ops := atxs.Operations{}
-	if filter == nil {
-		return ops, nil
-	}
-	if filter.NodeId != nil {
-		ops.Filter = append(ops.Filter, atxs.Op{
-			Field: atxs.Smesher,
-			Token: atxs.Eq,
-			Value: filter.NodeId,
-		})
-	}
-	if filter.Id != nil {
-		ops.Filter = append(ops.Filter, atxs.Op{
-			Field: atxs.Id,
-			Token: atxs.Eq,
-			Value: filter.Id,
-		})
-	}
-	if len(filter.Coinbase) > 0 {
-		addr, err := types.StringToAddress(filter.Coinbase)
-		if err != nil {
-			return atxs.Operations{}, err
-		}
-		ops.Filter = append(ops.Filter, atxs.Op{
-			Field: atxs.Coinbase,
-			Token: atxs.Eq,
-			Value: addr.Bytes(),
-		})
-	}
-	if filter.StartEpoch != 0 {
-		ops.Filter = append(ops.Filter, atxs.Op{
-			Field: atxs.Epoch,
-			Token: atxs.Gte,
-			Value: int64(filter.StartEpoch),
-		})
-	}
-	if filter.EndEpoch != 0 {
-		ops.Filter = append(ops.Filter, atxs.Op{
-			Field: atxs.Epoch,
-			Token: atxs.Lte,
-			Value: int64(filter.EndEpoch),
-		})
-	}
-	return atxs.Operations{}, nil
 }
