@@ -108,11 +108,28 @@ func (s *activationService) Stream(filter *pb.ActivationStreamRequest, stream pb
 		return status.Error(codes.InvalidArgument, "watch is not supported")
 	}
 	var ierr error
-	if err := atxs.IterateAtxGRPC(s.db, filter, func(atx *pb.ActivationStreamResponse) bool {
-		ierr = stream.Send(atx)
+	if err := atxs.IterateAtxsOps(s.db, toOperations(filter), func(atx *types.VerifiedActivationTx) bool {
+		v1 := &pb.ActivationV1{
+			Id:             atx.ID().Bytes(),
+			NodeId:         atx.SmesherID.Bytes(),
+			Signature:      atx.Signature.Bytes(),
+			PublishEpoch:   atx.PublishEpoch.Uint32(),
+			Sequence:       atx.Sequence,
+			PrevAtx:        atx.PrevATXID[:],
+			PositioningAtx: atx.PositioningATX[:],
+			Coinbase:       atx.Coinbase.String(),
+			Units:          atx.NumUnits,
+			BaseTick:       uint32(atx.BaseTickHeight()),
+			Ticks:          uint32(atx.TickCount()),
+		}
+		ierr = stream.Send(&pb.ActivationStreamResponse{V1: v1})
 		return ierr == nil
 	}); err != nil {
 		return status.Error(codes.Internal, err.Error())
 	}
 	return nil
+}
+
+func toOperations(filter *pb.ActivationStreamRequest) atxs.Operations {
+	return atxs.Operations{}
 }

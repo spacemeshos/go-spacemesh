@@ -2,9 +2,9 @@ package atxs
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
-	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -471,39 +471,53 @@ func IterateAtxs(db sql.Executor, from, to types.EpochID, fn func(*types.Verifie
 	return derr
 }
 
-func IterateAtxGRPC(
+type token string
+
+const (
+	Eq    token = "="
+	NotEq token = "!="
+	Gt    token = ">"
+	Gte   token = ">="
+	Lt    token = "<"
+	Lte   token = "<="
+	And   token = "and"
+	Where token = "where"
+)
+
+type field string
+
+const (
+	Epoch    field = "epoch"
+	Smesher  field = "pubkey"
+	Coinbase field = "coinbase"
+	Id       field = "id"
+)
+
+type Op struct {
+	Field field
+	Token token
+	// Value will be type casted to one the expected types.
+	// Operation will panic if it doesn't match any of expected.
+	Value any
+}
+
+type Operations struct {
+	Filter []Op
+	Other  []Op
+}
+
+func IterateAtxsOps(
 	db sql.Executor,
-	filter *spacemeshv1.ActivationStreamRequest,
-	fn func(*spacemeshv1.ActivationStreamResponse) bool,
+	operations Operations,
+	fn func(*types.VerifiedActivationTx) bool,
 ) error {
-	full := fullQuery
-	query := queryFrom(filter)
-	if query != "" {
-		full += " where " + query
-	}
-	full += " order by epoch asc"
-	bindings, err := bindingsFrom(filter)
-	if err != nil {
-		return err
-	}
 	var derr error
-	_, err = db.Exec(full, bindings,
+	_, err := db.Exec(
+		fullQuery+filterFrom(operations.Filter)+" order by epoch asc, id",
+		bindingsFrom(operations.Filter),
 		decoder(func(atx *types.VerifiedActivationTx, err error) bool {
 			if atx != nil {
-				v1 := &spacemeshv1.ActivationV1{
-					Id:             atx.ID().Bytes(),
-					NodeId:         atx.SmesherID.Bytes(),
-					Signature:      atx.Signature.Bytes(),
-					PublishEpoch:   atx.PublishEpoch.Uint32(),
-					Sequence:       atx.Sequence,
-					PrevAtx:        atx.PrevATXID[:],
-					PositioningAtx: atx.PositioningATX[:],
-					Coinbase:       atx.Coinbase.String(),
-					Units:          atx.NumUnits,
-					BaseTick:       uint32(atx.BaseTickHeight()),
-					Ticks:          uint32(atx.TickCount()),
-				}
-				return fn(&spacemeshv1.ActivationStreamResponse{V1: v1})
+				return fn(atx)
 			}
 			derr = err
 			return derr == nil
@@ -514,69 +528,34 @@ func IterateAtxGRPC(
 	return derr
 }
 
-// queryFrom and bindingsFrom should decode fields in the same order.
-
-func queryFrom(filter *spacemeshv1.ActivationStreamRequest) string {
-	query := ""
-	if filter == nil {
-		return query
+func filterFrom(filter []Op) string {
+	if len(filter) == 0 {
+		return ""
 	}
-	i := 1
-	and := ""
-	if filter.StartEpoch != 0 || filter.EndEpoch != 0 {
-		query += fmt.Sprintf(" epoch between ?%d and ?%d", i, i+1)
-		and = "and"
-		i += 2
-	}
-	if len(filter.Id) != 0 {
-		query += fmt.Sprintf(" %s id = ?%d", and, i)
-		i++
-		and = "and"
-	}
-	if len(filter.NodeId) != 0 {
-		query += fmt.Sprintf(" %s pubkey = ?%d", and, i)
-		i++
-		and = "and"
-	}
-	if len(filter.Coinbase) != 0 {
-		query += fmt.Sprintf(" %s coinbase = ?%d", and, i)
-		i++
-		and = "and"
+	query := "where "
+	for i, op := range filter {
+		if i != 0 {
+			query += " " + string(And) + " "
+		}
+		query += string(op.Field) + " " + string(op.Token) + " ?" + strconv.Itoa(i+1)
 	}
 	return query
 }
 
-func bindingsFrom(filter *spacemeshv1.ActivationStreamRequest) (sql.Encoder, error) {
-	if filter == nil {
-		return nil, nil
+func bindingsFrom(filter []Op) sql.Encoder {
+	if len(filter) == 0 {
+		return nil
 	}
-	var coinbase *types.Address
-	if len(filter.Coinbase) != 0 {
-		address, err := types.StringToAddress(filter.Coinbase)
-		if err != nil {
-			return nil, fmt.Errorf("invalid coinbase address: %w", err)
-		}
-		coinbase = &address
-	}
-	i := 1
 	return func(stmt *sql.Statement) {
-		if filter.StartEpoch != 0 || filter.EndEpoch != 0 {
-			stmt.BindInt64(i, int64(filter.StartEpoch))
-			i++
-			stmt.BindInt64(i, int64(filter.EndEpoch))
-			i++
+		for i, op := range filter {
+			switch value := op.Value.(type) {
+			case int64:
+				stmt.BindInt64(i+1, value)
+			case []byte:
+				stmt.BindBytes(i+1, value)
+			default:
+				panic(fmt.Sprintf("unexpected type %T", value))
+			}
 		}
-		if len(filter.Id) != 0 {
-			stmt.BindBytes(i, filter.Id)
-			i++
-		}
-		if len(filter.NodeId) != 0 {
-			stmt.BindBytes(i, filter.NodeId)
-			i++
-		}
-		if coinbase != nil {
-			stmt.BindBytes(i, coinbase.Bytes())
-			i++
-		}
-	}, nil
+	}
 }
