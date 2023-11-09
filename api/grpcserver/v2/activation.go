@@ -252,7 +252,7 @@ func (s *ActivationService) List(
 	if request.Limit > 100 {
 		return nil, status.Error(codes.InvalidArgument, "limit is capped at 100")
 	} else if request.Limit == 0 {
-		return nil, status.Error(codes.InvalidArgument, "limit must be set to a value below 100")
+		return nil, status.Error(codes.InvalidArgument, "limit must be set to <= 100")
 	}
 	rst := make([]*spacemeshv2.Activation, 0, request.Limit)
 	if err := atxs.IterateAtxsOps(s.db, ops, func(atx *types.VerifiedActivationTx) bool {
@@ -275,7 +275,7 @@ func (s *ActivationService) ListHeaders(
 	if request.Limit > 10000 {
 		return nil, status.Error(codes.InvalidArgument, "limit is capped at 10000")
 	} else if request.Limit == 0 {
-		return nil, status.Error(codes.InvalidArgument, "limit must be set to a value below 10000")
+		return nil, status.Error(codes.InvalidArgument, "limit must be set to <= 10000")
 	}
 	rst := make([]*spacemeshv2.ActivationHeader, 0, request.Limit)
 	if err := atxs.IterateAtxsOps(s.db, ops, func(atx *types.VerifiedActivationTx) bool {

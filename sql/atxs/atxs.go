@@ -544,15 +544,15 @@ func filterFrom(operations Operations) string {
 		}
 		query += " " + string(op.Field) + " " + string(op.Token) + " ?" + strconv.Itoa(i+1)
 	}
-	for i, op := range operations.Other {
-		query += " " + string(op.Field) + " " + string(op.Token) + " ?" + strconv.Itoa(i+1+len(operations.Filter))
+	for _, op := range operations.Other {
+		query += fmt.Sprintf(" %s %v", string(op.Field), op.Value)
 	}
 	return query
 }
 
 func bindingsFrom(operations Operations) sql.Encoder {
 	return func(stmt *sql.Statement) {
-		for i, op := range append(operations.Filter, operations.Other...) {
+		for i, op := range operations.Filter {
 			switch value := op.Value.(type) {
 			case int64:
 				stmt.BindInt64(i+1, value)
