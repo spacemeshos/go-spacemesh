@@ -87,7 +87,7 @@ func (s *ActivationStreamService) StreamHeaders(
 }
 
 func toAtx(atx *types.VerifiedActivationTx) *spacemeshv2.ActivationV1 {
-	return &spacemeshv2.ActivationV1{
+	v1 := &spacemeshv2.ActivationV1{
 		Id:             atx.ID().Bytes(),
 		NodeId:         atx.SmesherID.Bytes(),
 		Signature:      atx.Signature.Bytes(),
@@ -100,6 +100,44 @@ func toAtx(atx *types.VerifiedActivationTx) *spacemeshv2.ActivationV1 {
 		BaseHeight:     uint32(atx.BaseTickHeight()),
 		Ticks:          uint32(atx.TickCount()),
 	}
+	if atx.CommitmentATX != nil {
+		v1.CommittmentAtx = atx.CommitmentATX.Bytes()
+	}
+	if atx.VRFNonce != nil {
+		v1.VrfPostIndex = &spacemeshv2.VRFPostIndex{
+			Nonce: uint64(*atx.VRFNonce),
+		}
+	}
+	if atx.InitialPost != nil {
+		v1.InitialPost = &spacemeshv2.Post{
+			Nonce:   atx.InitialPost.Nonce,
+			Indices: atx.InitialPost.Indices,
+			Pow:     atx.InitialPost.Pow,
+		}
+	}
+	if nipost := atx.NIPost; nipost != nil {
+		if nipost.Post != nil {
+			v1.Post = &spacemeshv2.Post{
+				Nonce:   nipost.Post.Nonce,
+				Indices: nipost.Post.Indices,
+				Pow:     nipost.Post.Pow,
+			}
+		}
+		if nipost.PostMetadata != nil {
+			v1.PostMeta = &spacemeshv2.PostMeta{
+				Challenge: nipost.PostMetadata.Challenge,
+				Labels:    nipost.PostMetadata.LabelsPerUnit,
+			}
+		}
+		v1.PoetProof = &spacemeshv2.PoetProof{
+			ProofNodes: make([][]byte, len(nipost.Membership.Nodes)),
+			Leaf:       nipost.Membership.LeafIndex,
+		}
+		for i, node := range nipost.Membership.Nodes {
+			v1.PoetProof.ProofNodes[i] = node.Bytes()
+		}
+	}
+	return v1
 }
 
 func toHeader(atx *types.VerifiedActivationTx) *spacemeshv2.ActivationHeaderV1 {

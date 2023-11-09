@@ -651,6 +651,8 @@ github.com/spacemeshos/api/release/go v1.24.1-0.20231109072853-7ec08711115c h1:9
 github.com/spacemeshos/api/release/go v1.24.1-0.20231109072853-7ec08711115c/go.mod h1:SwqQxbhAF7tN3Qr34eVzczCB3KyTbkHH12U82eqfy6M=
 github.com/spacemeshos/api/release/go v1.24.1-0.20231109094211-d9b5d4ad4b20 h1:Ih/n+v1cprkGbcdKzQ4kyoSBE8jGjNSo6rZk1ifZHtI=
 github.com/spacemeshos/api/release/go v1.24.1-0.20231109094211-d9b5d4ad4b20/go.mod h1:SwqQxbhAF7tN3Qr34eVzczCB3KyTbkHH12U82eqfy6M=
+github.com/spacemeshos/api/release/go v1.24.1-0.20231109110859-b10d491252b4 h1:8AUxvXZSFWYYSMbRp0zuPUUygcQMDDWXgmj1Uc9VtP8=
+github.com/spacemeshos/api/release/go v1.24.1-0.20231109110859-b10d491252b4/go.mod h1:SwqQxbhAF7tN3Qr34eVzczCB3KyTbkHH12U82eqfy6M=
 github.com/spacemeshos/economics v0.1.1 h1:BPgMoTaeQ05ME6wEA1+MvXMp+wvXr51bIuN23thrCAk=
 github.com/spacemeshos/economics v0.1.1/go.mod h1:76nTjugYRiQ5/eD/DQs2dXPPilp28URMswUKncfdanY=
 github.com/spacemeshos/fixed v0.1.1 h1:N1y4SUpq1EV+IdJrWJwUCt1oBFzeru/VKVcBsvPc2Fk=
