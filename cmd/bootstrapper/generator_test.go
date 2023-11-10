@@ -5,13 +5,14 @@ import (
 	_ "embed"
 	"encoding/json"
 	"errors"
-	"go.uber.org/mock/gomock"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
 	"time"
+
+	"go.uber.org/mock/gomock"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spf13/afero"
@@ -67,7 +68,8 @@ func launchServer(tb testing.TB, cdb *datastore.CachedDB) (grpcserver.Config, fu
 	cfg := grpcserver.DefaultTestConfig()
 	grpcService := grpcserver.New("127.0.0.1:0", zaptest.NewLogger(tb).Named("grpc"), cfg)
 	jsonService := grpcserver.NewJSONHTTPServer("127.0.0.1:0", zaptest.NewLogger(tb).Named("grpc.JSON"))
-	s := grpcserver.NewMeshService(cdb, grpcserver.NewMockmeshAPI(gomock.NewController(tb)), nil, nil, 0, types.Hash20{}, 0, 0, 0)
+	s := grpcserver.NewMeshService(cdb, grpcserver.NewMockmeshAPI(gomock.NewController(tb)), nil, nil,
+		0, types.Hash20{}, 0, 0, 0)
 
 	pb.RegisterMeshServiceServer(grpcService.GrpcServer, s)
 	// start gRPC and json servers

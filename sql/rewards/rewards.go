@@ -75,7 +75,7 @@ func ListByKey(db sql.Executor, coinbase *types.Address, smesherID *types.NodeID
 		rst = append(rst, reward)
 		return true
 	})
-	return
+	return rst, err
 }
 
 // ListByCoinbase lists rewards from all layers for the coinbase address.
