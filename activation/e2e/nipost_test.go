@@ -136,13 +136,13 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
 	initPost(t, logger.Named("manager"), mgr, opts)
 
-	genesis := time.Now()
 	epoch := layersPerEpoch * layerDuration
+	genesis := time.Now()
 	poetCfg := activation.PoetConfig{
-		PhaseShift:        epoch / 2,
+		PhaseShift:        3 * epoch / 5,
 		CycleGap:          epoch / 5,
 		GracePeriod:       epoch / 5,
-		RequestTimeout:    epoch / 5,
+		RequestTimeout:    epoch / 10,
 		RequestRetryDelay: epoch / 50,
 		MaxRequestRetries: 10,
 	}
@@ -271,14 +271,14 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX)
 	require.NoError(t, err)
 
-	genesis := time.Now()
 	epoch := layersPerEpoch * layerDuration
+	genesis := time.Now()
 	poetCfg := activation.PoetConfig{
-		PhaseShift:        epoch / 5,
-		CycleGap:          epoch / 10,
-		GracePeriod:       epoch / 10,
+		PhaseShift:        3 * epoch / 5,
+		CycleGap:          epoch / 5,
+		GracePeriod:       epoch / 5,
 		RequestTimeout:    epoch / 10,
-		RequestRetryDelay: epoch / 100,
+		RequestRetryDelay: epoch / 50,
 		MaxRequestRetries: 10,
 	}
 	poetProver := spawnPoet(
