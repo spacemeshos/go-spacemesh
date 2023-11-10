@@ -12,11 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"go.uber.org/mock/gomock"
-
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
