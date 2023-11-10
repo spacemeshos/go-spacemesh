@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"errors"
+	"go.uber.org/mock/gomock"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -44,28 +45,6 @@ var bitcoinResponse1 string
 //go:embed bitcoinResponse2.json
 var bitcoinResponse2 string
 
-type MeshAPIMock struct{}
-
-func (m *MeshAPIMock) LatestLayer() types.LayerID        { panic("not implemented") }
-func (m *MeshAPIMock) LatestLayerInState() types.LayerID { panic("not implemented") }
-func (m *MeshAPIMock) ProcessedLayer() types.LayerID     { panic("not implemented") }
-func (m *MeshAPIMock) GetRewardsByCoinbase(types.Address) ([]*types.Reward, error) {
-	panic("not implemented")
-}
-
-func (m *MeshAPIMock) GetRewardsBySmesherId(types.NodeID) ([]*types.Reward, error) {
-	panic("not implemented")
-}
-func (m *MeshAPIMock) GetLayer(types.LayerID) (*types.Layer, error) { panic("not implemented") }
-
-func (m *MeshAPIMock) GetATXs(
-	context.Context,
-	[]types.ATXID,
-) (map[types.ATXID]*types.VerifiedActivationTx, []types.ATXID) {
-	panic("not implemented")
-}
-func (m *MeshAPIMock) MeshHash(types.LayerID) (types.Hash32, error) { panic("not implemented") }
-
 func createAtxs(tb testing.TB, db sql.Executor, epoch types.EpochID, atxids []types.ATXID) {
 	for _, id := range atxids {
 		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
@@ -88,7 +67,7 @@ func launchServer(tb testing.TB, cdb *datastore.CachedDB) (grpcserver.Config, fu
 	cfg := grpcserver.DefaultTestConfig()
 	grpcService := grpcserver.New("127.0.0.1:0", zaptest.NewLogger(tb).Named("grpc"), cfg)
 	jsonService := grpcserver.NewJSONHTTPServer("127.0.0.1:0", zaptest.NewLogger(tb).Named("grpc.JSON"))
-	s := grpcserver.NewMeshService(cdb, &MeshAPIMock{}, nil, nil, 0, types.Hash20{}, 0, 0, 0)
+	s := grpcserver.NewMeshService(cdb, grpcserver.NewMockmeshAPI(gomock.NewController(tb)), nil, nil, 0, types.Hash20{}, 0, 0, 0)
 
 	pb.RegisterMeshServiceServer(grpcService.GrpcServer, s)
 	// start gRPC and json servers
