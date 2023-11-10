@@ -13,7 +13,7 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 ### Improvements
 
 * [#5199](https://github.com/spacemeshos/go-spacemesh/pull/5199) Adds smesherID to rewards table. Historically rewards
-  were keyed only by coinbase. Now the primary key has changed to (coinbase, smesherID), which allows querying rewards
+  were keyed by (coinbase, layer). Now the primary key has changed to (smesherID, layer), which allows querying rewards
   by any subset of layer, smesherID, and coinbase. While this change does add smesherID to existing API endpoints
   (`GlobalStateService.{AccountDataQuery,AccountDataStream,GlobalStateStream}`), it does not yet expose an endpoint to
   query rewards by smesherID. Additionally, it does not re-index old data. Rewards will contain smesherID going forward,
