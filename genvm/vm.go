@@ -261,13 +261,13 @@ func (v *VM) Apply(
 		events.ReportAccountUpdate(account.Address)
 		return true
 	})
-	for i, reward := range rewardsResult {
+	for _, reward := range rewardsResult {
 		events.ReportRewardReceived(events.Reward{
 			Layer:       reward.Layer,
 			Total:       reward.TotalReward,
 			LayerReward: reward.LayerReward,
 			Coinbase:    reward.Coinbase,
-			SmesherID:   blockRewards[i].SmesherID,
+			SmesherID:   reward.SmesherID,
 		})
 	}
 
