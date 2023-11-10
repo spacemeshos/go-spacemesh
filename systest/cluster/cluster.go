@@ -58,6 +58,10 @@ func MakePoetEndpoint(ith int) string {
 	return fmt.Sprintf("http://%s:%d", createPoetIdentifier(ith), poetPort)
 }
 
+func MakePoetMetricsEndpoint(testNamespace string, ith int) string {
+	return fmt.Sprintf("http://%s.%s:%d/metrics", createPoetIdentifier(ith), testNamespace, prometheusScrapePort)
+}
+
 func BootstrapperEndpoint(ith int) string {
 	return fmt.Sprintf("http://%s:%d", createBootstrapperIdentifier(ith), bootstrapperPort)
 }
@@ -444,11 +448,11 @@ func (c *Cluster) AddCertifier(cctx *testcontext.Context, privkey string) error 
 
 // AddPoet spawns a single poet with the first available id.
 // Id is of form "poet-N", where N ∈ [0, ∞).
-func (c *Cluster) AddPoet(cctx *testcontext.Context) error {
+func (c *Cluster) AddPoet(cctx *testcontext.Context, flags ...DeploymentFlag) error {
 	if err := c.persist(cctx); err != nil {
 		return err
 	}
-	flags := maps.Values(c.poetFlags)
+	flags = append(maps.Values(c.poetFlags), flags...)
 
 	id := createPoetIdentifier(c.firstFreePoetId())
 	cctx.Log.Debugw("deploying poet", "id", id)
@@ -624,6 +628,11 @@ func (c *Cluster) DeleteSmesher(cctx *testcontext.Context, node *NodeClient) err
 // Bootnodes returns number of the bootnodes in the cluster.
 func (c *Cluster) Bootnodes() int {
 	return c.bootnodes
+}
+
+// Smeshers returns number of the smeshers in the cluster.
+func (c *Cluster) Smeshers() int {
+	return c.smeshers
 }
 
 // Total returns total number of clients.

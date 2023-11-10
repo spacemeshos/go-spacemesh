@@ -277,6 +277,7 @@ func deployCertifierD(ctx *testcontext.Context, id, privkey string) (*NodeClient
 func deployPoetD(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (*NodeClient, error) {
 	args := []string{
 		"-c=" + configDir + attachedPoetConfig,
+		"--metrics-port=" + strconv.Itoa(prometheusScrapePort),
 	}
 	for _, flag := range flags {
 		args = append(args, flag.Flag())
@@ -292,6 +293,12 @@ func deployPoetD(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (
 			WithReplicas(1).
 			WithTemplate(corev1.PodTemplateSpec().
 				WithLabels(labels).
+				WithAnnotations(
+					map[string]string{
+						"prometheus.io/port":   strconv.Itoa(prometheusScrapePort),
+						"prometheus.io/scrape": "true",
+					},
+				).
 				WithSpec(corev1.PodSpec().
 					WithNodeSelector(ctx.NodeSelector).
 					WithVolumes(corev1.Volume().
@@ -304,6 +311,7 @@ func deployPoetD(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (
 						WithArgs(args...).
 						WithPorts(
 							corev1.ContainerPort().WithName("rest").WithProtocol("TCP").WithContainerPort(poetPort),
+							corev1.ContainerPort().WithName("prometheus").WithContainerPort(prometheusScrapePort),
 						).
 						WithVolumeMounts(
 							corev1.VolumeMount().WithName("config").WithMountPath(configDir),
@@ -372,6 +380,7 @@ func deployPoetSvc(ctx *testcontext.Context, id string) (*apiv1.Service, error) 
 			WithSelector(labels).
 			WithPorts(
 				corev1.ServicePort().WithName("rest").WithPort(poetPort).WithProtocol("TCP"),
+				corev1.ServicePort().WithName("prometheus").WithPort(prometheusScrapePort),
 			),
 		)
 

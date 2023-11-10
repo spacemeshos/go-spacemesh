@@ -1,6 +1,8 @@
 package tests
 
 import (
+	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"math"
@@ -202,4 +204,69 @@ func TestNodesUsingDifferentPoets(t *testing.T) {
 			fmt.Sprintf("smesher ID: %v, its epochs: %v", hex.EncodeToString([]byte(id)), eligibleEpochs),
 		)
 	}
+}
+
+// Test verifying that nodes can register in both poets
+// - supporting PoW only
+// - supporting certificates
+// TODO: When PoW support is removed, convert this test to verify only the cert path.
+func TestRegisteringInPoetWithPowAndCert(t *testing.T) {
+	tctx := testcontext.New(t, testcontext.Labels("sanity"))
+	tctx.PoetSize = 2
+
+	cl := cluster.New(tctx, cluster.WithKeys(10))
+	require.NoError(t, cl.AddBootnodes(tctx, 2))
+	require.NoError(t, cl.AddBootstrappers(tctx))
+
+	pubkey, privkey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	require.NoError(t, cl.AddCertifier(tctx, base64.StdEncoding.EncodeToString(privkey.Seed())))
+	// First poet supports PoW only (legacy)
+	require.NoError(t, cl.AddPoet(tctx))
+	// Second poet supports certs
+	require.NoError(
+		t,
+		cl.AddPoet(
+			tctx,
+			cluster.PoetCertifierURL("http://certifier-0"),
+			cluster.PoetCertifierPubkey(base64.StdEncoding.EncodeToString(pubkey)),
+		),
+	)
+	require.NoError(t, cl.AddSmeshers(tctx, tctx.ClusterSize-2))
+	require.NoError(t, cl.WaitAll(tctx))
+
+	epoch := 2
+	layersPerEpoch := testcontext.LayersPerEpoch.Get(tctx.Parameters)
+	last := uint32(layersPerEpoch * epoch)
+	tctx.Log.Debugw("waiting for epoch", "epoch", epoch, "layer", last)
+
+	eg, ctx := errgroup.WithContext(tctx)
+	for i := 0; i < cl.Total(); i++ {
+		client := cl.Client(i)
+		tctx.Log.Debugw("watching", "client", client.Name)
+		watchProposals(ctx, eg, client, func(proposal *pb.Proposal) (bool, error) {
+			return proposal.Layer.Number < last, nil
+		})
+	}
+
+	require.NoError(t, eg.Wait())
+
+	// Check that smeshers are registered in both poets
+	valid := map[string]string{"result": "valid"}
+	invalid := map[string]string{"result": "invalid"}
+
+	metricsEndpoint := cluster.MakePoetMetricsEndpoint(tctx.Namespace, 0)
+	powRegs, err := fetchCounterMetric(tctx, metricsEndpoint, "poet_registration_with_pow_total", valid)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, float64(cl.Smeshers()*epoch), powRegs)
+	powRegsInvalid, err := fetchCounterMetric(tctx, metricsEndpoint, "poet_registration_with_pow_total", invalid)
+	require.ErrorIs(t, err, errMetricNotFound, "metric for invalid PoW registrations value: %v", powRegsInvalid)
+
+	metricsEndpoint = cluster.MakePoetMetricsEndpoint(tctx.Namespace, 1)
+	certRegs, err := fetchCounterMetric(tctx, metricsEndpoint, "poet_registration_with_cert_total", valid)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, float64(cl.Smeshers()*epoch), certRegs)
+
+	certRegsInvalid, err := fetchCounterMetric(tctx, metricsEndpoint, "poet_registration_with_cert_total", invalid)
+	require.ErrorIs(t, err, errMetricNotFound, "metric for invalid cert registrations value: %v", certRegsInvalid)
 }
