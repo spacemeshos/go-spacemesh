@@ -223,7 +223,7 @@ func publishAtx(
 		LabelsPerUnit: DefaultPostConfig().LabelsPerUnit,
 	}, nil).AnyTimes()
 	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, challenge *types.NIPostChallenge) (*types.NIPost, error) {
+		func(_ context.Context, challenge *types.NIPostChallenge) (*nipost.NIPostState, error) {
 			*currLayer = currLayer.Add(buildNIPostLayerDuration)
 			return newNIPostWithChallenge(t, challenge.Hash(), []byte("66666")), nil
 		})
@@ -387,7 +387,7 @@ func TestBuilder_StopSmeshing_Delete(t *testing.T) {
 		}).AnyTimes()
 	tab.mnipost.EXPECT().
 		BuildNIPost(gomock.Any(), gomock.Any()).
-		DoAndReturn(func(ctx context.Context, _ *types.NIPostChallenge) (*types.NIPost, error) {
+		DoAndReturn(func(ctx context.Context, _ *types.NIPostChallenge) (*nipost.NIPostState, error) {
 			<-ctx.Done()
 			return nil, ctx.Err()
 		}).
@@ -439,7 +439,7 @@ func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 	currLayer := posEpoch.FirstLayer()
 	ch := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posEpoch, nil)
 	nipostData := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
-	prevAtx := newAtx(t, tab.sig, ch, nipostData, 2, types.Address{})
+	prevAtx := newAtx(t, tab.sig, ch, nipostData.NIPost, 2, types.Address{})
 	SignAndFinalizeAtx(tab.sig, prevAtx)
 	vPrevAtx, err := prevAtx.Verify(0, 1)
 	require.NoError(t, err)
@@ -473,7 +473,7 @@ func TestBuilder_Loop_WaitsOnStaleChallenge(t *testing.T) {
 	currLayer := (postGenesisEpoch + 1).FirstLayer()
 	ch := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, postGenesisEpoch, nil)
 	nipostData := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
-	prevAtx := newAtx(t, tab.sig, ch, nipostData, 2, types.Address{})
+	prevAtx := newAtx(t, tab.sig, ch, nipostData.NIPost, 2, types.Address{})
 	SignAndFinalizeAtx(tab.sig, prevAtx)
 	vPrevAtx, err := prevAtx.Verify(0, 1)
 	require.NoError(t, err)
@@ -517,7 +517,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	currLayer := postGenesisEpoch.FirstLayer()
 	ch := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, postGenesisEpoch, nil)
 	nipostData := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
-	prevAtx := newAtx(t, tab.sig, ch, nipostData, 2, types.Address{})
+	prevAtx := newAtx(t, tab.sig, ch, nipostData.NIPost, 2, types.Address{})
 	SignAndFinalizeAtx(tab.sig, prevAtx)
 	vPrevAtx, err := prevAtx.Verify(0, 1)
 	require.NoError(t, err)
@@ -542,7 +542,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 		LabelsPerUnit: DefaultPostConfig().LabelsPerUnit,
 	}, nil).AnyTimes()
 	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, challenge *types.NIPostChallenge) (*types.NIPost, error) {
+		func(_ context.Context, challenge *types.NIPostChallenge) (*nipost.NIPostState, error) {
 			currLayer = currLayer.Add(layersPerEpoch)
 			return newNIPostWithChallenge(t, challenge.Hash(), []byte("66666")), nil
 		})
@@ -594,7 +594,7 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 	currLayer := posEpoch.FirstLayer()
 	ch := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posEpoch, nil)
 	nipostData := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
-	prevAtx := newAtx(t, tab.sig, ch, nipostData, 2, types.Address{})
+	prevAtx := newAtx(t, tab.sig, ch, nipostData.NIPost, 2, types.Address{})
 	SignAndFinalizeAtx(tab.sig, prevAtx)
 	vPrevAtx, err := prevAtx.Verify(0, 1)
 	require.NoError(t, err)
@@ -611,14 +611,8 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 			genesis := time.Now().Add(-time.Duration(currLayer) * layerDuration)
 			return genesis.Add(layerDuration * time.Duration(got))
 		}).AnyTimes()
-	tab.mpostClient.EXPECT().Info(gomock.Any()).Return(&types.PostInfo{
-		NodeID: tab.sig.NodeID(),
-
-		NumUnits:      DefaultPostSetupOpts().NumUnits,
-		LabelsPerUnit: DefaultPostConfig().LabelsPerUnit,
-	}, nil)
 	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, challenge *types.NIPostChallenge) (*types.NIPost, error) {
+		func(_ context.Context, challenge *types.NIPostChallenge) (*nipost.NIPostState, error) {
 			currLayer = currLayer.Add(layersPerEpoch)
 			return newNIPostWithChallenge(t, challenge.Hash(), []byte("66666")), nil
 		})
@@ -665,7 +659,7 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 	posEpoch = types.EpochID(4)
 	currLayer = posEpoch.FirstLayer()
 	ch = newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posEpoch, nil)
-	posAtx := newAtx(t, tab.sig, ch, nipostData, 2, types.Address{})
+	posAtx := newAtx(t, tab.sig, ch, nipostData.NIPost, 2, types.Address{})
 	SignAndFinalizeAtx(tab.sig, posAtx)
 	vPosAtx, err := posAtx.Verify(0, 1)
 	require.NoError(t, err)
@@ -690,7 +684,7 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 	nipostData := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
 	otherSigner, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	posAtx := newAtx(t, otherSigner, challenge, nipostData, 2, types.Address{})
+	posAtx := newAtx(t, otherSigner, challenge, nipostData.NIPost, 2, types.Address{})
 	SignAndFinalizeAtx(otherSigner, posAtx)
 	vPosAtx, err := posAtx.Verify(0, 1)
 	require.NoError(t, err)
@@ -725,7 +719,7 @@ func TestBuilder_PublishActivationTx_NoPrevATX_PublishFails_InitialPost_preserve
 	nipostData := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
 	otherSigner, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	posAtx := newAtx(t, otherSigner, challenge, nipostData, 2, types.Address{})
+	posAtx := newAtx(t, otherSigner, challenge, nipostData.NIPost, 2, types.Address{})
 	SignAndFinalizeAtx(otherSigner, posAtx)
 	vPosAtx, err := posAtx.Verify(0, 1)
 	require.NoError(t, err)
@@ -751,7 +745,7 @@ func TestBuilder_PublishActivationTx_NoPrevATX_PublishFails_InitialPost_preserve
 			return genesis.Add(layerDuration * time.Duration(got))
 		}).AnyTimes()
 	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, challenge *types.NIPostChallenge) (*types.NIPost, error) {
+		func(_ context.Context, challenge *types.NIPostChallenge) (*nipost.NIPostState, error) {
 			return nil, ErrATXChallengeExpired
 		},
 	)
@@ -809,7 +803,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, postAtxPubEpoch, nil)
 	poetBytes := []byte("66666")
 	nipostData := newNIPostWithChallenge(t, types.HexToHash32("55555"), poetBytes)
-	posAtx := newAtx(t, otherSigner, challenge, nipostData, 2, types.Address{})
+	posAtx := newAtx(t, otherSigner, challenge, nipostData.NIPost, 2, types.Address{})
 	SignAndFinalizeAtx(otherSigner, posAtx)
 	vPosAtx, err := posAtx.Verify(0, 2)
 	r.NoError(err)
@@ -817,7 +811,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 
 	challenge = newChallenge(0, types.EmptyATXID, posAtx.ID(), prevAtxPostEpoch, nil)
 	challenge.InitialPost = initialPost
-	prevAtx := newAtx(t, tab.sig, challenge, nipostData, 2, types.Address{})
+	prevAtx := newAtx(t, tab.sig, challenge, nipostData.NIPost, 2, types.Address{})
 	prevAtx.InitialPost = initialPost
 	SignAndFinalizeAtx(tab.sig, prevAtx)
 	vPrevAtx, err := prevAtx.Verify(0, 1)
@@ -855,7 +849,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	}, nil).AnyTimes()
 
 	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).
-		DoAndReturn(func(_ context.Context, challenge *types.NIPostChallenge) (*types.NIPost, error) {
+		DoAndReturn(func(_ context.Context, challenge *types.NIPostChallenge) (*nipost.NIPostState, error) {
 			currentLayer = currentLayer.Add(5)
 			return newNIPostWithChallenge(t, challenge.Hash(), poetBytes), nil
 		})
@@ -907,7 +901,7 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posEpoch, nil)
 	poetBytes := []byte("66666")
 	nipostData := newNIPostWithChallenge(t, types.HexToHash32("55555"), poetBytes)
-	posAtx := newAtx(t, otherSigner, challenge, nipostData, 2, types.Address{})
+	posAtx := newAtx(t, otherSigner, challenge, nipostData.NIPost, 2, types.Address{})
 	SignAndFinalizeAtx(otherSigner, posAtx)
 	vPosAtx, err := posAtx.Verify(0, 1)
 	r.NoError(err)
@@ -944,7 +938,7 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	}, nil).AnyTimes()
 
 	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).
-		DoAndReturn(func(_ context.Context, challenge *types.NIPostChallenge) (*types.NIPost, error) {
+		DoAndReturn(func(_ context.Context, challenge *types.NIPostChallenge) (*nipost.NIPostState, error) {
 			currentLayer = currentLayer.Add(layersPerEpoch)
 			return newNIPostWithChallenge(t, challenge.Hash(), poetBytes), nil
 		})
@@ -993,7 +987,7 @@ func TestBuilder_PublishActivationTx_FailsWhenNIPostBuilderFails(t *testing.T) {
 	currLayer := posEpoch.FirstLayer()
 	ch := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posEpoch, nil)
 	nipostData := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
-	posAtx := newAtx(t, tab.sig, ch, nipostData, 2, types.Address{})
+	posAtx := newAtx(t, tab.sig, ch, nipostData.NIPost, 2, types.Address{})
 	SignAndFinalizeAtx(tab.sig, posAtx)
 	vPosAtx, err := posAtx.Verify(0, 1)
 	require.NoError(t, err)
@@ -1035,11 +1029,23 @@ func TestBuilder_PublishActivationTx_Serialize(t *testing.T) {
 		100,
 		coinbase,
 		100,
-		nipost,
+		nipost.NIPost,
 	)
 	require.NoError(t, atxs.Add(cdb, atx))
 
-	act := newActivationTx(t, sig, 2, atx.ID(), atx.ID(), nil, atx.PublishEpoch.Add(10), 0, 100, coinbase, 100, nipost)
+	act := newActivationTx(t,
+		sig,
+		2,
+		atx.ID(),
+		atx.ID(),
+		nil,
+		atx.PublishEpoch.Add(10),
+		0,
+		100,
+		coinbase,
+		100,
+		nipost.NIPost,
+	)
 
 	bt, err := codec.Encode(act)
 	require.NoError(t, err)
@@ -1059,7 +1065,7 @@ func TestBuilder_SignAtx(t *testing.T) {
 	prevAtx := types.ATXID(types.HexToHash32("0x111"))
 	challenge := newChallenge(1, prevAtx, prevAtx, types.EpochID(15), nil)
 	nipost := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
-	atx := newAtx(t, tab.sig, challenge, nipost, 100, types.Address{})
+	atx := newAtx(t, tab.sig, challenge, nipost.NIPost, 100, types.Address{})
 	require.NoError(t, SignAndFinalizeAtx(tab.signer, atx))
 
 	ok := signing.NewEdVerifier().Verify(signing.ATX, tab.sig.NodeID(), atx.SignedBytes(), atx.Signature)
@@ -1089,7 +1095,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posEpoch, nil)
 	poetBytes := []byte("66666")
 	nipostData := newNIPostWithChallenge(t, types.HexToHash32("55555"), poetBytes)
-	prevAtx := newAtx(t, tab.sig, challenge, nipostData, 2, types.Address{})
+	prevAtx := newAtx(t, tab.sig, challenge, nipostData.NIPost, 2, types.Address{})
 	SignAndFinalizeAtx(tab.sig, prevAtx)
 	vPrevAtx, err := prevAtx.Verify(0, 1)
 	require.NoError(t, err)
@@ -1121,7 +1127,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	var last time.Time
 	builderConfirmation := make(chan struct{})
 	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).Times(expectedTries).DoAndReturn(
-		func(_ context.Context, challenge *types.NIPostChallenge) (*types.NIPost, error) {
+		func(_ context.Context, challenge *types.NIPostChallenge) (*nipost.NIPostState, error) {
 			now := time.Now()
 			if now.Sub(last) < retryInterval {
 				require.FailNow(t, "retry interval not respected")
@@ -1214,7 +1220,7 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posEpoch, nil)
 	poetByte := []byte("66666")
 	nipost := newNIPostWithChallenge(t, types.HexToHash32("55555"), poetByte)
-	prevAtx := newAtx(t, tab.sig, challenge, nipost, 2, types.Address{})
+	prevAtx := newAtx(t, tab.sig, challenge, nipost.NIPost, 2, types.Address{})
 	SignAndFinalizeAtx(tab.sig, prevAtx)
 	vPrevAtx, err := prevAtx.Verify(0, 1)
 	require.NoError(t, err)
@@ -1291,7 +1297,7 @@ func TestWaitPositioningAtx(t *testing.T) {
 
 			// everything else are stubs that are irrelevant for the test
 			tab.mpostClient.EXPECT().Info(gomock.Any()).Return(&types.PostInfo{}, nil).AnyTimes()
-			tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).Return(&types.NIPost{}, nil).AnyTimes()
+			tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).Return(&nipost.NIPostState{}, nil).AnyTimes()
 			closed := make(chan struct{})
 			close(closed)
 			tab.mclock.EXPECT().AwaitLayer(types.EpochID(1).FirstLayer()).Return(closed).AnyTimes()

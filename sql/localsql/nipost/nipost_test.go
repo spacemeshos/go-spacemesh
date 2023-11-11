@@ -14,20 +14,24 @@ func Test_AddNIPost(t *testing.T) {
 	db := localsql.InMemory()
 
 	nodeID := types.RandomNodeID()
-	refNipost := &types.NIPost{
-		Post: &types.Post{
-			Nonce:   1,
-			Indices: []byte{1, 2, 3},
-			Pow:     1,
+	refNipost := &NIPostState{
+		NIPost: &types.NIPost{
+			Post: &types.Post{
+				Nonce:   1,
+				Indices: []byte{1, 2, 3},
+				Pow:     1,
+			},
+			Membership: types.MerkleProof{
+				Nodes:     []types.Hash32{types.RandomHash()},
+				LeafIndex: 1,
+			},
+			PostMetadata: &types.PostMetadata{
+				Challenge:     types.RandomHash().Bytes(),
+				LabelsPerUnit: 1,
+			},
 		},
-		Membership: types.MerkleProof{
-			Nodes:     []types.Hash32{types.RandomHash()},
-			LeafIndex: 1,
-		},
-		PostMetadata: &types.PostMetadata{
-			Challenge:     types.RandomHash().Bytes(),
-			LabelsPerUnit: 1,
-		},
+		NumUnits: 1,
+		VRFNonce: types.VRFPostIndex(1),
 	}
 
 	err := AddNIPost(db, nodeID, refNipost)
@@ -48,35 +52,43 @@ func Test_AddNIPost(t *testing.T) {
 func Test_AddNIPost_NoDuplicates(t *testing.T) {
 	db := localsql.InMemory()
 
-	refNipost := &types.NIPost{
-		Post: &types.Post{
-			Nonce:   1,
-			Indices: []byte{1, 2, 3},
-			Pow:     1,
+	refNipost := &NIPostState{
+		NIPost: &types.NIPost{
+			Post: &types.Post{
+				Nonce:   1,
+				Indices: []byte{1, 2, 3},
+				Pow:     1,
+			},
+			Membership: types.MerkleProof{
+				Nodes:     []types.Hash32{types.RandomHash(), types.RandomHash()},
+				LeafIndex: 1,
+			},
+			PostMetadata: &types.PostMetadata{
+				Challenge:     types.RandomHash().Bytes(),
+				LabelsPerUnit: 1,
+			},
 		},
-		Membership: types.MerkleProof{
-			Nodes:     []types.Hash32{types.RandomHash(), types.RandomHash()},
-			LeafIndex: 1,
-		},
-		PostMetadata: &types.PostMetadata{
-			Challenge:     types.RandomHash().Bytes(),
-			LabelsPerUnit: 1,
-		},
+		NumUnits: 1,
+		VRFNonce: types.VRFPostIndex(1),
 	}
-	refNipost2 := &types.NIPost{
-		Post: &types.Post{
-			Nonce:   2,
-			Indices: []byte{1, 2, 3},
-			Pow:     1,
+	refNipost2 := &NIPostState{
+		NIPost: &types.NIPost{
+			Post: &types.Post{
+				Nonce:   2,
+				Indices: []byte{1, 2, 3},
+				Pow:     1,
+			},
+			Membership: types.MerkleProof{
+				Nodes:     []types.Hash32{types.RandomHash(), types.RandomHash()},
+				LeafIndex: 1,
+			},
+			PostMetadata: &types.PostMetadata{
+				Challenge:     types.RandomHash().Bytes(),
+				LabelsPerUnit: 1,
+			},
 		},
-		Membership: types.MerkleProof{
-			Nodes:     []types.Hash32{types.RandomHash(), types.RandomHash()},
-			LeafIndex: 1,
-		},
-		PostMetadata: &types.PostMetadata{
-			Challenge:     types.RandomHash().Bytes(),
-			LabelsPerUnit: 1,
-		},
+		NumUnits: 2,
+		VRFNonce: types.VRFPostIndex(2),
 	}
 
 	nodeID := types.RandomNodeID()

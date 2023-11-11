@@ -94,7 +94,10 @@ func Test_NIPostBuilder_WithMocks(t *testing.T) {
 	require.NoError(t, err)
 
 	postClient := NewMockPostClient(ctrl)
-	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(&types.Post{}, &types.PostInfo{}, nil)
+	nonce := types.VRFPostIndex(1)
+	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(&types.Post{}, &types.PostInfo{
+		Nonce: &nonce,
+	}, nil)
 	postService := NewMockpostService(ctrl)
 	postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil)
 
@@ -134,7 +137,10 @@ func TestPostSetup(t *testing.T) {
 	mclock := defaultLayerClockMock(ctrl)
 
 	postClient := NewMockPostClient(ctrl)
-	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(&types.Post{}, &types.PostInfo{}, nil)
+	nonce := types.VRFPostIndex(1)
+	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(&types.Post{}, &types.PostInfo{
+		Nonce: &nonce,
+	}, nil)
 	postService := NewMockpostService(ctrl)
 	postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil)
 
@@ -193,10 +199,13 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	mclock := defaultLayerClockMock(ctrl)
 
 	postClient := NewMockPostClient(ctrl)
+	nonce := types.VRFPostIndex(1)
 	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(
 		&types.Post{
 			Indices: []byte{1, 2, 3},
-		}, &types.PostInfo{}, nil).Times(1)
+		}, &types.PostInfo{
+			Nonce: &nonce,
+		}, nil).Times(1)
 	postService := NewMockpostService(ctrl)
 	postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil).AnyTimes()
 
@@ -254,9 +263,13 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 		withPoetClients([]poetClient{poetProver}),
 	)
 	require.NoError(t, err)
-	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(&types.Post{
-		Indices: []byte{1, 2, 3},
-	}, &types.PostInfo{}, nil)
+	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(
+		&types.Post{
+			Indices: []byte{1, 2, 3},
+		}, &types.PostInfo{
+			Nonce: &nonce,
+		}, nil,
+	)
 
 	// check that proof ref is not called again
 	nipost, err = nb.BuildNIPost(context.Background(), &challenge)
@@ -319,7 +332,10 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 	require.NoError(t, err)
 
 	postClient := NewMockPostClient(ctrl)
-	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(&types.Post{}, &types.PostInfo{}, nil)
+	nonce := types.VRFPostIndex(1)
+	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(&types.Post{}, &types.PostInfo{
+		Nonce: &nonce,
+	}, nil)
 	postService := NewMockpostService(ctrl)
 	postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil)
 	nb, err := NewNIPostBuilder(
@@ -384,7 +400,10 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 	require.NoError(t, err)
 
 	postClient := NewMockPostClient(ctrl)
-	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(&types.Post{}, &types.PostInfo{}, nil)
+	nonce := types.VRFPostIndex(1)
+	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(&types.Post{}, &types.PostInfo{
+		Nonce: &nonce,
+	}, nil)
 	postService := NewMockpostService(ctrl)
 	postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil)
 
@@ -733,7 +752,10 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 	require.NoError(t, err)
 
 	postClient := NewMockPostClient(ctrl)
-	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(&types.Post{}, &types.PostInfo{}, nil)
+	nonce := types.VRFPostIndex(1)
+	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(&types.Post{}, &types.PostInfo{
+		Nonce: &nonce,
+	}, nil)
 	postService := NewMockpostService(ctrl)
 	postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil)
 

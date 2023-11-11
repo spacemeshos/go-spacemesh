@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/post/verifying"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
 
 //go:generate mockgen -typed -package=activation -destination=./mocks.go -source=./interface.go
@@ -61,7 +62,7 @@ type layerClock interface {
 }
 
 type nipostBuilder interface {
-	BuildNIPost(ctx context.Context, challenge *types.NIPostChallenge) (*types.NIPost, error)
+	BuildNIPost(ctx context.Context, challenge *types.NIPostChallenge) (*nipost.NIPostState, error)
 	ResetState() error
 }
 

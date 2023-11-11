@@ -604,7 +604,7 @@ func (b *Builder) poetRoundStart(epoch types.EpochID) time.Time {
 func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChallenge) (*types.ActivationTx, error) {
 	pubEpoch := challenge.PublishEpoch
 
-	nipost, err := b.nipostBuilder.BuildNIPost(ctx, challenge)
+	nipostState, err := b.nipostBuilder.BuildNIPost(ctx, challenge)
 	if err != nil {
 		return nil, fmt.Errorf("build NIPost: %w", err)
 	}
@@ -629,29 +629,29 @@ func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChalleng
 		return nil, fmt.Errorf("%w: atx publish epoch has passed during nipost construction", ErrATXChallengeExpired)
 	}
 
-	client, err := b.postService.Client(b.signer.NodeID())
-	if err != nil {
-		return nil, fmt.Errorf("get post client: %w", err)
-	}
-	info, err := client.Info(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("get post client info: %w", err)
-	}
-
 	var nonce *types.VRFPostIndex
 	var nodeID *types.NodeID
-	if challenge.PrevATXID == types.EmptyATXID {
+	switch {
+	case challenge.PrevATXID == types.EmptyATXID:
 		nodeID = new(types.NodeID)
 		*nodeID = b.signer.NodeID()
-		// TODO(mafa): put this into the nipost state so we don't have to query it again from the post service
-		nonce = info.Nonce
+		nonce = &nipostState.VRFNonce
+	default:
+		oldNonce, err := atxs.VRFNonce(b.cdb, b.signer.NodeID(), challenge.PublishEpoch)
+		if err != nil {
+			b.log.Warn("failed to get VRF nonce for ATX", zap.Error(err))
+			break
+		}
+		if nipostState.VRFNonce != oldNonce {
+			nonce = &nipostState.VRFNonce
+		}
 	}
 
 	atx := types.NewActivationTx(
 		*challenge,
 		b.Coinbase(),
-		nipost,
-		info.NumUnits,
+		nipostState.NIPost,
+		nipostState.NumUnits,
 		nonce,
 	)
 	atx.InnerActivationTx.NodeID = nodeID

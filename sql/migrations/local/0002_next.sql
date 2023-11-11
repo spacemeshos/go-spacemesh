@@ -30,6 +30,9 @@ CREATE TABLE nipost
     post_indices  VARCHAR NOT NULL,
     post_pow      UNSIGNED LONG INT NOT NULL,
 
+    num_units UNSIGNED INT NOT NULL,
+    vrf_nonce UNSIGNED LONG INT NOT NULL,
+
     poet_proof_membership VARCHAR NOT NULL,
     poet_proof_ref        CHAR(32) NOT NULL,
     labels_per_unit       UNSIGNED INT NOT NULL

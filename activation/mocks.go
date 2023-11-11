@@ -14,6 +14,7 @@ import (
 	time "time"
 
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	nipost "github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 	shared "github.com/spacemeshos/post/shared"
 	verifying "github.com/spacemeshos/post/verifying"
 	gomock "go.uber.org/mock/gomock"
@@ -671,10 +672,10 @@ func (m *MocknipostBuilder) EXPECT() *MocknipostBuilderMockRecorder {
 }
 
 // BuildNIPost mocks base method.
-func (m *MocknipostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPostChallenge) (*types.NIPost, error) {
+func (m *MocknipostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPostChallenge) (*nipost.NIPostState, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "BuildNIPost", ctx, challenge)
-	ret0, _ := ret[0].(*types.NIPost)
+	ret0, _ := ret[0].(*nipost.NIPostState)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -692,19 +693,19 @@ type nipostBuilderBuildNIPostCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *nipostBuilderBuildNIPostCall) Return(arg0 *types.NIPost, arg1 error) *nipostBuilderBuildNIPostCall {
+func (c *nipostBuilderBuildNIPostCall) Return(arg0 *nipost.NIPostState, arg1 error) *nipostBuilderBuildNIPostCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *nipostBuilderBuildNIPostCall) Do(f func(context.Context, *types.NIPostChallenge) (*types.NIPost, error)) *nipostBuilderBuildNIPostCall {
+func (c *nipostBuilderBuildNIPostCall) Do(f func(context.Context, *types.NIPostChallenge) (*nipost.NIPostState, error)) *nipostBuilderBuildNIPostCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *nipostBuilderBuildNIPostCall) DoAndReturn(f func(context.Context, *types.NIPostChallenge) (*types.NIPost, error)) *nipostBuilderBuildNIPostCall {
+func (c *nipostBuilderBuildNIPostCall) DoAndReturn(f func(context.Context, *types.NIPostChallenge) (*nipost.NIPostState, error)) *nipostBuilderBuildNIPostCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

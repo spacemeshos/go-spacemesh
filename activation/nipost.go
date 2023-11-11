@@ -128,7 +128,10 @@ func (nb *NIPostBuilder) proof(ctx context.Context, challenge []byte) (*types.Po
 // BuildNIPost uses the given challenge to build a NIPost.
 // The process can take considerable time, because it includes waiting for the poet service to
 // publish a proof - a process that takes about an epoch.
-func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPostChallenge) (*types.NIPost, error) {
+func (nb *NIPostBuilder) BuildNIPost(
+	ctx context.Context,
+	challenge *types.NIPostChallenge,
+) (*nipost.NIPostState, error) {
 	logger := nb.log.With(log.ZContext(ctx))
 	// Note: to avoid missing next PoET round, we need to publish the ATX before the next PoET round starts.
 	//   We can still publish an ATX late (i.e. within publish epoch) and receive rewards, but we will miss one
@@ -264,13 +267,17 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPos
 		metrics.PostDuration.Set(float64(postGenDuration.Nanoseconds()))
 		public.PostSeconds.Set(postGenDuration.Seconds())
 
-		nipostState = &types.NIPost{
-			Post:       proof,
-			Membership: *membership,
-			PostMetadata: &types.PostMetadata{
-				Challenge:     poetProofRef[:],
-				LabelsPerUnit: postInfo.LabelsPerUnit,
+		nipostState = &nipost.NIPostState{
+			NIPost: &types.NIPost{
+				Post:       proof,
+				Membership: *membership,
+				PostMetadata: &types.PostMetadata{
+					Challenge:     poetProofRef[:],
+					LabelsPerUnit: postInfo.LabelsPerUnit,
+				},
 			},
+			NumUnits: postInfo.NumUnits,
+			VRFNonce: *postInfo.Nonce,
 		}
 		if err := nipost.AddNIPost(nb.localDB, nb.signer.NodeID(), nipostState); err != nil {
 			nb.log.Warn("cannot persist nipost state", zap.Error(err))

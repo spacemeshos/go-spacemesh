@@ -204,9 +204,9 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 		context.Background(),
 		sig.NodeID(),
 		goldenATX,
-		nipost,
+		nipost.NIPost,
 		challenge.Hash(),
-		opts.NumUnits,
+		nipost.NumUnits,
 	)
 	require.NoError(t, err)
 }
@@ -343,9 +343,9 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 		context.Background(),
 		sig.NodeID(),
 		goldenATX,
-		nipost,
+		nipost.NIPost,
 		challenge.Hash(),
-		opts.NumUnits,
+		nipost.NumUnits,
 	)
 	require.NoError(t, err)
 }
