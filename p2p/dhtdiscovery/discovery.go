@@ -84,6 +84,12 @@ func WithDir(path string) Opt {
 	}
 }
 
+func WithPingPeers(peers []peer.ID) Opt {
+	return func(d *Discovery) {
+		d.pingPeers = peers
+	}
+}
+
 func DisableDHT() Opt {
 	return func(d *Discovery) {
 		d.disableDht = true
@@ -141,10 +147,51 @@ type Discovery struct {
 	bootstrapDuration   time.Duration
 	minPeers, highPeers int
 	backup, bootnodes   []peer.AddrInfo
+	pingPeers           []peer.ID
 }
 
 func (d *Discovery) Start() {
+	if len(d.pingPeers) != 0 {
+		d.eg.Go(func() error {
+			ticker := time.NewTicker(15 * time.Second)
+			for {
+				select {
+				case <-ticker.C:
+					func() {
+						ctx, cancel := context.WithTimeout(d.ctx, 10*time.Second)
+						defer cancel()
+						for _, p := range d.pingPeers {
+							d.logger.Info("pinging peer",
+								zap.String("peer", p.String()))
+							addrInfo, err := d.dht.FindPeer(ctx, p)
+							if err != nil {
+								d.logger.Error("failed to find peer",
+									zap.String("peer", p.String()),
+									zap.Error(err))
+								continue
+							}
+							if err := d.dht.Ping(ctx, p); err != nil {
+								d.logger.Error("ping failed for peer",
+									zap.String("peer", p.String()),
+									zap.Any("addrInfo", addrInfo),
+									zap.Error(err))
+								continue
+							} else {
+								d.logger.Info("ping succeeded for peer",
+									zap.String("peer", p.String()),
+									zap.Any("addrInfo", addrInfo))
+							}
+						}
+					}()
+				case <-d.ctx.Done():
+					ticker.Stop()
+					return nil
+				}
+			}
+		})
+	}
 	d.eg.Go(func() error {
+		// time.Sleep(30 * time.Second)
 		var connEg errgroup.Group
 		disconnected := make(chan struct{}, 1)
 		disconnected <- struct{}{} // trigger bootstrap when node starts immediately
