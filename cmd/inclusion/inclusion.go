@@ -28,8 +28,11 @@ func main() {
 	for i := *from; i <= *to; i++ {
 		id, err := layers.GetApplied(db, types.LayerID(i))
 		must(err)
-		block, err := blocks.Get(db, id)
-		must(err)
+		if id != types.EmptyBlockID {
+			block, err := blocks.Get(db, id)
+			must(err)
+			included += float64(len(block.Rewards))
+		}
 		ballots, err := ballots.Layer(db, types.LayerID(i))
 		must(err)
 		for _, ballot := range ballots {
@@ -38,7 +41,6 @@ func main() {
 			}
 			total += 1
 		}
-		included += float64(len(block.Rewards))
 	}
 	fmt.Printf("from = %d to = %d average inclusion %f\n", *from, *to, included/total)
 }
