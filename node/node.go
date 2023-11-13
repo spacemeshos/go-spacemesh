@@ -1152,8 +1152,9 @@ func (app *App) initServices(ctx context.Context) error {
 //     (e.g. when they setup multiple post services). This ensures that users with a non-default private listener
 //     receive a warning as to why their node might not be able to smesh
 //
-// TODO: remove this function in a future release when we can assume that most nodes have updated
-// their config for the post service.
+// TODO: https://github.com/spacemeshos/go-spacemesh/issues/5260
+// remove this function in a future release when we can assume that most nodes have updated their config for
+// the post service.
 func (app *App) checkPostServiceSetup() error {
 	if !slices.Contains(app.Config.API.PrivateServices, grpcserver.Post) &&
 		!slices.Contains(app.Config.API.TLSServices, grpcserver.Post) {

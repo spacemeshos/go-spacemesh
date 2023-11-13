@@ -102,6 +102,9 @@ for more information on how to configure the node to work with the PoST service.
 
 * [#5209](https://github.com/spacemeshos/go-spacemesh/pull/5209) Removed API to update poet servers from SmesherService.
 
+* [#5259](https://github.com/spacemeshos/go-spacemesh/pull/5259) Node now tries to fix a 1.2.x config to be compatible with
+  1.3.x at startup.
+
 ## v1.2.0
 
 ### Upgrade information
