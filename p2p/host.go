@@ -98,6 +98,7 @@ type Config struct {
 	OutboundFraction         float64     `mapstructure:"outbound-fraction"`
 	AutoscalePeers           bool        `mapstructure:"autoscale-peers"`
 	AdvertiseAddress         string      `mapstructure:"advertise-address"`
+	AdvertiseAddresses       []string    `mapstructure:"advertise-addresses"`
 	AcceptQueue              int         `mapstructure:"p2p-accept-queue"`
 	Metrics                  bool        `mapstructure:"p2p-metrics"`
 	Bootnode                 bool        `mapstructure:"p2p-bootnode"`
@@ -107,12 +108,22 @@ type Config struct {
 	RelayServer              RelayServer `mapstructure:"relay-server"`
 	IP4Blocklist             []string    `mapstructure:"ip4-blocklist"`
 	IP6Blocklist             []string    `mapstructure:"ip6-blocklist"`
+	PingPeers                []string    `mapstructure:"ping-peers"`
+	Relay                    bool        `mapstructure:"relay"`
+	Relays                   []string    `mapstructure:"relays"`
 }
 
 type RelayServer struct {
 	Enable       bool          `mapstructure:"enable"`
 	Reservations int           `mapstructure:"reservations"`
 	TTL          time.Duration `mapstructure:"ttl"`
+}
+
+func (cfg *Config) allAdvertisedAddrs() []string {
+	if len(cfg.AdvertiseAddress) == 0 {
+		return cfg.AdvertiseAddresses
+	}
+	return append(cfg.AdvertiseAddresses, cfg.AdvertiseAddress)
 }
 
 func (cfg *Config) Validate() error {
@@ -124,12 +135,14 @@ func (cfg *Config) Validate() error {
 			)
 		}
 	}
-	if len(cfg.AdvertiseAddress) > 0 {
-		_, err := multiaddr.NewMultiaddr(cfg.AdvertiseAddress)
+
+	for _, addrStr := range cfg.allAdvertisedAddrs() {
+		_, err := multiaddr.NewMultiaddr(addrStr)
 		if err != nil {
-			return fmt.Errorf("address %s is not a valid multiaddr %w", cfg.AdvertiseAddress, err)
+			return fmt.Errorf("address %s is not a valid multiaddr %w", addrStr, err)
 		}
 	}
+
 	return nil
 }
 
@@ -232,15 +245,19 @@ func New(
 	if !cfg.DisableConnectionManager {
 		lopts = append(lopts, libp2p.ConnectionManager(cm))
 	}
-	if len(cfg.AdvertiseAddress) > 0 {
-		addr, err := multiaddr.NewMultiaddr(cfg.AdvertiseAddress)
-		if err != nil {
-			panic(err) // validated in config
+	if allAdvAddrs := cfg.allAdvertisedAddrs(); len(allAdvAddrs) > 0 {
+		var addrs []multiaddr.Multiaddr
+		for _, addrStr := range allAdvAddrs {
+			addr, err := multiaddr.NewMultiaddr(addrStr)
+			if err != nil {
+				panic(err) // validated in config
+			}
+			addrs = append(addrs, addr)
 		}
 		lopts = append(
 			lopts,
 			libp2p.AddrsFactory(func([]multiaddr.Multiaddr) []multiaddr.Multiaddr {
-				return []multiaddr.Multiaddr{addr}
+				return addrs
 			}),
 		)
 	}
@@ -254,6 +271,16 @@ func New(
 		resources.MaxReservations = cfg.RelayServer.Reservations
 		resources.ReservationTTL = cfg.RelayServer.TTL
 		lopts = append(lopts, libp2p.EnableRelayService(relay.WithResources(resources)))
+	}
+	if cfg.Relay {
+		lopts = append(lopts, libp2p.EnableRelay())
+	}
+	if len(cfg.Relays) != 0 {
+		relays, err := parseIntoAddr(cfg.Relays)
+		if err != nil {
+			return nil, err
+		}
+		lopts = append(lopts, libp2p.EnableAutoRelayWithStaticRelays(relays))
 	}
 	if cfg.ForceReachability == PublicReachability {
 		lopts = append(lopts, libp2p.ForceReachabilityPublic())

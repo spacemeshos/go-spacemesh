@@ -112,6 +112,7 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 	}
 	for _, peer := range direct {
 		h.ConnManager().Protect(peer.ID, "direct")
+		// TBD: also protect ping
 	}
 	if fh.PubSub, err = pubsub.New(fh.ctx, fh.logger, h, pubsub.Config{
 		Flood:          cfg.Flood,
@@ -144,6 +145,18 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 		} else if len(backup) > 0 {
 			dopts = append(dopts, discovery.WithBackup(backup))
 		}
+	}
+	if len(cfg.PingPeers) != 0 {
+		var peers []peer.ID
+		for _, p := range cfg.PingPeers {
+			peerID, err := peer.Decode(p)
+			if err != nil {
+				fh.logger.With().Warning("ignoring invalid ping peer", log.Err(err))
+				continue
+			}
+			peers = append(peers, peerID)
+		}
+		dopts = append(dopts, discovery.WithPingPeers(peers))
 	}
 	dhtdisc, err := discovery.New(fh, dopts...)
 	if err != nil {
