@@ -45,7 +45,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
-	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/hare3/compat"
@@ -337,7 +336,6 @@ type App struct {
 	mesh              *mesh.Mesh
 	atxsdata          *atxsdata.Data
 	clock             *timesync.NodeClock
-	hare              *hare.Hare
 	hare3             *hare3.Hare
 	hOracle           *eligibility.Oracle
 	blockGen          *blocks.Generator
@@ -454,27 +452,6 @@ func (app *App) Initialize() error {
 			)
 			return fmt.Errorf("genesis config updated after node initialization")
 		}
-	}
-
-	// tortoise wait zdist layers for hare to timeout for a layer. once hare timeout, tortoise will
-	// vote against all blocks in that layer. so it's important to make sure zdist takes longer than
-	// hare's max time duration to run consensus for a layer
-
-	// maxHareRoundsPerLayer is pre-round + 4 rounds per iteration
-	maxHareRoundsPerLayer := 1 + app.Config.HARE.LimitIterations*hare.RoundsPerIteration
-	maxHareLayerDuration := app.Config.HARE.WakeupDelta + time.Duration(
-		maxHareRoundsPerLayer,
-	)*app.Config.HARE.RoundDuration
-	if app.Config.LayerDuration*time.Duration(app.Config.Tortoise.Zdist) <= maxHareLayerDuration {
-		app.log.With().Error("incompatible params",
-			log.Uint32("tortoise_zdist", app.Config.Tortoise.Zdist),
-			log.Duration("layer_duration", app.Config.LayerDuration),
-			log.Duration("hare_wakeup_delta", app.Config.HARE.WakeupDelta),
-			log.Int("hare_limit_iterations", app.Config.HARE.LimitIterations),
-			log.Duration("hare_round_duration", app.Config.HARE.RoundDuration),
-		)
-
-		return errors.New("incompatible tortoise hare params")
 	}
 
 	// override default config in timesync since timesync is using TimeConfigValues
@@ -787,8 +764,9 @@ func (app *App) initServices(ctx context.Context) error {
 		beaconProtocol,
 		trtl,
 		blocks.WithCertConfig(blocks.CertConfig{
-			CommitteeSize:    app.Config.HARE.N,
-			CertifyThreshold: app.Config.HARE.N/2 + 1,
+			// TODO(dshulyak) this should be upgraded at specific layer
+			CommitteeSize:    int(app.Config.HARE3.Committee),
+			CertifyThreshold: int(app.Config.HARE3.Committee)/2 + 1,
 			LayerBuffer:      app.Config.Tortoise.Zdist,
 			NumLayersToKeep:  app.Config.Tortoise.Zdist * 2,
 		}),
@@ -828,7 +806,27 @@ func (app *App) initServices(ctx context.Context) error {
 	beaconProtocol.SetSyncState(newSyncer)
 	app.hOracle.SetSync(newSyncer)
 
-	hareOutputCh := make(chan hare.LayerOutput, app.Config.HARE.LimitConcurrent)
+	if err := app.Config.HARE3.Validate(time.Duration(app.Config.Tortoise.Zdist) * app.Config.LayerDuration); err != nil {
+		return err
+	}
+	logger := app.addLogger(HareLogger, lg).Zap()
+	app.hare3 = hare3.New(
+		app.clock, app.host, app.cachedDB, app.edVerifier, app.hOracle, newSyncer, patrol,
+		hare3.WithLogger(logger),
+		hare3.WithConfig(app.Config.HARE3),
+	)
+	app.hare3.Register(app.edSgn)
+	app.hare3.Start()
+	app.eg.Go(func() error {
+		compat.ReportWeakcoin(
+			ctx,
+			logger,
+			app.hare3.Coins(),
+			tortoiseWeakCoin{db: app.cachedDB, tortoise: trtl},
+		)
+		return nil
+	})
+
 	app.blockGen = blocks.NewGenerator(
 		app.db,
 		app.atxsdata,
@@ -842,55 +840,9 @@ func (app *App) initServices(ctx context.Context) error {
 			OptFilterThreshold: app.Config.OptFilterThreshold,
 			GenBlockInterval:   500 * time.Millisecond,
 		}),
-		blocks.WithHareOutputChan(hareOutputCh),
+		blocks.WithHareOutputChan(app.hare3.Results()),
 		blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg)),
 	)
-
-	hareCfg := app.Config.HARE
-	hareCfg.Hdist = app.Config.Tortoise.Hdist
-	app.hare = hare.New(
-		app.cachedDB,
-		hareCfg,
-		app.host,
-		app.edSgn,
-		app.edVerifier,
-		app.edSgn.NodeID(),
-		hareOutputCh,
-		newSyncer,
-		beaconProtocol,
-		app.hOracle,
-		patrol,
-		app.hOracle,
-		app.clock,
-		tortoiseWeakCoin{db: app.cachedDB, tortoise: trtl},
-		app.addLogger(HareLogger, lg),
-	)
-	if app.Config.HARE3.Enable {
-		if err := app.Config.HARE3.Validate(time.Duration(app.Config.Tortoise.Zdist) * app.Config.LayerDuration); err != nil {
-			return err
-		}
-		logger := app.addLogger(HareLogger, lg).Zap()
-		app.hare3 = hare3.New(
-			app.clock, app.host, app.cachedDB, app.edVerifier, app.hOracle, newSyncer, patrol,
-			hare3.WithLogger(logger),
-			hare3.WithConfig(app.Config.HARE3),
-		)
-		app.hare3.Register(app.edSgn)
-		app.hare3.Start()
-		app.eg.Go(func() error {
-			compat.ReportWeakcoin(
-				ctx,
-				logger,
-				app.hare3.Coins(),
-				tortoiseWeakCoin{db: app.cachedDB, tortoise: trtl},
-			)
-			return nil
-		})
-		app.eg.Go(func() error {
-			compat.ReportResult(ctx, logger, app.hare3.Results(), hareOutputCh)
-			return nil
-		})
-	}
 
 	minerGoodAtxPct := 90
 	if app.Config.MinerGoodAtxsPercent > 0 {
@@ -907,7 +859,8 @@ func (app *App) initServices(ctx context.Context) error {
 		miner.WithLayerPerEpoch(layersPerEpoch),
 		miner.WithMinimalActiveSetWeight(app.Config.Tortoise.MinimalActiveSetWeight),
 		miner.WithHdist(app.Config.Tortoise.Hdist),
-		miner.WithNetworkDelay(app.Config.HARE.WakeupDelta),
+		// TODO(dshulyak) ???
+		miner.WithNetworkDelay(app.Config.HARE3.PreroundDelay),
 		miner.WithMinGoodAtxPercent(minerGoodAtxPct),
 		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)),
 	)
@@ -987,7 +940,8 @@ func (app *App) initServices(ctx context.Context) error {
 		app.addLogger("atxBuilder", lg).Zap(),
 		activation.WithContext(ctx),
 		activation.WithPoetConfig(app.Config.POET),
-		activation.WithPoetRetryInterval(app.Config.HARE.WakeupDelta),
+		// TODO(dshulyak) makes no sense. how we ended using it?
+		activation.WithPoetRetryInterval(app.Config.HARE3.PreroundDelay),
 		activation.WithValidator(app.validator),
 	)
 	if err := atxBuilder.MigrateDiskToLocalDB(); err != nil {
@@ -999,7 +953,6 @@ func (app *App) initServices(ctx context.Context) error {
 		app.addLogger(MalfeasanceLogger, lg),
 		app.host.ID(),
 		app.edSgn.NodeID(),
-		app.hare,
 		app.edVerifier,
 		trtl,
 	)
@@ -1099,10 +1052,6 @@ func (app *App) initServices(ctx context.Context) error {
 	app.host.Register(
 		pubsub.TxProtocol,
 		pubsub.ChainGossipHandler(syncHandler, app.txHandler.HandleGossipTransaction),
-	)
-	app.host.Register(
-		pubsub.HareProtocol,
-		pubsub.ChainGossipHandler(syncHandler, app.hare.GetHareMsgHandler()),
 	)
 	app.host.Register(
 		pubsub.BlockCertify,
@@ -1230,9 +1179,6 @@ func (app *App) startServices(ctx context.Context) error {
 
 	app.blockGen.Start(ctx)
 	app.certifier.Start(ctx)
-	if err := app.hare.Start(ctx); err != nil {
-		return fmt.Errorf("cannot start hare: %w", err)
-	}
 	app.eg.Go(func() error {
 		return app.proposalBuilder.Run(ctx)
 	})
@@ -1458,9 +1404,6 @@ func (app *App) stopServices(ctx context.Context) {
 		app.postVerifier.Close()
 	}
 
-	if app.hare != nil {
-		app.hare.Close()
-	}
 	if app.hare3 != nil {
 		app.hare3.Stop()
 	}

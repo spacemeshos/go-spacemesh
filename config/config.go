@@ -19,7 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
-	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -51,7 +50,6 @@ type Config struct {
 	Tortoise        tortoise.Config                 `mapstructure:"tortoise"`
 	P2P             p2p.Config                      `mapstructure:"p2p"`
 	API             grpcserver.Config               `mapstructure:"api"`
-	HARE            hareConfig.Config               `mapstructure:"hare"`
 	HARE3           hare3.Config                    `mapstructure:"hare3"`
 	HareEligibility eligConfig.Config               `mapstructure:"hare-eligibility"`
 	Beacon          beacon.Config                   `mapstructure:"beacon"`
@@ -151,7 +149,6 @@ func DefaultConfig() Config {
 		Tortoise:        tortoise.DefaultConfig(),
 		P2P:             p2p.DefaultConfig(),
 		API:             grpcserver.DefaultConfig(),
-		HARE:            hareConfig.DefaultConfig(),
 		HARE3:           hare3.DefaultConfig(),
 		HareEligibility: eligConfig.DefaultConfig(),
 		Beacon:          beacon.DefaultConfig(),

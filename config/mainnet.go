@@ -18,7 +18,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
-	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -110,15 +109,6 @@ func MainnetConfig() Config {
 				// for participants to update software
 				{Epoch: 11, Weight: 7_879_129_244},
 			},
-		},
-		HARE: hareConfig.Config{
-			Disable:         hare3conf.EnableLayer,
-			N:               200,
-			ExpectedLeaders: 5,
-			RoundDuration:   25 * time.Second,
-			WakeupDelta:     25 * time.Second,
-			LimitConcurrent: 2,
-			LimitIterations: 4,
 		},
 		HARE3: hare3conf,
 		HareEligibility: eligConfig.Config{
