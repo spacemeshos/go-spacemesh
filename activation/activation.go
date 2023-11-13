@@ -83,6 +83,7 @@ type Builder struct {
 	nipostBuilder    nipostBuilder
 	validator        nipostValidator
 	certifier        certifierService
+	certifierConfig  CertifierClientConfig
 
 	// smeshingMutex protects `StartSmeshing` and `StopSmeshing` from concurrent access
 	smeshingMutex sync.Mutex
@@ -136,6 +137,12 @@ func WithValidator(v nipostValidator) BuilderOption {
 	}
 }
 
+func WithCertifierConfig(c CertifierClientConfig) BuilderOption {
+	return func(b *Builder) {
+		b.certifierConfig = c
+	}
+}
+
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
 func NewBuilder(
 	conf Config,
@@ -165,6 +172,7 @@ func NewBuilder(
 		syncer:            syncer,
 		log:               log,
 		poetRetryInterval: defaultPoetRetryInterval,
+		certifierConfig:   DefaultCertifierClientConfig(),
 	}
 	for _, opt := range opts {
 		opt(b)
@@ -397,7 +405,7 @@ func (b *Builder) certifyPost(ctx context.Context) {
 		b.log.With().Error("failed to obtain post for certification", zap.Error(err))
 	}
 
-	client := NewCertifierClient(b.log, post, meta, ch)
+	client := NewCertifierClient(b.log, post, meta, ch, WithCertifierClientConfig(b.certifierConfig))
 	b.certifier = NewCertifier(b.localDB, b.log, client)
 	b.certifier.CertifyAll(ctx, b.poets)
 }

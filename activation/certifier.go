@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/sourcegraph/conc/iter"
@@ -20,6 +21,23 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	certifier_db "github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
 )
+
+type CertifierClientConfig struct {
+	// Base delay between retries, scaled with the number of retries.
+	RetryDelay time.Duration `mapstructure:"retry-delay"`
+	// Maximum time to wait between retries
+	MaxRetryDelay time.Duration `mapstructure:"max-retry-delay"`
+	// Maximum number of retries
+	MaxRetries int `mapstructure:"max-retries"`
+}
+
+func DefaultCertifierClientConfig() CertifierClientConfig {
+	return CertifierClientConfig{
+		RetryDelay:    1 * time.Second,
+		MaxRetryDelay: 30 * time.Second,
+		MaxRetries:    5,
+	}
+}
 
 type ProofToCertify struct {
 	Nonce   uint32 `json:"nonce"`
@@ -182,11 +200,22 @@ type CertifierClient struct {
 	logger   *zap.Logger
 }
 
+type certifierClientOpts func(*CertifierClient)
+
+func WithCertifierClientConfig(cfg CertifierClientConfig) certifierClientOpts {
+	return func(c *CertifierClient) {
+		c.client.RetryMax = cfg.MaxRetries
+		c.client.RetryWaitMin = cfg.RetryDelay
+		c.client.RetryWaitMax = cfg.MaxRetryDelay
+	}
+}
+
 func NewCertifierClient(
 	logger *zap.Logger,
 	post *types.Post,
 	postInfo *types.PostInfo,
 	postCh []byte,
+	opts ...certifierClientOpts,
 ) *CertifierClient {
 	c := &CertifierClient{
 		client:   retryablehttp.NewClient(),
@@ -195,9 +224,17 @@ func NewCertifierClient(
 		postInfo: postInfo,
 		postCh:   postCh,
 	}
+	config := DefaultCertifierClientConfig()
+	c.client.RetryMax = config.MaxRetries
+	c.client.RetryWaitMin = config.RetryDelay
+	c.client.RetryWaitMax = config.MaxRetryDelay
 	c.client.Logger = &retryableHttpLogger{logger}
 	c.client.ResponseLogHook = func(logger retryablehttp.Logger, resp *http.Response) {
 		c.logger.Info("response received", zap.Stringer("url", resp.Request.URL), zap.Int("status", resp.StatusCode))
+	}
+
+	for _, opt := range opts {
+		opt(c)
 	}
 
 	return c

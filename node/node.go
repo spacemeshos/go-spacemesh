@@ -1002,6 +1002,7 @@ func (app *App) initServices(ctx context.Context) error {
 		activation.WithPoetRetryInterval(app.Config.HARE.WakeupDelta),
 		activation.WithValidator(app.validator),
 		activation.WithPoets(poetClients...),
+		activation.WithCertifierConfig(app.Config.Certifier),
 	)
 	if err := atxBuilder.MigrateDiskToLocalDB(); err != nil {
 		app.log.Panic("failed to migrate state of atx builder: %v", err)

@@ -28,5 +28,8 @@
     },
     "fetch": {
         "servers-metrics": true
+    },
+    "certifier": {
+        "max-retries": 10
     }
 }

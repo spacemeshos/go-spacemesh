@@ -150,7 +150,8 @@ func testnet() config.Config {
 			GossipDuration:           50 * time.Second,
 			OutOfSyncThresholdLayers: 10,
 		},
-		Recovery: checkpoint.DefaultConfig(),
-		Cache:    datastore.DefaultConfig(),
+		Recovery:  checkpoint.DefaultConfig(),
+		Cache:     datastore.DefaultConfig(),
+		Certifier: activation.DefaultCertifierClientConfig(),
 	}
 }
