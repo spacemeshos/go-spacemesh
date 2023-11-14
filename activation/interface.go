@@ -94,13 +94,15 @@ type SmeshingProvider interface {
 	SetCoinbase(coinbase types.Address)
 }
 
-type PoetCert struct {
-	Signature []byte
+type PoetCert []byte
+
+func (c PoetCert) Bytes() []byte {
+	return c
 }
 
 type PoetAuth struct {
 	*PoetPoW
-	*PoetCert
+	PoetCert
 }
 
 // PoetClient servers as an interface to communicate with a PoET server.
@@ -138,17 +140,17 @@ type certifierClient interface {
 	// The ID for which this client certifies.
 	Id() types.NodeID
 	// Certify the ID in the given certifier.
-	Certify(ctx context.Context, url *url.URL, pubkey []byte) (*PoetCert, error)
+	Certify(ctx context.Context, url *url.URL, pubkey []byte) (PoetCert, error)
 }
 
 // certifierService is used to certify nodeID for registerting in the poet.
 // It holds the certificates and can recertify if needed.
 type certifierService interface {
 	// Acquire a certificate for the given poet.
-	GetCertificate(poet string) *PoetCert
+	GetCertificate(poet string) PoetCert
 	// Recertify the nodeID and return a certificate confirming that
 	// it is verified. The certificate can be later used to submit in poet.
-	Recertify(ctx context.Context, poet PoetClient) (*PoetCert, error)
+	Recertify(ctx context.Context, poet PoetClient) (PoetCert, error)
 
 	// Certify the nodeID for all given poets.
 	// It won't recertify poets that already have a certificate.

@@ -85,9 +85,7 @@ func TestNIPostBuilderWithMocks(t *testing.T) {
 	require.NoError(t, err)
 
 	certifier := NewMockcertifierService(ctrl)
-	certifier.EXPECT().GetCertificate(poetProvider.Address()).Return(&PoetCert{
-		Signature: []byte("cert"),
-	})
+	certifier.EXPECT().GetCertificate(poetProvider.Address()).Return(PoetCert("cert"))
 
 	nipost, err := nb.BuildNIPost(context.Background(), &challenge, certifier)
 	require.NoError(t, err)
@@ -133,9 +131,7 @@ func TestPostSetup(t *testing.T) {
 	t.Cleanup(func() { assert.NoError(t, postProvider.Reset()) })
 
 	certifier := NewMockcertifierService(ctrl)
-	certifier.EXPECT().GetCertificate(poetProvider.Address()).Return(&PoetCert{
-		Signature: []byte("cert"),
-	})
+	certifier.EXPECT().GetCertificate(poetProvider.Address()).Return(PoetCert("cert"))
 
 	nipost, err := nb.BuildNIPost(context.Background(), &challenge, certifier)
 	require.NoError(t, err)
@@ -196,9 +192,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	require.NoError(t, err)
 
 	certifier := NewMockcertifierService(ctrl)
-	certifier.EXPECT().GetCertificate(poetProver.Address()).AnyTimes().Return(&PoetCert{
-		Signature: []byte("cert"),
-	})
+	certifier.EXPECT().GetCertificate(poetProver.Address()).AnyTimes().Return(PoetCert("cert"))
 	nipost, err := nb.BuildNIPost(context.Background(), &challenge, certifier)
 	require.NoError(t, err)
 	require.NotNil(t, nipost)
@@ -335,12 +329,8 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 	require.NoError(t, err)
 
 	certifier := NewMockcertifierService(ctrl)
-	certifier.EXPECT().GetCertificate(poets[0].Address()).Return(&PoetCert{
-		Signature: []byte("cert"),
-	})
-	certifier.EXPECT().GetCertificate(poets[1].Address()).Return(&PoetCert{
-		Signature: []byte("cert"),
-	})
+	certifier.EXPECT().GetCertificate(poets[0].Address()).Return(PoetCert("cert"))
+	certifier.EXPECT().GetCertificate(poets[1].Address()).Return(PoetCert("cert"))
 
 	// Act
 	nipost, err := nb.BuildNIPost(context.Background(), &challenge, certifier)
@@ -414,7 +404,7 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 	require.NoError(t, err)
 
 	certifier := NewMockcertifierService(ctrl)
-	certifier.EXPECT().GetCertificate(poets[0].Address()).Return(&PoetCert{Signature: []byte("cert")})
+	certifier.EXPECT().GetCertificate(poets[0].Address()).Return(PoetCert("cert"))
 	// No certs - fallback to PoW
 	certifier.EXPECT().GetCertificate(poets[1].Address()).Return(nil)
 
@@ -435,7 +425,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 	poetCfg := PoetConfig{
 		PhaseShift: layerDuration,
 	}
-	cert := &PoetCert{Signature: []byte("cert")}
+	cert := PoetCert("cert")
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
@@ -641,7 +631,7 @@ func TestNIPostBuilder_RecertifyPoet(t *testing.T) {
 
 	certifier := NewMockcertifierService(ctrl)
 
-	invalid := &PoetCert{Signature: []byte("certInvalid")}
+	invalid := PoetCert("certInvalid")
 	getInvalid := certifier.EXPECT().GetCertificate("http://localhost:9999").Return(invalid)
 	submitFailed := poetProver.EXPECT().
 		Submit(
@@ -656,7 +646,7 @@ func TestNIPostBuilder_RecertifyPoet(t *testing.T) {
 		After(getInvalid.Call).
 		Return(nil, ErrUnathorized)
 
-	valid := &PoetCert{Signature: []byte("certInvalid")}
+	valid := PoetCert("certInvalid")
 	recertify := certifier.EXPECT().Recertify(gomock.Any(), poetProver).After(submitFailed).Return(valid, nil)
 	submitOK := poetProver.EXPECT().
 		Submit(
@@ -823,7 +813,7 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 			LeafCount: 777,
 		},
 	}
-	cert := &PoetCert{Signature: []byte("cert")}
+	cert := PoetCert("cert")
 
 	ctrl := gomock.NewController(t)
 	poetDb := NewMockpoetDbAPI(ctrl)

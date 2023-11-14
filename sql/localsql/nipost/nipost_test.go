@@ -3,6 +3,7 @@ package nipost
 import (
 	"testing"
 
+	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -15,9 +16,10 @@ func Test_AddInitialPost(t *testing.T) {
 
 	nodeID := types.RandomNodeID()
 	post := Post{
-		Nonce:   1,
-		Indices: []byte{1, 2, 3},
-		Pow:     1,
+		Nonce:     1,
+		Indices:   []byte{1, 2, 3},
+		Pow:       1,
+		Challenge: shared.ZeroChallenge,
 
 		NumUnits:      2,
 		CommitmentATX: types.RandomATXID(),

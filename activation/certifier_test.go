@@ -29,21 +29,40 @@ func TestPersistsCerts(t *testing.T) {
 
 		client.EXPECT().
 			Certify(gomock.Any(), &url.URL{Scheme: "http", Host: "certifier.org"}, []byte("pubkey")).
-			Return(&activation.PoetCert{Signature: []byte("cert")}, nil)
+			Return(activation.PoetCert("cert"), nil)
 
 		require.Nil(t, certifier.GetCertificate("http://poet"))
 		certs, err := certifier.Recertify(context.Background(), poetMock)
 		require.NoError(t, err)
-		require.Equal(t, []byte("cert"), certs.Signature)
+		require.Equal(t, activation.PoetCert("cert"), certs)
 
 		cert := certifier.GetCertificate("http://poet")
-		require.Equal(t, []byte("cert"), cert.Signature)
+		require.Equal(t, activation.PoetCert("cert"), cert)
 		require.Nil(t, certifier.GetCertificate("http://other-poet"))
 	}
 	{
 		// Create new certifier and check that it loads the certs back.
 		certifier := activation.NewCertifier(db, zaptest.NewLogger(t), client)
 		cert := certifier.GetCertificate("http://poet")
-		require.Equal(t, []byte("cert"), cert.Signature)
+		require.Equal(t, activation.PoetCert("cert"), cert)
 	}
+}
+
+func TestSeedWithCerts(t *testing.T) {
+	client := activation.NewMockcertifierClient(gomock.NewController(t))
+	client.EXPECT().Id().AnyTimes().Return(types.RandomNodeID())
+
+	certs := []activation.Certificate{
+		{
+			Poet:        "poet1",
+			Certificate: activation.Base64Enc{Inner: []byte("cert1")},
+		},
+		{
+			Poet:        "poet2",
+			Certificate: activation.Base64Enc{Inner: []byte("cert2")},
+		},
+	}
+	c := activation.NewCertifier(localsql.InMemory(), zaptest.NewLogger(t), client, activation.WithCertificates(certs))
+	require.Equal(t, activation.PoetCert("cert1"), c.GetCertificate("poet1"))
+	require.Equal(t, activation.PoetCert("cert2"), c.GetCertificate("poet2"))
 }

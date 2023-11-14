@@ -152,6 +152,6 @@ func testnet() config.Config {
 		},
 		Recovery:  checkpoint.DefaultConfig(),
 		Cache:     datastore.DefaultConfig(),
-		Certifier: activation.DefaultCertifierClientConfig(),
+		Certifier: activation.DefaultCertifierConfig(),
 	}
 }

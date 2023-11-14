@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -31,11 +32,54 @@ type CertifierClientConfig struct {
 	MaxRetries int `mapstructure:"max-retries"`
 }
 
+type Base64Enc struct {
+	Inner []byte
+}
+
+func (e Base64Enc) String() string {
+	return base64.RawStdEncoding.EncodeToString(e.Inner)
+}
+
+// Set implements pflag.Value.Set.
+func (e *Base64Enc) Set(value string) error {
+	return e.UnmarshalText([]byte(value))
+}
+
+// Type implements pflag.Value.Type.
+func (Base64Enc) Type() string {
+	return "Base64Enc"
+}
+
+func (e *Base64Enc) UnmarshalText(text []byte) error {
+	b, err := base64.StdEncoding.DecodeString(string(text))
+	if err != nil {
+		return err
+	}
+	e.Inner = b
+	return nil
+}
+
+type Certificate struct {
+	Poet        string    `mapstructure:"poet"`
+	Certificate Base64Enc `mapstructure:"certificate"`
+}
+
+type CertifierConfig struct {
+	Client       CertifierClientConfig `mapstructure:"client"`
+	Certificates []Certificate         `mapstructure:"certificates"`
+}
+
 func DefaultCertifierClientConfig() CertifierClientConfig {
 	return CertifierClientConfig{
 		RetryDelay:    1 * time.Second,
 		MaxRetryDelay: 30 * time.Second,
 		MaxRetries:    5,
+	}
+}
+
+func DefaultCertifierConfig() CertifierConfig {
+	return CertifierConfig{
+		Client: DefaultCertifierClientConfig(),
 	}
 }
 
@@ -69,26 +113,50 @@ type Certifier struct {
 	client certifierClient
 }
 
-func NewCertifier(db *localsql.Database, logger *zap.Logger, client certifierClient) *Certifier {
-	return &Certifier{
+type NewCertifierOption func(*Certifier)
+
+func WithCertificates(certs []Certificate) NewCertifierOption {
+	return func(c *Certifier) {
+		c.logger.Info("adding certificates", zap.Int("num", len(certs)), zap.Any("certs", certs))
+		for _, cert := range certs {
+			if err := certifier_db.AddCertificate(c.db, c.client.Id(), cert.Certificate.Inner, cert.Poet); err != nil {
+				c.logger.Warn("failed to persist poet cert", zap.Error(err))
+			}
+		}
+	}
+}
+
+func NewCertifier(
+	db *localsql.Database,
+	logger *zap.Logger,
+	client certifierClient,
+	opts ...NewCertifierOption,
+) *Certifier {
+	c := &Certifier{
 		client: client,
 		logger: logger,
 		db:     db,
 	}
+
+	for _, opt := range opts {
+		opt(c)
+	}
+
+	return c
 }
 
-func (c *Certifier) GetCertificate(poet string) *PoetCert {
+func (c *Certifier) GetCertificate(poet string) PoetCert {
 	cert, err := certifier_db.Certificate(c.db, c.client.Id(), poet)
 	switch {
 	case err == nil:
-		return &PoetCert{Signature: cert}
+		return cert
 	case !errors.Is(err, sql.ErrNotFound):
 		c.logger.Warn("failed to get certificate", zap.Error(err))
 	}
 	return nil
 }
 
-func (c *Certifier) Recertify(ctx context.Context, poet PoetClient) (*PoetCert, error) {
+func (c *Certifier) Recertify(ctx context.Context, poet PoetClient) (PoetCert, error) {
 	url, pubkey, err := poet.CertifierInfo(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("querying certifier info: %w", err)
@@ -98,7 +166,7 @@ func (c *Certifier) Recertify(ctx context.Context, poet PoetClient) (*PoetCert, 
 		return nil, fmt.Errorf("certifying POST for %s at %v: %w", poet.Address(), url, err)
 	}
 
-	if err := certifier_db.AddCertificate(c.db, c.client.Id(), cert.Signature, poet.Address()); err != nil {
+	if err := certifier_db.AddCertificate(c.db, c.client.Id(), cert.Bytes(), poet.Address()); err != nil {
 		c.logger.Warn("failed to persist poet cert", zap.Error(err))
 	}
 
@@ -114,7 +182,7 @@ func (c *Certifier) CertifyAll(ctx context.Context, poets []PoetClient) map[stri
 	poetsToCertify := []PoetClient{}
 	for _, poet := range poets {
 		if cert := c.GetCertificate(poet.Address()); cert != nil {
-			certs[poet.Address()] = *cert
+			certs[poet.Address()] = cert
 		} else {
 			poetsToCertify = append(poetsToCertify, poet)
 		}
@@ -180,13 +248,13 @@ func (c *Certifier) CertifyAll(ctx context.Context, poets []PoetClient) map[stri
 		c.logger.Info(
 			"successfully obtained certificate",
 			zap.Stringer("certifier", svc.url),
-			zap.Binary("cert", cert.Signature),
+			zap.Binary("cert", cert.Bytes()),
 		)
 		for _, poet := range svc.poets {
-			if err := certifier_db.AddCertificate(c.db, c.client.Id(), cert.Signature, poet); err != nil {
+			if err := certifier_db.AddCertificate(c.db, c.client.Id(), cert.Bytes(), poet); err != nil {
 				c.logger.Warn("failed to persist poet cert", zap.Error(err))
 			}
-			certs[poet] = *cert
+			certs[poet] = cert
 		}
 	}
 	return certs
@@ -244,7 +312,7 @@ func (c *CertifierClient) Id() types.NodeID {
 	return c.postInfo.NodeID
 }
 
-func (c *CertifierClient) Certify(ctx context.Context, url *url.URL, pubkey []byte) (*PoetCert, error) {
+func (c *CertifierClient) Certify(ctx context.Context, url *url.URL, pubkey []byte) (PoetCert, error) {
 	request := CertifyRequest{
 		Proof: ProofToCertify{
 			Pow:     c.post.Pow,
@@ -294,5 +362,5 @@ func (c *CertifierClient) Certify(ctx context.Context, url *url.URL, pubkey []by
 	if !ed25519.Verify(pubkey, c.postInfo.NodeID[:], certRespose.Signature) {
 		return nil, errors.New("signature is invalid")
 	}
-	return &PoetCert{Signature: certRespose.Signature}, nil
+	return certRespose.Signature, nil
 }

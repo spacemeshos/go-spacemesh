@@ -136,7 +136,7 @@ func TestHTTPPoet(t *testing.T) {
 			signature,
 			signer.NodeID(),
 			activation.PoetAuth{
-				PoetCert: &activation.PoetCert{Signature: ed25519.Sign(certPrivKey, signer.NodeID().Bytes())},
+				PoetCert: ed25519.Sign(certPrivKey, signer.NodeID().Bytes()),
 			},
 		)
 		require.NoError(t, err)
@@ -150,7 +150,7 @@ func TestHTTPPoet(t *testing.T) {
 			ch.Bytes(),
 			signature,
 			signer.NodeID(),
-			activation.PoetAuth{PoetCert: &activation.PoetCert{Signature: []byte("oops")}},
+			activation.PoetAuth{PoetCert: activation.PoetCert("oops")},
 		)
 		require.ErrorIs(t, err, activation.ErrUnathorized)
 	})

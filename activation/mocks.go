@@ -1577,10 +1577,10 @@ func (m *MockcertifierClient) EXPECT() *MockcertifierClientMockRecorder {
 }
 
 // Certify mocks base method.
-func (m *MockcertifierClient) Certify(ctx context.Context, url *url.URL, pubkey []byte) (*PoetCert, error) {
+func (m *MockcertifierClient) Certify(ctx context.Context, url *url.URL, pubkey []byte) (PoetCert, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Certify", ctx, url, pubkey)
-	ret0, _ := ret[0].(*PoetCert)
+	ret0, _ := ret[0].(PoetCert)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -1598,19 +1598,19 @@ type certifierClientCertifyCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *certifierClientCertifyCall) Return(arg0 *PoetCert, arg1 error) *certifierClientCertifyCall {
+func (c *certifierClientCertifyCall) Return(arg0 PoetCert, arg1 error) *certifierClientCertifyCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *certifierClientCertifyCall) Do(f func(context.Context, *url.URL, []byte) (*PoetCert, error)) *certifierClientCertifyCall {
+func (c *certifierClientCertifyCall) Do(f func(context.Context, *url.URL, []byte) (PoetCert, error)) *certifierClientCertifyCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *certifierClientCertifyCall) DoAndReturn(f func(context.Context, *url.URL, []byte) (*PoetCert, error)) *certifierClientCertifyCall {
+func (c *certifierClientCertifyCall) DoAndReturn(f func(context.Context, *url.URL, []byte) (PoetCert, error)) *certifierClientCertifyCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -1715,10 +1715,10 @@ func (c *certifierServiceCertifyAllCall) DoAndReturn(f func(context.Context, []P
 }
 
 // GetCertificate mocks base method.
-func (m *MockcertifierService) GetCertificate(poet string) *PoetCert {
+func (m *MockcertifierService) GetCertificate(poet string) PoetCert {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetCertificate", poet)
-	ret0, _ := ret[0].(*PoetCert)
+	ret0, _ := ret[0].(PoetCert)
 	return ret0
 }
 
@@ -1735,28 +1735,28 @@ type certifierServiceGetCertificateCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *certifierServiceGetCertificateCall) Return(arg0 *PoetCert) *certifierServiceGetCertificateCall {
+func (c *certifierServiceGetCertificateCall) Return(arg0 PoetCert) *certifierServiceGetCertificateCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *certifierServiceGetCertificateCall) Do(f func(string) *PoetCert) *certifierServiceGetCertificateCall {
+func (c *certifierServiceGetCertificateCall) Do(f func(string) PoetCert) *certifierServiceGetCertificateCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *certifierServiceGetCertificateCall) DoAndReturn(f func(string) *PoetCert) *certifierServiceGetCertificateCall {
+func (c *certifierServiceGetCertificateCall) DoAndReturn(f func(string) PoetCert) *certifierServiceGetCertificateCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // Recertify mocks base method.
-func (m *MockcertifierService) Recertify(ctx context.Context, poet PoetClient) (*PoetCert, error) {
+func (m *MockcertifierService) Recertify(ctx context.Context, poet PoetClient) (PoetCert, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Recertify", ctx, poet)
-	ret0, _ := ret[0].(*PoetCert)
+	ret0, _ := ret[0].(PoetCert)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -1774,19 +1774,19 @@ type certifierServiceRecertifyCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *certifierServiceRecertifyCall) Return(arg0 *PoetCert, arg1 error) *certifierServiceRecertifyCall {
+func (c *certifierServiceRecertifyCall) Return(arg0 PoetCert, arg1 error) *certifierServiceRecertifyCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *certifierServiceRecertifyCall) Do(f func(context.Context, PoetClient) (*PoetCert, error)) *certifierServiceRecertifyCall {
+func (c *certifierServiceRecertifyCall) Do(f func(context.Context, PoetClient) (PoetCert, error)) *certifierServiceRecertifyCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *certifierServiceRecertifyCall) DoAndReturn(f func(context.Context, PoetClient) (*PoetCert, error)) *certifierServiceRecertifyCall {
+func (c *certifierServiceRecertifyCall) DoAndReturn(f func(context.Context, PoetClient) (PoetCert, error)) *certifierServiceRecertifyCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

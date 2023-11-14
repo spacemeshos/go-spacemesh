@@ -338,7 +338,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 	auth := PoetAuth{
 		PoetCert: certifier.GetCertificate(client.Address()),
 	}
-	if auth.PoetCert == nil || auth.PoetCert.Signature == nil {
+	if auth.PoetCert == nil {
 		logger.Info("missing poet cert - falling back to PoW")
 		powCtx, cancel := withConditionalTimeout(ctx, nb.poetCfg.RequestTimeout)
 		defer cancel()
@@ -364,7 +364,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 			Params: *powParams,
 		}
 	} else {
-		logger.Info("registering with a certificate", zap.Binary("cert", auth.PoetCert.Signature))
+		logger.Info("registering with a certificate", zap.Binary("cert", auth.PoetCert))
 	}
 
 	logger.Debug("submitting challenge to poet proving service")

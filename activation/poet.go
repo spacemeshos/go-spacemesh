@@ -189,7 +189,7 @@ func (c *HTTPPoetClient) Submit(
 	}
 	if auth.PoetCert != nil {
 		request.Certificate = &rpcapi.SubmitRequest_Certificate{
-			Signature: auth.PoetCert.Signature,
+			Signature: auth.PoetCert,
 		}
 	}
 
