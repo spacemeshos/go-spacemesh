@@ -747,42 +747,6 @@ func (c *nipostBuilderDataDirCall) DoAndReturn(f func() string) *nipostBuilderDa
 	return c
 }
 
-// UpdatePoETProvers mocks base method.
-func (m *MocknipostBuilder) UpdatePoETProvers(arg0 []poetClient) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "UpdatePoETProvers", arg0)
-}
-
-// UpdatePoETProvers indicates an expected call of UpdatePoETProvers.
-func (mr *MocknipostBuilderMockRecorder) UpdatePoETProvers(arg0 any) *nipostBuilderUpdatePoETProversCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePoETProvers", reflect.TypeOf((*MocknipostBuilder)(nil).UpdatePoETProvers), arg0)
-	return &nipostBuilderUpdatePoETProversCall{Call: call}
-}
-
-// nipostBuilderUpdatePoETProversCall wrap *gomock.Call
-type nipostBuilderUpdatePoETProversCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *nipostBuilderUpdatePoETProversCall) Return() *nipostBuilderUpdatePoETProversCall {
-	c.Call = c.Call.Return()
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *nipostBuilderUpdatePoETProversCall) Do(f func([]poetClient)) *nipostBuilderUpdatePoETProversCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *nipostBuilderUpdatePoETProversCall) DoAndReturn(f func([]poetClient)) *nipostBuilderUpdatePoETProversCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // Mocksyncer is a mock of syncer interface.
 type Mocksyncer struct {
 	ctrl     *gomock.Controller
@@ -1326,44 +1290,6 @@ func (c *SmeshingProviderStopSmeshingCall) Do(f func(bool) error) *SmeshingProvi
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *SmeshingProviderStopSmeshingCall) DoAndReturn(f func(bool) error) *SmeshingProviderStopSmeshingCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// UpdatePoETServers mocks base method.
-func (m *MockSmeshingProvider) UpdatePoETServers(ctx context.Context, endpoints []string) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdatePoETServers", ctx, endpoints)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// UpdatePoETServers indicates an expected call of UpdatePoETServers.
-func (mr *MockSmeshingProviderMockRecorder) UpdatePoETServers(ctx, endpoints any) *SmeshingProviderUpdatePoETServersCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePoETServers", reflect.TypeOf((*MockSmeshingProvider)(nil).UpdatePoETServers), ctx, endpoints)
-	return &SmeshingProviderUpdatePoETServersCall{Call: call}
-}
-
-// SmeshingProviderUpdatePoETServersCall wrap *gomock.Call
-type SmeshingProviderUpdatePoETServersCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *SmeshingProviderUpdatePoETServersCall) Return(arg0 error) *SmeshingProviderUpdatePoETServersCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *SmeshingProviderUpdatePoETServersCall) Do(f func(context.Context, []string) error) *SmeshingProviderUpdatePoETServersCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *SmeshingProviderUpdatePoETServersCall) DoAndReturn(f func(context.Context, []string) error) *SmeshingProviderUpdatePoETServersCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

@@ -20,7 +20,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	identityStr, err := p2p.PrettyIdentityInfoFromDir(dir)
+	identityStr, err := p2p.IdentityInfoFromDir(dir)
 	if err != nil {
 		fmt.Printf("failed fetching identity from file: %v\n", err)
 		os.Exit(1)

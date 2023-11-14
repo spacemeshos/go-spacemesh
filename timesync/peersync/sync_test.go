@@ -147,7 +147,7 @@ func TestSyncSimulateMultiple(t *testing.T) {
 		sync := New(hosts[i], hosts[i],
 			WithConfig(config),
 			WithTime(delayedTime(delay)),
-			WithLog(logtest.New(t).Named(hosts[i].ID().Pretty())),
+			WithLog(logtest.New(t).Named(hosts[i].ID().String())),
 		)
 		sync.Start()
 		t.Cleanup(sync.Stop)

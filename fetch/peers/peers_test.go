@@ -19,7 +19,7 @@ type event struct {
 }
 
 func withEvents(events []event) *Peers {
-	tracker := New(WithRateThreshold(0.1))
+	tracker := New()
 	for _, ev := range events {
 		if ev.delete {
 			tracker.Delete(ev.id)
@@ -44,68 +44,31 @@ func TestSelect(t *testing.T) {
 		n      int
 		expect []peer.ID
 
-		from []peer.ID
-		best peer.ID
+		selectFrom []peer.ID
+		best       peer.ID
 	}{
 		{
-			desc: "ordered by rate",
+			desc: "latency adjusted with moving average",
 			events: []event{
-				{id: "b", success: 100, failure: 30, add: true},
-				{id: "c", success: 100, failure: 0, add: true},
-				{id: "a", success: 80, failure: 80, add: true},
+				{id: "a", success: 1, latency: 8, add: true},
+				{id: "b", success: 1, latency: 9, add: true},
+				{id: "a", success: 1, latency: 14, add: true},
 			},
-			n:      5,
-			expect: []peer.ID{"c", "b", "a"},
-			from:   []peer.ID{"a", "b"},
-			best:   peer.ID("b"),
-		},
-		{
-			desc: "ordered by rate no best",
-			events: []event{
-				{id: "b", success: 100, failure: 30, add: true},
-				{id: "c", success: 100, failure: 0, add: true},
-				{id: "a", success: 80, failure: 80, add: true},
-			},
-			n:      5,
-			expect: []peer.ID{"c", "b", "a"},
-			from:   []peer.ID{"d", "e"},
-			best:   "",
-		},
-		{
-			desc: "ordered by latency within threshold",
-			events: []event{
-				{id: "b", success: 100, latency: 10, add: true},
-				{id: "c", success: 95, latency: 5, add: true},
-				{id: "a", success: 90, latency: 4, add: true},
-			},
-			n:      5,
-			expect: []peer.ID{"a", "c", "b"},
-			from:   []peer.ID{"c", "a"},
-			best:   peer.ID("a"),
+			n:          5,
+			expect:     []peer.ID{"b", "a"},
+			selectFrom: []peer.ID{"a", "b"},
+			best:       peer.ID("b"),
 		},
 		{
 			desc: "latency computed with moving average",
 			events: []event{
-				{id: "a", success: 100, latency: 8, add: true},
-				{id: "b", success: 100, latency: 9, add: true},
-				{id: "a", success: 1, latency: 10, add: true},
+				{id: "a", success: 2, latency: 8, add: true},
+				{id: "b", success: 2, latency: 9, add: true},
 			},
-			n:      5,
-			expect: []peer.ID{"a", "b"},
-			from:   []peer.ID{"a", "b"},
-			best:   peer.ID("a"),
-		},
-		{
-			desc: "latency computed with moving average",
-			events: []event{
-				{id: "a", success: 100, latency: 8, add: true},
-				{id: "b", success: 100, latency: 9, add: true},
-				{id: "a", success: 1, latency: 14},
-			},
-			n:      5,
-			expect: []peer.ID{"b", "a"},
-			from:   []peer.ID{"a", "b"},
-			best:   peer.ID("b"),
+			n:          5,
+			expect:     []peer.ID{"a", "b"},
+			selectFrom: []peer.ID{"b", "a"},
+			best:       peer.ID("a"),
 		},
 		{
 			desc: "total number is larger then capacity",
@@ -139,14 +102,15 @@ func TestSelect(t *testing.T) {
 				{id: "b", delete: true},
 				{id: "a", delete: true},
 			},
-			n:      4,
-			expect: []peer.ID{"c", "d"},
-			from:   []peer.ID{"a", "b", "c", "d"},
-			best:   peer.ID("c"),
+			n:          4,
+			expect:     []peer.ID{"c", "d"},
+			selectFrom: []peer.ID{"a", "b", "c", "d"},
+			best:       peer.ID("c"),
 		},
 		{
-			desc: "empty",
-			n:    4,
+			desc:       "empty",
+			n:          4,
+			selectFrom: []peer.ID{"a", "b", "c", "d"},
 		},
 		{
 			desc: "request empty",
@@ -156,20 +120,33 @@ func TestSelect(t *testing.T) {
 			n: 0,
 		},
 		{
-			desc: "no success rate",
-			events: []event{
-				{id: "a", add: true},
-				{id: "b", add: true},
-			},
-			n:      2,
-			expect: []peer.ID{"b", "a"},
-		},
-		{
 			desc: "events for nonexisting",
 			events: []event{
 				{id: "a", success: 100, failure: 100},
 			},
 			n: 2,
+		},
+		{
+			desc: "new peer",
+			events: []event{
+				{id: "a", success: 1, latency: 10, add: true},
+				{id: "b", add: true},
+			},
+			n:          2,
+			expect:     []peer.ID{"b", "a"},
+			selectFrom: []peer.ID{"a", "b"},
+			best:       peer.ID("b"),
+		},
+		{
+			desc: "unresponsive",
+			events: []event{
+				{id: "a", success: 1, latency: 10, add: true},
+				{id: "b", failure: 1, add: true},
+			},
+			n:          2,
+			expect:     []peer.ID{"a", "b"},
+			selectFrom: []peer.ID{"a", "b"},
+			best:       peer.ID("a"),
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
@@ -180,14 +157,14 @@ func TestSelect(t *testing.T) {
 				"select best %d",
 				tc.n,
 			)
-			if tc.from != nil {
+			if tc.selectFrom != nil {
 				require.Equal(
 					t,
 					tc.best,
-					withEvents(tc.events).SelectBestFrom(tc.from),
+					withEvents(tc.events).SelectBestFrom(tc.selectFrom),
 					"select best (%v) from %v",
 					tc.best,
-					tc.from,
+					tc.selectFrom,
 				)
 			}
 		})

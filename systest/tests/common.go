@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
-	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -439,17 +438,6 @@ func getVerifiedLayer(ctx context.Context, node *cluster.NodeClient) (*pb.Layer,
 		return nil, err
 	}
 	return getLayer(ctx, node, resp.Status.VerifiedLayer.Number)
-}
-
-func updatePoetServers(ctx context.Context, node *cluster.NodeClient, targets []string) (bool, error) {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	svc := pb.NewSmesherServiceClient(node)
-	resp, err := svc.UpdatePoetServers(ctx, &pb.UpdatePoetServersRequest{Urls: targets})
-	if err != nil {
-		return false, err
-	}
-	return resp.Status.Code == int32(code.Code_OK), nil
 }
 
 type txClient struct {

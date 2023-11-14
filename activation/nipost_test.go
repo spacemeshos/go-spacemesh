@@ -11,10 +11,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -73,7 +72,7 @@ func TestNIPostBuilderWithMocks(t *testing.T) {
 		postService,
 		[]string{},
 		t.TempDir(),
-		logtest.New(t),
+		zaptest.NewLogger(t),
 		sig,
 		PoetConfig{},
 		mclock,
@@ -112,7 +111,7 @@ func TestPostSetup(t *testing.T) {
 		postService,
 		[]string{},
 		t.TempDir(),
-		logtest.New(t),
+		zaptest.NewLogger(t),
 		postProvider.signer,
 		PoetConfig{},
 		mclock,
@@ -174,7 +173,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 		postService,
 		[]string{},
 		dir,
-		logtest.New(t),
+		zaptest.NewLogger(t),
 		sig,
 		PoetConfig{},
 		mclock,
@@ -195,7 +194,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 		postService,
 		[]string{},
 		dir,
-		logtest.New(t),
+		zaptest.NewLogger(t),
 		sig,
 		PoetConfig{},
 		mclock,
@@ -218,7 +217,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 		postService,
 		[]string{},
 		dir,
-		logtest.New(t),
+		zaptest.NewLogger(t),
 		sig,
 		PoetConfig{},
 		mclock,
@@ -275,7 +274,7 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 				return nil, ctx.Err()
 			})
 		poet.EXPECT().PowParams(gomock.Any()).Return(&PoetPowParams{}, nil)
-		poet.EXPECT().Address().Return("http://localhost:9999")
+		poet.EXPECT().Address().AnyTimes().Return("http://localhost:9999")
 		poets = append(poets, poet)
 	}
 	{
@@ -291,7 +290,7 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 			Proof(gomock.Any(), gomock.Any()).
 			Return(proof, []types.Member{types.Member(challenge.Hash())}, nil)
 		poet.EXPECT().PowParams(gomock.Any()).Return(&PoetPowParams{}, nil)
-		poet.EXPECT().Address().Return("http://localhost:9998")
+		poet.EXPECT().Address().AnyTimes().Return("http://localhost:9998")
 		poets = append(poets, poet)
 	}
 
@@ -311,7 +310,7 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 		postService,
 		[]string{},
 		t.TempDir(),
-		logtest.New(t),
+		zaptest.NewLogger(t),
 		sig,
 		poetCfg,
 		mclock,
@@ -377,7 +376,7 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 		postService,
 		[]string{},
 		t.TempDir(),
-		logtest.New(t),
+		zaptest.NewLogger(t),
 		sig,
 		PoetConfig{},
 		mclock,
@@ -421,7 +420,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			postService,
 			[]string{},
 			t.TempDir(),
-			logtest.New(t),
+			zaptest.NewLogger(t),
 			sig,
 			poetCfg,
 			mclock,
@@ -443,7 +442,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(nil, errors.New("test"))
 		poetProver.EXPECT().PowParams(gomock.Any()).Return(&PoetPowParams{}, nil)
-		poetProver.EXPECT().Address().Return("http://localhost:9999")
+		poetProver.EXPECT().Address().AnyTimes().Return("http://localhost:9999")
 		postService := NewMockpostService(ctrl)
 
 		nb, err := NewNIPostBuilder(
@@ -451,7 +450,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			postService,
 			[]string{},
 			t.TempDir(),
-			logtest.New(t),
+			zaptest.NewLogger(t),
 			sig,
 			poetCfg,
 			mclock,
@@ -484,7 +483,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 				return nil, ctx.Err()
 			})
 		poetProver.EXPECT().PowParams(gomock.Any()).Return(&PoetPowParams{}, nil)
-		poetProver.EXPECT().Address().Return("http://localhost:9999")
+		poetProver.EXPECT().Address().AnyTimes().Return("http://localhost:9999")
 		postService := NewMockpostService(ctrl)
 
 		nb, err := NewNIPostBuilder(
@@ -492,7 +491,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			postService,
 			[]string{},
 			t.TempDir(),
-			logtest.New(t),
+			zaptest.NewLogger(t),
 			sig,
 			poetCfg,
 			mclock,
@@ -517,7 +516,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			postService,
 			[]string{},
 			t.TempDir(),
-			logtest.New(t),
+			zaptest.NewLogger(t),
 			sig,
 			poetCfg,
 			mclock,
@@ -545,7 +544,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			postService,
 			[]string{},
 			t.TempDir(),
-			logtest.New(t),
+			zaptest.NewLogger(t),
 			sig,
 			poetCfg,
 			mclock,
@@ -588,7 +587,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 			postService,
 			[]string{},
 			t.TempDir(),
-			logtest.New(t),
+			zaptest.NewLogger(t),
 			sig,
 			PoetConfig{},
 			mclock,
@@ -620,7 +619,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 			postService,
 			[]string{},
 			dir,
-			logtest.New(t),
+			zaptest.NewLogger(t),
 			sig,
 			PoetConfig{},
 			mclock,
@@ -657,7 +656,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 			postService,
 			[]string{},
 			dir,
-			logtest.New(t),
+			zaptest.NewLogger(t),
 			sig,
 			PoetConfig{},
 			mclock,
@@ -720,7 +719,7 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 		})
 	poet.EXPECT().PowParams(gomock.Any()).Times(2).Return(&PoetPowParams{}, nil)
 	poet.EXPECT().Proof(gomock.Any(), "").Return(proof, []types.Member{types.Member(challenge.Hash())}, nil)
-	poet.EXPECT().Address().Return("http://localhost:9999")
+	poet.EXPECT().Address().AnyTimes().Return("http://localhost:9999")
 
 	poetCfg := PoetConfig{
 		PhaseShift: layerDuration * layersPerEpoch / 2,
@@ -739,7 +738,7 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 		postService,
 		[]string{},
 		t.TempDir(),
-		logtest.New(t),
+		zaptest.NewLogger(t),
 		sig,
 		poetCfg,
 		mclock,
@@ -901,7 +900,7 @@ func TestNIPostBuilder_Mainnet_Poet_Workaround(t *testing.T) {
 				postService,
 				[]string{},
 				t.TempDir(),
-				logtest.New(t, zapcore.DebugLevel),
+				zaptest.NewLogger(t),
 				sig,
 				poetCfg,
 				mclock,

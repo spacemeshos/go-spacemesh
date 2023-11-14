@@ -31,7 +31,7 @@ const (
 
 	cacheSize = 1000
 
-	RedundantPeers = 10
+	RedundantPeers = 20
 )
 
 var (
@@ -240,11 +240,7 @@ func NewFetch(
 	for _, opt := range opts {
 		opt(f)
 	}
-	popts := []peers.Opt{}
-	if f.cfg.PeersRateThreshold != 0 {
-		popts = append(popts, peers.WithRateThreshold(f.cfg.PeersRateThreshold))
-	}
-	f.peers = peers.New(popts...)
+	f.peers = peers.New()
 	// NOTE(dshulyak) this is to avoid tests refactoring.
 	// there is one test that covers this part.
 	if host != nil {
@@ -746,6 +742,12 @@ func (f *Fetch) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32) {
 	f.hashToPeers.RegisterPeerHashes(peer, hashes)
 }
 
-func (f *Fetch) SelectBest(n int) []p2p.Peer {
-	return f.peers.SelectBest(n)
+func (f *Fetch) SelectBestShuffled(n int) []p2p.Peer {
+	// shuffle to split the load between peers with good latency.
+	// and it avoids sticky behavior, when temporarily faulty peer had good latency in the past.
+	peers := f.peers.SelectBest(n)
+	rand.Shuffle(len(peers), func(i, j int) {
+		peers[i], peers[j] = peers[j], peers[i]
+	})
+	return peers
 }

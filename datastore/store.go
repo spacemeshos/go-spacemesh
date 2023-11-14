@@ -50,7 +50,7 @@ type Config struct {
 
 func DefaultConfig() Config {
 	return Config{
-		ATXSize:         100_000,
+		ATXSize:         150_000,
 		MalfeasenceSize: 1_000,
 	}
 }
@@ -295,7 +295,7 @@ func (db *CachedDB) GetLastAtx(nodeID types.NodeID) (*types.ActivationTxHeader, 
 	if atxid, err := atxs.GetLastIDByNodeID(db, nodeID); err != nil {
 		return nil, fmt.Errorf("no prev atx found: %w", err)
 	} else if atx, err := db.GetAtxHeader(atxid); err != nil {
-		return nil, fmt.Errorf("inconsistent state: failed to get atx header: %v", err)
+		return nil, fmt.Errorf("inconsistent state: failed to get atx header: %w", err)
 	} else {
 		return atx, nil
 	}
