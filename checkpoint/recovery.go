@@ -185,6 +185,8 @@ func recoverFromLocalFile(
 			log.Context(ctx),
 			log.Int("own atx deps", len(deps)),
 		)
+	} else {
+		logger.WithContext(ctx).Info("there are no own atx deps")
 	}
 	if err := db.Close(); err != nil {
 		return nil, fmt.Errorf("close old db: %w", err)
@@ -333,6 +335,7 @@ func collectOwnAtxDeps(
 	nipostCh, _ := nipost.Challenge(localDB, cfg.NodeID)
 	if ref == types.EmptyATXID {
 		if nipostCh == nil {
+			logger.Debug("there is no own atx and none is being built")
 			return nil, nil, nil
 		}
 		if nipostCh.CommitmentATX != nil {
@@ -371,6 +374,7 @@ func collectOwnAtxDeps(
 		deps = append(deps, deps2...)
 		proofs = append(proofs, proofs2...)
 	}
+	logger.With().Debug("collected atx deps", log.Any("deps", deps))
 	return deps, proofs, nil
 }
 

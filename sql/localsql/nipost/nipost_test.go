@@ -23,54 +23,53 @@ func Test_AddInitialPost(t *testing.T) {
 		CommitmentATX: types.RandomATXID(),
 		VRFNonce:      3,
 	}
-	err := AddInitialPost(db, nodeID, post)
+	err := AddPost(db, nodeID, post)
 	require.NoError(t, err)
 
-	got, err := InitialPost(db, nodeID)
+	got, err := GetPost(db, nodeID)
 	require.NoError(t, err)
 	require.NotNil(t, got)
 	require.Equal(t, post, *got)
-
-	err = RemoveInitialPost(db, nodeID)
-	require.NoError(t, err)
-
-	got, err = InitialPost(db, nodeID)
-	require.ErrorIs(t, err, sql.ErrNotFound)
-	require.Nil(t, got)
 }
 
-func Test_AddInitialPost_NoDuplicates(t *testing.T) {
+func Test_OverwritePost(t *testing.T) {
 	db := localsql.InMemory()
 
 	nodeID := types.RandomNodeID()
 	post := Post{
-		Nonce:   1,
-		Indices: []byte{1, 2, 3},
-		Pow:     1,
+		Nonce:     1,
+		Indices:   []byte{1, 2, 3},
+		Pow:       1,
+		Challenge: shared.ZeroChallenge,
 
 		NumUnits:      2,
 		CommitmentATX: types.RandomATXID(),
 		VRFNonce:      3,
 	}
-	err := AddInitialPost(db, nodeID, post)
-	require.NoError(t, err)
+	require.NoError(t, AddPost(db, nodeID, post))
 
-	// fail to add new initial post for same node
+	got, err := GetPost(db, nodeID)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Equal(t, post, *got)
+
+	// Overwrite
 	post2 := Post{
-		Nonce:   2,
-		Indices: []byte{1, 2, 3},
-		Pow:     1,
+		Nonce:     11,
+		Indices:   []byte{4, 5, 6},
+		Pow:       11,
+		Challenge: []byte("challenge"),
 
-		NumUnits:      4,
+		NumUnits:      22,
 		CommitmentATX: types.RandomATXID(),
-		VRFNonce:      5,
+		VRFNonce:      33,
 	}
-	err = AddInitialPost(db, nodeID, post2)
-	require.Error(t, err)
+	require.NoError(t, AddPost(db, nodeID, post2))
 
-	// succeed to add initial post for different node
-	err = AddInitialPost(db, types.RandomNodeID(), post2)
+	got, err = GetPost(db, nodeID)
 	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Equal(t, post2, *got)
 }
 
 func Test_AddChallenge(t *testing.T) {

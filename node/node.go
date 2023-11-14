@@ -959,6 +959,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.edSgn,
 		app.Config.POET,
 		app.clock,
+		app.localDB,
 		activation.WithPoetClients(poetClients...),
 	)
 	if err != nil {
@@ -1812,6 +1813,7 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 
 func (app *App) preserveAfterRecovery(ctx context.Context) {
 	if app.preserve == nil {
+		app.log.Info("no need to preserve data after recovery")
 		return
 	}
 	for i, poetProof := range app.preserve.Proofs {

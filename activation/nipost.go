@@ -21,6 +21,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/metrics/public"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
 
 const (
@@ -72,6 +74,7 @@ type NIPostBuilder struct {
 	signer      *signing.EdSigner
 	layerClock  layerClock
 	poetCfg     PoetConfig
+	localDB     *localsql.Database
 }
 
 type NIPostBuilderOption func(*NIPostBuilder)
@@ -94,6 +97,7 @@ func NewNIPostBuilder(
 	signer *signing.EdSigner,
 	poetCfg PoetConfig,
 	layerClock layerClock,
+	localDB *localsql.Database,
 	opts ...NIPostBuilderOption,
 ) (*NIPostBuilder, error) {
 	b := &NIPostBuilder{
@@ -105,6 +109,7 @@ func NewNIPostBuilder(
 		signer:      signer,
 		poetCfg:     poetCfg,
 		layerClock:  layerClock,
+		localDB:     localDB,
 	}
 
 	for _, opt := range opts {
@@ -284,6 +289,21 @@ func (nb *NIPostBuilder) BuildNIPost(
 		}
 
 		nb.persistState()
+
+		post := nipost.Post{
+			Nonce:         proof.Nonce,
+			Indices:       proof.Indices,
+			Pow:           proof.Pow,
+			Challenge:     nb.state.PoetProofRef[:],
+			NumUnits:      postInfo.NumUnits,
+			CommitmentATX: postInfo.CommitmentATX,
+		}
+		if postInfo.Nonce != nil {
+			post.VRFNonce = *postInfo.Nonce
+		}
+		if err := nipost.AddPost(nb.localDB, nb.signer.NodeID(), post); err != nil {
+			nb.log.Warn("failed to persist post", zap.Error(err))
+		}
 	}
 
 	nb.log.Info("finished nipost construction")

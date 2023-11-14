@@ -14,8 +14,8 @@ func AddCertificate(db sql.Executor, nodeID types.NodeID, cert []byte, poetUrl s
 		stmt.BindBytes(3, cert)
 	}
 	if _, err := db.Exec(`
-		insert into poet_certificates (node_id, poet_url, certificate)
-		values (?1, ?2, ?3);`, enc, nil,
+		REPLACE INTO poet_certificates (node_id, poet_url, certificate)
+		VALUES (?1, ?2, ?3);`, enc, nil,
 	); err != nil {
 		return fmt.Errorf("storing poet certificate for (%s; %s): %w", nodeID.ShortString(), poetUrl, err)
 	}

@@ -309,19 +309,17 @@ func (b *Builder) movePostToDb() error {
 	commitmentAtxId := types.BytesToATXID(meta.CommitmentAtxId)
 
 	return b.localDB.WithTx(context.Background(), func(tx *sql.Tx) error {
-		if err := nipost.RemoveInitialPost(tx, b.signer.NodeID()); err != nil {
-			return fmt.Errorf("removing existing challenge from db: %w", err)
-		}
 		initialPost := nipost.Post{
-			Nonce:   post.Nonce,
-			Indices: post.Indices,
-			Pow:     post.Pow,
+			Nonce:     post.Nonce,
+			Indices:   post.Indices,
+			Pow:       post.Pow,
+			Challenge: shared.ZeroChallenge,
 
 			NumUnits:      meta.NumUnits,
 			CommitmentATX: commitmentAtxId,
 			VRFNonce:      types.VRFPostIndex(*meta.Nonce),
 		}
-		if err := nipost.AddInitialPost(tx, b.signer.NodeID(), initialPost); err != nil {
+		if err := nipost.AddPost(tx, b.signer.NodeID(), initialPost); err != nil {
 			return fmt.Errorf("adding post to db: %w", err)
 		}
 		return discardPost(b.nipostBuilder.DataDir())
@@ -360,7 +358,7 @@ func (b *Builder) buildInitialPost(ctx context.Context) error {
 		return nil
 	}
 	// ...and if we haven't stored an initial post yet.
-	_, err := nipost.InitialPost(b.localDB, b.signer.NodeID())
+	_, err := nipost.GetPost(b.localDB, b.signer.NodeID())
 	switch {
 	case err == nil:
 		b.log.Info("load initial post from db")
@@ -382,15 +380,16 @@ func (b *Builder) buildInitialPost(ctx context.Context) error {
 	b.log.Info("created the initial post")
 
 	initialPost := nipost.Post{
-		Nonce:   post.Nonce,
-		Indices: post.Indices,
-		Pow:     post.Pow,
+		Nonce:     post.Nonce,
+		Indices:   post.Indices,
+		Pow:       post.Pow,
+		Challenge: shared.ZeroChallenge,
 
 		NumUnits:      postInfo.NumUnits,
 		CommitmentATX: postInfo.CommitmentATX,
 		VRFNonce:      *postInfo.Nonce,
 	}
-	return nipost.AddInitialPost(b.localDB, b.signer.NodeID(), initialPost)
+	return nipost.AddPost(b.localDB, b.signer.NodeID(), initialPost)
 }
 
 // Obtain certificates for the poets.
@@ -411,36 +410,37 @@ func (b *Builder) certifyPost(ctx context.Context) {
 }
 
 func (b *Builder) obtainPostForCertification() (*types.Post, *types.PostInfo, []byte, error) {
-	post, err := nipost.InitialPost(b.localDB, b.signer.NodeID())
+	post, err := nipost.GetPost(b.localDB, b.signer.NodeID())
 	switch {
 	case err == nil:
-		b.log.Info("certifying using the initial post")
+		b.log.Info("certifying using the post from local DB")
 		meta := &types.PostInfo{
 			NodeID:        b.SmesherID(),
 			CommitmentATX: post.CommitmentATX,
 			Nonce:         &post.VRFNonce,
 			NumUnits:      post.NumUnits,
 		}
+		challenge := post.Challenge
 		post := &types.Post{
 			Nonce:   post.Nonce,
 			Indices: post.Indices,
 			Pow:     post.Pow,
 		}
-		return post, meta, shared.ZeroChallenge, nil
+		return post, meta, challenge, nil
 	case errors.Is(err, sql.ErrNotFound):
-		// no initial post
+		// no post found
 	default:
 		return nil, nil, nil, fmt.Errorf("loading initial post from db: %w", err)
 	}
 
-	b.log.Info("certifying using an existing ATX")
-	atxid, err := atxs.GetFirstIDByNodeID(b.cdb, b.SmesherID())
+	b.log.Debug("trying to obtain POST from an existing ATX")
+	atxid, err := atxs.GetLastIDByNodeID(b.cdb, b.SmesherID())
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("cannot certify - no existing ATX found: %w", err)
+		return nil, nil, nil, fmt.Errorf("no existing ATX found: %w", err)
 	}
 	atx, err := b.cdb.GetFullAtx(atxid)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("cannot certify - failed to retrieve ATX: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to retrieve ATX: %w", err)
 	}
 	var commitmentAtx *types.ATXID
 	if commitmentAtx = atx.CommitmentATX; commitmentAtx == nil {
@@ -450,6 +450,12 @@ func (b *Builder) obtainPostForCertification() (*types.Post, *types.PostInfo, []
 		}
 		commitmentAtx = &atx
 	}
+	if atx.NIPost == nil {
+		return nil, nil, nil, errors.New("ATX does not contain a NIPost")
+	}
+
+	b.log.Info("certifying using an existing ATX", zap.Any("atx", atx))
+
 	meta := &types.PostInfo{
 		NodeID:        b.SmesherID(),
 		CommitmentATX: *commitmentAtx,
@@ -587,7 +593,7 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
 		// initial ATX challenge
-		post, err := nipost.InitialPost(b.localDB, b.signer.NodeID())
+		post, err := nipost.GetPost(b.localDB, b.signer.NodeID())
 		if err != nil {
 			return nil, fmt.Errorf("get initial post: %w", err)
 		}
@@ -673,9 +679,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	if err := nipost.RemoveChallenge(b.localDB, b.signer.NodeID()); err != nil {
 		return fmt.Errorf("discarding challenge after published ATX: %w", err)
 	}
-	if err := nipost.RemoveInitialPost(b.localDB, b.signer.NodeID()); err != nil {
-		return fmt.Errorf("discarding initial post after published ATX: %w", err)
-	}
+
 	events.EmitAtxPublished(
 		atx.PublishEpoch, atx.TargetEpoch(),
 		atx.ID(),
