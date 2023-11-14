@@ -1,4 +1,4 @@
-package activation
+package localsql
 
 import (
 	"sort"
@@ -10,7 +10,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 )
 
 func Test_0002Migration_AddsMissingData(t *testing.T) {
@@ -20,7 +19,7 @@ func Test_0002Migration_AddsMissingData(t *testing.T) {
 	// apply only the first migration
 	sort.Slice(migrations, func(i, j int) bool { return migrations[i].Order() < migrations[j].Order() })
 	migrations = migrations[:1]
-	db := localsql.InMemory(
+	db := InMemory(
 		sql.WithMigrations(migrations),
 	)
 
@@ -98,7 +97,7 @@ func Test_0002Migration_EmptyDBIsNoOp(t *testing.T) {
 	// apply only the first migration
 	sort.Slice(migrations, func(i, j int) bool { return migrations[i].Order() < migrations[j].Order() })
 	migrations = migrations[:1]
-	db := localsql.InMemory(
+	db := InMemory(
 		sql.WithMigrations(migrations),
 	)
 

@@ -130,7 +130,7 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 	tab := &testAtxBuilder{
 		cdb: datastore.NewCachedDB(sql.InMemory(), lg),
 		localDb: localsql.InMemory(
-			sql.WithMigration(New0002Migration(tb.TempDir())),
+			sql.WithMigration(localsql.New0002Migration(tb.TempDir())),
 		),
 		sig:         edSigner,
 		coinbase:    types.GenerateAddress([]byte("33333")),

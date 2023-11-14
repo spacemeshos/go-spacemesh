@@ -1634,7 +1634,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	}
 	localDB, err := localsql.Open("file:"+filepath.Join(dbPath, localDbFile),
 		sql.WithMigrations(migrations),
-		sql.WithMigration(activation.New0002Migration(app.Config.SMESHING.Opts.DataDir)),
+		sql.WithMigration(localsql.New0002Migration(app.Config.SMESHING.Opts.DataDir)),
 		sql.WithConnections(app.Config.DatabaseConnections),
 	)
 	if err != nil {

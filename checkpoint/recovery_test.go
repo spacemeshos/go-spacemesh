@@ -165,7 +165,7 @@ func TestRecover(t *testing.T) {
 			require.NoError(t, fs.MkdirAll(bsdir, 0o700))
 			db := sql.InMemory()
 			localDB := localsql.InMemory(
-				sql.WithMigration(activation.New0002Migration(cfg.DataDir)),
+				sql.WithMigration(localsql.New0002Migration(cfg.DataDir)),
 			)
 			preserve, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, localDB, fs, cfg)
 			if tc.expErr != nil {
@@ -214,7 +214,7 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 	require.NoError(t, fs.MkdirAll(bsdir, 0o700))
 	db := sql.InMemory()
 	localDB := localsql.InMemory(
-		sql.WithMigration(activation.New0002Migration(cfg.DataDir)),
+		sql.WithMigration(localsql.New0002Migration(cfg.DataDir)),
 	)
 	types.SetEffectiveGenesis(0)
 	require.NoError(t, recovery.SetCheckpoint(db, types.LayerID(recoverLayer)))
