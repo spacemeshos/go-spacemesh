@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -50,16 +51,21 @@ type Encoder func(*Statement)
 type Decoder func(*Statement) bool
 
 func defaultConf() *conf {
+	migrations, err := StateMigrations()
+	if err != nil {
+		panic(err)
+	}
+
 	return &conf{
 		connections: 16,
-		migrations:  StateMigrations,
+		migrations:  migrations,
 	}
 }
 
 type conf struct {
 	flags         sqlite.OpenFlags
 	connections   int
-	migrations    Migrations
+	migrations    []Migration
 	enableLatency bool
 
 	// TODO: remove after state is pruned for majority
@@ -74,9 +80,17 @@ func WithConnections(n int) Opt {
 }
 
 // WithMigrations overwrites embedded migrations.
-func WithMigrations(migrations Migrations) Opt {
+func WithMigrations(migrations []Migration) Opt {
 	return func(c *conf) {
 		c.migrations = migrations
+	}
+}
+
+// WithMigration adds migration to the list of migrations.
+// Migrations will be sorted by order before applying.
+func WithMigration(m Migration) Opt {
+	return func(c *conf) {
+		c.migrations = append(c.migrations, m)
 	}
 }
 
@@ -127,6 +141,10 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 		db.latency = newQueryLatency()
 	}
 	if config.migrations != nil {
+		sort.Slice(config.migrations, func(i, j int) bool {
+			return config.migrations[i].Order() < config.migrations[j].Order()
+		})
+
 		before, err := version(db)
 		if err != nil {
 			return nil, err
@@ -135,14 +153,15 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 		if err != nil {
 			return nil, err
 		}
-		err = config.migrations(tx)
-		if err == nil {
-			tx.Commit()
+		for _, m := range config.migrations {
+			if err := m.Apply(tx); err != nil {
+				tx.Release()
+				return nil, fmt.Errorf("apply %s: %w", m.Name(), err)
+			}
 		}
+		tx.Commit()
 		tx.Release()
-		if err != nil {
-			return nil, err
-		}
+
 		if before <= 4 && config.v5Migration != nil {
 			// v5 migration (active set extraction) needs the 3rd migration to execute first
 			if err := config.v5Migration(db); err != nil {

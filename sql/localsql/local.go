@@ -6,12 +6,15 @@ type Database struct {
 	*sql.Database
 }
 
-var defaultOpts = []sql.Opt{
-	sql.WithConnections(16),
-	sql.WithMigrations(sql.LocalMigrations),
-}
-
 func Open(uri string, opts ...sql.Opt) (*Database, error) {
+	migrations, err := sql.LocalMigrations()
+	if err != nil {
+		return nil, err
+	}
+	defaultOpts := []sql.Opt{
+		sql.WithConnections(16),
+		sql.WithMigrations(migrations),
+	}
 	opts = append(defaultOpts, opts...)
 	db, err := sql.Open(uri, opts...)
 	if err != nil {
@@ -21,9 +24,14 @@ func Open(uri string, opts ...sql.Opt) (*Database, error) {
 }
 
 func InMemory(opts ...sql.Opt) *Database {
+	migrations, err := sql.LocalMigrations()
+	if err != nil {
+		panic(err)
+	}
+
 	opts = append(opts,
 		sql.WithConnections(1),
-		sql.WithMigrations(sql.LocalMigrations),
+		sql.WithMigrations(migrations),
 	)
 	db := sql.InMemory(opts...)
 	return &Database{Database: db}

@@ -1592,8 +1592,12 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	if err := os.MkdirAll(dbPath, os.ModePerm); err != nil {
 		return fmt.Errorf("failed to create %s: %w", dbPath, err)
 	}
+	migrations, err := sql.StateMigrations()
+	if err != nil {
+		return fmt.Errorf("failed to load migrations: %w", err)
+	}
 	sqlDB, err := sql.Open("file:"+filepath.Join(dbPath, dbFile),
-		sql.WithMigrations(sql.StateMigrations),
+		sql.WithMigrations(migrations),
 		sql.WithConnections(app.Config.DatabaseConnections),
 		sql.WithLatencyMetering(app.Config.DatabaseLatencyMetering),
 		sql.WithV5Migration(util.ExtractActiveSet),
@@ -1624,8 +1628,13 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		datastore.WithConfig(app.Config.Cache),
 		datastore.WithConsensusCache(data),
 	)
+	migrations, err = sql.LocalMigrations()
+	if err != nil {
+		return fmt.Errorf("failed to load local migrations: %w", err)
+	}
 	localDB, err := localsql.Open("file:"+filepath.Join(dbPath, localDbFile),
-		sql.WithMigrations(sql.LocalMigrations),
+		sql.WithMigrations(migrations),
+		sql.WithMigration(activation.New0002Migration(app.Config.SMESHING.Opts.DataDir)),
 		sql.WithConnections(app.Config.DatabaseConnections),
 	)
 	if err != nil {

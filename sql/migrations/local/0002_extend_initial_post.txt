@@ -1,0 +1,3 @@
+Migration is in activation package:
+
+- `activation.New0002Migration(dataDir string)`
