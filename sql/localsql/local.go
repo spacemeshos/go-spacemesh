@@ -28,11 +28,11 @@ func InMemory(opts ...sql.Opt) *Database {
 	if err != nil {
 		panic(err)
 	}
-
-	opts = append(opts,
+	defaultOpts := []sql.Opt{
 		sql.WithConnections(1),
 		sql.WithMigrations(migrations),
-	)
+	}
+	opts = append(defaultOpts, opts...)
 	db := sql.InMemory(opts...)
 	return &Database{Database: db}
 }
