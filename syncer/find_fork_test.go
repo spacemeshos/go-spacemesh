@@ -48,7 +48,7 @@ func TestResynced(t *testing.T) {
 	tf.AddResynced(lid, hash)
 	require.False(t, tf.NeedResync(lid, hash))
 
-	tf.mFetcher.EXPECT().SelectBest(gomock.Any()).Return([]p2p.Peer{})
+	tf.mFetcher.EXPECT().SelectBestShuffled(gomock.Any()).Return([]p2p.Peer{})
 	tf.Purge(false)
 	require.True(t, tf.NeedResync(lid, hash))
 }
@@ -60,7 +60,7 @@ func TestForkFinder_Purge(t *testing.T) {
 	for i := 1; i < numCached; i++ {
 		tf.UpdateAgreement(p2p.Peer(strconv.Itoa(i)), types.LayerID(uint32(i+1)), types.RandomHash(), time.Now())
 	}
-	tf.mFetcher.EXPECT().SelectBest(gomock.Any()).Return([]p2p.Peer{})
+	tf.mFetcher.EXPECT().SelectBestShuffled(gomock.Any()).Return([]p2p.Peer{})
 	require.Equal(t, numCached, tf.NumPeersCached())
 	tf.Purge(false)
 	require.Equal(t, 9, tf.NumPeersCached())

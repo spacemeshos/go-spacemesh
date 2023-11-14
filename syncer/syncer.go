@@ -372,11 +372,12 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 			return true
 		}
 		// check that we have any peers
-		if len(s.dataFetcher.SelectBest(1)) == 0 {
+		if len(s.dataFetcher.SelectBestShuffled(1)) == 0 {
 			return false
 		}
 
 		if err := s.syncAtx(ctx); err != nil {
+			s.logger.With().Error("failed to sync atxs", log.Context(ctx), log.Err(err))
 			return false
 		}
 

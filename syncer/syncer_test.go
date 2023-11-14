@@ -123,7 +123,7 @@ func newTestSyncer(t *testing.T, interval time.Duration) *testSyncer {
 
 func newSyncerWithoutPeriodicRuns(t *testing.T) *testSyncer {
 	ts := newTestSyncer(t, never)
-	ts.mDataFetcher.EXPECT().SelectBest(gomock.Any()).Return([]p2p.Peer{"non-empty"}).AnyTimes()
+	ts.mDataFetcher.EXPECT().SelectBestShuffled(gomock.Any()).Return([]p2p.Peer{"non-empty"}).AnyTimes()
 	return ts
 }
 
@@ -145,7 +145,7 @@ func TestStartAndShutdown(t *testing.T) {
 	ts.syncer.Start()
 
 	ts.mForkFinder.EXPECT().Purge(false).AnyTimes()
-	ts.mDataFetcher.EXPECT().SelectBest(gomock.Any()).Return(nil).AnyTimes()
+	ts.mDataFetcher.EXPECT().SelectBestShuffled(gomock.Any()).Return(nil).AnyTimes()
 	require.Eventually(t, func() bool {
 		return ts.syncer.ListenToATXGossip() && ts.syncer.ListenToGossip() &&
 			ts.syncer.IsSynced(ctx)
