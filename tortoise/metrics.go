@@ -155,8 +155,6 @@ var (
 	executeEncodeVotes = encodeVotesHist.WithLabelValues("execute")
 )
 
-var _ prometheus.Collector = (*collector)(nil)
-
 func enableCollector(t *Tortoise) {
 	prometheus.MustRegister(&collector{
 		tortoise: t,
