@@ -83,7 +83,7 @@ func NewDataFetch(
 
 // PollMaliciousProofs polls all peers for malicious NodeIDs.
 func (d *DataFetch) PollMaliciousProofs(ctx context.Context) error {
-	peers := d.fetcher.SelectBest(fetch.RedundantPeers)
+	peers := d.fetcher.SelectBestShuffled(fetch.RedundantPeers)
 	logger := d.logger.WithContext(ctx)
 	req := &maliciousIDRequest{
 		peers: peers,
@@ -137,7 +137,7 @@ func (d *DataFetch) PollMaliciousProofs(ctx context.Context) error {
 // PollLayerData polls all peers for data in the specified layer.
 func (d *DataFetch) PollLayerData(ctx context.Context, lid types.LayerID, peers ...p2p.Peer) error {
 	if len(peers) == 0 {
-		peers = d.fetcher.SelectBest(fetch.RedundantPeers)
+		peers = d.fetcher.SelectBestShuffled(fetch.RedundantPeers)
 	}
 	if len(peers) == 0 {
 		return errNoPeers
@@ -471,7 +471,7 @@ func (d *DataFetch) updateAtxPeer(epoch types.EpochID, peer p2p.Peer) {
 
 // GetEpochATXs fetches all ATXs published in the specified epoch from a peer.
 func (d *DataFetch) GetEpochATXs(ctx context.Context, epoch types.EpochID) error {
-	peers := d.fetcher.SelectBest(fetch.RedundantPeers)
+	peers := d.fetcher.SelectBestShuffled(fetch.RedundantPeers)
 	if len(peers) == 0 {
 		return errNoPeers
 	}

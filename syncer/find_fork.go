@@ -82,7 +82,7 @@ func (ff *ForkFinder) Purge(all bool, toPurge ...p2p.Peer) {
 		return
 	}
 
-	peers := ff.fetcher.SelectBest(fetch.RedundantPeers)
+	peers := ff.fetcher.SelectBestShuffled(fetch.RedundantPeers)
 	uniquePeers := make(map[p2p.Peer]struct{})
 	for _, p := range peers {
 		uniquePeers[p] = struct{}{}
