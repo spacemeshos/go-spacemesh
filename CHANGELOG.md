@@ -2,6 +2,23 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## Release v1.2.6
+
+### Improvements
+
+  * [#5263](https://github.com/spacemeshos/go-spacemesh/pull/5263) randomize peer selection
+  
+  without this change node can get stuck after restart on requesting data from peer that is misbehaving. 
+  log below will be printed repeatedly: 
+  
+  > 2023-11-15T08:00:17.937+0100	INFO	fd68b.sync	syncing atx from genesis
+
+  * [#5264](https://github.com/spacemeshos/go-spacemesh/pull/5264) increase limits related to activations
+
+  some of the limits were hardcoded and didn't account for growth in atx number. 
+  this change is not required for node to work correct in the next epoch, but will be required later.
+
+
 ## Release v1.2.5
 
 ### Improvemennts
