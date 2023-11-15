@@ -136,7 +136,7 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 	if cfg.DisableDHT {
 		dopts = append(dopts, discovery.DisableDHT())
 	}
-	if cfg.Bootnode {
+	if cfg.Bootnode || cfg.ForceDHTServer {
 		dopts = append(dopts, discovery.Server())
 	} else {
 		backup, err := loadPeers(cfg.DataDir)

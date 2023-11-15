@@ -102,6 +102,7 @@ type Config struct {
 	AcceptQueue              int         `mapstructure:"p2p-accept-queue"`
 	Metrics                  bool        `mapstructure:"p2p-metrics"`
 	Bootnode                 bool        `mapstructure:"p2p-bootnode"`
+	ForceDHTServer           bool        `mapstructure:"force-dht-server"`
 	ForceReachability        string      `mapstructure:"p2p-reachability"`
 	EnableHolepunching       bool        `mapstructure:"p2p-holepunching"`
 	PrivateNetwork           bool        `mapstructure:"p2p-private-network"`
