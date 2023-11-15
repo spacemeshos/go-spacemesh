@@ -1,6 +1,6 @@
 module github.com/spacemeshos/go-spacemesh
 
-go 1.21.3
+go 1.21.4
 
 require (
 	cloud.google.com/go/storage v1.35.1
@@ -39,7 +39,7 @@ require (
 	github.com/spacemeshos/fixed v0.1.1
 	github.com/spacemeshos/go-scale v1.1.12
 	github.com/spacemeshos/merkle-tree v0.2.3
-	github.com/spacemeshos/poet v0.10.0-rc2
+	github.com/spacemeshos/poet v0.10.0
 	github.com/spacemeshos/post v0.10.1
 	github.com/spf13/afero v1.10.0
 	github.com/spf13/cobra v1.8.0
@@ -202,7 +202,7 @@ require (
 	golang.org/x/mod v0.13.0 // indirect
 	golang.org/x/net v0.17.0 // indirect
 	golang.org/x/oauth2 v0.13.0 // indirect
-	golang.org/x/sys v0.13.0 // indirect
+	golang.org/x/sys v0.14.0 // indirect
 	golang.org/x/term v0.13.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/tools v0.14.0 // indirect
