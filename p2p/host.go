@@ -3,7 +3,6 @@ package p2p
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	lp2plog "github.com/ipfs/go-log/v2"
@@ -33,7 +32,7 @@ import (
 // DefaultConfig config.
 func DefaultConfig() Config {
 	return Config{
-		Listen:                 "/ip4/0.0.0.0/tcp/7513",
+		ListenAddresses:        []string{"/ip4/0.0.0.0/tcp/7513"},
 		Flood:                  false,
 		MinPeers:               20,
 		LowPeers:               40,
@@ -89,6 +88,7 @@ type Config struct {
 	DisableDHT               bool        `mapstructure:"disable-dht"`
 	Flood                    bool        `mapstructure:"flood"`
 	Listen                   string      `mapstructure:"listen"`
+	ListenAddresses          []string    `mapstructure:"listen-addresses"`
 	Bootnodes                []string    `mapstructure:"bootnodes"`
 	Direct                   []string    `mapstructure:"direct"`
 	MinPeers                 int         `mapstructure:"min-peers"`
@@ -120,8 +120,15 @@ type RelayServer struct {
 	TTL          time.Duration `mapstructure:"ttl"`
 }
 
+func (cfg *Config) allListenAddrs() []string {
+	if cfg.Listen == "" {
+		return cfg.ListenAddresses
+	}
+	return append(cfg.ListenAddresses, cfg.Listen)
+}
+
 func (cfg *Config) allAdvertisedAddrs() []string {
-	if len(cfg.AdvertiseAddress) == 0 {
+	if cfg.AdvertiseAddress == "" {
 		return cfg.AdvertiseAddresses
 	}
 	return append(cfg.AdvertiseAddresses, cfg.AdvertiseAddress)
@@ -137,7 +144,7 @@ func (cfg *Config) Validate() error {
 		}
 	}
 
-	for _, addrStr := range cfg.allAdvertisedAddrs() {
+	for _, addrStr := range append(cfg.allAdvertisedAddrs(), cfg.allAdvertisedAddrs()...) {
 		_, err := multiaddr.NewMultiaddr(addrStr)
 		if err != nil {
 			return fmt.Errorf("address %s is not a valid multiaddr %w", addrStr, err)
@@ -208,10 +215,7 @@ func New(
 	g.direct = directMap
 	lopts := []libp2p.Option{
 		libp2p.Identity(key),
-		// TODO: use separate "multiListen" field or smth,
-		// using the space-separated list is ugly (just for
-		// testing)
-		libp2p.ListenAddrStrings(strings.Fields(cfg.Listen)...),
+		libp2p.ListenAddrStrings(cfg.allListenAddrs()...),
 		libp2p.UserAgent("go-spacemesh"),
 		libp2p.Transport(
 			func(upgrader transport.Upgrader, rcmgr network.ResourceManager) (transport.Transport, error) {
