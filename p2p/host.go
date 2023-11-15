@@ -106,6 +106,7 @@ type Config struct {
 	Metrics                     bool        `mapstructure:"p2p-metrics"`
 	Bootnode                    bool        `mapstructure:"p2p-bootnode"`
 	ForceReachability           string      `mapstructure:"p2p-reachability"`
+	ForceDHTServer              bool        `mapstructure:"force-dht-server"`
 	EnableHolepunching          bool        `mapstructure:"p2p-holepunching"`
 	PrivateNetwork              bool        `mapstructure:"p2p-private-network"`
 	RelayServer                 RelayServer `mapstructure:"relay-server"`
