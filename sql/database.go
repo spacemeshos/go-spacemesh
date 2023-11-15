@@ -154,9 +154,16 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 			return nil, err
 		}
 		for _, m := range config.migrations {
+			if m.Order() <= before {
+				continue
+			}
 			if err := m.Apply(tx); err != nil {
 				tx.Release()
 				return nil, fmt.Errorf("apply %s: %w", m.Name(), err)
+			}
+			// binding values in pragma statement is not allowed
+			if _, err := tx.Exec(fmt.Sprintf("PRAGMA user_version = %d;", m.Order()), nil, nil); err != nil {
+				return nil, fmt.Errorf("update user_version to %d: %w", m.Order(), err)
 			}
 		}
 		tx.Commit()
