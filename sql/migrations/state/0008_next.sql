@@ -8,7 +8,7 @@ CREATE TABLE rewards
     total_reward UNSIGNED LONG INT,
     layer_reward UNSIGNED LONG INT,
     PRIMARY KEY (pubkey, layer)
-) WITHOUT ROWID;
+);
 CREATE INDEX rewards_by_coinbase ON rewards (coinbase, layer);
 CREATE INDEX rewards_by_layer ON rewards (layer asc);
 INSERT INTO rewards (coinbase, layer, total_reward, layer_reward) SELECT coinbase, layer, total_reward, layer_reward FROM rewards_old;
