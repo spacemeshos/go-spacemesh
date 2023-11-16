@@ -215,7 +215,7 @@ func (h *Hare) Register(signer *signing.EdSigner) {
 	h.signers[string(signer.NodeID().Bytes())] = signer
 }
 
-func (h *Hare) Results() <-chan ConsensusOutput {
+func (h *Hare) Results() chan ConsensusOutput {
 	return h.results
 }
 
