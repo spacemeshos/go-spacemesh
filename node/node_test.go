@@ -639,6 +639,9 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		// syncer will cause the node to go out of sync (and not listen to gossip)
 		// since we are testing single-node transaction service, we don't need the syncer to run
 		app.Config.Sync.Interval = 1000000 * time.Second
+		app.Config.LayerDuration = 2 * time.Second
+		app.Config.HARE3.PreroundDelay = 100 * time.Millisecond
+		app.Config.HARE3.RoundDuration = 100 * time.Millisecond
 
 		app.Config.Genesis = &config.GenesisConfig{
 			GenesisTime: time.Now().Add(20 * time.Second).Format(time.RFC3339),
