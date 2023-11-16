@@ -110,6 +110,12 @@ func (h *Handler) HandleMalfeasanceProof(ctx context.Context, peer p2p.Peer, dat
 }
 
 func (h *Handler) validateAndSave(ctx context.Context, p *types.MalfeasanceGossip) (types.NodeID, error) {
+	if p.Eligibility != nil {
+		return types.EmptyNodeID, fmt.Errorf(
+			"%w: eligibility field was deprecated with hare3",
+			pubsub.ErrValidationReject,
+		)
+	}
 	nodeID, err := Validate(ctx, h.logger, h.cdb, h.edVerifier, p)
 	if err != nil {
 		return types.EmptyNodeID, err

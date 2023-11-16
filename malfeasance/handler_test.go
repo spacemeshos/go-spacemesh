@@ -727,9 +727,6 @@ func TestHandler_HandleMalfeasanceProof_validateHare(t *testing.T) {
 	require.NoError(t, err)
 	createIdentity(t, db, sig)
 	lid := types.LayerID(11)
-	round := uint32(11)
-	proofByte := types.RandomVrfSignature()
-	eCount := uint16(3)
 
 	bp := types.BallotProof{
 		Messages: [2]types.BallotProofMsg{
@@ -769,23 +766,6 @@ func TestHandler_HandleMalfeasanceProof_validateHare(t *testing.T) {
 		data, err := codec.Encode(gs)
 		require.NoError(t, err)
 		require.Error(t, h.HandleMalfeasanceProof(context.Background(), "peer", data))
-	})
-
-	t.Run("relay eligibility", func(t *testing.T) {
-		gs := gossip
-		gs.Eligibility = &types.HareEligibilityGossip{
-			Layer:  lid,
-			Round:  round,
-			NodeID: sig.NodeID(),
-			Eligibility: types.HareEligibility{
-				Proof: proofByte,
-				Count: eCount,
-			},
-		}
-		data, err := codec.Encode(gs)
-		require.NoError(t, err)
-		trt.EXPECT().OnMalfeasance(sig.NodeID())
-		require.NoError(t, h.HandleMalfeasanceProof(context.Background(), "peer", data))
 	})
 }
 
