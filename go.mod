@@ -5,7 +5,7 @@ go 1.21.3
 require (
 	cloud.google.com/go/storage v1.35.1
 	github.com/ALTree/bigfloat v0.2.0
-	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20231106043129-d1e08a5d3bc7
+	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20231115031015-f44a6888d1af
 	github.com/cosmos/btcutil v1.0.5
 	github.com/go-llsqlite/crawshaw v0.5.0
 	github.com/gofrs/flock v0.8.1
@@ -49,7 +49,7 @@ require (
 	github.com/zeebo/blake3 v0.2.3
 	go.uber.org/mock v0.3.0
 	go.uber.org/zap v1.26.0
-	golang.org/x/exp v0.0.0-20231108232855-2478ac86f678
+	golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa
 	golang.org/x/sync v0.5.0
 	golang.org/x/time v0.4.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20231106174013-bbf56f31fb17
