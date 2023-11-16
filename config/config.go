@@ -177,6 +177,8 @@ func DefaultTestConfig() Config {
 	conf.P2P = p2p.DefaultConfig()
 	conf.API = grpcserver.DefaultTestConfig()
 	conf.POSTService = activation.DefaultTestPostServiceConfig()
+	conf.HARE3.PreroundDelay = 1 * time.Second
+	conf.HARE3.RoundDuration = 1 * time.Second
 	return conf
 }
 
