@@ -106,7 +106,6 @@ func NewGenerator(
 	for _, opt := range opts {
 		opt(g)
 	}
-
 	return g
 }
 
@@ -135,7 +134,10 @@ func (g *Generator) run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return fmt.Errorf("context done: %w", ctx.Err())
-		case out := <-g.hareCh:
+		case out, open := <-g.hareCh:
+			if !open {
+				return nil
+			}
 			g.logger.With().Debug("received hare output",
 				log.Context(ctx),
 				out.Layer,
