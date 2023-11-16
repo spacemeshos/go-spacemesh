@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"syscall"
 	"time"
 
@@ -868,6 +869,10 @@ func (app *App) initServices(ctx context.Context) error {
 	proposalBuilder.Register(app.edSgn)
 
 	if app.Config.SMESHING.Start {
+		if err := app.checkPostServiceSetup(); err != nil {
+			return err
+		}
+
 		postSetupMgr, err := activation.NewPostSetupManager(
 			app.edSgn.NodeID(),
 			app.Config.POST,
@@ -1085,6 +1090,41 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	if err := app.host.Start(); err != nil {
 		return err
+	}
+	return nil
+}
+
+// checkPostServiceSetup does some sanity checks on the post service configuration
+//  1. it checks if the post service is included in at least one listener and adds it to private listener if its not
+//     this ensures that nodes that could smesh before v1.3.x can still smesh
+//  2. it checks that node address for the post service is the same as the private listener
+//     while this will incorrectly print a warning if a user uses the TLS listener for the post service
+//     (e.g. when they setup multiple post services). This ensures that users with a non-default private listener
+//     receive a warning as to why their node might not be able to smesh
+//
+// TODO: https://github.com/spacemeshos/go-spacemesh/issues/5260
+// remove this function in a future release when we can assume that most nodes have updated their config for
+// the post service.
+func (app *App) checkPostServiceSetup() error {
+	if !slices.Contains(app.Config.API.PrivateServices, grpcserver.Post) &&
+		!slices.Contains(app.Config.API.TLSServices, grpcserver.Post) {
+		app.log.Warning(
+			"post service is not included in any listener. Check the README.md and update your config file",
+		)
+		app.log.Info("adding post service to private listener. This will be removed in the future")
+
+		app.Config.API.PrivateServices = append(app.Config.API.PrivateServices, grpcserver.Post)
+	}
+
+	address, err := url.Parse(app.Config.POSTService.NodeAddress)
+	if err != nil {
+		return fmt.Errorf("invalid post service node address: %w", err)
+	}
+
+	if app.Config.API.PrivateListener != address.Host {
+		app.log.Warning("post service node address differs from private listener." +
+			" Check README.md to ensure that this is not an error",
+		)
 	}
 	return nil
 }
@@ -1536,8 +1576,12 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	if err := os.MkdirAll(dbPath, os.ModePerm); err != nil {
 		return fmt.Errorf("failed to create %s: %w", dbPath, err)
 	}
+	migrations, err := sql.StateMigrations()
+	if err != nil {
+		return fmt.Errorf("failed to load migrations: %w", err)
+	}
 	sqlDB, err := sql.Open("file:"+filepath.Join(dbPath, dbFile),
-		sql.WithMigrations(sql.StateMigrations),
+		sql.WithMigrations(migrations),
 		sql.WithConnections(app.Config.DatabaseConnections),
 		sql.WithLatencyMetering(app.Config.DatabaseLatencyMetering),
 		sql.WithV5Migration(util.ExtractActiveSet),
@@ -1568,8 +1612,13 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		datastore.WithConfig(app.Config.Cache),
 		datastore.WithConsensusCache(data),
 	)
+	migrations, err = sql.LocalMigrations()
+	if err != nil {
+		return fmt.Errorf("failed to load local migrations: %w", err)
+	}
 	localDB, err := localsql.Open("file:"+filepath.Join(dbPath, localDbFile),
-		sql.WithMigrations(sql.LocalMigrations),
+		sql.WithMigrations(migrations),
+		sql.WithMigration(localsql.New0002Migration(app.Config.SMESHING.Opts.DataDir)),
 		sql.WithConnections(app.Config.DatabaseConnections),
 	)
 	if err != nil {

@@ -16,13 +16,16 @@
 
 💾⏰💪
 
-Thanks for your interest in this open source project. This repo is the go implementation of the [Spacemesh](https://spacemesh.io) p2p full node software.
+Thanks for your interest in this open source project. This repo is the go implementation of the
+[Spacemesh](https://spacemesh.io) p2p full node software.
 
-Spacemesh is a decentralized blockchain computer using a new race-free consensus protocol that doesn't involve energy-wasteful `proof of work`.
+Spacemesh is a decentralized blockchain computer using a new race-free consensus protocol that doesn't involve
+energy-wasteful `proof of work`.
 
 We aim to create a secure and scalable decentralized computer formed by a large number of desktop PCs at home.
 
-We are designing and coding a modern blockchain platform from the ground up for scale, security and speed based on the learnings of the achievements and mistakes of previous projects in this space.
+We are designing and coding a modern blockchain platform from the ground up for scale, security and speed based on the
+learnings of the achievements and mistakes of previous projects in this space.
 
 To learn more about Spacemesh head over to [https://spacemesh.io](https://spacemesh.io).
 
@@ -30,17 +33,25 @@ To learn more about the Spacemesh protocol [watch this video](https://www.youtub
 
 ### Motivation
 
-Spacemesh is designed to create a decentralized blockchain smart contracts computer and a cryptocurrency that is formed by connecting the home PCs of people from around the world into one virtual computer without incurring massive energy waste and mining pools issues that are inherent in other blockchain computers, and provide a provably-secure and incentive-compatible smart contracts execution environment.
+Spacemesh is designed to create a decentralized blockchain smart contracts computer and a cryptocurrency that is formed
+by connecting the home PCs of people from around the world into one virtual computer without incurring massive energy
+waste and mining pools issues that are inherent in other blockchain computers, and provide a provably-secure and
+incentive-compatible smart contracts execution environment.
 
-Spacemesh is designed to be ASIC-resistant and in a way that doesn’t give an unfair advantage to rich parties who can afford setting up dedicated computers on the network. We achieve this by using a novel consensus protocol and optimize the software to be most effectively be used on home PCs that are also used for interactive apps.
+Spacemesh is designed to be ASIC-resistant and in a way that doesn’t give an unfair advantage to rich parties who can
+afford setting up dedicated computers on the network. We achieve this by using a novel consensus protocol and optimize
+the software to be most effectively be used on home PCs that are also used for interactive apps.
 
 ### What is this good for?
 
-Provide dapp and app developers with a robust way to add value exchange and other value related features to their apps at scale. Our goal is to create a truly decentralized cryptocurrency that fulfills the original vision behind bitcoin to become a secure trustless store of value as well as a transactional currency with extremely low transaction fees.
+Provide dapp and app developers with a robust way to add value exchange and other value related features to their apps
+at scale. Our goal is to create a truly decentralized cryptocurrency that fulfills the original vision behind bitcoin
+to become a secure trustless store of value as well as a transactional currency with extremely low transaction fees.
 
 ### Target Users
 
-go-spacemesh is designed to be installed and operated on users' home PCs to form one decentralized computer. It is going to be distributed in the Spacemesh App but people can also build and run it from source code.
+go-spacemesh is designed to be installed and operated on users' home PCs to form one decentralized computer. It is
+going to be distributed in the Spacemesh App but people can also build and run it from source code.
 
 ### Project Status
 
@@ -56,7 +67,8 @@ We welcome contributions large and small and we actively accept contributions.
 
 - We welcome collaborators to the Spacemesh core dev team.
 
-- You don’t have to contribute code! Many important types of contributions are important for our project. See: [How to Contribute to Open Source?](https://opensource.guide/how-to-contribute/#what-it-means-to-contribute)
+- You don’t have to contribute code! Many important types of contributions are important for our project.
+  See: [How to Contribute to Open Source?](https://opensource.guide/how-to-contribute/#what-it-means-to-contribute)
 
 - To get started, please read our [contributions guidelines](https://github.com/spacemeshos/go-spacemesh/blob/master/CONTRIBUTING.md).
 
@@ -80,7 +92,8 @@ git clone git@github.com:spacemeshos/go-spacemesh.git
 
 or fork the project from <https://github.com/spacemeshos/go-spacemesh>
 
-Since the project uses Go Modules it is best to place the code **outside** your `$GOPATH`. Read [this](https://github.com/golang/go/wiki/Modules#how-to-install-and-activate-module-support) for alternatives.
+Since the project uses Go Modules it is best to place the code **outside** your `$GOPATH`.
+Read [this](https://github.com/golang/go/wiki/Modules#how-to-install-and-activate-module-support) for alternatives.
 
 ### Setting Up Local Dev Environment
 
@@ -88,7 +101,8 @@ Building is supported on OS X, Linux, FreeBSD, and Windows.
 
 Install [Go 1.21 or later](https://golang.org/dl/) for your platform, if you haven't already.
 
-On Windows you need to install `make` via [msys2](https://www.msys2.org/), [MingGW-w64](http://mingw-w64.org/doku.php) or [mingw](https://chocolatey.org/packages/mingw)
+On Windows you need to install `make` via [msys2](https://www.msys2.org/), [MingGW-w64](http://mingw-w64.org/doku.php)
+or [mingw](https://chocolatey.org/packages/mingw).
 
 Ensure that `$GOPATH` is set correctly and that the `$GOPATH/bin` directory appears in `$PATH`.
 
@@ -105,7 +119,8 @@ with a simple command:
 
 > ./build/go-spacemesh --preset=standalone --genesis-time=2023-06-08T5:30:00.000Z
 
-Network will use short epochs (1 minute), and 10 layers within the epoch (each 6s). Poet is launched in the same process in this mode. So expect that it will periodically hog 1 core. Minimal smeshig is enabled in order for consensus to work.
+Network will use short epochs (1 minute), and 10 layers within the epoch (each 6s). Poet is launched in the same process
+in this mode. So expect that it will periodically hog 1 core. Minimal smeshing is enabled in order for consensus to work.
 
 Public GRPC API are launched on 0.0.0.0:9092. Private - 0.0.0.0:9093.
 
@@ -127,8 +142,8 @@ On linux or mac you can build a binary for windows using:
 make windows
 ```
 
-Be aware that this will require a cross-platform gcc like `x86_64-w64-mingw32-gcc`. Platform-specific binaries are saved to
-the `build/*target*` directory.
+Be aware that this will require a cross-platform gcc like `x86_64-w64-mingw32-gcc`. Platform-specific binaries are saved
+to the `build/*target*` directory.
 
 ### Using `go build` and `go test` without `make`
 
@@ -144,9 +159,12 @@ _Note: we need to use eval to interpret the commands since there are spaces in
 the values of the variables so the shell can't correctly split them as
 arguments._
 
-1. Setting the variables on the same line as the `go` command (e.g., `eval $(make print-env) go build ./...`). This affects the environment for that command invocation only.
-2. Exporting the variables in the shell's environment (e.g., `eval export $(make print-env)`). The variables will persist for the duration of that shell (and will be passed to subshells).
-3. Setting the variables in the go environment (e.g., `eval go env -w $(make print-env)`). Persistently adds these values to Go's environment for any future runs.
+1. Setting the variables on the same line as the `go` command (e.g., `eval $(make print-env) go build ./...`). This
+   affects the environment for that command invocation only.
+2. Exporting the variables in the shell's environment (e.g., `eval export $(make print-env)`). The variables will
+   persist for the duration of that shell (and will be passed to subshells).
+3. Setting the variables in the go environment (e.g., `eval go env -w $(make print-env)`). Persistently adds these
+   values to Go's environment for any future runs.
 
 ---
 
@@ -163,11 +181,13 @@ same directory as the go-spacemesh binary. Alternatively you can modify your
 system's library search paths (e.g. LD_LIBRARY_PATH) to ensure that the
 library is found._
 
-go-spacemesh is p2p software which is designed to form a decentralized network by connecting to other instances of go-spacemesh running on remote computers.
+go-spacemesh is p2p software which is designed to form a decentralized network by connecting to other instances of
+go-spacemesh running on remote computers.
 
 To run go-spacemesh you need to specify the parameters shared between all instances on a specific network.
 
-You specify these parameters by providing go-spacemesh with a json config file. Other CLI flags control local node behavior and override default values.
+You specify these parameters by providing go-spacemesh with a json config file. Other CLI flags control local node
+behavior and override default values.
 
 #### Joining a Testnet (without mining)
 
@@ -181,7 +201,9 @@ You specify these parameters by providing go-spacemesh with a json config file. 
 
     **Example:**
 
-    Assuming `tn1.json` is a testnet config file saved in the same directory as go-spacemesh, use the following command to join the testnet. The data folder will be created in the same directory as go-spacemesh. The node will use TCP port 7513 and UDP port 7513 for p2p connections:
+    Assuming `tn1.json` is a testnet config file saved in the same directory as go-spacemesh, use the following command
+    to join the testnet. The data folder will be created in the same directory as go-spacemesh. The node will use TCP port
+    7513 and UDP port 7513 for p2p connections:
 
     ```bash
     ./go-spacemesh --listen /ip4/0.0.0.0/tcp/7513 --config ./tn1.json -d ./sm_data
@@ -201,13 +223,17 @@ You specify these parameters by providing go-spacemesh with a json config file. 
 3. Stop go-spacemesh and start it with the following params:
 
     ```bash
-    ./go-spacemesh --listen [a_multiaddr] --config [configFileLocation] -d [nodeDataFilesPath] --smeshing-coinbase [coinbase_account] --smeshing-start --smeshing-opts-datadir [dir_for_post_data]
+    ./go-spacemesh --listen [a_multiaddr] --config [configFileLocation] -d [nodeDataFilesPath] \
+        --smeshing-coinbase [coinbase_account] \
+        --smeshing-start --smeshing-opts-datadir [dir_for_post_data]
     ```
 
     **Example:**
 
     ```bash
-    ./go-spacemesh --listen /ip4/0.0.0.0/tcp/7513 --config ./tn1.json -d ./sm_data --smeshing-coinbase stest1qqqqqqp3qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqql50dsa --smeshing-start --smeshing-opts-datadir ./post_data
+    ./go-spacemesh --listen /ip4/0.0.0.0/tcp/7513 --config ./tn1.json -d ./sm_data \
+        --smeshing-coinbase stest1qqqqqqp3qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqql50dsa \
+        --smeshing-start --smeshing-opts-datadir ./post_data
     ```
 
 4. Use the CLI wallet to check your coinbase account balance and to transact
@@ -216,13 +242,14 @@ You specify these parameters by providing go-spacemesh with a json config file. 
 
 ### Smeshing
 
-To be able to initialize your PoST using your Graphics card you will need to install the tools necessary to enable OpenCL support on your system.
-The exact steps to do this will vary based on your OS and GPU. In general you will need to install the OpenCL runtime for your GPU and ICD loader.
+To be able to initialize your PoST using your Graphics card you will need to install the tools necessary to enable
+OpenCL support on your system. The exact steps to do this will vary based on your OS and GPU. In general you will
+need to install the OpenCL runtime for your GPU and ICD loader.
 
 A good starting point to get more info is <https://wiki.archlinux.org/title/GPGPU>.
 
-If your system doesn't have a GPU or you can use a generic runtime instead. Be aware that we do not recommend this for initialization of PoST.
-On Ubuntu you need to install the following packages:
+If your system doesn't have a GPU or you can use a generic runtime instead. Be aware that we do not recommend this
+for initialization of PoST. On Ubuntu you need to install the following packages:
 
 ```bash
 apt-get update
@@ -235,6 +262,27 @@ on Windows you can use Intel OpenAPI:
 choco install opencl-intel-cpu-runtime
 ```
 
+If your config contains `"grpc-private-services"` make sure this list includes `"post"`:
+
+```json
+"api": {
+    "grpc-private-services": ["admin", "smesher", "post"],
+    "grpc-private-listener": "127.0.0.1:9093"
+}
+```
+
+or use the `--grpc-private-services=admin,smesher,post` flag.
+
+If you are using a `"grpc-private-listener"` other than the default (`"127.0.0.1:9093"`) you need to ensure that the
+post service is configured to connect to the correct address. This can be done via the `--post-opts-node-address`
+flag or the `"post-opts-node-address"` config option:
+
+```json
+"post-service": {
+    "post-opts-node-address": "http://ip:port"
+}
+```
+
 #### Using a remote machine as provider for PoST proofs
 
 To disable the internal PoST service and disable smeshing on your node you can use the following config:
@@ -245,15 +293,17 @@ To disable the internal PoST service and disable smeshing on your node you can u
 }
 ```
 
-or use the `--smeshing-start=false` flag. This will disable smeshing on your node causing it not generate any PoST proofs until a remote post
-service connects.
+or use the `--smeshing-start=false` flag. This will disable smeshing on your node causing it not generate any PoST
+proofs until a remote post service connects.
 
-By default the node listens for the PoST service on `grpc-private-listener` (defaults to 127.0.0.1:9093). This endpoint does not require authentication and
-should only be accessible from the same machine. If you want to allow connections from post services on other hosts to your node, you should do so via the
-`grpc-tls-listener` (defaults to 0.0.0.0:9094) and setup TLS for the connection.
+By default the node listens for the PoST service on `grpc-private-listener` (defaults to 127.0.0.1:9093). This endpoint
+does not require authentication and should only be accessible from the same machine. If you want to allow connections
+from post services on other hosts to your node, you should do so via the `grpc-tls-listener` (defaults to 0.0.0.0:9094)
+and setup TLS for the connection.
 
-This is useful for example if you want to run a node on a cloud provider with fewer resources and run PoST on a local machine with more resources. The post
-service only needs to be online for the initial proof (i.e. when joining the network for the first time) and during the cyclegap in every epoch.
+This is useful for example if you want to run a node on a cloud provider with fewer resources and run PoST on a local
+machine with more resources. The post service only needs to be online for the initial proof (i.e. when joining the
+network for the first time) and during the cyclegap in every epoch.
 
 To setup TLS-secured public connections the API config has been extended with the following options:
 
@@ -268,17 +318,17 @@ To setup TLS-secured public connections the API config has been extended with th
 }
 ```
 
-Ensure that remote PoST services are setup to connect to your node via TLS, that they trust your node's certificate and use a certificate that is signed by the
-same CA as your node's certificate.
+Ensure that remote PoST services are setup to connect to your node via TLS, that they trust your node's certificate and
+use a certificate that is signed by the same CA as your node's certificate.
 
-The local (supervised) PoST service can also be configured to connect to your node via TLS if needed. The following config options are available:
+The local (supervised) PoST service can also be configured to connect to your node via TLS if needed. The following
+config options are available:
 
 ```json
 "post-service": {
-    "post-opts-post-service": "/path/to/service-binary", // defaults to service in the same directory as the node binary
     "post-opts-node-address": "http://domain:port",      // defaults to 127.0.0.1:9093 - the same default value as for "grpc-private-listener"
 
-    // the following settings are mandatory when connecting to the node via TLS - when connecting via the private listener they are not needed
+    // the following settings are required when connecting to the node via TLS - not when connecting via the private listener
     "post-opts-tls-ca-cert": "/path/to/ca.pem",  // CA certificate that signed the node's and the PoST service's certificates
     "post-opts-tls-cert": "/path/to/cert.pem",   // certificate for the PoST service
     "post-opts-tls-key": "/path/to/key.pem",     // private key for the PoST service
@@ -332,16 +382,22 @@ docker run -d --name=spacemesh spacemesh
 On Windows you will need the following prerequisites:
 
 - Powershell - included by in Windows by default since Windows 7 and Windows Server 2008 R2
-- [Git for Windows](https://gitforwindows.org/) - after installation remove `C:\Program Files\Git\bin` from [System PATH](https://www.java.com/en/download/help/path.xml) (if present) and add `C:\Program Files\Git\cmd` to System PATH (if not already present)
-- [Make](http://gnuwin32.sourceforge.net/packages/make.htm) - after installation add `C:\Program Files (x86)\GnuWin32\bin` to System PATH
+- [Git for Windows](https://gitforwindows.org/) - after installation remove `C:\Program Files\Git\bin` from
+  [System PATH](https://www.java.com/en/download/help/path.xml) (if present) and add `C:\Program Files\Git\cmd` to
+  System PATH (if not already present)
+- [Make](http://gnuwin32.sourceforge.net/packages/make.htm) - after installation add `C:\Program Files (x86)\GnuWin32\bin`
+  to System PATH
 - [Golang](https://golang.org/dl/)
-- GCC. There are several ways to install gcc on Windows, including Cygwin. Instead, we recommend [tdm-gcc](https://jmeubank.github.io/tdm-gcc/) which we've tested.
+- GCC. There are several ways to install gcc on Windows, including Cygwin. Instead, we recommend
+  [tdm-gcc](https://jmeubank.github.io/tdm-gcc/) which we've tested.
 
-Close and reopen powershell to load the new PATH. You can then run the command `make install` followed by `make build` as on UNIX-based systems.
+Close and reopen powershell to load the new PATH. You can then run the command `make install` followed by `make build`
+as on UNIX-based systems.
 
 ### Running a Local Testnet
 
-- You can run a local Spacemesh Testnet with 6 full nodes, 6 user accounts, and 1 POET support service on your computer using docker.
+- You can run a local Spacemesh Testnet with 6 full nodes, 6 user accounts, and 1 POET support service on your computer
+  using docker.
 - The local testnet full nodes are built from this repo.
 - This is a great way to get a feel for the protocol and the platform and to start hacking on Spacemesh.
 - Follow the steps in our [Local Testnet Guide](https://testnet.spacemesh.io/#/README)

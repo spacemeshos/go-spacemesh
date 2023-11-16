@@ -7,7 +7,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func testTables(db Executor) error {
+type testMigration struct{}
+
+func (testMigration) Name() string {
+	return "test"
+}
+
+func (testMigration) Order() int {
+	return 1
+}
+
+func (m testMigration) Apply(db Executor) error {
 	if _, err := db.Exec(`create table testing1 (
 		id varchar primary key,
 		field int
@@ -19,7 +29,7 @@ func testTables(db Executor) error {
 
 func TestTransactionIsolation(t *testing.T) {
 	db := InMemory(
-		WithMigrations(testTables),
+		WithMigrations([]Migration{&testMigration{}}),
 		WithConnections(10),
 		WithLatencyMetering(true),
 	)
