@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
+	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -113,6 +114,12 @@ func MainnetConfig() Config {
 		HARE3: hare3conf,
 		HareEligibility: eligConfig.Config{
 			ConfidenceParam: 200,
+		},
+		Certificate: blocks.CertConfig{
+			// NOTE(dshulyak) this is intentional. we increased committee size with hare3 upgrade
+			// but certifier continues to use 200 committee size.
+			// this will be upgraded in future with schedulled upgrade.
+			CommitteeSize: 200,
 		},
 		Beacon: beacon.Config{
 			Kappa:                    40,

@@ -33,7 +33,7 @@ var (
 
 // CertConfig is the config for Certifier.
 type CertConfig struct {
-	CommitteeSize    int
+	CommitteeSize    int `mapstructure:"committee-size"`
 	CertifyThreshold int
 	LayerBuffer      uint32
 	NumLayersToKeep  uint32

@@ -754,7 +754,14 @@ func (app *App) initServices(ctx context.Context) error {
 		bootstrap.WithConfig(bscfg),
 		bootstrap.WithLogger(app.addLogger(BootstrapLogger, lg)),
 	)
-
+	if app.Config.Certificate.CommitteeSize == 0 {
+		app.log.With().Warning("certificate committee size is not set, defaulting to hare committee size",
+			log.Uint16("size", app.Config.HARE3.Committee))
+		app.Config.Certificate.CommitteeSize = int(app.Config.HARE3.Committee)
+	}
+	app.Config.Certificate.CertifyThreshold = app.Config.Certificate.CommitteeSize/2 + 1
+	app.Config.Certificate.LayerBuffer = app.Config.Tortoise.Zdist
+	app.Config.Certificate.NumLayersToKeep = app.Config.Tortoise.Zdist * 2
 	app.certifier = blocks.NewCertifier(
 		app.cachedDB,
 		app.hOracle,
@@ -763,13 +770,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.clock,
 		beaconProtocol,
 		trtl,
-		blocks.WithCertConfig(blocks.CertConfig{
-			// TODO(dshulyak) this should be upgraded at specific layer
-			CommitteeSize:    int(app.Config.HARE3.Committee),
-			CertifyThreshold: int(app.Config.HARE3.Committee)/2 + 1,
-			LayerBuffer:      app.Config.Tortoise.Zdist,
-			NumLayersToKeep:  app.Config.Tortoise.Zdist * 2,
-		}),
+		blocks.WithCertConfig(app.Config.Certificate),
 		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg)),
 	)
 	app.certifier.Register(app.edSgn)

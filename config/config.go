@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
+	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -52,6 +53,7 @@ type Config struct {
 	API             grpcserver.Config               `mapstructure:"api"`
 	HARE3           hare3.Config                    `mapstructure:"hare3"`
 	HareEligibility eligConfig.Config               `mapstructure:"hare-eligibility"`
+	Certificate     blocks.CertConfig               `mapstructure:"certificate"`
 	Beacon          beacon.Config                   `mapstructure:"beacon"`
 	TIME            timeConfig.TimeConfig           `mapstructure:"time"`
 	VM              vm.Config                       `mapstructure:"vm"`
