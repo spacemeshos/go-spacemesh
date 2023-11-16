@@ -155,11 +155,44 @@ var (
 	executeEncodeVotes = encodeVotesHist.WithLabelValues("execute")
 )
 
-// LayerDistanceToBaseBallot checks how far back a node needs to find a good ballot.
-var layerDistanceToBaseBallot = metrics.NewHistogramWithBuckets(
-	"layer_distance_to_base_ballot",
-	namespace,
-	"How far back a node needs to find a good ballot",
-	[]string{},
-	prometheus.ExponentialBuckets(1, 2, 16),
-).WithLabelValues()
+func enableCollector(t *Tortoise) {
+	prometheus.MustRegister(&collector{
+		tortoise: t,
+		opinions: prometheus.NewDesc(
+			prometheus.BuildFQName(metrics.Namespace, namespace, "opinion"),
+			"opinion on the layer",
+			[]string{"layer", "opinion"}, nil),
+		applied: prometheus.NewDesc(
+			prometheus.BuildFQName(metrics.Namespace, namespace, "applied"),
+			"applied block",
+			[]string{"layer", "block"}, nil),
+		blocksByLayer: prometheus.NewDesc(
+			prometheus.BuildFQName(metrics.Namespace, namespace, "blocks_by_layer"),
+			"count blocks by layer",
+			[]string{"layer"}, nil),
+	})
+}
+
+type collector struct {
+	tortoise      *Tortoise
+	opinions      *prometheus.Desc
+	applied       *prometheus.Desc
+	blocksByLayer *prometheus.Desc
+}
+
+func (c *collector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- c.opinions
+	ch <- c.applied
+	ch <- c.blocksByLayer
+}
+
+func (c *collector) Collect(ch chan<- prometheus.Metric) {
+	for _, rst := range c.tortoise.latestsResults(c.tortoise.cfg.CollectDetails) {
+		ch <- prometheus.MustNewConstMetric(c.opinions, prometheus.GaugeValue, 1,
+			rst.Layer.String(), rst.Opinion.ShortString())
+		ch <- prometheus.MustNewConstMetric(c.applied, prometheus.GaugeValue, 1,
+			rst.Layer.String(), rst.FirstValid().String())
+		ch <- prometheus.MustNewConstMetric(c.blocksByLayer, prometheus.GaugeValue, float64(len(rst.Blocks)),
+			rst.Layer.String())
+	}
+}

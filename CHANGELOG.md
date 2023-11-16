@@ -23,8 +23,17 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ### Upgrade information
 
+This release is not backwards compatible with v1.2.x. Upgrading will change the node's database schema and
+migrate local state to a new database. The migration will take place at the first startup after the upgrade.
+Be aware that after upgrading you cannot downgrade to v1.2.x any more.
+
 Current release is expected to be adopted by majority of the network participants before epoch 11 starts.
 Nodes that do not update before epoch 11 risk their proposals being rejected by the rest of the network.
+
+This release is the first step towards separating PoST from the node. Proof generation is now done via a dedicated
+service. This service is started automatically by the node and is shut down when the node shuts down. In most
+setups this should work out of the box, but if you are running into issues please check the REAMDE.md file
+for more information on how to configure the node to work with the PoST service.
 
 ### Highlights
 
@@ -77,7 +86,7 @@ Nodes that do not update before epoch 11 risk their proposals being rejected by 
 
   ```json
   "main": {
-      "prune-activesets-from": 4294967295
+    "prune-activesets-from": 4294967295
   }
   ```
 
@@ -99,6 +108,9 @@ Nodes that do not update before epoch 11 risk their proposals being rejected by 
   the data from disk and store it in the database. The migration will take place at the first startup after the upgrade.
 
 * [#5209](https://github.com/spacemeshos/go-spacemesh/pull/5209) Removed API to update poet servers from SmesherService.
+
+* [#5259](https://github.com/spacemeshos/go-spacemesh/pull/5259) Node now tries to fix a 1.2.x config to be compatible with
+  1.3.x at startup.
 
 ## v1.2.0
 

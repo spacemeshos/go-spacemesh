@@ -29,8 +29,10 @@ type Config struct {
 	// recorded in the first ballot, if that weight is less than minimal
 	// for purposes of eligibility computation.
 	MinimalActiveSetWeight []types.EpochMinimalActiveWeight
-
-	LayerSize uint32
+	// CollectDetails sets numbers of layers to collect details.
+	// Must be less than WindowSize.
+	CollectDetails uint32 `mapstructure:"tortoise-collect-details"`
+	LayerSize      uint32
 }
 
 // DefaultConfig for Tortoise.
@@ -99,6 +101,12 @@ func New(opts ...Opt) (*Tortoise, error) {
 	if t.cfg.WindowSize == 0 {
 		t.logger.Panic("tortoise-window-size should not be zero")
 	}
+	if t.cfg.CollectDetails > t.cfg.WindowSize {
+		t.logger.Panic("tortoise-collect-details must be lower then tortoise-window-size",
+			zap.Uint32("tortoise-collect-details", t.cfg.CollectDetails),
+			zap.Uint32("tortoise-window-size", t.cfg.WindowSize),
+		)
+	}
 	t.trtl = newTurtle(t.logger, t.cfg)
 	if t.tracer != nil {
 		t.tracer.On(&ConfigTrace{
@@ -111,6 +119,12 @@ func New(opts ...Opt) (*Tortoise, error) {
 			EpochSize:                types.GetLayersPerEpoch(),
 			EffectiveGenesis:         types.GetEffectiveGenesis().Uint32(),
 		})
+	}
+	if t.cfg.CollectDetails > 0 {
+		t.logger.Info("tortoise will collect details",
+			zap.Uint32("tortoise-collect-details", t.cfg.CollectDetails),
+		)
+		enableCollector(t)
 	}
 	return t, nil
 }
@@ -494,6 +508,23 @@ func (t *Tortoise) OnApplied(lid types.LayerID, opinion types.Hash32) bool {
 	}
 	if t.tracer != nil {
 		t.tracer.On(&AppliedTrace{Layer: lid, Opinion: opinion, Result: rst})
+	}
+	return rst
+}
+
+// latestsResults returns at most N latest results from process layer.
+//
+// private as it meant to be used for metering.
+func (t *Tortoise) latestsResults(n uint32) []result.Layer {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if n > t.trtl.processed.Uint32() {
+		n = t.trtl.processed.Uint32()
+	}
+	rst, err := t.results(t.trtl.processed-types.LayerID(n), t.trtl.processed)
+	if err != nil {
+		t.logger.Error("unexpected error", zap.Error(err))
+		return nil
 	}
 	return rst
 }
