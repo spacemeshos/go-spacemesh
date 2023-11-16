@@ -2,6 +2,8 @@ module github.com/spacemeshos/go-spacemesh
 
 go 1.21.3
 
+replace github.com/libp2p/go-libp2p => github.com/ivan4th/go-libp2p v0.0.0-20231115132946-8d742f4b0068
+
 require (
 	cloud.google.com/go/storage v1.35.1
 	github.com/ALTree/bigfloat v0.2.0
