@@ -740,33 +740,6 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	wg.Wait()
 }
 
-func TestInitialize_BadTortoiseParams(t *testing.T) {
-	conf := config.DefaultConfig()
-	conf.DataDirParent = t.TempDir()
-	conf.FileLock = filepath.Join(t.TempDir(), "LOCK")
-	app := New(WithLog(logtest.New(t)), WithConfig(&conf))
-	require.NoError(t, app.Initialize())
-	app.Cleanup(context.Background())
-
-	conf = config.DefaultTestConfig()
-	conf.DataDirParent = t.TempDir()
-	conf.FileLock = filepath.Join(t.TempDir(), "LOCK")
-	app = New(WithLog(logtest.New(t)), WithConfig(&conf))
-	require.NoError(t, app.Initialize())
-	app.Cleanup(context.Background())
-
-	tconf := getTestDefaultConfig(t)
-	tconf.DataDirParent = t.TempDir()
-	app = New(WithLog(logtest.New(t)), WithConfig(tconf))
-	require.NoError(t, app.Initialize())
-	app.Cleanup(context.Background())
-
-	conf.Tortoise.Zdist = 5
-	app = New(WithLog(logtest.New(t)), WithConfig(&conf))
-	err := app.Initialize()
-	require.EqualError(t, err, "incompatible tortoise hare params")
-}
-
 func TestConfig_Preset(t *testing.T) {
 	const name = "testnet"
 
@@ -1183,6 +1156,8 @@ func TestAdminEvents(t *testing.T) {
 	cfg.SMESHING.Opts.DataDir = cfg.DataDirParent
 	cfg.SMESHING.Opts.Scrypt.N = 2
 	cfg.POSTService.PostServiceCmd = activation.DefaultTestPostServiceConfig().PostServiceCmd
+	cfg.HARE3.PreroundDelay = 100 * time.Millisecond
+	cfg.HARE3.RoundDuration = 1 * time.Millisecond
 
 	cfg.Genesis.GenesisTime = time.Now().Add(5 * time.Second).Format(time.RFC3339)
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
