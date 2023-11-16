@@ -130,6 +130,7 @@ func testnet() config.Config {
 			K3:            37,
 			PowDifficulty: activation.DefaultPostConfig().PowDifficulty,
 		},
+		POSTService: activation.DefaultPostServiceConfig(),
 		Bootstrap: bootstrap.Config{
 			URL:      "https://bootstrap.spacemesh.network/testnet06",
 			Version:  "https://spacemesh.io/bootstrap.schema.json.1.0",

@@ -6,22 +6,55 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
-	"sort"
 	"strconv"
 	"strings"
 )
 
-//go:embed migrations/*.sql
+//go:embed migrations/**/*.sql
 var embedded embed.FS
 
-type migration struct {
+type sqlMigration struct {
 	order   int
 	name    string
 	content *bufio.Scanner
 }
 
-// Migrations is interface for migrations provider.
-type Migrations func(Executor) error
+func (m *sqlMigration) Apply(db Executor) error {
+	current, err := version(db)
+	if err != nil {
+		return err
+	}
+
+	if m.order <= current {
+		return nil
+	}
+	for m.content.Scan() {
+		if _, err := db.Exec(m.content.Text(), nil, nil); err != nil {
+			return fmt.Errorf("exec %s: %w", m.content.Text(), err)
+		}
+	}
+	// binding values in pragma statement is not allowed
+	if _, err := db.Exec(fmt.Sprintf("PRAGMA user_version = %d;", m.order), nil, nil); err != nil {
+		return fmt.Errorf("update user_version to %d: %w", m.order, err)
+	}
+
+	return nil
+}
+
+func (m *sqlMigration) Name() string {
+	return m.name
+}
+
+func (m *sqlMigration) Order() int {
+	return m.order
+}
+
+// Migration is interface for migrations provider.
+type Migration interface {
+	Apply(db Executor) error
+	Name() string
+	Order() int
+}
 
 func version(db Executor) (int, error) {
 	var current int
@@ -34,9 +67,17 @@ func version(db Executor) (int, error) {
 	return current, nil
 }
 
-func embeddedMigrations(db Executor) error {
-	var migrations []migration
-	fs.WalkDir(embedded, "migrations", func(path string, d fs.DirEntry, err error) error {
+func StateMigrations() ([]Migration, error) {
+	return sqlMigrations("state")
+}
+
+func LocalMigrations() ([]Migration, error) {
+	return sqlMigrations("local")
+}
+
+func sqlMigrations(dbname string) ([]Migration, error) {
+	var migrations []Migration
+	err := fs.WalkDir(embedded, fmt.Sprintf("migrations/%s", dbname), func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return fmt.Errorf("walkdir %s: %w", path, err)
 		}
@@ -62,35 +103,12 @@ func embeddedMigrations(db Executor) error {
 			}
 			return 0, nil, nil
 		})
-		migrations = append(migrations, migration{
+		migrations = append(migrations, &sqlMigration{
 			order:   order,
 			name:    d.Name(),
 			content: scanner,
 		})
 		return nil
 	})
-	sort.Slice(migrations, func(i, j int) bool {
-		return migrations[i].order < migrations[j].order
-	})
-
-	current, err := version(db)
-	if err != nil {
-		return err
-	}
-
-	for _, m := range migrations {
-		if m.order <= current {
-			continue
-		}
-		for m.content.Scan() {
-			if _, err := db.Exec(m.content.Text(), nil, nil); err != nil {
-				return fmt.Errorf("exec %s: %w", m.content.Text(), err)
-			}
-		}
-		// binding values in pragma statement is not allowed
-		if _, err := db.Exec(fmt.Sprintf("PRAGMA user_version = %d;", m.order), nil, nil); err != nil {
-			return fmt.Errorf("update user_version to %d: %w", m.order, err)
-		}
-	}
-	return nil
+	return migrations, err
 }

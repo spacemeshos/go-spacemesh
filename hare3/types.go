@@ -39,16 +39,16 @@ type IterRound struct {
 }
 
 // Delay returns number of network delays since specified iterround.
-func (ir IterRound) Delay(since IterRound) int {
-	delay := int(ir.Absolute()) - int(since.Absolute())
-	// we skip hardlock round in 0th iteration.
-	if since.Iter == 0 && since.Round == preround && delay != 0 {
-		delay--
+func (ir IterRound) Delay(since IterRound) uint32 {
+	if ir.Absolute() > since.Absolute() {
+		delay := ir.Absolute() - since.Absolute()
+		// we skip hardlock round in 0th iteration.
+		if since.Iter == 0 && since.Round == preround && delay != 0 {
+			delay--
+		}
+		return delay
 	}
-	if delay < 0 {
-		return 0
-	}
-	return delay
+	return 0
 }
 
 func (ir IterRound) Grade(since IterRound) grade {

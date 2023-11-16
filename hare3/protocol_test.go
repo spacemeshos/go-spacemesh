@@ -497,6 +497,28 @@ func TestProtocol(t *testing.T) {
 			// is first in the order
 			new(toutput).active().round(commit).iter(1).ref("a"), // commit
 		),
+		gen("early proposal by one",
+			new(setup).thresh(10),
+			new(tinput).sender("1").round(preround).proposals("a", "b").vrfcount(11).g(grade5),
+			new(toutput).coin(false), // preround
+			new(toutput),             // softlock
+			new(tinput).sender("1").round(propose).proposals("a", "b").g(grade5).vrf(1),
+			new(toutput), // propose
+			new(toutput), // wait1
+			new(toutput), // wait2
+			new(toutput).active().round(commit).ref("a", "b"),
+		),
+		gen("early proposal by two",
+			new(setup).thresh(10),
+			new(tinput).sender("1").round(preround).proposals("a", "b").vrfcount(11).g(grade5),
+			new(toutput).coin(false), // preround
+			new(tinput).sender("1").round(propose).proposals("a", "b").g(grade5).vrf(1),
+			new(toutput), // softlock
+			new(toutput), // propose
+			new(toutput), // wait1
+			new(toutput), // wait2
+			new(toutput).active().round(commit).ref("a", "b"),
+		),
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {

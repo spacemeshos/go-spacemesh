@@ -265,7 +265,7 @@ func (s *Sync) GetOffset(ctx context.Context, id uint64, prs []p2p.Peer) (time.D
 		wg.Add(1)
 		go func(pid p2p.Peer) {
 			defer wg.Done()
-			logger := s.log.WithFields(log.String("pid", pid.Pretty())).With()
+			logger := s.log.WithFields(log.Stringer("pid", pid)).With()
 			stream, err := s.h.NewStream(network.WithNoDial(ctx, "existing connection"), pid, protocolName)
 			if err != nil {
 				logger.Warning("failed to create new stream", log.Err(err))

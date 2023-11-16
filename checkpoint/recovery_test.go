@@ -13,8 +13,6 @@ import (
 	"time"
 
 	"github.com/spacemeshos/poet/shared"
-	"github.com/spacemeshos/post/initialization"
-	postShared "github.com/spacemeshos/post/shared"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -31,6 +29,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
 	"github.com/spacemeshos/go-spacemesh/sql/recovery"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
@@ -153,9 +153,9 @@ func TestRecover(t *testing.T) {
 			fs := afero.NewMemMapFs()
 			cfg := &checkpoint.RecoverConfig{
 				GoldenAtx:      goldenAtx,
-				PostDataDir:    t.TempDir(),
 				DataDir:        t.TempDir(),
 				DbFile:         "test.sql",
+				LocalDbFile:    "local.sql",
 				PreserveOwnAtx: true,
 				NodeID:         types.NodeID{2, 3, 4},
 				Uri:            tc.uri,
@@ -164,7 +164,10 @@ func TestRecover(t *testing.T) {
 			bsdir := filepath.Join(cfg.DataDir, bootstrap.DirName)
 			require.NoError(t, fs.MkdirAll(bsdir, 0o700))
 			db := sql.InMemory()
-			preserve, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, fs, cfg)
+			localDB := localsql.InMemory(
+				sql.WithMigration(localsql.New0002Migration(cfg.DataDir)),
+			)
+			preserve, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, localDB, fs, cfg)
 			if tc.expErr != nil {
 				require.ErrorIs(t, err, tc.expErr)
 				return
@@ -200,7 +203,6 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 	fs := afero.NewMemMapFs()
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      goldenAtx,
-		PostDataDir:    t.TempDir(),
 		DataDir:        t.TempDir(),
 		DbFile:         "test.sql",
 		PreserveOwnAtx: true,
@@ -211,9 +213,12 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 	bsdir := filepath.Join(cfg.DataDir, bootstrap.DirName)
 	require.NoError(t, fs.MkdirAll(bsdir, 0o700))
 	db := sql.InMemory()
+	localDB := localsql.InMemory(
+		sql.WithMigration(localsql.New0002Migration(cfg.DataDir)),
+	)
 	types.SetEffectiveGenesis(0)
 	require.NoError(t, recovery.SetCheckpoint(db, types.LayerID(recoverLayer)))
-	preserve, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, fs, cfg)
+	preserve, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, localDB, fs, cfg)
 	require.NoError(t, err)
 	require.Nil(t, preserve)
 	require.EqualValues(t, recoverLayer-1, types.GetEffectiveGenesis())
@@ -430,9 +435,9 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve(t *testing.T) {
 	require.NoError(t, err)
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      goldenAtx,
-		PostDataDir:    t.TempDir(),
 		DataDir:        t.TempDir(),
 		DbFile:         "test.sql",
+		LocalDbFile:    "local.sql",
 		PreserveOwnAtx: true,
 		NodeID:         sig.NodeID(),
 		Uri:            fmt.Sprintf("%s/snapshot-15", ts.URL),
@@ -502,9 +507,9 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
 	require.NoError(t, err)
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      goldenAtx,
-		PostDataDir:    t.TempDir(),
 		DataDir:        t.TempDir(),
 		DbFile:         "test.sql",
+		LocalDbFile:    "local.sql",
 		PreserveOwnAtx: true,
 		NodeID:         sig.NodeID(),
 		Uri:            fmt.Sprintf("%s/snapshot-15", ts.URL),
@@ -537,12 +542,19 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
 	// write pending nipost challenge to simulate a pending atx still waiting for poet proof.
 	prevAtx := vatxs[len(vatxs)-2]
 	posAtx := vatxs[len(vatxs)-1]
-	require.NoError(t, activation.SaveNipostChallenge(cfg.PostDataDir, &types.NIPostChallenge{
+
+	localDB, err := localsql.Open("file:" + filepath.Join(cfg.DataDir, cfg.LocalDbFile))
+	require.NoError(t, err)
+	require.NotNil(t, localDB)
+
+	err = nipost.AddChallenge(localDB, sig.NodeID(), &types.NIPostChallenge{
 		PublishEpoch:   posAtx.PublishEpoch + 1,
 		Sequence:       prevAtx.Sequence + 1,
 		PrevATXID:      prevAtx.ID(),
 		PositioningATX: posAtx.ID(),
-	}))
+	})
+	require.NoError(t, err)
+	require.NoError(t, localDB.Close())
 
 	preserve, err := checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg)
 	require.NoError(t, err)
@@ -584,9 +596,9 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_Still_Initializing(t *testing.T)
 	require.NoError(t, err)
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      goldenAtx,
-		PostDataDir:    t.TempDir(),
 		DataDir:        t.TempDir(),
 		DbFile:         "test.sql",
+		LocalDbFile:    "local.sql",
 		PreserveOwnAtx: true,
 		NodeID:         sig.NodeID(),
 		Uri:            fmt.Sprintf("%s/snapshot-15", ts.URL),
@@ -615,32 +627,36 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_Still_Initializing(t *testing.T)
 		)
 	}
 
-	commitment, err := atxs.GetIDWithMaxHeight(olddb, types.EmptyNodeID)
-	require.NoError(t, err)
 	require.NoError(t, olddb.Close())
 
-	// create post metadata to indicate that miner is still initializing
-	require.Equal(t, commitment, vatxs[len(vatxs)-1].ID())
-	require.NoError(t, initialization.SaveMetadata(cfg.PostDataDir, &postShared.PostMetadata{
-		NodeId:          sig.NodeID().Bytes(),
-		CommitmentAtxId: commitment.Bytes(),
-	}))
+	localDB, err := localsql.Open("file:" + filepath.Join(cfg.DataDir, cfg.LocalDbFile))
+	require.NoError(t, err)
+	require.NotNil(t, localDB)
+
+	post := types.Post{
+		Indices: []byte{1, 2, 3},
+	}
+	commitmentAtx := types.RandomATXID()
+	err = nipost.AddChallenge(localDB, sig.NodeID(), &types.NIPostChallenge{
+		PublishEpoch:   0, // will be updated later
+		Sequence:       0,
+		PrevATXID:      types.EmptyATXID, // initial has no previous ATX
+		PositioningATX: types.EmptyATXID, // will be updated later
+		InitialPost:    &post,
+		CommitmentATX:  &commitmentAtx,
+	})
+	require.NoError(t, err)
+	require.NoError(t, localDB.Close())
 
 	preserve, err := checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg)
 	require.NoError(t, err)
-	require.NotNil(t, preserve)
-	// the two set of atxs have different received time. just compare IDs
-	require.ElementsMatch(t, atxIDs(vatxs), atxIDs(preserve.Deps))
-	require.ElementsMatch(t, proofs, preserve.Proofs)
+	require.Nil(t, preserve)
 
 	newdb, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
 	require.NotNil(t, newdb)
 	t.Cleanup(func() { require.NoError(t, newdb.Close()) })
 	verifyDbContent(t, newdb)
-	validateAndPreserveData(t, newdb, preserve.Deps, preserve.Proofs)
-	// note that poet proofs are not saved to newdb due to verification errors
-
 	restore, err := recovery.CheckpointInfo(newdb)
 	require.NoError(t, err)
 	require.EqualValues(t, recoverLayer, restore)
@@ -666,9 +682,9 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 	require.NoError(t, err)
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      goldenAtx,
-		PostDataDir:    t.TempDir(),
 		DataDir:        t.TempDir(),
 		DbFile:         "test.sql",
+		LocalDbFile:    "local.sql",
 		PreserveOwnAtx: true,
 		NodeID:         sig.NodeID(),
 		Uri:            fmt.Sprintf("%s/snapshot-15", ts.URL),
@@ -748,9 +764,9 @@ func TestRecover_OwnAtxNotInCheckpoint_DontPreserve(t *testing.T) {
 	require.NoError(t, err)
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      goldenAtx,
-		PostDataDir:    t.TempDir(),
 		DataDir:        t.TempDir(),
 		DbFile:         "test.sql",
+		LocalDbFile:    "local.sql",
 		PreserveOwnAtx: false,
 		NodeID:         sig.NodeID(),
 		Uri:            fmt.Sprintf("%s/snapshot-15", ts.URL),
@@ -818,9 +834,9 @@ func TestRecover_OwnAtxInCheckpoint(t *testing.T) {
 
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      goldenAtx,
-		PostDataDir:    t.TempDir(),
 		DataDir:        t.TempDir(),
 		DbFile:         "test.sql",
+		LocalDbFile:    "local.sql",
 		PreserveOwnAtx: true,
 		NodeID:         nid,
 		Uri:            fmt.Sprintf("%s/snapshot-15", ts.URL),
