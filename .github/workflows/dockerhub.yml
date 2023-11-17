@@ -13,7 +13,11 @@ on:
       - develop
     tags:
       - '*'
-
+  workflow_dispatch:
+    inputs:
+      custom_image_tag:
+        description: 'A custom image tag'
+        default: ''
 jobs:
   dockerpush:
     runs-on: ubuntu-latest
@@ -24,10 +28,19 @@ jobs:
       run: |
         make dockerbuild-go
         make dockerbuild-bs
+        
     - name: Push docker images to dockerhub
       run: |
         make dockerpush-only
         make dockerpush-bs-only
+
+    - name: Push docker images to dockerhub
+      if: inputs.custom_image_tag
+      run: |
+        export DOCKER_IMAGE_VERSION="${{ inputs.custom_image_tag }}"
+        make dockerpush-only
+        make dockerpush-bs-only
+
     - name: Push docker images with version tag to dockerhub
       if: startsWith(github.ref, 'refs/tags/')
       run: |
@@ -38,3 +51,5 @@ jobs:
         export DOCKER_IMAGE_REPO="go-spacemesh"
         make dockerpush-only
         make dockerpush-bs-only
+
+    
