@@ -140,20 +140,24 @@ func AddCommands(cmd *cobra.Command) {
 
 	/** ======================== API Flags ========================== **/
 
-	cmd.PersistentFlags().StringSliceVar(&cfg.API.PublicServices, "grpc-public-services",
-		cfg.API.PublicServices, "List of services that are safe to open for the network.")
 	cmd.PersistentFlags().StringVar(&cfg.API.PublicListener, "grpc-public-listener",
-		cfg.API.PublicListener, "Socket for the list of services specified in grpc-public-services.")
-	cmd.PersistentFlags().StringSliceVar(&cfg.API.PrivateServices, "grpc-private-services",
-		cfg.API.PrivateServices, "List of services that must be kept private or exposed only in secure environments.")
+		cfg.API.PublicListener, "Socket for grpc services that are save to expose publicly.")
 	cmd.PersistentFlags().StringVar(&cfg.API.PrivateListener, "grpc-private-listener",
-		cfg.API.PrivateListener, "Socket for the list of services specified in grpc-private-services.")
+		cfg.API.PrivateListener, "Socket for grpc services that are not safe to expose publicly.")
+	cmd.PersistentFlags().StringVar(&cfg.API.TLSListener, "grpc-tls-listener",
+		cfg.API.TLSListener, "Socket for the grpc services that need to be accessible via mTLS.")
+	cmd.PersistentFlags().StringVar(&cfg.API.TLSCACert, "gprc-tls-ca-cert",
+		cfg.API.TLSCACert, "Path to the file containing the CA certificate for mTLS.")
+	cmd.PersistentFlags().StringVar(&cfg.API.TLSCert, "grpc-tls-cert",
+		cfg.API.TLSCert, "Path to the file containing the nodes certificate for mTLS.")
+	cmd.PersistentFlags().StringVar(&cfg.API.TLSKey, "grpc-tls-key",
+		cfg.API.TLSKey, "Path to the file containing the nodes private key for mTLS.")
 	cmd.PersistentFlags().IntVar(&cfg.API.GrpcRecvMsgSize, "grpc-recv-msg-size",
 		cfg.API.GrpcRecvMsgSize, "GRPC api recv message size")
 	cmd.PersistentFlags().IntVar(&cfg.API.GrpcSendMsgSize, "grpc-send-msg-size",
 		cfg.API.GrpcSendMsgSize, "GRPC api send message size")
-	cmd.PersistentFlags().StringVar(&cfg.API.JSONListener, "grpc-json-listener", cfg.API.JSONListener,
-		"Endpoint for services in grpc-public-services. If left empty - grpc gateway won't be enabled.")
+	cmd.PersistentFlags().StringVar(&cfg.API.JSONListener, "grpc-json-listener",
+		cfg.API.JSONListener, "(Optional) endpoint to expose public grpc services via HTTP/JSON.")
 
 	/**======================== Hare Flags ========================== **/
 
@@ -280,19 +284,6 @@ func AddCommands(cmd *cobra.Command) {
 		Value:    &cfg.SMESHING.VerifyingOpts.Flags,
 		DefValue: cfg.SMESHING.VerifyingOpts.Flags.String(),
 	})
-
-	/**======================== PoST service Flags ========================== **/
-
-	cmd.PersistentFlags().StringVar(&cfg.POSTService.PostServiceCmd, "post-opts-post-service",
-		cfg.POSTService.PostServiceCmd, "")
-	cmd.PersistentFlags().StringVar(&cfg.POSTService.NodeAddress, "post-opts-node-address",
-		cfg.POSTService.NodeAddress, "")
-	cmd.PersistentFlags().StringVar(&cfg.POSTService.CACert, "post-opts-ca-cert",
-		cfg.POSTService.CACert, "")
-	cmd.PersistentFlags().StringVar(&cfg.POSTService.Cert, "post-opts-cert",
-		cfg.POSTService.Cert, "")
-	cmd.PersistentFlags().StringVar(&cfg.POSTService.Key, "post-opts-key",
-		cfg.POSTService.Key, "")
 
 	/**======================== Consensus Flags ========================== **/
 
