@@ -6,11 +6,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
 	"sync"
 	"time"
 
-	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/shared"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -263,73 +261,6 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 	default:
 		return fmt.Errorf("failed to stop smeshing: %w", err)
 	}
-}
-
-func (b *Builder) MigrateDiskToLocalDB(dataDir string) error {
-	if err := b.movePostToDb(dataDir); err != nil {
-		return fmt.Errorf("moving post to db: %w", err)
-	}
-	if err := b.moveNipostChallengeToDb(dataDir); err != nil {
-		return fmt.Errorf("moving nipost challenge to db: %w", err)
-	}
-	return nil
-}
-
-func (b *Builder) movePostToDb(dataDir string) error {
-	post, err := loadPost(dataDir)
-	switch {
-	case errors.Is(err, fs.ErrNotExist):
-		return nil // no post file, nothing to do
-	case err != nil:
-		return fmt.Errorf("loading post: %w", err)
-	default:
-	}
-
-	meta, err := initialization.LoadMetadata(dataDir)
-	if err != nil {
-		return fmt.Errorf("getting post info: %w", err)
-	}
-	commitmentAtxId := types.BytesToATXID(meta.CommitmentAtxId)
-
-	return b.localDB.WithTx(context.Background(), func(tx *sql.Tx) error {
-		if err := nipost.RemoveInitialPost(tx, b.signer.NodeID()); err != nil {
-			return fmt.Errorf("removing existing challenge from db: %w", err)
-		}
-		initialPost := nipost.Post{
-			Nonce:   post.Nonce,
-			Indices: post.Indices,
-			Pow:     post.Pow,
-
-			NumUnits:      meta.NumUnits,
-			CommitmentATX: commitmentAtxId,
-			VRFNonce:      types.VRFPostIndex(*meta.Nonce),
-		}
-		if err := nipost.AddInitialPost(tx, b.signer.NodeID(), initialPost); err != nil {
-			return fmt.Errorf("adding post to db: %w", err)
-		}
-		return discardPost(dataDir)
-	})
-}
-
-func (b *Builder) moveNipostChallengeToDb(dataDir string) error {
-	ch, err := loadNipostChallenge(dataDir)
-	switch {
-	case errors.Is(err, fs.ErrNotExist):
-		return nil // no challenge file, nothing to do
-	case err != nil:
-		return fmt.Errorf("loading nipost challenge: %w", err)
-	default:
-	}
-	return b.localDB.WithTx(context.Background(), func(tx *sql.Tx) error {
-		if err := nipost.RemoveChallenge(tx, b.signer.NodeID()); err != nil {
-			return fmt.Errorf("removing existing challenge from db: %w", err)
-		}
-
-		if err := nipost.AddChallenge(tx, b.signer.NodeID(), ch); err != nil {
-			return fmt.Errorf("adding challenge to db: %w", err)
-		}
-		return discardNipostChallenge(dataDir)
-	})
 }
 
 // SmesherID returns the ID of the smesher that created this activation.

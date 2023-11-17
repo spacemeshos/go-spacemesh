@@ -11,9 +11,7 @@ import (
 )
 
 func Test_AddInitialPost(t *testing.T) {
-	db := localsql.InMemory(
-		sql.WithMigration(localsql.New0002Migration(t.TempDir())),
-	)
+	db := localsql.InMemory()
 
 	nodeID := types.RandomNodeID()
 	post := Post{
@@ -42,9 +40,7 @@ func Test_AddInitialPost(t *testing.T) {
 }
 
 func Test_AddInitialPost_NoDuplicates(t *testing.T) {
-	db := localsql.InMemory(
-		sql.WithMigration(localsql.New0002Migration(t.TempDir())),
-	)
+	db := localsql.InMemory()
 
 	nodeID := types.RandomNodeID()
 	post := Post{

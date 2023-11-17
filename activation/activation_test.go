@@ -4,14 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -128,10 +125,8 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 	require.NoError(tb, err)
 	ctrl := gomock.NewController(tb)
 	tab := &testAtxBuilder{
-		cdb: datastore.NewCachedDB(sql.InMemory(), lg),
-		localDb: localsql.InMemory(
-			sql.WithMigration(localsql.New0002Migration(tb.TempDir())),
-		),
+		cdb:         datastore.NewCachedDB(sql.InMemory(), lg),
+		localDb:     localsql.InMemory(),
 		sig:         edSigner,
 		coinbase:    types.GenerateAddress([]byte("33333")),
 		goldenATXID: types.ATXID(types.HexToHash32("77777")),
@@ -1464,139 +1459,4 @@ func TestWaitingToBuildNipostChallengeWithJitter(t *testing.T) {
 		deadline := buildNipostChallengeStartDeadline(time.Now().Add(time.Hour-time.Second*37), time.Hour)
 		require.Less(t, deadline, time.Now())
 	})
-}
-
-func TestBuilder_MovePostToDb(t *testing.T) {
-	tab := newTestBuilder(t)
-	dataDir := t.TempDir()
-
-	refPost := &types.Post{
-		Nonce:   1,
-		Indices: []byte{1, 2, 3},
-		Pow:     1,
-	}
-	require.NoError(t, savePost(dataDir, refPost))
-	require.FileExists(t, filepath.Join(dataDir, postFilename))
-
-	refCommitmentATX := types.RandomATXID()
-	nonce := rand.Uint64()
-	initialization.SaveMetadata(dataDir, &shared.PostMetadata{
-		CommitmentAtxId: refCommitmentATX.Bytes(),
-		Nonce:           &nonce,
-	})
-	require.NoError(t, tab.movePostToDb(dataDir))
-
-	post, err := nipost.InitialPost(tab.localDb, tab.sig.NodeID())
-	require.NoError(t, err)
-	require.NotNil(t, post)
-	require.Equal(t, refPost.Nonce, post.Nonce)
-	require.Equal(t, refPost.Indices, post.Indices)
-	require.Equal(t, refPost.Pow, post.Pow)
-	require.Equal(t, refCommitmentATX, post.CommitmentATX)
-	require.Equal(t, types.VRFPostIndex(nonce), post.VRFNonce)
-	require.NoFileExists(t, filepath.Join(dataDir, postFilename))
-
-	require.NoError(t, tab.movePostToDb(dataDir)) // should not fail if post is already in db
-	post2, err := nipost.InitialPost(tab.localDb, tab.sig.NodeID())
-	require.NoError(t, err)
-	require.NotNil(t, post2) // state is unchanged
-	require.Equal(t, refPost.Nonce, post2.Nonce)
-	require.Equal(t, refPost.Indices, post2.Indices)
-	require.Equal(t, refPost.Pow, post2.Pow)
-	require.Equal(t, refCommitmentATX, post2.CommitmentATX)
-	require.Equal(t, types.VRFPostIndex(nonce), post2.VRFNonce)
-}
-
-func TestBuilder_MoveNipostChallengeToDb(t *testing.T) {
-	tab := newTestBuilder(t)
-	dataDir := t.TempDir()
-
-	ch := &types.NIPostChallenge{
-		PublishEpoch:   4,
-		Sequence:       0,
-		PrevATXID:      types.RandomATXID(),
-		PositioningATX: types.RandomATXID(),
-		CommitmentATX:  nil,
-		InitialPost:    nil,
-	}
-	require.NoError(t, saveNipostChallenge(dataDir, ch))
-	require.FileExists(t, filepath.Join(dataDir, challengeFilename))
-
-	require.NoError(t, tab.moveNipostChallengeToDb(dataDir))
-
-	challenge, err := nipost.Challenge(tab.localDb, tab.sig.NodeID())
-	require.NoError(t, err)
-	require.NotNil(t, challenge)
-	require.Equal(t, ch, challenge)
-	require.NoFileExists(t, filepath.Join(dataDir, challengeFilename))
-
-	require.NoError(t, tab.moveNipostChallengeToDb(dataDir)) // should not fail if challenge is already in db
-	challenge2, err := nipost.Challenge(tab.localDb, tab.sig.NodeID())
-	require.NoError(t, err)
-	require.Equal(t, challenge, challenge2) // challenge is unchanged
-}
-
-func TestBuilder_MigrateDiskToLocalDB(t *testing.T) {
-	tab := newTestBuilder(t)
-	dataDir := t.TempDir()
-
-	ch := &types.NIPostChallenge{
-		PublishEpoch:   4,
-		Sequence:       0,
-		PrevATXID:      types.RandomATXID(),
-		PositioningATX: types.RandomATXID(),
-		CommitmentATX:  nil,
-		InitialPost:    nil,
-	}
-	require.NoError(t, saveNipostChallenge(dataDir, ch))
-	require.FileExists(t, filepath.Join(dataDir, challengeFilename))
-
-	refPost := &types.Post{
-		Nonce:   1,
-		Indices: []byte{1, 2, 3},
-		Pow:     1,
-	}
-	require.NoError(t, savePost(dataDir, refPost))
-	require.FileExists(t, filepath.Join(dataDir, postFilename))
-
-	refCommitmentATX := types.RandomATXID()
-	nonce := rand.Uint64()
-	initialization.SaveMetadata(dataDir, &shared.PostMetadata{
-		CommitmentAtxId: refCommitmentATX.Bytes(),
-		Nonce:           &nonce,
-	})
-
-	require.NoError(t, tab.MigrateDiskToLocalDB(dataDir))
-
-	post, err := nipost.InitialPost(tab.localDb, tab.sig.NodeID())
-	require.NoError(t, err)
-	require.NotNil(t, post)
-	require.Equal(t, refPost.Nonce, post.Nonce)
-	require.Equal(t, refPost.Indices, post.Indices)
-	require.Equal(t, refPost.Pow, post.Pow)
-	require.Equal(t, refCommitmentATX, post.CommitmentATX)
-	require.Equal(t, types.VRFPostIndex(nonce), post.VRFNonce)
-	require.NoFileExists(t, filepath.Join(dataDir, postFilename))
-
-	challenge, err := nipost.Challenge(tab.localDb, tab.sig.NodeID())
-	require.NoError(t, err)
-	require.NotNil(t, challenge)
-	require.Equal(t, ch, challenge)
-	require.NoFileExists(t, filepath.Join(dataDir, challengeFilename))
-
-	require.NoError(t, tab.MigrateDiskToLocalDB(dataDir)) // should not fail if challenge and post are already in db
-
-	post2, err := nipost.InitialPost(tab.localDb, tab.sig.NodeID())
-	require.NoError(t, err)
-	require.NotNil(t, post2) // state is unchanged
-	require.NotNil(t, post)
-	require.Equal(t, refPost.Nonce, post2.Nonce)
-	require.Equal(t, refPost.Indices, post2.Indices)
-	require.Equal(t, refPost.Pow, post2.Pow)
-	require.Equal(t, refCommitmentATX, post2.CommitmentATX)
-	require.Equal(t, types.VRFPostIndex(nonce), post2.VRFNonce)
-
-	challenge2, err := nipost.Challenge(tab.localDb, tab.sig.NodeID())
-	require.NoError(t, err)
-	require.Equal(t, challenge, challenge2) // challenge is unchanged
 }

@@ -7,13 +7,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
@@ -52,8 +52,10 @@ func Test_NIPostBuilder_ResetState(t *testing.T) {
 	postService := NewMockpostService(ctrl)
 	mclock := defaultLayerClockMock(ctrl)
 
+	db := localsql.InMemory()
+
 	nb, err := NewNIPostBuilder(
-		localsql.InMemory(),
+		db,
 		poetDb,
 		postService,
 		[]string{},
@@ -64,12 +66,31 @@ func Test_NIPostBuilder_ResetState(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// TODO(mafa): add state
+	nipost.AddNIPost(db, sig.NodeID(), &nipost.NIPostState{
+		NIPost: &types.NIPost{
+			Post: &types.Post{
+				Nonce:   1,
+				Indices: []byte{1, 2, 3},
+				Pow:     1,
+			},
+			Membership: types.MerkleProof{
+				Nodes:     []types.Hash32{types.RandomHash(), types.RandomHash()},
+				LeafIndex: 1,
+			},
+			PostMetadata: &types.PostMetadata{
+				Challenge:     types.RandomHash().Bytes(),
+				LabelsPerUnit: 1,
+			},
+		},
+		NumUnits: 8,
+		VRFNonce: types.VRFPostIndex(1024),
+	})
 
 	err = nb.ResetState()
 	require.NoError(t, err)
 
-	// TODO(mafa): check state is empty
+	_, err = nipost.NIPost(db, sig.NodeID())
+	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
 func Test_NIPostBuilder_WithMocks(t *testing.T) {
@@ -338,6 +359,7 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 	}, nil)
 	postService := NewMockpostService(ctrl)
 	postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil)
+
 	nb, err := NewNIPostBuilder(
 		localsql.InMemory(),
 		poetDb,
@@ -928,14 +950,6 @@ func TestNIPostBuilder_Mainnet_Poet_Workaround(t *testing.T) {
 			require.NotNil(t, nipost)
 		})
 	}
-}
-
-func FuzzBuilderStateConsistency(f *testing.F) {
-	tester.FuzzConsistency[NIPostBuilderState](f)
-}
-
-func FuzzBuilderStateSafety(f *testing.F) {
-	tester.FuzzSafety[NIPostBuilderState](f)
 }
 
 func TestRandomDurationInRange(t *testing.T) {

@@ -9,23 +9,23 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-func New0002Migration(dataDir string) *initialPostMigration {
-	return &initialPostMigration{dataDir: dataDir}
+func New0002Migration(dataDir string) *migration0002 {
+	return &migration0002{dataDir: dataDir}
 }
 
-type initialPostMigration struct {
+type migration0002 struct {
 	dataDir string
 }
 
-func (initialPostMigration) Name() string {
+func (migration0002) Name() string {
 	return "extend initial post"
 }
 
-func (initialPostMigration) Order() int {
+func (migration0002) Order() int {
 	return 2
 }
 
-func (m initialPostMigration) Apply(db sql.Executor) error {
+func (m migration0002) Apply(db sql.Executor) error {
 	_, err := db.Exec("ALTER TABLE initial_post ADD COLUMN num_units UNSIGNED INT;", nil, nil)
 	if err != nil {
 		return fmt.Errorf("failed to add column num_units to initial_post: %w", err)

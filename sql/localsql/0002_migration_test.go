@@ -1,6 +1,7 @@
 package localsql
 
 import (
+	"path/filepath"
 	"sort"
 	"testing"
 
@@ -11,6 +12,27 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
+
+func Test_0002Migration_CompatibleSQL(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "test1.db")
+	db, err := Open("file:"+file,
+		sql.WithMigration(New0002Migration(t.TempDir())),
+	)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+	goHash, err := fileHash(file)
+	require.NoError(t, err)
+
+	file = filepath.Join(t.TempDir(), "test2.db")
+	db, err = Open("file:" + file)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	sqlHash, err := fileHash(file)
+	require.NoError(t, err)
+
+	require.Equal(t, goHash, sqlHash)
+}
 
 func Test_0002Migration_AddsMissingData(t *testing.T) {
 	migrations, err := sql.LocalMigrations()

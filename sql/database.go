@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -80,17 +81,31 @@ func WithConnections(n int) Opt {
 }
 
 // WithMigrations overwrites embedded migrations.
+// Migrations are sorted by order before applying.
 func WithMigrations(migrations []Migration) Opt {
 	return func(c *conf) {
+		sort.Slice(migrations, func(i, j int) bool {
+			return migrations[i].Order() < migrations[j].Order()
+		})
 		c.migrations = migrations
 	}
 }
 
 // WithMigration adds migration to the list of migrations.
-// Migrations will be sorted by order before applying.
-func WithMigration(m Migration) Opt {
+// It will overwrite an existing migration with the same order.
+func WithMigration(migration Migration) Opt {
 	return func(c *conf) {
-		c.migrations = append(c.migrations, m)
+		for i, m := range c.migrations {
+			if m.Order() == migration.Order() {
+				c.migrations[i] = migration
+				return
+			}
+			if m.Order() > migration.Order() {
+				c.migrations = slices.Insert(c.migrations, i, migration)
+				return
+			}
+		}
+		c.migrations = append(c.migrations, migration)
 	}
 }
 
@@ -141,10 +156,6 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 		db.latency = newQueryLatency()
 	}
 	if config.migrations != nil {
-		sort.Slice(config.migrations, func(i, j int) bool {
-			return config.migrations[i].Order() < config.migrations[j].Order()
-		})
-
 		before, err := version(db)
 		if err != nil {
 			return nil, err

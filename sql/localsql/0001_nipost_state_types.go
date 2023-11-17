@@ -1,4 +1,4 @@
-package activation
+package localsql
 
 import "github.com/spacemeshos/go-spacemesh/common/types"
 
