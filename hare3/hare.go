@@ -40,7 +40,10 @@ type Config struct {
 	IterationsLimit uint8         `mapstructure:"iterations-limit"`
 	PreroundDelay   time.Duration `mapstructure:"preround-delay"`
 	RoundDuration   time.Duration `mapstructure:"round-duration"`
-	ProtocolName    string
+	// LogStats if true will log iteration statistics with INFO level at the start of the next iteration.
+	// This requires additional computation and should be used for debugging only.
+	LogStats     bool `mapstructure:"log-stats"`
+	ProtocolName string
 }
 
 func (cfg *Config) Validate(zdist time.Duration) error {
@@ -64,6 +67,7 @@ func (cfg *Config) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddUint8("iterations limit", cfg.IterationsLimit)
 	encoder.AddDuration("preround delay", cfg.PreroundDelay)
 	encoder.AddDuration("round duration", cfg.RoundDuration)
+	encoder.AddBool("log stats", cfg.LogStats)
 	encoder.AddString("p2p protocol", cfg.ProtocolName)
 	return nil
 }
@@ -437,6 +441,11 @@ func (h *Hare) run(session *session) error {
 			}
 			if err := h.onOutput(session, current, out); err != nil {
 				return err
+			}
+			// we are logginng stats 1 network delay after new iteration start
+			// so that we can receive notify messages from previous iteration
+			if session.proto.Round == softlock && h.config.LogStats {
+				h.log.Info("stats", zap.Uint32("lid", session.lid.Uint32()), zap.Inline(session.proto.Stats()))
 			}
 			if out.terminated {
 				if !result {
