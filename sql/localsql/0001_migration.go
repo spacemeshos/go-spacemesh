@@ -40,7 +40,7 @@ func (m migration0001) Apply(db sql.Executor) error {
     	post_pow      UNSIGNED LONG INT
 	) WITHOUT ROWID;`, nil, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create nipost table: %w", err)
+		return fmt.Errorf("create nipost table: %w", err)
 	}
 
 	_, err = db.Exec(`CREATE TABLE initial_post (
@@ -52,15 +52,15 @@ func (m migration0001) Apply(db sql.Executor) error {
 	    commit_atx    CHAR(32)
 	) WITHOUT ROWID;`, nil, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create initial_post table: %w", err)
+		return fmt.Errorf("create initial_post table: %w", err)
 	}
 
 	// move post and nipost challenge to db
 	if err := m.movePostToDb(db, m.dataDir); err != nil {
-		return fmt.Errorf("failed to move post to db: %w", err)
+		return fmt.Errorf("move post to db: %w", err)
 	}
 	if err := m.moveNipostChallengeToDb(db, m.dataDir); err != nil {
-		return fmt.Errorf("failed to move nipost challenge to db: %w", err)
+		return fmt.Errorf("move nipost challenge to db: %w", err)
 	}
 
 	return nil
@@ -78,7 +78,7 @@ func (migration0001) movePostToDb(db sql.Executor, dataDir string) error {
 
 	meta, err := initialization.LoadMetadata(dataDir)
 	if err != nil {
-		return fmt.Errorf("failed to load post metadata: %w", err)
+		return fmt.Errorf("load post metadata: %w", err)
 	}
 
 	enc := func(stmt *sql.Statement) {
@@ -110,7 +110,7 @@ func (migration0001) moveNipostChallengeToDb(db sql.Executor, dataDir string) er
 
 	meta, err := initialization.LoadMetadata(dataDir)
 	if err != nil {
-		return fmt.Errorf("failed to load post metadata: %w", err)
+		return fmt.Errorf("load post metadata: %w", err)
 	}
 
 	enc := func(stmt *sql.Statement) {

@@ -2,6 +2,7 @@ package localsql
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/spacemeshos/post/initialization"
@@ -18,19 +19,32 @@ func Test_0001Migration_CompatibleSQL(t *testing.T) {
 		sql.WithMigration(New0001Migration(t.TempDir())),
 	)
 	require.NoError(t, err)
-	require.NoError(t, db.Close())
-	goHash, err := fileHash(file)
+
+	var sqls1 []string
+	_, err = db.Exec("SELECT sql FROM sqlite_schema;", nil, func(stmt *sql.Statement) bool {
+		sql := stmt.ColumnText(0)
+		sql = strings.Join(strings.Fields(sql), " ") // remove whitespace
+		sqls1 = append(sqls1, sql)
+		return true
+	})
 	require.NoError(t, err)
+	require.NoError(t, db.Close())
 
 	file = filepath.Join(t.TempDir(), "test2.db")
 	db, err = Open("file:" + file)
 	require.NoError(t, err)
+
+	var sqls2 []string
+	_, err = db.Exec("SELECT sql FROM sqlite_schema;", nil, func(stmt *sql.Statement) bool {
+		sql := stmt.ColumnText(0)
+		sql = strings.Join(strings.Fields(sql), " ") // remove whitespace
+		sqls2 = append(sqls2, sql)
+		return true
+	})
+	require.NoError(t, err)
 	require.NoError(t, db.Close())
 
-	sqlHash, err := fileHash(file)
-	require.NoError(t, err)
-
-	require.Equal(t, goHash, sqlHash)
+	require.Equal(t, sqls1, sqls2)
 }
 
 func Test_0001Migration_AddsMissingData_Post(t *testing.T) {

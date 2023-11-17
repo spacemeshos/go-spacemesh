@@ -1,4 +1,5 @@
 ALTER TABLE nipost RENAME TO challenge;
+
 ALTER TABLE challenge ADD COLUMN poet_proof_ref        CHAR(32);
 ALTER TABLE challenge ADD COLUMN poet_proof_membership VARCHAR;
 
