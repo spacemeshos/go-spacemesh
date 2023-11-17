@@ -44,7 +44,7 @@ func identityInfoFromDir(dir string) (*identityInfo, error) {
 // PrettyIdentityInfoFromDir returns a printable ID from a given identity directory.
 func PrettyIdentityInfoFromDir(dir string) (string, error) {
 	identityInfo, err := identityInfoFromDir(dir)
-	return identityInfo.ID.Pretty(), err
+	return identityInfo.ID.String(), err
 }
 
 // EnsureIdentity generates an identity key file in given directory.
