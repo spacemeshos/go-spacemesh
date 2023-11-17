@@ -61,7 +61,7 @@ func (ir IterRound) IsMessageRound() bool {
 }
 
 func (ir IterRound) Absolute() uint32 {
-	return uint32(ir.Iter*uint8(notify) + uint8(ir.Round))
+	return uint32(ir.Iter)*uint32(notify) + uint32(ir.Round)
 }
 
 type Value struct {
