@@ -1338,6 +1338,8 @@ func (app *App) startAPIServices(ctx context.Context) error {
 	logger := app.addLogger(GRPCLogger, app.log)
 	grpczap.SetGrpcLoggerV2(grpclog, logger.Zap())
 	var (
+		// TODO(mafa): instead of checking for uniqueness of services across endpoints
+		// check uniqueness per endpoint and make them singletons
 		unique        = map[grpcserver.Service]struct{}{}
 		public        []grpcserver.ServiceAPI
 		private       []grpcserver.ServiceAPI
@@ -1370,9 +1372,6 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		unique[svc] = struct{}{}
 	}
 	for _, svc := range app.Config.API.TLSServices {
-		if _, exists := unique[svc]; exists {
-			return fmt.Errorf("can't start more than one %s", svc)
-		}
 		gsvc, err := app.initService(ctx, svc)
 		if err != nil {
 			return err
