@@ -148,7 +148,7 @@ func (s *Syncer) layerOpinions(
 	ctx context.Context,
 	lid types.LayerID,
 ) ([]*peerOpinion, []*types.Certificate, error) {
-	peers := s.dataFetcher.SelectBest(fetch.RedundantPeers)
+	peers := s.dataFetcher.SelectBestShuffled(fetch.RedundantPeers)
 	if len(peers) == 0 {
 		return nil, nil, errNoPeers
 	}

@@ -801,40 +801,40 @@ func (c *fetchLogicRegisterPeerHashesCall) DoAndReturn(f func(p2p.Peer, []types.
 	return c
 }
 
-// SelectBest mocks base method.
-func (m *MockfetchLogic) SelectBest(arg0 int) []p2p.Peer {
+// SelectBestShuffled mocks base method.
+func (m *MockfetchLogic) SelectBestShuffled(arg0 int) []p2p.Peer {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SelectBest", arg0)
+	ret := m.ctrl.Call(m, "SelectBestShuffled", arg0)
 	ret0, _ := ret[0].([]p2p.Peer)
 	return ret0
 }
 
-// SelectBest indicates an expected call of SelectBest.
-func (mr *MockfetchLogicMockRecorder) SelectBest(arg0 any) *fetchLogicSelectBestCall {
+// SelectBestShuffled indicates an expected call of SelectBestShuffled.
+func (mr *MockfetchLogicMockRecorder) SelectBestShuffled(arg0 any) *fetchLogicSelectBestShuffledCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectBest", reflect.TypeOf((*MockfetchLogic)(nil).SelectBest), arg0)
-	return &fetchLogicSelectBestCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectBestShuffled", reflect.TypeOf((*MockfetchLogic)(nil).SelectBestShuffled), arg0)
+	return &fetchLogicSelectBestShuffledCall{Call: call}
 }
 
-// fetchLogicSelectBestCall wrap *gomock.Call
-type fetchLogicSelectBestCall struct {
+// fetchLogicSelectBestShuffledCall wrap *gomock.Call
+type fetchLogicSelectBestShuffledCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *fetchLogicSelectBestCall) Return(arg0 []p2p.Peer) *fetchLogicSelectBestCall {
+func (c *fetchLogicSelectBestShuffledCall) Return(arg0 []p2p.Peer) *fetchLogicSelectBestShuffledCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *fetchLogicSelectBestCall) Do(f func(int) []p2p.Peer) *fetchLogicSelectBestCall {
+func (c *fetchLogicSelectBestShuffledCall) Do(f func(int) []p2p.Peer) *fetchLogicSelectBestShuffledCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *fetchLogicSelectBestCall) DoAndReturn(f func(int) []p2p.Peer) *fetchLogicSelectBestCall {
+func (c *fetchLogicSelectBestShuffledCall) DoAndReturn(f func(int) []p2p.Peer) *fetchLogicSelectBestShuffledCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -1281,40 +1281,40 @@ func (c *fetcherRegisterPeerHashesCall) DoAndReturn(f func(p2p.Peer, []types.Has
 	return c
 }
 
-// SelectBest mocks base method.
-func (m *Mockfetcher) SelectBest(arg0 int) []p2p.Peer {
+// SelectBestShuffled mocks base method.
+func (m *Mockfetcher) SelectBestShuffled(arg0 int) []p2p.Peer {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SelectBest", arg0)
+	ret := m.ctrl.Call(m, "SelectBestShuffled", arg0)
 	ret0, _ := ret[0].([]p2p.Peer)
 	return ret0
 }
 
-// SelectBest indicates an expected call of SelectBest.
-func (mr *MockfetcherMockRecorder) SelectBest(arg0 any) *fetcherSelectBestCall {
+// SelectBestShuffled indicates an expected call of SelectBestShuffled.
+func (mr *MockfetcherMockRecorder) SelectBestShuffled(arg0 any) *fetcherSelectBestShuffledCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectBest", reflect.TypeOf((*Mockfetcher)(nil).SelectBest), arg0)
-	return &fetcherSelectBestCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectBestShuffled", reflect.TypeOf((*Mockfetcher)(nil).SelectBestShuffled), arg0)
+	return &fetcherSelectBestShuffledCall{Call: call}
 }
 
-// fetcherSelectBestCall wrap *gomock.Call
-type fetcherSelectBestCall struct {
+// fetcherSelectBestShuffledCall wrap *gomock.Call
+type fetcherSelectBestShuffledCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *fetcherSelectBestCall) Return(arg0 []p2p.Peer) *fetcherSelectBestCall {
+func (c *fetcherSelectBestShuffledCall) Return(arg0 []p2p.Peer) *fetcherSelectBestShuffledCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *fetcherSelectBestCall) Do(f func(int) []p2p.Peer) *fetcherSelectBestCall {
+func (c *fetcherSelectBestShuffledCall) Do(f func(int) []p2p.Peer) *fetcherSelectBestShuffledCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *fetcherSelectBestCall) DoAndReturn(f func(int) []p2p.Peer) *fetcherSelectBestCall {
+func (c *fetcherSelectBestShuffledCall) DoAndReturn(f func(int) []p2p.Peer) *fetcherSelectBestShuffledCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
