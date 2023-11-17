@@ -139,18 +139,18 @@ type RelayServer struct {
 	TTL          time.Duration `mapstructure:"ttl"`
 }
 
-func (cfg *Config) allListenAddrs() []string {
-	if cfg.Listen == "" {
-		return cfg.ListenAddresses
+func (cfg *Config) listenAddrs() []string {
+	if cfg.Listen != "" {
+		return []string{cfg.Listen}
 	}
-	return append(cfg.ListenAddresses, cfg.Listen)
+	return cfg.ListenAddresses
 }
 
-func (cfg *Config) allAdvertisedAddrs() []string {
-	if cfg.AdvertiseAddress == "" {
-		return cfg.AdvertiseAddresses
+func (cfg *Config) advertisedAddrs() []string {
+	if cfg.AdvertiseAddress != "" {
+		return []string{cfg.AdvertiseAddress}
 	}
-	return append(cfg.AdvertiseAddresses, cfg.AdvertiseAddress)
+	return cfg.AdvertiseAddresses
 }
 
 func (cfg *Config) Validate() error {
@@ -163,7 +163,7 @@ func (cfg *Config) Validate() error {
 		}
 	}
 
-	for _, addrStr := range append(cfg.allAdvertisedAddrs(), cfg.allAdvertisedAddrs()...) {
+	for _, addrStr := range append(cfg.advertisedAddrs(), cfg.advertisedAddrs()...) {
 		_, err := multiaddr.NewMultiaddr(addrStr)
 		if err != nil {
 			return fmt.Errorf("address %s is not a valid multiaddr %w", addrStr, err)
@@ -275,7 +275,7 @@ func New(
 	g.direct = directMap
 	lopts := []libp2p.Option{
 		libp2p.Identity(key),
-		libp2p.ListenAddrStrings(cfg.allListenAddrs()...),
+		libp2p.ListenAddrStrings(cfg.listenAddrs()...),
 		libp2p.UserAgent("go-spacemesh"),
 		libp2p.Transport(
 			func(upgrader transport.Upgrader, rcmgr network.ResourceManager) (transport.Transport, error) {
@@ -289,14 +289,18 @@ func New(
 				return tcp.NewTCPTransport(upgrader, rcmgr, opts...)
 			},
 		),
-		libp2p.Transport(func(key crypto.PrivKey, connManager *quicreuse.ConnManager, psk pnet.PSK, gater ccmgr.ConnectionGater, rcmgr network.ResourceManager) (transport.Transport, error) {
-			return quic.NewTransport(key, connManager, psk, gater, rcmgr,
-				quic.WithCertTemplate(certTemplate),
-				quic.WithVerifyPeerCertificate(func(chain []*x509.Certificate) error {
-					err := validateTLSCertChain(chain, prologue)
-					return err
-				}))
-		}),
+		libp2p.Transport(
+			func(key crypto.PrivKey, connManager *quicreuse.ConnManager, psk pnet.PSK,
+				gater ccmgr.ConnectionGater,
+				rcmgr network.ResourceManager,
+			) (transport.Transport, error) {
+				return quic.NewTransport(key, connManager, psk, gater, rcmgr,
+					quic.WithCertTemplate(certTemplate),
+					quic.WithVerifyPeerCertificate(func(chain []*x509.Certificate) error {
+						err := validateTLSCertChain(chain, prologue)
+						return err
+					}))
+			}),
 		libp2p.Security(
 			noise.ID,
 			func(id protocol.ID, privkey crypto.PrivKey, muxers []tptu.StreamMuxer) (*noise.SessionTransport, error) {
@@ -317,9 +321,9 @@ func New(
 	if !cfg.DisableConnectionManager {
 		lopts = append(lopts, libp2p.ConnectionManager(cm))
 	}
-	if allAdvAddrs := cfg.allAdvertisedAddrs(); len(allAdvAddrs) > 0 {
+	if advAddrs := cfg.advertisedAddrs(); len(advAddrs) > 0 {
 		var addrs []multiaddr.Multiaddr
-		for _, addrStr := range allAdvAddrs {
+		for _, addrStr := range advAddrs {
 			addr, err := multiaddr.NewMultiaddr(addrStr)
 			if err != nil {
 				panic(err) // validated in config
