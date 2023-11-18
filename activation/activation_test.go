@@ -609,6 +609,85 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
+func TestBuilder_PublishActivationTx_UsesExistingChallengeOnLatePublish(t *testing.T) {
+	poetCfg := PoetConfig{
+		PhaseShift: layerDuration * 4,
+	}
+	tab := newTestBuilder(t, WithPoetConfig(poetCfg))
+	posEpoch := postGenesisEpoch
+	currLayer := (postGenesisEpoch + 1).FirstLayer().Add(5) // late for poet round start
+	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, postGenesisEpoch, nil)
+	nipostData := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
+	prevAtx := newAtx(t, tab.sig, challenge, nipostData, posEpoch.Uint32(), types.Address{})
+	SignAndFinalizeAtx(tab.sig, prevAtx)
+	vPrevAtx, err := prevAtx.Verify(0, 1)
+	require.NoError(t, err)
+	require.NoError(t, atxs.Add(tab.cdb, vPrevAtx))
+
+	publishEpoch := currLayer.GetEpoch()
+	tab.mclock.EXPECT().CurrentLayer().DoAndReturn(func() types.LayerID { return currLayer }).AnyTimes()
+	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
+		func(got types.LayerID) time.Time {
+			// time.Now() ~= currentLayer
+			genesis := time.Now().Add(-time.Duration(currLayer) * layerDuration)
+			return genesis.Add(layerDuration * time.Duration(got))
+		}).AnyTimes()
+	nonce := types.VRFPostIndex(123)
+	commitmentATX := types.RandomATXID()
+	tab.mpostClient.EXPECT().Info(gomock.Any()).Return(&types.PostInfo{
+		NodeID:        tab.sig.NodeID(),
+		CommitmentATX: commitmentATX,
+		Nonce:         &nonce,
+
+		NumUnits:      DefaultPostSetupOpts().NumUnits,
+		LabelsPerUnit: DefaultPostConfig().LabelsPerUnit,
+	}, nil).AnyTimes()
+	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, challenge *types.NIPostChallenge) (*types.NIPost, error) {
+			currLayer = currLayer.Add(1)
+			return newNIPostWithChallenge(t, challenge.Hash(), []byte("66666")), nil
+		})
+	done := make(chan struct{})
+	close(done)
+	tab.mclock.EXPECT().AwaitLayer(publishEpoch.FirstLayer()).DoAndReturn(
+		func(got types.LayerID) <-chan struct{} {
+			// advance to publish layer
+			if currLayer.Before(got) {
+				currLayer = got
+			}
+			return done
+		})
+
+	// store challenge in DB
+	ch := &types.NIPostChallenge{
+		Sequence:       vPrevAtx.Sequence + 1,
+		PrevATXID:      vPrevAtx.ID(),
+		PublishEpoch:   vPrevAtx.PublishEpoch + 1,
+		PositioningATX: vPrevAtx.ID(),
+	}
+
+	require.NoError(t, nipost.AddChallenge(tab.localDb, tab.sig.NodeID(), ch))
+
+	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
+		// publish succeeds
+		func(_ context.Context, _ string, got []byte) error {
+			var gotAtx types.ActivationTx
+			require.NoError(t, codec.Decode(got, &gotAtx))
+			gotAtx.SetReceived(time.Now().Local())
+			require.NoError(t, gotAtx.Initialize())
+			require.Equal(t, *ch, gotAtx.NIPostChallenge)
+			return nil
+		},
+	)
+
+	// create and publish ATX
+	require.NoError(t, tab.PublishActivationTx(context.Background()))
+
+	// state is cleaned up
+	_, err = nipost.Challenge(tab.localDB, tab.sig.NodeID())
+	require.ErrorIs(t, err, sql.ErrNotFound)
+}
+
 func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testing.T) {
 	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
 	posEpoch := types.EpochID(2)
