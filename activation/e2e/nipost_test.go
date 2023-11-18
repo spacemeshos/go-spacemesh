@@ -137,18 +137,17 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	initPost(t, logger.Named("manager"), mgr, opts)
 
 	epoch := layersPerEpoch * layerDuration
-	genesis := time.Now()
 	poetCfg := activation.PoetConfig{
-		PhaseShift:        3 * epoch / 5,
+		PhaseShift:        epoch / 2,
 		CycleGap:          epoch / 5,
 		GracePeriod:       epoch / 5,
-		RequestTimeout:    epoch / 10,
+		RequestTimeout:    epoch / 5,
 		RequestRetryDelay: epoch / 50,
 		MaxRequestRetries: 10,
 	}
 	poetProver := spawnPoet(
 		t,
-		WithGenesis(genesis),
+		WithGenesis(time.Now()),
 		WithEpochDuration(epoch),
 		WithPhaseShift(poetCfg.PhaseShift),
 		WithCycleGap(poetCfg.CycleGap),
@@ -157,6 +156,8 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	mclock := activation.NewMocklayerClock(ctrl)
 	mclock.EXPECT().LayerToTime(gomock.Any()).AnyTimes().DoAndReturn(
 		func(got types.LayerID) time.Time {
+			// time.Now() ~= currentLayer
+			genesis := time.Now().Add(-time.Duration(postGenesisEpoch.FirstLayer()) * layerDuration)
 			return genesis.Add(layerDuration * time.Duration(got))
 		},
 	)
@@ -272,18 +273,17 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	require.NoError(t, err)
 
 	epoch := layersPerEpoch * layerDuration
-	genesis := time.Now()
 	poetCfg := activation.PoetConfig{
-		PhaseShift:        3 * epoch / 5,
-		CycleGap:          epoch / 5,
-		GracePeriod:       epoch / 5,
+		PhaseShift:        epoch / 5,
+		CycleGap:          epoch / 10,
+		GracePeriod:       epoch / 10,
 		RequestTimeout:    epoch / 10,
-		RequestRetryDelay: epoch / 50,
+		RequestRetryDelay: epoch / 100,
 		MaxRequestRetries: 10,
 	}
 	poetProver := spawnPoet(
 		t,
-		WithGenesis(genesis),
+		WithGenesis(time.Now()),
 		WithEpochDuration(epoch),
 		WithPhaseShift(poetCfg.PhaseShift),
 		WithCycleGap(poetCfg.CycleGap),
@@ -292,6 +292,8 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	mclock := activation.NewMocklayerClock(ctrl)
 	mclock.EXPECT().LayerToTime(gomock.Any()).AnyTimes().DoAndReturn(
 		func(got types.LayerID) time.Time {
+			// time.Now() ~= currentLayer
+			genesis := time.Now().Add(-time.Duration(postGenesisEpoch.FirstLayer()) * layerDuration)
 			return genesis.Add(layerDuration * time.Duration(got))
 		},
 	)
