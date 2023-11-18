@@ -50,35 +50,31 @@ func (m migration0003) Apply(db sql.Executor) error {
 		return fmt.Errorf("add poet_proof_membership column to challenge table: %w", err)
 	}
 
-	if _, err := db.Exec(`
-		CREATE TABLE poet_registration
-		(
-		    id            CHAR(32) NOT NULL,
-		    hash          CHAR(32) NOT NULL,
-		    address       VARCHAR NOT NULL,
-		    round_id      VARCHAR NOT NULL,
-		    round_end     INT NOT NULL,
+	if _, err := db.Exec(`CREATE TABLE poet_registration (
+	    id            CHAR(32) NOT NULL,
+	    hash          CHAR(32) NOT NULL,
+	    address       VARCHAR NOT NULL,
+	    round_id      VARCHAR NOT NULL,
+	    round_end     INT NOT NULL,
 
-		    PRIMARY KEY (id, address)
-		) WITHOUT ROWID;`, nil, nil); err != nil {
+	    PRIMARY KEY (id, address)
+	) WITHOUT ROWID;`, nil, nil); err != nil {
 		return fmt.Errorf("create poet_registration table: %w", err)
 	}
 
-	if _, err := db.Exec(`
-		CREATE TABLE nipost
-		(
-			id            CHAR(32) PRIMARY KEY,
-			post_nonce    UNSIGNED INT NOT NULL,
-			post_indices  VARCHAR NOT NULL,
-			post_pow      UNSIGNED LONG INT NOT NULL,
+	if _, err := db.Exec(`CREATE TABLE nipost (
+		id            CHAR(32) PRIMARY KEY,
+		post_nonce    UNSIGNED INT NOT NULL,
+		post_indices  VARCHAR NOT NULL,
+		post_pow      UNSIGNED LONG INT NOT NULL,
 
-			num_units UNSIGNED INT NOT NULL,
-			vrf_nonce UNSIGNED LONG INT NOT NULL,
+		num_units UNSIGNED INT NOT NULL,
+		vrf_nonce UNSIGNED LONG INT NOT NULL,
 
-			poet_proof_membership VARCHAR NOT NULL,
-			poet_proof_ref        CHAR(32) NOT NULL,
-			labels_per_unit       UNSIGNED INT NOT NULL
-		) WITHOUT ROWID;`, nil, nil); err != nil {
+		poet_proof_membership VARCHAR NOT NULL,
+		poet_proof_ref        CHAR(32) NOT NULL,
+		labels_per_unit       UNSIGNED INT NOT NULL
+	) WITHOUT ROWID;`, nil, nil); err != nil {
 		return fmt.Errorf("create nipost table: %w", err)
 	}
 
