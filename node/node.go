@@ -1665,6 +1665,13 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		datastore.WithConfig(app.Config.Cache),
 		datastore.WithConsensusCache(data),
 	)
+	clients := make([]localsql.PoetClient, len(app.Config.PoETServers))
+	for i, server := range app.Config.PoETServers {
+		clients[i], err = activation.NewHTTPPoetClient(server, app.Config.POET)
+		if err != nil {
+			return fmt.Errorf("failed to create poet client: %w", err)
+		}
+	}
 	migrations, err = sql.LocalMigrations()
 	if err != nil {
 		return fmt.Errorf("failed to load local migrations: %w", err)
@@ -1673,6 +1680,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		sql.WithMigrations(migrations),
 		sql.WithMigration(localsql.New0001Migration(app.Config.SMESHING.Opts.DataDir)),
 		sql.WithMigration(localsql.New0002Migration(app.Config.SMESHING.Opts.DataDir)),
+		sql.WithMigration(localsql.New0003Migration(app.Config.SMESHING.Opts.DataDir, clients)),
 		sql.WithConnections(app.Config.DatabaseConnections),
 	)
 	if err != nil {

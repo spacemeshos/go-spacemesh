@@ -69,18 +69,16 @@ func (m migration0002) Apply(db sql.Executor) error {
 
 	// adding not null constraint to commit_atx, num_units and vrf_nonce columns is a multi-step process:
 	// 1. create new table with same schema and new constraints
-	if _, err := db.Exec(`
-		CREATE TABLE initial_post_new
-		(
-			id            CHAR(32) PRIMARY KEY,
-			post_nonce    UNSIGNED INT NOT NULL,
-			post_indices  VARCHAR NOT NULL,
-			post_pow      UNSIGNED LONG INT NOT NULL,
+	if _, err := db.Exec(`CREATE TABLE initial_post_new	(
+		id            CHAR(32) PRIMARY KEY,
+		post_nonce    UNSIGNED INT NOT NULL,
+		post_indices  VARCHAR NOT NULL,
+		post_pow      UNSIGNED LONG INT NOT NULL,
 
-			num_units     UNSIGNED INT NOT NULL,
-			commit_atx    CHAR(32) NOT NULL,
-			vrf_nonce     UNSIGNED LONG INT NOT NULL
-		);`, nil, nil); err != nil {
+		num_units     UNSIGNED INT NOT NULL,
+		commit_atx    CHAR(32) NOT NULL,
+		vrf_nonce     UNSIGNED LONG INT NOT NULL
+	);`, nil, nil); err != nil {
 		return fmt.Errorf("create initial_post_new table: %w", err)
 	}
 

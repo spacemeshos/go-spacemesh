@@ -183,17 +183,17 @@ func Test_0003Migration_Phase0_Complete(t *testing.T) {
 	)
 
 	ctrl := gomock.NewController(t)
-	poetClient1 := NewMockpoetClient(ctrl)
+	poetClient1 := NewMockPoetClient(ctrl)
 	poetClient1.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().
 		Return(types.PoetServiceID{ServiceID: []byte("service1")}, nil)
-	poetClient1.EXPECT().Address().AnyTimes().Return("http://poet1.com", nil)
+	poetClient1.EXPECT().Address().AnyTimes().Return("http://poet1.com")
 
-	poetClient2 := NewMockpoetClient(ctrl)
+	poetClient2 := NewMockPoetClient(ctrl)
 	poetClient2.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().
 		Return(types.PoetServiceID{ServiceID: []byte("service2")}, nil)
-	poetClient2.EXPECT().Address().AnyTimes().Return("http://poet2.com", nil)
+	poetClient2.EXPECT().Address().AnyTimes().Return("http://poet2.com")
 
-	err = New0003Migration(dataDir, []poetClient{poetClient1, poetClient2}).Apply(db)
+	err = New0003Migration(dataDir, []PoetClient{poetClient1, poetClient2}).Apply(db)
 	require.NoError(t, err)
 
 	// TODO(mafa): assert data in DB

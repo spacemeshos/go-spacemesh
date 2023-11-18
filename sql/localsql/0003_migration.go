@@ -14,7 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-func New0003Migration(dataDir string, poetClients []poetClient) *migration0003 {
+func New0003Migration(dataDir string, poetClients []PoetClient) *migration0003 {
 	return &migration0003{
 		dataDir:     dataDir,
 		poetClients: poetClients,
@@ -23,7 +23,7 @@ func New0003Migration(dataDir string, poetClients []poetClient) *migration0003 {
 
 type migration0003 struct {
 	dataDir     string
-	poetClients []poetClient
+	poetClients []PoetClient
 }
 
 func (migration0003) Name() string {
@@ -136,8 +136,8 @@ func (m migration0003) moveNipostStateToDb(db sql.Executor, dataDir string) erro
 		stmt.BindBytes(3, buf)
 	}
 	rows, err := db.Exec(`
-			update challenge set poet_proof_ref = ?2, poet_proof_membership = ?3
-			where id = ?1 returning id;`, enc, nil)
+		update challenge set poet_proof_ref = ?2, poet_proof_membership = ?3
+		where id = ?1 returning id;`, enc, nil)
 	if err != nil {
 		return fmt.Errorf("set poet proof ref for node id %s: %w", types.BytesToNodeID(meta.NodeId).ShortString(), err)
 	}
@@ -185,7 +185,7 @@ func (m migration0003) getAddress(serviceID types.PoetServiceID) (string, error)
 	for _, client := range m.poetClients {
 		clientId, err := client.PoetServiceID(context.Background())
 		if err == nil && bytes.Equal(serviceID.ServiceID, clientId.ServiceID) {
-			return client.Address()
+			return client.Address(), nil
 		}
 	}
 	return "", fmt.Errorf("no poet client found for service id %x", serviceID.ServiceID)
