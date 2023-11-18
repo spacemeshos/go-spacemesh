@@ -378,7 +378,6 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 		tm.logger,
 		tm.cdb,
 		signing.NewEdVerifier(),
-		nil,
 		&types.MalfeasanceGossip{MalfeasanceProof: *malProof},
 	)
 	require.NoError(t, err)
