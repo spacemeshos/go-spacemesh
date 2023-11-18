@@ -194,7 +194,7 @@ func (h Hash32) Hex() string { return util.Encode(h[:]) }
 // String implements the stringer interface and is used also by the logger when
 // doing full logging into a file.
 func (h Hash32) String() string {
-	return h.Hex()
+	return h.ShortString()
 }
 
 // ShortString returns the first 5 characters of the hash, for logging purposes.
