@@ -136,6 +136,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
 	initPost(t, logger.Named("manager"), mgr, opts)
 
+	genesis := time.Now()
 	epoch := layersPerEpoch * layerDuration
 	poetCfg := activation.PoetConfig{
 		PhaseShift:        epoch / 2,
@@ -147,7 +148,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	}
 	poetProver := spawnPoet(
 		t,
-		WithGenesis(time.Now()),
+		WithGenesis(genesis),
 		WithEpochDuration(epoch),
 		WithPhaseShift(poetCfg.PhaseShift),
 		WithCycleGap(poetCfg.CycleGap),
@@ -156,8 +157,6 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	mclock := activation.NewMocklayerClock(ctrl)
 	mclock.EXPECT().LayerToTime(gomock.Any()).AnyTimes().DoAndReturn(
 		func(got types.LayerID) time.Time {
-			// time.Now() ~= currentLayer
-			genesis := time.Now().Add(-time.Duration(postGenesisEpoch.FirstLayer()) * layerDuration)
 			return genesis.Add(layerDuration * time.Duration(got))
 		},
 	)
@@ -272,6 +271,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX)
 	require.NoError(t, err)
 
+	genesis := time.Now()
 	epoch := layersPerEpoch * layerDuration
 	poetCfg := activation.PoetConfig{
 		PhaseShift:        epoch / 5,
@@ -283,7 +283,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	}
 	poetProver := spawnPoet(
 		t,
-		WithGenesis(time.Now()),
+		WithGenesis(genesis),
 		WithEpochDuration(epoch),
 		WithPhaseShift(poetCfg.PhaseShift),
 		WithCycleGap(poetCfg.CycleGap),
@@ -292,8 +292,6 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	mclock := activation.NewMocklayerClock(ctrl)
 	mclock.EXPECT().LayerToTime(gomock.Any()).AnyTimes().DoAndReturn(
 		func(got types.LayerID) time.Time {
-			// time.Now() ~= currentLayer
-			genesis := time.Now().Add(-time.Duration(postGenesisEpoch.FirstLayer()) * layerDuration)
 			return genesis.Add(layerDuration * time.Duration(got))
 		},
 	)
