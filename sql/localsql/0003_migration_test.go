@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	gomock "go.uber.org/mock/gomock"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
@@ -139,13 +140,14 @@ func Test_0003Migration_Phase0_missing_poet_client(t *testing.T) {
 func Test_0003Migration_Phase0_Complete(t *testing.T) {
 	dataDir := t.TempDir()
 
+	endTime := time.Now()
 	state := &NIPostBuilderState{
 		Challenge: types.Hash32{1, 2, 3},
 		PoetRequests: []PoetRequest{
 			{
 				PoetRound: &types.PoetRound{
 					ID:  "101",
-					End: types.RoundEnd(time.Now()),
+					End: types.RoundEnd(endTime),
 				},
 				PoetServiceID: types.PoetServiceID{
 					ServiceID: []byte("service1"),
@@ -154,7 +156,7 @@ func Test_0003Migration_Phase0_Complete(t *testing.T) {
 			{
 				PoetRound: &types.PoetRound{
 					ID:  "102",
-					End: types.RoundEnd(time.Now()),
+					End: types.RoundEnd(endTime),
 				},
 				PoetServiceID: types.PoetServiceID{
 					ServiceID: []byte("service2"),
@@ -196,10 +198,318 @@ func Test_0003Migration_Phase0_Complete(t *testing.T) {
 	err = New0003Migration(dataDir, []PoetClient{poetClient1, poetClient2}).Apply(db)
 	require.NoError(t, err)
 
-	// TODO(mafa): assert data in DB
+	address := []string{
+		"http://poet1.com",
+		"http://poet2.com",
+	}
+	i := 0 // index for db rows
+	_, err = db.Exec("select hash, address, round_id, round_end from poet_registration where id = ?1;",
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, nodeID.Bytes())
+		},
+		func(stmt *sql.Statement) bool {
+			buf := make([]byte, stmt.ColumnLen(0))
+			stmt.ColumnBytes(0, buf)
+
+			require.Equal(t, state.Challenge.Bytes(), buf)
+			require.Equal(t, address[i], stmt.ColumnText(1))
+			require.Equal(t, state.PoetRequests[i].PoetRound.ID, stmt.ColumnText(2))
+			require.Equal(t, endTime.Unix(), stmt.ColumnInt64(3))
+			i++
+			return true
+		})
+	require.NoError(t, err)
 
 	require.NoFileExists(t, filepath.Join(dataDir, builderFilename))
 }
 
-// TODO(mafa): add tests for phase 1
-// TODO(mafa): add tests for phase 2
+func Test_0003Migration_Phase1_Complete(t *testing.T) {
+	dataDir := t.TempDir()
+
+	endTime := time.Now()
+	state := &NIPostBuilderState{
+		Challenge: types.Hash32{1, 2, 3},
+		PoetProofRef: types.PoetProofRef{
+			4, 5, 6,
+		},
+		NIPost: &types.NIPost{
+			Membership: types.MerkleProof{
+				Nodes:     []types.Hash32{types.RandomHash(), types.RandomHash()},
+				LeafIndex: 1,
+			},
+		},
+		PoetRequests: []PoetRequest{
+			{
+				PoetRound: &types.PoetRound{
+					ID:  "101",
+					End: types.RoundEnd(endTime),
+				},
+				PoetServiceID: types.PoetServiceID{
+					ServiceID: []byte("service1"),
+				},
+			},
+			{
+				PoetRound: &types.PoetRound{
+					ID:  "102",
+					End: types.RoundEnd(endTime),
+				},
+				PoetServiceID: types.PoetServiceID{
+					ServiceID: []byte("service2"),
+				},
+			},
+		},
+	}
+	require.NoError(t, saveBuilderState(dataDir, state))
+	require.FileExists(t, filepath.Join(dataDir, builderFilename))
+
+	nodeID := types.RandomNodeID()
+	nonce := uint64(1024)
+	err := initialization.SaveMetadata(dataDir, &shared.PostMetadata{
+		NodeId:   nodeID.Bytes(),
+		NumUnits: 8,
+		Nonce:    &nonce,
+	})
+	require.NoError(t, err)
+
+	migrations, err := sql.LocalMigrations()
+	require.NoError(t, err)
+	sort.Slice(migrations, func(i, j int) bool { return migrations[i].Order() < migrations[j].Order() })
+	migrations = migrations[:2]
+	db := InMemory(
+		sql.WithMigrations(migrations),
+	)
+
+	ctrl := gomock.NewController(t)
+	poetClient1 := NewMockPoetClient(ctrl)
+	poetClient1.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().
+		Return(types.PoetServiceID{ServiceID: []byte("service1")}, nil)
+	poetClient1.EXPECT().Address().AnyTimes().Return("http://poet1.com")
+
+	poetClient2 := NewMockPoetClient(ctrl)
+	poetClient2.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().
+		Return(types.PoetServiceID{ServiceID: []byte("service2")}, nil)
+	poetClient2.EXPECT().Address().AnyTimes().Return("http://poet2.com")
+
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, nodeID.Bytes())
+		stmt.BindInt64(2, int64(101))
+		stmt.BindInt64(3, int64(5))
+		stmt.BindBytes(4, types.RandomATXID().Bytes())
+		stmt.BindBytes(5, types.RandomATXID().Bytes())
+	}
+	_, err = db.Exec(`
+		insert into nipost (id, epoch, sequence, prev_atx, pos_atx)
+		values (?1, ?2, ?3, ?4, ?5);`, enc, nil,
+	)
+	require.NoError(t, err)
+
+	err = New0003Migration(dataDir, []PoetClient{poetClient1, poetClient2}).Apply(db)
+	require.NoError(t, err)
+
+	address := []string{
+		"http://poet1.com",
+		"http://poet2.com",
+	}
+	i := 0 // index for db rows
+	_, err = db.Exec("select hash, address, round_id, round_end from poet_registration where id = ?1;",
+		func(s *sql.Statement) {
+			s.BindBytes(1, nodeID.Bytes())
+		},
+		func(s *sql.Statement) bool {
+			buf := make([]byte, s.ColumnLen(0))
+			s.ColumnBytes(0, buf)
+
+			require.Equal(t, state.Challenge.Bytes(), buf)
+			require.Equal(t, address[i], s.ColumnText(1))
+			require.Equal(t, state.PoetRequests[i].PoetRound.ID, s.ColumnText(2))
+			require.Equal(t, endTime.Unix(), s.ColumnInt64(3))
+			i++
+			return true
+		})
+	require.NoError(t, err)
+
+	_, err = db.Exec("select poet_proof_ref, poet_proof_membership from challenge where id = ?1;",
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, nodeID.Bytes())
+		},
+		func(stmt *sql.Statement) bool {
+			buf := make([]byte, stmt.ColumnLen(0))
+			stmt.ColumnBytes(0, buf)
+
+			require.Equal(t, state.PoetProofRef[:], buf)
+
+			buf = make([]byte, stmt.ColumnLen(1))
+			stmt.ColumnBytes(1, buf)
+			require.Equal(t, codec.MustEncode(&state.NIPost.Membership), buf)
+			return true
+		})
+	require.NoError(t, err)
+
+	require.NoFileExists(t, filepath.Join(dataDir, builderFilename))
+}
+
+func Test_0003Migration_Phase2_Complete(t *testing.T) {
+	dataDir := t.TempDir()
+
+	endTime := time.Now()
+	poetProofRef := types.PoetProofRef{
+		4, 5, 6,
+	}
+	state := &NIPostBuilderState{
+		Challenge:    types.Hash32{1, 2, 3},
+		PoetProofRef: poetProofRef,
+		NIPost: &types.NIPost{
+			Post: &types.Post{
+				Pow:     7,
+				Indices: []byte{1, 2, 3},
+				Nonce:   4,
+			},
+			PostMetadata: &types.PostMetadata{
+				Challenge:     poetProofRef[:],
+				LabelsPerUnit: 1024,
+			},
+			Membership: types.MerkleProof{
+				Nodes:     []types.Hash32{types.RandomHash(), types.RandomHash()},
+				LeafIndex: 1,
+			},
+		},
+		PoetRequests: []PoetRequest{
+			{
+				PoetRound: &types.PoetRound{
+					ID:  "101",
+					End: types.RoundEnd(endTime),
+				},
+				PoetServiceID: types.PoetServiceID{
+					ServiceID: []byte("service1"),
+				},
+			},
+			{
+				PoetRound: &types.PoetRound{
+					ID:  "102",
+					End: types.RoundEnd(endTime),
+				},
+				PoetServiceID: types.PoetServiceID{
+					ServiceID: []byte("service2"),
+				},
+			},
+		},
+	}
+	require.NoError(t, saveBuilderState(dataDir, state))
+	require.FileExists(t, filepath.Join(dataDir, builderFilename))
+
+	nodeID := types.RandomNodeID()
+	nonce := uint64(1024)
+	numUnits := uint32(8)
+	err := initialization.SaveMetadata(dataDir, &shared.PostMetadata{
+		NodeId:   nodeID.Bytes(),
+		NumUnits: numUnits,
+		Nonce:    &nonce,
+	})
+	require.NoError(t, err)
+
+	migrations, err := sql.LocalMigrations()
+	require.NoError(t, err)
+	sort.Slice(migrations, func(i, j int) bool { return migrations[i].Order() < migrations[j].Order() })
+	migrations = migrations[:2]
+	db := InMemory(
+		sql.WithMigrations(migrations),
+	)
+
+	ctrl := gomock.NewController(t)
+	poetClient1 := NewMockPoetClient(ctrl)
+	poetClient1.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().
+		Return(types.PoetServiceID{ServiceID: []byte("service1")}, nil)
+	poetClient1.EXPECT().Address().AnyTimes().Return("http://poet1.com")
+
+	poetClient2 := NewMockPoetClient(ctrl)
+	poetClient2.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().
+		Return(types.PoetServiceID{ServiceID: []byte("service2")}, nil)
+	poetClient2.EXPECT().Address().AnyTimes().Return("http://poet2.com")
+
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, nodeID.Bytes())
+		stmt.BindInt64(2, int64(101))
+		stmt.BindInt64(3, int64(5))
+		stmt.BindBytes(4, types.RandomATXID().Bytes())
+		stmt.BindBytes(5, types.RandomATXID().Bytes())
+	}
+	_, err = db.Exec(`
+		insert into nipost (id, epoch, sequence, prev_atx, pos_atx)
+		values (?1, ?2, ?3, ?4, ?5);`, enc, nil,
+	)
+	require.NoError(t, err)
+
+	err = New0003Migration(dataDir, []PoetClient{poetClient1, poetClient2}).Apply(db)
+	require.NoError(t, err)
+
+	address := []string{
+		"http://poet1.com",
+		"http://poet2.com",
+	}
+	i := 0 // index for db rows
+	_, err = db.Exec("select hash, address, round_id, round_end from poet_registration where id = ?1;",
+		func(s *sql.Statement) {
+			s.BindBytes(1, nodeID.Bytes())
+		},
+		func(s *sql.Statement) bool {
+			buf := make([]byte, s.ColumnLen(0))
+			s.ColumnBytes(0, buf)
+
+			require.Equal(t, state.Challenge.Bytes(), buf)
+			require.Equal(t, address[i], s.ColumnText(1))
+			require.Equal(t, state.PoetRequests[i].PoetRound.ID, s.ColumnText(2))
+			require.Equal(t, endTime.Unix(), s.ColumnInt64(3))
+			i++
+			return true
+		})
+	require.NoError(t, err)
+
+	_, err = db.Exec("select poet_proof_ref, poet_proof_membership from challenge where id = ?1;",
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, nodeID.Bytes())
+		},
+		func(stmt *sql.Statement) bool {
+			buf := make([]byte, stmt.ColumnLen(0))
+			stmt.ColumnBytes(0, buf)
+
+			require.Equal(t, state.PoetProofRef[:], buf)
+
+			buf = make([]byte, stmt.ColumnLen(1))
+			stmt.ColumnBytes(1, buf)
+			require.Equal(t, codec.MustEncode(&state.NIPost.Membership), buf)
+			return true
+		})
+	require.NoError(t, err)
+
+	_, err = db.Exec(`
+	select post_nonce, post_indices, post_pow, num_units, vrf_nonce,
+		poet_proof_membership, poet_proof_ref, labels_per_unit
+	from nipost where id = ?1`, func(stmt *sql.Statement) {
+		stmt.BindBytes(1, nodeID.Bytes())
+	}, func(stmt *sql.Statement) bool {
+		require.Equal(t, state.NIPost.Post.Nonce, uint32(stmt.ColumnInt64(0)))
+
+		buf := make([]byte, stmt.ColumnLen(1))
+		stmt.ColumnBytes(1, buf)
+
+		require.Equal(t, state.NIPost.Post.Indices, buf)
+		require.Equal(t, state.NIPost.Post.Pow, uint64(stmt.ColumnInt64(2)))
+		require.Equal(t, numUnits, uint32(stmt.ColumnInt64(3)))
+		require.Equal(t, nonce, uint64(stmt.ColumnInt64(4)))
+
+		buf = make([]byte, stmt.ColumnLen(5))
+		stmt.ColumnBytes(5, buf)
+
+		require.Equal(t, codec.MustEncode(&state.NIPost.Membership), buf)
+
+		buf = make([]byte, stmt.ColumnLen(6))
+		stmt.ColumnBytes(6, buf)
+
+		require.Equal(t, state.PoetProofRef[:], buf)
+		require.Equal(t, state.NIPost.PostMetadata.LabelsPerUnit, uint64(stmt.ColumnInt64(7)))
+		return true
+	})
+	require.NoError(t, err)
+
+	require.NoFileExists(t, filepath.Join(dataDir, builderFilename))
+}
