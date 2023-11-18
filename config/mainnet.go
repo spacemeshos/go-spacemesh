@@ -118,7 +118,7 @@ func MainnetConfig() Config {
 		Certificate: blocks.CertConfig{
 			// NOTE(dshulyak) this is intentional. we increased committee size with hare3 upgrade
 			// but certifier continues to use 200 committee size.
-			// this will be upgraded in future with schedulled upgrade.
+			// this will be upgraded in future with scheduled upgrade.
 			CommitteeSize: 200,
 		},
 		Beacon: beacon.Config{

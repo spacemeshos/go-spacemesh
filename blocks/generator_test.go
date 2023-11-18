@@ -56,17 +56,20 @@ type testGenerator struct {
 	mockFetch  *smocks.MockProposalFetcher
 	mockCert   *mocks.Mockcertifier
 	mockPatrol *mocks.MocklayerPatrol
+	hareCh     chan hare3.ConsensusOutput
 }
 
 func createTestGenerator(t *testing.T) *testGenerator {
 	types.SetLayersPerEpoch(3)
 	ctrl := gomock.NewController(t)
+	ch := make(chan hare3.ConsensusOutput, 100)
 	tg := &testGenerator{
 		mockMesh:   mocks.NewMockmeshProvider(ctrl),
 		mockExec:   mocks.NewMockexecutor(ctrl),
 		mockFetch:  smocks.NewMockProposalFetcher(ctrl),
 		mockCert:   mocks.NewMockcertifier(ctrl),
 		mockPatrol: mocks.NewMocklayerPatrol(ctrl),
+		hareCh:     ch,
 	}
 	tg.mockMesh.EXPECT().ProcessedLayer().Return(types.LayerID(1)).AnyTimes()
 	lg := logtest.New(t)
@@ -74,7 +77,7 @@ func createTestGenerator(t *testing.T) *testGenerator {
 	data := atxsdata.New()
 	tg.Generator = NewGenerator(db, data, tg.mockExec, tg.mockMesh, tg.mockFetch, tg.mockCert, tg.mockPatrol,
 		WithGeneratorLogger(lg),
-		WithHareOutputChan(make(chan hare3.ConsensusOutput, 100)),
+		WithHareOutputChan(ch),
 		WithConfig(testConfig()))
 	return tg
 }

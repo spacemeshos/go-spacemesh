@@ -37,7 +37,7 @@ type Generator struct {
 	cert     certifier
 	patrol   layerPatrol
 
-	hareCh           chan hare3.ConsensusOutput
+	hareCh           <-chan hare3.ConsensusOutput
 	optimisticOutput map[types.LayerID]*proposalMetadata
 }
 
@@ -74,7 +74,7 @@ func WithGeneratorLogger(logger log.Log) GeneratorOpt {
 }
 
 // WithHareOutputChan sets the chan to listen to hare output.
-func WithHareOutputChan(ch chan hare3.ConsensusOutput) GeneratorOpt {
+func WithHareOutputChan(ch <-chan hare3.ConsensusOutput) GeneratorOpt {
 	return func(g *Generator) {
 		g.hareCh = ch
 	}
