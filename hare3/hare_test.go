@@ -14,6 +14,7 @@ import (
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zapcore"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -116,7 +117,8 @@ type node struct {
 	vrfsigner  *signing.VRFSigner
 	atx        *types.VerifiedActivationTx
 	oracle     *eligibility.Oracle
-	db         *datastore.CachedDB
+	db         *sql.Database
+	atxsdata   *atxsdata.Data
 
 	ctrl       *gomock.Controller
 	mpublisher *pmocks.MockPublishSubsciber
@@ -146,7 +148,8 @@ func (n *node) reuseSigner(signer *signing.EdSigner) *node {
 }
 
 func (n *node) withDb() *node {
-	n.db = datastore.NewCachedDB(sql.InMemory(), log.NewNop())
+	n.db = sql.InMemory()
+	n.atxsdata = atxsdata.New()
 	return n
 }
 
@@ -190,7 +193,7 @@ func (n *node) withOracle() *node {
 	}).AnyTimes()
 	n.oracle = eligibility.New(
 		beaconget,
-		n.db,
+		datastore.NewCachedDB(n.db, log.NewNop()),
 		signing.NewVRFVerifier(),
 		layersPerEpoch,
 		config.DefaultConfig(),
@@ -215,7 +218,7 @@ func (n *node) withHare() *node {
 	tracer := newTestTracer(n.t)
 	n.tracer = tracer
 	n.patrol = layerpatrol.New()
-	n.hare = New(n.nclock, n.mpublisher, n.db, signing.NewEdVerifier(), n.oracle, n.msyncer, n.patrol,
+	n.hare = New(n.nclock, n.mpublisher, n.db, n.atxsdata, signing.NewEdVerifier(), n.oracle, n.msyncer, n.patrol,
 		WithConfig(n.t.cfg),
 		WithLogger(logger.Zap()),
 		WithWallclock(n.clock),
@@ -732,8 +735,7 @@ func TestHandler(t *testing.T) {
 		require.NoError(t, n.hare.Handler(context.Background(), "", codec.MustEncode(msg1)))
 		require.NoError(t, n.hare.Handler(context.Background(), "", codec.MustEncode(msg2)))
 
-		malicious, err := n.db.IsMalicious(n.signer.NodeID())
-		require.NoError(t, err)
+		malicious := n.atxsdata.IsMalicious(n.signer.NodeID())
 		require.True(t, malicious)
 
 		require.ErrorContains(t,
@@ -963,8 +965,18 @@ func TestProposals(t *testing.T) {
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
-			db := datastore.NewCachedDB(sql.InMemory(), log.NewNop())
-			hare := New(nil, nil, db, nil, nil, nil, layerpatrol.New(), WithLogger(logtest.New(t).Zap()))
+			db := sql.InMemory()
+			hare := New(
+				nil,
+				nil,
+				db,
+				atxsdata.New(),
+				nil,
+				nil,
+				nil,
+				layerpatrol.New(),
+				WithLogger(logtest.New(t).Zap()),
+			)
 			for _, atx := range tc.atxs {
 				require.NoError(t, atxs.Add(db, &atx))
 			}

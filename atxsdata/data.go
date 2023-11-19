@@ -158,6 +158,13 @@ func (d *Data) Get(epoch types.EpochID, atx types.ATXID) *ATX {
 	return data
 }
 
+func (d *Data) IsMalicious(id types.NodeID) bool {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	_, exists := d.malicious[id]
+	return exists
+}
+
 // WeightForSet computes total weight of atxs in the set and returned array with
 // atxs in the set that weren't used.
 func (d *Data) WeightForSet(epoch types.EpochID, set []types.ATXID) (uint64, []bool) {
