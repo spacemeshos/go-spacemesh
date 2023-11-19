@@ -590,6 +590,8 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		// since we are testing single-node transaction service, we don't need the syncer to run
 		app.Config.Sync.Interval = 1000000 * time.Second
 		app.Config.LayerDuration = 2 * time.Second
+		app.Config.HARE3.PreroundDelay = 100 * time.Millisecond
+		app.Config.HARE3.RoundDuration = 100 * time.Millisecond
 
 		app.Config.Genesis = &config.GenesisConfig{
 			GenesisTime: time.Now().Add(20 * time.Second).Format(time.RFC3339),
@@ -686,33 +688,6 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 
 	// Wait for it to stop
 	wg.Wait()
-}
-
-func TestInitialize_BadTortoiseParams(t *testing.T) {
-	conf := config.DefaultConfig()
-	conf.DataDirParent = t.TempDir()
-	conf.FileLock = filepath.Join(t.TempDir(), "LOCK")
-	app := New(WithLog(logtest.New(t)), WithConfig(&conf))
-	require.NoError(t, app.Initialize())
-	app.Cleanup(context.Background())
-
-	conf = config.DefaultTestConfig()
-	conf.DataDirParent = t.TempDir()
-	conf.FileLock = filepath.Join(t.TempDir(), "LOCK")
-	app = New(WithLog(logtest.New(t)), WithConfig(&conf))
-	require.NoError(t, app.Initialize())
-	app.Cleanup(context.Background())
-
-	tconf := getTestDefaultConfig(t)
-	tconf.DataDirParent = t.TempDir()
-	app = New(WithLog(logtest.New(t)), WithConfig(tconf))
-	require.NoError(t, app.Initialize())
-	app.Cleanup(context.Background())
-
-	conf.Tortoise.Zdist = 5
-	app = New(WithLog(logtest.New(t)), WithConfig(&conf))
-	err := app.Initialize()
-	require.EqualError(t, err, "incompatible tortoise hare params")
 }
 
 func TestConfig_Preset(t *testing.T) {
@@ -1131,6 +1106,8 @@ func TestAdminEvents(t *testing.T) {
 	cfg.SMESHING.Opts.DataDir = cfg.DataDirParent
 	cfg.SMESHING.Opts.Scrypt.N = 2
 	cfg.POSTService.PostServiceCmd = activation.DefaultTestPostServiceConfig().PostServiceCmd
+	cfg.HARE3.PreroundDelay = 100 * time.Millisecond
+	cfg.HARE3.RoundDuration = 1 * time.Millisecond
 
 	cfg.Genesis.GenesisTime = time.Now().Add(5 * time.Second).Format(time.RFC3339)
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
@@ -1220,12 +1197,6 @@ func getTestDefaultConfig(tb testing.TB) *config.Config {
 	cfg.SMESHING.Start = true
 	cfg.SMESHING.Opts.NumUnits = cfg.POST.MinNumUnits + 1
 	cfg.SMESHING.Opts.ProviderID.SetUint32(initialization.CPUProviderID())
-
-	// note: these need to be set sufficiently low enough that turbohare finishes well before the LayerDurationSec
-	cfg.HARE.RoundDuration = 2
-	cfg.HARE.WakeupDelta = 1
-	cfg.HARE.N = 5
-	cfg.HARE.ExpectedLeaders = 5
 
 	cfg.HARE3.RoundDuration = 2
 	cfg.HARE3.PreroundDelay = 1

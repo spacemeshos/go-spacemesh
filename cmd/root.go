@@ -159,23 +159,6 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(&cfg.API.JSONListener, "grpc-json-listener",
 		cfg.API.JSONListener, "(Optional) endpoint to expose public grpc services via HTTP/JSON.")
 
-	/**======================== Hare Flags ========================== **/
-
-	// N determines the size of the hare committee
-	cmd.PersistentFlags().IntVar(&cfg.HARE.N, "hare-committee-size",
-		cfg.HARE.N, "Size of Hare committee")
-	// RoundDuration determines the duration of a round in the Hare protocol
-	cmd.PersistentFlags().DurationVar(&cfg.HARE.RoundDuration, "hare-round-duration",
-		cfg.HARE.RoundDuration, "Duration of round in the Hare protocol")
-	cmd.PersistentFlags().DurationVar(&cfg.HARE.WakeupDelta, "hare-wakeup-delta",
-		cfg.HARE.WakeupDelta, "Wakeup delta after tick for hare protocol")
-	cmd.PersistentFlags().IntVar(&cfg.HARE.ExpectedLeaders, "hare-exp-leaders",
-		cfg.HARE.ExpectedLeaders, "The expected number of leaders in the hare protocol")
-	cmd.PersistentFlags().IntVar(&cfg.HARE.LimitIterations, "hare-limit-iterations",
-		cfg.HARE.LimitIterations, "The limit of the number of iteration per consensus process")
-	cmd.PersistentFlags().IntVar(&cfg.HARE.LimitConcurrent, "hare-limit-concurrent",
-		cfg.HARE.LimitConcurrent, "The number of consensus processes running concurrently")
-
 	/**======================== Hare Eligibility Oracle Flags ========================== **/
 
 	cmd.PersistentFlags().Uint32Var(&cfg.HareEligibility.ConfidenceParam, "eligibility-confidence-param",

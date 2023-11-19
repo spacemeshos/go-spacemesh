@@ -983,7 +983,6 @@ func TestHandler_ProcessAtx(t *testing.T) {
 				atxHdlr.log,
 				atxHdlr.cdb,
 				atxHdlr.edVerifier,
-				nil,
 				&got,
 			)
 			require.NoError(t, err)
