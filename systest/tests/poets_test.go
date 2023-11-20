@@ -124,6 +124,7 @@ func testPoetDies(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 }
 
 func TestNodesUsingDifferentPoets(t *testing.T) {
+	t.Parallel()
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))
 	if tctx.PoetSize < 2 {
 		t.Skip("Skipping test for using different poets - test configured with less then 2 poets")
@@ -211,6 +212,7 @@ func TestNodesUsingDifferentPoets(t *testing.T) {
 // - supporting certificates
 // TODO: When PoW support is removed, convert this test to verify only the cert path.
 func TestRegisteringInPoetWithPowAndCert(t *testing.T) {
+	t.Parallel()
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))
 	tctx.PoetSize = 2
 
