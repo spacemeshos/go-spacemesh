@@ -19,7 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
-	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
+	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
@@ -112,7 +112,7 @@ func MainnetConfig() Config {
 			},
 		},
 		HARE3: hare3conf,
-		HareEligibility: eligConfig.Config{
+		HareEligibility: eligibility.Config{
 			ConfidenceParam: 200,
 		},
 		Certificate: blocks.CertConfig{

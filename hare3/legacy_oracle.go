@@ -11,10 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-type oracle interface {
-	Validate(context.Context, types.LayerID, uint32, int, types.NodeID, types.VrfSignature, uint16) (bool, error)
-	CalcEligibility(context.Context, types.LayerID, uint32, int, types.NodeID, types.VrfSignature) (uint16, error)
-}
+type oracle = eligibility.Rolacle
 
 type legacyOracle struct {
 	log    *zap.Logger
@@ -22,7 +19,7 @@ type legacyOracle struct {
 	config Config
 }
 
-func (lg *legacyOracle) validate(msg *Message) grade {
+func (lg *legacyOracle) validate(beacon types.Beacon, msg *Message) grade {
 	if msg.Eligibility.Count == 0 {
 		return grade0
 	}
@@ -30,9 +27,16 @@ func (lg *legacyOracle) validate(msg *Message) grade {
 	if msg.Round == propose {
 		committee = int(lg.config.Leaders)
 	}
-	valid, err := lg.oracle.Validate(context.Background(),
-		msg.Layer, msg.Absolute(), committee, msg.Sender,
-		msg.Eligibility.Proof, msg.Eligibility.Count)
+	valid, err := lg.oracle.Validate(
+		context.Background(),
+		beacon,
+		msg.Layer,
+		msg.Absolute(),
+		committee,
+		msg.Sender,
+		msg.Eligibility.Proof,
+		msg.Eligibility.Count,
+	)
 	if err != nil {
 		lg.log.Warn("failed proof validation", zap.Error(err))
 		return grade0
@@ -49,12 +53,20 @@ func (lg *legacyOracle) active(
 	layer types.LayerID,
 	ir IterRound,
 ) *types.HareEligibility {
-	vrf := eligibility.GenVRF(context.Background(), signer.VRFSigner(), beacon, layer, ir.Absolute())
+	vrf := eligibility.GenVRF(signer.VRFSigner(), beacon, layer, ir.Absolute())
 	committee := int(lg.config.Committee)
 	if ir.Round == propose {
 		committee = int(lg.config.Leaders)
 	}
-	count, err := lg.oracle.CalcEligibility(context.Background(), layer, ir.Absolute(), committee, signer.NodeID(), vrf)
+	count, err := lg.oracle.CalcEligibility(
+		context.Background(),
+		beacon,
+		layer,
+		ir.Absolute(),
+		committee,
+		signer.NodeID(),
+		vrf,
+	)
 	if err != nil {
 		if !errors.Is(err, eligibility.ErrNotActive) {
 			lg.log.Error("failed to compute eligibilities", zap.Error(err))

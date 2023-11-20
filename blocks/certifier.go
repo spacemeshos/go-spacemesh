@@ -249,9 +249,10 @@ func (c *Certifier) certifySingleSigner(
 	bid types.BlockID,
 	beacon types.Beacon,
 ) error {
-	proof := eligibility.GenVRF(context.Background(), s.VRFSigner(), beacon, lid, eligibility.CertifyRound)
+	proof := eligibility.GenVRF(s.VRFSigner(), beacon, lid, eligibility.CertifyRound)
 	eligibilityCount, err := c.oracle.CalcEligibility(
 		ctx,
+		beacon,
 		lid,
 		eligibility.CertifyRound,
 		c.cfg.CommitteeSize,
@@ -303,7 +304,7 @@ func (c *Certifier) NumCached() int {
 func (c *Certifier) HandleSyncedCertificate(ctx context.Context, lid types.LayerID, cert *types.Certificate) error {
 	logger := c.logger.WithContext(ctx).WithFields(lid, cert.BlockID)
 	logger.Debug("processing synced certificate")
-	if err := c.validateCert(ctx, logger, cert); err != nil {
+	if err := c.validateCert(ctx, logger, lid, cert); err != nil {
 		return err
 	}
 
@@ -315,10 +316,19 @@ func (c *Certifier) HandleSyncedCertificate(ctx context.Context, lid types.Layer
 	return nil
 }
 
-func (c *Certifier) validateCert(ctx context.Context, logger log.Log, cert *types.Certificate) error {
+func (c *Certifier) validateCert(
+	ctx context.Context,
+	logger log.Log,
+	lid types.LayerID,
+	cert *types.Certificate,
+) error {
 	eligibilityCnt := uint16(0)
+	beacon, err := c.beacon.GetBeacon(lid.GetEpoch())
+	if err != nil {
+		return fmt.Errorf("missing beacon %v", err)
+	}
 	for _, msg := range cert.Signatures {
-		if err := c.validate(ctx, logger, msg); err != nil {
+		if err := c.validate(ctx, logger, beacon, msg); err != nil {
 			continue
 		}
 		eligibilityCnt += msg.EligibilityCnt
@@ -379,7 +389,8 @@ func (c *Certifier) handleCertifyMessage(ctx context.Context, _ p2p.Peer, data [
 	bid := msg.BlockID
 	logger = logger.WithFields(lid, bid)
 
-	if _, err := c.beacon.GetBeacon(lid.GetEpoch()); err != nil {
+	beacon, err := c.beacon.GetBeacon(lid.GetEpoch())
+	if err != nil {
 		return errBeaconNotAvailable
 	}
 
@@ -393,7 +404,7 @@ func (c *Certifier) handleCertifyMessage(ctx context.Context, _ p2p.Peer, data [
 		return nil
 	}
 
-	if err := c.validate(ctx, logger, msg); err != nil {
+	if err := c.validate(ctx, logger, beacon, msg); err != nil {
 		return err
 	}
 
@@ -403,12 +414,13 @@ func (c *Certifier) handleCertifyMessage(ctx context.Context, _ p2p.Peer, data [
 	return nil
 }
 
-func (c *Certifier) validate(ctx context.Context, logger log.Log, msg types.CertifyMessage) error {
+func (c *Certifier) validate(ctx context.Context, logger log.Log, beacon types.Beacon, msg types.CertifyMessage) error {
 	if !c.edVerifier.Verify(signing.HARE, msg.SmesherID, msg.Bytes(), msg.Signature) {
 		return fmt.Errorf("%w: failed to verify signature", errMalformedData)
 	}
 	valid, err := c.oracle.Validate(
 		ctx,
+		beacon,
 		msg.LayerID,
 		eligibility.CertifyRound,
 		c.cfg.CommitteeSize,
@@ -504,7 +516,7 @@ func (c *Certifier) checkAndSave(
 			invalid = append(invalid, old.Block)
 			continue
 		}
-		if err = c.validateCert(ctx, logger, old.Cert); err == nil {
+		if err = c.validateCert(ctx, logger, lid, old.Cert); err == nil {
 			logger.With().Warning("old cert still valid", log.Stringer("old_cert", old.Block))
 			valid = append(valid, old.Block)
 		} else {

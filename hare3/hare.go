@@ -191,6 +191,7 @@ type Hare struct {
 	mu       sync.Mutex
 	signers  map[string]*signing.EdSigner
 	sessions map[types.LayerID]*protocol
+	beacons  map[types.LayerID]types.Beacon
 
 	// options
 	config    Config
@@ -269,6 +270,7 @@ func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 	h.tracer.OnMessageReceived(msg)
 	h.mu.Lock()
 	session, registered := h.sessions[msg.Layer]
+	beacon := h.beacons[msg.Layer]
 	h.mu.Unlock()
 	if !registered {
 		notRegisteredError.Inc()
@@ -284,7 +286,7 @@ func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 		return fmt.Errorf("database error %s", err.Error())
 	}
 	start := time.Now()
-	g := h.oracle.validate(msg)
+	g := h.oracle.validate(beacon, msg)
 	oracleLatency.Observe(time.Since(start).Seconds())
 	if g == grade0 {
 		oracleError.Inc()
@@ -347,6 +349,7 @@ func (h *Hare) onLayer(layer types.LayerID) {
 		proto:   newProtocol(h.config.Committee/2 + 1),
 	}
 	h.sessions[layer] = s.proto
+	h.beacons[layer] = beacon
 	h.mu.Unlock()
 
 	sessionStart.Inc()

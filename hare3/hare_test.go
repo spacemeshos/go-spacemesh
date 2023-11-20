@@ -14,11 +14,11 @@ import (
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zapcore"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
-	"github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -117,6 +117,7 @@ type node struct {
 	atx        *types.VerifiedActivationTx
 	oracle     *eligibility.Oracle
 	db         *datastore.CachedDB
+	atxsdata   *atxsdata.Data
 
 	ctrl       *gomock.Controller
 	mpublisher *pmocks.MockPublishSubsciber
@@ -184,16 +185,12 @@ func (n *node) withSyncer() *node {
 }
 
 func (n *node) withOracle() *node {
-	beaconget := smocks.NewMockBeaconGetter(n.ctrl)
-	beaconget.EXPECT().GetBeacon(gomock.Any()).DoAndReturn(func(epoch types.EpochID) (types.Beacon, error) {
-		return beacons.Get(n.db, epoch)
-	}).AnyTimes()
 	n.oracle = eligibility.New(
-		beaconget,
-		n.db,
+		n.db.Database,
+		n.atxsdata,
 		signing.NewVRFVerifier(),
 		layersPerEpoch,
-		config.DefaultConfig(),
+		eligibility.DefaultConfig(),
 		log.NewNop(),
 	)
 	return n
@@ -420,6 +417,16 @@ func (cl *lockstepCluster) setup() {
 			if other.atx == nil {
 				continue
 			}
+			n.atxsdata.Add(
+				other.atx.TargetEpoch(),
+				other.atx.SmesherID,
+				other.atx.ID(),
+				other.atx.GetWeight(),
+				other.atx.TickHeight(),
+				other.atx.BaseTickHeight(),
+				*other.atx.VRFNonce,
+				false,
+			)
 			require.NoError(cl.t, atxs.Add(n.db, other.atx))
 		}
 		n.oracle.UpdateActiveSet(cl.t.genesis.GetEpoch()+1, active)

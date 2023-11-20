@@ -20,7 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
-	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
+	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
@@ -52,7 +52,7 @@ type Config struct {
 	P2P             p2p.Config                      `mapstructure:"p2p"`
 	API             grpcserver.Config               `mapstructure:"api"`
 	HARE3           hare3.Config                    `mapstructure:"hare3"`
-	HareEligibility eligConfig.Config               `mapstructure:"hare-eligibility"`
+	HareEligibility eligibility.Config              `mapstructure:"hare-eligibility"`
 	Certificate     blocks.CertConfig               `mapstructure:"certificate"`
 	Beacon          beacon.Config                   `mapstructure:"beacon"`
 	TIME            timeConfig.TimeConfig           `mapstructure:"time"`
@@ -152,7 +152,7 @@ func DefaultConfig() Config {
 		P2P:             p2p.DefaultConfig(),
 		API:             grpcserver.DefaultConfig(),
 		HARE3:           hare3.DefaultConfig(),
-		HareEligibility: eligConfig.DefaultConfig(),
+		HareEligibility: eligibility.DefaultConfig(),
 		Beacon:          beacon.DefaultConfig(),
 		TIME:            timeConfig.DefaultConfig(),
 		VM:              vm.DefaultConfig(),
