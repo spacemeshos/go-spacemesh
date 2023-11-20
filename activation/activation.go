@@ -536,6 +536,23 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 	case <-b.syncer.RegisterForATXSynced():
 	}
 	current := b.layerClock.CurrentLayer().GetEpoch()
+
+	challenge, err := nipost.Challenge(b.localDB, b.signer.NodeID())
+	switch {
+	case errors.Is(err, sql.ErrNotFound):
+		// build new challenge
+	case err != nil:
+		return nil, fmt.Errorf("get nipost challenge: %w", err)
+	case challenge.PublishEpoch < current:
+		// challenge is stale
+		if err := nipost.RemoveChallenge(b.localDB, b.signer.NodeID()); err != nil {
+			return nil, fmt.Errorf("remove stale nipost challenge: %w", err)
+		}
+	default:
+		// challenge is fresh
+		return challenge, nil
+	}
+
 	prev, err := b.cdb.GetLastAtx(b.signer.NodeID())
 	switch {
 	case err == nil:
@@ -571,22 +588,6 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 	posAtx, err := b.GetPositioningAtx()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get positioning ATX: %w", err)
-	}
-
-	challenge, err := nipost.Challenge(b.localDB, b.signer.NodeID())
-	switch {
-	case errors.Is(err, sql.ErrNotFound):
-		// build new challenge
-	case err != nil:
-		return nil, fmt.Errorf("get nipost challenge: %w", err)
-	case challenge.PublishEpoch < current:
-		// challenge is stale
-		if err := nipost.RemoveChallenge(b.localDB, b.signer.NodeID()); err != nil {
-			return nil, fmt.Errorf("remove stale nipost challenge: %w", err)
-		}
-	default:
-		// challenge is fresh
-		return challenge, nil
 	}
 
 	prevAtx, err := b.cdb.GetLastAtx(b.signer.NodeID())

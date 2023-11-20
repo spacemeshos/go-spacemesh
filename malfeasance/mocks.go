@@ -9,72 +9,12 @@
 package malfeasance
 
 import (
-	context "context"
 	reflect "reflect"
 
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	signing "github.com/spacemeshos/go-spacemesh/signing"
 	gomock "go.uber.org/mock/gomock"
 )
-
-// MockconsensusProtocol is a mock of consensusProtocol interface.
-type MockconsensusProtocol struct {
-	ctrl     *gomock.Controller
-	recorder *MockconsensusProtocolMockRecorder
-}
-
-// MockconsensusProtocolMockRecorder is the mock recorder for MockconsensusProtocol.
-type MockconsensusProtocolMockRecorder struct {
-	mock *MockconsensusProtocol
-}
-
-// NewMockconsensusProtocol creates a new mock instance.
-func NewMockconsensusProtocol(ctrl *gomock.Controller) *MockconsensusProtocol {
-	mock := &MockconsensusProtocol{ctrl: ctrl}
-	mock.recorder = &MockconsensusProtocolMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockconsensusProtocol) EXPECT() *MockconsensusProtocolMockRecorder {
-	return m.recorder
-}
-
-// HandleEligibility mocks base method.
-func (m *MockconsensusProtocol) HandleEligibility(arg0 context.Context, arg1 *types.HareEligibilityGossip) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "HandleEligibility", arg0, arg1)
-}
-
-// HandleEligibility indicates an expected call of HandleEligibility.
-func (mr *MockconsensusProtocolMockRecorder) HandleEligibility(arg0, arg1 any) *consensusProtocolHandleEligibilityCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleEligibility", reflect.TypeOf((*MockconsensusProtocol)(nil).HandleEligibility), arg0, arg1)
-	return &consensusProtocolHandleEligibilityCall{Call: call}
-}
-
-// consensusProtocolHandleEligibilityCall wrap *gomock.Call
-type consensusProtocolHandleEligibilityCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *consensusProtocolHandleEligibilityCall) Return() *consensusProtocolHandleEligibilityCall {
-	c.Call = c.Call.Return()
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *consensusProtocolHandleEligibilityCall) Do(f func(context.Context, *types.HareEligibilityGossip)) *consensusProtocolHandleEligibilityCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *consensusProtocolHandleEligibilityCall) DoAndReturn(f func(context.Context, *types.HareEligibilityGossip)) *consensusProtocolHandleEligibilityCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
 
 // MockSigVerifier is a mock of SigVerifier interface.
 type MockSigVerifier struct {

@@ -49,14 +49,12 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	trt := malfeasance.NewMocktortoise(ctrl)
-	mcp := malfeasance.NewMockconsensusProtocol(ctrl)
 
 	h := malfeasance.NewHandler(
 		datastore.NewCachedDB(db, lg),
 		lg,
 		"self",
 		types.EmptyNodeID,
-		mcp,
 		signing.NewEdVerifier(),
 		trt,
 	)
@@ -263,14 +261,12 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 	lg := logtest.New(t)
 	ctrl := gomock.NewController(t)
 	trt := malfeasance.NewMocktortoise(ctrl)
-	mcp := malfeasance.NewMockconsensusProtocol(ctrl)
 
 	h := malfeasance.NewHandler(
 		datastore.NewCachedDB(db, lg),
 		lg,
 		"self",
 		types.EmptyNodeID,
-		mcp,
 		signing.NewEdVerifier(),
 		trt,
 	)
@@ -484,14 +480,12 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 	lg := logtest.New(t)
 	ctrl := gomock.NewController(t)
 	trt := malfeasance.NewMocktortoise(ctrl)
-	mcp := malfeasance.NewMockconsensusProtocol(ctrl)
 
 	h := malfeasance.NewHandler(
 		datastore.NewCachedDB(db, lg),
 		lg,
 		"self",
 		types.EmptyNodeID,
-		mcp,
 		signing.NewEdVerifier(),
 		trt,
 	)
@@ -720,14 +714,12 @@ func TestHandler_HandleMalfeasanceProof_validateHare(t *testing.T) {
 	lg := logtest.New(t)
 	ctrl := gomock.NewController(t)
 	trt := malfeasance.NewMocktortoise(ctrl)
-	mcp := malfeasance.NewMockconsensusProtocol(ctrl)
 
 	h := malfeasance.NewHandler(
 		datastore.NewCachedDB(db, lg),
 		lg,
 		"self",
 		types.EmptyNodeID,
-		mcp,
 		signing.NewEdVerifier(),
 		trt,
 	)
@@ -735,9 +727,6 @@ func TestHandler_HandleMalfeasanceProof_validateHare(t *testing.T) {
 	require.NoError(t, err)
 	createIdentity(t, db, sig)
 	lid := types.LayerID(11)
-	round := uint32(11)
-	proofByte := types.RandomVrfSignature()
-	eCount := uint16(3)
 
 	bp := types.BallotProof{
 		Messages: [2]types.BallotProofMsg{
@@ -778,28 +767,6 @@ func TestHandler_HandleMalfeasanceProof_validateHare(t *testing.T) {
 		require.NoError(t, err)
 		require.Error(t, h.HandleMalfeasanceProof(context.Background(), "peer", data))
 	})
-
-	t.Run("relay eligibility", func(t *testing.T) {
-		gs := gossip
-		gs.Eligibility = &types.HareEligibilityGossip{
-			Layer:  lid,
-			Round:  round,
-			NodeID: sig.NodeID(),
-			Eligibility: types.HareEligibility{
-				Proof: proofByte,
-				Count: eCount,
-			},
-		}
-		data, err := codec.Encode(gs)
-		require.NoError(t, err)
-		mcp.EXPECT().HandleEligibility(gomock.Any(), gomock.Any()).DoAndReturn(
-			func(_ context.Context, got *types.HareEligibilityGossip) {
-				require.NotNil(t, got)
-				require.EqualValues(t, gs.Eligibility, got)
-			})
-		trt.EXPECT().OnMalfeasance(sig.NodeID())
-		require.NoError(t, h.HandleMalfeasanceProof(context.Background(), "peer", data))
-	})
 }
 
 func TestHandler_CrossDomain(t *testing.T) {
@@ -807,14 +774,12 @@ func TestHandler_CrossDomain(t *testing.T) {
 	lg := logtest.New(t)
 	ctrl := gomock.NewController(t)
 	trt := malfeasance.NewMocktortoise(ctrl)
-	mcp := malfeasance.NewMockconsensusProtocol(ctrl)
 
 	h := malfeasance.NewHandler(
 		datastore.NewCachedDB(db, lg),
 		lg,
 		"self",
 		types.EmptyNodeID,
-		mcp,
 		signing.NewEdVerifier(),
 		trt,
 	)
@@ -871,14 +836,12 @@ func TestHandler_HandleSyncedMalfeasanceProof_multipleATXs(t *testing.T) {
 	lg := logtest.New(t)
 	ctrl := gomock.NewController(t)
 	trt := malfeasance.NewMocktortoise(ctrl)
-	mcp := malfeasance.NewMockconsensusProtocol(ctrl)
 
 	h := malfeasance.NewHandler(
 		datastore.NewCachedDB(db, lg),
 		lg,
 		"self",
 		types.EmptyNodeID,
-		mcp,
 		signing.NewEdVerifier(),
 		trt,
 	)
@@ -934,14 +897,12 @@ func TestHandler_HandleSyncedMalfeasanceProof_multipleBallots(t *testing.T) {
 	lg := logtest.New(t)
 	ctrl := gomock.NewController(t)
 	trt := malfeasance.NewMocktortoise(ctrl)
-	mcp := malfeasance.NewMockconsensusProtocol(ctrl)
 
 	h := malfeasance.NewHandler(
 		datastore.NewCachedDB(db, lg),
 		lg,
 		"self",
 		types.EmptyNodeID,
-		mcp,
 		signing.NewEdVerifier(),
 		trt,
 	)
@@ -996,14 +957,12 @@ func TestHandler_HandleSyncedMalfeasanceProof_hareEquivocation(t *testing.T) {
 	lg := logtest.New(t)
 	ctrl := gomock.NewController(t)
 	trt := malfeasance.NewMocktortoise(ctrl)
-	mcp := malfeasance.NewMockconsensusProtocol(ctrl)
 
 	h := malfeasance.NewHandler(
 		datastore.NewCachedDB(db, lg),
 		lg,
 		"self",
 		types.EmptyNodeID,
-		mcp,
 		signing.NewEdVerifier(),
 		trt,
 	)
@@ -1061,14 +1020,12 @@ func TestHandler_HandleSyncedMalfeasanceProof_wrongHash(t *testing.T) {
 	lg := logtest.New(t)
 	ctrl := gomock.NewController(t)
 	trt := malfeasance.NewMocktortoise(ctrl)
-	mcp := malfeasance.NewMockconsensusProtocol(ctrl)
 
 	h := malfeasance.NewHandler(
 		datastore.NewCachedDB(db, lg),
 		lg,
 		"self",
 		types.EmptyNodeID,
-		mcp,
 		signing.NewEdVerifier(),
 		trt,
 	)

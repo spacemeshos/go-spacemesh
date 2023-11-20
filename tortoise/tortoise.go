@@ -149,8 +149,7 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Opin
 			var opinion *types.Opinion
 			opinion, err = t.encodeVotes(ctx, base, t.evicted.Add(1), current)
 			if err == nil {
-				layerDistanceToBaseBallot.Observe(float64(t.last - base.layer))
-				t.logger.Info("encoded votes",
+				t.logger.Debug("encoded votes",
 					log.ZContext(ctx),
 					zap.Stringer("base ballot", base.id),
 					zap.Stringer("base layer", base.layer),

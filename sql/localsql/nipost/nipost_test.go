@@ -12,7 +12,9 @@ import (
 )
 
 func Test_AddInitialPost(t *testing.T) {
-	db := localsql.InMemory()
+	db := localsql.InMemory(
+		sql.WithMigration(localsql.New0002Migration(t.TempDir())),
+	)
 
 	nodeID := types.RandomNodeID()
 	post := Post{
@@ -35,7 +37,9 @@ func Test_AddInitialPost(t *testing.T) {
 }
 
 func Test_OverwritePost(t *testing.T) {
-	db := localsql.InMemory()
+	db := localsql.InMemory(
+		sql.WithMigration(localsql.New0002Migration(t.TempDir())),
+	)
 
 	nodeID := types.RandomNodeID()
 	post := Post{

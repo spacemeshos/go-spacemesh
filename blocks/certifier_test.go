@@ -14,7 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
-	hmocks "github.com/spacemeshos/go-spacemesh/hare/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	pubsubmock "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
@@ -30,7 +29,7 @@ const defaultCnt = uint16(2)
 type testCertifier struct {
 	*Certifier
 	db        *datastore.CachedDB
-	mOracle   *hmocks.MockRolacle
+	mOracle   *eligibility.MockRolacle
 	mPub      *pubsubmock.MockPublisher
 	mClk      *mocks.MocklayerClock
 	mb        *smocks.MockBeaconGetter
@@ -42,7 +41,7 @@ func newTestCertifier(t *testing.T, signers int) *testCertifier {
 	types.SetLayersPerEpoch(3)
 	db := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 	ctrl := gomock.NewController(t)
-	mo := hmocks.NewMockRolacle(ctrl)
+	mo := eligibility.NewMockRolacle(ctrl)
 	mp := pubsubmock.NewMockPublisher(ctrl)
 	mc := mocks.NewMocklayerClock(ctrl)
 	mb := smocks.NewMockBeaconGetter(ctrl)

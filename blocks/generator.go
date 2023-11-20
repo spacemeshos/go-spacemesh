@@ -12,8 +12,8 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
+	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
@@ -37,7 +37,7 @@ type Generator struct {
 	cert     certifier
 	patrol   layerPatrol
 
-	hareCh           chan hare.LayerOutput
+	hareCh           <-chan hare3.ConsensusOutput
 	optimisticOutput map[types.LayerID]*proposalMetadata
 }
 
@@ -74,7 +74,7 @@ func WithGeneratorLogger(logger log.Log) GeneratorOpt {
 }
 
 // WithHareOutputChan sets the chan to listen to hare output.
-func WithHareOutputChan(ch chan hare.LayerOutput) GeneratorOpt {
+func WithHareOutputChan(ch <-chan hare3.ConsensusOutput) GeneratorOpt {
 	return func(g *Generator) {
 		g.hareCh = ch
 	}
@@ -106,7 +106,6 @@ func NewGenerator(
 	for _, opt := range opts {
 		opt(g)
 	}
-
 	return g
 }
 
@@ -135,24 +134,27 @@ func (g *Generator) run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return fmt.Errorf("context done: %w", ctx.Err())
-		case out := <-g.hareCh:
+		case out, open := <-g.hareCh:
+			if !open {
+				return nil
+			}
 			g.logger.With().Debug("received hare output",
-				log.Context(out.Ctx),
+				log.Context(ctx),
 				out.Layer,
 				log.Int("num_proposals", len(out.Proposals)),
 			)
 			maxLayer = max(maxLayer, out.Layer)
-			_, err := g.processHareOutput(out)
+			_, err := g.processHareOutput(ctx, out)
 			if err != nil {
 				if errors.Is(err, errNodeHasBadMeshHash) {
 					g.logger.With().Info("node has different mesh hash from majority, will download block instead",
-						log.Context(out.Ctx),
+						log.Context(ctx),
 						out.Layer,
 						log.Err(err),
 					)
 				} else {
 					g.logger.With().Error("failed to process hare output",
-						log.Context(out.Ctx),
+						log.Context(ctx),
 						out.Layer,
 						log.Err(err),
 					)
@@ -184,12 +186,12 @@ func (g *Generator) getProposals(pids []types.ProposalID) ([]*types.Proposal, er
 	return result, nil
 }
 
-func (g *Generator) processHareOutput(out hare.LayerOutput) (*types.Block, error) {
+func (g *Generator) processHareOutput(ctx context.Context, out hare3.ConsensusOutput) (*types.Block, error) {
 	var md *proposalMetadata
 	if len(out.Proposals) > 0 {
 		getMetadata := func() error {
 			// fetch proposals from peers if not locally available
-			if err := g.fetcher.GetProposals(out.Ctx, out.Proposals); err != nil {
+			if err := g.fetcher.GetProposals(ctx, out.Proposals); err != nil {
 				failFetchCnt.Inc()
 				return fmt.Errorf("preprocess fetch layer %d proposals: %w", out.Layer, err)
 			}
@@ -199,7 +201,7 @@ func (g *Generator) processHareOutput(out hare.LayerOutput) (*types.Block, error
 				failErrCnt.Inc()
 				return fmt.Errorf("preprocess get layer %d proposals: %w", out.Layer, err)
 			}
-			md, err = getProposalMetadata(out.Ctx, g.logger, g.db, g.atxs, g.cfg, out.Layer, props)
+			md, err = getProposalMetadata(ctx, g.logger, g.db, g.atxs, g.cfg, out.Layer, props)
 			if err != nil {
 				return err
 			}
@@ -234,10 +236,10 @@ func (g *Generator) processHareOutput(out hare.LayerOutput) (*types.Block, error
 		hareOutput = block.ID()
 		g.logger.With().Info("generated block", out.Layer, block.ID())
 	}
-	if err := g.saveAndCertify(out.Ctx, out.Layer, block); err != nil {
+	if err := g.saveAndCertify(ctx, out.Layer, block); err != nil {
 		return block, err
 	}
-	if err := g.msh.ProcessLayerPerHareOutput(out.Ctx, out.Layer, hareOutput, false); err != nil {
+	if err := g.msh.ProcessLayerPerHareOutput(ctx, out.Layer, hareOutput, false); err != nil {
 		return block, err
 	}
 	return block, nil
