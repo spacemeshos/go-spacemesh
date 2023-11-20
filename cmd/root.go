@@ -83,8 +83,10 @@ func AddCommands(cmd *cobra.Command) {
 
 	/** ======================== P2P Flags ========================== **/
 
-	cmd.PersistentFlags().StringSliceVar(&cfg.P2P.ListenAddresses, "listen",
-		cfg.P2P.ListenAddresses, "address for listening")
+	cmd.PersistentFlags().StringVar(&cfg.P2P.Listen, "listen",
+		cfg.P2P.Listen, "address for listening")
+	cmd.PersistentFlags().StringSliceVar(&cfg.P2P.ListenAddresses, "listen-addresses",
+		cfg.P2P.ListenAddresses, "addresses for listening")
 	cmd.PersistentFlags().BoolVar(&cfg.P2P.Flood, "flood",
 		cfg.P2P.Flood, "flood created messages to all peers")
 	cmd.PersistentFlags().BoolVar(&cfg.P2P.DisableNatPort, "disable-natport",
@@ -113,8 +115,10 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.P2P.MinPeers, "actively search for peers until you get this much")
 	cmd.PersistentFlags().StringSliceVar(&cfg.P2P.Bootnodes, "bootnodes",
 		cfg.P2P.Bootnodes, "entrypoints into the network")
-	cmd.PersistentFlags().StringSliceVar(&cfg.P2P.AdvertiseAddresses, "advertise-address",
-		cfg.P2P.AdvertiseAddresses, "libp2p address(es) with identity (example: /dns4/bootnode.spacemesh.io/tcp/5003)")
+	cmd.PersistentFlags().StringVar(&cfg.P2P.AdvertiseAddress, "advertise-address",
+		cfg.P2P.AdvertiseAddress, "libp2p address with identity (example: /dns4/bootnode.spacemesh.io/tcp/5003)")
+	cmd.PersistentFlags().StringSliceVar(&cfg.P2P.AdvertiseAddresses, "advertise-addresses",
+		cfg.P2P.AdvertiseAddresses, "libp2p addresses with identity (example: /dns4/bootnode.spacemesh.io/tcp/5003)")
 	cmd.PersistentFlags().BoolVar(&cfg.P2P.Bootnode, "p2p-bootnode", cfg.P2P.Bootnode,
 		"gossipsub and discovery will be running in a mode suitable for bootnode")
 	cmd.PersistentFlags().BoolVar(&cfg.P2P.PrivateNetwork, "p2p-private-network", cfg.P2P.PrivateNetwork, "discovery will work in private mode. mostly useful for testing, don't set in public networks")
