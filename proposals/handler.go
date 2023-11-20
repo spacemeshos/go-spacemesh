@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/exp/slices"
 
@@ -51,6 +52,7 @@ type Handler struct {
 
 	db         *sql.Database
 	atxsdata   *atxsdata.Data
+	activeSets *lru.Cache[types.Hash32, uint64]
 	edVerifier *signing.EdVerifier
 	publisher  pubsub.Publisher
 	fetcher    system.Fetcher
@@ -115,11 +117,16 @@ func NewHandler(
 	clock layerClock,
 	opts ...Opt,
 ) *Handler {
+	activeSets, err := lru.New[types.Hash32, uint64](10_000)
+	if err != nil {
+		panic(err)
+	}
 	b := &Handler{
 		logger:     log.NewNop(),
 		cfg:        defaultConfig(),
 		db:         db,
 		atxsdata:   atxsdata,
+		activeSets: activeSets,
 		edVerifier: edVerifier,
 		publisher:  p,
 		fetcher:    f,
@@ -437,7 +444,7 @@ func (h *Handler) checkBallotSyntacticValidity(
 	b *types.Ballot,
 ) (*tortoise.DecodedBallot, error) {
 	t0 := time.Now()
-	actives, err := h.checkBallotDataIntegrity(ctx, b)
+	activeSetWeight, err := h.checkBallotDataIntegrity(ctx, b)
 	if err != nil {
 		badData.Inc()
 		return nil, err
@@ -473,7 +480,7 @@ func (h *Handler) checkBallotSyntacticValidity(
 	ballotDuration.WithLabelValues(votes).Observe(float64(time.Since(t3)))
 
 	t4 := time.Now()
-	if eligible, err := h.validator.CheckEligibility(ctx, b, actives); err != nil || !eligible {
+	if eligible, err := h.validator.CheckEligibility(ctx, b, activeSetWeight); err != nil || !eligible {
 		notEligible.Inc()
 		var reason string
 		if err != nil {
@@ -487,37 +494,44 @@ func (h *Handler) checkBallotSyntacticValidity(
 	return decoded, nil
 }
 
-func (h *Handler) checkBallotDataIntegrity(ctx context.Context, b *types.Ballot) ([]types.ATXID, error) {
-	var actives []types.ATXID
+func (h *Handler) checkBallotDataIntegrity(ctx context.Context, b *types.Ballot) (uint64, error) {
+	var weight uint64
 	if b.RefBallot == types.EmptyBallotID {
 		// this is the smesher's first Ballot in this epoch, should contain EpochData
 		if b.EpochData == nil {
-			return nil, errMissingEpochData
+			return 0, errMissingEpochData
 		}
 		if b.EpochData.Beacon == types.EmptyBeacon {
-			return nil, errMissingBeacon
+			return 0, errMissingBeacon
 		}
 		epoch := h.clock.CurrentLayer().GetEpoch()
 		if epoch > 0 {
 			epoch-- // download activesets in the previous epoch too
 		}
 		if b.Layer.GetEpoch() >= epoch {
-			if err := h.fetcher.GetActiveSet(ctx, b.EpochData.ActiveSetHash); err != nil {
-				return nil, err
+			var exists bool
+			weight, exists = h.activeSets.Get(b.EpochData.ActiveSetHash)
+			if !exists {
+				if err := h.fetcher.GetActiveSet(ctx, b.EpochData.ActiveSetHash); err != nil {
+					return 0, err
+				}
+				set, err := activesets.Get(h.db, b.EpochData.ActiveSetHash)
+				if err != nil {
+					return 0, err
+				}
+				if len(set.Set) == 0 {
+					return 0, fmt.Errorf("%w: empty active set ballot %s", pubsub.ErrValidationReject, b.ID().String())
+				}
+				weight, _ = h.atxsdata.WeightForSet(set.Epoch, set.Set)
+				// TODO(dshulyak) consider rechecking that all values in the set were used
+				// if there is a bug in fetching
+				h.activeSets.Add(b.EpochData.ActiveSetHash, weight)
 			}
-			set, err := activesets.Get(h.db, b.EpochData.ActiveSetHash)
-			if err != nil {
-				return nil, err
-			}
-			if len(set.Set) == 0 {
-				return nil, fmt.Errorf("%w: empty active set ballot %s", pubsub.ErrValidationReject, b.ID().String())
-			}
-			actives = set.Set
 		}
 	} else if b.EpochData != nil {
-		return nil, errUnexpectedEpochData
+		return 0, errUnexpectedEpochData
 	}
-	return actives, nil
+	return weight, nil
 }
 
 func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) error {
