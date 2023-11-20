@@ -29,6 +29,7 @@ func launchTLSServer(tb testing.TB, services ...ServiceAPI) (Config, func()) {
 	require.FileExists(tb, serverKey)
 
 	cfg := DefaultTestConfig()
+	cfg.TLSListener = "127.0.0.1:0"
 	cfg.TLSCACert = caCert
 	cfg.TLSCert = serverCert
 	cfg.TLSKey = serverKey

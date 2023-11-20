@@ -262,28 +262,9 @@ on Windows you can use Intel OpenAPI:
 choco install opencl-intel-cpu-runtime
 ```
 
-If your config contains `"grpc-private-services"` make sure this list includes `"post"`:
-
-```json
-"api": {
-    "grpc-private-services": ["admin", "smesher", "post"],
-    "grpc-private-listener": "127.0.0.1:9093"
-}
-```
-
-or use the `--grpc-private-services=admin,smesher,post` flag.
-
-If you are using a `"grpc-private-listener"` other than the default (`"127.0.0.1:9093"`) you need to ensure that the
-post service is configured to connect to the correct address. This can be done via the `--post-opts-node-address`
-flag or the `"post-opts-node-address"` config option:
-
-```json
-"post-service": {
-    "post-opts-node-address": "http://ip:port"
-}
-```
-
 #### Using a remote machine as provider for PoST proofs
+
+**NOTE:** this feature is currently experimental and not fully tested yet.
 
 To disable the internal PoST service and disable smeshing on your node you can use the following config:
 
@@ -296,10 +277,8 @@ To disable the internal PoST service and disable smeshing on your node you can u
 or use the `--smeshing-start=false` flag. This will disable smeshing on your node causing it not generate any PoST
 proofs until a remote post service connects.
 
-By default the node listens for the PoST service on `grpc-private-listener` (defaults to 127.0.0.1:9093). This endpoint
-does not require authentication and should only be accessible from the same machine. If you want to allow connections
-from post services on other hosts to your node, you should do so via the `grpc-tls-listener` (defaults to 0.0.0.0:9094)
-and setup TLS for the connection.
+If you want to allow connections from post services on other hosts to your node, you need to set a public endpoint via
+the `grpc-tls-listener` configuration parameter and setup TLS for the connection.
 
 This is useful for example if you want to run a node on a cloud provider with fewer resources and run PoST on a local
 machine with more resources. The post service only needs to be online for the initial proof (i.e. when joining the
@@ -309,31 +288,15 @@ To setup TLS-secured public connections the API config has been extended with th
 
 ```json
 "api": {
-    "grpc-private-services": ["admin", "smesher"], // remove "post" from the list of services only exposed to the local machine
-    "grpc-tls-services": ["post"],                 // add "post" to the list of services that should be exposed via TLS
-    "grpc-tls-listener": "0.0.0.0:9094",           // listen address for TLS connections
-    "grpc-tls-ca-cert": "/path/to/ca.pem",         // CA certificate that signed the node's and the PoST service's certificates
-    "grpc-tls-cert": "/path/to/cert.pem",          // certificate for the node
-    "grpc-tls-key": "/path/to/key.pem",            // private key for the node
+  "grpc-tls-listener": "0.0.0.0:9094",           // listen address for TLS connections
+  "grpc-tls-ca-cert": "/path/to/ca.pem",         // CA certificate that signed the node's and the PoST service's certificates
+  "grpc-tls-cert": "/path/to/cert.pem",          // certificate for the node
+  "grpc-tls-key": "/path/to/key.pem",            // private key for the node
 }
 ```
 
 Ensure that remote PoST services are setup to connect to your node via TLS, that they trust your node's certificate and
 use a certificate that is signed by the same CA as your node's certificate.
-
-The local (supervised) PoST service can also be configured to connect to your node via TLS if needed. The following
-config options are available:
-
-```json
-"post-service": {
-    "post-opts-node-address": "http://domain:port",      // defaults to 127.0.0.1:9093 - the same default value as for "grpc-private-listener"
-
-    // the following settings are required when connecting to the node via TLS - not when connecting via the private listener
-    "post-opts-tls-ca-cert": "/path/to/ca.pem",  // CA certificate that signed the node's and the PoST service's certificates
-    "post-opts-tls-cert": "/path/to/cert.pem",   // certificate for the PoST service
-    "post-opts-tls-key": "/path/to/key.pem",     // private key for the PoST service
-}
-```
 
 ---
 

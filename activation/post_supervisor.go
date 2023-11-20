@@ -48,12 +48,12 @@ func DefaultTestPostServiceConfig() PostSupervisorConfig {
 }
 
 type PostSupervisorConfig struct {
-	PostServiceCmd string `mapstructure:"post-opts-post-service"`
-	NodeAddress    string `mapstructure:"post-opts-node-address"`
+	PostServiceCmd string
+	NodeAddress    string
 
-	CACert string `mapstructure:"post-opts-ca-cert"`
-	Cert   string `mapstructure:"post-opts-cert"`
-	Key    string `mapstructure:"post-opts-key"`
+	CACert string
+	Cert   string
+	Key    string
 }
 
 // PostSupervisor manages a local post service.

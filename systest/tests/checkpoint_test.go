@@ -256,10 +256,10 @@ func updateCheckpointServer(ctx *testcontext.Context, endpoint string, chdata []
 }
 
 func snapshotNode(ctx *testcontext.Context, client *cluster.NodeClient, snapshot uint32) ([]byte, error) {
-	smshr := pb.NewAdminServiceClient(client)
+	smshr := pb.NewAdminServiceClient(client.PrivConn())
 	stream, err := smshr.CheckpointStream(ctx, &pb.CheckpointStreamRequest{SnapshotLayer: snapshot})
 	if err != nil {
-		return nil, fmt.Errorf("stream checkpoiont %v: %w", client.Name, err)
+		return nil, fmt.Errorf("stream checkpoint %v: %w", client.Name, err)
 	}
 	var (
 		result bytes.Buffer
@@ -282,7 +282,7 @@ func snapshotNode(ctx *testcontext.Context, client *cluster.NodeClient, snapshot
 }
 
 func recoverNode(ctx *testcontext.Context, client *cluster.NodeClient) error {
-	smshr := pb.NewAdminServiceClient(client)
+	smshr := pb.NewAdminServiceClient(client.PrivConn())
 	_, err := smshr.Recover(ctx, &pb.RecoverRequest{})
 	return err
 }
@@ -293,7 +293,7 @@ type acctState struct {
 }
 
 func getBalance(tctx *testcontext.Context, cl *cluster.Cluster, layer uint32) (map[types.Address]acctState, error) {
-	dbg := pb.NewDebugServiceClient(cl.Client(0))
+	dbg := pb.NewDebugServiceClient(cl.Client(0).PrivConn())
 	response, err := dbg.Accounts(tctx, &pb.AccountsRequest{Layer: layer})
 	if err != nil {
 		return nil, err
