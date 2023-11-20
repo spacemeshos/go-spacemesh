@@ -28,5 +28,10 @@
         "beacon-rounds-number": 10,
         "beacon-voting-round-duration": "10s",
         "beacon-weak-coin-round-duration": "10s"
+    },
+    "certifier": {
+        "client": {
+            "max-retries": 10
+        }
     }
 }

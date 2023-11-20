@@ -39,6 +39,8 @@
         "post-k3": 37
     },
     "certifier": {
-        "max-retries": 10
+        "client": {
+            "max-retries": 10
+        }
     }
 }
