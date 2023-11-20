@@ -60,8 +60,9 @@ func (e *Base64Enc) UnmarshalText(text []byte) error {
 }
 
 type Certificate struct {
-	Poet        string    `mapstructure:"poet"`
-	Certificate Base64Enc `mapstructure:"certificate"`
+	NodeID      types.NodeID `mapstructure:"node_id"`
+	Poet        string       `mapstructure:"poet"`
+	Certificate Base64Enc    `mapstructure:"certificate"`
 }
 
 type CertifierConfig struct {
@@ -119,7 +120,7 @@ func WithCertificates(certs []Certificate) NewCertifierOption {
 	return func(c *Certifier) {
 		c.logger.Info("adding certificates", zap.Int("num", len(certs)), zap.Any("certs", certs))
 		for _, cert := range certs {
-			if err := certifier_db.AddCertificate(c.db, c.client.Id(), cert.Certificate.Inner, cert.Poet); err != nil {
+			if err := certifier_db.AddCertificate(c.db, cert.NodeID, cert.Certificate.Inner, cert.Poet); err != nil {
 				c.logger.Warn("failed to persist poet cert", zap.Error(err))
 			}
 		}

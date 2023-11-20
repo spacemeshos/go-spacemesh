@@ -50,19 +50,28 @@ func TestPersistsCerts(t *testing.T) {
 
 func TestSeedWithCerts(t *testing.T) {
 	client := activation.NewMockcertifierClient(gomock.NewController(t))
-	client.EXPECT().Id().AnyTimes().Return(types.RandomNodeID())
+	nodeID := types.RandomNodeID()
+	client.EXPECT().Id().AnyTimes().Return(nodeID)
 
 	certs := []activation.Certificate{
 		{
+			NodeID:      nodeID,
 			Poet:        "poet1",
 			Certificate: activation.Base64Enc{Inner: []byte("cert1")},
 		},
 		{
+			NodeID:      nodeID,
 			Poet:        "poet2",
 			Certificate: activation.Base64Enc{Inner: []byte("cert2")},
+		},
+		{
+			NodeID:      types.RandomNodeID(),
+			Poet:        "poet3",
+			Certificate: activation.Base64Enc{Inner: []byte("cert3")},
 		},
 	}
 	c := activation.NewCertifier(localsql.InMemory(), zaptest.NewLogger(t), client, activation.WithCertificates(certs))
 	require.Equal(t, activation.PoetCert("cert1"), c.GetCertificate("poet1"))
 	require.Equal(t, activation.PoetCert("cert2"), c.GetCertificate("poet2"))
+	require.Nil(t, c.GetCertificate("poet3"))
 }
