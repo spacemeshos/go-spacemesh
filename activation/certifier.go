@@ -89,7 +89,7 @@ type ProofToCertify struct {
 	Pow     uint64 `json:"pow"`
 }
 
-type ProofToCertifyfMetadata struct {
+type ProofToCertifyMetadata struct {
 	NodeId          []byte `json:"node_id"`
 	CommitmentAtxId []byte `json:"commitment_atx_id"`
 
@@ -99,7 +99,7 @@ type ProofToCertifyfMetadata struct {
 
 type CertifyRequest struct {
 	Proof    ProofToCertify         `json:"proof"`
-	Metadata ProoToCertifyfMetadata `json:"metadata"`
+	Metadata ProofToCertifyMetadata `json:"metadata"`
 }
 
 type CertifyResponse struct {
@@ -319,7 +319,7 @@ func (c *CertifierClient) Certify(ctx context.Context, url *url.URL, pubkey []by
 			Nonce:   c.post.Nonce,
 			Indices: c.post.Indices,
 		},
-		Metadata: ProoToCertifyfMetadata{
+		Metadata: ProofToCertifyMetadata{
 			NodeId:          c.postInfo.NodeID[:],
 			CommitmentAtxId: c.postInfo.CommitmentATX[:],
 			NumUnits:        c.postInfo.NumUnits,
