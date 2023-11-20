@@ -358,8 +358,8 @@ func deployBootnodeSvc(ctx *testcontext.Context, id string) error {
 		WithSpec(corev1.ServiceSpec().
 			WithSelector(labels).
 			WithPorts(
-				corev1.ServicePort().WithName("grpc_pub").WithPort(9092).WithProtocol("TCP"),
-				corev1.ServicePort().WithName("grpc_priv").WithPort(9093).WithProtocol("TCP"),
+				corev1.ServicePort().WithName("grpc-pub").WithPort(9092).WithProtocol("TCP"),
+				corev1.ServicePort().WithName("grpc-priv").WithPort(9093).WithProtocol("TCP"),
 				corev1.ServicePort().WithName("p2p").WithPort(7513).WithProtocol("TCP"),
 			).
 			WithClusterIP("None"),
@@ -619,8 +619,8 @@ func deployNode(ctx *testcontext.Context, id string, labels map[string]string, f
 						WithImagePullPolicy(apiv1.PullIfNotPresent).
 						WithPorts(
 							corev1.ContainerPort().WithContainerPort(7513).WithName("p2p"),
-							corev1.ContainerPort().WithContainerPort(9092).WithName("grpc_pub"),
-							corev1.ContainerPort().WithContainerPort(9093).WithName("grpc_priv"),
+							corev1.ContainerPort().WithContainerPort(9092).WithName("grpc-pub"),
+							corev1.ContainerPort().WithContainerPort(9093).WithName("grpc-priv"),
 							corev1.ContainerPort().WithContainerPort(prometheusScrapePort).WithName("prometheus"),
 							corev1.ContainerPort().WithContainerPort(phlareScrapePort).WithName("pprof"),
 						).
