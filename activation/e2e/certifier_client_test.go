@@ -50,13 +50,12 @@ func TestCertification(t *testing.T) {
 	t.Cleanup(cleanup)
 	t.Cleanup(launchPostSupervisor(t, logger, mgr, grpcCfg, opts))
 
+	var postClient activation.PostClient
 	require.Eventually(t, func() bool {
-		_, err := svc.Client(sig.NodeID())
+		var err error
+		postClient, err = svc.Client(sig.NodeID())
 		return err == nil
 	}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
-
-	postClient, err := svc.Client(sig.NodeID())
-	require.NoError(t, err)
 	post, info, err := postClient.Proof(context.Background(), shared.ZeroChallenge)
 	require.NoError(t, err)
 

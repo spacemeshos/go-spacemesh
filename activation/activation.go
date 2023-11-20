@@ -401,7 +401,7 @@ func (b *Builder) buildInitialPost(ctx context.Context) error {
 func (b *Builder) certifyPost(ctx context.Context) {
 	post, meta, ch, err := b.obtainPostForCertification()
 	if err != nil {
-		b.log.With().Error("failed to obtain post for certification", zap.Error(err))
+		b.log.Error("failed to obtain post for certification", zap.Error(err))
 	}
 
 	client := NewCertifierClient(b.log, post, meta, ch, WithCertifierClientConfig(b.certifierConfig.Client))

@@ -89,7 +89,7 @@ type ProofToCertify struct {
 	Pow     uint64 `json:"pow"`
 }
 
-type ProoToCertifyfMetadata struct {
+type ProofToCertifyfMetadata struct {
 	NodeId          []byte `json:"node_id"`
 	CommitmentAtxId []byte `json:"commitment_atx_id"`
 
