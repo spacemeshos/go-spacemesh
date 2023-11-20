@@ -25,6 +25,11 @@ func (migration0002) Order() int {
 	return 2
 }
 
+func (migration0002) Rollback() error {
+	// handled by the DB itself
+	return nil
+}
+
 func (m migration0002) Apply(db sql.Executor) error {
 	_, err := db.Exec("ALTER TABLE initial_post ADD COLUMN num_units UNSIGNED INT;", nil, nil)
 	if err != nil {

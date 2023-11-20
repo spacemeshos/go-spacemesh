@@ -49,11 +49,9 @@ func (m *sqlMigration) Order() int {
 	return m.order
 }
 
-// Migration is interface for migrations provider.
-type Migration interface {
-	Apply(db Executor) error
-	Name() string
-	Order() int
+func (sqlMigration) Rollback() error {
+	// handled by the DB itself
+	return nil
 }
 
 func version(db Executor) (int, error) {

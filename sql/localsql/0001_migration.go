@@ -4,7 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"path/filepath"
 
+	"github.com/natefinch/atomic"
 	"github.com/spacemeshos/post/initialization"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -61,6 +63,22 @@ func (m migration0001) Apply(db sql.Executor) error {
 	}
 	if err := m.moveNipostChallengeToDb(db, m.dataDir); err != nil {
 		return fmt.Errorf("move nipost challenge to db: %w", err)
+	}
+
+	return nil
+}
+
+func (m migration0001) Rollback() error {
+	filename := filepath.Join(m.dataDir, postFilename)
+	backupName := fmt.Sprintf("%s.bak", filename)
+	if err := atomic.ReplaceFile(backupName, filename); err != nil {
+		return fmt.Errorf("rolling back post: %w", err)
+	}
+
+	filename = filepath.Join(m.dataDir, challengeFilename)
+	backupName = fmt.Sprintf("%s.bak", filename)
+	if err := atomic.ReplaceFile(backupName, filename); err != nil {
+		return fmt.Errorf("rolling back nipost challenge: %w", err)
 	}
 
 	return nil

@@ -164,11 +164,18 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 		if err != nil {
 			return nil, err
 		}
-		for _, m := range config.migrations {
+		for i, m := range config.migrations {
 			if m.Order() <= before {
 				continue
 			}
 			if err := m.Apply(tx); err != nil {
+				for j := i; j >= 0 && config.migrations[j].Order() > before; j-- {
+					if e := config.migrations[j].Rollback(); e != nil {
+						err = errors.Join(err, fmt.Errorf("rollback %s: %w", m.Name(), e))
+						break
+					}
+				}
+
 				tx.Release()
 				return nil, fmt.Errorf("apply %s: %w", m.Name(), err)
 			}

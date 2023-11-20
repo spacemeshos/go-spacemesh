@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"path/filepath"
 
+	"github.com/natefinch/atomic"
 	"github.com/spacemeshos/post/initialization"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -32,6 +34,15 @@ func (migration0003) Name() string {
 
 func (migration0003) Order() int {
 	return 3
+}
+
+func (m migration0003) Rollback() error {
+	filename := filepath.Join(m.dataDir, builderFilename)
+	backupName := fmt.Sprintf("%s.bak", filename)
+	if err := atomic.ReplaceFile(backupName, filename); err != nil {
+		return fmt.Errorf("rolling back nipost builder state: %w", err)
+	}
+	return nil
 }
 
 func (m migration0003) Apply(db sql.Executor) error {

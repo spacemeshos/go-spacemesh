@@ -130,7 +130,8 @@ func loadNipostChallenge(dir string) (*types.NIPostChallenge, error) {
 
 func discardNipostChallenge(dir string) error {
 	filename := filepath.Join(dir, challengeFilename)
-	if err := os.Remove(filename); err != nil {
+	backupName := fmt.Sprintf("%s.bak", filename)
+	if err := atomic.ReplaceFile(filename, backupName); err != nil {
 		return fmt.Errorf("discarding nipost challenge: %w", err)
 	}
 	return nil
@@ -153,7 +154,8 @@ func loadBuilderState(dir string) (*NIPostBuilderState, error) {
 
 func discardBuilderState(dir string) error {
 	filename := filepath.Join(dir, builderFilename)
-	if err := os.Remove(filename); err != nil {
+	backupName := fmt.Sprintf("%s.bak", filename)
+	if err := atomic.ReplaceFile(filename, backupName); err != nil {
 		return fmt.Errorf("discarding nipost builder state: %w", err)
 	}
 	return nil
@@ -176,7 +178,8 @@ func loadPost(dir string) (*types.Post, error) {
 
 func discardPost(dir string) error {
 	filename := filepath.Join(dir, postFilename)
-	if err := os.Remove(filename); err != nil {
+	backupName := fmt.Sprintf("%s.bak", filename)
+	if err := atomic.ReplaceFile(filename, backupName); err != nil {
 		return fmt.Errorf("discarding post: %w", err)
 	}
 	return nil

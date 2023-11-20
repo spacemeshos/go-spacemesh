@@ -1,6 +1,7 @@
 package localsql
 
 import (
+	"context"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -512,4 +513,107 @@ func Test_0003Migration_Phase2_Complete(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NoFileExists(t, filepath.Join(dataDir, builderFilename))
+}
+
+func Test_0003Migration_Rollback(t *testing.T) {
+	dataDir := t.TempDir()
+
+	endTime := time.Now()
+	poetProofRef := types.PoetProofRef{
+		4, 5, 6,
+	}
+	state := &NIPostBuilderState{
+		Challenge:    types.Hash32{1, 2, 3},
+		PoetProofRef: poetProofRef,
+		NIPost: &types.NIPost{
+			Post: &types.Post{
+				Pow:     7,
+				Indices: []byte{1, 2, 3},
+				Nonce:   4,
+			},
+			PostMetadata: &types.PostMetadata{
+				Challenge:     poetProofRef[:],
+				LabelsPerUnit: 1024,
+			},
+			Membership: types.MerkleProof{
+				Nodes:     []types.Hash32{types.RandomHash(), types.RandomHash()},
+				LeafIndex: 1,
+			},
+		},
+		PoetRequests: []PoetRequest{
+			{
+				PoetRound: &types.PoetRound{
+					ID:  "101",
+					End: types.RoundEnd(endTime),
+				},
+				PoetServiceID: types.PoetServiceID{
+					ServiceID: []byte("service1"),
+				},
+			},
+			{
+				PoetRound: &types.PoetRound{
+					ID:  "102",
+					End: types.RoundEnd(endTime),
+				},
+				PoetServiceID: types.PoetServiceID{
+					ServiceID: []byte("service2"),
+				},
+			},
+		},
+	}
+	require.NoError(t, saveBuilderState(dataDir, state))
+	require.FileExists(t, filepath.Join(dataDir, builderFilename))
+
+	nodeID := types.RandomNodeID()
+	nonce := uint64(1024)
+	numUnits := uint32(8)
+	err := initialization.SaveMetadata(dataDir, &shared.PostMetadata{
+		NodeId:   nodeID.Bytes(),
+		NumUnits: numUnits,
+		Nonce:    &nonce,
+	})
+	require.NoError(t, err)
+
+	migrations, err := sql.LocalMigrations()
+	require.NoError(t, err)
+	sort.Slice(migrations, func(i, j int) bool { return migrations[i].Order() < migrations[j].Order() })
+	migrations = migrations[:2]
+	db := InMemory(
+		sql.WithMigrations(migrations),
+	)
+
+	ctrl := gomock.NewController(t)
+	poetClient1 := NewMockPoetClient(ctrl)
+	poetClient1.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().
+		Return(types.PoetServiceID{ServiceID: []byte("service1")}, nil)
+	poetClient1.EXPECT().Address().AnyTimes().Return("http://poet1.com")
+
+	poetClient2 := NewMockPoetClient(ctrl)
+	poetClient2.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().
+		Return(types.PoetServiceID{ServiceID: []byte("service2")}, nil)
+	poetClient2.EXPECT().Address().AnyTimes().Return("http://poet2.com")
+
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, nodeID.Bytes())
+		stmt.BindInt64(2, int64(101))
+		stmt.BindInt64(3, int64(5))
+		stmt.BindBytes(4, types.RandomATXID().Bytes())
+		stmt.BindBytes(5, types.RandomATXID().Bytes())
+	}
+	_, err = db.Exec(`
+		insert into nipost (id, epoch, sequence, prev_atx, pos_atx)
+		values (?1, ?2, ?3, ?4, ?5);`, enc, nil,
+	)
+	require.NoError(t, err)
+
+	migration := New0003Migration(dataDir, []PoetClient{poetClient1, poetClient2})
+
+	tx, err := db.Tx(context.Background())
+	require.NoError(t, err)
+
+	require.NoError(t, migration.Apply(tx))
+	require.NoError(t, migration.Rollback())
+	require.NoError(t, tx.Release())
+
+	require.FileExists(t, filepath.Join(dataDir, builderFilename))
 }

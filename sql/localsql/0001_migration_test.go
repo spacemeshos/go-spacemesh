@@ -1,6 +1,7 @@
 package localsql
 
 import (
+	"context"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -207,4 +208,48 @@ func Test_0001Migration_AddsMissingData_NIPostChallenge_InitialPost(t *testing.T
 	require.NoError(t, err)
 
 	require.NoFileExists(t, filepath.Join(dataDir, challengeFilename))
+}
+
+func Test_0001Migration_Rollback(t *testing.T) {
+	dataDir := t.TempDir()
+
+	post := &types.Post{
+		Nonce:   1,
+		Indices: []byte{1, 2, 3},
+		Pow:     1,
+	}
+	require.NoError(t, savePost(dataDir, post))
+	require.FileExists(t, filepath.Join(dataDir, postFilename))
+
+	refChallenge := &types.NIPostChallenge{
+		PublishEpoch:   4,
+		Sequence:       1,
+		PrevATXID:      types.RandomATXID(),
+		PositioningATX: types.RandomATXID(),
+		CommitmentATX:  nil,
+		InitialPost:    nil,
+	}
+	require.NoError(t, saveNipostChallenge(dataDir, refChallenge))
+	require.FileExists(t, filepath.Join(dataDir, challengeFilename))
+
+	nodeID := types.RandomNodeID()
+	commitmentATX := types.RandomATXID()
+	err := initialization.SaveMetadata(dataDir, &shared.PostMetadata{
+		NodeId:          nodeID.Bytes(),
+		CommitmentAtxId: commitmentATX.Bytes(),
+	})
+	require.NoError(t, err)
+
+	db := InMemory(sql.WithMigrations(nil))
+
+	migration := New0001Migration(dataDir)
+	tx, err := db.Tx(context.Background())
+	require.NoError(t, err)
+
+	require.NoError(t, migration.Apply(tx))
+	require.NoError(t, migration.Rollback())
+	require.NoError(t, tx.Release())
+
+	require.FileExists(t, filepath.Join(dataDir, postFilename))
+	require.FileExists(t, filepath.Join(dataDir, challengeFilename))
 }
