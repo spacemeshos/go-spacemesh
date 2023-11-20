@@ -36,7 +36,7 @@ func testTransactions(
 		"expected transactions", expectedCount,
 	)
 	receiver := types.GenerateAddress([]byte{11, 1, 1})
-	state := pb.NewGlobalStateServiceClient(cl.Client(0))
+	state := pb.NewGlobalStateServiceClient(cl.Client(0).PubConn())
 	response, err := state.Account(
 		tctx,
 		&pb.AccountRequest{AccountId: &pb.AccountId{Address: receiver.String()}},
@@ -84,7 +84,7 @@ func testTransactions(
 	diff := batch * amount * int(sendFor-1) * cl.Accounts()
 	for i := 0; i < cl.Total(); i++ {
 		client := cl.Client(i)
-		state := pb.NewGlobalStateServiceClient(client)
+		state := pb.NewGlobalStateServiceClient(client.PubConn())
 		response, err := state.Account(
 			tctx,
 			&pb.AccountRequest{AccountId: &pb.AccountId{Address: receiver.String()}},

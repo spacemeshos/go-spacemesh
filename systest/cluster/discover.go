@@ -23,9 +23,10 @@ func discoverNodes(ctx *testcontext.Context, kind string) ([]*NodeClient, error)
 		rst = append(rst, &NodeClient{
 			session: ctx,
 			Node: Node{
-				Name: deployment.Name,
-				P2P:  7513,
-				GRPC: 9092,
+				Name:      deployment.Name,
+				P2P:       7513,
+				GRPC_PUB:  9092,
+				GRPC_PRIV: 9093,
 			},
 		})
 	}
