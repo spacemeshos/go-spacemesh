@@ -125,7 +125,10 @@ type Subscriber interface {
 
 type ValidatorOpt = pubsub.ValidatorOpt
 
-var WithValidatorInline = pubsub.WithValidatorInline
+var (
+	WithValidatorInline      = pubsub.WithValidatorInline
+	WithValidatorConcurrency = pubsub.WithValidatorConcurrency
+)
 
 // PublishSubsciber common interface for publisher and subscribing.
 type PublishSubsciber interface {
@@ -216,6 +219,7 @@ func getOptions(cfg Config) []pubsub.Option {
 		pubsub.WithMessageSignaturePolicy(pubsub.StrictNoSign),
 		pubsub.WithPeerOutboundQueueSize(8192),
 		pubsub.WithValidateQueueSize(8192),
+		pubsub.WithValidateThrottle(40000),
 		pubsub.WithRawTracer(p2pmetrics.NewGoSIPCollector()),
 		pubsub.WithPeerScore(
 			&pubsub.PeerScoreParams{
