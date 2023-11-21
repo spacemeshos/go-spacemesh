@@ -151,8 +151,6 @@ type config struct {
 	networkDelay       time.Duration
 	workersLimit       int
 	minActiveSetWeight []types.EpochMinimalActiveWeight
-	// used to determine whether a node has enough information on the active set this epoch
-	goodAtxPercent int
 }
 
 func (c *config) MarshalLogObject(encoder log.ObjectEncoder) error {
@@ -160,7 +158,6 @@ func (c *config) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("epoch size", c.layersPerEpoch)
 	encoder.AddUint32("hdist", c.hdist)
 	encoder.AddDuration("network delay", c.networkDelay)
-	encoder.AddInt("good atx percent", c.goodAtxPercent)
 	return nil
 }
 
@@ -211,12 +208,6 @@ func WithHdist(dist uint32) Opt {
 func WithNetworkDelay(delay time.Duration) Opt {
 	return func(pb *ProposalBuilder) {
 		pb.cfg.networkDelay = delay
-	}
-}
-
-func WithMinGoodAtxPercent(percent int) Opt {
-	return func(pb *ProposalBuilder) {
-		pb.cfg.goodAtxPercent = percent
 	}
 }
 
@@ -383,14 +374,17 @@ func (pb *ProposalBuilder) initSharedData(ctx context.Context, lid types.LayerID
 		weight, set, err := generateActiveSet(
 			pb.logger,
 			pb.cdb,
+			lid,
 			pb.shared.epoch,
 			pb.clock.LayerToTime(pb.shared.epoch.FirstLayer()),
-			pb.cfg.goodAtxPercent,
 			pb.cfg.networkDelay,
 		)
 		if err != nil {
 			return err
 		}
+		sort.Slice(set, func(i, j int) bool {
+			return bytes.Compare(set[i].Bytes(), set[j].Bytes()) < 0
+		})
 		pb.shared.active.set = set
 		pb.shared.active.weight = weight
 	}
@@ -713,15 +707,29 @@ func activesFromFirstBlock(
 func generateActiveSet(
 	logger log.Log,
 	cdb *datastore.CachedDB,
+	current types.LayerID,
 	target types.EpochID,
 	epochStart time.Time,
-	goodAtxPercent int,
 	networkDelay time.Duration,
 ) (uint64, []types.ATXID, error) {
+	if !current.FirstInEpoch() {
+		totalWeight, set, err := activesFromFirstBlock(cdb, target)
+		if err != nil {
+			logger.With().Warning("failed to get active set from first block", log.Err(err))
+		} else if len(set) == 0 || totalWeight == 0 {
+			logger.With().Warning("empty active set from first block")
+		} else {
+			logger.With().Info("miner active set from first block",
+				log.Uint64("total weight", totalWeight),
+				log.Int("set size", len(set)),
+			)
+			return totalWeight, set, nil
+		}
+	}
 	var (
 		totalWeight uint64
 		set         []types.ATXID
-		numOmitted  = 0
+		numOmitted  int
 	)
 	if err := cdb.IterateEpochATXHeaders(target, func(header *types.ActivationTxHeader) error {
 		grade, err := gradeAtx(cdb, header.NodeID, header.Received, epochStart, networkDelay)
@@ -745,33 +753,14 @@ func generateActiveSet(
 	}); err != nil {
 		return 0, nil, err
 	}
-
-	if total := numOmitted + len(set); total == 0 {
+	if len(set) == 0 || totalWeight == 0 {
 		return 0, nil, fmt.Errorf("empty active set")
-	} else if numOmitted*100/total > 100-goodAtxPercent {
-		// if the node is not synced during `targetEpoch-1`, it doesn't have the correct receipt timestamp
-		// for all the atx and malfeasance proof. this active set is not usable.
-		// TODO: change after timing info of ATXs and malfeasance proofs is sync'ed from peers as well
-		var err error
-		totalWeight, set, err = activesFromFirstBlock(cdb, target)
-		if err != nil {
-			return 0, nil, err
-		}
-		logger.With().Info("miner not synced during prior epoch, active set from first block",
-			log.Int("all atx", total),
-			log.Int("num omitted", numOmitted),
-			log.Int("num block atx", len(set)),
-		)
-	} else {
-		logger.With().Info("active set selected for proposal using grades",
-			log.Int("num atx", len(set)),
-			log.Int("num omitted", numOmitted),
-			log.Int("min atx good pct", goodAtxPercent),
-		)
 	}
-	sort.Slice(set, func(i, j int) bool {
-		return bytes.Compare(set[i].Bytes(), set[j].Bytes()) < 0
-	})
+	logger.With().Info("active set selected using grades",
+		log.Uint64("total weight", totalWeight),
+		log.Int("num atx", len(set)),
+		log.Int("num omitted", numOmitted),
+	)
 	return totalWeight, set, nil
 }
 

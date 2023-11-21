@@ -487,7 +487,6 @@ func TestBuild(t *testing.T) {
 			desc: "first block activeset",
 			opts: []Opt{
 				WithNetworkDelay(10 * time.Second),
-				WithMinGoodAtxPercent(50),
 			},
 			steps: []step{
 				{
@@ -498,33 +497,14 @@ func TestBuild(t *testing.T) {
 						gatx(types.ATXID{2}, 2, types.NodeID{2}, 1, genAtxWithReceived(time.Unix(20, 0))),
 						gatx(types.ATXID{3}, 2, types.NodeID{3}, 1, genAtxWithReceived(time.Unix(20, 0))),
 					},
-					expectErr: "first block",
-				},
-				{
-					lid: 16,
-					blocks: []*types.Block{
-						gblock(15, types.ATXID{4}), // this atx and ballot doesn't exist
-					},
-					expectErr: "actives get ballot",
-				},
-				{
-					lid: 16,
+					activeset: gactiveset(types.ATXID{2}, types.ATXID{3}),
 					ballots: []*types.Ballot{
-						gballot(types.BallotID{11}, types.ATXID{4}, types.NodeID{5}, 15, &types.EpochData{
-							ActiveSetHash: gactiveset(types.ATXID{1}, types.ATXID{2}).Hash(),
+						gballot(types.BallotID{11}, types.ATXID{3}, types.NodeID{5}, 15, &types.EpochData{
+							ActiveSetHash: gactiveset(types.ATXID{2}, types.ATXID{3}).Hash(),
 						}),
 					},
-					expectErr: "get active hash for ballot",
-				},
-				{
-					lid:       16,
-					activeset: gactiveset(types.ATXID{1}, types.ATXID{2}),
-					expectErr: "get ATXs from DB: get id 0400000000",
-				},
-				{
-					lid: 16,
-					atxs: []*types.VerifiedActivationTx{
-						gatx(types.ATXID{4}, 2, types.NodeID{4}, 1, genAtxWithReceived(time.Unix(20, 0))),
+					blocks: []*types.Block{
+						gblock(15, types.ATXID{3}),
 					},
 					opinion:        &types.Opinion{Hash: types.Hash32{1}},
 					txs:            []types.TransactionID{},
@@ -532,11 +512,11 @@ func TestBuild(t *testing.T) {
 					expectProposal: expectProposal(
 						signer, 16, types.ATXID{1}, types.Opinion{Hash: types.Hash32{1}},
 						expectEpochData(
-							gactiveset(types.ATXID{1}, types.ATXID{2}, types.ATXID{4}),
-							16,
+							gactiveset(types.ATXID{2}, types.ATXID{3}),
+							25,
 							types.Beacon{1},
 						),
-						expectCounters(signer, 3, types.Beacon{1}, 777, 2, 5, 11),
+						expectCounters(signer, 3, types.Beacon{1}, 777, 2, 5, 11, 19, 22, 24),
 					),
 				},
 			},
