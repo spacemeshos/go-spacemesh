@@ -522,6 +522,108 @@ func TestBuild(t *testing.T) {
 			},
 		},
 		{
+			desc: "first block not in the first layer",
+			opts: []Opt{
+				WithNetworkDelay(10 * time.Second),
+			},
+			steps: []step{
+				{
+					lid:    17,
+					beacon: types.Beacon{1},
+					atxs: []*types.VerifiedActivationTx{
+						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
+						gatx(types.ATXID{2}, 2, types.NodeID{2}, 1, genAtxWithReceived(time.Unix(20, 0))),
+						gatx(types.ATXID{3}, 2, types.NodeID{3}, 1, genAtxWithReceived(time.Unix(20, 0))),
+					},
+					activeset: gactiveset(types.ATXID{2}, types.ATXID{3}),
+					ballots: []*types.Ballot{
+						gballot(types.BallotID{11}, types.ATXID{3}, types.NodeID{5}, 15, &types.EpochData{
+							ActiveSetHash: gactiveset(types.ATXID{2}, types.ATXID{3}).Hash(),
+						}),
+					},
+					blocks: []*types.Block{
+						gblock(16, types.ATXID{3}),
+					},
+					opinion:        &types.Opinion{Hash: types.Hash32{1}},
+					txs:            []types.TransactionID{},
+					latestComplete: 16,
+					expectProposal: expectProposal(
+						signer, 17, types.ATXID{1}, types.Opinion{Hash: types.Hash32{1}},
+						expectEpochData(
+							gactiveset(types.ATXID{2}, types.ATXID{3}),
+							25,
+							types.Beacon{1},
+						),
+						expectCounters(signer, 3, types.Beacon{1}, 777, 3, 7, 10, 14, 15, 21),
+					),
+				},
+			},
+		},
+		{
+			desc: "first block empty",
+			opts: []Opt{
+				WithNetworkDelay(10 * time.Second),
+			},
+			steps: []step{
+				{
+					lid:    16,
+					beacon: types.Beacon{1},
+					atxs: []*types.VerifiedActivationTx{
+						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
+						gatx(types.ATXID{2}, 2, types.NodeID{2}, 1, genAtxWithNonce(777)),
+						gatx(types.ATXID{3}, 2, types.NodeID{3}, 1, genAtxWithReceived(time.Unix(20, 0))),
+					},
+					blocks: []*types.Block{
+						gblock(15),
+					},
+					opinion:        &types.Opinion{Hash: types.Hash32{1}},
+					txs:            []types.TransactionID{},
+					latestComplete: 15,
+					expectProposal: expectProposal(
+						signer, 16, types.ATXID{1}, types.Opinion{Hash: types.Hash32{1}},
+						expectEpochData(
+							gactiveset(types.ATXID{1}, types.ATXID{2}),
+							25,
+							types.Beacon{1},
+						),
+						expectCounters(signer, 3, types.Beacon{1}, 777, 2, 5, 11, 19, 22, 24),
+					),
+				},
+			},
+		},
+		{
+			desc: "first block missing ballot",
+			opts: []Opt{
+				WithNetworkDelay(10 * time.Second),
+			},
+			steps: []step{
+				{
+					lid:    16,
+					beacon: types.Beacon{1},
+					atxs: []*types.VerifiedActivationTx{
+						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
+						gatx(types.ATXID{2}, 2, types.NodeID{2}, 1, genAtxWithNonce(777)),
+						gatx(types.ATXID{3}, 2, types.NodeID{3}, 1, genAtxWithReceived(time.Unix(20, 0))),
+					},
+					blocks: []*types.Block{
+						gblock(15, types.ATXID{4}),
+					},
+					opinion:        &types.Opinion{Hash: types.Hash32{1}},
+					txs:            []types.TransactionID{},
+					latestComplete: 15,
+					expectProposal: expectProposal(
+						signer, 16, types.ATXID{1}, types.Opinion{Hash: types.Hash32{1}},
+						expectEpochData(
+							gactiveset(types.ATXID{1}, types.ATXID{2}),
+							25,
+							types.Beacon{1},
+						),
+						expectCounters(signer, 3, types.Beacon{1}, 777, 2, 5, 11, 19, 22, 24),
+					),
+				},
+			},
+		},
+		{
 			desc: "invalid first ballot",
 			steps: []step{
 				{
