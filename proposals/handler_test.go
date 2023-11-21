@@ -492,7 +492,7 @@ func TestBallot_BallotDoubleVotedOutsideHdist(t *testing.T) {
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, ballot *types.Ballot, _ uint64) (bool, error) {
+		func(_ context.Context, ballot *types.Ballot, _ *RefBallotAux) (bool, error) {
 			require.Equal(t, b.ID(), ballot.ID())
 			return true, nil
 		})
@@ -661,7 +661,7 @@ func TestBallot_ErrorCheckingEligible(t *testing.T) {
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, ballot *types.Ballot, _ uint64) (bool, error) {
+		func(ctx context.Context, ballot *types.Ballot, _ *RefBallotAux) (bool, error) {
 			require.Equal(t, b.ID(), ballot.ID())
 			return false, errors.New("unknown")
 		})
@@ -689,7 +689,7 @@ func TestBallot_NotEligible(t *testing.T) {
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, ballot *types.Ballot, _ uint64) (bool, error) {
+		func(ctx context.Context, ballot *types.Ballot, _ *RefBallotAux) (bool, error) {
 			require.Equal(t, b.ID(), ballot.ID())
 			return false, nil
 		})
@@ -718,7 +718,7 @@ func TestBallot_Success(t *testing.T) {
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, ballot *types.Ballot, _ uint64) (bool, error) {
+		func(_ context.Context, ballot *types.Ballot, _ *RefBallotAux) (bool, error) {
 			require.Equal(t, b.ID(), ballot.ID())
 			return true, nil
 		})
@@ -751,7 +751,7 @@ func TestBallot_MaliciousProofIgnoredInSyncFlow(t *testing.T) {
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base, b.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, ballot *types.Ballot, _ uint64) (bool, error) {
+		func(_ context.Context, ballot *types.Ballot, _ *RefBallotAux) (bool, error) {
 			require.Equal(t, b.ID(), ballot.ID())
 			return true, nil
 		})
@@ -792,7 +792,7 @@ func TestBallot_RefBallot(t *testing.T) {
 			})
 		})
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, ballot *types.Ballot, _ uint64) (bool, error) {
+		func(_ context.Context, ballot *types.Ballot, _ *RefBallotAux) (bool, error) {
 			require.Equal(t, b.ID(), ballot.ID())
 			return true, nil
 		})
@@ -973,7 +973,7 @@ func TestProposal_DuplicateTXs(t *testing.T) {
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{p.Votes.Base, p.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{p.AtxID}).Return(nil).Times(1)
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, ballot *types.Ballot, _ uint64) (bool, error) {
+		func(ctx context.Context, ballot *types.Ballot, _ *RefBallotAux) (bool, error) {
 			require.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
@@ -1007,7 +1007,7 @@ func TestProposal_TXsNotAvailable(t *testing.T) {
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{p.Votes.Base, p.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{p.AtxID}).Return(nil).Times(1)
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, ballot *types.Ballot, _ uint64) (bool, error) {
+		func(ctx context.Context, ballot *types.Ballot, _ *RefBallotAux) (bool, error) {
 			require.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
@@ -1044,7 +1044,7 @@ func TestProposal_FailedToAddProposalTXs(t *testing.T) {
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{p.Votes.Base, p.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{p.AtxID}).Return(nil).Times(1)
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, ballot *types.Ballot, _ uint64) (bool, error) {
+		func(ctx context.Context, ballot *types.Ballot, _ *RefBallotAux) (bool, error) {
 			require.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
@@ -1088,7 +1088,7 @@ func TestProposal_ProposalGossip_Concurrent(t *testing.T) {
 		MaxTimes(2)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{p.AtxID}).Return(nil).MinTimes(1).MaxTimes(2)
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, ballot *types.Ballot, _ uint64) (bool, error) {
+		func(ctx context.Context, ballot *types.Ballot, _ *RefBallotAux) (bool, error) {
 			require.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		}).MinTimes(1).MaxTimes(2)
@@ -1147,7 +1147,7 @@ func TestProposal_BroadcastMaliciousGossip(t *testing.T) {
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{pMal.Votes.Base, pMal.RefBallot})
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{pMal.AtxID})
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, ballot *types.Ballot, _ uint64) (bool, error) {
+		func(ctx context.Context, ballot *types.Ballot, _ *RefBallotAux) (bool, error) {
 			require.Equal(t, pMal.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
@@ -1220,7 +1220,7 @@ func TestProposal_ProposalGossip_Fetched(t *testing.T) {
 			th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{p.Votes.Base, p.RefBallot}).Return(nil)
 			th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{p.AtxID}).Return(nil)
 			th.mv.EXPECT().CheckEligibility(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-				func(ctx context.Context, ballot *types.Ballot, _ uint64) (bool, error) {
+				func(ctx context.Context, ballot *types.Ballot, _ *RefBallotAux) (bool, error) {
 					require.Equal(t, p.Ballot.ID(), ballot.ID())
 					if tc.propFetched {
 						// a separate goroutine fetched the propFetched and saved it to database
@@ -1264,7 +1264,7 @@ func TestProposal_ValidProposal(t *testing.T) {
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{p.Votes.Base, p.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{p.AtxID}).Return(nil).Times(1)
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, ballot *types.Ballot, _ uint64) (bool, error) {
+		func(ctx context.Context, ballot *types.Ballot, _ *RefBallotAux) (bool, error) {
 			require.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
@@ -1300,7 +1300,7 @@ func TestMetrics(t *testing.T) {
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{p.Votes.Base, p.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{p.AtxID}).Return(nil).Times(1)
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, ballot *types.Ballot, _ uint64) (bool, error) {
+		func(ctx context.Context, ballot *types.Ballot, _ *RefBallotAux) (bool, error) {
 			require.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
