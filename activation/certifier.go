@@ -114,9 +114,9 @@ type Certifier struct {
 	client certifierClient
 }
 
-type NewCertifierOption func(*Certifier)
+type CertifierOption func(*Certifier)
 
-func WithCertificates(certs []Certificate) NewCertifierOption {
+func WithCertificates(certs []Certificate) CertifierOption {
 	return func(c *Certifier) {
 		c.logger.Info("adding certificates", zap.Int("num", len(certs)), zap.Any("certs", certs))
 		for _, cert := range certs {
@@ -131,7 +131,7 @@ func NewCertifier(
 	db *localsql.Database,
 	logger *zap.Logger,
 	client certifierClient,
-	opts ...NewCertifierOption,
+	opts ...CertifierOption,
 ) *Certifier {
 	c := &Certifier{
 		client: client,
