@@ -23,9 +23,6 @@ func fastnet() config.Config {
 	conf.BaseConfig.OptFilterThreshold = 90
 	conf.BaseConfig.DatabasePruneInterval = time.Minute
 
-	// set for systest TestEquivocation
-	conf.BaseConfig.MinerGoodAtxsPercent = 50
-
 	conf.HARE3.Enable = true
 	conf.HARE3.DisableLayer = types.LayerID(math.MaxUint32)
 	conf.HARE3.Committee = 800

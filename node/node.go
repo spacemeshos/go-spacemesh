@@ -846,10 +846,6 @@ func (app *App) initServices(ctx context.Context) error {
 		blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg)),
 	)
 
-	minerGoodAtxPct := 90
-	if app.Config.MinerGoodAtxsPercent > 0 {
-		minerGoodAtxPct = app.Config.MinerGoodAtxsPercent
-	}
 	proposalBuilder := miner.New(
 		app.clock,
 		app.cachedDB,
@@ -863,7 +859,6 @@ func (app *App) initServices(ctx context.Context) error {
 		miner.WithHdist(app.Config.Tortoise.Hdist),
 		// TODO(dshulyak) ???
 		miner.WithNetworkDelay(app.Config.HARE3.PreroundDelay),
-		miner.WithMinGoodAtxPercent(minerGoodAtxPct),
 		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)),
 	)
 	proposalBuilder.Register(app.edSgn)
