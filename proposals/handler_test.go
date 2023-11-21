@@ -66,6 +66,7 @@ func (ms *mockSet) setCurrentLayer(layer types.LayerID) *mockSet {
 }
 
 type testHandler struct {
+	atxsdata *atxsdata.Data
 	*Handler
 	*mockSet
 }
@@ -88,6 +89,7 @@ func createTestHandler(t *testing.T) *testHandler {
 	types.SetLayersPerEpoch(layersPerEpoch)
 	ms := fullMockSet(t)
 	db := sql.InMemory()
+	atxsdata := atxsdata.New()
 	ms.md.EXPECT().GetBallot(gomock.Any()).AnyTimes().DoAndReturn(func(id types.BallotID) *tortoise.BallotData {
 		ballot, err := ballots.Get(db, id)
 		if err != nil {
@@ -107,9 +109,10 @@ func createTestHandler(t *testing.T) *testHandler {
 		return data
 	})
 	return &testHandler{
+		atxsdata: atxsdata,
 		Handler: NewHandler(
 			db,
-			atxsdata.New(),
+			atxsdata,
 			signing.NewEdVerifier(),
 			ms.mpub,
 			ms.mf,
@@ -786,6 +789,9 @@ func TestBallot_RefBallot(t *testing.T) {
 	th.mf.EXPECT().
 		GetActiveSet(gomock.Any(), activeSet.Hash()).
 		DoAndReturn(func(_ context.Context, hash types.Hash32) error {
+			for _, id := range activeSet {
+				th.atxsdata.Add(lid.GetEpoch(), types.NodeID{1}, id, 0, 0, 0, 0, false)
+			}
 			return activesets.Add(th.db, hash, &types.EpochActiveSet{
 				Epoch: b.Layer.GetEpoch(),
 				Set:   activeSet,
@@ -1446,8 +1452,12 @@ func TestHandleSyncedProposalActiveSet(t *testing.T) {
 	th.mf.EXPECT().GetActiveSet(gomock.Any(), set.Hash()).DoAndReturn(
 		func(_ context.Context, got types.Hash32) error {
 			require.NoError(t, activesets.Add(th.db, got, &types.EpochActiveSet{
-				Set: set,
+				Epoch: lid.GetEpoch(),
+				Set:   set,
 			}))
+			for _, id := range set {
+				th.atxsdata.Add(lid.GetEpoch(), types.NodeID{1}, id, 0, 0, 0, 0, false)
+			}
 			return nil
 		},
 	)

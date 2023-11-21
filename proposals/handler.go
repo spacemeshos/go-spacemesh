@@ -509,7 +509,7 @@ func (h *Handler) checkBallotDataIntegrity(ctx context.Context, b *types.Ballot)
 		}
 		if b.Layer.GetEpoch() >= epoch {
 			var exists bool
-			weight, exists := h.activeSets.Get(b.EpochData.ActiveSetHash)
+			totalWeight, exists := h.activeSets.Get(b.EpochData.ActiveSetHash)
 			if !exists {
 				if err := h.fetcher.GetActiveSet(ctx, b.EpochData.ActiveSetHash); err != nil {
 					return nil, err
@@ -525,12 +525,20 @@ func (h *Handler) checkBallotDataIntegrity(ctx context.Context, b *types.Ballot)
 						b.ID().String(),
 					)
 				}
-				weight, _ = h.atxsdata.WeightForSet(set.Epoch, set.Set)
-				// TODO(dshulyak) consider rechecking that all values in the set were used
-				// if there is a bug in fetching
-				h.activeSets.Add(b.EpochData.ActiveSetHash, weight)
+				computed, used := h.atxsdata.WeightForSet(set.Epoch, set.Set)
+				for i := range used {
+					if !used[i] {
+						return nil, fmt.Errorf(
+							"missing atx %s in active set ballot %s",
+							set.Set[i].ShortString(),
+							b.ID().String(),
+						)
+					}
+				}
+				totalWeight = computed
+				h.activeSets.Add(b.EpochData.ActiveSetHash, totalWeight)
 			}
-			return &RefBallotAux{TotalWeight: weight}, nil
+			return &RefBallotAux{TotalWeight: totalWeight}, nil
 		}
 	} else if b.EpochData != nil {
 		return nil, errUnexpectedEpochData
