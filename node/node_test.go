@@ -24,8 +24,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"go.uber.org/zap/zaptest"
-	"go.uber.org/zap/zaptest/observer"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"
@@ -296,23 +294,15 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 
 	run := func(c *cobra.Command, args []string) {
 		app.Config.API.PublicListener = listener
-		app.Config.API.PublicServices = nil
-		app.Config.API.PrivateServices = nil
 		r.NoError(cmd.EnsureCLIFlags(c, app.Config))
 		app.Config.DataDirParent = path
 		app.startAPIServices(context.Background())
 	}
 	defer app.stopServices(context.Background())
 
-	// Make sure the service is not running by default
-	str, err := testArgs(context.Background(), cmdWithRun(run)) // no args
-	r.Empty(str)
-	r.NoError(err)
-	r.Empty(app.Config.API.PublicServices)
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	_, err = grpc.DialContext(
+	_, err := grpc.DialContext(
 		ctx,
 		listener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -323,18 +313,15 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	events.CloseEventReporter()
 
 	// Test starting the server from the command line
-	str, err = testArgs(
+	str, err := testArgs(
 		context.Background(),
 		cmdWithRun(run),
 		"--grpc-public-listener",
 		listener,
-		"--grpc-public-services",
-		"node",
 	)
 	r.Empty(str)
 	r.NoError(err)
 	r.Equal(listener, app.Config.API.PublicListener)
-	r.Contains(app.Config.API.PublicServices, "node")
 
 	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -408,8 +395,6 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	str, err := testArgs(
 		context.Background(),
 		cmdWithRun(run),
-		"--grpc-public-services",
-		"node",
 		"--grpc-json-listener",
 		listener,
 	)
@@ -417,7 +402,6 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	r.NoError(err)
 	defer app.stopServices(context.Background())
 	r.Equal(listener, app.Config.API.JSONListener)
-	r.Contains(app.Config.API.PublicServices, "node")
 
 	var (
 		respBody   []byte
@@ -495,12 +479,8 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		str, err := testArgs(
 			ctx,
 			cmdWithRun(run),
-			"--grpc-private-listener",
+			"--grpc-public-listener",
 			fmt.Sprintf("localhost:%d", port),
-			"--grpc-private-services",
-			"node",
-			"--grpc-public-services",
-			"debug",
 		)
 		assert.Empty(t, str)
 		assert.NoError(t, err)
@@ -574,36 +554,6 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 	// Wait for everything to stop cleanly before ending test
 	eg.Wait()
-}
-
-func TestSpacemeshApp_PostServiceConfig(t *testing.T) {
-	observer, logs := observer.New(zapcore.DebugLevel)
-	logger := zap.New(zapcore.NewTee(zaptest.NewLogger(t).Core(), observer))
-
-	app := New(WithLog(log.NewFromLog(logger)))
-	app.Config = getTestDefaultConfig(t)
-
-	// default config doesn't cause
-	require.NoError(t, app.checkPostServiceSetup())
-	require.Empty(t, logs.TakeAll()) // no warnings
-
-	// change to different port only logs a warning
-	app.Config.API.PrivateListener = "127.0.0.1:14000"
-	require.NoError(t, app.checkPostServiceSetup())
-
-	observed := logs.FilterMessageSnippet("post service node address differs from private listener").All()
-	require.NotEmpty(t, observed)
-	logs.TakeAll()
-
-	// missing post service adds it and prints a warning
-	app.Config = getTestDefaultConfig(t)
-	app.Config.API.PrivateServices = []grpcserver.Service{grpcserver.Admin, grpcserver.Smesher}
-	require.NoError(t, app.checkPostServiceSetup())
-
-	observed = logs.FilterMessageSnippet("post service is not included in any listener").All()
-	require.NotEmpty(t, observed)
-
-	require.Contains(t, app.Config.API.PrivateServices, grpcserver.Post)
 }
 
 // E2E app test of the transaction service.

@@ -812,7 +812,7 @@ func extractP2PEndpoints(tctx *testcontext.Context, nodes []*NodeClient) ([]stri
 			if err != nil {
 				return err
 			}
-			dbg := pb.NewDebugServiceClient(n)
+			dbg := pb.NewDebugServiceClient(n.PrivConn())
 			info, err := dbg.NetworkInfo(ctx, &emptypb.Empty{})
 			if err != nil {
 				return err
@@ -867,7 +867,7 @@ func recoverFlags(ctx *testcontext.Context, name string) (map[string]DeploymentF
 }
 
 func fillNetworkConfig(ctx *testcontext.Context, node *NodeClient) error {
-	svc := pb.NewMeshServiceClient(node)
+	svc := pb.NewMeshServiceClient(node.PubConn())
 	resp1, err := svc.EpochNumLayers(ctx, &pb.EpochNumLayersRequest{})
 	if err != nil {
 		return fmt.Errorf("query layers per epoch from %v: %w", node.Name, err)

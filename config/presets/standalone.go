@@ -80,7 +80,5 @@ func standalone() config.Config {
 
 	conf.API.PublicListener = "0.0.0.0:10092"
 	conf.API.PrivateListener = "127.0.0.1:10093"
-
-	conf.POSTService.NodeAddress = "http://127.0.0.1:10093"
 	return conf
 }

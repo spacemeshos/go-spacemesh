@@ -12,7 +12,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"syscall"
 	"time"
 
@@ -869,9 +868,11 @@ func (app *App) initServices(ctx context.Context) error {
 	proposalBuilder.Register(app.edSgn)
 
 	if app.Config.SMESHING.Start {
-		if err := app.checkPostServiceSetup(); err != nil {
-			return err
+		u := url.URL{
+			Scheme: "http",
+			Host:   app.Config.API.PrivateListener,
 		}
+		app.Config.POSTService.NodeAddress = u.String()
 
 		postSetupMgr, err := activation.NewPostSetupManager(
 			app.edSgn.NodeID(),
@@ -927,6 +928,9 @@ func (app *App) initServices(ctx context.Context) error {
 
 	var coinbaseAddr types.Address
 	if app.Config.SMESHING.Start {
+		// TODO(mafa): this won't work with a remote-only setup, where `smeshing-start` is set to false
+		// TODO(mafa): also the way we handle coinbase means only 1 address can receive rewards, independent
+		// of the number of identities/post services that are managed by the node
 		coinbaseAddr, err = types.StringToAddress(app.Config.SMESHING.CoinbaseAccount)
 		if err != nil {
 			app.log.Panic(
@@ -1105,41 +1109,6 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	if err := app.host.Start(); err != nil {
 		return err
-	}
-	return nil
-}
-
-// checkPostServiceSetup does some sanity checks on the post service configuration
-//  1. it checks if the post service is included in at least one listener and adds it to private listener if its not
-//     this ensures that nodes that could smesh before v1.3.x can still smesh
-//  2. it checks that node address for the post service is the same as the private listener
-//     while this will incorrectly print a warning if a user uses the TLS listener for the post service
-//     (e.g. when they setup multiple post services). This ensures that users with a non-default private listener
-//     receive a warning as to why their node might not be able to smesh
-//
-// TODO: https://github.com/spacemeshos/go-spacemesh/issues/5260
-// remove this function in a future release when we can assume that most nodes have updated their config for
-// the post service.
-func (app *App) checkPostServiceSetup() error {
-	if !slices.Contains(app.Config.API.PrivateServices, grpcserver.Post) &&
-		!slices.Contains(app.Config.API.TLSServices, grpcserver.Post) {
-		app.log.Warning(
-			"post service is not included in any listener. Check the README.md and update your config file",
-		)
-		app.log.Info("adding post service to private listener. This will be removed in the future")
-
-		app.Config.API.PrivateServices = append(app.Config.API.PrivateServices, grpcserver.Post)
-	}
-
-	address, err := url.Parse(app.Config.POSTService.NodeAddress)
-	if err != nil {
-		return fmt.Errorf("invalid post service node address: %w", err)
-	}
-
-	if app.Config.API.PrivateListener != address.Host {
-		app.log.Warning("post service node address differs from private listener." +
-			" Check README.md to ensure that this is not an error",
-		)
 	}
 	return nil
 }
@@ -1331,6 +1300,8 @@ func (app *App) startAPIServices(ctx context.Context) error {
 	logger := app.addLogger(GRPCLogger, app.log)
 	grpczap.SetGrpcLoggerV2(grpclog, logger.Zap())
 	var (
+		// TODO(mafa): instead of checking for uniqueness of services across endpoints
+		// check uniqueness per endpoint and make them singletons
 		unique        = map[grpcserver.Service]struct{}{}
 		public        []grpcserver.ServiceAPI
 		private       []grpcserver.ServiceAPI
@@ -1363,9 +1334,6 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		unique[svc] = struct{}{}
 	}
 	for _, svc := range app.Config.API.TLSServices {
-		if _, exists := unique[svc]; exists {
-			return fmt.Errorf("can't start more than one %s", svc)
-		}
 		gsvc, err := app.initService(ctx, svc)
 		if err != nil {
 			return err
@@ -1396,7 +1364,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			return err
 		}
 	}
-	if len(authenticated) > 0 {
+	if len(authenticated) > 0 && app.Config.API.TLSListener != "" {
 		var err error
 		app.grpcTLSServer, err = grpcserver.NewTLS(logger.Zap(), app.Config.API, authenticated)
 		if err != nil {

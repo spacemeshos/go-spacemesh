@@ -9,19 +9,8 @@
         "tortoise-enable-tracer": true
     },
     "api": {
-        "grpc-public-services": [
-            "debug",
-            "global",
-            "mesh",
-            "node",
-            "transaction",
-            "activation",
-            "admin",
-            "smesher"
-        ],
-        "grpc-private-services": [
-            "post"
-        ]
+        "grpc-public-listener": "0.0.0.0:9092",
+        "grpc-private-listener": "0.0.0.0:9093"
     },
     "logging": {
         "hare": "debug"
