@@ -292,6 +292,7 @@ func Test_0008Migration(t *testing.T) {
 
 	// verify the data
 	rewards, err := ListByCoinbase(db, reward.Coinbase)
+	require.NoError(t, err)
 	require.Len(t, rewards, 1)
 	require.Equal(t, reward.Coinbase, rewards[0].Coinbase)
 	require.Equal(t, reward.TotalReward, rewards[0].TotalReward)
@@ -302,6 +303,7 @@ func Test_0008Migration(t *testing.T) {
 
 	// this should return nothing (since smesherID wasn't set)
 	rewards, err = ListBySmesherId(db, reward.SmesherID)
+	require.NoError(t, err)
 	require.Len(t, rewards, 0)
 
 	// add more data and verify that we can read it both ways
@@ -314,7 +316,9 @@ func Test_0008Migration(t *testing.T) {
 	}
 
 	err = Add(db, reward)
+	require.NoError(t, err)
 	rewards, err = ListByCoinbase(db, reward.Coinbase)
+	require.NoError(t, err)
 	require.Len(t, rewards, 2)
 	require.Equal(t, reward.Coinbase, rewards[1].Coinbase)
 	require.Equal(t, reward.TotalReward, rewards[1].TotalReward)
@@ -323,6 +327,7 @@ func Test_0008Migration(t *testing.T) {
 	require.Equal(t, reward.SmesherID, rewards[1].SmesherID)
 
 	rewards, err = ListBySmesherId(db, reward.SmesherID)
+	require.NoError(t, err)
 	require.Len(t, rewards, 1)
 	require.Equal(t, reward.Coinbase, rewards[0].Coinbase)
 	require.Equal(t, reward.TotalReward, rewards[0].TotalReward)
