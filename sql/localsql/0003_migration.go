@@ -192,7 +192,7 @@ func (m migration0003) moveNipostStateToDb(db sql.Executor, dataDir string) erro
 	return discardBuilderState(dataDir)
 }
 
-func (m migration0003) getAddress(serviceID types.PoetServiceID) (string, error) {
+func (m migration0003) getAddress(serviceID PoetServiceID) (string, error) {
 	for _, client := range m.poetClients {
 		clientId, err := client.PoetServiceID(context.Background())
 		if err == nil && bytes.Equal(serviceID.ServiceID, clientId.ServiceID) {

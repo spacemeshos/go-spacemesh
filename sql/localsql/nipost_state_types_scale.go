@@ -8,6 +8,29 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
+func (t *PoetServiceID) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.ServiceID, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *PoetServiceID) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.ServiceID = field
+	}
+	return total, nil
+}
+
 func (t *PoetRequest) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
 		n, err := scale.EncodeOption(enc, t.PoetRound)

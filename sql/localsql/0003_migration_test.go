@@ -99,7 +99,7 @@ func Test_0003Migration_Phase0_missing_poet_client(t *testing.T) {
 				PoetRound: &types.PoetRound{
 					ID: "101",
 				},
-				PoetServiceID: types.PoetServiceID{
+				PoetServiceID: PoetServiceID{
 					ServiceID: []byte("service1"),
 				},
 			},
@@ -107,7 +107,7 @@ func Test_0003Migration_Phase0_missing_poet_client(t *testing.T) {
 				PoetRound: &types.PoetRound{
 					ID: "102",
 				},
-				PoetServiceID: types.PoetServiceID{
+				PoetServiceID: PoetServiceID{
 					ServiceID: []byte("service2"),
 				},
 			},
@@ -150,7 +150,7 @@ func Test_0003Migration_Phase0_Complete(t *testing.T) {
 					ID:  "101",
 					End: types.RoundEnd(endTime),
 				},
-				PoetServiceID: types.PoetServiceID{
+				PoetServiceID: PoetServiceID{
 					ServiceID: []byte("service1"),
 				},
 			},
@@ -159,7 +159,7 @@ func Test_0003Migration_Phase0_Complete(t *testing.T) {
 					ID:  "102",
 					End: types.RoundEnd(endTime),
 				},
-				PoetServiceID: types.PoetServiceID{
+				PoetServiceID: PoetServiceID{
 					ServiceID: []byte("service2"),
 				},
 			},
@@ -188,12 +188,12 @@ func Test_0003Migration_Phase0_Complete(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	poetClient1 := NewMockPoetClient(ctrl)
 	poetClient1.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().
-		Return(types.PoetServiceID{ServiceID: []byte("service1")}, nil)
+		Return(PoetServiceID{ServiceID: []byte("service1")}, nil)
 	poetClient1.EXPECT().Address().AnyTimes().Return("http://poet1.com")
 
 	poetClient2 := NewMockPoetClient(ctrl)
 	poetClient2.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().
-		Return(types.PoetServiceID{ServiceID: []byte("service2")}, nil)
+		Return(PoetServiceID{ServiceID: []byte("service2")}, nil)
 	poetClient2.EXPECT().Address().AnyTimes().Return("http://poet2.com")
 
 	err = New0003Migration(dataDir, []PoetClient{poetClient1, poetClient2}).Apply(db)
@@ -245,7 +245,7 @@ func Test_0003Migration_Phase1_Complete(t *testing.T) {
 					ID:  "101",
 					End: types.RoundEnd(endTime),
 				},
-				PoetServiceID: types.PoetServiceID{
+				PoetServiceID: PoetServiceID{
 					ServiceID: []byte("service1"),
 				},
 			},
@@ -254,7 +254,7 @@ func Test_0003Migration_Phase1_Complete(t *testing.T) {
 					ID:  "102",
 					End: types.RoundEnd(endTime),
 				},
-				PoetServiceID: types.PoetServiceID{
+				PoetServiceID: PoetServiceID{
 					ServiceID: []byte("service2"),
 				},
 			},
@@ -283,12 +283,12 @@ func Test_0003Migration_Phase1_Complete(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	poetClient1 := NewMockPoetClient(ctrl)
 	poetClient1.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().
-		Return(types.PoetServiceID{ServiceID: []byte("service1")}, nil)
+		Return(PoetServiceID{ServiceID: []byte("service1")}, nil)
 	poetClient1.EXPECT().Address().AnyTimes().Return("http://poet1.com")
 
 	poetClient2 := NewMockPoetClient(ctrl)
 	poetClient2.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().
-		Return(types.PoetServiceID{ServiceID: []byte("service2")}, nil)
+		Return(PoetServiceID{ServiceID: []byte("service2")}, nil)
 	poetClient2.EXPECT().Address().AnyTimes().Return("http://poet2.com")
 
 	enc := func(stmt *sql.Statement) {
@@ -380,7 +380,7 @@ func Test_0003Migration_Phase2_Complete(t *testing.T) {
 					ID:  "101",
 					End: types.RoundEnd(endTime),
 				},
-				PoetServiceID: types.PoetServiceID{
+				PoetServiceID: PoetServiceID{
 					ServiceID: []byte("service1"),
 				},
 			},
@@ -389,7 +389,7 @@ func Test_0003Migration_Phase2_Complete(t *testing.T) {
 					ID:  "102",
 					End: types.RoundEnd(endTime),
 				},
-				PoetServiceID: types.PoetServiceID{
+				PoetServiceID: PoetServiceID{
 					ServiceID: []byte("service2"),
 				},
 			},
@@ -419,12 +419,12 @@ func Test_0003Migration_Phase2_Complete(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	poetClient1 := NewMockPoetClient(ctrl)
 	poetClient1.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().
-		Return(types.PoetServiceID{ServiceID: []byte("service1")}, nil)
+		Return(PoetServiceID{ServiceID: []byte("service1")}, nil)
 	poetClient1.EXPECT().Address().AnyTimes().Return("http://poet1.com")
 
 	poetClient2 := NewMockPoetClient(ctrl)
 	poetClient2.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().
-		Return(types.PoetServiceID{ServiceID: []byte("service2")}, nil)
+		Return(PoetServiceID{ServiceID: []byte("service2")}, nil)
 	poetClient2.EXPECT().Address().AnyTimes().Return("http://poet2.com")
 
 	enc := func(stmt *sql.Statement) {
@@ -546,7 +546,7 @@ func Test_0003Migration_Rollback(t *testing.T) {
 					ID:  "101",
 					End: types.RoundEnd(endTime),
 				},
-				PoetServiceID: types.PoetServiceID{
+				PoetServiceID: PoetServiceID{
 					ServiceID: []byte("service1"),
 				},
 			},
@@ -555,7 +555,7 @@ func Test_0003Migration_Rollback(t *testing.T) {
 					ID:  "102",
 					End: types.RoundEnd(endTime),
 				},
-				PoetServiceID: types.PoetServiceID{
+				PoetServiceID: PoetServiceID{
 					ServiceID: []byte("service2"),
 				},
 			},
@@ -585,12 +585,12 @@ func Test_0003Migration_Rollback(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	poetClient1 := NewMockPoetClient(ctrl)
 	poetClient1.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().
-		Return(types.PoetServiceID{ServiceID: []byte("service1")}, nil)
+		Return(PoetServiceID{ServiceID: []byte("service1")}, nil)
 	poetClient1.EXPECT().Address().AnyTimes().Return("http://poet1.com")
 
 	poetClient2 := NewMockPoetClient(ctrl)
 	poetClient2.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().
-		Return(types.PoetServiceID{ServiceID: []byte("service2")}, nil)
+		Return(PoetServiceID{ServiceID: []byte("service2")}, nil)
 	poetClient2.EXPECT().Address().AnyTimes().Return("http://poet2.com")
 
 	enc := func(stmt *sql.Statement) {

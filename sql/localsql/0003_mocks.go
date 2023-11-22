@@ -12,7 +12,6 @@ import (
 	context "context"
 	reflect "reflect"
 
-	types "github.com/spacemeshos/go-spacemesh/common/types"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -78,10 +77,10 @@ func (c *PoetClientAddressCall) DoAndReturn(f func() string) *PoetClientAddressC
 }
 
 // PoetServiceID mocks base method.
-func (m *MockPoetClient) PoetServiceID(ctx context.Context) (types.PoetServiceID, error) {
+func (m *MockPoetClient) PoetServiceID(ctx context.Context) (PoetServiceID, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PoetServiceID", ctx)
-	ret0, _ := ret[0].(types.PoetServiceID)
+	ret0, _ := ret[0].(PoetServiceID)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -99,19 +98,19 @@ type PoetClientPoetServiceIDCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *PoetClientPoetServiceIDCall) Return(arg0 types.PoetServiceID, arg1 error) *PoetClientPoetServiceIDCall {
+func (c *PoetClientPoetServiceIDCall) Return(arg0 PoetServiceID, arg1 error) *PoetClientPoetServiceIDCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *PoetClientPoetServiceIDCall) Do(f func(context.Context) (types.PoetServiceID, error)) *PoetClientPoetServiceIDCall {
+func (c *PoetClientPoetServiceIDCall) Do(f func(context.Context) (PoetServiceID, error)) *PoetClientPoetServiceIDCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *PoetClientPoetServiceIDCall) DoAndReturn(f func(context.Context) (types.PoetServiceID, error)) *PoetClientPoetServiceIDCall {
+func (c *PoetClientPoetServiceIDCall) DoAndReturn(f func(context.Context) (PoetServiceID, error)) *PoetClientPoetServiceIDCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

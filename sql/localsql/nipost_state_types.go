@@ -4,12 +4,16 @@ import "github.com/spacemeshos/go-spacemesh/common/types"
 
 //go:generate scalegen
 
+type PoetServiceID struct {
+	ServiceID []byte `scale:"max=32"` // public key of the PoET service
+}
+
 // PoetRequest describes an in-flight challenge submission for a poet proof.
 type PoetRequest struct {
 	// PoetRound is the round of the PoET proving service in which the PoET challenge was included in.
 	PoetRound *types.PoetRound
 	// PoetServiceID returns the public key of the PoET proving service.
-	PoetServiceID types.PoetServiceID
+	PoetServiceID PoetServiceID
 }
 
 // NIPostBuilderState is a builder state.

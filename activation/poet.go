@@ -18,6 +18,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 )
 
 var (
@@ -39,7 +40,7 @@ type PoetPoW struct {
 // HTTPPoetClient implements PoetProvingServiceClient interface.
 type HTTPPoetClient struct {
 	baseURL       *url.URL
-	poetServiceID types.PoetServiceID
+	poetServiceID localsql.PoetServiceID
 	client        *retryablehttp.Client
 	logger        *zap.Logger
 }
@@ -183,14 +184,14 @@ func (c *HTTPPoetClient) Submit(
 }
 
 // PoetServiceID returns the public key of the PoET proving service.
-func (c *HTTPPoetClient) PoetServiceID(ctx context.Context) (types.PoetServiceID, error) {
+func (c *HTTPPoetClient) PoetServiceID(ctx context.Context) (localsql.PoetServiceID, error) {
 	if c.poetServiceID.ServiceID != nil {
 		return c.poetServiceID, nil
 	}
 	resBody := rpcapi.InfoResponse{}
 
 	if err := c.req(ctx, http.MethodGet, "/v1/info", nil, &resBody); err != nil {
-		return types.PoetServiceID{}, fmt.Errorf("getting poet ID: %w", err)
+		return localsql.PoetServiceID{}, fmt.Errorf("getting poet ID: %w", err)
 	}
 
 	c.poetServiceID.ServiceID = resBody.ServicePubkey
