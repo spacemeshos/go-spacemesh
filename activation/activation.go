@@ -405,7 +405,7 @@ func (b *Builder) certifyPost(ctx context.Context) {
 	}
 
 	client := NewCertifierClient(b.log, post, meta, ch, WithCertifierClientConfig(b.certifierConfig.Client))
-	b.certifier = NewCertifier(b.localDB, b.log, client, WithCertificates(b.certifierConfig.Certificates))
+	b.certifier = NewCertifier(b.localDB, b.log, client)
 	b.certifier.CertifyAll(ctx, b.poets)
 }
 

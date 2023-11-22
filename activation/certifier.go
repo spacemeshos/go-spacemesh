@@ -59,15 +59,8 @@ func (e *Base64Enc) UnmarshalText(text []byte) error {
 	return nil
 }
 
-type Certificate struct {
-	NodeID      types.NodeID `mapstructure:"node_id"`
-	Poet        string       `mapstructure:"poet"`
-	Certificate Base64Enc    `mapstructure:"certificate"`
-}
-
 type CertifierConfig struct {
-	Client       CertifierClientConfig `mapstructure:"client"`
-	Certificates []Certificate         `mapstructure:"certificates"`
+	Client CertifierClientConfig `mapstructure:"client"`
 }
 
 func DefaultCertifierClientConfig() CertifierClientConfig {
@@ -114,33 +107,15 @@ type Certifier struct {
 	client certifierClient
 }
 
-type CertifierOption func(*Certifier)
-
-func WithCertificates(certs []Certificate) CertifierOption {
-	return func(c *Certifier) {
-		c.logger.Info("adding certificates", zap.Int("num", len(certs)), zap.Any("certs", certs))
-		for _, cert := range certs {
-			if err := certifier_db.AddCertificate(c.db, cert.NodeID, cert.Certificate.Inner, cert.Poet); err != nil {
-				c.logger.Warn("failed to persist poet cert", zap.Error(err))
-			}
-		}
-	}
-}
-
 func NewCertifier(
 	db *localsql.Database,
 	logger *zap.Logger,
 	client certifierClient,
-	opts ...CertifierOption,
 ) *Certifier {
 	c := &Certifier{
 		client: client,
 		logger: logger,
 		db:     db,
-	}
-
-	for _, opt := range opts {
-		opt(c)
 	}
 
 	return c
