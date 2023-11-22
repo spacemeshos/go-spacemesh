@@ -423,6 +423,10 @@ func TestBuilder_StopSmeshing_Delete(t *testing.T) {
 	tab.mnipost.EXPECT().ResetState().Return(nil)
 	require.NoError(t, tab.StartSmeshing(types.Address{}))
 	require.NoError(t, tab.StopSmeshing(true)) // no-op
+
+	challenge, err = nipost.Challenge(tab.localDb, tab.sig.NodeID())
+	require.ErrorIs(t, err, sql.ErrNotFound)
+	require.Nil(t, challenge) // challenge still deleted
 }
 
 func TestBuilder_StopSmeshing_failsWhenNotStarted(t *testing.T) {
