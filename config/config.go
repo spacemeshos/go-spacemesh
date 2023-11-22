@@ -2,6 +2,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -99,7 +100,8 @@ type BaseConfig struct {
 	LayerAvgSize   uint32        `mapstructure:"layer-average-size"`
 	LayersPerEpoch uint32        `mapstructure:"layers-per-epoch"`
 
-	PoETServers []string `mapstructure:"poet-server"`
+	PoETServers []deprecatedPoETServers `mapstructure:"poet-server"`
+	PoetServers []activation.PoetServer `mapstructure:"poet-servers"`
 
 	PprofHTTPServer bool `mapstructure:"pprof-server"`
 
@@ -124,6 +126,15 @@ type BaseConfig struct {
 	MinerGoodAtxsPercent int `mapstructure:"miner-good-atxs-percent"`
 
 	RegossipAtxInterval time.Duration `mapstructure:"regossip-atx-interval"`
+}
+
+type deprecatedPoETServers struct{}
+
+func (deprecatedPoETServers) UnmarshalText([]byte) error {
+	return errors.New(
+		`The poet-server field is deprecated. Please migrate to the poet-servers field. ` +
+			`Check 'Upgrade Information' in CHANGELOG.md for details.`,
+	)
 }
 
 type PublicMetrics struct {
@@ -192,7 +203,6 @@ func defaultBaseConfig() BaseConfig {
 		ProfilerName:                 "go-spacemesh",
 		LayerDuration:                30 * time.Second,
 		LayersPerEpoch:               3,
-		PoETServers:                  []string{"127.0.0.1"},
 		TxsPerProposal:               100,
 		BlockGasLimit:                math.MaxUint64,
 		OptFilterThreshold:           90,

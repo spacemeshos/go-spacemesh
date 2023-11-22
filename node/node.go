@@ -902,7 +902,7 @@ func (app *App) initServices(ctx context.Context) error {
 	nipostBuilder, err := activation.NewNIPostBuilder(
 		poetDb,
 		app.grpcPostService,
-		app.Config.PoETServers,
+		app.Config.PoetServers,
 		app.Config.SMESHING.Opts.DataDir,
 		app.addLogger(NipostBuilderLogger, lg).Zap(),
 		app.edSgn,
@@ -1102,10 +1102,10 @@ func (app *App) launchStandalone(ctx context.Context) error {
 	if !app.Config.Standalone {
 		return nil
 	}
-	if len(app.Config.PoETServers) != 1 {
+	if len(app.Config.PoetServers) != 1 {
 		return fmt.Errorf(
 			"to launch in a standalone mode provide single local address for poet: %v",
-			app.Config.PoETServers,
+			app.Config.PoetServers,
 		)
 	}
 	value := types.Beacon{}
@@ -1122,7 +1122,7 @@ func (app *App) launchStandalone(ctx context.Context) error {
 	cfg := server.DefaultConfig()
 	cfg.PoetDir = filepath.Join(app.Config.DataDir(), "poet")
 
-	parsed, err := url.Parse(app.Config.PoETServers[0])
+	parsed, err := url.Parse(app.Config.PoetServers[0].Address)
 	if err != nil {
 		return err
 	}

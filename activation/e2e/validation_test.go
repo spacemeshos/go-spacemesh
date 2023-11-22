@@ -87,7 +87,7 @@ func TestValidator_Validate(t *testing.T) {
 	nb, err := activation.NewNIPostBuilder(
 		poetDb,
 		svc,
-		[]string{poetProver.RestURL().String()},
+		[]activation.PoetServer{{Address: poetProver.RestURL().String()}},
 		t.TempDir(),
 		logger.Named("nipostBuilder"),
 		sig,

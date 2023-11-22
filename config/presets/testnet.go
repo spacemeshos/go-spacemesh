@@ -71,7 +71,6 @@ func testnet() config.Config {
 			OptFilterThreshold: 90,
 
 			TickSize:            666514,
-			PoETServers:         []string{},
 			RegossipAtxInterval: time.Hour,
 		},
 		Genesis: &config.GenesisConfig{

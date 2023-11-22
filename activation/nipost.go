@@ -90,7 +90,7 @@ func withPoetClients(clients []poetClient) NIPostBuilderOption {
 func NewNIPostBuilder(
 	poetDB poetDbAPI,
 	postService postService,
-	poetServers []string,
+	poetServers []PoetServer,
 	dataDir string,
 	lg *zap.Logger,
 	signer *signing.EdSigner,
@@ -99,8 +99,8 @@ func NewNIPostBuilder(
 	opts ...NIPostBuilderOption,
 ) (*NIPostBuilder, error) {
 	poetClients := make(map[string]poetClient, len(poetServers))
-	for _, address := range poetServers {
-		client, err := NewHTTPPoetClient(address, poetCfg, WithLogger(lg.Named("poet")))
+	for _, server := range poetServers {
+		client, err := NewHTTPPoetClient(server, poetCfg, WithLogger(lg.Named("poet")))
 		if err != nil {
 			return nil, fmt.Errorf("cannot create poet client: %w", err)
 		}
@@ -314,10 +314,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 	prefix, challenge []byte,
 	signature types.EdSignature,
 ) (*types.PoetRequest, error) {
-	poetServiceID, err := client.PoetServiceID(ctx)
-	if err != nil {
-		return nil, &PoetSvcUnstableError{msg: "failed to get PoET service ID", source: err}
-	}
+	poetServiceID := client.PoetServiceID(ctx)
 	logger := nb.log.With(log.ZContext(ctx), zap.String("poet", client.Address()))
 
 	logger.Debug("querying for poet pow parameters")
@@ -414,7 +411,7 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 
 func (nb *NIPostBuilder) getPoetClient(ctx context.Context, id types.PoetServiceID) poetClient {
 	for _, client := range nb.poetProvers {
-		if clientId, err := client.PoetServiceID(ctx); err == nil && bytes.Equal(id.ServiceID, clientId.ServiceID) {
+		if clientId := client.PoetServiceID(ctx); bytes.Equal(id.ServiceID, clientId.ServiceID) {
 			return client
 		}
 	}
@@ -459,15 +456,8 @@ func (nb *NIPostBuilder) addPoETMitigation(
 		zap.Uint32("pub_epoch", pubEpoch.Uint32()),
 	)
 
-	idFrom, err := clientFrom.PoetServiceID(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get id for PoET %s: %w", from, err)
-	}
-
-	idTo, err := clientTo.PoetServiceID(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get id for PoET %s: %w", to, err)
-	}
+	idFrom := clientFrom.PoetServiceID(ctx)
+	idTo := clientTo.PoetServiceID(ctx)
 
 	if slices.IndexFunc(
 		nb.state.PoetRequests,
