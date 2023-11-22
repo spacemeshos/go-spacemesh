@@ -247,27 +247,33 @@ func Test_0008Migration(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// insert some rewards data in the old format
-	err = Add(db, &types.Reward{
+	// attempt to insert some rewards data
+	reward := &types.Reward{
 		Layer:       9000,
 		TotalReward: 10,
 		LayerReward: 20,
 		Coinbase:    types.Address{1},
-	})
-	require.NoError(t, err)
-	err = Add(db, &types.Reward{
-		Layer:       9000,
-		TotalReward: 10,
-		LayerReward: 20,
-		Coinbase:    types.Address{1},
-		SmesherID:   types.NodeID{2},
-	})
+	}
+	err = Add(db, reward)
+
+	// this should fail since the un-migrated table doesn't have this column yet
+	require.ErrorContains(t, err, "table rewards has no column named pubkey")
+
+	// add the row manually
+	_, err = db.Exec(`
+		insert into rewards (coinbase, layer, total_reward, layer_reward) values (?1, ?2, ?3, ?4)`,
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, reward.Coinbase[:])
+			stmt.BindInt64(2, int64(reward.Layer.Uint32()))
+			stmt.BindInt64(3, int64(reward.TotalReward))
+			stmt.BindInt64(4, int64(reward.LayerReward))
+		}, nil)
 	require.NoError(t, err)
 
-	// verify the table format
+	// make sure one row was added successfully
 	_, err = db.Exec("select count(*) from rewards;", func(stmt *sql.Statement) {
 	}, func(stmt *sql.Statement) bool {
-		require.Equal(t, int64(0), stmt.ColumnInt64(0))
+		require.Equal(t, int64(1), stmt.ColumnInt64(0))
 		return true
 	})
 	require.NoError(t, err)
@@ -276,11 +282,51 @@ func Test_0008Migration(t *testing.T) {
 	err = migrations[7].Apply(db)
 	require.NoError(t, err)
 
-	// verify that db is still empty
+	// verify that one row is still present
 	_, err = db.Exec("select count(*) from rewards;", func(stmt *sql.Statement) {
 	}, func(stmt *sql.Statement) bool {
-		require.Equal(t, int64(0), stmt.ColumnInt64(0))
+		require.Equal(t, int64(1), stmt.ColumnInt64(0))
 		return true
 	})
 	require.NoError(t, err)
+
+	// verify the data
+	rewards, err := ListByCoinbase(db, reward.Coinbase)
+	require.Len(t, rewards, 1)
+	require.Equal(t, reward.Coinbase, rewards[0].Coinbase)
+	require.Equal(t, reward.TotalReward, rewards[0].TotalReward)
+	require.Equal(t, reward.LayerReward, rewards[0].LayerReward)
+	require.Equal(t, reward.Layer, rewards[0].Layer)
+	// this should not be set
+	require.Equal(t, types.NodeID{0}, rewards[0].SmesherID)
+
+	// this should return nothing (since smesherID wasn't set)
+	rewards, err = ListBySmesherId(db, reward.SmesherID)
+	require.Len(t, rewards, 0)
+
+	// add more data and verify that we can read it both ways
+	reward = &types.Reward{
+		Layer:       9001,
+		TotalReward: 11,
+		LayerReward: 21,
+		Coinbase:    types.Address{1},
+		SmesherID:   types.NodeID{2},
+	}
+
+	err = Add(db, reward)
+	rewards, err = ListByCoinbase(db, reward.Coinbase)
+	require.Len(t, rewards, 2)
+	require.Equal(t, reward.Coinbase, rewards[1].Coinbase)
+	require.Equal(t, reward.TotalReward, rewards[1].TotalReward)
+	require.Equal(t, reward.LayerReward, rewards[1].LayerReward)
+	require.Equal(t, reward.Layer, rewards[1].Layer)
+	require.Equal(t, reward.SmesherID, rewards[1].SmesherID)
+
+	rewards, err = ListBySmesherId(db, reward.SmesherID)
+	require.Len(t, rewards, 1)
+	require.Equal(t, reward.Coinbase, rewards[0].Coinbase)
+	require.Equal(t, reward.TotalReward, rewards[0].TotalReward)
+	require.Equal(t, reward.LayerReward, rewards[0].LayerReward)
+	require.Equal(t, reward.Layer, rewards[0].Layer)
+	require.Equal(t, reward.SmesherID, rewards[0].SmesherID)
 }
