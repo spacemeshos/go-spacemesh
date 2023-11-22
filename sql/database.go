@@ -177,6 +177,7 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 				}
 
 				tx.Release()
+				err = errors.Join(err, db.Close())
 				return nil, fmt.Errorf("apply %s: %w", m.Name(), err)
 			}
 			// binding values in pragma statement is not allowed
