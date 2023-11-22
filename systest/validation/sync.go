@@ -35,7 +35,7 @@ type Validation func(context.Context) error
 func isSynced(ctx context.Context, node *cluster.NodeClient) bool {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	svc := pb.NewNodeServiceClient(node)
+	svc := pb.NewNodeServiceClient(node.PubConn())
 	resp, err := svc.Status(ctx, &pb.StatusRequest{})
 	if err != nil {
 		return false

@@ -12,7 +12,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"syscall"
 	"time"
 
@@ -46,7 +45,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
-	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/hare3/compat"
@@ -338,7 +336,6 @@ type App struct {
 	mesh              *mesh.Mesh
 	atxsdata          *atxsdata.Data
 	clock             *timesync.NodeClock
-	hare              *hare.Hare
 	hare3             *hare3.Hare
 	hOracle           *eligibility.Oracle
 	blockGen          *blocks.Generator
@@ -455,27 +452,6 @@ func (app *App) Initialize() error {
 			)
 			return fmt.Errorf("genesis config updated after node initialization")
 		}
-	}
-
-	// tortoise wait zdist layers for hare to timeout for a layer. once hare timeout, tortoise will
-	// vote against all blocks in that layer. so it's important to make sure zdist takes longer than
-	// hare's max time duration to run consensus for a layer
-
-	// maxHareRoundsPerLayer is pre-round + 4 rounds per iteration
-	maxHareRoundsPerLayer := 1 + app.Config.HARE.LimitIterations*hare.RoundsPerIteration
-	maxHareLayerDuration := app.Config.HARE.WakeupDelta + time.Duration(
-		maxHareRoundsPerLayer,
-	)*app.Config.HARE.RoundDuration
-	if app.Config.LayerDuration*time.Duration(app.Config.Tortoise.Zdist) <= maxHareLayerDuration {
-		app.log.With().Error("incompatible params",
-			log.Uint32("tortoise_zdist", app.Config.Tortoise.Zdist),
-			log.Duration("layer_duration", app.Config.LayerDuration),
-			log.Duration("hare_wakeup_delta", app.Config.HARE.WakeupDelta),
-			log.Int("hare_limit_iterations", app.Config.HARE.LimitIterations),
-			log.Duration("hare_round_duration", app.Config.HARE.RoundDuration),
-		)
-
-		return errors.New("incompatible tortoise hare params")
 	}
 
 	// override default config in timesync since timesync is using TimeConfigValues
@@ -778,7 +754,14 @@ func (app *App) initServices(ctx context.Context) error {
 		bootstrap.WithConfig(bscfg),
 		bootstrap.WithLogger(app.addLogger(BootstrapLogger, lg)),
 	)
-
+	if app.Config.Certificate.CommitteeSize == 0 {
+		app.log.With().Warning("certificate committee size is not set, defaulting to hare committee size",
+			log.Uint16("size", app.Config.HARE3.Committee))
+		app.Config.Certificate.CommitteeSize = int(app.Config.HARE3.Committee)
+	}
+	app.Config.Certificate.CertifyThreshold = app.Config.Certificate.CommitteeSize/2 + 1
+	app.Config.Certificate.LayerBuffer = app.Config.Tortoise.Zdist
+	app.Config.Certificate.NumLayersToKeep = app.Config.Tortoise.Zdist * 2
 	app.certifier = blocks.NewCertifier(
 		app.cachedDB,
 		app.hOracle,
@@ -787,12 +770,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.clock,
 		beaconProtocol,
 		trtl,
-		blocks.WithCertConfig(blocks.CertConfig{
-			CommitteeSize:    app.Config.HARE.N,
-			CertifyThreshold: app.Config.HARE.N/2 + 1,
-			LayerBuffer:      app.Config.Tortoise.Zdist,
-			NumLayersToKeep:  app.Config.Tortoise.Zdist * 2,
-		}),
+		blocks.WithCertConfig(app.Config.Certificate),
 		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg)),
 	)
 	app.certifier.Register(app.edSgn)
@@ -829,7 +807,27 @@ func (app *App) initServices(ctx context.Context) error {
 	beaconProtocol.SetSyncState(newSyncer)
 	app.hOracle.SetSync(newSyncer)
 
-	hareOutputCh := make(chan hare.LayerOutput, app.Config.HARE.LimitConcurrent)
+	if err := app.Config.HARE3.Validate(time.Duration(app.Config.Tortoise.Zdist) * app.Config.LayerDuration); err != nil {
+		return err
+	}
+	logger := app.addLogger(HareLogger, lg).Zap()
+	app.hare3 = hare3.New(
+		app.clock, app.host, app.cachedDB, app.edVerifier, app.hOracle, newSyncer, patrol,
+		hare3.WithLogger(logger),
+		hare3.WithConfig(app.Config.HARE3),
+	)
+	app.hare3.Register(app.edSgn)
+	app.hare3.Start()
+	app.eg.Go(func() error {
+		compat.ReportWeakcoin(
+			ctx,
+			logger,
+			app.hare3.Coins(),
+			tortoiseWeakCoin{db: app.cachedDB, tortoise: trtl},
+		)
+		return nil
+	})
+
 	app.blockGen = blocks.NewGenerator(
 		app.db,
 		app.atxsdata,
@@ -843,55 +841,9 @@ func (app *App) initServices(ctx context.Context) error {
 			OptFilterThreshold: app.Config.OptFilterThreshold,
 			GenBlockInterval:   500 * time.Millisecond,
 		}),
-		blocks.WithHareOutputChan(hareOutputCh),
+		blocks.WithHareOutputChan(app.hare3.Results()),
 		blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg)),
 	)
-
-	hareCfg := app.Config.HARE
-	hareCfg.Hdist = app.Config.Tortoise.Hdist
-	app.hare = hare.New(
-		app.cachedDB,
-		hareCfg,
-		app.host,
-		app.edSgn,
-		app.edVerifier,
-		app.edSgn.NodeID(),
-		hareOutputCh,
-		newSyncer,
-		beaconProtocol,
-		app.hOracle,
-		patrol,
-		app.hOracle,
-		app.clock,
-		tortoiseWeakCoin{db: app.cachedDB, tortoise: trtl},
-		app.addLogger(HareLogger, lg),
-	)
-	if app.Config.HARE3.Enable {
-		if err := app.Config.HARE3.Validate(time.Duration(app.Config.Tortoise.Zdist) * app.Config.LayerDuration); err != nil {
-			return err
-		}
-		logger := app.addLogger(HareLogger, lg).Zap()
-		app.hare3 = hare3.New(
-			app.clock, app.host, app.cachedDB, app.edVerifier, app.hOracle, newSyncer, patrol,
-			hare3.WithLogger(logger),
-			hare3.WithConfig(app.Config.HARE3),
-		)
-		app.hare3.Register(app.edSgn)
-		app.hare3.Start()
-		app.eg.Go(func() error {
-			compat.ReportWeakcoin(
-				ctx,
-				logger,
-				app.hare3.Coins(),
-				tortoiseWeakCoin{db: app.cachedDB, tortoise: trtl},
-			)
-			return nil
-		})
-		app.eg.Go(func() error {
-			compat.ReportResult(ctx, logger, app.hare3.Results(), hareOutputCh)
-			return nil
-		})
-	}
 
 	minerGoodAtxPct := 90
 	if app.Config.MinerGoodAtxsPercent > 0 {
@@ -908,16 +860,19 @@ func (app *App) initServices(ctx context.Context) error {
 		miner.WithLayerPerEpoch(layersPerEpoch),
 		miner.WithMinimalActiveSetWeight(app.Config.Tortoise.MinimalActiveSetWeight),
 		miner.WithHdist(app.Config.Tortoise.Hdist),
-		miner.WithNetworkDelay(app.Config.HARE.WakeupDelta),
+		// TODO(dshulyak) ???
+		miner.WithNetworkDelay(app.Config.HARE3.PreroundDelay),
 		miner.WithMinGoodAtxPercent(minerGoodAtxPct),
 		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)),
 	)
 	proposalBuilder.Register(app.edSgn)
 
 	if app.Config.SMESHING.Start {
-		if err := app.checkPostServiceSetup(); err != nil {
-			return err
+		u := url.URL{
+			Scheme: "http",
+			Host:   app.Config.API.PrivateListener,
 		}
+		app.Config.POSTService.NodeAddress = u.String()
 
 		postSetupMgr, err := activation.NewPostSetupManager(
 			app.edSgn.NodeID(),
@@ -960,6 +915,9 @@ func (app *App) initServices(ctx context.Context) error {
 
 	var coinbaseAddr types.Address
 	if app.Config.SMESHING.Start {
+		// TODO(mafa): this won't work with a remote-only setup, where `smeshing-start` is set to false
+		// TODO(mafa): also the way we handle coinbase means only 1 address can receive rewards, independent
+		// of the number of identities/post services that are managed by the node
 		coinbaseAddr, err = types.StringToAddress(app.Config.SMESHING.CoinbaseAccount)
 		if err != nil {
 			app.log.Panic(
@@ -992,7 +950,8 @@ func (app *App) initServices(ctx context.Context) error {
 		app.addLogger("atxBuilder", lg).Zap(),
 		activation.WithContext(ctx),
 		activation.WithPoetConfig(app.Config.POET),
-		activation.WithPoetRetryInterval(app.Config.HARE.WakeupDelta),
+		// TODO(dshulyak) makes no sense. how we ended using it?
+		activation.WithPoetRetryInterval(app.Config.HARE3.PreroundDelay),
 		activation.WithValidator(app.validator),
 	)
 
@@ -1001,7 +960,6 @@ func (app *App) initServices(ctx context.Context) error {
 		app.addLogger(MalfeasanceLogger, lg),
 		app.host.ID(),
 		app.edSgn.NodeID(),
-		app.hare,
 		app.edVerifier,
 		trtl,
 	)
@@ -1103,10 +1061,6 @@ func (app *App) initServices(ctx context.Context) error {
 		pubsub.ChainGossipHandler(syncHandler, app.txHandler.HandleGossipTransaction),
 	)
 	app.host.Register(
-		pubsub.HareProtocol,
-		pubsub.ChainGossipHandler(syncHandler, app.hare.GetHareMsgHandler()),
-	)
-	app.host.Register(
 		pubsub.BlockCertify,
 		pubsub.ChainGossipHandler(syncHandler, app.certifier.HandleCertifyMessage),
 	)
@@ -1137,41 +1091,6 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	if err := app.host.Start(); err != nil {
 		return err
-	}
-	return nil
-}
-
-// checkPostServiceSetup does some sanity checks on the post service configuration
-//  1. it checks if the post service is included in at least one listener and adds it to private listener if its not
-//     this ensures that nodes that could smesh before v1.3.x can still smesh
-//  2. it checks that node address for the post service is the same as the private listener
-//     while this will incorrectly print a warning if a user uses the TLS listener for the post service
-//     (e.g. when they setup multiple post services). This ensures that users with a non-default private listener
-//     receive a warning as to why their node might not be able to smesh
-//
-// TODO: https://github.com/spacemeshos/go-spacemesh/issues/5260
-// remove this function in a future release when we can assume that most nodes have updated their config for
-// the post service.
-func (app *App) checkPostServiceSetup() error {
-	if !slices.Contains(app.Config.API.PrivateServices, grpcserver.Post) &&
-		!slices.Contains(app.Config.API.TLSServices, grpcserver.Post) {
-		app.log.Warning(
-			"post service is not included in any listener. Check the README.md and update your config file",
-		)
-		app.log.Info("adding post service to private listener. This will be removed in the future")
-
-		app.Config.API.PrivateServices = append(app.Config.API.PrivateServices, grpcserver.Post)
-	}
-
-	address, err := url.Parse(app.Config.POSTService.NodeAddress)
-	if err != nil {
-		return fmt.Errorf("invalid post service node address: %w", err)
-	}
-
-	if app.Config.API.PrivateListener != address.Host {
-		app.log.Warning("post service node address differs from private listener." +
-			" Check README.md to ensure that this is not an error",
-		)
 	}
 	return nil
 }
@@ -1267,9 +1186,6 @@ func (app *App) startServices(ctx context.Context) error {
 
 	app.blockGen.Start(ctx)
 	app.certifier.Start(ctx)
-	if err := app.hare.Start(ctx); err != nil {
-		return fmt.Errorf("cannot start hare: %w", err)
-	}
 	app.eg.Go(func() error {
 		return app.proposalBuilder.Run(ctx)
 	})
@@ -1366,6 +1282,8 @@ func (app *App) startAPIServices(ctx context.Context) error {
 	logger := app.addLogger(GRPCLogger, app.log)
 	grpczap.SetGrpcLoggerV2(grpclog, logger.Zap())
 	var (
+		// TODO(mafa): instead of checking for uniqueness of services across endpoints
+		// check uniqueness per endpoint and make them singletons
 		unique        = map[grpcserver.Service]struct{}{}
 		public        []grpcserver.ServiceAPI
 		private       []grpcserver.ServiceAPI
@@ -1398,9 +1316,6 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		unique[svc] = struct{}{}
 	}
 	for _, svc := range app.Config.API.TLSServices {
-		if _, exists := unique[svc]; exists {
-			return fmt.Errorf("can't start more than one %s", svc)
-		}
 		gsvc, err := app.initService(ctx, svc)
 		if err != nil {
 			return err
@@ -1431,7 +1346,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			return err
 		}
 	}
-	if len(authenticated) > 0 {
+	if len(authenticated) > 0 && app.Config.API.TLSListener != "" {
 		var err error
 		app.grpcTLSServer, err = grpcserver.NewTLS(logger.Zap(), app.Config.API, authenticated)
 		if err != nil {
@@ -1495,9 +1410,6 @@ func (app *App) stopServices(ctx context.Context) {
 		app.postVerifier.Close()
 	}
 
-	if app.hare != nil {
-		app.hare.Close()
-	}
 	if app.hare3 != nil {
 		app.hare3.Stop()
 	}

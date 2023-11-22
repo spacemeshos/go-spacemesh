@@ -103,7 +103,7 @@ func sendTransactions(
 }
 
 func submitTransaction(ctx context.Context, tx []byte, node *cluster.NodeClient) ([]byte, error) {
-	txclient := pb.NewTransactionServiceClient(node)
+	txclient := pb.NewTransactionServiceClient(node.PubConn())
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	response, err := txclient.SubmitTransaction(ctx, &pb.SubmitTransactionRequest{Transaction: tx})
@@ -132,7 +132,7 @@ func stateHashStream(
 	node *cluster.NodeClient,
 	collector func(*pb.GlobalStateStreamResponse) (bool, error),
 ) error {
-	stateapi := pb.NewGlobalStateServiceClient(node)
+	stateapi := pb.NewGlobalStateServiceClient(node.PubConn())
 	states, err := stateapi.GlobalStateStream(ctx,
 		&pb.GlobalStateStreamRequest{
 			GlobalStateDataFlags: uint32(pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_GLOBAL_STATE_HASH),
@@ -166,7 +166,7 @@ func layersStream(ctx context.Context,
 	node *cluster.NodeClient,
 	collector layerCollector,
 ) error {
-	meshapi := pb.NewMeshServiceClient(node)
+	meshapi := pb.NewMeshServiceClient(node.PubConn())
 	layers, err := meshapi.LayerStream(ctx, &pb.LayerStreamRequest{})
 	if err != nil {
 		return err
@@ -183,7 +183,7 @@ func layersStream(ctx context.Context,
 }
 
 func waitGenesis(ctx *testcontext.Context, node *cluster.NodeClient) error {
-	svc := pb.NewMeshServiceClient(node)
+	svc := pb.NewMeshServiceClient(node.PubConn())
 	resp, err := svc.GenesisTime(ctx, &pb.GenesisTimeRequest{})
 	if err != nil {
 		return err
@@ -203,7 +203,7 @@ func waitGenesis(ctx *testcontext.Context, node *cluster.NodeClient) error {
 }
 
 func waitLayer(ctx *testcontext.Context, node *cluster.NodeClient, lid uint32) error {
-	svc := pb.NewMeshServiceClient(node)
+	svc := pb.NewMeshServiceClient(node.PubConn())
 	resp, err := svc.GenesisTime(ctx, &pb.GenesisTimeRequest{})
 	if err != nil {
 		return err
@@ -230,7 +230,7 @@ func waitTransaction(ctx context.Context,
 	id []byte,
 ) {
 	eg.Go(func() error {
-		api := pb.NewTransactionServiceClient(client)
+		api := pb.NewTransactionServiceClient(client.PubConn())
 		rsts, err := api.StreamResults(ctx, &pb.TransactionResultsRequest{Watch: true, Id: id})
 		if err != nil {
 			return err
@@ -249,7 +249,7 @@ func watchTransactionResults(ctx context.Context,
 	collector func(*pb.TransactionResult) (bool, error),
 ) {
 	eg.Go(func() error {
-		api := pb.NewTransactionServiceClient(client)
+		api := pb.NewTransactionServiceClient(client.PubConn())
 		rsts, err := api.StreamResults(ctx, &pb.TransactionResultsRequest{Watch: true})
 		if err != nil {
 			return err
@@ -273,7 +273,7 @@ func watchProposals(
 	collector func(*pb.Proposal) (bool, error),
 ) {
 	eg.Go(func() error {
-		dbg := pb.NewDebugServiceClient(client)
+		dbg := pb.NewDebugServiceClient(client.PrivConn())
 		proposals, err := dbg.ProposalsStream(ctx, &emptypb.Empty{})
 		if err != nil {
 			return fmt.Errorf("proposal stream for %s: %w", client.Name, err)
@@ -322,7 +322,7 @@ func scheduleChaos(
 
 func currentLayer(ctx context.Context, tb testing.TB, client *cluster.NodeClient) uint32 {
 	tb.Helper()
-	response, err := pb.NewMeshServiceClient(client).CurrentLayer(ctx, &pb.CurrentLayerRequest{})
+	response, err := pb.NewMeshServiceClient(client.PubConn()).CurrentLayer(ctx, &pb.CurrentLayerRequest{})
 	require.NoError(tb, err)
 	return response.Layernum.Number
 }
@@ -346,7 +346,7 @@ func nextFirstLayer(current, size uint32) uint32 {
 }
 
 func getNonce(ctx context.Context, client *cluster.NodeClient, address types.Address) (uint64, error) {
-	gstate := pb.NewGlobalStateServiceClient(client)
+	gstate := pb.NewGlobalStateServiceClient(client.PubConn())
 	resp, err := gstate.Account(ctx, &pb.AccountRequest{AccountId: &pb.AccountId{Address: address.String()}})
 	if err != nil {
 		return 0, err
@@ -355,7 +355,7 @@ func getNonce(ctx context.Context, client *cluster.NodeClient, address types.Add
 }
 
 func currentBalance(ctx context.Context, client *cluster.NodeClient, address types.Address) (uint64, error) {
-	gstate := pb.NewGlobalStateServiceClient(client)
+	gstate := pb.NewGlobalStateServiceClient(client.PubConn())
 	resp, err := gstate.Account(ctx, &pb.AccountRequest{AccountId: &pb.AccountId{Address: address.String()}})
 	if err != nil {
 		return 0, err
@@ -406,7 +406,7 @@ func syncedNodes(ctx context.Context, cl *cluster.Cluster) []*cluster.NodeClient
 func isSynced(ctx context.Context, node *cluster.NodeClient) bool {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	svc := pb.NewNodeServiceClient(node)
+	svc := pb.NewNodeServiceClient(node.PubConn())
 	resp, err := svc.Status(ctx, &pb.StatusRequest{})
 	if err != nil {
 		return false
@@ -418,7 +418,7 @@ func getLayer(ctx context.Context, node *cluster.NodeClient, lid uint32) (*pb.La
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	layer := &pb.LayerNumber{Number: lid}
-	msvc := pb.NewMeshServiceClient(node)
+	msvc := pb.NewMeshServiceClient(node.PubConn())
 	lresp, err := msvc.LayersQuery(ctx, &pb.LayersQueryRequest{StartLayer: layer, EndLayer: layer})
 	if err != nil {
 		return nil, err
@@ -432,7 +432,7 @@ func getLayer(ctx context.Context, node *cluster.NodeClient, lid uint32) (*pb.La
 func getVerifiedLayer(ctx context.Context, node *cluster.NodeClient) (*pb.Layer, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	svc := pb.NewNodeServiceClient(node)
+	svc := pb.NewNodeServiceClient(node.PubConn())
 	resp, err := svc.Status(ctx, &pb.StatusRequest{})
 	if err != nil {
 		return nil, err
@@ -475,7 +475,7 @@ type txRequest struct {
 func (r *txRequest) wait(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	client := pb.NewTransactionServiceClient(r.node)
+	client := pb.NewTransactionServiceClient(r.node.PubConn())
 	stream, err := client.StreamResults(ctx, &pb.TransactionResultsRequest{
 		Id:    r.txid,
 		Watch: true,
@@ -495,7 +495,7 @@ func (r *txRequest) result(ctx context.Context) (*pb.TransactionResult, error) {
 	if r.rst != nil {
 		return r.rst, nil
 	}
-	client := pb.NewTransactionServiceClient(r.node)
+	client := pb.NewTransactionServiceClient(r.node.PubConn())
 	stream, err := client.StreamResults(ctx, &pb.TransactionResultsRequest{
 		Id: r.txid,
 	})

@@ -26,13 +26,6 @@ func standalone() config.Config {
 	conf.DataDirParent = filepath.Join(os.TempDir(), "spacemesh")
 	conf.FileLock = filepath.Join(conf.DataDirParent, "LOCK")
 
-	conf.HARE.N = 800
-	conf.HARE.ExpectedLeaders = 10
-	conf.HARE.LimitConcurrent = 2
-	conf.HARE.LimitIterations = 2
-	conf.HARE.RoundDuration = 1 * time.Second
-	conf.HARE.WakeupDelta = 1 * time.Second
-
 	conf.Genesis = &config.GenesisConfig{
 		ExtraData: "standalone",
 		Accounts:  map[string]uint64{},
@@ -87,7 +80,5 @@ func standalone() config.Config {
 
 	conf.API.PublicListener = "0.0.0.0:10092"
 	conf.API.PrivateListener = "127.0.0.1:10093"
-
-	conf.POSTService.NodeAddress = "http://127.0.0.1:10093"
 	return conf
 }
