@@ -13,13 +13,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
+	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
-	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -46,27 +46,27 @@ func init() {
 // Config defines the top level configuration for a spacemesh node.
 type Config struct {
 	BaseConfig      `mapstructure:"main"`
-	Genesis         *GenesisConfig                  `mapstructure:"genesis"`
-	PublicMetrics   PublicMetrics                   `mapstructure:"public-metrics"`
-	Tortoise        tortoise.Config                 `mapstructure:"tortoise"`
-	P2P             p2p.Config                      `mapstructure:"p2p"`
-	API             grpcserver.Config               `mapstructure:"api"`
-	HARE            hareConfig.Config               `mapstructure:"hare"`
-	HARE3           hare3.Config                    `mapstructure:"hare3"`
-	HareEligibility eligConfig.Config               `mapstructure:"hare-eligibility"`
-	Beacon          beacon.Config                   `mapstructure:"beacon"`
-	TIME            timeConfig.TimeConfig           `mapstructure:"time"`
-	VM              vm.Config                       `mapstructure:"vm"`
-	POST            activation.PostConfig           `mapstructure:"post"`
-	POSTService     activation.PostSupervisorConfig `mapstructure:"post-service"`
-	POET            activation.PoetConfig           `mapstructure:"poet"`
-	SMESHING        SmeshingConfig                  `mapstructure:"smeshing"`
-	LOGGING         LoggerConfig                    `mapstructure:"logging"`
-	FETCH           fetch.Config                    `mapstructure:"fetch"`
-	Bootstrap       bootstrap.Config                `mapstructure:"bootstrap"`
-	Sync            syncer.Config                   `mapstructure:"syncer"`
-	Recovery        checkpoint.Config               `mapstructure:"recovery"`
-	Cache           datastore.Config                `mapstructure:"cache"`
+	Genesis         *GenesisConfig        `mapstructure:"genesis"`
+	PublicMetrics   PublicMetrics         `mapstructure:"public-metrics"`
+	Tortoise        tortoise.Config       `mapstructure:"tortoise"`
+	P2P             p2p.Config            `mapstructure:"p2p"`
+	API             grpcserver.Config     `mapstructure:"api"`
+	HARE3           hare3.Config          `mapstructure:"hare3"`
+	HareEligibility eligConfig.Config     `mapstructure:"hare-eligibility"`
+	Certificate     blocks.CertConfig     `mapstructure:"certificate"`
+	Beacon          beacon.Config         `mapstructure:"beacon"`
+	TIME            timeConfig.TimeConfig `mapstructure:"time"`
+	VM              vm.Config             `mapstructure:"vm"`
+	POST            activation.PostConfig `mapstructure:"post"`
+	POSTService     activation.PostSupervisorConfig
+	POET            activation.PoetConfig `mapstructure:"poet"`
+	SMESHING        SmeshingConfig        `mapstructure:"smeshing"`
+	LOGGING         LoggerConfig          `mapstructure:"logging"`
+	FETCH           fetch.Config          `mapstructure:"fetch"`
+	Bootstrap       bootstrap.Config      `mapstructure:"bootstrap"`
+	Sync            syncer.Config         `mapstructure:"syncer"`
+	Recovery        checkpoint.Config     `mapstructure:"recovery"`
+	Cache           datastore.Config      `mapstructure:"cache"`
 }
 
 // DataDir returns the absolute path to use for the node's data. This is the tilde-expanded path given in the config
@@ -124,6 +124,10 @@ type BaseConfig struct {
 	MinerGoodAtxsPercent int `mapstructure:"miner-good-atxs-percent"`
 
 	RegossipAtxInterval time.Duration `mapstructure:"regossip-atx-interval"`
+
+	// ATXGradeDelay is used to grade ATXs for selection in tortoise active set.
+	// See grading fuction in miner/proposals_builder.go
+	ATXGradeDelay time.Duration `mapstructure:"atx-grade-delay"`
 }
 
 type PublicMetrics struct {
@@ -151,7 +155,6 @@ func DefaultConfig() Config {
 		Tortoise:        tortoise.DefaultConfig(),
 		P2P:             p2p.DefaultConfig(),
 		API:             grpcserver.DefaultConfig(),
-		HARE:            hareConfig.DefaultConfig(),
 		HARE3:           hare3.DefaultConfig(),
 		HareEligibility: eligConfig.DefaultConfig(),
 		Beacon:          beacon.DefaultConfig(),
@@ -178,6 +181,8 @@ func DefaultTestConfig() Config {
 	conf.P2P = p2p.DefaultConfig()
 	conf.API = grpcserver.DefaultTestConfig()
 	conf.POSTService = activation.DefaultTestPostServiceConfig()
+	conf.HARE3.PreroundDelay = 1 * time.Second
+	conf.HARE3.RoundDuration = 1 * time.Second
 	return conf
 }
 
@@ -200,6 +205,7 @@ func defaultBaseConfig() BaseConfig {
 		DatabaseSizeMeteringInterval: 10 * time.Minute,
 		DatabasePruneInterval:        30 * time.Minute,
 		NetworkHRP:                   "sm",
+		ATXGradeDelay:                10 * time.Second,
 	}
 }
 

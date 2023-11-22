@@ -124,10 +124,6 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *config.Config) error {
 			elem = reflect.ValueOf(&appCFG.TIME).Elem()
 			assignFields(ff, elem, name)
 
-			ff = reflect.TypeOf(appCFG.HARE)
-			elem = reflect.ValueOf(&appCFG.HARE).Elem()
-			assignFields(ff, elem, name)
-
 			ff = reflect.TypeOf(appCFG.HareEligibility)
 			elem = reflect.ValueOf(&appCFG.HareEligibility).Elem()
 			assignFields(ff, elem, name)

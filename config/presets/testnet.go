@@ -19,7 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
-	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -74,6 +73,7 @@ func testnet() config.Config {
 			TickSize:            666514,
 			PoETServers:         []string{},
 			RegossipAtxInterval: time.Hour,
+			ATXGradeDelay:       30 * time.Minute,
 		},
 		Genesis: &config.GenesisConfig{
 			GenesisTime: "2023-09-13T18:00:00Z",
@@ -86,15 +86,6 @@ func testnet() config.Config {
 			MaxExceptions:            1000,
 			BadBeaconVoteDelayLayers: 4032,
 			MinimalActiveSetWeight:   []types.EpochMinimalActiveWeight{{Weight: 10_000}},
-		},
-		HARE: hareConfig.Config{
-			Disable:         hare3conf.EnableLayer,
-			N:               200,
-			ExpectedLeaders: 5,
-			RoundDuration:   25 * time.Second,
-			WakeupDelta:     25 * time.Second,
-			LimitConcurrent: 2,
-			LimitIterations: 4,
 		},
 		HARE3: hare3conf,
 		HareEligibility: eligConfig.Config{

@@ -13,12 +13,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
+	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
-	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -91,6 +91,7 @@ func MainnetConfig() Config {
 				"https://poet-112.spacemesh.network",
 			},
 			RegossipAtxInterval: 2 * time.Hour,
+			ATXGradeDelay:       30 * time.Minute,
 		},
 		Genesis: &GenesisConfig{
 			GenesisTime: "2023-07-14T08:00:00Z",
@@ -111,18 +112,15 @@ func MainnetConfig() Config {
 				{Epoch: 11, Weight: 7_879_129_244},
 			},
 		},
-		HARE: hareConfig.Config{
-			Disable:         hare3conf.EnableLayer,
-			N:               200,
-			ExpectedLeaders: 5,
-			RoundDuration:   25 * time.Second,
-			WakeupDelta:     25 * time.Second,
-			LimitConcurrent: 2,
-			LimitIterations: 4,
-		},
 		HARE3: hare3conf,
 		HareEligibility: eligConfig.Config{
 			ConfidenceParam: 200,
+		},
+		Certificate: blocks.CertConfig{
+			// NOTE(dshulyak) this is intentional. we increased committee size with hare3 upgrade
+			// but certifier continues to use 200 committee size.
+			// this will be upgraded in future with scheduled upgrade.
+			CommitteeSize: 200,
 		},
 		Beacon: beacon.Config{
 			Kappa:                    40,
