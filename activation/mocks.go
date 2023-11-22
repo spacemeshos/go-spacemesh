@@ -14,7 +14,6 @@ import (
 	time "time"
 
 	types "github.com/spacemeshos/go-spacemesh/common/types"
-	localsql "github.com/spacemeshos/go-spacemesh/sql/localsql"
 	nipost "github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 	shared "github.com/spacemeshos/post/shared"
 	verifying "github.com/spacemeshos/post/verifying"
@@ -1353,45 +1352,6 @@ func (c *poetClientAddressCall) Do(f func() string) *poetClientAddressCall {
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *poetClientAddressCall) DoAndReturn(f func() string) *poetClientAddressCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// PoetServiceID mocks base method.
-func (m *MockpoetClient) PoetServiceID(arg0 context.Context) (localsql.PoetServiceID, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PoetServiceID", arg0)
-	ret0, _ := ret[0].(localsql.PoetServiceID)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// PoetServiceID indicates an expected call of PoetServiceID.
-func (mr *MockpoetClientMockRecorder) PoetServiceID(arg0 any) *poetClientPoetServiceIDCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PoetServiceID", reflect.TypeOf((*MockpoetClient)(nil).PoetServiceID), arg0)
-	return &poetClientPoetServiceIDCall{Call: call}
-}
-
-// poetClientPoetServiceIDCall wrap *gomock.Call
-type poetClientPoetServiceIDCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *poetClientPoetServiceIDCall) Return(arg0 localsql.PoetServiceID, arg1 error) *poetClientPoetServiceIDCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *poetClientPoetServiceIDCall) Do(f func(context.Context) (localsql.PoetServiceID, error)) *poetClientPoetServiceIDCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *poetClientPoetServiceIDCall) DoAndReturn(f func(context.Context) (localsql.PoetServiceID, error)) *poetClientPoetServiceIDCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
