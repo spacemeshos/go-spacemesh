@@ -1,5 +1,3 @@
---- should be overridden during startup with Go 0002 Migration to ensure data is migrated
-
 --- sqlite doesn't support just adding a NOT NULL constraint, so we create a new column,
 --- copy the data, drop the old table, and rename the new table to the old name
 ALTER TABLE initial_post ADD COLUMN num_units UNSIGNED INT;

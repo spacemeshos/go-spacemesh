@@ -17,8 +17,9 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 ### Upgrade information
 
 This release is not backwards compatible with v1.2.x. Upgrading will migrate local state to a new database.
-The migration will take place at the first startup after the upgrade. Be aware that after upgrading you cannot
-downgrade to v1.2.x without losing at least one epoch of rewards.
+The migration will take place at the first startup after the upgrade. Be aware that after a successful upgrade
+downgrading isn't supported and might result in at least one epoch of missed rewards. See change #5207 for more
+information.
 
 Current release is expected to be adopted by majority of the network participants before epoch 11 starts.
 Nodes that do not update before epoch 11 risk their proposals being rejected by the rest of the network.
@@ -98,7 +99,10 @@ for more information on how to configure the node to work with the PoST service.
   which holds ephemeral data of the node.
 
   With this change `post.bin` and `nipost_challenge.bin` files are no longer used. The node will automatically migrate
-  the data from disk and store it in the database. The migration will take place at the first startup after the upgrade.
+  the data from disk and store it in the database. The migration will take place during the first startup after the upgrade.
+  If you want to downgrade to a version before v1.3.0 you will need to restore `state.sql` as well as `post.bin` and
+  `nipost_challenge.bin` from a backup and do so before the end of the PoET round in which you upgraded. Otherwise the node
+  will not be able to participate in consensus and will miss at least one epoch of rewards.
 
 * [#5209](https://github.com/spacemeshos/go-spacemesh/pull/5209) Removed API to update poet servers from SmesherService.
 

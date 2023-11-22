@@ -92,7 +92,7 @@ func sqlMigrations(dbname string) ([]Migration, error) {
 		}
 		f, err := embedded.Open(path)
 		if err != nil {
-			return fmt.Errorf("readfile %s: %w", path, err)
+			return fmt.Errorf("read file %s: %w", path, err)
 		}
 		scanner := bufio.NewScanner(f)
 		scanner.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
