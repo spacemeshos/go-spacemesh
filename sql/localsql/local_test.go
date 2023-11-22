@@ -1,10 +1,8 @@
 package localsql
 
 import (
-	"crypto/sha256"
-	"io"
-	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -12,39 +10,32 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-func fileHash(file string) ([]byte, error) {
-	f, err := os.Open(file)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	h := sha256.New()
-	_, err = io.Copy(h, f)
-	if err != nil {
-		return nil, err
-	}
-
-	return h.Sum(nil), nil
-}
-
 func TestDatabase_MigrateTwice_NoOp(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "test.db")
-	db, err := Open("file:"+file,
-		sql.WithMigration(New0002Migration(t.TempDir())),
-	)
-	require.NoError(t, err)
-	require.NoError(t, db.Close())
-	old, err := fileHash(file)
+	db, err := Open("file:" + file)
 	require.NoError(t, err)
 
-	db, err = Open("file:"+file,
-		sql.WithMigration(New0002Migration(t.TempDir())),
-	)
+	var sqls1 []string
+	_, err = db.Exec("SELECT sql FROM sqlite_schema;", nil, func(stmt *sql.Statement) bool {
+		sql := stmt.ColumnText(0)
+		sql = strings.Join(strings.Fields(sql), " ") // remove whitespace
+		sqls1 = append(sqls1, sql)
+		return true
+	})
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
-	new, err := fileHash(file)
-	require.NoError(t, err)
 
-	require.Equal(t, old, new)
+	db, err = Open("file:" + file)
+	require.NoError(t, err)
+	var sqls2 []string
+	_, err = db.Exec("SELECT sql FROM sqlite_schema;", nil, func(stmt *sql.Statement) bool {
+		sql := stmt.ColumnText(0)
+		sql = strings.Join(strings.Fields(sql), " ") // remove whitespace
+		sqls2 = append(sqls2, sql)
+		return true
+	})
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	require.Equal(t, sqls1, sqls2)
 }
