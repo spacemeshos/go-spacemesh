@@ -171,7 +171,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 	// Phase 0: Submit challenge to PoET services.
 	count, err := nipost.PoetRegistrationCount(nb.localDB, nb.signer.NodeID())
 	if err != nil {
-		nb.log.Panic("failed to get poet registration count", zap.Error(err))
+		return nil, fmt.Errorf("failed to get poet registration count: %w", err)
 	}
 	if count == 0 {
 		now := time.Now()
@@ -192,7 +192,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 		}
 		count, err := nipost.PoetRegistrationCount(nb.localDB, nb.signer.NodeID())
 		if err != nil {
-			nb.log.Panic("failed to get poet registration count", zap.Error(err))
+			return nil, fmt.Errorf("failed to get poet registration count: %w", err)
 		}
 		if count == 0 {
 			return nil, &PoetSvcUnstableError{msg: "failed to submit challenge to any PoET", source: submitCtx.Err()}
