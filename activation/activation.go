@@ -352,28 +352,12 @@ func (b *Builder) SmesherID() types.NodeID {
 	return b.signer.NodeID()
 }
 
-func (b *Builder) buildInitialPost(ctx context.Context) error {
-	// Generate the initial POST if we don't have an ATX...
-	if _, err := b.cdb.GetLastAtx(b.signer.NodeID()); err == nil {
-		return nil
-	}
-	// ...and if we haven't stored an initial post yet.
-	_, err := nipost.GetPost(b.localDB, b.signer.NodeID())
-	switch {
-	case err == nil:
-		b.log.Info("load initial post from db")
-		return nil
-	case errors.Is(err, sql.ErrNotFound):
-		b.log.Info("creating initial post")
-	default:
-		return fmt.Errorf("get initial post: %w", err)
-	}
-
-	// Create the initial post and save it.
+// Create the initial post and save it.
+func (b *Builder) buildInitialPost(ctx context.Context) (*types.Post, *types.PostInfo, error) {
 	startTime := time.Now()
 	post, postInfo, err := b.proof(ctx, shared.ZeroChallenge)
 	if err != nil {
-		return fmt.Errorf("post execution: %w", err)
+		return nil, nil, fmt.Errorf("post execution: %w", err)
 	}
 	metrics.PostDuration.Set(float64(time.Since(startTime).Nanoseconds()))
 	public.PostSeconds.Set(float64(time.Since(startTime)))
@@ -389,7 +373,10 @@ func (b *Builder) buildInitialPost(ctx context.Context) error {
 		CommitmentATX: postInfo.CommitmentATX,
 		VRFNonce:      *postInfo.Nonce,
 	}
-	return nipost.AddPost(b.localDB, b.signer.NodeID(), initialPost)
+	if err := nipost.AddPost(b.localDB, b.signer.NodeID(), initialPost); err != nil {
+		b.log.Error("failed to save initial post", zap.Error(err))
+	}
+	return post, postInfo, nil
 }
 
 // Obtain certificates for the poets.
@@ -398,18 +385,46 @@ func (b *Builder) buildInitialPost(ctx context.Context) error {
 // submitting to the poets.
 //
 // New nodes should call it after the initial POST is created.
-func (b *Builder) certifyPost(ctx context.Context) {
-	post, meta, ch, err := b.obtainPostForCertification()
-	if err != nil {
-		b.log.Error("failed to obtain post for certification", zap.Error(err))
-	}
-
+func (b *Builder) certifyPost(ctx context.Context, post *types.Post, meta *types.PostInfo, ch []byte) {
 	client := NewCertifierClient(b.log, post, meta, ch, WithCertifierClientConfig(b.certifierConfig.Client))
 	b.certifier = NewCertifier(b.localDB, b.log, client)
 	b.certifier.CertifyAll(ctx, b.poets)
 }
 
-func (b *Builder) obtainPostForCertification() (*types.Post, *types.PostInfo, []byte, error) {
+func (b *Builder) obtainPostFromLastAtx(ctx context.Context) (*types.Post, *types.PostInfo, []byte, error) {
+	atxid, err := atxs.GetLastIDByNodeID(b.cdb, b.SmesherID())
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("no existing ATX found: %w", err)
+	}
+	atx, err := b.cdb.GetFullAtx(atxid)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to retrieve ATX: %w", err)
+	}
+	if atx.NIPost == nil {
+		return nil, nil, nil, errors.New("no NIPoST found in last ATX")
+	}
+	if atx.CommitmentATX == nil {
+		if commitmentAtx, err := atxs.CommitmentATX(b.cdb, b.SmesherID()); err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to retrieve commitment ATX: %w", err)
+		} else {
+			atx.CommitmentATX = &commitmentAtx
+		}
+	}
+
+	b.log.Info("found POST in an existing ATX", zap.String("atx_id", atxid.Hash32().ShortString()))
+	meta := &types.PostInfo{
+		NodeID:        b.SmesherID(),
+		CommitmentATX: *atx.CommitmentATX,
+		Nonce:         atx.VRFNonce,
+		NumUnits:      atx.NumUnits,
+		LabelsPerUnit: atx.NIPost.PostMetadata.LabelsPerUnit,
+	}
+
+	return atx.NIPost.Post, meta, atx.NIPost.PostMetadata.Challenge, nil
+}
+
+func (b *Builder) obtainPost(ctx context.Context) (*types.Post, *types.PostInfo, []byte, error) {
+	b.log.Info("looking for POST for poet certification")
 	post, err := nipost.GetPost(b.localDB, b.signer.NodeID())
 	switch {
 	case err == nil:
@@ -426,6 +441,7 @@ func (b *Builder) obtainPostForCertification() (*types.Post, *types.PostInfo, []
 			Indices: post.Indices,
 			Pow:     post.Pow,
 		}
+		b.log.Info("found POST in local DB")
 		return post, meta, challenge, nil
 	case errors.Is(err, sql.ErrNotFound):
 		// no post found
@@ -433,58 +449,36 @@ func (b *Builder) obtainPostForCertification() (*types.Post, *types.PostInfo, []
 		return nil, nil, nil, fmt.Errorf("loading initial post from db: %w", err)
 	}
 
-	b.log.Debug("trying to obtain POST from an existing ATX")
-	atxid, err := atxs.GetLastIDByNodeID(b.cdb, b.SmesherID())
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("no existing ATX found: %w", err)
-	}
-	atx, err := b.cdb.GetFullAtx(atxid)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to retrieve ATX: %w", err)
-	}
-	var commitmentAtx *types.ATXID
-	if commitmentAtx = atx.CommitmentATX; commitmentAtx == nil {
-		atx, err := atxs.CommitmentATX(b.cdb, b.SmesherID())
-		if err != nil {
-			return nil, nil, nil, fmt.Errorf("cannot determine own commitment ATX: %w", err)
-		}
-		commitmentAtx = &atx
-	}
-	if atx.NIPost == nil {
-		return nil, nil, nil, errors.New("ATX does not contain a NIPost")
+	b.log.Info("POST not found in local DB. Trying to obtain POST from an existing ATX")
+	if post, postInfo, ch, err := b.obtainPostFromLastAtx(ctx); err == nil {
+		return post, postInfo, ch, nil
 	}
 
-	b.log.Info("certifying using an existing ATX", zap.Any("atx", atx))
-
-	meta := &types.PostInfo{
-		NodeID:        b.SmesherID(),
-		CommitmentATX: *commitmentAtx,
-		Nonce:         atx.VRFNonce,
-		NumUnits:      atx.NumUnits,
-		LabelsPerUnit: atx.NIPost.PostMetadata.LabelsPerUnit,
-	}
-
-	return atx.NIPost.Post, meta, atx.NIPost.PostMetadata.Challenge, nil
-}
-
-func (b *Builder) run(ctx context.Context) {
-	defer b.log.Info("atx builder stopped")
-
+	b.log.Info("POST not found in existing ATXs. Regenerating the initial POST")
 	for {
-		err := b.buildInitialPost(ctx)
+		post, postInfo, err := b.buildInitialPost(ctx)
 		if err == nil {
-			break
+			return post, postInfo, shared.ZeroChallenge, nil
 		}
 		b.log.Error("failed to generate initial proof:", zap.Error(err))
 		currentLayer := b.layerClock.CurrentLayer()
 		select {
 		case <-ctx.Done():
-			return
+			return nil, nil, nil, ctx.Err()
 		case <-b.layerClock.AwaitLayer(currentLayer.Add(1)):
 		}
 	}
+}
 
-	b.certifyPost(ctx)
+func (b *Builder) run(ctx context.Context) {
+	defer b.log.Info("atx builder stopped")
+
+	if post, meta, ch, err := b.obtainPost(ctx); err != nil {
+		b.log.Error("failed to obtain post for certification", zap.Error(err))
+		return
+	} else {
+		b.certifyPost(ctx, post, meta, ch)
+	}
 
 	for {
 		err := b.PublishActivationTx(ctx)

@@ -292,10 +292,7 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 			return nil, nil, ctx.Err()
 		}).
 		AnyTimes()
-	tab.mValidator.EXPECT().
-		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		AnyTimes().
-		Return(nil)
+
 	tab.mclock.EXPECT().CurrentLayer().Return(types.LayerID(0)).AnyTimes()
 	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(make(chan struct{})).AnyTimes()
 	require.NoError(t, tab.StartSmeshing(coinbase))
@@ -317,14 +314,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 				return nil, nil, ctx.Err()
 			},
 		)
-		tab.mValidator.EXPECT().Post(
-			gomock.Any(),
-			gomock.Any(),
-			gomock.Any(),
-			gomock.Any(),
-			gomock.Any(),
-			gomock.Any(),
-		).AnyTimes().Return(nil)
+
 		ch := make(chan struct{})
 		close(ch)
 		tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(ch).AnyTimes()
@@ -492,7 +482,8 @@ func TestBuilder_Loop_WaitsOnStaleChallenge(t *testing.T) {
 	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
 	// current layer is too late to be able to build a nipost on time
 	currLayer := (postGenesisEpoch + 1).FirstLayer()
-	ch := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, postGenesisEpoch, nil)
+
+	ch := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, postGenesisEpoch, &types.ATXID{'c', 'a', 't', 'x'})
 	nipostData := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
 	prevAtx := newAtx(t, tab.sig, ch, nipostData, 2, types.Address{})
 	SignAndFinalizeAtx(tab.sig, prevAtx)
@@ -1183,7 +1174,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 		WithPoetRetryInterval(retryInterval),
 	)
 	posEpoch := types.EpochID(0)
-	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posEpoch, nil)
+	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posEpoch, &types.ATXID{'c', 'a', 't', 'x'})
 	poetBytes := []byte("66666")
 	nipostData := newNIPostWithChallenge(t, types.HexToHash32("55555"), poetBytes)
 	prevAtx := newAtx(t, tab.sig, challenge, nipostData, 2, types.Address{})
@@ -1301,11 +1292,9 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 			},
 			nil,
 		)
-	tab.mValidator.EXPECT().
-		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		AnyTimes().
-		Return(nil)
-	require.NoError(t, tab.buildInitialPost(context.Background()))
+
+	_, _, err := tab.buildInitialPost(context.Background())
+	require.NoError(t, err)
 
 	posEpoch := postGenesisEpoch + 1
 	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posEpoch, nil)
@@ -1325,23 +1314,34 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	assertLastAtx(require.New(t), tab.sig.NodeID(), types.BytesToHash(poetByte), atx, vPrevAtx, vPrevAtx, layersPerEpoch)
 
 	// postClient.Proof() should not be called again
-	require.NoError(t, tab.buildInitialPost(context.Background()))
+	_, _, _, err = tab.obtainPost(context.Background())
+	require.NoError(t, err)
 }
 
-func TestBuilder_ObtainPostForCertification(t *testing.T) {
-	t.Run("no POST or ATX - fail", func(t *testing.T) {
+func TestBuilder_obtainPost(t *testing.T) {
+	t.Run("no POST or ATX - generate", func(t *testing.T) {
 		tab := newTestBuilder(t)
-		_, _, _, err := tab.obtainPostForCertification()
-		require.Error(t, err)
+		tab.mpostClient.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).
+			Return(
+				&types.Post{Indices: make([]byte, 10)},
+				&types.PostInfo{
+					CommitmentATX: types.RandomATXID(),
+					Nonce:         new(types.VRFPostIndex),
+				},
+				nil,
+			)
+		_, _, _, err := tab.obtainPost(context.Background())
+		require.NoError(t, err)
 	})
 	t.Run("initial POST available", func(t *testing.T) {
 		tab := newTestBuilder(t)
 		tab.mpostClient.EXPECT().
 			Proof(gomock.Any(), shared.ZeroChallenge).
 			Return(&types.Post{Indices: []byte{1, 2, 3}}, &types.PostInfo{Nonce: new(types.VRFPostIndex)}, nil)
-		require.NoError(t, tab.buildInitialPost(context.Background()))
+		_, _, err := tab.buildInitialPost(context.Background())
+		require.NoError(t, err)
 
-		_, _, ch, err := tab.obtainPostForCertification()
+		_, _, ch, err := tab.obtainPost(context.Background())
 		require.NoError(t, err)
 		require.EqualValues(t, shared.ZeroChallenge, ch)
 	})
@@ -1375,7 +1375,7 @@ func TestBuilder_ObtainPostForCertification(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, atxs.Add(tab.cdb, vAtx))
 
-		post, meta, ch, err := tab.obtainPostForCertification()
+		post, meta, ch, err := tab.obtainPost(context.Background())
 		require.NoError(t, err)
 		require.Equal(t, commitmentAtxId, meta.CommitmentATX)
 		require.Equal(t, uint32(2), meta.NumUnits)
@@ -1397,14 +1397,12 @@ func TestBuilder_InitialPostIsPersisted(t *testing.T) {
 			},
 			nil,
 		)
-	tab.mValidator.EXPECT().
-		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		AnyTimes().
-		Return(nil)
-	require.NoError(t, tab.buildInitialPost(context.Background()))
+	_, _, _, err := tab.obtainPost(context.Background())
+	require.NoError(t, err)
 
 	// postClient.Proof() should not be called again
-	require.NoError(t, tab.buildInitialPost(context.Background()))
+	_, _, _, err = tab.obtainPost(context.Background())
+	require.NoError(t, err)
 }
 
 func TestWaitPositioningAtx(t *testing.T) {
