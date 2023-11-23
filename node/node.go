@@ -860,8 +860,7 @@ func (app *App) initServices(ctx context.Context) error {
 		miner.WithLayerPerEpoch(layersPerEpoch),
 		miner.WithMinimalActiveSetWeight(app.Config.Tortoise.MinimalActiveSetWeight),
 		miner.WithHdist(app.Config.Tortoise.Hdist),
-		// TODO(dshulyak) ???
-		miner.WithNetworkDelay(app.Config.HARE3.PreroundDelay),
+		miner.WithNetworkDelay(app.Config.ATXGradeDelay),
 		miner.WithMinGoodAtxPercent(minerGoodAtxPct),
 		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)),
 	)
