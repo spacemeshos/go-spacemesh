@@ -184,8 +184,8 @@ func Test_PostSupervisor_Restart_Possible(t *testing.T) {
 	require.Eventually(t, func() bool { return (ps.pid.Load() == 0) }, 5*time.Second, 100*time.Millisecond)
 }
 
-func Test_PostSupervisor_RestartsOnCrash(t *testing.T) {
-	log := zaptest.NewLogger(t)
+func Test_PostSupervisor_LogFatalOnCrash(t *testing.T) {
+	log := zaptest.NewLogger(t, zaptest.WrapOptions(zap.WithFatalHook(calledFatal(t))))
 
 	cmdCfg := DefaultTestPostServiceConfig()
 	postCfg := DefaultPostConfig()
@@ -209,21 +209,50 @@ func Test_PostSupervisor_RestartsOnCrash(t *testing.T) {
 
 	require.Eventually(t, func() bool { return (ps.pid.Load() != 0) }, 5*time.Second, 100*time.Millisecond)
 
-	oldPid := int(ps.pid.Load())
-	process, err := os.FindProcess(oldPid)
+	pid := int(ps.pid.Load())
+	process, err := os.FindProcess(pid)
 	require.NoError(t, err)
 	require.NotNil(t, process)
 	require.NoError(t, process.Kill())
 
-	require.Eventually(t, func() bool { return (ps.pid.Load() != int64(oldPid)) }, 5*time.Second, 100*time.Millisecond)
+	// log asserts that zap.Fatal was called
+	require.NoError(t, ps.eg.Wait())
+}
+
+func Test_PostSupervisor_LogFatalOnInvalidConfig(t *testing.T) {
+	log := zaptest.NewLogger(t, zaptest.WrapOptions(zap.WithFatalHook(calledFatal(t))))
+
+	cmdCfg := DefaultTestPostServiceConfig()
+	cmdCfg.NodeAddress = "http://127.0.0.1:9099" // wrong port
+	cmdCfg.MaxRetries = 1                        // speedup test, will fail on 2nd retry (~ 5s)
+	postCfg := DefaultPostConfig()
+	postOpts := DefaultPostSetupOpts()
+	provingOpts := DefaultPostProvingOpts()
+
+	ctrl := gomock.NewController(t)
+	mgr := NewMockpostSetupProvider(ctrl)
+	mgr.EXPECT().PrepareInitializer(postOpts).Return(nil)
+	mgr.EXPECT().StartSession(gomock.Any()).Return(nil)
+
+	sync := NewMocksyncer(ctrl)
+	sync.EXPECT().RegisterForATXSynced().DoAndReturn(closedChan)
+
+	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr, sync)
+	require.NoError(t, err)
+	require.NotNil(t, ps)
+
+	require.NoError(t, ps.Start(postOpts))
+	t.Cleanup(func() { assert.NoError(t, ps.Stop(false)) })
+
+	require.Eventually(t, func() bool { return (ps.pid.Load() != 0) }, 5*time.Second, 100*time.Millisecond)
 
 	pid := int(ps.pid.Load())
-	process, err = os.FindProcess(pid)
+	process, err := os.FindProcess(pid)
 	require.NoError(t, err)
 	require.NotNil(t, process)
 
-	require.NotEqual(t, oldPid, pid)
-	require.NoError(t, ps.Stop(false))
+	// log asserts that zap.Fatal was called
+	require.NoError(t, ps.eg.Wait())
 }
 
 func Test_PostSupervisor_StopOnError(t *testing.T) {
