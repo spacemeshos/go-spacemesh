@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-retryablehttp"
-	"github.com/sourcegraph/conc/iter"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -173,19 +173,25 @@ func (c *Certifier) CertifyAll(ctx context.Context, poets []PoetClient) map[stri
 		poet   string
 	}
 
-	certifierInfos := iter.Map(poetsToCertify, func(p *PoetClient) *certInfo {
-		poet := *p
-		url, pubkey, err := poet.CertifierInfo(ctx)
-		if err != nil {
-			c.logger.Warn("failed to query for certifier info", zap.Error(err), zap.String("poet", poet.Address()))
+	certifierInfos := make([]*certInfo, len(poetsToCertify))
+	var eg errgroup.Group
+	for i, poet := range poetsToCertify {
+		i, poet := i, poet
+		eg.Go(func() error {
+			url, pubkey, err := poet.CertifierInfo(ctx)
+			if err != nil {
+				c.logger.Warn("failed to query for certifier info", zap.Error(err), zap.String("poet", poet.Address()))
+				return nil
+			}
+			certifierInfos[i] = &certInfo{
+				url:    url,
+				pubkey: pubkey,
+				poet:   poet.Address(),
+			}
 			return nil
-		}
-		return &certInfo{
-			url:    url,
-			pubkey: pubkey,
-			poet:   poet.Address(),
-		}
-	})
+		})
+	}
+	eg.Wait()
 
 	type certService struct {
 		url    *url.URL

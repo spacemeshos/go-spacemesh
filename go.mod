@@ -33,7 +33,6 @@ require (
 	github.com/prometheus/common v0.45.0
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
 	github.com/seehuhn/mt19937 v1.0.0
-	github.com/sourcegraph/conc v0.3.0
 	github.com/spacemeshos/api/release/go v1.24.0
 	github.com/spacemeshos/economics v0.1.1
 	github.com/spacemeshos/fixed v0.1.1
@@ -186,6 +185,7 @@ require (
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/sagikazarmark/locafero v0.3.0 // indirect
 	github.com/sagikazarmark/slog-shim v0.1.0 // indirect
+	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spacemeshos/sha256-simd v0.1.0 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/spf13/cast v1.5.1 // indirect
