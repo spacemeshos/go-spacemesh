@@ -274,11 +274,11 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	genesis := time.Now()
 	epoch := layersPerEpoch * layerDuration
 	poetCfg := activation.PoetConfig{
-		PhaseShift:        epoch / 5,
-		CycleGap:          epoch / 10,
-		GracePeriod:       epoch / 10,
-		RequestTimeout:    epoch / 10,
-		RequestRetryDelay: epoch / 100,
+		PhaseShift:        epoch / 2,
+		CycleGap:          epoch / 5,
+		GracePeriod:       epoch / 5,
+		RequestTimeout:    epoch / 5,
+		RequestRetryDelay: epoch / 50,
 		MaxRequestRetries: 10,
 	}
 	poetProver := spawnPoet(
