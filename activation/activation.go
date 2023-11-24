@@ -518,9 +518,6 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	if err := nipost.RemoveChallenge(b.localDB, b.signer.NodeID()); err != nil {
 		return fmt.Errorf("discarding challenge after published ATX: %w", err)
 	}
-	if err := nipost.RemoveInitialPost(b.localDB, b.signer.NodeID()); err != nil {
-		return fmt.Errorf("discarding initial post after published ATX: %w", err)
-	}
 	events.EmitAtxPublished(
 		atx.PublishEpoch, atx.TargetEpoch(),
 		atx.ID(),
