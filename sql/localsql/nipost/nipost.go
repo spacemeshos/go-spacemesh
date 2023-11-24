@@ -30,7 +30,7 @@ func AddPost(db sql.Executor, nodeID types.NodeID, post Post) error {
 		stmt.BindInt64(8, int64(post.VRFNonce))
 	}
 	if _, err := db.Exec(`
-		REPLACE into post (
+		INSERT into post (
 			id, post_nonce, post_indices, post_pow, challenge, num_units, commit_atx, vrf_nonce
 		) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8);`, enc, nil,
 	); err != nil {

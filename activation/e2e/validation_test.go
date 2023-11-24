@@ -101,7 +101,6 @@ func TestValidator_Validate(t *testing.T) {
 		sig,
 		poetCfg,
 		mclock,
-		localsql.InMemory(),
 		activation.WithPoetClients(client),
 	)
 	require.NoError(t, err)

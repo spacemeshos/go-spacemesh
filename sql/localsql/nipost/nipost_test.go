@@ -36,48 +36,6 @@ func Test_AddInitialPost(t *testing.T) {
 	require.Equal(t, post, *got)
 }
 
-func Test_OverwritePost(t *testing.T) {
-	db := localsql.InMemory(
-		sql.WithMigration(localsql.New0002Migration(t.TempDir())),
-	)
-
-	nodeID := types.RandomNodeID()
-	post := Post{
-		Nonce:     1,
-		Indices:   []byte{1, 2, 3},
-		Pow:       1,
-		Challenge: shared.ZeroChallenge,
-
-		NumUnits:      2,
-		CommitmentATX: types.RandomATXID(),
-		VRFNonce:      3,
-	}
-	require.NoError(t, AddPost(db, nodeID, post))
-
-	got, err := GetPost(db, nodeID)
-	require.NoError(t, err)
-	require.NotNil(t, got)
-	require.Equal(t, post, *got)
-
-	// Overwrite
-	post2 := Post{
-		Nonce:     11,
-		Indices:   []byte{4, 5, 6},
-		Pow:       11,
-		Challenge: []byte("challenge"),
-
-		NumUnits:      22,
-		CommitmentATX: types.RandomATXID(),
-		VRFNonce:      33,
-	}
-	require.NoError(t, AddPost(db, nodeID, post2))
-
-	got, err = GetPost(db, nodeID)
-	require.NoError(t, err)
-	require.NotNil(t, got)
-	require.Equal(t, post2, *got)
-}
-
 func Test_AddChallenge(t *testing.T) {
 	commitmentATX := types.RandomATXID()
 	tt := []struct {

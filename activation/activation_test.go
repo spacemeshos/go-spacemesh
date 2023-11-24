@@ -485,7 +485,10 @@ func TestBuilder_Loop_WaitsOnStaleChallenge(t *testing.T) {
 
 	ch := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, postGenesisEpoch, &types.ATXID{'c', 'a', 't', 'x'})
 	nipostData := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
-	prevAtx := newAtx(t, tab.sig, ch, nipostData, 2, types.Address{})
+	vrf := types.VRFPostIndex(123)
+	prevAtx := types.NewActivationTx(ch, types.Address{}, nipostData, 2, &vrf)
+	prevAtx.SetEffectiveNumUnits(2)
+	prevAtx.SetReceived(time.Now())
 	SignAndFinalizeAtx(tab.sig, prevAtx)
 	vPrevAtx, err := prevAtx.Verify(0, 1)
 	require.NoError(t, err)
@@ -1177,7 +1180,10 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posEpoch, &types.ATXID{'c', 'a', 't', 'x'})
 	poetBytes := []byte("66666")
 	nipostData := newNIPostWithChallenge(t, types.HexToHash32("55555"), poetBytes)
-	prevAtx := newAtx(t, tab.sig, challenge, nipostData, 2, types.Address{})
+	vrf := types.VRFPostIndex(123)
+	prevAtx := types.NewActivationTx(challenge, types.Address{}, nipostData, 2, &vrf)
+	prevAtx.SetEffectiveNumUnits(2)
+	prevAtx.SetReceived(time.Now())
 	SignAndFinalizeAtx(tab.sig, prevAtx)
 	vPrevAtx, err := prevAtx.Verify(0, 1)
 	require.NoError(t, err)
@@ -1367,7 +1373,8 @@ func TestBuilder_obtainPost(t *testing.T) {
 				LabelsPerUnit: 777,
 			},
 		}
-		atx := types.NewActivationTx(challenge, types.Address{}, nipost, 2, nil)
+		vrf := types.VRFPostIndex(1234)
+		atx := types.NewActivationTx(challenge, types.Address{}, nipost, 2, &vrf)
 		atx.SetEffectiveNumUnits(2)
 		atx.SetReceived(time.Now())
 		SignAndFinalizeAtx(tab.sig, atx)

@@ -15,7 +15,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 )
 
 func defaultPoetServiceMock(ctrl *gomock.Controller, id []byte, address string) *MockPoetClient {
@@ -79,7 +78,6 @@ func TestNIPostBuilderWithMocks(t *testing.T) {
 		sig,
 		PoetConfig{},
 		mclock,
-		localsql.InMemory(),
 		WithPoetClients(poetProvider),
 	)
 	require.NoError(t, err)
@@ -121,7 +119,6 @@ func TestPostSetup(t *testing.T) {
 		postProvider.signer,
 		PoetConfig{},
 		mclock,
-		localsql.InMemory(),
 		WithPoetClients(poetProvider),
 	)
 	require.NoError(t, err)
@@ -186,7 +183,6 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 		sig,
 		PoetConfig{},
 		mclock,
-		localsql.InMemory(),
 		WithPoetClients(poetProver),
 	)
 	require.NoError(t, err)
@@ -209,7 +205,6 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 		sig,
 		PoetConfig{},
 		mclock,
-		localsql.InMemory(),
 		WithPoetClients(poetProver),
 	)
 	require.NoError(t, err)
@@ -232,7 +227,6 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 		sig,
 		PoetConfig{},
 		mclock,
-		localsql.InMemory(),
 		WithPoetClients(poetProver),
 	)
 	require.NoError(t, err)
@@ -323,7 +317,6 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 		sig,
 		poetCfg,
 		mclock,
-		localsql.InMemory(),
 		WithPoetClients(poets...),
 	)
 	require.NoError(t, err)
@@ -398,7 +391,6 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 		sig,
 		PoetConfig{},
 		mclock,
-		localsql.InMemory(),
 		WithPoetClients(poets...),
 	)
 	require.NoError(t, err)
@@ -447,7 +439,6 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			sig,
 			poetCfg,
 			mclock,
-			localsql.InMemory(),
 			WithPoetClients(poetProver),
 		)
 		require.NoError(t, err)
@@ -478,7 +469,6 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			sig,
 			poetCfg,
 			mclock,
-			localsql.InMemory(),
 			WithPoetClients(poetProver),
 		)
 		require.NoError(t, err)
@@ -521,7 +511,6 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			sig,
 			poetCfg,
 			mclock,
-			localsql.InMemory(),
 			WithPoetClients(poetProver),
 		)
 		require.NoError(t, err)
@@ -550,7 +539,6 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			sig,
 			poetCfg,
 			mclock,
-			localsql.InMemory(),
 			WithPoetClients(poetProver),
 		)
 		require.NoError(t, err)
@@ -582,7 +570,6 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			sig,
 			poetCfg,
 			mclock,
-			localsql.InMemory(),
 			WithPoetClients(poetProver),
 		)
 		require.NoError(t, err)
@@ -624,7 +611,6 @@ func TestNIPostBuilder_RecertifyPoet(t *testing.T) {
 		sig,
 		PoetConfig{PhaseShift: layerDuration},
 		mclock,
-		localsql.InMemory(),
 		WithPoetClients(poetProver),
 	)
 	require.NoError(t, err)
@@ -703,7 +689,6 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 			sig,
 			PoetConfig{},
 			mclock,
-			localsql.InMemory(),
 			WithPoetClients(poetProver),
 		)
 		require.NoError(t, err)
@@ -736,7 +721,6 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 			sig,
 			PoetConfig{},
 			mclock,
-			localsql.InMemory(),
 			WithPoetClients(poetProver),
 		)
 		require.NoError(t, err)
@@ -775,7 +759,6 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 			sig,
 			PoetConfig{},
 			mclock,
-			localsql.InMemory(),
 			WithPoetClients(poetProver),
 		)
 		require.NoError(t, err)
@@ -857,7 +840,6 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 		sig,
 		poetCfg,
 		mclock,
-		localsql.InMemory(),
 		WithPoetClients(poet),
 	)
 	require.NoError(t, err)
@@ -1022,7 +1004,6 @@ func TestNIPostBuilder_Mainnet_Poet_Workaround(t *testing.T) {
 				sig,
 				poetCfg,
 				mclock,
-				localsql.InMemory(),
 				WithPoetClients(poets...),
 			)
 			require.NoError(t, err)
@@ -1108,7 +1089,6 @@ func TestNIPostBuilder_Close(t *testing.T) {
 		sig,
 		PoetConfig{},
 		mclock,
-		localsql.InMemory(),
 		WithPoetClients(defaultPoetServiceMock(ctrl, []byte("poet"), "http://localhost:9999")),
 	)
 	require.NoError(t, err)

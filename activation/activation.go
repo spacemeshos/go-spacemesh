@@ -410,6 +410,13 @@ func (b *Builder) obtainPostFromLastAtx(ctx context.Context) (*types.Post, *type
 			atx.CommitmentATX = &commitmentAtx
 		}
 	}
+	if atx.VRFNonce == nil {
+		if nonce, err := atxs.VRFNonce(b.cdb, b.SmesherID(), b.layerClock.CurrentLayer().GetEpoch()); err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to retrieve VRF nonce: %w", err)
+		} else {
+			atx.VRFNonce = &nonce
+		}
+	}
 
 	b.log.Info("found POST in an existing ATX", zap.String("atx_id", atxid.Hash32().ShortString()))
 	meta := &types.PostInfo{
@@ -428,7 +435,6 @@ func (b *Builder) obtainPost(ctx context.Context) (*types.Post, *types.PostInfo,
 	post, err := nipost.GetPost(b.localDB, b.signer.NodeID())
 	switch {
 	case err == nil:
-		b.log.Info("certifying using the post from local DB")
 		meta := &types.PostInfo{
 			NodeID:        b.SmesherID(),
 			CommitmentATX: post.CommitmentATX,
@@ -451,10 +457,23 @@ func (b *Builder) obtainPost(ctx context.Context) (*types.Post, *types.PostInfo,
 
 	b.log.Info("POST not found in local DB. Trying to obtain POST from an existing ATX")
 	if post, postInfo, ch, err := b.obtainPostFromLastAtx(ctx); err == nil {
+		b.log.Info("found POST in an existing ATX")
+		postToPersist := nipost.Post{
+			Nonce:         post.Nonce,
+			Indices:       post.Indices,
+			Pow:           post.Pow,
+			Challenge:     ch,
+			NumUnits:      postInfo.NumUnits,
+			CommitmentATX: postInfo.CommitmentATX,
+			VRFNonce:      *postInfo.Nonce,
+		}
+		if err := nipost.AddPost(b.localDB, b.signer.NodeID(), postToPersist); err != nil {
+			b.log.Error("failed to save post", zap.Error(err))
+		}
 		return post, postInfo, ch, nil
 	}
 
-	b.log.Info("POST not found in existing ATXs. Regenerating the initial POST")
+	b.log.Info("POST not found in existing ATXs. Generating the initial POST")
 	for {
 		post, postInfo, err := b.buildInitialPost(ctx)
 		if err == nil {

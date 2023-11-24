@@ -918,7 +918,6 @@ func (app *App) initServices(ctx context.Context) error {
 		app.edSgn,
 		app.Config.POET,
 		app.clock,
-		app.localDB,
 		activation.WithPoetClients(poetClients...),
 	)
 	if err != nil {
