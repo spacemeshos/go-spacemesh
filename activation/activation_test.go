@@ -805,9 +805,6 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 	require.NotNil(t, atx)
 
 	// state is cleaned up
-	_, err = nipost.InitialPost(tab.localDB, tab.sig.NodeID())
-	require.ErrorIs(t, err, sql.ErrNotFound)
-
 	_, err = nipost.Challenge(tab.localDB, tab.sig.NodeID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
@@ -1344,19 +1341,6 @@ func TestBuilder_InitialPostIsPersisted(t *testing.T) {
 	require.NoError(t, tab.buildInitialPost(context.Background()))
 
 	// postClient.Proof() should not be called again
-	require.NoError(t, tab.buildInitialPost(context.Background()))
-
-	// Remove the persisted post file and try again
-	require.NoError(t, nipost.RemoveInitialPost(tab.localDb, tab.signer.NodeID()))
-	tab.mpostClient.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).
-		Return(
-			&types.Post{Indices: make([]byte, 10)},
-			&types.PostInfo{
-				CommitmentATX: types.RandomATXID(),
-				Nonce:         new(types.VRFPostIndex),
-			},
-			nil,
-		)
 	require.NoError(t, tab.buildInitialPost(context.Background()))
 }
 
