@@ -3,6 +3,8 @@ package node
 
 import (
 	"context"
+	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -1125,6 +1127,13 @@ func (app *App) launchStandalone(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	pubkey, privkey, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		return err
+	}
+	app.Config.PoetServers[0].Pubkey = types.NewBase64Enc(pubkey)
+	os.Setenv("POET_PRIVATE_KEY", base64.StdEncoding.EncodeToString(privkey))
+
 	cfg.RawRESTListener = parsed.Host
 	cfg.RawRPCListener = parsed.Hostname() + ":0"
 	cfg.Genesis.UnmarshalFlag(app.Config.Genesis.GenesisTime)

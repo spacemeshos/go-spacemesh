@@ -1,6 +1,6 @@
 module github.com/spacemeshos/go-spacemesh
 
-go 1.21.3
+go 1.21.4
 
 require (
 	cloud.google.com/go/storage v1.35.1
@@ -38,7 +38,7 @@ require (
 	github.com/spacemeshos/fixed v0.1.1
 	github.com/spacemeshos/go-scale v1.1.12
 	github.com/spacemeshos/merkle-tree v0.2.3
-	github.com/spacemeshos/poet v0.9.7
+	github.com/spacemeshos/poet v0.10.1-rc2
 	github.com/spacemeshos/post v0.10.1
 	github.com/spf13/afero v1.10.0
 	github.com/spf13/cobra v1.8.0
