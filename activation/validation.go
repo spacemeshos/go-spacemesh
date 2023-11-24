@@ -139,9 +139,7 @@ func (v *Validator) Post(
 	}
 
 	start := time.Now()
-	if err := v.postVerifier.Verify(ctx, p, m,
-		verifying.WithPowCreator(nodeId.Bytes()), verifying.WithLabelScryptParams(v.scrypt),
-	); err != nil {
+	if err := v.postVerifier.Verify(ctx, p, m, verifying.WithLabelScryptParams(v.scrypt)); err != nil {
 		return fmt.Errorf("verify PoST: %w", err)
 	}
 	metrics.PostVerificationLatency.Observe(time.Since(start).Seconds())
@@ -188,9 +186,7 @@ func (v *Validator) VRFNonce(
 		LabelsPerUnit:   PostMetadata.LabelsPerUnit,
 	}
 
-	if err := verifying.VerifyVRFNonce((*uint64)(vrfNonce), meta,
-		verifying.WithPowCreator(nodeId.Bytes()), verifying.WithLabelScryptParams(v.scrypt),
-	); err != nil {
+	if err := verifying.VerifyVRFNonce((*uint64)(vrfNonce), meta, verifying.WithLabelScryptParams(v.scrypt)); err != nil {
 		return fmt.Errorf("verify VRF nonce: %w", err)
 	}
 	return nil
