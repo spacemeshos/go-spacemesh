@@ -90,7 +90,7 @@ func withPoetClients(clients []poetClient) NIPostBuilderOption {
 func NewNIPostBuilder(
 	poetDB poetDbAPI,
 	postService postService,
-	poetServers []PoetServer,
+	poetServers []types.PoetServer,
 	dataDir string,
 	lg *zap.Logger,
 	signer *signing.EdSigner,

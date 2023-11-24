@@ -26,7 +26,6 @@ import (
 	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 	metav1 "k8s.io/client-go/applyconfigurations/meta/v1"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/systest/parameters"
 	"github.com/spacemeshos/go-spacemesh/systest/parameters/fastnet"
@@ -783,10 +782,10 @@ func (d DeploymentFlag) Flag() string {
 }
 
 func PoetEndpoints(ids ...int) DeploymentFlag {
-	var poets []activation.PoetServer
+	var poets []types.PoetServer
 	for _, id := range ids {
 		pubkey, _ := MakePoetKey(id)
-		poets = append(poets, activation.PoetServer{
+		poets = append(poets, types.PoetServer{
 			Address: MakePoetEndpoint(id),
 			Pubkey:  types.NewBase64Enc(pubkey),
 		})

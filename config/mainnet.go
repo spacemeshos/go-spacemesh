@@ -82,7 +82,7 @@ func MainnetConfig() Config {
 			OptFilterThreshold: 90,
 
 			TickSize: 9331200,
-			PoetServers: []activation.PoetServer{
+			PoetServers: []types.PoetServer{
 				{
 					Address: "https://mainnet-poet-0.spacemesh.network",
 					Pubkey:  types.MustBase64FromString("cFnqCS5oER7GOX576oPtahlxB/1y95aDibdK7RHQFVg="),

@@ -86,8 +86,8 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *config.Config) error {
 						panic(err.Error())
 					}
 					val = dst
-				case "[]activation.PoetServer":
-					dst := []activation.PoetServer{}
+				case "[]types.PoetServer":
+					dst := []types.PoetServer{}
 					if err := json.Unmarshal([]byte(viper.GetString(name)), &dst); err != nil {
 						panic(err.Error())
 					}

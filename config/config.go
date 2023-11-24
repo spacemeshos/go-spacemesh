@@ -101,7 +101,7 @@ type BaseConfig struct {
 	LayersPerEpoch uint32        `mapstructure:"layers-per-epoch"`
 
 	PoETServers []deprecatedPoETServers `mapstructure:"poet-server"`
-	PoetServers []activation.PoetServer `mapstructure:"poet-servers"`
+	PoetServers []types.PoetServer      `mapstructure:"poet-servers"`
 
 	PprofHTTPServer bool `mapstructure:"pprof-server"`
 

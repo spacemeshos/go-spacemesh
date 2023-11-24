@@ -68,7 +68,7 @@ func standalone() config.Config {
 	conf.Beacon.BeaconSyncWeightUnits = 10
 	conf.Beacon.VotesLimit = 100
 
-	conf.PoetServers = []activation.PoetServer{
+	conf.PoetServers = []types.PoetServer{
 		{
 			Address: "http://127.0.0.1:10010",
 		},

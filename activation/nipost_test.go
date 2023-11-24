@@ -70,7 +70,7 @@ func TestNIPostBuilderWithMocks(t *testing.T) {
 	nb, err := NewNIPostBuilder(
 		poetDb,
 		postService,
-		[]PoetServer{},
+		[]types.PoetServer{},
 		t.TempDir(),
 		zaptest.NewLogger(t),
 		sig,
@@ -109,7 +109,7 @@ func TestPostSetup(t *testing.T) {
 	nb, err := NewNIPostBuilder(
 		poetDb,
 		postService,
-		[]PoetServer{},
+		[]types.PoetServer{},
 		t.TempDir(),
 		zaptest.NewLogger(t),
 		postProvider.signer,
@@ -171,7 +171,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	nb, err := NewNIPostBuilder(
 		poetDb,
 		postService,
-		[]PoetServer{},
+		[]types.PoetServer{},
 		dir,
 		zaptest.NewLogger(t),
 		sig,
@@ -192,7 +192,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	nb, err = NewNIPostBuilder(
 		poetDb,
 		postService,
-		[]PoetServer{},
+		[]types.PoetServer{},
 		dir,
 		zaptest.NewLogger(t),
 		sig,
@@ -215,7 +215,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	nb, err = NewNIPostBuilder(
 		poetDb,
 		postService,
-		[]PoetServer{},
+		[]types.PoetServer{},
 		dir,
 		zaptest.NewLogger(t),
 		sig,
@@ -302,7 +302,7 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 	nb, err := NewNIPostBuilder(
 		poetDb,
 		postService,
-		[]PoetServer{},
+		[]types.PoetServer{},
 		t.TempDir(),
 		zaptest.NewLogger(t),
 		sig,
@@ -368,7 +368,7 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 	nb, err := NewNIPostBuilder(
 		poetDb,
 		postService,
-		[]PoetServer{},
+		[]types.PoetServer{},
 		t.TempDir(),
 		zaptest.NewLogger(t),
 		sig,
@@ -416,7 +416,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		nb, err := NewNIPostBuilder(
 			poetDb,
 			postService,
-			[]PoetServer{},
+			[]types.PoetServer{},
 			t.TempDir(),
 			zaptest.NewLogger(t),
 			sig,
@@ -457,7 +457,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		nb, err := NewNIPostBuilder(
 			poetDb,
 			postService,
-			[]PoetServer{},
+			[]types.PoetServer{},
 			t.TempDir(),
 			zaptest.NewLogger(t),
 			sig,
@@ -482,7 +482,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		nb, err := NewNIPostBuilder(
 			poetDb,
 			postService,
-			[]PoetServer{},
+			[]types.PoetServer{},
 			t.TempDir(),
 			zaptest.NewLogger(t),
 			sig,
@@ -510,7 +510,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		nb, err := NewNIPostBuilder(
 			poetDb,
 			postService,
-			[]PoetServer{},
+			[]types.PoetServer{},
 			t.TempDir(),
 			zaptest.NewLogger(t),
 			sig,
@@ -553,7 +553,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 		nb, err := NewNIPostBuilder(
 			poetDb,
 			postService,
-			[]PoetServer{},
+			[]types.PoetServer{},
 			t.TempDir(),
 			zaptest.NewLogger(t),
 			sig,
@@ -585,7 +585,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 		nb, err := NewNIPostBuilder(
 			poetDb,
 			postService,
-			[]PoetServer{},
+			[]types.PoetServer{},
 			dir,
 			zaptest.NewLogger(t),
 			sig,
@@ -622,7 +622,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 		nb, err := NewNIPostBuilder(
 			poetDb,
 			postService,
-			[]PoetServer{},
+			[]types.PoetServer{},
 			dir,
 			zaptest.NewLogger(t),
 			sig,
@@ -704,7 +704,7 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 	nb, err := NewNIPostBuilder(
 		poetDb,
 		postService,
-		[]PoetServer{},
+		[]types.PoetServer{},
 		t.TempDir(),
 		zaptest.NewLogger(t),
 		sig,
@@ -866,7 +866,7 @@ func TestNIPostBuilder_Mainnet_Poet_Workaround(t *testing.T) {
 			nb, err := NewNIPostBuilder(
 				poetDb,
 				postService,
-				[]PoetServer{},
+				[]types.PoetServer{},
 				t.TempDir(),
 				zaptest.NewLogger(t),
 				sig,

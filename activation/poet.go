@@ -26,11 +26,6 @@ var (
 	ErrInvalidRequest = errors.New("invalid request")
 )
 
-type PoetServer struct {
-	Address string          `mapstructure:"address" json:"address"`
-	Pubkey  types.Base64Enc `mapstructure:"pubkey" json:"pubkey"`
-}
-
 type PoetPowParams struct {
 	Challenge  []byte
 	Difficulty uint
@@ -101,7 +96,7 @@ func WithLogger(logger *zap.Logger) PoetClientOpts {
 }
 
 // NewHTTPPoetClient returns new instance of HTTPPoetClient connecting to the specified url.
-func NewHTTPPoetClient(server PoetServer, cfg PoetConfig, opts ...PoetClientOpts) (*HTTPPoetClient, error) {
+func NewHTTPPoetClient(server types.PoetServer, cfg PoetConfig, opts ...PoetClientOpts) (*HTTPPoetClient, error) {
 	client := &retryablehttp.Client{
 		RetryMax:     cfg.MaxRequestRetries,
 		RetryWaitMin: cfg.RequestRetryDelay,
@@ -133,6 +128,7 @@ func NewHTTPPoetClient(server PoetServer, cfg PoetConfig, opts ...PoetClientOpts
 	poetClient.logger.Info(
 		"created poet client",
 		zap.Stringer("url", baseURL),
+		zap.Binary("pubkey", server.Pubkey.Bytes()),
 		zap.Int("max retries", client.RetryMax),
 		zap.Duration("min retry wait", client.RetryWaitMin),
 		zap.Duration("max retry wait", client.RetryWaitMax),
