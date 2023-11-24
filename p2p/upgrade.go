@@ -119,6 +119,8 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 		Direct:         direct,
 		Bootnodes:      bootnodes,
 		MaxMessageSize: cfg.MaxMessageSize,
+		QueueSize:      cfg.GossipQueueSize,
+		Throttle:       cfg.GossipValidationThrottle,
 	}); err != nil {
 		return nil, fmt.Errorf("failed to initialize pubsub: %w", err)
 	}

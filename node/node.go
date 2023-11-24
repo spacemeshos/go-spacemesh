@@ -1054,6 +1054,7 @@ func (app *App) initServices(ctx context.Context) error {
 	app.host.Register(
 		pubsub.AtxProtocol,
 		pubsub.ChainGossipHandler(atxSyncHandler, atxHandler.HandleGossipAtx),
+		pubsub.WithValidatorConcurrency(app.Config.P2P.GossipAtxValidationThrottle),
 	)
 	app.host.Register(
 		pubsub.TxProtocol,
