@@ -49,6 +49,24 @@ var (
 		"Total amount of received messages",
 		[]string{"protocol"},
 	)
+	queueFullCount = metrics.NewCounter(
+		"queue_full",
+		subsystem,
+		"counter of dropped messages because queue was full",
+		[]string{"protocol"},
+	)
+	throttledCount = metrics.NewCounter(
+		"throttled",
+		subsystem,
+		"counter of dropped messages because of throttling",
+		[]string{"protocol"},
+	)
+	rejectedCount = metrics.NewCounter(
+		"rejected",
+		subsystem,
+		"counter of dropped messages for any other reason",
+		[]string{"protocol"},
+	)
 )
 
 // GossipCollector pubsub.RawTracer implementation
@@ -126,7 +144,20 @@ func (g *GossipCollector) DeliverMessage(msg *pubsub.Message) {
 
 // RejectMessage is invoked when a message is Rejected or Ignored.
 // The reason argument can be one of the named strings Reject*.
-func (g *GossipCollector) RejectMessage(*pubsub.Message, string) {}
+func (g *GossipCollector) RejectMessage(msg *pubsub.Message, reason string) {
+	topic := ""
+	if msg.Topic != nil {
+		topic = *msg.Topic
+	}
+	switch reason {
+	case pubsub.RejectValidationThrottled:
+		throttledCount.WithLabelValues(topic).Inc()
+	case pubsub.RejectValidationQueueFull:
+		queueFullCount.WithLabelValues(topic).Inc()
+	default:
+		rejectedCount.WithLabelValues(topic).Inc()
+	}
+}
 
 // DuplicateMessage is invoked when a duplicate message is dropped.
 func (g *GossipCollector) DuplicateMessage(msg *pubsub.Message) {

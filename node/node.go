@@ -976,11 +976,27 @@ func (app *App) initServices(ctx context.Context) error {
 			pubsub.WithValidatorInline(true),
 		)
 	}
-	app.host.Register(pubsub.ProposalProtocol, pubsub.ChainGossipHandler(syncHandler, proposalListener.HandleProposal))
-	app.host.Register(pubsub.AtxProtocol, pubsub.ChainGossipHandler(atxSyncHandler, atxHandler.HandleGossipAtx))
-	app.host.Register(pubsub.TxProtocol, pubsub.ChainGossipHandler(syncHandler, app.txHandler.HandleGossipTransaction))
-	app.host.Register(pubsub.HareProtocol, pubsub.ChainGossipHandler(syncHandler, app.hare.GetHareMsgHandler()))
-	app.host.Register(pubsub.BlockCertify, pubsub.ChainGossipHandler(syncHandler, app.certifier.HandleCertifyMessage))
+	app.host.Register(
+		pubsub.ProposalProtocol,
+		pubsub.ChainGossipHandler(syncHandler, proposalListener.HandleProposal),
+	)
+	app.host.Register(
+		pubsub.AtxProtocol,
+		pubsub.ChainGossipHandler(atxSyncHandler, atxHandler.HandleGossipAtx),
+		pubsub.WithValidatorConcurrency(app.Config.P2P.GossipAtxValidationThrottle),
+	)
+	app.host.Register(
+		pubsub.TxProtocol,
+		pubsub.ChainGossipHandler(syncHandler, app.txHandler.HandleGossipTransaction),
+	)
+	app.host.Register(
+		pubsub.HareProtocol,
+		pubsub.ChainGossipHandler(syncHandler, app.hare.GetHareMsgHandler()),
+	)
+	app.host.Register(
+		pubsub.BlockCertify,
+		pubsub.ChainGossipHandler(syncHandler, app.certifier.HandleCertifyMessage),
+	)
 	app.host.Register(
 		pubsub.MalfeasanceProof,
 		pubsub.ChainGossipHandler(atxSyncHandler, malfeasanceHandler.HandleMalfeasanceProof),

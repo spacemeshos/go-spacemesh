@@ -35,6 +35,12 @@ func fastnet() config.Config {
 	conf.HARE.RoundDuration = 2 * time.Second
 	conf.HARE.WakeupDelta = 3 * time.Second
 
+	// node will select atxs that were received atleast 4 seconds before start of the epoch
+	// for activeset.
+	// if some atxs weren't received on time it will skew eligibility distribution
+	// and will make some tests fail.
+	conf.ATXGradeDelay = 1 * time.Second
+
 	conf.HARE3.Enable = true
 	conf.HARE3.DisableLayer = types.LayerID(math.MaxUint32)
 	conf.HARE3.Committee = 800
