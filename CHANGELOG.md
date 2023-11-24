@@ -2,6 +2,21 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+
+## Release v1.2.7
+
+### Improvements
+
+  * [#5289](https://github.com/spacemeshos/go-spacemesh/pull/5289) build active set from activations received on time
+
+  should decrease the state growth at the start of the epoch because of number of unique activets. 
+
+  * [#5291](https://github.com/spacemeshos/go-spacemesh/pull/5291) parametrize queue size and throttle limits in gossip
+
+  * reduce log level for "atx omitted from active set"
+
+  * [#5302](https://github.com/spacemeshos/go-spacemesh/pull/5302) improvements in transaction validation 
+
 ## Release v1.2.6
 
 ### Improvements
