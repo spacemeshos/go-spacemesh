@@ -126,6 +126,10 @@ type BaseConfig struct {
 	MinerGoodAtxsPercent int `mapstructure:"miner-good-atxs-percent"`
 
 	RegossipAtxInterval time.Duration `mapstructure:"regossip-atx-interval"`
+
+	// ATXGradeDelay is used to grade ATXs for selection in tortoise active set.
+	// See grading fuction in miner/proposals_builder.go
+	ATXGradeDelay time.Duration `mapstructure:"atx-grade-delay"`
 }
 
 type deprecatedPoETServers struct{}
@@ -211,6 +215,7 @@ func defaultBaseConfig() BaseConfig {
 		DatabaseSizeMeteringInterval: 10 * time.Minute,
 		DatabasePruneInterval:        30 * time.Minute,
 		NetworkHRP:                   "sm",
+		ATXGradeDelay:                10 * time.Second,
 	}
 }
 

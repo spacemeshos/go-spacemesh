@@ -109,6 +109,7 @@ func MainnetConfig() Config {
 				},
 			},
 			RegossipAtxInterval: 2 * time.Hour,
+			ATXGradeDelay:       30 * time.Minute,
 		},
 		Genesis: &GenesisConfig{
 			GenesisTime: "2023-07-14T08:00:00Z",

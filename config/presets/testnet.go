@@ -72,6 +72,7 @@ func testnet() config.Config {
 
 			TickSize:            666514,
 			RegossipAtxInterval: time.Hour,
+			ATXGradeDelay:       30 * time.Minute,
 		},
 		Genesis: &config.GenesisConfig{
 			GenesisTime: "2023-09-13T18:00:00Z",
