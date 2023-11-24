@@ -1,9 +1,20 @@
-package util
+package types
 
-import "encoding/base64"
+import (
+	"encoding/base64"
+	"encoding/json"
+)
 
 type Base64Enc struct {
 	inner []byte
+}
+
+func (b *Base64Enc) UnmarshalJSON(data []byte) error {
+	return json.Unmarshal(data, &b.inner)
+}
+
+func (b Base64Enc) MarshalJSON() ([]byte, error) {
+	return json.Marshal(b.Bytes())
 }
 
 func (b *Base64Enc) UnmarshalText(text []byte) error {
@@ -17,6 +28,10 @@ func (b *Base64Enc) UnmarshalText(text []byte) error {
 
 func (b *Base64Enc) Bytes() []byte {
 	return b.inner
+}
+
+func NewBase64Enc(b []byte) Base64Enc {
+	return Base64Enc{inner: b}
 }
 
 func Base64FromString(s string) (Base64Enc, error) {

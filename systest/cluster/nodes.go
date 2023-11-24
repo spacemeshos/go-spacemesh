@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -25,6 +26,8 @@ import (
 	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 	metav1 "k8s.io/client-go/applyconfigurations/meta/v1"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/systest/parameters"
 	"github.com/spacemeshos/go-spacemesh/systest/parameters/fastnet"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
@@ -304,7 +307,10 @@ func deployPoetD(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (
 		args = append(args, flag.Flag())
 	}
 
-	ctx.Log.Debugw("deploying poet pod", "id", id, "args", args, "image", ctx.PoetImage)
+	pubkey, privkey := MakePoetKey(decodePoetIdentifier(id))
+	keyb64 := base64.StdEncoding.EncodeToString(privkey)
+
+	ctx.Log.Debugw("deploying poet pod", "id", id, "args", args, "image", ctx.PoetImage, "pubkey", pubkey)
 
 	labels := nodeLabels(poetApp, id)
 	deployment := appsv1.Deployment(id, ctx.Namespace).
@@ -333,6 +339,9 @@ func deployPoetD(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (
 						WithResources(corev1.ResourceRequirements().
 							WithRequests(poetResources.Get(ctx.Parameters).Requests).
 							WithLimits(poetResources.Get(ctx.Parameters).Limits),
+						).
+						WithEnv(
+							corev1.EnvVar().WithName("POET_PRIVATE_KEY").WithValue(keyb64),
 						),
 					),
 				)))
@@ -515,9 +524,11 @@ func deployNodes(ctx *testcontext.Context, kind string, from, to int, opts ...De
 		finalFlags := make([]DeploymentFlag, len(cfg.flags), len(cfg.flags)+ctx.PoetSize)
 		copy(finalFlags, cfg.flags)
 		if !cfg.noDefaultPoets {
+			var poetIds []int
 			for idx := 0; idx < ctx.PoetSize; idx++ {
-				finalFlags = append(finalFlags, PoetEndpoint(MakePoetEndpoint(idx)))
+				poetIds = append(poetIds, idx)
 			}
+			finalFlags = append(finalFlags, PoetEndpoints(poetIds...))
 		}
 		if ctx.BootstrapperSize > 1 {
 			finalFlags = append(finalFlags, BootstrapperUrl(BootstrapperEndpoint(i%ctx.BootstrapperSize)))
@@ -771,9 +782,20 @@ func (d DeploymentFlag) Flag() string {
 	return d.Name + "=" + d.Value
 }
 
-// PoetEndpoint flag can be used multiple times to add multiple poets.
-func PoetEndpoint(endpoint string) DeploymentFlag {
-	return DeploymentFlag{Name: "--poet-server", Value: endpoint}
+func PoetEndpoints(ids ...int) DeploymentFlag {
+	var poets []activation.PoetServer
+	for _, id := range ids {
+		pubkey, _ := MakePoetKey(id)
+		poets = append(poets, activation.PoetServer{
+			Address: MakePoetEndpoint(id),
+			Pubkey:  types.NewBase64Enc(pubkey),
+		})
+	}
+	value, err := json.Marshal(poets)
+	if err != nil {
+		panic(err)
+	}
+	return DeploymentFlag{Name: "--poet-servers", Value: string(value)}
 }
 
 // MinPeers flag.

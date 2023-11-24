@@ -17,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/config/util"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
@@ -86,27 +85,27 @@ func MainnetConfig() Config {
 			PoetServers: []activation.PoetServer{
 				{
 					Address: "https://mainnet-poet-0.spacemesh.network",
-					Pubkey:  util.MustBase64FromString("cFnqCS5oER7GOX576oPtahlxB/1y95aDibdK7RHQFVg="),
+					Pubkey:  types.MustBase64FromString("cFnqCS5oER7GOX576oPtahlxB/1y95aDibdK7RHQFVg="),
 				},
 				{
 					Address: "https://mainnet-poet-1.spacemesh.network",
-					Pubkey:  util.MustBase64FromString("Qh1efxY4YhoYBEXKPTiHJ/a7n1GsllRSyweQKO3j7m0="),
+					Pubkey:  types.MustBase64FromString("Qh1efxY4YhoYBEXKPTiHJ/a7n1GsllRSyweQKO3j7m0="),
 				},
 				{
 					Address: "https://mainnet-poet-2.spacemesh.network",
-					Pubkey:  util.MustBase64FromString("8RXEI0MwO3uJUINFFlOm/uTjJCneV9FidMpXmn55G8Y="),
+					Pubkey:  types.MustBase64FromString("8RXEI0MwO3uJUINFFlOm/uTjJCneV9FidMpXmn55G8Y="),
 				},
 				{
 					Address: "https://poet-110.spacemesh.network",
-					Pubkey:  util.MustBase64FromString("8Qqgid+37eyY7ik+EA47Nd5TrQjXolbv2Mdgir243No="),
+					Pubkey:  types.MustBase64FromString("8Qqgid+37eyY7ik+EA47Nd5TrQjXolbv2Mdgir243No="),
 				},
 				{
 					Address: "https://poet-111.spacemesh.network",
-					Pubkey:  util.MustBase64FromString("caIV0Ym59L3RqbVAL6UrCPwr+z+lwe2TBj57QWnAgtM="),
+					Pubkey:  types.MustBase64FromString("caIV0Ym59L3RqbVAL6UrCPwr+z+lwe2TBj57QWnAgtM="),
 				},
 				{
 					Address: "https://poet-112.spacemesh.network",
-					Pubkey:  util.MustBase64FromString("5p/mPvmqhwdvf8U0GVrNq/9IN/HmZj5hCkFLAN04g1E="),
+					Pubkey:  types.MustBase64FromString("5p/mPvmqhwdvf8U0GVrNq/9IN/HmZj5hCkFLAN04g1E="),
 				},
 			},
 			RegossipAtxInterval: 2 * time.Hour,

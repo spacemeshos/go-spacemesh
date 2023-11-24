@@ -18,7 +18,6 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/config/util"
 )
 
 var (
@@ -28,8 +27,8 @@ var (
 )
 
 type PoetServer struct {
-	Address string         `mapstructure:"address"`
-	Pubkey  util.Base64Enc `mapstructure:"pubkey"`
+	Address string          `mapstructure:"address" json:"address"`
+	Pubkey  types.Base64Enc `mapstructure:"pubkey" json:"pubkey"`
 }
 
 type PoetPowParams struct {

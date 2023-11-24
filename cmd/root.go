@@ -48,6 +48,11 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.PublicMetrics.MetricsURL, "Push metrics to url")
 	cmd.PersistentFlags().DurationVar(&cfg.PublicMetrics.MetricsPushPeriod, "metrics-push-period",
 		cfg.PublicMetrics.MetricsPushPeriod, "Push period")
+	cmd.PersistentFlags().Var(
+		&flags.JSONFlag{Value: &cfg.PoetServers},
+		"poet-servers",
+		"JSON-encoded list of poet servers (address and pubkey)",
+	)
 	cmd.PersistentFlags().StringVar(&cfg.Genesis.GenesisTime, "genesis-time",
 		cfg.Genesis.GenesisTime, "Time of the genesis layer in 2019-13-02T17:02:00+00:00 format")
 	cmd.PersistentFlags().StringVar(&cfg.Genesis.ExtraData, "genesis-extra-data",

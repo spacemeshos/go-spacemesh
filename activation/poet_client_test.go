@@ -13,7 +13,6 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/config/util"
 )
 
 func Test_HTTPPoetClient_ParsesURL(t *testing.T) {
@@ -154,7 +153,7 @@ func Test_HTTPPoetClient_PoetServiceID(t *testing.T) {
 	defer ts.Close()
 
 	cfg := server.DefaultRoundConfig()
-	key := util.MustBase64FromString("Zm9vYmFy")
+	key := types.MustBase64FromString("Zm9vYmFy")
 	client, err := NewHTTPPoetClient(PoetServer{Address: ts.URL, Pubkey: key}, PoetConfig{
 		PhaseShift: cfg.PhaseShift,
 		CycleGap:   cfg.CycleGap,

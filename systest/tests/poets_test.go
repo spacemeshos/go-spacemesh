@@ -133,13 +133,14 @@ func TestNodesUsingDifferentPoets(t *testing.T) {
 	require.NoError(t, cl.AddPoets(tctx))
 
 	for i := 0; i < tctx.ClusterSize-2; i++ {
-		poet := cluster.MakePoetEndpoint(i % tctx.PoetSize)
+		poetId := i % tctx.PoetSize
+		poet := cluster.MakePoetEndpoint(poetId)
 		tctx.Log.Debugw("adding smesher node", "id", i, "poet", poet)
 		err := cl.AddSmeshers(
 			tctx,
 			1,
 			cluster.NoDefaultPoets(),
-			cluster.WithFlags(cluster.PoetEndpoint(poet)),
+			cluster.WithFlags(cluster.PoetEndpoints(poetId)),
 		)
 		require.NoError(t, err)
 	}
