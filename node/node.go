@@ -953,9 +953,6 @@ func (app *App) initServices(ctx context.Context) error {
 		activation.WithPoetRetryInterval(app.Config.HARE3.PreroundDelay),
 		activation.WithValidator(app.validator),
 	)
-	if err := atxBuilder.MigrateDiskToLocalDB(); err != nil {
-		app.log.Panic("failed to migrate state of atx builder: %v", err)
-	}
 
 	malfeasanceHandler := malfeasance.NewHandler(
 		app.cachedDB,
@@ -1585,6 +1582,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	}
 	localDB, err := localsql.Open("file:"+filepath.Join(dbPath, localDbFile),
 		sql.WithMigrations(migrations),
+		sql.WithMigration(localsql.New0001Migration(app.Config.SMESHING.Opts.DataDir)),
 		sql.WithMigration(localsql.New0002Migration(app.Config.SMESHING.Opts.DataDir)),
 		sql.WithConnections(app.Config.DatabaseConnections),
 	)
