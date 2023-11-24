@@ -228,6 +228,9 @@ func (ps *PostSupervisor) runCmd(
 	args := []string{
 		"--address", cmdCfg.NodeAddress,
 
+		"--min-num-units", strconv.FormatUint(uint64(postCfg.MinNumUnits), 10),
+		"--max-num-units", strconv.FormatUint(uint64(postCfg.MaxNumUnits), 10),
+		"--labels-per-unit", strconv.FormatUint(uint64(postCfg.LabelsPerUnit), 10),
 		"--k1", strconv.FormatUint(uint64(postCfg.K1), 10),
 		"--k2", strconv.FormatUint(uint64(postCfg.K2), 10),
 		"--k3", strconv.FormatUint(uint64(postCfg.K3), 10),
@@ -242,7 +245,7 @@ func (ps *PostSupervisor) runCmd(
 		"--nonces", strconv.FormatUint(uint64(provingOpts.Nonces), 10),
 		"--randomx-mode", provingOpts.RandomXMode.String(),
 
-		// "--watch-pid", strconv.Itoa(os.Getpid()),
+		"--watch-pid", strconv.Itoa(os.Getpid()),
 	}
 	if cmdCfg.MaxRetries > 0 {
 		args = append(args, "--max-retries", strconv.Itoa(cmdCfg.MaxRetries))
