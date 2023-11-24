@@ -6,7 +6,27 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ### Upgrade information
 
-This release is not backwards compatible with v1.3.x.
+### Highlights
+
+### Features
+
+### Improvements
+
+## 1.3.0
+
+### Upgrade information
+
+This release is not backwards compatible with v1.2.x. Upgrading will change the node's database schema and
+migrate local state to a new database. The migration will take place at the first startup after the upgrade.
+Be aware that after upgrading you cannot downgrade to v1.2.x any more.
+
+Current release is expected to be adopted by majority of the network participants before epoch 11 starts.
+Nodes that do not update before epoch 11 risk their proposals being rejected by the rest of the network.
+
+This release is the first step towards separating PoST from the node. Proof generation is now done via a dedicated
+service. This service is started automatically by the node and is shut down when the node shuts down. In most
+setups this should work out of the box, but if you are running into issues please check the README.md file
+for more information on how to configure the node to work with the PoST service.
 
 #### New poets configuration
 Upgrading requires changes in config. The existing field `poet-server` that accepted an array of addresses of poet servers
@@ -49,30 +69,8 @@ configuration is as follows:
 
 ### Highlights
 
-* [#TODO](https://github.com/spacemeshos/go-spacemesh/pull/TODO) change poet servers configuration
+* [#5293](https://github.com/spacemeshos/go-spacemesh/pull/5293) change poet servers configuration
   The config now takes the poet server address and its public key. See the [Upgrade Information](#new-poets-configuration) for details.
-
-### Features
-
-### Improvements
-
-## 1.3.0
-
-### Upgrade information
-
-This release is not backwards compatible with v1.2.x. Upgrading will change the node's database schema and
-migrate local state to a new database. The migration will take place at the first startup after the upgrade.
-Be aware that after upgrading you cannot downgrade to v1.2.x any more.
-
-Current release is expected to be adopted by majority of the network participants before epoch 11 starts.
-Nodes that do not update before epoch 11 risk their proposals being rejected by the rest of the network.
-
-This release is the first step towards separating PoST from the node. Proof generation is now done via a dedicated
-service. This service is started automatically by the node and is shut down when the node shuts down. In most
-setups this should work out of the box, but if you are running into issues please check the README.md file
-for more information on how to configure the node to work with the PoST service.
-
-### Highlights
 
 ### Features
 
