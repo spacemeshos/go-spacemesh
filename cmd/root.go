@@ -301,6 +301,7 @@ func AddCommands(cmd *cobra.Command) {
 	)
 
 	/**========================  Deprecated flags ========================== **/
+	//lint:ignore ST1005 we want a detailed, helpful error
 	cmd.PersistentFlags().Var(flags.NewDeprecatedFlag(errors.New(
 		`The poet-server field is deprecated. Please migrate to the poet-servers field. `+
 			`Check 'Upgrade Information' in CHANGELOG.md for details.`,

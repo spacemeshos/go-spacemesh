@@ -131,10 +131,10 @@ type BaseConfig struct {
 type deprecatedPoETServers struct{}
 
 func (deprecatedPoETServers) UnmarshalText([]byte) error {
-	return errors.New(
-		`The poet-server field is deprecated. Please migrate to the poet-servers field. ` +
-			`Check 'Upgrade Information' in CHANGELOG.md for details.`,
-	)
+	msg := `The poet-server field is deprecated. Please migrate to the poet-servers field. ` +
+		`Check 'Upgrade Information' in CHANGELOG.md for details.`
+	//lint:ignore ST1005 we want a detailed, helpful error
+	return errors.New(msg)
 }
 
 type PublicMetrics struct {
