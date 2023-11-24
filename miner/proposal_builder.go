@@ -627,7 +627,7 @@ func generateActiveSet(
 			return err
 		}
 		if grade != good && header.NodeID != signer.NodeID() {
-			logger.With().Info("atx omitted from active set",
+			logger.With().Debug("atx omitted from active set",
 				header.ID,
 				log.Int("grade", int(grade)),
 				log.Stringer("smesher", header.NodeID),
