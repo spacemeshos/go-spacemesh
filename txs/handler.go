@@ -104,7 +104,10 @@ func (th *TxHandler) verifyAndCache(ctx context.Context, expHash types.Hash32, m
 	if expHash != (types.Hash32{}) && tx.ID.Hash32() != expHash {
 		return fmt.Errorf("%w: proposal tx want %s, got %s", errWrongHash, expHash.ShortString(), tx.ID.ShortString())
 	}
-	if header.GasPrice == 0 {
+	if header.LayerLimits.Min != 0 || header.LayerLimits.Max != 0 {
+		return fmt.Errorf("%w: layers limits are not enabled %s", errParse, raw.ID)
+	}
+	if header.GasPrice == 0 || header.Fee() == 0 {
 		return fmt.Errorf("%w: zero gas price %s", errParse, raw.ID)
 	}
 	if !req.Verify() {
