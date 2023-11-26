@@ -81,6 +81,8 @@ func DefaultConfig() Config {
 		GossipQueueSize:             10000,
 		GossipValidationThrottle:    10000,
 		GossipAtxValidationThrottle: 10000,
+		EnableTCPTransport:          true,
+		EnableQUICTransport:         false,
 	}
 }
 
@@ -131,6 +133,8 @@ type Config struct {
 	PingPeers                   []string    `mapstructure:"ping-peers"`
 	Relay                       bool        `mapstructure:"relay"`
 	Relays                      []string    `mapstructure:"relays"`
+	EnableTCPTransport          bool        `mapstructure:"enable-tcp-transport"`
+	EnableQUICTransport         bool        `mapstructure:"enable-quic-transport"`
 }
 
 type RelayServer struct {
@@ -154,6 +158,9 @@ func (cfg *Config) advertisedAddrs() []string {
 }
 
 func (cfg *Config) Validate() error {
+	if !cfg.EnableTCPTransport && !cfg.EnableQUICTransport {
+		return errors.New("no transports enabled")
+	}
 	if len(cfg.ForceReachability) > 0 {
 		if cfg.ForceReachability != PublicReachability &&
 			cfg.ForceReachability != PrivateReachability {
@@ -276,46 +283,54 @@ func New(
 		libp2p.Identity(key),
 		libp2p.ListenAddrStrings(cfg.listenAddrs()...),
 		libp2p.UserAgent("go-spacemesh"),
-		libp2p.Transport(
-			func(upgrader transport.Upgrader, rcmgr network.ResourceManager) (transport.Transport, error) {
-				opts := []tcp.Option{}
-				if cfg.DisableReusePort {
-					opts = append(opts, tcp.DisableReuseport())
-				}
-				if cfg.Metrics {
-					opts = append(opts, tcp.WithMetrics())
-				}
-				return tcp.NewTCPTransport(upgrader, rcmgr, opts...)
-			},
-		),
-		libp2p.Transport(
-			func(key crypto.PrivKey, connManager *quicreuse.ConnManager, psk pnet.PSK,
-				gater ccmgr.ConnectionGater,
-				rcmgr network.ResourceManager,
-			) (transport.Transport, error) {
-				return quic.NewTransport(key, connManager, psk, gater, rcmgr,
-					quic.WithCertTemplate(certTemplate),
-					quic.WithVerifyPeerCertificate(func(chain []*x509.Certificate) error {
-						err := validateTLSCertChain(chain, prologue)
-						return err
-					}))
-			}),
-		libp2p.Security(
-			noise.ID,
-			func(id protocol.ID, privkey crypto.PrivKey, muxers []tptu.StreamMuxer) (*noise.SessionTransport, error) {
-				tp, err := noise.New(id, privkey, muxers)
-				if err != nil {
-					return nil, err
-				}
-				return tp.WithSessionOptions(noise.Prologue(prologue))
-			},
-		),
 		libp2p.Muxer("/yamux/1.0.0", &streamer),
 		libp2p.Peerstore(ps),
 		libp2p.BandwidthReporter(p2pmetrics.NewBandwidthCollector()),
 		libp2p.EnableNATService(),
 		libp2p.ConnectionGater(g),
 		libp2p.Ping(false),
+	}
+	if cfg.EnableTCPTransport {
+		lopts = append(lopts,
+			libp2p.Transport(
+				func(upgrader transport.Upgrader, rcmgr network.ResourceManager) (transport.Transport, error) {
+					opts := []tcp.Option{}
+					if cfg.DisableReusePort {
+						opts = append(opts, tcp.DisableReuseport())
+					}
+					if cfg.Metrics {
+						opts = append(opts, tcp.WithMetrics())
+					}
+					return tcp.NewTCPTransport(upgrader, rcmgr, opts...)
+				},
+			),
+			libp2p.Security(
+				noise.ID,
+				func(id protocol.ID, privkey crypto.PrivKey, muxers []tptu.StreamMuxer) (*noise.SessionTransport, error) {
+					tp, err := noise.New(id, privkey, muxers)
+					if err != nil {
+						return nil, err
+					}
+					return tp.WithSessionOptions(noise.Prologue(prologue))
+				},
+			),
+		)
+	}
+	if cfg.EnableQUICTransport {
+		lopts = append(lopts,
+			libp2p.Transport(
+				func(key crypto.PrivKey, connManager *quicreuse.ConnManager, psk pnet.PSK,
+					gater ccmgr.ConnectionGater,
+					rcmgr network.ResourceManager,
+				) (transport.Transport, error) {
+					return quic.NewTransport(key, connManager, psk, gater, rcmgr,
+						quic.WithCertTemplate(certTemplate),
+						quic.WithVerifyPeerCertificate(func(chain []*x509.Certificate) error {
+							err := validateTLSCertChain(chain, prologue)
+							return err
+						}))
+				}),
+		)
 	}
 	if !cfg.DisableConnectionManager {
 		lopts = append(lopts, libp2p.ConnectionManager(cm))
