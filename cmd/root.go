@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -301,11 +300,8 @@ func AddCommands(cmd *cobra.Command) {
 	)
 
 	/**========================  Deprecated flags ========================== **/
-	//lint:ignore ST1005 we want a detailed, helpful error
-	cmd.PersistentFlags().Var(flags.NewDeprecatedFlag(errors.New(
-		`The poet-server field is deprecated. Please migrate to the poet-servers field. `+
-			`Check 'Upgrade Information' in CHANGELOG.md for details.`,
-	)), "poet-server", "deprecated, use poet-servers instead")
+	cmd.PersistentFlags().Var(flags.NewDeprecatedFlag(
+		config.DeprecatedPoETServers{}), "poet-server", "deprecated, use poet-servers instead")
 
 	// Bind Flags to config
 	err := viper.BindPFlags(cmd.PersistentFlags())

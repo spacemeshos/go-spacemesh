@@ -259,6 +259,7 @@ func LoadConfigFromFile() (*config.Config, error) {
 		mapstructure.StringToSliceHookFunc(","),
 		mapstructureutil.BigRatDecodeFunc(),
 		mapstructureutil.PostProviderIDDecodeFunc(),
+		mapstructureutil.DeprecatedHook(),
 		mapstructure.TextUnmarshallerHookFunc(),
 	)
 

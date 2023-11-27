@@ -2,7 +2,6 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -100,8 +99,8 @@ type BaseConfig struct {
 	LayerAvgSize   uint32        `mapstructure:"layer-average-size"`
 	LayersPerEpoch uint32        `mapstructure:"layers-per-epoch"`
 
-	PoETServers []deprecatedPoETServers `mapstructure:"poet-server"`
-	PoetServers []types.PoetServer      `mapstructure:"poet-servers"`
+	PoETServers DeprecatedPoETServers `mapstructure:"poet-server"`
+	PoetServers []types.PoetServer    `mapstructure:"poet-servers"`
 
 	PprofHTTPServer bool `mapstructure:"pprof-server"`
 
@@ -132,13 +131,12 @@ type BaseConfig struct {
 	ATXGradeDelay time.Duration `mapstructure:"atx-grade-delay"`
 }
 
-type deprecatedPoETServers struct{}
+type DeprecatedPoETServers struct{}
 
-func (deprecatedPoETServers) UnmarshalText([]byte) error {
-	msg := `The poet-server field is deprecated. Please migrate to the poet-servers field. ` +
+// DeprecatedMsg implements Deprecated interface.
+func (DeprecatedPoETServers) DeprecatedMsg() string {
+	return `The 'poet-server' is deprecated. Please migrate to the 'poet-servers'. ` +
 		`Check 'Upgrade Information' in CHANGELOG.md for details.`
-	//lint:ignore ST1005 we want a detailed, helpful error
-	return errors.New(msg)
 }
 
 type PublicMetrics struct {
