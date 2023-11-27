@@ -37,16 +37,6 @@ func AddInitialPost(db sql.Executor, nodeID types.NodeID, post Post) error {
 	return nil
 }
 
-func RemoveInitialPost(db sql.Executor, nodeID types.NodeID) error {
-	enc := func(stmt *sql.Statement) {
-		stmt.BindBytes(1, nodeID.Bytes())
-	}
-	if _, err := db.Exec(`delete from initial_post where id = ?1;`, enc, nil); err != nil {
-		return fmt.Errorf("remove initial post for %s: %w", nodeID, err)
-	}
-	return nil
-}
-
 func InitialPost(db sql.Executor, nodeID types.NodeID) (*Post, error) {
 	var post *Post
 	enc := func(stmt *sql.Statement) {
