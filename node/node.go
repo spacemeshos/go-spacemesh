@@ -967,9 +967,6 @@ func (app *App) initServices(ctx context.Context) error {
 		activation.WithPoets(poetClients...),
 		activation.WithCertifierConfig(app.Config.Certifier),
 	)
-	if err := atxBuilder.MigrateDiskToLocalDB(); err != nil {
-		app.log.Panic("failed to migrate state of atx builder: %v", err)
-	}
 
 	malfeasanceHandler := malfeasance.NewHandler(
 		app.cachedDB,
@@ -1071,6 +1068,7 @@ func (app *App) initServices(ctx context.Context) error {
 	app.host.Register(
 		pubsub.AtxProtocol,
 		pubsub.ChainGossipHandler(atxSyncHandler, atxHandler.HandleGossipAtx),
+		pubsub.WithValidatorConcurrency(app.Config.P2P.GossipAtxValidationThrottle),
 	)
 	app.host.Register(
 		pubsub.TxProtocol,
@@ -1599,6 +1597,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	}
 	localDB, err := localsql.Open("file:"+filepath.Join(dbPath, localDbFile),
 		sql.WithMigrations(migrations),
+		sql.WithMigration(localsql.New0001Migration(app.Config.SMESHING.Opts.DataDir)),
 		sql.WithMigration(localsql.New0002Migration(app.Config.SMESHING.Opts.DataDir)),
 		sql.WithConnections(app.Config.DatabaseConnections),
 	)

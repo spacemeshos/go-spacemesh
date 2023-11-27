@@ -227,7 +227,7 @@ func Test_HandleGossip(t *testing.T) {
 		},
 		{
 			desc:   "ZeroPrice",
-			fee:    1,
+			fee:    0,
 			expect: isErr,
 		},
 	} {

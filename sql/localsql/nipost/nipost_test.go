@@ -12,9 +12,7 @@ import (
 )
 
 func Test_AddInitialPost(t *testing.T) {
-	db := localsql.InMemory(
-		sql.WithMigration(localsql.New0002Migration(t.TempDir())),
-	)
+	db := localsql.InMemory()
 
 	nodeID := types.RandomNodeID()
 	post := Post{
@@ -34,6 +32,40 @@ func Test_AddInitialPost(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, got)
 	require.Equal(t, post, *got)
+}
+
+func Test_AddInitialPost_NoDuplicates(t *testing.T) {
+	db := localsql.InMemory()
+
+	nodeID := types.RandomNodeID()
+	post := Post{
+		Nonce:   1,
+		Indices: []byte{1, 2, 3},
+		Pow:     1,
+
+		NumUnits:      2,
+		CommitmentATX: types.RandomATXID(),
+		VRFNonce:      3,
+	}
+	err := AddPost(db, nodeID, post)
+	require.NoError(t, err)
+
+	// fail to add new initial post for same node
+	post2 := Post{
+		Nonce:   2,
+		Indices: []byte{1, 2, 3},
+		Pow:     1,
+
+		NumUnits:      4,
+		CommitmentATX: types.RandomATXID(),
+		VRFNonce:      5,
+	}
+	err = AddPost(db, nodeID, post2)
+	require.Error(t, err)
+
+	// succeed to add initial post for different node
+	err = AddPost(db, types.RandomNodeID(), post2)
+	require.NoError(t, err)
 }
 
 func Test_AddChallenge(t *testing.T) {

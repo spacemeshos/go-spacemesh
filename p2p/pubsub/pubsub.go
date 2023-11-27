@@ -82,7 +82,7 @@ const (
 
 // DefaultConfig for PubSub.
 func DefaultConfig() Config {
-	return Config{Flood: true}
+	return Config{Flood: true, QueueSize: 10000, Throttle: 10000}
 }
 
 // Config for PubSub.
@@ -93,6 +93,8 @@ type Config struct {
 	// Direct peers should be configured on both ends.
 	Direct         []peer.AddrInfo
 	MaxMessageSize int
+	QueueSize      int
+	Throttle       int
 }
 
 // New creates PubSub instance.
@@ -125,7 +127,10 @@ type Subscriber interface {
 
 type ValidatorOpt = pubsub.ValidatorOpt
 
-var WithValidatorInline = pubsub.WithValidatorInline
+var (
+	WithValidatorInline      = pubsub.WithValidatorInline
+	WithValidatorConcurrency = pubsub.WithValidatorConcurrency
+)
 
 // PublishSubsciber common interface for publisher and subscribing.
 type PublishSubsciber interface {
@@ -215,7 +220,8 @@ func getOptions(cfg Config) []pubsub.Option {
 		pubsub.WithNoAuthor(),
 		pubsub.WithMessageSignaturePolicy(pubsub.StrictNoSign),
 		pubsub.WithPeerOutboundQueueSize(8192),
-		pubsub.WithValidateQueueSize(8192),
+		pubsub.WithValidateQueueSize(cfg.QueueSize),
+		pubsub.WithValidateThrottle(cfg.Throttle),
 		pubsub.WithRawTracer(p2pmetrics.NewGoSIPCollector()),
 		pubsub.WithPeerScore(
 			&pubsub.PeerScoreParams{
