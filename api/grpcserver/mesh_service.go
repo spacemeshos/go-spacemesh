@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/api"
 	"time"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
@@ -27,7 +28,7 @@ import (
 type MeshService struct {
 	cdb            *datastore.CachedDB
 	mesh           meshAPI // Mesh
-	conState       conservativeState
+	conState       api.ConservativeState
 	genTime        genesisTimeAPI
 	layersPerEpoch uint32
 	genesisID      types.Hash20
@@ -54,7 +55,7 @@ func (s MeshService) String() string {
 func NewMeshService(
 	cdb *datastore.CachedDB,
 	msh meshAPI,
-	cstate conservativeState,
+	cstate api.ConservativeState,
 	genTime genesisTimeAPI,
 	layersPerEpoch uint32,
 	genesisID types.Hash20,

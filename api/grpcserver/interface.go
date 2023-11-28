@@ -7,7 +7,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 //go:generate mockgen -typed -package=grpcserver -destination=./mocks.go -source=./interface.go
@@ -15,20 +14,6 @@ import (
 // networkIdentity interface.
 type networkIdentity interface {
 	ID() p2p.Peer
-}
-
-// conservativeState is an API for reading state and transaction/mempool data.
-type conservativeState interface {
-	GetStateRoot() (types.Hash32, error)
-	GetLayerStateRoot(types.LayerID) (types.Hash32, error)
-	GetAllAccounts() ([]*types.Account, error)
-	GetBalance(types.Address) (uint64, error)
-	GetNonce(types.Address) (types.Nonce, error)
-	GetProjection(types.Address) (uint64, uint64)
-	GetMeshTransaction(types.TransactionID) (*types.MeshTransaction, error)
-	GetMeshTransactions([]types.TransactionID) ([]*types.MeshTransaction, map[types.TransactionID]struct{})
-	GetTransactionsByAddress(types.LayerID, types.LayerID, types.Address) ([]*types.MeshTransaction, error)
-	Validation(raw types.RawTx) system.ValidationRequest
 }
 
 // syncer is the API to get sync status.
