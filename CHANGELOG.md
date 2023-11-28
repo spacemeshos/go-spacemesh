@@ -2,6 +2,11 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## Release v1.2.8
+
+### Improvements
+
+  * cherry picked migrations for active sets to enable easier pruning in the future
 
 ## Release v1.2.7
 
