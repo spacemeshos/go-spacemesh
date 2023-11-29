@@ -805,9 +805,6 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 	require.NotNil(t, atx)
 
 	// state is cleaned up
-	_, err = nipost.InitialPost(tab.localDB, tab.sig.NodeID())
-	require.ErrorIs(t, err, sql.ErrNotFound)
-
 	_, err = nipost.Challenge(tab.localDB, tab.sig.NodeID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
@@ -1345,19 +1342,6 @@ func TestBuilder_InitialPostIsPersisted(t *testing.T) {
 
 	// postClient.Proof() should not be called again
 	require.NoError(t, tab.buildInitialPost(context.Background()))
-
-	// Remove the persisted post file and try again
-	require.NoError(t, nipost.RemoveInitialPost(tab.localDb, tab.signer.NodeID()))
-	tab.mpostClient.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).
-		Return(
-			&types.Post{Indices: make([]byte, 10)},
-			&types.PostInfo{
-				CommitmentATX: types.RandomATXID(),
-				Nonce:         new(types.VRFPostIndex),
-			},
-			nil,
-		)
-	require.NoError(t, tab.buildInitialPost(context.Background()))
 }
 
 func TestWaitPositioningAtx(t *testing.T) {
@@ -1368,8 +1352,8 @@ func TestWaitPositioningAtx(t *testing.T) {
 
 		targetEpoch types.EpochID
 	}{
-		{"no wait", 100 * time.Millisecond, 100 * time.Millisecond, 2},
-		{"wait", 100 * time.Millisecond, 0, 2},
+		{"no wait", 200 * time.Millisecond, 200 * time.Millisecond, 2},
+		{"wait", 200 * time.Millisecond, 0, 2},
 		{"round started", 0, 0, 3},
 	} {
 		tc := tc
@@ -1381,7 +1365,7 @@ func TestWaitPositioningAtx(t *testing.T) {
 			tab.mclock.EXPECT().CurrentLayer().Return(types.LayerID(0)).AnyTimes()
 			tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(func(lid types.LayerID) time.Time {
 				// layer duration is 10ms to speed up test
-				return genesis.Add(time.Duration(lid) * 10 * time.Millisecond)
+				return genesis.Add(time.Duration(lid) * 20 * time.Millisecond)
 			}).AnyTimes()
 
 			// everything else are stubs that are irrelevant for the test
@@ -1395,7 +1379,7 @@ func TestWaitPositioningAtx(t *testing.T) {
 				func(_ context.Context, _ string, got []byte) error {
 					var gotAtx types.ActivationTx
 					require.NoError(t, codec.Decode(got, &gotAtx))
-					require.Equal(t, gotAtx.TargetEpoch(), tc.targetEpoch)
+					require.Equal(t, tc.targetEpoch, gotAtx.TargetEpoch())
 					return nil
 				})
 
