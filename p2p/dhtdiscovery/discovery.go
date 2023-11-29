@@ -8,12 +8,20 @@ import (
 	levelds "github.com/ipfs/go-ds-leveldb"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	record "github.com/libp2p/go-libp2p-record"
+	p2pdisc "github.com/libp2p/go-libp2p/core/discovery"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	p2pdiscr "github.com/libp2p/go-libp2p/p2p/discovery/routing"
 	ldbopts "github.com/syndtr/goleveldb/leveldb/opt"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
+)
+
+const (
+	discoveryNS       = "spacemesh-disc"
+	discoveryTag      = "spacemesh-disc"
+	discoveryTagValue = 1
 )
 
 type Opt func(*Discovery)
@@ -195,6 +203,7 @@ func (d *Discovery) Start() {
 		var connEg errgroup.Group
 		disconnected := make(chan struct{}, 1)
 		disconnected <- struct{}{} // trigger bootstrap when node starts immediately
+		// TODO: connectedF, disconnectedF: track enough rendezvous peers
 		notifiee := &network.NotifyBundle{
 			DisconnectedF: func(_ network.Network, c network.Conn) {
 				select {
@@ -231,6 +240,7 @@ func (d *Discovery) Start() {
 			}
 		}
 	})
+	d.eg.Go(d.discoverPeers)
 }
 
 func (d *Discovery) Stop() {
@@ -294,8 +304,6 @@ func (d *Discovery) newDht(ctx context.Context, h host.Host, public, server bool
 		dht.Validator(record.PublicKeyValidator{}),
 		dht.Datastore(ds),
 		dht.ProtocolPrefix("/spacekad"),
-		dht.DisableProviders(),
-		dht.DisableValues(),
 	}
 	if public {
 		opts = append(opts, dht.QueryFilter(dht.PublicQueryFilter),
@@ -316,4 +324,71 @@ func (d *Discovery) newDht(ctx context.Context, h host.Host, public, server bool
 	d.dht = dht
 	d.datastore = ds
 	return nil
+}
+
+func (d *Discovery) discoverPeers() error {
+	d.logger.Info("QQQQQ: start")
+	var disc = p2pdiscr.NewRoutingDiscovery(d.dht)
+
+	ticker := time.NewTicker(time.Second * 1)
+	defer ticker.Stop()
+	peerCh, err := disc.FindPeers(d.ctx, discoveryNS)
+	if err != nil {
+		d.logger.Info("QQQQQ: find peers fail")
+		return fmt.Errorf("error finding peers: %w", err)
+	}
+
+	d.logger.Info("QQQQQ: looking for peers")
+	reAdvCh := time.After(10 * time.Second)
+
+	for {
+		select {
+		case <-d.ctx.Done():
+			d.logger.Info("QQQQQ: done looking for peers")
+			return nil
+		case <-reAdvCh:
+			d.logger.Info("QQQQQ: re-advertise")
+			ttl, err := disc.Advertise(d.ctx, discoveryNS, p2pdisc.TTL(10*time.Second))
+			if err != nil {
+				d.logger.Error("failed to re-advertise for discovery", zap.Error(err))
+				ttl = 10 * time.Second
+				continue
+			}
+			reAdvCh = time.After(ttl)
+		case p, ok := <-peerCh:
+			if !ok {
+				d.logger.Info("QQQQQ: no more peers, retrying find")
+				time.Sleep(time.Second) // FIXME
+				peerCh, err = disc.FindPeers(d.ctx, discoveryNS)
+				if err != nil {
+					d.logger.Info("QQQQQ: repeated find peers fail")
+					return fmt.Errorf("error finding peers: %w", err)
+				}
+				continue
+			}
+			if p.ID == d.h.ID() {
+				d.logger.Info("QQQQQ: found self")
+				continue
+			}
+			if d.h.Network().Connectedness(p.ID) != network.Connected {
+				d.logger.Info("QQQQQ: dialing peer", zap.Any("peer", p))
+				if _, err = d.h.Network().DialPeer(d.ctx, p.ID); err != nil {
+					d.logger.Info("QQQQQ: fail dialing peer", zap.Any("peer", p), zap.Error(err))
+					d.logger.Error("error dialing peer", zap.Any("peer", p),
+						zap.Error(err))
+					continue
+				}
+				// tag peer to prioritize it over the peers found by other means
+				d.h.ConnManager().TagPeer(p.ID, discoveryTag, discoveryTagValue)
+				d.logger.Info("found peer via rendezvous", zap.Any("peer", p))
+			} else {
+				d.logger.Info("QQQQQ: found already connected peer", zap.Any("peer", p))
+			}
+		}
+	}
+	// TagPeer
+	// GetTagInfo
+	// TBD: try not too grab too many peers when there are enough connected peers found through rendezvous -- cancel context, later restart if needed
+	// TBD: tag peer in the conn manager
+	// TBD: to consider: tag DHT-enabled peers too
 }
