@@ -138,11 +138,10 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 
 	// ensure that genesis aligns with layer timings
 	genesis := time.Now().Add(layerDuration).Round(layerDuration)
-
 	epoch := layersPerEpoch * layerDuration
 	poetCfg := activation.PoetConfig{
 		PhaseShift:        epoch / 2,
-		CycleGap:          epoch / 5,
+		CycleGap:          epoch / 4,
 		GracePeriod:       epoch / 5,
 		RequestTimeout:    epoch / 5,
 		RequestRetryDelay: epoch / 50,
@@ -275,11 +274,10 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 
 	// ensure that genesis aligns with layer timings
 	genesis := time.Now().Add(layerDuration).Round(layerDuration)
-
 	epoch := layersPerEpoch * layerDuration
 	poetCfg := activation.PoetConfig{
 		PhaseShift:        epoch / 2,
-		CycleGap:          epoch / 5,
+		CycleGap:          epoch / 4,
 		GracePeriod:       epoch / 5,
 		RequestTimeout:    epoch / 5,
 		RequestRetryDelay: epoch / 50,
