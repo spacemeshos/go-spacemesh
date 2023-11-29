@@ -55,7 +55,7 @@ jobs:
         shell: bash
         run: |
           make install
-          make build VERSION=${{ github.ref_name }} BIN_DIR_WIN=./build
+          make build VERSION=${{ github.ref_name }}
 
       - name: Create release archive
         shell: bash

@@ -107,7 +107,6 @@ type testAtxBuilder struct {
 	cdb         *datastore.CachedDB
 	localDb     *localsql.Database
 	sig         *signing.EdSigner
-	coinbase    types.Address
 	goldenATXID types.ATXID
 
 	mpub        *mocks.MockPublisher
@@ -128,7 +127,6 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 		cdb:         datastore.NewCachedDB(sql.InMemory(), lg),
 		localDb:     localsql.InMemory(),
 		sig:         edSigner,
-		coinbase:    types.GenerateAddress([]byte("33333")),
 		goldenATXID: types.ATXID(types.HexToHash32("77777")),
 		mpub:        mocks.NewMockPublisher(ctrl),
 		mpostSvc:    NewMockpostService(ctrl),
@@ -142,9 +140,8 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 	opts = append(opts, WithValidator(tab.mValidator))
 
 	cfg := Config{
-		CoinbaseAccount: tab.coinbase,
-		GoldenATXID:     tab.goldenATXID,
-		LayersPerEpoch:  layersPerEpoch,
+		GoldenATXID:    tab.goldenATXID,
+		LayersPerEpoch: layersPerEpoch,
 	}
 
 	tab.msync.EXPECT().RegisterForATXSynced().DoAndReturn(closedChan).AnyTimes()

@@ -866,38 +866,34 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 	proposalBuilder.Register(app.edSgn)
 
-	if app.Config.SMESHING.Start {
-		u := url.URL{
-			Scheme: "http",
-			Host:   app.Config.API.PrivateListener,
-		}
-		app.Config.POSTService.NodeAddress = u.String()
+	u := url.URL{
+		Scheme: "http",
+		Host:   app.Config.API.PrivateListener,
+	}
+	app.Config.POSTService.NodeAddress = u.String()
+	postSetupMgr, err := activation.NewPostSetupManager(
+		app.edSgn.NodeID(),
+		app.Config.POST,
+		app.addLogger(PostLogger, lg).Zap(),
+		app.cachedDB, goldenATXID,
+	)
+	if err != nil {
+		app.log.Panic("failed to create post setup manager: %v", err)
+	}
 
-		postSetupMgr, err := activation.NewPostSetupManager(
-			app.edSgn.NodeID(),
-			app.Config.POST,
-			app.addLogger(PostLogger, lg).Zap(),
-			app.cachedDB, goldenATXID,
-		)
-		if err != nil {
-			app.log.Panic("failed to create post setup manager: %v", err)
-		}
-
-		app.postSupervisor, err = activation.NewPostSupervisor(
-			app.log.Zap(),
-			app.Config.POSTService,
-			app.Config.POST,
-			app.Config.SMESHING.ProvingOpts,
-			postSetupMgr,
-			newSyncer,
-		)
-		if err != nil {
-			return fmt.Errorf("init post service: %w", err)
-		}
+	app.postSupervisor, err = activation.NewPostSupervisor(
+		app.log.Zap(),
+		app.Config.POSTService,
+		app.Config.POST,
+		app.Config.SMESHING.ProvingOpts,
+		postSetupMgr,
+		newSyncer,
+	)
+	if err != nil {
+		return fmt.Errorf("init post service: %w", err)
 	}
 
 	app.grpcPostService = grpcserver.NewPostService(app.addLogger(PostServiceLogger, lg).Zap())
-
 	nipostBuilder, err := activation.NewNIPostBuilder(
 		poetDb,
 		app.grpcPostService,
@@ -912,26 +908,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.log.Panic("failed to create nipost builder: %v", err)
 	}
 
-	var coinbaseAddr types.Address
-	if app.Config.SMESHING.Start {
-		// TODO(mafa): this won't work with a remote-only setup, where `smeshing-start` is set to false
-		// TODO(mafa): also the way we handle coinbase means only 1 address can receive rewards, independent
-		// of the number of identities/post services that are managed by the node
-		coinbaseAddr, err = types.StringToAddress(app.Config.SMESHING.CoinbaseAccount)
-		if err != nil {
-			app.log.Panic(
-				"failed to parse CoinbaseAccount address `%s`: %v",
-				app.Config.SMESHING.CoinbaseAccount,
-				err,
-			)
-		}
-		if coinbaseAddr.IsEmpty() {
-			app.log.Panic("invalid coinbase account")
-		}
-	}
-
 	builderConfig := activation.Config{
-		CoinbaseAccount:  coinbaseAddr,
 		GoldenATXID:      goldenATXID,
 		LayersPerEpoch:   layersPerEpoch,
 		RegossipInterval: app.Config.RegossipAtxInterval,
@@ -1190,7 +1167,7 @@ func (app *App) startServices(ctx context.Context) error {
 		return app.proposalBuilder.Run(ctx)
 	})
 
-	if app.Config.SMESHING.Start {
+	if app.Config.SMESHING.CoinbaseAccount != "" {
 		coinbaseAddr, err := types.StringToAddress(app.Config.SMESHING.CoinbaseAccount)
 		if err != nil {
 			app.log.Panic(
@@ -1201,6 +1178,12 @@ func (app *App) startServices(ctx context.Context) error {
 		}
 		if err := app.atxBuilder.StartSmeshing(coinbaseAddr); err != nil {
 			app.log.Panic("failed to start smeshing: %v", err)
+		}
+	}
+
+	if app.Config.SMESHING.Start {
+		if app.Config.SMESHING.CoinbaseAccount == "" {
+			app.log.Panic("smeshing enabled but no coinbase account provided")
 		}
 		if err := app.postSupervisor.Start(app.Config.SMESHING.Opts); err != nil {
 			return fmt.Errorf("start post service: %w", err)
