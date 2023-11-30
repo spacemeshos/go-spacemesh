@@ -1887,6 +1887,10 @@ func (app *App) Start(ctx context.Context) error {
 			return nil
 		})
 	}
+
+	// TODO(mafa): add code to fetch all ATXs from DB, decode and verify their signatures with
+	// the updated app.edVerifier and see if oasis is compatible to stdlib signatures.
+
 	// app blocks until it receives a signal to exit
 	// this signal may come from the node or from sig-abort (ctrl-c)
 	select {
