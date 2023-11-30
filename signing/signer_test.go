@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	voi "github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"github.com/stretchr/testify/require"
 )
 
@@ -145,21 +144,6 @@ func TestEdSigner_Sign(t *testing.T) {
 
 	ok := ed25519.Verify(ed.PublicKey().Bytes(), signed, sig[:])
 	require.Truef(t, ok, "failed to verify message %x with sig %x", m, sig)
-}
-
-func Fuzz_Bla(f *testing.F) {
-	pub, priv, err := ed25519.GenerateKey(nil)
-	require.NoError(f, err)
-
-	f.Fuzz(func(t *testing.T, m []byte) {
-		sig := ed25519.Sign(priv, m)
-
-		ok := ed25519.Verify(pub, m, sig)
-		require.Truef(t, ok, "failed to verify message %x with sig %x", m, sig)
-
-		ok = voi.Verify((voi.PublicKey)(pub), m, sig)
-		require.Truef(t, ok, "failed to verify message %x with sig %x", m, sig)
-	})
 }
 
 func TestEdSigner_ValidKeyEncoding(t *testing.T) {
