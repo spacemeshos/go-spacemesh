@@ -1335,6 +1335,9 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		if err := app.grpcTLSServer.Start(); err != nil {
+			return err
+		}
 	}
 
 	if len(app.Config.API.JSONListener) > 0 {
