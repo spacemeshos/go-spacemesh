@@ -191,7 +191,7 @@ func GetCommand() *cobra.Command {
 			// os.Interrupt for all systems, especially windows, syscall.SIGTERM is mainly for docker.
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer cancel()
-			if err = run(ctx); err != nil {
+			if err := run(ctx); err != nil {
 				app.log.With().Fatal(err.Error())
 			}
 		},
@@ -665,7 +665,7 @@ func (app *App) initServices(ctx context.Context) error {
 	mlog := app.addLogger(MeshLogger, lg)
 	msh, err := mesh.NewMesh(app.cachedDB, app.atxsdata, app.clock, trtl, executor, app.conState, mlog)
 	if err != nil {
-		return fmt.Errorf("failed to create mesh: %w", err)
+		return fmt.Errorf("create mesh: %w", err)
 	}
 
 	pruner := prune.New(app.db, app.Config.Tortoise.Hdist, app.Config.PruneActivesetsFrom, prune.WithLogger(mlog.Zap()))
@@ -878,7 +878,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.cachedDB, goldenATXID,
 	)
 	if err != nil {
-		app.log.Panic("failed to create post setup manager: %v", err)
+		return fmt.Errorf("create post setup manager: %v", err)
 	}
 
 	app.postSupervisor, err = activation.NewPostSupervisor(
@@ -905,7 +905,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.clock,
 	)
 	if err != nil {
-		app.log.Panic("failed to create nipost builder: %v", err)
+		return fmt.Errorf("create nipost builder: %w", err)
 	}
 
 	builderConfig := activation.Config{
@@ -1156,7 +1156,7 @@ func (app *App) listenToUpdates(ctx context.Context) {
 
 func (app *App) startServices(ctx context.Context) error {
 	if err := app.fetcher.Start(); err != nil {
-		return fmt.Errorf("failed to start fetcher: %w", err)
+		return fmt.Errorf("start fetcher: %w", err)
 	}
 	app.syncer.Start()
 	app.beaconProtocol.Start(ctx)
@@ -1170,20 +1170,20 @@ func (app *App) startServices(ctx context.Context) error {
 	if app.Config.SMESHING.CoinbaseAccount != "" {
 		coinbaseAddr, err := types.StringToAddress(app.Config.SMESHING.CoinbaseAccount)
 		if err != nil {
-			app.log.Panic(
-				"failed to parse CoinbaseAccount address on start `%s`: %v",
+			return fmt.Errorf(
+				"parse CoinbaseAccount address on start `%s`: %w",
 				app.Config.SMESHING.CoinbaseAccount,
 				err,
 			)
 		}
 		if err := app.atxBuilder.StartSmeshing(coinbaseAddr); err != nil {
-			app.log.Panic("failed to start smeshing: %v", err)
+			return fmt.Errorf("start smeshing: %w", err)
 		}
 	}
 
 	if app.Config.SMESHING.Start {
 		if app.Config.SMESHING.CoinbaseAccount == "" {
-			app.log.Panic("smeshing enabled but no coinbase account provided")
+			return fmt.Errorf("smeshing enabled but no coinbase account provided")
 		}
 		if err := app.postSupervisor.Start(app.Config.SMESHING.Opts); err != nil {
 			return fmt.Errorf("start post service: %w", err)
@@ -1565,7 +1565,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	)
 	migrations, err = sql.LocalMigrations()
 	if err != nil {
-		return fmt.Errorf("failed to load local migrations: %w", err)
+		return fmt.Errorf("load local migrations: %w", err)
 	}
 	localDB, err := localsql.Open("file:"+filepath.Join(dbPath, localDbFile),
 		sql.WithMigrations(migrations),
@@ -1695,14 +1695,14 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 		p2p.WithNodeReporter(events.ReportNodeStatusUpdate),
 	)
 	if err != nil {
-		return fmt.Errorf("failed to initialize p2p host: %w", err)
+		return fmt.Errorf("initialize p2p host: %w", err)
 	}
 
 	if err := app.setupDBs(ctx, lg); err != nil {
 		return err
 	}
 	if err := app.initServices(ctx); err != nil {
-		return fmt.Errorf("cannot start services: %w", err)
+		return fmt.Errorf("init services: %w", err)
 	}
 
 	if app.Config.CollectMetrics {
@@ -1721,7 +1721,7 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 	}
 
 	if err := app.startServices(ctx); err != nil {
-		return err
+		return fmt.Errorf("start services: %w", err)
 	}
 
 	// need post verifying service to start first
