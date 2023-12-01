@@ -24,6 +24,9 @@ var (
 
 	// Commit is the git commit used to build the app. Designed to be overwritten by make.
 	Commit string
+
+	// Prohibit this build from running on the mainnet.
+	NoMainNet bool
 )
 
 // EnsureCLIFlags checks flag types and converts them.

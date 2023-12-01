@@ -49,11 +49,9 @@ func (m *sqlMigration) Order() int {
 	return m.order
 }
 
-// Migration is interface for migrations provider.
-type Migration interface {
-	Apply(db Executor) error
-	Name() string
-	Order() int
+func (sqlMigration) Rollback() error {
+	// handled by the DB itself
+	return nil
 }
 
 func version(db Executor) (int, error) {
@@ -94,7 +92,7 @@ func sqlMigrations(dbname string) ([]Migration, error) {
 		}
 		f, err := embedded.Open(path)
 		if err != nil {
-			return fmt.Errorf("readfile %s: %w", path, err)
+			return fmt.Errorf("read file %s: %w", path, err)
 		}
 		scanner := bufio.NewScanner(f)
 		scanner.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {

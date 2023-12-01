@@ -12,7 +12,7 @@ type Config struct {
 	PrivateListener string `mapstructure:"grpc-private-listener"`
 	TLSServices     []Service
 	TLSListener     string `mapstructure:"grpc-tls-listener"`
-	TLSCACert       string `mapstructure:"gprc-tls-ca-cert"`
+	TLSCACert       string `mapstructure:"grpc-tls-ca-cert"`
 	TLSCert         string `mapstructure:"grpc-tls-cert"`
 	TLSKey          string `mapstructure:"grpc-tls-key"`
 	GrpcSendMsgSize int    `mapstructure:"grpc-send-msg-size"`

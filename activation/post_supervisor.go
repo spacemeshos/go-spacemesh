@@ -31,6 +31,7 @@ func DefaultPostServiceConfig() PostSupervisorConfig {
 	return PostSupervisorConfig{
 		PostServiceCmd: filepath.Join(filepath.Dir(path), DefaultPostServiceName),
 		NodeAddress:    "http://127.0.0.1:9093",
+		MaxRetries:     10,
 	}
 }
 
@@ -44,12 +45,14 @@ func DefaultTestPostServiceConfig() PostSupervisorConfig {
 	return PostSupervisorConfig{
 		PostServiceCmd: filepath.Join(filepath.Dir(string(path)), "build", DefaultPostServiceName),
 		NodeAddress:    "http://127.0.0.1:9093",
+		MaxRetries:     10,
 	}
 }
 
 type PostSupervisorConfig struct {
 	PostServiceCmd string
 	NodeAddress    string
+	MaxRetries     int
 
 	CACert string
 	Cert   string
@@ -167,8 +170,7 @@ func (ps *PostSupervisor) Start(opts PostSetupOpts) error {
 			return err
 		}
 
-		ps.eg.Go(func() error { return ps.runCmd(ctx, ps.cmdCfg, ps.postCfg, opts, ps.provingOpts) })
-		return nil
+		return ps.runCmd(ctx, ps.cmdCfg, ps.postCfg, opts, ps.provingOpts)
 	})
 	return nil
 }
@@ -206,22 +208,13 @@ func (ps *PostSupervisor) Stop(deleteFiles bool) error {
 // it returns when the pipe is closed.
 func (ps *PostSupervisor) captureCmdOutput(pipe io.ReadCloser) func() error {
 	return func() error {
-		buf := bufio.NewReader(pipe)
-		for {
-			line, err := buf.ReadString('\n')
+		scanner := bufio.NewScanner(pipe)
+		for scanner.Scan() {
+			line := scanner.Text()
 			line = strings.TrimRight(line, "\r\n") // remove line delimiters at end of input
-			switch err {
-			case nil:
-				ps.logger.Info(line)
-			case io.EOF:
-				ps.logger.Info(line)
-				return nil
-			default:
-				ps.logger.Info(line)
-				ps.logger.Warn("read from post service pipe", zap.Error(err))
-				return nil
-			}
+			ps.logger.Info(line)
 		}
+		return nil
 	}
 }
 
@@ -232,67 +225,72 @@ func (ps *PostSupervisor) runCmd(
 	postOpts PostSetupOpts,
 	provingOpts PostProvingOpts,
 ) error {
-	for {
-		args := []string{
-			"--address", cmdCfg.NodeAddress,
+	args := []string{
+		"--address", cmdCfg.NodeAddress,
 
-			"--k1", strconv.FormatUint(uint64(postCfg.K1), 10),
-			"--k2", strconv.FormatUint(uint64(postCfg.K2), 10),
-			"--k3", strconv.FormatUint(uint64(postCfg.K3), 10),
-			"--pow-difficulty", postCfg.PowDifficulty.String(),
+		"--min-num-units", strconv.FormatUint(uint64(postCfg.MinNumUnits), 10),
+		"--max-num-units", strconv.FormatUint(uint64(postCfg.MaxNumUnits), 10),
+		"--labels-per-unit", strconv.FormatUint(uint64(postCfg.LabelsPerUnit), 10),
+		"--k1", strconv.FormatUint(uint64(postCfg.K1), 10),
+		"--k2", strconv.FormatUint(uint64(postCfg.K2), 10),
+		"--k3", strconv.FormatUint(uint64(postCfg.K3), 10),
+		"--pow-difficulty", postCfg.PowDifficulty.String(),
 
-			"--dir", postOpts.DataDir,
-			"-n", strconv.FormatUint(uint64(postOpts.Scrypt.N), 10),
-			"-r", strconv.FormatUint(uint64(postOpts.Scrypt.R), 10),
-			"-p", strconv.FormatUint(uint64(postOpts.Scrypt.P), 10),
+		"--dir", postOpts.DataDir,
+		"-n", strconv.FormatUint(uint64(postOpts.Scrypt.N), 10),
+		"-r", strconv.FormatUint(uint64(postOpts.Scrypt.R), 10),
+		"-p", strconv.FormatUint(uint64(postOpts.Scrypt.P), 10),
 
-			"--threads", strconv.FormatUint(uint64(provingOpts.Threads), 10),
-			"--nonces", strconv.FormatUint(uint64(provingOpts.Nonces), 10),
-			"--randomx-mode", provingOpts.RandomXMode.String(),
+		"--threads", strconv.FormatUint(uint64(provingOpts.Threads), 10),
+		"--nonces", strconv.FormatUint(uint64(provingOpts.Nonces), 10),
+		"--randomx-mode", provingOpts.RandomXMode.String(),
 
-			"--watch-pid", strconv.Itoa(os.Getpid()),
-		}
-		if cmdCfg.CACert != "" {
-			args = append(args, "--ca-cert", cmdCfg.CACert)
-		}
-		if cmdCfg.Cert != "" {
-			args = append(args, "--cert", cmdCfg.Cert)
-		}
-		if cmdCfg.Key != "" {
-			args = append(args, "--key", cmdCfg.Key)
-		}
-
-		cmd := exec.CommandContext(
-			ctx,
-			cmdCfg.PostServiceCmd,
-			args...,
-		)
-		cmd.Dir = filepath.Dir(cmdCfg.PostServiceCmd)
-		pipe, err := cmd.StderrPipe()
-		if err != nil {
-			ps.logger.Error("setup stderr pipe for post service", zap.Error(err))
-			return nil
-		}
-
-		var eg errgroup.Group
-		eg.Go(ps.captureCmdOutput(pipe))
-		if err := cmd.Start(); err != nil {
-			pipe.Close()
-			ps.logger.Error("start post service", zap.Error(err))
-			return nil
-		}
-		ps.logger.Info("post service started", zap.Int("pid", cmd.Process.Pid), zap.String("cmd", cmd.String()))
-		ps.pid.Store(int64(cmd.Process.Pid))
-		events.EmitPostServiceStarted()
-		err = cmd.Wait()
-		if err := ctx.Err(); err != nil {
-			events.EmitPostServiceStopped()
-			if err := eg.Wait(); err != nil {
-				ps.logger.Warn("output reading goroutine failed", zap.Error(err))
-			}
-			return nil
-		}
-		ps.logger.Warn("post service exited", zap.Error(err))
-		eg.Wait()
+		"--watch-pid", strconv.Itoa(os.Getpid()),
 	}
+	if cmdCfg.MaxRetries > 0 {
+		args = append(args, "--max-retries", strconv.Itoa(cmdCfg.MaxRetries))
+	}
+	if cmdCfg.CACert != "" {
+		args = append(args, "--ca-cert", cmdCfg.CACert)
+	}
+	if cmdCfg.Cert != "" {
+		args = append(args, "--cert", cmdCfg.Cert)
+	}
+	if cmdCfg.Key != "" {
+		args = append(args, "--key", cmdCfg.Key)
+	}
+
+	cmd := exec.CommandContext(
+		ctx,
+		cmdCfg.PostServiceCmd,
+		args...,
+	)
+	cmd.Dir = filepath.Dir(cmdCfg.PostServiceCmd)
+	pipe, err := cmd.StderrPipe()
+	if err != nil {
+		ps.logger.Error("setup stderr pipe for post service", zap.Error(err))
+		return nil
+	}
+
+	var eg errgroup.Group
+	eg.Go(ps.captureCmdOutput(pipe))
+	if err := cmd.Start(); err != nil {
+		pipe.Close()
+		ps.logger.Error("start post service", zap.Error(err))
+		return nil
+	}
+	ps.logger.Info("post service started", zap.Int("pid", cmd.Process.Pid), zap.String("cmd", cmd.String()))
+	ps.pid.Store(int64(cmd.Process.Pid))
+	events.EmitPostServiceStarted()
+	err = cmd.Wait()
+	if ctx.Err() != nil {
+		events.EmitPostServiceStopped()
+		if err := eg.Wait(); err != nil {
+			ps.logger.Warn("output reading goroutine failed", zap.Error(err))
+		}
+		return nil
+	}
+	eg.Wait()
+	ps.logger.Fatal("post service exited", zap.Error(err))
+	return nil
 }

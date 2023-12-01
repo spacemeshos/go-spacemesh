@@ -62,7 +62,7 @@ jobs:
 
       - name: Setup gcloud authentication
         id: "auth"
-        uses: "google-github-actions/auth@v1"
+        uses: "google-github-actions/auth@v2"
         with:
           # GCP_CREDENTIALS is minified JSON of service account
           credentials_json: "${{ secrets.CI_GCP_CREDENTIALS }}"

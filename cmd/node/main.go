@@ -12,15 +12,17 @@ import (
 )
 
 var (
-	version string
-	commit  string
-	branch  string
+	version   string
+	commit    string
+	branch    string
+	noMainNet string
 )
 
 func main() { // run the app
 	cmd.Version = version
 	cmd.Commit = commit
 	cmd.Branch = branch
+	cmd.NoMainNet = noMainNet == "true"
 	if err := node.GetCommand().Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
