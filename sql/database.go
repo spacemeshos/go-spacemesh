@@ -198,9 +198,6 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 			}
 		}
 	}
-	for i := 0; i < config.connections; i++ {
-		pool.Put(pool.Get(context.Background()))
-	}
 	return db, nil
 }
 
