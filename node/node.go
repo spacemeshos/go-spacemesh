@@ -135,6 +135,11 @@ func GetCommand() *cobra.Command {
 			if conf.LOGGING.Encoder == config.JSONLogEncoder {
 				log.JSONLog(true)
 			}
+
+			if cmd.NoMainNet && onMainNet(conf) {
+				log.With().Fatal("this is a testnet-only build not intended for mainnet")
+			}
+
 			app := New(
 				WithConfig(conf),
 				// NOTE(dshulyak) this needs to be max level so that child logger can can be current level or below.
@@ -1741,4 +1746,8 @@ func (w tortoiseWeakCoin) Set(lid types.LayerID, value bool) error {
 	}
 	w.tortoise.OnWeakCoin(lid, value)
 	return nil
+}
+
+func onMainNet(conf *config.Config) bool {
+	return conf.Genesis.GenesisTime == config.MainnetConfig().Genesis.GenesisTime
 }
