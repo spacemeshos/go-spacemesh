@@ -240,7 +240,6 @@ func New(
 		libp2p.BandwidthReporter(p2pmetrics.NewBandwidthCollector()),
 		libp2p.EnableNATService(),
 		libp2p.ConnectionGater(g),
-		libp2p.Ping(false),
 	}
 	if cfg.EnableTCPTransport {
 		lopts = append(lopts,

@@ -86,6 +86,8 @@ type Host struct {
 
 	discovery        *discovery.Discovery
 	direct, bootnode map[peer.ID]struct{}
+
+	ping *Ping
 }
 
 // Upgrade creates Host instance from host.Host.
@@ -148,18 +150,20 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 			dopts = append(dopts, discovery.WithBackup(backup))
 		}
 	}
-	if len(cfg.PingPeers) != 0 {
-		var peers []peer.ID
-		for _, p := range cfg.PingPeers {
-			peerID, err := peer.Decode(p)
-			if err != nil {
-				fh.logger.With().Warning("ignoring invalid ping peer", log.Err(err))
-				continue
-			}
-			peers = append(peers, peerID)
+
+	var peers []peer.ID
+	for _, p := range cfg.PingPeers {
+		peerID, err := peer.Decode(p)
+		if err != nil {
+			fh.logger.With().Warning("ignoring invalid ping peer", log.Err(err))
+			continue
 		}
-		dopts = append(dopts, discovery.WithPingPeers(peers))
+		peers = append(peers, peerID)
 	}
+	if len(peers) != 0 {
+		fh.ping = NewPing(fh.logger, fh, peers)
+	}
+
 	dhtdisc, err := discovery.New(fh, dopts...)
 	if err != nil {
 		return nil, err
@@ -230,6 +234,12 @@ func (fh *Host) PeerProtocols(p Peer) ([]protocol.ID, error) {
 	return fh.Peerstore().GetProtocols(p)
 }
 
+// Ping returns Ping structure for this Host, if any PingPeers are
+// specified in the config. Otherwise, it returns nil
+func (fh *Host) Ping() *Ping {
+	return fh.ping
+}
+
 func (fh *Host) Start() error {
 	fh.closed.Lock()
 	defer fh.closed.Unlock()
@@ -237,6 +247,9 @@ func (fh *Host) Start() error {
 		return errors.New("p2p: closed")
 	}
 	fh.discovery.Start()
+	if fh.ping != nil {
+		fh.ping.Start()
+	}
 	if !fh.cfg.Bootnode {
 		fh.eg.Go(func() error {
 			persist(fh.ctx, fh.logger, fh.Host, fh.cfg.DataDir, 30*time.Minute)
