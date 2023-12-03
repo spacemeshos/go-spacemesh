@@ -11,32 +11,39 @@ import (
 )
 
 func TestPrologue(t *testing.T) {
-	for _, tc := range []struct {
-		desc   string
-		listen string
-		errStr string
-	}{
+	type testcase struct {
+		desc       string
+		listen     string
+		enableQUIC bool
+		errStr     string
+	}
+	var testcases = []testcase{
 		{
 			desc:   "tcp",
 			listen: "/ip4/127.0.0.1/tcp/0",
 			errStr: "failed to negotiate security protocol",
 		},
 		{
-			desc:   "quic",
-			listen: "/ip4/0.0.0.0/udp/0/quic-v1",
-			errStr: "prologue mismatch",
+			desc:       "quic",
+			listen:     "/ip4/0.0.0.0/udp/0/quic-v1",
+			enableQUIC: true,
+			errStr:     "cookie mismatch",
 		},
-	} {
+	}
+	for _, tc := range testcases {
 		t.Run(tc.desc, func(t *testing.T) {
 			cfg1 := DefaultConfig()
 			cfg1.DataDir = t.TempDir()
 			cfg1.Listen = tc.listen
+			cfg1.EnableQUICTransport = tc.enableQUIC
 			cfg2 := DefaultConfig()
 			cfg2.DataDir = t.TempDir()
 			cfg2.Listen = tc.listen
+			cfg2.EnableQUICTransport = tc.enableQUIC
 			cfg3 := DefaultConfig()
 			cfg3.DataDir = t.TempDir()
 			cfg3.Listen = tc.listen
+			cfg3.EnableQUICTransport = tc.enableQUIC
 
 			h1, err := New(context.Background(), logtest.New(t), cfg1, []byte("red"))
 			require.NoError(t, err)

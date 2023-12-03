@@ -1,13 +1,9 @@
 package p2p
 
 import (
-	"bytes"
 	"context"
-	"crypto/x509"
-	"crypto/x509/pkix"
 	"errors"
 	"fmt"
-	"slices"
 	"time"
 
 	lp2plog "github.com/ipfs/go-log/v2"
@@ -26,7 +22,6 @@ import (
 	tptu "github.com/libp2p/go-libp2p/p2p/net/upgrader"
 	"github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/relay"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
-	p2ptls "github.com/libp2p/go-libp2p/p2p/security/tls"
 	quic "github.com/libp2p/go-libp2p/p2p/transport/quic"
 	"github.com/libp2p/go-libp2p/p2p/transport/quicreuse"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
@@ -35,12 +30,9 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
 	p2pmetrics "github.com/spacemeshos/go-spacemesh/p2p/metrics"
 )
-
-// TODO: use proper registered PEN. See also:
-// https://github.com/libp2p/specs/pull/151/commits/15e57e758874bb85dbf711bfa165e48a26ece20d
-var tlsExtensionID = []int{1, 3, 6, 1, 4, 1, 123456, 1}
 
 // DefaultConfig config.
 func DefaultConfig() Config {
@@ -180,34 +172,6 @@ func (cfg *Config) Validate() error {
 	return nil
 }
 
-func validateTLSCertChain(chain []*x509.Certificate, prologue []byte) error {
-	if len(chain) != 1 {
-		return errors.New("expected one certificates in the chain")
-	}
-
-	cert := chain[0]
-	for _, ext := range cert.Extensions {
-		if !ext.Id.Equal(tlsExtensionID) {
-			continue
-		}
-
-		for i, oident := range cert.UnhandledCriticalExtensions {
-			if oident.Equal(ext.Id) {
-				cert.UnhandledCriticalExtensions = slices.Delete(cert.UnhandledCriticalExtensions, i, i+1)
-				break
-			}
-		}
-
-		if bytes.Equal(ext.Value, prologue) {
-			return nil
-		}
-
-		return errors.New("prologue mismatch")
-	}
-
-	return errors.New("prologue extension not found")
-}
-
 // New initializes libp2p host configured for spacemesh.
 func New(
 	_ context.Context,
@@ -266,18 +230,6 @@ func New(
 		direct:   directMap,
 	}
 
-	certTemplate, err := p2ptls.CertTemplate()
-	if err != nil {
-		return nil, err
-	}
-
-	certTemplate.ExtraExtensions = []pkix.Extension{
-		{
-			Id:    tlsExtensionID,
-			Value: prologue,
-		},
-	}
-
 	g.direct = directMap
 	lopts := []libp2p.Option{
 		libp2p.Identity(key),
@@ -323,12 +275,13 @@ func New(
 					gater ccmgr.ConnectionGater,
 					rcmgr network.ResourceManager,
 				) (transport.Transport, error) {
-					return quic.NewTransport(key, connManager, psk, gater, rcmgr,
-						quic.WithCertTemplate(certTemplate),
-						quic.WithVerifyPeerCertificate(func(chain []*x509.Certificate) error {
-							err := validateTLSCertChain(chain, prologue)
-							return err
-						}))
+					tr, err := quic.NewTransport(key, connManager, psk, gater, rcmgr)
+					if err != nil {
+						return nil, err
+					}
+					// QQQQQ: no prologue in case of mainnet (perhaps)
+					return handshake.MaybeWrapTransport(tr, prologue,
+						handshake.WithLog(logger)), nil
 				}),
 		)
 	}
