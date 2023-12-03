@@ -92,12 +92,6 @@ func WithDir(path string) Opt {
 	}
 }
 
-func WithPingPeers(peers []peer.ID) Opt {
-	return func(d *Discovery) {
-		d.pingPeers = peers
-	}
-}
-
 func DisableDHT() Opt {
 	return func(d *Discovery) {
 		d.disableDht = true
@@ -155,91 +149,10 @@ type Discovery struct {
 	bootstrapDuration   time.Duration
 	minPeers, highPeers int
 	backup, bootnodes   []peer.AddrInfo
-	pingPeers           []peer.ID
 }
 
 func (d *Discovery) Start() {
-	if len(d.pingPeers) != 0 {
-		d.eg.Go(func() error {
-			ticker := time.NewTicker(15 * time.Second)
-			for {
-				select {
-				case <-ticker.C:
-					func() {
-						ctx, cancel := context.WithTimeout(d.ctx, 10*time.Second)
-						defer cancel()
-						for _, p := range d.pingPeers {
-							d.logger.Info("pinging peer",
-								zap.String("peer", p.String()))
-							addrInfo, err := d.dht.FindPeer(ctx, p)
-							if err != nil {
-								d.logger.Error("failed to find peer",
-									zap.String("peer", p.String()),
-									zap.Error(err))
-								continue
-							}
-							if err := d.dht.Ping(ctx, p); err != nil {
-								d.logger.Error("ping failed for peer",
-									zap.String("peer", p.String()),
-									zap.Any("addrInfo", addrInfo),
-									zap.Error(err))
-								continue
-							} else {
-								d.logger.Info("ping succeeded for peer",
-									zap.String("peer", p.String()),
-									zap.Any("addrInfo", addrInfo))
-							}
-						}
-					}()
-				case <-d.ctx.Done():
-					ticker.Stop()
-					return nil
-				}
-			}
-		})
-	}
-	d.eg.Go(func() error {
-		// time.Sleep(30 * time.Second)
-		var connEg errgroup.Group
-		disconnected := make(chan struct{}, 1)
-		disconnected <- struct{}{} // trigger bootstrap when node starts immediately
-		// TODO: connectedF, disconnectedF: track enough rendezvous peers
-		notifiee := &network.NotifyBundle{
-			DisconnectedF: func(_ network.Network, c network.Conn) {
-				select {
-				case disconnected <- struct{}{}:
-				default:
-				}
-			},
-		}
-		d.h.Network().Notify(notifiee)
-		ticker := time.NewTicker(d.period)
-		for {
-			select {
-			case <-d.ctx.Done():
-				ticker.Stop()
-				d.h.Network().StopNotify(notifiee)
-				return nil
-			case <-ticker.C:
-			case <-disconnected:
-			}
-			if connected := len(d.h.Network().Peers()); connected >= d.minPeers {
-				d.backup = nil // once got enough peers no need to keep backup, they are either already connected or unavailable
-				d.logger.Debug("node is connected with required number of peers. skipping bootstrap",
-					zap.Int("required", d.minPeers),
-					zap.Int("connected", connected),
-				)
-			} else {
-				d.connect(&connEg, d.backup)
-				// no reason to spend more resources if we got enough from backup
-				if connected := len(d.h.Network().Peers()); connected >= d.minPeers {
-					continue
-				}
-				d.connect(&connEg, d.bootnodes)
-				d.bootstrap()
-			}
-		}
-	})
+	d.eg.Go(d.ensureAtLeastMinPeers)
 	d.eg.Go(d.discoverPeers)
 }
 
@@ -324,6 +237,48 @@ func (d *Discovery) newDht(ctx context.Context, h host.Host, public, server bool
 	d.dht = dht
 	d.datastore = ds
 	return nil
+}
+
+func (d *Discovery) ensureAtLeastMinPeers() error {
+	var connEg errgroup.Group
+	disconnected := make(chan struct{}, 1)
+	disconnected <- struct{}{} // trigger bootstrap when node starts immediately
+	// TODO: connectedF, disconnectedF: track enough rendezvous peers
+	notifiee := &network.NotifyBundle{
+		DisconnectedF: func(_ network.Network, c network.Conn) {
+			select {
+			case disconnected <- struct{}{}:
+			default:
+			}
+		},
+	}
+	d.h.Network().Notify(notifiee)
+	ticker := time.NewTicker(d.period)
+	for {
+		select {
+		case <-d.ctx.Done():
+			ticker.Stop()
+			d.h.Network().StopNotify(notifiee)
+			return nil
+		case <-ticker.C:
+		case <-disconnected:
+		}
+		if connected := len(d.h.Network().Peers()); connected >= d.minPeers {
+			d.backup = nil // once got enough peers no need to keep backup, they are either already connected or unavailable
+			d.logger.Debug("node is connected with required number of peers. skipping bootstrap",
+				zap.Int("required", d.minPeers),
+				zap.Int("connected", connected),
+			)
+		} else {
+			d.connect(&connEg, d.backup)
+			// no reason to spend more resources if we got enough from backup
+			if connected := len(d.h.Network().Peers()); connected >= d.minPeers {
+				continue
+			}
+			d.connect(&connEg, d.bootnodes)
+			d.bootstrap()
+		}
+	}
 }
 
 func (d *Discovery) discoverPeers() error {
