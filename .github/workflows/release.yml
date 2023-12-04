@@ -19,7 +19,7 @@ jobs:
           - os: ubuntu-latest
           - os: [self-hosted, linux, arm64]
           - os: macos-latest
-          - os: [self-hosted, macos, arm64]
+          - os: macos-13-xlarge
           - os: windows-latest
     steps:
       - shell: bash
