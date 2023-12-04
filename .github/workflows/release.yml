@@ -93,7 +93,6 @@ jobs:
 
       - name: Calculate the hashsum of the zip file (Windows)
         if: ${{ matrix.os == 'windows-latest' }}
-        shell: bash
         run: |
           (Get-FileHash ${{ env.OUTNAME }}.zip -Algorithm SHA256).Hash > sha256-${{ matrix.outname_sufix }}.txt
 
