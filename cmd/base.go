@@ -24,6 +24,9 @@ var (
 
 	// Commit is the git commit used to build the app. Designed to be overwritten by make.
 	Commit string
+
+	// Prohibit this build from running on the mainnet.
+	NoMainNet bool
 )
 
 // EnsureCLIFlags checks flag types and converts them.
@@ -122,10 +125,6 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *config.Config) error {
 
 			ff = reflect.TypeOf(appCFG.TIME)
 			elem = reflect.ValueOf(&appCFG.TIME).Elem()
-			assignFields(ff, elem, name)
-
-			ff = reflect.TypeOf(appCFG.HARE)
-			elem = reflect.ValueOf(&appCFG.HARE).Elem()
 			assignFields(ff, elem, name)
 
 			ff = reflect.TypeOf(appCFG.HareEligibility)

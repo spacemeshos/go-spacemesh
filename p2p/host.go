@@ -64,6 +64,9 @@ func DefaultConfig() Config {
 			// link local
 			"fe80::/10",
 		},
+		GossipQueueSize:             10000,
+		GossipValidationThrottle:    10000,
+		GossipAtxValidationThrottle: 10000,
 	}
 }
 
@@ -80,31 +83,34 @@ type Config struct {
 	MaxMessageSize     int
 
 	// see https://lwn.net/Articles/542629/ for reuseport explanation
-	DisableReusePort         bool        `mapstructure:"disable-reuseport"`
-	DisableNatPort           bool        `mapstructure:"disable-natport"`
-	DisableConnectionManager bool        `mapstructure:"disable-connection-manager"`
-	DisableResourceManager   bool        `mapstructure:"disable-resource-manager"`
-	DisableDHT               bool        `mapstructure:"disable-dht"`
-	Flood                    bool        `mapstructure:"flood"`
-	Listen                   string      `mapstructure:"listen"`
-	Bootnodes                []string    `mapstructure:"bootnodes"`
-	Direct                   []string    `mapstructure:"direct"`
-	MinPeers                 int         `mapstructure:"min-peers"`
-	LowPeers                 int         `mapstructure:"low-peers"`
-	HighPeers                int         `mapstructure:"high-peers"`
-	InboundFraction          float64     `mapstructure:"inbound-fraction"`
-	OutboundFraction         float64     `mapstructure:"outbound-fraction"`
-	AutoscalePeers           bool        `mapstructure:"autoscale-peers"`
-	AdvertiseAddress         string      `mapstructure:"advertise-address"`
-	AcceptQueue              int         `mapstructure:"p2p-accept-queue"`
-	Metrics                  bool        `mapstructure:"p2p-metrics"`
-	Bootnode                 bool        `mapstructure:"p2p-bootnode"`
-	ForceReachability        string      `mapstructure:"p2p-reachability"`
-	EnableHolepunching       bool        `mapstructure:"p2p-holepunching"`
-	PrivateNetwork           bool        `mapstructure:"p2p-private-network"`
-	RelayServer              RelayServer `mapstructure:"relay-server"`
-	IP4Blocklist             []string    `mapstructure:"ip4-blocklist"`
-	IP6Blocklist             []string    `mapstructure:"ip6-blocklist"`
+	DisableReusePort            bool        `mapstructure:"disable-reuseport"`
+	DisableNatPort              bool        `mapstructure:"disable-natport"`
+	DisableConnectionManager    bool        `mapstructure:"disable-connection-manager"`
+	DisableResourceManager      bool        `mapstructure:"disable-resource-manager"`
+	DisableDHT                  bool        `mapstructure:"disable-dht"`
+	Flood                       bool        `mapstructure:"flood"`
+	Listen                      string      `mapstructure:"listen"`
+	Bootnodes                   []string    `mapstructure:"bootnodes"`
+	Direct                      []string    `mapstructure:"direct"`
+	MinPeers                    int         `mapstructure:"min-peers"`
+	LowPeers                    int         `mapstructure:"low-peers"`
+	HighPeers                   int         `mapstructure:"high-peers"`
+	InboundFraction             float64     `mapstructure:"inbound-fraction"`
+	OutboundFraction            float64     `mapstructure:"outbound-fraction"`
+	AutoscalePeers              bool        `mapstructure:"autoscale-peers"`
+	AdvertiseAddress            string      `mapstructure:"advertise-address"`
+	AcceptQueue                 int         `mapstructure:"p2p-accept-queue"`
+	Metrics                     bool        `mapstructure:"p2p-metrics"`
+	Bootnode                    bool        `mapstructure:"p2p-bootnode"`
+	ForceReachability           string      `mapstructure:"p2p-reachability"`
+	EnableHolepunching          bool        `mapstructure:"p2p-holepunching"`
+	PrivateNetwork              bool        `mapstructure:"p2p-private-network"`
+	RelayServer                 RelayServer `mapstructure:"relay-server"`
+	IP4Blocklist                []string    `mapstructure:"ip4-blocklist"`
+	IP6Blocklist                []string    `mapstructure:"ip6-blocklist"`
+	GossipQueueSize             int         `mapstructure:"gossip-queue-size"`
+	GossipValidationThrottle    int         `mapstructure:"gossip-validation-throttle"`
+	GossipAtxValidationThrottle int         `mapstructure:"gossip-atx-validation-throttle"`
 }
 
 type RelayServer struct {

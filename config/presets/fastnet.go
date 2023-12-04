@@ -26,13 +26,11 @@ func fastnet() config.Config {
 	// set for systest TestEquivocation
 	conf.BaseConfig.MinerGoodAtxsPercent = 50
 
-	conf.HARE.Disable = 1 // non-zero low layer will prevent hare1 from running
-	conf.HARE.N = 800
-	conf.HARE.ExpectedLeaders = 10
-	conf.HARE.LimitConcurrent = 5
-	conf.HARE.LimitIterations = 3
-	conf.HARE.RoundDuration = 2 * time.Second
-	conf.HARE.WakeupDelta = 3 * time.Second
+	// node will select atxs that were received atleast 4 seconds before start of the epoch
+	// for activeset.
+	// if some atxs weren't received on time it will skew eligibility distribution
+	// and will make some tests fail.
+	conf.ATXGradeDelay = 1 * time.Second
 
 	conf.HARE3.Enable = true
 	conf.HARE3.DisableLayer = types.LayerID(math.MaxUint32)

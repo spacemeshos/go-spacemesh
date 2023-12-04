@@ -34,7 +34,7 @@ func getPoetProof(t *testing.T) types.PoetProofMessage {
 			prover.TreeConfig{Datadir: t.TempDir()},
 			poetHash.GenLabelHashFunc(challenge),
 			poetHash.GenMerkleHashFunc(challenge),
-			time.Now().Add(time.Millisecond*300),
+			time.Now().Add(500*time.Millisecond),
 			shared.T,
 		)
 		require.NoError(t, err)

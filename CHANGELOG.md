@@ -12,12 +12,29 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ### Improvements
 
+* [#5199](https://github.com/spacemeshos/go-spacemesh/pull/5199) Adds smesherID to rewards table. Historically rewards
+  were keyed by (coinbase, layer). Now the primary key has changed to (smesherID, layer), which allows querying rewards
+  by any subset of layer, smesherID, and coinbase. While this change does add smesherID to existing API endpoints
+  (`GlobalStateService.{AccountDataQuery,AccountDataStream,GlobalStateStream}`), it does not yet expose an endpoint to
+  query rewards by smesherID. Additionally, it does not re-index old data. Rewards will contain smesherID going forward,
+  but to refresh data for all rewards, a node will have to delete its database and resync from genesis.
+
 ## 1.3.0
 
 ### Upgrade information
 
+This release is not backwards compatible with v1.2.x. Upgrading will migrate local state to a new database.
+The migration will take place at the first startup after the upgrade. Be aware that after a successful upgrade
+downgrading isn't supported and might result in at least one epoch of missed rewards. See change #5207 for more
+information.
+
 Current release is expected to be adopted by majority of the network participants before epoch 11 starts.
 Nodes that do not update before epoch 11 risk their proposals being rejected by the rest of the network.
+
+This release is the first step towards separating PoST from the node. Proof generation is now done via a dedicated
+service. This service is started automatically by the node and is shut down when the node shuts down. In most
+setups this should work out of the box, but if you are running into issues please check the README.md file
+for more information on how to configure the node to work with the PoST service.
 
 ### Highlights
 
@@ -70,7 +87,7 @@ Nodes that do not update before epoch 11 risk their proposals being rejected by 
 
   ```json
   "main": {
-      "prune-activesets-from": 4294967295
+    "prune-activesets-from": 4294967295
   }
   ```
 
@@ -89,9 +106,17 @@ Nodes that do not update before epoch 11 risk their proposals being rejected by 
   which holds ephemeral data of the node.
 
   With this change `post.bin` and `nipost_challenge.bin` files are no longer used. The node will automatically migrate
-  the data from disk and store it in the database. The migration will take place at the first startup after the upgrade.
+  the data from disk and store it in the database. The migration will take place during the first startup after the upgrade.
+  If you want to downgrade to a version before v1.3.0 you will need to restore `state.sql` as well as `post.bin` and
+  `nipost_challenge.bin` from a backup and do so before the end of the PoET round in which you upgraded. Otherwise the node
+  will not be able to participate in consensus and will miss at least one epoch of rewards.
 
 * [#5209](https://github.com/spacemeshos/go-spacemesh/pull/5209) Removed API to update poet servers from SmesherService.
+
+* [#5276](https://github.com/spacemeshos/go-spacemesh/pull/5276) Removed the option to configure API services per endpoint.
+  The public listener exposes the following services: "debug", "global", "mesh", "transaction", "node", "activation"
+  The private listener exposes the following services: "admin", "smesher", "post"
+  The mTLS listener exposes only the "post" service.
 
 ## v1.2.0
 
@@ -138,7 +163,7 @@ In order to enable provide following configuration:
   Ephemeral data are deleted and state compacted at the time of upgrade. In steady-state, data is pruned periodically.
 * [#5021](https://github.com/spacemeshos/go-spacemesh/pull/5021) Drop support for old certificate sync protocol.
 * [#5024](https://github.com/spacemeshos/go-spacemesh/pull/5024) Active set will be saved in state separately from ballots.
-* [#5032](https://github.com/spacemeshos/go-spacemesh/pull/5032) Ativeset data pruned from ballots.
+* [#5032](https://github.com/spacemeshos/go-spacemesh/pull/5032) Activeset data pruned from ballots.
 * [#5035](https://github.com/spacemeshos/go-spacemesh/pull/5035) Fix possible nil pointer panic when node fails to persist
   nipost builder state.
 * [#5079](https://github.com/spacemeshos/go-spacemesh/pull/5079) increase atx cache to 50 000 to reduce disk reads.
@@ -179,7 +204,7 @@ active set will not be gossipped together with proposals. That was the main netw
 * [#4765](https://github.com/spacemeshos/go-spacemesh/pull/4765) hare 3 consensus protocol.
 
 Replacement for original version of hare. Won't be enabled on mainnet for now.
-Otherwise protocol uses significantly less traffic (atlest x20), and will allow
+Otherwise protocol uses significantly less traffic (at least x20), and will allow
 to set lower expected latency in the network, eventually reducing layer time.
 
 ### Improvements

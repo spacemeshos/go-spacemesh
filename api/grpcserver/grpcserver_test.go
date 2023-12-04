@@ -78,23 +78,24 @@ var (
 	postGenesisEpoch = types.EpochID(2)
 	genesisID        = types.Hash20{}
 
-	addr1       types.Address
-	addr2       types.Address
-	prevAtxID   = types.ATXID(types.HexToHash32("44444"))
-	chlng       = types.HexToHash32("55555")
-	poetRef     = []byte("66666")
-	nipost      = newNIPostWithChallenge(&chlng, poetRef)
-	challenge   = newChallenge(1, prevAtxID, prevAtxID, postGenesisEpoch)
-	globalAtx   *types.VerifiedActivationTx
-	globalAtx2  *types.VerifiedActivationTx
-	globalTx    *types.Transaction
-	globalTx2   *types.Transaction
-	ballot1     = genLayerBallot(types.LayerID(11))
-	block1      = genLayerBlock(types.LayerID(11), nil)
-	block2      = genLayerBlock(types.LayerID(11), nil)
-	block3      = genLayerBlock(types.LayerID(11), nil)
-	meshAPIMock = &MeshAPIMock{}
-	conStateAPI = &ConStateAPIMock{
+	addr1           types.Address
+	addr2           types.Address
+	rewardSmesherID = types.RandomNodeID()
+	prevAtxID       = types.ATXID(types.HexToHash32("44444"))
+	chlng           = types.HexToHash32("55555")
+	poetRef         = []byte("66666")
+	nipost          = newNIPostWithChallenge(&chlng, poetRef)
+	challenge       = newChallenge(1, prevAtxID, prevAtxID, postGenesisEpoch)
+	globalAtx       *types.VerifiedActivationTx
+	globalAtx2      *types.VerifiedActivationTx
+	globalTx        *types.Transaction
+	globalTx2       *types.Transaction
+	ballot1         = genLayerBallot(types.LayerID(11))
+	block1          = genLayerBlock(types.LayerID(11), nil)
+	block2          = genLayerBlock(types.LayerID(11), nil)
+	block3          = genLayerBlock(types.LayerID(11), nil)
+	meshAPIMock     = &MeshAPIMock{}
+	conStateAPI     = &ConStateAPIMock{
 		returnTx:      make(map[types.TransactionID]*types.Transaction),
 		layerApplied:  make(map[types.TransactionID]*types.LayerID),
 		balances:      make(map[types.Address]*big.Int),
@@ -260,13 +261,26 @@ func (m *MeshAPIMock) ProcessedLayer() types.LayerID {
 	return layerVerified
 }
 
-func (m *MeshAPIMock) GetRewards(types.Address) (rewards []*types.Reward, err error) {
+func (m *MeshAPIMock) GetRewardsByCoinbase(types.Address) (rewards []*types.Reward, err error) {
 	return []*types.Reward{
 		{
 			Layer:       layerFirst,
 			TotalReward: rewardAmount,
 			LayerReward: rewardAmount,
 			Coinbase:    addr1,
+			SmesherID:   rewardSmesherID,
+		},
+	}, nil
+}
+
+func (m *MeshAPIMock) GetRewardsBySmesherId(types.NodeID) (rewards []*types.Reward, err error) {
+	return []*types.Reward{
+		{
+			Layer:       layerFirst,
+			TotalReward: rewardAmount,
+			LayerReward: rewardAmount,
+			Coinbase:    addr1,
+			SmesherID:   rewardSmesherID,
 		},
 	}, nil
 }
@@ -1728,6 +1742,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 		Total:       rewardAmount,
 		LayerReward: rewardAmount * 2,
 		Coinbase:    addr1,
+		SmesherID:   rewardSmesherID,
 	})
 
 	res, err := stream.Recv()
@@ -1783,6 +1798,7 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 		Total:       rewardAmount,
 		LayerReward: rewardAmount * 2,
 		Coinbase:    addr1,
+		SmesherID:   rewardSmesherID,
 	})
 	res, err := stream.Recv()
 	require.NoError(t, err, "got error from stream")
@@ -1894,7 +1910,7 @@ func checkAccountDataQueryItemReward(t *testing.T, dataItem any) {
 	require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
 	require.Equal(t, uint64(rewardAmount), x.Reward.LayerReward.Value)
 	require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
-	require.Nil(t, x.Reward.Smesher)
+	require.Equal(t, rewardSmesherID.Bytes(), x.Reward.Smesher.Id)
 }
 
 func checkAccountMeshDataItemTx(t *testing.T, dataItem any) {
@@ -1925,6 +1941,7 @@ func checkAccountDataItemReward(t *testing.T, dataItem any) {
 	require.Equal(t, layerFirst.Uint32(), x.Reward.Layer.Number)
 	require.Equal(t, uint64(rewardAmount*2), x.Reward.LayerReward.Value)
 	require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
+	require.Equal(t, rewardSmesherID.Bytes(), x.Reward.Smesher.Id)
 }
 
 func checkAccountDataItemAccount(t *testing.T, dataItem any) {
@@ -1946,6 +1963,7 @@ func checkGlobalStateDataReward(t *testing.T, dataItem any) {
 	require.Equal(t, layerFirst.Uint32(), x.Reward.Layer.Number)
 	require.Equal(t, uint64(rewardAmount*2), x.Reward.LayerReward.Value)
 	require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
+	require.Equal(t, rewardSmesherID.Bytes(), x.Reward.Smesher.Id)
 }
 
 func checkGlobalStateDataAccountWrapper(t *testing.T, dataItem any) {

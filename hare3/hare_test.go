@@ -550,11 +550,13 @@ func (*testTracer) OnMessageReceived(*Message) {}
 
 func testHare(t *testing.T, active, inactive, equivocators int, opts ...clusterOpt) {
 	t.Parallel()
+	cfg := DefaultConfig()
+	cfg.LogStats = true
 	tst := &tester{
 		TB:            t,
 		rng:           rand.New(rand.NewSource(1001)),
 		start:         time.Now(),
-		cfg:           DefaultConfig(),
+		cfg:           cfg,
 		layerDuration: 5 * time.Minute,
 		beacon:        types.Beacon{1, 1, 1, 1},
 		genesis:       types.GetEffectiveGenesis(),

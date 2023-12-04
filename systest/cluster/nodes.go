@@ -106,7 +106,7 @@ const (
 	poetConfigMapName      = "poet"
 	spacemeshConfigMapName = "spacemesh"
 
-	// smeshers are splitted in 10 approximately equal buckets
+	// smeshers are split in 10 approximately equal buckets
 	// to enable running chaos mesh tasks on the different parts of the cluster.
 	buckets = 10
 )
@@ -118,8 +118,8 @@ const (
 
 // Node ...
 type Node struct {
-	Name      string
-	P2P, GRPC uint16
+	Name                     string
+	P2P, GRPC_PUB, GRPC_PRIV uint16
 }
 
 // P2PEndpoint returns full p2p endpoint, including identity.
@@ -132,14 +132,16 @@ type NodeClient struct {
 	session *testcontext.Context
 	Node
 
-	mu   sync.Mutex
-	conn *grpc.ClientConn
+	mu       sync.Mutex
+	pubConn  *grpc.ClientConn
+	privConn *grpc.ClientConn
 }
 
 func (n *NodeClient) Close() {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	n.resetConn(n.conn)
+	n.resetPubConn(n.pubConn)
+	n.resetPrivConn(n.privConn)
 }
 
 func (n *NodeClient) Resolve(ctx context.Context) (string, error) {
@@ -150,37 +152,76 @@ func (n *NodeClient) Resolve(ctx context.Context) (string, error) {
 	return pod.Status.PodIP, nil
 }
 
-func (n *NodeClient) ensureConn(ctx context.Context) (*grpc.ClientConn, error) {
+func (n *NodeClient) ensurePubConn(ctx context.Context) (*grpc.ClientConn, error) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	if n.conn != nil {
-		return n.conn, nil
+	if n.pubConn != nil {
+		return n.pubConn, nil
 	}
 	pod, err := waitPod(n.session, n.Name)
 	if err != nil {
 		return nil, err
 	}
-	conn, err := grpc.DialContext(ctx, fmt.Sprintf("%s:%d", pod.Status.PodIP, n.GRPC),
+	conn, err := grpc.DialContext(ctx,
+		fmt.Sprintf("%s:%d", pod.Status.PodIP, n.GRPC_PUB),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
 		return nil, err
 	}
-	n.conn = conn
-	return n.conn, nil
+	n.pubConn = conn
+	return n.pubConn, nil
 }
 
-func (n *NodeClient) resetConn(conn *grpc.ClientConn) {
+func (n *NodeClient) resetPubConn(conn *grpc.ClientConn) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	if n.conn != nil && n.conn == conn {
-		n.conn.Close()
-		n.conn = nil
+	if n.pubConn != nil && n.pubConn == conn {
+		n.pubConn.Close()
+		n.pubConn = nil
 	}
 }
 
-func (n *NodeClient) Invoke(ctx context.Context, method string, args, reply any, opts ...grpc.CallOption) error {
-	conn, err := n.ensureConn(ctx)
+func (n *NodeClient) ensurePrivConn(ctx context.Context) (*grpc.ClientConn, error) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.privConn != nil {
+		return n.privConn, nil
+	}
+	pod, err := waitPod(n.session, n.Name)
+	if err != nil {
+		return nil, err
+	}
+	conn, err := grpc.DialContext(ctx,
+		fmt.Sprintf("%s:%d", pod.Status.PodIP, n.GRPC_PRIV),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		return nil, err
+	}
+	n.privConn = conn
+	return n.privConn, nil
+}
+
+func (n *NodeClient) resetPrivConn(conn *grpc.ClientConn) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.privConn != nil && n.privConn == conn {
+		n.privConn.Close()
+		n.privConn = nil
+	}
+}
+
+func (n *NodeClient) PubConn() *PubNodeClient {
+	return &PubNodeClient{n}
+}
+
+type PubNodeClient struct {
+	*NodeClient
+}
+
+func (n *PubNodeClient) Invoke(ctx context.Context, method string, args, reply any, opts ...grpc.CallOption) error {
+	conn, err := n.ensurePubConn(ctx)
 	if err != nil {
 		return err
 	}
@@ -190,25 +231,67 @@ func (n *NodeClient) Invoke(ctx context.Context, method string, args, reply any,
 		if s.Code() != codes.InvalidArgument && s.Code() != codes.Canceled {
 			// check for app error. this is not exhaustive.
 			// the goal is to reset connection if pods were redeployed and changed IP
-			n.resetConn(conn)
+			n.resetPubConn(conn)
 		}
 	}
 	return err
 }
 
-func (n *NodeClient) NewStream(
+func (n *PubNodeClient) NewStream(
 	ctx context.Context,
 	desc *grpc.StreamDesc,
 	method string,
 	opts ...grpc.CallOption,
 ) (grpc.ClientStream, error) {
-	conn, err := n.ensureConn(ctx)
+	conn, err := n.ensurePubConn(ctx)
 	if err != nil {
 		return nil, err
 	}
-	stream, err := n.conn.NewStream(ctx, desc, method, opts...)
+	stream, err := n.pubConn.NewStream(ctx, desc, method, opts...)
 	if err != nil {
-		n.resetConn(conn)
+		n.resetPubConn(conn)
+	}
+	return stream, err
+}
+
+func (n *NodeClient) PrivConn() *PrivNodeClient {
+	return &PrivNodeClient{n}
+}
+
+type PrivNodeClient struct {
+	*NodeClient
+}
+
+func (n *PrivNodeClient) Invoke(ctx context.Context, method string, args, reply any, opts ...grpc.CallOption) error {
+	conn, err := n.ensurePrivConn(ctx)
+	if err != nil {
+		return err
+	}
+	err = conn.Invoke(ctx, method, args, reply, opts...)
+	if err != nil {
+		s, _ := status.FromError(err)
+		if s.Code() != codes.InvalidArgument && s.Code() != codes.Canceled {
+			// check for app error. this is not exhaustive.
+			// the goal is to reset connection if pods were redeployed and changed IP
+			n.resetPrivConn(conn)
+		}
+	}
+	return err
+}
+
+func (n *PrivNodeClient) NewStream(
+	ctx context.Context,
+	desc *grpc.StreamDesc,
+	method string,
+	opts ...grpc.CallOption,
+) (grpc.ClientStream, error) {
+	conn, err := n.ensurePrivConn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	stream, err := n.privConn.NewStream(ctx, desc, method, opts...)
+	if err != nil {
+		n.resetPrivConn(conn)
 	}
 	return stream, err
 }
@@ -275,7 +358,8 @@ func deployBootnodeSvc(ctx *testcontext.Context, id string) error {
 		WithSpec(corev1.ServiceSpec().
 			WithSelector(labels).
 			WithPorts(
-				corev1.ServicePort().WithName("grpc").WithPort(9092).WithProtocol("TCP"),
+				corev1.ServicePort().WithName("grpc-pub").WithPort(9092).WithProtocol("TCP"),
+				corev1.ServicePort().WithName("grpc-priv").WithPort(9093).WithProtocol("TCP"),
 				corev1.ServicePort().WithName("p2p").WithPort(7513).WithProtocol("TCP"),
 			).
 			WithClusterIP("None"),
@@ -454,9 +538,10 @@ func deployNodes(ctx *testcontext.Context, kind string, from, to int, opts ...De
 			clients <- &NodeClient{
 				session: ctx,
 				Node: Node{
-					Name: id,
-					P2P:  7513,
-					GRPC: 9092,
+					Name:      id,
+					P2P:       7513,
+					GRPC_PUB:  9092,
+					GRPC_PRIV: 9093,
 				},
 			}
 			return nil
@@ -534,7 +619,8 @@ func deployNode(ctx *testcontext.Context, id string, labels map[string]string, f
 						WithImagePullPolicy(apiv1.PullIfNotPresent).
 						WithPorts(
 							corev1.ContainerPort().WithContainerPort(7513).WithName("p2p"),
-							corev1.ContainerPort().WithContainerPort(9092).WithName("grpc"),
+							corev1.ContainerPort().WithContainerPort(9092).WithName("grpc-pub"),
+							corev1.ContainerPort().WithContainerPort(9093).WithName("grpc-priv"),
 							corev1.ContainerPort().WithContainerPort(prometheusScrapePort).WithName("prometheus"),
 							corev1.ContainerPort().WithContainerPort(phlareScrapePort).WithName("pprof"),
 						).

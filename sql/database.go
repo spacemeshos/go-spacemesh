@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"sort"
 	"sync"
 	"time"
 
@@ -50,16 +52,21 @@ type Encoder func(*Statement)
 type Decoder func(*Statement) bool
 
 func defaultConf() *conf {
+	migrations, err := StateMigrations()
+	if err != nil {
+		panic(err)
+	}
+
 	return &conf{
 		connections: 16,
-		migrations:  StateMigrations,
+		migrations:  migrations,
 	}
 }
 
 type conf struct {
 	flags         sqlite.OpenFlags
 	connections   int
-	migrations    Migrations
+	migrations    []Migration
 	enableLatency bool
 
 	// TODO: remove after state is pruned for majority
@@ -74,9 +81,31 @@ func WithConnections(n int) Opt {
 }
 
 // WithMigrations overwrites embedded migrations.
-func WithMigrations(migrations Migrations) Opt {
+// Migrations are sorted by order before applying.
+func WithMigrations(migrations []Migration) Opt {
 	return func(c *conf) {
+		sort.Slice(migrations, func(i, j int) bool {
+			return migrations[i].Order() < migrations[j].Order()
+		})
 		c.migrations = migrations
+	}
+}
+
+// WithMigration adds migration to the list of migrations.
+// It will overwrite an existing migration with the same order.
+func WithMigration(migration Migration) Opt {
+	return func(c *conf) {
+		for i, m := range c.migrations {
+			if m.Order() == migration.Order() {
+				c.migrations[i] = migration
+				return
+			}
+			if m.Order() > migration.Order() {
+				c.migrations = slices.Insert(c.migrations, i, migration)
+				return
+			}
+		}
+		c.migrations = append(c.migrations, migration)
 	}
 }
 
@@ -135,14 +164,30 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 		if err != nil {
 			return nil, err
 		}
-		err = config.migrations(tx)
-		if err == nil {
-			tx.Commit()
+		for i, m := range config.migrations {
+			if m.Order() <= before {
+				continue
+			}
+			if err := m.Apply(tx); err != nil {
+				for j := i; j >= 0 && config.migrations[j].Order() > before; j-- {
+					if e := config.migrations[j].Rollback(); e != nil {
+						err = errors.Join(err, fmt.Errorf("rollback %s: %w", m.Name(), e))
+						break
+					}
+				}
+
+				tx.Release()
+				err = errors.Join(err, db.Close())
+				return nil, fmt.Errorf("apply %s: %w", m.Name(), err)
+			}
+			// binding values in pragma statement is not allowed
+			if _, err := tx.Exec(fmt.Sprintf("PRAGMA user_version = %d;", m.Order()), nil, nil); err != nil {
+				return nil, fmt.Errorf("update user_version to %d: %w", m.Order(), err)
+			}
 		}
+		tx.Commit()
 		tx.Release()
-		if err != nil {
-			return nil, err
-		}
+
 		if before <= 4 && config.v5Migration != nil {
 			// v5 migration (active set extraction) needs the 3rd migration to execute first
 			if err := config.v5Migration(db); err != nil {
@@ -152,13 +197,6 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 				return nil, err
 			}
 		}
-	}
-	for i := 0; i < config.connections; i++ {
-		conn := pool.Get(context.Background())
-		if err := registerFunctions(conn); err != nil {
-			return nil, err
-		}
-		pool.Put(conn)
 	}
 	return db, nil
 }

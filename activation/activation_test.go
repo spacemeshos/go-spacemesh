@@ -5,12 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -109,7 +107,6 @@ type testAtxBuilder struct {
 	cdb         *datastore.CachedDB
 	localDb     *localsql.Database
 	sig         *signing.EdSigner
-	coinbase    types.Address
 	goldenATXID types.ATXID
 
 	mpub        *mocks.MockPublisher
@@ -130,7 +127,6 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 		cdb:         datastore.NewCachedDB(sql.InMemory(), lg),
 		localDb:     localsql.InMemory(),
 		sig:         edSigner,
-		coinbase:    types.GenerateAddress([]byte("33333")),
 		goldenATXID: types.ATXID(types.HexToHash32("77777")),
 		mpub:        mocks.NewMockPublisher(ctrl),
 		mpostSvc:    NewMockpostService(ctrl),
@@ -144,9 +140,8 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 	opts = append(opts, WithValidator(tab.mValidator))
 
 	cfg := Config{
-		CoinbaseAccount: tab.coinbase,
-		GoldenATXID:     tab.goldenATXID,
-		LayersPerEpoch:  layersPerEpoch,
+		GoldenATXID:    tab.goldenATXID,
+		LayersPerEpoch: layersPerEpoch,
 	}
 
 	tab.msync.EXPECT().RegisterForATXSynced().DoAndReturn(closedChan).AnyTimes()
@@ -606,6 +601,85 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
+func TestBuilder_PublishActivationTx_UsesExistingChallengeOnLatePublish(t *testing.T) {
+	poetCfg := PoetConfig{
+		PhaseShift: layerDuration * 4,
+	}
+	tab := newTestBuilder(t, WithPoetConfig(poetCfg))
+	posEpoch := postGenesisEpoch
+	currLayer := (postGenesisEpoch + 1).FirstLayer().Add(5) // late for poet round start
+	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, postGenesisEpoch, nil)
+	nipostData := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
+	prevAtx := newAtx(t, tab.sig, challenge, nipostData, posEpoch.Uint32(), types.Address{})
+	SignAndFinalizeAtx(tab.sig, prevAtx)
+	vPrevAtx, err := prevAtx.Verify(0, 1)
+	require.NoError(t, err)
+	require.NoError(t, atxs.Add(tab.cdb, vPrevAtx))
+
+	publishEpoch := currLayer.GetEpoch()
+	tab.mclock.EXPECT().CurrentLayer().DoAndReturn(func() types.LayerID { return currLayer }).AnyTimes()
+	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
+		func(got types.LayerID) time.Time {
+			// time.Now() ~= currentLayer
+			genesis := time.Now().Add(-time.Duration(currLayer) * layerDuration)
+			return genesis.Add(layerDuration * time.Duration(got))
+		}).AnyTimes()
+	nonce := types.VRFPostIndex(123)
+	commitmentATX := types.RandomATXID()
+	tab.mpostClient.EXPECT().Info(gomock.Any()).Return(&types.PostInfo{
+		NodeID:        tab.sig.NodeID(),
+		CommitmentATX: commitmentATX,
+		Nonce:         &nonce,
+
+		NumUnits:      DefaultPostSetupOpts().NumUnits,
+		LabelsPerUnit: DefaultPostConfig().LabelsPerUnit,
+	}, nil).AnyTimes()
+	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, challenge *types.NIPostChallenge) (*types.NIPost, error) {
+			currLayer = currLayer.Add(1)
+			return newNIPostWithChallenge(t, challenge.Hash(), []byte("66666")), nil
+		})
+	done := make(chan struct{})
+	close(done)
+	tab.mclock.EXPECT().AwaitLayer(publishEpoch.FirstLayer()).DoAndReturn(
+		func(got types.LayerID) <-chan struct{} {
+			// advance to publish layer
+			if currLayer.Before(got) {
+				currLayer = got
+			}
+			return done
+		})
+
+	// store challenge in DB
+	ch := &types.NIPostChallenge{
+		Sequence:       vPrevAtx.Sequence + 1,
+		PrevATXID:      vPrevAtx.ID(),
+		PublishEpoch:   vPrevAtx.PublishEpoch + 1,
+		PositioningATX: vPrevAtx.ID(),
+	}
+
+	require.NoError(t, nipost.AddChallenge(tab.localDb, tab.sig.NodeID(), ch))
+
+	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
+		// publish succeeds
+		func(_ context.Context, _ string, got []byte) error {
+			var gotAtx types.ActivationTx
+			require.NoError(t, codec.Decode(got, &gotAtx))
+			gotAtx.SetReceived(time.Now().Local())
+			require.NoError(t, gotAtx.Initialize())
+			require.Equal(t, *ch, gotAtx.NIPostChallenge)
+			return nil
+		},
+	)
+
+	// create and publish ATX
+	require.NoError(t, tab.PublishActivationTx(context.Background()))
+
+	// state is cleaned up
+	_, err = nipost.Challenge(tab.localDB, tab.sig.NodeID())
+	require.ErrorIs(t, err, sql.ErrNotFound)
+}
+
 func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testing.T) {
 	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
 	posEpoch := types.EpochID(2)
@@ -715,12 +789,10 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 	require.NoError(t, atxs.Add(tab.cdb, vPosAtx))
 
 	// generate and store initial post in state
-	commitmentATX := types.RandomATXID()
 	require.NoError(t, nipost.AddInitialPost(
 		tab.localDb,
 		tab.sig.NodeID(),
-		&types.Post{Indices: make([]byte, 10)},
-		commitmentATX,
+		nipost.Post{Indices: make([]byte, 10)},
 	))
 
 	// create and publish ATX
@@ -730,9 +802,6 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 	require.NotNil(t, atx)
 
 	// state is cleaned up
-	_, _, err = nipost.InitialPost(tab.localDB, tab.sig.NodeID())
-	require.ErrorIs(t, err, sql.ErrNotFound)
-
 	_, err = nipost.Challenge(tab.localDB, tab.sig.NodeID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
@@ -752,13 +821,14 @@ func TestBuilder_PublishActivationTx_NoPrevATX_PublishFails_InitialPost_preserve
 	require.NoError(t, atxs.Add(tab.cdb, vPosAtx))
 
 	// generate and store initial post in state
-	refPost := &types.Post{Indices: make([]byte, 10)}
-	refCommitmentATX := types.RandomATXID()
+	refPost := nipost.Post{
+		Indices:       make([]byte, 10),
+		CommitmentATX: types.RandomATXID(),
+	}
 	require.NoError(t, nipost.AddInitialPost(
 		tab.localDb,
 		tab.sig.NodeID(),
 		refPost,
-		refCommitmentATX,
 	))
 
 	// create and publish ATX
@@ -798,10 +868,10 @@ func TestBuilder_PublishActivationTx_NoPrevATX_PublishFails_InitialPost_preserve
 	}
 
 	// initial post is preserved
-	post, commitmentATX, err := nipost.InitialPost(tab.localDB, tab.sig.NodeID())
+	post, err := nipost.InitialPost(tab.localDB, tab.sig.NodeID())
 	require.NoError(t, err)
-	require.Equal(t, refPost, post)
-	require.Equal(t, refCommitmentATX, commitmentATX)
+	require.NotNil(t, post)
+	require.Equal(t, refPost, *post)
 
 	// state is cleaned up
 	_, err = nipost.Challenge(tab.localDB, tab.sig.NodeID())
@@ -996,8 +1066,7 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	require.NoError(t, nipost.AddInitialPost(
 		tab.localDb,
 		tab.sig.NodeID(),
-		&types.Post{Indices: make([]byte, 10)},
-		commitmentATX,
+		nipost.Post{Indices: make([]byte, 10)},
 	))
 
 	r.NoError(tab.PublishActivationTx(context.Background()))
@@ -1206,7 +1275,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	}
 
 	// state is cleaned up
-	_, _, err = nipost.InitialPost(tab.localDB, tab.sig.NodeID())
+	_, err = nipost.InitialPost(tab.localDB, tab.sig.NodeID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
 	_, err = nipost.Challenge(tab.localDB, tab.sig.NodeID())
@@ -1218,7 +1287,10 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	tab.mpostClient.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).
 		Return(
 			&types.Post{Indices: make([]byte, 10)},
-			&types.PostInfo{CommitmentATX: types.RandomATXID()},
+			&types.PostInfo{
+				CommitmentATX: types.RandomATXID(),
+				Nonce:         new(types.VRFPostIndex),
+			},
 			nil,
 		)
 	tab.mValidator.EXPECT().
@@ -1253,7 +1325,10 @@ func TestBuilder_InitialPostIsPersisted(t *testing.T) {
 	tab.mpostClient.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).
 		Return(
 			&types.Post{Indices: make([]byte, 10)},
-			&types.PostInfo{CommitmentATX: types.RandomATXID()},
+			&types.PostInfo{
+				CommitmentATX: types.RandomATXID(),
+				Nonce:         new(types.VRFPostIndex),
+			},
 			nil,
 		)
 	tab.mValidator.EXPECT().
@@ -1263,16 +1338,6 @@ func TestBuilder_InitialPostIsPersisted(t *testing.T) {
 	require.NoError(t, tab.buildInitialPost(context.Background()))
 
 	// postClient.Proof() should not be called again
-	require.NoError(t, tab.buildInitialPost(context.Background()))
-
-	// Remove the persisted post file and try again
-	require.NoError(t, nipost.RemoveInitialPost(tab.localDb, tab.signer.NodeID()))
-	tab.mpostClient.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).
-		Return(
-			&types.Post{Indices: make([]byte, 10)},
-			&types.PostInfo{CommitmentATX: types.RandomATXID()},
-			nil,
-		)
 	require.NoError(t, tab.buildInitialPost(context.Background()))
 }
 
@@ -1284,8 +1349,8 @@ func TestWaitPositioningAtx(t *testing.T) {
 
 		targetEpoch types.EpochID
 	}{
-		{"no wait", 100 * time.Millisecond, 100 * time.Millisecond, 2},
-		{"wait", 100 * time.Millisecond, 0, 2},
+		{"no wait", 200 * time.Millisecond, 200 * time.Millisecond, 2},
+		{"wait", 200 * time.Millisecond, 0, 2},
 		{"round started", 0, 0, 3},
 	} {
 		tc := tc
@@ -1297,7 +1362,7 @@ func TestWaitPositioningAtx(t *testing.T) {
 			tab.mclock.EXPECT().CurrentLayer().Return(types.LayerID(0)).AnyTimes()
 			tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(func(lid types.LayerID) time.Time {
 				// layer duration is 10ms to speed up test
-				return genesis.Add(time.Duration(lid) * 10 * time.Millisecond)
+				return genesis.Add(time.Duration(lid) * 20 * time.Millisecond)
 			}).AnyTimes()
 
 			// everything else are stubs that are irrelevant for the test
@@ -1311,17 +1376,15 @@ func TestWaitPositioningAtx(t *testing.T) {
 				func(_ context.Context, _ string, got []byte) error {
 					var gotAtx types.ActivationTx
 					require.NoError(t, codec.Decode(got, &gotAtx))
-					require.Equal(t, gotAtx.TargetEpoch(), tc.targetEpoch)
+					require.Equal(t, tc.targetEpoch, gotAtx.TargetEpoch())
 					return nil
 				})
 
-			commitmentATX := types.RandomATXID()
 			require.NoError(t, nipost.AddInitialPost(
 				tab.localDb,
 				tab.sig.NodeID(),
-				&types.Post{Indices: make([]byte, 10)},
-				commitmentATX),
-			)
+				nipost.Post{Indices: make([]byte, 10)},
+			))
 
 			err := tab.PublishActivationTx(context.Background())
 			require.NoError(t, err)
@@ -1390,114 +1453,4 @@ func TestWaitingToBuildNipostChallengeWithJitter(t *testing.T) {
 		deadline := buildNipostChallengeStartDeadline(time.Now().Add(time.Hour-time.Second*37), time.Hour)
 		require.Less(t, deadline, time.Now())
 	})
-}
-
-func TestBuilder_MovePostToDb(t *testing.T) {
-	tab := newTestBuilder(t)
-
-	refPost := &types.Post{
-		Nonce:   1,
-		Indices: []byte{1, 2, 3},
-		Pow:     1,
-	}
-	require.NoError(t, savePost(tab.nipostBuilder.DataDir(), refPost))
-	require.FileExists(t, filepath.Join(tab.nipostBuilder.DataDir(), postFilename))
-
-	refCommitmentATX := types.RandomATXID()
-	initialization.SaveMetadata(tab.nipostBuilder.DataDir(), &shared.PostMetadata{
-		CommitmentAtxId: refCommitmentATX.Bytes(),
-	})
-	require.NoError(t, tab.movePostToDb())
-
-	post, commitmentATX, err := nipost.InitialPost(tab.localDb, tab.sig.NodeID())
-	require.NoError(t, err)
-	require.Equal(t, refPost, post)
-	require.Equal(t, refCommitmentATX, commitmentATX)
-	require.NoFileExists(t, filepath.Join(tab.nipostBuilder.DataDir(), postFilename))
-
-	require.NoError(t, tab.movePostToDb()) // should not fail if post is already in db
-	post2, commitmentATX2, err := nipost.InitialPost(tab.localDb, tab.sig.NodeID())
-	require.NoError(t, err)
-	require.Equal(t, refPost, post2) // state is unchanged
-	require.Equal(t, refCommitmentATX, commitmentATX2)
-}
-
-func TestBuilder_MoveNipostChallengeToDb(t *testing.T) {
-	tab := newTestBuilder(t)
-
-	ch := &types.NIPostChallenge{
-		PublishEpoch:   4,
-		Sequence:       0,
-		PrevATXID:      types.RandomATXID(),
-		PositioningATX: types.RandomATXID(),
-		CommitmentATX:  nil,
-		InitialPost:    nil,
-	}
-	require.NoError(t, saveNipostChallenge(tab.nipostBuilder.DataDir(), ch))
-	require.FileExists(t, filepath.Join(tab.nipostBuilder.DataDir(), challengeFilename))
-
-	require.NoError(t, tab.moveNipostChallengeToDb())
-
-	challenge, err := nipost.Challenge(tab.localDb, tab.sig.NodeID())
-	require.NoError(t, err)
-	require.NotNil(t, challenge)
-	require.Equal(t, ch, challenge)
-	require.NoFileExists(t, filepath.Join(tab.nipostBuilder.DataDir(), challengeFilename))
-
-	require.NoError(t, tab.moveNipostChallengeToDb()) // should not fail if challenge is already in db
-	challenge2, err := nipost.Challenge(tab.localDb, tab.sig.NodeID())
-	require.NoError(t, err)
-	require.Equal(t, challenge, challenge2) // challenge is unchanged
-}
-
-func TestBuilder_MigrateDiskToLocalDB(t *testing.T) {
-	tab := newTestBuilder(t)
-
-	ch := &types.NIPostChallenge{
-		PublishEpoch:   4,
-		Sequence:       0,
-		PrevATXID:      types.RandomATXID(),
-		PositioningATX: types.RandomATXID(),
-		CommitmentATX:  nil,
-		InitialPost:    nil,
-	}
-	require.NoError(t, saveNipostChallenge(tab.nipostBuilder.DataDir(), ch))
-	require.FileExists(t, filepath.Join(tab.nipostBuilder.DataDir(), challengeFilename))
-
-	refPost := &types.Post{
-		Nonce:   1,
-		Indices: []byte{1, 2, 3},
-		Pow:     1,
-	}
-	require.NoError(t, savePost(tab.nipostBuilder.DataDir(), refPost))
-	require.FileExists(t, filepath.Join(tab.nipostBuilder.DataDir(), postFilename))
-
-	refCommitmentATX := types.RandomATXID()
-	initialization.SaveMetadata(tab.nipostBuilder.DataDir(), &shared.PostMetadata{
-		CommitmentAtxId: refCommitmentATX.Bytes(),
-	})
-
-	require.NoError(t, tab.MigrateDiskToLocalDB())
-
-	post, commitmentATX, err := nipost.InitialPost(tab.localDb, tab.sig.NodeID())
-	require.NoError(t, err)
-	require.Equal(t, refPost, post)
-	require.Equal(t, refCommitmentATX, commitmentATX)
-	require.NoFileExists(t, filepath.Join(tab.nipostBuilder.DataDir(), postFilename))
-
-	challenge, err := nipost.Challenge(tab.localDb, tab.sig.NodeID())
-	require.NoError(t, err)
-	require.NotNil(t, challenge)
-	require.Equal(t, ch, challenge)
-	require.NoFileExists(t, filepath.Join(tab.nipostBuilder.DataDir(), challengeFilename))
-
-	require.NoError(t, tab.MigrateDiskToLocalDB()) // should not fail if challenge and post are already in db
-
-	post2, commitmentATX2, err := nipost.InitialPost(tab.localDb, tab.sig.NodeID())
-	require.NoError(t, err)
-	require.Equal(t, refPost, post2) // state is unchanged
-	require.Equal(t, refCommitmentATX, commitmentATX2)
-	challenge2, err := nipost.Challenge(tab.localDb, tab.sig.NodeID())
-	require.NoError(t, err)
-	require.Equal(t, challenge, challenge2) // challenge is unchanged
 }

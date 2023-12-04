@@ -45,7 +45,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
-	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/hare3/compat"
@@ -132,6 +131,11 @@ func GetCommand() *cobra.Command {
 			if conf.LOGGING.Encoder == config.JSONLogEncoder {
 				log.JSONLog(true)
 			}
+
+			if cmd.NoMainNet && onMainNet(conf) {
+				log.With().Fatal("this is a testnet-only build not intended for mainnet")
+			}
+
 			app := New(
 				WithConfig(conf),
 				// NOTE(dshulyak) this needs to be max level so that child logger can can be current level or below.
@@ -192,7 +196,7 @@ func GetCommand() *cobra.Command {
 			// os.Interrupt for all systems, especially windows, syscall.SIGTERM is mainly for docker.
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer cancel()
-			if err = run(ctx); err != nil {
+			if err := run(ctx); err != nil {
 				app.log.With().Fatal(err.Error())
 			}
 		},
@@ -337,7 +341,6 @@ type App struct {
 	mesh              *mesh.Mesh
 	atxsdata          *atxsdata.Data
 	clock             *timesync.NodeClock
-	hare              *hare.Hare
 	hare3             *hare3.Hare
 	hOracle           *eligibility.Oracle
 	blockGen          *blocks.Generator
@@ -454,27 +457,6 @@ func (app *App) Initialize() error {
 			)
 			return fmt.Errorf("genesis config updated after node initialization")
 		}
-	}
-
-	// tortoise wait zdist layers for hare to timeout for a layer. once hare timeout, tortoise will
-	// vote against all blocks in that layer. so it's important to make sure zdist takes longer than
-	// hare's max time duration to run consensus for a layer
-
-	// maxHareRoundsPerLayer is pre-round + 4 rounds per iteration
-	maxHareRoundsPerLayer := 1 + app.Config.HARE.LimitIterations*hare.RoundsPerIteration
-	maxHareLayerDuration := app.Config.HARE.WakeupDelta + time.Duration(
-		maxHareRoundsPerLayer,
-	)*app.Config.HARE.RoundDuration
-	if app.Config.LayerDuration*time.Duration(app.Config.Tortoise.Zdist) <= maxHareLayerDuration {
-		app.log.With().Error("incompatible params",
-			log.Uint32("tortoise_zdist", app.Config.Tortoise.Zdist),
-			log.Duration("layer_duration", app.Config.LayerDuration),
-			log.Duration("hare_wakeup_delta", app.Config.HARE.WakeupDelta),
-			log.Int("hare_limit_iterations", app.Config.HARE.LimitIterations),
-			log.Duration("hare_round_duration", app.Config.HARE.RoundDuration),
-		)
-
-		return errors.New("incompatible tortoise hare params")
 	}
 
 	// override default config in timesync since timesync is using TimeConfigValues
@@ -688,7 +670,7 @@ func (app *App) initServices(ctx context.Context) error {
 	mlog := app.addLogger(MeshLogger, lg)
 	msh, err := mesh.NewMesh(app.cachedDB, app.atxsdata, app.clock, trtl, executor, app.conState, mlog)
 	if err != nil {
-		return fmt.Errorf("failed to create mesh: %w", err)
+		return fmt.Errorf("create mesh: %w", err)
 	}
 
 	pruner := prune.New(app.db, app.Config.Tortoise.Hdist, app.Config.PruneActivesetsFrom, prune.WithLogger(mlog.Zap()))
@@ -777,7 +759,14 @@ func (app *App) initServices(ctx context.Context) error {
 		bootstrap.WithConfig(bscfg),
 		bootstrap.WithLogger(app.addLogger(BootstrapLogger, lg)),
 	)
-
+	if app.Config.Certificate.CommitteeSize == 0 {
+		app.log.With().Warning("certificate committee size is not set, defaulting to hare committee size",
+			log.Uint16("size", app.Config.HARE3.Committee))
+		app.Config.Certificate.CommitteeSize = int(app.Config.HARE3.Committee)
+	}
+	app.Config.Certificate.CertifyThreshold = app.Config.Certificate.CommitteeSize/2 + 1
+	app.Config.Certificate.LayerBuffer = app.Config.Tortoise.Zdist
+	app.Config.Certificate.NumLayersToKeep = app.Config.Tortoise.Zdist * 2
 	app.certifier = blocks.NewCertifier(
 		app.cachedDB,
 		app.hOracle,
@@ -786,12 +775,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.clock,
 		beaconProtocol,
 		trtl,
-		blocks.WithCertConfig(blocks.CertConfig{
-			CommitteeSize:    app.Config.HARE.N,
-			CertifyThreshold: app.Config.HARE.N/2 + 1,
-			LayerBuffer:      app.Config.Tortoise.Zdist,
-			NumLayersToKeep:  app.Config.Tortoise.Zdist * 2,
-		}),
+		blocks.WithCertConfig(app.Config.Certificate),
 		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg)),
 	)
 	app.certifier.Register(app.edSgn)
@@ -828,7 +812,27 @@ func (app *App) initServices(ctx context.Context) error {
 	beaconProtocol.SetSyncState(newSyncer)
 	app.hOracle.SetSync(newSyncer)
 
-	hareOutputCh := make(chan hare.LayerOutput, app.Config.HARE.LimitConcurrent)
+	if err := app.Config.HARE3.Validate(time.Duration(app.Config.Tortoise.Zdist) * app.Config.LayerDuration); err != nil {
+		return err
+	}
+	logger := app.addLogger(HareLogger, lg).Zap()
+	app.hare3 = hare3.New(
+		app.clock, app.host, app.cachedDB, app.edVerifier, app.hOracle, newSyncer, patrol,
+		hare3.WithLogger(logger),
+		hare3.WithConfig(app.Config.HARE3),
+	)
+	app.hare3.Register(app.edSgn)
+	app.hare3.Start()
+	app.eg.Go(func() error {
+		compat.ReportWeakcoin(
+			ctx,
+			logger,
+			app.hare3.Coins(),
+			tortoiseWeakCoin{db: app.cachedDB, tortoise: trtl},
+		)
+		return nil
+	})
+
 	app.blockGen = blocks.NewGenerator(
 		app.db,
 		app.atxsdata,
@@ -842,55 +846,9 @@ func (app *App) initServices(ctx context.Context) error {
 			OptFilterThreshold: app.Config.OptFilterThreshold,
 			GenBlockInterval:   500 * time.Millisecond,
 		}),
-		blocks.WithHareOutputChan(hareOutputCh),
+		blocks.WithHareOutputChan(app.hare3.Results()),
 		blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg)),
 	)
-
-	hareCfg := app.Config.HARE
-	hareCfg.Hdist = app.Config.Tortoise.Hdist
-	app.hare = hare.New(
-		app.cachedDB,
-		hareCfg,
-		app.host,
-		app.edSgn,
-		app.edVerifier,
-		app.edSgn.NodeID(),
-		hareOutputCh,
-		newSyncer,
-		beaconProtocol,
-		app.hOracle,
-		patrol,
-		app.hOracle,
-		app.clock,
-		tortoiseWeakCoin{db: app.cachedDB, tortoise: trtl},
-		app.addLogger(HareLogger, lg),
-	)
-	if app.Config.HARE3.Enable {
-		if err := app.Config.HARE3.Validate(time.Duration(app.Config.Tortoise.Zdist) * app.Config.LayerDuration); err != nil {
-			return err
-		}
-		logger := app.addLogger(HareLogger, lg).Zap()
-		app.hare3 = hare3.New(
-			app.clock, app.host, app.cachedDB, app.edVerifier, app.hOracle, newSyncer, patrol,
-			hare3.WithLogger(logger),
-			hare3.WithConfig(app.Config.HARE3),
-		)
-		app.hare3.Register(app.edSgn)
-		app.hare3.Start()
-		app.eg.Go(func() error {
-			compat.ReportWeakcoin(
-				ctx,
-				logger,
-				app.hare3.Coins(),
-				tortoiseWeakCoin{db: app.cachedDB, tortoise: trtl},
-			)
-			return nil
-		})
-		app.eg.Go(func() error {
-			compat.ReportResult(ctx, logger, app.hare3.Results(), hareOutputCh)
-			return nil
-		})
-	}
 
 	minerGoodAtxPct := 90
 	if app.Config.MinerGoodAtxsPercent > 0 {
@@ -907,38 +865,40 @@ func (app *App) initServices(ctx context.Context) error {
 		miner.WithLayerPerEpoch(layersPerEpoch),
 		miner.WithMinimalActiveSetWeight(app.Config.Tortoise.MinimalActiveSetWeight),
 		miner.WithHdist(app.Config.Tortoise.Hdist),
-		miner.WithNetworkDelay(app.Config.HARE.WakeupDelta),
+		miner.WithNetworkDelay(app.Config.ATXGradeDelay),
 		miner.WithMinGoodAtxPercent(minerGoodAtxPct),
 		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)),
 	)
 	proposalBuilder.Register(app.edSgn)
 
-	if app.Config.SMESHING.Start {
-		postSetupMgr, err := activation.NewPostSetupManager(
-			app.edSgn.NodeID(),
-			app.Config.POST,
-			app.addLogger(PostLogger, lg).Zap(),
-			app.cachedDB, goldenATXID,
-		)
-		if err != nil {
-			app.log.Panic("failed to create post setup manager: %v", err)
-		}
+	u := url.URL{
+		Scheme: "http",
+		Host:   app.Config.API.PrivateListener,
+	}
+	app.Config.POSTService.NodeAddress = u.String()
+	postSetupMgr, err := activation.NewPostSetupManager(
+		app.edSgn.NodeID(),
+		app.Config.POST,
+		app.addLogger(PostLogger, lg).Zap(),
+		app.cachedDB, goldenATXID,
+	)
+	if err != nil {
+		return fmt.Errorf("create post setup manager: %v", err)
+	}
 
-		app.postSupervisor, err = activation.NewPostSupervisor(
-			app.log.Zap(),
-			app.Config.POSTService,
-			app.Config.POST,
-			app.Config.SMESHING.ProvingOpts,
-			postSetupMgr,
-			newSyncer,
-		)
-		if err != nil {
-			return fmt.Errorf("init post service: %w", err)
-		}
+	app.postSupervisor, err = activation.NewPostSupervisor(
+		app.log.Zap(),
+		app.Config.POSTService,
+		app.Config.POST,
+		app.Config.SMESHING.ProvingOpts,
+		postSetupMgr,
+		newSyncer,
+	)
+	if err != nil {
+		return fmt.Errorf("init post service: %w", err)
 	}
 
 	app.grpcPostService = grpcserver.NewPostService(app.addLogger(PostServiceLogger, lg).Zap())
-
 	nipostBuilder, err := activation.NewNIPostBuilder(
 		poetDb,
 		app.grpcPostService,
@@ -950,26 +910,10 @@ func (app *App) initServices(ctx context.Context) error {
 		app.clock,
 	)
 	if err != nil {
-		app.log.Panic("failed to create nipost builder: %v", err)
-	}
-
-	var coinbaseAddr types.Address
-	if app.Config.SMESHING.Start {
-		coinbaseAddr, err = types.StringToAddress(app.Config.SMESHING.CoinbaseAccount)
-		if err != nil {
-			app.log.Panic(
-				"failed to parse CoinbaseAccount address `%s`: %v",
-				app.Config.SMESHING.CoinbaseAccount,
-				err,
-			)
-		}
-		if coinbaseAddr.IsEmpty() {
-			app.log.Panic("invalid coinbase account")
-		}
+		return fmt.Errorf("create nipost builder: %w", err)
 	}
 
 	builderConfig := activation.Config{
-		CoinbaseAccount:  coinbaseAddr,
 		GoldenATXID:      goldenATXID,
 		LayersPerEpoch:   layersPerEpoch,
 		RegossipInterval: app.Config.RegossipAtxInterval,
@@ -987,19 +931,16 @@ func (app *App) initServices(ctx context.Context) error {
 		app.addLogger("atxBuilder", lg).Zap(),
 		activation.WithContext(ctx),
 		activation.WithPoetConfig(app.Config.POET),
-		activation.WithPoetRetryInterval(app.Config.HARE.WakeupDelta),
+		// TODO(dshulyak) makes no sense. how we ended using it?
+		activation.WithPoetRetryInterval(app.Config.HARE3.PreroundDelay),
 		activation.WithValidator(app.validator),
 	)
-	if err := atxBuilder.MigrateDiskToLocalDB(); err != nil {
-		app.log.Panic("failed to migrate state of atx builder: %v", err)
-	}
 
 	malfeasanceHandler := malfeasance.NewHandler(
 		app.cachedDB,
 		app.addLogger(MalfeasanceLogger, lg),
 		app.host.ID(),
 		app.edSgn.NodeID(),
-		app.hare,
 		app.edVerifier,
 		trtl,
 	)
@@ -1095,14 +1036,11 @@ func (app *App) initServices(ctx context.Context) error {
 	app.host.Register(
 		pubsub.AtxProtocol,
 		pubsub.ChainGossipHandler(atxSyncHandler, atxHandler.HandleGossipAtx),
+		pubsub.WithValidatorConcurrency(app.Config.P2P.GossipAtxValidationThrottle),
 	)
 	app.host.Register(
 		pubsub.TxProtocol,
 		pubsub.ChainGossipHandler(syncHandler, app.txHandler.HandleGossipTransaction),
-	)
-	app.host.Register(
-		pubsub.HareProtocol,
-		pubsub.ChainGossipHandler(syncHandler, app.hare.GetHareMsgHandler()),
 	)
 	app.host.Register(
 		pubsub.BlockCertify,
@@ -1223,31 +1161,34 @@ func (app *App) listenToUpdates(ctx context.Context) {
 
 func (app *App) startServices(ctx context.Context) error {
 	if err := app.fetcher.Start(); err != nil {
-		return fmt.Errorf("failed to start fetcher: %w", err)
+		return fmt.Errorf("start fetcher: %w", err)
 	}
 	app.syncer.Start()
 	app.beaconProtocol.Start(ctx)
 
 	app.blockGen.Start(ctx)
 	app.certifier.Start(ctx)
-	if err := app.hare.Start(ctx); err != nil {
-		return fmt.Errorf("cannot start hare: %w", err)
-	}
 	app.eg.Go(func() error {
 		return app.proposalBuilder.Run(ctx)
 	})
 
-	if app.Config.SMESHING.Start {
+	if app.Config.SMESHING.CoinbaseAccount != "" {
 		coinbaseAddr, err := types.StringToAddress(app.Config.SMESHING.CoinbaseAccount)
 		if err != nil {
-			app.log.Panic(
-				"failed to parse CoinbaseAccount address on start `%s`: %v",
+			return fmt.Errorf(
+				"parse CoinbaseAccount address on start `%s`: %w",
 				app.Config.SMESHING.CoinbaseAccount,
 				err,
 			)
 		}
 		if err := app.atxBuilder.StartSmeshing(coinbaseAddr); err != nil {
-			app.log.Panic("failed to start smeshing: %v", err)
+			return fmt.Errorf("start smeshing: %w", err)
+		}
+	}
+
+	if app.Config.SMESHING.Start {
+		if app.Config.SMESHING.CoinbaseAccount == "" {
+			return fmt.Errorf("smeshing enabled but no coinbase account provided")
 		}
 		if err := app.postSupervisor.Start(app.Config.SMESHING.Opts); err != nil {
 			return fmt.Errorf("start post service: %w", err)
@@ -1329,6 +1270,8 @@ func (app *App) startAPIServices(ctx context.Context) error {
 	logger := app.addLogger(GRPCLogger, app.log)
 	grpczap.SetGrpcLoggerV2(grpclog, logger.Zap())
 	var (
+		// TODO(mafa): instead of checking for uniqueness of services across endpoints
+		// check uniqueness per endpoint and make them singletons
 		unique        = map[grpcserver.Service]struct{}{}
 		public        []grpcserver.ServiceAPI
 		private       []grpcserver.ServiceAPI
@@ -1361,9 +1304,6 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		unique[svc] = struct{}{}
 	}
 	for _, svc := range app.Config.API.TLSServices {
-		if _, exists := unique[svc]; exists {
-			return fmt.Errorf("can't start more than one %s", svc)
-		}
 		gsvc, err := app.initService(ctx, svc)
 		if err != nil {
 			return err
@@ -1394,10 +1334,13 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			return err
 		}
 	}
-	if len(authenticated) > 0 {
+	if len(authenticated) > 0 && app.Config.API.TLSListener != "" {
 		var err error
 		app.grpcTLSServer, err = grpcserver.NewTLS(logger.Zap(), app.Config.API, authenticated)
 		if err != nil {
+			return err
+		}
+		if err := app.grpcTLSServer.Start(); err != nil {
 			return err
 		}
 	}
@@ -1458,9 +1401,6 @@ func (app *App) stopServices(ctx context.Context) {
 		app.postVerifier.Close()
 	}
 
-	if app.hare != nil {
-		app.hare.Close()
-	}
 	if app.hare3 != nil {
 		app.hare3.Stop()
 	}
@@ -1592,8 +1532,12 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	if err := os.MkdirAll(dbPath, os.ModePerm); err != nil {
 		return fmt.Errorf("failed to create %s: %w", dbPath, err)
 	}
+	migrations, err := sql.StateMigrations()
+	if err != nil {
+		return fmt.Errorf("failed to load migrations: %w", err)
+	}
 	sqlDB, err := sql.Open("file:"+filepath.Join(dbPath, dbFile),
-		sql.WithMigrations(sql.StateMigrations),
+		sql.WithMigrations(migrations),
 		sql.WithConnections(app.Config.DatabaseConnections),
 		sql.WithLatencyMetering(app.Config.DatabaseLatencyMetering),
 		sql.WithV5Migration(util.ExtractActiveSet),
@@ -1624,8 +1568,14 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		datastore.WithConfig(app.Config.Cache),
 		datastore.WithConsensusCache(data),
 	)
+	migrations, err = sql.LocalMigrations()
+	if err != nil {
+		return fmt.Errorf("load local migrations: %w", err)
+	}
 	localDB, err := localsql.Open("file:"+filepath.Join(dbPath, localDbFile),
-		sql.WithMigrations(sql.LocalMigrations),
+		sql.WithMigrations(migrations),
+		sql.WithMigration(localsql.New0001Migration(app.Config.SMESHING.Opts.DataDir)),
+		sql.WithMigration(localsql.New0002Migration(app.Config.SMESHING.Opts.DataDir)),
 		sql.WithConnections(app.Config.DatabaseConnections),
 	)
 	if err != nil {
@@ -1750,14 +1700,14 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 		p2p.WithNodeReporter(events.ReportNodeStatusUpdate),
 	)
 	if err != nil {
-		return fmt.Errorf("failed to initialize p2p host: %w", err)
+		return fmt.Errorf("initialize p2p host: %w", err)
 	}
 
 	if err := app.setupDBs(ctx, lg); err != nil {
 		return err
 	}
 	if err := app.initServices(ctx); err != nil {
-		return fmt.Errorf("cannot start services: %w", err)
+		return fmt.Errorf("init services: %w", err)
 	}
 
 	if app.Config.CollectMetrics {
@@ -1776,7 +1726,7 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 	}
 
 	if err := app.startServices(ctx); err != nil {
-		return err
+		return fmt.Errorf("start services: %w", err)
 	}
 
 	// need post verifying service to start first
@@ -1873,4 +1823,8 @@ func (w tortoiseWeakCoin) Set(lid types.LayerID, value bool) error {
 	}
 	w.tortoise.OnWeakCoin(lid, value)
 	return nil
+}
+
+func onMainNet(conf *config.Config) bool {
+	return conf.Genesis.GenesisTime == config.MainnetConfig().Genesis.GenesisTime
 }

@@ -16,9 +16,7 @@ import (
 )
 
 const (
-	challengeFilename = "nipost_challenge.bin"
-	builderFilename   = "nipost_builder_state.bin"
-	postFilename      = "post.bin"
+	builderFilename = "nipost_builder_state.bin"
 )
 
 func write(path string, data []byte) error {
@@ -113,29 +111,6 @@ func save(filename string, src scale.Encodable) error {
 	return nil
 }
 
-func saveNipostChallenge(dir string, ch *types.NIPostChallenge) error {
-	if err := save(filepath.Join(dir, challengeFilename), ch); err != nil {
-		return fmt.Errorf("saving nipost challenge: %w", err)
-	}
-	return nil
-}
-
-func loadNipostChallenge(dir string) (*types.NIPostChallenge, error) {
-	var ch types.NIPostChallenge
-	if err := load(filepath.Join(dir, challengeFilename), &ch); err != nil {
-		return nil, fmt.Errorf("loading nipost challenge: %w", err)
-	}
-	return &ch, nil
-}
-
-func discardNipostChallenge(dir string) error {
-	filename := filepath.Join(dir, challengeFilename)
-	if err := os.Remove(filename); err != nil {
-		return fmt.Errorf("discarding nipost challenge: %w", err)
-	}
-	return nil
-}
-
 func saveBuilderState(dir string, state *types.NIPostBuilderState) error {
 	if err := save(filepath.Join(dir, builderFilename), state); err != nil {
 		return fmt.Errorf("saving builder state: %w", err)
@@ -155,29 +130,6 @@ func discardBuilderState(dir string) error {
 	filename := filepath.Join(dir, builderFilename)
 	if err := os.Remove(filename); err != nil {
 		return fmt.Errorf("discarding nipost builder state: %w", err)
-	}
-	return nil
-}
-
-func savePost(dir string, post *types.Post) error {
-	if err := save(filepath.Join(dir, postFilename), post); err != nil {
-		return fmt.Errorf("saving post: %w", err)
-	}
-	return nil
-}
-
-func loadPost(dir string) (*types.Post, error) {
-	var post types.Post
-	if err := load(filepath.Join(dir, postFilename), &post); err != nil {
-		return nil, fmt.Errorf("loading post: %w", err)
-	}
-	return &post, nil
-}
-
-func discardPost(dir string) error {
-	filename := filepath.Join(dir, postFilename)
-	if err := os.Remove(filename); err != nil {
-		return fmt.Errorf("discarding post: %w", err)
 	}
 	return nil
 }
