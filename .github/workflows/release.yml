@@ -82,7 +82,7 @@ jobs:
           destination: ${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/
 
       - name: Install coreutils
-        if: ${{ matrix.outname_sufix == 'mac-amd64' }} || ${{ matrix.outname_sufix == 'mac-arm64' }}
+        if: ${{ matrix.os == 'macos-latest' }}
         run: brew install coreutils
 
       - name: Calculate the hashsum of the zip file
