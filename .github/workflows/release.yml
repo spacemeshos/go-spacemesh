@@ -29,7 +29,7 @@ jobs:
     steps:
       - shell: bash
         run: echo "OUTNAME=go-spacemesh-${{ github.ref_name }}-${{ matrix.outname_sufix }}" >> $GITHUB_ENV
-      
+
       - name: Install dependencies in windows
         if: ${{ matrix.os == 'windows-latest' }}
         run: choco install make wget zip
@@ -130,6 +130,11 @@ jobs:
           echo "linux-arm64: $(cat sha256-linux-arm64.txt)" >> sha256sum.yaml
           echo "mac-amd64: $(cat sha256-mac-amd64.txt)" >> sha256sum.yaml
           echo "mac-arm64: $(cat sha256-mac-arm64.txt)" >> sha256sum.yaml
+
+      - name: Setup gcloud authentication
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.GCP_SA_KEY }}'
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
