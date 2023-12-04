@@ -74,8 +74,6 @@ jobs:
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
-        with:
-          version: "450.0.0"
 
       - name: Upload zip
         uses: google-github-actions/upload-cloud-storage@v1
@@ -138,8 +136,6 @@ jobs:
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
-        with:
-          version: "450.0.0"
 
       - name: Upload sha256sums
         uses: google-github-actions/upload-cloud-storage@v1
