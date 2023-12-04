@@ -109,10 +109,16 @@ jobs:
     steps:
       - name: Download the artifacts
         uses: actions/download-artifact@v3
+        id: download
+        with:
+          path: artifact
 
       - name: Generate the env variables
+        working-directory: ${{steps.download.outputs.download-path}}
         shell: bash
         run: |
+          ls
+
           echo "OUTNAME_WIN_AMD64=go-spacemesh-${{ github.ref_name }}-win-amd64" >> $GITHUB_ENV
           echo "OUTNAME_LINUX_AMD64=go-spacemesh-${{ github.ref_name }}-linux-amd64" >> $GITHUB_ENV
           echo "OUTNAME_LINUX_ARM64=go-spacemesh-${{ github.ref_name }}-linux-arm64" >> $GITHUB_ENV
