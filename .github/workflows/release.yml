@@ -113,8 +113,6 @@ jobs:
       - name: Generate the env variables
         shell: bash
         run: |
-          find . -type f -name "*.txt"
-
           echo "OUTNAME_WIN_AMD64=go-spacemesh-${{ github.ref_name }}-win-amd64" >> $GITHUB_ENV
           echo "OUTNAME_LINUX_AMD64=go-spacemesh-${{ github.ref_name }}-linux-amd64" >> $GITHUB_ENV
           echo "OUTNAME_LINUX_ARM64=go-spacemesh-${{ github.ref_name }}-linux-arm64" >> $GITHUB_ENV
