@@ -114,6 +114,9 @@ jobs:
       - name: Add OpenCL support - Ubuntu
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
+      - name: Install coreutils
+        if: ${{ matrix.os == 'macos-latest' }} || ${{ matrix.os == 'macos-13-xlarge' }}
+        run: brew install coreutils
       - name: disable Windows Defender - Windows
         if: ${{ matrix.os == 'windows-latest' }}
         run: |
@@ -182,6 +185,9 @@ jobs:
       - name: Add OpenCL support - Windows
         if: ${{ matrix.os == 'windows-latest' }}
         run: choco install opencl-intel-cpu-runtime
+      - name: Install coreutils
+        if: ${{ matrix.os == 'macos-latest' }} || ${{ matrix.os == 'macos-13-xlarge' }}
+        run: brew install coreutils
       - name: setup env
         run: make install
       - name: Clear test cache
