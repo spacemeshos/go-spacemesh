@@ -67,13 +67,15 @@ jobs:
           rm -f $OUTNAME/post.h
           zip -r $OUTNAME.zip $OUTNAME
 
-      - name: 'Setup GCP Auth'
-        uses: 'google-github-actions/auth@v2'
+      - name: Setup gcloud authentication
+        uses: google-github-actions/auth@v2
         with:
           credentials_json: '${{ secrets.GCP_SA_KEY }}'
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
+        with:
+          version: "450.0.0"
 
       - name: Upload zip
         uses: google-github-actions/upload-cloud-storage@v1
@@ -107,9 +109,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     needs: build-and-upload
-    
     steps:
-
       - name: Download the artifacts
         uses: actions/download-artifact@v3
 
@@ -138,6 +138,8 @@ jobs:
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
+        with:
+          version: "450.0.0"
 
       - name: Upload sha256sums
         uses: google-github-actions/upload-cloud-storage@v1
