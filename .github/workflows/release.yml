@@ -109,15 +109,11 @@ jobs:
     steps:
       - name: Download the artifacts
         uses: actions/download-artifact@v3
-        id: download
-        with:
-          path: artifact
 
       - name: Generate the env variables
-        working-directory: ${{steps.download.outputs.download-path}}
         shell: bash
         run: |
-          ls
+          find . -type f -name "*.txt"
 
           echo "OUTNAME_WIN_AMD64=go-spacemesh-${{ github.ref_name }}-win-amd64" >> $GITHUB_ENV
           echo "OUTNAME_LINUX_AMD64=go-spacemesh-${{ github.ref_name }}-linux-amd64" >> $GITHUB_ENV
@@ -125,17 +121,17 @@ jobs:
           echo "OUTNAME_MAC_AMD64=go-spacemesh-${{ github.ref_name }}-mac-amd64" >> $GITHUB_ENV
           echo "OUTNAME_MAC_ARM64=go-spacemesh-${{ github.ref_name }}-mac-arm64" >> $GITHUB_ENV
 
-          echo "SHA256_WIN_AMD64=$(cat sha256-win-amd64.txt)" >> $GITHUB_ENV
-          echo "SHA256_LINUX_AMD64=$(cat sha256-linux-amd64.txt)" >> $GITHUB_ENV
-          echo "SHA256_LINUX_ARM64=$(cat sha256-linux-arm64.txt)" >> $GITHUB_ENV
-          echo "SHA256_MAC_AMD64=$(cat sha256-mac-amd64.txt)" >> $GITHUB_ENV
-          echo "SHA256_MAC_ARM64=$(cat sha256-mac-arm64.txt)" >> $GITHUB_ENV
+          echo "SHA256_WIN_AMD64=$(cat sha256-win-amd64/sha256-win-amd64.txt)" >> $GITHUB_ENV
+          echo "SHA256_LINUX_AMD64=$(cat sha256-linux-amd64/sha256-linux-amd64.txt)" >> $GITHUB_ENV
+          echo "SHA256_LINUX_ARM64=$(cat sha256-linux-arm64/sha256-linux-arm64.txt)" >> $GITHUB_ENV
+          echo "SHA256_MAC_AMD64=$(cat sha256-mac-amd64/sha256-mac-amd64.txt)" >> $GITHUB_ENV
+          echo "SHA256_MAC_ARM64=$(cat sha256-mac-arm64/sha256-mac-arm64.txt)" >> $GITHUB_ENV
 
-          echo "win-amd64: $(cat sha256-win-amd64.txt)" >> sha256sum.yaml
-          echo "linux-amd64: $(cat sha256-linux-amd64.txt)" >> sha256sum.yaml
-          echo "linux-arm64: $(cat sha256-linux-arm64.txt)" >> sha256sum.yaml
-          echo "mac-amd64: $(cat sha256-mac-amd64.txt)" >> sha256sum.yaml
-          echo "mac-arm64: $(cat sha256-mac-arm64.txt)" >> sha256sum.yaml
+          echo "win-amd64: $(cat sha256-win-amd64/sha256-win-amd64.txt)" >> sha256sum.yaml
+          echo "linux-amd64: $(cat sha256-linux-amd64/sha256-linux-amd64.txt)" >> sha256sum.yaml
+          echo "linux-arm64: $(cat sha256-linux-arm64/sha256-linux-arm64.txt)" >> sha256sum.yaml
+          echo "mac-amd64: $(cat sha256-mac-amd64/sha256-mac-amd64.txt)" >> sha256sum.yaml
+          echo "mac-arm64: $(cat sha256-mac-arm64/sha256-mac-arm64.txt)" >> sha256sum.yaml
 
       - name: Setup gcloud authentication
         uses: google-github-actions/auth@v2
