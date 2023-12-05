@@ -18,6 +18,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/network"
+	ma "github.com/multiformats/go-multiaddr"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/merkle-tree"
 	"github.com/spacemeshos/poet/shared"
@@ -2394,10 +2396,10 @@ func TestJsonApi(t *testing.T) {
 
 func TestDebugService(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	identity := NewMocknetworkIdentity(ctrl)
+	netInfo := NewMocknetworkInfo(ctrl)
 	mOracle := NewMockoracle(ctrl)
 	db := sql.InMemory()
-	svc := NewDebugService(db, conStateAPI, identity, mOracle)
+	svc := NewDebugService(db, conStateAPI, netInfo, mOracle)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
@@ -2448,13 +2450,33 @@ func TestDebugService(t *testing.T) {
 
 	t.Run("networkID", func(t *testing.T) {
 		id := p2p.Peer("test")
-		identity.EXPECT().ID().Return(id)
+		netInfo.EXPECT().ID().Return(id)
+		netInfo.EXPECT().ListenAddresses().Return([]ma.Multiaddr{
+			mustParseMultiaddr("/ip4/0.0.0.0/tcp/5000"),
+			mustParseMultiaddr("/ip4/0.0.0.0/udp/5001/quic-v1"),
+		})
+		netInfo.EXPECT().KnownAddresses().Return([]ma.Multiaddr{
+			mustParseMultiaddr("/ip4/10.36.0.221/tcp/5000"),
+			mustParseMultiaddr("/ip4/10.36.0.221/udp/5001/quic-v1"),
+		})
+		netInfo.EXPECT().NATDeviceType().Return(network.NATDeviceTypeCone, network.NATDeviceTypeSymmetric)
+		netInfo.EXPECT().Reachability().Return(network.ReachabilityPrivate)
+		netInfo.EXPECT().DHTServerEnabled().Return(true)
 
 		response, err := c.NetworkInfo(context.Background(), &emptypb.Empty{})
 		require.NoError(t, err)
 		require.NotNil(t, response)
 		require.Equal(t, id.String(), response.Id)
+		require.Equal(t, []string{"/ip4/0.0.0.0/tcp/5000", "/ip4/0.0.0.0/udp/5001/quic-v1"},
+			response.ListenAddresses)
+		require.Equal(t, []string{"/ip4/10.36.0.221/tcp/5000", "/ip4/10.36.0.221/udp/5001/quic-v1"},
+			response.KnownAddresses)
+		require.Equal(t, pb.NetworkInfoResponse_Cone, response.NatTypeUdp)
+		require.Equal(t, pb.NetworkInfoResponse_Symmetric, response.NatTypeTcp)
+		require.Equal(t, pb.NetworkInfoResponse_Private, response.Reachability)
+		require.True(t, response.DhtServerEnabled)
 	})
+
 	t.Run("ActiveSet", func(t *testing.T) {
 		epoch := types.EpochID(3)
 		activeSet := types.RandomActiveSet(11)
@@ -2775,4 +2797,12 @@ func TestMeshService_EpochStream(t *testing.T) {
 		got = append(got, types.ATXID(types.BytesToHash(resp.GetId().GetId())))
 	}
 	require.ElementsMatch(t, expected, got)
+}
+
+func mustParseMultiaddr(s string) ma.Multiaddr {
+	maddr, err := ma.NewMultiaddr(s)
+	if err != nil {
+		panic("can't parse multiaddr: " + err.Error())
+	}
+	return maddr
 }
