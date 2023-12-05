@@ -45,15 +45,18 @@ func TestPrologue(t *testing.T) {
 			cfg3.Listen = tc.listen
 			cfg3.EnableQUICTransport = tc.enableQUIC
 
-			h1, err := New(context.Background(), logtest.New(t), cfg1, []byte("red"))
+			nc1 := []byte("red")
+			h1, err := New(context.Background(), logtest.New(t), cfg1, nc1, nc1)
 			require.NoError(t, err)
 			t.Cleanup(func() { h1.Stop() })
 
-			h2, err := New(context.Background(), logtest.New(t), cfg2, []byte("blue"))
+			nc2 := []byte("blue")
+			h2, err := New(context.Background(), logtest.New(t), cfg2, nc2, nc2)
 			require.NoError(t, err)
 			t.Cleanup(func() { h2.Stop() })
 
-			h3, err := New(context.Background(), logtest.New(t), cfg3, []byte("red"))
+			nc3 := []byte("red")
+			h3, err := New(context.Background(), logtest.New(t), cfg3, nc3, nc3)
 			require.NoError(t, err)
 			t.Cleanup(func() { h3.Stop() })
 

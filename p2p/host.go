@@ -178,6 +178,7 @@ func New(
 	logger log.Log,
 	cfg Config,
 	prologue []byte,
+	quicNetCookie handshake.NetworkCookie,
 	opts ...Opt,
 ) (*Host, error) {
 	if err := cfg.Validate(); err != nil {
@@ -279,8 +280,7 @@ func New(
 					if err != nil {
 						return nil, err
 					}
-					// QQQQQ: no prologue in case of mainnet (perhaps)
-					return handshake.MaybeWrapTransport(tr, prologue,
+					return handshake.MaybeWrapTransport(tr, quicNetCookie,
 						handshake.WithLog(logger)), nil
 				}),
 		)
