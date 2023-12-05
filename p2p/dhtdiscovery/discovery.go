@@ -22,6 +22,8 @@ const (
 	discoveryNS       = "spacemesh-disc"
 	discoveryTag      = "spacemesh-disc"
 	discoveryTagValue = 1
+	protocolPrefix          = "/spacekad"
+	ProtocolID              = protocolPrefix + "/kad/1.0.0"
 )
 
 type Opt func(*Discovery)
