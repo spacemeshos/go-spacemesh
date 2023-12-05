@@ -116,6 +116,8 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.P2P.MinPeers, "actively search for peers until you get this much")
 	cmd.PersistentFlags().StringSliceVar(&cfg.P2P.Bootnodes, "bootnodes",
 		cfg.P2P.Bootnodes, "entrypoints into the network")
+	cmd.PersistentFlags().StringSliceVar(&cfg.P2P.PingPeers, "ping-peers", cfg.P2P.Bootnodes, "peers to ping")
+	cmd.PersistentFlags().StringSliceVar(&cfg.P2P.Relays, "relays", cfg.P2P.Bootnodes, "static relay list")
 	cmd.PersistentFlags().StringVar(&cfg.P2P.AdvertiseAddress, "advertise-address",
 		cfg.P2P.AdvertiseAddress, "libp2p address with identity (example: /dns4/bootnode.spacemesh.io/tcp/5003)")
 	cmd.PersistentFlags().StringSliceVar(&cfg.P2P.AdvertiseAddresses, "advertise-addresses",
@@ -124,6 +126,14 @@ func AddCommands(cmd *cobra.Command) {
 		"gossipsub and discovery will be running in a mode suitable for bootnode")
 	cmd.PersistentFlags().BoolVar(&cfg.P2P.PrivateNetwork, "p2p-private-network", cfg.P2P.PrivateNetwork,
 		"discovery will work in private mode. mostly useful for testing, don't set in public networks")
+	cmd.PersistentFlags().BoolVar(&cfg.P2P.ForceDHTServer, "force-dht-server", cfg.P2P.ForceDHTServer,
+		"force DHT server mode")
+	cmd.PersistentFlags().BoolVar(&cfg.P2P.EnableTCPTransport, "enable-tcp-transport", cfg.P2P.EnableTCPTransport,
+		"enable TCP transport")
+	cmd.PersistentFlags().BoolVar(&cfg.P2P.EnableQUICTransport, "enable-quic-transport", cfg.P2P.EnableQUICTransport,
+		"enable QUIC transport")
+	cmd.PersistentFlags().BoolVar(&cfg.P2P.EnableRoutingDiscovery, "enable-routing-discovery", cfg.P2P.EnableQUICTransport,
+		"enable routing discovery")
 
 	/** ======================== TIME Flags ========================== **/
 
