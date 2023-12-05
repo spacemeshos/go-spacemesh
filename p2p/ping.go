@@ -2,11 +2,13 @@ package p2p
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/routing"
 	"github.com/libp2p/go-libp2p/p2p/protocol/ping"
 	ma "github.com/multiformats/go-multiaddr"
 	"golang.org/x/sync/errgroup"
@@ -28,17 +30,19 @@ type Ping struct {
 	logger log.Log
 	h      host.Host
 	peers  []peer.ID
+	pr     routing.PeerRouting
 	stats  map[peer.ID]*pingStat
 	ctx    context.Context
 	cancel context.CancelFunc
 	eg     errgroup.Group
 }
 
-func NewPing(logger log.Log, h host.Host, peers []peer.ID) *Ping {
+func NewPing(logger log.Log, h host.Host, peers []peer.ID, pr routing.PeerRouting) *Ping {
 	p := &Ping{
 		logger: logger,
 		h:      h,
 		peers:  peers,
+		pr:     pr,
 		stats:  make(map[peer.ID]*pingStat),
 	}
 	return p
@@ -49,62 +53,100 @@ func (p *Ping) Start() {
 		return
 	}
 	p.ctx, p.cancel = context.WithCancel(context.Background())
-	p.logger.With().Info("QQQQQ: start ping (common)", log.Any("peers", p.peers))
 	for _, peer := range p.peers {
 		p.startForPeer(peer)
 	}
 }
 
-func (p *Ping) startForPeer(peer peer.ID) {
-	p.logger.With().Info("QQQQQ: start ping", log.Stringer("peer", peer))
-	ch := ping.Ping(p.ctx, p.h, peer)
+func (p *Ping) doPing(ctx context.Context, peerID peer.ID) (<-chan ping.Result, error) {
+	_, err := p.pr.FindPeer(ctx, peerID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find peer %s: %w", peerID, err)
+	}
+
+	return ping.Ping(ctx, p.h, peerID), nil
+}
+
+func (p *Ping) startForPeer(peerID peer.ID) {
+	p.h.ConnManager().Protect(peerID, "sm-ping")
+
 	p.eg.Go(func() error {
-		for r := range ch {
-			var addrs []ma.Multiaddr
-			for _, c := range p.h.Network().ConnsToPeer(peer) {
-				addrs = append(addrs, c.RemoteMultiaddr())
+		var ctx context.Context
+		var cancel context.CancelFunc
+		defer func() {
+			if cancel != nil {
+				cancel()
 			}
-			p.record(peer, r.Error == nil)
-			if r.Error != nil {
-				p.logger.With().Error("PING failed",
-					log.Stringer("peer", peer),
-					log.Any("addrs", addrs),
-					log.Err(r.Error))
-			} else {
-				p.logger.With().Info("PING succeeded",
-					log.Stringer("peer", peer),
-					log.Any("addrs", addrs),
-					log.Duration("rtt", r.RTT))
+		}()
+	OUTER:
+		for {
+			if cancel != nil {
+				cancel()
 			}
-			select {
-			case <-p.ctx.Done():
-				return p.ctx.Err()
-			case <-time.After(pingInterval):
+			ctx, cancel = context.WithCancel(p.ctx)
+			ch, err := p.doPing(ctx, peerID)
+			if err != nil {
+				cancel()
+				p.logger.With().Error("pre-PING connect failed", log.Err(err))
+				select {
+				case <-p.ctx.Done():
+					return p.ctx.Err()
+				case <-time.After(pingInterval):
+					continue
+				}
 			}
+
+			for r := range ch {
+				var addrs []ma.Multiaddr
+				for _, c := range p.h.Network().ConnsToPeer(peerID) {
+					addrs = append(addrs, c.RemoteMultiaddr())
+				}
+				p.record(peerID, r.Error == nil)
+				if r.Error != nil {
+					p.logger.With().Error("PING failed",
+						log.Stringer("peer", peerID),
+						log.Any("addrs", addrs),
+						log.Err(r.Error))
+					continue OUTER
+				} else {
+					p.logger.With().Info("PING succeeded",
+						log.Stringer("peer", peerID),
+						log.Any("addrs", addrs),
+						log.Duration("rtt", r.RTT))
+				}
+				select {
+				case <-p.ctx.Done():
+					cancel()
+					return p.ctx.Err()
+				case <-time.After(pingInterval):
+				}
+			}
+
+			cancel()
+			return nil
 		}
-		return nil
 	})
 }
 
-func (p *Ping) record(peer peer.ID, success bool) {
+func (p *Ping) record(peerID peer.ID, success bool) {
 	p.Lock()
 	defer p.Unlock()
-	st := p.stats[peer]
+	st := p.stats[peerID]
 	if st == nil {
 		st = &pingStat{}
-		p.stats[peer] = st
+		p.stats[peerID] = st
 	}
 	if success {
-		p.stats[peer].numSuccess++
+		p.stats[peerID].numSuccess++
 	} else {
-		p.stats[peer].numFail++
+		p.stats[peerID].numFail++
 	}
 }
 
-func (p *Ping) Stats(peer peer.ID) (numSuccess, numFail int) {
+func (p *Ping) Stats(peerID peer.ID) (numSuccess, numFail int) {
 	p.Lock()
 	defer p.Unlock()
-	st := p.stats[peer]
+	st := p.stats[peerID]
 	return st.numSuccess, st.numFail
 }
 

@@ -68,6 +68,12 @@ func WithBootnodes(bootnodes map[peer.ID]struct{}) Opt {
 	}
 }
 
+func WithRelayCandidateChannel(relayCh chan<- peer.AddrInfo) Opt {
+	return func(fh *Host) {
+		fh.relayCh = relayCh
+	}
+}
+
 // Host is a conveniency wrapper for all p2p related functionality required to run
 // a full spacemesh node.
 type Host struct {
@@ -90,6 +96,7 @@ type Host struct {
 
 	discovery        *discovery.Discovery
 	direct, bootnode map[peer.ID]struct{}
+	relayCh          chan<- peer.AddrInfo
 
 	natTypeSub event.Subscription
 	natType    struct {
@@ -166,18 +173,11 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 			dopts = append(dopts, discovery.WithBackup(backup))
 		}
 	}
-
-	var peers []peer.ID
-	for _, p := range cfg.PingPeers {
-		peerID, err := peer.Decode(p)
-		if err != nil {
-			fh.logger.With().Warning("ignoring invalid ping peer", log.Err(err))
-			continue
-		}
-		peers = append(peers, peerID)
+	if fh.relayCh != nil {
+		dopts = append(dopts, discovery.WithRelayCandidateChannel(fh.relayCh))
 	}
-	if len(peers) != 0 {
-		fh.ping = NewPing(fh.logger, fh, peers)
+	if fh.cfg.EnableRoutingDiscovery {
+		dopts = append(dopts, discovery.EnableRoutingDiscovery())
 	}
 
 	dhtdisc, err := discovery.New(fh, dopts...)
@@ -295,6 +295,35 @@ func (fh *Host) DHTServerEnabled() bool {
 	return slices.Contains(fh.Mux().Protocols(), discovery.ProtocolID)
 }
 
+// NeedPeerDiscovery returns true if it makes sense to do additional
+// discovery of non-DHT (NATed) peers.
+func (fh *Host) NeedPeerDiscovery() bool {
+	if len(fh.Network().Peers()) >= fh.cfg.HighPeers {
+		// Enough peers discovered
+		return false
+	}
+	if fh.Reachability() == network.ReachabilityPublic {
+		// This is public-reachable node which can reach nodes
+		// behind Cone NAT
+		return true
+	}
+
+	// Check if we have Cone NAT for either TCP or UDP. If so,
+	// hole punching should work for other NATed nodes
+	udpNATType, tcpNATType := fh.NATDeviceType()
+	if fh.cfg.EnableQUICTransport && udpNATType == network.NATDeviceTypeCone {
+		return true
+	}
+	if fh.cfg.EnableTCPTransport && tcpNATType == network.NATDeviceTypeCone {
+		return true
+	}
+
+	// Symmetric / unknown NAT, hole punching will not work so
+	// we're not looking for NATed peers. Will only connect to the
+	// nodes with DHT Server mode
+	return false
+}
+
 // PeerCount returns number of connected peers.
 func (fh *Host) PeerCount() uint64 {
 	return uint64(len(fh.Host.Network().Peers()))
@@ -306,7 +335,7 @@ func (fh *Host) PeerProtocols(p Peer) ([]protocol.ID, error) {
 }
 
 // Ping returns Ping structure for this Host, if any PingPeers are
-// specified in the config. Otherwise, it returns nil
+// specified in the config. Otherwise, it returns nil.
 func (fh *Host) Ping() *Ping {
 	return fh.ping
 }
