@@ -16,7 +16,6 @@ func TestPing(t *testing.T) {
 		desc       string
 		listen     string
 		enableQUIC bool
-		errStr     string
 	}
 
 	testcases := []testcase{

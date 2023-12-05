@@ -4,12 +4,26 @@ import (
 	"testing"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
+
+type discHost struct {
+	host.Host
+	needPeerDiscovery bool
+}
+
+var _ DiscoveryHost = &discHost{}
+
+func makeDiscHost(h host.Host) *discHost {
+	return &discHost{Host: h}
+}
+
+func (h *discHost) NeedPeerDiscovery() bool { return h.needPeerDiscovery }
 
 func TestSanity(t *testing.T) {
 	mock, err := mocknet.FullMeshLinked(4)
@@ -20,7 +34,7 @@ func TestSanity(t *testing.T) {
 			disc.Stop()
 		}
 	})
-	boot := mock.Hosts()[0]
+	boot := makeDiscHost(mock.Hosts()[0])
 	logger := logtest.New(t).Zap()
 	bootdisc, err := New(boot,
 		WithPeriod(100*time.Microsecond),
@@ -33,10 +47,11 @@ func TestSanity(t *testing.T) {
 	discs[0] = bootdisc
 	require.NoError(t, err)
 	for i, h := range mock.Hosts()[1:] {
-		disc, err := New(h,
+		disc, err := New(makeDiscHost(h),
 			Private(),
 			WithLogger(logger),
 			WithBootnodes([]peer.AddrInfo{{ID: boot.ID(), Addrs: boot.Addrs()}}),
+			EnableRoutingDiscovery(),
 		)
 		require.NoError(t, err)
 		disc.Start()

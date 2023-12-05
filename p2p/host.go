@@ -15,6 +15,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/pnet"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/core/transport"
+	"github.com/libp2p/go-libp2p/p2p/host/autorelay"
 	"github.com/libp2p/go-libp2p/p2p/host/peerstore/pstoremem"
 	rcmgr "github.com/libp2p/go-libp2p/p2p/host/resource-manager"
 	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
@@ -32,6 +33,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
 	p2pmetrics "github.com/spacemeshos/go-spacemesh/p2p/metrics"
+)
+
+const (
+	relayBacklog = 16
 )
 
 // DefaultConfig config.
@@ -127,6 +132,7 @@ type Config struct {
 	Relays                      []string    `mapstructure:"relays"`
 	EnableTCPTransport          bool        `mapstructure:"enable-tcp-transport"`
 	EnableQUICTransport         bool        `mapstructure:"enable-quic-transport"`
+	EnableRoutingDiscovery      bool        `mapstructure:"enable-routing-discovery"`
 }
 
 type RelayServer struct {
@@ -305,9 +311,7 @@ func New(
 		)
 	}
 	if cfg.EnableHolepunching {
-		lopts = append(lopts,
-			libp2p.EnableHolePunching(),
-			libp2p.EnableAutoRelayWithStaticRelays(bootnodes))
+		lopts = append(lopts, libp2p.EnableHolePunching())
 	}
 	if cfg.RelayServer.Enable {
 		resources := relay.DefaultResources()
@@ -324,6 +328,10 @@ func New(
 			return nil, err
 		}
 		lopts = append(lopts, libp2p.EnableAutoRelayWithStaticRelays(relays))
+	} else {
+		peerSrc, relayCh := relayPeerSource(logger, append(direct, bootnodes...))
+		lopts = append(lopts, libp2p.EnableAutoRelayWithPeerSource(peerSrc))
+		opts = append(opts, WithRelayCandidateChannel(relayCh))
 	}
 	if cfg.ForceReachability == PublicReachability {
 		lopts = append(lopts, libp2p.ForceReachabilityPublic())
@@ -413,4 +421,41 @@ func parseIntoAddr(nodes []string) ([]peer.AddrInfo, error) {
 		addrs = append(addrs, *addr)
 	}
 	return addrs, nil
+}
+
+func relayPeerSource(logger log.Logger, initial []peer.AddrInfo) (autorelay.PeerSource, chan<- peer.AddrInfo) {
+	relayCandidateCh := make(chan peer.AddrInfo, relayBacklog)
+	return func(ctx context.Context, num int) <-chan peer.AddrInfo {
+		r := make(chan peer.AddrInfo)
+		go func() {
+			defer close(r)
+			for _, addrInfo := range initial {
+				select {
+				case r <- addrInfo:
+					logger.With().Debug("using initial relay candidate",
+						log.Stringer("addrInfo", addrInfo))
+				case <-ctx.Done():
+					return
+				}
+			}
+			for ; num != 0; num-- {
+				select {
+				case addrInfo, ok := <-relayCandidateCh:
+					if !ok {
+						return
+					}
+					select {
+					case r <- addrInfo:
+						logger.With().Debug("discovered relay candidate",
+							log.Stringer("addrInfo", addrInfo))
+					case <-ctx.Done():
+						return
+					}
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
+		return r
+	}, relayCandidateCh
 }

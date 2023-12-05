@@ -17,7 +17,7 @@ func TestPrologue(t *testing.T) {
 		enableQUIC bool
 		errStr     string
 	}
-	var testcases = []testcase{
+	testcases := []testcase{
 		{
 			desc:   "tcp",
 			listen: "/ip4/127.0.0.1/tcp/0",
