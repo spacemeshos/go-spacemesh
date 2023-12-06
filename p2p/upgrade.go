@@ -309,18 +309,20 @@ func (fh *Host) NeedPeerDiscovery() bool {
 	}
 
 	// Check if we have Cone NAT for either TCP or UDP. If so,
-	// hole punching should work for other NATed nodes
+	// hole punching should work for other NATed nodes. Also, in
+	// case of an unknown NAT type, assume there's chance at hole
+	// punching
 	udpNATType, tcpNATType := fh.NATDeviceType()
-	if fh.cfg.EnableQUICTransport && udpNATType == network.NATDeviceTypeCone {
+	if fh.cfg.EnableQUICTransport && udpNATType != network.NATDeviceTypeSymmetric {
 		return true
 	}
-	if fh.cfg.EnableTCPTransport && tcpNATType == network.NATDeviceTypeCone {
+	if fh.cfg.EnableTCPTransport && tcpNATType != network.NATDeviceTypeSymmetric {
 		return true
 	}
 
-	// Symmetric / unknown NAT, hole punching will not work so
-	// we're not looking for NATed peers. Will only connect to the
-	// nodes with DHT Server mode
+	// Symmetric NAT for both TCP and UDP, hole punching will not
+	// work so we're not looking for NATed peers. Will only
+	// connect to the nodes with DHT Server mode
 	return false
 }
 
