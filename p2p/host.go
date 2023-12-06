@@ -35,10 +35,6 @@ import (
 	p2pmetrics "github.com/spacemeshos/go-spacemesh/p2p/metrics"
 )
 
-const (
-	relayBacklog = 16
-)
-
 // DefaultConfig config.
 func DefaultConfig() Config {
 	return Config{
@@ -133,6 +129,8 @@ type Config struct {
 	EnableTCPTransport          bool        `mapstructure:"enable-tcp-transport"`
 	EnableQUICTransport         bool        `mapstructure:"enable-quic-transport"`
 	EnableRoutingDiscovery      bool        `mapstructure:"enable-routing-discovery"`
+	RoutingDiscoveryNoAdvertise bool        `mapstructure:"routing-discovery-no-advertise"`
+	// TBD: adv peer fraction
 }
 
 type RelayServer struct {
@@ -329,7 +327,7 @@ func New(
 		}
 		lopts = append(lopts, libp2p.EnableAutoRelayWithStaticRelays(relays))
 	} else {
-		peerSrc, relayCh := relayPeerSource(logger, append(direct, bootnodes...))
+		peerSrc, relayCh := relayPeerSource(logger)
 		lopts = append(lopts, libp2p.EnableAutoRelayWithPeerSource(peerSrc))
 		opts = append(opts, WithRelayCandidateChannel(relayCh))
 	}
@@ -423,21 +421,12 @@ func parseIntoAddr(nodes []string) ([]peer.AddrInfo, error) {
 	return addrs, nil
 }
 
-func relayPeerSource(logger log.Logger, initial []peer.AddrInfo) (autorelay.PeerSource, chan<- peer.AddrInfo) {
-	relayCandidateCh := make(chan peer.AddrInfo, relayBacklog)
+func relayPeerSource(logger log.Logger) (autorelay.PeerSource, chan<- peer.AddrInfo) {
+	relayCandidateCh := make(chan peer.AddrInfo)
 	return func(ctx context.Context, num int) <-chan peer.AddrInfo {
 		r := make(chan peer.AddrInfo)
 		go func() {
 			defer close(r)
-			for _, addrInfo := range initial {
-				select {
-				case r <- addrInfo:
-					logger.With().Debug("using initial relay candidate",
-						log.Stringer("addrInfo", addrInfo))
-				case <-ctx.Done():
-					return
-				}
-			}
 			for ; num != 0; num-- {
 				select {
 				case addrInfo, ok := <-relayCandidateCh:

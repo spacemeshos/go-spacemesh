@@ -177,7 +177,7 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 		dopts = append(dopts, discovery.WithRelayCandidateChannel(fh.relayCh))
 	}
 	if fh.cfg.EnableRoutingDiscovery {
-		dopts = append(dopts, discovery.EnableRoutingDiscovery())
+		dopts = append(dopts, discovery.EnableRoutingDiscovery(!fh.cfg.RoutingDiscoveryNoAdvertise))
 	}
 
 	dhtdisc, err := discovery.New(fh, dopts...)
@@ -206,7 +206,7 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 		peers = append(peers, peerID)
 	}
 	if len(peers) != 0 {
-		fh.ping = NewPing(fh.logger, fh, peers, fh.discovery.DHT())
+		fh.ping = NewPing(fh.logger, fh, peers, fh.discovery)
 	}
 
 	fh.natTypeSub, err = fh.EventBus().Subscribe(new(event.EvtNATDeviceTypeChanged),
@@ -298,13 +298,15 @@ func (fh *Host) DHTServerEnabled() bool {
 // NeedPeerDiscovery returns true if it makes sense to do additional
 // discovery of non-DHT (NATed) peers.
 func (fh *Host) NeedPeerDiscovery() bool {
-	if len(fh.Network().Peers()) >= fh.cfg.HighPeers {
-		// Enough peers discovered
+	// Once we get LowPeers, the discovery mechanism is no longer
+	// needed
+	if len(fh.Network().Peers()) >= fh.cfg.LowPeers {
 		return false
 	}
+
+	// Check if this is a public-reachable node which can reach
+	// nodes behind Cone NAT
 	if fh.Reachability() == network.ReachabilityPublic {
-		// This is public-reachable node which can reach nodes
-		// behind Cone NAT
 		return true
 	}
 
@@ -324,6 +326,12 @@ func (fh *Host) NeedPeerDiscovery() bool {
 	// work so we're not looking for NATed peers. Will only
 	// connect to the nodes with DHT Server mode
 	return false
+}
+
+// HaveRelay returns true if this host can be used as a relay, that
+// is, it supports relay service and has public reachability.
+func (fh *Host) HaveRelay() bool {
+	return fh.cfg.RelayServer.Enable && fh.Reachability() == network.ReachabilityPublic
 }
 
 // PeerCount returns number of connected peers.
@@ -348,7 +356,7 @@ func (fh *Host) Start() error {
 	if fh.closed.closed {
 		return errors.New("p2p: closed")
 	}
-	fh.discovery.Start()
+	fh.discovery.Start(fh.ctx)
 	if fh.ping != nil {
 		fh.ping.Start()
 	}

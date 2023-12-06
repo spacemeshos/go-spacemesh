@@ -132,6 +132,8 @@ func AddCommands(cmd *cobra.Command) {
 		"enable QUIC transport")
 	cmd.PersistentFlags().BoolVar(&cfg.P2P.EnableRoutingDiscovery, "enable-routing-discovery", cfg.P2P.EnableQUICTransport,
 		"enable routing discovery")
+	cmd.PersistentFlags().BoolVar(&cfg.P2P.RoutingDiscoveryNoAdvertise, "routing-discovery-no-advertise",
+		cfg.P2P.RoutingDiscoveryNoAdvertise, "disable advertise for routing discovery")
 
 	/** ======================== TIME Flags ========================== **/
 
