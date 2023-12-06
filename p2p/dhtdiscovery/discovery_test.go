@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 type discHost struct {
 	host.Host
 	needPeerDiscovery bool
+	haveRelay         bool
 }
 
 var _ DiscoveryHost = &discHost{}
@@ -24,6 +26,7 @@ func makeDiscHost(h host.Host) *discHost {
 }
 
 func (h *discHost) NeedPeerDiscovery() bool { return h.needPeerDiscovery }
+func (h *discHost) HaveRelay() bool         { return h.haveRelay }
 
 func TestSanity(t *testing.T) {
 	mock, err := mocknet.FullMeshLinked(4)
@@ -31,6 +34,7 @@ func TestSanity(t *testing.T) {
 	discs := make([]*Discovery, len(mock.Hosts()))
 	t.Cleanup(func() {
 		for _, disc := range discs {
+
 			disc.Stop()
 		}
 	})
@@ -43,7 +47,8 @@ func TestSanity(t *testing.T) {
 		WithLogger(logger),
 	)
 	require.NoError(t, err)
-	bootdisc.Start()
+	bootdisc.Start(context.Background())
+	defer bootdisc.Stop()
 	discs[0] = bootdisc
 	require.NoError(t, err)
 	for i, h := range mock.Hosts()[1:] {
@@ -51,10 +56,11 @@ func TestSanity(t *testing.T) {
 			Private(),
 			WithLogger(logger),
 			WithBootnodes([]peer.AddrInfo{{ID: boot.ID(), Addrs: boot.Addrs()}}),
-			EnableRoutingDiscovery(),
+			EnableRoutingDiscovery(true),
 		)
 		require.NoError(t, err)
-		disc.Start()
+		disc.Start(context.Background())
+		defer disc.Stop()
 		discs[1+i] = disc
 	}
 	require.Eventually(t, func() bool {
@@ -65,4 +71,5 @@ func TestSanity(t *testing.T) {
 		}
 		return true
 	}, 3*time.Second, 50*time.Microsecond)
+	// TODO: capture advertised peers and relays
 }
