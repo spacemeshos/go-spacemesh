@@ -320,7 +320,9 @@ func (d *Discovery) discoverPeers() error {
 	reAdvCh := time.After(10 * time.Second)
 
 	for {
+		wasSuspended := false
 		for !d.h.NeedPeerDiscovery() {
+			wasSuspended = true
 			d.logger.With().Info("suspending routing discovery",
 				zap.Duration("delay", discoveryHighPeersDelay))
 			select {
@@ -328,6 +330,9 @@ func (d *Discovery) discoverPeers() error {
 				return nil
 			case <-time.After(discoveryHighPeersDelay):
 			}
+		}
+		if wasSuspended {
+			d.logger.With().Info("resuming routing discovery")
 		}
 
 		select {
