@@ -101,7 +101,7 @@ jobs:
         run: make -C systest push
 
       - name: set up go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           check-latest: true
           go-version-file: "go.mod"
