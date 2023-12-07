@@ -3,6 +3,7 @@ package grpcserver
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 	"testing"
 	"time"
 
@@ -235,4 +236,56 @@ func TestMeshService_MalfeasanceStream(t *testing.T) {
 	resp, err = stream.Recv()
 	require.NoError(t, err)
 	require.Equal(t, events.ToMalfeasancePB(id, proof, false), resp.Proof)
+}
+
+type MeshAPIMockInstrumented struct {
+	MeshAPIMock
+}
+
+var instrumentedErr error
+var instrumentedBlock *types.Block
+
+func (m *MeshAPIMockInstrumented) GetLayerVerified(tid types.LayerID) (*types.Block, error) {
+	return instrumentedBlock, instrumentedErr
+}
+
+func TestReadLayer(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	genTime := NewMockgenesisTimeAPI(ctrl)
+	db := sql.InMemory()
+	srv := NewMeshService(
+		datastore.NewCachedDB(db, logtest.New(t)),
+		&MeshAPIMockInstrumented{},
+		conStateAPI,
+		genTime,
+		layersPerEpoch,
+		types.Hash20{},
+		layerDuration,
+		layerAvgSize,
+		txsPerProposal,
+	)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	instrumentedErr = fmt.Errorf("error")
+	_, err := srv.readLayer(ctx, layer, pb.Layer_LAYER_STATUS_UNSPECIFIED)
+	require.Error(t, err)
+
+	instrumentedErr = nil
+	_, err = srv.readLayer(ctx, layer, pb.Layer_LAYER_STATUS_UNSPECIFIED)
+	require.NoError(t, err)
+
+	srv = NewMeshService(
+		datastore.NewCachedDB(db, logtest.New(t)),
+		meshAPIMock,
+		conStateAPI,
+		genTime,
+		layersPerEpoch,
+		types.Hash20{},
+		layerDuration,
+		layerAvgSize,
+		txsPerProposal,
+	)
+	_, err = srv.readLayer(ctx, layer, pb.Layer_LAYER_STATUS_UNSPECIFIED)
+	require.NoError(t, err)
 }

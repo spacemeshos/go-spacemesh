@@ -97,6 +97,160 @@ requirements.
 
   The change improves initial sync speed and any sync protocol requests required during consensus.
 
+* [#5109](https://github.com/spacemeshos/go-spacemesh/pull/5109) Limit number of layers that tortoise needs to read on startup.
+
+  Bounds the time required to restart a node.
+
+* [#5171](https://github.com/spacemeshos/go-spacemesh/pull/5171) Set minimal active set according to the observed number
+  of atxs.
+
+  It will prevent ballots that under report observed atxs from spamming the network. It doesn't have impact on rewards.
+
+* [#5169](https://github.com/spacemeshos/go-spacemesh/pull/5169) Support pruning activesets.
+
+  As of epoch 6 activesets storage size is about ~1.5GB. They are not useful after verifying eligibilities
+  for ballots in the current epoch and can be pruned.
+
+  Pruning will be enabled starting from epoch 8, e.g in epoch 8 we will prune all activesets for epochs 7 and below.
+  We should also run an archival node that doesn't prune them. To disable pruning we should configure
+
+  ```json
+  "main": {
+    "prune-activesets-from": 4294967295
+  }
+  ```
+
+* [#5189](https://github.com/spacemeshos/go-spacemesh/pull/5189) Removed deprecated "Best Provider" option for initialization.
+
+  With v1.1.0 (<https://github.com/spacemeshos/go-spacemesh/releases/tag/v1.1.0>) selecting `-1` as `smeshing-opts-provider`
+  has been deprecated. This option has now been removed. Nodes that already finished initialization can leave this setting
+  empty, as it is not required any more to be set when no initialization is performed. For nodes that have not yet created
+  their initial proof the operator has to specify which provider to use. For Smapp users this is done automatically by
+  Smapp, users that do not use Smapp may use `postcli -printProviders` (<https://github.com/spacemeshos/post/releases>)
+  to list their OpenCL providers and associated IDs.
+
+* [#5207](https://github.com/spacemeshos/go-spacemesh/pull/5207) Move the NiPoST state of a node into a new node-local database.
+  
+  The node now uses 2 databases: `state.sql` which holds the node's view on the global state of the network and `node_state.sql`
+  which holds ephemeral data of the node.
+
+  With this change `post.bin` and `nipost_challenge.bin` files are no longer used. The node will automatically migrate
+  the data from disk and store it in the database. The migration will take place during the first startup after the upgrade.
+  If you want to downgrade to a version before v1.3.0 you will need to restore `state.sql` as well as `post.bin` and
+  `nipost_challenge.bin` from a backup and do so before the end of the PoET round in which you upgraded. Otherwise the node
+  will not be able to participate in consensus and will miss at least one epoch of rewards.
+
+* [#5209](https://github.com/spacemeshos/go-spacemesh/pull/5209) Removed API to update poet servers from SmesherService.
+
+* [#5276](https://github.com/spacemeshos/go-spacemesh/pull/5276) Removed the option to configure API services per endpoint.
+  The public listener exposes the following services: "debug", "global", "mesh", "transaction", "node", "activation"
+  The private listener exposes the following services: "admin", "smesher", "post"
+  The mTLS listener exposes only the "post" service.
+
+* [#5199](https://github.com/spacemeshos/go-spacemesh/pull/5199) Adds smesherID to rewards table. Historically rewards
+  were keyed by (coinbase, layer). Now the primary key has changed to (smesherID, layer), which allows querying rewards
+  by any subset of layer, smesherID, and coinbase. While this change does add smesherID to existing API endpoints
+  (`GlobalStateService.{AccountDataQuery,AccountDataStream,GlobalStateStream}`), it does not yet expose an endpoint to
+  query rewards by smesherID. Additionally, it does not re-index old data. Rewards will contain smesherID going forward,
+  but to refresh data for all rewards, a node will have to delete its database and resync from genesis.
+
+* [#5334](https://github.com/spacemeshos/go-spacemesh/pull/5334) Hotfix for API queries for activations.
+  Two API endpoints (`MeshService.{AccountMeshDataQuery,LayersQuery}`) were broken because they attempt to read
+  all activation data for an epoch. As the number of activations per epoch has grown, this brute force query (i.e.,
+  without appropriate database indices) became very expensive and could cause the node to hang and consume an enormous
+  amount of resources. This hotfix removes all activation data from these endpoints so that they still work for
+  querying other data. It also modifies `LayersQuery` to not return any _ineffective_ transactions in blocks, since
+  there's currently no way to distinguish between effective and ineffective transactions using the API.
+
+## Release v1.2.9
+
+### Improvements
+
+* increased default cache sizes to improve disk IO and queue sizes for gossip to better handle the increasing number of
+  nodes on the network.
+
+## Release v1.2.8
+
+### Improvements
+
+* cherry picked migrations for active sets to enable easier pruning in the future
+
+## Release v1.2.7
+
+### Improvements
+
+* [#5289](https://github.com/spacemeshos/go-spacemesh/pull/5289) build active set from activations received on time
+
+  should decrease the state growth at the start of the epoch because of number of unique activets.
+
+* [#5291](https://github.com/spacemeshos/go-spacemesh/pull/5291) parametrize queue size and throttle limits in gossip
+
+* reduce log level for "atx omitted from active set"
+
+* [#5302](https://github.com/spacemeshos/go-spacemesh/pull/5302) improvements in transaction validation
+
+## Release v1.2.6
+
+### Improvements
+
+* [#5263](https://github.com/spacemeshos/go-spacemesh/pull/5263) randomize peer selection
+  
+  without this change node can get stuck after restart on requesting data from peer that is misbehaving.
+  log below will be printed repeatedly:
+  
+  > 2023-11-15T08:00:17.937+0100 INFO fd68b.sync syncing atx from genesis
+
+* [#5264](https://github.com/spacemeshos/go-spacemesh/pull/5264) increase limits related to activations
+
+  some of the limits were hardcoded and didn't account for growth in atx number.
+  this change is not required for node to work correct in the next epoch, but will be required later.
+
+## Release v1.2.5
+
+### Improvements
+
+* [#5247](https://github.com/spacemeshos/go-spacemesh/pull/5247) exits cleanly without misleading spamming
+
+Fixes a bug that would spam with misleading log on exit, such as below:
+
+  > 2023-11-09T11:13:27.835-0600 ERROR e524f.hare failed to update weakcoin {"node_id":
+  "e524fce96f0a87140ba895b56a2e37e29581075302778a05dd146f4b74fce72e", "module": "hare", "lid": 0, "error":
+  "set weak coin 0: database: no free connection"}
+
+## Release v1.2.4
+
+### Upgrade information
+
+This release enables hare3 on testnet networks. And schedules planned upgrade on mainnet.
+Network will have downtime if majority of nodes don't upgrade before layer 35117.
+Starting at layer 35117 network is expected to start using hare3, which reduces total bandwidth
+requirements.
+
+## Release v1.2.2
+
+### Improvements
+
+* [#5118](https://github.com/spacemeshos/go-spacemesh/pull/5118) reduce number of tortoise results returned after recovery.
+
+  this is hotfix for a bug introduced in v1.2.0. in rare conditions node may loop with the following warning:
+
+  > 2023-10-02T15:28:14.002+0200 WARN fd68b.sync mesh failed to process layer from sync {"node_id":
+  "fd68b9397572556c2f329f3e5af2faf23aef85dbbbb7e38447fae2f4ef38899f", "module": "sync", "sessionId":
+  "29422935-68d6-47d1-87a8-02293aa181f3", "layer_id": 23104, "errmsg": "requested layer 8063 is before evicted 13102",
+  "name": "sync"}
+
+* [#5109](https://github.com/spacemeshos/go-spacemesh/pull/5109) Limit number of layers that tortoise needs to read on startup.
+
+  Bounds the time required to restart a node.
+
+* [#5138](https://github.com/spacemeshos/go-spacemesh/pull/5138) Bump poet to v0.9.7
+
+  The submit proof of work should now be up to 40% faster thanks to [code optimization](https://github.com/spacemeshos/poet/pull/419).
+
+* [#5143](https://github.com/spacemeshos/go-spacemesh/pull/5143) Select good peers for sync requests.
+
+  The change improves initial sync speed and any sync protocol requests required during consensus.
+
 ## v1.2.0
 
 ### Upgrade information
