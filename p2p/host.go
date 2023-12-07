@@ -64,9 +64,9 @@ func DefaultConfig() Config {
 			// link local
 			"fe80::/10",
 		},
-		GossipQueueSize:             10000,
-		GossipValidationThrottle:    10000,
-		GossipAtxValidationThrottle: 10000,
+		GossipQueueSize:             50000,
+		GossipValidationThrottle:    50000,
+		GossipAtxValidationThrottle: 50000,
 	}
 }
 
