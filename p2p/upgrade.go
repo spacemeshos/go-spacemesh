@@ -211,7 +211,7 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 		peers = append(peers, peerID)
 	}
 	if len(peers) != 0 {
-		fh.ping = NewPing(fh.logger, fh, peers, fh.discovery)
+		fh.ping = NewPing(fh.logger.Zap(), fh, peers, fh.discovery)
 	}
 
 	fh.natTypeSub, err = fh.EventBus().Subscribe(new(event.EvtNATDeviceTypeChanged),
@@ -363,7 +363,7 @@ func (fh *Host) Start() error {
 	}
 	fh.discovery.Start(fh.ctx)
 	if fh.ping != nil {
-		fh.ping.Start()
+		fh.ping.Start(fh.ctx)
 	}
 	if !fh.cfg.Bootnode {
 		fh.eg.Go(func() error {
