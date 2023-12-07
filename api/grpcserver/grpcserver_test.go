@@ -297,6 +297,10 @@ func (m *MeshAPIMock) GetLayer(tid types.LayerID) (*types.Layer, error) {
 	return types.NewExistingLayer(tid, ballots, blocks), nil
 }
 
+func (m *MeshAPIMock) GetLayerVerified(tid types.LayerID) (*types.Block, error) {
+	return block1, nil
+}
+
 func (m *MeshAPIMock) GetATXs(
 	context.Context,
 	[]types.ATXID,

@@ -329,14 +329,8 @@ func (s MeshService) readLayer(
 	layerID types.LayerID,
 	layerStatus pb.Layer_LayerStatus,
 ) (*pb.Layer, error) {
-	// Load all block data
-	var blocks []*pb.Block
-
-	// Save activations too
-	var activations []types.ATXID
-
-	// read layer blocks
-	layer, err := s.mesh.GetLayer(layerID)
+	// read the canonical block for this layer
+	block, err := s.mesh.GetLayerVerified(layerID)
 	// TODO: Be careful with how we handle missing layers here.
 	// A layer that's newer than the currentLayer (defined above)
 	// is clearly an input error. A missing layer that's older than
@@ -349,82 +343,42 @@ func (s MeshService) readLayer(
 		return nil, status.Errorf(codes.Internal, "error reading layer data")
 	}
 
-	// TODO add proposal data as needed.
-
-	for _, b := range layer.Blocks() {
-		mtxs, missing := s.conState.GetMeshTransactions(b.TxIDs)
-		// TODO: Do we ever expect txs to be missing here?
-		// E.g., if this node has not synced/received them yet.
-		if len(missing) != 0 {
-			ctxzap.Error(ctx, "could not find transactions from layer",
-				zap.String("missing", fmt.Sprint(missing)), layer.Index().Field().Zap())
-			return nil, status.Errorf(codes.Internal, "error retrieving tx data")
-		}
-
-		pbTxs := make([]*pb.Transaction, 0, len(mtxs))
-		for _, t := range mtxs {
-			pbTxs = append(pbTxs, castTransaction(&t.Transaction))
-		}
-		blocks = append(blocks, &pb.Block{
-			Id:           types.Hash20(b.ID()).Bytes(),
-			Transactions: pbTxs,
-		})
+	mtxs, missing := s.conState.GetMeshTransactions(block.TxIDs)
+	// TODO: Do we ever expect txs to be missing here?
+	// E.g., if this node has not synced/received them yet.
+	if len(missing) != 0 {
+		ctxzap.Error(ctx, "could not find transactions from layer",
+			zap.String("missing", fmt.Sprint(missing)), layerID.Field().Zap())
+		return nil, status.Errorf(codes.Internal, "error retrieving tx data")
 	}
 
-	for _, b := range layer.Ballots() {
-		if b.EpochData != nil {
-			actives, err := activesets.Get(s.cdb, b.EpochData.ActiveSetHash)
-			if err != nil && !errors.Is(err, sql.ErrNotFound) {
-				return nil, status.Errorf(
-					codes.Internal,
-					"error retrieving active set %s (%s)",
-					b.ID().String(),
-					b.EpochData.ActiveSetHash.ShortString(),
-				)
-			}
-			if actives != nil {
-				activations = append(activations, actives.Set...)
-			}
-		}
+	pbTxs := make([]*pb.Transaction, 0, len(mtxs))
+	for _, t := range mtxs {
+		pbTxs = append(pbTxs, castTransaction(&t.Transaction))
+	}
+	pbBlock := &pb.Block{
+		Id:           types.Hash20(block.ID()).Bytes(),
+		Transactions: pbTxs,
 	}
 
-	// Extract ATX data from block data
-	var pbActivations []*pb.Activation
-
-	// Add unique ATXIDs
-	atxs, matxs := s.mesh.GetATXs(ctx, activations)
-	if len(matxs) != 0 {
-		ctxzap.Error(
-			ctx,
-			"could not find activations from layer",
-			zap.Array("missing", types.ATXIDs(matxs)),
-			layer.Index().Field().Zap(),
-		)
-		return nil, status.Errorf(codes.Internal, "error retrieving activations data")
-	}
-	for _, atx := range atxs {
-		pbActivations = append(pbActivations, convertActivation(atx))
-	}
-
-	stateRoot, err := s.conState.GetLayerStateRoot(layer.Index())
+	stateRoot, err := s.conState.GetLayerStateRoot(layerID)
 	if err != nil {
 		// This is expected. We can only retrieve state root for a layer that was applied to state,
 		// which only happens after it's approved/confirmed.
 		ctxzap.Debug(ctx, "no state root for layer",
-			layer.Field().Zap(), zap.Stringer("status", layerStatus), zap.Error(err))
+			layerID.Field().Zap(), zap.Stringer("status", layerStatus), zap.Error(err))
 	}
 	hash, err := s.mesh.MeshHash(layerID)
 	if err != nil {
 		// This is expected. We can only retrieve state root for a layer that was applied to state,
 		// which only happens after it's approved/confirmed.
 		ctxzap.Debug(ctx, "no mesh hash at layer",
-			layer.Field().Zap(), zap.Stringer("status", layerStatus), zap.Error(err))
+			layerID.Field().Zap(), zap.Stringer("status", layerStatus), zap.Error(err))
 	}
 	return &pb.Layer{
-		Number:        &pb.LayerNumber{Number: layer.Index().Uint32()},
+		Number:        &pb.LayerNumber{Number: layerID.Uint32()},
 		Status:        layerStatus,
-		Blocks:        blocks,
-		Activations:   pbActivations,
+		Blocks:        []*pb.Block{pbBlock},
 		Hash:          hash.Bytes(),
 		RootStateHash: stateRoot.Bytes(),
 	}, nil
