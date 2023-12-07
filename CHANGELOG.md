@@ -2,53 +2,58 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## Release v1.2.9
+
+* increased default cache sizes to improve disk IO and queue sizes for gossip to better handle the increasing number of
+  nodes on the network.
+
 ## Release v1.2.8
 
 ### Improvements
 
-  * cherry picked migrations for active sets to enable easier pruning in the future
+* cherry picked migrations for active sets to enable easier pruning in the future
 
 ## Release v1.2.7
 
 ### Improvements
 
-  * [#5289](https://github.com/spacemeshos/go-spacemesh/pull/5289) build active set from activations received on time
+* [#5289](https://github.com/spacemeshos/go-spacemesh/pull/5289) build active set from activations received on time
 
-  should decrease the state growth at the start of the epoch because of number of unique activets. 
+  should decrease the state growth at the start of the epoch because of number of unique activets.
 
-  * [#5291](https://github.com/spacemeshos/go-spacemesh/pull/5291) parametrize queue size and throttle limits in gossip
+* [#5291](https://github.com/spacemeshos/go-spacemesh/pull/5291) parametrize queue size and throttle limits in gossip
 
-  * reduce log level for "atx omitted from active set"
+* reduce log level for "atx omitted from active set"
 
-  * [#5302](https://github.com/spacemeshos/go-spacemesh/pull/5302) improvements in transaction validation 
+* [#5302](https://github.com/spacemeshos/go-spacemesh/pull/5302) improvements in transaction validation
 
 ## Release v1.2.6
 
 ### Improvements
 
-  * [#5263](https://github.com/spacemeshos/go-spacemesh/pull/5263) randomize peer selection
+* [#5263](https://github.com/spacemeshos/go-spacemesh/pull/5263) randomize peer selection
   
-  without this change node can get stuck after restart on requesting data from peer that is misbehaving. 
-  log below will be printed repeatedly: 
+  without this change node can get stuck after restart on requesting data from peer that is misbehaving.
+  log below will be printed repeatedly:
   
-  > 2023-11-15T08:00:17.937+0100	INFO	fd68b.sync	syncing atx from genesis
+  > 2023-11-15T08:00:17.937+0100 INFO fd68b.sync syncing atx from genesis
 
-  * [#5264](https://github.com/spacemeshos/go-spacemesh/pull/5264) increase limits related to activations
+* [#5264](https://github.com/spacemeshos/go-spacemesh/pull/5264) increase limits related to activations
 
-  some of the limits were hardcoded and didn't account for growth in atx number. 
+  some of the limits were hardcoded and didn't account for growth in atx number.
   this change is not required for node to work correct in the next epoch, but will be required later.
-
 
 ## Release v1.2.5
 
-### Improvemennts
+### Improvements
 
 * [#5247](https://github.com/spacemeshos/go-spacemesh/pull/5247) exits cleanly without milseading spamming
 
 Fixes a bug that would spam with misleading log on exit, such as below:
 
-> 2023-11-09T11:13:27.835-0600	ERROR	e524f.hare	failed to update weakcoin	{"node_id": "e524fce96f0a87140ba895b56a2e37e29581075302778a05dd146f4b74fce72e", "module": "hare", "lid": 0, "error": "set weak coin 0: database: no free connection"}
-
+  > 2023-11-09T11:13:27.835-0600 ERROR e524f.hare failed to update weakcoin {"node_id":
+  "e524fce96f0a87140ba895b56a2e37e29581075302778a05dd146f4b74fce72e", "module": "hare", "lid": 0, "error":
+  "set weak coin 0: database: no free connection"}
 
 ## Release v1.2.4
 
