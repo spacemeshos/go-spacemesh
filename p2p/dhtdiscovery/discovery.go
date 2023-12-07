@@ -82,9 +82,9 @@ func WithLogger(logger *zap.Logger) Opt {
 	}
 }
 
-func Server() Opt {
+func WithMode(mode dht.ModeOpt) Opt {
 	return func(d *Discovery) {
-		d.server = true
+		d.mode = mode
 	}
 }
 
@@ -112,10 +112,15 @@ func WithRelayCandidateChannel(relayCh chan<- peer.AddrInfo) Opt {
 	}
 }
 
-func EnableRoutingDiscovery(advertise bool) Opt {
+func EnableRoutingDiscovery() Opt {
 	return func(d *Discovery) {
 		d.enableRoutingDiscovery = true
-		d.advertise = advertise
+	}
+}
+
+func AdvertiseForPeerDiscovery() Opt {
+	return func(d *Discovery) {
+		d.advertise = true
 	}
 }
 
@@ -147,7 +152,7 @@ func New(h DiscoveryHost, opts ...Opt) (*Discovery, error) {
 
 type Discovery struct {
 	public                 bool
-	server                 bool
+	mode                   dht.ModeOpt
 	disableDht             bool
 	dir                    string
 	relayCh                chan<- peer.AddrInfo
@@ -186,7 +191,7 @@ func (d *Discovery) FindPeer(ctx context.Context, p peer.ID) (peer.AddrInfo, err
 func (d *Discovery) setupDHT(ctx context.Context) error {
 	d.dhtLock.Lock()
 	defer d.dhtLock.Unlock()
-	return d.newDht(ctx, d.h, d.public, d.server, d.dir)
+	return d.newDht(ctx, d.h, d.public, d.mode, d.dir)
 }
 
 func (d *Discovery) Start(ctx context.Context) error {
@@ -282,7 +287,7 @@ func (d *Discovery) connect(ctx context.Context, eg *errgroup.Group, nodes []pee
 	eg.Wait()
 }
 
-func (d *Discovery) newDht(ctx context.Context, h host.Host, public, server bool, dir string) error {
+func (d *Discovery) newDht(ctx context.Context, h host.Host, public bool, mode dht.ModeOpt, dir string) error {
 	ds, err := levelds.NewDatastore(dir, &levelds.Options{
 		Compression: ldbopts.NoCompression,
 		NoSync:      false,
@@ -301,11 +306,7 @@ func (d *Discovery) newDht(ctx context.Context, h host.Host, public, server bool
 		opts = append(opts, dht.QueryFilter(dht.PublicQueryFilter),
 			dht.RoutingTableFilter(dht.PublicRoutingTableFilter))
 	}
-	if server {
-		opts = append(opts, dht.Mode(dht.ModeServer))
-	} else {
-		opts = append(opts, dht.Mode(dht.ModeAutoServer))
-	}
+	opts = append(opts, dht.Mode(mode))
 	dht, err := dht.New(ctx, h, opts...)
 	if err != nil {
 		if err := ds.Close(); err != nil {
@@ -436,7 +437,11 @@ func (d *Discovery) discoverRelays(ctx context.Context) error {
 	for p := range d.findPeersContinuously(ctx, relayNS) {
 		if len(p.Addrs) != 0 {
 			d.logger.Debug("found relay candidate", zap.Any("p", p))
-			d.relayCh <- p
+			select {
+			case d.relayCh <- p:
+			case <-ctx.Done():
+				return nil
+			}
 		}
 	}
 	return nil
@@ -445,6 +450,7 @@ func (d *Discovery) discoverRelays(ctx context.Context) error {
 func (d *Discovery) findPeersContinuously(ctx context.Context, ns string) <-chan peer.AddrInfo {
 	r := make(chan peer.AddrInfo)
 	d.eg.Go(func() error {
+		defer close(r)
 		var peerCh <-chan peer.AddrInfo
 		for {
 			if peerCh == nil {
@@ -473,7 +479,10 @@ func (d *Discovery) findPeersContinuously(ctx context.Context, ns string) <-chan
 					}
 					continue
 				}
-				r <- p
+				select {
+				case r <- p:
+				case <-ctx.Done():
+				}
 			}
 		}
 	})

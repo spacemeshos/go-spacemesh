@@ -9,6 +9,7 @@ import (
 	"time"
 
 	lp2plog "github.com/ipfs/go-log/v2"
+	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/event"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -164,8 +165,9 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 		dopts = append(dopts, discovery.DisableDHT())
 	}
 	if cfg.Bootnode || cfg.ForceDHTServer {
-		dopts = append(dopts, discovery.Server())
+		dopts = append(dopts, discovery.WithMode(dht.ModeServer))
 	} else {
+		dopts = append(dopts, discovery.WithMode(dht.ModeAutoServer))
 		backup, err := loadPeers(cfg.DataDir)
 		if err != nil {
 			fh.logger.With().Warning("failed to to load backup peers", log.Err(err))
@@ -177,7 +179,10 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 		dopts = append(dopts, discovery.WithRelayCandidateChannel(fh.relayCh))
 	}
 	if fh.cfg.EnableRoutingDiscovery {
-		dopts = append(dopts, discovery.EnableRoutingDiscovery(!fh.cfg.RoutingDiscoveryNoAdvertise))
+		dopts = append(dopts, discovery.EnableRoutingDiscovery())
+	}
+	if !fh.cfg.RoutingDiscoveryNoAdvertise {
+		dopts = append(dopts, discovery.AdvertiseForPeerDiscovery())
 	}
 
 	dhtdisc, err := discovery.New(fh, dopts...)
