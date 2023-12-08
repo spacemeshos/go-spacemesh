@@ -165,6 +165,7 @@ func New(
 		return nil, fmt.Errorf("p2p create conn mgr: %w", err)
 	}
 	streamer := *yamux.DefaultTransport
+	streamer.Config().ConnectionWriteTimeout = 20 * time.Second // should be NOT exposed in the config
 	ps, err := pstoremem.NewPeerstore()
 	if err != nil {
 		return nil, fmt.Errorf("can't create peer store: %w", err)
