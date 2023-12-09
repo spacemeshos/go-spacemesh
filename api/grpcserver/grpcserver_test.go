@@ -61,10 +61,10 @@ const (
 	txsPerProposal = 99
 	layersPerEpoch = uint32(5)
 
-	// for now LayersStream returns no ATXs
+	// for now LayersStream returns no ATXs.
 	atxPerLayer = 0
 
-	// LayersStream returns one effective block per layer
+	// LayersStream returns one effective block per layer.
 	blkPerLayer    = 1
 	accountBalance = 8675301
 	accountCounter = 0
