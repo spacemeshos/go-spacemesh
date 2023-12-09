@@ -1,7 +1,6 @@
 package grpcserver
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -62,8 +61,11 @@ const (
 	txsPerProposal = 99
 	layersPerEpoch = uint32(5)
 
-	atxPerLayer    = 2
-	blkPerLayer    = 3
+	// for now LayersStream returns no ATXs
+	atxPerLayer = 0
+
+	// LayersStream returns one effective block per layer
+	blkPerLayer    = 1
 	accountBalance = 8675301
 	accountCounter = 0
 	rewardAmount   = 5551234
@@ -1596,36 +1598,6 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 	require.Equal(t, blkPerLayer, len(l.Blocks), "unexpected number of blocks in layer")
 	require.Equal(t, stateRoot.Bytes(), l.RootStateHash, "unexpected state root")
 
-	// The order of the activations is not deterministic since they're
-	// stored in a map, and randomized each run. Check if either matches.
-	require.Condition(t, func() bool {
-		for _, a := range l.Activations {
-			// Compare the two element by element
-			if a.Layer.Number != globalAtx.PublishEpoch.Uint32() {
-				continue
-			}
-			if !bytes.Equal(a.Id.Id, globalAtx.ID().Bytes()) {
-				continue
-			}
-			if !bytes.Equal(a.SmesherId.Id, globalAtx.SmesherID.Bytes()) {
-				continue
-			}
-			if a.Coinbase.Address != globalAtx.Coinbase.String() {
-				continue
-			}
-			if !bytes.Equal(a.PrevAtx.Id, globalAtx.PrevATXID.Bytes()) {
-				continue
-			}
-			if a.NumUnits != uint32(globalAtx.NumUnits) {
-				continue
-			}
-			// found a match
-			return true
-		}
-		// no match
-		return false
-	}, "return layer does not contain expected activation data")
-
 	resBlock := l.Blocks[0]
 
 	require.Equal(t, len(block1.TxIDs), len(resBlock.Transactions))
@@ -1848,14 +1820,6 @@ func TestLayerStream_comprehensive(t *testing.T) {
 		layerDuration,
 		layerAvgSize,
 		txsPerProposal,
-	)
-	require.NoError(
-		t,
-		activesets.Add(
-			db,
-			ballot1.EpochData.ActiveSetHash,
-			&types.EpochActiveSet{Set: types.ATXIDList{globalAtx.ID(), globalAtx2.ID()}},
-		),
 	)
 	cfg, cleanup := launchServer(t, grpcService)
 	t.Cleanup(cleanup)
