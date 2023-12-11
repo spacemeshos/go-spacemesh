@@ -120,7 +120,7 @@ func New(h Host, proto string, handler Handler, opts ...Opt) *Server {
 		protocol:            proto,
 		handler:             handler,
 		h:                   h,
-		timeout:             20 * time.Second,
+		timeout:             25 * time.Second,
 		requestLimit:        10240,
 		queueSize:           1000,
 		requestsPerInterval: 100,
