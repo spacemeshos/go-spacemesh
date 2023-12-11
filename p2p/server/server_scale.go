@@ -9,7 +9,7 @@ import (
 
 func (t *Response) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, t.Data, 10485760)
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.Data, 20971520)
 		if err != nil {
 			return total, err
 		}
@@ -27,7 +27,7 @@ func (t *Response) EncodeScale(enc *scale.Encoder) (total int, err error) {
 
 func (t *Response) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 10485760)
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 20971520)
 		if err != nil {
 			return total, err
 		}
