@@ -2,6 +2,12 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## Release v1.2.10
+
+### Improvements
+
+* further increased cache sizes and and p2p timeouts to compensate for the increased number of nodes on the network.
+
 ## Release v1.2.9
 
 ### Improvements
