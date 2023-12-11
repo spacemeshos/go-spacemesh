@@ -55,7 +55,7 @@ func (t *ResponseMessage) EncodeScale(enc *scale.Encoder) (total int, err error)
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, t.Data, 10485760)
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.Data, 20971520)
 		if err != nil {
 			return total, err
 		}
@@ -73,7 +73,7 @@ func (t *ResponseMessage) DecodeScale(dec *scale.Decoder) (total int, err error)
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 10485760)
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 20971520)
 		if err != nil {
 			return total, err
 		}
@@ -258,7 +258,7 @@ func (t *MaliciousIDs) DecodeScale(dec *scale.Decoder) (total int, err error) {
 
 func (t *EpochData) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.AtxIDs, 200000)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.AtxIDs, 500000)
 		if err != nil {
 			return total, err
 		}
@@ -269,7 +269,7 @@ func (t *EpochData) EncodeScale(enc *scale.Encoder) (total int, err error) {
 
 func (t *EpochData) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[types.ATXID](dec, 200000)
+		field, n, err := scale.DecodeStructSliceWithLimit[types.ATXID](dec, 500000)
 		if err != nil {
 			return total, err
 		}
