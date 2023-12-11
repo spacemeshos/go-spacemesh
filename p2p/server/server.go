@@ -12,7 +12,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
-	"github.com/multiformats/go-varint"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/time/rate"
 
@@ -84,7 +83,7 @@ type Handler func(context.Context, []byte) ([]byte, error)
 
 // Response is a server response.
 type Response struct {
-	Data  []byte `scale:"max=10485760"` // 10 MiB
+	Data  []byte `scale:"max=20971520"` // 20 MiB
 	Error string `scale:"max=1024"`     // TODO(mafa): make error code instead of string
 }
 
@@ -188,7 +187,7 @@ func (s *Server) queueHandler(ctx context.Context, stream network.Stream) {
 	_ = stream.SetDeadline(time.Now().Add(s.timeout))
 	defer stream.SetDeadline(time.Time{})
 	rd := bufio.NewReader(stream)
-	size, err := varint.ReadUvarint(rd)
+	size, err := binary.ReadUvarint(rd)
 	if err != nil {
 		return
 	}
