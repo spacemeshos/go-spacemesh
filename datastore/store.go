@@ -40,13 +40,15 @@ type CachedDB struct {
 }
 
 type Config struct {
+	// ATXSize must be larger than the sum of all ATXs in last 2 epochs to be effective
+	// (Epoch 12: ~ 300k, Epoch 11: ~ 200k)
 	ATXSize         int `mapstructure:"atx-size"`
 	MalfeasenceSize int `mapstructure:"malfeasence-size"`
 }
 
 func DefaultConfig() Config {
 	return Config{
-		ATXSize:         300_000,
+		ATXSize:         600_000,
 		MalfeasenceSize: 1_000,
 	}
 }

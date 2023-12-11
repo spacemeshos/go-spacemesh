@@ -12,7 +12,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
-	varint "github.com/multiformats/go-varint"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
@@ -139,15 +138,17 @@ func rpcWithMessages(msgs ...*pubsubpb.Message) *pubsub.RPC {
 
 func writeRpc(rpc *pubsub.RPC, s network.Stream) error {
 	size := uint64(rpc.Size())
-
-	buf := make([]byte, varint.UvarintSize(size)+int(size))
-
-	n := binary.PutUvarint(buf, size)
-	_, err := rpc.MarshalTo(buf[n:])
-	if err != nil {
+	sizeBuf := make([]byte, binary.MaxVarintLen64)
+	n := binary.PutUvarint(sizeBuf, size)
+	sizeBuf = sizeBuf[:n]
+	if _, err := s.Write(sizeBuf); err != nil {
 		return err
 	}
 
-	_, err = s.Write(buf)
+	buf := make([]byte, size)
+	if _, err := rpc.MarshalTo(buf); err != nil {
+		return err
+	}
+	_, err := s.Write(buf)
 	return err
 }
