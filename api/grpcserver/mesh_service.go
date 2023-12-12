@@ -344,7 +344,9 @@ func (s MeshService) readLayer(
 
 	pbTxs := make([]*pb.Transaction, 0, len(mtxs))
 	for _, t := range mtxs {
-		pbTxs = append(pbTxs, castTransaction(&t.Transaction))
+		if t.State == types.APPLIED {
+			pbTxs = append(pbTxs, castTransaction(&t.Transaction))
+		}
 	}
 	pbBlock := &pb.Block{
 		Id:           types.Hash20(block.ID()).Bytes(),
