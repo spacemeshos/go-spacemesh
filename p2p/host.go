@@ -125,12 +125,11 @@ type Config struct {
 	GossipAtxValidationThrottle int         `mapstructure:"gossip-atx-validation-throttle"`
 	PingPeers                   []string    `mapstructure:"ping-peers"`
 	Relay                       bool        `mapstructure:"relay"`
-	Relays                      []string    `mapstructure:"relays"`
+	StaticRelays                []string    `mapstructure:"static-relays"`
 	EnableTCPTransport          bool        `mapstructure:"enable-tcp-transport"`
 	EnableQUICTransport         bool        `mapstructure:"enable-quic-transport"`
 	EnableRoutingDiscovery      bool        `mapstructure:"enable-routing-discovery"`
 	RoutingDiscoveryNoAdvertise bool        `mapstructure:"routing-discovery-no-advertise"`
-	// TBD: adv peer fraction
 }
 
 type RelayServer struct {
@@ -157,6 +156,16 @@ func (cfg *Config) Validate() error {
 	if !cfg.EnableTCPTransport && !cfg.EnableQUICTransport {
 		return errors.New("no transports enabled")
 	}
+
+	if !cfg.Relay {
+		if cfg.RelayServer.Enable {
+			return errors.New("cannot enable relay server without enabling relay")
+		}
+		if len(cfg.StaticRelays) != 0 {
+			return errors.New("cannot specify static-relays without enabling relay")
+		}
+	}
+
 	if len(cfg.ForceReachability) > 0 {
 		if cfg.ForceReachability != PublicReachability &&
 			cfg.ForceReachability != PrivateReachability {
@@ -166,7 +175,7 @@ func (cfg *Config) Validate() error {
 		}
 	}
 
-	for _, addrStr := range append(cfg.advertisedAddrs(), cfg.advertisedAddrs()...) {
+	for _, addrStr := range append(cfg.listenAddrs(), cfg.advertisedAddrs()...) {
 		_, err := multiaddr.NewMultiaddr(addrStr)
 		if err != nil {
 			return fmt.Errorf("address %s is not a valid multiaddr %w", addrStr, err)
@@ -311,25 +320,28 @@ func New(
 	if cfg.EnableHolepunching {
 		lopts = append(lopts, libp2p.EnableHolePunching())
 	}
-	if cfg.RelayServer.Enable {
-		resources := relay.DefaultResources()
-		resources.MaxReservations = cfg.RelayServer.Reservations
-		resources.ReservationTTL = cfg.RelayServer.TTL
-		lopts = append(lopts, libp2p.EnableRelayService(relay.WithResources(resources)))
-	}
 	if cfg.Relay {
-		lopts = append(lopts, libp2p.EnableRelay())
-	}
-	if len(cfg.Relays) != 0 {
-		relays, err := parseIntoAddr(cfg.Relays)
-		if err != nil {
-			return nil, err
+		if cfg.RelayServer.Enable {
+			resources := relay.DefaultResources()
+			resources.MaxReservations = cfg.RelayServer.Reservations
+			resources.ReservationTTL = cfg.RelayServer.TTL
+			lopts = append(lopts, libp2p.EnableRelayService(relay.WithResources(resources)))
 		}
-		lopts = append(lopts, libp2p.EnableAutoRelayWithStaticRelays(relays))
+
+		lopts = append(lopts, libp2p.EnableRelay())
+		if len(cfg.StaticRelays) != 0 {
+			relays, err := parseIntoAddr(cfg.StaticRelays)
+			if err != nil {
+				return nil, err
+			}
+			lopts = append(lopts, libp2p.EnableAutoRelayWithStaticRelays(relays))
+		} else {
+			peerSrc, relayCh := relayPeerSource(logger)
+			lopts = append(lopts, libp2p.EnableAutoRelayWithPeerSource(peerSrc))
+			opts = append(opts, WithRelayCandidateChannel(relayCh))
+		}
 	} else {
-		peerSrc, relayCh := relayPeerSource(logger)
-		lopts = append(lopts, libp2p.EnableAutoRelayWithPeerSource(peerSrc))
-		opts = append(opts, WithRelayCandidateChannel(relayCh))
+		lopts = append(lopts, libp2p.DisableRelay())
 	}
 	if cfg.ForceReachability == PublicReachability {
 		lopts = append(lopts, libp2p.ForceReachabilityPublic())

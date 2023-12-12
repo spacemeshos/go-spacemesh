@@ -48,7 +48,7 @@ func NewPing(logger *zap.Logger, h host.Host, peers []peer.ID, pr routing.PeerRo
 	return p
 }
 
-func (p *Ping) Start(ctx context.Context) {
+func (p *Ping) Start() {
 	if p.cancel != nil {
 		return
 	}
@@ -80,6 +80,11 @@ func (p *Ping) doPing(ctx context.Context, peerID peer.ID) (<-chan ping.Result, 
 // runForPeer runs ping for the specific peer till an error occurs
 // or the context is canceled.
 func (p *Ping) runForPeer(ctx context.Context, peerID peer.ID, addrs []ma.Multiaddr) error {
+	// go-libp2p Ping tends to stop working after an error is received on the channel.
+	// This behavior is probably not intended and may change later.
+	// So, we create a child context here and cancel it when we receive an error
+	// on the channel returned by Ping, and then after a delay we restart
+	// Ping for this peer.
 	pingCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	ch, err := p.doPing(pingCtx, peerID)
@@ -99,7 +104,7 @@ func (p *Ping) runForPeer(ctx context.Context, peerID peer.ID, addrs []ma.Multia
 		}
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return nil
 		case <-time.After(pingInterval):
 		}
 	}
@@ -125,7 +130,7 @@ func (p *Ping) startForPeer(ctx context.Context, peerID peer.ID) {
 				zap.Error(err))
 			select {
 			case <-ctx.Done():
-				return ctx.Err()
+				return nil
 			case <-time.After(pingInterval):
 			}
 		}
