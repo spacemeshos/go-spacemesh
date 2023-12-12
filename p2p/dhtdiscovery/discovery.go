@@ -188,21 +188,15 @@ func (d *Discovery) FindPeer(ctx context.Context, p peer.ID) (peer.AddrInfo, err
 	return dht.FindPeer(ctx, p)
 }
 
-func (d *Discovery) setupDHT(ctx context.Context) error {
-	d.dhtLock.Lock()
-	defer d.dhtLock.Unlock()
-	return d.newDht(ctx, d.h, d.public, d.mode, d.dir)
-}
-
-func (d *Discovery) Start(ctx context.Context) error {
+func (d *Discovery) Start() error {
 	if d.cancel != nil {
 		return nil
 	}
 	var startCtx context.Context
-	startCtx, d.cancel = context.WithCancel(ctx)
+	startCtx, d.cancel = context.WithCancel(context.Background())
 
 	if !d.disableDht {
-		if err := d.setupDHT(ctx); err != nil {
+		if err := d.setupDHT(startCtx); err != nil {
 			return err
 		}
 	}
@@ -287,27 +281,29 @@ func (d *Discovery) connect(ctx context.Context, eg *errgroup.Group, nodes []pee
 	eg.Wait()
 }
 
-func (d *Discovery) newDht(ctx context.Context, h host.Host, public bool, mode dht.ModeOpt, dir string) error {
-	ds, err := levelds.NewDatastore(dir, &levelds.Options{
+func (d *Discovery) setupDHT(ctx context.Context) error {
+	d.dhtLock.Lock()
+	defer d.dhtLock.Unlock()
+	ds, err := levelds.NewDatastore(d.dir, &levelds.Options{
 		Compression: ldbopts.NoCompression,
 		NoSync:      false,
 		Strict:      ldbopts.StrictAll,
 		ReadOnly:    false,
 	})
 	if err != nil {
-		return fmt.Errorf("open leveldb at %s: %w", dir, err)
+		return fmt.Errorf("open leveldb at %s: %w", d.dir, err)
 	}
 	opts := []dht.Option{
 		dht.Validator(record.PublicKeyValidator{}),
 		dht.Datastore(ds),
 		dht.ProtocolPrefix(protocolPrefix),
 	}
-	if public {
+	if d.public {
 		opts = append(opts, dht.QueryFilter(dht.PublicQueryFilter),
 			dht.RoutingTableFilter(dht.PublicRoutingTableFilter))
 	}
-	opts = append(opts, dht.Mode(mode))
-	dht, err := dht.New(ctx, h, opts...)
+	opts = append(opts, dht.Mode(d.mode))
+	dht, err := dht.New(ctx, d.h, opts...)
 	if err != nil {
 		if err := ds.Close(); err != nil {
 			d.logger.Error("error closing level datastore", zap.Error(err))
@@ -334,10 +330,10 @@ func (d *Discovery) ensureAtLeastMinPeers(ctx context.Context) error {
 	}
 	d.h.Network().Notify(notifiee)
 	ticker := time.NewTicker(d.period)
+	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
-			ticker.Stop()
 			d.h.Network().StopNotify(notifiee)
 			return nil
 		case <-ticker.C:

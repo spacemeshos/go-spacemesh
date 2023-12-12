@@ -361,9 +361,9 @@ func (fh *Host) Start() error {
 	if fh.closed.closed {
 		return errors.New("p2p: closed")
 	}
-	fh.discovery.Start(fh.ctx)
+	fh.discovery.Start()
 	if fh.ping != nil {
-		fh.ping.Start(fh.ctx)
+		fh.ping.Start()
 	}
 	if !fh.cfg.Bootnode {
 		fh.eg.Go(func() error {

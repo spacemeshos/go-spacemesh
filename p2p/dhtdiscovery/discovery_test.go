@@ -1,8 +1,7 @@
 package discovery
 
 import (
-	"context"
-	"sync"
+	"fmt"
 	"testing"
 	"time"
 
@@ -11,6 +10,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
@@ -60,7 +60,7 @@ func TestSanity(t *testing.T) {
 		WithMode(dht.ModeServer),
 	)
 	require.NoError(t, err)
-	bootdisc.Start(context.Background())
+	bootdisc.Start()
 	defer bootdisc.Stop()
 	discs[0] = bootdisc
 	require.NoError(t, err)
@@ -119,7 +119,7 @@ func TestSanity(t *testing.T) {
 		}
 		disc, err := New(makeDiscHost(h, true, nodeOpts[i].relayService), opts...)
 		require.NoError(t, err)
-		disc.Start(context.Background())
+		disc.Start()
 		defer disc.Stop()
 		discs[1+i] = disc
 	}
@@ -134,23 +134,23 @@ func TestSanity(t *testing.T) {
 
 	// Wait till every node looking for relays have discovered
 	// the node 1 which has relay service enabled
-	var wg sync.WaitGroup
+	var eg errgroup.Group
 	for n, ch := range relayChans {
 		n := n
 		ch := ch
 		if ch == nil {
 			continue
 		}
-		wg.Add(1)
-		go func() {
+		eg.Go(func() error {
 			select {
 			case p := <-ch:
 				require.Equal(t, mock.Hosts()[1].ID(), p.ID)
 			case <-time.After(3 * time.Second):
-				t.Errorf("timed out waiting for relay id for peer %d", n)
+				return fmt.Errorf("timed out waiting for relay id for peer %d", n)
 			}
-			wg.Done()
-		}()
+			return nil
+		})
 	}
-	wg.Wait()
+
+	require.NoError(t, eg.Wait())
 }

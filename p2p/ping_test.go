@@ -39,7 +39,7 @@ func TestPing(t *testing.T) {
 			nc := []byte("foobar")
 			h1, err := New(context.Background(), logtest.New(t), cfg1, nc, nc)
 			require.NoError(t, err)
-			h1.discovery.Start(context.Background())
+			h1.discovery.Start()
 			t.Cleanup(func() { h1.Stop() })
 
 			cfg2 := DefaultConfig()
@@ -49,7 +49,7 @@ func TestPing(t *testing.T) {
 			cfg2.PingPeers = []string{h1.ID().String()}
 			h2, err := New(context.Background(), logtest.New(t), cfg2, nc, nc)
 			require.NoError(t, err)
-			h2.discovery.Start(context.Background())
+			h2.discovery.Start()
 			t.Cleanup(func() { h2.Stop() })
 
 			err = h2.Connect(context.Background(), peer.AddrInfo{
@@ -58,7 +58,7 @@ func TestPing(t *testing.T) {
 			})
 			require.NoError(t, err)
 
-			h2.Ping().Start(context.Background())
+			h2.Ping().Start()
 			t.Cleanup(h2.Ping().Stop)
 
 			require.Eventually(t, func() bool {
