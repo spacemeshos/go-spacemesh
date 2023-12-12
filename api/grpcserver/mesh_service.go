@@ -208,9 +208,6 @@ func (s MeshService) AccountMeshDataQuery(
 
 	// Read the filter flags
 	filterTx := in.Filter.AccountMeshDataFlags&uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_TRANSACTIONS) != 0
-	filterActivations := in.Filter.AccountMeshDataFlags&uint32(
-		pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS,
-	) != 0
 
 	// Gather transaction data
 	addr, err := types.StringToAddress(in.Filter.AccountId.Address)
@@ -230,21 +227,6 @@ func (s MeshService) AccountMeshDataQuery(
 						Transaction: castTransaction(&t.Transaction),
 						LayerId:     &pb.LayerNumber{Number: t.LayerID.Uint32()},
 					},
-				},
-			})
-		}
-	}
-
-	// Gather activation data
-	if filterActivations {
-		atxs, err := s.getFilteredActivations(ctx, startLayer, addr)
-		if err != nil {
-			return nil, err
-		}
-		for _, atx := range atxs {
-			res.Data = append(res.Data, &pb.AccountMeshData{
-				Datum: &pb.AccountMeshData_Activation{
-					Activation: convertActivation(atx),
 				},
 			})
 		}

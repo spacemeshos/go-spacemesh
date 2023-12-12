@@ -830,8 +830,8 @@ func TestMeshService(t *testing.T) {
 							},
 						})
 						require.NoError(t, err)
-						require.Equal(t, uint32(1), res.TotalResults)
-						require.Equal(t, 1, len(res.Data))
+						require.Equal(t, uint32(0), res.TotalResults)
+						require.Equal(t, 0, len(res.Data))
 					},
 				},
 				{
@@ -879,9 +879,8 @@ func TestMeshService(t *testing.T) {
 							},
 						})
 						require.NoError(t, err)
-						require.Equal(t, uint32(1), res.TotalResults)
-						require.Equal(t, 1, len(res.Data))
-						checkAccountMeshDataItemActivation(t, res.Data[0].Datum)
+						require.Equal(t, uint32(0), res.TotalResults)
+						require.Equal(t, 0, len(res.Data))
 					},
 				},
 				{
@@ -898,10 +897,9 @@ func TestMeshService(t *testing.T) {
 							},
 						})
 						require.NoError(t, err)
-						require.Equal(t, uint32(2), res.TotalResults)
-						require.Equal(t, 2, len(res.Data))
+						require.Equal(t, uint32(1), res.TotalResults)
+						require.Equal(t, 1, len(res.Data))
 						checkAccountMeshDataItemTx(t, res.Data[0].Datum)
-						checkAccountMeshDataItemActivation(t, res.Data[1].Datum)
 					},
 				},
 				{
@@ -917,7 +915,7 @@ func TestMeshService(t *testing.T) {
 							},
 						})
 						require.NoError(t, err)
-						require.Equal(t, uint32(2), res.TotalResults)
+						require.Equal(t, uint32(1), res.TotalResults)
 						require.Equal(t, 1, len(res.Data))
 						checkAccountMeshDataItemTx(t, res.Data[0].Datum)
 					},
@@ -936,9 +934,8 @@ func TestMeshService(t *testing.T) {
 							},
 						})
 						require.NoError(t, err)
-						require.Equal(t, uint32(2), res.TotalResults)
-						require.Equal(t, 1, len(res.Data))
-						checkAccountMeshDataItemActivation(t, res.Data[0].Datum)
+						require.Equal(t, uint32(1), res.TotalResults)
+						require.Equal(t, 0, len(res.Data))
 					},
 				},
 			}
@@ -1662,12 +1659,6 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	require.NoError(t, err, "got error from stream")
 	checkAccountMeshDataItemTx(t, res.Datum.Datum)
 
-	// publish an activation
-	events.ReportNewActivation(globalAtx)
-	res, err = stream.Recv()
-	require.NoError(t, err, "got error from stream")
-	checkAccountMeshDataItemActivation(t, res.Datum.Datum)
-
 	// test streaming a tx and an atx that are filtered out
 	// these should not be received
 	events.ReportNewTx(0, globalTx2)
@@ -1887,18 +1878,6 @@ func checkAccountMeshDataItemTx(t *testing.T, dataItem any) {
 	x := dataItem.(*pb.AccountMeshData_MeshTransaction)
 	// Check the sender
 	require.Equal(t, globalTx.Principal.String(), x.MeshTransaction.Transaction.Principal.Address)
-}
-
-func checkAccountMeshDataItemActivation(t *testing.T, dataItem any) {
-	t.Helper()
-	require.IsType(t, &pb.AccountMeshData_Activation{}, dataItem)
-	x := dataItem.(*pb.AccountMeshData_Activation)
-	require.Equal(t, globalAtx.ID().Bytes(), x.Activation.Id.Id)
-	require.Equal(t, globalAtx.PublishEpoch.Uint32(), x.Activation.Layer.Number)
-	require.Equal(t, globalAtx.SmesherID.Bytes(), x.Activation.SmesherId.Id)
-	require.Equal(t, globalAtx.Coinbase.String(), x.Activation.Coinbase.Address)
-	require.Equal(t, globalAtx.PrevATXID.Bytes(), x.Activation.PrevAtx.Id)
-	require.Equal(t, globalAtx.NumUnits, uint32(x.Activation.NumUnits))
 }
 
 func checkAccountDataItemReward(t *testing.T, dataItem any) {
