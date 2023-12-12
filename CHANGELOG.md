@@ -89,6 +89,13 @@ for more information on how to configure the node to work with the PoST service.
   query rewards by smesherID. Additionally, it does not re-index old data. Rewards will contain smesherID going forward,
   but to refresh data for all rewards, a node will have to delete its database and resync from genesis.
 
+* [#5334](https://github.com/spacemeshos/go-spacemesh/pull/5334) Hotfix for API queries for activations.
+  Two API endpoints (`MeshService.{AccountMeshDataQuery,LayersQuery}`) were broken because they attempt to read
+  all activation data for an epoch. As the number of activations per epoch has grown, this brute force query (i.e.,
+  without appropriate database indices) became very expensive and could cause the node to hang and consume an enormous
+  amount of resources. This hotfix removes all activation data from these endpoints so that they still work for
+  querying other data.
+
 ## Release v1.2.9
 
 ### Improvements
