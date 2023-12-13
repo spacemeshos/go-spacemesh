@@ -20,7 +20,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 )
 
 // MeshService exposes mesh data such as accounts, blocks, and transactions.
@@ -138,49 +137,6 @@ func (s MeshService) getFilteredTransactions(
 		return nil, fmt.Errorf("reading txs for address %s: %w", address, err)
 	}
 	return txs, nil
-}
-
-func (s MeshService) getFilteredActivations(
-	ctx context.Context,
-	startLayer types.LayerID,
-	addr types.Address,
-) (activations []*types.VerifiedActivationTx, err error) {
-	// We have no way to look up activations by coinbase so we have no choice but to read all of them.
-	var atxids []types.ATXID
-	for l := startLayer; !l.After(s.mesh.LatestLayer()); l = l.Add(1) {
-		layer, err := s.mesh.GetLayer(l)
-		if layer == nil || err != nil {
-			return nil, status.Errorf(codes.Internal, "error retrieving layer data")
-		}
-		for _, b := range layer.Ballots() {
-			if b.EpochData != nil {
-				actives, err := activesets.Get(s.cdb, b.EpochData.ActiveSetHash)
-				if err != nil {
-					return nil, status.Errorf(
-						codes.Internal,
-						"error retrieving active set %s (%s)",
-						b.ID().String(),
-						b.EpochData.ActiveSetHash.ShortString(),
-					)
-				}
-				atxids = append(atxids, actives.Set...)
-			}
-		}
-	}
-
-	// Look up full data
-	atxs, matxs := s.mesh.GetATXs(ctx, atxids)
-	if len(matxs) != 0 {
-		ctxzap.Error(ctx, "could not find activations", zap.Array("matxs", types.ATXIDs(matxs)))
-		return nil, status.Errorf(codes.Internal, "error retrieving activations data")
-	}
-	for _, atx := range atxs {
-		// Filter here, now that we have full data
-		if atx.Coinbase == addr {
-			activations = append(activations, atx)
-		}
-	}
-	return activations, nil
 }
 
 // AccountMeshDataQuery returns account data.
