@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/node/flags"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 )
 
 var (
@@ -88,6 +89,13 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *config.Config) error {
 						panic(err.Error())
 					}
 					val = dst
+				case "p2p.AddressList":
+					var al p2p.AddressList
+					alv := flags.NewAddressListValue(al, &al)
+					if err := alv.Set(viper.GetString(name)); err != nil {
+						panic(err.Error())
+					}
+					val = al
 				default:
 					val = viper.Get(name)
 				}

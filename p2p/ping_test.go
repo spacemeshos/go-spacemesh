@@ -14,18 +14,18 @@ import (
 func TestPing(t *testing.T) {
 	type testcase struct {
 		desc       string
-		listen     string
+		listen     AddressList
 		enableQUIC bool
 	}
 
 	testcases := []testcase{
 		{
 			desc:   "tcp",
-			listen: "/ip4/127.0.0.1/tcp/0",
+			listen: MustParseAddresses("/ip4/127.0.0.1/tcp/0"),
 		},
 		{
 			desc:       "quic",
-			listen:     "/ip4/0.0.0.0/udp/0/quic-v1",
+			listen:     MustParseAddresses("/ip4/0.0.0.0/udp/0/quic-v1"),
 			enableQUIC: true,
 		},
 	}

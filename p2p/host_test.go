@@ -13,19 +13,19 @@ import (
 func TestPrologue(t *testing.T) {
 	type testcase struct {
 		desc       string
-		listen     string
+		listen     AddressList
 		enableQUIC bool
 		errStr     string
 	}
 	testcases := []testcase{
 		{
 			desc:   "tcp",
-			listen: "/ip4/127.0.0.1/tcp/0",
+			listen: MustParseAddresses("/ip4/127.0.0.1/tcp/0"),
 			errStr: "failed to negotiate security protocol",
 		},
 		{
 			desc:       "quic",
-			listen:     "/ip4/0.0.0.0/udp/0/quic-v1",
+			listen:     MustParseAddresses("/ip4/0.0.0.0/udp/0/quic-v1"),
 			enableQUIC: true,
 			errStr:     "cookie mismatch",
 		},

@@ -335,7 +335,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 		MaxRetriesForRequest: 3,
 	}
 	p2pconf := p2p.DefaultConfig()
-	p2pconf.Listen = "/ip4/127.0.0.1/tcp/0"
+	p2pconf.Listen = p2p.MustParseAddresses("/ip4/127.0.0.1/tcp/0")
 	p2pconf.DataDir = t.TempDir()
 
 	// Good host

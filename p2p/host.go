@@ -38,7 +38,7 @@ import (
 // DefaultConfig config.
 func DefaultConfig() Config {
 	return Config{
-		ListenAddresses:        []string{"/ip4/0.0.0.0/tcp/7513"},
+		Listen:                 MustParseAddresses("/ip4/0.0.0.0/tcp/7513"),
 		Flood:                  false,
 		MinPeers:               20,
 		LowPeers:               40,
@@ -98,8 +98,7 @@ type Config struct {
 	DisableResourceManager      bool        `mapstructure:"disable-resource-manager"`
 	DisableDHT                  bool        `mapstructure:"disable-dht"`
 	Flood                       bool        `mapstructure:"flood"`
-	Listen                      string      `mapstructure:"listen"`
-	ListenAddresses             []string    `mapstructure:"listen-addresses"`
+	Listen                      AddressList `mapstructure:"listen"`
 	Bootnodes                   []string    `mapstructure:"bootnodes"`
 	Direct                      []string    `mapstructure:"direct"`
 	MinPeers                    int         `mapstructure:"min-peers"`
@@ -108,8 +107,7 @@ type Config struct {
 	InboundFraction             float64     `mapstructure:"inbound-fraction"`
 	OutboundFraction            float64     `mapstructure:"outbound-fraction"`
 	AutoscalePeers              bool        `mapstructure:"autoscale-peers"`
-	AdvertiseAddress            string      `mapstructure:"advertise-address"`
-	AdvertiseAddresses          []string    `mapstructure:"advertise-addresses"`
+	AdvertiseAddress            AddressList `mapstructure:"advertise-address"`
 	AcceptQueue                 int         `mapstructure:"p2p-accept-queue"`
 	Metrics                     bool        `mapstructure:"p2p-metrics"`
 	Bootnode                    bool        `mapstructure:"p2p-bootnode"`
@@ -138,20 +136,6 @@ type RelayServer struct {
 	TTL          time.Duration `mapstructure:"ttl"`
 }
 
-func (cfg *Config) listenAddrs() []string {
-	if cfg.Listen != "" {
-		return []string{cfg.Listen}
-	}
-	return cfg.ListenAddresses
-}
-
-func (cfg *Config) advertisedAddrs() []string {
-	if cfg.AdvertiseAddress != "" {
-		return []string{cfg.AdvertiseAddress}
-	}
-	return cfg.AdvertiseAddresses
-}
-
 func (cfg *Config) Validate() error {
 	if !cfg.EnableTCPTransport && !cfg.EnableQUICTransport {
 		return errors.New("no transports enabled")
@@ -172,13 +156,6 @@ func (cfg *Config) Validate() error {
 			return fmt.Errorf("p2p-reachability flag is invalid. should be one of %s, %s. got %s",
 				PublicReachability, PrivateReachability, cfg.ForceReachability,
 			)
-		}
-	}
-
-	for _, addrStr := range append(cfg.listenAddrs(), cfg.advertisedAddrs()...) {
-		_, err := multiaddr.NewMultiaddr(addrStr)
-		if err != nil {
-			return fmt.Errorf("address %s is not a valid multiaddr %w", addrStr, err)
 		}
 	}
 
@@ -248,7 +225,7 @@ func New(
 	g.direct = directMap
 	lopts := []libp2p.Option{
 		libp2p.Identity(key),
-		libp2p.ListenAddrStrings(cfg.listenAddrs()...),
+		libp2p.ListenAddrs(cfg.Listen...),
 		libp2p.UserAgent("go-spacemesh"),
 		libp2p.Muxer("/yamux/1.0.0", &streamer),
 		libp2p.Peerstore(ps),
@@ -301,19 +278,11 @@ func New(
 	if !cfg.DisableConnectionManager {
 		lopts = append(lopts, libp2p.ConnectionManager(cm))
 	}
-	if advAddrs := cfg.advertisedAddrs(); len(advAddrs) > 0 {
-		var addrs []multiaddr.Multiaddr
-		for _, addrStr := range advAddrs {
-			addr, err := multiaddr.NewMultiaddr(addrStr)
-			if err != nil {
-				panic(err) // validated in config
-			}
-			addrs = append(addrs, addr)
-		}
+	if len(cfg.AdvertiseAddress) > 0 {
 		lopts = append(
 			lopts,
 			libp2p.AddrsFactory(func([]multiaddr.Multiaddr) []multiaddr.Multiaddr {
-				return addrs
+				return cfg.AdvertiseAddress
 			}),
 		)
 	}
