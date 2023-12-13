@@ -3,6 +3,7 @@ package activation
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/shared"
@@ -25,16 +26,18 @@ type OffloadingPostVerifier struct {
 	stop    context.CancelFunc
 	stopped <-chan struct{}
 	log     *zap.Logger
-	workers []*postVerifierWorker
-	channel chan<- *verifyPostJob
 
-	verifier PostVerifier
+	workersCtx context.Context
+	workers    []*postVerifierWorker
+	jobs       chan *verifyPostJob
+	verifier   PostVerifier
 }
 
 type postVerifierWorker struct {
 	verifier PostVerifier
 	log      *zap.Logger
-	channel  <-chan *verifyPostJob
+	jobs     <-chan *verifyPostJob
+	cancel   atomic.Pointer[context.CancelFunc]
 }
 
 type postVerifier struct {
@@ -71,25 +74,14 @@ func NewPostVerifier(cfg PostConfig, logger *zap.Logger, opts ...verifying.Optio
 //
 // The verifier must be closed after use with Close().
 func NewOffloadingPostVerifier(verifier PostVerifier, numWorkers int, logger *zap.Logger) *OffloadingPostVerifier {
-	channel := make(chan *verifyPostJob, numWorkers)
-	workers := make([]*postVerifierWorker, 0, numWorkers)
-
-	for i := 0; i < numWorkers; i++ {
-		workers = append(workers, &postVerifierWorker{
-			verifier: verifier,
-			log:      logger.Named(fmt.Sprintf("worker-%d", i)),
-			channel:  channel,
-		})
-	}
-	logger.Info("created post verifier", zap.Int("num_workers", numWorkers))
-
 	ctx, cancel := context.WithCancel(context.Background())
 	stopped := make(chan struct{})
 	v := &OffloadingPostVerifier{
-		log:     logger,
-		workers: workers,
-		channel: channel,
-		stopped: stopped,
+		log:        logger,
+		workersCtx: ctx,
+		workers:    make([]*postVerifierWorker, 0, numWorkers),
+		jobs:       make(chan *verifyPostJob, numWorkers),
+		stopped:    stopped,
 		stop: func() {
 			cancel()
 			select {
@@ -102,12 +94,30 @@ func NewOffloadingPostVerifier(verifier PostVerifier, numWorkers int, logger *za
 	}
 
 	v.log.Info("starting post verifier")
-	for _, worker := range v.workers {
-		worker := worker
-		v.eg.Go(func() error { return worker.start(ctx) })
-	}
+	v.Scale(numWorkers)
 	v.log.Info("started post verifier")
 	return v
+}
+
+// Scale scales the number of workers to the given number.
+func (v *OffloadingPostVerifier) Scale(numWorkers int) {
+	v.log.Info("scaling post verifier", zap.Int("current", len(v.workers)), zap.Int("new", numWorkers))
+
+	if numWorkers > len(v.workers) {
+		// scale up
+		for i := 0; i < numWorkers-len(v.workers); i++ {
+			w := newWorker(v.verifier, v.log.Named(fmt.Sprintf("worker-%d", len(v.workers))), v.jobs)
+			v.workers = append(v.workers, w)
+			v.eg.Go(func() error { return w.start(v.workersCtx) })
+		}
+	} else if numWorkers < len(v.workers) {
+		// scale down
+		toKeep, toStop := v.workers[:numWorkers], v.workers[numWorkers:]
+		v.workers = toKeep
+		for _, worker := range toStop {
+			worker.stop()
+		}
+	}
 }
 
 func (v *OffloadingPostVerifier) Verify(
@@ -124,7 +134,7 @@ func (v *OffloadingPostVerifier) Verify(
 	}
 
 	select {
-	case v.channel <- job:
+	case v.jobs <- job:
 	case <-v.stopped:
 		return fmt.Errorf("verifier is closed")
 	case <-ctx.Done():
@@ -151,15 +161,37 @@ func (v *OffloadingPostVerifier) Close() error {
 	return nil
 }
 
+func newWorker(verifier PostVerifier, logger *zap.Logger, channel <-chan *verifyPostJob) *postVerifierWorker {
+	return &postVerifierWorker{
+		verifier: verifier,
+		log:      logger,
+		jobs:     channel,
+	}
+}
+
 func (w *postVerifierWorker) start(ctx context.Context) error {
+	ctx, cancel := context.WithCancel(ctx)
+	if !w.cancel.CompareAndSwap(nil, &cancel) {
+		return fmt.Errorf("worker already started")
+	}
 	w.log.Info("starting post proof verifier worker")
+	defer w.log.Info("stopped post proof verifier worker")
+
 	for {
 		select {
 		case <-ctx.Done():
-			w.log.Info("stopped post proof verifier worker")
 			return ctx.Err()
-		case job := <-w.channel:
+		case job := <-w.jobs:
 			job.result <- w.verifier.Verify(ctx, job.proof, job.metadata, job.opts...)
 		}
+	}
+}
+
+func (w *postVerifierWorker) stop() {
+	if cancel := w.cancel.Swap(nil); cancel != nil {
+		w.log.Info("stopping post proof verifier worker")
+		(*cancel)()
+	} else {
+		w.log.Warn("tried to stop worker that was not started")
 	}
 }

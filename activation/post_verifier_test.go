@@ -100,3 +100,26 @@ func TestPostVerifierClose(t *testing.T) {
 	err := v.Verify(context.Background(), &shared.Proof{}, &shared.ProofMetadata{})
 	require.EqualError(t, err, "verifier is closed")
 }
+
+func TestPostVerifierScaling(t *testing.T) {
+	// 0 workers - no one will verify the proof
+	mockVerifier := activation.NewMockPostVerifier(gomock.NewController(t))
+	v := activation.NewOffloadingPostVerifier(mockVerifier, 0, zaptest.NewLogger(t))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+
+	err := v.Verify(ctx, &shared.Proof{}, &shared.ProofMetadata{})
+	require.Error(t, err, context.Canceled)
+
+	mockVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+	v.Scale(1)
+	err = v.Verify(context.Background(), &shared.Proof{}, &shared.ProofMetadata{})
+	require.NoError(t, err)
+
+	v.Scale(0)
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	err = v.Verify(ctx, &shared.Proof{}, &shared.ProofMetadata{})
+	require.Error(t, err, context.Canceled)
+}
