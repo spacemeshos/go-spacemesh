@@ -391,7 +391,10 @@ func (t *ConStateAPIMock) GetMeshTransactions(
 	for _, txId := range txIds {
 		for _, tx := range t.returnTx {
 			if tx.ID == txId {
-				txs = append(txs, &types.MeshTransaction{Transaction: *tx})
+				txs = append(txs, &types.MeshTransaction{
+					State:       types.APPLIED,
+					Transaction: *tx,
+				})
 			}
 		}
 	}
@@ -1597,7 +1600,11 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 
 	resBlock := l.Blocks[0]
 
-	require.Equal(t, len(block1.TxIDs), len(resBlock.Transactions))
+	resTxIDs := make([]types.TransactionID, 0, len(resBlock.Transactions))
+	for _, tx := range resBlock.Transactions {
+		resTxIDs = append(resTxIDs, types.TransactionID(types.BytesToHash(tx.Id)))
+	}
+	require.ElementsMatch(t, block1.TxIDs, resTxIDs)
 	require.Equal(t, types.Hash20(block1.ID()).Bytes(), resBlock.Id)
 
 	// Check the tx as well
@@ -1801,6 +1808,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
 	db := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+
 	grpcService := NewMeshService(
 		db,
 		meshAPIMock,
