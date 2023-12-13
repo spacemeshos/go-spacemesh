@@ -261,6 +261,7 @@ func LoadConfigFromFile() (*config.Config, error) {
 	hook := mapstructure.ComposeDecodeHookFunc(
 		mapstructure.StringToTimeDurationHookFunc(),
 		mapstructure.StringToSliceHookFunc(","),
+		mapstructureutil.AddressListDecodeFunc(),
 		mapstructureutil.BigRatDecodeFunc(),
 		mapstructureutil.PostProviderIDDecodeFunc(),
 		mapstructure.TextUnmarshallerHookFunc(),
