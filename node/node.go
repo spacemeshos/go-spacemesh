@@ -553,7 +553,7 @@ func (app *App) initServices(ctx context.Context) error {
 	poetDb := activation.NewPoetDb(app.db, app.addLogger(PoetDbLogger, lg))
 
 	nipostValidatorLogger := app.addLogger(NipostValidatorLogger, lg)
-	postVerifiers := make([]activation.PostVerifier, 0, app.Config.SMESHING.VerifyingOpts.Workers)
+
 	lg.Debug("creating post verifier")
 	verifier, err := activation.NewPostVerifier(
 		app.Config.POST,
@@ -564,10 +564,8 @@ func (app *App) initServices(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	for i := 0; i < app.Config.SMESHING.VerifyingOpts.Workers; i++ {
-		postVerifiers = append(postVerifiers, verifier)
-	}
-	app.postVerifier = activation.NewOffloadingPostVerifier(postVerifiers, nipostValidatorLogger.Zap())
+	postVerifyingWorkers := app.Config.SMESHING.VerifyingOpts.Workers
+	app.postVerifier = activation.NewOffloadingPostVerifier(verifier, postVerifyingWorkers, nipostValidatorLogger.Zap())
 
 	validator := activation.NewValidator(
 		poetDb,

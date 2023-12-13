@@ -27,6 +27,8 @@ type OffloadingPostVerifier struct {
 	log     *zap.Logger
 	workers []*postVerifierWorker
 	channel chan<- *verifyPostJob
+
+	verifier PostVerifier
 }
 
 type postVerifierWorker struct {
@@ -64,12 +66,15 @@ func NewPostVerifier(cfg PostConfig, logger *zap.Logger, opts ...verifying.Optio
 // NewOffloadingPostVerifier creates a new post proof verifier with the given number of workers.
 // The verifier will distribute incoming proofs between the workers.
 // It will block if all workers are busy.
-func NewOffloadingPostVerifier(verifiers []PostVerifier, logger *zap.Logger) *OffloadingPostVerifier {
-	numWorkers := len(verifiers)
+//
+// SAFETY: The `verifier` must be safe to use concurrently.
+//
+// The verifier must be closed after use with Close().
+func NewOffloadingPostVerifier(verifier PostVerifier, numWorkers int, logger *zap.Logger) *OffloadingPostVerifier {
 	channel := make(chan *verifyPostJob, numWorkers)
 	workers := make([]*postVerifierWorker, 0, numWorkers)
 
-	for i, verifier := range verifiers {
+	for i := 0; i < numWorkers; i++ {
 		workers = append(workers, &postVerifierWorker{
 			verifier: verifier,
 			log:      logger.Named(fmt.Sprintf("worker-%d", i)),
@@ -93,6 +98,7 @@ func NewOffloadingPostVerifier(verifiers []PostVerifier, logger *zap.Logger) *Of
 				close(stopped)
 			}
 		},
+		verifier: verifier,
 	}
 
 	v.log.Info("starting post verifier")
@@ -140,11 +146,7 @@ func (v *OffloadingPostVerifier) Close() error {
 	v.stop()
 	v.eg.Wait()
 
-	for _, worker := range v.workers {
-		if err := worker.verifier.Close(); err != nil {
-			return err
-		}
-	}
+	v.verifier.Close()
 	v.log.Info("stopped post verifier")
 	return nil
 }
