@@ -37,9 +37,10 @@ func createTestHandler(t testing.TB) *testHandler {
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
 	ctrl := gomock.NewController(t)
 	mm := mocks.NewMockmeshProvider(ctrl)
+	clock := mocks.NewMocklayerClock(ctrl)
 	mb := smocks.NewMockBeaconGetter(ctrl)
 	return &testHandler{
-		handler: newHandler(cdb, datastore.NewBlobStore(cdb.Database), mm, mb, lg),
+		handler: newHandler(cdb, clock, datastore.NewBlobStore(cdb.Database), mm, mb, lg),
 		cdb:     cdb,
 		mm:      mm,
 		mb:      mb,

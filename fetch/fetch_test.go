@@ -25,6 +25,8 @@ import (
 
 type testFetch struct {
 	*Fetch
+	mClock *mocks.MocklayerClock
+
 	mh      *mocks.Mockhost
 	mMalS   *mocks.Mockrequester
 	mAtxS   *mocks.Mockrequester
@@ -50,6 +52,7 @@ func createFetch(tb testing.TB) *testFetch {
 	ctrl := gomock.NewController(tb)
 	tf := &testFetch{
 		mh:           mocks.NewMockhost(ctrl),
+		mClock:       mocks.NewMocklayerClock(ctrl),
 		mMalS:        mocks.NewMockrequester(ctrl),
 		mAtxS:        mocks.NewMockrequester(ctrl),
 		mLyrS:        mocks.NewMockrequester(ctrl),
@@ -78,7 +81,7 @@ func createFetch(tb testing.TB) *testFetch {
 	}
 	lg := logtest.New(tb)
 
-	tf.Fetch = NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), tf.mMesh, nil, nil,
+	tf.Fetch = NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), tf.mClock, tf.mMesh, nil, nil,
 		WithContext(context.TODO()),
 		WithConfig(cfg),
 		WithLogger(lg),
@@ -115,7 +118,7 @@ func badReceiver(context.Context, types.Hash32, p2p.Peer, []byte) error {
 
 func TestFetch_Start(t *testing.T) {
 	lg := logtest.New(t)
-	f := NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), nil, nil, nil,
+	f := NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), nil, nil, nil, nil,
 		WithContext(context.TODO()),
 		WithConfig(DefaultConfig()),
 		WithLogger(lg),
@@ -385,7 +388,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	})
 	defer eg.Wait()
 
-	fetcher := NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), nil, nil, h,
+	fetcher := NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), nil, nil, nil, h,
 		WithContext(ctx),
 		WithConfig(cfg),
 		WithLogger(lg),

@@ -781,7 +781,7 @@ func (app *App) initServices(ctx context.Context) error {
 	app.certifier.Register(app.edSgn)
 
 	flog := app.addLogger(Fetcher, lg)
-	fetcher := fetch.NewFetch(app.cachedDB, msh, beaconProtocol, app.host,
+	fetcher := fetch.NewFetch(app.cachedDB, app.clock, msh, beaconProtocol, app.host,
 		fetch.WithContext(ctx),
 		fetch.WithConfig(app.Config.FETCH),
 		fetch.WithLogger(flog),

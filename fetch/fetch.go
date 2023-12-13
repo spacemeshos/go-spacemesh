@@ -219,6 +219,7 @@ type Fetch struct {
 // NewFetch creates a new Fetch struct.
 func NewFetch(
 	cdb *datastore.CachedDB,
+	clock layerClock,
 	msh meshProvider,
 	b system.BeaconGetter,
 	host *p2p.Host,
@@ -266,7 +267,7 @@ func NewFetch(
 
 	f.batchTimeout = time.NewTicker(f.cfg.BatchTimeout)
 	if len(f.servers) == 0 {
-		h := newHandler(cdb, bs, msh, b, f.logger)
+		h := newHandler(cdb, clock, bs, msh, b, f.logger)
 		f.registerServer(host, atxProtocol, h.handleEpochInfoReq)
 		f.registerServer(host, lyrDataProtocol, h.handleLayerDataReq)
 		f.registerServer(host, hashProtocol, h.handleHashReq)
