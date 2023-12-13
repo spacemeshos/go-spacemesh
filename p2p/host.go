@@ -51,7 +51,19 @@ func DefaultConfig() Config {
 		EnableHolepunching:     true,
 		InboundFraction:        0.8,
 		OutboundFraction:       1.1,
-		RelayServer:            RelayServer{TTL: 20 * time.Minute, Reservations: 512},
+		RelayServer: RelayServer{
+			TTL:               20 * time.Minute,
+			Reservations:      512,
+			ConnDurationLimit: 2 * time.Minute,
+			ConnDataLimit:     1 << 17, // 128K
+
+			MaxCircuits: 16,
+			BufferSize:  2048,
+
+			MaxReservationsPerPeer: 4,
+			MaxReservationsPerIP:   8,
+			MaxReservationsPerASN:  32,
+		},
 		IP4Blocklist: []string{
 			// localhost
 			"127.0.0.0/8",
@@ -131,9 +143,16 @@ type Config struct {
 }
 
 type RelayServer struct {
-	Enable       bool          `mapstructure:"enable"`
-	Reservations int           `mapstructure:"reservations"`
-	TTL          time.Duration `mapstructure:"ttl"`
+	Enable                 bool          `mapstructure:"enable"`
+	Reservations           int           `mapstructure:"reservations"`
+	TTL                    time.Duration `mapstructure:"ttl"`
+	ConnDurationLimit      time.Duration `mapstructure:"conn-duration-limit"`
+	ConnDataLimit          int64         `mapstructure:"conn-data-limit"`
+	MaxCircuits            int           `mapstructure:"max-circuits"`
+	BufferSize             int           `mapstructure:"buffer-size"`
+	MaxReservationsPerPeer int           `mapstructure:"max-reservations-per-peer"`
+	MaxReservationsPerIP   int           `mapstructure:"max-reservations-per-ip"`
+	MaxReservationsPerASN  int           `mapstructure:"max-reservations-per-asn"`
 }
 
 func (cfg *Config) Validate() error {
@@ -292,8 +311,15 @@ func New(
 	if cfg.Relay {
 		if cfg.RelayServer.Enable {
 			resources := relay.DefaultResources()
-			resources.MaxReservations = cfg.RelayServer.Reservations
+			resources.Limit.Duration = cfg.RelayServer.ConnDurationLimit
+			resources.Limit.Data = cfg.RelayServer.ConnDataLimit
 			resources.ReservationTTL = cfg.RelayServer.TTL
+			resources.MaxReservations = cfg.RelayServer.Reservations
+			resources.MaxCircuits = cfg.RelayServer.MaxCircuits
+			resources.BufferSize = cfg.RelayServer.BufferSize
+			resources.MaxReservationsPerPeer = cfg.RelayServer.MaxReservationsPerPeer
+			resources.MaxReservationsPerIP = cfg.RelayServer.MaxReservationsPerIP
+			resources.MaxReservationsPerASN = cfg.RelayServer.MaxReservationsPerASN
 			lopts = append(lopts, libp2p.EnableRelayService(relay.WithResources(resources)))
 		}
 
