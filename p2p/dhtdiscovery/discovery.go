@@ -431,6 +431,9 @@ func (d *Discovery) discoverPeers(ctx context.Context) error {
 
 func (d *Discovery) discoverRelays(ctx context.Context) error {
 	for p := range d.findPeersContinuously(ctx, relayNS) {
+		if p.ID == d.h.ID() {
+			continue
+		}
 		if len(p.Addrs) != 0 {
 			d.logger.Debug("found relay candidate", zap.Any("p", p))
 			select {
