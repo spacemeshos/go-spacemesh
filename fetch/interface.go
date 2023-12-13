@@ -2,6 +2,7 @@ package fetch
 
 import (
 	"context"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -45,4 +46,10 @@ type meshProvider interface {
 
 type host interface {
 	ID() p2p.Peer
+}
+
+type layerClock interface {
+	AwaitLayer(layerID types.LayerID) <-chan struct{}
+	CurrentLayer() types.LayerID
+	LayerToTime(types.LayerID) time.Time
 }

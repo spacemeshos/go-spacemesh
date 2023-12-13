@@ -20,15 +20,17 @@ import (
 type handler struct {
 	logger log.Log
 	cdb    *datastore.CachedDB
+	clock  layerClock
 	bs     *datastore.BlobStore
 	msh    meshProvider
 	beacon system.BeaconGetter
 }
 
-func newHandler(cdb *datastore.CachedDB, bs *datastore.BlobStore, m meshProvider, b system.BeaconGetter, lg log.Log) *handler {
+func newHandler(cdb *datastore.CachedDB, clock layerClock, bs *datastore.BlobStore, m meshProvider, b system.BeaconGetter, lg log.Log) *handler {
 	return &handler{
 		logger: lg,
 		cdb:    cdb,
+		clock:  clock,
 		bs:     bs,
 		msh:    m,
 		beacon: b,
@@ -235,6 +237,22 @@ func (h *handler) handleMeshHashReq(ctx context.Context, reqData []byte) ([]byte
 	data, err = codec.EncodeSlice(hashes)
 	if err != nil {
 		h.logger.WithContext(ctx).With().Fatal("serve: failed to encode hashes", log.Err(err))
+	}
+	var currentLayer = h.clock.CurrentLayer()
+	if req.From > currentLayer-100 {
+		h.logger.WithContext(ctx).With().Info("SYNC BUCKET 1")
+	} else if req.From > currentLayer-500 {
+		h.logger.WithContext(ctx).With().Info("SYNC BUCKET 2")
+	} else if req.From > currentLayer-1000 {
+		h.logger.WithContext(ctx).With().Info("SYNC BUCKET 3")
+	} else if req.From > currentLayer-2000 {
+		h.logger.WithContext(ctx).With().Info("SYNC BUCKET 4")
+	} else if req.From > currentLayer-5000 {
+		h.logger.WithContext(ctx).With().Info("SYNC BUCKET 5")
+	} else if req.From > currentLayer-10000 {
+		h.logger.WithContext(ctx).With().Info("SYNC BUCKET 6")
+	} else {
+		h.logger.WithContext(ctx).With().Info("SYNC BUCKET 7")
 	}
 	h.logger.WithContext(ctx).With().Debug("serve: returning response for mesh hashes",
 		log.Stringer("layer_from", req.From),

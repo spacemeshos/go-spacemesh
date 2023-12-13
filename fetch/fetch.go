@@ -170,6 +170,7 @@ type Fetch struct {
 // NewFetch creates a new Fetch struct.
 func NewFetch(
 	cdb *datastore.CachedDB,
+	clock layerClock,
 	msh meshProvider,
 	b system.BeaconGetter,
 	host *p2p.Host,
@@ -221,7 +222,7 @@ func NewFetch(
 		server.WithLog(f.logger),
 	}
 	if len(f.servers) == 0 {
-		h := newHandler(cdb, bs, msh, b, f.logger)
+		h := newHandler(cdb, clock, bs, msh, b, f.logger)
 		f.servers[atxProtocol] = server.New(host, atxProtocol, h.handleEpochInfoReq, srvOpts...)
 		f.servers[lyrDataProtocol] = server.New(
 			host,

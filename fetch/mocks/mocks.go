@@ -11,6 +11,7 @@ package mocks
 import (
 	context "context"
 	reflect "reflect"
+	time "time"
 
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
@@ -318,6 +319,143 @@ func (c *hostIDCall) Do(f func() p2p.Peer) *hostIDCall {
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *hostIDCall) DoAndReturn(f func() p2p.Peer) *hostIDCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// MocklayerClock is a mock of layerClock interface.
+type MocklayerClock struct {
+	ctrl     *gomock.Controller
+	recorder *MocklayerClockMockRecorder
+}
+
+// MocklayerClockMockRecorder is the mock recorder for MocklayerClock.
+type MocklayerClockMockRecorder struct {
+	mock *MocklayerClock
+}
+
+// NewMocklayerClock creates a new mock instance.
+func NewMocklayerClock(ctrl *gomock.Controller) *MocklayerClock {
+	mock := &MocklayerClock{ctrl: ctrl}
+	mock.recorder = &MocklayerClockMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MocklayerClock) EXPECT() *MocklayerClockMockRecorder {
+	return m.recorder
+}
+
+// AwaitLayer mocks base method.
+func (m *MocklayerClock) AwaitLayer(layerID types.LayerID) <-chan struct{} {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AwaitLayer", layerID)
+	ret0, _ := ret[0].(<-chan struct{})
+	return ret0
+}
+
+// AwaitLayer indicates an expected call of AwaitLayer.
+func (mr *MocklayerClockMockRecorder) AwaitLayer(layerID any) *layerClockAwaitLayerCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AwaitLayer", reflect.TypeOf((*MocklayerClock)(nil).AwaitLayer), layerID)
+	return &layerClockAwaitLayerCall{Call: call}
+}
+
+// layerClockAwaitLayerCall wrap *gomock.Call
+type layerClockAwaitLayerCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *layerClockAwaitLayerCall) Return(arg0 <-chan struct{}) *layerClockAwaitLayerCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *layerClockAwaitLayerCall) Do(f func(types.LayerID) <-chan struct{}) *layerClockAwaitLayerCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *layerClockAwaitLayerCall) DoAndReturn(f func(types.LayerID) <-chan struct{}) *layerClockAwaitLayerCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// CurrentLayer mocks base method.
+func (m *MocklayerClock) CurrentLayer() types.LayerID {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CurrentLayer")
+	ret0, _ := ret[0].(types.LayerID)
+	return ret0
+}
+
+// CurrentLayer indicates an expected call of CurrentLayer.
+func (mr *MocklayerClockMockRecorder) CurrentLayer() *layerClockCurrentLayerCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CurrentLayer", reflect.TypeOf((*MocklayerClock)(nil).CurrentLayer))
+	return &layerClockCurrentLayerCall{Call: call}
+}
+
+// layerClockCurrentLayerCall wrap *gomock.Call
+type layerClockCurrentLayerCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *layerClockCurrentLayerCall) Return(arg0 types.LayerID) *layerClockCurrentLayerCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *layerClockCurrentLayerCall) Do(f func() types.LayerID) *layerClockCurrentLayerCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *layerClockCurrentLayerCall) DoAndReturn(f func() types.LayerID) *layerClockCurrentLayerCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// LayerToTime mocks base method.
+func (m *MocklayerClock) LayerToTime(arg0 types.LayerID) time.Time {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LayerToTime", arg0)
+	ret0, _ := ret[0].(time.Time)
+	return ret0
+}
+
+// LayerToTime indicates an expected call of LayerToTime.
+func (mr *MocklayerClockMockRecorder) LayerToTime(arg0 any) *layerClockLayerToTimeCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LayerToTime", reflect.TypeOf((*MocklayerClock)(nil).LayerToTime), arg0)
+	return &layerClockLayerToTimeCall{Call: call}
+}
+
+// layerClockLayerToTimeCall wrap *gomock.Call
+type layerClockLayerToTimeCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *layerClockLayerToTimeCall) Return(arg0 time.Time) *layerClockLayerToTimeCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *layerClockLayerToTimeCall) Do(f func(types.LayerID) time.Time) *layerClockLayerToTimeCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *layerClockLayerToTimeCall) DoAndReturn(f func(types.LayerID) time.Time) *layerClockLayerToTimeCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
