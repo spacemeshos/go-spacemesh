@@ -11,7 +11,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type verifyPostJob struct {
@@ -25,14 +24,14 @@ type OffloadingPostVerifier struct {
 	eg      errgroup.Group
 	stop    context.CancelFunc
 	stopped <-chan struct{}
-	log     log.Log
+	log     *zap.Logger
 	workers []*postVerifierWorker
 	channel chan<- *verifyPostJob
 }
 
 type postVerifierWorker struct {
 	verifier PostVerifier
-	log      log.Log
+	log      *zap.Logger
 	channel  <-chan *verifyPostJob
 }
 
@@ -65,7 +64,7 @@ func NewPostVerifier(cfg PostConfig, logger *zap.Logger, opts ...verifying.Optio
 // NewOffloadingPostVerifier creates a new post proof verifier with the given number of workers.
 // The verifier will distribute incoming proofs between the workers.
 // It will block if all workers are busy.
-func NewOffloadingPostVerifier(verifiers []PostVerifier, logger log.Log) *OffloadingPostVerifier {
+func NewOffloadingPostVerifier(verifiers []PostVerifier, logger *zap.Logger) *OffloadingPostVerifier {
 	numWorkers := len(verifiers)
 	channel := make(chan *verifyPostJob, numWorkers)
 	workers := make([]*postVerifierWorker, 0, numWorkers)
@@ -77,7 +76,7 @@ func NewOffloadingPostVerifier(verifiers []PostVerifier, logger log.Log) *Offloa
 			channel:  channel,
 		})
 	}
-	logger.With().Info("created post verifier", log.Int("num_workers", numWorkers))
+	logger.Info("created post verifier", zap.Int("num_workers", numWorkers))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	stopped := make(chan struct{})

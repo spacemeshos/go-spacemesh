@@ -13,8 +13,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
 func TestOffloadingPostVerifier(t *testing.T) {
@@ -27,7 +25,7 @@ func TestOffloadingPostVerifier(t *testing.T) {
 	verifier := activation.NewMockPostVerifier(gomock.NewController(t))
 	offloadingVerifier := activation.NewOffloadingPostVerifier(
 		[]activation.PostVerifier{verifier},
-		log.NewDefault(t.Name()),
+		zaptest.NewLogger(t),
 	)
 	defer offloadingVerifier.Close()
 	verifier.EXPECT().Close().Return(nil)
@@ -58,7 +56,7 @@ func TestPostVerifierVerifyAfterStop(t *testing.T) {
 	verifier := activation.NewMockPostVerifier(gomock.NewController(t))
 	offloadingVerifier := activation.NewOffloadingPostVerifier(
 		[]activation.PostVerifier{verifier},
-		log.NewDefault(t.Name()),
+		zaptest.NewLogger(t),
 	)
 	defer offloadingVerifier.Close()
 	verifier.EXPECT().Close().Return(nil)
@@ -85,7 +83,7 @@ func TestPostVerifierNoRaceOnClose(t *testing.T) {
 	verifier := activation.NewMockPostVerifier(gomock.NewController(t))
 	offloadingVerifier := activation.NewOffloadingPostVerifier(
 		[]activation.PostVerifier{verifier},
-		logtest.New(t),
+		zaptest.NewLogger(t),
 	)
 	defer offloadingVerifier.Close()
 	verifier.EXPECT().Close().AnyTimes().Return(nil)
@@ -116,7 +114,7 @@ func TestPostVerifierReturnsOnCtxCanceledWhenBlockedVerifying(t *testing.T) {
 	v := activation.NewOffloadingPostVerifier(
 		[]activation.PostVerifier{
 			// empty list of verifiers - no one will verify the proof
-		}, log.NewDefault(t.Name()))
+		}, zaptest.NewLogger(t))
 
 	require.NoError(t, v.Close())
 

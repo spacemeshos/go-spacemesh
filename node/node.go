@@ -567,7 +567,7 @@ func (app *App) initServices(ctx context.Context) error {
 	for i := 0; i < app.Config.SMESHING.VerifyingOpts.Workers; i++ {
 		postVerifiers = append(postVerifiers, verifier)
 	}
-	app.postVerifier = activation.NewOffloadingPostVerifier(postVerifiers, nipostValidatorLogger)
+	app.postVerifier = activation.NewOffloadingPostVerifier(postVerifiers, nipostValidatorLogger.Zap())
 
 	validator := activation.NewValidator(
 		poetDb,
