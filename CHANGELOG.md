@@ -94,7 +94,8 @@ for more information on how to configure the node to work with the PoST service.
   all activation data for an epoch. As the number of activations per epoch has grown, this brute force query (i.e.,
   without appropriate database indices) became very expensive and could cause the node to hang and consume an enormous
   amount of resources. This hotfix removes all activation data from these endpoints so that they still work for
-  querying other data.
+  querying other data. It also modifies `LayersQuery` to not return any _ineffective_ transactions in blocks, since
+  there's currently no way to distinguish between effective and ineffective transactions using the API.
 
 ## Release v1.2.9
 
