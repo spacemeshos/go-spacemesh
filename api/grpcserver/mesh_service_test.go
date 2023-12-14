@@ -256,3 +256,25 @@ func TestMeshService_MalfeasanceStream(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, events.ToMalfeasancePB(id, proof, false), resp.Proof)
 }
+
+func TestReadLayer(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	genTime := NewMockgenesisTimeAPI(ctrl)
+	db := sql.InMemory()
+	srv := NewMeshService(
+		datastore.NewCachedDB(db, logtest.New(t)),
+		meshAPIMock,
+		conStateAPI,
+		genTime,
+		layersPerEpoch,
+		types.Hash20{},
+		layerDuration,
+		layerAvgSize,
+		txsPerProposal,
+	)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	pbLayer, err := srv.readLayer(ctx, layer, pb.Layer_LAYER_STATUS_UNSPECIFIED)
+	require.NoError(t, err)
+	require.NotNil(t, pbLayer)
+}
