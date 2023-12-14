@@ -36,7 +36,7 @@ func newAutoscaler() (*autoscaler, error) {
 		default:
 			return false
 		}
-	}, events.WithBuffer(2))
+	}, events.WithBuffer(5))
 
 	return &autoscaler{sub: sub}, err
 }
