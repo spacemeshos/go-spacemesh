@@ -28,8 +28,8 @@ const (
 	discoveryHighPeersDelay = 10 * time.Second
 	protocolPrefix          = "/spacekad"
 	ProtocolID              = protocolPrefix + "/kad/1.0.0"
-	advertiseInterval       = 10 * time.Second
-	findPeersRetryDelay     = 1 * time.Second
+	findPeersRetryDelay     = time.Second
+	advertiseRetryInterval  = time.Second
 )
 
 type Opt func(*Discovery)
@@ -124,6 +124,12 @@ func AdvertiseForPeerDiscovery() Opt {
 	}
 }
 
+func WithAdvertiseInterval(aint time.Duration) Opt {
+	return func(d *Discovery) {
+		d.advertiseInterval = aint
+	}
+}
+
 type DiscoveryHost interface {
 	host.Host
 	NeedPeerDiscovery() bool
@@ -140,6 +146,7 @@ func New(h DiscoveryHost, opts ...Opt) (*Discovery, error) {
 		bootstrapDuration: 30 * time.Second,
 		minPeers:          20,
 		highPeers:         40,
+		advertiseInterval: time.Minute,
 	}
 	for _, opt := range opts {
 		opt(&d)
@@ -176,6 +183,7 @@ type Discovery struct {
 	bootstrapDuration   time.Duration
 	minPeers, highPeers int
 	backup, bootnodes   []peer.AddrInfo
+	advertiseInterval   time.Duration
 }
 
 func (d *Discovery) FindPeer(ctx context.Context, p peer.ID) (peer.AddrInfo, error) {
@@ -372,13 +380,13 @@ func (d *Discovery) advertiseNS(ctx context.Context, ns string, active func() bo
 		if active == nil || active() {
 			var err error
 			d.logger.Debug("advertising for routing discovery", zap.String("ns", ns))
-			ttl, err = d.disc.Advertise(ctx, ns, p2pdisc.TTL(advertiseInterval))
+			ttl, err = d.disc.Advertise(ctx, ns, p2pdisc.TTL(d.advertiseInterval))
 			if err != nil {
 				d.logger.Error("failed to re-advertise for discovery", zap.String("ns", ns), zap.Error(err))
-				ttl = advertiseInterval
+				ttl = advertiseRetryInterval
 			}
 		} else {
-			ttl = advertiseInterval
+			ttl = d.advertiseInterval
 		}
 		select {
 		case <-ctx.Done():
