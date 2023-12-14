@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync/atomic"
 
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
@@ -12,6 +13,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
 )
 
 type verifyPostJob struct {
@@ -19,6 +21,42 @@ type verifyPostJob struct {
 	metadata *shared.ProofMetadata
 	opts     []verifying.OptionFunc
 	result   chan error
+}
+
+type autoscaler struct {
+	sub *events.BufferedSubscription[events.UserEvent]
+}
+
+func newAutoscaler() (*autoscaler, error) {
+	sub, err := events.SubscribeMatched(func(t *events.UserEvent) bool {
+		switch t.Event.Details.(type) {
+		case (*pb.Event_PostStart):
+			return true
+		case (*pb.Event_PostComplete):
+			return true
+		default:
+			return false
+		}
+	}, events.WithBuffer(2))
+
+	return &autoscaler{sub: sub}, err
+}
+
+func (a autoscaler) run(ctx context.Context, s scaler, min, target int) error {
+	for {
+		select {
+		case e := <-a.sub.Out():
+			switch e.Event.Details.(type) {
+			case (*pb.Event_PostStart):
+				s.scale(min)
+			case (*pb.Event_PostComplete):
+				s.scale(target)
+			}
+		case <-ctx.Done():
+			a.sub.Close()
+			return ctx.Err()
+		}
+	}
 }
 
 type OffloadingPostVerifier struct {
@@ -94,25 +132,44 @@ func NewOffloadingPostVerifier(verifier PostVerifier, numWorkers int, logger *za
 	}
 
 	v.log.Info("starting post verifier")
-	v.Scale(numWorkers)
+	v.scale(numWorkers)
 	v.log.Info("started post verifier")
 	return v
 }
 
-// Scale scales the number of workers to the given number.
-func (v *OffloadingPostVerifier) Scale(numWorkers int) {
-	v.log.Info("scaling post verifier", zap.Int("current", len(v.workers)), zap.Int("new", numWorkers))
+// Turn on automatic scaling of the number of workers.
+// The number of workers will be scaled between `min` and `target` (inclusive).
+func (v *OffloadingPostVerifier) Autoscale(min, target int) {
+	a, err := newAutoscaler()
+	if err != nil {
+		v.log.Panic("failed to create autoscaler", zap.Error(err))
+	}
+	v.eg.Go(func() error { return a.run(v.workersCtx, v, min, target) })
+}
 
-	if numWorkers > len(v.workers) {
+// Scale the number of workers to the given number.
+//
+// SAFETY: Must not be called concurrently.
+// This is satisified by the fact that the only caller is the autoscaler,
+// which executes scale() serially.
+func (v *OffloadingPostVerifier) scale(target int) {
+	v.log.Info("scaling post verifier", zap.Int("current", len(v.workers)), zap.Int("new", target))
+
+	if target > len(v.workers) {
 		// scale up
-		for i := 0; i < numWorkers-len(v.workers); i++ {
-			w := newWorker(v.verifier, v.log.Named(fmt.Sprintf("worker-%d", len(v.workers))), v.jobs)
+		for i := len(v.workers); i < target; i++ {
+			v.log.Debug("starting post verifier worker", zap.Int("worker", i))
+			w := &postVerifierWorker{
+				verifier: v.verifier,
+				log:      v.log.Named(fmt.Sprintf("worker-%d", len(v.workers))),
+				jobs:     v.jobs,
+			}
 			v.workers = append(v.workers, w)
 			v.eg.Go(func() error { return w.start(v.workersCtx) })
 		}
-	} else if numWorkers < len(v.workers) {
+	} else if target < len(v.workers) {
 		// scale down
-		toKeep, toStop := v.workers[:numWorkers], v.workers[numWorkers:]
+		toKeep, toStop := v.workers[:target], v.workers[target:]
 		v.workers = toKeep
 		for _, worker := range toStop {
 			worker.stop()
@@ -161,14 +218,6 @@ func (v *OffloadingPostVerifier) Close() error {
 	return nil
 }
 
-func newWorker(verifier PostVerifier, logger *zap.Logger, channel <-chan *verifyPostJob) *postVerifierWorker {
-	return &postVerifierWorker{
-		verifier: verifier,
-		log:      logger,
-		jobs:     channel,
-	}
-}
-
 func (w *postVerifierWorker) start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	if !w.cancel.CompareAndSwap(nil, &cancel) {
@@ -189,7 +238,6 @@ func (w *postVerifierWorker) start(ctx context.Context) error {
 
 func (w *postVerifierWorker) stop() {
 	if cancel := w.cancel.Swap(nil); cancel != nil {
-		w.log.Info("stopping post proof verifier worker")
 		(*cancel)()
 	} else {
 		w.log.Warn("tried to stop worker that was not started")

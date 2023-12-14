@@ -564,8 +564,10 @@ func (app *App) initServices(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	postVerifyingWorkers := app.Config.SMESHING.VerifyingOpts.Workers
-	app.postVerifier = activation.NewOffloadingPostVerifier(verifier, postVerifyingWorkers, nipostValidatorLogger.Zap())
+	minWorkers := app.Config.SMESHING.VerifyingOpts.MinWorkers
+	workers := app.Config.SMESHING.VerifyingOpts.Workers
+	app.postVerifier = activation.NewOffloadingPostVerifier(verifier, workers, nipostValidatorLogger.Zap())
+	app.postVerifier.Autoscale(minWorkers, workers)
 
 	validator := activation.NewValidator(
 		poetDb,
