@@ -3,7 +3,7 @@ module github.com/spacemeshos/go-spacemesh
 go 1.21.3
 
 require (
-	cloud.google.com/go/storage v1.35.1
+	cloud.google.com/go/storage v1.36.0
 	github.com/ALTree/bigfloat v0.2.0
 	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20231115031015-f44a6888d1af
 	github.com/cosmos/btcutil v1.0.5
