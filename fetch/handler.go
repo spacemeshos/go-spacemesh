@@ -3,6 +3,7 @@ package fetch
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -239,21 +240,31 @@ func (h *handler) handleMeshHashReq(ctx context.Context, reqData []byte) ([]byte
 		h.logger.WithContext(ctx).With().Fatal("serve: failed to encode hashes", log.Err(err))
 	}
 	var currentLayer = h.clock.CurrentLayer()
+	var bucket int
 	if req.From > currentLayer-100 {
 		h.logger.WithContext(ctx).With().Info("SYNC BUCKET 1", log.Int("count_hashes", len(hashes)))
+		bucket = 1
 	} else if req.From > currentLayer-500 {
 		h.logger.WithContext(ctx).With().Info("SYNC BUCKET 2", log.Int("count_hashes", len(hashes)))
+		bucket = 2
 	} else if req.From > currentLayer-1000 {
 		h.logger.WithContext(ctx).With().Info("SYNC BUCKET 3", log.Int("count_hashes", len(hashes)))
+		bucket = 3
 	} else if req.From > currentLayer-2000 {
 		h.logger.WithContext(ctx).With().Info("SYNC BUCKET 4", log.Int("count_hashes", len(hashes)))
+		bucket = 4
 	} else if req.From > currentLayer-5000 {
 		h.logger.WithContext(ctx).With().Info("SYNC BUCKET 5", log.Int("count_hashes", len(hashes)))
+		bucket = 5
 	} else if req.From > currentLayer-10000 {
 		h.logger.WithContext(ctx).With().Info("SYNC BUCKET 6", log.Int("count_hashes", len(hashes)))
+		bucket = 6
 	} else {
 		h.logger.WithContext(ctx).With().Info("SYNC BUCKET 7", log.Int("count_hashes", len(hashes)))
+		bucket = 7
 	}
+	bucketMeshHash.WithLabelValues(fmt.Sprintf("%d", bucket)).Add(float64(len(hashes)))
+	bucketMeshHashHit.WithLabelValues(fmt.Sprintf("%d", bucket)).Add(1)
 	h.logger.WithContext(ctx).With().Debug("serve: returning response for mesh hashes",
 		log.Stringer("layer_from", req.From),
 		log.Stringer("layer_to", req.To),

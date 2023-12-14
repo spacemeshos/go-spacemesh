@@ -60,6 +60,20 @@ var (
 		"total layer opinion requests received",
 		[]string{"version"},
 	).WithLabelValues("v2")
+
+	bucketMeshHash = metrics.NewCounter(
+		"bucket_mesh_hash_counts",
+		subsystem,
+		"requests to mesh hash by bucket",
+		[]string{"bucket"},
+	)
+
+	bucketMeshHashHit = metrics.NewCounter(
+		"bucket_mesh_hit_counts",
+		subsystem,
+		"requests to mesh hash by bucket hit",
+		[]string{"bucket"},
+	)
 )
 
 // logCacheHit logs cache hit.
