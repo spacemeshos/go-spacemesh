@@ -18,7 +18,8 @@ IP.1 = 127.0.0.1
 EOF
 
 # create CA private key and certificate
-openssl req -x509 -newkey rsa:4096 -days 365 -nodes -keyout ca.key -out ca.crt -subj "/C=EN/ST=Spacemesh/L=Tel Aviv/O=Spacemesh/CN=spacemesh.io/emailAddress=info@spacemesh.io"
+openssl req -x509 -newkey rsa:4096 -days 365 -nodes -keyout ca.key -out ca.crt \
+    -subj "/C=EN/ST=Spacemesh/L=Tel Aviv/O=Spacemesh/CN=spacemesh.io/emailAddress=info@spacemesh.io"
 
 # create server private key and CSR
 openssl req -newkey rsa:4096 -nodes -keyout server.key -out server-req.pem \
