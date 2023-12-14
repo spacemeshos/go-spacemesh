@@ -6,13 +6,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/post/shared"
 )
 
 func TestAutoScaling(t *testing.T) {
