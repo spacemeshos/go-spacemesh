@@ -67,7 +67,7 @@ var (
 		subsystem,
 		"requests to mesh hash by bucket",
 		[]string{"bucket"},
-		prometheus.LinearBuckets(0, 100, 50),
+		prometheus.LinearBuckets(0, 10, 50),
 	)
 
 	bucketMeshHashHit = metrics.NewHistogramWithBuckets(

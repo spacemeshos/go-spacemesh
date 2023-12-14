@@ -258,7 +258,7 @@ func (h *handler) handleMeshHashReq(ctx context.Context, reqData []byte) ([]byte
 		bucket = int(^uint(0) >> 1)
 	}
 	bucketMeshHashHit.Observe(float64(currentLayer - req.From))
-	bucketMeshHash.WithLabelValues(string(bucket)).Observe(float64(len(hashes)))
+	bucketMeshHash.WithLabelValues(fmt.Sprintf("%d", bucket)).Observe(float64(len(hashes)))
 	h.logger.WithContext(ctx).With().Debug("serve: returning response for mesh hashes",
 		log.Stringer("layer_from", req.From),
 		log.Stringer("layer_to", req.To),
