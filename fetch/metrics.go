@@ -1,6 +1,7 @@
 package fetch
 
 import (
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 )
@@ -61,19 +62,21 @@ var (
 		[]string{"version"},
 	).WithLabelValues("v2")
 
-	bucketMeshHash = metrics.NewCounter(
+	bucketMeshHash = metrics.NewHistogramWithBuckets(
 		"bucket_mesh_hash_counts",
 		subsystem,
 		"requests to mesh hash by bucket",
 		[]string{"bucket"},
+		prometheus.LinearBuckets(0, 100, 50),
 	)
 
-	bucketMeshHashHit = metrics.NewCounter(
-		"bucket_mesh_hit_counts",
+	bucketMeshHashHit = metrics.NewHistogramWithBuckets(
+		"bucket_mesh_hits_counts",
 		subsystem,
-		"requests to mesh hash by bucket hit",
-		[]string{"bucket"},
-	)
+		"requests to mesh hash by bucket hits",
+		[]string{},
+		[]float64{10, 100, 500, 1000, 2000, 5000, 10000},
+	).WithLabelValues()
 )
 
 // logCacheHit logs cache hit.
