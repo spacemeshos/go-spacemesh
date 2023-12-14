@@ -39,7 +39,7 @@ func TestAutoScaling(t *testing.T) {
 	events.EmitPostStart(nil)
 	events.EmitPostComplete(nil)
 	events.EmitPostFailure()
-	require.Eventually(t, done.Load, time.Second, 5*time.Millisecond)
+	require.Eventually(t, done.Load, time.Second, 10*time.Millisecond)
 
 	cancel()
 	eg.Wait()

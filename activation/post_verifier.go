@@ -3,7 +3,6 @@ package activation
 import (
 	"context"
 	"fmt"
-	"sync/atomic"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/post/config"
@@ -75,7 +74,7 @@ type postVerifierWorker struct {
 	verifier PostVerifier
 	log      *zap.Logger
 	jobs     <-chan *verifyPostJob
-	cancel   atomic.Pointer[context.CancelFunc]
+	stop     context.CancelFunc
 }
 
 type postVerifier struct {
@@ -159,13 +158,15 @@ func (v *OffloadingPostVerifier) scale(target int) {
 		// scale up
 		for i := len(v.workers); i < target; i++ {
 			v.log.Debug("starting post verifier worker", zap.Int("worker", i))
+			ctx, cancel := context.WithCancel(v.workersCtx)
 			w := &postVerifierWorker{
 				verifier: v.verifier,
 				log:      v.log.Named(fmt.Sprintf("worker-%d", len(v.workers))),
 				jobs:     v.jobs,
+				stop:     cancel,
 			}
 			v.workers = append(v.workers, w)
-			v.eg.Go(func() error { return w.start(v.workersCtx) })
+			v.eg.Go(func() error { return w.start(ctx) })
 		}
 	} else if target < len(v.workers) {
 		// scale down
@@ -219,12 +220,8 @@ func (v *OffloadingPostVerifier) Close() error {
 }
 
 func (w *postVerifierWorker) start(ctx context.Context) error {
-	ctx, cancel := context.WithCancel(ctx)
-	if !w.cancel.CompareAndSwap(nil, &cancel) {
-		return fmt.Errorf("worker already started")
-	}
-	w.log.Info("starting post proof verifier worker")
-	defer w.log.Info("stopped post proof verifier worker")
+	w.log.Info("starting")
+	defer w.log.Info("stopped")
 
 	for {
 		select {
@@ -233,13 +230,5 @@ func (w *postVerifierWorker) start(ctx context.Context) error {
 		case job := <-w.jobs:
 			job.result <- w.verifier.Verify(ctx, job.proof, job.metadata, job.opts...)
 		}
-	}
-}
-
-func (w *postVerifierWorker) stop() {
-	if cancel := w.cancel.Swap(nil); cancel != nil {
-		(*cancel)()
-	} else {
-		w.log.Warn("tried to stop worker that was not started")
 	}
 }
