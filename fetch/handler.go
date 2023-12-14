@@ -240,19 +240,19 @@ func (h *handler) handleMeshHashReq(ctx context.Context, reqData []byte) ([]byte
 	}
 	var currentLayer = h.clock.CurrentLayer()
 	if req.From > currentLayer-100 {
-		h.logger.WithContext(ctx).With().Info("SYNC BUCKET 1")
+		h.logger.WithContext(ctx).With().Info("SYNC BUCKET 1", log.Int("count_hashes", len(hashes)))
 	} else if req.From > currentLayer-500 {
-		h.logger.WithContext(ctx).With().Info("SYNC BUCKET 2")
+		h.logger.WithContext(ctx).With().Info("SYNC BUCKET 2", log.Int("count_hashes", len(hashes)))
 	} else if req.From > currentLayer-1000 {
-		h.logger.WithContext(ctx).With().Info("SYNC BUCKET 3")
+		h.logger.WithContext(ctx).With().Info("SYNC BUCKET 3", log.Int("count_hashes", len(hashes)))
 	} else if req.From > currentLayer-2000 {
-		h.logger.WithContext(ctx).With().Info("SYNC BUCKET 4")
+		h.logger.WithContext(ctx).With().Info("SYNC BUCKET 4", log.Int("count_hashes", len(hashes)))
 	} else if req.From > currentLayer-5000 {
-		h.logger.WithContext(ctx).With().Info("SYNC BUCKET 5")
+		h.logger.WithContext(ctx).With().Info("SYNC BUCKET 5", log.Int("count_hashes", len(hashes)))
 	} else if req.From > currentLayer-10000 {
-		h.logger.WithContext(ctx).With().Info("SYNC BUCKET 6")
+		h.logger.WithContext(ctx).With().Info("SYNC BUCKET 6", log.Int("count_hashes", len(hashes)))
 	} else {
-		h.logger.WithContext(ctx).With().Info("SYNC BUCKET 7")
+		h.logger.WithContext(ctx).With().Info("SYNC BUCKET 7", log.Int("count_hashes", len(hashes)))
 	}
 	h.logger.WithContext(ctx).With().Debug("serve: returning response for mesh hashes",
 		log.Stringer("layer_from", req.From),
