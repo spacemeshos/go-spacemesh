@@ -262,11 +262,39 @@ type MeshAPIMockInstrumented struct {
 	MeshAPIMock
 }
 
-var instrumentedErr error
-var instrumentedBlock *types.Block
+var (
+	instrumentedErr         error
+	instrumentedBlock       *types.Block
+	instrumentedMissing     bool
+	instrumentedNoStateRoot bool
+)
 
 func (m *MeshAPIMockInstrumented) GetLayerVerified(tid types.LayerID) (*types.Block, error) {
 	return instrumentedBlock, instrumentedErr
+}
+
+type ConStateAPIMockInstrumented struct {
+	ConStateAPIMock
+}
+
+func (t *ConStateAPIMockInstrumented) GetMeshTransactions(
+	txIds []types.TransactionID,
+) (txs []*types.MeshTransaction, missing map[types.TransactionID]struct{}) {
+	txs, missing = t.ConStateAPIMock.GetMeshTransactions(txIds)
+	if instrumentedMissing {
+		// arbitrarily return one missing tx
+		missing = map[types.TransactionID]struct{}{
+			txs[0].ID: {},
+		}
+	}
+	return
+}
+
+func (t *ConStateAPIMockInstrumented) GetLayerStateRoot(types.LayerID) (types.Hash32, error) {
+	if instrumentedNoStateRoot {
+		return stateRoot, fmt.Errorf("error")
+	}
+	return stateRoot, nil
 }
 
 func TestReadLayer(t *testing.T) {
@@ -289,7 +317,7 @@ func TestReadLayer(t *testing.T) {
 
 	instrumentedErr = fmt.Errorf("error")
 	_, err := srv.readLayer(ctx, layer, pb.Layer_LAYER_STATUS_UNSPECIFIED)
-	require.Error(t, err)
+	require.ErrorContains(t, err, "error reading layer data")
 
 	instrumentedErr = nil
 	_, err = srv.readLayer(ctx, layer, pb.Layer_LAYER_STATUS_UNSPECIFIED)
@@ -306,6 +334,27 @@ func TestReadLayer(t *testing.T) {
 		layerAvgSize,
 		txsPerProposal,
 	)
+	_, err = srv.readLayer(ctx, layer, pb.Layer_LAYER_STATUS_UNSPECIFIED)
+	require.NoError(t, err)
+
+	// now instrument conStateAPI to return errors
+	srv = NewMeshService(
+		datastore.NewCachedDB(db, logtest.New(t)),
+		meshAPIMock,
+		&ConStateAPIMockInstrumented{*conStateAPI},
+		genTime,
+		layersPerEpoch,
+		types.Hash20{},
+		layerDuration,
+		layerAvgSize,
+		txsPerProposal,
+	)
+	instrumentedMissing = true
+	_, err = srv.readLayer(ctx, layer, pb.Layer_LAYER_STATUS_UNSPECIFIED)
+	require.ErrorContains(t, err, "error retrieving tx data")
+
+	instrumentedMissing = false
+	instrumentedNoStateRoot = true
 	_, err = srv.readLayer(ctx, layer, pb.Layer_LAYER_STATUS_UNSPECIFIED)
 	require.NoError(t, err)
 }
