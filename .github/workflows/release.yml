@@ -76,7 +76,7 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Upload zip
-        uses: google-github-actions/upload-cloud-storage@v1
+        uses: google-github-actions/upload-cloud-storage@v2
         with:
           path: ${{ env.OUTNAME }}.zip
           destination: ${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/
@@ -108,7 +108,7 @@ jobs:
     needs: build-and-upload
     steps:
       - name: Download the artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
 
       - name: Generate the env variables
         shell: bash
@@ -140,7 +140,7 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Upload sha256sums
-        uses: google-github-actions/upload-cloud-storage@v1
+        uses: google-github-actions/upload-cloud-storage@v2
         with:
           path: sha256sum.yaml
           destination: ${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/
