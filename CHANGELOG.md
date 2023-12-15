@@ -2,6 +2,12 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## Release v1.2.11
+
+### Improvements
+
+* increased the max response data size in p2p to 40MiB
+
 ## Release v1.2.10
 
 ### Improvements
@@ -40,10 +46,10 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 ### Improvements
 
 * [#5263](https://github.com/spacemeshos/go-spacemesh/pull/5263) randomize peer selection
-  
+
   without this change node can get stuck after restart on requesting data from peer that is misbehaving.
   log below will be printed repeatedly:
-  
+
   > 2023-11-15T08:00:17.937+0100 INFO fd68b.sync syncing atx from genesis
 
 * [#5264](https://github.com/spacemeshos/go-spacemesh/pull/5264) increase limits related to activations

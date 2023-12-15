@@ -58,7 +58,7 @@ type Handler func(context.Context, []byte) ([]byte, error)
 
 // Response is a server response.
 type Response struct {
-	Data  []byte `scale:"max=20971520"` // 20 MiB
+	Data  []byte `scale:"max=41943040"` // 40 MiB
 	Error string `scale:"max=1024"`     // TODO(mafa): make error code instead of string
 }
 
@@ -139,7 +139,12 @@ func (s *Server) streamHandler(stream network.Stream) {
 
 	wr := bufio.NewWriter(stream)
 	if _, err := codec.EncodeTo(wr, &resp); err != nil {
-		s.logger.With().Warning("failed to write response", log.Err(err))
+		s.logger.With().Warning(
+			"failed to write response",
+			log.Int("resp.Data len", len(resp.Data)),
+			log.Int("resp.Error len", len(resp.Error)),
+			log.Err(err),
+		)
 		return
 	}
 	if err := wr.Flush(); err != nil {
