@@ -75,7 +75,7 @@ func WithRetryInterval(i time.Duration) Option {
 	}
 }
 
-// WithLog specifies handshake retry count.
+// WithAttempts specifies handshake retry count.
 func WithAttempts(n int) Option {
 	return func(w *transportWrapper) {
 		w.attempts = n

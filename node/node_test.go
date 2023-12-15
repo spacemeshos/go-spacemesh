@@ -811,7 +811,7 @@ func TestConfig_CustomTypes(t *testing.T) {
 			},
 		},
 		{
-			name: "address-list-single",
+			name: "address-list-multiple",
 			cli: "--listen=/ip4/0.0.0.0/tcp/5555 --listen=/ip4/0.0.0.0/udp/5555/quic-v1" +
 				" --advertise-address=/ip4/10.20.30.40/tcp/5555" +
 				" --advertise-address=/ip4/10.20.30.40/udp/5555/quic-v1",

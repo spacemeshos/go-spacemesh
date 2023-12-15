@@ -230,7 +230,8 @@ func (d *Discovery) Start() error {
 		})
 		if d.relayCh != nil {
 			d.eg.Go(func() error {
-				return d.discoverRelays(startCtx)
+				d.discoverRelays(startCtx)
+				return nil
 			})
 		}
 	}
@@ -401,7 +402,7 @@ func (d *Discovery) discoverPeers(ctx context.Context) error {
 		wasSuspended := false
 		for !d.h.NeedPeerDiscovery() {
 			wasSuspended = true
-			d.logger.With().Info("suspending routing discovery",
+			d.logger.Info("suspending routing discovery",
 				zap.Duration("delay", discoveryHighPeersDelay))
 			select {
 			case <-ctx.Done():
@@ -410,7 +411,7 @@ func (d *Discovery) discoverPeers(ctx context.Context) error {
 			}
 		}
 		if wasSuspended {
-			d.logger.With().Info("resuming routing discovery")
+			d.logger.Info("resuming routing discovery")
 		}
 
 		if p.ID == d.h.ID() {
@@ -423,7 +424,7 @@ func (d *Discovery) discoverPeers(ctx context.Context) error {
 		d.h.ConnManager().TagPeer(p.ID, discoveryTag, discoveryTagValue)
 		if d.h.Network().Connectedness(p.ID) != network.Connected {
 			if _, err := d.h.Network().DialPeer(ctx, p.ID); err != nil {
-				d.logger.Error("error dialing peer", zap.Any("peer", p),
+				d.logger.Debug("error dialing peer", zap.Any("peer", p),
 					zap.Error(err))
 				continue
 			}
@@ -437,18 +438,17 @@ func (d *Discovery) discoverPeers(ctx context.Context) error {
 	return nil
 }
 
-func (d *Discovery) discoverRelays(ctx context.Context) error {
+func (d *Discovery) discoverRelays(ctx context.Context) {
 	for p := range d.findPeersContinuously(ctx, relayNS) {
 		if len(p.Addrs) != 0 {
 			d.logger.Debug("found relay candidate", zap.Any("p", p))
 			select {
 			case d.relayCh <- p:
 			case <-ctx.Done():
-				return nil
+				return
 			}
 		}
 	}
-	return nil
 }
 
 func (d *Discovery) findPeersContinuously(ctx context.Context, ns string) <-chan peer.AddrInfo {
@@ -467,6 +467,8 @@ func (d *Discovery) findPeersContinuously(ctx context.Context, ns string) <-chan
 						return nil
 					case <-time.After(findPeersRetryDelay):
 					}
+					peerCh = nil
+					continue
 				}
 			}
 
@@ -492,5 +494,3 @@ func (d *Discovery) findPeersContinuously(ctx context.Context, ns string) <-chan
 	})
 	return r
 }
-
-// TBD: don't store the context, create DHT during start
