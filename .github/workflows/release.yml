@@ -96,7 +96,7 @@ jobs:
         run: |
           (Get-FileHash ${{ env.OUTNAME }}.zip -Algorithm SHA256).Hash > sha256-${{ matrix.outname_sufix }}.txt
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: sha256-${{ matrix.outname_sufix }}
           path: sha256-${{ matrix.outname_sufix }}.txt
