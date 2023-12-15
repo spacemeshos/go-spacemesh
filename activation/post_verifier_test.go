@@ -47,7 +47,6 @@ func TestPostVerifierVerifyAfterStop(t *testing.T) {
 	verifier := activation.NewMockPostVerifier(gomock.NewController(t))
 	offloadingVerifier := activation.NewOffloadingPostVerifier(verifier, 1, zaptest.NewLogger(t))
 	defer offloadingVerifier.Close()
-	verifier.EXPECT().Close().Return(nil)
 
 	verifier.EXPECT().Verify(gomock.Any(), &proof, &metadata, gomock.Any()).Return(nil)
 	err := offloadingVerifier.Verify(context.Background(), &proof, &metadata)

@@ -16,6 +16,7 @@ import (
 )
 
 type verifyPostJob struct {
+	ctx      context.Context // context of Verify() call
 	proof    *shared.Proof
 	metadata *shared.ProofMetadata
 	opts     []verifying.OptionFunc
@@ -41,7 +42,7 @@ func newAutoscaler() (*autoscaler, error) {
 	return &autoscaler{sub: sub}, err
 }
 
-func (a autoscaler) run(ctx context.Context, s scaler, min, target int) error {
+func (a autoscaler) run(stop chan struct{}, s scaler, min, target int) {
 	for {
 		select {
 		case e := <-a.sub.Out():
@@ -51,30 +52,28 @@ func (a autoscaler) run(ctx context.Context, s scaler, min, target int) error {
 			case (*pb.Event_PostComplete):
 				s.scale(target)
 			}
-		case <-ctx.Done():
+		case <-stop:
 			a.sub.Close()
-			return ctx.Err()
+			return
 		}
 	}
 }
 
 type OffloadingPostVerifier struct {
-	eg      errgroup.Group
-	stop    context.CancelFunc
-	stopped <-chan struct{}
-	log     *zap.Logger
-
-	workersCtx context.Context
-	workers    []*postVerifierWorker
-	jobs       chan *verifyPostJob
-	verifier   PostVerifier
+	eg       errgroup.Group
+	log      *zap.Logger
+	verifier PostVerifier
+	workers  []*postVerifierWorker
+	jobs     chan *verifyPostJob
+	stop     chan struct{} // signal to stop all goroutines
 }
 
 type postVerifierWorker struct {
 	verifier PostVerifier
 	log      *zap.Logger
 	jobs     <-chan *verifyPostJob
-	stop     context.CancelFunc
+	stop     chan struct{} // signal to stop this worker
+	shutdown chan struct{} // signal that the verifier is closing
 }
 
 type postVerifier struct {
@@ -111,22 +110,11 @@ func NewPostVerifier(cfg PostConfig, logger *zap.Logger, opts ...verifying.Optio
 //
 // The verifier must be closed after use with Close().
 func NewOffloadingPostVerifier(verifier PostVerifier, numWorkers int, logger *zap.Logger) *OffloadingPostVerifier {
-	ctx, cancel := context.WithCancel(context.Background())
-	stopped := make(chan struct{})
 	v := &OffloadingPostVerifier{
-		log:        logger,
-		workersCtx: ctx,
-		workers:    make([]*postVerifierWorker, 0, numWorkers),
-		jobs:       make(chan *verifyPostJob, numWorkers),
-		stopped:    stopped,
-		stop: func() {
-			cancel()
-			select {
-			case <-stopped:
-			default:
-				close(stopped)
-			}
-		},
+		log:      logger,
+		workers:  make([]*postVerifierWorker, 0, numWorkers),
+		jobs:     make(chan *verifyPostJob, numWorkers),
+		stop:     make(chan struct{}),
 		verifier: verifier,
 	}
 
@@ -143,7 +131,7 @@ func (v *OffloadingPostVerifier) Autoscale(min, target int) {
 	if err != nil {
 		v.log.Panic("failed to create autoscaler", zap.Error(err))
 	}
-	v.eg.Go(func() error { return a.run(v.workersCtx, v, min, target) })
+	v.eg.Go(func() error { a.run(v.stop, v, min, target); return nil })
 }
 
 // Scale the number of workers to the given number.
@@ -157,23 +145,22 @@ func (v *OffloadingPostVerifier) scale(target int) {
 	if target > len(v.workers) {
 		// scale up
 		for i := len(v.workers); i < target; i++ {
-			v.log.Debug("starting post verifier worker", zap.Int("worker", i))
-			ctx, cancel := context.WithCancel(v.workersCtx)
 			w := &postVerifierWorker{
 				verifier: v.verifier,
 				log:      v.log.Named(fmt.Sprintf("worker-%d", len(v.workers))),
 				jobs:     v.jobs,
-				stop:     cancel,
+				stop:     make(chan struct{}),
+				shutdown: v.stop,
 			}
 			v.workers = append(v.workers, w)
-			v.eg.Go(func() error { return w.start(ctx) })
+			v.eg.Go(func() error { w.start(); return nil })
 		}
 	} else if target < len(v.workers) {
 		// scale down
 		toKeep, toStop := v.workers[:target], v.workers[target:]
 		v.workers = toKeep
 		for _, worker := range toStop {
-			worker.stop()
+			close(worker.stop)
 		}
 	}
 }
@@ -185,6 +172,7 @@ func (v *OffloadingPostVerifier) Verify(
 	opts ...verifying.OptionFunc,
 ) error {
 	job := &verifyPostJob{
+		ctx:      ctx,
 		proof:    p,
 		metadata: m,
 		opts:     opts,
@@ -193,7 +181,7 @@ func (v *OffloadingPostVerifier) Verify(
 
 	select {
 	case v.jobs <- job:
-	case <-v.stopped:
+	case <-v.stop:
 		return fmt.Errorf("verifier is closed")
 	case <-ctx.Done():
 		return fmt.Errorf("submitting verifying job: %w", ctx.Err())
@@ -202,7 +190,7 @@ func (v *OffloadingPostVerifier) Verify(
 	select {
 	case res := <-job.result:
 		return res
-	case <-v.stopped:
+	case <-v.stop:
 		return fmt.Errorf("verifier is closed")
 	case <-ctx.Done():
 		return fmt.Errorf("waiting for verification result: %w", ctx.Err())
@@ -210,8 +198,13 @@ func (v *OffloadingPostVerifier) Verify(
 }
 
 func (v *OffloadingPostVerifier) Close() error {
+	select {
+	case <-v.stop:
+		return nil
+	default:
+	}
 	v.log.Info("stopping post verifier")
-	v.stop()
+	close(v.stop)
 	v.eg.Wait()
 
 	v.verifier.Close()
@@ -219,16 +212,21 @@ func (v *OffloadingPostVerifier) Close() error {
 	return nil
 }
 
-func (w *postVerifierWorker) start(ctx context.Context) error {
+func (w *postVerifierWorker) start() {
 	w.log.Info("starting")
 	defer w.log.Info("stopped")
 
 	for {
 		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case job := <-w.jobs:
-			job.result <- w.verifier.Verify(ctx, job.proof, job.metadata, job.opts...)
+		case <-w.shutdown:
+			return
+		case <-w.stop:
+			return
+		case job, ok := <-w.jobs:
+			if !ok {
+				return
+			}
+			job.result <- w.verifier.Verify(job.ctx, job.proof, job.metadata, job.opts...)
 		}
 	}
 }

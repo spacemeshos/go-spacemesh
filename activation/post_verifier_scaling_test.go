@@ -27,13 +27,13 @@ func TestAutoScaling(t *testing.T) {
 		mockScaler.EXPECT().scale(5).Do(func(int) { done.Store(true) }), // on failed
 	)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	stop := make(chan struct{})
 	var eg errgroup.Group
 	autoscaler, err := newAutoscaler()
 	require.NoError(t, err)
 	eg.Go(func() error {
-		return autoscaler.run(ctx, mockScaler, 1, 5)
+		autoscaler.run(stop, mockScaler, 1, 5)
+		return nil
 	})
 
 	events.EmitPostStart(nil)
@@ -41,7 +41,7 @@ func TestAutoScaling(t *testing.T) {
 	events.EmitPostFailure()
 	require.Eventually(t, done.Load, time.Second, 10*time.Millisecond)
 
-	cancel()
+	close(stop)
 	eg.Wait()
 }
 
