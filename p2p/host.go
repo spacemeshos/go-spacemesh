@@ -86,6 +86,7 @@ func DefaultConfig() Config {
 		GossipQueueSize:             50000,
 		GossipValidationThrottle:    50000,
 		GossipAtxValidationThrottle: 50000,
+		PingInterval:                time.Second,
 		EnableTCPTransport:          true,
 		EnableQUICTransport:         false,
 		AdvertiseInterval:           time.Minute,
@@ -135,6 +136,7 @@ type Config struct {
 	GossipValidationThrottle    int           `mapstructure:"gossip-validation-throttle"`
 	GossipAtxValidationThrottle int           `mapstructure:"gossip-atx-validation-throttle"`
 	PingPeers                   []string      `mapstructure:"ping-peers"`
+	PingInterval                time.Duration `mapstructure:"ping-interval"`
 	Relay                       bool          `mapstructure:"relay"`
 	StaticRelays                []string      `mapstructure:"static-relays"`
 	EnableTCPTransport          bool          `mapstructure:"enable-tcp-transport"`

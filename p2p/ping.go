@@ -17,7 +17,6 @@ import (
 )
 
 const (
-	pingInterval   = time.Second
 	pingProtectTag = "spacemesh-ping"
 )
 
@@ -28,22 +27,35 @@ type pingStat struct {
 
 type Ping struct {
 	sync.Mutex
-	logger *zap.Logger
-	h      host.Host
-	peers  []peer.ID
-	pr     routing.PeerRouting
-	stats  map[peer.ID]*pingStat
-	cancel context.CancelFunc
-	eg     errgroup.Group
+	logger   *zap.Logger
+	h        host.Host
+	peers    []peer.ID
+	pr       routing.PeerRouting
+	interval time.Duration
+	stats    map[peer.ID]*pingStat
+	cancel   context.CancelFunc
+	eg       errgroup.Group
 }
 
-func NewPing(logger *zap.Logger, h host.Host, peers []peer.ID, pr routing.PeerRouting) *Ping {
+type PingOpt func(p *Ping)
+
+func WithPingInterval(d time.Duration) PingOpt {
+	return func(p *Ping) {
+		p.interval = d
+	}
+}
+
+func NewPing(logger *zap.Logger, h host.Host, peers []peer.ID, pr routing.PeerRouting, opts ...PingOpt) *Ping {
 	p := &Ping{
-		logger: logger,
-		h:      h,
-		peers:  peers,
-		pr:     pr,
-		stats:  make(map[peer.ID]*pingStat),
+		logger:   logger,
+		h:        h,
+		peers:    peers,
+		pr:       pr,
+		stats:    make(map[peer.ID]*pingStat),
+		interval: time.Second,
+	}
+	for _, opt := range opts {
+		opt(p)
 	}
 	return p
 }
@@ -105,7 +117,7 @@ func (p *Ping) runForPeer(ctx context.Context, peerID peer.ID, addrs []ma.Multia
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-time.After(pingInterval):
+		case <-time.After(p.interval):
 		}
 	}
 
@@ -131,7 +143,7 @@ func (p *Ping) startForPeer(ctx context.Context, peerID peer.ID) {
 			select {
 			case <-ctx.Done():
 				return nil
-			case <-time.After(pingInterval):
+			case <-time.After(p.interval):
 			}
 		}
 	})
