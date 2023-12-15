@@ -222,10 +222,7 @@ func (w *postVerifierWorker) start() {
 			return
 		case <-w.stop:
 			return
-		case job, ok := <-w.jobs:
-			if !ok {
-				return
-			}
+		case job := <-w.jobs:
 			job.result <- w.verifier.Verify(job.ctx, job.proof, job.metadata, job.opts...)
 		}
 	}
