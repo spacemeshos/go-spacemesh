@@ -114,6 +114,7 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringSliceVar(&cfg.P2P.Bootnodes, "bootnodes",
 		cfg.P2P.Bootnodes, "entrypoints into the network")
 	cmd.PersistentFlags().StringSliceVar(&cfg.P2P.PingPeers, "ping-peers", cfg.P2P.Bootnodes, "peers to ping")
+	cmd.PersistentFlags().DurationVar(&cfg.P2P.PingInterval, "ping-interval", cfg.P2P.PingInterval, "ping interval")
 	cmd.PersistentFlags().StringSliceVar(&cfg.P2P.StaticRelays, "static-relays",
 		cfg.P2P.StaticRelays, "static relay list")
 	cmd.PersistentFlags().Var(flags.NewAddressListValue(cfg.P2P.AdvertiseAddress, &cfg.P2P.AdvertiseAddress),
