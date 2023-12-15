@@ -35,7 +35,7 @@ require (
 	github.com/quic-go/quic-go v0.39.4
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
 	github.com/seehuhn/mt19937 v1.0.0
-	github.com/spacemeshos/api/release/go v1.24.1-0.20231205133442-1da5e0bc7f72
+	github.com/spacemeshos/api/release/go v1.25.0
 	github.com/spacemeshos/economics v0.1.1
 	github.com/spacemeshos/fixed v0.1.1
 	github.com/spacemeshos/go-scale v1.1.12
