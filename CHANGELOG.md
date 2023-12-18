@@ -98,6 +98,9 @@ for more information on how to configure the node to work with the PoST service.
   section. The non-conditional changes include values/provides support on all of the nodes, which will enable DHT to
   function efficiently for routing discovery.
 
+* [#5367](https://github.com/spacemeshos/go-spacemesh/pull/5367) Add `no-main-override` toplevel config option and
+  `--no-main-override` CLI option that makes it possible to run "nomain" builds on mainnet.
+
 ## Release v1.2.9
 
 ### Improvements
