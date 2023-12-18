@@ -133,7 +133,7 @@ func GetCommand() *cobra.Command {
 				log.JSONLog(true)
 			}
 
-			if cmd.NoMainNet && onMainNet(conf) {
+			if cmd.NoMainNet && onMainNet(conf) && !conf.NoMainOverride {
 				log.With().Fatal("this is a testnet-only build not intended for mainnet")
 			}
 
