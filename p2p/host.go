@@ -334,10 +334,12 @@ func New(
 				return nil, err
 			}
 			lopts = append(lopts, libp2p.EnableAutoRelayWithStaticRelays(relays))
-		} else {
+		} else if cfg.EnableRoutingDiscovery {
 			peerSrc, relayCh := relayPeerSource(logger)
 			lopts = append(lopts, libp2p.EnableAutoRelayWithPeerSource(peerSrc))
 			opts = append(opts, WithRelayCandidateChannel(relayCh))
+		} else {
+			lopts = append(lopts, libp2p.EnableAutoRelayWithStaticRelays(bootnodes))
 		}
 	} else {
 		lopts = append(lopts, libp2p.DisableRelay())
