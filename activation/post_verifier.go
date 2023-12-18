@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/activation/metrics"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 )
@@ -178,6 +179,9 @@ func (v *OffloadingPostVerifier) Verify(
 		opts:     opts,
 		result:   make(chan error, 1),
 	}
+
+	metrics.PostVerificationQueue.Inc()
+	defer metrics.PostVerificationQueue.Dec()
 
 	select {
 	case v.jobs <- job:
