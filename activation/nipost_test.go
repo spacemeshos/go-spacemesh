@@ -149,7 +149,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	postCfg.PowDifficulty[0] = 1
 	postProvider := newTestPostManager(t, withPostConfig(postCfg))
 	logger := logtest.New(t).WithName("validator")
-	verifier, err := NewPostVerifier(postProvider.Config(), logger)
+	verifier, err := NewPostVerifier(postProvider.Config(), zaptest.NewLogger(t))
 	require.NoError(t, err)
 	defer verifier.Close()
 
@@ -292,7 +292,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	r.NotNil(nipost)
 
 	logger := logtest.New(t).WithName("validator")
-	verifier, err := NewPostVerifier(postProvider.cfg, logger)
+	verifier, err := NewPostVerifier(postProvider.cfg, zaptest.NewLogger(t))
 	r.NoError(err)
 	defer verifier.Close()
 	v := NewValidator(poetDb, postProvider.cfg, postProvider.opts.Scrypt, logger, verifier)

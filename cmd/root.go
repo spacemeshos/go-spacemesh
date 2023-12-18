@@ -245,6 +245,24 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().BoolVar(&cfg.SMESHING.Opts.Throttle, "smeshing-opts-throttle",
 		cfg.SMESHING.Opts.Throttle, "")
 
+	/**======================== PoST Proving Flags ========================== **/
+
+	cmd.PersistentFlags().UintVar(&cfg.SMESHING.ProvingOpts.Threads, "smeshing-opts-proving-threads",
+		cfg.SMESHING.ProvingOpts.Threads, "")
+	cmd.PersistentFlags().UintVar(&cfg.SMESHING.ProvingOpts.Nonces, "smeshing-opts-proving-nonces",
+		cfg.SMESHING.ProvingOpts.Nonces, "")
+
+	/**======================== PoST Verifying Flags ========================== **/
+
+	cmd.PersistentFlags().IntVar(
+		&cfg.SMESHING.VerifyingOpts.MinWorkers,
+		"smeshing-opts-verifying-min-threads",
+		cfg.SMESHING.VerifyingOpts.MinWorkers,
+		"Minimal number of threads to use for verifying PoSTs (used while PoST is generated)",
+	)
+	cmd.PersistentFlags().IntVar(&cfg.SMESHING.VerifyingOpts.Workers, "smeshing-opts-verifying-threads",
+		cfg.SMESHING.VerifyingOpts.Workers, "")
+
 	/**======================== Consensus Flags ========================== **/
 
 	cmd.PersistentFlags().Uint32Var(&cfg.LayersPerEpoch, "layers-per-epoch",
