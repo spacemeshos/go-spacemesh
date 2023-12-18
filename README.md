@@ -264,8 +264,6 @@ choco install opencl-intel-cpu-runtime
 
 #### Using a remote machine as provider for PoST proofs
 
-**NOTE:** this feature is currently experimental and not fully tested yet.
-
 To disable the internal PoST service and disable smeshing on your node you can use the following config:
 
 ```json
@@ -275,7 +273,15 @@ To disable the internal PoST service and disable smeshing on your node you can u
 ```
 
 or use the `--smeshing-start=false` flag. This will disable smeshing on your node causing it not generate any PoST
-proofs until a remote post service connects.
+proofs until a remote post service connects. Be aware that you still need to set your coinbase via
+
+```json
+"smeshing": {
+    "smeshing-coinbase": "your coinbase address",
+}
+```
+
+or use the `--smeshing-coinbase` CLI parameter, otherwise your node will not be able to receive rewards.
 
 If you want to allow connections from post services on other hosts to your node, you need to set a public endpoint via
 the `grpc-tls-listener` configuration parameter and setup TLS for the connection.
@@ -297,6 +303,74 @@ To setup TLS-secured public connections the API config has been extended with th
 
 Ensure that remote PoST services are setup to connect to your node via TLS, that they trust your node's certificate and
 use a certificate that is signed by the same CA as your node's certificate.
+
+### Configuring a remote PoST service
+
+The post service is at the moment configured exclusively via command line parameters:
+
+- `--dir` specifies the directory containing `postdata_metadata.json` and the `postdata_xxx.bin` files; other files in
+  the post directory need to stay with the node!
+- `--address` specifies the address the post service should connect to
+- `--ca-cert`, `--cert` and `--key` specify the location of the CA certificate, the post services certificate and the
+  post services key respectively. For more information see below.
+- `--threads`, `--nonces` and `--randomx-mode` can be adapted to optimize proof generation. They are analogous to
+`smeshing-opts-proving-threads`, `smeshing-opts-proving-nonces` and `smeshing-opts-proving-randomx-mode` respectively.
+- `-h` or `--help` prints a help message with all available options and more details on their usage.
+
+### Keys and certificates
+
+The PoST service and the node talk to each other via mTLS and have to authenticate themselves at the opposite end. For
+this both need keys and certificates.
+
+Here is a script that generates a key & certificate for a CA, a key for the client (PoST service) and a key for the
+server (node). Then it uses the CAs key to generate certificates from the keys for both the client & server.
+
+Make sure to adjust the certificate extensions & subjects for your setup accordingly.
+
+`ca.crt` needs to be provided to both the PoST service and the node, `server.crt` & `server.key` are only needed by the
+node and `client.crt` & `client.key` are only needed by the PoST service.
+
+```bash
+# create certificate extensions to allow using them for localhost
+cat > server-domains.ext <<EOF
+[v3_req]
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = node
+IP.1 = 127.0.0.1
+EOF
+
+cat > client-domains.ext <<EOF
+[v3_req]
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = post
+EOF
+
+# create CA private key and certificate
+openssl req -x509 -newkey rsa:4096 -days 365 -nodes -keyout ca.key -out ca.crt \
+    -subj "/C=EN/ST=Spacemesh/L=Tel Aviv/O=Spacemesh/CN=spacemesh.io/emailAddress=info@spacemesh.io"
+
+# create server private key and CSR
+openssl req -newkey rsa:4096 -nodes -keyout server.key -out server-req.pem \
+    -subj "/C=EN/ST=Spacemesh/L=Tel Aviv/O=Server/CN=server.spacemesh.io/emailAddress=info@spacemesh.io"
+
+# use CA private key to sign ser CRS and get back the signed certificate
+openssl x509 -req -in server-req.pem -days 60 -CA ca.crt -CAkey ca.key -CAcreateserial -out server.crt \
+    -extfile server-domains.ext -extensions v3_req
+rm server-req.pem
+
+# create client private key and CSR
+openssl req -newkey rsa:4096 -nodes -keyout client.key -out client-req.pem \
+    -subj "/C=EN/ST=Spacemesh/L=Tel Aviv/O=Client/CN=client.spacemesh.io/emailAddress=info@spacemesh.io" \
+
+# use CA private key to sign client CSR and get back the signed certificate
+openssl x509 -req -in client-req.pem -days 60 -CA ca.crt -CAkey ca.key -CAcreateserial -out client.crt \
+    -extfile client-domains.ext -extensions v3_req
+rm client-req.pem
+```
 
 ---
 
