@@ -182,7 +182,7 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 	if fh.cfg.EnableRoutingDiscovery {
 		dopts = append(dopts, discovery.EnableRoutingDiscovery())
 	}
-	if !fh.cfg.RoutingDiscoveryNoAdvertise {
+	if fh.cfg.RoutingDiscoveryAdvertise {
 		dopts = append(dopts, discovery.AdvertiseForPeerDiscovery())
 	}
 
