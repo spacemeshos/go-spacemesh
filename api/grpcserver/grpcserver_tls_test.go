@@ -3,7 +3,7 @@ package grpcserver
 import (
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha1"
+	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
@@ -28,27 +28,52 @@ const (
 	clientKeyName  = "client.key"
 )
 
+func genPrivateKey(tb testing.TB, path string) *rsa.PrivateKey {
+	caKey, err := rsa.GenerateKey(rand.Reader, 4096)
+	require.NoError(tb, err)
+
+	f, err := os.Create(path)
+	require.NoError(tb, err)
+	defer f.Close()
+	require.NoError(tb, pem.Encode(f, &pem.Block{
+		Type:  "PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(caKey),
+	}))
+	return caKey
+}
+
+func genCertificate(
+	tb testing.TB,
+	template,
+	parent *x509.Certificate,
+	pub *rsa.PublicKey,
+	priv *rsa.PrivateKey,
+	path string,
+) {
+	caBytes, err := x509.CreateCertificate(rand.Reader, template, parent, pub, priv)
+	require.NoError(tb, err)
+
+	f, err := os.Create(path)
+	require.NoError(tb, err)
+	defer f.Close()
+	require.NoError(tb, pem.Encode(f, &pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: caBytes,
+	}))
+}
+
 func genKeys(tb testing.TB) string {
 	dir := tb.TempDir() // to store the generated files
 
-	caKey, err := rsa.GenerateKey(rand.Reader, 4096)
-	require.NoError(tb, err)
+	snLimit := new(big.Int).Lsh(big.NewInt(1), 128) // limits how long the serial number of a key can be
+
+	caKey := genPrivateKey(tb, filepath.Join(dir, caKeyName))
 	caKeyBytes := x509.MarshalPKCS1PublicKey(&caKey.PublicKey)
-	caKeyHash := sha1.Sum(caKeyBytes)
-
-	f, err := os.Create(filepath.Join(dir, caKeyName))
-	require.NoError(tb, err)
-	defer f.Close()
-	err = pem.Encode(f, &pem.Block{
-		Type:  "PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(caKey),
-	})
-	require.NoError(tb, err)
-
-	snLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	caKeyHash := sha256.Sum256(caKeyBytes)
 	snCA, err := rand.Int(rand.Reader, snLimit)
 	require.NoError(tb, err)
-	ca := &x509.Certificate{
+
+	caCert := &x509.Certificate{
 		SerialNumber: snCA,
 		Subject: pkix.Name{
 			CommonName:   "ca.spacemesh.io",
@@ -64,35 +89,15 @@ func genKeys(tb testing.TB) string {
 		IsCA:                  true,
 		BasicConstraintsValid: true,
 	}
-	caBytes, err := x509.CreateCertificate(rand.Reader, ca, ca, &caKey.PublicKey, caKey)
-	require.NoError(tb, err)
+	genCertificate(tb, caCert, caCert, &caKey.PublicKey, caKey, filepath.Join(dir, caCertName))
 
-	f, err = os.Create(filepath.Join(dir, caCertName))
-	require.NoError(tb, err)
-	defer f.Close()
-	err = pem.Encode(f, &pem.Block{
-		Type:  "CERTIFICATE",
-		Bytes: caBytes,
-	})
-	require.NoError(tb, err)
-
-	serverKey, err := rsa.GenerateKey(rand.Reader, 4096)
-	require.NoError(tb, err)
+	serverKey := genPrivateKey(tb, filepath.Join(dir, serverKeyName))
 	serverKeyBytes := x509.MarshalPKCS1PublicKey(&serverKey.PublicKey)
-	serverKeyHash := sha1.Sum(serverKeyBytes)
-
-	f, err = os.Create(filepath.Join(dir, serverKeyName))
-	require.NoError(tb, err)
-	defer f.Close()
-	err = pem.Encode(f, &pem.Block{
-		Type:  "PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(serverKey),
-	})
-	require.NoError(tb, err)
-
+	serverKeyHash := sha256.Sum256(serverKeyBytes)
 	snServer, err := rand.Int(rand.Reader, snLimit)
 	require.NoError(tb, err)
-	server := &x509.Certificate{
+
+	serverCert := &x509.Certificate{
 		SerialNumber: snServer,
 		Subject: pkix.Name{
 			CommonName:   "server.spacemesh.io",
@@ -103,40 +108,20 @@ func genKeys(tb testing.TB) string {
 		},
 		SubjectKeyId:   serverKeyHash[:],
 		AuthorityKeyId: caKeyHash[:],
-		IPAddresses:    []net.IP{net.IPv4(127, 0, 0, 1)},
+		IPAddresses:    []net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback},
 		DNSNames:       []string{"localhost"},
 		NotBefore:      time.Now(),
 		NotAfter:       time.Now().AddDate(0, 1, 0),
 	}
-	serverCertBytes, err := x509.CreateCertificate(rand.Reader, server, ca, &serverKey.PublicKey, caKey)
-	require.NoError(tb, err)
+	genCertificate(tb, serverCert, caCert, &serverKey.PublicKey, caKey, filepath.Join(dir, serverCertName))
 
-	f, err = os.Create(filepath.Join(dir, serverCertName))
-	require.NoError(tb, err)
-	defer f.Close()
-	err = pem.Encode(f, &pem.Block{
-		Type:  "CERTIFICATE",
-		Bytes: serverCertBytes,
-	})
-	require.NoError(tb, err)
-
-	clientKey, err := rsa.GenerateKey(rand.Reader, 4096)
-	require.NoError(tb, err)
+	clientKey := genPrivateKey(tb, filepath.Join(dir, clientKeyName))
 	clientKeyBytes := x509.MarshalPKCS1PublicKey(&clientKey.PublicKey)
-	clientKeyHash := sha1.Sum(clientKeyBytes)
-
-	f, err = os.Create(filepath.Join(dir, clientKeyName))
-	require.NoError(tb, err)
-	defer f.Close()
-	err = pem.Encode(f, &pem.Block{
-		Type:  "PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(clientKey),
-	})
-	require.NoError(tb, err)
-
+	clientKeyHash := sha256.Sum256(clientKeyBytes)
 	snClient, err := rand.Int(rand.Reader, snLimit)
 	require.NoError(tb, err)
-	client := &x509.Certificate{
+
+	clientCert := &x509.Certificate{
 		SerialNumber: snClient,
 		Subject: pkix.Name{
 			CommonName:   "client.spacemesh.io",
@@ -147,22 +132,13 @@ func genKeys(tb testing.TB) string {
 		},
 		SubjectKeyId:   clientKeyHash[:],
 		AuthorityKeyId: caKeyHash[:],
-		IPAddresses:    []net.IP{net.IPv4(127, 0, 0, 1)},
+		IPAddresses:    []net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback},
 		DNSNames:       []string{"localhost"},
 		NotBefore:      time.Now(),
 		NotAfter:       time.Now().AddDate(0, 1, 0),
 	}
-	clientCertBytes, err := x509.CreateCertificate(rand.Reader, client, ca, &clientKey.PublicKey, caKey)
-	require.NoError(tb, err)
+	genCertificate(tb, clientCert, caCert, &clientKey.PublicKey, caKey, filepath.Join(dir, clientCertName))
 
-	f, err = os.Create(filepath.Join(dir, clientCertName))
-	require.NoError(tb, err)
-	defer f.Close()
-	err = pem.Encode(f, &pem.Block{
-		Type:  "CERTIFICATE",
-		Bytes: clientCertBytes,
-	})
-	require.NoError(tb, err)
 	return dir
 }
 
