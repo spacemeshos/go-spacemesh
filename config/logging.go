@@ -35,6 +35,7 @@ type LoggerConfig struct {
 	BlkEligibilityLoggerLevel string     `mapstructure:"block-eligibility"`
 	MeshLoggerLevel           string     `mapstructure:"mesh"`
 	SyncLoggerLevel           string     `mapstructure:"sync"`
+	FetcherLoggerLevel        string     `mapstructure:"fetcher"`
 	BlockOracleLevel          string     `mapstructure:"block-oracle"`
 	HareOracleLoggerLevel     string     `mapstructure:"hare-oracle"`
 	HareLoggerLevel           string     `mapstructure:"hare"`
@@ -71,6 +72,7 @@ func DefaultLoggingConfig() LoggerConfig {
 		BlkEligibilityLoggerLevel: defaultLoggingLevel.String(),
 		MeshLoggerLevel:           defaultLoggingLevel.String(),
 		SyncLoggerLevel:           defaultLoggingLevel.String(),
+		FetcherLoggerLevel:        defaultLoggingLevel.String(),
 		BlockOracleLevel:          defaultLoggingLevel.String(),
 		HareOracleLoggerLevel:     defaultLoggingLevel.String(),
 		HareLoggerLevel:           defaultLoggingLevel.String(),
