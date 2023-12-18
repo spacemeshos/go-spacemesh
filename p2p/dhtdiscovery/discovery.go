@@ -224,15 +224,16 @@ func (d *Discovery) Start() error {
 			d.eg.Go(func() error {
 				return d.discoverPeers(startCtx)
 			})
+			if d.relayCh != nil {
+				d.eg.Go(func() error {
+					d.discoverRelays(startCtx)
+					return nil
+				})
+			}
 		}
 		d.eg.Go(func() error {
 			return d.advertiseNS(startCtx, relayNS, d.h.HaveRelay)
 		})
-		if d.relayCh != nil {
-			d.eg.Go(func() error {
-				return d.discoverRelays(startCtx)
-			})
-		}
 	}
 
 	return nil
