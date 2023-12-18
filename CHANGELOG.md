@@ -89,6 +89,15 @@ for more information on how to configure the node to work with the PoST service.
   query rewards by smesherID. Additionally, it does not re-index old data. Rewards will contain smesherID going forward,
   but to refresh data for all rewards, a node will have to delete its database and resync from genesis.
 
+* [#5329](https://github.com/spacemeshos/go-spacemesh/pull/5329) P2P decentralization improvements. Added support for QUIC
+  transport and DHT routing discovery for finding peers and relays. Also, added the `ping-peers` feature which is useful
+  during connectivity troubleshooting. `static-relays` feature can be used to provide a static list of circuit v2 relays
+  nodes when automatic relay discovery is not desired. All of the relay server resource settings are now configurable. Most
+  of the new functionality is disabled by default unless explicitly enabled in the config via `enable-routing-discovery`,
+  `routing-discovery-advertise`, `enable-quic-transport`, `static-relays` and `ping-peers` options in the `p2p` config
+  section. The non-conditional changes include values/provides support on all of the nodes, which will enable DHT to
+  function efficiently for routing discovery.
+
 ## Release v1.2.9
 
 ### Improvements
