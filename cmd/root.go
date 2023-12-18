@@ -260,6 +260,12 @@ func AddCommands(cmd *cobra.Command) {
 
 	/**======================== PoST Verifying Flags ========================== **/
 
+	cmd.PersistentFlags().IntVar(
+		&cfg.SMESHING.VerifyingOpts.MinWorkers,
+		"smeshing-opts-verifying-min-threads",
+		cfg.SMESHING.VerifyingOpts.MinWorkers,
+		"Minimal number of threads to use for verifying PoSTs (used while PoST is generated)",
+	)
 	cmd.PersistentFlags().IntVar(&cfg.SMESHING.VerifyingOpts.Workers, "smeshing-opts-verifying-threads",
 		cfg.SMESHING.VerifyingOpts.Workers, "")
 	cmd.PersistentFlags().AddFlag(&pflag.Flag{
