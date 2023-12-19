@@ -198,13 +198,6 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 			}
 		}
 	}
-	for i := 0; i < config.connections; i++ {
-		conn := pool.Get(context.Background())
-		if err := registerFunctions(conn); err != nil {
-			return nil, err
-		}
-		pool.Put(conn)
-	}
 	return db, nil
 }
 

@@ -64,9 +64,9 @@ func DefaultConfig() Config {
 			// link local
 			"fe80::/10",
 		},
-		GossipQueueSize:             10000,
-		GossipValidationThrottle:    10000,
-		GossipAtxValidationThrottle: 10000,
+		GossipQueueSize:             50000,
+		GossipValidationThrottle:    50000,
+		GossipAtxValidationThrottle: 50000,
 	}
 }
 
@@ -165,6 +165,7 @@ func New(
 		return nil, fmt.Errorf("p2p create conn mgr: %w", err)
 	}
 	streamer := *yamux.DefaultTransport
+	streamer.Config().ConnectionWriteTimeout = 25 * time.Second // should be NOT exposed in the config
 	ps, err := pstoremem.NewPeerstore()
 	if err != nil {
 		return nil, fmt.Errorf("can't create peer store: %w", err)

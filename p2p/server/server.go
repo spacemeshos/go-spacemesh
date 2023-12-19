@@ -84,7 +84,7 @@ type Handler func(context.Context, []byte) ([]byte, error)
 
 // Response is a server response.
 type Response struct {
-	Data  []byte `scale:"max=10485760"` // 10 MiB
+	Data  []byte `scale:"max=41943040"` // 40 MiB
 	Error string `scale:"max=1024"`     // TODO(mafa): make error code instead of string
 }
 
@@ -120,7 +120,7 @@ func New(h Host, proto string, handler Handler, opts ...Opt) *Server {
 		protocol:            proto,
 		handler:             handler,
 		h:                   h,
-		timeout:             10 * time.Second,
+		timeout:             25 * time.Second,
 		requestLimit:        10240,
 		queueSize:           1000,
 		requestsPerInterval: 100,
@@ -220,7 +220,12 @@ func (s *Server) queueHandler(ctx context.Context, stream network.Stream) {
 
 	wr := bufio.NewWriter(stream)
 	if _, err := codec.EncodeTo(wr, &resp); err != nil {
-		s.logger.With().Warning("failed to write response", log.Err(err))
+		s.logger.With().Warning(
+			"failed to write response",
+			log.Int("resp.Data len", len(resp.Data)),
+			log.Int("resp.Error len", len(resp.Error)),
+			log.Err(err),
+		)
 		return
 	}
 	if err := wr.Flush(); err != nil {

@@ -429,8 +429,11 @@ func (t *tester) rewards(all ...reward) []types.CoinbaseReward {
 	var rst []types.CoinbaseReward
 	for _, rew := range all {
 		rat := new(big.Rat).SetFloat64(rew.share)
+		address := t.accounts[rew.address].getAddress()
 		rst = append(rst, types.CoinbaseReward{
-			Coinbase: t.accounts[rew.address].getAddress(),
+			Coinbase: address,
+			// smesherID doesn't matter but must be set. Derive it arbitrarily from the coinbase.
+			SmesherID: types.BytesToNodeID(address.Bytes()),
 			Weight: types.RatNum{
 				Num:   rat.Num().Uint64(),
 				Denom: rat.Denom().Uint64(),

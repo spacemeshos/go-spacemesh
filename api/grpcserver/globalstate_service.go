@@ -143,7 +143,7 @@ func (s GlobalStateService) AccountDataQuery(
 	// if filterTxReceipt {}
 
 	if filterReward {
-		dbRewards, err := s.mesh.GetRewards(addr)
+		dbRewards, err := s.mesh.GetRewardsByCoinbase(addr)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "error getting rewards data")
 		}
@@ -153,10 +153,8 @@ func (s GlobalStateService) AccountDataQuery(
 					Layer:       &pb.LayerNumber{Number: r.Layer.Uint32()},
 					Total:       &pb.Amount{Value: r.TotalReward},
 					LayerReward: &pb.Amount{Value: r.LayerReward},
-					// Leave this out for now as this is changing
-					// See https://github.com/spacemeshos/go-spacemesh/issues/2275
-					// LayerComputed: 0,
-					Coinbase: &pb.AccountId{Address: addr.String()},
+					Coinbase:    &pb.AccountId{Address: addr.String()},
+					Smesher:     &pb.SmesherId{Id: r.SmesherID[:]},
 				},
 			}})
 		}
@@ -291,10 +289,8 @@ func (s GlobalStateService) AccountDataStream(
 						Layer:       &pb.LayerNumber{Number: reward.Layer.Uint32()},
 						Total:       &pb.Amount{Value: reward.Total},
 						LayerReward: &pb.Amount{Value: reward.LayerReward},
-						// Leave this out for now as this is changing
-						// See https://github.com/spacemeshos/go-spacemesh/issues/2275
-						// LayerComputed: 0,
-						Coinbase: &pb.AccountId{Address: addr.String()},
+						Coinbase:    &pb.AccountId{Address: addr.String()},
+						Smesher:     &pb.SmesherId{Id: reward.SmesherID[:]},
 					},
 				}}}
 				if err := stream.Send(resp); err != nil {
@@ -424,10 +420,8 @@ func (s GlobalStateService) GlobalStateStream(
 					Layer:       &pb.LayerNumber{Number: reward.Layer.Uint32()},
 					Total:       &pb.Amount{Value: reward.Total},
 					LayerReward: &pb.Amount{Value: reward.LayerReward},
-					// Leave this out for now as this is changing
-					// See https://github.com/spacemeshos/go-spacemesh/issues/2275
-					// LayerComputed: 0,
-					Coinbase: &pb.AccountId{Address: reward.Coinbase.String()},
+					Coinbase:    &pb.AccountId{Address: reward.Coinbase.String()},
+					Smesher:     &pb.SmesherId{Id: reward.SmesherID[:]},
 				},
 			}}}
 			if err := stream.Send(resp); err != nil {
