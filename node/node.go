@@ -2,6 +2,7 @@
 package node
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
@@ -12,6 +13,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"syscall"
 	"time"
 
@@ -64,6 +66,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/prune"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots/util"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
@@ -1156,13 +1159,22 @@ func (app *App) listenToUpdates(ctx context.Context) {
 					}
 				}
 				if len(update.Data.ActiveSet) > 0 {
-					app.hOracle.UpdateActiveSet(update.Data.Epoch, update.Data.ActiveSet)
-					app.proposalBuilder.UpdateActiveSet(update.Data.Epoch, update.Data.ActiveSet)
-
-					if err := app.fetcher.GetAtxs(ctx, update.Data.ActiveSet); err != nil {
-						app.errCh <- err
-						return nil
+					epoch := update.Data.Epoch
+					set := update.Data.ActiveSet
+					sort.Slice(set, func(i, j int) bool {
+						return bytes.Compare(set[i].Bytes(), set[j].Bytes()) < 0
+					})
+					id := types.ATXIDList(set).Hash()
+					activeSet := &types.EpochActiveSet{
+						Epoch: epoch,
+						Set:   set,
 					}
+					activesets.Add(app.db, id, activeSet)
+
+					app.hOracle.UpdateActiveSet(epoch, set)
+					app.proposalBuilder.UpdateActiveSet(epoch, set)
+
+					// TODO(mafa): fetch atxs (see #5377)
 				}
 			}
 		}
