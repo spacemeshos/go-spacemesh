@@ -28,6 +28,7 @@ type Config struct {
 	MaxStaleDuration         time.Duration
 	Standalone               bool
 	GossipDuration           time.Duration
+	DisableAtxSync           bool   `mapstructure:"disable-atx-sync"`
 	OutOfSyncThresholdLayers uint32 `mapstructure:"out-of-sync-threshold"`
 }
 
@@ -440,7 +441,10 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 			return err
 		}
 	}
-
+	if s.cfg.DisableAtxSync {
+		s.logger.Debug("atx sync disabled")
+		return nil
+	}
 	// steady state atx syncing
 	curr := s.ticker.CurrentLayer()
 	if float64(
