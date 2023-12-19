@@ -503,5 +503,5 @@ func ATXIDsToHashes(ids []ATXID) []Hash32 {
 
 type EpochActiveSet struct {
 	Epoch EpochID
-	Set   []ATXID `scale:"max=1_000_000"`
+	Set   []ATXID `scale:"max=1000000"`
 }
