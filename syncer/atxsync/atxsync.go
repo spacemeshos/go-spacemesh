@@ -20,11 +20,12 @@ func Download(
 	logger *zap.Logger,
 	data *atxsdata.Data,
 	fetcher atxFetcher,
-	epoch types.EpochID,
+	publish types.EpochID,
 	set []types.ATXID,
 ) {
 	for {
-		_, missing := data.WeightForSet(epoch, set)
+		// atxs are indexed by target epoch
+		_, missing := data.WeightForSet(publish+1, set)
 		n := 0
 		for i := range missing {
 			if missing[i] {
@@ -33,7 +34,7 @@ func Download(
 		}
 		if n == 0 {
 			logger.Info("all requested atxs are downloaded",
-				epoch.Field().Zap(),
+				publish.Field().Zap(),
 				zap.Array("atxs", zapcore.ArrayMarshalerFunc(func(enc zapcore.ArrayEncoder) error {
 					for i := range set {
 						enc.AppendString(set[i].ShortString())
@@ -49,7 +50,7 @@ func Download(
 			}
 		}
 		set = requsted
-		logger.Debug("downloading atxs", epoch.Field().Zap(),
+		logger.Debug("downloading atxs", publish.Field().Zap(),
 			zap.Array("atxs", zapcore.ArrayMarshalerFunc(func(enc zapcore.ArrayEncoder) error {
 				for i := range set {
 					enc.AppendString(set[i].ShortString())
