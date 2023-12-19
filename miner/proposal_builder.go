@@ -72,13 +72,16 @@ type ProposalBuilder struct {
 	tortoise  votesEncoder
 	syncer    system.SyncStateProvider
 
-	mu      sync.Mutex
-	signers map[types.NodeID]*signerSession
-
-	fallbackMtx sync.Mutex
-	fallback    map[types.EpochID][]types.ATXID
-
+	signers struct {
+		mu      sync.Mutex
+		signers map[types.NodeID]*signerSession
+	}
 	shared sharedSession
+
+	fallback struct {
+		mu   sync.Mutex
+		data map[types.EpochID][]types.ATXID
+	}
 }
 
 type signerSession struct {
@@ -255,8 +258,18 @@ func New(
 		tortoise:  trtl,
 		syncer:    syncer,
 		conState:  conState,
-		signers:   map[types.NodeID]*signerSession{},
-		fallback:  map[types.EpochID][]types.ATXID{},
+		signers: struct {
+			mu      sync.Mutex
+			signers map[types.NodeID]*signerSession
+		}{
+			signers: map[types.NodeID]*signerSession{},
+		},
+		fallback: struct {
+			mu   sync.Mutex
+			data map[types.EpochID][]types.ATXID
+		}{
+			data: map[types.EpochID][]types.ATXID{},
+		},
 	}
 	for _, opt := range opts {
 		opt(pb)
@@ -265,11 +278,11 @@ func New(
 }
 
 func (pb *ProposalBuilder) Register(signer *signing.EdSigner) {
-	pb.mu.Lock()
-	defer pb.mu.Unlock()
-	_, exist := pb.signers[signer.NodeID()]
+	pb.signers.mu.Lock()
+	defer pb.signers.mu.Unlock()
+	_, exist := pb.signers.signers[signer.NodeID()]
 	if !exist {
-		pb.signers[signer.NodeID()] = &signerSession{
+		pb.signers.signers[signer.NodeID()] = &signerSession{
 			signer: signer,
 			log:    pb.logger.WithFields(log.String("signer", signer.NodeID().ShortString())),
 		}
@@ -378,13 +391,13 @@ func (pb *ProposalBuilder) UpdateActiveSet(epoch types.EpochID, activeSet []type
 		epoch,
 		log.Int("size", len(activeSet)),
 	)
-	pb.fallbackMtx.Lock()
-	defer pb.fallbackMtx.Unlock()
-	if _, ok := pb.fallback[epoch]; ok {
+	pb.fallback.mu.Lock()
+	defer pb.fallback.mu.Unlock()
+	if _, ok := pb.fallback.data[epoch]; ok {
 		pb.logger.With().Debug("fallback active set already exists", epoch)
 		return
 	}
-	pb.fallback[epoch] = activeSet
+	pb.fallback.data[epoch] = activeSet
 }
 
 func (pb *ProposalBuilder) initSharedData(ctx context.Context, lid types.LayerID) error {
@@ -398,22 +411,36 @@ func (pb *ProposalBuilder) initSharedData(ctx context.Context, lid types.LayerID
 		}
 		pb.shared.beacon = beacon
 	}
-	if pb.shared.active.set == nil {
-		weight, set, err := pb.generateActiveSet(
+	if pb.shared.active.set != nil {
+		return nil
+	}
+
+	if weight, set, err := pb.fallbackActiveSet(pb.shared.epoch); err == nil {
+		pb.logger.With().Info("using fallback active set",
 			pb.shared.epoch,
-			pb.clock.LayerToTime(pb.shared.epoch.FirstLayer()),
-			pb.cfg.goodAtxPercent,
-			pb.cfg.networkDelay,
+			log.Int("size", len(set)),
 		)
-		if err != nil {
-			return err
-		}
 		sort.Slice(set, func(i, j int) bool {
 			return bytes.Compare(set[i].Bytes(), set[j].Bytes()) < 0
 		})
 		pb.shared.active.set = set
 		pb.shared.active.weight = weight
+		return nil
 	}
+
+	weight, set, err := generateActiveSet(
+		pb.logger,
+		pb.cdb,
+		pb.shared.epoch,
+		pb.clock.LayerToTime(pb.shared.epoch.FirstLayer()),
+		pb.cfg.goodAtxPercent,
+		pb.cfg.networkDelay,
+	)
+	if err != nil {
+		return err
+	}
+	pb.shared.active.set = set
+	pb.shared.active.weight = weight
 	return nil
 }
 
@@ -502,10 +529,10 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 		return err
 	}
 
-	pb.mu.Lock()
+	pb.signers.mu.Lock()
 	// don't accept registration in the middle of computing proposals
-	signers := maps.Values(pb.signers)
-	pb.mu.Unlock()
+	signers := maps.Values(pb.signers.signers)
+	pb.signers.mu.Unlock()
 
 	var eg errgroup.Group
 	eg.SetLimit(pb.cfg.workersLimit)
@@ -731,9 +758,9 @@ func activesFromFirstBlock(
 }
 
 func (pb *ProposalBuilder) fallbackActiveSet(targetEpoch types.EpochID) (uint64, []types.ATXID, error) {
-	pb.fallbackMtx.Lock()
-	defer pb.fallbackMtx.Unlock()
-	set, ok := pb.fallback[targetEpoch]
+	pb.fallback.mu.Lock()
+	defer pb.fallback.mu.Unlock()
+	set, ok := pb.fallback.data[targetEpoch]
 	if !ok {
 		return 0, nil, fmt.Errorf("no fallback active set for epoch %d", targetEpoch)
 	}
@@ -749,32 +776,26 @@ func (pb *ProposalBuilder) fallbackActiveSet(targetEpoch types.EpochID) (uint64,
 	return totalWeight, set, nil
 }
 
-func (pb *ProposalBuilder) generateActiveSet(
+func generateActiveSet(
+	logger log.Log,
+	cdb *datastore.CachedDB,
 	target types.EpochID,
 	epochStart time.Time,
 	goodAtxPercent int,
 	networkDelay time.Duration,
 ) (uint64, []types.ATXID, error) {
-	if totalWeight, set, err := pb.fallbackActiveSet(target); err == nil {
-		pb.logger.With().Info("using fallback active set",
-			target,
-			log.Int("size", len(set)),
-		)
-		return totalWeight, set, nil
-	}
-
 	var (
 		totalWeight uint64
 		set         []types.ATXID
 		numOmitted  = 0
 	)
-	if err := pb.cdb.IterateEpochATXHeaders(target, func(header *types.ActivationTxHeader) error {
-		grade, err := gradeAtx(pb.cdb, header.NodeID, header.Received, epochStart, networkDelay)
+	if err := cdb.IterateEpochATXHeaders(target, func(header *types.ActivationTxHeader) error {
+		grade, err := gradeAtx(cdb, header.NodeID, header.Received, epochStart, networkDelay)
 		if err != nil {
 			return err
 		}
 		if grade != good {
-			pb.logger.With().Debug("atx omitted from active set",
+			logger.With().Debug("atx omitted from active set",
 				header.ID,
 				log.Int("grade", int(grade)),
 				log.Stringer("smesher", header.NodeID),
@@ -797,23 +818,26 @@ func (pb *ProposalBuilder) generateActiveSet(
 		// if the node is not synced during `targetEpoch-1`, it doesn't have the correct receipt timestamp
 		// for all the atx and malfeasance proof. this active set is not usable.
 		// TODO: change after timing info of ATXs and malfeasance proofs is sync'ed from peers as well
-		totalWeight, set, err := activesFromFirstBlock(pb.cdb, target)
+		var err error
+		totalWeight, set, err = activesFromFirstBlock(cdb, target)
 		if err != nil {
 			return 0, nil, err
 		}
-		pb.logger.With().Info("miner not synced during prior epoch, active set from first block",
+		logger.With().Info("miner not synced during prior epoch, active set from first block",
 			log.Int("all atx", total),
 			log.Int("num omitted", numOmitted),
 			log.Int("num block atx", len(set)),
 		)
-		return totalWeight, set, nil
+	} else {
+		logger.With().Info("active set selected for proposal using grades",
+			log.Int("num atx", len(set)),
+			log.Int("num omitted", numOmitted),
+			log.Int("min atx good pct", goodAtxPercent),
+		)
 	}
-
-	pb.logger.With().Info("active set selected for proposal using grades",
-		log.Int("num atx", len(set)),
-		log.Int("num omitted", numOmitted),
-		log.Int("min atx good pct", goodAtxPercent),
-	)
+	sort.Slice(set, func(i, j int) bool {
+		return bytes.Compare(set[i].Bytes(), set[j].Bytes()) < 0
+	})
 	return totalWeight, set, nil
 }
 
