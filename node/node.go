@@ -1154,15 +1154,14 @@ func (app *App) listenToUpdates(ctx context.Context) {
 				if len(update.Data.ActiveSet) > 0 {
 					app.hOracle.UpdateActiveSet(update.Data.Epoch, update.Data.ActiveSet)
 					app.eg.Go(func() error {
-						atxsync.Download(
+						return atxsync.Download(
 							ctx,
-							app.log.Zap(),
-							app.atxsdata,
+							10*time.Second,
+							app.addLogger(SyncLogger, app.log).Zap(),
+							app.db,
 							app.fetcher,
-							update.Data.Epoch,
 							update.Data.ActiveSet,
 						)
-						return nil
 					})
 				}
 			}
