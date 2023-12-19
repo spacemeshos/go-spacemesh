@@ -34,7 +34,7 @@ func getMissing(db *sql.Database, set []types.ATXID) ([]types.ATXID, error) {
 
 // Download specified set of atxs from peers in the network.
 //
-// actual retry interval will be between [retryInterval, 2*retryInterval]
+// actual retry interval will be between [retryInterval, 2*retryInterval].
 func Download(
 	ctx context.Context,
 	retryInterval time.Duration,

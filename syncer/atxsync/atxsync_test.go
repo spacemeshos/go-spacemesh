@@ -6,13 +6,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/syncer/atxsync/mocks"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
 )
 
 func atx(id types.ATXID) *types.VerifiedActivationTx {
