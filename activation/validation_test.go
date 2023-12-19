@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -481,7 +482,7 @@ func TestValidator_Validate(t *testing.T) {
 
 	logger := logtest.New(t).WithName("validator")
 	postProvider := newTestPostManager(t)
-	verifier, err := NewPostVerifier(postProvider.cfg, logger)
+	verifier, err := NewPostVerifier(postProvider.cfg, zaptest.NewLogger(t))
 	r.NoError(err)
 	defer verifier.Close()
 

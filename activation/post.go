@@ -155,6 +155,9 @@ func DefaultPostProvingOpts() PostProvingOpts {
 type PostProofVerifyingOpts struct {
 	// Number of workers spawned to verify proofs.
 	Workers int `mapstructure:"smeshing-opts-verifying-workers"`
+	// The minimum number of verifying workers to keep
+	// while POST is being generated in parallel.
+	MinWorkers int `mapstructure:"smeshing-opts-verifying-min-workers"`
 	// Flags used for the PoW verification.
 	Flags config.PowFlags `mapstructure:"smeshing-opts-verifying-powflags"`
 }
@@ -165,8 +168,9 @@ func DefaultPostVerifyingOpts() PostProofVerifyingOpts {
 		workers = 1
 	}
 	return PostProofVerifyingOpts{
-		Workers: workers,
-		Flags:   config.DefaultVerifyingPowFlags(),
+		MinWorkers: 1,
+		Workers:    workers,
+		Flags:      config.DefaultVerifyingPowFlags(),
 	}
 }
 

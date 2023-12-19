@@ -183,6 +183,65 @@ func (c *PostVerifierVerifyCall) DoAndReturn(f func(context.Context, *shared.Pro
 	return c
 }
 
+// Mockscaler is a mock of scaler interface.
+type Mockscaler struct {
+	ctrl     *gomock.Controller
+	recorder *MockscalerMockRecorder
+}
+
+// MockscalerMockRecorder is the mock recorder for Mockscaler.
+type MockscalerMockRecorder struct {
+	mock *Mockscaler
+}
+
+// NewMockscaler creates a new mock instance.
+func NewMockscaler(ctrl *gomock.Controller) *Mockscaler {
+	mock := &Mockscaler{ctrl: ctrl}
+	mock.recorder = &MockscalerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *Mockscaler) EXPECT() *MockscalerMockRecorder {
+	return m.recorder
+}
+
+// scale mocks base method.
+func (m *Mockscaler) scale(arg0 int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "scale", arg0)
+}
+
+// scale indicates an expected call of scale.
+func (mr *MockscalerMockRecorder) scale(arg0 any) *scalerscaleCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "scale", reflect.TypeOf((*Mockscaler)(nil).scale), arg0)
+	return &scalerscaleCall{Call: call}
+}
+
+// scalerscaleCall wrap *gomock.Call
+type scalerscaleCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *scalerscaleCall) Return() *scalerscaleCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *scalerscaleCall) Do(f func(int)) *scalerscaleCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *scalerscaleCall) DoAndReturn(f func(int)) *scalerscaleCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // MocknipostValidator is a mock of nipostValidator interface.
 type MocknipostValidator struct {
 	ctrl     *gomock.Controller
