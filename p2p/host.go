@@ -2,16 +2,20 @@ package p2p
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	lp2plog "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p"
+	ccmgr "github.com/libp2p/go-libp2p/core/connmgr"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/pnet"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/core/transport"
+	"github.com/libp2p/go-libp2p/p2p/host/autorelay"
 	"github.com/libp2p/go-libp2p/p2p/host/peerstore/pstoremem"
 	rcmgr "github.com/libp2p/go-libp2p/p2p/host/resource-manager"
 	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
@@ -19,19 +23,22 @@ import (
 	tptu "github.com/libp2p/go-libp2p/p2p/net/upgrader"
 	"github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/relay"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
+	quic "github.com/libp2p/go-libp2p/p2p/transport/quic"
+	"github.com/libp2p/go-libp2p/p2p/transport/quicreuse"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
 	p2pmetrics "github.com/spacemeshos/go-spacemesh/p2p/metrics"
 )
 
 // DefaultConfig config.
 func DefaultConfig() Config {
 	return Config{
-		Listen:                 "/ip4/0.0.0.0/tcp/7513",
+		Listen:                 MustParseAddresses("/ip4/0.0.0.0/tcp/7513"),
 		Flood:                  false,
 		MinPeers:               20,
 		LowPeers:               40,
@@ -44,7 +51,19 @@ func DefaultConfig() Config {
 		EnableHolepunching:     true,
 		InboundFraction:        0.8,
 		OutboundFraction:       1.1,
-		RelayServer:            RelayServer{TTL: 20 * time.Minute, Reservations: 512},
+		RelayServer: RelayServer{
+			TTL:               20 * time.Minute,
+			Reservations:      512,
+			ConnDurationLimit: 2 * time.Minute,
+			ConnDataLimit:     1 << 17, // 128K
+
+			MaxCircuits: 16,
+			BufferSize:  2048,
+
+			MaxReservationsPerPeer: 4,
+			MaxReservationsPerIP:   8,
+			MaxReservationsPerASN:  32,
+		},
 		IP4Blocklist: []string{
 			// localhost
 			"127.0.0.0/8",
@@ -67,6 +86,10 @@ func DefaultConfig() Config {
 		GossipQueueSize:             50000,
 		GossipValidationThrottle:    50000,
 		GossipAtxValidationThrottle: 50000,
+		PingInterval:                time.Second,
+		EnableTCPTransport:          true,
+		EnableQUICTransport:         false,
+		AdvertiseInterval:           time.Minute,
 	}
 }
 
@@ -83,43 +106,73 @@ type Config struct {
 	MaxMessageSize     int
 
 	// see https://lwn.net/Articles/542629/ for reuseport explanation
-	DisableReusePort            bool        `mapstructure:"disable-reuseport"`
-	DisableNatPort              bool        `mapstructure:"disable-natport"`
-	DisableConnectionManager    bool        `mapstructure:"disable-connection-manager"`
-	DisableResourceManager      bool        `mapstructure:"disable-resource-manager"`
-	DisableDHT                  bool        `mapstructure:"disable-dht"`
-	Flood                       bool        `mapstructure:"flood"`
-	Listen                      string      `mapstructure:"listen"`
-	Bootnodes                   []string    `mapstructure:"bootnodes"`
-	Direct                      []string    `mapstructure:"direct"`
-	MinPeers                    int         `mapstructure:"min-peers"`
-	LowPeers                    int         `mapstructure:"low-peers"`
-	HighPeers                   int         `mapstructure:"high-peers"`
-	InboundFraction             float64     `mapstructure:"inbound-fraction"`
-	OutboundFraction            float64     `mapstructure:"outbound-fraction"`
-	AutoscalePeers              bool        `mapstructure:"autoscale-peers"`
-	AdvertiseAddress            string      `mapstructure:"advertise-address"`
-	AcceptQueue                 int         `mapstructure:"p2p-accept-queue"`
-	Metrics                     bool        `mapstructure:"p2p-metrics"`
-	Bootnode                    bool        `mapstructure:"p2p-bootnode"`
-	ForceReachability           string      `mapstructure:"p2p-reachability"`
-	EnableHolepunching          bool        `mapstructure:"p2p-holepunching"`
-	PrivateNetwork              bool        `mapstructure:"p2p-private-network"`
-	RelayServer                 RelayServer `mapstructure:"relay-server"`
-	IP4Blocklist                []string    `mapstructure:"ip4-blocklist"`
-	IP6Blocklist                []string    `mapstructure:"ip6-blocklist"`
-	GossipQueueSize             int         `mapstructure:"gossip-queue-size"`
-	GossipValidationThrottle    int         `mapstructure:"gossip-validation-throttle"`
-	GossipAtxValidationThrottle int         `mapstructure:"gossip-atx-validation-throttle"`
+	DisableReusePort            bool          `mapstructure:"disable-reuseport"`
+	DisableNatPort              bool          `mapstructure:"disable-natport"`
+	DisableConnectionManager    bool          `mapstructure:"disable-connection-manager"`
+	DisableResourceManager      bool          `mapstructure:"disable-resource-manager"`
+	DisableDHT                  bool          `mapstructure:"disable-dht"`
+	Flood                       bool          `mapstructure:"flood"`
+	Listen                      AddressList   `mapstructure:"listen"`
+	Bootnodes                   []string      `mapstructure:"bootnodes"`
+	Direct                      []string      `mapstructure:"direct"`
+	MinPeers                    int           `mapstructure:"min-peers"`
+	LowPeers                    int           `mapstructure:"low-peers"`
+	HighPeers                   int           `mapstructure:"high-peers"`
+	InboundFraction             float64       `mapstructure:"inbound-fraction"`
+	OutboundFraction            float64       `mapstructure:"outbound-fraction"`
+	AutoscalePeers              bool          `mapstructure:"autoscale-peers"`
+	AdvertiseAddress            AddressList   `mapstructure:"advertise-address"`
+	AcceptQueue                 int           `mapstructure:"p2p-accept-queue"`
+	Metrics                     bool          `mapstructure:"p2p-metrics"`
+	Bootnode                    bool          `mapstructure:"p2p-bootnode"`
+	ForceReachability           string        `mapstructure:"p2p-reachability"`
+	ForceDHTServer              bool          `mapstructure:"force-dht-server"`
+	EnableHolepunching          bool          `mapstructure:"p2p-holepunching"`
+	PrivateNetwork              bool          `mapstructure:"p2p-private-network"`
+	RelayServer                 RelayServer   `mapstructure:"relay-server"`
+	IP4Blocklist                []string      `mapstructure:"ip4-blocklist"`
+	IP6Blocklist                []string      `mapstructure:"ip6-blocklist"`
+	GossipQueueSize             int           `mapstructure:"gossip-queue-size"`
+	GossipValidationThrottle    int           `mapstructure:"gossip-validation-throttle"`
+	GossipAtxValidationThrottle int           `mapstructure:"gossip-atx-validation-throttle"`
+	PingPeers                   []string      `mapstructure:"ping-peers"`
+	PingInterval                time.Duration `mapstructure:"ping-interval"`
+	Relay                       bool          `mapstructure:"relay"`
+	StaticRelays                []string      `mapstructure:"static-relays"`
+	EnableTCPTransport          bool          `mapstructure:"enable-tcp-transport"`
+	EnableQUICTransport         bool          `mapstructure:"enable-quic-transport"`
+	EnableRoutingDiscovery      bool          `mapstructure:"enable-routing-discovery"`
+	RoutingDiscoveryAdvertise   bool          `mapstructure:"routing-discovery-advertise"`
+	AdvertiseInterval           time.Duration `mapstructure:"advertise-interval"`
 }
 
 type RelayServer struct {
-	Enable       bool          `mapstructure:"enable"`
-	Reservations int           `mapstructure:"reservations"`
-	TTL          time.Duration `mapstructure:"ttl"`
+	Enable                 bool          `mapstructure:"enable"`
+	Reservations           int           `mapstructure:"reservations"`
+	TTL                    time.Duration `mapstructure:"ttl"`
+	ConnDurationLimit      time.Duration `mapstructure:"conn-duration-limit"`
+	ConnDataLimit          int64         `mapstructure:"conn-data-limit"`
+	MaxCircuits            int           `mapstructure:"max-circuits"`
+	BufferSize             int           `mapstructure:"buffer-size"`
+	MaxReservationsPerPeer int           `mapstructure:"max-reservations-per-peer"`
+	MaxReservationsPerIP   int           `mapstructure:"max-reservations-per-ip"`
+	MaxReservationsPerASN  int           `mapstructure:"max-reservations-per-asn"`
 }
 
 func (cfg *Config) Validate() error {
+	if !cfg.EnableTCPTransport && !cfg.EnableQUICTransport {
+		return errors.New("no transports enabled")
+	}
+
+	if !cfg.Relay {
+		if cfg.RelayServer.Enable {
+			return errors.New("cannot enable relay server without enabling relay")
+		}
+		if len(cfg.StaticRelays) != 0 {
+			return errors.New("cannot specify static-relays without enabling relay")
+		}
+	}
+
 	if len(cfg.ForceReachability) > 0 {
 		if cfg.ForceReachability != PublicReachability &&
 			cfg.ForceReachability != PrivateReachability {
@@ -128,12 +181,7 @@ func (cfg *Config) Validate() error {
 			)
 		}
 	}
-	if len(cfg.AdvertiseAddress) > 0 {
-		_, err := multiaddr.NewMultiaddr(cfg.AdvertiseAddress)
-		if err != nil {
-			return fmt.Errorf("address %s is not a valid multiaddr %w", cfg.AdvertiseAddress, err)
-		}
-	}
+
 	return nil
 }
 
@@ -143,6 +191,7 @@ func New(
 	logger log.Log,
 	cfg Config,
 	prologue []byte,
+	quicNetCookie handshake.NetworkCookie,
 	opts ...Opt,
 ) (*Host, error) {
 	if err := cfg.Validate(); err != nil {
@@ -199,62 +248,101 @@ func New(
 	g.direct = directMap
 	lopts := []libp2p.Option{
 		libp2p.Identity(key),
-		libp2p.ListenAddrStrings(cfg.Listen),
+		libp2p.ListenAddrs(cfg.Listen...),
 		libp2p.UserAgent("go-spacemesh"),
-		libp2p.Transport(
-			func(upgrader transport.Upgrader, rcmgr network.ResourceManager) (transport.Transport, error) {
-				opts := []tcp.Option{}
-				if cfg.DisableReusePort {
-					opts = append(opts, tcp.DisableReuseport())
-				}
-				if cfg.Metrics {
-					opts = append(opts, tcp.WithMetrics())
-				}
-				return tcp.NewTCPTransport(upgrader, rcmgr, opts...)
-			},
-		),
-		libp2p.Security(
-			noise.ID,
-			func(id protocol.ID, privkey crypto.PrivKey, muxers []tptu.StreamMuxer) (*noise.SessionTransport, error) {
-				tp, err := noise.New(id, privkey, muxers)
-				if err != nil {
-					return nil, err
-				}
-				return tp.WithSessionOptions(noise.Prologue(prologue))
-			},
-		),
 		libp2p.Muxer("/yamux/1.0.0", &streamer),
 		libp2p.Peerstore(ps),
 		libp2p.BandwidthReporter(p2pmetrics.NewBandwidthCollector()),
 		libp2p.EnableNATService(),
 		libp2p.ConnectionGater(g),
-		libp2p.Ping(false),
+	}
+	if cfg.EnableTCPTransport {
+		lopts = append(lopts,
+			libp2p.Transport(
+				func(upgrader transport.Upgrader, rcmgr network.ResourceManager) (transport.Transport, error) {
+					opts := []tcp.Option{}
+					if cfg.DisableReusePort {
+						opts = append(opts, tcp.DisableReuseport())
+					}
+					if cfg.Metrics {
+						opts = append(opts, tcp.WithMetrics())
+					}
+					return tcp.NewTCPTransport(upgrader, rcmgr, opts...)
+				},
+			),
+			libp2p.Security(
+				noise.ID,
+				func(id protocol.ID, privkey crypto.PrivKey, muxers []tptu.StreamMuxer) (*noise.SessionTransport, error) {
+					tp, err := noise.New(id, privkey, muxers)
+					if err != nil {
+						return nil, err
+					}
+					return tp.WithSessionOptions(noise.Prologue(prologue))
+				},
+			),
+		)
+	}
+	if cfg.EnableQUICTransport {
+		lopts = append(lopts,
+			libp2p.Transport(
+				func(key crypto.PrivKey, connManager *quicreuse.ConnManager, psk pnet.PSK,
+					gater ccmgr.ConnectionGater,
+					rcmgr network.ResourceManager,
+				) (transport.Transport, error) {
+					tr, err := quic.NewTransport(key, connManager, psk, gater, rcmgr)
+					if err != nil {
+						return nil, err
+					}
+					return handshake.MaybeWrapTransport(tr, quicNetCookie,
+						handshake.WithLog(logger)), nil
+				}),
+		)
 	}
 	if !cfg.DisableConnectionManager {
 		lopts = append(lopts, libp2p.ConnectionManager(cm))
 	}
 	if len(cfg.AdvertiseAddress) > 0 {
-		addr, err := multiaddr.NewMultiaddr(cfg.AdvertiseAddress)
-		if err != nil {
-			panic(err) // validated in config
-		}
 		lopts = append(
 			lopts,
 			libp2p.AddrsFactory(func([]multiaddr.Multiaddr) []multiaddr.Multiaddr {
-				return []multiaddr.Multiaddr{addr}
+				return cfg.AdvertiseAddress
 			}),
 		)
 	}
 	if cfg.EnableHolepunching {
-		lopts = append(lopts,
-			libp2p.EnableHolePunching(),
-			libp2p.EnableAutoRelayWithStaticRelays(bootnodes))
+		lopts = append(lopts, libp2p.EnableHolePunching())
 	}
-	if cfg.RelayServer.Enable {
-		resources := relay.DefaultResources()
-		resources.MaxReservations = cfg.RelayServer.Reservations
-		resources.ReservationTTL = cfg.RelayServer.TTL
-		lopts = append(lopts, libp2p.EnableRelayService(relay.WithResources(resources)))
+	if cfg.Relay {
+		if cfg.RelayServer.Enable {
+			resources := relay.DefaultResources()
+			resources.Limit.Duration = cfg.RelayServer.ConnDurationLimit
+			resources.Limit.Data = cfg.RelayServer.ConnDataLimit
+			resources.ReservationTTL = cfg.RelayServer.TTL
+			resources.MaxReservations = cfg.RelayServer.Reservations
+			resources.MaxCircuits = cfg.RelayServer.MaxCircuits
+			resources.BufferSize = cfg.RelayServer.BufferSize
+			resources.MaxReservationsPerPeer = cfg.RelayServer.MaxReservationsPerPeer
+			resources.MaxReservationsPerIP = cfg.RelayServer.MaxReservationsPerIP
+			resources.MaxReservationsPerASN = cfg.RelayServer.MaxReservationsPerASN
+			lopts = append(lopts, libp2p.EnableRelayService(relay.WithResources(resources)))
+		}
+
+		lopts = append(lopts, libp2p.EnableRelay())
+		if len(cfg.StaticRelays) != 0 {
+			relays, err := parseIntoAddr(cfg.StaticRelays)
+			if err != nil {
+				return nil, err
+			}
+			lopts = append(lopts, libp2p.EnableAutoRelayWithStaticRelays(relays))
+		} else if cfg.EnableRoutingDiscovery {
+			peerSrc, relayCh := relayPeerSource(logger)
+			lopts = append(lopts, libp2p.EnableAutoRelayWithPeerSource(peerSrc))
+			opts = append(opts, WithRelayCandidateChannel(relayCh))
+		} else {
+			lopts = append(lopts, libp2p.EnableAutoRelayWithStaticRelays(bootnodes))
+		}
+	} else {
+		lopts = append(lopts, libp2p.DisableRelay())
 	}
 	if cfg.ForceReachability == PublicReachability {
 		lopts = append(lopts, libp2p.ForceReachabilityPublic())
@@ -344,4 +432,32 @@ func parseIntoAddr(nodes []string) ([]peer.AddrInfo, error) {
 		addrs = append(addrs, *addr)
 	}
 	return addrs, nil
+}
+
+func relayPeerSource(logger log.Logger) (autorelay.PeerSource, chan<- peer.AddrInfo) {
+	relayCandidateCh := make(chan peer.AddrInfo)
+	return func(ctx context.Context, num int) <-chan peer.AddrInfo {
+		r := make(chan peer.AddrInfo)
+		go func() {
+			defer close(r)
+			for ; num != 0; num-- {
+				select {
+				case addrInfo, ok := <-relayCandidateCh:
+					if !ok {
+						return
+					}
+					select {
+					case r <- addrInfo:
+						logger.With().Debug("discovered relay candidate",
+							log.Stringer("addrInfo", addrInfo))
+					case <-ctx.Done():
+						return
+					}
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
+		return r
+	}, relayCandidateCh
 }
