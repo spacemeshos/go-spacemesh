@@ -4,6 +4,9 @@ import (
 	"context"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/network"
+	ma "github.com/multiformats/go-multiaddr"
+
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -12,9 +15,14 @@ import (
 
 //go:generate mockgen -typed -package=grpcserver -destination=./mocks.go -source=./interface.go
 
-// networkIdentity interface.
-type networkIdentity interface {
+// networkInfo interface.
+type networkInfo interface {
 	ID() p2p.Peer
+	ListenAddresses() []ma.Multiaddr
+	KnownAddresses() []ma.Multiaddr
+	NATDeviceType() (udpNATType, tcpNATType network.NATDeviceType)
+	Reachability() network.Reachability
+	DHTServerEnabled() bool
 }
 
 // conservativeState is an API for reading state and transaction/mempool data.
