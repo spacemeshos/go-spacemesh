@@ -1141,11 +1141,14 @@ func (app *App) listenToUpdates(ctx context.Context) {
 			app.errCh <- err
 			return nil
 		}
-		for update := range ch {
+		for {
 			select {
 			case <-ctx.Done():
 				return nil
-			default:
+			case update, ok := <-ch:
+				if !ok {
+					return nil
+				}
 				if update.Data.Beacon != types.EmptyBeacon {
 					if err := app.beaconProtocol.UpdateBeacon(update.Data.Epoch, update.Data.Beacon); err != nil {
 						app.errCh <- err
@@ -1154,10 +1157,15 @@ func (app *App) listenToUpdates(ctx context.Context) {
 				}
 				if len(update.Data.ActiveSet) > 0 {
 					app.hOracle.UpdateActiveSet(update.Data.Epoch, update.Data.ActiveSet)
+					app.proposalBuilder.UpdateActiveSet(update.Data.Epoch, update.Data.ActiveSet)
+
+					if err := app.fetcher.GetAtxs(ctx, update.Data.ActiveSet); err != nil {
+						app.errCh <- err
+						return nil
+					}
 				}
 			}
 		}
-		return nil
 	})
 }
 
