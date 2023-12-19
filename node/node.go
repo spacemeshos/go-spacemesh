@@ -68,6 +68,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
 	"github.com/spacemeshos/go-spacemesh/syncer"
+	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
 	"github.com/spacemeshos/go-spacemesh/syncer/blockssync"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -1152,6 +1153,17 @@ func (app *App) listenToUpdates(ctx context.Context) {
 				}
 				if len(update.Data.ActiveSet) > 0 {
 					app.hOracle.UpdateActiveSet(update.Data.Epoch, update.Data.ActiveSet)
+					app.eg.Go(func() error {
+						atxsync.Download(
+							ctx,
+							app.log.Zap(),
+							app.atxsdata,
+							app.fetcher,
+							update.Data.Epoch,
+							update.Data.ActiveSet,
+						)
+						return nil
+					})
 				}
 			}
 		}
