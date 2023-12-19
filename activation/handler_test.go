@@ -1249,7 +1249,14 @@ func TestHandler_HandleParallelGossipAtx(t *testing.T) {
 
 	atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
 	atxHdlr.mValidator.EXPECT().VRFNonce(nodeID, goldenATXID, &vrfNonce, gomock.Any(), atx.NumUnits)
-	atxHdlr.mValidator.EXPECT().Post(gomock.Any(), nodeID, goldenATXID, atx.InitialPost, gomock.Any(), atx.NumUnits).DoAndReturn(
+	atxHdlr.mValidator.EXPECT().Post(
+		gomock.Any(),
+		atx.SmesherID,
+		goldenATXID,
+		atx.InitialPost,
+		gomock.Any(),
+		atx.NumUnits,
+	).DoAndReturn(
 		func(_ context.Context, _ types.NodeID, _ types.ATXID, _ *types.Post, _ *types.PostMetadata, _ uint32) error {
 			time.Sleep(100 * time.Millisecond)
 			return nil

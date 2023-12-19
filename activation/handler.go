@@ -504,11 +504,12 @@ func (h *Handler) HandleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte
 }
 
 func (h *Handler) handleAtx(ctx context.Context, expHash types.Hash32, peer p2p.Peer, msg []byte) error {
+	receivedTime := time.Now()
 	var atx types.ActivationTx
 	if err := codec.Decode(msg, &atx); err != nil {
 		return fmt.Errorf("%w: %w", errMalformedData, err)
 	}
-	atx.SetReceived(time.Now().Local())
+	atx.SetReceived(receivedTime.Local())
 	if err := atx.Initialize(); err != nil {
 		return fmt.Errorf("failed to derive ID from atx: %w", err)
 	}
