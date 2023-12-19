@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -597,7 +598,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		app.Config.API.PrivateServices = nil
 
 		// Prevent obnoxious warning in macOS
-		app.Config.P2P.Listen = "/ip4/127.0.0.1/tcp/7073"
+		app.Config.P2P.Listen = p2p.MustParseAddresses("/ip4/127.0.0.1/tcp/7073")
 
 		// Avoid waiting for new connections.
 		app.Config.P2P.MinPeers = 0
@@ -850,6 +851,32 @@ func TestConfig_CustomTypes(t *testing.T) {
 				copy(c.POST.PowDifficulty[:], diff)
 			},
 		},
+		{
+			name:   "address-list-single",
+			cli:    "--listen=/ip4/0.0.0.0/tcp/5555 --advertise-address=/ip4/10.20.30.40/tcp/5555",
+			config: `{"p2p":{"listen":"/ip4/0.0.0.0/tcp/5555","advertise-address":"/ip4/10.20.30.40/tcp/5555"}}`,
+			updatePreset: func(t *testing.T, c *config.Config) {
+				c.P2P.Listen = p2p.MustParseAddresses("/ip4/0.0.0.0/tcp/5555")
+				c.P2P.AdvertiseAddress = p2p.MustParseAddresses("/ip4/10.20.30.40/tcp/5555")
+			},
+		},
+		{
+			name: "address-list-multiple",
+			cli: "--listen=/ip4/0.0.0.0/tcp/5555 --listen=/ip4/0.0.0.0/udp/5555/quic-v1" +
+				" --advertise-address=/ip4/10.20.30.40/tcp/5555" +
+				" --advertise-address=/ip4/10.20.30.40/udp/5555/quic-v1",
+			config: `{"p2p":{"listen":["/ip4/0.0.0.0/tcp/5555","/ip4/0.0.0.0/udp/5555/quic-v1"],
+                                  "advertise-address":[
+                                    "/ip4/10.20.30.40/tcp/5555","/ip4/10.20.30.40/udp/5555/quic-v1"]}}`,
+			updatePreset: func(t *testing.T, c *config.Config) {
+				c.P2P.Listen = p2p.MustParseAddresses(
+					"/ip4/0.0.0.0/tcp/5555",
+					"/ip4/0.0.0.0/udp/5555/quic-v1")
+				c.P2P.AdvertiseAddress = p2p.MustParseAddresses(
+					"/ip4/10.20.30.40/tcp/5555",
+					"/ip4/10.20.30.40/udp/5555/quic-v1")
+			},
+		},
 	}
 
 	for _, tc := range tt {
@@ -859,7 +886,7 @@ func TestConfig_CustomTypes(t *testing.T) {
 
 			c := &cobra.Command{}
 			cmd.AddCommands(c)
-			require.NoError(t, c.ParseFlags([]string{tc.cli}))
+			require.NoError(t, c.ParseFlags(strings.Fields(tc.cli)))
 
 			t.Cleanup(viper.Reset)
 			t.Cleanup(cmd.ResetConfig)
@@ -897,7 +924,7 @@ func TestConfig_CustomTypes(t *testing.T) {
 
 			c := &cobra.Command{}
 			cmd.AddCommands(c)
-			require.NoError(t, c.ParseFlags([]string{tc.cli}))
+			require.NoError(t, c.ParseFlags(strings.Fields(tc.cli)))
 
 			viper.Set("preset", name)
 			t.Cleanup(viper.Reset)
