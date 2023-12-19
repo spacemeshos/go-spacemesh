@@ -324,8 +324,6 @@ func (u *Updater) get(ctx context.Context, uri string) (*VerifiedUpdate, []byte,
 		return nil, nil, fmt.Errorf("scheme not supported %v", resource.Scheme)
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, httpTimeout)
-	defer cancel()
 	t0 := time.Now()
 	data, err := query(ctx, u.client, resource)
 	if err != nil {

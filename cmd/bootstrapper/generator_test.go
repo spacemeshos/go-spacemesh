@@ -98,7 +98,7 @@ func verifyUpdate(tb testing.TB, data []byte, epoch types.EpochID, expBeacon str
 	var update bootstrap.Update
 	require.NoError(tb, json.Unmarshal(data, &update))
 	require.Equal(tb, SchemaVersion, update.Version)
-	require.EqualValues(tb, epoch, update.Data.Epoch.ID)
+	require.Equal(tb, epoch.Uint32(), update.Data.Epoch.ID)
 	require.Equal(tb, expBeacon, update.Data.Epoch.Beacon)
 	require.Len(tb, update.Data.Epoch.ActiveSet, expAsSize)
 }
