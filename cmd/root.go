@@ -82,6 +82,9 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().DurationVar(&cfg.DatabasePruneInterval, "db-prune-interval",
 		cfg.DatabasePruneInterval, "configure interval for database pruning")
 
+	cmd.PersistentFlags().BoolVar(&cfg.NoMainOverride, "no-main-override",
+		cfg.NoMainOverride, "force 'nomain' builds to run on the mainnet")
+
 	/** ======================== P2P Flags ========================== **/
 
 	cmd.PersistentFlags().Var(flags.NewAddressListValue(cfg.P2P.Listen, &cfg.P2P.Listen),
