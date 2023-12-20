@@ -49,6 +49,11 @@ type Handler struct {
 	mu              sync.Mutex
 	fetcher         system.Fetcher
 	poetCfg         PoetConfig
+
+	// inProgress map gathers ATXs that are currently being processed.
+	// It's used to avoid processing the same ATX twice.
+	inProgress   map[types.ATXID][]chan error
+	inProgressMu sync.Mutex
 }
 
 // NewHandler returns a data handler for ATX.
@@ -83,6 +88,8 @@ func NewHandler(
 		beacon:          beacon,
 		tortoise:        tortoise,
 		poetCfg:         poetCfg,
+
+		inProgress: make(map[types.ATXID][]chan error),
 	}
 }
 
@@ -502,12 +509,43 @@ func (h *Handler) handleAtx(ctx context.Context, expHash types.Hash32, peer p2p.
 	if err := codec.Decode(msg, &atx); err != nil {
 		return fmt.Errorf("%w: %w", errMalformedData, err)
 	}
-
 	atx.SetReceived(receivedTime.Local())
 	if err := atx.Initialize(); err != nil {
 		return fmt.Errorf("failed to derive ID from atx: %w", err)
 	}
 
+	// Check if processing is already in progress
+	h.inProgressMu.Lock()
+	if sub, ok := h.inProgress[atx.ID()]; ok {
+		ch := make(chan error, 1)
+		h.inProgress[atx.ID()] = append(sub, ch)
+		h.inProgressMu.Unlock()
+		h.log.WithContext(ctx).With().Debug("atx is already being processed. waiting for result", atx.ID())
+		select {
+		case err := <-ch:
+			h.log.WithContext(ctx).With().Debug("atx processed in other task", atx.ID(), log.Err(err))
+			return err
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
+	h.inProgress[atx.ID()] = []chan error{}
+	h.inProgressMu.Unlock()
+	h.log.WithContext(ctx).With().Info("handling incoming atx", atx.ID(), log.Int("size", len(msg)))
+
+	err := h.processAtx(ctx, expHash, peer, atx)
+	h.inProgressMu.Lock()
+	defer h.inProgressMu.Unlock()
+	for _, ch := range h.inProgress[atx.ID()] {
+		ch <- err
+		close(ch)
+	}
+	delete(h.inProgress, atx.ID())
+	return err
+}
+
+func (h *Handler) processAtx(ctx context.Context, expHash types.Hash32, peer p2p.Peer, atx types.ActivationTx) error {
 	if !h.edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature) {
 		return fmt.Errorf("failed to verify atx signature: %w", errMalformedData)
 	}
@@ -544,7 +582,7 @@ func (h *Handler) handleAtx(ctx context.Context, expHash types.Hash32, peer p2p.
 		return fmt.Errorf("cannot process atx %v: %w", atx.ShortString(), err)
 	}
 	events.ReportNewActivation(vAtx)
-	h.log.WithContext(ctx).With().Info("new atx", log.Inline(vAtx), log.Int("size", len(msg)))
+	h.log.WithContext(ctx).With().Info("new atx", log.Inline(vAtx))
 	return nil
 }
 

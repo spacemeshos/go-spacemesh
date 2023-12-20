@@ -24,6 +24,13 @@ var PoetPowDuration = metrics.NewGauge(
 	[]string{},
 ).WithLabelValues()
 
+var PostVerificationQueue = metrics.NewGauge(
+	"post_verification_waiting_total",
+	namespace,
+	"the number of POSTs waiting to be verified",
+	[]string{},
+).WithLabelValues()
+
 var (
 	publishWindowLatency = metrics.NewHistogramWithBuckets(
 		"publish_window_seconds",

@@ -58,6 +58,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/node/mapstructureutil"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/prune"
@@ -260,6 +261,7 @@ func LoadConfigFromFile() (*config.Config, error) {
 	hook := mapstructure.ComposeDecodeHookFunc(
 		mapstructure.StringToTimeDurationHookFunc(),
 		mapstructure.StringToSliceHookFunc(","),
+		mapstructureutil.AddressListDecodeFunc(),
 		mapstructureutil.BigRatDecodeFunc(),
 		mapstructureutil.PostProviderIDDecodeFunc(),
 		mapstructure.TextUnmarshallerHookFunc(),
@@ -553,7 +555,7 @@ func (app *App) initServices(ctx context.Context) error {
 	poetDb := activation.NewPoetDb(app.db, app.addLogger(PoetDbLogger, lg))
 
 	nipostValidatorLogger := app.addLogger(NipostValidatorLogger, lg)
-	postVerifiers := make([]activation.PostVerifier, 0, app.Config.SMESHING.VerifyingOpts.Workers)
+
 	lg.Debug("creating post verifier")
 	verifier, err := activation.NewPostVerifier(
 		app.Config.POST,
@@ -564,10 +566,10 @@ func (app *App) initServices(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	for i := 0; i < app.Config.SMESHING.VerifyingOpts.Workers; i++ {
-		postVerifiers = append(postVerifiers, verifier)
-	}
-	app.postVerifier = activation.NewOffloadingPostVerifier(postVerifiers, nipostValidatorLogger)
+	minWorkers := app.Config.SMESHING.VerifyingOpts.MinWorkers
+	workers := app.Config.SMESHING.VerifyingOpts.Workers
+	app.postVerifier = activation.NewOffloadingPostVerifier(verifier, workers, nipostValidatorLogger.Zap())
+	app.postVerifier.Autoscale(minWorkers, workers)
 
 	validator := activation.NewValidator(
 		poetDb,
@@ -1704,7 +1706,14 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 		app.Config.Genesis.GenesisID(),
 		types.GetEffectiveGenesis(),
 	)
-	app.host, err = p2p.New(ctx, p2plog, cfg, []byte(prologue),
+	// Prevent testnet nodes from working on the mainnet, but
+	// don't use the network cookie on mainnet as this technique
+	// may be replaced later
+	nc := handshake.NoNetworkCookie
+	if !onMainNet(app.Config) {
+		nc = handshake.NetworkCookie(prologue)
+	}
+	app.host, err = p2p.New(ctx, p2plog, cfg, []byte(prologue), nc,
 		p2p.WithNodeReporter(events.ReportNodeStatusUpdate),
 	)
 	if err != nil {

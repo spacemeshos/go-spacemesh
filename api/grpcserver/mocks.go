@@ -13,6 +13,8 @@ import (
 	reflect "reflect"
 	time "time"
 
+	network "github.com/libp2p/go-libp2p/core/network"
+	multiaddr "github.com/multiformats/go-multiaddr"
 	activation "github.com/spacemeshos/go-spacemesh/activation"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
@@ -20,31 +22,69 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
-// MocknetworkIdentity is a mock of networkIdentity interface.
-type MocknetworkIdentity struct {
+// MocknetworkInfo is a mock of networkInfo interface.
+type MocknetworkInfo struct {
 	ctrl     *gomock.Controller
-	recorder *MocknetworkIdentityMockRecorder
+	recorder *MocknetworkInfoMockRecorder
 }
 
-// MocknetworkIdentityMockRecorder is the mock recorder for MocknetworkIdentity.
-type MocknetworkIdentityMockRecorder struct {
-	mock *MocknetworkIdentity
+// MocknetworkInfoMockRecorder is the mock recorder for MocknetworkInfo.
+type MocknetworkInfoMockRecorder struct {
+	mock *MocknetworkInfo
 }
 
-// NewMocknetworkIdentity creates a new mock instance.
-func NewMocknetworkIdentity(ctrl *gomock.Controller) *MocknetworkIdentity {
-	mock := &MocknetworkIdentity{ctrl: ctrl}
-	mock.recorder = &MocknetworkIdentityMockRecorder{mock}
+// NewMocknetworkInfo creates a new mock instance.
+func NewMocknetworkInfo(ctrl *gomock.Controller) *MocknetworkInfo {
+	mock := &MocknetworkInfo{ctrl: ctrl}
+	mock.recorder = &MocknetworkInfoMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MocknetworkIdentity) EXPECT() *MocknetworkIdentityMockRecorder {
+func (m *MocknetworkInfo) EXPECT() *MocknetworkInfoMockRecorder {
 	return m.recorder
 }
 
+// DHTServerEnabled mocks base method.
+func (m *MocknetworkInfo) DHTServerEnabled() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DHTServerEnabled")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// DHTServerEnabled indicates an expected call of DHTServerEnabled.
+func (mr *MocknetworkInfoMockRecorder) DHTServerEnabled() *networkInfoDHTServerEnabledCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DHTServerEnabled", reflect.TypeOf((*MocknetworkInfo)(nil).DHTServerEnabled))
+	return &networkInfoDHTServerEnabledCall{Call: call}
+}
+
+// networkInfoDHTServerEnabledCall wrap *gomock.Call
+type networkInfoDHTServerEnabledCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *networkInfoDHTServerEnabledCall) Return(arg0 bool) *networkInfoDHTServerEnabledCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *networkInfoDHTServerEnabledCall) Do(f func() bool) *networkInfoDHTServerEnabledCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *networkInfoDHTServerEnabledCall) DoAndReturn(f func() bool) *networkInfoDHTServerEnabledCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // ID mocks base method.
-func (m *MocknetworkIdentity) ID() p2p.Peer {
+func (m *MocknetworkInfo) ID() p2p.Peer {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ID")
 	ret0, _ := ret[0].(p2p.Peer)
@@ -52,31 +92,184 @@ func (m *MocknetworkIdentity) ID() p2p.Peer {
 }
 
 // ID indicates an expected call of ID.
-func (mr *MocknetworkIdentityMockRecorder) ID() *networkIdentityIDCall {
+func (mr *MocknetworkInfoMockRecorder) ID() *networkInfoIDCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ID", reflect.TypeOf((*MocknetworkIdentity)(nil).ID))
-	return &networkIdentityIDCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ID", reflect.TypeOf((*MocknetworkInfo)(nil).ID))
+	return &networkInfoIDCall{Call: call}
 }
 
-// networkIdentityIDCall wrap *gomock.Call
-type networkIdentityIDCall struct {
+// networkInfoIDCall wrap *gomock.Call
+type networkInfoIDCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *networkIdentityIDCall) Return(arg0 p2p.Peer) *networkIdentityIDCall {
+func (c *networkInfoIDCall) Return(arg0 p2p.Peer) *networkInfoIDCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *networkIdentityIDCall) Do(f func() p2p.Peer) *networkIdentityIDCall {
+func (c *networkInfoIDCall) Do(f func() p2p.Peer) *networkInfoIDCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *networkIdentityIDCall) DoAndReturn(f func() p2p.Peer) *networkIdentityIDCall {
+func (c *networkInfoIDCall) DoAndReturn(f func() p2p.Peer) *networkInfoIDCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// KnownAddresses mocks base method.
+func (m *MocknetworkInfo) KnownAddresses() []multiaddr.Multiaddr {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "KnownAddresses")
+	ret0, _ := ret[0].([]multiaddr.Multiaddr)
+	return ret0
+}
+
+// KnownAddresses indicates an expected call of KnownAddresses.
+func (mr *MocknetworkInfoMockRecorder) KnownAddresses() *networkInfoKnownAddressesCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "KnownAddresses", reflect.TypeOf((*MocknetworkInfo)(nil).KnownAddresses))
+	return &networkInfoKnownAddressesCall{Call: call}
+}
+
+// networkInfoKnownAddressesCall wrap *gomock.Call
+type networkInfoKnownAddressesCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *networkInfoKnownAddressesCall) Return(arg0 []multiaddr.Multiaddr) *networkInfoKnownAddressesCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *networkInfoKnownAddressesCall) Do(f func() []multiaddr.Multiaddr) *networkInfoKnownAddressesCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *networkInfoKnownAddressesCall) DoAndReturn(f func() []multiaddr.Multiaddr) *networkInfoKnownAddressesCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// ListenAddresses mocks base method.
+func (m *MocknetworkInfo) ListenAddresses() []multiaddr.Multiaddr {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListenAddresses")
+	ret0, _ := ret[0].([]multiaddr.Multiaddr)
+	return ret0
+}
+
+// ListenAddresses indicates an expected call of ListenAddresses.
+func (mr *MocknetworkInfoMockRecorder) ListenAddresses() *networkInfoListenAddressesCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListenAddresses", reflect.TypeOf((*MocknetworkInfo)(nil).ListenAddresses))
+	return &networkInfoListenAddressesCall{Call: call}
+}
+
+// networkInfoListenAddressesCall wrap *gomock.Call
+type networkInfoListenAddressesCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *networkInfoListenAddressesCall) Return(arg0 []multiaddr.Multiaddr) *networkInfoListenAddressesCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *networkInfoListenAddressesCall) Do(f func() []multiaddr.Multiaddr) *networkInfoListenAddressesCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *networkInfoListenAddressesCall) DoAndReturn(f func() []multiaddr.Multiaddr) *networkInfoListenAddressesCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// NATDeviceType mocks base method.
+func (m *MocknetworkInfo) NATDeviceType() (network.NATDeviceType, network.NATDeviceType) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NATDeviceType")
+	ret0, _ := ret[0].(network.NATDeviceType)
+	ret1, _ := ret[1].(network.NATDeviceType)
+	return ret0, ret1
+}
+
+// NATDeviceType indicates an expected call of NATDeviceType.
+func (mr *MocknetworkInfoMockRecorder) NATDeviceType() *networkInfoNATDeviceTypeCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NATDeviceType", reflect.TypeOf((*MocknetworkInfo)(nil).NATDeviceType))
+	return &networkInfoNATDeviceTypeCall{Call: call}
+}
+
+// networkInfoNATDeviceTypeCall wrap *gomock.Call
+type networkInfoNATDeviceTypeCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *networkInfoNATDeviceTypeCall) Return(udpNATType, tcpNATType network.NATDeviceType) *networkInfoNATDeviceTypeCall {
+	c.Call = c.Call.Return(udpNATType, tcpNATType)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *networkInfoNATDeviceTypeCall) Do(f func() (network.NATDeviceType, network.NATDeviceType)) *networkInfoNATDeviceTypeCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *networkInfoNATDeviceTypeCall) DoAndReturn(f func() (network.NATDeviceType, network.NATDeviceType)) *networkInfoNATDeviceTypeCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Reachability mocks base method.
+func (m *MocknetworkInfo) Reachability() network.Reachability {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Reachability")
+	ret0, _ := ret[0].(network.Reachability)
+	return ret0
+}
+
+// Reachability indicates an expected call of Reachability.
+func (mr *MocknetworkInfoMockRecorder) Reachability() *networkInfoReachabilityCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Reachability", reflect.TypeOf((*MocknetworkInfo)(nil).Reachability))
+	return &networkInfoReachabilityCall{Call: call}
+}
+
+// networkInfoReachabilityCall wrap *gomock.Call
+type networkInfoReachabilityCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *networkInfoReachabilityCall) Return(arg0 network.Reachability) *networkInfoReachabilityCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *networkInfoReachabilityCall) Do(f func() network.Reachability) *networkInfoReachabilityCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *networkInfoReachabilityCall) DoAndReturn(f func() network.Reachability) *networkInfoReachabilityCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
