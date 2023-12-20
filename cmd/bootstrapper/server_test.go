@@ -127,14 +127,14 @@ func TestServer(t *testing.T) {
 
 	for _, epoch := range epochs {
 		createAtxs(t, db, epoch-1, types.RandomActiveSet(activeSetSize))
-		fname := PersistedFilename(epoch, bootstrap.SuffixBoostrap)
+		fname := PersistedFilename(epoch, bootstrap.SuffixBootstrap)
 		require.Eventually(t, func() bool {
 			_, err := fs.Stat(fname)
 			return err == nil
 		}, 5*time.Second, 100*time.Millisecond)
 		require.Empty(t, ch)
 
-		data := query(t, ctx, bootstrap.UpdateName(epoch, bootstrap.SuffixBoostrap))
+		data := query(t, ctx, bootstrap.UpdateName(epoch, bootstrap.SuffixBootstrap))
 		verifyUpdate(t, data, epoch, hex.EncodeToString(epochBeacon(epoch).Bytes()), activeSetSize)
 		require.NoError(t, fs.Remove(fname))
 	}

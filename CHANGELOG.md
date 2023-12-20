@@ -2,14 +2,22 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## Release v1.2.13
+
+### Improvements
+
+* [#5384](https://github.com/spacemeshos/go-spacemesh/pull/5384) to improve network stability and performance allow the
+  active set to be set in advance for an epoch.
+
 ## Release v1.2.12
 
 ### Improvements
 
-* [#5373](https://github.com/spacemeshos/go-spacemesh/pull/5373) automatic scaling of post verifying workers to a lower value (1 by default) when POST proving starts.
-  The workers are scaled up when POST proving finishes.
+* [#5373](https://github.com/spacemeshos/go-spacemesh/pull/5373) automatic scaling of post verifying workers to a lower
+  value (1 by default) when POST proving starts. The workers are scaled up when POST proving finishes.
 
-* [#5382](https://github.com/spacemeshos/go-spacemesh/pull/5382) avoid processing same (gossiped/fetched) ATX many times in parallel
+* [#5382](https://github.com/spacemeshos/go-spacemesh/pull/5382) avoid processing same (gossiped/fetched) ATX many times
+  in parallel
 
 ## Release v1.2.11
 

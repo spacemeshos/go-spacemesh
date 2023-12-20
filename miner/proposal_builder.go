@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"sync"
 	"time"
 
 	"golang.org/x/exp/maps"
@@ -70,6 +71,11 @@ type ProposalBuilder struct {
 
 	signer  *signing.EdSigner
 	session *session
+
+	fallback struct {
+		mu   sync.Mutex
+		data map[types.EpochID][]types.ATXID
+	}
 }
 
 // session per every signing key for the whole epoch.
@@ -215,6 +221,12 @@ func New(
 		tortoise:  trtl,
 		syncer:    syncer,
 		conState:  conState,
+		fallback: struct {
+			mu   sync.Mutex
+			data map[types.EpochID][]types.ATXID
+		}{
+			data: map[types.EpochID][]types.ATXID{},
+		},
 	}
 	for _, opt := range opts {
 		opt(pb)
@@ -317,6 +329,20 @@ func (pb *ProposalBuilder) decideMeshHash(ctx context.Context, current types.Lay
 	return mesh
 }
 
+func (pb *ProposalBuilder) UpdateActiveSet(epoch types.EpochID, activeSet []types.ATXID) {
+	pb.logger.With().Info("received activeset update",
+		epoch,
+		log.Int("size", len(activeSet)),
+	)
+	pb.fallback.mu.Lock()
+	defer pb.fallback.mu.Unlock()
+	if _, ok := pb.fallback.data[epoch]; ok {
+		pb.logger.With().Debug("fallback active set already exists", epoch)
+		return
+	}
+	pb.fallback.data[epoch] = activeSet
+}
+
 func (pb *ProposalBuilder) initSessionData(ctx context.Context, lid types.LayerID) error {
 	if pb.session == nil || pb.session.epoch != lid.GetEpoch() {
 		pb.session = &session{epoch: lid.GetEpoch()}
@@ -362,29 +388,48 @@ func (pb *ProposalBuilder) initSessionData(ctx context.Context, lid types.LayerI
 			return fmt.Errorf("get refballot %w", err)
 		}
 		if errors.Is(err, sql.ErrNotFound) {
-			weight, set, err := generateActiveSet(
-				pb.logger,
-				pb.cdb,
-				pb.signer.VRFSigner(),
-				pb.session.epoch,
-				pb.clock.LayerToTime(pb.session.epoch.FirstLayer()),
-				pb.cfg.GoodAtxPercent,
-				pb.cfg.networkDelay,
-				pb.session.atx,
-				pb.session.atxWeight,
-			)
-			if err != nil {
-				return err
+			if weight, set, err := pb.fallbackActiveSet(pb.session.epoch); err == nil {
+				pb.logger.With().Info("using fallback active set",
+					pb.session.epoch,
+					log.Int("size", len(set)),
+				)
+				sort.Slice(set, func(i, j int) bool {
+					return bytes.Compare(set[i].Bytes(), set[j].Bytes()) < 0
+				})
+				pb.session.active.set = set
+				pb.session.active.weight = weight
+				pb.session.eligibilities.slots = proposals.MustGetNumEligibleSlots(
+					pb.session.atxWeight,
+					pb.cfg.minActiveSetWeight,
+					weight,
+					pb.cfg.layerSize,
+					pb.cfg.layersPerEpoch,
+				)
+			} else {
+				weight, set, err := generateActiveSet(
+					pb.logger,
+					pb.cdb,
+					pb.signer.VRFSigner(),
+					pb.session.epoch,
+					pb.clock.LayerToTime(pb.session.epoch.FirstLayer()),
+					pb.cfg.GoodAtxPercent,
+					pb.cfg.networkDelay,
+					pb.session.atx,
+					pb.session.atxWeight,
+				)
+				if err != nil {
+					return err
+				}
+				pb.session.active.set = set
+				pb.session.active.weight = weight
+				pb.session.eligibilities.slots = proposals.MustGetNumEligibleSlots(
+					pb.session.atxWeight,
+					pb.cfg.minActiveSetWeight,
+					weight,
+					pb.cfg.layerSize,
+					pb.cfg.layersPerEpoch,
+				)
 			}
-			pb.session.active.set = set
-			pb.session.active.weight = weight
-			pb.session.eligibilities.slots = proposals.MustGetNumEligibleSlots(
-				pb.session.atxWeight,
-				pb.cfg.minActiveSetWeight,
-				weight,
-				pb.cfg.layerSize,
-				pb.cfg.layersPerEpoch,
-			)
 		} else {
 			if ballot.EpochData == nil {
 				return fmt.Errorf("atx %d created invalid first ballot", pb.session.atx)
@@ -601,6 +646,25 @@ func activesFromFirstBlock(
 		// miner is not included in the active set derived from the epoch's first block
 		set = append(set, ownAtx)
 		totalWeight += ownWeight
+	}
+	return totalWeight, set, nil
+}
+
+func (pb *ProposalBuilder) fallbackActiveSet(targetEpoch types.EpochID) (uint64, []types.ATXID, error) {
+	pb.fallback.mu.Lock()
+	defer pb.fallback.mu.Unlock()
+	set, ok := pb.fallback.data[targetEpoch]
+	if !ok {
+		return 0, nil, fmt.Errorf("no fallback active set for epoch %d", targetEpoch)
+	}
+
+	var totalWeight uint64
+	for _, id := range set {
+		atx, err := pb.cdb.GetAtxHeader(id)
+		if err != nil {
+			return 0, nil, err
+		}
+		totalWeight += atx.GetWeight()
 	}
 	return totalWeight, set, nil
 }
