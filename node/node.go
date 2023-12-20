@@ -2,6 +2,7 @@
 package node
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
@@ -12,6 +13,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"syscall"
 	"time"
 
@@ -66,6 +68,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/prune"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots/util"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
@@ -1089,11 +1092,14 @@ func (app *App) listenToUpdates(ctx context.Context) {
 			app.errCh <- err
 			return nil
 		}
-		for update := range ch {
+		for {
 			select {
 			case <-ctx.Done():
 				return nil
-			default:
+			case update, ok := <-ch:
+				if !ok {
+					return nil
+				}
 				if update.Data.Beacon != types.EmptyBeacon {
 					if err := app.beaconProtocol.UpdateBeacon(update.Data.Epoch, update.Data.Beacon); err != nil {
 						app.errCh <- err
@@ -1101,11 +1107,23 @@ func (app *App) listenToUpdates(ctx context.Context) {
 					}
 				}
 				if len(update.Data.ActiveSet) > 0 {
-					app.hOracle.UpdateActiveSet(update.Data.Epoch, update.Data.ActiveSet)
+					epoch := update.Data.Epoch
+					set := update.Data.ActiveSet
+					sort.Slice(set, func(i, j int) bool {
+						return bytes.Compare(set[i].Bytes(), set[j].Bytes()) < 0
+					})
+					id := types.ATXIDList(set).Hash()
+					activeSet := &types.EpochActiveSet{
+						Epoch: epoch,
+						Set:   set,
+					}
+					activesets.Add(app.db, id, activeSet)
+
+					app.hOracle.UpdateActiveSet(epoch, set)
+					app.proposalBuilder.UpdateActiveSet(epoch, set)
 				}
 			}
 		}
-		return nil
 	})
 }
 
