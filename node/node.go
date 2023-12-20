@@ -73,6 +73,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
 	"github.com/spacemeshos/go-spacemesh/syncer"
+	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
 	"github.com/spacemeshos/go-spacemesh/syncer/blockssync"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -1121,6 +1122,20 @@ func (app *App) listenToUpdates(ctx context.Context) {
 
 					app.hOracle.UpdateActiveSet(epoch, set)
 					app.proposalBuilder.UpdateActiveSet(epoch, set)
+
+					app.eg.Go(func() error {
+						if err := atxsync.Download(
+							ctx,
+							10*time.Second,
+							app.addLogger(SyncLogger, app.log).Zap(),
+							app.db,
+							app.fetcher,
+							update.Data.ActiveSet,
+						); err != nil {
+							app.errCh <- err
+						}
+						return nil
+					})
 				}
 			}
 		}
