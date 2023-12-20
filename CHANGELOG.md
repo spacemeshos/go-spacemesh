@@ -98,6 +98,9 @@ for more information on how to configure the node to work with the PoST service.
   section. The non-conditional changes include values/provides support on all of the nodes, which will enable DHT to
   function efficiently for routing discovery.
 
+* [#5384](https://github.com/spacemeshos/go-spacemesh/pull/5384) to improve network stability and performance allow the
+  active set to be set in advance for an epoch. This allows the network to start consensus on the first layer of an epoch.
+
 ## Release v1.2.9
 
 ### Improvements

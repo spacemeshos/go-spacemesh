@@ -287,14 +287,14 @@ func TestBuild(t *testing.T) {
 						gatx(types.ATXID{2}, 2, types.NodeID{2}, 1),
 						gatx(types.ATXID{3}, 2, types.NodeID{3}, 1),
 						gatx(types.ATXID{4}, 2, types.NodeID{4}, 1),
-						gatx(types.ATXID{5}, 2, types.NodeID{4}, 1),
-						gatx(types.ATXID{6}, 2, types.NodeID{4}, 1),
+						gatx(types.ATXID{5}, 2, types.NodeID{5}, 1),
+						gatx(types.ATXID{6}, 2, types.NodeID{6}, 1),
 					},
 					fallbackActiveSets: []struct {
 						epoch types.EpochID
 						atxs  types.ATXIDList
 					}{
-						{3, types.ATXIDList{{1}, {2}, {5}, {6}}},
+						{3, types.ATXIDList{{1}, {2}, {3}, {4}}},
 					},
 					opinion:        &types.Opinion{Hash: types.Hash32{1}},
 					txs:            []types.TransactionID{{1}, {2}},
@@ -302,7 +302,7 @@ func TestBuild(t *testing.T) {
 					expectProposal: expectProposal(
 						signer, 15, types.ATXID{1}, types.Opinion{Hash: types.Hash32{1}},
 						expectEpochData(
-							gactiveset(types.ATXID{1}, types.ATXID{2}, types.ATXID{5}, types.ATXID{6}),
+							gactiveset(types.ATXID{1}, types.ATXID{2}, types.ATXID{3}, types.ATXID{4}),
 							12,
 							types.Beacon{1},
 						),

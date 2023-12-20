@@ -95,7 +95,7 @@ func (g *Generator) Generate(
 		err       error
 	)
 	if genBeacon && genActiveSet {
-		suffix = bootstrap.SuffixBoostrap
+		suffix = bootstrap.SuffixBootstrap
 	} else if genBeacon {
 		suffix = bootstrap.SuffixBeacon
 	} else if genActiveSet {
@@ -181,7 +181,7 @@ func queryBitcoin(ctx context.Context, client *http.Client, targetUrl string) (*
 	defer resp.Body.Close()
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("bootstrap read resonse: %w", err)
+		return nil, fmt.Errorf("bootstrap read response: %w", err)
 	}
 	var br BitcoinResponse
 	err = json.Unmarshal(data, &br)
@@ -255,7 +255,6 @@ func (g *Generator) GenUpdate(
 		return "", fmt.Errorf("persist epoch update %v: %w", filename, err)
 	}
 	g.logger.With().Info("generated update",
-		log.String("update", string(data)),
 		log.String("filename", filename),
 	)
 	return filename, nil
