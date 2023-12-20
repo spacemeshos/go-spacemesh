@@ -29,6 +29,7 @@ type Config struct {
 	Standalone               bool
 	GossipDuration           time.Duration
 	OutOfSyncThresholdLayers uint32 `mapstructure:"out-of-sync-threshold"`
+	DisableAtxSync           bool
 }
 
 // DefaultConfig for the syncer.
@@ -441,6 +442,11 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 		if err := s.fetchATXsForEpoch(ctx, types.GetEffectiveGenesis().GetEpoch()+1); err != nil {
 			return err
 		}
+	}
+
+	if s.cfg.DisableAtxSync {
+		s.logger.Debug("atx sync disabled")
+		return nil
 	}
 
 	// steady state atx syncing
