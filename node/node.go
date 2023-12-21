@@ -2,6 +2,7 @@
 package node
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
@@ -12,6 +13,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"syscall"
 	"time"
 
@@ -64,11 +66,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/prune"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots/util"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
 	"github.com/spacemeshos/go-spacemesh/syncer"
+	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
 	"github.com/spacemeshos/go-spacemesh/syncer/blockssync"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -133,7 +137,7 @@ func GetCommand() *cobra.Command {
 				log.JSONLog(true)
 			}
 
-			if cmd.NoMainNet && onMainNet(conf) {
+			if cmd.NoMainNet && onMainNet(conf) && !conf.NoMainOverride {
 				log.With().Fatal("this is a testnet-only build not intended for mainnet")
 			}
 
@@ -1141,11 +1145,14 @@ func (app *App) listenToUpdates(ctx context.Context) {
 			app.errCh <- err
 			return nil
 		}
-		for update := range ch {
+		for {
 			select {
 			case <-ctx.Done():
 				return nil
-			default:
+			case update, ok := <-ch:
+				if !ok {
+					return nil
+				}
 				if update.Data.Beacon != types.EmptyBeacon {
 					if err := app.beaconProtocol.UpdateBeacon(update.Data.Epoch, update.Data.Beacon); err != nil {
 						app.errCh <- err
@@ -1153,11 +1160,37 @@ func (app *App) listenToUpdates(ctx context.Context) {
 					}
 				}
 				if len(update.Data.ActiveSet) > 0 {
-					app.hOracle.UpdateActiveSet(update.Data.Epoch, update.Data.ActiveSet)
+					epoch := update.Data.Epoch
+					set := update.Data.ActiveSet
+					sort.Slice(set, func(i, j int) bool {
+						return bytes.Compare(set[i].Bytes(), set[j].Bytes()) < 0
+					})
+					id := types.ATXIDList(set).Hash()
+					activeSet := &types.EpochActiveSet{
+						Epoch: epoch,
+						Set:   set,
+					}
+					activesets.Add(app.db, id, activeSet)
+
+					app.hOracle.UpdateActiveSet(epoch, set)
+					app.proposalBuilder.UpdateActiveSet(epoch, set)
+
+					app.eg.Go(func() error {
+						if err := atxsync.Download(
+							ctx,
+							10*time.Second,
+							app.addLogger(SyncLogger, app.log).Zap(),
+							app.db,
+							app.fetcher,
+							set,
+						); err != nil {
+							app.errCh <- err
+						}
+						return nil
+					})
 				}
 			}
 		}
-		return nil
 	})
 }
 

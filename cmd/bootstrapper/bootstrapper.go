@@ -76,7 +76,7 @@ var cmd = &cobra.Command{
 	Short: "generate bootstrapping data",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 0 {
-			return fmt.Errorf("epoch not specfiied")
+			return fmt.Errorf("epoch not specified")
 		}
 		var targetEpochs []types.EpochID
 		epochs := strings.Split(args[0], ",")

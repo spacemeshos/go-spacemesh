@@ -103,6 +103,28 @@ for more information on how to configure the node to work with the PoST service.
   section. The non-conditional changes include values/provides support on all of the nodes, which will enable DHT to
   function efficiently for routing discovery.
 
+* [#5367](https://github.com/spacemeshos/go-spacemesh/pull/5367) Add `no-main-override` toplevel config option and
+  `--no-main-override` CLI option that makes it possible to run "nomain" builds on mainnet.
+
+* [#5384](https://github.com/spacemeshos/go-spacemesh/pull/5384) to improve network stability and performance allow the
+  active set to be set in advance for an epoch. This allows the network to start consensus on the first layer of an epoch.
+
+## Release v1.2.12
+
+### Improvements
+
+* [#5373](https://github.com/spacemeshos/go-spacemesh/pull/5373) automatic scaling of post verifying workers to a lower
+  value (1 by default) when POST proving starts. The workers are scaled up when POST proving finishes.
+
+* [#5382](https://github.com/spacemeshos/go-spacemesh/pull/5382) avoid processing same (gossiped/fetched) ATX many times
+  in parallel
+
+## Release v1.2.11
+
+### Improvements
+
+* increased the max response data size in p2p to 40MiB
+
 ## Release v1.2.10
 
 ### Improvements
