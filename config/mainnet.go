@@ -167,6 +167,7 @@ func MainnetConfig() Config {
 			Standalone:               false,
 			GossipDuration:           50 * time.Second,
 			OutOfSyncThresholdLayers: 36, // 3h
+			DisableAtxReconciliation: true,
 		},
 		Recovery: checkpoint.DefaultConfig(),
 		Cache:    datastore.DefaultConfig(),
