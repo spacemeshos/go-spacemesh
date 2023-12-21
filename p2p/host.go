@@ -205,14 +205,6 @@ func New(
 	}
 	lp2plog.SetPrimaryCore(logger.Core())
 	lp2plog.SetAllLoggers(lp2plog.LogLevel(cfg.LogLevel))
-	cm, err := connmgr.NewConnManager(
-		cfg.LowPeers,
-		cfg.HighPeers,
-		connmgr.WithGracePeriod(cfg.GracePeersShutdown),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("p2p create conn mgr: %w", err)
-	}
 	streamer := *yamux.DefaultTransport
 	streamer.Config().ConnectionWriteTimeout = 25 * time.Second // should be NOT exposed in the config
 	ps, err := pstoremem.NewPeerstore()
@@ -299,7 +291,17 @@ func New(
 		)
 	}
 	if !cfg.DisableConnectionManager {
+		cm, err := connmgr.NewConnManager(
+			cfg.LowPeers,
+			cfg.HighPeers,
+			connmgr.WithGracePeriod(cfg.GracePeersShutdown),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("p2p create conn mgr: %w", err)
+		}
 		lopts = append(lopts, libp2p.ConnectionManager(cm))
+	} else {
+		lopts = append(lopts, libp2p.ConnectionManager(&ccmgr.NullConnMgr{}))
 	}
 	if len(cfg.AdvertiseAddress) > 0 {
 		lopts = append(

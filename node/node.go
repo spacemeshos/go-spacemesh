@@ -72,6 +72,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
 	"github.com/spacemeshos/go-spacemesh/syncer"
+	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
 	"github.com/spacemeshos/go-spacemesh/syncer/blockssync"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -136,7 +137,7 @@ func GetCommand() *cobra.Command {
 				log.JSONLog(true)
 			}
 
-			if cmd.NoMainNet && onMainNet(conf) {
+			if cmd.NoMainNet && onMainNet(conf) && !conf.NoMainOverride {
 				log.With().Fatal("this is a testnet-only build not intended for mainnet")
 			}
 
@@ -1174,7 +1175,19 @@ func (app *App) listenToUpdates(ctx context.Context) {
 					app.hOracle.UpdateActiveSet(epoch, set)
 					app.proposalBuilder.UpdateActiveSet(epoch, set)
 
-					// TODO(mafa): fetch atxs (see #5377)
+					app.eg.Go(func() error {
+						if err := atxsync.Download(
+							ctx,
+							10*time.Second,
+							app.addLogger(SyncLogger, app.log).Zap(),
+							app.db,
+							app.fetcher,
+							set,
+						); err != nil {
+							app.errCh <- err
+						}
+						return nil
+					})
 				}
 			}
 		}
