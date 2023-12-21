@@ -202,15 +202,20 @@ type aggHash struct {
 }
 
 type step struct {
-	lid          types.LayerID
-	beacon       types.Beacon
-	atxs         []*types.VerifiedActivationTx
-	ballots      []*types.Ballot
-	activeset    types.ATXIDList
-	identitities []identity
-	blocks       []*types.Block
-	hare         []types.LayerID
-	aggHashes    []aggHash
+	lid        types.LayerID
+	beacon     types.Beacon
+	atxs       []*types.VerifiedActivationTx
+	ballots    []*types.Ballot
+	activeset  types.ATXIDList
+	identities []identity
+	blocks     []*types.Block
+	hare       []types.LayerID
+	aggHashes  []aggHash
+
+	fallbackActiveSets []struct {
+		epoch types.EpochID
+		atxs  types.ATXIDList
+	}
 
 	txs            []types.TransactionID
 	latestComplete types.LayerID
@@ -245,6 +250,42 @@ func TestBuild(t *testing.T) {
 						gatx(types.ATXID{2}, 2, types.NodeID{2}, 1),
 						gatx(types.ATXID{3}, 2, types.NodeID{3}, 1),
 						gatx(types.ATXID{4}, 2, types.NodeID{4}, 1),
+					},
+					opinion:        &types.Opinion{Hash: types.Hash32{1}},
+					txs:            []types.TransactionID{{1}, {2}},
+					latestComplete: 14,
+					expectProposal: expectProposal(
+						signer, 15, types.ATXID{1}, types.Opinion{Hash: types.Hash32{1}},
+						expectEpochData(
+							gactiveset(types.ATXID{1}, types.ATXID{2}, types.ATXID{3}, types.ATXID{4}),
+							12,
+							types.Beacon{1},
+						),
+						expectTxs([]types.TransactionID{{1}, {2}}),
+						expectCounters(signer, 3, types.Beacon{1}, 777, 0, 6, 9),
+					),
+				},
+			},
+		},
+		{
+			desc: "activeset fallback with all ATXs from fallback available",
+			steps: []step{
+				{
+					lid:    15,
+					beacon: types.Beacon{1},
+					atxs: []*types.VerifiedActivationTx{
+						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
+						gatx(types.ATXID{2}, 2, types.NodeID{2}, 1),
+						gatx(types.ATXID{3}, 2, types.NodeID{3}, 1),
+						gatx(types.ATXID{4}, 2, types.NodeID{4}, 1),
+						gatx(types.ATXID{5}, 2, types.NodeID{5}, 1),
+						gatx(types.ATXID{6}, 2, types.NodeID{6}, 1),
+					},
+					fallbackActiveSets: []struct {
+						epoch types.EpochID
+						atxs  types.ATXIDList
+					}{
+						{3, types.ATXIDList{{1}, {2}, {3}, {4}}},
 					},
 					opinion:        &types.Opinion{Hash: types.Hash32{1}},
 					txs:            []types.TransactionID{{1}, {2}},
@@ -449,7 +490,7 @@ func TestBuild(t *testing.T) {
 						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
 						gatx(types.ATXID{2}, 2, types.NodeID{2}, 1),
 					},
-					identitities: []identity{{
+					identities: []identity{{
 						id: types.NodeID{2},
 						proof: types.MalfeasanceProof{Proof: types.Proof{
 							Type: types.HareEquivocation,
@@ -663,7 +704,7 @@ func TestBuild(t *testing.T) {
 					if step.beacon != types.EmptyBeacon {
 						require.NoError(t, beacons.Add(cdb, step.lid.GetEpoch(), step.beacon))
 					}
-					for _, iden := range step.identitities {
+					for _, iden := range step.identities {
 						require.NoError(
 							t,
 							identities.SetMalicious(
@@ -700,6 +741,9 @@ func TestBuild(t *testing.T) {
 								&types.EpochActiveSet{Set: step.activeset},
 							),
 						)
+					}
+					for _, activeSet := range step.fallbackActiveSets {
+						builder.UpdateActiveSet(activeSet.epoch, activeSet.atxs)
 					}
 				}
 				{

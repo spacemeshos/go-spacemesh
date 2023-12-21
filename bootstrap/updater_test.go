@@ -135,7 +135,7 @@ func TestLoad(t *testing.T) {
 		{
 			desc: "recovery required",
 			persisted: map[types.EpochID][]string{
-				current - 2: {bootstrap.SuffixBoostrap, update1},
+				current - 2: {bootstrap.SuffixBootstrap, update1},
 				current - 1: {bootstrap.SuffixActiveSet, update2},
 				current:     {bootstrap.SuffixBeacon, update3},
 				current + 1: {bootstrap.SuffixActiveSet, update4},
@@ -200,7 +200,7 @@ func TestLoadedNotDownloadedAgain(t *testing.T) {
 		current + 1: update4,
 	}
 	for epoch, update := range persisted {
-		persisted := filepath.Join(cfg.DataDir, bootstrap.DirName, strconv.Itoa(int(epoch)), bootstrap.UpdateName(epoch, bootstrap.SuffixBoostrap))
+		persisted := filepath.Join(cfg.DataDir, bootstrap.DirName, strconv.Itoa(int(epoch)), bootstrap.UpdateName(epoch, bootstrap.SuffixBootstrap))
 		require.NoError(t, fs.MkdirAll(filepath.Dir(persisted), 0o700))
 		require.NoError(t, afero.WriteFile(fs, persisted, []byte(update), 0o400))
 	}
@@ -300,7 +300,7 @@ func TestDoIt(t *testing.T) {
 		{
 			desc: "in order",
 			updates: map[string]string{
-				"/" + bootstrap.UpdateName(1, bootstrap.SuffixBoostrap):  update1,
+				"/" + bootstrap.UpdateName(1, bootstrap.SuffixBootstrap): update1,
 				"/" + bootstrap.UpdateName(2, bootstrap.SuffixActiveSet): update2,
 				"/" + bootstrap.UpdateName(3, bootstrap.SuffixBeacon):    update3,
 				"/" + bootstrap.UpdateName(4, bootstrap.SuffixActiveSet): update4,
@@ -311,7 +311,7 @@ func TestDoIt(t *testing.T) {
 		{
 			desc: "bootstrap trumps others",
 			updates: map[string]string{
-				"/" + bootstrap.UpdateName(3, bootstrap.SuffixBoostrap):  update1,
+				"/" + bootstrap.UpdateName(3, bootstrap.SuffixBootstrap): update1,
 				"/" + bootstrap.UpdateName(3, bootstrap.SuffixActiveSet): update2,
 				"/" + bootstrap.UpdateName(3, bootstrap.SuffixBeacon):    update3,
 				"/" + bootstrap.UpdateName(4, bootstrap.SuffixActiveSet): update4,
@@ -472,7 +472,7 @@ func TestNoNewUpdate(t *testing.T) {
 	numQ := 0
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, http.MethodGet, r.Method)
-		if r.URL.String() != "/"+bootstrap.UpdateName(3, bootstrap.SuffixBoostrap) {
+		if r.URL.String() != "/"+bootstrap.UpdateName(3, bootstrap.SuffixBootstrap) {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}

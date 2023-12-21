@@ -150,7 +150,7 @@ func (s *Server) GenBootstrap(ctx context.Context, epoch types.EpochID) error {
 	if err != nil {
 		return err
 	}
-	suffix := bootstrap.SuffixBoostrap
+	suffix := bootstrap.SuffixBootstrap
 	_, err = s.gen.GenUpdate(epoch, epochBeacon(epoch), actives, suffix)
 	return err
 }

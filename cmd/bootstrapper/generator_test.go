@@ -155,14 +155,16 @@ func launchServer(tb testing.TB, cdb *datastore.CachedDB) func() {
 	}
 }
 
-func verifyUpdate(t *testing.T, data []byte, epoch types.EpochID, expBeacon string, expAsSize int) {
-	require.NoError(t, bootstrap.ValidateSchema(data))
+func verifyUpdate(tb testing.TB, data []byte, epoch types.EpochID, expBeacon string, expAsSize int) {
+	tb.Helper()
+	require.NoError(tb, bootstrap.ValidateSchema(data))
+
 	var update bootstrap.Update
-	require.NoError(t, json.Unmarshal(data, &update))
-	require.Equal(t, SchemaVersion, update.Version)
-	require.EqualValues(t, epoch, update.Data.Epoch.ID)
-	require.Equal(t, expBeacon, update.Data.Epoch.Beacon)
-	require.Len(t, update.Data.Epoch.ActiveSet, expAsSize)
+	require.NoError(tb, json.Unmarshal(data, &update))
+	require.Equal(tb, SchemaVersion, update.Version)
+	require.Equal(tb, epoch.Uint32(), update.Data.Epoch.ID)
+	require.Equal(tb, expBeacon, update.Data.Epoch.Beacon)
+	require.Len(tb, update.Data.Epoch.ActiveSet, expAsSize)
 }
 
 func TestGenerator_Generate(t *testing.T) {

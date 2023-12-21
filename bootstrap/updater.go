@@ -41,7 +41,7 @@ const (
 	suffixLen       = 2
 	SuffixBeacon    = "bc"
 	SuffixActiveSet = "as"
-	SuffixBoostrap  = "bs"
+	SuffixBootstrap = "bs"
 
 	httpTimeout   = 5 * time.Second
 	notifyTimeout = time.Second
@@ -210,7 +210,7 @@ func (u *Updater) addUpdate(epoch types.EpochID, suffix string) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	switch suffix {
-	case SuffixActiveSet, SuffixBeacon, SuffixBoostrap:
+	case SuffixActiveSet, SuffixBeacon, SuffixBootstrap:
 	default:
 		return
 	}
@@ -242,7 +242,7 @@ func (u *Updater) DoIt(ctx context.Context) error {
 		}
 	}()
 	for _, epoch := range requiredEpochs(current) {
-		verified, cached, err := u.checkEpochUpdate(ctx, epoch, SuffixBoostrap)
+		verified, cached, err := u.checkEpochUpdate(ctx, epoch, SuffixBootstrap)
 		if err != nil {
 			return err
 		}
@@ -320,8 +320,6 @@ func (u *Updater) get(ctx context.Context, uri string) (*VerifiedUpdate, []byte,
 		return nil, nil, fmt.Errorf("scheme not supported %v", resource.Scheme)
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, httpTimeout)
-	defer cancel()
 	t0 := time.Now()
 	data, err := query(ctx, u.client, resource)
 	if err != nil {
