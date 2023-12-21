@@ -35,7 +35,7 @@ func atx(id types.ATXID) *types.VerifiedActivationTx {
 }
 
 func id(id ...byte) types.ATXID {
-	return types.BytesToATXID(id)
+	return types.ATXID(types.BytesToHash(id))
 }
 
 type fetchRequest struct {
