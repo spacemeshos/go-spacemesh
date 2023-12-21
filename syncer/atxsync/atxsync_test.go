@@ -68,8 +68,9 @@ func TestDownload(t *testing.T) {
 			desc:     "with multiple requests",
 			ctx:      context.Background(),
 			existing: []*types.VerifiedActivationTx{atx(id(1))},
+			retry:    1,
 			fetched: []fetchRequest{
-				{request: []types.ATXID{id(2), id(3)}, result: []*types.VerifiedActivationTx{atx(id(2))}},
+				{request: []types.ATXID{id(2), id(3)}, error: errors.New("test"), result: []*types.VerifiedActivationTx{atx(id(2))}},
 				{request: []types.ATXID{id(3)}, result: []*types.VerifiedActivationTx{atx(id(3))}},
 			},
 			set: []types.ATXID{id(1), id(2), id(3)},
