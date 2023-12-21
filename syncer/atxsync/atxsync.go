@@ -60,7 +60,7 @@ func Download(
 				}
 				return nil
 			})))
-		if downloaded == total {
+		if len(missing) == 0 {
 			return nil
 		}
 		if err := fetcher.GetAtxs(ctx, missing); err != nil {
