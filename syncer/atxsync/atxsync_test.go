@@ -35,9 +35,7 @@ func atx(id types.ATXID) *types.VerifiedActivationTx {
 }
 
 func id(id ...byte) types.ATXID {
-	var atxid types.ATXID
-	copy(atxid[:], id)
-	return atxid
+	return types.BytesToATXID(id)
 }
 
 type fetchRequest struct {
@@ -70,7 +68,11 @@ func TestDownload(t *testing.T) {
 			existing: []*types.VerifiedActivationTx{atx(id(1))},
 			retry:    1,
 			fetched: []fetchRequest{
-				{request: []types.ATXID{id(2), id(3)}, error: errors.New("test"), result: []*types.VerifiedActivationTx{atx(id(2))}},
+				{
+					request: []types.ATXID{id(2), id(3)},
+					error:   errors.New("test"),
+					result:  []*types.VerifiedActivationTx{atx(id(2))},
+				},
 				{request: []types.ATXID{id(3)}, result: []*types.VerifiedActivationTx{atx(id(3))}},
 			},
 			set: []types.ATXID{id(1), id(2), id(3)},
