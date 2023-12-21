@@ -9,6 +9,8 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 * [#5373](https://github.com/spacemeshos/go-spacemesh/pull/5373) automatic scaling of post verifying workers to a lower value (1 by default) when POST proving starts.
   The workers are scaled up when POST proving finishes.
 
+* [#5382](https://github.com/spacemeshos/go-spacemesh/pull/5382) avoid processing same (gossiped/fetched) ATX many times in parallel
+
 ## Release v1.2.11
 
 ### Improvements
