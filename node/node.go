@@ -1155,14 +1155,17 @@ func (app *App) listenToUpdates(ctx context.Context) {
 					app.hOracle.UpdateActiveSet(update.Data.Epoch, update.Data.ActiveSet)
 					set := update.Data.ActiveSet
 					app.eg.Go(func() error {
-						return atxsync.Download(
+						if err := atxsync.Download(
 							ctx,
 							10*time.Second,
 							app.addLogger(SyncLogger, app.log).Zap(),
 							app.db,
 							app.fetcher,
 							set,
-						)
+						); err != nil {
+							app.errCh <- err
+						}
+						return nil
 					})
 				}
 			}
