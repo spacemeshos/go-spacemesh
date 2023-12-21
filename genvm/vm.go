@@ -267,6 +267,7 @@ func (v *VM) Apply(
 			Total:       reward.TotalReward,
 			LayerReward: reward.LayerReward,
 			Coinbase:    reward.Coinbase,
+			SmesherID:   reward.SmesherID,
 		})
 	}
 

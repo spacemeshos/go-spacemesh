@@ -73,6 +73,13 @@ func (t *Reward) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		}
 		total += n
 	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.SmesherID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	return total, nil
 }
 
@@ -103,6 +110,13 @@ func (t *Reward) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	}
 	{
 		n, err := scale.DecodeByteArray(dec, t.Coinbase[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.SmesherID[:])
 		if err != nil {
 			return total, err
 		}

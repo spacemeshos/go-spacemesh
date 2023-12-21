@@ -61,6 +61,7 @@ func (v *VM) addRewards(
 		reward := types.Reward{
 			Layer:       lctx.Layer,
 			Coinbase:    blockReward.Coinbase,
+			SmesherID:   blockReward.SmesherID,
 			TotalReward: totalReward.Uint64(),
 			LayerReward: subsidyReward.Uint64(),
 		}
