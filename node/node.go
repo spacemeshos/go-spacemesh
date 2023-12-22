@@ -201,6 +201,16 @@ func GetCommand() *cobra.Command {
 			// os.Interrupt for all systems, especially windows, syscall.SIGTERM is mainly for docker.
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer cancel()
+
+			// listen for \q in stdin to gracefully shutdown the node
+			// see https://github.com/spacemeshos/go-spacemesh/issues/5321
+			go func() {
+				var input string
+				if _, err := fmt.Scanln(&input); err == nil && input == "\\q" {
+					cancel()
+				}
+			}()
+
 			if err := run(ctx); err != nil {
 				app.log.With().Fatal(err.Error())
 			}
