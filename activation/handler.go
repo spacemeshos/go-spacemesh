@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/post/shared"
+	"github.com/spacemeshos/post/verifying"
 	"golang.org/x/exp/maps"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
@@ -169,7 +170,7 @@ func (h *Handler) SyntacticallyValidate(ctx context.Context, atx *types.Activati
 			return fmt.Errorf("invalid vrf nonce: %w", err)
 		}
 		if err := h.nipostValidator.Post(
-			ctx, atx.SmesherID, *atx.CommitmentATX, atx.InitialPost, &initialPostMetadata, atx.NumUnits,
+			ctx, atx.SmesherID, *atx.CommitmentATX, atx.InitialPost, &initialPostMetadata, atx.NumUnits, FullPost(),
 		); err != nil {
 			return fmt.Errorf("invalid initial post: %w", err)
 		}
@@ -233,6 +234,32 @@ func (h *Handler) SyntacticallyValidateDeps(
 		expectedChallengeHash,
 		atx.NumUnits,
 	)
+	var invalidIdx *verifying.ErrInvalidIndex
+	if errors.As(err, &invalidIdx) {
+		h.log.WithContext(ctx).With().Info("ATX with invalid post index", atx.ID(), log.Int("index", invalidIdx.Index))
+		gossip := types.MalfeasanceGossip{
+			MalfeasanceProof: types.MalfeasanceProof{
+				Layer: atx.PublishEpoch.FirstLayer(),
+				Proof: types.Proof{
+					Type: types.InvalidPostIndex,
+					Data: &types.InvalidPostIndexProof{
+						Atx:        *atx,
+						InvalidIdx: uint32(invalidIdx.Index),
+					},
+				},
+			},
+		}
+		encodedProof := codec.MustEncode(&gossip.MalfeasanceProof)
+		if err := identities.SetMalicious(h.cdb, atx.SmesherID, encodedProof, time.Now()); err != nil {
+			return nil, fmt.Errorf("adding malfeasance proof: %w", err)
+		}
+		if err := h.publisher.Publish(ctx, pubsub.MalfeasanceProof, codec.MustEncode(&gossip)); err != nil {
+			h.log.With().Error("failed to broadcast malfeasance proof", log.Err(err))
+		}
+		h.cdb.CacheMalfeasanceProof(atx.SmesherID, &gossip.MalfeasanceProof)
+		h.tortoise.OnMalfeasance(atx.SmesherID)
+		return nil, errors.Join(errMaliciousATX, err)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("invalid nipost: %w", err)
 	}

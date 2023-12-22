@@ -67,7 +67,7 @@ func TestValidator_Validate(t *testing.T) {
 		},
 	)
 
-	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
+	verifier, err := activation.NewPostVerifier(nil, cfg, logger.Named("verifier"))
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
 

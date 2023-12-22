@@ -36,6 +36,17 @@ func (e *ErrAtxNotFound) Is(target error) bool {
 	return false
 }
 
+type validatorOptions struct {
+	fullPost bool
+}
+
+// FullPost is a validator option that configures the validator to validate all indices in POST.
+func FullPost() validatorOption {
+	return func(o *validatorOptions) {
+		o.fullPost = true
+	}
+}
+
 // Validator contains the dependencies required to validate NIPosts.
 type Validator struct {
 	poetDb       poetDbAPI
@@ -61,6 +72,7 @@ func (v *Validator) NIPost(
 	nipost *types.NIPost,
 	expectedChallenge types.Hash32,
 	numUnits uint32,
+	opts ...validatorOption,
 ) (uint64, error) {
 	if err := v.NumUnits(&v.cfg, numUnits); err != nil {
 		return 0, err
@@ -70,7 +82,7 @@ func (v *Validator) NIPost(
 		return 0, err
 	}
 
-	if err := v.Post(ctx, nodeId, commitmentAtxId, nipost.Post, nipost.PostMetadata, numUnits); err != nil {
+	if err := v.Post(ctx, nodeId, commitmentAtxId, nipost.Post, nipost.PostMetadata, numUnits, opts...); err != nil {
 		return 0, fmt.Errorf("invalid Post: %w", err)
 	}
 
@@ -127,6 +139,7 @@ func (v *Validator) Post(
 	PoST *types.Post,
 	PostMetadata *types.PostMetadata,
 	numUnits uint32,
+	opts ...validatorOption,
 ) error {
 	p := (*shared.Proof)(PoST)
 
@@ -138,8 +151,17 @@ func (v *Validator) Post(
 		LabelsPerUnit:   PostMetadata.LabelsPerUnit,
 	}
 
+	options := &validatorOptions{}
+	for _, opt := range opts {
+		opt(options)
+	}
+	verifyOpts := []verifying.OptionFunc{verifying.WithLabelScryptParams(v.scrypt)}
+	if options.fullPost {
+		verifyOpts = append(verifyOpts, verifying.AllIndices())
+	}
+
 	start := time.Now()
-	if err := v.postVerifier.Verify(ctx, p, m, verifying.WithLabelScryptParams(v.scrypt)); err != nil {
+	if err := v.postVerifier.Verify(ctx, p, m, verifyOpts...); err != nil {
 		return fmt.Errorf("verify PoST: %w", err)
 	}
 	metrics.PostVerificationLatency.Observe(time.Since(start).Seconds())

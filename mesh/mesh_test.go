@@ -378,6 +378,7 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 		tm.logger,
 		tm.cdb,
 		signing.NewEdVerifier(),
+		malfeasance.NewMockpostVerifier(gomock.NewController(t)),
 		&types.MalfeasanceGossip{MalfeasanceProof: *malProof},
 	)
 	require.NoError(t, err)

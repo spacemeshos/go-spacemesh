@@ -12,6 +12,7 @@ import (
 
 	"github.com/spacemeshos/merkle-tree"
 	poetShared "github.com/spacemeshos/poet/shared"
+	"github.com/spacemeshos/post/verifying"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -503,7 +504,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(currentLayer)
 		atxHdlr.mValidator.EXPECT().
-			Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(nil)
 		atxHdlr.mValidator.EXPECT().
 			VRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
@@ -591,7 +592,8 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atx.SmesherID = sig.NodeID()
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(currentLayer)
-		atxHdlr.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), cATX, atx.InitialPost, gomock.Any(), atx.NumUnits)
+		atxHdlr.mValidator.EXPECT().
+			Post(gomock.Any(), sig.NodeID(), cATX, atx.InitialPost, gomock.Any(), atx.NumUnits, gomock.Any())
 		atxHdlr.mValidator.EXPECT().VRFNonce(sig.NodeID(), cATX, &vrfNonce, gomock.Any(), atx.NumUnits)
 		require.NoError(t, atxHdlr.SyntacticallyValidate(context.Background(), atx))
 		atxHdlr.mValidator.EXPECT().
@@ -699,7 +701,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(currentLayer)
 		atxHdlr.mValidator.EXPECT().VRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 		atxHdlr.mValidator.EXPECT().
-			Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(errors.New("failed post validation"))
 		err := atxHdlr.SyntacticallyValidate(context.Background(), atx)
 		require.ErrorContains(t, err, "failed post validation")
@@ -984,6 +986,7 @@ func TestHandler_ProcessAtx(t *testing.T) {
 				atxHdlr.log,
 				atxHdlr.cdb,
 				atxHdlr.edVerifier,
+				NewMockPostVerifier(gomock.NewController(t)),
 				&got,
 			)
 			require.NoError(t, err)
@@ -997,6 +1000,80 @@ func TestHandler_ProcessAtx(t *testing.T) {
 	proof.SetReceived(time.Time{})
 	require.Equal(t, got.MalfeasanceProof, *proof)
 	require.Equal(t, atx2.PublishEpoch.FirstLayer(), got.MalfeasanceProof.Layer)
+}
+
+func TestHandler_PublishesPostMalfeasanceProofs(t *testing.T) {
+	goldenATXID := types.ATXID{2, 3, 4}
+	atxHdlr := newTestHandler(t, goldenATXID)
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	nodeID := sig.NodeID()
+
+	proof, err := identities.GetMalfeasanceProof(atxHdlr.cdb, nodeID)
+	require.ErrorIs(t, err, sql.ErrNotFound)
+	require.Nil(t, proof)
+
+	ch := newChallenge(0, types.EmptyATXID, goldenATXID, 1, &goldenATXID)
+	ch.InitialPost = &types.Post{}
+	nipost := newNIPostWithChallenge(t, types.HexToHash32("0x3333"), []byte{0x76, 0x45})
+
+	atx := newAtx(t, sig, ch, nipost, 100, types.GenerateAddress([]byte("aaaa")))
+	atx.NodeID = &nodeID
+	vrfNonce := types.VRFPostIndex(0)
+	atx.VRFNonce = &vrfNonce
+	atx.SetEffectiveNumUnits(100)
+	atx.SetReceived(time.Now())
+	require.NoError(t, SignAndFinalizeAtx(sig, atx))
+	_, err = atx.Verify(0, 100)
+	require.NoError(t, err)
+
+	var got types.MalfeasanceGossip
+	atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
+	atxHdlr.mValidator.EXPECT().VRFNonce(gomock.Any(), goldenATXID, gomock.Any(), gomock.Any(), gomock.Any())
+	atxHdlr.mValidator.EXPECT().Post(
+		gomock.Any(),
+		gomock.Any(),
+		gomock.Any(),
+		gomock.Any(),
+		gomock.Any(),
+		gomock.Any(),
+		gomock.Any(),
+	)
+	atxHdlr.mockFetch.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any())
+	atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), atx.GetPoetProofRef())
+	atxHdlr.mValidator.EXPECT().InitialNIPostChallenge(&atx.NIPostChallenge, gomock.Any(), goldenATXID)
+	atxHdlr.mValidator.EXPECT().PositioningAtx(goldenATXID, gomock.Any(), goldenATXID, atx.PublishEpoch)
+	atxHdlr.mValidator.EXPECT().NIPost(gomock.Any(), gomock.Any(), goldenATXID, atx.NIPost, gomock.Any(), atx.NumUnits).
+		Return(0, &verifying.ErrInvalidIndex{Index: 2})
+	atxHdlr.mtortoise.EXPECT().OnMalfeasance(gomock.Any())
+	atxHdlr.mpub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ string, data []byte) error {
+			require.NoError(t, codec.Decode(data, &got))
+			postVerifier := NewMockPostVerifier(gomock.NewController(t))
+			postVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("invalid"))
+			nodeID, err := malfeasance.Validate(
+				context.Background(),
+				atxHdlr.log,
+				atxHdlr.cdb,
+				atxHdlr.edVerifier,
+				postVerifier,
+				&got,
+			)
+			require.NoError(t, err)
+			require.Equal(t, sig.NodeID(), nodeID)
+			return nil
+		})
+
+	err = atxHdlr.handleAtx(context.Background(), types.Hash32{}, p2p.NoPeer, codec.MustEncode(atx))
+	require.ErrorIs(t, err, errMaliciousATX)
+
+	proof, err = identities.GetMalfeasanceProof(atxHdlr.cdb, atx.SmesherID)
+	require.NoError(t, err)
+	require.NotNil(t, proof.Received())
+	proof.SetReceived(time.Time{})
+	require.Equal(t, got.MalfeasanceProof, *proof)
+	require.Equal(t, atx.PublishEpoch.FirstLayer(), got.MalfeasanceProof.Layer)
 }
 
 func TestHandler_ProcessAtxStoresNewVRFNonce(t *testing.T) {
@@ -1190,7 +1267,7 @@ func TestHandler_HandleGossipAtx(t *testing.T) {
 			require.NoError(t, err)
 			atxHdlr.mclock.EXPECT().CurrentLayer().Return(first.PublishEpoch.FirstLayer())
 			atxHdlr.mValidator.EXPECT().
-				Post(gomock.Any(), nodeID1, goldenATXID, first.InitialPost, gomock.Any(), first.NumUnits)
+				Post(gomock.Any(), nodeID1, goldenATXID, first.InitialPost, gomock.Any(), first.NumUnits, gomock.Any())
 			atxHdlr.mValidator.EXPECT().VRFNonce(nodeID1, goldenATXID, &vrfNonce, gomock.Any(), first.NumUnits)
 			atxHdlr.mockFetch.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any())
 			atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), first.GetPoetProofRef())
@@ -1256,8 +1333,17 @@ func TestHandler_HandleParallelGossipAtx(t *testing.T) {
 		atx.InitialPost,
 		gomock.Any(),
 		atx.NumUnits,
+		gomock.Any(),
 	).DoAndReturn(
-		func(_ context.Context, _ types.NodeID, _ types.ATXID, _ *types.Post, _ *types.PostMetadata, _ uint32) error {
+		func(
+			_ context.Context,
+			_ types.NodeID,
+			_ types.ATXID,
+			_ *types.Post,
+			_ *types.PostMetadata,
+			_ uint32,
+			_ ...validatorOption,
+		) error {
 			time.Sleep(100 * time.Millisecond)
 			return nil
 		},
@@ -1641,7 +1727,8 @@ func TestHandler_AtxWeight(t *testing.T) {
 	atxHdlr.mockFetch.EXPECT().RegisterPeerHashes(peer, []types.Hash32{proofRef})
 	atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), proofRef)
 	atxHdlr.mValidator.EXPECT().VRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
-	atxHdlr.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+	atxHdlr.mValidator.EXPECT().
+		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 	atxHdlr.mValidator.EXPECT().
 		NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(leaves, nil)
@@ -1741,7 +1828,8 @@ func TestHandler_WrongHash(t *testing.T) {
 	atxHdlr.mockFetch.EXPECT().RegisterPeerHashes(peer, []types.Hash32{proofRef})
 	atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), proofRef)
 	atxHdlr.mValidator.EXPECT().VRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
-	atxHdlr.mValidator.EXPECT().Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+	atxHdlr.mValidator.EXPECT().
+		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 	atxHdlr.mValidator.EXPECT().
 		NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(uint64(111), nil)

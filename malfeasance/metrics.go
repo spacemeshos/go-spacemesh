@@ -9,9 +9,10 @@ const (
 
 	typeLabel = "type"
 
-	multiATXs      = "atx"
-	multiBallots   = "ballot"
-	hareEquivocate = "hare_eq"
+	multiATXs        = "atx"
+	multiBallots     = "ballot"
+	hareEquivocate   = "hare_eq"
+	invalidPostIndex = "invalid_post_index"
 )
 
 var (
@@ -24,9 +25,10 @@ var (
 		},
 	)
 
-	numProofsATX    = numProofs.WithLabelValues(multiATXs)
-	numProofsBallot = numProofs.WithLabelValues(multiBallots)
-	numProofsHare   = numProofs.WithLabelValues(hareEquivocate)
+	numProofsATX       = numProofs.WithLabelValues(multiATXs)
+	numProofsBallot    = numProofs.WithLabelValues(multiBallots)
+	numProofsHare      = numProofs.WithLabelValues(hareEquivocate)
+	numProofsPostIndex = numProofs.WithLabelValues(invalidPostIndex)
 
 	numInvalidProofs = metrics.NewCounter(
 		"num_invalid_proofs",
@@ -37,8 +39,9 @@ var (
 		},
 	)
 
-	numInvalidProofsATX    = numInvalidProofs.WithLabelValues(multiATXs)
-	numInvalidProofsBallot = numInvalidProofs.WithLabelValues(multiBallots)
-	numInvalidProofsHare   = numInvalidProofs.WithLabelValues(hareEquivocate)
-	numMalformed           = numInvalidProofs.WithLabelValues("mal")
+	numInvalidProofsATX       = numInvalidProofs.WithLabelValues(multiATXs)
+	numInvalidProofsBallot    = numInvalidProofs.WithLabelValues(multiBallots)
+	numInvalidProofsHare      = numInvalidProofs.WithLabelValues(hareEquivocate)
+	numInvalidProofsPostIndex = numInvalidProofs.WithLabelValues(invalidPostIndex)
+	numMalformed              = numInvalidProofs.WithLabelValues("mal")
 )

@@ -13,12 +13,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-//go:generate scalegen -types MalfeasanceProof,MalfeasanceGossip,AtxProof,BallotProof,HareProof,AtxProofMsg,BallotProofMsg,HareProofMsg,HareMetadata
+//go:generate scalegen -types MalfeasanceProof,MalfeasanceGossip,AtxProof,BallotProof,HareProof,AtxProofMsg,BallotProofMsg,HareProofMsg,HareMetadata,InvalidPostIndexProof
 
 const (
 	MultipleATXs byte = iota + 1
 	MultipleBallots
 	HareEquivocation
+	InvalidPostIndex
 )
 
 type MalfeasanceProof struct {
@@ -64,6 +65,15 @@ func (mp *MalfeasanceProof) MarshalLogObject(encoder log.ObjectEncoder) error {
 		} else {
 			encoder.AddObject("msgs", p)
 		}
+	case InvalidPostIndex:
+		encoder.AddString("type", "invalid post index")
+		p, ok := mp.Proof.Data.(*InvalidPostIndexProof)
+		if ok {
+			p.Atx.Initialize()
+			encoder.AddString("atx_id", p.Atx.ID().String())
+			encoder.AddString("smesher", p.Atx.SmesherID.String())
+			encoder.AddUint32("invalid index", p.InvalidIdx)
+		}
 	default:
 		encoder.AddString("type", "unknown")
 	}
@@ -72,9 +82,9 @@ func (mp *MalfeasanceProof) MarshalLogObject(encoder log.ObjectEncoder) error {
 }
 
 type Proof struct {
-	// MultipleATXs | MultipleBallots | HareEquivocation
+	// MultipleATXs | MultipleBallots | HareEquivocation | InvalidPostIndex
 	Type uint8
-	// AtxProof | BallotProof | HareProof
+	// AtxProof | BallotProof | HareProof | InvalidPostIndexProof
 	Data scale.Type
 }
 
@@ -133,8 +143,16 @@ func (e *Proof) DecodeScale(dec *scale.Decoder) (int, error) {
 		}
 		e.Data = &proof
 		total += n
+	case InvalidPostIndex:
+		var proof InvalidPostIndexProof
+		n, err := proof.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		e.Data = &proof
+		total += n
 	default:
-		return total, errors.New("unknown malfeasance type")
+		return total, errors.New("invalid ballot malfeasance proof")
 	}
 	return total, nil
 }
@@ -206,6 +224,13 @@ func (m *AtxProofMsg) SignedBytes() []byte {
 		log.With().Fatal("failed to serialize AtxProofMsg", log.Err(err))
 	}
 	return data
+}
+
+type InvalidPostIndexProof struct {
+	Atx ActivationTx
+
+	// Which index in POST is invalid
+	InvalidIdx uint32
 }
 
 type BallotProofMsg struct {
@@ -328,6 +353,18 @@ func MalfeasanceInfo(smesher NodeID, mp *MalfeasanceProof) string {
 			b.WriteString(
 				fmt.Sprintf("2nd message signature: %s\n", hex.EncodeToString(p.Messages[1].Signature.Bytes())),
 			)
+		}
+	case InvalidPostIndex:
+		p, ok := mp.Proof.Data.(*InvalidPostIndexProof)
+		if ok {
+			p.Atx.Initialize()
+			b.WriteString(
+				fmt.Sprintf(
+					"cause: smesher published ATX %s with invalid post index %d in epoch %d\n",
+					p.Atx.ID().ShortString(),
+					p.InvalidIdx,
+					p.Atx.PublishEpoch,
+				))
 		}
 	}
 	return b.String()

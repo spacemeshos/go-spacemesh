@@ -26,6 +26,9 @@ type scaler interface {
 	scale(int)
 }
 
+// validatorOption is a functional option type for the validator.
+type validatorOption func(*validatorOptions)
+
 type nipostValidator interface {
 	InitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, goldenATXID types.ATXID) error
 	NIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, nodeID types.NodeID) error
@@ -36,6 +39,7 @@ type nipostValidator interface {
 		NIPost *types.NIPost,
 		expectedChallenge types.Hash32,
 		numUnits uint32,
+		opts ...validatorOption,
 	) (uint64, error)
 
 	NumUnits(cfg *PostConfig, numUnits uint32) error
@@ -46,6 +50,7 @@ type nipostValidator interface {
 		Post *types.Post,
 		PostMetadata *types.PostMetadata,
 		numUnits uint32,
+		opts ...validatorOption,
 	) error
 	PostMetadata(cfg *PostConfig, metadata *types.PostMetadata) error
 
