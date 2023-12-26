@@ -14,13 +14,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 )
 
 func TestPeerInfoApi(t *testing.T) {
 	cfg := config.DefaultTestConfig()
 	cfg.Genesis.Accounts = nil
 	cfg.P2P.DisableNatPort = true
-	cfg.P2P.Listen = "/ip4/127.0.0.1/tcp/0"
+	cfg.P2P.Listen = p2p.MustParseAddresses("/ip4/127.0.0.1/tcp/0")
 
 	cfg.API.PublicListener = "0.0.0.0:0"
 	cfg.API.PrivateServices = nil

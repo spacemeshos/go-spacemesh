@@ -89,6 +89,7 @@ for more information on how to configure the node to work with the PoST service.
   query rewards by smesherID. Additionally, it does not re-index old data. Rewards will contain smesherID going forward,
   but to refresh data for all rewards, a node will have to delete its database and resync from genesis.
 
+
 * [#5334](https://github.com/spacemeshos/go-spacemesh/pull/5334) Hotfix for API queries for activations.
   Two API endpoints (`MeshService.{AccountMeshDataQuery,LayersQuery}`) were broken because they attempt to read
   all activation data for an epoch. As the number of activations per epoch has grown, this brute force query (i.e.,
@@ -96,6 +97,43 @@ for more information on how to configure the node to work with the PoST service.
   amount of resources. This hotfix removes all activation data from these endpoints so that they still work for
   querying other data. It also modifies `LayersQuery` to not return any _ineffective_ transactions in blocks, since
   there's currently no way to distinguish between effective and ineffective transactions using the API.
+
+* [#5329](https://github.com/spacemeshos/go-spacemesh/pull/5329) P2P decentralization improvements. Added support for QUIC
+  transport and DHT routing discovery for finding peers and relays. Also, added the `ping-peers` feature which is useful
+  during connectivity troubleshooting. `static-relays` feature can be used to provide a static list of circuit v2 relays
+  nodes when automatic relay discovery is not desired. All of the relay server resource settings are now configurable. Most
+  of the new functionality is disabled by default unless explicitly enabled in the config via `enable-routing-discovery`,
+  `routing-discovery-advertise`, `enable-quic-transport`, `static-relays` and `ping-peers` options in the `p2p` config
+  section. The non-conditional changes include values/provides support on all of the nodes, which will enable DHT to
+  function efficiently for routing discovery.
+
+* [#5367](https://github.com/spacemeshos/go-spacemesh/pull/5367) Add `no-main-override` toplevel config option and
+  `--no-main-override` CLI option that makes it possible to run "nomain" builds on mainnet.
+
+* [#5384](https://github.com/spacemeshos/go-spacemesh/pull/5384) to improve network stability and performance allow the
+  active set to be set in advance for an epoch. This allows the network to start consensus on the first layer of an epoch.
+
+## Release v1.2.12
+
+### Improvements
+
+* [#5373](https://github.com/spacemeshos/go-spacemesh/pull/5373) automatic scaling of post verifying workers to a lower
+  value (1 by default) when POST proving starts. The workers are scaled up when POST proving finishes.
+
+* [#5382](https://github.com/spacemeshos/go-spacemesh/pull/5382) avoid processing same (gossiped/fetched) ATX many times
+  in parallel
+
+## Release v1.2.11
+
+### Improvements
+
+* increased the max response data size in p2p to 40MiB
+
+## Release v1.2.10
+
+### Improvements
+
+* further increased cache sizes and and p2p timeouts to compensate for the increased number of nodes on the network.
 
 ## Release v1.2.9
 

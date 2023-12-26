@@ -128,6 +128,9 @@ type BaseConfig struct {
 	// ATXGradeDelay is used to grade ATXs for selection in tortoise active set.
 	// See grading fuction in miner/proposals_builder.go
 	ATXGradeDelay time.Duration `mapstructure:"atx-grade-delay"`
+
+	// NoMainOverride forces the "nomain" builds to run on the mainnet
+	NoMainOverride bool `mapstructure:"no-main-override"`
 }
 
 type PublicMetrics struct {
