@@ -58,7 +58,6 @@ const (
 
 // Config defines configuration for Builder.
 type Config struct {
-	CoinbaseAccount  types.Address
 	GoldenATXID      types.ATXID
 	LayersPerEpoch   uint32
 	RegossipInterval time.Duration
@@ -159,7 +158,6 @@ func NewBuilder(
 	b := &Builder{
 		parentCtx:         context.Background(),
 		signer:            signer,
-		coinbaseAccount:   conf.CoinbaseAccount,
 		goldenATXID:       conf.GoldenATXID,
 		regossipInterval:  conf.RegossipInterval,
 		cdb:               cdb,

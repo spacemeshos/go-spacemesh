@@ -107,7 +107,6 @@ type testAtxBuilder struct {
 	cdb         *datastore.CachedDB
 	localDb     *localsql.Database
 	sig         *signing.EdSigner
-	coinbase    types.Address
 	goldenATXID types.ATXID
 
 	mpub        *mocks.MockPublisher
@@ -128,7 +127,6 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 		cdb:         datastore.NewCachedDB(sql.InMemory(), lg),
 		localDb:     localsql.InMemory(),
 		sig:         edSigner,
-		coinbase:    types.GenerateAddress([]byte("33333")),
 		goldenATXID: types.ATXID(types.HexToHash32("77777")),
 		mpub:        mocks.NewMockPublisher(ctrl),
 		mpostSvc:    NewMockpostService(ctrl),
@@ -142,9 +140,8 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 	opts = append(opts, WithValidator(tab.mValidator))
 
 	cfg := Config{
-		CoinbaseAccount: tab.coinbase,
-		GoldenATXID:     tab.goldenATXID,
-		LayersPerEpoch:  layersPerEpoch,
+		GoldenATXID:    tab.goldenATXID,
+		LayersPerEpoch: layersPerEpoch,
 	}
 
 	tab.msync.EXPECT().RegisterForATXSynced().DoAndReturn(closedChan).AnyTimes()
@@ -1416,8 +1413,8 @@ func TestWaitPositioningAtx(t *testing.T) {
 
 		targetEpoch types.EpochID
 	}{
-		{"no wait", 100 * time.Millisecond, 100 * time.Millisecond, 2},
-		{"wait", 100 * time.Millisecond, 0, 2},
+		{"no wait", 200 * time.Millisecond, 200 * time.Millisecond, 2},
+		{"wait", 200 * time.Millisecond, 0, 2},
 		{"round started", 0, 0, 3},
 	} {
 		tc := tc
@@ -1429,7 +1426,7 @@ func TestWaitPositioningAtx(t *testing.T) {
 			tab.mclock.EXPECT().CurrentLayer().Return(types.LayerID(0)).AnyTimes()
 			tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(func(lid types.LayerID) time.Time {
 				// layer duration is 10ms to speed up test
-				return genesis.Add(time.Duration(lid) * 10 * time.Millisecond)
+				return genesis.Add(time.Duration(lid) * 20 * time.Millisecond)
 			}).AnyTimes()
 
 			// everything else are stubs that are irrelevant for the test
@@ -1443,7 +1440,7 @@ func TestWaitPositioningAtx(t *testing.T) {
 				func(_ context.Context, _ string, got []byte) error {
 					var gotAtx types.ActivationTx
 					require.NoError(t, codec.Decode(got, &gotAtx))
-					require.Equal(t, gotAtx.TargetEpoch(), tc.targetEpoch)
+					require.Equal(t, tc.targetEpoch, gotAtx.TargetEpoch())
 					return nil
 				})
 
