@@ -320,6 +320,8 @@ func (c *CertifierClient) Certify(ctx context.Context, url *url.URL, pubkey []by
 	}
 	req.Header.Set("Content-Type", "application/json")
 
+	c.logger.Debug("sending request", zap.Binary("challenge", c.postCh), zap.Stringer("url", req.URL), zap.String("body", string(jsonRequest)))
+
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("sending request: %w", err)
