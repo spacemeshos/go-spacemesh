@@ -5,6 +5,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/post/shared"
 )
 
 type Post struct {
@@ -33,6 +34,19 @@ func AddPost(db sql.Executor, nodeID types.NodeID, post Post) error {
 		INSERT into post (
 			id, post_nonce, post_indices, post_pow, challenge, num_units, commit_atx, vrf_nonce
 		) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8);`, enc, nil,
+	); err != nil {
+		return fmt.Errorf("inserting post for %s: %w", nodeID.ShortString(), err)
+	}
+	return nil
+}
+
+func FixPostInitialChallenge(db sql.Executor, nodeID types.NodeID, ch shared.Challenge) error {
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, ch)
+		stmt.BindBytes(2, nodeID.Bytes())
+	}
+	if _, err := db.Exec(`
+		UPDATE post SET challenge = ?1 WHERE id = ?2;`, enc, nil,
 	); err != nil {
 		return fmt.Errorf("inserting post for %s: %w", nodeID.ShortString(), err)
 	}

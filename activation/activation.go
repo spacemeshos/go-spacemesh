@@ -3,6 +3,7 @@
 package activation
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -367,6 +368,12 @@ func (b *Builder) obtainPost(ctx context.Context) (*types.Post, *types.PostInfo,
 	post, err := nipost.GetPost(b.localDB, b.signer.NodeID())
 	switch {
 	case err == nil:
+		// fixup broken initial post in testnet-10 localdbs
+		if bytes.Equal(post.Challenge, shared.ZeroChallenge[:16]) {
+			if err := nipost.FixPostInitialChallenge(b.localDB, b.signer.NodeID(), shared.ZeroChallenge); err != nil {
+				b.log.Error("failed to fixed-up initial post", zap.Error(err))
+			}
+		}
 		meta := &types.PostInfo{
 			NodeID:        b.SmesherID(),
 			CommitmentATX: post.CommitmentATX,

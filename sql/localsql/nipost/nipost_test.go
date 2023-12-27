@@ -34,6 +34,35 @@ func Test_AddPost(t *testing.T) {
 	require.Equal(t, post, *got)
 }
 
+func Test_FixPost(t *testing.T) {
+	db := localsql.InMemory()
+
+	nodeID := types.RandomNodeID()
+	post := Post{
+		Nonce:     1,
+		Indices:   []byte{1, 2, 3},
+		Pow:       1,
+		Challenge: shared.Challenge([]byte{4, 5, 6}),
+
+		NumUnits:      2,
+		CommitmentATX: types.RandomATXID(),
+		VRFNonce:      3,
+	}
+	err := AddPost(db, nodeID, post)
+	require.NoError(t, err)
+
+	got, err := GetPost(db, nodeID)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Equal(t, post, *got)
+
+	newCh := shared.Challenge([]byte{4, 5, 6, 7, 8, 9})
+	require.NoError(t, FixPostInitialChallenge(db, nodeID, newCh))
+	got, err = GetPost(db, nodeID)
+	require.NoError(t, err)
+	require.EqualValues(t, got.Challenge, newCh)
+}
+
 func Test_AddPost_NoDuplicates(t *testing.T) {
 	db := localsql.InMemory()
 
