@@ -115,9 +115,6 @@ jobs:
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
 
-      - name: Install coreutils
-        if: ${{ matrix.os == 'macos-12-large' || matrix.os == 'macos-13-xlarge' }}
-        run: brew install coreutils
 
       - name: disable Windows Defender - Windows
         if: ${{ matrix.os == 'windows-latest' }}
