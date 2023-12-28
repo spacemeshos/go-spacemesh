@@ -160,7 +160,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 		},
 	)
 
-	verifier, err := activation.NewPostVerifier(nil, cfg, logger.Named("verifier"))
+	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
 
@@ -329,7 +329,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, nipost)
 
-	verifier, err := activation.NewPostVerifier(nil, cfg, logger.Named("verifier"))
+	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
 

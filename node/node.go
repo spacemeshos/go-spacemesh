@@ -562,7 +562,6 @@ func (app *App) initServices(ctx context.Context) error {
 
 	lg.Debug("creating post verifier")
 	verifier, err := activation.NewPostVerifier(
-		app.edSgn.NodeID().Bytes(),
 		app.Config.POST,
 		nipostValidatorLogger.Zap(),
 		verifying.WithPowFlags(app.Config.SMESHING.VerifyingOpts.Flags.Value()),

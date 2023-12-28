@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/post/shared"
+	"github.com/spacemeshos/post/verifying"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -406,8 +407,7 @@ func validateInvalidPostIndex(ctx context.Context,
 		ctx,
 		post,
 		meta,
-		// TODO coming soon
-		// verifying.SelectedIndex(int(proof.InvalidIdx)),
+		verifying.SelectedIndex(int(proof.InvalidIdx)),
 	); err != nil {
 		return atx.SmesherID, nil
 	}

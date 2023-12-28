@@ -253,8 +253,8 @@ func (s SmesherService) PostConfig(context.Context, *emptypb.Empty) (*pb.PostCon
 		LabelsPerUnit: cfg.LabelsPerUnit,
 		MinNumUnits:   cfg.MinNumUnits,
 		MaxNumUnits:   cfg.MaxNumUnits,
-		K1:            cfg.K1,
-		K2:            cfg.K2,
+		K1:            uint32(cfg.K1),
+		K2:            uint32(cfg.K2),
 	}, nil
 }
 

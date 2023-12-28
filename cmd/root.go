@@ -229,11 +229,11 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.POST.MinNumUnits, "")
 	cmd.PersistentFlags().Uint32Var(&cfg.POST.MaxNumUnits, "post-max-numunits",
 		cfg.POST.MaxNumUnits, "")
-	cmd.PersistentFlags().Uint32Var(&cfg.POST.K1, "post-k1",
+	cmd.PersistentFlags().UintVar(&cfg.POST.K1, "post-k1",
 		cfg.POST.K1, "difficulty factor for finding a good label when generating a proof")
-	cmd.PersistentFlags().Uint32Var(&cfg.POST.K2, "post-k2",
+	cmd.PersistentFlags().UintVar(&cfg.POST.K2, "post-k2",
 		cfg.POST.K2, "number of labels to prove")
-	cmd.PersistentFlags().Uint32Var(&cfg.POST.K3, "post-k3",
+	cmd.PersistentFlags().UintVar(&cfg.POST.K3, "post-k3",
 		cfg.POST.K3, "subset of labels to verify in a proof")
 	cmd.PersistentFlags().AddFlag(&pflag.Flag{
 		Name:     "post-pow-difficulty",

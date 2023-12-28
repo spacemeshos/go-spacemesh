@@ -233,7 +233,6 @@ func (ps *PostSupervisor) runCmd(
 		"--labels-per-unit", strconv.FormatUint(uint64(postCfg.LabelsPerUnit), 10),
 		"--k1", strconv.FormatUint(uint64(postCfg.K1), 10),
 		"--k2", strconv.FormatUint(uint64(postCfg.K2), 10),
-		"--k3", strconv.FormatUint(uint64(postCfg.K3), 10),
 		"--pow-difficulty", postCfg.PowDifficulty.String(),
 
 		"--dir", postOpts.DataDir,

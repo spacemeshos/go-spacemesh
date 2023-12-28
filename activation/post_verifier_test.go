@@ -34,7 +34,7 @@ func TestOffloadingPostVerifier(t *testing.T) {
 }
 
 func TestPostVerifierDetectsInvalidProof(t *testing.T) {
-	verifier, err := activation.NewPostVerifier(nil, activation.PostConfig{}, zaptest.NewLogger(t))
+	verifier, err := activation.NewPostVerifier(activation.PostConfig{}, zaptest.NewLogger(t))
 	require.NoError(t, err)
 	defer verifier.Close()
 	require.Error(t, verifier.Verify(context.Background(), &shared.Proof{}, &shared.ProofMetadata{}))

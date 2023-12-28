@@ -95,12 +95,11 @@ func (v *postVerifier) Verify(
 
 // NewPostVerifier creates a new post verifier.
 func NewPostVerifier(
-	id []byte,
 	cfg PostConfig,
 	logger *zap.Logger,
 	opts ...verifying.OptionFunc,
 ) (PostVerifier, error) {
-	verifier, err := verifying.NewProofVerifier(id, opts...)
+	verifier, err := verifying.NewProofVerifier(opts...)
 	if err != nil {
 		return nil, err
 	}

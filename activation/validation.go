@@ -37,13 +37,14 @@ func (e *ErrAtxNotFound) Is(target error) bool {
 }
 
 type validatorOptions struct {
-	fullPost bool
+	postSubsetSeed []byte
 }
 
-// FullPost is a validator option that configures the validator to validate all indices in POST.
-func FullPost() validatorOption {
+// PostSubset configures the validator to validate only a subset of the POST indices.
+// The `seed` is used to randomize the selection of indices.
+func PostSubset(seed []byte) validatorOption {
 	return func(o *validatorOptions) {
-		o.fullPost = true
+		o.postSubsetSeed = seed
 	}
 }
 
@@ -156,8 +157,8 @@ func (v *Validator) Post(
 		opt(options)
 	}
 	verifyOpts := []verifying.OptionFunc{verifying.WithLabelScryptParams(v.scrypt)}
-	if options.fullPost {
-		verifyOpts = append(verifyOpts, verifying.AllIndices())
+	if options.postSubsetSeed != nil {
+		verifyOpts = append(verifyOpts, verifying.Subset(v.cfg.K3, options.postSubsetSeed))
 	}
 
 	start := time.Now()

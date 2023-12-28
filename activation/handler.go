@@ -170,7 +170,7 @@ func (h *Handler) SyntacticallyValidate(ctx context.Context, atx *types.Activati
 			return fmt.Errorf("invalid vrf nonce: %w", err)
 		}
 		if err := h.nipostValidator.Post(
-			ctx, atx.SmesherID, *atx.CommitmentATX, atx.InitialPost, &initialPostMetadata, atx.NumUnits, FullPost(),
+			ctx, atx.SmesherID, *atx.CommitmentATX, atx.InitialPost, &initialPostMetadata, atx.NumUnits,
 		); err != nil {
 			return fmt.Errorf("invalid initial post: %w", err)
 		}
@@ -233,6 +233,7 @@ func (h *Handler) SyntacticallyValidateDeps(
 		atx.NIPost,
 		expectedChallengeHash,
 		atx.NumUnits,
+		PostSubset([]byte(h.local)), // use the local peer ID as seed for random subset
 	)
 	var invalidIdx *verifying.ErrInvalidIndex
 	if errors.As(err, &invalidIdx) {
