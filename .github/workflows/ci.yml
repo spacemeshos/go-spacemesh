@@ -107,16 +107,18 @@ jobs:
         os:
           - ubuntu-latest
           - [self-hosted, linux, arm64]
-          - macos-latest
+          - macos-12-xlarge
           - macos-13-xlarge
           - windows-latest
     steps:
       - name: Add OpenCL support - Ubuntu
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
+
       - name: Install coreutils
-        if: ${{ matrix.os == 'macos-latest' }} || ${{ matrix.os == 'macos-13-xlarge' }}
+        if: ${{ matrix.os == 'macos-12-xlarge' || matrix.os == 'macos-13-xlarge' }}
         run: brew install coreutils
+
       - name: disable Windows Defender - Windows
         if: ${{ matrix.os == 'windows-latest' }}
         run: |
@@ -145,7 +147,7 @@ jobs:
         os:
           - ubuntu-latest
           - [self-hosted, linux, arm64]
-          - macos-latest
+          - macos-12-xlarge
           - macos-13-xlarge
           - windows-latest
     steps:
@@ -156,8 +158,9 @@ jobs:
         run: |
           sudo ethtool -K eth0 tx off
           sudo ethtool -K eth0 rx off
+
       - name: disable TCP/UDP offload - MacOS
-        if: ${{ matrix.os == 'macos-latest' }}
+        if: ${{ matrix.os == 'macos-12-xlarge' || matrix.os == 'macos-13-xlarge' }}
         run: |
           sudo sysctl -w net.link.generic.system.hwcksum_tx=0
           sudo sysctl -w net.link.generic.system.hwcksum_rx=0
@@ -185,9 +188,6 @@ jobs:
       - name: Add OpenCL support - Windows
         if: ${{ matrix.os == 'windows-latest' }}
         run: choco install opencl-intel-cpu-runtime
-      - name: Install coreutils
-        if: ${{ matrix.os == 'macos-latest' }} || ${{ matrix.os == 'macos-13-xlarge' }}
-        run: brew install coreutils
       - name: setup env
         run: make install
       - name: Clear test cache
