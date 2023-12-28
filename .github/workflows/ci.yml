@@ -107,7 +107,7 @@ jobs:
         os:
           - ubuntu-latest
           - [self-hosted, linux, arm64]
-          - macos-12-xlarge
+          - macos-12-large
           - macos-13-xlarge
           - windows-latest
     steps:
@@ -116,7 +116,7 @@ jobs:
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
 
       - name: Install coreutils
-        if: ${{ matrix.os == 'macos-12-xlarge' || matrix.os == 'macos-13-xlarge' }}
+        if: ${{ matrix.os == 'macos-12-large' || matrix.os == 'macos-13-xlarge' }}
         run: brew install coreutils
 
       - name: disable Windows Defender - Windows
@@ -147,7 +147,7 @@ jobs:
         os:
           - ubuntu-latest
           - [self-hosted, linux, arm64]
-          - macos-12-xlarge
+          - macos-12-large
           - macos-13-xlarge
           - windows-latest
     steps:
@@ -160,7 +160,7 @@ jobs:
           sudo ethtool -K eth0 rx off
 
       - name: disable TCP/UDP offload - MacOS
-        if: ${{ matrix.os == 'macos-12-xlarge' || matrix.os == 'macos-13-xlarge' }}
+        if: ${{ matrix.os == 'macos-12-large' || matrix.os == 'macos-13-xlarge' }}
         run: |
           sudo sysctl -w net.link.generic.system.hwcksum_tx=0
           sudo sysctl -w net.link.generic.system.hwcksum_rx=0
