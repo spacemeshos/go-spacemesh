@@ -35,7 +35,7 @@ type nipostValidator interface {
 	NIPost(
 		ctx context.Context,
 		nodeId types.NodeID,
-		atxId types.ATXID,
+		commitmentAtxId types.ATXID,
 		NIPost *types.NIPost,
 		expectedChallenge types.Hash32,
 		numUnits uint32,
@@ -46,7 +46,7 @@ type nipostValidator interface {
 	Post(
 		ctx context.Context,
 		nodeId types.NodeID,
-		atxId types.ATXID,
+		commitmentAtxId types.ATXID,
 		Post *types.Post,
 		PostMetadata *types.PostMetadata,
 		numUnits uint32,

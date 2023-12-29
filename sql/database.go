@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"slices"
 	"sort"
 	"sync"
@@ -129,8 +130,15 @@ type Opt func(c *conf)
 
 // InMemory database for testing.
 func InMemory(opts ...Opt) *Database {
-	opts = append(opts, WithConnections(1))
-	db, err := Open("file::memory:?mode=memory", opts...)
+	opts = append(opts, WithConnections(2))
+
+	var name []rune
+	runes := []rune("abcdefghijklmnopqrstuvwxyz")
+	for i := 0; i < 5; i++ {
+		name = append(name, (runes[rand.Intn(len(runes))]))
+	}
+
+	db, err := Open(fmt.Sprintf("file:db-%s?mode=memory&cache=shared", string(name)), opts...)
 	if err != nil {
 		panic(err)
 	}

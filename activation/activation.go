@@ -602,9 +602,27 @@ func (b *Builder) broadcast(ctx context.Context, atx *types.ActivationTx) (int, 
 
 // GetPositioningAtx returns atx id with the highest tick height.
 func (b *Builder) GetPositioningAtx() (types.ATXID, error) {
-	id, err := atxs.GetIDWithMaxHeight(b.cdb, b.signer.NodeID(), func(a types.ATXID) bool {
-		// TODO(poszu): verify POST fully
-		return true
+	id, err := atxs.GetIDWithMaxHeight(b.cdb, b.signer.NodeID(), func(id types.ATXID) bool {
+		atx, err := atxs.Get(b.cdb, id)
+		if err != nil {
+			return false
+		}
+		commitmentAtxId := atx.CommitmentATX
+		if commitmentAtxId == nil {
+			if atxId, err := atxs.CommitmentATX(b.cdb, atx.SmesherID); err != nil {
+				return false
+			} else {
+				commitmentAtxId = &atxId
+			}
+		}
+		return b.validator.Post(
+			context.Background(),
+			atx.SmesherID,
+			*commitmentAtxId,
+			atx.NIPost.Post,
+			atx.NIPost.PostMetadata,
+			atx.NumUnits,
+		) == nil
 	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNotFound) {
