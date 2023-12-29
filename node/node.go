@@ -63,6 +63,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/node/mapstructureutil"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/prune"
@@ -135,6 +136,11 @@ func GetCommand() *cobra.Command {
 			if conf.LOGGING.Encoder == config.JSONLogEncoder {
 				log.JSONLog(true)
 			}
+
+			if cmd.NoMainNet && onMainNet(conf) {
+				log.With().Fatal("this is a testnet-only build not intended for mainnet")
+			}
+
 			app := New(
 				WithConfig(conf),
 				// NOTE(dshulyak) this needs to be max level so that child logger can can be current level or below.
@@ -256,6 +262,7 @@ func LoadConfigFromFile() (*config.Config, error) {
 	hook := mapstructure.ComposeDecodeHookFunc(
 		mapstructure.StringToTimeDurationHookFunc(),
 		mapstructure.StringToSliceHookFunc(","),
+		mapstructureutil.AddressListDecodeFunc(),
 		mapstructureutil.BigRatDecodeFunc(),
 		mapstructureutil.PostProviderIDDecodeFunc(),
 		mapstructure.TextUnmarshallerHookFunc(),
@@ -1614,7 +1621,14 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 		app.Config.Genesis.GenesisID(),
 		types.GetEffectiveGenesis(),
 	)
-	app.host, err = p2p.New(ctx, p2plog, cfg, []byte(prologue),
+	// Prevent testnet nodes from working on the mainnet, but
+	// don't use the network cookie on mainnet as this technique
+	// may be replaced later
+	nc := handshake.NoNetworkCookie
+	if !onMainNet(app.Config) {
+		nc = handshake.NetworkCookie(prologue)
+	}
+	app.host, err = p2p.New(ctx, p2plog, cfg, []byte(prologue), nc,
 		p2p.WithNodeReporter(events.ReportNodeStatusUpdate),
 	)
 	if err != nil {
@@ -1741,4 +1755,8 @@ func (w tortoiseWeakCoin) Set(lid types.LayerID, value bool) error {
 	}
 	w.tortoise.OnWeakCoin(lid, value)
 	return nil
+}
+
+func onMainNet(conf *config.Config) bool {
+	return conf.Genesis.GenesisTime == config.MainnetConfig().Genesis.GenesisTime
 }

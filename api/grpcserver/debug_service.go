@@ -3,8 +3,10 @@ package grpcserver
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"github.com/libp2p/go-libp2p/core/network"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
@@ -22,7 +24,7 @@ import (
 type DebugService struct {
 	db       *sql.Database
 	conState conservativeState
-	identity networkIdentity
+	netInfo  networkInfo
 	oracle   oracle
 }
 
@@ -32,11 +34,11 @@ func (d DebugService) RegisterService(server *Server) {
 }
 
 // NewDebugService creates a new grpc service using config data.
-func NewDebugService(db *sql.Database, conState conservativeState, host networkIdentity, oracle oracle) *DebugService {
+func NewDebugService(db *sql.Database, conState conservativeState, host networkInfo, oracle oracle) *DebugService {
 	return &DebugService{
 		db:       db,
 		conState: conState,
-		identity: host,
+		netInfo:  host,
 		oracle:   oracle,
 	}
 }
@@ -78,7 +80,21 @@ func (d DebugService) Accounts(ctx context.Context, in *pb.AccountsRequest) (*pb
 
 // NetworkInfo query provides NetworkInfoResponse.
 func (d DebugService) NetworkInfo(ctx context.Context, _ *emptypb.Empty) (*pb.NetworkInfoResponse, error) {
-	return &pb.NetworkInfoResponse{Id: d.identity.ID().String()}, nil
+	resp := &pb.NetworkInfoResponse{Id: d.netInfo.ID().String()}
+	for _, a := range d.netInfo.ListenAddresses() {
+		resp.ListenAddresses = append(resp.ListenAddresses, a.String())
+	}
+	sort.Strings(resp.ListenAddresses)
+	for _, a := range d.netInfo.KnownAddresses() {
+		resp.KnownAddresses = append(resp.KnownAddresses, a.String())
+	}
+	sort.Strings(resp.KnownAddresses)
+	udpNATType, tcpNATType := d.netInfo.NATDeviceType()
+	resp.NatTypeUdp = convertNATType(udpNATType)
+	resp.NatTypeTcp = convertNATType(tcpNATType)
+	resp.Reachability = convertReachability(d.netInfo.Reachability())
+	resp.DhtServerEnabled = d.netInfo.DHTServerEnabled()
+	return resp, nil
 }
 
 // ActiveSet query provides hare active set for the specified epoch.
@@ -144,4 +160,26 @@ func castEventProposal(ev *events.EventProposal) *pb.Proposal {
 		})
 	}
 	return proposal
+}
+
+func convertNATType(natType network.NATDeviceType) pb.NetworkInfoResponse_NATType {
+	switch natType {
+	case network.NATDeviceTypeCone:
+		return pb.NetworkInfoResponse_Cone
+	case network.NATDeviceTypeSymmetric:
+		return pb.NetworkInfoResponse_Symmetric
+	default:
+		return pb.NetworkInfoResponse_NATTypeUnknown
+	}
+}
+
+func convertReachability(r network.Reachability) pb.NetworkInfoResponse_Reachability {
+	switch r {
+	case network.ReachabilityPublic:
+		return pb.NetworkInfoResponse_Public
+	case network.ReachabilityPrivate:
+		return pb.NetworkInfoResponse_Private
+	default:
+		return pb.NetworkInfoResponse_ReachabilityUnknown
+	}
 }

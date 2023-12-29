@@ -335,17 +335,17 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 		MaxRetriesForRequest: 3,
 	}
 	p2pconf := p2p.DefaultConfig()
-	p2pconf.Listen = "/ip4/127.0.0.1/tcp/0"
+	p2pconf.Listen = p2p.MustParseAddresses("/ip4/127.0.0.1/tcp/0")
 	p2pconf.DataDir = t.TempDir()
 
 	// Good host
-	h, err := p2p.New(ctx, lg, p2pconf, []byte{})
+	h, err := p2p.New(ctx, lg, p2pconf, []byte{}, []byte{})
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, h.Stop()) })
 
 	// Bad host, will send a message that results in validation reject
 	p2pconf.DataDir = t.TempDir()
-	badPeerHost, err := p2p.New(ctx, lg, p2pconf, []byte{})
+	badPeerHost, err := p2p.New(ctx, lg, p2pconf, []byte{}, []byte{})
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, badPeerHost.Stop()) })
 
