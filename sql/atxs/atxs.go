@@ -127,7 +127,7 @@ func CommitmentATX(db sql.Executor, nodeID types.NodeID) (id types.ATXID, err er
 	}
 
 	if rows, err := db.Exec(`
-		select commitment_atx from atxs 
+		select commitment_atx from atxs
 		where pubkey = ?1 and commitment_atx is not null
 		order by epoch desc
 		limit 1;`, enc, dec); err != nil {
@@ -150,7 +150,7 @@ func GetFirstIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, e
 	}
 
 	if rows, err := db.Exec(`
-		select id from atxs 
+		select id from atxs
 		where pubkey = ?1
 		order by epoch asc
 		limit 1;`, enc, dec); err != nil {
@@ -173,7 +173,7 @@ func GetLastIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, er
 	}
 
 	if rows, err := db.Exec(`
-		select id from atxs 
+		select id from atxs
 		where pubkey = ?1
 		order by epoch desc, received desc
 		limit 1;`, enc, dec); err != nil {
@@ -312,12 +312,19 @@ func Add(db sql.Executor, atx *types.VerifiedActivationTx) error {
 	return nil
 }
 
+type Filter func(types.ATXID) bool
+
+func FilterAll(types.ATXID) bool { return true }
+
 // GetIDWithMaxHeight returns the ID of the atx from the last 2 epoch with the highest (or tied for the highest)
 // tick height. It is possible that some poet servers are faster than others and the network ends up having its
 // highest ticked atx still in previous epoch and the atxs building on top of it have not been published yet.
 // Selecting from the last two epochs to strike a balance between being fair to honest miners while not giving
 // unfair advantage for malicious actors who retroactively publish a high tick atx many epochs back.
-func GetIDWithMaxHeight(db sql.Executor, pref types.NodeID) (types.ATXID, error) {
+func GetIDWithMaxHeight(db sql.Executor, pref types.NodeID, filter Filter) (types.ATXID, error) {
+	if filter == nil {
+		filter = FilterAll
+	}
 	var (
 		rst types.ATXID
 		max uint64
@@ -325,26 +332,38 @@ func GetIDWithMaxHeight(db sql.Executor, pref types.NodeID) (types.ATXID, error)
 	dec := func(stmt *sql.Statement) bool {
 		var id types.ATXID
 		stmt.ColumnBytes(0, id[:])
-		height := uint64(stmt.ColumnInt64(1)) + uint64(stmt.ColumnInt64(2))
-		if height >= max {
+		height := uint64(stmt.ColumnInt64(1))
+		epoch := uint64(stmt.ColumnInt64(3))
+		_ = epoch
+
+		switch {
+		case height < max:
+			// Results are ordered by height, so we can stop once we see a lower height.
+			return false
+		case height > max && filter(id):
+			max = height
+			rst = id
+			// We can stop on the first ATX if `pref` is empty.
+			return pref != types.EmptyNodeID
+		case height == max && filter(id):
+			// prefer atxs from `pref`
 			var smesher types.NodeID
-			stmt.ColumnBytes(3, smesher[:])
-			if height > max {
-				max = height
+			stmt.ColumnBytes(2, smesher[:])
+			if smesher == pref {
 				rst = id
-			} else if pref != types.EmptyNodeID && smesher == pref {
-				// height is equal. prefer atxs from `pref`
-				rst = id
+				return false
 			}
+			return true
 		}
+
 		return true
 	}
 
 	if rows, err := db.Exec(`
-		select id, base_tick_height, tick_count, pubkey
-		from atxs left join identities using(pubkey)
-		where identities.pubkey is null and epoch >= (select max(epoch) from atxs)-1
-		order by epoch desc;`, nil, dec); err != nil {
+	SELECT id, base_tick_height + tick_count AS height, pubkey, epoch
+	FROM atxs LEFT JOIN identities using(pubkey)
+	WHERE identities.pubkey is null and epoch >= (select max(epoch) from atxs)-1
+	ORDER BY height DESC, epoch DESC;`, nil, dec); err != nil {
 		return types.ATXID{}, fmt.Errorf("select positioning atx: %w", err)
 	} else if rows == 0 {
 		return types.ATXID{}, sql.ErrNotFound
@@ -386,7 +405,7 @@ func LatestN(db sql.Executor, n int) ([]CheckpointAtx, error) {
 	}
 
 	if rows, err := db.Exec(`
-		select id, epoch, effective_num_units, base_tick_height, tick_count, pubkey, sequence, coinbase 
+		select id, epoch, effective_num_units, base_tick_height, tick_count, pubkey, sequence, coinbase
 		from (
 			select row_number() over (partition by pubkey order by epoch desc) RowNum,
 			id, epoch, effective_num_units, base_tick_height, tick_count, pubkey, sequence, coinbase from atxs

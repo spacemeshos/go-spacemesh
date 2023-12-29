@@ -356,7 +356,10 @@ func (mgr *PostSetupManager) commitmentAtx(dataDir string) (types.ATXID, error) 
 // It will use the ATX with the highest height seen by the node and defaults to the goldenATX,
 // when no ATXs have yet been published.
 func (mgr *PostSetupManager) findCommitmentAtx() (types.ATXID, error) {
-	atx, err := atxs.GetIDWithMaxHeight(mgr.db, types.EmptyNodeID)
+	atx, err := atxs.GetIDWithMaxHeight(mgr.db, types.EmptyNodeID, func(a types.ATXID) bool {
+		// TODO(poszu): verify POST fully
+		return true
+	})
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
 		mgr.logger.Info("using golden atx as commitment atx")

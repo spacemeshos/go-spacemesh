@@ -602,7 +602,10 @@ func (b *Builder) broadcast(ctx context.Context, atx *types.ActivationTx) (int, 
 
 // GetPositioningAtx returns atx id with the highest tick height.
 func (b *Builder) GetPositioningAtx() (types.ATXID, error) {
-	id, err := atxs.GetIDWithMaxHeight(b.cdb, b.signer.NodeID())
+	id, err := atxs.GetIDWithMaxHeight(b.cdb, b.signer.NodeID(), func(a types.ATXID) bool {
+		// TODO(poszu): verify POST fully
+		return true
+	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNotFound) {
 			b.log.Info("using golden atx as positioning atx")
