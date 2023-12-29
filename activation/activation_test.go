@@ -300,7 +300,6 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 }
 
 func TestBuilder_RestartSmeshing(t *testing.T) {
-	now := time.Now()
 	getBuilder := func(t *testing.T) *Builder {
 		tab := newTestBuilder(t)
 		tab.mpostClient.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).AnyTimes().DoAndReturn(
@@ -309,19 +308,11 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 				return nil, nil, ctx.Err()
 			},
 		)
-		tab.mValidator.EXPECT().Post(
-			gomock.Any(),
-			gomock.Any(),
-			gomock.Any(),
-			gomock.Any(),
-			gomock.Any(),
-			gomock.Any(),
-		).AnyTimes().Return(nil)
+
 		ch := make(chan struct{})
 		close(ch)
 		tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(ch).AnyTimes()
 		tab.mclock.EXPECT().CurrentLayer().Return(types.LayerID(0)).AnyTimes()
-		tab.mclock.EXPECT().LayerToTime(gomock.Any()).Return(now).AnyTimes()
 		return tab.Builder
 	}
 
@@ -329,23 +320,9 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 		builder := getBuilder(t)
 		for i := 0; i < 50; i++ {
 			require.NoError(t, builder.StartSmeshing(types.Address{}))
-			require.Never(
-				t,
-				func() bool { return !builder.Smeshing() },
-				400*time.Microsecond,
-				50*time.Microsecond,
-				"failed on execution %d",
-				i,
-			)
+			require.True(t, builder.Smeshing())
 			require.NoError(t, builder.StopSmeshing(true))
-			require.Eventually(
-				t,
-				func() bool { return !builder.Smeshing() },
-				500*time.Millisecond,
-				time.Millisecond,
-				"failed on execution %d",
-				i,
-			)
+			require.False(t, builder.Smeshing())
 		}
 	})
 
