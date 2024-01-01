@@ -17,6 +17,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/network"
+	ma "github.com/multiformats/go-multiaddr"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/merkle-tree"
 	"github.com/spacemeshos/poet/shared"
@@ -78,23 +80,24 @@ var (
 	postGenesisEpoch = types.EpochID(2)
 	genesisID        = types.Hash20{}
 
-	addr1       types.Address
-	addr2       types.Address
-	prevAtxID   = types.ATXID(types.HexToHash32("44444"))
-	chlng       = types.HexToHash32("55555")
-	poetRef     = []byte("66666")
-	nipost      = newNIPostWithChallenge(&chlng, poetRef)
-	challenge   = newChallenge(1, prevAtxID, prevAtxID, postGenesisEpoch)
-	globalAtx   *types.VerifiedActivationTx
-	globalAtx2  *types.VerifiedActivationTx
-	globalTx    *types.Transaction
-	globalTx2   *types.Transaction
-	ballot1     = genLayerBallot(types.LayerID(11))
-	block1      = genLayerBlock(types.LayerID(11), nil)
-	block2      = genLayerBlock(types.LayerID(11), nil)
-	block3      = genLayerBlock(types.LayerID(11), nil)
-	meshAPIMock = &MeshAPIMock{}
-	conStateAPI = &ConStateAPIMock{
+	addr1           types.Address
+	addr2           types.Address
+	rewardSmesherID = types.RandomNodeID()
+	prevAtxID       = types.ATXID(types.HexToHash32("44444"))
+	chlng           = types.HexToHash32("55555")
+	poetRef         = []byte("66666")
+	nipost          = newNIPostWithChallenge(&chlng, poetRef)
+	challenge       = newChallenge(1, prevAtxID, prevAtxID, postGenesisEpoch)
+	globalAtx       *types.VerifiedActivationTx
+	globalAtx2      *types.VerifiedActivationTx
+	globalTx        *types.Transaction
+	globalTx2       *types.Transaction
+	ballot1         = genLayerBallot(types.LayerID(11))
+	block1          = genLayerBlock(types.LayerID(11), nil)
+	block2          = genLayerBlock(types.LayerID(11), nil)
+	block3          = genLayerBlock(types.LayerID(11), nil)
+	meshAPIMock     = &MeshAPIMock{}
+	conStateAPI     = &ConStateAPIMock{
 		returnTx:      make(map[types.TransactionID]*types.Transaction),
 		layerApplied:  make(map[types.TransactionID]*types.LayerID),
 		balances:      make(map[types.Address]*big.Int),
@@ -260,13 +263,26 @@ func (m *MeshAPIMock) ProcessedLayer() types.LayerID {
 	return layerVerified
 }
 
-func (m *MeshAPIMock) GetRewards(types.Address) (rewards []*types.Reward, err error) {
+func (m *MeshAPIMock) GetRewardsByCoinbase(types.Address) (rewards []*types.Reward, err error) {
 	return []*types.Reward{
 		{
 			Layer:       layerFirst,
 			TotalReward: rewardAmount,
 			LayerReward: rewardAmount,
 			Coinbase:    addr1,
+			SmesherID:   rewardSmesherID,
+		},
+	}, nil
+}
+
+func (m *MeshAPIMock) GetRewardsBySmesherId(types.NodeID) (rewards []*types.Reward, err error) {
+	return []*types.Reward{
+		{
+			Layer:       layerFirst,
+			TotalReward: rewardAmount,
+			LayerReward: rewardAmount,
+			Coinbase:    addr1,
+			SmesherID:   rewardSmesherID,
 		},
 	}, nil
 }
@@ -1728,6 +1744,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 		Total:       rewardAmount,
 		LayerReward: rewardAmount * 2,
 		Coinbase:    addr1,
+		SmesherID:   rewardSmesherID,
 	})
 
 	res, err := stream.Recv()
@@ -1783,6 +1800,7 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 		Total:       rewardAmount,
 		LayerReward: rewardAmount * 2,
 		Coinbase:    addr1,
+		SmesherID:   rewardSmesherID,
 	})
 	res, err := stream.Recv()
 	require.NoError(t, err, "got error from stream")
@@ -1894,7 +1912,7 @@ func checkAccountDataQueryItemReward(t *testing.T, dataItem any) {
 	require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
 	require.Equal(t, uint64(rewardAmount), x.Reward.LayerReward.Value)
 	require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
-	require.Nil(t, x.Reward.Smesher)
+	require.Equal(t, rewardSmesherID.Bytes(), x.Reward.Smesher.Id)
 }
 
 func checkAccountMeshDataItemTx(t *testing.T, dataItem any) {
@@ -1925,6 +1943,7 @@ func checkAccountDataItemReward(t *testing.T, dataItem any) {
 	require.Equal(t, layerFirst.Uint32(), x.Reward.Layer.Number)
 	require.Equal(t, uint64(rewardAmount*2), x.Reward.LayerReward.Value)
 	require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
+	require.Equal(t, rewardSmesherID.Bytes(), x.Reward.Smesher.Id)
 }
 
 func checkAccountDataItemAccount(t *testing.T, dataItem any) {
@@ -1946,6 +1965,7 @@ func checkGlobalStateDataReward(t *testing.T, dataItem any) {
 	require.Equal(t, layerFirst.Uint32(), x.Reward.Layer.Number)
 	require.Equal(t, uint64(rewardAmount*2), x.Reward.LayerReward.Value)
 	require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
+	require.Equal(t, rewardSmesherID.Bytes(), x.Reward.Smesher.Id)
 }
 
 func checkGlobalStateDataAccountWrapper(t *testing.T, dataItem any) {
@@ -2025,10 +2045,10 @@ func TestMultiService(t *testing.T) {
 
 func TestDebugService(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	identity := NewMocknetworkIdentity(ctrl)
+	netInfo := NewMocknetworkInfo(ctrl)
 	mOracle := NewMockoracle(ctrl)
 	db := sql.InMemory()
-	svc := NewDebugService(db, conStateAPI, identity, mOracle)
+	svc := NewDebugService(db, conStateAPI, netInfo, mOracle)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
@@ -2079,13 +2099,33 @@ func TestDebugService(t *testing.T) {
 
 	t.Run("networkID", func(t *testing.T) {
 		id := p2p.Peer("test")
-		identity.EXPECT().ID().Return(id)
+		netInfo.EXPECT().ID().Return(id)
+		netInfo.EXPECT().ListenAddresses().Return([]ma.Multiaddr{
+			mustParseMultiaddr("/ip4/0.0.0.0/tcp/5000"),
+			mustParseMultiaddr("/ip4/0.0.0.0/udp/5001/quic-v1"),
+		})
+		netInfo.EXPECT().KnownAddresses().Return([]ma.Multiaddr{
+			mustParseMultiaddr("/ip4/10.36.0.221/tcp/5000"),
+			mustParseMultiaddr("/ip4/10.36.0.221/udp/5001/quic-v1"),
+		})
+		netInfo.EXPECT().NATDeviceType().Return(network.NATDeviceTypeCone, network.NATDeviceTypeSymmetric)
+		netInfo.EXPECT().Reachability().Return(network.ReachabilityPrivate)
+		netInfo.EXPECT().DHTServerEnabled().Return(true)
 
 		response, err := c.NetworkInfo(context.Background(), &emptypb.Empty{})
 		require.NoError(t, err)
 		require.NotNil(t, response)
 		require.Equal(t, id.String(), response.Id)
+		require.Equal(t, []string{"/ip4/0.0.0.0/tcp/5000", "/ip4/0.0.0.0/udp/5001/quic-v1"},
+			response.ListenAddresses)
+		require.Equal(t, []string{"/ip4/10.36.0.221/tcp/5000", "/ip4/10.36.0.221/udp/5001/quic-v1"},
+			response.KnownAddresses)
+		require.Equal(t, pb.NetworkInfoResponse_Cone, response.NatTypeUdp)
+		require.Equal(t, pb.NetworkInfoResponse_Symmetric, response.NatTypeTcp)
+		require.Equal(t, pb.NetworkInfoResponse_Private, response.Reachability)
+		require.True(t, response.DhtServerEnabled)
 	})
+
 	t.Run("ActiveSet", func(t *testing.T) {
 		epoch := types.EpochID(3)
 		activeSet := types.RandomActiveSet(11)
@@ -2426,4 +2466,12 @@ func TestMeshService_EpochStream(t *testing.T) {
 		got = append(got, types.ATXID(types.BytesToHash(resp.GetId().GetId())))
 	}
 	require.ElementsMatch(t, expected, got)
+}
+
+func mustParseMultiaddr(s string) ma.Multiaddr {
+	maddr, err := ma.NewMultiaddr(s)
+	if err != nil {
+		panic("can't parse multiaddr: " + err.Error())
+	}
+	return maddr
 }

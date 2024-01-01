@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -24,8 +25,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"go.uber.org/zap/zaptest"
-	"go.uber.org/zap/zaptest/observer"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"
@@ -296,23 +295,15 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 
 	run := func(c *cobra.Command, args []string) {
 		app.Config.API.PublicListener = listener
-		app.Config.API.PublicServices = nil
-		app.Config.API.PrivateServices = nil
 		r.NoError(cmd.EnsureCLIFlags(c, app.Config))
 		app.Config.DataDirParent = path
 		app.startAPIServices(context.Background())
 	}
 	defer app.stopServices(context.Background())
 
-	// Make sure the service is not running by default
-	str, err := testArgs(context.Background(), cmdWithRun(run)) // no args
-	r.Empty(str)
-	r.NoError(err)
-	r.Empty(app.Config.API.PublicServices)
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	_, err = grpc.DialContext(
+	_, err := grpc.DialContext(
 		ctx,
 		listener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -323,18 +314,15 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	events.CloseEventReporter()
 
 	// Test starting the server from the command line
-	str, err = testArgs(
+	str, err := testArgs(
 		context.Background(),
 		cmdWithRun(run),
 		"--grpc-public-listener",
 		listener,
-		"--grpc-public-services",
-		"node",
 	)
 	r.Empty(str)
 	r.NoError(err)
 	r.Equal(listener, app.Config.API.PublicListener)
-	r.Contains(app.Config.API.PublicServices, "node")
 
 	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -408,8 +396,6 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	str, err := testArgs(
 		context.Background(),
 		cmdWithRun(run),
-		"--grpc-public-services",
-		"node",
 		"--grpc-json-listener",
 		listener,
 	)
@@ -417,7 +403,6 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	r.NoError(err)
 	defer app.stopServices(context.Background())
 	r.Equal(listener, app.Config.API.JSONListener)
-	r.Contains(app.Config.API.PublicServices, "node")
 
 	var (
 		respBody   []byte
@@ -495,12 +480,8 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		str, err := testArgs(
 			ctx,
 			cmdWithRun(run),
-			"--grpc-private-listener",
+			"--grpc-public-listener",
 			fmt.Sprintf("localhost:%d", port),
-			"--grpc-private-services",
-			"node",
-			"--grpc-public-services",
-			"debug",
 		)
 		assert.Empty(t, str)
 		assert.NoError(t, err)
@@ -576,36 +557,6 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	eg.Wait()
 }
 
-func TestSpacemeshApp_PostServiceConfig(t *testing.T) {
-	observer, logs := observer.New(zapcore.DebugLevel)
-	logger := zap.New(zapcore.NewTee(zaptest.NewLogger(t).Core(), observer))
-
-	app := New(WithLog(log.NewFromLog(logger)))
-	app.Config = getTestDefaultConfig(t)
-
-	// default config doesn't cause
-	require.NoError(t, app.checkPostServiceSetup())
-	require.Empty(t, logs.TakeAll()) // no warnings
-
-	// change to different port only logs a warning
-	app.Config.API.PrivateListener = "127.0.0.1:14000"
-	require.NoError(t, app.checkPostServiceSetup())
-
-	observed := logs.FilterMessageSnippet("post service node address differs from private listener").All()
-	require.NotEmpty(t, observed)
-	logs.TakeAll()
-
-	// missing post service adds it and prints a warning
-	app.Config = getTestDefaultConfig(t)
-	app.Config.API.PrivateServices = []grpcserver.Service{grpcserver.Admin, grpcserver.Smesher}
-	require.NoError(t, app.checkPostServiceSetup())
-
-	observed = logs.FilterMessageSnippet("post service is not included in any listener").All()
-	require.NotEmpty(t, observed)
-
-	require.Contains(t, app.Config.API.PrivateServices, grpcserver.Post)
-}
-
 // E2E app test of the transaction service.
 func TestSpacemeshApp_TransactionService(t *testing.T) {
 	r := require.New(t)
@@ -631,7 +582,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		app.Config.API.PrivateServices = nil
 
 		// Prevent obnoxious warning in macOS
-		app.Config.P2P.Listen = "/ip4/127.0.0.1/tcp/7073"
+		app.Config.P2P.Listen = p2p.MustParseAddresses("/ip4/127.0.0.1/tcp/7073")
 
 		// Avoid waiting for new connections.
 		app.Config.P2P.MinPeers = 0
@@ -850,6 +801,32 @@ func TestConfig_CustomTypes(t *testing.T) {
 				copy(c.POST.PowDifficulty[:], diff)
 			},
 		},
+		{
+			name:   "address-list-single",
+			cli:    "--listen=/ip4/0.0.0.0/tcp/5555 --advertise-address=/ip4/10.20.30.40/tcp/5555",
+			config: `{"p2p":{"listen":"/ip4/0.0.0.0/tcp/5555","advertise-address":"/ip4/10.20.30.40/tcp/5555"}}`,
+			updatePreset: func(t *testing.T, c *config.Config) {
+				c.P2P.Listen = p2p.MustParseAddresses("/ip4/0.0.0.0/tcp/5555")
+				c.P2P.AdvertiseAddress = p2p.MustParseAddresses("/ip4/10.20.30.40/tcp/5555")
+			},
+		},
+		{
+			name: "address-list-multiple",
+			cli: "--listen=/ip4/0.0.0.0/tcp/5555 --listen=/ip4/0.0.0.0/udp/5555/quic-v1" +
+				" --advertise-address=/ip4/10.20.30.40/tcp/5555" +
+				" --advertise-address=/ip4/10.20.30.40/udp/5555/quic-v1",
+			config: `{"p2p":{"listen":["/ip4/0.0.0.0/tcp/5555","/ip4/0.0.0.0/udp/5555/quic-v1"],
+                                  "advertise-address":[
+                                    "/ip4/10.20.30.40/tcp/5555","/ip4/10.20.30.40/udp/5555/quic-v1"]}}`,
+			updatePreset: func(t *testing.T, c *config.Config) {
+				c.P2P.Listen = p2p.MustParseAddresses(
+					"/ip4/0.0.0.0/tcp/5555",
+					"/ip4/0.0.0.0/udp/5555/quic-v1")
+				c.P2P.AdvertiseAddress = p2p.MustParseAddresses(
+					"/ip4/10.20.30.40/tcp/5555",
+					"/ip4/10.20.30.40/udp/5555/quic-v1")
+			},
+		},
 	}
 
 	for _, tc := range tt {
@@ -859,7 +836,7 @@ func TestConfig_CustomTypes(t *testing.T) {
 
 			c := &cobra.Command{}
 			cmd.AddCommands(c)
-			require.NoError(t, c.ParseFlags([]string{tc.cli}))
+			require.NoError(t, c.ParseFlags(strings.Fields(tc.cli)))
 
 			t.Cleanup(viper.Reset)
 			t.Cleanup(cmd.ResetConfig)
@@ -897,7 +874,7 @@ func TestConfig_CustomTypes(t *testing.T) {
 
 			c := &cobra.Command{}
 			cmd.AddCommands(c)
-			require.NoError(t, c.ParseFlags([]string{tc.cli}))
+			require.NoError(t, c.ParseFlags(strings.Fields(tc.cli)))
 
 			viper.Set("preset", name)
 			t.Cleanup(viper.Reset)

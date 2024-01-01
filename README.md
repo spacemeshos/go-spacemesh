@@ -262,27 +262,6 @@ on Windows you can use Intel OpenAPI:
 choco install opencl-intel-cpu-runtime
 ```
 
-If your config contains `"grpc-private-services"` make sure this list includes `"post"`:
-
-```json
-"api": {
-    "grpc-private-services": ["admin", "smesher", "post"],
-    "grpc-private-listener": "127.0.0.1:9093"
-}
-```
-
-or use the `--grpc-private-services=admin,smesher,post` flag.
-
-If you are using a `"grpc-private-listener"` other than the default (`"127.0.0.1:9093"`) you need to ensure that the
-post service is configured to connect to the correct address. This can be done via the `--post-opts-node-address`
-flag or the `"post-opts-node-address"` config option:
-
-```json
-"post-service": {
-    "post-opts-node-address": "http://ip:port"
-}
-```
-
 #### Using a remote machine as provider for PoST proofs
 
 To disable the internal PoST service and disable smeshing on your node you can use the following config:
@@ -294,12 +273,18 @@ To disable the internal PoST service and disable smeshing on your node you can u
 ```
 
 or use the `--smeshing-start=false` flag. This will disable smeshing on your node causing it not generate any PoST
-proofs until a remote post service connects.
+proofs until a remote post service connects. Be aware that you still need to set your coinbase via
 
-By default the node listens for the PoST service on `grpc-private-listener` (defaults to 127.0.0.1:9093). This endpoint
-does not require authentication and should only be accessible from the same machine. If you want to allow connections
-from post services on other hosts to your node, you should do so via the `grpc-tls-listener` (defaults to 0.0.0.0:9094)
-and setup TLS for the connection.
+```json
+"smeshing": {
+    "smeshing-coinbase": "your coinbase address",
+}
+```
+
+or use the `--smeshing-coinbase` CLI parameter, otherwise your node will not be able to receive rewards.
+
+If you want to allow connections from post services on other hosts to your node, you need to set a public endpoint via
+the `grpc-tls-listener` configuration parameter and setup TLS for the connection.
 
 This is useful for example if you want to run a node on a cloud provider with fewer resources and run PoST on a local
 machine with more resources. The post service only needs to be online for the initial proof (i.e. when joining the
@@ -309,30 +294,82 @@ To setup TLS-secured public connections the API config has been extended with th
 
 ```json
 "api": {
-    "grpc-private-services": ["admin", "smesher"], // remove "post" from the list of services only exposed to the local machine
-    "grpc-tls-services": ["post"],                 // add "post" to the list of services that should be exposed via TLS
-    "grpc-tls-listener": "0.0.0.0:9094",           // listen address for TLS connections
-    "grpc-tls-ca-cert": "/path/to/ca.pem",         // CA certificate that signed the node's and the PoST service's certificates
-    "grpc-tls-cert": "/path/to/cert.pem",          // certificate for the node
-    "grpc-tls-key": "/path/to/key.pem",            // private key for the node
+  "grpc-tls-listener": "0.0.0.0:9094",           // listen address for TLS connections
+  "grpc-tls-ca-cert": "/path/to/ca.pem",         // CA certificate that signed the node's and the PoST service's certificates
+  "grpc-tls-cert": "/path/to/cert.pem",          // certificate for the node
+  "grpc-tls-key": "/path/to/key.pem",            // private key for the node
 }
 ```
 
 Ensure that remote PoST services are setup to connect to your node via TLS, that they trust your node's certificate and
 use a certificate that is signed by the same CA as your node's certificate.
 
-The local (supervised) PoST service can also be configured to connect to your node via TLS if needed. The following
-config options are available:
+### Configuring a remote PoST service
 
-```json
-"post-service": {
-    "post-opts-node-address": "http://domain:port",      // defaults to 127.0.0.1:9093 - the same default value as for "grpc-private-listener"
+The post service is at the moment configured exclusively via command line parameters:
 
-    // the following settings are required when connecting to the node via TLS - not when connecting via the private listener
-    "post-opts-tls-ca-cert": "/path/to/ca.pem",  // CA certificate that signed the node's and the PoST service's certificates
-    "post-opts-tls-cert": "/path/to/cert.pem",   // certificate for the PoST service
-    "post-opts-tls-key": "/path/to/key.pem",     // private key for the PoST service
-}
+- `--dir` specifies the directory containing `postdata_metadata.json` and the `postdata_xxx.bin` files; other files in
+  the post directory need to stay with the node!
+- `--address` specifies the address the post service should connect to
+- `--ca-cert`, `--cert` and `--key` specify the location of the CA certificate, the post services certificate and the
+  post services key respectively. For more information see below.
+- `--threads`, `--nonces` and `--randomx-mode` can be adapted to optimize proof generation. They are analogous to
+`smeshing-opts-proving-threads`, `smeshing-opts-proving-nonces` and `smeshing-opts-proving-randomx-mode` respectively.
+- `-h` or `--help` prints a help message with all available options and more details on their usage.
+
+### Keys and certificates
+
+The PoST service and the node talk to each other via mTLS and have to authenticate themselves at the opposite end. For
+this both need keys and certificates.
+
+Here is a script that generates a key & certificate for a CA, a key for the client (PoST service) and a key for the
+server (node). Then it uses the CAs key to generate certificates from the keys for both the client & server.
+
+Make sure to adjust the certificate extensions & subjects for your setup accordingly.
+
+`ca.crt` needs to be provided to both the PoST service and the node, `server.crt` & `server.key` are only needed by the
+node and `client.crt` & `client.key` are only needed by the PoST service.
+
+```bash
+# create certificate extensions to allow using them for localhost
+cat > server-domains.ext <<EOF
+[v3_req]
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = node
+IP.1 = 127.0.0.1
+EOF
+
+cat > client-domains.ext <<EOF
+[v3_req]
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = post
+EOF
+
+# create CA private key and certificate
+openssl req -x509 -newkey rsa:4096 -days 365 -nodes -keyout ca.key -out ca.crt \
+    -subj "/C=EN/ST=Spacemesh/L=Tel Aviv/O=Spacemesh/CN=spacemesh.io/emailAddress=info@spacemesh.io"
+
+# create server private key and CSR
+openssl req -newkey rsa:4096 -nodes -keyout server.key -out server-req.pem \
+    -subj "/C=EN/ST=Spacemesh/L=Tel Aviv/O=Server/CN=server.spacemesh.io/emailAddress=info@spacemesh.io"
+
+# use CA private key to sign ser CRS and get back the signed certificate
+openssl x509 -req -in server-req.pem -days 60 -CA ca.crt -CAkey ca.key -CAcreateserial -out server.crt \
+    -extfile server-domains.ext -extensions v3_req
+rm server-req.pem
+
+# create client private key and CSR
+openssl req -newkey rsa:4096 -nodes -keyout client.key -out client-req.pem \
+    -subj "/C=EN/ST=Spacemesh/L=Tel Aviv/O=Client/CN=client.spacemesh.io/emailAddress=info@spacemesh.io" \
+
+# use CA private key to sign client CSR and get back the signed certificate
+openssl x509 -req -in client-req.pem -days 60 -CA ca.crt -CAkey ca.key -CAcreateserial -out client.crt \
+    -extfile client-domains.ext -extensions v3_req
+rm client-req.pem
 ```
 
 ---
@@ -401,6 +438,49 @@ as on UNIX-based systems.
 - The local testnet full nodes are built from this repo.
 - This is a great way to get a feel for the protocol and the platform and to start hacking on Spacemesh.
 - Follow the steps in our [Local Testnet Guide](https://testnet.spacemesh.io/#/README)
+
+### Improved decentralization and P2P diagnostic features
+
+**WARNING! THIS IS EXPERIMENTAL FUNCTIONALITY, USE WITH CARE!**
+
+In order to make the p2p network more decentralized, the following options are provided:
+- `"enable-routing-discovery": true`: enables routing discovery for finding new peers, including those behind NAT, ans
+  also for discovering relay nodes which are used for NAT hole punching. Note that hole punching can be done when both
+  ends of the connection are behind an endpoint-independent ("cone") NAT.
+- `"routing-discovery-advertise": true` advertises this node for discovery by other peers, even if it is behind NAT.
+- `"enable-quic-transport": true`: enables QUIC transport which, together with TCP transport, heightens the changes of
+  successful NAT hole punching.
+- `"enable-tcp-transport": false` disables TCP transport. This option is intended to be used for debugging purposes
+  only!
+- `"static-relays": ["/dns4/relay.example.com/udp/5000/quic-v1/p2p/...", ...]` provides a static list of relay nodes for
+  use for NAT hole punching in case of routing discovery based relay search is not to be used.
+- `"ping-peers": ["p2p_id_1", "p2p_id_2", ...]` runs P2P ping against the specified peers, logging the results.
+
+For the purpose of debugging P2P connectivity issues, the following command can also be used:
+```console
+$ grpcurl -plaintext 127.0.0.1:9093 spacemesh.v1.DebugService.NetworkInfo
+{
+  "id": "12D3Koo...",
+  "listenAddresses": [
+    "/ip4/0.0.0.0/tcp/50212",
+    "/ip4/0.0.0.0/udp/59458/quic-v1",
+    "/p2p-circuit"
+  ],
+  "knownAddresses": [
+    "/ip4/127.0.0.1/tcp/50212",
+    "/ip4/127.0.0.1/udp/59458/quic-v1",
+    "/ip4/192.168.33.5/tcp/50212",
+    "/ip4/192.168.33.5/udp/59458/quic-v1",
+    "/ip4/.../tcp/37670/p2p/12D3Koo.../p2p-circuit",
+    "/ip4/.../udp/37659/quic-v1/p2p/12D3Koo.../p2p-circuit",
+    "/ip4/.../tcp/31960/p2p/12D3Koo.../p2p-circuit",
+    "/ip4/.../udp/33377/quic-v1/p2p/12D3Koo.../p2p-circuit"
+  ],
+  "natTypeUdp": "Cone",
+  "natTypeTcp": "Cone",
+  "reachability": "Private"
+}
+```
 
 #### Next Steps
 

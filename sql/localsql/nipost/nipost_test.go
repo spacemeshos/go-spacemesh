@@ -11,9 +11,7 @@ import (
 )
 
 func Test_AddInitialPost(t *testing.T) {
-	db := localsql.InMemory(
-		sql.WithMigration(localsql.New0002Migration(t.TempDir())),
-	)
+	db := localsql.InMemory()
 
 	nodeID := types.RandomNodeID()
 	post := Post{
@@ -32,19 +30,10 @@ func Test_AddInitialPost(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, got)
 	require.Equal(t, post, *got)
-
-	err = RemoveInitialPost(db, nodeID)
-	require.NoError(t, err)
-
-	got, err = InitialPost(db, nodeID)
-	require.ErrorIs(t, err, sql.ErrNotFound)
-	require.Nil(t, got)
 }
 
 func Test_AddInitialPost_NoDuplicates(t *testing.T) {
-	db := localsql.InMemory(
-		sql.WithMigration(localsql.New0002Migration(t.TempDir())),
-	)
+	db := localsql.InMemory()
 
 	nodeID := types.RandomNodeID()
 	post := Post{

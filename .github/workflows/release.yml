@@ -17,28 +17,28 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
+            outname_sufix: "linux-amd64"
           - os: [self-hosted, linux, arm64]
-          - os: macos-latest
-          - os: [self-hosted, macos, arm64]
+            outname_sufix: "linux-arm64"
+          - os: macos-12-large
+            outname_sufix: "mac-amd64"
+          - os: macos-13-xlarge
+
+            outname_sufix: "mac-arm64"
           - os: windows-latest
+            outname_sufix: "win-amd64"
     steps:
       - shell: bash
-        run: |
-          if [[ ${{ runner.arch }} == "ARM64" ]]; then
-            echo "OUTNAME=${{ runner.os }}_${{ runner.arch }}" >> $GITHUB_ENV
-          else
-            echo "OUTNAME=${{ runner.os }}" >> $GITHUB_ENV
-          fi
-      
+        run: echo "OUTNAME=go-spacemesh-${{ github.ref_name }}-${{ matrix.outname_sufix }}" >> $GITHUB_ENV
+
       - name: Install dependencies in windows
         if: ${{ matrix.os == 'windows-latest' }}
         run: choco install make wget zip
+
       - name: Add OpenCL support - Ubuntu
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
-      - name: Override SDKROOT for macOS
-        if: ${{ contains(matrix.os, 'macos') && runner.arch == 'arm64' }}
-        run: echo "SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk" >> $GITHUB_ENV
+
       - name: disable Windows Defender - Windows
         if: ${{ matrix.os == 'windows-latest' }}
         run: |
@@ -49,7 +49,7 @@ jobs:
         with:
           lfs: true
       - name: Setup Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           check-latest: true
           go-version-file: "go.mod"
@@ -58,7 +58,7 @@ jobs:
         shell: bash
         run: |
           make install
-          make build VERSION=${{ github.ref_name }} BIN_DIR_WIN=./build
+          make build VERSION=${{ github.ref_name }}
 
       - name: Create release archive
         shell: bash
@@ -70,26 +70,83 @@ jobs:
           rm -f $OUTNAME/post.h
           zip -r $OUTNAME.zip $OUTNAME
 
-      - name: 'Setup GCP Auth'
-        uses: 'google-github-actions/auth@v1'
+      - name: Setup gcloud authentication
+        uses: google-github-actions/auth@v2
         with:
           credentials_json: '${{ secrets.GCP_SA_KEY }}'
 
       - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v1
+        uses: google-github-actions/setup-gcloud@v2
 
       - name: Upload zip
-        uses: google-github-actions/upload-cloud-storage@v1
+        uses: google-github-actions/upload-cloud-storage@v2
         with:
           path: ${{ env.OUTNAME }}.zip
           destination: ${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/
+
+      - name: Install coreutils
+        if: ${{ matrix.os == 'macos-12-large' || matrix.os == 'macos-13-xlarge' }}
+        run: brew install coreutils
+
+      - name: Calculate the hashsum of the zip file
+        if: ${{ matrix.os != 'windows-latest' }}
+        shell: bash
+        run: |
+          sha256sum ${{ env.OUTNAME }}.zip | awk '{ print $1 }' > sha256-${{ matrix.outname_sufix }}.txt
+
+      - name: Calculate the hashsum of the zip file (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: |
+          (Get-FileHash ${{ env.OUTNAME }}.zip -Algorithm SHA256).Hash > sha256-${{ matrix.outname_sufix }}.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sha256-${{ matrix.outname_sufix }}
+          path: sha256-${{ matrix.outname_sufix }}.txt
+          if-no-files-found: error
+          retention-days: 5
 
   release:
     runs-on: ubuntu-latest
     needs: build-and-upload
     steps:
-      - name: Check out Git repository
-        uses: actions/checkout@v4
+      - name: Download the artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Generate the env variables
+        shell: bash
+        run: |
+          echo "OUTNAME_WIN_AMD64=go-spacemesh-${{ github.ref_name }}-win-amd64" >> $GITHUB_ENV
+          echo "OUTNAME_LINUX_AMD64=go-spacemesh-${{ github.ref_name }}-linux-amd64" >> $GITHUB_ENV
+          echo "OUTNAME_LINUX_ARM64=go-spacemesh-${{ github.ref_name }}-linux-arm64" >> $GITHUB_ENV
+          echo "OUTNAME_MAC_AMD64=go-spacemesh-${{ github.ref_name }}-mac-amd64" >> $GITHUB_ENV
+          echo "OUTNAME_MAC_ARM64=go-spacemesh-${{ github.ref_name }}-mac-arm64" >> $GITHUB_ENV
+
+          echo "SHA256_WIN_AMD64=$(cat sha256-win-amd64/sha256-win-amd64.txt)" >> $GITHUB_ENV
+          echo "SHA256_LINUX_AMD64=$(cat sha256-linux-amd64/sha256-linux-amd64.txt)" >> $GITHUB_ENV
+          echo "SHA256_LINUX_ARM64=$(cat sha256-linux-arm64/sha256-linux-arm64.txt)" >> $GITHUB_ENV
+          echo "SHA256_MAC_AMD64=$(cat sha256-mac-amd64/sha256-mac-amd64.txt)" >> $GITHUB_ENV
+          echo "SHA256_MAC_ARM64=$(cat sha256-mac-arm64/sha256-mac-arm64.txt)" >> $GITHUB_ENV
+
+          echo "win-amd64: $(cat sha256-win-amd64/sha256-win-amd64.txt)" >> sha256sum.yaml
+          echo "linux-amd64: $(cat sha256-linux-amd64/sha256-linux-amd64.txt)" >> sha256sum.yaml
+          echo "linux-arm64: $(cat sha256-linux-arm64/sha256-linux-arm64.txt)" >> sha256sum.yaml
+          echo "mac-amd64: $(cat sha256-mac-amd64/sha256-mac-amd64.txt)" >> sha256sum.yaml
+          echo "mac-arm64: $(cat sha256-mac-arm64/sha256-mac-arm64.txt)" >> sha256sum.yaml
+
+      - name: Setup gcloud authentication
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Upload sha256sums
+        uses: google-github-actions/upload-cloud-storage@v2
+        with:
+          path: sha256sum.yaml
+          destination: ${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
@@ -100,11 +157,19 @@ jobs:
           tag_name:  ${{ github.ref_name }}
           body: |
             ## Zip Files
-            - Windows: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/Windows.zip
-            - macOS: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/macOS.zip
-            - macOS arm64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/macOS_ARM64.zip
-            - Linux: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/Linux.zip
-            - Linux arm64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/Linux_ARM64.zip
+            - Windows amd64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/${{ env.OUTNAME_WIN_AMD64 }}.zip
+            - macOS amd64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/${{ env.OUTNAME_MAC_AMD64 }}.zip
+            - macOS arm64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/${{ env.OUTNAME_MAC_ARM64 }}.zip
+            - Linux amd64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/${{ env.OUTNAME_LINUX_AMD64 }}.zip
+            - Linux arm64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/${{ env.OUTNAME_LINUX_ARM64 }}.zip
+
+            ## checksum - Zip files
+            YAML with all the checksums of this version :  https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/sha256sum.yaml
+            - Windows amd64 - sha256 : ${{ env.SHA256_WIN_AMD64 }}
+            - Linux amd64 - sha256: ${{ env.SHA256_LINUX_AMD64 }}
+            - Linux arm64 - sha256: ${{ env.SHA256_LINUX_ARM64 }}
+            - macOS amd64 - sha256: ${{ env.SHA256_MAC_AMD64 }}
+            - macOS arm64 - sha256: ${{ env.SHA256_MAC_ARM64 }}
 
             For information about changes in this release see the [changelog](https://github.com/spacemeshos/go-spacemesh/blob/${{ github.ref_name }}/CHANGELOG.md).
           draft: false

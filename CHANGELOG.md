@@ -6,26 +6,17 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ### Upgrade information
 
-### Highlights
-
-### Features
-
-### Improvements
-
-## 1.3.0
-
-### Upgrade information
-
-This release is not backwards compatible with v1.2.x. Upgrading will change the node's database schema and
-migrate local state to a new database. The migration will take place at the first startup after the upgrade.
-Be aware that after upgrading you cannot downgrade to v1.2.x any more.
+This release is not backwards compatible with v1.2.x. Upgrading will migrate local state to a new database.
+The migration will take place at the first startup after the upgrade. Be aware that after a successful upgrade
+downgrading isn't supported and might result in at least one epoch of missed rewards. See change #5207 for more
+information.
 
 Current release is expected to be adopted by majority of the network participants before epoch 11 starts.
 Nodes that do not update before epoch 11 risk their proposals being rejected by the rest of the network.
 
 This release is the first step towards separating PoST from the node. Proof generation is now done via a dedicated
 service. This service is started automatically by the node and is shut down when the node shuts down. In most
-setups this should work out of the box, but if you are running into issues please check the REAMDE.md file
+setups this should work out of the box, but if you are running into issues please check the README.md file
 for more information on how to configure the node to work with the PoST service.
 
 ### Highlights
@@ -34,35 +25,16 @@ for more information on how to configure the node to work with the PoST service.
 
 ### Improvements
 
-* [#5118](https://github.com/spacemeshos/go-spacemesh/pull/5118) reduce number of tortoise results returned after recovery.
-
-  this is hotfix for a bug introduced in v1.2.0. in rare conditions node may loop with the following warning:
-
-  > 2023-10-02T15:28:14.002+0200 WARN fd68b.sync mesh failed to process layer from sync {"node_id":
-  "fd68b9397572556c2f329f3e5af2faf23aef85dbbbb7e38447fae2f4ef38899f", "module": "sync", "sessionId":
-  "29422935-68d6-47d1-87a8-02293aa181f3", "layer_id": 23104, "errmsg": "requested layer 8063 is before evicted 13102",
-  "name": "sync"}
-
 * [#5091](https://github.com/spacemeshos/go-spacemesh/pull/5091) Separating PoST from the node into its own service.
+
 * [#5061](https://github.com/spacemeshos/go-spacemesh/pull/5061) Proof generation is now done via a dedicated service
   instead of the node.
+
 * [#5154](https://github.com/spacemeshos/go-spacemesh/pull/5154) Enable TLS connections between node and PoST service.
 
   PoST proofs are now done via a dedicated process / service that the node communicates with via gRPC. Smapp users can
   continue to smesh as they used to. The node will automatically start the PoST service when it starts and will shut it
   down when it shuts down.
-
-* [#5138](https://github.com/spacemeshos/go-spacemesh/pull/5138) Bump poet to v0.9.7
-
-  The submit proof of work should now be up to 40% faster thanks to [code optimization](https://github.com/spacemeshos/poet/pull/419).
-
-* [#5143](https://github.com/spacemeshos/go-spacemesh/pull/5143) Select good peers for sync requests.
-
-  The change improves initial sync speed and any sync protocol requests required during consensus.
-
-* [#5109](https://github.com/spacemeshos/go-spacemesh/pull/5109) Limit number of layers that tortoise needs to read on startup.
-
-  Bounds the time required to restart a node.
 
 * [#5171](https://github.com/spacemeshos/go-spacemesh/pull/5171) Set minimal active set according to the observed number
   of atxs.
@@ -98,12 +70,150 @@ for more information on how to configure the node to work with the PoST service.
   which holds ephemeral data of the node.
 
   With this change `post.bin` and `nipost_challenge.bin` files are no longer used. The node will automatically migrate
-  the data from disk and store it in the database. The migration will take place at the first startup after the upgrade.
+  the data from disk and store it in the database. The migration will take place during the first startup after the upgrade.
+  If you want to downgrade to a version before v1.3.0 you will need to restore `state.sql` as well as `post.bin` and
+  `nipost_challenge.bin` from a backup and do so before the end of the PoET round in which you upgraded. Otherwise the node
+  will not be able to participate in consensus and will miss at least one epoch of rewards.
 
 * [#5209](https://github.com/spacemeshos/go-spacemesh/pull/5209) Removed API to update poet servers from SmesherService.
 
-* [#5259](https://github.com/spacemeshos/go-spacemesh/pull/5259) Node now tries to fix a 1.2.x config to be compatible with
-  1.3.x at startup.
+* [#5276](https://github.com/spacemeshos/go-spacemesh/pull/5276) Removed the option to configure API services per endpoint.
+  The public listener exposes the following services: "debug", "global", "mesh", "transaction", "node", "activation"
+  The private listener exposes the following services: "admin", "smesher", "post"
+  The mTLS listener exposes only the "post" service.
+
+* [#5199](https://github.com/spacemeshos/go-spacemesh/pull/5199) Adds smesherID to rewards table. Historically rewards
+  were keyed by (coinbase, layer). Now the primary key has changed to (smesherID, layer), which allows querying rewards
+  by any subset of layer, smesherID, and coinbase. While this change does add smesherID to existing API endpoints
+  (`GlobalStateService.{AccountDataQuery,AccountDataStream,GlobalStateStream}`), it does not yet expose an endpoint to
+  query rewards by smesherID. Additionally, it does not re-index old data. Rewards will contain smesherID going forward,
+  but to refresh data for all rewards, a node will have to delete its database and resync from genesis.
+
+* [#5329](https://github.com/spacemeshos/go-spacemesh/pull/5329) P2P decentralization improvements. Added support for QUIC
+  transport and DHT routing discovery for finding peers and relays. Also, added the `ping-peers` feature which is useful
+  during connectivity troubleshooting. `static-relays` feature can be used to provide a static list of circuit v2 relays
+  nodes when automatic relay discovery is not desired. All of the relay server resource settings are now configurable. Most
+  of the new functionality is disabled by default unless explicitly enabled in the config via `enable-routing-discovery`,
+  `routing-discovery-advertise`, `enable-quic-transport`, `static-relays` and `ping-peers` options in the `p2p` config
+  section. The non-conditional changes include values/provides support on all of the nodes, which will enable DHT to
+  function efficiently for routing discovery.
+
+* [#5367](https://github.com/spacemeshos/go-spacemesh/pull/5367) Add `no-main-override` toplevel config option and
+  `--no-main-override` CLI option that makes it possible to run "nomain" builds on mainnet.
+
+* [#5384](https://github.com/spacemeshos/go-spacemesh/pull/5384) to improve network stability and performance allow the
+  active set to be set in advance for an epoch. This allows the network to start consensus on the first layer of an epoch.
+
+## Release v1.2.12
+
+### Improvements
+
+* [#5373](https://github.com/spacemeshos/go-spacemesh/pull/5373) automatic scaling of post verifying workers to a lower
+  value (1 by default) when POST proving starts. The workers are scaled up when POST proving finishes.
+
+* [#5382](https://github.com/spacemeshos/go-spacemesh/pull/5382) avoid processing same (gossiped/fetched) ATX many times
+  in parallel
+
+## Release v1.2.11
+
+### Improvements
+
+* increased the max response data size in p2p to 40MiB
+
+## Release v1.2.10
+
+### Improvements
+
+* further increased cache sizes and and p2p timeouts to compensate for the increased number of nodes on the network.
+
+## Release v1.2.9
+
+### Improvements
+
+* increased default cache sizes to improve disk IO and queue sizes for gossip to better handle the increasing number of
+  nodes on the network.
+
+## Release v1.2.8
+
+### Improvements
+
+* cherry picked migrations for active sets to enable easier pruning in the future
+
+## Release v1.2.7
+
+### Improvements
+
+* [#5289](https://github.com/spacemeshos/go-spacemesh/pull/5289) build active set from activations received on time
+
+  should decrease the state growth at the start of the epoch because of number of unique activets.
+
+* [#5291](https://github.com/spacemeshos/go-spacemesh/pull/5291) parametrize queue size and throttle limits in gossip
+
+* reduce log level for "atx omitted from active set"
+
+* [#5302](https://github.com/spacemeshos/go-spacemesh/pull/5302) improvements in transaction validation
+
+## Release v1.2.6
+
+### Improvements
+
+* [#5263](https://github.com/spacemeshos/go-spacemesh/pull/5263) randomize peer selection
+  
+  without this change node can get stuck after restart on requesting data from peer that is misbehaving.
+  log below will be printed repeatedly:
+  
+  > 2023-11-15T08:00:17.937+0100 INFO fd68b.sync syncing atx from genesis
+
+* [#5264](https://github.com/spacemeshos/go-spacemesh/pull/5264) increase limits related to activations
+
+  some of the limits were hardcoded and didn't account for growth in atx number.
+  this change is not required for node to work correct in the next epoch, but will be required later.
+
+## Release v1.2.5
+
+### Improvements
+
+* [#5247](https://github.com/spacemeshos/go-spacemesh/pull/5247) exits cleanly without misleading spamming
+
+Fixes a bug that would spam with misleading log on exit, such as below:
+
+  > 2023-11-09T11:13:27.835-0600 ERROR e524f.hare failed to update weakcoin {"node_id":
+  "e524fce96f0a87140ba895b56a2e37e29581075302778a05dd146f4b74fce72e", "module": "hare", "lid": 0, "error":
+  "set weak coin 0: database: no free connection"}
+
+## Release v1.2.4
+
+### Upgrade information
+
+This release enables hare3 on testnet networks. And schedules planned upgrade on mainnet.
+Network will have downtime if majority of nodes don't upgrade before layer 35117.
+Starting at layer 35117 network is expected to start using hare3, which reduces total bandwidth
+requirements.
+
+## Release v1.2.2
+
+### Improvements
+
+* [#5118](https://github.com/spacemeshos/go-spacemesh/pull/5118) reduce number of tortoise results returned after recovery.
+
+  this is hotfix for a bug introduced in v1.2.0. in rare conditions node may loop with the following warning:
+
+  > 2023-10-02T15:28:14.002+0200 WARN fd68b.sync mesh failed to process layer from sync {"node_id":
+  "fd68b9397572556c2f329f3e5af2faf23aef85dbbbb7e38447fae2f4ef38899f", "module": "sync", "sessionId":
+  "29422935-68d6-47d1-87a8-02293aa181f3", "layer_id": 23104, "errmsg": "requested layer 8063 is before evicted 13102",
+  "name": "sync"}
+
+* [#5109](https://github.com/spacemeshos/go-spacemesh/pull/5109) Limit number of layers that tortoise needs to read on startup.
+
+  Bounds the time required to restart a node.
+
+* [#5138](https://github.com/spacemeshos/go-spacemesh/pull/5138) Bump poet to v0.9.7
+
+  The submit proof of work should now be up to 40% faster thanks to [code optimization](https://github.com/spacemeshos/poet/pull/419).
+
+* [#5143](https://github.com/spacemeshos/go-spacemesh/pull/5143) Select good peers for sync requests.
+
+  The change improves initial sync speed and any sync protocol requests required during consensus.
 
 ## v1.2.0
 
@@ -127,8 +237,6 @@ mechanism since release v1.1.2.
 
 Support for old certificate sync protocol is dropped. This update is incompatible with v1.0.x series.
 
-### Highlights
-
 ### Features
 
 * [#5031](https://github.com/spacemeshos/go-spacemesh/pull/5031) Nodes will also fetch from PoET 112 for round 4 if they
@@ -150,7 +258,7 @@ In order to enable provide following configuration:
   Ephemeral data are deleted and state compacted at the time of upgrade. In steady-state, data is pruned periodically.
 * [#5021](https://github.com/spacemeshos/go-spacemesh/pull/5021) Drop support for old certificate sync protocol.
 * [#5024](https://github.com/spacemeshos/go-spacemesh/pull/5024) Active set will be saved in state separately from ballots.
-* [#5032](https://github.com/spacemeshos/go-spacemesh/pull/5032) Ativeset data pruned from ballots.
+* [#5032](https://github.com/spacemeshos/go-spacemesh/pull/5032) Activeset data pruned from ballots.
 * [#5035](https://github.com/spacemeshos/go-spacemesh/pull/5035) Fix possible nil pointer panic when node fails to persist
   nipost builder state.
 * [#5079](https://github.com/spacemeshos/go-spacemesh/pull/5079) increase atx cache to 50 000 to reduce disk reads.
@@ -162,8 +270,6 @@ In order to enable provide following configuration:
 
 It is critical for most nodes in the network to use v1.1.5 when layer 20 000 starts. Starting from that layer
 active set will not be gossipped together with proposals. That was the main network bottleneck in epoch 4.
-
-### Highlights
 
 ### Features
 
@@ -191,7 +297,7 @@ active set will not be gossipped together with proposals. That was the main netw
 * [#4765](https://github.com/spacemeshos/go-spacemesh/pull/4765) hare 3 consensus protocol.
 
 Replacement for original version of hare. Won't be enabled on mainnet for now.
-Otherwise protocol uses significantly less traffic (atlest x20), and will allow
+Otherwise protocol uses significantly less traffic (at least x20), and will allow
 to set lower expected latency in the network, eventually reducing layer time.
 
 ### Improvements

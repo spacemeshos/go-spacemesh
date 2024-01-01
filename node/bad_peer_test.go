@@ -12,7 +12,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
-	varint "github.com/multiformats/go-varint"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
@@ -20,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	ps "github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
@@ -33,7 +33,7 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 	conf1 := config.DefaultTestConfig()
 	conf1.DataDirParent = t.TempDir()
 	conf1.FileLock = filepath.Join(conf1.DataDirParent, "LOCK")
-	conf1.P2P.Listen = "/ip4/127.0.0.1/tcp/0"
+	conf1.P2P.Listen = p2p.MustParseAddresses("/ip4/127.0.0.1/tcp/0")
 	// We setup the api to listen on an OS assigned port, which avoids the second instance getting stuck when
 	conf1.API.PublicListener = "0.0.0.0:0"
 	conf1.API.PrivateListener = "0.0.0.0:0"
@@ -46,7 +46,7 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 	*conf2.Genesis = *conf1.Genesis
 	conf2.DataDirParent = t.TempDir()
 	conf2.FileLock = filepath.Join(conf2.DataDirParent, "LOCK")
-	conf2.P2P.Listen = "/ip4/127.0.0.1/tcp/0"
+	conf2.P2P.Listen = p2p.MustParseAddresses("/ip4/127.0.0.1/tcp/0")
 	conf2.API.PublicListener = "0.0.0.0:0"
 	conf2.API.PrivateListener = "0.0.0.0:0"
 	app2 := NewApp(t, &conf2, l)
@@ -143,15 +143,17 @@ func rpcWithMessages(msgs ...*pubsubpb.Message) *pubsub.RPC {
 
 func writeRpc(rpc *pubsub.RPC, s network.Stream) error {
 	size := uint64(rpc.Size())
-
-	buf := make([]byte, varint.UvarintSize(size)+int(size))
-
-	n := binary.PutUvarint(buf, size)
-	_, err := rpc.MarshalTo(buf[n:])
-	if err != nil {
+	sizeBuf := make([]byte, binary.MaxVarintLen64)
+	n := binary.PutUvarint(sizeBuf, size)
+	sizeBuf = sizeBuf[:n]
+	if _, err := s.Write(sizeBuf); err != nil {
 		return err
 	}
 
-	_, err = s.Write(buf)
+	buf := make([]byte, size)
+	if _, err := rpc.MarshalTo(buf); err != nil {
+		return err
+	}
+	_, err := s.Write(buf)
 	return err
 }

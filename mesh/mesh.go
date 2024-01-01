@@ -620,9 +620,14 @@ func (msh *Mesh) GetATXs(
 	return atxs, mIds
 }
 
-// GetRewards retrieves account's rewards by the coinbase address.
-func (msh *Mesh) GetRewards(coinbase types.Address) ([]*types.Reward, error) {
-	return rewards.List(msh.cdb, coinbase)
+// GetRewardsByCoinbase retrieves account's rewards by the coinbase address.
+func (msh *Mesh) GetRewardsByCoinbase(coinbase types.Address) ([]*types.Reward, error) {
+	return rewards.ListByCoinbase(msh.cdb, coinbase)
+}
+
+// GetRewardsBySmesherId retrieves account's rewards by the smesher ID.
+func (msh *Mesh) GetRewardsBySmesherId(smesherID types.NodeID) ([]*types.Reward, error) {
+	return rewards.ListBySmesherId(msh.cdb, smesherID)
 }
 
 // LastVerified returns the latest layer verified by tortoise.

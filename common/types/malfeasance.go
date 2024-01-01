@@ -182,7 +182,7 @@ func (hp *HareProof) MarshalLogObject(encoder log.ObjectEncoder) error {
 	return nil
 }
 
-func (hp *HareProof) ToMalfeasenceProof() *MalfeasanceProof {
+func (hp *HareProof) ToMalfeasanceProof() *MalfeasanceProof {
 	return &MalfeasanceProof{
 		Layer: hp.Messages[0].InnerMsg.Layer,
 		Proof: Proof{

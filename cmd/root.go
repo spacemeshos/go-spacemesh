@@ -82,10 +82,13 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().DurationVar(&cfg.DatabasePruneInterval, "db-prune-interval",
 		cfg.DatabasePruneInterval, "configure interval for database pruning")
 
+	cmd.PersistentFlags().BoolVar(&cfg.NoMainOverride, "no-main-override",
+		cfg.NoMainOverride, "force 'nomain' builds to run on the mainnet")
+
 	/** ======================== P2P Flags ========================== **/
 
-	cmd.PersistentFlags().StringVar(&cfg.P2P.Listen, "listen",
-		cfg.P2P.Listen, "address for listening")
+	cmd.PersistentFlags().Var(flags.NewAddressListValue(cfg.P2P.Listen, &cfg.P2P.Listen),
+		"listen", "address(es) for listening")
 	cmd.PersistentFlags().BoolVar(&cfg.P2P.Flood, "flood",
 		cfg.P2P.Flood, "flood created messages to all peers")
 	cmd.PersistentFlags().BoolVar(&cfg.P2P.DisableNatPort, "disable-natport", cfg.P2P.DisableNatPort,
@@ -114,12 +117,27 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.P2P.MinPeers, "actively search for peers until you get this much")
 	cmd.PersistentFlags().StringSliceVar(&cfg.P2P.Bootnodes, "bootnodes",
 		cfg.P2P.Bootnodes, "entrypoints into the network")
-	cmd.PersistentFlags().StringVar(&cfg.P2P.AdvertiseAddress, "advertise-address",
-		cfg.P2P.AdvertiseAddress, "libp2p address with identity (example: /dns4/bootnode.spacemesh.io/tcp/5003)")
+	cmd.PersistentFlags().StringSliceVar(&cfg.P2P.PingPeers, "ping-peers", cfg.P2P.Bootnodes, "peers to ping")
+	cmd.PersistentFlags().DurationVar(&cfg.P2P.PingInterval, "ping-interval", cfg.P2P.PingInterval, "ping interval")
+	cmd.PersistentFlags().StringSliceVar(&cfg.P2P.StaticRelays, "static-relays",
+		cfg.P2P.StaticRelays, "static relay list")
+	cmd.PersistentFlags().Var(flags.NewAddressListValue(cfg.P2P.AdvertiseAddress, &cfg.P2P.AdvertiseAddress),
+		"advertise-address",
+		"libp2p address(es) with identity (example: /dns4/bootnode.spacemesh.io/tcp/5003)")
 	cmd.PersistentFlags().BoolVar(&cfg.P2P.Bootnode, "p2p-bootnode", cfg.P2P.Bootnode,
 		"gossipsub and discovery will be running in a mode suitable for bootnode")
 	cmd.PersistentFlags().BoolVar(&cfg.P2P.PrivateNetwork, "p2p-private-network", cfg.P2P.PrivateNetwork,
 		"discovery will work in private mode. mostly useful for testing, don't set in public networks")
+	cmd.PersistentFlags().BoolVar(&cfg.P2P.ForceDHTServer, "force-dht-server", cfg.P2P.ForceDHTServer,
+		"force DHT server mode")
+	cmd.PersistentFlags().BoolVar(&cfg.P2P.EnableTCPTransport, "enable-tcp-transport", cfg.P2P.EnableTCPTransport,
+		"enable TCP transport")
+	cmd.PersistentFlags().BoolVar(&cfg.P2P.EnableQUICTransport, "enable-quic-transport", cfg.P2P.EnableQUICTransport,
+		"enable QUIC transport")
+	cmd.PersistentFlags().BoolVar(&cfg.P2P.EnableRoutingDiscovery, "enable-routing-discovery", cfg.P2P.EnableQUICTransport,
+		"enable routing discovery")
+	cmd.PersistentFlags().BoolVar(&cfg.P2P.RoutingDiscoveryAdvertise, "routing-discovery-advertise",
+		cfg.P2P.RoutingDiscoveryAdvertise, "advertise for routing discovery")
 
 	/** ======================== TIME Flags ========================== **/
 
@@ -140,20 +158,24 @@ func AddCommands(cmd *cobra.Command) {
 
 	/** ======================== API Flags ========================== **/
 
-	cmd.PersistentFlags().StringSliceVar(&cfg.API.PublicServices, "grpc-public-services",
-		cfg.API.PublicServices, "List of services that are safe to open for the network.")
 	cmd.PersistentFlags().StringVar(&cfg.API.PublicListener, "grpc-public-listener",
-		cfg.API.PublicListener, "Socket for the list of services specified in grpc-public-services.")
-	cmd.PersistentFlags().StringSliceVar(&cfg.API.PrivateServices, "grpc-private-services",
-		cfg.API.PrivateServices, "List of services that must be kept private or exposed only in secure environments.")
+		cfg.API.PublicListener, "Socket for grpc services that are save to expose publicly.")
 	cmd.PersistentFlags().StringVar(&cfg.API.PrivateListener, "grpc-private-listener",
-		cfg.API.PrivateListener, "Socket for the list of services specified in grpc-private-services.")
+		cfg.API.PrivateListener, "Socket for grpc services that are not safe to expose publicly.")
+	cmd.PersistentFlags().StringVar(&cfg.API.TLSListener, "grpc-tls-listener",
+		cfg.API.TLSListener, "Socket for the grpc services that need to be accessible via mTLS.")
+	cmd.PersistentFlags().StringVar(&cfg.API.TLSCACert, "gprc-tls-ca-cert",
+		cfg.API.TLSCACert, "Path to the file containing the CA certificate for mTLS.")
+	cmd.PersistentFlags().StringVar(&cfg.API.TLSCert, "grpc-tls-cert",
+		cfg.API.TLSCert, "Path to the file containing the nodes certificate for mTLS.")
+	cmd.PersistentFlags().StringVar(&cfg.API.TLSKey, "grpc-tls-key",
+		cfg.API.TLSKey, "Path to the file containing the nodes private key for mTLS.")
 	cmd.PersistentFlags().IntVar(&cfg.API.GrpcRecvMsgSize, "grpc-recv-msg-size",
 		cfg.API.GrpcRecvMsgSize, "GRPC api recv message size")
 	cmd.PersistentFlags().IntVar(&cfg.API.GrpcSendMsgSize, "grpc-send-msg-size",
 		cfg.API.GrpcSendMsgSize, "GRPC api send message size")
-	cmd.PersistentFlags().StringVar(&cfg.API.JSONListener, "grpc-json-listener", cfg.API.JSONListener,
-		"Endpoint for services in grpc-public-services. If left empty - grpc gateway won't be enabled.")
+	cmd.PersistentFlags().StringVar(&cfg.API.JSONListener, "grpc-json-listener",
+		cfg.API.JSONListener, "(Optional) endpoint to expose public grpc services via HTTP/JSON.")
 
 	/**======================== Hare Eligibility Oracle Flags ========================== **/
 
@@ -256,6 +278,12 @@ func AddCommands(cmd *cobra.Command) {
 
 	/**======================== PoST Verifying Flags ========================== **/
 
+	cmd.PersistentFlags().IntVar(
+		&cfg.SMESHING.VerifyingOpts.MinWorkers,
+		"smeshing-opts-verifying-min-threads",
+		cfg.SMESHING.VerifyingOpts.MinWorkers,
+		"Minimal number of threads to use for verifying PoSTs (used while PoST is generated)",
+	)
 	cmd.PersistentFlags().IntVar(&cfg.SMESHING.VerifyingOpts.Workers, "smeshing-opts-verifying-threads",
 		cfg.SMESHING.VerifyingOpts.Workers, "")
 	cmd.PersistentFlags().AddFlag(&pflag.Flag{
@@ -263,19 +291,6 @@ func AddCommands(cmd *cobra.Command) {
 		Value:    &cfg.SMESHING.VerifyingOpts.Flags,
 		DefValue: cfg.SMESHING.VerifyingOpts.Flags.String(),
 	})
-
-	/**======================== PoST service Flags ========================== **/
-
-	cmd.PersistentFlags().StringVar(&cfg.POSTService.PostServiceCmd, "post-opts-post-service",
-		cfg.POSTService.PostServiceCmd, "")
-	cmd.PersistentFlags().StringVar(&cfg.POSTService.NodeAddress, "post-opts-node-address",
-		cfg.POSTService.NodeAddress, "")
-	cmd.PersistentFlags().StringVar(&cfg.POSTService.CACert, "post-opts-ca-cert",
-		cfg.POSTService.CACert, "")
-	cmd.PersistentFlags().StringVar(&cfg.POSTService.Cert, "post-opts-cert",
-		cfg.POSTService.Cert, "")
-	cmd.PersistentFlags().StringVar(&cfg.POSTService.Key, "post-opts-key",
-		cfg.POSTService.Key, "")
 
 	/**======================== Consensus Flags ========================== **/
 

@@ -91,6 +91,7 @@ func MainnetConfig() Config {
 				"https://poet-112.spacemesh.network",
 			},
 			RegossipAtxInterval: 2 * time.Hour,
+			ATXGradeDelay:       30 * time.Minute,
 		},
 		Genesis: &GenesisConfig{
 			GenesisTime: "2023-07-14T08:00:00Z",
@@ -171,6 +172,7 @@ func MainnetConfig() Config {
 			Standalone:               false,
 			GossipDuration:           50 * time.Second,
 			OutOfSyncThresholdLayers: 36, // 3h
+			DisableAtxReconciliation: true,
 		},
 		Recovery: checkpoint.DefaultConfig(),
 		Cache:    datastore.DefaultConfig(),

@@ -116,7 +116,7 @@ func expectedBeacon(epoch uint32) []byte {
 }
 
 func queryEpochAtxs(ctx *testcontext.Context, client *cluster.NodeClient, targetEpoch uint32) ([]types.ATXID, error) {
-	msh := pb.NewMeshServiceClient(client)
+	msh := pb.NewMeshServiceClient(client.PubConn())
 	stream, err := msh.EpochStream(ctx, &pb.EpochStreamRequest{Epoch: targetEpoch - 1})
 	if err != nil {
 		return nil, fmt.Errorf("epoch stream %v: %w", client.Name, err)
@@ -139,7 +139,7 @@ func queryEpochAtxs(ctx *testcontext.Context, client *cluster.NodeClient, target
 }
 
 func queryActiveSet(ctx *testcontext.Context, client *cluster.NodeClient, epoch uint32) ([]types.ATXID, error) {
-	dbg := pb.NewDebugServiceClient(client)
+	dbg := pb.NewDebugServiceClient(client.PrivConn())
 	resp, err := dbg.ActiveSet(ctx, &pb.ActiveSetRequest{Epoch: epoch})
 	if err != nil {
 		return nil, fmt.Errorf("active set grpc %v: %w", client.Name, err)

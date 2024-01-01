@@ -16,7 +16,12 @@ DOCKER_HUB ?= spacemeshos
 DOCKER_IMAGE_REPO ?= go-spacemesh-dev
 DOCKER_IMAGE_VERSION ?= $(SHA)
 
-LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
+C_LDFLAGS = -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.branch=${BRANCH}
+ifneq (,$(findstring nomain,$(VERSION)))
+    C_LDFLAGS += -X main.noMainNet=true
+endif
+LDFLAGS = -ldflags "$(C_LDFLAGS)"
+
 include Makefile-libs.Inc
 
 UNIT_TESTS ?= $(shell go list ./...  | grep -v systest/tests | grep -v cmd/node | grep -v cmd/gen-p2p-identity | grep -v cmd/trace | grep -v genvm/cmd)
