@@ -140,6 +140,9 @@ func (v *Validator) validateReference(
 	if ballot.EpochData.Beacon == types.EmptyBeacon {
 		return nil, fmt.Errorf("%w: ref ballot %v", errMissingBeacon, ballot.ID())
 	}
+	if totalWeight == 0 {
+		return nil, fmt.Errorf("%w: ref ballot %v", errEmptyActiveSet, ballot.ID())
+	}
 	numEligibleSlots, err := GetNumEligibleSlots(
 		weight,
 		minweight.Select(ballot.Layer.GetEpoch(), v.minActiveSetWeight),
