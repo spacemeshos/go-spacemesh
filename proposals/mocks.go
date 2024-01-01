@@ -180,7 +180,7 @@ func (m *MockeligibilityValidator) EXPECT() *MockeligibilityValidatorMockRecorde
 }
 
 // CheckEligibility mocks base method.
-func (m *MockeligibilityValidator) CheckEligibility(arg0 context.Context, arg1 *types.Ballot, arg2 *RefBallotAux) (bool, error) {
+func (m *MockeligibilityValidator) CheckEligibility(arg0 context.Context, arg1 *types.Ballot, arg2 uint64) (bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CheckEligibility", arg0, arg1, arg2)
 	ret0, _ := ret[0].(bool)
@@ -207,13 +207,13 @@ func (c *eligibilityValidatorCheckEligibilityCall) Return(arg0 bool, arg1 error)
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *eligibilityValidatorCheckEligibilityCall) Do(f func(context.Context, *types.Ballot, *RefBallotAux) (bool, error)) *eligibilityValidatorCheckEligibilityCall {
+func (c *eligibilityValidatorCheckEligibilityCall) Do(f func(context.Context, *types.Ballot, uint64) (bool, error)) *eligibilityValidatorCheckEligibilityCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *eligibilityValidatorCheckEligibilityCall) DoAndReturn(f func(context.Context, *types.Ballot, *RefBallotAux) (bool, error)) *eligibilityValidatorCheckEligibilityCall {
+func (c *eligibilityValidatorCheckEligibilityCall) DoAndReturn(f func(context.Context, *types.Ballot, uint64) (bool, error)) *eligibilityValidatorCheckEligibilityCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

@@ -494,14 +494,14 @@ func (h *Handler) checkBallotSyntacticValidity(
 	return decoded, nil
 }
 
-func (h *Handler) checkBallotDataIntegrity(ctx context.Context, b *types.Ballot) (*RefBallotAux, error) {
+func (h *Handler) checkBallotDataIntegrity(ctx context.Context, b *types.Ballot) (uint64, error) {
 	if b.RefBallot == types.EmptyBallotID {
 		// this is the smesher's first Ballot in this epoch, should contain EpochData
 		if b.EpochData == nil {
-			return nil, errMissingEpochData
+			return 0, errMissingEpochData
 		}
 		if b.EpochData.Beacon == types.EmptyBeacon {
-			return nil, errMissingBeacon
+			return 0, errMissingBeacon
 		}
 		epoch := h.clock.CurrentLayer().GetEpoch()
 		if epoch > 0 {
@@ -512,14 +512,14 @@ func (h *Handler) checkBallotDataIntegrity(ctx context.Context, b *types.Ballot)
 			totalWeight, exists := h.activeSets.Get(b.EpochData.ActiveSetHash)
 			if !exists {
 				if err := h.fetcher.GetActiveSet(ctx, b.EpochData.ActiveSetHash); err != nil {
-					return nil, err
+					return 0, err
 				}
 				set, err := activesets.Get(h.db, b.EpochData.ActiveSetHash)
 				if err != nil {
-					return nil, err
+					return 0, err
 				}
 				if len(set.Set) == 0 {
-					return nil, fmt.Errorf(
+					return 0, fmt.Errorf(
 						"%w: empty active set ballot %s",
 						pubsub.ErrValidationReject,
 						b.ID().String(),
@@ -528,7 +528,7 @@ func (h *Handler) checkBallotDataIntegrity(ctx context.Context, b *types.Ballot)
 				computed, used := h.atxsdata.WeightForSet(set.Epoch, set.Set)
 				for i := range used {
 					if !used[i] {
-						return nil, fmt.Errorf(
+						return 0, fmt.Errorf(
 							"missing atx %s in active set ballot %s",
 							set.Set[i].ShortString(),
 							b.ID().String(),
@@ -538,12 +538,12 @@ func (h *Handler) checkBallotDataIntegrity(ctx context.Context, b *types.Ballot)
 				totalWeight = computed
 				h.activeSets.Add(b.EpochData.ActiveSetHash, totalWeight)
 			}
-			return &RefBallotAux{TotalWeight: totalWeight}, nil
+			return totalWeight, nil
 		}
 	} else if b.EpochData != nil {
-		return nil, errUnexpectedEpochData
+		return 0, errUnexpectedEpochData
 	}
-	return nil, nil
+	return 0, nil
 }
 
 func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) error {
