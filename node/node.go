@@ -1176,6 +1176,11 @@ func (app *App) listenToUpdates(ctx context.Context) {
 					app.proposalBuilder.UpdateActiveSet(epoch, set)
 
 					app.eg.Go(func() error {
+						select {
+						case <-app.syncer.RegisterForATXSynced():
+						case <-ctx.Done():
+							return nil
+						}
 						if err := atxsync.Download(
 							ctx,
 							10*time.Second,
