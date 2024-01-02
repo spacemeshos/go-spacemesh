@@ -69,7 +69,7 @@ func MainnetConfig() Config {
 			MetricsPort:           1010,
 			DatabaseConnections:   16,
 			DatabasePruneInterval: 30 * time.Minute,
-			PruneActivesetsFrom:   11, // starting from epoch 12 activesets below 11 will be pruned
+			PruneActivesetsFrom:   12, // starting from epoch 13 activesets below 12 will be pruned
 			NetworkHRP:            "sm",
 
 			LayerDuration:  5 * time.Minute,
@@ -106,10 +106,6 @@ func MainnetConfig() Config {
 			BadBeaconVoteDelayLayers: 4032,
 			MinimalActiveSetWeight: []types.EpochMinimalActiveWeight{
 				{Weight: 1_000_000},
-				// generated using ./cmd/activeset for publish epoch 6
-				// it will be used starting from epoch 11, so that there is plenty of time
-				// for participants to update software
-				{Epoch: 11, Weight: 7_879_129_244},
 			},
 		},
 		HARE3: hare3conf,
