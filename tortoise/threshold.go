@@ -59,7 +59,7 @@ func computeExpectedWeight(epochs map[types.EpochID]*epochInfo, target, last typ
 	)
 }
 
-// computeGlobalTreshold computes global treshold based on the expected weight.
+// computeGlobalThreshold computes global threshold based on the expected weight.
 func computeGlobalThreshold(
 	config Config,
 	localThreshold weight,
