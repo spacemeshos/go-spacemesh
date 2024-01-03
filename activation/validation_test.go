@@ -5,14 +5,19 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 func Test_Validation_VRFNonce(t *testing.T) {
@@ -515,5 +520,112 @@ func TestValidateMerkleProof(t *testing.T) {
 
 		err := validateMerkleProof(challenge[:], &proof, []byte("expected root"))
 		require.Error(t, err)
+	})
+}
+
+func TestVerifyChainDeps(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	logger := zaptest.NewLogger(t)
+	db := sql.InMemory()
+	ctx := context.Background()
+	goldenATXID := types.ATXID{2, 3, 4}
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	ch := newChallenge(1, types.EmptyATXID, goldenATXID, postGenesisEpoch, &goldenATXID)
+	nipostData := newNIPostWithChallenge(t, types.HexToHash32(""), []byte("00"))
+	invalidAtx := newAtx(t, signer, ch, nipostData, 2, types.Address{})
+	SignAndFinalizeAtx(signer, invalidAtx)
+	vInvalidAtx, err := invalidAtx.Verify(0, 1)
+	require.NoError(t, err)
+	vInvalidAtx.SetValidity(types.Invalid)
+	require.NoError(t, atxs.Add(db, vInvalidAtx))
+
+	t.Run("invalid prev ATX", func(t *testing.T) {
+		ch = newChallenge(1, vInvalidAtx.ID(), goldenATXID, postGenesisEpoch, nil)
+		nipostData = newNIPostWithChallenge(t, types.HexToHash32(""), []byte("01"))
+		atx := newAtx(t, signer, ch, nipostData, 2, types.Address{})
+		SignAndFinalizeAtx(signer, atx)
+		vAtx, err := atx.Verify(0, 1)
+		require.NoError(t, err)
+		vAtx.SetValidity(types.Unknown)
+		require.NoError(t, atxs.Add(db, vAtx))
+
+		v := NewMocknipostValidator(ctrl)
+		v.EXPECT().
+			Post(ctx, signer.NodeID(), goldenATXID, atx.NIPost.Post, atx.NIPost.PostMetadata, atx.NumUnits).
+			Return(nil)
+
+		err = VerifyChain(ctx, db, vAtx.ID(), goldenATXID, v, logger)
+		require.ErrorIs(t, err, ErrInvalidChain)
+	})
+
+	t.Run("invalid pos ATX", func(t *testing.T) {
+		ch = newChallenge(1, types.EmptyATXID, vInvalidAtx.ID(), postGenesisEpoch, nil)
+		nipostData = newNIPostWithChallenge(t, types.HexToHash32(""), []byte("02"))
+		atx := newAtx(t, signer, ch, nipostData, 2, types.Address{})
+		SignAndFinalizeAtx(signer, atx)
+		vAtx, err := atx.Verify(0, 1)
+		require.NoError(t, err)
+		vAtx.SetValidity(types.Unknown)
+		require.NoError(t, atxs.Add(db, vAtx))
+
+		v := NewMocknipostValidator(ctrl)
+		v.EXPECT().
+			Post(ctx, signer.NodeID(), goldenATXID, atx.NIPost.Post, atx.NIPost.PostMetadata, atx.NumUnits).
+			Return(nil)
+
+		err = VerifyChain(ctx, db, vAtx.ID(), goldenATXID, v, logger)
+		require.ErrorIs(t, err, ErrInvalidChain)
+	})
+
+	t.Run("invalid commitment ATX", func(t *testing.T) {
+		commitmentAtxID := vInvalidAtx.ID()
+		ch = newChallenge(1, types.EmptyATXID, goldenATXID, postGenesisEpoch, &commitmentAtxID)
+		nipostData = newNIPostWithChallenge(t, types.HexToHash32(""), []byte("03"))
+		atx := newAtx(t, signer, ch, nipostData, 2, types.Address{})
+		SignAndFinalizeAtx(signer, atx)
+		vAtx, err := atx.Verify(0, 1)
+		require.NoError(t, err)
+		vAtx.SetValidity(types.Unknown)
+		require.NoError(t, atxs.Add(db, vAtx))
+
+		v := NewMocknipostValidator(ctrl)
+		v.EXPECT().
+			Post(ctx, signer.NodeID(), commitmentAtxID, atx.NIPost.Post, atx.NIPost.PostMetadata, atx.NumUnits).
+			Return(nil)
+
+		err = VerifyChain(ctx, db, vAtx.ID(), goldenATXID, v, logger)
+		require.ErrorIs(t, err, ErrInvalidChain)
+	})
+
+	t.Run("with trusted node ID", func(t *testing.T) {
+		ch = newChallenge(1, types.EmptyATXID, vInvalidAtx.ID(), postGenesisEpoch, nil)
+		nipostData = newNIPostWithChallenge(t, types.HexToHash32(""), []byte("04"))
+		atx := newAtx(t, signer, ch, nipostData, 2, types.Address{})
+		SignAndFinalizeAtx(signer, atx)
+		vAtx, err := atx.Verify(0, 1)
+		require.NoError(t, err)
+		vAtx.SetValidity(types.Unknown)
+		require.NoError(t, atxs.Add(db, vAtx))
+
+		v := NewMocknipostValidator(ctrl)
+		err = VerifyChain(ctx, db, vAtx.ID(), goldenATXID, v, logger, WithTrustedID(signer.NodeID()))
+		require.NoError(t, err)
+	})
+
+	t.Run("assume valid if older than X", func(t *testing.T) {
+		ch = newChallenge(1, types.EmptyATXID, vInvalidAtx.ID(), postGenesisEpoch, nil)
+		nipostData = newNIPostWithChallenge(t, types.HexToHash32(""), []byte("05"))
+		atx := newAtx(t, signer, ch, nipostData, 2, types.Address{})
+		SignAndFinalizeAtx(signer, atx)
+		vAtx, err := atx.Verify(0, 1)
+		require.NoError(t, err)
+		vAtx.SetValidity(types.Unknown)
+		require.NoError(t, atxs.Add(db, vAtx))
+
+		v := NewMocknipostValidator(ctrl)
+		err = VerifyChain(ctx, db, vAtx.ID(), goldenATXID, v, logger, AssumeValidBefore(time.Now()))
+		require.NoError(t, err)
 	})
 }

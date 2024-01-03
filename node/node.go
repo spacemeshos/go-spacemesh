@@ -921,7 +921,6 @@ func (app *App) initServices(ctx context.Context) error {
 
 	builderConfig := activation.Config{
 		GoldenATXID:      goldenATXID,
-		LayersPerEpoch:   layersPerEpoch,
 		RegossipInterval: app.Config.RegossipAtxInterval,
 	}
 	atxBuilder := activation.NewBuilder(
@@ -940,6 +939,7 @@ func (app *App) initServices(ctx context.Context) error {
 		// TODO(dshulyak) makes no sense. how we ended using it?
 		activation.WithPoetRetryInterval(app.Config.HARE3.PreroundDelay),
 		activation.WithValidator(app.validator),
+		// TODO(poszu): configure activation.WithAtxValidityDelay() from the config
 	)
 
 	malfeasanceHandler := malfeasance.NewHandler(

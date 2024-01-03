@@ -71,6 +71,7 @@ func newAtx(
 	atx := types.NewActivationTx(challenge, coinbase, nipost, numUnits, nil)
 	atx.SetEffectiveNumUnits(numUnits)
 	atx.SetReceived(time.Now())
+	atx.SetValidity(types.Valid)
 	return atx
 }
 
@@ -140,8 +141,7 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 	opts = append(opts, WithValidator(tab.mValidator))
 
 	cfg := Config{
-		GoldenATXID:    tab.goldenATXID,
-		LayersPerEpoch: layersPerEpoch,
+		GoldenATXID: tab.goldenATXID,
 	}
 
 	tab.msync.EXPECT().RegisterForATXSynced().DoAndReturn(closedChan).AnyTimes()
@@ -450,7 +450,7 @@ func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration}))
 	posEpoch := postGenesisEpoch
 	currLayer := posEpoch.FirstLayer()
-	ch := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posEpoch, nil)
+	ch := newChallenge(1, types.EmptyATXID, tab.goldenATXID, posEpoch, &tab.goldenATXID)
 	nipostData := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
 	prevAtx := newAtx(t, tab.sig, ch, nipostData, 2, types.Address{})
 	SignAndFinalizeAtx(tab.sig, prevAtx)
@@ -484,7 +484,7 @@ func TestBuilder_Loop_WaitsOnStaleChallenge(t *testing.T) {
 	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
 	// current layer is too late to be able to build a nipost on time
 	currLayer := (postGenesisEpoch + 1).FirstLayer()
-	ch := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, postGenesisEpoch, nil)
+	ch := newChallenge(1, types.EmptyATXID, tab.goldenATXID, postGenesisEpoch, &tab.goldenATXID)
 	nipostData := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
 	prevAtx := newAtx(t, tab.sig, ch, nipostData, 2, types.Address{})
 	SignAndFinalizeAtx(tab.sig, prevAtx)
@@ -528,7 +528,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
 	posEpoch := postGenesisEpoch
 	currLayer := postGenesisEpoch.FirstLayer()
-	ch := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, postGenesisEpoch, nil)
+	ch := newChallenge(1, types.EmptyATXID, tab.goldenATXID, postGenesisEpoch, &tab.goldenATXID)
 	nipostData := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
 	prevAtx := newAtx(t, tab.sig, ch, nipostData, 2, types.Address{})
 	SignAndFinalizeAtx(tab.sig, prevAtx)
@@ -895,7 +895,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	prevAtxPostEpoch := postGenesisEpoch
 	postAtxPubEpoch := postGenesisEpoch
 
-	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, postAtxPubEpoch, &types.ATXID{4, 5, 6})
+	challenge := newChallenge(1, types.EmptyATXID, tab.goldenATXID, postAtxPubEpoch, &tab.goldenATXID)
 	poetBytes := []byte("66666")
 	nipostData := newNIPostWithChallenge(t, types.HexToHash32("55555"), poetBytes)
 	posAtx := newAtx(t, otherSigner, challenge, nipostData, 2, types.Address{})
@@ -975,16 +975,6 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 
 			return nil
 		})
-
-	// The candidate for a positioning ATX should be verified
-	tab.mValidator.EXPECT().Post(
-		gomock.Any(),
-		otherSigner.NodeID(),
-		*posAtx.CommitmentATX,
-		posAtx.NIPost.Post,
-		posAtx.NIPost.PostMetadata,
-		posAtx.NumUnits,
-	)
 
 	r.NoError(tab.PublishActivationTx(context.Background()))
 
@@ -1078,16 +1068,6 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 		tab.sig.NodeID(),
 		nipost.Post{Indices: make([]byte, 10)},
 	))
-
-	// The candidate for a positioning ATX should be verified
-	tab.mValidator.EXPECT().Post(
-		gomock.Any(),
-		otherSigner.NodeID(),
-		*posAtx.CommitmentATX,
-		posAtx.NIPost.Post,
-		posAtx.NIPost.PostMetadata,
-		posAtx.NumUnits,
-	)
 
 	r.NoError(tab.PublishActivationTx(context.Background()))
 
@@ -1316,7 +1296,7 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	require.NoError(t, tab.buildInitialPost(context.Background()))
 
 	posEpoch := postGenesisEpoch + 1
-	challenge := newChallenge(1, types.ATXID{1, 2, 3}, types.ATXID{1, 2, 3}, posEpoch, &types.ATXID{4, 5, 6})
+	challenge := newChallenge(1, types.EmptyATXID, tab.goldenATXID, posEpoch, &tab.goldenATXID)
 	poetByte := []byte("66666")
 	nipost := newNIPostWithChallenge(t, types.HexToHash32("55555"), poetByte)
 	prevAtx := newAtx(t, tab.sig, challenge, nipost, 2, types.Address{})
@@ -1325,24 +1305,12 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(tab.cdb, vPrevAtx))
 
-	posAtx := vPrevAtx
-	tab.mValidator.EXPECT().
-		Post(
-			gomock.Any(),
-			posAtx.SmesherID,
-			*posAtx.CommitmentATX,
-			posAtx.NIPost.Post,
-			posAtx.NIPost.PostMetadata,
-			posAtx.NumUnits,
-		).
-		Return(nil)
-
 	currLayer := posEpoch.FirstLayer().Add(1)
 	tab.mclock.EXPECT().CurrentLayer().Return(currLayer).AnyTimes()
 	atx, err := publishAtx(t, tab, posEpoch, &currLayer, layersPerEpoch)
 	require.NoError(t, err)
 	require.NotNil(t, atx)
-	assertLastAtx(require.New(t), tab.sig.NodeID(), types.BytesToHash(poetByte), atx, posAtx, vPrevAtx, layersPerEpoch)
+	assertLastAtx(require.New(t), tab.sig.NodeID(), types.BytesToHash(poetByte), atx, vPrevAtx, vPrevAtx, layersPerEpoch)
 
 	// postClient.Proof() should not be called again
 	require.NoError(t, tab.buildInitialPost(context.Background()))
@@ -1481,4 +1449,37 @@ func TestWaitingToBuildNipostChallengeWithJitter(t *testing.T) {
 		deadline := buildNipostChallengeStartDeadline(time.Now().Add(time.Hour-time.Second*37), time.Hour)
 		require.Less(t, deadline, time.Now())
 	})
+}
+
+// Test if GetPositioningAtx disregards ATXs with invalid POST in their chain.
+// It should pick an ATX with valid POST even though it's a lower height.
+func TestGetPositioningAtxPicksAtxWithValidChain(t *testing.T) {
+	tab := newTestBuilder(t)
+
+	// Invalid chain with high height
+	sigInvalid, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	ch := newChallenge(1, types.EmptyATXID, tab.goldenATXID, postGenesisEpoch, &tab.goldenATXID)
+	nipostData := newNIPostWithChallenge(t, types.HexToHash32("for invalid"), []byte("66"))
+	invalidAtx := newAtx(t, sigInvalid, ch, nipostData, 2, types.Address{})
+	SignAndFinalizeAtx(sigInvalid, invalidAtx)
+	vInvalidAtx, err := invalidAtx.Verify(0, 100)
+	require.NoError(t, err)
+	vInvalidAtx.SetValidity(types.Invalid)
+	require.NoError(t, atxs.Add(tab.cdb, vInvalidAtx))
+
+	// Valid chain with lower height
+	sigValid, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	ch = newChallenge(1, types.EmptyATXID, tab.goldenATXID, postGenesisEpoch, &tab.goldenATXID)
+	nipostData = newNIPostWithChallenge(t, types.HexToHash32("for valid"), []byte("77"))
+	validAtx := newAtx(t, sigValid, ch, nipostData, 2, types.Address{})
+	SignAndFinalizeAtx(sigValid, validAtx)
+	vValidAtx, err := validAtx.Verify(0, 1)
+	require.NoError(t, err)
+	require.NoError(t, atxs.Add(tab.cdb, vValidAtx))
+
+	posAtxID, err := tab.getPositioningAtx(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, posAtxID, vValidAtx.ID())
 }

@@ -59,7 +59,6 @@ const (
 // Config defines configuration for Builder.
 type Config struct {
 	GoldenATXID      types.ATXID
-	LayersPerEpoch   uint32
 	RegossipInterval time.Duration
 }
 
@@ -92,10 +91,16 @@ type Builder struct {
 	stop              context.CancelFunc
 	poetCfg           PoetConfig
 	poetRetryInterval time.Duration
+	atxValidityDelay  time.Duration // delay before an atx is considered valid (counting from the time it was received)
 }
 
-// BuilderOption ...
 type BuilderOption func(*Builder)
+
+func WithAtxValidityDelay(delay time.Duration) BuilderOption {
+	return func(b *Builder) {
+		b.atxValidityDelay = delay
+	}
+}
 
 // WithPoetRetryInterval modifies time that builder will have to wait before retrying ATX build process
 // if it failed due to issues with PoET server.
@@ -422,7 +427,7 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 		}
 	}
 
-	posAtx, err := b.GetPositioningAtx()
+	posAtx, err := b.getPositioningAtx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get positioning ATX: %w", err)
 	}
@@ -600,38 +605,36 @@ func (b *Builder) broadcast(ctx context.Context, atx *types.ActivationTx) (int, 
 	return len(buf), nil
 }
 
-// GetPositioningAtx returns atx id with the highest tick height.
-func (b *Builder) GetPositioningAtx() (types.ATXID, error) {
-	id, err := atxs.GetIDWithMaxHeight(b.cdb, b.signer.NodeID(), func(id types.ATXID) bool {
-		atx, err := atxs.Get(b.cdb, id)
-		if err != nil {
-			return false
-		}
-		commitmentAtxId := atx.CommitmentATX
-		if commitmentAtxId == nil {
-			if atxId, err := atxs.CommitmentATX(b.cdb, atx.SmesherID); err != nil {
-				return false
-			} else {
-				commitmentAtxId = &atxId
-			}
-		}
-		return b.validator.Post(
-			context.Background(),
-			atx.SmesherID,
-			*commitmentAtxId,
-			atx.NIPost.Post,
-			atx.NIPost.PostMetadata,
-			atx.NumUnits,
-		) == nil
-	})
-	if err != nil {
-		if errors.Is(err, sql.ErrNotFound) {
-			b.log.Info("using golden atx as positioning atx")
-			return b.goldenATXID, nil
-		}
-		return types.ATXID{}, fmt.Errorf("cannot find pos atx: %w", err)
+// getPositioningAtx returns atx id with the highest tick height.
+func (b *Builder) getPositioningAtx(ctx context.Context) (types.ATXID, error) {
+	rejectedAtxs := make(map[types.ATXID]struct{})
+	filter := func(id types.ATXID) bool {
+		_, ok := rejectedAtxs[id]
+		return !ok
 	}
-	return id, nil
+
+	for {
+		select {
+		case <-ctx.Done():
+			return types.ATXID{}, ctx.Err()
+		default:
+		}
+		id, err := atxs.GetIDWithMaxHeight(b.cdb, b.signer.NodeID(), filter)
+		if err != nil {
+			if errors.Is(err, sql.ErrNotFound) {
+				b.log.Info("using golden atx as positioning atx")
+				return b.goldenATXID, nil
+			}
+			return types.ATXID{}, fmt.Errorf("cannot find pos atx: %w", err)
+		}
+		validBefore := time.Now().Add(-b.atxValidityDelay)
+		if err := VerifyChain(ctx, b.cdb, id, b.goldenATXID, b.validator, b.log, AssumeValidBefore(validBefore)); err != nil {
+			b.log.Info("rejecting candidate for positioning atx", zap.Error(err), zap.Stringer("atx_id", id))
+			rejectedAtxs[id] = struct{}{}
+		} else {
+			return id, nil
+		}
+	}
 }
 
 func (b *Builder) Regossip(ctx context.Context) error {

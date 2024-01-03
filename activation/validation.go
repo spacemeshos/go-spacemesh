@@ -11,10 +11,13 @@ import (
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
+	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 type ErrAtxNotFound struct {
@@ -284,6 +287,132 @@ func (v *Validator) PositioningAtx(
 	}
 	if posAtx.PublishEpoch >= pubepoch {
 		return fmt.Errorf("positioning atx epoch (%v) must be before %v", posAtx.PublishEpoch, pubepoch)
+	}
+	return nil
+}
+
+type verifyChainOpts struct {
+	assumedValidTime time.Time
+	trustedNodeID    types.NodeID
+}
+
+type verifyChainOption func(*verifyChainOpts)
+
+// AssumeValidBefore configures the validator to assume that ATXs received before the given time are valid.
+func AssumeValidBefore(val time.Time) verifyChainOption {
+	return func(o *verifyChainOpts) {
+		o.assumedValidTime = val
+	}
+}
+
+// WithTrustedID configures the validator to assume that ATXs created by the given node ID are valid.
+func WithTrustedID(val types.NodeID) verifyChainOption {
+	return func(o *verifyChainOpts) {
+		o.trustedNodeID = val
+	}
+}
+
+var ErrInvalidChain = errors.New("invalid ATX chain")
+
+func VerifyChain(
+	ctx context.Context,
+	db sql.Executor,
+	id, goldenATXID types.ATXID,
+	validator nipostValidator,
+	log *zap.Logger,
+	opts ...verifyChainOption,
+) error {
+	options := verifyChainOpts{}
+	for _, opt := range opts {
+		opt(&options)
+	}
+	return verifyChainWithOpts(ctx, db, id, goldenATXID, validator, log, options)
+}
+
+func verifyChainWithOpts(
+	ctx context.Context,
+	db sql.Executor,
+	id, goldenATXID types.ATXID,
+	validator nipostValidator,
+	log *zap.Logger,
+	opts verifyChainOpts,
+) error {
+	atx, err := atxs.Get(db, id)
+	if err != nil {
+		return fmt.Errorf("get atx: %w", err)
+	}
+
+	switch {
+	case atx.Validity() == types.Valid:
+		return nil
+	case atx.Validity() == types.Invalid:
+		return errors.Join(ErrInvalidChain, errors.New("atx is marked as invalid"))
+	case atx.Received().Before(opts.assumedValidTime):
+		return nil
+	case atx.SmesherID == opts.trustedNodeID:
+		return nil
+	}
+
+	// validate POST fully
+	commitmentAtxId := atx.CommitmentATX
+	if commitmentAtxId == nil {
+		if atxId, err := atxs.CommitmentATX(db, atx.SmesherID); err != nil {
+			return fmt.Errorf("getting commitment atx: %w", err)
+		} else {
+			commitmentAtxId = &atxId
+		}
+	}
+	if err := validator.Post(
+		ctx,
+		atx.SmesherID,
+		*commitmentAtxId,
+		atx.NIPost.Post,
+		atx.NIPost.PostMetadata,
+		atx.NumUnits,
+	); err != nil {
+		if err := atxs.SetValidity(db, id, types.Invalid); err != nil {
+			log.Warn("failed to persist atx validity", zap.Error(err), zap.Stringer("atx_id", id))
+		}
+		return errors.Join(ErrInvalidChain, fmt.Errorf("invalid post in ATX %s: %w", id.ShortString(), err))
+	}
+
+	err = verifyChainDeps(ctx, db, atx.ActivationTx, goldenATXID, validator, log, opts)
+	switch {
+	case err == nil:
+		if err := atxs.SetValidity(db, id, types.Valid); err != nil {
+			log.Warn("failed to persist atx validity", zap.Error(err), zap.Stringer("atx_id", id))
+		}
+	case errors.Is(err, ErrInvalidChain):
+		if err := atxs.SetValidity(db, id, types.Invalid); err != nil {
+			log.Warn("failed to persist atx validity", zap.Error(err), zap.Stringer("atx_id", id))
+		}
+	}
+	return err
+}
+
+func verifyChainDeps(
+	ctx context.Context,
+	db sql.Executor,
+	atx *types.ActivationTx,
+	goldenATXID types.ATXID,
+	v nipostValidator,
+	log *zap.Logger,
+	opts verifyChainOpts,
+) error {
+	if atx.PrevATXID != types.EmptyATXID {
+		if err := verifyChainWithOpts(ctx, db, atx.PrevATXID, goldenATXID, v, log, opts); err != nil {
+			return fmt.Errorf("validating previous ATX %s chain: %w", atx.PrevATXID.ShortString(), err)
+		}
+	}
+	if atx.PositioningATX != goldenATXID {
+		if err := verifyChainWithOpts(ctx, db, atx.PositioningATX, goldenATXID, v, log, opts); err != nil {
+			return fmt.Errorf("validating positioning ATX %s chain: %w", atx.PositioningATX.ShortString(), err)
+		}
+	}
+	if atx.CommitmentATX != nil && *atx.CommitmentATX != goldenATXID {
+		if err := verifyChainWithOpts(ctx, db, *atx.CommitmentATX, goldenATXID, v, log, opts); err != nil {
+			return fmt.Errorf("validating commitment ATX %s chain: %w", atx.CommitmentATX.ShortString(), err)
+		}
 	}
 	return nil
 }

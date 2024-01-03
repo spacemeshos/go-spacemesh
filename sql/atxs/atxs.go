@@ -10,7 +10,7 @@ import (
 )
 
 const fullQuery = `select id, atx, base_tick_height, tick_count, pubkey,
-	effective_num_units, received, epoch, sequence, coinbase from atxs`
+	effective_num_units, received, epoch, sequence, coinbase, validity from atxs`
 
 type decoderCallback func(*types.VerifiedActivationTx, error) bool
 
@@ -43,6 +43,7 @@ func decoder(fn decoderCallback) sql.Decoder {
 		a.PublishEpoch = types.EpochID(uint32(stmt.ColumnInt(7)))
 		a.Sequence = uint64(stmt.ColumnInt64(8))
 		stmt.ColumnBytes(9, a.Coinbase[:])
+		a.SetValidity(types.Validity(stmt.ColumnInt(10)))
 		v, err := a.Verify(baseTickHeight, tickCount)
 		if err != nil {
 			return fn(nil, err)
@@ -300,12 +301,13 @@ func Add(db sql.Executor, atx *types.VerifiedActivationTx) error {
 		stmt.BindInt64(10, int64(atx.TickCount()))
 		stmt.BindInt64(11, int64(atx.Sequence))
 		stmt.BindBytes(12, atx.Coinbase.Bytes())
+		stmt.BindInt64(13, int64(atx.Validity()))
 	}
 
 	_, err = db.Exec(`
 		insert into atxs (id, epoch, effective_num_units, commitment_atx, nonce,
-			 pubkey, atx, received, base_tick_height, tick_count, sequence, coinbase)
-		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12);`, enc, nil)
+			 pubkey, atx, received, base_tick_height, tick_count, sequence, coinbase, validity)
+		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13);`, enc, nil)
 	if err != nil {
 		return fmt.Errorf("insert ATX ID %v: %w", atx.ID(), err)
 	}
@@ -487,4 +489,17 @@ func IterateAtxs(db sql.Executor, from, to types.EpochID, fn func(*types.Verifie
 		return err
 	}
 	return derr
+}
+
+func SetValidity(db sql.Executor, id types.ATXID, validity types.Validity) error {
+	_, err := db.Exec("UPDATE atxs SET validity = ?1 where id = ?2;",
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(validity))
+			stmt.BindBytes(2, id.Bytes())
+		}, nil,
+	)
+	if err != nil {
+		return fmt.Errorf("setting validity %v: %w", id, err)
+	}
+	return nil
 }
