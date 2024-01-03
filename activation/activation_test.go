@@ -320,7 +320,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 		for i := 0; i < 50; i++ {
 			require.NoError(t, builder.StartSmeshing(types.Address{}))
 			require.True(t, builder.Smeshing())
-			require.NoError(t, builder.StopSmeshing(true))
+			require.NoError(t, builder.StopSmeshing(false))
 			require.False(t, builder.Smeshing())
 		}
 	})
