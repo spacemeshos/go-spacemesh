@@ -30,7 +30,7 @@ require (
 	github.com/multiformats/go-varint v0.0.7
 	github.com/natefinch/atomic v1.0.1
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20230904125328-1f23a7beb09a
-	github.com/prometheus/client_golang v1.17.0
+	github.com/prometheus/client_golang v1.18.0
 	github.com/prometheus/common v0.45.0
 	github.com/quic-go/quic-go v0.40.1
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
@@ -56,7 +56,7 @@ require (
 	golang.org/x/time v0.5.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20231212172506-995d672761c0
 	google.golang.org/grpc v1.60.1
-	google.golang.org/protobuf v1.31.0
+	google.golang.org/protobuf v1.32.0
 	k8s.io/api v0.29.0
 	k8s.io/apimachinery v0.29.0
 	k8s.io/client-go v0.29.0
@@ -176,8 +176,8 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/polydawn/refmt v0.89.0 // indirect
-	github.com/prometheus/client_model v0.4.1-0.20230718164431-9a2bf3000d16 // indirect
-	github.com/prometheus/procfs v0.11.1 // indirect
+	github.com/prometheus/client_model v0.5.0 // indirect
+	github.com/prometheus/procfs v0.12.0 // indirect
 	github.com/quic-go/qpack v0.4.0 // indirect
 	github.com/quic-go/qtls-go1-20 v0.4.1 // indirect
 	github.com/quic-go/webtransport-go v0.6.0 // indirect

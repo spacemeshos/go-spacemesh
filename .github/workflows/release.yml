@@ -20,9 +20,10 @@ jobs:
             outname_sufix: "linux-amd64"
           - os: [self-hosted, linux, arm64]
             outname_sufix: "linux-arm64"
-          - os: macos-latest
+          - os: macos-12-large
             outname_sufix: "mac-amd64"
-          - os: [self-hosted, macos, arm64]
+          - os: macos-13-xlarge
+
             outname_sufix: "mac-arm64"
           - os: windows-latest
             outname_sufix: "win-amd64"
@@ -33,9 +34,11 @@ jobs:
       - name: Install dependencies in windows
         if: ${{ matrix.os == 'windows-latest' }}
         run: choco install make wget zip
+
       - name: Add OpenCL support - Ubuntu
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
+
       - name: disable Windows Defender - Windows
         if: ${{ matrix.os == 'windows-latest' }}
         run: |
@@ -82,7 +85,7 @@ jobs:
           destination: ${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/
 
       - name: Install coreutils
-        if: ${{ matrix.os == 'macos-latest' }}
+        if: ${{ matrix.os == 'macos-12-large' || matrix.os == 'macos-13-xlarge' }}
         run: brew install coreutils
 
       - name: Calculate the hashsum of the zip file
