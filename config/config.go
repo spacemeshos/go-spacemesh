@@ -114,6 +114,8 @@ type BaseConfig struct {
 	DatabaseLatencyMetering      bool          `mapstructure:"db-latency-metering"`
 	DatabaseSizeMeteringInterval time.Duration `mapstructure:"db-size-metering-interval"`
 	DatabasePruneInterval        time.Duration `mapstructure:"db-prune-interval"`
+	DatabaseVacuumState          int           `mapstructure:"db-vacuum-state"`
+	DatabaseSkipMigrations       []int         `mapstructure:"db-skip-migrations"`
 
 	PruneActivesetsFrom types.EpochID `mapstructure:"prune-activesets-from"`
 
