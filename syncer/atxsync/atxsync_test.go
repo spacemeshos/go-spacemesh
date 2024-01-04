@@ -91,7 +91,7 @@ func TestDownload(t *testing.T) {
 		{
 			desc:     "exit on context",
 			ctx:      canceled,
-			retry:    1,
+			retry:    time.Minute,
 			existing: []*types.VerifiedActivationTx{atx(id(1))},
 			fetched: []fetchRequest{
 				{request: []types.ATXID{id(2)}, error: errors.New("test")},
