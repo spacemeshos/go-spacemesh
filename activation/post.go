@@ -83,6 +83,8 @@ type PostProofVerifyingOpts struct {
 	Workers int `mapstructure:"smeshing-opts-verifying-workers"`
 	// The minimum number of verifying workers to keep
 	// while POST is being generated in parallel.
+	//
+	// Caps at the value of `Workers` (then scaling is disabled).
 	MinWorkers int `mapstructure:"smeshing-opts-verifying-min-workers"`
 	// Flags used for the PoW verification.
 	Flags PostPowFlags `mapstructure:"smeshing-opts-verifying-powflags"`

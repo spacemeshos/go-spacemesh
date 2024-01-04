@@ -17,5 +17,10 @@
     },
     "fetch": {
         "servers-metrics": true
+    },
+    "smeshing": {
+        "smeshing-verifying-opts": {
+            "smeshing-opts-verifying-min-workers": 1000000
+        }
     }
 }
