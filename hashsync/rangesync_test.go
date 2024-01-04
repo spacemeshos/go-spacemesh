@@ -1,6 +1,7 @@
 package hashsync
 
 import (
+	"fmt"
 	"math/rand"
 	"slices"
 	"testing"
@@ -8,6 +9,104 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/maps"
 )
+
+type rangeMessage struct {
+	x, y      Ordered
+	fp        any
+	count     int
+	haveItems bool
+}
+
+func (m rangeMessage) X() Ordered       { return m.x }
+func (m rangeMessage) Y() Ordered       { return m.y }
+func (m rangeMessage) Fingerprint() any { return m.fp }
+func (m rangeMessage) Count() int       { return m.count }
+func (m rangeMessage) HaveItems() bool  { return m.haveItems }
+
+var _ SyncMessage = rangeMessage{}
+
+func (m rangeMessage) String() string {
+	itemsStr := ""
+	if m.haveItems {
+		itemsStr = fmt.Sprintf(" +items")
+	}
+	return fmt.Sprintf("<X %v Y %v Count %d Fingerprint %v%s>",
+		m.x, m.y, m.count, m.fp, itemsStr)
+}
+
+type fakeConduit struct {
+	msgs  []rangeMessage
+	items []Ordered
+	resp  *fakeConduit
+}
+
+var _ Conduit = &fakeConduit{}
+
+func (fc *fakeConduit) done() bool {
+	if fc.resp == nil {
+		return true
+	}
+	if len(fc.resp.msgs) == 0 {
+		panic("BUG: not done but no msgs")
+	}
+	return false
+}
+
+func (fc *fakeConduit) NextMessage() (SyncMessage, error) {
+	if len(fc.msgs) != 0 {
+		m := fc.msgs[0]
+		fc.msgs = fc.msgs[1:]
+		return m, nil
+	}
+
+	return nil, nil
+}
+
+func (fc *fakeConduit) NextItem() (Ordered, error) {
+	if len(fc.items) != 0 {
+		item := fc.items[0]
+		fc.items = fc.items[1:]
+		return item, nil
+	}
+
+	return nil, nil
+}
+
+func (fc *fakeConduit) sendFingerprint(x, y Ordered, fingerprint any, count int, haveItems bool) {
+	if fc.resp == nil {
+		fc.resp = &fakeConduit{}
+	}
+	msg := rangeMessage{
+		x:         x,
+		y:         y,
+		fp:        fingerprint,
+		count:     count,
+		haveItems: haveItems,
+	}
+	fc.resp.msgs = append(fc.resp.msgs, msg)
+}
+
+func (fc *fakeConduit) SendFingerprint(x, y Ordered, fingerprint any, count int) {
+	fc.sendFingerprint(x, y, fingerprint, count, false)
+}
+
+func (fc *fakeConduit) SendItems(x, y Ordered, fingerprint any, count int, start, end Iterator) {
+	fc.sendFingerprint(x, y, fingerprint, count, true)
+	if start == nil || end == nil {
+		panic("SendItems with null iterator(s)")
+	}
+	it := start
+	for {
+		fc.resp.items = append(fc.resp.items, it.Key())
+		it = it.Next()
+		if it.Equal(end) {
+			break
+		}
+	}
+	if len(fc.resp.items) == 0 {
+		panic("SendItems with no items")
+	}
+}
 
 type dumbStoreIterator struct {
 	ds *dumbStore
@@ -287,7 +386,7 @@ func storeItemStr(is ItemStore) string {
 	r := ""
 	for {
 		r += string(it.Key().(sampleID))
-		if it == endAt {
+		if it.Equal(endAt) {
 			return r
 		}
 		it = it.Next()
@@ -320,7 +419,7 @@ func forTestStores(t *testing.T, testFunc func(t *testing.T, factory storeFactor
 	}
 }
 
-func dumpRangeMessages(t *testing.T, msgs []RangeMessage, fmt string, args ...any) {
+func dumpRangeMessages(t *testing.T, msgs []rangeMessage, fmt string, args ...any) {
 	t.Logf(fmt, args...)
 	for _, m := range msgs {
 		t.Logf("  %s", m)
@@ -328,21 +427,24 @@ func dumpRangeMessages(t *testing.T, msgs []RangeMessage, fmt string, args ...an
 }
 
 func runSync(t *testing.T, syncA, syncB *RangeSetReconciler, maxRounds int) (nRounds int) {
-	msgs := []RangeMessage{syncA.Initiate()}
+	fc := &fakeConduit{}
+	syncA.Initiate(fc)
+	require.False(t, fc.done(), "no messages from Initiate")
 	var i int
-	for i = 0; len(msgs) != 0; i++ {
+	for i := 0; !fc.done(); i++ {
 		if i == maxRounds {
 			require.FailNow(t, "too many rounds", "didn't reconcile in %d rounds", i)
 		}
-		// dumpRangeMessages(t, msgs, "A %q -> B %q:", storeItemStr(syncA.is), storeItemStr(syncB.is))
-		msgs = syncB.Process(msgs)
-		if msgs != nil {
-			// dumpRangeMessages(t, msgs, "B %q --> A %q:", storeItemStr(syncB.is), storeItemStr(syncA.is))
-			msgs = syncA.Process(msgs)
+		// dumpRangeMessages(t, fc.msgs, "A %q -> B %q:", storeItemStr(syncA.is), storeItemStr(syncB.is))
+		fc = fc.resp
+		syncB.Process(fc)
+		if fc.done() {
+			break
 		}
+		fc = fc.resp
+		// dumpRangeMessages(t, fc.msgs, "B %q --> A %q:", storeItemStr(syncB.is), storeItemStr(syncA.is))
+		syncA.Process(fc)
 	}
-	// even with empty sets, there must be an exchange of messages
-	require.Greater(t, i, 0, "wrong reconc in zero rounds")
 	return i
 }
 
@@ -455,5 +557,5 @@ func TestRandomSync(t *testing.T) {
 	forTestStores(t, testRandomSync)
 }
 
-// TBD: random test for MonoidTreeStore
+// TBD: include initiate round!!!
 // TBD: use logger for verbose logging (messages)
