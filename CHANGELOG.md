@@ -2,7 +2,7 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
-## UNRELEASED
+## Release v1.3
 
 ### Upgrade information
 
@@ -10,9 +10,6 @@ This release is not backwards compatible with v1.2.x. Upgrading will migrate loc
 The migration will take place at the first startup after the upgrade. Be aware that after a successful upgrade
 downgrading isn't supported and might result in at least one epoch of missed rewards. See change #5207 for more
 information.
-
-Current release is expected to be adopted by majority of the network participants before epoch 11 starts.
-Nodes that do not update before epoch 11 risk their proposals being rejected by the rest of the network.
 
 This release is the first step towards separating PoST from the node. Proof generation is now done via a dedicated
 service. This service is started automatically by the node and is shut down when the node shuts down. In most
