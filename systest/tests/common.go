@@ -12,6 +12,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -270,6 +272,7 @@ func watchProposals(
 	ctx context.Context,
 	eg *errgroup.Group,
 	client *cluster.NodeClient,
+	log *zap.Logger,
 	collector func(*pb.Proposal) (bool, error),
 ) {
 	eg.Go(func() error {
@@ -280,6 +283,21 @@ func watchProposals(
 		}
 		for {
 			proposal, err := proposals.Recv()
+			s, ok := status.FromError(err)
+			if ok && s.Code() != codes.OK {
+				log.Info(
+					"proposal stream closed",
+					zap.String("client", client.Name),
+					zap.Error(err),
+					zap.Any("status", s),
+					zap.String("message", s.Message()),
+				)
+
+				if s.Code() == codes.Unavailable {
+					// Server is closing the connection, return nil
+					return nil
+				}
+			}
 			if err != nil {
 				return fmt.Errorf("proposal event for %s: %w", client.Name, err)
 			}

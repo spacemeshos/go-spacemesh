@@ -68,7 +68,7 @@ func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 		i := i
 		client := cl.Client(i)
 		tctx.Log.Debugw("watching", "client", client.Name, "i", i)
-		watchProposals(ctx, eg, cl.Client(i), func(proposal *pb.Proposal) (bool, error) {
+		watchProposals(ctx, eg, client, tctx.Log.Desugar(), func(proposal *pb.Proposal) (bool, error) {
 			if proposal.Layer.Number < first {
 				return true, nil
 			}

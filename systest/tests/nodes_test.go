@@ -65,7 +65,7 @@ func TestAddNodes(t *testing.T) {
 	for i := 0; i < cl.Total(); i++ {
 		i := i
 		client := cl.Client(i)
-		watchProposals(tctx, &eg, cl.Client(i), func(proposal *pb.Proposal) (bool, error) {
+		watchProposals(tctx, &eg, client, tctx.Log.Desugar(), func(proposal *pb.Proposal) (bool, error) {
 			if proposal.Epoch.Number > lastEpoch {
 				return false, nil
 			}
