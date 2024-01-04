@@ -12,6 +12,7 @@ import (
 	sqlite "github.com/go-llsqlite/crawshaw"
 	"github.com/go-llsqlite/crawshaw/sqlitex"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 var (
@@ -171,6 +172,7 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 		if err != nil {
 			return nil, err
 		}
+		log.With().Info("running migrations", log.Int("current version", before))
 		tx, err := db.Tx(context.Background())
 		if err != nil {
 			return nil, err
