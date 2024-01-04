@@ -12,6 +12,7 @@ import (
 	sqlite "github.com/go-llsqlite/crawshaw"
 	"github.com/go-llsqlite/crawshaw/sqlitex"
 	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
