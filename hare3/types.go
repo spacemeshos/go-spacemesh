@@ -25,8 +25,8 @@ const (
 	hardlock
 	softlock
 	propose
-	_wait1
-	_wait2
+	wait1
+	wait2
 	commit
 	notify
 )
