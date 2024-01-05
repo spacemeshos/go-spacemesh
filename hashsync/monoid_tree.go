@@ -34,7 +34,9 @@ func (fpred FingerprintPredicate) Match(y any) bool {
 type MonoidTree interface {
 	Copy() MonoidTree
 	Fingerprint() any
-	Add(v Ordered)
+	Add(k Ordered)
+	Set(k Ordered, v any)
+	Lookup(k Ordered) (any, bool)
 	Min() MonoidTreePointer
 	Max() MonoidTreePointer
 	RangeFingerprint(ptr MonoidTreePointer, start, end Ordered, stop FingerprintPredicate) (fp any, startNode, endNode MonoidTreePointer)
@@ -63,6 +65,7 @@ func MonoidTreeFromSlice[T Ordered](m Monoid, items []T) MonoidTree {
 type MonoidTreePointer interface {
 	Equal(other MonoidTreePointer) bool
 	Key() Ordered
+	Value() any
 	Prev()
 	Next()
 }
@@ -216,10 +219,18 @@ func (p *monoidTreePointer) Key() Ordered {
 	return p.node.key
 }
 
+func (p *monoidTreePointer) Value() any {
+	if p.node == nil {
+		return nil
+	}
+	return p.node.value
+}
+
 type monoidTreeNode struct {
 	left        *monoidTreeNode
 	right       *monoidTreeNode
 	key         Ordered
+	value       any
 	max         Ordered
 	fingerprint any
 	flags       flags
@@ -398,11 +409,12 @@ func (mt *monoidTree) Fingerprint() any {
 	return mt.root.fingerprint
 }
 
-func (mt *monoidTree) newNode(parent *monoidTreeNode, v Ordered) *monoidTreeNode {
+func (mt *monoidTree) newNode(parent *monoidTreeNode, k Ordered, v any) *monoidTreeNode {
 	return &monoidTreeNode{
-		key:         v,
-		max:         v,
-		fingerprint: mt.m.Fingerprint(v),
+		key:         k,
+		value:       v,
+		max:         k,
+		fingerprint: mt.m.Fingerprint(k),
 	}
 }
 
@@ -411,10 +423,10 @@ func (mt *monoidTree) buildFromSortedSlice(parent *monoidTreeNode, s []Ordered) 
 	case 0:
 		return nil
 	case 1:
-		return mt.newNode(nil, s[0])
+		return mt.newNode(nil, s[0], nil)
 	}
 	middle := len(s) / 2
-	node := mt.newNode(parent, s[middle])
+	node := mt.newNode(parent, s[middle], nil)
 	node.left = mt.buildFromSortedSlice(node, s[:middle])
 	node.right = mt.buildFromSortedSlice(node, s[middle+1:])
 	if node.left != nil {
@@ -480,19 +492,27 @@ func (mt *monoidTree) doubleRotate(mn *monoidTreeNode, d dir) *monoidTreeNode {
 	return mt.rotate(mn, d)
 }
 
-func (mt *monoidTree) Add(v Ordered) {
-	mt.root = mt.insert(mt.root, v, true)
+func (mt *monoidTree) Add(k Ordered) {
+	mt.add(k, nil, false)
+}
+
+func (mt *monoidTree) Set(k Ordered, v any) {
+	mt.add(k, v, true)
+}
+
+func (mt *monoidTree) add(k Ordered, v any, set bool) {
+	mt.root = mt.insert(mt.root, k, v, true, set)
 	if mt.root.flags&flagBlack == 0 {
 		mt.root = mt.ensureCloned(mt.root)
 		mt.root.flags |= flagBlack
 	}
 }
 
-func (mt *monoidTree) insert(mn *monoidTreeNode, v Ordered, rb bool) *monoidTreeNode {
+func (mt *monoidTree) insert(mn *monoidTreeNode, k Ordered, v any, rb, set bool) *monoidTreeNode {
 	// simplified insert implementation idea from
 	// https://zarif98sjs.github.io/blog/blog/redblacktree/
 	if mn == nil {
-		mn = mt.newNode(nil, v)
+		mn = mt.newNode(nil, k, v)
 		// the new node is not really "cloned", but at this point it's
 		// only present in this tree so we can safely modify it
 		// without allocating new nodes
@@ -502,8 +522,12 @@ func (mt *monoidTree) insert(mn *monoidTreeNode, v Ordered, rb bool) *monoidTree
 		mt.cachedMaxPtr = nil
 		return mn
 	}
-	c := v.Compare(mn.key)
+	c := k.Compare(mn.key)
 	if c == 0 {
+		if v != mn.value {
+			mn = mt.ensureCloned(mn)
+			mn.value = v
+		}
 		return mn
 	}
 	d := left
@@ -511,7 +535,7 @@ func (mt *monoidTree) insert(mn *monoidTreeNode, v Ordered, rb bool) *monoidTree
 		d = right
 	}
 	oldChild := mn.child(d)
-	newChild := mt.insert(oldChild, v, rb)
+	newChild := mt.insert(oldChild, k, v, rb, set)
 	mn = mt.setChild(mn, d, newChild)
 	updateFP := true
 	if rb {
@@ -555,6 +579,15 @@ func (mt *monoidTree) insertFixup(mn *monoidTreeNode, d dir, updateFP bool) (*mo
 	default:
 		return mn, true
 	}
+}
+
+func (mt *monoidTree) Lookup(k Ordered) (any, bool) {
+	// TODO: lookups shouldn't cause any allocation!
+	ptr := mt.rootPtr()
+	if !mt.findGTENode(ptr, k) || ptr.node == nil || ptr.Key().Compare(k) != 0 {
+		return nil, false
+	}
+	return ptr.Value(), true
 }
 
 func (mt *monoidTree) findGTENode(ptr *monoidTreePointer, x Ordered) bool {

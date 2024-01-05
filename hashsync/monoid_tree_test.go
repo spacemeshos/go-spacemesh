@@ -40,9 +40,9 @@ func makeStringConcatTree(chars string) MonoidTree {
 
 // dumbAdd inserts the node into the tree without trying to maintain the
 // red-black properties
-func dumbAdd(mt MonoidTree, v Ordered) {
+func dumbAdd(mt MonoidTree, k Ordered) {
 	mtree := mt.(*monoidTree)
-	mtree.root = mtree.insert(mtree.root, v, false)
+	mtree.root = mtree.insert(mtree.root, k, nil, false, false)
 }
 
 // makeDumbTree constructs a binary tree by adding the chars one-by-one without
@@ -59,9 +59,6 @@ func makeDumbTree(chars string) MonoidTree {
 }
 
 func makeRBTree(chars string) MonoidTree {
-	if len(chars) == 0 {
-		panic("empty set")
-	}
 	mt := NewMonoidTree(sampleCountMonoid())
 	for _, c := range chars {
 		mt.Add(sampleID(c))
@@ -464,4 +461,51 @@ func TestRandomOrderAndRanges(t *testing.T) {
 	t.Run("red-black tree", func(t *testing.T) {
 		testRandomOrderAndRanges(t, makeRBTree)
 	})
+}
+
+func TestTreeValues(t *testing.T) {
+	tree := makeRBTree("")
+	tree.Add(sampleID("a"))
+	tree.Set(sampleID("b"), 123)
+	tree.Set(sampleID("d"), 456)
+	verifyOrig := func() {
+		v, found := tree.Lookup(sampleID("a"))
+		require.True(t, found)
+		require.Nil(t, v)
+		v, found = tree.Lookup(sampleID("b"))
+		require.True(t, found)
+		require.Equal(t, 123, v)
+		v, found = tree.Lookup(sampleID("c"))
+		require.False(t, found)
+		require.Nil(t, v)
+		v, found = tree.Lookup(sampleID("d"))
+		require.True(t, found)
+		require.Equal(t, 456, v)
+	}
+	verifyOrig()
+
+	treeDump := tree.Dump()
+	tree1 := tree.Copy()
+
+	// flagCloned on the root should be cleared after copy
+	// and not set again by Set b/c the value is the same
+	tree.Set(sampleID("d"), 456) // nothing changed
+	require.Zero(t, tree.(*monoidTree).root.flags&flagCloned)
+
+	tree1.Set(sampleID("b"), 1234)
+	tree1.Set(sampleID("c"), 222)
+	verifyOrig()
+	require.Equal(t, treeDump, tree.Dump())
+	v, found := tree1.Lookup(sampleID("a"))
+	require.True(t, found)
+	require.Nil(t, v)
+	v, found = tree1.Lookup(sampleID("b"))
+	require.True(t, found)
+	require.Equal(t, 1234, v)
+	v, found = tree1.Lookup(sampleID("c"))
+	require.True(t, found)
+	require.Equal(t, 222, v)
+	v, found = tree1.Lookup(sampleID("d"))
+	require.True(t, found)
+	require.Equal(t, 456, v)
 }

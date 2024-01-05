@@ -55,7 +55,8 @@ type RangeInfo struct {
 }
 
 type ItemStore interface {
-	Add(v Ordered)
+	// Add adds a key to the store
+	Add(k Ordered)
 	// GetRangeInfo returns RangeInfo for the item range in the tree.
 	// If count >= 0, at most count items are returned, and RangeInfo
 	// is returned for the corresponding subrange of the requested range

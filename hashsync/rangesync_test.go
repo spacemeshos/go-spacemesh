@@ -142,9 +142,8 @@ type dumbStore struct {
 
 var _ ItemStore = &dumbStore{}
 
-func (ds *dumbStore) Add(v Ordered) {
-	//slices.Insert[S ~[]E, E any](s S, i int, v ...E)
-	id := v.(sampleID)
+func (ds *dumbStore) Add(k Ordered) {
+	id := k.(sampleID)
 	if len(ds.items) == 0 {
 		ds.items = []sampleID{id}
 		return
@@ -266,9 +265,9 @@ type verifiedStore struct {
 
 var _ ItemStore = &verifiedStore{}
 
-func (vs *verifiedStore) Add(v Ordered) {
-	vs.knownGood.Add(v)
-	vs.store.Add(v)
+func (vs *verifiedStore) Add(k Ordered) {
+	vs.knownGood.Add(k)
+	vs.store.Add(k)
 }
 
 func (vs *verifiedStore) GetRangeInfo(preceding Iterator, x, y Ordered, count int) RangeInfo {

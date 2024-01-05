@@ -26,7 +26,6 @@ func (it *monoidTreeIterator) Next() {
 	}
 }
 
-// TBD: Lookup method
 type MonoidTreeStore struct {
 	mt MonoidTree
 }
@@ -40,8 +39,8 @@ func NewMonoidTreeStore(m Monoid) ItemStore {
 }
 
 // Add implements ItemStore.
-func (mts *MonoidTreeStore) Add(v Ordered) {
-	mts.mt.Add(v)
+func (mts *MonoidTreeStore) Add(k Ordered) {
+	mts.mt.Add(k)
 }
 
 func (mts *MonoidTreeStore) iter(ptr MonoidTreePointer) Iterator {
