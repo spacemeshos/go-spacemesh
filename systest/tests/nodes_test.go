@@ -47,17 +47,23 @@ func TestAddNodes(t *testing.T) {
 
 	var eg errgroup.Group
 	{
-		watchLayers(tctx, &eg, cl.Client(0), func(layer *pb.LayerStreamResponse) (bool, error) {
-			if layer.Layer.Number.Number >= beforeAdding {
-				tctx.Log.Debugw("adding new smeshers",
-					"n", addedLater,
-					"layer", layer.Layer.Number,
-				)
-				// the new smeshers will use the old sync protocol
-				return false, cl.AddSmeshers(tctx, addedLater)
-			}
-			return true, nil
-		})
+		watchLayers(
+			tctx,
+			&eg,
+			cl.Client(0),
+			tctx.Log.Desugar(),
+			func(layer *pb.LayerStreamResponse) (bool, error) {
+				if layer.Layer.Number.Number >= beforeAdding {
+					tctx.Log.Debugw("adding new smeshers",
+						"n", addedLater,
+						"layer", layer.Layer.Number,
+					)
+					// the new smeshers will use the old sync protocol
+					return false, cl.AddSmeshers(tctx, addedLater)
+				}
+				return true, nil
+			},
+		)
 	}
 	require.NoError(t, eg.Wait())
 
@@ -65,23 +71,29 @@ func TestAddNodes(t *testing.T) {
 	for i := 0; i < cl.Total(); i++ {
 		i := i
 		client := cl.Client(i)
-		watchProposals(tctx, &eg, client, tctx.Log.Desugar(), func(proposal *pb.Proposal) (bool, error) {
-			if proposal.Epoch.Number > lastEpoch {
-				return false, nil
-			}
-			if proposal.Status == pb.Proposal_Created {
-				tctx.Log.Debugw("received proposal event",
-					"client", client.Name,
-					"layer", proposal.Layer.Number,
-					"epoch", proposal.Epoch.Number,
-					"smesher", prettyHex(proposal.Smesher.Id),
-					"eligibilities", len(proposal.Eligibilities),
-					"status", pb.Proposal_Status_name[int32(proposal.Status)],
-				)
-				created[i] = append(created[i], proposal)
-			}
-			return true, nil
-		})
+		watchProposals(
+			tctx,
+			&eg,
+			client,
+			tctx.Log.Desugar(),
+			func(proposal *pb.Proposal) (bool, error) {
+				if proposal.Epoch.Number > lastEpoch {
+					return false, nil
+				}
+				if proposal.Status == pb.Proposal_Created {
+					tctx.Log.Debugw("received proposal event",
+						"client", client.Name,
+						"layer", proposal.Layer.Number,
+						"epoch", proposal.Epoch.Number,
+						"smesher", prettyHex(proposal.Smesher.Id),
+						"eligibilities", len(proposal.Eligibilities),
+						"status", pb.Proposal_Status_name[int32(proposal.Status)],
+					)
+					created[i] = append(created[i], proposal)
+				}
+				return true, nil
+			},
+		)
 	}
 	require.NoError(t, eg.Wait())
 	unique := map[uint32]map[string]struct{}{}
@@ -128,14 +140,22 @@ func TestFailedNodes(t *testing.T) {
 	failed := int(0.6 * float64(tctx.ClusterSize))
 
 	eg, ctx := errgroup.WithContext(tctx)
-	scheduleChaos(ctx, eg, cl.Client(0), failAt, lastLayer, func(ctx context.Context) (chaos.Teardown, error) {
-		names := []string{}
-		for i := 1; i <= failed; i++ {
-			names = append(names, cl.Client(cl.Total()-i).Name)
-		}
-		tctx.Log.Debugw("failing nodes", "names", strings.Join(names, ","))
-		return chaos.Fail(tctx, "fail60percent", names...)
-	})
+	scheduleChaos(
+		ctx,
+		eg,
+		cl.Client(0),
+		tctx.Log.Desugar(),
+		failAt,
+		lastLayer,
+		func(ctx context.Context) (chaos.Teardown, error) {
+			names := []string{}
+			for i := 1; i <= failed; i++ {
+				names = append(names, cl.Client(cl.Total()-i).Name)
+			}
+			tctx.Log.Debugw("failing nodes", "names", strings.Join(names, ","))
+			return chaos.Fail(tctx, "fail60percent", names...)
+		},
+	)
 
 	hashes := make([]map[uint32]string, cl.Total())
 	for i := 0; i < cl.Total(); i++ {
@@ -144,22 +164,32 @@ func TestFailedNodes(t *testing.T) {
 	for i := 0; i < cl.Total()-failed; i++ {
 		i := i
 		client := cl.Client(i)
-		watchLayers(ctx, eg, client, func(layer *pb.LayerStreamResponse) (bool, error) {
-			if layer.Layer.Status == pb.Layer_LAYER_STATUS_APPLIED {
-				tctx.Log.Debugw("layer applied",
-					"client", client.Name,
-					"layer", layer.Layer.Number.Number,
-					"hash", prettyHex(layer.Layer.Hash),
-				)
-				if layer.Layer.Number.Number == stopLayer {
-					return false, nil
+		watchLayers(
+			ctx,
+			eg,
+			client,
+			tctx.Log.Desugar(),
+			func(layer *pb.LayerStreamResponse) (bool, error) {
+				if layer.Layer.Status == pb.Layer_LAYER_STATUS_APPLIED {
+					tctx.Log.Debugw(
+						"layer applied",
+						"client",
+						client.Name,
+						"layer",
+						layer.Layer.Number.Number,
+						"hash",
+						prettyHex(layer.Layer.Hash),
+					)
+					if layer.Layer.Number.Number == stopLayer {
+						return false, nil
+					}
+					if layer.Layer.Number.Number <= lastLayer {
+						hashes[i][layer.Layer.Number.Number] = prettyHex(layer.Layer.Hash)
+					}
 				}
-				if layer.Layer.Number.Number <= lastLayer {
-					hashes[i][layer.Layer.Number.Number] = prettyHex(layer.Layer.Hash)
-				}
-			}
-			return true, nil
-		})
+				return true, nil
+			},
+		)
 	}
 	require.NoError(t, eg.Wait())
 	reference := hashes[0]

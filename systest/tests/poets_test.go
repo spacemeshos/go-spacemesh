@@ -71,7 +71,7 @@ func testPoetDies(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 		})
 	}
 
-	watchLayers(ctx, eg, cl.Client(0), func(layer *pb.LayerStreamResponse) (bool, error) {
+	watchLayers(ctx, eg, cl.Client(0), tctx.Log.Desugar(), func(layer *pb.LayerStreamResponse) (bool, error) {
 		// Will kill a poet from time to time
 		if layer.Layer.Number.Number > last {
 			tctx.Log.Debug("Poet killer is done")

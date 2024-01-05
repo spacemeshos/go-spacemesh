@@ -179,7 +179,7 @@ func testVesting(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster, 
 		client := cl.Client(i % cl.Total())
 		eg.Go(func() error {
 			var subeg errgroup.Group
-			watchLayers(tctx, &subeg, client, func(layer *pb.LayerStreamResponse) (bool, error) {
+			watchLayers(tctx, &subeg, client, tctx.Log.Desugar(), func(layer *pb.LayerStreamResponse) (bool, error) {
 				return layer.Layer.Number.Number < uint32(acc.start), nil
 			})
 			if err := subeg.Wait(); err != nil {

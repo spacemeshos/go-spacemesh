@@ -44,7 +44,7 @@ func sendTransactions(
 		if err != nil {
 			return fmt.Errorf("get nonce failed (%s:%s): %w", client.Name, cl.Address(i), err)
 		}
-		watchLayers(ctx, eg, client, func(layer *pb.LayerStreamResponse) (bool, error) {
+		watchLayers(ctx, eg, client, logger.Desugar(), func(layer *pb.LayerStreamResponse) (bool, error) {
 			if layer.Layer.Number.Number == stop {
 				return false, nil
 			}
@@ -122,16 +122,18 @@ func watchStateHashes(
 	ctx context.Context,
 	eg *errgroup.Group,
 	node *cluster.NodeClient,
+	logger *zap.Logger,
 	collector func(*pb.GlobalStateStreamResponse) (bool, error),
 ) {
 	eg.Go(func() error {
-		return stateHashStream(ctx, node, collector)
+		return stateHashStream(ctx, node, logger, collector)
 	})
 }
 
 func stateHashStream(
 	ctx context.Context,
 	node *cluster.NodeClient,
+	logger *zap.Logger,
 	collector func(*pb.GlobalStateStreamResponse) (bool, error),
 ) error {
 	stateapi := pb.NewGlobalStateServiceClient(node.PubConn())
@@ -144,6 +146,13 @@ func stateHashStream(
 	}
 	for {
 		state, err := states.Recv()
+		s, ok := status.FromError(err)
+		if ok && s.Code() != codes.OK {
+			logger.Warn("global state stream error", zap.String("client", node.Name), zap.Error(err), zap.Any("status", s))
+			if s.Code() == codes.Unavailable {
+				return nil
+			}
+		}
 		if err != nil {
 			return fmt.Errorf("stream err from client %v: %w", node.Name, err)
 		}
@@ -153,19 +162,24 @@ func stateHashStream(
 	}
 }
 
-func watchLayers(ctx context.Context, eg *errgroup.Group,
+func watchLayers(
+	ctx context.Context,
+	eg *errgroup.Group,
 	node *cluster.NodeClient,
+	logger *zap.Logger,
 	collector func(*pb.LayerStreamResponse) (bool, error),
 ) {
 	eg.Go(func() error {
-		return layersStream(ctx, node, collector)
+		return layersStream(ctx, node, logger, collector)
 	})
 }
 
 type layerCollector func(*pb.LayerStreamResponse) (bool, error)
 
-func layersStream(ctx context.Context,
+func layersStream(
+	ctx context.Context,
 	node *cluster.NodeClient,
+	logger *zap.Logger,
 	collector layerCollector,
 ) error {
 	meshapi := pb.NewMeshServiceClient(node.PubConn())
@@ -175,6 +189,13 @@ func layersStream(ctx context.Context,
 	}
 	for {
 		layer, err := layers.Recv()
+		s, ok := status.FromError(err)
+		if ok && s.Code() != codes.OK {
+			logger.Warn("layers stream error", zap.String("client", node.Name), zap.Error(err), zap.Any("status", s))
+			if s.Code() == codes.Unavailable {
+				return nil
+			}
+		}
 		if err != nil {
 			return err
 		}
@@ -248,6 +269,7 @@ func waitTransaction(ctx context.Context,
 func watchTransactionResults(ctx context.Context,
 	eg *errgroup.Group,
 	client *cluster.NodeClient,
+	log *zap.Logger,
 	collector func(*pb.TransactionResult) (bool, error),
 ) {
 	eg.Go(func() error {
@@ -258,6 +280,13 @@ func watchTransactionResults(ctx context.Context,
 		}
 		for {
 			rst, err := rsts.Recv()
+			s, ok := status.FromError(err)
+			if ok && s.Code() != codes.OK {
+				log.Warn("transactions stream error", zap.String("client", client.Name), zap.Error(err), zap.Any("status", s))
+				if s.Code() == codes.Unavailable {
+					return nil
+				}
+			}
 			if err != nil {
 				return fmt.Errorf("stream error on receiving result %s: %w", client.Name, err)
 			}
@@ -285,17 +314,11 @@ func watchProposals(
 			proposal, err := proposals.Recv()
 			s, ok := status.FromError(err)
 			if ok && s.Code() != codes.OK {
-				log.Info(
-					"proposal stream closed",
-					zap.String("client", client.Name),
-					zap.Error(err),
-					zap.Any("status", s),
-					zap.String("message", s.Message()),
-				)
-
-				if s.Code() == codes.Unavailable {
-					// Server is closing the connection, return nil
-					return nil
+				if ok && s.Code() != codes.OK {
+					log.Warn("proposals stream error", zap.String("client", client.Name), zap.Error(err), zap.Any("status", s))
+					if s.Code() == codes.Unavailable {
+						return nil
+					}
 				}
 			}
 			if err != nil {
@@ -316,11 +339,12 @@ func scheduleChaos(
 	ctx context.Context,
 	eg *errgroup.Group,
 	client *cluster.NodeClient,
+	logger *zap.Logger,
 	from, to uint32,
 	action func(context.Context) (chaos.Teardown, error),
 ) {
 	var teardown chaos.Teardown
-	watchLayers(ctx, eg, client, func(layer *pb.LayerStreamResponse) (bool, error) {
+	watchLayers(ctx, eg, client, logger, func(layer *pb.LayerStreamResponse) (bool, error) {
 		if layer.Layer.Number.Number == from && teardown == nil {
 			var err error
 			teardown, err = action(ctx)
