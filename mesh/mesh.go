@@ -194,12 +194,14 @@ func (msh *Mesh) GetLayer(lid types.LayerID) (*types.Layer, error) {
 // GetLayerVerified returns the verified, canonical block for a layer (or none for an empty layer).
 func (msh *Mesh) GetLayerVerified(lid types.LayerID) (*types.Block, error) {
 	applied, err := layers.GetApplied(msh.cdb, lid)
-	if err != nil && errors.Is(err, sql.ErrNotFound) {
+	switch {
+	case errors.Is(err, sql.ErrNotFound):
 		return nil, nil
-	} else if err != nil {
+	case err != nil:
 		return nil, fmt.Errorf("get applied %v: %w", lid, err)
+	default:
+		return blocks.Get(msh.cdb, applied)
 	}
-	return blocks.Get(msh.cdb, applied)
 }
 
 // ProcessedLayer returns the last processed layer ID.
