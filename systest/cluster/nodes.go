@@ -634,7 +634,7 @@ func deployNode(ctx *testcontext.Context, id string, labels map[string]string, f
 						).
 						WithStartupProbe(
 							corev1.Probe().WithTCPSocket(
-								corev1.TCPSocketAction().WithPort(intstr.FromInt(9092)),
+								corev1.TCPSocketAction().WithPort(intstr.FromInt32(9092)),
 							).WithInitialDelaySeconds(10).WithPeriodSeconds(10),
 						).
 						WithEnv(
