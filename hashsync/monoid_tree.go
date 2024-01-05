@@ -33,9 +33,9 @@ func (fpred FingerprintPredicate) Match(y any) bool {
 type MonoidTree interface {
 	Fingerprint() any
 	Add(v Ordered)
-	Min() MonoidTreeNode
-	Max() MonoidTreeNode
-	RangeFingerprint(node MonoidTreeNode, start, end Ordered, stop FingerprintPredicate) (fp any, startNode, endNode MonoidTreeNode)
+	Min() MonoidTreePointer
+	Max() MonoidTreePointer
+	RangeFingerprint(ptr MonoidTreePointer, start, end Ordered, stop FingerprintPredicate) (fp any, startNode, endNode MonoidTreePointer)
 	Dump() string
 }
 
@@ -58,10 +58,11 @@ func MonoidTreeFromSlice[T Ordered](m Monoid, items []T) MonoidTree {
 	return MonoidTreeFromSortedSlice(m, items)
 }
 
-type MonoidTreeNode interface {
+type MonoidTreePointer interface {
+	Equal(other MonoidTreePointer) bool
 	Key() Ordered
-	Prev() MonoidTreeNode
-	Next() MonoidTreeNode
+	Prev()
+	Next()
 }
 
 type color uint8
@@ -104,8 +105,123 @@ func (d dir) String() string {
 	}
 }
 
+const initialParentStackSize = 32
+
+type monoidTreePointer struct {
+	parentStack []*monoidTreeNode
+	node        *monoidTreeNode
+}
+
+var _ MonoidTreePointer = &monoidTreePointer{}
+
+func (p *monoidTreePointer) clone() *monoidTreePointer {
+	// TODO: copy node stack
+	r := &monoidTreePointer{
+		parentStack: make([]*monoidTreeNode, len(p.parentStack), cap(p.parentStack)),
+		node:        p.node,
+	}
+	copy(r.parentStack, p.parentStack)
+	return r
+}
+
+func (p *monoidTreePointer) parent() {
+	n := len(p.parentStack)
+	if n == 0 {
+		p.node = nil
+	} else {
+		n--
+		p.node = p.parentStack[n]
+		p.parentStack = p.parentStack[:n]
+	}
+}
+
+func (p *monoidTreePointer) left() {
+	if p.node != nil {
+		p.parentStack = append(p.parentStack, p.node)
+		p.node = p.node.left
+	}
+}
+
+func (p *monoidTreePointer) right() {
+	if p.node != nil {
+		p.parentStack = append(p.parentStack, p.node)
+		p.node = p.node.right
+	}
+}
+
+func (p *monoidTreePointer) min() {
+	for {
+		switch {
+		case p.node == nil || p.node.left == nil:
+			return
+		default:
+			p.left()
+		}
+	}
+}
+
+func (p *monoidTreePointer) max() {
+	for {
+		switch {
+		case p.node == nil || p.node.right == nil:
+			return
+		default:
+			p.right()
+		}
+	}
+}
+
+func (p *monoidTreePointer) Equal(other MonoidTreePointer) bool {
+	if other == nil {
+		return p.node == nil
+	}
+	return p.node == other.(*monoidTreePointer).node
+}
+
+func (p *monoidTreePointer) Prev() {
+	switch {
+	case p.node == nil:
+	case p.node.left != nil:
+		p.left()
+		p.max()
+	default:
+		oldNode := p.node
+		for {
+			p.parent()
+			if p.node == nil || oldNode != p.node.left {
+				return
+			}
+			oldNode = p.node
+		}
+	}
+}
+
+func (p *monoidTreePointer) Next() {
+	switch {
+	case p.node == nil:
+	case p.node.right != nil:
+		p.right()
+		p.min()
+	default:
+		oldNode := p.node
+		for {
+			p.parent()
+			if p.node == nil || oldNode != p.node.right {
+				return
+			}
+			oldNode = p.node
+		}
+	}
+}
+
+func (p *monoidTreePointer) Key() Ordered {
+	if p.node == nil {
+		return nil
+	}
+	return p.node.key
+}
+
 type monoidTreeNode struct {
-	parent      *monoidTreeNode
 	left        *monoidTreeNode
 	right       *monoidTreeNode
 	key         Ordered
@@ -141,9 +257,6 @@ func (mn *monoidTreeNode) setChild(dir dir, child *monoidTreeNode) {
 	} else {
 		mn.right = child
 	}
-	if child != nil {
-		child.parent = mn
-	}
 }
 
 func (mn *monoidTreeNode) flip() {
@@ -157,73 +270,6 @@ func (mn *monoidTreeNode) flip() {
 
 func (mn *monoidTreeNode) Key() Ordered { return mn.key }
 
-func (mn *monoidTreeNode) minNode() *monoidTreeNode {
-	if mn.left == nil {
-		return mn
-	}
-	return mn.left.minNode()
-}
-
-func (mn *monoidTreeNode) maxNode() *monoidTreeNode {
-	if mn.right == nil {
-		return mn
-	}
-	return mn.right.maxNode()
-}
-
-func (mn *monoidTreeNode) prev() *monoidTreeNode {
-	switch {
-	case mn == nil:
-		return nil
-	case mn.left != nil:
-		return mn.left.maxNode()
-	default:
-		p := mn.parent
-		for p != nil && mn == p.left {
-			mn = p
-			p = p.parent
-		}
-		return p
-	}
-}
-
-func (mn *monoidTreeNode) next() *monoidTreeNode {
-	switch {
-	case mn == nil:
-		return nil
-	case mn.right != nil:
-		return mn.right.minNode()
-	default:
-		p := mn.parent
-		for p != nil && mn == p.right {
-			mn = p
-			p = p.parent
-		}
-		return p
-	}
-}
-
-func (mn *monoidTreeNode) rmmeStr() string {
-	if mn == nil {
-		return "<nil>"
-	}
-	return fmt.Sprintf("%s", mn.key)
-}
-
-func (mn *monoidTreeNode) Prev() MonoidTreeNode {
-	if prev := mn.prev(); prev != nil {
-		return prev
-	}
-	return nil
-}
-
-func (mn *monoidTreeNode) Next() MonoidTreeNode {
-	if next := mn.next(); next != nil {
-		return next
-	}
-	return nil
-}
-
 func (mn *monoidTreeNode) dump(w io.Writer, indent int) {
 	indentStr := strings.Repeat("  ", indent)
 	fmt.Fprintf(w, "%skey: %v\n", indentStr, mn.key)
@@ -232,9 +278,6 @@ func (mn *monoidTreeNode) dump(w io.Writer, indent int) {
 	if mn.left != nil {
 		fmt.Fprintf(w, "%sleft:\n", indentStr)
 		mn.left.dump(w, indent+1)
-		if mn.left.parent != mn {
-			fmt.Fprintf(w, "%sERROR: bad parent on the left\n", indentStr)
-		}
 		if mn.left.key.Compare(mn.key) >= 0 {
 			fmt.Fprintf(w, "%sERROR: left key >= parent key\n", indentStr)
 		}
@@ -242,9 +285,6 @@ func (mn *monoidTreeNode) dump(w io.Writer, indent int) {
 	if mn.right != nil {
 		fmt.Fprintf(w, "%sright:\n", indentStr)
 		mn.right.dump(w, indent+1)
-		if mn.right.parent != mn {
-			fmt.Fprintf(w, "%sERROR: bad parent on the right\n", indentStr)
-		}
 		if mn.right.key.Compare(mn.key) <= 0 {
 			fmt.Fprintf(w, "%sERROR: right key <= parent key\n", indentStr)
 		}
@@ -258,40 +298,49 @@ func (mn *monoidTreeNode) dumpSubtree() string {
 }
 
 type monoidTree struct {
-	m             Monoid
-	root          *monoidTreeNode
-	cachedMinNode *monoidTreeNode
-	cachedMaxNode *monoidTreeNode
+	m            Monoid
+	root         *monoidTreeNode
+	cachedMinPtr *monoidTreePointer
+	cachedMaxPtr *monoidTreePointer
 }
 
 func NewMonoidTree(m Monoid) MonoidTree {
 	return &monoidTree{m: m}
 }
 
-func (mt *monoidTree) Min() MonoidTreeNode {
-	if mt.root == nil {
-		return nil
+func (mt *monoidTree) rootPtr() *monoidTreePointer {
+	return &monoidTreePointer{
+		parentStack: make([]*monoidTreeNode, 0, initialParentStackSize),
+		node:        mt.root,
 	}
-	if mt.cachedMinNode == nil {
-		mt.cachedMinNode = mt.root.minNode()
-	}
-	if mt.cachedMinNode == nil {
-		panic("BUG: no minNode in a non-empty tree")
-	}
-	return mt.cachedMinNode
 }
 
-func (mt *monoidTree) Max() MonoidTreeNode {
+func (mt *monoidTree) Min() MonoidTreePointer {
 	if mt.root == nil {
 		return nil
 	}
-	if mt.cachedMaxNode == nil {
-		mt.cachedMaxNode = mt.root.maxNode()
+	if mt.cachedMinPtr == nil {
+		mt.cachedMinPtr = mt.rootPtr()
+		mt.cachedMinPtr.min()
 	}
-	if mt.cachedMaxNode == nil {
+	if mt.cachedMinPtr.node == nil {
+		panic("BUG: no minNode in a non-empty tree")
+	}
+	return mt.cachedMinPtr.clone()
+}
+
+func (mt *monoidTree) Max() MonoidTreePointer {
+	if mt.root == nil {
+		return nil
+	}
+	if mt.cachedMaxPtr == nil {
+		mt.cachedMaxPtr = mt.rootPtr()
+		mt.cachedMaxPtr.max()
+	}
+	if mt.cachedMaxPtr.node == nil {
 		panic("BUG: no maxNode in a non-empty tree")
 	}
-	return mt.cachedMaxNode
+	return mt.cachedMaxPtr.clone()
 }
 
 func (mt *monoidTree) Fingerprint() any {
@@ -303,7 +352,6 @@ func (mt *monoidTree) Fingerprint() any {
 
 func (mt *monoidTree) newNode(parent *monoidTreeNode, v Ordered) *monoidTreeNode {
 	return &monoidTreeNode{
-		parent:      parent,
 		key:         v,
 		max:         v,
 		fingerprint: mt.m.Fingerprint(v),
@@ -322,11 +370,9 @@ func (mt *monoidTree) buildFromSortedSlice(parent *monoidTreeNode, s []Ordered) 
 	node.left = mt.buildFromSortedSlice(node, s[:middle])
 	node.right = mt.buildFromSortedSlice(node, s[middle+1:])
 	if node.left != nil {
-		node.left.parent = node
 		node.fingerprint = mt.m.Op(node.left.fingerprint, node.fingerprint)
 	}
 	if node.right != nil {
-		node.right.parent = node
 		node.fingerprint = mt.m.Op(node.fingerprint, node.right.fingerprint)
 		node.max = node.right.max
 	}
@@ -358,7 +404,6 @@ func (mt *monoidTree) rotate(mn *monoidTreeNode, d dir) *monoidTreeNode {
 	// fmt.Fprintf(os.Stderr, "QQQQQ: rotate %s (child at %s is %s): subtree:\n%s\n",
 	// 	d, rd, tmp.key, mn.dumpSubtree())
 	mn.setChild(rd, tmp.child(d))
-	tmp.parent = mn.parent
 	tmp.setChild(d, mn)
 
 	tmp.color = mn.color
@@ -388,12 +433,9 @@ func (mt *monoidTree) insert(mn *monoidTreeNode, v Ordered, rb bool) *monoidTree
 	// https://zarif98sjs.github.io/blog/blog/redblacktree/
 	if mn == nil {
 		mn = mt.newNode(nil, v)
-		if mt.cachedMinNode != nil && v.Compare(mt.cachedMinNode.key) < 0 {
-			mt.cachedMinNode = mn
-		}
-		if mt.cachedMaxNode != nil && v.Compare(mt.cachedMaxNode.key) > 0 {
-			mt.cachedMaxNode = mn
-		}
+		// if the tree is being modified, cached min/max ptrs are no longer valid
+		mt.cachedMinPtr = nil
+		mt.cachedMaxPtr = nil
 		return mn
 	}
 	c := v.Compare(mn.key)
@@ -449,135 +491,116 @@ func (mt *monoidTree) insertFixup(mn *monoidTreeNode, d dir, updateFP bool) (*mo
 	return mn, updateFP
 }
 
-func (mt *monoidTree) findGTENode(mn *monoidTreeNode, x Ordered) *monoidTreeNode {
-	switch {
-	case mn == nil:
-		return nil
-	case x.Compare(mn.key) == 0:
-		// Exact match
-		return mn
-	case x.Compare(mn.max) > 0:
-		// All of this subtree is below v, maybe we can have
-		// some luck with the parent node
-		return mt.findGTENode(mn.parent, x)
-	case x.Compare(mn.key) >= 0:
-		// We're still below x (or at x, but allowEqual is
-		// false), but given that we checked Max and saw that
-		// this subtree has some keys that are greater than
-		// or equal to x, we can find them on the right
-		if mn.right == nil {
-			// mn.Max lied to us
-			panic("BUG: MonoidTreeNode: x > mn.Max but no right branch")
+func (mt *monoidTree) findGTENode(ptr *monoidTreePointer, x Ordered) bool {
+	for {
+		switch {
+		case ptr.node == nil:
+			return false
+		case x.Compare(ptr.node.key) == 0:
+			// Exact match
+			return true
+		case x.Compare(ptr.node.max) > 0:
+			// All of this subtree is below v, maybe we can have
+			// some luck with the parent node
+			ptr.parent()
+			mt.findGTENode(ptr, x)
+		case x.Compare(ptr.node.key) >= 0:
+			// We're still below x (or at x, but allowEqual is
+			// false), but given that we checked Max and saw that
+			// this subtree has some keys that are greater than
+			// or equal to x, we can find them on the right
+			if ptr.node.right == nil {
+				// mn.Max lied to us
+				panic("BUG: MonoidTreeNode: x > mn.Max but no right branch")
+			}
+			// Avoid endless recursion in case of a bug
+			if x.Compare(ptr.node.right.max) > 0 {
+				panic("BUG: MonoidTreeNode: inconsistent Max on the right branch")
+			}
+			ptr.right()
+		case ptr.node.left == nil || x.Compare(ptr.node.left.max) > 0:
+			// The current node's key is greater than x and the
+			// left branch is either empty or fully below x, so
+			// the current node is what we were looking for
+			return true
+		default:
+			// Some keys on the left branch are greater or equal
+			// than x accordingto mn.Left.Max
+			ptr.left()
 		}
-		// Avoid endless recursion in case of a bug
-		if x.Compare(mn.right.max) > 0 {
-			panic("BUG: MonoidTreeNode: inconsistent Max on the right branch")
-		}
-		return mt.findGTENode(mn.right, x)
-	case mn.left == nil || x.Compare(mn.left.max) > 0:
-		// The current node's key is greater than x and the
-		// left branch is either empty or fully below x, so
-		// the current node is what we were looking for
-		return mn
-	default:
-		// Some keys on the left branch are greater or equal
-		// than x accordingto mn.Left.Max
-		r := mt.findGTENode(mn.left, x)
-		if r == nil {
-			panic("BUG: MonoidTreeNode: inconsistent Max on the left branch")
-		}
-		return r
 	}
 }
 
-func (mt *monoidTree) invRangeFingerprint(mn *monoidTreeNode, x, y Ordered, stop FingerprintPredicate) (any, *monoidTreeNode) {
-	// QQQQQ: rename: rollover range
-	next := mn
-	minNode := mn.minNode()
-
-	var acc any
-	var stopped bool
-	rightStartNode := mt.findGTENode(mn, x)
-	if rightStartNode != nil {
-		acc, next, stopped = mt.aggregateUntil(rightStartNode, acc, x, UpperBound{}, stop)
-		if stopped {
-			return acc, next
-		}
-	} else {
-		acc = mt.m.Identity()
-	}
-
-	if y.Compare(minNode.key) > 0 {
-		acc, next, _ = mt.aggregateUntil(minNode, acc, LowerBound{}, y, stop)
-	}
-
-	return acc, next
-}
-
-func (mt *monoidTree) rangeFingerprint(node MonoidTreeNode, start, end Ordered, stop FingerprintPredicate) (fp any, startNode, endNode *monoidTreeNode) {
+func (mt *monoidTree) rangeFingerprint(preceding MonoidTreePointer, start, end Ordered, stop FingerprintPredicate) (fp any, startPtr, endPtr *monoidTreePointer) {
 	if mt.root == nil {
 		return mt.m.Identity(), nil, nil
 	}
-	if node == nil {
-		node = mt.root
+	var ptr *monoidTreePointer
+	if preceding == nil {
+		ptr = mt.rootPtr()
+	} else {
+		ptr = preceding.(*monoidTreePointer)
 	}
 
-	mn := node.(*monoidTreeNode)
-	minNode := mt.root.minNode()
+	minPtr := mt.Min().(*monoidTreePointer)
 	acc := mt.m.Identity()
-	startNode = mt.findGTENode(mn, start)
+	haveGTE := mt.findGTENode(ptr, start)
+	startPtr = ptr.clone()
 	switch {
 	case start.Compare(end) >= 0:
 		// rollover range, which includes the case start == end
 		// this includes 2 subranges:
 		// [start, max_element] and [min_element, end)
 		var stopped bool
-		if node != nil {
-			acc, endNode, stopped = mt.aggregateUntil(startNode, acc, start, UpperBound{}, stop)
+		if haveGTE {
+			acc, stopped = mt.aggregateUntil(ptr, acc, start, UpperBound{}, stop)
 		}
 
-		if !stopped && end.Compare(minNode.key) > 0 {
-			acc, endNode, _ = mt.aggregateUntil(minNode, acc, LowerBound{}, end, stop)
+		if !stopped && end.Compare(minPtr.Key()) > 0 {
+			ptr = minPtr.clone()
+			acc, _ = mt.aggregateUntil(ptr, acc, LowerBound{}, end, stop)
 		}
-	case node != nil:
+	case haveGTE:
 		// normal range, that is, start < end
-		acc, endNode, _ = mt.aggregateUntil(startNode, mt.m.Identity(), start, end, stop)
+		acc, _ = mt.aggregateUntil(ptr, mt.m.Identity(), start, end, stop)
 	}
 
-	if startNode == nil {
-		startNode = minNode
+	if startPtr.node == nil {
+		startPtr = minPtr.clone()
 	}
-	if endNode == nil {
-		endNode = minNode
+	if ptr.node == nil {
+		ptr = minPtr.clone()
 	}
 
-	return acc, startNode, endNode
+	return acc, startPtr, ptr
 }
 
-func (mt *monoidTree) RangeFingerprint(node MonoidTreeNode, start, end Ordered, stop FingerprintPredicate) (fp any, startNode, endNode MonoidTreeNode) {
-	fp, stn, endn := mt.rangeFingerprint(node, start, end, stop)
+func (mt *monoidTree) RangeFingerprint(ptr MonoidTreePointer, start, end Ordered, stop FingerprintPredicate) (fp any, startNode, endNode MonoidTreePointer) {
+	fp, startPtr, endPtr := mt.rangeFingerprint(ptr, start, end, stop)
 	switch {
-	case stn == nil && endn == nil:
-		// avoid wrapping nil in MonoidTreeNode interface
+	case startPtr == nil && endPtr == nil:
+		// avoid wrapping nil in MonoidTreePointer interface
 		return fp, nil, nil
-	case stn == nil || endn == nil:
+	case startPtr == nil || endPtr == nil:
 		panic("BUG: can't have nil node just on one end")
 	default:
-		return fp, stn, endn
+		return fp, startPtr, endPtr
 	}
 }
 
-func (mt *monoidTree) aggregateUntil(mn *monoidTreeNode, acc any, start, end Ordered, stop FingerprintPredicate) (fp any, node *monoidTreeNode, stopped bool) {
-	acc, node, stopped = mt.aggregateUp(mn, acc, start, end, stop)
-	if node == nil || end.Compare(node.key) <= 0 || stopped {
-		return acc, node, stopped
+func (mt *monoidTree) aggregateUntil(ptr *monoidTreePointer, acc any, start, end Ordered, stop FingerprintPredicate) (fp any, stopped bool) {
+	acc, stopped = mt.aggregateUp(ptr, acc, start, end, stop)
+	if ptr.node == nil || end.Compare(ptr.node.key) <= 0 || stopped {
+		return acc, stopped
 	}
 
-	f := mt.m.Op(acc, mt.m.Fingerprint(node.key))
+	// fmt.Fprintf(os.Stderr, "QQQQQ: from aggregateUp: acc %q; ptr.node %q\n", acc, ptr.node.key)
+	f := mt.m.Op(acc, mt.m.Fingerprint(ptr.node.key))
 	if stop.Match(f) {
-		return acc, node, true
+		return acc, true
 	}
-	return mt.aggregateDown(node.right, f, end, stop)
+	ptr.right()
+	return mt.aggregateDown(ptr, f, end, stop)
 }
 
 // aggregateUp ascends from the left (lower) end of the range towards the LCA
@@ -594,50 +617,49 @@ func (mt *monoidTree) aggregateUntil(mn *monoidTreeNode, acc any, start, end Ord
 // If stop function is passed, we find the node on which it returns true
 // for the fingerprint accumulated between start and that node, if the target
 // node is somewhere to the left from the LCA.
-func (mt *monoidTree) aggregateUp(mn *monoidTreeNode, acc any, start, end Ordered, stop FingerprintPredicate) (fp any, node *monoidTreeNode, stopped bool) {
-	switch {
-	case mn == nil:
-		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateUp: null node\n")
-		return acc, nil, false
-	case stop.Match(acc):
-		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateUp: stop: node %v acc %v\n", mn.key, acc)
-		return acc, mn.prev(), true
-	case end.Compare(mn.max) <= 0:
-		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateUp: LCA: node %v acc %v\n", mn.key, acc)
-		// This node is a the LCA, the starting point for AggregateDown
-		return acc, mn, false
-	case start.Compare(mn.key) <= 0:
-		// This node is within the target range
-		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateUp: in-range node %v acc %v\n", mn.key, acc)
-		f := mt.m.Op(acc, mt.m.Fingerprint(mn.key))
-		if stop.Match(f) {
-			// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateUp: stop at the own node %v acc %v\n", mn.key, acc)
-			return acc, mn, true
-		}
-		f1 := mt.m.Op(f, mt.safeFingerprint(mn.right))
-		if stop.Match(f1) {
-			// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateUp: right subtree matches node %v acc %v f1 %v\n", mn.key, acc, f1)
-			// The target node is somewhere in the right subtree
-			if mn.right == nil {
-				panic("BUG: nil right child with non-identity fingerprint")
+func (mt *monoidTree) aggregateUp(ptr *monoidTreePointer, acc any, start, end Ordered, stop FingerprintPredicate) (fp any, stopped bool) {
+	for {
+		switch {
+		case ptr.node == nil:
+			// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateUp: null node\n")
+			return acc, false
+		case stop.Match(acc):
+			// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateUp: stop: node %v acc %v\n", mn.key, acc)
+			ptr.Prev()
+			return acc, true
+		case end.Compare(ptr.node.max) <= 0:
+			// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateUp: LCA: node %v acc %v\n", mn.key, acc)
+			// This node is a the LCA, the starting point for AggregateDown
+			return acc, false
+		case start.Compare(ptr.node.key) <= 0:
+			// This node is within the target range
+			// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateUp: in-range node %v acc %v\n", mn.key, acc)
+			f := mt.m.Op(acc, mt.m.Fingerprint(ptr.node.key))
+			if stop.Match(f) {
+				// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateUp: stop at the own node %v acc %v\n", mn.key, acc)
+				return acc, true
 			}
-			acc, node := mt.boundedAggregate(mn.right, f, stop)
-			if node == nil {
-				panic("BUG: aggregateUp: bad subtree fingerprint on the right branch")
+			f1 := mt.m.Op(f, mt.safeFingerprint(ptr.node.right))
+			if stop.Match(f1) {
+				// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateUp: right subtree matches node %v acc %v f1 %v\n", mn.key, acc, f1)
+				// The target node is somewhere in the right subtree
+				if ptr.node.right == nil {
+					panic("BUG: nil right child with non-identity fingerprint")
+				}
+				ptr.right()
+				acc := mt.boundedAggregate(ptr, f, stop)
+				if ptr.node == nil {
+					panic("BUG: aggregateUp: bad subtree fingerprint on the right branch")
+				}
+				// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateUp: right subtree: node %v acc %v\n", node.key, acc)
+				return acc, true
+			} else {
+				// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateUp: no right subtree match: node %v acc %v f1 %v\n", mn.key, acc, f1)
+				acc = f1
 			}
-			// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateUp: right subtree: node %v acc %v\n", node.key, acc)
-			return acc, node, true
-		} else {
-			// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateUp: no right subtree match: node %v acc %v f1 %v\n", mn.key, acc, f1)
-			acc = f1
 		}
+		ptr.parent()
 	}
-	if mn.parent == nil {
-		// No need for AggregateDown as we've covered the entire
-		// [start, end) range
-		return acc, nil, false
-	}
-	return mt.aggregateUp(mn.parent, acc, start, end, stop)
 }
 
 // aggregateDown descends from the LCA (lowest common ancestor) of nodes within
@@ -646,136 +668,119 @@ func (mt *monoidTree) aggregateUp(mn *monoidTreeNode, acc any, start, end Ordere
 // aggregation using their saved fingerprint.
 // If stop function is passed, we find the node on which it returns true
 // for the fingerprint accumulated between start and that node
-func (mt *monoidTree) aggregateDown(mn *monoidTreeNode, acc any, end Ordered, stop FingerprintPredicate) (fp any, node *monoidTreeNode, stopped bool) {
-	switch {
-	case mn == nil:
-		// fmt.Fprintf(os.Stderr, "QQQQQ: mn == nil\n")
-		return acc, nil, false
-	case stop.Match(acc):
-		// fmt.Fprintf(os.Stderr, "QQQQQ: stop on node\n")
-		return acc, mn.prev(), true
-	case end.Compare(mn.key) > 0:
-		// fmt.Fprintf(os.Stderr, "QQQQQ: within the range\n")
-		// We're within the range but there also may be nodes
-		// within the range to the right. The left branch is
-		// fully within the range
-		f := mt.m.Op(acc, mt.safeFingerprint(mn.left))
-		if stop.Match(f) {
-			// fmt.Fprintf(os.Stderr, "QQQQQ: left subtree covers it\n")
-			// The target node is somewhere in the left subtree
-			if mn.left == nil {
-				panic("BUG: aggregateDown: nil left child with non-identity fingerprint")
+func (mt *monoidTree) aggregateDown(ptr *monoidTreePointer, acc any, end Ordered, stop FingerprintPredicate) (fp any, stopped bool) {
+	for {
+		switch {
+		case ptr.node == nil:
+			// fmt.Fprintf(os.Stderr, "QQQQQ: mn == nil\n")
+			return acc, false
+		case stop.Match(acc):
+			// fmt.Fprintf(os.Stderr, "QQQQQ: stop on node\n")
+			ptr.Prev()
+			return acc, true
+		case end.Compare(ptr.node.key) > 0:
+			// fmt.Fprintf(os.Stderr, "QQQQQ: within the range\n")
+			// We're within the range but there also may be nodes
+			// within the range to the right. The left branch is
+			// fully within the range
+			f := mt.m.Op(acc, mt.safeFingerprint(ptr.node.left))
+			if stop.Match(f) {
+				// fmt.Fprintf(os.Stderr, "QQQQQ: left subtree covers it\n")
+				// The target node is somewhere in the left subtree
+				if ptr.node.left == nil {
+					panic("BUG: aggregateDown: nil left child with non-identity fingerprint")
+				}
+				ptr.left()
+				return mt.boundedAggregate(ptr, acc, stop), true
 			}
-			acc, node := mt.boundedAggregate(mn.left, acc, stop)
-			// fmt.Fprintf(os.Stderr, "QQQQQ: boundedAggregate: returned acc %v node %#v\n", acc, node)
-			if node == nil {
-				panic("BUG: aggregateDown: bad subtree fingerprint on the left branch")
+			f1 := mt.m.Op(f, mt.m.Fingerprint(ptr.node.key))
+			if stop.Match(f1) {
+				// fmt.Fprintf(os.Stderr, "QQQQQ: stop at the node, prev %#v\n", node.prev())
+				return f, true
+			} else {
+				acc = f1
 			}
-			return acc, node, true
+			// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateDown on the right\n")
+			ptr.right()
+		case ptr.node.left == nil || end.Compare(ptr.node.left.max) > 0:
+			// fmt.Fprintf(os.Stderr, "QQQQQ: node covers the range\n")
+			// Found the rightmost bounding node
+			f := mt.m.Op(acc, mt.safeFingerprint(ptr.node.left))
+			if stop.Match(f) {
+				// The target node is somewhere in the left subtree
+				if ptr.node.left == nil {
+					panic("BUG: aggregateDown: nil left child with non-identity fingerprint")
+				}
+				// XXXXX fixme
+				ptr.left()
+				return mt.boundedAggregate(ptr, acc, stop), true
+			}
+			return f, false
+		default:
+			// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateDown: going further down\n")
+			// We're too far to the right, outside the range
+			ptr.left()
 		}
-		f1 := mt.m.Op(f, mt.m.Fingerprint(mn.key))
-		if stop.Match(f1) {
-			// fmt.Fprintf(os.Stderr, "QQQQQ: stop at the node, prev %#v\n", node.prev())
-			return f, mn, true
-		} else {
-			acc = f1
-		}
-		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateDown on the right\n")
-		return mt.aggregateDown(mn.right, acc, end, stop)
-	case mn.left == nil || end.Compare(mn.left.max) > 0:
-		// fmt.Fprintf(os.Stderr, "QQQQQ: node covers the range\n")
-		// Found the rightmost bounding node
-		f := mt.m.Op(acc, mt.safeFingerprint(mn.left))
-		if stop.Match(f) {
-			// The target node is somewhere in the left subtree
-			if mn.left == nil {
-				panic("BUG: aggregateDown: nil left child with non-identity fingerprint")
-			}
-			acc, node := mt.boundedAggregate(mn.left, acc, stop)
-			// fmt.Fprintf(os.Stderr, "QQQQQ: boundedAggregate(2): returned acc %v node %#v\n", acc, node)
-			if node == nil {
-				panic("BUG: aggregateDown: bad subtree fingerprint on the left branch")
-			}
-			return acc, node, true
-		}
-		return f, mn, false
-	default:
-		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateDown: going further down\n")
-		// We're too far to the right, outside the range
-		return mt.aggregateDown(mn.left, acc, end, stop)
 	}
 }
 
-func (mt *monoidTree) boundedAggregate(mn *monoidTreeNode, acc any, stop FingerprintPredicate) (any, *monoidTreeNode) {
-	// fmt.Fprintf(os.Stderr, "QQQQQ: boundedAggregate: node %v, acc %v\n", mn.key, acc)
-	if mn == nil {
-		return acc, nil
-	}
-
-	// If we don't need to stop, or if the stop point is somewhere after
-	// this subtree, we can just use the pre-calculated subtree fingerprint
-	if f := mt.m.Op(acc, mn.fingerprint); !stop.Match(f) {
-		return f, nil
-	}
-
-	// This function is not supposed to be called with acc already matching
-	// the stop condition
-	if stop(acc) {
-		panic("BUG: boundedAggregate: initial fingerprint is matched before the first node")
-	}
-
-	if mn.left != nil {
-		// See if we can skip recursion on the left branch
-		f := mt.m.Op(acc, mn.left.fingerprint)
-		if !stop(f) {
-			// fmt.Fprintf(os.Stderr, "QQQQQ: boundedAggregate: mn Left non-nil and no-stop %v, f %v, left fingerprint %v\n", mn.key, f, mn.Left.Fingerprint)
-			acc = f
-		} else {
-			// The target node must be contained in the left subtree
-			var node *monoidTreeNode
-			acc, node = mt.boundedAggregate(mn.left, acc, stop)
-			if node == nil {
-				panic("BUG: boundedAggregate: bad subtree fingerprint on the left branch")
-			}
-			// fmt.Fprintf(os.Stderr, "QQQQQ: boundedAggregate: mn Left non-nil and stop %v, new node %v, acc %v\n", mn.key, node.key, acc)
-			return acc, node
+func (mt *monoidTree) boundedAggregate(ptr *monoidTreePointer, acc any, stop FingerprintPredicate) any {
+	for {
+		// fmt.Fprintf(os.Stderr, "QQQQQ: boundedAggregate: node %v, acc %v\n", mn.key, acc)
+		if ptr.node == nil {
+			return acc
 		}
-	}
 
-	f := mt.m.Op(acc, mt.m.Fingerprint(mn.key))
-
-	switch {
-	case stop(f):
-		// fmt.Fprintf(os.Stderr, "QQQQQ: boundedAggregate: stop at this node %v, fp %v\n", mn.key, acc)
-		return acc, mn
-	case mn.right != nil:
-		f1 := mt.m.Op(f, mn.right.fingerprint)
-		if !stop(f1) {
-			// The right branch is still below the target fingerprint
-			// fmt.Fprintf(os.Stderr, "QQQQQ: boundedAggregate: mn Right non-nil and no-stop %v, acc %v\n", mn.key, acc)
-			acc = f1
-		} else {
-			// The target node must be contained in the right subtree
-			var node *monoidTreeNode
-			acc, node := mt.boundedAggregate(mn.right, f, stop)
-			if node == nil {
-				panic("BUG: boundedAggregate: bad subtree fingerprint on the right branch")
-			}
-			// fmt.Fprintf(os.Stderr, "QQQQQ: boundedAggregate: mn Right non-nil and stop %v, new node %v, acc %v\n", mn.key, node.key, acc)
-			return acc, node
+		// If we don't need to stop, or if the stop point is somewhere after
+		// this subtree, we can just use the pre-calculated subtree fingerprint
+		if f := mt.m.Op(acc, ptr.node.fingerprint); !stop.Match(f) {
+			return f
 		}
-	}
-	// fmt.Fprintf(os.Stderr, "QQQQQ: boundedAggregate: %v -- return acc %v\n", mn.key, acc)
-	// QQQQQ: ZXXXXXX: return acc, nil !!!!
-	return f, nil
-}
 
-func (mt *monoidTree) Next(node MonoidTreeNode) MonoidTreeNode {
-	next := node.(*monoidTreeNode).next()
-	if next == nil {
-		return nil
+		// This function is not supposed to be called with acc already matching
+		// the stop condition
+		if stop.Match(acc) {
+			panic("BUG: boundedAggregate: initial fingerprint is matched before the first node")
+		}
+
+		if ptr.node.left != nil {
+			// See if we can skip recursion on the left branch
+			f := mt.m.Op(acc, ptr.node.left.fingerprint)
+			if !stop.Match(f) {
+				// fmt.Fprintf(os.Stderr, "QQQQQ: boundedAggregate: mn Left non-nil and no-stop %v, f %v, left fingerprint %v\n", mn.key, f, mn.Left.Fingerprint)
+				acc = f
+			} else {
+				// The target node must be contained in the left subtree
+				ptr.left()
+				// fmt.Fprintf(os.Stderr, "QQQQQ: boundedAggregate: mn Left non-nil and stop %v, new node %v, acc %v\n", mn.key, node.key, acc)
+				continue
+			}
+		}
+
+		f := mt.m.Op(acc, mt.m.Fingerprint(ptr.node.key))
+		if stop.Match(f) {
+			return acc
+		}
+		acc = f
+
+		if ptr.node.right != nil {
+			f1 := mt.m.Op(f, ptr.node.right.fingerprint)
+			if !stop.Match(f1) {
+				// The right branch is still below the target fingerprint
+				// fmt.Fprintf(os.Stderr, "QQQQQ: boundedAggregate: mn Right non-nil and no-stop %v, acc %v\n", mn.key, acc)
+				acc = f1
+			} else {
+				// The target node must be contained in the right subtree
+				acc = f
+				ptr.right()
+				// fmt.Fprintf(os.Stderr, "QQQQQ: boundedAggregate: mn Right non-nil and stop %v, new node %v, acc %v\n", mn.key, node.key, acc)
+				continue
+			}
+		}
+		// fmt.Fprintf(os.Stderr, "QQQQQ: boundedAggregate: %v -- return acc %v\n", mn.key, acc)
+		// QQQQQ: ZXXXXXX: return acc, nil !!!!
+		return acc
 	}
-	return next
 }
 
 func (mt *monoidTree) Dump() string {
@@ -792,12 +797,8 @@ func (mt *monoidTree) Dump() string {
 // too, in this case (Insert returns a new tree => no problem with thread safety
 // or cached min/max)
 
-// Persistent tree:
-// In 'derived' mode, along with the color, use 2 more bits:
-//   * whether this node is new
-//   * whether this node has new descendants
-// Note that any combination possible (a new node MAY NOT have any new descendants)
-// Derived trees are created with Derive(). The persistent mode may only be used
-// for derived trees (need to see if this is worth it).
-// With these bits, it is fairly easy to grab the newly added items w/o
-// using the local sync algorithm
+// TODO: rename MonoidTreeNode to just Node, MonoidTree to SyncTree
+// TODO: use sync.Pool for node alloc
+//       see also:
+//         https://www.akshaydeo.com/blog/2017/12/23/How-did-I-improve-latency-by-700-percent-using-syncPool/
+//       so may need refcounting

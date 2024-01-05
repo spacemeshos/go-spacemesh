@@ -97,8 +97,11 @@ func (fc *fakeConduit) SendItems(x, y Ordered, fingerprint any, count int, start
 	}
 	it := start
 	for {
+		if it.Key() == nil {
+			panic("fakeConduit.SendItems: went got to the end of the tree")
+		}
 		fc.resp.items = append(fc.resp.items, it.Key())
-		it = it.Next()
+		it.Next()
 		if it.Equal(end) {
 			break
 		}
@@ -113,24 +116,23 @@ type dumbStoreIterator struct {
 	n  int
 }
 
-var _ Iterator = dumbStoreIterator{}
+var _ Iterator = &dumbStoreIterator{}
 
-func (it dumbStoreIterator) Equal(other Iterator) bool {
-	o := other.(dumbStoreIterator)
+func (it *dumbStoreIterator) Equal(other Iterator) bool {
+	o := other.(*dumbStoreIterator)
 	if it.ds != o.ds {
 		panic("comparing iterators from different dumbStores")
 	}
 	return it.n == o.n
 }
 
-func (it dumbStoreIterator) Key() Ordered {
+func (it *dumbStoreIterator) Key() Ordered {
 	return it.ds.items[it.n]
 }
 
-func (it dumbStoreIterator) Next() Iterator {
-	return dumbStoreIterator{
-		ds: it.ds,
-		n:  (it.n + 1) % len(it.ds.items),
+func (it *dumbStoreIterator) Next() {
+	if len(it.ds.items) != 0 {
+		it.n = (it.n + 1) % len(it.ds.items)
 	}
 }
 
@@ -164,7 +166,7 @@ func (ds *dumbStore) iter(n int) Iterator {
 	if n == -1 || n == len(ds.items) {
 		return nil
 	}
-	return dumbStoreIterator{ds: ds, n: n}
+	return &dumbStoreIterator{ds: ds, n: n}
 }
 
 func (ds *dumbStore) last() sampleID {
@@ -208,7 +210,7 @@ func (ds *dumbStore) Min() Iterator {
 	if len(ds.items) == 0 {
 		return nil
 	}
-	return dumbStoreIterator{
+	return &dumbStoreIterator{
 		ds: ds,
 		n:  0,
 	}
@@ -218,7 +220,7 @@ func (ds *dumbStore) Max() Iterator {
 	if len(ds.items) == 0 {
 		return nil
 	}
-	return dumbStoreIterator{
+	return &dumbStoreIterator{
 		ds: ds,
 		n:  len(ds.items) - 1,
 	}
@@ -236,7 +238,9 @@ func (it verifiedStoreIterator) Equal(other Iterator) bool {
 	o := other.(verifiedStoreIterator)
 	eq1 := it.knownGood.Equal(o.knownGood)
 	eq2 := it.it.Equal(o.it)
-	require.Equal(it.t, eq1, eq2, "iterators equal")
+	require.Equal(it.t, eq1, eq2, "iterators equal -- keys <%v> <%v> / <%v> <%v>",
+		it.knownGood.Key(), it.it.Key(),
+		o.knownGood.Key(), o.it.Key())
 	require.Equal(it.t, it.knownGood.Key(), it.it.Key(), "keys of equal iterators")
 	return eq2
 }
@@ -248,15 +252,10 @@ func (it verifiedStoreIterator) Key() Ordered {
 	return k2
 }
 
-func (it verifiedStoreIterator) Next() Iterator {
-	next1 := it.knownGood.Next()
-	next2 := it.it.Next()
-	require.Equal(it.t, next1.Key(), next2.Key(), "keys for Next()")
-	return verifiedStoreIterator{
-		t:         it.t,
-		knownGood: next1,
-		it:        next2,
-	}
+func (it verifiedStoreIterator) Next() {
+	it.knownGood.Next()
+	it.it.Next()
+	require.Equal(it.t, it.knownGood.Key(), it.it.Key(), "keys for Next()")
 }
 
 type verifiedStore struct {
@@ -389,7 +388,7 @@ func storeItemStr(is ItemStore) string {
 		if it.Equal(endAt) {
 			return r
 		}
-		it = it.Next()
+		it.Next()
 	}
 }
 
@@ -445,7 +444,7 @@ func runSync(t *testing.T, syncA, syncB *RangeSetReconciler, maxRounds int) (nRo
 		// dumpRangeMessages(t, fc.msgs, "B %q --> A %q:", storeItemStr(syncB.is), storeItemStr(syncA.is))
 		syncA.Process(fc)
 	}
-	return i
+	return i + 1
 }
 
 func testRangeSync(t *testing.T, storeFactory storeFactory) {
@@ -490,6 +489,13 @@ func testRangeSync(t *testing.T, storeFactory storeFactory) {
 			final:     "abcdefghijklmnopqr",
 			maxRounds: [4]int{4, 4, 4, 3},
 		},
+		{
+			name:      "sync against 1-element set",
+			a:         "bcd",
+			b:         "a",
+			final:     "abcd",
+			maxRounds: [4]int{3, 2, 2, 1},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			for n, maxSendRange := range []int{1, 2, 3, 4} {
@@ -514,20 +520,26 @@ func TestRangeSync(t *testing.T) {
 }
 
 func testRandomSync(t *testing.T, storeFactory storeFactory) {
+	var bytesA, bytesB []byte
+	defer func() {
+		if t.Failed() {
+			t.Logf("Random sync failed: %q <-> %q", bytesA, bytesB)
+		}
+	}()
 	for i := 0; i < 1000; i++ {
 		var chars []byte
 		for c := byte(33); c < 127; c++ {
 			chars = append(chars, c)
 		}
 
-		bytesA := append([]byte(nil), chars...)
+		bytesA = append([]byte(nil), chars...)
 		rand.Shuffle(len(bytesA), func(i, j int) {
 			bytesA[i], bytesA[j] = bytesA[j], bytesA[i]
 		})
 		bytesA = bytesA[:rand.Intn(len(bytesA))]
 		storeA := makeStore(t, storeFactory, string(bytesA))
 
-		bytesB := append([]byte(nil), chars...)
+		bytesB = append([]byte(nil), chars...)
 		rand.Shuffle(len(bytesB), func(i, j int) {
 			bytesB[i], bytesB[j] = bytesB[j], bytesB[i]
 		})

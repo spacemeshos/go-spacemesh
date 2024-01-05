@@ -45,7 +45,7 @@ type Iterator interface {
 	Key() Ordered
 	// Next returns an iterator pointing to the next key or nil
 	// if this key is the last one in the store
-	Next() Iterator
+	Next()
 }
 
 type RangeInfo struct {
@@ -213,3 +213,4 @@ func (rsr *RangeSetReconciler) Process(c Conduit) error {
 // TBD: limit the number of rounds (outside RangeSetReconciler)
 // TBD: process ascending ranges properly
 // TBD: bounded reconcile
+// TBD: limit max N of received unconfirmed items

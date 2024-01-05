@@ -1,38 +1,28 @@
 package hashsync
 
 type monoidTreeIterator struct {
-	mt   MonoidTree
-	node MonoidTreeNode
+	mt  MonoidTree
+	ptr MonoidTreePointer
 }
 
-var _ Iterator = monoidTreeIterator{}
+var _ Iterator = &monoidTreeIterator{}
 
-func (it monoidTreeIterator) Equal(other Iterator) bool {
-	o := other.(monoidTreeIterator)
+func (it *monoidTreeIterator) Equal(other Iterator) bool {
+	o := other.(*monoidTreeIterator)
 	if it.mt != o.mt {
 		panic("comparing iterators from different MonoidTreeStore")
 	}
-	return it.node == o.node
+	return it.ptr.Equal(o.ptr)
 }
 
-func (it monoidTreeIterator) Key() Ordered {
-	return it.node.Key()
+func (it *monoidTreeIterator) Key() Ordered {
+	return it.ptr.Key()
 }
 
-func (it monoidTreeIterator) Next() Iterator {
-	next := it.node.Next()
-	if next == nil {
-		next = it.mt.Min()
-	}
-	if next == nil {
-		return nil
-	}
-	if next.(*monoidTreeNode) == nil {
-		panic("QQQQQ: wrapped nil in Next")
-	}
-	return monoidTreeIterator{
-		mt:   it.mt,
-		node: next,
+func (it *monoidTreeIterator) Next() {
+	it.ptr.Next()
+	if it.ptr.Key() == nil {
+		it.ptr = it.mt.Min()
 	}
 }
 
@@ -54,43 +44,39 @@ func (mts *MonoidTreeStore) Add(v Ordered) {
 	mts.mt.Add(v)
 }
 
-func (mts *MonoidTreeStore) iter(node MonoidTreeNode) Iterator {
-	if node == nil {
+func (mts *MonoidTreeStore) iter(ptr MonoidTreePointer) Iterator {
+	if ptr == nil {
 		return nil
 	}
-	if node.(*monoidTreeNode) == nil {
-		panic("QQQQQ: wrapped nil")
-	}
-	return monoidTreeIterator{
-		mt:   mts.mt,
-		node: node,
+	return &monoidTreeIterator{
+		mt:  mts.mt,
+		ptr: ptr,
 	}
 }
 
 // GetRangeInfo implements ItemStore.
 func (mts *MonoidTreeStore) GetRangeInfo(preceding Iterator, x Ordered, y Ordered, count int) RangeInfo {
 	var stop FingerprintPredicate
-	var node MonoidTreeNode
+	var node MonoidTreePointer
 	if preceding != nil {
-		p := preceding.(monoidTreeIterator)
+		p := preceding.(*monoidTreeIterator)
 		if p.mt != mts.mt {
 			panic("GetRangeInfo: preceding iterator from a wrong MonoidTreeStore")
 		}
-		node = p.node
+		node = p.ptr
 	}
 	if count >= 0 {
 		stop = func(fp any) bool {
 			return CombinedSecond[int](fp) > count
 		}
 	}
-	fp, startNode, endNode := mts.mt.RangeFingerprint(node, x, y, stop)
-	// fmt.Fprintf(os.Stderr, "QQQQQ: fp %v, startNode %#v, endNode %#v\n", fp, startNode, endNode)
+	fp, startPtr, endPtr := mts.mt.RangeFingerprint(node, x, y, stop)
 	cfp := fp.(CombinedFingerprint)
 	return RangeInfo{
 		Fingerprint: cfp.First,
 		Count:       cfp.Second.(int),
-		Start:       mts.iter(startNode),
-		End:         mts.iter(endNode),
+		Start:       mts.iter(startPtr),
+		End:         mts.iter(endPtr),
 	}
 }
 

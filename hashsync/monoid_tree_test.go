@@ -272,7 +272,7 @@ func TestAscendingRanges(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var fps []string
-			var node MonoidTreeNode
+			var node MonoidTreePointer
 			for n, rng := range tc.ranges {
 				x := sampleID(rng[0])
 				y := sampleID(rng[1])
@@ -293,34 +293,30 @@ func TestAscendingRanges(t *testing.T) {
 }
 
 func verifyBinaryTree(t *testing.T, mn *monoidTreeNode) {
-	if mn.parent != nil && mn != mn.parent.left && mn != mn.parent.right {
-		require.Fail(t, "node is an 'unknown' child")
-	}
-
 	if mn.left != nil {
-		require.Equal(t, mn, mn.left.parent, "bad parent node on the left branch")
 		require.Negative(t, mn.left.key.Compare(mn.key))
-		leftMaxNode := mn.left.maxNode()
-		require.Negative(t, leftMaxNode.key.Compare(mn.key))
+		// not a "real" pointer (no parent stack), just to get max
+		leftMax := &monoidTreePointer{node: mn.left}
+		leftMax.max()
+		require.Negative(t, leftMax.Key().Compare(mn.key))
 		verifyBinaryTree(t, mn.left)
 	}
 
 	if mn.right != nil {
-		require.Equal(t, mn, mn.right.parent, "bad parent node on the right branch")
 		require.Positive(t, mn.right.key.Compare(mn.key))
-		rightMinNode := mn.right.minNode()
-		require.Positive(t, rightMinNode.key.Compare(mn.key))
+		// not a "real" pointer (no parent stack), just to get min
+		rightMin := &monoidTreePointer{node: mn.right}
+		rightMin.min()
+		require.Positive(t, rightMin.Key().Compare(mn.key))
 		verifyBinaryTree(t, mn.right)
 	}
 }
 
-func verifyRedBlack(t *testing.T, mn *monoidTreeNode, blackDepth int) int {
+func verifyRedBlackNode(t *testing.T, mn *monoidTreeNode, blackDepth int) int {
 	if mn == nil {
 		return blackDepth + 1
 	}
 	if mn.color == red {
-		require.NotNil(t, mn.parent, "root node must be black")
-		require.Equal(t, black, mn.parent.color, "parent of a red node is red")
 		if mn.left != nil {
 			require.Equal(t, black, mn.left.color, "left child of a red node is red")
 		}
@@ -330,10 +326,18 @@ func verifyRedBlack(t *testing.T, mn *monoidTreeNode, blackDepth int) int {
 	} else {
 		blackDepth++
 	}
-	bdLeft := verifyRedBlack(t, mn.left, blackDepth)
-	bdRight := verifyRedBlack(t, mn.right, blackDepth)
+	bdLeft := verifyRedBlackNode(t, mn.left, blackDepth)
+	bdRight := verifyRedBlackNode(t, mn.right, blackDepth)
 	require.Equal(t, bdLeft, bdRight, "subtree black depth for node %s", mn.key)
 	return bdLeft
+}
+
+func verifyRedBlack(t *testing.T, mt *monoidTree) {
+	if mt.root == nil {
+		return
+	}
+	require.Equal(t, black, mt.root.color, "root node must be black")
+	verifyRedBlackNode(t, mt.root, 0)
 }
 
 func TestRedBlackTreeInsert(t *testing.T) {
@@ -360,12 +364,12 @@ func TestRedBlackTreeInsert(t *testing.T) {
 		// t.Logf("QQQQQ: tree:\n%s", tree.Dump())
 		root := tree.(*monoidTree).root
 		verifyBinaryTree(t, root)
-		verifyRedBlack(t, root, 0)
-		for node := tree.Min(); node != nil; node = node.Next() {
+		verifyRedBlack(t, tree.(*monoidTree))
+		for ptr := tree.Min(); ptr.Key() != nil; ptr.Next() {
 			// avoid endless loop due to bugs in the tree impl
 			require.Less(t, n, len(items)*2, "got much more items than needed: %q -- %q", actualItems, shuffled)
 			n++
-			actualItems = append(actualItems, node.Key().(sampleID)[0])
+			actualItems = append(actualItems, ptr.Key().(sampleID)[0])
 		}
 		require.Equal(t, items, actualItems)
 
