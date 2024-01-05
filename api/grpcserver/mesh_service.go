@@ -284,7 +284,7 @@ func (s MeshService) readLayer(
 	// internal errors.
 	if err != nil {
 		ctxzap.Error(ctx, "could not read layer from database", layerID.Field().Zap(), zap.Error(err))
-		return pbLayer, status.Errorf(codes.Internal, "error reading layer data")
+		return pbLayer, status.Errorf(codes.Internal, "error reading layer data: %v", err)
 	} else if block == nil {
 		return pbLayer, nil
 	}
