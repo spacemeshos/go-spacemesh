@@ -2,24 +2,15 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
-## Release v1.3
+## UNRELEASED
 
 ### Upgrade information
 
-This release is not backwards compatible with v1.2.x. Upgrading will migrate local state to a new database.
-The migration will take place at the first startup after the upgrade. Be aware that after a successful upgrade
-downgrading isn't supported and might result in at least one epoch of missed rewards. See change #5207 for more
-information.
-
-This release is the first step towards separating PoST from the node. Proof generation is now done via a dedicated
-service. This service is started automatically by the node and is shut down when the node shuts down. In most
-setups this should work out of the box, but if you are running into issues please check the README.md file
-for more information on how to configure the node to work with the PoST service.
-
 #### New poets configuration
-Upgrading requires changes in config and in CLI flags (if used).
+Upgrading requires changes in config and in CLI flags (if not using the default).
 
-⚠ Users that use additional poet servers need to add their address and public key to one of the lists below, depedning on their configuration method.
+⚠ Users that use additional poet servers need to add their address and public key to one of the lists below,
+depending on their configuration method.
 
 ##### CLI argument `--poet-server`
 This argument was replaced by `--poet-servers` that take JSON-encoded array of poet server descriptors
@@ -31,7 +22,7 @@ This argument was replaced by `--poet-servers` that take JSON-encoded array of p
 The existing field `poet-server` that accepted an array of addresses of poet servers
 was replaced by a new field `poet-servers` that accepts an object containing an address and a public key.
 The default configuration was adapted and doesn't need any action on the user's side. Users who
-overwrite the `poet-server` field need to adapt their config accordignly. The default
+overwrite the `poet-server` field need to adapt their config accordingly. The default
 configuration is as follows:
 ```json
 {
@@ -70,6 +61,26 @@ configuration is as follows:
 
 * [#5293](https://github.com/spacemeshos/go-spacemesh/pull/5293) change poet servers configuration
   The config now takes the poet server address and its public key. See the [Upgrade Information](#new-poets-configuration) for details.
+
+### Features
+
+### Improvements
+
+## Release v1.3
+
+### Upgrade information
+
+This release is not backwards compatible with v1.2.x. Upgrading will migrate local state to a new database.
+The migration will take place at the first startup after the upgrade. Be aware that after a successful upgrade
+downgrading isn't supported and might result in at least one epoch of missed rewards. See change #5207 for more
+information.
+
+This release is the first step towards separating PoST from the node. Proof generation is now done via a dedicated
+service. This service is started automatically by the node and is shut down when the node shuts down. In most
+setups this should work out of the box, but if you are running into issues please check the README.md file
+for more information on how to configure the node to work with the PoST service.
+
+### Highlights
 
 ### Features
 
