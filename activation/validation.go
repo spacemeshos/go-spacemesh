@@ -314,7 +314,7 @@ func WithTrustedID(val types.NodeID) verifyChainOption {
 
 var ErrInvalidChain = errors.New("invalid ATX chain")
 
-func VerifyChain(
+func verifyChain(
 	ctx context.Context,
 	db sql.Executor,
 	id, goldenATXID types.ATXID,

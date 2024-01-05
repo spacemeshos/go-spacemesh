@@ -887,6 +887,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.Config.POST,
 		app.addLogger(PostLogger, lg).Zap(),
 		app.cachedDB, goldenATXID,
+		app.validator,
 	)
 	if err != nil {
 		return fmt.Errorf("create post setup manager: %v", err)

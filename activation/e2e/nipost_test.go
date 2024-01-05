@@ -124,8 +124,9 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	goldenATX := types.ATXID{2, 3, 4}
 	cfg := activation.DefaultPostConfig()
 	cdb := datastore.NewCachedDB(sql.InMemory(), log.NewFromLog(logger))
+	validator := activation.NewMocknipostValidator(ctrl)
 
-	mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX)
+	mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX, validator)
 	require.NoError(t, err)
 
 	opts := activation.DefaultPostSetupOpts()
@@ -263,7 +264,8 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	cfg := activation.DefaultPostConfig()
 	cdb := datastore.NewCachedDB(sql.InMemory(), log.NewFromLog(logger))
 
-	mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX)
+	validator := activation.NewMocknipostValidator(gomock.NewController(t))
+	mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX, validator)
 	require.NoError(t, err)
 
 	// ensure that genesis aligns with layer timings

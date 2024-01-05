@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
@@ -340,8 +341,12 @@ func newTestPostManager(tb testing.TB) *testPostManager {
 
 	goldenATXID := types.ATXID{2, 3, 4}
 
+	validator := NewMocknipostValidator(gomock.NewController(tb))
+	validator.EXPECT().
+		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		AnyTimes()
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
-	mgr, err := NewPostSetupManager(id, DefaultPostConfig(), zaptest.NewLogger(tb), cdb, goldenATXID)
+	mgr, err := NewPostSetupManager(id, DefaultPostConfig(), zaptest.NewLogger(tb), cdb, goldenATXID, validator)
 	require.NoError(tb, err)
 
 	return &testPostManager{

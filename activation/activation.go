@@ -607,34 +607,21 @@ func (b *Builder) broadcast(ctx context.Context, atx *types.ActivationTx) (int, 
 
 // getPositioningAtx returns atx id with the highest tick height.
 func (b *Builder) getPositioningAtx(ctx context.Context) (types.ATXID, error) {
-	rejectedAtxs := make(map[types.ATXID]struct{})
-	filter := func(id types.ATXID) bool {
-		_, ok := rejectedAtxs[id]
-		return !ok
+	id, err := findFullyValidHighTickAtx(
+		ctx,
+		b.cdb,
+		b.signer.NodeID(),
+		b.goldenATXID,
+		b.validator,
+		b.log,
+		AssumeValidBefore(time.Now().Add(-b.atxValidityDelay)),
+		WithTrustedID(b.signer.NodeID()),
+	)
+	if errors.Is(err, sql.ErrNotFound) {
+		b.log.Info("using golden atx as positioning atx")
+		return b.goldenATXID, nil
 	}
-
-	for {
-		select {
-		case <-ctx.Done():
-			return types.ATXID{}, ctx.Err()
-		default:
-		}
-		id, err := atxs.GetIDWithMaxHeight(b.cdb, b.signer.NodeID(), filter)
-		if err != nil {
-			if errors.Is(err, sql.ErrNotFound) {
-				b.log.Info("using golden atx as positioning atx")
-				return b.goldenATXID, nil
-			}
-			return types.ATXID{}, fmt.Errorf("cannot find pos atx: %w", err)
-		}
-		validBefore := time.Now().Add(-b.atxValidityDelay)
-		if err := VerifyChain(ctx, b.cdb, id, b.goldenATXID, b.validator, b.log, AssumeValidBefore(validBefore)); err != nil {
-			b.log.Info("rejecting candidate for positioning atx", zap.Error(err), zap.Stringer("atx_id", id))
-			rejectedAtxs[id] = struct{}{}
-		} else {
-			return id, nil
-		}
-	}
+	return id, nil
 }
 
 func (b *Builder) Regossip(ctx context.Context) error {
@@ -669,4 +656,39 @@ func SignAndFinalizeAtx(signer *signing.EdSigner, atx *types.ActivationTx) error
 func buildNipostChallengeStartDeadline(roundStart time.Time, gracePeriod time.Duration) time.Time {
 	jitter := randomDurationInRange(time.Duration(0), gracePeriod*maxNipostChallengeBuildJitter/100.0)
 	return roundStart.Add(jitter).Add(-gracePeriod)
+}
+
+func findFullyValidHighTickAtx(
+	ctx context.Context,
+	db sql.Executor,
+	prefNodeID types.NodeID,
+	goldenATXID types.ATXID,
+	validator nipostValidator,
+	log *zap.Logger,
+	opts ...verifyChainOption,
+) (types.ATXID, error) {
+	rejectedAtxs := make(map[types.ATXID]struct{})
+	filter := func(id types.ATXID) bool {
+		_, ok := rejectedAtxs[id]
+		return !ok
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return types.ATXID{}, ctx.Err()
+		default:
+		}
+		id, err := atxs.GetIDWithMaxHeight(db, prefNodeID, filter)
+		if err != nil {
+			return types.ATXID{}, err
+		}
+
+		if err := verifyChain(ctx, db, id, goldenATXID, validator, log, opts...); err != nil {
+			log.Info("rejecting candidate for high-tick atx", zap.Error(err), zap.Stringer("atx_id", id))
+			rejectedAtxs[id] = struct{}{}
+		} else {
+			return id, nil
+		}
+	}
 }

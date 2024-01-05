@@ -556,7 +556,7 @@ func TestVerifyChainDeps(t *testing.T) {
 			Post(ctx, signer.NodeID(), goldenATXID, atx.NIPost.Post, atx.NIPost.PostMetadata, atx.NumUnits).
 			Return(nil)
 
-		err = VerifyChain(ctx, db, vAtx.ID(), goldenATXID, v, logger)
+		err = verifyChain(ctx, db, vAtx.ID(), goldenATXID, v, logger)
 		require.ErrorIs(t, err, ErrInvalidChain)
 	})
 
@@ -575,7 +575,7 @@ func TestVerifyChainDeps(t *testing.T) {
 			Post(ctx, signer.NodeID(), goldenATXID, atx.NIPost.Post, atx.NIPost.PostMetadata, atx.NumUnits).
 			Return(nil)
 
-		err = VerifyChain(ctx, db, vAtx.ID(), goldenATXID, v, logger)
+		err = verifyChain(ctx, db, vAtx.ID(), goldenATXID, v, logger)
 		require.ErrorIs(t, err, ErrInvalidChain)
 	})
 
@@ -595,7 +595,7 @@ func TestVerifyChainDeps(t *testing.T) {
 			Post(ctx, signer.NodeID(), commitmentAtxID, atx.NIPost.Post, atx.NIPost.PostMetadata, atx.NumUnits).
 			Return(nil)
 
-		err = VerifyChain(ctx, db, vAtx.ID(), goldenATXID, v, logger)
+		err = verifyChain(ctx, db, vAtx.ID(), goldenATXID, v, logger)
 		require.ErrorIs(t, err, ErrInvalidChain)
 	})
 
@@ -610,7 +610,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		require.NoError(t, atxs.Add(db, vAtx))
 
 		v := NewMocknipostValidator(ctrl)
-		err = VerifyChain(ctx, db, vAtx.ID(), goldenATXID, v, logger, WithTrustedID(signer.NodeID()))
+		err = verifyChain(ctx, db, vAtx.ID(), goldenATXID, v, logger, WithTrustedID(signer.NodeID()))
 		require.NoError(t, err)
 	})
 
@@ -625,7 +625,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		require.NoError(t, atxs.Add(db, vAtx))
 
 		v := NewMocknipostValidator(ctrl)
-		err = VerifyChain(ctx, db, vAtx.ID(), goldenATXID, v, logger, AssumeValidBefore(time.Now()))
+		err = verifyChain(ctx, db, vAtx.ID(), goldenATXID, v, logger, AssumeValidBefore(time.Now()))
 		require.NoError(t, err)
 	})
 }

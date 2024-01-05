@@ -43,8 +43,12 @@ func launchPostSupervisor(
 	id := sig.NodeID()
 	goldenATXID := types.RandomATXID()
 
+	validator := activation.NewMocknipostValidator(gomock.NewController(tb))
+	validator.EXPECT().
+		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		AnyTimes()
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
-	mgr, err := activation.NewPostSetupManager(id, postCfg, log.Named("post manager"), cdb, goldenATXID)
+	mgr, err := activation.NewPostSetupManager(id, postCfg, log.Named("post manager"), cdb, goldenATXID, validator)
 	require.NoError(tb, err)
 
 	syncer := activation.NewMocksyncer(gomock.NewController(tb))
@@ -83,8 +87,12 @@ func launchPostSupervisorTLS(
 	id := sig.NodeID()
 	goldenATXID := types.RandomATXID()
 
+	validator := activation.NewMocknipostValidator(gomock.NewController(tb))
+	validator.EXPECT().
+		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		AnyTimes()
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
-	mgr, err := activation.NewPostSetupManager(id, postCfg, log.Named("post manager"), cdb, goldenATXID)
+	mgr, err := activation.NewPostSetupManager(id, postCfg, log.Named("post manager"), cdb, goldenATXID, validator)
 	require.NoError(tb, err)
 
 	syncer := activation.NewMocksyncer(gomock.NewController(tb))
