@@ -57,9 +57,6 @@ const (
 	// TxProtocol iis the protocol id for transactions.
 	TxProtocol = "tx1"
 
-	// HareProtocol is the protocol id for hare messages.
-	HareProtocol = "hr1"
-
 	// BlockCertify is the protocol id for block certification.
 	BlockCertify = "bc1"
 

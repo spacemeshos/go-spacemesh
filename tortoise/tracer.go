@@ -119,8 +119,8 @@ const (
 	traceTally
 	traceBlock
 	traceHare
-	traceActiveset
-	traceResults
+	_traceActiveset
+	_traceResults
 	traceUpdates
 	traceApplied
 	traceMalfeasance
