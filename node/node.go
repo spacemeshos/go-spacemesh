@@ -2,6 +2,7 @@
 package node
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"encoding/base64"
@@ -14,6 +15,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"syscall"
 	"time"
 
@@ -60,16 +62,18 @@ import (
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/node/mapstructureutil"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/prune"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/ballots/util"
+	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
 	"github.com/spacemeshos/go-spacemesh/syncer"
+	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
 	"github.com/spacemeshos/go-spacemesh/syncer/blockssync"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -133,6 +137,11 @@ func GetCommand() *cobra.Command {
 			if conf.LOGGING.Encoder == config.JSONLogEncoder {
 				log.JSONLog(true)
 			}
+
+			if cmd.NoMainNet && onMainNet(conf) && !conf.NoMainOverride {
+				log.With().Fatal("this is a testnet-only build not intended for mainnet")
+			}
+
 			app := New(
 				WithConfig(conf),
 				// NOTE(dshulyak) this needs to be max level so that child logger can can be current level or below.
@@ -193,7 +202,7 @@ func GetCommand() *cobra.Command {
 			// os.Interrupt for all systems, especially windows, syscall.SIGTERM is mainly for docker.
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer cancel()
-			if err = run(ctx); err != nil {
+			if err := run(ctx); err != nil {
 				app.log.With().Fatal(err.Error())
 			}
 		},
@@ -257,6 +266,7 @@ func LoadConfigFromFile() (*config.Config, error) {
 	hook := mapstructure.ComposeDecodeHookFunc(
 		mapstructure.StringToTimeDurationHookFunc(),
 		mapstructure.StringToSliceHookFunc(","),
+		mapstructureutil.AddressListDecodeFunc(),
 		mapstructureutil.BigRatDecodeFunc(),
 		mapstructureutil.PostProviderIDDecodeFunc(),
 		mapstructureutil.DeprecatedHook(),
@@ -551,7 +561,7 @@ func (app *App) initServices(ctx context.Context) error {
 	poetDb := activation.NewPoetDb(app.db, app.addLogger(PoetDbLogger, lg))
 
 	nipostValidatorLogger := app.addLogger(NipostValidatorLogger, lg)
-	postVerifiers := make([]activation.PostVerifier, 0, app.Config.SMESHING.VerifyingOpts.Workers)
+
 	lg.Debug("creating post verifier")
 	verifier, err := activation.NewPostVerifier(
 		app.Config.POST,
@@ -562,10 +572,10 @@ func (app *App) initServices(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	for i := 0; i < app.Config.SMESHING.VerifyingOpts.Workers; i++ {
-		postVerifiers = append(postVerifiers, verifier)
-	}
-	app.postVerifier = activation.NewOffloadingPostVerifier(postVerifiers, nipostValidatorLogger)
+	minWorkers := app.Config.SMESHING.VerifyingOpts.MinWorkers
+	workers := app.Config.SMESHING.VerifyingOpts.Workers
+	app.postVerifier = activation.NewOffloadingPostVerifier(verifier, workers, nipostValidatorLogger.Zap())
+	app.postVerifier.Autoscale(minWorkers, workers)
 
 	validator := activation.NewValidator(
 		poetDb,
@@ -668,7 +678,7 @@ func (app *App) initServices(ctx context.Context) error {
 	mlog := app.addLogger(MeshLogger, lg)
 	msh, err := mesh.NewMesh(app.cachedDB, app.atxsdata, app.clock, trtl, executor, app.conState, mlog)
 	if err != nil {
-		return fmt.Errorf("failed to create mesh: %w", err)
+		return fmt.Errorf("create mesh: %w", err)
 	}
 
 	pruner := prune.New(app.db, app.Config.Tortoise.Hdist, app.Config.PruneActivesetsFrom, prune.WithLogger(mlog.Zap()))
@@ -869,38 +879,34 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 	proposalBuilder.Register(app.edSgn)
 
-	if app.Config.SMESHING.Start {
-		u := url.URL{
-			Scheme: "http",
-			Host:   app.Config.API.PrivateListener,
-		}
-		app.Config.POSTService.NodeAddress = u.String()
+	u := url.URL{
+		Scheme: "http",
+		Host:   app.Config.API.PrivateListener,
+	}
+	app.Config.POSTService.NodeAddress = u.String()
+	postSetupMgr, err := activation.NewPostSetupManager(
+		app.edSgn.NodeID(),
+		app.Config.POST,
+		app.addLogger(PostLogger, lg).Zap(),
+		app.cachedDB, goldenATXID,
+	)
+	if err != nil {
+		return fmt.Errorf("create post setup manager: %v", err)
+	}
 
-		postSetupMgr, err := activation.NewPostSetupManager(
-			app.edSgn.NodeID(),
-			app.Config.POST,
-			app.addLogger(PostLogger, lg).Zap(),
-			app.cachedDB, goldenATXID,
-		)
-		if err != nil {
-			app.log.Panic("failed to create post setup manager: %v", err)
-		}
-
-		app.postSupervisor, err = activation.NewPostSupervisor(
-			app.log.Zap(),
-			app.Config.POSTService,
-			app.Config.POST,
-			app.Config.SMESHING.ProvingOpts,
-			postSetupMgr,
-			newSyncer,
-		)
-		if err != nil {
-			return fmt.Errorf("init post service: %w", err)
-		}
+	app.postSupervisor, err = activation.NewPostSupervisor(
+		app.log.Zap(),
+		app.Config.POSTService,
+		app.Config.POST,
+		app.Config.SMESHING.ProvingOpts,
+		postSetupMgr,
+		newSyncer,
+	)
+	if err != nil {
+		return fmt.Errorf("init post service: %w", err)
 	}
 
 	app.grpcPostService = grpcserver.NewPostService(app.addLogger(PostServiceLogger, lg).Zap())
-
 	nipostBuilder, err := activation.NewNIPostBuilder(
 		poetDb,
 		app.grpcPostService,
@@ -912,29 +918,10 @@ func (app *App) initServices(ctx context.Context) error {
 		app.clock,
 	)
 	if err != nil {
-		app.log.Panic("failed to create nipost builder: %v", err)
-	}
-
-	var coinbaseAddr types.Address
-	if app.Config.SMESHING.Start {
-		// TODO(mafa): this won't work with a remote-only setup, where `smeshing-start` is set to false
-		// TODO(mafa): also the way we handle coinbase means only 1 address can receive rewards, independent
-		// of the number of identities/post services that are managed by the node
-		coinbaseAddr, err = types.StringToAddress(app.Config.SMESHING.CoinbaseAccount)
-		if err != nil {
-			app.log.Panic(
-				"failed to parse CoinbaseAccount address `%s`: %v",
-				app.Config.SMESHING.CoinbaseAccount,
-				err,
-			)
-		}
-		if coinbaseAddr.IsEmpty() {
-			app.log.Panic("invalid coinbase account")
-		}
+		return fmt.Errorf("create nipost builder: %w", err)
 	}
 
 	builderConfig := activation.Config{
-		CoinbaseAccount:  coinbaseAddr,
 		GoldenATXID:      goldenATXID,
 		LayersPerEpoch:   layersPerEpoch,
 		RegossipInterval: app.Config.RegossipAtxInterval,
@@ -1167,11 +1154,14 @@ func (app *App) listenToUpdates(ctx context.Context) {
 			app.errCh <- err
 			return nil
 		}
-		for update := range ch {
+		for {
 			select {
 			case <-ctx.Done():
 				return nil
-			default:
+			case update, ok := <-ch:
+				if !ok {
+					return nil
+				}
 				if update.Data.Beacon != types.EmptyBeacon {
 					if err := app.beaconProtocol.UpdateBeacon(update.Data.Epoch, update.Data.Beacon); err != nil {
 						app.errCh <- err
@@ -1179,17 +1169,48 @@ func (app *App) listenToUpdates(ctx context.Context) {
 					}
 				}
 				if len(update.Data.ActiveSet) > 0 {
-					app.hOracle.UpdateActiveSet(update.Data.Epoch, update.Data.ActiveSet)
+					epoch := update.Data.Epoch
+					set := update.Data.ActiveSet
+					sort.Slice(set, func(i, j int) bool {
+						return bytes.Compare(set[i].Bytes(), set[j].Bytes()) < 0
+					})
+					id := types.ATXIDList(set).Hash()
+					activeSet := &types.EpochActiveSet{
+						Epoch: epoch,
+						Set:   set,
+					}
+					activesets.Add(app.db, id, activeSet)
+
+					app.hOracle.UpdateActiveSet(epoch, set)
+					app.proposalBuilder.UpdateActiveSet(epoch, set)
+
+					app.eg.Go(func() error {
+						select {
+						case <-app.syncer.RegisterForATXSynced():
+						case <-ctx.Done():
+							return nil
+						}
+						if err := atxsync.Download(
+							ctx,
+							10*time.Second,
+							app.addLogger(SyncLogger, app.log).Zap(),
+							app.db,
+							app.fetcher,
+							set,
+						); err != nil {
+							app.errCh <- err
+						}
+						return nil
+					})
 				}
 			}
 		}
-		return nil
 	})
 }
 
 func (app *App) startServices(ctx context.Context) error {
 	if err := app.fetcher.Start(); err != nil {
-		return fmt.Errorf("failed to start fetcher: %w", err)
+		return fmt.Errorf("start fetcher: %w", err)
 	}
 	app.syncer.Start()
 	app.beaconProtocol.Start(ctx)
@@ -1200,17 +1221,23 @@ func (app *App) startServices(ctx context.Context) error {
 		return app.proposalBuilder.Run(ctx)
 	})
 
-	if app.Config.SMESHING.Start {
+	if app.Config.SMESHING.CoinbaseAccount != "" {
 		coinbaseAddr, err := types.StringToAddress(app.Config.SMESHING.CoinbaseAccount)
 		if err != nil {
-			app.log.Panic(
-				"failed to parse CoinbaseAccount address on start `%s`: %v",
+			return fmt.Errorf(
+				"parse CoinbaseAccount address on start `%s`: %w",
 				app.Config.SMESHING.CoinbaseAccount,
 				err,
 			)
 		}
 		if err := app.atxBuilder.StartSmeshing(coinbaseAddr); err != nil {
-			app.log.Panic("failed to start smeshing: %v", err)
+			return fmt.Errorf("start smeshing: %w", err)
+		}
+	}
+
+	if app.Config.SMESHING.Start {
+		if app.Config.SMESHING.CoinbaseAccount == "" {
+			return fmt.Errorf("smeshing enabled but no coinbase account provided")
 		}
 		if err := app.postSupervisor.Start(app.Config.SMESHING.Opts); err != nil {
 			return fmt.Errorf("start post service: %w", err)
@@ -1360,6 +1387,9 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		var err error
 		app.grpcTLSServer, err = grpcserver.NewTLS(logger.Zap(), app.Config.API, authenticated)
 		if err != nil {
+			return err
+		}
+		if err := app.grpcTLSServer.Start(); err != nil {
 			return err
 		}
 	}
@@ -1555,12 +1585,16 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	if err != nil {
 		return fmt.Errorf("failed to load migrations: %w", err)
 	}
-	sqlDB, err := sql.Open("file:"+filepath.Join(dbPath, dbFile),
+	dbopts := []sql.Opt{
 		sql.WithMigrations(migrations),
 		sql.WithConnections(app.Config.DatabaseConnections),
 		sql.WithLatencyMetering(app.Config.DatabaseLatencyMetering),
-		sql.WithV5Migration(util.ExtractActiveSet),
-	)
+		sql.WithVacuumState(app.Config.DatabaseVacuumState),
+	}
+	if len(app.Config.DatabaseSkipMigrations) > 0 {
+		dbopts = append(dbopts, sql.WithSkipMigrations(app.Config.DatabaseSkipMigrations...))
+	}
+	sqlDB, err := sql.Open("file:"+filepath.Join(dbPath, dbFile), dbopts...)
 	if err != nil {
 		return fmt.Errorf("open sqlite db %w", err)
 	}
@@ -1589,7 +1623,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	)
 	migrations, err = sql.LocalMigrations()
 	if err != nil {
-		return fmt.Errorf("failed to load local migrations: %w", err)
+		return fmt.Errorf("load local migrations: %w", err)
 	}
 	localDB, err := localsql.Open("file:"+filepath.Join(dbPath, localDbFile),
 		sql.WithMigrations(migrations),
@@ -1715,18 +1749,25 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 		app.Config.Genesis.GenesisID(),
 		types.GetEffectiveGenesis(),
 	)
-	app.host, err = p2p.New(ctx, p2plog, cfg, []byte(prologue),
+	// Prevent testnet nodes from working on the mainnet, but
+	// don't use the network cookie on mainnet as this technique
+	// may be replaced later
+	nc := handshake.NoNetworkCookie
+	if !onMainNet(app.Config) {
+		nc = handshake.NetworkCookie(prologue)
+	}
+	app.host, err = p2p.New(ctx, p2plog, cfg, []byte(prologue), nc,
 		p2p.WithNodeReporter(events.ReportNodeStatusUpdate),
 	)
 	if err != nil {
-		return fmt.Errorf("failed to initialize p2p host: %w", err)
+		return fmt.Errorf("initialize p2p host: %w", err)
 	}
 
 	if err := app.setupDBs(ctx, lg); err != nil {
 		return err
 	}
 	if err := app.initServices(ctx); err != nil {
-		return fmt.Errorf("cannot start services: %w", err)
+		return fmt.Errorf("init services: %w", err)
 	}
 
 	if app.Config.CollectMetrics {
@@ -1745,7 +1786,7 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 	}
 
 	if err := app.startServices(ctx); err != nil {
-		return err
+		return fmt.Errorf("start services: %w", err)
 	}
 
 	// need post verifying service to start first
@@ -1842,4 +1883,8 @@ func (w tortoiseWeakCoin) Set(lid types.LayerID, value bool) error {
 	}
 	w.tortoise.OnWeakCoin(lid, value)
 	return nil
+}
+
+func onMainNet(conf *config.Config) bool {
+	return conf.Genesis.GenesisTime == config.MainnetConfig().Genesis.GenesisTime
 }

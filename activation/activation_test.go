@@ -107,7 +107,6 @@ type testAtxBuilder struct {
 	cdb         *datastore.CachedDB
 	localDb     *localsql.Database
 	sig         *signing.EdSigner
-	coinbase    types.Address
 	goldenATXID types.ATXID
 
 	mpub        *mocks.MockPublisher
@@ -128,7 +127,6 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 		cdb:         datastore.NewCachedDB(sql.InMemory(), lg),
 		localDb:     localsql.InMemory(),
 		sig:         edSigner,
-		coinbase:    types.GenerateAddress([]byte("33333")),
 		goldenATXID: types.ATXID(types.HexToHash32("77777")),
 		mpub:        mocks.NewMockPublisher(ctrl),
 		mpostSvc:    NewMockpostService(ctrl),
@@ -142,9 +140,8 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 	opts = append(opts, WithValidator(tab.mValidator))
 
 	cfg := Config{
-		CoinbaseAccount: tab.coinbase,
-		GoldenATXID:     tab.goldenATXID,
-		LayersPerEpoch:  layersPerEpoch,
+		GoldenATXID:    tab.goldenATXID,
+		LayersPerEpoch: layersPerEpoch,
 	}
 
 	tab.msync.EXPECT().RegisterForATXSynced().DoAndReturn(closedChan).AnyTimes()
@@ -303,7 +300,6 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 }
 
 func TestBuilder_RestartSmeshing(t *testing.T) {
-	now := time.Now()
 	getBuilder := func(t *testing.T) *Builder {
 		tab := newTestBuilder(t)
 		tab.mpostClient.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).AnyTimes().DoAndReturn(
@@ -312,19 +308,11 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 				return nil, nil, ctx.Err()
 			},
 		)
-		tab.mValidator.EXPECT().Post(
-			gomock.Any(),
-			gomock.Any(),
-			gomock.Any(),
-			gomock.Any(),
-			gomock.Any(),
-			gomock.Any(),
-		).AnyTimes().Return(nil)
+
 		ch := make(chan struct{})
 		close(ch)
 		tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(ch).AnyTimes()
 		tab.mclock.EXPECT().CurrentLayer().Return(types.LayerID(0)).AnyTimes()
-		tab.mclock.EXPECT().LayerToTime(gomock.Any()).Return(now).AnyTimes()
 		return tab.Builder
 	}
 
@@ -332,23 +320,9 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 		builder := getBuilder(t)
 		for i := 0; i < 50; i++ {
 			require.NoError(t, builder.StartSmeshing(types.Address{}))
-			require.Never(
-				t,
-				func() bool { return !builder.Smeshing() },
-				400*time.Microsecond,
-				50*time.Microsecond,
-				"failed on execution %d",
-				i,
-			)
+			require.True(t, builder.Smeshing())
 			require.NoError(t, builder.StopSmeshing(true))
-			require.Eventually(
-				t,
-				func() bool { return !builder.Smeshing() },
-				500*time.Millisecond,
-				time.Millisecond,
-				"failed on execution %d",
-				i,
-			)
+			require.False(t, builder.Smeshing())
 		}
 	})
 
@@ -1352,8 +1326,8 @@ func TestWaitPositioningAtx(t *testing.T) {
 
 		targetEpoch types.EpochID
 	}{
-		{"no wait", 100 * time.Millisecond, 100 * time.Millisecond, 2},
-		{"wait", 100 * time.Millisecond, 0, 2},
+		{"no wait", 200 * time.Millisecond, 200 * time.Millisecond, 2},
+		{"wait", 200 * time.Millisecond, 0, 2},
 		{"round started", 0, 0, 3},
 	} {
 		tc := tc
@@ -1365,7 +1339,7 @@ func TestWaitPositioningAtx(t *testing.T) {
 			tab.mclock.EXPECT().CurrentLayer().Return(types.LayerID(0)).AnyTimes()
 			tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(func(lid types.LayerID) time.Time {
 				// layer duration is 10ms to speed up test
-				return genesis.Add(time.Duration(lid) * 10 * time.Millisecond)
+				return genesis.Add(time.Duration(lid) * 20 * time.Millisecond)
 			}).AnyTimes()
 
 			// everything else are stubs that are irrelevant for the test
@@ -1379,7 +1353,7 @@ func TestWaitPositioningAtx(t *testing.T) {
 				func(_ context.Context, _ string, got []byte) error {
 					var gotAtx types.ActivationTx
 					require.NoError(t, codec.Decode(got, &gotAtx))
-					require.Equal(t, gotAtx.TargetEpoch(), tc.targetEpoch)
+					require.Equal(t, tc.targetEpoch, gotAtx.TargetEpoch())
 					return nil
 				})
 

@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/node/flags"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 )
 
 var (
@@ -25,6 +26,9 @@ var (
 
 	// Commit is the git commit used to build the app. Designed to be overwritten by make.
 	Commit string
+
+	// Prohibit this build from running on the mainnet.
+	NoMainNet bool
 )
 
 // EnsureCLIFlags checks flag types and converts them.
@@ -86,6 +90,13 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *config.Config) error {
 						panic(err.Error())
 					}
 					val = dst
+				case "p2p.AddressList":
+					var al p2p.AddressList
+					alv := flags.NewAddressListValue(al, &al)
+					if err := alv.Set(viper.GetString(name)); err != nil {
+						panic(err.Error())
+					}
+					val = al
 				case "[]types.PoetServer":
 					dst := []types.PoetServer{}
 					if err := json.Unmarshal([]byte(viper.GetString(name)), &dst); err != nil {

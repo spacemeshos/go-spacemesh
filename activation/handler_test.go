@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -1209,6 +1210,74 @@ func TestHandler_HandleGossipAtx(t *testing.T) {
 	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
 	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
 	require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), "", secondData))
+}
+
+func TestHandler_HandleParallelGossipAtx(t *testing.T) {
+	goldenATXID := types.ATXID{2, 3, 4}
+	atxHdlr := newTestHandler(t, goldenATXID)
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	nodeID := sig.NodeID()
+	nipost := newNIPostWithChallenge(t, types.HexToHash32("0x3333"), []byte{0xba, 0xbe})
+	vrfNonce := types.VRFPostIndex(12345)
+	atx := &types.ActivationTx{
+		InnerActivationTx: types.InnerActivationTx{
+			NIPostChallenge: types.NIPostChallenge{
+				PublishEpoch:   1,
+				PrevATXID:      types.EmptyATXID,
+				PositioningATX: goldenATXID,
+				CommitmentATX:  &goldenATXID,
+				InitialPost:    nipost.Post,
+			},
+			Coinbase: types.Address{2, 3, 4},
+			NumUnits: 2,
+			NIPost:   nipost,
+			NodeID:   &nodeID,
+			VRFNonce: &vrfNonce,
+		},
+		SmesherID: nodeID,
+	}
+	atx.Signature = sig.Sign(signing.ATX, atx.SignedBytes())
+	atx.SetEffectiveNumUnits(atx.NumUnits)
+	atx.SetReceived(time.Now())
+	_, err = atx.Verify(0, 2)
+	require.NoError(t, err)
+
+	atxData, err := codec.Encode(atx)
+	require.NoError(t, err)
+
+	atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
+	atxHdlr.mValidator.EXPECT().VRFNonce(nodeID, goldenATXID, &vrfNonce, gomock.Any(), atx.NumUnits)
+	atxHdlr.mValidator.EXPECT().Post(
+		gomock.Any(),
+		atx.SmesherID,
+		goldenATXID,
+		atx.InitialPost,
+		gomock.Any(),
+		atx.NumUnits,
+	).DoAndReturn(
+		func(_ context.Context, _ types.NodeID, _ types.ATXID, _ *types.Post, _ *types.PostMetadata, _ uint32) error {
+			time.Sleep(100 * time.Millisecond)
+			return nil
+		},
+	)
+	atxHdlr.mockFetch.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any())
+	atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), atx.GetPoetProofRef())
+	atxHdlr.mValidator.EXPECT().InitialNIPostChallenge(&atx.NIPostChallenge, gomock.Any(), goldenATXID)
+	atxHdlr.mValidator.EXPECT().PositioningAtx(goldenATXID, gomock.Any(), goldenATXID, atx.PublishEpoch)
+	atxHdlr.mValidator.EXPECT().NIPost(gomock.Any(), nodeID, goldenATXID, atx.NIPost, gomock.Any(), atx.NumUnits)
+	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
+
+	var eg errgroup.Group
+	for i := 0; i < 10; i++ {
+		eg.Go(func() error {
+			return atxHdlr.HandleGossipAtx(context.Background(), "", atxData)
+		})
+	}
+
+	require.NoError(t, eg.Wait())
 }
 
 func TestHandler_HandleSyncedAtx(t *testing.T) {
