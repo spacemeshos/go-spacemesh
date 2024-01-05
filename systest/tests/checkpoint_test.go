@@ -185,9 +185,8 @@ func ensureSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster
 	createdch := make(chan *pb.Proposal, numSmeshers)
 	eg, _ := errgroup.WithContext(tctx)
 	for i := cl.Bootnodes(); i < cl.Total(); i++ {
-		i := i
 		client := cl.Client(i)
-		watchProposals(tctx, eg, client, func(proposal *pb.Proposal) (bool, error) {
+		watchProposals(tctx, eg, client, tctx.Log.Desugar(), func(proposal *pb.Proposal) (bool, error) {
 			if proposal.Epoch.Number > stop {
 				return false, nil
 			}

@@ -46,26 +46,29 @@ func TestStepShortDisconnect(t *testing.T) {
 
 	eg, ctx := errgroup.WithContext(tctx)
 	client := cl.Client(0)
-	scheduleChaos(ctx, eg, client, enable, stop, func(ctx context.Context) (chaos.Teardown, error) {
-		var (
-			left  []string
-			right = []string{cl.Client(0).Name}
-		)
-		for i := 1; i < cl.Total(); i++ {
-			if i < split {
-				left = append(left, cl.Client(i).Name)
-			} else {
-				right = append(right, cl.Client(i).Name)
+	scheduleChaos(
+		ctx,
+		eg,
+		client,
+		tctx.Log.Desugar(),
+		enable,
+		stop,
+		func(ctx context.Context) (chaos.Teardown, error) {
+			var (
+				left  []string
+				right = []string{cl.Client(0).Name}
+			)
+			for i := 1; i < cl.Total(); i++ {
+				if i < split {
+					left = append(left, cl.Client(i).Name)
+				} else {
+					right = append(right, cl.Client(i).Name)
+				}
 			}
-		}
-		tctx.Log.Debugw("short partition",
-			"enable", enable,
-			"stop", stop,
-			"left", left,
-			"right", right,
-		)
-		return chaos.Partition2(tctx, "split", left, right)
-	})
+			tctx.Log.Debugw("short partition", "enable", enable, "stop", stop, "left", left, "right", right)
+			return chaos.Partition2(tctx, "split", left, right)
+		},
+	)
 	require.NoError(t, eg.Wait())
 }
 
@@ -228,8 +231,13 @@ func TestStepVerifyConsistency(t *testing.T) {
 						node.Name, reference.Number.Number, layer.Hash, reference.Hash)
 				}
 				if !bytes.Equal(layer.RootStateHash, reference.RootStateHash) {
-					return fmt.Errorf("state hash doesn't match reference %s in layer %d: %x != %x",
-						node.Name, reference.Number.Number, layer.RootStateHash, reference.RootStateHash)
+					return fmt.Errorf(
+						"state hash doesn't match reference %s in layer %d: %x != %x",
+						node.Name,
+						reference.Number.Number,
+						layer.RootStateHash,
+						reference.RootStateHash,
+					)
 				}
 				return nil
 			})

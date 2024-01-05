@@ -569,8 +569,8 @@ func (app *App) initServices(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	minWorkers := app.Config.SMESHING.VerifyingOpts.MinWorkers
 	workers := app.Config.SMESHING.VerifyingOpts.Workers
+	minWorkers := min(app.Config.SMESHING.VerifyingOpts.MinWorkers, workers)
 	app.postVerifier = activation.NewOffloadingPostVerifier(verifier, workers, nipostValidatorLogger.Zap())
 	app.postVerifier.Autoscale(minWorkers, workers)
 
