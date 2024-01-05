@@ -142,7 +142,7 @@ func (v *OffloadingPostVerifier) Autoscale(min, target int) {
 // Scale the number of workers to the given number.
 //
 // SAFETY: Must not be called concurrently.
-// This is satisified by the fact that the only caller is the autoscaler,
+// This is satisfied by the fact that the only caller is the autoscaler,
 // which executes scale() serially.
 func (v *OffloadingPostVerifier) scale(target int) {
 	v.log.Info("scaling post verifier", zap.Int("current", len(v.workers)), zap.Int("new", target))

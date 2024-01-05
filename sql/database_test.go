@@ -3,6 +3,7 @@ package sql
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -104,4 +105,42 @@ func Test_Migration_Rollback_Only_NewMigrations(t *testing.T) {
 		WithMigrations([]Migration{migration1, migration2}),
 	)
 	require.ErrorContains(t, err, "migration 2 failed")
+}
+
+func TestDatabaseSkipMigrations(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	migration1 := NewMockMigration(ctrl)
+	migration1.EXPECT().Order().Return(1).AnyTimes()
+
+	migration2 := NewMockMigration(ctrl)
+	migration2.EXPECT().Name().Return("test").AnyTimes()
+	migration2.EXPECT().Order().Return(2).AnyTimes()
+	migration2.EXPECT().Apply(gomock.Any()).Return(nil)
+
+	dbFile := filepath.Join(t.TempDir(), "test.sql")
+	db, err := Open("file:"+dbFile,
+		WithMigrations([]Migration{migration1, migration2}),
+		WithSkipMigrations(1),
+	)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+}
+
+func TestDatabaseVacuumState(t *testing.T) {
+	dir := t.TempDir()
+	dbFile := filepath.Join(dir, "test.sql")
+	db, err := Open("file:" + dbFile)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	db, err = Open("file:"+dbFile,
+		WithMigrations([]Migration{}),
+		WithVacuumState(9),
+	)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	// we run pragma wal_checkpoint(TRUNCATE) after vacuum, which drops the wal file
+	_, err = os.Open(dbFile + "-wal")
+	require.ErrorIs(t, err, os.ErrNotExist)
 }

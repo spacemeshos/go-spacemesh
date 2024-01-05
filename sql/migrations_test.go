@@ -15,5 +15,5 @@ func TestMigrationsAppliedOnce(t *testing.T) {
 		return true
 	})
 	require.NoError(t, err)
-	require.Equal(t, version, 8)
+	require.Equal(t, version, 9)
 }

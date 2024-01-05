@@ -75,7 +75,7 @@ func (ir IterRound) Absolute() uint32 {
 
 type Value struct {
 	// Proposals is set in messages for preround and propose rounds.
-	Proposals []types.ProposalID `scale:"max=200"`
+	Proposals []types.ProposalID `scale:"max=500"`
 	// Reference is set in messages for commit and notify rounds.
 	Reference *types.Hash32
 }

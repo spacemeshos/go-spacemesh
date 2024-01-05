@@ -133,7 +133,7 @@ func (f *full) verify(logger *zap.Logger, lid types.LayerID) (bool, bool) {
 		}
 		return empty, false
 	}
-	logger.Debug("global treshold",
+	logger.Debug("global threshold",
 		zap.Uint32("target", lid.Uint32()),
 		zap.Float64("threshold", threshold.Float()),
 	)

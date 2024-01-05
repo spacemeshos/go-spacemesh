@@ -280,11 +280,11 @@ func AddCommands(cmd *cobra.Command) {
 
 	cmd.PersistentFlags().IntVar(
 		&cfg.SMESHING.VerifyingOpts.MinWorkers,
-		"smeshing-opts-verifying-min-threads",
+		"smeshing-opts-verifying-min-workers",
 		cfg.SMESHING.VerifyingOpts.MinWorkers,
 		"Minimal number of threads to use for verifying PoSTs (used while PoST is generated)",
 	)
-	cmd.PersistentFlags().IntVar(&cfg.SMESHING.VerifyingOpts.Workers, "smeshing-opts-verifying-threads",
+	cmd.PersistentFlags().IntVar(&cfg.SMESHING.VerifyingOpts.Workers, "smeshing-opts-verifying-workers",
 		cfg.SMESHING.VerifyingOpts.Workers, "")
 	cmd.PersistentFlags().AddFlag(&pflag.Flag{
 		Name:     "smeshing-opts-verifying-powflags",
