@@ -58,6 +58,7 @@ func testTransactions(
 			tctx.Context,
 			eg,
 			client,
+			tctx.Log.Desugar(),
 			func(rst *pb.TransactionResult) (bool, error) {
 				txs[i] = append(txs[i], rst.Tx)
 				count := len(txs[i])
