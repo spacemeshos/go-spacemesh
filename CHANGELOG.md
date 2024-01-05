@@ -2,6 +2,70 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## UNRELEASED
+
+### Upgrade information
+
+#### New poets configuration
+Upgrading requires changes in config and in CLI flags (if not using the default).
+
+⚠ Users that use additional poet servers need to add their address and public key to one of the lists below,
+depending on their configuration method.
+
+##### CLI argument `--poet-server`
+This argument was replaced by `--poet-servers` that take JSON-encoded array of poet server descriptors
+(address, public key). The default value is
+```json
+ [{"address":"https://mainnet-poet-0.spacemesh.network","pubkey":"cFnqCS5oER7GOX576oPtahlxB/1y95aDibdK7RHQFVg="},{"address":"https://mainnet-poet-1.spacemesh.network","pubkey":"Qh1efxY4YhoYBEXKPTiHJ/a7n1GsllRSyweQKO3j7m0="},{"address":"https://mainnet-poet-2.spacemesh.network","pubkey":"8RXEI0MwO3uJUINFFlOm/uTjJCneV9FidMpXmn55G8Y="},{"address":"https://poet-110.spacemesh.network","pubkey":"8Qqgid+37eyY7ik+EA47Nd5TrQjXolbv2Mdgir243No="},{"address":"https://poet-111.spacemesh.network","pubkey":"caIV0Ym59L3RqbVAL6UrCPwr+z+lwe2TBj57QWnAgtM="},{"address":"https://poet-112.spacemesh.network","pubkey":"5p/mPvmqhwdvf8U0GVrNq/9IN/HmZj5hCkFLAN04g1E="}]
+```
+##### config.json
+The existing field `poet-server` that accepted an array of addresses of poet servers
+was replaced by a new field `poet-servers` that accepts an object containing an address and a public key.
+The default configuration was adapted and doesn't need any action on the user's side. Users who
+overwrite the `poet-server` field need to adapt their config accordingly. The default
+configuration is as follows:
+```json
+{
+  "main": {
+    "poet-servers": [
+      {
+        "address": "https://mainnet-poet-0.spacemesh.network",
+        "pubkey": "cFnqCS5oER7GOX576oPtahlxB/1y95aDibdK7RHQFVg="
+      },
+      {
+        "address": "https://mainnet-poet-1.spacemesh.network",
+        "pubkey": "Qh1efxY4YhoYBEXKPTiHJ/a7n1GsllRSyweQKO3j7m0="
+      },
+      {
+        "address": "https://mainnet-poet-2.spacemesh.network",
+        "pubkey": "8RXEI0MwO3uJUINFFlOm/uTjJCneV9FidMpXmn55G8Y="
+      },
+      {
+        "address": "https://poet-110.spacemesh.network",
+        "pubkey": "8Qqgid+37eyY7ik+EA47Nd5TrQjXolbv2Mdgir243No="
+      },
+      {
+        "address": "https://poet-111.spacemesh.network",
+        "pubkey": "caIV0Ym59L3RqbVAL6UrCPwr+z+lwe2TBj57QWnAgtM="
+      },
+      {
+        "address": "https://poet-112.spacemesh.network",
+        "pubkey": "5p/mPvmqhwdvf8U0GVrNq/9IN/HmZj5hCkFLAN04g1E="
+      }
+    ]
+  },
+}
+```
+
+### Highlights
+
+* [#5293](https://github.com/spacemeshos/go-spacemesh/pull/5293) change poet servers configuration
+  The config now takes the poet server address and its public key. See the [Upgrade Information](#new-poets-configuration) for details.
+
+### Features
+
+### Improvements
+
 ## Release v1.3
 
 ### Upgrade information
@@ -62,7 +126,7 @@ for more information on how to configure the node to work with the PoST service.
   to list their OpenCL providers and associated IDs.
 
 * [#5207](https://github.com/spacemeshos/go-spacemesh/pull/5207) Move the NiPoST state of a node into a new node-local database.
-  
+
   The node now uses 2 databases: `state.sql` which holds the node's view on the global state of the network and `node_state.sql`
   which holds ephemeral data of the node.
 

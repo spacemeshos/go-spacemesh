@@ -68,7 +68,7 @@ func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 		i := i
 		client := cl.Client(i)
 		tctx.Log.Debugw("watching", "client", client.Name, "i", i)
-		watchProposals(ctx, eg, cl.Client(i), func(proposal *pb.Proposal) (bool, error) {
+		watchProposals(ctx, eg, client, tctx.Log.Desugar(), func(proposal *pb.Proposal) (bool, error) {
 			if proposal.Layer.Number < first {
 				return true, nil
 			}
@@ -179,7 +179,7 @@ func testVesting(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster, 
 		client := cl.Client(i % cl.Total())
 		eg.Go(func() error {
 			var subeg errgroup.Group
-			watchLayers(tctx, &subeg, client, func(layer *pb.LayerStreamResponse) (bool, error) {
+			watchLayers(tctx, &subeg, client, tctx.Log.Desugar(), func(layer *pb.LayerStreamResponse) (bool, error) {
 				return layer.Layer.Number.Number < uint32(acc.start), nil
 			})
 			if err := subeg.Wait(); err != nil {
