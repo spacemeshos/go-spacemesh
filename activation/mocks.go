@@ -1415,18 +1415,17 @@ func (c *poetClientAddressCall) DoAndReturn(f func() string) *poetClientAddressC
 }
 
 // PoetServiceID mocks base method.
-func (m *MockpoetClient) PoetServiceID(arg0 context.Context) (types.PoetServiceID, error) {
+func (m *MockpoetClient) PoetServiceID(ctx context.Context) types.PoetServiceID {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PoetServiceID", arg0)
+	ret := m.ctrl.Call(m, "PoetServiceID", ctx)
 	ret0, _ := ret[0].(types.PoetServiceID)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
 // PoetServiceID indicates an expected call of PoetServiceID.
-func (mr *MockpoetClientMockRecorder) PoetServiceID(arg0 any) *poetClientPoetServiceIDCall {
+func (mr *MockpoetClientMockRecorder) PoetServiceID(ctx any) *poetClientPoetServiceIDCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PoetServiceID", reflect.TypeOf((*MockpoetClient)(nil).PoetServiceID), arg0)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PoetServiceID", reflect.TypeOf((*MockpoetClient)(nil).PoetServiceID), ctx)
 	return &poetClientPoetServiceIDCall{Call: call}
 }
 
@@ -1436,19 +1435,19 @@ type poetClientPoetServiceIDCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *poetClientPoetServiceIDCall) Return(arg0 types.PoetServiceID, arg1 error) *poetClientPoetServiceIDCall {
-	c.Call = c.Call.Return(arg0, arg1)
+func (c *poetClientPoetServiceIDCall) Return(arg0 types.PoetServiceID) *poetClientPoetServiceIDCall {
+	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *poetClientPoetServiceIDCall) Do(f func(context.Context) (types.PoetServiceID, error)) *poetClientPoetServiceIDCall {
+func (c *poetClientPoetServiceIDCall) Do(f func(context.Context) types.PoetServiceID) *poetClientPoetServiceIDCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *poetClientPoetServiceIDCall) DoAndReturn(f func(context.Context) (types.PoetServiceID, error)) *poetClientPoetServiceIDCall {
+func (c *poetClientPoetServiceIDCall) DoAndReturn(f func(context.Context) types.PoetServiceID) *poetClientPoetServiceIDCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

@@ -99,7 +99,8 @@ type BaseConfig struct {
 	LayerAvgSize   uint32        `mapstructure:"layer-average-size"`
 	LayersPerEpoch uint32        `mapstructure:"layers-per-epoch"`
 
-	PoETServers []string `mapstructure:"poet-server"`
+	PoETServers DeprecatedPoETServers `mapstructure:"poet-server"`
+	PoetServers []types.PoetServer    `mapstructure:"poet-servers"`
 
 	PprofHTTPServer bool `mapstructure:"pprof-server"`
 
@@ -133,6 +134,14 @@ type BaseConfig struct {
 
 	// NoMainOverride forces the "nomain" builds to run on the mainnet
 	NoMainOverride bool `mapstructure:"no-main-override"`
+}
+
+type DeprecatedPoETServers struct{}
+
+// DeprecatedMsg implements Deprecated interface.
+func (DeprecatedPoETServers) DeprecatedMsg() string {
+	return `The 'poet-server' is deprecated. Please migrate to the 'poet-servers'. ` +
+		`Check 'Upgrade Information' in CHANGELOG.md for details.`
 }
 
 type PublicMetrics struct {
@@ -201,7 +210,6 @@ func defaultBaseConfig() BaseConfig {
 		ProfilerName:                 "go-spacemesh",
 		LayerDuration:                30 * time.Second,
 		LayersPerEpoch:               3,
-		PoETServers:                  []string{"127.0.0.1"},
 		TxsPerProposal:               100,
 		BlockGasLimit:                math.MaxUint64,
 		OptFilterThreshold:           90,

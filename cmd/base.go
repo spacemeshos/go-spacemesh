@@ -2,6 +2,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"math/big"
 	"reflect"
 
@@ -96,6 +97,12 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *config.Config) error {
 						panic(err.Error())
 					}
 					val = al
+				case "[]types.PoetServer":
+					dst := []types.PoetServer{}
+					if err := json.Unmarshal([]byte(viper.GetString(name)), &dst); err != nil {
+						panic(err.Error())
+					}
+					val = dst
 				default:
 					val = viper.Get(name)
 				}
