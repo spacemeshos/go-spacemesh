@@ -67,7 +67,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
-	"github.com/spacemeshos/go-spacemesh/sql/ballots/util"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
@@ -570,8 +569,8 @@ func (app *App) initServices(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	minWorkers := app.Config.SMESHING.VerifyingOpts.MinWorkers
 	workers := app.Config.SMESHING.VerifyingOpts.Workers
+	minWorkers := min(app.Config.SMESHING.VerifyingOpts.MinWorkers, workers)
 	app.postVerifier = activation.NewOffloadingPostVerifier(verifier, workers, nipostValidatorLogger.Zap())
 	app.postVerifier.Autoscale(minWorkers, workers)
 
@@ -1192,6 +1191,11 @@ func (app *App) listenToUpdates(ctx context.Context) {
 					app.proposalBuilder.UpdateActiveSet(epoch, set)
 
 					app.eg.Go(func() error {
+						select {
+						case <-app.syncer.RegisterForATXSynced():
+						case <-ctx.Done():
+							return nil
+						}
 						if err := atxsync.Download(
 							ctx,
 							10*time.Second,
@@ -1587,12 +1591,16 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	if err != nil {
 		return fmt.Errorf("failed to load migrations: %w", err)
 	}
-	sqlDB, err := sql.Open("file:"+filepath.Join(dbPath, dbFile),
+	dbopts := []sql.Opt{
 		sql.WithMigrations(migrations),
 		sql.WithConnections(app.Config.DatabaseConnections),
 		sql.WithLatencyMetering(app.Config.DatabaseLatencyMetering),
-		sql.WithV5Migration(util.ExtractActiveSet),
-	)
+		sql.WithVacuumState(app.Config.DatabaseVacuumState),
+	}
+	if len(app.Config.DatabaseSkipMigrations) > 0 {
+		dbopts = append(dbopts, sql.WithSkipMigrations(app.Config.DatabaseSkipMigrations...))
+	}
+	sqlDB, err := sql.Open("file:"+filepath.Join(dbPath, dbFile), dbopts...)
 	if err != nil {
 		return fmt.Errorf("open sqlite db %w", err)
 	}

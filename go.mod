@@ -5,7 +5,7 @@ go 1.21.5
 require (
 	cloud.google.com/go/storage v1.36.0
 	github.com/ALTree/bigfloat v0.2.0
-	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20231212132935-7a55558d8c33
+	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20240104130649-f55576898805
 	github.com/cosmos/btcutil v1.0.5
 	github.com/go-llsqlite/crawshaw v0.5.0
 	github.com/gofrs/flock v0.8.1
@@ -14,7 +14,7 @@ require (
 	github.com/google/uuid v1.5.0
 	github.com/grafana/pyroscope-go v1.0.4
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
-	github.com/grpc-ecosystem/grpc-gateway/v2 v2.18.1
+	github.com/grpc-ecosystem/grpc-gateway/v2 v2.19.0
 	github.com/hashicorp/go-retryablehttp v0.7.5
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/ipfs/go-ds-leveldb v0.5.0
@@ -30,7 +30,7 @@ require (
 	github.com/multiformats/go-varint v0.0.7
 	github.com/natefinch/atomic v1.0.1
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20230904125328-1f23a7beb09a
-	github.com/prometheus/client_golang v1.17.0
+	github.com/prometheus/client_golang v1.18.0
 	github.com/prometheus/common v0.45.0
 	github.com/quic-go/quic-go v0.40.1
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
@@ -51,10 +51,10 @@ require (
 	github.com/zeebo/blake3 v0.2.3
 	go.uber.org/mock v0.4.0
 	go.uber.org/zap v1.26.0
-	golang.org/x/exp v0.0.0-20231206192017-f3f8817b8deb
-	golang.org/x/sync v0.5.0
+	golang.org/x/exp v0.0.0-20240103183307-be819d1f06fc
+	golang.org/x/sync v0.6.0
 	golang.org/x/time v0.5.0
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20231212172506-995d672761c0
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240102182953-50ed04b92917
 	google.golang.org/grpc v1.60.1
 	google.golang.org/protobuf v1.32.0
 	k8s.io/api v0.29.0
@@ -64,7 +64,7 @@ require (
 )
 
 require (
-	cloud.google.com/go v0.110.10 // indirect
+	cloud.google.com/go v0.111.0 // indirect
 	cloud.google.com/go/compute v1.23.3 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	cloud.google.com/go/iam v1.1.5 // indirect
@@ -176,8 +176,8 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/polydawn/refmt v0.89.0 // indirect
-	github.com/prometheus/client_model v0.4.1-0.20230718164431-9a2bf3000d16 // indirect
-	github.com/prometheus/procfs v0.11.1 // indirect
+	github.com/prometheus/client_model v0.5.0 // indirect
+	github.com/prometheus/procfs v0.12.0 // indirect
 	github.com/quic-go/qpack v0.4.0 // indirect
 	github.com/quic-go/qtls-go1-20 v0.4.1 // indirect
 	github.com/quic-go/webtransport-go v0.6.0 // indirect
@@ -192,9 +192,9 @@ require (
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/whyrusleeping/go-keyspace v0.0.0-20160322163242-5b898ac5add1 // indirect
 	go.opencensus.io v0.24.0 // indirect
-	go.opentelemetry.io/otel v1.16.0 // indirect
-	go.opentelemetry.io/otel/metric v1.16.0 // indirect
-	go.opentelemetry.io/otel/trace v1.16.0 // indirect
+	go.opentelemetry.io/otel v1.19.0 // indirect
+	go.opentelemetry.io/otel/metric v1.19.0 // indirect
+	go.opentelemetry.io/otel/trace v1.19.0 // indirect
 	go.uber.org/dig v1.17.1 // indirect
 	go.uber.org/fx v1.20.1 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
@@ -206,13 +206,12 @@ require (
 	golang.org/x/term v0.15.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/tools v0.16.0 // indirect
-	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	gonum.org/v1/gonum v0.13.0 // indirect
 	google.golang.org/api v0.153.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
-	google.golang.org/genproto v0.0.0-20231211222908-989df2bf70f3 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20231120223509-83a465c0220f // indirect
+	google.golang.org/genproto v0.0.0-20231212172506-995d672761c0 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20240102182953-50ed04b92917 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect

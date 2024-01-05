@@ -76,7 +76,8 @@ gomplate:
 run: gomplate $(run_deps)
 	@echo "launching test job with name=$(test_job_name) and testid=$(test_id)"
 	@testid=$(test_id) job_name=$(test_job_name) image=$(image_name) command="$(command)" gomplate --file systest_job.yml.tmpl | kubectl apply -f -
-	-@kubectl wait --timeout=20s --for=condition=ready -l job-name=$(test_job_name) pod
+	until kubectl get jobs $(test_job_name); do sleep 1; done
+	kubectl wait --timeout=30s --for=condition=ready -l job-name=$(test_job_name) pod
 	kubectl logs job/$(test_job_name) -f --ignore-errors
 	test_job_name=$(test_job_name) ./wait_for_job.sh
 

@@ -12,6 +12,8 @@ import (
 	sqlite "github.com/go-llsqlite/crawshaw"
 	"github.com/go-llsqlite/crawshaw/sqlitex"
 	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 var (
@@ -58,19 +60,19 @@ func defaultConf() *conf {
 	}
 
 	return &conf{
-		connections: 16,
-		migrations:  migrations,
+		connections:   16,
+		migrations:    migrations,
+		skipMigration: map[int]struct{}{},
 	}
 }
 
 type conf struct {
 	flags         sqlite.OpenFlags
 	connections   int
+	skipMigration map[int]struct{}
+	vacuumState   int
 	migrations    []Migration
 	enableLatency bool
-
-	// TODO: remove after state is pruned for majority
-	v5Migration func(Executor) error
 }
 
 // WithConnections overwrites number of pooled connections.
@@ -109,9 +111,20 @@ func WithMigration(migration Migration) Opt {
 	}
 }
 
-func WithV5Migration(cb func(Executor) error) Opt {
+// WithSkipMigrations will update database version with executing associated migrations.
+// It should be used at your own risk.
+func WithSkipMigrations(i ...int) Opt {
 	return func(c *conf) {
-		c.v5Migration = cb
+		for _, index := range i {
+			c.skipMigration[index] = struct{}{}
+		}
+	}
+}
+
+// WithVacuumState will execute vacuum if database version before the migration was less or equal to the provided value.
+func WithVacuumState(i int) Opt {
+	return func(c *conf) {
+		c.vacuumState = i
 	}
 }
 
@@ -160,6 +173,7 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 		if err != nil {
 			return nil, err
 		}
+		log.With().Info("running migrations", log.Int("current version", before))
 		tx, err := db.Tx(context.Background())
 		if err != nil {
 			return nil, err
@@ -168,19 +182,21 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 			if m.Order() <= before {
 				continue
 			}
-			if err := m.Apply(tx); err != nil {
-				for j := i; j >= 0 && config.migrations[j].Order() > before; j-- {
-					if e := config.migrations[j].Rollback(); e != nil {
-						err = errors.Join(err, fmt.Errorf("rollback %s: %w", m.Name(), e))
-						break
+			if _, ok := config.skipMigration[m.Order()]; !ok {
+				if err := m.Apply(tx); err != nil {
+					for j := i; j >= 0 && config.migrations[j].Order() > before; j-- {
+						if e := config.migrations[j].Rollback(); e != nil {
+							err = errors.Join(err, fmt.Errorf("rollback %s: %w", m.Name(), e))
+							break
+						}
 					}
-				}
 
-				tx.Release()
-				err = errors.Join(err, db.Close())
-				return nil, fmt.Errorf("apply %s: %w", m.Name(), err)
+					tx.Release()
+					err = errors.Join(err, db.Close())
+					return nil, fmt.Errorf("apply %s: %w", m.Name(), err)
+				}
 			}
-			// binding values in pragma statement is not allowed
+			// version is set intentionally even if actual migration was skipped
 			if _, err := tx.Exec(fmt.Sprintf("PRAGMA user_version = %d;", m.Order()), nil, nil); err != nil {
 				return nil, fmt.Errorf("update user_version to %d: %w", m.Order(), err)
 			}
@@ -188,11 +204,7 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 		tx.Commit()
 		tx.Release()
 
-		if before <= 4 && config.v5Migration != nil {
-			// v5 migration (active set extraction) needs the 3rd migration to execute first
-			if err := config.v5Migration(db); err != nil {
-				return nil, err
-			}
+		if config.vacuumState != 0 && before <= config.vacuumState {
 			if err := Vacuum(db); err != nil {
 				return nil, err
 			}
