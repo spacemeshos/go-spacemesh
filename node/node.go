@@ -4,8 +4,6 @@ package node
 import (
 	"bytes"
 	"context"
-	"crypto/ed25519"
-	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -1113,16 +1111,12 @@ func (app *App) launchStandalone(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	pubkey, privkey, err := ed25519.GenerateKey(nil)
-	if err != nil {
-		return err
-	}
-	app.Config.PoetServers[0].Pubkey = types.NewBase64Enc(pubkey)
-	os.Setenv("POET_PRIVATE_KEY", base64.StdEncoding.EncodeToString(privkey))
 
 	cfg.RawRESTListener = parsed.Host
 	cfg.RawRPCListener = parsed.Hostname() + ":0"
-	cfg.Genesis.UnmarshalFlag(app.Config.Genesis.GenesisTime)
+	if err := cfg.Genesis.UnmarshalFlag(app.Config.Genesis.GenesisTime); err != nil {
+		return err
+	}
 	cfg.Round.EpochDuration = app.Config.LayerDuration * time.Duration(app.Config.LayersPerEpoch)
 	cfg.Round.CycleGap = app.Config.POET.CycleGap
 	cfg.Round.PhaseShift = app.Config.POET.PhaseShift
@@ -1132,6 +1126,8 @@ func (app *App) launchStandalone(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("init poet server: %w", err)
 	}
+
+	app.Config.PoetServers[0].Pubkey = types.NewBase64Enc(srv.PublicKey())
 	app.log.With().Warning("launching poet in standalone mode", log.Any("config", cfg))
 	app.eg.Go(func() error {
 		if err := srv.Start(ctx); err != nil {
