@@ -97,7 +97,7 @@ func WithLogger(logger *zap.Logger) PoetClientOpts {
 }
 
 // NewHTTPPoetClient returns new instance of HTTPPoetClient connecting to the specified url.
-func NewHTTPPoetClient(baseUrl string, cfg PoetConfig, opts ...PoetClientOpts) (*HTTPPoetClient, error) {
+func NewHTTPPoetClient(server types.PoetServer, cfg PoetConfig, opts ...PoetClientOpts) (*HTTPPoetClient, error) {
 	client := &retryablehttp.Client{
 		RetryMax:     cfg.MaxRequestRetries,
 		RetryWaitMin: cfg.RequestRetryDelay,
@@ -106,7 +106,7 @@ func NewHTTPPoetClient(baseUrl string, cfg PoetConfig, opts ...PoetClientOpts) (
 		CheckRetry:   checkRetry,
 	}
 
-	baseURL, err := url.Parse(baseUrl)
+	baseURL, err := url.Parse(server.Address)
 	if err != nil {
 		return nil, fmt.Errorf("parsing address: %w", err)
 	}
@@ -118,6 +118,9 @@ func NewHTTPPoetClient(baseUrl string, cfg PoetConfig, opts ...PoetClientOpts) (
 		baseURL: baseURL,
 		client:  client,
 		logger:  zap.NewNop(),
+		poetServiceID: localsql.PoetServiceID{
+			ServiceID: server.Pubkey.Bytes(),
+		},
 	}
 	for _, opt := range opts {
 		opt(poetClient)
@@ -126,6 +129,7 @@ func NewHTTPPoetClient(baseUrl string, cfg PoetConfig, opts ...PoetClientOpts) (
 	poetClient.logger.Info(
 		"created poet client",
 		zap.Stringer("url", baseURL),
+		zap.Binary("pubkey", server.Pubkey.Bytes()),
 		zap.Int("max retries", client.RetryMax),
 		zap.Duration("min retry wait", client.RetryWaitMin),
 		zap.Duration("max retry wait", client.RetryWaitMax),
@@ -184,18 +188,8 @@ func (c *HTTPPoetClient) Submit(
 }
 
 // PoetServiceID returns the public key of the PoET proving service.
-func (c *HTTPPoetClient) PoetServiceID(ctx context.Context) (localsql.PoetServiceID, error) {
-	if c.poetServiceID.ServiceID != nil {
-		return c.poetServiceID, nil
-	}
-	resBody := rpcapi.InfoResponse{}
-
-	if err := c.req(ctx, http.MethodGet, "/v1/info", nil, &resBody); err != nil {
-		return localsql.PoetServiceID{}, fmt.Errorf("getting poet ID: %w", err)
-	}
-
-	c.poetServiceID.ServiceID = resBody.ServicePubkey
-	return c.poetServiceID, nil
+func (c *HTTPPoetClient) PoetServiceID(ctx context.Context) localsql.PoetServiceID {
+	return c.poetServiceID
 }
 
 // Proof implements PoetProvingServiceClient.

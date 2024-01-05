@@ -72,7 +72,7 @@ func NewNIPostBuilder(
 	db *localsql.Database,
 	poetDB poetDbAPI,
 	postService postService,
-	poetServers []string,
+	poetServers []types.PoetServer,
 	lg *zap.Logger,
 	signer *signing.EdSigner,
 	poetCfg PoetConfig,
@@ -80,8 +80,8 @@ func NewNIPostBuilder(
 	opts ...NIPostBuilderOption,
 ) (*NIPostBuilder, error) {
 	poetClients := make(map[string]poetClient, len(poetServers))
-	for _, address := range poetServers {
-		client, err := NewHTTPPoetClient(address, poetCfg, WithLogger(lg.Named("poet")))
+	for _, server := range poetServers {
+		client, err := NewHTTPPoetClient(server, poetCfg, WithLogger(lg.Named("poet")))
 		if err != nil {
 			return nil, fmt.Errorf("cannot create poet client: %w", err)
 		}

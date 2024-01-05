@@ -96,7 +96,7 @@ func TestValidator_Validate(t *testing.T) {
 		localsql.InMemory(),
 		poetDb,
 		svc,
-		[]string{poetProver.RestURL().String()},
+		[]types.PoetServer{{Address: poetProver.RestURL().String()}},
 		logger.Named("nipostBuilder"),
 		sig,
 		poetCfg,

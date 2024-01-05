@@ -55,6 +55,15 @@ func MakePoetEndpoint(ith int) string {
 	return fmt.Sprintf("http://%s:%d", createPoetIdentifier(ith), poetPort)
 }
 
+// Deterministically generate poet keys for given instance.
+func MakePoetKey(ith int) (ed25519.PublicKey, ed25519.PrivateKey) {
+	seed := make([]byte, ed25519.SeedSize)
+	copy(seed, fmt.Sprintf("poet-%d", ith))
+	privateKey := ed25519.NewKeyFromSeed(seed)
+
+	return privateKey.Public().(ed25519.PublicKey), privateKey
+}
+
 func BootstrapperEndpoint(ith int) string {
 	return fmt.Sprintf("http://%s:%d", createBootstrapperIdentifier(ith), bootstrapperPort)
 }

@@ -194,8 +194,8 @@ func (m migration0003) moveNipostStateToDb(db sql.Executor, dataDir string) erro
 
 func (m migration0003) getAddress(serviceID PoetServiceID) (string, error) {
 	for _, client := range m.poetClients {
-		clientId, err := client.PoetServiceID(context.Background())
-		if err == nil && bytes.Equal(serviceID.ServiceID, clientId.ServiceID) {
+		clientId := client.PoetServiceID(context.Background())
+		if bytes.Equal(serviceID.ServiceID, clientId.ServiceID) {
 			return client.Address(), nil
 		}
 	}
