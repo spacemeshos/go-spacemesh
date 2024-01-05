@@ -1669,6 +1669,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		sql.WithMigrations(migrations),
 		sql.WithConnections(app.Config.DatabaseConnections),
 		sql.WithLatencyMetering(app.Config.DatabaseLatencyMetering),
+		sql.WithVacuumDisabled(app.Config.DatabaseVacuumDisable),
 		sql.WithVacuumState(app.Config.DatabaseVacuumState),
 	}
 	if len(app.Config.DatabaseSkipMigrations) > 0 {

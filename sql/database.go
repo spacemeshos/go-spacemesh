@@ -70,6 +70,7 @@ type conf struct {
 	flags         sqlite.OpenFlags
 	connections   int
 	skipMigration map[int]struct{}
+	disableVacuum bool
 	vacuumState   int
 	migrations    []Migration
 	enableLatency bool
@@ -141,6 +142,12 @@ func WithVacuumState(i int) Opt {
 func WithLatencyMetering(enable bool) Opt {
 	return func(c *conf) {
 		c.enableLatency = enable
+	}
+}
+
+func WithVacuumDisabled(disable bool) Opt {
+	return func(c *conf) {
+		c.disableVacuum = disable
 	}
 }
 
@@ -219,7 +226,7 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 		tx.Commit()
 		tx.Release()
 
-		if config.vacuumState != 0 && before <= config.vacuumState {
+		if !config.disableVacuum && config.vacuumState != 0 && before <= config.vacuumState {
 			if err := Vacuum(db); err != nil {
 				return nil, err
 			}

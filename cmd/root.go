@@ -84,6 +84,8 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.DatabaseLatencyMetering, "if enabled collect latency histogram for every database query")
 	cmd.PersistentFlags().DurationVar(&cfg.DatabasePruneInterval, "db-prune-interval",
 		cfg.DatabasePruneInterval, "configure interval for database pruning")
+	cmd.PersistentFlags().BoolVar(&cfg.DatabaseVacuumDisable, "db-vacuum-disable",
+		cfg.DatabaseVacuumDisable, "disable vacuum of db on node startup")
 
 	cmd.PersistentFlags().BoolVar(&cfg.NoMainOverride, "no-main-override",
 		cfg.NoMainOverride, "force 'nomain' builds to run on the mainnet")

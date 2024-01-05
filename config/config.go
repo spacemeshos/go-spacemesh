@@ -115,6 +115,7 @@ type BaseConfig struct {
 	DatabaseLatencyMetering      bool          `mapstructure:"db-latency-metering"`
 	DatabaseSizeMeteringInterval time.Duration `mapstructure:"db-size-metering-interval"`
 	DatabasePruneInterval        time.Duration `mapstructure:"db-prune-interval"`
+	DatabaseVacuumDisable        bool          `mapstructure:"db-vacuum-disable"`
 	DatabaseVacuumState          int           `mapstructure:"db-vacuum-state"`
 	DatabaseSkipMigrations       []int         `mapstructure:"db-skip-migrations"`
 
@@ -217,6 +218,7 @@ func defaultBaseConfig() BaseConfig {
 		DatabaseConnections:          16,
 		DatabaseSizeMeteringInterval: 10 * time.Minute,
 		DatabasePruneInterval:        30 * time.Minute,
+		DatabaseVacuumDisable:        false,
 		NetworkHRP:                   "sm",
 		ATXGradeDelay:                10 * time.Second,
 	}
