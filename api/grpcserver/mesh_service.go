@@ -266,15 +266,15 @@ func (s MeshService) readLayer(
 	ctx context.Context,
 	layerID types.LayerID,
 	layerStatus pb.Layer_LayerStatus,
-) (pbLayer *pb.Layer, err error) {
+) (*pb.Layer, error) {
 	// Populate with what we already know
-	pbLayer = &pb.Layer{
+	pbLayer := &pb.Layer{
 		Number: &pb.LayerNumber{Number: layerID.Uint32()},
 		Status: layerStatus,
 	}
 
 	// read the canonical block for this layer
-	block, err2 := s.mesh.GetLayerVerified(layerID)
+	block, err := s.mesh.GetLayerVerified(layerID)
 	// TODO: Be careful with how we handle missing layers here.
 	// A layer that's newer than the currentLayer (defined above)
 	// is clearly an input error. A missing layer that's older than
@@ -282,8 +282,8 @@ func (s MeshService) readLayer(
 	// between these two is a gray area: do we define this as an
 	// internal or an input error? For now, all missing layers produce
 	// internal errors.
-	if err2 != nil {
-		ctxzap.Error(ctx, "could not read layer from database", layerID.Field().Zap(), zap.Error(err2))
+	if err != nil {
+		ctxzap.Error(ctx, "could not read layer from database", layerID.Field().Zap(), zap.Error(err))
 		return pbLayer, status.Errorf(codes.Internal, "error reading layer data")
 	} else if block == nil {
 		return pbLayer, nil
@@ -309,19 +309,19 @@ func (s MeshService) readLayer(
 		Transactions: pbTxs,
 	}
 
-	stateRoot, err2 := s.conState.GetLayerStateRoot(layerID)
-	if err2 != nil {
+	stateRoot, err := s.conState.GetLayerStateRoot(layerID)
+	if err != nil {
 		// This is expected. We can only retrieve state root for a layer that was applied to state,
 		// which only happens after it's approved/confirmed.
 		ctxzap.Debug(ctx, "no state root for layer",
-			layerID.Field().Zap(), zap.Stringer("status", layerStatus), zap.Error(err2))
+			layerID.Field().Zap(), zap.Stringer("status", layerStatus), zap.Error(err))
 	}
-	hash, err2 := s.mesh.MeshHash(layerID)
-	if err2 != nil {
+	hash, err := s.mesh.MeshHash(layerID)
+	if err != nil {
 		// This is expected. We can only retrieve state root for a layer that was applied to state,
 		// which only happens after it's approved/confirmed.
 		ctxzap.Debug(ctx, "no mesh hash at layer",
-			layerID.Field().Zap(), zap.Stringer("status", layerStatus), zap.Error(err2))
+			layerID.Field().Zap(), zap.Stringer("status", layerStatus), zap.Error(err))
 	}
 	pbLayer.Blocks = []*pb.Block{pbBlock}
 	pbLayer.Hash = hash.Bytes()
