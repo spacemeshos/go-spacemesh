@@ -293,7 +293,11 @@ func TestAscendingRanges(t *testing.T) {
 }
 
 func verifyBinaryTree(t *testing.T, mn *monoidTreeNode) {
+	cloned := mn.flags&flagCloned != 0
 	if mn.left != nil {
+		if !cloned {
+			require.Zero(t, mn.left.flags&flagCloned, "cloned left child of a non-cloned node")
+		}
 		require.Negative(t, mn.left.key.Compare(mn.key))
 		// not a "real" pointer (no parent stack), just to get max
 		leftMax := &monoidTreePointer{node: mn.left}
@@ -303,6 +307,9 @@ func verifyBinaryTree(t *testing.T, mn *monoidTreeNode) {
 	}
 
 	if mn.right != nil {
+		if !cloned {
+			require.Zero(t, mn.right.flags&flagCloned, "cloned right child of a non-cloned node")
+		}
 		require.Positive(t, mn.right.key.Compare(mn.key))
 		// not a "real" pointer (no parent stack), just to get min
 		rightMin := &monoidTreePointer{node: mn.right}
@@ -316,12 +323,12 @@ func verifyRedBlackNode(t *testing.T, mn *monoidTreeNode, blackDepth int) int {
 	if mn == nil {
 		return blackDepth + 1
 	}
-	if mn.color == red {
+	if mn.flags&flagBlack == 0 {
 		if mn.left != nil {
-			require.Equal(t, black, mn.left.color, "left child of a red node is red")
+			require.Equal(t, flagBlack, mn.left.flags&flagBlack, "left child of a red node is red")
 		}
 		if mn.right != nil {
-			require.Equal(t, black, mn.right.color, "right child of a red node is red")
+			require.Equal(t, flagBlack, mn.right.flags&flagBlack, "right child of a red node is red")
 		}
 	} else {
 		blackDepth++
@@ -336,7 +343,7 @@ func verifyRedBlack(t *testing.T, mt *monoidTree) {
 	if mt.root == nil {
 		return
 	}
-	require.Equal(t, black, mt.root.color, "root node must be black")
+	require.Equal(t, flagBlack, mt.root.flags&flagBlack, "root node must be black")
 	verifyRedBlackNode(t, mt.root, 0)
 }
 
@@ -354,16 +361,31 @@ func TestRedBlackTreeInsert(t *testing.T) {
 		// items := []byte("0123456789ABCDEFG")
 		// shuffled := []byte("0678DF1CG5A9324BE")
 
+		trees := make([]MonoidTree, len(shuffled))
+		treeDumps := make([]string, len(shuffled))
 		for i := 0; i < len(shuffled); i++ {
-			tree.Add(sampleID(shuffled[i])) // XXXX: Insert
+			trees[i] = tree.Copy()
+			treeDumps[i] = tree.Dump()
+			require.Equal(t, treeDumps[i], trees[i].Dump(), "initial tree dump %d", i)
+			tree.Add(sampleID(shuffled[i]))
+			if i >= 3 && i%3 == 0 {
+				// this shouldn't change anything
+				trees[i-1].Add(sampleID(shuffled[rand.Intn(i-1)]))
+				// cloning should not happen b/c no new nodes are inserted
+				require.Zero(t, trees[i-1].(*monoidTree).root.flags&flagCloned)
+			}
 		}
+
+		for i := 0; i < len(shuffled); i++ {
+			require.Equal(t, treeDumps[i], trees[i].Dump(), "tree dump %d after copy", i)
+		}
+
 		var actualItems []byte
 		n := 0
 		// t.Logf("items: %q", string(items))
 		// t.Logf("shuffled: %q", string(shuffled))
 		// t.Logf("QQQQQ: tree:\n%s", tree.Dump())
-		root := tree.(*monoidTree).root
-		verifyBinaryTree(t, root)
+		verifyBinaryTree(t, tree.(*monoidTree).root)
 		verifyRedBlack(t, tree.(*monoidTree))
 		for ptr := tree.Min(); ptr.Key() != nil; ptr.Next() {
 			// avoid endless loop due to bugs in the tree impl
@@ -402,25 +424,36 @@ func testRandomOrderAndRanges(t *testing.T, mktree makeTestTreeFunc) {
 			}
 		}
 
-		expFP, expStart, expEnd := naiveRange(all, string(x), string(y), stopCount)
-		fp, startNode, endNode := tree.RangeFingerprint(nil, x, y, stop)
+		verify := func() {
+			expFP, expStart, expEnd := naiveRange(all, string(x), string(y), stopCount)
+			fp, startNode, endNode := tree.RangeFingerprint(nil, x, y, stop)
 
-		fpStr := CombinedFirst[string](fp)
-		curCase := fmt.Sprintf("items %q x %q y %q stopCount %d", shuffled, x, y, stopCount)
-		require.Equal(t, expFP, fpStr, "%s: fingerprint", curCase)
-		require.Equal(t, len(fpStr), CombinedSecond[int](fp), "%s: count", curCase)
+			fpStr := CombinedFirst[string](fp)
+			curCase := fmt.Sprintf("items %q x %q y %q stopCount %d", shuffled, x, y, stopCount)
+			require.Equal(t, expFP, fpStr, "%s: fingerprint", curCase)
+			require.Equal(t, len(fpStr), CombinedSecond[int](fp), "%s: count", curCase)
 
-		startStr := ""
-		if startNode != nil {
-			startStr = string(startNode.Key().(sampleID))
+			startStr := ""
+			if startNode != nil {
+				startStr = string(startNode.Key().(sampleID))
+			}
+			require.Equal(t, expStart, startStr, "%s: next", curCase)
+
+			endStr := ""
+			if endNode != nil {
+				endStr = string(endNode.Key().(sampleID))
+			}
+			require.Equal(t, expEnd, endStr, "%s: next", curCase)
 		}
-		require.Equal(t, expStart, startStr, "%s: next", curCase)
-
-		endStr := ""
-		if endNode != nil {
-			endStr = string(endNode.Key().(sampleID))
-		}
-		require.Equal(t, expEnd, endStr, "%s: next", curCase)
+		verify()
+		tree1 := tree.Copy()
+		tree1.Add(sampleID("s"))
+		tree1.Add(sampleID("t"))
+		tree1.Add(sampleID("u"))
+		verify() // the original tree should be unchanged
+		fp, _, _ := tree1.RangeFingerprint(nil, sampleID("a"), sampleID("a"), nil)
+		require.Equal(t, "abcdefghijklmnopqrstu", CombinedFirst[string](fp))
+		require.Equal(t, len(all)+3, CombinedSecond[int](fp))
 	}
 }
 

@@ -4,6 +4,7 @@ package hashsync
 import (
 	"fmt"
 	"io"
+	"reflect"
 	"slices"
 	"strings"
 )
@@ -31,6 +32,7 @@ func (fpred FingerprintPredicate) Match(y any) bool {
 }
 
 type MonoidTree interface {
+	Copy() MonoidTree
 	Fingerprint() any
 	Add(v Ordered)
 	Min() MonoidTreePointer
@@ -65,25 +67,18 @@ type MonoidTreePointer interface {
 	Next()
 }
 
-type color uint8
+type flags uint8
 
 const (
-	red   color = 0
-	black color = 1
+	// flagBlack indicates a black node. If it is not set, the
+	// node is red, which is the default for newly created nodes
+	flagBlack flags = 1
+	// flagCloned indicates a node that is only present in this
+	// tree and not in any of its copies, thus permitting
+	// modification of this node without cloning it. When the tree
+	// is copied, flagCloned is cleared on all of its nodes.
+	flagCloned flags = 2
 )
-
-func (c color) flip() color { return c ^ 1 }
-
-func (c color) String() string {
-	switch c {
-	case red:
-		return "red"
-	case black:
-		return "black"
-	default:
-		return fmt.Sprintf("<bad: %d>", c)
-	}
-}
 
 type dir uint8
 
@@ -227,15 +222,15 @@ type monoidTreeNode struct {
 	key         Ordered
 	max         Ordered
 	fingerprint any
-	color       color
+	flags       flags
 }
 
 func (mn *monoidTreeNode) red() bool {
-	return mn != nil && mn.color == red
+	return mn != nil && (mn.flags&flagBlack) == 0
 }
 
 func (mn *monoidTreeNode) black() bool {
-	return mn == nil || mn.color == black
+	return mn == nil || (mn.flags&flagBlack) != 0
 }
 
 func (mn *monoidTreeNode) child(dir dir) *monoidTreeNode {
@@ -248,26 +243,6 @@ func (mn *monoidTreeNode) child(dir dir) *monoidTreeNode {
 	return mn.right
 }
 
-func (mn *monoidTreeNode) setChild(dir dir, child *monoidTreeNode) {
-	if mn == nil {
-		panic("setChild for a nil node")
-	}
-	if dir == left {
-		mn.left = child
-	} else {
-		mn.right = child
-	}
-}
-
-func (mn *monoidTreeNode) flip() {
-	if mn.left == nil || mn.right == nil {
-		panic("can't flip color with one or more nil children")
-	}
-	mn.color = mn.color.flip()
-	mn.left.color = mn.left.color.flip()
-	mn.right.color = mn.right.color.flip()
-}
-
 func (mn *monoidTreeNode) Key() Ordered { return mn.key }
 
 func (mn *monoidTreeNode) dump(w io.Writer, indent int) {
@@ -275,6 +250,11 @@ func (mn *monoidTreeNode) dump(w io.Writer, indent int) {
 	fmt.Fprintf(w, "%skey: %v\n", indentStr, mn.key)
 	fmt.Fprintf(w, "%smax: %v\n", indentStr, mn.max)
 	fmt.Fprintf(w, "%sfp: %v\n", indentStr, mn.fingerprint)
+	color := "red"
+	if mn.black() {
+		color = "black"
+	}
+	fmt.Fprintf(w, "%scolor: %v\n", indentStr, color)
 	if mn.left != nil {
 		fmt.Fprintf(w, "%sleft:\n", indentStr)
 		mn.left.dump(w, indent+1)
@@ -297,6 +277,19 @@ func (mn *monoidTreeNode) dumpSubtree() string {
 	return sb.String()
 }
 
+// cleanNodes removed flagCloned from all of the nodes in the subtree,
+// so that it can be used in further cloned trees.
+// A non-cloned node cannot have any cloned children, so the function
+// stops the recursion at any non-cloned node.
+func (mn *monoidTreeNode) cleanCloned() {
+	if mn == nil || mn.flags&flagCloned == 0 {
+		return
+	}
+	mn.flags &^= flagCloned
+	mn.left.cleanCloned()
+	mn.right.cleanCloned()
+}
+
 type monoidTree struct {
 	m            Monoid
 	root         *monoidTreeNode
@@ -308,11 +301,66 @@ func NewMonoidTree(m Monoid) MonoidTree {
 	return &monoidTree{m: m}
 }
 
+func (mt *monoidTree) Copy() MonoidTree {
+	// Clean flagCloned from any nodes created specifically
+	// for this subtree. This will mean they will have to be
+	// re-cloned if they need to be changed again.
+	mt.root.cleanCloned()
+	// Don't reuse cachedMinPtr / cachedMaxPtr for the cloned
+	// tree to be on the safe side
+	return &monoidTree{
+		m:    mt.m,
+		root: mt.root,
+	}
+}
+
 func (mt *monoidTree) rootPtr() *monoidTreePointer {
 	return &monoidTreePointer{
 		parentStack: make([]*monoidTreeNode, 0, initialParentStackSize),
 		node:        mt.root,
 	}
+}
+
+func (mt *monoidTree) ensureCloned(mn *monoidTreeNode) *monoidTreeNode {
+	if mn.flags&flagCloned != 0 {
+		return mn
+	}
+	cloned := *mn
+	cloned.flags |= flagCloned
+	return &cloned
+}
+
+func (mt *monoidTree) setChild(mn *monoidTreeNode, dir dir, child *monoidTreeNode) *monoidTreeNode {
+	if mn == nil {
+		panic("setChild for a nil node")
+	}
+	if mn.child(dir) == child {
+		return mn
+	}
+	mn = mt.ensureCloned(mn)
+	if dir == left {
+		mn.left = child
+	} else {
+		mn.right = child
+	}
+	return mn
+}
+
+func (mt *monoidTree) flip(mn *monoidTreeNode) *monoidTreeNode {
+	if mn.left == nil || mn.right == nil {
+		panic("can't flip color with one or more nil children")
+	}
+
+	left := mt.ensureCloned(mn.left)
+	right := mt.ensureCloned(mn.right)
+	mn = mt.ensureCloned(mn)
+	mn.left = left
+	mn.right = right
+
+	mn.flags ^= flagBlack
+	left.flags ^= flagBlack
+	right.flags ^= flagBlack
+	return mn
 }
 
 func (mt *monoidTree) Min() MonoidTreePointer {
@@ -388,12 +436,17 @@ func (mt *monoidTree) safeFingerprint(mn *monoidTreeNode) any {
 
 func (mt *monoidTree) updateFingerprintAndMax(mn *monoidTreeNode) {
 	fp := mt.m.Op(mt.safeFingerprint(mn.left), mt.m.Fingerprint(mn.key))
-	mn.fingerprint = mt.m.Op(fp, mt.safeFingerprint(mn.right))
+	fp = mt.m.Op(fp, mt.safeFingerprint(mn.right))
+	newMax := mn.key
 	if mn.right != nil {
-		mn.max = mn.right.max
-	} else {
-		mn.max = mn.key
+		newMax = mn.right.max
 	}
+	if mn.flags&flagCloned == 0 &&
+		(!reflect.DeepEqual(mn.fingerprint, fp) || mn.max.Compare(newMax) != 0) {
+		panic("BUG: updating fingerprint/max for a non-cloned node")
+	}
+	mn.fingerprint = fp
+	mn.max = newMax
 }
 
 func (mt *monoidTree) rotate(mn *monoidTreeNode, d dir) *monoidTreeNode {
@@ -401,13 +454,17 @@ func (mt *monoidTree) rotate(mn *monoidTreeNode, d dir) *monoidTreeNode {
 
 	rd := d.flip()
 	tmp := mn.child(rd)
+	if tmp == nil {
+		panic("BUG: nil parent after rotate")
+	}
 	// fmt.Fprintf(os.Stderr, "QQQQQ: rotate %s (child at %s is %s): subtree:\n%s\n",
 	// 	d, rd, tmp.key, mn.dumpSubtree())
-	mn.setChild(rd, tmp.child(d))
-	tmp.setChild(d, mn)
+	mn = mt.setChild(mn, rd, tmp.child(d))
+	tmp = mt.setChild(tmp, d, mn)
 
-	tmp.color = mn.color
-	mn.color = red
+	// copy node color to the tmp
+	tmp.flags = (tmp.flags &^ flagBlack) | (mn.flags & flagBlack)
+	mn.flags &^= flagBlack // set to red
 
 	// it's important to update mn first as it may be the new right child of
 	// tmp, and we need to update tmp.max too
@@ -419,13 +476,16 @@ func (mt *monoidTree) rotate(mn *monoidTreeNode, d dir) *monoidTreeNode {
 
 func (mt *monoidTree) doubleRotate(mn *monoidTreeNode, d dir) *monoidTreeNode {
 	rd := d.flip()
-	mn.setChild(rd, mt.rotate(mn.child(rd), rd))
+	mn = mt.setChild(mn, rd, mt.rotate(mn.child(rd), rd))
 	return mt.rotate(mn, d)
 }
 
 func (mt *monoidTree) Add(v Ordered) {
 	mt.root = mt.insert(mt.root, v, true)
-	mt.root.color = black
+	if mt.root.flags&flagBlack == 0 {
+		mt.root = mt.ensureCloned(mt.root)
+		mt.root.flags |= flagBlack
+	}
 }
 
 func (mt *monoidTree) insert(mn *monoidTreeNode, v Ordered, rb bool) *monoidTreeNode {
@@ -433,7 +493,11 @@ func (mt *monoidTree) insert(mn *monoidTreeNode, v Ordered, rb bool) *monoidTree
 	// https://zarif98sjs.github.io/blog/blog/redblacktree/
 	if mn == nil {
 		mn = mt.newNode(nil, v)
-		// if the tree is being modified, cached min/max ptrs are no longer valid
+		// the new node is not really "cloned", but at this point it's
+		// only present in this tree so we can safely modify it
+		// without allocating new nodes
+		mn.flags |= flagCloned
+		// when the tree is being modified, cached min/max ptrs are no longer valid
 		mt.cachedMinPtr = nil
 		mt.cachedMaxPtr = nil
 		return mn
@@ -448,7 +512,7 @@ func (mt *monoidTree) insert(mn *monoidTreeNode, v Ordered, rb bool) *monoidTree
 	}
 	oldChild := mn.child(d)
 	newChild := mt.insert(oldChild, v, rb)
-	mn.setChild(d, newChild)
+	mn = mt.setChild(mn, d, newChild)
 	updateFP := true
 	if rb {
 		// non-red-black insert is used for testing
@@ -460,6 +524,9 @@ func (mt *monoidTree) insert(mn *monoidTreeNode, v Ordered, rb bool) *monoidTree
 	return mn
 }
 
+// insertFixup fixes a subtree after insert according to Red-Black tree rules.
+// It returns the updated node and a boolean indicating whether the fingerprint/max
+// update is needed. The latter is NOT the case
 func (mt *monoidTree) insertFixup(mn *monoidTreeNode, d dir, updateFP bool) (*monoidTreeNode, bool) {
 	child := mn.child(d)
 	rd := d.flip()
@@ -467,28 +534,27 @@ func (mt *monoidTree) insertFixup(mn *monoidTreeNode, d dir, updateFP bool) (*mo
 	case child.black():
 		return mn, true
 	case mn.child(rd).red():
-		updateFP = true
 		// both children of mn are red => any child has 2 reds in a row
 		// (LL LR RR RL) => flip colors
 		if child.child(d).red() || child.child(rd).red() {
-			mn.flip()
+			return mt.flip(mn), true
 		}
+		return mn, true
 	case child.child(d).red():
 		// another child of mn is black
 		// any child has 2 reds in a row (LL RR) => rotate
 		// rotate will update fingerprint of mn and the node
 		// that replaces it
-		mn = mt.rotate(mn, rd)
+		return mt.rotate(mn, rd), updateFP
 	case child.child(rd).red():
 		// another child of mn is black
 		// any child has 2 reds in a row (LR RL) => align first, then rotate
 		// doubleRotate will update fingerprint of mn and the node
 		// that replaces it
-		mn = mt.doubleRotate(mn, rd)
+		return mt.doubleRotate(mn, rd), updateFP
 	default:
-		updateFP = true
+		return mn, true
 	}
-	return mn, updateFP
 }
 
 func (mt *monoidTree) findGTENode(ptr *monoidTreePointer, x Ordered) bool {
@@ -778,7 +844,6 @@ func (mt *monoidTree) boundedAggregate(ptr *monoidTreePointer, acc any, stop Fin
 			}
 		}
 		// fmt.Fprintf(os.Stderr, "QQQQQ: boundedAggregate: %v -- return acc %v\n", mn.key, acc)
-		// QQQQQ: ZXXXXXX: return acc, nil !!!!
 		return acc
 	}
 }
@@ -793,10 +858,6 @@ func (mt *monoidTree) Dump() string {
 }
 
 // TBD: !!! values and Lookup (via findGTENode) !!!
-// TBD: maybe: persistent rbtree -- note that MonoidTree will be immutable,
-// too, in this case (Insert returns a new tree => no problem with thread safety
-// or cached min/max)
-
 // TODO: rename MonoidTreeNode to just Node, MonoidTree to SyncTree
 // TODO: use sync.Pool for node alloc
 //       see also:
