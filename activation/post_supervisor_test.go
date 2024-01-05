@@ -130,7 +130,7 @@ func Test_PostSupervisor_StartsServiceCmd(t *testing.T) {
 	require.NoError(t, ps.Start(postOpts))
 	t.Cleanup(func() { assert.NoError(t, ps.Stop(false)) })
 
-	require.Eventually(t, func() bool { return (ps.pid.Load() != 0) }, 5*time.Second, 100*time.Millisecond)
+	require.Eventually(t, func() bool { return ps.pid.Load() != 0 }, 5*time.Second, 100*time.Millisecond)
 
 	pid := int(ps.pid.Load())
 	process, err := os.FindProcess(pid)
@@ -170,18 +170,18 @@ func Test_PostSupervisor_Restart_Possible(t *testing.T) {
 
 	require.NoError(t, ps.Start(postOpts))
 	t.Cleanup(func() { assert.NoError(t, ps.Stop(false)) })
-	require.Eventually(t, func() bool { return (ps.pid.Load() != 0) }, 5*time.Second, 100*time.Millisecond)
+	require.Eventually(t, func() bool { return ps.pid.Load() != 0 }, 5*time.Second, 100*time.Millisecond)
 
 	require.NoError(t, ps.Stop(false))
-	require.Eventually(t, func() bool { return (ps.pid.Load() == 0) }, 5*time.Second, 100*time.Millisecond)
+	require.Eventually(t, func() bool { return ps.pid.Load() == 0 }, 5*time.Second, 100*time.Millisecond)
 
 	mgr.EXPECT().PrepareInitializer(postOpts).Return(nil)
 	mgr.EXPECT().StartSession(gomock.Any()).Return(nil)
 	require.NoError(t, ps.Start(postOpts))
-	require.Eventually(t, func() bool { return (ps.pid.Load() != 0) }, 5*time.Second, 100*time.Millisecond)
+	require.Eventually(t, func() bool { return ps.pid.Load() != 0 }, 5*time.Second, 100*time.Millisecond)
 
 	require.NoError(t, ps.Stop(false))
-	require.Eventually(t, func() bool { return (ps.pid.Load() == 0) }, 5*time.Second, 100*time.Millisecond)
+	require.Eventually(t, func() bool { return ps.pid.Load() == 0 }, 5*time.Second, 100*time.Millisecond)
 }
 
 func Test_PostSupervisor_LogFatalOnCrash(t *testing.T) {
@@ -207,7 +207,7 @@ func Test_PostSupervisor_LogFatalOnCrash(t *testing.T) {
 	require.NoError(t, ps.Start(postOpts))
 	t.Cleanup(func() { assert.NoError(t, ps.Stop(false)) })
 
-	require.Eventually(t, func() bool { return (ps.pid.Load() != 0) }, 5*time.Second, 100*time.Millisecond)
+	require.Eventually(t, func() bool { return ps.pid.Load() != 0 }, 5*time.Second, 100*time.Millisecond)
 
 	pid := int(ps.pid.Load())
 	process, err := os.FindProcess(pid)
@@ -244,7 +244,7 @@ func Test_PostSupervisor_LogFatalOnInvalidConfig(t *testing.T) {
 	require.NoError(t, ps.Start(postOpts))
 	t.Cleanup(func() { assert.NoError(t, ps.Stop(false)) })
 
-	require.Eventually(t, func() bool { return (ps.pid.Load() != 0) }, 5*time.Second, 100*time.Millisecond)
+	require.Eventually(t, func() bool { return ps.pid.Load() != 0 }, 5*time.Second, 100*time.Millisecond)
 
 	pid := int(ps.pid.Load())
 	process, err := os.FindProcess(pid)
@@ -277,7 +277,7 @@ func Test_PostSupervisor_StopOnError(t *testing.T) {
 
 	require.NoError(t, ps.Start(postOpts))
 	t.Cleanup(func() { assert.NoError(t, ps.Stop(false)) })
-	require.Eventually(t, func() bool { return (ps.pid.Load() != 0) }, 5*time.Second, 100*time.Millisecond)
+	require.Eventually(t, func() bool { return ps.pid.Load() != 0 }, 5*time.Second, 100*time.Millisecond)
 
 	testErr := errors.New("couldn't delete files")
 	mgr.EXPECT().Reset().Return(testErr)

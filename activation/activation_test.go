@@ -1137,7 +1137,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	events.InitializeReporter()
 	sub, err := events.SubscribeMatched(func(t *events.UserEvent) bool {
 		switch t.Event.Details.(type) {
-		case (*pb.Event_AtxPublished):
+		case *pb.Event_AtxPublished:
 			return true
 		default:
 			return false
