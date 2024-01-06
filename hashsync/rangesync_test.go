@@ -6,6 +6,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/maps"
 )
@@ -35,6 +36,7 @@ func (m rangeMessage) String() string {
 }
 
 type fakeConduit struct {
+	t     *testing.T
 	msgs  []rangeMessage
 	items []Ordered
 	resp  *fakeConduit
@@ -46,10 +48,7 @@ func (fc *fakeConduit) done() bool {
 	if fc.resp == nil {
 		return true
 	}
-	if len(fc.resp.msgs) == 0 {
-		panic("BUG: not done but no msgs")
-	}
-	return false
+	return len(fc.resp.msgs) == 0 && len(fc.resp.items) == 0
 }
 
 func (fc *fakeConduit) NextMessage() (SyncMessage, error) {
@@ -72,10 +71,14 @@ func (fc *fakeConduit) NextItem() (Ordered, error) {
 	return nil, nil
 }
 
-func (fc *fakeConduit) sendFingerprint(x, y Ordered, fingerprint any, count int, haveItems bool) {
+func (fc *fakeConduit) ensureResp() {
 	if fc.resp == nil {
-		fc.resp = &fakeConduit{}
+		fc.resp = &fakeConduit{t: fc.t}
 	}
+}
+
+func (fc *fakeConduit) sendMsg(x, y Ordered, fingerprint any, count int, haveItems bool) {
+	fc.ensureResp()
 	msg := rangeMessage{
 		x:         x,
 		y:         y,
@@ -86,29 +89,47 @@ func (fc *fakeConduit) sendFingerprint(x, y Ordered, fingerprint any, count int,
 	fc.resp.msgs = append(fc.resp.msgs, msg)
 }
 
-func (fc *fakeConduit) SendFingerprint(x, y Ordered, fingerprint any, count int) {
-	fc.sendFingerprint(x, y, fingerprint, count, false)
-}
-
-func (fc *fakeConduit) SendItems(x, y Ordered, fingerprint any, count int, start, end Iterator) {
-	fc.sendFingerprint(x, y, fingerprint, count, true)
-	if start == nil || end == nil {
-		panic("SendItems with null iterator(s)")
-	}
-	it := start
-	for {
+func (fc *fakeConduit) sendItems(count int, it Iterator) {
+	require.NotZero(fc.t, count)
+	require.NotNil(fc.t, it)
+	fc.ensureResp()
+	for i := 0; i < count; i++ {
 		if it.Key() == nil {
 			panic("fakeConduit.SendItems: went got to the end of the tree")
 		}
 		fc.resp.items = append(fc.resp.items, it.Key())
 		it.Next()
-		if it.Equal(end) {
-			break
-		}
 	}
-	if len(fc.resp.items) == 0 {
-		panic("SendItems with no items")
-	}
+}
+
+func (fc *fakeConduit) SendFingerprint(x, y Ordered, fingerprint any, count int) {
+	require.NotNil(fc.t, x)
+	require.NotNil(fc.t, y)
+	require.NotZero(fc.t, count)
+	require.NotNil(fc.t, fingerprint)
+	fc.sendMsg(x, y, fingerprint, count, false)
+}
+
+func (fc *fakeConduit) SendEmptySet() {
+	fc.sendMsg(nil, nil, nil, 0, false)
+}
+
+func (fc *fakeConduit) SendEmptyRange(x, y Ordered) {
+	require.NotNil(fc.t, x)
+	require.NotNil(fc.t, y)
+	fc.sendMsg(x, y, nil, 0, false)
+}
+
+func (fc *fakeConduit) SendItems(x, y Ordered, count int, it Iterator) {
+	require.Positive(fc.t, count)
+	require.NotNil(fc.t, x)
+	require.NotNil(fc.t, y)
+	fc.sendMsg(x, y, nil, count, true)
+	fc.sendItems(count, it)
+}
+
+func (fc *fakeConduit) SendItemsOnly(count int, it Iterator) {
+	fc.sendItems(count, it)
 }
 
 type dumbStoreIterator struct {
@@ -237,35 +258,51 @@ func (it verifiedStoreIterator) Equal(other Iterator) bool {
 	o := other.(verifiedStoreIterator)
 	eq1 := it.knownGood.Equal(o.knownGood)
 	eq2 := it.it.Equal(o.it)
-	require.Equal(it.t, eq1, eq2, "iterators equal -- keys <%v> <%v> / <%v> <%v>",
+	assert.Equal(it.t, eq1, eq2, "iterators equal -- keys <%v> <%v> / <%v> <%v>",
 		it.knownGood.Key(), it.it.Key(),
 		o.knownGood.Key(), o.it.Key())
-	require.Equal(it.t, it.knownGood.Key(), it.it.Key(), "keys of equal iterators")
+	assert.Equal(it.t, it.knownGood.Key(), it.it.Key(), "keys of equal iterators")
 	return eq2
 }
 
 func (it verifiedStoreIterator) Key() Ordered {
 	k1 := it.knownGood.Key()
 	k2 := it.it.Key()
-	require.Equal(it.t, k1, k2, "keys")
+	assert.Equal(it.t, k1, k2, "keys")
 	return k2
 }
 
 func (it verifiedStoreIterator) Next() {
 	it.knownGood.Next()
 	it.it.Next()
-	require.Equal(it.t, it.knownGood.Key(), it.it.Key(), "keys for Next()")
+	assert.Equal(it.t, it.knownGood.Key(), it.it.Key(), "keys for Next()")
 }
 
 type verifiedStore struct {
-	t         *testing.T
-	knownGood ItemStore
-	store     ItemStore
+	t            *testing.T
+	knownGood    ItemStore
+	store        ItemStore
+	disableReAdd bool
+	added        map[sampleID]struct{}
 }
 
 var _ ItemStore = &verifiedStore{}
 
+func disableReAdd(s ItemStore) {
+	if vs, ok := s.(*verifiedStore); ok {
+		vs.disableReAdd = true
+	}
+}
+
 func (vs *verifiedStore) Add(k Ordered) {
+	if vs.disableReAdd {
+		_, found := vs.added[k.(sampleID)]
+		require.False(vs.t, found, "hash sent twice: %v", k)
+		if vs.added == nil {
+			vs.added = make(map[sampleID]struct{})
+		}
+		vs.added[k.(sampleID)] = struct{}{}
+	}
 	vs.knownGood.Add(k)
 	vs.store.Add(k)
 }
@@ -312,6 +349,8 @@ func (vs *verifiedStore) GetRangeInfo(preceding Iterator, x, y Ordered, count in
 			it:        ri2.End,
 		}
 	}
+	// QQQQQ: TODO: if count >= 0 and start+end != nil, do more calls to GetRangeInfo using resulting
+	// end iterator key to make sure the range is correct
 	return ri
 }
 
@@ -380,14 +419,14 @@ func storeItemStr(is ItemStore) string {
 	if it == nil {
 		return ""
 	}
-	endAt := is.Max()
+	endAt := is.Min()
 	r := ""
 	for {
 		r += string(it.Key().(sampleID))
+		it.Next()
 		if it.Equal(endAt) {
 			return r
 		}
-		it.Next()
 	}
 }
 
@@ -417,6 +456,7 @@ func forTestStores(t *testing.T, testFunc func(t *testing.T, factory storeFactor
 	}
 }
 
+// QQQQQ: rm
 func dumpRangeMessages(t *testing.T, msgs []rangeMessage, fmt string, args ...any) {
 	t.Logf(fmt, args...)
 	for _, m := range msgs {
@@ -424,26 +464,30 @@ func dumpRangeMessages(t *testing.T, msgs []rangeMessage, fmt string, args ...an
 	}
 }
 
-func runSync(t *testing.T, syncA, syncB *RangeSetReconciler, maxRounds int) (nRounds int) {
-	fc := &fakeConduit{}
+func runSync(t *testing.T, syncA, syncB *RangeSetReconciler, maxRounds int) (nRounds, nMsg, nItems int) {
+	fc := &fakeConduit{t: t}
 	syncA.Initiate(fc)
 	require.False(t, fc.done(), "no messages from Initiate")
 	var i int
-	for i := 0; !fc.done(); i++ {
+	for i = 0; !fc.done(); i++ {
 		if i == maxRounds {
 			require.FailNow(t, "too many rounds", "didn't reconcile in %d rounds", i)
 		}
-		// dumpRangeMessages(t, fc.msgs, "A %q -> B %q:", storeItemStr(syncA.is), storeItemStr(syncB.is))
 		fc = fc.resp
+		// dumpRangeMessages(t, fc.msgs, "A %q -> B %q:", storeItemStr(syncA.is), storeItemStr(syncB.is))
+		nMsg += len(fc.msgs)
+		nItems += len(fc.items)
 		syncB.Process(fc)
 		if fc.done() {
 			break
 		}
 		fc = fc.resp
+		nMsg += len(fc.msgs)
+		nItems += len(fc.items)
 		// dumpRangeMessages(t, fc.msgs, "B %q --> A %q:", storeItemStr(syncB.is), storeItemStr(syncA.is))
 		syncA.Process(fc)
 	}
-	return i + 1
+	return i + 1, nMsg, nItems
 }
 
 func testRangeSync(t *testing.T, storeFactory storeFactory) {
@@ -500,11 +544,13 @@ func testRangeSync(t *testing.T, storeFactory storeFactory) {
 			for n, maxSendRange := range []int{1, 2, 3, 4} {
 				t.Logf("maxSendRange: %d", maxSendRange)
 				storeA := makeStore(t, storeFactory, tc.a)
+				disableReAdd(storeA)
 				syncA := NewRangeSetReconciler(storeA, WithMaxSendRange(maxSendRange))
 				storeB := makeStore(t, storeFactory, tc.b)
+				disableReAdd(storeB)
 				syncB := NewRangeSetReconciler(storeB, WithMaxSendRange(maxSendRange))
 
-				nRounds := runSync(t, syncA, syncB, tc.maxRounds[n])
+				nRounds, _, _ := runSync(t, syncA, syncB, tc.maxRounds[n])
 				t.Logf("%s: maxSendRange %d: %d rounds", tc.name, maxSendRange, nRounds)
 
 				require.Equal(t, storeItemStr(storeA), storeItemStr(storeB))
@@ -558,6 +604,7 @@ func testRandomSync(t *testing.T, storeFactory storeFactory) {
 		syncB := NewRangeSetReconciler(storeB, WithMaxSendRange(maxSendRange))
 
 		runSync(t, syncA, syncB, max(len(expectedSet), 2)) // FIXME: less rounds!
+		// t.Logf("maxSendRange %d a %d b %d n %d", maxSendRange, len(bytesA), len(bytesB), n)
 		require.Equal(t, storeItemStr(storeA), storeItemStr(storeB))
 		require.Equal(t, string(expectedSet), storeItemStr(storeA),
 			"expected set for %q<->%q", bytesA, bytesB)
@@ -568,5 +615,8 @@ func TestRandomSync(t *testing.T) {
 	forTestStores(t, testRandomSync)
 }
 
+// TBD: test XOR + big sync
 // TBD: include initiate round!!!
 // TBD: use logger for verbose logging (messages)
+// TBD: in fakeConduit -- check item count against the iterator in SendItems / SendItemsOnly!!
+// TBD: record interaction using golden master in testRangeSync, together with N of rounds / msgs / items and don't check max rounds
