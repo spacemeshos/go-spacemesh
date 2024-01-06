@@ -10,20 +10,20 @@ import (
 )
 
 type Ordered interface {
-	Compare(other Ordered) int
+	Compare(other any) int
 }
 
 type LowerBound struct{}
 
 var _ Ordered = LowerBound{}
 
-func (vb LowerBound) Compare(x Ordered) int { return -1 }
+func (vb LowerBound) Compare(x any) int { return -1 }
 
 type UpperBound struct{}
 
 var _ Ordered = UpperBound{}
 
-func (vb UpperBound) Compare(x Ordered) int { return 1 }
+func (vb UpperBound) Compare(x any) int { return 1 }
 
 type FingerprintPredicate func(fp any) bool
 

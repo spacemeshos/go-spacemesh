@@ -1,6 +1,7 @@
 package types
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"math/big"
@@ -201,6 +202,16 @@ func (h Hash32) String() string {
 func (h Hash32) ShortString() string {
 	l := len(h.Hex())
 	return Shorten(h.Hex()[min(2, l):], 10)
+}
+
+// Compare compares a Hash32 to another hash and returns
+//
+//	-1 if this hash is less than the other
+//	 0 if the hashes are equal
+//	 1 if this hash is greater than the other
+func (h Hash32) Compare(other any) int {
+	oh := other.(Hash32)
+	return bytes.Compare(h[:], oh[:])
 }
 
 // Shorten shortens a string to a specified length.

@@ -14,7 +14,7 @@ type sampleID string
 
 var _ Ordered = sampleID("")
 
-func (s sampleID) Compare(other Ordered) int {
+func (s sampleID) Compare(other any) int {
 	return cmp.Compare(s, other.(sampleID))
 }
 
