@@ -77,8 +77,41 @@ func WithRequestsPerInterval(n int, interval time.Duration) Opt {
 	}
 }
 
+type Interactor interface {
+	Send(data []byte) error
+	SendError(err error) error
+	Receive() ([]byte, error)
+}
+
+type ServerHandler interface {
+	Handle(ctx context.Context, i Interactor) (time.Duration, error)
+}
+
+type InteractiveHandler func(ctx context.Context, i Interactor) (time.Duration, error)
+
+func (ih InteractiveHandler) Handle(ctx context.Context, i Interactor) (time.Duration, error) {
+	return ih(ctx, i)
+}
+
 // Handler is the handler to be defined by the application.
 type Handler func(context.Context, []byte) ([]byte, error)
+
+func (h Handler) Handle(ctx context.Context, i Interactor) (time.Duration, error) {
+	in, err := i.Receive()
+	if err != nil {
+		return 0, err
+	}
+	start := time.Now()
+	out, err := h(ctx, in)
+	duration := time.Since(start)
+	if err != nil {
+		if err := i.SendError(err); err != nil {
+			return duration, err
+		}
+		return duration, err
+	}
+	return duration, i.Send(out)
+}
 
 //go:generate scalegen -types Response
 
@@ -101,7 +134,7 @@ type Host interface {
 type Server struct {
 	logger              log.Log
 	protocol            string
-	handler             Handler
+	handler             ServerHandler
 	timeout             time.Duration
 	requestLimit        int
 	queueSize           int
@@ -114,7 +147,7 @@ type Server struct {
 }
 
 // New server for the handler.
-func New(h Host, proto string, handler Handler, opts ...Opt) *Server {
+func New(h Host, proto string, handler ServerHandler, opts ...Opt) *Server {
 	srv := &Server{
 		logger:              log.NewNop(),
 		protocol:            proto,
@@ -184,52 +217,24 @@ func (s *Server) Run(ctx context.Context) error {
 }
 
 func (s *Server) queueHandler(ctx context.Context, stream network.Stream) {
-	defer stream.Close()
-	_ = stream.SetDeadline(time.Now().Add(s.timeout))
-	defer stream.SetDeadline(time.Time{})
-	rd := bufio.NewReader(stream)
-	size, err := varint.ReadUvarint(rd)
-	if err != nil {
+	ps := s.peerStream(stream)
+	defer ps.Close()
+	defer ps.clearDeadline()
+	if err := ps.readInitialRequest(); err != nil {
+		s.logger.With().Debug("error receiving request", log.Err(err))
+		ps.Conn().Close()
 		return
 	}
-	if size > uint64(s.requestLimit) {
-		s.logger.With().Warning("request limit overflow",
-			log.Int("limit", s.requestLimit),
-			log.Uint64("request", size),
-		)
-		stream.Conn().Close()
-		return
-	}
-	buf := make([]byte, size)
-	_, err = io.ReadFull(rd, buf)
+	d, err := s.handler.Handle(ctx, ps)
 	if err != nil {
-		return
-	}
-	start := time.Now()
-	buf, err = s.handler(log.WithNewRequestID(ctx), buf)
-	s.logger.With().Debug("protocol handler execution time",
-		log.String("protocol", s.protocol),
-		log.Duration("duration", time.Since(start)),
-	)
-	var resp Response
-	if err != nil {
-		resp.Error = err.Error()
+		s.logger.With().Debug("protocol handler execution time",
+			log.String("protocol", s.protocol),
+			log.Duration("duration", d))
 	} else {
-		resp.Data = buf
-	}
-
-	wr := bufio.NewWriter(stream)
-	if _, err := codec.EncodeTo(wr, &resp); err != nil {
-		s.logger.With().Warning(
-			"failed to write response",
-			log.Int("resp.Data len", len(resp.Data)),
-			log.Int("resp.Error len", len(resp.Error)),
-			log.Err(err),
-		)
-		return
-	}
-	if err := wr.Flush(); err != nil {
-		s.logger.With().Warning("failed to flush stream", log.Err(err))
+		s.logger.With().Debug("protocol handler execution failed",
+			log.String("protocol", s.protocol),
+			log.Duration("duration", d),
+			log.Err(err))
 	}
 }
 
@@ -275,7 +280,54 @@ func (s *Server) Request(
 	return nil
 }
 
+func (s *Server) InteractiveRequest(
+	ctx context.Context,
+	pid peer.ID,
+	initialRequest []byte,
+	handler InteractiveHandler,
+	failure func(error),
+) error {
+	// start := time.Now()
+	if len(initialRequest) > s.requestLimit {
+		return fmt.Errorf("request length (%d) is longer than limit %d", len(initialRequest), s.requestLimit)
+	}
+	if s.h.Network().Connectedness(pid) != network.Connected {
+		return fmt.Errorf("%w: %s", ErrNotConnected, pid)
+	}
+	go func() {
+		ps, err := s.beginRequest(ctx, pid)
+		if err != nil {
+			failure(err)
+			return
+		}
+		defer ps.Close()
+		defer ps.clearDeadline()
+
+		ps.updateDeadline()
+		ps.sendInitialRequest(initialRequest)
+
+		if _, err = handler.Handle(ctx, ps); err != nil {
+			failure(err)
+		}
+		// TODO: client latency metrics
+	}()
+	return nil
+}
+
 func (s *Server) request(ctx context.Context, pid peer.ID, req []byte) (*Response, error) {
+	ps, err := s.beginRequest(ctx, pid)
+	if err != nil {
+		return nil, err
+	}
+	defer ps.Close()
+	defer ps.clearDeadline()
+
+	ps.updateDeadline()
+	ps.sendInitialRequest(req)
+	return ps.readResponse()
+}
+
+func (s *Server) beginRequest(ctx context.Context, pid peer.ID) (*peerStream, error) {
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
 
@@ -288,27 +340,126 @@ func (s *Server) request(ctx context.Context, pid peer.ID, req []byte) (*Respons
 	if err != nil {
 		return nil, err
 	}
-	defer stream.Close()
-	defer stream.SetDeadline(time.Time{})
-	_ = stream.SetDeadline(time.Now().Add(s.timeout))
 
-	wr := bufio.NewWriter(stream)
+	return s.peerStream(stream), err
+}
+
+func (s *Server) peerStream(stream network.Stream) *peerStream {
+	return &peerStream{
+		Stream: stream,
+		rd:     bufio.NewReader(stream),
+		wr:     bufio.NewWriter(stream),
+		s:      s,
+	}
+}
+
+type peerStream struct {
+	network.Stream
+	rd      *bufio.Reader
+	wr      *bufio.Writer
+	s       *Server
+	initReq []byte
+}
+
+func (ps *peerStream) updateDeadline() {
+	ps.SetDeadline(time.Now().Add(ps.s.timeout))
+}
+
+func (ps *peerStream) clearDeadline() {
+	ps.SetDeadline(time.Time{})
+}
+
+func (ps *peerStream) sendInitialRequest(data []byte) error {
 	sz := make([]byte, binary.MaxVarintLen64)
-	n := binary.PutUvarint(sz, uint64(len(req)))
-	if _, err := wr.Write(sz[:n]); err != nil {
-		return nil, err
+	n := binary.PutUvarint(sz, uint64(len(data)))
+	if _, err := ps.wr.Write(sz[:n]); err != nil {
+		return err
 	}
-	if _, err := wr.Write(req); err != nil {
-		return nil, err
+	if _, err := ps.wr.Write(data); err != nil {
+		return err
 	}
-	if err := wr.Flush(); err != nil {
-		return nil, err
+	if err := ps.wr.Flush(); err != nil {
+		return err
+	}
+	return nil
+}
+
+var errOversizedRequest = errors.New("request size limit exceeded")
+
+func (ps *peerStream) readInitialRequest() error {
+	size, err := varint.ReadUvarint(ps.rd)
+	if err != nil {
+		return err
+	}
+	if size > uint64(ps.s.requestLimit) {
+		ps.s.logger.With().Warning("request limit overflow",
+			log.Int("limit", ps.s.requestLimit),
+			log.Uint64("request", size),
+		)
+		ps.Conn().Close()
+		return errOversizedRequest
+	}
+	ps.initReq = make([]byte, size)
+	_, err = io.ReadFull(ps.rd, ps.initReq)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (ps *peerStream) sendResponse(resp *Response) error {
+	if _, err := codec.EncodeTo(ps.wr, resp); err != nil {
+		ps.s.logger.With().Warning(
+			"failed to write response",
+			log.Int("resp.Data len", len(resp.Data)),
+			log.Int("resp.Error len", len(resp.Error)),
+			log.Err(err),
+		)
+		return err
 	}
 
-	rd := bufio.NewReader(stream)
+	if err := ps.wr.Flush(); err != nil {
+		ps.s.logger.With().Warning("failed to flush stream", log.Err(err))
+		return err
+	}
+
+	return nil
+}
+
+func (ps *peerStream) readResponse() (*Response, error) {
 	var r Response
-	if _, err = codec.DecodeFrom(rd, &r); err != nil {
+	if _, err := codec.DecodeFrom(ps.rd, &r); err != nil {
 		return nil, err
 	}
 	return &r, nil
 }
+
+func (ps *peerStream) Receive() (data []byte, err error) {
+	if ps.initReq != nil {
+		data, ps.initReq = ps.initReq, nil
+		return data, nil
+	}
+	resp, err := ps.readResponse()
+	switch {
+	case err != nil:
+		return nil, err
+	case resp.Error != "":
+		return nil, fmt.Errorf("%w: %s", RemoteError, resp.Error)
+	default:
+		ps.updateDeadline()
+		return resp.Data, nil
+	}
+}
+
+func (ps *peerStream) Send(data []byte) error {
+	ps.updateDeadline()
+	return ps.sendResponse(&Response{Data: data})
+}
+
+func (ps *peerStream) SendError(err error) error {
+	return ps.sendResponse(&Response{Error: err.Error()})
+}
+
+var RemoteError = errors.New("peer reported an error")
+
+// TODO: InteractiveRequest should be same as Request
