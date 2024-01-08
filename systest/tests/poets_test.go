@@ -47,10 +47,9 @@ func testPoetDies(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 
 	eg, ctx := errgroup.WithContext(tctx)
 	for i := 0; i < cl.Total(); i++ {
-		clientId := i
-		client := cl.Client(clientId)
-		tctx.Log.Debugw("watching", "client", client.Name, "clientId", clientId)
-		watchProposals(ctx, eg, client, func(proposal *pb.Proposal) (bool, error) {
+		client := cl.Client(i)
+		tctx.Log.Debugw("watching", "client", client.Name, "clientId", i)
+		watchProposals(ctx, eg, client, tctx.Log.Desugar(), func(proposal *pb.Proposal) (bool, error) {
 			if proposal.Layer.Number < first {
 				return true, nil
 			}
@@ -72,7 +71,7 @@ func testPoetDies(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 		})
 	}
 
-	watchLayers(ctx, eg, cl.Client(0), func(layer *pb.LayerStreamResponse) (bool, error) {
+	watchLayers(ctx, eg, cl.Client(0), tctx.Log.Desugar(), func(layer *pb.LayerStreamResponse) (bool, error) {
 		// Will kill a poet from time to time
 		if layer.Layer.Number.Number > last {
 			tctx.Log.Debug("Poet killer is done")
@@ -133,13 +132,14 @@ func TestNodesUsingDifferentPoets(t *testing.T) {
 	require.NoError(t, cl.AddPoets(tctx))
 
 	for i := 0; i < tctx.ClusterSize-2; i++ {
-		poet := cluster.MakePoetEndpoint(i % tctx.PoetSize)
+		poetId := i % tctx.PoetSize
+		poet := cluster.MakePoetEndpoint(poetId)
 		tctx.Log.Debugw("adding smesher node", "id", i, "poet", poet)
 		err := cl.AddSmeshers(
 			tctx,
 			1,
 			cluster.NoDefaultPoets(),
-			cluster.WithFlags(cluster.PoetEndpoint(poet)),
+			cluster.WithFlags(cluster.PoetEndpoints(poetId)),
 		)
 		require.NoError(t, err)
 	}
@@ -157,7 +157,7 @@ func TestNodesUsingDifferentPoets(t *testing.T) {
 	for i := 0; i < cl.Total(); i++ {
 		client := cl.Client(i)
 		tctx.Log.Debugw("watching", "client", client.Name)
-		watchProposals(ctx, eg, client, func(proposal *pb.Proposal) (bool, error) {
+		watchProposals(ctx, eg, client, tctx.Log.Desugar(), func(proposal *pb.Proposal) (bool, error) {
 			if proposal.Layer.Number < first {
 				return true, nil
 			}

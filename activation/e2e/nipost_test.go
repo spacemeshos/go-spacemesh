@@ -181,7 +181,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	nb, err := activation.NewNIPostBuilder(
 		poetDb,
 		svc,
-		[]string{poetProver.RestURL().String()},
+		[]types.PoetServer{{Address: poetProver.RestURL().String()}},
 		t.TempDir(),
 		logger.Named("nipostBuilder"),
 		sig,
@@ -234,7 +234,7 @@ func TestNIPostBuilder_Close(t *testing.T) {
 	nb, err := activation.NewNIPostBuilder(
 		poetDb,
 		svc,
-		[]string{poetProver.RestURL().String()},
+		[]types.PoetServer{{Address: poetProver.RestURL().String()}},
 		t.TempDir(),
 		logger.Named("nipostBuilder"),
 		sig,
@@ -303,7 +303,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	nb, err := activation.NewNIPostBuilder(
 		poetDb,
 		svc,
-		[]string{poetProver.RestURL().String()},
+		[]types.PoetServer{{Address: poetProver.RestURL().String()}},
 		t.TempDir(),
 		logger.Named("nipostBuilder"),
 		sig,
