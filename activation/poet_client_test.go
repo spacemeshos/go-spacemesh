@@ -160,5 +160,5 @@ func Test_HTTPPoetClient_PoetServiceID(t *testing.T) {
 	}, withCustomHttpClient(ts.Client()))
 	require.NoError(t, err)
 
-	require.Equal(t, key.Bytes(), client.PoetServiceID(context.Background()).ServiceID)
+	require.Equal(t, key.Bytes(), client.PoetServiceID(context.Background()))
 }

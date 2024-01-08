@@ -195,7 +195,7 @@ func (m migration0003) moveNipostStateToDb(db sql.Executor, dataDir string) erro
 func (m migration0003) getAddress(serviceID PoetServiceID) (string, error) {
 	for _, client := range m.poetClients {
 		clientId := client.PoetServiceID(context.Background())
-		if bytes.Equal(serviceID.ServiceID, clientId.ServiceID) {
+		if bytes.Equal(serviceID.ServiceID, clientId) {
 			return client.Address(), nil
 		}
 	}

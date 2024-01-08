@@ -25,7 +25,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
-	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
 
 const (
@@ -180,11 +179,6 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
 
 	db := localsql.InMemory()
-	challenge := types.NIPostChallenge{
-		PublishEpoch: postGenesisEpoch + 2,
-	}
-	require.NoError(t, nipost.AddChallenge(db, sig.NodeID(), &challenge))
-
 	nb, err := activation.NewNIPostBuilder(
 		db,
 		poetDb,
@@ -197,6 +191,9 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	challenge := types.NIPostChallenge{
+		PublishEpoch: postGenesisEpoch + 2,
+	}
 	nipost, err := nb.BuildNIPost(context.Background(), &challenge)
 	require.NoError(t, err)
 
@@ -235,10 +232,6 @@ func TestNIPostBuilder_Close(t *testing.T) {
 	svc := grpcserver.NewPostService(logger)
 
 	db := localsql.InMemory()
-	challenge := types.NIPostChallenge{
-		PublishEpoch: postGenesisEpoch + 2,
-	}
-	require.NoError(t, nipost.AddChallenge(db, sig.NodeID(), &challenge))
 	nb, err := activation.NewNIPostBuilder(
 		db,
 		poetDb,
@@ -251,6 +244,9 @@ func TestNIPostBuilder_Close(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	challenge := types.NIPostChallenge{
+		PublishEpoch: postGenesisEpoch + 2,
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	nipost, err := nb.BuildNIPost(ctx, &challenge)
@@ -305,10 +301,6 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	t.Cleanup(cleanup)
 
 	db := localsql.InMemory()
-	challenge := types.NIPostChallenge{
-		PublishEpoch: postGenesisEpoch + 2,
-	}
-	require.NoError(t, nipost.AddChallenge(db, sig.NodeID(), &challenge))
 	nb, err := activation.NewNIPostBuilder(
 		db,
 		poetDb,
@@ -332,6 +324,9 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 		return err == nil
 	}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
 
+	challenge := types.NIPostChallenge{
+		PublishEpoch: postGenesisEpoch + 2,
+	}
 	nipost, err := nb.BuildNIPost(context.Background(), &challenge)
 	require.NoError(t, err)
 	require.NotNil(t, nipost)

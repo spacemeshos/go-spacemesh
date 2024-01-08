@@ -77,10 +77,10 @@ func (c *PoetClientAddressCall) DoAndReturn(f func() string) *PoetClientAddressC
 }
 
 // PoetServiceID mocks base method.
-func (m *MockPoetClient) PoetServiceID(ctx context.Context) PoetServiceID {
+func (m *MockPoetClient) PoetServiceID(ctx context.Context) []byte {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PoetServiceID", ctx)
-	ret0, _ := ret[0].(PoetServiceID)
+	ret0, _ := ret[0].([]byte)
 	return ret0
 }
 
@@ -97,19 +97,19 @@ type PoetClientPoetServiceIDCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *PoetClientPoetServiceIDCall) Return(arg0 PoetServiceID) *PoetClientPoetServiceIDCall {
+func (c *PoetClientPoetServiceIDCall) Return(arg0 []byte) *PoetClientPoetServiceIDCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *PoetClientPoetServiceIDCall) Do(f func(context.Context) PoetServiceID) *PoetClientPoetServiceIDCall {
+func (c *PoetClientPoetServiceIDCall) Do(f func(context.Context) []byte) *PoetClientPoetServiceIDCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *PoetClientPoetServiceIDCall) DoAndReturn(f func(context.Context) PoetServiceID) *PoetClientPoetServiceIDCall {
+func (c *PoetClientPoetServiceIDCall) DoAndReturn(f func(context.Context) []byte) *PoetClientPoetServiceIDCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
