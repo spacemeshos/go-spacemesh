@@ -2,6 +2,7 @@ package localsql
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -17,6 +18,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
+
+func saveBuilderState(dir string, state *NIPostBuilderState) error {
+	if err := save(filepath.Join(dir, builderFilename), state); err != nil {
+		return fmt.Errorf("saving builder state: %w", err)
+	}
+	return nil
+}
 
 func Test_0003Migration_CompatibleSQL(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "test1.db")

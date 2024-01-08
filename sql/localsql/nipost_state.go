@@ -113,13 +113,6 @@ func save(filename string, src scale.Encodable) error {
 	return nil
 }
 
-func saveNipostChallenge(dir string, ch *types.NIPostChallenge) error {
-	if err := save(filepath.Join(dir, challengeFilename), ch); err != nil {
-		return fmt.Errorf("saving nipost challenge: %w", err)
-	}
-	return nil
-}
-
 func loadNipostChallenge(dir string) (*types.NIPostChallenge, error) {
 	var ch types.NIPostChallenge
 	if err := load(filepath.Join(dir, challengeFilename), &ch); err != nil {
@@ -137,13 +130,6 @@ func discardNipostChallenge(dir string) error {
 	return nil
 }
 
-func saveBuilderState(dir string, state *NIPostBuilderState) error {
-	if err := save(filepath.Join(dir, builderFilename), state); err != nil {
-		return fmt.Errorf("saving builder state: %w", err)
-	}
-	return nil
-}
-
 func loadBuilderState(dir string) (*NIPostBuilderState, error) {
 	var state NIPostBuilderState
 	if err := load(filepath.Join(dir, builderFilename), &state); err != nil {
@@ -157,13 +143,6 @@ func discardBuilderState(dir string) error {
 	backupName := fmt.Sprintf("%s.bak", filename)
 	if err := atomic.ReplaceFile(filename, backupName); err != nil {
 		return fmt.Errorf("discarding nipost builder state: %w", err)
-	}
-	return nil
-}
-
-func savePost(dir string, post *types.Post) error {
-	if err := save(filepath.Join(dir, postFilename), post); err != nil {
-		return fmt.Errorf("saving post: %w", err)
 	}
 	return nil
 }
