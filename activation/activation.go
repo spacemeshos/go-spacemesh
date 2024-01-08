@@ -335,7 +335,10 @@ func (b *Builder) run(ctx context.Context) {
 		switch {
 		case errors.Is(err, ErrATXChallengeExpired):
 			b.log.Debug("retrying with new challenge after waiting for a layer")
-			if err = nipost.RemoveChallenge(b.localDB, b.signer.NodeID()); err != nil {
+			if err := b.nipostBuilder.ResetState(); err != nil {
+				b.log.Error("failed to reset nipost builder state", zap.Error(err))
+			}
+			if err := nipost.RemoveChallenge(b.localDB, b.signer.NodeID()); err != nil {
 				b.log.Error("failed to discard challenge", zap.Error(err))
 			}
 			// give node some time to sync in case selecting the positioning ATX caused the challenge to expire
@@ -381,6 +384,9 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 		return nil, fmt.Errorf("get nipost challenge: %w", err)
 	case challenge.PublishEpoch < current:
 		// challenge is stale
+		if err := b.nipostBuilder.ResetState(); err != nil {
+			return nil, fmt.Errorf("reset nipost builder state: %w", err)
+		}
 		if err := nipost.RemoveChallenge(b.localDB, b.signer.NodeID()); err != nil {
 			return nil, fmt.Errorf("remove stale nipost challenge: %w", err)
 		}
@@ -513,6 +519,9 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 		}
 	}
 
+	if err := b.nipostBuilder.ResetState(); err != nil {
+		return fmt.Errorf("reset nipost builder state: %w", err)
+	}
 	if err := nipost.RemoveChallenge(b.localDB, b.signer.NodeID()); err != nil {
 		return fmt.Errorf("discarding challenge after published ATX: %w", err)
 	}

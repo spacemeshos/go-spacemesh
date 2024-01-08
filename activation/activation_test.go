@@ -245,6 +245,8 @@ func publishAtx(
 			require.NoError(t, atxs.Add(tab.cdb, vatx))
 			return nil
 		})
+
+	tab.mnipost.EXPECT().ResetState().Return(nil)
 	// create and publish ATX
 	err := tab.PublishActivationTx(context.Background())
 	return built, err
@@ -461,7 +463,9 @@ func TestBuilder_Loop_WaitsOnStaleChallenge(t *testing.T) {
 			genesis := time.Now().Add(-time.Duration(currLayer) * layerDuration)
 			return genesis.Add(layerDuration * time.Duration(got))
 		}).AnyTimes()
+
 	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).Return(nil, ErrATXChallengeExpired)
+	tab.mnipost.EXPECT().ResetState().Return(nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -544,6 +548,9 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 		},
 	)
 
+	// after successful publish, state is cleaned up
+	tab.mnipost.EXPECT().ResetState().Return(nil)
+
 	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
 		// second publish succeeds
 		func(_ context.Context, _ string, got []byte) error {
@@ -621,6 +628,8 @@ func TestBuilder_PublishActivationTx_UsesExistingChallengeOnLatePublish(t *testi
 	}
 
 	require.NoError(t, nipost.AddChallenge(tab.localDb, tab.sig.NodeID(), ch))
+
+	tab.mnipost.EXPECT().ResetState().Return(nil)
 
 	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
 		// publish succeeds
@@ -719,6 +728,7 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(tab.cdb, vPosAtx))
 	tab.mclock.EXPECT().CurrentLayer().DoAndReturn(func() types.LayerID { return currLayer }).AnyTimes()
+	tab.mnipost.EXPECT().ResetState().Return(nil)
 	built2, err := publishAtx(t, tab, posEpoch, &currLayer, layersPerEpoch)
 	require.NoError(t, err)
 	require.NotNil(t, built2)
@@ -795,11 +805,10 @@ func TestBuilder_PublishActivationTx_NoPrevATX_PublishFails_InitialPost_preserve
 			genesis := time.Now().Add(-time.Duration(currLayer) * layerDuration)
 			return genesis.Add(layerDuration * time.Duration(got))
 		}).AnyTimes()
-	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, challenge *types.NIPostChallenge) (*nipost.NIPostState, error) {
-			return nil, ErrATXChallengeExpired
-		},
-	)
+
+	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).Return(nil, ErrATXChallengeExpired)
+	tab.mnipost.EXPECT().ResetState().Return(nil)
+
 	ch := make(chan struct{})
 	tab.mclock.EXPECT().AwaitLayer(currLayer.Add(1)).Do(func(got types.LayerID) <-chan struct{} {
 		close(ch)
@@ -932,6 +941,8 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 			return nil
 		})
 
+	tab.mnipost.EXPECT().ResetState().Return(nil)
+
 	r.NoError(tab.PublishActivationTx(context.Background()))
 
 	// state is cleaned up
@@ -1024,6 +1035,8 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 		tab.sig.NodeID(),
 		nipost.Post{Indices: make([]byte, 10)},
 	))
+
+	tab.mnipost.EXPECT().ResetState().Return(nil)
 
 	r.NoError(tab.PublishActivationTx(context.Background()))
 
@@ -1194,6 +1207,8 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 		},
 	)
 
+	tab.mnipost.EXPECT().ResetState().Return(nil)
+
 	nonce := types.VRFPostIndex(123)
 	commitmentATX := types.RandomATXID()
 	tab.mpostClient.EXPECT().Info(gomock.Any()).Return(&types.PostInfo{
@@ -1335,7 +1350,8 @@ func TestWaitPositioningAtx(t *testing.T) {
 
 			// everything else are stubs that are irrelevant for the test
 			tab.mpostClient.EXPECT().Info(gomock.Any()).Return(&types.PostInfo{}, nil).AnyTimes()
-			tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).Return(&nipost.NIPostState{}, nil).AnyTimes()
+			tab.mnipost.EXPECT().ResetState().Return(nil)
+			tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any()).Return(&nipost.NIPostState{}, nil)
 			closed := make(chan struct{})
 			close(closed)
 			tab.mclock.EXPECT().AwaitLayer(types.EpochID(1).FirstLayer()).Return(closed).AnyTimes()

@@ -169,7 +169,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 	)
 
 	// Phase 0: Submit challenge to PoET services.
-	count, err := nipost.PoetRegistrationCount(nb.localDB, nb.signer.NodeID())
+	count, err := nipost.PoetRegistrationCount(nb.localDB, nb.signer.NodeID()) // TODO(mafa): when are these cleared?
 	if err != nil {
 		return nil, fmt.Errorf("failed to get poet registration count: %w", err)
 	}
