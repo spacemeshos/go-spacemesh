@@ -196,11 +196,6 @@ func SortBlockIDs(ids blockIDs) []BlockID {
 	return ids
 }
 
-// BlockIdsField returns a list of loggable fields for a given list of BlockID.
-func BlockIdsField(ids blockIDs) log.Field {
-	return log.Array("block_ids", ids)
-}
-
 // ToBlockIDs returns a slice of BlockID corresponding to the given list of Block.
 func ToBlockIDs(blocks []*Block) []BlockID {
 	ids := make([]BlockID, 0, len(blocks))

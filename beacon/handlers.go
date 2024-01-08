@@ -232,8 +232,8 @@ func (pd *ProtocolDriver) HandleFirstVotes(ctx context.Context, peer p2p.Peer, m
 	currentEpoch := pd.currentEpoch()
 	if m.EpochID != currentEpoch {
 		logger.With().Debug("first votes from different epoch",
-			log.Uint32("current_epoch", uint32((currentEpoch))),
-			log.Uint32("message_epoch", uint32((m.EpochID))),
+			log.Uint32("current_epoch", uint32(currentEpoch)),
+			log.Uint32("message_epoch", uint32(m.EpochID)),
 		)
 		return errEpochNotActive
 	}
