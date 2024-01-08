@@ -906,10 +906,10 @@ func (app *App) initServices(ctx context.Context) error {
 
 	app.grpcPostService = grpcserver.NewPostService(app.addLogger(PostServiceLogger, lg).Zap())
 	nipostBuilder, err := activation.NewNIPostBuilder(
+		app.localDB,
 		poetDb,
 		app.grpcPostService,
 		app.Config.PoetServers,
-		app.Config.SMESHING.Opts.DataDir,
 		app.addLogger(NipostBuilderLogger, lg).Zap(),
 		app.edSgn,
 		app.Config.POET,
@@ -1617,6 +1617,13 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		datastore.WithConfig(app.Config.Cache),
 		datastore.WithConsensusCache(data),
 	)
+	clients := make([]localsql.PoetClient, len(app.Config.PoetServers))
+	for i, server := range app.Config.PoetServers {
+		clients[i], err = activation.NewHTTPPoetClient(server, app.Config.POET)
+		if err != nil {
+			return fmt.Errorf("failed to create poet client: %w", err)
+		}
+	}
 	migrations, err = sql.LocalMigrations()
 	if err != nil {
 		return fmt.Errorf("load local migrations: %w", err)
@@ -1625,6 +1632,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		sql.WithMigrations(migrations),
 		sql.WithMigration(localsql.New0001Migration(app.Config.SMESHING.Opts.DataDir)),
 		sql.WithMigration(localsql.New0002Migration(app.Config.SMESHING.Opts.DataDir)),
+		sql.WithMigration(localsql.New0003Migration(app.Config.SMESHING.Opts.DataDir, clients)),
 		sql.WithConnections(app.Config.DatabaseConnections),
 	)
 	if err != nil {
