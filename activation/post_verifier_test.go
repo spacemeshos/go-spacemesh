@@ -7,12 +7,14 @@ import (
 	"time"
 
 	"github.com/spacemeshos/post/shared"
+	"github.com/spacemeshos/post/verifying"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 func TestOffloadingPostVerifier(t *testing.T) {
@@ -98,4 +100,37 @@ func TestPostVerifierClose(t *testing.T) {
 
 	err := v.Verify(context.Background(), &shared.Proof{}, &shared.ProofMetadata{})
 	require.EqualError(t, err, "verifier is closed")
+}
+
+func TestPostVerifierPrioritization(t *testing.T) {
+	prioritizedID := types.RandomNodeID()
+	otherID := types.RandomNodeID()
+	verifier := activation.NewMockPostVerifier(gomock.NewController(t))
+	offloadedStarted := make(chan struct{})
+	prioritizedDone := make(chan struct{})
+
+	v := activation.NewOffloadingPostVerifier(verifier, 1, zaptest.NewLogger(t), activation.PrioritizedIDs(prioritizedID))
+
+	verifier.EXPECT().
+		Verify(gomock.Any(), gomock.Any(), &shared.ProofMetadata{NodeId: otherID.Bytes()}, gomock.Any()).
+		DoAndReturn(
+			func(_ context.Context, _ *shared.Proof, _ *shared.ProofMetadata, _ ...verifying.OptionFunc) error {
+				close(offloadedStarted)
+				<-prioritizedDone
+				return nil
+			})
+	verifier.EXPECT().
+		Verify(gomock.Any(), gomock.Any(), &shared.ProofMetadata{NodeId: prioritizedID.Bytes()}, gomock.Any()).
+		Return(nil)
+
+	var offloadedGroup errgroup.Group
+	offloadedGroup.Go(func() error {
+		return v.Verify(context.Background(), &shared.Proof{}, &shared.ProofMetadata{NodeId: otherID.Bytes()})
+	})
+	<-offloadedStarted
+	err := v.Verify(context.Background(), &shared.Proof{}, &shared.ProofMetadata{NodeId: prioritizedID.Bytes()})
+	require.NoError(t, err)
+
+	close(prioritizedDone)
+	require.NoError(t, offloadedGroup.Wait())
 }

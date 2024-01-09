@@ -67,6 +67,8 @@ type OffloadingPostVerifier struct {
 	workers  []*postVerifierWorker
 	jobs     chan *verifyPostJob
 	stop     chan struct{} // signal to stop all goroutines
+
+	prioritizedIds map[types.NodeID]struct{}
 }
 
 type postVerifierWorker struct {
@@ -103,6 +105,16 @@ func NewPostVerifier(cfg PostConfig, logger *zap.Logger, opts ...verifying.Optio
 	return &postVerifier{logger: logger, ProofVerifier: verifier, cfg: cfg.ToConfig()}, nil
 }
 
+type NewOflloadingVerifierOpt func(v *OffloadingPostVerifier)
+
+func PrioritizedIDs(ids ...types.NodeID) NewOflloadingVerifierOpt {
+	return func(v *OffloadingPostVerifier) {
+		for _, id := range ids {
+			v.prioritizedIds[id] = struct{}{}
+		}
+	}
+}
+
 // NewOffloadingPostVerifier creates a new post proof verifier with the given number of workers.
 // The verifier will distribute incoming proofs between the workers.
 // It will block if all workers are busy.
@@ -110,13 +122,23 @@ func NewPostVerifier(cfg PostConfig, logger *zap.Logger, opts ...verifying.Optio
 // SAFETY: The `verifier` must be safe to use concurrently.
 //
 // The verifier must be closed after use with Close().
-func NewOffloadingPostVerifier(verifier PostVerifier, numWorkers int, logger *zap.Logger) *OffloadingPostVerifier {
+func NewOffloadingPostVerifier(
+	verifier PostVerifier,
+	numWorkers int,
+	logger *zap.Logger,
+	opts ...NewOflloadingVerifierOpt,
+) *OffloadingPostVerifier {
 	v := &OffloadingPostVerifier{
-		log:      logger,
-		workers:  make([]*postVerifierWorker, 0, numWorkers),
-		jobs:     make(chan *verifyPostJob, numWorkers),
-		stop:     make(chan struct{}),
-		verifier: verifier,
+		log:            logger,
+		workers:        make([]*postVerifierWorker, 0, numWorkers),
+		jobs:           make(chan *verifyPostJob, numWorkers),
+		stop:           make(chan struct{}),
+		verifier:       verifier,
+		prioritizedIds: make(map[types.NodeID]struct{}),
+	}
+
+	for _, o := range opts {
+		o(v)
 	}
 
 	v.log.Info("starting post verifier")
@@ -172,6 +194,10 @@ func (v *OffloadingPostVerifier) Verify(
 	m *shared.ProofMetadata,
 	opts ...verifying.OptionFunc,
 ) error {
+	if _, ok := v.prioritizedIds[types.BytesToNodeID(m.NodeId)]; ok {
+		v.log.Debug("prioritizing post verification", zap.Stringer("proof_node_id", types.BytesToNodeID(m.NodeId)))
+		return v.verifier.Verify(ctx, p, m, opts...)
+	}
 	job := &verifyPostJob{
 		ctx:      ctx,
 		proof:    p,

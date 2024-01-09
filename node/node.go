@@ -572,7 +572,12 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	workers := app.Config.SMESHING.VerifyingOpts.Workers
 	minWorkers := min(app.Config.SMESHING.VerifyingOpts.MinWorkers, workers)
-	app.postVerifier = activation.NewOffloadingPostVerifier(verifier, workers, nipostValidatorLogger.Zap())
+	app.postVerifier = activation.NewOffloadingPostVerifier(
+		verifier,
+		workers,
+		nipostValidatorLogger.Zap(),
+		activation.PrioritizedIDs(app.edSgn.NodeID()),
+	)
 	app.postVerifier.Autoscale(minWorkers, workers)
 
 	validator := activation.NewValidator(
