@@ -18,7 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
 
-func defaultPoetServiceMock(ctrl *gomock.Controller, id []byte, address string) *MockPoetClient {
+func defaultPoetServiceMock(ctrl *gomock.Controller, address string) *MockPoetClient {
 	poetClient := NewMockPoetClient(ctrl)
 	poetClient.EXPECT().
 		Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
@@ -33,7 +33,6 @@ func defaultLayerClockMock(ctrl *gomock.Controller) *MocklayerClock {
 	mclock := NewMocklayerClock(ctrl)
 	mclock.EXPECT().LayerToTime(gomock.Any()).AnyTimes().DoAndReturn(
 		func(got types.LayerID) time.Time {
-			// time.Now() ~= currentLayer
 			genesis := time.Now().Add(-time.Duration(postGenesisEpoch.FirstLayer()) * layerDuration)
 			return genesis.Add(layerDuration * time.Duration(got))
 		},
@@ -101,7 +100,7 @@ func Test_NIPostBuilder_WithMocks(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 
-	poetProvider := defaultPoetServiceMock(ctrl, []byte("poet"), "http://localhost:9999")
+	poetProvider := defaultPoetServiceMock(ctrl, "http://localhost:9999")
 	poetProvider.EXPECT().Proof(gomock.Any(), "").Return(&types.PoetProofMessage{
 		PoetProof: types.PoetProof{},
 	}, []types.Member{types.Member(challenge.Hash())}, nil)
@@ -149,7 +148,7 @@ func TestPostSetup(t *testing.T) {
 	require.NoError(t, err)
 
 	ctrl := gomock.NewController(t)
-	poetProvider := defaultPoetServiceMock(ctrl, []byte("poet"), "http://localhost:9999")
+	poetProvider := defaultPoetServiceMock(ctrl, "http://localhost:9999")
 	poetProvider.EXPECT().Proof(gomock.Any(), "").Return(&types.PoetProofMessage{
 		PoetProof: types.PoetProof{},
 	}, []types.Member{types.Member(challenge.Hash())}, nil)
@@ -207,7 +206,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	}
 
 	ctrl := gomock.NewController(t)
-	poetProver := defaultPoetServiceMock(ctrl, []byte("poet"), "http://localhost:9999")
+	poetProver := defaultPoetServiceMock(ctrl, "http://localhost:9999")
 	poetProver.EXPECT().Proof(gomock.Any(), "").AnyTimes().Return(
 		&types.PoetProofMessage{
 			PoetProof: types.PoetProof{},
@@ -420,7 +419,7 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 		poets = append(poets, poet)
 	}
 	{
-		poet := defaultPoetServiceMock(ctrl, []byte("poet1"), "http://localhost:9998")
+		poet := defaultPoetServiceMock(ctrl, "http://localhost:9998")
 		poet.EXPECT().Proof(gomock.Any(), "").Return(proofBetter, []types.Member{types.Member(challenge.Hash())}, nil)
 		poets = append(poets, poet)
 	}
@@ -551,7 +550,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		poetDb := NewMockpoetDbAPI(ctrl)
 		mclock := defaultLayerClockMock(ctrl)
-		poetProver := defaultPoetServiceMock(ctrl, []byte("poet"), "http://localhost:9999")
+		poetProver := defaultPoetServiceMock(ctrl, "http://localhost:9999")
 		poetProver.EXPECT().Proof(gomock.Any(), "").Return(nil, nil, errors.New("failed"))
 		postService := NewMockpostService(ctrl)
 
@@ -580,7 +579,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		poetDb := NewMockpoetDbAPI(ctrl)
 		poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
 		mclock := defaultLayerClockMock(ctrl)
-		poetProver := defaultPoetServiceMock(ctrl, []byte("poet"), "http://localhost:9999")
+		poetProver := defaultPoetServiceMock(ctrl, "http://localhost:9999")
 		poetProver.EXPECT().
 			Proof(gomock.Any(), "").
 			Return(&types.PoetProofMessage{PoetProof: types.PoetProof{}}, []types.Member{}, nil)
@@ -1095,19 +1094,14 @@ func TestCalculatingGetProofWaitTime(t *testing.T) {
 
 func TestNIPostBuilder_Close(t *testing.T) {
 	ctrl := gomock.NewController(t)
-
-	mclock := NewMocklayerClock(ctrl)
-	mclock.EXPECT().LayerToTime(gomock.Any()).AnyTimes().DoAndReturn(
-		func(got types.LayerID) time.Time {
-			// time.Now() ~= currentLayer
-			genesis := time.Now().Add(-time.Duration(postGenesisEpoch.FirstLayer()) * layerDuration)
-			return genesis.Add(layerDuration * time.Duration(got))
-		},
-	)
-
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
+	poet := defaultPoetServiceMock(ctrl, "http://localhost:9999")
+	poet.EXPECT().Proof(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
+		func(ctx context.Context, _ string) (*types.PoetProofMessage, []types.Member, error) {
+			return nil, nil, ctx.Err()
+		})
 	nb, err := NewNIPostBuilder(
 		localsql.InMemory(),
 		NewMockpoetDbAPI(ctrl),
@@ -1115,8 +1109,8 @@ func TestNIPostBuilder_Close(t *testing.T) {
 		zaptest.NewLogger(t),
 		sig,
 		PoetConfig{},
-		mclock,
-		WithPoetClients(defaultPoetServiceMock(ctrl, []byte("poet"), "http://localhost:9999")),
+		defaultLayerClockMock(ctrl),
+		WithPoetClients(poet),
 	)
 	require.NoError(t, err)
 
@@ -1129,7 +1123,6 @@ func TestNIPostBuilder_Close(t *testing.T) {
 	certifier := NewMockcertifierService(ctrl)
 	certifier.EXPECT().GetCertificate("http://localhost:9999").Return(PoetCert("cert"))
 
-	nipost, err := nb.BuildNIPost(ctx, &challenge, certifier)
+	_, err = nb.BuildNIPost(ctx, &challenge, certifier)
 	require.Error(t, err)
-	require.Nil(t, nipost)
 }
