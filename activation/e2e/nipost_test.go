@@ -195,7 +195,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	require.NoError(t, err)
 
 	client, err := activation.NewHTTPPoetClient(
-		poetProver.RestURL().String(),
+		types.PoetServer{Address: poetProver.RestURL().String()},
 		poetCfg,
 		activation.WithLogger(logger),
 	)
@@ -205,10 +205,11 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	certifier := activation.NewCertifier(localsql.InMemory(), logger, certifierClient)
 	certifier.CertifyAll(context.Background(), []activation.PoetClient{client})
 
+	db := localsql.InMemory()
 	nb, err := activation.NewNIPostBuilder(
+		db,
 		poetDb,
 		svc,
-		t.TempDir(),
 		logger.Named("nipostBuilder"),
 		sig,
 		poetCfg,
@@ -220,7 +221,6 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	challenge := types.NIPostChallenge{
 		PublishEpoch: postGenesisEpoch + 2,
 	}
-
 	nipost, err := nb.BuildNIPost(context.Background(), &challenge, certifier)
 	require.NoError(t, err)
 
@@ -229,9 +229,9 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 		context.Background(),
 		sig.NodeID(),
 		goldenATX,
-		nipost,
+		nipost.NIPost,
 		challenge.Hash(),
-		opts.NumUnits,
+		nipost.NumUnits,
 	)
 	require.NoError(t, err)
 }

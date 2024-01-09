@@ -20,7 +20,7 @@ func Register(registry *registry.Registry) {
 }
 
 var (
-	_ (core.Handler) = (*handler)(nil)
+	_ core.Handler = (*handler)(nil)
 	// TemplateAddress is an address of the Wallet template.
 	TemplateAddress core.Address
 )

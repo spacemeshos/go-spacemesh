@@ -444,6 +444,7 @@ as on UNIX-based systems.
 **WARNING! THIS IS EXPERIMENTAL FUNCTIONALITY, USE WITH CARE!**
 
 In order to make the p2p network more decentralized, the following options are provided:
+
 - `"enable-routing-discovery": true`: enables routing discovery for finding new peers, including those behind NAT, ans
   also for discovering relay nodes which are used for NAT hole punching. Note that hole punching can be done when both
   ends of the connection are behind an endpoint-independent ("cone") NAT.
@@ -457,6 +458,7 @@ In order to make the p2p network more decentralized, the following options are p
 - `"ping-peers": ["p2p_id_1", "p2p_id_2", ...]` runs P2P ping against the specified peers, logging the results.
 
 For the purpose of debugging P2P connectivity issues, the following command can also be used:
+
 ```console
 $ grpcurl -plaintext 127.0.0.1:9093 spacemesh.v1.DebugService.NetworkInfo
 {

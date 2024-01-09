@@ -12,7 +12,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-//go:generate scalegen
+//go:generate scalegen -types PoetChallenge,PoetProof,PoetProofMessage,PoetRound,ProcessingError
+
+type PoetServer struct {
+	Address string    `mapstructure:"address" json:"address"`
+	Pubkey  Base64Enc `mapstructure:"pubkey" json:"pubkey"`
+}
 
 type PoetChallenge struct {
 	*NIPostChallenge

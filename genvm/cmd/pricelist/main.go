@@ -54,7 +54,7 @@ type tx struct {
 }
 
 func perWord(size int) int {
-	den := (size / word)
+	den := size / word
 	rem := size % word
 	if rem != 0 {
 		return den + 1

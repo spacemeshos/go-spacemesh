@@ -8,7 +8,6 @@ import (
 
 	"github.com/spacemeshos/go-scale"
 
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -117,15 +116,6 @@ func CalcProposalsHash32(view []ProposalID, additionalBytes []byte) Hash32 {
 	return CalcProposalHash32Presorted(sortedView, additionalBytes)
 }
 
-// CalcBlocksHash32 returns the 32-byte blake3 sum of the IDs, sorted in lexicographic order. The pre-image is
-// prefixed with additionalBytes.
-func CalcBlocksHash32(view []BlockID, additionalBytes []byte) Hash32 {
-	sortedView := make([]BlockID, len(view))
-	copy(sortedView, view)
-	SortBlockIDs(sortedView)
-	return CalcBlockHash32Presorted(sortedView, additionalBytes)
-}
-
 // CalcProposalHash32Presorted returns the 32-byte blake3 sum of the IDs, in the order given. The pre-image is
 // prefixed with additionalBytes.
 func CalcProposalHash32Presorted(sortedView []ProposalID, additionalBytes []byte) Hash32 {
@@ -162,15 +152,6 @@ var hashT = reflect.TypeOf(Hash32{})
 // CalcHash32 returns the 32-byte blake3 sum of the given data.
 func CalcHash32(data []byte) Hash32 {
 	return hash.Sum(data)
-}
-
-// CalcObjectHash32 returns the 32-byte blake3 sum of the scale serialization of the object.
-func CalcObjectHash32(obj scale.Encodable) Hash32 {
-	bytes, err := codec.Encode(obj)
-	if err != nil {
-		panic("could not serialize object")
-	}
-	return CalcHash32(bytes)
 }
 
 // BytesToHash sets b to hash.

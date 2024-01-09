@@ -25,21 +25,8 @@ import (
 )
 
 const (
-	// HarePreRound ...
-	HarePreRound uint32 = math.MaxUint32
 	// CertifyRound is not part of the hare protocol, but it shares the same oracle for eligibility.
 	CertifyRound uint32 = math.MaxUint32 >> 1
-)
-
-const (
-	// HareStatusRound ...
-	HareStatusRound uint32 = iota
-	// HareProposalRound ...
-	HareProposalRound
-	// HareCommitRound ...
-	HareCommitRound
-	// HareNotifyRound ...
-	HareNotifyRound
 )
 
 const (

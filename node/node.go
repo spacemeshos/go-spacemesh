@@ -267,6 +267,7 @@ func LoadConfigFromFile() (*config.Config, error) {
 		mapstructureutil.AddressListDecodeFunc(),
 		mapstructureutil.BigRatDecodeFunc(),
 		mapstructureutil.PostProviderIDDecodeFunc(),
+		mapstructureutil.DeprecatedHook(),
 		mapstructure.TextUnmarshallerHookFunc(),
 	)
 
@@ -905,10 +906,10 @@ func (app *App) initServices(ctx context.Context) error {
 
 	app.grpcPostService = grpcserver.NewPostService(app.addLogger(PostServiceLogger, lg).Zap())
 
-	poetClients := make([]activation.PoetClient, 0, len(app.Config.PoETServers))
-	for _, address := range app.Config.PoETServers {
+	poetClients := make([]activation.PoetClient, 0, len(app.Config.PoetServers))
+	for _, poet := range app.Config.PoetServers {
 		client, err := activation.NewHTTPPoetClient(
-			address,
+			poet,
 			app.Config.POET,
 			activation.WithLogger(lg.Zap().Named("poet")),
 		)
@@ -919,9 +920,9 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 
 	nipostBuilder, err := activation.NewNIPostBuilder(
+		app.localDB,
 		poetDb,
 		app.grpcPostService,
-		app.Config.SMESHING.Opts.DataDir,
 		app.addLogger(NipostBuilderLogger, lg).Zap(),
 		app.edSgn,
 		app.Config.POET,
@@ -1102,10 +1103,10 @@ func (app *App) launchStandalone(ctx context.Context) error {
 	if !app.Config.Standalone {
 		return nil
 	}
-	if len(app.Config.PoETServers) != 1 {
+	if len(app.Config.PoetServers) != 1 {
 		return fmt.Errorf(
 			"to launch in a standalone mode provide single local address for poet: %v",
-			app.Config.PoETServers,
+			app.Config.PoetServers,
 		)
 	}
 	value := types.Beacon{}
@@ -1122,13 +1123,16 @@ func (app *App) launchStandalone(ctx context.Context) error {
 	cfg := server.DefaultConfig()
 	cfg.PoetDir = filepath.Join(app.Config.DataDir(), "poet")
 
-	parsed, err := url.Parse(app.Config.PoETServers[0])
+	parsed, err := url.Parse(app.Config.PoetServers[0].Address)
 	if err != nil {
 		return err
 	}
+
 	cfg.RawRESTListener = parsed.Host
 	cfg.RawRPCListener = parsed.Hostname() + ":0"
-	cfg.Genesis.UnmarshalFlag(app.Config.Genesis.GenesisTime)
+	if err := cfg.Genesis.UnmarshalFlag(app.Config.Genesis.GenesisTime); err != nil {
+		return err
+	}
 	cfg.Round.EpochDuration = app.Config.LayerDuration * time.Duration(app.Config.LayersPerEpoch)
 	cfg.Round.CycleGap = app.Config.POET.CycleGap
 	cfg.Round.PhaseShift = app.Config.POET.PhaseShift
@@ -1138,6 +1142,8 @@ func (app *App) launchStandalone(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("init poet server: %w", err)
 	}
+
+	app.Config.PoetServers[0].Pubkey = types.NewBase64Enc(srv.PublicKey())
 	app.log.With().Warning("launching poet in standalone mode", log.Any("config", cfg))
 	app.eg.Go(func() error {
 		if err := srv.Start(ctx); err != nil {
@@ -1627,6 +1633,13 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		datastore.WithConfig(app.Config.Cache),
 		datastore.WithConsensusCache(data),
 	)
+	clients := make([]localsql.PoetClient, len(app.Config.PoetServers))
+	for i, server := range app.Config.PoetServers {
+		clients[i], err = activation.NewHTTPPoetClient(server, app.Config.POET)
+		if err != nil {
+			return fmt.Errorf("failed to create poet client: %w", err)
+		}
+	}
 	migrations, err = sql.LocalMigrations()
 	if err != nil {
 		return fmt.Errorf("load local migrations: %w", err)
@@ -1635,6 +1648,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		sql.WithMigrations(migrations),
 		sql.WithMigration(localsql.New0001Migration(app.Config.SMESHING.Opts.DataDir)),
 		sql.WithMigration(localsql.New0002Migration(app.Config.SMESHING.Opts.DataDir)),
+		sql.WithMigration(localsql.New0003Migration(app.Config.SMESHING.Opts.DataDir, clients)),
 		sql.WithConnections(app.Config.DatabaseConnections),
 	)
 	if err != nil {
