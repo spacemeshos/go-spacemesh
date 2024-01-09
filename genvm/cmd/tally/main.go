@@ -36,6 +36,17 @@ func main() {
 	filter := transactions.ResultsFilter{Address: &addr}
 	must(transactions.IterateResults(db, filter,
 		func(rst *types.TransactionWithResult) bool {
+			status := "PASS"
+			if rst.Status != types.TransactionSuccess {
+				status = "FAIL"
+			}
+			fmt.Printf(
+				"%s: ID=%s PRINCIPAL=%s AMOUNT=%d\n",
+				status,
+				rst.ID.String(),
+				rst.Principal.String(),
+				rst.MaxSpend,
+			)
 			if rst.Principal == addr {
 				// in case of sending to yourself you just spend gas
 				if rst.Status == types.TransactionSuccess && len(rst.Addresses) != 1 {
@@ -49,8 +60,16 @@ func main() {
 			}
 			return true
 		}))
-	fmt.Printf("address=%s\nlayer=%d\nearned=%d\nrewards=%d\nspent=%d\ntally=%d\naccount=%d\n",
-		account.Address.String(), account.Layer, earnings, rewards, spending, rewards+earnings-spending, account.Balance)
+	fmt.Printf(
+		"address=%s\nlayer=%d\nearned=%d\nrewards=%d\nspent=%d\ntally=%d\naccount=%d\n",
+		account.Address.String(),
+		account.Layer,
+		earnings,
+		rewards,
+		spending,
+		rewards+earnings-spending,
+		account.Balance,
+	)
 }
 
 func must(err error) {
