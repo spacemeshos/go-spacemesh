@@ -450,8 +450,6 @@ func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, epoch types.
 
 func launchServer(tb testing.TB, services ...ServiceAPI) (Config, func()) {
 	cfg := DefaultTestConfig()
-	cfg.PublicListener = "127.0.0.1:0" // run on random port
-
 	grpcService, err := NewPublic(zaptest.NewLogger(tb).Named("grpc"), cfg, services)
 	require.NoError(tb, err)
 
@@ -488,6 +486,57 @@ func TestNewServersConfig(t *testing.T) {
 
 	require.Contains(t, grpcService.listener, strconv.Itoa(port1), "Expected same port")
 	require.Contains(t, jsonService.listener, strconv.Itoa(port2), "Expected same port")
+}
+
+func TestNewLocalServer(t *testing.T) {
+	tt := []struct {
+		name      string
+		listener  string
+		expectErr bool
+	}{
+		{
+			name:      "valid",
+			listener:  "192.168.1.1:1234",
+			expectErr: false,
+		},
+		{
+			name:      "valid random port",
+			listener:  "10.0.0.1:0",
+			expectErr: false,
+		},
+		{
+			name:      "invalid",
+			listener:  "0.0.0.0:1234",
+			expectErr: true,
+		},
+		{
+			name:      "invalid random port",
+			listener:  "88.77.66.11:0",
+			expectErr: true,
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			peerCounter := NewMockpeerCounter(ctrl)
+			meshApi := NewMockmeshAPI(ctrl)
+			genTime := NewMockgenesisTimeAPI(ctrl)
+			syncer := NewMocksyncer(ctrl)
+
+			cfg := DefaultTestConfig()
+			cfg.LocalListener = tc.listener
+			svc := NewNodeService(peerCounter, meshApi, genTime, syncer, "v0.0.0", "cafebabe")
+			grpcService, err := NewLocal(zaptest.NewLogger(t).Named("grpc"), cfg, []ServiceAPI{svc})
+			if tc.expectErr {
+				require.ErrorContains(t, err, "not in private network range")
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, grpcService.listener, tc.listener, "expected same listener")
+		})
+	}
 }
 
 type smesherServiceConn struct {

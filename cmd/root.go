@@ -165,6 +165,8 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.API.PublicListener, "Socket for grpc services that are save to expose publicly.")
 	cmd.PersistentFlags().StringVar(&cfg.API.PrivateListener, "grpc-private-listener",
 		cfg.API.PrivateListener, "Socket for grpc services that are not safe to expose publicly.")
+	cmd.PersistentFlags().StringVar(&cfg.API.LocalListener, "grpc-local-listener", cfg.API.LocalListener,
+		"Socket for grpc services that are not safe to expose publicly, but can be accessible within a local network")
 	cmd.PersistentFlags().StringVar(&cfg.API.TLSListener, "grpc-tls-listener",
 		cfg.API.TLSListener, "Socket for the grpc services that need to be accessible via mTLS.")
 	cmd.PersistentFlags().StringVar(&cfg.API.TLSCACert, "gprc-tls-ca-cert",

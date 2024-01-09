@@ -10,6 +10,8 @@ type Config struct {
 	PublicListener  string `mapstructure:"grpc-public-listener"`
 	PrivateServices []Service
 	PrivateListener string `mapstructure:"grpc-private-listener"`
+	LocalServices   []Service
+	LocalListener   string `mapstructure:"grpc-post-listener"`
 	TLSServices     []Service
 	TLSListener     string `mapstructure:"grpc-tls-listener"`
 	TLSCACert       string `mapstructure:"grpc-tls-ca-cert"`
@@ -22,7 +24,7 @@ type Config struct {
 	SmesherStreamInterval time.Duration
 }
 
-type Service = string
+type Service string
 
 const (
 	Admin       Service = "admin"
@@ -43,6 +45,8 @@ func DefaultConfig() Config {
 		PublicListener:        "0.0.0.0:9092",
 		PrivateServices:       []Service{Admin, Smesher, Debug, Post},
 		PrivateListener:       "127.0.0.1:9093",
+		LocalServices:         []Service{Post},
+		LocalListener:         "",
 		TLSServices:           []Service{Post},
 		TLSListener:           "",
 		JSONListener:          "",
@@ -57,6 +61,7 @@ func DefaultTestConfig() Config {
 	conf := DefaultConfig()
 	conf.PublicListener = "127.0.0.1:0"
 	conf.PrivateListener = "127.0.0.1:0"
+	conf.LocalListener = ""
 	conf.JSONListener = ""
 	conf.TLSListener = ""
 	return conf

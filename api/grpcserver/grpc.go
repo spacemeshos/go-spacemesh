@@ -86,6 +86,31 @@ func NewPrivate(logger *zap.Logger, config Config, svc []ServiceAPI) (*Server, e
 	return server, nil
 }
 
+// NewLocal creates a new Server listening on the LocalListener address with the given logger and config.
+// Services passed in the svc slice are registered with the server.
+// Additionally the endpoint is checked to be in a private network range.
+func NewLocal(logger *zap.Logger, config Config, svc []ServiceAPI) (*Server, error) {
+	if len(svc) == 0 {
+		return nil, errors.New("no services to register")
+	}
+
+	// check if config.LocalListener IP is in private network range
+	host, _, err := net.SplitHostPort(config.LocalListener)
+	if err != nil {
+		return nil, fmt.Errorf("split local listener: %w", err)
+	}
+	ip := net.ParseIP(host)
+	if !ip.IsPrivate() && !ip.IsLoopback() {
+		return nil, fmt.Errorf("local listener is not in private network range: %s", config.LocalListener)
+	}
+
+	server := New(config.LocalListener, logger, config)
+	for _, s := range svc {
+		s.RegisterService(server.GrpcServer)
+	}
+	return server, nil
+}
+
 // NewTLS creates a new Server listening on the TLSListener address with the given logger and config.
 // Services passed in the svc slice are registered with the server.
 func NewTLS(logger *zap.Logger, config Config, svc []ServiceAPI) (*Server, error) {
