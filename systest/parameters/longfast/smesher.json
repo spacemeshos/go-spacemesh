@@ -28,10 +28,5 @@
         "beacon-rounds-number": 10,
         "beacon-voting-round-duration": "10s",
         "beacon-weak-coin-round-duration": "10s"
-    },
-    "smeshing": {
-        "smeshing-verifying-opts": {
-            "smeshing-opts-verifying-min-workers": 1000000
-        }
     }
 }
