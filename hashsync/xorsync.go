@@ -46,8 +46,6 @@ func (m Hash32To12Xor) Fingerprint(v any) any {
 	// TODO: fix types.CalcHash12()
 	h := v.(types.Hash32)
 	var r types.Hash12
-	// copy(r[:], h[20:])
-	// return r
 	hasher := hashPool.Get().(*blake3.Hasher)
 	defer func() {
 		hasher.Reset()

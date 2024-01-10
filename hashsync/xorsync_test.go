@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -43,10 +44,6 @@ func collectStoreItems[T Ordered](is ItemStore) (r []T) {
 	}
 }
 
-const numTestHashes = 100000
-
-// const numTestHashes = 100
-
 type catchTransferTwice struct {
 	ItemStore
 	t     *testing.T
@@ -56,7 +53,7 @@ type catchTransferTwice struct {
 func (s *catchTransferTwice) Add(k Ordered) {
 	h := k.(types.Hash32)
 	_, found := s.added[h]
-	require.False(s.t, found, "hash sent twice")
+	assert.False(s.t, found, "hash sent twice")
 	s.ItemStore.Add(k)
 	if s.added == nil {
 		s.added = make(map[types.Hash32]bool)
@@ -64,50 +61,65 @@ func (s *catchTransferTwice) Add(k Ordered) {
 	s.added[h] = true
 }
 
-const xorTestMaxSendRange = 1
+type xorSyncTestConfig struct {
+	maxSendRange    int
+	numTestHashes   int
+	minNumSpecificA int
+	maxNumSpecificA int
+	minNumSpecificB int
+	maxNumSpecificB int
+}
 
-func TestBigSyncHash32(t *testing.T) {
-	numSpecificA := rand.Intn(96) + 4
-	numSpecificB := rand.Intn(96) + 4
-	// numSpecificA := rand.Intn(6) + 4
-	// numSpecificB := rand.Intn(6) + 4
-	src := make([]types.Hash32, numTestHashes)
+func verifyXORSync(t *testing.T, cfg xorSyncTestConfig, sync func(syncA, syncB *RangeSetReconciler, numSpecific int)) {
+	numSpecificA := rand.Intn(cfg.maxNumSpecificA+1-cfg.minNumSpecificA) + cfg.minNumSpecificA
+	numSpecificB := rand.Intn(cfg.maxNumSpecificB+1-cfg.minNumSpecificB) + cfg.minNumSpecificB
+	src := make([]types.Hash32, cfg.numTestHashes)
 	for n := range src {
 		src[n] = types.RandomHash()
 	}
 
-	sliceA := src[:numTestHashes-numSpecificB]
+	sliceA := src[:cfg.numTestHashes-numSpecificB]
 	storeA := NewMonoidTreeStore(Hash32To12Xor{})
 	for _, h := range sliceA {
 		storeA.Add(h)
 	}
 	storeA = &catchTransferTwice{t: t, ItemStore: storeA}
-	syncA := NewRangeSetReconciler(storeA, WithMaxSendRange(xorTestMaxSendRange))
+	syncA := NewRangeSetReconciler(storeA, WithMaxSendRange(cfg.maxSendRange))
 
-	sliceB := append([]types.Hash32(nil), src[:numTestHashes-numSpecificB-numSpecificA]...)
-	sliceB = append(sliceB, src[numTestHashes-numSpecificB:]...)
+	sliceB := append([]types.Hash32(nil), src[:cfg.numTestHashes-numSpecificB-numSpecificA]...)
+	sliceB = append(sliceB, src[cfg.numTestHashes-numSpecificB:]...)
 	storeB := NewMonoidTreeStore(Hash32To12Xor{})
 	for _, h := range sliceB {
 		storeB.Add(h)
 	}
 	storeB = &catchTransferTwice{t: t, ItemStore: storeB}
-	syncB := NewRangeSetReconciler(storeB, WithMaxSendRange(xorTestMaxSendRange))
-
-	nRounds, nMsg, nItems := runSync(t, syncA, syncB, 100)
-	excess := float64(nItems-numSpecificA-numSpecificB) / float64(numSpecificA+numSpecificB)
-	t.Logf("numSpecificA: %d, numSpecificB: %d, nRounds: %d, nMsg: %d, nItems: %d, excess: %.2f",
-		numSpecificA, numSpecificB, nRounds, nMsg, nItems, excess)
+	syncB := NewRangeSetReconciler(storeB, WithMaxSendRange(cfg.maxSendRange))
 
 	slices.SortFunc(src, func(a, b types.Hash32) int {
 		return a.Compare(b)
 	})
+
+	sync(syncA, syncB, numSpecificA+numSpecificB)
+
 	itemsA := collectStoreItems[types.Hash32](storeA)
 	itemsB := collectStoreItems[types.Hash32](storeB)
 	require.Equal(t, itemsA, itemsB)
 	require.Equal(t, src, itemsA)
 }
 
-// TODO: try catching items sent twice in a simpler test
-// TODO: check why insertion takes so long (1000000 items => too long wait)
-// TODO: number of items transferred is unreasonable for 100k total / 1 range size:
-// xorsync_test.go:56: numSpecificA: 141, numSpecificB: 784, nRounds: 11, nMsg: 13987, nItems: 3553
+func TestBigSyncHash32(t *testing.T) {
+	cfg := xorSyncTestConfig{
+		maxSendRange:    1,
+		numTestHashes:   100000,
+		minNumSpecificA: 4,
+		maxNumSpecificA: 100,
+		minNumSpecificB: 4,
+		maxNumSpecificB: 100,
+	}
+	verifyXORSync(t, cfg, func(syncA, syncB *RangeSetReconciler, numSpecific int) {
+		nRounds, nMsg, nItems := runSync(t, syncA, syncB, 100)
+		itemCoef := float64(nItems) / float64(numSpecific)
+		t.Logf("numSpecific: %d, nRounds: %d, nMsg: %d, nItems: %d, itemCoef: %.2f",
+			numSpecific, nRounds, nMsg, nItems, itemCoef)
+	})
+}

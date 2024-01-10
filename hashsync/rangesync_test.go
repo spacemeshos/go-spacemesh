@@ -1,7 +1,6 @@
 package hashsync
 
 import (
-	"fmt"
 	"math/rand"
 	"slices"
 	"testing"
@@ -12,43 +11,40 @@ import (
 )
 
 type rangeMessage struct {
-	x, y      Ordered
-	fp        any
-	count     int
-	haveItems bool
+	mtype MessageType
+	x, y  Ordered
+	fp    any
+	count int
+	items []Ordered
 }
 
-func (m rangeMessage) X() Ordered       { return m.x }
-func (m rangeMessage) Y() Ordered       { return m.y }
-func (m rangeMessage) Fingerprint() any { return m.fp }
-func (m rangeMessage) Count() int       { return m.count }
-func (m rangeMessage) HaveItems() bool  { return m.haveItems }
+func (m rangeMessage) Type() MessageType { return m.mtype }
+func (m rangeMessage) X() Ordered        { return m.x }
+func (m rangeMessage) Y() Ordered        { return m.y }
+func (m rangeMessage) Fingerprint() any  { return m.fp }
+func (m rangeMessage) Count() int        { return m.count }
+func (m rangeMessage) Items() []Ordered  { return m.items }
 
 var _ SyncMessage = rangeMessage{}
 
 func (m rangeMessage) String() string {
-	itemsStr := ""
-	if m.haveItems {
-		itemsStr = fmt.Sprintf(" +items")
-	}
-	return fmt.Sprintf("<X %v Y %v Count %d Fingerprint %v%s>",
-		m.x, m.y, m.count, m.fp, itemsStr)
+	return SyncMessageToString(m)
 }
 
 type fakeConduit struct {
-	t     *testing.T
-	msgs  []rangeMessage
-	items []Ordered
-	resp  *fakeConduit
+	t    *testing.T
+	msgs []rangeMessage
+	resp *fakeConduit
 }
 
 var _ Conduit = &fakeConduit{}
 
-func (fc *fakeConduit) done() bool {
-	if fc.resp == nil {
-		return true
+func (fc *fakeConduit) numItems() int {
+	n := 0
+	for _, m := range fc.msgs {
+		n += len(m.Items())
 	}
-	return len(fc.resp.msgs) == 0 && len(fc.resp.items) == 0
+	return n
 }
 
 func (fc *fakeConduit) NextMessage() (SyncMessage, error) {
@@ -61,75 +57,81 @@ func (fc *fakeConduit) NextMessage() (SyncMessage, error) {
 	return nil, nil
 }
 
-func (fc *fakeConduit) NextItem() (Ordered, error) {
-	if len(fc.items) != 0 {
-		item := fc.items[0]
-		fc.items = fc.items[1:]
-		return item, nil
-	}
-
-	return nil, nil
-}
-
 func (fc *fakeConduit) ensureResp() {
 	if fc.resp == nil {
 		fc.resp = &fakeConduit{t: fc.t}
 	}
 }
 
-func (fc *fakeConduit) sendMsg(x, y Ordered, fingerprint any, count int, haveItems bool) {
+func (fc *fakeConduit) sendMsg(mtype MessageType, x, y Ordered, fingerprint any, count int) {
 	fc.ensureResp()
 	msg := rangeMessage{
-		x:         x,
-		y:         y,
-		fp:        fingerprint,
-		count:     count,
-		haveItems: haveItems,
+		mtype: mtype,
+		x:     x,
+		y:     y,
+		fp:    fingerprint,
+		count: count,
 	}
 	fc.resp.msgs = append(fc.resp.msgs, msg)
 }
 
-func (fc *fakeConduit) sendItems(count int, it Iterator) {
-	require.NotZero(fc.t, count)
-	require.NotNil(fc.t, it)
-	fc.ensureResp()
-	for i := 0; i < count; i++ {
-		if it.Key() == nil {
-			panic("fakeConduit.SendItems: went got to the end of the tree")
-		}
-		fc.resp.items = append(fc.resp.items, it.Key())
-		it.Next()
-	}
-}
-
-func (fc *fakeConduit) SendFingerprint(x, y Ordered, fingerprint any, count int) {
+func (fc *fakeConduit) SendFingerprint(x, y Ordered, fingerprint any, count int) error {
 	require.NotNil(fc.t, x)
 	require.NotNil(fc.t, y)
 	require.NotZero(fc.t, count)
 	require.NotNil(fc.t, fingerprint)
-	fc.sendMsg(x, y, fingerprint, count, false)
+	fc.sendMsg(MessageTypeFingerprint, x, y, fingerprint, count)
+	return nil
 }
 
-func (fc *fakeConduit) SendEmptySet() {
-	fc.sendMsg(nil, nil, nil, 0, false)
+func (fc *fakeConduit) SendEmptySet() error {
+	fc.sendMsg(MessageTypeEmptySet, nil, nil, nil, 0)
+	return nil
 }
 
-func (fc *fakeConduit) SendEmptyRange(x, y Ordered) {
+func (fc *fakeConduit) SendEmptyRange(x, y Ordered) error {
 	require.NotNil(fc.t, x)
 	require.NotNil(fc.t, y)
-	fc.sendMsg(x, y, nil, 0, false)
+	fc.sendMsg(MessageTypeEmptyRange, x, y, nil, 0)
+	return nil
 }
 
-func (fc *fakeConduit) SendItems(x, y Ordered, count int, it Iterator) {
+func (fc *fakeConduit) SendRangeContents(x, y Ordered, count int) error {
+	require.NotNil(fc.t, x)
+	require.NotNil(fc.t, y)
+	fc.sendMsg(MessageTypeRangeContents, x, y, nil, count)
+	return nil
+}
+
+func (fc *fakeConduit) SendItems(count, itemChunkSize int, it Iterator) error {
 	require.Positive(fc.t, count)
-	require.NotNil(fc.t, x)
-	require.NotNil(fc.t, y)
-	fc.sendMsg(x, y, nil, count, true)
-	fc.sendItems(count, it)
+	require.NotZero(fc.t, count)
+	require.NotNil(fc.t, it)
+	fc.ensureResp()
+	for i := 0; i < count; i += itemChunkSize {
+		msg := rangeMessage{mtype: MessageTypeItemBatch}
+		n := min(itemChunkSize, count-i)
+		for n > 0 {
+			if it.Key() == nil {
+				panic("fakeConduit.SendItems: went got to the end of the tree")
+			}
+			msg.items = append(msg.items, it.Key())
+			it.Next()
+			n--
+		}
+		fc.resp.msgs = append(fc.resp.msgs, msg)
+	}
+	return nil
 }
 
-func (fc *fakeConduit) SendItemsOnly(count int, it Iterator) {
-	fc.sendItems(count, it)
+func (fc *fakeConduit) SendEndRound() error {
+	fc.sendMsg(MessageTypeEndRound, nil, nil, nil, 0)
+	return nil
+}
+
+func (fc *fakeConduit) SendDone() error {
+	fc.sendMsg(MessageTypeDone, nil, nil, nil, 0)
+	return nil
 }
 
 type dumbStoreIterator struct {
@@ -467,25 +469,32 @@ func dumpRangeMessages(t *testing.T, msgs []rangeMessage, fmt string, args ...an
 func runSync(t *testing.T, syncA, syncB *RangeSetReconciler, maxRounds int) (nRounds, nMsg, nItems int) {
 	fc := &fakeConduit{t: t}
 	syncA.Initiate(fc)
-	require.False(t, fc.done(), "no messages from Initiate")
 	var i int
-	for i = 0; !fc.done(); i++ {
+	done := false
+	// dumpRangeMessages(t, fc.resp.msgs, "A %q -> B %q (init):", storeItemStr(syncA.is), storeItemStr(syncB.is))
+	// dumpRangeMessages(t, fc.resp.msgs, "A -> B (init):")
+	for i = 0; !done; i++ {
 		if i == maxRounds {
 			require.FailNow(t, "too many rounds", "didn't reconcile in %d rounds", i)
 		}
 		fc = fc.resp
-		// dumpRangeMessages(t, fc.msgs, "A %q -> B %q:", storeItemStr(syncA.is), storeItemStr(syncB.is))
 		nMsg += len(fc.msgs)
-		nItems += len(fc.items)
-		syncB.Process(fc)
-		if fc.done() {
+		nItems += fc.numItems()
+		var err error
+		done, err = syncB.Process(fc)
+		require.NoError(t, err)
+		// dumpRangeMessages(t, fc.resp.msgs, "B %q -> A %q:", storeItemStr(syncA.is), storeItemStr(syncB.is))
+		// dumpRangeMessages(t, fc.resp.msgs, "B -> A:")
+		if done {
 			break
 		}
 		fc = fc.resp
 		nMsg += len(fc.msgs)
-		nItems += len(fc.items)
-		// dumpRangeMessages(t, fc.msgs, "B %q --> A %q:", storeItemStr(syncB.is), storeItemStr(syncA.is))
-		syncA.Process(fc)
+		nItems += fc.numItems()
+		done, err = syncA.Process(fc)
+		require.NoError(t, err)
+		// dumpRangeMessages(t, fc.msgs, "A %q --> B %q:", storeItemStr(syncB.is), storeItemStr(syncA.is))
+		// dumpRangeMessages(t, fc.resp.msgs, "A -> B:")
 	}
 	return i + 1, nMsg, nItems
 }
@@ -545,10 +554,14 @@ func testRangeSync(t *testing.T, storeFactory storeFactory) {
 				t.Logf("maxSendRange: %d", maxSendRange)
 				storeA := makeStore(t, storeFactory, tc.a)
 				disableReAdd(storeA)
-				syncA := NewRangeSetReconciler(storeA, WithMaxSendRange(maxSendRange))
+				syncA := NewRangeSetReconciler(storeA,
+					WithMaxSendRange(maxSendRange),
+					WithItemChunkSize(3))
 				storeB := makeStore(t, storeFactory, tc.b)
 				disableReAdd(storeB)
-				syncB := NewRangeSetReconciler(storeB, WithMaxSendRange(maxSendRange))
+				syncB := NewRangeSetReconciler(storeB,
+					WithMaxSendRange(maxSendRange),
+					WithItemChunkSize(3))
 
 				nRounds, _, _ := runSync(t, syncA, syncB, tc.maxRounds[n])
 				t.Logf("%s: maxSendRange %d: %d rounds", tc.name, maxSendRange, nRounds)
@@ -600,8 +613,12 @@ func testRandomSync(t *testing.T, storeFactory storeFactory) {
 		slices.Sort(expectedSet)
 
 		maxSendRange := rand.Intn(16) + 1
-		syncA := NewRangeSetReconciler(storeA, WithMaxSendRange(maxSendRange))
-		syncB := NewRangeSetReconciler(storeB, WithMaxSendRange(maxSendRange))
+		syncA := NewRangeSetReconciler(storeA,
+			WithMaxSendRange(maxSendRange),
+			WithItemChunkSize(3))
+		syncB := NewRangeSetReconciler(storeB,
+			WithMaxSendRange(maxSendRange),
+			WithItemChunkSize(3))
 
 		runSync(t, syncA, syncB, max(len(expectedSet), 2)) // FIXME: less rounds!
 		// t.Logf("maxSendRange %d a %d b %d n %d", maxSendRange, len(bytesA), len(bytesB), n)
@@ -615,7 +632,6 @@ func TestRandomSync(t *testing.T) {
 	forTestStores(t, testRandomSync)
 }
 
-// TBD: test XOR + big sync
 // TBD: include initiate round!!!
 // TBD: use logger for verbose logging (messages)
 // TBD: in fakeConduit -- check item count against the iterator in SendItems / SendItemsOnly!!
