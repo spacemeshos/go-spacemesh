@@ -22,7 +22,7 @@ type RequestMessage struct {
 // ResponseMessage is sent to the node as a response.
 type ResponseMessage struct {
 	Hash types.Hash32
-	Data []byte `scale:"max=20971520"` // limit to 20 MiB
+	Data []byte `scale:"max=41943040"` // limit to 40 MiB
 }
 
 // RequestBatch is a batch of requests and a hash of all requests as ID.
@@ -105,7 +105,7 @@ type MaliciousIDs struct {
 }
 
 type EpochData struct {
-	AtxIDs []types.ATXID `scale:"max=500000"` // for epoch 12 > 300k ATXs are expected, added some safety margin
+	AtxIDs []types.ATXID `scale:"max=1000000"` // for epoch 13 > 800k ATXs are expected, added some safety margin
 }
 
 // LayerData is the data response for a given layer ID.
