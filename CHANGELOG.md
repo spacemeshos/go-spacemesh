@@ -2,6 +2,13 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## Release v1.3.1
+
+### Improvements
+
+* [#5419](https://github.com/spacemeshos/go-spacemesh/pull/5419) Fixed `0.0.0.0` not being a valid listen address for
+  `grpc-private-listener`.
+
 ## Release v1.3
 
 ### Upgrade information
