@@ -1133,8 +1133,87 @@ func TestAdminEvents(t *testing.T) {
 	cfg.SMESHING.Opts.DataDir = cfg.DataDirParent
 	cfg.SMESHING.Opts.Scrypt.N = 2
 	cfg.POSTService.PostServiceCmd = activation.DefaultTestPostServiceConfig().PostServiceCmd
-	cfg.HARE3.PreroundDelay = 100 * time.Millisecond
-	cfg.HARE3.RoundDuration = 1 * time.Millisecond
+
+	cfg.Genesis.GenesisTime = time.Now().Add(5 * time.Second).Format(time.RFC3339)
+	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
+
+	logger := logtest.New(t, zapcore.DebugLevel)
+	app := New(WithConfig(&cfg), WithLog(logger))
+	signer, err := app.LoadOrCreateEdSigner()
+	require.NoError(t, err)
+	app.edSgn = signer // https://github.com/spacemeshos/go-spacemesh/issues/4653
+	require.NoError(t, app.Initialize())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var eg errgroup.Group
+	eg.Go(func() error {
+		if err := app.Start(ctx); err != nil {
+			return err
+		}
+		app.Cleanup(context.Background())
+		app.eg.Wait() // https://github.com/spacemeshos/go-spacemesh/issues/4653
+		return nil
+	})
+	t.Cleanup(func() { assert.NoError(t, eg.Wait()) })
+
+	grpcCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	conn, err := grpc.DialContext(
+		grpcCtx,
+		cfg.API.PrivateListener,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+	)
+	require.NoError(t, err)
+	t.Cleanup(func() { assert.NoError(t, conn.Close()) })
+	client := pb.NewAdminServiceClient(conn)
+
+	tctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+	defer cancel()
+
+	// 4 is arbitrary, if we received events once, they must be
+	// cached and should be returned immediately
+	for i := 0; i < 4; i++ {
+		stream, err := client.EventsStream(tctx, &pb.EventStreamRequest{})
+		require.NoError(t, err)
+		success := []pb.IsEventDetails{
+			&pb.Event_Beacon{},
+			&pb.Event_InitStart{},
+			&pb.Event_InitComplete{},
+			&pb.Event_PostServiceStarted{},
+			&pb.Event_PostStart{},
+			&pb.Event_PostComplete{},
+			&pb.Event_PoetWaitRound{},
+			&pb.Event_PoetWaitProof{},
+			&pb.Event_PostStart{},
+			&pb.Event_PostComplete{},
+			&pb.Event_AtxPublished{},
+		}
+		for idx, ev := range success {
+			msg, err := stream.Recv()
+			require.NoError(t, err, "stream %d", i)
+			require.IsType(t, ev, msg.Details, "stream %d, event %d", i, idx)
+		}
+		require.NoError(t, stream.CloseSend())
+	}
+}
+
+func TestAdminEvents_UnspecifiedAddresses(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	cfg, err := presets.Get("standalone")
+	require.NoError(t, err)
+
+	cfg.DataDirParent = t.TempDir()
+	cfg.FileLock = filepath.Join(cfg.DataDirParent, "LOCK")
+	cfg.SMESHING.Opts.DataDir = cfg.DataDirParent
+	cfg.SMESHING.Opts.Scrypt.N = 2
+	cfg.POSTService.PostServiceCmd = activation.DefaultTestPostServiceConfig().PostServiceCmd
+
+	// Expose APIs on all interfaces
+	cfg.API.PublicListener = "0.0.0.0:10092"
+	cfg.API.PrivateListener = "0.0.0.0:10093"
 
 	cfg.Genesis.GenesisTime = time.Now().Add(5 * time.Second).Format(time.RFC3339)
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
