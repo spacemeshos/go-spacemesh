@@ -124,7 +124,7 @@ func DefaultConfig() Config {
 	return Config{
 		BatchTimeout:         50 * time.Millisecond,
 		QueueSize:            20,
-		BatchSize:            20,
+		BatchSize:            10,
 		RequestTimeout:       25 * time.Second,
 		MaxRetriesForRequest: 100,
 		ServersConfig: map[string]ServerConfig{
