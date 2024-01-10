@@ -55,7 +55,7 @@ func (t *ResponseMessage) EncodeScale(enc *scale.Encoder) (total int, err error)
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, t.Data, 41943040)
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.Data, 20971520)
 		if err != nil {
 			return total, err
 		}
@@ -73,7 +73,7 @@ func (t *ResponseMessage) DecodeScale(dec *scale.Decoder) (total int, err error)
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 41943040)
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 20971520)
 		if err != nil {
 			return total, err
 		}
@@ -92,7 +92,7 @@ func (t *RequestBatch) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.Requests, 1000)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.Requests, 100)
 		if err != nil {
 			return total, err
 		}
@@ -110,7 +110,7 @@ func (t *RequestBatch) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[RequestMessage](dec, 1000)
+		field, n, err := scale.DecodeStructSliceWithLimit[RequestMessage](dec, 100)
 		if err != nil {
 			return total, err
 		}
@@ -129,7 +129,7 @@ func (t *ResponseBatch) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.Responses, 1000)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.Responses, 100)
 		if err != nil {
 			return total, err
 		}
@@ -147,7 +147,7 @@ func (t *ResponseBatch) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[ResponseMessage](dec, 1000)
+		field, n, err := scale.DecodeStructSliceWithLimit[ResponseMessage](dec, 100)
 		if err != nil {
 			return total, err
 		}
