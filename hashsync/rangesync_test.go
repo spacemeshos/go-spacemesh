@@ -396,15 +396,15 @@ func makeDumbStore(t *testing.T) ItemStore {
 	return &dumbStore{}
 }
 
-func makeMonoidTreeStore(t *testing.T) ItemStore {
-	return NewMonoidTreeStore(sampleMonoid{})
+func makeSyncTreeStore(t *testing.T) ItemStore {
+	return NewSyncTreeStore(sampleMonoid{})
 }
 
-func makeVerifiedMonoidTreeStore(t *testing.T) ItemStore {
+func makeVerifiedSyncTreeStore(t *testing.T) ItemStore {
 	return &verifiedStore{
 		t:         t,
 		knownGood: makeDumbStore(t),
-		store:     makeMonoidTreeStore(t),
+		store:     makeSyncTreeStore(t),
 	}
 }
 
@@ -442,11 +442,11 @@ var testStores = []struct {
 	},
 	{
 		name:    "monoid tree store",
-		factory: makeMonoidTreeStore,
+		factory: makeSyncTreeStore,
 	},
 	{
 		name:    "verified monoid tree store",
-		factory: makeVerifiedMonoidTreeStore,
+		factory: makeVerifiedSyncTreeStore,
 	},
 }
 

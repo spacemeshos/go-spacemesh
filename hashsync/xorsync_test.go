@@ -79,7 +79,7 @@ func verifyXORSync(t *testing.T, cfg xorSyncTestConfig, sync func(syncA, syncB *
 	}
 
 	sliceA := src[:cfg.numTestHashes-numSpecificB]
-	storeA := NewMonoidTreeStore(Hash32To12Xor{})
+	storeA := NewSyncTreeStore(Hash32To12Xor{})
 	for _, h := range sliceA {
 		storeA.Add(h)
 	}
@@ -88,7 +88,7 @@ func verifyXORSync(t *testing.T, cfg xorSyncTestConfig, sync func(syncA, syncB *
 
 	sliceB := append([]types.Hash32(nil), src[:cfg.numTestHashes-numSpecificB-numSpecificA]...)
 	sliceB = append(sliceB, src[cfg.numTestHashes-numSpecificB:]...)
-	storeB := NewMonoidTreeStore(Hash32To12Xor{})
+	storeB := NewSyncTreeStore(Hash32To12Xor{})
 	for _, h := range sliceB {
 		storeB.Add(h)
 	}

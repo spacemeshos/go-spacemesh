@@ -31,40 +31,40 @@ func sampleCountMonoid() Monoid {
 	return CombineMonoids(sampleMonoid{}, CountingMonoid{})
 }
 
-func makeStringConcatTree(chars string) MonoidTree {
+func makeStringConcatTree(chars string) SyncTree {
 	ids := make([]sampleID, len(chars))
 	for n, c := range chars {
 		ids[n] = sampleID(c)
 	}
-	return MonoidTreeFromSlice[sampleID](sampleCountMonoid(), ids)
+	return SyncTreeFromSlice[sampleID](sampleCountMonoid(), ids)
 }
 
 // dumbAdd inserts the node into the tree without trying to maintain the
 // red-black properties
-func dumbAdd(mt MonoidTree, k Ordered) {
-	mtree := mt.(*monoidTree)
-	mtree.root = mtree.insert(mtree.root, k, nil, false, false)
+func dumbAdd(st SyncTree, k Ordered) {
+	stree := st.(*syncTree)
+	stree.root = stree.insert(stree.root, k, nil, false, false)
 }
 
 // makeDumbTree constructs a binary tree by adding the chars one-by-one without
 // trying to maintain the red-black properties
-func makeDumbTree(chars string) MonoidTree {
+func makeDumbTree(chars string) SyncTree {
 	if len(chars) == 0 {
 		panic("empty set")
 	}
-	mt := NewMonoidTree(sampleCountMonoid())
+	st := NewSyncTree(sampleCountMonoid())
 	for _, c := range chars {
-		dumbAdd(mt, sampleID(c))
+		dumbAdd(st, sampleID(c))
 	}
-	return mt
+	return st
 }
 
-func makeRBTree(chars string) MonoidTree {
-	mt := NewMonoidTree(sampleCountMonoid())
+func makeRBTree(chars string) SyncTree {
+	st := NewSyncTree(sampleCountMonoid())
 	for _, c := range chars {
-		mt.Add(sampleID(c))
+		st.Add(sampleID(c))
 	}
-	return mt
+	return st
 }
 
 func gtePos(all string, item string) int {
@@ -126,7 +126,7 @@ func naiveRange(all, x, y string, stopCount int) (fingerprint, startStr, endStr 
 }
 
 func TestEmptyTree(t *testing.T) {
-	tree := NewMonoidTree(sampleCountMonoid())
+	tree := NewSyncTree(sampleCountMonoid())
 	rfp1, startNode, endNode := tree.RangeFingerprint(nil, sampleID("a"), sampleID("a"), nil)
 	require.Nil(t, startNode)
 	require.Nil(t, endNode)
@@ -147,7 +147,7 @@ func TestEmptyTree(t *testing.T) {
 	}
 }
 
-func testMonoidTreeRanges(t *testing.T, tree MonoidTree) {
+func testSyncTreeRanges(t *testing.T, tree SyncTree) {
 	all := "abcdefghijklmnopqr"
 	for _, tc := range []struct {
 		all     string
@@ -234,18 +234,18 @@ func testMonoidTreeRanges(t *testing.T, tree MonoidTree) {
 	}
 }
 
-func TestMonoidTreeRanges(t *testing.T) {
+func TestSyncTreeRanges(t *testing.T) {
 	t.Run("pre-balanced tree", func(t *testing.T) {
-		testMonoidTreeRanges(t, makeStringConcatTree("abcdefghijklmnopqr"))
+		testSyncTreeRanges(t, makeStringConcatTree("abcdefghijklmnopqr"))
 	})
 	t.Run("sequential add", func(t *testing.T) {
-		testMonoidTreeRanges(t, makeDumbTree("abcdefghijklmnopqr"))
+		testSyncTreeRanges(t, makeDumbTree("abcdefghijklmnopqr"))
 	})
 	t.Run("shuffled add", func(t *testing.T) {
-		testMonoidTreeRanges(t, makeDumbTree("lodrnifeqacmbhkgjp"))
+		testSyncTreeRanges(t, makeDumbTree("lodrnifeqacmbhkgjp"))
 	})
 	t.Run("red-black add", func(t *testing.T) {
-		testMonoidTreeRanges(t, makeRBTree("lodrnifeqacmbhkgjp"))
+		testSyncTreeRanges(t, makeRBTree("lodrnifeqacmbhkgjp"))
 	})
 }
 
@@ -270,7 +270,7 @@ func TestAscendingRanges(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var fps []string
-			var node MonoidTreePointer
+			var node SyncTreePointer
 			for n, rng := range tc.ranges {
 				x := sampleID(rng[0])
 				y := sampleID(rng[1])
@@ -290,64 +290,64 @@ func TestAscendingRanges(t *testing.T) {
 	}
 }
 
-func verifyBinaryTree(t *testing.T, mn *monoidTreeNode) {
-	cloned := mn.flags&flagCloned != 0
-	if mn.left != nil {
+func verifyBinaryTree(t *testing.T, sn *syncTreeNode) {
+	cloned := sn.flags&flagCloned != 0
+	if sn.left != nil {
 		if !cloned {
-			require.Zero(t, mn.left.flags&flagCloned, "cloned left child of a non-cloned node")
+			require.Zero(t, sn.left.flags&flagCloned, "cloned left child of a non-cloned node")
 		}
-		require.Negative(t, mn.left.key.Compare(mn.key))
+		require.Negative(t, sn.left.key.Compare(sn.key))
 		// not a "real" pointer (no parent stack), just to get max
-		leftMax := &monoidTreePointer{node: mn.left}
+		leftMax := &syncTreePointer{node: sn.left}
 		leftMax.max()
-		require.Negative(t, leftMax.Key().Compare(mn.key))
-		verifyBinaryTree(t, mn.left)
+		require.Negative(t, leftMax.Key().Compare(sn.key))
+		verifyBinaryTree(t, sn.left)
 	}
 
-	if mn.right != nil {
+	if sn.right != nil {
 		if !cloned {
-			require.Zero(t, mn.right.flags&flagCloned, "cloned right child of a non-cloned node")
+			require.Zero(t, sn.right.flags&flagCloned, "cloned right child of a non-cloned node")
 		}
-		require.Positive(t, mn.right.key.Compare(mn.key))
+		require.Positive(t, sn.right.key.Compare(sn.key))
 		// not a "real" pointer (no parent stack), just to get min
-		rightMin := &monoidTreePointer{node: mn.right}
+		rightMin := &syncTreePointer{node: sn.right}
 		rightMin.min()
-		require.Positive(t, rightMin.Key().Compare(mn.key))
-		verifyBinaryTree(t, mn.right)
+		require.Positive(t, rightMin.Key().Compare(sn.key))
+		verifyBinaryTree(t, sn.right)
 	}
 }
 
-func verifyRedBlackNode(t *testing.T, mn *monoidTreeNode, blackDepth int) int {
-	if mn == nil {
+func verifyRedBlackNode(t *testing.T, sn *syncTreeNode, blackDepth int) int {
+	if sn == nil {
 		return blackDepth + 1
 	}
-	if mn.flags&flagBlack == 0 {
-		if mn.left != nil {
-			require.Equal(t, flagBlack, mn.left.flags&flagBlack, "left child of a red node is red")
+	if sn.flags&flagBlack == 0 {
+		if sn.left != nil {
+			require.Equal(t, flagBlack, sn.left.flags&flagBlack, "left child of a red node is red")
 		}
-		if mn.right != nil {
-			require.Equal(t, flagBlack, mn.right.flags&flagBlack, "right child of a red node is red")
+		if sn.right != nil {
+			require.Equal(t, flagBlack, sn.right.flags&flagBlack, "right child of a red node is red")
 		}
 	} else {
 		blackDepth++
 	}
-	bdLeft := verifyRedBlackNode(t, mn.left, blackDepth)
-	bdRight := verifyRedBlackNode(t, mn.right, blackDepth)
-	require.Equal(t, bdLeft, bdRight, "subtree black depth for node %s", mn.key)
+	bdLeft := verifyRedBlackNode(t, sn.left, blackDepth)
+	bdRight := verifyRedBlackNode(t, sn.right, blackDepth)
+	require.Equal(t, bdLeft, bdRight, "subtree black depth for node %s", sn.key)
 	return bdLeft
 }
 
-func verifyRedBlack(t *testing.T, mt *monoidTree) {
-	if mt.root == nil {
+func verifyRedBlack(t *testing.T, st *syncTree) {
+	if st.root == nil {
 		return
 	}
-	require.Equal(t, flagBlack, mt.root.flags&flagBlack, "root node must be black")
-	verifyRedBlackNode(t, mt.root, 0)
+	require.Equal(t, flagBlack, st.root.flags&flagBlack, "root node must be black")
+	verifyRedBlackNode(t, st.root, 0)
 }
 
 func TestRedBlackTreeInsert(t *testing.T) {
 	for i := 0; i < 1000; i++ {
-		tree := NewMonoidTree(sampleCountMonoid())
+		tree := NewSyncTree(sampleCountMonoid())
 		items := []byte("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")
 		count := rand.Intn(len(items)) + 1
 		items = items[:count]
@@ -359,7 +359,7 @@ func TestRedBlackTreeInsert(t *testing.T) {
 		// items := []byte("0123456789ABCDEFG")
 		// shuffled := []byte("0678DF1CG5A9324BE")
 
-		trees := make([]MonoidTree, len(shuffled))
+		trees := make([]SyncTree, len(shuffled))
 		treeDumps := make([]string, len(shuffled))
 		for i := 0; i < len(shuffled); i++ {
 			trees[i] = tree.Copy()
@@ -370,7 +370,7 @@ func TestRedBlackTreeInsert(t *testing.T) {
 				// this shouldn't change anything
 				trees[i-1].Add(sampleID(shuffled[rand.Intn(i-1)]))
 				// cloning should not happen b/c no new nodes are inserted
-				require.Zero(t, trees[i-1].(*monoidTree).root.flags&flagCloned)
+				require.Zero(t, trees[i-1].(*syncTree).root.flags&flagCloned)
 			}
 		}
 
@@ -383,8 +383,8 @@ func TestRedBlackTreeInsert(t *testing.T) {
 		// t.Logf("items: %q", string(items))
 		// t.Logf("shuffled: %q", string(shuffled))
 		// t.Logf("QQQQQ: tree:\n%s", tree.Dump())
-		verifyBinaryTree(t, tree.(*monoidTree).root)
-		verifyRedBlack(t, tree.(*monoidTree))
+		verifyBinaryTree(t, tree.(*syncTree).root)
+		verifyRedBlack(t, tree.(*syncTree))
 		for ptr := tree.Min(); ptr.Key() != nil; ptr.Next() {
 			// avoid endless loop due to bugs in the tree impl
 			require.Less(t, n, len(items)*2, "got much more items than needed: %q -- %q", actualItems, shuffled)
@@ -402,7 +402,7 @@ func TestRedBlackTreeInsert(t *testing.T) {
 	}
 }
 
-type makeTestTreeFunc func(chars string) MonoidTree
+type makeTestTreeFunc func(chars string) SyncTree
 
 func testRandomOrderAndRanges(t *testing.T, mktree makeTestTreeFunc) {
 	all := "abcdefghijklmnopqr"
@@ -491,7 +491,7 @@ func TestTreeValues(t *testing.T) {
 	// flagCloned on the root should be cleared after copy
 	// and not set again by Set b/c the value is the same
 	tree.Set(sampleID("d"), 456) // nothing changed
-	require.Zero(t, tree.(*monoidTree).root.flags&flagCloned)
+	require.Zero(t, tree.(*syncTree).root.flags&flagCloned)
 
 	tree1.Set(sampleID("b"), 1234)
 	tree1.Set(sampleID("c"), 222)
