@@ -22,22 +22,22 @@ type RequestMessage struct {
 // ResponseMessage is sent to the node as a response.
 type ResponseMessage struct {
 	Hash types.Hash32
-	Data []byte `scale:"max=41943040"` // limit to 40 MiB
+	Data []byte `scale:"max=20971520"` // limit to 20 MiB
 }
 
 // RequestBatch is a batch of requests and a hash of all requests as ID.
 type RequestBatch struct {
 	ID types.Hash32
-	// depends on fetch config `BatchSize` which defaults to 20, more than 1000 seems unlikely
-	Requests []RequestMessage `scale:"max=1000"`
+	// depends on fetch config `BatchSize` which defaults to 10, more than 100 seems unlikely
+	Requests []RequestMessage `scale:"max=100"`
 }
 
 // ResponseBatch is the response struct send for a RequestBatch. the ResponseBatch ID must be the same
 // as stated in RequestBatch even if not all Data is present.
 type ResponseBatch struct {
 	ID types.Hash32
-	// depends on fetch config `BatchSize` which defaults to 20, more than 1000 seems unlikely
-	Responses []ResponseMessage `scale:"max=1000"`
+	// depends on fetch config `BatchSize` which defaults to 10, more than 100 seems unlikely
+	Responses []ResponseMessage `scale:"max=100"`
 }
 
 // MeshHashRequest is used by ForkFinder to request the hashes of layers from
