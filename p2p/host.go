@@ -351,9 +351,7 @@ func New(
 	} else if cfg.ForceReachability == PrivateReachability {
 		lopts = append(lopts, libp2p.ForceReachabilityPrivate())
 	}
-	if cfg.Metrics {
-		lopts = append(lopts, setupResourcesManager(cfg))
-	}
+	lopts = append(lopts, setupResourcesManager(cfg))
 	if !cfg.DisableNatPort {
 		lopts = append(lopts, libp2p.NATPortMap())
 	}
@@ -389,6 +387,9 @@ func setupResourcesManager(hostcfg Config) func(cfg *libp2p.Config) error {
 		}
 		highPeers := hostcfg.HighPeers
 		limits := rcmgr.DefaultLimits
+		limits.ConnBaseLimit.ConnsInbound = highPeers
+		limits.ConnBaseLimit.ConnsOutbound = highPeers
+		limits.ConnBaseLimit.Conns = 2 * highPeers
 		limits.SystemBaseLimit.ConnsInbound = highPeers
 		limits.SystemBaseLimit.ConnsOutbound = highPeers
 		limits.SystemBaseLimit.Conns = 2 * highPeers
@@ -399,7 +400,9 @@ func setupResourcesManager(hostcfg Config) func(cfg *libp2p.Config) error {
 		limits.ServiceBaseLimit.StreamsInbound = 8 * highPeers
 		limits.ServiceBaseLimit.StreamsOutbound = 8 * highPeers
 		limits.ServiceBaseLimit.Streams = 16 * highPeers
-
+		limits.StreamBaseLimit.StreamsInbound = 8 * highPeers
+		limits.StreamBaseLimit.StreamsOutbound = 8 * highPeers
+		limits.StreamBaseLimit.Streams = 16 * highPeers
 		limits.ProtocolBaseLimit.StreamsInbound = 8 * highPeers
 		limits.ProtocolBaseLimit.StreamsOutbound = 8 * highPeers
 		limits.ProtocolBaseLimit.Streams = 16 * highPeers
