@@ -340,9 +340,9 @@ func (rsr *RangeSetReconciler) getMessages(c Conduit) (msgs []SyncMessage, done 
 		msg, err := c.NextMessage()
 		switch {
 		case err != nil:
-			return nil, false, err
+			return msgs, false, err
 		case msg == nil:
-			return nil, false, errors.New("no end round marker")
+			return msgs, false, errors.New("no end round marker")
 		default:
 			switch msg.Type() {
 			case MessageTypeEndRound:
@@ -362,9 +362,6 @@ func (rsr *RangeSetReconciler) Process(c Conduit) (done bool, err error) {
 	// them, as processing the messages involves sending more
 	// messages back to the peer
 	msgs, done, err = rsr.getMessages(c)
-	if err != nil {
-		return false, err
-	}
 	if done {
 		// items already added
 		if len(msgs) != 0 {
@@ -374,7 +371,6 @@ func (rsr *RangeSetReconciler) Process(c Conduit) (done bool, err error) {
 	}
 	done = true
 	for _, msg := range msgs {
-		// TODO: pass preceding range, should be safe as the iterator is checked
 		if msg.Type() == MessageTypeItemBatch {
 			for _, item := range msg.Items() {
 				rsr.is.Add(item)
@@ -382,13 +378,24 @@ func (rsr *RangeSetReconciler) Process(c Conduit) (done bool, err error) {
 			continue
 		}
 
-		_, msgDone, err := rsr.handleMessage(c, nil, msg)
+		// If there was an error, just add any items received,
+		// but ignore other messages
 		if err != nil {
-			return false, err
+			continue
 		}
+
+		// TODO: pass preceding range. Somehow, currently the code
+		// breaks if we capture the iterator from handleMessage and
+		// pass it to the next handleMessage call (it shouldn't)
+		var msgDone bool
+		_, msgDone, err = rsr.handleMessage(c, nil, msg)
 		if !msgDone {
 			done = false
 		}
+	}
+
+	if err != nil {
+		return false, err
 	}
 
 	if done {
@@ -409,6 +416,7 @@ func fingerprintEqual(a, b any) bool {
 	return reflect.DeepEqual(a, b)
 }
 
+// TBD: test: add items to the store even in case of NextMessage() failure
 // TBD: !!! use wire types instead of multiple Send* methods in the Conduit interface !!!
 // TBD: !!! queue outbound messages right in RangeSetReconciler while processing msgs, and no need for done in handleMessage this way ++ no need for complicated logic on the conduit part !!!
 // TBD: !!! check that done message present !!!
