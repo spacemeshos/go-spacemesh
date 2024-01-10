@@ -94,7 +94,7 @@ const (
 	P2PLogger              = "p2p"
 	PostLogger             = "post"
 	PostServiceLogger      = "postService"
-	StateDbLogger          = "stateDbStore"
+	StateDbLogger          = "stateDb"
 	BeaconLogger           = "beacon"
 	CachedDBLogger         = "cachedDB"
 	PoetDbLogger           = "poetDb"
