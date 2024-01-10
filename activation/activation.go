@@ -395,7 +395,7 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 			zap.Uint32("current epoch", current.Uint32()),
 			zap.Duration("wait", time.Until(wait)),
 		)
-		events.EmitPoetWaitRound(current, current+1, time.Until(wait))
+		events.EmitPoetWaitRound(current, current+1, wait)
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -504,7 +504,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	events.EmitAtxPublished(
 		atx.PublishEpoch, atx.TargetEpoch(),
 		atx.ID(),
-		time.Until(b.layerClock.LayerToTime(atx.TargetEpoch().FirstLayer())),
+		b.layerClock.LayerToTime(atx.TargetEpoch().FirstLayer()),
 	)
 	return nil
 }
