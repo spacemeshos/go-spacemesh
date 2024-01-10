@@ -1133,8 +1133,6 @@ func TestAdminEvents(t *testing.T) {
 	cfg.SMESHING.Opts.DataDir = cfg.DataDirParent
 	cfg.SMESHING.Opts.Scrypt.N = 2
 	cfg.POSTService.PostServiceCmd = activation.DefaultTestPostServiceConfig().PostServiceCmd
-	cfg.HARE3.PreroundDelay = 100 * time.Millisecond
-	cfg.HARE3.RoundDuration = 1 * time.Millisecond
 
 	cfg.Genesis.GenesisTime = time.Now().Add(5 * time.Second).Format(time.RFC3339)
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
@@ -1212,8 +1210,6 @@ func TestAdminEvents_UnspecifiedAddresses(t *testing.T) {
 	cfg.SMESHING.Opts.DataDir = cfg.DataDirParent
 	cfg.SMESHING.Opts.Scrypt.N = 2
 	cfg.POSTService.PostServiceCmd = activation.DefaultTestPostServiceConfig().PostServiceCmd
-	cfg.HARE3.PreroundDelay = 100 * time.Millisecond
-	cfg.HARE3.RoundDuration = 1 * time.Millisecond
 
 	// Expose APIs on all interfaces
 	cfg.API.PublicListener = "0.0.0.0:10092"
