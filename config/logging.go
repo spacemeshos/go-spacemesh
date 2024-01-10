@@ -28,6 +28,7 @@ type LoggerConfig struct {
 	PoetDbLoggerLevel          string `mapstructure:"poetDb"`
 	TrtlLoggerLevel            string `mapstructure:"trtl"`
 	AtxHandlerLevel            string `mapstructure:"atxHandler"`
+	AtxBuilderLoggerLevel      string `mapstructure:"atxBuilder"`
 	MeshLoggerLevel            string `mapstructure:"mesh"`
 	SyncLoggerLevel            string `mapstructure:"sync"`
 	HareOracleLoggerLevel      string `mapstructure:"hareOracle"`
@@ -58,6 +59,7 @@ func DefaultLoggingConfig() LoggerConfig {
 		PostLoggerLevel:            defaultLoggingLevel.String(),
 		StateDbLoggerLevel:         defaultLoggingLevel.String(),
 		AtxHandlerLevel:            defaultLoggingLevel.String(),
+		AtxBuilderLoggerLevel:      defaultLoggingLevel.String(),
 		BeaconLoggerLevel:          defaultLoggingLevel.String(),
 		PoetDbLoggerLevel:          defaultLoggingLevel.String(),
 		TrtlLoggerLevel:            defaultLoggingLevel.String(),
