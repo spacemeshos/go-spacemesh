@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -877,11 +878,16 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 	proposalBuilder.Register(app.edSgn)
 
-	u := url.URL{
-		Scheme: "http",
-		Host:   app.Config.API.PrivateListener,
+	host, port, err := net.SplitHostPort(app.Config.API.PrivateListener)
+	if err != nil {
+		return fmt.Errorf("parse grpc-private-listener: %w", err)
 	}
-	app.Config.POSTService.NodeAddress = u.String()
+	ip := net.ParseIP(host)
+	if ip.IsUnspecified() {
+		host = "127.0.0.1"
+	}
+
+	app.Config.POSTService.NodeAddress = fmt.Sprintf("http://%s:%s", host, port)
 	postSetupMgr, err := activation.NewPostSetupManager(
 		app.edSgn.NodeID(),
 		app.Config.POST,
