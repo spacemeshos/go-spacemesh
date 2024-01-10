@@ -61,22 +61,24 @@ func (a autoscaler) run(stop chan struct{}, s scaler, min, target int) {
 }
 
 type OffloadingPostVerifier struct {
-	eg       errgroup.Group
-	log      *zap.Logger
-	verifier PostVerifier
-	workers  []*postVerifierWorker
-	jobs     chan *verifyPostJob
-	stop     chan struct{} // signal to stop all goroutines
+	eg          errgroup.Group
+	log         *zap.Logger
+	verifier    PostVerifier
+	workers     []*postVerifierWorker
+	prioritized chan *verifyPostJob
+	jobs        chan *verifyPostJob
+	stop        chan struct{} // signal to stop all goroutines
 
 	prioritizedIds map[types.NodeID]struct{}
 }
 
 type postVerifierWorker struct {
-	verifier PostVerifier
-	log      *zap.Logger
-	jobs     <-chan *verifyPostJob
-	stop     chan struct{} // signal to stop this worker
-	shutdown chan struct{} // signal that the verifier is closing
+	verifier    PostVerifier
+	log         *zap.Logger
+	prioritized <-chan *verifyPostJob
+	jobs        <-chan *verifyPostJob
+	stop        chan struct{} // signal to stop this worker
+	shutdown    chan struct{} // signal that the verifier is closing
 }
 
 type postVerifier struct {
@@ -86,7 +88,7 @@ type postVerifier struct {
 }
 
 func (v *postVerifier) Verify(
-	ctx context.Context,
+	_ context.Context,
 	p *shared.Proof,
 	m *shared.ProofMetadata,
 	opts ...verifying.OptionFunc,
@@ -105,9 +107,9 @@ func NewPostVerifier(cfg PostConfig, logger *zap.Logger, opts ...verifying.Optio
 	return &postVerifier{logger: logger, ProofVerifier: verifier, cfg: cfg.ToConfig()}, nil
 }
 
-type NewOflloadingVerifierOpt func(v *OffloadingPostVerifier)
+type OffloadingPostVerifierOpt func(v *OffloadingPostVerifier)
 
-func PrioritizedIDs(ids ...types.NodeID) NewOflloadingVerifierOpt {
+func PrioritizedIDs(ids ...types.NodeID) OffloadingPostVerifierOpt {
 	return func(v *OffloadingPostVerifier) {
 		for _, id := range ids {
 			v.prioritizedIds[id] = struct{}{}
@@ -126,11 +128,12 @@ func NewOffloadingPostVerifier(
 	verifier PostVerifier,
 	numWorkers int,
 	logger *zap.Logger,
-	opts ...NewOflloadingVerifierOpt,
+	opts ...OffloadingPostVerifierOpt,
 ) *OffloadingPostVerifier {
 	v := &OffloadingPostVerifier{
 		log:            logger,
 		workers:        make([]*postVerifierWorker, 0, numWorkers),
+		prioritized:    make(chan *verifyPostJob, numWorkers),
 		jobs:           make(chan *verifyPostJob, numWorkers),
 		stop:           make(chan struct{}),
 		verifier:       verifier,
@@ -169,11 +172,12 @@ func (v *OffloadingPostVerifier) scale(target int) {
 		// scale up
 		for i := len(v.workers); i < target; i++ {
 			w := &postVerifierWorker{
-				verifier: v.verifier,
-				log:      v.log.Named(fmt.Sprintf("worker-%d", len(v.workers))),
-				jobs:     v.jobs,
-				stop:     make(chan struct{}),
-				shutdown: v.stop,
+				verifier:    v.verifier,
+				log:         v.log.Named(fmt.Sprintf("worker-%d", len(v.workers))),
+				prioritized: v.prioritized,
+				jobs:        v.jobs,
+				stop:        make(chan struct{}),
+				shutdown:    v.stop,
 			}
 			v.workers = append(v.workers, w)
 			v.eg.Go(func() error { w.start(); return nil })
@@ -194,10 +198,6 @@ func (v *OffloadingPostVerifier) Verify(
 	m *shared.ProofMetadata,
 	opts ...verifying.OptionFunc,
 ) error {
-	if _, ok := v.prioritizedIds[types.BytesToNodeID(m.NodeId)]; ok {
-		v.log.Debug("prioritizing post verification", zap.Stringer("proof_node_id", types.BytesToNodeID(m.NodeId)))
-		return v.verifier.Verify(ctx, p, m, opts...)
-	}
 	job := &verifyPostJob{
 		ctx:      ctx,
 		proof:    p,
@@ -209,8 +209,18 @@ func (v *OffloadingPostVerifier) Verify(
 	metrics.PostVerificationQueue.Inc()
 	defer metrics.PostVerificationQueue.Dec()
 
+	var jobChannel chan<- *verifyPostJob
+	_, prioritize := v.prioritizedIds[types.BytesToNodeID(m.NodeId)]
+	switch {
+	case prioritize:
+		v.log.Debug("prioritizing post verification", zap.Stringer("proof_node_id", types.BytesToNodeID(m.NodeId)))
+		jobChannel = v.prioritized
+	default:
+		jobChannel = v.jobs
+	}
+
 	select {
-	case v.jobs <- job:
+	case jobChannel <- job:
 	case <-v.stop:
 		return fmt.Errorf("verifier is closed")
 	case <-ctx.Done():
@@ -247,13 +257,21 @@ func (w *postVerifierWorker) start() {
 	defer w.log.Info("stopped")
 
 	for {
+		// First try to process a prioritized job.
 		select {
-		case <-w.shutdown:
-			return
-		case <-w.stop:
-			return
-		case job := <-w.jobs:
+		case job := <-w.prioritized:
 			job.result <- w.verifier.Verify(job.ctx, job.proof, job.metadata, job.opts...)
+		default:
+			select {
+			case <-w.shutdown:
+				return
+			case <-w.stop:
+				return
+			case job := <-w.prioritized:
+				job.result <- w.verifier.Verify(job.ctx, job.proof, job.metadata, job.opts...)
+			case job := <-w.jobs:
+				job.result <- w.verifier.Verify(job.ctx, job.proof, job.metadata, job.opts...)
+			}
 		}
 	}
 }
