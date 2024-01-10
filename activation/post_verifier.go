@@ -31,9 +31,9 @@ type autoscaler struct {
 func newAutoscaler() (*autoscaler, error) {
 	sub, err := events.SubscribeMatched(func(t *events.UserEvent) bool {
 		switch t.Event.Details.(type) {
-		case (*pb.Event_PostStart):
+		case *pb.Event_PostStart:
 			return true
-		case (*pb.Event_PostComplete):
+		case *pb.Event_PostComplete:
 			return true
 		default:
 			return false
@@ -48,9 +48,9 @@ func (a autoscaler) run(stop chan struct{}, s scaler, min, target int) {
 		select {
 		case e := <-a.sub.Out():
 			switch e.Event.Details.(type) {
-			case (*pb.Event_PostStart):
+			case *pb.Event_PostStart:
 				s.scale(min)
-			case (*pb.Event_PostComplete):
+			case *pb.Event_PostComplete:
 				s.scale(target)
 			}
 		case <-stop:

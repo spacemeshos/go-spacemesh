@@ -24,6 +24,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 )
 
 const (
@@ -178,11 +179,12 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 		return err == nil
 	}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
 
+	db := localsql.InMemory()
 	nb, err := activation.NewNIPostBuilder(
+		db,
 		poetDb,
 		svc,
 		[]types.PoetServer{{Address: poetProver.RestURL().String()}},
-		t.TempDir(),
 		logger.Named("nipostBuilder"),
 		sig,
 		poetCfg,
@@ -193,7 +195,6 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	challenge := types.NIPostChallenge{
 		PublishEpoch: postGenesisEpoch + 2,
 	}
-
 	nipost, err := nb.BuildNIPost(context.Background(), &challenge)
 	require.NoError(t, err)
 
@@ -202,9 +203,9 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 		context.Background(),
 		sig.NodeID(),
 		goldenATX,
-		nipost,
+		nipost.NIPost,
 		challenge.Hash(),
-		opts.NumUnits,
+		nipost.NumUnits,
 	)
 	require.NoError(t, err)
 }
@@ -231,11 +232,12 @@ func TestNIPostBuilder_Close(t *testing.T) {
 
 	svc := grpcserver.NewPostService(logger)
 
+	db := localsql.InMemory()
 	nb, err := activation.NewNIPostBuilder(
+		db,
 		poetDb,
 		svc,
 		[]types.PoetServer{{Address: poetProver.RestURL().String()}},
-		t.TempDir(),
 		logger.Named("nipostBuilder"),
 		sig,
 		activation.PoetConfig{},
@@ -243,11 +245,11 @@ func TestNIPostBuilder_Close(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
 	challenge := types.NIPostChallenge{
 		PublishEpoch: postGenesisEpoch + 2,
 	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
 	nipost, err := nb.BuildNIPost(ctx, &challenge)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Nil(t, nipost)
@@ -300,11 +302,12 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
+	db := localsql.InMemory()
 	nb, err := activation.NewNIPostBuilder(
+		db,
 		poetDb,
 		svc,
 		[]types.PoetServer{{Address: poetProver.RestURL().String()}},
-		t.TempDir(),
 		logger.Named("nipostBuilder"),
 		sig,
 		poetCfg,
@@ -326,7 +329,6 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	challenge := types.NIPostChallenge{
 		PublishEpoch: postGenesisEpoch + 2,
 	}
-
 	nipost, err := nb.BuildNIPost(context.Background(), &challenge)
 	require.NoError(t, err)
 	require.NotNil(t, nipost)
@@ -340,9 +342,9 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 		context.Background(),
 		sig.NodeID(),
 		goldenATX,
-		nipost,
+		nipost.NIPost,
 		challenge.Hash(),
-		opts.NumUnits,
+		nipost.NumUnits,
 	)
 	require.NoError(t, err)
 }

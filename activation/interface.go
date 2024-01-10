@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/post/verifying"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
 
 //go:generate mockgen -typed -package=activation -destination=./mocks.go -source=./interface.go
@@ -71,8 +72,8 @@ type layerClock interface {
 }
 
 type nipostBuilder interface {
-	BuildNIPost(ctx context.Context, challenge *types.NIPostChallenge) (*types.NIPost, error)
-	DataDir() string
+	BuildNIPost(ctx context.Context, challenge *types.NIPostChallenge) (*nipost.NIPostState, error)
+	ResetState() error
 }
 
 type syncer interface {
@@ -119,9 +120,6 @@ type poetClient interface {
 		nodeID types.NodeID,
 		pow PoetPoW,
 	) (*types.PoetRound, error)
-
-	// PoetServiceID returns the public key of the PoET proving service.
-	PoetServiceID(ctx context.Context) types.PoetServiceID
 
 	// Proof returns the proof for the given round ID.
 	Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Member, error)

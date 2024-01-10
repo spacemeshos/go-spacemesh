@@ -1756,7 +1756,6 @@ func TestVestingWithVault(t *testing.T) {
 		end     = 4
 
 		vestingAccounts = 20 // number of funded vesting accounts
-		vaultAccounts   = 10 // number of funded vault accounts
 
 		// in the test below
 		// vesting with funds:  [0 : 20)

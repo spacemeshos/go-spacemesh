@@ -2,8 +2,6 @@ package types
 
 import (
 	"bytes"
-	"sort"
-	"strings"
 	"time"
 
 	"github.com/spacemeshos/go-scale"
@@ -61,15 +59,6 @@ func (id *TransactionID) DecodeScale(d *scale.Decoder) (int, error) {
 	return scale.DecodeByteArray(d, id[:])
 }
 
-// TxIdsField returns a list of loggable fields for a given list of IDs.
-func TxIdsField(ids []TransactionID) log.Field {
-	strs := []string{}
-	for _, a := range ids {
-		strs = append(strs, a.ShortString())
-	}
-	return log.String("tx_ids", strings.Join(strs, ", "))
-}
-
 // Transaction is an alias to RawTx.
 type Transaction struct {
 	RawTx
@@ -102,12 +91,6 @@ func ToTransactionIDs(txs []*Transaction) []TransactionID {
 	for _, tx := range txs {
 		ids = append(ids, tx.ID)
 	}
-	return ids
-}
-
-// SortTransactionIDs sorts a list of TransactionID in their lexicographic order, in-place.
-func SortTransactionIDs(ids []TransactionID) []TransactionID {
-	sort.Slice(ids, func(i, j int) bool { return ids[i].Compare(ids[j]) })
 	return ids
 }
 

@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
 	"sync"
 	"time"
 
@@ -253,12 +252,12 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 		if !deleteFiles {
 			return nil
 		}
-		if err := nipost.RemoveChallenge(b.localDB, b.signer.NodeID()); err != nil {
-			b.log.Error("failed to remove nipost challenge", zap.Error(err))
+		if err := b.nipostBuilder.ResetState(); err != nil {
+			b.log.Error("failed to delete builder state", zap.Error(err))
 			return err
 		}
-		if err := discardBuilderState(b.nipostBuilder.DataDir()); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			b.log.Error("failed to delete builder state", zap.Error(err))
+		if err := nipost.RemoveChallenge(b.localDB, b.signer.NodeID()); err != nil {
+			b.log.Error("failed to remove nipost challenge", zap.Error(err))
 			return err
 		}
 		return nil
@@ -341,7 +340,10 @@ func (b *Builder) run(ctx context.Context) {
 		switch {
 		case errors.Is(err, ErrATXChallengeExpired):
 			b.log.Debug("retrying with new challenge after waiting for a layer")
-			if err = nipost.RemoveChallenge(b.localDB, b.signer.NodeID()); err != nil {
+			if err := b.nipostBuilder.ResetState(); err != nil {
+				b.log.Error("failed to reset nipost builder state", zap.Error(err))
+			}
+			if err := nipost.RemoveChallenge(b.localDB, b.signer.NodeID()); err != nil {
 				b.log.Error("failed to discard challenge", zap.Error(err))
 			}
 			// give node some time to sync in case selecting the positioning ATX caused the challenge to expire
@@ -387,6 +389,9 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context) (*types.NIPostChalle
 		return nil, fmt.Errorf("get nipost challenge: %w", err)
 	case challenge.PublishEpoch < current:
 		// challenge is stale
+		if err := b.nipostBuilder.ResetState(); err != nil {
+			return nil, fmt.Errorf("reset nipost builder state: %w", err)
+		}
 		if err := nipost.RemoveChallenge(b.localDB, b.signer.NodeID()); err != nil {
 			return nil, fmt.Errorf("remove stale nipost challenge: %w", err)
 		}
@@ -519,6 +524,9 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 		}
 	}
 
+	if err := b.nipostBuilder.ResetState(); err != nil {
+		return fmt.Errorf("reset nipost builder state: %w", err)
+	}
 	if err := nipost.RemoveChallenge(b.localDB, b.signer.NodeID()); err != nil {
 		return fmt.Errorf("discarding challenge after published ATX: %w", err)
 	}
@@ -537,7 +545,7 @@ func (b *Builder) poetRoundStart(epoch types.EpochID) time.Time {
 func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChallenge) (*types.ActivationTx, error) {
 	pubEpoch := challenge.PublishEpoch
 
-	nipost, err := b.nipostBuilder.BuildNIPost(ctx, challenge)
+	nipostState, err := b.nipostBuilder.BuildNIPost(ctx, challenge)
 	if err != nil {
 		return nil, fmt.Errorf("build NIPost: %w", err)
 	}
@@ -562,29 +570,29 @@ func (b *Builder) createAtx(ctx context.Context, challenge *types.NIPostChalleng
 		return nil, fmt.Errorf("%w: atx publish epoch has passed during nipost construction", ErrATXChallengeExpired)
 	}
 
-	client, err := b.postService.Client(b.signer.NodeID())
-	if err != nil {
-		return nil, fmt.Errorf("get post client: %w", err)
-	}
-	info, err := client.Info(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("get post client info: %w", err)
-	}
-
 	var nonce *types.VRFPostIndex
 	var nodeID *types.NodeID
-	if challenge.PrevATXID == types.EmptyATXID {
+	switch {
+	case challenge.PrevATXID == types.EmptyATXID:
 		nodeID = new(types.NodeID)
 		*nodeID = b.signer.NodeID()
-		// TODO(mafa): put this into the nipost state so we don't have to query it again from the post service
-		nonce = info.Nonce
+		nonce = &nipostState.VRFNonce
+	default:
+		oldNonce, err := atxs.VRFNonce(b.cdb, b.signer.NodeID(), challenge.PublishEpoch)
+		if err != nil {
+			b.log.Warn("failed to get VRF nonce for ATX", zap.Error(err))
+			break
+		}
+		if nipostState.VRFNonce != oldNonce {
+			nonce = &nipostState.VRFNonce
+		}
 	}
 
 	atx := types.NewActivationTx(
 		*challenge,
 		b.Coinbase(),
-		nipost,
-		info.NumUnits,
+		nipostState.NIPost,
+		nipostState.NumUnits,
 		nonce,
 	)
 	atx.InnerActivationTx.NodeID = nodeID

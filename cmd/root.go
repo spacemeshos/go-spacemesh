@@ -22,7 +22,7 @@ func ResetConfig() {
 // AddCommands adds cobra commands to the app.
 func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringP("preset", "p", "",
-		fmt.Sprintf("preset overwrites default values of the config. options %+s", presets.Options()))
+		fmt.Sprintf("preset overwrites default values of the config. options %s", presets.Options()))
 
 	/** ======================== Checkpoint Flags ========================== **/
 	cmd.PersistentFlags().StringVar(&cfg.Recovery.Uri,

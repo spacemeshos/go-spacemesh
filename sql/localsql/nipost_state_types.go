@@ -1,6 +1,8 @@
-package types
+package localsql
 
-//go:generate scalegen -types NIPostBuilderState,PoetRequest,PoetServiceID
+import "github.com/spacemeshos/go-spacemesh/common/types"
+
+//go:generate scalegen
 
 type PoetServiceID struct {
 	ServiceID []byte `scale:"max=32"` // public key of the PoET service
@@ -9,19 +11,19 @@ type PoetServiceID struct {
 // PoetRequest describes an in-flight challenge submission for a poet proof.
 type PoetRequest struct {
 	// PoetRound is the round of the PoET proving service in which the PoET challenge was included in.
-	PoetRound *PoetRound
+	PoetRound *types.PoetRound
 	// PoetServiceID returns the public key of the PoET proving service.
 	PoetServiceID PoetServiceID
 }
 
 // NIPostBuilderState is a builder state.
 type NIPostBuilderState struct {
-	Challenge Hash32
+	Challenge types.Hash32
 
-	NIPost *NIPost
+	NIPost *types.NIPost
 
 	PoetRequests []PoetRequest `scale:"max=100"` // max number of poets a node connects to
 
 	// PoetProofRef is the root of the proof received from the PoET service.
-	PoetProofRef PoetProofRef
+	PoetProofRef types.PoetProofRef
 }

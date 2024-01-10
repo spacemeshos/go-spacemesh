@@ -43,7 +43,6 @@ const (
 	SuffixActiveSet = "as"
 	SuffixBootstrap = "bs"
 
-	httpTimeout   = 5 * time.Second
 	notifyTimeout = time.Second
 	schemaFile    = "schema.json"
 )
