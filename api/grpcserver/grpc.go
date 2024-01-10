@@ -58,53 +58,24 @@ func streamingGrpcLogStart(
 	return handler(srv, stream)
 }
 
-// NewPublic creates a new Server listening on the PublicListener address with the given logger and config.
+// NewWithServices creates a new Server listening on the provided address with the given logger and config.
 // Services passed in the svc slice are registered with the server.
-func NewPublic(logger *zap.Logger, config Config, svc []ServiceAPI) (*Server, error) {
+func NewWithServices(listener string, logger *zap.Logger, config Config, svc []ServiceAPI) (*Server, error) {
 	if len(svc) == 0 {
 		return nil, errors.New("no services to register")
 	}
 
-	server := New(config.PublicListener, logger, config)
-	for _, s := range svc {
-		s.RegisterService(server.GrpcServer)
-	}
-	return server, nil
-}
-
-// NewPrivate creates new Server listening on the PrivateListener address with the given logger and config.
-// Services passed in the svc slice are registered with the server.
-func NewPrivate(logger *zap.Logger, config Config, svc []ServiceAPI) (*Server, error) {
-	if len(svc) == 0 {
-		return nil, errors.New("no services to register")
-	}
-
-	server := New(config.PrivateListener, logger, config)
-	for _, s := range svc {
-		s.RegisterService(server.GrpcServer)
-	}
-	return server, nil
-}
-
-// NewLocal creates a new Server listening on the LocalListener address with the given logger and config.
-// Services passed in the svc slice are registered with the server.
-// Additionally the endpoint is checked to be in a private network range.
-func NewLocal(logger *zap.Logger, config Config, svc []ServiceAPI) (*Server, error) {
-	if len(svc) == 0 {
-		return nil, errors.New("no services to register")
-	}
-
-	// check if config.LocalListener IP is in private network range
-	host, _, err := net.SplitHostPort(config.LocalListener)
+	// check if listener IP is in private network range
+	host, _, err := net.SplitHostPort(listener)
 	if err != nil {
 		return nil, fmt.Errorf("split local listener: %w", err)
 	}
 	ip := net.ParseIP(host)
 	if !ip.IsPrivate() && !ip.IsLoopback() {
-		return nil, fmt.Errorf("local listener is not in private network range: %s", config.LocalListener)
+		logger.Warn("unsecured grpc server is listening on a public IP address", zap.String("address", listener))
 	}
 
-	server := New(config.LocalListener, logger, config)
+	server := New(listener, logger, config)
 	for _, s := range svc {
 		s.RegisterService(server.GrpcServer)
 	}

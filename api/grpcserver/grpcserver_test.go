@@ -24,7 +24,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
+	"go.uber.org/zap/zaptest/observer"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"
@@ -450,7 +453,7 @@ func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, epoch types.
 
 func launchServer(tb testing.TB, services ...ServiceAPI) (Config, func()) {
 	cfg := DefaultTestConfig()
-	grpcService, err := NewPublic(zaptest.NewLogger(tb).Named("grpc"), cfg, services)
+	grpcService, err := NewWithServices(cfg.PublicListener, zaptest.NewLogger(tb).Named("grpc"), cfg, services)
 	require.NoError(tb, err)
 
 	// start gRPC server
@@ -518,6 +521,9 @@ func TestNewLocalServer(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
+			observer, observedLogs := observer.New(zapcore.WarnLevel)
+			logger := zap.New(observer)
+
 			ctrl := gomock.NewController(t)
 			peerCounter := NewMockpeerCounter(ctrl)
 			meshApi := NewMockmeshAPI(ctrl)
@@ -525,11 +531,13 @@ func TestNewLocalServer(t *testing.T) {
 			syncer := NewMocksyncer(ctrl)
 
 			cfg := DefaultTestConfig()
-			cfg.LocalListener = tc.listener
+			cfg.PostListener = tc.listener
 			svc := NewNodeService(peerCounter, meshApi, genTime, syncer, "v0.0.0", "cafebabe")
-			grpcService, err := NewLocal(zaptest.NewLogger(t).Named("grpc"), cfg, []ServiceAPI{svc})
+			grpcService, err := NewWithServices(cfg.PostListener, logger, cfg, []ServiceAPI{svc})
 			if tc.expectErr {
-				require.ErrorContains(t, err, "not in private network range")
+				require.Equal(t, observedLogs.Len(), 1, "Expected a warning log")
+				require.Equal(t, observedLogs.All()[0].Message, "unsecured grpc server is listening on a public IP address")
+				require.Equal(t, observedLogs.All()[0].ContextMap()["address"], tc.listener)
 				return
 			}
 

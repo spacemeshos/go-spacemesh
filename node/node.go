@@ -340,7 +340,7 @@ type App struct {
 	localDB           *localsql.Database
 	grpcPublicServer  *grpcserver.Server
 	grpcPrivateServer *grpcserver.Server
-	grpcLocalServer   *grpcserver.Server
+	grpcPostServer    *grpcserver.Server
 	grpcTLSServer     *grpcserver.Server
 	jsonAPIServer     *grpcserver.JSONHTTPServer
 	grpcServices      map[grpcserver.Service]grpcserver.ServiceAPI
@@ -893,7 +893,7 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 	proposalBuilder.Register(app.edSgn)
 
-	host, port, err := net.SplitHostPort(app.Config.API.PrivateListener)
+	host, port, err := net.SplitHostPort(app.Config.API.PostListener)
 	if err != nil {
 		return fmt.Errorf("parse grpc-private-listener: %w", err)
 	}
@@ -1357,15 +1357,15 @@ func (app *App) startAPIServices(ctx context.Context) error {
 	grpczap.SetGrpcLoggerV2(grpclog, logger.Zap())
 
 	var (
-		public        = make(map[grpcserver.Service]grpcserver.ServiceAPI, len(app.Config.API.PublicServices))
-		private       = make(map[grpcserver.Service]grpcserver.ServiceAPI, len(app.Config.API.PrivateServices))
-		local         = make(map[grpcserver.Service]grpcserver.ServiceAPI, len(app.Config.API.LocalServices))
-		authenticated = make(map[grpcserver.Service]grpcserver.ServiceAPI, len(app.Config.API.TLSServices))
+		publicSvcs        = make(map[grpcserver.Service]grpcserver.ServiceAPI, len(app.Config.API.PublicServices))
+		privateSvcs       = make(map[grpcserver.Service]grpcserver.ServiceAPI, len(app.Config.API.PrivateServices))
+		postSvcs          = make(map[grpcserver.Service]grpcserver.ServiceAPI, len(app.Config.API.PostServices))
+		authenticatedSvcs = make(map[grpcserver.Service]grpcserver.ServiceAPI, len(app.Config.API.TLSServices))
 	)
 
 	// check services for uniques across all endpoints
 	for _, svc := range app.Config.API.PublicServices {
-		if _, exists := public[svc]; exists {
+		if _, exists := publicSvcs[svc]; exists {
 			return fmt.Errorf("can't start more than one %s on public grpc endpoint", svc)
 		}
 		gsvc, err := app.grpcService(svc, app.log)
@@ -1373,10 +1373,10 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			return err
 		}
 		logger.Info("registering public service %s", svc)
-		public[svc] = gsvc
+		publicSvcs[svc] = gsvc
 	}
 	for _, svc := range app.Config.API.PrivateServices {
-		if _, exists := private[svc]; exists {
+		if _, exists := privateSvcs[svc]; exists {
 			return fmt.Errorf("can't start more than one %s on private grpc endpoint", svc)
 		}
 		gsvc, err := app.grpcService(svc, app.log)
@@ -1384,21 +1384,21 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			return err
 		}
 		logger.Info("registering private service %s", svc)
-		private[svc] = gsvc
+		privateSvcs[svc] = gsvc
 	}
-	for _, svc := range app.Config.API.LocalServices {
-		if _, exists := local[svc]; exists {
-			return fmt.Errorf("can't start more than one %s on local grpc endpoint", svc)
+	for _, svc := range app.Config.API.PostServices {
+		if _, exists := postSvcs[svc]; exists {
+			return fmt.Errorf("can't start more than one %s on post grpc endpoint", svc)
 		}
 		gsvc, err := app.grpcService(svc, app.log)
 		if err != nil {
 			return err
 		}
 		logger.Info("registering local service %s", svc)
-		local[svc] = gsvc
+		postSvcs[svc] = gsvc
 	}
 	for _, svc := range app.Config.API.TLSServices {
-		if _, exists := authenticated[svc]; exists {
+		if _, exists := authenticatedSvcs[svc]; exists {
 			return fmt.Errorf("can't start more than one %s on authenticated grpc endpoint", svc)
 		}
 		gsvc, err := app.grpcService(svc, app.log)
@@ -1406,13 +1406,18 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			return err
 		}
 		logger.Info("registering authenticated service %s", svc)
-		authenticated[svc] = gsvc
+		authenticatedSvcs[svc] = gsvc
 	}
 
 	// start servers if at least one endpoint is defined for them
-	if len(public) > 0 {
+	if len(publicSvcs) > 0 {
 		var err error
-		app.grpcPublicServer, err = grpcserver.NewPublic(logger.Zap(), app.Config.API, maps.Values(public))
+		app.grpcPublicServer, err = grpcserver.NewWithServices(
+			app.Config.API.PublicListener,
+			logger.Zap(),
+			app.Config.API,
+			maps.Values(publicSvcs),
+		)
 		if err != nil {
 			return err
 		}
@@ -1420,9 +1425,14 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			return err
 		}
 	}
-	if len(private) > 0 {
+	if len(privateSvcs) > 0 {
 		var err error
-		app.grpcPrivateServer, err = grpcserver.NewPrivate(logger.Zap(), app.Config.API, maps.Values(private))
+		app.grpcPrivateServer, err = grpcserver.NewWithServices(
+			app.Config.API.PrivateListener,
+			logger.Zap(),
+			app.Config.API,
+			maps.Values(privateSvcs),
+		)
 		if err != nil {
 			return err
 		}
@@ -1430,20 +1440,25 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			return err
 		}
 	}
-	if len(local) > 0 && app.Config.API.LocalListener != "" {
+	if len(postSvcs) > 0 && app.Config.API.PostListener != "" {
 		var err error
-		app.grpcLocalServer, err = grpcserver.NewLocal(logger.Zap(), app.Config.API, maps.Values(local))
+		app.grpcPostServer, err = grpcserver.NewWithServices(
+			app.Config.API.PostListener,
+			logger.Zap(),
+			app.Config.API,
+			maps.Values(postSvcs),
+		)
 		if err != nil {
 			return err
 		}
-		if err := app.grpcLocalServer.Start(); err != nil {
+		if err := app.grpcPostServer.Start(); err != nil {
 			return err
 		}
 	}
 
-	if len(authenticated) > 0 && app.Config.API.TLSListener != "" {
+	if len(authenticatedSvcs) > 0 && app.Config.API.TLSListener != "" {
 		var err error
-		app.grpcTLSServer, err = grpcserver.NewTLS(logger.Zap(), app.Config.API, maps.Values(authenticated))
+		app.grpcTLSServer, err = grpcserver.NewTLS(logger.Zap(), app.Config.API, maps.Values(authenticatedSvcs))
 		if err != nil {
 			return err
 		}
@@ -1453,14 +1468,14 @@ func (app *App) startAPIServices(ctx context.Context) error {
 	}
 
 	if len(app.Config.API.JSONListener) > 0 {
-		if len(public) == 0 {
+		if len(publicSvcs) == 0 {
 			return fmt.Errorf("start json server without public services")
 		}
 		app.jsonAPIServer = grpcserver.NewJSONHTTPServer(
 			app.Config.API.JSONListener,
 			logger.Zap().Named("JSON"),
 		)
-		if err := app.jsonAPIServer.StartService(ctx, maps.Values(public)...); err != nil {
+		if err := app.jsonAPIServer.StartService(ctx, maps.Values(publicSvcs)...); err != nil {
 			return fmt.Errorf("start listen server: %w", err)
 		}
 	}
@@ -1481,6 +1496,10 @@ func (app *App) stopServices(ctx context.Context) {
 	if app.grpcPrivateServer != nil {
 		app.log.Info("stopping private grpc service")
 		app.grpcPrivateServer.Close() // err is always nil
+	}
+	if app.grpcPostServer != nil {
+		app.log.Info("stopping local grpc service")
+		app.grpcPostServer.Close() // err is always nil
 	}
 	if app.grpcTLSServer != nil {
 		app.log.Info("stopping tls grpc service")
