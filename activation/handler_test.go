@@ -1024,7 +1024,7 @@ func TestHandler_PublishesPostMalfeasanceProofs(t *testing.T) {
 	ch.InitialPost = &types.Post{}
 	nipost := newNIPostWithChallenge(t, types.HexToHash32("0x3333"), []byte{0x76, 0x45})
 
-	atx := newAtx(t, sig, ch, nipost, 100, types.GenerateAddress([]byte("aaaa")))
+	atx := newAtx(t, sig, ch, nipost.NIPost, 100, types.GenerateAddress([]byte("aaaa")))
 	atx.NodeID = &nodeID
 	vrfNonce := types.VRFPostIndex(0)
 	atx.VRFNonce = &vrfNonce

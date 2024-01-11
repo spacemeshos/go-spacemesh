@@ -328,8 +328,8 @@ func GetIDWithMaxHeight(db sql.Executor, pref types.NodeID, filter Filter) (type
 		filter = FilterAll
 	}
 	var (
-		rst types.ATXID
-		max uint64
+		rst     types.ATXID
+		highest uint64
 	)
 	dec := func(stmt *sql.Statement) bool {
 		var id types.ATXID
@@ -339,15 +339,15 @@ func GetIDWithMaxHeight(db sql.Executor, pref types.NodeID, filter Filter) (type
 		_ = epoch
 
 		switch {
-		case height < max:
+		case height < highest:
 			// Results are ordered by height, so we can stop once we see a lower height.
 			return false
-		case height > max && filter(id):
-			max = height
+		case height > highest && filter(id):
+			highest = height
 			rst = id
 			// We can stop on the first ATX if `pref` is empty.
 			return pref != types.EmptyNodeID
-		case height == max && filter(id):
+		case height == highest && filter(id):
 			// prefer atxs from `pref`
 			var smesher types.NodeID
 			stmt.ColumnBytes(2, smesher[:])
@@ -361,15 +361,18 @@ func GetIDWithMaxHeight(db sql.Executor, pref types.NodeID, filter Filter) (type
 		return true
 	}
 
-	if rows, err := db.Exec(`
+	_, err := db.Exec(`
 	SELECT id, base_tick_height + tick_count AS height, pubkey, epoch
 	FROM atxs LEFT JOIN identities using(pubkey)
 	WHERE identities.pubkey is null and epoch >= (select max(epoch) from atxs)-1
-	ORDER BY height DESC, epoch DESC;`, nil, dec); err != nil {
-		return types.ATXID{}, fmt.Errorf("select positioning atx: %w", err)
-	} else if rows == 0 {
-		return types.ATXID{}, sql.ErrNotFound
+	ORDER BY height DESC, epoch DESC;`, nil, dec)
+	switch {
+	case err != nil:
+		return types.ATXID{}, fmt.Errorf("selecting high-tick atx: %w", err)
+	case rst == types.EmptyATXID:
+		return types.ATXID{}, fmt.Errorf("selecting high-tick atx: %w", sql.ErrNotFound)
 	}
+
 	return rst, nil
 }
 
