@@ -95,12 +95,13 @@ const (
 	P2PLogger              = "p2p"
 	PostLogger             = "post"
 	PostServiceLogger      = "postService"
-	StateDbLogger          = "stateDbStore"
+	StateDbLogger          = "stateDb"
 	BeaconLogger           = "beacon"
 	CachedDBLogger         = "cachedDB"
 	PoetDbLogger           = "poetDb"
 	TrtlLogger             = "trtl"
 	ATXHandlerLogger       = "atxHandler"
+	ATXBuilderLogger       = "atxBuilder"
 	MeshLogger             = "mesh"
 	SyncLogger             = "sync"
 	HareOracleLogger       = "hareOracle"
@@ -940,7 +941,7 @@ func (app *App) initServices(ctx context.Context) error {
 		nipostBuilder,
 		app.clock,
 		newSyncer,
-		app.addLogger("atxBuilder", lg).Zap(),
+		app.addLogger(ATXBuilderLogger, lg).Zap(),
 		activation.WithContext(ctx),
 		activation.WithPoetConfig(app.Config.POET),
 		// TODO(dshulyak) makes no sense. how we ended using it?
