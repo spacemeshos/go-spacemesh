@@ -55,6 +55,10 @@ func MakePoetEndpoint(ith int) string {
 	return fmt.Sprintf("http://%s:%d", createPoetIdentifier(ith), poetPort)
 }
 
+func MakePoetGlobalEndpoint(testNamespace string, ith int) string {
+	return fmt.Sprintf("http://%s.%s:%d", createPoetIdentifier(ith), testNamespace, poetPort)
+}
+
 // Deterministically generate poet keys for given instance.
 func MakePoetKey(ith int) (ed25519.PublicKey, ed25519.PrivateKey) {
 	seed := make([]byte, ed25519.SeedSize)
@@ -170,8 +174,9 @@ func New(cctx *testcontext.Context, opts ...Opt) *Cluster {
 		bootstrapperFlags: map[string]DeploymentFlag{},
 		bootstrapEpochs:   []int{2},
 		genesisBalances:   map[string]uint64{},
+		genesis:           time.Now().Add(cctx.BootstrapDuration),
 	}
-	genesis := GenesisTime(time.Now().Add(cctx.BootstrapDuration))
+	genesis := GenesisTime(cluster.genesis)
 	cluster.addFlag(genesis)
 	cluster.addFlag(GenesisExtraData(defaultExtraData))
 	cluster.addFlag(MinPeers(minPeers(cctx.ClusterSize)))
@@ -195,6 +200,7 @@ type Cluster struct {
 
 	accounts
 	genesisBalances map[string]uint64
+	genesis         time.Time
 
 	bootnodes     int
 	smeshers      int
@@ -205,16 +211,28 @@ type Cluster struct {
 	bootstrapEpochs []int
 }
 
+func (c *Cluster) Genesis() time.Time {
+	return c.genesis
+}
+
+func (c *Cluster) GenesisExtraData() string {
+	return defaultExtraData
+}
+
 // GenesisID computes id from the configuration.
 func (c *Cluster) GenesisID() types.Hash20 {
+	return types.Hash32(c.GoldenATX()).ToHash20()
+}
+
+func (c *Cluster) GoldenATX() types.ATXID {
 	parsed, err := time.Parse(time.RFC3339, c.smesherFlags[genesisTimeFlag].Value)
 	if err != nil {
 		panic("invalid genesis time")
 	}
-	return types.Hash32(hash.Sum(
+	return types.ATXID(hash.Sum(
 		[]byte(strconv.FormatInt(parsed.Unix(), 10)),
 		[]byte(c.smesherFlags[genesisExtraData].Value),
-	)).ToHash20()
+	))
 }
 
 func (c *Cluster) nextSmesher() int {
@@ -497,7 +515,7 @@ func (c *Cluster) AddSmeshers(tctx *testcontext.Context, n int, opts ...Deployme
 		return err
 	}
 	flags := maps.Values(c.smesherFlags)
-	endpoints, err := extractP2PEndpoints(tctx, c.clients[:c.bootnodes])
+	endpoints, err := ExtractP2PEndpoints(tctx, c.clients[:c.bootnodes])
 	if err != nil {
 		return fmt.Errorf("extracting p2p endpoints %w", err)
 	}
@@ -757,7 +775,7 @@ func genSigner() *signer {
 	return &signer{Pub: pub, PK: pk}
 }
 
-func extractP2PEndpoints(tctx *testcontext.Context, nodes []*NodeClient) ([]string, error) {
+func ExtractP2PEndpoints(tctx *testcontext.Context, nodes []*NodeClient) ([]string, error) {
 	var (
 		rst          = make([]string, len(nodes))
 		rctx, cancel = context.WithTimeout(tctx, 5*time.Minute)
