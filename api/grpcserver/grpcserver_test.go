@@ -493,29 +493,29 @@ func TestNewServersConfig(t *testing.T) {
 
 func TestNewLocalServer(t *testing.T) {
 	tt := []struct {
-		name      string
-		listener  string
-		expectErr bool
+		name     string
+		listener string
+		warn     bool
 	}{
 		{
-			name:      "valid",
-			listener:  "192.168.1.1:1234",
-			expectErr: false,
+			name:     "valid",
+			listener: "192.168.1.1:1234",
+			warn:     false,
 		},
 		{
-			name:      "valid random port",
-			listener:  "10.0.0.1:0",
-			expectErr: false,
+			name:     "valid random port",
+			listener: "10.0.0.1:0",
+			warn:     false,
 		},
 		{
-			name:      "invalid",
-			listener:  "0.0.0.0:1234",
-			expectErr: true,
+			name:     "invalid",
+			listener: "0.0.0.0:1234",
+			warn:     true,
 		},
 		{
-			name:      "invalid random port",
-			listener:  "88.77.66.11:0",
-			expectErr: true,
+			name:     "invalid random port",
+			listener: "88.77.66.11:0",
+			warn:     true,
 		},
 	}
 
@@ -534,7 +534,7 @@ func TestNewLocalServer(t *testing.T) {
 			cfg.PostListener = tc.listener
 			svc := NewNodeService(peerCounter, meshApi, genTime, syncer, "v0.0.0", "cafebabe")
 			grpcService, err := NewWithServices(cfg.PostListener, logger, cfg, []ServiceAPI{svc})
-			if tc.expectErr {
+			if tc.warn {
 				require.Equal(t, observedLogs.Len(), 1, "Expected a warning log")
 				require.Equal(t, observedLogs.All()[0].Message, "unsecured grpc server is listening on a public IP address")
 				require.Equal(t, observedLogs.All()[0].ContextMap()["address"], tc.listener)
