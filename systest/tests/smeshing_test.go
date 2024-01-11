@@ -15,6 +15,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/protobuf/encoding/prototext"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
@@ -130,7 +131,25 @@ func requireEqualProposals(tb testing.TB, reference map[uint32][]*pb.Proposal, r
 			})
 		}
 		for layer, proposals := range reference {
-			require.Lenf(tb, included[layer], len(proposals), "client=%d layer=%d", i, layer)
+			if len(included[layer]) != len(proposals) {
+				includedStrs := make([]string, len(included[layer]))
+				for j, p := range included[layer] {
+					includedStrs[j] = fmt.Sprintf("%d-%s", j, prototext.MarshalOptions{Multiline: true, EmitASCII: true}.Format(p))
+				}
+				proposalsStrs := make([]string, len(proposals))
+				for j, p := range proposals {
+					proposalsStrs[j] = fmt.Sprintf("%d-%s", j, prototext.MarshalOptions{Multiline: true, EmitASCII: true}.Format(p))
+				}
+				require.FailNowf(
+					tb,
+					"len(included[layer]) != len(proposals)",
+					"%d != %d\nincluded:\n%v\n-----------\nall:\n%v",
+					len(included[layer]),
+					len(proposals),
+					includedStrs,
+					proposalsStrs,
+				)
+			}
 			for j := range proposals {
 				assert.Equalf(tb, proposals[j].Id, included[layer][j].Id, "client=%d layer=%d", i, layer)
 			}
