@@ -43,10 +43,6 @@ func launchPostSupervisor(
 	id := sig.NodeID()
 	goldenATXID := types.RandomATXID()
 
-	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
-	mgr, err := activation.NewPostSetupManager(id, postCfg, log.Named("post manager"), cdb, goldenATXID)
-	require.NoError(tb, err)
-
 	syncer := activation.NewMocksyncer(gomock.NewController(tb))
 	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
 		ch := make(chan struct{})
@@ -54,8 +50,12 @@ func launchPostSupervisor(
 		return ch
 	})
 
+	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
+	mgr, err := activation.NewPostSetupManager(id, postCfg, log.Named("post manager"), cdb, goldenATXID, syncer)
+	require.NoError(tb, err)
+
 	// start post supervisor
-	ps, err := activation.NewPostSupervisor(log, serviceCfg, postCfg, provingOpts, mgr, syncer)
+	ps, err := activation.NewPostSupervisor(log, serviceCfg, postCfg, provingOpts, mgr)
 	require.NoError(tb, err)
 	require.NotNil(tb, ps)
 	require.NoError(tb, ps.Start(postOpts))
@@ -83,10 +83,6 @@ func launchPostSupervisorTLS(
 	id := sig.NodeID()
 	goldenATXID := types.RandomATXID()
 
-	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
-	mgr, err := activation.NewPostSetupManager(id, postCfg, log.Named("post manager"), cdb, goldenATXID)
-	require.NoError(tb, err)
-
 	syncer := activation.NewMocksyncer(gomock.NewController(tb))
 	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
 		ch := make(chan struct{})
@@ -94,7 +90,11 @@ func launchPostSupervisorTLS(
 		return ch
 	})
 
-	ps, err := activation.NewPostSupervisor(log, serviceCfg, postCfg, provingOpts, mgr, syncer)
+	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
+	mgr, err := activation.NewPostSetupManager(id, postCfg, log.Named("post manager"), cdb, goldenATXID, syncer)
+	require.NoError(tb, err)
+
+	ps, err := activation.NewPostSupervisor(log, serviceCfg, postCfg, provingOpts, mgr)
 	require.NoError(tb, err)
 	require.NotNil(tb, ps)
 	require.NoError(tb, ps.Start(postOpts))
