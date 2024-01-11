@@ -298,15 +298,15 @@ type verifyChainOpts struct {
 
 type verifyChainOption func(*verifyChainOpts)
 
-// AssumeValidBefore configures the validator to assume that ATXs received before the given time are valid.
-func AssumeValidBefore(val time.Time) verifyChainOption {
+// assumeValidBefore configures the validator to assume that ATXs received before the given time are valid.
+func assumeValidBefore(val time.Time) verifyChainOption {
 	return func(o *verifyChainOpts) {
 		o.assumedValidTime = val
 	}
 }
 
-// WithTrustedID configures the validator to assume that ATXs created by the given node ID are valid.
-func WithTrustedID(val types.NodeID) verifyChainOption {
+// withTrustedID configures the validator to assume that ATXs created by the given node ID are valid.
+func withTrustedID(val types.NodeID) verifyChainOption {
 	return func(o *verifyChainOpts) {
 		o.trustedNodeID = val
 	}
@@ -322,6 +322,7 @@ func verifyChain(
 	log *zap.Logger,
 	opts ...verifyChainOption,
 ) error {
+	log.Info("verifying ATX chain", zap.Stringer("atx_id", id))
 	options := verifyChainOpts{}
 	for _, opt := range opts {
 		opt(&options)
@@ -344,12 +345,22 @@ func verifyChainWithOpts(
 
 	switch {
 	case atx.Validity() == types.Valid:
+		log.Debug("not verifying ATX chain", zap.Stringer("atx_id", id), zap.String("reason", "already verified"))
 		return nil
 	case atx.Validity() == types.Invalid:
+		log.Debug("not verifying ATX chain", zap.Stringer("atx_id", id), zap.String("reason", "invalid"))
 		return errors.Join(ErrInvalidChain, errors.New("atx is marked as invalid"))
 	case atx.Received().Before(opts.assumedValidTime):
+		log.Debug(
+			"not verifying ATX chain",
+			zap.Stringer("atx_id", id),
+			zap.String("reason", "assumed valid"),
+			zap.Time("received", atx.Received()),
+			zap.Time("valid_before", opts.assumedValidTime),
+		)
 		return nil
 	case atx.SmesherID == opts.trustedNodeID:
+		log.Debug("not verifying ATX chain", zap.Stringer("atx_id", id), zap.String("reason", "trusted"))
 		return nil
 	}
 

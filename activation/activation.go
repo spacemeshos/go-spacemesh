@@ -90,14 +90,15 @@ type Builder struct {
 	stop              context.CancelFunc
 	poetCfg           PoetConfig
 	poetRetryInterval time.Duration
-	atxValidityDelay  time.Duration // delay before an atx is considered valid (counting from the time it was received)
+	// delay before PoST in ATX is considered valid (counting from the time it was received)
+	postValidityDelay time.Duration
 }
 
 type BuilderOption func(*Builder)
 
-func WithAtxValidityDelay(delay time.Duration) BuilderOption {
+func WithPostValidityDelay(delay time.Duration) BuilderOption {
 	return func(b *Builder) {
-		b.atxValidityDelay = delay
+		b.postValidityDelay = delay
 	}
 }
 
@@ -157,6 +158,7 @@ func NewBuilder(
 		syncer:            syncer,
 		log:               log,
 		poetRetryInterval: defaultPoetRetryInterval,
+		postValidityDelay: 12 * time.Hour,
 	}
 	for _, opt := range opts {
 		opt(b)
@@ -622,8 +624,8 @@ func (b *Builder) getPositioningAtx(ctx context.Context) (types.ATXID, error) {
 		b.goldenATXID,
 		b.validator,
 		b.log,
-		AssumeValidBefore(time.Now().Add(-b.atxValidityDelay)),
-		WithTrustedID(b.signer.NodeID()),
+		assumeValidBefore(time.Now().Add(-b.postValidityDelay)),
+		withTrustedID(b.signer.NodeID()),
 	)
 	if errors.Is(err, sql.ErrNotFound) {
 		b.log.Info("using golden atx as positioning atx")

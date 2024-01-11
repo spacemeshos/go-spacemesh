@@ -610,7 +610,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		require.NoError(t, atxs.Add(db, vAtx))
 
 		v := NewMocknipostValidator(ctrl)
-		err = verifyChain(ctx, db, vAtx.ID(), goldenATXID, v, logger, WithTrustedID(signer.NodeID()))
+		err = verifyChain(ctx, db, vAtx.ID(), goldenATXID, v, logger, withTrustedID(signer.NodeID()))
 		require.NoError(t, err)
 	})
 
@@ -625,7 +625,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		require.NoError(t, atxs.Add(db, vAtx))
 
 		v := NewMocknipostValidator(ctrl)
-		err = verifyChain(ctx, db, vAtx.ID(), goldenATXID, v, logger, AssumeValidBefore(time.Now()))
+		err = verifyChain(ctx, db, vAtx.ID(), goldenATXID, v, logger, assumeValidBefore(time.Now()))
 		require.NoError(t, err)
 	})
 }

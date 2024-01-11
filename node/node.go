@@ -894,6 +894,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.addLogger(PostLogger, lg).Zap(),
 		app.cachedDB, goldenATXID,
 		app.validator,
+		activation.PostValidityDelay(app.Config.PostValidDelay),
 	)
 	if err != nil {
 		return fmt.Errorf("create post setup manager: %v", err)
@@ -946,7 +947,7 @@ func (app *App) initServices(ctx context.Context) error {
 		// TODO(dshulyak) makes no sense. how we ended using it?
 		activation.WithPoetRetryInterval(app.Config.HARE3.PreroundDelay),
 		activation.WithValidator(app.validator),
-		// TODO(poszu): configure activation.WithAtxValidityDelay() from the config
+		activation.WithPostValidityDelay(app.Config.PostValidDelay),
 	)
 
 	malfeasanceHandler := malfeasance.NewHandler(

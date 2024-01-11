@@ -180,6 +180,19 @@ type PostSetupManager struct {
 	lastOpts *PostSetupOpts              // the last options used to initiate a Post setup session.
 	state    PostSetupState              // state is the current state of the Post setup.
 	init     *initialization.Initializer // init is the current initializer instance.
+
+	// delay before PoST in ATX is considered valid (counting from the time it was received)
+	// used to decide whether to fully verify a candidate for commitment ATX
+	postValidityDelay time.Duration
+}
+
+type PostSetupManagerOpt func(*PostSetupManager)
+
+// PostValidityDelay sets the delay before PoST in ATX is considered valid.
+func PostValidityDelay(delay time.Duration) PostSetupManagerOpt {
+	return func(mgr *PostSetupManager) {
+		mgr.postValidityDelay = delay
+	}
 }
 
 // NewPostSetupManager creates a new instance of PostSetupManager.
@@ -190,6 +203,7 @@ func NewPostSetupManager(
 	db *datastore.CachedDB,
 	goldenATXID types.ATXID,
 	validator nipostValidator,
+	opts ...PostSetupManagerOpt,
 ) (*PostSetupManager, error) {
 	mgr := &PostSetupManager{
 		id:          id,
@@ -199,8 +213,12 @@ func NewPostSetupManager(
 		goldenATXID: goldenATXID,
 		state:       PostSetupStateNotStarted,
 		validator:   validator,
-	}
 
+		postValidityDelay: 12 * time.Hour,
+	}
+	for _, opt := range opts {
+		opt(mgr)
+	}
 	return mgr, nil
 }
 
@@ -369,8 +387,7 @@ func (mgr *PostSetupManager) findCommitmentAtx() (types.ATXID, error) {
 		mgr.goldenATXID,
 		mgr.validator,
 		mgr.logger,
-		// TODO(poszu): the duration could be configurable
-		AssumeValidBefore(time.Now().Add(-time.Hour*12)),
+		assumeValidBefore(time.Now().Add(-mgr.postValidityDelay)),
 	)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
