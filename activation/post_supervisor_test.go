@@ -4,7 +4,6 @@ import (
 	"errors"
 	"os"
 	"runtime"
-	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -51,16 +50,8 @@ func Test_PostSupervisor_StopWithoutStart(t *testing.T) {
 	require.NoError(t, ps.Stop(false))
 }
 
-type hookF func(*zapcore.CheckedEntry,  []zapcore.Field)
-func (f hookF) OnWrite(ce *zapcore.CheckedEntry, fields []zapcore.Field) {
-	f(ce, fields)
-}
-
 func Test_PostSupervisor_Start_FailPrepare(t *testing.T) {
-	fatalled := atomic.Bool{}
-	log := zaptest.NewLogger(t).WithOptions(zap.WithFatalHook(hookF(func(*zapcore.CheckedEntry,  []zapcore.Field) {
-		fatalled.Store(true)
-	})))
+	log := zaptest.NewLogger(t).WithOptions(zap.WithFatalHook(calledFatal(t)))
 
 	cmdCfg := DefaultTestPostServiceConfig()
 	postCfg := DefaultPostConfig()
@@ -76,7 +67,6 @@ func Test_PostSupervisor_Start_FailPrepare(t *testing.T) {
 	require.NotNil(t, ps)
 
 	require.NoError(t, ps.Start(postOpts))
-	require.Eventually(t, fatalled.Load, time.Second, time.Millisecond*100)
 	require.ErrorIs(t, ps.Stop(false), testErr)
 }
 
