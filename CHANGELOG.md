@@ -2,6 +2,13 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## Release v1.3.2
+
+### Improvements
+
+* [#5432](https://github.com/spacemeshos/go-spacemesh/pull/5419) Fixed a possible race that is caused by a node
+  processing the same bootstrapped active set twice.
+
 ## Release v1.3.1
 
 ### Improvements
