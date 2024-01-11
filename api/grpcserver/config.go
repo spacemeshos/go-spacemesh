@@ -24,7 +24,7 @@ type Config struct {
 	SmesherStreamInterval time.Duration
 }
 
-type Service string
+type Service = string
 
 const (
 	Admin       Service = "admin"
