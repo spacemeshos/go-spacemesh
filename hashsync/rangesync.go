@@ -47,7 +47,8 @@ type SyncMessage interface {
 	Y() Ordered
 	Fingerprint() any
 	Count() int
-	Items() []Ordered
+	Keys() []Ordered
+	Values() []any
 }
 
 func SyncMessageToString(m SyncMessage) string {
@@ -66,12 +67,15 @@ func SyncMessageToString(m SyncMessage) string {
 	if fp := m.Fingerprint(); fp != nil {
 		sb.WriteString(" FP=" + fp.(fmt.Stringer).String())
 	}
-	for _, item := range m.Items() {
-		sb.WriteString(" item=" + item.(fmt.Stringer).String())
+	vals := m.Values()
+	for n, k := range m.Keys() {
+		fmt.Fprintf(&sb, " item=[%s:%#v]", k.(fmt.Stringer).String(), vals[n])
 	}
 	sb.WriteString(">")
 	return sb.String()
 }
+
+type NewValueFunc func() any
 
 // Conduit handles receiving and sending peer messages
 type Conduit interface {
@@ -120,10 +124,13 @@ func WithItemChunkSize(n int) Option {
 type Iterator interface {
 	// Equal returns true if this iterator is equal to another Iterator
 	Equal(other Iterator) bool
-	// Key returns the key corresponding to iterator
+	// Key returns the key corresponding to iterator position. It returns
+	// nil if the ItemStore is empty
 	Key() Ordered
+	// Value returns the value corresponding to the iterator. It returns nil
+	// if the ItemStore is empty
+	Value() any
 	// Next advances the iterator
-	// TODO: should return bool
 	Next()
 }
 
@@ -134,8 +141,8 @@ type RangeInfo struct {
 }
 
 type ItemStore interface {
-	// Add adds a key to the store
-	Add(k Ordered)
+	// Add adds a key-value pair to the store
+	Add(k Ordered, v any)
 	// GetRangeInfo returns RangeInfo for the item range in the tree.
 	// If count >= 0, at most count items are returned, and RangeInfo
 	// is returned for the corresponding subrange of the requested range
@@ -146,6 +153,8 @@ type ItemStore interface {
 	// Max returns the iterator pointing at the maximum element
 	// in the store. If the store is empty, it returns nil
 	Max() Iterator
+	// New returns an empty payload value
+	New() any
 }
 
 type RangeSetReconciler struct {
@@ -372,8 +381,9 @@ func (rsr *RangeSetReconciler) Process(c Conduit) (done bool, err error) {
 	done = true
 	for _, msg := range msgs {
 		if msg.Type() == MessageTypeItemBatch {
-			for _, item := range msg.Items() {
-				rsr.is.Add(item)
+			vals := msg.Values()
+			for n, k := range msg.Keys() {
+				rsr.is.Add(k, vals[n])
 			}
 			continue
 		}

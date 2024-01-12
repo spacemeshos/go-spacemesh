@@ -5,6 +5,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/spacemeshos/go-scale"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -29,14 +30,22 @@ func TestHash32To12Xor(t *testing.T) {
 	require.Equal(t, m.Op(m.Op(fp1, fp2), fp3), m.Op(fp1, m.Op(fp2, fp3)))
 }
 
-func collectStoreItems[T Ordered](is ItemStore) (r []T) {
+type pair[K any, V any] struct {
+	k K
+	v V
+}
+
+func collectStoreItems[K Ordered, V any](is ItemStore) (r []pair[K, V]) {
 	it := is.Min()
 	if it == nil {
 		return nil
 	}
 	endAt := is.Min()
 	for {
-		r = append(r, it.Key().(T))
+		r = append(r, pair[K, V]{
+			k: it.Key().(K),
+			v: it.Value().(V),
+		})
 		it.Next()
 		if it.Equal(endAt) {
 			return r
@@ -50,11 +59,11 @@ type catchTransferTwice struct {
 	added map[types.Hash32]bool
 }
 
-func (s *catchTransferTwice) Add(k Ordered) {
+func (s *catchTransferTwice) Add(k Ordered, v any) {
 	h := k.(types.Hash32)
 	_, found := s.added[h]
 	assert.False(s.t, found, "hash sent twice")
-	s.ItemStore.Add(k)
+	s.ItemStore.Add(k, v)
 	if s.added == nil {
 		s.added = make(map[types.Hash32]bool)
 	}
@@ -70,7 +79,31 @@ type xorSyncTestConfig struct {
 	maxNumSpecificB int
 }
 
-func verifyXORSync(t *testing.T, cfg xorSyncTestConfig, sync func(syncA, syncB *RangeSetReconciler, numSpecific int)) {
+type fakeValue struct {
+	v string
+}
+
+var _ scale.Decodable = &fakeValue{}
+var _ scale.Encodable = &fakeValue{}
+
+func mkFakeValue(h types.Hash32) *fakeValue {
+	return &fakeValue{v: h.String()}
+}
+
+func (fv *fakeValue) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	s, total, err := scale.DecodeString(dec)
+	fv.v = s
+	return total, err
+}
+
+func (fv *fakeValue) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	return scale.EncodeString(enc, fv.v)
+}
+
+func verifyXORSync(t *testing.T, cfg xorSyncTestConfig, sync func(storeA, storeB ItemStore, numSpecific int, opts []Option)) {
+	opts := []Option{
+		WithMaxSendRange(cfg.maxSendRange),
+	}
 	numSpecificA := rand.Intn(cfg.maxNumSpecificA+1-cfg.minNumSpecificA) + cfg.minNumSpecificA
 	numSpecificB := rand.Intn(cfg.maxNumSpecificB+1-cfg.minNumSpecificB) + cfg.minNumSpecificB
 	src := make([]types.Hash32, cfg.numTestHashes)
@@ -79,32 +112,37 @@ func verifyXORSync(t *testing.T, cfg xorSyncTestConfig, sync func(syncA, syncB *
 	}
 
 	sliceA := src[:cfg.numTestHashes-numSpecificB]
-	storeA := NewSyncTreeStore(Hash32To12Xor{})
+	storeA := NewSyncTreeStore(Hash32To12Xor{}, nil, func() any { return new(fakeValue) })
 	for _, h := range sliceA {
-		storeA.Add(h)
+		storeA.Add(h, mkFakeValue(h))
 	}
 	storeA = &catchTransferTwice{t: t, ItemStore: storeA}
-	syncA := NewRangeSetReconciler(storeA, WithMaxSendRange(cfg.maxSendRange))
 
 	sliceB := append([]types.Hash32(nil), src[:cfg.numTestHashes-numSpecificB-numSpecificA]...)
 	sliceB = append(sliceB, src[cfg.numTestHashes-numSpecificB:]...)
-	storeB := NewSyncTreeStore(Hash32To12Xor{})
+	storeB := NewSyncTreeStore(Hash32To12Xor{}, nil, func() any { return new(fakeValue) })
 	for _, h := range sliceB {
-		storeB.Add(h)
+		storeB.Add(h, mkFakeValue(h))
 	}
 	storeB = &catchTransferTwice{t: t, ItemStore: storeB}
-	syncB := NewRangeSetReconciler(storeB, WithMaxSendRange(cfg.maxSendRange))
 
 	slices.SortFunc(src, func(a, b types.Hash32) int {
 		return a.Compare(b)
 	})
 
-	sync(syncA, syncB, numSpecificA+numSpecificB)
+	sync(storeA, storeB, numSpecificA+numSpecificB, opts)
 
-	itemsA := collectStoreItems[types.Hash32](storeA)
-	itemsB := collectStoreItems[types.Hash32](storeB)
+	itemsA := collectStoreItems[types.Hash32, *fakeValue](storeA)
+	itemsB := collectStoreItems[types.Hash32, *fakeValue](storeB)
 	require.Equal(t, itemsA, itemsB)
-	require.Equal(t, src, itemsA)
+	srcPairs := make([]pair[types.Hash32, *fakeValue], len(src))
+	for n, h := range src {
+		srcPairs[n] = pair[types.Hash32, *fakeValue]{
+			k: h,
+			v: mkFakeValue(h),
+		}
+	}
+	require.Equal(t, srcPairs, itemsA)
 }
 
 func TestBigSyncHash32(t *testing.T) {
@@ -116,7 +154,9 @@ func TestBigSyncHash32(t *testing.T) {
 		minNumSpecificB: 4,
 		maxNumSpecificB: 100,
 	}
-	verifyXORSync(t, cfg, func(syncA, syncB *RangeSetReconciler, numSpecific int) {
+	verifyXORSync(t, cfg, func(storeA, storeB ItemStore, numSpecific int, opts []Option) {
+		syncA := NewRangeSetReconciler(storeA, opts...)
+		syncB := NewRangeSetReconciler(storeB, opts...)
 		nRounds, nMsg, nItems := runSync(t, syncA, syncB, 100)
 		itemCoef := float64(nItems) / float64(numSpecific)
 		t.Logf("numSpecific: %d, nRounds: %d, nMsg: %d, nItems: %d, itemCoef: %.2f",

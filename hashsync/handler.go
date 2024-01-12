@@ -14,6 +14,69 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 )
 
+type sendable interface {
+	codec.Encodable
+	Type() MessageType
+}
+
+type decodedItemBatchMessage struct {
+	ContentKeys   []types.Hash32
+	ContentValues []any
+}
+
+var _ SyncMessage = &decodedItemBatchMessage{}
+
+func (m *decodedItemBatchMessage) Type() MessageType { return MessageTypeItemBatch }
+func (m *decodedItemBatchMessage) X() Ordered        { return nil }
+func (m *decodedItemBatchMessage) Y() Ordered        { return nil }
+func (m *decodedItemBatchMessage) Fingerprint() any  { return nil }
+func (m *decodedItemBatchMessage) Count() int        { return 0 }
+func (m *decodedItemBatchMessage) Keys() []Ordered {
+	r := make([]Ordered, len(m.ContentKeys))
+	for n, k := range m.ContentKeys {
+		r[n] = k
+	}
+	return r
+}
+func (m *decodedItemBatchMessage) Values() []any {
+	r := make([]any, len(m.ContentValues))
+	for n, v := range m.ContentValues {
+		r[n] = v
+	}
+	return r
+}
+
+func (m *decodedItemBatchMessage) encode() (*ItemBatchMessage, error) {
+	var b bytes.Buffer
+	for _, v := range m.ContentValues {
+		_, err := codec.EncodeTo(&b, v.(codec.Encodable))
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &ItemBatchMessage{
+		ContentKeys:   m.ContentKeys,
+		ContentValues: b.Bytes(),
+	}, nil
+}
+
+func decodeItemBatchMessage(m *ItemBatchMessage, newValue NewValueFunc) (*decodedItemBatchMessage, error) {
+	d := &decodedItemBatchMessage{ContentKeys: m.ContentKeys}
+	b := bytes.NewBuffer(m.ContentValues)
+	for b.Len() != 0 {
+		v := newValue().(codec.Decodable)
+		if _, err := codec.DecodeFrom(b, v); err != nil {
+			return nil, err
+		}
+		d.ContentValues = append(d.ContentValues, v)
+	}
+	if len(d.ContentValues) != len(d.ContentKeys) {
+		return nil, fmt.Errorf("mismatched key / value counts: %d / %d",
+			len(d.ContentKeys), len(d.ContentValues))
+	}
+	return d, nil
+}
+
 type outboundMessage struct {
 	code MessageType // TODO: "mt"
 	msg  codec.Encodable
@@ -25,6 +88,7 @@ type wireConduit struct {
 	i           server.Interactor
 	pendingMsgs []SyncMessage
 	initReqBuf  *bytes.Buffer
+	newValue    NewValueFunc
 	// rmmePrint   bool
 }
 
@@ -69,7 +133,11 @@ func (c *wireConduit) receive() (msgs []SyncMessage, err error) {
 			if _, err := codec.DecodeFrom(b, &m); err != nil {
 				return nil, err
 			}
-			msgs = append(msgs, &m)
+			dm, err := decodeItemBatchMessage(&m, c.newValue)
+			if err != nil {
+				return nil, err
+			}
+			msgs = append(msgs, dm)
 		case MessageTypeEmptySet:
 			msgs = append(msgs, &EmptySetMessage{})
 		case MessageTypeEmptyRange:
@@ -96,13 +164,13 @@ func (c *wireConduit) receive() (msgs []SyncMessage, err error) {
 	}
 }
 
-func (c *wireConduit) send(m SyncMessage) error {
+func (c *wireConduit) send(m sendable) error {
 	// fmt.Fprintf(os.Stderr, "QQQQQ: wireConduit: sending %s m %#v\n", m.Type(), m)
 	msg := []byte{byte(m.Type())}
 	// if c.rmmePrint {
 	// 	fmt.Fprintf(os.Stderr, "QQQQQ: send: %s\n", SyncMessageToString(m))
 	// }
-	encoded, err := codec.Encode(m.(codec.Encodable))
+	encoded, err := codec.Encode(m)
 	if err != nil {
 		return fmt.Errorf("error encoding %T: %w", m, err)
 	}
@@ -170,17 +238,22 @@ func (c *wireConduit) SendRangeContents(x Ordered, y Ordered, count int) error {
 
 func (c *wireConduit) SendItems(count, itemChunkSize int, it Iterator) error {
 	for i := 0; i < count; i += itemChunkSize {
-		var msg ItemBatchMessage
+		var msg decodedItemBatchMessage
 		n := min(itemChunkSize, count-i)
 		for n > 0 {
 			if it.Key() == nil {
 				panic("fakeConduit.SendItems: went got to the end of the tree")
 			}
-			msg.Contents = append(msg.Contents, it.Key().(types.Hash32))
+			msg.ContentKeys = append(msg.ContentKeys, it.Key().(types.Hash32))
+			msg.ContentValues = append(msg.ContentValues, it.Value())
 			it.Next()
 			n--
 		}
-		if err := c.send(&msg); err != nil {
+		encoded, err := msg.encode()
+		if err != nil {
+			return err
+		}
+		if err := c.send(encoded); err != nil {
 			return err
 		}
 	}
@@ -229,16 +302,18 @@ func makeHandler(rsr *RangeSetReconciler, c *wireConduit, done chan struct{}) se
 	}
 }
 
-func MakeServerHandler(rsr *RangeSetReconciler) server.InteractiveHandler {
+func MakeServerHandler(is ItemStore, opts ...Option) server.InteractiveHandler {
 	return func(ctx context.Context, i server.Interactor) (time.Duration, error) {
-		var c wireConduit
+		c := wireConduit{newValue: is.New}
+		rsr := NewRangeSetReconciler(is, opts...)
 		h := makeHandler(rsr, &c, nil)
 		return h(ctx, i)
 	}
 }
 
-func SyncStore(ctx context.Context, r requester, peer p2p.Peer, rsr *RangeSetReconciler) error {
-	var c wireConduit
+func SyncStore(ctx context.Context, r requester, peer p2p.Peer, is ItemStore, opts ...Option) error {
+	c := wireConduit{newValue: is.New}
+	rsr := NewRangeSetReconciler(is, opts...)
 	// c.rmmePrint = true
 	initReq, err := c.withInitialRequest(rsr.Initiate)
 	if err != nil {
@@ -261,9 +336,7 @@ func SyncStore(ctx context.Context, r requester, peer p2p.Peer, rsr *RangeSetRec
 	}
 }
 
-// TODO: HashSyncer object (SyncStore, also server handler, implementing ServerHandler)
-// TODO: HashSyncer options instead of itemChunkSize (WithItemChunkSize, WithMaxSendRange)
-// TODO: duration
+// TODO: request duration
 // TODO: validate counts
 // TODO: don't forget about Initiate!!!
 // TBD: use MessageType instead of byte

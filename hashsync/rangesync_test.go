@@ -11,21 +11,23 @@ import (
 )
 
 type rangeMessage struct {
-	mtype MessageType
-	x, y  Ordered
-	fp    any
-	count int
-	items []Ordered
+	mtype  MessageType
+	x, y   Ordered
+	fp     any
+	count  int
+	keys   []Ordered
+	values []any
 }
+
+var _ SyncMessage = rangeMessage{}
 
 func (m rangeMessage) Type() MessageType { return m.mtype }
 func (m rangeMessage) X() Ordered        { return m.x }
 func (m rangeMessage) Y() Ordered        { return m.y }
 func (m rangeMessage) Fingerprint() any  { return m.fp }
 func (m rangeMessage) Count() int        { return m.count }
-func (m rangeMessage) Items() []Ordered  { return m.items }
-
-var _ SyncMessage = rangeMessage{}
+func (m rangeMessage) Keys() []Ordered   { return m.keys }
+func (m rangeMessage) Values() []any     { return m.values }
 
 func (m rangeMessage) String() string {
 	return SyncMessageToString(m)
@@ -42,7 +44,7 @@ var _ Conduit = &fakeConduit{}
 func (fc *fakeConduit) numItems() int {
 	n := 0
 	for _, m := range fc.msgs {
-		n += len(m.Items())
+		n += len(m.Keys())
 	}
 	return n
 }
@@ -115,7 +117,8 @@ func (fc *fakeConduit) SendItems(count, itemChunkSize int, it Iterator) error {
 			if it.Key() == nil {
 				panic("fakeConduit.SendItems: went got to the end of the tree")
 			}
-			msg.items = append(msg.items, it.Key())
+			msg.keys = append(msg.keys, it.Key())
+			msg.values = append(msg.values, it.Value())
 			it.Next()
 			n--
 		}
@@ -150,56 +153,70 @@ func (it *dumbStoreIterator) Equal(other Iterator) bool {
 }
 
 func (it *dumbStoreIterator) Key() Ordered {
-	return it.ds.items[it.n]
+	return it.ds.keys[it.n]
+}
+
+func (it *dumbStoreIterator) Value() any {
+	if len(it.ds.keys) == 0 {
+		return nil
+	}
+	return it.ds.m[it.Key().(sampleID)]
 }
 
 func (it *dumbStoreIterator) Next() {
-	if len(it.ds.items) != 0 {
-		it.n = (it.n + 1) % len(it.ds.items)
+	if len(it.ds.keys) != 0 {
+		it.n = (it.n + 1) % len(it.ds.keys)
 	}
 }
 
 type dumbStore struct {
-	items []sampleID
+	keys []sampleID
+	m    map[sampleID]any
 }
 
 var _ ItemStore = &dumbStore{}
 
-func (ds *dumbStore) Add(k Ordered) {
+func (ds *dumbStore) Add(k Ordered, v any) {
+	if ds.m == nil {
+		ds.m = make(map[sampleID]any)
+	}
 	id := k.(sampleID)
-	if len(ds.items) == 0 {
-		ds.items = []sampleID{id}
+	if len(ds.keys) == 0 {
+		ds.keys = []sampleID{id}
+		ds.m[id] = v
 		return
 	}
-	p := slices.IndexFunc(ds.items, func(other sampleID) bool {
+	p := slices.IndexFunc(ds.keys, func(other sampleID) bool {
 		return other >= id
 	})
 	switch {
 	case p < 0:
-		ds.items = append(ds.items, id)
-	case id == ds.items[p]:
+		ds.keys = append(ds.keys, id)
+		ds.m[id] = v
+	case id == ds.keys[p]:
 		// already present
 	default:
-		ds.items = slices.Insert(ds.items, p, id)
+		ds.keys = slices.Insert(ds.keys, p, id)
+		ds.m[id] = v
 	}
 }
 
 func (ds *dumbStore) iter(n int) Iterator {
-	if n == -1 || n == len(ds.items) {
+	if n == -1 || n == len(ds.keys) {
 		return nil
 	}
 	return &dumbStoreIterator{ds: ds, n: n}
 }
 
 func (ds *dumbStore) last() sampleID {
-	if len(ds.items) == 0 {
+	if len(ds.keys) == 0 {
 		panic("can't get the last element: zero items")
 	}
-	return ds.items[len(ds.items)-1]
+	return ds.keys[len(ds.keys)-1]
 }
 
 func (ds *dumbStore) iterFor(s sampleID) Iterator {
-	n := slices.Index(ds.items, s)
+	n := slices.Index(ds.keys, s)
 	if n == -1 {
 		panic("item not found: " + s)
 	}
@@ -229,7 +246,7 @@ func (ds *dumbStore) GetRangeInfo(preceding Iterator, x, y Ordered, count int) R
 }
 
 func (ds *dumbStore) Min() Iterator {
-	if len(ds.items) == 0 {
+	if len(ds.keys) == 0 {
 		return nil
 	}
 	return &dumbStoreIterator{
@@ -239,13 +256,17 @@ func (ds *dumbStore) Min() Iterator {
 }
 
 func (ds *dumbStore) Max() Iterator {
-	if len(ds.items) == 0 {
+	if len(ds.keys) == 0 {
 		return nil
 	}
 	return &dumbStoreIterator{
 		ds: ds,
-		n:  len(ds.items) - 1,
+		n:  len(ds.keys) - 1,
 	}
+}
+
+func (it *dumbStore) New() any {
+	panic("not implemented")
 }
 
 type verifiedStoreIterator struct {
@@ -274,6 +295,13 @@ func (it verifiedStoreIterator) Key() Ordered {
 	return k2
 }
 
+func (it verifiedStoreIterator) Value() any {
+	v1 := it.knownGood.Value()
+	v2 := it.it.Value()
+	assert.Equal(it.t, v1, v2, "values")
+	return v2
+}
+
 func (it verifiedStoreIterator) Next() {
 	it.knownGood.Next()
 	it.it.Next()
@@ -296,7 +324,7 @@ func disableReAdd(s ItemStore) {
 	}
 }
 
-func (vs *verifiedStore) Add(k Ordered) {
+func (vs *verifiedStore) Add(k Ordered, v any) {
 	if vs.disableReAdd {
 		_, found := vs.added[k.(sampleID)]
 		require.False(vs.t, found, "hash sent twice: %v", k)
@@ -305,8 +333,8 @@ func (vs *verifiedStore) Add(k Ordered) {
 		}
 		vs.added[k.(sampleID)] = struct{}{}
 	}
-	vs.knownGood.Add(k)
-	vs.store.Add(k)
+	vs.knownGood.Add(k, v)
+	vs.store.Add(k, v)
 }
 
 func (vs *verifiedStore) GetRangeInfo(preceding Iterator, x, y Ordered, count int) RangeInfo {
@@ -358,7 +386,7 @@ func (vs *verifiedStore) GetRangeInfo(preceding Iterator, x, y Ordered, count in
 
 func (vs *verifiedStore) Min() Iterator {
 	m1 := vs.knownGood.Min()
-	m2 := vs.knownGood.Min()
+	m2 := vs.store.Min()
 	if m1 == nil {
 		require.Nil(vs.t, m2, "Min")
 		return nil
@@ -375,7 +403,7 @@ func (vs *verifiedStore) Min() Iterator {
 
 func (vs *verifiedStore) Max() Iterator {
 	m1 := vs.knownGood.Max()
-	m2 := vs.knownGood.Max()
+	m2 := vs.store.Max()
 	if m1 == nil {
 		require.Nil(vs.t, m2, "Max")
 		return nil
@@ -390,6 +418,13 @@ func (vs *verifiedStore) Max() Iterator {
 	}
 }
 
+func (vs *verifiedStore) New() any {
+	v1 := vs.knownGood.New()
+	v2 := vs.store.New()
+	require.Equal(vs.t, v1, v2, "New")
+	return v2
+}
+
 type storeFactory func(t *testing.T) ItemStore
 
 func makeDumbStore(t *testing.T) ItemStore {
@@ -397,7 +432,10 @@ func makeDumbStore(t *testing.T) ItemStore {
 }
 
 func makeSyncTreeStore(t *testing.T) ItemStore {
-	return NewSyncTreeStore(sampleMonoid{})
+	return NewSyncTreeStore(sampleMonoid{}, nil, func() any {
+		// newValue func is only called by wireConduit
+		panic("not implemented")
+	})
 }
 
 func makeVerifiedSyncTreeStore(t *testing.T) ItemStore {
@@ -411,7 +449,7 @@ func makeVerifiedSyncTreeStore(t *testing.T) ItemStore {
 func makeStore(t *testing.T, f storeFactory, items string) ItemStore {
 	s := f(t)
 	for _, c := range items {
-		s.Add(sampleID(c))
+		s.Add(sampleID(c), "<c>")
 	}
 	return s
 }

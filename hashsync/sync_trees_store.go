@@ -1,8 +1,24 @@
 package hashsync
 
+type ValueHandler interface {
+	Load(k Ordered, treeValue any) (v any)
+	Store(k Ordered, v any) (treeValue any)
+}
+
+type defaultValueHandler struct{}
+
+func (vh defaultValueHandler) Load(k Ordered, treeValue any) (v any) {
+	return treeValue
+}
+
+func (vh defaultValueHandler) Store(k Ordered, v any) (treeValue any) {
+	return v
+}
+
 type syncTreeIterator struct {
 	st  SyncTree
 	ptr SyncTreePointer
+	vh  ValueHandler
 }
 
 var _ Iterator = &syncTreeIterator{}
@@ -19,6 +35,10 @@ func (it *syncTreeIterator) Key() Ordered {
 	return it.ptr.Key()
 }
 
+func (it *syncTreeIterator) Value() any {
+	return it.vh.Load(it.ptr.Key(), it.ptr.Value())
+}
+
 func (it *syncTreeIterator) Next() {
 	it.ptr.Next()
 	if it.ptr.Key() == nil {
@@ -27,20 +47,28 @@ func (it *syncTreeIterator) Next() {
 }
 
 type SyncTreeStore struct {
-	st SyncTree
+	st       SyncTree
+	vh       ValueHandler
+	newValue NewValueFunc
 }
 
 var _ ItemStore = &SyncTreeStore{}
 
-func NewSyncTreeStore(m Monoid) ItemStore {
+func NewSyncTreeStore(m Monoid, vh ValueHandler, newValue NewValueFunc) ItemStore {
+	if vh == nil {
+		vh = defaultValueHandler{}
+	}
 	return &SyncTreeStore{
-		st: NewSyncTree(CombineMonoids(m, CountingMonoid{})),
+		st:       NewSyncTree(CombineMonoids(m, CountingMonoid{})),
+		vh:       vh,
+		newValue: newValue,
 	}
 }
 
 // Add implements ItemStore.
-func (sts *SyncTreeStore) Add(k Ordered) {
-	sts.st.Add(k)
+func (sts *SyncTreeStore) Add(k Ordered, v any) {
+	treeValue := sts.vh.Store(k, v)
+	sts.st.Set(k, treeValue)
 }
 
 func (sts *SyncTreeStore) iter(ptr SyncTreePointer) Iterator {
@@ -50,6 +78,7 @@ func (sts *SyncTreeStore) iter(ptr SyncTreePointer) Iterator {
 	return &syncTreeIterator{
 		st:  sts.st,
 		ptr: ptr,
+		vh:  sts.vh,
 	}
 }
 
@@ -87,4 +116,9 @@ func (sts *SyncTreeStore) Min() Iterator {
 // Max implements ItemStore.
 func (sts *SyncTreeStore) Max() Iterator {
 	return sts.iter(sts.st.Max())
+}
+
+// New implements ItemStore.
+func (sts *SyncTreeStore) New() any {
+	return sts.newValue()
 }

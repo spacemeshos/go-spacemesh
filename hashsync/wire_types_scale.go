@@ -236,7 +236,14 @@ func (t *RangeContentsMessage) DecodeScale(dec *scale.Decoder) (total int, err e
 
 func (t *ItemBatchMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.Contents, 1024)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.ContentKeys, 1024)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.ContentValues, 1024)
 		if err != nil {
 			return total, err
 		}
@@ -252,7 +259,15 @@ func (t *ItemBatchMessage) DecodeScale(dec *scale.Decoder) (total int, err error
 			return total, err
 		}
 		total += n
-		t.Contents = field
+		t.ContentKeys = field
+	}
+	{
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 1024)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.ContentValues = field
 	}
 	return total, nil
 }

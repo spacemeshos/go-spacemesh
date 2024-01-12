@@ -185,6 +185,14 @@ func (it *sliceIterator) Key() Ordered {
 	return nil
 }
 
+func (it *sliceIterator) Value() any {
+	k := it.Key()
+	if k == nil {
+		return nil
+	}
+	return mkFakeValue(k.(types.Hash32))
+}
+
 func (it *sliceIterator) Next() {
 	if len(it.s) != 0 {
 		it.s = it.s[1:]
@@ -260,7 +268,7 @@ func (r *fakeRound) handleConversation(t *testing.T, c *wireConduit) error {
 	return nil
 }
 
-func makeTestHandler(t *testing.T, c *wireConduit, done chan struct{}, rounds []fakeRound) server.InteractiveHandler {
+func makeTestHandler(t *testing.T, c *wireConduit, newValue NewValueFunc, done chan struct{}, rounds []fakeRound) server.InteractiveHandler {
 	return func(ctx context.Context, i server.Interactor) (time.Duration, error) {
 		defer func() {
 			if done != nil {
@@ -268,7 +276,7 @@ func makeTestHandler(t *testing.T, c *wireConduit, done chan struct{}, rounds []
 			}
 		}()
 		if c == nil {
-			c = &wireConduit{i: i}
+			c = &wireConduit{i: i, newValue: newValue}
 		} else {
 			c.i = i
 		}
@@ -288,7 +296,7 @@ func TestWireConduit(t *testing.T) {
 		hs[n] = types.RandomHash()
 	}
 	fp := types.Hash12(hs[2][:12])
-	srvHandler := makeTestHandler(t, nil, nil, []fakeRound{
+	srvHandler := makeTestHandler(t, nil, func() any { return new(fakeValue) }, nil, []fakeRound{
 		{
 			name: "server got 1st request",
 			expectMsgs: []SyncMessage{
@@ -322,11 +330,13 @@ func TestWireConduit(t *testing.T) {
 		{
 			name: "server got 2nd request",
 			expectMsgs: []SyncMessage{
-				&ItemBatchMessage{
-					Contents: []types.Hash32{hs[9], hs[10]},
+				&decodedItemBatchMessage{
+					ContentKeys:   []types.Hash32{hs[9], hs[10]},
+					ContentValues: []any{mkFakeValue(hs[9]), mkFakeValue(hs[10])},
 				},
-				&ItemBatchMessage{
-					Contents: []types.Hash32{hs[11]},
+				&decodedItemBatchMessage{
+					ContentKeys:   []types.Hash32{hs[11]},
+					ContentValues: []any{mkFakeValue(hs[11])},
 				},
 				&EndRoundMessage{},
 			},
@@ -351,6 +361,7 @@ func TestWireConduit(t *testing.T) {
 
 	client := newFakeRequester("client", nil, srv)
 	var c wireConduit
+	c.newValue = func() any { return new(fakeValue) }
 	initReq, err := c.withInitialRequest(func(c Conduit) error {
 		if err := c.SendFingerprint(hs[0], hs[1], fp, 4); err != nil {
 			return err
@@ -359,7 +370,7 @@ func TestWireConduit(t *testing.T) {
 	})
 	require.NoError(t, err)
 	done := make(chan struct{})
-	clientHandler := makeTestHandler(t, &c, done, []fakeRound{
+	clientHandler := makeTestHandler(t, &c, c.newValue, done, []fakeRound{
 		{
 			name: "client got 1st response",
 			expectMsgs: []SyncMessage{
@@ -373,11 +384,13 @@ func TestWireConduit(t *testing.T) {
 					RangeY:   hs[6],
 					NumItems: 2,
 				},
-				&ItemBatchMessage{
-					Contents: []types.Hash32{hs[4], hs[5]},
+				&decodedItemBatchMessage{
+					ContentKeys:   []types.Hash32{hs[4], hs[5]},
+					ContentValues: []any{mkFakeValue(hs[4]), mkFakeValue(hs[5])},
 				},
-				&ItemBatchMessage{
-					Contents: []types.Hash32{hs[7], hs[8]},
+				&decodedItemBatchMessage{
+					ContentKeys:   []types.Hash32{hs[7], hs[8]},
+					ContentValues: []any{mkFakeValue(hs[7]), mkFakeValue(hs[8])},
 				},
 				&EndRoundMessage{},
 			},
@@ -398,7 +411,8 @@ func TestWireConduit(t *testing.T) {
 		},
 	})
 	err = client.InteractiveRequest(context.Background(), "srv", initReq, clientHandler, func(err error) {
-		require.FailNow(t, "fail handler called", "error: %v", err)
+		t.Errorf("fail handler called: %v", err)
+		close(done)
 	})
 	require.NoError(t, err)
 	<-done
@@ -416,8 +430,8 @@ func testWireSync(t *testing.T, getRequester getRequesterFunc) requester {
 		maxNumSpecificB: 100,
 	}
 	var client requester
-	verifyXORSync(t, cfg, func(syncA, syncB *RangeSetReconciler, numSpecific int) {
-		srvHandler := MakeServerHandler(syncA)
+	verifyXORSync(t, cfg, func(storeA, storeB ItemStore, numSpecific int, opts []Option) {
+		srvHandler := MakeServerHandler(storeA, opts...)
 		srv, srvPeerID := getRequester("srv", srvHandler)
 		var eg errgroup.Group
 		ctx, cancel := context.WithCancel(context.Background())
@@ -430,7 +444,7 @@ func testWireSync(t *testing.T, getRequester getRequesterFunc) requester {
 		})
 
 		client, _ = getRequester("client", nil, srv)
-		err := SyncStore(ctx, client, srvPeerID, syncB)
+		err := SyncStore(ctx, client, srvPeerID, storeB, opts...)
 		require.NoError(t, err)
 
 		if fr, ok := client.(*fakeRequester); ok {
@@ -475,3 +489,5 @@ func TestWireSync(t *testing.T) {
 		})
 	})
 }
+
+// TODO: test fail handler
