@@ -231,7 +231,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	logger.Sugar().Infow("waiting for publish epoch", "epoch", epoch, "layer", epoch.FirstLayer())
 	err = layersStream(ctx, cl.Client(0), logger, func(resp *pb.LayerStreamResponse) (bool, error) {
 		logger.Info("new layer", zap.Uint32("layer", resp.Layer.Number.Number))
-		return resp.Layer.Number.Number != epoch.FirstLayer().Uint32(), nil
+		return resp.Layer.Number.Number < epoch.FirstLayer().Uint32(), nil
 	})
 	require.NoError(t, err)
 
