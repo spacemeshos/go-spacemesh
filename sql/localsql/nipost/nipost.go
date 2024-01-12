@@ -3,9 +3,10 @@ package nipost
 import (
 	"fmt"
 
+	"github.com/spacemeshos/post/shared"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/post/shared"
 )
 
 type Post struct {

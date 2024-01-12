@@ -371,8 +371,13 @@ func (b *Builder) obtainPost(ctx context.Context) (*types.Post, *types.PostInfo,
 		// fixup broken initial post in testnet-10 localdbs
 		if bytes.Equal(post.Challenge, shared.ZeroChallenge[:16]) {
 			if err := nipost.FixPostInitialChallenge(b.localDB, b.signer.NodeID(), shared.ZeroChallenge); err != nil {
-				b.log.Error("failed to fixed-up initial post", zap.Error(err))
+				b.log.Error("failed to fix-up initial post", zap.Error(err))
+			} else {
+				b.log.Info("fixed-up initial post")
 			}
+			post.Challenge = shared.ZeroChallenge
+		} else {
+			b.log.Info("not fixing-up initial post", zap.Binary("challenge", post.Challenge))
 		}
 		meta := &types.PostInfo{
 			NodeID:        b.SmesherID(),
