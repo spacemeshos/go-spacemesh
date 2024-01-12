@@ -73,14 +73,7 @@ func launchPostSupervisor(
 	provingOpts := activation.DefaultPostProvingOpts()
 	provingOpts.RandomXMode = activation.PostRandomXModeLight
 
-	syncer := activation.NewMocksyncer(gomock.NewController(tb))
-	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
-		ch := make(chan struct{})
-		close(ch)
-		return ch
-	}).AnyTimes()
-
-	ps, err := activation.NewPostSupervisor(log, cmdCfg, postCfg, provingOpts, mgr, syncer)
+	ps, err := activation.NewPostSupervisor(log, cmdCfg, postCfg, provingOpts, mgr)
 	require.NoError(tb, err)
 	require.NotNil(tb, ps)
 	require.NoError(tb, ps.Start(postOpts))
@@ -106,11 +99,11 @@ func launchServer(tb testing.TB, services ...grpcserver.ServiceAPI) (grpcserver.
 	return cfg, func() { assert.NoError(tb, server.Close()) }
 }
 
-func initPost(tb testing.TB, logger *zap.Logger, mgr *activation.PostSetupManager, opts activation.PostSetupOpts) {
+func initPost(tb testing.TB, mgr *activation.PostSetupManager, opts activation.PostSetupOpts) {
 	tb.Helper()
 
 	// Create data.
-	require.NoError(tb, mgr.PrepareInitializer(opts))
+	require.NoError(tb, mgr.PrepareInitializer(context.Background(), opts))
 	require.NoError(tb, mgr.StartSession(context.Background()))
 	require.Equal(tb, activation.PostSetupStateComplete, mgr.Status().State)
 }
@@ -127,14 +120,21 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	cdb := datastore.NewCachedDB(sql.InMemory(), log.NewFromLog(logger))
 	validator := activation.NewMocknipostValidator(ctrl)
 
-	mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX, validator)
+	syncer := activation.NewMocksyncer(gomock.NewController(t))
+	syncer.EXPECT().RegisterForATXSynced().AnyTimes().DoAndReturn(func() <-chan struct{} {
+		synced := make(chan struct{})
+		close(synced)
+		return synced
+	})
+
+	mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX, syncer, validator)
 	require.NoError(t, err)
 
 	opts := activation.DefaultPostSetupOpts()
 	opts.DataDir = t.TempDir()
 	opts.ProviderID.SetUint32(initialization.CPUProviderID())
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
-	initPost(t, logger.Named("manager"), mgr, opts)
+	initPost(t, mgr, opts)
 
 	// ensure that genesis aligns with layer timings
 	genesis := time.Now().Add(layerDuration).Round(layerDuration)
@@ -266,8 +266,15 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	cfg := activation.DefaultPostConfig()
 	cdb := datastore.NewCachedDB(sql.InMemory(), log.NewFromLog(logger))
 
+	syncer := activation.NewMocksyncer(gomock.NewController(t))
+	syncer.EXPECT().RegisterForATXSynced().AnyTimes().DoAndReturn(func() <-chan struct{} {
+		synced := make(chan struct{})
+		close(synced)
+		return synced
+	})
+
 	validator := activation.NewMocknipostValidator(gomock.NewController(t))
-	mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX, validator)
+	mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX, syncer, validator)
 	require.NoError(t, err)
 
 	// ensure that genesis aligns with layer timings

@@ -964,17 +964,17 @@ func (m *MockpostSetupProvider) EXPECT() *MockpostSetupProviderMockRecorder {
 }
 
 // PrepareInitializer mocks base method.
-func (m *MockpostSetupProvider) PrepareInitializer(opts PostSetupOpts) error {
+func (m *MockpostSetupProvider) PrepareInitializer(ctx context.Context, opts PostSetupOpts) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PrepareInitializer", opts)
+	ret := m.ctrl.Call(m, "PrepareInitializer", ctx, opts)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // PrepareInitializer indicates an expected call of PrepareInitializer.
-func (mr *MockpostSetupProviderMockRecorder) PrepareInitializer(opts any) *postSetupProviderPrepareInitializerCall {
+func (mr *MockpostSetupProviderMockRecorder) PrepareInitializer(ctx, opts any) *postSetupProviderPrepareInitializerCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PrepareInitializer", reflect.TypeOf((*MockpostSetupProvider)(nil).PrepareInitializer), opts)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PrepareInitializer", reflect.TypeOf((*MockpostSetupProvider)(nil).PrepareInitializer), ctx, opts)
 	return &postSetupProviderPrepareInitializerCall{Call: call}
 }
 
@@ -990,13 +990,13 @@ func (c *postSetupProviderPrepareInitializerCall) Return(arg0 error) *postSetupP
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *postSetupProviderPrepareInitializerCall) Do(f func(PostSetupOpts) error) *postSetupProviderPrepareInitializerCall {
+func (c *postSetupProviderPrepareInitializerCall) Do(f func(context.Context, PostSetupOpts) error) *postSetupProviderPrepareInitializerCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *postSetupProviderPrepareInitializerCall) DoAndReturn(f func(PostSetupOpts) error) *postSetupProviderPrepareInitializerCall {
+func (c *postSetupProviderPrepareInitializerCall) DoAndReturn(f func(context.Context, PostSetupOpts) error) *postSetupProviderPrepareInitializerCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

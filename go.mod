@@ -26,7 +26,7 @@ require (
 	github.com/libp2p/go-libp2p-record v0.2.0
 	github.com/libp2p/go-msgio v0.3.0
 	github.com/mitchellh/mapstructure v1.5.0
-	github.com/multiformats/go-multiaddr v0.12.0
+	github.com/multiformats/go-multiaddr v0.12.1
 	github.com/multiformats/go-varint v0.0.7
 	github.com/natefinch/atomic v1.0.1
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20230904125328-1f23a7beb09a
@@ -36,7 +36,7 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
 	github.com/seehuhn/mt19937 v1.0.0
 	github.com/spacemeshos/api/release/go v1.25.1-0.20240112122020-f3d0b62e039f
-	github.com/spacemeshos/economics v0.1.1
+	github.com/spacemeshos/economics v0.1.2
 	github.com/spacemeshos/fixed v0.1.1
 	github.com/spacemeshos/go-scale v1.1.12
 	github.com/spacemeshos/merkle-tree v0.2.3
@@ -203,7 +203,7 @@ require (
 	golang.org/x/net v0.19.0 // indirect
 	golang.org/x/oauth2 v0.15.0 // indirect
 	golang.org/x/sys v0.16.0 // indirect
-	golang.org/x/term v0.15.0 // indirect
+	golang.org/x/term v0.16.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/tools v0.16.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect

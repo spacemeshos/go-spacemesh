@@ -123,17 +123,6 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	require.NoError(t, host.Start())
 	t.Cleanup(func() { assert.NoError(t, host.Stop()) })
 
-	// 1. Initialize
-	postSetupMgr, err := activation.NewPostSetupManager(
-		signer.NodeID(),
-		cfg.POST,
-		logger.Named("post"),
-		datastore.NewCachedDB(sql.InMemory(), log.NewNop()),
-		cl.GoldenATX(),
-		activation.NewMocknipostValidator(gomock.NewController(t)),
-	)
-	require.NoError(t, err)
-
 	syncer := activation.NewMocksyncer(gomock.NewController(t))
 	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
 		ch := make(chan struct{})
@@ -141,13 +130,24 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		return ch
 	}).AnyTimes()
 
+	// 1. Initialize
+	postSetupMgr, err := activation.NewPostSetupManager(
+		signer.NodeID(),
+		cfg.POST,
+		logger.Named("post"),
+		datastore.NewCachedDB(sql.InMemory(), log.NewNop()),
+		cl.GoldenATX(),
+		syncer,
+		activation.NewMocknipostValidator(gomock.NewController(t)),
+	)
+	require.NoError(t, err)
+
 	postSupervisor, err := activation.NewPostSupervisor(
 		logger.Named("post-supervisor"),
 		cfg.POSTService,
 		cfg.POST,
 		cfg.SMESHING.ProvingOpts,
 		postSetupMgr,
-		syncer,
 	)
 	require.NoError(t, err)
 	require.NoError(t, postSupervisor.Start(cfg.SMESHING.Opts))

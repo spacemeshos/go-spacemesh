@@ -2,6 +2,7 @@ package peersync
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -143,15 +144,19 @@ func TestSyncSimulateMultiple(t *testing.T) {
 	}
 	require.NoError(t, mesh.ConnectAllButSelf())
 
+	// First create all instances so they register in the protocol
+	// and then start them.
 	for i, delay := range delays {
 		sync := New(hosts[i], hosts[i],
 			WithConfig(config),
 			WithTime(delayedTime(delay)),
-			WithLog(logtest.New(t).Named(hosts[i].ID().String())),
+			WithLog(logtest.New(t).Named(fmt.Sprintf("%d-%s", i, hosts[i].ID()))),
 		)
+		instances = append(instances, sync)
+	}
+	for _, sync := range instances {
 		sync.Start()
 		t.Cleanup(sync.Stop)
-		instances = append(instances, sync)
 	}
 	for i, inst := range instances {
 		if errors[i] == nil {
