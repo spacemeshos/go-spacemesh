@@ -72,6 +72,10 @@ func BootstrapperEndpoint(ith int) string {
 	return fmt.Sprintf("http://%s:%d", createBootstrapperIdentifier(ith), bootstrapperPort)
 }
 
+func BootstrapperGlobalEndpoint(namespace string, ith int) string {
+	return fmt.Sprintf("http://%s.%s:%d", createBootstrapperIdentifier(ith), namespace, bootstrapperPort)
+}
+
 // Opt is for configuring cluster.
 type Opt func(c *Cluster)
 

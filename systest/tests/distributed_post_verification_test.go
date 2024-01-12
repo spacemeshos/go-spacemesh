@@ -25,9 +25,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/timesync/peersync"
 	"github.com/spacemeshos/post/shared"
+	"github.com/spacemeshos/post/verifying"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"golang.org/x/sync/errgroup"
 	"os"
 	"path/filepath"
 	"testing"
@@ -44,13 +48,21 @@ func init() {
 
 func TestCreatingPostMalfeasanceProof(t *testing.T) {
 	t.Parallel()
-
 	testDir := t.TempDir()
 
 	ctx := testcontext.New(t, testcontext.Labels("sanity"))
-	cl, err := cluster.Reuse(ctx, cluster.WithKeys(10))
-	require.NoError(t, err)
+	logger := ctx.Log.Desugar().WithOptions(zap.IncreaseLevel(zapcore.InfoLevel), zap.WithCaller(false))
 
+	// Prepare cluster
+	ctx.PoetSize = 1 // one poet guarantees everybody gets the same proof
+	ctx.ClusterSize = 3
+	cl := cluster.New(ctx, cluster.WithKeys(10))
+	require.NoError(t, cl.AddBootnodes(ctx, 1))
+	require.NoError(t, cl.AddBootstrappers(ctx))
+	require.NoError(t, cl.AddPoets(ctx))
+	require.NoError(t, cl.AddSmeshers(ctx, ctx.ClusterSize-cl.Total()))
+
+	// Prepare config
 	cfg, err := presets.Get("fastnet")
 	require.NoError(t, err)
 	cfg.Genesis = &config.GenesisConfig{
@@ -69,17 +81,7 @@ func TestCreatingPostMalfeasanceProof(t *testing.T) {
 	cfg.PoetServers = []types.PoetServer{
 		{Address: cluster.MakePoetGlobalEndpoint(ctx.Namespace, 0)},
 	}
-	cfg.POET.MaxRequestRetries = 10
-	cfg.POET.RequestTimeout = time.Minute
 	cfg.POET.RequestRetryDelay = 5 * time.Second
-
-	cfg.API.PrivateListener = "0.0.0.0:9093"
-
-	ctx.Log.Desugar().Info("Prepared config", zap.Any("cfg", cfg))
-	goldenATXID := cl.GoldenATX()
-
-	signer, err := signing.NewEdSigner()
-	require.NoError(t, err)
 
 	var bootnodes []*cluster.NodeClient
 	for i := 0; i < cl.Bootnodes(); i++ {
@@ -89,38 +91,46 @@ func TestCreatingPostMalfeasanceProof(t *testing.T) {
 	endpoints, err := cluster.ExtractP2PEndpoints(ctx, bootnodes)
 	require.NoError(t, err)
 	cfg.P2P.Bootnodes = endpoints
-	prologue := fmt.Sprintf("%x-%v", cl.GenesisID(), cfg.LayersPerEpoch*2-1)
+	cfg.P2P.PrivateNetwork = true
+	cfg.Bootstrap.URL = cluster.BootstrapperGlobalEndpoint(ctx.Namespace, 0)
+	cfg.P2P.MinPeers = 2
+	ctx.Log.Infow("Prepared config", "cfg", cfg)
 
+	goldenATXID := cl.GoldenATX()
+	signer, err := signing.NewEdSigner(signing.WithPrefix(cl.GenesisID().Bytes()))
+	require.NoError(t, err)
+
+	prologue := fmt.Sprintf("%x-%v", cl.GenesisID(), cfg.LayersPerEpoch*2-1)
 	host, err := p2p.New(
 		ctx,
-		log.NewFromLog(ctx.Log.Desugar().Named("p2p")),
+		log.NewFromLog(logger.Named("p2p")),
 		cfg.P2P,
 		[]byte(prologue),
 		handshake.NetworkCookie(prologue),
 	)
 	require.NoError(t, err)
+	logger.Info("p2p host created", zap.Stringer("id", host.ID()))
 	host.Register(pubsub.AtxProtocol, func(context.Context, peer.ID, []byte) error { return nil })
 	ptimesync := peersync.New(
 		host,
 		host,
-		peersync.WithLog(log.NewFromLog(ctx.Log.Named("peersync").Desugar())),
+		peersync.WithLog(log.NewFromLog(logger.Named("peersync"))),
 		peersync.WithConfig(cfg.TIME.Peersync),
 	)
 	ptimesync.Start()
 	t.Cleanup(ptimesync.Stop)
 
 	require.NoError(t, host.Start())
-	t.Cleanup(func() { host.Stop() })
+	t.Cleanup(func() { assert.NoError(t, host.Stop()) })
 
-	mValidator := activation.NewMocknipostValidator(gomock.NewController(t))
 	// 1. Initialize
 	postSetupMgr, err := activation.NewPostSetupManager(
 		signer.NodeID(),
 		cfg.POST,
-		ctx.Log.Named("post").Desugar(),
+		logger.Named("post"),
 		sql.InMemory(),
 		cl.GoldenATX(),
-		mValidator,
+		activation.NewMocknipostValidator(gomock.NewController(t)),
 	)
 	require.NoError(t, err)
 
@@ -132,7 +142,7 @@ func TestCreatingPostMalfeasanceProof(t *testing.T) {
 	}).AnyTimes()
 
 	postSupervisor, err := activation.NewPostSupervisor(
-		ctx.Log.Named("post-supervisor").Desugar(),
+		logger.Named("post-supervisor"),
 		cfg.POSTService,
 		cfg.POST,
 		cfg.SMESHING.ProvingOpts,
@@ -141,32 +151,34 @@ func TestCreatingPostMalfeasanceProof(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.NoError(t, postSupervisor.Start(cfg.SMESHING.Opts))
+	t.Cleanup(func() { assert.NoError(t, postSupervisor.Stop(false)) })
 
 	// 2. create ATX with invalid POST labels
 	clock, err := timesync.NewClock(
 		timesync.WithLayerDuration(cfg.LayerDuration),
 		timesync.WithTickInterval(1*time.Second),
 		timesync.WithGenesisTime(cl.Genesis()),
-		timesync.WithLogger(log.NewFromLog(ctx.Log.Desugar().Named("clock"))),
+		timesync.WithLogger(log.NewFromLog(logger.Named("clock"))),
 	)
 	require.NoError(t, err)
 
-	grpcPostService := grpcserver.NewPostService(ctx.Log.Desugar().Named("grpc-post-service"))
-	grpczap.SetGrpcLoggerV2(grpclog, ctx.Log.Desugar().Named("grpc"))
+	grpcPostService := grpcserver.NewPostService(logger.Named("grpc-post-service"))
+	grpczap.SetGrpcLoggerV2(grpclog, logger.Named("grpc"))
 	grpcPrivateServer, err := grpcserver.NewPrivate(
-		ctx.Log.Desugar().Named("grpc-server"),
+		logger.Named("grpc-server"),
 		cfg.API,
 		[]grpcserver.ServiceAPI{grpcPostService},
 	)
 	require.NoError(t, err)
 	require.NoError(t, grpcPrivateServer.Start())
+	t.Cleanup(func() { assert.NoError(t, grpcPrivateServer.Close()) })
 
 	nipostBuilder, err := activation.NewNIPostBuilder(
 		localsql.InMemory(),
-		activation.NewPoetDb(sql.InMemory(), log.NewFromLog(ctx.Log.Desugar().Named("poet-db"))),
+		activation.NewPoetDb(sql.InMemory(), log.NewFromLog(logger.Named("poet-db"))),
 		grpcPostService,
 		cfg.PoetServers,
-		ctx.Log.Desugar().Named("nipostBuilder"),
+		logger.Named("nipostBuilder"),
 		signer,
 		cfg.POET,
 		clock,
@@ -218,21 +230,71 @@ func TestCreatingPostMalfeasanceProof(t *testing.T) {
 	require.NoError(t, cl.WaitAll(ctx))
 
 	// 3. Wait for publish epoch
-	err = layersStream(ctx, cl.Client(0), ctx.Log.Desugar(), func(layer *pb.LayerStreamResponse) (bool, error) {
-		return layer.Layer.Number.Number == cfg.LayersPerEpoch*2, nil
+	epoch := atx.PublishEpoch
+	logger.Sugar().Infow("waiting for publish epoch", "epoch", epoch, "layer", epoch.FirstLayer())
+	err = layersStream(ctx, cl.Client(0), logger, func(resp *pb.LayerStreamResponse) (bool, error) {
+		logger.Info("new layer", zap.Uint32("layer", resp.Layer.Number.Number))
+		return resp.Layer.Number.Number != epoch.FirstLayer().Uint32(), nil
 	})
 	require.NoError(t, err)
 
 	// 4. Publish ATX
-	buf, err := codec.Encode(atx)
-	require.NoError(t, err)
-	err = host.Publish(ctx, pubsub.AtxProtocol, buf)
-	require.NoError(t, err)
+	publishCtx, stopPublishing := context.WithCancel(ctx.Context)
+	t.Cleanup(stopPublishing)
+	var eg errgroup.Group
+	eg.Go(func() error {
+		for {
+			logger.Sugar().Infow("publishing ATX", "atx", atx)
+			buf, err := codec.Encode(atx)
+			require.NoError(t, err)
+			err = host.Publish(ctx, pubsub.AtxProtocol, buf)
+			require.NoError(t, err)
+
+			select {
+			case <-publishCtx.Done():
+				return nil
+			case <-time.After(10 * time.Second):
+			}
+		}
+	})
 
 	// 5. Wait for POST malfeasance proof
-	err = malfeasanceStream(ctx, cl.Client(0), ctx.Log.Desugar(), func(malfeasance *pb.MalfeasanceStreamResponse) (bool, error) {
-		ctx.Log.Desugar().Info("malfeasance proof received", zap.Any("malfeasance", malfeasance))
-		require.Equal(t, malfeasance.Proof.SmesherId, signer.NodeID().String())
+	logger.Info("waiting for malfeasance proof")
+	err = malfeasanceStream(ctx, cl.Client(0), logger, func(malfeasance *pb.MalfeasanceStreamResponse) (bool, error) {
+		stopPublishing()
+		logger.Info("malfeasance proof received")
+		require.Equal(t, malfeasance.GetProof().GetSmesherId().Id, signer.NodeID().Bytes())
+		require.Equal(t, pb.MalfeasanceProof_MalfeasanceType(4), malfeasance.GetProof().GetKind())
+
+		var proof types.MalfeasanceProof
+		require.NoError(t, codec.Decode(malfeasance.Proof.Proof, &proof))
+		require.Equal(t, types.InvalidPostIndex, proof.Proof.Type)
+		invalidPostProof := proof.Proof.Data.(*types.InvalidPostIndexProof)
+		logger.Sugar().Infow("malfeasance post proof", "proof", invalidPostProof)
+		invalidAtx := invalidPostProof.Atx
+		require.Equal(t, atx.PublishEpoch, invalidAtx.PublishEpoch)
+		require.Equal(t, atx.SmesherID, invalidAtx.SmesherID)
+		require.Equal(t, atx.NodeID, invalidAtx.NodeID)
+		require.Equal(t, atx.PositioningATX, invalidAtx.PositioningATX)
+		require.Equal(t, atx.PrevATXID, invalidAtx.PrevATXID)
+		require.Equal(t, atx.Signature, invalidAtx.Signature)
+		require.Equal(t, atx.Coinbase, invalidAtx.Coinbase)
+		require.Equal(t, *atx.CommitmentATX, *invalidAtx.CommitmentATX)
+		require.Equal(t, atx.NIPostChallenge, invalidAtx.NIPostChallenge)
+		require.Equal(t, atx.NIPost.Post.Indices, invalidAtx.NIPost.Post.Indices)
+
+		postVerifier, err := activation.NewPostVerifier(cfg.POST, logger.Named("post-verifier"))
+		require.NoError(t, err)
+		meta := &shared.ProofMetadata{
+			NodeId:          invalidAtx.NodeID.Bytes(),
+			CommitmentAtxId: invalidAtx.CommitmentATX.Bytes(),
+			NumUnits:        invalidAtx.NumUnits,
+			Challenge:       invalidAtx.NIPost.PostMetadata.Challenge,
+			LabelsPerUnit:   invalidAtx.NIPost.PostMetadata.LabelsPerUnit,
+		}
+		err = postVerifier.Verify(ctx, (*shared.Proof)(invalidAtx.NIPost.Post), meta)
+		var invalidIdxError *verifying.ErrInvalidIndex
+		require.ErrorAs(t, err, &invalidIdxError)
 		return false, nil
 	})
 	require.NoError(t, err)

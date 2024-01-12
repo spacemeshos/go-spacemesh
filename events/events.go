@@ -272,6 +272,8 @@ func ToMalfeasancePB(smesher types.NodeID, mp *types.MalfeasanceProof, includePr
 		kind = pb.MalfeasanceProof_MALFEASANCE_BALLOT
 	case types.HareEquivocation:
 		kind = pb.MalfeasanceProof_MALFEASANCE_HARE
+	case types.InvalidPostIndex:
+		kind = 4
 	}
 	result := &pb.MalfeasanceProof{
 		SmesherId: &pb.SmesherId{Id: smesher.Bytes()},
