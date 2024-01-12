@@ -3,16 +3,31 @@ package tests
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
 	grpc_logsettable "github.com/grpc-ecosystem/go-grpc-middleware/logging/settable"
 	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	"github.com/libp2p/go-libp2p/core/peer"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/spacemeshos/post/shared"
+	"github.com/spacemeshos/post/verifying"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/config/presets"
+	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
@@ -24,29 +39,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/timesync/peersync"
-	"github.com/spacemeshos/post/shared"
-	"github.com/spacemeshos/post/verifying"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-	"golang.org/x/sync/errgroup"
-	"os"
-	"path/filepath"
-	"testing"
-	"time"
 )
 
-var (
-	grpclog grpc_logsettable.SettableLoggerV2
-)
+var grpclog grpc_logsettable.SettableLoggerV2
 
 func init() {
 	grpclog = grpc_logsettable.ReplaceGrpcLoggerV2()
 }
 
-func TestCreatingPostMalfeasanceProof(t *testing.T) {
+func TestPostMalfeasanceProof(t *testing.T) {
 	t.Parallel()
 	testDir := t.TempDir()
 
@@ -128,7 +129,7 @@ func TestCreatingPostMalfeasanceProof(t *testing.T) {
 		signer.NodeID(),
 		cfg.POST,
 		logger.Named("post"),
-		sql.InMemory(),
+		datastore.NewCachedDB(sql.InMemory(), log.NewNop()),
 		cl.GoldenATX(),
 		activation.NewMocknipostValidator(gomock.NewController(t)),
 	)
@@ -175,7 +176,7 @@ func TestCreatingPostMalfeasanceProof(t *testing.T) {
 
 	nipostBuilder, err := activation.NewNIPostBuilder(
 		localsql.InMemory(),
-		activation.NewPoetDb(sql.InMemory(), log.NewFromLog(logger.Named("poet-db"))),
+		activation.NewPoetDb(sql.InMemory(), log.NewNop()),
 		grpcPostService,
 		cfg.PoetServers,
 		logger.Named("nipostBuilder"),
@@ -224,10 +225,7 @@ func TestCreatingPostMalfeasanceProof(t *testing.T) {
 	)
 	nodeID := signer.NodeID()
 	atx.InnerActivationTx.NodeID = &nodeID
-	err = activation.SignAndFinalizeAtx(signer, atx)
-	require.NoError(t, err)
-
-	require.NoError(t, cl.WaitAll(ctx))
+	require.NoError(t, activation.SignAndFinalizeAtx(signer, atx))
 
 	// 3. Wait for publish epoch
 	epoch := atx.PublishEpoch

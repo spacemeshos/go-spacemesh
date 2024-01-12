@@ -892,7 +892,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.edSgn.NodeID(),
 		app.Config.POST,
 		app.addLogger(PostLogger, lg).Zap(),
-		app.cachedDB.Database,
+		app.cachedDB,
 		goldenATXID,
 		app.validator,
 		activation.PostValidityDelay(app.Config.PostValidDelay),
