@@ -508,12 +508,11 @@ func (app *App) Cleanup(ctx context.Context) {
 }
 
 // Wrap the top-level logger to add context info and set the level for a
-// specific module.
+// specific module. Calling this method and will create a new logger every time
+// and not re-use an existing logger with the same name.
+//
+// This method is not safe to be called concurrently.
 func (app *App) addLogger(name string, logger log.Log) log.Log {
-	// TODO(mafa): this method is not safe to be called concurrently, as it will create a new logger every time
-	// calling it with the same name twice will create two loggers with the same name (instead of returning the
-	// existing one)
-
 	lvl := zap.NewAtomicLevel()
 	loggers, err := decodeLoggers(app.Config.LOGGING)
 	if err != nil {
