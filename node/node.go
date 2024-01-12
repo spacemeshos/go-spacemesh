@@ -361,6 +361,7 @@ type App struct {
 	edVerifier        *signing.EdVerifier
 	beaconProtocol    *beacon.ProtocolDriver
 	log               log.Log
+	syncLogger        log.Log
 	svm               *vm.VM
 	conState          *txs.ConservativeState
 	fetcher           *fetch.Fetch
@@ -507,7 +508,10 @@ func (app *App) Cleanup(ctx context.Context) {
 }
 
 // Wrap the top-level logger to add context info and set the level for a
-// specific module.
+// specific module. Calling this method and will create a new logger every time
+// and not re-use an existing logger with the same name.
+//
+// This method is not safe to be called concurrently.
 func (app *App) addLogger(name string, logger log.Log) log.Log {
 	lvl := zap.NewAtomicLevel()
 	loggers, err := decodeLoggers(app.Config.LOGGING)
@@ -804,6 +808,8 @@ func (app *App) initServices(ctx context.Context) error {
 	syncerConf.HareDelayLayers = app.Config.Tortoise.Zdist
 	syncerConf.SyncCertDistance = app.Config.Tortoise.Hdist
 	syncerConf.Standalone = app.Config.Standalone
+
+	app.syncLogger = app.addLogger(SyncLogger, lg)
 	newSyncer := syncer.NewSyncer(
 		app.cachedDB,
 		app.clock,
@@ -814,7 +820,7 @@ func (app *App) initServices(ctx context.Context) error {
 		patrol,
 		app.certifier,
 		syncer.WithConfig(syncerConf),
-		syncer.WithLogger(app.addLogger(SyncLogger, lg)),
+		syncer.WithLogger(app.syncLogger),
 	)
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
 	beaconProtocol.SetSyncState(newSyncer)
@@ -1197,7 +1203,7 @@ func (app *App) listenToUpdates(ctx context.Context) {
 						if err := atxsync.Download(
 							ctx,
 							10*time.Second,
-							app.addLogger(SyncLogger, app.log).Zap(),
+							app.syncLogger.Zap(),
 							app.db,
 							app.fetcher,
 							set,
