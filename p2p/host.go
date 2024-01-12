@@ -143,6 +143,7 @@ type Config struct {
 	EnableQUICTransport         bool          `mapstructure:"enable-quic-transport"`
 	EnableRoutingDiscovery      bool          `mapstructure:"enable-routing-discovery"`
 	RoutingDiscoveryAdvertise   bool          `mapstructure:"routing-discovery-advertise"`
+	RoutingDiscoveryPropagate   bool          `mapstructure:"routing-discovery-propagate"`
 	AdvertiseInterval           time.Duration `mapstructure:"advertise-interval"`
 }
 

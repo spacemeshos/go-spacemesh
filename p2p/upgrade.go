@@ -179,11 +179,27 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 	if fh.relayCh != nil {
 		dopts = append(dopts, discovery.WithRelayCandidateChannel(fh.relayCh))
 	}
-	if fh.cfg.EnableRoutingDiscovery {
-		dopts = append(dopts, discovery.EnableRoutingDiscovery())
+	if fh.cfg.RoutingDiscoveryPropagate {
+		dopts = append(dopts, discovery.RoutingDiscoveryPropagate())
 	}
+	if fh.cfg.EnableRoutingDiscovery {
+		if fh.cfg.RoutingDiscoveryPropagate {
+			dopts = append(dopts, discovery.EnableRoutingDiscovery())
+		} else {
+			fh.logger.With().Warning(
+				"can't set enable-routing-discovery without routing-discovery-propagate",
+				log.Err(err))
+		}
+	}
+
 	if fh.cfg.RoutingDiscoveryAdvertise {
-		dopts = append(dopts, discovery.AdvertiseForPeerDiscovery())
+		if fh.cfg.RoutingDiscoveryPropagate {
+			dopts = append(dopts, discovery.AdvertiseForPeerDiscovery())
+		} else {
+			fh.logger.With().Warning(
+				"can't set enable-routing-discovery without routing-discovery-propagate",
+				log.Err(err))
+		}
 	}
 
 	dhtdisc, err := discovery.New(fh, dopts...)

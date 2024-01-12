@@ -130,6 +130,12 @@ func WithAdvertiseInterval(aint time.Duration) Opt {
 	}
 }
 
+func RoutingDiscoveryPropagate() Opt {
+	return func(d *Discovery) {
+		d.rtDiscPropagate = true
+	}
+}
+
 type DiscoveryHost interface {
 	host.Host
 	NeedPeerDiscovery() bool
@@ -184,6 +190,7 @@ type Discovery struct {
 	minPeers, highPeers int
 	backup, bootnodes   []peer.AddrInfo
 	advertiseInterval   time.Duration
+	rtDiscPropagate     bool
 }
 
 func (d *Discovery) FindPeer(ctx context.Context, p peer.ID) (peer.AddrInfo, error) {
@@ -213,7 +220,7 @@ func (d *Discovery) Start() error {
 		return d.ensureAtLeastMinPeers(startCtx)
 	})
 
-	if !d.disableDht {
+	if !d.disableDht && d.rtDiscPropagate {
 		d.disc = p2pdiscr.NewRoutingDiscovery(d.dht)
 		if d.advertise {
 			d.eg.Go(func() error {
@@ -306,6 +313,9 @@ func (d *Discovery) setupDHT(ctx context.Context) error {
 		dht.Validator(record.PublicKeyValidator{}),
 		dht.Datastore(ds),
 		dht.ProtocolPrefix(protocolPrefix),
+	}
+	if !d.rtDiscPropagate {
+		opts = append(opts, dht.DisableValues(), dht.DisableProviders())
 	}
 	if d.public {
 		opts = append(opts, dht.QueryFilter(dht.PublicQueryFilter),

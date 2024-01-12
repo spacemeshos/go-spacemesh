@@ -449,6 +449,7 @@ In order to make the p2p network more decentralized, the following options are p
   also for discovering relay nodes which are used for NAT hole punching. Note that hole punching can be done when both
   ends of the connection are behind an endpoint-independent ("cone") NAT.
 - `"routing-discovery-advertise": true` advertises this node for discovery by other peers, even if it is behind NAT.
+- `"routing-discovery-propagate": true` enables "values" and "providers" DHT features which are required to propagate routing discovery info through KAD.
 - `"enable-quic-transport": true`: enables QUIC transport which, together with TCP transport, heightens the changes of
   successful NAT hole punching.
 - `"enable-tcp-transport": false` disables TCP transport. This option is intended to be used for debugging purposes

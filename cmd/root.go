@@ -141,6 +141,8 @@ func AddCommands(cmd *cobra.Command) {
 		"enable routing discovery")
 	cmd.PersistentFlags().BoolVar(&cfg.P2P.RoutingDiscoveryAdvertise, "routing-discovery-advertise",
 		cfg.P2P.RoutingDiscoveryAdvertise, "advertise for routing discovery")
+	cmd.PersistentFlags().BoolVar(&cfg.P2P.RoutingDiscoveryPropagate, "routing-discovery-propagate",
+		cfg.P2P.RoutingDiscoveryPropagate, "propagate routing discovery info through DHT")
 
 	/** ======================== TIME Flags ========================== **/
 
