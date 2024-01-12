@@ -170,8 +170,9 @@ func New(cctx *testcontext.Context, opts ...Opt) *Cluster {
 		bootstrapperFlags: map[string]DeploymentFlag{},
 		bootstrapEpochs:   []int{2},
 		genesisBalances:   map[string]uint64{},
+		genesis:           time.Now().Add(cctx.BootstrapDuration),
 	}
-	genesis := GenesisTime(time.Now().Add(cctx.BootstrapDuration))
+	genesis := GenesisTime(cluster.genesis)
 	cluster.addFlag(genesis)
 	cluster.addFlag(GenesisExtraData(defaultExtraData))
 	cluster.addFlag(MinPeers(minPeers(cctx.ClusterSize)))
@@ -192,6 +193,7 @@ type Cluster struct {
 	smesherFlags      map[string]DeploymentFlag
 	poetFlags         map[string]DeploymentFlag
 	bootstrapperFlags map[string]DeploymentFlag
+	genesis           time.Time
 
 	accounts
 	genesisBalances map[string]uint64
@@ -205,16 +207,24 @@ type Cluster struct {
 	bootstrapEpochs []int
 }
 
+func (c *Cluster) Genesis() time.Time {
+	return c.genesis
+}
+
+func (c *Cluster) GenesisExtraData() string {
+	return defaultExtraData
+}
+
 // GenesisID computes id from the configuration.
 func (c *Cluster) GenesisID() types.Hash20 {
-	parsed, err := time.Parse(time.RFC3339, c.smesherFlags[genesisTimeFlag].Value)
-	if err != nil {
-		panic("invalid genesis time")
-	}
-	return types.Hash32(hash.Sum(
-		[]byte(strconv.FormatInt(parsed.Unix(), 10)),
-		[]byte(c.smesherFlags[genesisExtraData].Value),
-	)).ToHash20()
+	return c.GoldenATX().Hash32().ToHash20()
+}
+
+func (c *Cluster) GoldenATX() types.ATXID {
+	return types.ATXID(hash.Sum(
+		[]byte(strconv.FormatInt(c.Genesis().Unix(), 10)),
+		[]byte(c.GenesisExtraData()),
+	))
 }
 
 func (c *Cluster) nextSmesher() int {

@@ -275,13 +275,13 @@ func LoadConfigFromFile() (*config.Config, error) {
 	)
 
 	// load config if it was loaded to the viper
-	if err := viper.Unmarshal(&conf, viper.DecodeHook(hook), withZeroFields()); err != nil {
-		return nil, fmt.Errorf("unmarshal viper: %w", err)
+	if err := viper.Unmarshal(&conf, viper.DecodeHook(hook), WithZeroFields()); err != nil {
+		return nil, fmt.Errorf("unmarshal config: %w", err)
 	}
 	return &conf, nil
 }
 
-func withZeroFields() viper.DecoderConfigOption {
+func WithZeroFields() viper.DecoderConfigOption {
 	return func(cfg *mapstructure.DecoderConfig) {
 		cfg.ZeroFields = true
 	}

@@ -26,10 +26,16 @@ import (
 	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 	metav1 "k8s.io/client-go/applyconfigurations/meta/v1"
 
+	"github.com/mitchellh/mapstructure"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/config/presets"
+	"github.com/spacemeshos/go-spacemesh/node"
+	"github.com/spacemeshos/go-spacemesh/node/mapstructureutil"
 	"github.com/spacemeshos/go-spacemesh/systest/parameters"
 	"github.com/spacemeshos/go-spacemesh/systest/parameters/fastnet"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
+	"github.com/spf13/viper"
 )
 
 var (
@@ -580,6 +586,8 @@ func deleteNode(ctx *testcontext.Context, id string) error {
 		return err
 	}
 	return nil
+
+	// TODO(mafa): also delete post service if present
 }
 
 func deployNode(ctx *testcontext.Context, id string, labels map[string]string, flags []DeploymentFlag) error {
@@ -606,6 +614,7 @@ func deployNode(ctx *testcontext.Context, id string, labels map[string]string, f
 				WithLabels(labels).
 				WithAnnotations(
 					map[string]string{
+						// TODO(mafa): annotate node with post service?
 						"prometheus.io/port":   strconv.Itoa(prometheusScrapePort),
 						"prometheus.io/scrape": "true",
 					},
@@ -631,6 +640,7 @@ func deployNode(ctx *testcontext.Context, id string, labels map[string]string, f
 							corev1.ContainerPort().WithContainerPort(7513).WithName("p2p"),
 							corev1.ContainerPort().WithContainerPort(9092).WithName("grpc-pub"),
 							corev1.ContainerPort().WithContainerPort(9093).WithName("grpc-priv"),
+							corev1.ContainerPort().WithContainerPort(9094).WithName("grpc-post"),
 							corev1.ContainerPort().WithContainerPort(prometheusScrapePort).WithName("prometheus"),
 							corev1.ContainerPort().WithContainerPort(phlareScrapePort).WithName("pprof"),
 						).
@@ -652,14 +662,110 @@ func deployNode(ctx *testcontext.Context, id string, labels map[string]string, f
 						).
 						WithCommand(cmd...),
 					),
-				)))
-	_, err := ctx.Client.AppsV1().Deployments(ctx.Namespace).
+				),
+			),
+		)
+	_, err := ctx.Client.AppsV1().
+		Deployments(ctx.Namespace).
 		Apply(ctx, deployment, apimetav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
 		return fmt.Errorf("apply pod %s: %w", id, err)
 	}
 	if strings.Contains(id, bootnodeApp) {
 		return deployBootnodeSvc(ctx, id)
+	}
+	return nil
+}
+
+func deployPostService(ctx *testcontext.Context, id string, labels map[string]string) error {
+	ctx.Log.Debugw("deploying post service", "id", id)
+
+	vip := viper.New()
+	if err := config.LoadConfig(smesherConfig.Get(ctx.Parameters), vip); err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+	conf := config.MainnetConfig()
+	if name := vip.GetString("preset"); len(name) > 0 {
+		preset, err := presets.Get(name)
+		if err != nil {
+			return err
+		}
+		conf = preset
+	}
+
+	hook := mapstructure.ComposeDecodeHookFunc(
+		mapstructure.StringToTimeDurationHookFunc(),
+		mapstructure.StringToSliceHookFunc(","),
+		mapstructureutil.AddressListDecodeFunc(),
+		mapstructureutil.BigRatDecodeFunc(),
+		mapstructureutil.PostProviderIDDecodeFunc(),
+		mapstructureutil.DeprecatedHook(),
+		mapstructure.TextUnmarshallerHookFunc(),
+	)
+	if err := vip.Unmarshal(&conf, viper.DecodeHook(hook), node.WithZeroFields()); err != nil {
+		return fmt.Errorf("unmarshal config: %w", err)
+	}
+
+	args := []string{
+		"--dir", "/data", // TODO(mafa): initialize
+		"--address", "", // TODO(mafa): get address for node with id `id`
+		"--threads", strconv.FormatUint(uint64(conf.SMESHING.ProvingOpts.Threads), 10),
+		"--nonces", strconv.FormatUint(uint64(conf.SMESHING.ProvingOpts.Nonces), 10),
+		"--randomx-mode", conf.SMESHING.ProvingOpts.RandomXMode.String(),
+		"--min-num-units", strconv.FormatUint(uint64(conf.POST.MinNumUnits), 10),
+		"--max-num-units", strconv.FormatUint(uint64(conf.POST.MaxNumUnits), 10),
+		"--labels-per-unit", strconv.FormatUint(uint64(conf.POST.LabelsPerUnit), 10),
+		"--k1", strconv.FormatUint(uint64(conf.POST.K1), 10),
+		"--k2", strconv.FormatUint(uint64(conf.POST.K2), 10),
+		"--k3", strconv.FormatUint(uint64(conf.POST.K3), 10),
+		"--pow-difficulty", conf.POST.PowDifficulty.String(),
+	}
+	deployment := appsv1.Deployment(id, ctx.Namespace).
+		WithLabels(labels).
+		WithSpec(appsv1.DeploymentSpec().
+			WithSelector(metav1.LabelSelector().WithMatchLabels(labels)).
+			WithReplicas(1).
+			WithTemplate(corev1.PodTemplateSpec().
+				WithLabels(labels).
+				WithAnnotations(
+					map[string]string{
+						// TODO(mafa): annotate post service with node?
+					},
+				).
+				WithSpec(corev1.PodSpec().
+					WithInitContainers(corev1.Container(
+					// TODO(mafa): add init container to initialize post data
+					// pub key is in Cluster::accounts.keys[0-n].Pub
+					// GoldenATX is in Cluster::GoldenATX()
+					// consider passing them as DeploymentFlags
+					)).
+					WithNodeSelector(ctx.NodeSelector).
+					WithVolumes(
+						corev1.Volume().WithName("data").
+							WithEmptyDir(corev1.EmptyDirVolumeSource().
+								WithSizeLimit(resource.MustParse(ctx.Storage.Size))),
+					).
+					WithContainers(corev1.Container().
+						WithName("postService").
+						WithImage(ctx.PostServiceImage).
+						WithImagePullPolicy(apiv1.PullIfNotPresent).
+						WithArgs(args...).
+						WithVolumeMounts(
+							corev1.VolumeMount().WithName("data").WithMountPath("/data"),
+						).
+						WithResources(corev1.ResourceRequirements().
+							WithRequests(smesherResources.Get(ctx.Parameters).Requests).
+							WithLimits(smesherResources.Get(ctx.Parameters).Limits),
+						),
+					),
+				),
+			),
+		)
+	_, err := ctx.Client.AppsV1().
+		Deployments(ctx.Namespace).
+		Apply(ctx, deployment, apimetav1.ApplyOptions{FieldManager: "test"})
+	if err != nil {
+		return fmt.Errorf("create post service %s: %w", id, err)
 	}
 	return nil
 }
