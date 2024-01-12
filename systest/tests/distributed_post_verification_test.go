@@ -61,7 +61,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	require.NoError(t, cl.AddBootnodes(ctx, 1))
 	require.NoError(t, cl.AddBootstrappers(ctx))
 	require.NoError(t, cl.AddPoets(ctx))
-	require.NoError(t, cl.AddSmeshers(ctx, ctx.ClusterSize-cl.Total()))
+	require.NoError(t, cl.AddSmeshers(ctx, ctx.ClusterSize-cl.Total(), cluster.WithFlags(cluster.PostK3(1))))
 
 	// Prepare config
 	cfg, err := presets.Get("fastnet")
@@ -82,7 +82,6 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	cfg.PoetServers = []types.PoetServer{
 		{Address: cluster.MakePoetGlobalEndpoint(ctx.Namespace, 0)},
 	}
-	cfg.POET.RequestRetryDelay = 5 * time.Second
 
 	var bootnodes []*cluster.NodeClient
 	for i := 0; i < cl.Bootnodes(); i++ {

@@ -797,6 +797,10 @@ func PoetEndpoints(ids ...int) DeploymentFlag {
 	return DeploymentFlag{Name: "--poet-servers", Value: string(value)}
 }
 
+func PostK3(k3 int) DeploymentFlag {
+	return DeploymentFlag{Name: "--post-k3", Value: strconv.Itoa(k3)}
+}
+
 // MinPeers flag.
 func MinPeers(target int) DeploymentFlag {
 	return DeploymentFlag{Name: "--min-peers", Value: strconv.Itoa(target)}
