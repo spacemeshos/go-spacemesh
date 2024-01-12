@@ -264,7 +264,7 @@ func TestCreatingPostMalfeasanceProof(t *testing.T) {
 		stopPublishing()
 		logger.Info("malfeasance proof received")
 		require.Equal(t, malfeasance.GetProof().GetSmesherId().Id, signer.NodeID().Bytes())
-		require.Equal(t, pb.MalfeasanceProof_MalfeasanceType(4), malfeasance.GetProof().GetKind())
+		require.Equal(t, pb.MalfeasanceProof_MALFEASANCE_POST_INDEX, malfeasance.GetProof().GetKind())
 
 		var proof types.MalfeasanceProof
 		require.NoError(t, codec.Decode(malfeasance.Proof.Proof, &proof))
