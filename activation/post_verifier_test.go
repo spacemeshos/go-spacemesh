@@ -68,6 +68,7 @@ func TestPostVerifierNoRaceOnClose(t *testing.T) {
 	verifier := activation.NewMockPostVerifier(gomock.NewController(t))
 	offloadingVerifier := activation.NewOffloadingPostVerifier(verifier, 1, zaptest.NewLogger(t))
 	defer offloadingVerifier.Close()
+
 	verifier.EXPECT().Close().AnyTimes().Return(nil)
 	verifier.EXPECT().Verify(gomock.Any(), &proof, &metadata, gomock.Any()).AnyTimes().Return(nil)
 

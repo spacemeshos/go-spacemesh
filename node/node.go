@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -94,12 +95,13 @@ const (
 	P2PLogger              = "p2p"
 	PostLogger             = "post"
 	PostServiceLogger      = "postService"
-	StateDbLogger          = "stateDbStore"
+	StateDbLogger          = "stateDb"
 	BeaconLogger           = "beacon"
 	CachedDBLogger         = "cachedDB"
 	PoetDbLogger           = "poetDb"
 	TrtlLogger             = "trtl"
 	ATXHandlerLogger       = "atxHandler"
+	ATXBuilderLogger       = "atxBuilder"
 	MeshLogger             = "mesh"
 	SyncLogger             = "sync"
 	HareOracleLogger       = "hareOracle"
@@ -882,16 +884,23 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 	proposalBuilder.Register(app.edSgn)
 
-	u := url.URL{
-		Scheme: "http",
-		Host:   app.Config.API.PrivateListener,
+	host, port, err := net.SplitHostPort(app.Config.API.PrivateListener)
+	if err != nil {
+		return fmt.Errorf("parse grpc-private-listener: %w", err)
 	}
-	app.Config.POSTService.NodeAddress = u.String()
+	ip := net.ParseIP(host)
+	if ip.IsUnspecified() {
+		host = "127.0.0.1"
+	}
+
+	app.Config.POSTService.NodeAddress = fmt.Sprintf("http://%s:%s", host, port)
 	postSetupMgr, err := activation.NewPostSetupManager(
 		app.edSgn.NodeID(),
 		app.Config.POST,
 		app.addLogger(PostLogger, lg).Zap(),
-		app.cachedDB, goldenATXID,
+		app.cachedDB,
+		goldenATXID,
+		newSyncer,
 	)
 	if err != nil {
 		return fmt.Errorf("create post setup manager: %v", err)
@@ -903,7 +912,6 @@ func (app *App) initServices(ctx context.Context) error {
 		app.Config.POST,
 		app.Config.SMESHING.ProvingOpts,
 		postSetupMgr,
-		newSyncer,
 	)
 	if err != nil {
 		return fmt.Errorf("init post service: %w", err)
@@ -939,7 +947,7 @@ func (app *App) initServices(ctx context.Context) error {
 		nipostBuilder,
 		app.clock,
 		newSyncer,
-		app.addLogger("atxBuilder", lg).Zap(),
+		app.addLogger(ATXBuilderLogger, lg).Zap(),
 		activation.WithContext(ctx),
 		activation.WithPoetConfig(app.Config.POET),
 		// TODO(dshulyak) makes no sense. how we ended using it?

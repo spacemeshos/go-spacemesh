@@ -77,7 +77,8 @@ func (h *handler) handleEpochInfoReq(ctx context.Context, msg []byte) ([]byte, e
 	}
 	h.logger.WithContext(ctx).With().Debug("serve: responded to epoch info request",
 		epoch,
-		log.Int("atx_count", len(ed.AtxIDs)))
+		log.Int("atx_count", len(ed.AtxIDs)),
+	)
 	bts, err := codec.Encode(&ed)
 	if err != nil {
 		h.logger.WithContext(ctx).With().Fatal("serve: failed to serialize epoch atx", epoch, log.Err(err))
