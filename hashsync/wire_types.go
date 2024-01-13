@@ -101,4 +101,29 @@ type ItemBatchMessage struct {
 
 func (m *ItemBatchMessage) Type() MessageType { return MessageTypeItemBatch }
 
+// QueryMessage requests bounded range fingerprint and count from the peer
+type QueryMessage struct {
+	RangeX, RangeY *types.Hash32
+}
+
+var _ SyncMessage = &QueryMessage{}
+
+func (m *QueryMessage) Type() MessageType { return MessageTypeQuery }
+func (m *QueryMessage) X() Ordered {
+	if m.RangeX == nil {
+		return nil
+	}
+	return *m.RangeX
+}
+func (m *QueryMessage) Y() Ordered {
+	if m.RangeY == nil {
+		return nil
+	}
+	return *m.RangeY
+}
+func (m *QueryMessage) Fingerprint() any { return nil }
+func (m *QueryMessage) Count() int       { return 0 }
+func (m *QueryMessage) Keys() []Ordered  { return nil }
+func (m *QueryMessage) Values() []any    { return nil }
+
 // TODO: don't do scalegen for empty types

@@ -271,3 +271,41 @@ func (t *ItemBatchMessage) DecodeScale(dec *scale.Decoder) (total int, err error
 	}
 	return total, nil
 }
+
+func (t *QueryMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeOption(enc, t.RangeX)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeOption(enc, t.RangeY)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *QueryMessage) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		field, n, err := scale.DecodeOption[types.Hash32](dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.RangeX = field
+	}
+	{
+		field, n, err := scale.DecodeOption[types.Hash32](dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.RangeY = field
+	}
+	return total, nil
+}

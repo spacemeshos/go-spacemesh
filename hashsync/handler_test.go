@@ -420,6 +420,61 @@ func TestWireConduit(t *testing.T) {
 
 type getRequesterFunc func(name string, handler server.InteractiveHandler, peers ...requester) (requester, p2p.Peer)
 
+func withClientServer(
+	storeA, storeB ItemStore,
+	getRequester getRequesterFunc,
+	opts []Option,
+	toCall func(ctx context.Context, client requester, srvPeerID p2p.Peer),
+) {
+	srvHandler := MakeServerHandler(storeA, opts...)
+	srv, srvPeerID := getRequester("srv", srvHandler)
+	var eg errgroup.Group
+	ctx, cancel := context.WithCancel(context.Background())
+	defer func() {
+		cancel()
+		eg.Wait()
+	}()
+	eg.Go(func() error {
+		return srv.Run(ctx)
+	})
+
+	client, _ := getRequester("client", nil, srv)
+	toCall(ctx, client, srvPeerID)
+}
+
+func fakeRequesterGetter(t *testing.T) getRequesterFunc {
+	return func(name string, handler server.InteractiveHandler, peers ...requester) (requester, p2p.Peer) {
+		pid := p2p.Peer(name)
+		return newFakeRequester(pid, handler, peers...), pid
+	}
+}
+
+func p2pRequesterGetter(t *testing.T) getRequesterFunc {
+	mesh, err := mocknet.FullMeshConnected(2)
+	require.NoError(t, err)
+	proto := "itest"
+	opts := []server.Opt{
+		server.WithTimeout(10 * time.Second),
+		server.WithLog(logtest.New(t)),
+	}
+	return func(name string, handler server.InteractiveHandler, peers ...requester) (requester, p2p.Peer) {
+		if len(peers) == 0 {
+			return server.New(mesh.Hosts()[0], proto, handler, opts...), mesh.Hosts()[0].ID()
+		}
+		s := server.New(mesh.Hosts()[1], proto, handler, opts...)
+		// TODO: this 'Eventually' is somewhat misplaced
+		require.Eventually(t, func() bool {
+			for _, h := range mesh.Hosts()[0:] {
+				if len(h.Mux().Protocols()) == 0 {
+					return false
+				}
+			}
+			return true
+		}, time.Second, 10*time.Millisecond)
+		return s, mesh.Hosts()[1].ID()
+	}
+}
+
 func testWireSync(t *testing.T, getRequester getRequesterFunc) requester {
 	cfg := xorSyncTestConfig{
 		maxSendRange:    1,
@@ -430,64 +485,76 @@ func testWireSync(t *testing.T, getRequester getRequesterFunc) requester {
 		maxNumSpecificB: 100,
 	}
 	var client requester
-	verifyXORSync(t, cfg, func(storeA, storeB ItemStore, numSpecific int, opts []Option) {
-		srvHandler := MakeServerHandler(storeA, opts...)
-		srv, srvPeerID := getRequester("srv", srvHandler)
-		var eg errgroup.Group
-		ctx, cancel := context.WithCancel(context.Background())
-		defer func() {
-			cancel()
-			eg.Wait()
-		}()
-		eg.Go(func() error {
-			return srv.Run(ctx)
-		})
+	verifyXORSync(t, cfg, func(storeA, storeB ItemStore, numSpecific int, opts []Option) bool {
+		withClientServer(
+			storeA, storeB, getRequester, opts,
+			func(ctx context.Context, client requester, srvPeerID p2p.Peer) {
+				err := SyncStore(ctx, client, srvPeerID, storeB, opts...)
+				require.NoError(t, err)
 
-		client, _ = getRequester("client", nil, srv)
-		err := SyncStore(ctx, client, srvPeerID, storeB, opts...)
-		require.NoError(t, err)
-
-		if fr, ok := client.(*fakeRequester); ok {
-			t.Logf("numSpecific: %d, bytesSent %d, bytesReceived %d",
-				numSpecific, fr.bytesSent, fr.bytesReceived)
-		}
+				if fr, ok := client.(*fakeRequester); ok {
+					t.Logf("numSpecific: %d, bytesSent %d, bytesReceived %d",
+						numSpecific, fr.bytesSent, fr.bytesReceived)
+				}
+			})
+		return true
 	})
 	return client
 }
 
 func TestWireSync(t *testing.T) {
 	t.Run("fake requester", func(t *testing.T) {
-		testWireSync(t, func(name string, handler server.InteractiveHandler, peers ...requester) (requester, p2p.Peer) {
-			pid := p2p.Peer(name)
-			return newFakeRequester(pid, handler, peers...), pid
-		})
+		testWireSync(t, fakeRequesterGetter(t))
 	})
-
 	t.Run("p2p", func(t *testing.T) {
-		mesh, err := mocknet.FullMeshConnected(2)
-		require.NoError(t, err)
-		proto := "itest"
-		opts := []server.Opt{
-			server.WithTimeout(10 * time.Second),
-			server.WithLog(logtest.New(t)),
-		}
-		testWireSync(t, func(name string, handler server.InteractiveHandler, peers ...requester) (requester, p2p.Peer) {
-			if len(peers) == 0 {
-				return server.New(mesh.Hosts()[0], proto, handler, opts...), mesh.Hosts()[0].ID()
-			}
-			s := server.New(mesh.Hosts()[1], proto, handler, opts...)
-			// TODO: this 'Eventually' is somewhat misplaced
-			require.Eventually(t, func() bool {
-				for _, h := range mesh.Hosts()[0:] {
-					if len(h.Mux().Protocols()) == 0 {
-						return false
-					}
-				}
-				return true
-			}, time.Second, 10*time.Millisecond)
-			return s, mesh.Hosts()[1].ID()
-		})
+		testWireSync(t, p2pRequesterGetter(t))
 	})
 }
 
+func testWireProbe(t *testing.T, getRequester getRequesterFunc) requester {
+	cfg := xorSyncTestConfig{
+		maxSendRange:    1,
+		numTestHashes:   32,
+		minNumSpecificA: 4,
+		maxNumSpecificA: 4,
+		minNumSpecificB: 4,
+		maxNumSpecificB: 4,
+	}
+	var client requester
+	verifyXORSync(t, cfg, func(storeA, storeB ItemStore, numSpecific int, opts []Option) bool {
+		withClientServer(
+			storeA, storeB, getRequester, opts,
+			func(ctx context.Context, client requester, srvPeerID p2p.Peer) {
+				minA := storeA.Min().Key()
+				infoA := storeA.GetRangeInfo(nil, minA, minA, -1)
+				fpA, countA, err := Probe(ctx, client, srvPeerID, opts...)
+				require.NoError(t, err)
+				require.Equal(t, infoA.Fingerprint, fpA)
+				require.Equal(t, infoA.Count, countA)
+
+				minA = storeA.Min().Key()
+				partInfoA := storeA.GetRangeInfo(nil, minA, minA, infoA.Count/2)
+				x := partInfoA.Start.Key().(types.Hash32)
+				y := partInfoA.End.Key().(types.Hash32)
+				// partInfoA = storeA.GetRangeInfo(nil, x, y, -1)
+				fpA, countA, err = BoundedProbe(ctx, client, srvPeerID, x, y, opts...)
+				require.NoError(t, err)
+				require.Equal(t, partInfoA.Fingerprint, fpA)
+				require.Equal(t, partInfoA.Count, countA)
+			})
+		return false
+	})
+	return client
+}
+
+func TestWireProbe(t *testing.T) {
+	t.Run("fake requester", func(t *testing.T) {
+		testWireProbe(t, fakeRequesterGetter(t))
+	})
+	t.Run("p2p", func(t *testing.T) {
+		testWireProbe(t, p2pRequesterGetter(t))
+	})
+}
+
+// TODO: test bounded sync
 // TODO: test fail handler

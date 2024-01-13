@@ -77,11 +77,6 @@ func decodeItemBatchMessage(m *ItemBatchMessage, newValue NewValueFunc) (*decode
 	return d, nil
 }
 
-type outboundMessage struct {
-	code MessageType // TODO: "mt"
-	msg  codec.Encodable
-}
-
 type conduitState int
 
 type wireConduit struct {
@@ -158,6 +153,12 @@ func (c *wireConduit) receive() (msgs []SyncMessage, err error) {
 				return nil, err
 			}
 			msgs = append(msgs, &m)
+		case MessageTypeQuery:
+			var m QueryMessage
+			if _, err := codec.DecodeFrom(b, &m); err != nil {
+				return nil, err
+			}
+			msgs = append(msgs, &m)
 		default:
 			return nil, fmt.Errorf("invalid message code %02x", code)
 		}
@@ -211,7 +212,7 @@ func (c *wireConduit) NextMessage() (SyncMessage, error) {
 	return msgs[0], nil
 }
 
-func (c *wireConduit) SendFingerprint(x Ordered, y Ordered, fingerprint any, count int) error {
+func (c *wireConduit) SendFingerprint(x, y Ordered, fingerprint any, count int) error {
 	return c.send(&FingerprintMessage{
 		RangeX:           x.(types.Hash32),
 		RangeY:           y.(types.Hash32),
@@ -224,11 +225,11 @@ func (c *wireConduit) SendEmptySet() error {
 	return c.send(&EmptySetMessage{})
 }
 
-func (c *wireConduit) SendEmptyRange(x Ordered, y Ordered) error {
+func (c *wireConduit) SendEmptyRange(x, y Ordered) error {
 	return c.send(&EmptyRangeMessage{RangeX: x.(types.Hash32), RangeY: y.(types.Hash32)})
 }
 
-func (c *wireConduit) SendRangeContents(x Ordered, y Ordered, count int) error {
+func (c *wireConduit) SendRangeContents(x, y Ordered, count int) error {
 	return c.send(&RangeContentsMessage{
 		RangeX:   x.(types.Hash32),
 		RangeY:   y.(types.Hash32),
@@ -266,6 +267,17 @@ func (c *wireConduit) SendEndRound() error {
 
 func (c *wireConduit) SendDone() error {
 	return c.send(&DoneMessage{})
+}
+
+func (c *wireConduit) SendQuery(x, y Ordered) error {
+	if x == nil && y == nil {
+		return c.send(&QueryMessage{})
+	} else if x == nil || y == nil {
+		panic("BUG: SendQuery: bad range: just one of the bounds is nil")
+	}
+	xh := x.(types.Hash32)
+	yh := y.(types.Hash32)
+	return c.send(&QueryMessage{RangeX: &xh, RangeY: &yh})
 }
 
 func (c *wireConduit) withInitialRequest(toCall func(Conduit) error) ([]byte, error) {
@@ -311,11 +323,29 @@ func MakeServerHandler(is ItemStore, opts ...Option) server.InteractiveHandler {
 	}
 }
 
+func BoundedSyncStore(ctx context.Context, r requester, peer p2p.Peer, is ItemStore, x, y types.Hash32, opts ...Option) error {
+	return syncStore(ctx, r, peer, is, &x, &y, opts)
+}
+
 func SyncStore(ctx context.Context, r requester, peer p2p.Peer, is ItemStore, opts ...Option) error {
+	return syncStore(ctx, r, peer, is, nil, nil, opts)
+}
+
+func syncStore(ctx context.Context, r requester, peer p2p.Peer, is ItemStore, x, y *types.Hash32, opts []Option) error {
 	c := wireConduit{newValue: is.New}
 	rsr := NewRangeSetReconciler(is, opts...)
 	// c.rmmePrint = true
-	initReq, err := c.withInitialRequest(rsr.Initiate)
+	var (
+		initReq []byte
+		err     error
+	)
+	if x == nil {
+		initReq, err = c.withInitialRequest(rsr.Initiate)
+	} else {
+		initReq, err = c.withInitialRequest(func(c Conduit) error {
+			return rsr.InitiateBounded(c, *x, *y)
+		})
+	}
 	if err != nil {
 		return err
 	}
@@ -330,9 +360,66 @@ func SyncStore(ctx context.Context, r requester, peer p2p.Peer, is ItemStore, op
 	}
 	select {
 	case <-ctx.Done():
+		<-done
 		return ctx.Err()
 	case <-done:
 		return reqErr
+	}
+}
+
+func Probe(ctx context.Context, r requester, peer p2p.Peer, opts ...Option) (fp any, count int, err error) {
+	return boundedProbe(ctx, r, peer, nil, nil, opts)
+}
+
+func BoundedProbe(ctx context.Context, r requester, peer p2p.Peer, x, y types.Hash32, opts ...Option) (fp any, count int, err error) {
+	return boundedProbe(ctx, r, peer, &x, &y, opts)
+}
+
+func boundedProbe(ctx context.Context, r requester, peer p2p.Peer, x, y *types.Hash32, opts []Option) (fp any, count int, err error) {
+	c := wireConduit{
+		newValue: func() any { return nil }, // not used
+	}
+	rsr := NewRangeSetReconciler(nil, opts...)
+	// c.rmmePrint = true
+	var initReq []byte
+	if x == nil {
+		initReq, err = c.withInitialRequest(func(c Conduit) error {
+			return rsr.InitiateProbe(c)
+		})
+	} else {
+		initReq, err = c.withInitialRequest(func(c Conduit) error {
+			return rsr.InitiateBoundedProbe(c, *x, *y)
+		})
+	}
+	if err != nil {
+		return nil, 0, err
+	}
+	done := make(chan struct{}, 2)
+	h := func(ctx context.Context, i server.Interactor) (time.Duration, error) {
+		defer func() {
+			done <- struct{}{}
+		}()
+		c.i = i
+		var err error
+		fp, count, err = rsr.HandleProbeResponse(&c)
+		return 0, err
+	}
+	var reqErr error
+	if err = r.InteractiveRequest(ctx, peer, initReq, h, func(err error) {
+		reqErr = err
+		done <- struct{}{}
+	}); err != nil {
+		return nil, 0, err
+	}
+	select {
+	case <-ctx.Done():
+		<-done
+		return nil, 0, ctx.Err()
+	case <-done:
+		if reqErr != nil {
+			return nil, 0, reqErr
+		}
+		return fp, count, nil
 	}
 }
 

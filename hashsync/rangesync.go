@@ -22,6 +22,7 @@ const (
 	MessageTypeFingerprint
 	MessageTypeRangeContents
 	MessageTypeItemBatch
+	MessageTypeQuery
 )
 
 var messageTypes = []string{
@@ -104,6 +105,10 @@ type Conduit interface {
 	SendEndRound() error
 	// SendDone sends a message that notifies the peer that sync is finished
 	SendDone() error
+	// SendQuery sends a message requesting fingerprint and count of the
+	// whole range or part of the range. The response will never contain any
+	// actual data items
+	SendQuery(x, y Ordered) error
 }
 
 type Option func(r *RangeSetReconciler)
@@ -233,7 +238,7 @@ func (rsr *RangeSetReconciler) handleMessage(c Conduit, preceding Iterator, msg 
 	x := msg.X()
 	y := msg.Y()
 	done = true
-	if msg.Type() == MessageTypeEmptySet {
+	if msg.Type() == MessageTypeEmptySet || (msg.Type() == MessageTypeQuery && x == nil && y == nil) {
 		// The peer has no items at all so didn't
 		// even send X & Y (SendEmptySet)
 		it := rsr.is.Min()
@@ -263,6 +268,11 @@ func (rsr *RangeSetReconciler) handleMessage(c Conduit, preceding Iterator, msg 
 				return nil, false, err
 			}
 		}
+	case msg.Type() == MessageTypeQuery:
+		if err := c.SendFingerprint(x, y, info.Fingerprint, info.Count); err != nil {
+			return nil, false, err
+		}
+		return nil, true, nil
 	case msg.Type() != MessageTypeFingerprint:
 		return nil, false, fmt.Errorf("unexpected message type %s", msg.Type())
 	case fingerprintEqual(info.Fingerprint, msg.Fingerprint()):
@@ -367,6 +377,52 @@ func (rsr *RangeSetReconciler) getMessages(c Conduit) (msgs []SyncMessage, done 
 				return msgs, true, nil
 			default:
 				msgs = append(msgs, msg)
+			}
+		}
+	}
+}
+
+func (rsr *RangeSetReconciler) InitiateProbe(c Conduit) error {
+	return rsr.InitiateBoundedProbe(c, nil, nil)
+}
+
+func (rsr *RangeSetReconciler) InitiateBoundedProbe(c Conduit, x, y Ordered) error {
+	if err := c.SendQuery(x, y); err != nil {
+		return err
+	}
+	if err := c.SendEndRound(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (rsr *RangeSetReconciler) HandleProbeResponse(c Conduit) (fp any, count int, err error) {
+	gotRange := false
+	for {
+		msg, err := c.NextMessage()
+		switch {
+		case err != nil:
+			return nil, 0, err
+		case msg == nil:
+			return nil, 0, errors.New("no end round marker")
+		default:
+			switch mt := msg.Type(); mt {
+			case MessageTypeEndRound:
+				return nil, 0, errors.New("non-final round in response to a probe")
+			case MessageTypeDone:
+				// the peer is not expecting any new messages
+				return fp, count, nil
+			case MessageTypeFingerprint:
+				fp = msg.Fingerprint()
+				count = msg.Count()
+				fallthrough
+			case MessageTypeEmptySet, MessageTypeEmptyRange:
+				if gotRange {
+					return nil, 0, errors.New("single range message expected")
+				}
+				gotRange = true
+			default:
+				return nil, 0, fmt.Errorf("unexpected message type: %v", msg.Type())
 			}
 		}
 	}

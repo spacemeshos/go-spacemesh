@@ -100,7 +100,7 @@ func (fv *fakeValue) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	return scale.EncodeString(enc, fv.v)
 }
 
-func verifyXORSync(t *testing.T, cfg xorSyncTestConfig, sync func(storeA, storeB ItemStore, numSpecific int, opts []Option)) {
+func verifyXORSync(t *testing.T, cfg xorSyncTestConfig, sync func(storeA, storeB ItemStore, numSpecific int, opts []Option) bool) {
 	opts := []Option{
 		WithMaxSendRange(cfg.maxSendRange),
 	}
@@ -130,19 +130,19 @@ func verifyXORSync(t *testing.T, cfg xorSyncTestConfig, sync func(storeA, storeB
 		return a.Compare(b)
 	})
 
-	sync(storeA, storeB, numSpecificA+numSpecificB, opts)
-
-	itemsA := collectStoreItems[types.Hash32, *fakeValue](storeA)
-	itemsB := collectStoreItems[types.Hash32, *fakeValue](storeB)
-	require.Equal(t, itemsA, itemsB)
-	srcPairs := make([]pair[types.Hash32, *fakeValue], len(src))
-	for n, h := range src {
-		srcPairs[n] = pair[types.Hash32, *fakeValue]{
-			k: h,
-			v: mkFakeValue(h),
+	if sync(storeA, storeB, numSpecificA+numSpecificB, opts) {
+		itemsA := collectStoreItems[types.Hash32, *fakeValue](storeA)
+		itemsB := collectStoreItems[types.Hash32, *fakeValue](storeB)
+		require.Equal(t, itemsA, itemsB)
+		srcPairs := make([]pair[types.Hash32, *fakeValue], len(src))
+		for n, h := range src {
+			srcPairs[n] = pair[types.Hash32, *fakeValue]{
+				k: h,
+				v: mkFakeValue(h),
+			}
 		}
+		require.Equal(t, srcPairs, itemsA)
 	}
-	require.Equal(t, srcPairs, itemsA)
 }
 
 func TestBigSyncHash32(t *testing.T) {
@@ -154,12 +154,13 @@ func TestBigSyncHash32(t *testing.T) {
 		minNumSpecificB: 4,
 		maxNumSpecificB: 100,
 	}
-	verifyXORSync(t, cfg, func(storeA, storeB ItemStore, numSpecific int, opts []Option) {
+	verifyXORSync(t, cfg, func(storeA, storeB ItemStore, numSpecific int, opts []Option) bool {
 		syncA := NewRangeSetReconciler(storeA, opts...)
 		syncB := NewRangeSetReconciler(storeB, opts...)
 		nRounds, nMsg, nItems := runSync(t, syncA, syncB, 100)
 		itemCoef := float64(nItems) / float64(numSpecific)
 		t.Logf("numSpecific: %d, nRounds: %d, nMsg: %d, nItems: %d, itemCoef: %.2f",
 			numSpecific, nRounds, nMsg, nItems, itemCoef)
+		return true
 	})
 }

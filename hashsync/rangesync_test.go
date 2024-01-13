@@ -36,10 +36,15 @@ func (m rangeMessage) String() string {
 type fakeConduit struct {
 	t    *testing.T
 	msgs []rangeMessage
-	resp *fakeConduit
+	resp []rangeMessage
 }
 
 var _ Conduit = &fakeConduit{}
+
+func (fc *fakeConduit) gotoResponse() {
+	fc.msgs = fc.resp
+	fc.resp = nil
+}
 
 func (fc *fakeConduit) numItems() int {
 	n := 0
@@ -59,14 +64,7 @@ func (fc *fakeConduit) NextMessage() (SyncMessage, error) {
 	return nil, nil
 }
 
-func (fc *fakeConduit) ensureResp() {
-	if fc.resp == nil {
-		fc.resp = &fakeConduit{t: fc.t}
-	}
-}
-
 func (fc *fakeConduit) sendMsg(mtype MessageType, x, y Ordered, fingerprint any, count int) {
-	fc.ensureResp()
 	msg := rangeMessage{
 		mtype: mtype,
 		x:     x,
@@ -74,7 +72,7 @@ func (fc *fakeConduit) sendMsg(mtype MessageType, x, y Ordered, fingerprint any,
 		fp:    fingerprint,
 		count: count,
 	}
-	fc.resp.msgs = append(fc.resp.msgs, msg)
+	fc.resp = append(fc.resp, msg)
 }
 
 func (fc *fakeConduit) SendFingerprint(x, y Ordered, fingerprint any, count int) error {
@@ -109,7 +107,6 @@ func (fc *fakeConduit) SendItems(count, itemChunkSize int, it Iterator) error {
 	require.Positive(fc.t, count)
 	require.NotZero(fc.t, count)
 	require.NotNil(fc.t, it)
-	fc.ensureResp()
 	for i := 0; i < count; i += itemChunkSize {
 		msg := rangeMessage{mtype: MessageTypeItemBatch}
 		n := min(itemChunkSize, count-i)
@@ -122,7 +119,7 @@ func (fc *fakeConduit) SendItems(count, itemChunkSize int, it Iterator) error {
 			it.Next()
 			n--
 		}
-		fc.resp.msgs = append(fc.resp.msgs, msg)
+		fc.resp = append(fc.resp, msg)
 	}
 	return nil
 }
@@ -134,6 +131,11 @@ func (fc *fakeConduit) SendEndRound() error {
 
 func (fc *fakeConduit) SendDone() error {
 	fc.sendMsg(MessageTypeDone, nil, nil, nil, 0)
+	return nil
+}
+
+func (fc *fakeConduit) SendQuery(x, y Ordered) error {
+	fc.sendMsg(MessageTypeQuery, x, y, nil, 0)
 	return nil
 }
 
@@ -518,203 +520,284 @@ func runBoundedSync(t *testing.T, syncA, syncB *RangeSetReconciler, x, y Ordered
 
 func doRunSync(fc *fakeConduit, syncA, syncB *RangeSetReconciler, maxRounds int) (nRounds, nMsg, nItems int) {
 	var i int
-	done := false
+	aDone, bDone := false, false
 	// dumpRangeMessages(fc.t, fc.resp.msgs, "A %q -> B %q (init):", storeItemStr(syncA.is), storeItemStr(syncB.is))
 	// dumpRangeMessages(fc.t, fc.resp.msgs, "A -> B (init):")
-	for i = 0; !done; i++ {
+	for i = 0; ; i++ {
 		if i == maxRounds {
 			require.FailNow(fc.t, "too many rounds", "didn't reconcile in %d rounds", i)
 		}
-		fc = fc.resp
+		fc.gotoResponse()
 		nMsg += len(fc.msgs)
 		nItems += fc.numItems()
 		var err error
-		done, err = syncB.Process(fc)
+		bDone, err = syncB.Process(fc)
 		require.NoError(fc.t, err)
+		// a party should never send anything in response to the "done" message
+		require.False(fc.t, aDone && !bDone, "A is done but B after that is not")
 		// dumpRangeMessages(fc.t, fc.resp.msgs, "B %q -> A %q:", storeItemStr(syncA.is), storeItemStr(syncB.is))
 		// dumpRangeMessages(fc.t, fc.resp.msgs, "B -> A:")
-		if done {
+		if aDone && bDone {
+			require.Empty(fc.t, fc.resp, "got messages from B in response to done msg from A")
 			break
 		}
-		fc = fc.resp
+		fc.gotoResponse()
 		nMsg += len(fc.msgs)
 		nItems += fc.numItems()
-		done, err = syncA.Process(fc)
+		aDone, err = syncA.Process(fc)
 		require.NoError(fc.t, err)
 		// dumpRangeMessages(fc.t, fc.msgs, "A %q --> B %q:", storeItemStr(syncB.is), storeItemStr(syncA.is))
 		// dumpRangeMessages(fc.t, fc.resp.msgs, "A -> B:")
+		require.False(fc.t, bDone && !aDone, "B is done but A after that is not")
+		if aDone && bDone {
+			require.Empty(fc.t, fc.resp, "got messages from A in response to done msg from B")
+			break
+		}
 	}
 	return i + 1, nMsg, nItems
 }
 
-func testRangeSync(t *testing.T, storeFactory storeFactory) {
-	for _, tc := range []struct {
-		name      string
-		a, b      string
-		finalA    string
-		finalB    string
-		maxRounds [4]int
-		x, y      string
-	}{
-		{
-			name:      "empty sets",
-			a:         "",
-			b:         "",
-			finalA:    "",
-			finalB:    "",
-			maxRounds: [4]int{1, 1, 1, 1},
-		},
-		{
-			name:      "empty to non-empty",
-			a:         "",
-			b:         "abcd",
-			finalA:    "abcd",
-			finalB:    "abcd",
-			maxRounds: [4]int{2, 2, 2, 2},
-		},
-		{
-			name:      "non-empty to empty",
-			a:         "abcd",
-			b:         "",
-			finalA:    "abcd",
-			finalB:    "abcd",
-			maxRounds: [4]int{2, 2, 2, 2},
-		},
-		{
-			name:      "non-intersecting sets",
-			a:         "ab",
-			b:         "cd",
-			finalA:    "abcd",
-			finalB:    "abcd",
-			maxRounds: [4]int{3, 2, 2, 2},
-		},
-		{
-			name:      "intersecting sets",
-			a:         "acdefghijklmn",
-			b:         "bcdopqr",
-			finalA:    "abcdefghijklmnopqr",
-			finalB:    "abcdefghijklmnopqr",
-			maxRounds: [4]int{4, 4, 3, 3},
-		},
-		{
-			name:      "bounded reconciliation",
-			a:         "acdefghijklmn",
-			b:         "bcdopqr",
-			finalA:    "abcdefghijklmn",
-			finalB:    "abcdefgopqr",
-			maxRounds: [4]int{3, 3, 2, 2},
-			x:         "a",
-			y:         "h",
-		},
-		{
-			name:      "bounded reconciliation with rollover",
-			a:         "acdefghijklmn",
-			b:         "bcdopqr",
-			finalA:    "acdefghijklmnopqr",
-			finalB:    "bcdhijklmnopqr",
-			maxRounds: [4]int{4, 3, 3, 2},
-			x:         "h",
-			y:         "a",
-		},
-		{
-			name:      "sync against 1-element set",
-			a:         "bcd",
-			b:         "a",
-			finalA:    "abcd",
-			finalB:    "abcd",
-			maxRounds: [4]int{2, 2, 2, 2},
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			for n, maxSendRange := range []int{1, 2, 3, 4} {
-				t.Logf("maxSendRange: %d", maxSendRange)
-				storeA := makeStore(t, storeFactory, tc.a)
-				disableReAdd(storeA)
-				syncA := NewRangeSetReconciler(storeA,
-					WithMaxSendRange(maxSendRange),
-					WithItemChunkSize(3))
-				storeB := makeStore(t, storeFactory, tc.b)
-				disableReAdd(storeB)
-				syncB := NewRangeSetReconciler(storeB,
-					WithMaxSendRange(maxSendRange),
-					WithItemChunkSize(3))
+func runProbe(t *testing.T, from, to *RangeSetReconciler) (fp any, count int) {
+	fc := &fakeConduit{t: t}
+	require.NoError(t, from.InitiateProbe(fc))
+	return doRunProbe(fc, from, to)
+}
 
-				var nRounds int
-				if tc.x == "" {
-					nRounds, _, _ = runSync(t, syncA, syncB, tc.maxRounds[n])
-				} else {
-					nRounds, _, _ = runBoundedSync(t, syncA, syncB,
-						sampleID(tc.x), sampleID(tc.y), tc.maxRounds[n])
-				}
-				t.Logf("%s: maxSendRange %d: %d rounds", tc.name, maxSendRange, nRounds)
+func runBoundedProbe(t *testing.T, from, to *RangeSetReconciler, x, y Ordered) (fp any, count int) {
+	fc := &fakeConduit{t: t}
+	require.NoError(t, from.InitiateBoundedProbe(fc, x, y))
+	return doRunProbe(fc, from, to)
+}
 
-				require.Equal(t, tc.finalA, storeItemStr(storeA))
-				require.Equal(t, tc.finalB, storeItemStr(storeB))
-			}
-		})
-	}
+func doRunProbe(fc *fakeConduit, from, to *RangeSetReconciler) (fp any, count int) {
+	require.NotEmpty(fc.t, fc.resp, "empty initial round")
+	fc.gotoResponse()
+	done, err := to.Process(fc)
+	require.True(fc.t, done)
+	require.NoError(fc.t, err)
+	fc.gotoResponse()
+	fp, count, err = from.HandleProbeResponse(fc)
+	require.NoError(fc.t, err)
+	require.Nil(fc.t, fc.resp, "got messages from Probe in response to done msg")
+	return fp, count
 }
 
 func TestRangeSync(t *testing.T) {
-	forTestStores(t, testRangeSync)
-}
+	forTestStores(t, func(t *testing.T, storeFactory storeFactory) {
+		for _, tc := range []struct {
+			name      string
+			a, b      string
+			finalA    string
+			finalB    string
+			x, y      string
+			countA    int
+			countB    int
+			fpA       any
+			fpB       any
+			maxRounds [4]int
+		}{
+			{
+				name:      "empty sets",
+				a:         "",
+				b:         "",
+				finalA:    "",
+				finalB:    "",
+				countA:    0,
+				countB:    0,
+				fpA:       nil,
+				fpB:       nil,
+				maxRounds: [4]int{1, 1, 1, 1},
+			},
+			{
+				name:      "empty to non-empty",
+				a:         "",
+				b:         "abcd",
+				finalA:    "abcd",
+				finalB:    "abcd",
+				countA:    0,
+				countB:    4,
+				fpA:       nil,
+				fpB:       "abcd",
+				maxRounds: [4]int{2, 2, 2, 2},
+			},
+			{
+				name:      "non-empty to empty",
+				a:         "abcd",
+				b:         "",
+				finalA:    "abcd",
+				finalB:    "abcd",
+				countA:    4,
+				countB:    0,
+				fpA:       "abcd",
+				fpB:       nil,
+				maxRounds: [4]int{2, 2, 2, 2},
+			},
+			{
+				name:      "non-intersecting sets",
+				a:         "ab",
+				b:         "cd",
+				finalA:    "abcd",
+				finalB:    "abcd",
+				countA:    2,
+				countB:    2,
+				fpA:       "ab",
+				fpB:       "cd",
+				maxRounds: [4]int{3, 2, 2, 2},
+			},
+			{
+				name:      "intersecting sets",
+				a:         "acdefghijklmn",
+				b:         "bcdopqr",
+				finalA:    "abcdefghijklmnopqr",
+				finalB:    "abcdefghijklmnopqr",
+				countA:    13,
+				countB:    7,
+				fpA:       "acdefghijklmn",
+				fpB:       "bcdopqr",
+				maxRounds: [4]int{4, 4, 3, 3},
+			},
+			{
+				name:      "bounded reconciliation",
+				a:         "acdefghijklmn",
+				b:         "bcdopqr",
+				finalA:    "abcdefghijklmn",
+				finalB:    "abcdefgopqr",
+				x:         "a",
+				y:         "h",
+				countA:    6,
+				countB:    3,
+				fpA:       "acdefg",
+				fpB:       "bcd",
+				maxRounds: [4]int{3, 3, 2, 2},
+			},
+			{
+				name:      "bounded reconciliation with rollover",
+				a:         "acdefghijklmn",
+				b:         "bcdopqr",
+				finalA:    "acdefghijklmnopqr",
+				finalB:    "bcdhijklmnopqr",
+				x:         "h",
+				y:         "a",
+				countA:    7,
+				countB:    4,
+				fpA:       "hijklmn",
+				fpB:       "opqr",
+				maxRounds: [4]int{4, 3, 3, 2},
+			},
+			{
+				name:      "sync against 1-element set",
+				a:         "bcd",
+				b:         "a",
+				finalA:    "abcd",
+				finalB:    "abcd",
+				countA:    3,
+				countB:    1,
+				fpA:       "bcd",
+				fpB:       "a",
+				maxRounds: [4]int{2, 2, 2, 2},
+			},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				for n, maxSendRange := range []int{1, 2, 3, 4} {
+					t.Logf("maxSendRange: %d", maxSendRange)
+					storeA := makeStore(t, storeFactory, tc.a)
+					disableReAdd(storeA)
+					syncA := NewRangeSetReconciler(storeA,
+						WithMaxSendRange(maxSendRange),
+						WithItemChunkSize(3))
+					storeB := makeStore(t, storeFactory, tc.b)
+					disableReAdd(storeB)
+					syncB := NewRangeSetReconciler(storeB,
+						WithMaxSendRange(maxSendRange),
+						WithItemChunkSize(3))
 
-func testRandomSync(t *testing.T, storeFactory storeFactory) {
-	var bytesA, bytesB []byte
-	defer func() {
-		if t.Failed() {
-			t.Logf("Random sync failed: %q <-> %q", bytesA, bytesB)
+					var (
+						countA, countB, nRounds int
+						fpA, fpB                any
+					)
+					if tc.x == "" {
+						fpA, countA = runProbe(t, syncB, syncA)
+						fpB, countB = runProbe(t, syncA, syncB)
+						nRounds, _, _ = runSync(t, syncA, syncB, tc.maxRounds[n])
+					} else {
+						x := sampleID(tc.x)
+						y := sampleID(tc.y)
+						fpA, countA = runBoundedProbe(t, syncB, syncA, x, y)
+						fpB, countB = runBoundedProbe(t, syncA, syncB, x, y)
+						nRounds, _, _ = runBoundedSync(t, syncA, syncB, x, y, tc.maxRounds[n])
+					}
+					t.Logf("%s: maxSendRange %d: %d rounds", tc.name, maxSendRange, nRounds)
+
+					require.Equal(t, tc.countA, countA, "countA")
+					require.Equal(t, tc.countB, countB, "countB")
+					require.Equal(t, tc.fpA, fpA, "fpA")
+					require.Equal(t, tc.fpB, fpB, "fpB")
+					require.Equal(t, tc.finalA, storeItemStr(storeA), "finalA")
+					require.Equal(t, tc.finalB, storeItemStr(storeB), "finalB")
+				}
+			})
 		}
-	}()
-	for i := 0; i < 1000; i++ {
-		var chars []byte
-		for c := byte(33); c < 127; c++ {
-			chars = append(chars, c)
-		}
-
-		bytesA = append([]byte(nil), chars...)
-		rand.Shuffle(len(bytesA), func(i, j int) {
-			bytesA[i], bytesA[j] = bytesA[j], bytesA[i]
-		})
-		bytesA = bytesA[:rand.Intn(len(bytesA))]
-		storeA := makeStore(t, storeFactory, string(bytesA))
-
-		bytesB = append([]byte(nil), chars...)
-		rand.Shuffle(len(bytesB), func(i, j int) {
-			bytesB[i], bytesB[j] = bytesB[j], bytesB[i]
-		})
-		bytesB = bytesB[:rand.Intn(len(bytesB))]
-		storeB := makeStore(t, storeFactory, string(bytesB))
-
-		keySet := make(map[byte]struct{})
-		for _, c := range append(bytesA, bytesB...) {
-			keySet[byte(c)] = struct{}{}
-		}
-
-		expectedSet := maps.Keys(keySet)
-		slices.Sort(expectedSet)
-
-		maxSendRange := rand.Intn(16) + 1
-		syncA := NewRangeSetReconciler(storeA,
-			WithMaxSendRange(maxSendRange),
-			WithItemChunkSize(3))
-		syncB := NewRangeSetReconciler(storeB,
-			WithMaxSendRange(maxSendRange),
-			WithItemChunkSize(3))
-
-		runSync(t, syncA, syncB, max(len(expectedSet), 2)) // FIXME: less rounds!
-		// t.Logf("maxSendRange %d a %d b %d n %d", maxSendRange, len(bytesA), len(bytesB), n)
-		require.Equal(t, storeItemStr(storeA), storeItemStr(storeB))
-		require.Equal(t, string(expectedSet), storeItemStr(storeA),
-			"expected set for %q<->%q", bytesA, bytesB)
-	}
+	})
 }
 
 func TestRandomSync(t *testing.T) {
-	forTestStores(t, testRandomSync)
+	forTestStores(t, func(t *testing.T, storeFactory storeFactory) {
+		var bytesA, bytesB []byte
+		defer func() {
+			if t.Failed() {
+				t.Logf("Random sync failed: %q <-> %q", bytesA, bytesB)
+			}
+		}()
+		for i := 0; i < 1000; i++ {
+			var chars []byte
+			for c := byte(33); c < 127; c++ {
+				chars = append(chars, c)
+			}
+
+			bytesA = append([]byte(nil), chars...)
+			rand.Shuffle(len(bytesA), func(i, j int) {
+				bytesA[i], bytesA[j] = bytesA[j], bytesA[i]
+			})
+			bytesA = bytesA[:rand.Intn(len(bytesA))]
+			storeA := makeStore(t, storeFactory, string(bytesA))
+
+			bytesB = append([]byte(nil), chars...)
+			rand.Shuffle(len(bytesB), func(i, j int) {
+				bytesB[i], bytesB[j] = bytesB[j], bytesB[i]
+			})
+			bytesB = bytesB[:rand.Intn(len(bytesB))]
+			storeB := makeStore(t, storeFactory, string(bytesB))
+
+			keySet := make(map[byte]struct{})
+			for _, c := range append(bytesA, bytesB...) {
+				keySet[byte(c)] = struct{}{}
+			}
+
+			expectedSet := maps.Keys(keySet)
+			slices.Sort(expectedSet)
+
+			maxSendRange := rand.Intn(16) + 1
+			syncA := NewRangeSetReconciler(storeA,
+				WithMaxSendRange(maxSendRange),
+				WithItemChunkSize(3))
+			syncB := NewRangeSetReconciler(storeB,
+				WithMaxSendRange(maxSendRange),
+				WithItemChunkSize(3))
+
+			runSync(t, syncA, syncB, max(len(expectedSet), 2)) // FIXME: less rounds!
+			// t.Logf("maxSendRange %d a %d b %d n %d", maxSendRange, len(bytesA), len(bytesB), n)
+			require.Equal(t, storeItemStr(storeA), storeItemStr(storeB))
+			require.Equal(t, string(expectedSet), storeItemStr(storeA),
+				"expected set for %q<->%q", bytesA, bytesB)
+		}
+	})
 }
 
-// TBD: include initiate round!!!
+// TBD: make sure that requests with MessageTypeDone are never
+//      answered!!!
 // TBD: use logger for verbose logging (messages)
-// TBD: in fakeConduit -- check item count against the iterator in SendItems / SendItemsOnly!!
-// TBD: record interaction using golden master in testRangeSync, together with N of rounds / msgs / items and don't check max rounds
+// TBD: in fakeConduit -- check item count against the iterator in
+//      SendItems / SendItemsOnly!!
+// TBD: record interaction using golden master in testRangeSync, for
+//      both probe and sync, together with N of rounds / msgs / items
+//      and don't check max rounds
