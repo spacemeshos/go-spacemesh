@@ -315,25 +315,32 @@ func (rsr *RangeSetReconciler) handleMessage(c Conduit, preceding Iterator, msg 
 
 func (rsr *RangeSetReconciler) Initiate(c Conduit) error {
 	it := rsr.is.Min()
-	if it == nil {
+	var x Ordered
+	if it != nil {
+		x = it.Key()
+	}
+	return rsr.InitiateBounded(c, x, x)
+}
+
+func (rsr *RangeSetReconciler) InitiateBounded(c Conduit, x, y Ordered) error {
+	if x == nil {
 		if err := c.SendEmptySet(); err != nil {
 			return err
 		}
 	} else {
-		min := it.Key()
-		info := rsr.is.GetRangeInfo(nil, min, min, -1)
+		info := rsr.is.GetRangeInfo(nil, x, y, -1)
 		switch {
 		case info.Count == 0:
 			panic("empty full min-min range")
 		case info.Count < rsr.maxSendRange:
-			if err := c.SendRangeContents(min, min, info.Count); err != nil {
+			if err := c.SendRangeContents(x, y, info.Count); err != nil {
 				return err
 			}
-			if err := c.SendItems(info.Count, rsr.itemChunkSize, it); err != nil {
+			if err := c.SendItems(info.Count, rsr.itemChunkSize, info.Start); err != nil {
 				return err
 			}
 		default:
-			if err := c.SendFingerprint(min, min, info.Fingerprint, info.Count); err != nil {
+			if err := c.SendFingerprint(x, y, info.Fingerprint, info.Count); err != nil {
 				return err
 			}
 		}

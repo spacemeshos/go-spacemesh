@@ -506,23 +506,33 @@ func dumpRangeMessages(t *testing.T, msgs []rangeMessage, fmt string, args ...an
 
 func runSync(t *testing.T, syncA, syncB *RangeSetReconciler, maxRounds int) (nRounds, nMsg, nItems int) {
 	fc := &fakeConduit{t: t}
-	syncA.Initiate(fc)
+	require.NoError(t, syncA.Initiate(fc))
+	return doRunSync(fc, syncA, syncB, maxRounds)
+}
+
+func runBoundedSync(t *testing.T, syncA, syncB *RangeSetReconciler, x, y Ordered, maxRounds int) (nRounds, nMsg, nItems int) {
+	fc := &fakeConduit{t: t}
+	require.NoError(t, syncA.InitiateBounded(fc, x, y))
+	return doRunSync(fc, syncA, syncB, maxRounds)
+}
+
+func doRunSync(fc *fakeConduit, syncA, syncB *RangeSetReconciler, maxRounds int) (nRounds, nMsg, nItems int) {
 	var i int
 	done := false
-	// dumpRangeMessages(t, fc.resp.msgs, "A %q -> B %q (init):", storeItemStr(syncA.is), storeItemStr(syncB.is))
-	// dumpRangeMessages(t, fc.resp.msgs, "A -> B (init):")
+	// dumpRangeMessages(fc.t, fc.resp.msgs, "A %q -> B %q (init):", storeItemStr(syncA.is), storeItemStr(syncB.is))
+	// dumpRangeMessages(fc.t, fc.resp.msgs, "A -> B (init):")
 	for i = 0; !done; i++ {
 		if i == maxRounds {
-			require.FailNow(t, "too many rounds", "didn't reconcile in %d rounds", i)
+			require.FailNow(fc.t, "too many rounds", "didn't reconcile in %d rounds", i)
 		}
 		fc = fc.resp
 		nMsg += len(fc.msgs)
 		nItems += fc.numItems()
 		var err error
 		done, err = syncB.Process(fc)
-		require.NoError(t, err)
-		// dumpRangeMessages(t, fc.resp.msgs, "B %q -> A %q:", storeItemStr(syncA.is), storeItemStr(syncB.is))
-		// dumpRangeMessages(t, fc.resp.msgs, "B -> A:")
+		require.NoError(fc.t, err)
+		// dumpRangeMessages(fc.t, fc.resp.msgs, "B %q -> A %q:", storeItemStr(syncA.is), storeItemStr(syncB.is))
+		// dumpRangeMessages(fc.t, fc.resp.msgs, "B -> A:")
 		if done {
 			break
 		}
@@ -530,9 +540,9 @@ func runSync(t *testing.T, syncA, syncB *RangeSetReconciler, maxRounds int) (nRo
 		nMsg += len(fc.msgs)
 		nItems += fc.numItems()
 		done, err = syncA.Process(fc)
-		require.NoError(t, err)
-		// dumpRangeMessages(t, fc.msgs, "A %q --> B %q:", storeItemStr(syncB.is), storeItemStr(syncA.is))
-		// dumpRangeMessages(t, fc.resp.msgs, "A -> B:")
+		require.NoError(fc.t, err)
+		// dumpRangeMessages(fc.t, fc.msgs, "A %q --> B %q:", storeItemStr(syncB.is), storeItemStr(syncA.is))
+		// dumpRangeMessages(fc.t, fc.resp.msgs, "A -> B:")
 	}
 	return i + 1, nMsg, nItems
 }
@@ -541,50 +551,78 @@ func testRangeSync(t *testing.T, storeFactory storeFactory) {
 	for _, tc := range []struct {
 		name      string
 		a, b      string
-		final     string
+		finalA    string
+		finalB    string
 		maxRounds [4]int
+		x, y      string
 	}{
 		{
 			name:      "empty sets",
 			a:         "",
 			b:         "",
-			final:     "",
+			finalA:    "",
+			finalB:    "",
 			maxRounds: [4]int{1, 1, 1, 1},
 		},
 		{
 			name:      "empty to non-empty",
 			a:         "",
 			b:         "abcd",
-			final:     "abcd",
-			maxRounds: [4]int{1, 1, 1, 1},
+			finalA:    "abcd",
+			finalB:    "abcd",
+			maxRounds: [4]int{2, 2, 2, 2},
 		},
 		{
 			name:      "non-empty to empty",
 			a:         "abcd",
 			b:         "",
-			final:     "abcd",
+			finalA:    "abcd",
+			finalB:    "abcd",
 			maxRounds: [4]int{2, 2, 2, 2},
 		},
 		{
 			name:      "non-intersecting sets",
 			a:         "ab",
 			b:         "cd",
-			final:     "abcd",
+			finalA:    "abcd",
+			finalB:    "abcd",
 			maxRounds: [4]int{3, 2, 2, 2},
 		},
 		{
 			name:      "intersecting sets",
 			a:         "acdefghijklmn",
 			b:         "bcdopqr",
-			final:     "abcdefghijklmnopqr",
-			maxRounds: [4]int{4, 4, 4, 3},
+			finalA:    "abcdefghijklmnopqr",
+			finalB:    "abcdefghijklmnopqr",
+			maxRounds: [4]int{4, 4, 3, 3},
+		},
+		{
+			name:      "bounded reconciliation",
+			a:         "acdefghijklmn",
+			b:         "bcdopqr",
+			finalA:    "abcdefghijklmn",
+			finalB:    "abcdefgopqr",
+			maxRounds: [4]int{3, 3, 2, 2},
+			x:         "a",
+			y:         "h",
+		},
+		{
+			name:      "bounded reconciliation with rollover",
+			a:         "acdefghijklmn",
+			b:         "bcdopqr",
+			finalA:    "acdefghijklmnopqr",
+			finalB:    "bcdhijklmnopqr",
+			maxRounds: [4]int{4, 3, 3, 2},
+			x:         "h",
+			y:         "a",
 		},
 		{
 			name:      "sync against 1-element set",
 			a:         "bcd",
 			b:         "a",
-			final:     "abcd",
-			maxRounds: [4]int{3, 2, 2, 1},
+			finalA:    "abcd",
+			finalB:    "abcd",
+			maxRounds: [4]int{2, 2, 2, 2},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -601,11 +639,17 @@ func testRangeSync(t *testing.T, storeFactory storeFactory) {
 					WithMaxSendRange(maxSendRange),
 					WithItemChunkSize(3))
 
-				nRounds, _, _ := runSync(t, syncA, syncB, tc.maxRounds[n])
+				var nRounds int
+				if tc.x == "" {
+					nRounds, _, _ = runSync(t, syncA, syncB, tc.maxRounds[n])
+				} else {
+					nRounds, _, _ = runBoundedSync(t, syncA, syncB,
+						sampleID(tc.x), sampleID(tc.y), tc.maxRounds[n])
+				}
 				t.Logf("%s: maxSendRange %d: %d rounds", tc.name, maxSendRange, nRounds)
 
-				require.Equal(t, storeItemStr(storeA), storeItemStr(storeB))
-				require.Equal(t, tc.final, storeItemStr(storeA))
+				require.Equal(t, tc.finalA, storeItemStr(storeA))
+				require.Equal(t, tc.finalB, storeItemStr(storeB))
 			}
 		})
 	}
