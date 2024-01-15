@@ -25,7 +25,7 @@ import (
 type Generator struct {
 	logger log.Log
 	cfg    Config
-	mtx    sync.Mutex
+	once   sync.Once
 	eg     errgroup.Group
 	stop   func()
 
@@ -111,23 +111,16 @@ func NewGenerator(
 
 // Start starts listening to hare output.
 func (g *Generator) Start(ctx context.Context) {
-	g.mtx.Lock()
-	defer g.mtx.Unlock()
-	if g.stop != nil {
-		return
-	}
-
-	ctx, g.stop = context.WithCancel(ctx)
-	g.eg.Go(func() error {
-		return g.run(ctx)
+	g.once.Do(func() {
+		ctx, g.stop = context.WithCancel(ctx)
+		g.eg.Go(func() error {
+			return g.run(ctx)
+		})
 	})
 }
 
 // Stop stops listening to hare output.
 func (g *Generator) Stop() {
-	g.mtx.Lock()
-	defer g.mtx.Unlock()
-
 	if g.stop == nil {
 		return
 	}
