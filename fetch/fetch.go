@@ -10,6 +10,7 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/network"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -104,6 +105,7 @@ type Config struct {
 	EnableServesMetrics  bool                    `mapstructure:"servers-metrics"`
 	ServersConfig        map[string]ServerConfig `mapstructure:"servers"`
 	PeersRateThreshold   float64                 `mapstructure:"peers-rate-threshold"`
+	GetAtxsConcurrency   int64                   // The maximum number of concurrent requests to get ATXs.
 }
 
 func (c Config) getServerConfig(protocol string) ServerConfig {
@@ -144,6 +146,7 @@ func DefaultConfig() Config {
 			OpnProtocol: {Queue: 10000, Requests: 1000, Interval: time.Second},
 		},
 		PeersRateThreshold: 0.02,
+		GetAtxsConcurrency: 100,
 	}
 }
 
@@ -213,6 +216,8 @@ type Fetch struct {
 	shutdownCtx context.Context
 	cancel      context.CancelFunc
 	eg          errgroup.Group
+
+	getAtxsLimiter limiter
 }
 
 // NewFetch creates a new Fetch struct.
@@ -237,6 +242,7 @@ func NewFetch(
 	for _, opt := range opts {
 		opt(f)
 	}
+	f.getAtxsLimiter = semaphore.NewWeighted(f.cfg.GetAtxsConcurrency)
 	f.peers = peers.New()
 	// NOTE(dshulyak) this is to avoid tests refactoring.
 	// there is one test that covers this part.

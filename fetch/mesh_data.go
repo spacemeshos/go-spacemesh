@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	"golang.org/x/sync/errgroup"
-	"golang.org/x/sync/semaphore"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -24,29 +23,12 @@ func (f *Fetch) GetAtxs(ctx context.Context, ids []types.ATXID) error {
 	if len(ids) == 0 {
 		return nil
 	}
-	f.logger.WithContext(ctx).With().Debug("requesting atxs from peer", log.Int("num_atxs", len(ids)))
+	f.logger.WithContext(ctx).With().Info("requesting atxs from peer", log.Int("num_atxs", len(ids)))
 	hashes := types.ATXIDsToHashes(ids)
-	// TODO(poszu): use limit from config?
-	limiter := semaphore.NewWeighted(100)
-	return f.getHashes(ctx, hashes, datastore.ATXDB, f.validators.atx.HandleMessage, withLimiter(limiter))
+	return f.getHashes(ctx, hashes, datastore.ATXDB, f.validators.atx.HandleMessage, withLimiter(f.getAtxsLimiter))
 }
 
 type dataReceiver func(context.Context, types.Hash32, p2p.Peer, []byte) error
-
-type limiter interface {
-	Acquire(ctx context.Context, n int64) error
-	Release(n int64)
-}
-
-type getHashesOpts struct {
-	limiter limiter
-}
-
-type noLimit struct{}
-
-func (noLimit) Acquire(context.Context, int64) error { return nil }
-
-func (noLimit) Release(int64) {}
 
 type getHashesOpt func(*getHashesOpts)
 
@@ -70,21 +52,26 @@ func (f *Fetch) getHashes(
 		opt(&options)
 	}
 
+	pendingMetric := pendingHashReqs.WithLabelValues(string(hint))
+	pendingMetric.Add(float64(len(hashes)))
+
 	var eg errgroup.Group
 	var errs error
 	var mu sync.Mutex
-	for _, hash := range hashes {
+	for i, hash := range hashes {
 		if err := options.limiter.Acquire(ctx, 1); err != nil {
 			return fmt.Errorf("acquiring slot to get hash: %w", err)
 		}
 		p, err := f.getHash(ctx, hash, hint, receiver)
 		if err != nil {
 			options.limiter.Release(1)
+			pendingMetric.Add(float64(i - len(hashes)))
 			return err
 		}
 		if p == nil {
 			// data is available locally
 			options.limiter.Release(1)
+			pendingMetric.Add(-1)
 			continue
 		}
 
@@ -93,14 +80,16 @@ func (f *Fetch) getHashes(
 			select {
 			case <-ctx.Done():
 				options.limiter.Release(1)
+				pendingMetric.Add(-1)
 				return ctx.Err()
 			case <-p.completed:
 				options.limiter.Release(1)
+				pendingMetric.Add(-1)
 				if p.err != nil {
-					mu.Lock()
-					defer mu.Unlock()
 					err := fmt.Errorf("hint: %v, hash: %v, err: %w", hint, h.String(), p.err)
+					mu.Lock()
 					errs = errors.Join(errs, err)
+					mu.Unlock()
 				}
 				return nil
 			}
