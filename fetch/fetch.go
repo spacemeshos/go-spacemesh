@@ -18,7 +18,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
-	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 const (
@@ -219,8 +218,6 @@ type Fetch struct {
 // NewFetch creates a new Fetch struct.
 func NewFetch(
 	cdb *datastore.CachedDB,
-	msh meshProvider,
-	b system.BeaconGetter,
 	host *p2p.Host,
 	opts ...Option,
 ) *Fetch {
@@ -266,7 +263,7 @@ func NewFetch(
 
 	f.batchTimeout = time.NewTicker(f.cfg.BatchTimeout)
 	if len(f.servers) == 0 {
-		h := newHandler(cdb, bs, msh, b, f.logger)
+		h := newHandler(cdb, bs, f.logger)
 		f.registerServer(host, atxProtocol, h.handleEpochInfoReq)
 		f.registerServer(host, lyrDataProtocol, h.handleLayerDataReq)
 		f.registerServer(host, hashProtocol, h.handleHashReq)
