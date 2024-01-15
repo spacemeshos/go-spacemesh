@@ -83,6 +83,11 @@ var (
 		"post service image",
 		"spacemeshos/post-service:v0.6.5",
 	)
+	postInitImage = parameters.String(
+		"post-init-image",
+		"post init image",
+		"spacemeshos/postcli:v0.10.4",
+	)
 	namespaceFlag = parameters.String(
 		"namespace",
 		"namespace for the cluster. if empty every test will use random namespace",
@@ -164,6 +169,7 @@ type Context struct {
 	BootstrapperImage string
 	PoetImage         string
 	PostServiceImage  string
+	PostInitImage     string
 	Storage           struct {
 		Size  string
 		Class string
@@ -343,6 +349,7 @@ func New(t *testing.T, opts ...Opt) *Context {
 		BootstrapperImage: bsImage.Get(p),
 		PoetImage:         poetImage.Get(p),
 		PostServiceImage:  postServiceImage.Get(p),
+		PostInitImage:     postInitImage.Get(p),
 		NodeSelector:      nodeSelector.Get(p),
 		Log:               zaptest.NewLogger(t, zaptest.Level(logLevel)).Sugar().Named(t.Name()),
 	}

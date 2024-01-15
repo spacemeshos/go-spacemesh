@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -13,6 +14,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mitchellh/mapstructure"
+	"github.com/spf13/viper"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -26,7 +29,6 @@ import (
 	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 	metav1 "k8s.io/client-go/applyconfigurations/meta/v1"
 
-	"github.com/mitchellh/mapstructure"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/config/presets"
@@ -35,7 +37,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/parameters"
 	"github.com/spacemeshos/go-spacemesh/systest/parameters/fastnet"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
-	"github.com/spf13/viper"
 )
 
 var (
@@ -518,7 +519,7 @@ func deployNodes(ctx *testcontext.Context, kind string, from, to int, opts ...De
 	}
 	if delta := to - from; len(cfg.keys) > 0 && len(cfg.keys) != delta {
 		return nil, fmt.Errorf(
-			"keys must be overwritten for all or none members of the cluster: delta %d, keys %d %v",
+			"keys must be overwritten for all or no members of the cluster: delta %d, keys %d %v",
 			delta,
 			len(cfg.keys),
 			cfg.keys,
@@ -577,7 +578,107 @@ func deployNodes(ctx *testcontext.Context, kind string, from, to int, opts ...De
 	return rst, nil
 }
 
+func deployRemoteNodes(ctx *testcontext.Context, from, to int,
+	goldenAtxId types.ATXID,
+	opts ...DeploymentOpt,
+) ([]*NodeClient, error) {
+	ctx.Log.Debugw("deploying remote nodes", "from", from, "to", to)
+	var (
+		eg      errgroup.Group
+		clients = make(chan *NodeClient, to-from)
+		cfg     = SmesherDeploymentConfig{}
+	)
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	if delta := to - from; len(cfg.keys) != delta {
+		return nil, fmt.Errorf(
+			"keys must be overwritten for all members of the cluster: delta %d, keys %d %v",
+			delta,
+			len(cfg.keys),
+			cfg.keys,
+		)
+	}
+	for i := from; i < to; i++ {
+		i := i
+		finalFlags := make([]DeploymentFlag, len(cfg.flags), len(cfg.flags)+ctx.PoetSize)
+		copy(finalFlags, cfg.flags)
+		if !cfg.noDefaultPoets {
+			var poetIds []int
+			for idx := 0; idx < ctx.PoetSize; idx++ {
+				poetIds = append(poetIds, idx)
+			}
+			finalFlags = append(finalFlags, PoetEndpoints(poetIds...))
+		}
+		if ctx.BootstrapperSize > 1 {
+			finalFlags = append(finalFlags, BootstrapperUrl(BootstrapperEndpoint(i%ctx.BootstrapperSize)))
+		} else {
+			finalFlags = append(finalFlags, BootstrapperUrl(BootstrapperEndpoint(0)))
+		}
+
+		finalFlags = append(finalFlags, SmesherKey(cfg.keys[i-from]))
+
+		nodeId := fmt.Sprintf("%s-%d", smesherApp, i)
+		eg.Go(func() error {
+			labels := nodeLabels(smesherApp, nodeId)
+			labels["bucket"] = strconv.Itoa(i % buckets)
+			if err := deployNode(ctx, nodeId, labels, finalFlags); err != nil {
+				return err
+			}
+			clients <- &NodeClient{
+				session: ctx,
+				Node: Node{
+					Name:      nodeId,
+					P2P:       7513,
+					GRPC_PUB:  9092,
+					GRPC_PRIV: 9093,
+				},
+			}
+			return nil
+		})
+
+		eg.Go(func() error {
+			postId := fmt.Sprintf("%s-%d", postServiceApp, i)
+			labels := nodeLabels(postServiceApp, postId)
+			labels["bucket"] = strconv.Itoa(i % buckets)
+			labels["nodeId"] = nodeId
+			err := deployPostService(ctx, postId, labels, nodeId,
+				hex.EncodeToString(cfg.keys[i-from].Public().(ed25519.PublicKey)),
+				goldenAtxId.Hash32().Hex()[2:],
+			)
+			return err
+		})
+	}
+	if err := eg.Wait(); err != nil {
+		return nil, err
+	}
+	close(clients)
+	var rst []*NodeClient
+	for node := range clients {
+		rst = append(rst, node)
+	}
+	sort.Slice(rst, func(i, j int) bool {
+		return decodeOrdinal(rst[i].Name) < decodeOrdinal(rst[j].Name)
+	})
+	return rst, nil
+}
+
 func deleteNode(ctx *testcontext.Context, id string) error {
+	// find and delete any post services linked to this node
+	var errService error
+	if svcs, err := ctx.Client.AppsV1().
+		Deployments(ctx.Namespace).
+		List(ctx, apimetav1.ListOptions{LabelSelector: fmt.Sprintf("nodeId=%s", id)}); err == nil {
+		for _, svc := range svcs.Items {
+			err = ctx.Client.AppsV1().Deployments(ctx.Namespace).
+				Delete(ctx, svc.ObjectMeta.Name, apimetav1.DeleteOptions{})
+			errService = errors.Join(errService, err)
+		}
+	}
+	if errService != nil {
+		return errService
+	}
+
 	if err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Delete(ctx, id, apimetav1.DeleteOptions{}); err != nil {
 		return fmt.Errorf("deleting configmap %s/%s: %w", ctx.Namespace, id, err)
 	}
@@ -586,8 +687,6 @@ func deleteNode(ctx *testcontext.Context, id string) error {
 		return err
 	}
 	return nil
-
-	// TODO(mafa): also delete post service if present
 }
 
 func deployNode(ctx *testcontext.Context, id string, labels map[string]string, flags []DeploymentFlag) error {
@@ -614,7 +713,6 @@ func deployNode(ctx *testcontext.Context, id string, labels map[string]string, f
 				WithLabels(labels).
 				WithAnnotations(
 					map[string]string{
-						// TODO(mafa): annotate node with post service?
 						"prometheus.io/port":   strconv.Itoa(prometheusScrapePort),
 						"prometheus.io/scrape": "true",
 					},
@@ -677,11 +775,19 @@ func deployNode(ctx *testcontext.Context, id string, labels map[string]string, f
 	return nil
 }
 
-func deployPostService(ctx *testcontext.Context, id string, labels map[string]string) error {
+func deployPostService(
+	ctx *testcontext.Context,
+	id string,
+	labels map[string]string,
+	nodeId string,
+	pubKey string,
+	goldenAtxId string,
+) error {
 	ctx.Log.Debugw("deploying post service", "id", id)
 
 	vip := viper.New()
-	if err := config.LoadConfig(smesherConfig.Get(ctx.Parameters), vip); err != nil {
+	vip.SetConfigType("json")
+	if err := vip.ReadConfig(strings.NewReader(smesherConfig.Get(ctx.Parameters))); err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
 	conf := config.MainnetConfig()
@@ -707,8 +813,8 @@ func deployPostService(ctx *testcontext.Context, id string, labels map[string]st
 	}
 
 	args := []string{
-		"--dir", "/data", // TODO(mafa): initialize
-		"--address", "", // TODO(mafa): get address for node with id `id`
+		"--dir", "/data",
+		"--address", fmt.Sprintf("http://%s:%d", nodeId, 9094), // TODO(mafa): probably needs a service to be accessible
 		"--threads", strconv.FormatUint(uint64(conf.SMESHING.ProvingOpts.Threads), 10),
 		"--nonces", strconv.FormatUint(uint64(conf.SMESHING.ProvingOpts.Nonces), 10),
 		"--randomx-mode", conf.SMESHING.ProvingOpts.RandomXMode.String(),
@@ -720,6 +826,15 @@ func deployPostService(ctx *testcontext.Context, id string, labels map[string]st
 		"--k3", strconv.FormatUint(uint64(conf.POST.K3), 10),
 		"--pow-difficulty", conf.POST.PowDifficulty.String(),
 	}
+	initArgs := []string{
+		"-id", pubKey,
+		"-commitmentAtxId", goldenAtxId,
+		"-datadir", "/data",
+		"-numUnits", strconv.FormatUint(uint64(conf.POST.MinNumUnits), 10),
+		"-labelsPerUnit", strconv.FormatUint(uint64(conf.POST.LabelsPerUnit), 10),
+		"-provider", "4294967295", // 0xffffffff = CPU Provider
+		"-yes", // to prevent checks for mainnet compatibility
+	}
 	deployment := appsv1.Deployment(id, ctx.Namespace).
 		WithLabels(labels).
 		WithSpec(appsv1.DeploymentSpec().
@@ -727,18 +842,16 @@ func deployPostService(ctx *testcontext.Context, id string, labels map[string]st
 			WithReplicas(1).
 			WithTemplate(corev1.PodTemplateSpec().
 				WithLabels(labels).
-				WithAnnotations(
-					map[string]string{
-						// TODO(mafa): annotate post service with node?
-					},
-				).
 				WithSpec(corev1.PodSpec().
-					WithInitContainers(corev1.Container(
-					// TODO(mafa): add init container to initialize post data
-					// pub key is in Cluster::accounts.keys[0-n].Pub
-					// GoldenATX is in Cluster::GoldenATX()
-					// consider passing them as DeploymentFlags
-					)).
+					WithInitContainers(corev1.Container().
+						WithName("init").
+						WithImage(ctx.PostInitImage).
+						WithImagePullPolicy(apiv1.PullIfNotPresent).
+						WithArgs(initArgs...).
+						WithVolumeMounts(
+							corev1.VolumeMount().WithName("data").WithMountPath("/data"),
+						),
+					).
 					WithNodeSelector(ctx.NodeSelector).
 					WithVolumes(
 						corev1.Volume().WithName("data").
@@ -746,7 +859,7 @@ func deployPostService(ctx *testcontext.Context, id string, labels map[string]st
 								WithSizeLimit(resource.MustParse(ctx.Storage.Size))),
 					).
 					WithContainers(corev1.Container().
-						WithName("postService").
+						WithName("post-service").
 						WithImage(ctx.PostServiceImage).
 						WithImagePullPolicy(apiv1.PullIfNotPresent).
 						WithArgs(args...).
