@@ -60,6 +60,7 @@ func (f *Fetch) getHashes(
 	var mu sync.Mutex
 	for i, hash := range hashes {
 		if err := options.limiter.Acquire(ctx, 1); err != nil {
+			pendingMetric.Add(float64(i - len(hashes)))
 			return fmt.Errorf("acquiring slot to get hash: %w", err)
 		}
 		p, err := f.getHash(ctx, hash, hint, receiver)
