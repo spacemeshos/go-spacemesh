@@ -78,6 +78,23 @@ configuration is as follows:
 
 ### Improvements
 
+## Release v1.3.2
+
+### Improvements
+
+* [#5432](https://github.com/spacemeshos/go-spacemesh/pull/5419) Fixed a possible race that is caused by a node
+  processing the same bootstrapped active set twice.
+
+## Release v1.3.1
+
+### Improvements
+
+* [#5419](https://github.com/spacemeshos/go-spacemesh/pull/5419) Fixed `0.0.0.0` not being a valid listen address for
+  `grpc-private-listener`.
+
+* [#5424](https://github.com/spacemeshos/go-spacemesh/pull/5424) Further increased limits for message sizes and caches
+  to compensate for the increased number of nodes on the network.
+
 ## Release v1.3
 
 ### Upgrade information
