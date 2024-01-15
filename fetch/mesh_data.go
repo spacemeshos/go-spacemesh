@@ -26,7 +26,7 @@ func (f *Fetch) GetAtxs(ctx context.Context, ids []types.ATXID) error {
 	}
 	f.logger.WithContext(ctx).With().Debug("requesting atxs from peer", log.Int("num_atxs", len(ids)))
 	hashes := types.ATXIDsToHashes(ids)
-	//TODO(poszu): use limit from config?
+	// TODO(poszu): use limit from config?
 	limiter := semaphore.NewWeighted(100)
 	return f.getHashes(ctx, hashes, datastore.ATXDB, f.validators.atx.HandleMessage, withLimiter(limiter))
 }
