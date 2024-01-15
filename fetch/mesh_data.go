@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -25,27 +26,65 @@ func (f *Fetch) GetAtxs(ctx context.Context, ids []types.ATXID) error {
 	}
 	f.logger.WithContext(ctx).With().Debug("requesting atxs from peer", log.Int("num_atxs", len(ids)))
 	hashes := types.ATXIDsToHashes(ids)
-	return f.getHashes(ctx, hashes, datastore.ATXDB, f.validators.atx.HandleMessage)
+	//TODO(poszu): use limit from config?
+	limiter := semaphore.NewWeighted(100)
+	return f.getHashes(ctx, hashes, datastore.ATXDB, f.validators.atx.HandleMessage, withLimiter(limiter))
 }
 
 type dataReceiver func(context.Context, types.Hash32, p2p.Peer, []byte) error
+
+type limiter interface {
+	Acquire(ctx context.Context, n int64) error
+	Release(n int64)
+}
+
+type getHashesOpts struct {
+	limiter limiter
+}
+
+type noLimit struct{}
+
+func (noLimit) Acquire(context.Context, int64) error { return nil }
+
+func (noLimit) Release(int64) {}
+
+type getHashesOpt func(*getHashesOpts)
+
+func withLimiter(l limiter) getHashesOpt {
+	return func(o *getHashesOpts) {
+		o.limiter = l
+	}
+}
 
 func (f *Fetch) getHashes(
 	ctx context.Context,
 	hashes []types.Hash32,
 	hint datastore.Hint,
 	receiver dataReceiver,
+	opts ...getHashesOpt,
 ) error {
+	options := getHashesOpts{
+		limiter: noLimit{},
+	}
+	for _, opt := range opts {
+		opt(&options)
+	}
+
 	var eg errgroup.Group
 	var errs error
 	var mu sync.Mutex
 	for _, hash := range hashes {
+		if err := options.limiter.Acquire(ctx, 1); err != nil {
+			return fmt.Errorf("acquiring slot to get hash: %w", err)
+		}
 		p, err := f.getHash(ctx, hash, hint, receiver)
 		if err != nil {
+			options.limiter.Release(1)
 			return err
 		}
 		if p == nil {
 			// data is available locally
+			options.limiter.Release(1)
 			continue
 		}
 
@@ -53,8 +92,10 @@ func (f *Fetch) getHashes(
 		eg.Go(func() error {
 			select {
 			case <-ctx.Done():
+				options.limiter.Release(1)
 				return ctx.Err()
 			case <-p.completed:
+				options.limiter.Release(1)
 				if p.err != nil {
 					mu.Lock()
 					defer mu.Unlock()
