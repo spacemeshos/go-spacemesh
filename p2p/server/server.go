@@ -9,6 +9,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/connmgr"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
@@ -19,6 +20,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
+
+type DecayingTagSpec struct {
+	Interval time.Duration `mapstructure:"interval"`
+	Inc      int           `mapstructure:"inc"`
+	Dec      int           `mapstructure:"dec"`
+	Cap      int           `mapstructure:"cap"`
+}
 
 // ErrNotConnected is returned when peer is not connected.
 var ErrNotConnected = errors.New("peer is not connected")
@@ -88,6 +96,12 @@ func WithRequestsPerInterval(n int, interval time.Duration) Opt {
 	}
 }
 
+func WithDecayingTag(tag DecayingTagSpec) Opt {
+	return func(s *Server) {
+		s.decayingTagSpec = &tag
+	}
+}
+
 // Handler is the handler to be defined by the application.
 type Handler func(context.Context, []byte) ([]byte, error)
 
@@ -110,6 +124,8 @@ type Server struct {
 	queueSize           int
 	requestsPerInterval int
 	interval            time.Duration
+	decayingTagSpec     *DecayingTagSpec
+	decayingTag         connmgr.DecayingTag
 
 	metrics *tracker // metrics can be nil
 
@@ -133,6 +149,23 @@ func New(h Host, proto string, handler Handler, opts ...Opt) *Server {
 	for _, opt := range opts {
 		opt(srv)
 	}
+
+	if srv.decayingTagSpec != nil {
+		decayer, supported := connmgr.SupportsDecay(h.ConnManager())
+		if supported {
+			tag, err := decayer.RegisterDecayingTag(
+				"server:"+proto,
+				srv.decayingTagSpec.Interval,
+				connmgr.DecayFixed(srv.decayingTagSpec.Dec),
+				connmgr.BumpSumBounded(0, srv.decayingTagSpec.Cap))
+			if err != nil {
+				srv.logger.Error("error registering decaying tag", log.Err(err))
+			} else {
+				srv.decayingTag = tag
+			}
+		}
+	}
+
 	return srv
 }
 
@@ -176,6 +209,9 @@ func (s *Server) Run(ctx context.Context) error {
 				return nil
 			}
 			eg.Go(func() error {
+				if s.decayingTag != nil {
+					s.decayingTag.Bump(req.stream.Conn().RemotePeer(), s.decayingTagSpec.Inc)
+				}
 				ok := s.queueHandler(ctx, req.stream)
 				if s.metrics != nil {
 					s.metrics.serverLatency.Observe(time.Since(req.received).Seconds())
