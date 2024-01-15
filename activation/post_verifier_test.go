@@ -3,6 +3,7 @@ package activation_test
 import (
 	"context"
 	"errors"
+	"github.com/spacemeshos/post/verifying"
 	"testing"
 	"time"
 
@@ -103,14 +104,52 @@ func TestPostVerifierClose(t *testing.T) {
 }
 
 func TestPostVerifierPrioritization(t *testing.T) {
-	nodeID := types.RandomNodeID()
+	prioritizedID := types.RandomNodeID()
+	otherID := types.RandomNodeID().Bytes()
+	other2ID := types.RandomNodeID().Bytes()
 	verifier := activation.NewMockPostVerifier(gomock.NewController(t))
-	v := activation.NewOffloadingPostVerifier(verifier, 2, zaptest.NewLogger(t), activation.PrioritizedIDs(nodeID))
+	start := make(chan struct{})
+	firstNormalCalled := make(chan struct{})
 
-	verifier.EXPECT().
-		Verify(gomock.Any(), gomock.Any(), &shared.ProofMetadata{NodeId: nodeID.Bytes()}, gomock.Any()).
-		Return(nil)
+	v := activation.NewOffloadingPostVerifier(verifier, 1, zaptest.NewLogger(t), activation.PrioritizedIDs(prioritizedID))
 
-	err := v.Verify(context.Background(), &shared.Proof{}, &shared.ProofMetadata{NodeId: nodeID.Bytes()})
-	require.NoError(t, err)
+	gomock.InOrder(
+		verifier.EXPECT().
+			Verify(gomock.Any(), gomock.Any(), &shared.ProofMetadata{NodeId: otherID}, gomock.Any()).
+			DoAndReturn(
+				func(_ context.Context, _ *shared.Proof, _ *shared.ProofMetadata, _ ...verifying.OptionFunc) error {
+					close(firstNormalCalled)
+					<-start
+					return nil
+				}),
+		verifier.EXPECT().
+			Verify(gomock.Any(), gomock.Any(), &shared.ProofMetadata{NodeId: prioritizedID.Bytes()}, gomock.Any()).
+			DoAndReturn(
+				func(_ context.Context, _ *shared.Proof, _ *shared.ProofMetadata, _ ...verifying.OptionFunc) error {
+					return nil
+				}),
+		verifier.EXPECT().
+			Verify(gomock.Any(), gomock.Any(), &shared.ProofMetadata{NodeId: other2ID}, gomock.Any()).
+			Return(nil).
+			Times(9),
+	)
+
+	var normal, prioritized errgroup.Group
+	normal.Go(func() error {
+		return v.Verify(context.Background(), &shared.Proof{}, &shared.ProofMetadata{NodeId: otherID})
+	})
+	<-firstNormalCalled
+	for i := 1; i < 10; i++ {
+		normal.Go(func() error {
+			return v.Verify(context.Background(), &shared.Proof{}, &shared.ProofMetadata{NodeId: other2ID})
+		})
+	}
+
+	prioritized.Go(func() error {
+		close(start)
+		return v.Verify(context.Background(), &shared.Proof{}, &shared.ProofMetadata{NodeId: prioritizedID.Bytes()})
+	})
+
+	require.NoError(t, prioritized.Wait())
+	require.NoError(t, normal.Wait())
 }
