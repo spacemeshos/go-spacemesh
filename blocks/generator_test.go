@@ -13,6 +13,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
@@ -257,6 +258,31 @@ func Test_StartStop(t *testing.T) {
 	tg.Start(context.Background())
 	tg.Start(context.Background()) // start for the second time is ok.
 	tg.Stop()
+}
+
+func Test_StopBeforeStart(t *testing.T) {
+	tg := createTestGenerator(t)
+	tg.Stop()
+}
+
+func Test_NoRaceStartStop(t *testing.T) {
+	tg := createTestGenerator(t)
+	var eg errgroup.Group
+
+	eg.Go(func() error {
+		for i := 0; i < 1000; i++ {
+			tg.Start(context.Background())
+		}
+		return nil
+	})
+	eg.Go(func() error {
+		for i := 0; i < 1000; i++ {
+			tg.Stop()
+		}
+		return nil
+	})
+
+	require.NoError(t, eg.Wait())
 }
 
 func genData(
