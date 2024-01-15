@@ -259,6 +259,11 @@ func Test_StartStop(t *testing.T) {
 	tg.Stop()
 }
 
+func Test_StopBeforeStart(t *testing.T) {
+	tg := createTestGenerator(t)
+	tg.Stop()
+}
+
 func genData(
 	t *testing.T,
 	db *sql.Database,
