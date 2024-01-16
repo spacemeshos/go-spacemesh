@@ -12,6 +12,7 @@ import (
 	"time"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"go.uber.org/zap"
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -159,6 +160,14 @@ func Default(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 	bsize := defaultBootnodes(cctx.ClusterSize)
 	remote := defaultRemote(cctx.ClusterSize)
 	smeshers := cctx.ClusterSize - bsize - remote
+
+	cctx.Log.Desugar().Info("Using the following nodes",
+		zap.Int("total", cctx.ClusterSize),
+		zap.Int("bootnodes", bsize),
+		zap.Int("smeshers", smeshers),
+		zap.Int("remote", remote),
+	)
+
 	keys := make([]ed25519.PrivateKey, cctx.ClusterSize)
 	for i := range keys {
 		keys[i] = cl.accounts.Private(i)
