@@ -9,6 +9,9 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 * [#5442](https://github.com/spacemeshos/go-spacemesh/pull/5442)
   Limit concurrent requests for ATXs to reduce usage of memory and p2p streams.
 
+* [#5417](https://github.com/spacemeshos/go-spacemesh/pull/5417)
+  Prioritize verifying own ATX's PoST.
+
 ## Release v1.3.2
 
 ### Improvements
