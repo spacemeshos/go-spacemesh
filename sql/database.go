@@ -331,7 +331,7 @@ func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (in
 		row, err := stmt.Step()
 		if err != nil {
 			code := sqlite.ErrCode(err)
-			if code == sqlite.SQLITE_CONSTRAINT_PRIMARYKEY {
+			if code == sqlite.SQLITE_CONSTRAINT_PRIMARYKEY || code == sqlite.SQLITE_CONSTRAINT_UNIQUE {
 				return 0, ErrObjectExists
 			}
 			return 0, fmt.Errorf("step %d: %w", rows, err)

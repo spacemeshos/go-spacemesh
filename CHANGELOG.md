@@ -78,6 +78,9 @@ configuration is as follows:
 
 ### Improvements
 
+* [#5394] Fix inefficient SQLite clustered indices
+  The database size is reduced and query performance is improved
+
 ## Release v1.3.2
 
 ### Improvements
