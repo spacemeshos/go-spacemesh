@@ -2,6 +2,13 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## UNRELEASED
+
+### Improvements
+
+* [#5442](https://github.com/spacemeshos/go-spacemesh/pull/5442)
+  Limit concurrent requests for ATXs to reduce usage of memory and p2p streams.
+
 ## Release v1.3.2
 
 ### Improvements
