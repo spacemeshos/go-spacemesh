@@ -39,7 +39,7 @@ func TestSmeshing(t *testing.T) {
 		prepareVesting(t, 1, 8, 20, 0, 1e15),
 	}
 	cl, err := cluster.ReuseWait(tctx,
-		cluster.WithKeys(10),
+		cluster.WithKeys(tctx.ClusterSize),
 		cluster.WithGenesisBalances(vests.genesisBalances()...),
 	)
 	require.NoError(t, err)
