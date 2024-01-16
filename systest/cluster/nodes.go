@@ -854,6 +854,7 @@ func deployPostService(
 		"-datadir", "/data",
 		"-numUnits", strconv.FormatUint(uint64(conf.POST.MinNumUnits), 10),
 		"-labelsPerUnit", strconv.FormatUint(uint64(conf.POST.LabelsPerUnit), 10),
+		"-scryptN", strconv.FormatUint(uint64(conf.SMESHING.Opts.Scrypt.N), 10),
 		"-provider", "4294967295", // 0xffffffff = CPU Provider
 		"-yes", // to prevent checks for mainnet compatibility
 	}

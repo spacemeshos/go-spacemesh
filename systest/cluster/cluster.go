@@ -508,7 +508,7 @@ func (c *Cluster) AddBootnodes(cctx *testcontext.Context, n int) error {
 	c.clients = nil
 	c.clients = append(c.clients, clients...)
 	c.clients = append(c.clients, smeshers...)
-	c.bootnodes = len(clients)
+	c.bootnodes += len(clients)
 
 	return fillNetworkConfig(cctx, clients[0])
 }
