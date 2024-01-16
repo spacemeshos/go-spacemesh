@@ -170,9 +170,9 @@ func TestFetch_getHashes(t *testing.T) {
 				responses[h] = res
 			}
 			f.mHashS.EXPECT().
-				Request(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+				Request(gomock.Any(), gomock.Any(), gomock.Any()).
 				DoAndReturn(
-					func(_ context.Context, p p2p.Peer, req []byte, okFunc func([]byte), _ func(error)) error {
+					func(_ context.Context, p p2p.Peer, req []byte) ([]byte, error) {
 						var rb RequestBatch
 						err := codec.Decode(req, &rb)
 						require.NoError(t, err)
@@ -192,8 +192,8 @@ func TestFetch_getHashes(t *testing.T) {
 						}
 						bts, err := codec.Encode(&resBatch)
 						require.NoError(t, err)
-						okFunc(bts)
-						return nil
+
+						return bts, nil
 					}).
 				Times(len(peers))
 
@@ -521,15 +521,13 @@ func TestFetch_GetMaliciousIDs(t *testing.T) {
 				}
 				idx := i
 				f.mMalS.EXPECT().
-					Request(gomock.Any(), p, []byte{}, gomock.Any(), gomock.Any()).
+					Request(gomock.Any(), p, []byte{}).
 					DoAndReturn(
-						func(_ context.Context, _ p2p.Peer, _ []byte, okCB func([]byte), errCB func(error)) error {
+						func(_ context.Context, _ p2p.Peer, _ []byte) ([]byte, error) {
 							if tc.errs[idx] == nil {
-								go okCB(generateMaliciousIDs(t))
-							} else {
-								go errCB(tc.errs[idx])
+								return generateMaliciousIDs(t), nil
 							}
-							return nil
+							return nil, tc.errs[idx]
 						})
 			}
 			require.NoError(t, f.GetMaliciousIDs(context.Background(), peers, okFunc, errFunc))
@@ -585,15 +583,13 @@ func TestFetch_GetLayerData(t *testing.T) {
 				}
 				idx := i
 				f.mLyrS.EXPECT().
-					Request(gomock.Any(), p, gomock.Any(), gomock.Any(), gomock.Any()).
+					Request(gomock.Any(), p, gomock.Any()).
 					DoAndReturn(
-						func(_ context.Context, _ p2p.Peer, _ []byte, okCB func([]byte), errCB func(error)) error {
-							if tc.errs[idx] == nil {
-								go okCB(generateLayerContent(t))
-							} else {
-								go errCB(tc.errs[idx])
+						func(_ context.Context, _ p2p.Peer, _ []byte) ([]byte, error) {
+							if err := tc.errs[idx]; err != nil {
+								return nil, err
 							}
-							return nil
+							return generateLayerContent(t), nil
 						})
 			}
 			require.NoError(
@@ -642,17 +638,15 @@ func Test_PeerEpochInfo(t *testing.T) {
 			f.mh.EXPECT().ID().Return(p2p.Peer("self")).AnyTimes()
 			var expected *EpochData
 			f.mAtxS.EXPECT().
-				Request(gomock.Any(), peer, gomock.Any(), gomock.Any(), gomock.Any()).
+				Request(gomock.Any(), peer, gomock.Any()).
 				DoAndReturn(
-					func(_ context.Context, _ p2p.Peer, req []byte, okCB func([]byte), errCB func(error)) error {
+					func(_ context.Context, _ p2p.Peer, req []byte) ([]byte, error) {
 						if tc.err == nil {
 							var data []byte
 							expected, data = generateEpochData(t)
-							okCB(data)
-						} else {
-							errCB(tc.err)
+							return data, nil
 						}
-						return nil
+						return nil, tc.err
 					})
 			got, err := f.PeerEpochInfo(context.Background(), peer, types.EpochID(111))
 			require.ErrorIs(t, err, tc.err)
@@ -706,19 +700,16 @@ func TestFetch_GetMeshHashes(t *testing.T) {
 			reqData, err := codec.Encode(req)
 			require.NoError(t, err)
 			f.mMHashS.EXPECT().
-				Request(gomock.Any(), peer, gomock.Any(), gomock.Any(), gomock.Any()).
-				DoAndReturn(
-					func(_ context.Context, _ p2p.Peer, gotReq []byte, okCB func([]byte), errCB func(error)) error {
-						require.Equal(t, reqData, gotReq)
-						if tc.err == nil {
-							data, err := codec.EncodeSlice(expected.Hashes)
-							require.NoError(t, err)
-							okCB(data)
-						} else {
-							errCB(tc.err)
-						}
-						return nil
-					})
+				Request(gomock.Any(), peer, gomock.Any()).
+				DoAndReturn(func(_ context.Context, _ p2p.Peer, gotReq []byte) ([]byte, error) {
+					require.Equal(t, reqData, gotReq)
+					if tc.err == nil {
+						data, err := codec.EncodeSlice(expected.Hashes)
+						require.NoError(t, err)
+						return data, nil
+					}
+					return nil, tc.err
+				})
 			got, err := f.PeerMeshHashes(context.Background(), peer, req)
 			if tc.err == nil {
 				require.NoError(t, err)
@@ -736,18 +727,16 @@ func TestFetch_GetCert(t *testing.T) {
 	tt := []struct {
 		name    string
 		results [3]error
-		stop    int
-		err     bool
+
+		err bool
 	}{
 		{
 			name:    "success",
 			results: [3]error{errUnknown, nil, nil},
-			stop:    1,
 		},
 		{
 			name:    "failure",
 			results: [3]error{errUnknown, errUnknown, errUnknown},
-			stop:    -1,
 			err:     true,
 		},
 	}
@@ -768,22 +757,20 @@ func TestFetch_GetCert(t *testing.T) {
 			reqData, err := codec.Encode(req)
 			require.NoError(t, err)
 			for i, peer := range peers {
+				p := peer
 				ith := i
 				f.mOpn2S.EXPECT().
-					Request(gomock.Any(), peer, gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(
-						func(_ context.Context, _ p2p.Peer, gotReq []byte, okCB func([]byte), errCB func(error)) error {
-							require.Equal(t, reqData, gotReq)
-							if tc.results[ith] == nil {
-								data, err := codec.Encode(&expected)
-								require.NoError(t, err)
-								okCB(data)
-							} else {
-								errCB(tc.results[ith])
-							}
-							return nil
-						})
-				if tc.stop > 0 && tc.stop == i {
+					Request(gomock.Any(), p, gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ p2p.Peer, gotReq []byte) ([]byte, error) {
+						require.Equal(t, reqData, gotReq)
+						if tc.results[ith] == nil {
+							data, err := codec.Encode(&expected)
+							require.NoError(t, err)
+							return data, nil
+						}
+						return nil, tc.results[ith]
+					})
+				if tc.results[ith] == nil {
 					break
 				}
 			}
