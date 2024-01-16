@@ -7,6 +7,8 @@ import (
 	"sync"
 	"testing"
 
+	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"golang.org/x/sync/errgroup"
@@ -15,9 +17,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/fetch/mocks"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 const (
@@ -790,6 +796,80 @@ func TestFetch_GetCert(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Test if GetAtxs() limits the number of concurrent requests to `cfg.GetAtxsConcurrency`.
+func Test_GetAtxsLimiting(t *testing.T) {
+	mesh, err := mocknet.FullMeshConnected(2)
+	require.NoError(t, err)
+
+	const (
+		totalRequests     = 100
+		getAtxConcurrency = 10
+	)
+
+	srv := server.New(
+		mesh.Hosts()[1],
+		hashProtocol,
+		func(_ context.Context, data []byte) ([]byte, error) {
+			var requestBatch RequestBatch
+			require.NoError(t, codec.Decode(data, &requestBatch))
+			resBatch := ResponseBatch{
+				ID: requestBatch.ID,
+			}
+			require.Len(t, requestBatch.Requests, getAtxConcurrency)
+			for _, r := range requestBatch.Requests {
+				resBatch.Responses = append(resBatch.Responses, ResponseMessage{Hash: r.Hash})
+			}
+			response, err := codec.Encode(&resBatch)
+			require.NoError(t, err)
+			return response, nil
+		},
+	)
+
+	var (
+		eg          errgroup.Group
+		ctx, cancel = context.WithCancel(context.Background())
+	)
+	defer cancel()
+	eg.Go(func() error {
+		return srv.Run(ctx)
+	})
+	t.Cleanup(func() {
+		assert.NoError(t, eg.Wait())
+	})
+
+	cfg := DefaultConfig()
+	// should do only `cfg.GetAtxsConcurrency` requests at a time even though batch size is 1000
+	cfg.BatchSize = 1000
+	cfg.GetAtxsConcurrency = getAtxConcurrency
+
+	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+	client := server.New(mesh.Hosts()[0], hashProtocol, nil)
+	host, err := p2p.Upgrade(mesh.Hosts()[0])
+	require.NoError(t, err)
+	f := NewFetch(cdb, host,
+		WithContext(context.Background()),
+		withServers(map[string]requester{hashProtocol: client}),
+		WithConfig(cfg),
+	)
+
+	atxValidatorMock := mocks.NewMockSyncValidator(gomock.NewController(t))
+	f.validators = &dataValidators{
+		atx: atxValidatorMock,
+	}
+	require.NoError(t, f.Start())
+	t.Cleanup(f.Stop)
+
+	var atxIds []types.ATXID
+	for i := 0; i < totalRequests; i++ {
+		id := types.RandomATXID()
+		atxIds = append(atxIds, id)
+		atxValidatorMock.EXPECT().HandleMessage(gomock.Any(), id.Hash32(), mesh.Hosts()[1].ID(), gomock.Any())
+	}
+
+	err = f.GetAtxs(context.Background(), atxIds)
+	require.NoError(t, err)
 }
 
 func FuzzCertRequest(f *testing.F) {

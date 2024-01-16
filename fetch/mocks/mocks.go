@@ -238,67 +238,6 @@ func (c *PoetValidatorValidateAndStoreMsgCall) DoAndReturn(f func(context.Contex
 	return c
 }
 
-// MockmeshProvider is a mock of meshProvider interface.
-type MockmeshProvider struct {
-	ctrl     *gomock.Controller
-	recorder *MockmeshProviderMockRecorder
-}
-
-// MockmeshProviderMockRecorder is the mock recorder for MockmeshProvider.
-type MockmeshProviderMockRecorder struct {
-	mock *MockmeshProvider
-}
-
-// NewMockmeshProvider creates a new mock instance.
-func NewMockmeshProvider(ctrl *gomock.Controller) *MockmeshProvider {
-	mock := &MockmeshProvider{ctrl: ctrl}
-	mock.recorder = &MockmeshProviderMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockmeshProvider) EXPECT() *MockmeshProviderMockRecorder {
-	return m.recorder
-}
-
-// LastVerified mocks base method.
-func (m *MockmeshProvider) LastVerified() types.LayerID {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LastVerified")
-	ret0, _ := ret[0].(types.LayerID)
-	return ret0
-}
-
-// LastVerified indicates an expected call of LastVerified.
-func (mr *MockmeshProviderMockRecorder) LastVerified() *meshProviderLastVerifiedCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LastVerified", reflect.TypeOf((*MockmeshProvider)(nil).LastVerified))
-	return &meshProviderLastVerifiedCall{Call: call}
-}
-
-// meshProviderLastVerifiedCall wrap *gomock.Call
-type meshProviderLastVerifiedCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *meshProviderLastVerifiedCall) Return(arg0 types.LayerID) *meshProviderLastVerifiedCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *meshProviderLastVerifiedCall) Do(f func() types.LayerID) *meshProviderLastVerifiedCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *meshProviderLastVerifiedCall) DoAndReturn(f func() types.LayerID) *meshProviderLastVerifiedCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // Mockhost is a mock of host interface.
 type Mockhost struct {
 	ctrl     *gomock.Controller
