@@ -21,7 +21,7 @@ type PostService struct {
 	log *zap.Logger
 
 	clientMtx sync.Mutex
-	client    *postClient
+	client    map[types.NodeID]*postClient
 }
 
 type postCommand struct {
@@ -56,10 +56,11 @@ func NewPostService(log *zap.Logger) *PostService {
 // requests to the PoST node and receive responses.
 func (s *PostService) Register(stream pb.PostService_RegisterServer) error {
 	con := make(chan postCommand)
-	if err := s.setConnection(con); err != nil {
+	nodeId, err := s.setConnection(con)
+	if err != nil {
 		return err
 	}
-	defer s.dropConnection()
+	defer s.dropConnection(nodeId)
 
 	for {
 		select {
@@ -81,25 +82,31 @@ func (s *PostService) Register(stream pb.PostService_RegisterServer) error {
 	}
 }
 
-func (s *PostService) setConnection(con chan postCommand) error {
+func (s *PostService) setConnection(con chan postCommand) (types.NodeID, error) {
 	s.clientMtx.Lock()
 	defer s.clientMtx.Unlock()
 
-	if s.client != nil {
-		return fmt.Errorf("post service already registered")
+	client := newPostClient(con)
+	info, err := client.Info(context.Background())
+	if err != nil {
+		return types.EmptyNodeID, fmt.Errorf("failed to get node info: %w", err)
 	}
 
-	s.client = newPostClient(con)
-	s.log.Info("post service registered")
-	return nil
+	if _, ok := s.client[info.NodeID]; ok {
+		return types.EmptyNodeID, fmt.Errorf("post service already registered")
+	}
+
+	s.log.Info("post service registered", zap.Stringer("node_id", info.NodeID))
+	s.client[info.NodeID] = client
+	return info.NodeID, nil
 }
 
-func (s *PostService) dropConnection() error {
+func (s *PostService) dropConnection(nodeId types.NodeID) error {
 	s.clientMtx.Lock()
 	defer s.clientMtx.Unlock()
 
-	err := s.client.Close()
-	s.client = nil
+	err := s.client[nodeId].Close()
+	delete(s.client, nodeId)
 	return err
 }
 
@@ -107,10 +114,10 @@ func (s *PostService) Client(nodeId types.NodeID) (activation.PostClient, error)
 	s.clientMtx.Lock()
 	defer s.clientMtx.Unlock()
 
-	// TODO(mafa): select correct client based on node id
-	if s.client == nil {
+	client, ok := s.client[nodeId]
+	if !ok {
 		return nil, fmt.Errorf("post service not registered")
 	}
 
-	return s.client, nil
+	return client, nil
 }
