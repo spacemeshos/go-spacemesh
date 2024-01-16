@@ -34,7 +34,7 @@ const (
 	poetApp          = "poet"
 	bootnodeApp      = "boot"
 	smesherApp       = "smesher"
-	postServiceApp   = "post-service"
+	postServiceApp   = "postservice"
 	bootstrapperApp  = "bootstrapper"
 	bootstrapperPort = 80
 	poetPort         = 80
