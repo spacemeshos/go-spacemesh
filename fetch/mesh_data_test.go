@@ -798,7 +798,7 @@ func TestFetch_GetCert(t *testing.T) {
 	}
 }
 
-// Test if GetAtxs() limits the number of concurrent requests to `cfg.GetAtxsConcurrency`
+// Test if GetAtxs() limits the number of concurrent requests to `cfg.GetAtxsConcurrency`.
 func Test_GetAtxsLimiting(t *testing.T) {
 	mesh, err := mocknet.FullMeshConnected(2)
 	require.NoError(t, err)
