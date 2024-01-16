@@ -74,6 +74,7 @@ func createFetch(tb testing.TB) *testFetch {
 		QueueSize:            1000,
 		RequestTimeout:       3 * time.Second,
 		MaxRetriesForRequest: 3,
+		GetAtxsConcurrency:   DefaultConfig().GetAtxsConcurrency,
 	}
 	lg := logtest.New(tb)
 
