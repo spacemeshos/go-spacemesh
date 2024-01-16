@@ -199,6 +199,8 @@ func (msh *Mesh) GetLayerVerified(lid types.LayerID) (*types.Block, error) {
 		return nil, nil
 	case err != nil:
 		return nil, fmt.Errorf("get applied %v: %w", lid, err)
+	case applied.IsEmpty():
+		return nil, nil
 	default:
 		return blocks.Get(msh.cdb, applied)
 	}
