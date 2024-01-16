@@ -40,10 +40,6 @@ type PoetValidator interface {
 	ValidateAndStoreMsg(context.Context, types.Hash32, p2p.Peer, []byte) error
 }
 
-type meshProvider interface {
-	LastVerified() types.LayerID
-}
-
 type host interface {
 	ID() p2p.Peer
 }

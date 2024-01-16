@@ -23,29 +23,56 @@ func (f *Fetch) GetAtxs(ctx context.Context, ids []types.ATXID) error {
 	if len(ids) == 0 {
 		return nil
 	}
-	f.logger.WithContext(ctx).With().Debug("requesting atxs from peer", log.Int("num_atxs", len(ids)))
+	f.logger.WithContext(ctx).With().Info("requesting atxs from peer", log.Int("num_atxs", len(ids)))
 	hashes := types.ATXIDsToHashes(ids)
-	return f.getHashes(ctx, hashes, datastore.ATXDB, f.validators.atx.HandleMessage)
+	return f.getHashes(ctx, hashes, datastore.ATXDB, f.validators.atx.HandleMessage, withLimiter(f.getAtxsLimiter))
 }
 
 type dataReceiver func(context.Context, types.Hash32, p2p.Peer, []byte) error
+
+type getHashesOpt func(*getHashesOpts)
+
+func withLimiter(l limiter) getHashesOpt {
+	return func(o *getHashesOpts) {
+		o.limiter = l
+	}
+}
 
 func (f *Fetch) getHashes(
 	ctx context.Context,
 	hashes []types.Hash32,
 	hint datastore.Hint,
 	receiver dataReceiver,
+	opts ...getHashesOpt,
 ) error {
+	options := getHashesOpts{
+		limiter: noLimit{},
+	}
+	for _, opt := range opts {
+		opt(&options)
+	}
+
+	pendingMetric := pendingHashReqs.WithLabelValues(string(hint))
+	pendingMetric.Add(float64(len(hashes)))
+
 	var eg errgroup.Group
 	var errs error
 	var mu sync.Mutex
-	for _, hash := range hashes {
+	for i, hash := range hashes {
+		if err := options.limiter.Acquire(ctx, 1); err != nil {
+			pendingMetric.Add(float64(i - len(hashes)))
+			return fmt.Errorf("acquiring slot to get hash: %w", err)
+		}
 		p, err := f.getHash(ctx, hash, hint, receiver)
 		if err != nil {
+			options.limiter.Release(1)
+			pendingMetric.Add(float64(i - len(hashes)))
 			return err
 		}
 		if p == nil {
 			// data is available locally
+			options.limiter.Release(1)
+			pendingMetric.Add(-1)
 			continue
 		}
 
@@ -53,13 +80,17 @@ func (f *Fetch) getHashes(
 		eg.Go(func() error {
 			select {
 			case <-ctx.Done():
+				options.limiter.Release(1)
+				pendingMetric.Add(-1)
 				return ctx.Err()
 			case <-p.completed:
+				options.limiter.Release(1)
+				pendingMetric.Add(-1)
 				if p.err != nil {
-					mu.Lock()
-					defer mu.Unlock()
 					err := fmt.Errorf("hint: %v, hash: %v, err: %w", hint, h.String(), p.err)
+					mu.Lock()
 					errs = errors.Join(errs, err)
+					mu.Unlock()
 				}
 				return nil
 			}
