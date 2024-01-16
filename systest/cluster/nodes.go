@@ -386,6 +386,27 @@ func deployBootnodeSvc(ctx *testcontext.Context, id string) error {
 	return nil
 }
 
+func deployNodeSvc(ctx *testcontext.Context, id string) error {
+	labels := nodeLabels(smesherApp, id)
+	svc := corev1.Service(id, ctx.Namespace).
+		WithLabels(labels).
+		WithSpec(corev1.ServiceSpec().
+			WithSelector(labels).
+			WithPorts(
+				corev1.ServicePort().WithName("p2p").WithPort(7513).WithProtocol("TCP"),
+				corev1.ServicePort().WithName("grpc-pub").WithPort(9092).WithProtocol("TCP"),
+				corev1.ServicePort().WithName("grpc-priv").WithPort(9093).WithProtocol("TCP"),
+				corev1.ServicePort().WithName("grpc-post").WithPort(9094).WithProtocol("TCP"),
+			).
+			WithClusterIP("None"),
+		)
+	_, err := ctx.Client.CoreV1().Services(ctx.Namespace).Apply(ctx, svc, apimetav1.ApplyOptions{FieldManager: "test"})
+	if err != nil {
+		return fmt.Errorf("apply headless service: %w", err)
+	}
+	return nil
+}
+
 func deployPoetSvc(ctx *testcontext.Context, id string) (*apiv1.Service, error) {
 	ctx.Log.Debugw("deploying poet service", "id", id)
 	labels := nodeLabels(poetApp, id)
@@ -625,6 +646,7 @@ func deployRemoteNodes(ctx *testcontext.Context, from, to int,
 			if err := deployNode(ctx, nodeId, labels, finalFlags); err != nil {
 				return err
 			}
+			deployNodeSvc(ctx, nodeId)
 			clients <- &NodeClient{
 				session: ctx,
 				Node: Node{
@@ -814,7 +836,7 @@ func deployPostService(
 
 	args := []string{
 		"--dir", "/data",
-		"--address", fmt.Sprintf("http://%s:%d", nodeId, 9094), // TODO(mafa): probably needs a service to be accessible
+		"--address", fmt.Sprintf("http://%s:%d", nodeId, 9094),
 		"--threads", strconv.FormatUint(uint64(conf.SMESHING.ProvingOpts.Threads), 10),
 		"--nonces", strconv.FormatUint(uint64(conf.SMESHING.ProvingOpts.Nonces), 10),
 		"--randomx-mode", conf.SMESHING.ProvingOpts.RandomXMode.String(),
