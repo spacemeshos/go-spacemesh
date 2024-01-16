@@ -46,7 +46,8 @@ func (s *PostService) String() string {
 // NewPostService creates a new grpc service using config data.
 func NewPostService(log *zap.Logger) *PostService {
 	return &PostService{
-		log: log,
+		log:    log,
+		client: make(map[types.NodeID]*postClient),
 	}
 }
 
@@ -55,12 +56,32 @@ func NewPostService(log *zap.Logger) *PostService {
 // The other functions on this service are called by services of the node to send
 // requests to the PoST node and receive responses.
 func (s *PostService) Register(stream pb.PostService_RegisterServer) error {
-	con := make(chan postCommand)
-	nodeId, err := s.setConnection(con)
+	err := stream.SendMsg(&pb.NodeRequest{
+		Kind: &pb.NodeRequest_Metadata{
+			Metadata: &pb.MetadataRequest{},
+		},
+	})
 	if err != nil {
+		return fmt.Errorf("failed to send metadata request: %w", err)
+	}
+	resp, err := stream.Recv()
+	if err != nil {
+		return fmt.Errorf("failed to receive response: %w", err)
+	}
+	metadataResp := resp.GetMetadata()
+	if metadataResp == nil {
+		return fmt.Errorf("expected metadata response, got %T", resp.Kind)
+	}
+	meta := metadataResp.GetMeta()
+	if meta == nil {
+		return fmt.Errorf("expected metadata, got empty response")
+	}
+
+	con := make(chan postCommand)
+	if err := s.setConnection(types.BytesToNodeID(meta.NodeId), con); err != nil {
 		return err
 	}
-	defer s.dropConnection(nodeId)
+	defer s.dropConnection(types.BytesToNodeID(meta.NodeId))
 
 	for {
 		select {
@@ -82,23 +103,16 @@ func (s *PostService) Register(stream pb.PostService_RegisterServer) error {
 	}
 }
 
-func (s *PostService) setConnection(con chan postCommand) (types.NodeID, error) {
+func (s *PostService) setConnection(nodeId types.NodeID, con chan postCommand) error {
 	s.clientMtx.Lock()
 	defer s.clientMtx.Unlock()
 
-	client := newPostClient(con)
-	info, err := client.Info(context.Background())
-	if err != nil {
-		return types.EmptyNodeID, fmt.Errorf("failed to get node info: %w", err)
+	if _, ok := s.client[nodeId]; ok {
+		return fmt.Errorf("post service already registered")
 	}
-
-	if _, ok := s.client[info.NodeID]; ok {
-		return types.EmptyNodeID, fmt.Errorf("post service already registered")
-	}
-
-	s.log.Info("post service registered", zap.Stringer("node_id", info.NodeID))
-	s.client[info.NodeID] = client
-	return info.NodeID, nil
+	s.client[nodeId] = newPostClient(con)
+	s.log.Info("post service registered", zap.Stringer("node_id", nodeId))
+	return nil
 }
 
 func (s *PostService) dropConnection(nodeId types.NodeID) error {
