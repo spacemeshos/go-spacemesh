@@ -849,7 +849,7 @@ func deployPostService(
 		"--pow-difficulty", conf.POST.PowDifficulty.String(),
 		"-n", strconv.FormatUint(uint64(conf.SMESHING.Opts.Scrypt.N), 10),
 		"-r", strconv.FormatUint(uint64(conf.SMESHING.Opts.Scrypt.R), 10),
-		"-r", strconv.FormatUint(uint64(conf.SMESHING.Opts.Scrypt.P), 10),
+		"-p", strconv.FormatUint(uint64(conf.SMESHING.Opts.Scrypt.P), 10),
 	}
 	initArgs := []string{
 		"-id", pubKey,
