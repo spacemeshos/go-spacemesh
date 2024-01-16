@@ -6,6 +6,19 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ### Upgrade information
 
+#### Post service endpoint
+
+As requested by the community, the post service now has its own endpoint separate from `grpc-private-listener`.
+The default for `grpc-post-listener` is `127.0.0.1:9094`. In contrast to `grpc-tls-listener` this endpoint does not
+require setting up mTLS.
+
+The post service cannot connect to `grpc-private-listener` anymore. If you are using a remote smeshing setup please
+adjust your configuration accordingly. If you are using a remote setup with mTLS over a private network you can switch
+to using `grpc-post-listener` to not require the overhead of mTLS. We however strongly recommend using an mTLS
+encrypted connection between the post service and the node over insecure connections (e.g. over the internet).
+
+Smeshers using the default setup with a supervised post service do not need to make changes to their node configuration.
+
 #### New poets configuration
 
 Upgrading requires changes in config and in CLI flags (if not using the default).
@@ -80,6 +93,13 @@ configuration is as follows:
 
 * [#5394] Fix inefficient SQLite clustered indices
   The database size is reduced and query performance is improved
+
+* [#5418](https://github.com/spacemeshos/go-spacemesh/pull/5418) Add `grpc-post-listener` to separate post service from
+  `grpc-private-listener` and not require mTLS for the post service.
+
+  If you are not using a remote post service you do not need to adjust anything. If you are using a remote setup
+  make sure your post service now connects to `grpc-post-listener` instead of `grpc-private-listener`. If you are
+  connecting to a remote post service over the internet we strongly recommend using mTLS via `grpc-tls-listener`.
 
 ## Release v1.3.2
 
@@ -181,7 +201,6 @@ for more information on how to configure the node to work with the PoST service.
   (`GlobalStateService.{AccountDataQuery,AccountDataStream,GlobalStateStream}`), it does not yet expose an endpoint to
   query rewards by smesherID. Additionally, it does not re-index old data. Rewards will contain smesherID going forward,
   but to refresh data for all rewards, a node will have to delete its database and resync from genesis.
-
 
 * [#5334](https://github.com/spacemeshos/go-spacemesh/pull/5334) Hotfix for API queries for activations.
   Two API endpoints (`MeshService.{AccountMeshDataQuery,LayersQuery}`) were broken because they attempt to read
