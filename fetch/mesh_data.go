@@ -206,16 +206,12 @@ func (f *Fetch) GetMaliciousIDs(ctx context.Context, peer p2p.Peer) ([]byte, err
 }
 
 // GetLayerData get layer data from peers.
-func (f *Fetch) GetLayerData(
-	ctx context.Context,
-	peers []p2p.Peer,
-	lid types.LayerID,
-) (<-chan Result, error) {
+func (f *Fetch) GetLayerData(ctx context.Context, peer p2p.Peer, lid types.LayerID) ([]byte, error) {
 	lidBytes, err := codec.Encode(&lid)
 	if err != nil {
 		return nil, err
 	}
-	return poll(ctx, f.servers[lyrDataProtocol], peers, lidBytes), nil
+	return f.servers[lyrDataProtocol].Request(ctx, peer, lidBytes)
 }
 
 func (f *Fetch) GetLayerOpinions(

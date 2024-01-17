@@ -101,7 +101,7 @@ func TestDataFetch_PollMaliciousIDs(t *testing.T) {
 	numPeers := 4
 	peers := GenPeers(numPeers)
 	errUnknown := errors.New("unknown")
-	newTestDataFetchWithMocks := func(_ *testing.T, exits bool) *testDataFetch {
+	newTestDataFetchWithMocks := func(_ *testing.T, exists bool) *testDataFetch {
 		td := newTestDataFetch(t)
 		td.mFetcher.EXPECT().SelectBestShuffled(gomock.Any()).Return(peers)
 		for _, peer := range peers {
@@ -109,7 +109,7 @@ func TestDataFetch_PollMaliciousIDs(t *testing.T) {
 				func(_ context.Context, peer p2p.Peer) ([]byte, error) {
 					ids, data := generateMaliciousIDs(t)
 					for _, id := range ids {
-						td.mIDs.EXPECT().IdentityExists(id).Return(exits, nil)
+						td.mIDs.EXPECT().IdentityExists(id).Return(exists, nil)
 					}
 					return data, nil
 				})
@@ -120,7 +120,7 @@ func TestDataFetch_PollMaliciousIDs(t *testing.T) {
 		t.Parallel()
 		td := newTestDataFetchWithMocks(t, true)
 		td.mFetcher.EXPECT().GetMalfeasanceProofs(gomock.Any(), gomock.Any())
-		require.NoError(t, td.PollMaliciousProofs(context.TODO()))
+		require.NoError(t, td.PollMaliciousProofs(context.Background()))
 	})
 	t.Run("getting proofs failure", func(t *testing.T) {
 		t.Parallel()
@@ -131,7 +131,8 @@ func TestDataFetch_PollMaliciousIDs(t *testing.T) {
 	t.Run("ids do not exist", func(t *testing.T) {
 		t.Parallel()
 		td := newTestDataFetchWithMocks(t, false)
-		require.NoError(t, td.PollMaliciousProofs(context.TODO()))
+		td.mFetcher.EXPECT().GetMalfeasanceProofs(gomock.Any(), nil)
+		require.NoError(t, td.PollMaliciousProofs(context.Background()))
 	})
 }
 
@@ -197,35 +198,23 @@ func TestDataFetch_PollLayerData(t *testing.T) {
 	newTestDataFetchWithMocks := func(*testing.T) *testDataFetch {
 		td := newTestDataFetch(t)
 		td.mFetcher.EXPECT().SelectBestShuffled(gomock.Any()).Return(peers)
-		td.mFetcher.EXPECT().GetLayerData(gomock.Any(), peers, layerID).
-			DoAndReturn(func(_ context.Context, _ []p2p.Peer, _ types.LayerID) (<-chan fetch.Result, error) {
-				results := make(chan fetch.Result, len(peers))
-				for _, peer := range peers {
-					td.mFetcher.EXPECT().RegisterPeerHashes(peer, gomock.Any())
-					results <- fetch.Result{Data: generateLayerContent(t), Peer: peer}
-				}
-				return results, nil
-			})
+		for _, peer := range peers {
+			td.mFetcher.EXPECT().GetLayerData(gomock.Any(), peer, layerID).Return(generateLayerContent(t), nil)
+			td.mFetcher.EXPECT().RegisterPeerHashes(peer, gomock.Any())
+		}
 		return td
 	}
 	t.Run("all peers have layer data", func(t *testing.T) {
 		t.Parallel()
 		td := newTestDataFetchWithMocks(t)
-		td.mFetcher.EXPECT().GetBallots(gomock.Any(), gomock.Any()).Return(nil).MaxTimes(numPeers)
-		require.NoError(t, td.PollLayerData(context.TODO(), layerID))
+		td.mFetcher.EXPECT().GetBallots(gomock.Any(), gomock.Any())
+		require.NoError(t, td.PollLayerData(context.Background(), layerID))
 	})
-	t.Run("ballots failure ignored", func(t *testing.T) {
+	t.Run("GetBallots failure", func(t *testing.T) {
 		t.Parallel()
 		td := newTestDataFetchWithMocks(t)
 		td.mFetcher.EXPECT().GetBallots(gomock.Any(), gomock.Any()).Return(errUnknown)
-		td.mFetcher.EXPECT().GetBallots(gomock.Any(), gomock.Any()).Return(nil).MaxTimes(numPeers - 1)
-		require.NoError(t, td.PollLayerData(context.TODO(), layerID))
-	})
-	t.Run("blocks failure ignored", func(t *testing.T) {
-		t.Parallel()
-		td := newTestDataFetchWithMocks(t)
-		td.mFetcher.EXPECT().GetBallots(gomock.Any(), gomock.Any()).Return(nil).MaxTimes(numPeers)
-		require.NoError(t, td.PollLayerData(context.TODO(), layerID))
+		require.ErrorIs(t, td.PollLayerData(context.Background(), layerID), errUnknown)
 	})
 }
 
@@ -235,68 +224,49 @@ func TestDataFetch_PollLayerData_FailToRequest(t *testing.T) {
 	expectedErr := errors.New("failed to request")
 	td := newTestDataFetch(t)
 	td.mFetcher.EXPECT().SelectBestShuffled(gomock.Any()).Return(peers)
-	td.mFetcher.EXPECT().GetLayerData(gomock.Any(), peers, types.LayerID(7)).Return(nil, expectedErr)
+	for _, peer := range peers {
+		td.mFetcher.EXPECT().GetLayerData(gomock.Any(), peer, types.LayerID(7)).Return(nil, expectedErr)
+	}
 	require.ErrorIs(t, td.PollLayerData(context.Background(), 7), expectedErr)
 }
 
 func TestDataFetch_PollLayerData_PeerErrors(t *testing.T) {
 	numPeers := 4
 	peers := GenPeers(numPeers)
-	layerID := types.LayerID(10)
+	lid := types.LayerID(10)
 	t.Run("only one peer has data", func(t *testing.T) {
 		t.Parallel()
 		td := newTestDataFetch(t)
 		td.mFetcher.EXPECT().SelectBestShuffled(gomock.Any()).Return(peers)
-		td.mFetcher.EXPECT().GetLayerData(gomock.Any(), peers, layerID).
-			DoAndReturn(func(_ context.Context, _ []p2p.Peer, _ types.LayerID) (<-chan fetch.Result, error) {
-				results := make(chan fetch.Result, len(peers))
-				td.mFetcher.EXPECT().RegisterPeerHashes(peers[0], gomock.Any())
-				results <- fetch.Result{Data: generateLayerContent(t), Peer: peers[0]}
-				for i := 1; i < numPeers; i++ {
-					results <- fetch.Result{Err: errors.New("not available"), Peer: peers[i]}
-				}
-				return results, nil
-			})
-		td.mFetcher.EXPECT().GetBallots(gomock.Any(), gomock.Any()).Return(nil).MaxTimes(numPeers)
-		td.mFetcher.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).Return(nil).MaxTimes(numPeers)
-		require.NoError(t, td.PollLayerData(context.TODO(), layerID))
+		td.mFetcher.EXPECT().RegisterPeerHashes(peers[0], gomock.Any())
+		td.mFetcher.EXPECT().GetLayerData(gomock.Any(), peers[0], lid).Return(generateLayerContent(t), nil)
+		td.mFetcher.EXPECT().GetLayerData(gomock.Any(), gomock.Any(), lid).Return(nil, errors.New("na")).Times(numPeers - 1)
+		td.mFetcher.EXPECT().GetBallots(gomock.Any(), gomock.Any())
+		require.NoError(t, td.PollLayerData(context.Background(), lid))
 	})
 	t.Run("only one peer has empty layer", func(t *testing.T) {
 		t.Parallel()
 		td := newTestDataFetch(t)
 		td.mFetcher.EXPECT().SelectBestShuffled(gomock.Any()).Return(peers)
-		td.mFetcher.EXPECT().GetLayerData(gomock.Any(), peers, layerID).
-			DoAndReturn(func(
-				_ context.Context,
-				_ []p2p.Peer,
-				_ types.LayerID,
-			) (<-chan fetch.Result, error) {
-				results := make(chan fetch.Result, len(peers))
-				results <- fetch.Result{Data: generateEmptyLayer(t), Peer: peers[0]}
-				for i := 1; i < numPeers; i++ {
-					results <- fetch.Result{Err: errors.New("not available"), Peer: peers[i]}
-				}
-				return results, nil
-			})
-		require.NoError(t, td.PollLayerData(context.TODO(), layerID))
+		td.mFetcher.EXPECT().GetLayerData(gomock.Any(), peers[0], lid).Return(generateEmptyLayer(t), nil)
+		for i := 1; i < numPeers; i++ {
+			td.mFetcher.EXPECT().RegisterPeerHashes(peers[i], gomock.Any())
+			td.mFetcher.EXPECT().GetLayerData(gomock.Any(), peers[i], lid).Return(generateLayerContent(t), nil)
+		}
+		td.mFetcher.EXPECT().GetBallots(gomock.Any(), gomock.Any())
+		require.NoError(t, td.PollLayerData(context.Background(), lid))
 	})
 	t.Run("one peer sends malformed data", func(t *testing.T) {
 		t.Parallel()
 		td := newTestDataFetch(t)
 		td.mFetcher.EXPECT().SelectBestShuffled(gomock.Any()).Return(peers)
-		td.mFetcher.EXPECT().GetLayerData(gomock.Any(), peers, layerID).
-			DoAndReturn(func(_ context.Context, peers []p2p.Peer, _ types.LayerID) (<-chan fetch.Result, error) {
-				results := make(chan fetch.Result, len(peers))
-				for _, peer := range peers[:len(peers)-1] {
-					td.mFetcher.EXPECT().RegisterPeerHashes(peer, gomock.Any())
-					results <- fetch.Result{Data: generateLayerContent(t), Peer: peer}
-				}
-				results <- fetch.Result{Data: []byte("malformed"), Peer: peers[len(peers)-1]}
-				return results, nil
-			})
-		td.mFetcher.EXPECT().GetBallots(gomock.Any(), gomock.Any()).Times(numPeers - 1)
-		td.mFetcher.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).MaxTimes(numPeers - 1)
-		require.NoError(t, td.PollLayerData(context.Background(), layerID))
+		td.mFetcher.EXPECT().GetLayerData(gomock.Any(), peers[0], lid).Return([]byte("malformed"), nil)
+		for i := 1; i < numPeers; i++ {
+			td.mFetcher.EXPECT().RegisterPeerHashes(peers[i], gomock.Any())
+			td.mFetcher.EXPECT().GetLayerData(gomock.Any(), peers[i], lid).Return(generateLayerContent(t), nil)
+		}
+		td.mFetcher.EXPECT().GetBallots(gomock.Any(), gomock.Any())
+		require.NoError(t, td.PollLayerData(context.Background(), lid))
 	})
 }
 

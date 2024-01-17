@@ -538,53 +538,24 @@ func TestFetch_GetLayerOpinions(t *testing.T) {
 }
 
 func TestFetch_GetLayerData(t *testing.T) {
-	errUnknown := errors.New("unknown")
-	tt := []struct {
-		name  string
-		peers map[p2p.Peer]error
-	}{
-		{
-			name:  "all peers returns",
-			peers: map[p2p.Peer]error{"p0": nil, "p1": nil, "p2": nil, "p3": nil},
-		},
-		{
-			name:  "some peers errors",
-			peers: map[p2p.Peer]error{"p0": nil, "p1": errUnknown, "p2": nil, "p3": errUnknown},
-		},
-	}
-
-	for _, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			f := createFetch(t)
-
-			var expOk, expErr int
-			for peer, err := range tc.peers {
-				if err == nil {
-					expOk++
-					f.mLyrS.EXPECT().Request(gomock.Any(), peer, gomock.Any()).Return(generateLayerContent(t), nil)
-				} else {
-					expErr++
-					f.mLyrS.EXPECT().Request(gomock.Any(), peer, gomock.Any()).Return(nil, err)
-				}
-			}
-			resp, err := f.GetLayerData(context.Background(), maps.Keys(tc.peers), types.LayerID(111))
-			require.NoError(t, err)
-			var oks, errs int
-			for i := 0; i < len(tc.peers); i++ {
-				r := <-resp
-				require.ErrorIs(t, r.Err, tc.peers[r.Peer])
-				if r.Err != nil {
-					errs += 1
-				} else {
-					oks += 1
-				}
-			}
-			require.Equal(t, oks, expOk)
-			require.Equal(t, errs, expErr)
-		})
-	}
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+		f := createFetch(t)
+		expected := generateLayerContent(t)
+		f.mLyrS.EXPECT().Request(gomock.Any(), p2p.Peer("p0"), gomock.Any()).Return(expected, nil)
+		res, err := f.GetLayerData(context.Background(), "p0", 7)
+		require.NoError(t, err)
+		require.Equal(t, expected, res)
+	})
+	t.Run("failure", func(t *testing.T) {
+		t.Parallel()
+		errUnknown := errors.New("unknown")
+		f := createFetch(t)
+		f.mLyrS.EXPECT().Request(gomock.Any(), p2p.Peer("p0"), gomock.Any()).Return(nil, errUnknown)
+		res, err := f.GetLayerData(context.Background(), "p0", 7)
+		require.ErrorIs(t, err, errUnknown)
+		require.Nil(t, res)
+	})
 }
 
 func generateEpochData(t *testing.T) (*EpochData, []byte) {
