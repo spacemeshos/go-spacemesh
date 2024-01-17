@@ -2,14 +2,16 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
-## UNRELEASED 
+## Release v1.3.3
 
 ### Improvements
 
 * [#5442](https://github.com/spacemeshos/go-spacemesh/pull/5442)
   Limit concurrent requests for ATXs to reduce usage of memory and p2p streams.
+
 * [#5394](https://github.com/spacemeshos/go-spacemesh/pull/5394) Add rowid to tables with inefficient clustered indices.
   This reduces database size and improves its performance.
+
 * [#5334](https://github.com/spacemeshos/go-spacemesh/pull/5334) Hotfix for API queries for activations.
   Two API endpoints (`MeshService.{AccountMeshDataQuery,LayersQuery}`) were broken because they attempt to read
   all activation data for an epoch. As the number of activations per epoch has grown, this brute force query (i.e.,
@@ -103,7 +105,7 @@ for more information on how to configure the node to work with the PoST service.
   to list their OpenCL providers and associated IDs.
 
 * [#5207](https://github.com/spacemeshos/go-spacemesh/pull/5207) Move the NiPoST state of a node into a new node-local database.
-  
+
   The node now uses 2 databases: `state.sql` which holds the node's view on the global state of the network and `node_state.sql`
   which holds ephemeral data of the node.
 
@@ -196,10 +198,10 @@ for more information on how to configure the node to work with the PoST service.
 ### Improvements
 
 * [#5263](https://github.com/spacemeshos/go-spacemesh/pull/5263) randomize peer selection
-  
+
   without this change node can get stuck after restart on requesting data from peer that is misbehaving.
   log below will be printed repeatedly:
-  
+
   > 2023-11-15T08:00:17.937+0100 INFO fd68b.sync syncing atx from genesis
 
 * [#5264](https://github.com/spacemeshos/go-spacemesh/pull/5264) increase limits related to activations
