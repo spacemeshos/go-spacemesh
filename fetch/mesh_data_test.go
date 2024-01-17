@@ -493,18 +493,11 @@ func TestFetch_GetMaliciousIDs(t *testing.T) {
 				err := err
 				if err == nil {
 					expOk++
+					f.mMalS.EXPECT().Request(gomock.Any(), peer, []byte{}).Return(generateMaliciousIDs(t), nil)
 				} else {
 					expErr++
+					f.mMalS.EXPECT().Request(gomock.Any(), peer, []byte{}).Return(nil, err)
 				}
-				f.mMalS.EXPECT().
-					Request(gomock.Any(), peer, []byte{}).
-					DoAndReturn(
-						func(_ context.Context, _ p2p.Peer, _ []byte) ([]byte, error) {
-							if err == nil {
-								return generateMaliciousIDs(t), nil
-							}
-							return nil, err
-						})
 			}
 			resp := f.GetMaliciousIDs(context.Background(), maps.Keys(tc.peers))
 			var oks, errs int
@@ -516,7 +509,56 @@ func TestFetch_GetMaliciousIDs(t *testing.T) {
 				} else {
 					oks += 1
 				}
+			}
+			require.Equal(t, oks, expOk)
+			require.Equal(t, errs, expErr)
+		})
+	}
+}
 
+func TestFetch_GetLayerOpinions(t *testing.T) {
+	errUnknown := errors.New("unknown")
+	tt := []struct {
+		name  string
+		peers map[p2p.Peer]error
+	}{
+		{
+			name:  "all peers returns",
+			peers: map[p2p.Peer]error{"p0": nil, "p1": nil, "p2": nil, "p3": nil},
+		},
+		{
+			name:  "some peers errors",
+			peers: map[p2p.Peer]error{"p0": nil, "p1": errUnknown, "p2": nil, "p3": errUnknown},
+		},
+	}
+
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			f := createFetch(t)
+
+			var expOk, expErr int
+			for peer, err := range tc.peers {
+				if err == nil {
+					expOk++
+					f.mOpn2S.EXPECT().Request(gomock.Any(), peer, gomock.Any()).Return(generateMaliciousIDs(t), nil)
+				} else {
+					expErr++
+					f.mOpn2S.EXPECT().Request(gomock.Any(), peer, gomock.Any()).Return(nil, err)
+				}
+			}
+			resp, err := f.GetLayerOpinions(context.Background(), maps.Keys(tc.peers), 7)
+			require.NoError(t, err)
+			var oks, errs int
+			for i := 0; i < len(tc.peers); i++ {
+				r := <-resp
+				require.ErrorIs(t, r.Err, tc.peers[r.Peer])
+				if r.Err != nil {
+					errs += 1
+				} else {
+					oks += 1
+				}
 			}
 			require.Equal(t, oks, expOk)
 			require.Equal(t, errs, expErr)
@@ -548,21 +590,13 @@ func TestFetch_GetLayerData(t *testing.T) {
 
 			var expOk, expErr int
 			for peer, err := range tc.peers {
-				err := err
 				if err == nil {
 					expOk++
+					f.mLyrS.EXPECT().Request(gomock.Any(), peer, gomock.Any()).Return(generateLayerContent(t), nil)
 				} else {
 					expErr++
+					f.mLyrS.EXPECT().Request(gomock.Any(), peer, gomock.Any()).Return(nil, err)
 				}
-				f.mLyrS.EXPECT().
-					Request(gomock.Any(), peer, gomock.Any()).
-					DoAndReturn(
-						func(_ context.Context, _ p2p.Peer, _ []byte) ([]byte, error) {
-							if err != nil {
-								return nil, err
-							}
-							return generateLayerContent(t), nil
-						})
 			}
 			resp, err := f.GetLayerData(context.Background(), maps.Keys(tc.peers), types.LayerID(111))
 			require.NoError(t, err)
@@ -575,7 +609,6 @@ func TestFetch_GetLayerData(t *testing.T) {
 				} else {
 					oks += 1
 				}
-
 			}
 			require.Equal(t, oks, expOk)
 			require.Equal(t, errs, expErr)
