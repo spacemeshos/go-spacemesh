@@ -104,35 +104,29 @@ func TestDataFetch_PollMaliciousIDs(t *testing.T) {
 	newTestDataFetchWithMocks := func(_ *testing.T, exits bool) *testDataFetch {
 		td := newTestDataFetch(t)
 		td.mFetcher.EXPECT().SelectBestShuffled(gomock.Any()).Return(peers)
-		td.mFetcher.EXPECT().GetMaliciousIDs(gomock.Any(), peers).DoAndReturn(
-			func(_ context.Context, peers []p2p.Peer) <-chan fetch.Result {
-				result := make(chan fetch.Result, len(peers))
-				for _, peer := range peers {
+		for _, peer := range peers {
+			td.mFetcher.EXPECT().GetMaliciousIDs(gomock.Any(), peer).DoAndReturn(
+				func(_ context.Context, peer p2p.Peer) ([]byte, error) {
 					ids, data := generateMaliciousIDs(t)
 					for _, id := range ids {
 						td.mIDs.EXPECT().IdentityExists(id).Return(exits, nil)
 					}
-					result <- fetch.Result{
-						Data: data,
-						Peer: peer,
-					}
-				}
-				return result
-			})
+					return data, nil
+				})
+		}
 		return td
 	}
-	t.Run("all peers have malfeasance proofs", func(t *testing.T) {
+	t.Run("getting malfeasance proofs success", func(t *testing.T) {
 		t.Parallel()
 		td := newTestDataFetchWithMocks(t, true)
-		td.mFetcher.EXPECT().GetMalfeasanceProofs(gomock.Any(), gomock.Any()).Return(nil).MaxTimes(numPeers)
+		td.mFetcher.EXPECT().GetMalfeasanceProofs(gomock.Any(), gomock.Any())
 		require.NoError(t, td.PollMaliciousProofs(context.TODO()))
 	})
-	t.Run("proof failure ignored", func(t *testing.T) {
+	t.Run("getting proofs failure", func(t *testing.T) {
 		t.Parallel()
 		td := newTestDataFetchWithMocks(t, true)
 		td.mFetcher.EXPECT().GetMalfeasanceProofs(gomock.Any(), gomock.Any()).Return(errUnknown)
-		td.mFetcher.EXPECT().GetMalfeasanceProofs(gomock.Any(), gomock.Any()).Return(nil).MaxTimes(numPeers - 1)
-		require.NoError(t, td.PollMaliciousProofs(context.TODO()))
+		require.ErrorIs(t, td.PollMaliciousProofs(context.Background()), errUnknown)
 	})
 	t.Run("ids do not exist", func(t *testing.T) {
 		t.Parallel()
@@ -147,15 +141,7 @@ func TestDataFetch_PollMaliciousIDs_PeerErrors(t *testing.T) {
 		peers := []p2p.Peer{"p0"}
 		td := newTestDataFetch(t)
 		td.mFetcher.EXPECT().SelectBestShuffled(gomock.Any()).Return(peers)
-		td.mFetcher.EXPECT().GetMaliciousIDs(gomock.Any(), peers).DoAndReturn(
-			func(_ context.Context, peers []p2p.Peer) <-chan fetch.Result {
-				result := make(chan fetch.Result, 1)
-				result <- fetch.Result{
-					Data: []byte("malformed"),
-					Peer: peers[0],
-				}
-				return result
-			})
+		td.mFetcher.EXPECT().GetMaliciousIDs(gomock.Any(), p2p.Peer("p0")).Return([]byte("malformed"), nil)
 		err := td.PollMaliciousProofs(context.Background())
 		require.ErrorContains(t, err, "decode")
 	})
@@ -165,19 +151,11 @@ func TestDataFetch_PollMaliciousIDs_PeerErrors(t *testing.T) {
 		expectedErr := errors.New("peer failure")
 		td := newTestDataFetch(t)
 		td.mFetcher.EXPECT().SelectBestShuffled(gomock.Any()).Return(peers)
-		td.mFetcher.EXPECT().GetMaliciousIDs(gomock.Any(), peers).DoAndReturn(
-			func(_ context.Context, peers []p2p.Peer) <-chan fetch.Result {
-				result := make(chan fetch.Result, 1)
-				result <- fetch.Result{
-					Err:  expectedErr,
-					Peer: peers[0],
-				}
-				return result
-			})
+		td.mFetcher.EXPECT().GetMaliciousIDs(gomock.Any(), p2p.Peer("p0")).Return(nil, expectedErr)
 		err := td.PollMaliciousProofs(context.Background())
 		require.ErrorIs(t, err, expectedErr)
 	})
-	t.Run("only second peer sends malformed data (succeed anyway)", func(t *testing.T) {
+	t.Run("one peer sends malformed data (succeed anyway)", func(t *testing.T) {
 		t.Parallel()
 		peers := []p2p.Peer{"p0", "p1"}
 		td := newTestDataFetch(t)
@@ -187,24 +165,13 @@ func TestDataFetch_PollMaliciousIDs_PeerErrors(t *testing.T) {
 		}
 
 		td.mFetcher.EXPECT().SelectBestShuffled(gomock.Any()).Return(peers)
-		td.mFetcher.EXPECT().GetMaliciousIDs(gomock.Any(), peers).DoAndReturn(
-			func(_ context.Context, peers []p2p.Peer) <-chan fetch.Result {
-				result := make(chan fetch.Result, 2)
-				result <- fetch.Result{
-					Data: data,
-					Peer: peers[0],
-				}
-				result <- fetch.Result{
-					Data: []byte("malformed"),
-					Peer: peers[1],
-				}
-				return result
-			})
+		td.mFetcher.EXPECT().GetMaliciousIDs(gomock.Any(), p2p.Peer("p0")).Return(data, nil)
+		td.mFetcher.EXPECT().GetMaliciousIDs(gomock.Any(), p2p.Peer("p1")).Return([]byte("malformed"), nil)
 		td.mFetcher.EXPECT().GetMalfeasanceProofs(gomock.Any(), gomock.Any())
 		err := td.PollMaliciousProofs(context.Background())
 		require.NoError(t, err)
 	})
-	t.Run("only second peer fails (succeed anyway)", func(t *testing.T) {
+	t.Run("one peer fails (succeed anyway)", func(t *testing.T) {
 		t.Parallel()
 		peers := []p2p.Peer{"p0", "p1"}
 		expectedErr := errors.New("peer failure")
@@ -214,19 +181,8 @@ func TestDataFetch_PollMaliciousIDs_PeerErrors(t *testing.T) {
 			td.mIDs.EXPECT().IdentityExists(id).Return(true, nil)
 		}
 		td.mFetcher.EXPECT().SelectBestShuffled(gomock.Any()).Return(peers)
-		td.mFetcher.EXPECT().GetMaliciousIDs(gomock.Any(), peers).DoAndReturn(
-			func(_ context.Context, peers []p2p.Peer) <-chan fetch.Result {
-				result := make(chan fetch.Result, 2)
-				result <- fetch.Result{
-					Data: data,
-					Peer: peers[0],
-				}
-				result <- fetch.Result{
-					Err:  expectedErr,
-					Peer: peers[1],
-				}
-				return result
-			})
+		td.mFetcher.EXPECT().GetMaliciousIDs(gomock.Any(), p2p.Peer("p0")).Return(data, nil)
+		td.mFetcher.EXPECT().GetMaliciousIDs(gomock.Any(), p2p.Peer("p1")).Return(nil, expectedErr)
 		td.mFetcher.EXPECT().GetMalfeasanceProofs(gomock.Any(), gomock.Any())
 		err := td.PollMaliciousProofs(context.Background())
 		require.NoError(t, err)

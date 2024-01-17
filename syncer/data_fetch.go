@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sync"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
@@ -46,45 +48,87 @@ func NewDataFetch(
 	}
 }
 
+type fetchResult struct {
+	err error
+	mu  sync.Mutex
+}
+
+func (e *fetchResult) joinError(err error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.err = errors.Join(e.err, err)
+}
+
+func (e *fetchResult) error() error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.err
+}
+
 // PollMaliciousProofs polls all peers for malicious NodeIDs.
 func (d *DataFetch) PollMaliciousProofs(ctx context.Context) error {
 	peers := d.fetcher.SelectBestShuffled(fetch.RedundantPeers)
-	resp := d.fetcher.GetMaliciousIDs(ctx, peers)
-
-	success := false
-	maliciousIDs := make(map[types.NodeID]struct{})
-	var combinedErr error
 	logger := d.logger.WithContext(ctx)
-	for results := 0; results < len(peers); results++ {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case resp := <-resp:
-			logger.With().Debug("received malicious id from peer", log.Stringer("peer", resp.Peer))
 
-			if resp.Err != nil {
+	maliciousIDs := make(chan fetch.MaliciousIDs, len(peers))
+	var eg errgroup.Group
+	result := fetchResult{}
+	for _, peer := range peers {
+		peer := peer
+		eg.Go(func() error {
+			data, err := d.fetcher.GetMaliciousIDs(ctx, peer)
+			if err != nil {
 				malPeerError.Inc()
-				logger.With().Debug("failed to get malicious IDs", log.Err(resp.Err), log.Stringer("peer", resp.Peer))
-				if !success {
-					combinedErr = errors.Join(combinedErr, resp.Err)
-				}
-				continue
+				logger.With().Debug("failed to get malicious IDs", log.Err(err), log.Stringer("peer", peer))
+				result.joinError(err)
+				return err
 			}
-
+			logger.With().Debug("received malicious id from peer", log.Stringer("peer", peer))
 			var malIDs fetch.MaliciousIDs
-			if err := codec.Decode(resp.Data, &malIDs); err != nil {
+			if err := codec.Decode(data, &malIDs); err != nil {
 				logger.With().Debug("failed to decode", log.Err(err))
-				if !success {
-					combinedErr = errors.Join(combinedErr, err)
-				}
-				continue
+				result.joinError(err)
+				return err
 			}
-			fetchMalfeasanceProof(ctx, logger, d.ids, d.fetcher, maliciousIDs, &malIDs)
-			success = true
-			combinedErr = nil
+			maliciousIDs <- malIDs
+			return nil
+		})
+	}
+	_ = eg.Wait()
+	close(maliciousIDs)
+
+	allIds := make(map[types.NodeID]struct{})
+	success := false
+	for ids := range maliciousIDs {
+		success = true
+		for _, id := range ids.NodeIDs {
+			allIds[id] = struct{}{}
 		}
 	}
-	return combinedErr
+	if !success {
+		return result.error()
+	}
+
+	var idsToFetch []types.NodeID
+	for nodeID := range allIds {
+		if exists, err := d.ids.IdentityExists(nodeID); err != nil {
+			logger.With().Error("failed to check identity", log.Err(err))
+			continue
+		} else if !exists {
+			logger.With().Info("malicious identity does not exist", log.String("identity", nodeID.String()))
+			continue
+		}
+		idsToFetch = append(idsToFetch, nodeID)
+	}
+
+	if len(idsToFetch) > 0 {
+		logger.With().Info("fetching malfeasance proofs", log.Int("to_fetch", len(idsToFetch)))
+		if err := d.fetcher.GetMalfeasanceProofs(ctx, idsToFetch); err != nil {
+			return fmt.Errorf("getting malfeasance proofs: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // PollLayerData polls all peers for data in the specified layer.
@@ -147,46 +191,6 @@ func registerLayerHashes(fetcher fetcher, peer p2p.Peer, data *fetch.LayerData) 
 		layerHashes = append(layerHashes, ballotID.AsHash32())
 	}
 	fetcher.RegisterPeerHashes(peer, layerHashes)
-}
-
-func fetchMalfeasanceProof(
-	ctx context.Context,
-	logger log.Log,
-	ids idProvider,
-	fetcher fetcher,
-	maliciousIDs map[types.NodeID]struct{},
-	data *fetch.MaliciousIDs,
-) {
-	var idsToFetch []types.NodeID
-	for _, nodeID := range data.NodeIDs {
-		if _, ok := maliciousIDs[nodeID]; !ok {
-			// check if the NodeID exists
-			if exists, err := ids.IdentityExists(nodeID); err != nil {
-				logger.With().Error("failed to check identity", log.Err(err))
-				continue
-			} else if !exists {
-				logger.With().Warning("malicious identity does not exist",
-					log.String("identity", nodeID.String()))
-				continue
-			}
-			// not yet fetched
-			maliciousIDs[nodeID] = struct{}{}
-			idsToFetch = append(idsToFetch, nodeID)
-		}
-	}
-	if len(idsToFetch) > 0 {
-		logger.With().Info("fetching malfeasance proofs", log.Int("to_fetch", len(idsToFetch)))
-		if err := fetcher.GetMalfeasanceProofs(ctx, idsToFetch); err != nil {
-			logger.With().Warning("failed fetching malfeasance proofs",
-				log.Array("malicious_ids", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-					for _, nodeID := range idsToFetch {
-						encoder.AppendString(nodeID.String())
-					}
-					return nil
-				})),
-				log.Err(err))
-		}
-	}
 }
 
 func fetchLayerData(

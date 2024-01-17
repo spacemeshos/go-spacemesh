@@ -201,8 +201,8 @@ func (f *Fetch) GetPoetProof(ctx context.Context, id types.Hash32) error {
 	}
 }
 
-func (f *Fetch) GetMaliciousIDs(ctx context.Context, peers []p2p.Peer) <-chan Result {
-	return poll(ctx, f.servers[malProtocol], peers, []byte{})
+func (f *Fetch) GetMaliciousIDs(ctx context.Context, peer p2p.Peer) ([]byte, error) {
+	return f.servers[malProtocol].Request(ctx, peer, []byte{})
 }
 
 // GetLayerData get layer data from peers.

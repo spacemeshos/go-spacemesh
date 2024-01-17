@@ -531,11 +531,12 @@ func (c *fetchLogicGetMalfeasanceProofsCall) DoAndReturn(f func(context.Context,
 }
 
 // GetMaliciousIDs mocks base method.
-func (m *MockfetchLogic) GetMaliciousIDs(arg0 context.Context, arg1 []p2p.Peer) <-chan fetch.Result {
+func (m *MockfetchLogic) GetMaliciousIDs(arg0 context.Context, arg1 p2p.Peer) ([]byte, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetMaliciousIDs", arg0, arg1)
-	ret0, _ := ret[0].(<-chan fetch.Result)
-	return ret0
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetMaliciousIDs indicates an expected call of GetMaliciousIDs.
@@ -551,19 +552,19 @@ type fetchLogicGetMaliciousIDsCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *fetchLogicGetMaliciousIDsCall) Return(arg0 <-chan fetch.Result) *fetchLogicGetMaliciousIDsCall {
-	c.Call = c.Call.Return(arg0)
+func (c *fetchLogicGetMaliciousIDsCall) Return(arg0 []byte, arg1 error) *fetchLogicGetMaliciousIDsCall {
+	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *fetchLogicGetMaliciousIDsCall) Do(f func(context.Context, []p2p.Peer) <-chan fetch.Result) *fetchLogicGetMaliciousIDsCall {
+func (c *fetchLogicGetMaliciousIDsCall) Do(f func(context.Context, p2p.Peer) ([]byte, error)) *fetchLogicGetMaliciousIDsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *fetchLogicGetMaliciousIDsCall) DoAndReturn(f func(context.Context, []p2p.Peer) <-chan fetch.Result) *fetchLogicGetMaliciousIDsCall {
+func (c *fetchLogicGetMaliciousIDsCall) DoAndReturn(f func(context.Context, p2p.Peer) ([]byte, error)) *fetchLogicGetMaliciousIDsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -1134,11 +1135,12 @@ func (c *fetcherGetMalfeasanceProofsCall) DoAndReturn(f func(context.Context, []
 }
 
 // GetMaliciousIDs mocks base method.
-func (m *Mockfetcher) GetMaliciousIDs(arg0 context.Context, arg1 []p2p.Peer) <-chan fetch.Result {
+func (m *Mockfetcher) GetMaliciousIDs(arg0 context.Context, arg1 p2p.Peer) ([]byte, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetMaliciousIDs", arg0, arg1)
-	ret0, _ := ret[0].(<-chan fetch.Result)
-	return ret0
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetMaliciousIDs indicates an expected call of GetMaliciousIDs.
@@ -1154,19 +1156,19 @@ type fetcherGetMaliciousIDsCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *fetcherGetMaliciousIDsCall) Return(arg0 <-chan fetch.Result) *fetcherGetMaliciousIDsCall {
-	c.Call = c.Call.Return(arg0)
+func (c *fetcherGetMaliciousIDsCall) Return(arg0 []byte, arg1 error) *fetcherGetMaliciousIDsCall {
+	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *fetcherGetMaliciousIDsCall) Do(f func(context.Context, []p2p.Peer) <-chan fetch.Result) *fetcherGetMaliciousIDsCall {
+func (c *fetcherGetMaliciousIDsCall) Do(f func(context.Context, p2p.Peer) ([]byte, error)) *fetcherGetMaliciousIDsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *fetcherGetMaliciousIDsCall) DoAndReturn(f func(context.Context, []p2p.Peer) <-chan fetch.Result) *fetcherGetMaliciousIDsCall {
+func (c *fetcherGetMaliciousIDsCall) DoAndReturn(f func(context.Context, p2p.Peer) ([]byte, error)) *fetcherGetMaliciousIDsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

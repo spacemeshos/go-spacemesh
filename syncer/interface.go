@@ -41,7 +41,7 @@ type fetchLogic interface {
 
 // fetcher is the interface to the low-level fetching.
 type fetcher interface {
-	GetMaliciousIDs(context.Context, []p2p.Peer) <-chan fetch.Result
+	GetMaliciousIDs(context.Context, p2p.Peer) ([]byte, error)
 	GetLayerData(context.Context, []p2p.Peer, types.LayerID) (<-chan fetch.Result, error)
 	GetLayerOpinions(context.Context, []p2p.Peer, types.LayerID) (<-chan fetch.Result, error)
 	GetCert(context.Context, types.LayerID, types.BlockID, []p2p.Peer) (*types.Certificate, error)
