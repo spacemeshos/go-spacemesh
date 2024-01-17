@@ -201,13 +201,8 @@ func (f *Fetch) GetPoetProof(ctx context.Context, id types.Hash32) error {
 	}
 }
 
-func (f *Fetch) GetMaliciousIDs(
-	ctx context.Context,
-	peers []p2p.Peer,
-	okCB func([]byte, p2p.Peer),
-	errCB func(error, p2p.Peer),
-) error {
-	return poll(ctx, f.servers[malProtocol], peers, []byte{}, okCB, errCB)
+func (f *Fetch) GetMaliciousIDs(ctx context.Context, peers []p2p.Peer) <-chan Result {
+	return poll(ctx, f.servers[malProtocol], peers, []byte{})
 }
 
 // GetLayerData get layer data from peers.
@@ -215,31 +210,33 @@ func (f *Fetch) GetLayerData(
 	ctx context.Context,
 	peers []p2p.Peer,
 	lid types.LayerID,
-	okCB func([]byte, p2p.Peer),
-	errCB func(error, p2p.Peer),
-) error {
+) (<-chan Result, error) {
 	lidBytes, err := codec.Encode(&lid)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return poll(ctx, f.servers[lyrDataProtocol], peers, lidBytes, okCB, errCB)
+	return poll(ctx, f.servers[lyrDataProtocol], peers, lidBytes), nil
 }
 
 func (f *Fetch) GetLayerOpinions(
 	ctx context.Context,
 	peers []p2p.Peer,
 	lid types.LayerID,
-	okCB func([]byte, p2p.Peer),
-	errCB func(error, p2p.Peer),
-) error {
+) (<-chan Result, error) {
 	req := OpinionRequest{
 		Layer: lid,
 	}
 	reqData, err := codec.Encode(&req)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return poll(ctx, f.servers[OpnProtocol], peers, reqData, okCB, errCB)
+	return poll(ctx, f.servers[OpnProtocol], peers, reqData), nil
+}
+
+type Result struct {
+	Data []byte
+	Peer p2p.Peer
+	Err  error
 }
 
 func poll(
@@ -247,23 +244,20 @@ func poll(
 	srv requester,
 	peers []p2p.Peer,
 	req []byte,
-	okCB func([]byte, p2p.Peer),
-	errCB func(error, p2p.Peer),
-) error {
-	var eg errgroup.Group
+) <-chan Result {
+	result := make(chan Result, len(peers))
 	for _, p := range peers {
 		peer := p
-		eg.Go(func() error {
+		go func() {
 			data, err := srv.Request(ctx, peer, req)
-			if err != nil {
-				errCB(err, peer)
-			} else {
-				okCB(data, peer)
+			result <- Result{
+				Data: data,
+				Peer: peer,
+				Err:  err,
 			}
-			return nil
-		})
+		}()
 	}
-	return nil
+	return result
 }
 
 // PeerEpochInfo get the epoch info published in the given epoch from the specified peer.

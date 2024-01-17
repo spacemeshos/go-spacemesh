@@ -104,16 +104,20 @@ func TestDataFetch_PollMaliciousIDs(t *testing.T) {
 	newTestDataFetchWithMocks := func(_ *testing.T, exits bool) *testDataFetch {
 		td := newTestDataFetch(t)
 		td.mFetcher.EXPECT().SelectBestShuffled(gomock.Any()).Return(peers)
-		td.mFetcher.EXPECT().GetMaliciousIDs(gomock.Any(), peers, gomock.Any(), gomock.Any()).DoAndReturn(
-			func(_ context.Context, _ []p2p.Peer, okCB func([]byte, p2p.Peer), errCB func(error, p2p.Peer)) error {
+		td.mFetcher.EXPECT().GetMaliciousIDs(gomock.Any(), peers).DoAndReturn(
+			func(_ context.Context, peers []p2p.Peer) <-chan fetch.Result {
+				result := make(chan fetch.Result, len(peers))
 				for _, peer := range peers {
 					ids, data := generateMaliciousIDs(t)
 					for _, id := range ids {
 						td.mIDs.EXPECT().IdentityExists(id).Return(exits, nil)
 					}
-					okCB(data, peer)
+					result <- fetch.Result{
+						Data: data,
+						Peer: peer,
+					}
 				}
-				return nil
+				return result
 			})
 		return td
 	}
@@ -145,19 +149,14 @@ func TestDataFetch_PollLayerData(t *testing.T) {
 	newTestDataFetchWithMocks := func(*testing.T) *testDataFetch {
 		td := newTestDataFetch(t)
 		td.mFetcher.EXPECT().SelectBestShuffled(gomock.Any()).Return(peers)
-		td.mFetcher.EXPECT().GetLayerData(gomock.Any(), peers, layerID, gomock.Any(), gomock.Any()).
-			DoAndReturn(func(
-				_ context.Context,
-				_ []p2p.Peer,
-				_ types.LayerID,
-				okCB func([]byte, p2p.Peer),
-				errCB func(error, p2p.Peer),
-			) error {
+		td.mFetcher.EXPECT().GetLayerData(gomock.Any(), peers, layerID).
+			DoAndReturn(func(_ context.Context, _ []p2p.Peer, _ types.LayerID) (<-chan fetch.Result, error) {
+				results := make(chan fetch.Result, len(peers))
 				for _, peer := range peers {
 					td.mFetcher.EXPECT().RegisterPeerHashes(peer, gomock.Any())
-					okCB(generateLayerContent(t), peer)
+					results <- fetch.Result{Data: generateLayerContent(t), Peer: peer}
 				}
-				return nil
+				return results, nil
 			})
 		return td
 	}
@@ -190,20 +189,15 @@ func TestDataFetch_PollLayerData_PeerErrors(t *testing.T) {
 		t.Parallel()
 		td := newTestDataFetch(t)
 		td.mFetcher.EXPECT().SelectBestShuffled(gomock.Any()).Return(peers)
-		td.mFetcher.EXPECT().GetLayerData(gomock.Any(), peers, layerID, gomock.Any(), gomock.Any()).
-			DoAndReturn(func(
-				_ context.Context,
-				_ []p2p.Peer,
-				_ types.LayerID,
-				okCB func([]byte, p2p.Peer),
-				errCB func(error, p2p.Peer),
-			) error {
+		td.mFetcher.EXPECT().GetLayerData(gomock.Any(), peers, layerID).
+			DoAndReturn(func(_ context.Context, _ []p2p.Peer, _ types.LayerID) (<-chan fetch.Result, error) {
+				results := make(chan fetch.Result, len(peers))
 				td.mFetcher.EXPECT().RegisterPeerHashes(peers[0], gomock.Any())
-				okCB(generateLayerContent(t), peers[0])
+				results <- fetch.Result{Data: generateLayerContent(t), Peer: peers[0]}
 				for i := 1; i < numPeers; i++ {
-					errCB(errors.New("not available"), peers[i])
+					results <- fetch.Result{Err: errors.New("not available"), Peer: peers[i]}
 				}
-				return nil
+				return results, nil
 			})
 		td.mFetcher.EXPECT().GetBallots(gomock.Any(), gomock.Any()).Return(nil).MaxTimes(numPeers)
 		td.mFetcher.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).Return(nil).MaxTimes(numPeers)
@@ -213,19 +207,18 @@ func TestDataFetch_PollLayerData_PeerErrors(t *testing.T) {
 		t.Parallel()
 		td := newTestDataFetch(t)
 		td.mFetcher.EXPECT().SelectBestShuffled(gomock.Any()).Return(peers)
-		td.mFetcher.EXPECT().GetLayerData(gomock.Any(), peers, layerID, gomock.Any(), gomock.Any()).
+		td.mFetcher.EXPECT().GetLayerData(gomock.Any(), peers, layerID).
 			DoAndReturn(func(
 				_ context.Context,
 				_ []p2p.Peer,
 				_ types.LayerID,
-				okCB func([]byte, p2p.Peer),
-				errCB func(error, p2p.Peer),
-			) error {
-				okCB(generateEmptyLayer(t), peers[0])
+			) (<-chan fetch.Result, error) {
+				results := make(chan fetch.Result, len(peers))
+				results <- fetch.Result{Data: generateEmptyLayer(t), Peer: peers[0]}
 				for i := 1; i < numPeers; i++ {
-					errCB(errors.New("not available"), peers[i])
+					results <- fetch.Result{Err: errors.New("not available"), Peer: peers[i]}
 				}
-				return nil
+				return results, nil
 			})
 		require.NoError(t, td.PollLayerData(context.TODO(), layerID))
 	})
@@ -290,17 +283,12 @@ func TestDataFetch_PollLayerOpinions(t *testing.T) {
 			t.Parallel()
 
 			td := newTestDataFetch(t)
-			td.mFetcher.EXPECT().GetLayerOpinions(gomock.Any(), peers, lid, gomock.Any(), gomock.Any()).
-				DoAndReturn(func(
-					_ context.Context,
-					_ []p2p.Peer,
-					_ types.LayerID,
-					okCB func([]byte, p2p.Peer),
-					errCB func(error, p2p.Peer),
-				) error {
+			td.mFetcher.EXPECT().GetLayerOpinions(gomock.Any(), peers, lid).
+				DoAndReturn(func(_ context.Context, _ []p2p.Peer, _ types.LayerID) (<-chan fetch.Result, error) {
+					results := make(chan fetch.Result, len(peers))
 					for i, peer := range peers {
 						if tc.pErrs[i] != nil {
-							errCB(tc.pErrs[i], peer)
+							results <- fetch.Result{Err: tc.pErrs[i], Peer: peer}
 						} else {
 							if tc.needCert && len(tc.hasCert) > 0 {
 								p := peer
@@ -310,7 +298,7 @@ func TestDataFetch_PollLayerOpinions(t *testing.T) {
 							if len(tc.hasCert) > 0 {
 								certified = &tc.hasCert[i]
 							}
-							okCB(generateLayerOpinions2(t, certified), peer)
+							results <- fetch.Result{Data: generateLayerOpinions2(t, certified), Peer: peer}
 						}
 					}
 					for _, bid := range tc.queried {
@@ -324,7 +312,7 @@ func TestDataFetch_PollLayerOpinions(t *testing.T) {
 								}
 							})
 					}
-					return nil
+					return results, nil
 				})
 
 			got, certs, err := td.PollLayerOpinions(context.TODO(), lid, tc.needCert, peers)

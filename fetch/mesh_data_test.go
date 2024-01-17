@@ -3,14 +3,13 @@ package fetch
 import (
 	"context"
 	"errors"
-	"os"
-	"sync"
 	"testing"
 
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -30,15 +29,6 @@ const (
 	txsForBlock    = iota
 	txsForProposal = iota
 )
-
-const layersPerEpoch = 3
-
-func TestMain(m *testing.M) {
-	types.SetLayersPerEpoch(layersPerEpoch)
-
-	res := m.Run()
-	os.Exit(res)
-}
 
 func (f *testFetch) withMethod(method int) *testFetch {
 	f.method = method
@@ -157,7 +147,7 @@ func TestFetch_getHashes(t *testing.T) {
 			for _, peer := range peers {
 				f.peers.Add(peer)
 			}
-			f.mh.EXPECT().ID().Return(p2p.Peer("self")).AnyTimes()
+			f.mh.EXPECT().ID().Return("self").AnyTimes()
 			f.RegisterPeerHashes(peers[0], hashes[:2])
 			f.RegisterPeerHashes(peers[1], hashes[2:])
 
@@ -477,19 +467,18 @@ func TestGetPoetProof(t *testing.T) {
 }
 
 func TestFetch_GetMaliciousIDs(t *testing.T) {
-	peers := []p2p.Peer{"p0", "p1", "p3", "p4"}
 	errUnknown := errors.New("unknown")
 	tt := []struct {
-		name string
-		errs []error
+		name  string
+		peers map[p2p.Peer]error
 	}{
 		{
-			name: "all peers returns",
-			errs: []error{nil, nil, nil, nil},
+			name:  "all peers returns",
+			peers: map[p2p.Peer]error{"p0": nil, "p1": nil, "p2": nil, "p3": nil},
 		},
 		{
-			name: "some peers errors",
-			errs: []error{nil, errUnknown, nil, errUnknown},
+			name:  "some peers errors",
+			peers: map[p2p.Peer]error{"p0": nil, "p1": errUnknown, "p2": nil, "p3": errUnknown},
 		},
 	}
 
@@ -497,61 +486,57 @@ func TestFetch_GetMaliciousIDs(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-
-			require.Equal(t, len(peers), len(tc.errs))
 			f := createFetch(t)
-			oks := make(chan struct{}, len(peers))
-			errs := make(chan struct{}, len(peers))
-			var wg sync.WaitGroup
-			wg.Add(len(peers))
-			okFunc := func([]byte, p2p.Peer) {
-				oks <- struct{}{}
-				wg.Done()
-			}
-			errFunc := func(error, p2p.Peer) {
-				errs <- struct{}{}
-				wg.Done()
-			}
+
 			var expOk, expErr int
-			for i, p := range peers {
-				if tc.errs[i] == nil {
+			for peer, err := range tc.peers {
+				err := err
+				if err == nil {
 					expOk++
 				} else {
 					expErr++
 				}
-				idx := i
 				f.mMalS.EXPECT().
-					Request(gomock.Any(), p, []byte{}).
+					Request(gomock.Any(), peer, []byte{}).
 					DoAndReturn(
 						func(_ context.Context, _ p2p.Peer, _ []byte) ([]byte, error) {
-							if tc.errs[idx] == nil {
+							if err == nil {
 								return generateMaliciousIDs(t), nil
 							}
-							return nil, tc.errs[idx]
+							return nil, err
 						})
 			}
-			require.NoError(t, f.GetMaliciousIDs(context.Background(), peers, okFunc, errFunc))
-			wg.Wait()
-			require.Len(t, oks, expOk)
-			require.Len(t, errs, expErr)
+			resp := f.GetMaliciousIDs(context.Background(), maps.Keys(tc.peers))
+			var oks, errs int
+			for i := 0; i < len(tc.peers); i++ {
+				r := <-resp
+				require.ErrorIs(t, r.Err, tc.peers[r.Peer])
+				if r.Err != nil {
+					errs += 1
+				} else {
+					oks += 1
+				}
+
+			}
+			require.Equal(t, oks, expOk)
+			require.Equal(t, errs, expErr)
 		})
 	}
 }
 
 func TestFetch_GetLayerData(t *testing.T) {
-	peers := []p2p.Peer{"p0", "p1", "p3", "p4"}
 	errUnknown := errors.New("unknown")
 	tt := []struct {
-		name string
-		errs []error
+		name  string
+		peers map[p2p.Peer]error
 	}{
 		{
-			name: "all peers returns",
-			errs: []error{nil, nil, nil, nil},
+			name:  "all peers returns",
+			peers: map[p2p.Peer]error{"p0": nil, "p1": nil, "p2": nil, "p3": nil},
 		},
 		{
-			name: "some peers errors",
-			errs: []error{nil, errUnknown, nil, errUnknown},
+			name:  "some peers errors",
+			peers: map[p2p.Peer]error{"p0": nil, "p1": errUnknown, "p2": nil, "p3": errUnknown},
 		},
 	}
 
@@ -559,46 +544,41 @@ func TestFetch_GetLayerData(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-
-			require.Equal(t, len(peers), len(tc.errs))
 			f := createFetch(t)
-			oks := make(chan struct{}, len(peers))
-			errs := make(chan struct{}, len(peers))
-			var wg sync.WaitGroup
-			wg.Add(len(peers))
-			okFunc := func(data []byte, peer p2p.Peer) {
-				oks <- struct{}{}
-				wg.Done()
-			}
-			errFunc := func(err error, peer p2p.Peer) {
-				errs <- struct{}{}
-				wg.Done()
-			}
+
 			var expOk, expErr int
-			for i, p := range peers {
-				if tc.errs[i] == nil {
+			for peer, err := range tc.peers {
+				err := err
+				if err == nil {
 					expOk++
 				} else {
 					expErr++
 				}
-				idx := i
 				f.mLyrS.EXPECT().
-					Request(gomock.Any(), p, gomock.Any()).
+					Request(gomock.Any(), peer, gomock.Any()).
 					DoAndReturn(
 						func(_ context.Context, _ p2p.Peer, _ []byte) ([]byte, error) {
-							if err := tc.errs[idx]; err != nil {
+							if err != nil {
 								return nil, err
 							}
 							return generateLayerContent(t), nil
 						})
 			}
-			require.NoError(
-				t,
-				f.GetLayerData(context.Background(), peers, types.LayerID(111), okFunc, errFunc),
-			)
-			wg.Wait()
-			require.Len(t, oks, expOk)
-			require.Len(t, errs, expErr)
+			resp, err := f.GetLayerData(context.Background(), maps.Keys(tc.peers), types.LayerID(111))
+			require.NoError(t, err)
+			var oks, errs int
+			for i := 0; i < len(tc.peers); i++ {
+				r := <-resp
+				require.ErrorIs(t, r.Err, tc.peers[r.Peer])
+				if r.Err != nil {
+					errs += 1
+				} else {
+					oks += 1
+				}
+
+			}
+			require.Equal(t, oks, expOk)
+			require.Equal(t, errs, expErr)
 		})
 	}
 }
@@ -635,7 +615,7 @@ func Test_PeerEpochInfo(t *testing.T) {
 			t.Parallel()
 
 			f := createFetch(t)
-			f.mh.EXPECT().ID().Return(p2p.Peer("self")).AnyTimes()
+			f.mh.EXPECT().ID().Return("self").AnyTimes()
 			var expected *EpochData
 			f.mAtxS.EXPECT().
 				Request(gomock.Any(), peer, gomock.Any()).
