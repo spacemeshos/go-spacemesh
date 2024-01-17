@@ -2,7 +2,7 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
-## UNRELEASED
+## UNRELEASED 
 
 ### Improvements
 
@@ -10,6 +10,13 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
   Limit concurrent requests for ATXs to reduce usage of memory and p2p streams.
 * [#5394](https://github.com/spacemeshos/go-spacemesh/pull/5394) Add rowid to tables with inefficient clustered indices.
   This reduces database size and improves its performance.
+* [#5334](https://github.com/spacemeshos/go-spacemesh/pull/5334) Hotfix for API queries for activations.
+  Two API endpoints (`MeshService.{AccountMeshDataQuery,LayersQuery}`) were broken because they attempt to read
+  all activation data for an epoch. As the number of activations per epoch has grown, this brute force query (i.e.,
+  without appropriate database indices) became very expensive and could cause the node to hang and consume an enormous
+  amount of resources. This hotfix removes all activation data from these endpoints so that they still work for
+  querying other data. It also modifies `LayersQuery` to not return any _ineffective_ transactions in blocks, since
+  there's currently no way to distinguish between effective and ineffective transactions using the API.
 
 ## Release v1.3.2
 
