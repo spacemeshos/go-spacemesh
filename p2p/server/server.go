@@ -244,22 +244,23 @@ func (s *Server) Request(ctx context.Context, pid peer.ID, req []byte) ([]byte, 
 		return nil, fmt.Errorf("%w: %s", ErrNotConnected, pid)
 	}
 	data, err := s.request(ctx, pid, req)
-	if err != nil {
-		return nil, err
-	} else if len(data.Error) > 0 {
-		return nil, errors.New(data.Error)
-	}
 	s.logger.WithContext(ctx).With().Debug("request execution time",
 		log.String("protocol", s.protocol),
 		log.Duration("duration", time.Since(start)),
 		log.Err(err),
 	)
+
+	took := time.Since(start).Seconds()
 	switch {
 	case s.metrics == nil:
 	case err != nil:
-		s.metrics.clientLatencyFailure.Observe(time.Since(start).Seconds())
-	case err == nil:
-		s.metrics.clientLatency.Observe(time.Since(start).Seconds())
+		s.metrics.clientLatencyFailure.Observe(took)
+		return nil, err
+	case len(data.Error) > 0:
+		s.metrics.clientLatencyFailure.Observe(took)
+		return nil, errors.New(data.Error)
+	default:
+		s.metrics.clientLatency.Observe(took)
 	}
 	return data.Data, nil
 }
