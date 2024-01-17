@@ -13,6 +13,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 func TestOffloadingPostVerifier(t *testing.T) {
@@ -98,4 +99,17 @@ func TestPostVerifierClose(t *testing.T) {
 
 	err := v.Verify(context.Background(), &shared.Proof{}, &shared.ProofMetadata{})
 	require.EqualError(t, err, "verifier is closed")
+}
+
+func TestPostVerifierPrioritization(t *testing.T) {
+	nodeID := types.RandomNodeID()
+	verifier := activation.NewMockPostVerifier(gomock.NewController(t))
+	v := activation.NewOffloadingPostVerifier(verifier, 2, zaptest.NewLogger(t), activation.PrioritizedIDs(nodeID))
+
+	verifier.EXPECT().
+		Verify(gomock.Any(), gomock.Any(), &shared.ProofMetadata{NodeId: nodeID.Bytes()}, gomock.Any()).
+		Return(nil)
+
+	err := v.Verify(context.Background(), &shared.Proof{}, &shared.ProofMetadata{NodeId: nodeID.Bytes()})
+	require.NoError(t, err)
 }

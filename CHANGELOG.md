@@ -18,6 +18,9 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
   querying other data. It also modifies `LayersQuery` to not return any _ineffective_ transactions in blocks, since
   there's currently no way to distinguish between effective and ineffective transactions using the API.
 
+* [#5417](https://github.com/spacemeshos/go-spacemesh/pull/5417)
+  Prioritize verifying own ATX's PoST.
+
 ## Release v1.3.2
 
 ### Improvements
