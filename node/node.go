@@ -904,7 +904,9 @@ func (app *App) initServices(ctx context.Context) error {
 		app.edSgn.NodeID(),
 		app.Config.POST,
 		app.addLogger(PostLogger, lg).Zap(),
-		app.cachedDB, goldenATXID,
+		app.cachedDB,
+		goldenATXID,
+		newSyncer,
 	)
 	if err != nil {
 		return fmt.Errorf("create post setup manager: %v", err)
@@ -916,7 +918,6 @@ func (app *App) initServices(ctx context.Context) error {
 		app.Config.POST,
 		app.Config.SMESHING.ProvingOpts,
 		postSetupMgr,
-		newSyncer,
 	)
 	if err != nil {
 		return fmt.Errorf("init post service: %w", err)

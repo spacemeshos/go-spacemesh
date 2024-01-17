@@ -21,6 +21,11 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 * [#5417](https://github.com/spacemeshos/go-spacemesh/pull/5417)
   Prioritize verifying own ATX's PoST.
 
+* [#5423](https://github.com/spacemeshos/go-spacemesh/pull/5423)
+  Wait to be ATX-synced before selecting the commitment ATX for initialization.
+  Also, remove unnecessary wait for ATXs to be synced before beginning initialization if
+  the commitment ATX is already selected.
+
 ## Release v1.3.2
 
 ### Improvements
