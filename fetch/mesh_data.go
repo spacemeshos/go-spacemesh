@@ -225,12 +225,6 @@ func (f *Fetch) GetLayerOpinions(ctx context.Context, peer p2p.Peer, lid types.L
 	return f.servers[OpnProtocol].Request(ctx, peer, reqData)
 }
 
-type Result struct {
-	Data []byte
-	Peer p2p.Peer
-	Err  error
-}
-
 // PeerEpochInfo get the epoch info published in the given epoch from the specified peer.
 func (f *Fetch) PeerEpochInfo(ctx context.Context, peer p2p.Peer, epoch types.EpochID) (*EpochData, error) {
 	f.logger.WithContext(ctx).With().Debug("requesting epoch info from peer",
