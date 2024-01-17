@@ -8,6 +8,8 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 * [#5442](https://github.com/spacemeshos/go-spacemesh/pull/5442)
   Limit concurrent requests for ATXs to reduce usage of memory and p2p streams.
+* [#5394](https://github.com/spacemeshos/go-spacemesh/pull/5394) Add rowid to tables with inefficient clustered indices.
+  This reduces database size and improves its performance.
 
 ## Release v1.3.2
 
