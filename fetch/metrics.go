@@ -30,6 +30,12 @@ var (
 		"total hash requests",
 		[]string{hint})
 
+	pendingHashReqs = metrics.NewGauge(
+		"pending_hash_reqs",
+		subsystem,
+		"pending hash requests",
+		[]string{hint})
+
 	hashMissing = metrics.NewCounter(
 		"hash_missing",
 		subsystem,
