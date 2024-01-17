@@ -55,7 +55,7 @@ func generateMaliciousIDs(t *testing.T) ([]types.NodeID, []byte) {
 	return malicious.NodeIDs, data
 }
 
-func generateLayerOpinions2(t *testing.T, bid *types.BlockID) []byte {
+func generateLayerOpinions(t *testing.T, bid *types.BlockID) []byte {
 	t.Helper()
 	lo := &fetch.LayerOpinion{
 		PrevAggHash: types.RandomHash(),
@@ -329,39 +329,34 @@ func TestDataFetch_PollLayerOpinions(t *testing.T) {
 			t.Parallel()
 
 			td := newTestDataFetch(t)
-			td.mFetcher.EXPECT().GetLayerOpinions(gomock.Any(), peers, lid).
-				DoAndReturn(func(_ context.Context, _ []p2p.Peer, _ types.LayerID) (<-chan fetch.Result, error) {
-					results := make(chan fetch.Result, len(peers))
-					for i, peer := range peers {
-						if tc.pErrs[i] != nil {
-							results <- fetch.Result{Err: tc.pErrs[i], Peer: peer}
+			for i, peer := range peers {
+				if tc.pErrs[i] != nil {
+					td.mFetcher.EXPECT().GetLayerOpinions(gomock.Any(), peer, lid).Return(nil, tc.pErrs[i])
+				} else {
+					if tc.needCert && len(tc.hasCert) > 0 {
+						td.mFetcher.EXPECT().RegisterPeerHashes(peer, []types.Hash32{tc.hasCert[i].AsHash32()})
+					}
+					var certified *types.BlockID
+					if len(tc.hasCert) > 0 {
+						certified = &tc.hasCert[i]
+					}
+					op := generateLayerOpinions(t, certified)
+					td.mFetcher.EXPECT().GetLayerOpinions(gomock.Any(), peer, lid).Return(op, nil)
+				}
+			}
+			for _, bid := range tc.queried {
+				td.mFetcher.EXPECT().GetCert(gomock.Any(), lid, bid, gomock.Any()).DoAndReturn(
+					func(_ context.Context, _ types.LayerID, bid types.BlockID, peers []p2p.Peer) (*types.Certificate, error) {
+						require.Len(t, peers, 2)
+						if tc.cErr == nil {
+							return &types.Certificate{BlockID: bid}, nil
 						} else {
-							if tc.needCert && len(tc.hasCert) > 0 {
-								p := peer
-								td.mFetcher.EXPECT().RegisterPeerHashes(p, []types.Hash32{tc.hasCert[i].AsHash32()})
-							}
-							var certified *types.BlockID
-							if len(tc.hasCert) > 0 {
-								certified = &tc.hasCert[i]
-							}
-							results <- fetch.Result{Data: generateLayerOpinions2(t, certified), Peer: peer}
+							return nil, tc.cErr
 						}
-					}
-					for _, bid := range tc.queried {
-						td.mFetcher.EXPECT().GetCert(gomock.Any(), lid, bid, gomock.Any()).DoAndReturn(
-							func(_ context.Context, _ types.LayerID, bid types.BlockID, peers []p2p.Peer) (*types.Certificate, error) {
-								require.Len(t, peers, 2)
-								if tc.cErr == nil {
-									return &types.Certificate{BlockID: bid}, nil
-								} else {
-									return nil, tc.cErr
-								}
-							})
-					}
-					return results, nil
-				})
+					})
+			}
 
-			got, certs, err := td.PollLayerOpinions(context.TODO(), lid, tc.needCert, peers)
+			got, certs, err := td.PollLayerOpinions(context.Background(), lid, tc.needCert, peers)
 			require.ErrorIs(t, err, tc.err)
 			if err == nil {
 				require.NotEmpty(t, got)
@@ -381,7 +376,7 @@ func TestDataFetch_PollLayerOpinions_FailToRequest(t *testing.T) {
 	peers := []p2p.Peer{"p0"}
 	td := newTestDataFetch(t)
 	expectedErr := errors.New("failed to request")
-	td.mFetcher.EXPECT().GetLayerOpinions(gomock.Any(), peers, types.LayerID(10)).Return(nil, expectedErr)
+	td.mFetcher.EXPECT().GetLayerOpinions(gomock.Any(), peers[0], types.LayerID(10)).Return(nil, expectedErr)
 	_, _, err := td.PollLayerOpinions(context.Background(), 10, false, peers)
 	require.ErrorIs(t, err, expectedErr)
 }
@@ -389,16 +384,7 @@ func TestDataFetch_PollLayerOpinions_FailToRequest(t *testing.T) {
 func TestDataFetch_PollLayerOpinions_MalformedData(t *testing.T) {
 	peers := []p2p.Peer{"p0"}
 	td := newTestDataFetch(t)
-
-	td.mFetcher.EXPECT().GetLayerOpinions(gomock.Any(), peers, types.LayerID(10)).DoAndReturn(
-		func(_ context.Context, peers []p2p.Peer, _ types.LayerID) (<-chan fetch.Result, error) {
-			result := make(chan fetch.Result, 1)
-			result <- fetch.Result{
-				Data: []byte("malformed"),
-				Peer: peers[0],
-			}
-			return result, nil
-		})
+	td.mFetcher.EXPECT().GetLayerOpinions(gomock.Any(), peers[0], types.LayerID(10)).Return([]byte("malformed"), nil)
 	_, _, err := td.PollLayerOpinions(context.Background(), 10, false, peers)
 	require.ErrorContains(t, err, "decode")
 }

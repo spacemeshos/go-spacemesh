@@ -214,11 +214,7 @@ func (f *Fetch) GetLayerData(ctx context.Context, peer p2p.Peer, lid types.Layer
 	return f.servers[lyrDataProtocol].Request(ctx, peer, lidBytes)
 }
 
-func (f *Fetch) GetLayerOpinions(
-	ctx context.Context,
-	peers []p2p.Peer,
-	lid types.LayerID,
-) (<-chan Result, error) {
+func (f *Fetch) GetLayerOpinions(ctx context.Context, peer p2p.Peer, lid types.LayerID) ([]byte, error) {
 	req := OpinionRequest{
 		Layer: lid,
 	}
@@ -226,34 +222,13 @@ func (f *Fetch) GetLayerOpinions(
 	if err != nil {
 		return nil, err
 	}
-	return poll(ctx, f.servers[OpnProtocol], peers, reqData), nil
+	return f.servers[OpnProtocol].Request(ctx, peer, reqData)
 }
 
 type Result struct {
 	Data []byte
 	Peer p2p.Peer
 	Err  error
-}
-
-func poll(
-	ctx context.Context,
-	srv requester,
-	peers []p2p.Peer,
-	req []byte,
-) <-chan Result {
-	result := make(chan Result, len(peers))
-	for _, p := range peers {
-		peer := p
-		go func() {
-			data, err := srv.Request(ctx, peer, req)
-			result <- Result{
-				Data: data,
-				Peer: peer,
-				Err:  err,
-			}
-		}()
-	}
-	return result
 }
 
 // PeerEpochInfo get the epoch info published in the given epoch from the specified peer.

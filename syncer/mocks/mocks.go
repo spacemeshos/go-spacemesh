@@ -454,10 +454,10 @@ func (c *fetchLogicGetLayerDataCall) DoAndReturn(f func(context.Context, p2p.Pee
 }
 
 // GetLayerOpinions mocks base method.
-func (m *MockfetchLogic) GetLayerOpinions(arg0 context.Context, arg1 []p2p.Peer, arg2 types.LayerID) (<-chan fetch.Result, error) {
+func (m *MockfetchLogic) GetLayerOpinions(arg0 context.Context, arg1 p2p.Peer, arg2 types.LayerID) ([]byte, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetLayerOpinions", arg0, arg1, arg2)
-	ret0, _ := ret[0].(<-chan fetch.Result)
+	ret0, _ := ret[0].([]byte)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -475,19 +475,19 @@ type fetchLogicGetLayerOpinionsCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *fetchLogicGetLayerOpinionsCall) Return(arg0 <-chan fetch.Result, arg1 error) *fetchLogicGetLayerOpinionsCall {
+func (c *fetchLogicGetLayerOpinionsCall) Return(arg0 []byte, arg1 error) *fetchLogicGetLayerOpinionsCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *fetchLogicGetLayerOpinionsCall) Do(f func(context.Context, []p2p.Peer, types.LayerID) (<-chan fetch.Result, error)) *fetchLogicGetLayerOpinionsCall {
+func (c *fetchLogicGetLayerOpinionsCall) Do(f func(context.Context, p2p.Peer, types.LayerID) ([]byte, error)) *fetchLogicGetLayerOpinionsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *fetchLogicGetLayerOpinionsCall) DoAndReturn(f func(context.Context, []p2p.Peer, types.LayerID) (<-chan fetch.Result, error)) *fetchLogicGetLayerOpinionsCall {
+func (c *fetchLogicGetLayerOpinionsCall) DoAndReturn(f func(context.Context, p2p.Peer, types.LayerID) ([]byte, error)) *fetchLogicGetLayerOpinionsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -1058,10 +1058,10 @@ func (c *fetcherGetLayerDataCall) DoAndReturn(f func(context.Context, p2p.Peer, 
 }
 
 // GetLayerOpinions mocks base method.
-func (m *Mockfetcher) GetLayerOpinions(arg0 context.Context, arg1 []p2p.Peer, arg2 types.LayerID) (<-chan fetch.Result, error) {
+func (m *Mockfetcher) GetLayerOpinions(arg0 context.Context, arg1 p2p.Peer, arg2 types.LayerID) ([]byte, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetLayerOpinions", arg0, arg1, arg2)
-	ret0, _ := ret[0].(<-chan fetch.Result)
+	ret0, _ := ret[0].([]byte)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -1079,19 +1079,19 @@ type fetcherGetLayerOpinionsCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *fetcherGetLayerOpinionsCall) Return(arg0 <-chan fetch.Result, arg1 error) *fetcherGetLayerOpinionsCall {
+func (c *fetcherGetLayerOpinionsCall) Return(arg0 []byte, arg1 error) *fetcherGetLayerOpinionsCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *fetcherGetLayerOpinionsCall) Do(f func(context.Context, []p2p.Peer, types.LayerID) (<-chan fetch.Result, error)) *fetcherGetLayerOpinionsCall {
+func (c *fetcherGetLayerOpinionsCall) Do(f func(context.Context, p2p.Peer, types.LayerID) ([]byte, error)) *fetcherGetLayerOpinionsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *fetcherGetLayerOpinionsCall) DoAndReturn(f func(context.Context, []p2p.Peer, types.LayerID) (<-chan fetch.Result, error)) *fetcherGetLayerOpinionsCall {
+func (c *fetcherGetLayerOpinionsCall) DoAndReturn(f func(context.Context, p2p.Peer, types.LayerID) ([]byte, error)) *fetcherGetLayerOpinionsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

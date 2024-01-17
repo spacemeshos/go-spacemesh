@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -488,53 +487,24 @@ func TestFetch_GetMaliciousIDs(t *testing.T) {
 }
 
 func TestFetch_GetLayerOpinions(t *testing.T) {
-	errUnknown := errors.New("unknown")
-	tt := []struct {
-		name  string
-		peers map[p2p.Peer]error
-	}{
-		{
-			name:  "all peers returns",
-			peers: map[p2p.Peer]error{"p0": nil, "p1": nil, "p2": nil, "p3": nil},
-		},
-		{
-			name:  "some peers errors",
-			peers: map[p2p.Peer]error{"p0": nil, "p1": errUnknown, "p2": nil, "p3": errUnknown},
-		},
-	}
-
-	for _, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			f := createFetch(t)
-
-			var expOk, expErr int
-			for peer, err := range tc.peers {
-				if err == nil {
-					expOk++
-					f.mOpn2S.EXPECT().Request(gomock.Any(), peer, gomock.Any()).Return(generateMaliciousIDs(t), nil)
-				} else {
-					expErr++
-					f.mOpn2S.EXPECT().Request(gomock.Any(), peer, gomock.Any()).Return(nil, err)
-				}
-			}
-			resp, err := f.GetLayerOpinions(context.Background(), maps.Keys(tc.peers), 7)
-			require.NoError(t, err)
-			var oks, errs int
-			for i := 0; i < len(tc.peers); i++ {
-				r := <-resp
-				require.ErrorIs(t, r.Err, tc.peers[r.Peer])
-				if r.Err != nil {
-					errs += 1
-				} else {
-					oks += 1
-				}
-			}
-			require.Equal(t, oks, expOk)
-			require.Equal(t, errs, expErr)
-		})
-	}
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+		f := createFetch(t)
+		expected := generateLayerContent(t)
+		f.mOpn2S.EXPECT().Request(gomock.Any(), p2p.Peer("p0"), gomock.Any()).Return(expected, nil)
+		res, err := f.GetLayerOpinions(context.Background(), "p0", 7)
+		require.NoError(t, err)
+		require.Equal(t, expected, res)
+	})
+	t.Run("failure", func(t *testing.T) {
+		t.Parallel()
+		errUnknown := errors.New("unknown")
+		f := createFetch(t)
+		f.mOpn2S.EXPECT().Request(gomock.Any(), p2p.Peer("p0"), gomock.Any()).Return(nil, errUnknown)
+		res, err := f.GetLayerOpinions(context.Background(), "p0", 7)
+		require.ErrorIs(t, err, errUnknown)
+		require.Nil(t, res)
+	})
 }
 
 func TestFetch_GetLayerData(t *testing.T) {

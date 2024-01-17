@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	
+
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
@@ -76,13 +76,13 @@ func (d *DataFetch) PollMaliciousProofs(ctx context.Context) error {
 				malPeerError.Inc()
 				logger.With().Debug("failed to get malicious IDs", log.Err(err), log.Stringer("peer", peer))
 				fetchErr.join(err)
-				return err
+				return nil
 			}
 			var malIDs fetch.MaliciousIDs
 			if err := codec.Decode(data, &malIDs); err != nil {
 				logger.With().Debug("failed to decode", log.Err(err))
 				fetchErr.join(err)
-				return err
+				return nil
 			}
 			logger.With().Debug("received malicious id from peer", log.Stringer("peer", peer))
 			maliciousIDs <- malIDs
@@ -143,13 +143,13 @@ func (d *DataFetch) PollLayerData(ctx context.Context, lid types.LayerID, peers 
 				layerPeerError.Inc()
 				logger.With().Debug("failed to get layer data", log.Err(err), log.Stringer("peer", peer))
 				fetchErr.join(err)
-				return err
+				return nil
 			}
 			var ld fetch.LayerData
 			if err := codec.Decode(data, &ld); err != nil {
 				logger.With().Debug("failed to decode", log.Err(err))
 				fetchErr.join(err)
-				return err
+				return nil
 			}
 			logger.With().Debug("received layer data from peer", log.Stringer("peer", peer))
 			registerLayerHashes(d.fetcher, peer, &ld)
@@ -196,48 +196,49 @@ func (d *DataFetch) PollLayerOpinions(
 	needCert bool,
 	peers []p2p.Peer,
 ) ([]*fetch.LayerOpinion, []*types.Certificate, error) {
-	resp, err := d.fetcher.GetLayerOpinions(ctx, peers, lid)
-	if err != nil {
-		return nil, nil, fmt.Errorf("requesting layer opinions: %w", err)
-	}
-
 	logger := d.logger.WithContext(ctx).WithFields(lid)
-	opinions := make([]*fetch.LayerOpinion, 0, len(peers))
-	success := false
-	var combinedErr error
-	for results := 0; results < len(peers); results++ {
-		select {
-		case <-ctx.Done():
-			return opinions, nil, ctx.Err()
-		case resp := <-resp:
-			logger.Debug("received layer opinions from peer")
-			var lo fetch.LayerOpinion
-			if resp.Err != nil {
+	opinions := make(chan *fetch.LayerOpinion, len(peers))
+	var eg errgroup.Group
+	fetchErr := threadSafeErr{}
+	for _, peer := range peers {
+		peer := peer
+		eg.Go(func() error {
+			data, err := d.fetcher.GetLayerOpinions(ctx, peer, lid)
+			if err != nil {
 				opnsPeerError.Inc()
-				logger.With().Debug("received peer error for layer opinions", log.Err(resp.Err))
-				if !success {
-					combinedErr = errors.Join(combinedErr, resp.Err)
-				}
-				continue
+				logger.With().Debug("received peer error for layer opinions", log.Err(err), log.Stringer("peer", peer))
+				fetchErr.join(err)
+				return nil
 			}
-			if err := codec.Decode(resp.Data, &lo); err != nil {
-				logger.With().Debug("error decoding LayerOpinion", log.Err(err))
-				if !success {
-					combinedErr = errors.Join(combinedErr, err)
-				}
-				continue
+			var lo fetch.LayerOpinion
+			if err := codec.Decode(data, &lo); err != nil {
+				logger.With().Debug("failed to decode layer opinion", log.Err(err))
+				fetchErr.join(err)
+				return nil
 			}
-			lo.SetPeer(resp.Peer)
-			opinions = append(opinions, &lo)
-			success = true
-			combinedErr = nil
-		}
+			logger.With().Debug("received layer opinion", log.Stringer("peer", peer))
+			lo.SetPeer(peer)
+			opinions <- &lo
+			return nil
+		})
+	}
+	_ = eg.Wait()
+	close(opinions)
+
+	var allOpinions []*fetch.LayerOpinion
+	success := false
+	for op := range opinions {
+		success = true
+		allOpinions = append(allOpinions, op)
+	}
+	if !success {
+		return nil, nil, fetchErr.err
 	}
 
-	certs := make([]*types.Certificate, 0, len(opinions))
+	certs := make([]*types.Certificate, 0, len(allOpinions))
 	if needCert {
 		peerCerts := map[types.BlockID][]p2p.Peer{}
-		for _, opinion := range opinions {
+		for _, opinion := range allOpinions {
 			if opinion.Certified == nil {
 				continue
 			}
@@ -263,7 +264,7 @@ func (d *DataFetch) PollLayerOpinions(
 			certs = append(certs, cert)
 		}
 	}
-	return opinions, certs, combinedErr
+	return allOpinions, certs, nil
 }
 
 func (d *DataFetch) pickAtxPeer(epoch types.EpochID, peers []p2p.Peer) p2p.Peer {
