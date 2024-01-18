@@ -441,24 +441,37 @@ func TestGetIDsByEpochCached(t *testing.T) {
 		require.NoError(t, atxs.Add(db, atx))
 	}
 
-	ids1, err := atxs.GetIDsByEpoch(db, e1)
-	require.NoError(t, err)
-	require.EqualValues(t, []types.ATXID{atx1.ID()}, ids1)
+	require.Equal(t, 4, db.QueryCount())
 
-	ids2, err := atxs.GetIDsByEpoch(db, e2)
-	require.NoError(t, err)
-	require.Contains(t, ids2, atx2.ID())
-	require.Contains(t, ids2, atx3.ID())
+	for i := 0; i < 3; i++ {
+		ids1, err := atxs.GetIDsByEpoch(db, e1)
+		require.NoError(t, err)
+		require.EqualValues(t, []types.ATXID{atx1.ID()}, ids1)
+		require.Equal(t, 5, db.QueryCount())
+	}
+
+	for i := 0; i < 3; i++ {
+		ids2, err := atxs.GetIDsByEpoch(db, e2)
+		require.NoError(t, err)
+		require.Contains(t, ids2, atx2.ID())
+		require.Contains(t, ids2, atx3.ID())
+		require.Equal(t, 6, db.QueryCount())
+	}
+
+	for i := 0; i < 3; i++ {
+		ids3, err := atxs.GetIDsByEpoch(db, e3)
+		require.NoError(t, err)
+		require.EqualValues(t, []types.ATXID{atx4.ID()}, ids3)
+		require.Equal(t, 7, db.QueryCount())
+	}
+
+	require.NoError(t, atxs.Add(db, atx5))
+	require.Equal(t, 8, db.QueryCount())
 
 	ids3, err := atxs.GetIDsByEpoch(db, e3)
 	require.NoError(t, err)
-	require.EqualValues(t, []types.ATXID{atx4.ID()}, ids3)
-
-	require.NoError(t, atxs.Add(db, atx5))
-
-	ids3, err = atxs.GetIDsByEpoch(db, e3)
-	require.NoError(t, err)
 	require.EqualValues(t, []types.ATXID{atx4.ID(), atx5.ID()}, ids3)
+	require.Equal(t, 8, db.QueryCount()) // not incremented after Add
 }
 
 func TestVRFNonce(t *testing.T) {
@@ -537,11 +550,13 @@ func TestGetBlobCached(t *testing.T) {
 	require.NoError(t, atxs.Add(db, atx))
 	encoded, err := codec.Encode(atx.ActivationTx)
 	require.NoError(t, err)
+	require.Equal(t, 1, db.QueryCount())
 
 	for i := 0; i < 3; i++ {
 		buf, err := atxs.GetBlob(db, atx.ID().Bytes())
 		require.NoError(t, err)
 		require.Equal(t, encoded, buf)
+		require.Equal(t, 2, db.QueryCount())
 	}
 }
 

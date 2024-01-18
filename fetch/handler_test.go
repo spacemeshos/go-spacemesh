@@ -333,26 +333,33 @@ func TestHandleEpochInfoReqWithQueryCache(t *testing.T) {
 		expected.AtxIDs = append(expected.AtxIDs, vatx.ID())
 	}
 
+	require.Equal(t, 10, th.cdb.Database.QueryCount())
 	epochBytes, err := codec.Encode(epoch)
 	require.NoError(t, err)
 
 	var got EpochData
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 3; i++ {
 		out, err := th.handleEpochInfoReq(context.Background(), epochBytes)
 		require.NoError(t, err)
 		require.NoError(t, codec.Decode(out, &got))
 		require.ElementsMatch(t, expected.AtxIDs, got.AtxIDs)
+		require.Equal(t, 11, th.cdb.Database.QueryCount())
 	}
 
 	// Add another ATX which should be appended to the cached slice
 	vatx := newAtx(t, epoch)
 	require.NoError(t, atxs.Add(th.cdb, vatx))
 	expected.AtxIDs = append(expected.AtxIDs, vatx.ID())
+	require.Equal(t, 12, th.cdb.Database.QueryCount())
 
 	out, err := th.handleEpochInfoReq(context.Background(), epochBytes)
 	require.NoError(t, err)
 	require.NoError(t, codec.Decode(out, &got))
 	require.ElementsMatch(t, expected.AtxIDs, got.AtxIDs)
+	// The query count is not incremented as the slice is still
+	// cached and the new atx is just appended to it, even though
+	// the response is re-serialized.
+	require.Equal(t, 12, th.cdb.Database.QueryCount())
 }
 
 func TestHandleMaliciousIDsReq(t *testing.T) {
