@@ -26,9 +26,21 @@ type BlockFetcher interface {
 	GetBlocks(context.Context, []types.BlockID) error
 }
 
+type GetAtxOpts struct {
+	LimitingOff bool
+}
+
+type GetAtxOpt func(*GetAtxOpts)
+
+func WithoutLimiting() GetAtxOpt {
+	return func(opts *GetAtxOpts) {
+		opts.LimitingOff = true
+	}
+}
+
 // AtxFetcher defines an interface for fetching ATXs from remote peers.
 type AtxFetcher interface {
-	GetAtxs(context.Context, []types.ATXID) error
+	GetAtxs(context.Context, []types.ATXID, ...GetAtxOpt) error
 }
 
 // TxFetcher defines an interface for fetching transactions from remote peers.
