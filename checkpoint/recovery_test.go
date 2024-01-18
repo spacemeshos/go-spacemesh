@@ -254,7 +254,7 @@ func validateAndPreserveData(
 		lg,
 		activation.PoetConfig{},
 	)
-	mfetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).AnyTimes()
+	mfetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	for i, vatx := range deps {
 		encoded, err := codec.Encode(vatx)
 		require.NoError(tb, err)
