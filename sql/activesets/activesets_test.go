@@ -49,3 +49,29 @@ func TestActiveSet(t *testing.T) {
 	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.Empty(t, blob)
 }
+
+func TestCachedActiveSet(t *testing.T) {
+	ids := []types.Hash32{{1}, {2}}
+	set0 := &types.EpochActiveSet{
+		Epoch: 2,
+		Set:   []types.ATXID{{1}, {2}},
+	}
+	set1 := &types.EpochActiveSet{
+		Epoch: 2,
+		Set:   []types.ATXID{{3}, {4}},
+	}
+	db := sql.InMemory(sql.WithQueryCache(true))
+
+	require.NoError(t, Add(db, ids[0], set0))
+	require.NoError(t, Add(db, ids[1], set1))
+
+	for i := 0; i < 3; i++ {
+		blob, err := GetBlob(db, ids[0].Bytes())
+		require.NoError(t, err)
+		require.Equal(t, codec.MustEncode(set0), blob)
+
+		blob, err = GetBlob(db, ids[1].Bytes())
+		require.NoError(t, err)
+		require.Equal(t, codec.MustEncode(set1), blob)
+	}
+}

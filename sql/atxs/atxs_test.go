@@ -414,6 +414,53 @@ func TestGetIDsByEpoch(t *testing.T) {
 	require.EqualValues(t, []types.ATXID{atx4.ID()}, ids3)
 }
 
+func TestGetIDsByEpochCached(t *testing.T) {
+	db := sql.InMemory(sql.WithQueryCache(true))
+
+	sig1, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	sig2, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	e1 := types.EpochID(1)
+	e2 := types.EpochID(2)
+	e3 := types.EpochID(3)
+
+	atx1, err := newAtx(sig1, withPublishEpoch(e1))
+	require.NoError(t, err)
+	atx2, err := newAtx(sig1, withPublishEpoch(e2))
+	require.NoError(t, err)
+	atx3, err := newAtx(sig2, withPublishEpoch(e2))
+	require.NoError(t, err)
+	atx4, err := newAtx(sig2, withPublishEpoch(e3))
+	require.NoError(t, err)
+	atx5, err := newAtx(sig2, withPublishEpoch(e3))
+	require.NoError(t, err)
+
+	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
+		require.NoError(t, atxs.Add(db, atx))
+	}
+
+	ids1, err := atxs.GetIDsByEpoch(db, e1)
+	require.NoError(t, err)
+	require.EqualValues(t, []types.ATXID{atx1.ID()}, ids1)
+
+	ids2, err := atxs.GetIDsByEpoch(db, e2)
+	require.NoError(t, err)
+	require.Contains(t, ids2, atx2.ID())
+	require.Contains(t, ids2, atx3.ID())
+
+	ids3, err := atxs.GetIDsByEpoch(db, e3)
+	require.NoError(t, err)
+	require.EqualValues(t, []types.ATXID{atx4.ID()}, ids3)
+
+	require.NoError(t, atxs.Add(db, atx5))
+
+	ids3, err = atxs.GetIDsByEpoch(db, e3)
+	require.NoError(t, err)
+	require.EqualValues(t, []types.ATXID{atx4.ID(), atx5.ID()}, ids3)
+}
+
 func TestVRFNonce(t *testing.T) {
 	// Arrange
 	db := sql.InMemory()
@@ -477,6 +524,25 @@ func TestGetBlob(t *testing.T) {
 	encoded, err := codec.Encode(atx.ActivationTx)
 	require.NoError(t, err)
 	require.Equal(t, encoded, buf)
+}
+
+func TestGetBlobCached(t *testing.T) {
+	db := sql.InMemory(sql.WithQueryCache(true))
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	atx, err := newAtx(sig, withPublishEpoch(1))
+	require.NoError(t, err)
+
+	require.NoError(t, atxs.Add(db, atx))
+	encoded, err := codec.Encode(atx.ActivationTx)
+	require.NoError(t, err)
+
+	for i := 0; i < 3; i++ {
+		buf, err := atxs.GetBlob(db, atx.ID().Bytes())
+		require.NoError(t, err)
+		require.Equal(t, encoded, buf)
+	}
 }
 
 func TestCheckpointATX(t *testing.T) {
