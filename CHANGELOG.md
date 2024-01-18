@@ -78,6 +78,9 @@ configuration is as follows:
 
 ### Improvements
 
+* [#5463](https://github.com/spacemeshos/go-spacemesh/pull/5463)
+  Adjust deadline during long reads and writes, reducing "i/o deadline exceeded" errors.
+
 ## Release v1.3.3
 
 ### Improvements
