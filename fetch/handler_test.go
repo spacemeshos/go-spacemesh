@@ -27,9 +27,9 @@ type testHandler struct {
 	cdb *datastore.CachedDB
 }
 
-func createTestHandler(t testing.TB) *testHandler {
+func createTestHandler(t testing.TB, opts ...sql.Opt) *testHandler {
 	lg := logtest.New(t)
-	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
+	cdb := datastore.NewCachedDB(sql.InMemory(opts...), lg)
 	return &testHandler{
 		handler: newHandler(cdb, datastore.NewBlobStore(cdb.Database), lg),
 		cdb:     cdb,
@@ -320,6 +320,39 @@ func TestHandleEpochInfoReq(t *testing.T) {
 			require.ElementsMatch(t, expected.AtxIDs, got.AtxIDs)
 		})
 	}
+}
+
+func TestHandleEpochInfoReqWithQueryCache(t *testing.T) {
+	th := createTestHandler(t, sql.WithQueryCache(true))
+	epoch := types.EpochID(11)
+	var expected EpochData
+
+	for i := 0; i < 10; i++ {
+		vatx := newAtx(t, epoch)
+		require.NoError(t, atxs.Add(th.cdb, vatx))
+		expected.AtxIDs = append(expected.AtxIDs, vatx.ID())
+	}
+
+	epochBytes, err := codec.Encode(epoch)
+	require.NoError(t, err)
+
+	var got EpochData
+	for i := 0; i < 4; i++ {
+		out, err := th.handleEpochInfoReq(context.Background(), epochBytes)
+		require.NoError(t, err)
+		require.NoError(t, codec.Decode(out, &got))
+		require.ElementsMatch(t, expected.AtxIDs, got.AtxIDs)
+	}
+
+	// Add another ATX which should be appended to the cached slice
+	vatx := newAtx(t, epoch)
+	require.NoError(t, atxs.Add(th.cdb, vatx))
+	expected.AtxIDs = append(expected.AtxIDs, vatx.ID())
+
+	out, err := th.handleEpochInfoReq(context.Background(), epochBytes)
+	require.NoError(t, err)
+	require.NoError(t, codec.Decode(out, &got))
+	require.ElementsMatch(t, expected.AtxIDs, got.AtxIDs)
 }
 
 func TestHandleMaliciousIDsReq(t *testing.T) {

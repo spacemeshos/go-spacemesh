@@ -74,6 +74,7 @@ type conf struct {
 	migrations    []Migration
 	enableLatency bool
 	logger        *zap.Logger
+	cache         bool
 }
 
 // WithConnections overwrites number of pooled connections.
@@ -141,6 +142,13 @@ func WithVacuumState(i int) Opt {
 func WithLatencyMetering(enable bool) Opt {
 	return func(c *conf) {
 		c.enableLatency = enable
+	}
+}
+
+// WithQueryCache enables in-memory caching of results of some queries.
+func WithQueryCache(enable bool) Opt {
+	return func(c *conf) {
+		c.cache = enable
 	}
 }
 
@@ -225,11 +233,15 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 			}
 		}
 	}
+	if config.cache {
+		db.queryCache = &queryCache{}
+	}
 	return db, nil
 }
 
 // Database is an instance of sqlite database.
 type Database struct {
+	*queryCache
 	pool *sqlitex.Pool
 
 	closed   bool
