@@ -78,6 +78,8 @@ configuration is as follows:
 
 ### Improvements
 
+* [#5464](https://github.com/spacemeshos/go-spacemesh/pull/5464) Make fetch request timeout configurable.
+
 ## Release v1.3.3
 
 ### Improvements
