@@ -333,7 +333,7 @@ func (db *Database) Close() error {
 }
 
 // QueryCount returns the number of queries executed, including failed
-// queries, but not counting transaction start / commit / rollback
+// queries, but not counting transaction start / commit / rollback.
 func (db *Database) QueryCount() int {
 	return int(db.queryCount.Load())
 }
