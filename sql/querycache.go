@@ -65,7 +65,12 @@ func WithCachedValue[T any](db any, key queryCacheKey, retrieve func() (T, error
 // subKey from the cache. If the entry is absent from the cache, it's populated
 // by calling retrieve func. Note that the retrieve func should never cause
 // UpdateSlice to be called.
-func WithCachedSubKey[T any](db any, key queryCacheKey, subKey QueryCacheSubKey, retrieve func() (T, error)) (T, error) {
+func WithCachedSubKey[T any](
+	db any,
+	key queryCacheKey,
+	subKey QueryCacheSubKey,
+	retrieve func() (T, error),
+) (T, error) {
 	cache, ok := db.(QueryCache)
 	if !ok {
 		return retrieve()
@@ -100,7 +105,7 @@ type fullCacheKey struct {
 
 type queryCache struct {
 	sync.Mutex
-	updateMtx sync.Mutex
+	updateMtx sync.RWMutex
 	subKeyMap map[queryCacheKey][]QueryCacheSubKey
 	values    map[fullCacheKey]any
 }
@@ -138,8 +143,8 @@ func (c *queryCache) GetValue(key queryCacheKey, subKey QueryCacheSubKey, retrie
 	if c == nil {
 		return retrieve()
 	}
-	c.updateMtx.Lock()
-	c.updateMtx.Unlock()
+	c.updateMtx.RLock()
+	defer c.updateMtx.RUnlock()
 	v, found := c.get(key, subKey)
 	var err error
 	if !found {
