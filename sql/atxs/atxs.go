@@ -9,6 +9,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
+const (
+	CacheKindEpochATXs = "epoch-atxs"
+	CacheKindATXBlob   = "atx-blob"
+)
+
 const fullQuery = `select id, atx, base_tick_height, tick_count, pubkey,
 	effective_num_units, received, epoch, sequence, coinbase from atxs`
 
@@ -210,23 +215,26 @@ func GetIDByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.No
 
 // GetIDsByEpoch gets ATX IDs for a given epoch.
 func GetIDsByEpoch(db sql.Executor, epoch types.EpochID) (ids []types.ATXID, err error) {
-	enc := func(stmt *sql.Statement) {
-		stmt.BindInt64(1, int64(epoch))
-	}
-	dec := func(stmt *sql.Statement) bool {
-		var id types.ATXID
-		stmt.ColumnBytes(0, id[:])
-		ids = append(ids, id)
-		return true
-	}
+	cacheKey := sql.MkQueryCacheKey(CacheKindEpochATXs, epoch.String())
+	return sql.WithCachedValue(db, cacheKey, func() (ids []types.ATXID, err error) {
+		enc := func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(epoch))
+		}
+		dec := func(stmt *sql.Statement) bool {
+			var id types.ATXID
+			stmt.ColumnBytes(0, id[:])
+			ids = append(ids, id)
+			return true
+		}
 
-	if rows, err := db.Exec("select id from atxs where epoch = ?1;", enc, dec); err != nil {
-		return nil, fmt.Errorf("exec epoch %v: %w", epoch, err)
-	} else if rows == 0 {
-		return []types.ATXID{}, nil
-	}
+		if rows, err := db.Exec("select id from atxs where epoch = ?1;", enc, dec); err != nil {
+			return nil, fmt.Errorf("exec epoch %v: %w", epoch, err)
+		} else if rows == 0 {
+			return []types.ATXID{}, nil
+		}
 
-	return ids, nil
+		return ids, nil
+	})
 }
 
 // VRFNonce gets the VRF nonce of a smesher for a given epoch.
@@ -255,21 +263,24 @@ func VRFNonce(db sql.Executor, id types.NodeID, epoch types.EpochID) (nonce type
 
 // GetBlob loads ATX as an encoded blob, ready to be sent over the wire.
 func GetBlob(db sql.Executor, id []byte) (buf []byte, err error) {
-	if rows, err := db.Exec("select atx from atxs where id = ?1",
-		func(stmt *sql.Statement) {
-			stmt.BindBytes(1, id)
-		}, func(stmt *sql.Statement) bool {
-			if stmt.ColumnLen(0) > 0 {
-				buf = make([]byte, stmt.ColumnLen(0))
-				stmt.ColumnBytes(0, buf)
-			}
-			return true
-		}); err != nil {
-		return nil, fmt.Errorf("get %s: %w", types.BytesToHash(id), err)
-	} else if rows == 0 {
-		return nil, fmt.Errorf("%w: atx %s", sql.ErrNotFound, types.BytesToHash(id))
-	}
-	return buf, nil
+	cacheKey := sql.MkQueryCacheKey(CacheKindATXBlob, string(id))
+	return sql.WithCachedValue(db, cacheKey, func() ([]byte, error) {
+		if rows, err := db.Exec("select atx from atxs where id = ?1",
+			func(stmt *sql.Statement) {
+				stmt.BindBytes(1, id)
+			}, func(stmt *sql.Statement) bool {
+				if stmt.ColumnLen(0) > 0 {
+					buf = make([]byte, stmt.ColumnLen(0))
+					stmt.ColumnBytes(0, buf)
+				}
+				return true
+			}); err != nil {
+			return nil, fmt.Errorf("get %s: %w", types.BytesToHash(id), err)
+		} else if rows == 0 {
+			return nil, fmt.Errorf("%w: atx %s", sql.ErrNotFound, types.BytesToHash(id))
+		}
+		return buf, nil
+	})
 }
 
 // Add adds an ATX for a given ATX ID.
@@ -309,6 +320,8 @@ func Add(db sql.Executor, atx *types.VerifiedActivationTx) error {
 	if err != nil {
 		return fmt.Errorf("insert ATX ID %v: %w", atx.ID(), err)
 	}
+	epochCacheKey := sql.MkQueryCacheKey(CacheKindEpochATXs, atx.PublishEpoch.String())
+	sql.AppendToCachedSlice(db, epochCacheKey, atx.ID())
 	return nil
 }
 

@@ -117,6 +117,7 @@ type BaseConfig struct {
 	DatabasePruneInterval        time.Duration `mapstructure:"db-prune-interval"`
 	DatabaseVacuumState          int           `mapstructure:"db-vacuum-state"`
 	DatabaseSkipMigrations       []int         `mapstructure:"db-skip-migrations"`
+	DatabaseQueryCache           bool          `mapstructure:"db-query-cache"`
 
 	PruneActivesetsFrom types.EpochID `mapstructure:"prune-activesets-from"`
 

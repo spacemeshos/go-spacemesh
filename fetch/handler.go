@@ -16,6 +16,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
+const (
+	fetchSubKey sql.QueryCacheSubKey = "epoch-info-req"
+)
+
 type handler struct {
 	logger log.Log
 	cdb    *datastore.CachedDB
@@ -60,23 +64,27 @@ func (h *handler) handleEpochInfoReq(ctx context.Context, msg []byte) ([]byte, e
 	if err := codec.Decode(msg, &epoch); err != nil {
 		return nil, err
 	}
-	atxids, err := atxs.GetIDsByEpoch(h.cdb, epoch)
-	if err != nil {
-		h.logger.WithContext(ctx).With().Warning("serve: failed to get epoch atx IDs", epoch, log.Err(err))
-		return nil, err
-	}
-	ed := EpochData{
-		AtxIDs: atxids,
-	}
-	h.logger.WithContext(ctx).With().Debug("serve: responded to epoch info request",
-		epoch,
-		log.Int("atx_count", len(ed.AtxIDs)),
-	)
-	bts, err := codec.Encode(&ed)
-	if err != nil {
-		h.logger.WithContext(ctx).With().Fatal("serve: failed to serialize epoch atx", epoch, log.Err(err))
-	}
-	return bts, nil
+
+	cacheKey := sql.MkQueryCacheKey(atxs.CacheKindEpochATXs, epoch.String())
+	return sql.WithCachedSubKey(h.cdb, cacheKey, fetchSubKey, func() ([]byte, error) {
+		atxids, err := atxs.GetIDsByEpoch(h.cdb, epoch)
+		if err != nil {
+			h.logger.WithContext(ctx).With().Warning("serve: failed to get epoch atx IDs", epoch, log.Err(err))
+			return nil, err
+		}
+		ed := EpochData{
+			AtxIDs: atxids,
+		}
+		h.logger.WithContext(ctx).With().Debug("serve: responded to epoch info request",
+			epoch,
+			log.Int("atx_count", len(ed.AtxIDs)),
+		)
+		bts, err := codec.Encode(&ed)
+		if err != nil {
+			h.logger.WithContext(ctx).With().Fatal("serve: failed to serialize epoch atx", epoch, log.Err(err))
+		}
+		return bts, nil
+	})
 }
 
 // handleLayerDataReq returns all data in a layer, described in LayerData.
