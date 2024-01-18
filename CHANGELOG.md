@@ -6,13 +6,6 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ### Upgrade information
 
-#### Stricter configuration parsing
-
-With [#5466](https://github.com/spacemeshos/go-spacemesh/pull/5466) The configuration parser now rejects unknown
-settings in the configuration file. This means that if you have old settings that are not used by the node anymore in
-your configuration file, the node will fail to start informing you about the unknown settings. To fix this, remove the
-unknown fields and start the node again.
-
 #### New poets configuration
 
 Upgrading requires changes in config and in CLI flags (if not using the default).

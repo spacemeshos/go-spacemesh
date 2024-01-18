@@ -277,7 +277,6 @@ func LoadConfigFromFile() (*config.Config, error) {
 		viper.DecodeHook(hook),
 		withZeroFields(),
 		withIgnoreUntagged(),
-		withErrorUnused(),
 	}
 
 	// load config if it was loaded to the viper
@@ -296,12 +295,6 @@ func withZeroFields() viper.DecoderConfigOption {
 func withIgnoreUntagged() viper.DecoderConfigOption {
 	return func(cfg *mapstructure.DecoderConfig) {
 		cfg.IgnoreUntaggedFields = true
-	}
-}
-
-func withErrorUnused() viper.DecoderConfigOption {
-	return func(cfg *mapstructure.DecoderConfig) {
-		cfg.ErrorUnused = true
 	}
 }
 
