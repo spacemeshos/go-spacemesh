@@ -88,15 +88,6 @@ type Response struct {
 	Error string `scale:"max=1024"`     // TODO(mafa): make error code instead of string
 }
 
-//go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./server.go
-
-// Host is a subset of libp2p Host interface that needs to be implemented to be usable with server.
-type Host interface {
-	SetStreamHandler(protocol.ID, network.StreamHandler)
-	NewStream(context.Context, peer.ID, ...protocol.ID) (network.Stream, error)
-	Network() network.Network
-}
-
 // Server for the Handler.
 type Server struct {
 	logger              log.Log
@@ -183,11 +174,17 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 }
 
+func (s *Server) desc(what string, stream network.Stream) string {
+	return fmt.Sprintf("%s %s: peer %s address %s", s.protocol, what,
+		stream.Conn().RemotePeer(),
+		stream.Conn().RemoteMultiaddr())
+}
+
 func (s *Server) queueHandler(ctx context.Context, stream network.Stream) {
 	defer stream.Close()
-	_ = stream.SetDeadline(time.Now().Add(s.timeout))
 	defer stream.SetDeadline(time.Time{})
-	rd := bufio.NewReader(stream)
+	dadj := newDeadlineAdjuster(stream, s.desc("handler", stream), s.timeout)
+	rd := bufio.NewReader(dadj)
 	size, err := varint.ReadUvarint(rd)
 	if err != nil {
 		return
@@ -218,7 +215,7 @@ func (s *Server) queueHandler(ctx context.Context, stream network.Stream) {
 		resp.Data = buf
 	}
 
-	wr := bufio.NewWriter(stream)
+	wr := bufio.NewWriter(dadj)
 	if _, err := codec.EncodeTo(wr, &resp); err != nil {
 		s.logger.With().Warning(
 			"failed to write response",
@@ -290,9 +287,9 @@ func (s *Server) request(ctx context.Context, pid peer.ID, req []byte) (*Respons
 	}
 	defer stream.Close()
 	defer stream.SetDeadline(time.Time{})
-	_ = stream.SetDeadline(time.Now().Add(s.timeout))
+	dadj := newDeadlineAdjuster(stream, s.desc("request", stream), s.timeout)
 
-	wr := bufio.NewWriter(stream)
+	wr := bufio.NewWriter(dadj)
 	sz := make([]byte, binary.MaxVarintLen64)
 	n := binary.PutUvarint(sz, uint64(len(req)))
 	if _, err := wr.Write(sz[:n]); err != nil {
@@ -305,7 +302,7 @@ func (s *Server) request(ctx context.Context, pid peer.ID, req []byte) (*Respons
 		return nil, err
 	}
 
-	rd := bufio.NewReader(stream)
+	rd := bufio.NewReader(dadj)
 	var r Response
 	if _, err = codec.DecodeFrom(rd, &r); err != nil {
 		return nil, err
