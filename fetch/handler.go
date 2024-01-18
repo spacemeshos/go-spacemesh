@@ -65,7 +65,7 @@ func (h *handler) handleEpochInfoReq(ctx context.Context, msg []byte) ([]byte, e
 		return nil, err
 	}
 
-	cacheKey := sql.MkQueryCacheKey(atxs.CacheKindEpochATXs, epoch.String())
+	cacheKey := sql.QueryCacheKey(atxs.CacheKindEpochATXs, epoch.String())
 	return sql.WithCachedSubKey(h.cdb, cacheKey, fetchSubKey, func() ([]byte, error) {
 		atxids, err := atxs.GetIDsByEpoch(h.cdb, epoch)
 		if err != nil {

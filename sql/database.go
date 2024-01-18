@@ -7,6 +7,7 @@ import (
 	"slices"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	sqlite "github.com/go-llsqlite/crawshaw"
@@ -236,6 +237,7 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 	if config.cache {
 		db.queryCache = &queryCache{}
 	}
+	db.queryCount.Store(0)
 	return db, nil
 }
 
@@ -247,7 +249,8 @@ type Database struct {
 	closed   bool
 	closeMux sync.Mutex
 
-	latency *prometheus.HistogramVec
+	latency    *prometheus.HistogramVec
+	queryCount atomic.Int64
 }
 
 func (db *Database) getTx(ctx context.Context, initstmt string) (*Tx, error) {
@@ -315,6 +318,7 @@ func (db *Database) WithTxImmediate(ctx context.Context, exec func(*Tx) error) e
 // Note that Exec will block until database is closed or statement has finished.
 // If application needs to control statement execution lifetime use one of the transaction.
 func (db *Database) Exec(query string, encoder Encoder, decoder Decoder) (int, error) {
+	db.queryCount.Add(1)
 	conn := db.pool.Get(context.Background())
 	if conn == nil {
 		return 0, ErrNoConnection
@@ -341,6 +345,12 @@ func (db *Database) Close() error {
 	}
 	db.closed = true
 	return nil
+}
+
+// QueryCount returns the number of queries executed, including failed
+// queries, but not counting transaction start / commit / rollback
+func (db *Database) QueryCount() int {
+	return int(db.queryCount.Load())
 }
 
 func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (int, error) {
@@ -421,6 +431,7 @@ func (tx *Tx) Release() error {
 
 // Exec query.
 func (tx *Tx) Exec(query string, encoder Encoder, decoder Decoder) (int, error) {
+	tx.db.queryCount.Add(1)
 	if tx.db.latency != nil {
 		start := time.Now()
 		defer func() {
