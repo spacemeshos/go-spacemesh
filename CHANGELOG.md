@@ -78,6 +78,9 @@ configuration is as follows:
 
 ### Improvements
 
+* [#5465](https://github.com/spacemeshos/go-spacemesh/pull/5465)
+  Add an option to cache SQL query results. This is useful for nodes with high peer counts.
+
 ## Release v1.3.3
 
 ### Improvements
