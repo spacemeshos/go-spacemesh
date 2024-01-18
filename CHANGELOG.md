@@ -8,14 +8,13 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 #### Post service endpoint
 
-As requested by the community, the post service now has its own endpoint separate from `grpc-private-listener`.
-The default for `grpc-post-listener` is `127.0.0.1:9094`. In contrast to `grpc-tls-listener` this endpoint does not
-require setting up mTLS.
+The post service now has its own endpoint separate from `grpc-private-listener`. The default for `grpc-post-listener`
+is `127.0.0.1:9094`. In contrast to `grpc-tls-listener` this endpoint does not require setting up mTLS.
 
 The post service cannot connect to `grpc-private-listener` anymore. If you are using a remote smeshing setup please
 adjust your configuration accordingly. If you are using a remote setup with mTLS over a private network you can switch
 to using `grpc-post-listener` to not require the overhead of mTLS. We however strongly recommend using an mTLS
-encrypted connection between the post service and the node over insecure connections (e.g. over the internet).
+encrypted connection between the post service and the node over insecure connections (e.g. over the Internet).
 
 Smeshers using the default setup with a supervised post service do not need to make changes to their node configuration.
 

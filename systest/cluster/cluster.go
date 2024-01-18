@@ -44,20 +44,15 @@ const (
 	bsFlags      = "bsflags"
 )
 
+// defaultBootnodes defines the number of bootnodes deployed for a given cluster size.
 func defaultBootnodes(size int) int {
-	bsize := (size / 1000) * 2
-	if bsize == 0 {
-		return 2
-	}
-	return bsize
+	return max(2, (size/1000)*2)
 }
 
+// defaultRemote defines the number of smeshing nodes deployed with a remote service (25% of all nodes) for a given
+// cluster size.
 func defaultRemote(size int) int {
-	remote := (size / 4)
-	if remote == 0 {
-		return 1
-	}
-	return remote
+	return max(1, size/4)
 }
 
 // MakePoetEndpoint generate a poet endpoint for the ith instance.
@@ -559,11 +554,6 @@ func (c *Cluster) AddSmeshers(tctx *testcontext.Context, n int, opts ...Deployme
 	if err != nil {
 		return err
 	}
-	bootnodes := c.clients[:c.bootnodes]
-	smeshers := c.clients[c.bootnodes:]
-	c.clients = nil
-	c.clients = append(c.clients, bootnodes...)
-	c.clients = append(c.clients, smeshers...)
 	c.clients = append(c.clients, clients...)
 	c.smeshers += len(clients)
 	return nil
@@ -587,11 +577,6 @@ func (c *Cluster) AddRemoteSmeshers(tctx *testcontext.Context, n int, opts ...De
 	if err != nil {
 		return err
 	}
-	bootnodes := c.clients[:c.bootnodes]
-	smeshers := c.clients[c.bootnodes:]
-	c.clients = nil
-	c.clients = append(c.clients, bootnodes...)
-	c.clients = append(c.clients, smeshers...)
 	c.clients = append(c.clients, clients...)
 	c.smeshers += len(clients)
 	return nil
