@@ -76,6 +76,8 @@ configuration is as follows:
 
 ### Features
 
+* [#5462](https://github.com/spacemeshos/go-spacemesh/pull/5462) Add separate metric for failed p2p server requests
+
 ### Improvements
 
 ## Release v1.3.3
