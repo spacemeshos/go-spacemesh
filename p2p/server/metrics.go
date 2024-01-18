@@ -58,6 +58,7 @@ func newTracker(protocol string) *tracker {
 		queue:                queue.WithLabelValues(protocol),
 		targetRps:            targetRps.WithLabelValues(protocol),
 		completed:            requests.WithLabelValues(protocol, "completed"),
+		failed:               requests.WithLabelValues(protocol, "failed"),
 		accepted:             requests.WithLabelValues(protocol, "accepted"),
 		dropped:              requests.WithLabelValues(protocol, "dropped"),
 		serverLatency:        serverLatency.WithLabelValues(protocol),
@@ -71,6 +72,7 @@ type tracker struct {
 	queue                               prometheus.Gauge
 	targetRps                           prometheus.Gauge
 	completed                           prometheus.Counter
+	failed                              prometheus.Counter
 	accepted                            prometheus.Counter
 	dropped                             prometheus.Counter
 	serverLatency                       prometheus.Observer

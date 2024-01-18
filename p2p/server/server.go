@@ -172,10 +172,14 @@ func (s *Server) Run(ctx context.Context) error {
 				return nil
 			}
 			eg.Go(func() error {
-				s.queueHandler(ctx, req.stream)
+				ok := s.queueHandler(ctx, req.stream)
 				if s.metrics != nil {
 					s.metrics.serverLatency.Observe(time.Since(req.received).Seconds())
-					s.metrics.completed.Inc()
+					if ok {
+						s.metrics.completed.Inc()
+					} else {
+						s.metrics.failed.Inc()
+					}
 				}
 				return nil
 			})
@@ -183,14 +187,14 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 }
 
-func (s *Server) queueHandler(ctx context.Context, stream network.Stream) {
+func (s *Server) queueHandler(ctx context.Context, stream network.Stream) bool {
 	defer stream.Close()
 	_ = stream.SetDeadline(time.Now().Add(s.timeout))
 	defer stream.SetDeadline(time.Time{})
 	rd := bufio.NewReader(stream)
 	size, err := varint.ReadUvarint(rd)
 	if err != nil {
-		return
+		return false
 	}
 	if size > uint64(s.requestLimit) {
 		s.logger.With().Warning("request limit overflow",
@@ -198,12 +202,12 @@ func (s *Server) queueHandler(ctx context.Context, stream network.Stream) {
 			log.Uint64("request", size),
 		)
 		stream.Conn().Close()
-		return
+		return false
 	}
 	buf := make([]byte, size)
 	_, err = io.ReadFull(rd, buf)
 	if err != nil {
-		return
+		return false
 	}
 	start := time.Now()
 	buf, err = s.handler(log.WithNewRequestID(ctx), buf)
@@ -226,11 +230,13 @@ func (s *Server) queueHandler(ctx context.Context, stream network.Stream) {
 			log.Int("resp.Error len", len(resp.Error)),
 			log.Err(err),
 		)
-		return
+		return false
 	}
 	if err := wr.Flush(); err != nil {
 		s.logger.With().Warning("failed to flush stream", log.Err(err))
 	}
+
+	return true
 }
 
 // Request sends a binary request to the peer. Request is executed in the background, one of the callbacks
