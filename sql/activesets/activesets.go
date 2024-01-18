@@ -54,7 +54,7 @@ func Get(db sql.Executor, id types.Hash32) (*types.EpochActiveSet, error) {
 }
 
 func GetBlob(db sql.Executor, id []byte) ([]byte, error) {
-	cacheKey := sql.MkQueryCacheKey(CacheKindActiveSetBlob, string(id))
+	cacheKey := sql.QueryCacheKey(CacheKindActiveSetBlob, string(id))
 	return sql.WithCachedValue(db, cacheKey, func() ([]byte, error) {
 		var rst []byte
 		rows, err := db.Exec("select active_set from activesets where id = ?1;",

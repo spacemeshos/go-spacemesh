@@ -215,7 +215,7 @@ func GetIDByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.No
 
 // GetIDsByEpoch gets ATX IDs for a given epoch.
 func GetIDsByEpoch(db sql.Executor, epoch types.EpochID) (ids []types.ATXID, err error) {
-	cacheKey := sql.MkQueryCacheKey(CacheKindEpochATXs, epoch.String())
+	cacheKey := sql.QueryCacheKey(CacheKindEpochATXs, epoch.String())
 	return sql.WithCachedValue(db, cacheKey, func() (ids []types.ATXID, err error) {
 		enc := func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(epoch))
@@ -263,7 +263,7 @@ func VRFNonce(db sql.Executor, id types.NodeID, epoch types.EpochID) (nonce type
 
 // GetBlob loads ATX as an encoded blob, ready to be sent over the wire.
 func GetBlob(db sql.Executor, id []byte) (buf []byte, err error) {
-	cacheKey := sql.MkQueryCacheKey(CacheKindATXBlob, string(id))
+	cacheKey := sql.QueryCacheKey(CacheKindATXBlob, string(id))
 	return sql.WithCachedValue(db, cacheKey, func() ([]byte, error) {
 		if rows, err := db.Exec("select atx from atxs where id = ?1",
 			func(stmt *sql.Statement) {
@@ -320,7 +320,7 @@ func Add(db sql.Executor, atx *types.VerifiedActivationTx) error {
 	if err != nil {
 		return fmt.Errorf("insert ATX ID %v: %w", atx.ID(), err)
 	}
-	epochCacheKey := sql.MkQueryCacheKey(CacheKindEpochATXs, atx.PublishEpoch.String())
+	epochCacheKey := sql.QueryCacheKey(CacheKindEpochATXs, atx.PublishEpoch.String())
 	sql.AppendToCachedSlice(db, epochCacheKey, atx.ID())
 	return nil
 }

@@ -64,14 +64,19 @@ func TestCachedActiveSet(t *testing.T) {
 
 	require.NoError(t, Add(db, ids[0], set0))
 	require.NoError(t, Add(db, ids[1], set1))
+	require.Equal(t, 2, db.QueryCount())
 
 	for i := 0; i < 3; i++ {
 		blob, err := GetBlob(db, ids[0].Bytes())
 		require.NoError(t, err)
 		require.Equal(t, codec.MustEncode(set0), blob)
+		require.Equal(t, 3, db.QueryCount())
+	}
 
-		blob, err = GetBlob(db, ids[1].Bytes())
+	for i := 0; i < 3; i++ {
+		blob, err := GetBlob(db, ids[1].Bytes())
 		require.NoError(t, err)
 		require.Equal(t, codec.MustEncode(set1), blob)
+		require.Equal(t, 4, db.QueryCount())
 	}
 }
