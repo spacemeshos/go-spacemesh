@@ -273,9 +273,16 @@ func LoadConfigFromFile() (*config.Config, error) {
 		mapstructure.TextUnmarshallerHookFunc(),
 	)
 
+	opts := []viper.DecoderConfigOption{
+		viper.DecodeHook(hook),
+		withZeroFields(),
+		withIgnoreUntagged(),
+		withErrorUnused(),
+	}
+
 	// load config if it was loaded to the viper
-	if err := viper.Unmarshal(&conf, viper.DecodeHook(hook), withZeroFields()); err != nil {
-		return nil, fmt.Errorf("unmarshal viper: %w", err)
+	if err := viper.Unmarshal(&conf, opts...); err != nil {
+		return nil, fmt.Errorf("unmarshal config: %w", err)
 	}
 	return &conf, nil
 }
@@ -283,6 +290,18 @@ func LoadConfigFromFile() (*config.Config, error) {
 func withZeroFields() viper.DecoderConfigOption {
 	return func(cfg *mapstructure.DecoderConfig) {
 		cfg.ZeroFields = true
+	}
+}
+
+func withIgnoreUntagged() viper.DecoderConfigOption {
+	return func(cfg *mapstructure.DecoderConfig) {
+		cfg.IgnoreUntaggedFields = true
+	}
+}
+
+func withErrorUnused() viper.DecoderConfigOption {
+	return func(cfg *mapstructure.DecoderConfig) {
+		cfg.ErrorUnused = true
 	}
 }
 
