@@ -160,27 +160,6 @@ func NewBuilder(
 	return b
 }
 
-func (b *Builder) proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error) {
-	for {
-		client, err := b.postService.Client(b.signer.NodeID())
-		if err == nil {
-			events.EmitPostStart(challenge)
-			post, postInfo, err := client.Proof(ctx, challenge)
-			if err != nil {
-				events.EmitPostFailure()
-				return nil, nil, err
-			}
-			events.EmitPostComplete(challenge)
-			return post, postInfo, err
-		}
-		select {
-		case <-ctx.Done():
-			return nil, nil, ctx.Err()
-		case <-time.After(2 * time.Second):
-		}
-	}
-}
-
 // Smeshing returns true iff atx builder is smeshing.
 func (b *Builder) Smeshing() bool {
 	b.smeshingMutex.Lock()
@@ -286,7 +265,7 @@ func (b *Builder) buildInitialPost(ctx context.Context) error {
 
 	// Create the initial post and save it.
 	startTime := time.Now()
-	post, postInfo, err := b.proof(ctx, shared.ZeroChallenge)
+	post, postInfo, err := b.nipostBuilder.Proof(ctx, shared.ZeroChallenge)
 	if err != nil {
 		return fmt.Errorf("post execution: %w", err)
 	}
