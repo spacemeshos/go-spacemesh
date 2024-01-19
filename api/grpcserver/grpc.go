@@ -71,7 +71,7 @@ func NewWithServices(listener string, logger *zap.Logger, config Config, svc []S
 		return nil, fmt.Errorf("split local listener: %w", err)
 	}
 	ip := net.ParseIP(host)
-	if !ip.IsPrivate() && !ip.IsLoopback() {
+	if host != "localhost" && !ip.IsPrivate() && !ip.IsLoopback() {
 		logger.Warn("unsecured grpc server is listening on a public IP address", zap.String("address", listener))
 	}
 
