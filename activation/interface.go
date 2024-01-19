@@ -2,6 +2,7 @@ package activation
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"time"
 
@@ -124,6 +125,8 @@ type poetDbAPI interface {
 	GetProof(types.PoetProofRef) (*types.PoetProof, *types.Hash32, error)
 	ValidateAndStore(ctx context.Context, proofMessage *types.PoetProofMessage) error
 }
+
+var ErrPostClientClosed = fmt.Errorf("post client closed")
 
 type postService interface {
 	Client(nodeId types.NodeID) (PostClient, error)

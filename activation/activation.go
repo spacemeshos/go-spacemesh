@@ -160,22 +160,37 @@ func NewBuilder(
 }
 
 func (b *Builder) proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error) {
+	events.EmitPostStart(challenge)
+	retries := 0
 	for {
 		client, err := b.postService.Client(b.signer.NodeID())
-		if err == nil {
-			events.EmitPostStart(challenge)
-			post, postInfo, err := client.Proof(ctx, challenge)
-			if err != nil {
-				events.EmitPostFailure()
-				return nil, nil, err
+		if err != nil {
+			select {
+			case <-ctx.Done():
+				return nil, nil, ctx.Err()
+			case <-time.After(2 * time.Second): // Wait a few seconds and try connecting again
+				retries++ // TODO(mafa): emit event warning user about lost connection after a few retries
+				continue
 			}
+		}
+
+		retries = 0
+		post, postInfo, err := client.Proof(ctx, challenge)
+		switch {
+		case errors.Is(err, ErrPostClientClosed):
+			b.log.Warn("post service connection dropped - trying to reconnect", zap.Error(err))
+			select {
+			case <-ctx.Done():
+				return nil, nil, ctx.Err()
+			case <-time.After(2 * time.Second):
+				continue
+			}
+		case err != nil:
+			events.EmitPostFailure()
+			return nil, nil, err
+		default: // err == nil
 			events.EmitPostComplete(challenge)
 			return post, postInfo, err
-		}
-		select {
-		case <-ctx.Done():
-			return nil, nil, ctx.Err()
-		case <-time.After(2 * time.Second):
 		}
 	}
 }
