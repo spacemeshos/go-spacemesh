@@ -36,6 +36,8 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ## Release v1.3.4
 
+* [#5462](https://github.com/spacemeshos/go-spacemesh/pull/5462) Add separate metric for failed p2p server requests
+
 ### Improvements
 
 * [#5464](https://github.com/spacemeshos/go-spacemesh/pull/5464) Make fetch request timeout configurable.
