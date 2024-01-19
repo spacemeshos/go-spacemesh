@@ -117,12 +117,41 @@ func (nb *NIPostBuilder) ResetState() error {
 }
 
 func (nb *NIPostBuilder) proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error) {
-	client, err := nb.postService.Client(nb.signer.NodeID())
-	if err != nil {
-		return nil, nil, err
-	}
+	events.EmitPostStart(challenge)
+	retries := 0
+	for {
+		client, err := nb.postService.Client(nb.signer.NodeID())
+		if err != nil {
+			select {
+			case <-ctx.Done():
+				events.EmitPostFailure()
+				return nil, nil, ctx.Err()
+			case <-time.After(2 * time.Second): // Wait a few seconds and try connecting again
+				retries++ // TODO(mafa): emit event warning user about lost connection after a few retries
+				continue
+			}
+		}
 
-	return client.Proof(ctx, challenge)
+		retries = 0
+		post, postInfo, err := client.Proof(ctx, challenge)
+		switch {
+		case errors.Is(err, ErrPostClientClosed):
+			nb.log.Warn("post service connection dropped - trying to reconnect", zap.Error(err))
+			select {
+			case <-ctx.Done():
+				events.EmitPostFailure()
+				return nil, nil, ctx.Err()
+			case <-time.After(2 * time.Second):
+				continue
+			}
+		case err != nil:
+			events.EmitPostFailure()
+			return nil, nil, err
+		default: // err == nil
+			events.EmitPostComplete(challenge)
+			return post, postInfo, err
+		}
+	}
 }
 
 // BuildNIPost uses the given challenge to build a NIPost.
@@ -254,11 +283,8 @@ func (nb *NIPostBuilder) BuildNIPost(
 
 		nb.log.Info("starting post execution", zap.Binary("challenge", poetProofRef[:]))
 		startTime := time.Now()
-		events.EmitPostStart(poetProofRef[:])
-
 		proof, postInfo, err := nb.proof(postCtx, poetProofRef[:])
 		if err != nil {
-			events.EmitPostFailure()
 			return nil, fmt.Errorf("failed to generate Post: %w", err)
 		}
 		events.EmitPostComplete(poetProofRef[:])

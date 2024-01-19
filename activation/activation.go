@@ -167,6 +167,7 @@ func (b *Builder) proof(ctx context.Context, challenge []byte) (*types.Post, *ty
 		if err != nil {
 			select {
 			case <-ctx.Done():
+				events.EmitPostFailure()
 				return nil, nil, ctx.Err()
 			case <-time.After(2 * time.Second): // Wait a few seconds and try connecting again
 				retries++ // TODO(mafa): emit event warning user about lost connection after a few retries
@@ -181,6 +182,7 @@ func (b *Builder) proof(ctx context.Context, challenge []byte) (*types.Post, *ty
 			b.log.Warn("post service connection dropped - trying to reconnect", zap.Error(err))
 			select {
 			case <-ctx.Done():
+				events.EmitPostFailure()
 				return nil, nil, ctx.Err()
 			case <-time.After(2 * time.Second):
 				continue
