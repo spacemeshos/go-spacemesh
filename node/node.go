@@ -938,7 +938,6 @@ func (app *App) initServices(ctx context.Context) error {
 		grpcPostService.(*grpcserver.PostService),
 		app.Config.PoetServers,
 		app.addLogger(NipostBuilderLogger, lg).Zap(),
-		app.edSgn,
 		app.Config.POET,
 		app.clock,
 	)
@@ -953,7 +952,6 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	atxBuilder := activation.NewBuilder(
 		builderConfig,
-		app.edSgn,
 		app.cachedDB,
 		app.localDB,
 		app.host,
@@ -967,6 +965,7 @@ func (app *App) initServices(ctx context.Context) error {
 		activation.WithPoetRetryInterval(app.Config.HARE3.PreroundDelay),
 		activation.WithValidator(app.validator),
 	)
+	atxBuilder.Register(app.edSgn)
 
 	malfeasanceHandler := malfeasance.NewHandler(
 		app.cachedDB,

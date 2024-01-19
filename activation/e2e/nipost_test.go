@@ -185,7 +185,6 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 		svc,
 		[]types.PoetServer{{Address: poetProver.RestURL().String()}},
 		logger.Named("nipostBuilder"),
-		sig,
 		poetCfg,
 		mclock,
 	)
@@ -194,7 +193,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	challenge := types.NIPostChallenge{
 		PublishEpoch: postGenesisEpoch + 2,
 	}
-	nipost, err := nb.BuildNIPost(context.Background(), &challenge)
+	nipost, err := nb.BuildNIPost(context.Background(), sig, &challenge)
 	require.NoError(t, err)
 
 	v := activation.NewValidator(poetDb, cfg, opts.Scrypt, verifier)
@@ -238,7 +237,6 @@ func TestNIPostBuilder_Close(t *testing.T) {
 		svc,
 		[]types.PoetServer{{Address: poetProver.RestURL().String()}},
 		logger.Named("nipostBuilder"),
-		sig,
 		activation.PoetConfig{},
 		mclock,
 	)
@@ -249,7 +247,7 @@ func TestNIPostBuilder_Close(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	nipost, err := nb.BuildNIPost(ctx, &challenge)
+	nipost, err := nb.BuildNIPost(ctx, sig, &challenge)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Nil(t, nipost)
 }
@@ -314,7 +312,6 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 		svc,
 		[]types.PoetServer{{Address: poetProver.RestURL().String()}},
 		logger.Named("nipostBuilder"),
-		sig,
 		poetCfg,
 		mclock,
 	)
@@ -334,7 +331,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	challenge := types.NIPostChallenge{
 		PublishEpoch: postGenesisEpoch + 2,
 	}
-	nipost, err := nb.BuildNIPost(context.Background(), &challenge)
+	nipost, err := nb.BuildNIPost(context.Background(), sig, &challenge)
 	require.NoError(t, err)
 	require.NotNil(t, nipost)
 

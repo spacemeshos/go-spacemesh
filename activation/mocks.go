@@ -14,6 +14,7 @@ import (
 	time "time"
 
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	signing "github.com/spacemeshos/go-spacemesh/signing"
 	nipost "github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 	shared "github.com/spacemeshos/post/shared"
 	verifying "github.com/spacemeshos/post/verifying"
@@ -731,18 +732,18 @@ func (m *MocknipostBuilder) EXPECT() *MocknipostBuilderMockRecorder {
 }
 
 // BuildNIPost mocks base method.
-func (m *MocknipostBuilder) BuildNIPost(ctx context.Context, challenge *types.NIPostChallenge) (*nipost.NIPostState, error) {
+func (m *MocknipostBuilder) BuildNIPost(ctx context.Context, sig *signing.EdSigner, challenge *types.NIPostChallenge) (*nipost.NIPostState, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BuildNIPost", ctx, challenge)
+	ret := m.ctrl.Call(m, "BuildNIPost", ctx, sig, challenge)
 	ret0, _ := ret[0].(*nipost.NIPostState)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // BuildNIPost indicates an expected call of BuildNIPost.
-func (mr *MocknipostBuilderMockRecorder) BuildNIPost(ctx, challenge any) *nipostBuilderBuildNIPostCall {
+func (mr *MocknipostBuilderMockRecorder) BuildNIPost(ctx, sig, challenge any) *nipostBuilderBuildNIPostCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildNIPost", reflect.TypeOf((*MocknipostBuilder)(nil).BuildNIPost), ctx, challenge)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildNIPost", reflect.TypeOf((*MocknipostBuilder)(nil).BuildNIPost), ctx, sig, challenge)
 	return &nipostBuilderBuildNIPostCall{Call: call}
 }
 
@@ -758,21 +759,21 @@ func (c *nipostBuilderBuildNIPostCall) Return(arg0 *nipost.NIPostState, arg1 err
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *nipostBuilderBuildNIPostCall) Do(f func(context.Context, *types.NIPostChallenge) (*nipost.NIPostState, error)) *nipostBuilderBuildNIPostCall {
+func (c *nipostBuilderBuildNIPostCall) Do(f func(context.Context, *signing.EdSigner, *types.NIPostChallenge) (*nipost.NIPostState, error)) *nipostBuilderBuildNIPostCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *nipostBuilderBuildNIPostCall) DoAndReturn(f func(context.Context, *types.NIPostChallenge) (*nipost.NIPostState, error)) *nipostBuilderBuildNIPostCall {
+func (c *nipostBuilderBuildNIPostCall) DoAndReturn(f func(context.Context, *signing.EdSigner, *types.NIPostChallenge) (*nipost.NIPostState, error)) *nipostBuilderBuildNIPostCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // Proof mocks base method.
-func (m *MocknipostBuilder) Proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error) {
+func (m *MocknipostBuilder) Proof(ctx context.Context, nodeID types.NodeID, challenge []byte) (*types.Post, *types.PostInfo, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Proof", ctx, challenge)
+	ret := m.ctrl.Call(m, "Proof", ctx, nodeID, challenge)
 	ret0, _ := ret[0].(*types.Post)
 	ret1, _ := ret[1].(*types.PostInfo)
 	ret2, _ := ret[2].(error)
@@ -780,9 +781,9 @@ func (m *MocknipostBuilder) Proof(ctx context.Context, challenge []byte) (*types
 }
 
 // Proof indicates an expected call of Proof.
-func (mr *MocknipostBuilderMockRecorder) Proof(ctx, challenge any) *nipostBuilderProofCall {
+func (mr *MocknipostBuilderMockRecorder) Proof(ctx, nodeID, challenge any) *nipostBuilderProofCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Proof", reflect.TypeOf((*MocknipostBuilder)(nil).Proof), ctx, challenge)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Proof", reflect.TypeOf((*MocknipostBuilder)(nil).Proof), ctx, nodeID, challenge)
 	return &nipostBuilderProofCall{Call: call}
 }
 
@@ -798,29 +799,29 @@ func (c *nipostBuilderProofCall) Return(arg0 *types.Post, arg1 *types.PostInfo, 
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *nipostBuilderProofCall) Do(f func(context.Context, []byte) (*types.Post, *types.PostInfo, error)) *nipostBuilderProofCall {
+func (c *nipostBuilderProofCall) Do(f func(context.Context, types.NodeID, []byte) (*types.Post, *types.PostInfo, error)) *nipostBuilderProofCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *nipostBuilderProofCall) DoAndReturn(f func(context.Context, []byte) (*types.Post, *types.PostInfo, error)) *nipostBuilderProofCall {
+func (c *nipostBuilderProofCall) DoAndReturn(f func(context.Context, types.NodeID, []byte) (*types.Post, *types.PostInfo, error)) *nipostBuilderProofCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // ResetState mocks base method.
-func (m *MocknipostBuilder) ResetState() error {
+func (m *MocknipostBuilder) ResetState(arg0 types.NodeID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ResetState")
+	ret := m.ctrl.Call(m, "ResetState", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ResetState indicates an expected call of ResetState.
-func (mr *MocknipostBuilderMockRecorder) ResetState() *nipostBuilderResetStateCall {
+func (mr *MocknipostBuilderMockRecorder) ResetState(arg0 any) *nipostBuilderResetStateCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetState", reflect.TypeOf((*MocknipostBuilder)(nil).ResetState))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetState", reflect.TypeOf((*MocknipostBuilder)(nil).ResetState), arg0)
 	return &nipostBuilderResetStateCall{Call: call}
 }
 
@@ -836,13 +837,13 @@ func (c *nipostBuilderResetStateCall) Return(arg0 error) *nipostBuilderResetStat
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *nipostBuilderResetStateCall) Do(f func() error) *nipostBuilderResetStateCall {
+func (c *nipostBuilderResetStateCall) Do(f func(types.NodeID) error) *nipostBuilderResetStateCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *nipostBuilderResetStateCall) DoAndReturn(f func() error) *nipostBuilderResetStateCall {
+func (c *nipostBuilderResetStateCall) DoAndReturn(f func(types.NodeID) error) *nipostBuilderResetStateCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

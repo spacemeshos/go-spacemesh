@@ -129,7 +129,7 @@ type BaseConfig struct {
 	RegossipAtxInterval time.Duration `mapstructure:"regossip-atx-interval"`
 
 	// ATXGradeDelay is used to grade ATXs for selection in tortoise active set.
-	// See grading fuction in miner/proposals_builder.go
+	// See grading function in miner/proposals_builder.go
 	ATXGradeDelay time.Duration `mapstructure:"atx-grade-delay"`
 
 	// NoMainOverride forces the "nomain" builds to run on the mainnet
