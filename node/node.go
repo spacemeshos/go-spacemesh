@@ -955,7 +955,6 @@ func (app *App) initServices(ctx context.Context) error {
 		app.cachedDB,
 		app.localDB,
 		app.host,
-		grpcPostService.(*grpcserver.PostService),
 		nipostBuilder,
 		app.clock,
 		newSyncer,

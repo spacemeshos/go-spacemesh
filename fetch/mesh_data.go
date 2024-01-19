@@ -14,17 +14,28 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 var errBadRequest = errors.New("invalid request")
 
 // GetAtxs gets the data for given atx IDs and validates them. returns an error if at least one ATX cannot be fetched.
-func (f *Fetch) GetAtxs(ctx context.Context, ids []types.ATXID) error {
+func (f *Fetch) GetAtxs(ctx context.Context, ids []types.ATXID, opts ...system.GetAtxOpt) error {
 	if len(ids) == 0 {
 		return nil
 	}
-	f.logger.WithContext(ctx).With().Info("requesting atxs from peer", log.Int("num_atxs", len(ids)))
+
+	options := system.GetAtxOpts{}
+	for _, opt := range opts {
+		opt(&options)
+	}
+
+	f.logger.WithContext(ctx).With().
+		Info("requesting atxs from peer", log.Int("num_atxs", len(ids)), log.Bool("limiting", !options.LimitingOff))
 	hashes := types.ATXIDsToHashes(ids)
+	if options.LimitingOff {
+		return f.getHashes(ctx, hashes, datastore.ATXDB, f.validators.atx.HandleMessage)
+	}
 	return f.getHashes(ctx, hashes, datastore.ATXDB, f.validators.atx.HandleMessage, withLimiter(f.getAtxsLimiter))
 }
 
