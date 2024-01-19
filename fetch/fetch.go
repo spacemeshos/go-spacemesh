@@ -128,6 +128,7 @@ func DefaultConfig() Config {
 		QueueSize:            20,
 		BatchSize:            10,
 		RequestTimeout:       25 * time.Second,
+		RequestHardTimeout:   5 * time.Minute,
 		MaxRetriesForRequest: 100,
 		ServersConfig: map[string]ServerConfig{
 			// serves 1 MB of data
