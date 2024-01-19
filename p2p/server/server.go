@@ -274,8 +274,13 @@ func (s *Server) Request(
 		case s.metrics == nil:
 			return
 		case err != nil:
+			s.metrics.clientFailed.Inc()
 			s.metrics.clientLatencyFailure.Observe(time.Since(start).Seconds())
+		case len(data.Error) > 0:
+			s.metrics.clientServerError.Inc()
+			s.metrics.clientLatency.Observe(time.Since(start).Seconds())
 		case err == nil:
+			s.metrics.clientSucceeded.Inc()
 			s.metrics.clientLatency.Observe(time.Since(start).Seconds())
 		}
 	}()
