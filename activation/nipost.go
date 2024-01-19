@@ -116,7 +116,7 @@ func (nb *NIPostBuilder) ResetState() error {
 	return nil
 }
 
-func (nb *NIPostBuilder) proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error) {
+func (nb *NIPostBuilder) Proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error) {
 	started := false
 	retries := 0
 	for {
@@ -287,11 +287,10 @@ func (nb *NIPostBuilder) BuildNIPost(
 
 		nb.log.Info("starting post execution", zap.Binary("challenge", poetProofRef[:]))
 		startTime := time.Now()
-		proof, postInfo, err := nb.proof(postCtx, poetProofRef[:])
+		proof, postInfo, err := nb.Proof(postCtx, poetProofRef[:])
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate Post: %w", err)
 		}
-		events.EmitPostComplete(poetProofRef[:])
 		postGenDuration := time.Since(startTime)
 		nb.log.Info("finished post execution", zap.Duration("duration", postGenDuration))
 		metrics.PostDuration.Set(float64(postGenDuration.Nanoseconds()))

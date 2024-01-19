@@ -769,6 +769,46 @@ func (c *nipostBuilderBuildNIPostCall) DoAndReturn(f func(context.Context, *type
 	return c
 }
 
+// Proof mocks base method.
+func (m *MocknipostBuilder) Proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Proof", ctx, challenge)
+	ret0, _ := ret[0].(*types.Post)
+	ret1, _ := ret[1].(*types.PostInfo)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// Proof indicates an expected call of Proof.
+func (mr *MocknipostBuilderMockRecorder) Proof(ctx, challenge any) *nipostBuilderProofCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Proof", reflect.TypeOf((*MocknipostBuilder)(nil).Proof), ctx, challenge)
+	return &nipostBuilderProofCall{Call: call}
+}
+
+// nipostBuilderProofCall wrap *gomock.Call
+type nipostBuilderProofCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *nipostBuilderProofCall) Return(arg0 *types.Post, arg1 *types.PostInfo, arg2 error) *nipostBuilderProofCall {
+	c.Call = c.Call.Return(arg0, arg1, arg2)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *nipostBuilderProofCall) Do(f func(context.Context, []byte) (*types.Post, *types.PostInfo, error)) *nipostBuilderProofCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *nipostBuilderProofCall) DoAndReturn(f func(context.Context, []byte) (*types.Post, *types.PostInfo, error)) *nipostBuilderProofCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // ResetState mocks base method.
 func (m *MocknipostBuilder) ResetState() error {
 	m.ctrl.T.Helper()

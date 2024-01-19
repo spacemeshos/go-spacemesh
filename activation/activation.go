@@ -159,48 +159,6 @@ func NewBuilder(
 	return b
 }
 
-func (b *Builder) proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error) {
-	started := false
-	retries := 0
-	for {
-		client, err := b.postService.Client(b.signer.NodeID())
-		if err != nil {
-			select {
-			case <-ctx.Done():
-				events.EmitPostFailure()
-				return nil, nil, ctx.Err()
-			case <-time.After(2 * time.Second): // Wait a few seconds and try connecting again
-				retries++ // TODO(mafa): emit event warning user about lost connection after a few retries
-				continue
-			}
-		}
-		if !started {
-			events.EmitPostStart(challenge)
-			started = true
-		}
-
-		retries = 0
-		post, postInfo, err := client.Proof(ctx, challenge)
-		switch {
-		case errors.Is(err, ErrPostClientClosed):
-			b.log.Warn("post service connection dropped - trying to reconnect", zap.Error(err))
-			select {
-			case <-ctx.Done():
-				events.EmitPostFailure()
-				return nil, nil, ctx.Err()
-			case <-time.After(2 * time.Second): // Wait a few seconds and try connecting again
-				continue
-			}
-		case err != nil:
-			events.EmitPostFailure()
-			return nil, nil, err
-		default: // err == nil
-			events.EmitPostComplete(challenge)
-			return post, postInfo, err
-		}
-	}
-}
-
 // Smeshing returns true iff atx builder is smeshing.
 func (b *Builder) Smeshing() bool {
 	b.smeshingMutex.Lock()
@@ -306,7 +264,7 @@ func (b *Builder) buildInitialPost(ctx context.Context) error {
 
 	// Create the initial post and save it.
 	startTime := time.Now()
-	post, postInfo, err := b.proof(ctx, shared.ZeroChallenge)
+	post, postInfo, err := b.nipostBuilder.Proof(ctx, shared.ZeroChallenge)
 	if err != nil {
 		return fmt.Errorf("post execution: %w", err)
 	}

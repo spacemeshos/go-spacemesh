@@ -69,6 +69,7 @@ type layerClock interface {
 
 type nipostBuilder interface {
 	BuildNIPost(ctx context.Context, challenge *types.NIPostChallenge) (*nipost.NIPostState, error)
+	Proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error)
 	ResetState() error
 }
 
