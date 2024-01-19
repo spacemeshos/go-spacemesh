@@ -160,7 +160,7 @@ func NewBuilder(
 }
 
 func (b *Builder) proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error) {
-	events.EmitPostStart(challenge)
+	started := false
 	retries := 0
 	for {
 		client, err := b.postService.Client(b.signer.NodeID())
@@ -174,6 +174,10 @@ func (b *Builder) proof(ctx context.Context, challenge []byte) (*types.Post, *ty
 				continue
 			}
 		}
+		if !started {
+			events.EmitPostStart(challenge)
+			started = true
+		}
 
 		retries = 0
 		post, postInfo, err := client.Proof(ctx, challenge)
@@ -184,7 +188,7 @@ func (b *Builder) proof(ctx context.Context, challenge []byte) (*types.Post, *ty
 			case <-ctx.Done():
 				events.EmitPostFailure()
 				return nil, nil, ctx.Err()
-			case <-time.After(2 * time.Second):
+			case <-time.After(2 * time.Second): // Wait a few seconds and try connecting again
 				continue
 			}
 		case err != nil:
