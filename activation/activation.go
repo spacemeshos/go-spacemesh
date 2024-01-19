@@ -76,7 +76,6 @@ type Builder struct {
 	cdb              *datastore.CachedDB
 	localDB          *localsql.Database
 	publisher        pubsub.Publisher
-	postService      postService
 	nipostBuilder    nipostBuilder
 	validator        nipostValidator
 
@@ -131,7 +130,6 @@ func NewBuilder(
 	cdb *datastore.CachedDB,
 	localDB *localsql.Database,
 	publisher pubsub.Publisher,
-	postService postService,
 	nipostBuilder nipostBuilder,
 	layerClock layerClock,
 	syncer syncer,
@@ -146,7 +144,6 @@ func NewBuilder(
 		cdb:               cdb,
 		localDB:           localDB,
 		publisher:         publisher,
-		postService:       postService,
 		nipostBuilder:     nipostBuilder,
 		layerClock:        layerClock,
 		syncer:            syncer,

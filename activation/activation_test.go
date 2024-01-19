@@ -110,7 +110,6 @@ type testAtxBuilder struct {
 	goldenATXID types.ATXID
 
 	mpub        *mocks.MockPublisher
-	mpostSvc    *MockpostService
 	mnipost     *MocknipostBuilder
 	mpostClient *MockPostClient
 	mclock      *MocklayerClock
@@ -129,7 +128,6 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 		sig:         edSigner,
 		goldenATXID: types.ATXID(types.HexToHash32("77777")),
 		mpub:        mocks.NewMockPublisher(ctrl),
-		mpostSvc:    NewMockpostService(ctrl),
 		mnipost:     NewMocknipostBuilder(ctrl),
 		mpostClient: NewMockPostClient(ctrl),
 		mclock:      NewMocklayerClock(ctrl),
@@ -145,7 +143,6 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 	}
 
 	tab.msync.EXPECT().RegisterForATXSynced().DoAndReturn(closedChan).AnyTimes()
-	tab.mpostSvc.EXPECT().Client(tab.sig.NodeID()).Return(tab.mpostClient, nil).AnyTimes()
 
 	b := NewBuilder(
 		cfg,
@@ -153,7 +150,6 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 		tab.cdb,
 		tab.localDb,
 		tab.mpub,
-		tab.mpostSvc,
 		tab.mnipost,
 		tab.mclock,
 		tab.msync,
