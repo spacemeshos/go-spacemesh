@@ -124,10 +124,16 @@ func (nb *NIPostBuilder) Proof(ctx context.Context, challenge []byte) (*types.Po
 		if err != nil {
 			select {
 			case <-ctx.Done():
-				events.EmitPostFailure()
+				if started {
+					events.EmitPostFailure()
+				}
 				return nil, nil, ctx.Err()
 			case <-time.After(2 * time.Second): // Wait a few seconds and try connecting again
-				retries++ // TODO(mafa): emit event warning user about lost connection after a few retries
+				retries++
+				if retries%10 == 0 { // every 20 seconds inform user about lost connection (for remote post service)
+					// TODO(mafa): emit event warning user about lost connection
+					nb.log.Warn("post service not connected - waiting for reconnection", zap.Error(err))
+				}
 				continue
 			}
 		}
@@ -140,7 +146,7 @@ func (nb *NIPostBuilder) Proof(ctx context.Context, challenge []byte) (*types.Po
 		post, postInfo, err := client.Proof(ctx, challenge)
 		switch {
 		case errors.Is(err, ErrPostClientClosed):
-			nb.log.Warn("post service connection dropped - trying to reconnect", zap.Error(err))
+			nb.log.Warn("post service connection dropped - waiting for reconnect", zap.Error(err))
 			select {
 			case <-ctx.Done():
 				events.EmitPostFailure()
