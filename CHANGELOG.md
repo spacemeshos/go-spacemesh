@@ -79,6 +79,28 @@ configuration is as follows:
 ### Improvements
 
 * [#5464](https://github.com/spacemeshos/go-spacemesh/pull/5464) Make fetch request timeout configurable.
+
+* [#5467](https://github.com/spacemeshos/go-spacemesh/pull/5467)
+  Fix a bug that could cause ATX sync to stall because of exhausted limit of concurrent requests for dependencies.
+  Fetching dependencies of an ATX is not limited anymore.
+
+## Release v1.3.5
+
+### Improvements
+
+* [#5470](https://github.com/spacemeshos/go-spacemesh/pull/5470)
+  Fixed a bug in event reporting where the node reports a disconnection from the PoST service as a "PoST failed" event.
+  Disconnections cannot be avoided completely and do not interrupt the PoST proofing process. As long as the PoST
+  service reconnects within a reasonable time, the node will continue to operate normally without reporting any errors
+  via the event API.
+
+  Users of a remote setup should make sure that the PoST service is actually running and can reach the node. Observe
+  the log of both apps for indications of a connection problem.
+
+## Release v1.3.4
+
+### Improvements
+
 * [#5467](https://github.com/spacemeshos/go-spacemesh/pull/5467)
   Fix a bug that could cause ATX sync to stall because of exhausted limit of concurrent requests for dependencies.
   Fetching dependencies of an ATX is not limited anymore.
