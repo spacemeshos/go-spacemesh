@@ -1596,7 +1596,9 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	if err != nil {
 		return fmt.Errorf("failed to load migrations: %w", err)
 	}
+	dbLog := app.addLogger(StateDbLogger, lg)
 	dbopts := []sql.Opt{
+		sql.WithLogger(dbLog.Zap()),
 		sql.WithMigrations(migrations),
 		sql.WithConnections(app.Config.DatabaseConnections),
 		sql.WithLatencyMetering(app.Config.DatabaseLatencyMetering),
@@ -1614,7 +1616,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		app.dbMetrics = dbmetrics.NewDBMetricsCollector(
 			ctx,
 			app.db,
-			app.addLogger(StateDbLogger, lg),
+			dbLog,
 			app.Config.DatabaseSizeMeteringInterval,
 		)
 	}
@@ -1638,6 +1640,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		return fmt.Errorf("load local migrations: %w", err)
 	}
 	localDB, err := localsql.Open("file:"+filepath.Join(dbPath, localDbFile),
+		sql.WithLogger(dbLog.Zap()),
 		sql.WithMigrations(migrations),
 		sql.WithMigration(localsql.New0001Migration(app.Config.SMESHING.Opts.DataDir)),
 		sql.WithMigration(localsql.New0002Migration(app.Config.SMESHING.Opts.DataDir)),
