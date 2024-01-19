@@ -146,14 +146,7 @@ func (nb *NIPostBuilder) Proof(ctx context.Context, challenge []byte) (*types.Po
 		post, postInfo, err := client.Proof(ctx, challenge)
 		switch {
 		case errors.Is(err, ErrPostClientClosed):
-			nb.log.Warn("post service connection dropped - waiting for reconnect", zap.Error(err))
-			select {
-			case <-ctx.Done():
-				events.EmitPostFailure()
-				return nil, nil, ctx.Err()
-			case <-time.After(2 * time.Second): // Wait a few seconds and try connecting again
-				continue
-			}
+			continue
 		case err != nil:
 			events.EmitPostFailure()
 			return nil, nil, err
