@@ -20,24 +20,17 @@ func TestDeadlineAdjuster(t *testing.T) {
 	readChunks := []string{"xy", "ABCD", "EF", "0123", "4567", "89"}
 	writeChunks := []string{"foo", "abcd", "efgh", "ijk", "bbbc"}
 
-	now := clock.Now()
-
-	var sdCalls []any
-	for _, n := range []int{11, 13, 15, 17, 19, 31} {
-		sdCalls = append(sdCalls, s.EXPECT().
-			SetDeadline(now.Add(time.Duration(n)*time.Second)).
-			Return(nil))
-	}
-	gomock.InOrder(sdCalls...)
-
-	// Capture the deadlines:
-	// s.EXPECT().
-	// 	SetDeadline(gomock.Any()).
-	// 	DoAndReturn(func(dt time.Time) error {
-	// 		t.Logf("deadline: +%v", dt.Sub(now))
-	// 		return nil
-	// 	}).
-	// 	AnyTimes()
+	start := clock.Now()
+	var deadlines []int
+	s.EXPECT().
+		SetDeadline(gomock.Any()).
+		DoAndReturn(func(dt time.Time) error {
+			d := dt.Sub(start)
+			require.Equal(t, d, d.Truncate(time.Second))
+			deadlines = append(deadlines, int(d/time.Second))
+			return nil
+		}).
+		AnyTimes()
 
 	var readCalls []any
 	for _, str := range readChunks {
@@ -67,15 +60,17 @@ func TestDeadlineAdjuster(t *testing.T) {
 			return len(chunk), nil
 		}))
 	}
-	writeCalls = append(writeCalls, s.EXPECT().
-		Write(gomock.Any()).
-		DoAndReturn(func(b []byte) (int, error) {
-			clock.Advance(10 * time.Second)
-			return 2, yamux.ErrTimeout
-		}))
+	for i := 0; i < 2; i++ {
+		writeCalls = append(writeCalls, s.EXPECT().
+			Write(gomock.Any()).
+			DoAndReturn(func(b []byte) (int, error) {
+				clock.Advance(10 * time.Second)
+				return 2, yamux.ErrTimeout
+			}))
+	}
 	gomock.InOrder(writeCalls...)
 
-	dadj := newDeadlineAdjuster(s, "test", 10*time.Second)
+	dadj := newDeadlineAdjuster(s, "test", 10*time.Second, 35*time.Second)
 	dadj.clock = clock
 	dadj.chunkSize = 4
 
@@ -109,10 +104,25 @@ func TestDeadlineAdjuster(t *testing.T) {
 	n, err = dadj.Read(b)
 	require.Equal(t, 1, n)
 	require.ErrorIs(t, err, yamux.ErrTimeout)
-	require.ErrorContains(t, err, "19 bytes read, 14 bytes written, timeout 10s")
+	require.ErrorContains(t, err, "19 bytes read, 14 bytes written, timeout 10s, hard timeout 35s")
 
 	n, err = dadj.Write([]byte("bbbcdef"))
 	require.Equal(t, 6, n)
 	require.ErrorIs(t, err, yamux.ErrTimeout)
-	require.ErrorContains(t, err, "19 bytes read, 20 bytes written, timeout 10s")
+	require.ErrorContains(t, err, "19 bytes read, 20 bytes written, timeout 10s, hard timeout 35s")
+
+	// this causes deadline to be set at the hard deadline
+	n, err = dadj.Write([]byte("dd"))
+	require.Equal(t, 2, n)
+	require.ErrorIs(t, err, yamux.ErrTimeout)
+	require.ErrorContains(t, err, "19 bytes read, 22 bytes written, timeout 10s, hard timeout 35s")
+
+	// this write doesn't even start as we're past the hard deadline
+	require.Equal(t, 41*time.Second, clock.Now().Sub(start))
+	n, err = dadj.Write([]byte("ddd"))
+	require.Equal(t, 0, n)
+	require.ErrorIs(t, err, yamux.ErrTimeout)
+	require.ErrorContains(t, err, "19 bytes read, 22 bytes written, timeout 10s, hard timeout 35s")
+
+	require.Equal(t, []int{10, 12, 14, 16, 18, 20, 35}, deadlines)
 }

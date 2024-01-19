@@ -27,9 +27,20 @@ var ErrNotConnected = errors.New("peer is not connected")
 type Opt func(s *Server)
 
 // WithTimeout configures stream timeout.
+// The requests are terminated when no data is received or sent for
+// the specified duration.
 func WithTimeout(timeout time.Duration) Opt {
 	return func(s *Server) {
 		s.timeout = timeout
+	}
+}
+
+// WithHardTimeout configures the hard timeout for requests.
+// Requests are terminated if they take longer than the specified
+// duration.
+func WithHardTimeout(timeout time.Duration) Opt {
+	return func(s *Server) {
+		s.hardTimeout = timeout
 	}
 }
 
@@ -94,6 +105,7 @@ type Server struct {
 	protocol            string
 	handler             Handler
 	timeout             time.Duration
+	hardTimeout         time.Duration
 	requestLimit        int
 	queueSize           int
 	requestsPerInterval int
@@ -112,6 +124,7 @@ func New(h Host, proto string, handler Handler, opts ...Opt) *Server {
 		handler:             handler,
 		h:                   h,
 		timeout:             25 * time.Second,
+		hardTimeout:         5 * time.Minute,
 		requestLimit:        10240,
 		queueSize:           1000,
 		requestsPerInterval: 100,
@@ -183,7 +196,7 @@ func (s *Server) desc(what string, stream network.Stream) string {
 func (s *Server) queueHandler(ctx context.Context, stream network.Stream) {
 	defer stream.Close()
 	defer stream.SetDeadline(time.Time{})
-	dadj := newDeadlineAdjuster(stream, s.desc("handler", stream), s.timeout)
+	dadj := newDeadlineAdjuster(stream, s.desc("handler", stream), s.timeout, s.hardTimeout)
 	rd := bufio.NewReader(dadj)
 	size, err := varint.ReadUvarint(rd)
 	if err != nil {
@@ -287,7 +300,7 @@ func (s *Server) request(ctx context.Context, pid peer.ID, req []byte) (*Respons
 	}
 	defer stream.Close()
 	defer stream.SetDeadline(time.Time{})
-	dadj := newDeadlineAdjuster(stream, s.desc("request", stream), s.timeout)
+	dadj := newDeadlineAdjuster(stream, s.desc("request", stream), s.timeout, s.hardTimeout)
 
 	wr := bufio.NewWriter(dadj)
 	sz := make([]byte, binary.MaxVarintLen64)
