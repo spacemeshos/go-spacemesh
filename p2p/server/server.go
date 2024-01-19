@@ -234,6 +234,7 @@ func (s *Server) queueHandler(ctx context.Context, stream network.Stream) bool {
 	}
 	if err := wr.Flush(); err != nil {
 		s.logger.With().Warning("failed to flush stream", log.Err(err))
+		return false
 	}
 
 	return true
