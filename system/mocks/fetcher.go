@@ -14,6 +14,7 @@ import (
 
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
+	system "github.com/spacemeshos/go-spacemesh/system"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -79,17 +80,22 @@ func (c *FetcherGetActiveSetCall) DoAndReturn(f func(context.Context, types.Hash
 }
 
 // GetAtxs mocks base method.
-func (m *MockFetcher) GetAtxs(arg0 context.Context, arg1 []types.ATXID) error {
+func (m *MockFetcher) GetAtxs(arg0 context.Context, arg1 []types.ATXID, arg2 ...system.GetAtxOpt) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAtxs", arg0, arg1)
+	varargs := []any{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetAtxs", varargs...)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // GetAtxs indicates an expected call of GetAtxs.
-func (mr *MockFetcherMockRecorder) GetAtxs(arg0, arg1 any) *FetcherGetAtxsCall {
+func (mr *MockFetcherMockRecorder) GetAtxs(arg0, arg1 any, arg2 ...any) *FetcherGetAtxsCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAtxs", reflect.TypeOf((*MockFetcher)(nil).GetAtxs), arg0, arg1)
+	varargs := append([]any{arg0, arg1}, arg2...)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAtxs", reflect.TypeOf((*MockFetcher)(nil).GetAtxs), varargs...)
 	return &FetcherGetAtxsCall{Call: call}
 }
 
@@ -105,13 +111,13 @@ func (c *FetcherGetAtxsCall) Return(arg0 error) *FetcherGetAtxsCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *FetcherGetAtxsCall) Do(f func(context.Context, []types.ATXID) error) *FetcherGetAtxsCall {
+func (c *FetcherGetAtxsCall) Do(f func(context.Context, []types.ATXID, ...system.GetAtxOpt) error) *FetcherGetAtxsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *FetcherGetAtxsCall) DoAndReturn(f func(context.Context, []types.ATXID) error) *FetcherGetAtxsCall {
+func (c *FetcherGetAtxsCall) DoAndReturn(f func(context.Context, []types.ATXID, ...system.GetAtxOpt) error) *FetcherGetAtxsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -465,17 +471,22 @@ func (m *MockAtxFetcher) EXPECT() *MockAtxFetcherMockRecorder {
 }
 
 // GetAtxs mocks base method.
-func (m *MockAtxFetcher) GetAtxs(arg0 context.Context, arg1 []types.ATXID) error {
+func (m *MockAtxFetcher) GetAtxs(arg0 context.Context, arg1 []types.ATXID, arg2 ...system.GetAtxOpt) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAtxs", arg0, arg1)
+	varargs := []any{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetAtxs", varargs...)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // GetAtxs indicates an expected call of GetAtxs.
-func (mr *MockAtxFetcherMockRecorder) GetAtxs(arg0, arg1 any) *AtxFetcherGetAtxsCall {
+func (mr *MockAtxFetcherMockRecorder) GetAtxs(arg0, arg1 any, arg2 ...any) *AtxFetcherGetAtxsCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAtxs", reflect.TypeOf((*MockAtxFetcher)(nil).GetAtxs), arg0, arg1)
+	varargs := append([]any{arg0, arg1}, arg2...)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAtxs", reflect.TypeOf((*MockAtxFetcher)(nil).GetAtxs), varargs...)
 	return &AtxFetcherGetAtxsCall{Call: call}
 }
 
@@ -491,13 +502,13 @@ func (c *AtxFetcherGetAtxsCall) Return(arg0 error) *AtxFetcherGetAtxsCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *AtxFetcherGetAtxsCall) Do(f func(context.Context, []types.ATXID) error) *AtxFetcherGetAtxsCall {
+func (c *AtxFetcherGetAtxsCall) Do(f func(context.Context, []types.ATXID, ...system.GetAtxOpt) error) *AtxFetcherGetAtxsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *AtxFetcherGetAtxsCall) DoAndReturn(f func(context.Context, []types.ATXID) error) *AtxFetcherGetAtxsCall {
+func (c *AtxFetcherGetAtxsCall) DoAndReturn(f func(context.Context, []types.ATXID, ...system.GetAtxOpt) error) *AtxFetcherGetAtxsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

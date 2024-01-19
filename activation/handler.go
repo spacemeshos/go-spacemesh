@@ -610,7 +610,7 @@ func (h *Handler) FetchReferences(ctx context.Context, atx *types.ActivationTx) 
 		return nil
 	}
 
-	if err := h.fetcher.GetAtxs(ctx, maps.Keys(atxIDs)); err != nil {
+	if err := h.fetcher.GetAtxs(ctx, maps.Keys(atxIDs), system.WithoutLimiting()); err != nil {
 		dbg := fmt.Sprintf("prev %v pos %v commit %v", atx.PrevATXID, atx.PositioningATX, atx.CommitmentATX)
 		return fmt.Errorf("fetch referenced atxs (%s): %w", dbg, err)
 	}
