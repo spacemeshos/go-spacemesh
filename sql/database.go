@@ -180,10 +180,14 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 		if err != nil {
 			return nil, err
 		}
+		after := 0
+		if len(config.migrations) > 0 {
+			after = config.migrations[len(config.migrations)-1].Order()
+		}
 		config.logger.Info("running migrations",
 			zap.String("uri", uri),
 			zap.Int("current version", before),
-			zap.Int("target version", config.migrations[len(config.migrations)-1].Order()),
+			zap.Int("target version", after),
 		)
 		tx, err := db.Tx(context.Background())
 		if err != nil {
