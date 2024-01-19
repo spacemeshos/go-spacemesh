@@ -128,6 +128,7 @@ type poetDbAPI interface {
 }
 
 var ErrPostClientClosed = fmt.Errorf("post client closed")
+var ErrPostClientNotConnected = fmt.Errorf("post service not registered")
 
 type postService interface {
 	Client(nodeId types.NodeID) (PostClient, error)

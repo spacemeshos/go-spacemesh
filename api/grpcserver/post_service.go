@@ -109,7 +109,7 @@ func (s *PostService) Client(nodeId types.NodeID) (activation.PostClient, error)
 
 	// TODO(mafa): select correct client based on node id
 	if s.client == nil {
-		return nil, fmt.Errorf("post service not registered")
+		return nil, activation.ErrPostClientNotConnected
 	}
 
 	return s.client, nil
