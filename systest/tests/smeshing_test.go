@@ -32,6 +32,7 @@ func TestSmeshing(t *testing.T) {
 	t.Parallel()
 
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))
+	tctx.RemoteSize = tctx.ClusterSize / 4 // 25% of nodes are remote
 	vests := vestingAccs{
 		prepareVesting(t, 3, 8, 20, 1e15, 10e15),
 		prepareVesting(t, 5, 8, 20, 1e15, 10e15),

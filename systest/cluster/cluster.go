@@ -44,17 +44,6 @@ const (
 	bsFlags      = "bsflags"
 )
 
-// defaultBootnodes defines the number of bootnodes deployed for a given cluster size.
-func defaultBootnodes(size int) int {
-	return max(2, (size/1000)*2)
-}
-
-// defaultRemote defines the number of smeshing nodes deployed with a remote service (25% of all nodes) for a given
-// cluster size.
-func defaultRemote(size int) int {
-	return max(1, size/4)
-}
-
 // MakePoetEndpoint generate a poet endpoint for the ith instance.
 func MakePoetEndpoint(ith int) string {
 	return fmt.Sprintf("http://%s:%d", createPoetIdentifier(ith), poetPort)
@@ -152,15 +141,13 @@ func ReuseWait(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 func Default(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 	cl := New(cctx, opts...)
 
-	bsize := defaultBootnodes(cctx.ClusterSize)
-	remote := defaultRemote(cctx.ClusterSize)
-	smeshers := cctx.ClusterSize - bsize - remote
+	smeshers := cctx.ClusterSize - cctx.BootnodeSize - cctx.RemoteSize
 
 	cctx.Log.Desugar().Info("Using the following nodes",
 		zap.Int("total", cctx.ClusterSize),
-		zap.Int("bootnodes", bsize),
+		zap.Int("bootnodes", cctx.BootnodeSize),
 		zap.Int("smeshers", smeshers),
-		zap.Int("remote", remote),
+		zap.Int("remote", cctx.RemoteSize),
 	)
 
 	keys := make([]ed25519.PrivateKey, cctx.ClusterSize)
@@ -168,7 +155,7 @@ func Default(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 		keys[i] = cl.accounts.Private(i)
 	}
 
-	if err := cl.AddBootnodes(cctx, bsize); err != nil {
+	if err := cl.AddBootnodes(cctx, cctx.BootnodeSize); err != nil {
 		return nil, err
 	}
 	if err := cl.AddBootstrappers(cctx); err != nil {
@@ -177,11 +164,11 @@ func Default(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 	if err := cl.AddPoets(cctx); err != nil {
 		return nil, err
 	}
-	err := cl.AddSmeshers(cctx, smeshers, WithSmeshers(keys[bsize:bsize+smeshers]))
+	err := cl.AddSmeshers(cctx, smeshers, WithSmeshers(keys[cctx.BootnodeSize:cctx.BootnodeSize+smeshers]))
 	if err != nil {
 		return nil, err
 	}
-	err = cl.AddRemoteSmeshers(cctx, remote, WithSmeshers(keys[bsize+smeshers:]))
+	err = cl.AddRemoteSmeshers(cctx, cctx.RemoteSize, WithSmeshers(keys[cctx.BootnodeSize+smeshers:]))
 	if err != nil {
 		return nil, err
 	}

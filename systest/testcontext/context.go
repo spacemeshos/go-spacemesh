@@ -159,6 +159,8 @@ type Context struct {
 	Parameters        *parameters.Parameters
 	BootstrapDuration time.Duration
 	ClusterSize       int
+	BootnodeSize      int
+	RemoteSize        int
 	PoetSize          int
 	BootstrapperSize  int
 	Generic           client.Client
@@ -333,6 +335,7 @@ func New(t *testing.T, opts ...Opt) *Context {
 	if len(ns) == 0 {
 		ns = "test-" + rngName()
 	}
+	clSize := clusterSize.Get(p)
 	cctx := &Context{
 		Context:           ctx,
 		Parameters:        p,
@@ -342,7 +345,9 @@ func New(t *testing.T, opts ...Opt) *Context {
 		Generic:           generic,
 		TestID:            testid.Get(p),
 		Keep:              keep.Get(p),
-		ClusterSize:       clusterSize.Get(p),
+		ClusterSize:       clSize,
+		BootnodeSize:      max(2, (clSize/1000)*2),
+		RemoteSize:        0,
 		PoetSize:          poetSize.Get(p),
 		BootstrapperSize:  bsSize.Get(p),
 		Image:             imageFlag.Get(p),
