@@ -31,7 +31,7 @@ func (f *Fetch) GetAtxs(ctx context.Context, ids []types.ATXID, opts ...system.G
 	}
 
 	f.logger.WithContext(ctx).With().
-		Info("requesting atxs from peer", log.Int("num_atxs", len(ids)), log.Bool("limiting", !options.LimitingOff))
+		Debug("requesting atxs from peer", log.Int("num_atxs", len(ids)), log.Bool("limiting", !options.LimitingOff))
 	hashes := types.ATXIDsToHashes(ids)
 	if options.LimitingOff {
 		return f.getHashes(ctx, hashes, datastore.ATXDB, f.validators.atx.HandleMessage)
