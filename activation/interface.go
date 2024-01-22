@@ -127,7 +127,10 @@ type poetDbAPI interface {
 	ValidateAndStore(ctx context.Context, proofMessage *types.PoetProofMessage) error
 }
 
-var ErrPostClientClosed = fmt.Errorf("post client closed")
+var (
+	ErrPostClientClosed       = fmt.Errorf("post client closed")
+	ErrPostClientNotConnected = fmt.Errorf("post service not registered")
+)
 
 type postService interface {
 	Client(nodeId types.NodeID) (PostClient, error)
