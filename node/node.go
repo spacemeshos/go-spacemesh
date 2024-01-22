@@ -274,8 +274,14 @@ func LoadConfigFromFile() (*config.Config, error) {
 		mapstructure.TextUnmarshallerHookFunc(),
 	)
 
+	opts := []viper.DecoderConfigOption{
+		viper.DecodeHook(hook),
+		WithZeroFields(),
+		WithIgnoreUntagged(),
+	}
+
 	// load config if it was loaded to the viper
-	if err := viper.Unmarshal(&conf, viper.DecodeHook(hook), WithZeroFields()); err != nil {
+	if err := viper.Unmarshal(&conf, opts...); err != nil {
 		return nil, fmt.Errorf("unmarshal config: %w", err)
 	}
 	return &conf, nil
@@ -284,6 +290,12 @@ func LoadConfigFromFile() (*config.Config, error) {
 func WithZeroFields() viper.DecoderConfigOption {
 	return func(cfg *mapstructure.DecoderConfig) {
 		cfg.ZeroFields = true
+	}
+}
+
+func WithIgnoreUntagged() viper.DecoderConfigOption {
+	return func(cfg *mapstructure.DecoderConfig) {
+		cfg.IgnoreUntaggedFields = true
 	}
 }
 
@@ -662,6 +674,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.log.With().Info("tortoise will trace execution")
 		trtlopts = append(trtlopts, tortoise.WithTracer())
 	}
+	app.log.Info("initializing tortoise")
 	start := time.Now()
 	trtl, err := tortoise.Recover(
 		ctx,
@@ -1685,6 +1698,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 			app.Config.DatabaseSizeMeteringInterval,
 		)
 	}
+	app.log.Info("starting cache warmup")
 	start := time.Now()
 	data, err := atxsdata.Warm(
 		app.db,

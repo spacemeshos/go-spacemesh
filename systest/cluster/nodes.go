@@ -830,7 +830,12 @@ func deployPostService(
 		mapstructureutil.DeprecatedHook(),
 		mapstructure.TextUnmarshallerHookFunc(),
 	)
-	if err := vip.Unmarshal(&conf, viper.DecodeHook(hook), node.WithZeroFields()); err != nil {
+	opts := []viper.DecoderConfigOption{
+		viper.DecodeHook(hook),
+		node.WithZeroFields(),
+		node.WithIgnoreUntagged(),
+	}
+	if err := vip.Unmarshal(&conf, opts...); err != nil {
 		return fmt.Errorf("unmarshal config: %w", err)
 	}
 

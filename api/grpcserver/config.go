@@ -21,7 +21,7 @@ type Config struct {
 	GrpcRecvMsgSize int       `mapstructure:"grpc-recv-msg-size"`
 	JSONListener    string    `mapstructure:"grpc-json-listener"`
 
-	SmesherStreamInterval time.Duration
+	SmesherStreamInterval time.Duration `mapstructure:"smesherstreaminterval"`
 }
 
 type Service = string
