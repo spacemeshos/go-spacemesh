@@ -120,7 +120,7 @@ jobs:
           label: sanity
           storage: premium-rwo=10Gi
           node_selector: cloud.google.com/gke-nodepool=gha
-          size: 50
+          size: 30
           bootstrap: 4m
           level: ${{ inputs.log_level }}
           clusters: 4

@@ -172,10 +172,14 @@ func (s *Server) Run(ctx context.Context) error {
 				return nil
 			}
 			eg.Go(func() error {
-				s.queueHandler(ctx, req.stream)
+				ok := s.queueHandler(ctx, req.stream)
 				if s.metrics != nil {
 					s.metrics.serverLatency.Observe(time.Since(req.received).Seconds())
-					s.metrics.completed.Inc()
+					if ok {
+						s.metrics.completed.Inc()
+					} else {
+						s.metrics.failed.Inc()
+					}
 				}
 				return nil
 			})
@@ -183,27 +187,36 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 }
 
-func (s *Server) queueHandler(ctx context.Context, stream network.Stream) {
+func (s *Server) queueHandler(ctx context.Context, stream network.Stream) bool {
 	defer stream.Close()
 	_ = stream.SetDeadline(time.Now().Add(s.timeout))
 	defer stream.SetDeadline(time.Time{})
 	rd := bufio.NewReader(stream)
 	size, err := varint.ReadUvarint(rd)
 	if err != nil {
-		return
+		s.logger.With().Debug("initial read failed",
+			log.String("protocol", s.protocol),
+			log.Err(err),
+		)
+		return false
 	}
 	if size > uint64(s.requestLimit) {
 		s.logger.With().Warning("request limit overflow",
+			log.String("protocol", s.protocol),
 			log.Int("limit", s.requestLimit),
 			log.Uint64("request", size),
 		)
 		stream.Conn().Close()
-		return
+		return false
 	}
 	buf := make([]byte, size)
 	_, err = io.ReadFull(rd, buf)
 	if err != nil {
-		return
+		s.logger.With().Debug("error reading request",
+			log.String("protocol", s.protocol),
+			log.Err(err),
+		)
+		return false
 	}
 	start := time.Now()
 	buf, err = s.handler(log.WithNewRequestID(ctx), buf)
@@ -213,6 +226,10 @@ func (s *Server) queueHandler(ctx context.Context, stream network.Stream) {
 	)
 	var resp Response
 	if err != nil {
+		s.logger.With().Debug("handler reported error",
+			log.String("protocol", s.protocol),
+			log.Err(err),
+		)
 		resp.Error = err.Error()
 	} else {
 		resp.Data = buf
@@ -222,15 +239,21 @@ func (s *Server) queueHandler(ctx context.Context, stream network.Stream) {
 	if _, err := codec.EncodeTo(wr, &resp); err != nil {
 		s.logger.With().Warning(
 			"failed to write response",
+			log.String("protocol", s.protocol),
 			log.Int("resp.Data len", len(resp.Data)),
 			log.Int("resp.Error len", len(resp.Error)),
 			log.Err(err),
 		)
-		return
+		return false
 	}
 	if err := wr.Flush(); err != nil {
-		s.logger.With().Warning("failed to flush stream", log.Err(err))
+		s.logger.With().Warning("failed to flush stream",
+			log.String("protocol", s.protocol),
+			log.Err(err))
+		return false
 	}
+
+	return true
 }
 
 // Request sends a binary request to the peer. Request is executed in the background, one of the callbacks
@@ -267,8 +290,13 @@ func (s *Server) Request(
 		case s.metrics == nil:
 			return
 		case err != nil:
+			s.metrics.clientFailed.Inc()
 			s.metrics.clientLatencyFailure.Observe(time.Since(start).Seconds())
+		case len(data.Error) > 0:
+			s.metrics.clientServerError.Inc()
+			s.metrics.clientLatency.Observe(time.Since(start).Seconds())
 		case err == nil:
+			s.metrics.clientSucceeded.Inc()
 			s.metrics.clientLatency.Observe(time.Since(start).Seconds())
 		}
 	}()

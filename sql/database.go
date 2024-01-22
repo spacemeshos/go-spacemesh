@@ -12,8 +12,7 @@ import (
 	sqlite "github.com/go-llsqlite/crawshaw"
 	"github.com/go-llsqlite/crawshaw/sqlitex"
 	"github.com/prometheus/client_golang/prometheus"
-
-	"github.com/spacemeshos/go-spacemesh/log"
+	"go.uber.org/zap"
 )
 
 var (
@@ -63,6 +62,7 @@ func defaultConf() *conf {
 		connections:   16,
 		migrations:    migrations,
 		skipMigration: map[int]struct{}{},
+		logger:        zap.NewNop(),
 	}
 }
 
@@ -73,12 +73,19 @@ type conf struct {
 	vacuumState   int
 	migrations    []Migration
 	enableLatency bool
+	logger        *zap.Logger
 }
 
 // WithConnections overwrites number of pooled connections.
 func WithConnections(n int) Opt {
 	return func(c *conf) {
 		c.connections = n
+	}
+}
+
+func WithLogger(logger *zap.Logger) Opt {
+	return func(c *conf) {
+		c.logger = logger
 	}
 }
 
@@ -173,7 +180,15 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 		if err != nil {
 			return nil, err
 		}
-		log.With().Info("running migrations", log.Int("current version", before))
+		after := 0
+		if len(config.migrations) > 0 {
+			after = config.migrations[len(config.migrations)-1].Order()
+		}
+		config.logger.Info("running migrations",
+			zap.String("uri", uri),
+			zap.Int("current version", before),
+			zap.Int("target version", after),
+		)
 		tx, err := db.Tx(context.Background())
 		if err != nil {
 			return nil, err
@@ -331,7 +346,7 @@ func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (in
 		row, err := stmt.Step()
 		if err != nil {
 			code := sqlite.ErrCode(err)
-			if code == sqlite.SQLITE_CONSTRAINT_PRIMARYKEY {
+			if code == sqlite.SQLITE_CONSTRAINT_PRIMARYKEY || code == sqlite.SQLITE_CONSTRAINT_UNIQUE {
 				return 0, ErrObjectExists
 			}
 			return 0, fmt.Errorf("step %d: %w", rows, err)

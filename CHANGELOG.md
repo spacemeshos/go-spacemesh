@@ -76,7 +76,57 @@ configuration is as follows:
 
 ### Features
 
+* [#5462](https://github.com/spacemeshos/go-spacemesh/pull/5462) Add separate metric for failed p2p server requests
+
 ### Improvements
+
+* [#5464](https://github.com/spacemeshos/go-spacemesh/pull/5464) Make fetch request timeout configurable.
+* [#5467](https://github.com/spacemeshos/go-spacemesh/pull/5467)
+  Fix a bug that could cause ATX sync to stall because of exhausted limit of concurrent requests for dependencies.
+  Fetching dependencies of an ATX is not limited anymore.
+
+## Release v1.3.3
+
+### Improvements
+
+* [#5442](https://github.com/spacemeshos/go-spacemesh/pull/5442)
+  Limit concurrent requests for ATXs to reduce usage of memory and p2p streams.
+
+* [#5394](https://github.com/spacemeshos/go-spacemesh/pull/5394) Add rowid to tables with inefficient clustered indices.
+  This reduces database size and improves its performance.
+
+* [#5334](https://github.com/spacemeshos/go-spacemesh/pull/5334) Hotfix for API queries for activations.
+  Two API endpoints (`MeshService.{AccountMeshDataQuery,LayersQuery}`) were broken because they attempt to read
+  all activation data for an epoch. As the number of activations per epoch has grown, this brute force query (i.e.,
+  without appropriate database indices) became very expensive and could cause the node to hang and consume an enormous
+  amount of resources. This hotfix removes all activation data from these endpoints so that they still work for
+  querying other data. It also modifies `LayersQuery` to not return any _ineffective_ transactions in blocks, since
+  there's currently no way to distinguish between effective and ineffective transactions using the API.
+
+* [#5417](https://github.com/spacemeshos/go-spacemesh/pull/5417)
+  Prioritize verifying own ATX's PoST.
+
+* [#5423](https://github.com/spacemeshos/go-spacemesh/pull/5423)
+  Wait to be ATX-synced before selecting the commitment ATX for initialization.
+  Also, remove unnecessary wait for ATXs to be synced before beginning initialization if
+  the commitment ATX is already selected.
+
+## Release v1.3.2
+
+### Improvements
+
+* [#5432](https://github.com/spacemeshos/go-spacemesh/pull/5419) Fixed a possible race that is caused by a node
+  processing the same bootstrapped active set twice.
+
+## Release v1.3.1
+
+### Improvements
+
+* [#5419](https://github.com/spacemeshos/go-spacemesh/pull/5419) Fixed `0.0.0.0` not being a valid listen address for
+  `grpc-private-listener`.
+
+* [#5424](https://github.com/spacemeshos/go-spacemesh/pull/5424) Further increased limits for message sizes and caches
+  to compensate for the increased number of nodes on the network.
 
 ## Release v1.3
 

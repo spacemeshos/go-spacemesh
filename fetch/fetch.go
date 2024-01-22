@@ -10,6 +10,7 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/network"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -18,7 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
-	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 const (
@@ -100,11 +100,12 @@ func (s ServerConfig) toOpts() []server.Opt {
 type Config struct {
 	BatchTimeout         time.Duration
 	BatchSize, QueueSize int
-	RequestTimeout       time.Duration
 	MaxRetriesForRequest int
-	EnableServesMetrics  bool                    `mapstructure:"servers-metrics"`
+	RequestTimeout       time.Duration           `mapstructure:"request-timeout"`
+	EnableServerMetrics  bool                    `mapstructure:"servers-metrics"`
 	ServersConfig        map[string]ServerConfig `mapstructure:"servers"`
 	PeersRateThreshold   float64                 `mapstructure:"peers-rate-threshold"`
+	GetAtxsConcurrency   int64                   // The maximum number of concurrent requests to get ATXs.
 }
 
 func (c Config) getServerConfig(protocol string) ServerConfig {
@@ -145,6 +146,7 @@ func DefaultConfig() Config {
 			OpnProtocol: {Queue: 10000, Requests: 1000, Interval: time.Second},
 		},
 		PeersRateThreshold: 0.02,
+		GetAtxsConcurrency: 100,
 	}
 }
 
@@ -214,13 +216,13 @@ type Fetch struct {
 	shutdownCtx context.Context
 	cancel      context.CancelFunc
 	eg          errgroup.Group
+
+	getAtxsLimiter limiter
 }
 
 // NewFetch creates a new Fetch struct.
 func NewFetch(
 	cdb *datastore.CachedDB,
-	msh meshProvider,
-	b system.BeaconGetter,
 	host *p2p.Host,
 	opts ...Option,
 ) *Fetch {
@@ -240,6 +242,7 @@ func NewFetch(
 	for _, opt := range opts {
 		opt(f)
 	}
+	f.getAtxsLimiter = semaphore.NewWeighted(f.cfg.GetAtxsConcurrency)
 	f.peers = peers.New()
 	// NOTE(dshulyak) this is to avoid tests refactoring.
 	// there is one test that covers this part.
@@ -266,7 +269,7 @@ func NewFetch(
 
 	f.batchTimeout = time.NewTicker(f.cfg.BatchTimeout)
 	if len(f.servers) == 0 {
-		h := newHandler(cdb, bs, msh, b, f.logger)
+		h := newHandler(cdb, bs, f.logger)
 		f.registerServer(host, atxProtocol, h.handleEpochInfoReq)
 		f.registerServer(host, lyrDataProtocol, h.handleLayerDataReq)
 		f.registerServer(host, hashProtocol, h.handleHashReq)
@@ -286,7 +289,7 @@ func (f *Fetch) registerServer(
 		server.WithTimeout(f.cfg.RequestTimeout),
 		server.WithLog(f.logger),
 	}
-	if f.cfg.EnableServesMetrics {
+	if f.cfg.EnableServerMetrics {
 		opts = append(opts, server.WithMetrics())
 	}
 	opts = append(opts, f.cfg.getServerConfig(protocol).toOpts()...)

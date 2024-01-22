@@ -95,12 +95,13 @@ const (
 	P2PLogger              = "p2p"
 	PostLogger             = "post"
 	PostServiceLogger      = "postService"
-	StateDbLogger          = "stateDbStore"
+	StateDbLogger          = "stateDb"
 	BeaconLogger           = "beacon"
 	CachedDBLogger         = "cachedDB"
 	PoetDbLogger           = "poetDb"
 	TrtlLogger             = "trtl"
 	ATXHandlerLogger       = "atxHandler"
+	ATXBuilderLogger       = "atxBuilder"
 	MeshLogger             = "mesh"
 	SyncLogger             = "sync"
 	HareOracleLogger       = "hareOracle"
@@ -360,6 +361,7 @@ type App struct {
 	edVerifier        *signing.EdVerifier
 	beaconProtocol    *beacon.ProtocolDriver
 	log               log.Log
+	syncLogger        log.Log
 	svm               *vm.VM
 	conState          *txs.ConservativeState
 	fetcher           *fetch.Fetch
@@ -506,7 +508,10 @@ func (app *App) Cleanup(ctx context.Context) {
 }
 
 // Wrap the top-level logger to add context info and set the level for a
-// specific module.
+// specific module. Calling this method and will create a new logger every time
+// and not re-use an existing logger with the same name.
+//
+// This method is not safe to be called concurrently.
 func (app *App) addLogger(name string, logger log.Log) log.Log {
 	lvl := zap.NewAtomicLevel()
 	loggers, err := decodeLoggers(app.Config.LOGGING)
@@ -573,7 +578,12 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	workers := app.Config.SMESHING.VerifyingOpts.Workers
 	minWorkers := min(app.Config.SMESHING.VerifyingOpts.MinWorkers, workers)
-	app.postVerifier = activation.NewOffloadingPostVerifier(verifier, workers, nipostValidatorLogger.Zap())
+	app.postVerifier = activation.NewOffloadingPostVerifier(
+		verifier,
+		workers,
+		nipostValidatorLogger.Zap(),
+		activation.PrioritizedIDs(app.edSgn.NodeID()),
+	)
 	app.postVerifier.Autoscale(minWorkers, workers)
 
 	validator := activation.NewValidator(
@@ -788,7 +798,7 @@ func (app *App) initServices(ctx context.Context) error {
 	app.certifier.Register(app.edSgn)
 
 	flog := app.addLogger(Fetcher, lg)
-	fetcher := fetch.NewFetch(app.cachedDB, msh, beaconProtocol, app.host,
+	fetcher := fetch.NewFetch(app.cachedDB, app.host,
 		fetch.WithContext(ctx),
 		fetch.WithConfig(app.Config.FETCH),
 		fetch.WithLogger(flog),
@@ -803,6 +813,8 @@ func (app *App) initServices(ctx context.Context) error {
 	syncerConf.HareDelayLayers = app.Config.Tortoise.Zdist
 	syncerConf.SyncCertDistance = app.Config.Tortoise.Hdist
 	syncerConf.Standalone = app.Config.Standalone
+
+	app.syncLogger = app.addLogger(SyncLogger, lg)
 	newSyncer := syncer.NewSyncer(
 		app.cachedDB,
 		app.clock,
@@ -813,7 +825,7 @@ func (app *App) initServices(ctx context.Context) error {
 		patrol,
 		app.certifier,
 		syncer.WithConfig(syncerConf),
-		syncer.WithLogger(app.addLogger(SyncLogger, lg)),
+		syncer.WithLogger(app.syncLogger),
 	)
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
 	beaconProtocol.SetSyncState(newSyncer)
@@ -892,7 +904,9 @@ func (app *App) initServices(ctx context.Context) error {
 		app.edSgn.NodeID(),
 		app.Config.POST,
 		app.addLogger(PostLogger, lg).Zap(),
-		app.cachedDB, goldenATXID,
+		app.cachedDB,
+		goldenATXID,
+		newSyncer,
 	)
 	if err != nil {
 		return fmt.Errorf("create post setup manager: %v", err)
@@ -904,7 +918,6 @@ func (app *App) initServices(ctx context.Context) error {
 		app.Config.POST,
 		app.Config.SMESHING.ProvingOpts,
 		postSetupMgr,
-		newSyncer,
 	)
 	if err != nil {
 		return fmt.Errorf("init post service: %w", err)
@@ -936,11 +949,10 @@ func (app *App) initServices(ctx context.Context) error {
 		app.cachedDB,
 		app.localDB,
 		app.host,
-		app.grpcPostService,
 		nipostBuilder,
 		app.clock,
 		newSyncer,
-		app.addLogger("atxBuilder", lg).Zap(),
+		app.addLogger(ATXBuilderLogger, lg).Zap(),
 		activation.WithContext(ctx),
 		activation.WithPoetConfig(app.Config.POET),
 		// TODO(dshulyak) makes no sense. how we ended using it?
@@ -1195,7 +1207,7 @@ func (app *App) listenToUpdates(ctx context.Context) {
 						if err := atxsync.Download(
 							ctx,
 							10*time.Second,
-							app.addLogger(SyncLogger, app.log).Zap(),
+							app.syncLogger.Zap(),
 							app.db,
 							app.fetcher,
 							set,
@@ -1587,7 +1599,9 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	if err != nil {
 		return fmt.Errorf("failed to load migrations: %w", err)
 	}
+	dbLog := app.addLogger(StateDbLogger, lg)
 	dbopts := []sql.Opt{
+		sql.WithLogger(dbLog.Zap()),
 		sql.WithMigrations(migrations),
 		sql.WithConnections(app.Config.DatabaseConnections),
 		sql.WithLatencyMetering(app.Config.DatabaseLatencyMetering),
@@ -1605,7 +1619,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		app.dbMetrics = dbmetrics.NewDBMetricsCollector(
 			ctx,
 			app.db,
-			app.addLogger(StateDbLogger, lg),
+			dbLog,
 			app.Config.DatabaseSizeMeteringInterval,
 		)
 	}
@@ -1635,6 +1649,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		return fmt.Errorf("load local migrations: %w", err)
 	}
 	localDB, err := localsql.Open("file:"+filepath.Join(dbPath, localDbFile),
+		sql.WithLogger(dbLog.Zap()),
 		sql.WithMigrations(migrations),
 		sql.WithMigration(localsql.New0001Migration(app.Config.SMESHING.Opts.DataDir)),
 		sql.WithMigration(localsql.New0002Migration(app.Config.SMESHING.Opts.DataDir)),
