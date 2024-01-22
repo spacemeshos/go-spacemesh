@@ -107,15 +107,13 @@ jobs:
         os:
           - ubuntu-latest
           - [self-hosted, linux, arm64]
-          - macos-12-large
+          # - macos-12-large
           - [self-hosted, macOS, arm64]
           - windows-latest
     steps:
       - name: Add OpenCL support - Ubuntu
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
-
-
       - name: disable Windows Defender - Windows
         if: ${{ matrix.os == 'windows-latest' }}
         run: |
@@ -144,7 +142,7 @@ jobs:
         os:
           - ubuntu-latest
           - [self-hosted, linux, arm64]
-          - macos-12-large
+          # - macos-12-large
           - [self-hosted, macOS, arm64]
           - windows-latest
     steps:
