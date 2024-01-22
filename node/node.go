@@ -659,6 +659,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.log.With().Info("tortoise will trace execution")
 		trtlopts = append(trtlopts, tortoise.WithTracer())
 	}
+	app.log.Info("initializing tortoise")
 	start := time.Now()
 	trtl, err := tortoise.Recover(
 		ctx,
@@ -1617,6 +1618,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 			app.Config.DatabaseSizeMeteringInterval,
 		)
 	}
+	app.log.Info("starting cache warmup")
 	start := time.Now()
 	data, err := atxsdata.Warm(
 		app.db,
