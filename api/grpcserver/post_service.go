@@ -130,7 +130,7 @@ func (s *PostService) Client(nodeId types.NodeID) (activation.PostClient, error)
 
 	client, ok := s.client[nodeId]
 	if !ok {
-		return nil, fmt.Errorf("post service not registered")
+		return nil, activation.ErrPostClientNotConnected
 	}
 
 	return client, nil

@@ -132,7 +132,10 @@ func (nb *NIPostBuilder) Proof(ctx context.Context, challenge []byte) (*types.Po
 				retries++
 				if retries%10 == 0 { // every 20 seconds inform user about lost connection (for remote post service)
 					// TODO(mafa): emit event warning user about lost connection
-					nb.log.Warn("post service not connected - waiting for reconnection", zap.Error(err))
+					nb.log.Warn("post service not connected - waiting for reconnection",
+						zap.Stringer("service id", nb.signer.NodeID()),
+						zap.Error(err),
+					)
 				}
 				continue
 			}
@@ -250,7 +253,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 			)
 		}
 
-		events.EmitPoetWaitProof(challenge.PublishEpoch, challenge.TargetEpoch(), time.Until(poetRoundEnd))
+		events.EmitPoetWaitProof(challenge.PublishEpoch, challenge.TargetEpoch(), poetRoundEnd)
 		poetProofRef, membership, err = nb.getBestProof(ctx, challenge.Hash(), challenge.PublishEpoch)
 		if err != nil {
 			return nil, &PoetSvcUnstableError{msg: "getBestProof failed", source: err}
