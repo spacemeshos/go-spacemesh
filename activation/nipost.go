@@ -145,7 +145,10 @@ func (nb *NIPostBuilder) Proof(ctx context.Context, challenge []byte) (*types.Po
 				retries++
 				if retries%10 == 0 { // every 20 seconds inform user about lost connection (for remote post service)
 					// TODO(mafa): emit event warning user about lost connection
-					nb.log.Warn("post service not connected - waiting for reconnection", zap.Error(err))
+					nb.log.Warn("post service not connected - waiting for reconnection",
+						zap.Stringer("service id", nb.signer.NodeID()),
+						zap.Error(err),
+					)
 				}
 				continue
 			}

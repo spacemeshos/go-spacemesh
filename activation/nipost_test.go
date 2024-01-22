@@ -8,13 +8,19 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-scale/tester"
+	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
+	"go.uber.org/zap/zaptest/observer"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 )
 
 func defaultPoetServiceMock(ctrl *gomock.Controller, id []byte, address string) *MockpoetClient {
@@ -41,7 +47,227 @@ func defaultLayerClockMock(ctrl *gomock.Controller) *MocklayerClock {
 	return mclock
 }
 
-func TestNIPostBuilderWithMocks(t *testing.T) {
+type testNIPostBuilder struct {
+	*NIPostBuilder
+
+	sig          *signing.EdSigner
+	observedLogs *observer.ObservedLogs
+	eventSub     <-chan events.UserEvent
+
+	mDb          *localsql.Database
+	mLogger      *zap.Logger
+	mPoetDb      *MockpoetDbAPI
+	mClock       *MocklayerClock
+	mPostService *MockpostService
+	mPostClient  *MockPostClient
+}
+
+func newTestNIPostBuilder(tb testing.TB) *testNIPostBuilder {
+	sig, err := signing.NewEdSigner()
+	require.NoError(tb, err)
+
+	observer, observedLogs := observer.New(zapcore.WarnLevel)
+	logger := zap.New(observer)
+
+	events.InitializeReporter()
+	sub, _, err := events.SubscribeUserEvents(events.WithBuffer(10))
+	require.NoError(tb, err)
+	tb.Cleanup(func() {
+		sub.Close()
+		_, ok := <-sub.Out()
+		require.False(tb, ok, "received unexpected event")
+	})
+
+	ctrl := gomock.NewController(tb)
+	tnb := &testNIPostBuilder{
+		sig:          sig,
+		observedLogs: observedLogs,
+		eventSub:     sub.Out(),
+
+		mPoetDb:      NewMockpoetDbAPI(ctrl),
+		mPostService: NewMockpostService(ctrl),
+		mPostClient:  NewMockPostClient(ctrl),
+		mLogger:      logger,
+		mClock:       defaultLayerClockMock(ctrl),
+	}
+
+	nb, err := NewNIPostBuilder(
+		tnb.mPoetDb,
+		tnb.mPostService,
+		[]string{},
+		tb.TempDir(),
+		tnb.mLogger,
+		tnb.sig,
+		PoetConfig{},
+		tnb.mClock,
+	)
+	require.NoError(tb, err)
+	tnb.NIPostBuilder = nb
+	return tnb
+}
+
+func Test_NIPost_PostClientHandling(t *testing.T) {
+	t.Run("connect then complete", func(t *testing.T) {
+		// post client connects, starts post, then completes successfully
+		tnb := newTestNIPostBuilder(t)
+
+		tnb.mPostService.EXPECT().Client(tnb.sig.NodeID()).Return(tnb.mPostClient, nil)
+		tnb.mPostClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(&types.Post{}, &types.PostInfo{}, nil)
+
+		nipost, nipostInfo, err := tnb.Proof(context.Background(), shared.ZeroChallenge)
+		require.NoError(t, err)
+		require.NotNil(t, nipost)
+		require.NotNil(t, nipostInfo)
+
+		select {
+		case e := <-tnb.eventSub:
+			event := e.Event.GetPostStart()
+			require.NotNil(t, event, "wrong event type")
+			require.EqualValues(t, shared.ZeroChallenge, event.Challenge)
+		case <-time.After(5 * time.Second):
+			require.Fail(t, "timeout waiting for event")
+		}
+
+		select {
+		case e := <-tnb.eventSub:
+			event := e.Event.GetPostComplete()
+			require.NotNil(t, event, "wrong event type")
+			require.EqualValues(t, shared.ZeroChallenge, event.Challenge)
+			require.Equal(t, false, e.Event.Failure)
+			require.Equal(t, "Node finished PoST execution using PoET challenge.", e.Event.Help)
+		case <-time.After(5 * time.Second):
+			require.Fail(t, "timeout waiting for event")
+		}
+	})
+
+	t.Run("connect then error", func(t *testing.T) {
+		// post client connects, starts post, then fails with an error that is not a disconnect
+		tnb := newTestNIPostBuilder(t)
+		expectedErr := errors.New("some error")
+
+		tnb.mPostService.EXPECT().Client(tnb.sig.NodeID()).Return(tnb.mPostClient, nil)
+		tnb.mPostClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(nil, nil, expectedErr)
+
+		nipost, nipostInfo, err := tnb.Proof(context.Background(), shared.ZeroChallenge)
+		require.ErrorIs(t, err, expectedErr)
+		require.Nil(t, nipost)
+		require.Nil(t, nipostInfo)
+
+		select {
+		case e := <-tnb.eventSub:
+			event := e.Event.GetPostStart()
+			require.NotNil(t, event, "wrong event type")
+			require.EqualValues(t, shared.ZeroChallenge, event.Challenge)
+		case <-time.After(5 * time.Second):
+			require.Fail(t, "timeout waiting for event")
+		}
+
+		select {
+		case e := <-tnb.eventSub:
+			event := e.Event.GetPostComplete()
+			require.NotNil(t, event, "wrong event type")
+			require.Equal(t, true, e.Event.Failure)
+			require.Equal(t, "Node failed PoST execution.", e.Event.Help)
+		case <-time.After(5 * time.Second):
+			require.Fail(t, "timeout waiting for event")
+		}
+	})
+
+	t.Run("connect, disconnect, reconnect then complete", func(t *testing.T) {
+		// post client connects, starts post, disconnects in between but completes successfully
+		tnb := newTestNIPostBuilder(t)
+
+		tnb.mPostService.EXPECT().Client(tnb.sig.NodeID()).Return(tnb.mPostClient, nil)
+		tnb.mPostClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(nil, nil, ErrPostClientClosed)
+		tnb.mPostService.EXPECT().Client(tnb.sig.NodeID()).Return(tnb.mPostClient, nil)
+		tnb.mPostClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(&types.Post{}, &types.PostInfo{}, nil)
+
+		nipost, nipostInfo, err := tnb.Proof(context.Background(), shared.ZeroChallenge)
+		require.NoError(t, err)
+		require.NotNil(t, nipost)
+		require.NotNil(t, nipostInfo)
+
+		select {
+		case e := <-tnb.eventSub:
+			event := e.Event.GetPostStart()
+			require.NotNil(t, event, "wrong event type")
+			require.EqualValues(t, shared.ZeroChallenge, event.Challenge)
+		case <-time.After(5 * time.Second):
+			require.Fail(t, "timeout waiting for event")
+		}
+
+		select {
+		case e := <-tnb.eventSub:
+			event := e.Event.GetPostComplete()
+			require.NotNil(t, event, "wrong event type")
+			require.EqualValues(t, shared.ZeroChallenge, event.Challenge)
+			require.Equal(t, false, e.Event.Failure)
+			require.Equal(t, "Node finished PoST execution using PoET challenge.", e.Event.Help)
+		case <-time.After(5 * time.Second):
+			require.Fail(t, "timeout waiting for event")
+		}
+	})
+
+	t.Run("connect, disconnect, reconnect then error", func(t *testing.T) {
+		// post client connects, starts post, disconnects in between and then fails to complete
+		tnb := newTestNIPostBuilder(t)
+
+		tnb.mPostService.EXPECT().Client(tnb.sig.NodeID()).Return(tnb.mPostClient, nil)
+		tnb.mPostClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(nil, nil, ErrPostClientClosed).Times(1)
+		tnb.mPostService.EXPECT().Client(tnb.sig.NodeID()).Return(tnb.mPostClient, nil)
+
+		expectedErr := errors.New("some error")
+		tnb.mPostClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(nil, nil, expectedErr)
+
+		nipost, nipostInfo, err := tnb.Proof(context.Background(), shared.ZeroChallenge)
+		require.ErrorIs(t, err, expectedErr)
+		require.Nil(t, nipost)
+		require.Nil(t, nipostInfo)
+
+		select {
+		case e := <-tnb.eventSub:
+			event := e.Event.GetPostStart()
+			require.NotNil(t, event, "wrong event type")
+			require.EqualValues(t, shared.ZeroChallenge, event.Challenge)
+		case <-time.After(5 * time.Second):
+			require.Fail(t, "timeout waiting for event")
+		}
+
+		select {
+		case e := <-tnb.eventSub:
+			event := e.Event.GetPostComplete()
+			require.NotNil(t, event, "wrong event type")
+			require.Equal(t, true, e.Event.Failure)
+			require.Equal(t, "Node failed PoST execution.", e.Event.Help)
+		case <-time.After(5 * time.Second):
+			require.Fail(t, "timeout waiting for event")
+		}
+	})
+
+	t.Run("repeated connection failure", func(t *testing.T) {
+		tnb := newTestNIPostBuilder(t)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		tnb.mPostService.EXPECT().Client(tnb.sig.NodeID()).Return(nil, ErrPostClientNotConnected).Times(10)
+		tnb.mPostService.EXPECT().Client(tnb.sig.NodeID()).DoAndReturn(
+			func(types.NodeID) (PostClient, error) {
+				cancel()
+				return nil, ErrPostClientNotConnected
+			})
+
+		nipost, nipostInfo, err := tnb.Proof(ctx, shared.ZeroChallenge)
+		require.ErrorIs(t, err, context.Canceled)
+		require.Nil(t, nipost)
+		require.Nil(t, nipostInfo)
+
+		require.Equal(t, 1, tnb.observedLogs.Len(), "expected 1 log message")
+		require.Equal(t, zapcore.WarnLevel, tnb.observedLogs.All()[0].Level)
+		require.Equal(t, "post service not connected - waiting for reconnection", tnb.observedLogs.All()[0].Message)
+		require.Equal(t, tnb.sig.NodeID().String(), tnb.observedLogs.All()[0].ContextMap()["service id"])
+	})
+}
+
+func Test_NIPostBuilder_WithMocks(t *testing.T) {
 	t.Parallel()
 
 	challenge := types.NIPostChallenge{
