@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
+	"sync/atomic"
 
 	"golang.org/x/sync/errgroup"
 
@@ -67,8 +67,7 @@ func (f *Fetch) getHashes(
 	pendingMetric.Add(float64(len(hashes)))
 
 	var eg errgroup.Group
-	var errs error
-	var mu sync.Mutex
+	var failed atomic.Uint64
 	for i, hash := range hashes {
 		if err := options.limiter.Acquire(ctx, 1); err != nil {
 			pendingMetric.Add(float64(i - len(hashes)))
@@ -98,18 +97,23 @@ func (f *Fetch) getHashes(
 				options.limiter.Release(1)
 				pendingMetric.Add(-1)
 				if p.err != nil {
-					err := fmt.Errorf("hint: %v, hash: %v, err: %w", hint, h.String(), p.err)
-					mu.Lock()
-					errs = errors.Join(errs, err)
-					mu.Unlock()
+					f.logger.Debug("failed to get hash",
+						log.String("hint", string(hint)),
+						log.Stringer("hash", h),
+						log.Err(p.err),
+					)
+					failed.Add(1)
 				}
 				return nil
 			}
 		})
 	}
 
-	err := eg.Wait()
-	return errors.Join(errs, err)
+	eg.Wait()
+	if failed.Load() > 0 {
+		return fmt.Errorf("failed to fetch %d hashes out of %d", failed.Load(), len(hashes))
+	}
+	return nil
 }
 
 // GetActiveSet downloads activeset.
