@@ -20,7 +20,6 @@ import (
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -254,17 +253,6 @@ func TestSpacemeshApp_Cmd(t *testing.T) {
 	r.Error(err)
 	r.Equal(expected, err.Error())
 	r.Equal(expected2, str)
-
-	// Test a legal flag
-	c = cmdWithRun(func(c *cobra.Command, args []string) {
-		r.NoError(cmd.EnsureCLIFlags(c, app.Config))
-	})
-
-	str, err = testArgs(context.Background(), c, "--log-encoder", "json")
-
-	r.NoError(err)
-	r.Empty(str)
-	r.Equal(config.JSONLogEncoder, app.Config.LOGGING.Encoder)
 }
 
 func marshalProto(t *testing.T, msg proto.Message) []byte {
@@ -291,12 +279,9 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	r := require.New(t)
 	app := New(WithLog(logtest.New(t)))
 
-	path := t.TempDir()
-
 	run := func(c *cobra.Command, args []string) {
 		app.Config.API.PublicListener = listener
-		r.NoError(cmd.EnsureCLIFlags(c, app.Config))
-		app.Config.DataDirParent = path
+		app.Config.DataDirParent = t.TempDir()
 		app.startAPIServices(context.Background())
 	}
 	defer app.stopServices(context.Background())
@@ -314,12 +299,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	events.CloseEventReporter()
 
 	// Test starting the server from the command line
-	str, err := testArgs(
-		context.Background(),
-		cmdWithRun(run),
-		"--grpc-public-listener",
-		listener,
-	)
+	str, err := testArgs(context.Background(), cmdWithRun(run))
 	r.Empty(str)
 	r.NoError(err)
 	r.Equal(listener, app.Config.API.PublicListener)
@@ -352,9 +332,8 @@ func TestSpacemeshApp_JsonServiceNotRunning(t *testing.T) {
 
 	// Make sure the service is not running by default
 	run := func(c *cobra.Command, args []string) {
-		r.NoError(cmd.EnsureCLIFlags(c, app.Config))
 		app.Config.DataDirParent = t.TempDir()
-		app.startAPIServices(context.Background())
+		require.NoError(t, app.startAPIServices(context.Background()))
 	}
 
 	str, err := testArgs(context.Background(), cmdWithRun(run))
@@ -362,18 +341,7 @@ func TestSpacemeshApp_JsonServiceNotRunning(t *testing.T) {
 	r.NoError(err)
 	defer app.stopServices(context.Background())
 
-	// Try talking to the server
-	const message = "nihao shijie"
-
-	// generate request payload (api input params)
-	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
-
-	// We expect this one to fail
-	url := fmt.Sprintf("http://%s/%s", app.Config.API.JSONListener, "v1/node/echo")
-	_, err = http.Post(url, "application/json", bytes.NewReader(payload))
-	r.Error(err)
-
-	events.CloseEventReporter()
+	require.Nil(t, app.jsonAPIServer)
 }
 
 func TestSpacemeshApp_JsonService(t *testing.T) {
@@ -381,39 +349,31 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	app := New(WithLog(logtest.New(t)))
 	const message = "nihao shijie"
 	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
+	listener := "127.0.0.1:0"
 
 	// Make sure the service is not running by default
 	run := func(c *cobra.Command, args []string) {
 		app.Config.API.PrivateServices = nil
-		r.NoError(cmd.EnsureCLIFlags(c, app.Config))
+		app.Config.API.JSONListener = listener
 		app.Config.DataDirParent = t.TempDir()
 		app.startAPIServices(context.Background())
 	}
 
 	// Test starting the JSON server from the command line
 	// uses Cmd.Run from above
-	listener := "127.0.0.1:1234"
-	str, err := testArgs(
-		context.Background(),
-		cmdWithRun(run),
-		"--grpc-json-listener",
-		listener,
-	)
+
+	str, err := testArgs(context.Background(), cmdWithRun(run))
 	r.Empty(str)
 	r.NoError(err)
 	defer app.stopServices(context.Background())
-	r.Equal(listener, app.Config.API.JSONListener)
 
 	var (
 		respBody   []byte
 		respStatus int
 	)
+	endpoint := fmt.Sprintf("http://%s/v1/node/echo", app.jsonAPIServer.BoundAddress)
 	require.Eventually(t, func() bool {
-		respBody, respStatus = callEndpoint(
-			t,
-			fmt.Sprintf("http://%s/v1/node/echo", app.Config.API.JSONListener),
-			payload,
-		)
+		respBody, respStatus = callEndpoint(t, endpoint, payload)
 		return respStatus == http.StatusOK
 	}, 2*time.Second, 100*time.Millisecond)
 	var msg pb.EchoResponse
@@ -431,9 +391,6 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		logtest.New(t, zap.ErrorLevel),
 		events.EventHook(),
 	) // errlog is used to simulate errors in the app
-
-	// Use a unique port
-	port := 1240
 
 	app := New(WithLog(logger))
 	app.Config = getTestDefaultConfig(t)
@@ -456,8 +413,6 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	defer cancel()
 
 	run := func(c *cobra.Command, args []string) {
-		require.NoError(t, cmd.EnsureCLIFlags(c, app.Config))
-
 		// Give the error channel a buffer
 		events.CloseEventReporter()
 		events.InitializeReporter()
@@ -466,6 +421,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		app.Config.Sync.Interval = time.Second
 		app.Config.LayerDuration = 2 * time.Second
 		app.Config.DataDirParent = t.TempDir()
+		app.Config.API.PublicListener = "localhost:0"
 
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
@@ -477,20 +433,16 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	// If there's an error in the args, it will return immediately.
 	var eg errgroup.Group
 	eg.Go(func() error {
-		str, err := testArgs(
-			ctx,
-			cmdWithRun(run),
-			"--grpc-public-listener",
-			fmt.Sprintf("localhost:%d", port),
-		)
+		str, err := testArgs(ctx, cmdWithRun(run))
 		assert.Empty(t, str)
 		assert.NoError(t, err)
 		return nil
 	})
 
+	<-app.started
 	conn, err := grpc.DialContext(
 		ctx,
-		fmt.Sprintf("localhost:%d", port),
+		app.grpcPublicServer.BoundAddress,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
@@ -594,7 +546,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		app.Config.HARE3.PreroundDelay = 100 * time.Millisecond
 		app.Config.HARE3.RoundDuration = 100 * time.Millisecond
 
-		app.Config.Genesis = &config.GenesisConfig{
+		app.Config.Genesis = config.GenesisConfig{
 			GenesisTime: time.Now().Add(20 * time.Second).Format(time.RFC3339),
 			Accounts: map[string]uint64{
 				address.String(): 100_000_000,
@@ -698,77 +650,62 @@ func TestConfig_Preset(t *testing.T) {
 		preset, err := presets.Get(name)
 		require.NoError(t, err)
 
+		conf := config.Config{}
 		c := &cobra.Command{}
-		cmd.AddCommands(c)
+		cmd.AddFlags(c, &conf)
 
-		viper.Set("preset", name)
-		t.Cleanup(viper.Reset)
-		t.Cleanup(cmd.ResetConfig)
-		conf, err := loadConfig(c)
-		require.NoError(t, err)
-		require.Equal(t, preset, *conf)
+		require.NoError(t, loadConfig(&conf, name, ""))
+		require.Equal(t, preset, conf)
 	})
 
 	t.Run("PresetOverwrittenByFlags", func(t *testing.T) {
 		preset, err := presets.Get(name)
 		require.NoError(t, err)
 
+		conf := config.Config{}
 		c := &cobra.Command{}
-		cmd.AddCommands(c)
-		const lowPeers = 1234
-		require.NoError(t, c.ParseFlags([]string{"--low-peers=" + strconv.Itoa(lowPeers)}))
+		cmd.AddFlags(c, &conf)
 
-		viper.Set("preset", name)
-		t.Cleanup(viper.Reset)
-		t.Cleanup(cmd.ResetConfig)
-		conf, err := loadConfig(c)
-		require.NoError(t, err)
+		const lowPeers = 1234
+		require.NoError(t, loadConfig(&conf, name, ""))
+		require.NoError(t, c.ParseFlags([]string{"--low-peers=" + strconv.Itoa(lowPeers)}))
 		preset.P2P.LowPeers = lowPeers
-		require.Equal(t, preset, *conf)
+		require.Equal(t, preset, conf)
 	})
 
 	t.Run("PresetOverWrittenByConfigFile", func(t *testing.T) {
 		preset, err := presets.Get(name)
 		require.NoError(t, err)
 
+		conf := config.Config{}
 		c := &cobra.Command{}
-		cmd.AddCommands(c)
-		const lowPeers = 1234
+		cmd.AddFlags(c, &conf)
 
+		const lowPeers = 1234
 		content := fmt.Sprintf(`{"p2p": {"low-peers": %d}}`, lowPeers)
 		path := filepath.Join(t.TempDir(), "config.json")
 		require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
-		require.NoError(t, c.ParseFlags([]string{"--config=" + path}))
 
-		viper.Set("preset", name)
-		t.Cleanup(viper.Reset)
-		t.Cleanup(cmd.ResetConfig)
-		conf, err := loadConfig(c)
-		require.NoError(t, err)
+		require.NoError(t, loadConfig(&conf, name, path))
 		preset.P2P.LowPeers = lowPeers
-		preset.ConfigFile = path
-		require.Equal(t, preset, *conf)
+		require.Equal(t, preset, conf)
 	})
 
 	t.Run("LoadedFromConfigFile", func(t *testing.T) {
 		preset, err := presets.Get(name)
 		require.NoError(t, err)
 
+		conf := config.Config{}
 		c := &cobra.Command{}
-		cmd.AddCommands(c)
+		cmd.AddFlags(c, &conf)
 
 		content := fmt.Sprintf(`{"preset": "%s"}`, name)
 		path := filepath.Join(t.TempDir(), "config.json")
 		require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
-		require.NoError(t, c.ParseFlags([]string{"--config=" + path}))
 
-		t.Cleanup(viper.Reset)
-		t.Cleanup(cmd.ResetConfig)
-
-		conf, err := loadConfig(c)
+		require.NoError(t, loadConfig(&conf, name, path))
 		require.NoError(t, err)
-		preset.ConfigFile = path
-		require.Equal(t, preset, *conf)
+		require.Equal(t, preset, conf)
 	})
 }
 
@@ -834,78 +771,60 @@ func TestConfig_CustomTypes(t *testing.T) {
 			mainnet := config.MainnetConfig()
 			require.Nil(t, mainnet.SMESHING.Opts.ProviderID.Value())
 
+			conf := config.MainnetConfig()
 			c := &cobra.Command{}
-			cmd.AddCommands(c)
+			cmd.AddFlags(c, &conf)
+
+			require.NoError(t, loadConfig(&conf, "", ""))
 			require.NoError(t, c.ParseFlags(strings.Fields(tc.cli)))
-
-			t.Cleanup(viper.Reset)
-			t.Cleanup(cmd.ResetConfig)
-
-			conf, err := loadConfig(c)
-			require.NoError(t, err)
 			tc.updatePreset(t, &mainnet)
-			require.Equal(t, mainnet, *conf)
+			require.Equal(t, mainnet, conf)
 		})
 
 		t.Run(fmt.Sprintf("%s_ConfigFile", tc.name), func(t *testing.T) {
 			mainnet := config.MainnetConfig()
 			require.Nil(t, mainnet.SMESHING.Opts.ProviderID.Value())
 
+			conf := config.MainnetConfig()
 			c := &cobra.Command{}
-			cmd.AddCommands(c)
+			cmd.AddFlags(c, &conf)
 
 			path := filepath.Join(t.TempDir(), "config.json")
 			require.NoError(t, os.WriteFile(path, []byte(tc.config), 0o600))
-			require.NoError(t, c.ParseFlags([]string{"--config=" + path}))
 
-			t.Cleanup(viper.Reset)
-			t.Cleanup(cmd.ResetConfig)
-
-			conf, err := loadConfig(c)
-			require.NoError(t, err)
+			require.NoError(t, loadConfig(&conf, "", path))
 			tc.updatePreset(t, &mainnet)
-			mainnet.ConfigFile = path
-			require.Equal(t, mainnet, *conf)
+			require.Equal(t, mainnet, conf)
 		})
 
 		t.Run(fmt.Sprintf("%s_PresetOverwrittenByFlags", tc.name), func(t *testing.T) {
 			preset, err := presets.Get(name)
 			require.NoError(t, err)
 
+			conf := config.Config{}
 			c := &cobra.Command{}
-			cmd.AddCommands(c)
+			cmd.AddFlags(c, &conf)
+
+			require.NoError(t, loadConfig(&conf, name, ""))
 			require.NoError(t, c.ParseFlags(strings.Fields(tc.cli)))
-
-			viper.Set("preset", name)
-			t.Cleanup(viper.Reset)
-			t.Cleanup(cmd.ResetConfig)
-
-			conf, err := loadConfig(c)
-			require.NoError(t, err)
 			tc.updatePreset(t, &preset)
-			require.Equal(t, preset, *conf)
+			require.Equal(t, preset, conf)
 		})
 
 		t.Run(fmt.Sprintf("%s_PresetOverWrittenByConfigFile", tc.name), func(t *testing.T) {
 			preset, err := presets.Get(name)
 			require.NoError(t, err)
 
+			conf := config.Config{}
 			c := &cobra.Command{}
-			cmd.AddCommands(c)
+			cmd.AddFlags(c, &conf)
 
 			path := filepath.Join(t.TempDir(), "config.json")
 			require.NoError(t, os.WriteFile(path, []byte(tc.config), 0o600))
-			require.NoError(t, c.ParseFlags([]string{"--config=" + path}))
 
-			viper.Set("preset", name)
-			t.Cleanup(viper.Reset)
-			t.Cleanup(cmd.ResetConfig)
-
-			conf, err := loadConfig(c)
-			require.NoError(t, err)
+			require.NoError(t, loadConfig(&conf, name, path))
 			tc.updatePreset(t, &preset)
-			preset.ConfigFile = path
-			require.Equal(t, preset, *conf)
+			require.Equal(t, preset, conf)
 		})
 	}
 }
@@ -935,37 +854,23 @@ func TestConfig_PostProviderID_InvalidValues(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(fmt.Sprintf("%s_Flags", tc.name), func(t *testing.T) {
+			conf := config.Config{}
 			c := &cobra.Command{}
-			cmd.AddCommands(c)
-			t.Cleanup(cmd.ResetConfig)
+			cmd.AddFlags(c, &conf)
 
 			err := c.ParseFlags([]string{fmt.Sprintf("--smeshing-opts-provider=%s", tc.cliValue)})
 			require.ErrorContains(t, err, "failed to parse PoST Provider ID")
 		})
 
 		t.Run(fmt.Sprintf("%s_ConfigFile", tc.name), func(t *testing.T) {
+			conf := config.Config{}
 			c := &cobra.Command{}
-			cmd.AddCommands(c)
+			cmd.AddFlags(c, &conf)
 
 			path := filepath.Join(t.TempDir(), "config.json")
-			require.NoError(
-				t,
-				os.WriteFile(
-					path,
-					[]byte(
-						fmt.Sprintf(
-							`{"smeshing": {"smeshing-opts": {"smeshing-opts-provider": %s}}}`,
-							tc.configValue,
-						),
-					),
-					0o600,
-				),
-			)
-			require.NoError(t, c.ParseFlags([]string{"--config=" + path}))
-
-			t.Cleanup(cmd.ResetConfig)
-
-			_, err := loadConfig(c)
+			cfg := fmt.Sprintf(`{"smeshing": {"smeshing-opts": {"smeshing-opts-provider": %s}}}`, tc.configValue)
+			require.NoError(t, os.WriteFile(path, []byte(cfg), 0o600))
+			err := loadConfig(&conf, "", path)
 			require.ErrorContains(t, err, "invalid provider ID value")
 		})
 	}
@@ -973,66 +878,59 @@ func TestConfig_PostProviderID_InvalidValues(t *testing.T) {
 
 func TestConfig_Load(t *testing.T) {
 	t.Run("invalid fails to load", func(t *testing.T) {
+		conf := config.Config{}
 		c := &cobra.Command{}
-		cmd.AddCommands(c)
+		cmd.AddFlags(c, &conf)
 
 		path := filepath.Join(t.TempDir(), "config.json")
 		require.NoError(t, os.WriteFile(path, []byte("}"), 0o600))
-		require.NoError(t, c.ParseFlags([]string{"--config=" + path}))
 
-		t.Cleanup(viper.Reset)
-		t.Cleanup(cmd.ResetConfig)
-
-		_, err := loadConfig(c)
+		err := loadConfig(&conf, "", path)
 		require.ErrorContains(t, err, path)
 	})
 	t.Run("missing default doesn't fail", func(t *testing.T) {
+		conf := config.Config{}
 		c := &cobra.Command{}
-		cmd.AddCommands(c)
+		cmd.AddFlags(c, &conf)
 		require.NoError(t, c.ParseFlags([]string{}))
 
-		t.Cleanup(viper.Reset)
-		t.Cleanup(cmd.ResetConfig)
-
-		_, err := loadConfig(c)
-		require.NoError(t, err)
+		require.NoError(t, loadConfig(&conf, "", ""))
 	})
 }
 
 func TestConfig_GenesisAccounts(t *testing.T) {
-	t.Run("OverwriteDefaults", func(t *testing.T) {
-		c := &cobra.Command{}
-		cmd.AddCommands(c)
-		t.Cleanup(cmd.ResetConfig)
+	conf := config.Config{
+		Genesis: config.GenesisConfig{
+			Accounts: make(map[string]uint64),
+		},
+	}
+	c := &cobra.Command{}
+	cmd.AddFlags(c, &conf)
 
-		const value = 100
-		keys := []string{"0x03", "0x04"}
-		args := []string{}
-		for _, key := range keys {
-			args = append(args, fmt.Sprintf("-a %s=%d", key, value))
-		}
-		require.NoError(t, c.ParseFlags(args))
+	const value = 100
+	keys := []string{"0x03", "0x04"}
+	args := []string{}
+	for _, key := range keys {
+		args = append(args, fmt.Sprintf("-a %s=%d", key, value))
+	}
 
-		conf, err := loadConfig(c)
-		require.NoError(t, err)
-		for _, key := range keys {
-			require.EqualValues(t, conf.Genesis.Accounts[key], value)
-		}
-	})
+	require.NoError(t, loadConfig(&conf, "", ""))
+	require.NoError(t, c.ParseFlags(args))
+	for _, key := range keys {
+		require.EqualValues(t, value, conf.Genesis.Accounts[key])
+	}
 }
 
 func TestHRP(t *testing.T) {
+	conf := config.Config{}
 	c := &cobra.Command{}
-	cmd.AddCommands(c)
-	t.Cleanup(cmd.ResetConfig)
+	cmd.AddFlags(c, &conf)
 
 	data := `{"main": {"network-hrp": "TEST"}}`
 	cfg := filepath.Join(t.TempDir(), "config.json")
 	require.NoError(t, os.WriteFile(cfg, []byte(data), 0o600))
-	require.NoError(t, c.ParseFlags([]string{"-c=" + cfg}))
-	conf, err := loadConfig(c)
-	require.NoError(t, err)
-	app := New(WithConfig(conf))
+	require.NoError(t, loadConfig(&conf, "", cfg))
+	app := New(WithConfig(&conf))
 	require.NotNil(t, app)
 	require.Equal(t, "TEST", types.NetworkHRP())
 }
@@ -1051,7 +949,7 @@ func TestGenesisConfig(t *testing.T) {
 			t,
 			existing.LoadFromFile(filepath.Join(app.Config.DataDir(), genesisFileName)),
 		)
-		require.Empty(t, existing.Diff(app.Config.Genesis))
+		require.Empty(t, existing.Diff(&app.Config.Genesis))
 	})
 
 	t.Run("no error if no diff", func(t *testing.T) {
@@ -1287,8 +1185,7 @@ func TestEmptyExtraData(t *testing.T) {
 }
 
 func getTestDefaultConfig(tb testing.TB) *config.Config {
-	cfg, err := LoadConfigFromFile()
-	require.NoError(tb, err, "cannot load config from file")
+	cfg := config.MainnetConfig()
 
 	// is set to 0 to make sync start immediately when node starts
 	cfg.P2P.MinPeers = 0
@@ -1332,5 +1229,5 @@ func getTestDefaultConfig(tb testing.TB) *config.Config {
 
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 
-	return cfg
+	return &cfg
 }

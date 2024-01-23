@@ -5,7 +5,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
@@ -13,15 +12,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/node/flags"
 )
 
-var cfg = config.MainnetConfig()
+func AddFlags(cmd *cobra.Command, cfg *config.Config) (configPath *string) {
+	// A workaround to keep the original config intact to avoid
+	// overwriting it with the default values.
+	original := *cfg
+	defer func() { *cfg = original }()
 
-func ResetConfig() {
-	cfg = config.MainnetConfig()
-}
-
-// AddCommands adds cobra commands to the app.
-func AddCommands(cmd *cobra.Command) {
-	cmd.PersistentFlags().StringP("preset", "p", "",
+	configPath = cmd.PersistentFlags().StringP("config", "c", "", "load configuration from file")
+	cmd.PersistentFlags().StringVarP(&cfg.Preset, "preset", "p", "",
 		fmt.Sprintf("preset overwrites default values of the config. options %s", presets.Options()))
 
 	/** ======================== Checkpoint Flags ========================== **/
@@ -31,8 +29,6 @@ func AddCommands(cmd *cobra.Command) {
 		"recovery-layer", cfg.Recovery.Restore, "restart the mesh with the checkpoint file at this layer")
 
 	/** ======================== BaseConfig Flags ========================== **/
-	cmd.PersistentFlags().StringVarP(&cfg.BaseConfig.ConfigFile,
-		"config", "c", cfg.BaseConfig.ConfigFile, "Set Load configuration from file")
 	cmd.PersistentFlags().StringVarP(&cfg.BaseConfig.DataDirParent, "data-folder", "d",
 		cfg.BaseConfig.DataDirParent, "Specify data directory for spacemesh")
 	cmd.PersistentFlags().StringVar(&cfg.BaseConfig.FileLock,
@@ -75,7 +71,7 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVar(&cfg.OptFilterThreshold, "optimistic-filtering-threshold",
 		cfg.OptFilterThreshold, "threshold for optimistic filtering in percentage")
 
-	cmd.PersistentFlags().VarP(flags.NewStringToUint64Value(map[string]uint64{}), "accounts", "a",
+	cmd.PersistentFlags().VarP(flags.NewStringToUint64Value(cfg.Genesis.Accounts), "accounts", "a",
 		"List of pre-funded accounts")
 
 	cmd.PersistentFlags().IntVar(&cfg.DatabaseConnections, "db-connections",
@@ -190,7 +186,7 @@ func AddCommands(cmd *cobra.Command) {
 
 	cmd.PersistentFlags().IntVar(&cfg.Beacon.Kappa, "beacon-kappa",
 		cfg.Beacon.Kappa, "Security parameter (for calculating ATX threshold)")
-	cmd.PersistentFlags().Var((*types.RatVar)(cfg.Beacon.Q), "beacon-q",
+	cmd.PersistentFlags().Var((*types.RatVar)(&cfg.Beacon.Q), "beacon-q",
 		"Ratio of dishonest spacetime (for calculating ATX threshold). It should be a string representing a rational number.")
 	cmd.PersistentFlags().Uint32Var((*uint32)(&cfg.Beacon.RoundsNumber), "beacon-rounds-number",
 		uint32(cfg.Beacon.RoundsNumber), "Amount of rounds in every epoch")
@@ -204,7 +200,7 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.Beacon.VotingRoundDuration, "Voting round duration in milliseconds")
 	cmd.PersistentFlags().DurationVar(&cfg.Beacon.WeakCoinRoundDuration, "beacon-weak-coin-round-duration",
 		cfg.Beacon.WeakCoinRoundDuration, "Weak coin round duration in milliseconds")
-	cmd.PersistentFlags().Var((*types.RatVar)(cfg.Beacon.Theta), "beacon-theta",
+	cmd.PersistentFlags().Var((*types.RatVar)(&cfg.Beacon.Theta), "beacon-theta",
 		"Ratio of votes for reaching consensus")
 	cmd.PersistentFlags().Uint32Var(&cfg.Beacon.VotesLimit, "beacon-votes-limit",
 		cfg.Beacon.VotesLimit, "Maximum allowed number of votes to be sent")
@@ -326,10 +322,9 @@ func AddCommands(cmd *cobra.Command) {
 	/**========================  Deprecated flags ========================== **/
 	cmd.PersistentFlags().Var(flags.NewDeprecatedFlag(
 		config.DeprecatedPoETServers{}), "poet-server", "deprecated, use poet-servers instead")
-
-	// Bind Flags to config
-	err := viper.BindPFlags(cmd.PersistentFlags())
-	if err != nil {
-		fmt.Println("an error has occurred while binding flags:", err)
+	if err := cmd.PersistentFlags().MarkHidden("poet-server"); err != nil {
+		panic(err) // unreachable
 	}
+
+	return configPath
 }

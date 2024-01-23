@@ -125,25 +125,31 @@ const (
 )
 
 func GetCommand() *cobra.Command {
+	conf := config.MainnetConfig()
+	var configPath *string
 	c := &cobra.Command{
 		Use:   "node",
 		Short: "start node",
 		Run: func(c *cobra.Command, args []string) {
-			conf, err := loadConfig(c)
-			if err != nil {
+			preset := conf.Preset // might be set via CLI flag
+			if err := loadConfig(&conf, preset, *configPath); err != nil {
 				log.With().Fatal("failed to initialize config", log.Err(err))
+			}
+			// apply CLI args to config
+			if err := c.ParseFlags(args); err != nil {
+				fmt.Println("an error has occurred while parsing flags:", err)
 			}
 
 			if conf.LOGGING.Encoder == config.JSONLogEncoder {
 				log.JSONLog(true)
 			}
 
-			if cmd.NoMainNet && onMainNet(conf) && !conf.NoMainOverride {
+			if cmd.NoMainNet && onMainNet(&conf) && !conf.NoMainOverride {
 				log.With().Fatal("this is a testnet-only build not intended for mainnet")
 			}
 
 			app := New(
-				WithConfig(conf),
+				WithConfig(&conf),
 				// NOTE(dshulyak) this needs to be max level so that child logger can can be current level or below.
 				// otherwise it will fail later when child logger will try to increase level.
 				WithLog(log.RegisterHooks(
@@ -169,6 +175,7 @@ func GetCommand() *cobra.Command {
 				}
 
 				/* Create or load miner identity */
+				var err error
 				if app.edSgn, err = app.LoadOrCreateEdSigner(); err != nil {
 					return fmt.Errorf("could not retrieve identity: %w", err)
 				}
@@ -208,7 +215,7 @@ func GetCommand() *cobra.Command {
 		},
 	}
 
-	cmd.AddCommands(c)
+	configPath = cmd.AddFlags(c, &conf)
 
 	// versionCmd returns the current version of spacemesh.
 	versionCmd := cobra.Command{
@@ -237,32 +244,28 @@ func init() {
 	grpclog = grpc_logsettable.ReplaceGrpcLoggerV2()
 }
 
-func loadConfig(c *cobra.Command) (*config.Config, error) {
-	conf, err := LoadConfigFromFile()
-	if err != nil {
-		return nil, err
+// loadConfig loads config and preset (if provided) into the provided config.
+// It first loads the preset and then overrides it with values from the config file.
+func loadConfig(cfg *config.Config, preset, path string) error {
+	v := viper.New()
+	// read in config from file
+	if err := config.LoadConfig(path, v); err != nil {
+		return err
 	}
-	if err := cmd.EnsureCLIFlags(c, conf); err != nil {
-		return nil, fmt.Errorf("mapping cli flags to config: %w", err)
-	}
-	return conf, nil
-}
 
-// LoadConfigFromFile tries to load configuration file if the config parameter was specified.
-func LoadConfigFromFile() (*config.Config, error) {
-	// read in default config if passed as param using viper
-	if err := config.LoadConfig(viper.GetString("config"), viper.GetViper()); err != nil {
-		return nil, err
+	// override default config with preset if provided
+	if len(preset) == 0 && v.IsSet("preset") {
+		preset = v.GetString("preset")
 	}
-	conf := config.MainnetConfig()
-	if name := viper.GetString("preset"); len(name) > 0 {
-		preset, err := presets.Get(name)
+	if len(preset) > 0 {
+		p, err := presets.Get(preset)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		conf = preset
+		*cfg = p
 	}
 
+	// Unmarshall config file into config struct
 	hook := mapstructure.ComposeDecodeHookFunc(
 		mapstructure.StringToTimeDurationHookFunc(),
 		mapstructure.StringToSliceHookFunc(","),
@@ -274,15 +277,21 @@ func LoadConfigFromFile() (*config.Config, error) {
 	)
 
 	// load config if it was loaded to the viper
-	if err := viper.Unmarshal(&conf, viper.DecodeHook(hook), withZeroFields()); err != nil {
-		return nil, fmt.Errorf("unmarshal viper: %w", err)
+	if err := v.Unmarshal(cfg, viper.DecodeHook(hook), withZeroFields(), withErrorUnused()); err != nil {
+		return fmt.Errorf("unmarshalling config file with viper: %w", err)
 	}
-	return &conf, nil
+	return nil
 }
 
 func withZeroFields() viper.DecoderConfigOption {
 	return func(cfg *mapstructure.DecoderConfig) {
 		cfg.ZeroFields = true
+	}
+}
+
+func withErrorUnused() viper.DecoderConfigOption {
+	return func(cfg *mapstructure.DecoderConfig) {
+		cfg.ErrorUnused = true
 	}
 }
 
@@ -459,7 +468,7 @@ func (app *App) Initialize() error {
 			return fmt.Errorf("failed to write genesis config to %s: %w", gpath, err)
 		}
 	} else {
-		diff := existing.Diff(app.Config.Genesis)
+		diff := existing.Diff(&app.Config.Genesis)
 		if len(diff) > 0 {
 			app.log.Error("genesis config updated after node initialization, if this update is required delete config"+
 				" at %s.\ndiff:\n%s", gpath, diff,

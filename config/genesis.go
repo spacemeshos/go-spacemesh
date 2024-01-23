@@ -115,9 +115,9 @@ func DefaultGenesisConfig() *GenesisConfig {
 }
 
 // DefaultTestGenesisConfig is the default test configuration for the node.
-func DefaultTestGenesisConfig() *GenesisConfig {
+func DefaultTestGenesisConfig() GenesisConfig {
 	// NOTE(dshulyak) keys in default config are used in some tests
-	return &GenesisConfig{
+	return GenesisConfig{
 		ExtraData:   "testnet",
 		GenesisTime: time.Now().Format(time.RFC3339),
 		Accounts:    generateGenesisAccounts(),
