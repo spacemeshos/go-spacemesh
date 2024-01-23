@@ -20,6 +20,7 @@ import (
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -651,9 +652,6 @@ func TestConfig_Preset(t *testing.T) {
 		require.NoError(t, err)
 
 		conf := config.Config{}
-		c := &cobra.Command{}
-		cmd.AddFlags(c, &conf)
-
 		require.NoError(t, loadConfig(&conf, name, ""))
 		require.Equal(t, preset, conf)
 	})
@@ -663,12 +661,12 @@ func TestConfig_Preset(t *testing.T) {
 		require.NoError(t, err)
 
 		conf := config.Config{}
-		c := &cobra.Command{}
-		cmd.AddFlags(c, &conf)
+		var flags pflag.FlagSet
+		cmd.AddFlags(&flags, &conf)
 
 		const lowPeers = 1234
 		require.NoError(t, loadConfig(&conf, name, ""))
-		require.NoError(t, c.ParseFlags([]string{"--low-peers=" + strconv.Itoa(lowPeers)}))
+		require.NoError(t, flags.Parse([]string{"--low-peers=" + strconv.Itoa(lowPeers)}))
 		preset.P2P.LowPeers = lowPeers
 		require.Equal(t, preset, conf)
 	})
@@ -678,9 +676,6 @@ func TestConfig_Preset(t *testing.T) {
 		require.NoError(t, err)
 
 		conf := config.Config{}
-		c := &cobra.Command{}
-		cmd.AddFlags(c, &conf)
-
 		const lowPeers = 1234
 		content := fmt.Sprintf(`{"p2p": {"low-peers": %d}}`, lowPeers)
 		path := filepath.Join(t.TempDir(), "config.json")
@@ -696,9 +691,6 @@ func TestConfig_Preset(t *testing.T) {
 		require.NoError(t, err)
 
 		conf := config.Config{}
-		c := &cobra.Command{}
-		cmd.AddFlags(c, &conf)
-
 		content := fmt.Sprintf(`{"preset": "%s"}`, name)
 		path := filepath.Join(t.TempDir(), "config.json")
 		require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
@@ -772,11 +764,11 @@ func TestConfig_CustomTypes(t *testing.T) {
 			require.Nil(t, mainnet.SMESHING.Opts.ProviderID.Value())
 
 			conf := config.MainnetConfig()
-			c := &cobra.Command{}
-			cmd.AddFlags(c, &conf)
+			var flags pflag.FlagSet
+			cmd.AddFlags(&flags, &conf)
 
 			require.NoError(t, loadConfig(&conf, "", ""))
-			require.NoError(t, c.ParseFlags(strings.Fields(tc.cli)))
+			require.NoError(t, flags.Parse(strings.Fields(tc.cli)))
 			tc.updatePreset(t, &mainnet)
 			require.Equal(t, mainnet, conf)
 		})
@@ -786,9 +778,6 @@ func TestConfig_CustomTypes(t *testing.T) {
 			require.Nil(t, mainnet.SMESHING.Opts.ProviderID.Value())
 
 			conf := config.MainnetConfig()
-			c := &cobra.Command{}
-			cmd.AddFlags(c, &conf)
-
 			path := filepath.Join(t.TempDir(), "config.json")
 			require.NoError(t, os.WriteFile(path, []byte(tc.config), 0o600))
 
@@ -802,11 +791,11 @@ func TestConfig_CustomTypes(t *testing.T) {
 			require.NoError(t, err)
 
 			conf := config.Config{}
-			c := &cobra.Command{}
-			cmd.AddFlags(c, &conf)
+			var flags pflag.FlagSet
+			cmd.AddFlags(&flags, &conf)
 
 			require.NoError(t, loadConfig(&conf, name, ""))
-			require.NoError(t, c.ParseFlags(strings.Fields(tc.cli)))
+			require.NoError(t, flags.Parse(strings.Fields(tc.cli)))
 			tc.updatePreset(t, &preset)
 			require.Equal(t, preset, conf)
 		})
@@ -816,9 +805,6 @@ func TestConfig_CustomTypes(t *testing.T) {
 			require.NoError(t, err)
 
 			conf := config.Config{}
-			c := &cobra.Command{}
-			cmd.AddFlags(c, &conf)
-
 			path := filepath.Join(t.TempDir(), "config.json")
 			require.NoError(t, os.WriteFile(path, []byte(tc.config), 0o600))
 
@@ -855,17 +841,15 @@ func TestConfig_PostProviderID_InvalidValues(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(fmt.Sprintf("%s_Flags", tc.name), func(t *testing.T) {
 			conf := config.Config{}
-			c := &cobra.Command{}
-			cmd.AddFlags(c, &conf)
+			var flags pflag.FlagSet
+			cmd.AddFlags(&flags, &conf)
 
-			err := c.ParseFlags([]string{fmt.Sprintf("--smeshing-opts-provider=%s", tc.cliValue)})
+			err := flags.Parse([]string{fmt.Sprintf("--smeshing-opts-provider=%s", tc.cliValue)})
 			require.ErrorContains(t, err, "failed to parse PoST Provider ID")
 		})
 
 		t.Run(fmt.Sprintf("%s_ConfigFile", tc.name), func(t *testing.T) {
 			conf := config.Config{}
-			c := &cobra.Command{}
-			cmd.AddFlags(c, &conf)
 
 			path := filepath.Join(t.TempDir(), "config.json")
 			cfg := fmt.Sprintf(`{"smeshing": {"smeshing-opts": {"smeshing-opts-provider": %s}}}`, tc.configValue)
@@ -879,8 +863,6 @@ func TestConfig_PostProviderID_InvalidValues(t *testing.T) {
 func TestConfig_Load(t *testing.T) {
 	t.Run("invalid fails to load", func(t *testing.T) {
 		conf := config.Config{}
-		c := &cobra.Command{}
-		cmd.AddFlags(c, &conf)
 
 		path := filepath.Join(t.TempDir(), "config.json")
 		require.NoError(t, os.WriteFile(path, []byte("}"), 0o600))
@@ -890,11 +872,11 @@ func TestConfig_Load(t *testing.T) {
 	})
 	t.Run("missing default doesn't fail", func(t *testing.T) {
 		conf := config.Config{}
-		c := &cobra.Command{}
-		cmd.AddFlags(c, &conf)
-		require.NoError(t, c.ParseFlags([]string{}))
+		var flags pflag.FlagSet
+		cmd.AddFlags(&flags, &conf)
 
 		require.NoError(t, loadConfig(&conf, "", ""))
+		require.NoError(t, flags.Parse([]string{}))
 	})
 }
 
@@ -904,8 +886,8 @@ func TestConfig_GenesisAccounts(t *testing.T) {
 			Accounts: make(map[string]uint64),
 		},
 	}
-	c := &cobra.Command{}
-	cmd.AddFlags(c, &conf)
+	var flags pflag.FlagSet
+	cmd.AddFlags(&flags, &conf)
 
 	const value = 100
 	keys := []string{"0x03", "0x04"}
@@ -915,7 +897,7 @@ func TestConfig_GenesisAccounts(t *testing.T) {
 	}
 
 	require.NoError(t, loadConfig(&conf, "", ""))
-	require.NoError(t, c.ParseFlags(args))
+	require.NoError(t, flags.Parse(args))
 	for _, key := range keys {
 		require.EqualValues(t, value, conf.Genesis.Accounts[key])
 	}
@@ -923,9 +905,6 @@ func TestConfig_GenesisAccounts(t *testing.T) {
 
 func TestHRP(t *testing.T) {
 	conf := config.Config{}
-	c := &cobra.Command{}
-	cmd.AddFlags(c, &conf)
-
 	data := `{"main": {"network-hrp": "TEST"}}`
 	cfg := filepath.Join(t.TempDir(), "config.json")
 	require.NoError(t, os.WriteFile(cfg, []byte(data), 0o600))

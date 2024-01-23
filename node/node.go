@@ -215,7 +215,7 @@ func GetCommand() *cobra.Command {
 		},
 	}
 
-	configPath = cmd.AddFlags(c, &conf)
+	configPath = cmd.AddFlags(c.PersistentFlags(), &conf)
 
 	// versionCmd returns the current version of spacemesh.
 	versionCmd := cobra.Command{
