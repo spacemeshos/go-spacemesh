@@ -74,7 +74,9 @@ func getCommand() *cobra.Command {
 				metrics.WithClock(clock),
 			}
 			if os.Getenv("MIMIR_USR") != "" && os.Getenv("MIMIR_PWD") != "" && os.Getenv("MIMIR_ORG") != "" {
-				clientOpts = append(clientOpts, metrics.WithBasicAuth(os.Getenv("MIMIR_ORG"), os.Getenv("MIMIR_USR"), os.Getenv("MIMIR_PWD")))
+				clientOpts = append(clientOpts,
+					metrics.WithBasicAuth(os.Getenv("MIMIR_ORG"), os.Getenv("MIMIR_USR"), os.Getenv("MIMIR_PWD")),
+				)
 			}
 
 			// Start the client
@@ -112,8 +114,10 @@ func getCommand() *cobra.Command {
 
 	cmd.AddCommands(c)
 
-	c.PersistentFlags().StringVar(&serverURL, "prometheus", "https://mimir.spacemesh.dev/prometheus", "Prometheus server URL")
-	c.PersistentFlags().StringVar(&k8sNamespace, "k8sNamespace", "devnet-402-short", "Kubernetes namespace to monitor")
+	c.PersistentFlags().StringVar(&serverURL, "prometheus",
+		"https://mimir.spacemesh.dev/prometheus", "Prometheus server URL")
+	c.PersistentFlags().StringVar(&k8sNamespace, "k8sNamespace",
+		"devnet-402-short", "Kubernetes namespace to monitor")
 	return c
 }
 
