@@ -24,7 +24,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
+	"go.uber.org/zap/zaptest/observer"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"
@@ -450,9 +453,7 @@ func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, epoch types.
 
 func launchServer(tb testing.TB, services ...ServiceAPI) (Config, func()) {
 	cfg := DefaultTestConfig()
-	cfg.PublicListener = "127.0.0.1:0" // run on random port
-
-	grpcService, err := NewPublic(zaptest.NewLogger(tb).Named("grpc"), cfg, services)
+	grpcService, err := NewWithServices(cfg.PublicListener, zaptest.NewLogger(tb).Named("grpc"), cfg, services)
 	require.NoError(tb, err)
 
 	// start gRPC server
@@ -488,6 +489,62 @@ func TestNewServersConfig(t *testing.T) {
 
 	require.Contains(t, grpcService.listener, strconv.Itoa(port1), "Expected same port")
 	require.Contains(t, jsonService.listener, strconv.Itoa(port2), "Expected same port")
+}
+
+func TestNewLocalServer(t *testing.T) {
+	tt := []struct {
+		name     string
+		listener string
+		warn     bool
+	}{
+		{
+			name:     "valid",
+			listener: "192.168.1.1:1234",
+			warn:     false,
+		},
+		{
+			name:     "valid random port",
+			listener: "10.0.0.1:0",
+			warn:     false,
+		},
+		{
+			name:     "invalid",
+			listener: "0.0.0.0:1234",
+			warn:     true,
+		},
+		{
+			name:     "invalid random port",
+			listener: "88.77.66.11:0",
+			warn:     true,
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			observer, observedLogs := observer.New(zapcore.WarnLevel)
+			logger := zap.New(observer)
+
+			ctrl := gomock.NewController(t)
+			peerCounter := NewMockpeerCounter(ctrl)
+			meshApi := NewMockmeshAPI(ctrl)
+			genTime := NewMockgenesisTimeAPI(ctrl)
+			syncer := NewMocksyncer(ctrl)
+
+			cfg := DefaultTestConfig()
+			cfg.PostListener = tc.listener
+			svc := NewNodeService(peerCounter, meshApi, genTime, syncer, "v0.0.0", "cafebabe")
+			grpcService, err := NewWithServices(cfg.PostListener, logger, cfg, []ServiceAPI{svc})
+			if tc.warn {
+				require.Equal(t, observedLogs.Len(), 1, "Expected a warning log")
+				require.Equal(t, observedLogs.All()[0].Message, "unsecured grpc server is listening on a public IP address")
+				require.Equal(t, observedLogs.All()[0].ContextMap()["address"], tc.listener)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, grpcService.listener, tc.listener, "expected same listener")
+		})
+	}
 }
 
 type smesherServiceConn struct {
