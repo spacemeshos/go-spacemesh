@@ -2,6 +2,14 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## UNRELEASED
+
+### Improvements
+
+* [#5486](https://github.com/spacemeshos/go-spacemesh/pull/5486)
+  Backport: p2p: make AutoNAT service limits configurable. This helps with AutoNAT dialback to determine
+  nodes' reachability status.
+
 ## Release v1.3.5
 
 ### Improvements
