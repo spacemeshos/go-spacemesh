@@ -66,7 +66,8 @@ type Config struct {
 // it is responsible for initializing post, receiving poet proof and orchestrating nipst. after which it will
 // calculate total weight and providing relevant view as proof.
 type Builder struct {
-	eg errgroup.Group
+	parentCtx context.Context
+	eg        errgroup.Group
 
 	accountLock      sync.RWMutex
 	coinbaseAccount  types.Address
@@ -82,13 +83,11 @@ type Builder struct {
 	// as well as the fields below.
 	smeshingMutex sync.Mutex
 	signers       map[types.NodeID]*signing.EdSigner
-	started       bool
+	stop          context.CancelFunc
 
 	layerClock        layerClock
 	syncer            syncer
 	log               *zap.Logger
-	parentCtx         context.Context
-	stop              context.CancelFunc
 	poetCfg           PoetConfig
 	poetRetryInterval time.Duration
 }
@@ -167,7 +166,7 @@ func (b *Builder) Register(sig *signing.EdSigner) {
 	b.log.Info("registered signing key", zap.Stringer("id", sig.NodeID()))
 	b.signers[sig.NodeID()] = sig
 
-	if b.started {
+	if b.stop != nil {
 		b.startID(b.parentCtx, sig)
 	}
 }
@@ -176,7 +175,7 @@ func (b *Builder) Register(sig *signing.EdSigner) {
 func (b *Builder) Smeshing() bool {
 	b.smeshingMutex.Lock()
 	defer b.smeshingMutex.Unlock()
-	return b.started
+	return b.stop != nil
 }
 
 // StartSmeshing is the main entry point of the atx builder. It runs the main
@@ -189,10 +188,9 @@ func (b *Builder) StartSmeshing(coinbase types.Address) error {
 	b.smeshingMutex.Lock()
 	defer b.smeshingMutex.Unlock()
 
-	if b.started {
+	if b.stop != nil {
 		return errors.New("already started")
 	}
-	b.started = true
 
 	b.coinbaseAccount = coinbase
 	ctx, stop := context.WithCancel(b.parentCtx)
@@ -233,13 +231,13 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 	b.smeshingMutex.Lock()
 	defer b.smeshingMutex.Unlock()
 
-	if !b.started {
+	if b.stop == nil {
 		return errors.New("not started")
 	}
 
 	b.stop()
 	err := b.eg.Wait()
-	b.started = false
+	b.stop = nil
 	switch {
 	case err == nil || errors.Is(err, context.Canceled):
 		if !deleteFiles {
