@@ -89,7 +89,7 @@ func DefaultConfig() Config {
 		PingInterval:                time.Second,
 		EnableTCPTransport:          true,
 		EnableQUICTransport:         false,
-		AdvertiseInterval:           time.Minute,
+		AdvertiseInterval:           time.Hour,
 	}
 }
 
