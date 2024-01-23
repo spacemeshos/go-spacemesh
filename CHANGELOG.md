@@ -93,6 +93,7 @@ configuration is as follows:
 ### Improvements
 
 * [#5464](https://github.com/spacemeshos/go-spacemesh/pull/5464) Make fetch request timeout configurable.
+* [#5479](https://github.com/spacemeshos/go-spacemesh/pull/5479) p2p: make AutoNAT service limits configurable.
 
 ## Release v1.3.5
 
