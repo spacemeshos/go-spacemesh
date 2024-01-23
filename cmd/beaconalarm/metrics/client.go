@@ -48,7 +48,9 @@ func NewClient(opts ...ClientOptionFunc) (*Client, error) {
 		return nil, fmt.Errorf("failed to create Prometheus client: %w", err)
 	}
 
-	offset := options.cfg.ProposalDuration + options.cfg.FirstVotingRoundDuration + time.Duration(options.cfg.RoundsNumber-1)*(options.cfg.VotingRoundDuration+options.cfg.WeakCoinRoundDuration)
+	offset := options.cfg.ProposalDuration +
+		options.cfg.FirstVotingRoundDuration +
+		time.Duration(options.cfg.RoundsNumber-1)*(options.cfg.VotingRoundDuration+options.cfg.WeakCoinRoundDuration)
 	options.logger.With().Info("using alarm offset",
 		log.Duration("offset", offset),
 		log.Duration("proposalDuration", options.cfg.ProposalDuration),
@@ -71,7 +73,7 @@ func (c *Client) FetchBeaconValue(ctx context.Context, namespace string, epoch t
 
 	lid := types.EpochID(epoch - 1).FirstLayer()
 	ts := c.clock.LayerToTime(lid)
-	ts = ts.Add(c.offset).Add(30 * time.Second) // Add 30 seconds to account for the time it takes to fetch the metric from nodes
+	ts = ts.Add(c.offset).Add(30 * time.Second) // Add 30 seconds to account for time to fetch the metric from nodes
 
 	c.logger.With().Info("waiting for beacon value", log.FieldNamed("target_epoch", epoch), log.Time("ts", ts))
 
@@ -85,7 +87,12 @@ func (c *Client) FetchBeaconValue(ctx context.Context, namespace string, epoch t
 	}
 
 	c.logger.With().Info("fetching beacon value", log.FieldNamed("target_epoch", epoch), log.Time("ts", ts))
-	result, warnings, err := c.client.Query(ctx, fmt.Sprintf(`group by(beacon) (%s{kubernetes_namespace="%s",epoch="%d"})`, beaconMetrics.MetricNameCalculatedWeight(), namespace, epoch), ts)
+	result, warnings, err := c.client.Query(ctx,
+		fmt.Sprintf(`group by(beacon) (%s{kubernetes_namespace="%s",epoch="%d"})`,
+			beaconMetrics.MetricNameCalculatedWeight(),
+			namespace,
+			epoch,
+		), ts)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch metric: %w", err)
 	}
