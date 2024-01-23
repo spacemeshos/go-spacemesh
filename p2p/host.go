@@ -89,7 +89,7 @@ func DefaultConfig() Config {
 		PingInterval:                time.Second,
 		EnableTCPTransport:          true,
 		EnableQUICTransport:         false,
-		AdvertiseInterval:           time.Minute,
+		AdvertiseInterval:           time.Hour,
 		AutoNATServer: AutoNATServer{
 			// Defaults taken from libp2p
 			GlobalMax:   30,
@@ -108,8 +108,8 @@ const (
 type Config struct {
 	DataDir            string
 	LogLevel           log.Level
-	GracePeersShutdown time.Duration
-	MaxMessageSize     int
+	GracePeersShutdown time.Duration `mapstructure:"gracepeersshutdown"`
+	MaxMessageSize     int           `mapstructure:"maxmessagesize"`
 
 	// see https://lwn.net/Articles/542629/ for reuseport explanation
 	DisableReusePort            bool          `mapstructure:"disable-reuseport"`

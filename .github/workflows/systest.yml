@@ -2,6 +2,13 @@ name: System tests
 on:
   # Allow manually triggering this workflow
   workflow_dispatch:
+    inputs:
+      test_name:
+        description: 'Test to run'
+        default: '.'
+      log_level:
+        description: 'Log level'
+        default: 'info'
   push:
     branches:
       - staging
@@ -115,9 +122,9 @@ jobs:
           node_selector: cloud.google.com/gke-nodepool=gha
           size: 30
           bootstrap: 4m
-          level: info
+          level: ${{ inputs.log_level }}
           clusters: 4
-        run: make -C systest run test_name=.
+        run: make -C systest run test_name=${{ inputs.test_name }}
 
       - name: Delete pod
         if: always()

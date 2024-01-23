@@ -82,7 +82,8 @@ make run test_name=TestSmeshing smesher_image=<image built with `make dockerbuil
 ```
 
 The command will create a pod inside your k8s cluster named `systest`. After test completes it will clean up after
-itself. If you want to interrupt the test run `make clean` - it will gracefully terminate the pod allowing it to clean up the test setup.
+itself. If you want to interrupt the test run `make clean` - it will gracefully terminate the pod allowing it to clean
+up the test setup.
 
 If logs were interrupted it is always possible to re-attach to them with `make attach`.
 
@@ -198,7 +199,8 @@ export namespace=qqq
 make run test_name=TestStepCreate size=10 bootstrap=1m keep=true
 ```
 
-Once that step completes user is able to apply different tasks that either modify the cluster, asserts some expectations or enables chaos conditions.
+Once that step completes user is able to apply different tasks that either modify the cluster, asserts some
+expectations or enables chaos conditions.
 
 For example creating a batch of transactions:
 
@@ -212,7 +214,8 @@ Or replacing a some part of nodes:
 make run test_name=TestStepReplaceNodes
 ```
 
-Some steps may be executed concurrently with other steps. In manual mode this must be handled by the operator, for example creating transactions and setting up a short disconnect concurrent is safe:
+Some steps may be executed concurrently with other steps. In manual mode this must be handled by the operator, for
+example creating transactions and setting up a short disconnect concurrent is safe:
 
 ```bash
 make run test_name=TestStepTransactions &
@@ -223,9 +226,11 @@ All such individual steps can be found in `systest/steps_test.go`.
 
 ### Scheduler
 
-Individual steps may be also scheduled by any software. For simplicity the first version of scheduler is implemented in golang (see TestScheduleBasic).
+Individual steps may be also scheduled by any software. For simplicity the first version of scheduler is implemented
+in golang (see TestScheduleBasic).
 
-It launches a test that will execute sub-tests to create transactions, add nodes, verify consistency of the mesh and that nodes are eventually synced.
+It launches a test that will execute sub-tests to create transactions, add nodes, verify consistency of the mesh and
+that nodes are eventually synced.
 
 ```bash
 export namespace=qqq
@@ -240,9 +245,11 @@ See available storage classes using:
 kubectl get sc
 ```
 
-For longevity tests standard storage class is not sufficiently fast, and has low amount of allocated resources (iops and throughput). Allocated resource also depend on the disk size.
+For longevity tests standard storage class is not sufficiently fast, and has low amount of allocated resources (iops
+and throughput). Allocated resource also depend on the disk size.
 
-On gke for the network with a moderate load `premium-rwo` storage class with 10Gi disk size can be used. It will provision ssd disks.
+On gke for the network with a moderate load `premium-rwo` storage class with 10Gi disk size can be used. It will
+provision ssd disks.
 
 ```bash
 export storage=premium-rwo=10Gi

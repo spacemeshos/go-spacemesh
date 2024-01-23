@@ -98,14 +98,16 @@ func (s ServerConfig) toOpts() []server.Opt {
 
 // Config is the configuration file of the Fetch component.
 type Config struct {
-	BatchTimeout         time.Duration
-	BatchSize, QueueSize int
-	MaxRetriesForRequest int
+	BatchTimeout         time.Duration           `mapstructure:"batchtimeout"`
+	BatchSize            int                     `mapstructure:"batchsize"`
+	QueueSize            int                     `mapstructure:"queuesize"`
+	MaxRetriesForRequest int                     `mapstructure:"maxretriesforrequest"`
 	RequestTimeout       time.Duration           `mapstructure:"request-timeout"`
 	EnableServerMetrics  bool                    `mapstructure:"servers-metrics"`
 	ServersConfig        map[string]ServerConfig `mapstructure:"servers"`
 	PeersRateThreshold   float64                 `mapstructure:"peers-rate-threshold"`
-	GetAtxsConcurrency   int64                   // The maximum number of concurrent requests to get ATXs.
+	// The maximum number of concurrent requests to get ATXs.
+	GetAtxsConcurrency int64 `mapstructure:"getatxsconcurrency"`
 }
 
 func (c Config) getServerConfig(protocol string) ServerConfig {
