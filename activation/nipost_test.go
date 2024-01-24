@@ -14,6 +14,7 @@ import (
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
 	"go.uber.org/zap/zaptest/observer"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -206,6 +207,56 @@ func Test_NIPost_PostClientHandling(t *testing.T) {
 		case <-time.After(5 * time.Second):
 			require.Fail(t, "timeout waiting for event")
 		}
+	})
+
+	t.Run("connect, disconnect, then cancel before reconnect", func(t *testing.T) {
+		// post client connects, starts post, disconnects in between and proofing is canceled before reconnection
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		tnb := newTestNIPostBuilder(t)
+
+		var eg errgroup.Group
+		eg.Go(func() error {
+			select {
+			case e := <-tnb.eventSub:
+				event := e.Event.GetPostStart()
+				require.NotNil(t, event, "wrong event type")
+				require.EqualValues(t, shared.ZeroChallenge, event.Challenge)
+			case <-time.After(5 * time.Second):
+				require.Fail(t, "timeout waiting for event")
+			}
+
+			cancel()
+
+			select {
+			case e := <-tnb.eventSub:
+				event := e.Event.GetPostComplete()
+				require.NotNil(t, event, "wrong event type")
+				require.Equal(t, true, e.Event.Failure)
+				require.Equal(t, "Node failed PoST execution.", e.Event.Help)
+			case <-time.After(5 * time.Second):
+				require.Fail(t, "timeout waiting for event")
+			}
+			return nil
+		})
+
+		tnb.mPostService.EXPECT().Client(sig.NodeID()).Return(tnb.mPostClient, nil)
+		tnb.mPostClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(nil, nil, ErrPostClientClosed)
+		tnb.mPostService.EXPECT().Client(sig.NodeID()).DoAndReturn(
+			func(types.NodeID) (PostClient, error) {
+				<-ctx.Done()
+				return nil, ErrPostClientNotConnected
+			})
+
+		nipost, nipostInfo, err := tnb.Proof(ctx, sig.NodeID(), shared.ZeroChallenge)
+		require.ErrorIs(t, err, context.Canceled)
+		require.Nil(t, nipost)
+		require.Nil(t, nipostInfo)
+
+		require.Nil(t, eg.Wait())
 	})
 
 	t.Run("connect, disconnect, reconnect then error", func(t *testing.T) {
@@ -520,6 +571,20 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	nipost, err = nb.BuildNIPost(context.Background(), sig, &challenge)
 	require.NoError(t, err)
 	require.NotNil(t, nipost)
+}
+
+func Test_NIPostBuilder_InvalidPoetAddresses(t *testing.T) {
+	nb, err := NewNIPostBuilder(
+		nil,
+		nil,
+		nil,
+		[]types.PoetServer{{Address: ":invalid"}},
+		zaptest.NewLogger(t).Named("nipostBuilder"),
+		PoetConfig{},
+		nil,
+	)
+	require.ErrorContains(t, err, "cannot create poet client")
+	require.Nil(t, nb)
 }
 
 func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.T) {
