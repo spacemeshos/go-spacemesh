@@ -10,6 +10,11 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
   Backport: p2p: make AutoNAT service limits configurable. This helps with AutoNAT dialback to determine
   nodes' reachability status.
 
+* [#5490](https://github.com/spacemeshos/go-spacemesh/pull/5490)
+  The path in `smeshing-opts-datadir` used to be resolved relative to the location of the `service` binary when running
+  the node in supervised mode. This is no longer the case. The path is now resolved relative to the current working
+  directory.
+
 ## Release v1.3.5
 
 ### Improvements
