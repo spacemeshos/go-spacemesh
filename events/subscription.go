@@ -85,6 +85,7 @@ func (sub *BufferedSubscription[T]) run(ctx context.Context, s Subscription, mat
 	for {
 		select {
 		case <-ctx.Done():
+			close(sub.result)
 			return
 		case evt := <-s.Out():
 			typed := evt.(T)

@@ -2,12 +2,12 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
-## UNRELEASED
+## Release v1.3.6
 
 ### Improvements
 
-* [#5486](https://github.com/spacemeshos/go-spacemesh/pull/5486)
-  Backport: p2p: make AutoNAT service limits configurable. This helps with AutoNAT dialback to determine
+* [#5479](https://github.com/spacemeshos/go-spacemesh/pull/5486)
+  p2p: make AutoNAT service limits configurable. This helps with AutoNAT dialback to determine
   nodes' reachability status.
 
 * [#5490](https://github.com/spacemeshos/go-spacemesh/pull/5490)
@@ -34,6 +34,8 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 ## Release v1.3.4
 
 ### Improvements
+
+* [#5464](https://github.com/spacemeshos/go-spacemesh/pull/5464) Make fetch request timeout configurable.
 
 * [#5467](https://github.com/spacemeshos/go-spacemesh/pull/5467)
   Fix a bug that could cause ATX sync to stall because of exhausted limit of concurrent requests for dependencies.
