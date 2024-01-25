@@ -197,7 +197,7 @@ func (b *Builder) StartSmeshing(coinbase types.Address) error {
 	b.stop = stop
 
 	for _, sig := range b.signers {
-		b.startID(ctx, sig) // check that `sig` is copied here
+		b.startID(ctx, sig)
 	}
 	return nil
 }
