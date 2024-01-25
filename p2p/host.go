@@ -89,7 +89,13 @@ func DefaultConfig() Config {
 		PingInterval:                time.Second,
 		EnableTCPTransport:          true,
 		EnableQUICTransport:         false,
-		AdvertiseInterval:           time.Minute,
+		AdvertiseInterval:           time.Hour,
+		AutoNATServer: AutoNATServer{
+			// Defaults taken from libp2p
+			GlobalMax:   30,
+			PeerMax:     3,
+			ResetPeriod: time.Minute,
+		},
 	}
 }
 
@@ -102,8 +108,8 @@ const (
 type Config struct {
 	DataDir            string
 	LogLevel           log.Level
-	GracePeersShutdown time.Duration
-	MaxMessageSize     int
+	GracePeersShutdown time.Duration `mapstructure:"gracepeersshutdown"`
+	MaxMessageSize     int           `mapstructure:"maxmessagesize"`
 
 	// see https://lwn.net/Articles/542629/ for reuseport explanation
 	DisableReusePort            bool          `mapstructure:"disable-reuseport"`
@@ -144,6 +150,13 @@ type Config struct {
 	EnableRoutingDiscovery      bool          `mapstructure:"enable-routing-discovery"`
 	RoutingDiscoveryAdvertise   bool          `mapstructure:"routing-discovery-advertise"`
 	AdvertiseInterval           time.Duration `mapstructure:"advertise-interval"`
+	AutoNATServer               AutoNATServer `mapstructure:"auto-nat-server"`
+}
+
+type AutoNATServer struct {
+	GlobalMax   int           `mapstructure:"global-max"`
+	PeerMax     int           `mapstructure:"peer-max"`
+	ResetPeriod time.Duration `mapstructure:"reset-period"`
 }
 
 type RelayServer struct {
@@ -246,6 +259,10 @@ func New(
 		libp2p.Peerstore(ps),
 		libp2p.BandwidthReporter(p2pmetrics.NewBandwidthCollector()),
 		libp2p.EnableNATService(),
+		libp2p.AutoNATServiceRateLimit(
+			cfg.AutoNATServer.GlobalMax,
+			cfg.AutoNATServer.PeerMax,
+			cfg.AutoNATServer.ResetPeriod),
 		libp2p.ConnectionGater(g),
 	}
 	if cfg.EnableTCPTransport {

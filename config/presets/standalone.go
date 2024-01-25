@@ -87,5 +87,6 @@ func standalone() config.Config {
 
 	conf.API.PublicListener = "0.0.0.0:10092"
 	conf.API.PrivateListener = "127.0.0.1:10093"
+	conf.API.PostListener = "127.0.0.1:10094"
 	return conf
 }

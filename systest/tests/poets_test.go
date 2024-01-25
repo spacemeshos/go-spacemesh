@@ -28,7 +28,7 @@ func TestPoetsFailures(t *testing.T) {
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))
 	tctx.Log.Debug("TestPoetsFailures start")
 
-	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(10))
+	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(tctx.ClusterSize))
 	require.NoError(t, err)
 	tctx.Log.Debug("Obtained cluster")
 
@@ -126,7 +126,7 @@ func TestNodesUsingDifferentPoets(t *testing.T) {
 		t.Skip("Skipping test for using different poets - test configured with less then 2 poets")
 	}
 
-	cl := cluster.New(tctx, cluster.WithKeys(10))
+	cl := cluster.New(tctx, cluster.WithKeys(tctx.ClusterSize))
 	require.NoError(t, cl.AddBootnodes(tctx, 2))
 	require.NoError(t, cl.AddBootstrappers(tctx))
 	require.NoError(t, cl.AddPoets(tctx))

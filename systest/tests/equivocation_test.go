@@ -41,7 +41,7 @@ func TestEquivocation(t *testing.T) {
 		zap.Int("honest", honest),
 		zap.Int("equivocators", len(keys)-honest),
 	)
-	cl := cluster.New(cctx, cluster.WithKeys(10))
+	cl := cluster.New(cctx, cluster.WithKeys(cctx.ClusterSize))
 	require.NoError(t, cl.AddBootnodes(cctx, bootnodes))
 	require.NoError(t, cl.AddBootstrappers(cctx))
 	require.NoError(t, cl.AddPoets(cctx))

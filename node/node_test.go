@@ -1037,7 +1037,7 @@ func TestAdminEvents(t *testing.T) {
 	defer cancel()
 	conn, err := grpc.DialContext(
 		grpcCtx,
-		cfg.API.PrivateListener,
+		"127.0.0.1:10093",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
@@ -1091,6 +1091,7 @@ func TestAdminEvents_UnspecifiedAddresses(t *testing.T) {
 	// Expose APIs on all interfaces
 	cfg.API.PublicListener = "0.0.0.0:10092"
 	cfg.API.PrivateListener = "0.0.0.0:10093"
+	cfg.API.PostListener = "0.0.0.0:10094"
 
 	cfg.Genesis.GenesisTime = time.Now().Add(5 * time.Second).Format(time.RFC3339)
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
@@ -1118,7 +1119,7 @@ func TestAdminEvents_UnspecifiedAddresses(t *testing.T) {
 	defer cancel()
 	conn, err := grpc.DialContext(
 		grpcCtx,
-		cfg.API.PrivateListener,
+		"127.0.0.1:10093",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
