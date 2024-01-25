@@ -128,21 +128,21 @@ func WithAdvertiseRetryDelay(value time.Duration) Opt {
 	}
 }
 
-func WithAdvertiseDelay(ad time.Duration) Opt {
+func WithAdvertiseDelay(value time.Duration) Opt {
 	return func(d *Discovery) {
-		d.advertiseDelay = ad
+		d.advertiseDelay = value
 	}
 }
 
-func WithAdvertiseInterval(aint time.Duration) Opt {
+func WithAdvertiseInterval(value time.Duration) Opt {
 	return func(d *Discovery) {
-		d.advertiseInterval = aint
+		d.advertiseInterval = value
 	}
 }
 
-func WithFindPeersRetryDelay(fd time.Duration) Opt {
+func WithFindPeersRetryDelay(value time.Duration) Opt {
 	return func(d *Discovery) {
-		d.findPeersRetryDelay = fd
+		d.findPeersRetryDelay = value
 	}
 }
 
