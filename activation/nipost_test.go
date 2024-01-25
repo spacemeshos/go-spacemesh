@@ -20,7 +20,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 )
 
 func defaultPoetServiceMock(ctrl *gomock.Controller, id []byte, address string) *MockpoetClient {
@@ -54,7 +53,6 @@ type testNIPostBuilder struct {
 	observedLogs *observer.ObservedLogs
 	eventSub     <-chan events.UserEvent
 
-	mDb          *localsql.Database
 	mLogger      *zap.Logger
 	mPoetDb      *MockpoetDbAPI
 	mClock       *MocklayerClock
