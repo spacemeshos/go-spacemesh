@@ -21,6 +21,12 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 * [#5498](https://github.com/spacemeshos/go-spacemesh/pull/5498)
   Reduce the default number of CPU cores that are used for verifying incoming ATXs to half of the available cores.
 
+* [#5500](https://github.com/spacemeshos/go-spacemesh/pull/5500)
+  Make fetch request timeout configurable.
+  Add separate metric for failed p2p server requests.
+  Adjust deadline during long reads and writes, reducing "i/o deadline exceeded" errors.
+  Make routing discovery more configurable and less spammy by default.
+
 ## Release v1.3.5
 
 ### Improvements
@@ -37,8 +43,6 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 ## Release v1.3.4
 
 ### Improvements
-
-* [#5464](https://github.com/spacemeshos/go-spacemesh/pull/5464) Make fetch request timeout configurable.
 
 * [#5467](https://github.com/spacemeshos/go-spacemesh/pull/5467)
   Fix a bug that could cause ATX sync to stall because of exhausted limit of concurrent requests for dependencies.

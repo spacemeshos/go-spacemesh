@@ -100,9 +100,10 @@ func (s ServerConfig) toOpts() []server.Opt {
 type Config struct {
 	BatchTimeout         time.Duration
 	BatchSize, QueueSize int
-	RequestTimeout       time.Duration
 	MaxRetriesForRequest int
-	EnableServesMetrics  bool                    `mapstructure:"servers-metrics"`
+	RequestTimeout       time.Duration           `mapstructure:"request-timeout"`
+	RequestHardTimeout   time.Duration           `mapstructure:"request-hard-timeout"`
+	EnableServerMetrics  bool                    `mapstructure:"servers-metrics"`
 	ServersConfig        map[string]ServerConfig `mapstructure:"servers"`
 	PeersRateThreshold   float64                 `mapstructure:"peers-rate-threshold"`
 	GetAtxsConcurrency   int64                   // The maximum number of concurrent requests to get ATXs.
@@ -127,6 +128,7 @@ func DefaultConfig() Config {
 		QueueSize:            20,
 		BatchSize:            10,
 		RequestTimeout:       25 * time.Second,
+		RequestHardTimeout:   5 * time.Minute,
 		MaxRetriesForRequest: 100,
 		ServersConfig: map[string]ServerConfig{
 			// serves 1 MB of data
@@ -287,9 +289,10 @@ func (f *Fetch) registerServer(
 ) {
 	opts := []server.Opt{
 		server.WithTimeout(f.cfg.RequestTimeout),
+		server.WithHardTimeout(f.cfg.RequestHardTimeout),
 		server.WithLog(f.logger),
 	}
-	if f.cfg.EnableServesMetrics {
+	if f.cfg.EnableServerMetrics {
 		opts = append(opts, server.WithMetrics())
 	}
 	opts = append(opts, f.cfg.getServerConfig(protocol).toOpts()...)
