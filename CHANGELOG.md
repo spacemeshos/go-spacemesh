@@ -15,6 +15,9 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
   the node in supervised mode. This is no longer the case. The path is now resolved relative to the current working
   directory.
 
+* [#5489](https://github.com/spacemeshos/go-spacemesh/pull/5489)
+  Fix problem in POST proving where too many files were opened at the same time.
+
 ## Release v1.3.5
 
 ### Improvements
