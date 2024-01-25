@@ -281,7 +281,7 @@ func loadConfig(cfg *config.Config, preset, path string) error {
 	}
 
 	// load config if it was loaded to the viper
-	if err := viper.Unmarshal(cfg, opts...); err != nil {
+	if err := v.Unmarshal(cfg, opts...); err != nil {
 		return fmt.Errorf("unmarshal config: %w", err)
 	}
 	return nil

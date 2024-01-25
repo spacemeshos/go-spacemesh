@@ -230,10 +230,10 @@ func testArgs(ctx context.Context, root *cobra.Command, args ...string) (string,
 	return buf.String(), err
 }
 
-func cmdWithRun(run func(*cobra.Command, []string)) *cobra.Command {
-	cmd := GetCommand()
-	cmd.Run = run
-	return cmd
+func cmdWithRun(run func(*cobra.Command, []string) error) *cobra.Command {
+	c := GetCommand()
+	c.RunE = run
+	return c
 }
 
 func TestSpacemeshApp_Cmd(t *testing.T) {
@@ -245,9 +245,10 @@ func TestSpacemeshApp_Cmd(t *testing.T) {
 	r.Equal(config.ConsoleLogEncoder, app.Config.LOGGING.Encoder)
 
 	// Test an illegal flag
-	c := cmdWithRun(func(*cobra.Command, []string) {
+	c := cmdWithRun(func(*cobra.Command, []string) error {
 		// We don't expect this to be called at all
 		r.Fail("Command.Run not expected to run")
+		return nil
 	})
 
 	str, err := testArgs(context.Background(), c, "illegal")
@@ -280,10 +281,10 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	r := require.New(t)
 	app := New(WithLog(logtest.New(t)))
 
-	run := func(c *cobra.Command, args []string) {
+	run := func(c *cobra.Command, args []string) error {
 		app.Config.API.PublicListener = listener
 		app.Config.DataDirParent = t.TempDir()
-		app.startAPIServices(context.Background())
+		return app.startAPIServices(context.Background())
 	}
 	defer app.stopServices(context.Background())
 
@@ -332,9 +333,9 @@ func TestSpacemeshApp_JsonServiceNotRunning(t *testing.T) {
 	app := New(WithLog(logtest.New(t)))
 
 	// Make sure the service is not running by default
-	run := func(c *cobra.Command, args []string) {
+	run := func(c *cobra.Command, args []string) error {
 		app.Config.DataDirParent = t.TempDir()
-		require.NoError(t, app.startAPIServices(context.Background()))
+		return app.startAPIServices(context.Background())
 	}
 
 	str, err := testArgs(context.Background(), cmdWithRun(run))
@@ -353,11 +354,11 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	listener := "127.0.0.1:0"
 
 	// Make sure the service is not running by default
-	run := func(c *cobra.Command, args []string) {
+	run := func(c *cobra.Command, args []string) error {
 		app.Config.API.PrivateServices = nil
 		app.Config.API.JSONListener = listener
 		app.Config.DataDirParent = t.TempDir()
-		app.startAPIServices(context.Background())
+		return app.startAPIServices(context.Background())
 	}
 
 	// Test starting the JSON server from the command line
@@ -413,7 +414,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	run := func(c *cobra.Command, args []string) {
+	run := func(c *cobra.Command, args []string) error {
 		// Give the error channel a buffer
 		events.CloseEventReporter()
 		events.InitializeReporter()
@@ -427,7 +428,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
 		// be done more surgically, and we don't need _all_ of the services.
-		require.NoError(t, app.Start(context.Background()))
+		return app.Start(context.Background())
 	}
 
 	// Run the app in a goroutine. As noted above, it blocks if it succeeds.
@@ -526,7 +527,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	app.edSgn = signer
 	address := wallet.Address(signer.PublicKey().Bytes())
 
-	run := func(c *cobra.Command, args []string) {
+	run := func(c *cobra.Command, args []string) error {
 		r.NoError(app.Initialize())
 
 		// GRPC configuration
@@ -557,7 +558,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
 		// be done more surgically, and we don't need _all_ of the services.
-		require.NoError(t, app.Start(context.Background()))
+		return app.Start(context.Background())
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
