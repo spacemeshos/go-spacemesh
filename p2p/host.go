@@ -89,12 +89,17 @@ func DefaultConfig() Config {
 		PingInterval:                time.Second,
 		EnableTCPTransport:          true,
 		EnableQUICTransport:         false,
-		AdvertiseInterval:           time.Hour,
 		AutoNATServer: AutoNATServer{
 			// Defaults taken from libp2p
 			GlobalMax:   30,
 			PeerMax:     3,
 			ResetPeriod: time.Minute,
+		},
+		DiscoveryTimings: DiscoveryTimings{
+			AdvertiseDelay:      time.Hour,
+			AdvertiseInterval:   time.Hour,
+			AdvertiseRetryDelay: time.Minute,
+			FindPeersRetryDelay: time.Minute,
 		},
 	}
 }
@@ -112,45 +117,52 @@ type Config struct {
 	MaxMessageSize     int           `mapstructure:"maxmessagesize"`
 
 	// see https://lwn.net/Articles/542629/ for reuseport explanation
-	DisableReusePort            bool          `mapstructure:"disable-reuseport"`
-	DisableNatPort              bool          `mapstructure:"disable-natport"`
-	DisableConnectionManager    bool          `mapstructure:"disable-connection-manager"`
-	DisableResourceManager      bool          `mapstructure:"disable-resource-manager"`
-	DisableDHT                  bool          `mapstructure:"disable-dht"`
-	Flood                       bool          `mapstructure:"flood"`
-	Listen                      AddressList   `mapstructure:"listen"`
-	Bootnodes                   []string      `mapstructure:"bootnodes"`
-	Direct                      []string      `mapstructure:"direct"`
-	MinPeers                    int           `mapstructure:"min-peers"`
-	LowPeers                    int           `mapstructure:"low-peers"`
-	HighPeers                   int           `mapstructure:"high-peers"`
-	InboundFraction             float64       `mapstructure:"inbound-fraction"`
-	OutboundFraction            float64       `mapstructure:"outbound-fraction"`
-	AutoscalePeers              bool          `mapstructure:"autoscale-peers"`
-	AdvertiseAddress            AddressList   `mapstructure:"advertise-address"`
-	AcceptQueue                 int           `mapstructure:"p2p-accept-queue"`
-	Metrics                     bool          `mapstructure:"p2p-metrics"`
-	Bootnode                    bool          `mapstructure:"p2p-bootnode"`
-	ForceReachability           string        `mapstructure:"p2p-reachability"`
-	ForceDHTServer              bool          `mapstructure:"force-dht-server"`
-	EnableHolepunching          bool          `mapstructure:"p2p-holepunching"`
-	PrivateNetwork              bool          `mapstructure:"p2p-private-network"`
-	RelayServer                 RelayServer   `mapstructure:"relay-server"`
-	IP4Blocklist                []string      `mapstructure:"ip4-blocklist"`
-	IP6Blocklist                []string      `mapstructure:"ip6-blocklist"`
-	GossipQueueSize             int           `mapstructure:"gossip-queue-size"`
-	GossipValidationThrottle    int           `mapstructure:"gossip-validation-throttle"`
-	GossipAtxValidationThrottle int           `mapstructure:"gossip-atx-validation-throttle"`
-	PingPeers                   []string      `mapstructure:"ping-peers"`
-	PingInterval                time.Duration `mapstructure:"ping-interval"`
-	Relay                       bool          `mapstructure:"relay"`
-	StaticRelays                []string      `mapstructure:"static-relays"`
-	EnableTCPTransport          bool          `mapstructure:"enable-tcp-transport"`
-	EnableQUICTransport         bool          `mapstructure:"enable-quic-transport"`
-	EnableRoutingDiscovery      bool          `mapstructure:"enable-routing-discovery"`
-	RoutingDiscoveryAdvertise   bool          `mapstructure:"routing-discovery-advertise"`
-	AdvertiseInterval           time.Duration `mapstructure:"advertise-interval"`
-	AutoNATServer               AutoNATServer `mapstructure:"auto-nat-server"`
+	DisableReusePort            bool             `mapstructure:"disable-reuseport"`
+	DisableNatPort              bool             `mapstructure:"disable-natport"`
+	DisableConnectionManager    bool             `mapstructure:"disable-connection-manager"`
+	DisableResourceManager      bool             `mapstructure:"disable-resource-manager"`
+	DisableDHT                  bool             `mapstructure:"disable-dht"`
+	Flood                       bool             `mapstructure:"flood"`
+	Listen                      AddressList      `mapstructure:"listen"`
+	Bootnodes                   []string         `mapstructure:"bootnodes"`
+	Direct                      []string         `mapstructure:"direct"`
+	MinPeers                    int              `mapstructure:"min-peers"`
+	LowPeers                    int              `mapstructure:"low-peers"`
+	HighPeers                   int              `mapstructure:"high-peers"`
+	InboundFraction             float64          `mapstructure:"inbound-fraction"`
+	OutboundFraction            float64          `mapstructure:"outbound-fraction"`
+	AutoscalePeers              bool             `mapstructure:"autoscale-peers"`
+	AdvertiseAddress            AddressList      `mapstructure:"advertise-address"`
+	AcceptQueue                 int              `mapstructure:"p2p-accept-queue"`
+	Metrics                     bool             `mapstructure:"p2p-metrics"`
+	Bootnode                    bool             `mapstructure:"p2p-bootnode"`
+	ForceReachability           string           `mapstructure:"p2p-reachability"`
+	ForceDHTServer              bool             `mapstructure:"force-dht-server"`
+	EnableHolepunching          bool             `mapstructure:"p2p-holepunching"`
+	PrivateNetwork              bool             `mapstructure:"p2p-private-network"`
+	RelayServer                 RelayServer      `mapstructure:"relay-server"`
+	IP4Blocklist                []string         `mapstructure:"ip4-blocklist"`
+	IP6Blocklist                []string         `mapstructure:"ip6-blocklist"`
+	GossipQueueSize             int              `mapstructure:"gossip-queue-size"`
+	GossipValidationThrottle    int              `mapstructure:"gossip-validation-throttle"`
+	GossipAtxValidationThrottle int              `mapstructure:"gossip-atx-validation-throttle"`
+	PingPeers                   []string         `mapstructure:"ping-peers"`
+	PingInterval                time.Duration    `mapstructure:"ping-interval"`
+	Relay                       bool             `mapstructure:"relay"`
+	StaticRelays                []string         `mapstructure:"static-relays"`
+	EnableTCPTransport          bool             `mapstructure:"enable-tcp-transport"`
+	EnableQUICTransport         bool             `mapstructure:"enable-quic-transport"`
+	EnableRoutingDiscovery      bool             `mapstructure:"enable-routing-discovery"`
+	RoutingDiscoveryAdvertise   bool             `mapstructure:"routing-discovery-advertise"`
+	DiscoveryTimings            DiscoveryTimings `mapstructure:"discovery-timings"`
+	AutoNATServer               AutoNATServer    `mapstructure:"auto-nat-server"`
+}
+
+type DiscoveryTimings struct {
+	AdvertiseDelay      time.Duration `mapstructure:"advertise-delay"`
+	AdvertiseInterval   time.Duration `mapstructure:"advertise-interval"`
+	AdvertiseRetryDelay time.Duration `mapstructure:"advertise-retry-delay"`
+	FindPeersRetryDelay time.Duration `mapstructure:"find-peers-retry-delay"`
 }
 
 type AutoNATServer struct {
