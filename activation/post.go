@@ -91,7 +91,7 @@ type PostProofVerifyingOpts struct {
 }
 
 func DefaultPostVerifyingOpts() PostProofVerifyingOpts {
-	workers := runtime.NumCPU() * 3 / 4
+	workers := runtime.NumCPU() * 1 / 2
 	if workers < 1 {
 		workers = 1
 	}
