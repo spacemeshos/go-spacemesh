@@ -63,7 +63,7 @@ func (dadj *deadlineAdjuster) adjust() error {
 	now := dadj.clock.Now()
 	if dadj.hardDeadline.IsZero() {
 		dadj.hardDeadline = now.Add(dadj.hardTimeout)
-	} else if !now.Before(dadj.hardDeadline) {
+	} else if now.After(dadj.hardDeadline) {
 		// emulate yamux timeout error
 		return yamux.ErrTimeout
 	}
