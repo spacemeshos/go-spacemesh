@@ -122,9 +122,9 @@ func AdvertiseForPeerDiscovery() Opt {
 	}
 }
 
-func WithAdvertiseRetryDelay(aint time.Duration) Opt {
+func WithAdvertiseRetryDelay(value time.Duration) Opt {
 	return func(d *Discovery) {
-		d.advertiseRetryDelay = aint
+		d.advertiseRetryDelay = value
 	}
 }
 
