@@ -14,9 +14,31 @@ const (
 	deadlineAdjusterChunkSize = 4096
 )
 
+type deadlineAdjusterError struct {
+	innerErr     error
+	elapsed      time.Duration
+	totalRead    int
+	totalWritten int
+	timeout      time.Duration
+	hardTimeout  time.Duration
+}
+
+func (err *deadlineAdjusterError) Unwrap() error {
+	return err.innerErr
+}
+
+func (err *deadlineAdjusterError) Error() string {
+	return fmt.Sprintf("%v elapsed, %d bytes read, %d bytes written, timeout %v, hard timeout %v: %v",
+		err.elapsed,
+		err.totalRead,
+		err.totalWritten,
+		err.timeout,
+		err.hardTimeout,
+		err.innerErr)
+}
+
 type deadlineAdjuster struct {
 	peerStream
-	desc            string
 	timeout         time.Duration
 	hardTimeout     time.Duration
 	totalRead       int
@@ -29,10 +51,9 @@ type deadlineAdjuster struct {
 	hardDeadline    time.Time
 }
 
-func newDeadlineAdjuster(stream peerStream, desc string, timeout, hardTimeout time.Duration) *deadlineAdjuster {
+func newDeadlineAdjuster(stream peerStream, timeout, hardTimeout time.Duration) *deadlineAdjuster {
 	return &deadlineAdjuster{
 		peerStream:      stream,
-		desc:            desc,
 		timeout:         timeout,
 		hardTimeout:     hardTimeout,
 		start:           time.Now(),
@@ -47,16 +68,15 @@ func (dadj *deadlineAdjuster) augmentError(what string, err error) error {
 	if !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, yamux.ErrTimeout) {
 		return err
 	}
-	now := dadj.clock.Now()
-	return fmt.Errorf("%s: %s after %v, %d bytes read, %d bytes written, timeout %v, hard timeout %v: %w",
-		dadj.desc,
-		what,
-		now.Sub(dadj.start),
-		dadj.totalRead,
-		dadj.totalWritten,
-		dadj.timeout,
-		dadj.hardTimeout,
-		err)
+
+	return &deadlineAdjusterError{
+		innerErr:     err,
+		elapsed:      dadj.clock.Now().Sub(dadj.start),
+		totalRead:    dadj.totalRead,
+		totalWritten: dadj.totalWritten,
+		timeout:      dadj.timeout,
+		hardTimeout:  dadj.hardTimeout,
+	}
 }
 
 func (dadj *deadlineAdjuster) adjust() error {
@@ -91,14 +111,14 @@ func (dadj *deadlineAdjuster) adjust() error {
 	return nil
 }
 
-func (dadj *deadlineAdjuster) Read(p []byte) (n int, err error) {
-	var nCur int
+func (dadj *deadlineAdjuster) Read(p []byte) (int, error) {
+	var n int
 	for n < len(p) {
 		if err := dadj.adjust(); err != nil {
 			return n, dadj.augmentError("read", err)
 		}
 		to := min(len(p), n+dadj.chunkSize)
-		nCur, err = dadj.peerStream.Read(p[n:to])
+		nCur, err := dadj.peerStream.Read(p[n:to])
 		n += nCur
 		dadj.totalRead += nCur
 		if err != nil {

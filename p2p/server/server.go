@@ -191,21 +191,17 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 }
 
-func (s *Server) desc(what string, stream network.Stream) string {
-	return fmt.Sprintf("%s %s: peer %s address %s", s.protocol, what,
-		stream.Conn().RemotePeer(),
-		stream.Conn().RemoteMultiaddr())
-}
-
 func (s *Server) queueHandler(ctx context.Context, stream network.Stream) bool {
 	defer stream.Close()
 	defer stream.SetDeadline(time.Time{})
-	dadj := newDeadlineAdjuster(stream, s.desc("handler", stream), s.timeout, s.hardTimeout)
+	dadj := newDeadlineAdjuster(stream, s.timeout, s.hardTimeout)
 	rd := bufio.NewReader(dadj)
 	size, err := varint.ReadUvarint(rd)
 	if err != nil {
 		s.logger.With().Debug("initial read failed",
 			log.String("protocol", s.protocol),
+			log.Stringer("remotePeer", stream.Conn().RemotePeer()),
+			log.Stringer("remoteMultiaddr", stream.Conn().RemoteMultiaddr()),
 			log.Err(err),
 		)
 		return false
@@ -213,6 +209,8 @@ func (s *Server) queueHandler(ctx context.Context, stream network.Stream) bool {
 	if size > uint64(s.requestLimit) {
 		s.logger.With().Warning("request limit overflow",
 			log.String("protocol", s.protocol),
+			log.Stringer("remotePeer", stream.Conn().RemotePeer()),
+			log.Stringer("remoteMultiaddr", stream.Conn().RemoteMultiaddr()),
 			log.Int("limit", s.requestLimit),
 			log.Uint64("request", size),
 		)
@@ -224,6 +222,8 @@ func (s *Server) queueHandler(ctx context.Context, stream network.Stream) bool {
 	if err != nil {
 		s.logger.With().Debug("error reading request",
 			log.String("protocol", s.protocol),
+			log.Stringer("remotePeer", stream.Conn().RemotePeer()),
+			log.Stringer("remoteMultiaddr", stream.Conn().RemoteMultiaddr()),
 			log.Err(err),
 		)
 		return false
@@ -232,12 +232,16 @@ func (s *Server) queueHandler(ctx context.Context, stream network.Stream) bool {
 	buf, err = s.handler(log.WithNewRequestID(ctx), buf)
 	s.logger.With().Debug("protocol handler execution time",
 		log.String("protocol", s.protocol),
+		log.Stringer("remotePeer", stream.Conn().RemotePeer()),
+		log.Stringer("remoteMultiaddr", stream.Conn().RemoteMultiaddr()),
 		log.Duration("duration", time.Since(start)),
 	)
 	var resp Response
 	if err != nil {
 		s.logger.With().Debug("handler reported error",
 			log.String("protocol", s.protocol),
+			log.Stringer("remotePeer", stream.Conn().RemotePeer()),
+			log.Stringer("remoteMultiaddr", stream.Conn().RemoteMultiaddr()),
 			log.Err(err),
 		)
 		resp.Error = err.Error()
@@ -250,6 +254,8 @@ func (s *Server) queueHandler(ctx context.Context, stream network.Stream) bool {
 		s.logger.With().Warning(
 			"failed to write response",
 			log.String("protocol", s.protocol),
+			log.Stringer("remotePeer", stream.Conn().RemotePeer()),
+			log.Stringer("remoteMultiaddr", stream.Conn().RemoteMultiaddr()),
 			log.Int("resp.Data len", len(resp.Data)),
 			log.Int("resp.Error len", len(resp.Error)),
 			log.Err(err),
@@ -259,6 +265,8 @@ func (s *Server) queueHandler(ctx context.Context, stream network.Stream) bool {
 	if err := wr.Flush(); err != nil {
 		s.logger.With().Warning("failed to flush stream",
 			log.String("protocol", s.protocol),
+			log.Stringer("remotePeer", stream.Conn().RemotePeer()),
+			log.Stringer("remoteMultiaddr", stream.Conn().RemoteMultiaddr()),
 			log.Err(err))
 		return false
 	}
@@ -328,25 +336,29 @@ func (s *Server) request(ctx context.Context, pid peer.ID, req []byte) (*Respons
 	}
 	defer stream.Close()
 	defer stream.SetDeadline(time.Time{})
-	dadj := newDeadlineAdjuster(stream, s.desc("request", stream), s.timeout, s.hardTimeout)
+	dadj := newDeadlineAdjuster(stream, s.timeout, s.hardTimeout)
 
 	wr := bufio.NewWriter(dadj)
 	sz := make([]byte, binary.MaxVarintLen64)
 	n := binary.PutUvarint(sz, uint64(len(req)))
 	if _, err := wr.Write(sz[:n]); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("peer %s address %s: %w",
+			pid, stream.Conn().RemoteMultiaddr(), err)
 	}
 	if _, err := wr.Write(req); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("peer %s address %s: %w",
+			pid, stream.Conn().RemoteMultiaddr(), err)
 	}
 	if err := wr.Flush(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("peer %s address %s: %w",
+			pid, stream.Conn().RemoteMultiaddr(), err)
 	}
 
 	rd := bufio.NewReader(dadj)
 	var r Response
 	if _, err = codec.DecodeFrom(rd, &r); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("peer %s address %s: %w",
+			pid, stream.Conn().RemoteMultiaddr(), err)
 	}
 	return &r, nil
 }

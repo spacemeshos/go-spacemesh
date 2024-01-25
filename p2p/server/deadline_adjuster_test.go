@@ -70,7 +70,7 @@ func TestDeadlineAdjuster(t *testing.T) {
 	}
 	gomock.InOrder(writeCalls...)
 
-	dadj := newDeadlineAdjuster(s, "test", 10*time.Second, 35*time.Second)
+	dadj := newDeadlineAdjuster(s, 10*time.Second, 35*time.Second)
 	dadj.clock = clock
 	dadj.chunkSize = 4
 
