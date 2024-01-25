@@ -130,14 +130,14 @@ func GetCommand() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "node",
 		Short: "start node",
-		Run: func(c *cobra.Command, args []string) {
+		RunE: func(c *cobra.Command, args []string) error {
 			preset := conf.Preset // might be set via CLI flag
 			if err := loadConfig(&conf, preset, *configPath); err != nil {
-				log.With().Fatal("failed to initialize config", log.Err(err))
+				return fmt.Errorf("loading config: %w", err)
 			}
 			// apply CLI args to config
 			if err := c.ParseFlags(args); err != nil {
-				fmt.Println("an error has occurred while parsing flags:", err)
+				return fmt.Errorf("parsing flags: %w", err)
 			}
 
 			if conf.LOGGING.Encoder == config.JSONLogEncoder {
@@ -145,7 +145,7 @@ func GetCommand() *cobra.Command {
 			}
 
 			if cmd.NoMainNet && onMainNet(&conf) && !conf.NoMainOverride {
-				log.With().Fatal("this is a testnet-only build not intended for mainnet")
+				return errors.New("this is a testnet-only build not intended for mainnet")
 			}
 
 			app := New(
@@ -158,60 +158,56 @@ func GetCommand() *cobra.Command {
 				),
 			)
 
-			run := func(ctx context.Context) error {
-				types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
-				// ensure all data folders exist
-				if err := os.MkdirAll(app.Config.DataDir(), 0o700); err != nil {
-					return fmt.Errorf("ensure folders exist: %w", err)
-				}
-
-				if err := app.Lock(); err != nil {
-					return fmt.Errorf("failed to get exclusive file lock: %w", err)
-				}
-				defer app.Unlock()
-
-				if err := app.Initialize(); err != nil {
-					return err
-				}
-
-				/* Create or load miner identity */
-				var err error
-				if app.edSgn, err = app.LoadOrCreateEdSigner(); err != nil {
-					return fmt.Errorf("could not retrieve identity: %w", err)
-				}
-
-				app.preserve, err = app.LoadCheckpoint(ctx)
-				if err != nil {
-					return err
-				}
-
-				// This blocks until the context is finished or until an error is produced
-				err = app.Start(ctx)
-				cleanupCtx, cleanupCancel := context.WithTimeout(
-					context.Background(),
-					30*time.Second,
-				)
-				defer cleanupCancel()
-				done := make(chan struct{}, 1)
-				// FIXME: per https://github.com/spacemeshos/go-spacemesh/issues/3830
-				go func() {
-					app.Cleanup(cleanupCtx)
-					_ = app.eg.Wait()
-					close(done)
-				}()
-				select {
-				case <-done:
-				case <-cleanupCtx.Done():
-					app.log.With().Error("app failed to clean up in time")
-				}
-				return err
-			}
 			// os.Interrupt for all systems, especially windows, syscall.SIGTERM is mainly for docker.
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer cancel()
-			if err := run(ctx); err != nil {
-				app.log.With().Fatal(err.Error())
+
+			types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
+			// ensure all data folders exist
+			if err := os.MkdirAll(app.Config.DataDir(), 0o700); err != nil {
+				return fmt.Errorf("ensure folders exist: %w", err)
 			}
+
+			if err := app.Lock(); err != nil {
+				return fmt.Errorf("getting exclusive file lock: %w", err)
+			}
+			defer app.Unlock()
+
+			if err := app.Initialize(); err != nil {
+				return fmt.Errorf("initializing app: %w", err)
+			}
+
+			/* Create or load miner identity */
+			var err error
+			if app.edSgn, err = app.LoadOrCreateEdSigner(); err != nil {
+				return fmt.Errorf("could not retrieve identity: %w", err)
+			}
+
+			app.preserve, err = app.LoadCheckpoint(ctx)
+			if err != nil {
+				return fmt.Errorf("loading checkpoint: %w", err)
+			}
+
+			// This blocks until the context is finished or until an error is produced
+			err = app.Start(ctx)
+			cleanupCtx, cleanupCancel := context.WithTimeout(
+				context.Background(),
+				30*time.Second,
+			)
+			defer cleanupCancel()
+			done := make(chan struct{}, 1)
+			// FIXME: per https://github.com/spacemeshos/go-spacemesh/issues/3830
+			go func() {
+				app.Cleanup(cleanupCtx)
+				_ = app.eg.Wait()
+				close(done)
+			}()
+			select {
+			case <-done:
+			case <-cleanupCtx.Done():
+				app.log.Error("app failed to clean up in time")
+			}
+			return err
 		},
 	}
 
