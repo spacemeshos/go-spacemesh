@@ -73,6 +73,7 @@ func createFetch(tb testing.TB) *testFetch {
 		BatchSize:            3,
 		QueueSize:            1000,
 		RequestTimeout:       3 * time.Second,
+		RequestHardTimeout:   10 * time.Second,
 		MaxRetriesForRequest: 3,
 		GetAtxsConcurrency:   DefaultConfig().GetAtxsConcurrency,
 	}
@@ -335,7 +336,8 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 		BatchTimeout:         2000 * time.Minute, // make sure we never hit the batch timeout
 		BatchSize:            3,
 		QueueSize:            1000,
-		RequestTimeout:       time.Second * time.Duration(3),
+		RequestTimeout:       3 * time.Second,
+		RequestHardTimeout:   10 * time.Second,
 		MaxRetriesForRequest: 3,
 	}
 	p2pconf := p2p.DefaultConfig()
