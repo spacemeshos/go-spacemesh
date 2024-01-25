@@ -28,8 +28,6 @@ const (
 	discoveryHighPeersDelay = 10 * time.Second
 	protocolPrefix          = "/spacekad"
 	ProtocolID              = protocolPrefix + "/kad/1.0.0"
-	findPeersRetryDelay     = time.Second
-	advertiseRetryInterval  = time.Second
 )
 
 type Opt func(*Discovery)
@@ -124,9 +122,27 @@ func AdvertiseForPeerDiscovery() Opt {
 	}
 }
 
+func WithAdvertiseRetryDelay(aint time.Duration) Opt {
+	return func(d *Discovery) {
+		d.advertiseRetryDelay = aint
+	}
+}
+
+func WithAdvertiseDelay(ad time.Duration) Opt {
+	return func(d *Discovery) {
+		d.advertiseDelay = ad
+	}
+}
+
 func WithAdvertiseInterval(aint time.Duration) Opt {
 	return func(d *Discovery) {
 		d.advertiseInterval = aint
+	}
+}
+
+func WithFindPeersRetryDelay(fd time.Duration) Opt {
+	return func(d *Discovery) {
+		d.findPeersRetryDelay = fd
 	}
 }
 
@@ -138,15 +154,17 @@ type DiscoveryHost interface {
 
 func New(h DiscoveryHost, opts ...Opt) (*Discovery, error) {
 	d := Discovery{
-		public:            true,
-		logger:            zap.NewNop(),
-		h:                 h,
-		period:            10 * time.Second,
-		timeout:           30 * time.Second,
-		bootstrapDuration: 30 * time.Second,
-		minPeers:          20,
-		highPeers:         40,
-		advertiseInterval: time.Minute,
+		public:              true,
+		logger:              zap.NewNop(),
+		h:                   h,
+		period:              10 * time.Second,
+		timeout:             30 * time.Second,
+		bootstrapDuration:   30 * time.Second,
+		minPeers:            20,
+		highPeers:           40,
+		advertiseInterval:   time.Minute,
+		advertiseRetryDelay: time.Minute,
+		findPeersRetryDelay: time.Minute,
 	}
 	for _, opt := range opts {
 		opt(&d)
@@ -183,7 +201,10 @@ type Discovery struct {
 	bootstrapDuration   time.Duration
 	minPeers, highPeers int
 	backup, bootnodes   []peer.AddrInfo
+	advertiseDelay      time.Duration
 	advertiseInterval   time.Duration
+	advertiseRetryDelay time.Duration
+	findPeersRetryDelay time.Duration
 }
 
 func (d *Discovery) FindPeer(ctx context.Context, p peer.ID) (peer.AddrInfo, error) {
@@ -376,6 +397,13 @@ func (d *Discovery) peerHasTag(p peer.ID) bool {
 }
 
 func (d *Discovery) advertiseNS(ctx context.Context, ns string, active func() bool) error {
+	if d.advertiseDelay != 0 {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(d.advertiseDelay):
+		}
+	}
 	for {
 		var ttl time.Duration
 		if active == nil || active() {
@@ -384,7 +412,7 @@ func (d *Discovery) advertiseNS(ctx context.Context, ns string, active func() bo
 			ttl, err = d.disc.Advertise(ctx, ns, p2pdisc.TTL(d.advertiseInterval))
 			if err != nil {
 				d.logger.Error("failed to re-advertise for discovery", zap.String("ns", ns), zap.Error(err))
-				ttl = advertiseRetryInterval
+				ttl = d.advertiseRetryDelay
 			}
 		} else {
 			ttl = d.advertiseInterval
@@ -465,7 +493,7 @@ func (d *Discovery) findPeersContinuously(ctx context.Context, ns string) <-chan
 					select {
 					case <-ctx.Done():
 						return nil
-					case <-time.After(findPeersRetryDelay):
+					case <-time.After(d.findPeersRetryDelay):
 					}
 					peerCh = nil
 					continue
@@ -481,7 +509,7 @@ func (d *Discovery) findPeersContinuously(ctx context.Context, ns string) <-chan
 					select {
 					case <-ctx.Done():
 						return nil
-					case <-time.After(findPeersRetryDelay):
+					case <-time.After(d.findPeersRetryDelay):
 					}
 					continue
 				}
