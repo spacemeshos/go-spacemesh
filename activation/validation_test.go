@@ -96,7 +96,14 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 		posAtxId := types.ATXID{1, 2, 3}
 		commitmentAtxId := types.ATXID{5, 6, 7}
 
-		challenge := newChallenge(0, types.EmptyATXID, posAtxId, 2, &commitmentAtxId)
+		var PublishEpoch types.EpochID = 2
+		challenge := types.NIPostChallenge{
+			Sequence:       0,
+			PrevATXID:      types.EmptyATXID,
+			PublishEpoch:   PublishEpoch,
+			PositioningATX: posAtxId,
+			CommitmentATX:  &commitmentAtxId,
+		}
 		challenge.InitialPost = &types.Post{}
 
 		atxProvider := NewMockatxProvider(ctrl)
@@ -115,7 +122,14 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(0, types.EmptyATXID, posAtxId, types.LayerID(2).GetEpoch(), &goldenATXID)
+		var PublishEpoch types.EpochID = types.LayerID(2).GetEpoch()
+		challenge := types.NIPostChallenge{
+			Sequence:       0,
+			PrevATXID:      types.EmptyATXID,
+			PublishEpoch:   PublishEpoch,
+			PositioningATX: posAtxId,
+			CommitmentATX:  &goldenATXID,
+		}
 		challenge.InitialPost = &types.Post{}
 
 		atxProvider := NewMockatxProvider(ctrl)
@@ -130,7 +144,14 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 		posAtxId := types.ATXID{1, 2, 3}
 		commitmentAtxId := types.ATXID{5, 6, 7}
 
-		challenge := newChallenge(0, types.EmptyATXID, posAtxId, 1, &commitmentAtxId)
+		var PublishEpoch types.EpochID = 1
+		challenge := types.NIPostChallenge{
+			Sequence:       0,
+			PrevATXID:      types.EmptyATXID,
+			PublishEpoch:   PublishEpoch,
+			PositioningATX: posAtxId,
+			CommitmentATX:  &commitmentAtxId,
+		}
 		challenge.InitialPost = &types.Post{}
 
 		atxProvider := NewMockatxProvider(ctrl)
@@ -166,7 +187,14 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(10, prevAtxId, posAtxId, 2, nil)
+		var PublishEpoch types.EpochID = 2
+		challenge := types.NIPostChallenge{
+			Sequence:       10,
+			PrevATXID:      prevAtxId,
+			PublishEpoch:   PublishEpoch,
+			PositioningATX: posAtxId,
+			CommitmentATX:  nil,
+		}
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(&types.ActivationTxHeader{
@@ -189,7 +217,14 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(10, prevAtxId, posAtxId, types.LayerID(1012).GetEpoch(), nil)
+		var PublishEpoch types.EpochID = types.LayerID(1012).GetEpoch()
+		challenge := types.NIPostChallenge{
+			Sequence:       10,
+			PrevATXID:      prevAtxId,
+			PublishEpoch:   PublishEpoch,
+			PositioningATX: posAtxId,
+			CommitmentATX:  nil,
+		}
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(nil, errors.New("not found"))
@@ -208,7 +243,14 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(10, prevAtxId, posAtxId, types.LayerID(1012).GetEpoch(), nil)
+		var PublishEpoch types.EpochID = types.LayerID(1012).GetEpoch()
+		challenge := types.NIPostChallenge{
+			Sequence:       10,
+			PrevATXID:      prevAtxId,
+			PublishEpoch:   PublishEpoch,
+			PositioningATX: posAtxId,
+			CommitmentATX:  nil,
+		}
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(&types.ActivationTxHeader{
@@ -231,7 +273,14 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(10, prevAtxId, posAtxId, 2, nil)
+		var PublishEpoch types.EpochID = 2
+		challenge := types.NIPostChallenge{
+			Sequence:       10,
+			PrevATXID:      prevAtxId,
+			PublishEpoch:   PublishEpoch,
+			PositioningATX: posAtxId,
+			CommitmentATX:  nil,
+		}
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(&types.ActivationTxHeader{
@@ -254,7 +303,14 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(10, prevAtxId, posAtxId, 2, nil)
+		var PublishEpoch types.EpochID = 2
+		challenge := types.NIPostChallenge{
+			Sequence:       10,
+			PrevATXID:      prevAtxId,
+			PublishEpoch:   PublishEpoch,
+			PositioningATX: posAtxId,
+			CommitmentATX:  nil,
+		}
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(&types.ActivationTxHeader{
