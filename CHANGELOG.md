@@ -17,6 +17,8 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 * [#5489](https://github.com/spacemeshos/go-spacemesh/pull/5489)
   Fix problem in POST proving where too many files were opened at the same time.
+* [#5494](https://github.com/spacemeshos/go-spacemesh/pull/5494)
+  Make routing discovery more configurable and less spammy by default.
 
 * [#5498](https://github.com/spacemeshos/go-spacemesh/pull/5498)
   Reduce the default number of CPU cores that are used for verifying incoming ATXs to half of the available cores.

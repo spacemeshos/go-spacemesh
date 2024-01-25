@@ -157,7 +157,10 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 		discovery.WithDir(cfg.DataDir),
 		discovery.WithBootnodes(bootnodes),
 		discovery.WithLogger(fh.logger.Zap()),
-		discovery.WithAdvertiseInterval(fh.cfg.AdvertiseInterval),
+		discovery.WithAdvertiseDelay(fh.cfg.DiscoveryTimings.AdvertiseDelay),
+		discovery.WithAdvertiseInterval(fh.cfg.DiscoveryTimings.AdvertiseInterval),
+		discovery.WithAdvertiseRetryDelay(fh.cfg.DiscoveryTimings.AdvertiseInterval),
+		discovery.WithFindPeersRetryDelay(fh.cfg.DiscoveryTimings.FindPeersRetryDelay),
 	}
 	if cfg.PrivateNetwork {
 		dopts = append(dopts, discovery.Private())
