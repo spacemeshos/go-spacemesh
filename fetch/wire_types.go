@@ -22,7 +22,7 @@ type RequestMessage struct {
 // ResponseMessage is sent to the node as a response.
 type ResponseMessage struct {
 	Hash types.Hash32
-	Data []byte `scale:"max=41943040"` // limit to 20 MiB
+	Data []byte `scale:"max=41943040"` // limit to 40 MiB
 }
 
 // RequestBatch is a batch of requests and a hash of all requests as ID.
