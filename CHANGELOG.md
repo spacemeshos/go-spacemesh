@@ -2,6 +2,13 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## Release v1.3.7
+
+### Improvements
+
+* [#5502](https://github.com/spacemeshos/go-spacemesh/pull/5502)
+  Increase limits of p2p messages to compensate for the increased number of nodes on the network.
+
 ## Release v1.3.6
 
 ### Improvements
