@@ -137,7 +137,7 @@ func GetCommand() *cobra.Command {
 				return fmt.Errorf("loading config: %w", err)
 			}
 			// apply CLI args to config
-			if err := c.ParseFlags(args); err != nil {
+			if err := c.ParseFlags(os.Args[1:]); err != nil {
 				return fmt.Errorf("parsing flags: %w", err)
 			}
 
