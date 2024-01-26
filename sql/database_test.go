@@ -135,7 +135,7 @@ func TestDatabaseVacuumState(t *testing.T) {
 
 	db, err = Open("file:"+dbFile,
 		WithMigrations([]Migration{}),
-		WithVacuumState(1000),
+		WithVacuumState(11),
 	)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())

@@ -32,6 +32,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
+	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
@@ -1264,8 +1265,8 @@ func TestHandler_HandleGossipAtx(t *testing.T) {
 	atxHdlr.mclock.EXPECT().CurrentLayer().Return(second.PublishEpoch.FirstLayer())
 	atxHdlr.mockFetch.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any())
 	atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), second.GetPoetProofRef())
-	atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, ids []types.ATXID) error {
+	atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, ids []types.ATXID, _ ...system.GetAtxOpt) error {
 			require.ElementsMatch(t, []types.ATXID{first.ID()}, ids)
 			data, err := codec.Encode(first)
 			require.NoError(t, err)
@@ -1561,7 +1562,7 @@ func TestHandler_FetchReferences(t *testing.T) {
 
 		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), atx.GetPoetProofRef())
 		atxHdlr.mockFetch.EXPECT().
-			GetAtxs(gomock.Any(), gomock.InAnyOrder([]types.ATXID{atx.PositioningATX, atx.PrevATXID})).
+			GetAtxs(gomock.Any(), gomock.InAnyOrder([]types.ATXID{atx.PositioningATX, atx.PrevATXID}), gomock.Any()).
 			Return(nil)
 		require.NoError(t, atxHdlr.FetchReferences(context.Background(), atx))
 	})
@@ -1576,7 +1577,7 @@ func TestHandler_FetchReferences(t *testing.T) {
 		atx := newAtx(t, sig, challenge, nipost.NIPost, 2, coinbase)
 
 		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), atx.GetPoetProofRef())
-		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atx.PrevATXID}).Return(nil)
+		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atx.PrevATXID}, gomock.Any()).Return(nil)
 		require.NoError(t, atxHdlr.FetchReferences(context.Background(), atx))
 	})
 
@@ -1590,7 +1591,7 @@ func TestHandler_FetchReferences(t *testing.T) {
 		atx := newAtx(t, sig, challenge, nipost.NIPost, 2, coinbase)
 
 		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), atx.GetPoetProofRef())
-		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atx.PrevATXID}).Return(nil)
+		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atx.PrevATXID}, gomock.Any()).Return(nil)
 		require.NoError(t, atxHdlr.FetchReferences(context.Background(), atx))
 	})
 
@@ -1605,9 +1606,8 @@ func TestHandler_FetchReferences(t *testing.T) {
 		atx.CommitmentATX = &commitATX
 
 		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), atx.GetPoetProofRef())
-		atxHdlr.mockFetch.EXPECT().
-			GetAtxs(gomock.Any(), gomock.InAnyOrder([]types.ATXID{atx.PositioningATX, *atx.CommitmentATX})).
-			Return(nil)
+		expectedIds := []types.ATXID{atx.PositioningATX, *atx.CommitmentATX}
+		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), gomock.InAnyOrder(expectedIds), gomock.Any()).Return(nil)
 		require.NoError(t, atxHdlr.FetchReferences(context.Background(), atx))
 	})
 
@@ -1622,7 +1622,7 @@ func TestHandler_FetchReferences(t *testing.T) {
 		atx.CommitmentATX = &goldenATXID
 
 		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), atx.GetPoetProofRef())
-		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atx.PositioningATX}).Return(nil)
+		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atx.PositioningATX}, gomock.Any()).Return(nil)
 		require.NoError(t, atxHdlr.FetchReferences(context.Background(), atx))
 	})
 
@@ -1649,7 +1649,7 @@ func TestHandler_FetchReferences(t *testing.T) {
 		atx := newAtx(t, sig, challenge, nipost.NIPost, 2, coinbase)
 
 		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), atx.GetPoetProofRef())
-		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atx.PrevATXID}).Return(nil)
+		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atx.PrevATXID}, gomock.Any()).Return(nil)
 		require.NoError(t, atxHdlr.FetchReferences(context.Background(), atx))
 	})
 
@@ -1676,7 +1676,7 @@ func TestHandler_FetchReferences(t *testing.T) {
 		atx := newAtx(t, sig, challenge, nipost.NIPost, 2, coinbase)
 
 		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), atx.GetPoetProofRef())
-		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atx.PrevATXID}).Return(errors.New("pooh"))
+		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atx.PrevATXID}, gomock.Any()).Return(errors.New("oh"))
 		require.Error(t, atxHdlr.FetchReferences(context.Background(), atx))
 	})
 }
@@ -1772,7 +1772,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 			require.ElementsMatch(t, []types.Hash32{atx1.ID().Hash32(), proofRef}, got)
 		})
 	atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), proofRef)
-	atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any())
+	atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any())
 	atxHdlr.mValidator.EXPECT().
 		NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(leaves, nil)

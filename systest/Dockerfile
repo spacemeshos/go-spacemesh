@@ -1,8 +1,15 @@
 FROM golang:1.21 as build
-RUN apt-get update -q
-RUN apt-get install -qy ocl-icd-opencl-dev libpocl2 unzip
+RUN set -ex \
+    && apt-get update --fix-missing \
+    && apt-get install -qy --no-install-recommends \
+    unzip sudo \
+    ocl-icd-opencl-dev
 
-WORKDIR /build/
+WORKDIR /src
+
+COPY Makefile* .
+RUN make get-libs
+RUN make go-env-test
 
 COPY go.mod .
 COPY go.sum .
@@ -13,14 +20,15 @@ RUN make get-postrs-service
 RUN make get-postrs-lib
 RUN make go-env-test
 
-RUN --mount=type=cache,target=/root/.cache/go-build go test -failfast -v -c -o /build/tests.test ./systest/tests/
+RUN --mount=type=cache,id=build,target=/root/.cache/go-build go test -failfast -v -c -o ./build/tests.test ./systest/tests/
 
-FROM debian:bookworm
-RUN apt-get update -q
-RUN apt-get install -qy libpocl2
-
-COPY --from=build /build/tests.test /bin/tests
-COPY --from=build /build/build/libpost.so /bin/libpost.so
-COPY --from=build /build/build/service /bin/service
+FROM ubuntu:22.04
+RUN set -ex \
+   && apt-get update --fix-missing \
+   && apt-get install -qy --no-install-recommends \
+   ocl-icd-libopencl1 clinfo \
+   && apt-get clean \
+   && rm -rf /var/lib/apt/lists/*
+COPY --from=build /src/build/tests.test /bin/tests
+COPY --from=build /src/build/libpost.so /bin/libpost.so
 ENV LD_LIBRARY_PATH="/bin/"
-ENV RUST_LOG=trace

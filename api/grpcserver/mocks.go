@@ -1561,6 +1561,45 @@ func (c *meshAPIGetLayerCall) DoAndReturn(f func(types.LayerID) (*types.Layer, e
 	return c
 }
 
+// GetLayerVerified mocks base method.
+func (m *MockmeshAPI) GetLayerVerified(arg0 types.LayerID) (*types.Block, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetLayerVerified", arg0)
+	ret0, _ := ret[0].(*types.Block)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetLayerVerified indicates an expected call of GetLayerVerified.
+func (mr *MockmeshAPIMockRecorder) GetLayerVerified(arg0 any) *meshAPIGetLayerVerifiedCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerVerified", reflect.TypeOf((*MockmeshAPI)(nil).GetLayerVerified), arg0)
+	return &meshAPIGetLayerVerifiedCall{Call: call}
+}
+
+// meshAPIGetLayerVerifiedCall wrap *gomock.Call
+type meshAPIGetLayerVerifiedCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *meshAPIGetLayerVerifiedCall) Return(arg0 *types.Block, arg1 error) *meshAPIGetLayerVerifiedCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *meshAPIGetLayerVerifiedCall) Do(f func(types.LayerID) (*types.Block, error)) *meshAPIGetLayerVerifiedCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *meshAPIGetLayerVerifiedCall) DoAndReturn(f func(types.LayerID) (*types.Block, error)) *meshAPIGetLayerVerifiedCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // GetRewardsByCoinbase mocks base method.
 func (m *MockmeshAPI) GetRewardsByCoinbase(arg0 types.Address) ([]*types.Reward, error) {
 	m.ctrl.T.Helper()

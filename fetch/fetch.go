@@ -10,6 +10,7 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/network"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -18,7 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
-	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 const (
@@ -98,13 +98,17 @@ func (s ServerConfig) toOpts() []server.Opt {
 
 // Config is the configuration file of the Fetch component.
 type Config struct {
-	BatchTimeout         time.Duration
-	BatchSize, QueueSize int
-	RequestTimeout       time.Duration
-	MaxRetriesForRequest int
-	EnableServesMetrics  bool                    `mapstructure:"servers-metrics"`
+	BatchTimeout         time.Duration           `mapstructure:"batchtimeout"`
+	BatchSize            int                     `mapstructure:"batchsize"`
+	QueueSize            int                     `mapstructure:"queuesize"`
+	MaxRetriesForRequest int                     `mapstructure:"maxretriesforrequest"`
+	RequestTimeout       time.Duration           `mapstructure:"request-timeout"`
+	RequestHardTimeout   time.Duration           `mapstructure:"request-hard-timeout"`
+	EnableServerMetrics  bool                    `mapstructure:"servers-metrics"`
 	ServersConfig        map[string]ServerConfig `mapstructure:"servers"`
 	PeersRateThreshold   float64                 `mapstructure:"peers-rate-threshold"`
+	// The maximum number of concurrent requests to get ATXs.
+	GetAtxsConcurrency int64 `mapstructure:"getatxsconcurrency"`
 }
 
 func (c Config) getServerConfig(protocol string) ServerConfig {
@@ -126,6 +130,7 @@ func DefaultConfig() Config {
 		QueueSize:            20,
 		BatchSize:            10,
 		RequestTimeout:       25 * time.Second,
+		RequestHardTimeout:   5 * time.Minute,
 		MaxRetriesForRequest: 100,
 		ServersConfig: map[string]ServerConfig{
 			// serves 1 MB of data
@@ -145,6 +150,7 @@ func DefaultConfig() Config {
 			OpnProtocol: {Queue: 10000, Requests: 1000, Interval: time.Second},
 		},
 		PeersRateThreshold: 0.02,
+		GetAtxsConcurrency: 100,
 	}
 }
 
@@ -214,13 +220,13 @@ type Fetch struct {
 	shutdownCtx context.Context
 	cancel      context.CancelFunc
 	eg          errgroup.Group
+
+	getAtxsLimiter limiter
 }
 
 // NewFetch creates a new Fetch struct.
 func NewFetch(
 	cdb *datastore.CachedDB,
-	msh meshProvider,
-	b system.BeaconGetter,
 	host *p2p.Host,
 	opts ...Option,
 ) *Fetch {
@@ -240,6 +246,7 @@ func NewFetch(
 	for _, opt := range opts {
 		opt(f)
 	}
+	f.getAtxsLimiter = semaphore.NewWeighted(f.cfg.GetAtxsConcurrency)
 	f.peers = peers.New()
 	// NOTE(dshulyak) this is to avoid tests refactoring.
 	// there is one test that covers this part.
@@ -266,7 +273,7 @@ func NewFetch(
 
 	f.batchTimeout = time.NewTicker(f.cfg.BatchTimeout)
 	if len(f.servers) == 0 {
-		h := newHandler(cdb, bs, msh, b, f.logger)
+		h := newHandler(cdb, bs, f.logger)
 		f.registerServer(host, atxProtocol, h.handleEpochInfoReq)
 		f.registerServer(host, lyrDataProtocol, h.handleLayerDataReq)
 		f.registerServer(host, hashProtocol, h.handleHashReq)
@@ -284,9 +291,10 @@ func (f *Fetch) registerServer(
 ) {
 	opts := []server.Opt{
 		server.WithTimeout(f.cfg.RequestTimeout),
+		server.WithHardTimeout(f.cfg.RequestHardTimeout),
 		server.WithLog(f.logger),
 	}
-	if f.cfg.EnableServesMetrics {
+	if f.cfg.EnableServerMetrics {
 		opts = append(opts, server.WithMetrics())
 	}
 	opts = append(opts, f.cfg.getServerConfig(protocol).toOpts()...)

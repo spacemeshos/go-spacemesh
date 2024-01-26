@@ -263,6 +263,32 @@ func TestMesh_WakeUp(t *testing.T) {
 	require.Equal(t, latestState, gotLS)
 }
 
+func TestMesh_GetLayerVerified(t *testing.T) {
+	tm := createTestMesh(t)
+	id := types.GetEffectiveGenesis().Add(1)
+	blk, err := tm.GetLayerVerified(id)
+	require.NoError(t, err)
+	require.Nil(t, blk)
+
+	// now create some blocks in the layer
+	blks := createLayerBlocks(t, tm.db, tm.Mesh, id)
+	blk, err = tm.GetLayerVerified(id)
+
+	// still expect no result since no layer is marked as verified
+	require.NoError(t, err)
+	require.Nil(t, blk)
+
+	// now set one of the layers as applied
+	require.NoError(t, layers.SetApplied(tm.db, id, blks[2].ID()))
+
+	// finally we expect a result
+	blk, err = tm.GetLayerVerified(id)
+	require.NoError(t, err)
+	require.NotNil(t, blk)
+	require.Equal(t, id, blk.LayerIndex)
+	require.Equal(t, blks[2].ID(), blk.ID())
+}
+
 func TestMesh_GetLayer(t *testing.T) {
 	tm := createTestMesh(t)
 	id := types.GetEffectiveGenesis().Add(1)
@@ -934,7 +960,7 @@ func TestProcessLayerPerHareOutput(t *testing.T) {
 				Updates().
 				Return(nil).
 				AnyTimes()
-				// this makes ProcessLayer noop
+			// this makes ProcessLayer noop
 			for _, c := range tc.certs {
 				if c.cert.Cert != nil {
 					require.NoError(t, certificates.Add(tm.cdb, c.layer, c.cert.Cert))

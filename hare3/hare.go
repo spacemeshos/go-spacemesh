@@ -42,8 +42,8 @@ type Config struct {
 	RoundDuration   time.Duration `mapstructure:"round-duration"`
 	// LogStats if true will log iteration statistics with INFO level at the start of the next iteration.
 	// This requires additional computation and should be used for debugging only.
-	LogStats     bool `mapstructure:"log-stats"`
-	ProtocolName string
+	LogStats     bool   `mapstructure:"log-stats"`
+	ProtocolName string `mapstructure:"protocolname"`
 }
 
 func (cfg *Config) Validate(zdist time.Duration) error {

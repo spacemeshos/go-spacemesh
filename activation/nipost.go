@@ -116,13 +116,48 @@ func (nb *NIPostBuilder) ResetState() error {
 	return nil
 }
 
-func (nb *NIPostBuilder) proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error) {
-	client, err := nb.postService.Client(nb.signer.NodeID())
-	if err != nil {
-		return nil, nil, err
-	}
+func (nb *NIPostBuilder) Proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error) {
+	started := false
+	retries := 0
+	for {
+		client, err := nb.postService.Client(nb.signer.NodeID())
+		if err != nil {
+			select {
+			case <-ctx.Done():
+				if started {
+					events.EmitPostFailure()
+				}
+				return nil, nil, ctx.Err()
+			case <-time.After(2 * time.Second): // Wait a few seconds and try connecting again
+				retries++
+				if retries%10 == 0 { // every 20 seconds inform user about lost connection (for remote post service)
+					// TODO(mafa): emit event warning user about lost connection
+					nb.log.Warn("post service not connected - waiting for reconnection",
+						zap.Stringer("service id", nb.signer.NodeID()),
+						zap.Error(err),
+					)
+				}
+				continue
+			}
+		}
+		if !started {
+			events.EmitPostStart(challenge)
+			started = true
+		}
 
-	return client.Proof(ctx, challenge)
+		retries = 0
+		post, postInfo, err := client.Proof(ctx, challenge)
+		switch {
+		case errors.Is(err, ErrPostClientClosed):
+			continue
+		case err != nil:
+			events.EmitPostFailure()
+			return nil, nil, err
+		default: // err == nil
+			events.EmitPostComplete(challenge)
+			return post, postInfo, err
+		}
+	}
 }
 
 // BuildNIPost uses the given challenge to build a NIPost.
@@ -218,7 +253,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 			)
 		}
 
-		events.EmitPoetWaitProof(challenge.PublishEpoch, challenge.TargetEpoch(), time.Until(poetRoundEnd))
+		events.EmitPoetWaitProof(challenge.PublishEpoch, challenge.TargetEpoch(), poetRoundEnd)
 		poetProofRef, membership, err = nb.getBestProof(ctx, challenge.Hash(), challenge.PublishEpoch)
 		if err != nil {
 			return nil, &PoetSvcUnstableError{msg: "getBestProof failed", source: err}
@@ -254,14 +289,10 @@ func (nb *NIPostBuilder) BuildNIPost(
 
 		nb.log.Info("starting post execution", zap.Binary("challenge", poetProofRef[:]))
 		startTime := time.Now()
-		events.EmitPostStart(poetProofRef[:])
-
-		proof, postInfo, err := nb.proof(postCtx, poetProofRef[:])
+		proof, postInfo, err := nb.Proof(postCtx, poetProofRef[:])
 		if err != nil {
-			events.EmitPostFailure()
 			return nil, fmt.Errorf("failed to generate Post: %w", err)
 		}
-		events.EmitPostComplete(poetProofRef[:])
 		postGenDuration := time.Since(startTime)
 		nb.log.Info("finished post execution", zap.Duration("duration", postGenDuration))
 		metrics.PostDuration.Set(float64(postGenDuration.Nanoseconds()))

@@ -11,7 +11,7 @@ import (
 type PowDifficulty [32]byte
 
 func (d PowDifficulty) String() string {
-	return fmt.Sprintf("%X", d[:])
+	return fmt.Sprintf("%x", d[:])
 }
 
 // Set implements pflag.Value.Set.

@@ -164,7 +164,8 @@ func TestPostMalfeasanceProof(t *testing.T) {
 
 	grpcPostService := grpcserver.NewPostService(logger.Named("grpc-post-service"))
 	grpczap.SetGrpcLoggerV2(grpclog, logger.Named("grpc"))
-	grpcPrivateServer, err := grpcserver.NewPrivate(
+	grpcPrivateServer, err := grpcserver.NewWithServices(
+		cfg.API.PostListener,
 		logger.Named("grpc-server"),
 		cfg.API,
 		[]grpcserver.ServiceAPI{grpcPostService},
