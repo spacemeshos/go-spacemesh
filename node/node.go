@@ -602,6 +602,7 @@ func (app *App) initServices(ctx context.Context) error {
 	app.postVerifier.Autoscale(minWorkers, workers)
 
 	validator := activation.NewValidator(
+		app.db,
 		poetDb,
 		app.Config.POST,
 		app.Config.SMESHING.Opts.Scrypt,

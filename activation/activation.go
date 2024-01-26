@@ -600,14 +600,15 @@ func (b *Builder) getPositioningAtx(ctx context.Context) (types.ATXID, error) {
 		b.goldenATXID,
 		b.validator,
 		b.log,
-		assumeValidBefore(time.Now().Add(-b.postValidityDelay)),
-		withTrustedID(b.signer.NodeID()),
+		VerifyChainOpts.AssumeValidBefore(time.Now().Add(-b.postValidityDelay)),
+		VerifyChainOpts.WithTrustedID(b.signer.NodeID()),
+		VerifyChainOpts.WithLogger(b.log),
 	)
 	if errors.Is(err, sql.ErrNotFound) {
 		b.log.Info("using golden atx as positioning atx")
 		return b.goldenATXID, nil
 	}
-	return id, nil
+	return id, err
 }
 
 func (b *Builder) Regossip(ctx context.Context) error {
@@ -651,7 +652,7 @@ func findFullyValidHighTickAtx(
 	goldenATXID types.ATXID,
 	validator nipostValidator,
 	log *zap.Logger,
-	opts ...verifyChainOption,
+	opts ...VerifyChainOption,
 ) (types.ATXID, error) {
 	rejectedAtxs := make(map[types.ATXID]struct{})
 	filter := func(id types.ATXID) bool {
@@ -670,7 +671,7 @@ func findFullyValidHighTickAtx(
 			return types.ATXID{}, err
 		}
 
-		if err := verifyChain(ctx, db, id, goldenATXID, validator, log, opts...); err != nil {
+		if err := validator.VerifyChain(ctx, id, goldenATXID, opts...); err != nil {
 			log.Info("rejecting candidate for high-tick atx", zap.Error(err), zap.Stringer("atx_id", id))
 			rejectedAtxs[id] = struct{}{}
 		} else {

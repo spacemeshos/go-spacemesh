@@ -1,6 +1,7 @@
 package datastore
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -27,9 +28,16 @@ type VrfNonceKey struct {
 	Epoch types.EpochID
 }
 
+//go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./store.go
+
+type Executor interface {
+	sql.Executor
+	WithTx(context.Context, func(*sql.Tx) error) error
+}
+
 // CachedDB is simply a database injected with cache.
 type CachedDB struct {
-	*sql.Database
+	Executor
 	logger log.Log
 
 	// cache is optional
@@ -77,7 +85,7 @@ func WithConsensusCache(c *atxsdata.Data) Opt {
 }
 
 // NewCachedDB create an instance of a CachedDB.
-func NewCachedDB(db *sql.Database, lg log.Log, opts ...Opt) *CachedDB {
+func NewCachedDB(db Executor, lg log.Log, opts ...Opt) *CachedDB {
 	o := cacheOpts{cfg: DefaultConfig()}
 	for _, opt := range opts {
 		opt(&o)
@@ -100,7 +108,7 @@ func NewCachedDB(db *sql.Database, lg log.Log, opts ...Opt) *CachedDB {
 	}
 
 	return &CachedDB{
-		Database:         db,
+		Executor:         db,
 		atxsdata:         o.atxsdata,
 		logger:           lg,
 		atxHdrCache:      atxHdrCache,
@@ -154,7 +162,7 @@ func (db *CachedDB) GetMalfeasanceProof(id types.NodeID) (*types.MalfeasanceProo
 		return proof, nil
 	}
 
-	proof, err := identities.GetMalfeasanceProof(db.Database, id)
+	proof, err := identities.GetMalfeasanceProof(db.Executor, id)
 	if err != nil && err != sql.ErrNotFound {
 		return nil, err
 	}
@@ -349,13 +357,13 @@ const (
 )
 
 // NewBlobStore returns a BlobStore.
-func NewBlobStore(db *sql.Database) *BlobStore {
+func NewBlobStore(db sql.Executor) *BlobStore {
 	return &BlobStore{DB: db}
 }
 
 // BlobStore gets data as a blob to serve direct fetch requests.
 type BlobStore struct {
-	DB *sql.Database
+	DB sql.Executor
 }
 
 // Get gets an ATX as bytes by an ATX ID as bytes.

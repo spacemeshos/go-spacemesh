@@ -129,7 +129,7 @@ func DefaultPostConfig() PostConfig {
 		LabelsPerUnit: cfg.LabelsPerUnit,
 		K1:            cfg.K1,
 		K2:            cfg.K2,
-		K3:            cfg.K2,
+		K3:            cfg.K2, // The default is to verify all K2 indices.
 		PowDifficulty: PowDifficulty(cfg.PowDifficulty),
 	}
 }
@@ -399,7 +399,8 @@ func (mgr *PostSetupManager) findCommitmentAtx(ctx context.Context) (types.ATXID
 		mgr.goldenATXID,
 		mgr.validator,
 		mgr.logger,
-		assumeValidBefore(time.Now().Add(-mgr.postValidityDelay)),
+		VerifyChainOpts.AssumeValidBefore(time.Now().Add(-mgr.postValidityDelay)),
+		VerifyChainOpts.WithLogger(mgr.logger),
 	)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):

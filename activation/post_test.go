@@ -350,6 +350,7 @@ func newTestPostManager(tb testing.TB) *testPostManager {
 	validator.EXPECT().
 		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		AnyTimes()
+	validator.EXPECT().VerifyChain(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	syncer := NewMocksyncer(gomock.NewController(tb))
 	synced := make(chan struct{})
 	close(synced)

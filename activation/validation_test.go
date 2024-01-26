@@ -12,7 +12,6 @@ import (
 	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -51,7 +50,7 @@ func Test_Validation_VRFNonce(t *testing.T) {
 
 	nonce := (*types.VRFPostIndex)(init.Nonce())
 
-	v := NewValidator(poetDbAPI, postCfg, initOpts.Scrypt, nil)
+	v := NewValidator(nil, poetDbAPI, postCfg, initOpts.Scrypt, nil)
 
 	// Act & Assert
 	t.Run("valid vrf nonce", func(t *testing.T) {
@@ -92,7 +91,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 	postCfg := DefaultPostConfig()
 	goldenATXID := types.ATXID{2, 3, 4}
 
-	v := NewValidator(poetDbAPI, postCfg, config.ScryptParams{}, nil)
+	v := NewValidator(nil, poetDbAPI, postCfg, config.ScryptParams{}, nil)
 
 	// Act & Assert
 	t.Run("valid initial nipost challenge passes", func(t *testing.T) {
@@ -160,7 +159,7 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 	poetDbAPI := NewMockpoetDbAPI(ctrl)
 	postCfg := DefaultPostConfig()
 
-	v := NewValidator(poetDbAPI, postCfg, config.ScryptParams{}, nil)
+	v := NewValidator(nil, poetDbAPI, postCfg, config.ScryptParams{}, nil)
 
 	// Act & Assert
 	t.Run("valid nipost challenge passes", func(t *testing.T) {
@@ -286,7 +285,7 @@ func Test_Validation_Post(t *testing.T) {
 	postCfg := DefaultPostConfig()
 	postVerifier := NewMockPostVerifier(ctrl)
 
-	v := NewValidator(poetDbAPI, postCfg, config.ScryptParams{}, postVerifier)
+	v := NewValidator(nil, poetDbAPI, postCfg, config.ScryptParams{}, postVerifier)
 
 	post := types.Post{}
 	meta := types.PostMetadata{}
@@ -310,7 +309,7 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 	poetDbAPI := NewMockpoetDbAPI(ctrl)
 	postCfg := DefaultPostConfig()
 
-	v := NewValidator(poetDbAPI, postCfg, config.ScryptParams{}, nil)
+	v := NewValidator(nil, poetDbAPI, postCfg, config.ScryptParams{}, nil)
 
 	// Act & Assert
 	t.Run("valid nipost challenge passes", func(t *testing.T) {
@@ -414,7 +413,7 @@ func Test_Validate_NumUnits(t *testing.T) {
 	poetDbAPI := NewMockpoetDbAPI(ctrl)
 	postCfg := DefaultPostConfig()
 
-	v := NewValidator(poetDbAPI, postCfg, config.ScryptParams{}, nil)
+	v := NewValidator(nil, poetDbAPI, postCfg, config.ScryptParams{}, nil)
 
 	// Act & Assert
 	t.Run("valid number of num units passes", func(t *testing.T) {
@@ -456,7 +455,7 @@ func Test_Validate_PostMetadata(t *testing.T) {
 	poetDbAPI := NewMockpoetDbAPI(ctrl)
 	postCfg := DefaultPostConfig()
 
-	v := NewValidator(poetDbAPI, postCfg, config.ScryptParams{}, nil)
+	v := NewValidator(nil, poetDbAPI, postCfg, config.ScryptParams{}, nil)
 
 	// Act & Assert
 	t.Run("valid post metadata", func(t *testing.T) {
@@ -525,7 +524,6 @@ func TestValidateMerkleProof(t *testing.T) {
 
 func TestVerifyChainDeps(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	logger := zaptest.NewLogger(t)
 	db := sql.InMemory()
 	ctx := context.Background()
 	goldenATXID := types.ATXID{2, 3, 4}
@@ -551,12 +549,11 @@ func TestVerifyChainDeps(t *testing.T) {
 		vAtx.SetValidity(types.Unknown)
 		require.NoError(t, atxs.Add(db, vAtx))
 
-		v := NewMocknipostValidator(ctrl)
-		v.EXPECT().
-			Post(ctx, signer.NodeID(), goldenATXID, atx.NIPost.Post, atx.NIPost.PostMetadata, atx.NumUnits).
-			Return(nil)
+		v := NewMockPostVerifier(ctrl)
+		v.EXPECT().Verify(ctx, (*shared.Proof)(atx.NIPost.Post), gomock.Any(), gomock.Any())
 
-		err = verifyChain(ctx, db, vAtx.ID(), goldenATXID, v, logger)
+		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
+		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID)
 		require.ErrorIs(t, err, ErrInvalidChain)
 	})
 
@@ -570,12 +567,11 @@ func TestVerifyChainDeps(t *testing.T) {
 		vAtx.SetValidity(types.Unknown)
 		require.NoError(t, atxs.Add(db, vAtx))
 
-		v := NewMocknipostValidator(ctrl)
-		v.EXPECT().
-			Post(ctx, signer.NodeID(), goldenATXID, atx.NIPost.Post, atx.NIPost.PostMetadata, atx.NumUnits).
-			Return(nil)
+		v := NewMockPostVerifier(ctrl)
+		v.EXPECT().Verify(ctx, (*shared.Proof)(atx.NIPost.Post), gomock.Any(), gomock.Any())
 
-		err = verifyChain(ctx, db, vAtx.ID(), goldenATXID, v, logger)
+		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
+		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID)
 		require.ErrorIs(t, err, ErrInvalidChain)
 	})
 
@@ -590,12 +586,10 @@ func TestVerifyChainDeps(t *testing.T) {
 		vAtx.SetValidity(types.Unknown)
 		require.NoError(t, atxs.Add(db, vAtx))
 
-		v := NewMocknipostValidator(ctrl)
-		v.EXPECT().
-			Post(ctx, signer.NodeID(), commitmentAtxID, atx.NIPost.Post, atx.NIPost.PostMetadata, atx.NumUnits).
-			Return(nil)
-
-		err = verifyChain(ctx, db, vAtx.ID(), goldenATXID, v, logger)
+		v := NewMockPostVerifier(ctrl)
+		v.EXPECT().Verify(ctx, (*shared.Proof)(atx.NIPost.Post), gomock.Any(), gomock.Any())
+		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
+		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID)
 		require.ErrorIs(t, err, ErrInvalidChain)
 	})
 
@@ -609,8 +603,9 @@ func TestVerifyChainDeps(t *testing.T) {
 		vAtx.SetValidity(types.Unknown)
 		require.NoError(t, atxs.Add(db, vAtx))
 
-		v := NewMocknipostValidator(ctrl)
-		err = verifyChain(ctx, db, vAtx.ID(), goldenATXID, v, logger, withTrustedID(signer.NodeID()))
+		v := NewMockPostVerifier(ctrl)
+		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
+		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID, VerifyChainOpts.WithTrustedID(signer.NodeID()))
 		require.NoError(t, err)
 	})
 
@@ -624,8 +619,9 @@ func TestVerifyChainDeps(t *testing.T) {
 		vAtx.SetValidity(types.Unknown)
 		require.NoError(t, atxs.Add(db, vAtx))
 
-		v := NewMocknipostValidator(ctrl)
-		err = verifyChain(ctx, db, vAtx.ID(), goldenATXID, v, logger, assumeValidBefore(time.Now()))
+		v := NewMockPostVerifier(ctrl)
+		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
+		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID, VerifyChainOpts.AssumeValidBefore(time.Now()))
 		require.NoError(t, err)
 	})
 }

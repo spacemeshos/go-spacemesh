@@ -335,8 +335,6 @@ func GetIDWithMaxHeight(db sql.Executor, pref types.NodeID, filter Filter) (type
 		var id types.ATXID
 		stmt.ColumnBytes(0, id[:])
 		height := uint64(stmt.ColumnInt64(1))
-		epoch := uint64(stmt.ColumnInt64(3))
-		_ = epoch
 
 		switch {
 		case height < highest:
@@ -362,7 +360,7 @@ func GetIDWithMaxHeight(db sql.Executor, pref types.NodeID, filter Filter) (type
 	}
 
 	_, err := db.Exec(`
-	SELECT id, base_tick_height + tick_count AS height, pubkey, epoch
+	SELECT id, base_tick_height + tick_count AS height, pubkey
 	FROM atxs LEFT JOIN identities using(pubkey)
 	WHERE identities.pubkey is null and epoch >= (select max(epoch) from atxs)-1
 	ORDER BY height DESC, epoch DESC;`, nil, dec)

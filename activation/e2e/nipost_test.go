@@ -198,7 +198,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	nipost, err := nb.BuildNIPost(context.Background(), &challenge)
 	require.NoError(t, err)
 
-	v := activation.NewValidator(poetDb, cfg, opts.Scrypt, verifier)
+	v := activation.NewValidator(nil, poetDb, cfg, opts.Scrypt, verifier)
 	_, err = v.NIPost(
 		context.Background(),
 		sig.NodeID(),
@@ -344,7 +344,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
 
-	v := activation.NewValidator(poetDb, cfg, opts.Scrypt, verifier)
+	v := activation.NewValidator(nil, poetDb, cfg, opts.Scrypt, verifier)
 	_, err = v.NIPost(
 		context.Background(),
 		sig.NodeID(),

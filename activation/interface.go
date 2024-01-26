@@ -64,6 +64,9 @@ type nipostValidator interface {
 		numUnits uint32,
 	) error
 	PositioningAtx(id types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubepoch types.EpochID) error
+
+	// VerifyChain fully verifies all dependencies of the given ATX and the ATX itself.
+	VerifyChain(ctx context.Context, id, goldenATXID types.ATXID, opts ...VerifyChainOption) error
 }
 
 type layerClock interface {

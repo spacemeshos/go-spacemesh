@@ -152,7 +152,7 @@ func (e *Proof) DecodeScale(dec *scale.Decoder) (int, error) {
 		e.Data = &proof
 		total += n
 	default:
-		return total, errors.New("invalid ballot malfeasance proof")
+		return total, errors.New("unknown malfeasance proof type")
 	}
 	return total, nil
 }

@@ -580,6 +580,49 @@ func (c *nipostValidatorVRFNonceCall) DoAndReturn(f func(types.NodeID, types.ATX
 	return c
 }
 
+// VerifyChain mocks base method.
+func (m *MocknipostValidator) VerifyChain(ctx context.Context, id, goldenATXID types.ATXID, opts ...VerifyChainOption) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, id, goldenATXID}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "VerifyChain", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// VerifyChain indicates an expected call of VerifyChain.
+func (mr *MocknipostValidatorMockRecorder) VerifyChain(ctx, id, goldenATXID any, opts ...any) *nipostValidatorVerifyChainCall {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, id, goldenATXID}, opts...)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VerifyChain", reflect.TypeOf((*MocknipostValidator)(nil).VerifyChain), varargs...)
+	return &nipostValidatorVerifyChainCall{Call: call}
+}
+
+// nipostValidatorVerifyChainCall wrap *gomock.Call
+type nipostValidatorVerifyChainCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *nipostValidatorVerifyChainCall) Return(arg0 error) *nipostValidatorVerifyChainCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *nipostValidatorVerifyChainCall) Do(f func(context.Context, types.ATXID, types.ATXID, ...VerifyChainOption) error) *nipostValidatorVerifyChainCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *nipostValidatorVerifyChainCall) DoAndReturn(f func(context.Context, types.ATXID, types.ATXID, ...VerifyChainOption) error) *nipostValidatorVerifyChainCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // MocklayerClock is a mock of layerClock interface.
 type MocklayerClock struct {
 	ctrl     *gomock.Controller

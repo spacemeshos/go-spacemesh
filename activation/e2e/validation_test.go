@@ -115,7 +115,7 @@ func TestValidator_Validate(t *testing.T) {
 	nipost, err := nb.BuildNIPost(context.Background(), &challenge)
 	require.NoError(t, err)
 
-	v := activation.NewValidator(poetDb, cfg, opts.Scrypt, verifier)
+	v := activation.NewValidator(cdb, poetDb, cfg, opts.Scrypt, verifier)
 	_, err = v.NIPost(context.Background(), sig.NodeID(), goldenATX, nipost.NIPost, challenge.Hash(), nipost.NumUnits)
 	require.NoError(t, err)
 
@@ -136,7 +136,7 @@ func TestValidator_Validate(t *testing.T) {
 
 	newPostCfg := cfg
 	newPostCfg.MinNumUnits = nipost.NumUnits + 1
-	v = activation.NewValidator(poetDb, newPostCfg, opts.Scrypt, nil)
+	v = activation.NewValidator(cdb, poetDb, newPostCfg, opts.Scrypt, nil)
 	_, err = v.NIPost(context.Background(), sig.NodeID(), goldenATX, nipost.NIPost, challenge.Hash(), nipost.NumUnits)
 	require.EqualError(
 		t,
@@ -146,7 +146,7 @@ func TestValidator_Validate(t *testing.T) {
 
 	newPostCfg = cfg
 	newPostCfg.MaxNumUnits = nipost.NumUnits - 1
-	v = activation.NewValidator(poetDb, newPostCfg, opts.Scrypt, nil)
+	v = activation.NewValidator(cdb, poetDb, newPostCfg, opts.Scrypt, nil)
 	_, err = v.NIPost(context.Background(), sig.NodeID(), goldenATX, nipost.NIPost, challenge.Hash(), nipost.NumUnits)
 	require.EqualError(
 		t,
@@ -156,7 +156,7 @@ func TestValidator_Validate(t *testing.T) {
 
 	newPostCfg = cfg
 	newPostCfg.LabelsPerUnit = nipost.PostMetadata.LabelsPerUnit + 1
-	v = activation.NewValidator(poetDb, newPostCfg, opts.Scrypt, nil)
+	v = activation.NewValidator(cdb, poetDb, newPostCfg, opts.Scrypt, nil)
 	_, err = v.NIPost(context.Background(), sig.NodeID(), goldenATX, nipost.NIPost, challenge.Hash(), nipost.NumUnits)
 	require.EqualError(
 		t,
