@@ -98,6 +98,8 @@ configuration is as follows:
   Fix problem in POST proving where too many files were opened at the same time.
 * [#5494](https://github.com/spacemeshos/go-spacemesh/pull/5494)
   Make routing discovery more configurable and less spammy by default.
+* [#5511](https://github.com/spacemeshos/go-spacemesh/pull/5511)
+  Fix dialing peers on their private IPs, which was causing "portscan" complaints.
 
 ## Release v1.3.5
 
