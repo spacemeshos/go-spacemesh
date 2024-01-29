@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
@@ -20,7 +19,7 @@ import (
 // Recover tortoise state from database.
 func Recover(
 	ctx context.Context,
-	db *datastore.CachedDB,
+	db *sql.Database,
 	current types.LayerID,
 	opts ...Opt,
 ) (*Tortoise, error) {
@@ -33,17 +32,21 @@ func Recover(
 	if err != nil {
 		return nil, fmt.Errorf("failed to load latest known layer: %w", err)
 	}
-
 	applied, err := layers.GetLastApplied(db)
 	if err != nil {
 		return nil, fmt.Errorf("get last applied: %w", err)
 	}
+
 	start := types.GetEffectiveGenesis() + 1
 	if applied > types.LayerID(trtl.cfg.WindowSize) {
+		// we want to emulate the same condition as during genesis with one difference.
+		// genesis starts with zero opinion (aggregated hash) - see computeOpinion method.
+		// but in this case first processed layer should use non-zero opinion of the the previous layer.
+
 		window := applied - types.LayerID(trtl.cfg.WindowSize)
-		window = window.GetEpoch().
-			FirstLayer()
-			// windback to the start of the epoch to load ref ballots
+		// we start tallying votes from the first layer of the epoch to guarantee that we load reference ballots.
+		// reference ballots track beacon and eligibilities
+		window = window.GetEpoch().FirstLayer()
 		if window > start {
 			prev, err1 := layers.GetAggregatedHash(db, window-1)
 			opinion, err2 := layers.GetAggregatedHash(db, window)
@@ -70,18 +73,14 @@ func Recover(
 		}
 	}
 
-	epoch, err := atxs.LatestEpoch(db)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load latest epoch: %w", err)
+	valid, err := blocks.LastValid(db)
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
+		return nil, fmt.Errorf("get last valid: %w", err)
 	}
-	epoch++ // recoverEpoch expects target epoch, rather than publish
-	if last.GetEpoch() != epoch {
-		for eid := last.GetEpoch(); eid <= epoch; eid++ {
-			if err := recoverEpoch(eid, trtl, db); err != nil {
-				return nil, err
-			}
-		}
+	if err == nil {
+		trtl.UpdateVerified(valid)
 	}
+	trtl.UpdateLastLayer(last)
 	for lid := start; !lid.After(last); lid = lid.Add(1) {
 		select {
 		case <-ctx.Done():
@@ -114,19 +113,41 @@ func Recover(
 			return nil, fmt.Errorf("check opinion %w", err)
 		}
 	}
+	// load activations from future epochs that are not yet referenced by the ballots
+	epoch, err := atxs.LatestEpoch(db)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load latest epoch: %w", err)
+	}
+	epoch++ // recoverEpoch expects target epoch, rather than publish
+	if last.GetEpoch() != epoch {
+		for eid := last.GetEpoch() + 1; eid <= epoch; eid++ {
+			if err := recoverEpoch(eid, trtl, db); err != nil {
+				return nil, err
+			}
+		}
+	}
 	return trtl, nil
 }
 
-func recoverEpoch(epoch types.EpochID, trtl *Tortoise, db *datastore.CachedDB) error {
-	if err := db.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) error {
-		trtl.OnAtx(header.ToData())
-		return nil
-	}); err != nil {
+func recoverEpoch(target types.EpochID, trtl *Tortoise, db *sql.Database) error {
+	publish := target - 1
+	if err := atxs.IterateAtxsFields(db, publish, publish,
+		func(id types.ATXID, node types.NodeID, weight, height, baseHeight uint64) bool {
+			trtl.OnAtx(&types.AtxTortoiseData{
+				ID:          id,
+				Smesher:     node,
+				TargetEpoch: target,
+				BaseHeight:  baseHeight,
+				Height:      height,
+				Weight:      weight,
+			})
+			return true
+		}); err != nil {
 		return err
 	}
-	beacon, err := beacons.Get(db, epoch)
+	beacon, err := beacons.Get(db, target)
 	if err == nil && beacon != types.EmptyBeacon {
-		trtl.OnBeacon(epoch, beacon)
+		trtl.OnBeacon(target, beacon)
 	}
 	return nil
 }
@@ -136,7 +157,7 @@ type ballotFunc func(*types.BallotTortoiseData)
 func RecoverLayer(
 	ctx context.Context,
 	trtl *Tortoise,
-	db *datastore.CachedDB,
+	db *sql.Database,
 	lid types.LayerID,
 	onBallot ballotFunc,
 ) error {
@@ -159,6 +180,10 @@ func RecoverLayer(
 		} else {
 			trtl.OnBlock(block.ToVote())
 		}
+	}
+	// tortoise votes according to the hare only within hdist (protocol parameter).
+	// also node is free to prune certificates outside hdist to minimize space usage.
+	if trtl.WithinHdist(lid) {
 		hare, err := certificates.GetHareOutput(db, lid)
 		if err != nil && !errors.Is(err, sql.ErrNotFound) {
 			return err
@@ -172,6 +197,9 @@ func RecoverLayer(
 	if err != nil {
 		return err
 	}
+	// NOTE(dshulyak) it is done in two steps so that if ballot from the same layer was used
+	// as reference or base ballot we will be able to decode it.
+	// it might be possible to invalidate such ballots, but until then this is required
 	for _, ballot := range ballotsrst {
 		if ballot.EpochData != nil {
 			onBallot(ballot.ToTortoiseData())

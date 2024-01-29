@@ -128,7 +128,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		m.Send(MessageBallot{Ballot: ballot})
 	case MessageLayerEnd:
 		if ev.LayerID.After(types.GetEffectiveGenesis()) {
-			tortoise.RecoverLayer(context.Background(), c.tortoise, c.cdb, ev.LayerID, c.tortoise.OnBallot)
+			tortoise.RecoverLayer(context.Background(), c.tortoise, c.cdb.Database, ev.LayerID, c.tortoise.OnBallot)
 			c.tortoise.TallyVotes(context.Background(), ev.LayerID)
 			m.Notify(EventVerified{ID: c.id, Verified: c.tortoise.LatestComplete(), Layer: ev.LayerID})
 		}

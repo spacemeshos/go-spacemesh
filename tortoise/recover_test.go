@@ -28,7 +28,7 @@ func (a *recoveryAdapter) TallyVotes(ctx context.Context, current types.LayerID)
 		a.prev = genesis
 	}
 	for lid := a.prev; lid <= current; lid++ {
-		require.NoError(a, RecoverLayer(ctx, a.Tortoise, a.db, lid, a.OnBallot))
+		require.NoError(a, RecoverLayer(ctx, a.Tortoise, a.db.Database, lid, a.OnBallot))
 		a.Tortoise.TallyVotes(ctx, lid)
 		a.prev = lid
 	}
@@ -51,7 +51,13 @@ func TestRecoverState(t *testing.T) {
 	}
 	require.Equal(t, last.Sub(1), verified)
 
-	tortoise2, err := Recover(context.Background(), s.GetState(0).DB, last, WithLogger(logtest.New(t)), WithConfig(cfg))
+	tortoise2, err := Recover(
+		context.Background(),
+		s.GetState(0).DB.Database,
+		last,
+		WithLogger(logtest.New(t)),
+		WithConfig(cfg),
+	)
 	require.NoError(t, err)
 	verified = tortoise2.LatestComplete()
 	require.Equal(t, last.Sub(1), verified)
@@ -68,7 +74,13 @@ func TestRecoverEmpty(t *testing.T) {
 
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
-	tortoise, err := Recover(context.Background(), s.GetState(0).DB, 100, WithLogger(logtest.New(t)), WithConfig(cfg))
+	tortoise, err := Recover(
+		context.Background(),
+		s.GetState(0).DB.Database,
+		100,
+		WithLogger(logtest.New(t)),
+		WithConfig(cfg),
+	)
 	require.NoError(t, err)
 	require.NotNil(t, tortoise)
 }
@@ -88,13 +100,13 @@ func TestRecoverWithOpinion(t *testing.T) {
 	var last result.Layer
 	for _, rst := range trt.Updates() {
 		if rst.Verified {
-			require.NoError(t, layers.SetMeshHash(s.GetState(0).DB, rst.Layer, rst.Opinion))
+			require.NoError(t, layers.SetMeshHash(s.GetState(0).DB.Database, rst.Layer, rst.Opinion))
 		}
 		last = rst
 	}
 	tortoise, err := Recover(
 		context.Background(),
-		s.GetState(0).DB,
+		s.GetState(0).DB.Database,
 		last.Layer,
 		WithLogger(logtest.New(t)),
 		WithConfig(cfg),
@@ -129,7 +141,13 @@ func TestResetPending(t *testing.T) {
 		require.NoError(t, layers.SetMeshHash(s.GetState(0).DB, item.Layer, item.Opinion))
 	}
 
-	recovered, err := Recover(context.Background(), s.GetState(0).DB, last, WithLogger(logtest.New(t)), WithConfig(cfg))
+	recovered, err := Recover(
+		context.Background(),
+		s.GetState(0).DB.Database,
+		last,
+		WithLogger(logtest.New(t)),
+		WithConfig(cfg),
+	)
 	require.NoError(t, err)
 	updates2 := recovered.Updates()
 	require.Len(t, updates2, n/2+1)
@@ -163,7 +181,13 @@ func TestWindowRecovery(t *testing.T) {
 		require.NoError(t, layers.SetMeshHash(s.GetState(0).DB, item.Layer, item.Opinion))
 	}
 
-	recovered, err := Recover(context.Background(), s.GetState(0).DB, last, WithLogger(logtest.New(t)), WithConfig(cfg))
+	recovered, err := Recover(
+		context.Background(),
+		s.GetState(0).DB.Database,
+		last,
+		WithLogger(logtest.New(t)),
+		WithConfig(cfg),
+	)
 	require.NoError(t, err)
 	updates2 := recovered.Updates()
 	require.Len(t, updates2, epochSize+1)

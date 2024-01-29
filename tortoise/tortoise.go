@@ -307,9 +307,7 @@ func (t *turtle) getFullVote(verified, current types.LayerID, block *blockInfo) 
 	return layer.coinflip, reasonCoinflip, nil
 }
 
-func (t *turtle) onLayer(ctx context.Context, last types.LayerID) {
-	t.logger.Debug("on layer", zap.Uint32("last", last.Uint32()))
-	defer t.evict(ctx)
+func (t *turtle) updateLast(last types.LayerID) {
 	if last.After(t.last) {
 		update := t.last.GetEpoch() != last.GetEpoch()
 		t.last = last
@@ -321,19 +319,32 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) {
 				Div(fixed.New64(int64(types.GetLayersPerEpoch())))
 		}
 	}
+}
+
+func (t *turtle) tallyVotes(ctx context.Context, last types.LayerID) {
+	defer t.evict(ctx)
+
+	t.logger.Debug("on layer", zap.Uint32("last", last.Uint32()))
+	t.updateLast(last)
 	if err := t.drainRetriable(); err != nil {
 		return
 	}
 	for process := t.processed.Add(1); !process.After(t.last); process = process.Add(1) {
 		if process.FirstInEpoch() {
-			t.computeEpochHeight(process.GetEpoch())
+			t.computeEpochHeight(process)
 		}
 		layer := t.layer(process)
 		for _, block := range layer.blocks {
 			t.updateRefHeight(layer, block)
 		}
-		prev := t.layer(process.Sub(1))
-		layer.verifying.goodUncounted = layer.verifying.goodUncounted.Add(prev.verifying.goodUncounted)
+
+		// NOTE(dshulyak) i need this when running verifying tortoise not from the genesis.
+		if previous := process - 1; previous > t.evicted {
+			prev := t.layer(previous)
+			layer.verifying.goodUncounted = layer.verifying.goodUncounted.Add(prev.verifying.goodUncounted)
+			layer.prevOpinion = &prev.opinion
+		}
+
 		t.processed = process
 		processedLayer.Set(float64(t.processed))
 
@@ -350,8 +361,18 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) {
 				}
 			}
 		}
-
-		layer.prevOpinion = &prev.opinion
+		// TODO(dshulyak) don't leave it like this
+		// the intention here is to mark all blocks outside hdist distance as invalid
+		// unless they are valid.
+		// this is important if we want to run verifying tortoise when loading data from database.
+		if !withinDistance(t.Hdist, process, t.last) {
+			layer.hareTerminated = true
+			for _, block := range layer.blocks {
+				if block.validity == abstain {
+					block.validity = against
+				}
+			}
+		}
 		opinion := layer.opinion
 		layer.computeOpinion(t.Hdist, t.last)
 		if opinion != layer.opinion {
@@ -506,8 +527,8 @@ func (t *turtle) runFull() (verified, changed types.LayerID) {
 	return verified, changed
 }
 
-func (t *turtle) computeEpochHeight(epoch types.EpochID) {
-	einfo := t.epoch(epoch)
+func (t *turtle) computeEpochHeight(lid types.LayerID) {
+	einfo := t.epoch(lid.GetEpoch())
 	heights := make([]uint64, 0, len(einfo.atxs))
 	for _, info := range einfo.atxs {
 		if !info.malfeasant {
@@ -515,12 +536,22 @@ func (t *turtle) computeEpochHeight(epoch types.EpochID) {
 		}
 	}
 	einfo.height = getMedian(heights)
+	t.logger.Debug(
+		"computed epoch height",
+		zap.Uint32("in layer", lid.GetEpoch().Uint32()),
+		zap.Uint32("for epoch", lid.GetEpoch().Uint32()),
+		zap.Uint64("height", einfo.height),
+	)
 }
 
 func (t *turtle) onBlock(header types.BlockHeader, data, valid bool) {
 	if header.LayerID <= t.evicted {
 		return
 	}
+
+	t.logger.Debug("on block", zap.Inline(&header), zap.Bool("data", data), zap.Bool("valid", valid))
+
+	// update existing state without calling t.addBlock
 	if binfo := t.state.getBlock(header); binfo != nil {
 		binfo.data = data
 		if valid {
@@ -528,8 +559,6 @@ func (t *turtle) onBlock(header types.BlockHeader, data, valid bool) {
 		}
 		return
 	}
-	t.logger.Debug("on data block", zap.Inline(&header))
-
 	binfo := newBlockInfo(header)
 	binfo.data = data
 	if valid {
@@ -600,6 +629,7 @@ func (t *turtle) onOpinionChange(lid types.LayerID, early bool) {
 		t.logger.Debug("computed local opinion",
 			zap.Uint32("last", t.last.Uint32()),
 			zap.Uint32("lid", layer.lid.Uint32()),
+			zap.Bool("changed from previous", opinion != layer.opinion),
 			log.ZShortStringer("previous", opinion),
 			log.ZShortStringer("new", layer.opinion),
 			log.ZShortStringer("prev layer", layer.prevOpinion),
@@ -889,6 +919,8 @@ func getLocalVote(config Config, verified, last types.LayerID, block *blockInfo)
 	if withinDistance(config.Hdist, block.layer, last) {
 		return block.hare, reasonHareOutput
 	}
+	// if layer was verified, but then global threshold became unreachable we will not
+	// update validity, but verified variable will be lowered
 	if block.layer.After(verified) {
 		return abstain, reasonValidity
 	}

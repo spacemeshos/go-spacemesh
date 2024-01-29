@@ -469,3 +469,30 @@ func IterateAtxs(db sql.Executor, from, to types.EpochID, fn func(*types.Verifie
 	}
 	return derr
 }
+
+type fieldsDecoder = func(id types.ATXID, node types.NodeID, weight, height, baseHeight uint64) bool
+
+func IterateAtxsFields(db sql.Executor, from, to types.EpochID, fn fieldsDecoder) error {
+	var derr error
+	_, err := db.Exec(
+		"select id, pubkey, base_tick_height, tick_count, effective_num_units from atxs where epoch between ?1 and ?2",
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(from.Uint32()))
+			stmt.BindInt64(2, int64(to.Uint32()))
+		},
+		func(stmt *sql.Statement) bool {
+			id := types.ATXID{}
+			stmt.ColumnBytes(0, id[:])
+			node := types.NodeID{}
+			stmt.ColumnBytes(1, node[:])
+			baseHeight := uint64(stmt.ColumnInt64(2))
+			ticks := uint64(stmt.ColumnInt64(3))
+			units := uint64(stmt.ColumnInt64(4))
+			return fn(id, node, units*ticks, baseHeight+ticks, baseHeight)
+		},
+	)
+	if err != nil {
+		return err
+	}
+	return derr
+}

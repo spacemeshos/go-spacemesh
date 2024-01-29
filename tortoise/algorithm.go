@@ -140,7 +140,7 @@ func (t *Tortoise) RecoverFrom(lid types.LayerID, opinion, prev types.Hash32) {
 	t.trtl.evicted = lid - 1
 	t.trtl.pending = lid
 	t.trtl.verified = lid
-	t.trtl.processed = lid
+	t.trtl.processed = lid - 1 // -1 so that iteration in tallyVotes starts from the target layer
 	t.trtl.last = lid
 	layer := t.trtl.layer(lid)
 	layer.opinion = opinion
@@ -276,7 +276,7 @@ func (t *Tortoise) TallyVotes(ctx context.Context, lid types.LayerID) {
 	defer t.mu.Unlock()
 	waitTallyVotes.Observe(float64(time.Since(start).Nanoseconds()))
 	start = time.Now()
-	t.trtl.onLayer(ctx, lid)
+	t.trtl.tallyVotes(ctx, lid)
 	executeTallyVotes.Observe(float64(time.Since(start).Nanoseconds()))
 	if t.tracer != nil {
 		t.tracer.On(&TallyTrace{Layer: lid})
@@ -606,4 +606,24 @@ func (t *Tortoise) Mode() Mode {
 		return Full
 	}
 	return Verifying
+}
+
+// UpdateLastLayer updates last layer which is used for determining weight thresholds.
+func (t *Tortoise) UpdateLastLayer(last types.LayerID) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.trtl.updateLast(last)
+}
+
+// UpdateVerified layers based on the previously known verified layer.
+func (t *Tortoise) UpdateVerified(verified types.LayerID) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.trtl.verified = verified
+}
+
+func (t *Tortoise) WithinHdist(lid types.LayerID) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return withinDistance(t.cfg.Hdist, lid, t.trtl.last)
 }

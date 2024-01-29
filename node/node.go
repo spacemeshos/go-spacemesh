@@ -678,7 +678,7 @@ func (app *App) initServices(ctx context.Context) error {
 	start := time.Now()
 	trtl, err := tortoise.Recover(
 		ctx,
-		app.cachedDB,
+		app.db,
 		app.clock.CurrentLayer(), trtlopts...,
 	)
 	if err != nil {
