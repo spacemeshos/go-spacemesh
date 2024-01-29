@@ -22,10 +22,9 @@ func TestStringToUint64Value(t *testing.T) {
 			},
 		},
 		{
-			desc:  "Separate",
+			desc:  "Separate (Set overrides previous values)",
 			input: []string{"1=1", "2=2"},
 			expected: map[string]uint64{
-				"1": 1,
 				"2": 2,
 			},
 		},
@@ -48,7 +47,7 @@ func TestStringToUint64Value(t *testing.T) {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			value := map[string]uint64{}
-			parser := NewStringToUint64Value(value)
+			parser := NewStringToUint64Value(&value)
 			full := ""
 			for _, arg := range tc.input {
 				full += arg + ","

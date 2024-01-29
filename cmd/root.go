@@ -70,9 +70,6 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 	flagSet.IntVar(&cfg.OptFilterThreshold, "optimistic-filtering-threshold",
 		cfg.OptFilterThreshold, "threshold for optimistic filtering in percentage")
 
-	flagSet.VarP(flags.NewStringToUint64Value(cfg.Genesis.Accounts), "accounts", "a",
-		"List of pre-funded accounts")
-
 	flagSet.IntVar(&cfg.DatabaseConnections, "db-connections",
 		cfg.DatabaseConnections, "configure number of active connections to enable parallel read requests")
 	flagSet.BoolVar(&cfg.DatabaseLatencyMetering, "db-latency-metering",
@@ -321,6 +318,8 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 	flagSet.StringVar(&cfg.TestConfig.SmesherKey, "testing-smesher-key",
 		"", "import private smesher key for testing",
 	)
+	flagSet.VarP(flags.NewStringToUint64Value(&cfg.Genesis.Accounts), "accounts", "a",
+		"List of pre-funded accounts (use in tests only")
 
 	/**========================  Deprecated flags ========================== **/
 	flagSet.Var(flags.NewDeprecatedFlag(
