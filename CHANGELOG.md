@@ -2,6 +2,13 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## UNRELEASED
+
+### Improvements
+
+* [#5441](https://github.com/spacemeshos/go-spacemesh/pull/5441)
+  Fix possible nil-pointer dereference in blocks.Generator.
+
 ## Release v1.3.7
 
 ### Improvements
