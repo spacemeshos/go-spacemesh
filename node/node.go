@@ -2,6 +2,7 @@
 package node
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/hex"
@@ -203,6 +204,27 @@ func GetCommand() *cobra.Command {
 			// os.Interrupt for all systems, especially windows, syscall.SIGTERM is mainly for docker.
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer cancel()
+
+			// Workaround for Windows not being able to `TASKKILL` without `/F`.
+			// Instead smapp can close the node gracefully by closing stdin (analogous to `CTRL+D`).
+			// CTRL+C is still supported for other platforms and when the node is running in console on windows.
+			// see https://github.com/spacemeshos/go-spacemesh/issues/5321
+			go func() {
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					default:
+						buf := bufio.NewReader(os.Stdin)
+						_, err := buf.ReadByte()
+						if err != nil {
+							cancel()
+							return
+						}
+					}
+				}
+			}()
+
 			if err := run(ctx); err != nil {
 				app.log.With().Fatal(err.Error())
 			}
