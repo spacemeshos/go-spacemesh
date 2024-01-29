@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -15,5 +16,11 @@ func TestMigrationsAppliedOnce(t *testing.T) {
 		return true
 	})
 	require.NoError(t, err)
-	require.Equal(t, version, 10)
+
+	migrations, err := StateMigrations()
+	require.NoError(t, err)
+	expectedVersion := slices.MaxFunc(migrations, func(a, b Migration) int {
+		return a.Order() - b.Order()
+	})
+	require.Equal(t, expectedVersion.Order(), version)
 }
