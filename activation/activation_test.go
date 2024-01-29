@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -105,7 +106,7 @@ type testAtxBuilder struct {
 	mValidator  *MocknipostValidator
 }
 
-func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
+func newTestBuilder(tb testing.TB, numSigners int, opts ...BuilderOption) *testAtxBuilder {
 	lg := logtest.New(tb)
 
 	ctrl := gomock.NewController(tb)
@@ -143,6 +144,13 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 		opts...,
 	)
 	tab.Builder = b
+
+	for i := 0; i < numSigners; i++ {
+		sig, err := signing.NewEdSigner()
+		require.NoError(tb, err)
+		tab.Register(sig)
+	}
+
 	return tab
 }
 
@@ -216,11 +224,8 @@ func publishAtx(
 // ========== Tests ==========
 
 func Test_Builder_StartSmeshingCoinbase(t *testing.T) {
-	sig, err := signing.NewEdSigner()
-	require.NoError(t, err)
-
-	tab := newTestBuilder(t)
-	tab.Register(sig)
+	tab := newTestBuilder(t, 1)
+	sig := maps.Values(tab.signers)[0]
 	coinbase := types.Address{1, 1, 1}
 
 	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).DoAndReturn(
@@ -246,11 +251,8 @@ func Test_Builder_StartSmeshingCoinbase(t *testing.T) {
 
 func TestBuilder_RestartSmeshing(t *testing.T) {
 	getBuilder := func(t *testing.T) *Builder {
-		sig, err := signing.NewEdSigner()
-		require.NoError(t, err)
-
-		tab := newTestBuilder(t)
-		tab.Register(sig)
+		tab := newTestBuilder(t, 1)
+		sig := maps.Values(tab.signers)[0]
 
 		tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).AnyTimes().DoAndReturn(
 			func(ctx context.Context, _ types.NodeID, _ []byte) (*types.Post, *types.PostInfo, error) {
@@ -295,11 +297,8 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 }
 
 func TestBuilder_StopSmeshing_Delete(t *testing.T) {
-	sig, err := signing.NewEdSigner()
-	require.NoError(t, err)
-
-	tab := newTestBuilder(t)
-	tab.Register(sig)
+	tab := newTestBuilder(t, 1)
+	sig := maps.Values(tab.signers)[0]
 
 	currLayer := (postGenesisEpoch + 1).FirstLayer()
 	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(make(chan struct{})).AnyTimes()
@@ -354,16 +353,13 @@ func TestBuilder_StopSmeshing_Delete(t *testing.T) {
 }
 
 func TestBuilder_StopSmeshing_failsWhenNotStarted(t *testing.T) {
-	tab := newTestBuilder(t)
+	tab := newTestBuilder(t, 1)
 	require.ErrorContains(t, tab.StopSmeshing(true), "not started")
 }
 
 func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
-	sig, err := signing.NewEdSigner()
-	require.NoError(t, err)
-
-	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration}))
-	tab.Register(sig)
+	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration}))
+	sig := maps.Values(tab.signers)[0]
 
 	posEpoch := postGenesisEpoch
 	currLayer := posEpoch.FirstLayer()
@@ -405,11 +401,8 @@ func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 // failing with ErrATXChallengeExpired.
 func TestBuilder_Loop_WaitsOnStaleChallenge(t *testing.T) {
 	// Arrange
-	sig, err := signing.NewEdSigner()
-	require.NoError(t, err)
-
-	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
-	tab.Register(sig)
+	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
+	sig := maps.Values(tab.signers)[0]
 
 	// current layer is too late to be able to build a nipost on time
 	currLayer := (postGenesisEpoch + 1).FirstLayer()
@@ -462,11 +455,8 @@ func TestBuilder_Loop_WaitsOnStaleChallenge(t *testing.T) {
 }
 
 func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
-	sig, err := signing.NewEdSigner()
-	require.NoError(t, err)
-
-	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
-	tab.Register(sig)
+	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
+	sig := maps.Values(tab.signers)[0]
 
 	posEpoch := postGenesisEpoch
 	currLayer := postGenesisEpoch.FirstLayer()
@@ -553,14 +543,11 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 }
 
 func TestBuilder_PublishActivationTx_UsesExistingChallengeOnLatePublish(t *testing.T) {
-	sig, err := signing.NewEdSigner()
-	require.NoError(t, err)
-
 	poetCfg := PoetConfig{
 		PhaseShift: layerDuration * 4,
 	}
-	tab := newTestBuilder(t, WithPoetConfig(poetCfg))
-	tab.Register(sig)
+	tab := newTestBuilder(t, 1, WithPoetConfig(poetCfg))
+	sig := maps.Values(tab.signers)[0]
 
 	posEpoch := postGenesisEpoch
 	currLayer := (postGenesisEpoch + 1).FirstLayer().Add(5) // late for poet round start
@@ -645,11 +632,8 @@ func TestBuilder_PublishActivationTx_UsesExistingChallengeOnLatePublish(t *testi
 }
 
 func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testing.T) {
-	sig, err := signing.NewEdSigner()
-	require.NoError(t, err)
-
-	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
-	tab.Register(sig)
+	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
+	sig := maps.Values(tab.signers)[0]
 
 	posEpoch := types.EpochID(2)
 	currLayer := posEpoch.FirstLayer()
@@ -751,11 +735,8 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 }
 
 func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
-	sig, err := signing.NewEdSigner()
-	require.NoError(t, err)
-
-	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
-	tab.Register(sig)
+	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
+	sig := maps.Values(tab.signers)[0]
 
 	posEpoch := postGenesisEpoch
 	currLayer := posEpoch.FirstLayer()
@@ -794,11 +775,8 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 }
 
 func TestBuilder_PublishActivationTx_NoPrevATX_PublishFails_InitialPost_preserved(t *testing.T) {
-	sig, err := signing.NewEdSigner()
-	require.NoError(t, err)
-
-	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
-	tab.Register(sig)
+	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
+	sig := maps.Values(tab.signers)[0]
 
 	posEpoch := postGenesisEpoch
 	currLayer := posEpoch.FirstLayer()
@@ -875,11 +853,8 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	r := require.New(t)
 
 	// Arrange
-	sig, err := signing.NewEdSigner()
-	require.NoError(t, err)
-
-	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
-	tab.Register(sig)
+	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
+	sig := maps.Values(tab.signers)[0]
 
 	otherSigner, err := signing.NewEdSigner()
 	r.NoError(err)
@@ -999,11 +974,8 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	r := require.New(t)
 
 	// Arrange
-	sig, err := signing.NewEdSigner()
-	require.NoError(t, err)
-
-	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
-	tab.Register(sig)
+	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
+	sig := maps.Values(tab.signers)[0]
 
 	otherSigner, err := signing.NewEdSigner()
 	r.NoError(err)
@@ -1098,11 +1070,8 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 }
 
 func TestBuilder_PublishActivationTx_FailsWhenNIPostBuilderFails(t *testing.T) {
-	sig, err := signing.NewEdSigner()
-	require.NoError(t, err)
-
-	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
-	tab.Register(sig)
+	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
+	sig := maps.Values(tab.signers)[0]
 
 	posEpoch := postGenesisEpoch
 	currLayer := posEpoch.FirstLayer()
@@ -1220,15 +1189,14 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	}, events.WithBuffer(100))
 	require.NoError(t, err)
 
-	sig, err := signing.NewEdSigner()
-	require.NoError(t, err)
-
 	retryInterval := 50 * time.Microsecond
 	tab := newTestBuilder(
 		t,
+		1,
 		WithPoetConfig(PoetConfig{PhaseShift: 150 * time.Millisecond}),
 		WithPoetRetryInterval(retryInterval),
 	)
+	sig := maps.Values(tab.signers)[0]
 	posEpoch := types.EpochID(0)
 	challenge := types.NIPostChallenge{
 		Sequence:       1,
@@ -1346,11 +1314,8 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 }
 
 func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
-	sig, err := signing.NewEdSigner()
-	require.NoError(t, err)
-
-	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
-	tab.Register(sig)
+	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
+	sig := maps.Values(tab.signers)[0]
 
 	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).Return(
 		&types.Post{Indices: make([]byte, 10)},
@@ -1402,11 +1367,8 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 }
 
 func TestBuilder_InitialPostIsPersisted(t *testing.T) {
-	sig, err := signing.NewEdSigner()
-	require.NoError(t, err)
-
-	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
-	tab.Register(sig)
+	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
+	sig := maps.Values(tab.signers)[0]
 
 	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).Return(
 		&types.Post{Indices: make([]byte, 10)},
@@ -1440,14 +1402,11 @@ func TestWaitPositioningAtx(t *testing.T) {
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
-			sig, err := signing.NewEdSigner()
-			require.NoError(t, err)
-
-			tab := newTestBuilder(t, WithPoetConfig(PoetConfig{
+			tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{
 				PhaseShift:  tc.shift,
 				GracePeriod: tc.grace,
 			}))
-			tab.Register(sig)
+			sig := maps.Values(tab.signers)[0]
 
 			tab.mclock.EXPECT().CurrentLayer().Return(types.LayerID(0)).AnyTimes()
 			tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(func(lid types.LayerID) time.Time {

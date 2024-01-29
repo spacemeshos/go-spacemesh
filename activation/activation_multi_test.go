@@ -12,26 +12,16 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
 
 func Test_Builder_Multi_StartSmeshingCoinbase(t *testing.T) {
-	tab := newTestBuilder(t)
+	tab := newTestBuilder(t, 5)
 	coinbase := types.Address{1, 1, 1}
 
-	smeshers := make(map[types.NodeID]*signing.EdSigner, 10)
-	for i := 0; i < 10; i++ {
-		sig, err := signing.NewEdSigner()
-		require.NoError(t, err)
-
-		tab.Register(sig)
-		smeshers[sig.NodeID()] = sig
-	}
-
-	for _, sig := range smeshers {
+	for _, sig := range tab.signers {
 		tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).DoAndReturn(
 			func(ctx context.Context, _ types.NodeID, _ []byte) (*types.Post, *types.PostInfo, error) {
 				<-ctx.Done()
@@ -50,7 +40,7 @@ func Test_Builder_Multi_StartSmeshingCoinbase(t *testing.T) {
 	// calling StartSmeshing more than once before calling StopSmeshing is an error
 	require.ErrorContains(t, tab.StartSmeshing(coinbase), "already started")
 
-	for _, sig := range smeshers {
+	for _, sig := range tab.signers {
 		tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil)
 	}
 	require.NoError(t, tab.StopSmeshing(true))
@@ -58,16 +48,9 @@ func Test_Builder_Multi_StartSmeshingCoinbase(t *testing.T) {
 
 func Test_Builder_Multi_RestartSmeshing(t *testing.T) {
 	getBuilder := func(t *testing.T) *Builder {
-		tab := newTestBuilder(t)
+		tab := newTestBuilder(t, 5)
 
-		smeshers := make(map[types.NodeID]*signing.EdSigner, 10)
-		for i := 0; i < 10; i++ {
-			sig, err := signing.NewEdSigner()
-			require.NoError(t, err)
-
-			tab.Register(sig)
-			smeshers[sig.NodeID()] = sig
-
+		for _, sig := range tab.signers {
 			tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).AnyTimes().DoAndReturn(
 				func(ctx context.Context, _ types.NodeID, _ []byte) (*types.Post, *types.PostInfo, error) {
 					<-ctx.Done()
@@ -112,7 +95,7 @@ func Test_Builder_Multi_RestartSmeshing(t *testing.T) {
 }
 
 func Test_Builder_Multi_StopSmeshing_Delete(t *testing.T) {
-	tab := newTestBuilder(t)
+	tab := newTestBuilder(t, 5)
 
 	atx := types.RandomATXID()
 	refChallenge := &types.NIPostChallenge{
@@ -130,14 +113,7 @@ func Test_Builder_Multi_StopSmeshing_Delete(t *testing.T) {
 			return genesis.Add(layerDuration * time.Duration(got))
 		}).AnyTimes()
 
-	smeshers := make(map[types.NodeID]*signing.EdSigner, 10)
-	for i := 0; i < 10; i++ {
-		sig, err := signing.NewEdSigner()
-		require.NoError(t, err)
-
-		tab.Register(sig)
-		smeshers[sig.NodeID()] = sig
-
+	for _, sig := range tab.signers {
 		tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).DoAndReturn(
 			func(ctx context.Context, _ types.NodeID, _ []byte) (*types.Post, *types.PostInfo, error) {
 				<-ctx.Done()
@@ -151,7 +127,7 @@ func Test_Builder_Multi_StopSmeshing_Delete(t *testing.T) {
 	require.NoError(t, tab.StartSmeshing(types.Address{}))
 	require.NoError(t, tab.StopSmeshing(false))
 
-	for _, sig := range smeshers {
+	for _, sig := range tab.signers {
 		challenge, err := nipost.Challenge(tab.localDb, sig.NodeID())
 		require.NoError(t, err)
 		require.Equal(t, refChallenge, challenge) // challenge still present
@@ -168,7 +144,7 @@ func Test_Builder_Multi_StopSmeshing_Delete(t *testing.T) {
 	require.NoError(t, tab.StartSmeshing(types.Address{}))
 	require.NoError(t, tab.StopSmeshing(true))
 
-	for _, sig := range smeshers {
+	for _, sig := range tab.signers {
 		challenge, err := nipost.Challenge(tab.localDb, sig.NodeID())
 		require.ErrorIs(t, err, sql.ErrNotFound)
 		require.Nil(t, challenge) // challenge deleted
@@ -185,7 +161,7 @@ func Test_Builder_Multi_StopSmeshing_Delete(t *testing.T) {
 	require.NoError(t, tab.StartSmeshing(types.Address{}))
 	require.NoError(t, tab.StopSmeshing(true)) // no-op
 
-	for _, sig := range smeshers {
+	for _, sig := range tab.signers {
 		challenge, err := nipost.Challenge(tab.localDb, sig.NodeID())
 		require.ErrorIs(t, err, sql.ErrNotFound)
 		require.Nil(t, challenge) // challenge still deleted
@@ -195,30 +171,19 @@ func Test_Builder_Multi_StopSmeshing_Delete(t *testing.T) {
 func TestRegossip(t *testing.T) {
 	layer := types.LayerID(10)
 
-	smeshers := make(map[types.NodeID]*signing.EdSigner, 10)
-	for i := 0; i < 10; i++ {
-		sig, err := signing.NewEdSigner()
-		require.NoError(t, err)
-
-		smeshers[sig.NodeID()] = sig
-	}
-
 	t.Run("not found", func(t *testing.T) {
-		tab := newTestBuilder(t)
-		for _, sig := range smeshers {
-			tab.Register(sig)
+		tab := newTestBuilder(t, 5)
+		for _, sig := range tab.signers {
 			tab.mclock.EXPECT().CurrentLayer().Return(layer)
 			require.NoError(t, tab.Regossip(context.Background(), sig.NodeID()))
 		}
 	})
 
 	t.Run("success", func(t *testing.T) {
-		tab := newTestBuilder(t)
+		tab := newTestBuilder(t, 5)
 		var refAtx *types.VerifiedActivationTx
 
-		for _, sig := range smeshers {
-			tab.Register(sig)
-
+		for _, sig := range tab.signers {
 			atx := newActivationTx(t,
 				sig, 0, types.EmptyATXID, types.EmptyATXID, nil,
 				layer.GetEpoch(), 0, 1, types.Address{}, 1, &types.NIPost{})
@@ -240,10 +205,8 @@ func TestRegossip(t *testing.T) {
 	})
 
 	t.Run("checkpointed", func(t *testing.T) {
-		tab := newTestBuilder(t)
-		for _, sig := range smeshers {
-			tab.Register(sig)
-
+		tab := newTestBuilder(t, 5)
+		for _, sig := range tab.signers {
 			require.NoError(t, atxs.AddCheckpointed(tab.cdb.Database,
 				&atxs.CheckpointAtx{ID: types.RandomATXID(), Epoch: layer.GetEpoch(), SmesherID: sig.NodeID()}))
 
@@ -254,18 +217,9 @@ func TestRegossip(t *testing.T) {
 }
 
 func Test_Builder_Multi_InitialPost(t *testing.T) {
-	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
-	smeshers := make(map[types.NodeID]*signing.EdSigner, 10)
-	for i := 0; i < 10; i++ {
-		sig, err := signing.NewEdSigner()
-		require.NoError(t, err)
-
-		tab.Register(sig)
-		smeshers[sig.NodeID()] = sig
-	}
-
+	tab := newTestBuilder(t, 5, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
 	var eg errgroup.Group
-	for _, sig := range smeshers {
+	for _, sig := range tab.signers {
 		sig := sig
 		eg.Go(func() error {
 			tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).Return(
