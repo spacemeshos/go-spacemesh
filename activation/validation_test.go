@@ -554,7 +554,7 @@ func TestVerifyChainDeps(t *testing.T) {
 
 		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
 		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID)
-		require.ErrorIs(t, err, ErrInvalidChain)
+		require.ErrorIs(t, err, &InvalidChainError{ID: invalidAtx.ID()})
 	})
 
 	t.Run("invalid pos ATX", func(t *testing.T) {
@@ -572,7 +572,7 @@ func TestVerifyChainDeps(t *testing.T) {
 
 		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
 		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID)
-		require.ErrorIs(t, err, ErrInvalidChain)
+		require.ErrorIs(t, err, &InvalidChainError{ID: invalidAtx.ID()})
 	})
 
 	t.Run("invalid commitment ATX", func(t *testing.T) {
@@ -590,7 +590,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		v.EXPECT().Verify(ctx, (*shared.Proof)(atx.NIPost.Post), gomock.Any(), gomock.Any())
 		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
 		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID)
-		require.ErrorIs(t, err, ErrInvalidChain)
+		require.ErrorIs(t, err, &InvalidChainError{ID: invalidAtx.ID()})
 	})
 
 	t.Run("with trusted node ID", func(t *testing.T) {
@@ -623,5 +623,24 @@ func TestVerifyChainDeps(t *testing.T) {
 		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
 		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID, VerifyChainOpts.AssumeValidBefore(time.Now()))
 		require.NoError(t, err)
+	})
+
+	t.Run("invalid top-level", func(t *testing.T) {
+		ch = newChallenge(1, types.EmptyATXID, vInvalidAtx.ID(), postGenesisEpoch, nil)
+		nipostData = newNIPostWithChallenge(t, types.HexToHash32(""), []byte("06"))
+		atx := newAtx(t, signer, ch, nipostData.NIPost, 2, types.Address{})
+		require.NoError(t, SignAndFinalizeAtx(signer, atx))
+		vAtx, err := atx.Verify(0, 1)
+		require.NoError(t, err)
+		vAtx.SetValidity(types.Unknown)
+		require.NoError(t, atxs.Add(db, vAtx))
+
+		expected := errors.New("post is invalid")
+		v := NewMockPostVerifier(ctrl)
+		v.EXPECT().Verify(ctx, (*shared.Proof)(atx.NIPost.Post), gomock.Any(), gomock.Any()).Return(expected)
+		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
+		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID)
+		require.ErrorIs(t, err, &InvalidChainError{ID: vAtx.ID()})
+		require.ErrorIs(t, err, expected)
 	})
 }

@@ -330,7 +330,27 @@ func (verifyChainOptsNs) WithLogger(log *zap.Logger) VerifyChainOption {
 	}
 }
 
-var ErrInvalidChain = errors.New("invalid ATX chain")
+type InvalidChainError struct {
+	ID  types.ATXID
+	src error
+}
+
+func (e *InvalidChainError) Error() string {
+	msg := fmt.Sprintf("invalid POST found in ATX chain for ID %v", e.ID.String())
+	if e.src != nil {
+		msg = fmt.Sprintf("%s: %v", msg, e.src)
+	}
+	return msg
+}
+
+func (e *InvalidChainError) Unwrap() error { return e.src }
+
+func (e *InvalidChainError) Is(target error) bool {
+	if err, ok := target.(*InvalidChainError); ok {
+		return err.ID == e.ID
+	}
+	return false
+}
 
 func (v *Validator) VerifyChain(ctx context.Context, id, goldenATXID types.ATXID, opts ...VerifyChainOption) error {
 	options := verifyChainOpts{
@@ -360,7 +380,7 @@ func (v *Validator) verifyChainWithOpts(
 		return nil
 	case atx.Validity() == types.Invalid:
 		log.Debug("not verifying ATX chain", zap.Stringer("atx_id", id), zap.String("reason", "invalid"))
-		return errors.Join(ErrInvalidChain, errors.New("atx is marked as invalid"))
+		return &InvalidChainError{ID: id}
 	case atx.Received().Before(opts.assumedValidTime):
 		log.Debug(
 			"not verifying ATX chain",
@@ -395,16 +415,17 @@ func (v *Validator) verifyChainWithOpts(
 		if err := atxs.SetValidity(v.db, id, types.Invalid); err != nil {
 			log.Warn("failed to persist atx validity", zap.Error(err), zap.Stringer("atx_id", id))
 		}
-		return errors.Join(ErrInvalidChain, fmt.Errorf("invalid post in ATX %s: %w", id.ShortString(), err))
+		return &InvalidChainError{ID: id, src: err}
 	}
 
 	err = v.verifyChainDeps(ctx, atx.ActivationTx, goldenATXID, opts)
+	invalidChain := &InvalidChainError{}
 	switch {
 	case err == nil:
 		if err := atxs.SetValidity(v.db, id, types.Valid); err != nil {
 			log.Warn("failed to persist atx validity", zap.Error(err), zap.Stringer("atx_id", id))
 		}
-	case errors.Is(err, ErrInvalidChain):
+	case errors.As(err, &invalidChain):
 		if err := atxs.SetValidity(v.db, id, types.Invalid); err != nil {
 			log.Warn("failed to persist atx validity", zap.Error(err), zap.Stringer("atx_id", id))
 		}

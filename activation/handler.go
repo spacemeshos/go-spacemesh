@@ -259,7 +259,7 @@ func (h *Handler) SyntacticallyValidateDeps(
 		}
 		h.cdb.CacheMalfeasanceProof(atx.SmesherID, &gossip.MalfeasanceProof)
 		h.tortoise.OnMalfeasance(atx.SmesherID)
-		return nil, errors.Join(errMaliciousATX, err)
+		return nil, errMaliciousATX
 	}
 	if err != nil {
 		return nil, fmt.Errorf("invalid nipost: %w", err)
