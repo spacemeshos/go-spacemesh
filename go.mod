@@ -27,7 +27,7 @@ require (
 	github.com/libp2p/go-msgio v0.3.0
 	github.com/libp2p/go-yamux/v4 v4.0.1
 	github.com/mitchellh/mapstructure v1.5.0
-	github.com/multiformats/go-multiaddr v0.12.1
+	github.com/multiformats/go-multiaddr v0.12.2
 	github.com/multiformats/go-varint v0.0.7
 	github.com/natefinch/atomic v1.0.1
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20230904125328-1f23a7beb09a
@@ -135,7 +135,7 @@ require (
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.17.3 // indirect
-	github.com/klauspost/cpuid/v2 v2.2.5 // indirect
+	github.com/klauspost/cpuid/v2 v2.2.6 // indirect
 	github.com/koron/go-ssdp v0.0.4 // indirect
 	github.com/libp2p/go-buffer-pool v0.1.0 // indirect
 	github.com/libp2p/go-cidranger v1.1.0 // indirect
