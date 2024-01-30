@@ -236,11 +236,15 @@ func (s *Syncer) adoptCert(ctx context.Context, lid types.LayerID, cert *types.C
 	if err := s.certHandler.HandleSyncedCertificate(ctx, lid, cert); err != nil {
 		return fmt.Errorf("opnions adopt cert: %w", err)
 	}
+	// it is safer to ask for block after certificate was downloaded, as we know that we ask for block signed by committee
+	// so we should not reorder this
 	if cert.BlockID != types.EmptyBlockID {
 		if err := s.dataFetcher.GetBlocks(ctx, []types.BlockID{cert.BlockID}); err != nil {
 			return fmt.Errorf("fetch block in cert %v: %w", cert.BlockID, err)
 		}
 	}
+	// in GetBlocks call block will be also passed to tortoise.OnBlock
+	s.mesh.Tortoise().OnHareOutput(lid, cert.BlockID)
 	numCertAdopted.Inc()
 	return nil
 }

@@ -527,7 +527,6 @@ func (c *Certifier) checkAndSave(
 		return errMultipleCerts
 	}
 	c.addCertCount(lid.GetEpoch())
-	c.tortoise.OnHareOutput(lid, cert.BlockID)
 	return nil
 }
 
