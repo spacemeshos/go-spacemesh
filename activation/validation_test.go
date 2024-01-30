@@ -96,11 +96,10 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 		posAtxId := types.ATXID{1, 2, 3}
 		commitmentAtxId := types.ATXID{5, 6, 7}
 
-		var PublishEpoch types.EpochID = 2
 		challenge := types.NIPostChallenge{
 			Sequence:       0,
 			PrevATXID:      types.EmptyATXID,
-			PublishEpoch:   PublishEpoch,
+			PublishEpoch:   2,
 			PositioningATX: posAtxId,
 			CommitmentATX:  &commitmentAtxId,
 		}
@@ -122,11 +121,10 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 
 		posAtxId := types.ATXID{1, 2, 3}
 
-		var PublishEpoch types.EpochID = types.LayerID(2).GetEpoch()
 		challenge := types.NIPostChallenge{
 			Sequence:       0,
 			PrevATXID:      types.EmptyATXID,
-			PublishEpoch:   PublishEpoch,
+			PublishEpoch:   0,
 			PositioningATX: posAtxId,
 			CommitmentATX:  &goldenATXID,
 		}
@@ -144,11 +142,10 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 		posAtxId := types.ATXID{1, 2, 3}
 		commitmentAtxId := types.ATXID{5, 6, 7}
 
-		var PublishEpoch types.EpochID = 1
 		challenge := types.NIPostChallenge{
 			Sequence:       0,
 			PrevATXID:      types.EmptyATXID,
-			PublishEpoch:   PublishEpoch,
+			PublishEpoch:   1,
 			PositioningATX: posAtxId,
 			CommitmentATX:  &commitmentAtxId,
 		}
@@ -187,11 +184,10 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		var PublishEpoch types.EpochID = 2
 		challenge := types.NIPostChallenge{
 			Sequence:       10,
 			PrevATXID:      prevAtxId,
-			PublishEpoch:   PublishEpoch,
+			PublishEpoch:   2,
 			PositioningATX: posAtxId,
 			CommitmentATX:  nil,
 		}
@@ -217,11 +213,10 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		var PublishEpoch types.EpochID = types.LayerID(1012).GetEpoch()
 		challenge := types.NIPostChallenge{
 			Sequence:       10,
 			PrevATXID:      prevAtxId,
-			PublishEpoch:   PublishEpoch,
+			PublishEpoch:   101,
 			PositioningATX: posAtxId,
 			CommitmentATX:  nil,
 		}
@@ -243,11 +238,10 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		var PublishEpoch types.EpochID = types.LayerID(1012).GetEpoch()
 		challenge := types.NIPostChallenge{
 			Sequence:       10,
 			PrevATXID:      prevAtxId,
-			PublishEpoch:   PublishEpoch,
+			PublishEpoch:   101,
 			PositioningATX: posAtxId,
 			CommitmentATX:  nil,
 		}
@@ -273,11 +267,10 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		var PublishEpoch types.EpochID = 2
 		challenge := types.NIPostChallenge{
 			Sequence:       10,
 			PrevATXID:      prevAtxId,
-			PublishEpoch:   PublishEpoch,
+			PublishEpoch:   2,
 			PositioningATX: posAtxId,
 			CommitmentATX:  nil,
 		}
@@ -303,11 +296,10 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		var PublishEpoch types.EpochID = 2
 		challenge := types.NIPostChallenge{
 			Sequence:       10,
 			PrevATXID:      prevAtxId,
-			PublishEpoch:   PublishEpoch,
+			PublishEpoch:   2,
 			PositioningATX: posAtxId,
 			CommitmentATX:  nil,
 		}

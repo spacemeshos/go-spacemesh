@@ -66,8 +66,7 @@ type Config struct {
 // it is responsible for initializing post, receiving poet proof and orchestrating nipst. after which it will
 // calculate total weight and providing relevant view as proof.
 type Builder struct {
-	parentCtx context.Context
-	eg        errgroup.Group
+	eg errgroup.Group
 
 	accountLock      sync.RWMutex
 	coinbaseAccount  types.Address
@@ -83,11 +82,12 @@ type Builder struct {
 	// as well as the fields below.
 	smeshingMutex sync.Mutex
 	signers       map[types.NodeID]*signing.EdSigner
-	stop          context.CancelFunc
 
 	layerClock        layerClock
 	syncer            syncer
 	log               *zap.Logger
+	parentCtx         context.Context
+	stop              context.CancelFunc
 	poetCfg           PoetConfig
 	poetRetryInterval time.Duration
 }

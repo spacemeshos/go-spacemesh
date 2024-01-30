@@ -162,6 +162,7 @@ func (es *EdSigner) Prefix() []byte {
 	return es.prefix
 }
 
+// Matches implements the gomock.Matcher interface for testing.
 func (es *EdSigner) Matches(x any) bool {
 	if other, ok := x.(*EdSigner); ok {
 		return bytes.Equal(es.priv, other.priv)
