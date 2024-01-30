@@ -55,7 +55,7 @@ func (t *ResponseMessage) EncodeScale(enc *scale.Encoder) (total int, err error)
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, t.Data, 41943040)
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.Data, 62914560)
 		if err != nil {
 			return total, err
 		}
@@ -73,7 +73,7 @@ func (t *ResponseMessage) DecodeScale(dec *scale.Decoder) (total int, err error)
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 41943040)
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 62914560)
 		if err != nil {
 			return total, err
 		}
