@@ -326,6 +326,7 @@ func New(opts ...Option) *App {
 		grpcServices: make(map[grpcserver.Service]grpcserver.ServiceAPI),
 		started:      make(chan struct{}),
 		eg:           &errgroup.Group{},
+		postVerifier: &activation.NoopPostVerifier{},
 	}
 	for _, opt := range opts {
 		opt(app)
@@ -384,7 +385,7 @@ type App struct {
 	tortoise          *tortoise.Tortoise
 	updater           *bootstrap.Updater
 	poetDb            *activation.PoetDb
-	postVerifier      *activation.OffloadingPostVerifier
+	postVerifier      activation.PostVerifier
 	postSupervisor    *activation.PostSupervisor
 	preserve          *checkpoint.PreservedData
 	errCh             chan error
@@ -579,27 +580,31 @@ func (app *App) initServices(ctx context.Context) error {
 
 	poetDb := activation.NewPoetDb(app.db, app.addLogger(PoetDbLogger, lg))
 
-	nipostValidatorLogger := app.addLogger(NipostValidatorLogger, lg)
-
-	lg.Debug("creating post verifier")
-	verifier, err := activation.NewPostVerifier(
-		app.Config.POST,
-		nipostValidatorLogger.Zap(),
-		verifying.WithPowFlags(app.Config.SMESHING.VerifyingOpts.Flags.Value()),
-	)
-	lg.With().Debug("created post verifier", log.Err(err))
-	if err != nil {
-		return err
+	if app.Config.SMESHING.VerifyingOpts.Disabled {
+		lg.Warning("Disabled verifying of PoST proofs")
+	} else {
+		nipostValidatorLogger := app.addLogger(NipostValidatorLogger, lg)
+		lg.Debug("creating post verifier")
+		verifier, err := activation.NewPostVerifier(
+			app.Config.POST,
+			nipostValidatorLogger.Zap(),
+			verifying.WithPowFlags(app.Config.SMESHING.VerifyingOpts.Flags.Value()),
+		)
+		lg.With().Debug("created post verifier", log.Err(err))
+		if err != nil {
+			return err
+		}
+		workers := app.Config.SMESHING.VerifyingOpts.Workers
+		minWorkers := min(app.Config.SMESHING.VerifyingOpts.MinWorkers, workers)
+		offloadingVerifier := activation.NewOffloadingPostVerifier(
+			verifier,
+			workers,
+			nipostValidatorLogger.Zap(),
+			activation.PrioritizedIDs(app.edSgn.NodeID()),
+		)
+		offloadingVerifier.Autoscale(minWorkers, workers)
+		app.postVerifier = offloadingVerifier
 	}
-	workers := app.Config.SMESHING.VerifyingOpts.Workers
-	minWorkers := min(app.Config.SMESHING.VerifyingOpts.MinWorkers, workers)
-	app.postVerifier = activation.NewOffloadingPostVerifier(
-		verifier,
-		workers,
-		nipostValidatorLogger.Zap(),
-		activation.PrioritizedIDs(app.edSgn.NodeID()),
-	)
-	app.postVerifier.Autoscale(minWorkers, workers)
 
 	validator := activation.NewValidator(
 		poetDb,

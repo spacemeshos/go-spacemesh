@@ -275,3 +275,18 @@ func (w *postVerifierWorker) start() {
 		}
 	}
 }
+
+type NoopPostVerifier struct{}
+
+func (v *NoopPostVerifier) Verify(
+	_ context.Context,
+	_ *shared.Proof,
+	_ *shared.ProofMetadata,
+	_ ...verifying.OptionFunc,
+) error {
+	return nil
+}
+
+func (v *NoopPostVerifier) Close() error {
+	return nil
+}
