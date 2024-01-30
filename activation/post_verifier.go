@@ -60,7 +60,7 @@ func (a autoscaler) run(stop chan struct{}, s scaler, min, target int) {
 	}
 }
 
-type OffloadingPostVerifier struct {
+type offloadingPostVerifier struct {
 	eg          errgroup.Group
 	log         *zap.Logger
 	verifier    PostVerifier
@@ -97,40 +97,79 @@ func (v *postVerifier) Verify(
 	return v.ProofVerifier.Verify(p, m, v.cfg, v.logger, opts...)
 }
 
+type postVerifierOpts struct {
+	opts           PostProofVerifyingOpts
+	prioritizedIds []types.NodeID
+	autoscaling    bool
+}
+
+type PostVerifierOpt func(v *postVerifierOpts)
+
+func WithVerifyingOpts(opts PostProofVerifyingOpts) PostVerifierOpt {
+	return func(v *postVerifierOpts) {
+		v.opts = opts
+	}
+}
+
+func PrioritizedIDs(ids ...types.NodeID) PostVerifierOpt {
+	return func(v *postVerifierOpts) {
+		v.prioritizedIds = ids
+	}
+}
+
+func WithAutoscaling() PostVerifierOpt {
+	return func(v *postVerifierOpts) {
+		v.autoscaling = true
+	}
+}
+
 // NewPostVerifier creates a new post verifier.
-func NewPostVerifier(cfg PostConfig, logger *zap.Logger, opts ...verifying.OptionFunc) (PostVerifier, error) {
-	verifier, err := verifying.NewProofVerifier(opts...)
+func NewPostVerifier(cfg PostConfig, logger *zap.Logger, opts ...PostVerifierOpt) (PostVerifier, error) {
+	options := &postVerifierOpts{
+		opts: DefaultPostVerifyingOpts(),
+	}
+	for _, o := range opts {
+		o(options)
+	}
+	if options.opts.Disabled {
+		logger.Warn("verifying post proofs is disabled")
+		return &noopPostVerifier{}, nil
+	}
+
+	logger.Debug("creating post verifier")
+	verifier, err := verifying.NewProofVerifier(verifying.WithPowFlags(options.opts.Flags.Value()))
+	logger.Debug("created post verifier", zap.Error(err))
 	if err != nil {
 		return nil, err
 	}
-
-	return &postVerifier{logger: logger, ProofVerifier: verifier, cfg: cfg.ToConfig()}, nil
-}
-
-type OffloadingPostVerifierOpt func(v *OffloadingPostVerifier)
-
-func PrioritizedIDs(ids ...types.NodeID) OffloadingPostVerifierOpt {
-	return func(v *OffloadingPostVerifier) {
-		for _, id := range ids {
-			v.prioritizedIds[id] = struct{}{}
-		}
+	workers := options.opts.Workers
+	minWorkers := min(options.opts.MinWorkers, workers)
+	offloadingVerifier := newOffloadingPostVerifier(
+		&postVerifier{logger: logger, ProofVerifier: verifier, cfg: cfg.ToConfig()},
+		workers,
+		logger,
+		options.prioritizedIds...,
+	)
+	if options.autoscaling && minWorkers != workers {
+		offloadingVerifier.autoscale(minWorkers, workers)
 	}
+	return offloadingVerifier, nil
 }
 
-// NewOffloadingPostVerifier creates a new post proof verifier with the given number of workers.
+// newOffloadingPostVerifier creates a new post proof verifier with the given number of workers.
 // The verifier will distribute incoming proofs between the workers.
 // It will block if all workers are busy.
 //
 // SAFETY: The `verifier` must be safe to use concurrently.
 //
 // The verifier must be closed after use with Close().
-func NewOffloadingPostVerifier(
+func newOffloadingPostVerifier(
 	verifier PostVerifier,
 	numWorkers int,
 	logger *zap.Logger,
-	opts ...OffloadingPostVerifierOpt,
-) *OffloadingPostVerifier {
-	v := &OffloadingPostVerifier{
+	prioritizedIds ...types.NodeID,
+) *offloadingPostVerifier {
+	v := &offloadingPostVerifier{
 		log:            logger,
 		workers:        make([]*postVerifierWorker, 0, numWorkers),
 		prioritized:    make(chan *verifyPostJob, numWorkers),
@@ -139,9 +178,8 @@ func NewOffloadingPostVerifier(
 		verifier:       verifier,
 		prioritizedIds: make(map[types.NodeID]struct{}),
 	}
-
-	for _, o := range opts {
-		o(v)
+	for _, id := range prioritizedIds {
+		v.prioritizedIds[id] = struct{}{}
 	}
 
 	v.log.Info("starting post verifier")
@@ -152,7 +190,7 @@ func NewOffloadingPostVerifier(
 
 // Turn on automatic scaling of the number of workers.
 // The number of workers will be scaled between `min` and `target` (inclusive).
-func (v *OffloadingPostVerifier) Autoscale(min, target int) {
+func (v *offloadingPostVerifier) autoscale(min, target int) {
 	a, err := newAutoscaler()
 	if err != nil {
 		v.log.Panic("failed to create autoscaler", zap.Error(err))
@@ -165,7 +203,7 @@ func (v *OffloadingPostVerifier) Autoscale(min, target int) {
 // SAFETY: Must not be called concurrently.
 // This is satisfied by the fact that the only caller is the autoscaler,
 // which executes scale() serially.
-func (v *OffloadingPostVerifier) scale(target int) {
+func (v *offloadingPostVerifier) scale(target int) {
 	v.log.Info("scaling post verifier", zap.Int("current", len(v.workers)), zap.Int("new", target))
 
 	if target > len(v.workers) {
@@ -192,7 +230,7 @@ func (v *OffloadingPostVerifier) scale(target int) {
 	}
 }
 
-func (v *OffloadingPostVerifier) Verify(
+func (v *offloadingPostVerifier) Verify(
 	ctx context.Context,
 	p *shared.Proof,
 	m *shared.ProofMetadata,
@@ -237,7 +275,7 @@ func (v *OffloadingPostVerifier) Verify(
 	}
 }
 
-func (v *OffloadingPostVerifier) Close() error {
+func (v *offloadingPostVerifier) Close() error {
 	select {
 	case <-v.stop:
 		return nil
@@ -276,9 +314,9 @@ func (w *postVerifierWorker) start() {
 	}
 }
 
-type NoopPostVerifier struct{}
+type noopPostVerifier struct{}
 
-func (v *NoopPostVerifier) Verify(
+func (v *noopPostVerifier) Verify(
 	_ context.Context,
 	_ *shared.Proof,
 	_ *shared.ProofMetadata,
@@ -287,6 +325,6 @@ func (v *NoopPostVerifier) Verify(
 	return nil
 }
 
-func (v *NoopPostVerifier) Close() error {
+func (v *noopPostVerifier) Close() error {
 	return nil
 }
