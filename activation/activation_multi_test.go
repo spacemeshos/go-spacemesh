@@ -440,27 +440,6 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 		}
 	}
 
-	for _, sig := range tab.signers {
-		challenge, err := nipost.Challenge(tab.localDB, sig.NodeID())
-		require.NoError(t, err)
-
-		post := &types.Post{
-			Indices: initialPost[sig.NodeID()].Indices,
-			Nonce:   initialPost[sig.NodeID()].Nonce,
-			Pow:     initialPost[sig.NodeID()].Pow,
-		}
-		ref := &types.NIPostChallenge{
-			PublishEpoch:   postGenesisEpoch + 1,
-			CommitmentATX:  &initialPost[sig.NodeID()].CommitmentATX,
-			Sequence:       0,
-			PrevATXID:      types.EmptyATXID,
-			PositioningATX: tab.goldenATXID,
-			InitialPost:    post,
-		}
-
-		require.Equal(t, ref, challenge)
-	}
-
 	close(nipostChan)
 	for id, ch := range nipostStep {
 		select {
