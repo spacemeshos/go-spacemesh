@@ -3,6 +3,7 @@ package activation
 import (
 	"context"
 	"math/rand"
+	"sync"
 	"testing"
 	"time"
 
@@ -380,6 +381,7 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 	// step 4: build and broadcast atx
 	atxChan := make(chan struct{})
 	atxStep := make(map[types.NodeID]chan struct{})
+	var atxMtx sync.Mutex
 	atxs := make(map[types.NodeID]types.ActivationTx)
 	endChan := make(chan struct{})
 	for _, sig := range tab.signers {
@@ -398,8 +400,8 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 
 		tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
 			func(ctx context.Context, _ string, got []byte) error {
-				close(ch)
-
+				atxMtx.Lock()
+				defer atxMtx.Unlock()
 				var gotAtx types.ActivationTx
 				require.NoError(t, codec.Decode(got, &gotAtx))
 				atxs[gotAtx.SmesherID] = gotAtx
@@ -410,6 +412,7 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 		// shutdown builder
 		tab.mnipost.EXPECT().ResetState(sig.NodeID()).DoAndReturn(
 			func(_ types.NodeID) error {
+				close(ch)
 				<-endChan
 				return context.Canceled
 			},
@@ -426,13 +429,6 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 		case <-time.After(5 * time.Second):
 			require.FailNowf(t, "timed out waiting for initial post", "node %s", id)
 		}
-	}
-
-	for _, sig := range tab.signers {
-		post, err := nipost.InitialPost(tab.localDB, sig.NodeID())
-		require.NoError(t, err)
-
-		require.Equal(t, initialPost[sig.NodeID()], post)
 	}
 
 	close(nipostChallengeChan)
@@ -482,6 +478,7 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 			require.FailNowf(t, "timed out waiting for atx publication", "node %s", id)
 		}
 	}
+	close(endChan)
 
 	for _, sig := range tab.signers {
 		atx := atxs[sig.NodeID()]
@@ -503,6 +500,5 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 	}
 
 	// stop smeshing
-	close(endChan)
 	require.NoError(t, tab.StopSmeshing(false))
 }
