@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zapcore"
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
@@ -107,12 +108,12 @@ type testAtxBuilder struct {
 }
 
 func newTestBuilder(tb testing.TB, numSigners int, opts ...BuilderOption) *testAtxBuilder {
-	lg := logtest.New(tb)
+	lg := logtest.New(tb, zapcore.DebugLevel)
 
 	ctrl := gomock.NewController(tb)
 	tab := &testAtxBuilder{
 		cdb:         datastore.NewCachedDB(sql.InMemory(), lg),
-		localDb:     localsql.InMemory(),
+		localDb:     localsql.InMemory(sql.WithConnections(numSigners)),
 		goldenATXID: types.ATXID(types.HexToHash32("77777")),
 
 		mpub:        mocks.NewMockPublisher(ctrl),

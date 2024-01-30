@@ -161,3 +161,14 @@ func (es *EdSigner) VRFSigner() *VRFSigner {
 func (es *EdSigner) Prefix() []byte {
 	return es.prefix
 }
+
+func (es *EdSigner) Matches(x any) bool {
+	if other, ok := x.(*EdSigner); ok {
+		return bytes.Equal(es.priv, other.priv)
+	}
+	return false
+}
+
+func (es *EdSigner) String() string {
+	return es.NodeID().ShortString()
+}

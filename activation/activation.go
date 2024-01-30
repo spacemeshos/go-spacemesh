@@ -551,6 +551,7 @@ func (b *Builder) createAtx(
 		zap.Stringer("pub_epoch", pubEpoch),
 		zap.Stringer("pub_epoch_first_layer", pubEpoch.FirstLayer()),
 		zap.Stringer("current_layer", b.layerClock.CurrentLayer()),
+		zap.Stringer("node_id", sig.NodeID()),
 	)
 	select {
 	case <-ctx.Done():

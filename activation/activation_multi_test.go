@@ -2,6 +2,7 @@ package activation
 
 import (
 	"context"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"go.uber.org/mock/gomock"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -244,4 +246,263 @@ func Test_Builder_Multi_InitialPost(t *testing.T) {
 	}
 
 	eg.Wait()
+}
+
+func Test_Builder_Multi_HappyPath(t *testing.T) {
+	layerDuration := 2 * time.Second
+	tab := newTestBuilder(t, 3, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4, CycleGap: layerDuration}))
+	tab.regossipInterval = 0 // disable regossip for testing
+
+	// step 1: build initial posts
+	initialPostChan := make(chan struct{})
+	initialPostStep := make(map[types.NodeID]chan struct{})
+	initialPost := make(map[types.NodeID]*nipost.Post)
+	for _, sig := range tab.signers {
+		ch := make(chan struct{})
+		initialPostStep[sig.NodeID()] = ch
+
+		nipost := nipost.Post{
+			Indices: types.RandomBytes(10),
+			Nonce:   rand.Uint32(),
+			Pow:     rand.Uint64(),
+
+			NumUnits:      4,
+			CommitmentATX: types.RandomATXID(),
+			VRFNonce:      types.VRFPostIndex(rand.Uint64()),
+		}
+		initialPost[sig.NodeID()] = &nipost
+
+		tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).DoAndReturn(
+			func(ctx context.Context, _ types.NodeID, _ []byte) (*types.Post, *types.PostInfo, error) {
+				<-initialPostChan
+				close(ch)
+				post := &types.Post{
+					Indices: nipost.Indices,
+					Nonce:   nipost.Nonce,
+					Pow:     nipost.Pow,
+				}
+				postInfo := &types.PostInfo{
+					NumUnits:      nipost.NumUnits,
+					CommitmentATX: nipost.CommitmentATX,
+					Nonce:         &nipost.VRFNonce,
+				}
+
+				return post, postInfo, nil
+			},
+		)
+	}
+
+	// step 2: build nipost challenge
+	nipostChallengeChan := make(chan struct{})
+	nipostChallengeStep := make(map[types.NodeID]chan struct{})
+	poetRoundEnd := time.Now().Add(1 * time.Second).Add(-tab.poetCfg.PhaseShift) // poetRoundEnd is in 100ms
+	for _, sig := range tab.signers {
+		ch := make(chan struct{})
+		nipostChallengeStep[sig.NodeID()] = ch
+
+		tab.mclock.EXPECT().CurrentLayer().DoAndReturn(
+			func() types.LayerID {
+				<-nipostChallengeChan
+				return postGenesisEpoch.FirstLayer() + 1
+			},
+		)
+
+		// called twice per id
+		tab.mclock.EXPECT().LayerToTime(postGenesisEpoch.FirstLayer()).Return(poetRoundEnd).Times(2)
+
+		// logged once per id
+		tab.mclock.EXPECT().CurrentLayer().DoAndReturn(
+			func() types.LayerID {
+				close(ch)
+				return postGenesisEpoch.FirstLayer() + 1
+			},
+		)
+	}
+
+	// step 3: create ATX
+	nipostChan := make(chan struct{})
+	nipostStep := make(map[types.NodeID]chan struct{})
+	nipostState := make(map[types.NodeID]*nipost.NIPostState)
+	for _, sig := range tab.signers {
+		ch := make(chan struct{})
+		nipostStep[sig.NodeID()] = ch
+
+		// deadline for create ATX
+		tab.mclock.EXPECT().LayerToTime(postGenesisEpoch.Add(2).FirstLayer()).DoAndReturn(
+			func(_ types.LayerID) time.Time {
+				<-nipostChan
+				return time.Now().Add(5 * time.Second)
+			},
+		)
+
+		post := &types.Post{
+			Indices: initialPost[sig.NodeID()].Indices,
+			Nonce:   initialPost[sig.NodeID()].Nonce,
+			Pow:     initialPost[sig.NodeID()].Pow,
+		}
+		ref := &types.NIPostChallenge{
+			PublishEpoch:   postGenesisEpoch + 1,
+			CommitmentATX:  &initialPost[sig.NodeID()].CommitmentATX,
+			Sequence:       0,
+			PrevATXID:      types.EmptyATXID,
+			PositioningATX: tab.goldenATXID,
+			InitialPost:    post,
+		}
+
+		state := &nipost.NIPostState{
+			NIPost: &types.NIPost{
+				Membership: types.MerkleProof{},
+				Post: &types.Post{
+					Indices: types.RandomBytes(10),
+					Nonce:   rand.Uint32(),
+					Pow:     rand.Uint64(),
+				},
+				PostMetadata: &types.PostMetadata{
+					LabelsPerUnit: 128,
+					Challenge:     shared.ZeroChallenge,
+				},
+			},
+			NumUnits: 4,
+			VRFNonce: types.VRFPostIndex(rand.Uint64()),
+		}
+		nipostState[sig.NodeID()] = state
+		tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), sig, ref).Return(state, nil)
+
+		// awaiting atx publication epoch log
+		tab.mclock.EXPECT().CurrentLayer().DoAndReturn(
+			func() types.LayerID {
+				close(ch)
+				return postGenesisEpoch.Add(1).FirstLayer()
+			},
+		)
+	}
+
+	// step 4: build and broadcast atx
+	atxChan := make(chan struct{})
+	atxStep := make(map[types.NodeID]chan struct{})
+	atxs := make(map[types.NodeID]types.ActivationTx)
+	endChan := make(chan struct{})
+	for _, sig := range tab.signers {
+		ch := make(chan struct{})
+		atxStep[sig.NodeID()] = ch
+
+		tab.mclock.EXPECT().AwaitLayer(postGenesisEpoch.Add(1).FirstLayer()).DoAndReturn(
+			func(_ types.LayerID) <-chan struct{} {
+				<-atxChan
+				ch := make(chan struct{})
+				close(ch)
+				return ch
+			},
+		)
+		tab.mclock.EXPECT().CurrentLayer().Return(postGenesisEpoch.Add(1).FirstLayer())
+
+		tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
+			func(ctx context.Context, _ string, got []byte) error {
+				close(ch)
+
+				var gotAtx types.ActivationTx
+				require.NoError(t, codec.Decode(got, &gotAtx))
+				atxs[gotAtx.SmesherID] = gotAtx
+				return nil
+			},
+		)
+
+		// shutdown builder
+		tab.mnipost.EXPECT().ResetState(sig.NodeID()).DoAndReturn(
+			func(_ types.NodeID) error {
+				<-endChan
+				return context.Canceled
+			},
+		)
+	}
+
+	// start smeshing
+	require.NoError(t, tab.StartSmeshing(types.Address{}))
+
+	close(initialPostChan) // signal initial post to complete
+	for id, ch := range initialPostStep {
+		select {
+		case <-ch:
+		case <-time.After(5 * time.Second):
+			require.FailNowf(t, "timed out waiting for initial post", "node %s", id)
+		}
+	}
+
+	for _, sig := range tab.signers {
+		post, err := nipost.InitialPost(tab.localDB, sig.NodeID())
+		require.NoError(t, err)
+
+		require.Equal(t, initialPost[sig.NodeID()], post)
+	}
+
+	close(nipostChallengeChan)
+	for id, ch := range nipostChallengeStep {
+		select {
+		case <-ch:
+		case <-time.After(5 * time.Second):
+			require.FailNowf(t, "timed out waiting for nipost challenge", "node %s", id)
+		}
+	}
+
+	for _, sig := range tab.signers {
+		challenge, err := nipost.Challenge(tab.localDB, sig.NodeID())
+		require.NoError(t, err)
+
+		post := &types.Post{
+			Indices: initialPost[sig.NodeID()].Indices,
+			Nonce:   initialPost[sig.NodeID()].Nonce,
+			Pow:     initialPost[sig.NodeID()].Pow,
+		}
+		ref := &types.NIPostChallenge{
+			PublishEpoch:   postGenesisEpoch + 1,
+			CommitmentATX:  &initialPost[sig.NodeID()].CommitmentATX,
+			Sequence:       0,
+			PrevATXID:      types.EmptyATXID,
+			PositioningATX: tab.goldenATXID,
+			InitialPost:    post,
+		}
+
+		require.Equal(t, ref, challenge)
+	}
+
+	close(nipostChan)
+	for id, ch := range nipostStep {
+		select {
+		case <-ch:
+		case <-time.After(5 * time.Second):
+			require.FailNowf(t, "timed out waiting for nipost", "node %s", id)
+		}
+	}
+
+	close(atxChan)
+	for id, ch := range atxStep {
+		select {
+		case <-ch:
+		case <-time.After(5 * time.Second):
+			require.FailNowf(t, "timed out waiting for atx publication", "node %s", id)
+		}
+	}
+
+	for _, sig := range tab.signers {
+		atx := atxs[sig.NodeID()]
+		require.Equal(t, initialPost[sig.NodeID()].Nonce, atx.NIPostChallenge.InitialPost.Nonce)
+		require.Equal(t, initialPost[sig.NodeID()].Pow, atx.NIPostChallenge.InitialPost.Pow)
+		require.Equal(t, initialPost[sig.NodeID()].Indices, atx.NIPostChallenge.InitialPost.Indices)
+
+		require.Equal(t, initialPost[sig.NodeID()].CommitmentATX, *atx.NIPostChallenge.CommitmentATX)
+		require.Equal(t, postGenesisEpoch+1, atx.NIPostChallenge.PublishEpoch)
+		require.Equal(t, types.EmptyATXID, atx.NIPostChallenge.PrevATXID)
+		require.Equal(t, tab.goldenATXID, atx.NIPostChallenge.PositioningATX)
+		require.Equal(t, uint64(0), atx.NIPostChallenge.Sequence)
+
+		require.Equal(t, types.Address{}, atx.Coinbase)
+		require.Equal(t, nipostState[sig.NodeID()].NumUnits, atx.NumUnits)
+		require.Equal(t, nipostState[sig.NodeID()].NIPost, atx.NIPost)
+		require.Equal(t, sig.NodeID(), *atx.NodeID)
+		require.Equal(t, nipostState[sig.NodeID()].VRFNonce, *atx.VRFNonce)
+	}
+
+	// stop smeshing
+	close(endChan)
+	require.NoError(t, tab.StopSmeshing(false))
 }
