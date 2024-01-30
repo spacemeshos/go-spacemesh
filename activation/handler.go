@@ -48,7 +48,6 @@ type Handler struct {
 	log             log.Log
 	mu              sync.Mutex
 	fetcher         system.Fetcher
-	poetCfg         PoetConfig
 
 	// inProgress map gathers ATXs that are currently being processed.
 	// It's used to avoid processing the same ATX twice.
@@ -71,7 +70,6 @@ func NewHandler(
 	beacon AtxReceiver,
 	tortoise system.Tortoise,
 	log log.Log,
-	poetCfg PoetConfig,
 ) *Handler {
 	return &Handler{
 		local:           local,
@@ -87,9 +85,7 @@ func NewHandler(
 		fetcher:         fetcher,
 		beacon:          beacon,
 		tortoise:        tortoise,
-		poetCfg:         poetCfg,
-
-		inProgress: make(map[types.ATXID][]chan error),
+		inProgress:      make(map[types.ATXID][]chan error),
 	}
 }
 
