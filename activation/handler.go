@@ -98,16 +98,16 @@ func NewHandler(
 	}
 }
 
-func (b *Handler) Register(sig *signing.EdSigner) {
-	b.signerMtx.Lock()
-	defer b.signerMtx.Unlock()
-	if _, exists := b.signers[sig.NodeID()]; exists {
-		b.log.Error("signing key already registered", zap.Stringer("id", sig.NodeID()))
+func (h *Handler) Register(sig *signing.EdSigner) {
+	h.signerMtx.Lock()
+	defer h.signerMtx.Unlock()
+	if _, exists := h.signers[sig.NodeID()]; exists {
+		h.log.Error("signing key already registered", zap.Stringer("id", sig.NodeID()))
 		return
 	}
 
-	b.log.Info("registered signing key", zap.Stringer("id", sig.NodeID()))
-	b.signers[sig.NodeID()] = sig
+	h.log.Info("registered signing key", zap.Stringer("id", sig.NodeID()))
+	h.signers[sig.NodeID()] = sig
 }
 
 // ProcessAtx validates the active set size declared in the atx, and contextually validates the atx according to atx
@@ -407,7 +407,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 			if _, ok := h.signers[atx.SmesherID]; ok {
 				// if we land here we tried to publish 2 ATXs in the same epoch
 				// don't punish ourselves but fail validation and thereby the handling of the incoming ATX
-				return fmt.Errorf("%s failed to reference its last ATX as previous", atx.SmesherID.ShortString())
+				return fmt.Errorf("%s already published an ATX in epoch %d", atx.SmesherID.ShortString(), atx.PublishEpoch)
 			}
 
 			var atxProof types.AtxProof

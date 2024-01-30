@@ -1057,8 +1057,10 @@ func TestHandler_ProcessAtx_OwnNotMalicious(t *testing.T) {
 		100,
 		&types.NIPost{},
 	)
-	require.ErrorContains(t, atxHdlr.ProcessAtx(context.Background(), atx2),
-		"failed to reference its last ATX as previous")
+	require.ErrorContains(t,
+		atxHdlr.ProcessAtx(context.Background(), atx2),
+		fmt.Sprintf("%s already published an ATX", sig.NodeID().ShortString()),
+	)
 	proof, err = identities.GetMalfeasanceProof(atxHdlr.cdb, sig.NodeID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.Nil(t, proof)
