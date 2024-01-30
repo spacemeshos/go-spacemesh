@@ -423,7 +423,7 @@ func (t *EpochActiveSet) EncodeScale(enc *scale.Encoder) (total int, err error) 
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.Set, 1000000)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.Set, 1500000)
 		if err != nil {
 			return total, err
 		}
@@ -442,7 +442,7 @@ func (t *EpochActiveSet) DecodeScale(dec *scale.Decoder) (total int, err error) 
 		t.Epoch = EpochID(field)
 	}
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[ATXID](dec, 1000000)
+		field, n, err := scale.DecodeStructSliceWithLimit[ATXID](dec, 1500000)
 		if err != nil {
 			return total, err
 		}
