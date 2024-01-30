@@ -121,6 +121,9 @@ func (g *Generator) Start(ctx context.Context) {
 
 // Stop stops listening to hare output.
 func (g *Generator) Stop() {
+	if g.stop == nil {
+		return
+	}
 	g.stop()
 	err := g.eg.Wait()
 	if err != nil && !errors.Is(err, context.Canceled) {
