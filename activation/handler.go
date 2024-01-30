@@ -407,7 +407,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 			if _, ok := h.signers[atx.SmesherID]; ok {
 				// if we land here we tried to publish 2 ATXs in the same epoch
 				// don't punish ourselves but fail validation and thereby the handling of the incoming ATX
-				return fmt.Errorf("atx %s already exists in epoch %d", atx.SmesherID, atx.PublishEpoch)
+				return fmt.Errorf("%s failed to reference its last ATX as previous", atx.SmesherID.ShortString())
 			}
 
 			var atxProof types.AtxProof
