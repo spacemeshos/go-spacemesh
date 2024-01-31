@@ -4,6 +4,13 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ## Release v1.3.8
 
+### Features
+
+* [#5517](https://github.com/spacemeshos/go-spacemesh/pull/5517)
+  Added a flag `--smeshing-opts-verifying-disable` and a config parameter `smeshing-opts-verifying-disable`
+  meant for disabling verifying POST in incoming ATXs on private nodes.
+  The verification should be performed by the public node instead.
+
 ### Improvements
 
 * [#5441](https://github.com/spacemeshos/go-spacemesh/pull/5441)
