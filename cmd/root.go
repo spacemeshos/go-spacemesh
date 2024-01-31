@@ -240,8 +240,14 @@ func AddCommands(cmd *cobra.Command) {
 		cfg.POST.K1, "difficulty factor for finding a good label when generating a proof")
 	cmd.PersistentFlags().UintVar(&cfg.POST.K2, "post-k2",
 		cfg.POST.K2, "number of labels to prove")
-	cmd.PersistentFlags().UintVar(&cfg.POST.K3, "post-k3",
-		cfg.POST.K3, "subset of labels to verify in a proof")
+	cmd.PersistentFlags().UintVar(
+		&cfg.POST.K3,
+		"post-k3",
+		cfg.POST.K3,
+		"size of the subset of labels to verify in POST proofs\n"+
+			"lower values will result in faster ATX verification but increase the risk\n"+
+			"as the node must depend on malfeasance proofs to detect invalid ATXs",
+	)
 	cmd.PersistentFlags().AddFlag(&pflag.Flag{
 		Name:     "post-pow-difficulty",
 		Value:    &cfg.POST.PowDifficulty,

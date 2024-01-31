@@ -25,11 +25,14 @@ type PostSetupProvider initialization.Provider
 
 // PostConfig is the configuration of the Post protocol, used for data creation, proofs generation and validation.
 type PostConfig struct {
-	MinNumUnits   uint32        `mapstructure:"post-min-numunits"`
-	MaxNumUnits   uint32        `mapstructure:"post-max-numunits"`
-	LabelsPerUnit uint64        `mapstructure:"post-labels-per-unit"`
-	K1            uint          `mapstructure:"post-k1"`
-	K2            uint          `mapstructure:"post-k2"`
+	MinNumUnits   uint32 `mapstructure:"post-min-numunits"`
+	MaxNumUnits   uint32 `mapstructure:"post-max-numunits"`
+	LabelsPerUnit uint64 `mapstructure:"post-labels-per-unit"`
+	K1            uint   `mapstructure:"post-k1"`
+	K2            uint   `mapstructure:"post-k2"`
+	// size of the subset of labels to verify in POST proofs
+	// lower values will result in faster ATX verification but increase the risk
+	// as the node must depend on malfeasance proofs to detect invalid ATXs
 	K3            uint          `mapstructure:"post-k3"`
 	PowDifficulty PowDifficulty `mapstructure:"post-pow-difficulty"`
 }
