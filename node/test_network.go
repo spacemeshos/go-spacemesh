@@ -106,12 +106,13 @@ func NewTestNetwork(t *testing.T, conf config.Config, l log.Log, size int) []*Te
 }
 
 func NewApp(t *testing.T, conf *config.Config, l log.Log) *App {
-	app := New(
+	app, err := New(
 		WithConfig(conf),
 		WithLog(l),
 	)
+	require.NoError(t, err)
 
-	err := app.Initialize()
+	err = app.Initialize()
 	require.NoError(t, err)
 
 	/* Create or load miner identity */

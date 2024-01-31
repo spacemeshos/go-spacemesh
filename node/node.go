@@ -142,7 +142,7 @@ func GetCommand() *cobra.Command {
 				log.With().Fatal("this is a testnet-only build not intended for mainnet")
 			}
 
-			app := New(
+			app, err := New(
 				WithConfig(conf),
 				// NOTE(dshulyak) this needs to be max level so that child logger can can be current level or below.
 				// otherwise it will fail later when child logger will try to increase level.
@@ -151,6 +151,9 @@ func GetCommand() *cobra.Command {
 					events.EventHook()),
 				),
 			)
+			if err != nil {
+				log.With().Fatal("failed to create app", log.Err(err))
+			}
 
 			run := func(ctx context.Context) error {
 				types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
@@ -316,7 +319,7 @@ func WithConfig(conf *config.Config) Option {
 }
 
 // New creates an instance of the spacemesh app.
-func New(opts ...Option) *App {
+func New(opts ...Option) (*App, error) {
 	defaultConfig := config.DefaultConfig()
 	app := &App{
 		Config:       &defaultConfig,
@@ -329,6 +332,9 @@ func New(opts ...Option) *App {
 	for _, opt := range opts {
 		opt(app)
 	}
+	if app.Config.SMESHING.VerifyingOpts.Disabled && !app.Config.P2P.PrivateNetwork {
+		return nil, errors.New("disabling verifying POST is only allowed on private P2P networks")
+	}
 	// TODO(mafa): this is a hack to suppress debugging logs on 0000.defaultLogger
 	// to fix this we should get rid of the global logger and pass app.log to all
 	// components that need it
@@ -336,7 +342,7 @@ func New(opts ...Option) *App {
 	log.SetupGlobal(app.log.SetLevel(&lvl))
 
 	types.SetNetworkHRP(app.Config.NetworkHRP)
-	return app
+	return app, nil
 }
 
 // App is the cli app singleton.

@@ -65,7 +65,8 @@ func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	tempdir := t.TempDir()
 
 	// setup spacemesh app
-	app := New(WithLog(logtest.New(t)))
+	app, err := New(WithLog(logtest.New(t)))
+	r.NoError(err)
 	app.Config.SMESHING.Opts.DataDir = tempdir
 	app.log = logtest.New(t)
 
@@ -121,7 +122,8 @@ func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 
 func testLoadOrCreateEdSigner(t *testing.T, data []byte, expect string) {
 	tempdir := t.TempDir()
-	app := New(WithLog(logtest.New(t)))
+	app, err := New(WithLog(logtest.New(t)))
+	require.NoError(t, err)
 	app.Config.SMESHING.Opts.DataDir = tempdir
 	keyfile := filepath.Join(app.Config.SMESHING.Opts.DataDir, edKeyFileName)
 	require.NoError(t, os.WriteFile(keyfile, data, 0o600))
@@ -150,7 +152,8 @@ func TestSpacemeshApp_SetLoggers(t *testing.T) {
 
 	var buf1, buf2 bytes.Buffer
 
-	app := New(WithLog(logtest.New(t)))
+	app, err := New(WithLog(logtest.New(t)))
+	r.NoError(err)
 	mylogger := "anton"
 	myLog := newLogger(&buf1)
 	myLog2 := newLogger(&buf2)
@@ -205,7 +208,8 @@ func TestSpacemeshApp_AddLogger(t *testing.T) {
 	var buf bytes.Buffer
 
 	lg := newLogger(&buf)
-	app := New(WithLog(logtest.New(t)))
+	app, err := New(WithLog(logtest.New(t)))
+	r.NoError(err)
 	mylogger := "anton"
 	subLogger := app.addLogger(mylogger, lg)
 	subLogger.Debug("should not get printed")
@@ -238,7 +242,8 @@ func cmdWithRun(run func(*cobra.Command, []string)) *cobra.Command {
 
 func TestSpacemeshApp_Cmd(t *testing.T) {
 	r := require.New(t)
-	app := New(WithLog(logtest.New(t)))
+	app, err := New(WithLog(logtest.New(t)))
+	r.NoError(err)
 
 	expected := `unknown command "illegal" for "node"`
 	expected2 := "Error: " + expected + "\nRun 'node --help' for usage.\n"
@@ -289,7 +294,8 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	listener := "127.0.0.1:1242"
 
 	r := require.New(t)
-	app := New(WithLog(logtest.New(t)))
+	app, err := New(WithLog(logtest.New(t)))
+	r.NoError(err)
 
 	path := t.TempDir()
 
@@ -303,7 +309,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	_, err := grpc.DialContext(
+	_, err = grpc.DialContext(
 		ctx,
 		listener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -348,7 +354,8 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 
 func TestSpacemeshApp_JsonServiceNotRunning(t *testing.T) {
 	r := require.New(t)
-	app := New(WithLog(logtest.New(t)))
+	app, err := New(WithLog(logtest.New(t)))
+	r.NoError(err)
 
 	// Make sure the service is not running by default
 	run := func(c *cobra.Command, args []string) {
@@ -378,7 +385,8 @@ func TestSpacemeshApp_JsonServiceNotRunning(t *testing.T) {
 
 func TestSpacemeshApp_JsonService(t *testing.T) {
 	r := require.New(t)
-	app := New(WithLog(logtest.New(t)))
+	app, err := New(WithLog(logtest.New(t)))
+	r.NoError(err)
 	const message = "nihao shijie"
 	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
 
@@ -435,8 +443,8 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	// Use a unique port
 	port := 1240
 
-	app := New(WithLog(logger))
-	app.Config = getTestDefaultConfig(t)
+	app, err := New(WithConfig(getTestDefaultConfig(t)), WithLog(logger))
+	require.NoError(t, err)
 	types.SetNetworkHRP(app.Config.NetworkHRP) // ensure that the correct HRP is set when generating the address below
 	app.Config.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte{1}).String()
 	app.Config.SMESHING.Opts.DataDir = t.TempDir()
@@ -562,11 +570,9 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	r := require.New(t)
 
 	listener := "127.0.0.1:14236"
-
-	app := New(WithLog(logtest.New(t)))
 	cfg := config.DefaultTestConfig()
-	cfg.DataDirParent = t.TempDir()
-	app.Config = &cfg
+	app, err := New(WithConfig(&cfg), WithLog(logtest.New(t)))
+	r.NoError(err)
 
 	signer, err := signing.NewEdSigner()
 	r.NoError(err)
@@ -1032,16 +1038,16 @@ func TestHRP(t *testing.T) {
 	require.NoError(t, c.ParseFlags([]string{"-c=" + cfg}))
 	conf, err := loadConfig(c)
 	require.NoError(t, err)
-	app := New(WithConfig(conf))
+	app, err := New(WithConfig(conf))
+	require.NoError(t, err)
 	require.NotNil(t, app)
 	require.Equal(t, "TEST", types.NetworkHRP())
 }
 
 func TestGenesisConfig(t *testing.T) {
 	t.Run("config is written to a file", func(t *testing.T) {
-		app := New()
-		app.Config = getTestDefaultConfig(t)
-		app.Config.DataDirParent = t.TempDir()
+		app, err := New(WithConfig(getTestDefaultConfig(t)))
+		require.NoError(t, err)
 
 		require.NoError(t, app.Initialize())
 		t.Cleanup(func() { app.Cleanup(context.Background()) })
@@ -1055,9 +1061,8 @@ func TestGenesisConfig(t *testing.T) {
 	})
 
 	t.Run("no error if no diff", func(t *testing.T) {
-		app := New()
-		app.Config = getTestDefaultConfig(t)
-		app.Config.DataDirParent = t.TempDir()
+		app, err := New(WithConfig(getTestDefaultConfig(t)))
+		require.NoError(t, err)
 
 		require.NoError(t, app.Initialize())
 		app.Cleanup(context.Background())
@@ -1067,32 +1072,31 @@ func TestGenesisConfig(t *testing.T) {
 	})
 
 	t.Run("fatal error on a diff", func(t *testing.T) {
-		app := New()
-		app.Config = getTestDefaultConfig(t)
-		app.Config.DataDirParent = t.TempDir()
+		app, err := New(WithConfig(getTestDefaultConfig(t)))
+		require.NoError(t, err)
 
 		require.NoError(t, app.Initialize())
 		t.Cleanup(func() { app.Cleanup(context.Background()) })
 
 		app.Config.Genesis.ExtraData = "changed"
 		app.Cleanup(context.Background())
-		err := app.Initialize()
+		err = app.Initialize()
 		require.ErrorContains(t, err, "genesis config")
 	})
 
 	t.Run("not valid time", func(t *testing.T) {
-		app := New()
-		app.Config = getTestDefaultConfig(t)
-		app.Config.DataDirParent = t.TempDir()
-		app.Config.Genesis.GenesisTime = time.Now().Format(time.RFC1123)
+		cfg := getTestDefaultConfig(t)
+		cfg.Genesis.GenesisTime = time.Now().Format(time.RFC1123)
+		app, err := New(WithConfig(cfg))
+		require.NoError(t, err)
 
 		require.ErrorContains(t, app.Initialize(), "time.RFC3339")
 	})
 	t.Run("long extra data", func(t *testing.T) {
-		app := New()
-		app.Config = getTestDefaultConfig(t)
-		app.Config.DataDirParent = t.TempDir()
-		app.Config.Genesis.ExtraData = string(make([]byte, 256))
+		cfg := getTestDefaultConfig(t)
+		cfg.Genesis.ExtraData = string(make([]byte, 256))
+		app, err := New(WithConfig(cfg))
+		require.NoError(t, err)
 
 		require.ErrorContains(t, app.Initialize(), "extra-data")
 	})
@@ -1100,8 +1104,8 @@ func TestGenesisConfig(t *testing.T) {
 
 func TestFlock(t *testing.T) {
 	t.Run("sanity", func(t *testing.T) {
-		app := New()
-		app.Config = getTestDefaultConfig(t)
+		app, err := New(WithConfig(getTestDefaultConfig(t)))
+		require.NoError(t, err)
 
 		require.NoError(t, app.Lock())
 		t.Cleanup(app.Unlock)
@@ -1113,9 +1117,10 @@ func TestFlock(t *testing.T) {
 	})
 
 	t.Run("dir doesn't exist", func(t *testing.T) {
-		app := New()
-		app.Config = getTestDefaultConfig(t)
-		app.Config.FileLock = filepath.Join(t.TempDir(), "newdir", "LOCK")
+		cfg := getTestDefaultConfig(t)
+		cfg.FileLock = filepath.Join(t.TempDir(), "newdir", "LOCK")
+		app, err := New(WithConfig(cfg))
+		require.NoError(t, err)
 
 		require.NoError(t, app.Lock())
 		t.Cleanup(app.Unlock)
@@ -1138,7 +1143,8 @@ func TestAdminEvents(t *testing.T) {
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 
 	logger := logtest.New(t, zapcore.DebugLevel)
-	app := New(WithConfig(&cfg), WithLog(logger))
+	app, err := New(WithConfig(&cfg), WithLog(logger))
+	require.NoError(t, err)
 	signer, err := app.LoadOrCreateEdSigner()
 	require.NoError(t, err)
 	app.edSgn = signer // https://github.com/spacemeshos/go-spacemesh/issues/4653
@@ -1220,7 +1226,8 @@ func TestAdminEvents_UnspecifiedAddresses(t *testing.T) {
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 
 	logger := logtest.New(t, zapcore.DebugLevel)
-	app := New(WithConfig(&cfg), WithLog(logger))
+	app, err := New(WithConfig(&cfg), WithLog(logger))
+	require.NoError(t, err)
 	signer, err := app.LoadOrCreateEdSigner()
 	require.NoError(t, err)
 	app.edSgn = signer // https://github.com/spacemeshos/go-spacemesh/issues/4653
@@ -1283,14 +1290,24 @@ func TestAdminEvents_UnspecifiedAddresses(t *testing.T) {
 func TestEmptyExtraData(t *testing.T) {
 	cfg := getTestDefaultConfig(t)
 	cfg.Genesis.ExtraData = ""
-	app := New(WithConfig(cfg), WithLog(logtest.New(t)))
+	app, err := New(WithConfig(cfg), WithLog(logtest.New(t)))
+	require.NoError(t, err)
 	require.Error(t, app.Initialize())
+}
+
+func TestCannotDisablePostVerifyingOnPublicP2PNetwork(t *testing.T) {
+	cfg := getTestDefaultConfig(t)
+	cfg.SMESHING.VerifyingOpts.Disabled = true
+	cfg.P2P.PrivateNetwork = false
+	_, err := New(WithConfig(cfg))
+	require.Error(t, err)
 }
 
 func getTestDefaultConfig(tb testing.TB) *config.Config {
 	cfg, err := LoadConfigFromFile()
 	require.NoError(tb, err, "cannot load config from file")
 
+	cfg.DataDirParent = tb.TempDir()
 	// is set to 0 to make sync start immediately when node starts
 	cfg.P2P.MinPeers = 0
 
