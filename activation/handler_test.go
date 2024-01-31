@@ -1006,6 +1006,66 @@ func TestHandler_ProcessAtx(t *testing.T) {
 	require.Equal(t, atx2.PublishEpoch.FirstLayer(), got.MalfeasanceProof.Layer)
 }
 
+func TestHandler_ProcessAtx_OwnNotMalicious(t *testing.T) {
+	// Arrange
+	goldenATXID := types.ATXID{2, 3, 4}
+	atxHdlr := newTestHandler(t, goldenATXID)
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	atxHdlr.Register(sig)
+
+	coinbase := types.GenerateAddress([]byte("aaaa"))
+
+	// Act & Assert
+	atx1 := newActivationTx(
+		t,
+		sig,
+		0,
+		types.EmptyATXID,
+		types.EmptyATXID,
+		nil,
+		types.LayerID(layersPerEpoch).GetEpoch(),
+		0,
+		100,
+		coinbase,
+		100,
+		&types.NIPost{},
+	)
+	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
+	require.NoError(t, atxHdlr.ProcessAtx(context.Background(), atx1))
+
+	// processing an already stored ATX returns no error
+	require.NoError(t, atxHdlr.ProcessAtx(context.Background(), atx1))
+	proof, err := identities.GetMalfeasanceProof(atxHdlr.cdb, sig.NodeID())
+	require.ErrorIs(t, err, sql.ErrNotFound)
+	require.Nil(t, proof)
+
+	// another atx for the same epoch is considered malicious
+	atx2 := newActivationTx(
+		t,
+		sig,
+		1,
+		atx1.ID(),
+		atx1.ID(),
+		nil,
+		types.LayerID(layersPerEpoch+1).GetEpoch(),
+		0,
+		100,
+		coinbase,
+		100,
+		&types.NIPost{},
+	)
+	require.ErrorContains(t,
+		atxHdlr.ProcessAtx(context.Background(), atx2),
+		fmt.Sprintf("%s already published an ATX", sig.NodeID().ShortString()),
+	)
+	proof, err = identities.GetMalfeasanceProof(atxHdlr.cdb, sig.NodeID())
+	require.ErrorIs(t, err, sql.ErrNotFound)
+	require.Nil(t, proof)
+}
+
 func TestHandler_ProcessAtxStoresNewVRFNonce(t *testing.T) {
 	// Arrange
 	goldenATXID := types.ATXID{2, 3, 4}
