@@ -2,16 +2,21 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
-## UNRELEASED
+## Release v1.3.8
 
 ### Improvements
 
 * [#5441](https://github.com/spacemeshos/go-spacemesh/pull/5441)
   Fix possible nil-pointer dereference in blocks.Generator.
+
 * [#5512](https://github.com/spacemeshos/go-spacemesh/pull/5512)
   Increase EpochActiveSet limit to 1.5M to prepare for 1M+ ATXs.
+
 * [#5515](https://github.com/spacemeshos/go-spacemesh/pull/5515)
   Increase fetcher limit to 60MiB to prepare for 1M+ ATXs.
+
+* [#5518](https://github.com/spacemeshos/go-spacemesh/pull/5518) In rare cases the node could create a malfeasance
+  proof against itself. This is now prevented.
 
 ## Release v1.3.7
 
@@ -39,10 +44,14 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 * [#5498](https://github.com/spacemeshos/go-spacemesh/pull/5498)
   Reduce the default number of CPU cores that are used for verifying incoming ATXs to half of the available cores.
 
-* [#5500](https://github.com/spacemeshos/go-spacemesh/pull/5500)
-  Make fetch request timeout configurable.
-  Add separate metric for failed p2p server requests.
+* [#5462](https://github.com/spacemeshos/go-spacemesh/pull/5462) Add separate metric for failed p2p server requests
+
+* [#5464](https://github.com/spacemeshos/go-spacemesh/pull/5464) Make fetch request timeout configurable.
+
+* [#5463](https://github.com/spacemeshos/go-spacemesh/pull/5463)
   Adjust deadline during long reads and writes, reducing "i/o deadline exceeded" errors.
+
+* [#5494](https://github.com/spacemeshos/go-spacemesh/pull/5494)
   Make routing discovery more configurable and less spammy by default.
 
 ## Release v1.3.5
@@ -208,6 +217,13 @@ for more information on how to configure the node to work with the PoST service.
 * [#5384](https://github.com/spacemeshos/go-spacemesh/pull/5384) to improve network stability and performance allow the
   active set to be set in advance for an epoch. This allows the network to start consensus on the first layer of an epoch.
 
+## Release v1.2.13
+
+### Improvements
+
+* [#5384](https://github.com/spacemeshos/go-spacemesh/pull/5384) to improve network stability and performance allow the
+  active set to be set in advance for an epoch.
+
 ## Release v1.2.12
 
 ### Improvements
@@ -229,6 +245,15 @@ for more information on how to configure the node to work with the PoST service.
 ### Improvements
 
 * further increased cache sizes and and p2p timeouts to compensate for the increased number of nodes on the network.
+
+* [#5329](https://github.com/spacemeshos/go-spacemesh/pull/5329) P2P decentralization improvements. Added support for QUIC
+  transport and DHT routing discovery for finding peers and relays. Also, added the `ping-peers` feature which is useful
+  during connectivity troubleshooting. `static-relays` feature can be used to provide a static list of circuit v2 relays
+  nodes when automatic relay discovery is not desired. All of the relay server resource settings are now configurable. Most
+  of the new functionality is disabled by default unless explicitly enabled in the config via `enable-routing-discovery`,
+  `routing-discovery-advertise`, `enable-quic-transport`, `static-relays` and `ping-peers` options in the `p2p` config
+  section. The non-conditional changes include values/provides support on all of the nodes, which will enable DHT to
+  function efficiently for routing discovery.
 
 ## Release v1.2.9
 
@@ -262,7 +287,6 @@ for more information on how to configure the node to work with the PoST service.
 ### Improvements
 
 * [#5263](https://github.com/spacemeshos/go-spacemesh/pull/5263) randomize peer selection
-
   without this change node can get stuck after restart on requesting data from peer that is misbehaving.
   log below will be printed repeatedly:
 
