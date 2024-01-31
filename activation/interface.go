@@ -25,7 +25,7 @@ type PostVerifier interface {
 }
 
 type scaler interface {
-	scale(int)
+	scale(int) (stopped []chan struct{})
 }
 
 type nipostValidator interface {

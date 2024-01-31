@@ -78,6 +78,7 @@ type postVerifierWorker struct {
 	prioritized <-chan *verifyPostJob
 	jobs        <-chan *verifyPostJob
 	stop        chan struct{} // signal to stop this worker
+	stopped     chan struct{} // signal that this worker has stopped
 	shutdown    chan struct{} // signal that the verifier is closing
 }
 
@@ -165,7 +166,10 @@ func (v *OffloadingPostVerifier) Autoscale(min, target int) {
 // SAFETY: Must not be called concurrently.
 // This is satisfied by the fact that the only caller is the autoscaler,
 // which executes scale() serially.
-func (v *OffloadingPostVerifier) scale(target int) {
+//
+// Returns a slice of channels that will be closed when the corresponding worker has stopped.
+// Only relevant when scaling down. The caller can, but doesn't need to wait for these channels to be closed.
+func (v *OffloadingPostVerifier) scale(target int) (stopped []chan struct{}) {
 	v.log.Info("scaling post verifier", zap.Int("current", len(v.workers)), zap.Int("new", target))
 
 	if target > len(v.workers) {
@@ -177,6 +181,7 @@ func (v *OffloadingPostVerifier) scale(target int) {
 				prioritized: v.prioritized,
 				jobs:        v.jobs,
 				stop:        make(chan struct{}),
+				stopped:     make(chan struct{}),
 				shutdown:    v.stop,
 			}
 			v.workers = append(v.workers, w)
@@ -188,8 +193,10 @@ func (v *OffloadingPostVerifier) scale(target int) {
 		v.workers = toKeep
 		for _, worker := range toStop {
 			close(worker.stop)
+			stopped = append(stopped, worker.stopped)
 		}
 	}
+	return stopped
 }
 
 func (v *OffloadingPostVerifier) Verify(
@@ -255,6 +262,7 @@ func (v *OffloadingPostVerifier) Close() error {
 func (w *postVerifierWorker) start() {
 	w.log.Info("starting")
 	defer w.log.Info("stopped")
+	defer close(w.stopped)
 
 	for {
 		// First try to process a prioritized job.
