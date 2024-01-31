@@ -100,9 +100,9 @@ func Recover(
 		return trtl, nil
 	}
 	trtl.TallyVotes(ctx, last)
-	// find topmost layer that was already applied and reset pending
-	// so that result for that layer is not returned
-	for prev := last - 1; prev >= start; prev-- {
+	// find topmost layer that was already applied with same result
+	// and reset pending so that result for that layer is not returned
+	for prev := valid; prev >= start; prev-- {
 		opinion, err := layers.GetAggregatedHash(db, prev)
 		if err == nil && opinion != types.EmptyLayerHash {
 			if trtl.OnApplied(prev, opinion) {
@@ -131,19 +131,11 @@ func Recover(
 
 func recoverEpoch(target types.EpochID, trtl *Tortoise, db *sql.Database) error {
 	publish := target - 1
-	if err := atxs.IterateAtxsFields(db, publish, publish,
-		func(id types.ATXID, node types.NodeID, weight, height, baseHeight uint64) bool {
-			trtl.OnAtx(&types.AtxTortoiseData{
-				ID:          id,
-				Smesher:     node,
-				TargetEpoch: target,
-				BaseHeight:  baseHeight,
-				Height:      height,
-				Weight:      weight,
-			})
-			return true
-		}); err != nil {
-		return err
+	if err := atxs.IterateAtxs(db, publish, publish, func(atx *types.VerifiedActivationTx) bool {
+		trtl.OnAtx(atx.ToHeader().ToData())
+		return true
+	}); err != nil {
+		return fmt.Errorf("iterate atxs: %w", err)
 	}
 	beacon, err := beacons.Get(db, target)
 	if err == nil && beacon != types.EmptyBeacon {
@@ -170,28 +162,29 @@ func RecoverLayer(
 	if err != nil {
 		return err
 	}
+
+	results := map[types.BlockHeader]bool{}
 	for _, block := range blocksrst {
 		valid, err := blocks.IsValid(db, block.ID())
 		if err != nil && errors.Is(err, sql.ErrNotFound) {
 			return err
 		}
-		if valid {
-			trtl.OnValidBlock(block.ToVote())
-		} else {
-			trtl.OnBlock(block.ToVote())
-		}
+		results[block.ToVote()] = valid
 	}
-	// tortoise votes according to the hare only within hdist (protocol parameter).
-	// also node is free to prune certificates outside hdist to minimize space usage.
+	var hareResult *types.BlockID
 	if trtl.WithinHdist(lid) {
 		hare, err := certificates.GetHareOutput(db, lid)
 		if err != nil && !errors.Is(err, sql.ErrNotFound) {
 			return err
 		}
 		if err == nil {
-			trtl.OnHareOutput(lid, hare)
+			hareResult = &hare
 		}
 	}
+	trtl.OnRecoveredBlocks(lid, results, hareResult)
+	// tortoise votes according to the hare only within hdist (protocol parameter).
+	// also node is free to prune certificates outside hdist to minimize space usage.
+
 	// NOTE(dshulyak) we loaded information about malicious identities earlier.
 	ballotsrst, err := ballots.LayerNoMalicious(db, lid)
 	if err != nil {

@@ -2118,7 +2118,7 @@ func TestFutureHeight(t *testing.T) {
 			tortoise.TallyVotes(context.Background(), s.Next(sim.WithNumBlocks(1)))
 		}
 
-		require.Equal(t, types.GetEffectiveGenesis(), tortoise.LatestComplete())
+		require.Equal(t, types.GetEffectiveGenesis().String(), tortoise.LatestComplete().String())
 	})
 	t.Run("median above slow smeshers", func(t *testing.T) {
 		s := sim.New(

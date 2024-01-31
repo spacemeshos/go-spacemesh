@@ -307,16 +307,43 @@ func (t *Tortoise) OnBlock(header types.BlockHeader) {
 	}
 }
 
-// OnValidBlock inserts block, updates that data is stored locally
-// and that block was previously considered valid by tortoise.
-func (t *Tortoise) OnValidBlock(header types.BlockHeader) {
-	start := time.Now()
+// OnRecoveredBlocks uploads blocks to the state with all metadata.
+//
+// Implementation assumes that they will be uploaded in order.
+func (t *Tortoise) OnRecoveredBlocks(lid types.LayerID, validity map[types.BlockHeader]bool, hare *types.BlockID) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	waitBlockDuration.Observe(float64(time.Since(start).Nanoseconds()))
-	t.trtl.onBlock(header, true, true)
+
+	for block, valid := range validity {
+		if exists := t.trtl.getBlock(block); exists != nil {
+			continue
+		}
+		info := newBlockInfo(block)
+		info.data = true
+		if valid {
+			info.validity = support
+		}
+		t.trtl.addBlock(info)
+	}
+	if hare != nil {
+		t.trtl.onHareOutput(lid, *hare)
+	} else if !withinDistance(t.cfg.Hdist, lid, t.trtl.last) {
+		layer := t.trtl.state.layer(lid)
+		layer.hareTerminated = true
+		for _, info := range layer.blocks {
+			if info.validity == abstain {
+				info.validity = against
+			}
+		}
+	}
+
+	t.logger.Debug("loaded recovered blocks",
+		zap.Uint32("lid", lid.Uint32()),
+		zap.Uint32("last", t.trtl.last.Uint32()),
+		zapBlocks(t.trtl.state.layer(lid).blocks),
+	)
 	if t.tracer != nil {
-		t.tracer.On(&BlockTrace{Header: header, Valid: true})
+		t.tracer.On(newRecoveredBlocksTrace(lid, validity, hare))
 	}
 }
 

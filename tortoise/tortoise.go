@@ -361,18 +361,7 @@ func (t *turtle) tallyVotes(ctx context.Context, last types.LayerID) {
 				}
 			}
 		}
-		// TODO(dshulyak) don't leave it like this
-		// the intention here is to mark all blocks outside hdist distance as invalid
-		// unless they are valid.
-		// this is important if we want to run verifying tortoise when loading data from database.
-		if !withinDistance(t.Hdist, process, t.last) {
-			layer.hareTerminated = true
-			for _, block := range layer.blocks {
-				if block.validity == abstain {
-					block.validity = against
-				}
-			}
-		}
+
 		opinion := layer.opinion
 		layer.computeOpinion(t.Hdist, t.last)
 		if opinion != layer.opinion {
@@ -383,9 +372,11 @@ func (t *turtle) tallyVotes(ctx context.Context, last types.LayerID) {
 		}
 
 		t.logger.Debug("initial local opinion",
+			zap.Bool("hate terminated", layer.hareTerminated),
 			zap.Uint32("lid", layer.lid.Uint32()),
 			log.ZShortStringer("previous", opinion),
 			log.ZShortStringer("opinion", layer.opinion),
+			zapBlocks(layer.blocks),
 		)
 		// terminate layer that falls out of the zdist window and wasn't terminated
 		// by any other component
@@ -608,6 +599,9 @@ func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {
 	if exists && previous == bid {
 		return
 	}
+	// we do not compute opinion because opinion hashing recursive.
+	// so if we didn't receive layer in order this opinion will be wrong
+	// and we also need to copy previous layer opinion into layer.prevOpinion
 	if !lid.After(t.processed) && withinDistance(t.Config.Hdist, lid, t.last) {
 		t.logger.Debug("local opinion changed within hdist",
 			zap.Uint32("lid", lid.Uint32()),
@@ -830,6 +824,10 @@ func (t *turtle) storeBallot(ballot *ballotInfo, offset types.LayerID) error {
 				if existing != nil {
 					current.supported[i] = existing
 				} else {
+					if !withinDistance(t.Hdist, block.layer, t.last) {
+						block.validity = against
+						block.hare = against
+					}
 					t.addBlock(block)
 				}
 			}

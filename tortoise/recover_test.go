@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/tortoise/sim"
 )
@@ -102,6 +103,11 @@ func TestRecoverWithOpinion(t *testing.T) {
 		if rst.Verified {
 			require.NoError(t, layers.SetMeshHash(s.GetState(0).DB.Database, rst.Layer, rst.Opinion))
 		}
+		for _, block := range rst.Blocks {
+			if block.Valid {
+				require.NoError(t, blocks.SetValid(s.GetState(0).DB.Database, block.Header.ID))
+			}
+		}
 		last = rst
 	}
 	tortoise, err := Recover(
@@ -137,8 +143,13 @@ func TestResetPending(t *testing.T) {
 	require.Len(t, updates1, n+1)
 	require.Equal(t, types.GetEffectiveGenesis(), updates1[0].Layer)
 	require.Equal(t, last, updates1[n].Layer)
-	for _, item := range updates1[:n/2] {
-		require.NoError(t, layers.SetMeshHash(s.GetState(0).DB, item.Layer, item.Opinion))
+	for _, rst := range updates1[:n/2] {
+		require.NoError(t, layers.SetMeshHash(s.GetState(0).DB, rst.Layer, rst.Opinion))
+		for _, block := range rst.Blocks {
+			if block.Valid {
+				require.NoError(t, blocks.SetValid(s.GetState(0).DB.Database, block.Header.ID))
+			}
+		}
 	}
 
 	recovered, err := Recover(
@@ -177,8 +188,13 @@ func TestWindowRecovery(t *testing.T) {
 	require.Len(t, updates1, n+1)
 	require.Equal(t, types.GetEffectiveGenesis(), updates1[0].Layer)
 	require.Equal(t, last, updates1[n].Layer)
-	for _, item := range updates1[:epochSize*4] {
-		require.NoError(t, layers.SetMeshHash(s.GetState(0).DB, item.Layer, item.Opinion))
+	for _, rst := range updates1[:epochSize*4] {
+		require.NoError(t, layers.SetMeshHash(s.GetState(0).DB, rst.Layer, rst.Opinion))
+		for _, block := range rst.Blocks {
+			if block.Valid {
+				require.NoError(t, blocks.SetValid(s.GetState(0).DB.Database, block.Header.ID))
+			}
+		}
 	}
 
 	recovered, err := Recover(
