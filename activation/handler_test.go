@@ -117,7 +117,6 @@ func newTestHandler(tb testing.TB, goldenATXID types.ATXID) *testHandler {
 		mbeacon,
 		mtortoise,
 		lg,
-		PoetConfig{},
 	)
 	return &testHandler{
 		Handler: atxHdlr,

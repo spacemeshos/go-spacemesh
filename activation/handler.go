@@ -49,7 +49,6 @@ type Handler struct {
 	log             log.Log
 	mu              sync.Mutex
 	fetcher         system.Fetcher
-	poetCfg         PoetConfig
 
 	signerMtx sync.Mutex
 	signers   map[types.NodeID]*signing.EdSigner
@@ -75,7 +74,6 @@ func NewHandler(
 	beacon AtxReceiver,
 	tortoise system.Tortoise,
 	log log.Log,
-	poetCfg PoetConfig,
 ) *Handler {
 	return &Handler{
 		local:           local,
@@ -91,7 +89,6 @@ func NewHandler(
 		fetcher:         fetcher,
 		beacon:          beacon,
 		tortoise:        tortoise,
-		poetCfg:         poetCfg,
 
 		signers:    make(map[types.NodeID]*signing.EdSigner),
 		inProgress: make(map[types.ATXID][]chan error),

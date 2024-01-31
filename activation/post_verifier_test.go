@@ -1,4 +1,4 @@
-package activation_test
+package activation
 
 import (
 	"context"
@@ -9,10 +9,10 @@ import (
 	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
@@ -20,8 +20,8 @@ func TestOffloadingPostVerifier(t *testing.T) {
 	proof := shared.Proof{}
 	metadata := shared.ProofMetadata{}
 
-	verifier := activation.NewMockPostVerifier(gomock.NewController(t))
-	offloadingVerifier := activation.NewOffloadingPostVerifier(verifier, 1, zaptest.NewLogger(t))
+	verifier := NewMockPostVerifier(gomock.NewController(t))
+	offloadingVerifier := newOffloadingPostVerifier(verifier, 1, zaptest.NewLogger(t))
 	defer offloadingVerifier.Close()
 	verifier.EXPECT().Close().Return(nil)
 
@@ -35,7 +35,7 @@ func TestOffloadingPostVerifier(t *testing.T) {
 }
 
 func TestPostVerifierDetectsInvalidProof(t *testing.T) {
-	verifier, err := activation.NewPostVerifier(activation.PostConfig{}, zaptest.NewLogger(t))
+	verifier, err := NewPostVerifier(PostConfig{}, zaptest.NewLogger(t))
 	require.NoError(t, err)
 	defer verifier.Close()
 	require.Error(t, verifier.Verify(context.Background(), &shared.Proof{}, &shared.ProofMetadata{}))
@@ -45,8 +45,8 @@ func TestPostVerifierVerifyAfterStop(t *testing.T) {
 	proof := shared.Proof{}
 	metadata := shared.ProofMetadata{}
 
-	verifier := activation.NewMockPostVerifier(gomock.NewController(t))
-	offloadingVerifier := activation.NewOffloadingPostVerifier(verifier, 1, zaptest.NewLogger(t))
+	verifier := NewMockPostVerifier(gomock.NewController(t))
+	offloadingVerifier := newOffloadingPostVerifier(verifier, 1, zaptest.NewLogger(t))
 	defer offloadingVerifier.Close()
 
 	verifier.EXPECT().Verify(gomock.Any(), &proof, &metadata, gomock.Any()).Return(nil)
@@ -65,8 +65,8 @@ func TestPostVerifierNoRaceOnClose(t *testing.T) {
 	var proof shared.Proof
 	var metadata shared.ProofMetadata
 
-	verifier := activation.NewMockPostVerifier(gomock.NewController(t))
-	offloadingVerifier := activation.NewOffloadingPostVerifier(verifier, 1, zaptest.NewLogger(t))
+	verifier := NewMockPostVerifier(gomock.NewController(t))
+	offloadingVerifier := newOffloadingPostVerifier(verifier, 1, zaptest.NewLogger(t))
 	defer offloadingVerifier.Close()
 
 	verifier.EXPECT().Close().AnyTimes().Return(nil)
@@ -91,9 +91,9 @@ func TestPostVerifierNoRaceOnClose(t *testing.T) {
 }
 
 func TestPostVerifierClose(t *testing.T) {
-	verifier := activation.NewMockPostVerifier(gomock.NewController(t))
+	verifier := NewMockPostVerifier(gomock.NewController(t))
 	// 0 workers - no one will verify the proof
-	v := activation.NewOffloadingPostVerifier(verifier, 0, zaptest.NewLogger(t))
+	v := newOffloadingPostVerifier(verifier, 0, zaptest.NewLogger(t))
 
 	verifier.EXPECT().Close().Return(nil)
 	require.NoError(t, v.Close())
@@ -104,8 +104,8 @@ func TestPostVerifierClose(t *testing.T) {
 
 func TestPostVerifierPrioritization(t *testing.T) {
 	nodeID := types.RandomNodeID()
-	verifier := activation.NewMockPostVerifier(gomock.NewController(t))
-	v := activation.NewOffloadingPostVerifier(verifier, 2, zaptest.NewLogger(t), activation.PrioritizedIDs(nodeID))
+	verifier := NewMockPostVerifier(gomock.NewController(t))
+	v := newOffloadingPostVerifier(verifier, 2, zaptest.NewLogger(t), nodeID)
 
 	verifier.EXPECT().
 		Verify(gomock.Any(), gomock.Any(), &shared.ProofMetadata{NodeId: nodeID.Bytes()}, gomock.Any()).
@@ -113,4 +113,13 @@ func TestPostVerifierPrioritization(t *testing.T) {
 
 	err := v.Verify(context.Background(), &shared.Proof{}, &shared.ProofMetadata{NodeId: nodeID.Bytes()})
 	require.NoError(t, err)
+}
+
+func TestVerificationDisabled(t *testing.T) {
+	opts := DefaultPostVerifyingOpts()
+	opts.Disabled = true
+	v, err := NewPostVerifier(DefaultPostConfig(), zap.NewNop(), WithVerifyingOpts(opts))
+	require.NoError(t, err)
+	require.NoError(t, v.Verify(context.Background(), &shared.Proof{}, &shared.ProofMetadata{}))
+	require.NoError(t, v.Close())
 }

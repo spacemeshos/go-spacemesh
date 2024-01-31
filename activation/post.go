@@ -79,6 +79,11 @@ func DefaultPostProvingOpts() PostProvingOpts {
 
 // PostProofVerifyingOpts are the options controlling POST proving process.
 type PostProofVerifyingOpts struct {
+	// Disable verifying POST proofs. Experimental.
+	// Use with caution, only on private nodes with a trusted public peer that
+	// validates the proofs.
+	Disabled bool `mapstructure:"smeshing-opts-verifying-disable"`
+
 	// Number of workers spawned to verify proofs.
 	Workers int `mapstructure:"smeshing-opts-verifying-workers"`
 	// The minimum number of verifying workers to keep

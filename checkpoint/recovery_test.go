@@ -252,7 +252,6 @@ func validateAndPreserveData(
 		mreceiver,
 		mtrtl,
 		lg,
-		activation.PoetConfig{},
 	)
 	mfetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	for i, vatx := range deps {
