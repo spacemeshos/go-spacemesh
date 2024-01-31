@@ -88,12 +88,34 @@ configuration is as follows:
 
 ### Features
 
+### Improvements
+
+* [#5418](https://github.com/spacemeshos/go-spacemesh/pull/5418) Add `grpc-post-listener` to separate post service from
+  `grpc-private-listener` and not require mTLS for the post service.
+
+  If you are not using a remote post service you do not need to adjust anything. If you are using a remote setup
+  make sure your post service now connects to `grpc-post-listener` instead of `grpc-private-listener`. If you are
+  connecting to a remote post service over the internet we strongly recommend using mTLS via `grpc-tls-listener`.
+
+## Release v1.3.8
+
+### Features
+
 * [#5517](https://github.com/spacemeshos/go-spacemesh/pull/5517)
   Added a flag `--smeshing-opts-verifying-disable` and a config parameter `smeshing-opts-verifying-disable`
   meant for disabling verifying POST in incoming ATXs on private nodes.
   The verification should be performed by the public node instead.
 
 ### Improvements
+
+* [#5441](https://github.com/spacemeshos/go-spacemesh/pull/5441)
+  Fix possible nil-pointer dereference in blocks.Generator.
+
+* [#5512](https://github.com/spacemeshos/go-spacemesh/pull/5512)
+  Increase EpochActiveSet limit to 1.5M to prepare for 1M+ ATXs.
+
+* [#5515](https://github.com/spacemeshos/go-spacemesh/pull/5515)
+  Increase fetcher limit to 60MiB to prepare for 1M+ ATXs.
 
 * [#5518](https://github.com/spacemeshos/go-spacemesh/pull/5518) In rare cases the node could create a malfeasance
   proof against itself. This is now prevented.
@@ -126,12 +148,11 @@ configuration is as follows:
 
 * [#5462](https://github.com/spacemeshos/go-spacemesh/pull/5462) Add separate metric for failed p2p server requests
 
-### Improvements
-
 * [#5464](https://github.com/spacemeshos/go-spacemesh/pull/5464) Make fetch request timeout configurable.
-* [#5479](https://github.com/spacemeshos/go-spacemesh/pull/5479) p2p: make AutoNAT service limits configurable.
-* [#5489](https://github.com/spacemeshos/go-spacemesh/pull/5489)
-  Fix problem in POST proving where too many files were opened at the same time.
+
+* [#5463](https://github.com/spacemeshos/go-spacemesh/pull/5463)
+  Adjust deadline during long reads and writes, reducing "i/o deadline exceeded" errors.
+
 * [#5494](https://github.com/spacemeshos/go-spacemesh/pull/5494)
   Make routing discovery more configurable and less spammy by default.
 
@@ -155,8 +176,6 @@ configuration is as follows:
 * [#5467](https://github.com/spacemeshos/go-spacemesh/pull/5467)
   Fix a bug that could cause ATX sync to stall because of exhausted limit of concurrent requests for dependencies.
   Fetching dependencies of an ATX is not limited anymore.
-* [#5463](https://github.com/spacemeshos/go-spacemesh/pull/5463)
-  Adjust deadline during long reads and writes, reducing "i/o deadline exceeded" errors.
 
 ## Release v1.3.3
 
@@ -183,13 +202,6 @@ configuration is as follows:
   Wait to be ATX-synced before selecting the commitment ATX for initialization.
   Also, remove unnecessary wait for ATXs to be synced before beginning initialization if
   the commitment ATX is already selected.
-
-* [#5418](https://github.com/spacemeshos/go-spacemesh/pull/5418) Add `grpc-post-listener` to separate post service from
-  `grpc-private-listener` and not require mTLS for the post service.
-
-  If you are not using a remote post service you do not need to adjust anything. If you are using a remote setup
-  make sure your post service now connects to `grpc-post-listener` instead of `grpc-private-listener`. If you are
-  connecting to a remote post service over the internet we strongly recommend using mTLS via `grpc-tls-listener`.
 
 ## Release v1.3.2
 
@@ -377,10 +389,9 @@ for more information on how to configure the node to work with the PoST service.
 ### Improvements
 
 * [#5263](https://github.com/spacemeshos/go-spacemesh/pull/5263) randomize peer selection
-  
   without this change node can get stuck after restart on requesting data from peer that is misbehaving.
   log below will be printed repeatedly:
-  
+
   > 2023-11-15T08:00:17.937+0100 INFO fd68b.sync syncing atx from genesis
 
 * [#5264](https://github.com/spacemeshos/go-spacemesh/pull/5264) increase limits related to activations
