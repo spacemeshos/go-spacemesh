@@ -226,13 +226,11 @@ func (v *offloadingPostVerifier) scale(target int) {
 		// scale down
 		toKeep, toStop := v.workers[:target], v.workers[target:]
 		v.workers = toKeep
-		stopping := make([]<-chan struct{}, 0, len(toStop))
 		for _, worker := range toStop {
 			close(worker.stop)
-			stopping = append(stopping, worker.stopped)
 		}
-		for _, stopped := range stopping {
-			<-stopped
+		for _, worker := range toStop {
+			<-worker.stopped
 		}
 	}
 }
