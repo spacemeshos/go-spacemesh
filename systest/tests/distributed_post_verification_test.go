@@ -216,6 +216,19 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	for i := range nipost.Post.Indices {
 		nipost.Post.Indices[i] += 1
 	}
+	// Sanity check that the POST is invalid
+	verifier, err := activation.NewPostVerifier(cfg.POST, logger.Named("post-verifier"))
+	require.NoError(t, err)
+	err = verifier.Verify(ctx, (*shared.Proof)(nipost.Post), &shared.ProofMetadata{
+		NodeId:          signer.NodeID().Bytes(),
+		CommitmentAtxId: challenge.CommitmentATX.Bytes(),
+		NumUnits:        nipost.NumUnits,
+		Challenge:       nipost.PostMetadata.Challenge,
+		LabelsPerUnit:   nipost.PostMetadata.LabelsPerUnit,
+	})
+	var invalidIdxError *verifying.ErrInvalidIndex
+	require.ErrorAs(t, err, &invalidIdxError)
+
 	atx := types.NewActivationTx(
 		*challenge,
 		types.Address{1, 2, 3, 4},
