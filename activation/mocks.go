@@ -207,11 +207,9 @@ func (m *Mockscaler) EXPECT() *MockscalerMockRecorder {
 }
 
 // scale mocks base method.
-func (m *Mockscaler) scale(arg0 int) []chan struct{} {
+func (m *Mockscaler) scale(arg0 int) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "scale", arg0)
-	ret0, _ := ret[0].([]chan struct{})
-	return ret0
+	m.ctrl.Call(m, "scale", arg0)
 }
 
 // scale indicates an expected call of scale.
@@ -227,19 +225,19 @@ type scalerscaleCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *scalerscaleCall) Return(stopped []chan struct{}) *scalerscaleCall {
-	c.Call = c.Call.Return(stopped)
+func (c *scalerscaleCall) Return() *scalerscaleCall {
+	c.Call = c.Call.Return()
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *scalerscaleCall) Do(f func(int) []chan struct{}) *scalerscaleCall {
+func (c *scalerscaleCall) Do(f func(int)) *scalerscaleCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *scalerscaleCall) DoAndReturn(f func(int) []chan struct{}) *scalerscaleCall {
+func (c *scalerscaleCall) DoAndReturn(f func(int)) *scalerscaleCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

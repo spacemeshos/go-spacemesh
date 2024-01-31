@@ -22,9 +22,9 @@ func TestAutoScaling(t *testing.T) {
 	mockScaler := NewMockscaler(gomock.NewController(t))
 	var done atomic.Bool
 	gomock.InOrder(
-		mockScaler.EXPECT().scale(1), // on start
-		mockScaler.EXPECT().scale(5), // on complete
-		mockScaler.EXPECT().scale(5).Do(func(int) []chan struct{} { done.Store(true); return nil }), // on failed
+		mockScaler.EXPECT().scale(1),                                    // on start
+		mockScaler.EXPECT().scale(5),                                    // on complete
+		mockScaler.EXPECT().scale(5).Do(func(int) { done.Store(true) }), // on failed
 	)
 
 	stop := make(chan struct{})
@@ -61,10 +61,8 @@ func TestPostVerifierScaling(t *testing.T) {
 	err = v.Verify(context.Background(), &shared.Proof{}, &shared.ProofMetadata{})
 	require.NoError(t, err)
 
-	stopHandles := v.scale(0)
-	for _, stopped := range stopHandles {
-		<-stopped
-	}
+	v.scale(0)
+
 	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 	err = v.Verify(ctx, &shared.Proof{}, &shared.ProofMetadata{})

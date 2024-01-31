@@ -166,10 +166,7 @@ func (v *OffloadingPostVerifier) Autoscale(min, target int) {
 // SAFETY: Must not be called concurrently.
 // This is satisfied by the fact that the only caller is the autoscaler,
 // which executes scale() serially.
-//
-// Returns a slice of channels that will be closed when the corresponding worker has stopped.
-// Only relevant when scaling down. The caller can, but doesn't need to wait for these channels to be closed.
-func (v *OffloadingPostVerifier) scale(target int) (stopped []chan struct{}) {
+func (v *OffloadingPostVerifier) scale(target int) {
 	v.log.Info("scaling post verifier", zap.Int("current", len(v.workers)), zap.Int("new", target))
 
 	if target > len(v.workers) {
@@ -191,12 +188,15 @@ func (v *OffloadingPostVerifier) scale(target int) (stopped []chan struct{}) {
 		// scale down
 		toKeep, toStop := v.workers[:target], v.workers[target:]
 		v.workers = toKeep
+		stopping := make([]<-chan struct{}, 0, len(toStop))
 		for _, worker := range toStop {
 			close(worker.stop)
-			stopped = append(stopped, worker.stopped)
+			stopping = append(stopping, worker.stopped)
+		}
+		for _, stopped := range stopping {
+			<-stopped
 		}
 	}
-	return stopped
 }
 
 func (v *OffloadingPostVerifier) Verify(
