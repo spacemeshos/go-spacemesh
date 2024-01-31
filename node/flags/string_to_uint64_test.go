@@ -22,9 +22,10 @@ func TestStringToUint64Value(t *testing.T) {
 			},
 		},
 		{
-			desc:  "Separate (Set overrides previous values)",
+			desc:  "Separate",
 			input: []string{"1=1", "2=2"},
 			expected: map[string]uint64{
+				"1": 1,
 				"2": 2,
 			},
 		},

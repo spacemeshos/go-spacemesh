@@ -19,7 +19,6 @@ func NewStringToUint64Value(p *map[string]uint64) *StringToUint64Value {
 
 // Set expects value as "smth=101,else=102".
 func (s *StringToUint64Value) Set(val string) error {
-	clear(*s.value)
 	ss := strings.Split(val, ",")
 	for _, pair := range ss {
 		parts := strings.SplitN(pair, "=", 2)
