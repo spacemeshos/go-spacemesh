@@ -184,6 +184,9 @@ func GetCommand() *cobra.Command {
 				return fmt.Errorf("could not retrieve identity: %w", err)
 			}
 
+			// Don't print usage on error from this point forward
+			c.SilenceUsage = true
+
 			app.preserve, err = app.LoadCheckpoint(ctx)
 			if err != nil {
 				return fmt.Errorf("loading checkpoint: %w", err)
