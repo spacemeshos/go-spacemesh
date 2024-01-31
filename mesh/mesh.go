@@ -306,7 +306,6 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, lid types.LayerID) error {
 					encoder.AppendObject(&results[i])
 				}
 				return nil
-
 			})),
 		)
 	}
