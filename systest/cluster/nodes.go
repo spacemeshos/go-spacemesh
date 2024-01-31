@@ -850,7 +850,6 @@ func deployPostService(
 		"--labels-per-unit", strconv.FormatUint(uint64(conf.POST.LabelsPerUnit), 10),
 		"--k1", strconv.FormatUint(uint64(conf.POST.K1), 10),
 		"--k2", strconv.FormatUint(uint64(conf.POST.K2), 10),
-		"--k3", strconv.FormatUint(uint64(conf.POST.K3), 10),
 		"--pow-difficulty", conf.POST.PowDifficulty.String(),
 		"-n", strconv.FormatUint(uint64(conf.SMESHING.Opts.Scrypt.N), 10),
 		"-r", strconv.FormatUint(uint64(conf.SMESHING.Opts.Scrypt.R), 10),
