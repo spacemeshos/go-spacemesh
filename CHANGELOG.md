@@ -8,6 +8,10 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 * [#5441](https://github.com/spacemeshos/go-spacemesh/pull/5441)
   Fix possible nil-pointer dereference in blocks.Generator.
+* [#5512](https://github.com/spacemeshos/go-spacemesh/pull/5512)
+  Increase EpochActiveSet limit to 1.5M to prepare for 1M+ ATXs.
+* [#5515](https://github.com/spacemeshos/go-spacemesh/pull/5515)
+  Increase fetcher limit to 60MiB to prepare for 1M+ ATXs.
 
 ## Release v1.3.7
 
