@@ -62,6 +62,7 @@ func TestPostVerifierScaling(t *testing.T) {
 	require.NoError(t, err)
 
 	v.scale(0)
+
 	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 	err = v.Verify(ctx, &shared.Proof{}, &shared.ProofMetadata{})

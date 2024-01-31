@@ -78,6 +78,7 @@ type postVerifierWorker struct {
 	prioritized <-chan *verifyPostJob
 	jobs        <-chan *verifyPostJob
 	stop        chan struct{} // signal to stop this worker
+	stopped     chan struct{} // signal that this worker has stopped
 	shutdown    chan struct{} // signal that the verifier is closing
 }
 
@@ -215,6 +216,7 @@ func (v *offloadingPostVerifier) scale(target int) {
 				prioritized: v.prioritized,
 				jobs:        v.jobs,
 				stop:        make(chan struct{}),
+				stopped:     make(chan struct{}),
 				shutdown:    v.stop,
 			}
 			v.workers = append(v.workers, w)
@@ -226,6 +228,9 @@ func (v *offloadingPostVerifier) scale(target int) {
 		v.workers = toKeep
 		for _, worker := range toStop {
 			close(worker.stop)
+		}
+		for _, worker := range toStop {
+			<-worker.stopped
 		}
 	}
 }
@@ -293,6 +298,7 @@ func (v *offloadingPostVerifier) Close() error {
 func (w *postVerifierWorker) start() {
 	w.log.Info("starting")
 	defer w.log.Info("stopped")
+	defer close(w.stopped)
 
 	for {
 		// First try to process a prioritized job.
