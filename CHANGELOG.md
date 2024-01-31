@@ -88,6 +88,12 @@ configuration is as follows:
 
 ### Features
 
+* [#5517](https://github.com/spacemeshos/go-spacemesh/pull/5517)
+  Added a flag `--smeshing-opts-verifying-disable` and a config parameter `smeshing-opts-verifying-disable`
+  meant for disabling verifying POST in incoming ATXs on private nodes.
+  The verification should be performed by the public node instead.
+  It's only possible to use it together with `--p2p-private-network` flag/config parameter.
+
 ### Improvements
 
 * [#5518](https://github.com/spacemeshos/go-spacemesh/pull/5518) In rare cases the node could create a malfeasance
@@ -120,11 +126,6 @@ configuration is as follows:
   Reduce the default number of CPU cores that are used for verifying incoming ATXs to half of the available cores.
 
 * [#5462](https://github.com/spacemeshos/go-spacemesh/pull/5462) Add separate metric for failed p2p server requests
-* [#5517](https://github.com/spacemeshos/go-spacemesh/pull/5517)
-  Added a flag `--smeshing-opts-verifying-disable` and a config parameter `smeshing-opts-verifying-disable`
-  meant for disabling verifying POST in incoming ATXs on private nodes.
-  The verification should be performed by the public node instead. 
-  It's only possible to use it together with `--p2p-private-network` flag/config parameter.
 
 ### Improvements
 
