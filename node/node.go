@@ -720,6 +720,7 @@ func (app *App) initServices(ctx context.Context) error {
 		trtl,
 		app.addLogger(ATXHandlerLogger, lg),
 	)
+	atxHandler.Register(app.edSgn)
 
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
 

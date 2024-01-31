@@ -95,7 +95,7 @@ type Handler func(context.Context, []byte) ([]byte, error)
 
 // Response is a server response.
 type Response struct {
-	Data  []byte `scale:"max=41943040"` // 40 MiB
+	Data  []byte `scale:"max=62914560"` // 60 MiB
 	Error string `scale:"max=1024"`     // TODO(mafa): make error code instead of string
 }
 
