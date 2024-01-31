@@ -1198,9 +1198,10 @@ func getTestDefaultConfig(tb testing.TB) *config.Config {
 	cfg.DataDirParent = tmp
 	cfg.FileLock = filepath.Join(tmp, "LOCK")
 
-	cfg.FETCH.RequestTimeout = 10
+	cfg.FETCH.RequestTimeout = 10 * time.Second
+	cfg.FETCH.RequestHardTimeout = 20 * time.Second
 	cfg.FETCH.BatchSize = 5
-	cfg.FETCH.BatchTimeout = 5
+	cfg.FETCH.BatchTimeout = 5 * time.Second
 
 	cfg.Beacon = beacon.NodeSimUnitTestConfig()
 

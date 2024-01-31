@@ -96,6 +96,8 @@ configuration is as follows:
 * [#5479](https://github.com/spacemeshos/go-spacemesh/pull/5479) p2p: make AutoNAT service limits configurable.
 * [#5489](https://github.com/spacemeshos/go-spacemesh/pull/5489)
   Fix problem in POST proving where too many files were opened at the same time.
+* [#5494](https://github.com/spacemeshos/go-spacemesh/pull/5494)
+  Make routing discovery more configurable and less spammy by default.
 
 ## Release v1.3.5
 
@@ -117,6 +119,8 @@ configuration is as follows:
 * [#5467](https://github.com/spacemeshos/go-spacemesh/pull/5467)
   Fix a bug that could cause ATX sync to stall because of exhausted limit of concurrent requests for dependencies.
   Fetching dependencies of an ATX is not limited anymore.
+* [#5463](https://github.com/spacemeshos/go-spacemesh/pull/5463)
+  Adjust deadline during long reads and writes, reducing "i/o deadline exceeded" errors.
 
 ## Release v1.3.3
 

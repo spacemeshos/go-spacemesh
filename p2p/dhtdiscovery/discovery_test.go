@@ -58,6 +58,7 @@ func TestSanity(t *testing.T) {
 		Private(),
 		WithLogger(logger),
 		WithMode(dht.ModeServer),
+		WithFindPeersRetryDelay(1*time.Second),
 	)
 	require.NoError(t, err)
 	bootdisc.Start()
@@ -111,6 +112,10 @@ func TestSanity(t *testing.T) {
 			EnableRoutingDiscovery(),
 			AdvertiseForPeerDiscovery(),
 			WithMode(nodeOpts[i].dhtMode),
+			WithAdvertiseDelay(10 * time.Millisecond),
+			WithAdvertiseInterval(1 * time.Minute),
+			WithAdvertiseRetryDelay(1 * time.Second),
+			WithFindPeersRetryDelay(1 * time.Second),
 		}
 		if nodeOpts[i].lookForRelays {
 			relayCh := make(chan peer.AddrInfo)
