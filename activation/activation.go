@@ -260,8 +260,12 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 }
 
 // SmesherID returns the ID of the smesher that created this activation.
-func (b *Builder) SmesherID() types.NodeID {
-	return types.EmptyNodeID // TODO(mafa): API needs to be changed to support multiple smeshers
+func (b *Builder) SmesherIDs() []types.NodeID {
+	res := make([]types.NodeID, 0, len(b.signers))
+	for _, sig := range b.signers {
+		res = append(res, sig.NodeID())
+	}
+	return res
 }
 
 func (b *Builder) buildInitialPost(ctx context.Context, nodeId types.NodeID) error {

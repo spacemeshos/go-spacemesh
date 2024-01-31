@@ -97,7 +97,7 @@ type SmeshingProvider interface {
 	Smeshing() bool
 	StartSmeshing(types.Address) error
 	StopSmeshing(bool) error
-	SmesherID() types.NodeID
+	SmesherIDs() []types.NodeID
 	Coinbase() types.Address
 	SetCoinbase(coinbase types.Address)
 }

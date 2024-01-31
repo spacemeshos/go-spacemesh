@@ -126,7 +126,7 @@ func (nb *NIPostBuilder) Proof(
 			select {
 			case <-ctx.Done():
 				if started {
-					events.EmitPostFailure()
+					events.EmitPostFailure(nodeID)
 				}
 				return nil, nil, ctx.Err()
 			case <-time.After(2 * time.Second): // Wait a few seconds and try connecting again
@@ -142,7 +142,7 @@ func (nb *NIPostBuilder) Proof(
 			}
 		}
 		if !started {
-			events.EmitPostStart(challenge)
+			events.EmitPostStart(nodeID, challenge)
 			started = true
 		}
 
@@ -152,10 +152,10 @@ func (nb *NIPostBuilder) Proof(
 		case errors.Is(err, ErrPostClientClosed):
 			continue
 		case err != nil:
-			events.EmitPostFailure()
+			events.EmitPostFailure(nodeID)
 			return nil, nil, err
 		default: // err == nil
-			events.EmitPostComplete(challenge)
+			events.EmitPostComplete(nodeID, challenge)
 			return post, postInfo, err
 		}
 	}

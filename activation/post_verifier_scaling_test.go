@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 )
 
@@ -36,9 +37,9 @@ func TestAutoScaling(t *testing.T) {
 		return nil
 	})
 
-	events.EmitPostStart(nil)
-	events.EmitPostComplete(nil)
-	events.EmitPostFailure()
+	events.EmitPostStart(types.EmptyNodeID, nil)
+	events.EmitPostComplete(types.EmptyNodeID, nil)
+	events.EmitPostFailure(types.EmptyNodeID)
 	require.Eventually(t, done.Load, time.Second, 10*time.Millisecond)
 
 	close(stop)

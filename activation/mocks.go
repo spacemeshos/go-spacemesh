@@ -1243,40 +1243,40 @@ func (c *SmeshingProviderSetCoinbaseCall) DoAndReturn(f func(types.Address)) *Sm
 	return c
 }
 
-// SmesherID mocks base method.
-func (m *MockSmeshingProvider) SmesherID() types.NodeID {
+// SmesherIDs mocks base method.
+func (m *MockSmeshingProvider) SmesherIDs() []types.NodeID {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SmesherID")
-	ret0, _ := ret[0].(types.NodeID)
+	ret := m.ctrl.Call(m, "SmesherIDs")
+	ret0, _ := ret[0].([]types.NodeID)
 	return ret0
 }
 
-// SmesherID indicates an expected call of SmesherID.
-func (mr *MockSmeshingProviderMockRecorder) SmesherID() *SmeshingProviderSmesherIDCall {
+// SmesherIDs indicates an expected call of SmesherIDs.
+func (mr *MockSmeshingProviderMockRecorder) SmesherIDs() *SmeshingProviderSmesherIDsCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SmesherID", reflect.TypeOf((*MockSmeshingProvider)(nil).SmesherID))
-	return &SmeshingProviderSmesherIDCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SmesherIDs", reflect.TypeOf((*MockSmeshingProvider)(nil).SmesherIDs))
+	return &SmeshingProviderSmesherIDsCall{Call: call}
 }
 
-// SmeshingProviderSmesherIDCall wrap *gomock.Call
-type SmeshingProviderSmesherIDCall struct {
+// SmeshingProviderSmesherIDsCall wrap *gomock.Call
+type SmeshingProviderSmesherIDsCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *SmeshingProviderSmesherIDCall) Return(arg0 types.NodeID) *SmeshingProviderSmesherIDCall {
+func (c *SmeshingProviderSmesherIDsCall) Return(arg0 []types.NodeID) *SmeshingProviderSmesherIDsCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *SmeshingProviderSmesherIDCall) Do(f func() types.NodeID) *SmeshingProviderSmesherIDCall {
+func (c *SmeshingProviderSmesherIDsCall) Do(f func() []types.NodeID) *SmeshingProviderSmesherIDsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *SmeshingProviderSmesherIDCall) DoAndReturn(f func() types.NodeID) *SmeshingProviderSmesherIDCall {
+func (c *SmeshingProviderSmesherIDsCall) DoAndReturn(f func() []types.NodeID) *SmeshingProviderSmesherIDsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
