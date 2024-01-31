@@ -45,6 +45,9 @@ type nipostValidator interface {
 	) (uint64, error)
 
 	NumUnits(cfg *PostConfig, numUnits uint32) error
+
+	IsVerifyingFullPost() bool
+
 	Post(
 		ctx context.Context,
 		nodeId types.NodeID,

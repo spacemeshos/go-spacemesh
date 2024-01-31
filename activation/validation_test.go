@@ -644,3 +644,17 @@ func TestVerifyChainDeps(t *testing.T) {
 		require.ErrorIs(t, err, expected)
 	})
 }
+
+func TestIsVerifyingFullPost(t *testing.T) {
+	t.Run("full", func(t *testing.T) {
+		t.Parallel()
+		validator := NewValidator(nil, nil, PostConfig{K2: 7, K3: 7}, config.ScryptParams{}, nil)
+		require.True(t, validator.IsVerifyingFullPost())
+	})
+
+	t.Run("partial", func(t *testing.T) {
+		t.Parallel()
+		validator := NewValidator(nil, nil, PostConfig{K2: 7, K3: 2}, config.ScryptParams{}, nil)
+		require.False(t, validator.IsVerifyingFullPost())
+	})
+}

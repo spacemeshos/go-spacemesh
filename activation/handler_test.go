@@ -362,6 +362,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atxHdlr.mValidator.EXPECT().
 			NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(uint64(1), nil)
+		atxHdlr.mValidator.EXPECT().IsVerifyingFullPost()
 		atxHdlr.mValidator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		atxHdlr.mValidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		_, err := atxHdlr.SyntacticallyValidateDeps(context.Background(), atx)
@@ -387,6 +388,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atxHdlr.mValidator.EXPECT().
 			NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(uint64(1), nil)
+		atxHdlr.mValidator.EXPECT().IsVerifyingFullPost()
 		atxHdlr.mValidator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		atxHdlr.mValidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		atxHdlr.mValidator.EXPECT().
@@ -419,6 +421,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atxHdlr.mValidator.EXPECT().
 			NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(uint64(1), nil)
+		atxHdlr.mValidator.EXPECT().IsVerifyingFullPost()
 		atxHdlr.mValidator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		atxHdlr.mValidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		vAtx, err := atxHdlr.SyntacticallyValidateDeps(context.Background(), atx)
@@ -450,6 +453,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atxHdlr.mValidator.EXPECT().
 			NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(uint64(1), nil)
+		atxHdlr.mValidator.EXPECT().IsVerifyingFullPost()
 		atxHdlr.mValidator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		atxHdlr.mValidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		atxHdlr.mValidator.EXPECT().
@@ -521,6 +525,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atxHdlr.mValidator.EXPECT().
 			NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(uint64(1), nil)
+		atxHdlr.mValidator.EXPECT().IsVerifyingFullPost()
 		atxHdlr.mValidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		_, err := atxHdlr.SyntacticallyValidateDeps(context.Background(), atx)
 		require.NoError(t, err)
@@ -1290,6 +1295,7 @@ func TestHandler_HandleGossipAtx(t *testing.T) {
 	atxHdlr.mValidator.EXPECT().
 		NIPost(gomock.Any(), nodeID1, goldenATXID, second.NIPost, gomock.Any(), second.NumUnits, gomock.Any())
 	atxHdlr.mValidator.EXPECT().PositioningAtx(second.PositioningATX, gomock.Any(), goldenATXID, second.PublishEpoch)
+	atxHdlr.mValidator.EXPECT().IsVerifyingFullPost().AnyTimes().Return(true)
 	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
 	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
 	require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), "", secondData))
@@ -1354,6 +1360,7 @@ func TestHandler_HandleParallelGossipAtx(t *testing.T) {
 	atxHdlr.mValidator.EXPECT().PositioningAtx(goldenATXID, gomock.Any(), goldenATXID, atx.PublishEpoch)
 	atxHdlr.mValidator.EXPECT().
 		NIPost(gomock.Any(), nodeID, goldenATXID, atx.NIPost, gomock.Any(), atx.NumUnits, gomock.Any())
+	atxHdlr.mValidator.EXPECT().IsVerifyingFullPost()
 	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
 	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
 
@@ -1732,6 +1739,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 	atxHdlr.mValidator.EXPECT().
 		NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(leaves, nil)
+	atxHdlr.mValidator.EXPECT().IsVerifyingFullPost()
 	atxHdlr.mValidator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 	atxHdlr.mValidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
@@ -1776,6 +1784,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 	atxHdlr.mValidator.EXPECT().
 		NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(leaves, nil)
+	atxHdlr.mValidator.EXPECT().IsVerifyingFullPost()
 	atxHdlr.mValidator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 	atxHdlr.mValidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
@@ -1833,9 +1842,57 @@ func TestHandler_WrongHash(t *testing.T) {
 	atxHdlr.mValidator.EXPECT().
 		NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(uint64(111), nil)
+	atxHdlr.mValidator.EXPECT().IsVerifyingFullPost()
 	atxHdlr.mValidator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 	atxHdlr.mValidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 	err = atxHdlr.HandleSyncedAtx(context.Background(), types.RandomHash(), peer, buf)
 	require.ErrorIs(t, err, errWrongHash)
 	require.ErrorIs(t, err, pubsub.ErrValidationReject)
+}
+
+func TestHandler_MarksAtxValid(t *testing.T) {
+	t.Parallel()
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	goldenATXID := types.ATXID{2, 3, 4}
+	challenge := newChallenge(0, types.EmptyATXID, goldenATXID, 2, &goldenATXID)
+	nipost := newNIPostWithChallenge(t, challenge.Hash(), []byte("poet")).NIPost
+
+	t.Run("post verified fully", func(t *testing.T) {
+		t.Parallel()
+		handler := newTestHandler(t, goldenATXID)
+		handler.mValidator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any())
+		handler.mValidator.EXPECT().
+			NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(uint64(1), nil)
+		handler.mValidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+		handler.mValidator.EXPECT().IsVerifyingFullPost().Return(true)
+
+		atx := newAtx(t, sig, challenge, nipost, 2, types.Address{1, 2, 3, 4})
+		atx.SetValidity(types.Unknown)
+		require.NoError(t, SignAndFinalizeAtx(sig, atx))
+		_, err := handler.SyntacticallyValidateDeps(context.Background(), atx)
+		require.NoError(t, err)
+		require.Equal(t, types.Valid, atx.Validity())
+	})
+	t.Run("post verified fully", func(t *testing.T) {
+		t.Parallel()
+		handler := newTestHandler(t, goldenATXID)
+		handler.mValidator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any())
+		handler.mValidator.EXPECT().
+			NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(uint64(1), nil)
+		handler.mValidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+		handler.mValidator.EXPECT().IsVerifyingFullPost().Return(false)
+
+		atx := newAtx(t, sig, challenge, nipost, 2, types.Address{1, 2, 3, 4})
+		atx.SetValidity(types.Unknown)
+		require.NoError(t, SignAndFinalizeAtx(sig, atx))
+		_, err := handler.SyntacticallyValidateDeps(context.Background(), atx)
+		require.NoError(t, err)
+		require.Equal(t, types.Unknown, atx.Validity())
+	})
+	require.NoError(t, err)
 }

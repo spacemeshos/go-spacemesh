@@ -276,6 +276,7 @@ func validateAndPreserveData(
 		mvalidator.EXPECT().
 			NIPost(gomock.Any(), vatx.SmesherID, gomock.Any(), vatx.NIPost, gomock.Any(), vatx.NumUnits, gomock.Any()).
 			Return(uint64(1111111), nil)
+		mvalidator.EXPECT().IsVerifyingFullPost().AnyTimes().Return(true)
 		mreceiver.EXPECT().OnAtx(gomock.Any())
 		mtrtl.EXPECT().OnAtx(gomock.Any())
 		require.NoError(tb, atxHandler.HandleSyncedAtx(context.Background(), vatx.ID().Hash32(), "self", encoded))

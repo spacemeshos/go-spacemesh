@@ -303,6 +303,44 @@ func (c *nipostValidatorInitialNIPostChallengeCall) DoAndReturn(f func(*types.NI
 	return c
 }
 
+// IsVerifyingFullPost mocks base method.
+func (m *MocknipostValidator) IsVerifyingFullPost() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsVerifyingFullPost")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsVerifyingFullPost indicates an expected call of IsVerifyingFullPost.
+func (mr *MocknipostValidatorMockRecorder) IsVerifyingFullPost() *nipostValidatorIsVerifyingFullPostCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsVerifyingFullPost", reflect.TypeOf((*MocknipostValidator)(nil).IsVerifyingFullPost))
+	return &nipostValidatorIsVerifyingFullPostCall{Call: call}
+}
+
+// nipostValidatorIsVerifyingFullPostCall wrap *gomock.Call
+type nipostValidatorIsVerifyingFullPostCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *nipostValidatorIsVerifyingFullPostCall) Return(arg0 bool) *nipostValidatorIsVerifyingFullPostCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *nipostValidatorIsVerifyingFullPostCall) Do(f func() bool) *nipostValidatorIsVerifyingFullPostCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *nipostValidatorIsVerifyingFullPostCall) DoAndReturn(f func() bool) *nipostValidatorIsVerifyingFullPostCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // NIPost mocks base method.
 func (m *MocknipostValidator) NIPost(ctx context.Context, nodeId types.NodeID, commitmentAtxId types.ATXID, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32, opts ...validatorOption) (uint64, error) {
 	m.ctrl.T.Helper()

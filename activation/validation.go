@@ -141,6 +141,10 @@ func validateMerkleProof(leaf []byte, proof *types.MerkleProof, expectedRoot []b
 	return nil
 }
 
+func (v *Validator) IsVerifyingFullPost() bool {
+	return v.cfg.K3 >= v.cfg.K2
+}
+
 // Post validates a Proof of Space-Time (PoST). It returns nil if validation passed or an error indicating why
 // validation failed.
 func (v *Validator) Post(
