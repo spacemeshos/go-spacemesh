@@ -128,14 +128,26 @@ func TestDatabaseSkipMigrations(t *testing.T) {
 
 func TestDatabaseVacuumState(t *testing.T) {
 	dir := t.TempDir()
+
+	ctrl := gomock.NewController(t)
+	migration1 := NewMockMigration(ctrl)
+	migration1.EXPECT().Order().Return(1).AnyTimes()
+	migration1.EXPECT().Apply(gomock.Any()).Return(nil).Times(1)
+
+	migration2 := NewMockMigration(ctrl)
+	migration2.EXPECT().Order().Return(2).AnyTimes()
+	migration2.EXPECT().Apply(gomock.Any()).Return(nil).Times(1)
+
 	dbFile := filepath.Join(dir, "test.sql")
-	db, err := Open("file:" + dbFile)
+	db, err := Open("file:"+dbFile,
+		WithMigrations([]Migration{migration1}),
+	)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 
 	db, err = Open("file:"+dbFile,
-		WithMigrations([]Migration{}),
-		WithVacuumState(11),
+		WithMigrations([]Migration{migration1, migration2}),
+		WithVacuumState(2),
 	)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())

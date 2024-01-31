@@ -19,8 +19,8 @@ func TestMigrationsAppliedOnce(t *testing.T) {
 
 	migrations, err := StateMigrations()
 	require.NoError(t, err)
-	lastMigration := slices.MaxFunc(migrations, func(a, b Migration) int {
+	expectedVersion := slices.MaxFunc(migrations, func(a, b Migration) int {
 		return a.Order() - b.Order()
 	})
-	require.Equal(t, lastMigration.Order(), version)
+	require.Equal(t, expectedVersion.Order(), version)
 }

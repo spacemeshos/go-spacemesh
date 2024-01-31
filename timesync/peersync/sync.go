@@ -23,7 +23,7 @@ const (
 
 var (
 	// ErrPeersNotSynced returned if system clock is out of sync with peers clock for configured period of time.
-	ErrPeersNotSynced = errors.New("timesync: peers are not time synced")
+	ErrPeersNotSynced = errors.New("timesync: peers are not time synced, make sure your system clock is accurate")
 	// ErrTimesyncFailed returned if we weren't able to collect enough clock samples from peers.
 	ErrTimesyncFailed = errors.New("timesync: failed request")
 )
