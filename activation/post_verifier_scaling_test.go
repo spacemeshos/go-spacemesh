@@ -48,7 +48,7 @@ func TestAutoScaling(t *testing.T) {
 func TestPostVerifierScaling(t *testing.T) {
 	// 0 workers - no one will verify the proof
 	mockVerifier := NewMockPostVerifier(gomock.NewController(t))
-	v := NewOffloadingPostVerifier(mockVerifier, 0, zaptest.NewLogger(t))
+	v := newOffloadingPostVerifier(mockVerifier, 0, zaptest.NewLogger(t))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
