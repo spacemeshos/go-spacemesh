@@ -291,6 +291,13 @@ func AddCommands(cmd *cobra.Command) {
 
 	/**======================== PoST Verifying Flags ========================== **/
 
+	cmd.PersistentFlags().BoolVar(
+		&cfg.SMESHING.VerifyingOpts.Disabled,
+		"smeshing-opts-verifying-disable",
+		false,
+		"Disable verifying POST proofs. Experimental.\n"+
+			"Use with caution, only on private nodes with a trusted public peer that validates the proofs.",
+	)
 	cmd.PersistentFlags().IntVar(
 		&cfg.SMESHING.VerifyingOpts.MinWorkers,
 		"smeshing-opts-verifying-min-workers",

@@ -88,6 +88,42 @@ configuration is as follows:
 
 ### Features
 
+* [#5517](https://github.com/spacemeshos/go-spacemesh/pull/5517)
+  Added a flag `--smeshing-opts-verifying-disable` and a config parameter `smeshing-opts-verifying-disable`
+  meant for disabling verifying POST in incoming ATXs on private nodes.
+  The verification should be performed by the public node instead.
+
+### Improvements
+
+* [#5518](https://github.com/spacemeshos/go-spacemesh/pull/5518) In rare cases the node could create a malfeasance
+  proof against itself. This is now prevented.
+
+## Release v1.3.7
+
+### Improvements
+
+* [#5502](https://github.com/spacemeshos/go-spacemesh/pull/5502)
+  Increase limits of p2p messages to compensate for the increased number of nodes on the network.
+
+## Release v1.3.6
+
+### Improvements
+
+* [#5479](https://github.com/spacemeshos/go-spacemesh/pull/5486)
+  p2p: make AutoNAT service limits configurable. This helps with AutoNAT dialback to determine
+  nodes' reachability status.
+
+* [#5490](https://github.com/spacemeshos/go-spacemesh/pull/5490)
+  The path in `smeshing-opts-datadir` used to be resolved relative to the location of the `service` binary when running
+  the node in supervised mode. This is no longer the case. The path is now resolved relative to the current working
+  directory.
+
+* [#5489](https://github.com/spacemeshos/go-spacemesh/pull/5489)
+  Fix problem in POST proving where too many files were opened at the same time.
+
+* [#5498](https://github.com/spacemeshos/go-spacemesh/pull/5498)
+  Reduce the default number of CPU cores that are used for verifying incoming ATXs to half of the available cores.
+
 * [#5462](https://github.com/spacemeshos/go-spacemesh/pull/5462) Add separate metric for failed p2p server requests
 
 ### Improvements
