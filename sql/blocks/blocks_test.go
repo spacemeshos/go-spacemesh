@@ -217,3 +217,48 @@ func TestGetLayer(t *testing.T) {
 		require.Equal(t, b.LayerIndex, lid)
 	}
 }
+
+func TestLastValid(t *testing.T) {
+	t.Run("empty", func(t *testing.T) {
+		db := sql.InMemory()
+		_, err := LastValid(db)
+		require.ErrorIs(t, err, sql.ErrNotFound)
+	})
+	t.Run("all valid", func(t *testing.T) {
+		db := sql.InMemory()
+
+		ids := []types.BlockID{{1}, {2}, {3}}
+		layers := []types.LayerID{11, 22, 33}
+		for i := range ids {
+			block := types.NewExistingBlock(
+				ids[i],
+				types.InnerBlock{LayerIndex: layers[i]},
+			)
+			require.NoError(t, Add(db, block))
+			require.NoError(t, SetValid(db, ids[i]))
+		}
+		last, err := LastValid(db)
+		require.NoError(t, err)
+		require.Equal(t, layers[len(ids)-1], last)
+	})
+	t.Run("last is invalid", func(t *testing.T) {
+		db := sql.InMemory()
+
+		ids := []types.BlockID{{1}, {2}, {3}}
+		layers := []types.LayerID{11, 22, 33}
+		cutoff := len(ids) - 1
+		for i := range ids {
+			block := types.NewExistingBlock(
+				ids[i],
+				types.InnerBlock{LayerIndex: layers[i]},
+			)
+			require.NoError(t, Add(db, block))
+		}
+		for i := range ids[:cutoff] {
+			require.NoError(t, SetValid(db, ids[i]))
+		}
+		last, err := LastValid(db)
+		require.NoError(t, err)
+		require.Equal(t, layers[cutoff-1], last)
+	})
+}

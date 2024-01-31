@@ -73,10 +73,16 @@ func Get(db sql.Executor, id types.BlockID) (rst *types.Block, err error) {
 
 func LastValid(db sql.Executor) (types.LayerID, error) {
 	var lid types.LayerID
-	if rows, err := db.Exec("select max(layer) from blocks where validity = 1;", nil, func(stmt *sql.Statement) bool {
-		lid = types.LayerID(uint32(stmt.ColumnInt64(0)))
-		return false
-	}); err != nil {
+	// it doesn't use max(layer) in order to get rows == 0 when there are not layers
+	rows, err := db.Exec(
+		"select layer from blocks where validity = 1 order by layer desc limit 1;",
+		nil,
+		func(stmt *sql.Statement) bool {
+			lid = types.LayerID(uint32(stmt.ColumnInt64(0)))
+			return false
+		},
+	)
+	if err != nil {
 		return lid, fmt.Errorf("get last valid layer: %w", err)
 	} else if rows == 0 {
 		return lid, fmt.Errorf("%w: no valid layers", sql.ErrNotFound)
