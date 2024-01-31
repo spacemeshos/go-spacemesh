@@ -2112,7 +2112,7 @@ func TestFutureHeight(t *testing.T) {
 			s.Next(sim.WithNumBlocks(1), sim.WithBlockTickHeights(slow+1)),
 		)
 		tortoise.TallyVotes(context.Background(),
-			s.Next(sim.WithEmptyHareOutput(), sim.WithNumBlocks(0)))
+			s.Next(sim.WithoutHareOutput(), sim.WithNumBlocks(0)))
 		// 3 is handpicked so that threshold will be crossed if bug wasn't fixed
 		for i := 0; i < 3; i++ {
 			tortoise.TallyVotes(context.Background(), s.Next(sim.WithNumBlocks(1)))
