@@ -24,7 +24,6 @@ import (
 	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	"github.com/mitchellh/mapstructure"
 	"github.com/spacemeshos/poet/server"
-	"github.com/spacemeshos/post/verifying"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -393,7 +392,7 @@ type App struct {
 	tortoise          *tortoise.Tortoise
 	updater           *bootstrap.Updater
 	poetDb            *activation.PoetDb
-	postVerifier      *activation.OffloadingPostVerifier
+	postVerifier      activation.PostVerifier
 	postSupervisor    *activation.PostSupervisor
 	preserve          *checkpoint.PreservedData
 	errCh             chan error
@@ -588,27 +587,17 @@ func (app *App) initServices(ctx context.Context) error {
 
 	poetDb := activation.NewPoetDb(app.db, app.addLogger(PoetDbLogger, lg))
 
-	nipostValidatorLogger := app.addLogger(NipostValidatorLogger, lg)
-
-	lg.Debug("creating post verifier")
 	verifier, err := activation.NewPostVerifier(
 		app.Config.POST,
-		nipostValidatorLogger.Zap(),
-		verifying.WithPowFlags(app.Config.SMESHING.VerifyingOpts.Flags.Value()),
-	)
-	lg.With().Debug("created post verifier", log.Err(err))
-	if err != nil {
-		return err
-	}
-	workers := app.Config.SMESHING.VerifyingOpts.Workers
-	minWorkers := min(app.Config.SMESHING.VerifyingOpts.MinWorkers, workers)
-	app.postVerifier = activation.NewOffloadingPostVerifier(
-		verifier,
-		workers,
-		nipostValidatorLogger.Zap(),
+		app.addLogger(NipostValidatorLogger, lg).Zap(),
+		activation.WithVerifyingOpts(app.Config.SMESHING.VerifyingOpts),
 		activation.PrioritizedIDs(app.edSgn.NodeID()),
+		activation.WithAutoscaling(),
 	)
-	app.postVerifier.Autoscale(minWorkers, workers)
+	if err != nil {
+		return fmt.Errorf("creating post verifier: %w", err)
+	}
+	app.postVerifier = verifier
 
 	validator := activation.NewValidator(
 		poetDb,
@@ -739,8 +728,8 @@ func (app *App) initServices(ctx context.Context) error {
 		beaconProtocol,
 		trtl,
 		app.addLogger(ATXHandlerLogger, lg),
-		app.Config.POET,
 	)
+	atxHandler.Register(app.edSgn)
 
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
 
