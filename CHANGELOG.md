@@ -88,6 +88,11 @@ configuration is as follows:
 
 ### Features
 
+* [#5517](https://github.com/spacemeshos/go-spacemesh/pull/5517)
+  Added a flag `--smeshing-opts-verifying-disable` and a config parameter `smeshing-opts-verifying-disable`
+  meant for disabling verifying POST in incoming ATXs on private nodes.
+  The verification should be performed by the public node instead.
+
 ### Improvements
 
 * [#5518](https://github.com/spacemeshos/go-spacemesh/pull/5518) In rare cases the node could create a malfeasance
