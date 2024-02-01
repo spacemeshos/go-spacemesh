@@ -47,11 +47,9 @@ func (h Hash20) String() string {
 	return h.Hex()
 }
 
-// ShortString returns a the first 10 characters of the hash, for logging purposes.
+// ShortString returns a the first 5 hex-encoded bytes of the hash, for logging purposes.
 func (h Hash20) ShortString() string {
-	str := h.Hex()
-	l := len(str)
-	return fmt.Sprintf("%.10s", str[min(2, l):])
+	return hex.EncodeToString(h[:5])
 }
 
 // Format implements fmt.Formatter, forcing the byte slice to be formatted as is,
@@ -179,11 +177,9 @@ func (h Hash32) String() string {
 	return h.ShortString()
 }
 
-// ShortString returns the first 10 characters of the hash, for logging purposes.
+// ShortString returns the first 5 hex-encoded bytes of the hash, for logging purposes.
 func (h Hash32) ShortString() string {
-	str := h.Hex()
-	l := len(str)
-	return fmt.Sprintf("%.10s", str[min(2, l):])
+	return hex.EncodeToString(h[:5])
 }
 
 // Format implements fmt.Formatter, forcing the byte slice to be formatted as is,

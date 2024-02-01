@@ -2,7 +2,6 @@ package types
 
 import (
 	"encoding/hex"
-	"fmt"
 
 	"github.com/spacemeshos/go-scale"
 
@@ -35,9 +34,9 @@ func (id NodeID) Bytes() []byte {
 	return id[:]
 }
 
-// ShortString returns a the first 5 characters of the ID, for logging purposes.
+// ShortString returns a the first 3 hex-encoded bytes of the ID, for logging purposes.
 func (id NodeID) ShortString() string {
-	return fmt.Sprintf("%.5s", id.String())
+	return hex.EncodeToString(id[:3])
 }
 
 // Field returns a log field. Implements the LoggableField interface.
