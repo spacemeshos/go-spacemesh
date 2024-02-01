@@ -299,7 +299,7 @@ func loadConfig(cfg *config.Config, preset, path string) error {
 		viper.DecodeHook(hook),
 		WithZeroFields(),
 		WithIgnoreUntagged(),
-		withErrorUnused(),
+		WithErrorUnused(),
 	}
 
 	// load config if it was loaded to the viper
@@ -321,7 +321,7 @@ func WithIgnoreUntagged() viper.DecoderConfigOption {
 	}
 }
 
-func withErrorUnused() viper.DecoderConfigOption {
+func WithErrorUnused() viper.DecoderConfigOption {
 	return func(cfg *mapstructure.DecoderConfig) {
 		cfg.ErrorUnused = true
 	}
