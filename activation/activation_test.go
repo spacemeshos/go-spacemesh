@@ -99,6 +99,7 @@ type testAtxBuilder struct {
 	localDb     *localsql.Database
 	goldenATXID types.ATXID
 
+	mctrl       *gomock.Controller
 	mpub        *mocks.MockPublisher
 	mnipost     *MocknipostBuilder
 	mpostClient *MockPostClient
@@ -116,6 +117,7 @@ func newTestBuilder(tb testing.TB, numSigners int, opts ...BuilderOption) *testA
 		localDb:     localsql.InMemory(sql.WithConnections(numSigners)),
 		goldenATXID: types.ATXID(types.HexToHash32("77777")),
 
+		mctrl:       ctrl,
 		mpub:        mocks.NewMockPublisher(ctrl),
 		mnipost:     NewMocknipostBuilder(ctrl),
 		mpostClient: NewMockPostClient(ctrl),
@@ -234,10 +236,6 @@ func Test_Builder_StartSmeshingCoinbase(t *testing.T) {
 			<-ctx.Done()
 			return nil, nil, ctx.Err()
 		})
-	tab.mValidator.EXPECT().
-		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		AnyTimes().
-		Return(nil)
 	tab.mclock.EXPECT().CurrentLayer().Return(types.LayerID(0)).AnyTimes()
 	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(make(chan struct{})).AnyTimes()
 	require.NoError(t, tab.StartSmeshing(coinbase))
@@ -301,52 +299,63 @@ func TestBuilder_StopSmeshing_Delete(t *testing.T) {
 	tab := newTestBuilder(t, 1)
 	sig := maps.Values(tab.signers)[0]
 
+	atx := types.RandomATXID()
+	refChallenge := &types.NIPostChallenge{
+		PublishEpoch:  postGenesisEpoch + 2,
+		CommitmentATX: &atx,
+	}
+
 	currLayer := (postGenesisEpoch + 1).FirstLayer()
-	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(make(chan struct{})).AnyTimes()
-	tab.mclock.EXPECT().CurrentLayer().Return(currLayer).AnyTimes()
-	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
-		func(got types.LayerID) time.Time {
-			// time.Now() ~= currentLayer
-			genesis := time.Now().Add(-time.Duration(currLayer) * layerDuration)
-			return genesis.Add(layerDuration * time.Duration(got))
-		}).AnyTimes()
-	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, _ *signing.EdSigner, _ *types.NIPostChallenge) (*nipost.NIPostState, error) {
-			<-ctx.Done()
-			return nil, ctx.Err()
-		}).
-		AnyTimes()
+	tab.mclock.EXPECT().CurrentLayer().Return(currLayer)
+	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(make(chan struct{}))
+
 	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).DoAndReturn(
 		func(ctx context.Context, _ types.NodeID, _ []byte) (*types.Post, *types.PostInfo, error) {
 			<-ctx.Done()
 			return nil, nil, ctx.Err()
-		}).AnyTimes()
+		})
 
 	// add challenge to DB
-	refChallenge := &types.NIPostChallenge{
-		PublishEpoch:  postGenesisEpoch + 2,
-		CommitmentATX: &types.ATXID{1, 2, 3},
-	}
 	require.NoError(t, nipost.AddChallenge(tab.localDb, sig.NodeID(), refChallenge))
 
 	require.NoError(t, tab.StartSmeshing(types.Address{}))
 	require.NoError(t, tab.StopSmeshing(false))
+	require.True(t, tab.mctrl.Satisfied(), "failed to assert all mocks were called the expected number of times")
+
+	tab.mclock.EXPECT().CurrentLayer().Return(currLayer)
+	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(make(chan struct{}))
 
 	challenge, err := nipost.Challenge(tab.localDb, sig.NodeID())
 	require.NoError(t, err)
 	require.Equal(t, refChallenge, challenge) // challenge still present
 
 	tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil)
+	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).DoAndReturn(
+		func(ctx context.Context, _ types.NodeID, _ []byte) (*types.Post, *types.PostInfo, error) {
+			<-ctx.Done()
+			return nil, nil, ctx.Err()
+		})
+
 	require.NoError(t, tab.StartSmeshing(types.Address{}))
 	require.NoError(t, tab.StopSmeshing(true))
+	require.True(t, tab.mctrl.Satisfied(), "failed to assert all mocks were called the expected number of times")
+
+	tab.mclock.EXPECT().CurrentLayer().Return(currLayer)
+	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(make(chan struct{}))
 
 	challenge, err = nipost.Challenge(tab.localDb, sig.NodeID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.Nil(t, challenge) // challenge deleted
 
 	tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil)
+	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).DoAndReturn(
+		func(ctx context.Context, _ types.NodeID, _ []byte) (*types.Post, *types.PostInfo, error) {
+			<-ctx.Done()
+			return nil, nil, ctx.Err()
+		})
 	require.NoError(t, tab.StartSmeshing(types.Address{}))
 	require.NoError(t, tab.StopSmeshing(true)) // no-op
+	require.True(t, tab.mctrl.Satisfied(), "failed to assert all mocks were called the expected number of times")
 
 	challenge, err = nipost.Challenge(tab.localDb, sig.NodeID())
 	require.ErrorIs(t, err, sql.ErrNotFound)

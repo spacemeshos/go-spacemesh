@@ -279,7 +279,6 @@ func TestPostSetupManager_findCommitmentAtx_UsesLatestAtx(t *testing.T) {
 		PublishEpoch: 1,
 	}
 	atx := types.NewActivationTx(challenge, types.Address{}, nil, 2, nil)
-	atx.SetEffectiveNumUnits(2)
 	require.NoError(t, SignAndFinalizeAtx(mgr.signer, atx))
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now())

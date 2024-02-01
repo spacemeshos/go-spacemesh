@@ -31,10 +31,6 @@ func Test_Builder_Multi_StartSmeshingCoinbase(t *testing.T) {
 				return nil, nil, ctx.Err()
 			})
 	}
-	tab.mValidator.EXPECT().
-		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		AnyTimes().
-		Return(nil)
 	tab.mclock.EXPECT().CurrentLayer().Return(types.LayerID(0)).AnyTimes()
 	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(make(chan struct{})).AnyTimes()
 	require.NoError(t, tab.StartSmeshing(coinbase))
@@ -98,7 +94,8 @@ func Test_Builder_Multi_RestartSmeshing(t *testing.T) {
 }
 
 func Test_Builder_Multi_StopSmeshing_Delete(t *testing.T) {
-	tab := newTestBuilder(t, 5)
+	numIds := 5
+	tab := newTestBuilder(t, numIds)
 
 	atx := types.RandomATXID()
 	refChallenge := &types.NIPostChallenge{
@@ -107,14 +104,8 @@ func Test_Builder_Multi_StopSmeshing_Delete(t *testing.T) {
 	}
 
 	currLayer := (postGenesisEpoch + 1).FirstLayer()
-	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(make(chan struct{})).AnyTimes()
-	tab.mclock.EXPECT().CurrentLayer().Return(currLayer).AnyTimes()
-	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
-		func(got types.LayerID) time.Time {
-			// time.Now() ~= currentLayer
-			genesis := time.Now().Add(-time.Duration(currLayer) * layerDuration)
-			return genesis.Add(layerDuration * time.Duration(got))
-		}).AnyTimes()
+	tab.mclock.EXPECT().CurrentLayer().Return(currLayer).Times(numIds)
+	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(make(chan struct{})).Times(numIds)
 
 	for _, sig := range tab.signers {
 		tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).DoAndReturn(
@@ -129,6 +120,10 @@ func Test_Builder_Multi_StopSmeshing_Delete(t *testing.T) {
 
 	require.NoError(t, tab.StartSmeshing(types.Address{}))
 	require.NoError(t, tab.StopSmeshing(false))
+	require.True(t, tab.mctrl.Satisfied(), "failed to assert all mocks were called the expected number of times")
+
+	tab.mclock.EXPECT().CurrentLayer().Return(currLayer).Times(numIds)
+	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(make(chan struct{})).Times(numIds)
 
 	for _, sig := range tab.signers {
 		challenge, err := nipost.Challenge(tab.localDb, sig.NodeID())
@@ -136,7 +131,6 @@ func Test_Builder_Multi_StopSmeshing_Delete(t *testing.T) {
 		require.Equal(t, refChallenge, challenge) // challenge still present
 
 		tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil)
-
 		tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).DoAndReturn(
 			func(ctx context.Context, _ types.NodeID, _ []byte) (*types.Post, *types.PostInfo, error) {
 				<-ctx.Done()
@@ -146,6 +140,10 @@ func Test_Builder_Multi_StopSmeshing_Delete(t *testing.T) {
 
 	require.NoError(t, tab.StartSmeshing(types.Address{}))
 	require.NoError(t, tab.StopSmeshing(true))
+	require.True(t, tab.mctrl.Satisfied(), "failed to assert all mocks were called the expected number of times")
+
+	tab.mclock.EXPECT().CurrentLayer().Return(currLayer).Times(numIds)
+	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(make(chan struct{})).Times(numIds)
 
 	for _, sig := range tab.signers {
 		challenge, err := nipost.Challenge(tab.localDb, sig.NodeID())
@@ -153,7 +151,6 @@ func Test_Builder_Multi_StopSmeshing_Delete(t *testing.T) {
 		require.Nil(t, challenge) // challenge deleted
 
 		tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil)
-
 		tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).DoAndReturn(
 			func(ctx context.Context, _ types.NodeID, _ []byte) (*types.Post, *types.PostInfo, error) {
 				<-ctx.Done()
@@ -163,6 +160,7 @@ func Test_Builder_Multi_StopSmeshing_Delete(t *testing.T) {
 
 	require.NoError(t, tab.StartSmeshing(types.Address{}))
 	require.NoError(t, tab.StopSmeshing(true)) // no-op
+	require.True(t, tab.mctrl.Satisfied(), "failed to assert all mocks were called the expected number of times")
 
 	for _, sig := range tab.signers {
 		challenge, err := nipost.Challenge(tab.localDb, sig.NodeID())
