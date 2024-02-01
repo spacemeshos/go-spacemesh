@@ -2,6 +2,13 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## UNRELEASED
+
+### Improvements
+
+* [#5530](https://github.com/spacemeshos/go-spacemesh/pull/5530)
+  Adjusted cache sizes for the increased number of ATXs on the network.
+
 ## Release v1.3.8
 
 ### Features
