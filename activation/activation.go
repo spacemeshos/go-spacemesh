@@ -243,17 +243,21 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 		if !deleteFiles {
 			return nil
 		}
+		var resetErr error
 		for _, sig := range b.signers {
 			if err := b.nipostBuilder.ResetState(sig.NodeID()); err != nil {
-				b.log.Error("failed to delete builder state", zap.Error(err))
-				return err
+				b.log.Error("failed to reset builder state", log.ZShortStringer("nodeId", sig.NodeID()), zap.Error(err))
+				err = fmt.Errorf("reset builder state for id %s: %w", sig.NodeID().ShortString(), err)
+				resetErr = errors.Join(resetErr, err)
+				continue
 			}
 			if err := nipost.RemoveChallenge(b.localDB, sig.NodeID()); err != nil {
 				b.log.Error("failed to remove nipost challenge", zap.Error(err))
-				return err
+				err = fmt.Errorf("remove nipost challenge for id %s: %w", sig.NodeID().ShortString(), err)
+				resetErr = errors.Join(resetErr, err)
 			}
 		}
-		return nil
+		return resetErr
 	default:
 		return fmt.Errorf("failed to stop smeshing: %w", err)
 	}
