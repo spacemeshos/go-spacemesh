@@ -61,10 +61,8 @@ build: go-spacemesh get-profiler get-postrs-service
 .PHONY: build
 
 get-libs: get-postrs-lib get-postrs-service
-.PHONY: get-libs
 
 get-profiler: get-postrs-profiler
-.PHONY: get-profiler
 
 gen-p2p-identity:
 	cd cmd/gen-p2p-identity ; go build -o $(BIN_DIR)$@$(EXE) .
