@@ -15,73 +15,74 @@ const (
 
 // LoggerConfig holds the logging level for each module.
 type LoggerConfig struct {
-	Encoder                   LogEncoder `mapstructure:"log-encoder"`
-	AppLoggerLevel            string     `mapstructure:"app"`
-	GrpcLoggerLevel           string     `mapstructure:"grpc"`
-	P2PLoggerLevel            string     `mapstructure:"p2p"`
-	PostLoggerLevel           string     `mapstructure:"post"`
-	StateDbLoggerLevel        string     `mapstructure:"stateDb"`
-	StateLoggerLevel          string     `mapstructure:"state"`
-	AtxHandlerLevel           string     `mapstructure:"atxHandler"`
-	AtxDbStoreLoggerLevel     string     `mapstructure:"atxDbStore"`
-	BeaconLoggerLevel         string     `mapstructure:"beacon"`
-	WeakCoinLoggerLevel       string     `mapstructure:"weakCoin"`
-	PoetDbStoreLoggerLevel    string     `mapstructure:"poetDbStore"`
-	StoreLoggerLevel          string     `mapstructure:"store"`
-	PoetDbLoggerLevel         string     `mapstructure:"poetDb"`
-	MeshDBLoggerLevel         string     `mapstructure:"meshDb"`
-	TrtlLoggerLevel           string     `mapstructure:"trtl"`
-	AtxDbLoggerLevel          string     `mapstructure:"atxDb"`
-	BlkEligibilityLoggerLevel string     `mapstructure:"block-eligibility"`
-	MeshLoggerLevel           string     `mapstructure:"mesh"`
-	SyncLoggerLevel           string     `mapstructure:"sync"`
-	BlockOracleLevel          string     `mapstructure:"block-oracle"`
-	HareOracleLoggerLevel     string     `mapstructure:"hare-oracle"`
-	HareLoggerLevel           string     `mapstructure:"hare"`
-	BlockBuilderLoggerLevel   string     `mapstructure:"block-builder"`
-	BlockListenerLoggerLevel  string     `mapstructure:"block-listener"`
-	PoetListenerLoggerLevel   string     `mapstructure:"poet"`
-	NipostBuilderLoggerLevel  string     `mapstructure:"nipostBuilder"`
-	AtxBuilderLoggerLevel     string     `mapstructure:"atxBuilder"`
-	HareBeaconLoggerLevel     string     `mapstructure:"hare-beacon"`
-	TimeSyncLoggerLevel       string     `mapstructure:"timesync"`
-	VMLogLevel                string     `mapstructure:"vm"`
-	ProposalListenerLevel     string     `mapstructure:"proposalListener"`
+	Encoder LogEncoder `mapstructure:"log-encoder"`
+
+	AppLoggerLevel             string `mapstructure:"app"`
+	ClockLoggerLevel           string `mapstructure:"clock"`
+	P2PLoggerLevel             string `mapstructure:"p2p"`
+	PostLoggerLevel            string `mapstructure:"post"`
+	PostServiceLoggerLevel     string `mapstructure:"postService"`
+	StateDbLoggerLevel         string `mapstructure:"stateDb"`
+	BeaconLoggerLevel          string `mapstructure:"beacon"`
+	CachedDBLoggerLevel        string `mapstructure:"cachedDb"`
+	PoetDbLoggerLevel          string `mapstructure:"poetDb"`
+	TrtlLoggerLevel            string `mapstructure:"trtl"`
+	AtxHandlerLevel            string `mapstructure:"atxHandler"`
+	AtxBuilderLoggerLevel      string `mapstructure:"atxBuilder"`
+	MeshLoggerLevel            string `mapstructure:"mesh"`
+	SyncLoggerLevel            string `mapstructure:"sync"`
+	HareOracleLoggerLevel      string `mapstructure:"hareOracle"`
+	BlockCertLoggerLevel       string `mapstructure:"blockCert"`
+	BlockGenLoggerLevel        string `mapstructure:"blockGenerator"`
+	BlockHandlerLoggerLevel    string `mapstructure:"blockHandler"`
+	TxHandlerLoggerLevel       string `mapstructure:"txHandler"`
+	ProposalBuilderLoggerLevel string `mapstructure:"proposalBuilder"`
+	ProposalListenerLevel      string `mapstructure:"proposalListener"`
+	NipostBuilderLoggerLevel   string `mapstructure:"nipostBuilder"`
+	NipostValidatorLoggerLevel string `mapstructure:"nipostValidator"`
+	FetcherLoggerLevel         string `mapstructure:"fetcher"`
+	TimeSyncLoggerLevel        string `mapstructure:"timesync"`
+	VMLogLevel                 string `mapstructure:"vm"`
+	GrpcLoggerLevel            string `mapstructure:"grpc"`
+	ConStateLoggerLevel        string `mapstructure:"conState"`
+	ExecutorLoggerLevel        string `mapstructure:"executor"`
+	MalfeasanceLoggerLevel     string `mapstructure:"malfeasance"`
+	BootstrapLoggerLevel       string `mapstructure:"bootstrap"`
 }
 
 func DefaultLoggingConfig() LoggerConfig {
 	return LoggerConfig{
-		Encoder:                   ConsoleLogEncoder,
-		AppLoggerLevel:            defaultLoggingLevel.String(),
-		GrpcLoggerLevel:           defaultLoggingLevel.String(),
-		P2PLoggerLevel:            zapcore.WarnLevel.String(),
-		PostLoggerLevel:           defaultLoggingLevel.String(),
-		StateDbLoggerLevel:        defaultLoggingLevel.String(),
-		StateLoggerLevel:          defaultLoggingLevel.String(),
-		AtxDbStoreLoggerLevel:     defaultLoggingLevel.String(),
-		AtxHandlerLevel:           defaultLoggingLevel.String(),
-		BeaconLoggerLevel:         defaultLoggingLevel.String(),
-		WeakCoinLoggerLevel:       defaultLoggingLevel.String(),
-		PoetDbStoreLoggerLevel:    defaultLoggingLevel.String(),
-		StoreLoggerLevel:          defaultLoggingLevel.String(),
-		PoetDbLoggerLevel:         defaultLoggingLevel.String(),
-		MeshDBLoggerLevel:         defaultLoggingLevel.String(),
-		TrtlLoggerLevel:           defaultLoggingLevel.String(),
-		AtxDbLoggerLevel:          defaultLoggingLevel.String(),
-		BlkEligibilityLoggerLevel: defaultLoggingLevel.String(),
-		MeshLoggerLevel:           defaultLoggingLevel.String(),
-		SyncLoggerLevel:           defaultLoggingLevel.String(),
-		BlockOracleLevel:          defaultLoggingLevel.String(),
-		HareOracleLoggerLevel:     defaultLoggingLevel.String(),
-		HareLoggerLevel:           defaultLoggingLevel.String(),
-		BlockBuilderLoggerLevel:   defaultLoggingLevel.String(),
-		BlockListenerLoggerLevel:  defaultLoggingLevel.String(),
-		PoetListenerLoggerLevel:   defaultLoggingLevel.String(),
-		NipostBuilderLoggerLevel:  defaultLoggingLevel.String(),
-		AtxBuilderLoggerLevel:     defaultLoggingLevel.String(),
-		HareBeaconLoggerLevel:     defaultLoggingLevel.String(),
-		TimeSyncLoggerLevel:       defaultLoggingLevel.String(),
-		VMLogLevel:                defaultLoggingLevel.String(),
-		ProposalListenerLevel:     defaultLoggingLevel.String(),
+		Encoder:                    ConsoleLogEncoder,
+		AppLoggerLevel:             defaultLoggingLevel.String(),
+		GrpcLoggerLevel:            defaultLoggingLevel.String(),
+		P2PLoggerLevel:             zapcore.WarnLevel.String(),
+		PostLoggerLevel:            defaultLoggingLevel.String(),
+		StateDbLoggerLevel:         defaultLoggingLevel.String(),
+		AtxHandlerLevel:            defaultLoggingLevel.String(),
+		AtxBuilderLoggerLevel:      defaultLoggingLevel.String(),
+		BeaconLoggerLevel:          defaultLoggingLevel.String(),
+		PoetDbLoggerLevel:          defaultLoggingLevel.String(),
+		TrtlLoggerLevel:            defaultLoggingLevel.String(),
+		MeshLoggerLevel:            defaultLoggingLevel.String(),
+		SyncLoggerLevel:            defaultLoggingLevel.String(),
+		FetcherLoggerLevel:         defaultLoggingLevel.String(),
+		HareOracleLoggerLevel:      defaultLoggingLevel.String(),
+		NipostBuilderLoggerLevel:   defaultLoggingLevel.String(),
+		TimeSyncLoggerLevel:        defaultLoggingLevel.String(),
+		VMLogLevel:                 defaultLoggingLevel.String(),
+		ProposalListenerLevel:      defaultLoggingLevel.String(),
+		ExecutorLoggerLevel:        defaultLoggingLevel.String(),
+		BlockHandlerLoggerLevel:    defaultLoggingLevel.String(),
+		BlockGenLoggerLevel:        defaultLoggingLevel.String(),
+		BlockCertLoggerLevel:       defaultLoggingLevel.String(),
+		TxHandlerLoggerLevel:       defaultLoggingLevel.String(),
+		ProposalBuilderLoggerLevel: defaultLoggingLevel.String(),
+		NipostValidatorLoggerLevel: defaultLoggingLevel.String(),
+		CachedDBLoggerLevel:        defaultLoggingLevel.String(),
+		ClockLoggerLevel:           defaultLoggingLevel.String(),
+		PostServiceLoggerLevel:     defaultLoggingLevel.String(),
+		ConStateLoggerLevel:        defaultLoggingLevel.String(),
+		MalfeasanceLoggerLevel:     defaultLoggingLevel.String(),
+		BootstrapLoggerLevel:       defaultLoggingLevel.String(),
 	}
 }

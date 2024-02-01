@@ -23,7 +23,7 @@ func TestFallback(t *testing.T) {
 
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))
 	cl, err := cluster.ReuseWait(tctx,
-		cluster.WithKeys(10),
+		cluster.WithKeys(tctx.ClusterSize),
 		cluster.WithBootstrapperFlag(cluster.GenerateFallback()),
 	)
 	require.NoError(t, err)
@@ -38,10 +38,9 @@ func TestFallback(t *testing.T) {
 	createdch := make(chan *pb.Proposal, cl.Total()*int(limit+1))
 	eg, ctx := errgroup.WithContext(tctx)
 	for i := 0; i < cl.Total(); i++ {
-		i := i
 		client := cl.Client(i)
 		tctx.Log.Debugw("watching", "client", client.Name, "i", i)
-		watchProposals(ctx, eg, cl.Client(i), func(proposal *pb.Proposal) (bool, error) {
+		watchProposals(ctx, eg, client, tctx.Log.Desugar(), func(proposal *pb.Proposal) (bool, error) {
 			if proposal.Layer.Number < first {
 				return true, nil
 			}

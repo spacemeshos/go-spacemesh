@@ -21,14 +21,15 @@ import (
 
 // Config is the config params for syncer.
 type Config struct {
-	Interval                 time.Duration
-	EpochEndFraction         float64
+	Interval                 time.Duration `mapstructure:"interval"`
+	EpochEndFraction         float64       `mapstructure:"epochendfraction"`
 	HareDelayLayers          uint32
 	SyncCertDistance         uint32
-	MaxStaleDuration         time.Duration
+	MaxStaleDuration         time.Duration `mapstructure:"maxstaleduration"`
 	Standalone               bool
-	GossipDuration           time.Duration
-	OutOfSyncThresholdLayers uint32 `mapstructure:"out-of-sync-threshold"`
+	GossipDuration           time.Duration `mapstructure:"gossipduration"`
+	DisableAtxReconciliation bool          `mapstructure:"disable-atx-reconciliation"`
+	OutOfSyncThresholdLayers uint32        `mapstructure:"out-of-sync-threshold"`
 }
 
 // DefaultConfig for the syncer.
@@ -440,7 +441,10 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 			return err
 		}
 	}
-
+	if s.cfg.DisableAtxReconciliation {
+		s.logger.Debug("atx sync disabled")
+		return nil
+	}
 	// steady state atx syncing
 	curr := s.ticker.CurrentLayer()
 	if float64(

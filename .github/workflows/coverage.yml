@@ -20,7 +20,7 @@ jobs:
         with:
           lfs: true
       - name: set up go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           check-latest: true
           go-version-file: "go.mod"

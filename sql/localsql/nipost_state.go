@@ -1,4 +1,4 @@
-package activation
+package localsql
 
 import (
 	"encoding/binary"
@@ -113,13 +113,6 @@ func save(filename string, src scale.Encodable) error {
 	return nil
 }
 
-func saveNipostChallenge(dir string, ch *types.NIPostChallenge) error {
-	if err := save(filepath.Join(dir, challengeFilename), ch); err != nil {
-		return fmt.Errorf("saving nipost challenge: %w", err)
-	}
-	return nil
-}
-
 func loadNipostChallenge(dir string) (*types.NIPostChallenge, error) {
 	var ch types.NIPostChallenge
 	if err := load(filepath.Join(dir, challengeFilename), &ch); err != nil {
@@ -130,21 +123,15 @@ func loadNipostChallenge(dir string) (*types.NIPostChallenge, error) {
 
 func discardNipostChallenge(dir string) error {
 	filename := filepath.Join(dir, challengeFilename)
-	if err := os.Remove(filename); err != nil {
+	backupName := fmt.Sprintf("%s.bak", filename)
+	if err := atomic.ReplaceFile(filename, backupName); err != nil {
 		return fmt.Errorf("discarding nipost challenge: %w", err)
 	}
 	return nil
 }
 
-func saveBuilderState(dir string, state *types.NIPostBuilderState) error {
-	if err := save(filepath.Join(dir, builderFilename), state); err != nil {
-		return fmt.Errorf("saving builder state: %w", err)
-	}
-	return nil
-}
-
-func loadBuilderState(dir string) (*types.NIPostBuilderState, error) {
-	var state types.NIPostBuilderState
+func loadBuilderState(dir string) (*NIPostBuilderState, error) {
+	var state NIPostBuilderState
 	if err := load(filepath.Join(dir, builderFilename), &state); err != nil {
 		return nil, fmt.Errorf("loading builder state: %w", err)
 	}
@@ -153,15 +140,9 @@ func loadBuilderState(dir string) (*types.NIPostBuilderState, error) {
 
 func discardBuilderState(dir string) error {
 	filename := filepath.Join(dir, builderFilename)
-	if err := os.Remove(filename); err != nil {
+	backupName := fmt.Sprintf("%s.bak", filename)
+	if err := atomic.ReplaceFile(filename, backupName); err != nil {
 		return fmt.Errorf("discarding nipost builder state: %w", err)
-	}
-	return nil
-}
-
-func savePost(dir string, post *types.Post) error {
-	if err := save(filepath.Join(dir, postFilename), post); err != nil {
-		return fmt.Errorf("saving post: %w", err)
 	}
 	return nil
 }
@@ -176,7 +157,8 @@ func loadPost(dir string) (*types.Post, error) {
 
 func discardPost(dir string) error {
 	filename := filepath.Join(dir, postFilename)
-	if err := os.Remove(filename); err != nil {
+	backupName := fmt.Sprintf("%s.bak", filename)
+	if err := atomic.ReplaceFile(filename, backupName); err != nil {
 		return fmt.Errorf("discarding post: %w", err)
 	}
 	return nil

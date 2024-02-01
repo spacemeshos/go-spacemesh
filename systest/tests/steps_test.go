@@ -27,13 +27,13 @@ import (
 
 func TestStepCreate(t *testing.T) {
 	ctx := testcontext.New(t, testcontext.SkipClusterLimits())
-	_, err := cluster.Reuse(ctx, cluster.WithKeys(10))
+	_, err := cluster.Reuse(ctx, cluster.WithKeys(ctx.ClusterSize))
 	require.NoError(t, err)
 }
 
 func TestStepShortDisconnect(t *testing.T) {
 	tctx := testcontext.New(t, testcontext.SkipClusterLimits())
-	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
+	cl, err := cluster.Reuse(tctx, cluster.WithKeys(tctx.ClusterSize))
 	require.NoError(t, err)
 	require.Greater(t, cl.Bootnodes(), 1)
 
@@ -46,26 +46,29 @@ func TestStepShortDisconnect(t *testing.T) {
 
 	eg, ctx := errgroup.WithContext(tctx)
 	client := cl.Client(0)
-	scheduleChaos(ctx, eg, client, enable, stop, func(ctx context.Context) (chaos.Teardown, error) {
-		var (
-			left  []string
-			right = []string{cl.Client(0).Name}
-		)
-		for i := 1; i < cl.Total(); i++ {
-			if i < split {
-				left = append(left, cl.Client(i).Name)
-			} else {
-				right = append(right, cl.Client(i).Name)
+	scheduleChaos(
+		ctx,
+		eg,
+		client,
+		tctx.Log.Desugar(),
+		enable,
+		stop,
+		func(ctx context.Context) (chaos.Teardown, error) {
+			var (
+				left  []string
+				right = []string{cl.Client(0).Name}
+			)
+			for i := 1; i < cl.Total(); i++ {
+				if i < split {
+					left = append(left, cl.Client(i).Name)
+				} else {
+					right = append(right, cl.Client(i).Name)
+				}
 			}
-		}
-		tctx.Log.Debugw("short partition",
-			"enable", enable,
-			"stop", stop,
-			"left", left,
-			"right", right,
-		)
-		return chaos.Partition2(tctx, "split", left, right)
-	})
+			tctx.Log.Debugw("short partition", "enable", enable, "stop", stop, "left", left, "right", right)
+			return chaos.Partition2(tctx, "split", left, right)
+		},
+	)
 	require.NoError(t, eg.Wait())
 }
 
@@ -76,7 +79,7 @@ func TestStepTransactions(t *testing.T) {
 	)
 
 	tctx := testcontext.New(t, testcontext.SkipClusterLimits())
-	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
+	cl, err := cluster.Reuse(tctx, cluster.WithKeys(tctx.ClusterSize))
 	require.NoError(t, err)
 	require.NoError(t, waitGenesis(tctx, cl.Client(0)))
 	t.Cleanup(cl.CloseClients)
@@ -164,7 +167,7 @@ func TestStepTransactions(t *testing.T) {
 
 func TestStepReplaceNodes(t *testing.T) {
 	cctx := testcontext.New(t, testcontext.SkipClusterLimits())
-	cl, err := cluster.Reuse(cctx, cluster.WithKeys(10))
+	cl, err := cluster.Reuse(cctx, cluster.WithKeys(cctx.ClusterSize))
 	require.NoError(t, err)
 
 	var (
@@ -191,7 +194,7 @@ func TestStepReplaceNodes(t *testing.T) {
 
 func TestStepVerifyConsistency(t *testing.T) {
 	cctx := testcontext.New(t, testcontext.SkipClusterLimits())
-	cl, err := cluster.Reuse(cctx, cluster.WithKeys(10))
+	cl, err := cluster.Reuse(cctx, cluster.WithKeys(cctx.ClusterSize))
 	require.NoError(t, err)
 
 	synced := syncedNodes(cctx, cl)
@@ -228,8 +231,13 @@ func TestStepVerifyConsistency(t *testing.T) {
 						node.Name, reference.Number.Number, layer.Hash, reference.Hash)
 				}
 				if !bytes.Equal(layer.RootStateHash, reference.RootStateHash) {
-					return fmt.Errorf("state hash doesn't match reference %s in layer %d: %x != %x",
-						node.Name, reference.Number.Number, layer.RootStateHash, reference.RootStateHash)
+					return fmt.Errorf(
+						"state hash doesn't match reference %s in layer %d: %x != %x",
+						node.Name,
+						reference.Number.Number,
+						layer.RootStateHash,
+						reference.RootStateHash,
+					)
 				}
 				return nil
 			})
@@ -333,7 +341,7 @@ func TestScheduleTransactions(t *testing.T) {
 
 func TestStepValidation(t *testing.T) {
 	tctx := testcontext.New(t, testcontext.SkipClusterLimits())
-	c, err := cluster.Reuse(tctx, cluster.WithKeys(10))
+	c, err := cluster.Reuse(tctx, cluster.WithKeys(tctx.ClusterSize))
 	require.NoError(t, err)
 
 	eg, ctx := errgroup.WithContext(tctx)

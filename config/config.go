@@ -99,7 +99,8 @@ type BaseConfig struct {
 	LayerAvgSize   uint32        `mapstructure:"layer-average-size"`
 	LayersPerEpoch uint32        `mapstructure:"layers-per-epoch"`
 
-	PoETServers []string `mapstructure:"poet-server"`
+	PoETServers DeprecatedPoETServers `mapstructure:"poet-server"`
+	PoetServers []types.PoetServer    `mapstructure:"poet-servers"`
 
 	PprofHTTPServer bool `mapstructure:"pprof-server"`
 
@@ -114,6 +115,8 @@ type BaseConfig struct {
 	DatabaseLatencyMetering      bool          `mapstructure:"db-latency-metering"`
 	DatabaseSizeMeteringInterval time.Duration `mapstructure:"db-size-metering-interval"`
 	DatabasePruneInterval        time.Duration `mapstructure:"db-prune-interval"`
+	DatabaseVacuumState          int           `mapstructure:"db-vacuum-state"`
+	DatabaseSkipMigrations       []int         `mapstructure:"db-skip-migrations"`
 
 	PruneActivesetsFrom types.EpochID `mapstructure:"prune-activesets-from"`
 
@@ -124,6 +127,21 @@ type BaseConfig struct {
 	MinerGoodAtxsPercent int `mapstructure:"miner-good-atxs-percent"`
 
 	RegossipAtxInterval time.Duration `mapstructure:"regossip-atx-interval"`
+
+	// ATXGradeDelay is used to grade ATXs for selection in tortoise active set.
+	// See grading fuction in miner/proposals_builder.go
+	ATXGradeDelay time.Duration `mapstructure:"atx-grade-delay"`
+
+	// NoMainOverride forces the "nomain" builds to run on the mainnet
+	NoMainOverride bool `mapstructure:"no-main-override"`
+}
+
+type DeprecatedPoETServers struct{}
+
+// DeprecatedMsg implements Deprecated interface.
+func (DeprecatedPoETServers) DeprecatedMsg() string {
+	return `The 'poet-server' is deprecated. Please migrate to the 'poet-servers'. ` +
+		`Check 'Upgrade Information' in CHANGELOG.md for details.`
 }
 
 type PublicMetrics struct {
@@ -192,7 +210,6 @@ func defaultBaseConfig() BaseConfig {
 		ProfilerName:                 "go-spacemesh",
 		LayerDuration:                30 * time.Second,
 		LayersPerEpoch:               3,
-		PoETServers:                  []string{"127.0.0.1"},
 		TxsPerProposal:               100,
 		BlockGasLimit:                math.MaxUint64,
 		OptFilterThreshold:           90,
@@ -201,6 +218,7 @@ func defaultBaseConfig() BaseConfig {
 		DatabaseSizeMeteringInterval: 10 * time.Minute,
 		DatabasePruneInterval:        30 * time.Minute,
 		NetworkHRP:                   "sm",
+		ATXGradeDelay:                10 * time.Second,
 	}
 }
 

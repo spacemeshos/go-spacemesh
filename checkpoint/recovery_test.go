@@ -164,9 +164,7 @@ func TestRecover(t *testing.T) {
 			bsdir := filepath.Join(cfg.DataDir, bootstrap.DirName)
 			require.NoError(t, fs.MkdirAll(bsdir, 0o700))
 			db := sql.InMemory()
-			localDB := localsql.InMemory(
-				sql.WithMigration(localsql.New0002Migration(cfg.DataDir)),
-			)
+			localDB := localsql.InMemory()
 			preserve, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, localDB, fs, cfg)
 			if tc.expErr != nil {
 				require.ErrorIs(t, err, tc.expErr)
@@ -213,9 +211,7 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 	bsdir := filepath.Join(cfg.DataDir, bootstrap.DirName)
 	require.NoError(t, fs.MkdirAll(bsdir, 0o700))
 	db := sql.InMemory()
-	localDB := localsql.InMemory(
-		sql.WithMigration(localsql.New0002Migration(cfg.DataDir)),
-	)
+	localDB := localsql.InMemory()
 	types.SetEffectiveGenesis(0)
 	require.NoError(t, recovery.SetCheckpoint(db, types.LayerID(recoverLayer)))
 	preserve, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, localDB, fs, cfg)
@@ -256,9 +252,8 @@ func validateAndPreserveData(
 		mreceiver,
 		mtrtl,
 		lg,
-		activation.PoetConfig{},
 	)
-	mfetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).AnyTimes()
+	mfetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	for i, vatx := range deps {
 		encoded, err := codec.Encode(vatx)
 		require.NoError(tb, err)

@@ -778,7 +778,7 @@ func TestDisagreement(t *testing.T) {
 		v := new(evotes)
 		if i < n/2 {
 			v = v.support(1, "aa", 0)
-		} else if n == n/2 {
+		} else if i == n/2 {
 			v = v.abstain(1)
 		} else {
 			v = v.against(1, "aa", 0)

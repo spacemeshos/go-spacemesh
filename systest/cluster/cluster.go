@@ -12,6 +12,7 @@ import (
 	"time"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"go.uber.org/zap"
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -33,6 +34,7 @@ const (
 	poetApp          = "poet"
 	bootnodeApp      = "boot"
 	smesherApp       = "smesher"
+	postServiceApp   = "postservice"
 	bootstrapperApp  = "bootstrapper"
 	bootstrapperPort = 80
 	poetPort         = 80
@@ -42,17 +44,18 @@ const (
 	bsFlags      = "bsflags"
 )
 
-func defaultBootnodes(size int) int {
-	bsize := (size / 1000) * 2
-	if bsize == 0 {
-		return 2
-	}
-	return bsize
-}
-
 // MakePoetEndpoint generate a poet endpoint for the ith instance.
 func MakePoetEndpoint(ith int) string {
 	return fmt.Sprintf("http://%s:%d", createPoetIdentifier(ith), poetPort)
+}
+
+// Deterministically generate poet keys for given instance.
+func MakePoetKey(ith int) (ed25519.PublicKey, ed25519.PrivateKey) {
+	seed := make([]byte, ed25519.SeedSize)
+	copy(seed, fmt.Sprintf("poet-%d", ith))
+	privateKey := ed25519.NewKeyFromSeed(seed)
+
+	return privateKey.Public().(ed25519.PublicKey), privateKey
 }
 
 func BootstrapperEndpoint(ith int) string {
@@ -137,8 +140,22 @@ func ReuseWait(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 // Default deploys bootnodes, one poet and the smeshers according to the cluster size.
 func Default(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 	cl := New(cctx, opts...)
-	bsize := defaultBootnodes(cctx.ClusterSize)
-	if err := cl.AddBootnodes(cctx, bsize); err != nil {
+
+	smeshers := cctx.ClusterSize - cctx.BootnodeSize - cctx.RemoteSize
+
+	cctx.Log.Desugar().Info("Using the following nodes",
+		zap.Int("total", cctx.ClusterSize),
+		zap.Int("bootnodes", cctx.BootnodeSize),
+		zap.Int("smeshers", smeshers),
+		zap.Int("remote", cctx.RemoteSize),
+	)
+
+	keys := make([]ed25519.PrivateKey, cctx.ClusterSize)
+	for i := range keys {
+		keys[i] = cl.accounts.Private(i)
+	}
+
+	if err := cl.AddBootnodes(cctx, cctx.BootnodeSize); err != nil {
 		return nil, err
 	}
 	if err := cl.AddBootstrappers(cctx); err != nil {
@@ -147,7 +164,12 @@ func Default(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 	if err := cl.AddPoets(cctx); err != nil {
 		return nil, err
 	}
-	if err := cl.AddSmeshers(cctx, cctx.ClusterSize-bsize); err != nil {
+	err := cl.AddSmeshers(cctx, smeshers, WithSmeshers(keys[cctx.BootnodeSize:cctx.BootnodeSize+smeshers]))
+	if err != nil {
+		return nil, err
+	}
+	err = cl.AddRemoteSmeshers(cctx, cctx.RemoteSize, WithSmeshers(keys[cctx.BootnodeSize+smeshers:]))
+	if err != nil {
 		return nil, err
 	}
 	return cl, nil
@@ -161,8 +183,9 @@ func New(cctx *testcontext.Context, opts ...Opt) *Cluster {
 		bootstrapperFlags: map[string]DeploymentFlag{},
 		bootstrapEpochs:   []int{2},
 		genesisBalances:   map[string]uint64{},
+		genesis:           time.Now().Add(cctx.BootstrapDuration),
 	}
-	genesis := GenesisTime(time.Now().Add(cctx.BootstrapDuration))
+	genesis := GenesisTime(cluster.genesis)
 	cluster.addFlag(genesis)
 	cluster.addFlag(GenesisExtraData(defaultExtraData))
 	cluster.addFlag(MinPeers(minPeers(cctx.ClusterSize)))
@@ -183,6 +206,7 @@ type Cluster struct {
 	smesherFlags      map[string]DeploymentFlag
 	poetFlags         map[string]DeploymentFlag
 	bootstrapperFlags map[string]DeploymentFlag
+	genesis           time.Time
 
 	accounts
 	genesisBalances map[string]uint64
@@ -192,20 +216,29 @@ type Cluster struct {
 	clients       []*NodeClient
 	poets         []*NodeClient
 	bootstrappers []*NodeClient
+	postServices  []*NodeClient
 
 	bootstrapEpochs []int
 }
 
+func (c *Cluster) Genesis() time.Time {
+	return c.genesis
+}
+
+func (c *Cluster) GenesisExtraData() string {
+	return defaultExtraData
+}
+
 // GenesisID computes id from the configuration.
 func (c *Cluster) GenesisID() types.Hash20 {
-	parsed, err := time.Parse(time.RFC3339, c.smesherFlags[genesisTimeFlag].Value)
-	if err != nil {
-		panic("invalid genesis time")
-	}
-	return types.Hash32(hash.Sum(
-		[]byte(strconv.FormatInt(parsed.Unix(), 10)),
-		[]byte(c.smesherFlags[genesisExtraData].Value),
-	)).ToHash20()
+	return c.GoldenATX().Hash32().ToHash20()
+}
+
+func (c *Cluster) GoldenATX() types.ATXID {
+	return types.ATXID(hash.Sum(
+		[]byte(strconv.FormatInt(c.Genesis().Unix(), 10)),
+		[]byte(c.GenesisExtraData()),
+	))
 }
 
 func (c *Cluster) nextSmesher() int {
@@ -351,6 +384,14 @@ func (c *Cluster) reuse(cctx *testcontext.Context) error {
 		cctx.Log.Debugw("discovered existing bootstrapper", "name", bs.Name)
 	}
 
+	c.postServices, err = discoverNodes(cctx, postServiceApp)
+	if err != nil {
+		return err
+	}
+	for _, postService := range c.postServices {
+		cctx.Log.Debugw("discovered existing post services", "name", postService.Name)
+	}
+
 	cctx.Log.Debugw(
 		"discovered cluster",
 		"bootnodes",
@@ -361,6 +402,8 @@ func (c *Cluster) reuse(cctx *testcontext.Context) error {
 		len(c.poets),
 		"bootstrappers",
 		len(c.bootstrappers),
+		"postServices",
+		len(c.postServices),
 	)
 	if err := c.accounts.Recover(cctx); err != nil {
 		return err
@@ -447,7 +490,7 @@ func (c *Cluster) AddBootnodes(cctx *testcontext.Context, n int) error {
 	c.clients = nil
 	c.clients = append(c.clients, clients...)
 	c.clients = append(c.clients, smeshers...)
-	c.bootnodes = len(clients)
+	c.bootnodes += len(clients)
 
 	return fillNetworkConfig(cctx, clients[0])
 }
@@ -498,11 +541,29 @@ func (c *Cluster) AddSmeshers(tctx *testcontext.Context, n int, opts ...Deployme
 	if err != nil {
 		return err
 	}
-	bootnodes := c.clients[:c.bootnodes]
-	smeshers := c.clients[c.bootnodes:]
-	c.clients = nil
-	c.clients = append(c.clients, bootnodes...)
-	c.clients = append(c.clients, smeshers...)
+	c.clients = append(c.clients, clients...)
+	c.smeshers += len(clients)
+	return nil
+}
+
+func (c *Cluster) AddRemoteSmeshers(tctx *testcontext.Context, n int, opts ...DeploymentOpt) error {
+	if err := c.resourceControl(tctx, n); err != nil {
+		return err
+	}
+	if err := c.persist(tctx); err != nil {
+		return err
+	}
+	flags := maps.Values(c.smesherFlags)
+	endpoints, err := extractP2PEndpoints(tctx, c.clients[:c.bootnodes])
+	if err != nil {
+		return fmt.Errorf("extracting p2p endpoints %w", err)
+	}
+	dopts := []DeploymentOpt{WithFlags(flags...), WithFlags(Bootnodes(endpoints...), StartSmeshing(false))}
+	dopts = append(dopts, opts...)
+	clients, err := deployRemoteNodes(tctx, c.nextSmesher(), c.nextSmesher()+n, c.GoldenATX(), dopts...)
+	if err != nil {
+		return err
+	}
 	c.clients = append(c.clients, clients...)
 	c.smeshers += len(clients)
 	return nil

@@ -33,7 +33,6 @@ type testFetch struct {
 	mMHashS *mocks.Mockrequester
 	mOpn2S  *mocks.Mockrequester
 
-	mMesh        *mocks.MockmeshProvider
 	mMalH        *mocks.MockSyncValidator
 	mAtxH        *mocks.MockSyncValidator
 	mBallotH     *mocks.MockSyncValidator
@@ -74,11 +73,13 @@ func createFetch(tb testing.TB) *testFetch {
 		BatchSize:            3,
 		QueueSize:            1000,
 		RequestTimeout:       3 * time.Second,
+		RequestHardTimeout:   10 * time.Second,
 		MaxRetriesForRequest: 3,
+		GetAtxsConcurrency:   DefaultConfig().GetAtxsConcurrency,
 	}
 	lg := logtest.New(tb)
 
-	tf.Fetch = NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), tf.mMesh, nil, nil,
+	tf.Fetch = NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), nil,
 		WithContext(context.TODO()),
 		WithConfig(cfg),
 		WithLogger(lg),
@@ -115,7 +116,7 @@ func badReceiver(context.Context, types.Hash32, p2p.Peer, []byte) error {
 
 func TestFetch_Start(t *testing.T) {
 	lg := logtest.New(t)
-	f := NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), nil, nil, nil,
+	f := NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), nil,
 		WithContext(context.TODO()),
 		WithConfig(DefaultConfig()),
 		WithLogger(lg),
@@ -276,7 +277,7 @@ func TestFetch_Loop_BatchRequestMax(t *testing.T) {
 				return nil
 			}).
 		Times(2)
-		// 3 requests with batch size 2 -> 2 sends
+	// 3 requests with batch size 2 -> 2 sends
 
 	hint := datastore.POETDB
 
@@ -335,21 +336,22 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 		BatchTimeout:         2000 * time.Minute, // make sure we never hit the batch timeout
 		BatchSize:            3,
 		QueueSize:            1000,
-		RequestTimeout:       time.Second * time.Duration(3),
+		RequestTimeout:       3 * time.Second,
+		RequestHardTimeout:   10 * time.Second,
 		MaxRetriesForRequest: 3,
 	}
 	p2pconf := p2p.DefaultConfig()
-	p2pconf.Listen = "/ip4/127.0.0.1/tcp/0"
+	p2pconf.Listen = p2p.MustParseAddresses("/ip4/127.0.0.1/tcp/0")
 	p2pconf.DataDir = t.TempDir()
 
 	// Good host
-	h, err := p2p.New(ctx, lg, p2pconf, []byte{})
+	h, err := p2p.New(ctx, lg, p2pconf, []byte{}, []byte{})
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, h.Stop()) })
 
 	// Bad host, will send a message that results in validation reject
 	p2pconf.DataDir = t.TempDir()
-	badPeerHost, err := p2p.New(ctx, lg, p2pconf, []byte{})
+	badPeerHost, err := p2p.New(ctx, lg, p2pconf, []byte{}, []byte{})
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, badPeerHost.Stop()) })
 
@@ -385,7 +387,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	})
 	defer eg.Wait()
 
-	fetcher := NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), nil, nil, h,
+	fetcher := NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), h,
 		WithContext(ctx),
 		WithConfig(cfg),
 		WithLogger(lg),

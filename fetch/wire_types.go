@@ -22,22 +22,22 @@ type RequestMessage struct {
 // ResponseMessage is sent to the node as a response.
 type ResponseMessage struct {
 	Hash types.Hash32
-	Data []byte `scale:"max=10485760"` // limit to 10MiB
+	Data []byte `scale:"max=62914560"` // limit to 60 MiB
 }
 
 // RequestBatch is a batch of requests and a hash of all requests as ID.
 type RequestBatch struct {
 	ID types.Hash32
-	// depends on fetch config `BatchSize` which defaults to 20, more than 1000 seems unlikely
-	Requests []RequestMessage `scale:"max=1000"`
+	// depends on fetch config `BatchSize` which defaults to 10, more than 100 seems unlikely
+	Requests []RequestMessage `scale:"max=100"`
 }
 
 // ResponseBatch is the response struct send for a RequestBatch. the ResponseBatch ID must be the same
 // as stated in RequestBatch even if not all Data is present.
 type ResponseBatch struct {
 	ID types.Hash32
-	// depends on fetch config `BatchSize` which defaults to 20, more than 1000 seems unlikely
-	Responses []ResponseMessage `scale:"max=1000"`
+	// depends on fetch config `BatchSize` which defaults to 10, more than 100 seems unlikely
+	Responses []ResponseMessage `scale:"max=100"`
 }
 
 // MeshHashRequest is used by ForkFinder to request the hashes of layers from
@@ -105,7 +105,7 @@ type MaliciousIDs struct {
 }
 
 type EpochData struct {
-	AtxIDs []types.ATXID `scale:"max=200000"` // max. expected number of ATXs per epoch is 100_000
+	AtxIDs []types.ATXID `scale:"max=1000000"` // for epoch 13 > 800k ATXs are expected, added some safety margin
 }
 
 // LayerData is the data response for a given layer ID.

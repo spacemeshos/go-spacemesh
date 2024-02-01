@@ -10,12 +10,18 @@
     },
     "api": {
         "grpc-public-listener": "0.0.0.0:9092",
-        "grpc-private-listener": "0.0.0.0:9093"
+        "grpc-private-listener": "0.0.0.0:9093",
+        "grpc-post-listener": "0.0.0.0:9094"
     },
     "logging": {
         "hare": "debug"
     },
     "fetch": {
         "servers-metrics": true
+    },
+    "smeshing": {
+        "smeshing-verifying-opts": {
+            "smeshing-opts-verifying-min-workers": 1000000
+        }
     }
 }

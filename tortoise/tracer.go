@@ -119,11 +119,9 @@ const (
 	traceTally
 	traceBlock
 	traceHare
-	traceActiveset
-	traceResults
 	traceUpdates
 	traceApplied
-	traceMalfeasence
+	traceMalfeasance
 )
 
 type traceEvent interface {
@@ -435,7 +433,7 @@ type MalfeasanceTrace struct {
 }
 
 func (m *MalfeasanceTrace) Type() eventType {
-	return traceMalfeasence
+	return traceMalfeasance
 }
 
 func (m *MalfeasanceTrace) New() traceEvent {

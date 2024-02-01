@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -581,7 +582,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		app.Config.API.PrivateServices = nil
 
 		// Prevent obnoxious warning in macOS
-		app.Config.P2P.Listen = "/ip4/127.0.0.1/tcp/7073"
+		app.Config.P2P.Listen = p2p.MustParseAddresses("/ip4/127.0.0.1/tcp/7073")
 
 		// Avoid waiting for new connections.
 		app.Config.P2P.MinPeers = 0
@@ -800,6 +801,32 @@ func TestConfig_CustomTypes(t *testing.T) {
 				copy(c.POST.PowDifficulty[:], diff)
 			},
 		},
+		{
+			name:   "address-list-single",
+			cli:    "--listen=/ip4/0.0.0.0/tcp/5555 --advertise-address=/ip4/10.20.30.40/tcp/5555",
+			config: `{"p2p":{"listen":"/ip4/0.0.0.0/tcp/5555","advertise-address":"/ip4/10.20.30.40/tcp/5555"}}`,
+			updatePreset: func(t *testing.T, c *config.Config) {
+				c.P2P.Listen = p2p.MustParseAddresses("/ip4/0.0.0.0/tcp/5555")
+				c.P2P.AdvertiseAddress = p2p.MustParseAddresses("/ip4/10.20.30.40/tcp/5555")
+			},
+		},
+		{
+			name: "address-list-multiple",
+			cli: "--listen=/ip4/0.0.0.0/tcp/5555 --listen=/ip4/0.0.0.0/udp/5555/quic-v1" +
+				" --advertise-address=/ip4/10.20.30.40/tcp/5555" +
+				" --advertise-address=/ip4/10.20.30.40/udp/5555/quic-v1",
+			config: `{"p2p":{"listen":["/ip4/0.0.0.0/tcp/5555","/ip4/0.0.0.0/udp/5555/quic-v1"],
+                                  "advertise-address":[
+                                    "/ip4/10.20.30.40/tcp/5555","/ip4/10.20.30.40/udp/5555/quic-v1"]}}`,
+			updatePreset: func(t *testing.T, c *config.Config) {
+				c.P2P.Listen = p2p.MustParseAddresses(
+					"/ip4/0.0.0.0/tcp/5555",
+					"/ip4/0.0.0.0/udp/5555/quic-v1")
+				c.P2P.AdvertiseAddress = p2p.MustParseAddresses(
+					"/ip4/10.20.30.40/tcp/5555",
+					"/ip4/10.20.30.40/udp/5555/quic-v1")
+			},
+		},
 	}
 
 	for _, tc := range tt {
@@ -809,7 +836,7 @@ func TestConfig_CustomTypes(t *testing.T) {
 
 			c := &cobra.Command{}
 			cmd.AddCommands(c)
-			require.NoError(t, c.ParseFlags([]string{tc.cli}))
+			require.NoError(t, c.ParseFlags(strings.Fields(tc.cli)))
 
 			t.Cleanup(viper.Reset)
 			t.Cleanup(cmd.ResetConfig)
@@ -847,7 +874,7 @@ func TestConfig_CustomTypes(t *testing.T) {
 
 			c := &cobra.Command{}
 			cmd.AddCommands(c)
-			require.NoError(t, c.ParseFlags([]string{tc.cli}))
+			require.NoError(t, c.ParseFlags(strings.Fields(tc.cli)))
 
 			viper.Set("preset", name)
 			t.Cleanup(viper.Reset)
@@ -1106,8 +1133,6 @@ func TestAdminEvents(t *testing.T) {
 	cfg.SMESHING.Opts.DataDir = cfg.DataDirParent
 	cfg.SMESHING.Opts.Scrypt.N = 2
 	cfg.POSTService.PostServiceCmd = activation.DefaultTestPostServiceConfig().PostServiceCmd
-	cfg.HARE3.PreroundDelay = 100 * time.Millisecond
-	cfg.HARE3.RoundDuration = 1 * time.Millisecond
 
 	cfg.Genesis.GenesisTime = time.Now().Add(5 * time.Second).Format(time.RFC3339)
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
@@ -1135,7 +1160,89 @@ func TestAdminEvents(t *testing.T) {
 	defer cancel()
 	conn, err := grpc.DialContext(
 		grpcCtx,
-		cfg.API.PrivateListener,
+		"127.0.0.1:10093",
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+	)
+	require.NoError(t, err)
+	t.Cleanup(func() { assert.NoError(t, conn.Close()) })
+	client := pb.NewAdminServiceClient(conn)
+
+	tctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+	defer cancel()
+
+	// 4 is arbitrary, if we received events once, they must be
+	// cached and should be returned immediately
+	for i := 0; i < 4; i++ {
+		stream, err := client.EventsStream(tctx, &pb.EventStreamRequest{})
+		require.NoError(t, err)
+		success := []pb.IsEventDetails{
+			&pb.Event_Beacon{},
+			&pb.Event_InitStart{},
+			&pb.Event_InitComplete{},
+			&pb.Event_PostServiceStarted{},
+			&pb.Event_PostStart{},
+			&pb.Event_PostComplete{},
+			&pb.Event_PoetWaitRound{},
+			&pb.Event_PoetWaitProof{},
+			&pb.Event_PostStart{},
+			&pb.Event_PostComplete{},
+			&pb.Event_AtxPublished{},
+		}
+		for idx, ev := range success {
+			msg, err := stream.Recv()
+			require.NoError(t, err, "stream %d", i)
+			require.IsType(t, ev, msg.Details, "stream %d, event %d", i, idx)
+		}
+		require.NoError(t, stream.CloseSend())
+	}
+}
+
+func TestAdminEvents_UnspecifiedAddresses(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	cfg, err := presets.Get("standalone")
+	require.NoError(t, err)
+
+	cfg.DataDirParent = t.TempDir()
+	cfg.FileLock = filepath.Join(cfg.DataDirParent, "LOCK")
+	cfg.SMESHING.Opts.DataDir = cfg.DataDirParent
+	cfg.SMESHING.Opts.Scrypt.N = 2
+	cfg.POSTService.PostServiceCmd = activation.DefaultTestPostServiceConfig().PostServiceCmd
+
+	// Expose APIs on all interfaces
+	cfg.API.PublicListener = "0.0.0.0:10092"
+	cfg.API.PrivateListener = "0.0.0.0:10093"
+	cfg.API.PostListener = "0.0.0.0:10094"
+
+	cfg.Genesis.GenesisTime = time.Now().Add(5 * time.Second).Format(time.RFC3339)
+	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
+
+	logger := logtest.New(t, zapcore.DebugLevel)
+	app := New(WithConfig(&cfg), WithLog(logger))
+	signer, err := app.LoadOrCreateEdSigner()
+	require.NoError(t, err)
+	app.edSgn = signer // https://github.com/spacemeshos/go-spacemesh/issues/4653
+	require.NoError(t, app.Initialize())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var eg errgroup.Group
+	eg.Go(func() error {
+		if err := app.Start(ctx); err != nil {
+			return err
+		}
+		app.Cleanup(context.Background())
+		app.eg.Wait() // https://github.com/spacemeshos/go-spacemesh/issues/4653
+		return nil
+	})
+	t.Cleanup(func() { assert.NoError(t, eg.Wait()) })
+
+	grpcCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	conn, err := grpc.DialContext(
+		grpcCtx,
+		"127.0.0.1:10093",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
@@ -1214,9 +1321,10 @@ func getTestDefaultConfig(tb testing.TB) *config.Config {
 	cfg.DataDirParent = tmp
 	cfg.FileLock = filepath.Join(tmp, "LOCK")
 
-	cfg.FETCH.RequestTimeout = 10
+	cfg.FETCH.RequestTimeout = 10 * time.Second
+	cfg.FETCH.RequestHardTimeout = 20 * time.Second
 	cfg.FETCH.BatchSize = 5
-	cfg.FETCH.BatchTimeout = 5
+	cfg.FETCH.BatchTimeout = 5 * time.Second
 
 	cfg.Beacon = beacon.NodeSimUnitTestConfig()
 

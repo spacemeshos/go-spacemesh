@@ -36,6 +36,9 @@ func standalone() config.Config {
 	conf.Sync.Interval = 3 * time.Second
 	conf.LayersPerEpoch = 10
 
+	conf.HARE3.PreroundDelay = 100 * time.Millisecond
+	conf.HARE3.RoundDuration = 1 * time.Millisecond
+
 	conf.Tortoise.Hdist = 2
 	conf.Tortoise.Zdist = 2
 
@@ -68,7 +71,11 @@ func standalone() config.Config {
 	conf.Beacon.BeaconSyncWeightUnits = 10
 	conf.Beacon.VotesLimit = 100
 
-	conf.PoETServers = []string{"http://127.0.0.1:10010"}
+	conf.PoetServers = []types.PoetServer{
+		{
+			Address: "http://127.0.0.1:10010",
+		},
+	}
 	conf.POET.GracePeriod = 12 * time.Second
 	conf.POET.CycleGap = 30 * time.Second
 	conf.POET.PhaseShift = 30 * time.Second
@@ -80,5 +87,6 @@ func standalone() config.Config {
 
 	conf.API.PublicListener = "0.0.0.0:10092"
 	conf.API.PrivateListener = "127.0.0.1:10093"
+	conf.API.PostListener = "127.0.0.1:10094"
 	return conf
 }

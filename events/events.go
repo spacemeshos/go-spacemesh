@@ -70,7 +70,7 @@ func EmitInitComplete() {
 	)
 }
 
-func EmitPoetWaitRound(current, publish types.EpochID, wait time.Duration) {
+func EmitPoetWaitRound(current, publish types.EpochID, wait time.Time) {
 	const help = "Node is waiting for PoET registration window in current epoch to open. " +
 		"After this it will submit challenge and wait until PoET round ends in publish epoch."
 	emitUserEvent(
@@ -79,7 +79,8 @@ func EmitPoetWaitRound(current, publish types.EpochID, wait time.Duration) {
 		&pb.Event_PoetWaitRound{PoetWaitRound: &pb.EventPoetWaitRound{
 			Current: current.Uint32(),
 			Publish: publish.Uint32(),
-			Wait:    durationpb.New(wait),
+			Wait:    durationpb.New(time.Until(wait)),
+			Until:   timestamppb.New(wait),
 		}},
 	)
 }
@@ -90,7 +91,7 @@ type EventPoetWaitEnd struct {
 	Wait    time.Duration `json:"wait"`
 }
 
-func EmitPoetWaitProof(publish, target types.EpochID, wait time.Duration) {
+func EmitPoetWaitProof(publish, target types.EpochID, wait time.Time) {
 	const help = "Node is waiting for PoET to complete. " +
 		"After it's complete, the node will fetch the PoET proof, generate a PoST proof, " +
 		"and finally publish an ATX to establish eligibility for rewards in the target epoch."
@@ -101,7 +102,8 @@ func EmitPoetWaitProof(publish, target types.EpochID, wait time.Duration) {
 			PoetWaitProof: &pb.EventPoetWaitProof{
 				Publish: publish.Uint32(),
 				Target:  target.Uint32(),
-				Wait:    durationpb.New(wait),
+				Wait:    durationpb.New(time.Until(wait)),
+				Until:   timestamppb.New(wait),
 			},
 		},
 	)
@@ -164,7 +166,7 @@ func EmitInvalidPostProof() {
 func EmitAtxPublished(
 	current, target types.EpochID,
 	id types.ATXID,
-	wait time.Duration,
+	wait time.Time,
 ) {
 	const help = "Node published activation for the current epoch. " +
 		"It now needs to wait until the target epoch when it will be eligible for rewards."
@@ -176,7 +178,8 @@ func EmitAtxPublished(
 				Current: current.Uint32(),
 				Target:  target.Uint32(),
 				Id:      id[:],
-				Wait:    durationpb.New(wait),
+				Wait:    durationpb.New(time.Until(wait)),
+				Until:   timestamppb.New(wait),
 			},
 		},
 	)

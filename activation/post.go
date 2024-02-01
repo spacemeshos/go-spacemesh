@@ -77,22 +77,33 @@ func DefaultPostProvingOpts() PostProvingOpts {
 	}
 }
 
-// PostProvingOpts are the options controlling POST proving process.
+// PostProofVerifyingOpts are the options controlling POST proving process.
 type PostProofVerifyingOpts struct {
+	// Disable verifying POST proofs. Experimental.
+	// Use with caution, only on private nodes with a trusted public peer that
+	// validates the proofs.
+	Disabled bool `mapstructure:"smeshing-opts-verifying-disable"`
+
 	// Number of workers spawned to verify proofs.
 	Workers int `mapstructure:"smeshing-opts-verifying-workers"`
+	// The minimum number of verifying workers to keep
+	// while POST is being generated in parallel.
+	//
+	// Caps at the value of `Workers` (then scaling is disabled).
+	MinWorkers int `mapstructure:"smeshing-opts-verifying-min-workers"`
 	// Flags used for the PoW verification.
 	Flags PostPowFlags `mapstructure:"smeshing-opts-verifying-powflags"`
 }
 
 func DefaultPostVerifyingOpts() PostProofVerifyingOpts {
-	workers := runtime.NumCPU() * 3 / 4
+	workers := runtime.NumCPU() * 1 / 2
 	if workers < 1 {
 		workers = 1
 	}
 	return PostProofVerifyingOpts{
-		Workers: workers,
-		Flags:   PostPowFlags(config.DefaultVerifyingPowFlags()),
+		MinWorkers: 1,
+		Workers:    workers,
+		Flags:      PostPowFlags(config.DefaultVerifyingPowFlags()),
 	}
 }
 
@@ -163,6 +174,7 @@ func (o PostSetupOpts) ToInitOpts() config.InitOpts {
 type PostSetupManager struct {
 	id              types.NodeID
 	commitmentAtxId types.ATXID
+	syncer          syncer
 
 	cfg         PostConfig
 	logger      *zap.Logger
@@ -182,6 +194,7 @@ func NewPostSetupManager(
 	logger *zap.Logger,
 	db *datastore.CachedDB,
 	goldenATXID types.ATXID,
+	syncer syncer,
 ) (*PostSetupManager, error) {
 	mgr := &PostSetupManager{
 		id:          id,
@@ -190,6 +203,7 @@ func NewPostSetupManager(
 		db:          db,
 		goldenATXID: goldenATXID,
 		state:       PostSetupStateNotStarted,
+		syncer:      syncer,
 	}
 
 	return mgr, nil
@@ -292,7 +306,8 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context) error {
 // (StartSession can take days to complete). After the first call to this
 // method subsequent calls to this method will return an error until
 // StartSession has completed execution.
-func (mgr *PostSetupManager) PrepareInitializer(opts PostSetupOpts) error {
+func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSetupOpts) error {
+	mgr.logger.Info("preparing post initializer", zap.Any("opts", opts))
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
 	if mgr.state == PostSetupStatePrepared || mgr.state == PostSetupStateInProgress {
@@ -300,7 +315,7 @@ func (mgr *PostSetupManager) PrepareInitializer(opts PostSetupOpts) error {
 	}
 
 	var err error
-	mgr.commitmentAtxId, err = mgr.commitmentAtx(opts.DataDir)
+	mgr.commitmentAtxId, err = mgr.commitmentAtx(ctx, opts.DataDir)
 	if err != nil {
 		return err
 	}
@@ -323,7 +338,7 @@ func (mgr *PostSetupManager) PrepareInitializer(opts PostSetupOpts) error {
 	return nil
 }
 
-func (mgr *PostSetupManager) commitmentAtx(dataDir string) (types.ATXID, error) {
+func (mgr *PostSetupManager) commitmentAtx(ctx context.Context, dataDir string) (types.ATXID, error) {
 	m, err := initialization.LoadMetadata(dataDir)
 	switch {
 	case err == nil:
@@ -343,7 +358,7 @@ func (mgr *PostSetupManager) commitmentAtx(dataDir string) (types.ATXID, error) 
 		}
 
 		// if this node has not published an ATX select the best ATX with `findCommitmentAtx`
-		return mgr.findCommitmentAtx()
+		return mgr.findCommitmentAtx(ctx)
 	default:
 		return types.EmptyATXID, fmt.Errorf("load metadata: %w", err)
 	}
@@ -352,7 +367,15 @@ func (mgr *PostSetupManager) commitmentAtx(dataDir string) (types.ATXID, error) 
 // findCommitmentAtx determines the best commitment ATX to use for the node.
 // It will use the ATX with the highest height seen by the node and defaults to the goldenATX,
 // when no ATXs have yet been published.
-func (mgr *PostSetupManager) findCommitmentAtx() (types.ATXID, error) {
+func (mgr *PostSetupManager) findCommitmentAtx(ctx context.Context) (types.ATXID, error) {
+	mgr.logger.Info("waiting for ATXs to sync before selecting commitment ATX")
+	select {
+	case <-ctx.Done():
+		return types.EmptyATXID, ctx.Err()
+	case <-mgr.syncer.RegisterForATXSynced():
+		mgr.logger.Info("ATXs synced - selecting commitment ATX")
+	}
+
 	atx, err := atxs.GetIDWithMaxHeight(mgr.db, types.EmptyNodeID)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):

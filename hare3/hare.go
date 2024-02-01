@@ -42,8 +42,8 @@ type Config struct {
 	RoundDuration   time.Duration `mapstructure:"round-duration"`
 	// LogStats if true will log iteration statistics with INFO level at the start of the next iteration.
 	// This requires additional computation and should be used for debugging only.
-	LogStats     bool `mapstructure:"log-stats"`
-	ProtocolName string
+	LogStats     bool   `mapstructure:"log-stats"`
+	ProtocolName string `mapstructure:"protocolname"`
 }
 
 func (cfg *Config) Validate(zdist time.Duration) error {
@@ -309,7 +309,7 @@ func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 		h.log.Debug("registered equivocation",
 			zap.Uint32("lid", msg.Layer.Uint32()),
 			zap.Stringer("sender", equivocation.Messages[0].SmesherID))
-		proof := equivocation.ToMalfeasenceProof()
+		proof := equivocation.ToMalfeasanceProof()
 		if err := identities.SetMalicious(
 			h.db, equivocation.Messages[0].SmesherID, codec.MustEncode(proof), time.Now()); err != nil {
 			h.log.Error("failed to save malicious identity", zap.Error(err))

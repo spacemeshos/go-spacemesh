@@ -191,6 +191,21 @@ func (msh *Mesh) GetLayer(lid types.LayerID) (*types.Layer, error) {
 	return types.NewExistingLayer(lid, blts, blks), nil
 }
 
+// GetLayerVerified returns the verified, canonical block for a layer (or none for an empty layer).
+func (msh *Mesh) GetLayerVerified(lid types.LayerID) (*types.Block, error) {
+	applied, err := layers.GetApplied(msh.cdb, lid)
+	switch {
+	case errors.Is(err, sql.ErrNotFound):
+		return nil, nil
+	case err != nil:
+		return nil, fmt.Errorf("get applied %v: %w", lid, err)
+	case applied.IsEmpty():
+		return nil, nil
+	default:
+		return blocks.Get(msh.cdb, applied)
+	}
+}
+
 // ProcessedLayer returns the last processed layer ID.
 func (msh *Mesh) ProcessedLayer() types.LayerID {
 	return msh.processedLayer.Load().(types.LayerID)
@@ -620,9 +635,14 @@ func (msh *Mesh) GetATXs(
 	return atxs, mIds
 }
 
-// GetRewards retrieves account's rewards by the coinbase address.
-func (msh *Mesh) GetRewards(coinbase types.Address) ([]*types.Reward, error) {
-	return rewards.List(msh.cdb, coinbase)
+// GetRewardsByCoinbase retrieves account's rewards by the coinbase address.
+func (msh *Mesh) GetRewardsByCoinbase(coinbase types.Address) ([]*types.Reward, error) {
+	return rewards.ListByCoinbase(msh.cdb, coinbase)
+}
+
+// GetRewardsBySmesherId retrieves account's rewards by the smesher ID.
+func (msh *Mesh) GetRewardsBySmesherId(smesherID types.NodeID) ([]*types.Reward, error) {
+	return rewards.ListBySmesherId(msh.cdb, smesherID)
 }
 
 // LastVerified returns the latest layer verified by tortoise.

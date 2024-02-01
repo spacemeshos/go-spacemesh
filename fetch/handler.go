@@ -14,30 +14,23 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
-	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 type handler struct {
 	logger log.Log
 	cdb    *datastore.CachedDB
 	bs     *datastore.BlobStore
-	msh    meshProvider
-	beacon system.BeaconGetter
 }
 
 func newHandler(
 	cdb *datastore.CachedDB,
 	bs *datastore.BlobStore,
-	m meshProvider,
-	b system.BeaconGetter,
 	lg log.Log,
 ) *handler {
 	return &handler{
 		logger: lg,
 		cdb:    cdb,
 		bs:     bs,
-		msh:    m,
-		beacon: b,
 	}
 }
 
@@ -77,7 +70,8 @@ func (h *handler) handleEpochInfoReq(ctx context.Context, msg []byte) ([]byte, e
 	}
 	h.logger.WithContext(ctx).With().Debug("serve: responded to epoch info request",
 		epoch,
-		log.Int("atx_count", len(ed.AtxIDs)))
+		log.Int("atx_count", len(ed.AtxIDs)),
+	)
 	bts, err := codec.Encode(&ed)
 	if err != nil {
 		h.logger.WithContext(ctx).With().Fatal("serve: failed to serialize epoch atx", epoch, log.Err(err))

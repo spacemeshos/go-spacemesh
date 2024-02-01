@@ -2,6 +2,7 @@ package activation
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/spacemeshos/post/verifying"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
 
 //go:generate mockgen -typed -package=activation -destination=./mocks.go -source=./interface.go
@@ -21,6 +23,11 @@ type PostVerifier interface {
 	io.Closer
 	Verify(ctx context.Context, p *shared.Proof, m *shared.ProofMetadata, opts ...verifying.OptionFunc) error
 }
+
+type scaler interface {
+	scale(int)
+}
+
 type nipostValidator interface {
 	InitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, goldenATXID types.ATXID) error
 	NIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, nodeID types.NodeID) error
@@ -61,8 +68,9 @@ type layerClock interface {
 }
 
 type nipostBuilder interface {
-	BuildNIPost(ctx context.Context, challenge *types.NIPostChallenge) (*types.NIPost, error)
-	DataDir() string
+	BuildNIPost(ctx context.Context, challenge *types.NIPostChallenge) (*nipost.NIPostState, error)
+	Proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error)
+	ResetState() error
 }
 
 type syncer interface {
@@ -77,7 +85,7 @@ type atxProvider interface {
 // This interface is used by the atx builder and currently implemented by the PostSetupManager.
 // Eventually most of the functionality will be moved to the PoSTClient.
 type postSetupProvider interface {
-	PrepareInitializer(opts PostSetupOpts) error
+	PrepareInitializer(ctx context.Context, opts PostSetupOpts) error
 	StartSession(context context.Context) error
 	Status() *PostSetupStatus
 	Reset() error
@@ -110,9 +118,6 @@ type poetClient interface {
 		pow PoetPoW,
 	) (*types.PoetRound, error)
 
-	// PoetServiceID returns the public key of the PoET proving service.
-	PoetServiceID(context.Context) (types.PoetServiceID, error)
-
 	// Proof returns the proof for the given round ID.
 	Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Member, error)
 }
@@ -121,6 +126,11 @@ type poetDbAPI interface {
 	GetProof(types.PoetProofRef) (*types.PoetProof, *types.Hash32, error)
 	ValidateAndStore(ctx context.Context, proofMessage *types.PoetProofMessage) error
 }
+
+var (
+	ErrPostClientClosed       = fmt.Errorf("post client closed")
+	ErrPostClientNotConnected = fmt.Errorf("post service not registered")
+)
 
 type postService interface {
 	Client(nodeId types.NodeID) (PostClient, error)

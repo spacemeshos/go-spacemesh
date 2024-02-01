@@ -1,3 +1,4 @@
+--- should be overridden during startup with Go 0001 Migration to ensure data is migrated
 CREATE TABLE nipost
 (
     id            CHAR(32) PRIMARY KEY,

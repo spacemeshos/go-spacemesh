@@ -16,9 +16,6 @@ const (
 	// with it and they don't overwrite each other.
 	requestFieldsKey
 	sessionFieldsKey
-
-	// PeerIDKey is used to store the peer ID in the p2p stack.
-	PeerIDKey
 )
 
 // WithRequestID returns a context which knows its request ID.

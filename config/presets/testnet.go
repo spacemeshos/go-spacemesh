@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
+	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -71,8 +72,8 @@ func testnet() config.Config {
 			OptFilterThreshold: 90,
 
 			TickSize:            666514,
-			PoETServers:         []string{},
 			RegossipAtxInterval: time.Hour,
+			ATXGradeDelay:       30 * time.Minute,
 		},
 		Genesis: &config.GenesisConfig{
 			GenesisTime: "2023-09-13T18:00:00Z",
@@ -142,5 +143,11 @@ func testnet() config.Config {
 		},
 		Recovery: checkpoint.DefaultConfig(),
 		Cache:    datastore.DefaultConfig(),
+		Certificate: blocks.CertConfig{
+			// NOTE(dshulyak) this is intentional. we increased committee size with hare3 upgrade
+			// but certifier continues to use 200 committee size.
+			// this will be upgraded in future with scheduled upgrade.
+			CommitteeSize: 200,
+		},
 	}
 }

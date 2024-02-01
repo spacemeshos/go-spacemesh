@@ -25,21 +25,8 @@ import (
 )
 
 const (
-	// HarePreRound ...
-	HarePreRound uint32 = math.MaxUint32
 	// CertifyRound is not part of the hare protocol, but it shares the same oracle for eligibility.
 	CertifyRound uint32 = math.MaxUint32 >> 1
-)
-
-const (
-	// HareStatusRound ...
-	HareStatusRound uint32 = iota
-	// HareProposalRound ...
-	HareProposalRound
-	// HareCommitRound ...
-	HareCommitRound
-	// HareNotifyRound ...
-	HareNotifyRound
 )
 
 const (
@@ -160,11 +147,6 @@ func (o *Oracle) minerWeight(ctx context.Context, layer types.LayerID, id types.
 
 	w, ok := actives.set[id]
 	if !ok {
-		o.With().Debug("miner is not active in specified layer",
-			log.Int("active_set_size", len(actives.set)),
-			log.String("actives", fmt.Sprintf("%v", actives)),
-			layer, log.Stringer("id.Key", id),
-		)
 		return 0, fmt.Errorf("%w: %v", ErrNotActive, id)
 	}
 	return w, nil
@@ -275,7 +257,7 @@ func (o *Oracle) Validate(
 	defer func() {
 		if msg := recover(); msg != nil {
 			o.WithContext(ctx).With().Fatal("panic in validate",
-				log.String("msg", fmt.Sprint(msg)),
+				log.Any("msg", msg),
 				log.Int("n", n),
 				log.String("p", p.String()),
 				log.String("vrf_frac", vrfFrac.String()),
@@ -294,8 +276,8 @@ func (o *Oracle) Validate(
 		id,
 		log.Uint16("eligibility_count", eligibilityCount),
 		log.Int("n", n),
-		log.String("p", p.String()),
-		log.String("vrf_frac", vrfFrac.String()),
+		log.Float64("p", p.Float()),
+		log.Float64("vrf_frac", vrfFrac.Float()),
 		log.Int("x", x),
 	)
 	return false, nil
@@ -322,11 +304,11 @@ func (o *Oracle) CalcEligibility(
 				layer,
 				layer.GetEpoch(),
 				log.Uint32("round_id", round),
-				log.String("msg", fmt.Sprint(msg)),
+				log.Any("msg", msg),
 				log.Int("committee_size", committeeSize),
 				log.Int("n", n),
-				log.String("p", fmt.Sprintf("%g", p.Float())),
-				log.String("vrf_frac", fmt.Sprintf("%g", vrfFrac.Float())),
+				log.Float64("p", p.Float()),
+				log.Float64("vrf_frac", vrfFrac.Float()),
 			)
 		}
 	}()
@@ -337,8 +319,8 @@ func (o *Oracle) CalcEligibility(
 		log.Uint32("round_id", round),
 		log.Int("committee_size", committeeSize),
 		log.Int("n", n),
-		log.String("p", fmt.Sprintf("%g", p.Float())),
-		log.String("vrf_frac", fmt.Sprintf("%g", vrfFrac.Float())),
+		log.Float64("p", p.Float()),
+		log.Float64("vrf_frac", vrfFrac.Float()),
 	)
 
 	for x := 0; x < n; x++ {
