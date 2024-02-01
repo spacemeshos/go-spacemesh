@@ -6,6 +6,18 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ### Upgrade information
 
+#### Post service endpoint
+
+The post service now has its own endpoint separate from `grpc-private-listener`. The default for `grpc-post-listener`
+is `127.0.0.1:9094`. In contrast to `grpc-tls-listener` this endpoint does not require setting up mTLS.
+
+The post service cannot connect to `grpc-private-listener` anymore. If you are using a remote smeshing setup please
+adjust your configuration accordingly. If you are using a remote setup with mTLS over a private network you can switch
+to using `grpc-post-listener` to not require the overhead of mTLS. We however strongly recommend using an mTLS
+encrypted connection between the post service and the node over insecure connections (e.g. over the Internet).
+
+Smeshers using the default setup with a supervised post service do not need to make changes to their node configuration.
+
 #### New poets configuration
 
 Upgrading requires changes in config and in CLI flags (if not using the default).
@@ -78,8 +90,118 @@ configuration is as follows:
 
 ### Improvements
 
-* [#5394] Fix inefficient SQLite clustered indices
-  The database size is reduced and query performance is improved
+* [#5418](https://github.com/spacemeshos/go-spacemesh/pull/5418) Add `grpc-post-listener` to separate post service from
+  `grpc-private-listener` and not require mTLS for the post service.
+
+  If you are not using a remote post service you do not need to adjust anything. If you are using a remote setup
+  make sure your post service now connects to `grpc-post-listener` instead of `grpc-private-listener`. If you are
+  connecting to a remote post service over the internet we strongly recommend using mTLS via `grpc-tls-listener`.
+
+## Release v1.3.8
+
+### Features
+
+* [#5517](https://github.com/spacemeshos/go-spacemesh/pull/5517)
+  Added a flag `--smeshing-opts-verifying-disable` and a config parameter `smeshing-opts-verifying-disable`
+  meant for disabling verifying POST in incoming ATXs on private nodes.
+  The verification should be performed by the public node instead.
+
+### Improvements
+
+* [#5441](https://github.com/spacemeshos/go-spacemesh/pull/5441)
+  Fix possible nil-pointer dereference in blocks.Generator.
+
+* [#5512](https://github.com/spacemeshos/go-spacemesh/pull/5512)
+  Increase EpochActiveSet limit to 1.5M to prepare for 1M+ ATXs.
+
+* [#5515](https://github.com/spacemeshos/go-spacemesh/pull/5515)
+  Increase fetcher limit to 60MiB to prepare for 1M+ ATXs.
+
+* [#5518](https://github.com/spacemeshos/go-spacemesh/pull/5518) In rare cases the node could create a malfeasance
+  proof against itself. This is now prevented.
+
+## Release v1.3.7
+
+### Improvements
+
+* [#5502](https://github.com/spacemeshos/go-spacemesh/pull/5502)
+  Increase limits of p2p messages to compensate for the increased number of nodes on the network.
+
+## Release v1.3.6
+
+### Improvements
+
+* [#5479](https://github.com/spacemeshos/go-spacemesh/pull/5486)
+  p2p: make AutoNAT service limits configurable. This helps with AutoNAT dialback to determine
+  nodes' reachability status.
+
+* [#5490](https://github.com/spacemeshos/go-spacemesh/pull/5490)
+  The path in `smeshing-opts-datadir` used to be resolved relative to the location of the `service` binary when running
+  the node in supervised mode. This is no longer the case. The path is now resolved relative to the current working
+  directory.
+
+* [#5489](https://github.com/spacemeshos/go-spacemesh/pull/5489)
+  Fix problem in POST proving where too many files were opened at the same time.
+
+* [#5498](https://github.com/spacemeshos/go-spacemesh/pull/5498)
+  Reduce the default number of CPU cores that are used for verifying incoming ATXs to half of the available cores.
+
+* [#5462](https://github.com/spacemeshos/go-spacemesh/pull/5462) Add separate metric for failed p2p server requests
+
+* [#5464](https://github.com/spacemeshos/go-spacemesh/pull/5464) Make fetch request timeout configurable.
+
+* [#5463](https://github.com/spacemeshos/go-spacemesh/pull/5463)
+  Adjust deadline during long reads and writes, reducing "i/o deadline exceeded" errors.
+
+* [#5494](https://github.com/spacemeshos/go-spacemesh/pull/5494)
+  Make routing discovery more configurable and less spammy by default.
+
+## Release v1.3.5
+
+### Improvements
+
+* [#5470](https://github.com/spacemeshos/go-spacemesh/pull/5470)
+  Fixed a bug in event reporting where the node reports a disconnection from the PoST service as a "PoST failed" event.
+  Disconnections cannot be avoided completely and do not interrupt the PoST proofing process. As long as the PoST
+  service reconnects within a reasonable time, the node will continue to operate normally without reporting any errors
+  via the event API.
+
+  Users of a remote setup should make sure that the PoST service is actually running and can reach the node. Observe
+  the log of both apps for indications of a connection problem.
+
+## Release v1.3.4
+
+### Improvements
+
+* [#5467](https://github.com/spacemeshos/go-spacemesh/pull/5467)
+  Fix a bug that could cause ATX sync to stall because of exhausted limit of concurrent requests for dependencies.
+  Fetching dependencies of an ATX is not limited anymore.
+
+## Release v1.3.3
+
+### Improvements
+
+* [#5442](https://github.com/spacemeshos/go-spacemesh/pull/5442)
+  Limit concurrent requests for ATXs to reduce usage of memory and p2p streams.
+
+* [#5394](https://github.com/spacemeshos/go-spacemesh/pull/5394) Add rowid to tables with inefficient clustered indices.
+  This reduces database size and improves its performance.
+
+* [#5334](https://github.com/spacemeshos/go-spacemesh/pull/5334) Hotfix for API queries for activations.
+  Two API endpoints (`MeshService.{AccountMeshDataQuery,LayersQuery}`) were broken because they attempt to read
+  all activation data for an epoch. As the number of activations per epoch has grown, this brute force query (i.e.,
+  without appropriate database indices) became very expensive and could cause the node to hang and consume an enormous
+  amount of resources. This hotfix removes all activation data from these endpoints so that they still work for
+  querying other data. It also modifies `LayersQuery` to not return any _ineffective_ transactions in blocks, since
+  there's currently no way to distinguish between effective and ineffective transactions using the API.
+
+* [#5417](https://github.com/spacemeshos/go-spacemesh/pull/5417)
+  Prioritize verifying own ATX's PoST.
+
+* [#5423](https://github.com/spacemeshos/go-spacemesh/pull/5423)
+  Wait to be ATX-synced before selecting the commitment ATX for initialization.
+  Also, remove unnecessary wait for ATXs to be synced before beginning initialization if
+  the commitment ATX is already selected.
 
 ## Release v1.3.2
 
@@ -182,15 +304,6 @@ for more information on how to configure the node to work with the PoST service.
   query rewards by smesherID. Additionally, it does not re-index old data. Rewards will contain smesherID going forward,
   but to refresh data for all rewards, a node will have to delete its database and resync from genesis.
 
-
-* [#5334](https://github.com/spacemeshos/go-spacemesh/pull/5334) Hotfix for API queries for activations.
-  Two API endpoints (`MeshService.{AccountMeshDataQuery,LayersQuery}`) were broken because they attempt to read
-  all activation data for an epoch. As the number of activations per epoch has grown, this brute force query (i.e.,
-  without appropriate database indices) became very expensive and could cause the node to hang and consume an enormous
-  amount of resources. This hotfix removes all activation data from these endpoints so that they still work for
-  querying other data. It also modifies `LayersQuery` to not return any _ineffective_ transactions in blocks, since
-  there's currently no way to distinguish between effective and ineffective transactions using the API.
-
 * [#5329](https://github.com/spacemeshos/go-spacemesh/pull/5329) P2P decentralization improvements. Added support for QUIC
   transport and DHT routing discovery for finding peers and relays. Also, added the `ping-peers` feature which is useful
   during connectivity troubleshooting. `static-relays` feature can be used to provide a static list of circuit v2 relays
@@ -276,10 +389,9 @@ for more information on how to configure the node to work with the PoST service.
 ### Improvements
 
 * [#5263](https://github.com/spacemeshos/go-spacemesh/pull/5263) randomize peer selection
-  
   without this change node can get stuck after restart on requesting data from peer that is misbehaving.
   log below will be printed repeatedly:
-  
+
   > 2023-11-15T08:00:17.937+0100 INFO fd68b.sync syncing atx from genesis
 
 * [#5264](https://github.com/spacemeshos/go-spacemesh/pull/5264) increase limits related to activations

@@ -16,6 +16,7 @@ import (
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	fetch "github.com/spacemeshos/go-spacemesh/fetch"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
+	system "github.com/spacemeshos/go-spacemesh/system"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -224,17 +225,22 @@ func (m *MockfetchLogic) EXPECT() *MockfetchLogicMockRecorder {
 }
 
 // GetAtxs mocks base method.
-func (m *MockfetchLogic) GetAtxs(arg0 context.Context, arg1 []types.ATXID) error {
+func (m *MockfetchLogic) GetAtxs(arg0 context.Context, arg1 []types.ATXID, arg2 ...system.GetAtxOpt) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAtxs", arg0, arg1)
+	varargs := []any{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetAtxs", varargs...)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // GetAtxs indicates an expected call of GetAtxs.
-func (mr *MockfetchLogicMockRecorder) GetAtxs(arg0, arg1 any) *fetchLogicGetAtxsCall {
+func (mr *MockfetchLogicMockRecorder) GetAtxs(arg0, arg1 any, arg2 ...any) *fetchLogicGetAtxsCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAtxs", reflect.TypeOf((*MockfetchLogic)(nil).GetAtxs), arg0, arg1)
+	varargs := append([]any{arg0, arg1}, arg2...)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAtxs", reflect.TypeOf((*MockfetchLogic)(nil).GetAtxs), varargs...)
 	return &fetchLogicGetAtxsCall{Call: call}
 }
 
@@ -250,13 +256,13 @@ func (c *fetchLogicGetAtxsCall) Return(arg0 error) *fetchLogicGetAtxsCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *fetchLogicGetAtxsCall) Do(f func(context.Context, []types.ATXID) error) *fetchLogicGetAtxsCall {
+func (c *fetchLogicGetAtxsCall) Do(f func(context.Context, []types.ATXID, ...system.GetAtxOpt) error) *fetchLogicGetAtxsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *fetchLogicGetAtxsCall) DoAndReturn(f func(context.Context, []types.ATXID) error) *fetchLogicGetAtxsCall {
+func (c *fetchLogicGetAtxsCall) DoAndReturn(f func(context.Context, []types.ATXID, ...system.GetAtxOpt) error) *fetchLogicGetAtxsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -866,17 +872,22 @@ func (m *Mockfetcher) EXPECT() *MockfetcherMockRecorder {
 }
 
 // GetAtxs mocks base method.
-func (m *Mockfetcher) GetAtxs(arg0 context.Context, arg1 []types.ATXID) error {
+func (m *Mockfetcher) GetAtxs(arg0 context.Context, arg1 []types.ATXID, arg2 ...system.GetAtxOpt) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAtxs", arg0, arg1)
+	varargs := []any{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetAtxs", varargs...)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // GetAtxs indicates an expected call of GetAtxs.
-func (mr *MockfetcherMockRecorder) GetAtxs(arg0, arg1 any) *fetcherGetAtxsCall {
+func (mr *MockfetcherMockRecorder) GetAtxs(arg0, arg1 any, arg2 ...any) *fetcherGetAtxsCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAtxs", reflect.TypeOf((*Mockfetcher)(nil).GetAtxs), arg0, arg1)
+	varargs := append([]any{arg0, arg1}, arg2...)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAtxs", reflect.TypeOf((*Mockfetcher)(nil).GetAtxs), varargs...)
 	return &fetcherGetAtxsCall{Call: call}
 }
 
@@ -892,13 +903,13 @@ func (c *fetcherGetAtxsCall) Return(arg0 error) *fetcherGetAtxsCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *fetcherGetAtxsCall) Do(f func(context.Context, []types.ATXID) error) *fetcherGetAtxsCall {
+func (c *fetcherGetAtxsCall) Do(f func(context.Context, []types.ATXID, ...system.GetAtxOpt) error) *fetcherGetAtxsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *fetcherGetAtxsCall) DoAndReturn(f func(context.Context, []types.ATXID) error) *fetcherGetAtxsCall {
+func (c *fetcherGetAtxsCall) DoAndReturn(f func(context.Context, []types.ATXID, ...system.GetAtxOpt) error) *fetcherGetAtxsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

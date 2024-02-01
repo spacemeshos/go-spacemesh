@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
+	"sync/atomic"
 
 	"golang.org/x/sync/errgroup"
 
@@ -14,17 +14,28 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 var errBadRequest = errors.New("invalid request")
 
 // GetAtxs gets the data for given atx IDs and validates them. returns an error if at least one ATX cannot be fetched.
-func (f *Fetch) GetAtxs(ctx context.Context, ids []types.ATXID) error {
+func (f *Fetch) GetAtxs(ctx context.Context, ids []types.ATXID, opts ...system.GetAtxOpt) error {
 	if len(ids) == 0 {
 		return nil
 	}
-	f.logger.WithContext(ctx).With().Info("requesting atxs from peer", log.Int("num_atxs", len(ids)))
+
+	options := system.GetAtxOpts{}
+	for _, opt := range opts {
+		opt(&options)
+	}
+
+	f.logger.WithContext(ctx).With().
+		Debug("requesting atxs from peer", log.Int("num_atxs", len(ids)), log.Bool("limiting", !options.LimitingOff))
 	hashes := types.ATXIDsToHashes(ids)
+	if options.LimitingOff {
+		return f.getHashes(ctx, hashes, datastore.ATXDB, f.validators.atx.HandleMessage)
+	}
 	return f.getHashes(ctx, hashes, datastore.ATXDB, f.validators.atx.HandleMessage, withLimiter(f.getAtxsLimiter))
 }
 
@@ -56,8 +67,7 @@ func (f *Fetch) getHashes(
 	pendingMetric.Add(float64(len(hashes)))
 
 	var eg errgroup.Group
-	var errs error
-	var mu sync.Mutex
+	var failed atomic.Uint64
 	for i, hash := range hashes {
 		if err := options.limiter.Acquire(ctx, 1); err != nil {
 			pendingMetric.Add(float64(i - len(hashes)))
@@ -87,18 +97,23 @@ func (f *Fetch) getHashes(
 				options.limiter.Release(1)
 				pendingMetric.Add(-1)
 				if p.err != nil {
-					err := fmt.Errorf("hint: %v, hash: %v, err: %w", hint, h.String(), p.err)
-					mu.Lock()
-					errs = errors.Join(errs, err)
-					mu.Unlock()
+					f.logger.Debug("failed to get hash",
+						log.String("hint", string(hint)),
+						log.Stringer("hash", h),
+						log.Err(p.err),
+					)
+					failed.Add(1)
 				}
 				return nil
 			}
 		})
 	}
 
-	err := eg.Wait()
-	return errors.Join(errs, err)
+	eg.Wait()
+	if failed.Load() > 0 {
+		return fmt.Errorf("failed to fetch %d hashes out of %d", failed.Load(), len(hashes))
+	}
+	return nil
 }
 
 // GetActiveSet downloads activeset.
