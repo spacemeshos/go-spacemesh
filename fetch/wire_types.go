@@ -105,7 +105,8 @@ type MaliciousIDs struct {
 }
 
 type EpochData struct {
-	// when we change scale max, we also need to adjust `EpochActiveSet` in common/types/activation.go
+	// to be in line with `EpochActiveSet` in common/types/activation.go
+	// and DefaultConfig in datastore/store.go
 	AtxIDs []types.ATXID `scale:"max=1500000"`
 }
 
