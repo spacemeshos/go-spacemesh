@@ -10,6 +10,8 @@ import (
 	"github.com/spacemeshos/post/config"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -227,4 +229,23 @@ func TestSmesherService_PostSetupStatus(t *testing.T) {
 		require.EqualValues(t, 100, *resp.Status.Opts.ProviderId)
 		require.False(t, resp.Status.Opts.Throttle)
 	})
+}
+
+func TestSmesherService_SmesherID(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
+	postSupervisor := grpcserver.NewMockpostSupervisor(ctrl)
+	svc := grpcserver.NewSmesherService(
+		smeshingProvider,
+		postSupervisor,
+		time.Second,
+		activation.DefaultPostSetupOpts(),
+	)
+
+	resp, err := svc.SmesherID(context.Background(), &emptypb.Empty{})
+	require.Error(t, err)
+	require.Nil(t, resp)
+	statusErr, ok := status.FromError(err)
+	require.True(t, ok)
+	require.Equal(t, codes.Unimplemented, statusErr.Code())
 }

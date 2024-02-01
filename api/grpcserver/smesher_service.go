@@ -140,7 +140,7 @@ func (s SmesherService) StopSmeshing(
 
 // SmesherID returns the smesher ID of this node.
 func (s SmesherService) SmesherID(context.Context, *emptypb.Empty) (*pb.SmesherIDResponse, error) {
-	return &pb.SmesherIDResponse{PublicKey: types.EmptyNodeID.Bytes()}, nil
+	return nil, status.Errorf(codes.Unimplemented, "this endpoint has been deprecated, use `SmesherIDs` instead")
 }
 
 func (s SmesherService) SmesherIDs(context.Context, *emptypb.Empty) (*pb.SmesherIDsResponse, error) {
