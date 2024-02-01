@@ -797,26 +797,19 @@ func deployNode(ctx *testcontext.Context, id string, labels map[string]string, f
 	return nil
 }
 
-func deployPostService(
-	ctx *testcontext.Context,
-	id string,
-	labels map[string]string,
-	nodeId string,
-	pubKey string,
-	goldenAtxId string,
-) error {
-	ctx.Log.Debugw("deploying post service", "id", id)
-
+func loadSmesherConfig(ctx *testcontext.Context) (*config.Config, error) {
+	// TODO(poszu): this is mostly a copy of the code in cmd/node.go
+	// refactor the code below to reuse it after https://github.com/spacemeshos/go-spacemesh/pull/5485 lands.
 	vip := viper.New()
 	vip.SetConfigType("json")
 	if err := vip.ReadConfig(strings.NewReader(smesherConfig.Get(ctx.Parameters))); err != nil {
-		return fmt.Errorf("load config: %w", err)
+		return nil, fmt.Errorf("reading config: %w", err)
 	}
 	conf := config.MainnetConfig()
 	if name := vip.GetString("preset"); len(name) > 0 {
 		preset, err := presets.Get(name)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		conf = preset
 	}
@@ -836,9 +829,24 @@ func deployPostService(
 		node.WithIgnoreUntagged(),
 	}
 	if err := vip.Unmarshal(&conf, opts...); err != nil {
-		return fmt.Errorf("unmarshal config: %w", err)
+		return nil, fmt.Errorf("unmarshaling config: %w", err)
 	}
+	return &conf, nil
+}
 
+func deployPostService(
+	ctx *testcontext.Context,
+	id string,
+	labels map[string]string,
+	nodeId string,
+	pubKey string,
+	goldenAtxId string,
+) error {
+	ctx.Log.Debugw("deploying post service", "id", id)
+	conf, err := loadSmesherConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("loading smesher config: %w", err)
+	}
 	args := []string{
 		"--dir", "/data",
 		"--address", fmt.Sprintf("http://%s:%d", nodeId, 9094),
@@ -904,7 +912,7 @@ func deployPostService(
 				),
 			),
 		)
-	_, err := ctx.Client.AppsV1().
+	_, err = ctx.Client.AppsV1().
 		Deployments(ctx.Namespace).
 		Apply(ctx, deployment, apimetav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {

@@ -20,6 +20,7 @@ import (
 	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/systest/parameters"
@@ -906,4 +907,18 @@ func fillNetworkConfig(ctx *testcontext.Context, node *NodeClient) error {
 	ctx.Log.Debugw("updated param layers per epoch", "layers", testcontext.LayersPerEpoch.Get(ctx.Parameters))
 	ctx.Log.Debugw("updated param layer duration", "duration", testcontext.LayerDuration.Get(ctx.Parameters))
 	return nil
+}
+
+func (c *Cluster) NodeConfig(ctx *testcontext.Context) (*config.Config, error) {
+	cfg, err := loadSmesherConfig(ctx)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Genesis = &config.GenesisConfig{
+		GenesisTime: c.Genesis().Format(time.RFC3339),
+		ExtraData:   c.GenesisExtraData(),
+	}
+	cfg.LayersPerEpoch = uint32(testcontext.LayersPerEpoch.Get(ctx.Parameters))
+	cfg.LayerDuration = testcontext.LayerDuration.Get(ctx.Parameters)
+	return cfg, nil
 }

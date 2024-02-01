@@ -25,8 +25,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/config"
-	"github.com/spacemeshos/go-spacemesh/config/presets"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -64,19 +62,13 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	require.NoError(t, cl.AddSmeshers(ctx, ctx.ClusterSize-cl.Total(), cluster.WithFlags(cluster.PostK3(1))))
 
 	// Prepare config
-	cfg, err := presets.Get("fastnet")
+	cfg, err := cl.NodeConfig(ctx)
 	require.NoError(t, err)
-	cfg.Genesis = &config.GenesisConfig{
-		GenesisTime: cl.Genesis().Format(time.RFC3339),
-		ExtraData:   cl.GenesisExtraData(),
-	}
-	cfg.LayersPerEpoch = uint32(testcontext.LayersPerEpoch.Get(ctx.Parameters))
-	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
-	cfg.LayerDuration = testcontext.LayerDuration.Get(ctx.Parameters)
 
+	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 	cfg.DataDirParent = testDir
 	cfg.SMESHING.Opts.DataDir = filepath.Join(testDir, "post-data")
-	cfg.P2P.DataDir = filepath.Join(testDir, "post-data")
+	cfg.P2P.DataDir = filepath.Join(testDir, "p2p-dir")
 	require.NoError(t, os.Mkdir(cfg.P2P.DataDir, os.ModePerm))
 
 	cfg.PoetServers = []types.PoetServer{
