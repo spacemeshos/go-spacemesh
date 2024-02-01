@@ -54,14 +54,3 @@ func (s *StringToUint64Value) String() string {
 	}
 	return buf.String()[:buf.Len()-1]
 }
-
-// CastStringToMapStringUint64 casts string with comma separated values to map[string]uint64.
-// Nil is returned if value fails format validation (consistnt with viper behavior).
-func CastStringToMapStringUint64(value string) map[string]uint64 {
-	val := map[string]uint64{}
-	parser := NewStringToUint64Value(&val)
-	if err := parser.Set(value); err != nil {
-		return nil
-	}
-	return val
-}
