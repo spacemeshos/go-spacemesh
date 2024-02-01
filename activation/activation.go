@@ -11,6 +11,7 @@ import (
 
 	"github.com/spacemeshos/post/shared"
 	"go.uber.org/zap"
+	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
@@ -66,30 +67,28 @@ type Config struct {
 // it is responsible for initializing post, receiving poet proof and orchestrating nipst. after which it will
 // calculate total weight and providing relevant view as proof.
 type Builder struct {
-	eg errgroup.Group
-
-	accountLock      sync.RWMutex
-	coinbaseAccount  types.Address
-	goldenATXID      types.ATXID
-	regossipInterval time.Duration
-	cdb              *datastore.CachedDB
-	localDB          *localsql.Database
-	publisher        pubsub.Publisher
-	nipostBuilder    nipostBuilder
-	validator        nipostValidator
-
-	// smeshingMutex protects `StartSmeshing` and `StopSmeshing` from concurrent access
-	// as well as the fields below.
-	smeshingMutex sync.Mutex
-	signers       map[types.NodeID]*signing.EdSigner
-
+	accountLock       sync.RWMutex
+	coinbaseAccount   types.Address
+	goldenATXID       types.ATXID
+	regossipInterval  time.Duration
+	cdb               *datastore.CachedDB
+	localDB           *localsql.Database
+	publisher         pubsub.Publisher
+	nipostBuilder     nipostBuilder
+	validator         nipostValidator
 	layerClock        layerClock
 	syncer            syncer
 	log               *zap.Logger
 	parentCtx         context.Context
-	stop              context.CancelFunc
 	poetCfg           PoetConfig
 	poetRetryInterval time.Duration
+
+	// smeshingMutex protects methods like `StartSmeshing` and `StopSmeshing` from concurrent execution
+	// since they (can) modify the fields below.
+	smeshingMutex sync.Mutex
+	signers       map[types.NodeID]*signing.EdSigner
+	eg            errgroup.Group
+	stop          context.CancelFunc
 }
 
 // BuilderOption ...
@@ -237,6 +236,7 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 
 	b.stop()
 	err := b.eg.Wait()
+	b.eg = errgroup.Group{}
 	b.stop = nil
 	switch {
 	case err == nil || errors.Is(err, context.Canceled):
@@ -265,11 +265,9 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 
 // SmesherID returns the ID of the smesher that created this activation.
 func (b *Builder) SmesherIDs() []types.NodeID {
-	res := make([]types.NodeID, 0, len(b.signers))
-	for _, sig := range b.signers {
-		res = append(res, sig.NodeID())
-	}
-	return res
+	b.smeshingMutex.Lock()
+	defer b.smeshingMutex.Unlock()
+	return maps.Keys(b.signers)
 }
 
 func (b *Builder) buildInitialPost(ctx context.Context, nodeId types.NodeID) error {
