@@ -42,7 +42,7 @@ func fastnet() config.Config {
 
 	conf.P2P.MinPeers = 10
 
-	conf.Genesis = &config.GenesisConfig{
+	conf.Genesis = config.GenesisConfig{
 		ExtraData: "fastnet",
 		Accounts:  map[string]uint64{},
 	}
@@ -78,7 +78,7 @@ func fastnet() config.Config {
 	conf.SMESHING.ProvingOpts.RandomXMode = activation.PostRandomXModeLight
 
 	conf.Beacon.Kappa = 40
-	conf.Beacon.Theta = big.NewRat(1, 4)
+	conf.Beacon.Theta = *big.NewRat(1, 4)
 	conf.Beacon.FirstVotingRoundDuration = 10 * time.Second
 	conf.Beacon.GracePeriodDuration = 30 * time.Second
 	conf.Beacon.ProposalDuration = 2 * time.Second
