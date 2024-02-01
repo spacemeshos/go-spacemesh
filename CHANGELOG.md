@@ -86,6 +86,14 @@ configuration is as follows:
   The node will automatically migrate the data from disk and store it in the database. The migration will take place at the
   first startup after the upgrade.
 
+* [#5390](https://github.com/spacemeshos/go-spacemesh/pull/5390)
+  Distributed PoST verification.
+
+  The nodes on the network can now choose to verify
+  only a subset of labels in PoST proofs by choosing a K3 value lower than K2.
+  If a node finds a proof invalid, it will report it to the network by
+  creating a malfeasance proof. The malicious node will then be blacklisted by the network.
+
 ### Features
 
 * [#5517](https://github.com/spacemeshos/go-spacemesh/pull/5517)
@@ -334,7 +342,7 @@ for more information on how to configure the node to work with the PoST service.
 
 ### Improvements
 
-* further increased cache sizes and and p2p timeouts to compensate for the increased number of nodes on the network.
+* further increased cache sizes and p2p timeouts to compensate for the increased number of nodes on the network.
 
 * [#5329](https://github.com/spacemeshos/go-spacemesh/pull/5329) P2P decentralization improvements. Added support for QUIC
   transport and DHT routing discovery for finding peers and relays. Also, added the `ping-peers` feature which is useful
