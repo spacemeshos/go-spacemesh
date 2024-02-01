@@ -376,7 +376,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 		}
 		return result, nil
 	}
-	badsrv := server.New(badPeerHost, hashProtocol, badPeerHandler)
+	badsrv := server.New(badPeerHost, hashProtocol, server.WrapHandler(badPeerHandler))
 	var eg errgroup.Group
 	eg.Go(func() error {
 		badsrv.Run(ctx)

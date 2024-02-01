@@ -67,44 +67,57 @@ func GetMalfeasanceProof(db sql.Executor, nodeID types.NodeID) (*types.Malfeasan
 	return &proof, nil
 }
 
-// GetMalfeasanceBlob returns the malfeasance proof in raw bytes for the given identity.
-func GetMalfeasanceBlob(db sql.Executor, nodeID []byte) ([]byte, error) {
-	var (
-		proof []byte
-		err   error
-	)
-	rows, err := db.Exec("select proof from identities where pubkey = ?1;",
-		func(stmt *sql.Statement) {
-			stmt.BindBytes(1, nodeID)
-		}, func(stmt *sql.Statement) bool {
-			proof = make([]byte, stmt.ColumnLen(0))
-			stmt.ColumnBytes(0, proof[:])
-			return true
-		})
-	if err != nil {
-		return nil, fmt.Errorf("proof blob %v: %w", nodeID, err)
-	}
-	if rows == 0 {
-		return nil, sql.ErrNotFound
-	}
-	return proof, nil
+// GetBlobSizes returns the sizes of the blobs corresponding to malfeasance proofs for the
+// specified identities. For non-existent proofs, the corresponding items are set to -1.
+func GetBlobSizes(db sql.Executor, ids [][]byte) (sizes []int, err error) {
+	return sql.GetBlobSizes(db, "select pubkey, length(proof) from identities where pubkey in", ids)
 }
 
-func GetMalicious(db sql.Executor) ([]types.NodeID, error) {
-	var (
-		result []types.NodeID
-		err    error
-	)
-	_, err = db.Exec("select pubkey from identities where proof is not null;",
-		nil,
-		func(stmt *sql.Statement) bool {
-			var nid types.NodeID
-			stmt.ColumnBytes(0, nid[:])
-			result = append(result, nid)
-			return true
-		})
-	if err != nil {
-		return nil, fmt.Errorf("get malicious identities: %w", err)
+// LoadMalfeasanceBlob returns the malfeasance proof in raw bytes for the given identity.
+func LoadMalfeasanceBlob(db sql.Executor, nodeID []byte, blob *sql.Blob) error {
+	return sql.LoadBlob(db, "select proof from identities where pubkey = ?1;", nodeID, blob)
+}
+
+// IterateMalicious invokes the specified callback for each malicious node ID.
+// It stops if the callback returns an error.
+func IterateMalicious(
+	db sql.Executor,
+	callback func(total int, id types.NodeID) error,
+) error {
+	var callbackErr error
+	dec := func(stmt *sql.Statement) bool {
+		var nid types.NodeID
+		total := stmt.ColumnInt(0)
+		stmt.ColumnBytes(1, nid[:])
+		if callbackErr = callback(total, nid); callbackErr != nil {
+			return false
+		}
+		return true
 	}
-	return result, nil
+
+	// Get total count in the same select statement to avoid the need for transaction
+	if _, err := db.Exec(
+		"select (select count(*) from identities where proof is not null) as total, "+
+			"pubkey from identities where proof is not null", nil, dec); err != nil {
+		return fmt.Errorf("get malicious identities: %w", err)
+	}
+
+	return callbackErr
+}
+
+// GetMalicious retrives malicious node IDs from the database.
+func GetMalicious(db sql.Executor) (nids []types.NodeID, err error) {
+	if err = IterateMalicious(db, func(total int, nid types.NodeID) error {
+		if nids == nil {
+			nids = make([]types.NodeID, 0, total)
+		}
+		nids = append(nids, nid)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	if len(nids) != cap(nids) {
+		panic("BUG: bad malicious node ID count")
+	}
+	return nids, nil
 }

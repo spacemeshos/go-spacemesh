@@ -3,11 +3,13 @@ package fetch
 import (
 	"context"
 	"errors"
+	"io"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
@@ -54,6 +56,19 @@ func (h *handler) handleMaliciousIDsReq(ctx context.Context, _ []byte) ([]byte, 
 	return data, nil
 }
 
+func (h *handler) handleMaliciousIDsReqStream(ctx context.Context, msg []byte, s io.ReadWriter) error {
+	if err := h.streamIDs(ctx, s, func(cbk retrieveCallback) error {
+		return identities.IterateMalicious(h.cdb, func(total int, id types.NodeID) error {
+			return cbk(total, id[:])
+		})
+	}); err != nil {
+		h.logger.WithContext(ctx).With().
+			Warning("serve: failed to stream malicious node IDs", log.Err(err))
+	}
+
+	return nil
+}
+
 // handleEpochInfoReq returns the ATXs published in the specified epoch.
 func (h *handler) handleEpochInfoReq(ctx context.Context, msg []byte) ([]byte, error) {
 	var epoch types.EpochID
@@ -77,6 +92,77 @@ func (h *handler) handleEpochInfoReq(ctx context.Context, msg []byte) ([]byte, e
 		h.logger.WithContext(ctx).With().Fatal("serve: failed to serialize epoch atx", epoch, log.Err(err))
 	}
 	return bts, nil
+}
+
+// handleEpochInfoReq streams the ATXs published in the specified epoch.
+func (h *handler) handleEpochInfoReqStream(ctx context.Context, msg []byte, s io.ReadWriter) error {
+	var epoch types.EpochID
+	if err := codec.Decode(msg, &epoch); err != nil {
+		return err
+	}
+	if err := h.streamIDs(ctx, s, func(cbk retrieveCallback) error {
+		return atxs.IterateIDsByEpoch(h.cdb, epoch, func(total int, id types.ATXID) error {
+			return cbk(total, id[:])
+		})
+	}); err != nil {
+		h.logger.WithContext(ctx).With().
+			Warning("serve: failed to stream epoch atx IDs", epoch, log.Err(err))
+	}
+
+	return nil
+}
+
+type (
+	retrieveCallback func(total int, id []byte) error
+	retrieveFunc     func(retrieveCallback) error
+)
+
+func (h *handler) streamIDs(ctx context.Context, s io.ReadWriter, retrieve retrieveFunc) error {
+	started := false
+	if err := retrieve(func(total int, id []byte) error {
+		if !started {
+			started = true
+			respSize := codec.LenSize(uint32(total)) + uint32(total*len(id))
+			if _, err := codec.EncodeLen(s, respSize); err != nil {
+				return err
+			}
+			if _, err := codec.EncodeLen(s, uint32(total)); err != nil {
+				return err
+			}
+		}
+		if _, err := s.Write(id[:]); err != nil {
+			return err
+		}
+		return nil
+	},
+	); err != nil {
+		if !started {
+			if wrErr := server.WriteErrorResponse(s, err); wrErr != nil {
+				h.logger.WithContext(ctx).With().
+					Warning("serve: failed to write error response", log.Err(wrErr))
+			}
+		}
+		return err
+	}
+
+	// If any IDs were sent:
+	// Response.Data already sent
+	// Response.Error has length 0
+	lens := []uint32{0}
+	if !started {
+		// If no ATX IDs were sent:
+		// Response.Data is just a single zero byte (length 0),
+		// but the length of Response.Data is 1 so we must send it
+		// Response.Error has length 0
+		lens = []uint32{1, 0, 0}
+	}
+	for _, l := range lens {
+		if _, err := codec.EncodeLen(s, l); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // handleLayerDataReq returns all data in a layer, described in LayerData.
@@ -174,29 +260,36 @@ func (h *handler) handleHashReq(ctx context.Context, data []byte) ([]byte, error
 	// be included in the response at all
 	for _, r := range requestBatch.Requests {
 		totalHashReqs.WithLabelValues(string(r.Hint)).Add(1)
-		res, err := h.bs.Get(r.Hint, r.Hash.Bytes())
-		if err != nil {
+		var blob sql.Blob
+		if err := h.bs.LoadBlob(r.Hint, r.Hash.Bytes(), &blob); err != nil {
+			if !errors.Is(err, sql.ErrNotFound) {
+				h.logger.WithContext(ctx).With().Debug("serve: database error",
+					log.String("hash", r.Hash.ShortString()),
+					log.String("hint", string(r.Hint)),
+					log.Err(err))
+				return nil, err
+			}
 			h.logger.WithContext(ctx).With().Debug("serve: remote peer requested nonexistent hash",
 				log.String("hash", r.Hash.ShortString()),
 				log.String("hint", string(r.Hint)),
 				log.Err(err))
 			hashMissing.WithLabelValues(string(r.Hint)).Add(1)
 			continue
-		} else if res == nil {
+		} else if len(blob.Bytes) == 0 {
 			h.logger.WithContext(ctx).With().Debug("serve: remote peer requested golden",
 				log.String("hash", r.Hash.ShortString()),
-				log.Int("dataSize", len(res)))
+				log.Int("dataSize", len(blob.Bytes)))
 			hashEmptyData.WithLabelValues(string(r.Hint)).Add(1)
 			continue
 		} else {
 			h.logger.WithContext(ctx).With().Debug("serve: responded to hash request",
 				log.String("hash", r.Hash.ShortString()),
-				log.Int("dataSize", len(res)))
+				log.Int("dataSize", len(blob.Bytes)))
 		}
 		// add response to batch
 		m := ResponseMessage{
 			Hash: r.Hash,
-			Data: res,
+			Data: blob.Bytes,
 		}
 		resBatch.Responses = append(resBatch.Responses, m)
 	}
@@ -206,12 +299,87 @@ func (h *handler) handleHashReq(ctx context.Context, data []byte) ([]byte, error
 		h.logger.WithContext(ctx).With().Fatal("serve: failed to encode batch id",
 			log.Err(err),
 			log.String("batch_hash", resBatch.ID.ShortString()))
+		return nil, err
 	}
 	h.logger.WithContext(ctx).With().Debug("serve: returning response for batch",
 		log.String("batch_hash", resBatch.ID.ShortString()),
 		log.Int("count_responses", len(resBatch.Responses)),
 		log.Int("data_size", len(bts)))
 	return bts, nil
+}
+
+func (h *handler) handleHashReqStream(ctx context.Context, msg []byte, s io.ReadWriter) error {
+	var requestBatch RequestBatch
+	if err := codec.Decode(msg, &requestBatch); err != nil {
+		h.logger.WithContext(ctx).With().Warning("serve: failed to parse request", log.Err(err))
+		return errBadRequest
+	}
+
+	idsByHint := make(map[datastore.Hint][][]byte)
+	for _, r := range requestBatch.Requests {
+		idsByHint[r.Hint] = append(idsByHint[r.Hint], r.Hash.Bytes())
+	}
+
+	totalSize := uint32(types.Hash32Length)
+	var count uint32
+	for hint, ids := range idsByHint {
+		goodIDs := make([][]byte, 0, len(ids))
+		sizes, err := h.bs.GetBlobSizes(hint, ids)
+		if err != nil {
+			// At this point, nothing has been written yet, so we can report
+			// and error
+			if err := server.WriteErrorResponse(s, err); err != nil {
+				return err
+			}
+			return nil
+		}
+		for n, size := range sizes {
+			if size > 0 {
+				goodIDs = append(goodIDs, ids[n])
+				count++
+				totalSize += types.Hash32Length + codec.LenSize(uint32(size)) + uint32(size)
+			}
+		}
+		idsByHint[hint] = goodIDs
+	}
+
+	totalSize += codec.LenSize(count)
+
+	if _, err := codec.EncodeLen(s, totalSize); err != nil {
+		return err
+	}
+
+	if _, err := codec.EncodeTo(s, &requestBatch.ID); err != nil {
+		return err
+	}
+
+	if _, err := codec.EncodeLen(s, count); err != nil {
+		return err
+	}
+
+	var blob sql.Blob
+	for hint, ids := range idsByHint {
+		for _, id := range ids {
+			if err := h.bs.LoadBlob(hint, id, &blob); err != nil {
+				return err
+			}
+			if _, err := s.Write(id); err != nil {
+				return err
+			}
+			if _, err := codec.EncodeLen(s, uint32(len(blob.Bytes))); err != nil {
+				return err
+			}
+			if _, err := s.Write(blob.Bytes); err != nil {
+				return err
+			}
+		}
+	}
+
+	if _, err := codec.EncodeLen(s, 0); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (h *handler) handleMeshHashReq(ctx context.Context, reqData []byte) ([]byte, error) {
@@ -245,4 +413,28 @@ func (h *handler) handleMeshHashReq(ctx context.Context, reqData []byte) ([]byte
 		log.Int("count_hashes", len(hashes)),
 	)
 	return data, nil
+}
+
+func (h *handler) handleMeshHashReqStream(ctx context.Context, reqData []byte, s io.ReadWriter) error {
+	var req MeshHashRequest
+	if err := codec.Decode(reqData, &req); err != nil {
+		h.logger.WithContext(ctx).With().Warning("serve: failed to parse mesh hash request", log.Err(err))
+		return errBadRequest
+	}
+	if err := req.Validate(); err != nil {
+		h.logger.WithContext(ctx).With().Debug("failed to validate mesh hash request", log.Err(err))
+		return err
+	}
+
+	if err := h.streamIDs(ctx, s, func(cbk retrieveCallback) error {
+		return layers.IterateAggHashes(
+			h.cdb, req.From, req.To, req.Step, func(total int, id types.Hash32) error {
+				return cbk(total, id[:])
+			})
+	}); err != nil {
+		h.logger.WithContext(ctx).With().
+			Warning("serve: failed to stream mesh hashes", log.Err(err))
+	}
+
+	return nil
 }

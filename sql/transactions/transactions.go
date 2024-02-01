@@ -207,21 +207,16 @@ func Get(db sql.Executor, id types.TransactionID) (tx *types.MeshTransaction, er
 	return tx, nil
 }
 
-// GetBlob loads transaction as an encoded blob, ready to be sent over the wire.
-func GetBlob(db sql.Executor, id []byte) (buf []byte, err error) {
-	if rows, err := db.Exec("select tx from transactions where id = ?1",
-		func(stmt *sql.Statement) {
-			stmt.BindBytes(1, id)
-		}, func(stmt *sql.Statement) bool {
-			buf = make([]byte, stmt.ColumnLen(0))
-			stmt.ColumnBytes(0, buf)
-			return true
-		}); err != nil {
-		return nil, fmt.Errorf("get blob %s: %w", types.BytesToHash(id), err)
-	} else if rows == 0 {
-		return nil, fmt.Errorf("%w: tx %s", sql.ErrNotFound, types.BytesToHash(id))
-	}
-	return buf, nil
+// GetBlobSizes returns the sizes of the blobs corresponding to the transactions
+// with specified ids. For non-existent transactions, the corresponding items
+// are set to -1.
+func GetBlobSizes(db sql.Executor, ids [][]byte) (sizes []int, err error) {
+	return sql.GetBlobSizes(db, "select id, length(tx) from transactions where id in", ids)
+}
+
+// LoadBlob loads transaction as an encoded blob, ready to be sent over the wire.
+func LoadBlob(db sql.Executor, id []byte, blob *sql.Blob) error {
+	return sql.LoadBlob(db, "select tx from transactions where id = ?1", id, blob)
 }
 
 // Has returns true if transaction is stored in the database.

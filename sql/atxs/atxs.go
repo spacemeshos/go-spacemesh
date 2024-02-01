@@ -209,24 +209,52 @@ func GetIDByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.No
 	return id, err
 }
 
-// GetIDsByEpoch gets ATX IDs for a given epoch.
-func GetIDsByEpoch(db sql.Executor, epoch types.EpochID) (ids []types.ATXID, err error) {
+// IterateIDsByEpoch invokes the specified callback for each ATX ID in a given epoch.
+// It stops if the callback returns an error.
+func IterateIDsByEpoch(
+	db sql.Executor,
+	epoch types.EpochID,
+	callback func(total int, id types.ATXID) error,
+) error {
+	var callbackErr error
 	enc := func(stmt *sql.Statement) {
 		stmt.BindInt64(1, int64(epoch))
 	}
 	dec := func(stmt *sql.Statement) bool {
 		var id types.ATXID
-		stmt.ColumnBytes(0, id[:])
-		ids = append(ids, id)
+		total := stmt.ColumnInt(0)
+		stmt.ColumnBytes(1, id[:])
+		if callbackErr = callback(total, id); callbackErr != nil {
+			return false
+		}
 		return true
 	}
 
-	if rows, err := db.Exec("select id from atxs where epoch = ?1;", enc, dec); err != nil {
-		return nil, fmt.Errorf("exec epoch %v: %w", epoch, err)
-	} else if rows == 0 {
-		return []types.ATXID{}, nil
+	// Get total count in the same select statement to avoid the need for transaction
+	if _, err := db.Exec(
+		"select (select count(*) from atxs where epoch = ?1) as total, id from atxs where epoch = ?1;",
+		enc, dec,
+	); err != nil {
+		return fmt.Errorf("exec epoch %v: %w", epoch, err)
 	}
 
+	return callbackErr
+}
+
+// GetIDsByEpoch gets ATX IDs for a given epoch.
+func GetIDsByEpoch(db sql.Executor, epoch types.EpochID) (ids []types.ATXID, err error) {
+	if err := IterateIDsByEpoch(db, epoch, func(total int, id types.ATXID) error {
+		if ids == nil {
+			ids = make([]types.ATXID, 0, total)
+		}
+		ids = append(ids, id)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	if len(ids) != cap(ids) {
+		panic("BUG: bad ATX ID count")
+	}
 	return ids, nil
 }
 
@@ -254,23 +282,15 @@ func VRFNonce(db sql.Executor, id types.NodeID, epoch types.EpochID) (nonce type
 	return nonce, err
 }
 
-// GetBlob loads ATX as an encoded blob, ready to be sent over the wire.
-func GetBlob(db sql.Executor, id []byte) (buf []byte, err error) {
-	if rows, err := db.Exec("select atx from atxs where id = ?1",
-		func(stmt *sql.Statement) {
-			stmt.BindBytes(1, id)
-		}, func(stmt *sql.Statement) bool {
-			if stmt.ColumnLen(0) > 0 {
-				buf = make([]byte, stmt.ColumnLen(0))
-				stmt.ColumnBytes(0, buf)
-			}
-			return true
-		}); err != nil {
-		return nil, fmt.Errorf("get %s: %w", types.BytesToHash(id), err)
-	} else if rows == 0 {
-		return nil, fmt.Errorf("%w: atx %s", sql.ErrNotFound, types.BytesToHash(id))
-	}
-	return buf, nil
+// GetBlobSizes returns the sizes of the blobs corresponding to ATXs with specified
+// ids. For non-existent ATXs, the corresponding items are set to -1.
+func GetBlobSizes(db sql.Executor, ids [][]byte) (sizes []int, err error) {
+	return sql.GetBlobSizes(db, "select id, length(atx) from atxs where id in", ids)
+}
+
+// LoadBlob loads ATX as an encoded blob, ready to be sent over the wire.
+func LoadBlob(db sql.Executor, id []byte, blob *sql.Blob) error {
+	return sql.LoadBlob(db, "select atx from atxs where id = ?1", id, blob)
 }
 
 // Add adds an ATX for a given ATX ID.

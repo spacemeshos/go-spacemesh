@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"sync/atomic"
 
 	"golang.org/x/sync/errgroup"
@@ -14,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -97,7 +99,7 @@ func (f *Fetch) getHashes(
 				options.limiter.Release(1)
 				pendingMetric.Add(-1)
 				if p.err != nil {
-					f.logger.Debug("failed to get hash",
+					f.logger.With().Debug("failed to get hash",
 						log.String("hint", string(hint)),
 						log.Stringer("hash", h),
 						log.Err(p.err),
@@ -217,7 +219,26 @@ func (f *Fetch) GetPoetProof(ctx context.Context, id types.Hash32) error {
 }
 
 func (f *Fetch) GetMaliciousIDs(ctx context.Context, peer p2p.Peer) ([]byte, error) {
-	return f.servers[malProtocol].Request(ctx, peer, []byte{})
+	if f.cfg.Streaming {
+		var b []byte
+		if err := f.servers[malProtocol].StreamRequest(
+			ctx, peer, []byte{},
+			func(ctx context.Context, s io.ReadWriter) error {
+				return server.ReadResponse(s, func(respLen uint32) (n int, err error) {
+					b = make([]byte, respLen)
+					if _, err := io.ReadFull(s, b); err != nil {
+						return 0, err
+					}
+					return int(respLen), nil
+				})
+			},
+		); err != nil {
+			return nil, err
+		}
+		return b, nil
+	} else {
+		return f.servers[malProtocol].Request(ctx, peer, []byte{})
+	}
 }
 
 // GetLayerData get layer data from peers.
@@ -240,6 +261,21 @@ func (f *Fetch) GetLayerOpinions(ctx context.Context, peer p2p.Peer, lid types.L
 	return f.servers[OpnProtocol].Request(ctx, peer, reqData)
 }
 
+func (f *Fetch) peerEpochInfoStreamed(ctx context.Context, peer p2p.Peer, epochBytes []byte) (*EpochData, error) {
+	var ed EpochData
+	if err := f.servers[atxProtocol].StreamRequest(
+		ctx, peer, epochBytes,
+		func(ctx context.Context, s io.ReadWriter) error {
+			return server.ReadResponse(s, func(respLen uint32) (n int, err error) {
+				return codec.DecodeFrom(s, &ed)
+			})
+		},
+	); err != nil {
+		return nil, err
+	}
+	return &ed, nil
+}
+
 // PeerEpochInfo get the epoch info published in the given epoch from the specified peer.
 func (f *Fetch) PeerEpochInfo(ctx context.Context, peer p2p.Peer, epoch types.EpochID) (*EpochData, error) {
 	f.logger.WithContext(ctx).With().Debug("requesting epoch info from peer",
@@ -250,17 +286,42 @@ func (f *Fetch) PeerEpochInfo(ctx context.Context, peer p2p.Peer, epoch types.Ep
 	if err != nil {
 		return nil, err
 	}
-	data, err := f.servers[atxProtocol].Request(ctx, peer, epochBytes)
-	if err != nil {
-		return nil, err
-	}
 
-	var ed EpochData
-	if err := codec.Decode(data, &ed); err != nil {
-		return nil, fmt.Errorf("decoding epoch data: %w", err)
+	var ed *EpochData
+	if f.cfg.Streaming {
+		ed, err = f.peerEpochInfoStreamed(ctx, peer, epochBytes)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		data, err := f.servers[atxProtocol].Request(ctx, peer, epochBytes)
+		if err != nil {
+			return nil, err
+		}
+
+		ed = &EpochData{}
+		if err := codec.Decode(data, ed); err != nil {
+			return nil, fmt.Errorf("decoding epoch data: %w", err)
+		}
 	}
 	f.RegisterPeerHashes(peer, types.ATXIDsToHashes(ed.AtxIDs))
-	return &ed, nil
+	return ed, nil
+}
+
+func (f *Fetch) peerMeshHashesStreamed(ctx context.Context, peer p2p.Peer, reqBytes []byte) ([]types.Hash32, error) {
+	var hashes []types.Hash32
+	if err := f.servers[meshHashProtocol].StreamRequest(
+		ctx, peer, reqBytes,
+		func(ctx context.Context, s io.ReadWriter) error {
+			return server.ReadResponse(s, func(respLen uint32) (n int, err error) {
+				hashes, n, err = codec.ReadSlice[types.Hash32](s)
+				return n, err
+			})
+		},
+	); err != nil {
+		return nil, err
+	}
+	return hashes, nil
 }
 
 func (f *Fetch) PeerMeshHashes(ctx context.Context, peer p2p.Peer, req *MeshHashRequest) (*MeshHashes, error) {
@@ -274,13 +335,21 @@ func (f *Fetch) PeerMeshHashes(ctx context.Context, peer p2p.Peer, req *MeshHash
 		f.logger.With().Fatal("failed to encode mesh hash request", log.Err(err))
 	}
 
-	data, err := f.servers[meshHashProtocol].Request(ctx, peer, reqData)
-	if err != nil {
-		return nil, err
-	}
-	hashes, err := codec.DecodeSlice[types.Hash32](data)
-	if err != nil {
-		return nil, fmt.Errorf("decoding hashes response: %w", err)
+	var hashes []types.Hash32
+	if f.cfg.Streaming {
+		hashes, err = f.peerMeshHashesStreamed(ctx, peer, reqData)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		data, err := f.servers[meshHashProtocol].Request(ctx, peer, reqData)
+		if err != nil {
+			return nil, err
+		}
+		hashes, err = codec.DecodeSlice[types.Hash32](data)
+		if err != nil {
+			return nil, fmt.Errorf("decoding hashes response: %w", err)
+		}
 	}
 	return &MeshHashes{
 		Hashes: hashes,

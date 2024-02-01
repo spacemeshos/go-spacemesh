@@ -88,22 +88,16 @@ func GetByLayer(db sql.Executor, layerID types.LayerID) (proposals []*types.Prop
 	return proposals, err
 }
 
-// GetBlob loads proposal as an encoded blob, ready to be sent over the wire.
-func GetBlob(db sql.Executor, id []byte) (proposal []byte, err error) {
-	if rows, err := db.Exec(`select proposal from proposals where id = ?1;`,
-		func(stmt *sql.Statement) {
-			stmt.BindBytes(1, id)
-		}, func(stmt *sql.Statement) bool {
-			proposal = make([]byte, stmt.ColumnLen(0))
-			stmt.ColumnBytes(0, proposal)
-			return true
-		}); err != nil {
-		return nil, fmt.Errorf("exec %s: %w", types.BytesToHash(id), err)
-	} else if rows == 0 {
-		return nil, fmt.Errorf("%w proposal ID %s", sql.ErrNotFound, types.BytesToHash(id))
-	}
+// GetBlobSizes returns the sizes of the blobs corresponding to the proposals
+// with specified ids. For non-existent proposals, the corresponding items are
+// set to -1.
+func GetBlobSizes(db sql.Executor, ids [][]byte) (sizes []int, err error) {
+	return sql.GetBlobSizes(db, "select id, length(proposal) from proposals where id in", ids)
+}
 
-	return proposal, err
+// LoadBlob loads proposal as an encoded blob, ready to be sent over the wire.
+func LoadBlob(db sql.Executor, id []byte, blob *sql.Blob) error {
+	return sql.LoadBlob(db, "select proposal from proposals where id = ?1", id, blob)
 }
 
 // Add adds a proposal for a given ID.

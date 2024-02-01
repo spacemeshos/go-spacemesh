@@ -26,26 +26,30 @@ func TestActiveSet(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, set, set1)
 
-	blob, err := GetBlob(db, ids[0].Bytes())
-	require.NoError(t, err)
-	require.Equal(t, codec.MustEncode(set), blob)
+	var blob1 sql.Blob
+	require.NoError(t, LoadBlob(db, ids[0].Bytes(), &blob1))
+	require.Equal(t, codec.MustEncode(set), blob1.Bytes)
 
 	set2, err := Get(db, ids[1])
 	require.NoError(t, err)
 	require.Empty(t, set2)
 
+	var blob2 sql.Blob
+	require.NoError(t, LoadBlob(db, ids[1].Bytes(), &blob2))
+	require.Equal(t, codec.MustEncode(set2), blob2.Bytes)
+
 	_, err = Get(db, ids[3])
 	require.ErrorIs(t, err, sql.ErrNotFound)
-	_, err = GetBlob(db, ids[3].Bytes())
-	require.ErrorIs(t, err, sql.ErrNotFound)
+	require.ErrorIs(t, LoadBlob(db, ids[3].Bytes(), &sql.Blob{}), sql.ErrNotFound)
+
+	sizes, err := GetBlobSizes(db, [][]byte{ids[0].Bytes(), ids[1].Bytes(), ids[3].Bytes()})
+	require.NoError(t, err)
+	require.Equal(t, []int{len(blob1.Bytes), len(blob2.Bytes), -1}, sizes)
 
 	require.NoError(t, DeleteBeforeEpoch(db, set.Epoch))
-	blob, err = GetBlob(db, ids[0].Bytes())
-	require.NoError(t, err)
-	require.NotEmpty(t, blob)
+	require.NoError(t, LoadBlob(db, ids[0].Bytes(), &blob1))
+	require.NotEmpty(t, blob1.Bytes)
 
 	require.NoError(t, DeleteBeforeEpoch(db, set.Epoch+1))
-	blob, err = GetBlob(db, ids[0].Bytes())
-	require.ErrorIs(t, err, sql.ErrNotFound)
-	require.Empty(t, blob)
+	require.ErrorIs(t, LoadBlob(db, ids[0].Bytes(), &sql.Blob{}), sql.ErrNotFound)
 }

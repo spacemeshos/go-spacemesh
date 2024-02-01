@@ -9,7 +9,6 @@ import (
 	lru "github.com/hashicorp/golang-lru/v2"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -365,45 +364,56 @@ type BlobStore struct {
 	DB sql.Executor
 }
 
-// Get gets an ATX as bytes by an ATX ID as bytes.
-func (bs *BlobStore) Get(hint Hint, key []byte) ([]byte, error) {
-	switch hint {
-	case ATXDB:
-		return atxs.GetBlob(bs.DB, key)
-	case ProposalDB:
-		return proposals.GetBlob(bs.DB, key)
-	case BallotDB:
-		id := types.BallotID(types.BytesToHash(key).ToHash20())
-		blt, err := ballots.Get(bs.DB, id)
-		if err != nil {
-			return nil, fmt.Errorf("get ballot blob: %w", err)
-		}
-		data, err := codec.Encode(blt)
-		if err != nil {
-			return data, fmt.Errorf("serialize: %w", err)
-		}
-		return data, nil
-	case BlockDB:
-		id := types.BlockID(types.BytesToHash(key).ToHash20())
-		blk, err := blocks.Get(bs.DB, id)
-		if err != nil {
-			return nil, fmt.Errorf("get block: %w", err)
-		}
-		data, err := codec.Encode(blk)
-		if err != nil {
-			return data, fmt.Errorf("serialize: %w", err)
-		}
-		return data, nil
-	case TXDB:
-		return transactions.GetBlob(bs.DB, key)
-	case POETDB:
-		var ref types.PoetProofRef
-		copy(ref[:], key)
-		return poets.Get(bs.DB, ref)
-	case Malfeasance:
-		return identities.GetMalfeasanceBlob(bs.DB, key)
-	case ActiveSet:
-		return activesets.GetBlob(bs.DB, key)
+type (
+	loadBlobFunc func(db sql.Executor, key []byte, blob *sql.Blob) error
+	blobSizeFunc func(db sql.Executor, ids [][]byte) (sizes []int, err error)
+)
+
+var loadBlobDispatch = map[Hint]loadBlobFunc{
+	ATXDB:       atxs.LoadBlob,
+	ProposalDB:  proposals.LoadBlob,
+	BallotDB:    ballots.LoadBlob,
+	BlockDB:     blocks.LoadBlob,
+	TXDB:        transactions.LoadBlob,
+	POETDB:      poets.LoadBlob,
+	Malfeasance: identities.LoadMalfeasanceBlob,
+	ActiveSet:   activesets.LoadBlob,
+}
+
+var blobSizeDispatch = map[Hint]blobSizeFunc{
+	ATXDB:       atxs.GetBlobSizes,
+	ProposalDB:  proposals.GetBlobSizes,
+	BallotDB:    ballots.GetBlobSizes,
+	BlockDB:     blocks.GetBlobSizes,
+	TXDB:        transactions.GetBlobSizes,
+	POETDB:      poets.GetBlobSizes,
+	Malfeasance: identities.GetBlobSizes,
+	ActiveSet:   activesets.GetBlobSizes,
+}
+
+// LoadBlob gets an blob as bytes by an object ID as bytes.
+func (bs *BlobStore) LoadBlob(hint Hint, key []byte, blob *sql.Blob) error {
+	// TODO: use dispatch table (LoadBlob fns)
+	loader, found := loadBlobDispatch[hint]
+	if !found {
+		return fmt.Errorf("blob store not found %s", hint)
 	}
-	return nil, fmt.Errorf("blob store not found %s", hint)
+	if err := loader(bs.DB, key, blob); err != nil {
+		return fmt.Errorf("get %s blob: %w", hint, err)
+	}
+	return nil
+}
+
+// GetBlobSizes returns the sizes of the blobs corresponding to the specified ids. For
+// non-existent objects, the corresponding items are set to -1.
+func (bs *BlobStore) GetBlobSizes(hint Hint, ids [][]byte) (sizes []int, err error) {
+	getSizes, found := blobSizeDispatch[hint]
+	if !found {
+		return nil, fmt.Errorf("blob store not found %s", hint)
+	}
+	sizes, err = getSizes(bs.DB, ids)
+	if err != nil {
+		return nil, fmt.Errorf("get %s blob sizes: %w", hint, err)
+	}
+	return sizes, nil
 }

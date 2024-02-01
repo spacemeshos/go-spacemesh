@@ -1,6 +1,7 @@
 package atxs_test
 
 import (
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -414,6 +415,35 @@ func TestGetIDsByEpoch(t *testing.T) {
 	require.EqualValues(t, []types.ATXID{atx4.ID()}, ids3)
 }
 
+func TestForIDsByEpochEarlyStop(t *testing.T) {
+	db := sql.InMemory()
+
+	e1 := types.EpochID(1)
+	m := make(map[types.ATXID]struct{})
+	for i := 0; i < 4; i++ {
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		atx, err := newAtx(sig, withPublishEpoch(e1))
+		require.NoError(t, err)
+		require.NoError(t, atxs.Add(db, atx))
+		m[atx.ID()] = struct{}{}
+	}
+
+	n := 0
+	err := atxs.IterateIDsByEpoch(db, e1, func(total int, id types.ATXID) error {
+		require.Equal(t, 4, total)
+		delete(m, id)
+		n++
+		if n >= 2 {
+			return errors.New("test error")
+		}
+		return nil
+	})
+	require.ErrorContains(t, err, "test error")
+	require.Equal(t, 2, n)
+	require.Len(t, m, 2)
+}
+
 func TestVRFNonce(t *testing.T) {
 	// Arrange
 	db := sql.InMemory()
@@ -463,20 +493,51 @@ func TestVRFNonce(t *testing.T) {
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
-func TestGetBlob(t *testing.T) {
+func TestLoadBlob(t *testing.T) {
 	db := sql.InMemory()
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	atx, err := newAtx(sig, withPublishEpoch(1))
+	atx1, err := newAtx(sig, withPublishEpoch(1))
 	require.NoError(t, err)
 
-	require.NoError(t, atxs.Add(db, atx))
-	buf, err := atxs.GetBlob(db, atx.ID().Bytes())
+	require.NoError(t, atxs.Add(db, atx1))
+
+	var blob1 sql.Blob
+	require.NoError(t, atxs.LoadBlob(db, atx1.ID().Bytes(), &blob1))
+	encoded := codec.MustEncode(atx1.ActivationTx)
+	require.Equal(t, encoded, blob1.Bytes)
+
+	blobSizes, err := atxs.GetBlobSizes(db, [][]byte{atx1.ID().Bytes()})
 	require.NoError(t, err)
-	encoded, err := codec.Encode(atx.ActivationTx)
+	require.Equal(t, []int{len(blob1.Bytes)}, blobSizes)
+
+	var blob2 sql.Blob
+	atx2, err := newAtx(sig, withPublishEpoch(1))
+	nodeID := types.RandomNodeID()
+	atx2.NodeID = &nodeID // ensure ATXs differ in size
 	require.NoError(t, err)
-	require.Equal(t, encoded, buf)
+	require.NoError(t, atxs.Add(db, atx2))
+	require.NoError(t, atxs.LoadBlob(db, atx2.ID().Bytes(), &blob2))
+	encoded = codec.MustEncode(atx2.ActivationTx)
+	require.Equal(t, encoded, blob2.Bytes)
+	blobSizes, err = atxs.GetBlobSizes(db, [][]byte{
+		atx1.ID().Bytes(),
+		atx2.ID().Bytes(),
+	})
+	require.NoError(t, err)
+	require.Equal(t, []int{len(blob1.Bytes), len(blob2.Bytes)}, blobSizes)
+
+	noSuchID := types.RandomATXID()
+	require.ErrorIs(t, atxs.LoadBlob(db, noSuchID[:], &sql.Blob{}), sql.ErrNotFound)
+
+	blobSizes, err = atxs.GetBlobSizes(db, [][]byte{
+		atx1.ID().Bytes(),
+		noSuchID.Bytes(),
+		atx2.ID().Bytes(),
+	})
+	require.NoError(t, err)
+	require.Equal(t, []int{len(blob1.Bytes), -1, len(blob2.Bytes)}, blobSizes)
 }
 
 func TestCheckpointATX(t *testing.T) {
@@ -520,9 +581,9 @@ func TestCheckpointATX(t *testing.T) {
 	require.Equal(t, catx.VRFNonce, gotvrf)
 
 	// checkpoint atx does not have actual atx data
-	blob, err := atxs.GetBlob(db, catx.ID.Bytes())
-	require.NoError(t, err)
-	require.Nil(t, blob)
+	var blob sql.Blob
+	require.NoError(t, atxs.LoadBlob(db, catx.ID.Bytes(), &blob))
+	require.Empty(t, blob.Bytes)
 }
 
 func TestAdd(t *testing.T) {

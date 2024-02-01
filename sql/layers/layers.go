@@ -237,16 +237,28 @@ func GetAggregatedHash(db sql.Executor, lid types.LayerID) (types.Hash32, error)
 	return rst, nil
 }
 
-func GetAggHashes(db sql.Executor, from, to types.LayerID, by uint32) ([]types.Hash32, error) {
+func IterateAggHashes(
+	db sql.Executor,
+	from, to types.LayerID,
+	by uint32,
+	callback func(total int, id types.Hash32) error,
+) error {
+	var (
+		err, callbackErr error
+		rows             int
+	)
 	dist := to.Difference(from)
 	count := int(dist/by + 1)
 	if dist%by != 0 {
 		// last layer is not a multiple of By, so we need to add it
 		count++
 	}
-	hashes := make([]types.Hash32, 0, count)
-	if _, err := db.Exec(
-		`select aggregated_hash from layers
+	if rows, err = db.Exec(
+		`select (
+                  select count(*) from layers
+                  where id >= ?1 and id <= ?2 and
+			((id-?1)%?3 = 0 or id = ?2)
+                ) as total, aggregated_hash from layers
 	 	where id >= ?1 and id <= ?2 and
 			((id-?1)%?3 = 0 or id = ?2)
 		order by id asc;`,
@@ -257,14 +269,40 @@ func GetAggHashes(db sql.Executor, from, to types.LayerID, by uint32) ([]types.H
 		},
 		func(stmt *sql.Statement) bool {
 			var h types.Hash32
-			stmt.ColumnBytes(0, h[:])
-			hashes = append(hashes, h)
+			total := stmt.ColumnInt(0)
+			stmt.ColumnBytes(1, h[:])
+			if total != count {
+				callbackErr = fmt.Errorf("%w layers from %s to %s by %d", sql.ErrNotFound, from, to, by)
+				return false
+			}
+			if callbackErr = callback(total, h); callbackErr != nil {
+				return false
+			}
 			return true
 		}); err != nil {
-		return nil, fmt.Errorf("get aggHashes from %s to %s by %d: %w", from, to, by, err)
+		return fmt.Errorf("get aggHashes from %s to %s by %d: %w", from, to, by, err)
 	}
-	if len(hashes) != count {
-		return nil, fmt.Errorf("%w layers from %s to %s by %d", sql.ErrNotFound, from, to, by)
+	if callbackErr != nil {
+		return callbackErr
+	}
+	if rows != count {
+		return fmt.Errorf("%w layers from %s to %s by %d", sql.ErrNotFound, from, to, by)
+	}
+	return nil
+}
+
+func GetAggHashes(db sql.Executor, from, to types.LayerID, by uint32) (hashes []types.Hash32, err error) {
+	if err := IterateAggHashes(db, from, to, by, func(total int, id types.Hash32) error {
+		if hashes == nil {
+			hashes = make([]types.Hash32, 0, total)
+		}
+		hashes = append(hashes, id)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	if len(hashes) != cap(hashes) {
+		panic("BUG: bad aggregate hash count")
 	}
 	return hashes, nil
 }

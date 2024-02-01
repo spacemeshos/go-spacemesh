@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
@@ -269,4 +270,44 @@ func TestLastValid(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 22, int(last))
 	})
+}
+
+func TestLoadBlob(t *testing.T) {
+	db := sql.InMemory()
+
+	lid1 := types.LayerID(11)
+	block1 := types.NewExistingBlock(
+		types.BlockID{1, 1},
+		types.InnerBlock{LayerIndex: lid1},
+	)
+	encoded1 := codec.MustEncode(block1)
+	lid2 := lid1.Add(1)
+	block2 := types.NewExistingBlock(
+		types.BlockID{2, 2},
+		types.InnerBlock{LayerIndex: lid2},
+	)
+	encoded2 := codec.MustEncode(block2)
+
+	for _, b := range []*types.Block{block1, block2} {
+		require.NoError(t, Add(db, b))
+	}
+
+	var blob1 sql.Blob
+	require.NoError(t, LoadBlob(db, block1.ID().Bytes(), &blob1))
+	require.Equal(t, encoded1, blob1.Bytes)
+
+	var blob2 sql.Blob
+	require.NoError(t, LoadBlob(db, block2.ID().Bytes(), &blob2))
+	require.Equal(t, encoded2, blob2.Bytes)
+
+	noSuchID := types.RandomBallotID()
+	require.ErrorIs(t, LoadBlob(db, noSuchID.Bytes(), &sql.Blob{}), sql.ErrNotFound)
+
+	sizes, err := GetBlobSizes(db, [][]byte{
+		block1.ID().Bytes(),
+		block2.ID().Bytes(),
+		noSuchID.Bytes(),
+	})
+	require.NoError(t, err)
+	require.Equal(t, []int{len(blob1.Bytes), len(blob2.Bytes), -1}, sizes)
 }

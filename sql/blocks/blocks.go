@@ -56,6 +56,17 @@ func Has(db sql.Executor, id types.BlockID) (bool, error) {
 	return rows > 0, nil
 }
 
+// GetBlobSizes returns the sizes of the blobs corresponding to blocks with specified
+// ids. For non-existent balots, the corresponding items are set to -1.
+func GetBlobSizes(db sql.Executor, ids [][]byte) (sizes []int, err error) {
+	return sql.GetBlobSizes(db, "select id, length(block) from blocks where id in", ids)
+}
+
+// LoadBlob loads block as an encoded blob, ready to be sent over the wire.
+func LoadBlob(db sql.Executor, id []byte, b *sql.Blob) error {
+	return sql.LoadBlob(db, "select block from blocks where id = ?1", id, b)
+}
+
 // Get block with id from database.
 func Get(db sql.Executor, id types.BlockID) (rst *types.Block, err error) {
 	if rows, err := db.Exec("select block from blocks where id = ?1;", func(stmt *sql.Statement) {

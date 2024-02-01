@@ -1,6 +1,7 @@
 package fetch
 
 import (
+	"bytes"
 	"context"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -24,14 +26,17 @@ import (
 
 type testHandler struct {
 	*handler
+	db  *sql.Database
 	cdb *datastore.CachedDB
 }
 
 func createTestHandler(t testing.TB) *testHandler {
 	lg := logtest.New(t)
-	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
+	db := sql.InMemory()
+	cdb := datastore.NewCachedDB(db, lg)
 	return &testHandler{
 		handler: newHandler(cdb, datastore.NewBlobStore(cdb), lg),
+		db:      db,
 		cdb:     cdb,
 	}
 }
@@ -313,11 +318,33 @@ func TestHandleEpochInfoReq(t *testing.T) {
 			epochBytes, err := codec.Encode(epoch)
 			require.NoError(t, err)
 
-			out, err := th.handleEpochInfoReq(context.Background(), epochBytes)
-			require.NoError(t, err)
-			var got EpochData
-			require.NoError(t, codec.Decode(out, &got))
-			require.ElementsMatch(t, expected.AtxIDs, got.AtxIDs)
+			t.Run("non-streamed", func(t *testing.T) {
+				out, err := th.handleEpochInfoReq(context.Background(), epochBytes)
+				require.NoError(t, err)
+				var got EpochData
+				require.NoError(t, codec.Decode(out, &got))
+				require.ElementsMatch(t, expected.AtxIDs, got.AtxIDs)
+			})
+
+			t.Run("streamed", func(t *testing.T) {
+				var b bytes.Buffer
+				require.NoError(t, th.handleEpochInfoReqStream(context.Background(), epochBytes, &b))
+				var resp server.Response
+				require.NoError(t, codec.Decode(b.Bytes(), &resp))
+				var got EpochData
+				require.NoError(t, codec.Decode(resp.Data, &got))
+				require.ElementsMatch(t, expected.AtxIDs, got.AtxIDs)
+			})
+
+			t.Run("streamed request failure", func(t *testing.T) {
+				th.db.Close()
+				var b bytes.Buffer
+				require.NoError(t, th.handleEpochInfoReqStream(context.Background(), epochBytes, &b))
+				var resp server.Response
+				require.NoError(t, codec.Decode(b.Bytes(), &resp))
+				require.Empty(t, resp.Data)
+				require.Contains(t, resp.Error, "exec epoch 11: database: no free connection")
+			})
 		})
 	}
 }

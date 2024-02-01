@@ -195,13 +195,13 @@ func TestRegossip(t *testing.T) {
 			}
 		}
 
-		blob, err := atxs.GetBlob(tab.cdb, refAtx.ID().Bytes())
-		require.NoError(t, err)
+		var blob sql.Blob
+		require.NoError(t, atxs.LoadBlob(tab.cdb, refAtx.ID().Bytes(), &blob))
 
 		// atx will be regossiped once (by the smesher)
 		tab.mclock.EXPECT().CurrentLayer().Return(layer)
 		ctx := context.Background()
-		tab.mpub.EXPECT().Publish(ctx, pubsub.AtxProtocol, blob)
+		tab.mpub.EXPECT().Publish(ctx, pubsub.AtxProtocol, blob.Bytes)
 		require.NoError(t, tab.Regossip(ctx, refAtx.SmesherID))
 	})
 

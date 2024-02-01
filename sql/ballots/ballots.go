@@ -11,15 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-func decodeBallot(id types.BallotID, pubkey, body *bytes.Reader, malicious bool) (*types.Ballot, error) {
-	var nodeID types.NodeID
-	if n, err := pubkey.Read(nodeID[:]); err != nil {
-		if err != io.EOF {
-			return nil, fmt.Errorf("copy pubkey: %w", err)
-		}
-	} else if n != types.NodeIDSize {
-		return nil, errors.New("public key data missing")
-	}
+func decodeBallot(id types.BallotID, body *bytes.Reader, malicious bool) (*types.Ballot, error) {
 	ballot := types.Ballot{}
 	if n, err := codec.DecodeFrom(body, &ballot); err != nil {
 		if err != io.EOF {
@@ -29,7 +21,6 @@ func decodeBallot(id types.BallotID, pubkey, body *bytes.Reader, malicious bool)
 		return nil, errors.New("ballot data missing")
 	}
 	ballot.SetID(id)
-	ballot.SmesherID = nodeID
 	if malicious {
 		ballot.SetMalicious()
 	}
@@ -81,9 +72,20 @@ func UpdateBlob(db sql.Executor, bid types.BallotID, blob []byte) error {
 	return nil
 }
 
+// GetBlobSizes returns the sizes of the blobs corresponding to ballots with specified
+// ids. For non-existent balots, the corresponding items are set to -1.
+func GetBlobSizes(db sql.Executor, ids [][]byte) (sizes []int, err error) {
+	return sql.GetBlobSizes(db, "select id, length(ballot) from ballots where id in", ids)
+}
+
+// LoadBlob loads ballot as an encoded blob, ready to be sent over the wire.
+func LoadBlob(db sql.Executor, id []byte, b *sql.Blob) error {
+	return sql.LoadBlob(db, "select ballot from ballots where id = ?1", id, b)
+}
+
 // Get ballot with id from database.
 func Get(db sql.Executor, id types.BallotID) (rst *types.Ballot, err error) {
-	if rows, err := db.Exec(`select pubkey, ballot, length(identities.proof)
+	if rows, err := db.Exec(`select ballot, length(identities.proof)
 	from ballots left join identities using(pubkey)
 	where id = ?1;`,
 		func(stmt *sql.Statement) {
@@ -91,8 +93,7 @@ func Get(db sql.Executor, id types.BallotID) (rst *types.Ballot, err error) {
 		}, func(stmt *sql.Statement) bool {
 			rst, err = decodeBallot(id,
 				stmt.ColumnReader(0),
-				stmt.ColumnReader(1),
-				stmt.ColumnInt(2) > 0,
+				stmt.ColumnInt(1) > 0,
 			)
 			return true
 		}); err != nil {
@@ -105,7 +106,7 @@ func Get(db sql.Executor, id types.BallotID) (rst *types.Ballot, err error) {
 
 // Layer returns full body ballot for layer.
 func Layer(db sql.Executor, lid types.LayerID) (rst []*types.Ballot, err error) {
-	if _, err = db.Exec(`select id, pubkey, ballot, length(identities.proof)
+	if _, err = db.Exec(`select id, ballot, length(identities.proof)
 		from ballots left join identities using(pubkey)
 		where layer = ?1;`, func(stmt *sql.Statement) {
 		stmt.BindInt64(1, int64(lid))
@@ -115,8 +116,7 @@ func Layer(db sql.Executor, lid types.LayerID) (rst []*types.Ballot, err error) 
 		var ballot *types.Ballot
 		ballot, err = decodeBallot(id,
 			stmt.ColumnReader(1),
-			stmt.ColumnReader(2),
-			stmt.ColumnInt(3) > 0,
+			stmt.ColumnInt(2) > 0,
 		)
 		if err != nil {
 			return false

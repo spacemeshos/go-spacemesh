@@ -14,6 +14,7 @@ import (
 
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
+	server "github.com/spacemeshos/go-spacemesh/p2p/server"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -113,6 +114,44 @@ func (c *requesterRunCall) Do(f func(context.Context) error) *requesterRunCall {
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *requesterRunCall) DoAndReturn(f func(context.Context) error) *requesterRunCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// StreamRequest mocks base method.
+func (m *Mockrequester) StreamRequest(arg0 context.Context, arg1 p2p.Peer, arg2 []byte, arg3 server.StreamRequestCallback) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StreamRequest", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// StreamRequest indicates an expected call of StreamRequest.
+func (mr *MockrequesterMockRecorder) StreamRequest(arg0, arg1, arg2, arg3 any) *requesterStreamRequestCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StreamRequest", reflect.TypeOf((*Mockrequester)(nil).StreamRequest), arg0, arg1, arg2, arg3)
+	return &requesterStreamRequestCall{Call: call}
+}
+
+// requesterStreamRequestCall wrap *gomock.Call
+type requesterStreamRequestCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *requesterStreamRequestCall) Return(arg0 error) *requesterStreamRequestCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *requesterStreamRequestCall) Do(f func(context.Context, p2p.Peer, []byte, server.StreamRequestCallback) error) *requesterStreamRequestCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *requesterStreamRequestCall) DoAndReturn(f func(context.Context, p2p.Peer, []byte, server.StreamRequestCallback) error) *requesterStreamRequestCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
