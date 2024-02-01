@@ -80,7 +80,7 @@ BINDIR_POSTRS_SETUP_LIBS = $(foreach X,$(POSTRS_SETUP_LIBS),$(BIN_DIR)$(X))
 
 # file marking libpost version
 $(BIN_DIR).libpost.version.$(POSTRS_SETUP_REV): $(PROJ_DIR)$(POSTRS_SETUP_ZIP)
-	rm --force $(BIN_DIR).libpost.version.*
+	rm -f $(BIN_DIR).libpost.version.*
 	mkdir -p $(dir $@)
 	touch $@
 
@@ -102,7 +102,7 @@ $(PROJ_DIR)$(POSTRS_PROFILER_ZIP):
 
 # file marking profiler version
 $(BIN_DIR)/.profiler.version.$(POSTRS_SETUP_REV): $(PROJ_DIR)$(POSTRS_PROFILER_ZIP)
-	rm --force $(BIN_DIR).profiler.version.*
+	rm -f $(BIN_DIR).profiler.version.*
 	mkdir -p $(dir $@)
 	touch $@
 
@@ -115,7 +115,7 @@ $(PROJ_DIR)$(POSTRS_SERVICE_ZIP):
 
 # file marking post-service version
 $(BIN_DIR)/.service.version.$(POSTRS_SETUP_REV): $(PROJ_DIR)$(POSTRS_SERVICE_ZIP)
-	rm --force $(BIN_DIR).service.version.*
+	rm -f $(BIN_DIR).service.version.*
 	mkdir -p $(dir $@)
 	touch $@
 
