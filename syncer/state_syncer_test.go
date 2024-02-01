@@ -404,7 +404,7 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 		} else {
 			ts.mForkFinder.EXPECT().NeedResync(instate.Sub(1), opns[i].PrevAggHash).Return(true)
 			if i != 4 {
-				ts.mAtxCache.EXPECT().GetMissingActiveSet(epoch, eds[i].AtxIDs).Return(eds[i].AtxIDs)
+				ts.mTortoise.EXPECT().GetMissingActiveSet(epoch, eds[i].AtxIDs).Return(eds[i].AtxIDs)
 			}
 		}
 	}

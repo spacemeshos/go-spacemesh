@@ -140,11 +140,6 @@ func (msh *Mesh) recoverFromDB(latest types.LayerID) {
 		log.Stringer("processed", msh.ProcessedLayer()))
 }
 
-// Tortoise returns the tortoise instance.
-func (mesh *Mesh) Tortoise() system.Tortoise {
-	return mesh.trtl
-}
-
 // LatestLayerInState returns the latest layer we applied to state.
 func (msh *Mesh) LatestLayerInState() types.LayerID {
 	return msh.latestLayerInState.Load().(types.LayerID)

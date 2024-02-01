@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/syncer/mocks"
+	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
 type testDataFetch struct {
@@ -23,7 +24,7 @@ type testDataFetch struct {
 	mMesh     *mocks.MockmeshProvider
 	mFetcher  *mocks.Mockfetcher
 	mIDs      *mocks.MockidProvider
-	mAtxCache *mocks.MockactiveSetCache
+	mTortoise *smocks.MockTortoise
 }
 
 func newTestDataFetch(t *testing.T) *testDataFetch {
@@ -33,9 +34,9 @@ func newTestDataFetch(t *testing.T) *testDataFetch {
 		mMesh:     mocks.NewMockmeshProvider(ctrl),
 		mFetcher:  mocks.NewMockfetcher(ctrl),
 		mIDs:      mocks.NewMockidProvider(ctrl),
-		mAtxCache: mocks.NewMockactiveSetCache(ctrl),
+		mTortoise: smocks.NewMockTortoise(ctrl),
 	}
-	tl.DataFetch = syncer.NewDataFetch(tl.mMesh, tl.mFetcher, tl.mIDs, tl.mAtxCache, lg)
+	tl.DataFetch = syncer.NewDataFetch(tl.mMesh, tl.mFetcher, tl.mIDs, tl.mTortoise, lg)
 	return tl
 }
 
@@ -379,7 +380,7 @@ func TestDataFetch_GetEpochATXs(t *testing.T) {
 			}
 			td.mFetcher.EXPECT().SelectBestShuffled(gomock.Any()).Return(peers)
 			if tc.getErr == nil {
-				td.mAtxCache.EXPECT().GetMissingActiveSet(epoch+1, ed.AtxIDs).Return(ed.AtxIDs[1:])
+				td.mTortoise.EXPECT().GetMissingActiveSet(epoch+1, ed.AtxIDs).Return(ed.AtxIDs[1:])
 			}
 			td.mFetcher.EXPECT().PeerEpochInfo(gomock.Any(), gomock.Any(), epoch).DoAndReturn(
 				func(_ context.Context, peer p2p.Peer, _ types.EpochID) (*fetch.EpochData, error) {

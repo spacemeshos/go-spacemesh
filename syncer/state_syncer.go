@@ -244,7 +244,7 @@ func (s *Syncer) adoptCert(ctx context.Context, lid types.LayerID, cert *types.C
 		}
 	}
 	// in GetBlocks call block will be also passed to tortoise.OnBlock
-	s.mesh.Tortoise().OnHareOutput(lid, cert.BlockID)
+	s.tortoise.OnHareOutput(lid, cert.BlockID)
 	numCertAdopted.Inc()
 	return nil
 }
@@ -307,7 +307,7 @@ func (s *Syncer) ensureMeshAgreement(
 			)
 			continue
 		}
-		missing := s.asCache.GetMissingActiveSet(diffLayer.GetEpoch(), ed.AtxIDs)
+		missing := s.tortoise.GetMissingActiveSet(diffLayer.GetEpoch(), ed.AtxIDs)
 		if len(missing) > 0 {
 			s.logger.WithContext(ctx).With().Debug("fetching missing atxs from peer",
 				log.Stringer("peer", peer),
