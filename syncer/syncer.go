@@ -28,6 +28,7 @@ type Config struct {
 	MaxStaleDuration         time.Duration
 	Standalone               bool
 	GossipDuration           time.Duration
+	DisableMeshAgreement     bool   `mapstructure:"disable-mesh-agreement"`
 	DisableAtxReconciliation bool   `mapstructure:"disable-atx-reconciliation"`
 	OutOfSyncThresholdLayers uint32 `mapstructure:"out-of-sync-threshold"`
 }
