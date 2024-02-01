@@ -36,7 +36,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"github.com/spacemeshos/go-spacemesh/timesync/peersync"
 )
 
 var grpclog grpc_logsettable.SettableLoggerV2
@@ -86,7 +85,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	cfg.P2P.PrivateNetwork = true
 	cfg.Bootstrap.URL = cluster.BootstrapperGlobalEndpoint(ctx.Namespace, 0)
 	cfg.P2P.MinPeers = 2
-	ctx.Log.Infow("Prepared config", "cfg", cfg)
+	ctx.Log.Debugw("Prepared config", "cfg", cfg)
 
 	goldenATXID := cl.GoldenATX()
 	signer, err := signing.NewEdSigner(signing.WithPrefix(cl.GenesisID().Bytes()))
@@ -103,14 +102,6 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	require.NoError(t, err)
 	logger.Info("p2p host created", zap.Stringer("id", host.ID()))
 	host.Register(pubsub.AtxProtocol, func(context.Context, peer.ID, []byte) error { return nil })
-	ptimesync := peersync.New(
-		host,
-		host,
-		peersync.WithLog(log.NewFromLog(logger.Named("peersync"))),
-		peersync.WithConfig(cfg.TIME.Peersync),
-	)
-	ptimesync.Start()
-	t.Cleanup(ptimesync.Stop)
 
 	require.NoError(t, host.Start())
 	t.Cleanup(func() { assert.NoError(t, host.Stop()) })
@@ -209,7 +200,9 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		nipost.Post.Indices[i] += 1
 	}
 	// Sanity check that the POST is invalid
-	verifier, err := activation.NewPostVerifier(cfg.POST, logger.Named("post-verifier"))
+	verifyingOpts := activation.DefaultPostVerifyingOpts()
+	verifyingOpts.Workers = 1
+	verifier, err := activation.NewPostVerifier(cfg.POST, logger, activation.WithVerifyingOpts(verifyingOpts))
 	require.NoError(t, err)
 	err = verifier.Verify(ctx, (*shared.Proof)(nipost.Post), &shared.ProofMetadata{
 		NodeId:          signer.NodeID().Bytes(),
@@ -243,8 +236,9 @@ func TestPostMalfeasanceProof(t *testing.T) {
 
 	// 4. Publish ATX
 	publishCtx, stopPublishing := context.WithCancel(ctx.Context)
-	t.Cleanup(stopPublishing)
+	defer stopPublishing()
 	var eg errgroup.Group
+	t.Cleanup(func() { assert.NoError(t, eg.Wait()) })
 	eg.Go(func() error {
 		for {
 			logger.Sugar().Infow("publishing ATX", "atx", atx)
@@ -286,8 +280,6 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		require.Equal(t, atx.NIPostChallenge, invalidAtx.NIPostChallenge)
 		require.Equal(t, atx.NIPost.Post.Indices, invalidAtx.NIPost.Post.Indices)
 
-		postVerifier, err := activation.NewPostVerifier(cfg.POST, logger.Named("post-verifier"))
-		require.NoError(t, err)
 		meta := &shared.ProofMetadata{
 			NodeId:          invalidAtx.NodeID.Bytes(),
 			CommitmentAtxId: invalidAtx.CommitmentATX.Bytes(),
@@ -295,7 +287,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 			Challenge:       invalidAtx.NIPost.PostMetadata.Challenge,
 			LabelsPerUnit:   invalidAtx.NIPost.PostMetadata.LabelsPerUnit,
 		}
-		err = postVerifier.Verify(ctx, (*shared.Proof)(invalidAtx.NIPost.Post), meta)
+		err = verifier.Verify(ctx, (*shared.Proof)(invalidAtx.NIPost.Post), meta)
 		var invalidIdxError *verifying.ErrInvalidIndex
 		require.ErrorAs(t, err, &invalidIdxError)
 		return false, nil

@@ -16,9 +16,6 @@ COPY go.sum .
 RUN go mod download
 
 COPY . .
-RUN make get-postrs-service
-RUN make get-postrs-lib
-RUN make go-env-test
 
 RUN --mount=type=cache,id=build,target=/root/.cache/go-build go test -failfast -v -c -o ./build/tests.test ./systest/tests/
 
