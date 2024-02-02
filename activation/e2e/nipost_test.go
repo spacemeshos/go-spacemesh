@@ -387,12 +387,12 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	opts.ProviderID.SetUint32(initialization.CPUProviderID())
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
 
+	validator := activation.NewMocknipostValidator(ctrl)
 	var eg errgroup.Group
 	for _, sig := range signers {
 		sig := sig
 		opts := opts
 		eg.Go(func() error {
-			validator := activation.NewMocknipostValidator(ctrl)
 			mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX, syncer, validator)
 			require.NoError(t, err)
 
@@ -435,6 +435,10 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 		},
 	)
 
+	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
+	require.NoError(t, err)
+	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
+
 	poetDb := activation.NewPoetDb(db, log.NewFromLog(logger).Named("poetDb"))
 
 	localDB := localsql.InMemory()
@@ -448,10 +452,6 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 		mclock,
 	)
 	require.NoError(t, err)
-
-	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
-	require.NoError(t, err)
-	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
 
 	challenge := types.NIPostChallenge{
 		PublishEpoch: postGenesisEpoch + 2,

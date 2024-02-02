@@ -438,7 +438,7 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		}
 	}
 
-	posAtx, err := b.GetPositioningAtx(ctx, nodeID)
+	posAtx, err := b.getPositioningAtx(ctx, nodeID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get positioning ATX: %w", err)
 	}
@@ -625,7 +625,7 @@ func (b *Builder) broadcast(ctx context.Context, atx *types.ActivationTx) (int, 
 }
 
 // getPositioningAtx returns atx id with the highest tick height.
-func (b *Builder) GetPositioningAtx(ctx context.Context, nodeID types.NodeID) (types.ATXID, error) {
+func (b *Builder) getPositioningAtx(ctx context.Context, nodeID types.NodeID) (types.ATXID, error) {
 	id, err := findFullyValidHighTickAtx(
 		ctx,
 		b.cdb,

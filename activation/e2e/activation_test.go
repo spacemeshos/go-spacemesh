@@ -109,6 +109,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		timesync.WithLogger(logger),
 	)
 	require.NoError(t, err)
+	t.Cleanup(clock.Close)
 
 	poetDb := activation.NewPoetDb(db, log.NewFromLog(logger).Named("poetDb"))
 

@@ -1525,7 +1525,7 @@ func TestGetPositioningAtxPicksAtxWithValidChain(t *testing.T) {
 	tab.mValidator.EXPECT().
 		VerifyChain(gomock.Any(), validAtx.ID(), tab.goldenATXID, gomock.Any())
 
-	posAtxID, err := tab.GetPositioningAtx(context.Background(), sig.NodeID())
+	posAtxID, err := tab.getPositioningAtx(context.Background(), sig.NodeID())
 	require.NoError(t, err)
 	require.Equal(t, posAtxID, vValidAtx.ID())
 }
@@ -1539,7 +1539,7 @@ func TestGetPositioningAtxDbFailed(t *testing.T) {
 	expected := errors.New("db error")
 	db.EXPECT().Exec(gomock.Any(), gomock.Any(), gomock.Any()).Return(0, expected)
 
-	none, err := tab.GetPositioningAtx(context.Background(), sig.NodeID())
+	none, err := tab.getPositioningAtx(context.Background(), sig.NodeID())
 	require.ErrorIs(t, err, expected)
 	require.Equal(t, types.ATXID{}, none)
 }
