@@ -442,8 +442,8 @@ func (m *MalfeasanceTrace) Run(r *traceRunner) error {
 }
 
 type headerWithValidity struct {
-	Headers  types.BlockHeader `json:"header"`
-	Validity bool              `json:"validity"`
+	Header types.BlockHeader `json:"header"`
+	Valid  bool              `json:"valid"`
 }
 
 func newRecoveredBlocksTrace(
@@ -475,7 +475,7 @@ func (r *RecoveredBlocksTrace) New() traceEvent {
 func (r *RecoveredBlocksTrace) Run(tr *traceRunner) error {
 	validity := map[types.BlockHeader]bool{}
 	for _, block := range r.Blocks {
-		validity[block.Headers] = block.Validity
+		validity[block.Header] = block.Valid
 	}
 	tr.trt.OnRecoveredBlocks(r.Layer, validity, r.Hare)
 	return nil

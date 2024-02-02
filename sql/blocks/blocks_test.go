@@ -226,39 +226,47 @@ func TestLastValid(t *testing.T) {
 	})
 	t.Run("all valid", func(t *testing.T) {
 		db := sql.InMemory()
-
-		ids := []types.BlockID{{1}, {2}, {3}}
-		layers := []types.LayerID{11, 22, 33}
-		for i := range ids {
+		blocks := map[types.BlockID]struct {
+			lid types.LayerID
+		}{
+			{1}: {lid: 11},
+			{2}: {lid: 22},
+			{3}: {lid: 33},
+		}
+		for bid, layer := range blocks {
 			block := types.NewExistingBlock(
-				ids[i],
-				types.InnerBlock{LayerIndex: layers[i]},
+				bid,
+				types.InnerBlock{LayerIndex: layer.lid},
 			)
 			require.NoError(t, Add(db, block))
-			require.NoError(t, SetValid(db, ids[i]))
+			require.NoError(t, SetValid(db, bid))
 		}
 		last, err := LastValid(db)
 		require.NoError(t, err)
-		require.Equal(t, layers[len(ids)-1], last)
+		require.Equal(t, 33, last)
 	})
 	t.Run("last is invalid", func(t *testing.T) {
 		db := sql.InMemory()
-
-		ids := []types.BlockID{{1}, {2}, {3}}
-		layers := []types.LayerID{11, 22, 33}
-		cutoff := len(ids) - 1
-		for i := range ids {
+		blocks := map[types.BlockID]struct {
+			invalid bool
+			lid     types.LayerID
+		}{
+			{1}: {lid: 11},
+			{2}: {lid: 22},
+			{3}: {invalid: true, lid: 33},
+		}
+		for bid, layer := range blocks {
 			block := types.NewExistingBlock(
-				ids[i],
-				types.InnerBlock{LayerIndex: layers[i]},
+				bid,
+				types.InnerBlock{LayerIndex: layer.lid},
 			)
 			require.NoError(t, Add(db, block))
-		}
-		for i := range ids[:cutoff] {
-			require.NoError(t, SetValid(db, ids[i]))
+			if !layer.invalid {
+				require.NoError(t, SetValid(db, bid))
+			}
 		}
 		last, err := LastValid(db)
 		require.NoError(t, err)
-		require.Equal(t, layers[cutoff-1], last)
+		require.Equal(t, 22, last)
 	})
 }

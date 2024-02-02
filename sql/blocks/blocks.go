@@ -73,7 +73,8 @@ func Get(db sql.Executor, id types.BlockID) (rst *types.Block, err error) {
 
 func LastValid(db sql.Executor) (types.LayerID, error) {
 	var lid types.LayerID
-	// it doesn't use max(layer) in order to get rows == 0 when there are not layers
+	// it doesn't use max(layer) in order to get rows == 0 when there are no layers.
+	// aggregation always returns rows == 1, hence the check below doesn't work.
 	rows, err := db.Exec(
 		"select layer from blocks where validity = 1 order by layer desc limit 1;",
 		nil,

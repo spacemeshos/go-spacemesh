@@ -19,7 +19,7 @@ import (
 // Recover tortoise state from database.
 func Recover(
 	ctx context.Context,
-	db *sql.Database,
+	db sql.Executor,
 	current types.LayerID,
 	opts ...Opt,
 ) (*Tortoise, error) {
@@ -129,7 +129,7 @@ func Recover(
 	return trtl, nil
 }
 
-func recoverEpoch(target types.EpochID, trtl *Tortoise, db *sql.Database) error {
+func recoverEpoch(target types.EpochID, trtl *Tortoise, db sql.Executor) error {
 	publish := target - 1
 	if err := atxs.IterateAtxs(db, publish, publish, func(atx *types.VerifiedActivationTx) bool {
 		trtl.OnAtx(atx.ToHeader().ToData())
@@ -149,7 +149,7 @@ type ballotFunc func(*types.BallotTortoiseData)
 func RecoverLayer(
 	ctx context.Context,
 	trtl *Tortoise,
-	db *sql.Database,
+	db sql.Executor,
 	lid types.LayerID,
 	onBallot ballotFunc,
 ) error {

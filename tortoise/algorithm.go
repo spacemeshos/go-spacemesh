@@ -130,6 +130,12 @@ func New(opts ...Opt) (*Tortoise, error) {
 }
 
 func (t *Tortoise) RecoverFrom(lid types.LayerID, opinion, prev types.Hash32) {
+	if lid <= types.GetEffectiveGenesis() {
+		t.logger.Panic("recover should be after effective genesis",
+			zap.Uint32("lid", lid.Uint32()),
+			zap.Uint32("effective genesis", types.GetEffectiveGenesis().Uint32()),
+		)
+	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.logger.Debug("recover from",

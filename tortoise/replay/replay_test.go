@@ -3,6 +3,7 @@ package replay
 import (
 	"context"
 	"flag"
+	"fmt"
 	"testing"
 	"time"
 
@@ -49,7 +50,7 @@ func TestReplayMainnet(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	db, err := sql.Open("file:" + *dbpath)
+	db, err := sql.Open(fmt.Sprintf("file:%s?mode=ro", *dbpath))
 	require.NoError(t, err)
 
 	start := time.Now()
