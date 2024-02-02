@@ -70,6 +70,8 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	cfg.P2P.DataDir = filepath.Join(testDir, "p2p-dir")
 	require.NoError(t, os.Mkdir(cfg.P2P.DataDir, os.ModePerm))
 
+	cfg.POET.RequestTimeout = time.Minute
+	cfg.POET.MaxRequestRetries = 10
 	cfg.PoetServers = []types.PoetServer{
 		{Address: cluster.MakePoetGlobalEndpoint(ctx.Namespace, 0)},
 	}
