@@ -231,10 +231,6 @@ func Test_Builder_Multi_InitialPost(t *testing.T) {
 				},
 				nil,
 			)
-			tab.mValidator.EXPECT().
-				Post(gomock.Any(), sig.NodeID(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-				AnyTimes().
-				Return(nil)
 
 			require.NoError(t, tab.buildInitialPost(context.Background(), sig.NodeID()))
 

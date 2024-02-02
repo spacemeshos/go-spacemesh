@@ -75,7 +75,6 @@ type Builder struct {
 	localDB           *localsql.Database
 	publisher         pubsub.Publisher
 	nipostBuilder     nipostBuilder
-	validator         nipostValidator
 	layerClock        layerClock
 	syncer            syncer
 	log               *zap.Logger
@@ -113,12 +112,6 @@ func WithContext(ctx context.Context) BuilderOption {
 func WithPoetConfig(c PoetConfig) BuilderOption {
 	return func(b *Builder) {
 		b.poetCfg = c
-	}
-}
-
-func WithValidator(v nipostValidator) BuilderOption {
-	return func(b *Builder) {
-		b.validator = v
 	}
 }
 

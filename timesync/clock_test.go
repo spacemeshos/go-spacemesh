@@ -9,17 +9,17 @@ import (
 	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
 func Test_NodeClock_NewClock(t *testing.T) {
 	clock, err := NewClock(
 		WithGenesisTime(time.Now()),
 		WithTickInterval(time.Second),
-		WithLogger(logtest.New(t)),
+		WithLogger(zaptest.NewLogger(t)),
 	)
 	require.ErrorContains(t, err, "layer duration is zero")
 	require.Nil(t, clock)
@@ -27,7 +27,7 @@ func Test_NodeClock_NewClock(t *testing.T) {
 	clock, err = NewClock(
 		WithLayerDuration(time.Second),
 		WithTickInterval(time.Second),
-		WithLogger(logtest.New(t)),
+		WithLogger(zaptest.NewLogger(t)),
 	)
 	require.ErrorContains(t, err, "genesis time is zero")
 	require.Nil(t, clock)
@@ -43,7 +43,7 @@ func Test_NodeClock_NewClock(t *testing.T) {
 	clock, err = NewClock(
 		WithLayerDuration(time.Second),
 		WithGenesisTime(time.Now()),
-		WithLogger(logtest.New(t)),
+		WithLogger(zaptest.NewLogger(t)),
 	)
 	require.ErrorContains(t, err, "tick interval is zero")
 	require.Nil(t, clock)
@@ -52,7 +52,7 @@ func Test_NodeClock_NewClock(t *testing.T) {
 		WithLayerDuration(time.Second),
 		WithTickInterval(2*time.Second),
 		WithGenesisTime(time.Now()),
-		WithLogger(logtest.New(t)),
+		WithLogger(zaptest.NewLogger(t)),
 	)
 	require.ErrorContains(t, err, "tick interval must be between 0 and layer duration")
 	require.Nil(t, clock)
@@ -65,7 +65,7 @@ func Test_NodeClock_GenesisTime(t *testing.T) {
 		WithLayerDuration(time.Second),
 		WithTickInterval(time.Second/10),
 		WithGenesisTime(genesis),
-		WithLogger(logtest.New(t)),
+		WithLogger(zaptest.NewLogger(t)),
 	)
 	require.NoError(t, err)
 	require.NotNil(t, clock)
@@ -78,7 +78,7 @@ func Test_NodeClock_Close(t *testing.T) {
 		WithLayerDuration(time.Second),
 		WithTickInterval(time.Second/10),
 		WithGenesisTime(time.Now()),
-		WithLogger(logtest.New(t)),
+		WithLogger(zaptest.NewLogger(t)),
 	)
 	require.NoError(t, err)
 	require.NotNil(t, clock)
@@ -105,7 +105,7 @@ func Test_NodeClock_NoRaceOnTick(t *testing.T) {
 		WithLayerDuration(time.Second),
 		WithTickInterval(time.Second/10),
 		WithGenesisTime(time.Now()),
-		WithLogger(logtest.New(t)),
+		WithLogger(zaptest.NewLogger(t)),
 	)
 	require.NoError(t, err)
 	require.NotNil(t, clock)
@@ -148,7 +148,7 @@ func Test_NodeClock_Await_BeforeGenesis(t *testing.T) {
 		WithLayerDuration(layerDuration),
 		WithTickInterval(tickInterval),
 		WithGenesisTime(genesis),
-		WithLogger(logtest.New(t)),
+		WithLogger(zaptest.NewLogger(t)),
 	)
 	require.NoError(t, err)
 	require.NotNil(t, clock)
@@ -173,7 +173,7 @@ func Test_NodeClock_Await_PassedLayer(t *testing.T) {
 		WithLayerDuration(layerDuration),
 		WithTickInterval(tickInterval),
 		WithGenesisTime(genesis),
-		WithLogger(logtest.New(t)),
+		WithLogger(zaptest.NewLogger(t)),
 	)
 	require.NoError(t, err)
 	require.NotNil(t, clock)
@@ -199,7 +199,7 @@ func Test_NodeClock_Await_WithClockMovingBackwards(t *testing.T) {
 		WithLayerDuration(layerDuration),
 		WithTickInterval(tickInterval),
 		WithGenesisTime(genesis),
-		WithLogger(logtest.New(t)),
+		WithLogger(zaptest.NewLogger(t)),
 	)
 	require.NoError(t, err)
 	require.NotNil(t, clock)
@@ -248,7 +248,7 @@ func Test_NodeClock_NonMonotonicTick_Forward(t *testing.T) {
 		WithLayerDuration(layerDuration),
 		WithTickInterval(tickInterval),
 		WithGenesisTime(genesis),
-		WithLogger(logtest.New(t)),
+		WithLogger(zaptest.NewLogger(t)),
 	)
 	require.NoError(t, err)
 	require.NotNil(t, clock)
@@ -286,7 +286,7 @@ func Test_NodeClock_NonMonotonicTick_Backward(t *testing.T) {
 		WithLayerDuration(layerDuration),
 		WithTickInterval(tickInterval),
 		WithGenesisTime(genesis),
-		WithLogger(logtest.New(t)),
+		WithLogger(zaptest.NewLogger(t)),
 	)
 	require.NoError(t, err)
 	require.NotNil(t, clock)
@@ -382,7 +382,7 @@ func Fuzz_NodeClock_CurrentLayer(f *testing.F) {
 			WithLayerDuration(layerTime),
 			WithTickInterval(tickInterval),
 			WithGenesisTime(genesisTime),
-			WithLogger(logtest.New(t)),
+			WithLogger(zaptest.NewLogger(t)),
 		)
 		require.NoError(t, err)
 		require.NotNil(t, clock)

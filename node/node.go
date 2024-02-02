@@ -972,7 +972,6 @@ func (app *App) initServices(ctx context.Context) error {
 		activation.WithPoetConfig(app.Config.POET),
 		// TODO(dshulyak) makes no sense. how we ended using it?
 		activation.WithPoetRetryInterval(app.Config.HARE3.PreroundDelay),
-		activation.WithValidator(app.validator),
 	)
 	atxBuilder.Register(app.edSgn)
 
@@ -1830,7 +1829,7 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 		timesync.WithLayerDuration(app.Config.LayerDuration),
 		timesync.WithTickInterval(1*time.Second),
 		timesync.WithGenesisTime(gTime),
-		timesync.WithLogger(app.addLogger(ClockLogger, lg)),
+		timesync.WithLogger(app.addLogger(ClockLogger, lg).Zap()),
 	)
 	if err != nil {
 		return fmt.Errorf("cannot create clock: %w", err)

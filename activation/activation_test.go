@@ -105,7 +105,6 @@ type testAtxBuilder struct {
 	mpostClient *MockPostClient
 	mclock      *MocklayerClock
 	msync       *Mocksyncer
-	mValidator  *MocknipostValidator
 }
 
 func newTestBuilder(tb testing.TB, numSigners int, opts ...BuilderOption) *testAtxBuilder {
@@ -123,10 +122,7 @@ func newTestBuilder(tb testing.TB, numSigners int, opts ...BuilderOption) *testA
 		mpostClient: NewMockPostClient(ctrl),
 		mclock:      NewMocklayerClock(ctrl),
 		msync:       NewMocksyncer(ctrl),
-		mValidator:  NewMocknipostValidator(ctrl),
 	}
-
-	opts = append(opts, WithValidator(tab.mValidator))
 
 	cfg := Config{
 		GoldenATXID:    tab.goldenATXID,
@@ -1335,10 +1331,6 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 		},
 		nil,
 	)
-	tab.mValidator.EXPECT().
-		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		AnyTimes().
-		Return(nil)
 	require.NoError(t, tab.buildInitialPost(context.Background(), sig.NodeID()))
 
 	posEpoch := postGenesisEpoch + 1
@@ -1388,10 +1380,6 @@ func TestBuilder_InitialPostIsPersisted(t *testing.T) {
 		},
 		nil,
 	)
-	tab.mValidator.EXPECT().
-		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		AnyTimes().
-		Return(nil)
 	require.NoError(t, tab.buildInitialPost(context.Background(), sig.NodeID()))
 
 	// postClient.Proof() should not be called again

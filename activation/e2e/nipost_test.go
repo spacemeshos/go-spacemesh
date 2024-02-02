@@ -117,7 +117,8 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	goldenATX := types.ATXID{2, 3, 4}
 	cfg := activation.DefaultPostConfig()
-	cdb := datastore.NewCachedDB(sql.InMemory(), log.NewFromLog(logger))
+	db := sql.InMemory()
+	cdb := datastore.NewCachedDB(db, log.NewFromLog(logger))
 
 	syncer := activation.NewMocksyncer(gomock.NewController(t))
 	syncer.EXPECT().RegisterForATXSynced().AnyTimes().DoAndReturn(func() <-chan struct{} {
@@ -165,7 +166,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
 
-	poetDb := activation.NewPoetDb(sql.InMemory(), log.NewFromLog(logger).Named("poetDb"))
+	poetDb := activation.NewPoetDb(db, log.NewFromLog(logger).Named("poetDb"))
 
 	svc := grpcserver.NewPostService(logger)
 	grpcCfg, cleanup := launchServer(t, svc)
@@ -178,9 +179,9 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 		return err == nil
 	}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
 
-	db := localsql.InMemory()
+	localDB := localsql.InMemory()
 	nb, err := activation.NewNIPostBuilder(
-		db,
+		localDB,
 		poetDb,
 		svc,
 		[]types.PoetServer{{Address: poetProver.RestURL().String()}},
@@ -261,7 +262,8 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	goldenATX := types.ATXID{2, 3, 4}
 	cfg := activation.DefaultPostConfig()
-	cdb := datastore.NewCachedDB(sql.InMemory(), log.NewFromLog(logger))
+	db := sql.InMemory()
+	cdb := datastore.NewCachedDB(db, log.NewFromLog(logger))
 
 	syncer := activation.NewMocksyncer(gomock.NewController(t))
 	syncer.EXPECT().RegisterForATXSynced().AnyTimes().DoAndReturn(func() <-chan struct{} {
@@ -299,15 +301,15 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 		},
 	)
 
-	poetDb := activation.NewPoetDb(sql.InMemory(), log.NewFromLog(logger).Named("poetDb"))
+	poetDb := activation.NewPoetDb(db, log.NewFromLog(logger).Named("poetDb"))
 
 	svc := grpcserver.NewPostService(logger)
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	db := localsql.InMemory()
+	localDB := localsql.InMemory()
 	nb, err := activation.NewNIPostBuilder(
-		db,
+		localDB,
 		poetDb,
 		svc,
 		[]types.PoetServer{{Address: poetProver.RestURL().String()}},
@@ -365,7 +367,8 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	goldenATX := types.ATXID{2, 3, 4}
 	cfg := activation.DefaultPostConfig()
-	cdb := datastore.NewCachedDB(sql.InMemory(), log.NewFromLog(logger))
+	db := sql.InMemory()
+	cdb := datastore.NewCachedDB(db, log.NewFromLog(logger))
 
 	syncer := activation.NewMocksyncer(gomock.NewController(t))
 	syncer.EXPECT().RegisterForATXSynced().AnyTimes().DoAndReturn(func() <-chan struct{} {
@@ -429,15 +432,11 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 		},
 	)
 
-	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
-	require.NoError(t, err)
-	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
+	poetDb := activation.NewPoetDb(db, log.NewFromLog(logger).Named("poetDb"))
 
-	poetDb := activation.NewPoetDb(sql.InMemory(), log.NewFromLog(logger).Named("poetDb"))
-
-	db := localsql.InMemory()
+	localDB := localsql.InMemory()
 	nb, err := activation.NewNIPostBuilder(
-		db,
+		localDB,
 		poetDb,
 		svc,
 		[]types.PoetServer{{Address: poetProver.RestURL().String()}},
@@ -447,10 +446,13 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
+	require.NoError(t, err)
+	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
+
 	challenge := types.NIPostChallenge{
 		PublishEpoch: postGenesisEpoch + 2,
 	}
-
 	for _, sig := range signers {
 		sig := sig
 		eg.Go(func() error {
