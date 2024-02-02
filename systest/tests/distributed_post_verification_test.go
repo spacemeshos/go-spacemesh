@@ -146,6 +146,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		timesync.WithLogger(logger.Named("clock")),
 	)
 	require.NoError(t, err)
+	t.Cleanup(clock.Close)
 
 	grpcPostService := grpcserver.NewPostService(logger.Named("grpc-post-service"))
 	grpczap.SetGrpcLoggerV2(grpclog, logger.Named("grpc"))

@@ -69,6 +69,7 @@ func Test_NodeClock_GenesisTime(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.NotNil(t, clock)
+	t.Cleanup(clock.Close)
 
 	require.Equal(t, genesis.Local(), clock.GenesisTime())
 }
@@ -82,6 +83,7 @@ func Test_NodeClock_Close(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.NotNil(t, clock)
+	t.Cleanup(clock.Close)
 
 	var eg errgroup.Group
 	eg.Go(func() error {
@@ -109,6 +111,7 @@ func Test_NodeClock_NoRaceOnTick(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.NotNil(t, clock)
+	t.Cleanup(clock.Close)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	eg, egCtx := errgroup.WithContext(ctx)
@@ -152,6 +155,7 @@ func Test_NodeClock_Await_BeforeGenesis(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.NotNil(t, clock)
+	t.Cleanup(clock.Close)
 
 	select {
 	case <-clock.AwaitLayer(types.LayerID(0)):
@@ -177,6 +181,7 @@ func Test_NodeClock_Await_PassedLayer(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.NotNil(t, clock)
+	t.Cleanup(clock.Close)
 
 	select {
 	case <-clock.AwaitLayer(types.LayerID(4)):
@@ -203,6 +208,7 @@ func Test_NodeClock_Await_WithClockMovingBackwards(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.NotNil(t, clock)
+	t.Cleanup(clock.Close)
 
 	// make the clock tick
 	clock.tick()
@@ -252,6 +258,7 @@ func Test_NodeClock_NonMonotonicTick_Forward(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.NotNil(t, clock)
+	t.Cleanup(clock.Close)
 	ch := clock.AwaitLayer(types.LayerID(6))
 
 	select {
@@ -290,6 +297,7 @@ func Test_NodeClock_NonMonotonicTick_Backward(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.NotNil(t, clock)
+	t.Cleanup(clock.Close)
 
 	ch6 := clock.AwaitLayer(types.LayerID(6))
 	ch7 := clock.AwaitLayer(types.LayerID(7))
@@ -386,6 +394,7 @@ func Fuzz_NodeClock_CurrentLayer(f *testing.F) {
 		)
 		require.NoError(t, err)
 		require.NotNil(t, clock)
+		t.Cleanup(clock.Close)
 
 		expectedLayer := uint32(0)
 		if nowTime.After(genesisTime) {
