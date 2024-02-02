@@ -45,14 +45,13 @@ type CachedDB struct {
 
 type Config struct {
 	// ATXSize must be larger than the sum of all ATXs in last 2 epochs to be effective
-	// (Epoch 12: ~ 300k, Epoch 11: ~ 200k)
 	ATXSize         int `mapstructure:"atx-size"`
 	MalfeasanceSize int `mapstructure:"malfeasance-size"`
 }
 
 func DefaultConfig() Config {
 	return Config{
-		ATXSize:         600_000,
+		ATXSize:         3_000_000, // to be in line with 2*`EpochData` size (see fetch/wire_types.go) - see comment above
 		MalfeasanceSize: 1_000,
 	}
 }

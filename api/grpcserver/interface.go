@@ -87,6 +87,7 @@ type genesisTimeAPI interface {
 type meshAPI interface {
 	GetATXs(context.Context, []types.ATXID) (map[types.ATXID]*types.VerifiedActivationTx, []types.ATXID)
 	GetLayer(types.LayerID) (*types.Layer, error)
+	GetLayerVerified(types.LayerID) (*types.Block, error)
 	GetRewardsByCoinbase(types.Address) ([]*types.Reward, error)
 	GetRewardsBySmesherId(id types.NodeID) ([]*types.Reward, error)
 	LatestLayer() types.LayerID

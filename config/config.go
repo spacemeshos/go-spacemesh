@@ -46,7 +46,8 @@ func init() {
 // Config defines the top level configuration for a spacemesh node.
 type Config struct {
 	BaseConfig      `mapstructure:"main"`
-	Genesis         *GenesisConfig             `mapstructure:"genesis"`
+	Preset          string                     `mapstructure:"preset"`
+	Genesis         GenesisConfig              `mapstructure:"genesis"`
 	PublicMetrics   PublicMetrics              `mapstructure:"public-metrics"`
 	Tortoise        tortoise.Config            `mapstructure:"tortoise"`
 	P2P             p2p.Config                 `mapstructure:"p2p"`
@@ -87,8 +88,6 @@ type BaseConfig struct {
 
 	TestConfig TestConfig `mapstructure:"testing"`
 	Standalone bool       `mapstructure:"standalone"`
-
-	ConfigFile string `mapstructure:"config"`
 
 	CollectMetrics bool `mapstructure:"metrics"`
 	MetricsPort    int  `mapstructure:"metrics-port"`

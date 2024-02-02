@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/post/shared"
+	"go.uber.org/zap"
 	"golang.org/x/exp/maps"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
@@ -48,7 +49,9 @@ type Handler struct {
 	log             log.Log
 	mu              sync.Mutex
 	fetcher         system.Fetcher
-	poetCfg         PoetConfig
+
+	signerMtx sync.Mutex
+	signers   map[types.NodeID]*signing.EdSigner
 
 	// inProgress map gathers ATXs that are currently being processed.
 	// It's used to avoid processing the same ATX twice.
@@ -71,7 +74,6 @@ func NewHandler(
 	beacon AtxReceiver,
 	tortoise system.Tortoise,
 	log log.Log,
-	poetCfg PoetConfig,
 ) *Handler {
 	return &Handler{
 		local:           local,
@@ -87,10 +89,22 @@ func NewHandler(
 		fetcher:         fetcher,
 		beacon:          beacon,
 		tortoise:        tortoise,
-		poetCfg:         poetCfg,
 
+		signers:    make(map[types.NodeID]*signing.EdSigner),
 		inProgress: make(map[types.ATXID][]chan error),
 	}
+}
+
+func (h *Handler) Register(sig *signing.EdSigner) {
+	h.signerMtx.Lock()
+	defer h.signerMtx.Unlock()
+	if _, exists := h.signers[sig.NodeID()]; exists {
+		h.log.Error("signing key already registered", zap.Stringer("id", sig.NodeID()))
+		return
+	}
+
+	h.log.Info("registered signing key", zap.Stringer("id", sig.NodeID()))
+	h.signers[sig.NodeID()] = sig
 }
 
 // ProcessAtx validates the active set size declared in the atx, and contextually validates the atx according to atx
@@ -372,48 +386,61 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 		return fmt.Errorf("checking if node is malicious: %w", err)
 	}
 	var proof *types.MalfeasanceProof
-	if err := h.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
-		if !malicious {
-			prev, err := atxs.GetByEpochAndNodeID(dbtx, atx.PublishEpoch, atx.SmesherID)
-			if err != nil && !errors.Is(err, sql.ErrNotFound) {
-				return err
+	if err := h.cdb.WithTx(ctx, func(tx *sql.Tx) error {
+		if malicious {
+			if err := atxs.Add(tx, atx); err != nil && !errors.Is(err, sql.ErrObjectExists) {
+				return fmt.Errorf("add atx to db: %w", err)
 			}
-			// do ID check to be absolutely sure.
-			if prev != nil && prev.ID() != atx.ID() {
-				var atxProof types.AtxProof
-				for i, a := range []*types.VerifiedActivationTx{prev, atx} {
-					atxProof.Messages[i] = types.AtxProofMsg{
-						InnerMsg: types.ATXMetadata{
-							PublishEpoch: a.PublishEpoch,
-							MsgHash:      types.BytesToHash(a.HashInnerBytes()),
-						},
-						SmesherID: a.SmesherID,
-						Signature: a.Signature,
-					}
-				}
-				proof = &types.MalfeasanceProof{
-					Layer: atx.PublishEpoch.FirstLayer(),
-					Proof: types.Proof{
-						Type: types.MultipleATXs,
-						Data: &atxProof,
-					},
-				}
-				encoded, err := codec.Encode(proof)
-				if err != nil {
-					h.log.With().Panic("failed to encode malfeasance proof", log.Err(err))
-				}
-				if err := identities.SetMalicious(dbtx, atx.SmesherID, encoded, time.Now()); err != nil {
-					return fmt.Errorf("add malfeasance proof: %w", err)
-				}
-
-				h.log.WithContext(ctx).With().Warning("smesher produced more than one atx in the same epoch",
-					log.Stringer("smesher", atx.SmesherID),
-					log.Object("prev", prev),
-					log.Object("curr", atx),
-				)
-			}
+			return nil
 		}
-		if err := atxs.Add(dbtx, atx); err != nil && !errors.Is(err, sql.ErrObjectExists) {
+
+		prev, err := atxs.GetByEpochAndNodeID(tx, atx.PublishEpoch, atx.SmesherID)
+		if err != nil && !errors.Is(err, sql.ErrNotFound) {
+			return err
+		}
+
+		// do ID check to be absolutely sure.
+		if prev != nil && prev.ID() != atx.ID() {
+			if _, ok := h.signers[atx.SmesherID]; ok {
+				// if we land here we tried to publish 2 ATXs in the same epoch
+				// don't punish ourselves but fail validation and thereby the handling of the incoming ATX
+				return fmt.Errorf("%s already published an ATX in epoch %d", atx.SmesherID.ShortString(), atx.PublishEpoch)
+			}
+
+			var atxProof types.AtxProof
+			for i, a := range []*types.VerifiedActivationTx{prev, atx} {
+				atxProof.Messages[i] = types.AtxProofMsg{
+					InnerMsg: types.ATXMetadata{
+						PublishEpoch: a.PublishEpoch,
+						MsgHash:      types.BytesToHash(a.HashInnerBytes()),
+					},
+					SmesherID: a.SmesherID,
+					Signature: a.Signature,
+				}
+			}
+			proof = &types.MalfeasanceProof{
+				Layer: atx.PublishEpoch.FirstLayer(),
+				Proof: types.Proof{
+					Type: types.MultipleATXs,
+					Data: &atxProof,
+				},
+			}
+			encoded, err := codec.Encode(proof)
+			if err != nil {
+				h.log.With().Panic("failed to encode malfeasance proof", log.Err(err))
+			}
+			if err := identities.SetMalicious(tx, atx.SmesherID, encoded, time.Now()); err != nil {
+				return fmt.Errorf("add malfeasance proof: %w", err)
+			}
+
+			h.log.WithContext(ctx).With().Warning("smesher produced more than one atx in the same epoch",
+				log.Stringer("smesher", atx.SmesherID),
+				log.Object("prev", prev),
+				log.Object("curr", atx),
+			)
+		}
+
+		if err := atxs.Add(tx, atx); err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("add atx to db: %w", err)
 		}
 		return nil
@@ -610,7 +637,7 @@ func (h *Handler) FetchReferences(ctx context.Context, atx *types.ActivationTx) 
 		return nil
 	}
 
-	if err := h.fetcher.GetAtxs(ctx, maps.Keys(atxIDs)); err != nil {
+	if err := h.fetcher.GetAtxs(ctx, maps.Keys(atxIDs), system.WithoutLimiting()); err != nil {
 		dbg := fmt.Sprintf("prev %v pos %v commit %v", atx.PrevATXID, atx.PositioningATX, atx.CommitmentATX)
 		return fmt.Errorf("fetch referenced atxs (%s): %w", dbg, err)
 	}

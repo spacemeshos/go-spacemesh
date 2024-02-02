@@ -16,6 +16,7 @@ import (
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	fetch "github.com/spacemeshos/go-spacemesh/fetch"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
+	system "github.com/spacemeshos/go-spacemesh/system"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -224,17 +225,22 @@ func (m *MockfetchLogic) EXPECT() *MockfetchLogicMockRecorder {
 }
 
 // GetAtxs mocks base method.
-func (m *MockfetchLogic) GetAtxs(arg0 context.Context, arg1 []types.ATXID) error {
+func (m *MockfetchLogic) GetAtxs(arg0 context.Context, arg1 []types.ATXID, arg2 ...system.GetAtxOpt) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAtxs", arg0, arg1)
+	varargs := []any{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetAtxs", varargs...)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // GetAtxs indicates an expected call of GetAtxs.
-func (mr *MockfetchLogicMockRecorder) GetAtxs(arg0, arg1 any) *fetchLogicGetAtxsCall {
+func (mr *MockfetchLogicMockRecorder) GetAtxs(arg0, arg1 any, arg2 ...any) *fetchLogicGetAtxsCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAtxs", reflect.TypeOf((*MockfetchLogic)(nil).GetAtxs), arg0, arg1)
+	varargs := append([]any{arg0, arg1}, arg2...)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAtxs", reflect.TypeOf((*MockfetchLogic)(nil).GetAtxs), varargs...)
 	return &fetchLogicGetAtxsCall{Call: call}
 }
 
@@ -250,13 +256,13 @@ func (c *fetchLogicGetAtxsCall) Return(arg0 error) *fetchLogicGetAtxsCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *fetchLogicGetAtxsCall) Do(f func(context.Context, []types.ATXID) error) *fetchLogicGetAtxsCall {
+func (c *fetchLogicGetAtxsCall) Do(f func(context.Context, []types.ATXID, ...system.GetAtxOpt) error) *fetchLogicGetAtxsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *fetchLogicGetAtxsCall) DoAndReturn(f func(context.Context, []types.ATXID) error) *fetchLogicGetAtxsCall {
+func (c *fetchLogicGetAtxsCall) DoAndReturn(f func(context.Context, []types.ATXID, ...system.GetAtxOpt) error) *fetchLogicGetAtxsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -415,17 +421,18 @@ func (c *fetchLogicGetEpochATXsCall) DoAndReturn(f func(context.Context, types.E
 }
 
 // GetLayerData mocks base method.
-func (m *MockfetchLogic) GetLayerData(arg0 context.Context, arg1 []p2p.Peer, arg2 types.LayerID, arg3 func([]byte, p2p.Peer), arg4 func(error, p2p.Peer)) error {
+func (m *MockfetchLogic) GetLayerData(arg0 context.Context, arg1 p2p.Peer, arg2 types.LayerID) ([]byte, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetLayerData", arg0, arg1, arg2, arg3, arg4)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret := m.ctrl.Call(m, "GetLayerData", arg0, arg1, arg2)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetLayerData indicates an expected call of GetLayerData.
-func (mr *MockfetchLogicMockRecorder) GetLayerData(arg0, arg1, arg2, arg3, arg4 any) *fetchLogicGetLayerDataCall {
+func (mr *MockfetchLogicMockRecorder) GetLayerData(arg0, arg1, arg2 any) *fetchLogicGetLayerDataCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerData", reflect.TypeOf((*MockfetchLogic)(nil).GetLayerData), arg0, arg1, arg2, arg3, arg4)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerData", reflect.TypeOf((*MockfetchLogic)(nil).GetLayerData), arg0, arg1, arg2)
 	return &fetchLogicGetLayerDataCall{Call: call}
 }
 
@@ -435,35 +442,36 @@ type fetchLogicGetLayerDataCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *fetchLogicGetLayerDataCall) Return(arg0 error) *fetchLogicGetLayerDataCall {
-	c.Call = c.Call.Return(arg0)
+func (c *fetchLogicGetLayerDataCall) Return(arg0 []byte, arg1 error) *fetchLogicGetLayerDataCall {
+	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *fetchLogicGetLayerDataCall) Do(f func(context.Context, []p2p.Peer, types.LayerID, func([]byte, p2p.Peer), func(error, p2p.Peer)) error) *fetchLogicGetLayerDataCall {
+func (c *fetchLogicGetLayerDataCall) Do(f func(context.Context, p2p.Peer, types.LayerID) ([]byte, error)) *fetchLogicGetLayerDataCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *fetchLogicGetLayerDataCall) DoAndReturn(f func(context.Context, []p2p.Peer, types.LayerID, func([]byte, p2p.Peer), func(error, p2p.Peer)) error) *fetchLogicGetLayerDataCall {
+func (c *fetchLogicGetLayerDataCall) DoAndReturn(f func(context.Context, p2p.Peer, types.LayerID) ([]byte, error)) *fetchLogicGetLayerDataCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // GetLayerOpinions mocks base method.
-func (m *MockfetchLogic) GetLayerOpinions(arg0 context.Context, arg1 []p2p.Peer, arg2 types.LayerID, arg3 func([]byte, p2p.Peer), arg4 func(error, p2p.Peer)) error {
+func (m *MockfetchLogic) GetLayerOpinions(arg0 context.Context, arg1 p2p.Peer, arg2 types.LayerID) ([]byte, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetLayerOpinions", arg0, arg1, arg2, arg3, arg4)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret := m.ctrl.Call(m, "GetLayerOpinions", arg0, arg1, arg2)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetLayerOpinions indicates an expected call of GetLayerOpinions.
-func (mr *MockfetchLogicMockRecorder) GetLayerOpinions(arg0, arg1, arg2, arg3, arg4 any) *fetchLogicGetLayerOpinionsCall {
+func (mr *MockfetchLogicMockRecorder) GetLayerOpinions(arg0, arg1, arg2 any) *fetchLogicGetLayerOpinionsCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerOpinions", reflect.TypeOf((*MockfetchLogic)(nil).GetLayerOpinions), arg0, arg1, arg2, arg3, arg4)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerOpinions", reflect.TypeOf((*MockfetchLogic)(nil).GetLayerOpinions), arg0, arg1, arg2)
 	return &fetchLogicGetLayerOpinionsCall{Call: call}
 }
 
@@ -473,19 +481,19 @@ type fetchLogicGetLayerOpinionsCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *fetchLogicGetLayerOpinionsCall) Return(arg0 error) *fetchLogicGetLayerOpinionsCall {
-	c.Call = c.Call.Return(arg0)
+func (c *fetchLogicGetLayerOpinionsCall) Return(arg0 []byte, arg1 error) *fetchLogicGetLayerOpinionsCall {
+	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *fetchLogicGetLayerOpinionsCall) Do(f func(context.Context, []p2p.Peer, types.LayerID, func([]byte, p2p.Peer), func(error, p2p.Peer)) error) *fetchLogicGetLayerOpinionsCall {
+func (c *fetchLogicGetLayerOpinionsCall) Do(f func(context.Context, p2p.Peer, types.LayerID) ([]byte, error)) *fetchLogicGetLayerOpinionsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *fetchLogicGetLayerOpinionsCall) DoAndReturn(f func(context.Context, []p2p.Peer, types.LayerID, func([]byte, p2p.Peer), func(error, p2p.Peer)) error) *fetchLogicGetLayerOpinionsCall {
+func (c *fetchLogicGetLayerOpinionsCall) DoAndReturn(f func(context.Context, p2p.Peer, types.LayerID) ([]byte, error)) *fetchLogicGetLayerOpinionsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -529,17 +537,18 @@ func (c *fetchLogicGetMalfeasanceProofsCall) DoAndReturn(f func(context.Context,
 }
 
 // GetMaliciousIDs mocks base method.
-func (m *MockfetchLogic) GetMaliciousIDs(arg0 context.Context, arg1 []p2p.Peer, arg2 func([]byte, p2p.Peer), arg3 func(error, p2p.Peer)) error {
+func (m *MockfetchLogic) GetMaliciousIDs(arg0 context.Context, arg1 p2p.Peer) ([]byte, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMaliciousIDs", arg0, arg1, arg2, arg3)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret := m.ctrl.Call(m, "GetMaliciousIDs", arg0, arg1)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetMaliciousIDs indicates an expected call of GetMaliciousIDs.
-func (mr *MockfetchLogicMockRecorder) GetMaliciousIDs(arg0, arg1, arg2, arg3 any) *fetchLogicGetMaliciousIDsCall {
+func (mr *MockfetchLogicMockRecorder) GetMaliciousIDs(arg0, arg1 any) *fetchLogicGetMaliciousIDsCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMaliciousIDs", reflect.TypeOf((*MockfetchLogic)(nil).GetMaliciousIDs), arg0, arg1, arg2, arg3)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMaliciousIDs", reflect.TypeOf((*MockfetchLogic)(nil).GetMaliciousIDs), arg0, arg1)
 	return &fetchLogicGetMaliciousIDsCall{Call: call}
 }
 
@@ -549,19 +558,19 @@ type fetchLogicGetMaliciousIDsCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *fetchLogicGetMaliciousIDsCall) Return(arg0 error) *fetchLogicGetMaliciousIDsCall {
-	c.Call = c.Call.Return(arg0)
+func (c *fetchLogicGetMaliciousIDsCall) Return(arg0 []byte, arg1 error) *fetchLogicGetMaliciousIDsCall {
+	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *fetchLogicGetMaliciousIDsCall) Do(f func(context.Context, []p2p.Peer, func([]byte, p2p.Peer), func(error, p2p.Peer)) error) *fetchLogicGetMaliciousIDsCall {
+func (c *fetchLogicGetMaliciousIDsCall) Do(f func(context.Context, p2p.Peer) ([]byte, error)) *fetchLogicGetMaliciousIDsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *fetchLogicGetMaliciousIDsCall) DoAndReturn(f func(context.Context, []p2p.Peer, func([]byte, p2p.Peer), func(error, p2p.Peer)) error) *fetchLogicGetMaliciousIDsCall {
+func (c *fetchLogicGetMaliciousIDsCall) DoAndReturn(f func(context.Context, p2p.Peer) ([]byte, error)) *fetchLogicGetMaliciousIDsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -863,17 +872,22 @@ func (m *Mockfetcher) EXPECT() *MockfetcherMockRecorder {
 }
 
 // GetAtxs mocks base method.
-func (m *Mockfetcher) GetAtxs(arg0 context.Context, arg1 []types.ATXID) error {
+func (m *Mockfetcher) GetAtxs(arg0 context.Context, arg1 []types.ATXID, arg2 ...system.GetAtxOpt) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAtxs", arg0, arg1)
+	varargs := []any{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetAtxs", varargs...)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // GetAtxs indicates an expected call of GetAtxs.
-func (mr *MockfetcherMockRecorder) GetAtxs(arg0, arg1 any) *fetcherGetAtxsCall {
+func (mr *MockfetcherMockRecorder) GetAtxs(arg0, arg1 any, arg2 ...any) *fetcherGetAtxsCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAtxs", reflect.TypeOf((*Mockfetcher)(nil).GetAtxs), arg0, arg1)
+	varargs := append([]any{arg0, arg1}, arg2...)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAtxs", reflect.TypeOf((*Mockfetcher)(nil).GetAtxs), varargs...)
 	return &fetcherGetAtxsCall{Call: call}
 }
 
@@ -889,13 +903,13 @@ func (c *fetcherGetAtxsCall) Return(arg0 error) *fetcherGetAtxsCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *fetcherGetAtxsCall) Do(f func(context.Context, []types.ATXID) error) *fetcherGetAtxsCall {
+func (c *fetcherGetAtxsCall) Do(f func(context.Context, []types.ATXID, ...system.GetAtxOpt) error) *fetcherGetAtxsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *fetcherGetAtxsCall) DoAndReturn(f func(context.Context, []types.ATXID) error) *fetcherGetAtxsCall {
+func (c *fetcherGetAtxsCall) DoAndReturn(f func(context.Context, []types.ATXID, ...system.GetAtxOpt) error) *fetcherGetAtxsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -1016,17 +1030,18 @@ func (c *fetcherGetCertCall) DoAndReturn(f func(context.Context, types.LayerID, 
 }
 
 // GetLayerData mocks base method.
-func (m *Mockfetcher) GetLayerData(arg0 context.Context, arg1 []p2p.Peer, arg2 types.LayerID, arg3 func([]byte, p2p.Peer), arg4 func(error, p2p.Peer)) error {
+func (m *Mockfetcher) GetLayerData(arg0 context.Context, arg1 p2p.Peer, arg2 types.LayerID) ([]byte, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetLayerData", arg0, arg1, arg2, arg3, arg4)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret := m.ctrl.Call(m, "GetLayerData", arg0, arg1, arg2)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetLayerData indicates an expected call of GetLayerData.
-func (mr *MockfetcherMockRecorder) GetLayerData(arg0, arg1, arg2, arg3, arg4 any) *fetcherGetLayerDataCall {
+func (mr *MockfetcherMockRecorder) GetLayerData(arg0, arg1, arg2 any) *fetcherGetLayerDataCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerData", reflect.TypeOf((*Mockfetcher)(nil).GetLayerData), arg0, arg1, arg2, arg3, arg4)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerData", reflect.TypeOf((*Mockfetcher)(nil).GetLayerData), arg0, arg1, arg2)
 	return &fetcherGetLayerDataCall{Call: call}
 }
 
@@ -1036,35 +1051,36 @@ type fetcherGetLayerDataCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *fetcherGetLayerDataCall) Return(arg0 error) *fetcherGetLayerDataCall {
-	c.Call = c.Call.Return(arg0)
+func (c *fetcherGetLayerDataCall) Return(arg0 []byte, arg1 error) *fetcherGetLayerDataCall {
+	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *fetcherGetLayerDataCall) Do(f func(context.Context, []p2p.Peer, types.LayerID, func([]byte, p2p.Peer), func(error, p2p.Peer)) error) *fetcherGetLayerDataCall {
+func (c *fetcherGetLayerDataCall) Do(f func(context.Context, p2p.Peer, types.LayerID) ([]byte, error)) *fetcherGetLayerDataCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *fetcherGetLayerDataCall) DoAndReturn(f func(context.Context, []p2p.Peer, types.LayerID, func([]byte, p2p.Peer), func(error, p2p.Peer)) error) *fetcherGetLayerDataCall {
+func (c *fetcherGetLayerDataCall) DoAndReturn(f func(context.Context, p2p.Peer, types.LayerID) ([]byte, error)) *fetcherGetLayerDataCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // GetLayerOpinions mocks base method.
-func (m *Mockfetcher) GetLayerOpinions(arg0 context.Context, arg1 []p2p.Peer, arg2 types.LayerID, arg3 func([]byte, p2p.Peer), arg4 func(error, p2p.Peer)) error {
+func (m *Mockfetcher) GetLayerOpinions(arg0 context.Context, arg1 p2p.Peer, arg2 types.LayerID) ([]byte, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetLayerOpinions", arg0, arg1, arg2, arg3, arg4)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret := m.ctrl.Call(m, "GetLayerOpinions", arg0, arg1, arg2)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetLayerOpinions indicates an expected call of GetLayerOpinions.
-func (mr *MockfetcherMockRecorder) GetLayerOpinions(arg0, arg1, arg2, arg3, arg4 any) *fetcherGetLayerOpinionsCall {
+func (mr *MockfetcherMockRecorder) GetLayerOpinions(arg0, arg1, arg2 any) *fetcherGetLayerOpinionsCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerOpinions", reflect.TypeOf((*Mockfetcher)(nil).GetLayerOpinions), arg0, arg1, arg2, arg3, arg4)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerOpinions", reflect.TypeOf((*Mockfetcher)(nil).GetLayerOpinions), arg0, arg1, arg2)
 	return &fetcherGetLayerOpinionsCall{Call: call}
 }
 
@@ -1074,19 +1090,19 @@ type fetcherGetLayerOpinionsCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *fetcherGetLayerOpinionsCall) Return(arg0 error) *fetcherGetLayerOpinionsCall {
-	c.Call = c.Call.Return(arg0)
+func (c *fetcherGetLayerOpinionsCall) Return(arg0 []byte, arg1 error) *fetcherGetLayerOpinionsCall {
+	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *fetcherGetLayerOpinionsCall) Do(f func(context.Context, []p2p.Peer, types.LayerID, func([]byte, p2p.Peer), func(error, p2p.Peer)) error) *fetcherGetLayerOpinionsCall {
+func (c *fetcherGetLayerOpinionsCall) Do(f func(context.Context, p2p.Peer, types.LayerID) ([]byte, error)) *fetcherGetLayerOpinionsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *fetcherGetLayerOpinionsCall) DoAndReturn(f func(context.Context, []p2p.Peer, types.LayerID, func([]byte, p2p.Peer), func(error, p2p.Peer)) error) *fetcherGetLayerOpinionsCall {
+func (c *fetcherGetLayerOpinionsCall) DoAndReturn(f func(context.Context, p2p.Peer, types.LayerID) ([]byte, error)) *fetcherGetLayerOpinionsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -1130,17 +1146,18 @@ func (c *fetcherGetMalfeasanceProofsCall) DoAndReturn(f func(context.Context, []
 }
 
 // GetMaliciousIDs mocks base method.
-func (m *Mockfetcher) GetMaliciousIDs(arg0 context.Context, arg1 []p2p.Peer, arg2 func([]byte, p2p.Peer), arg3 func(error, p2p.Peer)) error {
+func (m *Mockfetcher) GetMaliciousIDs(arg0 context.Context, arg1 p2p.Peer) ([]byte, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMaliciousIDs", arg0, arg1, arg2, arg3)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret := m.ctrl.Call(m, "GetMaliciousIDs", arg0, arg1)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetMaliciousIDs indicates an expected call of GetMaliciousIDs.
-func (mr *MockfetcherMockRecorder) GetMaliciousIDs(arg0, arg1, arg2, arg3 any) *fetcherGetMaliciousIDsCall {
+func (mr *MockfetcherMockRecorder) GetMaliciousIDs(arg0, arg1 any) *fetcherGetMaliciousIDsCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMaliciousIDs", reflect.TypeOf((*Mockfetcher)(nil).GetMaliciousIDs), arg0, arg1, arg2, arg3)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMaliciousIDs", reflect.TypeOf((*Mockfetcher)(nil).GetMaliciousIDs), arg0, arg1)
 	return &fetcherGetMaliciousIDsCall{Call: call}
 }
 
@@ -1150,19 +1167,19 @@ type fetcherGetMaliciousIDsCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *fetcherGetMaliciousIDsCall) Return(arg0 error) *fetcherGetMaliciousIDsCall {
-	c.Call = c.Call.Return(arg0)
+func (c *fetcherGetMaliciousIDsCall) Return(arg0 []byte, arg1 error) *fetcherGetMaliciousIDsCall {
+	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *fetcherGetMaliciousIDsCall) Do(f func(context.Context, []p2p.Peer, func([]byte, p2p.Peer), func(error, p2p.Peer)) error) *fetcherGetMaliciousIDsCall {
+func (c *fetcherGetMaliciousIDsCall) Do(f func(context.Context, p2p.Peer) ([]byte, error)) *fetcherGetMaliciousIDsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *fetcherGetMaliciousIDsCall) DoAndReturn(f func(context.Context, []p2p.Peer, func([]byte, p2p.Peer), func(error, p2p.Peer)) error) *fetcherGetMaliciousIDsCall {
+func (c *fetcherGetMaliciousIDsCall) DoAndReturn(f func(context.Context, p2p.Peer) ([]byte, error)) *fetcherGetMaliciousIDsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

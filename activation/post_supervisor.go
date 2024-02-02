@@ -68,7 +68,6 @@ type PostSupervisor struct {
 	provingOpts PostProvingOpts
 
 	postSetupProvider postSetupProvider
-	syncer            syncer
 
 	pid atomic.Int64 // pid of the running post service, only for tests.
 
@@ -84,7 +83,6 @@ func NewPostSupervisor(
 	postCfg PostConfig,
 	provingOpts PostProvingOpts,
 	postSetupProvider postSetupProvider,
-	syncer syncer,
 ) (*PostSupervisor, error) {
 	if _, err := os.Stat(cmdCfg.PostServiceCmd); err != nil {
 		return nil, fmt.Errorf("post service binary not found: %s", cmdCfg.PostServiceCmd)
@@ -97,7 +95,6 @@ func NewPostSupervisor(
 		provingOpts: provingOpts,
 
 		postSetupProvider: postSetupProvider,
-		syncer:            syncer,
 	}, nil
 }
 
@@ -141,27 +138,24 @@ func (ps *PostSupervisor) Start(opts PostSetupOpts) error {
 		return fmt.Errorf("post service already started")
 	}
 
-	// TODO(mafa): verify that opts don't delete existing files?
-
-	err := ps.postSetupProvider.PrepareInitializer(opts)
-	if err != nil {
-		return fmt.Errorf("prepare initializer: %w", err)
-	}
+	// TODO(mafa): verify that opts don't delete existing files
 
 	ps.eg = errgroup.Group{} // reset errgroup to allow restarts.
 	ctx, stop := context.WithCancel(context.Background())
 	ps.stop = stop
 	ps.eg.Go(func() error {
-		select {
-		case <-ctx.Done():
+		// If it returns any error other than context.Canceled
+		// (which is how we signal it to stop) then we shutdown.
+		err := ps.postSetupProvider.PrepareInitializer(ctx, opts)
+		switch {
+		case errors.Is(err, context.Canceled):
 			return nil
-		case <-ps.syncer.RegisterForATXSynced():
-			// ensure we are ATX synced before starting the PoST Session
+		case err != nil:
+			ps.logger.Fatal("preparing POST initializer failed", zap.Error(err))
+			return err
 		}
 
-		// If start session returns any error other than context.Canceled
-		// (which is how we signal it to stop) then we panic.
-		err := ps.postSetupProvider.StartSession(ctx)
+		err = ps.postSetupProvider.StartSession(ctx)
 		switch {
 		case errors.Is(err, context.Canceled):
 			return nil
@@ -230,7 +224,7 @@ func (ps *PostSupervisor) runCmd(
 
 		"--min-num-units", strconv.FormatUint(uint64(postCfg.MinNumUnits), 10),
 		"--max-num-units", strconv.FormatUint(uint64(postCfg.MaxNumUnits), 10),
-		"--labels-per-unit", strconv.FormatUint(uint64(postCfg.LabelsPerUnit), 10),
+		"--labels-per-unit", strconv.FormatUint(postCfg.LabelsPerUnit, 10),
 		"--k1", strconv.FormatUint(uint64(postCfg.K1), 10),
 		"--k2", strconv.FormatUint(uint64(postCfg.K2), 10),
 		"--k3", strconv.FormatUint(uint64(postCfg.K3), 10),
@@ -265,7 +259,6 @@ func (ps *PostSupervisor) runCmd(
 		cmdCfg.PostServiceCmd,
 		args...,
 	)
-	cmd.Dir = filepath.Dir(cmdCfg.PostServiceCmd)
 	pipe, err := cmd.StderrPipe()
 	if err != nil {
 		ps.logger.Error("setup stderr pipe for post service", zap.Error(err))

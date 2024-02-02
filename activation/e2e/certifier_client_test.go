@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
@@ -36,14 +37,19 @@ func TestCertification(t *testing.T) {
 	cfg := activation.DefaultPostConfig()
 	cdb := datastore.NewCachedDB(sql.InMemory(), log.NewFromLog(logger))
 
-	mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, types.ATXID{2, 3, 4})
+	syncer := activation.NewMocksyncer(gomock.NewController(t))
+	synced := make(chan struct{})
+	close(synced)
+	syncer.EXPECT().RegisterForATXSynced().AnyTimes().Return(synced)
+
+	mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, types.ATXID{2, 3, 4}, syncer)
 	require.NoError(t, err)
 
 	opts := activation.DefaultPostSetupOpts()
 	opts.DataDir = t.TempDir()
 	opts.ProviderID.SetUint32(initialization.CPUProviderID())
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
-	initPost(t, logger.Named("manager"), mgr, opts)
+	initPost(t, mgr, opts)
 
 	svc := grpcserver.NewPostService(logger)
 	grpcCfg, cleanup := launchServer(t, svc)
@@ -162,7 +168,6 @@ func spawnTestCertifier(
 	postVerifier, err := activation.NewPostVerifier(
 		cfg,
 		zaptest.NewLogger(t),
-		opts...,
 	)
 	require.NoError(t, err)
 	var eg errgroup.Group

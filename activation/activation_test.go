@@ -110,7 +110,6 @@ type testAtxBuilder struct {
 	goldenATXID types.ATXID
 
 	mpub        *mocks.MockPublisher
-	mpostSvc    *MockpostService
 	mnipost     *MocknipostBuilder
 	mpostClient *MockPostClient
 	mclock      *MocklayerClock
@@ -129,7 +128,6 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 		sig:         edSigner,
 		goldenATXID: types.ATXID(types.HexToHash32("77777")),
 		mpub:        mocks.NewMockPublisher(ctrl),
-		mpostSvc:    NewMockpostService(ctrl),
 		mnipost:     NewMocknipostBuilder(ctrl),
 		mpostClient: NewMockPostClient(ctrl),
 		mclock:      NewMocklayerClock(ctrl),
@@ -145,7 +143,6 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 	}
 
 	tab.msync.EXPECT().RegisterForATXSynced().DoAndReturn(closedChan).AnyTimes()
-	tab.mpostSvc.EXPECT().Client(tab.sig.NodeID()).Return(tab.mpostClient, nil).AnyTimes()
 
 	b := NewBuilder(
 		cfg,
@@ -153,7 +150,6 @@ func newTestBuilder(tb testing.TB, opts ...BuilderOption) *testAtxBuilder {
 		tab.cdb,
 		tab.localDb,
 		tab.mpub,
-		tab.mpostSvc,
 		tab.mnipost,
 		tab.mclock,
 		tab.msync,
@@ -277,14 +273,11 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 	tab := newTestBuilder(t)
 	coinbase := types.Address{1, 1, 1}
 
-	tab.mpostClient.EXPECT().
-		Proof(gomock.Any(), gomock.Any()).
-		DoAndReturn(func(ctx context.Context, b []byte) (*types.Post, *types.PostInfo, error) {
+	tab.mnipost.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).DoAndReturn(
+		func(ctx context.Context, b []byte) (*types.Post, *types.PostInfo, error) {
 			<-ctx.Done()
 			return nil, nil, ctx.Err()
-		}).
-		AnyTimes()
-
+		})
 	tab.mclock.EXPECT().CurrentLayer().Return(types.LayerID(0)).AnyTimes()
 	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(make(chan struct{})).AnyTimes()
 	require.NoError(t, tab.StartSmeshing(coinbase))
@@ -300,12 +293,11 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 func TestBuilder_RestartSmeshing(t *testing.T) {
 	getBuilder := func(t *testing.T) *Builder {
 		tab := newTestBuilder(t)
-		tab.mpostClient.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).AnyTimes().DoAndReturn(
-			func(ctx context.Context, _ []byte) (*types.Post, *types.PostInfo, error) {
+		tab.mnipost.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).AnyTimes().DoAndReturn(
+			func(ctx context.Context, b []byte) (*types.Post, *types.PostInfo, error) {
 				<-ctx.Done()
 				return nil, nil, ctx.Err()
-			},
-		)
+			})
 
 		ch := make(chan struct{})
 		close(ch)
@@ -362,13 +354,11 @@ func TestBuilder_StopSmeshing_Delete(t *testing.T) {
 			return nil, ctx.Err()
 		}).
 		AnyTimes()
-	tab.mpostClient.EXPECT().
-		Proof(gomock.Any(), gomock.Any()).
-		DoAndReturn(func(ctx context.Context, b []byte) (*types.Post, *types.PostInfo, error) {
+	tab.mnipost.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).DoAndReturn(
+		func(ctx context.Context, b []byte) (*types.Post, *types.PostInfo, error) {
 			<-ctx.Done()
 			return nil, nil, ctx.Err()
-		}).
-		AnyTimes()
+		}).AnyTimes()
 
 	// add challenge to DB
 	refChallenge := &types.NIPostChallenge{
@@ -1269,15 +1259,14 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 
 func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
-	tab.mpostClient.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).
-		Return(
-			&types.Post{Indices: make([]byte, 10)},
-			&types.PostInfo{
-				CommitmentATX: types.RandomATXID(),
-				Nonce:         new(types.VRFPostIndex),
-			},
-			nil,
-		)
+	tab.mnipost.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).Return(
+		&types.Post{Indices: make([]byte, 10)},
+		&types.PostInfo{
+			CommitmentATX: types.RandomATXID(),
+			Nonce:         new(types.VRFPostIndex),
+		},
+		nil,
+	)
 
 	_, _, err := tab.buildInitialPost(context.Background())
 	require.NoError(t, err)
@@ -1307,7 +1296,7 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 func TestBuilder_obtainPost(t *testing.T) {
 	t.Run("no POST or ATX - generate", func(t *testing.T) {
 		tab := newTestBuilder(t)
-		tab.mpostClient.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).
+		tab.mnipost.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).
 			Return(
 				&types.Post{Indices: make([]byte, 10)},
 				&types.PostInfo{
@@ -1321,7 +1310,7 @@ func TestBuilder_obtainPost(t *testing.T) {
 	})
 	t.Run("initial POST available", func(t *testing.T) {
 		tab := newTestBuilder(t)
-		tab.mpostClient.EXPECT().
+		tab.mnipost.EXPECT().
 			Proof(gomock.Any(), shared.ZeroChallenge).
 			Return(&types.Post{Indices: []byte{1, 2, 3}}, &types.PostInfo{Nonce: new(types.VRFPostIndex)}, nil)
 		_, _, err := tab.buildInitialPost(context.Background())
@@ -1375,15 +1364,14 @@ func TestBuilder_obtainPost(t *testing.T) {
 
 func TestBuilder_InitialPostIsPersisted(t *testing.T) {
 	tab := newTestBuilder(t, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
-	tab.mpostClient.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).
-		Return(
-			&types.Post{Indices: make([]byte, 10)},
-			&types.PostInfo{
-				CommitmentATX: types.RandomATXID(),
-				Nonce:         new(types.VRFPostIndex),
-			},
-			nil,
-		)
+	tab.mnipost.EXPECT().Proof(gomock.Any(), shared.ZeroChallenge).Return(
+		&types.Post{Indices: make([]byte, 10)},
+		&types.PostInfo{
+			CommitmentATX: types.RandomATXID(),
+			Nonce:         new(types.VRFPostIndex),
+		},
+		nil,
+	)
 	_, _, _, err := tab.obtainPost(context.Background())
 	require.NoError(t, err)
 

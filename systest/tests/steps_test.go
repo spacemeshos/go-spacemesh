@@ -27,13 +27,13 @@ import (
 
 func TestStepCreate(t *testing.T) {
 	ctx := testcontext.New(t, testcontext.SkipClusterLimits())
-	_, err := cluster.Reuse(ctx, cluster.WithKeys(10))
+	_, err := cluster.Reuse(ctx, cluster.WithKeys(ctx.ClusterSize))
 	require.NoError(t, err)
 }
 
 func TestStepShortDisconnect(t *testing.T) {
 	tctx := testcontext.New(t, testcontext.SkipClusterLimits())
-	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
+	cl, err := cluster.Reuse(tctx, cluster.WithKeys(tctx.ClusterSize))
 	require.NoError(t, err)
 	require.Greater(t, cl.Bootnodes(), 1)
 
@@ -79,7 +79,7 @@ func TestStepTransactions(t *testing.T) {
 	)
 
 	tctx := testcontext.New(t, testcontext.SkipClusterLimits())
-	cl, err := cluster.Reuse(tctx, cluster.WithKeys(10))
+	cl, err := cluster.Reuse(tctx, cluster.WithKeys(tctx.ClusterSize))
 	require.NoError(t, err)
 	require.NoError(t, waitGenesis(tctx, cl.Client(0)))
 	t.Cleanup(cl.CloseClients)
@@ -167,7 +167,7 @@ func TestStepTransactions(t *testing.T) {
 
 func TestStepReplaceNodes(t *testing.T) {
 	cctx := testcontext.New(t, testcontext.SkipClusterLimits())
-	cl, err := cluster.Reuse(cctx, cluster.WithKeys(10))
+	cl, err := cluster.Reuse(cctx, cluster.WithKeys(cctx.ClusterSize))
 	require.NoError(t, err)
 
 	var (
@@ -194,7 +194,7 @@ func TestStepReplaceNodes(t *testing.T) {
 
 func TestStepVerifyConsistency(t *testing.T) {
 	cctx := testcontext.New(t, testcontext.SkipClusterLimits())
-	cl, err := cluster.Reuse(cctx, cluster.WithKeys(10))
+	cl, err := cluster.Reuse(cctx, cluster.WithKeys(cctx.ClusterSize))
 	require.NoError(t, err)
 
 	synced := syncedNodes(cctx, cl)
@@ -341,7 +341,7 @@ func TestScheduleTransactions(t *testing.T) {
 
 func TestStepValidation(t *testing.T) {
 	tctx := testcontext.New(t, testcontext.SkipClusterLimits())
-	c, err := cluster.Reuse(tctx, cluster.WithKeys(10))
+	c, err := cluster.Reuse(tctx, cluster.WithKeys(tctx.ClusterSize))
 	require.NoError(t, err)
 
 	eg, ctx := errgroup.WithContext(tctx)

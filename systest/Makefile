@@ -6,7 +6,9 @@ test_name ?= TestSmeshing
 org ?= spacemeshos
 image_name ?= $(org)/systest:$(version_info)
 certifier_image ?= spacemeshos/certifier-service:v0.6.0
-poet_image ?= spacemeshos/poet:v0.10.2
+poet_image ?= $(org)/poet:v0.10.2
+post_service_image ?= $(org)/post-service:v0.6.5
+post_init_image ?= $(org)/postcli:v0.10.4
 smesher_image ?= $(org)/go-spacemesh-dev:$(version_info)
 bs_image ?= $(org)/go-spacemesh-dev-bs:$(version_info)
 test_id ?= systest-$(version_info)
@@ -59,6 +61,8 @@ template:
 	@echo certifier-image=$(certifier_image) >> $(tmpfile)
 	@echo poet-image=$(poet_image) >> $(tmpfile)
 	@echo poet-size=$(poet_size) >> $(tmpfile)
+	@echo post-service-image=$(post_service_image) >> $(tmpfile)
+	@echo post-init-image=$(post_init_image) >> $(tmpfile)
 	@echo keep=$(keep) >> $(tmpfile)
 	@echo testid=$(test_id) >> $(tmpfile)
 

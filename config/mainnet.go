@@ -69,7 +69,7 @@ func MainnetConfig() Config {
 			MetricsPort:           1010,
 			DatabaseConnections:   16,
 			DatabasePruneInterval: 30 * time.Minute,
-			DatabaseVacuumState:   8,
+			DatabaseVacuumState:   9,
 			PruneActivesetsFrom:   12, // starting from epoch 13 activesets below 12 will be pruned
 			NetworkHRP:            "sm",
 
@@ -112,7 +112,7 @@ func MainnetConfig() Config {
 			RegossipAtxInterval: 2 * time.Hour,
 			ATXGradeDelay:       30 * time.Minute,
 		},
-		Genesis: &GenesisConfig{
+		Genesis: GenesisConfig{
 			GenesisTime: "2023-07-14T08:00:00Z",
 			ExtraData:   "00000000000000000001a6bc150307b5c1998045752b3c87eccf3c013036f3cc",
 			Accounts:    MainnetAccounts(),
@@ -139,8 +139,8 @@ func MainnetConfig() Config {
 		},
 		Beacon: beacon.Config{
 			Kappa:                    40,
-			Q:                        big.NewRat(1, 3),
-			Theta:                    big.NewRat(1, 4),
+			Q:                        *big.NewRat(1, 3),
+			Theta:                    *big.NewRat(1, 4),
 			GracePeriodDuration:      10 * time.Minute,
 			ProposalDuration:         4 * time.Minute,
 			FirstVotingRoundDuration: 30 * time.Minute,
@@ -187,6 +187,7 @@ func MainnetConfig() Config {
 			Standalone:               false,
 			GossipDuration:           50 * time.Second,
 			OutOfSyncThresholdLayers: 36, // 3h
+			DisableMeshAgreement:     true,
 			DisableAtxReconciliation: true,
 		},
 		Recovery: checkpoint.DefaultConfig(),

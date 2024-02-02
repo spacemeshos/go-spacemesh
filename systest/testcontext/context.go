@@ -83,6 +83,16 @@ var (
 		"poet server image",
 		"spacemeshos/poet:87608eda8307b44984c191afc65cdbcec0d8d1c4",
 	)
+	postServiceImage = parameters.String(
+		"post-service-image",
+		"post service image",
+		"spacemeshos/post-service:v0.6.5",
+	)
+	postInitImage = parameters.String(
+		"post-init-image",
+		"post init image",
+		"spacemeshos/postcli:v0.10.4",
+	)
 	namespaceFlag = parameters.String(
 		"namespace",
 		"namespace for the cluster. if empty every test will use random namespace",
@@ -154,6 +164,8 @@ type Context struct {
 	Parameters        *parameters.Parameters
 	BootstrapDuration time.Duration
 	ClusterSize       int
+	BootnodeSize      int
+	RemoteSize        int
 	PoetSize          int
 	BootstrapperSize  int
 	Generic           client.Client
@@ -164,6 +176,8 @@ type Context struct {
 	BootstrapperImage string
 	CertifierImage    string
 	PoetImage         string
+	PostServiceImage  string
+	PostInitImage     string
 	Storage           struct {
 		Size  string
 		Class string
@@ -327,6 +341,7 @@ func New(t *testing.T, opts ...Opt) *Context {
 	if len(ns) == 0 {
 		ns = "test-" + rngName()
 	}
+	clSize := clusterSize.Get(p)
 	cctx := &Context{
 		Context:           ctx,
 		Parameters:        p,
@@ -336,13 +351,17 @@ func New(t *testing.T, opts ...Opt) *Context {
 		Generic:           generic,
 		TestID:            testid.Get(p),
 		Keep:              keep.Get(p),
-		ClusterSize:       clusterSize.Get(p),
+		ClusterSize:       clSize,
+		BootnodeSize:      max(2, (clSize/1000)*2),
+		RemoteSize:        0,
 		PoetSize:          poetSize.Get(p),
 		BootstrapperSize:  bsSize.Get(p),
 		Image:             imageFlag.Get(p),
 		BootstrapperImage: bsImage.Get(p),
 		CertifierImage:    certifierImage.Get(p),
 		PoetImage:         poetImage.Get(p),
+		PostServiceImage:  postServiceImage.Get(p),
+		PostInitImage:     postInitImage.Get(p),
 		NodeSelector:      nodeSelector.Get(p),
 		Log:               zaptest.NewLogger(t, zaptest.Level(logLevel)).Sugar().Named(t.Name()),
 	}

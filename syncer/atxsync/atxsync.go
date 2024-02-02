@@ -11,12 +11,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
-
-//go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./atxsync.go
-type atxFetcher interface {
-	GetAtxs(context.Context, []types.ATXID) error
-}
 
 func getMissing(db *sql.Database, set []types.ATXID) ([]types.ATXID, error) {
 	missing := []types.ATXID{}
@@ -40,7 +36,7 @@ func Download(
 	retryInterval time.Duration,
 	logger *zap.Logger,
 	db *sql.Database,
-	fetcher atxFetcher,
+	fetcher system.AtxFetcher,
 	set []types.ATXID,
 ) error {
 	total := len(set)

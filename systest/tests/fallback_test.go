@@ -23,7 +23,7 @@ func TestFallback(t *testing.T) {
 
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))
 	cl, err := cluster.ReuseWait(tctx,
-		cluster.WithKeys(10),
+		cluster.WithKeys(tctx.ClusterSize),
 		cluster.WithBootstrapperFlag(cluster.GenerateFallback()),
 	)
 	require.NoError(t, err)

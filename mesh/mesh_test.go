@@ -263,6 +263,32 @@ func TestMesh_WakeUp(t *testing.T) {
 	require.Equal(t, latestState, gotLS)
 }
 
+func TestMesh_GetLayerVerified(t *testing.T) {
+	tm := createTestMesh(t)
+	id := types.GetEffectiveGenesis().Add(1)
+	blk, err := tm.GetLayerVerified(id)
+	require.NoError(t, err)
+	require.Nil(t, blk)
+
+	// now create some blocks in the layer
+	blks := createLayerBlocks(t, tm.db, tm.Mesh, id)
+	blk, err = tm.GetLayerVerified(id)
+
+	// still expect no result since no layer is marked as verified
+	require.NoError(t, err)
+	require.Nil(t, blk)
+
+	// now set one of the layers as applied
+	require.NoError(t, layers.SetApplied(tm.db, id, blks[2].ID()))
+
+	// finally we expect a result
+	blk, err = tm.GetLayerVerified(id)
+	require.NoError(t, err)
+	require.NotNil(t, blk)
+	require.Equal(t, id, blk.LayerIndex)
+	require.Equal(t, blks[2].ID(), blk.ID())
+}
+
 func TestMesh_GetLayer(t *testing.T) {
 	tm := createTestMesh(t)
 	id := types.GetEffectiveGenesis().Add(1)
@@ -731,7 +757,6 @@ func TestProcessLayer(t *testing.T) {
 
 			tm := createTestMesh(t)
 			tm.mockTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any()).AnyTimes()
-			tm.mockTortoise.EXPECT().OnApplied(gomock.Any(), gomock.Any()).AnyTimes()
 			tm.mockVM.EXPECT().GetStateRoot().AnyTimes()
 			tm.mockVM.EXPECT().Revert(gomock.Any()).AnyTimes()
 			tm.mockState.EXPECT().RevertCache(gomock.Any()).AnyTimes()
@@ -744,6 +769,21 @@ func TestProcessLayer(t *testing.T) {
 						UpdateCache(gomock.Any(), gomock.Any(), executed, gomock.Any(), gomock.Any()).
 						Return(nil)
 				}
+
+				for _, update := range c.updates {
+					hasData := true
+					allInvalid := true
+					for _, block := range update.Blocks {
+						hasData = hasData && block.Data
+						allInvalid = allInvalid && block.Invalid
+					}
+					if update.Verified && (hasData || allInvalid) {
+						tm.mockTortoise.EXPECT().OnApplied(update.Layer, update.Opinion)
+					} else {
+						break
+					}
+				}
+
 				tm.mockTortoise.EXPECT().Updates().Return(c.updates)
 				ensuresDatabaseConsistent(t, tm.cdb, c.updates)
 				err := tm.ProcessLayer(context.TODO(), lid)
@@ -933,7 +973,7 @@ func TestProcessLayerPerHareOutput(t *testing.T) {
 				Updates().
 				Return(nil).
 				AnyTimes()
-				// this makes ProcessLayer noop
+			// this makes ProcessLayer noop
 			for _, c := range tc.certs {
 				if c.cert.Cert != nil {
 					require.NoError(t, certificates.Add(tm.cdb, c.layer, c.cert.Cert))

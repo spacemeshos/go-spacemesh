@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 //go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./interface.go
@@ -41,30 +42,13 @@ type fetchLogic interface {
 
 // fetcher is the interface to the low-level fetching.
 type fetcher interface {
-	GetMaliciousIDs(
-		context.Context,
-		[]p2p.Peer,
-		func([]byte, p2p.Peer),
-		func(error, p2p.Peer),
-	) error
-	GetLayerData(
-		context.Context,
-		[]p2p.Peer,
-		types.LayerID,
-		func([]byte, p2p.Peer),
-		func(error, p2p.Peer),
-	) error
-	GetLayerOpinions(
-		context.Context,
-		[]p2p.Peer,
-		types.LayerID,
-		func([]byte, p2p.Peer),
-		func(error, p2p.Peer),
-	) error
+	GetMaliciousIDs(context.Context, p2p.Peer) ([]byte, error)
+	GetLayerData(context.Context, p2p.Peer, types.LayerID) ([]byte, error)
+	GetLayerOpinions(context.Context, p2p.Peer, types.LayerID) ([]byte, error)
 	GetCert(context.Context, types.LayerID, types.BlockID, []p2p.Peer) (*types.Certificate, error)
 
 	GetMalfeasanceProofs(context.Context, []types.NodeID) error
-	GetAtxs(context.Context, []types.ATXID) error
+	system.AtxFetcher
 	GetBallots(context.Context, []types.BallotID) error
 	GetBlocks(context.Context, []types.BlockID) error
 	RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32)

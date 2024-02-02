@@ -2,6 +2,7 @@ package activation
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/url"
 	"time"
@@ -73,6 +74,7 @@ type nipostBuilder interface {
 		challenge *types.NIPostChallenge,
 		certifier certifierService,
 	) (*nipost.NIPostState, error)
+	Proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error)
 	ResetState() error
 }
 
@@ -88,7 +90,7 @@ type atxProvider interface {
 // This interface is used by the atx builder and currently implemented by the PostSetupManager.
 // Eventually most of the functionality will be moved to the PoSTClient.
 type postSetupProvider interface {
-	PrepareInitializer(opts PostSetupOpts) error
+	PrepareInitializer(ctx context.Context, opts PostSetupOpts) error
 	StartSession(context context.Context) error
 	Status() *PostSetupStatus
 	Reset() error
@@ -169,6 +171,11 @@ type poetDbAPI interface {
 	GetProof(types.PoetProofRef) (*types.PoetProof, *types.Hash32, error)
 	ValidateAndStore(ctx context.Context, proofMessage *types.PoetProofMessage) error
 }
+
+var (
+	ErrPostClientClosed       = fmt.Errorf("post client closed")
+	ErrPostClientNotConnected = fmt.Errorf("post service not registered")
+)
 
 type postService interface {
 	Client(nodeId types.NodeID) (PostClient, error)
