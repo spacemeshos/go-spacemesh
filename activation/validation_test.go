@@ -100,7 +100,13 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 		posAtxId := types.ATXID{1, 2, 3}
 		commitmentAtxId := types.ATXID{5, 6, 7}
 
-		challenge := newChallenge(0, types.EmptyATXID, posAtxId, 2, &commitmentAtxId)
+		challenge := types.NIPostChallenge{
+			Sequence:       0,
+			PrevATXID:      types.EmptyATXID,
+			PublishEpoch:   2,
+			PositioningATX: posAtxId,
+			CommitmentATX:  &commitmentAtxId,
+		}
 		challenge.InitialPost = &types.Post{}
 
 		atxProvider := NewMockatxProvider(ctrl)
@@ -119,7 +125,13 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(0, types.EmptyATXID, posAtxId, types.LayerID(2).GetEpoch(), &goldenATXID)
+		challenge := types.NIPostChallenge{
+			Sequence:       0,
+			PrevATXID:      types.EmptyATXID,
+			PublishEpoch:   0,
+			PositioningATX: posAtxId,
+			CommitmentATX:  &goldenATXID,
+		}
 		challenge.InitialPost = &types.Post{}
 
 		atxProvider := NewMockatxProvider(ctrl)
@@ -134,7 +146,13 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 		posAtxId := types.ATXID{1, 2, 3}
 		commitmentAtxId := types.ATXID{5, 6, 7}
 
-		challenge := newChallenge(0, types.EmptyATXID, posAtxId, 1, &commitmentAtxId)
+		challenge := types.NIPostChallenge{
+			Sequence:       0,
+			PrevATXID:      types.EmptyATXID,
+			PublishEpoch:   1,
+			PositioningATX: posAtxId,
+			CommitmentATX:  &commitmentAtxId,
+		}
 		challenge.InitialPost = &types.Post{}
 
 		atxProvider := NewMockatxProvider(ctrl)
@@ -170,7 +188,13 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(10, prevAtxId, posAtxId, 2, nil)
+		challenge := types.NIPostChallenge{
+			Sequence:       10,
+			PrevATXID:      prevAtxId,
+			PublishEpoch:   2,
+			PositioningATX: posAtxId,
+			CommitmentATX:  nil,
+		}
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(&types.ActivationTxHeader{
@@ -193,7 +217,13 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(10, prevAtxId, posAtxId, types.LayerID(1012).GetEpoch(), nil)
+		challenge := types.NIPostChallenge{
+			Sequence:       10,
+			PrevATXID:      prevAtxId,
+			PublishEpoch:   101,
+			PositioningATX: posAtxId,
+			CommitmentATX:  nil,
+		}
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(nil, errors.New("not found"))
@@ -212,7 +242,13 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(10, prevAtxId, posAtxId, types.LayerID(1012).GetEpoch(), nil)
+		challenge := types.NIPostChallenge{
+			Sequence:       10,
+			PrevATXID:      prevAtxId,
+			PublishEpoch:   101,
+			PositioningATX: posAtxId,
+			CommitmentATX:  nil,
+		}
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(&types.ActivationTxHeader{
@@ -235,7 +271,13 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(10, prevAtxId, posAtxId, 2, nil)
+		challenge := types.NIPostChallenge{
+			Sequence:       10,
+			PrevATXID:      prevAtxId,
+			PublishEpoch:   2,
+			PositioningATX: posAtxId,
+			CommitmentATX:  nil,
+		}
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(&types.ActivationTxHeader{
@@ -258,7 +300,13 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(10, prevAtxId, posAtxId, 2, nil)
+		challenge := types.NIPostChallenge{
+			Sequence:       10,
+			PrevATXID:      prevAtxId,
+			PublishEpoch:   2,
+			PositioningATX: posAtxId,
+			CommitmentATX:  nil,
+		}
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(&types.ActivationTxHeader{
@@ -530,9 +578,15 @@ func TestVerifyChainDeps(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	ch := newChallenge(1, types.EmptyATXID, goldenATXID, postGenesisEpoch, &goldenATXID)
+	ch := types.NIPostChallenge{
+		Sequence:       1,
+		PrevATXID:      types.EmptyATXID,
+		PublishEpoch:   postGenesisEpoch,
+		PositioningATX: goldenATXID,
+		CommitmentATX:  &goldenATXID,
+	}
 	nipostData := newNIPostWithChallenge(t, types.HexToHash32(""), []byte("00"))
-	invalidAtx := newAtx(t, signer, ch, nipostData.NIPost, 2, types.Address{})
+	invalidAtx := newAtx(ch, nipostData.NIPost, 2, types.Address{})
 	require.NoError(t, SignAndFinalizeAtx(signer, invalidAtx))
 	vInvalidAtx, err := invalidAtx.Verify(0, 1)
 	require.NoError(t, err)
@@ -540,9 +594,15 @@ func TestVerifyChainDeps(t *testing.T) {
 	require.NoError(t, atxs.Add(db, vInvalidAtx))
 
 	t.Run("invalid prev ATX", func(t *testing.T) {
-		ch = newChallenge(1, vInvalidAtx.ID(), goldenATXID, postGenesisEpoch, nil)
+		ch := types.NIPostChallenge{
+			Sequence:       1,
+			PrevATXID:      vInvalidAtx.ID(),
+			PublishEpoch:   postGenesisEpoch,
+			PositioningATX: goldenATXID,
+			CommitmentATX:  nil,
+		}
 		nipostData = newNIPostWithChallenge(t, types.HexToHash32(""), []byte("01"))
-		atx := newAtx(t, signer, ch, nipostData.NIPost, 2, types.Address{})
+		atx := newAtx(ch, nipostData.NIPost, 2, types.Address{})
 		require.NoError(t, SignAndFinalizeAtx(signer, atx))
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t, err)
@@ -558,9 +618,15 @@ func TestVerifyChainDeps(t *testing.T) {
 	})
 
 	t.Run("invalid pos ATX", func(t *testing.T) {
-		ch = newChallenge(1, types.EmptyATXID, vInvalidAtx.ID(), postGenesisEpoch, nil)
+		ch := types.NIPostChallenge{
+			Sequence:       1,
+			PrevATXID:      types.EmptyATXID,
+			PublishEpoch:   postGenesisEpoch,
+			PositioningATX: vInvalidAtx.ID(),
+			CommitmentATX:  nil,
+		}
 		nipostData = newNIPostWithChallenge(t, types.HexToHash32(""), []byte("02"))
-		atx := newAtx(t, signer, ch, nipostData.NIPost, 2, types.Address{})
+		atx := newAtx(ch, nipostData.NIPost, 2, types.Address{})
 		require.NoError(t, SignAndFinalizeAtx(signer, atx))
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t, err)
@@ -577,9 +643,15 @@ func TestVerifyChainDeps(t *testing.T) {
 
 	t.Run("invalid commitment ATX", func(t *testing.T) {
 		commitmentAtxID := vInvalidAtx.ID()
-		ch = newChallenge(1, types.EmptyATXID, goldenATXID, postGenesisEpoch, &commitmentAtxID)
+		ch := types.NIPostChallenge{
+			Sequence:       1,
+			PrevATXID:      types.EmptyATXID,
+			PublishEpoch:   postGenesisEpoch,
+			PositioningATX: goldenATXID,
+			CommitmentATX:  &commitmentAtxID,
+		}
 		nipostData = newNIPostWithChallenge(t, types.HexToHash32(""), []byte("03"))
-		atx := newAtx(t, signer, ch, nipostData.NIPost, 2, types.Address{})
+		atx := newAtx(ch, nipostData.NIPost, 2, types.Address{})
 		require.NoError(t, SignAndFinalizeAtx(signer, atx))
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t, err)
@@ -594,9 +666,15 @@ func TestVerifyChainDeps(t *testing.T) {
 	})
 
 	t.Run("with trusted node ID", func(t *testing.T) {
-		ch = newChallenge(1, types.EmptyATXID, vInvalidAtx.ID(), postGenesisEpoch, nil)
+		ch := types.NIPostChallenge{
+			Sequence:       1,
+			PrevATXID:      types.EmptyATXID,
+			PublishEpoch:   postGenesisEpoch,
+			PositioningATX: vInvalidAtx.ID(),
+			CommitmentATX:  nil,
+		}
 		nipostData = newNIPostWithChallenge(t, types.HexToHash32(""), []byte("04"))
-		atx := newAtx(t, signer, ch, nipostData.NIPost, 2, types.Address{})
+		atx := newAtx(ch, nipostData.NIPost, 2, types.Address{})
 		require.NoError(t, SignAndFinalizeAtx(signer, atx))
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t, err)
@@ -610,9 +688,15 @@ func TestVerifyChainDeps(t *testing.T) {
 	})
 
 	t.Run("assume valid if older than X", func(t *testing.T) {
-		ch = newChallenge(1, types.EmptyATXID, vInvalidAtx.ID(), postGenesisEpoch, nil)
+		ch := types.NIPostChallenge{
+			Sequence:       1,
+			PrevATXID:      types.EmptyATXID,
+			PublishEpoch:   postGenesisEpoch,
+			PositioningATX: vInvalidAtx.ID(),
+			CommitmentATX:  nil,
+		}
 		nipostData = newNIPostWithChallenge(t, types.HexToHash32(""), []byte("05"))
-		atx := newAtx(t, signer, ch, nipostData.NIPost, 2, types.Address{})
+		atx := newAtx(ch, nipostData.NIPost, 2, types.Address{})
 		require.NoError(t, SignAndFinalizeAtx(signer, atx))
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t, err)
@@ -626,9 +710,15 @@ func TestVerifyChainDeps(t *testing.T) {
 	})
 
 	t.Run("invalid top-level", func(t *testing.T) {
-		ch = newChallenge(1, types.EmptyATXID, vInvalidAtx.ID(), postGenesisEpoch, nil)
+		ch := types.NIPostChallenge{
+			Sequence:       1,
+			PrevATXID:      types.EmptyATXID,
+			PublishEpoch:   postGenesisEpoch,
+			PositioningATX: vInvalidAtx.ID(),
+			CommitmentATX:  nil,
+		}
 		nipostData = newNIPostWithChallenge(t, types.HexToHash32(""), []byte("06"))
-		atx := newAtx(t, signer, ch, nipostData.NIPost, 2, types.Address{})
+		atx := newAtx(ch, nipostData.NIPost, 2, types.Address{})
 		require.NoError(t, SignAndFinalizeAtx(signer, atx))
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t, err)

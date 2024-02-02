@@ -128,7 +128,7 @@ type BaseConfig struct {
 	RegossipAtxInterval time.Duration `mapstructure:"regossip-atx-interval"`
 
 	// ATXGradeDelay is used to grade ATXs for selection in tortoise active set.
-	// See grading fuction in miner/proposals_builder.go
+	// See grading function in miner/proposals_builder.go
 	ATXGradeDelay time.Duration `mapstructure:"atx-grade-delay"`
 
 	// PostValidDelay is the time after which a PoST is considered valid

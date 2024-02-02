@@ -1,6 +1,8 @@
 package types
 
 import (
+	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -25,11 +27,11 @@ func (b Beacon) Hex() string { return util.Encode(b[:]) }
 // doing full logging into a file.
 func (b Beacon) String() string { return b.Hex() }
 
-// ShortString returns the first 5 characters of the Beacon, usually for logging purposes.
+// ShortString returns the first 10 characters of the Beacon, usually for logging purposes.
 func (b Beacon) ShortString() string {
 	str := b.Hex()
 	l := len(str)
-	return Shorten(str[min(2, l):], 10)
+	return fmt.Sprintf("%.10s", str[min(2, l):])
 }
 
 // Bytes gets the byte representation of the underlying hash.

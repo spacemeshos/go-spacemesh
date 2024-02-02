@@ -950,7 +950,6 @@ func (app *App) initServices(ctx context.Context) error {
 		grpcPostService.(*grpcserver.PostService),
 		app.Config.PoetServers,
 		app.addLogger(NipostBuilderLogger, lg).Zap(),
-		app.edSgn,
 		app.Config.POET,
 		app.clock,
 	)
@@ -964,7 +963,6 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	atxBuilder := activation.NewBuilder(
 		builderConfig,
-		app.edSgn,
 		app.cachedDB,
 		app.localDB,
 		app.host,
@@ -979,6 +977,7 @@ func (app *App) initServices(ctx context.Context) error {
 		activation.WithValidator(app.validator),
 		activation.WithPostValidityDelay(app.Config.PostValidDelay),
 	)
+	atxBuilder.Register(app.edSgn)
 
 	malfeasanceHandler := malfeasance.NewHandler(
 		app.cachedDB,
@@ -1835,7 +1834,7 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 		timesync.WithLayerDuration(app.Config.LayerDuration),
 		timesync.WithTickInterval(1*time.Second),
 		timesync.WithGenesisTime(gTime),
-		timesync.WithLogger(app.addLogger(ClockLogger, lg)),
+		timesync.WithLogger(app.addLogger(ClockLogger, lg).Zap()),
 	)
 	if err != nil {
 		return fmt.Errorf("cannot create clock: %w", err)

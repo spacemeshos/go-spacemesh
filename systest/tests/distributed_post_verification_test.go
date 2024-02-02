@@ -143,9 +143,10 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		timesync.WithLayerDuration(cfg.LayerDuration),
 		timesync.WithTickInterval(1*time.Second),
 		timesync.WithGenesisTime(cl.Genesis()),
-		timesync.WithLogger(log.NewFromLog(logger.Named("clock"))),
+		timesync.WithLogger(logger.Named("clock")),
 	)
 	require.NoError(t, err)
+	t.Cleanup(clock.Close)
 
 	grpcPostService := grpcserver.NewPostService(logger.Named("grpc-post-service"))
 	grpczap.SetGrpcLoggerV2(grpclog, logger.Named("grpc"))
@@ -165,7 +166,6 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		grpcPostService,
 		cfg.PoetServers,
 		logger.Named("nipostBuilder"),
-		signer,
 		cfg.POET,
 		clock,
 	)
@@ -194,7 +194,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		break
 	}
 
-	nipost, err := nipostBuilder.BuildNIPost(ctx, challenge)
+	nipost, err := nipostBuilder.BuildNIPost(ctx, signer, challenge)
 	require.NoError(t, err)
 
 	// 2.2 Create ATX with invalid POST

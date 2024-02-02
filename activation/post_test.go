@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 func TestPostSetupManager(t *testing.T) {
@@ -274,14 +275,20 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 func TestPostSetupManager_findCommitmentAtx_UsesLatestAtx(t *testing.T) {
 	mgr := newTestPostManager(t)
 
-	ch := newChallenge(0, types.EmptyATXID, mgr.goldenATXID, 2, &mgr.goldenATXID)
-	nipostData := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
-	latestAtx := newAtx(t, mgr.signer, ch, nipostData.NIPost, 2, types.Address{})
-	addAtx(t, mgr.db, mgr.signer, latestAtx)
-
-	atx, err := mgr.findCommitmentAtx(context.Background())
+	challenge := types.NIPostChallenge{
+		PublishEpoch: 1,
+	}
+	atx := types.NewActivationTx(challenge, types.Address{}, nil, 2, nil)
+	require.NoError(t, SignAndFinalizeAtx(mgr.signer, atx))
+	atx.SetEffectiveNumUnits(atx.NumUnits)
+	atx.SetReceived(time.Now())
+	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
-	require.Equal(t, latestAtx.ID(), atx)
+	require.NoError(t, atxs.Add(mgr.db, vAtx))
+
+	commitmentAtx, err := mgr.findCommitmentAtx(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, vAtx.ID(), commitmentAtx)
 }
 
 func TestPostSetupManager_findCommitmentAtx_DefaultsToGoldenAtx(t *testing.T) {
@@ -316,7 +323,12 @@ func TestPostSetupManager_getCommitmentAtx_getsCommitmentAtxFromInitialAtx(t *te
 	commitmentAtx := types.RandomATXID()
 	atx := types.NewActivationTx(types.NIPostChallenge{}, types.Address{}, nil, 1, nil)
 	atx.CommitmentATX = &commitmentAtx
-	addAtx(t, mgr.cdb, mgr.signer, atx)
+	require.NoError(t, SignAndFinalizeAtx(mgr.signer, atx))
+	atx.SetEffectiveNumUnits(atx.NumUnits)
+	atx.SetReceived(time.Now())
+	vAtx, err := atx.Verify(0, 1)
+	require.NoError(t, err)
+	require.NoError(t, atxs.Add(mgr.cdb, vAtx))
 
 	atxid, err := mgr.commitmentAtx(context.Background(), mgr.opts.DataDir)
 	require.NoError(t, err)

@@ -630,14 +630,15 @@ func TestSmesherService(t *testing.T) {
 		require.Equal(t, int32(code.Code_OK), res.Status.Code)
 	})
 
-	t.Run("SmesherID", func(t *testing.T) {
+	t.Run("SmesherIDs", func(t *testing.T) {
 		t.Parallel()
 		c, ctx := setupSmesherService(t)
 		nodeId := types.RandomNodeID()
-		c.smeshingProvider.EXPECT().SmesherID().Return(nodeId)
-		res, err := c.SmesherID(ctx, &emptypb.Empty{})
+		c.smeshingProvider.EXPECT().SmesherIDs().Return([]types.NodeID{nodeId})
+		res, err := c.SmesherIDs(ctx, &emptypb.Empty{})
 		require.NoError(t, err)
-		require.Equal(t, nodeId.Bytes(), res.PublicKey)
+		require.Equal(t, 1, len(res.PublicKeys))
+		require.Equal(t, nodeId.Bytes(), res.PublicKeys[0])
 	})
 
 	t.Run("SetCoinbaseMissingArgs", func(t *testing.T) {
