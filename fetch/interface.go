@@ -12,7 +12,7 @@ import (
 
 type requester interface {
 	Run(context.Context) error
-	Request(context.Context, p2p.Peer, []byte, func([]byte), func(error)) error
+	Request(context.Context, p2p.Peer, []byte) ([]byte, error)
 }
 
 // The ValidatorFunc type is an adapter to allow the use of functions as

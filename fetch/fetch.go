@@ -214,9 +214,7 @@ type Fetch struct {
 	// unprocessed contains requests that are not processed
 	unprocessed map[types.Hash32]*request
 	// ongoing contains requests that have been processed and are waiting for responses
-	ongoing map[types.Hash32]*request
-	// batched contains batched ongoing requests.
-	batched      map[types.Hash32]*batchInfo
+	ongoing      map[types.Hash32]*request
 	batchTimeout *time.Ticker
 	mu           sync.Mutex
 	onlyOnce     sync.Once
@@ -245,7 +243,6 @@ func NewFetch(
 		servers:     map[string]requester{},
 		unprocessed: make(map[types.Hash32]*request),
 		ongoing:     make(map[types.Hash32]*request),
-		batched:     make(map[types.Hash32]*batchInfo),
 		hashToPeers: NewHashPeersCache(cacheSize),
 	}
 	for _, opt := range opts {
@@ -415,7 +412,7 @@ func (f *Fetch) loop() {
 }
 
 // receive Data from message server and call response handlers accordingly.
-func (f *Fetch) receiveResponse(data []byte) {
+func (f *Fetch) receiveResponse(data []byte, batch *batchInfo) {
 	if f.stopped() {
 		return
 	}
@@ -430,14 +427,13 @@ func (f *Fetch) receiveResponse(data []byte) {
 		log.Stringer("batch_hash", response.ID),
 		log.Int("num_hashes", len(response.Responses)),
 	)
-	f.mu.Lock()
-	batch, ok := f.batched[response.ID]
-	delete(f.batched, response.ID)
-	f.mu.Unlock()
 
-	if !ok {
-		f.logger.With().Warning("unknown batch response received, or already received",
-			log.Stringer("batch_hash", response.ID))
+	if batch.ID != response.ID {
+		f.logger.With().Warning(
+			"unknown batch response received",
+			log.Stringer("expected", batch.ID),
+			log.Stringer("response", response.ID),
+		)
 		return
 	}
 
@@ -560,6 +556,7 @@ func (f *Fetch) send(requests []RequestMessage) {
 
 	peer2batches := f.organizeRequests(requests)
 	for peer, peerBatches := range peer2batches {
+		peer := peer
 		for _, reqs := range peerBatches {
 			batch := &batchInfo{
 				RequestBatch: RequestBatch{
@@ -568,7 +565,20 @@ func (f *Fetch) send(requests []RequestMessage) {
 				peer: peer,
 			}
 			batch.setID()
-			f.sendBatch(peer, batch)
+			go func() {
+				data, err := f.sendBatch(peer, batch)
+				if err != nil {
+					f.logger.With().Warning(
+						"failed to send batch request",
+						log.Stringer("batch", batch.ID),
+						log.Stringer("peer", peer),
+						log.Err(err),
+					)
+					f.handleHashError(batch, err)
+				} else {
+					f.receiveResponse(data, batch)
+				}
+			}()
 		}
 	}
 }
@@ -632,71 +642,47 @@ func (f *Fetch) organizeRequests(requests []RequestMessage) map[p2p.Peer][][]Req
 }
 
 // sendBatch dispatches batched request messages to provided peer.
-func (f *Fetch) sendBatch(peer p2p.Peer, batch *batchInfo) {
+func (f *Fetch) sendBatch(peer p2p.Peer, batch *batchInfo) ([]byte, error) {
 	if f.stopped() {
-		return
+		return nil, f.shutdownCtx.Err()
 	}
-	f.mu.Lock()
-	f.batched[batch.ID] = batch
-	f.mu.Unlock()
 	f.logger.With().Debug("sending batched request to peer",
 		log.Stringer("batch_hash", batch.ID),
 		log.Int("num_requests", len(batch.Requests)),
 		log.Stringer("peer", peer),
 	)
-	// Request is asynchronous,
+	// Request is synchronous,
 	// it will return errors only if size of the bytes buffer is large
 	// or target peer is not connected
 	start := time.Now()
-	errf := func(err error) {
-		f.logger.With().Warning("failed to send batch",
-			log.Stringer("batch_hash", peer), log.Err(err),
-		)
-		f.peers.OnFailure(peer)
-		f.handleHashError(batch.ID, err)
-	}
-	err := f.servers[hashProtocol].Request(
-		f.shutdownCtx,
-		peer,
-		codec.MustEncode(&batch.RequestBatch),
-		func(buf []byte) {
-			f.peers.OnLatency(peer, time.Since(start))
-			f.receiveResponse(buf)
-		},
-		errf,
-	)
+	req := codec.MustEncode(&batch.RequestBatch)
+	data, err := f.servers[hashProtocol].Request(f.shutdownCtx, peer, req)
 	if err != nil {
-		errf(err)
+		f.peers.OnFailure(peer)
+		return nil, err
 	}
+	f.peers.OnLatency(peer, time.Since(start))
+	return data, nil
 }
 
 // handleHashError is called when an error occurred processing batches of the following hashes.
-func (f *Fetch) handleHashError(batchHash types.Hash32, err error) {
+func (f *Fetch) handleHashError(batch *batchInfo, err error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	f.logger.With().Debug("failed batch fetch", log.Stringer("batch_hash", batchHash), log.Err(err))
-	batch, ok := f.batched[batchHash]
-	if !ok {
-		f.logger.With().Error("batch not found", log.Stringer("batch_hash", batchHash))
-		return
-	}
 	for _, br := range batch.Requests {
 		req, ok := f.ongoing[br.Hash]
 		if !ok {
-			f.logger.With().
-				Warning("hash missing from ongoing requests", log.Stringer("hash", br.Hash))
+			f.logger.With().Warning("hash missing from ongoing requests", log.Stringer("hash", br.Hash))
 			continue
 		}
-		f.logger.WithContext(req.ctx).With().Warning("hash request failed",
-			log.Stringer("hash", req.hash),
-			log.Err(err))
+		f.logger.WithContext(req.ctx).With().
+			Warning("hash request failed", log.Stringer("hash", req.hash), log.Err(err))
 		req.promise.err = err
 		peerErrors.WithLabelValues(string(req.hint)).Inc()
 		close(req.promise.completed)
 		delete(f.ongoing, req.hash)
 	}
-	delete(f.batched, batchHash)
 }
 
 // getHash is the regular buffered call to get a specific hash, using provided hash, h as hint the receiving end will
