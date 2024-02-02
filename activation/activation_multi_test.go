@@ -188,14 +188,14 @@ func TestRegossip(t *testing.T) {
 			atx := newActivationTx(t,
 				sig, 0, types.EmptyATXID, types.EmptyATXID, nil,
 				layer.GetEpoch(), 0, 1, types.Address{}, 1, &types.NIPost{})
-			require.NoError(t, atxs.Add(tab.cdb.Database, atx))
+			require.NoError(t, atxs.Add(tab.cdb, atx))
 
 			if refAtx == nil {
 				refAtx = atx
 			}
 		}
 
-		blob, err := atxs.GetBlob(tab.cdb.Database, refAtx.ID().Bytes())
+		blob, err := atxs.GetBlob(tab.cdb, refAtx.ID().Bytes())
 		require.NoError(t, err)
 
 		// atx will be regossiped once (by the smesher)
@@ -208,9 +208,12 @@ func TestRegossip(t *testing.T) {
 	t.Run("checkpointed", func(t *testing.T) {
 		tab := newTestBuilder(t, 5)
 		for _, sig := range tab.signers {
-			require.NoError(t, atxs.AddCheckpointed(tab.cdb.Database,
-				&atxs.CheckpointAtx{ID: types.RandomATXID(), Epoch: layer.GetEpoch(), SmesherID: sig.NodeID()}))
-
+			atx := atxs.CheckpointAtx{
+				ID:        types.RandomATXID(),
+				Epoch:     layer.GetEpoch(),
+				SmesherID: sig.NodeID(),
+			}
+			require.NoError(t, atxs.AddCheckpointed(tab.cdb, &atx))
 			tab.mclock.EXPECT().CurrentLayer().Return(layer)
 			require.NoError(t, tab.Regossip(context.Background(), sig.NodeID()))
 		}

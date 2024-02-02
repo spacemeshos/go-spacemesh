@@ -10,7 +10,7 @@ couple of nodes publicly available and the rest connected to them directly.
 ### Get network id
 - get it with grpcurl
 
-> grpcurl -plaintext 127.0.0.1:9092 spacemesh.v1.DebugService.NetworkInfo
+> grpcurl -plaintext 127.0.0.1:9093 spacemesh.v1.DebugService.NetworkInfo
 
 ```json
 {
@@ -29,7 +29,7 @@ couple of nodes publicly available and the rest connected to them directly.
 
 Public node should have higher peer limits to help with network connectivity
 and a list of botnodes. Direct connections should be reciprocal, otherwise
-public node may prune your private node if overloaded. 
+public node may prune your private node if overloaded.
 
 Setup more than one public node, and perform rolling upgrades or restart
 for them if needed.
@@ -42,23 +42,26 @@ for them if needed.
         "high-peers": 100,
         "direct": [
             "/ip4/0.0.0.0/tcp/6000/p2p/12D3KooWRkBh6QayKLb1pDRJGMHE94Lix4ZBVh2BJJeX6mghk8VH"
-        ],
-        "bootnodes": [
-            "/dns4/mainnet-bootnode-10.spacemesh.network/tcp/5000/p2p/12D3KooWHK5m83sNj2eNMJMGAngcS9gBja27ho83t79Q2CD4iRjQ",
-            "/dns4/mainnet-bootnode-11.spacemesh.network/tcp/5000/p2p/12D3KooWFrCDS8tc29nxJEYf4sKFXhXw7wMSdhQP4S7tsbfh6ngn"
         ]
     }
 }
 ```
 
-> [!NOTE]  
-> Please note that 0.0.0.0 in the above config will work ONLY if all nodes are on the same host. If you're using multiple hosts make sure that you're using proper IPs on both sides.
-> The `bootnodes` section can contain any bootnodes (or all) depending on your preference.
+> [!NOTE]
+> Please note that 0.0.0.0 in the above config will work ONLY if all nodes are on the same host.
+> If you're using multiple hosts make sure that you're using proper IPs on both sides.
+> If you're on Windows system, it's recommended to use `127.0.0.1` instead of `0.0.0.0` in the `direct`
+> part of the config on the same host. You can obviously use any other IP address that is available on the host too,
+> that would allow to use multiple machines for the setup.
 
 ### Configuration for private node
 
-Set min-peers to the number of peers in the config and disable-dht.
-low-peers and high-peers should not be lower than min-peers.
+Set `min-peers` to the number of peers in the config and `disable-dht` to `true`.
+`low-peers` and `high-peers` should not be lower than `min-peers`.
+
+
+> [!IMPORTANT]
+> Please note that having `disable-dht` option is critical to properly working public/private node setup.
 
 ```json
 {
@@ -76,8 +79,12 @@ low-peers and high-peers should not be lower than min-peers.
 }
 ```
 
-> [!NOTE]  
-> Please note that 0.0.0.0 in the above config will work ONLY if all nodes are on the same host. If you're using multiple hosts make sure that you're using proper IPs on both sides.
+> [!NOTE]
+> Please note that 0.0.0.0 in the above config will work ONLY if all nodes are on the same host.
+> If you're using multiple hosts make sure that you're using proper IPs on both sides. If you're on Windows system,
+> it's recommended to use `127.0.0.1` instead of `0.0.0.0` in the `direct` part of the config on the same host.
+> You can obviously use any other IP address that is available on the host too,
+> that would allow to use multiple machines for the setup.
 
 #### Expected result
 
@@ -91,6 +98,15 @@ Private will connect only to the specified public node:
 > ss -npO4 | rg spacemesh | rg 6000
 
 ```
-tcp   ESTAB      0      0              127.0.0.1:7513        127.0.0.1:6000  users:(("go-spacemesh",pid=39165,fd=11)) 
+tcp   ESTAB      0      0              127.0.0.1:7513        127.0.0.1:6000  users:(("go-spacemesh",pid=39165,fd=11))
 tcp   ESTAB      0      0              127.0.0.1:6000        127.0.0.1:7513  users:(("go-spacemesh",pid=39202,fd=47))
 ```
+
+You can also check that by querying the GRPC endpoint:
+
+```
+grpcurl -plaintext 127.0.0.1:9093 spacemesh.v1.AdminService.PeerInfoStream
+```
+
+On your public node you should see many nodes (possibly including bootnodes)
+and on your private node you should see only the configured public node(s).

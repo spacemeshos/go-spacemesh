@@ -348,3 +348,40 @@ func (t *HareMetadata) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	}
 	return total, nil
 }
+
+func (t *InvalidPostIndexProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := t.Atx.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeCompact32(enc, uint32(t.InvalidIdx))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *InvalidPostIndexProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		n, err := t.Atx.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		field, n, err := scale.DecodeCompact32(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.InvalidIdx = uint32(field)
+	}
+	return total, nil
+}

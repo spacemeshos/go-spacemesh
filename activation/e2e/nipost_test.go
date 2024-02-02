@@ -127,7 +127,8 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 		return synced
 	})
 
-	mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX, syncer)
+	validator := activation.NewMocknipostValidator(ctrl)
+	mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX, syncer, validator)
 	require.NoError(t, err)
 
 	opts := activation.DefaultPostSetupOpts()
@@ -197,7 +198,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	nipost, err := nb.BuildNIPost(context.Background(), sig, &challenge)
 	require.NoError(t, err)
 
-	v := activation.NewValidator(poetDb, cfg, opts.Scrypt, verifier)
+	v := activation.NewValidator(nil, poetDb, cfg, opts.Scrypt, verifier)
 	_, err = v.NIPost(
 		context.Background(),
 		sig.NodeID(),
@@ -272,7 +273,8 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 		return synced
 	})
 
-	mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX, syncer)
+	validator := activation.NewMocknipostValidator(gomock.NewController(t))
+	mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX, syncer, validator)
 	require.NoError(t, err)
 
 	// ensure that genesis aligns with layer timings
@@ -341,7 +343,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
 
-	v := activation.NewValidator(poetDb, cfg, opts.Scrypt, verifier)
+	v := activation.NewValidator(nil, poetDb, cfg, opts.Scrypt, verifier)
 	_, err = v.NIPost(
 		context.Background(),
 		sig.NodeID(),
@@ -390,7 +392,8 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 		sig := sig
 		opts := opts
 		eg.Go(func() error {
-			mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX, syncer)
+			validator := activation.NewMocknipostValidator(ctrl)
+			mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX, syncer, validator)
 			require.NoError(t, err)
 
 			opts.DataDir = t.TempDir()
@@ -459,7 +462,7 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 			nipost, err := nb.BuildNIPost(context.Background(), sig, &challenge)
 			require.NoError(t, err)
 
-			v := activation.NewValidator(poetDb, cfg, opts.Scrypt, verifier)
+			v := activation.NewValidator(nil, poetDb, cfg, opts.Scrypt, verifier)
 			_, err = v.NIPost(
 				context.Background(),
 				sig.NodeID(),

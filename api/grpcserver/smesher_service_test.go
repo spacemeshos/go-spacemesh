@@ -34,8 +34,8 @@ func TestPostConfig(t *testing.T) {
 		MinNumUnits:   rand.Uint32(),
 		MaxNumUnits:   rand.Uint32(),
 		LabelsPerUnit: rand.Uint64(),
-		K1:            rand.Uint32(),
-		K2:            rand.Uint32(),
+		K1:            uint(rand.Uint32()),
+		K2:            uint(rand.Uint32()),
 	}
 	postSupervisor.EXPECT().Config().Return(postConfig)
 
@@ -45,7 +45,7 @@ func TestPostConfig(t *testing.T) {
 	require.Equal(t, postConfig.MinNumUnits, response.MinNumUnits)
 	require.Equal(t, postConfig.MaxNumUnits, response.MaxNumUnits)
 	require.Equal(t, postConfig.LabelsPerUnit, response.LabelsPerUnit)
-	require.Equal(t, postConfig.K1, response.K1)
+	require.EqualValues(t, postConfig.K1, response.K1)
 	require.EqualValues(t, postConfig.K2, response.K2)
 }
 

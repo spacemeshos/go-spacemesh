@@ -29,26 +29,34 @@ type scaler interface {
 	scale(int)
 }
 
+// validatorOption is a functional option type for the validator.
+type validatorOption func(*validatorOptions)
+
 type nipostValidator interface {
 	InitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, goldenATXID types.ATXID) error
 	NIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, nodeID types.NodeID) error
 	NIPost(
 		ctx context.Context,
 		nodeId types.NodeID,
-		atxId types.ATXID,
+		commitmentAtxId types.ATXID,
 		NIPost *types.NIPost,
 		expectedChallenge types.Hash32,
 		numUnits uint32,
+		opts ...validatorOption,
 	) (uint64, error)
 
 	NumUnits(cfg *PostConfig, numUnits uint32) error
+
+	IsVerifyingFullPost() bool
+
 	Post(
 		ctx context.Context,
 		nodeId types.NodeID,
-		atxId types.ATXID,
+		commitmentAtxId types.ATXID,
 		Post *types.Post,
 		PostMetadata *types.PostMetadata,
 		numUnits uint32,
+		opts ...validatorOption,
 	) error
 	PostMetadata(cfg *PostConfig, metadata *types.PostMetadata) error
 
@@ -60,6 +68,9 @@ type nipostValidator interface {
 		numUnits uint32,
 	) error
 	PositioningAtx(id types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubepoch types.EpochID) error
+
+	// VerifyChain fully verifies all dependencies of the given ATX and the ATX itself.
+	VerifyChain(ctx context.Context, id, goldenATXID types.ATXID, opts ...VerifyChainOption) error
 }
 
 type layerClock interface {

@@ -304,19 +304,62 @@ func (c *nipostValidatorInitialNIPostChallengeCall) DoAndReturn(f func(*types.NI
 	return c
 }
 
-// NIPost mocks base method.
-func (m *MocknipostValidator) NIPost(ctx context.Context, nodeId types.NodeID, atxId types.ATXID, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32) (uint64, error) {
+// IsVerifyingFullPost mocks base method.
+func (m *MocknipostValidator) IsVerifyingFullPost() bool {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "NIPost", ctx, nodeId, atxId, NIPost, expectedChallenge, numUnits)
+	ret := m.ctrl.Call(m, "IsVerifyingFullPost")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsVerifyingFullPost indicates an expected call of IsVerifyingFullPost.
+func (mr *MocknipostValidatorMockRecorder) IsVerifyingFullPost() *nipostValidatorIsVerifyingFullPostCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsVerifyingFullPost", reflect.TypeOf((*MocknipostValidator)(nil).IsVerifyingFullPost))
+	return &nipostValidatorIsVerifyingFullPostCall{Call: call}
+}
+
+// nipostValidatorIsVerifyingFullPostCall wrap *gomock.Call
+type nipostValidatorIsVerifyingFullPostCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *nipostValidatorIsVerifyingFullPostCall) Return(arg0 bool) *nipostValidatorIsVerifyingFullPostCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *nipostValidatorIsVerifyingFullPostCall) Do(f func() bool) *nipostValidatorIsVerifyingFullPostCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *nipostValidatorIsVerifyingFullPostCall) DoAndReturn(f func() bool) *nipostValidatorIsVerifyingFullPostCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// NIPost mocks base method.
+func (m *MocknipostValidator) NIPost(ctx context.Context, nodeId types.NodeID, commitmentAtxId types.ATXID, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint32, opts ...validatorOption) (uint64, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, nodeId, commitmentAtxId, NIPost, expectedChallenge, numUnits}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "NIPost", varargs...)
 	ret0, _ := ret[0].(uint64)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // NIPost indicates an expected call of NIPost.
-func (mr *MocknipostValidatorMockRecorder) NIPost(ctx, nodeId, atxId, NIPost, expectedChallenge, numUnits any) *nipostValidatorNIPostCall {
+func (mr *MocknipostValidatorMockRecorder) NIPost(ctx, nodeId, commitmentAtxId, NIPost, expectedChallenge, numUnits any, opts ...any) *nipostValidatorNIPostCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NIPost", reflect.TypeOf((*MocknipostValidator)(nil).NIPost), ctx, nodeId, atxId, NIPost, expectedChallenge, numUnits)
+	varargs := append([]any{ctx, nodeId, commitmentAtxId, NIPost, expectedChallenge, numUnits}, opts...)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NIPost", reflect.TypeOf((*MocknipostValidator)(nil).NIPost), varargs...)
 	return &nipostValidatorNIPostCall{Call: call}
 }
 
@@ -332,13 +375,13 @@ func (c *nipostValidatorNIPostCall) Return(arg0 uint64, arg1 error) *nipostValid
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *nipostValidatorNIPostCall) Do(f func(context.Context, types.NodeID, types.ATXID, *types.NIPost, types.Hash32, uint32) (uint64, error)) *nipostValidatorNIPostCall {
+func (c *nipostValidatorNIPostCall) Do(f func(context.Context, types.NodeID, types.ATXID, *types.NIPost, types.Hash32, uint32, ...validatorOption) (uint64, error)) *nipostValidatorNIPostCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *nipostValidatorNIPostCall) DoAndReturn(f func(context.Context, types.NodeID, types.ATXID, *types.NIPost, types.Hash32, uint32) (uint64, error)) *nipostValidatorNIPostCall {
+func (c *nipostValidatorNIPostCall) DoAndReturn(f func(context.Context, types.NodeID, types.ATXID, *types.NIPost, types.Hash32, uint32, ...validatorOption) (uint64, error)) *nipostValidatorNIPostCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -458,17 +501,22 @@ func (c *nipostValidatorPositioningAtxCall) DoAndReturn(f func(types.ATXID, atxP
 }
 
 // Post mocks base method.
-func (m *MocknipostValidator) Post(ctx context.Context, nodeId types.NodeID, atxId types.ATXID, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint32) error {
+func (m *MocknipostValidator) Post(ctx context.Context, nodeId types.NodeID, commitmentAtxId types.ATXID, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint32, opts ...validatorOption) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Post", ctx, nodeId, atxId, Post, PostMetadata, numUnits)
+	varargs := []any{ctx, nodeId, commitmentAtxId, Post, PostMetadata, numUnits}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Post", varargs...)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Post indicates an expected call of Post.
-func (mr *MocknipostValidatorMockRecorder) Post(ctx, nodeId, atxId, Post, PostMetadata, numUnits any) *nipostValidatorPostCall {
+func (mr *MocknipostValidatorMockRecorder) Post(ctx, nodeId, commitmentAtxId, Post, PostMetadata, numUnits any, opts ...any) *nipostValidatorPostCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Post", reflect.TypeOf((*MocknipostValidator)(nil).Post), ctx, nodeId, atxId, Post, PostMetadata, numUnits)
+	varargs := append([]any{ctx, nodeId, commitmentAtxId, Post, PostMetadata, numUnits}, opts...)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Post", reflect.TypeOf((*MocknipostValidator)(nil).Post), varargs...)
 	return &nipostValidatorPostCall{Call: call}
 }
 
@@ -484,13 +532,13 @@ func (c *nipostValidatorPostCall) Return(arg0 error) *nipostValidatorPostCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *nipostValidatorPostCall) Do(f func(context.Context, types.NodeID, types.ATXID, *types.Post, *types.PostMetadata, uint32) error) *nipostValidatorPostCall {
+func (c *nipostValidatorPostCall) Do(f func(context.Context, types.NodeID, types.ATXID, *types.Post, *types.PostMetadata, uint32, ...validatorOption) error) *nipostValidatorPostCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *nipostValidatorPostCall) DoAndReturn(f func(context.Context, types.NodeID, types.ATXID, *types.Post, *types.PostMetadata, uint32) error) *nipostValidatorPostCall {
+func (c *nipostValidatorPostCall) DoAndReturn(f func(context.Context, types.NodeID, types.ATXID, *types.Post, *types.PostMetadata, uint32, ...validatorOption) error) *nipostValidatorPostCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -567,6 +615,49 @@ func (c *nipostValidatorVRFNonceCall) Do(f func(types.NodeID, types.ATXID, *type
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *nipostValidatorVRFNonceCall) DoAndReturn(f func(types.NodeID, types.ATXID, *types.VRFPostIndex, *types.PostMetadata, uint32) error) *nipostValidatorVRFNonceCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// VerifyChain mocks base method.
+func (m *MocknipostValidator) VerifyChain(ctx context.Context, id, goldenATXID types.ATXID, opts ...VerifyChainOption) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, id, goldenATXID}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "VerifyChain", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// VerifyChain indicates an expected call of VerifyChain.
+func (mr *MocknipostValidatorMockRecorder) VerifyChain(ctx, id, goldenATXID any, opts ...any) *nipostValidatorVerifyChainCall {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, id, goldenATXID}, opts...)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VerifyChain", reflect.TypeOf((*MocknipostValidator)(nil).VerifyChain), varargs...)
+	return &nipostValidatorVerifyChainCall{Call: call}
+}
+
+// nipostValidatorVerifyChainCall wrap *gomock.Call
+type nipostValidatorVerifyChainCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *nipostValidatorVerifyChainCall) Return(arg0 error) *nipostValidatorVerifyChainCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *nipostValidatorVerifyChainCall) Do(f func(context.Context, types.ATXID, types.ATXID, ...VerifyChainOption) error) *nipostValidatorVerifyChainCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *nipostValidatorVerifyChainCall) DoAndReturn(f func(context.Context, types.ATXID, types.ATXID, ...VerifyChainOption) error) *nipostValidatorVerifyChainCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
