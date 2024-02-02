@@ -293,16 +293,19 @@ func (s *Server) Request(ctx context.Context, pid peer.ID, req []byte) ([]byte, 
 
 	took := time.Since(start).Seconds()
 	switch {
-	case s.metrics == nil:
 	case err != nil:
-		s.metrics.clientFailed.Inc()
-		s.metrics.clientLatencyFailure.Observe(took)
+		if s.metrics != nil {
+			s.metrics.clientFailed.Inc()
+			s.metrics.clientLatencyFailure.Observe(took)
+		}
 		return nil, err
 	case len(data.Error) > 0:
-		s.metrics.clientServerError.Inc()
-		s.metrics.clientLatencyFailure.Observe(took)
+		if s.metrics != nil {
+			s.metrics.clientServerError.Inc()
+			s.metrics.clientLatencyFailure.Observe(took)
+		}
 		return nil, errors.New(data.Error)
-	default:
+	case s.metrics != nil:
 		s.metrics.clientSucceeded.Inc()
 		s.metrics.clientLatency.Observe(took)
 	}
