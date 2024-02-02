@@ -10,10 +10,8 @@
     },
     "api": {
         "grpc-public-listener": "0.0.0.0:9092",
-        "grpc-private-listener": "0.0.0.0:9093"
-    },
-    "logging": {
-        "hare": "debug"
+        "grpc-private-listener": "0.0.0.0:9093",
+        "grpc-post-listener": "0.0.0.0:9094"
     },
     "fetch": {
         "servers-metrics": true

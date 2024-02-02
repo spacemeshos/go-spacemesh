@@ -58,28 +58,24 @@ func streamingGrpcLogStart(
 	return handler(srv, stream)
 }
 
-// NewPublic creates a new Server listening on the PublicListener address with the given logger and config.
+// NewWithServices creates a new Server listening on the provided address with the given logger and config.
 // Services passed in the svc slice are registered with the server.
-func NewPublic(logger *zap.Logger, config Config, svc []ServiceAPI) (*Server, error) {
+func NewWithServices(listener string, logger *zap.Logger, config Config, svc []ServiceAPI) (*Server, error) {
 	if len(svc) == 0 {
 		return nil, errors.New("no services to register")
 	}
 
-	server := New(config.PublicListener, logger, config)
-	for _, s := range svc {
-		s.RegisterService(server.GrpcServer)
+	// check if listener IP is in private network range
+	host, _, err := net.SplitHostPort(listener)
+	if err != nil {
+		return nil, fmt.Errorf("split local listener: %w", err)
 	}
-	return server, nil
-}
-
-// NewPrivate creates new Server listening on the PrivateListener address with the given logger and config.
-// Services passed in the svc slice are registered with the server.
-func NewPrivate(logger *zap.Logger, config Config, svc []ServiceAPI) (*Server, error) {
-	if len(svc) == 0 {
-		return nil, errors.New("no services to register")
+	ip := net.ParseIP(host)
+	if host != "localhost" && !ip.IsPrivate() && !ip.IsLoopback() {
+		logger.Warn("unsecured grpc server is listening on a public IP address", zap.String("address", listener))
 	}
 
-	server := New(config.PrivateListener, logger, config)
+	server := New(listener, logger, config)
 	for _, s := range svc {
 		s.RegisterService(server.GrpcServer)
 	}

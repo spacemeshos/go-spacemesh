@@ -43,7 +43,7 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 	// same genesis ID, otherwise they will not be able to connect to each
 	// other.
 	conf2 := config.DefaultTestConfig()
-	*conf2.Genesis = *conf1.Genesis
+	conf2.Genesis = conf1.Genesis
 	conf2.DataDirParent = t.TempDir()
 	conf2.FileLock = filepath.Join(conf2.DataDirParent, "LOCK")
 	conf2.P2P.Listen = p2p.MustParseAddresses("/ip4/127.0.0.1/tcp/0")

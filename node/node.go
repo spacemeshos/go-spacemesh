@@ -24,12 +24,12 @@ import (
 	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	"github.com/mitchellh/mapstructure"
 	"github.com/spacemeshos/poet/server"
-	"github.com/spacemeshos/post/verifying"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -125,25 +125,31 @@ const (
 )
 
 func GetCommand() *cobra.Command {
+	conf := config.MainnetConfig()
+	var configPath *string
 	c := &cobra.Command{
 		Use:   "node",
 		Short: "start node",
-		Run: func(c *cobra.Command, args []string) {
-			conf, err := loadConfig(c)
-			if err != nil {
-				log.With().Fatal("failed to initialize config", log.Err(err))
+		RunE: func(c *cobra.Command, args []string) error {
+			preset := conf.Preset // might be set via CLI flag
+			if err := loadConfig(&conf, preset, *configPath); err != nil {
+				return fmt.Errorf("loading config: %w", err)
+			}
+			// apply CLI args to config
+			if err := c.ParseFlags(os.Args[1:]); err != nil {
+				return fmt.Errorf("parsing flags: %w", err)
 			}
 
 			if conf.LOGGING.Encoder == config.JSONLogEncoder {
 				log.JSONLog(true)
 			}
 
-			if cmd.NoMainNet && onMainNet(conf) && !conf.NoMainOverride {
-				log.With().Fatal("this is a testnet-only build not intended for mainnet")
+			if cmd.NoMainNet && onMainNet(&conf) && !conf.NoMainOverride {
+				return errors.New("this is a testnet-only build not intended for mainnet")
 			}
 
 			app := New(
-				WithConfig(conf),
+				WithConfig(&conf),
 				// NOTE(dshulyak) this needs to be max level so that child logger can can be current level or below.
 				// otherwise it will fail later when child logger will try to increase level.
 				WithLog(log.RegisterHooks(
@@ -152,63 +158,63 @@ func GetCommand() *cobra.Command {
 				),
 			)
 
-			run := func(ctx context.Context) error {
-				types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
-				// ensure all data folders exist
-				if err := os.MkdirAll(app.Config.DataDir(), 0o700); err != nil {
-					return fmt.Errorf("ensure folders exist: %w", err)
-				}
-
-				if err := app.Lock(); err != nil {
-					return fmt.Errorf("failed to get exclusive file lock: %w", err)
-				}
-				defer app.Unlock()
-
-				if err := app.Initialize(); err != nil {
-					return err
-				}
-
-				/* Create or load miner identity */
-				if app.edSgn, err = app.LoadOrCreateEdSigner(); err != nil {
-					return fmt.Errorf("could not retrieve identity: %w", err)
-				}
-
-				app.preserve, err = app.LoadCheckpoint(ctx)
-				if err != nil {
-					return err
-				}
-
-				// This blocks until the context is finished or until an error is produced
-				err = app.Start(ctx)
-				cleanupCtx, cleanupCancel := context.WithTimeout(
-					context.Background(),
-					30*time.Second,
-				)
-				defer cleanupCancel()
-				done := make(chan struct{}, 1)
-				// FIXME: per https://github.com/spacemeshos/go-spacemesh/issues/3830
-				go func() {
-					app.Cleanup(cleanupCtx)
-					_ = app.eg.Wait()
-					close(done)
-				}()
-				select {
-				case <-done:
-				case <-cleanupCtx.Done():
-					app.log.With().Error("app failed to clean up in time")
-				}
-				return err
-			}
 			// os.Interrupt for all systems, especially windows, syscall.SIGTERM is mainly for docker.
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer cancel()
-			if err := run(ctx); err != nil {
-				app.log.With().Fatal(err.Error())
+
+			types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
+			// ensure all data folders exist
+			if err := os.MkdirAll(app.Config.DataDir(), 0o700); err != nil {
+				return fmt.Errorf("ensure folders exist: %w", err)
 			}
+
+			if err := app.Lock(); err != nil {
+				return fmt.Errorf("getting exclusive file lock: %w", err)
+			}
+			defer app.Unlock()
+
+			if err := app.Initialize(); err != nil {
+				return fmt.Errorf("initializing app: %w", err)
+			}
+
+			/* Create or load miner identity */
+			var err error
+			if app.edSgn, err = app.LoadOrCreateEdSigner(); err != nil {
+				return fmt.Errorf("could not retrieve identity: %w", err)
+			}
+
+			// Don't print usage on error from this point forward
+			c.SilenceUsage = true
+
+			app.preserve, err = app.LoadCheckpoint(ctx)
+			if err != nil {
+				return fmt.Errorf("loading checkpoint: %w", err)
+			}
+
+			// This blocks until the context is finished or until an error is produced
+			err = app.Start(ctx)
+			cleanupCtx, cleanupCancel := context.WithTimeout(
+				context.Background(),
+				30*time.Second,
+			)
+			defer cleanupCancel()
+			done := make(chan struct{}, 1)
+			// FIXME: per https://github.com/spacemeshos/go-spacemesh/issues/3830
+			go func() {
+				app.Cleanup(cleanupCtx)
+				_ = app.eg.Wait()
+				close(done)
+			}()
+			select {
+			case <-done:
+			case <-cleanupCtx.Done():
+				app.log.Error("app failed to clean up in time")
+			}
+			return err
 		},
 	}
 
-	cmd.AddCommands(c)
+	configPath = cmd.AddFlags(c.PersistentFlags(), &conf)
 
 	// versionCmd returns the current version of spacemesh.
 	versionCmd := cobra.Command{
@@ -237,32 +243,28 @@ func init() {
 	grpclog = grpc_logsettable.ReplaceGrpcLoggerV2()
 }
 
-func loadConfig(c *cobra.Command) (*config.Config, error) {
-	conf, err := LoadConfigFromFile()
-	if err != nil {
-		return nil, err
+// loadConfig loads config and preset (if provided) into the provided config.
+// It first loads the preset and then overrides it with values from the config file.
+func loadConfig(cfg *config.Config, preset, path string) error {
+	v := viper.New()
+	// read in config from file
+	if err := config.LoadConfig(path, v); err != nil {
+		return err
 	}
-	if err := cmd.EnsureCLIFlags(c, conf); err != nil {
-		return nil, fmt.Errorf("mapping cli flags to config: %w", err)
-	}
-	return conf, nil
-}
 
-// LoadConfigFromFile tries to load configuration file if the config parameter was specified.
-func LoadConfigFromFile() (*config.Config, error) {
-	// read in default config if passed as param using viper
-	if err := config.LoadConfig(viper.GetString("config"), viper.GetViper()); err != nil {
-		return nil, err
+	// override default config with preset if provided
+	if len(preset) == 0 && v.IsSet("preset") {
+		preset = v.GetString("preset")
 	}
-	conf := config.MainnetConfig()
-	if name := viper.GetString("preset"); len(name) > 0 {
-		preset, err := presets.Get(name)
+	if len(preset) > 0 {
+		p, err := presets.Get(preset)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		conf = preset
+		*cfg = p
 	}
 
+	// Unmarshall config file into config struct
 	hook := mapstructure.ComposeDecodeHookFunc(
 		mapstructure.StringToTimeDurationHookFunc(),
 		mapstructure.StringToSliceHookFunc(","),
@@ -273,16 +275,35 @@ func LoadConfigFromFile() (*config.Config, error) {
 		mapstructure.TextUnmarshallerHookFunc(),
 	)
 
-	// load config if it was loaded to the viper
-	if err := viper.Unmarshal(&conf, viper.DecodeHook(hook), withZeroFields()); err != nil {
-		return nil, fmt.Errorf("unmarshal viper: %w", err)
+	opts := []viper.DecoderConfigOption{
+		viper.DecodeHook(hook),
+		WithZeroFields(),
+		WithIgnoreUntagged(),
+		withErrorUnused(),
 	}
-	return &conf, nil
+
+	// load config if it was loaded to the viper
+	if err := v.Unmarshal(cfg, opts...); err != nil {
+		return fmt.Errorf("unmarshal config: %w", err)
+	}
+	return nil
 }
 
-func withZeroFields() viper.DecoderConfigOption {
+func WithZeroFields() viper.DecoderConfigOption {
 	return func(cfg *mapstructure.DecoderConfig) {
 		cfg.ZeroFields = true
+	}
+}
+
+func WithIgnoreUntagged() viper.DecoderConfigOption {
+	return func(cfg *mapstructure.DecoderConfig) {
+		cfg.IgnoreUntaggedFields = true
+	}
+}
+
+func withErrorUnused() viper.DecoderConfigOption {
+	return func(cfg *mapstructure.DecoderConfig) {
+		cfg.ErrorUnused = true
 	}
 }
 
@@ -307,11 +328,12 @@ func WithConfig(conf *config.Config) Option {
 func New(opts ...Option) *App {
 	defaultConfig := config.DefaultConfig()
 	app := &App{
-		Config:  &defaultConfig,
-		log:     appLog,
-		loggers: make(map[string]*zap.AtomicLevel),
-		started: make(chan struct{}),
-		eg:      &errgroup.Group{},
+		Config:       &defaultConfig,
+		log:          appLog,
+		loggers:      make(map[string]*zap.AtomicLevel),
+		grpcServices: make(map[grpcserver.Service]grpcserver.ServiceAPI),
+		started:      make(chan struct{}),
+		eg:           &errgroup.Group{},
 	}
 	for _, opt := range opts {
 		opt(app)
@@ -338,9 +360,10 @@ type App struct {
 	localDB           *localsql.Database
 	grpcPublicServer  *grpcserver.Server
 	grpcPrivateServer *grpcserver.Server
+	grpcPostServer    *grpcserver.Server
 	grpcTLSServer     *grpcserver.Server
 	jsonAPIServer     *grpcserver.JSONHTTPServer
-	grpcPostService   *grpcserver.PostService
+	grpcServices      map[grpcserver.Service]grpcserver.ServiceAPI
 	pprofService      *http.Server
 	profilerService   *pyroscope.Profiler
 	syncer            *syncer.Syncer
@@ -369,7 +392,7 @@ type App struct {
 	tortoise          *tortoise.Tortoise
 	updater           *bootstrap.Updater
 	poetDb            *activation.PoetDb
-	postVerifier      *activation.OffloadingPostVerifier
+	postVerifier      activation.PostVerifier
 	postSupervisor    *activation.PostSupervisor
 	preserve          *checkpoint.PreservedData
 	errCh             chan error
@@ -459,7 +482,7 @@ func (app *App) Initialize() error {
 			return fmt.Errorf("failed to write genesis config to %s: %w", gpath, err)
 		}
 	} else {
-		diff := existing.Diff(app.Config.Genesis)
+		diff := existing.Diff(&app.Config.Genesis)
 		if len(diff) > 0 {
 			app.log.Error("genesis config updated after node initialization, if this update is required delete config"+
 				" at %s.\ndiff:\n%s", gpath, diff,
@@ -564,27 +587,17 @@ func (app *App) initServices(ctx context.Context) error {
 
 	poetDb := activation.NewPoetDb(app.db, app.addLogger(PoetDbLogger, lg))
 
-	nipostValidatorLogger := app.addLogger(NipostValidatorLogger, lg)
-
-	lg.Debug("creating post verifier")
 	verifier, err := activation.NewPostVerifier(
 		app.Config.POST,
-		nipostValidatorLogger.Zap(),
-		verifying.WithPowFlags(app.Config.SMESHING.VerifyingOpts.Flags.Value()),
-	)
-	lg.With().Debug("created post verifier", log.Err(err))
-	if err != nil {
-		return err
-	}
-	workers := app.Config.SMESHING.VerifyingOpts.Workers
-	minWorkers := min(app.Config.SMESHING.VerifyingOpts.MinWorkers, workers)
-	app.postVerifier = activation.NewOffloadingPostVerifier(
-		verifier,
-		workers,
-		nipostValidatorLogger.Zap(),
+		app.addLogger(NipostValidatorLogger, lg).Zap(),
+		activation.WithVerifyingOpts(app.Config.SMESHING.VerifyingOpts),
 		activation.PrioritizedIDs(app.edSgn.NodeID()),
+		activation.WithAutoscaling(),
 	)
-	app.postVerifier.Autoscale(minWorkers, workers)
+	if err != nil {
+		return fmt.Errorf("creating post verifier: %w", err)
+	}
+	app.postVerifier = verifier
 
 	validator := activation.NewValidator(
 		poetDb,
@@ -659,6 +672,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.log.With().Info("tortoise will trace execution")
 		trtlopts = append(trtlopts, tortoise.WithTracer())
 	}
+	app.log.Info("initializing tortoise")
 	start := time.Now()
 	trtl, err := tortoise.Recover(
 		ctx,
@@ -714,8 +728,8 @@ func (app *App) initServices(ctx context.Context) error {
 		beaconProtocol,
 		trtl,
 		app.addLogger(ATXHandlerLogger, lg),
-		app.Config.POET,
 	)
+	atxHandler.Register(app.edSgn)
 
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
 
@@ -890,7 +904,7 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 	proposalBuilder.Register(app.edSgn)
 
-	host, port, err := net.SplitHostPort(app.Config.API.PrivateListener)
+	host, port, err := net.SplitHostPort(app.Config.API.PostListener)
 	if err != nil {
 		return fmt.Errorf("parse grpc-private-listener: %w", err)
 	}
@@ -923,11 +937,14 @@ func (app *App) initServices(ctx context.Context) error {
 		return fmt.Errorf("init post service: %w", err)
 	}
 
-	app.grpcPostService = grpcserver.NewPostService(app.addLogger(PostServiceLogger, lg).Zap())
+	grpcPostService, err := app.grpcService(grpcserver.Post, lg)
+	if err != nil {
+		return fmt.Errorf("init post grpc service: %w", err)
+	}
 	nipostBuilder, err := activation.NewNIPostBuilder(
 		app.localDB,
 		poetDb,
-		app.grpcPostService,
+		grpcPostService.(*grpcserver.PostService),
 		app.Config.PoetServers,
 		app.addLogger(NipostBuilderLogger, lg).Zap(),
 		app.edSgn,
@@ -949,7 +966,6 @@ func (app *App) initServices(ctx context.Context) error {
 		app.cachedDB,
 		app.localDB,
 		app.host,
-		app.grpcPostService,
 		nipostBuilder,
 		app.clock,
 		newSyncer,
@@ -1271,17 +1287,22 @@ func (app *App) startServices(ctx context.Context) error {
 	return nil
 }
 
-func (app *App) initService(
-	ctx context.Context,
-	svc grpcserver.Service,
-) (grpcserver.ServiceAPI, error) {
+func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.ServiceAPI, error) {
+	if service, ok := app.grpcServices[svc]; ok {
+		return service, nil
+	}
+
 	switch svc {
 	case grpcserver.Debug:
-		return grpcserver.NewDebugService(app.db, app.conState, app.host, app.hOracle), nil
+		service := grpcserver.NewDebugService(app.db, app.conState, app.host, app.hOracle)
+		app.grpcServices[svc] = service
+		return service, nil
 	case grpcserver.GlobalState:
-		return grpcserver.NewGlobalStateService(app.mesh, app.conState), nil
+		service := grpcserver.NewGlobalStateService(app.mesh, app.conState)
+		app.grpcServices[svc] = service
+		return service, nil
 	case grpcserver.Mesh:
-		return grpcserver.NewMeshService(
+		service := grpcserver.NewMeshService(
 			app.cachedDB,
 			app.mesh,
 			app.conState,
@@ -1291,41 +1312,52 @@ func (app *App) initService(
 			app.Config.LayerDuration,
 			app.Config.LayerAvgSize,
 			uint32(app.Config.TxsPerProposal),
-		), nil
+		)
+		app.grpcServices[svc] = service
+		return service, nil
 	case grpcserver.Node:
-		return grpcserver.NewNodeService(
+		service := grpcserver.NewNodeService(
 			app.host,
 			app.mesh,
 			app.clock,
 			app.syncer,
 			cmd.Version,
 			cmd.Commit,
-		), nil
+		)
+		app.grpcServices[svc] = service
+		return service, nil
 	case grpcserver.Admin:
-		return grpcserver.NewAdminService(app.db, app.Config.DataDir(), app.host), nil
+		service := grpcserver.NewAdminService(app.db, app.Config.DataDir(), app.host)
+		app.grpcServices[svc] = service
+		return service, nil
 	case grpcserver.Smesher:
-		return grpcserver.NewSmesherService(
+		service := grpcserver.NewSmesherService(
 			app.atxBuilder,
 			app.postSupervisor,
 			app.Config.API.SmesherStreamInterval,
 			app.Config.SMESHING.Opts,
-		), nil
+		)
+		app.grpcServices[svc] = service
+		return service, nil
 	case grpcserver.Post:
-		return app.grpcPostService, nil
+		service := grpcserver.NewPostService(app.addLogger(PostServiceLogger, lg).Zap())
+		app.grpcServices[svc] = service
+		return service, nil
 	case grpcserver.Transaction:
-		return grpcserver.NewTransactionService(
+		service := grpcserver.NewTransactionService(
 			app.db,
 			app.host,
 			app.mesh,
 			app.conState,
 			app.syncer,
 			app.txHandler,
-		), nil
+		)
+		app.grpcServices[svc] = service
+		return service, nil
 	case grpcserver.Activation:
-		return grpcserver.NewActivationService(
-			app.cachedDB,
-			types.ATXID(app.Config.Genesis.GoldenATX()),
-		), nil
+		service := grpcserver.NewActivationService(app.cachedDB, types.ATXID(app.Config.Genesis.GoldenATX()))
+		app.grpcServices[svc] = service
+		return service, nil
 	}
 	return nil, fmt.Errorf("unknown service %s", svc)
 }
@@ -1333,54 +1365,69 @@ func (app *App) initService(
 func (app *App) startAPIServices(ctx context.Context) error {
 	logger := app.addLogger(GRPCLogger, app.log)
 	grpczap.SetGrpcLoggerV2(grpclog, logger.Zap())
+
 	var (
-		// TODO(mafa): instead of checking for uniqueness of services across endpoints
-		// check uniqueness per endpoint and make them singletons
-		unique        = map[grpcserver.Service]struct{}{}
-		public        []grpcserver.ServiceAPI
-		private       []grpcserver.ServiceAPI
-		authenticated []grpcserver.ServiceAPI
+		publicSvcs        = make(map[grpcserver.Service]grpcserver.ServiceAPI, len(app.Config.API.PublicServices))
+		privateSvcs       = make(map[grpcserver.Service]grpcserver.ServiceAPI, len(app.Config.API.PrivateServices))
+		postSvcs          = make(map[grpcserver.Service]grpcserver.ServiceAPI, len(app.Config.API.PostServices))
+		authenticatedSvcs = make(map[grpcserver.Service]grpcserver.ServiceAPI, len(app.Config.API.TLSServices))
 	)
 
 	// check services for uniques across all endpoints
 	for _, svc := range app.Config.API.PublicServices {
-		if _, exists := unique[svc]; exists {
-			return fmt.Errorf("can't start more than one %s", svc)
+		if _, exists := publicSvcs[svc]; exists {
+			return fmt.Errorf("can't start more than one %s on public grpc endpoint", svc)
 		}
-		gsvc, err := app.initService(ctx, svc)
+		gsvc, err := app.grpcService(svc, app.log)
 		if err != nil {
 			return err
 		}
 		logger.Info("registering public service %s", svc)
-		public = append(public, gsvc)
-		unique[svc] = struct{}{}
+		publicSvcs[svc] = gsvc
 	}
 	for _, svc := range app.Config.API.PrivateServices {
-		if _, exists := unique[svc]; exists {
-			return fmt.Errorf("can't start more than one %s", svc)
+		if _, exists := privateSvcs[svc]; exists {
+			return fmt.Errorf("can't start more than one %s on private grpc endpoint", svc)
 		}
-		gsvc, err := app.initService(ctx, svc)
+		gsvc, err := app.grpcService(svc, app.log)
 		if err != nil {
 			return err
 		}
 		logger.Info("registering private service %s", svc)
-		private = append(private, gsvc)
-		unique[svc] = struct{}{}
+		privateSvcs[svc] = gsvc
+	}
+	for _, svc := range app.Config.API.PostServices {
+		if _, exists := postSvcs[svc]; exists {
+			return fmt.Errorf("can't start more than one %s on post grpc endpoint", svc)
+		}
+		gsvc, err := app.grpcService(svc, app.log)
+		if err != nil {
+			return err
+		}
+		logger.Info("registering local service %s", svc)
+		postSvcs[svc] = gsvc
 	}
 	for _, svc := range app.Config.API.TLSServices {
-		gsvc, err := app.initService(ctx, svc)
+		if _, exists := authenticatedSvcs[svc]; exists {
+			return fmt.Errorf("can't start more than one %s on authenticated grpc endpoint", svc)
+		}
+		gsvc, err := app.grpcService(svc, app.log)
 		if err != nil {
 			return err
 		}
 		logger.Info("registering authenticated service %s", svc)
-		authenticated = append(authenticated, gsvc)
-		unique[svc] = struct{}{}
+		authenticatedSvcs[svc] = gsvc
 	}
 
 	// start servers if at least one endpoint is defined for them
-	if len(public) > 0 {
+	if len(publicSvcs) > 0 {
 		var err error
-		app.grpcPublicServer, err = grpcserver.NewPublic(logger.Zap(), app.Config.API, public)
+		app.grpcPublicServer, err = grpcserver.NewWithServices(
+			app.Config.API.PublicListener,
+			logger.Zap(),
+			app.Config.API,
+			maps.Values(publicSvcs),
+		)
 		if err != nil {
 			return err
 		}
@@ -1388,9 +1435,14 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			return err
 		}
 	}
-	if len(private) > 0 {
+	if len(privateSvcs) > 0 {
 		var err error
-		app.grpcPrivateServer, err = grpcserver.NewPrivate(logger.Zap(), app.Config.API, private)
+		app.grpcPrivateServer, err = grpcserver.NewWithServices(
+			app.Config.API.PrivateListener,
+			logger.Zap(),
+			app.Config.API,
+			maps.Values(privateSvcs),
+		)
 		if err != nil {
 			return err
 		}
@@ -1398,9 +1450,25 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			return err
 		}
 	}
-	if len(authenticated) > 0 && app.Config.API.TLSListener != "" {
+	if len(postSvcs) > 0 && app.Config.API.PostListener != "" {
 		var err error
-		app.grpcTLSServer, err = grpcserver.NewTLS(logger.Zap(), app.Config.API, authenticated)
+		app.grpcPostServer, err = grpcserver.NewWithServices(
+			app.Config.API.PostListener,
+			logger.Zap(),
+			app.Config.API,
+			maps.Values(postSvcs),
+		)
+		if err != nil {
+			return err
+		}
+		if err := app.grpcPostServer.Start(); err != nil {
+			return err
+		}
+	}
+
+	if len(authenticatedSvcs) > 0 && app.Config.API.TLSListener != "" {
+		var err error
+		app.grpcTLSServer, err = grpcserver.NewTLS(logger.Zap(), app.Config.API, maps.Values(authenticatedSvcs))
 		if err != nil {
 			return err
 		}
@@ -1410,14 +1478,14 @@ func (app *App) startAPIServices(ctx context.Context) error {
 	}
 
 	if len(app.Config.API.JSONListener) > 0 {
-		if len(public) == 0 {
+		if len(publicSvcs) == 0 {
 			return fmt.Errorf("start json server without public services")
 		}
 		app.jsonAPIServer = grpcserver.NewJSONHTTPServer(
 			app.Config.API.JSONListener,
 			logger.Zap().Named("JSON"),
 		)
-		if err := app.jsonAPIServer.StartService(ctx, public...); err != nil {
+		if err := app.jsonAPIServer.StartService(ctx, maps.Values(publicSvcs)...); err != nil {
 			return fmt.Errorf("start listen server: %w", err)
 		}
 	}
@@ -1438,6 +1506,10 @@ func (app *App) stopServices(ctx context.Context) {
 	if app.grpcPrivateServer != nil {
 		app.log.Info("stopping private grpc service")
 		app.grpcPrivateServer.Close() // err is always nil
+	}
+	if app.grpcPostServer != nil {
+		app.log.Info("stopping local grpc service")
+		app.grpcPostServer.Close() // err is always nil
 	}
 	if app.grpcTLSServer != nil {
 		app.log.Info("stopping tls grpc service")
@@ -1600,7 +1672,9 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	if err != nil {
 		return fmt.Errorf("failed to load migrations: %w", err)
 	}
+	dbLog := app.addLogger(StateDbLogger, lg)
 	dbopts := []sql.Opt{
+		sql.WithLogger(dbLog.Zap()),
 		sql.WithMigrations(migrations),
 		sql.WithConnections(app.Config.DatabaseConnections),
 		sql.WithLatencyMetering(app.Config.DatabaseLatencyMetering),
@@ -1618,10 +1692,11 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		app.dbMetrics = dbmetrics.NewDBMetricsCollector(
 			ctx,
 			app.db,
-			app.addLogger(StateDbLogger, lg),
+			dbLog,
 			app.Config.DatabaseSizeMeteringInterval,
 		)
 	}
+	app.log.Info("starting cache warmup")
 	start := time.Now()
 	data, err := atxsdata.Warm(
 		app.db,
@@ -1648,6 +1723,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		return fmt.Errorf("load local migrations: %w", err)
 	}
 	localDB, err := localsql.Open("file:"+filepath.Join(dbPath, localDbFile),
+		sql.WithLogger(dbLog.Zap()),
 		sql.WithMigrations(migrations),
 		sql.WithMigration(localsql.New0001Migration(app.Config.SMESHING.Opts.DataDir)),
 		sql.WithMigration(localsql.New0002Migration(app.Config.SMESHING.Opts.DataDir)),

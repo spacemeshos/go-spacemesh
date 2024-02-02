@@ -25,7 +25,7 @@ func TestPeerInfoApi(t *testing.T) {
 
 	cfg.API.PublicListener = "0.0.0.0:0"
 	cfg.API.PrivateServices = nil
-	cfg.API.PublicServices = []string{grpcserver.Admin}
+	cfg.API.PublicServices = []grpcserver.Service{grpcserver.Admin}
 	l := logtest.New(t)
 	networkSize := 3
 	network := NewTestNetwork(t, cfg, l, networkSize)

@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 func opinions(prevHash types.Hash32) []*fetch.LayerOpinion {
@@ -415,26 +416,26 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 	ts.mDataFetcher.EXPECT().
 		PeerEpochInfo(gomock.Any(), opns[5].Peer(), epoch-1).
 		Return(eds[5], nil)
-	ts.mDataFetcher.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, got []types.ATXID) error {
+	ts.mDataFetcher.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, got []types.ATXID, _ ...system.GetAtxOpt) error {
 			require.ElementsMatch(t, eds[0].AtxIDs, got)
 			return nil
 		},
 	)
-	ts.mDataFetcher.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, got []types.ATXID) error {
+	ts.mDataFetcher.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, got []types.ATXID, _ ...system.GetAtxOpt) error {
 			require.ElementsMatch(t, eds[2].AtxIDs, got)
 			return nil
 		},
 	)
-	ts.mDataFetcher.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, got []types.ATXID) error {
+	ts.mDataFetcher.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, got []types.ATXID, _ ...system.GetAtxOpt) error {
 			require.ElementsMatch(t, eds[3].AtxIDs, got)
 			return errors.New("not available")
 		},
 	)
-	ts.mDataFetcher.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, got []types.ATXID) error {
+	ts.mDataFetcher.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, got []types.ATXID, _ ...system.GetAtxOpt) error {
 			require.ElementsMatch(t, eds[5].AtxIDs, got)
 			return nil
 		},

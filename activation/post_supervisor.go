@@ -259,7 +259,6 @@ func (ps *PostSupervisor) runCmd(
 		cmdCfg.PostServiceCmd,
 		args...,
 	)
-	cmd.Dir = filepath.Dir(cmdCfg.PostServiceCmd)
 	pipe, err := cmd.StderrPipe()
 	if err != nil {
 		ps.logger.Error("setup stderr pipe for post service", zap.Error(err))
