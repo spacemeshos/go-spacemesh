@@ -228,12 +228,18 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 		cfg.POST.MinNumUnits, "")
 	flagSet.Uint32Var(&cfg.POST.MaxNumUnits, "post-max-numunits",
 		cfg.POST.MaxNumUnits, "")
-	flagSet.Uint32Var(&cfg.POST.K1, "post-k1",
+	flagSet.UintVar(&cfg.POST.K1, "post-k1",
 		cfg.POST.K1, "difficulty factor for finding a good label when generating a proof")
-	flagSet.Uint32Var(&cfg.POST.K2, "post-k2",
+	flagSet.UintVar(&cfg.POST.K2, "post-k2",
 		cfg.POST.K2, "number of labels to prove")
-	flagSet.Uint32Var(&cfg.POST.K3, "post-k3",
-		cfg.POST.K3, "subset of labels to verify in a proof")
+	flagSet.UintVar(
+		&cfg.POST.K3,
+		"post-k3",
+		cfg.POST.K3,
+		"size of the subset of labels to verify in POST proofs\n"+
+			"lower values will result in faster ATX verification but increase the risk\n"+
+			"as the node must depend on malfeasance proofs to detect invalid ATXs",
+	)
 	flagSet.AddFlag(&pflag.Flag{
 		Name:     "post-pow-difficulty",
 		Value:    &cfg.POST.PowDifficulty,

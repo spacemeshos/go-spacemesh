@@ -600,6 +600,7 @@ func (app *App) initServices(ctx context.Context) error {
 	app.postVerifier = verifier
 
 	validator := activation.NewValidator(
+		app.db,
 		poetDb,
 		app.Config.POST,
 		app.Config.SMESHING.Opts.Scrypt,
@@ -921,6 +922,8 @@ func (app *App) initServices(ctx context.Context) error {
 		app.cachedDB,
 		goldenATXID,
 		newSyncer,
+		app.validator,
+		activation.PostValidityDelay(app.Config.PostValidDelay),
 	)
 	if err != nil {
 		return fmt.Errorf("create post setup manager: %v", err)
@@ -957,7 +960,6 @@ func (app *App) initServices(ctx context.Context) error {
 
 	builderConfig := activation.Config{
 		GoldenATXID:      goldenATXID,
-		LayersPerEpoch:   layersPerEpoch,
 		RegossipInterval: app.Config.RegossipAtxInterval,
 	}
 	atxBuilder := activation.NewBuilder(
@@ -975,6 +977,7 @@ func (app *App) initServices(ctx context.Context) error {
 		// TODO(dshulyak) makes no sense. how we ended using it?
 		activation.WithPoetRetryInterval(app.Config.HARE3.PreroundDelay),
 		activation.WithValidator(app.validator),
+		activation.WithPostValidityDelay(app.Config.PostValidDelay),
 	)
 
 	malfeasanceHandler := malfeasance.NewHandler(
@@ -984,6 +987,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.edSgn.NodeID(),
 		app.edVerifier,
 		trtl,
+		app.postVerifier,
 	)
 	fetcher.SetValidators(
 		fetch.ValidatorFunc(

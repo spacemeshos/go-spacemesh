@@ -118,6 +118,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	goldenATX := types.ATXID{2, 3, 4}
 	cfg := activation.DefaultPostConfig()
 	cdb := datastore.NewCachedDB(sql.InMemory(), log.NewFromLog(logger))
+	validator := activation.NewMocknipostValidator(ctrl)
 
 	syncer := activation.NewMocksyncer(gomock.NewController(t))
 	syncer.EXPECT().RegisterForATXSynced().AnyTimes().DoAndReturn(func() <-chan struct{} {
@@ -126,7 +127,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 		return synced
 	})
 
-	mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX, syncer)
+	mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX, syncer, validator)
 	require.NoError(t, err)
 
 	opts := activation.DefaultPostSetupOpts()
@@ -197,7 +198,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	nipost, err := nb.BuildNIPost(context.Background(), &challenge)
 	require.NoError(t, err)
 
-	v := activation.NewValidator(poetDb, cfg, opts.Scrypt, verifier)
+	v := activation.NewValidator(nil, poetDb, cfg, opts.Scrypt, verifier)
 	_, err = v.NIPost(
 		context.Background(),
 		sig.NodeID(),
@@ -272,7 +273,8 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 		return synced
 	})
 
-	mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX, syncer)
+	validator := activation.NewMocknipostValidator(gomock.NewController(t))
+	mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX, syncer, validator)
 	require.NoError(t, err)
 
 	// ensure that genesis aligns with layer timings
@@ -342,7 +344,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
 
-	v := activation.NewValidator(poetDb, cfg, opts.Scrypt, verifier)
+	v := activation.NewValidator(nil, poetDb, cfg, opts.Scrypt, verifier)
 	_, err = v.NIPost(
 		context.Background(),
 		sig.NodeID(),

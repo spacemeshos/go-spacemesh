@@ -171,7 +171,7 @@ func NewSyncer(
 		s.dataFetcher = NewDataFetch(mesh, fetcher, cdb, cache, s.logger)
 	}
 	if s.forkFinder == nil {
-		s.forkFinder = NewForkFinder(s.logger, cdb.Database, fetcher, s.cfg.MaxStaleDuration)
+		s.forkFinder = NewForkFinder(s.logger, cdb, fetcher, s.cfg.MaxStaleDuration)
 	}
 	s.syncState.Store(notSynced)
 	s.atxSyncState.Store(notSynced)

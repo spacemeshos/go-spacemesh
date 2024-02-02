@@ -131,6 +131,12 @@ type BaseConfig struct {
 	// See grading fuction in miner/proposals_builder.go
 	ATXGradeDelay time.Duration `mapstructure:"atx-grade-delay"`
 
+	// PostValidDelay is the time after which a PoST is considered valid
+	// counting from the time an ATX was received.
+	// Before that time, the PoST must be fully verified.
+	// After that time, we depend on PoST malfeasance proofs.
+	PostValidDelay time.Duration `mapstructure:"post-valid-delay"`
+
 	// NoMainOverride forces the "nomain" builds to run on the mainnet
 	NoMainOverride bool `mapstructure:"no-main-override"`
 }
@@ -218,6 +224,7 @@ func defaultBaseConfig() BaseConfig {
 		DatabasePruneInterval:        30 * time.Minute,
 		NetworkHRP:                   "sm",
 		ATXGradeDelay:                10 * time.Second,
+		PostValidDelay:               12 * time.Hour,
 	}
 }
 

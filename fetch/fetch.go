@@ -228,7 +228,7 @@ func NewFetch(
 	host *p2p.Host,
 	opts ...Option,
 ) *Fetch {
-	bs := datastore.NewBlobStore(cdb.Database)
+	bs := datastore.NewBlobStore(cdb)
 
 	f := &Fetch{
 		cfg:         DefaultConfig(),

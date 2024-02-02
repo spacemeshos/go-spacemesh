@@ -274,7 +274,11 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 func TestPostSetupManager_findCommitmentAtx_UsesLatestAtx(t *testing.T) {
 	mgr := newTestPostManager(t)
 
-	latestAtx := addPrevAtx(t, mgr.db, 1, mgr.signer)
+	ch := newChallenge(0, types.EmptyATXID, mgr.goldenATXID, 2, &mgr.goldenATXID)
+	nipostData := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
+	latestAtx := newAtx(t, mgr.signer, ch, nipostData.NIPost, 2, types.Address{})
+	addAtx(t, mgr.db, mgr.signer, latestAtx)
+
 	atx, err := mgr.findCommitmentAtx(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, latestAtx.ID(), atx)
@@ -342,13 +346,18 @@ func newTestPostManager(tb testing.TB) *testPostManager {
 
 	goldenATXID := types.ATXID{2, 3, 4}
 
+	validator := NewMocknipostValidator(gomock.NewController(tb))
+	validator.EXPECT().
+		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		AnyTimes()
+	validator.EXPECT().VerifyChain(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	syncer := NewMocksyncer(gomock.NewController(tb))
 	synced := make(chan struct{})
 	close(synced)
 	syncer.EXPECT().RegisterForATXSynced().AnyTimes().Return(synced)
 
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
-	mgr, err := NewPostSetupManager(id, DefaultPostConfig(), zaptest.NewLogger(tb), cdb, goldenATXID, syncer)
+	mgr, err := NewPostSetupManager(id, DefaultPostConfig(), zaptest.NewLogger(tb), cdb, goldenATXID, syncer, validator)
 	require.NoError(tb, err)
 
 	return &testPostManager{
