@@ -159,7 +159,7 @@ func TestSpacemeshApp_SetLoggers(t *testing.T) {
 	msg1 := "hi there"
 	app.log.Info(msg1)
 	r.Equal(
-		fmt.Sprintf("INFO\t%s\t%s\t{\"module\": \"%s\"}\n", mylogger, msg1, mylogger),
+		fmt.Sprintf("INFO\t%s\t%s\n", mylogger, msg1),
 		buf1.String(),
 	)
 	r.NoError(app.SetLogLevel(mylogger, "warn"))
@@ -175,7 +175,7 @@ func TestSpacemeshApp_SetLoggers(t *testing.T) {
 	// This one should be printed
 	app.log.Warning(msg3)
 	r.Equal(
-		fmt.Sprintf("WARN\t%s\t%s\t{\"module\": \"%s\"}\n", mylogger, msg3, mylogger),
+		fmt.Sprintf("WARN\t%s\t%s\n", mylogger, msg3),
 		buf1.String(),
 	)
 	r.Equal(fmt.Sprintf("INFO\t%s\n", msg1), buf2.String())
@@ -187,7 +187,7 @@ func TestSpacemeshApp_SetLoggers(t *testing.T) {
 	app.log.Info(msg4)
 	r.Equal("info", app.loggers[mylogger].String())
 	r.Equal(
-		fmt.Sprintf("INFO\t%s\t%s\t{\"module\": \"%s\"}\n", mylogger, msg4, mylogger),
+		fmt.Sprintf("INFO\t%s\t%s\n", mylogger, msg4),
 		buf1.String(),
 	)
 
@@ -212,7 +212,7 @@ func TestSpacemeshApp_AddLogger(t *testing.T) {
 	teststr := "should get printed"
 	subLogger.Info(teststr)
 	r.Equal(
-		fmt.Sprintf("INFO\t%s\t%s\t{\"module\": \"%s\"}\n", mylogger, teststr, mylogger),
+		fmt.Sprintf("INFO\t%s\t%s\n", mylogger, teststr),
 		buf.String(),
 	)
 }

@@ -2,6 +2,7 @@ package log
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/google/uuid"
 )
@@ -45,7 +46,7 @@ func WithRequestID(ctx context.Context, requestID string, fields ...LoggableFiel
 // It can be used when there isn't a single, clear, unique id associated with a request (e.g.,
 // a block or tx hash).
 func WithNewRequestID(ctx context.Context, fields ...LoggableField) context.Context {
-	return WithRequestID(ctx, uuid.New().String(), fields...)
+	return WithRequestID(ctx, shortUUID(), fields...)
 }
 
 // ExtractSessionID extracts the session id from a context object.
@@ -100,5 +101,10 @@ func WithSessionID(ctx context.Context, sessionID string, fields ...LoggableFiel
 // WithNewSessionID does the same thing as WithSessionID but generates a new, random sessionId.
 // It can be used when there isn't a single, clear, unique id associated with a session.
 func WithNewSessionID(ctx context.Context, fields ...LoggableField) context.Context {
-	return WithSessionID(ctx, uuid.New().String(), fields...)
+	return WithSessionID(ctx, shortUUID(), fields...)
+}
+
+func shortUUID() string {
+	// 4 first bytes from uuid in hex. before the first hyphen
+	return fmt.Sprintf("%.8s", uuid.New())
 }
