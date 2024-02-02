@@ -302,7 +302,7 @@ func (s *Server) Request(ctx context.Context, pid peer.ID, req []byte) ([]byte, 
 	case len(data.Error) > 0:
 		if s.metrics != nil {
 			s.metrics.clientServerError.Inc()
-			s.metrics.clientLatencyFailure.Observe(took)
+			s.metrics.clientLatency.Observe(took)
 		}
 		return nil, errors.New(data.Error)
 	case s.metrics != nil:
