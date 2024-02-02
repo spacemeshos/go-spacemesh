@@ -399,8 +399,12 @@ func (msh *Mesh) applyResults(ctx context.Context, results []result.Layer) error
 		}); err != nil {
 			return err
 		}
-		msh.trtl.OnApplied(layer.Layer, layer.Opinion)
 		if layer.Verified {
+			// tortoise will evict layer when OnApplied is called.
+			// however we also apply layers before contextual validity was determined (e.g block.Valid field)
+			// in such case we would apply block because of hare, and then we may evict event when block.Valid was set
+			// but before it was saved to database
+			msh.trtl.OnApplied(layer.Layer, layer.Opinion)
 			events.ReportLayerUpdate(events.LayerUpdate{
 				LayerID: layer.Layer,
 				Status:  events.LayerStatusTypeApplied,

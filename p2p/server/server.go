@@ -276,49 +276,40 @@ func (s *Server) queueHandler(ctx context.Context, stream network.Stream) bool {
 
 // Request sends a binary request to the peer. Request is executed in the background, one of the callbacks
 // is guaranteed to be called on success/error.
-func (s *Server) Request(
-	ctx context.Context,
-	pid peer.ID,
-	req []byte,
-	resp func([]byte),
-	failure func(error),
-) error {
+func (s *Server) Request(ctx context.Context, pid peer.ID, req []byte) ([]byte, error) {
 	start := time.Now()
 	if len(req) > s.requestLimit {
-		return fmt.Errorf("request length (%d) is longer than limit %d", len(req), s.requestLimit)
+		return nil, fmt.Errorf("request length (%d) is longer than limit %d", len(req), s.requestLimit)
 	}
 	if s.h.Network().Connectedness(pid) != network.Connected {
-		return fmt.Errorf("%w: %s", ErrNotConnected, pid)
+		return nil, fmt.Errorf("%w: %s", ErrNotConnected, pid)
 	}
-	go func() {
-		data, err := s.request(ctx, pid, req)
-		if err != nil {
-			failure(err)
-		} else if len(data.Error) > 0 {
-			failure(errors.New(data.Error))
-		} else {
-			resp(data.Data)
-		}
-		s.logger.WithContext(ctx).With().Debug("request execution time",
-			log.String("protocol", s.protocol),
-			log.Duration("duration", time.Since(start)),
-			log.Err(err),
-		)
-		switch {
-		case s.metrics == nil:
-			return
-		case err != nil:
+	data, err := s.request(ctx, pid, req)
+	s.logger.WithContext(ctx).With().Debug("request execution time",
+		log.String("protocol", s.protocol),
+		log.Duration("duration", time.Since(start)),
+		log.Err(err),
+	)
+
+	took := time.Since(start).Seconds()
+	switch {
+	case err != nil:
+		if s.metrics != nil {
 			s.metrics.clientFailed.Inc()
-			s.metrics.clientLatencyFailure.Observe(time.Since(start).Seconds())
-		case len(data.Error) > 0:
-			s.metrics.clientServerError.Inc()
-			s.metrics.clientLatency.Observe(time.Since(start).Seconds())
-		case err == nil:
-			s.metrics.clientSucceeded.Inc()
-			s.metrics.clientLatency.Observe(time.Since(start).Seconds())
+			s.metrics.clientLatencyFailure.Observe(took)
 		}
-	}()
-	return nil
+		return nil, err
+	case len(data.Error) > 0:
+		if s.metrics != nil {
+			s.metrics.clientServerError.Inc()
+			s.metrics.clientLatency.Observe(took)
+		}
+		return nil, errors.New(data.Error)
+	case s.metrics != nil:
+		s.metrics.clientSucceeded.Inc()
+		s.metrics.clientLatency.Observe(took)
+	}
+	return data.Data, nil
 }
 
 func (s *Server) request(ctx context.Context, pid peer.ID, req []byte) (*Response, error) {

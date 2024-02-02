@@ -555,7 +555,7 @@ func (app *App) addLogger(name string, logger log.Log) log.Log {
 		app.loggers[name] = &lvl
 		logger = logger.SetLevel(&lvl)
 	}
-	return logger.WithName(name).WithFields(log.String("module", name))
+	return logger.WithName(name)
 }
 
 func (app *App) getLevel(name string) log.Level {
@@ -583,7 +583,7 @@ func (app *App) SetLogLevel(name, loglevel string) error {
 func (app *App) initServices(ctx context.Context) error {
 	layerSize := app.Config.LayerAvgSize
 	layersPerEpoch := types.GetLayersPerEpoch()
-	lg := app.log.Named(app.edSgn.NodeID().ShortString()).WithFields(app.edSgn.NodeID())
+	lg := app.log
 
 	poetDb := activation.NewPoetDb(app.db, app.addLogger(PoetDbLogger, lg))
 
@@ -1818,7 +1818,7 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 		}
 	}
 
-	lg := logger.Named(app.edSgn.NodeID().ShortString()).WithFields(app.edSgn.NodeID())
+	lg := logger
 
 	/* Initialize all protocol services */
 
