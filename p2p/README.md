@@ -52,7 +52,7 @@ for them if needed.
 
 ### Configuration for private node
 
-Set `min-peers` to the number of peers in the config and `disable-dht`.
+Set `min-peers` to the number of peers in the config and `disable-dht` to `true`.
 `low-peers` and `high-peers` should not be lower than min-peers.
 
 
