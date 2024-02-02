@@ -13,9 +13,6 @@
         "grpc-private-listener": "0.0.0.0:9093",
         "grpc-post-listener": "0.0.0.0:9094"
     },
-    "logging": {
-        "hare": "debug"
-    },
     "fetch": {
         "servers-metrics": true
     },

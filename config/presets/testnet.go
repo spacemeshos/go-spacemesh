@@ -54,6 +54,7 @@ func testnet() config.Config {
 	hare3conf.ProtocolName = ""
 	defaultdir := filepath.Join(home, "spacemesh-testnet", "/")
 	return config.Config{
+		Preset: "testnet",
 		BaseConfig: config.BaseConfig{
 			DataDirParent:                defaultdir,
 			FileLock:                     filepath.Join(os.TempDir(), "spacemesh.lock"),
@@ -75,7 +76,7 @@ func testnet() config.Config {
 			RegossipAtxInterval: time.Hour,
 			ATXGradeDelay:       30 * time.Minute,
 		},
-		Genesis: &config.GenesisConfig{
+		Genesis: config.GenesisConfig{
 			GenesisTime: "2023-09-13T18:00:00Z",
 			ExtraData:   "0000000000000000000000c76c58ebac180989673fd6d237b40e66ed5c976ec3",
 		},
@@ -93,8 +94,8 @@ func testnet() config.Config {
 		},
 		Beacon: beacon.Config{
 			Kappa:                    40,
-			Q:                        big.NewRat(1, 3),
-			Theta:                    big.NewRat(1, 4),
+			Q:                        *big.NewRat(1, 3),
+			Theta:                    *big.NewRat(1, 4),
 			GracePeriodDuration:      10 * time.Minute,
 			ProposalDuration:         4 * time.Minute,
 			FirstVotingRoundDuration: 30 * time.Minute,

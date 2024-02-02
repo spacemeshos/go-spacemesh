@@ -914,7 +914,7 @@ func (c *Cluster) NodeConfig(ctx *testcontext.Context) (*config.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	cfg.Genesis = &config.GenesisConfig{
+	cfg.Genesis = config.GenesisConfig{
 		GenesisTime: c.Genesis().Format(time.RFC3339),
 		ExtraData:   c.GenesisExtraData(),
 	}
