@@ -243,7 +243,7 @@ func TestLastValid(t *testing.T) {
 		}
 		last, err := LastValid(db)
 		require.NoError(t, err)
-		require.Equal(t, 33, last)
+		require.Equal(t, 33, int(last))
 	})
 	t.Run("last is invalid", func(t *testing.T) {
 		db := sql.InMemory()
@@ -267,6 +267,6 @@ func TestLastValid(t *testing.T) {
 		}
 		last, err := LastValid(db)
 		require.NoError(t, err)
-		require.Equal(t, 22, last)
+		require.Equal(t, 22, int(last))
 	})
 }
