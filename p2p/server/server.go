@@ -322,7 +322,7 @@ func (s *Server) Request(
 }
 
 func (s *Server) request(ctx context.Context, pid peer.ID, req []byte) (*Response, error) {
-	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	ctx, cancel := context.WithTimeout(ctx, s.hardTimeout)
 	defer cancel()
 
 	var stream network.Stream
