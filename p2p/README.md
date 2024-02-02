@@ -10,7 +10,7 @@ couple of nodes publicly available and the rest connected to them directly.
 ### Get network id
 - get it with grpcurl
 
-> grpcurl -plaintext 127.0.0.1:9092 spacemesh.v1.DebugService.NetworkInfo
+> grpcurl -plaintext 127.0.0.1:9093 spacemesh.v1.DebugService.NetworkInfo
 
 ```json
 {
@@ -48,8 +48,7 @@ for them if needed.
 ```
 
 > [!NOTE]
-> Please note that 0.0.0.0 in the above config will work ONLY if all nodes are on the same host. If you're using multiple hosts make sure that you're using proper IPs on both sides.
-> The `bootnodes` section can contain any bootnodes (or all) depending on your preference.
+> Please note that 0.0.0.0 in the above config will work ONLY if all nodes are on the same host. If you're using multiple hosts make sure that you're using proper IPs on both sides. If you're on Windows system, it's recommended to use `127.0.0.1` instead of `0.0.0.0` in the `direct` part of the config on the same host. You can obviously use any other IP address that is available on the host too, that would allow to use multiple machines for the setup.
 
 ### Configuration for private node
 
@@ -77,7 +76,7 @@ Set `min-peers` to the number of peers in the config and `disable-dht`.
 ```
 
 > [!NOTE]
-> Please note that 0.0.0.0 in the above config will work ONLY if all nodes are on the same host. If you're using multiple hosts make sure that you're using proper IPs on both sides.
+> Please note that 0.0.0.0 in the above config will work ONLY if all nodes are on the same host. If you're using multiple hosts make sure that you're using proper IPs on both sides. If you're on Windows system, it's recommended to use `127.0.0.1` instead of `0.0.0.0` in the `direct` part of the config on the same host. You can obviously use any other IP address that is available on the host too, that would allow to use multiple machines for the setup.
 
 #### Expected result
 
