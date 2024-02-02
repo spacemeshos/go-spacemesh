@@ -45,7 +45,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	db := sql.InMemory()
 	cdb := datastore.NewCachedDB(db, log.NewFromLog(logger))
 
-	syncer := activation.NewMocksyncer(gomock.NewController(t))
+	syncer := activation.NewMocksyncer(ctrl)
 	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
 		synced := make(chan struct{})
 		close(synced)
@@ -65,7 +65,8 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		sig := sig
 		opts := opts
 		eg.Go(func() error {
-			mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX, syncer)
+			validator := activation.NewMocknipostValidator(ctrl)
+			mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX, syncer, validator)
 			require.NoError(t, err)
 
 			opts.DataDir = t.TempDir()
@@ -125,7 +126,6 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 
 	conf := activation.Config{
 		GoldenATXID:      goldenATX,
-		LayersPerEpoch:   layersPerEpoch,
 		RegossipInterval: 0,
 	}
 
@@ -172,7 +172,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
 
-	v := activation.NewValidator(poetDb, cfg, opts.Scrypt, verifier)
+	v := activation.NewValidator(nil, poetDb, cfg, opts.Scrypt, verifier)
 	for _, sig := range signers {
 		atx := atxs[sig.NodeID()]
 

@@ -128,6 +128,8 @@ func newTestBuilder(tb testing.TB, numSigners int, opts ...BuilderOption) *testA
 		mValidator:  NewMocknipostValidator(ctrl),
 	}
 
+	opts = append(opts, WithValidator(tab.mValidator))
+
 	cfg := Config{
 		GoldenATXID: tab.goldenATXID,
 	}
@@ -1532,7 +1534,7 @@ func TestGetPositioningAtxDbFailed(t *testing.T) {
 	tab := newTestBuilder(t, 1)
 	sig := maps.Values(tab.signers)[0]
 
-	db := datastoremocks.NewMockExecutor(gomock.NewController(t))
+	db := datastoremocks.NewMockExecutor(tab.mctrl)
 	tab.Builder.cdb = datastore.NewCachedDB(db, logtest.New(t))
 	expected := errors.New("db error")
 	db.EXPECT().Exec(gomock.Any(), gomock.Any(), gomock.Any()).Return(0, expected)

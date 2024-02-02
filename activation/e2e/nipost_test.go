@@ -120,7 +120,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	db := sql.InMemory()
 	cdb := datastore.NewCachedDB(db, log.NewFromLog(logger))
 
-	syncer := activation.NewMocksyncer(gomock.NewController(t))
+	syncer := activation.NewMocksyncer(ctrl)
 	syncer.EXPECT().RegisterForATXSynced().AnyTimes().DoAndReturn(func() <-chan struct{} {
 		synced := make(chan struct{})
 		close(synced)
@@ -266,14 +266,14 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	db := sql.InMemory()
 	cdb := datastore.NewCachedDB(db, log.NewFromLog(logger))
 
-	syncer := activation.NewMocksyncer(gomock.NewController(t))
+	syncer := activation.NewMocksyncer(ctrl)
 	syncer.EXPECT().RegisterForATXSynced().AnyTimes().DoAndReturn(func() <-chan struct{} {
 		synced := make(chan struct{})
 		close(synced)
 		return synced
 	})
 
-	validator := activation.NewMocknipostValidator(gomock.NewController(t))
+	validator := activation.NewMocknipostValidator(ctrl)
 	mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX, syncer, validator)
 	require.NoError(t, err)
 
@@ -372,7 +372,7 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	db := sql.InMemory()
 	cdb := datastore.NewCachedDB(db, log.NewFromLog(logger))
 
-	syncer := activation.NewMocksyncer(gomock.NewController(t))
+	syncer := activation.NewMocksyncer(ctrl)
 	syncer.EXPECT().RegisterForATXSynced().AnyTimes().DoAndReturn(func() <-chan struct{} {
 		synced := make(chan struct{})
 		close(synced)
