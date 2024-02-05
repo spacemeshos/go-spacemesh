@@ -205,6 +205,35 @@ func layersStream(
 	}
 }
 
+func malfeasanceStream(
+	ctx context.Context,
+	node *cluster.NodeClient,
+	logger *zap.Logger,
+	collector func(*pb.MalfeasanceStreamResponse) (bool, error),
+) error {
+	meshapi := pb.NewMeshServiceClient(node.PubConn())
+	layers, err := meshapi.MalfeasanceStream(ctx, &pb.MalfeasanceStreamRequest{IncludeProof: true})
+	if err != nil {
+		return err
+	}
+	for {
+		proof, err := layers.Recv()
+		s, ok := status.FromError(err)
+		if ok && s.Code() != codes.OK {
+			logger.Warn("malfeasance stream error", zap.String("client", node.Name), zap.Error(err), zap.Any("status", s))
+			if s.Code() == codes.Unavailable {
+				return nil
+			}
+		}
+		if err != nil {
+			return err
+		}
+		if cont, err := collector(proof); !cont {
+			return err
+		}
+	}
+}
+
 func waitGenesis(ctx *testcontext.Context, node *cluster.NodeClient) error {
 	svc := pb.NewMeshServiceClient(node.PubConn())
 	resp, err := svc.GenesisTime(ctx, &pb.GenesisTimeRequest{})

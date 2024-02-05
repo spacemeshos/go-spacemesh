@@ -20,6 +20,7 @@ import (
 	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/systest/parameters"
@@ -49,6 +50,10 @@ func MakePoetEndpoint(ith int) string {
 	return fmt.Sprintf("http://%s:%d", createPoetIdentifier(ith), poetPort)
 }
 
+func MakePoetGlobalEndpoint(testNamespace string, ith int) string {
+	return fmt.Sprintf("http://%s.%s:%d", createPoetIdentifier(ith), testNamespace, poetPort)
+}
+
 // Deterministically generate poet keys for given instance.
 func MakePoetKey(ith int) (ed25519.PublicKey, ed25519.PrivateKey) {
 	seed := make([]byte, ed25519.SeedSize)
@@ -60,6 +65,10 @@ func MakePoetKey(ith int) (ed25519.PublicKey, ed25519.PrivateKey) {
 
 func BootstrapperEndpoint(ith int) string {
 	return fmt.Sprintf("http://%s:%d", createBootstrapperIdentifier(ith), bootstrapperPort)
+}
+
+func BootstrapperGlobalEndpoint(namespace string, ith int) string {
+	return fmt.Sprintf("http://%s.%s:%d", createBootstrapperIdentifier(ith), namespace, bootstrapperPort)
 }
 
 // Opt is for configuring cluster.
@@ -531,7 +540,7 @@ func (c *Cluster) AddSmeshers(tctx *testcontext.Context, n int, opts ...Deployme
 		return err
 	}
 	flags := maps.Values(c.smesherFlags)
-	endpoints, err := extractP2PEndpoints(tctx, c.clients[:c.bootnodes])
+	endpoints, err := ExtractP2PEndpoints(tctx, c.clients[:c.bootnodes])
 	if err != nil {
 		return fmt.Errorf("extracting p2p endpoints %w", err)
 	}
@@ -554,7 +563,7 @@ func (c *Cluster) AddRemoteSmeshers(tctx *testcontext.Context, n int, opts ...De
 		return err
 	}
 	flags := maps.Values(c.smesherFlags)
-	endpoints, err := extractP2PEndpoints(tctx, c.clients[:c.bootnodes])
+	endpoints, err := ExtractP2PEndpoints(tctx, c.clients[:c.bootnodes])
 	if err != nil {
 		return fmt.Errorf("extracting p2p endpoints %w", err)
 	}
@@ -809,7 +818,7 @@ func genSigner() *signer {
 	return &signer{Pub: pub, PK: pk}
 }
 
-func extractP2PEndpoints(tctx *testcontext.Context, nodes []*NodeClient) ([]string, error) {
+func ExtractP2PEndpoints(tctx *testcontext.Context, nodes []*NodeClient) ([]string, error) {
 	var (
 		rst          = make([]string, len(nodes))
 		rctx, cancel = context.WithTimeout(tctx, 5*time.Minute)
@@ -898,4 +907,18 @@ func fillNetworkConfig(ctx *testcontext.Context, node *NodeClient) error {
 	ctx.Log.Debugw("updated param layers per epoch", "layers", testcontext.LayersPerEpoch.Get(ctx.Parameters))
 	ctx.Log.Debugw("updated param layer duration", "duration", testcontext.LayerDuration.Get(ctx.Parameters))
 	return nil
+}
+
+func (c *Cluster) NodeConfig(ctx *testcontext.Context) (*config.Config, error) {
+	cfg, err := loadSmesherConfig(ctx)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Genesis = config.GenesisConfig{
+		GenesisTime: c.Genesis().Format(time.RFC3339),
+		ExtraData:   c.GenesisExtraData(),
+	}
+	cfg.LayersPerEpoch = uint32(testcontext.LayersPerEpoch.Get(ctx.Parameters))
+	cfg.LayerDuration = testcontext.LayerDuration.Get(ctx.Parameters)
+	return cfg, nil
 }

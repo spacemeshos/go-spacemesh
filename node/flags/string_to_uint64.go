@@ -9,11 +9,11 @@ import (
 
 // StringToUint64Value is a flag type for string to uint64 values.
 type StringToUint64Value struct {
-	value map[string]uint64
+	value *map[string]uint64
 }
 
 // NewStringToUint64Value creates instance.
-func NewStringToUint64Value(p map[string]uint64) *StringToUint64Value {
+func NewStringToUint64Value(p *map[string]uint64) *StringToUint64Value {
 	return &StringToUint64Value{value: p}
 }
 
@@ -30,7 +30,7 @@ func (s *StringToUint64Value) Set(val string) error {
 			return err
 		}
 		key := strings.TrimSpace(parts[0])
-		s.value[key] = out
+		(*s.value)[key] = out
 	}
 	return nil
 }
@@ -43,7 +43,7 @@ func (s *StringToUint64Value) Type() string {
 // String marshals value of the StringToUint64Value instance.
 func (s *StringToUint64Value) String() string {
 	var buf bytes.Buffer
-	for k, v := range s.value {
+	for k, v := range *s.value {
 		buf.WriteString(k)
 		buf.WriteRune('=')
 		buf.WriteString(strconv.FormatUint(v, 10))
@@ -53,15 +53,4 @@ func (s *StringToUint64Value) String() string {
 		return ""
 	}
 	return buf.String()[:buf.Len()-1]
-}
-
-// CastStringToMapStringUint64 casts string with comma separated values to map[string]uint64.
-// Nil is returned if value fails format validation (consistnt with viper behavior).
-func CastStringToMapStringUint64(value string) map[string]uint64 {
-	val := map[string]uint64{}
-	parser := NewStringToUint64Value(val)
-	if err := parser.Set(value); err != nil {
-		return nil
-	}
-	return val
 }

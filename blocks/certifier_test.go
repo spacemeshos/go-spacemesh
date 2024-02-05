@@ -657,7 +657,7 @@ func Test_OldLayersPruned(t *testing.T) {
 
 func Test_CertifyIfEligible(t *testing.T) {
 	numSigners := 3
-	tc := newTestCertifier(t, 3)
+	tc := newTestCertifier(t, numSigners)
 	b := generateBlock(t, tc.db)
 	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil)
 

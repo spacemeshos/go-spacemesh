@@ -85,7 +85,7 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 						Warning("failed to adopt peer opinions", lid, log.Err(err))
 				}
 			}
-			if s.IsSynced(ctx) {
+			if s.IsSynced(ctx) && !s.cfg.DisableMeshAgreement {
 				if err = s.checkMeshAgreement(ctx, lid, opinions); err != nil &&
 					errors.Is(err, errMeshHashDiverged) {
 					s.logger.WithContext(ctx).

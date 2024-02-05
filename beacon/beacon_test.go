@@ -995,7 +995,7 @@ func TestBeacon_atxThreshold(t *testing.T) {
 }
 
 func TestBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
-	cfg := Config{Kappa: 40, Q: big.NewRat(1, 3)}
+	cfg := Config{Kappa: 40, Q: *big.NewRat(1, 3)}
 	tt := []struct {
 		name            string
 		wEarly, wOntime int

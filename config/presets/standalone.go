@@ -26,7 +26,7 @@ func standalone() config.Config {
 	conf.DataDirParent = filepath.Join(os.TempDir(), "spacemesh")
 	conf.FileLock = filepath.Join(conf.DataDirParent, "LOCK")
 
-	conf.Genesis = &config.GenesisConfig{
+	conf.Genesis = config.GenesisConfig{
 		ExtraData: "standalone",
 		Accounts:  map[string]uint64{},
 	}
@@ -61,7 +61,7 @@ func standalone() config.Config {
 	conf.SMESHING.ProvingOpts.RandomXMode = activation.PostRandomXModeLight
 
 	conf.Beacon.Kappa = 40
-	conf.Beacon.Theta = big.NewRat(1, 4)
+	conf.Beacon.Theta = *big.NewRat(1, 4)
 	conf.Beacon.FirstVotingRoundDuration = 10 * time.Second
 	conf.Beacon.GracePeriodDuration = 30 * time.Second
 	conf.Beacon.ProposalDuration = 2 * time.Second

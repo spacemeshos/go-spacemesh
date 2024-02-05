@@ -24,7 +24,6 @@ import (
 	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	"github.com/mitchellh/mapstructure"
 	"github.com/spacemeshos/poet/server"
-	"github.com/spacemeshos/post/verifying"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -126,25 +125,31 @@ const (
 )
 
 func GetCommand() *cobra.Command {
+	conf := config.MainnetConfig()
+	var configPath *string
 	c := &cobra.Command{
 		Use:   "node",
 		Short: "start node",
-		Run: func(c *cobra.Command, args []string) {
-			conf, err := loadConfig(c)
-			if err != nil {
-				log.With().Fatal("failed to initialize config", log.Err(err))
+		RunE: func(c *cobra.Command, args []string) error {
+			preset := conf.Preset // might be set via CLI flag
+			if err := loadConfig(&conf, preset, *configPath); err != nil {
+				return fmt.Errorf("loading config: %w", err)
+			}
+			// apply CLI args to config
+			if err := c.ParseFlags(os.Args[1:]); err != nil {
+				return fmt.Errorf("parsing flags: %w", err)
 			}
 
 			if conf.LOGGING.Encoder == config.JSONLogEncoder {
 				log.JSONLog(true)
 			}
 
-			if cmd.NoMainNet && onMainNet(conf) && !conf.NoMainOverride {
-				log.With().Fatal("this is a testnet-only build not intended for mainnet")
+			if cmd.NoMainNet && onMainNet(&conf) && !conf.NoMainOverride {
+				return errors.New("this is a testnet-only build not intended for mainnet")
 			}
 
 			app := New(
-				WithConfig(conf),
+				WithConfig(&conf),
 				// NOTE(dshulyak) this needs to be max level so that child logger can can be current level or below.
 				// otherwise it will fail later when child logger will try to increase level.
 				WithLog(log.RegisterHooks(
@@ -153,63 +158,63 @@ func GetCommand() *cobra.Command {
 				),
 			)
 
-			run := func(ctx context.Context) error {
-				types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
-				// ensure all data folders exist
-				if err := os.MkdirAll(app.Config.DataDir(), 0o700); err != nil {
-					return fmt.Errorf("ensure folders exist: %w", err)
-				}
-
-				if err := app.Lock(); err != nil {
-					return fmt.Errorf("failed to get exclusive file lock: %w", err)
-				}
-				defer app.Unlock()
-
-				if err := app.Initialize(); err != nil {
-					return err
-				}
-
-				/* Create or load miner identity */
-				if app.edSgn, err = app.LoadOrCreateEdSigner(); err != nil {
-					return fmt.Errorf("could not retrieve identity: %w", err)
-				}
-
-				app.preserve, err = app.LoadCheckpoint(ctx)
-				if err != nil {
-					return err
-				}
-
-				// This blocks until the context is finished or until an error is produced
-				err = app.Start(ctx)
-				cleanupCtx, cleanupCancel := context.WithTimeout(
-					context.Background(),
-					30*time.Second,
-				)
-				defer cleanupCancel()
-				done := make(chan struct{}, 1)
-				// FIXME: per https://github.com/spacemeshos/go-spacemesh/issues/3830
-				go func() {
-					app.Cleanup(cleanupCtx)
-					_ = app.eg.Wait()
-					close(done)
-				}()
-				select {
-				case <-done:
-				case <-cleanupCtx.Done():
-					app.log.With().Error("app failed to clean up in time")
-				}
-				return err
-			}
 			// os.Interrupt for all systems, especially windows, syscall.SIGTERM is mainly for docker.
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer cancel()
-			if err := run(ctx); err != nil {
-				app.log.With().Fatal(err.Error())
+
+			types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
+			// ensure all data folders exist
+			if err := os.MkdirAll(app.Config.DataDir(), 0o700); err != nil {
+				return fmt.Errorf("ensure folders exist: %w", err)
 			}
+
+			if err := app.Lock(); err != nil {
+				return fmt.Errorf("getting exclusive file lock: %w", err)
+			}
+			defer app.Unlock()
+
+			if err := app.Initialize(); err != nil {
+				return fmt.Errorf("initializing app: %w", err)
+			}
+
+			/* Create or load miner identity */
+			var err error
+			if app.edSgn, err = app.LoadOrCreateEdSigner(); err != nil {
+				return fmt.Errorf("could not retrieve identity: %w", err)
+			}
+
+			// Don't print usage on error from this point forward
+			c.SilenceUsage = true
+
+			app.preserve, err = app.LoadCheckpoint(ctx)
+			if err != nil {
+				return fmt.Errorf("loading checkpoint: %w", err)
+			}
+
+			// This blocks until the context is finished or until an error is produced
+			err = app.Start(ctx)
+			cleanupCtx, cleanupCancel := context.WithTimeout(
+				context.Background(),
+				30*time.Second,
+			)
+			defer cleanupCancel()
+			done := make(chan struct{}, 1)
+			// FIXME: per https://github.com/spacemeshos/go-spacemesh/issues/3830
+			go func() {
+				app.Cleanup(cleanupCtx)
+				_ = app.eg.Wait()
+				close(done)
+			}()
+			select {
+			case <-done:
+			case <-cleanupCtx.Done():
+				app.log.Error("app failed to clean up in time")
+			}
+			return err
 		},
 	}
 
-	cmd.AddCommands(c)
+	configPath = cmd.AddFlags(c.PersistentFlags(), &conf)
 
 	// versionCmd returns the current version of spacemesh.
 	versionCmd := cobra.Command{
@@ -238,32 +243,28 @@ func init() {
 	grpclog = grpc_logsettable.ReplaceGrpcLoggerV2()
 }
 
-func loadConfig(c *cobra.Command) (*config.Config, error) {
-	conf, err := LoadConfigFromFile()
-	if err != nil {
-		return nil, err
+// loadConfig loads config and preset (if provided) into the provided config.
+// It first loads the preset and then overrides it with values from the config file.
+func loadConfig(cfg *config.Config, preset, path string) error {
+	v := viper.New()
+	// read in config from file
+	if err := config.LoadConfig(path, v); err != nil {
+		return err
 	}
-	if err := cmd.EnsureCLIFlags(c, conf); err != nil {
-		return nil, fmt.Errorf("mapping cli flags to config: %w", err)
-	}
-	return conf, nil
-}
 
-// LoadConfigFromFile tries to load configuration file if the config parameter was specified.
-func LoadConfigFromFile() (*config.Config, error) {
-	// read in default config if passed as param using viper
-	if err := config.LoadConfig(viper.GetString("config"), viper.GetViper()); err != nil {
-		return nil, err
+	// override default config with preset if provided
+	if len(preset) == 0 && v.IsSet("preset") {
+		preset = v.GetString("preset")
 	}
-	conf := config.MainnetConfig()
-	if name := viper.GetString("preset"); len(name) > 0 {
-		preset, err := presets.Get(name)
+	if len(preset) > 0 {
+		p, err := presets.Get(preset)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		conf = preset
+		*cfg = p
 	}
 
+	// Unmarshall config file into config struct
 	hook := mapstructure.ComposeDecodeHookFunc(
 		mapstructure.StringToTimeDurationHookFunc(),
 		mapstructure.StringToSliceHookFunc(","),
@@ -278,13 +279,14 @@ func LoadConfigFromFile() (*config.Config, error) {
 		viper.DecodeHook(hook),
 		WithZeroFields(),
 		WithIgnoreUntagged(),
+		withErrorUnused(),
 	}
 
 	// load config if it was loaded to the viper
-	if err := viper.Unmarshal(&conf, opts...); err != nil {
-		return nil, fmt.Errorf("unmarshal config: %w", err)
+	if err := v.Unmarshal(cfg, opts...); err != nil {
+		return fmt.Errorf("unmarshal config: %w", err)
 	}
-	return &conf, nil
+	return nil
 }
 
 func WithZeroFields() viper.DecoderConfigOption {
@@ -296,6 +298,12 @@ func WithZeroFields() viper.DecoderConfigOption {
 func WithIgnoreUntagged() viper.DecoderConfigOption {
 	return func(cfg *mapstructure.DecoderConfig) {
 		cfg.IgnoreUntaggedFields = true
+	}
+}
+
+func withErrorUnused() viper.DecoderConfigOption {
+	return func(cfg *mapstructure.DecoderConfig) {
+		cfg.ErrorUnused = true
 	}
 }
 
@@ -384,7 +392,7 @@ type App struct {
 	tortoise          *tortoise.Tortoise
 	updater           *bootstrap.Updater
 	poetDb            *activation.PoetDb
-	postVerifier      *activation.OffloadingPostVerifier
+	postVerifier      activation.PostVerifier
 	postSupervisor    *activation.PostSupervisor
 	preserve          *checkpoint.PreservedData
 	errCh             chan error
@@ -474,7 +482,7 @@ func (app *App) Initialize() error {
 			return fmt.Errorf("failed to write genesis config to %s: %w", gpath, err)
 		}
 	} else {
-		diff := existing.Diff(app.Config.Genesis)
+		diff := existing.Diff(&app.Config.Genesis)
 		if len(diff) > 0 {
 			app.log.Error("genesis config updated after node initialization, if this update is required delete config"+
 				" at %s.\ndiff:\n%s", gpath, diff,
@@ -547,7 +555,7 @@ func (app *App) addLogger(name string, logger log.Log) log.Log {
 		app.loggers[name] = &lvl
 		logger = logger.SetLevel(&lvl)
 	}
-	return logger.WithName(name).WithFields(log.String("module", name))
+	return logger.WithName(name)
 }
 
 func (app *App) getLevel(name string) log.Level {
@@ -575,33 +583,24 @@ func (app *App) SetLogLevel(name, loglevel string) error {
 func (app *App) initServices(ctx context.Context) error {
 	layerSize := app.Config.LayerAvgSize
 	layersPerEpoch := types.GetLayersPerEpoch()
-	lg := app.log.Named(app.edSgn.NodeID().ShortString()).WithFields(app.edSgn.NodeID())
+	lg := app.log
 
 	poetDb := activation.NewPoetDb(app.db, app.addLogger(PoetDbLogger, lg))
 
-	nipostValidatorLogger := app.addLogger(NipostValidatorLogger, lg)
-
-	lg.Debug("creating post verifier")
 	verifier, err := activation.NewPostVerifier(
 		app.Config.POST,
-		nipostValidatorLogger.Zap(),
-		verifying.WithPowFlags(app.Config.SMESHING.VerifyingOpts.Flags.Value()),
-	)
-	lg.With().Debug("created post verifier", log.Err(err))
-	if err != nil {
-		return err
-	}
-	workers := app.Config.SMESHING.VerifyingOpts.Workers
-	minWorkers := min(app.Config.SMESHING.VerifyingOpts.MinWorkers, workers)
-	app.postVerifier = activation.NewOffloadingPostVerifier(
-		verifier,
-		workers,
-		nipostValidatorLogger.Zap(),
+		app.addLogger(NipostValidatorLogger, lg).Zap(),
+		activation.WithVerifyingOpts(app.Config.SMESHING.VerifyingOpts),
 		activation.PrioritizedIDs(app.edSgn.NodeID()),
+		activation.WithAutoscaling(),
 	)
-	app.postVerifier.Autoscale(minWorkers, workers)
+	if err != nil {
+		return fmt.Errorf("creating post verifier: %w", err)
+	}
+	app.postVerifier = verifier
 
 	validator := activation.NewValidator(
+		app.db,
 		poetDb,
 		app.Config.POST,
 		app.Config.SMESHING.Opts.Scrypt,
@@ -730,8 +729,8 @@ func (app *App) initServices(ctx context.Context) error {
 		beaconProtocol,
 		trtl,
 		app.addLogger(ATXHandlerLogger, lg),
-		app.Config.POET,
 	)
+	atxHandler.Register(app.edSgn)
 
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
 
@@ -923,6 +922,8 @@ func (app *App) initServices(ctx context.Context) error {
 		app.cachedDB,
 		goldenATXID,
 		newSyncer,
+		app.validator,
+		activation.PostValidityDelay(app.Config.PostValidDelay),
 	)
 	if err != nil {
 		return fmt.Errorf("create post setup manager: %v", err)
@@ -949,7 +950,6 @@ func (app *App) initServices(ctx context.Context) error {
 		grpcPostService.(*grpcserver.PostService),
 		app.Config.PoetServers,
 		app.addLogger(NipostBuilderLogger, lg).Zap(),
-		app.edSgn,
 		app.Config.POET,
 		app.clock,
 	)
@@ -959,12 +959,10 @@ func (app *App) initServices(ctx context.Context) error {
 
 	builderConfig := activation.Config{
 		GoldenATXID:      goldenATXID,
-		LayersPerEpoch:   layersPerEpoch,
 		RegossipInterval: app.Config.RegossipAtxInterval,
 	}
 	atxBuilder := activation.NewBuilder(
 		builderConfig,
-		app.edSgn,
 		app.cachedDB,
 		app.localDB,
 		app.host,
@@ -977,7 +975,9 @@ func (app *App) initServices(ctx context.Context) error {
 		// TODO(dshulyak) makes no sense. how we ended using it?
 		activation.WithPoetRetryInterval(app.Config.HARE3.PreroundDelay),
 		activation.WithValidator(app.validator),
+		activation.WithPostValidityDelay(app.Config.PostValidDelay),
 	)
+	atxBuilder.Register(app.edSgn)
 
 	malfeasanceHandler := malfeasance.NewHandler(
 		app.cachedDB,
@@ -986,6 +986,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.edSgn.NodeID(),
 		app.edVerifier,
 		trtl,
+		app.postVerifier,
 	)
 	fetcher.SetValidators(
 		fetch.ValidatorFunc(
@@ -1821,7 +1822,7 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 		}
 	}
 
-	lg := logger.Named(app.edSgn.NodeID().ShortString()).WithFields(app.edSgn.NodeID())
+	lg := logger
 
 	/* Initialize all protocol services */
 
@@ -1833,7 +1834,7 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 		timesync.WithLayerDuration(app.Config.LayerDuration),
 		timesync.WithTickInterval(1*time.Second),
 		timesync.WithGenesisTime(gTime),
-		timesync.WithLogger(app.addLogger(ClockLogger, lg)),
+		timesync.WithLogger(app.addLogger(ClockLogger, lg).Zap()),
 	)
 	if err != nil {
 		return fmt.Errorf("cannot create clock: %w", err)
