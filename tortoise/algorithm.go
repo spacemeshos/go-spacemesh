@@ -130,6 +130,12 @@ func New(opts ...Opt) (*Tortoise, error) {
 }
 
 func (t *Tortoise) RecoverFrom(lid types.LayerID, opinion, prev types.Hash32) {
+	if lid <= types.GetEffectiveGenesis() {
+		t.logger.Panic("recover should be after effective genesis",
+			zap.Uint32("lid", lid.Uint32()),
+			zap.Uint32("effective genesis", types.GetEffectiveGenesis().Uint32()),
+		)
+	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.logger.Debug("recover from",
@@ -140,7 +146,7 @@ func (t *Tortoise) RecoverFrom(lid types.LayerID, opinion, prev types.Hash32) {
 	t.trtl.evicted = lid - 1
 	t.trtl.pending = lid
 	t.trtl.verified = lid
-	t.trtl.processed = lid
+	t.trtl.processed = lid - 1 // -1 so that iteration in tallyVotes starts from the target layer
 	t.trtl.last = lid
 	layer := t.trtl.layer(lid)
 	layer.opinion = opinion
@@ -276,7 +282,7 @@ func (t *Tortoise) TallyVotes(ctx context.Context, lid types.LayerID) {
 	defer t.mu.Unlock()
 	waitTallyVotes.Observe(float64(time.Since(start).Nanoseconds()))
 	start = time.Now()
-	t.trtl.onLayer(ctx, lid)
+	t.trtl.tallyVotes(ctx, lid)
 	executeTallyVotes.Observe(float64(time.Since(start).Nanoseconds()))
 	if t.tracer != nil {
 		t.tracer.On(&TallyTrace{Layer: lid})
@@ -307,16 +313,43 @@ func (t *Tortoise) OnBlock(header types.BlockHeader) {
 	}
 }
 
-// OnValidBlock inserts block, updates that data is stored locally
-// and that block was previously considered valid by tortoise.
-func (t *Tortoise) OnValidBlock(header types.BlockHeader) {
-	start := time.Now()
+// OnRecoveredBlocks uploads blocks to the state with all metadata.
+//
+// Implementation assumes that they will be uploaded in order.
+func (t *Tortoise) OnRecoveredBlocks(lid types.LayerID, validity map[types.BlockHeader]bool, hare *types.BlockID) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	waitBlockDuration.Observe(float64(time.Since(start).Nanoseconds()))
-	t.trtl.onBlock(header, true, true)
+
+	for block, valid := range validity {
+		if exists := t.trtl.getBlock(block); exists != nil {
+			continue
+		}
+		info := newBlockInfo(block)
+		info.data = true
+		if valid {
+			info.validity = support
+		}
+		t.trtl.addBlock(info)
+	}
+	if hare != nil {
+		t.trtl.onHareOutput(lid, *hare)
+	} else if !withinDistance(t.cfg.Hdist, lid, t.trtl.last) {
+		layer := t.trtl.state.layer(lid)
+		layer.hareTerminated = true
+		for _, info := range layer.blocks {
+			if info.validity == abstain {
+				info.validity = against
+			}
+		}
+	}
+
+	t.logger.Debug("loaded recovered blocks",
+		zap.Uint32("lid", lid.Uint32()),
+		zap.Uint32("last", t.trtl.last.Uint32()),
+		zapBlocks(t.trtl.state.layer(lid).blocks),
+	)
 	if t.tracer != nil {
-		t.tracer.On(&BlockTrace{Header: header, Valid: true})
+		t.tracer.On(newRecoveredBlocksTrace(lid, validity, hare))
 	}
 }
 
@@ -606,4 +639,24 @@ func (t *Tortoise) Mode() Mode {
 		return Full
 	}
 	return Verifying
+}
+
+// UpdateLastLayer updates last layer which is used for determining weight thresholds.
+func (t *Tortoise) UpdateLastLayer(last types.LayerID) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.trtl.updateLast(last)
+}
+
+// UpdateVerified layers based on the previously known verified layer.
+func (t *Tortoise) UpdateVerified(verified types.LayerID) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.trtl.verified = verified
+}
+
+func (t *Tortoise) WithinHdist(lid types.LayerID) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return withinDistance(t.cfg.Hdist, lid, t.trtl.last)
 }

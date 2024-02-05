@@ -45,7 +45,7 @@ func TestTracer(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "tortoise.trace")
 		trt, err := Recover(
 			context.Background(),
-			s.GetState(0).DB,
+			s.GetState(0).DB.Executor,
 			last,
 			WithTracer(WithOutput(path)),
 		)
