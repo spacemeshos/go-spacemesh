@@ -9,6 +9,7 @@ import (
 
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/spacemeshos/go-scale/tester"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
@@ -23,8 +24,6 @@ func TestServer(t *testing.T) {
 	proto := "test"
 	request := []byte("test request")
 	testErr := errors.New("test error")
-	errch := make(chan error, 1)
-	respch := make(chan []byte, 1)
 
 	handler := func(_ context.Context, msg []byte) ([]byte, error) {
 		return msg, nil
@@ -59,79 +58,32 @@ func TestServer(t *testing.T) {
 		cancel()
 		eg.Wait()
 	})
-	respHandler := func(msg []byte) {
-		select {
-		case <-ctx.Done():
-		case respch <- msg:
-		}
-	}
-	respErrHandler := func(err error) {
-		select {
-		case <-ctx.Done():
-		case errch <- err:
-		}
-	}
+
 	t.Run("ReceiveMessage", func(t *testing.T) {
-		require.NoError(
-			t,
-			client.Request(ctx, mesh.Hosts()[1].ID(), request, respHandler, respErrHandler),
-		)
-		select {
-		case <-time.After(time.Second):
-			require.FailNow(t, "timed out while waiting for message response")
-		case response := <-respch:
-			require.Equal(t, request, response)
-			require.NotEmpty(t, mesh.Hosts()[2].Network().ConnsToPeer(mesh.Hosts()[0].ID()))
-		}
+		response, err := client.Request(ctx, mesh.Hosts()[1].ID(), request)
+		require.NoError(t, err)
+		require.Equal(t, request, response)
+		require.NotEmpty(t, mesh.Hosts()[2].Network().ConnsToPeer(mesh.Hosts()[0].ID()))
 	})
 	t.Run("ReceiveError", func(t *testing.T) {
-		require.NoError(
-			t,
-			client.Request(ctx, mesh.Hosts()[2].ID(), request, respHandler, respErrHandler),
-		)
-		select {
-		case <-time.After(time.Second):
-			require.FailNow(t, "timed out while waiting for error response")
-		case err := <-errch:
-			require.Equal(t, testErr, err)
-		}
+		_, err := client.Request(ctx, mesh.Hosts()[2].ID(), request)
+		require.Equal(t, err, testErr)
 	})
 	t.Run("DialError", func(t *testing.T) {
-		require.NoError(
-			t,
-			client.Request(ctx, mesh.Hosts()[3].ID(), request, respHandler, respErrHandler),
-		)
-		select {
-		case <-time.After(time.Second):
-			require.FailNow(t, "timed out while waiting for dial error")
-		case err := <-errch:
-			require.Error(t, err)
-		}
+		_, err := client.Request(ctx, mesh.Hosts()[2].ID(), request)
+		require.Error(t, err)
 	})
 	t.Run("NotConnected", func(t *testing.T) {
-		require.ErrorIs(
-			t,
-			client.Request(ctx, "unknown", request, respHandler, respErrHandler),
-			ErrNotConnected,
-		)
+		_, err := client.Request(ctx, "unknown", request)
+		require.ErrorIs(t, err, ErrNotConnected)
 	})
 	t.Run("limit overflow", func(t *testing.T) {
-		require.NoError(
-			t,
-			client.Request(
-				ctx,
-				mesh.Hosts()[2].ID(),
-				make([]byte, limit+1),
-				respHandler,
-				respErrHandler,
-			),
+		_, err := client.Request(
+			ctx,
+			mesh.Hosts()[2].ID(),
+			make([]byte, limit+1),
 		)
-		select {
-		case <-time.After(time.Second):
-			require.FailNow(t, "timed out while waiting for error response")
-		case err := <-errch:
-			require.Error(t, err)
-		}
+		require.Error(t, err)
 	})
 }
 
@@ -166,18 +118,18 @@ func TestQueued(t *testing.T) {
 		return srv.Run(ctx)
 	})
 	t.Cleanup(func() {
-		eg.Wait()
+		assert.NoError(t, eg.Wait())
 	})
 	for i := 0; i < total; i++ {
-		require.NoError(t, client.Request(ctx, mesh.Hosts()[1].ID(), []byte("ping"),
-			func(b []byte) {
-				success.Add(1)
-				wait <- struct{}{}
-			}, func(err error) {
+		eg.Go(func() error {
+			if _, err := client.Request(ctx, mesh.Hosts()[1].ID(), []byte("ping")); err != nil {
 				failure.Add(1)
-				wait <- struct{}{}
-			},
-		))
+			} else {
+				success.Add(1)
+			}
+			wait <- struct{}{}
+			return nil
+		})
 	}
 	for i := 0; i < total; i++ {
 		<-wait

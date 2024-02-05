@@ -28,6 +28,7 @@ type Config struct {
 	MaxStaleDuration         time.Duration `mapstructure:"maxstaleduration"`
 	Standalone               bool
 	GossipDuration           time.Duration `mapstructure:"gossipduration"`
+	DisableMeshAgreement     bool          `mapstructure:"disable-mesh-agreement"`
 	DisableAtxReconciliation bool          `mapstructure:"disable-atx-reconciliation"`
 	OutOfSyncThresholdLayers uint32        `mapstructure:"out-of-sync-threshold"`
 }
@@ -170,7 +171,7 @@ func NewSyncer(
 		s.dataFetcher = NewDataFetch(mesh, fetcher, cdb, cache, s.logger)
 	}
 	if s.forkFinder == nil {
-		s.forkFinder = NewForkFinder(s.logger, cdb.Database, fetcher, s.cfg.MaxStaleDuration)
+		s.forkFinder = NewForkFinder(s.logger, cdb, fetcher, s.cfg.MaxStaleDuration)
 	}
 	s.syncState.Store(notSynced)
 	s.atxSyncState.Store(notSynced)

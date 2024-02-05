@@ -46,7 +46,8 @@ func init() {
 // Config defines the top level configuration for a spacemesh node.
 type Config struct {
 	BaseConfig      `mapstructure:"main"`
-	Genesis         *GenesisConfig        `mapstructure:"genesis"`
+	Preset          string                `mapstructure:"preset"`
+	Genesis         GenesisConfig         `mapstructure:"genesis"`
 	PublicMetrics   PublicMetrics         `mapstructure:"public-metrics"`
 	Tortoise        tortoise.Config       `mapstructure:"tortoise"`
 	P2P             p2p.Config            `mapstructure:"p2p"`
@@ -86,8 +87,6 @@ type BaseConfig struct {
 
 	TestConfig TestConfig `mapstructure:"testing"`
 	Standalone bool       `mapstructure:"standalone"`
-
-	ConfigFile string `mapstructure:"config"`
 
 	CollectMetrics bool `mapstructure:"metrics"`
 	MetricsPort    int  `mapstructure:"metrics-port"`
@@ -129,8 +128,14 @@ type BaseConfig struct {
 	RegossipAtxInterval time.Duration `mapstructure:"regossip-atx-interval"`
 
 	// ATXGradeDelay is used to grade ATXs for selection in tortoise active set.
-	// See grading fuction in miner/proposals_builder.go
+	// See grading function in miner/proposals_builder.go
 	ATXGradeDelay time.Duration `mapstructure:"atx-grade-delay"`
+
+	// PostValidDelay is the time after which a PoST is considered valid
+	// counting from the time an ATX was received.
+	// Before that time, the PoST must be fully verified.
+	// After that time, we depend on PoST malfeasance proofs.
+	PostValidDelay time.Duration `mapstructure:"post-valid-delay"`
 
 	// NoMainOverride forces the "nomain" builds to run on the mainnet
 	NoMainOverride bool `mapstructure:"no-main-override"`
@@ -219,6 +224,7 @@ func defaultBaseConfig() BaseConfig {
 		DatabasePruneInterval:        30 * time.Minute,
 		NetworkHRP:                   "sm",
 		ATXGradeDelay:                10 * time.Second,
+		PostValidDelay:               12 * time.Hour,
 	}
 }
 

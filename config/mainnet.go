@@ -111,8 +111,9 @@ func MainnetConfig() Config {
 			},
 			RegossipAtxInterval: 2 * time.Hour,
 			ATXGradeDelay:       30 * time.Minute,
+			PostValidDelay:      time.Duration(math.MaxInt64),
 		},
-		Genesis: &GenesisConfig{
+		Genesis: GenesisConfig{
 			GenesisTime: "2023-07-14T08:00:00Z",
 			ExtraData:   "00000000000000000001a6bc150307b5c1998045752b3c87eccf3c013036f3cc",
 			Accounts:    MainnetAccounts(),
@@ -139,8 +140,8 @@ func MainnetConfig() Config {
 		},
 		Beacon: beacon.Config{
 			Kappa:                    40,
-			Q:                        big.NewRat(1, 3),
-			Theta:                    big.NewRat(1, 4),
+			Q:                        *big.NewRat(1, 3),
+			Theta:                    *big.NewRat(1, 4),
 			GracePeriodDuration:      10 * time.Minute,
 			ProposalDuration:         4 * time.Minute,
 			FirstVotingRoundDuration: 30 * time.Minute,
@@ -187,6 +188,7 @@ func MainnetConfig() Config {
 			Standalone:               false,
 			GossipDuration:           50 * time.Second,
 			OutOfSyncThresholdLayers: 36, // 3h
+			DisableMeshAgreement:     true,
 			DisableAtxReconciliation: true,
 		},
 		Recovery: checkpoint.DefaultConfig(),

@@ -404,6 +404,7 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 		tm.logger,
 		tm.cdb,
 		signing.NewEdVerifier(),
+		malfeasance.NewMockpostVerifier(gomock.NewController(t)),
 		&types.MalfeasanceGossip{MalfeasanceProof: *malProof},
 	)
 	require.NoError(t, err)
@@ -757,7 +758,6 @@ func TestProcessLayer(t *testing.T) {
 
 			tm := createTestMesh(t)
 			tm.mockTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any()).AnyTimes()
-			tm.mockTortoise.EXPECT().OnApplied(gomock.Any(), gomock.Any()).AnyTimes()
 			tm.mockVM.EXPECT().GetStateRoot().AnyTimes()
 			tm.mockVM.EXPECT().Revert(gomock.Any()).AnyTimes()
 			tm.mockState.EXPECT().RevertCache(gomock.Any()).AnyTimes()
@@ -770,6 +770,21 @@ func TestProcessLayer(t *testing.T) {
 						UpdateCache(gomock.Any(), gomock.Any(), executed, gomock.Any(), gomock.Any()).
 						Return(nil)
 				}
+
+				for _, update := range c.updates {
+					hasData := true
+					allInvalid := true
+					for _, block := range update.Blocks {
+						hasData = hasData && block.Data
+						allInvalid = allInvalid && block.Invalid
+					}
+					if update.Verified && (hasData || allInvalid) {
+						tm.mockTortoise.EXPECT().OnApplied(update.Layer, update.Opinion)
+					} else {
+						break
+					}
+				}
+
 				tm.mockTortoise.EXPECT().Updates().Return(c.updates)
 				ensuresDatabaseConsistent(t, tm.cdb, c.updates)
 				err := tm.ProcessLayer(context.TODO(), lid)

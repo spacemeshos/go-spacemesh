@@ -48,7 +48,7 @@ func TestStringToUint64Value(t *testing.T) {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			value := map[string]uint64{}
-			parser := NewStringToUint64Value(value)
+			parser := NewStringToUint64Value(&value)
 			full := ""
 			for _, arg := range tc.input {
 				full += arg + ","
@@ -61,11 +61,15 @@ func TestStringToUint64Value(t *testing.T) {
 				}
 			}
 			full = full[:len(full)-1]
+			valFull := map[string]uint64{}
+			err := NewStringToUint64Value(&valFull).Set(full)
 			if len(tc.err) == 0 {
+				require.Nil(t, err)
 				require.Equal(t, tc.expected, value)
-				require.Equal(t, tc.expected, CastStringToMapStringUint64(full))
+				require.Equal(t, tc.expected, valFull)
 			} else {
-				require.Nil(t, CastStringToMapStringUint64(full))
+				require.NotNil(t, err)
+				require.Contains(t, err.Error(), tc.err)
 			}
 		})
 	}
