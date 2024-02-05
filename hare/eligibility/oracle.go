@@ -11,10 +11,9 @@ import (
 	"github.com/spacemeshos/fixed"
 	"golang.org/x/exp/maps"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -41,9 +40,43 @@ var (
 	ErrNotActive         = errors.New("oracle: miner is not active in epoch")
 )
 
+type identityWeight struct {
+	atx    types.ATXID
+	weight uint64
+}
+
 type cachedActiveSet struct {
-	set   map[types.NodeID]uint64
+	set   map[types.NodeID]identityWeight
 	total uint64
+}
+
+func (c *cachedActiveSet) atxs() []types.ATXID {
+	atxs := make([]types.ATXID, 0, len(c.set))
+	for _, id := range c.set {
+		atxs = append(atxs, id.atx)
+	}
+	return atxs
+}
+
+// Config is the configuration of the oracle package.
+type Config struct {
+	// ConfidenceParam specifies how many layers into the epoch hare uses active set generated in the previous epoch.
+	// For example, if epoch size is 100 and confidence is 10 hare will use previous active set for layers 0-9
+	// and then generate a new activeset.
+	//
+	// This was done like that so that we have higher `confidence` that hare will succeed atleast
+	// once during this interval. If it doesn't we have to provide centralized fallback.
+	ConfidenceParam uint32 `mapstructure:"eligibility-confidence-param"`
+}
+
+func (c *Config) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddUint32("confidence param", c.ConfidenceParam)
+	return nil
+}
+
+// DefaultConfig returns the default configuration for the oracle package.
+func DefaultConfig() Config {
+	return Config{ConfidenceParam: 1}
 }
 
 // Oracle is the hare eligibility oracle.
@@ -58,37 +91,57 @@ type Oracle struct {
 	synced bool
 
 	beacons        system.BeaconGetter
-	cdb            *datastore.CachedDB
+	atxsdata       *atxsdata.Data
+	db             sql.Executor
 	vrfVerifier    vrfVerifier
 	layersPerEpoch uint32
-	cfg            config.Config
+	cfg            Config
 	log.Log
+}
+
+type Opt func(*Oracle)
+
+func WithConfig(config Config) Opt {
+	return func(o *Oracle) {
+		o.cfg = config
+	}
+}
+
+func WithLogger(logger log.Log) Opt {
+	return func(o *Oracle) {
+		o.Log = logger
+	}
 }
 
 // New returns a new eligibility oracle instance.
 func New(
 	beacons system.BeaconGetter,
-	db *datastore.CachedDB,
+	db sql.Executor,
+	atxsdata *atxsdata.Data,
 	vrfVerifier vrfVerifier,
 	layersPerEpoch uint32,
-	cfg config.Config,
-	logger log.Log,
+	opts ...Opt,
 ) *Oracle {
-	ac, err := lru.New[types.EpochID, *cachedActiveSet](activesCacheSize)
+	activesCache, err := lru.New[types.EpochID, *cachedActiveSet](activesCacheSize)
 	if err != nil {
-		logger.With().Fatal("failed to create lru cache for active set", log.Err(err))
+		panic("failed to create lru cache for active set" + err.Error())
 	}
-
-	return &Oracle{
+	oracle := &Oracle{
 		beacons:        beacons,
-		cdb:            db,
+		db:             db,
+		atxsdata:       atxsdata,
 		vrfVerifier:    vrfVerifier,
 		layersPerEpoch: layersPerEpoch,
-		activesCache:   ac,
+		activesCache:   activesCache,
 		fallback:       map[types.EpochID][]types.ATXID{},
-		cfg:            cfg,
-		Log:            logger,
+		cfg:            DefaultConfig(),
+		Log:            log.NewNop(),
 	}
+	for _, opt := range opts {
+		opt(oracle)
+	}
+	oracle.Log.With().Info("hare oracle initialized", log.Uint32("epoch size", layersPerEpoch), log.Inline(&oracle.cfg))
+	return oracle
 }
 
 //go:generate scalegen -types VrfMessage
@@ -149,7 +202,7 @@ func (o *Oracle) minerWeight(ctx context.Context, layer types.LayerID, id types.
 	if !ok {
 		return 0, fmt.Errorf("%w: %v", ErrNotActive, id)
 	}
-	return w, nil
+	return w.weight, nil
 }
 
 func calcVrfFrac(vrfSig types.VrfSignature) fixed.Fixed {
@@ -399,8 +452,8 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (*cache
 	}
 
 	aset := &cachedActiveSet{set: activeWeights}
-	for _, weight := range activeWeights {
-		aset.total += weight
+	for _, aweight := range activeWeights {
+		aset.total += aweight.weight
 	}
 	o.WithContext(ctx).With().Info("got hare active set", log.Int("count", len(activeWeights)))
 	o.activesCache.Add(targetEpoch, aset)
@@ -412,15 +465,7 @@ func (o *Oracle) ActiveSet(ctx context.Context, targetEpoch types.EpochID) ([]ty
 	if err != nil {
 		return nil, err
 	}
-	activeSet := make([]types.ATXID, 0, len(aset.set))
-	for nodeID := range aset.set {
-		hdr, err := o.cdb.GetEpochAtx(targetEpoch-1, nodeID)
-		if err != nil {
-			return nil, err
-		}
-		activeSet = append(activeSet, hdr.ID)
-	}
-	return activeSet, nil
+	return aset.atxs(), nil
 }
 
 func (o *Oracle) computeActiveSet(ctx context.Context, targetEpoch types.EpochID) ([]types.ATXID, error) {
@@ -433,7 +478,7 @@ func (o *Oracle) computeActiveSet(ctx context.Context, targetEpoch types.EpochID
 		return activeSet, nil
 	}
 
-	activeSet, err := miner.ActiveSetFromEpochFirstBlock(o.cdb, targetEpoch)
+	activeSet, err := miner.ActiveSetFromEpochFirstBlock(o.db, targetEpoch)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return nil, err
 	}
@@ -446,16 +491,16 @@ func (o *Oracle) computeActiveSet(ctx context.Context, targetEpoch types.EpochID
 func (o *Oracle) computeActiveWeights(
 	targetEpoch types.EpochID,
 	activeSet []types.ATXID,
-) (map[types.NodeID]uint64, error) {
-	weightedActiveSet := make(map[types.NodeID]uint64)
+) (map[types.NodeID]identityWeight, error) {
+	identities := map[types.NodeID]identityWeight{}
 	for _, id := range activeSet {
-		atx, err := o.cdb.GetAtxHeader(id)
-		if err != nil {
-			return nil, fmt.Errorf("hare actives get ATX %s, epoch %d: %w", id, targetEpoch, err)
+		atx := o.atxsdata.Get(targetEpoch, id)
+		if atx == nil {
+			return nil, fmt.Errorf("oracle: missing atx in atxsdata %s/%s", targetEpoch, id.ShortString())
 		}
-		weightedActiveSet[atx.NodeID] = atx.GetWeight()
+		identities[atx.Node] = identityWeight{atx: id, weight: atx.Weight}
 	}
-	return weightedActiveSet, nil
+	return identities, nil
 }
 
 func (o *Oracle) activeSetFromRefBallots(epoch types.EpochID) ([]types.ATXID, error) {
@@ -463,11 +508,11 @@ func (o *Oracle) activeSetFromRefBallots(epoch types.EpochID) ([]types.ATXID, er
 	if err != nil {
 		return nil, fmt.Errorf("get beacon: %w", err)
 	}
-	ballotsrst, err := ballots.AllFirstInEpoch(o.cdb, epoch)
+	ballotsrst, err := ballots.AllFirstInEpoch(o.db, epoch)
 	if err != nil {
 		return nil, fmt.Errorf("first in epoch %d: %w", epoch, err)
 	}
-	activeMap := make(map[types.ATXID]struct{})
+	activeMap := map[types.ATXID]struct{}{}
 	for _, ballot := range ballotsrst {
 		if ballot.EpochData == nil {
 			o.Log.With().Error("invalid data. first ballot doesn't have epoch data", log.Inline(ballot))
@@ -477,7 +522,7 @@ func (o *Oracle) activeSetFromRefBallots(epoch types.EpochID) ([]types.ATXID, er
 			o.Log.With().Debug("beacon mismatch", log.Stringer("local", beacon), log.Object("ballot", ballot))
 			continue
 		}
-		actives, err := activesets.Get(o.cdb, ballot.EpochData.ActiveSetHash)
+		actives, err := activesets.Get(o.db, ballot.EpochData.ActiveSetHash)
 		if err != nil {
 			o.Log.With().Error("failed to get active set",
 				log.String("actives hash", ballot.EpochData.ActiveSetHash.ShortString()),

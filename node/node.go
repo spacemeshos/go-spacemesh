@@ -775,11 +775,12 @@ func (app *App) initServices(ctx context.Context) error {
 
 	app.hOracle = eligibility.New(
 		beaconProtocol,
-		app.cachedDB,
+		app.db,
+		app.atxsdata,
 		vrfVerifier,
 		app.Config.LayersPerEpoch,
-		app.Config.HareEligibility,
-		app.addLogger(HareOracleLogger, lg),
+		eligibility.WithConfig(app.Config.HareEligibility),
+		eligibility.WithLogger(app.addLogger(HareOracleLogger, lg)),
 	)
 	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 

@@ -14,11 +14,11 @@ import (
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zapcore"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
-	"github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -117,6 +117,7 @@ type node struct {
 	atx        *types.VerifiedActivationTx
 	oracle     *eligibility.Oracle
 	db         *datastore.CachedDB
+	atxsdata   *atxsdata.Data
 
 	ctrl       *gomock.Controller
 	mpublisher *pmocks.MockPublishSubsciber
@@ -147,6 +148,7 @@ func (n *node) reuseSigner(signer *signing.EdSigner) *node {
 
 func (n *node) withDb() *node {
 	n.db = datastore.NewCachedDB(sql.InMemory(), log.NewNop())
+	n.atxsdata = atxsdata.New()
 	return n
 }
 
@@ -191,10 +193,9 @@ func (n *node) withOracle() *node {
 	n.oracle = eligibility.New(
 		beaconget,
 		n.db,
+		n.atxsdata,
 		signing.NewVRFVerifier(),
 		layersPerEpoch,
-		config.DefaultConfig(),
-		log.NewNop(),
 	)
 	return n
 }
@@ -732,7 +733,7 @@ func TestHandler(t *testing.T) {
 		require.NoError(t, n.hare.Handler(context.Background(), "", codec.MustEncode(msg1)))
 		require.NoError(t, n.hare.Handler(context.Background(), "", codec.MustEncode(msg2)))
 
-		malicious, err := n.db.IsMalicious(n.signer.NodeID())
+		malicious, err := identities.IsMalicious(n.db, n.signer.NodeID())
 		require.NoError(t, err)
 		require.True(t, malicious)
 
