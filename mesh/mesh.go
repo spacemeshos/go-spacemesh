@@ -464,16 +464,8 @@ func (msh *Mesh) saveHareOutput(ctx context.Context, lid types.LayerID, bid type
 	}); err != nil {
 		return err
 	}
-	switch len(certs) {
-	case 0:
-		msh.trtl.OnHareOutput(lid, bid)
-	case 1:
-		msh.logger.With().Debug("already synced certificate",
-			log.Context(ctx),
-			log.Stringer("cert_block_id", certs[0].Block),
-			log.Bool("cert_valid", certs[0].Valid))
-	default: // more than 1 cert
-		msh.logger.With().Warning("multiple certs found in network",
+	if len(certs) > 1 {
+		msh.logger.With().Warning("multiple certificates found in network",
 			log.Context(ctx),
 			log.Object("certificates", log.ObjectMarshallerFunc(func(encoder zapcore.ObjectEncoder) error {
 				for _, cert := range certs {
@@ -483,7 +475,10 @@ func (msh *Mesh) saveHareOutput(ctx context.Context, lid types.LayerID, bid type
 				return nil
 			})),
 		)
+		return nil
 	}
+	// otherwise always notify tortoise about hare output
+	msh.trtl.OnHareOutput(lid, bid)
 	return nil
 }
 
