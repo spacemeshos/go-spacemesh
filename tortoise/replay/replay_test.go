@@ -46,7 +46,7 @@ func TestReplayMainnet(t *testing.T) {
 		timesync.WithLayerDuration(cfg.LayerDuration),
 		timesync.WithTickInterval(1*time.Second),
 		timesync.WithGenesisTime(genesis),
-		timesync.WithLogger(log.NewNop()),
+		timesync.WithLogger(log.NewNop().Zap()),
 	)
 	require.NoError(t, err)
 
