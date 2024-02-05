@@ -9,6 +9,9 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 * [#5530](https://github.com/spacemeshos/go-spacemesh/pull/5530)
   Adjusted cache sizes for the increased number of ATXs on the network.
 
+* [#5511](https://github.com/spacemeshos/go-spacemesh/pull/5511)
+  Fix dialing peers on their private IPs, which was causing "portscan" complaints.
+
 ## Release v1.3.8
 
 ### Features
