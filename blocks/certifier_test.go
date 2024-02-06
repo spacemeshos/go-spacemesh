@@ -12,7 +12,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -28,7 +27,7 @@ const defaultCnt = uint16(2)
 
 type testCertifier struct {
 	*Certifier
-	db        *datastore.CachedDB
+	db        *sql.Database
 	mOracle   *eligibility.MockRolacle
 	mPub      *pubsubmock.MockPublisher
 	mClk      *mocks.MocklayerClock
@@ -39,7 +38,7 @@ type testCertifier struct {
 func newTestCertifier(t *testing.T, signers int) *testCertifier {
 	t.Helper()
 	types.SetLayersPerEpoch(3)
-	db := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+	db := sql.InMemory()
 	ctrl := gomock.NewController(t)
 	mo := eligibility.NewMockRolacle(ctrl)
 	mp := pubsubmock.NewMockPublisher(ctrl)
@@ -66,7 +65,7 @@ func newTestCertifier(t *testing.T, signers int) *testCertifier {
 	}
 }
 
-func generateBlock(t *testing.T, db *datastore.CachedDB) *types.Block {
+func generateBlock(t *testing.T, db sql.Executor) *types.Block {
 	t.Helper()
 	block := types.NewExistingBlock(
 		types.RandomBlockID(),
@@ -112,7 +111,7 @@ func genEncodedMsg(
 
 func verifyCerts(
 	t *testing.T,
-	db *datastore.CachedDB,
+	db sql.Executor,
 	lid types.LayerID,
 	expected map[types.BlockID]bool,
 ) {
