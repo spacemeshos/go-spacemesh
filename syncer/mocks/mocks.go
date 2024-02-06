@@ -140,67 +140,6 @@ func (c *meshProviderSetZeroBlockLayerCall) DoAndReturn(f func(context.Context, 
 	return c
 }
 
-// MockactiveSetCache is a mock of activeSetCache interface.
-type MockactiveSetCache struct {
-	ctrl     *gomock.Controller
-	recorder *MockactiveSetCacheMockRecorder
-}
-
-// MockactiveSetCacheMockRecorder is the mock recorder for MockactiveSetCache.
-type MockactiveSetCacheMockRecorder struct {
-	mock *MockactiveSetCache
-}
-
-// NewMockactiveSetCache creates a new mock instance.
-func NewMockactiveSetCache(ctrl *gomock.Controller) *MockactiveSetCache {
-	mock := &MockactiveSetCache{ctrl: ctrl}
-	mock.recorder = &MockactiveSetCacheMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockactiveSetCache) EXPECT() *MockactiveSetCacheMockRecorder {
-	return m.recorder
-}
-
-// GetMissingActiveSet mocks base method.
-func (m *MockactiveSetCache) GetMissingActiveSet(arg0 types.EpochID, arg1 []types.ATXID) []types.ATXID {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMissingActiveSet", arg0, arg1)
-	ret0, _ := ret[0].([]types.ATXID)
-	return ret0
-}
-
-// GetMissingActiveSet indicates an expected call of GetMissingActiveSet.
-func (mr *MockactiveSetCacheMockRecorder) GetMissingActiveSet(arg0, arg1 any) *activeSetCacheGetMissingActiveSetCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMissingActiveSet", reflect.TypeOf((*MockactiveSetCache)(nil).GetMissingActiveSet), arg0, arg1)
-	return &activeSetCacheGetMissingActiveSetCall{Call: call}
-}
-
-// activeSetCacheGetMissingActiveSetCall wrap *gomock.Call
-type activeSetCacheGetMissingActiveSetCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *activeSetCacheGetMissingActiveSetCall) Return(arg0 []types.ATXID) *activeSetCacheGetMissingActiveSetCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *activeSetCacheGetMissingActiveSetCall) Do(f func(types.EpochID, []types.ATXID) []types.ATXID) *activeSetCacheGetMissingActiveSetCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *activeSetCacheGetMissingActiveSetCall) DoAndReturn(f func(types.EpochID, []types.ATXID) []types.ATXID) *activeSetCacheGetMissingActiveSetCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // MockfetchLogic is a mock of fetchLogic interface.
 type MockfetchLogic struct {
 	ctrl     *gomock.Controller

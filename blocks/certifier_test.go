@@ -179,7 +179,6 @@ func Test_HandleSyncedCertificate(t *testing.T) {
 		BlockID:    b.ID(),
 		Signatures: sigs,
 	}
-	tc.mTortoise.EXPECT().OnHareOutput(b.LayerIndex, b.ID())
 	require.NoError(t, tc.HandleSyncedCertificate(context.Background(), b.LayerIndex, cert))
 	verifyCerts(t, tc.db, b.LayerIndex, map[types.BlockID]bool{b.ID(): true})
 	require.Equal(t, map[types.EpochID]int{b.LayerIndex.GetEpoch(): 1}, tc.CertCount())
@@ -203,7 +202,6 @@ func Test_HandleSyncedCertificate_HareOutputTrumped(t *testing.T) {
 	}
 	ho := types.RandomBlockID()
 	require.NoError(t, certificates.SetHareOutput(tc.db, b.LayerIndex, ho))
-	tc.mTortoise.EXPECT().OnHareOutput(b.LayerIndex, b.ID())
 	require.NoError(t, tc.HandleSyncedCertificate(context.Background(), b.LayerIndex, cert))
 	verifyCerts(t, tc.db, b.LayerIndex, map[types.BlockID]bool{b.ID(): true, ho: false})
 	require.Equal(t, map[types.EpochID]int{b.LayerIndex.GetEpoch(): 1}, tc.CertCount())
@@ -266,8 +264,6 @@ func Test_HandleSyncedCertificate_MultipleCertificates(t *testing.T) {
 			}
 			if tc.err != nil {
 				tcc.mTortoise.EXPECT().OnHareOutput(b.LayerIndex, types.EmptyBlockID)
-			} else {
-				tcc.mTortoise.EXPECT().OnHareOutput(b.LayerIndex, b.ID())
 			}
 			require.ErrorIs(
 				t,
@@ -438,7 +434,6 @@ func Test_HandleCertifyMessage_Certified(t *testing.T) {
 					defaultCnt,
 				).Return(true, nil).MinTimes(cutoff).MaxTimes(numMsgs)
 			}
-			tcc.mTortoise.EXPECT().OnHareOutput(b.LayerIndex, b.ID())
 			var wg sync.WaitGroup
 			for i := 0; i < numMsgs; i++ {
 				nid, msg, encoded := genEncodedMsg(t, b.LayerIndex, b.ID())
@@ -518,8 +513,6 @@ func Test_HandleCertifyMessage_MultipleCertificates(t *testing.T) {
 			require.NoError(t, tcc.RegisterForCert(context.Background(), b.LayerIndex, b.ID()))
 			if tc.err != nil {
 				tcc.mTortoise.EXPECT().OnHareOutput(b.LayerIndex, types.EmptyBlockID)
-			} else {
-				tcc.mTortoise.EXPECT().OnHareOutput(b.LayerIndex, b.ID())
 			}
 			for i := 0; i < numMsgs; i++ {
 				nid, msg, encoded := genEncodedMsg(t, b.LayerIndex, b.ID())

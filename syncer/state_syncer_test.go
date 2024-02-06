@@ -82,6 +82,14 @@ func TestProcessLayers_MultiLayers(t *testing.T) {
 				require.NoError(t, certificates.Add(ts.cdb, lid, gotC))
 				return nil
 			})
+		ts.mTortoise.EXPECT().
+			OnHareOutput(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(lid types.LayerID, bid types.BlockID) {
+				exists, err := blocks.Has(ts.cdb, bid)
+				require.NoError(t, err)
+				require.True(t, exists)
+				require.Equal(t, adopted[lid], bid)
+			})
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
 		ts.mTortoise.EXPECT().Updates().DoAndReturn(func() []result.Layer {
 			return fixture.RLayers(
@@ -396,7 +404,7 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 		} else {
 			ts.mForkFinder.EXPECT().NeedResync(instate.Sub(1), opns[i].PrevAggHash).Return(true)
 			if i != 4 {
-				ts.mAtxCache.EXPECT().GetMissingActiveSet(epoch, eds[i].AtxIDs).Return(eds[i].AtxIDs)
+				ts.mTortoise.EXPECT().GetMissingActiveSet(epoch, eds[i].AtxIDs).Return(eds[i].AtxIDs)
 			}
 		}
 	}
