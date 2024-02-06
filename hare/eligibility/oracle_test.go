@@ -872,7 +872,7 @@ func TestActiveSetMatrix(t *testing.T) {
 			},
 			atxs:    []*types.VerifiedActivationTx{},
 			actives: []types.ATXIDList{{{1}, {2}}, {{2}, {3}}},
-			expect:  "missing atx in atxsdata 4/0100000000",
+			expect:  "missing atx in atxsdata",
 		},
 		{
 			desc:   "ballot no epoch data",
