@@ -135,6 +135,13 @@ func (d *Data) Add(
 	}
 }
 
+func (d *Data) IsMalicious(node types.NodeID) bool {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	_, exists := d.malicious[node]
+	return exists
+}
+
 func (d *Data) SetMalicious(node types.NodeID) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
