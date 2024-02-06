@@ -36,6 +36,7 @@ func TestData(t *testing.T) {
 					c.Add(
 						types.EpochID(epoch)+1,
 						d.Node,
+						types.Address{},
 						atxids[epoch][i],
 						d.Weight,
 						d.BaseHeight,
@@ -57,7 +58,18 @@ func TestData(t *testing.T) {
 		c := New()
 		node := types.NodeID{1}
 		for epoch := 1; epoch <= 10; epoch++ {
-			c.Add(types.EpochID(epoch), node, types.ATXID{byte(epoch)}, 2, 0, 0, 0, false)
+			c.Add(
+				types.EpochID(epoch),
+				node,
+				types.Address{},
+				types.Address{},
+				types.ATXID{byte(epoch)},
+				2,
+				0,
+				0,
+				0,
+				false,
+			)
 			data := c.Get(types.EpochID(epoch), types.ATXID{byte(epoch)})
 			require.NotNil(t, data)
 			require.False(t, data.Malicious)
@@ -77,7 +89,7 @@ func TestData(t *testing.T) {
 		c := New(WithCapacity(capacity))
 		node := types.NodeID{1}
 		for epoch := 1; epoch <= epochs; epoch++ {
-			c.Add(types.EpochID(epoch), node, types.ATXID{}, 2, 0, 0, 0, false)
+			c.Add(types.EpochID(epoch), node, types.Address{}, types.ATXID{}, 2, 0, 0, 0, false)
 			data := c.Get(types.EpochID(epoch), types.ATXID{})
 			require.NotNil(t, data)
 		}

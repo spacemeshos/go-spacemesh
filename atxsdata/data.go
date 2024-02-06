@@ -13,6 +13,7 @@ const minCapacity = 2
 
 type ATX struct {
 	Node               types.NodeID
+	Coinbase           types.Address
 	Weight             uint64
 	BaseHeight, Height uint64
 	Nonce              types.VRFPostIndex
@@ -100,6 +101,7 @@ func (d *Data) OnEpoch(applied types.EpochID) {
 func (d *Data) Add(
 	epoch types.EpochID,
 	node types.NodeID,
+	coinbase types.Address,
 	atx types.ATXID,
 	weight, baseHeight, height uint64,
 	nonce types.VRFPostIndex,
