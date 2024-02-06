@@ -800,7 +800,7 @@ func (app *App) initServices(ctx context.Context) error {
 	app.Config.Certificate.LayerBuffer = app.Config.Tortoise.Zdist
 	app.Config.Certificate.NumLayersToKeep = app.Config.Tortoise.Zdist * 2
 	app.certifier = blocks.NewCertifier(
-		app.cachedDB,
+		app.db,
 		app.hOracle,
 		app.edVerifier,
 		app.host,
