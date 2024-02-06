@@ -694,13 +694,14 @@ func (app *App) initServices(ctx context.Context) error {
 	})
 
 	executor := mesh.NewExecutor(
-		app.cachedDB,
+		app.db,
+		app.atxsdata,
 		state,
 		app.conState,
 		app.addLogger(ExecutorLogger, lg),
 	)
 	mlog := app.addLogger(MeshLogger, lg)
-	msh, err := mesh.NewMesh(app.cachedDB, app.atxsdata, app.clock, trtl, executor, app.conState, mlog)
+	msh, err := mesh.NewMesh(app.db, app.atxsdata, app.clock, trtl, executor, app.conState, mlog)
 	if err != nil {
 		return fmt.Errorf("create mesh: %w", err)
 	}

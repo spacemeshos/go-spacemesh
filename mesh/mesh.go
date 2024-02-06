@@ -17,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -36,7 +35,7 @@ var ErrMissingBlock = errors.New("missing blocks")
 // Mesh is the logic layer above our mesh.DB database.
 type Mesh struct {
 	logger   log.Log
-	cdb      *datastore.CachedDB
+	cdb      *sql.Database
 	atxsdata *atxsdata.Data
 	clock    layerClock
 
@@ -59,7 +58,7 @@ type Mesh struct {
 
 // NewMesh creates a new instant of a mesh.
 func NewMesh(
-	cdb *datastore.CachedDB,
+	db *sql.Database,
 	atxsdata *atxsdata.Data,
 	c layerClock,
 	trtl system.Tortoise,
@@ -69,7 +68,7 @@ func NewMesh(
 ) (*Mesh, error) {
 	msh := &Mesh{
 		logger:              logger,
-		cdb:                 cdb,
+		cdb:                 db,
 		atxsdata:            atxsdata,
 		clock:               c,
 		trtl:                trtl,
@@ -82,7 +81,7 @@ func NewMesh(
 	msh.latestLayerInState.Store(types.LayerID(0))
 	msh.processedLayer.Store(types.LayerID(0))
 
-	lid, err := ballots.LatestLayer(cdb)
+	lid, err := ballots.LatestLayer(db)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return nil, fmt.Errorf("get latest layer %w", err)
 	}
@@ -93,7 +92,7 @@ func NewMesh(
 	}
 
 	genesis := types.GetEffectiveGenesis()
-	if err = cdb.WithTx(context.Background(), func(dbtx *sql.Tx) error {
+	if err = db.WithTx(context.Background(), func(dbtx *sql.Tx) error {
 		if err = layers.SetProcessed(dbtx, genesis); err != nil {
 			return fmt.Errorf("mesh init: %w", err)
 		}
@@ -538,17 +537,14 @@ func (msh *Mesh) AddBallot(
 	ctx context.Context,
 	ballot *types.Ballot,
 ) (*types.MalfeasanceProof, error) {
-	malicious, err := msh.cdb.IsMalicious(ballot.SmesherID)
-	if err != nil {
-		return nil, err
-	}
+	malicious := msh.atxsdata.IsMalicious(ballot.SmesherID)
 	if malicious {
 		ballot.SetMalicious()
 	}
 	var proof *types.MalfeasanceProof
 	// ballots.LayerBallotByNodeID and ballots.Add should be atomic
 	// otherwise concurrent ballots.Add from the same smesher may not be noticed
-	if err = msh.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
+	if err := msh.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
 		if !malicious {
 			prev, err := ballots.LayerBallotByNodeID(dbtx, ballot.Layer, ballot.SmesherID)
 			if err != nil && !errors.Is(err, sql.ErrNotFound) {
@@ -588,7 +584,7 @@ func (msh *Mesh) AddBallot(
 				)
 			}
 		}
-		if err = ballots.Add(dbtx, ballot); err != nil && !errors.Is(err, sql.ErrObjectExists) {
+		if err := ballots.Add(dbtx, ballot); err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return err
 		}
 		return nil
@@ -596,7 +592,7 @@ func (msh *Mesh) AddBallot(
 		return nil, err
 	}
 	if proof != nil {
-		msh.cdb.CacheMalfeasanceProof(ballot.SmesherID, proof)
+		msh.atxsdata.SetMalicious(ballot.SmesherID)
 		msh.trtl.OnMalfeasance(ballot.SmesherID)
 	}
 	return proof, nil
@@ -616,27 +612,6 @@ func (msh *Mesh) AddBlockWithTXs(ctx context.Context, block *types.Block) error 
 		return err
 	}
 	return nil
-}
-
-// GetATXs uses GetFullAtx to return a list of atxs corresponding to atxIds requested.
-func (msh *Mesh) GetATXs(
-	ctx context.Context,
-	atxIds []types.ATXID,
-) (map[types.ATXID]*types.VerifiedActivationTx, []types.ATXID) {
-	var mIds []types.ATXID
-	atxs := make(map[types.ATXID]*types.VerifiedActivationTx, len(atxIds))
-	for _, id := range atxIds {
-		t, err := msh.cdb.GetFullAtx(id)
-		if err != nil {
-			msh.logger.WithContext(ctx).
-				With().
-				Warning("could not get atx from database", id, log.Err(err))
-			mIds = append(mIds, id)
-		} else {
-			atxs[t.ID()] = t
-		}
-	}
-	return atxs, mIds
 }
 
 // GetRewardsByCoinbase retrieves account's rewards by the coinbase address.

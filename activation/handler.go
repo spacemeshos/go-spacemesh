@@ -396,16 +396,7 @@ func (h *Handler) cacheAtx(ctx context.Context, atx *types.ActivationTxHeader) {
 			h.log.With().Error("failed is malicious read", log.Err(err), log.Context(ctx))
 			return
 		}
-		h.atxsdata.Add(
-			atx.TargetEpoch(),
-			atx.NodeID,
-			atx.ID,
-			atx.GetWeight(),
-			atx.BaseTickHeight,
-			atx.TickHeight(),
-			nonce,
-			malicious,
-		)
+		h.atxsdata.AddFromHeader(atx, nonce, malicious)
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -24,20 +25,22 @@ var (
 )
 
 type Executor struct {
-	logger log.Log
-	db     sql.Executor
-	vm     vmState
-	cs     conservativeState
+	logger   log.Log
+	db       sql.Executor
+	atxsdata *atxsdata.Data
+	vm       vmState
+	cs       conservativeState
 
 	mu sync.Mutex
 }
 
-func NewExecutor(db sql.Executor, vm vmState, cs conservativeState, lg log.Log) *Executor {
+func NewExecutor(db sql.Executor, atxsdata *atxsdata.Data, vm vmState, cs conservativeState, lg log.Log) *Executor {
 	return &Executor{
-		logger: lg,
-		db:     db,
-		vm:     vm,
-		cs:     cs,
+		logger:   lg,
+		db:       db,
+		atxsdata: atxsdata,
+		vm:       vm,
+		cs:       cs,
 	}
 }
 
@@ -85,7 +88,7 @@ func (e *Executor) ExecuteOptimistic(
 	if err != nil {
 		return nil, err
 	}
-	crewards, err := e.convertRewards(rewards)
+	crewards, err := e.convertRewards(lid, rewards)
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +144,7 @@ func (e *Executor) Execute(ctx context.Context, lid types.LayerID, block *types.
 	if err != nil {
 		return err
 	}
-	rewards, err := e.convertRewards(block.Rewards)
+	rewards, err := e.convertRewards(lid, block.Rewards)
 	if err != nil {
 		return err
 	}
@@ -173,15 +176,15 @@ func (e *Executor) Execute(ctx context.Context, lid types.LayerID, block *types.
 	return nil
 }
 
-func (e *Executor) convertRewards(rewards []types.AnyReward) ([]types.CoinbaseReward, error) {
+func (e *Executor) convertRewards(lid types.LayerID, rewards []types.AnyReward) ([]types.CoinbaseReward, error) {
 	res := make([]types.CoinbaseReward, 0, len(rewards))
 	for _, r := range rewards {
-		atx, err := e.db.GetAtxHeader(r.AtxID)
-		if err != nil {
-			return nil, fmt.Errorf("exec convert rewards: %w", err)
+		atx := e.atxsdata.Get(lid.GetEpoch(), r.AtxID)
+		if atx == nil {
+			return nil, fmt.Errorf("execute: missing atx %s/%s", lid.GetEpoch(), r.AtxID.ShortString())
 		}
 		res = append(res, types.CoinbaseReward{
-			SmesherID: atx.NodeID,
+			SmesherID: atx.Node,
 			Coinbase:  atx.Coinbase,
 			Weight:    r.Weight,
 		})

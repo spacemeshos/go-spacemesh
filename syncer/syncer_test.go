@@ -91,10 +91,12 @@ func newTestSyncer(t *testing.T, interval time.Duration) *testSyncer {
 		mForkFinder:  mocks.NewMockforkFinder(ctrl),
 		mAtxCache:    mocks.NewMockactiveSetCache(ctrl),
 	}
-	ts.cdb = datastore.NewCachedDB(sql.InMemory(), lg)
+	db := sql.InMemory()
+	ts.cdb = datastore.NewCachedDB(db, lg)
 	var err error
-	exec := mesh.NewExecutor(ts.cdb, ts.mVm, ts.mConState, lg)
-	ts.msh, err = mesh.NewMesh(ts.cdb, atxsdata.New(), ts.mTicker, ts.mTortoise, exec, ts.mConState, lg)
+	atxsdata := atxsdata.New()
+	exec := mesh.NewExecutor(ts.cdb, atxsdata, ts.mVm, ts.mConState, lg)
+	ts.msh, err = mesh.NewMesh(db, atxsdata, ts.mTicker, ts.mTortoise, exec, ts.mConState, lg)
 	require.NoError(t, err)
 
 	cfg := Config{

@@ -39,7 +39,9 @@ const (
 
 type testMesh struct {
 	*Mesh
-	db           sql.Executor
+	db           *sql.Database
+	cdb          *datastore.CachedDB
+	atxsdata     *atxsdata.Data
 	mockClock    *mocks.MocklayerClock
 	mockVM       *mocks.MockvmState
 	mockState    *mocks.MockconservativeState
@@ -50,17 +52,20 @@ func createTestMesh(t *testing.T) *testMesh {
 	t.Helper()
 	types.SetLayersPerEpoch(3)
 	lg := logtest.New(t)
-	db := datastore.NewCachedDB(sql.InMemory(), lg)
+	db := sql.InMemory()
+	atxsdata := atxsdata.New()
 	ctrl := gomock.NewController(t)
 	tm := &testMesh{
 		db:           db,
+		cdb:          datastore.NewCachedDB(db, lg),
+		atxsdata:     atxsdata,
 		mockClock:    mocks.NewMocklayerClock(ctrl),
 		mockVM:       mocks.NewMockvmState(ctrl),
 		mockState:    mocks.NewMockconservativeState(ctrl),
 		mockTortoise: smocks.NewMockTortoise(ctrl),
 	}
-	exec := NewExecutor(db, tm.mockVM, tm.mockState, lg)
-	msh, err := NewMesh(db, atxsdata.New(), tm.mockClock, tm.mockTortoise, exec, tm.mockState, lg)
+	exec := NewExecutor(db, atxsdata, tm.mockVM, tm.mockState, lg)
+	msh, err := NewMesh(db, atxsdata, tm.mockClock, tm.mockTortoise, exec, tm.mockState, lg)
 	require.NoError(t, err)
 	gLid := types.GetEffectiveGenesis()
 	checkLastAppliedInDB(t, msh, gLid)
@@ -208,8 +213,8 @@ func TestMesh_FromGenesis(t *testing.T) {
 func TestMesh_WakeUpWhileGenesis(t *testing.T) {
 	tm := createTestMesh(t)
 	msh, err := NewMesh(
-		tm.cdb,
-		atxsdata.New(),
+		tm.db,
+		tm.atxsdata,
 		tm.mockClock,
 		tm.mockTortoise,
 		tm.executor,
@@ -246,8 +251,8 @@ func TestMesh_WakeUp(t *testing.T) {
 	tm.mockState.EXPECT().RevertCache(latestState)
 	tm.mockVM.EXPECT().GetStateRoot()
 	msh, err := NewMesh(
-		tm.cdb,
-		atxsdata.New(),
+		tm.db,
+		tm.atxsdata,
 		tm.mockClock,
 		tm.mockTortoise,
 		tm.executor,
