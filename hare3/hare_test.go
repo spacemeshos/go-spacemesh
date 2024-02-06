@@ -239,6 +239,23 @@ func (n *node) register(signer *signing.EdSigner) {
 	n.registered = append(n.registered, signer)
 }
 
+func (n *node) storeAtx(atx *types.VerifiedActivationTx) error {
+	if err := atxs.Add(n.db, atx); err != nil {
+		return err
+	}
+	n.atxsdata.Add(
+		atx.TargetEpoch(),
+		atx.SmesherID,
+		atx.ID(),
+		atx.GetWeight(),
+		atx.BaseTickHeight(),
+		atx.TickHeight(),
+		*atx.VRFNonce,
+		false,
+	)
+	return nil
+}
+
 type clusterOpt func(*lockstepCluster)
 
 func withUnits(min, max int) clusterOpt {
@@ -421,7 +438,7 @@ func (cl *lockstepCluster) setup() {
 			if other.atx == nil {
 				continue
 			}
-			require.NoError(cl.t, atxs.Add(n.db, other.atx))
+			require.NoError(cl.t, n.storeAtx(other.atx))
 		}
 		n.oracle.UpdateActiveSet(cl.t.genesis.GetEpoch()+1, active)
 		n.mpublisher.EXPECT().
@@ -663,7 +680,7 @@ func TestHandler(t *testing.T) {
 	cluster.addActive(1)
 	n := cluster.nodes[0]
 	require.NoError(t, beacons.Add(n.db, tst.genesis.GetEpoch()+1, tst.beacon))
-	require.NoError(t, atxs.Add(n.db, n.atx))
+	require.NoError(t, n.storeAtx(n.atx))
 	n.oracle.UpdateActiveSet(tst.genesis.GetEpoch()+1, []types.ATXID{n.atx.ID()})
 	n.mpublisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	layer := tst.genesis + 1
