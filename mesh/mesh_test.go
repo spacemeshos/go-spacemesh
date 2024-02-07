@@ -39,7 +39,8 @@ const (
 
 type testMesh struct {
 	*Mesh
-	db           *sql.Database
+	db *sql.Database
+	// it is used in malfeasence.Validate, which is called in the tests
 	cdb          *datastore.CachedDB
 	atxsdata     *atxsdata.Data
 	mockClock    *mocks.MocklayerClock
