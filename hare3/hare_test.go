@@ -243,16 +243,7 @@ func (n *node) storeAtx(atx *types.VerifiedActivationTx) error {
 	if err := atxs.Add(n.db, atx); err != nil {
 		return err
 	}
-	n.atxsdata.Add(
-		atx.TargetEpoch(),
-		atx.SmesherID,
-		atx.ID(),
-		atx.GetWeight(),
-		atx.BaseTickHeight(),
-		atx.TickHeight(),
-		*atx.VRFNonce,
-		false,
-	)
+	n.atxsdata.AddFromHeader(atx.ToHeader(), *atx.VRFNonce, false)
 	return nil
 }
 

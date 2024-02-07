@@ -147,6 +147,8 @@ func (t *testOracle) createActiveSet(
 			},
 			NumUnits: uint32(i + 1),
 		}}
+		nonce := types.VRFPostIndex(0)
+		atx.VRFNonce = &nonce
 		atx.SetID(id)
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
@@ -161,16 +163,7 @@ func (t *testOracle) createActiveSet(
 func (t *testOracle) addAtx(atx *types.VerifiedActivationTx) {
 	t.tb.Helper()
 	require.NoError(t.tb, atxs.Add(t.db, atx))
-	t.atxsdata.Add(
-		atx.TargetEpoch(),
-		atx.SmesherID,
-		atx.ID(),
-		atx.GetWeight(),
-		atx.BaseTickHeight(),
-		atx.TickHeight(),
-		types.VRFPostIndex(0),
-		false,
-	)
+	t.atxsdata.AddFromHeader(atx.ToHeader(), *atx.VRFNonce, false)
 }
 
 // create n identities with weights and identifiers 1,2,3,...,n.
@@ -389,6 +382,8 @@ func Test_VrfSignVerify(t *testing.T) {
 		},
 		NumUnits: 1 * 1024,
 	}}
+	nonce := types.VRFPostIndex(0)
+	atx1.VRFNonce = &nonce
 	atx1.SetID(activeSet[0])
 	atx1.SetEffectiveNumUnits(atx1.NumUnits)
 	atx1.SetReceived(time.Now())
@@ -406,6 +401,8 @@ func Test_VrfSignVerify(t *testing.T) {
 		},
 		NumUnits: 9 * 1024,
 	}}
+	nonce = types.VRFPostIndex(0)
+	atx2.VRFNonce = &nonce
 	atx2.SetID(activeSet[1])
 	atx2.SetEffectiveNumUnits(atx2.NumUnits)
 	atx2.SetReceived(time.Now())
@@ -936,16 +933,7 @@ func TestActiveSetMatrix(t *testing.T) {
 			}
 			for _, atx := range tc.atxs {
 				require.NoError(t, atxs.Add(oracle.db, atx))
-				oracle.atxsdata.Add(
-					atx.TargetEpoch(),
-					atx.SmesherID,
-					atx.ID(),
-					atx.GetWeight(),
-					atx.BaseTickHeight(),
-					atx.TickHeight(),
-					*atx.VRFNonce,
-					false,
-				)
+				oracle.atxsdata.AddFromHeader(atx.ToHeader(), *atx.VRFNonce, false)
 			}
 			if tc.beacon != types.EmptyBeacon {
 				oracle.mBeacon.EXPECT().GetBeacon(target).Return(tc.beacon, nil)
