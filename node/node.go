@@ -677,7 +677,7 @@ func (app *App) initServices(ctx context.Context) error {
 	start := time.Now()
 	trtl, err := tortoise.Recover(
 		ctx,
-		app.cachedDB,
+		app.db,
 		app.clock.CurrentLayer(), trtlopts...,
 	)
 	if err != nil {
@@ -776,11 +776,12 @@ func (app *App) initServices(ctx context.Context) error {
 
 	app.hOracle = eligibility.New(
 		beaconProtocol,
-		app.cachedDB,
+		app.db,
+		app.atxsdata,
 		vrfVerifier,
 		app.Config.LayersPerEpoch,
-		app.Config.HareEligibility,
-		app.addLogger(HareOracleLogger, lg),
+		eligibility.WithConfig(app.Config.HareEligibility),
+		eligibility.WithLogger(app.addLogger(HareOracleLogger, lg)),
 	)
 	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 
@@ -801,7 +802,7 @@ func (app *App) initServices(ctx context.Context) error {
 	app.Config.Certificate.LayerBuffer = app.Config.Tortoise.Zdist
 	app.Config.Certificate.NumLayersToKeep = app.Config.Tortoise.Zdist * 2
 	app.certifier = blocks.NewCertifier(
-		app.cachedDB,
+		app.db,
 		app.hOracle,
 		app.edVerifier,
 		app.host,

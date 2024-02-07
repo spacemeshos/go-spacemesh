@@ -114,10 +114,10 @@ type Syncer struct {
 
 	cfg          Config
 	cdb          *datastore.CachedDB
-	asCache      activeSetCache
 	ticker       layerTicker
 	beacon       system.BeaconGetter
 	mesh         *mesh.Mesh
+	tortoise     system.Tortoise
 	certHandler  certHandler
 	dataFetcher  fetchLogic
 	patrol       layerPatrol
@@ -145,7 +145,7 @@ func NewSyncer(
 	ticker layerTicker,
 	beacon system.BeaconGetter,
 	mesh *mesh.Mesh,
-	cache activeSetCache,
+	tortoise system.Tortoise,
 	fetcher fetcher,
 	patrol layerPatrol,
 	ch certHandler,
@@ -155,10 +155,10 @@ func NewSyncer(
 		logger:           log.NewNop(),
 		cfg:              DefaultConfig(),
 		cdb:              cdb,
-		asCache:          cache,
 		ticker:           ticker,
 		beacon:           beacon,
 		mesh:             mesh,
+		tortoise:         tortoise,
 		certHandler:      ch,
 		patrol:           patrol,
 		awaitATXSyncedCh: make(chan struct{}),
@@ -168,7 +168,7 @@ func NewSyncer(
 	}
 
 	if s.dataFetcher == nil {
-		s.dataFetcher = NewDataFetch(mesh, fetcher, cdb, cache, s.logger)
+		s.dataFetcher = NewDataFetch(mesh, fetcher, cdb, tortoise, s.logger)
 	}
 	if s.forkFinder == nil {
 		s.forkFinder = NewForkFinder(s.logger, cdb, fetcher, s.cfg.MaxStaleDuration)

@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 var errNoPeers = errors.New("no peers")
@@ -22,10 +23,10 @@ var errNoPeers = errors.New("no peers")
 type DataFetch struct {
 	fetcher
 
-	logger  log.Log
-	msh     meshProvider
-	ids     idProvider
-	asCache activeSetCache
+	logger   log.Log
+	msh      meshProvider
+	ids      idProvider
+	tortoise system.Tortoise
 
 	mu        sync.Mutex
 	atxSynced map[types.EpochID]map[p2p.Peer]struct{}
@@ -36,7 +37,7 @@ func NewDataFetch(
 	msh meshProvider,
 	fetch fetcher,
 	ids idProvider,
-	cache activeSetCache,
+	tortoise system.Tortoise,
 	lg log.Log,
 ) *DataFetch {
 	return &DataFetch{
@@ -44,7 +45,7 @@ func NewDataFetch(
 		logger:    lg,
 		msh:       msh,
 		ids:       ids,
-		asCache:   cache,
+		tortoise:  tortoise,
 		atxSynced: map[types.EpochID]map[p2p.Peer]struct{}{},
 	}
 }
@@ -317,7 +318,7 @@ func (d *DataFetch) GetEpochATXs(ctx context.Context, epoch types.EpochID) error
 	}
 	d.updateAtxPeer(epoch, peer)
 	d.fetcher.RegisterPeerHashes(peer, types.ATXIDsToHashes(ed.AtxIDs))
-	missing := d.asCache.GetMissingActiveSet(epoch+1, ed.AtxIDs)
+	missing := d.tortoise.GetMissingActiveSet(epoch+1, ed.AtxIDs)
 	d.logger.WithContext(ctx).With().Debug("fetching atxs",
 		epoch,
 		log.Stringer("peer", peer),

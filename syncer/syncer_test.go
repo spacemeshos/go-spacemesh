@@ -72,7 +72,6 @@ type testSyncer struct {
 	mTortoise    *smocks.MockTortoise
 	mCertHdr     *mocks.MockcertHandler
 	mForkFinder  *mocks.MockforkFinder
-	mAtxCache    *mocks.MockactiveSetCache
 }
 
 func newTestSyncer(t *testing.T, interval time.Duration) *testSyncer {
@@ -89,7 +88,6 @@ func newTestSyncer(t *testing.T, interval time.Duration) *testSyncer {
 		mTortoise:    smocks.NewMockTortoise(ctrl),
 		mCertHdr:     mocks.NewMockcertHandler(ctrl),
 		mForkFinder:  mocks.NewMockforkFinder(ctrl),
-		mAtxCache:    mocks.NewMockactiveSetCache(ctrl),
 	}
 	db := sql.InMemory()
 	ts.cdb = datastore.NewCachedDB(db, lg)
@@ -112,7 +110,7 @@ func newTestSyncer(t *testing.T, interval time.Duration) *testSyncer {
 		ts.mTicker,
 		ts.mBeacon,
 		ts.msh,
-		ts.mAtxCache,
+		ts.mTortoise,
 		nil,
 		ts.mLyrPatrol,
 		ts.mCertHdr,
@@ -690,7 +688,7 @@ func TestSynchronize_RecoverFromCheckpoint(t *testing.T) {
 		ts.mTicker,
 		ts.mBeacon,
 		ts.msh,
-		nil,
+		ts.mTortoise,
 		nil,
 		ts.mLyrPatrol,
 		ts.mCertHdr,

@@ -898,7 +898,7 @@ func TestProcessLayerPerHareOutput(t *testing.T) {
 			desc: "exists",
 			calls: []call{
 				{
-					lid: start, bid: idg("1"),
+					lid: start, bid: idg("1"), onHare: true,
 					expect: []certificates.CertValidity{validcert(idg("1"))},
 				},
 			},
@@ -910,7 +910,7 @@ func TestProcessLayerPerHareOutput(t *testing.T) {
 			desc: "exists different",
 			calls: []call{
 				{
-					lid: start, bid: idg("1"),
+					lid: start, bid: idg("1"), onHare: true,
 					expect: []certificates.CertValidity{invalidcert(idg("1")), validcert(idg("2"))},
 				},
 			},
@@ -922,7 +922,7 @@ func TestProcessLayerPerHareOutput(t *testing.T) {
 			desc: "exists different invalid",
 			calls: []call{
 				{
-					lid: start, bid: idg("1"),
+					lid: start, bid: idg("1"), onHare: true,
 					expect: []certificates.CertValidity{validcert(idg("1")), invalidcert(idg("2"))},
 				},
 			},
