@@ -179,8 +179,81 @@ func (g *GossipCollector) ThrottlePeer(peer.ID) {}
 // RecvRPC is invoked when an incoming RPC is received.
 func (g *GossipCollector) RecvRPC(*pubsub.RPC) {}
 
+var (
+	sendControl = metrics.NewCounter(
+		"send_control_bytes",
+		subsystem,
+		"Bytes of control messages sent",
+		[]string{},
+	).WithLabelValues()
+	sendControlTypes = metrics.NewCounter(
+		"send_control_types",
+		subsystem,
+		"Number of control messaages per type",
+		[]string{"type"},
+	)
+	sendPublish = metrics.NewCounter(
+		"send_publish_bytes",
+		subsystem,
+		"Bytes of publish messages sent",
+		[]string{},
+	).WithLabelValues()
+	sendCount = metrics.NewCounter(
+		"send_publish_count",
+		subsystem,
+		"Number of messages in publish rpc",
+		[]string{},
+	).WithLabelValues()
+	sendSubs = metrics.NewCounter(
+		"send_subs_bytes",
+		subsystem,
+		"Bytes of subscriptions messages sent",
+		[]string{},
+	).WithLabelValues()
+)
+
 // SendRPC is invoked when a RPC is sent.
-func (g *GossipCollector) SendRPC(*pubsub.RPC, peer.ID) {}
+func (g *GossipCollector) SendRPC(rpc *pubsub.RPC, _ peer.ID) {
+	if rpc == nil {
+		return
+	}
+	if control := rpc.GetControl(); control != nil {
+		buf, err := control.Marshal()
+		if err != nil {
+			panic(err)
+		}
+		sendControl.Add(float64(len(buf)))
+		sendControlTypes.WithLabelValues("iwant").Add(float64(len(control.Iwant)))
+		sendControlTypes.WithLabelValues("ihave").Add(float64(len(control.Ihave)))
+		sendControlTypes.WithLabelValues("prune").Add(float64(len(control.Prune)))
+		sendControlTypes.WithLabelValues("graft").Add(float64(len(control.Graft)))
+	}
+	if rpc.Publish != nil {
+		for _, msg := range rpc.Publish {
+			if msg == nil {
+				continue
+			}
+			buf, err := msg.Marshal()
+			if err != nil {
+				panic(err)
+			}
+			sendPublish.Add(float64(len(buf)))
+		}
+		sendCount.Add(float64(len(rpc.Publish)))
+	}
+	if rpc.Subscriptions != nil {
+		for _, sub := range rpc.Subscriptions {
+			if sub == nil {
+				continue
+			}
+			buf, err := sub.Marshal()
+			if err != nil {
+				panic(err)
+			}
+			sendSubs.Add(float64(len(buf)))
+		}
+	}
+}
 
 // DropRPC is invoked when an outbound RPC is dropped, typically because of a queue full.
 func (g *GossipCollector) DropRPC(*pubsub.RPC, peer.ID) {}
