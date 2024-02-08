@@ -1483,45 +1483,6 @@ func (m *MockmeshAPI) EXPECT() *MockmeshAPIMockRecorder {
 	return m.recorder
 }
 
-// GetATXs mocks base method.
-func (m *MockmeshAPI) GetATXs(arg0 context.Context, arg1 []types.ATXID) (map[types.ATXID]*types.VerifiedActivationTx, []types.ATXID) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetATXs", arg0, arg1)
-	ret0, _ := ret[0].(map[types.ATXID]*types.VerifiedActivationTx)
-	ret1, _ := ret[1].([]types.ATXID)
-	return ret0, ret1
-}
-
-// GetATXs indicates an expected call of GetATXs.
-func (mr *MockmeshAPIMockRecorder) GetATXs(arg0, arg1 any) *meshAPIGetATXsCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetATXs", reflect.TypeOf((*MockmeshAPI)(nil).GetATXs), arg0, arg1)
-	return &meshAPIGetATXsCall{Call: call}
-}
-
-// meshAPIGetATXsCall wrap *gomock.Call
-type meshAPIGetATXsCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *meshAPIGetATXsCall) Return(arg0 map[types.ATXID]*types.VerifiedActivationTx, arg1 []types.ATXID) *meshAPIGetATXsCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *meshAPIGetATXsCall) Do(f func(context.Context, []types.ATXID) (map[types.ATXID]*types.VerifiedActivationTx, []types.ATXID)) *meshAPIGetATXsCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *meshAPIGetATXsCall) DoAndReturn(f func(context.Context, []types.ATXID) (map[types.ATXID]*types.VerifiedActivationTx, []types.ATXID)) *meshAPIGetATXsCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // GetLayer mocks base method.
 func (m *MockmeshAPI) GetLayer(arg0 types.LayerID) (*types.Layer, error) {
 	m.ctrl.T.Helper()
