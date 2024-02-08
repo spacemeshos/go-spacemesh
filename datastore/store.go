@@ -1,6 +1,7 @@
 package datastore
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -27,9 +28,16 @@ type VrfNonceKey struct {
 	Epoch types.EpochID
 }
 
+//go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./store.go
+
+type Executor interface {
+	sql.Executor
+	WithTx(context.Context, func(*sql.Tx) error) error
+}
+
 // CachedDB is simply a database injected with cache.
 type CachedDB struct {
-	*sql.Database
+	Executor
 	logger log.Log
 
 	// cache is optional
@@ -44,14 +52,15 @@ type CachedDB struct {
 }
 
 type Config struct {
+	// ATXSize must be larger than the sum of all ATXs in last 2 epochs to be effective
 	ATXSize         int `mapstructure:"atx-size"`
-	MalfeasenceSize int `mapstructure:"malfeasence-size"`
+	MalfeasanceSize int `mapstructure:"malfeasance-size"`
 }
 
 func DefaultConfig() Config {
 	return Config{
-		ATXSize:         100_000,
-		MalfeasenceSize: 1_000,
+		ATXSize:         3_000_000, // to be in line with 2*`EpochData` size (see fetch/wire_types.go) - see comment above
+		MalfeasanceSize: 1_000,
 	}
 }
 
@@ -75,7 +84,7 @@ func WithConsensusCache(c *atxsdata.Data) Opt {
 }
 
 // NewCachedDB create an instance of a CachedDB.
-func NewCachedDB(db *sql.Database, lg log.Log, opts ...Opt) *CachedDB {
+func NewCachedDB(db Executor, lg log.Log, opts ...Opt) *CachedDB {
 	o := cacheOpts{cfg: DefaultConfig()}
 	for _, opt := range opts {
 		opt(&o)
@@ -87,7 +96,7 @@ func NewCachedDB(db *sql.Database, lg log.Log, opts ...Opt) *CachedDB {
 		lg.Fatal("failed to create atx cache", err)
 	}
 
-	malfeasanceCache, err := lru.New[types.NodeID, *types.MalfeasanceProof](o.cfg.MalfeasenceSize)
+	malfeasanceCache, err := lru.New[types.NodeID, *types.MalfeasanceProof](o.cfg.MalfeasanceSize)
 	if err != nil {
 		lg.Fatal("failed to create malfeasance cache", err)
 	}
@@ -98,7 +107,7 @@ func NewCachedDB(db *sql.Database, lg log.Log, opts ...Opt) *CachedDB {
 	}
 
 	return &CachedDB{
-		Database:         db,
+		Executor:         db,
 		atxsdata:         o.atxsdata,
 		logger:           lg,
 		atxHdrCache:      atxHdrCache,
@@ -152,7 +161,7 @@ func (db *CachedDB) GetMalfeasanceProof(id types.NodeID) (*types.MalfeasanceProo
 		return proof, nil
 	}
 
-	proof, err := identities.GetMalfeasanceProof(db.Database, id)
+	proof, err := identities.GetMalfeasanceProof(db.Executor, id)
 	if err != nil && err != sql.ErrNotFound {
 		return nil, err
 	}
@@ -328,7 +337,7 @@ func (db *CachedDB) IdentityExists(nodeID types.NodeID) (bool, error) {
 }
 
 func (db *CachedDB) MaxHeightAtx() (types.ATXID, error) {
-	return atxs.GetIDWithMaxHeight(db, types.EmptyNodeID)
+	return atxs.GetIDWithMaxHeight(db, types.EmptyNodeID, atxs.FilterAll)
 }
 
 // Hint marks which DB should be queried for a certain provided hash.
@@ -347,13 +356,13 @@ const (
 )
 
 // NewBlobStore returns a BlobStore.
-func NewBlobStore(db *sql.Database) *BlobStore {
+func NewBlobStore(db sql.Executor) *BlobStore {
 	return &BlobStore{DB: db}
 }
 
 // BlobStore gets data as a blob to serve direct fetch requests.
 type BlobStore struct {
-	DB *sql.Database
+	DB sql.Executor
 }
 
 // Get gets an ATX as bytes by an ATX ID as bytes.

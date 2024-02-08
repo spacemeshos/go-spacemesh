@@ -16,10 +16,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"golang.org/x/exp/maps"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -45,34 +45,46 @@ func TestMain(m *testing.M) {
 
 type testOracle struct {
 	*Oracle
+	tb        testing.TB
+	db        *sql.Database
+	atxsdata  *atxsdata.Data
 	mBeacon   *mocks.MockBeaconGetter
 	mVerifier *MockvrfVerifier
 }
 
-func defaultOracle(t testing.TB) *testOracle {
-	lg := logtest.New(t)
-	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
+func defaultOracle(tb testing.TB) *testOracle {
+	db := sql.InMemory()
+	atxsdata := atxsdata.New()
 
-	ctrl := gomock.NewController(t)
-	mb := mocks.NewMockBeaconGetter(ctrl)
-	verifier := NewMockvrfVerifier(ctrl)
+	ctrl := gomock.NewController(tb)
+	mBeacon := mocks.NewMockBeaconGetter(ctrl)
+	mVerifier := NewMockvrfVerifier(ctrl)
 
 	to := &testOracle{
-		Oracle:    New(mb, cdb, verifier, defLayersPerEpoch, config.Config{ConfidenceParam: confidenceParam}, lg),
-		mBeacon:   mb,
-		mVerifier: verifier,
+		Oracle: New(
+			mBeacon,
+			db,
+			atxsdata,
+			mVerifier,
+			defLayersPerEpoch,
+			WithConfig(Config{ConfidenceParam: confidenceParam}),
+			WithLogger(logtest.New(tb)),
+		),
+		tb:        tb,
+		mBeacon:   mBeacon,
+		mVerifier: mVerifier,
+		db:        db,
+		atxsdata:  atxsdata,
 	}
 	return to
 }
 
-func createBallots(
-	tb testing.TB,
-	cdb *datastore.CachedDB,
+func (t *testOracle) createBallots(
 	lid types.LayerID,
 	activeSet types.ATXIDList,
 	miners []types.NodeID,
 ) []*types.Ballot {
-	tb.Helper()
+	t.tb.Helper()
 	numBallots := ballotsPerLayer
 	if len(activeSet) < numBallots {
 		numBallots = len(activeSet)
@@ -86,9 +98,9 @@ func createBallots(
 		b.EpochData = &types.EpochData{ActiveSetHash: activeSet.Hash()}
 		b.Signature = types.RandomEdSignature()
 		b.SmesherID = miners[i]
-		require.NoError(tb, b.Initialize())
-		require.NoError(tb, ballots.Add(cdb, b))
-		activesets.Add(cdb, b.EpochData.ActiveSetHash, &types.EpochActiveSet{
+		require.NoError(t.tb, b.Initialize())
+		require.NoError(t.tb, ballots.Add(t.db, b))
+		activesets.Add(t.db, b.EpochData.ActiveSetHash, &types.EpochActiveSet{
 			Epoch: lid.GetEpoch(),
 			Set:   activeSet,
 		})
@@ -97,8 +109,8 @@ func createBallots(
 	return result
 }
 
-func createBlock(tb testing.TB, cdb *datastore.CachedDB, blts []*types.Ballot) {
-	tb.Helper()
+func (t *testOracle) createBlock(blts []*types.Ballot) {
+	t.tb.Helper()
 	block := &types.Block{
 		InnerBlock: types.InnerBlock{
 			LayerIndex: blts[0].Layer,
@@ -108,22 +120,20 @@ func createBlock(tb testing.TB, cdb *datastore.CachedDB, blts []*types.Ballot) {
 		block.Rewards = append(block.Rewards, types.AnyReward{AtxID: b.AtxID})
 	}
 	block.Initialize()
-	require.NoError(tb, blocks.Add(cdb, block))
-	require.NoError(tb, layers.SetApplied(cdb, block.LayerIndex, block.ID()))
+	require.NoError(t.tb, blocks.Add(t.db, block))
+	require.NoError(t.tb, layers.SetApplied(t.db, block.LayerIndex, block.ID()))
 }
 
-func createLayerData(tb testing.TB, cdb *datastore.CachedDB, lid types.LayerID, numMiners int) []types.NodeID {
-	tb.Helper()
+func (t *testOracle) createLayerData(lid types.LayerID, numMiners int) []types.NodeID {
+	t.tb.Helper()
 	activeSet := types.RandomActiveSet(numMiners)
-	miners := createActiveSet(tb, cdb, lid.GetEpoch().FirstLayer().Sub(1), activeSet)
-	blts := createBallots(tb, cdb, lid, activeSet, miners)
-	createBlock(tb, cdb, blts)
+	miners := t.createActiveSet(lid.GetEpoch().FirstLayer().Sub(1), activeSet)
+	blts := t.createBallots(lid, activeSet, miners)
+	t.createBlock(blts)
 	return miners
 }
 
-func createActiveSet(
-	tb testing.TB,
-	cdb *datastore.CachedDB,
+func (t *testOracle) createActiveSet(
 	lid types.LayerID,
 	activeSet []types.ATXID,
 ) []types.NodeID {
@@ -137,21 +147,33 @@ func createActiveSet(
 			},
 			NumUnits: uint32(i + 1),
 		}}
+		nonce := types.VRFPostIndex(0)
+		atx.VRFNonce = &nonce
 		atx.SetID(id)
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
 		atx.SmesherID = types.BytesToNodeID([]byte(strconv.Itoa(i)))
 		vAtx, err := atx.Verify(0, 1)
-		require.NoError(tb, err)
-		require.NoError(tb, atxs.Add(cdb, vAtx))
+		require.NoError(t.tb, err)
+		t.addAtx(vAtx)
 	}
 	return miners
 }
 
-func createMapWithSize(n int) map[types.NodeID]uint64 {
-	m := make(map[types.NodeID]uint64)
+func (t *testOracle) addAtx(atx *types.VerifiedActivationTx) {
+	t.tb.Helper()
+	require.NoError(t.tb, atxs.Add(t.db, atx))
+	t.atxsdata.AddFromHeader(atx.ToHeader(), *atx.VRFNonce, false)
+}
+
+// create n identities with weights and identifiers 1,2,3,...,n.
+func createIdentities(n int) map[types.NodeID]identityWeight {
+	m := map[types.NodeID]identityWeight{}
 	for i := 0; i < n; i++ {
-		m[types.BytesToNodeID([]byte(strconv.Itoa(i)))] = uint64(i + 1)
+		m[types.BytesToNodeID([]byte(strconv.Itoa(i)))] = identityWeight{
+			atx:    types.ATXID(types.BytesToHash([]byte(strconv.Itoa(i)))),
+			weight: uint64(i + 1),
+		}
 	}
 	return m
 }
@@ -178,7 +200,7 @@ func TestCalcEligibility(t *testing.T) {
 	t.Run("miner not active", func(t *testing.T) {
 		o := defaultOracle(t)
 		lid := types.EpochID(5).FirstLayer()
-		createLayerData(t, o.cdb, lid.Sub(defLayersPerEpoch), 11)
+		o.createLayerData(lid.Sub(defLayersPerEpoch), 11)
 		res, err := o.CalcEligibility(context.Background(), lid, 1, 1, nid, types.EmptyVrfSignature)
 		require.ErrorIs(t, err, ErrNotActive)
 		require.Equal(t, 0, int(res))
@@ -187,7 +209,7 @@ func TestCalcEligibility(t *testing.T) {
 	t.Run("beacon failure", func(t *testing.T) {
 		o := defaultOracle(t)
 		layer := types.EpochID(5).FirstLayer()
-		miners := createLayerData(t, o.cdb, layer.Sub(defLayersPerEpoch), 5)
+		miners := o.createLayerData(layer.Sub(defLayersPerEpoch), 5)
 		errUnknown := errors.New("unknown")
 		o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(types.EmptyBeacon, errUnknown).Times(1)
 
@@ -199,7 +221,7 @@ func TestCalcEligibility(t *testing.T) {
 	t.Run("verify failure", func(t *testing.T) {
 		o := defaultOracle(t)
 		layer := types.EpochID(5).FirstLayer()
-		miners := createLayerData(t, o.cdb, layer.Sub(defLayersPerEpoch), 5)
+		miners := o.createLayerData(layer.Sub(defLayersPerEpoch), 5)
 		o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(types.RandomBeacon(), nil).Times(1)
 		o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(false).Times(1)
 
@@ -217,7 +239,7 @@ func TestCalcEligibility(t *testing.T) {
 		require.Equal(t, 0, int(res))
 
 		activeSet := types.RandomActiveSet(111)
-		miners := createActiveSet(t, o.cdb, types.EpochID(4).FirstLayer(), activeSet)
+		miners := o.createActiveSet(types.EpochID(4).FirstLayer(), activeSet)
 		o.UpdateActiveSet(5, activeSet)
 		o.mBeacon.EXPECT().GetBeacon(lid.GetEpoch()).Return(types.RandomBeacon(), nil)
 		o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true)
@@ -229,7 +251,7 @@ func TestCalcEligibility(t *testing.T) {
 		o := defaultOracle(t)
 		lid := types.EpochID(5).FirstLayer()
 		beacon := types.Beacon{1, 0, 0, 0}
-		miners := createLayerData(t, o.cdb, lid.Sub(defLayersPerEpoch), 5)
+		miners := o.createLayerData(lid.Sub(defLayersPerEpoch), 5)
 		sigs := map[string]uint16{
 			"0516a574aef37257d6811ea53ef55d4cbb0e14674900a0d5165bd6742513840d" +
 				"02442d979fdabc7059645d1e8f8a0f44d0db2aa90f23374dd74a3636d4ecdab7": 1,
@@ -281,7 +303,7 @@ func TestCalcEligibilityWithSpaceUnit(t *testing.T) {
 
 			lid := types.EpochID(5).FirstLayer()
 			beacon := types.Beacon{1, 0, 0, 0}
-			miners := createLayerData(t, o.cdb, lid.Sub(defLayersPerEpoch), tc.numMiners)
+			miners := o.createLayerData(lid.Sub(defLayersPerEpoch), tc.numMiners)
 
 			var eligibilityCount uint16
 			for _, nodeID := range miners {
@@ -298,14 +320,10 @@ func TestCalcEligibilityWithSpaceUnit(t *testing.T) {
 				eligibilityCount += res
 			}
 
-			diff := committeeSize - int(eligibilityCount)
-			if diff < 0 {
-				diff = -diff
-			}
-			t.Logf("diff=%d (%g%% of committeeSize)", diff, 100*float64(diff)/float64(committeeSize))
-			require.Less(t, diff, committeeSize/10) // up to 10% difference
-			// While it's theoretically possible to get a result higher than 10%, I've run this many times and haven't seen
-			// anything higher than 6% and it's usually under 3%.
+			require.InDelta(t, committeeSize, eligibilityCount, committeeSize*15/100) // up to 15% difference
+			// a correct check would be to calculate the expected variance of the binomial distribution
+			// which depends on the number of miners and the number of units each miner has
+			// and then assert that the difference is within 3 standard deviations of the expected value
 		})
 	}
 }
@@ -320,11 +338,11 @@ func BenchmarkOracle_CalcEligibility(b *testing.B) {
 	committeeSize := 800
 
 	lid := types.EpochID(5).FirstLayer()
-	createLayerData(b, o.cdb, lid, numOfMiners)
+	o.createLayerData(lid, numOfMiners)
 
 	var eligibilityCount uint16
 	var nodeIDs []types.NodeID
-	for pubkey := range createMapWithSize(b.N) {
+	for pubkey := range createIdentities(b.N) {
 		nodeIDs = append(nodeIDs, pubkey)
 	}
 	b.ResetTimer()
@@ -351,7 +369,8 @@ func Test_VrfSignVerify(t *testing.T) {
 	o := defaultOracle(t)
 	nid := signer.NodeID()
 
-	lid := types.EpochID(5).FirstLayer()
+	lid := types.EpochID(5).FirstLayer().Add(confidenceParam)
+	first := types.EpochID(5).FirstLayer()
 	prevEpoch := lid.GetEpoch() - 1
 	o.mBeacon.EXPECT().GetBeacon(lid.GetEpoch()).Return(types.Beacon{1, 0, 0, 0}, nil).AnyTimes()
 
@@ -363,13 +382,15 @@ func Test_VrfSignVerify(t *testing.T) {
 		},
 		NumUnits: 1 * 1024,
 	}}
+	nonce := types.VRFPostIndex(0)
+	atx1.VRFNonce = &nonce
 	atx1.SetID(activeSet[0])
 	atx1.SetEffectiveNumUnits(atx1.NumUnits)
 	atx1.SetReceived(time.Now())
 	atx1.SmesherID = signer.NodeID()
 	vAtx1, err := atx1.Verify(0, 1)
 	require.NoError(t, err)
-	require.NoError(t, atxs.Add(o.cdb, vAtx1))
+	o.addAtx(vAtx1)
 
 	signer2, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
 	require.NoError(t, err)
@@ -380,26 +401,31 @@ func Test_VrfSignVerify(t *testing.T) {
 		},
 		NumUnits: 9 * 1024,
 	}}
+	nonce = types.VRFPostIndex(0)
+	atx2.VRFNonce = &nonce
 	atx2.SetID(activeSet[1])
 	atx2.SetEffectiveNumUnits(atx2.NumUnits)
 	atx2.SetReceived(time.Now())
 	atx2.SmesherID = signer2.NodeID()
 	vAtx2, err := atx2.Verify(0, 1)
 	require.NoError(t, err)
-	require.NoError(t, atxs.Add(o.cdb, vAtx2))
+	o.addAtx(vAtx2)
 	miners := []types.NodeID{atx1.SmesherID, atx2.SmesherID}
-	createBlock(t, o.cdb, createBallots(t, o.cdb, lid.Sub(defLayersPerEpoch), activeSet, miners))
+	o.createBlock(o.createBallots(first, activeSet, miners))
 
 	o.vrfVerifier = signing.NewVRFVerifier()
 
-	proof, err := o.Proof(context.Background(), signer.VRFSigner(), lid, 1)
+	// round is handpicked for vrf signature to pass
+	const round = 0
+
+	proof, err := o.Proof(context.Background(), signer.VRFSigner(), lid, round)
 	require.NoError(t, err)
 
-	res, err := o.CalcEligibility(context.Background(), lid, 1, 10, nid, proof)
+	res, err := o.CalcEligibility(context.Background(), lid, round, 10, nid, proof)
 	require.NoError(t, err)
 	require.Equal(t, 1, int(res))
 
-	valid, err := o.Validate(context.Background(), lid, 1, 10, nid, proof, 1)
+	valid, err := o.Validate(context.Background(), lid, round, 10, nid, proof, 1)
 	require.NoError(t, err)
 	require.True(t, valid)
 }
@@ -435,7 +461,7 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	o := defaultOracle(t)
 	layer := types.LayerID(defLayersPerEpoch * 4)
 	numMiners := 2
-	miners := createLayerData(t, o.cdb, layer.Sub(defLayersPerEpoch), numMiners)
+	miners := o.createLayerData(layer.Sub(defLayersPerEpoch), numMiners)
 	for _, nodeID := range miners {
 		v, err := o.IsIdentityActiveOnConsensusView(context.Background(), nodeID, layer)
 		require.NoError(t, err)
@@ -508,20 +534,25 @@ func TestActiveSet(t *testing.T) {
 	o := defaultOracle(t)
 	targetEpoch := types.EpochID(5)
 	layer := targetEpoch.FirstLayer().Add(o.cfg.ConfidenceParam)
-	createLayerData(t, o.cdb, targetEpoch.FirstLayer(), numMiners)
+	o.createLayerData(targetEpoch.FirstLayer(), numMiners)
 
 	aset, err := o.actives(context.Background(), layer)
 	require.NoError(t, err)
-	require.Equal(t, createMapWithSize(numMiners), aset.set)
+	require.ElementsMatch(
+		t,
+		maps.Keys(createIdentities(numMiners)),
+		maps.Keys(aset.set),
+		"assertion relies on the enumeration of identities",
+	)
 
 	got, err := o.ActiveSet(context.Background(), targetEpoch)
 	require.NoError(t, err)
 	require.Len(t, got, len(aset.set))
 	for _, id := range got {
-		atx, err := o.cdb.GetAtxHeader(id)
+		atx, err := atxs.Get(o.db, id)
 		require.NoError(t, err)
-		require.Contains(t, aset.set, atx.NodeID)
-		delete(aset.set, atx.NodeID)
+		require.Contains(t, aset.set, atx.SmesherID, "id %s atx %s", id.ShortString(), atx.ShortString())
+		delete(aset.set, atx.SmesherID)
 	}
 }
 
@@ -531,7 +562,7 @@ func TestActives(t *testing.T) {
 		o := defaultOracle(t)
 		first := types.GetEffectiveGenesis().Add(1)
 		bootstrap := types.RandomActiveSet(numMiners)
-		createActiveSet(t, o.cdb, types.EpochID(1).FirstLayer(), bootstrap)
+		o.createActiveSet(types.EpochID(1).FirstLayer(), bootstrap)
 		o.UpdateActiveSet(types.GetEffectiveGenesis().GetEpoch()+1, bootstrap)
 
 		for lid := types.LayerID(0); lid.Before(first); lid = lid.Add(1) {
@@ -541,19 +572,29 @@ func TestActives(t *testing.T) {
 		}
 		activeSet, err := o.actives(context.Background(), first)
 		require.NoError(t, err)
-		require.Equal(t, createMapWithSize(numMiners), activeSet.set)
+		require.ElementsMatch(
+			t,
+			maps.Keys(createIdentities(numMiners)),
+			maps.Keys(activeSet.set),
+			"assertion relies on the enumeration of identities",
+		)
 	})
 	t.Run("steady state", func(t *testing.T) {
 		numMiners++
 		o := defaultOracle(t)
 		o.mBeacon.EXPECT().GetBeacon(gomock.Any())
 		layer := types.EpochID(4).FirstLayer()
-		createLayerData(t, o.cdb, layer, numMiners)
+		o.createLayerData(layer, numMiners)
 
 		start := layer.Add(o.cfg.ConfidenceParam)
 		activeSet, err := o.actives(context.Background(), start)
 		require.NoError(t, err)
-		require.Equal(t, createMapWithSize(numMiners), activeSet.set)
+		require.ElementsMatch(
+			t,
+			maps.Keys(createIdentities(numMiners)),
+			maps.Keys(activeSet.set),
+			"assertion relies on the enumeration of identities",
+		)
 		end := (layer.GetEpoch() + 1).FirstLayer().Add(o.cfg.ConfidenceParam)
 
 		for lid := start.Add(1); lid.Before(end); lid = lid.Add(1) {
@@ -572,9 +613,9 @@ func TestActives(t *testing.T) {
 		o.mBeacon.EXPECT().GetBeacon(gomock.Any()).AnyTimes()
 		layer := types.EpochID(4).FirstLayer()
 		end := layer.Add(o.cfg.ConfidenceParam)
-		createLayerData(t, o.cdb, layer, numMiners)
+		o.createLayerData(layer, numMiners)
 		fallback := types.RandomActiveSet(numMiners + 1)
-		createActiveSet(t, o.cdb, types.EpochID(3).FirstLayer(), fallback)
+		o.createActiveSet(types.EpochID(3).FirstLayer(), fallback)
 		o.UpdateActiveSet(end.GetEpoch(), fallback)
 
 		for lid := layer; lid.Before(end); lid = lid.Add(1) {
@@ -582,9 +623,14 @@ func TestActives(t *testing.T) {
 			require.ErrorIs(t, err, errEmptyActiveSet)
 			require.Nil(t, got)
 		}
-		got, err := o.actives(context.Background(), end)
+		activeSet, err := o.actives(context.Background(), end)
 		require.NoError(t, err)
-		require.Equal(t, createMapWithSize(numMiners+1), got.set)
+		require.ElementsMatch(
+			t,
+			maps.Keys(createIdentities(numMiners+1)),
+			maps.Keys(activeSet.set),
+			"assertion relies on the enumeration of identities",
+		)
 	})
 	t.Run("recover at epoch start", func(t *testing.T) {
 		numMiners++
@@ -596,17 +642,22 @@ func TestActives(t *testing.T) {
 		t.Cleanup(func() {
 			types.SetEffectiveGenesis(old.Uint32())
 		})
-		createLayerData(t, o.cdb, layer, numMiners)
+		o.createLayerData(layer, numMiners)
 		fallback := types.RandomActiveSet(numMiners + 1)
-		createActiveSet(t, o.cdb, types.EpochID(3).FirstLayer(), fallback)
+		o.createActiveSet(types.EpochID(3).FirstLayer(), fallback)
 		o.UpdateActiveSet(layer.GetEpoch(), fallback)
 
-		got, err := o.actives(context.Background(), layer)
+		activeSet, err := o.actives(context.Background(), layer)
 		require.NoError(t, err)
-		require.Equal(t, createMapWithSize(numMiners+1), got.set)
-		got2, err := o.actives(context.Background(), layer+1)
+		require.ElementsMatch(
+			t,
+			maps.Keys(createIdentities(numMiners+1)),
+			maps.Keys(activeSet.set),
+			"assertion relies on the enumeration of identities",
+		)
+		activeSet2, err := o.actives(context.Background(), layer+1)
 		require.NoError(t, err)
-		require.Equal(t, got2, got)
+		require.Equal(t, activeSet, activeSet2)
 	})
 }
 
@@ -614,7 +665,7 @@ func TestActives_ConcurrentCalls(t *testing.T) {
 	r := require.New(t)
 	o := defaultOracle(t)
 	layer := types.LayerID(100)
-	createLayerData(t, o.cdb, layer.Sub(defLayersPerEpoch), 5)
+	o.createLayerData(layer.Sub(defLayersPerEpoch), 5)
 
 	mc := NewMockactiveSetCache(gomock.NewController(t))
 	firstCall := true
@@ -624,9 +675,9 @@ func TestActives_ConcurrentCalls(t *testing.T) {
 				firstCall = false
 				return nil, false
 			}
-			aset := cachedActiveSet{set: createMapWithSize(5)}
+			aset := cachedActiveSet{set: createIdentities(5)}
 			for _, value := range aset.set {
-				aset.total += value
+				aset.total += value.weight
 			}
 			return &aset, true
 		}).Times(102)
@@ -668,7 +719,7 @@ func TestMaxSupportedN(t *testing.T) {
 	})
 }
 
-func TestActiveSetDD(t *testing.T) {
+func TestActiveSetMatrix(t *testing.T) {
 	t.Parallel()
 
 	target := types.EpochID(4)
@@ -703,6 +754,8 @@ func TestActiveSetDD(t *testing.T) {
 		atx.SetID(id)
 		atx.SetEffectiveNumUnits(1)
 		atx.SetReceived(time.Time{}.Add(1))
+		nonce := types.VRFPostIndex(0)
+		atx.VRFNonce = &nonce
 		verified, err := atx.Verify(0, 1)
 		require.NoError(t, err)
 		for _, opt := range option {
@@ -816,7 +869,7 @@ func TestActiveSetDD(t *testing.T) {
 			},
 			atxs:    []*types.VerifiedActivationTx{},
 			actives: []types.ATXIDList{{{1}, {2}}, {{2}, {3}}},
-			expect:  "get ATX",
+			expect:  "missing atx in atxsdata",
 		},
 		{
 			desc:   "ballot no epoch data",
@@ -856,16 +909,16 @@ func TestActiveSetDD(t *testing.T) {
 					target.FirstLayer(),
 					types.NodeID{1},
 					types.Beacon{1},
-					[]types.ATXID{{1}},
+					[]types.ATXID{{2}},
 				),
 			},
 			atxs: []*types.VerifiedActivationTx{
-				agen(types.ATXID{1}, types.NodeID{1}, func(verified *types.VerifiedActivationTx) {
+				agen(types.ATXID{2}, types.NodeID{1}, func(verified *types.VerifiedActivationTx) {
 					verified.PublishEpoch = target
 				}),
 			},
-			actives: []types.ATXIDList{{{1}}},
-			expect:  "no epoch atx found",
+			actives: []types.ATXIDList{{{2}}},
+			expect:  "missing atx in atxsdata 4/0200000000",
 		},
 	} {
 		tc := tc
@@ -873,13 +926,14 @@ func TestActiveSetDD(t *testing.T) {
 			t.Parallel()
 			oracle := defaultOracle(t)
 			for _, actives := range tc.actives {
-				require.NoError(t, activesets.Add(oracle.cdb, actives.Hash(), &types.EpochActiveSet{Set: actives}))
+				require.NoError(t, activesets.Add(oracle.db, actives.Hash(), &types.EpochActiveSet{Set: actives}))
 			}
 			for _, ballot := range tc.ballots {
-				require.NoError(t, ballots.Add(oracle.cdb, &ballot))
+				require.NoError(t, ballots.Add(oracle.db, &ballot))
 			}
 			for _, atx := range tc.atxs {
-				require.NoError(t, atxs.Add(oracle.cdb, atx))
+				require.NoError(t, atxs.Add(oracle.db, atx))
+				oracle.atxsdata.AddFromHeader(atx.ToHeader(), *atx.VRFNonce, false)
 			}
 			if tc.beacon != types.EmptyBeacon {
 				oracle.mBeacon.EXPECT().GetBeacon(target).Return(tc.beacon, nil)

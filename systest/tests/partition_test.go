@@ -32,29 +32,37 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 	eg, ctx := errgroup.WithContext(tctx)
 	// make sure the first boot node is in the 2nd partition so the poet proof can be broadcast to both splits
 	split := pct*cl.Total()/100 + 1
-	scheduleChaos(ctx, eg, cl.Client(0), startSplit, rejoin, func(ctx context.Context) (chaos.Teardown, error) {
-		var (
-			left  []string
-			right = []string{cl.Client(0).Name}
-		)
-		for i := 1; i < cl.Total(); i++ {
-			if i < split {
-				left = append(left, cl.Client(i).Name)
-			} else {
-				right = append(right, cl.Client(i).Name)
+	scheduleChaos(
+		ctx,
+		eg,
+		cl.Client(0),
+		tctx.Log.Desugar(),
+		startSplit,
+		rejoin,
+		func(ctx context.Context) (chaos.Teardown, error) {
+			var (
+				left  []string
+				right = []string{cl.Client(0).Name}
+			)
+			for i := 1; i < cl.Total(); i++ {
+				if i < split {
+					left = append(left, cl.Client(i).Name)
+				} else {
+					right = append(right, cl.Client(i).Name)
+				}
 			}
-		}
-		tctx.Log.Debugw("long partition",
-			"percentage", pct,
-			"split", startSplit,
-			"rejoin", rejoin,
-			"last", last,
-			"stop", stop,
-			"left", left,
-			"right", right,
-		)
-		return chaos.Partition2(tctx, fmt.Sprintf("split-%v-%v", pct, 100-pct), left, right)
-	})
+			tctx.Log.Debugw("long partition",
+				"percentage", pct,
+				"split", startSplit,
+				"rejoin", rejoin,
+				"last", last,
+				"stop", stop,
+				"left", left,
+				"right", right,
+			)
+			return chaos.Partition2(tctx, fmt.Sprintf("split-%v-%v", pct, 100-pct), left, right)
+		},
+	)
 
 	// start sending transactions
 	tctx.Log.Debug("sending transactions...")
@@ -74,7 +82,7 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 	for i := 0; i < cl.Total(); i++ {
 		i := i
 		client := cl.Client(i)
-		watchStateHashes(ctx, eg, client, func(state *pb.GlobalStateStreamResponse) (bool, error) {
+		watchStateHashes(ctx, eg, client, tctx.Log.Desugar(), func(state *pb.GlobalStateStreamResponse) (bool, error) {
 			data := state.Datum.Datum
 			require.IsType(t, &pb.GlobalStateData_GlobalState{}, data)
 
@@ -176,7 +184,7 @@ func TestPartition_30_70(t *testing.T) {
 		tctx.Log.Info("cluster size changed to 30")
 		tctx.ClusterSize = 30
 	}
-	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(10))
+	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(tctx.ClusterSize))
 	require.NoError(t, err)
 	// TODO: re-assess the number of epoch required for healing.
 	testPartition(t, tctx, cl, 30, 6)
@@ -190,7 +198,7 @@ func TestPartition_50_50(t *testing.T) {
 		tctx.Log.Info("cluster size changed to 30")
 		tctx.ClusterSize = 30
 	}
-	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(10))
+	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(tctx.ClusterSize))
 	require.NoError(t, err)
 	// TODO: re-assess the number of epoch required for healing.
 	testPartition(t, tctx, cl, 50, 6)

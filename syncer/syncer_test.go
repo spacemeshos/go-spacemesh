@@ -72,7 +72,6 @@ type testSyncer struct {
 	mTortoise    *smocks.MockTortoise
 	mCertHdr     *mocks.MockcertHandler
 	mForkFinder  *mocks.MockforkFinder
-	mAtxCache    *mocks.MockactiveSetCache
 }
 
 func newTestSyncer(t *testing.T, interval time.Duration) *testSyncer {
@@ -89,12 +88,13 @@ func newTestSyncer(t *testing.T, interval time.Duration) *testSyncer {
 		mTortoise:    smocks.NewMockTortoise(ctrl),
 		mCertHdr:     mocks.NewMockcertHandler(ctrl),
 		mForkFinder:  mocks.NewMockforkFinder(ctrl),
-		mAtxCache:    mocks.NewMockactiveSetCache(ctrl),
 	}
-	ts.cdb = datastore.NewCachedDB(sql.InMemory(), lg)
+	db := sql.InMemory()
+	ts.cdb = datastore.NewCachedDB(db, lg)
 	var err error
-	exec := mesh.NewExecutor(ts.cdb, ts.mVm, ts.mConState, lg)
-	ts.msh, err = mesh.NewMesh(ts.cdb, atxsdata.New(), ts.mTicker, ts.mTortoise, exec, ts.mConState, lg)
+	atxsdata := atxsdata.New()
+	exec := mesh.NewExecutor(ts.cdb, atxsdata, ts.mVm, ts.mConState, lg)
+	ts.msh, err = mesh.NewMesh(db, atxsdata, ts.mTicker, ts.mTortoise, exec, ts.mConState, lg)
 	require.NoError(t, err)
 
 	cfg := Config{
@@ -110,7 +110,7 @@ func newTestSyncer(t *testing.T, interval time.Duration) *testSyncer {
 		ts.mTicker,
 		ts.mBeacon,
 		ts.msh,
-		ts.mAtxCache,
+		ts.mTortoise,
 		nil,
 		ts.mLyrPatrol,
 		ts.mCertHdr,
@@ -124,7 +124,7 @@ func newTestSyncer(t *testing.T, interval time.Duration) *testSyncer {
 
 func newSyncerWithoutPeriodicRuns(t *testing.T) *testSyncer {
 	ts := newTestSyncer(t, never)
-	ts.mDataFetcher.EXPECT().SelectBest(gomock.Any()).Return([]p2p.Peer{"non-empty"}).AnyTimes()
+	ts.mDataFetcher.EXPECT().SelectBestShuffled(gomock.Any()).Return([]p2p.Peer{"non-empty"}).AnyTimes()
 	return ts
 }
 
@@ -146,7 +146,7 @@ func TestStartAndShutdown(t *testing.T) {
 	ts.syncer.Start()
 
 	ts.mForkFinder.EXPECT().Purge(false).AnyTimes()
-	ts.mDataFetcher.EXPECT().SelectBest(gomock.Any()).Return(nil).AnyTimes()
+	ts.mDataFetcher.EXPECT().SelectBestShuffled(gomock.Any()).Return(nil).AnyTimes()
 	require.Eventually(t, func() bool {
 		return ts.syncer.ListenToATXGossip() && ts.syncer.ListenToGossip() &&
 			ts.syncer.IsSynced(ctx)
@@ -688,7 +688,7 @@ func TestSynchronize_RecoverFromCheckpoint(t *testing.T) {
 		ts.mTicker,
 		ts.mBeacon,
 		ts.msh,
-		nil,
+		ts.mTortoise,
 		nil,
 		ts.mLyrPatrol,
 		ts.mCertHdr,

@@ -106,10 +106,11 @@ type AnyReward struct {
 	Weight RatNum
 }
 
-// CoinbaseReward contains the reward information by coinbase, used as an interface to VM.
+// CoinbaseReward contains the reward information by coinbase and smesher, used as an interface to VM.
 type CoinbaseReward struct {
-	Coinbase Address
-	Weight   RatNum
+	SmesherID NodeID
+	Coinbase  Address
+	Weight    RatNum
 }
 
 // Initialize calculates and sets the Block's cached blockID.
@@ -193,11 +194,6 @@ func (ids blockIDs) MarshalLogArray(encoder log.ArrayEncoder) error {
 func SortBlockIDs(ids blockIDs) []BlockID {
 	sort.Slice(ids, func(i, j int) bool { return ids[i].Compare(ids[j]) })
 	return ids
-}
-
-// BlockIdsField returns a list of loggable fields for a given list of BlockID.
-func BlockIdsField(ids blockIDs) log.Field {
-	return log.Array("block_ids", ids)
 }
 
 // ToBlockIDs returns a slice of BlockID corresponding to the given list of Block.

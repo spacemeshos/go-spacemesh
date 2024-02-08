@@ -117,7 +117,7 @@ func New(
 	}
 
 	pd.ctx, pd.cancel = context.WithCancel(pd.ctx)
-	pd.theta = new(big.Float).SetRat(pd.config.Theta)
+	pd.theta = new(big.Float).SetRat(&pd.config.Theta)
 
 	if pd.weakCoin == nil {
 		pd.weakCoin = weakcoin.New(
@@ -1069,8 +1069,8 @@ func createProposalChecker(logger log.Log, conf Config, numEarlyATXs, numATXs in
 		return &proposalChecker{threshold: big.NewInt(0), thresholdStrict: big.NewInt(0)}
 	}
 
-	high := atxThreshold(conf.Kappa, conf.Q, numEarlyATXs)
-	low := atxThreshold(conf.Kappa, conf.Q, numATXs)
+	high := atxThreshold(conf.Kappa, &conf.Q, numEarlyATXs)
+	low := atxThreshold(conf.Kappa, &conf.Q, numATXs)
 	logger.With().Info("created proposal checker with ATX threshold",
 		log.Int("num_early_atxs", numEarlyATXs),
 		log.Int("num_atxs", numATXs),

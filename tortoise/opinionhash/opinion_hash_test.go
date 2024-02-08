@@ -25,35 +25,35 @@ func TestOpinionHasher(t *testing.T) {
 			seq: []any{
 				support{id: types.BlockID{1}, height: 10},
 			},
-			expected: "0x9792d675f91bda454356c00761f0ee7e4fad33f075f5c02cfd11730f0199f3ed",
+			expected: "9792d675f9",
 		},
 		{
 			desc: "support height 100",
 			seq: []any{
 				support{id: types.BlockID{1}, height: 100},
 			},
-			expected: "0xfdae510822088f67d47f8229d7971212973688d310c87144a154e8b51d787b4e",
+			expected: "fdae510822",
 		},
 		{
 			desc: "multiple blocks",
 			seq: []any{
 				[]support{{id: types.BlockID{1}, height: 100}, {id: types.BlockID{2}, height: 100}},
 			},
-			expected: "0xc0d65bb2f64a870c3f067bbc6e06ded4437ec95616b7bc61ee52fd02fe9468d2",
+			expected: "c0d65bb2f6",
 		},
 		{
 			desc: "single against",
 			seq: []any{
 				nil,
 			},
-			expected: "0xaf1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+			expected: "af1349b9f5",
 		},
 		{
 			desc: "abstain",
 			seq: []any{
 				abstain{},
 			},
-			expected: "0x2d3adedff11b61f14c886e35afa036736dcd87a74d27b5c1510225d0f592e213",
+			expected: "2d3adedff1",
 		},
 		{
 			desc: "abstain abstain",
@@ -61,7 +61,7 @@ func TestOpinionHasher(t *testing.T) {
 				abstain{},
 				abstain{},
 			},
-			expected: "0x58716d2accccc68182ffb06de20c77010061d694056defb23d2ad881d9367e16",
+			expected: "58716d2acc",
 		},
 		{
 			desc: "against against",
@@ -69,7 +69,7 @@ func TestOpinionHasher(t *testing.T) {
 				nil,
 				nil,
 			},
-			expected: "0x82878ed8a480ee41775636820e05a934ca5c747223ca64306658ee5982e6c227",
+			expected: "82878ed8a4",
 		},
 		{
 			desc: "support support",
@@ -77,7 +77,7 @@ func TestOpinionHasher(t *testing.T) {
 				support{id: types.BlockID{1}, height: 100},
 				support{id: types.BlockID{2}, height: 100},
 			},
-			expected: "0x88f75279f76898e958fba3409c60cee10967e04910bb97730e286531bbe7a757",
+			expected: "88f75279f7",
 		},
 		{
 			desc: "support against",
@@ -85,7 +85,7 @@ func TestOpinionHasher(t *testing.T) {
 				support{id: types.BlockID{1}, height: 100},
 				nil,
 			},
-			expected: "0xae4b107c6601034d18eb7b7817a330abe6ba8a82e58265ef503928050730cd14",
+			expected: "ae4b107c66",
 		},
 	} {
 		tc := tc

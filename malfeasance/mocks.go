@@ -14,67 +14,10 @@ import (
 
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	signing "github.com/spacemeshos/go-spacemesh/signing"
+	shared "github.com/spacemeshos/post/shared"
+	verifying "github.com/spacemeshos/post/verifying"
 	gomock "go.uber.org/mock/gomock"
 )
-
-// MockconsensusProtocol is a mock of consensusProtocol interface.
-type MockconsensusProtocol struct {
-	ctrl     *gomock.Controller
-	recorder *MockconsensusProtocolMockRecorder
-}
-
-// MockconsensusProtocolMockRecorder is the mock recorder for MockconsensusProtocol.
-type MockconsensusProtocolMockRecorder struct {
-	mock *MockconsensusProtocol
-}
-
-// NewMockconsensusProtocol creates a new mock instance.
-func NewMockconsensusProtocol(ctrl *gomock.Controller) *MockconsensusProtocol {
-	mock := &MockconsensusProtocol{ctrl: ctrl}
-	mock.recorder = &MockconsensusProtocolMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockconsensusProtocol) EXPECT() *MockconsensusProtocolMockRecorder {
-	return m.recorder
-}
-
-// HandleEligibility mocks base method.
-func (m *MockconsensusProtocol) HandleEligibility(arg0 context.Context, arg1 *types.HareEligibilityGossip) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "HandleEligibility", arg0, arg1)
-}
-
-// HandleEligibility indicates an expected call of HandleEligibility.
-func (mr *MockconsensusProtocolMockRecorder) HandleEligibility(arg0, arg1 any) *consensusProtocolHandleEligibilityCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleEligibility", reflect.TypeOf((*MockconsensusProtocol)(nil).HandleEligibility), arg0, arg1)
-	return &consensusProtocolHandleEligibilityCall{Call: call}
-}
-
-// consensusProtocolHandleEligibilityCall wrap *gomock.Call
-type consensusProtocolHandleEligibilityCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *consensusProtocolHandleEligibilityCall) Return() *consensusProtocolHandleEligibilityCall {
-	c.Call = c.Call.Return()
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *consensusProtocolHandleEligibilityCall) Do(f func(context.Context, *types.HareEligibilityGossip)) *consensusProtocolHandleEligibilityCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *consensusProtocolHandleEligibilityCall) DoAndReturn(f func(context.Context, *types.HareEligibilityGossip)) *consensusProtocolHandleEligibilityCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
 
 // MockSigVerifier is a mock of SigVerifier interface.
 type MockSigVerifier struct {
@@ -192,6 +135,72 @@ func (c *tortoiseOnMalfeasanceCall) Do(f func(types.NodeID)) *tortoiseOnMalfeasa
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *tortoiseOnMalfeasanceCall) DoAndReturn(f func(types.NodeID)) *tortoiseOnMalfeasanceCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// MockpostVerifier is a mock of postVerifier interface.
+type MockpostVerifier struct {
+	ctrl     *gomock.Controller
+	recorder *MockpostVerifierMockRecorder
+}
+
+// MockpostVerifierMockRecorder is the mock recorder for MockpostVerifier.
+type MockpostVerifierMockRecorder struct {
+	mock *MockpostVerifier
+}
+
+// NewMockpostVerifier creates a new mock instance.
+func NewMockpostVerifier(ctrl *gomock.Controller) *MockpostVerifier {
+	mock := &MockpostVerifier{ctrl: ctrl}
+	mock.recorder = &MockpostVerifierMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockpostVerifier) EXPECT() *MockpostVerifierMockRecorder {
+	return m.recorder
+}
+
+// Verify mocks base method.
+func (m_2 *MockpostVerifier) Verify(ctx context.Context, p *shared.Proof, m *shared.ProofMetadata, opts ...verifying.OptionFunc) error {
+	m_2.ctrl.T.Helper()
+	varargs := []any{ctx, p, m}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m_2.ctrl.Call(m_2, "Verify", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Verify indicates an expected call of Verify.
+func (mr *MockpostVerifierMockRecorder) Verify(ctx, p, m any, opts ...any) *postVerifierVerifyCall {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, p, m}, opts...)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockpostVerifier)(nil).Verify), varargs...)
+	return &postVerifierVerifyCall{Call: call}
+}
+
+// postVerifierVerifyCall wrap *gomock.Call
+type postVerifierVerifyCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *postVerifierVerifyCall) Return(arg0 error) *postVerifierVerifyCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *postVerifierVerifyCall) Do(f func(context.Context, *shared.Proof, *shared.ProofMetadata, ...verifying.OptionFunc) error) *postVerifierVerifyCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *postVerifierVerifyCall) DoAndReturn(f func(context.Context, *shared.Proof, *shared.ProofMetadata, ...verifying.OptionFunc) error) *postVerifierVerifyCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

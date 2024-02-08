@@ -41,17 +41,18 @@ func (m *Mockrequester) EXPECT() *MockrequesterMockRecorder {
 }
 
 // Request mocks base method.
-func (m *Mockrequester) Request(arg0 context.Context, arg1 p2p.Peer, arg2 []byte, arg3 func([]byte), arg4 func(error)) error {
+func (m *Mockrequester) Request(arg0 context.Context, arg1 p2p.Peer, arg2 []byte) ([]byte, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Request", arg0, arg1, arg2, arg3, arg4)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret := m.ctrl.Call(m, "Request", arg0, arg1, arg2)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // Request indicates an expected call of Request.
-func (mr *MockrequesterMockRecorder) Request(arg0, arg1, arg2, arg3, arg4 any) *requesterRequestCall {
+func (mr *MockrequesterMockRecorder) Request(arg0, arg1, arg2 any) *requesterRequestCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Request", reflect.TypeOf((*Mockrequester)(nil).Request), arg0, arg1, arg2, arg3, arg4)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Request", reflect.TypeOf((*Mockrequester)(nil).Request), arg0, arg1, arg2)
 	return &requesterRequestCall{Call: call}
 }
 
@@ -61,19 +62,19 @@ type requesterRequestCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *requesterRequestCall) Return(arg0 error) *requesterRequestCall {
-	c.Call = c.Call.Return(arg0)
+func (c *requesterRequestCall) Return(arg0 []byte, arg1 error) *requesterRequestCall {
+	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *requesterRequestCall) Do(f func(context.Context, p2p.Peer, []byte, func([]byte), func(error)) error) *requesterRequestCall {
+func (c *requesterRequestCall) Do(f func(context.Context, p2p.Peer, []byte) ([]byte, error)) *requesterRequestCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *requesterRequestCall) DoAndReturn(f func(context.Context, p2p.Peer, []byte, func([]byte), func(error)) error) *requesterRequestCall {
+func (c *requesterRequestCall) DoAndReturn(f func(context.Context, p2p.Peer, []byte) ([]byte, error)) *requesterRequestCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -234,67 +235,6 @@ func (c *PoetValidatorValidateAndStoreMsgCall) Do(f func(context.Context, types.
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *PoetValidatorValidateAndStoreMsgCall) DoAndReturn(f func(context.Context, types.Hash32, p2p.Peer, []byte) error) *PoetValidatorValidateAndStoreMsgCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// MockmeshProvider is a mock of meshProvider interface.
-type MockmeshProvider struct {
-	ctrl     *gomock.Controller
-	recorder *MockmeshProviderMockRecorder
-}
-
-// MockmeshProviderMockRecorder is the mock recorder for MockmeshProvider.
-type MockmeshProviderMockRecorder struct {
-	mock *MockmeshProvider
-}
-
-// NewMockmeshProvider creates a new mock instance.
-func NewMockmeshProvider(ctrl *gomock.Controller) *MockmeshProvider {
-	mock := &MockmeshProvider{ctrl: ctrl}
-	mock.recorder = &MockmeshProviderMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockmeshProvider) EXPECT() *MockmeshProviderMockRecorder {
-	return m.recorder
-}
-
-// LastVerified mocks base method.
-func (m *MockmeshProvider) LastVerified() types.LayerID {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LastVerified")
-	ret0, _ := ret[0].(types.LayerID)
-	return ret0
-}
-
-// LastVerified indicates an expected call of LastVerified.
-func (mr *MockmeshProviderMockRecorder) LastVerified() *meshProviderLastVerifiedCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LastVerified", reflect.TypeOf((*MockmeshProvider)(nil).LastVerified))
-	return &meshProviderLastVerifiedCall{Call: call}
-}
-
-// meshProviderLastVerifiedCall wrap *gomock.Call
-type meshProviderLastVerifiedCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *meshProviderLastVerifiedCall) Return(arg0 types.LayerID) *meshProviderLastVerifiedCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *meshProviderLastVerifiedCall) Do(f func() types.LayerID) *meshProviderLastVerifiedCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *meshProviderLastVerifiedCall) DoAndReturn(f func() types.LayerID) *meshProviderLastVerifiedCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

@@ -13,14 +13,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
+	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
-	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
-	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
+	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
@@ -54,6 +54,7 @@ func testnet() config.Config {
 	hare3conf.ProtocolName = ""
 	defaultdir := filepath.Join(home, "spacemesh-testnet", "/")
 	return config.Config{
+		Preset: "testnet",
 		BaseConfig: config.BaseConfig{
 			DataDirParent:                defaultdir,
 			FileLock:                     filepath.Join(os.TempDir(), "spacemesh.lock"),
@@ -72,10 +73,10 @@ func testnet() config.Config {
 			OptFilterThreshold: 90,
 
 			TickSize:            666514,
-			PoETServers:         []string{},
 			RegossipAtxInterval: time.Hour,
+			ATXGradeDelay:       30 * time.Minute,
 		},
-		Genesis: &config.GenesisConfig{
+		Genesis: config.GenesisConfig{
 			GenesisTime: "2023-09-13T18:00:00Z",
 			ExtraData:   "0000000000000000000000c76c58ebac180989673fd6d237b40e66ed5c976ec3",
 		},
@@ -87,23 +88,14 @@ func testnet() config.Config {
 			BadBeaconVoteDelayLayers: 4032,
 			MinimalActiveSetWeight:   []types.EpochMinimalActiveWeight{{Weight: 10_000}},
 		},
-		HARE: hareConfig.Config{
-			Disable:         hare3conf.EnableLayer,
-			N:               200,
-			ExpectedLeaders: 5,
-			RoundDuration:   25 * time.Second,
-			WakeupDelta:     25 * time.Second,
-			LimitConcurrent: 2,
-			LimitIterations: 4,
-		},
 		HARE3: hare3conf,
-		HareEligibility: eligConfig.Config{
+		HareEligibility: eligibility.Config{
 			ConfidenceParam: 20,
 		},
 		Beacon: beacon.Config{
 			Kappa:                    40,
-			Q:                        big.NewRat(1, 3),
-			Theta:                    big.NewRat(1, 4),
+			Q:                        *big.NewRat(1, 3),
+			Theta:                    *big.NewRat(1, 4),
 			GracePeriodDuration:      10 * time.Minute,
 			ProposalDuration:         4 * time.Minute,
 			FirstVotingRoundDuration: 30 * time.Minute,
@@ -152,5 +144,11 @@ func testnet() config.Config {
 		},
 		Recovery: checkpoint.DefaultConfig(),
 		Cache:    datastore.DefaultConfig(),
+		Certificate: blocks.CertConfig{
+			// NOTE(dshulyak) this is intentional. we increased committee size with hare3 upgrade
+			// but certifier continues to use 200 committee size.
+			// this will be upgraded in future with scheduled upgrade.
+			CommitteeSize: 200,
+		},
 	}
 }

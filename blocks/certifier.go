@@ -12,8 +12,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -34,7 +32,7 @@ var (
 
 // CertConfig is the config for Certifier.
 type CertConfig struct {
-	CommitteeSize    int
+	CommitteeSize    int `mapstructure:"committee-size"`
 	CertifyThreshold int
 	LayerBuffer      uint32
 	NumLayersToKeep  uint32
@@ -82,8 +80,8 @@ type Certifier struct {
 	stop    func()
 	stopped atomic.Bool
 
-	db         *datastore.CachedDB
-	oracle     hare.Rolacle
+	db         *sql.Database
+	oracle     eligibility.Rolacle
 	signers    map[types.NodeID]*signing.EdSigner
 	edVerifier *signing.EdVerifier
 	publisher  pubsub.Publisher
@@ -100,8 +98,8 @@ type Certifier struct {
 
 // NewCertifier creates new block certifier.
 func NewCertifier(
-	db *datastore.CachedDB,
-	o hare.Rolacle,
+	db *sql.Database,
+	o eligibility.Rolacle,
 
 	v *signing.EdVerifier,
 	p pubsub.Publisher,
@@ -528,7 +526,6 @@ func (c *Certifier) checkAndSave(
 		return errMultipleCerts
 	}
 	c.addCertCount(lid.GetEpoch())
-	c.tortoise.OnHareOutput(lid, cert.BlockID)
 	return nil
 }
 

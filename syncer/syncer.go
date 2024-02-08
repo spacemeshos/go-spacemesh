@@ -21,14 +21,16 @@ import (
 
 // Config is the config params for syncer.
 type Config struct {
-	Interval                 time.Duration
-	EpochEndFraction         float64
+	Interval                 time.Duration `mapstructure:"interval"`
+	EpochEndFraction         float64       `mapstructure:"epochendfraction"`
 	HareDelayLayers          uint32
 	SyncCertDistance         uint32
-	MaxStaleDuration         time.Duration
+	MaxStaleDuration         time.Duration `mapstructure:"maxstaleduration"`
 	Standalone               bool
-	GossipDuration           time.Duration
-	OutOfSyncThresholdLayers uint32 `mapstructure:"out-of-sync-threshold"`
+	GossipDuration           time.Duration `mapstructure:"gossipduration"`
+	DisableMeshAgreement     bool          `mapstructure:"disable-mesh-agreement"`
+	DisableAtxReconciliation bool          `mapstructure:"disable-atx-reconciliation"`
+	OutOfSyncThresholdLayers uint32        `mapstructure:"out-of-sync-threshold"`
 }
 
 // DefaultConfig for the syncer.
@@ -112,10 +114,10 @@ type Syncer struct {
 
 	cfg          Config
 	cdb          *datastore.CachedDB
-	asCache      activeSetCache
 	ticker       layerTicker
 	beacon       system.BeaconGetter
 	mesh         *mesh.Mesh
+	tortoise     system.Tortoise
 	certHandler  certHandler
 	dataFetcher  fetchLogic
 	patrol       layerPatrol
@@ -143,7 +145,7 @@ func NewSyncer(
 	ticker layerTicker,
 	beacon system.BeaconGetter,
 	mesh *mesh.Mesh,
-	cache activeSetCache,
+	tortoise system.Tortoise,
 	fetcher fetcher,
 	patrol layerPatrol,
 	ch certHandler,
@@ -153,10 +155,10 @@ func NewSyncer(
 		logger:           log.NewNop(),
 		cfg:              DefaultConfig(),
 		cdb:              cdb,
-		asCache:          cache,
 		ticker:           ticker,
 		beacon:           beacon,
 		mesh:             mesh,
+		tortoise:         tortoise,
 		certHandler:      ch,
 		patrol:           patrol,
 		awaitATXSyncedCh: make(chan struct{}),
@@ -166,10 +168,10 @@ func NewSyncer(
 	}
 
 	if s.dataFetcher == nil {
-		s.dataFetcher = NewDataFetch(mesh, fetcher, cdb, cache, s.logger)
+		s.dataFetcher = NewDataFetch(mesh, fetcher, cdb, tortoise, s.logger)
 	}
 	if s.forkFinder == nil {
-		s.forkFinder = NewForkFinder(s.logger, cdb.Database, fetcher, s.cfg.MaxStaleDuration)
+		s.forkFinder = NewForkFinder(s.logger, cdb, fetcher, s.cfg.MaxStaleDuration)
 	}
 	s.syncState.Store(notSynced)
 	s.atxSyncState.Store(notSynced)
@@ -370,11 +372,12 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 			return true
 		}
 		// check that we have any peers
-		if len(s.dataFetcher.SelectBest(1)) == 0 {
+		if len(s.dataFetcher.SelectBestShuffled(1)) == 0 {
 			return false
 		}
 
 		if err := s.syncAtx(ctx); err != nil {
+			s.logger.With().Error("failed to sync atxs", log.Context(ctx), log.Err(err))
 			return false
 		}
 
@@ -439,7 +442,10 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 			return err
 		}
 	}
-
+	if s.cfg.DisableAtxReconciliation {
+		s.logger.Debug("atx sync disabled")
+		return nil
+	}
 	// steady state atx syncing
 	curr := s.ticker.CurrentLayer()
 	if float64(

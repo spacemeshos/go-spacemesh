@@ -12,7 +12,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-//go:generate scalegen
+//go:generate scalegen -types PoetChallenge,PoetProof,PoetProofMessage,PoetRound,ProcessingError
+
+type PoetServer struct {
+	Address string    `mapstructure:"address" json:"address"`
+	Pubkey  Base64Enc `mapstructure:"pubkey" json:"pubkey"`
+}
 
 type PoetChallenge struct {
 	*NIPostChallenge
@@ -111,11 +116,11 @@ func (p *PoetProofMessage) MarshalLogObject(encoder log.ObjectEncoder) error {
 }
 
 // Ref returns the reference to the PoET proof message. It's the blake3 sum of the entire proof message.
-func (proofMessage *PoetProofMessage) Ref() (PoetProofRef, error) {
-	poetProofBytes, err := codec.Encode(&proofMessage.PoetProof)
+func (p *PoetProofMessage) Ref() (PoetProofRef, error) {
+	poetProofBytes, err := codec.Encode(&p.PoetProof)
 	if err != nil {
 		return PoetProofRef{}, fmt.Errorf("failed to marshal poet proof for poetId %x round %v: %w",
-			proofMessage.PoetServiceID, proofMessage.RoundID, err)
+			p.PoetServiceID, p.RoundID, err)
 	}
 	h := CalcHash32(poetProofBytes)
 	return (PoetProofRef)(h), nil

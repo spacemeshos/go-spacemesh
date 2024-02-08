@@ -149,8 +149,7 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Opin
 			var opinion *types.Opinion
 			opinion, err = t.encodeVotes(ctx, base, t.evicted.Add(1), current)
 			if err == nil {
-				layerDistanceToBaseBallot.Observe(float64(t.last - base.layer))
-				t.logger.Info("encoded votes",
+				t.logger.Debug("encoded votes",
 					log.ZContext(ctx),
 					zap.Stringer("base ballot", base.id),
 					zap.Stringer("base layer", base.layer),
@@ -308,9 +307,7 @@ func (t *turtle) getFullVote(verified, current types.LayerID, block *blockInfo) 
 	return layer.coinflip, reasonCoinflip, nil
 }
 
-func (t *turtle) onLayer(ctx context.Context, last types.LayerID) {
-	t.logger.Debug("on layer", zap.Uint32("last", last.Uint32()))
-	defer t.evict(ctx)
+func (t *turtle) updateLast(last types.LayerID) {
 	if last.After(t.last) {
 		update := t.last.GetEpoch() != last.GetEpoch()
 		t.last = last
@@ -322,19 +319,32 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) {
 				Div(fixed.New64(int64(types.GetLayersPerEpoch())))
 		}
 	}
+}
+
+func (t *turtle) tallyVotes(ctx context.Context, last types.LayerID) {
+	defer t.evict(ctx)
+
+	t.logger.Debug("on layer", zap.Uint32("last", last.Uint32()))
+	t.updateLast(last)
 	if err := t.drainRetriable(); err != nil {
 		return
 	}
 	for process := t.processed.Add(1); !process.After(t.last); process = process.Add(1) {
 		if process.FirstInEpoch() {
-			t.computeEpochHeight(process.GetEpoch())
+			t.computeEpochHeight(process)
 		}
 		layer := t.layer(process)
 		for _, block := range layer.blocks {
 			t.updateRefHeight(layer, block)
 		}
-		prev := t.layer(process.Sub(1))
-		layer.verifying.goodUncounted = layer.verifying.goodUncounted.Add(prev.verifying.goodUncounted)
+
+		// NOTE(dshulyak) i need this when running verifying tortoise not from the genesis.
+		if previous := process - 1; previous > t.evicted {
+			prev := t.layer(previous)
+			layer.verifying.goodUncounted = layer.verifying.goodUncounted.Add(prev.verifying.goodUncounted)
+			layer.prevOpinion = &prev.opinion
+		}
+
 		t.processed = process
 		processedLayer.Set(float64(t.processed))
 
@@ -352,7 +362,6 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) {
 			}
 		}
 
-		layer.prevOpinion = &prev.opinion
 		opinion := layer.opinion
 		layer.computeOpinion(t.Hdist, t.last)
 		if opinion != layer.opinion {
@@ -363,9 +372,11 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) {
 		}
 
 		t.logger.Debug("initial local opinion",
+			zap.Bool("hate terminated", layer.hareTerminated),
 			zap.Uint32("lid", layer.lid.Uint32()),
 			log.ZShortStringer("previous", opinion),
 			log.ZShortStringer("opinion", layer.opinion),
+			zapBlocks(layer.blocks),
 		)
 		// terminate layer that falls out of the zdist window and wasn't terminated
 		// by any other component
@@ -507,8 +518,8 @@ func (t *turtle) runFull() (verified, changed types.LayerID) {
 	return verified, changed
 }
 
-func (t *turtle) computeEpochHeight(epoch types.EpochID) {
-	einfo := t.epoch(epoch)
+func (t *turtle) computeEpochHeight(lid types.LayerID) {
+	einfo := t.epoch(lid.GetEpoch())
 	heights := make([]uint64, 0, len(einfo.atxs))
 	for _, info := range einfo.atxs {
 		if !info.malfeasant {
@@ -516,12 +527,22 @@ func (t *turtle) computeEpochHeight(epoch types.EpochID) {
 		}
 	}
 	einfo.height = getMedian(heights)
+	t.logger.Debug(
+		"computed epoch height",
+		zap.Uint32("in layer", lid.GetEpoch().Uint32()),
+		zap.Uint32("for epoch", lid.GetEpoch().Uint32()),
+		zap.Uint64("height", einfo.height),
+	)
 }
 
 func (t *turtle) onBlock(header types.BlockHeader, data, valid bool) {
 	if header.LayerID <= t.evicted {
 		return
 	}
+
+	t.logger.Debug("on block", zap.Inline(&header), zap.Bool("data", data), zap.Bool("valid", valid))
+
+	// update existing state without calling t.addBlock
 	if binfo := t.state.getBlock(header); binfo != nil {
 		binfo.data = data
 		if valid {
@@ -529,8 +550,6 @@ func (t *turtle) onBlock(header types.BlockHeader, data, valid bool) {
 		}
 		return
 	}
-	t.logger.Debug("on data block", zap.Inline(&header))
-
 	binfo := newBlockInfo(header)
 	binfo.data = data
 	if valid {
@@ -580,6 +599,9 @@ func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {
 	if exists && previous == bid {
 		return
 	}
+	// we do not compute opinion because opinion hashing recursive.
+	// so if we didn't receive layer in order this opinion will be wrong
+	// and we also need to copy previous layer opinion into layer.prevOpinion
 	if !lid.After(t.processed) && withinDistance(t.Config.Hdist, lid, t.last) {
 		t.logger.Debug("local opinion changed within hdist",
 			zap.Uint32("lid", lid.Uint32()),
@@ -601,6 +623,7 @@ func (t *turtle) onOpinionChange(lid types.LayerID, early bool) {
 		t.logger.Debug("computed local opinion",
 			zap.Uint32("last", t.last.Uint32()),
 			zap.Uint32("lid", layer.lid.Uint32()),
+			zap.Bool("changed from previous", opinion != layer.opinion),
 			log.ZShortStringer("previous", opinion),
 			log.ZShortStringer("new", layer.opinion),
 			log.ZShortStringer("prev layer", layer.prevOpinion),
@@ -801,6 +824,10 @@ func (t *turtle) storeBallot(ballot *ballotInfo, offset types.LayerID) error {
 				if existing != nil {
 					current.supported[i] = existing
 				} else {
+					if !withinDistance(t.Hdist, block.layer, t.last) {
+						block.validity = against
+						block.hare = against
+					}
 					t.addBlock(block)
 				}
 			}
@@ -890,6 +917,8 @@ func getLocalVote(config Config, verified, last types.LayerID, block *blockInfo)
 	if withinDistance(config.Hdist, block.layer, last) {
 		return block.hare, reasonHareOutput
 	}
+	// if layer was verified, but then global threshold became unreachable we will not
+	// update validity, but verified variable will be lowered
 	if block.layer.After(verified) {
 		return abstain, reasonValidity
 	}

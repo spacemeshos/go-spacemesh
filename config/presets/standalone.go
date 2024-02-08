@@ -26,14 +26,7 @@ func standalone() config.Config {
 	conf.DataDirParent = filepath.Join(os.TempDir(), "spacemesh")
 	conf.FileLock = filepath.Join(conf.DataDirParent, "LOCK")
 
-	conf.HARE.N = 800
-	conf.HARE.ExpectedLeaders = 10
-	conf.HARE.LimitConcurrent = 2
-	conf.HARE.LimitIterations = 2
-	conf.HARE.RoundDuration = 1 * time.Second
-	conf.HARE.WakeupDelta = 1 * time.Second
-
-	conf.Genesis = &config.GenesisConfig{
+	conf.Genesis = config.GenesisConfig{
 		ExtraData: "standalone",
 		Accounts:  map[string]uint64{},
 	}
@@ -42,6 +35,9 @@ func standalone() config.Config {
 	conf.LayerDuration = 6 * time.Second
 	conf.Sync.Interval = 3 * time.Second
 	conf.LayersPerEpoch = 10
+
+	conf.HARE3.PreroundDelay = 100 * time.Millisecond
+	conf.HARE3.RoundDuration = 1 * time.Millisecond
 
 	conf.Tortoise.Hdist = 2
 	conf.Tortoise.Zdist = 2
@@ -65,7 +61,7 @@ func standalone() config.Config {
 	conf.SMESHING.ProvingOpts.RandomXMode = activation.PostRandomXModeLight
 
 	conf.Beacon.Kappa = 40
-	conf.Beacon.Theta = big.NewRat(1, 4)
+	conf.Beacon.Theta = *big.NewRat(1, 4)
 	conf.Beacon.FirstVotingRoundDuration = 10 * time.Second
 	conf.Beacon.GracePeriodDuration = 30 * time.Second
 	conf.Beacon.ProposalDuration = 2 * time.Second
@@ -75,7 +71,11 @@ func standalone() config.Config {
 	conf.Beacon.BeaconSyncWeightUnits = 10
 	conf.Beacon.VotesLimit = 100
 
-	conf.PoETServers = []string{"http://127.0.0.1:10010"}
+	conf.PoetServers = []types.PoetServer{
+		{
+			Address: "http://127.0.0.1:10010",
+		},
+	}
 	conf.POET.GracePeriod = 12 * time.Second
 	conf.POET.CycleGap = 30 * time.Second
 	conf.POET.PhaseShift = 30 * time.Second
@@ -87,7 +87,6 @@ func standalone() config.Config {
 
 	conf.API.PublicListener = "0.0.0.0:10092"
 	conf.API.PrivateListener = "127.0.0.1:10093"
-
-	conf.POSTService.NodeAddress = "http://127.0.0.1:10093"
+	conf.API.PostListener = "127.0.0.1:10094"
 	return conf
 }

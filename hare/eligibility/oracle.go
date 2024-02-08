@@ -11,10 +11,9 @@ import (
 	"github.com/spacemeshos/fixed"
 	"golang.org/x/exp/maps"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -25,21 +24,8 @@ import (
 )
 
 const (
-	// HarePreRound ...
-	HarePreRound uint32 = math.MaxUint32
 	// CertifyRound is not part of the hare protocol, but it shares the same oracle for eligibility.
 	CertifyRound uint32 = math.MaxUint32 >> 1
-)
-
-const (
-	// HareStatusRound ...
-	HareStatusRound uint32 = iota
-	// HareProposalRound ...
-	HareProposalRound
-	// HareCommitRound ...
-	HareCommitRound
-	// HareNotifyRound ...
-	HareNotifyRound
 )
 
 const (
@@ -54,9 +40,43 @@ var (
 	ErrNotActive         = errors.New("oracle: miner is not active in epoch")
 )
 
+type identityWeight struct {
+	atx    types.ATXID
+	weight uint64
+}
+
 type cachedActiveSet struct {
-	set   map[types.NodeID]uint64
+	set   map[types.NodeID]identityWeight
 	total uint64
+}
+
+func (c *cachedActiveSet) atxs() []types.ATXID {
+	atxs := make([]types.ATXID, 0, len(c.set))
+	for _, id := range c.set {
+		atxs = append(atxs, id.atx)
+	}
+	return atxs
+}
+
+// Config is the configuration of the oracle package.
+type Config struct {
+	// ConfidenceParam specifies how many layers into the epoch hare uses active set generated in the previous epoch.
+	// For example, if epoch size is 100 and confidence is 10 hare will use previous active set for layers 0-9
+	// and then generate a new activeset.
+	//
+	// This was done like that so that we have higher `confidence` that hare will succeed atleast
+	// once during this interval. If it doesn't we have to provide centralized fallback.
+	ConfidenceParam uint32 `mapstructure:"eligibility-confidence-param"`
+}
+
+func (c *Config) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddUint32("confidence param", c.ConfidenceParam)
+	return nil
+}
+
+// DefaultConfig returns the default configuration for the oracle package.
+func DefaultConfig() Config {
+	return Config{ConfidenceParam: 1}
 }
 
 // Oracle is the hare eligibility oracle.
@@ -71,37 +91,57 @@ type Oracle struct {
 	synced bool
 
 	beacons        system.BeaconGetter
-	cdb            *datastore.CachedDB
+	atxsdata       *atxsdata.Data
+	db             sql.Executor
 	vrfVerifier    vrfVerifier
 	layersPerEpoch uint32
-	cfg            config.Config
-	log.Log
+	cfg            Config
+	log            log.Log
+}
+
+type Opt func(*Oracle)
+
+func WithConfig(config Config) Opt {
+	return func(o *Oracle) {
+		o.cfg = config
+	}
+}
+
+func WithLogger(logger log.Log) Opt {
+	return func(o *Oracle) {
+		o.log = logger
+	}
 }
 
 // New returns a new eligibility oracle instance.
 func New(
 	beacons system.BeaconGetter,
-	db *datastore.CachedDB,
+	db sql.Executor,
+	atxsdata *atxsdata.Data,
 	vrfVerifier vrfVerifier,
 	layersPerEpoch uint32,
-	cfg config.Config,
-	logger log.Log,
+	opts ...Opt,
 ) *Oracle {
-	ac, err := lru.New[types.EpochID, *cachedActiveSet](activesCacheSize)
+	activesCache, err := lru.New[types.EpochID, *cachedActiveSet](activesCacheSize)
 	if err != nil {
-		logger.With().Fatal("failed to create lru cache for active set", log.Err(err))
+		panic("failed to create lru cache for active set" + err.Error())
 	}
-
-	return &Oracle{
+	oracle := &Oracle{
 		beacons:        beacons,
-		cdb:            db,
+		db:             db,
+		atxsdata:       atxsdata,
 		vrfVerifier:    vrfVerifier,
 		layersPerEpoch: layersPerEpoch,
-		activesCache:   ac,
+		activesCache:   activesCache,
 		fallback:       map[types.EpochID][]types.ATXID{},
-		cfg:            cfg,
-		Log:            logger,
+		cfg:            DefaultConfig(),
+		log:            log.NewNop(),
 	}
+	for _, opt := range opts {
+		opt(oracle)
+	}
+	oracle.log.With().Info("hare oracle initialized", log.Uint32("epoch size", layersPerEpoch), log.Inline(&oracle.cfg))
+	return oracle
 }
 
 //go:generate scalegen -types VrfMessage
@@ -129,7 +169,7 @@ func (o *Oracle) resetCacheOnSynced(ctx context.Context) {
 	if !synced && o.synced {
 		ac, err := lru.New[types.EpochID, *cachedActiveSet](activesCacheSize)
 		if err != nil {
-			o.Log.With().Fatal("failed to create lru cache for active set", log.Err(err))
+			o.log.With().Fatal("failed to create lru cache for active set", log.Err(err))
 		}
 		o.activesCache = ac
 	}
@@ -160,14 +200,9 @@ func (o *Oracle) minerWeight(ctx context.Context, layer types.LayerID, id types.
 
 	w, ok := actives.set[id]
 	if !ok {
-		o.With().Debug("miner is not active in specified layer",
-			log.Int("active_set_size", len(actives.set)),
-			log.String("actives", fmt.Sprintf("%v", actives)),
-			layer, log.Stringer("id.Key", id),
-		)
 		return 0, fmt.Errorf("%w: %v", ErrNotActive, id)
 	}
-	return w, nil
+	return w.weight, nil
 }
 
 func calcVrfFrac(vrfSig types.VrfSignature) fixed.Fixed {
@@ -182,7 +217,7 @@ func (o *Oracle) prepareEligibilityCheck(
 	id types.NodeID,
 	vrfSig types.VrfSignature,
 ) (int, fixed.Fixed, fixed.Fixed, bool, error) {
-	logger := o.WithContext(ctx).WithFields(
+	logger := o.log.WithContext(ctx).WithFields(
 		layer,
 		layer.GetEpoch(),
 		log.Stringer("smesher", id),
@@ -274,8 +309,8 @@ func (o *Oracle) Validate(
 
 	defer func() {
 		if msg := recover(); msg != nil {
-			o.WithContext(ctx).With().Fatal("panic in validate",
-				log.String("msg", fmt.Sprint(msg)),
+			o.log.WithContext(ctx).With().Fatal("panic in validate",
+				log.Any("msg", msg),
 				log.Int("n", n),
 				log.String("p", p.String()),
 				log.String("vrf_frac", vrfFrac.String()),
@@ -287,15 +322,15 @@ func (o *Oracle) Validate(
 	if !fixed.BinCDF(n, p, x-1).GreaterThan(vrfFrac) && vrfFrac.LessThan(fixed.BinCDF(n, p, x)) {
 		return true, nil
 	}
-	o.WithContext(ctx).With().Warning("eligibility: node did not pass vrf eligibility threshold",
+	o.log.WithContext(ctx).With().Warning("eligibility: node did not pass vrf eligibility threshold",
 		layer,
 		log.Uint32("round", round),
 		log.Int("committee_size", committeeSize),
 		id,
 		log.Uint16("eligibility_count", eligibilityCount),
 		log.Int("n", n),
-		log.String("p", p.String()),
-		log.String("vrf_frac", vrfFrac.String()),
+		log.Float64("p", p.Float()),
+		log.Float64("vrf_frac", vrfFrac.Float()),
 		log.Int("x", x),
 	)
 	return false, nil
@@ -318,27 +353,27 @@ func (o *Oracle) CalcEligibility(
 
 	defer func() {
 		if msg := recover(); msg != nil {
-			o.With().Fatal("panic in calc eligibility",
+			o.log.With().Fatal("panic in calc eligibility",
 				layer,
 				layer.GetEpoch(),
 				log.Uint32("round_id", round),
-				log.String("msg", fmt.Sprint(msg)),
+				log.Any("msg", msg),
 				log.Int("committee_size", committeeSize),
 				log.Int("n", n),
-				log.String("p", fmt.Sprintf("%g", p.Float())),
-				log.String("vrf_frac", fmt.Sprintf("%g", vrfFrac.Float())),
+				log.Float64("p", p.Float()),
+				log.Float64("vrf_frac", vrfFrac.Float()),
 			)
 		}
 	}()
 
-	o.With().Debug("params",
+	o.log.With().Debug("params",
 		layer,
 		layer.GetEpoch(),
 		log.Uint32("round_id", round),
 		log.Int("committee_size", committeeSize),
 		log.Int("n", n),
-		log.String("p", fmt.Sprintf("%g", p.Float())),
-		log.String("vrf_frac", fmt.Sprintf("%g", vrfFrac.Float())),
+		log.Float64("p", p.Float()),
+		log.Float64("vrf_frac", vrfFrac.Float()),
 	)
 
 	for x := 0; x < n; x++ {
@@ -392,7 +427,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (*cache
 		targetLayer.Difference(targetEpoch.FirstLayer()) < o.cfg.ConfidenceParam {
 		targetEpoch -= 1
 	}
-	o.WithContext(ctx).With().Debug("hare oracle getting active set",
+	o.log.WithContext(ctx).With().Debug("hare oracle getting active set",
 		log.Stringer("target_layer", targetLayer),
 		log.Stringer("target_layer_epoch", targetLayer.GetEpoch()),
 		log.Stringer("target_epoch", targetEpoch),
@@ -417,10 +452,10 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (*cache
 	}
 
 	aset := &cachedActiveSet{set: activeWeights}
-	for _, weight := range activeWeights {
-		aset.total += weight
+	for _, aweight := range activeWeights {
+		aset.total += aweight.weight
 	}
-	o.WithContext(ctx).With().Info("got hare active set", log.Int("count", len(activeWeights)))
+	o.log.WithContext(ctx).With().Info("got hare active set", log.Int("count", len(activeWeights)))
 	o.activesCache.Add(targetEpoch, aset)
 	return aset, nil
 }
@@ -430,28 +465,20 @@ func (o *Oracle) ActiveSet(ctx context.Context, targetEpoch types.EpochID) ([]ty
 	if err != nil {
 		return nil, err
 	}
-	activeSet := make([]types.ATXID, 0, len(aset.set))
-	for nodeID := range aset.set {
-		hdr, err := o.cdb.GetEpochAtx(targetEpoch-1, nodeID)
-		if err != nil {
-			return nil, err
-		}
-		activeSet = append(activeSet, hdr.ID)
-	}
-	return activeSet, nil
+	return aset.atxs(), nil
 }
 
 func (o *Oracle) computeActiveSet(ctx context.Context, targetEpoch types.EpochID) ([]types.ATXID, error) {
 	activeSet, ok := o.fallback[targetEpoch]
 	if ok {
-		o.WithContext(ctx).With().Info("using fallback active set",
+		o.log.WithContext(ctx).With().Info("using fallback active set",
 			targetEpoch,
 			log.Int("size", len(activeSet)),
 		)
 		return activeSet, nil
 	}
 
-	activeSet, err := miner.ActiveSetFromEpochFirstBlock(o.cdb, targetEpoch)
+	activeSet, err := miner.ActiveSetFromEpochFirstBlock(o.db, targetEpoch)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return nil, err
 	}
@@ -464,16 +491,16 @@ func (o *Oracle) computeActiveSet(ctx context.Context, targetEpoch types.EpochID
 func (o *Oracle) computeActiveWeights(
 	targetEpoch types.EpochID,
 	activeSet []types.ATXID,
-) (map[types.NodeID]uint64, error) {
-	weightedActiveSet := make(map[types.NodeID]uint64)
+) (map[types.NodeID]identityWeight, error) {
+	identities := make(map[types.NodeID]identityWeight, len(activeSet))
 	for _, id := range activeSet {
-		atx, err := o.cdb.GetAtxHeader(id)
-		if err != nil {
-			return nil, fmt.Errorf("hare actives get ATX %s, epoch %d: %w", id, targetEpoch, err)
+		atx := o.atxsdata.Get(targetEpoch, id)
+		if atx == nil {
+			return nil, fmt.Errorf("oracle: missing atx in atxsdata %s/%s", targetEpoch, id.ShortString())
 		}
-		weightedActiveSet[atx.NodeID] = atx.GetWeight()
+		identities[atx.Node] = identityWeight{atx: id, weight: atx.Weight}
 	}
-	return weightedActiveSet, nil
+	return identities, nil
 }
 
 func (o *Oracle) activeSetFromRefBallots(epoch types.EpochID) ([]types.ATXID, error) {
@@ -481,23 +508,23 @@ func (o *Oracle) activeSetFromRefBallots(epoch types.EpochID) ([]types.ATXID, er
 	if err != nil {
 		return nil, fmt.Errorf("get beacon: %w", err)
 	}
-	ballotsrst, err := ballots.AllFirstInEpoch(o.cdb, epoch)
+	ballotsrst, err := ballots.AllFirstInEpoch(o.db, epoch)
 	if err != nil {
 		return nil, fmt.Errorf("first in epoch %d: %w", epoch, err)
 	}
-	activeMap := make(map[types.ATXID]struct{})
+	activeMap := make(map[types.ATXID]struct{}, len(ballotsrst))
 	for _, ballot := range ballotsrst {
 		if ballot.EpochData == nil {
-			o.Log.With().Error("invalid data. first ballot doesn't have epoch data", log.Inline(ballot))
+			o.log.With().Error("invalid data. first ballot doesn't have epoch data", log.Inline(ballot))
 			continue
 		}
 		if ballot.EpochData.Beacon != beacon {
-			o.Log.With().Debug("beacon mismatch", log.Stringer("local", beacon), log.Object("ballot", ballot))
+			o.log.With().Debug("beacon mismatch", log.Stringer("local", beacon), log.Object("ballot", ballot))
 			continue
 		}
-		actives, err := activesets.Get(o.cdb, ballot.EpochData.ActiveSetHash)
+		actives, err := activesets.Get(o.db, ballot.EpochData.ActiveSetHash)
 		if err != nil {
-			o.Log.With().Error("failed to get active set",
+			o.log.With().Error("failed to get active set",
 				log.String("actives hash", ballot.EpochData.ActiveSetHash.ShortString()),
 				log.String("ballot ", ballot.ID().String()),
 				log.Err(err),
@@ -508,7 +535,7 @@ func (o *Oracle) activeSetFromRefBallots(epoch types.EpochID) ([]types.ATXID, er
 			activeMap[id] = struct{}{}
 		}
 	}
-	o.Log.With().Warning("using tortoise active set",
+	o.log.With().Warning("using tortoise active set",
 		log.Int("actives size", len(activeMap)),
 		log.Uint32("epoch", epoch.Uint32()),
 		log.Stringer("beacon", beacon),
@@ -523,9 +550,9 @@ func (o *Oracle) IsIdentityActiveOnConsensusView(
 	edID types.NodeID,
 	layer types.LayerID,
 ) (bool, error) {
-	o.WithContext(ctx).With().Debug("hare oracle checking for active identity")
+	o.log.WithContext(ctx).With().Debug("hare oracle checking for active identity")
 	defer func() {
-		o.WithContext(ctx).With().Debug("hare oracle active identity check complete")
+		o.log.WithContext(ctx).With().Debug("hare oracle active identity check complete")
 	}()
 	actives, err := o.actives(ctx, layer)
 	if err != nil {
@@ -536,14 +563,14 @@ func (o *Oracle) IsIdentityActiveOnConsensusView(
 }
 
 func (o *Oracle) UpdateActiveSet(epoch types.EpochID, activeSet []types.ATXID) {
-	o.Log.With().Info("received activeset update",
+	o.log.With().Info("received activeset update",
 		epoch,
 		log.Int("size", len(activeSet)),
 	)
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	if _, ok := o.fallback[epoch]; ok {
-		o.Log.With().Debug("fallback active set already exists", epoch)
+		o.log.With().Debug("fallback active set already exists", epoch)
 		return
 	}
 	o.fallback[epoch] = activeSet

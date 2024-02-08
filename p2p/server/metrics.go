@@ -36,6 +36,11 @@ var (
 		"requests counter",
 		[]string{protoLabel, "state"},
 	)
+	clientRequests = metrics.NewCounter(
+		"client_requests",
+		namespace,
+		"client request counter",
+		[]string{protoLabel, "state"})
 	clientLatency = metrics.NewHistogramWithBuckets(
 		"client_latency_seconds",
 		namespace,
@@ -58,8 +63,12 @@ func newTracker(protocol string) *tracker {
 		queue:                queue.WithLabelValues(protocol),
 		targetRps:            targetRps.WithLabelValues(protocol),
 		completed:            requests.WithLabelValues(protocol, "completed"),
+		failed:               requests.WithLabelValues(protocol, "failed"),
 		accepted:             requests.WithLabelValues(protocol, "accepted"),
 		dropped:              requests.WithLabelValues(protocol, "dropped"),
+		clientSucceeded:      clientRequests.WithLabelValues(protocol, "succeeded"),
+		clientFailed:         clientRequests.WithLabelValues(protocol, "failed"),
+		clientServerError:    clientRequests.WithLabelValues(protocol, "server_error"),
 		serverLatency:        serverLatency.WithLabelValues(protocol),
 		clientLatency:        clientLatency.WithLabelValues(protocol, "success"),
 		clientLatencyFailure: clientLatency.WithLabelValues(protocol, "failure"),
@@ -71,8 +80,12 @@ type tracker struct {
 	queue                               prometheus.Gauge
 	targetRps                           prometheus.Gauge
 	completed                           prometheus.Counter
+	failed                              prometheus.Counter
 	accepted                            prometheus.Counter
 	dropped                             prometheus.Counter
+	clientSucceeded                     prometheus.Counter
+	clientFailed                        prometheus.Counter
+	clientServerError                   prometheus.Counter
 	serverLatency                       prometheus.Observer
 	clientLatency, clientLatencyFailure prometheus.Observer
 }

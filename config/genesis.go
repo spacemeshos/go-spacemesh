@@ -105,9 +105,9 @@ const Account2Private = "0x0bb3f2936d42f463e597f5fb2c48bbd8475ce74ba91f1eaae97df
 	"9feaf3d38b6ef430933ebedeb073af7bec018e8d2e379fa47df6a9fa07a6a8344"
 
 // DefaultGenesisConfig is the default configuration for the node.
-func DefaultGenesisConfig() *GenesisConfig {
+func DefaultGenesisConfig() GenesisConfig {
 	// NOTE(dshulyak) keys in default config are used in some tests
-	return &GenesisConfig{
+	return GenesisConfig{
 		ExtraData:   "mainnet",
 		GenesisTime: time.Now().Format(time.RFC3339),
 		Accounts:    generateGenesisAccounts(),
@@ -115,9 +115,9 @@ func DefaultGenesisConfig() *GenesisConfig {
 }
 
 // DefaultTestGenesisConfig is the default test configuration for the node.
-func DefaultTestGenesisConfig() *GenesisConfig {
+func DefaultTestGenesisConfig() GenesisConfig {
 	// NOTE(dshulyak) keys in default config are used in some tests
-	return &GenesisConfig{
+	return GenesisConfig{
 		ExtraData:   "testnet",
 		GenesisTime: time.Now().Format(time.RFC3339),
 		Accounts:    generateGenesisAccounts(),

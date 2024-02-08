@@ -101,7 +101,7 @@ func TestHTTPPoet(t *testing.T) {
 	})
 
 	client, err := activation.NewHTTPPoetClient(
-		c.RestURL().String(),
+		types.PoetServer{Address: c.RestURL().String()},
 		activation.DefaultPoetConfig(),
 		activation.WithLogger(zaptest.NewLogger(t)),
 	)
@@ -162,7 +162,7 @@ func TestSubmitTooLate(t *testing.T) {
 	})
 
 	client, err := activation.NewHTTPPoetClient(
-		c.RestURL().String(),
+		types.PoetServer{Address: c.RestURL().String()},
 		activation.DefaultPoetConfig(),
 		activation.WithLogger(zaptest.NewLogger(t)),
 	)

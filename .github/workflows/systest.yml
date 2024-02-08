@@ -2,6 +2,13 @@ name: System tests
 on:
   # Allow manually triggering this workflow
   workflow_dispatch:
+    inputs:
+      test_name:
+        description: 'Test to run'
+        default: '.'
+      log_level:
+        description: 'Log level'
+        default: 'info'
   push:
     branches:
       - staging
@@ -38,7 +45,7 @@ jobs:
       nondocchanges: ${{ steps.filter.outputs.nondoc }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v2
+      - uses: dorny/paths-filter@v3
         id: filter
         with:
           filters: |
@@ -61,14 +68,13 @@ jobs:
           version: "v1.23.15"
 
       - name: Setup gcloud authentication
-        id: "auth"
-        uses: "google-github-actions/auth@v1"
+        uses: google-github-actions/auth@v2
         with:
           # GCP_CREDENTIALS is minified JSON of service account
           credentials_json: "${{ secrets.CI_GCP_CREDENTIALS }}"
 
       - name: Configure gcloud
-        uses: "google-github-actions/setup-gcloud@v1"
+        uses: google-github-actions/setup-gcloud@v2
         with:
           version: "450.0.0"
 
@@ -102,7 +108,7 @@ jobs:
         run: make -C systest push
 
       - name: set up go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           check-latest: true
           go-version-file: "go.mod"
@@ -114,11 +120,11 @@ jobs:
           label: sanity
           storage: premium-rwo=10Gi
           node_selector: cloud.google.com/gke-nodepool=gha
-          size: 50
+          size: 30
           bootstrap: 4m
-          level: info
+          level: ${{ inputs.log_level }}
           clusters: 4
-        run: make -C systest run test_name=.
+        run: make -C systest run test_name=${{ inputs.test_name }}
 
       - name: Delete pod
         if: always()

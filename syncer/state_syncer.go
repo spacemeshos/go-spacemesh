@@ -85,7 +85,7 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 						Warning("failed to adopt peer opinions", lid, log.Err(err))
 				}
 			}
-			if s.IsSynced(ctx) {
+			if s.IsSynced(ctx) && !s.cfg.DisableMeshAgreement {
 				if err = s.checkMeshAgreement(ctx, lid, opinions); err != nil &&
 					errors.Is(err, errMeshHashDiverged) {
 					s.logger.WithContext(ctx).
@@ -148,7 +148,7 @@ func (s *Syncer) layerOpinions(
 	ctx context.Context,
 	lid types.LayerID,
 ) ([]*peerOpinion, []*types.Certificate, error) {
-	peers := s.dataFetcher.SelectBest(fetch.RedundantPeers)
+	peers := s.dataFetcher.SelectBestShuffled(fetch.RedundantPeers)
 	if len(peers) == 0 {
 		return nil, nil, errNoPeers
 	}
@@ -236,11 +236,15 @@ func (s *Syncer) adoptCert(ctx context.Context, lid types.LayerID, cert *types.C
 	if err := s.certHandler.HandleSyncedCertificate(ctx, lid, cert); err != nil {
 		return fmt.Errorf("opnions adopt cert: %w", err)
 	}
+	// it is safer to ask for block after certificate was downloaded, as we know that we ask for block signed by committee
+	// so we should not reorder this
 	if cert.BlockID != types.EmptyBlockID {
 		if err := s.dataFetcher.GetBlocks(ctx, []types.BlockID{cert.BlockID}); err != nil {
 			return fmt.Errorf("fetch block in cert %v: %w", cert.BlockID, err)
 		}
 	}
+	// in GetBlocks call block will be also passed to tortoise.OnBlock
+	s.tortoise.OnHareOutput(lid, cert.BlockID)
 	numCertAdopted.Inc()
 	return nil
 }
@@ -303,7 +307,7 @@ func (s *Syncer) ensureMeshAgreement(
 			)
 			continue
 		}
-		missing := s.asCache.GetMissingActiveSet(diffLayer.GetEpoch(), ed.AtxIDs)
+		missing := s.tortoise.GetMissingActiveSet(diffLayer.GetEpoch(), ed.AtxIDs)
 		if len(missing) > 0 {
 			s.logger.WithContext(ctx).With().Debug("fetching missing atxs from peer",
 				log.Stringer("peer", peer),

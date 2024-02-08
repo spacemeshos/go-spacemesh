@@ -10,6 +10,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
+func TestAbsoluteMaxValue(t *testing.T) {
+	ir := IterRound{Iter: 40, Round: notify}
+	require.EqualValues(t, 41*7, ir.Absolute())
+}
+
 func TestMessageMarshall(t *testing.T) {
 	enc := zapcore.NewMapObjectEncoder()
 	msg := &Message{Body: Body{Value: Value{Proposals: []types.ProposalID{{}}}}}

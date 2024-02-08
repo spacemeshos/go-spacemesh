@@ -6,13 +6,11 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/fetch/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -22,27 +20,19 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
-	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
 type testHandler struct {
 	*handler
 	cdb *datastore.CachedDB
-	mm  *mocks.MockmeshProvider
-	mb  *smocks.MockBeaconGetter
 }
 
 func createTestHandler(t testing.TB) *testHandler {
 	lg := logtest.New(t)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
-	ctrl := gomock.NewController(t)
-	mm := mocks.NewMockmeshProvider(ctrl)
-	mb := smocks.NewMockBeaconGetter(ctrl)
 	return &testHandler{
-		handler: newHandler(cdb, datastore.NewBlobStore(cdb.Database), mm, mb, lg),
+		handler: newHandler(cdb, datastore.NewBlobStore(cdb), lg),
 		cdb:     cdb,
-		mm:      mm,
-		mb:      mb,
 	}
 }
 

@@ -13,8 +13,8 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -32,21 +32,25 @@ func TestMain(m *testing.M) {
 }
 
 type testExecutor struct {
-	exec *mesh.Executor
-	db   *sql.Database
-	mcs  *mocks.MockconservativeState
-	mvm  *mocks.MockvmState
+	tb       testing.TB
+	exec     *mesh.Executor
+	db       *sql.Database
+	atxsdata *atxsdata.Data
+	mcs      *mocks.MockconservativeState
+	mvm      *mocks.MockvmState
 }
 
 func newTestExecutor(t *testing.T) *testExecutor {
 	ctrl := gomock.NewController(t)
 	te := &testExecutor{
-		db:  sql.InMemory(),
-		mvm: mocks.NewMockvmState(ctrl),
-		mcs: mocks.NewMockconservativeState(ctrl),
+		tb:       t,
+		db:       sql.InMemory(),
+		atxsdata: atxsdata.New(),
+		mvm:      mocks.NewMockvmState(ctrl),
+		mcs:      mocks.NewMockconservativeState(ctrl),
 	}
 	lg := logtest.New(t)
-	te.exec = mesh.NewExecutor(datastore.NewCachedDB(te.db, lg), te.mvm, te.mcs, lg)
+	te.exec = mesh.NewExecutor(te.db, te.atxsdata, te.mvm, te.mcs, lg)
 	return te
 }
 
@@ -63,12 +67,12 @@ func makeResults(lid types.LayerID, txs ...types.Transaction) []types.Transactio
 	return results
 }
 
-func createATX(t testing.TB, db sql.Executor, cb types.Address) types.ATXID {
+func (t *testExecutor) createATX(epoch types.EpochID, cb types.Address) (types.ATXID, types.NodeID) {
 	sig, err := signing.NewEdSigner()
-	require.NoError(t, err)
+	require.NoError(t.tb, err)
 	nonce := types.VRFPostIndex(1)
 	atx := types.NewActivationTx(
-		types.NIPostChallenge{PublishEpoch: types.EpochID(11)},
+		types.NIPostChallenge{PublishEpoch: epoch},
 		cb,
 		nil,
 		11,
@@ -77,16 +81,18 @@ func createATX(t testing.TB, db sql.Executor, cb types.Address) types.ATXID {
 
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now())
-	require.NoError(t, activation.SignAndFinalizeAtx(sig, atx))
+	require.NoError(t.tb, activation.SignAndFinalizeAtx(sig, atx))
 	vAtx, err := atx.Verify(0, 1)
-	require.NoError(t, err)
-	require.NoError(t, atxs.Add(db, vAtx))
-	return vAtx.ID()
+	require.NoError(t.tb, err)
+	require.NoError(t.tb, atxs.Add(t.db, vAtx))
+	t.atxsdata.AddFromHeader(vAtx.ToHeader(), 0, false)
+	return vAtx.ID(), sig.NodeID()
 }
 
 func TestExecutor_Execute(t *testing.T) {
 	te := newTestExecutor(t)
-	lid := types.GetEffectiveGenesis()
+	genesis := types.GetEffectiveGenesis()
+	lid := genesis
 	require.NoError(t, layers.SetApplied(te.db, lid, types.EmptyBlockID))
 
 	t.Run("layer already applied", func(t *testing.T) {
@@ -128,24 +134,28 @@ func TestExecutor_Execute(t *testing.T) {
 
 	lid = lid.Add(1)
 	cbs := []types.Address{{1, 2, 3}, {2, 3, 4}}
+	atxid1, nodeId1 := te.createATX(genesis.GetEpoch(), cbs[0])
+	atxid2, nodeId2 := te.createATX(genesis.GetEpoch(), cbs[1])
 	rewards := []types.AnyReward{
 		{
-			AtxID:  createATX(t, te.db, cbs[0]),
+			AtxID:  atxid1,
 			Weight: types.RatNum{Num: 1, Denom: 3},
 		},
 		{
-			AtxID:  createATX(t, te.db, cbs[1]),
+			AtxID:  atxid2,
 			Weight: types.RatNum{Num: 2, Denom: 3},
 		},
 	}
 	expRewards := []types.CoinbaseReward{
 		{
-			Coinbase: cbs[0],
-			Weight:   rewards[0].Weight,
+			SmesherID: nodeId1,
+			Coinbase:  cbs[0],
+			Weight:    rewards[0].Weight,
 		},
 		{
-			Coinbase: cbs[1],
-			Weight:   rewards[1].Weight,
+			SmesherID: nodeId2,
+			Coinbase:  cbs[1],
+			Weight:    rewards[1].Weight,
 		},
 	}
 	sort.Slice(expRewards, func(i, j int) bool {
@@ -157,7 +167,7 @@ func TestExecutor_Execute(t *testing.T) {
 		TxIDs:      mesh.CreateAndSaveTxs(t, te.db, 10),
 		Rewards:    rewards,
 	})
-	errInconceivable := errors.New("inconceivable")
+	errTest := errors.New("test")
 	t.Run("vm failure", func(t *testing.T) {
 		te.mvm.EXPECT().Apply(vm.ApplyContext{Layer: block.LayerIndex}, gomock.Any(), expRewards).
 			DoAndReturn(func(
@@ -170,9 +180,9 @@ func TestExecutor_Execute(t *testing.T) {
 					tids = append(tids, tx.ID)
 				}
 				require.Equal(t, block.TxIDs, tids)
-				return nil, nil, errInconceivable
+				return nil, nil, errTest
 			})
-		require.ErrorIs(t, te.exec.Execute(context.Background(), block.LayerIndex, block), errInconceivable)
+		require.ErrorIs(t, te.exec.Execute(context.Background(), block.LayerIndex, block), errTest)
 	})
 
 	var executed []types.TransactionWithResult
@@ -207,9 +217,9 @@ func TestExecutor_Execute(t *testing.T) {
 				for _, tr := range executed {
 					require.Equal(t, tr.Block, gotBid)
 				}
-				return errInconceivable
+				return errTest
 			})
-		require.ErrorIs(t, te.exec.Execute(context.Background(), block.LayerIndex, block), errInconceivable)
+		require.ErrorIs(t, te.exec.Execute(context.Background(), block.LayerIndex, block), errTest)
 	})
 
 	t.Run("applied block", func(t *testing.T) {
@@ -254,24 +264,28 @@ func TestExecutor_ExecuteOptimistic(t *testing.T) {
 	lid := types.GetEffectiveGenesis()
 	tickHeight := uint64(111)
 	cbs := []types.Address{{1, 2, 3}, {2, 3, 4}}
+	atxId1, nodeId1 := te.createATX(lid.GetEpoch(), cbs[0])
+	atxId2, nodeId2 := te.createATX(lid.GetEpoch(), cbs[1])
 	rewards := []types.AnyReward{
 		{
-			AtxID:  createATX(t, te.db, cbs[0]),
+			AtxID:  atxId1,
 			Weight: types.RatNum{Num: 1, Denom: 3},
 		},
 		{
-			AtxID:  createATX(t, te.db, cbs[1]),
+			AtxID:  atxId2,
 			Weight: types.RatNum{Num: 2, Denom: 3},
 		},
 	}
 	expRewards := []types.CoinbaseReward{
 		{
-			Coinbase: cbs[0],
-			Weight:   rewards[0].Weight,
+			SmesherID: nodeId1,
+			Coinbase:  cbs[0],
+			Weight:    rewards[0].Weight,
 		},
 		{
-			Coinbase: cbs[1],
-			Weight:   rewards[1].Weight,
+			SmesherID: nodeId2,
+			Coinbase:  cbs[1],
+			Weight:    rewards[1].Weight,
 		},
 	}
 	sort.Slice(expRewards, func(i, j int) bool {
@@ -300,7 +314,7 @@ func TestExecutor_ExecuteOptimistic(t *testing.T) {
 		require.Nil(t, block)
 	})
 
-	errInconceivable := errors.New("inconceivable")
+	errTest := errors.New("test")
 	t.Run("vm failure", func(t *testing.T) {
 		te.mvm.EXPECT().Apply(vm.ApplyContext{Layer: lid}, gomock.Any(), expRewards).DoAndReturn(
 			func(
@@ -313,10 +327,10 @@ func TestExecutor_ExecuteOptimistic(t *testing.T) {
 					gotTids = append(gotTids, tx.ID)
 				}
 				require.Equal(t, tids, gotTids)
-				return nil, nil, errInconceivable
+				return nil, nil, errTest
 			})
 		block, err := te.exec.ExecuteOptimistic(context.Background(), lid, tickHeight, rewards, tids)
-		require.ErrorIs(t, err, errInconceivable)
+		require.ErrorIs(t, err, errTest)
 		require.Nil(t, block)
 	})
 
@@ -361,10 +375,10 @@ func TestExecutor_ExecuteOptimistic(t *testing.T) {
 				for _, tr := range gotExecuted {
 					require.Equal(t, tr.Block, gotBid)
 				}
-				return errInconceivable
+				return errTest
 			})
 		block, err := te.exec.ExecuteOptimistic(context.Background(), lid, tickHeight, rewards, tids)
-		require.ErrorIs(t, err, errInconceivable)
+		require.ErrorIs(t, err, errTest)
 		require.Nil(t, block)
 	})
 

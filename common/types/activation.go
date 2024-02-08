@@ -22,6 +22,14 @@ func BytesToATXID(buf []byte) (id ATXID) {
 	return id
 }
 
+type Validity int
+
+const (
+	Unknown Validity = iota
+	Valid
+	Invalid
+)
+
 // ATXID is a 32-bit hash used to identify an activation transaction.
 type ATXID Hash32
 
@@ -161,6 +169,7 @@ type InnerActivationTx struct {
 	id                ATXID     // non-exported cache of the ATXID
 	effectiveNumUnits uint32    // the number of effective units in the ATX (minimum of this ATX and the previous ATX)
 	received          time.Time // time received by node, gossiped or synced
+	validity          Validity  // whether the chain is fully verified and OK
 }
 
 // ATXMetadata is the data of ActivationTx that is signed.
@@ -311,6 +320,14 @@ func (atx *ActivationTx) SetReceived(received time.Time) {
 
 func (atx *ActivationTx) Received() time.Time {
 	return atx.received
+}
+
+func (atx *ActivationTx) Validity() Validity {
+	return atx.validity
+}
+
+func (atx *ActivationTx) SetValidity(validity Validity) {
+	atx.validity = validity
 }
 
 // Verify an ATX for a given base TickHeight and TickCount.
@@ -503,5 +520,5 @@ func ATXIDsToHashes(ids []ATXID) []Hash32 {
 
 type EpochActiveSet struct {
 	Epoch EpochID
-	Set   []ATXID `scale:"max=1000000"`
+	Set   []ATXID `scale:"max=1500000"` // to be in line with `EpochData` in fetch/wire_types.go
 }

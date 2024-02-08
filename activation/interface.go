@@ -2,6 +2,7 @@ package activation
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"time"
 
@@ -9,6 +10,8 @@ import (
 	"github.com/spacemeshos/post/verifying"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
 
 //go:generate mockgen -typed -package=activation -destination=./mocks.go -source=./interface.go
@@ -21,26 +24,39 @@ type PostVerifier interface {
 	io.Closer
 	Verify(ctx context.Context, p *shared.Proof, m *shared.ProofMetadata, opts ...verifying.OptionFunc) error
 }
+
+type scaler interface {
+	scale(int)
+}
+
+// validatorOption is a functional option type for the validator.
+type validatorOption func(*validatorOptions)
+
 type nipostValidator interface {
 	InitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, goldenATXID types.ATXID) error
 	NIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, nodeID types.NodeID) error
 	NIPost(
 		ctx context.Context,
 		nodeId types.NodeID,
-		atxId types.ATXID,
+		commitmentAtxId types.ATXID,
 		NIPost *types.NIPost,
 		expectedChallenge types.Hash32,
 		numUnits uint32,
+		opts ...validatorOption,
 	) (uint64, error)
 
 	NumUnits(cfg *PostConfig, numUnits uint32) error
+
+	IsVerifyingFullPost() bool
+
 	Post(
 		ctx context.Context,
 		nodeId types.NodeID,
-		atxId types.ATXID,
+		commitmentAtxId types.ATXID,
 		Post *types.Post,
 		PostMetadata *types.PostMetadata,
 		numUnits uint32,
+		opts ...validatorOption,
 	) error
 	PostMetadata(cfg *PostConfig, metadata *types.PostMetadata) error
 
@@ -52,6 +68,9 @@ type nipostValidator interface {
 		numUnits uint32,
 	) error
 	PositioningAtx(id types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubepoch types.EpochID) error
+
+	// VerifyChain fully verifies all dependencies of the given ATX and the ATX itself.
+	VerifyChain(ctx context.Context, id, goldenATXID types.ATXID, opts ...VerifyChainOption) error
 }
 
 type layerClock interface {
@@ -61,8 +80,9 @@ type layerClock interface {
 }
 
 type nipostBuilder interface {
-	BuildNIPost(ctx context.Context, challenge *types.NIPostChallenge) (*types.NIPost, error)
-	DataDir() string
+	BuildNIPost(ctx context.Context, sig *signing.EdSigner, challenge *types.NIPostChallenge) (*nipost.NIPostState, error)
+	Proof(ctx context.Context, nodeID types.NodeID, challenge []byte) (*types.Post, *types.PostInfo, error)
+	ResetState(types.NodeID) error
 }
 
 type syncer interface {
@@ -77,7 +97,7 @@ type atxProvider interface {
 // This interface is used by the atx builder and currently implemented by the PostSetupManager.
 // Eventually most of the functionality will be moved to the PoSTClient.
 type postSetupProvider interface {
-	PrepareInitializer(opts PostSetupOpts) error
+	PrepareInitializer(ctx context.Context, opts PostSetupOpts) error
 	StartSession(context context.Context) error
 	Status() *PostSetupStatus
 	Reset() error
@@ -88,7 +108,7 @@ type SmeshingProvider interface {
 	Smeshing() bool
 	StartSmeshing(types.Address) error
 	StopSmeshing(bool) error
-	SmesherID() types.NodeID
+	SmesherIDs() []types.NodeID
 	Coinbase() types.Address
 	SetCoinbase(coinbase types.Address)
 }
@@ -110,9 +130,6 @@ type poetClient interface {
 		pow PoetPoW,
 	) (*types.PoetRound, error)
 
-	// PoetServiceID returns the public key of the PoET proving service.
-	PoetServiceID(context.Context) (types.PoetServiceID, error)
-
 	// Proof returns the proof for the given round ID.
 	Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Member, error)
 }
@@ -121,6 +138,11 @@ type poetDbAPI interface {
 	GetProof(types.PoetProofRef) (*types.PoetProof, *types.Hash32, error)
 	ValidateAndStore(ctx context.Context, proofMessage *types.PoetProofMessage) error
 }
+
+var (
+	ErrPostClientClosed       = fmt.Errorf("post client closed")
+	ErrPostClientNotConnected = fmt.Errorf("post service not registered")
+)
 
 type postService interface {
 	Client(nodeId types.NodeID) (PostClient, error)

@@ -10,6 +10,7 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/network"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -18,7 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
-	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 const (
@@ -31,7 +31,7 @@ const (
 
 	cacheSize = 1000
 
-	RedundantPeers = 10
+	RedundantPeers = 20
 )
 
 var (
@@ -98,13 +98,17 @@ func (s ServerConfig) toOpts() []server.Opt {
 
 // Config is the configuration file of the Fetch component.
 type Config struct {
-	BatchTimeout         time.Duration
-	BatchSize, QueueSize int
-	RequestTimeout       time.Duration
-	MaxRetriesForRequest int
-	EnableServesMetrics  bool                    `mapstructure:"servers-metrics"`
+	BatchTimeout         time.Duration           `mapstructure:"batchtimeout"`
+	BatchSize            int                     `mapstructure:"batchsize"`
+	QueueSize            int                     `mapstructure:"queuesize"`
+	MaxRetriesForRequest int                     `mapstructure:"maxretriesforrequest"`
+	RequestTimeout       time.Duration           `mapstructure:"request-timeout"`
+	RequestHardTimeout   time.Duration           `mapstructure:"request-hard-timeout"`
+	EnableServerMetrics  bool                    `mapstructure:"servers-metrics"`
 	ServersConfig        map[string]ServerConfig `mapstructure:"servers"`
 	PeersRateThreshold   float64                 `mapstructure:"peers-rate-threshold"`
+	// The maximum number of concurrent requests to get ATXs.
+	GetAtxsConcurrency int64 `mapstructure:"getatxsconcurrency"`
 }
 
 func (c Config) getServerConfig(protocol string) ServerConfig {
@@ -124,8 +128,9 @@ func DefaultConfig() Config {
 	return Config{
 		BatchTimeout:         50 * time.Millisecond,
 		QueueSize:            20,
-		BatchSize:            20,
-		RequestTimeout:       10 * time.Second,
+		BatchSize:            10,
+		RequestTimeout:       25 * time.Second,
+		RequestHardTimeout:   5 * time.Minute,
 		MaxRetriesForRequest: 100,
 		ServersConfig: map[string]ServerConfig{
 			// serves 1 MB of data
@@ -145,6 +150,7 @@ func DefaultConfig() Config {
 			OpnProtocol: {Queue: 10000, Requests: 1000, Interval: time.Second},
 		},
 		PeersRateThreshold: 0.02,
+		GetAtxsConcurrency: 100,
 	}
 }
 
@@ -203,9 +209,7 @@ type Fetch struct {
 	// unprocessed contains requests that are not processed
 	unprocessed map[types.Hash32]*request
 	// ongoing contains requests that have been processed and are waiting for responses
-	ongoing map[types.Hash32]*request
-	// batched contains batched ongoing requests.
-	batched      map[types.Hash32]*batchInfo
+	ongoing      map[types.Hash32]*request
 	batchTimeout *time.Ticker
 	mu           sync.Mutex
 	onlyOnce     sync.Once
@@ -214,17 +218,17 @@ type Fetch struct {
 	shutdownCtx context.Context
 	cancel      context.CancelFunc
 	eg          errgroup.Group
+
+	getAtxsLimiter limiter
 }
 
 // NewFetch creates a new Fetch struct.
 func NewFetch(
 	cdb *datastore.CachedDB,
-	msh meshProvider,
-	b system.BeaconGetter,
 	host *p2p.Host,
 	opts ...Option,
 ) *Fetch {
-	bs := datastore.NewBlobStore(cdb.Database)
+	bs := datastore.NewBlobStore(cdb)
 
 	f := &Fetch{
 		cfg:         DefaultConfig(),
@@ -234,12 +238,12 @@ func NewFetch(
 		servers:     map[string]requester{},
 		unprocessed: make(map[types.Hash32]*request),
 		ongoing:     make(map[types.Hash32]*request),
-		batched:     make(map[types.Hash32]*batchInfo),
 		hashToPeers: NewHashPeersCache(cacheSize),
 	}
 	for _, opt := range opts {
 		opt(f)
 	}
+	f.getAtxsLimiter = semaphore.NewWeighted(f.cfg.GetAtxsConcurrency)
 	f.peers = peers.New()
 	// NOTE(dshulyak) this is to avoid tests refactoring.
 	// there is one test that covers this part.
@@ -266,7 +270,7 @@ func NewFetch(
 
 	f.batchTimeout = time.NewTicker(f.cfg.BatchTimeout)
 	if len(f.servers) == 0 {
-		h := newHandler(cdb, bs, msh, b, f.logger)
+		h := newHandler(cdb, bs, f.logger)
 		f.registerServer(host, atxProtocol, h.handleEpochInfoReq)
 		f.registerServer(host, lyrDataProtocol, h.handleLayerDataReq)
 		f.registerServer(host, hashProtocol, h.handleHashReq)
@@ -284,9 +288,10 @@ func (f *Fetch) registerServer(
 ) {
 	opts := []server.Opt{
 		server.WithTimeout(f.cfg.RequestTimeout),
+		server.WithHardTimeout(f.cfg.RequestHardTimeout),
 		server.WithLog(f.logger),
 	}
-	if f.cfg.EnableServesMetrics {
+	if f.cfg.EnableServerMetrics {
 		opts = append(opts, server.WithMetrics())
 	}
 	opts = append(opts, f.cfg.getServerConfig(protocol).toOpts()...)
@@ -396,7 +401,7 @@ func (f *Fetch) loop() {
 }
 
 // receive Data from message server and call response handlers accordingly.
-func (f *Fetch) receiveResponse(data []byte) {
+func (f *Fetch) receiveResponse(data []byte, batch *batchInfo) {
 	if f.stopped() {
 		return
 	}
@@ -411,14 +416,13 @@ func (f *Fetch) receiveResponse(data []byte) {
 		log.Stringer("batch_hash", response.ID),
 		log.Int("num_hashes", len(response.Responses)),
 	)
-	f.mu.Lock()
-	batch, ok := f.batched[response.ID]
-	delete(f.batched, response.ID)
-	f.mu.Unlock()
 
-	if !ok {
-		f.logger.With().Warning("unknown batch response received, or already received",
-			log.Stringer("batch_hash", response.ID))
+	if batch.ID != response.ID {
+		f.logger.With().Warning(
+			"unknown batch response received",
+			log.Stringer("expected", batch.ID),
+			log.Stringer("response", response.ID),
+		)
 		return
 	}
 
@@ -541,6 +545,7 @@ func (f *Fetch) send(requests []RequestMessage) {
 
 	peer2batches := f.organizeRequests(requests)
 	for peer, peerBatches := range peer2batches {
+		peer := peer
 		for _, reqs := range peerBatches {
 			batch := &batchInfo{
 				RequestBatch: RequestBatch{
@@ -549,7 +554,20 @@ func (f *Fetch) send(requests []RequestMessage) {
 				peer: peer,
 			}
 			batch.setID()
-			f.sendBatch(peer, batch)
+			go func() {
+				data, err := f.sendBatch(peer, batch)
+				if err != nil {
+					f.logger.With().Warning(
+						"failed to send batch request",
+						log.Stringer("batch", batch.ID),
+						log.Stringer("peer", peer),
+						log.Err(err),
+					)
+					f.handleHashError(batch, err)
+				} else {
+					f.receiveResponse(data, batch)
+				}
+			}()
 		}
 	}
 }
@@ -613,71 +631,47 @@ func (f *Fetch) organizeRequests(requests []RequestMessage) map[p2p.Peer][][]Req
 }
 
 // sendBatch dispatches batched request messages to provided peer.
-func (f *Fetch) sendBatch(peer p2p.Peer, batch *batchInfo) {
+func (f *Fetch) sendBatch(peer p2p.Peer, batch *batchInfo) ([]byte, error) {
 	if f.stopped() {
-		return
+		return nil, f.shutdownCtx.Err()
 	}
-	f.mu.Lock()
-	f.batched[batch.ID] = batch
-	f.mu.Unlock()
 	f.logger.With().Debug("sending batched request to peer",
 		log.Stringer("batch_hash", batch.ID),
 		log.Int("num_requests", len(batch.Requests)),
 		log.Stringer("peer", peer),
 	)
-	// Request is asynchronous,
+	// Request is synchronous,
 	// it will return errors only if size of the bytes buffer is large
 	// or target peer is not connected
 	start := time.Now()
-	errf := func(err error) {
-		f.logger.With().Warning("failed to send batch",
-			log.Stringer("batch_hash", peer), log.Err(err),
-		)
-		f.peers.OnFailure(peer)
-		f.handleHashError(batch.ID, err)
-	}
-	err := f.servers[hashProtocol].Request(
-		f.shutdownCtx,
-		peer,
-		codec.MustEncode(&batch.RequestBatch),
-		func(buf []byte) {
-			f.peers.OnLatency(peer, time.Since(start))
-			f.receiveResponse(buf)
-		},
-		errf,
-	)
+	req := codec.MustEncode(&batch.RequestBatch)
+	data, err := f.servers[hashProtocol].Request(f.shutdownCtx, peer, req)
 	if err != nil {
-		errf(err)
+		f.peers.OnFailure(peer)
+		return nil, err
 	}
+	f.peers.OnLatency(peer, time.Since(start))
+	return data, nil
 }
 
 // handleHashError is called when an error occurred processing batches of the following hashes.
-func (f *Fetch) handleHashError(batchHash types.Hash32, err error) {
+func (f *Fetch) handleHashError(batch *batchInfo, err error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	f.logger.With().Debug("failed batch fetch", log.Stringer("batch_hash", batchHash), log.Err(err))
-	batch, ok := f.batched[batchHash]
-	if !ok {
-		f.logger.With().Error("batch not found", log.Stringer("batch_hash", batchHash))
-		return
-	}
 	for _, br := range batch.Requests {
 		req, ok := f.ongoing[br.Hash]
 		if !ok {
-			f.logger.With().
-				Warning("hash missing from ongoing requests", log.Stringer("hash", br.Hash))
+			f.logger.With().Warning("hash missing from ongoing requests", log.Stringer("hash", br.Hash))
 			continue
 		}
-		f.logger.WithContext(req.ctx).With().Warning("hash request failed",
-			log.Stringer("hash", req.hash),
-			log.Err(err))
+		f.logger.WithContext(req.ctx).With().
+			Warning("hash request failed", log.Stringer("hash", req.hash), log.Err(err))
 		req.promise.err = err
 		peerErrors.WithLabelValues(string(req.hint)).Inc()
 		close(req.promise.completed)
 		delete(f.ongoing, req.hash)
 	}
-	delete(f.batched, batchHash)
 }
 
 // getHash is the regular buffered call to get a specific hash, using provided hash, h as hint the receiving end will
@@ -742,6 +736,12 @@ func (f *Fetch) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32) {
 	f.hashToPeers.RegisterPeerHashes(peer, hashes)
 }
 
-func (f *Fetch) SelectBest(n int) []p2p.Peer {
-	return f.peers.SelectBest(n)
+func (f *Fetch) SelectBestShuffled(n int) []p2p.Peer {
+	// shuffle to split the load between peers with good latency.
+	// and it avoids sticky behavior, when temporarily faulty peer had good latency in the past.
+	peers := f.peers.SelectBest(n)
+	rand.Shuffle(len(peers), func(i, j int) {
+		peers[i], peers[j] = peers[j], peers[i]
+	})
+	return peers
 }

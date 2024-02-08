@@ -41,7 +41,7 @@ func TestEquivocation(t *testing.T) {
 		zap.Int("honest", honest),
 		zap.Int("equivocators", len(keys)-honest),
 	)
-	cl := cluster.New(cctx, cluster.WithKeys(10))
+	cl := cluster.New(cctx, cluster.WithKeys(cctx.ClusterSize))
 	require.NoError(t, cl.AddBootnodes(cctx, bootnodes))
 	require.NoError(t, cl.AddBootstrappers(cctx))
 	require.NoError(t, cl.AddPoets(cctx))
@@ -59,7 +59,7 @@ func TestEquivocation(t *testing.T) {
 	for i := 0; i < cl.Total(); i++ {
 		client := cl.Client(i)
 		results[client.Name] = map[int]string{}
-		watchLayers(cctx, &eg, client, func(resp *pb.LayerStreamResponse) (bool, error) {
+		watchLayers(cctx, &eg, client, cctx.Log.Desugar(), func(resp *pb.LayerStreamResponse) (bool, error) {
 			if resp.Layer.Status != pb.Layer_LAYER_STATUS_APPLIED {
 				return true, nil
 			}

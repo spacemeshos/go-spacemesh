@@ -38,7 +38,7 @@ jobs:
       nondocchanges: ${{ steps.filter.outputs.nondoc }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v2
+      - uses: dorny/paths-filter@v3
         id: filter
         with:
           # this pattern matches using picomatch syntax (used by this third party Action), which is slightly
@@ -63,7 +63,7 @@ jobs:
       - name: checkout
         uses: actions/checkout@v4
       - name: set up go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           check-latest: true
           go-version: ${{ env.go-version }}
@@ -86,7 +86,7 @@ jobs:
       - name: checkout
         uses: actions/checkout@v4
       - name: set up go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           check-latest: true
           go-version: ${{ env.go-version }}
@@ -107,16 +107,13 @@ jobs:
         os:
           - ubuntu-latest
           - [self-hosted, linux, arm64]
-          - macos-latest
-          - [self-hosted, macos, arm64]
+          # - macos-12-large
+          - [go-spacemesh, m2-pro]
           - windows-latest
     steps:
       - name: Add OpenCL support - Ubuntu
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
-      - name: Override SDKROOT for macOS
-        if: ${{ contains(matrix.os, 'macos') && runner.arch == 'arm64' }}
-        run: echo "SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk" >> $GITHUB_ENV
       - name: disable Windows Defender - Windows
         if: ${{ matrix.os == 'windows-latest' }}
         run: |
@@ -124,7 +121,7 @@ jobs:
       - name: checkout
         uses: actions/checkout@v4
       - name: set up go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           check-latest: true
           go-version: ${{ env.go-version }}
@@ -145,8 +142,8 @@ jobs:
         os:
           - ubuntu-latest
           - [self-hosted, linux, arm64]
-          - macos-latest
-          - [self-hosted, macos, arm64]
+          # - macos-12-large
+          - [go-spacemesh, m2-pro]
           - windows-latest
     steps:
       # as we use some request to localhost, sometimes it gives us flaky tests. try to disable tcp offloading for fix it
@@ -156,8 +153,9 @@ jobs:
         run: |
           sudo ethtool -K eth0 tx off
           sudo ethtool -K eth0 rx off
+
       - name: disable TCP/UDP offload - MacOS
-        if: ${{ matrix.os == 'macos-latest' }}
+        if: ${{ matrix.os == 'macos-12-large' || matrix.os == '[go-spacemesh, m2-pro]' }}
         run: |
           sudo sysctl -w net.link.generic.system.hwcksum_tx=0
           sudo sysctl -w net.link.generic.system.hwcksum_rx=0
@@ -174,7 +172,7 @@ jobs:
         with:
           lfs: true
       - name: set up go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           check-latest: true
           go-version: ${{ env.go-version }}
@@ -182,9 +180,6 @@ jobs:
       - name: Add OpenCL support - Ubuntu
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
-      - name: Override SDKROOT for macOS
-        if: ${{ contains(matrix.os, 'macos') && runner.arch == 'arm64' }}
-        run: echo "SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk" >> $GITHUB_ENV
       - name: Add OpenCL support - Windows
         if: ${{ matrix.os == 'windows-latest' }}
         run: choco install opencl-intel-cpu-runtime

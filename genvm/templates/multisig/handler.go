@@ -22,7 +22,7 @@ func Register(registry *registry.Registry) {
 }
 
 var (
-	_               (core.Handler) = (*handler)(nil)
+	_               core.Handler = (*handler)(nil)
 	TemplateAddress core.Address
 )
 

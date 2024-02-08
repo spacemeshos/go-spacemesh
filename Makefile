@@ -16,7 +16,12 @@ DOCKER_HUB ?= spacemeshos
 DOCKER_IMAGE_REPO ?= go-spacemesh-dev
 DOCKER_IMAGE_VERSION ?= $(SHA)
 
-LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
+C_LDFLAGS = -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.branch=${BRANCH}
+ifneq (,$(findstring nomain,$(VERSION)))
+    C_LDFLAGS += -X main.noMainNet=true
+endif
+LDFLAGS = -ldflags "$(C_LDFLAGS)"
+
 include Makefile-libs.Inc
 
 UNIT_TESTS ?= $(shell go list ./...  | grep -v systest/tests | grep -v cmd/node | grep -v cmd/gen-p2p-identity | grep -v cmd/trace | grep -v genvm/cmd)
@@ -56,10 +61,8 @@ build: go-spacemesh get-profiler get-postrs-service
 .PHONY: build
 
 get-libs: get-postrs-lib get-postrs-service
-.PHONY: get-libs
 
 get-profiler: get-postrs-profiler
-.PHONY: get-profiler
 
 gen-p2p-identity:
 	cd cmd/gen-p2p-identity ; go build -o $(BIN_DIR)$@$(EXE) .
@@ -140,7 +143,7 @@ list-versions:
 .PHONY: list-versions
 
 dockerbuild-go:
-	DOCKER_BUILDKIT=1 docker build -t go-spacemesh:$(SHA) .
+	DOCKER_BUILDKIT=1 docker build -t go-spacemesh:$(SHA) -t $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION) .
 .PHONY: dockerbuild-go
 
 dockerpush: dockerbuild-go dockerpush-only
@@ -150,12 +153,11 @@ dockerpush-only:
 ifneq ($(DOCKER_USERNAME):$(DOCKER_PASSWORD),:)
 	echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
 endif
-	docker tag go-spacemesh:$(SHA) $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION)
 	docker push $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION)
 .PHONY: dockerpush-only
 
 dockerbuild-bs:
-	DOCKER_BUILDKIT=1 docker build -t go-spacemesh-bs:$(SHA) -f ./bootstrap.Dockerfile .
+	DOCKER_BUILDKIT=1 docker build -t go-spacemesh-bs:$(SHA) -t $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO)-bs:$(DOCKER_IMAGE_VERSION) -f ./bootstrap.Dockerfile .
 .PHONY: dockerbuild-bs
 
 dockerpush-bs: dockerbuild-bs dockerpush-bs-only
@@ -165,7 +167,6 @@ dockerpush-bs-only:
 ifneq ($(DOCKER_USERNAME):$(DOCKER_PASSWORD),:)
 	echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
 endif
-	docker tag go-spacemesh-bs:$(SHA) $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO)-bs:$(DOCKER_IMAGE_VERSION)
 	docker push $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO)-bs:$(DOCKER_IMAGE_VERSION)
 .PHONY: dockerpush-bs-only
 

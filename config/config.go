@@ -13,14 +13,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
+	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
-	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
-	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
+	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
@@ -46,27 +46,28 @@ func init() {
 // Config defines the top level configuration for a spacemesh node.
 type Config struct {
 	BaseConfig      `mapstructure:"main"`
-	Genesis         *GenesisConfig                  `mapstructure:"genesis"`
-	PublicMetrics   PublicMetrics                   `mapstructure:"public-metrics"`
-	Tortoise        tortoise.Config                 `mapstructure:"tortoise"`
-	P2P             p2p.Config                      `mapstructure:"p2p"`
-	API             grpcserver.Config               `mapstructure:"api"`
-	HARE            hareConfig.Config               `mapstructure:"hare"`
-	HARE3           hare3.Config                    `mapstructure:"hare3"`
-	HareEligibility eligConfig.Config               `mapstructure:"hare-eligibility"`
-	Beacon          beacon.Config                   `mapstructure:"beacon"`
-	TIME            timeConfig.TimeConfig           `mapstructure:"time"`
-	VM              vm.Config                       `mapstructure:"vm"`
-	POST            activation.PostConfig           `mapstructure:"post"`
-	POSTService     activation.PostSupervisorConfig `mapstructure:"post-service"`
-	POET            activation.PoetConfig           `mapstructure:"poet"`
-	SMESHING        SmeshingConfig                  `mapstructure:"smeshing"`
-	LOGGING         LoggerConfig                    `mapstructure:"logging"`
-	FETCH           fetch.Config                    `mapstructure:"fetch"`
-	Bootstrap       bootstrap.Config                `mapstructure:"bootstrap"`
-	Sync            syncer.Config                   `mapstructure:"syncer"`
-	Recovery        checkpoint.Config               `mapstructure:"recovery"`
-	Cache           datastore.Config                `mapstructure:"cache"`
+	Preset          string                `mapstructure:"preset"`
+	Genesis         GenesisConfig         `mapstructure:"genesis"`
+	PublicMetrics   PublicMetrics         `mapstructure:"public-metrics"`
+	Tortoise        tortoise.Config       `mapstructure:"tortoise"`
+	P2P             p2p.Config            `mapstructure:"p2p"`
+	API             grpcserver.Config     `mapstructure:"api"`
+	HARE3           hare3.Config          `mapstructure:"hare3"`
+	HareEligibility eligibility.Config    `mapstructure:"hare-eligibility"`
+	Certificate     blocks.CertConfig     `mapstructure:"certificate"`
+	Beacon          beacon.Config         `mapstructure:"beacon"`
+	TIME            timeConfig.TimeConfig `mapstructure:"time"`
+	VM              vm.Config             `mapstructure:"vm"`
+	POST            activation.PostConfig `mapstructure:"post"`
+	POSTService     activation.PostSupervisorConfig
+	POET            activation.PoetConfig `mapstructure:"poet"`
+	SMESHING        SmeshingConfig        `mapstructure:"smeshing"`
+	LOGGING         LoggerConfig          `mapstructure:"logging"`
+	FETCH           fetch.Config          `mapstructure:"fetch"`
+	Bootstrap       bootstrap.Config      `mapstructure:"bootstrap"`
+	Sync            syncer.Config         `mapstructure:"syncer"`
+	Recovery        checkpoint.Config     `mapstructure:"recovery"`
+	Cache           datastore.Config      `mapstructure:"cache"`
 }
 
 // DataDir returns the absolute path to use for the node's data. This is the tilde-expanded path given in the config
@@ -87,8 +88,6 @@ type BaseConfig struct {
 	TestConfig TestConfig `mapstructure:"testing"`
 	Standalone bool       `mapstructure:"standalone"`
 
-	ConfigFile string `mapstructure:"config"`
-
 	CollectMetrics bool `mapstructure:"metrics"`
 	MetricsPort    int  `mapstructure:"metrics-port"`
 
@@ -99,7 +98,8 @@ type BaseConfig struct {
 	LayerAvgSize   uint32        `mapstructure:"layer-average-size"`
 	LayersPerEpoch uint32        `mapstructure:"layers-per-epoch"`
 
-	PoETServers []string `mapstructure:"poet-server"`
+	PoETServers DeprecatedPoETServers `mapstructure:"poet-server"`
+	PoetServers []types.PoetServer    `mapstructure:"poet-servers"`
 
 	PprofHTTPServer bool `mapstructure:"pprof-server"`
 
@@ -114,6 +114,8 @@ type BaseConfig struct {
 	DatabaseLatencyMetering      bool          `mapstructure:"db-latency-metering"`
 	DatabaseSizeMeteringInterval time.Duration `mapstructure:"db-size-metering-interval"`
 	DatabasePruneInterval        time.Duration `mapstructure:"db-prune-interval"`
+	DatabaseVacuumState          int           `mapstructure:"db-vacuum-state"`
+	DatabaseSkipMigrations       []int         `mapstructure:"db-skip-migrations"`
 
 	PruneActivesetsFrom types.EpochID `mapstructure:"prune-activesets-from"`
 
@@ -124,6 +126,27 @@ type BaseConfig struct {
 	MinerGoodAtxsPercent int `mapstructure:"miner-good-atxs-percent"`
 
 	RegossipAtxInterval time.Duration `mapstructure:"regossip-atx-interval"`
+
+	// ATXGradeDelay is used to grade ATXs for selection in tortoise active set.
+	// See grading function in miner/proposals_builder.go
+	ATXGradeDelay time.Duration `mapstructure:"atx-grade-delay"`
+
+	// PostValidDelay is the time after which a PoST is considered valid
+	// counting from the time an ATX was received.
+	// Before that time, the PoST must be fully verified.
+	// After that time, we depend on PoST malfeasance proofs.
+	PostValidDelay time.Duration `mapstructure:"post-valid-delay"`
+
+	// NoMainOverride forces the "nomain" builds to run on the mainnet
+	NoMainOverride bool `mapstructure:"no-main-override"`
+}
+
+type DeprecatedPoETServers struct{}
+
+// DeprecatedMsg implements Deprecated interface.
+func (DeprecatedPoETServers) DeprecatedMsg() string {
+	return `The 'poet-server' is deprecated. Please migrate to the 'poet-servers'. ` +
+		`Check 'Upgrade Information' in CHANGELOG.md for details.`
 }
 
 type PublicMetrics struct {
@@ -151,9 +174,8 @@ func DefaultConfig() Config {
 		Tortoise:        tortoise.DefaultConfig(),
 		P2P:             p2p.DefaultConfig(),
 		API:             grpcserver.DefaultConfig(),
-		HARE:            hareConfig.DefaultConfig(),
 		HARE3:           hare3.DefaultConfig(),
-		HareEligibility: eligConfig.DefaultConfig(),
+		HareEligibility: eligibility.DefaultConfig(),
 		Beacon:          beacon.DefaultConfig(),
 		TIME:            timeConfig.DefaultConfig(),
 		VM:              vm.DefaultConfig(),
@@ -178,6 +200,8 @@ func DefaultTestConfig() Config {
 	conf.P2P = p2p.DefaultConfig()
 	conf.API = grpcserver.DefaultTestConfig()
 	conf.POSTService = activation.DefaultTestPostServiceConfig()
+	conf.HARE3.PreroundDelay = 1 * time.Second
+	conf.HARE3.RoundDuration = 1 * time.Second
 	return conf
 }
 
@@ -191,7 +215,6 @@ func defaultBaseConfig() BaseConfig {
 		ProfilerName:                 "go-spacemesh",
 		LayerDuration:                30 * time.Second,
 		LayersPerEpoch:               3,
-		PoETServers:                  []string{"127.0.0.1"},
 		TxsPerProposal:               100,
 		BlockGasLimit:                math.MaxUint64,
 		OptFilterThreshold:           90,
@@ -200,6 +223,8 @@ func defaultBaseConfig() BaseConfig {
 		DatabaseSizeMeteringInterval: 10 * time.Minute,
 		DatabasePruneInterval:        30 * time.Minute,
 		NetworkHRP:                   "sm",
+		ATXGradeDelay:                10 * time.Second,
+		PostValidDelay:               12 * time.Hour,
 	}
 }
 
