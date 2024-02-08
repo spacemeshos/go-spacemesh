@@ -25,9 +25,10 @@ func init() {
 	pubsub.GossipSubDhi = 8
 	pubsub.GossipSubDlazy = 8
 	pubsub.GossipSubDirectConnectInitialDelay = 30 * time.Second
-	pubsub.GossipSubIWantFollowupTime = 5 * time.Second
-	pubsub.GossipSubHistoryLength = 10
-	pubsub.GossipSubGossipFactor = 0.1
+	pubsub.GossipSubHistoryLength = 75 // keep 30 seconds of messages
+	pubsub.GossipSubHistoryGossip = 24 // send 12 seconds of messages
+	pubsub.GossipSubHeartbeatInterval = 500 * time.Microsecond
+	pubsub.GossipSubGossipFactor = 0.02 // send to 2% of nodes every 500 ms
 }
 
 const (
