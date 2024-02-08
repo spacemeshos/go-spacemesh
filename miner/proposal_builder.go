@@ -15,9 +15,9 @@ import (
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner/minweight"
@@ -50,10 +50,6 @@ type votesEncoder interface {
 	EncodeVotes(context.Context, ...tortoise.EncodeVotesOpts) (*types.Opinion, error)
 }
 
-type mesh interface {
-	GetMalfeasanceProof(nodeID types.NodeID) (*types.MalfeasanceProof, error)
-}
-
 type layerClock interface {
 	AwaitLayer(layerID types.LayerID) <-chan struct{}
 	CurrentLayer() types.LayerID
@@ -65,7 +61,8 @@ type ProposalBuilder struct {
 	logger log.Log
 	cfg    config
 
-	cdb       *datastore.CachedDB
+	db        sql.Executor
+	atxsdata  *atxsdata.Data
 	clock     layerClock
 	publisher pubsub.Publisher
 	conState  conservativeState
@@ -240,7 +237,8 @@ func WithSigners(signers ...*signing.EdSigner) Opt {
 // New creates a struct of block builder type.
 func New(
 	clock layerClock,
-	cdb *datastore.CachedDB,
+	db sql.Executor,
+	atxsdata *atxsdata.Data,
 	publisher pubsub.Publisher,
 	trtl votesEncoder,
 	syncer system.SyncStateProvider,
@@ -253,7 +251,8 @@ func New(
 		},
 		logger:    log.NewNop(),
 		clock:     clock,
-		cdb:       cdb,
+		db:        db,
+		atxsdata:  atxsdata,
 		publisher: publisher,
 		tortoise:  trtl,
 		syncer:    syncer,
@@ -356,7 +355,7 @@ func (pb *ProposalBuilder) decideMeshHash(ctx context.Context, current types.Lay
 	)
 
 	for lid := minVerified.Add(1); lid.Before(current); lid = lid.Add(1) {
-		_, err := certificates.GetHareOutput(pb.cdb, lid)
+		_, err := certificates.GetHareOutput(pb.db, lid)
 		if err != nil {
 			pb.logger.With().Warning("missing hare output for layer within hdist",
 				log.Context(ctx),
@@ -374,7 +373,7 @@ func (pb *ProposalBuilder) decideMeshHash(ctx context.Context, current types.Lay
 		log.Stringer("to", current.Sub(1)),
 	)
 
-	mesh, err := layers.GetAggregatedHash(pb.cdb, current.Sub(1))
+	mesh, err := layers.GetAggregatedHash(pb.db, current.Sub(1))
 	if err != nil {
 		pb.logger.With().Warning("failed to get mesh hash",
 			log.Context(ctx),
@@ -405,13 +404,28 @@ func (pb *ProposalBuilder) initSharedData(ctx context.Context, lid types.LayerID
 		pb.shared = sharedSession{epoch: lid.GetEpoch()}
 	}
 	if pb.shared.beacon == types.EmptyBeacon {
-		beacon, err := beacons.Get(pb.cdb, pb.shared.epoch)
+		beacon, err := beacons.Get(pb.db, pb.shared.epoch)
 		if err != nil || beacon == types.EmptyBeacon {
 			return fmt.Errorf("missing beacon for epoch %d", pb.shared.epoch)
 		}
 		pb.shared.beacon = beacon
 	}
 	if pb.shared.active.set != nil {
+		return nil
+	}
+
+	weight, set, err := activesets.GetPrepared(pb.db, pb.shared.epoch)
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
+		return fmt.Errorf("failed to get prepared active set: %w", err)
+	}
+	if err == nil {
+		pb.logger.With().Info("loaded previously generated active set",
+			pb.shared.epoch,
+			log.Int("size", len(set)),
+			log.Uint64("weight", weight),
+		)
+		pb.shared.active.set = set
+		pb.shared.active.weight = weight
 		return nil
 	}
 
@@ -428,9 +442,10 @@ func (pb *ProposalBuilder) initSharedData(ctx context.Context, lid types.LayerID
 		return nil
 	}
 
-	weight, set, err := generateActiveSet(
+	weight, set, err = generateActiveSet(
 		pb.logger,
-		pb.cdb,
+		pb.db,
+		pb.atxsdata,
 		pb.shared.epoch,
 		pb.clock.LayerToTime(pb.shared.epoch.FirstLayer()),
 		pb.cfg.goodAtxPercent,
@@ -441,6 +456,9 @@ func (pb *ProposalBuilder) initSharedData(ctx context.Context, lid types.LayerID
 	}
 	pb.shared.active.set = set
 	pb.shared.active.weight = weight
+	if err := activesets.SavePrepapred(pb.db, pb.shared.epoch, weight, set); err != nil {
+		return fmt.Errorf("failed to save prepared active set: %w", err)
+	}
 	return nil
 }
 
@@ -453,25 +471,23 @@ func (pb *ProposalBuilder) initSignerData(
 		ss.session = session{epoch: lid.GetEpoch()}
 	}
 	if ss.session.atx == types.EmptyATXID {
-		atx, err := atxs.GetByEpochAndNodeID(pb.cdb, ss.session.epoch-1, ss.signer.NodeID())
+		atxid, err := atxs.GetIDByEpochAndNodeID(pb.db, ss.session.epoch-1, ss.signer.NodeID())
 		if err != nil {
 			if errors.Is(err, sql.ErrNotFound) {
 				err = errAtxNotAvailable
 			}
 			return fmt.Errorf("get atx in epoch %v: %w", ss.session.epoch-1, err)
 		}
-		ss.session.atx = atx.ID()
-		ss.session.atxWeight = atx.GetWeight()
-	}
-	if ss.session.nonce == 0 {
-		nonce, err := pb.cdb.VRFNonce(ss.signer.NodeID(), ss.session.epoch)
-		if err != nil {
-			return fmt.Errorf("missing nonce: %w", err)
+		atx := pb.atxsdata.Get(ss.session.epoch, atxid)
+		if atx == nil {
+			return fmt.Errorf("missing atx in atxsdata %v", atxid)
 		}
-		ss.session.nonce = nonce
+		ss.session.atx = atxid
+		ss.session.atxWeight = atx.Weight
+		ss.session.nonce = atx.Nonce
 	}
 	if ss.session.prev == 0 {
-		prev, err := ballots.LastInEpoch(pb.cdb, ss.session.atx, ss.session.epoch)
+		prev, err := ballots.LastInEpoch(pb.db, ss.session.atx, ss.session.epoch)
 		if err != nil && !errors.Is(err, sql.ErrNotFound) {
 			return err
 		}
@@ -480,7 +496,7 @@ func (pb *ProposalBuilder) initSignerData(
 		}
 	}
 	if ss.session.ref == types.EmptyBallotID {
-		ballot, err := ballots.FirstInEpoch(pb.cdb, ss.session.atx, ss.session.epoch)
+		ballot, err := ballots.FirstInEpoch(pb.db, ss.session.atx, ss.session.epoch)
 		if err != nil && !errors.Is(err, sql.ErrNotFound) {
 			return fmt.Errorf("get refballot %w", err)
 		}
@@ -618,7 +634,7 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 
 		// needs to be saved before publishing, as we will query it in handler
 		if ss.session.ref == types.EmptyBallotID {
-			if err := activesets.Add(pb.cdb, pb.shared.active.set.Hash(), &types.EpochActiveSet{
+			if err := activesets.Add(pb.db, pb.shared.active.set.Hash(), &types.EpochActiveSet{
 				Epoch: ss.session.epoch,
 				Set:   pb.shared.active.set,
 			}); err != nil && !errors.Is(err, sql.ErrObjectExists) {
@@ -739,20 +755,21 @@ func activeSetFromBlock(db sql.Executor, bid types.BlockID) ([]types.ATXID, erro
 }
 
 func activesFromFirstBlock(
-	cdb *datastore.CachedDB,
+	db sql.Executor,
+	atxsdata *atxsdata.Data,
 	target types.EpochID,
 ) (uint64, []types.ATXID, error) {
-	set, err := ActiveSetFromEpochFirstBlock(cdb, target)
+	set, err := ActiveSetFromEpochFirstBlock(db, target)
 	if err != nil {
 		return 0, nil, err
 	}
 	var totalWeight uint64
 	for _, id := range set {
-		atx, err := cdb.GetAtxHeader(id)
-		if err != nil {
-			return 0, nil, err
+		atx := atxsdata.Get(target, id)
+		if atx == nil {
+			return 0, nil, fmt.Errorf("atx %s is missing in atxsdata", id.ShortString())
 		}
-		totalWeight += atx.GetWeight()
+		totalWeight += atx.Weight
 	}
 	return totalWeight, set, nil
 }
@@ -767,18 +784,19 @@ func (pb *ProposalBuilder) fallbackActiveSet(targetEpoch types.EpochID) (uint64,
 
 	var totalWeight uint64
 	for _, id := range set {
-		atx, err := pb.cdb.GetAtxHeader(id)
-		if err != nil {
-			return 0, nil, err
+		atx := pb.atxsdata.Get(targetEpoch, id)
+		if atx == nil {
+			return 0, nil, fmt.Errorf("atx %s is missing in atxsdata", id.ShortString())
 		}
-		totalWeight += atx.GetWeight()
+		totalWeight += atx.Weight
 	}
 	return totalWeight, set, nil
 }
 
 func generateActiveSet(
 	logger log.Log,
-	cdb *datastore.CachedDB,
+	db sql.Executor,
+	atxsdata *atxsdata.Data,
 	target types.EpochID,
 	epochStart time.Time,
 	goodAtxPercent int,
@@ -788,28 +806,26 @@ func generateActiveSet(
 		totalWeight uint64
 		set         []types.ATXID
 		numOmitted  = 0
+		gerr        error
 	)
-	if err := cdb.IterateEpochATXHeaders(target, func(header *types.ActivationTxHeader) error {
-		grade, err := gradeAtx(cdb, header.NodeID, header.Received, epochStart, networkDelay)
-		if err != nil {
-			return err
-		}
-		if grade != good {
-			logger.With().Debug("atx omitted from active set",
-				header.ID,
-				log.Int("grade", int(grade)),
-				log.Stringer("smesher", header.NodeID),
-				log.Time("received", header.Received),
-				log.Time("epoch_start", epochStart),
-			)
+	if err := atxs.IterateForGrading(db, target-1, func(id types.ATXID, atxtime, prooftime int64) bool {
+		if gradeAtx(epochStart, networkDelay, atxtime, prooftime) != good {
 			numOmitted++
-			return nil
+		} else {
+			atx := atxsdata.Get(target, id)
+			if atx == nil {
+				gerr = fmt.Errorf("atx %s is missing in atxsdata", id.ShortString())
+				return false
+			}
+			set = append(set, id)
+			totalWeight += atx.Weight
 		}
-		totalWeight += header.GetWeight()
-		set = append(set, header.ID)
-		return nil
+		return true
 	}); err != nil {
 		return 0, nil, err
+	}
+	if gerr != nil {
+		return 0, nil, gerr
 	}
 
 	if total := numOmitted + len(set); total == 0 {
@@ -819,7 +835,7 @@ func generateActiveSet(
 		// for all the atx and malfeasance proof. this active set is not usable.
 		// TODO: change after timing info of ATXs and malfeasance proofs is sync'ed from peers as well
 		var err error
-		totalWeight, set, err = activesFromFirstBlock(cdb, target)
+		totalWeight, set, err = activesFromFirstBlock(db, atxsdata, target)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -878,23 +894,13 @@ const (
 	good
 )
 
-func gradeAtx(
-	msh mesh,
-	nodeID types.NodeID,
-	atxReceived, epochStart time.Time,
-	delta time.Duration,
-) (atxGrade, error) {
-	proof, err := msh.GetMalfeasanceProof(nodeID)
-	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		return good, err
+func gradeAtx(epochStart time.Time, networkDelay time.Duration, atxtime, prooftime int64) atxGrade {
+	atx := time.Unix(0, int64(atxtime))
+	proof := time.Unix(0, int64(prooftime))
+	if atx.Before(epochStart.Add(-4*networkDelay)) && (proof.IsZero() || !proof.Before(epochStart)) {
+		return good
+	} else if atx.Before(epochStart.Add(-3*networkDelay)) && (proof.IsZero() || !proof.Before(epochStart.Add(-networkDelay))) {
+		return acceptable
 	}
-	if atxReceived.Before(epochStart.Add(-4*delta)) &&
-		(proof == nil || !proof.Received().Before(epochStart)) {
-		return good, nil
-	}
-	if atxReceived.Before(epochStart.Add(-3*delta)) &&
-		(proof == nil || !proof.Received().Before(epochStart.Add(-delta))) {
-		return acceptable, nil
-	}
-	return evil, nil
+	return evil
 }

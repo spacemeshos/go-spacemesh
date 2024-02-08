@@ -504,3 +504,27 @@ func SetValidity(db sql.Executor, id types.ATXID, validity types.Validity) error
 	}
 	return nil
 }
+
+// IterateForGrading selects every atx from publish epoch and joins identities to load malfeasence proofs receive time.
+func IterateForGrading(
+	db sql.Executor,
+	epoch types.EpochID,
+	fn func(id types.ATXID, atxtime, prooftime int64) bool,
+) error {
+	if _, err := db.Exec(`
+		select atxs.id as id, atxs.received as atxtime, identities.received as prooftime from atxs
+		left join identities on atxs.pubkey = identities.pubkey
+		where atxs.epoch == ?1;`,
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(epoch))
+		}, func(stmt *sql.Statement) bool {
+			id := types.ATXID{}
+			stmt.ColumnBytes(0, id[:])
+			atxtime := stmt.ColumnInt64(1)
+			prooftime := stmt.ColumnInt64(2)
+			return fn(id, atxtime, prooftime)
+		}); err != nil {
+		return fmt.Errorf("iterate for grading: %w", err)
+	}
+	return nil
+}

@@ -15,9 +15,9 @@ import (
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/miner/mocks"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -73,6 +73,8 @@ func gatx(
 	atx.SetID(id)
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Time{}.Add(1))
+	nonce := types.VRFPostIndex(0)
+	atx.VRFNonce = &nonce
 	for _, opt := range opts {
 		opt(atx)
 	}
@@ -385,16 +387,9 @@ func TestBuild(t *testing.T) {
 					},
 				},
 				{
-					lid: 15,
-					atxs: []*types.VerifiedActivationTx{
-						gatx(types.ATXID{10}, 2, signer.NodeID(), 1),
-					},
-					expectErr: "missing nonce",
-				},
-				{
 					lid: 16,
 					atxs: []*types.VerifiedActivationTx{
-						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
+						gatx(types.ATXID{10}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
 					},
 					ballots: []*types.Ballot{
 						gballot(types.BallotID{1}, types.ATXID{10}, signer.NodeID(), 15, &types.EpochData{
@@ -560,7 +555,7 @@ func TestBuild(t *testing.T) {
 				{
 					lid:       16,
 					activeset: gactiveset(types.ATXID{1}, types.ATXID{2}),
-					expectErr: "get ATXs from DB: get id 0400000000",
+					expectErr: "atx 0400000000 is missing in atxsdata",
 				},
 				{
 					lid: 16,
@@ -743,25 +738,26 @@ func TestBuild(t *testing.T) {
 				publisher = pmocks.NewMockPublisher(ctrl)
 				tortoise  = mocks.NewMockvotesEncoder(ctrl)
 				syncer    = smocks.NewMockSyncStateProvider(ctrl)
-				cdb       = datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+				db        = sql.InMemory()
+				atxsdata  = atxsdata.New()
 			)
 
 			clock.EXPECT().LayerToTime(gomock.Any()).Return(time.Unix(0, 0)).AnyTimes()
 
 			full := append(defaults, WithLogger(logtest.New(t)), WithSigners(signer))
 			full = append(full, tc.opts...)
-			builder := New(clock, cdb, publisher, tortoise, syncer, conState, full...)
+			builder := New(clock, db, atxsdata, publisher, tortoise, syncer, conState, full...)
 			var decoded chan *types.Proposal
 			for _, step := range tc.steps {
 				{
 					if step.beacon != types.EmptyBeacon {
-						require.NoError(t, beacons.Add(cdb, step.lid.GetEpoch(), step.beacon))
+						require.NoError(t, beacons.Add(db, step.lid.GetEpoch(), step.beacon))
 					}
 					for _, iden := range step.identities {
 						require.NoError(
 							t,
 							identities.SetMalicious(
-								cdb,
+								db,
 								iden.id,
 								codec.MustEncode(&iden.proof),
 								iden.received,
@@ -769,27 +765,28 @@ func TestBuild(t *testing.T) {
 						)
 					}
 					for _, atx := range step.atxs {
-						require.NoError(t, atxs.Add(cdb, atx))
+						require.NoError(t, atxs.Add(db, atx))
+						atxsdata.AddFromHeader(atx.ToHeader(), *atx.VRFNonce, false)
 					}
 					for _, ballot := range step.ballots {
-						require.NoError(t, ballots.Add(cdb, ballot))
+						require.NoError(t, ballots.Add(db, ballot))
 					}
 					for _, block := range step.blocks {
-						require.NoError(t, blocks.Add(cdb, block))
-						require.NoError(t, layers.SetApplied(cdb, block.LayerIndex, block.ID()))
+						require.NoError(t, blocks.Add(db, block))
+						require.NoError(t, layers.SetApplied(db, block.LayerIndex, block.ID()))
 					}
 					for _, lid := range step.hare {
 						// block id is irrelevant for this test
-						require.NoError(t, certificates.SetHareOutput(cdb, lid, types.EmptyBlockID))
+						require.NoError(t, certificates.SetHareOutput(db, lid, types.EmptyBlockID))
 					}
 					for _, ahash := range step.aggHashes {
-						require.NoError(t, layers.SetMeshHash(cdb, ahash.lid, ahash.hash))
+						require.NoError(t, layers.SetMeshHash(db, ahash.lid, ahash.hash))
 					}
 					if step.activeset != nil {
 						require.NoError(
 							t,
 							activesets.Add(
-								cdb,
+								db,
 								step.activeset.Hash(),
 								&types.EpochActiveSet{Set: step.activeset},
 							),
@@ -896,7 +893,8 @@ func TestStartStop(t *testing.T) {
 		publisher = pmocks.NewMockPublisher(ctrl)
 		tortoise  = mocks.NewMockvotesEncoder(ctrl)
 		syncer    = smocks.NewMockSyncStateProvider(ctrl)
-		cdb       = datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+		db        = sql.InMemory()
+		atxsdata  = atxsdata.New()
 	)
 	signer, err := signing.NewEdSigner(signing.WithKeyFromRand(rand.New(rand.NewSource(10101))))
 	require.NoError(t, err)
@@ -932,7 +930,8 @@ func TestStartStop(t *testing.T) {
 
 	builder := New(
 		clock,
-		cdb,
+		db,
+		atxsdata,
 		publisher,
 		tortoise,
 		syncer,
@@ -959,10 +958,9 @@ func TestStartStop(t *testing.T) {
 }
 
 func TestGradeAtx(t *testing.T) {
-	const delta = 10
+	const networkDelay = 10
 	for _, tc := range []struct {
-		desc      string
-		malicious bool
+		desc string
 		// distance in second from the epoch start time
 		atxReceived, malReceived int
 		result                   atxGrade
@@ -975,21 +973,18 @@ func TestGradeAtx(t *testing.T) {
 		{
 			desc:        "very early atx, late malfeasance",
 			atxReceived: -41,
-			malicious:   true,
 			malReceived: 0,
 			result:      good,
 		},
 		{
 			desc:        "very early atx, malicious",
 			atxReceived: -41,
-			malicious:   true,
 			malReceived: -10,
 			result:      acceptable,
 		},
 		{
 			desc:        "very early atx, early malicious",
 			atxReceived: -41,
-			malicious:   true,
 			malReceived: -11,
 			result:      evil,
 		},
@@ -1001,14 +996,12 @@ func TestGradeAtx(t *testing.T) {
 		{
 			desc:        "early atx, late malicious",
 			atxReceived: -31,
-			malicious:   true,
 			malReceived: -10,
 			result:      acceptable,
 		},
 		{
 			desc:        "early atx, early malicious",
 			atxReceived: -31,
-			malicious:   true,
 			malReceived: -11,
 			result:      evil,
 		},
@@ -1025,20 +1018,14 @@ func TestGradeAtx(t *testing.T) {
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
-			mockMsh := mocks.NewMockmesh(gomock.NewController(t))
 			epochStart := time.Now()
-			nodeID := types.RandomNodeID()
-			if tc.malicious {
-				proof := &types.MalfeasanceProof{}
-				proof.SetReceived(epochStart.Add(time.Duration(tc.malReceived) * time.Second))
-				mockMsh.EXPECT().GetMalfeasanceProof(nodeID).Return(proof, nil)
-			} else {
-				mockMsh.EXPECT().GetMalfeasanceProof(nodeID).Return(nil, sql.ErrNotFound)
-			}
 			atxReceived := epochStart.Add(time.Duration(tc.atxReceived) * time.Second)
-			got, err := gradeAtx(mockMsh, nodeID, atxReceived, epochStart, delta*time.Second)
-			require.NoError(t, err)
-			require.Equal(t, tc.result, got)
+			malReceived := epochStart.Add(time.Duration(tc.malReceived) * time.Second)
+			require.Equal(
+				t,
+				tc.result,
+				gradeAtx(epochStart, networkDelay*time.Second, atxReceived.UnixNano(), malReceived.UnixNano()),
+			)
 		})
 	}
 }

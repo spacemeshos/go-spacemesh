@@ -83,3 +83,46 @@ func DeleteBeforeEpoch(db sql.Executor, epoch types.EpochID) error {
 	}
 	return nil
 }
+
+func SavePrepapred(db sql.Executor, target types.EpochID, weight uint64, set []types.ATXID) error {
+	_, err := db.Exec("insert into activesets (epoch, weight, active_set, prepared) values (?1, ?2, ?3, true);",
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(target))
+			stmt.BindInt64(2, int64(weight))
+			stmt.BindBytes(3, codec.MustEncode(&types.EpochActiveSet{
+				Epoch: target,
+				Set:   set,
+			}))
+		}, nil)
+	if err != nil {
+		return fmt.Errorf("save prepared activeset for target %s: %w", target, err)
+	}
+	return nil
+}
+
+// GetPrepared load previously generated activeset with weight.
+func GetPrepared(db sql.Executor, target types.EpochID) (uint64, []types.ATXID, error) {
+	var (
+		activeSet types.EpochActiveSet
+		cerr      error
+		weight    uint64
+	)
+	rows, err := db.Exec("select active_set, weight from activesets where epoch = ?1 and prepared = true",
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(target))
+		}, func(stmt *sql.Statement) bool {
+			_, cerr = codec.DecodeFrom(stmt.ColumnReader(0), &activeSet)
+			weight = uint64(stmt.ColumnInt64(1))
+			return false
+		})
+	if err != nil {
+		return 0, nil, fmt.Errorf("get prepared. target %s: %w", target, err)
+	}
+	if cerr != nil {
+		return 0, nil, fmt.Errorf("decode into activeset. target %s: %w", target, err)
+	}
+	if rows == 0 {
+		return 0, nil, fmt.Errorf("%w: get prepared for target %s", sql.ErrNotFound, target)
+	}
+	return weight, activeSet.Set, nil
+}
