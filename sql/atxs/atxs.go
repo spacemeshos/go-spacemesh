@@ -3,6 +3,7 @@ package atxs
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -568,22 +569,22 @@ func IterateAtxsOps(
 }
 
 func filterFrom(operations Operations) string {
-	// TODO(dshulyak) using string writer will be more efficient
-	query := ""
+	var queryBuilder strings.Builder
+
 	for i, op := range operations.Filter {
 		if i == 0 {
-			query += " " + string(Where)
+			queryBuilder.WriteString(" " + string(Where))
 		}
 		if i != 0 {
-			query += " " + string(And)
+			queryBuilder.WriteString(" " + string(And))
 		}
-		query += " " + string(op.Field) + " " + string(op.Token) + " ?" + strconv.Itoa(i+1)
+		queryBuilder.WriteString(" " + string(op.Field) + " " + string(op.Token) + " ?" + strconv.Itoa(i+1))
 	}
-	query += " order by epoch asc, id"
+	queryBuilder.WriteString(" order by epoch asc, id")
 	for _, op := range operations.Other {
-		query += fmt.Sprintf(" %s %v", string(op.Field), op.Value)
+		queryBuilder.WriteString(fmt.Sprintf(" %s %v", string(op.Field), op.Value))
 	}
-	return query
+	return queryBuilder.String()
 }
 
 func bindingsFrom(operations Operations) sql.Encoder {
