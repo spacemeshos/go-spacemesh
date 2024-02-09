@@ -3,6 +3,8 @@ package v2
 import (
 	"context"
 	"errors"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
 	"io"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -51,11 +53,53 @@ func (s *ActivationStreamService) Stream(
 	request *spacemeshv2.ActivationStreamRequest,
 	stream spacemeshv2.ActivationStreamService_StreamServer,
 ) error {
-	// TODO(dshulyak) implement matcher based on filter
 	var sub *events.BufferedSubscription[events.ActivationTx]
 	if request.Watch {
 		var err error
-		sub, err = events.Subscribe[events.ActivationTx]()
+		sub, err = events.SubscribeMatched(func(t *events.ActivationTx) bool {
+			if len(request.NodeId) > 0 {
+				var nodeId types.NodeID
+				copy(nodeId[:], request.NodeId)
+
+				if t.SmesherID != nodeId {
+					return false
+				}
+			}
+
+			if len(request.Id) > 0 {
+				var atxId types.ATXID
+				copy(atxId[:], request.Id)
+
+				if t.ID() != atxId {
+					return false
+				}
+			}
+
+			if len(request.Coinbase) > 0 {
+				addr, err := types.StringToAddress(request.Coinbase)
+				if err != nil {
+					ctxzap.Error(stream.Context(), "unable to convert atx coinbase", zap.Error(err))
+					return false
+				}
+				if t.Coinbase != addr {
+					return false
+				}
+			}
+
+			if request.StartEpoch != 0 {
+				if t.PublishEpoch.Uint32() < request.StartEpoch {
+					return false
+				}
+			}
+
+			if request.EndEpoch != 0 {
+				if t.PublishEpoch.Uint32() > request.EndEpoch {
+					return false
+				}
+			}
+
+			return true
+		})
 		if err != nil {
 			return status.Error(codes.Internal, err.Error())
 		}
