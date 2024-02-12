@@ -20,7 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
-	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
+	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
@@ -53,7 +53,7 @@ type Config struct {
 	P2P             p2p.Config                 `mapstructure:"p2p"`
 	API             grpcserver.Config          `mapstructure:"api"`
 	HARE3           hare3.Config               `mapstructure:"hare3"`
-	HareEligibility eligConfig.Config          `mapstructure:"hare-eligibility"`
+	HareEligibility eligibility.Config         `mapstructure:"hare-eligibility"`
 	Certificate     blocks.CertConfig          `mapstructure:"certificate"`
 	Beacon          beacon.Config              `mapstructure:"beacon"`
 	TIME            timeConfig.TimeConfig      `mapstructure:"time"`
@@ -129,8 +129,14 @@ type BaseConfig struct {
 	RegossipAtxInterval time.Duration `mapstructure:"regossip-atx-interval"`
 
 	// ATXGradeDelay is used to grade ATXs for selection in tortoise active set.
-	// See grading fuction in miner/proposals_builder.go
+	// See grading function in miner/proposals_builder.go
 	ATXGradeDelay time.Duration `mapstructure:"atx-grade-delay"`
+
+	// PostValidDelay is the time after which a PoST is considered valid
+	// counting from the time an ATX was received.
+	// Before that time, the PoST must be fully verified.
+	// After that time, we depend on PoST malfeasance proofs.
+	PostValidDelay time.Duration `mapstructure:"post-valid-delay"`
 
 	// NoMainOverride forces the "nomain" builds to run on the mainnet
 	NoMainOverride bool `mapstructure:"no-main-override"`
@@ -170,7 +176,7 @@ func DefaultConfig() Config {
 		P2P:             p2p.DefaultConfig(),
 		API:             grpcserver.DefaultConfig(),
 		HARE3:           hare3.DefaultConfig(),
-		HareEligibility: eligConfig.DefaultConfig(),
+		HareEligibility: eligibility.DefaultConfig(),
 		Beacon:          beacon.DefaultConfig(),
 		TIME:            timeConfig.DefaultConfig(),
 		VM:              vm.DefaultConfig(),
@@ -220,6 +226,7 @@ func defaultBaseConfig() BaseConfig {
 		DatabasePruneInterval:        30 * time.Minute,
 		NetworkHRP:                   "sm",
 		ATXGradeDelay:                10 * time.Second,
+		PostValidDelay:               12 * time.Hour,
 	}
 }
 

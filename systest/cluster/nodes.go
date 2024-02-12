@@ -897,26 +897,19 @@ func deployNode(ctx *testcontext.Context, id string, labels map[string]string, f
 	return nil
 }
 
-func deployPostService(
-	ctx *testcontext.Context,
-	id string,
-	labels map[string]string,
-	nodeId string,
-	pubKey string,
-	goldenAtxId string,
-) error {
-	ctx.Log.Debugw("deploying post service", "id", id)
-
+func loadSmesherConfig(ctx *testcontext.Context) (*config.Config, error) {
+	// TODO(poszu): this is mostly a copy of the code in cmd/node.go
+	// refactor the code below to reuse it after https://github.com/spacemeshos/go-spacemesh/pull/5485 lands.
 	vip := viper.New()
 	vip.SetConfigType("json")
 	if err := vip.ReadConfig(strings.NewReader(smesherConfig.Get(ctx.Parameters))); err != nil {
-		return fmt.Errorf("load config: %w", err)
+		return nil, fmt.Errorf("reading config: %w", err)
 	}
 	conf := config.MainnetConfig()
 	if name := vip.GetString("preset"); len(name) > 0 {
 		preset, err := presets.Get(name)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		conf = preset
 	}
@@ -936,9 +929,24 @@ func deployPostService(
 		node.WithIgnoreUntagged(),
 	}
 	if err := vip.Unmarshal(&conf, opts...); err != nil {
-		return fmt.Errorf("unmarshal config: %w", err)
+		return nil, fmt.Errorf("unmarshaling config: %w", err)
 	}
+	return &conf, nil
+}
 
+func deployPostService(
+	ctx *testcontext.Context,
+	id string,
+	labels map[string]string,
+	nodeId string,
+	pubKey string,
+	goldenAtxId string,
+) error {
+	ctx.Log.Debugw("deploying post service", "id", id)
+	conf, err := loadSmesherConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("loading smesher config: %w", err)
+	}
 	args := []string{
 		"--dir", "/data",
 		"--address", fmt.Sprintf("http://%s:%d", nodeId, 9094),
@@ -950,7 +958,6 @@ func deployPostService(
 		"--labels-per-unit", strconv.FormatUint(uint64(conf.POST.LabelsPerUnit), 10),
 		"--k1", strconv.FormatUint(uint64(conf.POST.K1), 10),
 		"--k2", strconv.FormatUint(uint64(conf.POST.K2), 10),
-		"--k3", strconv.FormatUint(uint64(conf.POST.K3), 10),
 		"--pow-difficulty", conf.POST.PowDifficulty.String(),
 		"-n", strconv.FormatUint(uint64(conf.SMESHING.Opts.Scrypt.N), 10),
 		"-r", strconv.FormatUint(uint64(conf.SMESHING.Opts.Scrypt.R), 10),
@@ -1005,7 +1012,7 @@ func deployPostService(
 				),
 			),
 		)
-	_, err := ctx.Client.AppsV1().
+	_, err = ctx.Client.AppsV1().
 		Deployments(ctx.Namespace).
 		Apply(ctx, deployment, apimetav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
@@ -1145,6 +1152,10 @@ func PoetEndpoints(ids ...int) DeploymentFlag {
 		panic(err)
 	}
 	return DeploymentFlag{Name: "--poet-servers", Value: string(value)}
+}
+
+func PostK3(k3 int) DeploymentFlag {
+	return DeploymentFlag{Name: "--post-k3", Value: strconv.Itoa(k3)}
 }
 
 // MinPeers flag.

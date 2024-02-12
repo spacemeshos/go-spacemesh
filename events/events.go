@@ -127,30 +127,44 @@ func EmitPostServiceStopped() {
 	)
 }
 
-func EmitPostStart(challenge []byte) {
+func EmitPostStart(nodeID types.NodeID, challenge []byte) {
 	const help = "Node started PoST execution using the challenge from PoET."
 	emitUserEvent(
 		help,
 		false,
-		&pb.Event_PostStart{PostStart: &pb.EventPostStart{Challenge: challenge}},
+		&pb.Event_PostStart{
+			PostStart: &pb.EventPostStart{
+				Challenge: challenge,
+				Smesher:   nodeID.Bytes(),
+			},
+		},
 	)
 }
 
-func EmitPostComplete(challenge []byte) {
+func EmitPostComplete(nodeID types.NodeID, challenge []byte) {
 	const help = "Node finished PoST execution using PoET challenge."
 	emitUserEvent(
 		help,
 		false,
-		&pb.Event_PostComplete{PostComplete: &pb.EventPostComplete{Challenge: challenge}},
+		&pb.Event_PostComplete{
+			PostComplete: &pb.EventPostComplete{
+				Challenge: challenge,
+				Smesher:   nodeID.Bytes(),
+			},
+		},
 	)
 }
 
-func EmitPostFailure() {
+func EmitPostFailure(nodeID types.NodeID) {
 	const help = "Node failed PoST execution."
 	emitUserEvent(
 		help,
 		true,
-		&pb.Event_PostComplete{PostComplete: &pb.EventPostComplete{}},
+		&pb.Event_PostComplete{
+			PostComplete: &pb.EventPostComplete{
+				Smesher: nodeID.Bytes(),
+			},
+		},
 	)
 }
 
@@ -275,6 +289,8 @@ func ToMalfeasancePB(smesher types.NodeID, mp *types.MalfeasanceProof, includePr
 		kind = pb.MalfeasanceProof_MALFEASANCE_BALLOT
 	case types.HareEquivocation:
 		kind = pb.MalfeasanceProof_MALFEASANCE_HARE
+	case types.InvalidPostIndex:
+		kind = pb.MalfeasanceProof_MALFEASANCE_POST_INDEX
 	}
 	result := &pb.MalfeasanceProof{
 		SmesherId: &pb.SmesherId{Id: smesher.Bytes()},

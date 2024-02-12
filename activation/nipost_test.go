@@ -14,6 +14,7 @@ import (
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
 	"go.uber.org/zap/zaptest/observer"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -48,7 +49,6 @@ func defaultLayerClockMock(ctrl *gomock.Controller) *MocklayerClock {
 type testNIPostBuilder struct {
 	*NIPostBuilder
 
-	sig          *signing.EdSigner
 	observedLogs *observer.ObservedLogs
 	eventSub     <-chan events.UserEvent
 
@@ -61,9 +61,6 @@ type testNIPostBuilder struct {
 }
 
 func newTestNIPostBuilder(tb testing.TB) *testNIPostBuilder {
-	sig, err := signing.NewEdSigner()
-	require.NoError(tb, err)
-
 	observer, observedLogs := observer.New(zapcore.WarnLevel)
 	logger := zap.New(observer)
 
@@ -78,7 +75,6 @@ func newTestNIPostBuilder(tb testing.TB) *testNIPostBuilder {
 
 	ctrl := gomock.NewController(tb)
 	tnb := &testNIPostBuilder{
-		sig:          sig,
 		observedLogs: observedLogs,
 		eventSub:     sub.Out(),
 
@@ -95,7 +91,6 @@ func newTestNIPostBuilder(tb testing.TB) *testNIPostBuilder {
 		tnb.mPoetDb,
 		tnb.mPostService,
 		tnb.mLogger,
-		tnb.sig,
 		PoetConfig{},
 		tnb.mClock,
 	)
@@ -107,12 +102,14 @@ func newTestNIPostBuilder(tb testing.TB) *testNIPostBuilder {
 func Test_NIPost_PostClientHandling(t *testing.T) {
 	t.Run("connect then complete", func(t *testing.T) {
 		// post client connects, starts post, then completes successfully
-		tnb := newTestNIPostBuilder(t)
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
 
-		tnb.mPostService.EXPECT().Client(tnb.sig.NodeID()).Return(tnb.mPostClient, nil)
+		tnb := newTestNIPostBuilder(t)
+		tnb.mPostService.EXPECT().Client(sig.NodeID()).Return(tnb.mPostClient, nil)
 		tnb.mPostClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(&types.Post{}, &types.PostInfo{}, nil)
 
-		nipost, nipostInfo, err := tnb.Proof(context.Background(), shared.ZeroChallenge)
+		nipost, nipostInfo, err := tnb.Proof(context.Background(), sig.NodeID(), shared.ZeroChallenge)
 		require.NoError(t, err)
 		require.NotNil(t, nipost)
 		require.NotNil(t, nipostInfo)
@@ -140,13 +137,15 @@ func Test_NIPost_PostClientHandling(t *testing.T) {
 
 	t.Run("connect then error", func(t *testing.T) {
 		// post client connects, starts post, then fails with an error that is not a disconnect
-		tnb := newTestNIPostBuilder(t)
-		expectedErr := errors.New("some error")
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
 
-		tnb.mPostService.EXPECT().Client(tnb.sig.NodeID()).Return(tnb.mPostClient, nil)
+		tnb := newTestNIPostBuilder(t)
+		tnb.mPostService.EXPECT().Client(sig.NodeID()).Return(tnb.mPostClient, nil)
+		expectedErr := errors.New("some error")
 		tnb.mPostClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(nil, nil, expectedErr)
 
-		nipost, nipostInfo, err := tnb.Proof(context.Background(), shared.ZeroChallenge)
+		nipost, nipostInfo, err := tnb.Proof(context.Background(), sig.NodeID(), shared.ZeroChallenge)
 		require.ErrorIs(t, err, expectedErr)
 		require.Nil(t, nipost)
 		require.Nil(t, nipostInfo)
@@ -173,14 +172,16 @@ func Test_NIPost_PostClientHandling(t *testing.T) {
 
 	t.Run("connect, disconnect, reconnect then complete", func(t *testing.T) {
 		// post client connects, starts post, disconnects in between but completes successfully
-		tnb := newTestNIPostBuilder(t)
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
 
-		tnb.mPostService.EXPECT().Client(tnb.sig.NodeID()).Return(tnb.mPostClient, nil)
+		tnb := newTestNIPostBuilder(t)
+		tnb.mPostService.EXPECT().Client(sig.NodeID()).Return(tnb.mPostClient, nil)
 		tnb.mPostClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(nil, nil, ErrPostClientClosed)
-		tnb.mPostService.EXPECT().Client(tnb.sig.NodeID()).Return(tnb.mPostClient, nil)
+		tnb.mPostService.EXPECT().Client(sig.NodeID()).Return(tnb.mPostClient, nil)
 		tnb.mPostClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(&types.Post{}, &types.PostInfo{}, nil)
 
-		nipost, nipostInfo, err := tnb.Proof(context.Background(), shared.ZeroChallenge)
+		nipost, nipostInfo, err := tnb.Proof(context.Background(), sig.NodeID(), shared.ZeroChallenge)
 		require.NoError(t, err)
 		require.NotNil(t, nipost)
 		require.NotNil(t, nipostInfo)
@@ -206,18 +207,70 @@ func Test_NIPost_PostClientHandling(t *testing.T) {
 		}
 	})
 
-	t.Run("connect, disconnect, reconnect then error", func(t *testing.T) {
-		// post client connects, starts post, disconnects in between and then fails to complete
+	t.Run("connect, disconnect, then cancel before reconnect", func(t *testing.T) {
+		// post client connects, starts post, disconnects in between and proofing is canceled before reconnection
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 		tnb := newTestNIPostBuilder(t)
 
-		tnb.mPostService.EXPECT().Client(tnb.sig.NodeID()).Return(tnb.mPostClient, nil)
+		var eg errgroup.Group
+		eg.Go(func() error {
+			select {
+			case e := <-tnb.eventSub:
+				event := e.Event.GetPostStart()
+				require.NotNil(t, event, "wrong event type")
+				require.EqualValues(t, shared.ZeroChallenge, event.Challenge)
+			case <-time.After(5 * time.Second):
+				require.Fail(t, "timeout waiting for event")
+			}
+
+			cancel()
+
+			select {
+			case e := <-tnb.eventSub:
+				event := e.Event.GetPostComplete()
+				require.NotNil(t, event, "wrong event type")
+				require.Equal(t, true, e.Event.Failure)
+				require.Equal(t, "Node failed PoST execution.", e.Event.Help)
+			case <-time.After(5 * time.Second):
+				require.Fail(t, "timeout waiting for event")
+			}
+			return nil
+		})
+
+		tnb.mPostService.EXPECT().Client(sig.NodeID()).Return(tnb.mPostClient, nil)
+		tnb.mPostClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(nil, nil, ErrPostClientClosed)
+		tnb.mPostService.EXPECT().Client(sig.NodeID()).DoAndReturn(
+			func(types.NodeID) (PostClient, error) {
+				<-ctx.Done()
+				return nil, ErrPostClientNotConnected
+			})
+
+		nipost, nipostInfo, err := tnb.Proof(ctx, sig.NodeID(), shared.ZeroChallenge)
+		require.ErrorIs(t, err, context.Canceled)
+		require.Nil(t, nipost)
+		require.Nil(t, nipostInfo)
+
+		require.Nil(t, eg.Wait())
+	})
+
+	t.Run("connect, disconnect, reconnect then error", func(t *testing.T) {
+		// post client connects, starts post, disconnects in between and then fails to complete
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		tnb := newTestNIPostBuilder(t)
+		tnb.mPostService.EXPECT().Client(sig.NodeID()).Return(tnb.mPostClient, nil)
 		tnb.mPostClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(nil, nil, ErrPostClientClosed).Times(1)
-		tnb.mPostService.EXPECT().Client(tnb.sig.NodeID()).Return(tnb.mPostClient, nil)
+		tnb.mPostService.EXPECT().Client(sig.NodeID()).Return(tnb.mPostClient, nil)
 
 		expectedErr := errors.New("some error")
 		tnb.mPostClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(nil, nil, expectedErr)
 
-		nipost, nipostInfo, err := tnb.Proof(context.Background(), shared.ZeroChallenge)
+		nipost, nipostInfo, err := tnb.Proof(context.Background(), sig.NodeID(), shared.ZeroChallenge)
 		require.ErrorIs(t, err, expectedErr)
 		require.Nil(t, nipost)
 		require.Nil(t, nipostInfo)
@@ -243,17 +296,19 @@ func Test_NIPost_PostClientHandling(t *testing.T) {
 	})
 
 	t.Run("repeated connection failure", func(t *testing.T) {
-		tnb := newTestNIPostBuilder(t)
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
 
+		tnb := newTestNIPostBuilder(t)
 		ctx, cancel := context.WithCancel(context.Background())
-		tnb.mPostService.EXPECT().Client(tnb.sig.NodeID()).Return(nil, ErrPostClientNotConnected).Times(10)
-		tnb.mPostService.EXPECT().Client(tnb.sig.NodeID()).DoAndReturn(
+		tnb.mPostService.EXPECT().Client(sig.NodeID()).Return(nil, ErrPostClientNotConnected).Times(10)
+		tnb.mPostService.EXPECT().Client(sig.NodeID()).DoAndReturn(
 			func(types.NodeID) (PostClient, error) {
 				cancel()
 				return nil, ErrPostClientNotConnected
 			})
 
-		nipost, nipostInfo, err := tnb.Proof(ctx, shared.ZeroChallenge)
+		nipost, nipostInfo, err := tnb.Proof(ctx, sig.NodeID(), shared.ZeroChallenge)
 		require.ErrorIs(t, err, context.Canceled)
 		require.Nil(t, nipost)
 		require.Nil(t, nipostInfo)
@@ -261,7 +316,7 @@ func Test_NIPost_PostClientHandling(t *testing.T) {
 		require.Equal(t, 1, tnb.observedLogs.Len(), "expected 1 log message")
 		require.Equal(t, zapcore.WarnLevel, tnb.observedLogs.All()[0].Level)
 		require.Equal(t, "post service not connected - waiting for reconnection", tnb.observedLogs.All()[0].Message)
-		require.Equal(t, tnb.sig.NodeID().String(), tnb.observedLogs.All()[0].ContextMap()["service id"])
+		require.Equal(t, sig.NodeID().String(), tnb.observedLogs.All()[0].ContextMap()["service id"])
 	})
 }
 
@@ -283,7 +338,6 @@ func Test_NIPostBuilder_ResetState(t *testing.T) {
 		poetDb,
 		postService,
 		zaptest.NewLogger(t),
-		sig,
 		PoetConfig{},
 		mclock,
 	)
@@ -309,7 +363,7 @@ func Test_NIPostBuilder_ResetState(t *testing.T) {
 		VRFNonce: types.VRFPostIndex(1024),
 	})
 
-	err = nb.ResetState()
+	err = nb.ResetState(sig.NodeID())
 	require.NoError(t, err)
 
 	_, err = nipost.NIPost(db, sig.NodeID())
@@ -350,7 +404,6 @@ func Test_NIPostBuilder_WithMocks(t *testing.T) {
 		poetDb,
 		postService,
 		zaptest.NewLogger(t),
-		sig,
 		PoetConfig{},
 		mclock,
 		WithPoetClients(poetProvider),
@@ -360,7 +413,7 @@ func Test_NIPostBuilder_WithMocks(t *testing.T) {
 	certifier := NewMockcertifierService(ctrl)
 	certifier.EXPECT().GetCertificate(poetProvider.Address()).Return(PoetCert("cert"))
 
-	nipost, err := nb.BuildNIPost(context.Background(), &challenge, certifier)
+	nipost, err := nb.BuildNIPost(context.Background(), sig, &challenge, certifier)
 	require.NoError(t, err)
 	require.NotNil(t, nipost)
 }
@@ -395,7 +448,6 @@ func TestPostSetup(t *testing.T) {
 		poetDb,
 		postService,
 		zaptest.NewLogger(t),
-		sig,
 		PoetConfig{},
 		mclock,
 		WithPoetClients(poetProvider),
@@ -405,7 +457,7 @@ func TestPostSetup(t *testing.T) {
 	certifier := NewMockcertifierService(ctrl)
 	certifier.EXPECT().GetCertificate(poetProvider.Address()).Return(PoetCert("cert"))
 
-	nipost, err := nb.BuildNIPost(context.Background(), &challenge, certifier)
+	nipost, err := nb.BuildNIPost(context.Background(), sig, &challenge, certifier)
 	require.NoError(t, err)
 	require.NotNil(t, nipost)
 }
@@ -462,7 +514,6 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 		poetDb,
 		postService,
 		zaptest.NewLogger(t),
-		sig,
 		PoetConfig{},
 		mclock,
 		WithPoetClients(poetProver),
@@ -471,20 +522,19 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 
 	certifier := NewMockcertifierService(ctrl)
 	certifier.EXPECT().GetCertificate(poetProver.Address()).AnyTimes().Return(PoetCert("cert"))
-	nipost, err := nb.BuildNIPost(context.Background(), &challenge, certifier)
+	nipost, err := nb.BuildNIPost(context.Background(), sig, &challenge, certifier)
 	require.NoError(t, err)
 	require.NotNil(t, nipost)
 
 	poetDb = NewMockpoetDbAPI(ctrl)
 
 	// fail post exec
-	require.NoError(t, nb.ResetState())
+	require.NoError(t, nb.ResetState(sig.NodeID()))
 	nb, err = NewNIPostBuilder(
 		db,
 		poetDb,
 		postService,
 		zaptest.NewLogger(t),
-		sig,
 		PoetConfig{},
 		mclock,
 		WithPoetClients(poetProver),
@@ -494,7 +544,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(nil, nil, fmt.Errorf("error"))
 
 	// check that proof ref is not called again
-	nipost, err = nb.BuildNIPost(context.Background(), &challenge, certifier)
+	nipost, err = nb.BuildNIPost(context.Background(), sig, &challenge, certifier)
 	require.Nil(t, nipost)
 	require.Error(t, err)
 
@@ -504,7 +554,6 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 		poetDb,
 		postService,
 		zaptest.NewLogger(t),
-		sig,
 		PoetConfig{},
 		mclock,
 		WithPoetClients(poetProver),
@@ -519,7 +568,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	)
 
 	// check that proof ref is not called again
-	nipost, err = nb.BuildNIPost(context.Background(), &challenge, certifier)
+	nipost, err = nb.BuildNIPost(context.Background(), sig, &challenge, certifier)
 	require.NoError(t, err)
 	require.NotNil(t, nipost)
 }
@@ -589,7 +638,6 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 		poetDb,
 		postService,
 		zaptest.NewLogger(t),
-		sig,
 		poetCfg,
 		mclock,
 		WithPoetClients(poets...),
@@ -601,7 +649,7 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 	certifier.EXPECT().GetCertificate(poets[1].Address()).Return(PoetCert("cert"))
 
 	// Act
-	nipost, err := nb.BuildNIPost(context.Background(), &challenge, certifier)
+	nipost, err := nb.BuildNIPost(context.Background(), sig, &challenge, certifier)
 	require.NoError(t, err)
 
 	// Verify
@@ -665,7 +713,6 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 		poetDb,
 		postService,
 		zaptest.NewLogger(t),
-		sig,
 		PoetConfig{},
 		mclock,
 		WithPoetClients(poets...),
@@ -678,7 +725,7 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 	certifier.EXPECT().GetCertificate(poets[1].Address()).Return(nil)
 
 	// Act
-	nipost, err := nb.BuildNIPost(context.Background(), &challenge, certifier)
+	nipost, err := nb.BuildNIPost(context.Background(), sig, &challenge, certifier)
 	require.NoError(t, err)
 
 	// Verify
@@ -715,7 +762,6 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			poetDb,
 			postService,
 			zaptest.NewLogger(t),
-			sig,
 			poetCfg,
 			mclock,
 			WithPoetClients(poetProver),
@@ -725,7 +771,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		certifier := NewMockcertifierService(ctrl)
 		certifier.EXPECT().GetCertificate("http://localhost:9999").Return(cert)
 
-		nipst, err := nb.BuildNIPost(context.Background(), &challenge, certifier)
+		nipst, err := nb.BuildNIPost(context.Background(), sig, &challenge, certifier)
 		require.ErrorIs(t, err, ErrPoetServiceUnstable)
 		require.Nil(t, nipst)
 	})
@@ -756,7 +802,6 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			poetDb,
 			postService,
 			zaptest.NewLogger(t),
-			sig,
 			poetCfg,
 			mclock,
 			WithPoetClients(poetProver),
@@ -766,7 +811,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		certifier := NewMockcertifierService(ctrl)
 		certifier.EXPECT().GetCertificate("http://localhost:9999").Return(cert)
 
-		nipst, err := nb.BuildNIPost(context.Background(), &challenge, certifier)
+		nipst, err := nb.BuildNIPost(context.Background(), sig, &challenge, certifier)
 		require.ErrorIs(t, err, ErrPoetServiceUnstable)
 		require.Nil(t, nipst)
 	})
@@ -784,7 +829,6 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			poetDb,
 			postService,
 			zaptest.NewLogger(t),
-			sig,
 			poetCfg,
 			mclock,
 			WithPoetClients(poetProver),
@@ -794,7 +838,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		certifier := NewMockcertifierService(ctrl)
 		certifier.EXPECT().GetCertificate("http://localhost:9999").Return(cert)
 
-		nipst, err := nb.BuildNIPost(context.Background(), &challenge, certifier)
+		nipst, err := nb.BuildNIPost(context.Background(), sig, &challenge, certifier)
 		require.ErrorIs(t, err, ErrPoetProofNotReceived)
 		require.Nil(t, nipst)
 	})
@@ -815,7 +859,6 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			poetDb,
 			postService,
 			zaptest.NewLogger(t),
-			sig,
 			poetCfg,
 			mclock,
 			WithPoetClients(poetProver),
@@ -825,7 +868,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		certifier := NewMockcertifierService(ctrl)
 		certifier.EXPECT().GetCertificate("http://localhost:9999").Return(cert)
 
-		nipst, err := nb.BuildNIPost(context.Background(), &challenge, certifier)
+		nipst, err := nb.BuildNIPost(context.Background(), sig, &challenge, certifier)
 		require.ErrorIs(t, err, ErrPoetProofNotReceived)
 		require.Nil(t, nipst)
 	})
@@ -860,7 +903,6 @@ func TestNIPostBuilder_RecertifyPoet(t *testing.T) {
 		poetDb,
 		postService,
 		zaptest.NewLogger(t),
-		sig,
 		PoetConfig{PhaseShift: layerDuration},
 		mclock,
 		WithPoetClients(poetProver),
@@ -904,7 +946,7 @@ func TestNIPostBuilder_RecertifyPoet(t *testing.T) {
 		After(submitOK).
 		Return(&types.PoetProofMessage{}, []types.Member{types.Member(challenge.Hash())}, nil)
 
-	_, err = nb.BuildNIPost(context.Background(), &challenge, certifier)
+	_, err = nb.BuildNIPost(context.Background(), sig, &challenge, certifier)
 	require.NoError(t, err)
 }
 
@@ -938,7 +980,6 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 			poetDb,
 			postService,
 			zaptest.NewLogger(t),
-			sig,
 			PoetConfig{},
 			mclock,
 			WithPoetClients(poetProver),
@@ -947,7 +988,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 
 		certifier := NewMockcertifierService(ctrl)
 		challenge := types.NIPostChallenge{PublishEpoch: currLayer.GetEpoch()}
-		nipost, err := nb.BuildNIPost(context.Background(), &challenge, certifier)
+		nipost, err := nb.BuildNIPost(context.Background(), sig, &challenge, certifier)
 		require.ErrorIs(t, err, ErrATXChallengeExpired)
 		require.ErrorContains(t, err, "poet round has already started")
 		require.Nil(t, nipost)
@@ -970,7 +1011,6 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 			poetDb,
 			postService,
 			zaptest.NewLogger(t),
-			sig,
 			PoetConfig{},
 			mclock,
 			WithPoetClients(poetProver),
@@ -992,7 +1032,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 
 		certifier := NewMockcertifierService(ctrl)
 
-		nipost, err := nb.BuildNIPost(context.Background(), challenge, certifier)
+		nipost, err := nb.BuildNIPost(context.Background(), sig, challenge, certifier)
 		require.ErrorIs(t, err, ErrATXChallengeExpired)
 		require.ErrorContains(t, err, "poet proof for pub epoch")
 		require.Nil(t, nipost)
@@ -1015,7 +1055,6 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 			poetDb,
 			postService,
 			zaptest.NewLogger(t),
-			sig,
 			PoetConfig{},
 			mclock,
 			WithPoetClients(poetProver),
@@ -1041,7 +1080,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 
 		certifier := NewMockcertifierService(ctrl)
 
-		nipost, err := nb.BuildNIPost(context.Background(), challenge, certifier)
+		nipost, err := nb.BuildNIPost(context.Background(), sig, challenge, certifier)
 		require.ErrorIs(t, err, ErrATXChallengeExpired)
 		require.ErrorContains(t, err, "deadline to publish ATX for pub epoch")
 		require.Nil(t, nipost)
@@ -1107,7 +1146,6 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 		poetDb,
 		postService,
 		zaptest.NewLogger(t),
-		sig,
 		poetCfg,
 		mclock,
 		WithPoetClients(poet),
@@ -1118,7 +1156,7 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 	certifier.EXPECT().GetCertificate("http://localhost:9999").Return(cert)
 
 	// Act
-	nipost, err := nb.BuildNIPost(buildCtx, &challenge, certifier)
+	nipost, err := nb.BuildNIPost(buildCtx, sig, &challenge, certifier)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Nil(t, nipost)
 
@@ -1128,7 +1166,7 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 		Return(&types.PoetRound{}, nil)
 
 	certifier.EXPECT().GetCertificate("http://localhost:9999").Return(cert)
-	nipost, err = nb.BuildNIPost(context.Background(), &challenge, certifier)
+	nipost, err = nb.BuildNIPost(context.Background(), sig, &challenge, certifier)
 	require.NoError(t, err)
 
 	// Verify
@@ -1260,7 +1298,6 @@ func TestNIPostBuilder_Mainnet_Poet_Workaround(t *testing.T) {
 				poetDb,
 				postService,
 				zaptest.NewLogger(t),
-				sig,
 				poetCfg,
 				mclock,
 				WithPoetClients(poets...),
@@ -1270,7 +1307,7 @@ func TestNIPostBuilder_Mainnet_Poet_Workaround(t *testing.T) {
 			certifier := NewMockcertifierService(ctrl)
 			certifier.EXPECT().CertifyAll(gomock.Any(), gomock.Any()).Return(nil)
 
-			nipost, err := nb.BuildNIPost(context.Background(), &challenge, certifier)
+			nipost, err := nb.BuildNIPost(context.Background(), sig, &challenge, certifier)
 			require.NoError(t, err)
 			require.NotNil(t, nipost)
 		})
@@ -1332,7 +1369,6 @@ func TestNIPostBuilder_Close(t *testing.T) {
 		NewMockpoetDbAPI(ctrl),
 		NewMockpostService(ctrl),
 		zaptest.NewLogger(t),
-		sig,
 		PoetConfig{},
 		defaultLayerClockMock(ctrl),
 		WithPoetClients(poet),
@@ -1348,6 +1384,6 @@ func TestNIPostBuilder_Close(t *testing.T) {
 	certifier := NewMockcertifierService(ctrl)
 	certifier.EXPECT().GetCertificate("http://localhost:9999").Return(PoetCert("cert"))
 
-	_, err = nb.BuildNIPost(ctx, &challenge, certifier)
+	_, err = nb.BuildNIPost(ctx, sig, &challenge, certifier)
 	require.Error(t, err)
 }

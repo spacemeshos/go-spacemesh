@@ -42,7 +42,13 @@ func TestCertification(t *testing.T) {
 	close(synced)
 	syncer.EXPECT().RegisterForATXSynced().AnyTimes().Return(synced)
 
-	mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, types.ATXID{2, 3, 4}, syncer)
+	validator := activation.NewMocknipostValidator(gomock.NewController(t))
+	validator.EXPECT().
+		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		AnyTimes()
+	validator.EXPECT().VerifyChain(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, types.ATXID{2, 3, 4}, syncer, validator)
 	require.NoError(t, err)
 
 	opts := activation.DefaultPostSetupOpts()

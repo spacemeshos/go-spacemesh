@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/post/shared"
+	"github.com/spacemeshos/post/verifying"
 	"go.uber.org/zap"
 	"golang.org/x/exp/maps"
 
@@ -246,11 +247,40 @@ func (h *Handler) SyntacticallyValidateDeps(
 		atx.NIPost,
 		expectedChallengeHash,
 		atx.NumUnits,
+		PostSubset([]byte(h.local)), // use the local peer ID as seed for random subset
 	)
+	var invalidIdx *verifying.ErrInvalidIndex
+	if errors.As(err, &invalidIdx) {
+		h.log.WithContext(ctx).With().Info("ATX with invalid post index", atx.ID(), log.Int("index", invalidIdx.Index))
+		gossip := types.MalfeasanceGossip{
+			MalfeasanceProof: types.MalfeasanceProof{
+				Layer: atx.PublishEpoch.FirstLayer(),
+				Proof: types.Proof{
+					Type: types.InvalidPostIndex,
+					Data: &types.InvalidPostIndexProof{
+						Atx:        *atx,
+						InvalidIdx: uint32(invalidIdx.Index),
+					},
+				},
+			},
+		}
+		encodedProof := codec.MustEncode(&gossip.MalfeasanceProof)
+		if err := identities.SetMalicious(h.cdb, atx.SmesherID, encodedProof, time.Now()); err != nil {
+			return nil, fmt.Errorf("adding malfeasance proof: %w", err)
+		}
+		if err := h.publisher.Publish(ctx, pubsub.MalfeasanceProof, codec.MustEncode(&gossip)); err != nil {
+			h.log.With().Error("failed to broadcast malfeasance proof", log.Err(err))
+		}
+		h.cdb.CacheMalfeasanceProof(atx.SmesherID, &gossip.MalfeasanceProof)
+		h.tortoise.OnMalfeasance(atx.SmesherID)
+		return nil, errMaliciousATX
+	}
 	if err != nil {
 		return nil, fmt.Errorf("invalid nipost: %w", err)
 	}
-
+	if h.nipostValidator.IsVerifyingFullPost() {
+		atx.SetValidity(types.Valid)
+	}
 	return atx.Verify(baseTickHeight, leaves/h.tickSize)
 }
 
@@ -366,16 +396,7 @@ func (h *Handler) cacheAtx(ctx context.Context, atx *types.ActivationTxHeader) {
 			h.log.With().Error("failed is malicious read", log.Err(err), log.Context(ctx))
 			return
 		}
-		h.atxsdata.Add(
-			atx.TargetEpoch(),
-			atx.NodeID,
-			atx.ID,
-			atx.GetWeight(),
-			atx.BaseTickHeight,
-			atx.TickHeight(),
-			nonce,
-			malicious,
-		)
+		h.atxsdata.AddFromHeader(atx, nonce, malicious)
 	}
 }
 

@@ -600,6 +600,7 @@ func (app *App) initServices(ctx context.Context) error {
 	app.postVerifier = verifier
 
 	validator := activation.NewValidator(
+		app.db,
 		poetDb,
 		app.Config.POST,
 		app.Config.SMESHING.Opts.Scrypt,
@@ -676,7 +677,7 @@ func (app *App) initServices(ctx context.Context) error {
 	start := time.Now()
 	trtl, err := tortoise.Recover(
 		ctx,
-		app.cachedDB,
+		app.db,
 		app.clock.CurrentLayer(), trtlopts...,
 	)
 	if err != nil {
@@ -693,13 +694,14 @@ func (app *App) initServices(ctx context.Context) error {
 	})
 
 	executor := mesh.NewExecutor(
-		app.cachedDB,
+		app.db,
+		app.atxsdata,
 		state,
 		app.conState,
 		app.addLogger(ExecutorLogger, lg),
 	)
 	mlog := app.addLogger(MeshLogger, lg)
-	msh, err := mesh.NewMesh(app.cachedDB, app.atxsdata, app.clock, trtl, executor, app.conState, mlog)
+	msh, err := mesh.NewMesh(app.db, app.atxsdata, app.clock, trtl, executor, app.conState, mlog)
 	if err != nil {
 		return fmt.Errorf("create mesh: %w", err)
 	}
@@ -774,11 +776,12 @@ func (app *App) initServices(ctx context.Context) error {
 
 	app.hOracle = eligibility.New(
 		beaconProtocol,
-		app.cachedDB,
+		app.db,
+		app.atxsdata,
 		vrfVerifier,
 		app.Config.LayersPerEpoch,
-		app.Config.HareEligibility,
-		app.addLogger(HareOracleLogger, lg),
+		eligibility.WithConfig(app.Config.HareEligibility),
+		eligibility.WithLogger(app.addLogger(HareOracleLogger, lg)),
 	)
 	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 
@@ -799,7 +802,7 @@ func (app *App) initServices(ctx context.Context) error {
 	app.Config.Certificate.LayerBuffer = app.Config.Tortoise.Zdist
 	app.Config.Certificate.NumLayersToKeep = app.Config.Tortoise.Zdist * 2
 	app.certifier = blocks.NewCertifier(
-		app.cachedDB,
+		app.db,
 		app.hOracle,
 		app.edVerifier,
 		app.host,
@@ -921,6 +924,8 @@ func (app *App) initServices(ctx context.Context) error {
 		app.cachedDB,
 		goldenATXID,
 		newSyncer,
+		app.validator,
+		activation.PostValidityDelay(app.Config.PostValidDelay),
 	)
 	if err != nil {
 		return fmt.Errorf("create post setup manager: %v", err)
@@ -960,7 +965,6 @@ func (app *App) initServices(ctx context.Context) error {
 		poetDb,
 		grpcPostService.(*grpcserver.PostService),
 		app.addLogger(NipostBuilderLogger, lg).Zap(),
-		app.edSgn,
 		app.Config.POET,
 		app.clock,
 		activation.WithPoetClients(poetClients...),
@@ -971,12 +975,10 @@ func (app *App) initServices(ctx context.Context) error {
 
 	builderConfig := activation.Config{
 		GoldenATXID:      goldenATXID,
-		LayersPerEpoch:   layersPerEpoch,
 		RegossipInterval: app.Config.RegossipAtxInterval,
 	}
 	atxBuilder := activation.NewBuilder(
 		builderConfig,
-		app.edSgn,
 		app.cachedDB,
 		app.localDB,
 		app.host,
@@ -991,7 +993,9 @@ func (app *App) initServices(ctx context.Context) error {
 		activation.WithValidator(app.validator),
 		activation.WithPoets(poetClients...),
 		activation.WithCertifierConfig(app.Config.Certifier),
+		activation.WithPostValidityDelay(app.Config.PostValidDelay),
 	)
+	atxBuilder.Register(app.edSgn)
 
 	malfeasanceHandler := malfeasance.NewHandler(
 		app.cachedDB,
@@ -1000,6 +1004,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.edSgn.NodeID(),
 		app.edVerifier,
 		trtl,
+		app.postVerifier,
 	)
 	fetcher.SetValidators(
 		fetch.ValidatorFunc(
@@ -1847,7 +1852,7 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 		timesync.WithLayerDuration(app.Config.LayerDuration),
 		timesync.WithTickInterval(1*time.Second),
 		timesync.WithGenesisTime(gTime),
-		timesync.WithLogger(app.addLogger(ClockLogger, lg)),
+		timesync.WithLogger(app.addLogger(ClockLogger, lg).Zap()),
 	)
 	if err != nil {
 		return fmt.Errorf("cannot create clock: %w", err)

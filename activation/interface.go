@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/post/verifying"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
 
@@ -29,26 +30,34 @@ type scaler interface {
 	scale(int)
 }
 
+// validatorOption is a functional option type for the validator.
+type validatorOption func(*validatorOptions)
+
 type nipostValidator interface {
 	InitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, goldenATXID types.ATXID) error
 	NIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, nodeID types.NodeID) error
 	NIPost(
 		ctx context.Context,
 		nodeId types.NodeID,
-		atxId types.ATXID,
+		commitmentAtxId types.ATXID,
 		NIPost *types.NIPost,
 		expectedChallenge types.Hash32,
 		numUnits uint32,
+		opts ...validatorOption,
 	) (uint64, error)
 
 	NumUnits(cfg *PostConfig, numUnits uint32) error
+
+	IsVerifyingFullPost() bool
+
 	Post(
 		ctx context.Context,
 		nodeId types.NodeID,
-		atxId types.ATXID,
+		commitmentAtxId types.ATXID,
 		Post *types.Post,
 		PostMetadata *types.PostMetadata,
 		numUnits uint32,
+		opts ...validatorOption,
 	) error
 	PostMetadata(cfg *PostConfig, metadata *types.PostMetadata) error
 
@@ -60,6 +69,9 @@ type nipostValidator interface {
 		numUnits uint32,
 	) error
 	PositioningAtx(id types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubepoch types.EpochID) error
+
+	// VerifyChain fully verifies all dependencies of the given ATX and the ATX itself.
+	VerifyChain(ctx context.Context, id, goldenATXID types.ATXID, opts ...VerifyChainOption) error
 }
 
 type layerClock interface {
@@ -71,11 +83,12 @@ type layerClock interface {
 type nipostBuilder interface {
 	BuildNIPost(
 		ctx context.Context,
+		sig *signing.EdSigner,
 		challenge *types.NIPostChallenge,
 		certifier certifierService,
 	) (*nipost.NIPostState, error)
-	Proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error)
-	ResetState() error
+	Proof(ctx context.Context, nodeID types.NodeID, challenge []byte) (*types.Post, *types.PostInfo, error)
+	ResetState(types.NodeID) error
 }
 
 type syncer interface {
@@ -101,7 +114,7 @@ type SmeshingProvider interface {
 	Smeshing() bool
 	StartSmeshing(types.Address) error
 	StopSmeshing(bool) error
-	SmesherID() types.NodeID
+	SmesherIDs() []types.NodeID
 	Coinbase() types.Address
 	SetCoinbase(coinbase types.Address)
 }

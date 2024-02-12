@@ -33,6 +33,17 @@ func (h *HTTPPoetTestHarness) RestURL() *url.URL {
 	}
 }
 
+func (h *HTTPPoetTestHarness) Client(
+	cfg activation.PoetConfig,
+	opts ...activation.PoetClientOpts,
+) (*activation.HTTPPoetClient, error) {
+	return activation.NewHTTPPoetClient(
+		types.PoetServer{Address: h.RestURL().String()},
+		cfg,
+		opts...,
+	)
+}
+
 type HTTPPoetOpt func(*server.Config)
 
 func WithGenesis(genesis time.Time) HTTPPoetOpt {

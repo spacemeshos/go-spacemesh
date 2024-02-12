@@ -790,7 +790,7 @@ func TestBallot_RefBallot(t *testing.T) {
 		GetActiveSet(gomock.Any(), activeSet.Hash()).
 		DoAndReturn(func(_ context.Context, hash types.Hash32) error {
 			for _, id := range activeSet {
-				th.atxsdata.Add(lid.GetEpoch(), types.NodeID{1}, id, 0, 0, 0, 0, false)
+				th.atxsdata.Add(lid.GetEpoch(), types.NodeID{1}, types.Address{}, id, 0, 0, 0, 0, false)
 			}
 			return activesets.Add(th.db, hash, &types.EpochActiveSet{
 				Epoch: b.Layer.GetEpoch(),
@@ -1397,7 +1397,7 @@ func TestHandleActiveSet(t *testing.T) {
 				th.mf.EXPECT().RegisterPeerHashes(pid, types.ATXIDsToHashes(eset.Set))
 			}
 			for _, atxid := range tc.cached {
-				th.atxsdata.Add(eset.Epoch, types.NodeID{1}, atxid, 0, 0, 0, 0, false)
+				th.atxsdata.Add(eset.Epoch, types.NodeID{1}, types.Address{}, atxid, 0, 0, 0, 0, false)
 			}
 			if tc.fetch != nil {
 				th.mf.EXPECT().GetAtxs(gomock.Any(), tc.fetch).Return(tc.fetchErr)
@@ -1456,7 +1456,7 @@ func TestHandleSyncedProposalActiveSet(t *testing.T) {
 				Set:   set,
 			}))
 			for _, id := range set {
-				th.atxsdata.Add(lid.GetEpoch(), types.NodeID{1}, id, 0, 0, 0, 0, false)
+				th.atxsdata.Add(lid.GetEpoch(), types.NodeID{1}, types.Address{}, id, 0, 0, 0, 0, false)
 			}
 			return nil
 		},

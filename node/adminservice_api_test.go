@@ -22,6 +22,7 @@ func TestPeerInfoApi(t *testing.T) {
 	cfg.Genesis.Accounts = nil
 	cfg.P2P.DisableNatPort = true
 	cfg.P2P.Listen = p2p.MustParseAddresses("/ip4/127.0.0.1/tcp/0")
+	cfg.P2P.IP4Blocklist = nil
 
 	cfg.API.PublicListener = "0.0.0.0:0"
 	cfg.API.PrivateServices = nil

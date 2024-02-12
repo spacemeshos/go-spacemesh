@@ -50,6 +50,7 @@ func Warmup(db sql.Executor, cache *Data) error {
 		cache.Add(
 			vatx.TargetEpoch(),
 			vatx.SmesherID,
+			vatx.Coinbase,
 			vatx.ID(),
 			vatx.GetWeight(),
 			vatx.BaseTickHeight(),

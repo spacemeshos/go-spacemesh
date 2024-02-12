@@ -252,10 +252,6 @@ func (c *HTTPPoetClient) Proof(ctx context.Context, roundID string) (*types.Poet
 		RoundID:       roundID,
 		Statement:     types.BytesToHash(statement),
 	}
-	if c.poetServiceID == nil {
-		c.poetServiceID = proof.PoetServiceID
-	}
-
 	return &proof, members, nil
 }
 
