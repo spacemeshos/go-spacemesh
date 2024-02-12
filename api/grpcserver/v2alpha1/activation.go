@@ -1,4 +1,4 @@
-package v2
+package v2alpha1
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	spacemeshv2 "github.com/spacemeshos/api/release/go/spacemesh/v2"
+	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
 
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -23,8 +23,8 @@ import (
 )
 
 const (
-	Activation       = "activation_v2"
-	ActivationStream = "activation_stream_v2"
+	Activation       = "activation_v2alpha1"
+	ActivationStream = "activation_stream_v2alpha1"
 )
 
 func NewActivationStreamService(db *sql.Database) *ActivationStreamService {
@@ -38,11 +38,11 @@ type ActivationStreamService struct {
 var _ grpcserver.ServiceAPI = (*ActivationStreamService)(nil)
 
 func (s *ActivationStreamService) RegisterService(server *grpc.Server) {
-	spacemeshv2.RegisterActivationStreamServiceServer(server, s)
+	spacemeshv2alpha1.RegisterActivationStreamServiceServer(server, s)
 }
 
 func (s *ActivationStreamService) RegisterHandlerService(mux *runtime.ServeMux) error {
-	return spacemeshv2.RegisterActivationStreamServiceHandlerServer(context.Background(), mux, s)
+	return spacemeshv2alpha1.RegisterActivationStreamServiceHandlerServer(context.Background(), mux, s)
 }
 
 func (s *ActivationStreamService) String() string {
@@ -50,8 +50,8 @@ func (s *ActivationStreamService) String() string {
 }
 
 func (s *ActivationStreamService) Stream(
-	request *spacemeshv2.ActivationStreamRequest,
-	stream spacemeshv2.ActivationStreamService_StreamServer,
+	request *spacemeshv2alpha1.ActivationStreamRequest,
+	stream spacemeshv2alpha1.ActivationStreamService_StreamServer,
 ) error {
 	var sub *events.BufferedSubscription[events.ActivationTx]
 	if request.Watch {
@@ -114,7 +114,7 @@ func (s *ActivationStreamService) Stream(
 	}
 	var ierr error
 	if err := atxs.IterateAtxsOps(s.db, ops, func(atx *types.VerifiedActivationTx) bool {
-		ierr = stream.Send(&spacemeshv2.Activation{Versioned: &spacemeshv2.Activation_V1{V1: toAtx(atx)}})
+		ierr = stream.Send(&spacemeshv2alpha1.Activation{Versioned: &spacemeshv2alpha1.Activation_V1{V1: toAtx(atx)}})
 		return ierr == nil
 	}); err != nil {
 		return status.Error(codes.Internal, err.Error())
@@ -129,8 +129,8 @@ func (s *ActivationStreamService) Stream(
 		case <-sub.Full():
 			return status.Error(codes.Canceled, "buffer overflow")
 		case rst := <-sub.Out():
-			if err := stream.Send(&spacemeshv2.Activation{
-				Versioned: &spacemeshv2.Activation_V1{V1: toAtx(rst.VerifiedActivationTx)}},
+			if err := stream.Send(&spacemeshv2alpha1.Activation{
+				Versioned: &spacemeshv2alpha1.Activation_V1{V1: toAtx(rst.VerifiedActivationTx)}},
 			); err != nil {
 				if errors.Is(err, io.EOF) {
 					return nil
@@ -141,62 +141,8 @@ func (s *ActivationStreamService) Stream(
 	}
 }
 
-func (s *ActivationStreamService) StreamHeaders(
-	request *spacemeshv2.ActivationStreamRequest,
-	stream spacemeshv2.ActivationStreamService_StreamHeadersServer,
-) error {
-	// TODO(dshulyak) the code below is almost the same as code in Stream
-	// it can be refactored by implementing generic with toAtx/toHeader
-
-	// TODO(dshulyak) implement matcher based on filter
-	var sub *events.BufferedSubscription[events.ActivationTx]
-	if request.Watch {
-		var err error
-		sub, err = events.Subscribe[events.ActivationTx]()
-		if err != nil {
-			return status.Error(codes.Internal, err.Error())
-		}
-		defer sub.Close()
-		if err := stream.SendHeader(metadata.MD{}); err != nil {
-			return status.Errorf(codes.Unavailable, "can't send header")
-		}
-	}
-	ops, err := toOperations(toRequest(request))
-	if err != nil {
-		return status.Error(codes.InvalidArgument, err.Error())
-	}
-	var ierr error
-	if err := atxs.IterateAtxsOps(s.db, ops, func(atx *types.VerifiedActivationTx) bool {
-		ierr = stream.Send(&spacemeshv2.ActivationHeader{Versioned: &spacemeshv2.ActivationHeader_V1{
-			V1: toHeader(atx)}})
-		return ierr == nil
-	}); err != nil {
-		return status.Error(codes.Internal, err.Error())
-	}
-	if sub == nil {
-		return nil
-	}
-	for {
-		select {
-		case <-stream.Context().Done():
-			return nil
-		case <-sub.Full():
-			return status.Error(codes.Canceled, "buffer overflow")
-		case rst := <-sub.Out():
-			if err := stream.Send(&spacemeshv2.ActivationHeader{
-				Versioned: &spacemeshv2.ActivationHeader_V1{V1: toHeader(rst.VerifiedActivationTx)}},
-			); err != nil {
-				if errors.Is(err, io.EOF) {
-					return nil
-				}
-				return status.Error(codes.Internal, err.Error())
-			}
-		}
-	}
-}
-
-func toAtx(atx *types.VerifiedActivationTx) *spacemeshv2.ActivationV1 {
-	v1 := &spacemeshv2.ActivationV1{
+func toAtx(atx *types.VerifiedActivationTx) *spacemeshv2alpha1.ActivationV1 {
+	v1 := &spacemeshv2alpha1.ActivationV1{
 		Id:             atx.ID().Bytes(),
 		NodeId:         atx.SmesherID.Bytes(),
 		Signature:      atx.Signature.Bytes(),
@@ -213,12 +159,12 @@ func toAtx(atx *types.VerifiedActivationTx) *spacemeshv2.ActivationV1 {
 		v1.CommittmentAtx = atx.CommitmentATX.Bytes()
 	}
 	if atx.VRFNonce != nil {
-		v1.VrfPostIndex = &spacemeshv2.VRFPostIndex{
+		v1.VrfPostIndex = &spacemeshv2alpha1.VRFPostIndex{
 			Nonce: uint64(*atx.VRFNonce),
 		}
 	}
 	if atx.InitialPost != nil {
-		v1.InitialPost = &spacemeshv2.Post{
+		v1.InitialPost = &spacemeshv2alpha1.Post{
 			Nonce:   atx.InitialPost.Nonce,
 			Indices: atx.InitialPost.Indices,
 			Pow:     atx.InitialPost.Pow,
@@ -226,19 +172,19 @@ func toAtx(atx *types.VerifiedActivationTx) *spacemeshv2.ActivationV1 {
 	}
 	if nipost := atx.NIPost; nipost != nil {
 		if nipost.Post != nil {
-			v1.Post = &spacemeshv2.Post{
+			v1.Post = &spacemeshv2alpha1.Post{
 				Nonce:   nipost.Post.Nonce,
 				Indices: nipost.Post.Indices,
 				Pow:     nipost.Post.Pow,
 			}
 		}
 		if nipost.PostMetadata != nil {
-			v1.PostMeta = &spacemeshv2.PostMeta{
+			v1.PostMeta = &spacemeshv2alpha1.PostMeta{
 				Challenge: nipost.PostMetadata.Challenge,
 				Labels:    nipost.PostMetadata.LabelsPerUnit,
 			}
 		}
-		v1.PoetProof = &spacemeshv2.PoetProof{
+		v1.PoetProof = &spacemeshv2alpha1.PoetProof{
 			ProofNodes: make([][]byte, len(nipost.Membership.Nodes)),
 			Leaf:       nipost.Membership.LeafIndex,
 		}
@@ -247,18 +193,6 @@ func toAtx(atx *types.VerifiedActivationTx) *spacemeshv2.ActivationV1 {
 		}
 	}
 	return v1
-}
-
-func toHeader(atx *types.VerifiedActivationTx) *spacemeshv2.ActivationHeaderV1 {
-	return &spacemeshv2.ActivationHeaderV1{
-		Id:           atx.ID().Bytes(),
-		NodeId:       atx.SmesherID.Bytes(),
-		PublishEpoch: atx.PublishEpoch.Uint32(),
-		Coinbase:     atx.Coinbase.String(),
-		Units:        atx.NumUnits,
-		BaseHeight:   uint32(atx.BaseTickHeight()),
-		Ticks:        uint32(atx.TickCount()),
-	}
 }
 
 func NewActivationService(db *sql.Database) *ActivationService {
@@ -272,11 +206,11 @@ type ActivationService struct {
 var _ grpcserver.ServiceAPI = (*ActivationService)(nil)
 
 func (s *ActivationService) RegisterService(server *grpc.Server) {
-	spacemeshv2.RegisterActivationServiceServer(server, s)
+	spacemeshv2alpha1.RegisterActivationServiceServer(server, s)
 }
 
 func (s *ActivationService) RegisterHandlerService(mux *runtime.ServeMux) error {
-	return spacemeshv2.RegisterActivationServiceHandlerServer(context.Background(), mux, s)
+	return spacemeshv2alpha1.RegisterActivationServiceHandlerServer(context.Background(), mux, s)
 }
 
 // String returns the service name.
@@ -286,8 +220,8 @@ func (s *ActivationService) String() string {
 
 func (s *ActivationService) List(
 	ctx context.Context,
-	request *spacemeshv2.ActivationRequest,
-) (*spacemeshv2.ActivationList, error) {
+	request *spacemeshv2alpha1.ActivationRequest,
+) (*spacemeshv2alpha1.ActivationList, error) {
 	ops, err := toOperations(request)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
@@ -298,41 +232,18 @@ func (s *ActivationService) List(
 	} else if request.Limit == 0 {
 		return nil, status.Error(codes.InvalidArgument, "limit must be set to <= 100")
 	}
-	rst := make([]*spacemeshv2.Activation, 0, request.Limit)
+	rst := make([]*spacemeshv2alpha1.Activation, 0, request.Limit)
 	if err := atxs.IterateAtxsOps(s.db, ops, func(atx *types.VerifiedActivationTx) bool {
-		rst = append(rst, &spacemeshv2.Activation{Versioned: &spacemeshv2.Activation_V1{V1: toAtx(atx)}})
+		rst = append(rst, &spacemeshv2alpha1.Activation{Versioned: &spacemeshv2alpha1.Activation_V1{V1: toAtx(atx)}})
 		return true
 	}); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-	return &spacemeshv2.ActivationList{Activations: rst}, nil
+	return &spacemeshv2alpha1.ActivationList{Activations: rst}, nil
 }
 
-func (s *ActivationService) ListHeaders(
-	ctx context.Context,
-	request *spacemeshv2.ActivationRequest,
-) (*spacemeshv2.ActivationHeaderList, error) {
-	ops, err := toOperations(request)
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-	if request.Limit > 10000 {
-		return nil, status.Error(codes.InvalidArgument, "limit is capped at 10000")
-	} else if request.Limit == 0 {
-		return nil, status.Error(codes.InvalidArgument, "limit must be set to <= 10000")
-	}
-	rst := make([]*spacemeshv2.ActivationHeader, 0, request.Limit)
-	if err := atxs.IterateAtxsOps(s.db, ops, func(atx *types.VerifiedActivationTx) bool {
-		rst = append(rst, &spacemeshv2.ActivationHeader{Versioned: &spacemeshv2.ActivationHeader_V1{V1: toHeader(atx)}})
-		return true
-	}); err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-	return &spacemeshv2.ActivationHeaderList{Headers: rst}, nil
-}
-
-func toRequest(filter *spacemeshv2.ActivationStreamRequest) *spacemeshv2.ActivationRequest {
-	return &spacemeshv2.ActivationRequest{
+func toRequest(filter *spacemeshv2alpha1.ActivationStreamRequest) *spacemeshv2alpha1.ActivationRequest {
+	return &spacemeshv2alpha1.ActivationRequest{
 		NodeId:     filter.NodeId,
 		Id:         filter.Id,
 		Coinbase:   filter.Coinbase,
@@ -341,7 +252,7 @@ func toRequest(filter *spacemeshv2.ActivationStreamRequest) *spacemeshv2.Activat
 	}
 }
 
-func toOperations(filter *spacemeshv2.ActivationRequest) (atxs.Operations, error) {
+func toOperations(filter *spacemeshv2alpha1.ActivationRequest) (atxs.Operations, error) {
 	ops := atxs.Operations{}
 	if filter == nil {
 		return ops, nil

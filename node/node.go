@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/api/grpcserver/v2alpha1"
 	"net"
 	"net/http"
 	"net/url"
@@ -34,7 +35,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
-	v2 "github.com/spacemeshos/go-spacemesh/api/grpcserver/v2"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/blocks"
@@ -1365,10 +1365,10 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 			app.cachedDB,
 			types.ATXID(app.Config.Genesis.GoldenATX()),
 		), nil
-	case v2.Activation:
-		return v2.NewActivationService(app.db), nil
-	case v2.ActivationStream:
-		return v2.NewActivationStreamService(app.db), nil
+	case v2alpha1.Activation:
+		return v2alpha1.NewActivationService(app.db), nil
+	case v2alpha1.ActivationStream:
+		return v2alpha1.NewActivationStreamService(app.db), nil
 	}
 	return nil, fmt.Errorf("unknown service %s", svc)
 }
