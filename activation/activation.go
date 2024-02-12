@@ -75,7 +75,6 @@ type Builder struct {
 	publisher         pubsub.Publisher
 	nipostBuilder     nipostBuilder
 	validator         nipostValidator
-	certifier         certifierService
 	certifierConfig   CertifierConfig
 	layerClock        layerClock
 	syncer            syncer
@@ -91,6 +90,7 @@ type Builder struct {
 	// since they (can) modify the fields below.
 	smeshingMutex sync.Mutex
 	signers       map[types.NodeID]*signing.EdSigner
+	certifiers    map[types.NodeID]certifierService
 	eg            errgroup.Group
 	stop          context.CancelFunc
 }
@@ -169,6 +169,7 @@ func NewBuilder(
 		log:               log,
 		poetRetryInterval: defaultPoetRetryInterval,
 		postValidityDelay: 12 * time.Hour,
+		certifiers:        make(map[types.NodeID]certifierService),
 		certifierConfig:   DefaultCertifierConfig(),
 	}
 	for _, opt := range opts {
@@ -324,12 +325,14 @@ func (b *Builder) buildInitialPost(ctx context.Context, nodeId types.NodeID) (*t
 // We want to certify immediately after the startup or creating the initial POST
 // to avoid all nodes spamming the certifier at the same time when
 // submitting to the poets.
-//
-// New nodes should call it after the initial POST is created.
 func (b *Builder) certifyPost(ctx context.Context, post *types.Post, meta *types.PostInfo, ch []byte) {
 	client := NewCertifierClient(b.log, post, meta, ch, WithCertifierClientConfig(b.certifierConfig.Client))
-	b.certifier = NewCertifier(b.localDB, b.log, client)
-	b.certifier.CertifyAll(ctx, b.poets)
+	certifier := NewCertifier(b.localDB, b.log, client)
+	certifier.CertifyAll(ctx, b.poets)
+
+	b.smeshingMutex.Lock()
+	b.certifiers[meta.NodeID] = certifier
+	b.smeshingMutex.Unlock()
 }
 
 func (b *Builder) obtainPostFromLastAtx(
@@ -436,12 +439,12 @@ func (b *Builder) obtainPost(ctx context.Context, nodeId types.NodeID) (*types.P
 func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 	defer b.log.Info("atx builder stopped")
 
-	if post, meta, ch, err := b.obtainPost(ctx, sig.NodeID()); err != nil {
+	post, meta, ch, err := b.obtainPost(ctx, sig.NodeID())
+	if err != nil {
 		b.log.Error("failed to obtain post for certification", zap.Error(err))
 		return
-	} else {
-		b.certifyPost(ctx, post, meta, ch)
 	}
+	b.certifyPost(ctx, post, meta, ch)
 
 	for {
 		err := b.PublishActivationTx(ctx, sig)
@@ -665,7 +668,11 @@ func (b *Builder) createAtx(
 ) (*types.ActivationTx, error) {
 	pubEpoch := challenge.PublishEpoch
 
-	nipostState, err := b.nipostBuilder.BuildNIPost(ctx, sig, challenge, b.certifier)
+	b.smeshingMutex.Lock()
+	certifier := b.certifiers[sig.NodeID()]
+	b.smeshingMutex.Unlock()
+
+	nipostState, err := b.nipostBuilder.BuildNIPost(ctx, sig, challenge, certifier)
 	if err != nil {
 		return nil, fmt.Errorf("build NIPost: %w", err)
 	}
