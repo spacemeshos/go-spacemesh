@@ -98,6 +98,8 @@ configuration is as follows:
 
 ### Improvements
 
+* [#5562](https://github.com/spacemeshos/go-spacemesh/pull/5562) Add streaming mode for fetcher. This should lessen
+  GC pressure during sync
 * [#5418](https://github.com/spacemeshos/go-spacemesh/pull/5418) Add `grpc-post-listener` to separate post service from
   `grpc-private-listener` and not require mTLS for the post service.
 
