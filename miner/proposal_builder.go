@@ -754,26 +754,6 @@ func activeSetFromBlock(db sql.Executor, bid types.BlockID) ([]types.ATXID, erro
 	return maps.Keys(activeMap), nil
 }
 
-func activesFromFirstBlock(
-	db sql.Executor,
-	atxsdata *atxsdata.Data,
-	target types.EpochID,
-) (uint64, []types.ATXID, error) {
-	set, err := ActiveSetFromEpochFirstBlock(db, target)
-	if err != nil {
-		return 0, nil, err
-	}
-	var totalWeight uint64
-	for _, id := range set {
-		atx := atxsdata.Get(target, id)
-		if atx == nil {
-			return 0, nil, fmt.Errorf("atx %s is missing in atxsdata", id.ShortString())
-		}
-		totalWeight += atx.Weight
-	}
-	return totalWeight, set, nil
-}
-
 func (pb *ProposalBuilder) fallbackActiveSet(targetEpoch types.EpochID) (uint64, []types.ATXID, error) {
 	pb.fallback.mu.Lock()
 	defer pb.fallback.mu.Unlock()
@@ -803,57 +783,52 @@ func generateActiveSet(
 	networkDelay time.Duration,
 ) (uint64, []types.ATXID, error) {
 	var (
-		totalWeight uint64
-		set         []types.ATXID
-		numOmitted  = 0
-		gerr        error
+		set   []types.ATXID
+		total int
 	)
 	if err := atxs.IterateForGrading(db, target-1, func(id types.ATXID, atxtime, prooftime int64) bool {
-		if gradeAtx(epochStart, networkDelay, atxtime, prooftime) != good {
-			numOmitted++
-		} else {
-			atx := atxsdata.Get(target, id)
-			if atx == nil {
-				gerr = fmt.Errorf("atx %s is missing in atxsdata", id.ShortString())
-				return false
-			}
+		total++
+		if gradeAtx(epochStart, networkDelay, atxtime, prooftime) == good {
 			set = append(set, id)
-			totalWeight += atx.Weight
 		}
 		return true
 	}); err != nil {
 		return 0, nil, err
 	}
-	if gerr != nil {
-		return 0, nil, gerr
-	}
-
-	if total := numOmitted + len(set); total == 0 {
+	if total == 0 {
 		return 0, nil, fmt.Errorf("empty active set")
-	} else if numOmitted*100/total > 100-goodAtxPercent {
+	} else if (total-len(set))*100/total > 100-goodAtxPercent {
 		// if the node is not synced during `targetEpoch-1`, it doesn't have the correct receipt timestamp
 		// for all the atx and malfeasance proof. this active set is not usable.
 		// TODO: change after timing info of ATXs and malfeasance proofs is sync'ed from peers as well
 		var err error
-		totalWeight, set, err = activesFromFirstBlock(db, atxsdata, target)
+		set, err := ActiveSetFromEpochFirstBlock(db, target)
 		if err != nil {
 			return 0, nil, err
 		}
 		logger.With().Info("miner not synced during prior epoch, active set from first block",
 			log.Int("all atx", total),
-			log.Int("num omitted", numOmitted),
+			log.Int("num omitted", total-len(set)),
 			log.Int("num block atx", len(set)),
 		)
 	} else {
 		logger.With().Info("active set selected for proposal using grades",
 			log.Int("num atx", len(set)),
-			log.Int("num omitted", numOmitted),
+			log.Int("num omitted", total-len(set)),
 			log.Int("min atx good pct", goodAtxPercent),
 		)
 	}
 	sort.Slice(set, func(i, j int) bool {
 		return bytes.Compare(set[i].Bytes(), set[j].Bytes()) < 0
 	})
+	var totalWeight uint64
+	for _, id := range set {
+		atx := atxsdata.Get(target, id)
+		if atx == nil {
+			return 0, nil, fmt.Errorf("atx %s/%s is missing in atxsdata", target, id.ShortString())
+		}
+		totalWeight += atx.Weight
+	}
 	return totalWeight, set, nil
 }
 
