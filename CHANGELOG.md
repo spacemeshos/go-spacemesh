@@ -2,6 +2,14 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## UNRELEASED
+
+### Improvements
+
+* [#5548](https://github.com/spacemeshos/go-spacemesh/pull/5548) Disable mesh aggremenet sync protocol.
+
+  It reduces number of requests for historical activation ids.
+
 ## Release v1.3.9
 
 ### Improvements
