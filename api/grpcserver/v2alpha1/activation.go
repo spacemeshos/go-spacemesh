@@ -55,51 +55,9 @@ func (s *ActivationStreamService) Stream(
 ) error {
 	var sub *events.BufferedSubscription[events.ActivationTx]
 	if request.Watch {
+		matcher := resultsMatcher{request, stream.Context()}
 		var err error
-		sub, err = events.SubscribeMatched(func(t *events.ActivationTx) bool {
-			if len(request.NodeId) > 0 {
-				var nodeId types.NodeID
-				copy(nodeId[:], request.NodeId)
-
-				if t.SmesherID != nodeId {
-					return false
-				}
-			}
-
-			if len(request.Id) > 0 {
-				var atxId types.ATXID
-				copy(atxId[:], request.Id)
-
-				if t.ID() != atxId {
-					return false
-				}
-			}
-
-			if len(request.Coinbase) > 0 {
-				addr, err := types.StringToAddress(request.Coinbase)
-				if err != nil {
-					ctxzap.Error(stream.Context(), "unable to convert atx coinbase", zap.Error(err))
-					return false
-				}
-				if t.Coinbase != addr {
-					return false
-				}
-			}
-
-			if request.StartEpoch != 0 {
-				if t.PublishEpoch.Uint32() < request.StartEpoch {
-					return false
-				}
-			}
-
-			if request.EndEpoch != 0 {
-				if t.PublishEpoch.Uint32() > request.EndEpoch {
-					return false
-				}
-			}
-
-			return true
-		})
+		sub, err = events.SubscribeMatched(matcher.match)
 		if err != nil {
 			return status.Error(codes.Internal, err.Error())
 		}
@@ -309,4 +267,54 @@ func toOperations(filter *spacemeshv2alpha1.ActivationRequest) (atxs.Operations,
 		})
 	}
 	return ops, nil
+}
+
+type resultsMatcher struct {
+	*spacemeshv2alpha1.ActivationStreamRequest
+	ctx context.Context
+}
+
+func (m *resultsMatcher) match(t *events.ActivationTx) bool {
+	if len(m.NodeId) > 0 {
+		var nodeId types.NodeID
+		copy(nodeId[:], m.NodeId)
+
+		if t.SmesherID != nodeId {
+			return false
+		}
+	}
+
+	if len(m.Id) > 0 {
+		var atxId types.ATXID
+		copy(atxId[:], m.Id)
+
+		if t.ID() != atxId {
+			return false
+		}
+	}
+
+	if len(m.Coinbase) > 0 {
+		addr, err := types.StringToAddress(m.Coinbase)
+		if err != nil {
+			ctxzap.Error(m.ctx, "unable to convert atx coinbase", zap.Error(err))
+			return false
+		}
+		if t.Coinbase != addr {
+			return false
+		}
+	}
+
+	if m.StartEpoch != 0 {
+		if t.PublishEpoch.Uint32() < m.StartEpoch {
+			return false
+		}
+	}
+
+	if m.EndEpoch != 0 {
+		if t.PublishEpoch.Uint32() > m.EndEpoch {
+			return false
+		}
+	}
+
+	return true
 }
