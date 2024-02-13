@@ -1,14 +1,14 @@
 package fixture
 
 import (
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"log"
 	"math/rand"
 	"os"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // NewAtxsGenerator with some random parameters.

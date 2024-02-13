@@ -3,19 +3,21 @@ package v2alpha1
 import (
 	"context"
 	"errors"
+	"io"
+	"testing"
+	"time"
+
 	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	"io"
-	"testing"
-	"time"
 )
 
 func TestActivationService_List(t *testing.T) {
@@ -217,7 +219,9 @@ func TestActivationService_ActivationsCount(t *testing.T) {
 	conn := dialGrpc(ctx, t, cfg)
 	client := spacemeshv2alpha1.NewActivationServiceClient(conn)
 
-	count, err := client.ActivationsCount(ctx, &spacemeshv2alpha1.ActivationsCountRequest{Epoch: activations[3].PublishEpoch.Uint32()})
+	count, err := client.ActivationsCount(ctx, &spacemeshv2alpha1.ActivationsCountRequest{
+		Epoch: activations[3].PublishEpoch.Uint32(),
+	})
 	require.NoError(t, err)
 	require.Equal(t, len(activations), int(count.Count))
 }

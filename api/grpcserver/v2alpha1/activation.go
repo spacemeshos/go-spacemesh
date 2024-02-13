@@ -3,24 +3,23 @@ package v2alpha1
 import (
 	"context"
 	"errors"
-	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
-	"github.com/spacemeshos/go-spacemesh/sql/builder"
-	"go.uber.org/zap"
 	"io"
 
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-
-	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
 
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
 )
 
 const (
@@ -89,7 +88,8 @@ func (s *ActivationStreamService) Stream(
 			return status.Error(codes.Canceled, "buffer overflow")
 		case rst := <-sub.Out():
 			if err := stream.Send(&spacemeshv2alpha1.Activation{
-				Versioned: &spacemeshv2alpha1.Activation_V1{V1: toAtx(rst.VerifiedActivationTx)}},
+				Versioned: &spacemeshv2alpha1.Activation_V1{V1: toAtx(rst.VerifiedActivationTx)},
+			},
 			); err != nil {
 				if errors.Is(err, io.EOF) {
 					return nil
@@ -219,7 +219,6 @@ func (s *ActivationService) ActivationsCount(
 	}
 
 	return &spacemeshv2alpha1.ActivationsCountResponse{Count: count}, nil
-
 }
 
 func toRequest(filter *spacemeshv2alpha1.ActivationStreamRequest) *spacemeshv2alpha1.ActivationRequest {

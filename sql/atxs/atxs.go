@@ -2,12 +2,12 @@ package atxs
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
 )
 
 const fullQuery = `select id, atx, base_tick_height, tick_count, pubkey,

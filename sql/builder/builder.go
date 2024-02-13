@@ -2,9 +2,10 @@ package builder
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"strconv"
 	"strings"
+
+	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 type token string
