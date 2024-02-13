@@ -571,13 +571,8 @@ func TestEligibilityValidator(t *testing.T) {
 				ms.mvrf,
 			)
 			for _, atx := range tc.atxs {
-				c.Add(
-					atx.TargetEpoch(),
-					atx.SmesherID,
-					atx.ID(),
-					atx.GetWeight(),
-					atx.BaseTickHeight(),
-					atx.TickHeight(),
+				c.AddFromHeader(
+					atx.ToHeader(),
 					0,
 					false,
 				)

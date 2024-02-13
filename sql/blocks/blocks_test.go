@@ -217,3 +217,56 @@ func TestGetLayer(t *testing.T) {
 		require.Equal(t, b.LayerIndex, lid)
 	}
 }
+
+func TestLastValid(t *testing.T) {
+	t.Run("empty", func(t *testing.T) {
+		db := sql.InMemory()
+		_, err := LastValid(db)
+		require.ErrorIs(t, err, sql.ErrNotFound)
+	})
+	t.Run("all valid", func(t *testing.T) {
+		db := sql.InMemory()
+		blocks := map[types.BlockID]struct {
+			lid types.LayerID
+		}{
+			{1}: {lid: 11},
+			{2}: {lid: 22},
+			{3}: {lid: 33},
+		}
+		for bid, layer := range blocks {
+			block := types.NewExistingBlock(
+				bid,
+				types.InnerBlock{LayerIndex: layer.lid},
+			)
+			require.NoError(t, Add(db, block))
+			require.NoError(t, SetValid(db, bid))
+		}
+		last, err := LastValid(db)
+		require.NoError(t, err)
+		require.Equal(t, 33, int(last))
+	})
+	t.Run("last is invalid", func(t *testing.T) {
+		db := sql.InMemory()
+		blocks := map[types.BlockID]struct {
+			invalid bool
+			lid     types.LayerID
+		}{
+			{1}: {lid: 11},
+			{2}: {lid: 22},
+			{3}: {invalid: true, lid: 33},
+		}
+		for bid, layer := range blocks {
+			block := types.NewExistingBlock(
+				bid,
+				types.InnerBlock{LayerIndex: layer.lid},
+			)
+			require.NoError(t, Add(db, block))
+			if !layer.invalid {
+				require.NoError(t, SetValid(db, bid))
+			}
+		}
+		last, err := LastValid(db)
+		require.NoError(t, err)
+		require.Equal(t, 22, int(last))
+	})
+}

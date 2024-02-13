@@ -335,7 +335,7 @@ func tortoiseFromSimState(tb testing.TB, state sim.State, opts ...Opt) *recovery
 	return &recoveryAdapter{
 		TB:       tb,
 		Tortoise: trtl,
-		db:       state.DB,
+		db:       state.DB.Executor,
 	}
 }
 
@@ -2112,13 +2112,13 @@ func TestFutureHeight(t *testing.T) {
 			s.Next(sim.WithNumBlocks(1), sim.WithBlockTickHeights(slow+1)),
 		)
 		tortoise.TallyVotes(context.Background(),
-			s.Next(sim.WithEmptyHareOutput(), sim.WithNumBlocks(0)))
+			s.Next(sim.WithoutHareOutput(), sim.WithNumBlocks(0)))
 		// 3 is handpicked so that threshold will be crossed if bug wasn't fixed
 		for i := 0; i < 3; i++ {
 			tortoise.TallyVotes(context.Background(), s.Next(sim.WithNumBlocks(1)))
 		}
 
-		require.Equal(t, types.GetEffectiveGenesis(), tortoise.LatestComplete())
+		require.Equal(t, types.GetEffectiveGenesis().String(), tortoise.LatestComplete().String())
 	})
 	t.Run("median above slow smeshers", func(t *testing.T) {
 		s := sim.New(

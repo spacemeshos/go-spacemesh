@@ -339,6 +339,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	p2pconf := p2p.DefaultConfig()
 	p2pconf.Listen = p2p.MustParseAddresses("/ip4/127.0.0.1/tcp/0")
 	p2pconf.DataDir = t.TempDir()
+	p2pconf.IP4Blocklist = nil
 
 	// Good host
 	h, err := p2p.New(ctx, lg, p2pconf, []byte{}, []byte{})

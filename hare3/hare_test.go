@@ -241,16 +241,7 @@ func (n *node) storeAtx(atx *types.VerifiedActivationTx) error {
 	if err := atxs.Add(n.db, atx); err != nil {
 		return err
 	}
-	n.atxsdata.Add(
-		atx.TargetEpoch(),
-		atx.SmesherID,
-		atx.ID(),
-		atx.GetWeight(),
-		atx.BaseTickHeight(),
-		atx.TickHeight(),
-		*atx.VRFNonce,
-		false,
-	)
+	n.atxsdata.AddFromHeader(atx.ToHeader(), *atx.VRFNonce, false)
 	return nil
 }
 
@@ -984,16 +975,7 @@ func TestProposals(t *testing.T) {
 			hare := New(nil, nil, db, atxsdata, nil, nil, nil, layerpatrol.New(), WithLogger(logtest.New(t).Zap()))
 			for _, atx := range tc.atxs {
 				require.NoError(t, atxs.Add(db, &atx))
-				atxsdata.Add(
-					atx.TargetEpoch(),
-					atx.SmesherID,
-					atx.ID(),
-					atx.GetWeight(),
-					atx.BaseTickHeight(),
-					atx.TickHeight(),
-					*atx.VRFNonce,
-					false,
-				)
+				atxsdata.AddFromHeader(atx.ToHeader(), *atx.VRFNonce, false)
 			}
 			for _, proposal := range tc.proposals {
 				require.NoError(t, proposals.Add(db, &proposal))

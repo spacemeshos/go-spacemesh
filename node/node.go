@@ -677,7 +677,7 @@ func (app *App) initServices(ctx context.Context) error {
 	start := time.Now()
 	trtl, err := tortoise.Recover(
 		ctx,
-		app.cachedDB,
+		app.db,
 		app.clock.CurrentLayer(), trtlopts...,
 	)
 	if err != nil {
@@ -694,13 +694,14 @@ func (app *App) initServices(ctx context.Context) error {
 	})
 
 	executor := mesh.NewExecutor(
-		app.cachedDB,
+		app.db,
+		app.atxsdata,
 		state,
 		app.conState,
 		app.addLogger(ExecutorLogger, lg),
 	)
 	mlog := app.addLogger(MeshLogger, lg)
-	msh, err := mesh.NewMesh(app.cachedDB, app.atxsdata, app.clock, trtl, executor, app.conState, mlog)
+	msh, err := mesh.NewMesh(app.db, app.atxsdata, app.clock, trtl, executor, app.conState, mlog)
 	if err != nil {
 		return fmt.Errorf("create mesh: %w", err)
 	}
@@ -801,7 +802,7 @@ func (app *App) initServices(ctx context.Context) error {
 	app.Config.Certificate.LayerBuffer = app.Config.Tortoise.Zdist
 	app.Config.Certificate.NumLayersToKeep = app.Config.Tortoise.Zdist * 2
 	app.certifier = blocks.NewCertifier(
-		app.cachedDB,
+		app.db,
 		app.hOracle,
 		app.edVerifier,
 		app.host,

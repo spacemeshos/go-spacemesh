@@ -246,23 +246,13 @@ func New(
 		bootnodesMap[pid.ID] = struct{}{}
 	}
 
-	directMap := make(map[peer.ID]struct{})
-	direct, err := parseIntoAddr(cfg.Direct)
-	if err != nil {
-		return nil, err
-	}
-	for _, pid := range direct {
-		directMap[pid.ID] = struct{}{}
-	}
 	// leaves a small room for outbound connections in order to
 	// reduce risk of network isolation
-	g := &gater{
-		inbound:  int(float64(cfg.HighPeers) * cfg.InboundFraction),
-		outbound: int(float64(cfg.HighPeers) * cfg.OutboundFraction),
-		direct:   directMap,
+	g, err := newGater(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("can't set up connection gater: %w", err)
 	}
 
-	g.direct = directMap
 	lopts := []libp2p.Option{
 		libp2p.Identity(key),
 		libp2p.ListenAddrs(cfg.Listen...),
@@ -402,7 +392,7 @@ func New(
 		WithConfig(cfg),
 		WithLog(logger),
 		WithBootnodes(bootnodesMap),
-		WithDirectNodes(directMap),
+		WithDirectNodes(g.direct),
 	)
 	return Upgrade(h, opts...)
 }

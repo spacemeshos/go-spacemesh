@@ -158,16 +158,7 @@ func createModifiedATXs(
 		vAtx, err := onAtx(atx)
 		require.NoError(tb, err)
 
-		data.Add(
-			vAtx.TargetEpoch(),
-			vAtx.SmesherID,
-			vAtx.ID(),
-			vAtx.GetWeight(),
-			vAtx.BaseTickHeight(),
-			vAtx.TickHeight(),
-			0,
-			false,
-		)
+		data.AddFromHeader(vAtx.ToHeader(), 0, false)
 		atxes = append(atxes, atx)
 	}
 	return signers, atxes
