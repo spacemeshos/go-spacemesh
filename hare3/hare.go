@@ -528,11 +528,13 @@ func (h *Hare) proposals(session *session) []types.ProposalID {
 	publish := target - 1
 	for _, signer := range session.signers {
 		atxid, err := atxs.GetIDByEpochAndNodeID(h.db, publish, signer.NodeID())
-		if err != nil && !errors.Is(err, sql.ErrNotFound) {
+		switch {
+		case errors.Is(err, sql.ErrNotFound):
+			// if atx is not registered for identity we will get sql.ErrNotFound
+		case err != nil:
+			h.log.Error("failed to get atx id by epoch and node id", zap.Error(err))
 			return []types.ProposalID{}
-		}
-		// if atx is not registered for identity we will get sql.ErrNotFound
-		if err == nil {
+		default:
 			own = h.atxsdata.Get(target, atxid)
 			if min == nil || (min != nil && own != nil && own.Height < min.Height) {
 				min = own
