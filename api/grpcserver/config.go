@@ -27,23 +27,25 @@ type Config struct {
 type Service = string
 
 const (
-	Admin       Service = "admin"
-	Debug       Service = "debug"
-	GlobalState Service = "global"
-	Mesh        Service = "mesh"
-	Transaction Service = "transaction"
-	Activation  Service = "activation"
-	Smesher     Service = "smesher"
-	Post        Service = "post"
-	Node        Service = "node"
+	Admin                    Service = "admin"
+	Debug                    Service = "debug"
+	GlobalState              Service = "global"
+	Mesh                     Service = "mesh"
+	Transaction              Service = "transaction"
+	Activation               Service = "activation"
+	Smesher                  Service = "smesher"
+	Post                     Service = "post"
+	Node                     Service = "node"
+	ActivationV2Alpha1       Service = "activation_v2alpha1"
+	ActivationStreamV2Alpha1 Service = "activation_stream_v2alpha1"
 )
 
 // DefaultConfig defines the default configuration options for api.
 func DefaultConfig() Config {
 	return Config{
-		PublicServices:        []Service{GlobalState, Mesh, Transaction, Node, Activation, "activation_v2alpha1"},
+		PublicServices:        []Service{GlobalState, Mesh, Transaction, Node, Activation, ActivationV2Alpha1},
 		PublicListener:        "0.0.0.0:9092",
-		PrivateServices:       []Service{Admin, Smesher, Debug, "activation_stream_v2alpha1"},
+		PrivateServices:       []Service{Admin, Smesher, Debug, ActivationStreamV2Alpha1},
 		PrivateListener:       "127.0.0.1:9093",
 		PostServices:          []Service{Post},
 		PostListener:          "127.0.0.1:9094",
