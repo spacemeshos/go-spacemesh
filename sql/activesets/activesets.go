@@ -84,7 +84,7 @@ func DeleteBeforeEpoch(db sql.Executor, epoch types.EpochID) error {
 	return nil
 }
 
-func SavePrepapred(db sql.Executor, target types.EpochID, weight uint64, set []types.ATXID) error {
+func SavePrepared(db sql.Executor, target types.EpochID, weight uint64, set []types.ATXID) error {
 	_, err := db.Exec("insert into activesets (epoch, weight, active_set, prepared) values (?1, ?2, ?3, true);",
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(target))

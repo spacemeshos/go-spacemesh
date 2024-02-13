@@ -509,10 +509,10 @@ func SetValidity(db sql.Executor, id types.ATXID, validity types.Validity) error
 func IterateForGrading(
 	db sql.Executor,
 	epoch types.EpochID,
-	fn func(id types.ATXID, atxtime, prooftime int64) bool,
+	fn func(id types.ATXID, atxtime, prooftime int64, weight uint64) bool,
 ) error {
 	if _, err := db.Exec(`
-		select atxs.id as id, atxs.received as atxtime, identities.received as prooftime from atxs
+		select atxs.id as id, atxs.received as atxtime, identities.received as prooftime, effective_num_units, tick_count from atxs
 		left join identities on atxs.pubkey = identities.pubkey
 		where atxs.epoch == ?1;`,
 		func(stmt *sql.Statement) {
@@ -522,7 +522,9 @@ func IterateForGrading(
 			stmt.ColumnBytes(0, id[:])
 			atxtime := stmt.ColumnInt64(1)
 			prooftime := stmt.ColumnInt64(2)
-			return fn(id, atxtime, prooftime)
+			units := uint64(stmt.ColumnInt64(3))
+			ticks := uint64(stmt.ColumnInt64(4))
+			return fn(id, atxtime, prooftime, units*ticks)
 		}); err != nil {
 		return fmt.Errorf("iterate for grading: %w", err)
 	}
