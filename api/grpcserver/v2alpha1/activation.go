@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"go.uber.org/zap"
 	"io"
 
@@ -204,10 +205,10 @@ func (s *ActivationService) ActivationsCount(
 	ctx context.Context,
 	request *spacemeshv2alpha1.ActivationsCountRequest,
 ) (*spacemeshv2alpha1.ActivationsCountResponse, error) {
-	ops := atxs.Operations{Filter: []atxs.Op{
+	ops := builder.Operations{Filter: []builder.Op{
 		{
-			Field: atxs.Epoch,
-			Token: atxs.Eq,
+			Field: builder.Epoch,
+			Token: builder.Eq,
 			Value: int64(request.Epoch),
 		},
 	}}
@@ -231,62 +232,69 @@ func toRequest(filter *spacemeshv2alpha1.ActivationStreamRequest) *spacemeshv2al
 	}
 }
 
-func toOperations(filter *spacemeshv2alpha1.ActivationRequest) (atxs.Operations, error) {
-	ops := atxs.Operations{}
+func toOperations(filter *spacemeshv2alpha1.ActivationRequest) (builder.Operations, error) {
+	ops := builder.Operations{}
 	if filter == nil {
 		return ops, nil
 	}
 	if filter.NodeId != nil {
-		ops.Filter = append(ops.Filter, atxs.Op{
-			Field: atxs.Smesher,
-			Token: atxs.Eq,
+		ops.Filter = append(ops.Filter, builder.Op{
+			Field: builder.Smesher,
+			Token: builder.Eq,
 			Value: filter.NodeId,
 		})
 	}
 	if filter.Id != nil {
-		ops.Filter = append(ops.Filter, atxs.Op{
-			Field: atxs.Id,
-			Token: atxs.Eq,
+		ops.Filter = append(ops.Filter, builder.Op{
+			Field: builder.Id,
+			Token: builder.Eq,
 			Value: filter.Id,
 		})
 	}
 	if len(filter.Coinbase) > 0 {
 		addr, err := types.StringToAddress(filter.Coinbase)
 		if err != nil {
-			return atxs.Operations{}, err
+			return builder.Operations{}, err
 		}
-		ops.Filter = append(ops.Filter, atxs.Op{
-			Field: atxs.Coinbase,
-			Token: atxs.Eq,
+		ops.Filter = append(ops.Filter, builder.Op{
+			Field: builder.Coinbase,
+			Token: builder.Eq,
 			Value: addr.Bytes(),
 		})
 	}
 	if filter.StartEpoch != 0 {
-		ops.Filter = append(ops.Filter, atxs.Op{
-			Field: atxs.Epoch,
-			Token: atxs.Gte,
+		ops.Filter = append(ops.Filter, builder.Op{
+			Field: builder.Epoch,
+			Token: builder.Gte,
 			Value: int64(filter.StartEpoch),
 		})
 	}
 	if filter.EndEpoch != 0 {
-		ops.Filter = append(ops.Filter, atxs.Op{
-			Field: atxs.Epoch,
-			Token: atxs.Lte,
+		ops.Filter = append(ops.Filter, builder.Op{
+			Field: builder.Epoch,
+			Token: builder.Lte,
 			Value: int64(filter.EndEpoch),
 		})
 	}
+
+	ops.Other = append(ops.Other, builder.Op{
+		Field: builder.OrderBy,
+		Value: "epoch asc, id",
+	})
+
 	if filter.Limit != 0 {
-		ops.Other = append(ops.Other, atxs.Op{
-			Field: atxs.Limit,
+		ops.Other = append(ops.Other, builder.Op{
+			Field: builder.Limit,
 			Value: int64(filter.Limit),
 		})
 	}
 	if filter.Offset != 0 {
-		ops.Other = append(ops.Other, atxs.Op{
-			Field: atxs.Offset,
+		ops.Other = append(ops.Other, builder.Op{
+			Field: builder.Offset,
 			Value: int64(filter.Offset),
 		})
 	}
+
 	return ops, nil
 }
 

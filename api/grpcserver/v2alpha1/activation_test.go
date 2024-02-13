@@ -62,6 +62,15 @@ func TestActivationService_List(t *testing.T) {
 		require.Equal(t, s.Message(), "limit must be set to <= 100")
 	})
 
+	t.Run("limit and offset", func(t *testing.T) {
+		list, err := client.List(ctx, &spacemeshv2alpha1.ActivationRequest{
+			Limit:  25,
+			Offset: 50,
+		})
+		require.NoError(t, err)
+		require.Equal(t, 25, len(list.Activations))
+	})
+
 	t.Run("all", func(t *testing.T) {
 		list, err := client.List(ctx, &spacemeshv2alpha1.ActivationRequest{Limit: 100})
 		require.NoError(t, err)

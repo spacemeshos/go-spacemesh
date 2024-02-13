@@ -2,8 +2,7 @@ package atxs
 
 import (
 	"fmt"
-	"strconv"
-	"strings"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -507,54 +506,15 @@ func SetValidity(db sql.Executor, id types.ATXID, validity types.Validity) error
 	return nil
 }
 
-// TODO(dshulyak) extract code for query building into separate module
-
-type token string
-
-const (
-	Eq    token = "="
-	NotEq token = "!="
-	Gt    token = ">"
-	Gte   token = ">="
-	Lt    token = "<"
-	Lte   token = "<="
-	And   token = "and"
-	Where token = "where"
-)
-
-type field string
-
-const (
-	Epoch    field = "epoch"
-	Smesher  field = "pubkey"
-	Coinbase field = "coinbase"
-	Id       field = "id"
-	Offset   field = "offset"
-	Limit    field = "limit"
-)
-
-type Op struct {
-	Field field
-	Token token
-	// Value will be type casted to one the expected types.
-	// Operation will panic if it doesn't match any of expected.
-	Value any
-}
-
-type Operations struct {
-	Filter []Op
-	Other  []Op
-}
-
 func IterateAtxsOps(
 	db sql.Executor,
-	operations Operations,
+	operations builder.Operations,
 	fn func(*types.VerifiedActivationTx) bool,
 ) error {
 	var derr error
 	_, err := db.Exec(
-		fullQuery+filterFrom(operations),
-		bindingsFrom(operations),
+		fullQuery+builder.FilterFrom(operations),
+		builder.BindingsFrom(operations),
 		decoder(func(atx *types.VerifiedActivationTx, err error) bool {
 			if atx != nil {
 				return fn(atx)
@@ -568,48 +528,14 @@ func IterateAtxsOps(
 	return derr
 }
 
-func CountAtxsByEpoch(db sql.Executor, operations Operations) (count uint32, err error) {
+func CountAtxsByEpoch(db sql.Executor, operations builder.Operations) (count uint32, err error) {
 	_, err = db.Exec(
-		"SELECT count(*) FROM atxs"+filterFrom(operations),
-		bindingsFrom(operations),
+		"SELECT count(*) FROM atxs"+builder.FilterFrom(operations),
+		builder.BindingsFrom(operations),
 		func(stmt *sql.Statement) bool {
 			count = uint32(stmt.ColumnInt32(0))
 			return true
 		},
 	)
 	return
-}
-
-func filterFrom(operations Operations) string {
-	var queryBuilder strings.Builder
-
-	for i, op := range operations.Filter {
-		if i == 0 {
-			queryBuilder.WriteString(" " + string(Where))
-		}
-		if i != 0 {
-			queryBuilder.WriteString(" " + string(And))
-		}
-		queryBuilder.WriteString(" " + string(op.Field) + " " + string(op.Token) + " ?" + strconv.Itoa(i+1))
-	}
-	queryBuilder.WriteString(" order by epoch asc, id")
-	for _, op := range operations.Other {
-		queryBuilder.WriteString(fmt.Sprintf(" %s %v", string(op.Field), op.Value))
-	}
-	return queryBuilder.String()
-}
-
-func bindingsFrom(operations Operations) sql.Encoder {
-	return func(stmt *sql.Statement) {
-		for i, op := range operations.Filter {
-			switch value := op.Value.(type) {
-			case int64:
-				stmt.BindInt64(i+1, value)
-			case []byte:
-				stmt.BindBytes(i+1, value)
-			default:
-				panic(fmt.Sprintf("unexpected type %T", value))
-			}
-		}
-	}
 }
