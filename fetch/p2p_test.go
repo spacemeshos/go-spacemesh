@@ -67,6 +67,14 @@ func p2pFetchCfg(streaming bool) Config {
 	return cfg
 }
 
+func p2pCfg(t *testing.T) p2p.Config {
+	p2pconf := p2p.DefaultConfig()
+	p2pconf.Listen = p2p.MustParseAddresses("/ip4/127.0.0.1/tcp/0")
+	p2pconf.IP4Blocklist = nil
+	p2pconf.DataDir = t.TempDir()
+	return p2pconf
+}
+
 func createP2PFetch(
 	t *testing.T,
 	clientStreaming,
@@ -76,17 +84,12 @@ func createP2PFetch(
 	lg := logtest.New(t)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	t.Cleanup(cancel)
-	p2pconf := p2p.DefaultConfig()
-	p2pconf.Listen = p2p.MustParseAddresses("/ip4/127.0.0.1/tcp/0")
-	p2pconf.IP4Blocklist = nil
-	p2pconf.DataDir = t.TempDir()
 
-	serverHost, err := p2p.New(ctx, lg, p2pconf, []byte{}, []byte{})
+	serverHost, err := p2p.New(ctx, lg, p2pCfg(t), []byte{}, []byte{})
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, serverHost.Stop()) })
 
-	p2pconf.DataDir = t.TempDir()
-	clientHost, err := p2p.New(ctx, lg, p2pconf, []byte{}, []byte{})
+	clientHost, err := p2p.New(ctx, lg, p2pCfg(t), []byte{}, []byte{})
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, clientHost.Stop()) })
 
@@ -204,12 +207,10 @@ func forStreaming(
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Run("ok", func(t *testing.T) {
-				t.Parallel()
 				tpf, ctx := createP2PFetch(t, tc.clientStreaming, tc.serverStreaming)
 				toCall(t, ctx, tpf, "")
 			})
 			t.Run("fail", func(t *testing.T) {
-				t.Parallel()
 				tpf, ctx := createP2PFetch(t, tc.clientStreaming, tc.serverStreaming)
 				toCall(t, ctx, tpf, errStr)
 			})
