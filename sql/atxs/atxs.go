@@ -568,6 +568,18 @@ func IterateAtxsOps(
 	return derr
 }
 
+func CountAtxsByEpoch(db sql.Executor, operations Operations) (count uint32, err error) {
+	_, err = db.Exec(
+		"SELECT count(*) FROM atxs"+filterFrom(operations),
+		bindingsFrom(operations),
+		func(stmt *sql.Statement) bool {
+			count = uint32(stmt.ColumnInt32(0))
+			return true
+		},
+	)
+	return
+}
+
 func filterFrom(operations Operations) string {
 	var queryBuilder strings.Builder
 

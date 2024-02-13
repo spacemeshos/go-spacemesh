@@ -200,6 +200,27 @@ func (s *ActivationService) List(
 	return &spacemeshv2alpha1.ActivationList{Activations: rst}, nil
 }
 
+func (s *ActivationService) ActivationsCount(
+	ctx context.Context,
+	request *spacemeshv2alpha1.ActivationsCountRequest,
+) (*spacemeshv2alpha1.ActivationsCountResponse, error) {
+	ops := atxs.Operations{Filter: []atxs.Op{
+		{
+			Field: atxs.Epoch,
+			Token: atxs.Eq,
+			Value: int64(request.Epoch),
+		},
+	}}
+
+	count, err := atxs.CountAtxsByEpoch(s.db, ops)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	return &spacemeshv2alpha1.ActivationsCountResponse{Count: count}, nil
+
+}
+
 func toRequest(filter *spacemeshv2alpha1.ActivationStreamRequest) *spacemeshv2alpha1.ActivationRequest {
 	return &spacemeshv2alpha1.ActivationRequest{
 		NodeId:     filter.NodeId,

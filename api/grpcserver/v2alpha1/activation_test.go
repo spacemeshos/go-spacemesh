@@ -183,3 +183,32 @@ func TestActivationStreamService_Stream(t *testing.T) {
 		}
 	})
 }
+
+func TestActivationService_ActivationsCount(t *testing.T) {
+	db := sql.InMemory()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	gen := fixture.NewAtxsGenerator().WithEpochs(0, 1)
+	activations := make([]types.VerifiedActivationTx, 30)
+	require.NoError(t, db.WithTx(ctx, func(dtx *sql.Tx) error {
+		for i := range activations {
+			atx := gen.Next()
+			require.NoError(t, atxs.Add(dtx, atx))
+			activations[i] = *atx
+		}
+		return nil
+	}))
+
+	svc := NewActivationService(db)
+	cfg, cleanup := launchServer(t, svc)
+	t.Cleanup(cleanup)
+
+	conn := dialGrpc(ctx, t, cfg)
+	client := spacemeshv2alpha1.NewActivationServiceClient(conn)
+
+	count, err := client.ActivationsCount(ctx, &spacemeshv2alpha1.ActivationsCountRequest{Epoch: activations[3].PublishEpoch.Uint32()})
+	require.NoError(t, err)
+	require.Equal(t, len(activations), int(count.Count))
+}
