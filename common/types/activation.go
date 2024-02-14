@@ -30,7 +30,7 @@ const (
 	Invalid
 )
 
-// ATXID is a 32-bit hash used to identify an activation transaction.
+// ATXID is a 32 byte hash used to identify an activation transaction.
 type ATXID Hash32
 
 const (
@@ -520,5 +520,5 @@ func ATXIDsToHashes(ids []ATXID) []Hash32 {
 
 type EpochActiveSet struct {
 	Epoch EpochID
-	Set   []ATXID `scale:"max=1500000"` // to be in line with `EpochData` in fetch/wire_types.go
+	Set   []ATXID `scale:"max=2200000"` // to be in line with `EpochData` in fetch/wire_types.go
 }
