@@ -13,6 +13,7 @@ import (
 	reflect "reflect"
 	time "time"
 
+	connmgr "github.com/libp2p/go-libp2p/core/connmgr"
 	network "github.com/libp2p/go-libp2p/core/network"
 	peer "github.com/libp2p/go-libp2p/core/peer"
 	protocol "github.com/libp2p/go-libp2p/core/protocol"
@@ -40,6 +41,44 @@ func NewMockHost(ctrl *gomock.Controller) *MockHost {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockHost) EXPECT() *MockHostMockRecorder {
 	return m.recorder
+}
+
+// ConnManager mocks base method.
+func (m *MockHost) ConnManager() connmgr.ConnManager {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ConnManager")
+	ret0, _ := ret[0].(connmgr.ConnManager)
+	return ret0
+}
+
+// ConnManager indicates an expected call of ConnManager.
+func (mr *MockHostMockRecorder) ConnManager() *HostConnManagerCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConnManager", reflect.TypeOf((*MockHost)(nil).ConnManager))
+	return &HostConnManagerCall{Call: call}
+}
+
+// HostConnManagerCall wrap *gomock.Call
+type HostConnManagerCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *HostConnManagerCall) Return(arg0 connmgr.ConnManager) *HostConnManagerCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *HostConnManagerCall) Do(f func() connmgr.ConnManager) *HostConnManagerCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *HostConnManagerCall) DoAndReturn(f func() connmgr.ConnManager) *HostConnManagerCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // Network mocks base method.
