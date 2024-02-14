@@ -555,7 +555,7 @@ func TestBuild(t *testing.T) {
 				{
 					lid:       16,
 					activeset: gactiveset(types.ATXID{1}, types.ATXID{2}),
-					expectErr: "atx 0400000000 is missing in atxsdata",
+					expectErr: "atx 3/0400000000 is missing in atxsdata",
 				},
 				{
 					lid: 16,

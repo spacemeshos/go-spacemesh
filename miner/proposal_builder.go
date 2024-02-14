@@ -163,6 +163,7 @@ type config struct {
 	// declares
 	activeSetWindow        time.Duration
 	activeSetRetryInterval time.Duration
+	activeSetTries         int
 }
 
 func (c *config) MarshalLogObject(encoder log.ObjectEncoder) error {
@@ -173,6 +174,7 @@ func (c *config) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddInt("good atx percent", c.goodAtxPercent)
 	encoder.AddDuration("active set window", c.activeSetWindow)
 	encoder.AddDuration("active set retry interval", c.activeSetRetryInterval)
+	encoder.AddInt("active set tries", c.activeSetTries)
 	return nil
 }
 
@@ -255,7 +257,10 @@ func New(
 ) *ProposalBuilder {
 	pb := &ProposalBuilder{
 		cfg: config{
-			workersLimit: runtime.NumCPU(),
+			workersLimit:           runtime.NumCPU(),
+			activeSetWindow:        1 * time.Second,
+			activeSetRetryInterval: 1 * time.Second,
+			activeSetTries:         3,
 		},
 		logger:    log.NewNop(),
 		clock:     clock,
@@ -298,9 +303,27 @@ func (pb *ProposalBuilder) Register(signer *signing.EdSigner) {
 
 // Start the loop that listens to layers and build proposals.
 func (pb *ProposalBuilder) Run(ctx context.Context) error {
-	next := pb.clock.CurrentLayer().Add(1)
+	current := pb.clock.CurrentLayer()
+	next := current + 1
 	pb.logger.With().Info("started", log.Inline(&pb.cfg), log.Uint32("next", next.Uint32()))
 	var eg errgroup.Group
+	if pb.cfg.activeSetTries == 0 || pb.cfg.activeSetRetryInterval == 0 {
+		pb.logger.With().Warning("preparation of the active set is disabled")
+	} else {
+		eg.Go(func() error {
+			// check that activeset was prepared for current epoch
+			pb.ensureActiveSetPrepared(ctx, current.GetEpoch())
+			// and then wait for the right time to generate activeset for the next epoch
+			wait := pb.clock.LayerToTime((current.GetEpoch() + 1).FirstLayer()).Add(-pb.cfg.activeSetWindow)
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-time.After(time.Until(wait)):
+			}
+			pb.ensureActiveSetPrepared(ctx, current.GetEpoch())
+			return nil
+		})
+	}
 	eg.Go(func() error {
 		for {
 			select {
@@ -732,6 +755,24 @@ func activeSetFromBlock(db sql.Executor, bid types.BlockID) ([]types.ATXID, erro
 	return maps.Keys(activeMap), nil
 }
 
+func (pb *ProposalBuilder) ensureActiveSetPrepared(ctx context.Context, target types.EpochID) {
+	var err error
+	for try := 0; try < pb.cfg.activeSetTries; try++ {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(pb.cfg.activeSetRetryInterval):
+		}
+		current := pb.clock.CurrentLayer()
+		_, _, err = pb.prepareActiveSet(current, target)
+		if err == nil {
+			return
+		}
+		pb.logger.With().Debug("failed to prepare active set", log.Err(err), log.Uint32("attempt", uint32(try)))
+	}
+	pb.logger.With().Warning("failed to prepare active set", log.Err(err))
+}
+
 // prepareActiveSet generates activeset in advance.
 //
 // It stores it on the builder and persists it in the database, so that when node is restarted
@@ -780,7 +821,10 @@ func (pb *ProposalBuilder) prepareActiveSet(
 		if err != nil {
 			return 0, nil, err
 		}
-		if (result.Total-len(result.Set))*100/result.Total > pb.cfg.goodAtxPercent {
+		if result.Total == 0 {
+			return 0, nil, fmt.Errorf("empty active set")
+		}
+		if result.Total > 0 && len(result.Set)*100/result.Total > pb.cfg.goodAtxPercent {
 			set = result.Set
 			setWeight = result.Weight
 		} else {
@@ -805,25 +849,28 @@ func (pb *ProposalBuilder) prepareActiveSet(
 		if err != nil {
 			return 0, nil, err
 		}
-		setWeight, err = getSetWeight(pb.atxsdata, pb.shared.epoch, fallback)
+		setWeight, err = getSetWeight(pb.atxsdata, pb.shared.epoch, set)
 		if err != nil {
 			return 0, nil, err
 		}
 	}
+	if set != nil && setWeight == 0 {
+		return 0, nil, fmt.Errorf("empty active set")
+	}
 	if set != nil {
 		pb.logger.With().Info("prepared activeset",
 			target.Field(),
-			log.Int("size", len(fallback)),
+			log.Int("size", len(set)),
 			log.Uint64("weight", setWeight),
 			log.Duration("elapsed", time.Since(start)),
 		)
-		sort.Slice(fallback, func(i, j int) bool {
-			return bytes.Compare(fallback[i].Bytes(), fallback[j].Bytes()) < 0
+		sort.Slice(set, func(i, j int) bool {
+			return bytes.Compare(set[i].Bytes(), set[j].Bytes()) < 0
 		})
-		if err := activesets.SavePrepared(pb.db, target, setWeight, fallback); err != nil {
+		if err := activesets.SavePrepared(pb.db, target, setWeight, set); err != nil {
 			return 0, nil, err
 		}
-		return setWeight, fallback, nil
+		return setWeight, set, nil
 	}
 	return 0, nil, fmt.Errorf("failed to generate activeset")
 }
