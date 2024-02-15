@@ -8,9 +8,12 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 * [#5564](https://github.com/spacemeshos/go-spacemesh/pull/5564) Use decaying tags for fetch peers. This prevents
   libp2p's Connection Manager from breaking sync.
+
 * [#5548](https://github.com/spacemeshos/go-spacemesh/pull/5548) Disable mesh aggremenet sync protocol.
 
   It reduces number of requests for historical activation ids.
+
+* [#5571](https://github.com/spacemeshos/go-spacemesh/pull/5571) Adjust to 2.2M ATXs
 
 ## Release v1.3.9
 

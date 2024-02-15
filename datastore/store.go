@@ -51,7 +51,7 @@ type Config struct {
 
 func DefaultConfig() Config {
 	return Config{
-		ATXSize:         3_000_000, // to be in line with 2*`EpochData` size (see fetch/wire_types.go) - see comment above
+		ATXSize:         4_400_000, // to be in line with 2*`EpochData` size (see fetch/wire_types.go) - see comment above
 		MalfeasanceSize: 1_000,
 	}
 }
