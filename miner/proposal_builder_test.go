@@ -941,7 +941,7 @@ func TestStartStop(t *testing.T) {
 		syncer,
 		conState,
 		WithLogger(logtest.New(t)),
-		WithActiveSetConfig(0, 0, 0),
+		WithActiveSetPrepation(ActiveSetPreparation{}),
 	)
 	builder.Register(signer)
 	var (

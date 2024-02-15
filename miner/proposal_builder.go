@@ -162,12 +162,25 @@ type config struct {
 	minActiveSetWeight []types.EpochMinimalActiveWeight
 	// used to determine whether a node has enough information on the active set this epoch
 	goodAtxPercent int
-	// activeSetWindow is a period of time before epoch start.
-	activeSetWindow time.Duration
-	// activeSetRetryInterval is a period of time between active set retries.
-	activeSetRetryInterval time.Duration
-	// activeSetTries is a number of retries to get active set.
-	activeSetTries int
+	activeSet      ActiveSetPreparation
+}
+
+// ActiveSetPreparation is a configuration to enable computation of activeset in advance.
+type ActiveSetPreparation struct {
+	// Window describes how much in advance the active set should be prepared.
+	Window time.Duration `mapstructure:"window"`
+	// RetryInterval describes how often the active set is retried.
+	RetryInterval time.Duration `mapstructure:"retry-interval"`
+	// Tries describes how many times the active set is retried.
+	Tries int `mapstructure:"tries"`
+}
+
+func DefaultActiveSetPrepartion() ActiveSetPreparation {
+	return ActiveSetPreparation{
+		Window:        1 * time.Second,
+		RetryInterval: 1 * time.Second,
+		Tries:         3,
+	}
 }
 
 func (c *config) MarshalLogObject(encoder log.ObjectEncoder) error {
@@ -176,9 +189,9 @@ func (c *config) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("hdist", c.hdist)
 	encoder.AddDuration("network delay", c.networkDelay)
 	encoder.AddInt("good atx percent", c.goodAtxPercent)
-	encoder.AddDuration("active set window", c.activeSetWindow)
-	encoder.AddDuration("active set retry interval", c.activeSetRetryInterval)
-	encoder.AddInt("active set tries", c.activeSetTries)
+	encoder.AddDuration("active set window", c.activeSet.Window)
+	encoder.AddDuration("active set retry interval", c.activeSet.RetryInterval)
+	encoder.AddInt("active set tries", c.activeSet.Tries)
 	return nil
 }
 
@@ -248,12 +261,10 @@ func WithSigners(signers ...*signing.EdSigner) Opt {
 	}
 }
 
-// WithActiveSetConfig ...
-func WithActiveSetConfig(window, retryInterval time.Duration, tries int) Opt {
+// WithActiveSetPrepation overwrites configuration for activeset preparation.
+func WithActiveSetPrepation(prep ActiveSetPreparation) Opt {
 	return func(pb *ProposalBuilder) {
-		pb.cfg.activeSetWindow = window
-		pb.cfg.activeSetRetryInterval = retryInterval
-		pb.cfg.activeSetTries = tries
+		pb.cfg.activeSet = prep
 	}
 }
 
@@ -271,10 +282,8 @@ func New(
 ) *ProposalBuilder {
 	pb := &ProposalBuilder{
 		cfg: config{
-			workersLimit:           runtime.NumCPU(),
-			activeSetWindow:        1 * time.Second,
-			activeSetRetryInterval: 1 * time.Second,
-			activeSetTries:         3,
+			workersLimit: runtime.NumCPU(),
+			activeSet:    DefaultActiveSetPrepartion(),
 		},
 		logger:    log.NewNop(),
 		clock:     clock,
@@ -322,18 +331,21 @@ func (pb *ProposalBuilder) Run(ctx context.Context) error {
 	next := current + 1
 	pb.logger.With().Info("started", log.Inline(&pb.cfg), log.Uint32("next", next.Uint32()))
 	var eg errgroup.Group
-	if pb.cfg.activeSetTries == 0 || pb.cfg.activeSetRetryInterval == 0 {
+	if pb.cfg.activeSet.Tries == 0 || pb.cfg.activeSet.RetryInterval == 0 {
 		pb.logger.With().Warning("activeset will not be prepared in advance")
 	} else {
 		eg.Go(func() error {
 			// check that activeset was prepared for current epoch
 			pb.ensureActiveSetPrepared(ctx, current.GetEpoch())
 			// and then wait for the right time to generate activeset for the next epoch
-			wait := pb.clock.LayerToTime((current.GetEpoch() + 1).FirstLayer()).Add(-pb.cfg.activeSetWindow)
-			select {
-			case <-ctx.Done():
-				return nil
-			case <-time.After(time.Until(wait)):
+			wait := time.Until(
+				pb.clock.LayerToTime((current.GetEpoch() + 1).FirstLayer()).Add(-pb.cfg.activeSet.Window))
+			if wait > 0 {
+				select {
+				case <-ctx.Done():
+					return nil
+				case <-time.After(wait):
+				}
 			}
 			pb.ensureActiveSetPrepared(ctx, current.GetEpoch())
 			return nil
@@ -773,11 +785,11 @@ func activeSetFromBlock(db sql.Executor, bid types.BlockID) ([]types.ATXID, erro
 
 func (pb *ProposalBuilder) ensureActiveSetPrepared(ctx context.Context, target types.EpochID) {
 	var err error
-	for try := 0; try < pb.cfg.activeSetTries; try++ {
+	for try := 0; try < pb.cfg.activeSet.Tries; try++ {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(pb.cfg.activeSetRetryInterval):
+		case <-time.After(pb.cfg.activeSet.RetryInterval):
 		}
 		current := pb.clock.CurrentLayer()
 		// we run it here for side effects
