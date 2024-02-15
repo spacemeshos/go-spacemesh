@@ -33,6 +33,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
@@ -739,6 +740,7 @@ func TestBuild(t *testing.T) {
 				tortoise  = mocks.NewMockvotesEncoder(ctrl)
 				syncer    = smocks.NewMockSyncStateProvider(ctrl)
 				db        = sql.InMemory()
+				localdb   = localsql.InMemory()
 				atxsdata  = atxsdata.New()
 			)
 
@@ -746,7 +748,7 @@ func TestBuild(t *testing.T) {
 
 			full := append(defaults, WithLogger(logtest.New(t)), WithSigners(signer))
 			full = append(full, tc.opts...)
-			builder := New(clock, db, atxsdata, publisher, tortoise, syncer, conState, full...)
+			builder := New(clock, db, localdb, atxsdata, publisher, tortoise, syncer, conState, full...)
 			var decoded chan *types.Proposal
 			for _, step := range tc.steps {
 				{
@@ -894,6 +896,7 @@ func TestStartStop(t *testing.T) {
 		tortoise  = mocks.NewMockvotesEncoder(ctrl)
 		syncer    = smocks.NewMockSyncStateProvider(ctrl)
 		db        = sql.InMemory()
+		localdb   = localsql.InMemory()
 		atxsdata  = atxsdata.New()
 	)
 	signer, err := signing.NewEdSigner(signing.WithKeyFromRand(rand.New(rand.NewSource(10101))))
@@ -931,12 +934,14 @@ func TestStartStop(t *testing.T) {
 	builder := New(
 		clock,
 		db,
+		localdb,
 		atxsdata,
 		publisher,
 		tortoise,
 		syncer,
 		conState,
 		WithLogger(logtest.New(t)),
+		WithActiveSetConfig(0, 0, 0),
 	)
 	builder.Register(signer)
 	var (

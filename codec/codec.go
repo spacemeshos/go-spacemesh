@@ -96,7 +96,7 @@ func Decode(buf []byte, value Decodable) error {
 	return nil
 }
 
-// EncodeSlice encodes slice to a buffer.
+// EncodeSlice encodes slice with a length prefix.
 func EncodeSlice[V any, H scale.EncodablePtr[V]](value []V) ([]byte, error) {
 	var b bytes.Buffer
 	_, err := scale.EncodeStructSlice[V, H](scale.NewEncoder(&b), value)
@@ -106,13 +106,36 @@ func EncodeSlice[V any, H scale.EncodablePtr[V]](value []V) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
-// DecodeSlice decodes slice from a buffer.
-func DecodeSlice[V any, H scale.DecodablePtr[V]](buf []byte) ([]V, error) {
-	v, _, err := scale.DecodeStructSlice[V, H](scale.NewDecoder(bytes.NewReader(buf)))
+// MustEncodeSlice encodes slice with a length prefix or panics on error.
+func MustEncodeSlice[V any, H scale.EncodablePtr[V]](value []V) []byte {
+	buf, err := EncodeSlice[V, H](value)
+	if err != nil {
+		panic(err)
+	}
+	return buf
+}
+
+// DecodeSliceFromReader accepts a reader and decodes slice with a length prefix.
+func DecodeSliceFromReader[V any, H scale.DecodablePtr[V]](r io.Reader) ([]V, error) {
+	v, _, err := scale.DecodeStructSlice[V, H](scale.NewDecoder(r))
 	if err != nil {
 		return nil, fmt.Errorf("decode struct slice: %w", err)
 	}
 	return v, nil
+}
+
+// MustDecodeSliceFromReader decodes slice with a length prefix or panics on error.
+func MustDecodeSliceFromReader[V any, H scale.DecodablePtr[V]](r io.Reader) []V {
+	v, err := DecodeSliceFromReader[V, H](r)
+	if err != nil {
+		panic(err)
+	}
+	return v
+}
+
+// DecodeSlice decodes slice from a buffer.
+func DecodeSlice[V any, H scale.DecodablePtr[V]](buf []byte) ([]V, error) {
+	return DecodeSliceFromReader[V, H](bytes.NewReader(buf))
 }
 
 // EncodeCompact16 encodes uint16 to a buffer.

@@ -32,6 +32,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql/activeset"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
@@ -62,6 +63,7 @@ type ProposalBuilder struct {
 	cfg    config
 
 	db        sql.Executor
+	localdb   sql.Executor
 	atxsdata  *atxsdata.Data
 	clock     layerClock
 	publisher pubsub.Publisher
@@ -160,10 +162,12 @@ type config struct {
 	minActiveSetWeight []types.EpochMinimalActiveWeight
 	// used to determine whether a node has enough information on the active set this epoch
 	goodAtxPercent int
-	// declares
-	activeSetWindow        time.Duration
+	// activeSetWindow is a period of time before epoch start.
+	activeSetWindow time.Duration
+	// activeSetRetryInterval is a period of time between active set retries.
 	activeSetRetryInterval time.Duration
-	activeSetTries         int
+	// activeSetTries is a number of retries to get active set.
+	activeSetTries int
 }
 
 func (c *config) MarshalLogObject(encoder log.ObjectEncoder) error {
@@ -244,10 +248,20 @@ func WithSigners(signers ...*signing.EdSigner) Opt {
 	}
 }
 
+// WithActiveSetConfig ...
+func WithActiveSetConfig(window, retryInterval time.Duration, tries int) Opt {
+	return func(pb *ProposalBuilder) {
+		pb.cfg.activeSetWindow = window
+		pb.cfg.activeSetRetryInterval = retryInterval
+		pb.cfg.activeSetTries = tries
+	}
+}
+
 // New creates a struct of block builder type.
 func New(
 	clock layerClock,
 	db sql.Executor,
+	localdb sql.Executor,
 	atxsdata *atxsdata.Data,
 	publisher pubsub.Publisher,
 	trtl votesEncoder,
@@ -265,6 +279,7 @@ func New(
 		logger:    log.NewNop(),
 		clock:     clock,
 		db:        db,
+		localdb:   localdb,
 		atxsdata:  atxsdata,
 		publisher: publisher,
 		tortoise:  trtl,
@@ -308,7 +323,7 @@ func (pb *ProposalBuilder) Run(ctx context.Context) error {
 	pb.logger.With().Info("started", log.Inline(&pb.cfg), log.Uint32("next", next.Uint32()))
 	var eg errgroup.Group
 	if pb.cfg.activeSetTries == 0 || pb.cfg.activeSetRetryInterval == 0 {
-		pb.logger.With().Warning("preparation of the active set is disabled")
+		pb.logger.With().Warning("activeset will not be prepared in advance")
 	} else {
 		eg.Go(func() error {
 			// check that activeset was prepared for current epoch
@@ -448,16 +463,17 @@ func (pb *ProposalBuilder) initSharedData(ctx context.Context, current types.Lay
 	if pb.shared.active.set != nil {
 		return nil
 	}
-	weight, set, err := pb.prepareActiveSet(current, current.GetEpoch())
+	id, weight, set, err := pb.prepareActiveSet(current, current.GetEpoch())
 	if err != nil {
 		return err
 	}
 	pb.logger.With().Info("loaded prepared active set",
 		pb.shared.epoch,
+		log.ShortStringer("id", id),
 		log.Int("size", len(set)),
 		log.Uint64("weight", weight),
 	)
-	pb.shared.active.id = types.ATXIDList(set).Hash()
+	pb.shared.active.id = id
 	pb.shared.active.set = set
 	pb.shared.active.weight = weight
 	return nil
@@ -764,7 +780,8 @@ func (pb *ProposalBuilder) ensureActiveSetPrepared(ctx context.Context, target t
 		case <-time.After(pb.cfg.activeSetRetryInterval):
 		}
 		current := pb.clock.CurrentLayer()
-		_, _, err = pb.prepareActiveSet(current, target)
+		// we run it here for side effects
+		_, _, _, err = pb.prepareActiveSet(current, target)
 		if err == nil {
 			return
 		}
@@ -782,16 +799,16 @@ func (pb *ProposalBuilder) ensureActiveSetPrepared(ctx context.Context, target t
 func (pb *ProposalBuilder) prepareActiveSet(
 	current types.LayerID,
 	target types.EpochID,
-) (uint64, []types.ATXID, error) {
+) (types.Hash32, uint64, []types.ATXID, error) {
 	pb.preparedActivesetLinearizer.Lock()
 	defer pb.preparedActivesetLinearizer.Unlock()
 
-	setWeight, set, err := activesets.GetPrepared(pb.db, target)
+	id, setWeight, set, err := activeset.Get(pb.localdb, activeset.Tortoise, target)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		return 0, nil, fmt.Errorf("failed to get prepared active set: %w", err)
+		return id, 0, nil, fmt.Errorf("failed to get prepared active set: %w", err)
 	}
 	if err == nil {
-		return setWeight, set, nil
+		return id, setWeight, set, nil
 	}
 
 	pb.fallback.mu.Lock()
@@ -807,7 +824,7 @@ func (pb *ProposalBuilder) prepareActiveSet(
 		var err error
 		setWeight, err = getSetWeight(pb.atxsdata, target, fallback)
 		if err != nil {
-			return 0, nil, err
+			return id, 0, nil, err
 		}
 		set = fallback
 	} else {
@@ -819,10 +836,10 @@ func (pb *ProposalBuilder) prepareActiveSet(
 		)
 		result, err := activeSetFromGrades(pb.db, target, epochStart, networkDelay)
 		if err != nil {
-			return 0, nil, err
+			return id, 0, nil, err
 		}
 		if result.Total == 0 {
-			return 0, nil, fmt.Errorf("empty active set")
+			return id, 0, nil, fmt.Errorf("empty active set")
 		}
 		if result.Total > 0 && len(result.Set)*100/result.Total > pb.cfg.goodAtxPercent {
 			set = result.Set
@@ -847,15 +864,15 @@ func (pb *ProposalBuilder) prepareActiveSet(
 		var err error
 		set, err = ActiveSetFromEpochFirstBlock(pb.db, pb.shared.epoch)
 		if err != nil {
-			return 0, nil, err
+			return id, 0, nil, err
 		}
 		setWeight, err = getSetWeight(pb.atxsdata, pb.shared.epoch, set)
 		if err != nil {
-			return 0, nil, err
+			return id, 0, nil, err
 		}
 	}
 	if set != nil && setWeight == 0 {
-		return 0, nil, fmt.Errorf("empty active set")
+		return id, 0, nil, fmt.Errorf("empty active set")
 	}
 	if set != nil {
 		pb.logger.With().Info("prepared activeset",
@@ -867,12 +884,13 @@ func (pb *ProposalBuilder) prepareActiveSet(
 		sort.Slice(set, func(i, j int) bool {
 			return bytes.Compare(set[i].Bytes(), set[j].Bytes()) < 0
 		})
-		if err := activesets.SavePrepared(pb.db, target, setWeight, set); err != nil {
-			return 0, nil, err
+		id := types.ATXIDList(set).Hash()
+		if err := activeset.Add(pb.localdb, activeset.Tortoise, target, id, setWeight, set); err != nil {
+			return id, 0, nil, fmt.Errorf("failed to persist prepared active set for epoch %v: %w", target, err)
 		}
-		return setWeight, set, nil
+		return id, setWeight, set, nil
 	}
-	return 0, nil, fmt.Errorf("failed to generate activeset")
+	return id, 0, nil, fmt.Errorf("failed to generate activeset")
 }
 
 type gradedActiveSet struct {
