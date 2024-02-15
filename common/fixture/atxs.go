@@ -72,6 +72,7 @@ func (g *AtxsGenerator) Next() *types.VerifiedActivationTx {
 				NumUnits: g.rng.Uint32(),
 				NodeID:   &nodeId,
 			},
+			SmesherID: nodeId,
 		},
 	}
 

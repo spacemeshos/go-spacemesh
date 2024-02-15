@@ -107,7 +107,7 @@ func toAtx(atx *types.VerifiedActivationTx) *spacemeshv2alpha1.ActivationV1 {
 		Signature:      atx.Signature.Bytes(),
 		PublishEpoch:   atx.PublishEpoch.Uint32(),
 		Sequence:       atx.Sequence,
-		PrevAtx:        atx.PrevATXID[:],
+		PreviousAtx:    atx.PrevATXID[:],
 		PositioningAtx: atx.PositioningATX[:],
 		Coinbase:       atx.Coinbase.String(),
 		Units:          atx.NumUnits,
@@ -139,16 +139,16 @@ func toAtx(atx *types.VerifiedActivationTx) *spacemeshv2alpha1.ActivationV1 {
 		}
 		if nipost.PostMetadata != nil {
 			v1.PostMeta = &spacemeshv2alpha1.PostMeta{
-				Challenge: nipost.PostMetadata.Challenge,
-				Labels:    nipost.PostMetadata.LabelsPerUnit,
+				Challenge:     nipost.PostMetadata.Challenge,
+				LabelsPerUnit: nipost.PostMetadata.LabelsPerUnit,
 			}
 		}
-		v1.PoetProof = &spacemeshv2alpha1.PoetProof{
+		v1.Membership = &spacemeshv2alpha1.PoetMembershipProof{
 			ProofNodes: make([][]byte, len(nipost.Membership.Nodes)),
 			Leaf:       nipost.Membership.LeafIndex,
 		}
 		for i, node := range nipost.Membership.Nodes {
-			v1.PoetProof.ProofNodes[i] = node.Bytes()
+			v1.Membership.ProofNodes[i] = node.Bytes()
 		}
 	}
 	return v1
