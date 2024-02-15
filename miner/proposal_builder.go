@@ -851,7 +851,7 @@ func (pb *ProposalBuilder) prepareActiveSet(
 				log.Duration("network delay", networkDelay),
 				log.Int("total", result.Total),
 				log.Int("set", len(result.Set)),
-				log.Int("ommitted", result.Total-len(result.Set)),
+				log.Int("omitted", result.Total-len(result.Set)),
 			)
 		}
 	}
@@ -860,7 +860,7 @@ func (pb *ProposalBuilder) prepareActiveSet(
 			log.Uint32("current", current.Uint32()),
 			log.Uint32("first", target.FirstLayer().Uint32()),
 		)
-		// see how it can be futher improved https://github.com/spacemeshos/go-spacemesh/issues/5560
+		// see how it can be further improved https://github.com/spacemeshos/go-spacemesh/issues/5560
 		var err error
 		set, err = ActiveSetFromEpochFirstBlock(pb.db, pb.shared.epoch)
 		if err != nil {
@@ -989,7 +989,8 @@ func gradeAtx(epochStart time.Time, networkDelay time.Duration, atxtime, proofti
 	proof := time.Unix(0, prooftime)
 	if atx.Before(epochStart.Add(-4*networkDelay)) && (prooftime == 0 || !proof.Before(epochStart)) {
 		return good
-	} else if atx.Before(epochStart.Add(-3*networkDelay)) && (proof.IsZero() || !proof.Before(epochStart.Add(-networkDelay))) {
+	} else if atx.Before(epochStart.Add(-3*networkDelay)) &&
+		(proof.IsZero() || !proof.Before(epochStart.Add(-networkDelay))) {
 		return acceptable
 	}
 	return evil
