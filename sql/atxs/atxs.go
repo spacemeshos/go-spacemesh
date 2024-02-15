@@ -505,7 +505,7 @@ func SetValidity(db sql.Executor, id types.ATXID, validity types.Validity) error
 	return nil
 }
 
-// IterateForGrading selects every atx from publish epoch and joins identities to load malfeasence proofs receive time.
+// IterateForGrading selects every atx from publish epoch and joins identities to load malfeasence proofs if they exist.
 func IterateForGrading(
 	db sql.Executor,
 	epoch types.EpochID,
