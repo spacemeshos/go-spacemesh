@@ -17,10 +17,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	pmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
@@ -116,7 +114,7 @@ type node struct {
 	vrfsigner  *signing.VRFSigner
 	atx        *types.VerifiedActivationTx
 	oracle     *eligibility.Oracle
-	db         *datastore.CachedDB
+	db         *sql.Database
 	atxsdata   *atxsdata.Data
 
 	ctrl       *gomock.Controller
@@ -147,7 +145,7 @@ func (n *node) reuseSigner(signer *signing.EdSigner) *node {
 }
 
 func (n *node) withDb() *node {
-	n.db = datastore.NewCachedDB(sql.InMemory(), log.NewNop())
+	n.db = sql.InMemory()
 	n.atxsdata = atxsdata.New()
 	return n
 }
@@ -216,7 +214,7 @@ func (n *node) withHare() *node {
 	tracer := newTestTracer(n.t)
 	n.tracer = tracer
 	n.patrol = layerpatrol.New()
-	n.hare = New(n.nclock, n.mpublisher, n.db, signing.NewEdVerifier(), n.oracle, n.msyncer, n.patrol,
+	n.hare = New(n.nclock, n.mpublisher, n.db, n.atxsdata, signing.NewEdVerifier(), n.oracle, n.msyncer, n.patrol,
 		WithConfig(n.t.cfg),
 		WithLogger(logger.Zap()),
 		WithWallclock(n.clock),
@@ -972,10 +970,12 @@ func TestProposals(t *testing.T) {
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
-			db := datastore.NewCachedDB(sql.InMemory(), log.NewNop())
-			hare := New(nil, nil, db, nil, nil, nil, layerpatrol.New(), WithLogger(logtest.New(t).Zap()))
+			db := sql.InMemory()
+			atxsdata := atxsdata.New()
+			hare := New(nil, nil, db, atxsdata, nil, nil, nil, layerpatrol.New(), WithLogger(logtest.New(t).Zap()))
 			for _, atx := range tc.atxs {
 				require.NoError(t, atxs.Add(db, &atx))
+				atxsdata.AddFromHeader(atx.ToHeader(), *atx.VRFNonce, false)
 			}
 			for _, proposal := range tc.proposals {
 				require.NoError(t, proposals.Add(db, &proposal))
@@ -983,6 +983,7 @@ func TestProposals(t *testing.T) {
 			}
 			for _, id := range tc.malicious {
 				require.NoError(t, identities.SetMalicious(db, id, []byte("non empty"), time.Time{}))
+				atxsdata.SetMalicious(id)
 			}
 			require.Equal(t, tc.expect, hare.proposals(&session{
 				lid:     tc.layer,

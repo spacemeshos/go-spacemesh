@@ -5,6 +5,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/connmgr"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
@@ -17,6 +18,7 @@ type Host interface {
 	SetStreamHandler(protocol.ID, network.StreamHandler)
 	NewStream(context.Context, peer.ID, ...protocol.ID) (network.Stream, error)
 	Network() network.Network
+	ConnManager() connmgr.ConnManager
 }
 
 type peerStream interface {
