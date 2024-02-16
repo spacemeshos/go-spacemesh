@@ -360,7 +360,7 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
 	signers := make(map[types.NodeID]*signing.EdSigner, 3)
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 

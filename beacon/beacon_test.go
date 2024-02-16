@@ -610,7 +610,7 @@ func TestBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
 
 	epoch := types.EpochID(5)
 	mclock.EXPECT().CurrentLayer().Return(epoch.FirstLayer()).AnyTimes()
-	for i := 0; i < numEpochsToKeep; i++ {
+	for i := range numEpochsToKeep {
 		e := epoch + types.EpochID(i)
 		err := pd.setBeacon(e, types.RandomBeacon())
 		require.NoError(t, err)

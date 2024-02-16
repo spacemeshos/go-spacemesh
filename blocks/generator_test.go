@@ -3,10 +3,11 @@ package blocks
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"math"
 	"math/big"
-	"math/rand"
+	"math/rand/v2"
 	"sort"
 	"testing"
 	"time"
@@ -657,7 +658,9 @@ func Test_processHareOutput_UnequalHeight(t *testing.T) {
 	tg := createTestGenerator(t)
 	layerID := types.GetEffectiveGenesis().Add(100)
 	numProposals := 10
-	rng := rand.New(rand.NewSource(10101))
+	var seed [32]byte
+	binary.LittleEndian.PutUint64(seed[:], 10101)
+	rng := rand.New(rand.NewChaCha8(seed))
 	maxHeight := uint64(0)
 	signers, atxes := createModifiedATXs(
 		t,

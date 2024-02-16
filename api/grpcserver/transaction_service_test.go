@@ -78,7 +78,7 @@ func TestTransactionService_StreamResults(t *testing.T) {
 		gen = fixture.NewTransactionResultGenerator().
 			WithAddresses(2).WithLayers(start, 10)
 		var streamed []*types.TransactionWithResult
-		for i := 0; i < n; i++ {
+		for range n {
 			streamed = append(streamed, gen.Next())
 		}
 
@@ -148,7 +148,7 @@ func BenchmarkStreamResults(b *testing.B) {
 	)
 	tx, err := db.Tx(ctx)
 	require.NoError(b, err)
-	for i := 0; i < 1_000; i++ {
+	for range 1_000 {
 		rst := gen.Next()
 		for _, addr := range rst.Addresses {
 			count[addr]++
@@ -174,7 +174,7 @@ func BenchmarkStreamResults(b *testing.B) {
 	b.ReportAllocs()
 
 	stats := runtime.MemStats{}
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		stream, err := client.StreamResults(ctx, &pb.TransactionResultsRequest{Address: maxaddr.String()})
 		if err != nil {
 			b.Fatal(err)

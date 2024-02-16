@@ -140,19 +140,19 @@ func TestData(t *testing.T) {
 }
 
 func TestMemory(t *testing.T) {
-	test := func(t *testing.T, size int, memory, delta uint64) {
+	test := func(t *testing.T, size, memory, delta uint64) {
 		runtime.GC()
 		var before runtime.MemStats
 		runtime.ReadMemStats(&before)
 
 		c := New()
-		for i := 1; i <= size; i++ {
+		for i := range size {
 			var (
 				node types.NodeID
 				atx  types.ATXID
 			)
-			binary.PutUvarint(node[:], uint64(i))
-			binary.PutUvarint(atx[:], uint64(i))
+			binary.PutUvarint(node[:], uint64(i+1))
+			binary.PutUvarint(atx[:], uint64(i+1))
 			c.Add(1, node, types.Address{}, atx, 500, 100, 0, 0, false)
 		}
 		runtime.GC()
@@ -176,13 +176,13 @@ func BenchmarkConcurrentReadWrite(b *testing.B) {
 		epoch = 1
 		size  = 1_000_000
 	)
-	for i := 1; i <= size; i++ {
+	for i := range size {
 		var (
 			node types.NodeID
 			atx  types.ATXID
 		)
-		binary.PutUvarint(node[:], uint64(i))
-		binary.PutUvarint(atx[:], uint64(i))
+		binary.PutUvarint(node[:], uint64(i+1))
+		binary.PutUvarint(atx[:], uint64(i+1))
 		c.Add(epoch, node, types.Address{}, atx, 500, 100, 0, 0, false)
 	}
 	b.ResetTimer()
@@ -216,13 +216,13 @@ func benchmarkkWeightForSet(b *testing.B, size, setSize int) {
 	const epoch = 1
 	atxs := make([]types.ATXID, 0, size)
 	rng := rand.New(rand.NewSource(10101))
-	for i := 1; i <= size; i++ {
+	for i := range size {
 		var (
 			node types.NodeID
 			atx  types.ATXID
 		)
-		binary.PutUvarint(node[:], uint64(i))
-		binary.PutUvarint(atx[:], uint64(i))
+		binary.PutUvarint(node[:], uint64(i+1))
+		binary.PutUvarint(atx[:], uint64(i+1))
 		atxs = append(atxs, atx)
 		c.Add(epoch, node, types.Address{}, atx, 500, 100, 0, 0, false)
 	}
@@ -230,7 +230,7 @@ func benchmarkkWeightForSet(b *testing.B, size, setSize int) {
 		atxs[i], atxs[j] = atxs[j], atxs[i]
 	})
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		weight, used := c.WeightForSet(epoch, atxs[:setSize])
 		if weight == 0 {
 			b.Fatalf("weight can't be zero")

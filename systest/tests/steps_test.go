@@ -170,7 +170,7 @@ func TestStepReplaceNodes(t *testing.T) {
 
 	var (
 		max      = cctx.ClusterSize * 2 / 10
-		delete   = rand.New(rand.NewSource(time.Now().Unix())).Intn(max) + 1
+		delete   = rand.Intn(max) + 1
 		deleting []*cluster.NodeClient
 	)
 	for i := cl.Bootnodes(); i < cl.Total() && len(deleting) < delete; i++ {

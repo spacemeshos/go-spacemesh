@@ -103,7 +103,7 @@ func TestWarmup(t *testing.T) {
 				return tx.Exec(q, enc, dec)
 			}).
 			AnyTimes()
-		for i := 0; i < 5; i++ {
+		for range 5 {
 			c := New()
 			require.Error(t, Warmup(exec, c, 1))
 			fail++

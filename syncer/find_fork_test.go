@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"strconv"
 	"testing"
 	"time"
@@ -117,7 +117,7 @@ func serveHashReq(t *testing.T, req *fetch.MeshHashRequest) (*fetch.MeshHashes, 
 func TestForkFinder_FindFork_Permutation(t *testing.T) {
 	peer := p2p.Peer("grumpy")
 	max := 173
-	diverge := rand.Intn(max)
+	diverge := rand.IntN(max)
 	gLid := types.GetEffectiveGenesis()
 	if diverge <= int(gLid.Uint32()) {
 		diverge = int(gLid.Uint32()) + 1

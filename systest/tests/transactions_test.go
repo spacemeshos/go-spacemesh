@@ -51,7 +51,7 @@ func testTransactions(
 	)
 	txs := make([][]*pb.Transaction, cl.Total())
 
-	for i := 0; i < cl.Total(); i++ {
+	for i := range cl.Total() {
 		client := cl.Client(i)
 		watchTransactionResults(
 			tctx.Context,

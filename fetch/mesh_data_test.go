@@ -783,24 +783,23 @@ func TestFetch_GetCert(t *testing.T) {
 			expected := types.Certificate{BlockID: bid}
 			reqData, err := codec.Encode(req)
 			require.NoError(t, err)
-			for i, p := range peers {
+			for i, peer := range peers {
 				f.mOpn2S.EXPECT().
-					Request(gomock.Any(), p, gomock.Any()).
-					DoAndReturn(
-						func(
-							_ context.Context,
-							_ p2p.Peer,
-							gotReq []byte,
-							extraProtocols ...string,
-						) ([]byte, error) {
-							require.Equal(t, reqData, gotReq)
-							if tc.results[i] == nil {
-								data, err := codec.Encode(&expected)
-								require.NoError(t, err)
-								return data, nil
-							}
-							return nil, tc.results[i]
-						})
+					Request(gomock.Any(), peer, gomock.Any()).
+					DoAndReturn(func(
+						_ context.Context,
+						_ p2p.Peer,
+						gotReq []byte,
+						extraProtocols ...string,
+					) ([]byte, error) {
+						require.Equal(t, reqData, gotReq)
+						if tc.results[i] == nil {
+							data, err := codec.Encode(&expected)
+							require.NoError(t, err)
+							return data, nil
+						}
+						return nil, tc.results[i]
+					})
 				if tc.results[i] == nil {
 					break
 				}
