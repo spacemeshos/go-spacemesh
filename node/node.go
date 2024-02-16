@@ -1362,11 +1362,16 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		return service, nil
 	case grpcserver.Activation:
 		service := grpcserver.NewActivationService(app.cachedDB, types.ATXID(app.Config.Genesis.GoldenATX()))
+		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.Activation:
-		return v2alpha1.NewActivationService(app.db), nil
+		service := v2alpha1.NewActivationService(app.db)
+		app.grpcServices[svc] = service
+		return service, nil
 	case v2alpha1.ActivationStream:
-		return v2alpha1.NewActivationStreamService(app.db), nil
+		service := v2alpha1.NewActivationStreamService(app.db)
+		app.grpcServices[svc] = service
+		return service, nil
 	}
 	return nil, fmt.Errorf("unknown service %s", svc)
 }
