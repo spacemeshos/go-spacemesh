@@ -714,7 +714,6 @@ func (c *Cluster) WaitAllTimeout(timeout time.Duration) error {
 func (c *Cluster) CloseClients() {
 	var eg errgroup.Group
 	for _, client := range c.clients {
-		client := client
 		eg.Go(func() error {
 			client.Close()
 			return nil
@@ -825,20 +824,18 @@ func ExtractP2PEndpoints(tctx *testcontext.Context, nodes []*NodeClient) ([]stri
 		eg, ctx      = errgroup.WithContext(rctx)
 	)
 	defer cancel()
-	for i := range nodes {
-		i := i
-		n := nodes[i]
+	for i, node := range nodes {
 		eg.Go(func() error {
-			ip, err := n.Resolve(ctx)
+			ip, err := node.Resolve(ctx)
 			if err != nil {
 				return err
 			}
-			dbg := pb.NewDebugServiceClient(n.PrivConn())
+			dbg := pb.NewDebugServiceClient(node.PrivConn())
 			info, err := dbg.NetworkInfo(ctx, &emptypb.Empty{})
 			if err != nil {
 				return err
 			}
-			rst[i] = p2pEndpoint(n.Node, ip, info.Id)
+			rst[i] = p2pEndpoint(node.Node, ip, info.Id)
 			return nil
 		})
 	}

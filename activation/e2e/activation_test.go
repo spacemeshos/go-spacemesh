@@ -32,7 +32,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 
 	numSigners := 3
 	signers := make(map[types.NodeID]*signing.EdSigner, numSigners)
-	for i := 0; i < numSigners; i++ {
+	for range numSigners {
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 
@@ -63,7 +63,6 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	var eg errgroup.Group
 	i := uint32(1)
 	for _, sig := range signers {
-		sig := sig
 		opts := opts
 		opts.DataDir = t.TempDir()
 		opts.NumUnits = min(i*2, cfg.MaxNumUnits)

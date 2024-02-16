@@ -655,7 +655,6 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 			}
 		}
 
-		ss := ss
 		eg.Go(func() error {
 			proposal := createProposal(
 				&ss.session,

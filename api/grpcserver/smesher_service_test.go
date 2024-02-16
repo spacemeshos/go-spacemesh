@@ -2,7 +2,7 @@ package grpcserver_test
 
 import (
 	"context"
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 	"time"
 

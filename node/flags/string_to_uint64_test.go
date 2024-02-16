@@ -45,7 +45,6 @@ func TestStringToUint64Value(t *testing.T) {
 			err:   "strconv.ParseUint: parsing \"abc\": invalid syntax",
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			value := map[string]uint64{}
 			parser := NewStringToUint64Value(&value)

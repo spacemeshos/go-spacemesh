@@ -141,8 +141,6 @@ func TestSanity(t *testing.T) {
 	// the node 1 which has relay service enabled
 	var eg errgroup.Group
 	for n, ch := range relayChans {
-		n := n
-		ch := ch
 		if ch == nil {
 			continue
 		}

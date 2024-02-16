@@ -163,7 +163,6 @@ func TestSyncSimulateMultiple(t *testing.T) {
 			continue
 		}
 		wait := make(chan error, 1)
-		inst := inst
 		go func() {
 			wait <- inst.Wait()
 		}()

@@ -75,7 +75,6 @@ func (d *DataFetch) PollLayerData(ctx context.Context, lid types.LayerID, peers 
 	var eg errgroup.Group
 	fetchErr := threadSafeErr{}
 	for _, peer := range peers {
-		peer := peer
 		eg.Go(func() error {
 			data, err := d.fetcher.GetLayerData(ctx, peer, lid)
 			if err != nil {
@@ -140,7 +139,6 @@ func (d *DataFetch) PollLayerOpinions(
 	var eg errgroup.Group
 	fetchErr := threadSafeErr{}
 	for _, peer := range peers {
-		peer := peer
 		eg.Go(func() error {
 			data, err := d.fetcher.GetLayerOpinions(ctx, peer, lid)
 			if err != nil {

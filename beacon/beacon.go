@@ -831,7 +831,6 @@ func (pd *ProtocolDriver) runProposalPhase(ctx context.Context, epoch types.Epoc
 	defer cancel()
 
 	for _, session := range st.active {
-		session := session
 		pd.eg.Go(func() error {
 			pd.sendProposal(ctx, epoch, session, st.proposalChecker)
 			return nil
@@ -915,7 +914,6 @@ func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.Epo
 	}
 	pd.mu.RUnlock()
 	for _, session := range st.active {
-		session := session
 		pd.eg.Go(func() error {
 			if err := pd.sendFirstRoundVote(ctx, msg, session.signer); err != nil {
 				logger.With().Error("failed to send proposal vote", log.Err(err), session.Id(), round)
@@ -933,14 +931,12 @@ func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.Epo
 
 	// Subsequent rounds
 	for round := types.FirstRound + 1; round < pd.config.RoundsNumber; round++ {
-		round := round
 		pd.setRoundInProgress(round)
 		rLogger := logger.WithFields(round)
 		timer.Reset(pd.config.VotingRoundDuration)
 
 		votes := ownVotes
 		for _, session := range st.active {
-			session := session
 			pd.eg.Go(func() error {
 				if err := pd.sendFollowingVote(ctx, epoch, round, votes, session.signer); err != nil {
 					rLogger.With().Error("failed to send following vote", log.Err(err), session.Id())

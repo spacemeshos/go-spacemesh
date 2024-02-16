@@ -19,7 +19,6 @@ func discoverNodes(ctx *testcontext.Context, kind string) ([]*NodeClient, error)
 	}
 	var rst []*NodeClient
 	for _, deployment := range deployments.Items {
-		deployment := deployment
 		rst = append(rst, &NodeClient{
 			session: ctx,
 			Node: Node{

@@ -115,7 +115,6 @@ func TestVerifyingProcessLayer(t *testing.T) {
 			total:     []weight{fixed.From(20), fixed.From(20)},
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			logger := logtest.Zap(t)
 			v := newVerifying(Config{}, newState(atxsdata.New()))
@@ -576,7 +575,6 @@ func TestVerifying_Verify(t *testing.T) {
 			expectedValidity: map[types.BlockID]sign{},
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			logger := logtest.Zap(t)
 

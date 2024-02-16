@@ -2,7 +2,7 @@ package atxsync
 
 import (
 	"context"
-	"math/rand"
+	"math/rand/v2"
 	"time"
 
 	"go.uber.org/zap"
@@ -64,7 +64,7 @@ func Download(
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case <-time.After(retryInterval + time.Duration(rand.Int63n(int64(retryInterval)))):
+			case <-time.After(retryInterval + rand.N(retryInterval)):
 			}
 		}
 	}

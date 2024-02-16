@@ -408,7 +408,6 @@ func TestCalculateOpinionWithThreshold(t *testing.T) {
 			threshold: fixed.From(120),
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			require.EqualValues(t, tc.expect,
 				crossesThreshold(tc.vote, tc.threshold))
@@ -466,7 +465,6 @@ func TestComputeExpectedWeight(t *testing.T) {
 			expect: 20,
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			var (
 				cdb    = datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
@@ -1477,7 +1475,6 @@ func TestComputeLocalOpinion(t *testing.T) {
 			expected: abstain,
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			s := sim.New(
 				sim.WithLayerSize(size),
@@ -1599,7 +1596,6 @@ func TestComputeBallotWeight(t *testing.T) {
 			},
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			current := types.GetLayersPerEpoch()
 			t.Cleanup(func() {

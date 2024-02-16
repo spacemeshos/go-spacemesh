@@ -298,7 +298,6 @@ func TestRunner_Generate(t *testing.T) {
 		},
 	}
 	for _, tc := range tcs {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			db := sql.InMemory()
 			snapshot := types.LayerID(5)
@@ -354,7 +353,6 @@ func TestRunner_Generate_Error(t *testing.T) {
 		},
 	}
 	for _, tc := range tcs {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			db := sql.InMemory()
 			snapshot := types.LayerID(5)

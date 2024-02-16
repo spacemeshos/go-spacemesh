@@ -4,7 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"os/signal"
 	"strconv"
@@ -143,11 +143,10 @@ const (
 )
 
 func rngName() string {
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	const choices = "qwertyuiopasdfghjklzxcvbnm"
 	buf := make([]byte, 4)
 	for i := range buf {
-		buf[i] = choices[rng.Intn(len(choices))]
+		buf[i] = choices[rand.IntN(len(choices))]
 	}
 	return string(buf)
 }

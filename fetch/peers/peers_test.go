@@ -1,7 +1,8 @@
 package peers
 
 import (
-	"math/rand"
+	"encoding/binary"
+	"math/rand/v2"
 	"strconv"
 	"testing"
 	"time"
@@ -226,15 +227,17 @@ func BenchmarkSelectBest(b *testing.B) {
 		target = 10
 	)
 	events := []event{}
-	rng := rand.New(rand.NewSource(10001))
+	var seed [32]byte
+	binary.LittleEndian.PutUint64(seed[:], 10001)
+	rng := rand.New(rand.NewChaCha8(seed))
 
 	for i := 0; i < total; i++ {
 		events = append(
 			events,
 			event{
 				id:      peer.ID(strconv.Itoa(i)),
-				success: rng.Intn(100),
-				failure: rng.Intn(100),
+				success: rng.IntN(100),
+				failure: rng.IntN(100),
 				add:     true,
 			},
 		)

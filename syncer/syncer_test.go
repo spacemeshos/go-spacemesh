@@ -498,7 +498,6 @@ func TestSyncAtxs(t *testing.T) {
 		},
 	}
 	for _, tc := range tcs {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			ts := newSyncerWithoutPeriodicRuns(t)
 			ts.expectDownloadLoop()

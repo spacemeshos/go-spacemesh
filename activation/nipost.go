@@ -5,7 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"time"
 
 	"github.com/spacemeshos/merkle-tree"
@@ -589,7 +589,7 @@ func constructMerkleProof(challenge types.Hash32, members []types.Member) (*type
 }
 
 func randomDurationInRange(min, max time.Duration) time.Duration {
-	return min + time.Duration(rand.Int63n(int64(max-min+1)))
+	return min + rand.N(max-min+1)
 }
 
 // Calculate the time to wait before querying for the proof

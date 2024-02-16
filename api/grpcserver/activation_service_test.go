@@ -3,7 +3,7 @@ package grpcserver_test
 import (
 	"context"
 	"errors"
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"

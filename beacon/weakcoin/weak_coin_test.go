@@ -159,7 +159,6 @@ func TestWeakCoin(t *testing.T) {
 			expected: false,
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			miner := len(tc.participants) * 2
 			if len(tc.msg) > 0 {
@@ -323,7 +322,6 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 		},
 	}
 	for _, tc := range tcs {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			mockAllowance := weakcoin.NewMockallowance(gomock.NewController(t))
 			mockAllowance.EXPECT().MinerAllowance(epoch, gomock.Any()).Return(allowance).AnyTimes()
@@ -467,7 +465,6 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 	)
 
 	for i := range instances {
-		i := i
 		broadcaster := mocks.NewMockPublisher(ctrl)
 		broadcaster.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().
 			DoAndReturn(func(_ context.Context, _ string, data []byte) error {

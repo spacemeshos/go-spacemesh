@@ -50,8 +50,7 @@ func Sync(c *cluster.Cluster, tolerate int) Validation {
 	}
 	return func(ctx context.Context) error {
 		var eg errgroup.Group
-		for i := 0; i < c.Total(); i++ {
-			i := i
+		for i := range c.Total() {
 			node := c.Client(i)
 			eg.Go(func() error {
 				return sv.OnData(i, isSynced(ctx, node))

@@ -214,7 +214,7 @@ func TestMeshService_MalfeasanceStream(t *testing.T) {
 	conn := dialGrpc(ctx, t, cfg)
 	client := pb.NewMeshServiceClient(conn)
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		AtxMalfeasance(t, db)
 		BallotMalfeasance(t, db)
 		HareMalfeasance(t, db)
@@ -226,7 +226,7 @@ func TestMeshService_MalfeasanceStream(t *testing.T) {
 	require.NoError(t, err)
 
 	var total, atx, ballot, hare int
-	for i := 0; i < 30; i++ {
+	for range 30 {
 		resp, err := stream.Recv()
 		require.NoError(t, err)
 		total++

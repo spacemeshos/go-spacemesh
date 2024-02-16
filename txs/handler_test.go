@@ -83,7 +83,6 @@ func Test_HandleBlock(t *testing.T) {
 			desc: "ZeroPrice",
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			cstate := NewMockconservativeState(ctrl)
@@ -231,7 +230,6 @@ func Test_HandleGossip(t *testing.T) {
 			expect: isErr,
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			th, tx := gossipExpectations(t, tc.fee,
 				tc.hasErr, tc.parseErr, tc.addErr,
@@ -317,7 +315,6 @@ func Test_HandleProposal(t *testing.T) {
 			fail: true,
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			th, tx := gossipExpectations(t, tc.fee,
 				tc.hasErr, tc.parseErr, tc.addErr,

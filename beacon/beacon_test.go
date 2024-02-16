@@ -613,7 +613,7 @@ func TestBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
 
 	epoch := types.EpochID(5)
 	mclock.EXPECT().CurrentLayer().Return(epoch.FirstLayer()).AnyTimes()
-	for i := 0; i < numEpochsToKeep; i++ {
+	for i := range numEpochsToKeep {
 		e := epoch + types.EpochID(i)
 		err := pd.setBeacon(e, types.RandomBeacon())
 		require.NoError(t, err)
@@ -674,7 +674,6 @@ func TestBeacon_ReportBeaconFromBallot(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -972,7 +971,6 @@ func TestBeacon_atxThresholdFraction(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1016,7 +1014,6 @@ func TestBeacon_atxThreshold(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1052,7 +1049,6 @@ func TestBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1099,7 +1095,6 @@ func TestBeacon_buildProposal(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1133,7 +1128,6 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 

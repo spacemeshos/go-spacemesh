@@ -143,7 +143,6 @@ func testFetch_getHashes(t *testing.T, streaming bool) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -612,7 +611,6 @@ func Test_PeerEpochInfo(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -685,7 +683,6 @@ func TestFetch_GetMeshHashes(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -754,7 +751,6 @@ func TestFetch_GetCert(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -769,25 +765,24 @@ func TestFetch_GetCert(t *testing.T) {
 			reqData, err := codec.Encode(req)
 			require.NoError(t, err)
 			for i, peer := range peers {
-				p := peer
 				ith := i
 				f.mOpn2S.EXPECT().
-					Request(gomock.Any(), p, gomock.Any()).
+					Request(gomock.Any(), peer, gomock.Any()).
 					DoAndReturn(
 						func(
-							_ context.Context,
-							_ p2p.Peer,
-							gotReq []byte,
-							extraProtocols ...string,
-						) ([]byte, error) {
-							require.Equal(t, reqData, gotReq)
-							if tc.results[ith] == nil {
-								data, err := codec.Encode(&expected)
-								require.NoError(t, err)
-								return data, nil
-							}
-							return nil, tc.results[ith]
-						})
+						_ context.Context,
+						_ p2p.Peer,
+						gotReq []byte,
+						extraProtocols ...string,
+					) ([]byte, error) {
+						require.Equal(t, reqData, gotReq)
+						if tc.results[ith] == nil {
+							data, err := codec.Encode(&expected)
+							require.NoError(t, err)
+							return data, nil
+						}
+						return nil, tc.results[ith]
+					})
 				if tc.results[ith] == nil {
 					break
 				}

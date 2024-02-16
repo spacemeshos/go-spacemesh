@@ -227,7 +227,6 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID, partici
 
 	var eg errgroup.Group
 	for _, p := range participants {
-		p := p
 		eg.Go(func() error {
 			wc.publishProposal(ctx, wc.epoch, p.Signer, p.Nonce, round)
 			return nil

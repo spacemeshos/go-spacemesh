@@ -3,7 +3,7 @@ package tortoise
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"sort"
 	"strconv"
 	"testing"

@@ -1376,16 +1376,17 @@ func BenchmarkNewActivationDb(b *testing.B) {
 	poetBytes := []byte("66666")
 	coinbase := types.Address{2, 4, 5}
 	sigs := make([]*signing.EdSigner, 0, numOfMiners)
-	for i := 0; i < numOfMiners; i++ {
+	for range numOfMiners {
 		sig, err := signing.NewEdSigner()
 		r.NoError(err)
 		sigs = append(sigs, sig)
 	}
+	r.Len(sigs, numOfMiners)
 
 	start := time.Now()
 	eStart := time.Now()
 	for epoch := postGenesisEpoch; epoch < postGenesisEpoch+numOfEpochs; epoch++ {
-		for i := 0; i < numOfMiners; i++ {
+		for i := range numOfMiners {
 			challenge := types.NIPostChallenge{
 				Sequence:       1,
 				PrevATXID:      prevAtxs[i],
@@ -1573,7 +1574,7 @@ func TestHandler_HandleParallelGossipAtx(t *testing.T) {
 	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
 
 	var eg errgroup.Group
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		eg.Go(func() error {
 			return atxHdlr.HandleGossipAtx(context.Background(), "", atxData)
 		})
@@ -1868,7 +1869,7 @@ func BenchmarkGetAtxHeaderWithConcurrentProcessAtx(b *testing.B) {
 		stop uint64
 		wg   sync.WaitGroup
 	)
-	for i := 0; i < runtime.NumCPU()/2; i++ {
+	for range runtime.NumCPU() / 2 {
 		wg.Add(1)
 		//nolint:testifylint
 		go func() {
@@ -1903,7 +1904,7 @@ func BenchmarkGetAtxHeaderWithConcurrentProcessAtx(b *testing.B) {
 		}()
 	}
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		_, err := atxHdlr.cdb.GetAtxHeader(types.ATXID{1, 1, 1})
 		require.ErrorIs(b, err, sql.ErrNotFound)
 	}

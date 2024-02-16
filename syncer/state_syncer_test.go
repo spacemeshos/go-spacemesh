@@ -51,7 +51,6 @@ func TestProcessLayers_MultiLayers(t *testing.T) {
 		AnyTimes()
 	adopted := make(map[types.LayerID]types.BlockID)
 	for lid := gLid.Add(1); lid.Before(current); lid = lid.Add(1) {
-		lid := lid
 		ts.mLyrPatrol.EXPECT().IsHareInCharge(lid).Return(false)
 		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid, true, peers).DoAndReturn(
 			func(context.Context, types.LayerID, bool, []p2p.Peer,
@@ -160,7 +159,6 @@ func TestProcessLayers_OpinionsNotAdopted(t *testing.T) {
 		},
 	}
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 

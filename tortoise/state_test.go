@@ -362,7 +362,6 @@ func TestStateDecodeVotes(t *testing.T) {
 			"conflict with abstain",
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			t.Parallel()
 			base := &ballotInfo{layer: genesis}
