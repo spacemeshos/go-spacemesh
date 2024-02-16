@@ -51,10 +51,9 @@ func FilterFrom(operations Operations) string {
 
 	for i, op := range operations.Filter {
 		if i == 0 {
-			queryBuilder.WriteString(" " + string(Where))
-		}
-		if i != 0 {
-			queryBuilder.WriteString(" " + string(And))
+			queryBuilder.WriteString(" where")
+		} else {
+			queryBuilder.WriteString(" and")
 		}
 		queryBuilder.WriteString(" " + string(op.Field) + " " + string(op.Token) + " ?" + strconv.Itoa(i+1))
 	}

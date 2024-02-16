@@ -28,14 +28,11 @@ func TestActivationService_List(t *testing.T) {
 
 	gen := fixture.NewAtxsGenerator()
 	activations := make([]types.VerifiedActivationTx, 100)
-	require.NoError(t, db.WithTx(ctx, func(dtx *sql.Tx) error {
-		for i := range activations {
-			atx := gen.Next()
-			require.NoError(t, atxs.Add(dtx, atx))
-			activations[i] = *atx
-		}
-		return nil
-	}))
+	for i := range activations {
+		atx := gen.Next()
+		require.NoError(t, atxs.Add(db, atx))
+		activations[i] = *atx
+	}
 
 	svc := NewActivationService(db)
 	cfg, cleanup := launchServer(t, svc)
@@ -70,7 +67,7 @@ func TestActivationService_List(t *testing.T) {
 			Offset: 50,
 		})
 		require.NoError(t, err)
-		require.Equal(t, 25, len(list.Activations))
+		require.Len(t, list.Activations, 25)
 	})
 
 	t.Run("all", func(t *testing.T) {
