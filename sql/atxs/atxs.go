@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
 )
 
 const fullQuery = `select id, atx, base_tick_height, tick_count, pubkey,
@@ -503,4 +504,38 @@ func SetValidity(db sql.Executor, id types.ATXID, validity types.Validity) error
 		return fmt.Errorf("setting validity %v: %w", id, err)
 	}
 	return nil
+}
+
+func IterateAtxsOps(
+	db sql.Executor,
+	operations builder.Operations,
+	fn func(*types.VerifiedActivationTx) bool,
+) error {
+	var derr error
+	_, err := db.Exec(
+		fullQuery+builder.FilterFrom(operations),
+		builder.BindingsFrom(operations),
+		decoder(func(atx *types.VerifiedActivationTx, err error) bool {
+			if atx != nil {
+				return fn(atx)
+			}
+			derr = err
+			return derr == nil
+		}))
+	if err != nil {
+		return err
+	}
+	return derr
+}
+
+func CountAtxsByOps(db sql.Executor, operations builder.Operations) (count uint32, err error) {
+	_, err = db.Exec(
+		"SELECT count(*) FROM atxs"+builder.FilterFrom(operations),
+		builder.BindingsFrom(operations),
+		func(stmt *sql.Statement) bool {
+			count = uint32(stmt.ColumnInt32(0))
+			return true
+		},
+	)
+	return
 }

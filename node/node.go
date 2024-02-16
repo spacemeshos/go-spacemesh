@@ -34,6 +34,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+	"github.com/spacemeshos/go-spacemesh/api/grpcserver/v2alpha1"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/blocks"
@@ -1361,6 +1362,14 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		return service, nil
 	case grpcserver.Activation:
 		service := grpcserver.NewActivationService(app.cachedDB, types.ATXID(app.Config.Genesis.GoldenATX()))
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2alpha1.Activation:
+		service := v2alpha1.NewActivationService(app.db)
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2alpha1.ActivationStream:
+		service := v2alpha1.NewActivationStreamService(app.db)
 		app.grpcServices[svc] = service
 		return service, nil
 	}
