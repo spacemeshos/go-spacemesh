@@ -1,10 +1,11 @@
 package fixture
 
 import (
-	"github.com/spacemeshos/merkle-tree"
-	"github.com/spacemeshos/poet/shared"
 	"math/rand"
 	"time"
+
+	"github.com/spacemeshos/merkle-tree"
+	"github.com/spacemeshos/poet/shared"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
