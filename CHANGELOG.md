@@ -94,6 +94,9 @@ configuration is as follows:
   If a node finds a proof invalid, it will report it to the network by
   creating a malfeasance proof. The malicious node will then be blacklisted by the network.
 
+*[#5580](https://github.com/spacemeshos/go-spacemesh/pull/5580)
+  Building with Go 1.22.0
+
 ### Features
 
 ### Improvements
