@@ -3,15 +3,13 @@ package v2alpha1
 import (
 	"context"
 	"errors"
-	"io"
-	"testing"
-	"time"
-
 	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"io"
+	"testing"
 
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -22,9 +20,7 @@ import (
 
 func TestActivationService_List(t *testing.T) {
 	db := sql.InMemory()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	ctx := context.Background()
 
 	gen := fixture.NewAtxsGenerator()
 	activations := make([]types.VerifiedActivationTx, 100)
@@ -106,20 +102,15 @@ func TestActivationService_List(t *testing.T) {
 
 func TestActivationStreamService_Stream(t *testing.T) {
 	db := sql.InMemory()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	ctx := context.Background()
 
 	gen := fixture.NewAtxsGenerator()
 	activations := make([]types.VerifiedActivationTx, 100)
-	require.NoError(t, db.WithTx(ctx, func(dtx *sql.Tx) error {
-		for i := range activations {
-			atx := gen.Next()
-			require.NoError(t, atxs.Add(dtx, atx))
-			activations[i] = *atx
-		}
-		return nil
-	}))
+	for i := range activations {
+		atx := gen.Next()
+		require.NoError(t, atxs.Add(db, atx))
+		activations[i] = *atx
+	}
 
 	svc := NewActivationStreamService(db)
 	cfg, cleanup := launchServer(t, svc)
@@ -143,7 +134,7 @@ func TestActivationStreamService_Stream(t *testing.T) {
 			}
 			i++
 		}
-		require.Equal(t, len(activations), i)
+		require.Len(t, activations, i)
 	})
 
 	t.Run("watch", func(t *testing.T) {
@@ -192,9 +183,6 @@ func TestActivationStreamService_Stream(t *testing.T) {
 		} {
 			tc := tc
 			t.Run(tc.desc, func(t *testing.T) {
-				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-				defer cancel()
-
 				stream, err := client.Stream(ctx, tc.request)
 				require.NoError(t, err)
 				_, err = stream.Header()
@@ -221,20 +209,15 @@ func TestActivationStreamService_Stream(t *testing.T) {
 
 func TestActivationService_ActivationsCount(t *testing.T) {
 	db := sql.InMemory()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	ctx := context.Background()
 
 	gen := fixture.NewAtxsGenerator().WithEpochs(0, 1)
 	activations := make([]types.VerifiedActivationTx, 30)
-	require.NoError(t, db.WithTx(ctx, func(dtx *sql.Tx) error {
-		for i := range activations {
-			atx := gen.Next()
-			require.NoError(t, atxs.Add(dtx, atx))
-			activations[i] = *atx
-		}
-		return nil
-	}))
+	for i := range activations {
+		atx := gen.Next()
+		require.NoError(t, atxs.Add(db, atx))
+		activations[i] = *atx
+	}
 
 	svc := NewActivationService(db)
 	cfg, cleanup := launchServer(t, svc)
@@ -247,5 +230,5 @@ func TestActivationService_ActivationsCount(t *testing.T) {
 		Epoch: activations[3].PublishEpoch.Uint32(),
 	})
 	require.NoError(t, err)
-	require.Equal(t, len(activations), int(count.Count))
+	require.Len(t, activations, int(count.Count))
 }

@@ -528,7 +528,7 @@ func IterateAtxsOps(
 	return derr
 }
 
-func CountAtxsByEpoch(db sql.Executor, operations builder.Operations) (count uint32, err error) {
+func CountAtxsByOps(db sql.Executor, operations builder.Operations) (count uint32, err error) {
 	_, err = db.Exec(
 		"SELECT count(*) FROM atxs"+builder.FilterFrom(operations),
 		builder.BindingsFrom(operations),

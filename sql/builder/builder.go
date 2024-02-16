@@ -17,8 +17,6 @@ const (
 	Gte   token = ">="
 	Lt    token = "<"
 	Lte   token = "<="
-	And   token = "and"
-	Where token = "where"
 )
 
 type field string
@@ -28,9 +26,14 @@ const (
 	Smesher  field = "pubkey"
 	Coinbase field = "coinbase"
 	Id       field = "id"
-	Offset   field = "offset"
-	Limit    field = "limit"
-	OrderBy  field = "order by"
+)
+
+type modifier string
+
+const (
+	Offset  modifier = "offset"
+	Limit   modifier = "limit"
+	OrderBy modifier = "order by"
 )
 
 type Op struct {
@@ -41,9 +44,16 @@ type Op struct {
 	Value any
 }
 
+type Modifier struct {
+	Key modifier
+	// Value will be type casted to one the expected types.
+	// Modifier will panic if it doesn't match any of expected.
+	Value any
+}
+
 type Operations struct {
-	Filter []Op
-	Other  []Op
+	Filter    []Op
+	Modifiers []Modifier
 }
 
 func FilterFrom(operations Operations) string {
@@ -58,8 +68,8 @@ func FilterFrom(operations Operations) string {
 		queryBuilder.WriteString(" " + string(op.Field) + " " + string(op.Token) + " ?" + strconv.Itoa(i+1))
 	}
 
-	for _, op := range operations.Other {
-		queryBuilder.WriteString(fmt.Sprintf(" %s %v", string(op.Field), op.Value))
+	for _, m := range operations.Modifiers {
+		queryBuilder.WriteString(fmt.Sprintf(" %s %v", string(m.Key), m.Value))
 	}
 
 	return queryBuilder.String()

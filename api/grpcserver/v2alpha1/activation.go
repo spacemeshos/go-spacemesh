@@ -3,6 +3,7 @@ package v2alpha1
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
@@ -14,7 +15,6 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -27,15 +27,13 @@ const (
 	ActivationStream = "activation_stream_v2alpha1"
 )
 
-func NewActivationStreamService(db *sql.Database) *ActivationStreamService {
+func NewActivationStreamService(db sql.Executor) *ActivationStreamService {
 	return &ActivationStreamService{db: db}
 }
 
 type ActivationStreamService struct {
-	db *sql.Database
+	db sql.Executor
 }
-
-var _ grpcserver.ServiceAPI = (*ActivationStreamService)(nil)
 
 func (s *ActivationStreamService) RegisterService(server *grpc.Server) {
 	spacemeshv2alpha1.RegisterActivationStreamServiceServer(server, s)
@@ -129,40 +127,50 @@ func toAtx(atx *types.VerifiedActivationTx) *spacemeshv2alpha1.ActivationV1 {
 			Pow:     atx.InitialPost.Pow,
 		}
 	}
-	if nipost := atx.NIPost; nipost != nil {
-		if nipost.Post != nil {
-			v1.Post = &spacemeshv2alpha1.Post{
-				Nonce:   nipost.Post.Nonce,
-				Indices: nipost.Post.Indices,
-				Pow:     nipost.Post.Pow,
-			}
-		}
-		if nipost.PostMetadata != nil {
-			v1.PostMeta = &spacemeshv2alpha1.PostMeta{
-				Challenge:     nipost.PostMetadata.Challenge,
-				LabelsPerUnit: nipost.PostMetadata.LabelsPerUnit,
-			}
-		}
-		v1.Membership = &spacemeshv2alpha1.PoetMembershipProof{
-			ProofNodes: make([][]byte, len(nipost.Membership.Nodes)),
-			Leaf:       nipost.Membership.LeafIndex,
-		}
-		for i, node := range nipost.Membership.Nodes {
-			v1.Membership.ProofNodes[i] = node.Bytes()
-		}
+
+	if atx.NIPost == nil {
+		panic(fmt.Sprintf("nil nipost for atx %s", atx.ShortString()))
 	}
+
+	if atx.NIPost.Post == nil {
+		panic(fmt.Sprintf("nil nipost post for atx %s", atx.ShortString()))
+	}
+
+	if atx.NIPost.PostMetadata == nil {
+		panic(fmt.Sprintf("nil nipost post metadata for atx %s", atx.ShortString()))
+	}
+
+	nipost := atx.NIPost
+	v1.Post = &spacemeshv2alpha1.Post{
+		Nonce:   nipost.Post.Nonce,
+		Indices: nipost.Post.Indices,
+		Pow:     nipost.Post.Pow,
+	}
+
+	v1.PostMeta = &spacemeshv2alpha1.PostMeta{
+		Challenge:     nipost.PostMetadata.Challenge,
+		LabelsPerUnit: nipost.PostMetadata.LabelsPerUnit,
+	}
+
+	v1.Membership = &spacemeshv2alpha1.PoetMembershipProof{
+		ProofNodes: make([][]byte, len(nipost.Membership.Nodes)),
+		Leaf:       nipost.Membership.LeafIndex,
+	}
+
+	for i, node := range nipost.Membership.Nodes {
+		v1.Membership.ProofNodes[i] = node.Bytes()
+	}
+
 	return v1
 }
 
-func NewActivationService(db *sql.Database) *ActivationService {
+func NewActivationService(db sql.Executor) *ActivationService {
 	return &ActivationService{db: db}
 }
 
 type ActivationService struct {
-	db *sql.Database
+	db sql.Executor
 }
-
-var _ grpcserver.ServiceAPI = (*ActivationService)(nil)
 
 func (s *ActivationService) RegisterService(server *grpc.Server) {
 	spacemeshv2alpha1.RegisterActivationServiceServer(server, s)
@@ -214,7 +222,7 @@ func (s *ActivationService) ActivationsCount(
 		},
 	}}
 
-	count, err := atxs.CountAtxsByEpoch(s.db, ops)
+	count, err := atxs.CountAtxsByOps(s.db, ops)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -277,20 +285,20 @@ func toOperations(filter *spacemeshv2alpha1.ActivationRequest) (builder.Operatio
 		})
 	}
 
-	ops.Other = append(ops.Other, builder.Op{
-		Field: builder.OrderBy,
+	ops.Modifiers = append(ops.Modifiers, builder.Modifier{
+		Key:   builder.OrderBy,
 		Value: "epoch asc, id",
 	})
 
 	if filter.Limit != 0 {
-		ops.Other = append(ops.Other, builder.Op{
-			Field: builder.Limit,
+		ops.Modifiers = append(ops.Modifiers, builder.Modifier{
+			Key:   builder.Limit,
 			Value: int64(filter.Limit),
 		})
 	}
 	if filter.Offset != 0 {
-		ops.Other = append(ops.Other, builder.Op{
-			Field: builder.Offset,
+		ops.Modifiers = append(ops.Modifiers, builder.Modifier{
+			Key:   builder.Offset,
 			Value: int64(filter.Offset),
 		})
 	}
