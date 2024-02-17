@@ -269,7 +269,7 @@ func (h *Handler) SyntacticallyValidateDeps(
 			return nil, fmt.Errorf("adding malfeasance proof: %w", err)
 		}
 		if err := h.publisher.Publish(ctx, pubsub.MalfeasanceProof, codec.MustEncode(&gossip)); err != nil {
-			h.log.With().Error("failed to broadcast malfeasance proof", log.Err(err))
+			h.log.With().Error("failed to broadcast malfeasance proof after validating nipost", log.Err(err))
 		}
 		h.cdb.CacheMalfeasanceProof(atx.SmesherID, &gossip.MalfeasanceProof)
 		h.tortoise.OnMalfeasance(atx.SmesherID)
@@ -454,7 +454,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 				return fmt.Errorf("add malfeasance proof: %w", err)
 			}
 
-			h.log.WithContext(ctx).With().Warning("smesher produced more than one atx in the same epoch",
+			h.log.WithContext(ctx).With().Info("smesher produced more than one atx in the same epoch",
 				log.Stringer("smesher", atx.SmesherID),
 				log.Object("prev", prev),
 				log.Object("curr", atx),
@@ -493,7 +493,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 			h.log.With().Fatal("failed to encode malfeasance gossip", log.Err(err))
 		}
 		if err = h.publisher.Publish(ctx, pubsub.MalfeasanceProof, encodedProof); err != nil {
-			h.log.With().Error("failed to broadcast malfeasance proof", log.Err(err))
+			h.log.With().Warning("failed to broadcast malfeasance proof after store atx", log.Err(err))
 			return fmt.Errorf("broadcast atx malfeasance proof: %w", err)
 		}
 		return errMaliciousATX

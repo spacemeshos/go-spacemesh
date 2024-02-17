@@ -416,11 +416,15 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 	if !s.ListenToATXGossip() {
 		s.logger.WithContext(ctx).With().Info("beginning atx sync from genesis", s.ticker.CurrentLayer())
 		for epoch := s.lastAtxEpoch() + 1; epoch <= s.ticker.CurrentLayer().GetEpoch(); epoch++ {
+			s.logger.WithContext(ctx).With().Info("syncing epoch atxs",
+				epoch,
+				log.Uint32("epoch_id_current", uint32(s.ticker.CurrentLayer().GetEpoch())),
+			)
 			if err := s.fetchATXsForEpoch(ctx, epoch); err != nil {
 				return err
 			}
 			s.logger.WithContext(ctx).With().Info("synced atxs through epoch",
-				log.Uint32("epoch_id_synced", uint32(epoch)),
+				epoch,
 				log.Uint32("epoch_id_current", uint32(s.ticker.CurrentLayer().GetEpoch())),
 			)
 		}

@@ -310,7 +310,7 @@ func (d *DataFetch) GetEpochATXs(ctx context.Context, epoch types.EpochID) error
 		return fmt.Errorf("get epoch info (peer %v): %w", peer, err)
 	}
 	if len(ed.AtxIDs) == 0 {
-		d.logger.WithContext(ctx).With().Debug("peer has zero atx",
+		d.logger.WithContext(ctx).With().Debug("peer has no atx data",
 			epoch,
 			log.Stringer("peer", peer),
 		)
@@ -326,6 +326,12 @@ func (d *DataFetch) GetEpochATXs(ctx context.Context, epoch types.EpochID) error
 		log.Int("missing", len(missing)),
 	)
 	if len(missing) > 0 {
+		d.logger.WithContext(ctx).With().Info("fetching missing epoch atxs",
+			epoch,
+			log.Stringer("peer", peer),
+			log.Int("total", len(ed.AtxIDs)),
+			log.Int("missing", len(missing)),
+		)
 		if err := d.fetcher.GetAtxs(ctx, missing); err != nil {
 			return fmt.Errorf("get ATXs: %w", err)
 		}
