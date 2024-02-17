@@ -387,7 +387,7 @@ func (pb *ProposalBuilder) decideMeshHash(ctx context.Context, current types.Lay
 }
 
 func (pb *ProposalBuilder) UpdateActiveSet(epoch types.EpochID, activeSet []types.ATXID) {
-	pb.logger.With().Info("received activeset update",
+	pb.logger.With().Debug("received activeset update",
 		epoch,
 		log.Int("size", len(activeSet)),
 	)

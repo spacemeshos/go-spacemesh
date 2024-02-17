@@ -565,7 +565,7 @@ func (f *Fetch) send(requests []RequestMessage) {
 			go func() {
 				data, err := f.sendBatch(peer, batch)
 				if err != nil {
-					f.logger.With().Warning(
+					f.logger.With().Debug(
 						"failed to send batch request",
 						log.Stringer("batch", batch.ID),
 						log.Stringer("peer", peer),
@@ -674,7 +674,7 @@ func (f *Fetch) handleHashError(batch *batchInfo, err error) {
 			continue
 		}
 		f.logger.WithContext(req.ctx).With().
-			Warning("hash request failed", log.Stringer("hash", req.hash), log.Err(err))
+			Debug("hash request failed", log.Stringer("hash", req.hash), log.Err(err))
 		req.promise.err = err
 		peerErrors.WithLabelValues(string(req.hint)).Inc()
 		close(req.promise.completed)

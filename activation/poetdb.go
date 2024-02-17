@@ -114,7 +114,7 @@ func (db *PoetDb) StoreProof(ctx context.Context, ref types.PoetProofRef, proofM
 			proofMessage.PoetServiceID[:5], proofMessage.RoundID, err)
 	}
 
-	db.log.WithContext(ctx).With().Info("stored poet proof",
+	db.log.WithContext(ctx).With().Debug("stored poet proof",
 		log.String("poet_proof_id", fmt.Sprintf("%x", ref[:5])),
 		log.String("round_id", proofMessage.RoundID),
 		log.String("poet_service_id", fmt.Sprintf("%x", proofMessage.PoetServiceID[:5])),

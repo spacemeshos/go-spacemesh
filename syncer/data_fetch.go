@@ -310,7 +310,7 @@ func (d *DataFetch) GetEpochATXs(ctx context.Context, epoch types.EpochID) error
 		return fmt.Errorf("get epoch info (peer %v): %w", peer, err)
 	}
 	if len(ed.AtxIDs) == 0 {
-		d.logger.WithContext(ctx).With().Debug("peer have zero atx",
+		d.logger.WithContext(ctx).With().Debug("peer has zero atx",
 			epoch,
 			log.Stringer("peer", peer),
 		)

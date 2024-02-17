@@ -377,7 +377,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		}
 
 		if err := s.syncAtx(ctx); err != nil {
-			s.logger.With().Error("failed to sync atxs", log.Context(ctx), log.Err(err))
+			s.logger.With().Info("failed to sync atxs", log.Context(ctx), log.Err(err))
 			return false
 		}
 
@@ -414,20 +414,24 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 
 func (s *Syncer) syncAtx(ctx context.Context) error {
 	if !s.ListenToATXGossip() {
-		s.logger.WithContext(ctx).With().Info("syncing atx from genesis", s.ticker.CurrentLayer())
+		s.logger.WithContext(ctx).With().Info("beginning atx sync from genesis", s.ticker.CurrentLayer())
 		for epoch := s.lastAtxEpoch() + 1; epoch <= s.ticker.CurrentLayer().GetEpoch(); epoch++ {
 			if err := s.fetchATXsForEpoch(ctx, epoch); err != nil {
 				return err
 			}
+			s.logger.WithContext(ctx).With().Info("synced atxs through epoch",
+				log.Uint32("epoch_id_synced", uint32(epoch)),
+				log.Uint32("epoch_id_current", uint32(s.ticker.CurrentLayer().GetEpoch())),
+			)
 		}
-		s.logger.WithContext(ctx).With().Info("atxs synced to epoch", s.lastAtxEpoch())
+		s.logger.WithContext(ctx).With().Info("atxs sync complete", s.lastAtxEpoch())
 
 		// FIXME https://github.com/spacemeshos/go-spacemesh/issues/3987
-		s.logger.WithContext(ctx).With().Info("syncing malicious proofs")
+		s.logger.WithContext(ctx).With().Info("syncing malfeasance proofs")
 		if err := s.syncMalfeasance(ctx); err != nil {
 			return err
 		}
-		s.logger.WithContext(ctx).With().Info("malicious IDs synced")
+		s.logger.WithContext(ctx).With().Info("malfeasance proofs sync complete")
 		s.setATXSynced()
 		return nil
 	}
@@ -468,7 +472,7 @@ func isTooFarBehind(
 	outOfSyncThreshold uint32,
 ) bool {
 	if current.After(lastSynced) && current.Difference(lastSynced) >= outOfSyncThreshold {
-		logger.WithContext(ctx).With().Info("node is too far behind",
+		logger.WithContext(ctx).With().Info("node is far behind, setting out of sync",
 			log.Stringer("current", current),
 			log.Stringer("last synced", lastSynced),
 			log.Uint32("behind threshold", outOfSyncThreshold))
@@ -561,7 +565,7 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID, peers ...
 	return nil
 }
 
-// fetching ATXs published the specified epoch.
+// fetching published ATXs targeting the specified epoch.
 func (s *Syncer) fetchATXsForEpoch(ctx context.Context, epoch types.EpochID) error {
 	if err := s.dataFetcher.GetEpochATXs(ctx, epoch); err != nil {
 		return err

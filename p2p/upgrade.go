@@ -409,7 +409,7 @@ func (fh *Host) trackNetEvents() error {
 				return nil
 			}
 			natEv := ev.(event.EvtNATDeviceTypeChanged)
-			fh.logger.With().Info("NAT type changed",
+			fh.logger.With().Debug("NAT type changed",
 				log.Stringer("transportProtocol", natEv.TransportProtocol),
 				log.Stringer("type", natEv.NatDeviceType))
 			fh.natType.Lock()
@@ -425,7 +425,7 @@ func (fh *Host) trackNetEvents() error {
 				return nil
 			}
 			reachEv := ev.(event.EvtLocalReachabilityChanged)
-			fh.logger.With().Info("local reachability changed",
+			fh.logger.With().Debug("local reachability changed",
 				log.Stringer("reachability", reachEv.Reachability))
 			fh.reachability.Lock()
 			fh.reachability.value = reachEv.Reachability

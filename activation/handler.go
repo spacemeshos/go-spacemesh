@@ -126,7 +126,7 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.VerifiedActivationT
 		log.Stringer("smesher", atx.SmesherID),
 	)
 	if err := h.ContextuallyValidateAtx(atx); err != nil {
-		h.log.WithContext(ctx).With().Warning("atx failed contextual validation",
+		h.log.WithContext(ctx).With().Info("atx failed contextual validation",
 			atx.ID(),
 			log.Stringer("smesher", atx.SmesherID),
 			log.Err(err),
