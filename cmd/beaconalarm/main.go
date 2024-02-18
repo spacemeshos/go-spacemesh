@@ -197,6 +197,6 @@ func setupClock(conf config.Config) (*timesync.NodeClock, error) {
 		timesync.WithLayerDuration(conf.LayerDuration),
 		timesync.WithTickInterval(1*time.Second),
 		timesync.WithGenesisTime(gTime),
-		timesync.WithLogger(log.NewDefault("clock")),
+		timesync.WithLogger(log.NewDefault("clock").Zap()),
 	)
 }

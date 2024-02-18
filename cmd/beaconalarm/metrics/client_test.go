@@ -30,7 +30,7 @@ func Test_Client(t *testing.T) {
 		timesync.WithLayerDuration(2*time.Minute),
 		timesync.WithTickInterval(1*time.Second),
 		timesync.WithGenesisTime(genesis),
-		timesync.WithLogger(logger),
+		timesync.WithLogger(logger.Zap()),
 	)
 	require.NoError(t, err)
 
