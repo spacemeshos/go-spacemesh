@@ -2,13 +2,11 @@
 package miner
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"runtime"
 	"slices"
-	"sort"
 	"sync"
 	"time"
 
@@ -29,10 +27,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/beacons"
-	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
-	"github.com/spacemeshos/go-spacemesh/sql/localsql/activeset"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
@@ -70,19 +66,13 @@ type ProposalBuilder struct {
 	conState  conservativeState
 	tortoise  votesEncoder
 	syncer    system.SyncStateProvider
+	activeGen *activeSetGenerator
 
 	signers struct {
 		mu      sync.Mutex
 		signers map[types.NodeID]*signerSession
 	}
 	shared sharedSession
-
-	fallback struct {
-		mu   sync.Mutex
-		data map[types.EpochID][]types.ATXID
-	}
-
-	preparedActivesetLinearizer sync.Mutex
 }
 
 type signerSession struct {
@@ -300,16 +290,11 @@ func New(
 		}{
 			signers: map[types.NodeID]*signerSession{},
 		},
-		fallback: struct {
-			mu   sync.Mutex
-			data map[types.EpochID][]types.ATXID
-		}{
-			data: map[types.EpochID][]types.ATXID{},
-		},
 	}
 	for _, opt := range opts {
 		opt(pb)
 	}
+	pb.activeGen = newActiveSetGenerator(pb.cfg, pb.logger.Zap(), pb.db, pb.localdb, pb.atxsdata, pb.clock)
 	return pb
 }
 
@@ -336,7 +321,7 @@ func (pb *ProposalBuilder) Run(ctx context.Context) error {
 	} else {
 		eg.Go(func() error {
 			// check that activeset was prepared for current epoch
-			pb.ensureActiveSetPrepared(ctx, current.GetEpoch())
+			pb.activeGen.ensure(ctx, current.GetEpoch())
 			// and then wait for the right time to generate activeset for the next epoch
 			wait := time.Until(
 				pb.clock.LayerToTime((current.GetEpoch() + 1).FirstLayer()).Add(-pb.cfg.activeSet.Window))
@@ -347,7 +332,7 @@ func (pb *ProposalBuilder) Run(ctx context.Context) error {
 				case <-time.After(wait):
 				}
 			}
-			pb.ensureActiveSetPrepared(ctx, current.GetEpoch())
+			pb.activeGen.ensure(ctx, current.GetEpoch())
 			return nil
 		})
 	}
@@ -447,18 +432,8 @@ func (pb *ProposalBuilder) decideMeshHash(ctx context.Context, current types.Lay
 	return mesh
 }
 
-func (pb *ProposalBuilder) UpdateActiveSet(epoch types.EpochID, activeSet []types.ATXID) {
-	pb.logger.With().Info("received trusted activeset update",
-		epoch,
-		log.Int("size", len(activeSet)),
-	)
-	pb.fallback.mu.Lock()
-	defer pb.fallback.mu.Unlock()
-	if _, ok := pb.fallback.data[epoch]; ok {
-		pb.logger.With().Debug("fallback active set already exists", epoch)
-		return
-	}
-	pb.fallback.data[epoch] = activeSet
+func (pb *ProposalBuilder) UpdateActiveSet(target types.EpochID, set []types.ATXID) {
+	pb.activeGen.updateFallback(target, set)
 }
 
 func (pb *ProposalBuilder) initSharedData(ctx context.Context, current types.LayerID) error {
@@ -475,7 +450,7 @@ func (pb *ProposalBuilder) initSharedData(ctx context.Context, current types.Lay
 	if pb.shared.active.set != nil {
 		return nil
 	}
-	id, weight, set, err := pb.prepareActiveSet(current, current.GetEpoch())
+	id, weight, set, err := pb.activeGen.generate(current, current.GetEpoch())
 	if err != nil {
 		return err
 	}
@@ -747,218 +722,6 @@ func createProposal(
 	return p
 }
 
-func ActiveSetFromEpochFirstBlock(db sql.Executor, epoch types.EpochID) ([]types.ATXID, error) {
-	bid, err := layers.FirstAppliedInEpoch(db, epoch)
-	if err != nil {
-		return nil, fmt.Errorf("first block in epoch %d not found: %w", epoch, err)
-	}
-	return activeSetFromBlock(db, bid)
-}
-
-func activeSetFromBlock(db sql.Executor, bid types.BlockID) ([]types.ATXID, error) {
-	block, err := blocks.Get(db, bid)
-	if err != nil {
-		return nil, fmt.Errorf("actives get block: %w", err)
-	}
-	activeMap := make(map[types.ATXID]struct{})
-	// the active set is the union of all active sets recorded in rewarded miners' ref ballot
-	for _, r := range block.Rewards {
-		activeMap[r.AtxID] = struct{}{}
-		ballot, err := ballots.FirstInEpoch(db, r.AtxID, block.LayerIndex.GetEpoch())
-		if err != nil {
-			return nil, fmt.Errorf("actives get ballot: %w", err)
-		}
-		actives, err := activesets.Get(db, ballot.EpochData.ActiveSetHash)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"actives get active hash for ballot %s: %w",
-				ballot.ID().String(),
-				err,
-			)
-		}
-		for _, id := range actives.Set {
-			activeMap[id] = struct{}{}
-		}
-	}
-	return maps.Keys(activeMap), nil
-}
-
-func (pb *ProposalBuilder) ensureActiveSetPrepared(ctx context.Context, target types.EpochID) {
-	var err error
-	for try := 0; try < pb.cfg.activeSet.Tries; try++ {
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(pb.cfg.activeSet.RetryInterval):
-		}
-		current := pb.clock.CurrentLayer()
-		// we run it here for side effects
-		_, _, _, err = pb.prepareActiveSet(current, target)
-		if err == nil {
-			return
-		}
-		pb.logger.With().Debug("failed to prepare active set", log.Err(err), log.Uint32("attempt", uint32(try)))
-	}
-	pb.logger.With().Warning("failed to prepare active set", log.Err(err))
-}
-
-// prepareActiveSet generates activeset in advance.
-//
-// It stores it on the builder and persists it in the database, so that when node is restarted
-// it doesn't have to redo the work.
-//
-// The method is expected to be called at any point in target epoch, as well as the very end of the previous epoch.
-func (pb *ProposalBuilder) prepareActiveSet(
-	current types.LayerID,
-	target types.EpochID,
-) (types.Hash32, uint64, []types.ATXID, error) {
-	pb.preparedActivesetLinearizer.Lock()
-	defer pb.preparedActivesetLinearizer.Unlock()
-
-	id, setWeight, set, err := activeset.Get(pb.localdb, activeset.Tortoise, target)
-	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		return id, 0, nil, fmt.Errorf("failed to get prepared active set: %w", err)
-	}
-	if err == nil {
-		return id, setWeight, set, nil
-	}
-
-	pb.fallback.mu.Lock()
-	fallback, exists := pb.fallback.data[target]
-	pb.fallback.mu.Unlock()
-
-	start := time.Now()
-	if exists {
-		pb.logger.With().Info("generating activeset from trusted fallback",
-			target.Field(),
-			log.Int("size", len(fallback)),
-		)
-		var err error
-		setWeight, err = getSetWeight(pb.atxsdata, target, fallback)
-		if err != nil {
-			return id, 0, nil, err
-		}
-		set = fallback
-	} else {
-		epochStart := pb.clock.LayerToTime(target.FirstLayer())
-		networkDelay := pb.cfg.networkDelay
-		pb.logger.With().Info("generating activeset from grades", target.Field(),
-			log.Time("epoch start", epochStart),
-			log.Duration("network delay", networkDelay),
-		)
-		result, err := activeSetFromGrades(pb.db, target, epochStart, networkDelay)
-		if err != nil {
-			return id, 0, nil, err
-		}
-		if result.Total == 0 {
-			return id, 0, nil, fmt.Errorf("empty active set")
-		}
-		if result.Total > 0 && len(result.Set)*100/result.Total > pb.cfg.goodAtxPercent {
-			set = result.Set
-			setWeight = result.Weight
-		} else {
-			pb.logger.With().Info("node was not synced during previous epoch. can't use activeset from grades",
-				target.Field(),
-				log.Time("epoch start", epochStart),
-				log.Duration("network delay", networkDelay),
-				log.Int("total", result.Total),
-				log.Int("set", len(result.Set)),
-				log.Int("omitted", result.Total-len(result.Set)),
-			)
-		}
-	}
-	if set == nil && current > target.FirstLayer() {
-		pb.logger.With().Info("generating activeset from first block",
-			log.Uint32("current", current.Uint32()),
-			log.Uint32("first", target.FirstLayer().Uint32()),
-		)
-		// see how it can be further improved https://github.com/spacemeshos/go-spacemesh/issues/5560
-		var err error
-		set, err = ActiveSetFromEpochFirstBlock(pb.db, pb.shared.epoch)
-		if err != nil {
-			return id, 0, nil, err
-		}
-		setWeight, err = getSetWeight(pb.atxsdata, pb.shared.epoch, set)
-		if err != nil {
-			return id, 0, nil, err
-		}
-	}
-	if set != nil && setWeight == 0 {
-		return id, 0, nil, fmt.Errorf("empty active set")
-	}
-	if set != nil {
-		pb.logger.With().Info("prepared activeset",
-			target.Field(),
-			log.Int("size", len(set)),
-			log.Uint64("weight", setWeight),
-			log.Duration("elapsed", time.Since(start)),
-		)
-		sort.Slice(set, func(i, j int) bool {
-			return bytes.Compare(set[i].Bytes(), set[j].Bytes()) < 0
-		})
-		id := types.ATXIDList(set).Hash()
-		if err := activeset.Add(pb.localdb, activeset.Tortoise, target, id, setWeight, set); err != nil {
-			return id, 0, nil, fmt.Errorf("failed to persist prepared active set for epoch %v: %w", target, err)
-		}
-		return id, setWeight, set, nil
-	}
-	return id, 0, nil, fmt.Errorf("failed to generate activeset")
-}
-
-type gradedActiveSet struct {
-	// Set includes activations with highest grade.
-	Set []types.ATXID
-	// Weight of the activations in the Set.
-	Weight uint64
-	// Total number of activations in the database that targets requests epoch.
-	Total int
-}
-
-// activeSetFromGrades includes activations with the highest grade.
-// Such activations were received atleast 4 network delays before the epoch start, and no malfeasence proof for
-// identity was received before the epoch start.
-//
-// On mainnet we use 30minutes as a network delay parameter.
-func activeSetFromGrades(
-	db sql.Executor,
-	target types.EpochID,
-	epochStart time.Time,
-	networkDelay time.Duration,
-) (gradedActiveSet, error) {
-	var (
-		setWeight uint64
-		set       []types.ATXID
-		total     int
-	)
-	if err := atxs.IterateForGrading(db, target-1, func(id types.ATXID, atxtime, prooftime int64, weight uint64) bool {
-		total++
-		if gradeAtx(epochStart, networkDelay, atxtime, prooftime) == good {
-			set = append(set, id)
-			setWeight += weight
-		}
-		return true
-	}); err != nil {
-		return gradedActiveSet{}, fmt.Errorf("failed to iterate atxs that target epoch %v: %v", target, err)
-	}
-	return gradedActiveSet{
-		Set:    set,
-		Weight: setWeight,
-		Total:  total,
-	}, nil
-}
-
-func getSetWeight(atxsdata *atxsdata.Data, target types.EpochID, set []types.ATXID) (uint64, error) {
-	var setWeight uint64
-	for _, id := range set {
-		atx := atxsdata.Get(target, id)
-		if atx == nil {
-			return 0, fmt.Errorf("atx %s/%s is missing in atxsdata", target, id.ShortString())
-		}
-		setWeight += atx.Weight
-	}
-	return setWeight, nil
-}
-
 // calcEligibilityProofs calculates the eligibility proofs of proposals for the miner in the given epoch
 // and returns the proofs along with the epoch's active set.
 func calcEligibilityProofs(
@@ -979,31 +742,4 @@ func calcEligibilityProofs(
 		})
 	}
 	return proofs
-}
-
-// atxGrade describes the grade of an ATX as described in
-// https://community.spacemesh.io/t/grading-atxs-for-the-active-set/335
-//
-// let s be the start of the epoch, and δ the network propagation time.
-// grade 0: ATX was received at time t >= s-3δ, or an equivocation proof was received by time s-δ.
-// grade 1: ATX was received at time t < s-3δ before the start of the epoch, and no equivocation proof by time s-δ.
-// grade 2: ATX was received at time t < s-4δ, and no equivocation proof was received for that id until time s.
-type atxGrade int
-
-const (
-	evil atxGrade = iota
-	acceptable
-	good
-)
-
-func gradeAtx(epochStart time.Time, networkDelay time.Duration, atxtime, prooftime int64) atxGrade {
-	atx := time.Unix(0, atxtime)
-	proof := time.Unix(0, prooftime)
-	if atx.Before(epochStart.Add(-4*networkDelay)) && (prooftime == 0 || !proof.Before(epochStart)) {
-		return good
-	} else if atx.Before(epochStart.Add(-3*networkDelay)) &&
-		(proof.IsZero() || !proof.Before(epochStart.Add(-networkDelay))) {
-		return acceptable
-	}
-	return evil
 }
