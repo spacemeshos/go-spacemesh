@@ -78,6 +78,7 @@ func TestData(t *testing.T) {
 			data := c.Get(types.EpochID(epoch), types.ATXID{byte(epoch)})
 			require.True(t, data.Malicious)
 		}
+		require.True(t, c.IsMalicious(node))
 	})
 	t.Run("eviction", func(t *testing.T) {
 		const (
