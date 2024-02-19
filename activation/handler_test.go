@@ -1258,9 +1258,12 @@ func testHandler_PostMalfeasanceProofs(t *testing.T, expectPublish, synced bool)
 
 	msg := codec.MustEncode(atx)
 	if synced {
-		require.NoError(t, atxHdlr.HandleSyncedAtx(context.Background(), types.Hash32{}, p2p.NoPeer, msg))
+		require.NoError(
+			t, atxHdlr.HandleSyncedAtx(context.Background(), types.Hash32{}, p2p.NoPeer, msg))
 	} else {
-		require.ErrorIs(t, atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, msg), errMaliciousATX)
+		require.ErrorIs(
+			t, atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, msg),
+			errMaliciousATX)
 	}
 
 	proof, err = identities.GetMalfeasanceProof(atxHdlr.cdb, atx.SmesherID)
@@ -1574,7 +1577,7 @@ func TestHandler_HandleParallelGossipAtx(t *testing.T) {
 	require.NoError(t, eg.Wait())
 }
 
-func TestHandler_HandleMaliciousGossipAtx(t *testing.T) {
+func testHandler_HandleMaliciousAtx(t *testing.T, expectPublish, synced bool) {
 	const (
 		tickSize = 3
 		units    = 4
@@ -1613,9 +1616,6 @@ func TestHandler_HandleMaliciousGossipAtx(t *testing.T) {
 	}
 	require.NoError(t, SignAndFinalizeAtx(sig, atx1))
 
-	buf, err := codec.Encode(atx1)
-	require.NoError(t, err)
-
 	atxHdlr.mclock.EXPECT().CurrentLayer().Return(currentLayer).Times(2)
 	atxHdlr.mValidator.EXPECT().
 		NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
@@ -1638,7 +1638,8 @@ func TestHandler_HandleMaliciousGossipAtx(t *testing.T) {
 		VRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 	atxHdlr.mValidator.EXPECT().
 		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
-	require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), peer, buf))
+	msg := codec.MustEncode(atx1)
+	require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), peer, msg))
 
 	atx2 := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
@@ -1657,9 +1658,6 @@ func TestHandler_HandleMaliciousGossipAtx(t *testing.T) {
 	}
 	require.NoError(t, SignAndFinalizeAtx(sig, atx2))
 
-	buf, err = codec.Encode(atx2)
-	require.NoError(t, err)
-
 	proofRef = atx2.GetPoetProofRef()
 	atxHdlr.mockFetch.EXPECT().RegisterPeerHashes(peer, gomock.Any()).Do(
 		func(_ p2p.Peer, got []types.Hash32) {
@@ -1671,30 +1669,51 @@ func TestHandler_HandleMaliciousGossipAtx(t *testing.T) {
 	atxHdlr.mtortoise.EXPECT().OnMalfeasance(gomock.Any())
 
 	var got types.MalfeasanceGossip
-	atxHdlr.mpub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, gomock.Any()).DoAndReturn(
-		func(_ context.Context, _ string, data []byte) error {
-			require.NoError(t, codec.Decode(data, &got))
-			nodeID, err := malfeasance.Validate(
-				context.Background(),
-				atxHdlr.log,
-				atxHdlr.cdb,
-				atxHdlr.edVerifier,
-				nil,
-				&got,
-			)
-			require.NoError(t, err)
-			require.Equal(t, sig.NodeID(), nodeID)
-			return nil
-		})
+	if expectPublish {
+		atxHdlr.mpub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, gomock.Any()).DoAndReturn(
+			func(_ context.Context, _ string, data []byte) error {
+				require.NoError(t, codec.Decode(data, &got))
+				nodeID, err := malfeasance.Validate(
+					context.Background(),
+					atxHdlr.log,
+					atxHdlr.cdb,
+					atxHdlr.edVerifier,
+					nil,
+					&got,
+				)
+				require.NoError(t, err)
+				require.Equal(t, sig.NodeID(), nodeID)
+				return nil
+			})
+	}
 
-	require.ErrorIs(
-		t, atxHdlr.HandleGossipAtx(context.Background(), peer, buf),
-		errMaliciousATX)
+	msg = codec.MustEncode(atx2)
+	if synced {
+		require.NoError(
+			t, atxHdlr.HandleSyncedAtx(context.Background(), types.Hash32{}, peer, msg))
+	} else {
+		require.ErrorIs(
+			t, atxHdlr.HandleGossipAtx(context.Background(), peer, msg),
+			errMaliciousATX)
+	}
 
 	proof, err := identities.GetMalfeasanceProof(atxHdlr.cdb, sig.NodeID())
 	require.NoError(t, err)
 	require.NotNil(t, proof.Received())
-	proof.SetReceived(time.Time{})
+	if expectPublish {
+		proof.SetReceived(time.Time{})
+		require.Equal(t, got.MalfeasanceProof, *proof)
+	}
+}
+
+func TestHandler_HandleMaliciousAtx(t *testing.T) {
+	t.Run("produced but not published during sync", func(t *testing.T) {
+		testHandler_HandleMaliciousAtx(t, false, true)
+	})
+
+	t.Run("produced and published during gossip", func(t *testing.T) {
+		testHandler_HandleMaliciousAtx(t, true, false)
+	})
 }
 
 func TestHandler_HandleSyncedAtx(t *testing.T) {
@@ -1829,107 +1848,6 @@ func TestHandler_HandleSyncedAtx(t *testing.T) {
 			atxHdlr.HandleSyncedAtx(context.Background(), atx.ID().Hash32(), p2p.NoPeer, buf),
 			"failed to verify atx signature",
 		)
-	})
-
-	t.Run("malicious ATX", func(t *testing.T) {
-		const (
-			tickSize = 3
-			units    = 4
-			leaves   = uint64(11)
-		)
-
-		t.Parallel()
-
-		atxHdlr := newTestHandler(t, goldenATXID)
-		atxHdlr.tickSize = tickSize
-
-		currentLayer := types.LayerID(100)
-
-		nonce := types.VRFPostIndex(1)
-		nodeId := sig.NodeID()
-		atx1 := &types.ActivationTx{
-			InnerActivationTx: types.InnerActivationTx{
-				NIPostChallenge: types.NIPostChallenge{
-					PositioningATX: goldenATXID,
-					InitialPost:    &types.Post{Indices: []byte{1}},
-					PublishEpoch:   1,
-					CommitmentATX:  &goldenATXID,
-				},
-				NumUnits: units,
-				NIPost: &types.NIPost{
-					Post:         &types.Post{},
-					PostMetadata: &types.PostMetadata{},
-				},
-				VRFNonce: &nonce,
-				NodeID:   &nodeId,
-			},
-		}
-		require.NoError(t, SignAndFinalizeAtx(sig, atx1))
-
-		buf, err := codec.Encode(atx1)
-		require.NoError(t, err)
-
-		atxHdlr.mclock.EXPECT().CurrentLayer().Return(currentLayer).Times(2)
-		atxHdlr.mValidator.EXPECT().
-			NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
-				gomock.Any(), gomock.Any(), gomock.Any()).
-			Return(leaves, nil).Times(2)
-		atxHdlr.mValidator.EXPECT().
-			PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).
-			Times(2)
-		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any()).Times(2)
-		atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any()).Times(2)
-		atxHdlr.mValidator.EXPECT().IsVerifyingFullPost().Return(true).Times(2)
-
-		peer := p2p.Peer("buddy")
-		proofRef := atx1.GetPoetProofRef()
-		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), proofRef)
-		atxHdlr.mockFetch.EXPECT().RegisterPeerHashes(peer, []types.Hash32{proofRef})
-		atxHdlr.mValidator.EXPECT().
-			InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-		atxHdlr.mValidator.EXPECT().
-			VRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
-		atxHdlr.mValidator.EXPECT().
-			Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
-		require.NoError(t, atxHdlr.HandleSyncedAtx(context.Background(), atx1.ID().Hash32(), peer, buf))
-
-		atx2 := &types.ActivationTx{
-			InnerActivationTx: types.InnerActivationTx{
-				NIPostChallenge: types.NIPostChallenge{
-					Sequence:       1,
-					PositioningATX: atx1.ID(),
-					PrevATXID:      atx1.ID(),
-					PublishEpoch:   1,
-				},
-				NumUnits: units,
-				NIPost: &types.NIPost{
-					Post:         &types.Post{},
-					PostMetadata: &types.PostMetadata{},
-				},
-			},
-		}
-		require.NoError(t, SignAndFinalizeAtx(sig, atx2))
-
-		buf, err = codec.Encode(atx2)
-		require.NoError(t, err)
-
-		proofRef = atx2.GetPoetProofRef()
-		atxHdlr.mockFetch.EXPECT().RegisterPeerHashes(peer, gomock.Any()).Do(
-			func(_ p2p.Peer, got []types.Hash32) {
-				require.ElementsMatch(t, []types.Hash32{atx1.ID().Hash32(), proofRef}, got)
-			})
-		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), proofRef)
-		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any())
-		atxHdlr.mValidator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-		atxHdlr.mtortoise.EXPECT().OnMalfeasance(gomock.Any())
-
-		// No attempt is made to publish malfeasance proof during sync
-		require.NoError(t, atxHdlr.HandleSyncedAtx(context.Background(), atx2.ID().Hash32(), peer, buf))
-
-		proof, err := identities.GetMalfeasanceProof(atxHdlr.cdb, sig.NodeID())
-		require.NoError(t, err)
-		require.NotNil(t, proof.Received())
-		proof.SetReceived(time.Time{})
 	})
 }
 
