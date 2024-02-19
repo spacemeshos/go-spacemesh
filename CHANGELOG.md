@@ -94,6 +94,12 @@ configuration is as follows:
   If a node finds a proof invalid, it will report it to the network by
   creating a malfeasance proof. The malicious node will then be blacklisted by the network.
 
+* [#5586](https://github.com/spacemeshos/go-spacemesh/pull/5586)
+  Do not try to publish proofs for malicious ATXs during sync.
+
+  Publishing is blocked during sync because `Syncer::ListenToATXGossip()` returns false, and thus every malicious ATX being
+  synced was causing an error resulting in an interruption of sync.
+
 ### Features
 
 ### Improvements
