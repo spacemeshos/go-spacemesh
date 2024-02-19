@@ -99,7 +99,7 @@ func (f *Fetch) getHashes(
 				options.limiter.Release(1)
 				pendingMetric.Add(-1)
 				if p.err != nil {
-					f.logger.Debug("failed to get hash",
+					f.logger.WithContext(ctx).With().Debug("failed to get hash",
 						log.String("hint", string(hint)),
 						log.Stringer("hash", h),
 						log.Err(p.err),
