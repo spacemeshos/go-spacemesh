@@ -231,7 +231,9 @@ func TestHandler_processBlockATXs(t *testing.T) {
 	}
 	for _, atx := range atxList {
 		atx.NIPost = newNIPostWithChallenge(t, atx.NIPostChallenge.Hash(), poetRef).NIPost
-		r.NoError(atxHdlr.ProcessAtx(context.Background(), atx))
+		proof, err := atxHdlr.processVerifiedATX(context.Background(), atx)
+		r.NoError(err)
+		r.Nil(proof)
 	}
 
 	// check that further atxList don't affect current epoch count
@@ -281,7 +283,9 @@ func TestHandler_processBlockATXs(t *testing.T) {
 	}
 	for _, atx := range atxList2 {
 		atx.NIPost = newNIPostWithChallenge(t, atx.NIPostChallenge.Hash(), poetRef).NIPost
-		r.NoError(atxHdlr.ProcessAtx(context.Background(), atx))
+		proof, err := atxHdlr.processVerifiedATX(context.Background(), atx)
+		r.NoError(err)
+		r.Nil(proof)
 	}
 
 	// Assert
@@ -1070,12 +1074,13 @@ func TestHandler_ProcessAtx(t *testing.T) {
 	)
 	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
 	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
-	require.NoError(t, atxHdlr.ProcessAtx(context.Background(), atx1))
+	proof, err := atxHdlr.processVerifiedATX(context.Background(), atx1)
+	require.NoError(t, err)
+	require.Nil(t, proof)
 
 	// processing an already stored ATX returns no error
-	require.NoError(t, atxHdlr.ProcessAtx(context.Background(), atx1))
-	proof, err := identities.GetMalfeasanceProof(atxHdlr.cdb, sig.NodeID())
-	require.ErrorIs(t, err, sql.ErrNotFound)
+	proof, err = atxHdlr.processVerifiedATX(context.Background(), atx1)
+	require.NoError(t, err)
 	require.Nil(t, proof)
 
 	// another atx for the same epoch is considered malicious
@@ -1093,32 +1098,24 @@ func TestHandler_ProcessAtx(t *testing.T) {
 		100,
 		&types.NIPost{},
 	)
-	var got types.MalfeasanceGossip
 	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
 	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
 	atxHdlr.mtortoise.EXPECT().OnMalfeasance(gomock.Any())
-	atxHdlr.mpub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, gomock.Any()).DoAndReturn(
-		func(_ context.Context, _ string, data []byte) error {
-			require.NoError(t, codec.Decode(data, &got))
-			nodeID, err := malfeasance.Validate(
-				context.Background(),
-				atxHdlr.log,
-				atxHdlr.cdb,
-				atxHdlr.edVerifier,
-				nil,
-				&got,
-			)
-			require.NoError(t, err)
-			require.Equal(t, sig.NodeID(), nodeID)
-			return nil
-		})
-	require.ErrorIs(t, atxHdlr.ProcessAtx(context.Background(), atx2), errMaliciousATX)
-	proof, err = identities.GetMalfeasanceProof(atxHdlr.cdb, sig.NodeID())
+	proof, err = atxHdlr.processVerifiedATX(context.Background(), atx2)
 	require.NoError(t, err)
-	require.NotNil(t, proof.Received())
 	proof.SetReceived(time.Time{})
-	require.Equal(t, got.MalfeasanceProof, *proof)
-	require.Equal(t, atx2.PublishEpoch.FirstLayer(), got.MalfeasanceProof.Layer)
+	nodeID, err := malfeasance.Validate(
+		context.Background(),
+		atxHdlr.log,
+		atxHdlr.cdb,
+		atxHdlr.edVerifier,
+		nil,
+		&types.MalfeasanceGossip{
+			MalfeasanceProof: *proof,
+		},
+	)
+	require.NoError(t, err)
+	require.Equal(t, sig.NodeID(), nodeID)
 }
 
 func TestHandler_ProcessAtx_OwnNotMalicious(t *testing.T) {
@@ -1149,12 +1146,13 @@ func TestHandler_ProcessAtx_OwnNotMalicious(t *testing.T) {
 	)
 	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
 	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
-	require.NoError(t, atxHdlr.ProcessAtx(context.Background(), atx1))
+	proof, err := atxHdlr.processVerifiedATX(context.Background(), atx1)
+	require.NoError(t, err)
+	require.Nil(t, proof)
 
 	// processing an already stored ATX returns no error
-	require.NoError(t, atxHdlr.ProcessAtx(context.Background(), atx1))
-	proof, err := identities.GetMalfeasanceProof(atxHdlr.cdb, sig.NodeID())
-	require.ErrorIs(t, err, sql.ErrNotFound)
+	proof, err = atxHdlr.processVerifiedATX(context.Background(), atx1)
+	require.NoError(t, err)
 	require.Nil(t, proof)
 
 	// another atx for the same epoch is considered malicious
@@ -1172,12 +1170,11 @@ func TestHandler_ProcessAtx_OwnNotMalicious(t *testing.T) {
 		100,
 		&types.NIPost{},
 	)
+	proof, err = atxHdlr.processVerifiedATX(context.Background(), atx2)
 	require.ErrorContains(t,
-		atxHdlr.ProcessAtx(context.Background(), atx2),
+		err,
 		fmt.Sprintf("%s already published an ATX", sig.NodeID().ShortString()),
 	)
-	proof, err = identities.GetMalfeasanceProof(atxHdlr.cdb, sig.NodeID())
-	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.Nil(t, proof)
 }
 
@@ -1248,7 +1245,7 @@ func TestHandler_PublishesPostMalfeasanceProofs(t *testing.T) {
 			return nil
 		})
 
-	err = atxHdlr.handleAtx(context.Background(), types.Hash32{}, p2p.NoPeer, codec.MustEncode(atx))
+	err = atxHdlr.HandleSyncedAtx(context.Background(), types.Hash32{}, p2p.NoPeer, codec.MustEncode(atx))
 	require.ErrorIs(t, err, errMaliciousATX)
 
 	proof, err = identities.GetMalfeasanceProof(atxHdlr.cdb, atx.SmesherID)
@@ -1288,7 +1285,9 @@ func TestHandler_ProcessAtxStoresNewVRFNonce(t *testing.T) {
 	atx1.VRFNonce = &nonce1
 	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
 	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
-	require.NoError(t, atxHdlr.ProcessAtx(context.Background(), atx1))
+	proof, err := atxHdlr.processVerifiedATX(context.Background(), atx1)
+	require.NoError(t, err)
+	require.Nil(t, proof)
 
 	got, err := atxs.VRFNonce(atxHdlr.cdb, sig.NodeID(), atx1.TargetEpoch())
 	require.NoError(t, err)
@@ -1313,7 +1312,9 @@ func TestHandler_ProcessAtxStoresNewVRFNonce(t *testing.T) {
 	atx2.VRFNonce = &nonce2
 	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
 	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
-	require.NoError(t, atxHdlr.ProcessAtx(context.Background(), atx2))
+	proof, err = atxHdlr.processVerifiedATX(context.Background(), atx2)
+	require.NoError(t, err)
+	require.Nil(t, proof)
 
 	got, err = atxs.VRFNonce(atxHdlr.cdb, sig.NodeID(), atx2.TargetEpoch())
 	require.NoError(t, err)
@@ -1363,7 +1364,9 @@ func BenchmarkNewActivationDb(b *testing.B) {
 			SignAndFinalizeAtx(sigs[i], atx)
 			vAtx, err := atx.Verify(0, 1)
 			r.NoError(err)
-			require.NoError(b, atxHdlr.ProcessAtx(context.Background(), vAtx))
+			proof, err := atxHdlr.processVerifiedATX(context.Background(), vAtx)
+			require.NoError(b, err)
+			require.Nil(b, proof)
 			prevAtxs[i] = atx.ID()
 		}
 		posAtx = atx.ID()
@@ -1544,6 +1547,127 @@ func TestHandler_HandleParallelGossipAtx(t *testing.T) {
 	require.NoError(t, eg.Wait())
 }
 
+func TestHandler_HandleMaliciousGossipAtx(t *testing.T) {
+	const (
+		tickSize = 3
+		units    = 4
+		leaves   = uint64(11)
+	)
+	goldenATXID := types.ATXID{2, 3, 4}
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	t.Parallel()
+
+	atxHdlr := newTestHandler(t, goldenATXID)
+	atxHdlr.tickSize = tickSize
+
+	currentLayer := types.LayerID(100)
+
+	nonce := types.VRFPostIndex(1)
+	nodeId := sig.NodeID()
+	atx1 := &types.ActivationTx{
+		InnerActivationTx: types.InnerActivationTx{
+			NIPostChallenge: types.NIPostChallenge{
+				PositioningATX: goldenATXID,
+				InitialPost:    &types.Post{Indices: []byte{1}},
+				PublishEpoch:   1,
+				CommitmentATX:  &goldenATXID,
+			},
+			NumUnits: units,
+			NIPost: &types.NIPost{
+				Post:         &types.Post{},
+				PostMetadata: &types.PostMetadata{},
+			},
+			VRFNonce: &nonce,
+			NodeID:   &nodeId,
+		},
+	}
+	require.NoError(t, SignAndFinalizeAtx(sig, atx1))
+
+	buf, err := codec.Encode(atx1)
+	require.NoError(t, err)
+
+	atxHdlr.mclock.EXPECT().CurrentLayer().Return(currentLayer).Times(2)
+	atxHdlr.mValidator.EXPECT().
+		NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(leaves, nil).Times(2)
+	atxHdlr.mValidator.EXPECT().
+		PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).
+		Times(2)
+	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any()).Times(2)
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any()).Times(2)
+
+	peer := p2p.Peer("buddy")
+	proofRef := atx1.GetPoetProofRef()
+	atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), proofRef)
+	atxHdlr.mockFetch.EXPECT().RegisterPeerHashes(peer, []types.Hash32{proofRef})
+	atxHdlr.mValidator.EXPECT().
+		InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+	atxHdlr.mValidator.EXPECT().
+		VRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+	atxHdlr.mValidator.EXPECT().
+		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+	require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), peer, buf))
+
+	atx2 := &types.ActivationTx{
+		InnerActivationTx: types.InnerActivationTx{
+			NIPostChallenge: types.NIPostChallenge{
+				Sequence:       1,
+				PositioningATX: atx1.ID(),
+				PrevATXID:      atx1.ID(),
+				PublishEpoch:   1,
+			},
+			NumUnits: units,
+			NIPost: &types.NIPost{
+				Post:         &types.Post{},
+				PostMetadata: &types.PostMetadata{},
+			},
+		},
+	}
+	require.NoError(t, SignAndFinalizeAtx(sig, atx2))
+
+	buf, err = codec.Encode(atx2)
+	require.NoError(t, err)
+
+	proofRef = atx2.GetPoetProofRef()
+	atxHdlr.mockFetch.EXPECT().RegisterPeerHashes(peer, gomock.Any()).Do(
+		func(_ p2p.Peer, got []types.Hash32) {
+			require.ElementsMatch(t, []types.Hash32{atx1.ID().Hash32(), proofRef}, got)
+		})
+	atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), proofRef)
+	atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any())
+	atxHdlr.mValidator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+	atxHdlr.mtortoise.EXPECT().OnMalfeasance(gomock.Any())
+
+	var got types.MalfeasanceGossip
+	atxHdlr.mpub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ string, data []byte) error {
+			require.NoError(t, codec.Decode(data, &got))
+			nodeID, err := malfeasance.Validate(
+				context.Background(),
+				atxHdlr.log,
+				atxHdlr.cdb,
+				atxHdlr.edVerifier,
+				nil,
+				&got,
+			)
+			require.NoError(t, err)
+			require.Equal(t, sig.NodeID(), nodeID)
+			return nil
+		})
+
+	require.ErrorIs(
+		t, atxHdlr.HandleGossipAtx(context.Background(), peer, buf),
+		errMaliciousATX)
+
+	proof, err := identities.GetMalfeasanceProof(atxHdlr.cdb, sig.NodeID())
+	require.NoError(t, err)
+	require.NotNil(t, proof.Received())
+	proof.SetReceived(time.Time{})
+}
+
 func TestHandler_HandleSyncedAtx(t *testing.T) {
 	// Arrange
 	goldenATXID := types.ATXID{2, 3, 4}
@@ -1604,7 +1728,9 @@ func TestHandler_HandleSyncedAtx(t *testing.T) {
 
 		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
 		atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
-		require.NoError(t, atxHdlr.ProcessAtx(context.Background(), atx))
+		proof, err := atxHdlr.processVerifiedATX(context.Background(), atx)
+		require.NoError(t, err)
+		require.Nil(t, proof)
 
 		buf, err := codec.Encode(atx)
 		require.NoError(t, err)
@@ -1613,6 +1739,7 @@ func TestHandler_HandleSyncedAtx(t *testing.T) {
 
 		require.Error(t, atxHdlr.HandleGossipAtx(context.Background(), "", buf))
 	})
+
 	t.Run("known atx from local id is allowed", func(t *testing.T) {
 		t.Parallel()
 
@@ -1635,7 +1762,9 @@ func TestHandler_HandleSyncedAtx(t *testing.T) {
 
 		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
 		atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
-		require.NoError(t, atxHdlr.ProcessAtx(context.Background(), atx))
+		proof, err := atxHdlr.processVerifiedATX(context.Background(), atx)
+		require.NoError(t, err)
+		require.Nil(t, proof)
 
 		buf, err := codec.Encode(atx)
 		require.NoError(t, err)
@@ -1672,6 +1801,105 @@ func TestHandler_HandleSyncedAtx(t *testing.T) {
 			"failed to verify atx signature",
 		)
 	})
+
+	t.Run("malicious ATX", func(t *testing.T) {
+		const (
+			tickSize = 3
+			units    = 4
+			leaves   = uint64(11)
+		)
+
+		t.Parallel()
+
+		atxHdlr := newTestHandler(t, goldenATXID)
+		atxHdlr.tickSize = tickSize
+
+		currentLayer := types.LayerID(100)
+
+		nonce := types.VRFPostIndex(1)
+		nodeId := sig.NodeID()
+		atx1 := &types.ActivationTx{
+			InnerActivationTx: types.InnerActivationTx{
+				NIPostChallenge: types.NIPostChallenge{
+					PositioningATX: goldenATXID,
+					InitialPost:    &types.Post{Indices: []byte{1}},
+					PublishEpoch:   1,
+					CommitmentATX:  &goldenATXID,
+				},
+				NumUnits: units,
+				NIPost: &types.NIPost{
+					Post:         &types.Post{},
+					PostMetadata: &types.PostMetadata{},
+				},
+				VRFNonce: &nonce,
+				NodeID:   &nodeId,
+			},
+		}
+		require.NoError(t, SignAndFinalizeAtx(sig, atx1))
+
+		buf, err := codec.Encode(atx1)
+		require.NoError(t, err)
+
+		atxHdlr.mclock.EXPECT().CurrentLayer().Return(currentLayer).Times(2)
+		atxHdlr.mValidator.EXPECT().
+			NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(leaves, nil).Times(2)
+		atxHdlr.mValidator.EXPECT().
+			PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).
+			Times(2)
+		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any()).Times(2)
+		atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any()).Times(2)
+
+		peer := p2p.Peer("buddy")
+		proofRef := atx1.GetPoetProofRef()
+		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), proofRef)
+		atxHdlr.mockFetch.EXPECT().RegisterPeerHashes(peer, []types.Hash32{proofRef})
+		atxHdlr.mValidator.EXPECT().
+			InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+		atxHdlr.mValidator.EXPECT().
+			VRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+		atxHdlr.mValidator.EXPECT().
+			Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+		require.NoError(t, atxHdlr.HandleSyncedAtx(context.Background(), atx1.ID().Hash32(), peer, buf))
+
+		atx2 := &types.ActivationTx{
+			InnerActivationTx: types.InnerActivationTx{
+				NIPostChallenge: types.NIPostChallenge{
+					Sequence:       1,
+					PositioningATX: atx1.ID(),
+					PrevATXID:      atx1.ID(),
+					PublishEpoch:   1,
+				},
+				NumUnits: units,
+				NIPost: &types.NIPost{
+					Post:         &types.Post{},
+					PostMetadata: &types.PostMetadata{},
+				},
+			},
+		}
+		require.NoError(t, SignAndFinalizeAtx(sig, atx2))
+
+		buf, err = codec.Encode(atx2)
+		require.NoError(t, err)
+
+		proofRef = atx2.GetPoetProofRef()
+		atxHdlr.mockFetch.EXPECT().RegisterPeerHashes(peer, gomock.Any()).Do(
+			func(_ p2p.Peer, got []types.Hash32) {
+				require.ElementsMatch(t, []types.Hash32{atx1.ID().Hash32(), proofRef}, got)
+			})
+		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), proofRef)
+		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any())
+		atxHdlr.mValidator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+		atxHdlr.mtortoise.EXPECT().OnMalfeasance(gomock.Any())
+
+		// No attempt is made to publish malfeasance proof during sync
+		require.NoError(t, atxHdlr.HandleSyncedAtx(context.Background(), atx2.ID().Hash32(), peer, buf))
+
+		proof, err := identities.GetMalfeasanceProof(atxHdlr.cdb, sig.NodeID())
+		require.NoError(t, err)
+		require.NotNil(t, proof.Received())
+		proof.SetReceived(time.Time{})
+	})
 }
 
 func BenchmarkGetAtxHeaderWithConcurrentProcessAtx(b *testing.B) {
@@ -1704,7 +1932,11 @@ func BenchmarkGetAtxHeaderWithConcurrentProcessAtx(b *testing.B) {
 				if !assert.NoError(b, err) {
 					return
 				}
-				if !assert.NoError(b, atxHdlr.ProcessAtx(context.Background(), vAtx)) {
+				proof, err := atxHdlr.processVerifiedATX(context.Background(), vAtx)
+				if !assert.NoError(b, err) {
+					return
+				}
+				if !assert.Nil(b, proof) {
 					return
 				}
 				if atomic.LoadUint64(&stop) == 1 {

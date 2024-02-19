@@ -108,17 +108,22 @@ func (h *Handler) Register(sig *signing.EdSigner) {
 	h.signers[sig.NodeID()] = sig
 }
 
-// ProcessAtx validates the active set size declared in the atx, and contextually validates the atx according to atx
-// validation rules it then stores the atx with flag set to validity of the atx.
+// processVerifiedATX validates the active set size declared in the ATX, and contextually
+// validates the ATX according to ATX validation rules. It then stores the ATX with flag
+// set to validity of the ATX.
 //
-// ATXs received as input must be already syntactically valid. Only contextual validation is performed.
-func (h *Handler) ProcessAtx(ctx context.Context, atx *types.VerifiedActivationTx) error {
+// ATXs received as input must be already syntactically valid. Only contextual validation
+// is performed.
+func (h *Handler) processVerifiedATX(
+	ctx context.Context,
+	atx *types.VerifiedActivationTx,
+) (*types.MalfeasanceProof, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	existingATX, _ := h.cdb.GetAtxHeader(atx.ID())
 	if existingATX != nil { // Already processed
-		return nil
+		return nil, nil
 	}
 	h.log.WithContext(ctx).With().Debug("processing atx",
 		atx.ID(),
@@ -134,11 +139,12 @@ func (h *Handler) ProcessAtx(ctx context.Context, atx *types.VerifiedActivationT
 	} else {
 		h.log.WithContext(ctx).With().Debug("atx is valid", atx.ID())
 	}
-	if err := h.storeAtx(ctx, atx); err != nil {
-		return fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
-	}
 
-	return nil
+	proof, err := h.storeAtx(ctx, atx)
+	if err != nil {
+		return nil, fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
+	}
+	return proof, err
 }
 
 func (h *Handler) SyntacticallyValidate(ctx context.Context, atx *types.ActivationTx) error {
@@ -401,10 +407,10 @@ func (h *Handler) cacheAtx(ctx context.Context, atx *types.ActivationTxHeader) {
 }
 
 // storeAtx stores an ATX and notifies subscribers of the ATXID.
-func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx) error {
+func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx) (*types.MalfeasanceProof, error) {
 	malicious, err := h.cdb.IsMalicious(atx.SmesherID)
 	if err != nil {
-		return fmt.Errorf("checking if node is malicious: %w", err)
+		return nil, fmt.Errorf("checking if node is malicious: %w", err)
 	}
 	var proof *types.MalfeasanceProof
 	if err := h.cdb.WithTx(ctx, func(tx *sql.Tx) error {
@@ -466,7 +472,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 		}
 		return nil
 	}); err != nil {
-		return fmt.Errorf("store atx: %w", err)
+		return nil, fmt.Errorf("store atx: %w", err)
 	}
 	if proof != nil {
 		h.cdb.CacheMalfeasanceProof(atx.SmesherID, proof)
@@ -474,7 +480,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 	}
 	header, err := h.cdb.GetAtxHeader(atx.ID())
 	if err != nil {
-		return fmt.Errorf("get header for processed atx %s: %w", atx.ID(), err)
+		return nil, fmt.Errorf("get header for processed atx %s: %w", atx.ID(), err)
 	}
 	h.beacon.OnAtx(header)
 	h.tortoise.OnAtx(header.ToData())
@@ -482,23 +488,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 
 	h.log.WithContext(ctx).With().Debug("finished storing atx in epoch", atx.ID(), atx.PublishEpoch)
 
-	// broadcast malfeasance proof last as the verification of the proof will take place
-	// in the same goroutine
-	if proof != nil {
-		gossip := types.MalfeasanceGossip{
-			MalfeasanceProof: *proof,
-		}
-		encodedProof, err := codec.Encode(&gossip)
-		if err != nil {
-			h.log.With().Fatal("failed to encode malfeasance gossip", log.Err(err))
-		}
-		if err = h.publisher.Publish(ctx, pubsub.MalfeasanceProof, encodedProof); err != nil {
-			h.log.With().Error("failed to broadcast malfeasance proof", log.Err(err))
-			return fmt.Errorf("broadcast atx malfeasance proof: %w", err)
-		}
-		return errMaliciousATX
-	}
-	return nil
+	return proof, nil
 }
 
 // GetEpochAtxs returns all valid ATXs received in the epoch epochID.
@@ -512,7 +502,7 @@ func (h *Handler) GetEpochAtxs(epochID types.EpochID) (ids []types.ATXID, err er
 
 // HandleSyncedAtx handles atxs received by sync.
 func (h *Handler) HandleSyncedAtx(ctx context.Context, expHash types.Hash32, peer p2p.Peer, data []byte) error {
-	err := h.handleAtx(ctx, expHash, peer, data)
+	_, err := h.handleAtx(ctx, expHash, peer, data)
 	if err != nil && !errors.Is(err, errMalformedData) && !errors.Is(err, errKnownAtx) {
 		h.log.WithContext(ctx).With().Warning("failed to process synced atx",
 			log.Stringer("sender", peer),
@@ -538,7 +528,7 @@ func (h *Handler) registerHashes(atx *types.ActivationTx, peer p2p.Peer) {
 
 // HandleGossipAtx handles the atx gossip data channel.
 func (h *Handler) HandleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte) error {
-	err := h.handleAtx(ctx, types.Hash32{}, peer, msg)
+	proof, err := h.handleAtx(ctx, types.Hash32{}, peer, msg)
 	if err != nil && !errors.Is(err, errMalformedData) && !errors.Is(err, errKnownAtx) {
 		h.log.WithContext(ctx).With().Warning("failed to process atx gossip",
 			log.Stringer("sender", peer),
@@ -548,18 +538,40 @@ func (h *Handler) HandleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte
 	if errors.Is(err, errKnownAtx) && peer == h.local {
 		return nil
 	}
+
+	// broadcast malfeasance proof last as the verification of the proof will take place
+	// in the same goroutine
+	if proof != nil {
+		gossip := types.MalfeasanceGossip{
+			MalfeasanceProof: *proof,
+		}
+		encodedProof, err := codec.Encode(&gossip)
+		if err != nil {
+			h.log.With().Fatal("failed to encode malfeasance gossip", log.Err(err))
+		}
+		if err = h.publisher.Publish(ctx, pubsub.MalfeasanceProof, encodedProof); err != nil {
+			h.log.With().Error("failed to broadcast malfeasance proof", log.Err(err))
+			return fmt.Errorf("broadcast atx malfeasance proof: %w", err)
+		}
+		return errMaliciousATX
+	}
 	return err
 }
 
-func (h *Handler) handleAtx(ctx context.Context, expHash types.Hash32, peer p2p.Peer, msg []byte) error {
+func (h *Handler) handleAtx(
+	ctx context.Context,
+	expHash types.Hash32,
+	peer p2p.Peer,
+	msg []byte,
+) (*types.MalfeasanceProof, error) {
 	receivedTime := time.Now()
 	var atx types.ActivationTx
 	if err := codec.Decode(msg, &atx); err != nil {
-		return fmt.Errorf("%w: %w", errMalformedData, err)
+		return nil, fmt.Errorf("%w: %w", errMalformedData, err)
 	}
 	atx.SetReceived(receivedTime.Local())
 	if err := atx.Initialize(); err != nil {
-		return fmt.Errorf("failed to derive ID from atx: %w", err)
+		return nil, fmt.Errorf("failed to derive ID from atx: %w", err)
 	}
 
 	// Check if processing is already in progress
@@ -572,9 +584,9 @@ func (h *Handler) handleAtx(ctx context.Context, expHash types.Hash32, peer p2p.
 		select {
 		case err := <-ch:
 			h.log.WithContext(ctx).With().Debug("atx processed in other task", atx.ID(), log.Err(err))
-			return err
+			return nil, err
 		case <-ctx.Done():
-			return ctx.Err()
+			return nil, ctx.Err()
 		}
 	}
 
@@ -582,7 +594,7 @@ func (h *Handler) handleAtx(ctx context.Context, expHash types.Hash32, peer p2p.
 	h.inProgressMu.Unlock()
 	h.log.WithContext(ctx).With().Info("handling incoming atx", atx.ID(), log.Int("size", len(msg)))
 
-	err := h.processAtx(ctx, expHash, peer, atx)
+	proof, err := h.processATX(ctx, expHash, peer, atx)
 	h.inProgressMu.Lock()
 	defer h.inProgressMu.Unlock()
 	for _, ch := range h.inProgress[atx.ID()] {
@@ -590,35 +602,40 @@ func (h *Handler) handleAtx(ctx context.Context, expHash types.Hash32, peer p2p.
 		close(ch)
 	}
 	delete(h.inProgress, atx.ID())
-	return err
+	return proof, err
 }
 
-func (h *Handler) processAtx(ctx context.Context, expHash types.Hash32, peer p2p.Peer, atx types.ActivationTx) error {
+func (h *Handler) processATX(
+	ctx context.Context,
+	expHash types.Hash32,
+	peer p2p.Peer,
+	atx types.ActivationTx,
+) (*types.MalfeasanceProof, error) {
 	if !h.edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature) {
-		return fmt.Errorf("failed to verify atx signature: %w", errMalformedData)
+		return nil, fmt.Errorf("failed to verify atx signature: %w", errMalformedData)
 	}
 
 	existing, _ := h.cdb.GetAtxHeader(atx.ID())
 	if existing != nil {
-		return fmt.Errorf("%w atx %s", errKnownAtx, atx.ID())
+		return nil, fmt.Errorf("%w atx %s", errKnownAtx, atx.ID())
 	}
 
 	if err := h.SyntacticallyValidate(ctx, &atx); err != nil {
-		return fmt.Errorf("atx %v syntactically invalid: %w", atx.ShortString(), err)
+		return nil, fmt.Errorf("atx %v syntactically invalid: %w", atx.ShortString(), err)
 	}
 
 	h.registerHashes(&atx, peer)
 	if err := h.FetchReferences(ctx, &atx); err != nil {
-		return err
+		return nil, err
 	}
 
 	vAtx, err := h.SyntacticallyValidateDeps(ctx, &atx)
 	if err != nil {
-		return fmt.Errorf("atx %v syntactically invalid based on deps: %w", atx.ShortString(), err)
+		return nil, fmt.Errorf("atx %v syntactically invalid based on deps: %w", atx.ShortString(), err)
 	}
 
 	if expHash != (types.Hash32{}) && vAtx.ID().Hash32() != expHash {
-		return fmt.Errorf(
+		return nil, fmt.Errorf(
 			"%w: atx want %s, got %s",
 			errWrongHash,
 			expHash.ShortString(),
@@ -626,12 +643,15 @@ func (h *Handler) processAtx(ctx context.Context, expHash types.Hash32, peer p2p
 		)
 	}
 
-	if err := h.ProcessAtx(ctx, vAtx); err != nil {
-		return fmt.Errorf("cannot process atx %v: %w", atx.ShortString(), err)
+	proof, err := h.processVerifiedATX(ctx, vAtx)
+	if err != nil {
+		return nil, fmt.Errorf("cannot process atx %v: %w", atx.ShortString(), err)
 	}
 	events.ReportNewActivation(vAtx)
-	h.log.WithContext(ctx).With().Info("new atx", log.Inline(vAtx))
-	return nil
+	h.log.WithContext(ctx).With().Info(
+		"new atx", log.Inline(vAtx),
+		log.Bool("malicious", proof != nil))
+	return proof, err
 }
 
 // FetchReferences fetches referenced ATXs from peers if they are not found in db.
