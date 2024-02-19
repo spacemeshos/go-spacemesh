@@ -374,8 +374,9 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atxHdlr.mValidator.EXPECT().IsVerifyingFullPost()
 		atxHdlr.mValidator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		atxHdlr.mValidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-		_, err := atxHdlr.SyntacticallyValidateDeps(context.Background(), atx)
+		_, proof, err := atxHdlr.SyntacticallyValidateDeps(context.Background(), atx)
 		require.NoError(t, err)
+		require.Nil(t, proof)
 	})
 
 	t.Run("valid atx with new VRF nonce", func(t *testing.T) {
@@ -409,8 +410,9 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atxHdlr.mValidator.EXPECT().
 			VRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(nil)
-		_, err := atxHdlr.SyntacticallyValidateDeps(context.Background(), atx)
+		_, proof, err := atxHdlr.SyntacticallyValidateDeps(context.Background(), atx)
 		require.NoError(t, err)
+		require.Nil(t, proof)
 	})
 
 	t.Run("valid atx with decreasing num units", func(t *testing.T) {
@@ -439,8 +441,9 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atxHdlr.mValidator.EXPECT().IsVerifyingFullPost()
 		atxHdlr.mValidator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		atxHdlr.mValidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-		vAtx, err := atxHdlr.SyntacticallyValidateDeps(context.Background(), atx)
+		vAtx, proof, err := atxHdlr.SyntacticallyValidateDeps(context.Background(), atx)
 		require.NoError(t, err)
+		require.Nil(t, proof)
 		require.Equal(t, uint32(90), vAtx.NumUnits)
 		require.Equal(t, uint32(90), vAtx.EffectiveNumUnits())
 	})
@@ -474,8 +477,9 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atxHdlr.mValidator.EXPECT().
 			VRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(nil)
-		vAtx, err := atxHdlr.SyntacticallyValidateDeps(context.Background(), atx)
+		vAtx, proof, err := atxHdlr.SyntacticallyValidateDeps(context.Background(), atx)
 		require.NoError(t, err)
+		require.Nil(t, proof)
 		require.Equal(t, uint32(110), vAtx.NumUnits)
 		require.Equal(t, uint32(100), vAtx.EffectiveNumUnits())
 	})
@@ -504,7 +508,8 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atxHdlr.mValidator.EXPECT().
 			VRFNonce(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(errors.New("invalid VRF"))
-		_, err := atxHdlr.SyntacticallyValidateDeps(context.Background(), atx)
+		_, proof, err := atxHdlr.SyntacticallyValidateDeps(context.Background(), atx)
+		require.Nil(t, proof)
 		require.ErrorContains(t, err, "invalid vrf nonce")
 	})
 
@@ -548,8 +553,9 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 			Return(uint64(1), nil)
 		atxHdlr.mValidator.EXPECT().IsVerifyingFullPost()
 		atxHdlr.mValidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-		_, err := atxHdlr.SyntacticallyValidateDeps(context.Background(), atx)
+		_, proof, err := atxHdlr.SyntacticallyValidateDeps(context.Background(), atx)
 		require.NoError(t, err)
+		require.Nil(t, proof)
 	})
 
 	t.Run("atx targeting wrong publish epoch", func(t *testing.T) {
@@ -594,8 +600,9 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atxHdlr.mValidator.EXPECT().
 			NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(errors.New("nipost error"))
-		_, err := atxHdlr.SyntacticallyValidateDeps(context.Background(), atx)
+		_, proof, err := atxHdlr.SyntacticallyValidateDeps(context.Background(), atx)
 		require.EqualError(t, err, "nipost error")
+		require.Nil(t, proof)
 	})
 
 	t.Run("failing positioning atx validation", func(t *testing.T) {
@@ -620,8 +627,9 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atxHdlr.mValidator.EXPECT().
 			PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(errors.New("bad positioning atx"))
-		_, err := atxHdlr.SyntacticallyValidateDeps(context.Background(), atx)
+		_, proof, err := atxHdlr.SyntacticallyValidateDeps(context.Background(), atx)
 		require.EqualError(t, err, "bad positioning atx")
+		require.Nil(t, proof)
 	})
 
 	t.Run("bad initial nipost challenge", func(t *testing.T) {
@@ -656,8 +664,9 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atxHdlr.mValidator.EXPECT().
 			InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(errors.New("bad initial nipost"))
-		_, err := atxHdlr.SyntacticallyValidateDeps(context.Background(), atx)
+		_, proof, err := atxHdlr.SyntacticallyValidateDeps(context.Background(), atx)
 		require.EqualError(t, err, "bad initial nipost")
+		require.Nil(t, proof)
 	})
 
 	t.Run("missing NodeID in initial atx", func(t *testing.T) {
@@ -1178,7 +1187,7 @@ func TestHandler_ProcessAtx_OwnNotMalicious(t *testing.T) {
 	require.Nil(t, proof)
 }
 
-func TestHandler_PublishesPostMalfeasanceProofs(t *testing.T) {
+func testHandler_PostMalfeasanceProofs(t *testing.T, expectPublish, synced bool) {
 	goldenATXID := types.ATXID{2, 3, 4}
 	atxHdlr := newTestHandler(t, goldenATXID)
 
@@ -1223,37 +1232,55 @@ func TestHandler_PublishesPostMalfeasanceProofs(t *testing.T) {
 		NIPost(gomock.Any(), gomock.Any(), goldenATXID, atx.NIPost, gomock.Any(), atx.NumUnits, gomock.Any()).
 		Return(0, &verifying.ErrInvalidIndex{Index: 2})
 	atxHdlr.mtortoise.EXPECT().OnMalfeasance(gomock.Any())
-	atxHdlr.mpub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, gomock.Any()).DoAndReturn(
-		func(_ context.Context, _ string, data []byte) error {
-			require.NoError(t, codec.Decode(data, &got))
-			postVerifier := NewMockPostVerifier(gomock.NewController(t))
-			postVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("invalid"))
-			nodeID, err := malfeasance.Validate(
-				context.Background(),
-				atxHdlr.log,
-				atxHdlr.cdb,
-				atxHdlr.edVerifier,
-				postVerifier,
-				&got,
-			)
-			require.NoError(t, err)
-			require.Equal(t, sig.NodeID(), nodeID)
-			require.Equal(t, types.InvalidPostIndex, got.Proof.Type)
-			p, ok := got.Proof.Data.(*types.InvalidPostIndexProof)
-			require.True(t, ok)
-			require.EqualValues(t, 2, p.InvalidIdx)
-			return nil
-		})
+	if expectPublish {
+		atxHdlr.mpub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, gomock.Any()).DoAndReturn(
+			func(_ context.Context, _ string, data []byte) error {
+				require.NoError(t, codec.Decode(data, &got))
+				postVerifier := NewMockPostVerifier(gomock.NewController(t))
+				postVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("invalid"))
+				nodeID, err := malfeasance.Validate(
+					context.Background(),
+					atxHdlr.log,
+					atxHdlr.cdb,
+					atxHdlr.edVerifier,
+					postVerifier,
+					&got,
+				)
+				require.NoError(t, err)
+				require.Equal(t, sig.NodeID(), nodeID)
+				require.Equal(t, types.InvalidPostIndex, got.Proof.Type)
+				p, ok := got.Proof.Data.(*types.InvalidPostIndexProof)
+				require.True(t, ok)
+				require.EqualValues(t, 2, p.InvalidIdx)
+				return nil
+			})
+	}
 
-	err = atxHdlr.HandleSyncedAtx(context.Background(), types.Hash32{}, p2p.NoPeer, codec.MustEncode(atx))
-	require.ErrorIs(t, err, errMaliciousATX)
+	msg := codec.MustEncode(atx)
+	if synced {
+		require.NoError(t, atxHdlr.HandleSyncedAtx(context.Background(), types.Hash32{}, p2p.NoPeer, msg))
+	} else {
+		require.ErrorIs(t, atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, msg), errMaliciousATX)
+	}
 
 	proof, err = identities.GetMalfeasanceProof(atxHdlr.cdb, atx.SmesherID)
 	require.NoError(t, err)
 	require.NotNil(t, proof.Received())
 	proof.SetReceived(time.Time{})
-	require.Equal(t, got.MalfeasanceProof, *proof)
-	require.Equal(t, atx.PublishEpoch.FirstLayer(), got.MalfeasanceProof.Layer)
+	if expectPublish {
+		require.Equal(t, got.MalfeasanceProof, *proof)
+		require.Equal(t, atx.PublishEpoch.FirstLayer(), got.MalfeasanceProof.Layer)
+	}
+}
+
+func TestHandler_PostMalfeasanceProofs(t *testing.T) {
+	t.Run("produced but not published during sync", func(t *testing.T) {
+		testHandler_PostMalfeasanceProofs(t, false, true)
+	})
+
+	t.Run("produced and published during gossip", func(t *testing.T) {
+		testHandler_PostMalfeasanceProofs(t, true, false)
+	})
 }
 
 func TestHandler_ProcessAtxStoresNewVRFNonce(t *testing.T) {
@@ -1591,13 +1618,15 @@ func TestHandler_HandleMaliciousGossipAtx(t *testing.T) {
 
 	atxHdlr.mclock.EXPECT().CurrentLayer().Return(currentLayer).Times(2)
 	atxHdlr.mValidator.EXPECT().
-		NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
+			gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(leaves, nil).Times(2)
 	atxHdlr.mValidator.EXPECT().
 		PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).
 		Times(2)
 	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any()).Times(2)
 	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any()).Times(2)
+	atxHdlr.mValidator.EXPECT().IsVerifyingFullPost().Return(true).Times(2)
 
 	peer := p2p.Peer("buddy")
 	proofRef := atx1.GetPoetProofRef()
@@ -1842,13 +1871,15 @@ func TestHandler_HandleSyncedAtx(t *testing.T) {
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(currentLayer).Times(2)
 		atxHdlr.mValidator.EXPECT().
-			NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			NIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
+				gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(leaves, nil).Times(2)
 		atxHdlr.mValidator.EXPECT().
 			PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).
 			Times(2)
 		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any()).Times(2)
 		atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any()).Times(2)
+		atxHdlr.mValidator.EXPECT().IsVerifyingFullPost().Return(true).Times(2)
 
 		peer := p2p.Peer("buddy")
 		proofRef := atx1.GetPoetProofRef()
@@ -2338,8 +2369,9 @@ func TestHandler_MarksAtxValid(t *testing.T) {
 		atx := newAtx(challenge, nipost, 2, types.Address{1, 2, 3, 4})
 		atx.SetValidity(types.Unknown)
 		require.NoError(t, SignAndFinalizeAtx(sig, atx))
-		_, err := handler.SyntacticallyValidateDeps(context.Background(), atx)
+		_, proof, err := handler.SyntacticallyValidateDeps(context.Background(), atx)
 		require.NoError(t, err)
+		require.Nil(t, proof)
 		require.Equal(t, types.Valid, atx.Validity())
 	})
 	t.Run("post verified fully", func(t *testing.T) {
@@ -2355,8 +2387,9 @@ func TestHandler_MarksAtxValid(t *testing.T) {
 		atx := newAtx(challenge, nipost, 2, types.Address{1, 2, 3, 4})
 		atx.SetValidity(types.Unknown)
 		require.NoError(t, SignAndFinalizeAtx(sig, atx))
-		_, err := handler.SyntacticallyValidateDeps(context.Background(), atx)
+		_, proof, err := handler.SyntacticallyValidateDeps(context.Background(), atx)
 		require.NoError(t, err)
+		require.Nil(t, proof)
 		require.Equal(t, types.Unknown, atx.Validity())
 	})
 	require.NoError(t, err)

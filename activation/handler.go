@@ -211,28 +211,28 @@ func (h *Handler) SyntacticallyValidate(ctx context.Context, atx *types.Activati
 func (h *Handler) SyntacticallyValidateDeps(
 	ctx context.Context,
 	atx *types.ActivationTx,
-) (*types.VerifiedActivationTx, error) {
+) (*types.VerifiedActivationTx, *types.MalfeasanceProof, error) {
 	var (
 		commitmentATX *types.ATXID
 		err           error
 	)
 	if atx.PrevATXID == types.EmptyATXID {
 		if err := h.validateInitialAtx(ctx, atx); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		commitmentATX = atx.CommitmentATX
 	} else {
 		commitmentATX, err = h.getCommitmentAtx(atx)
 		if err != nil {
-			return nil, fmt.Errorf("commitment atx for %s not found: %w", atx.SmesherID, err)
+			return nil, nil, fmt.Errorf("commitment atx for %s not found: %w", atx.SmesherID, err)
 		}
 		if err := h.validateNonInitialAtx(ctx, atx, *commitmentATX); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
 	if err := h.nipostValidator.PositioningAtx(atx.PositioningATX, h.cdb, h.goldenATXID, atx.PublishEpoch); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var baseTickHeight uint64
@@ -258,36 +258,32 @@ func (h *Handler) SyntacticallyValidateDeps(
 	var invalidIdx *verifying.ErrInvalidIndex
 	if errors.As(err, &invalidIdx) {
 		h.log.WithContext(ctx).With().Info("ATX with invalid post index", atx.ID(), log.Int("index", invalidIdx.Index))
-		gossip := types.MalfeasanceGossip{
-			MalfeasanceProof: types.MalfeasanceProof{
-				Layer: atx.PublishEpoch.FirstLayer(),
-				Proof: types.Proof{
-					Type: types.InvalidPostIndex,
-					Data: &types.InvalidPostIndexProof{
-						Atx:        *atx,
-						InvalidIdx: uint32(invalidIdx.Index),
-					},
+		proof := &types.MalfeasanceProof{
+			Layer: atx.PublishEpoch.FirstLayer(),
+			Proof: types.Proof{
+				Type: types.InvalidPostIndex,
+				Data: &types.InvalidPostIndexProof{
+					Atx:        *atx,
+					InvalidIdx: uint32(invalidIdx.Index),
 				},
 			},
 		}
-		encodedProof := codec.MustEncode(&gossip.MalfeasanceProof)
+		encodedProof := codec.MustEncode(proof)
 		if err := identities.SetMalicious(h.cdb, atx.SmesherID, encodedProof, time.Now()); err != nil {
-			return nil, fmt.Errorf("adding malfeasance proof: %w", err)
+			return nil, nil, fmt.Errorf("adding malfeasance proof: %w", err)
 		}
-		if err := h.publisher.Publish(ctx, pubsub.MalfeasanceProof, codec.MustEncode(&gossip)); err != nil {
-			h.log.With().Error("failed to broadcast malfeasance proof", log.Err(err))
-		}
-		h.cdb.CacheMalfeasanceProof(atx.SmesherID, &gossip.MalfeasanceProof)
+		h.cdb.CacheMalfeasanceProof(atx.SmesherID, proof)
 		h.tortoise.OnMalfeasance(atx.SmesherID)
-		return nil, errMaliciousATX
+		return nil, proof, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("invalid nipost: %w", err)
+		return nil, nil, fmt.Errorf("invalid nipost: %w", err)
 	}
 	if h.nipostValidator.IsVerifyingFullPost() {
 		atx.SetValidity(types.Valid)
 	}
-	return atx.Verify(baseTickHeight, leaves/h.tickSize)
+	vAtx, err := atx.Verify(baseTickHeight, leaves/h.tickSize)
+	return vAtx, nil, err
 }
 
 func (h *Handler) validateInitialAtx(ctx context.Context, atx *types.ActivationTx) error {
@@ -629,9 +625,13 @@ func (h *Handler) processATX(
 		return nil, err
 	}
 
-	vAtx, err := h.SyntacticallyValidateDeps(ctx, &atx)
+	vAtx, proof, err := h.SyntacticallyValidateDeps(ctx, &atx)
 	if err != nil {
 		return nil, fmt.Errorf("atx %v syntactically invalid based on deps: %w", atx.ShortString(), err)
+	}
+
+	if proof != nil {
+		return proof, err
 	}
 
 	if expHash != (types.Hash32{}) && vAtx.ID().Hash32() != expHash {
@@ -643,7 +643,7 @@ func (h *Handler) processATX(
 		)
 	}
 
-	proof, err := h.processVerifiedATX(ctx, vAtx)
+	proof, err = h.processVerifiedATX(ctx, vAtx)
 	if err != nil {
 		return nil, fmt.Errorf("cannot process atx %v: %w", atx.ShortString(), err)
 	}
