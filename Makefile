@@ -54,7 +54,7 @@ install:
 	go install github.com/spacemeshos/go-scale/scalegen@v1.1.12
 	go install go.uber.org/mock/mockgen@v0.3.0
 	go install gotest.tools/gotestsum@v1.10.1
-	go install honnef.co/go/tools/cmd/staticcheck@v0.4.5
+	go install honnef.co/go/tools/cmd/staticcheck@v0.4.6
 .PHONY: install
 
 build: go-spacemesh get-profiler get-postrs-service
