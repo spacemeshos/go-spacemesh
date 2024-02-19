@@ -60,6 +60,8 @@ func genAtxWithReceived(received time.Time) genAtxOpt {
 	}
 }
 
+const ticks = 100
+
 func gatx(
 	id types.ATXID,
 	epoch types.EpochID,
@@ -79,7 +81,7 @@ func gatx(
 	for _, opt := range opts {
 		opt(atx)
 	}
-	verified, err := atx.Verify(0, 100)
+	verified, err := atx.Verify(0, ticks)
 	if err != nil {
 		panic(err)
 	}
@@ -193,6 +195,18 @@ func expectProposal(
 		panic(err)
 	}
 	return p
+}
+
+func gidentity(id types.NodeID, received time.Time) identity {
+	return identity{
+		id: id,
+		// kind of proof is irrelevant for this test, we want to avoid validation failing
+		proof: types.MalfeasanceProof{Proof: types.Proof{
+			Type: types.HareEquivocation,
+			Data: &types.HareProof{},
+		}},
+		received: received,
+	}
 }
 
 type identity struct {
