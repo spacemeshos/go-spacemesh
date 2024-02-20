@@ -26,6 +26,7 @@ const (
 	Smesher  field = "pubkey"
 	Coinbase field = "coinbase"
 	Id       field = "id"
+	Layer    field = "layer"
 )
 
 type modifier string
