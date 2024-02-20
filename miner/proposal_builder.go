@@ -316,25 +316,9 @@ func (pb *ProposalBuilder) Run(ctx context.Context) error {
 	next := current + 1
 	pb.logger.With().Info("started", log.Inline(&pb.cfg), log.Uint32("next", next.Uint32()))
 	var eg errgroup.Group
-	if pb.cfg.activeSet.Tries == 0 || pb.cfg.activeSet.RetryInterval == 0 {
+	prepareDisabled := pb.cfg.activeSet.Tries == 0 || pb.cfg.activeSet.RetryInterval == 0
+	if prepareDisabled {
 		pb.logger.With().Warning("activeset will not be prepared in advance")
-	} else {
-		eg.Go(func() error {
-			// check that activeset was prepared for current epoch
-			pb.activeGen.ensure(ctx, current.GetEpoch())
-			// and then wait for the right time to generate activeset for the next epoch
-			wait := time.Until(
-				pb.clock.LayerToTime((current.GetEpoch() + 1).FirstLayer()).Add(-pb.cfg.activeSet.Window))
-			if wait > 0 {
-				select {
-				case <-ctx.Done():
-					return nil
-				case <-time.After(wait):
-				}
-			}
-			pb.activeGen.ensure(ctx, current.GetEpoch())
-			return nil
-		})
 	}
 	eg.Go(func() error {
 		for {
@@ -352,7 +336,12 @@ func (pb *ProposalBuilder) Run(ctx context.Context) error {
 				}
 				next = current.Add(1)
 				ctx := log.WithNewSessionID(ctx)
-				if current <= types.GetEffectiveGenesis() || !pb.syncer.IsSynced(ctx) {
+				synced := pb.syncer.IsSynced(ctx)
+				if !prepareDisabled {
+					pb.runPrepare(ctx, current)
+					prepareDisabled = true
+				}
+				if current <= types.GetEffectiveGenesis() || !synced {
 					continue
 				}
 				if err := pb.build(ctx, current); err != nil {
@@ -369,6 +358,20 @@ func (pb *ProposalBuilder) Run(ctx context.Context) error {
 		}
 	})
 	return eg.Wait()
+}
+
+func (pb *ProposalBuilder) runPrepare(ctx context.Context, current types.LayerID) {
+	nextEpoch := current.GetEpoch() + 1
+	wait := time.Until(
+		pb.clock.LayerToTime((nextEpoch).FirstLayer()).Add(-pb.cfg.activeSet.Window))
+	if wait > 0 {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(wait):
+		}
+	}
+	pb.activeGen.ensure(ctx, nextEpoch)
 }
 
 // only output the mesh hash in the proposal when the following conditions are met:
