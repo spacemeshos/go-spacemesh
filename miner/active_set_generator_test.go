@@ -1,6 +1,7 @@
 package miner
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -10,11 +11,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/miner/mocks"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql/activeset"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
@@ -39,23 +43,67 @@ type test struct {
 	malfeasent []identity
 	blocks     []*types.Block
 	ballots    []*types.Ballot
+	activesets []*types.EpochActiveSet
 	fallbacks  []types.EpochActiveSet
 
-	networkDelay time.Duration
-	current      types.LayerID
-	target       types.EpochID
+	networkDelay   time.Duration
+	goodAtxPercent int
+	current        types.LayerID
+	target         types.EpochID
+	epochStart     *time.Time
 
 	expect    *expect
 	expectErr string
 }
 
+func unixPtr(sec, nsec int64) *time.Time {
+	t := time.Unix(sec, nsec)
+	return &t
+}
+
+func newTesterActiveSetGenerator(tb testing.TB, cfg config) *testerActiveSetGenerator {
+	var (
+		db       = sql.InMemory()
+		localdb  = localsql.InMemory()
+		atxsdata = atxsdata.New()
+		ctrl     = gomock.NewController(tb)
+		clock    = mocks.NewMocklayerClock(ctrl)
+		gen      = newActiveSetGenerator(cfg, logtest.New(tb).Zap(), db, localdb, atxsdata, clock)
+	)
+	return &testerActiveSetGenerator{
+		tb:       tb,
+		gen:      gen,
+		db:       db,
+		localdb:  localdb,
+		atxsdata: atxsdata,
+		ctrl:     ctrl,
+		clock:    clock,
+	}
+}
+
+type testerActiveSetGenerator struct {
+	tb  testing.TB
+	gen *activeSetGenerator
+
+	db       *sql.Database
+	localdb  *localsql.Database
+	atxsdata *atxsdata.Data
+	ctrl     *gomock.Controller
+	clock    *mocks.MocklayerClock
+}
+
 func TestActiveSetGenerate(t *testing.T) {
+	// third epoch first layer
+	thirdFirst := types.EpochID(3).FirstLayer()
+	// activeset hash from atx ids 1 and 2
+	activeSetHash12 := types.ATXIDList([]types.ATXID{types.ATXID{1}, types.ATXID{2}}).Hash()
+
 	for _, tc := range []test{
 		{
 			desc: "fallback success",
 			atxs: []*types.VerifiedActivationTx{
-				gatx(types.ATXID{1}, 2, types.NodeID{1}, 2, genAtxWithReceived(time.Unix(20, 0))),
-				gatx(types.ATXID{2}, 2, types.NodeID{1}, 3, genAtxWithReceived(time.Unix(20, 0))),
+				gatx(types.ATXID{1}, 2, types.NodeID{1}, 2),
+				gatx(types.ATXID{2}, 2, types.NodeID{1}, 3),
 			},
 			fallbacks: []types.EpochActiveSet{
 				{
@@ -72,7 +120,7 @@ func TestActiveSetGenerate(t *testing.T) {
 		{
 			desc: "fallback failure",
 			atxs: []*types.VerifiedActivationTx{
-				gatx(types.ATXID{1}, 2, types.NodeID{1}, 2, genAtxWithReceived(time.Unix(20, 0))),
+				gatx(types.ATXID{1}, 2, types.NodeID{1}, 2),
 			},
 			fallbacks: []types.EpochActiveSet{
 				{
@@ -86,41 +134,156 @@ func TestActiveSetGenerate(t *testing.T) {
 			target:    3,
 			expectErr: "atx 3/0200000000 is missing in atxsdata",
 		},
+		{
+			desc: "graded active set > 60",
+			atxs: []*types.VerifiedActivationTx{
+				gatx(types.ATXID{1}, 2, types.NodeID{1}, 2, genAtxWithReceived(time.Unix(20, 0))),
+				gatx(types.ATXID{2}, 2, types.NodeID{2}, 2, genAtxWithReceived(time.Unix(20, 0))),
+				// the last atx won't be marked as good due to being received only 2 seconds before epoch start
+				gatx(types.ATXID{3}, 2, types.NodeID{3}, 2, genAtxWithReceived(time.Unix(28, 0))),
+			},
+			epochStart:     unixPtr(30, 0),
+			networkDelay:   2 * time.Second,
+			goodAtxPercent: 60,
+			target:         3,
+			expect:         expectSet([]types.ATXID{types.ATXID{1}, types.ATXID{2}}, 4*ticks),
+		},
+		{
+			desc: "graded active set < 60",
+			atxs: []*types.VerifiedActivationTx{
+				gatx(types.ATXID{1}, 2, types.NodeID{1}, 2, genAtxWithReceived(time.Unix(20, 0))),
+				// two last atx won't be marked as good due to being received only 2 seconds before epoch start
+				gatx(types.ATXID{2}, 2, types.NodeID{2}, 2, genAtxWithReceived(time.Unix(28, 0))),
+				gatx(types.ATXID{3}, 2, types.NodeID{3}, 2, genAtxWithReceived(time.Unix(28, 0))),
+			},
+			epochStart:     unixPtr(30, 0),
+			networkDelay:   2 * time.Second,
+			goodAtxPercent: 60,
+			target:         3,
+			expectErr:      "failed to generate activeset for epoch 3",
+		},
+		{
+			desc: "graded active set with malicious",
+			atxs: []*types.VerifiedActivationTx{
+				gatx(types.ATXID{1}, 2, types.NodeID{1}, 2, genAtxWithReceived(time.Unix(20, 0))),
+				gatx(types.ATXID{2}, 2, types.NodeID{2}, 2, genAtxWithReceived(time.Unix(20, 0))),
+				gatx(types.ATXID{3}, 2, types.NodeID{3}, 2, genAtxWithReceived(time.Unix(20, 0))),
+			},
+			malfeasent: []identity{
+				gidentity(types.NodeID{3}, time.Unix(29, 0)),
+			},
+			epochStart:     unixPtr(30, 0),
+			networkDelay:   2 * time.Second,
+			goodAtxPercent: 60,
+			target:         3,
+			expect:         expectSet([]types.ATXID{types.ATXID{1}, types.ATXID{2}}, 4*ticks),
+		},
+		{
+			desc: "graded active set with late malicious",
+			atxs: []*types.VerifiedActivationTx{
+				gatx(types.ATXID{1}, 2, types.NodeID{1}, 2, genAtxWithReceived(time.Unix(20, 0))),
+				gatx(types.ATXID{2}, 2, types.NodeID{2}, 2, genAtxWithReceived(time.Unix(20, 0))),
+				gatx(types.ATXID{3}, 2, types.NodeID{3}, 2, genAtxWithReceived(time.Unix(20, 0))),
+			},
+			malfeasent: []identity{
+				gidentity(types.NodeID{3}, time.Unix(31, 0)),
+			},
+			epochStart:     unixPtr(30, 0),
+			networkDelay:   2 * time.Second,
+			goodAtxPercent: 60,
+			target:         3,
+			expect:         expectSet([]types.ATXID{types.ATXID{1}, types.ATXID{2}, types.ATXID{3}}, 6*ticks),
+		},
+		{
+			desc:           "graded empty",
+			atxs:           []*types.VerifiedActivationTx{},
+			epochStart:     unixPtr(30, 0),
+			networkDelay:   2 * time.Second,
+			goodAtxPercent: 60,
+			target:         3,
+			expectErr:      "empty active set",
+		},
+		{
+			desc: "first block not found",
+			atxs: []*types.VerifiedActivationTx{
+				gatx(types.ATXID{1}, 2, types.NodeID{1}, 2),
+				gatx(types.ATXID{2}, 2, types.NodeID{2}, 2),
+			},
+			epochStart:     unixPtr(0, 0),
+			networkDelay:   2 * time.Second,
+			goodAtxPercent: 100,
+			current:        thirdFirst + 1,
+			target:         3,
+			expectErr:      "first block in epoch 3 not found",
+		},
+		{
+			desc: "first block success",
+			atxs: []*types.VerifiedActivationTx{
+				gatx(types.ATXID{1}, 2, types.NodeID{1}, 2),
+				gatx(types.ATXID{2}, 2, types.NodeID{2}, 2),
+			},
+			blocks: []*types.Block{
+				gblock(thirdFirst, types.ATXID{1}, types.ATXID{2}),
+			},
+			ballots: []*types.Ballot{
+				gballot(types.BallotID{1}, types.ATXID{1}, types.NodeID{1}, thirdFirst, &types.EpochData{
+					ActiveSetHash: activeSetHash12,
+				}),
+				gballot(types.BallotID{2}, types.ATXID{2}, types.NodeID{2}, thirdFirst, &types.EpochData{
+					ActiveSetHash: activeSetHash12,
+				}),
+			},
+			activesets: []*types.EpochActiveSet{
+				{Epoch: 3, Set: []types.ATXID{{1}, {2}}},
+			},
+			epochStart:     unixPtr(0, 0),
+			networkDelay:   2 * time.Second,
+			goodAtxPercent: 100,
+			current:        types.EpochID(3).FirstLayer() + 1,
+			target:         3,
+			expect:         expectSet([]types.ATXID{{1}, {2}}, 4*ticks),
+		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			t.Parallel()
-
-			var (
-				db       = sql.InMemory()
-				localdb  = localsql.InMemory()
-				atxsdata = atxsdata.New()
-				ctrl     = gomock.NewController(t)
-				clock    = mocks.NewMocklayerClock(ctrl)
-				cfg      = config{networkDelay: tc.networkDelay}
-				gen      = newActiveSetGenerator(cfg, logtest.New(t).Zap(), db, localdb, atxsdata, clock)
+			tester := newTesterActiveSetGenerator(
+				t,
+				config{networkDelay: tc.networkDelay, goodAtxPercent: tc.goodAtxPercent},
 			)
 			for _, atx := range tc.atxs {
-				require.NoError(t, atxs.Add(db, atx))
-				atxsdata.AddFromHeader(atx.ToHeader(), types.VRFPostIndex(0), false)
+				require.NoError(t, atxs.Add(tester.db, atx))
+				tester.atxsdata.AddFromHeader(atx.ToHeader(), types.VRFPostIndex(0), false)
 			}
 			for _, identity := range tc.malfeasent {
 				require.NoError(
 					t,
-					identities.SetMalicious(db, identity.id, codec.MustEncode(&identity.proof), identity.received),
+					identities.SetMalicious(
+						tester.db,
+						identity.id,
+						codec.MustEncode(&identity.proof),
+						identity.received,
+					),
 				)
 			}
 			for _, block := range tc.blocks {
-				require.NoError(t, blocks.Add(db, block))
+				require.NoError(t, blocks.Add(tester.db, block))
+				require.NoError(t, layers.SetApplied(tester.db, block.LayerIndex, block.ID()))
 			}
 			for _, ballot := range tc.ballots {
-				require.NoError(t, ballots.Add(db, ballot))
+				require.NoError(t, ballots.Add(tester.db, ballot))
+			}
+			for _, ac := range tc.activesets {
+				require.NoError(t, activesets.Add(tester.db, types.ATXIDList(ac.Set).Hash(), ac))
 			}
 			for _, fallback := range tc.fallbacks {
-				gen.updateFallback(fallback.Epoch, fallback.Set)
+				tester.gen.updateFallback(fallback.Epoch, fallback.Set)
+			}
+			if tc.epochStart != nil {
+				tester.clock.EXPECT().LayerToTime(tc.target.FirstLayer()).Return(*tc.epochStart)
 			}
 
-			id, setWeight, set, err := gen.generate(tc.current, tc.target)
+			id, setWeight, set, err := tester.gen.generate(tc.current, tc.target)
 			if tc.expectErr != "" {
 				require.ErrorContains(t, err, tc.expectErr)
 			} else {
@@ -133,4 +296,42 @@ func TestActiveSetGenerate(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestActiveSetEnsure(t *testing.T) {
+	const (
+		tries  = 10
+		target = 3
+	)
+
+	ctx := context.Background()
+	tester := newTesterActiveSetGenerator(t, config{
+		activeSet: ActiveSetPreparation{
+			RetryInterval: time.Nanosecond,
+			Tries:         tries,
+		},
+	})
+
+	expected := []types.ATXID{{1}}
+	// verify that it tries compute activeset for configured number of tries
+	tester.gen.updateFallback(target, expected)
+	tester.clock.EXPECT().CurrentLayer().Return(0).Times(tries)
+	tester.gen.ensure(ctx, target)
+	_, _, _, err := activeset.Get(tester.localdb, activeset.Tortoise, target)
+	require.ErrorIs(t, err, sql.ErrNotFound)
+
+	// computes from first try
+	tester.atxsdata.AddFromHeader(gatx(expected[0], 2, types.NodeID{1}, 1).ToHeader(), types.VRFPostIndex(0), false)
+	tester.clock.EXPECT().CurrentLayer().Return(0).Times(1)
+	tester.gen.ensure(ctx, target)
+	id, weight, set, err := activeset.Get(tester.localdb, activeset.Tortoise, target)
+	require.NoError(t, err)
+	require.Equal(t, types.ATXIDList(expected).Hash(), id)
+	require.Equal(t, expected, set)
+	require.Equal(t, 1*ticks, int(weight))
+
+	// interruptible
+	ctx, cancel := context.WithCancel(ctx)
+	cancel()
+	tester.gen.ensure(ctx, target)
 }

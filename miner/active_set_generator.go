@@ -66,13 +66,15 @@ func (p *activeSetGenerator) updateFallback(target types.EpochID, set []types.AT
 	)
 	p.fallback.Lock()
 	defer p.fallback.Unlock()
-	if _, ok := p.fallback.data[target]; ok {
+	if _, exists := p.fallback.data[target]; exists {
 		p.log.Debug("fallback active set already exists", target.Field().Zap())
 		return
 	}
 	p.fallback.data[target] = set
 }
 
+// ensure tries to generate active set for the target epoch in configured number of tries,
+// each try will be repeated after configured retry interval.
 func (a *activeSetGenerator) ensure(ctx context.Context, target types.EpochID) {
 	var err error
 	for try := 0; try < a.cfg.activeSet.Tries; try++ {
@@ -192,7 +194,7 @@ func (p *activeSetGenerator) generate(
 		}
 		return id, setWeight, set, nil
 	}
-	return id, 0, nil, fmt.Errorf("failed to generate activeset")
+	return id, 0, nil, fmt.Errorf("failed to generate activeset for epoch %v", target)
 }
 
 type gradedActiveSet struct {
@@ -264,13 +266,13 @@ const (
 	good
 )
 
-func gradeAtx(epochStart time.Time, networkDelay time.Duration, atxtime, prooftime int64) atxGrade {
-	atx := time.Unix(0, atxtime)
-	proof := time.Unix(0, prooftime)
-	if atx.Before(epochStart.Add(-4*networkDelay)) && (prooftime == 0 || !proof.Before(epochStart)) {
+func gradeAtx(epochStart time.Time, networkDelay time.Duration, atxNsec, proofNsec int64) atxGrade {
+	atx := time.Unix(0, atxNsec)
+	proof := time.Unix(0, proofNsec)
+	if atx.Before(epochStart.Add(-4*networkDelay)) && (proofNsec == 0 || !proof.Before(epochStart)) {
 		return good
 	} else if atx.Before(epochStart.Add(-3*networkDelay)) &&
-		(proof.IsZero() || !proof.Before(epochStart.Add(-networkDelay))) {
+		(proofNsec == 0 || !proof.Before(epochStart.Add(-networkDelay))) {
 		return acceptable
 	}
 	return evil
@@ -295,7 +297,12 @@ func activeSetFromBlock(db sql.Executor, bid types.BlockID) ([]types.ATXID, erro
 		activeMap[r.AtxID] = struct{}{}
 		ballot, err := ballots.FirstInEpoch(db, r.AtxID, block.LayerIndex.GetEpoch())
 		if err != nil {
-			return nil, fmt.Errorf("actives get ballot: %w", err)
+			return nil, fmt.Errorf(
+				"ballot for atx %v in epoch %v: %w",
+				r.AtxID.ShortString(),
+				block.LayerIndex.GetEpoch(),
+				err,
+			)
 		}
 		actives, err := activesets.Get(db, ballot.EpochData.ActiveSetHash)
 		if err != nil {

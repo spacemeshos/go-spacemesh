@@ -556,7 +556,7 @@ func TestBuild(t *testing.T) {
 					blocks: []*types.Block{
 						gblock(15, types.ATXID{4}), // this atx and ballot doesn't exist
 					},
-					expectErr: "actives get ballot",
+					expectErr: "ballot for atx 0400000000 in epoch 3",
 				},
 				{
 					lid: 16,
