@@ -2,15 +2,18 @@ package v2alpha1
 
 import (
 	"context"
+	"errors"
 	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"io"
 	"testing"
 )
 
@@ -94,5 +97,121 @@ func TestRewardService_List(t *testing.T) {
 		require.Equal(t, rwds[4].LayerReward, list.GetRewards()[0].GetV1().LayerReward)
 		require.Equal(t, rwds[4].TotalReward, list.GetRewards()[0].GetV1().Total)
 		require.Equal(t, rwds[4].Coinbase.String(), list.GetRewards()[0].GetV1().Coinbase)
+	})
+}
+
+func TestRewardStreamService_Stream(t *testing.T) {
+	db := sql.InMemory()
+	ctx := context.Background()
+
+	gen := fixture.NewRewardsGenerator()
+	rwds := make([]types.Reward, 100)
+	for i := range rwds {
+		rwd := gen.Next()
+		require.NoError(t, rewards.Add(db, rwd))
+		rwds[i] = *rwd
+	}
+
+	svc := NewRewardStreamService(db)
+	cfg, cleanup := launchServer(t, svc)
+	t.Cleanup(cleanup)
+
+	conn := dialGrpc(ctx, t, cfg)
+	client := spacemeshv2alpha1.NewRewardStreamServiceClient(conn)
+
+	t.Run("all", func(t *testing.T) {
+		events.InitializeReporter()
+		t.Cleanup(events.CloseEventReporter)
+
+		stream, err := client.Stream(ctx, &spacemeshv2alpha1.RewardStreamRequest{})
+		require.NoError(t, err)
+
+		var i int
+		for {
+			_, err := stream.Recv()
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			i++
+		}
+		require.Len(t, rwds, i)
+	})
+
+	t.Run("watch", func(t *testing.T) {
+		events.InitializeReporter()
+		t.Cleanup(events.CloseEventReporter)
+
+		const (
+			start = 100
+			n     = 10
+		)
+
+		gen = fixture.NewRewardsGenerator().WithLayers(start, 10)
+		var streamed []events.Reward
+		for i := 0; i < n; i++ {
+			rwd := gen.Next()
+			streamed = append(streamed, events.Reward{
+				Layer:       rwd.Layer,
+				Total:       rwd.TotalReward,
+				LayerReward: rwd.LayerReward,
+				Coinbase:    rwd.Coinbase,
+				SmesherID:   rwd.SmesherID,
+			})
+		}
+
+		for _, tc := range []struct {
+			desc    string
+			request *spacemeshv2alpha1.RewardStreamRequest
+		}{
+			{
+				desc: "Smesher",
+				request: &spacemeshv2alpha1.RewardStreamRequest{
+					FilterBy: &spacemeshv2alpha1.RewardStreamRequest_Smesher{
+						Smesher: streamed[3].SmesherID.Bytes(),
+					},
+					StartLayer: start,
+					Watch:      true,
+				},
+			},
+			{
+				desc: "Coinbase",
+				request: &spacemeshv2alpha1.RewardStreamRequest{
+					FilterBy: &spacemeshv2alpha1.RewardStreamRequest_Coinbase{
+						Coinbase: streamed[3].Coinbase.String(),
+					},
+					StartLayer: start,
+					Watch:      true,
+				},
+			},
+		} {
+			tc := tc
+			t.Run(tc.desc, func(t *testing.T) {
+				stream, err := client.Stream(ctx, tc.request)
+				require.NoError(t, err)
+				_, err = stream.Header()
+				require.NoError(t, err)
+
+				var expect []*types.Reward
+				for _, rst := range streamed {
+					events.ReportRewardReceived(rst)
+					matcher := rewardsMatcher{tc.request, ctx}
+					if matcher.match(&rst) {
+						expect = append(expect, &types.Reward{
+							Layer:       rst.Layer,
+							TotalReward: rst.Total,
+							LayerReward: rst.LayerReward,
+							Coinbase:    rst.Coinbase,
+							SmesherID:   rst.SmesherID,
+						})
+					}
+				}
+
+				for _, rst := range expect {
+					received, err := stream.Recv()
+					require.NoError(t, err)
+					require.Equal(t, toReward(rst).String(), received.GetV1().String())
+				}
+			})
+		}
 	})
 }

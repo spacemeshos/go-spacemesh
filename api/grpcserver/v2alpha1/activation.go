@@ -53,7 +53,7 @@ func (s *ActivationStreamService) Stream(
 ) error {
 	var sub *events.BufferedSubscription[events.ActivationTx]
 	if request.Watch {
-		matcher := resultsMatcher{request, stream.Context()}
+		matcher := atxsMatcher{request, stream.Context()}
 		var err error
 		sub, err = events.SubscribeMatched(matcher.match)
 		if err != nil {
@@ -64,7 +64,7 @@ func (s *ActivationStreamService) Stream(
 			return status.Errorf(codes.Unavailable, "can't send header")
 		}
 	}
-	ops, err := toOperations(toRequest(request))
+	ops, err := toAtxOperations(toAtxRequest(request))
 	if err != nil {
 		return status.Error(codes.InvalidArgument, err.Error())
 	}
@@ -189,7 +189,7 @@ func (s *ActivationService) List(
 	ctx context.Context,
 	request *spacemeshv2alpha1.ActivationRequest,
 ) (*spacemeshv2alpha1.ActivationList, error) {
-	ops, err := toOperations(request)
+	ops, err := toAtxOperations(request)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
@@ -230,7 +230,7 @@ func (s *ActivationService) ActivationsCount(
 	return &spacemeshv2alpha1.ActivationsCountResponse{Count: count}, nil
 }
 
-func toRequest(filter *spacemeshv2alpha1.ActivationStreamRequest) *spacemeshv2alpha1.ActivationRequest {
+func toAtxRequest(filter *spacemeshv2alpha1.ActivationStreamRequest) *spacemeshv2alpha1.ActivationRequest {
 	return &spacemeshv2alpha1.ActivationRequest{
 		NodeId:     filter.NodeId,
 		Id:         filter.Id,
@@ -240,7 +240,7 @@ func toRequest(filter *spacemeshv2alpha1.ActivationStreamRequest) *spacemeshv2al
 	}
 }
 
-func toOperations(filter *spacemeshv2alpha1.ActivationRequest) (builder.Operations, error) {
+func toAtxOperations(filter *spacemeshv2alpha1.ActivationRequest) (builder.Operations, error) {
 	ops := builder.Operations{}
 	if filter == nil {
 		return ops, nil
@@ -306,12 +306,12 @@ func toOperations(filter *spacemeshv2alpha1.ActivationRequest) (builder.Operatio
 	return ops, nil
 }
 
-type resultsMatcher struct {
+type atxsMatcher struct {
 	*spacemeshv2alpha1.ActivationStreamRequest
 	ctx context.Context
 }
 
-func (m *resultsMatcher) match(t *events.ActivationTx) bool {
+func (m *atxsMatcher) match(t *events.ActivationTx) bool {
 	if len(m.NodeId) > 0 {
 		var nodeId types.NodeID
 		copy(nodeId[:], m.NodeId)
