@@ -1,0 +1,1 @@
+CREATE INDEX atxs_by_coinbase ON atxs (coinbase);
