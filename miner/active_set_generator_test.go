@@ -5,6 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
+
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -19,8 +22,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/activeset"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
 )
 
 type expect struct {
@@ -96,7 +97,7 @@ func TestActiveSetGenerate(t *testing.T) {
 	// third epoch first layer
 	thirdFirst := types.EpochID(3).FirstLayer()
 	// activeset hash from atx ids 1 and 2
-	activeSetHash12 := types.ATXIDList([]types.ATXID{types.ATXID{1}, types.ATXID{2}}).Hash()
+	activeSetHash12 := types.ATXIDList([]types.ATXID{{1}, {2}}).Hash()
 
 	for _, tc := range []test{
 		{
@@ -106,16 +107,10 @@ func TestActiveSetGenerate(t *testing.T) {
 				gatx(types.ATXID{2}, 2, types.NodeID{1}, 3),
 			},
 			fallbacks: []types.EpochActiveSet{
-				{
-					Epoch: 3,
-					Set: []types.ATXID{
-						types.ATXID{1},
-						types.ATXID{2},
-					},
-				},
+				{Epoch: 3, Set: []types.ATXID{{1}, {2}}},
 			},
 			target: 3,
-			expect: expectSet([]types.ATXID{types.ATXID{1}, types.ATXID{2}}, 5*ticks),
+			expect: expectSet([]types.ATXID{{1}, {2}}, 5*ticks),
 		},
 		{
 			desc: "fallback failure",
@@ -123,13 +118,7 @@ func TestActiveSetGenerate(t *testing.T) {
 				gatx(types.ATXID{1}, 2, types.NodeID{1}, 2),
 			},
 			fallbacks: []types.EpochActiveSet{
-				{
-					Epoch: 3,
-					Set: []types.ATXID{
-						types.ATXID{1},
-						types.ATXID{2},
-					},
-				},
+				{Epoch: 3, Set: []types.ATXID{{1}, {2}}},
 			},
 			target:    3,
 			expectErr: "atx 3/0200000000 is missing in atxsdata",
@@ -146,7 +135,7 @@ func TestActiveSetGenerate(t *testing.T) {
 			networkDelay:   2 * time.Second,
 			goodAtxPercent: 60,
 			target:         3,
-			expect:         expectSet([]types.ATXID{types.ATXID{1}, types.ATXID{2}}, 4*ticks),
+			expect:         expectSet([]types.ATXID{{1}, {2}}, 4*ticks),
 		},
 		{
 			desc: "graded active set < 60",
@@ -176,7 +165,7 @@ func TestActiveSetGenerate(t *testing.T) {
 			networkDelay:   2 * time.Second,
 			goodAtxPercent: 60,
 			target:         3,
-			expect:         expectSet([]types.ATXID{types.ATXID{1}, types.ATXID{2}}, 4*ticks),
+			expect:         expectSet([]types.ATXID{{1}, {2}}, 4*ticks),
 		},
 		{
 			desc: "graded active set with late malicious",
@@ -192,7 +181,7 @@ func TestActiveSetGenerate(t *testing.T) {
 			networkDelay:   2 * time.Second,
 			goodAtxPercent: 60,
 			target:         3,
-			expect:         expectSet([]types.ATXID{types.ATXID{1}, types.ATXID{2}, types.ATXID{3}}, 6*ticks),
+			expect:         expectSet([]types.ATXID{{1}, {2}, {3}}, 6*ticks),
 		},
 		{
 			desc:           "graded empty",

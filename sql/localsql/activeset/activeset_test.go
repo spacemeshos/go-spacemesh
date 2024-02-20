@@ -3,10 +3,11 @@ package activeset
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
-	"github.com/stretchr/testify/require"
 )
 
 func TestGetNotFound(t *testing.T) {
