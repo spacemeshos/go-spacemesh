@@ -1,6 +1,7 @@
 package atxs
 
 import (
+	"bytes"
 	"fmt"
 	"time"
 
@@ -538,4 +539,15 @@ func CountAtxsByOps(db sql.Executor, operations builder.Operations) (count uint3
 		},
 	)
 	return
+}
+
+func IterateIds(db sql.Executor, epoch types.EpochID, fn func(*bytes.Reader) bool) error {
+	_, err := db.Exec("select id from atxs where epoch = ?1;",
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(epoch))
+		},
+		func(stmt *sql.Statement) bool {
+			return fn(stmt.ColumnReader(0))
+		})
+	return err
 }

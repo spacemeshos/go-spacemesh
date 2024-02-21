@@ -1,11 +1,13 @@
 package atxs_test
 
 import (
+	"bytes"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -766,5 +768,51 @@ func TestLatest(t *testing.T) {
 			require.NoError(t, err)
 			require.EqualValues(t, tc.expect, latest)
 		})
+	}
+}
+
+func BenchmarkIterateIds(b *testing.B) {
+	// create index atxs_by_epoch_id on atxs (epoch, id);
+	// drop index atxs_by_epoch_id;
+
+	// WITHOUT INDEX
+	// explain select id from atxs where epoch = 15;
+	// 1     OpenRead       0     17    0     2              0   root=17 iDb=0; atxs
+	// 2     OpenRead       1     40    0     k(3,,,)        2   root=40 iDb=0; atxs_by_epoch_by_pubkey
+	// 3     Integer        15    1     0                    0   r[1]=15
+	// 4     SeekGE         1     10    1     1              0   key=r[1]
+	// 5       IdxGT          1     10    1     1              0   key=r[1]
+	// 6       DeferredSeek   1     0     0                    0   Move 0 to 1.rowid if needed
+	// 7       Column         0     0     2                    0   r[2]=atxs.id
+	// 8       ResultRow      2     1     0                    0   output=r[2]
+	// BenchmarkIterateIds-24    	       1	2748158640 ns/op	115087752 B/op	 6538789 allocs/op
+
+	// WITH INDEX
+	// 1     OpenRead       1     3252084  0     k(3,,,)        2   root=3252084 iDb=0; atxs_by_epoch_id
+	// 2     Integer        15    1     0                    0   r[1]=15
+	// 3     SeekGE         1     8     1     1              0   key=r[1]
+	// 4       IdxGT          1     8     1     1              0   key=r[1]
+	// 5       Column         1     1     2                    0   r[2]=atxs.id
+	// 6       ResultRow      2     1     0                    0   output=r[2]
+	// BenchmarkIterateIds-24    	       3	 476045089 ns/op	115085674 B/op	 6538773 allocs/op
+
+	db, err := sql.Open("file:/home/dd/Downloads/state.sql", sql.WithConnections(1000))
+	require.NoError(b, err)
+
+	iter := func(r *bytes.Reader) bool {
+		return true
+	}
+
+	b.ResetTimer()
+	var eg errgroup.Group
+	for i := 0; i < b.N; i++ {
+		for c := 0; c < 1; c++ {
+			eg.Go(func() error {
+				return atxs.IterateIds(db, 15, iter)
+			})
+		}
+		if err := eg.Wait(); err != nil {
+			require.NoError(b, err)
+		}
 	}
 }
