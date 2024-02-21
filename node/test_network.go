@@ -114,8 +114,7 @@ func NewApp(t *testing.T, conf *config.Config, l log.Log) *App {
 	err := app.Initialize()
 	require.NoError(t, err)
 
-	/* Create or load miner identity */
-	app.edSgn, err = app.LoadOrCreateEdSigner()
+	app.signers, err = app.LoadIdentities()
 	require.NoError(t, err, "could not retrieve identity")
 
 	return app
