@@ -1856,8 +1856,10 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 	cfg := app.Config.P2P
 	cfg.DataDir = filepath.Join(app.Config.DataDir(), "p2p")
 	p2plog := app.addLogger(P2PLogger, lg)
-	// if addLogger won't add a level we will use a default 0 (info).
-	cfg.LogLevel = app.getLevel(P2PLogger)
+
+	// our p2p code logs at the default level (Info), but we want the lower level libp2p logging
+	// to be less verbose
+	cfg.LogLevel = zapcore.WarnLevel
 	prologue := fmt.Sprintf("%x-%v",
 		app.Config.Genesis.GenesisID(),
 		types.GetEffectiveGenesis(),

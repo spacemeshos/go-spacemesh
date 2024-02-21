@@ -68,6 +68,8 @@ func (f *Fetch) getHashes(
 
 	var eg errgroup.Group
 	var failed atomic.Uint64
+	f.logger.WithContext(ctx).With().Info("attempting to fetch hash objects",
+		log.Uint64("count", uint64(len(hashes))))
 	for i, hash := range hashes {
 		if err := options.limiter.Acquire(ctx, 1); err != nil {
 			pendingMetric.Add(float64(i - len(hashes)))
@@ -97,7 +99,7 @@ func (f *Fetch) getHashes(
 				options.limiter.Release(1)
 				pendingMetric.Add(-1)
 				if p.err != nil {
-					f.logger.Debug("failed to get hash",
+					f.logger.WithContext(ctx).With().Debug("failed to get hash",
 						log.String("hint", string(hint)),
 						log.Stringer("hash", h),
 						log.Err(p.err),
@@ -110,6 +112,7 @@ func (f *Fetch) getHashes(
 	}
 
 	eg.Wait()
+	f.logger.WithContext(ctx).With().Info("finished fetching hash objects")
 	if failed.Load() > 0 {
 		return fmt.Errorf("failed to fetch %d hashes out of %d", failed.Load(), len(hashes))
 	}

@@ -391,7 +391,7 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 		}
 		if err = h.publisher.Publish(ctx, pubsub.MalfeasanceProof, encodedProof); err != nil {
 			failedPublish.Inc()
-			logger.With().Error("failed to broadcast malfeasance proof", log.Err(err))
+			logger.With().Error("failed to broadcast malfeasance proof after process ballot", log.Err(err))
 			return fmt.Errorf("broadcast ballot malfeasance proof: %w", err)
 		}
 		return errMaliciousBallot

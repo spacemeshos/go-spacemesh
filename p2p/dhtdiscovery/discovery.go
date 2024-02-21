@@ -300,7 +300,7 @@ func (d *Discovery) connect(ctx context.Context, eg *errgroup.Group, nodes []pee
 		}
 		eg.Go(func() error {
 			if err := d.h.Connect(conCtx, boot); err != nil {
-				d.logger.Warn("failed to connect",
+				d.logger.Debug("failed to connect",
 					zap.Stringer("address", boot),
 					zap.Error(err),
 				)
@@ -333,14 +333,14 @@ func (d *Discovery) setupDHT(ctx context.Context) error {
 			dht.RoutingTableFilter(dht.PublicRoutingTableFilter))
 	}
 	opts = append(opts, dht.Mode(d.mode))
-	dht, err := dht.New(ctx, d.h, opts...)
+	myDht, err := dht.New(ctx, d.h, opts...)
 	if err != nil {
 		if err := ds.Close(); err != nil {
 			d.logger.Error("error closing level datastore", zap.Error(err))
 		}
 		return err
 	}
-	d.dht = dht
+	d.dht = myDht
 	d.datastore = ds
 	return nil
 }
