@@ -592,7 +592,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.Config.POST,
 		app.addLogger(NipostValidatorLogger, lg).Zap(),
 		activation.WithVerifyingOpts(app.Config.SMESHING.VerifyingOpts),
-		activation.PrioritizedIDs(app.edSgn.NodeID()),
+		activation.WithPrioritizedID(app.edSgn.NodeID()),
 		activation.WithAutoscaling(),
 	)
 	if err != nil {
@@ -919,7 +919,6 @@ func (app *App) initServices(ctx context.Context) error {
 
 	app.Config.POSTService.NodeAddress = fmt.Sprintf("http://%s:%s", host, port)
 	postSetupMgr, err := activation.NewPostSetupManager(
-		app.edSgn.NodeID(),
 		app.Config.POST,
 		app.addLogger(PostLogger, lg).Zap(),
 		app.cachedDB,
@@ -1276,7 +1275,7 @@ func (app *App) startServices(ctx context.Context) error {
 		if app.Config.SMESHING.CoinbaseAccount == "" {
 			return fmt.Errorf("smeshing enabled but no coinbase account provided")
 		}
-		if err := app.postSupervisor.Start(app.Config.SMESHING.Opts); err != nil {
+		if err := app.postSupervisor.Start(app.Config.SMESHING.Opts, app.edSgn.NodeID()); err != nil {
 			return fmt.Errorf("start post service: %w", err)
 		}
 	} else {
@@ -1337,10 +1336,12 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		app.grpcServices[svc] = service
 		return service, nil
 	case grpcserver.Smesher:
+		nodeID := app.edSgn.NodeID()
 		service := grpcserver.NewSmesherService(
 			app.atxBuilder,
 			app.postSupervisor,
 			app.Config.API.SmesherStreamInterval,
+			&nodeID,
 			app.Config.SMESHING.Opts,
 		)
 		app.grpcServices[svc] = service

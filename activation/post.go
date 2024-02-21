@@ -175,7 +175,6 @@ func (o PostSetupOpts) ToInitOpts() config.InitOpts {
 
 // PostSetupManager implements the PostProvider interface.
 type PostSetupManager struct {
-	id              types.NodeID
 	commitmentAtxId types.ATXID
 	syncer          syncer
 
@@ -206,7 +205,6 @@ func PostValidityDelay(delay time.Duration) PostSetupManagerOpt {
 
 // NewPostSetupManager creates a new instance of PostSetupManager.
 func NewPostSetupManager(
-	id types.NodeID,
 	cfg PostConfig,
 	logger *zap.Logger,
 	db *datastore.CachedDB,
@@ -216,7 +214,6 @@ func NewPostSetupManager(
 	opts ...PostSetupManagerOpt,
 ) (*PostSetupManager, error) {
 	mgr := &PostSetupManager{
-		id:          id,
 		cfg:         cfg,
 		logger:      logger,
 		db:          db,
@@ -260,7 +257,7 @@ func (mgr *PostSetupManager) Status() *PostSetupStatus {
 // previously started session, and will return an error if a session is already
 // in progress. It must be ensured that PrepareInitializer is called once
 // before each call to StartSession and that the node is ATX synced.
-func (mgr *PostSetupManager) StartSession(ctx context.Context) error {
+func (mgr *PostSetupManager) StartSession(ctx context.Context, id types.NodeID) error {
 	// Ensure only one goroutine can execute initialization at a time.
 	err := func() error {
 		mgr.mu.Lock()
@@ -275,7 +272,7 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context) error {
 		return err
 	}
 	mgr.logger.Info("post setup session starting",
-		zap.Stringer("node_id", mgr.id),
+		zap.Stringer("node_id", id),
 		zap.Stringer("commitment_atx", mgr.commitmentAtxId),
 		zap.String("data_dir", mgr.lastOpts.DataDir),
 		zap.Uint32("num_units", mgr.lastOpts.NumUnits),
@@ -283,7 +280,7 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context) error {
 		zap.Stringer("provider", mgr.lastOpts.ProviderID),
 	)
 	public.InitStart.Set(float64(mgr.lastOpts.NumUnits))
-	events.EmitInitStart(mgr.id, mgr.commitmentAtxId)
+	events.EmitInitStart(id, mgr.commitmentAtxId)
 	err = mgr.init.Initialize(ctx)
 
 	mgr.mu.Lock()
@@ -300,19 +297,19 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context) error {
 			zap.Error(errLabelMismatch),
 		)
 		mgr.state = PostSetupStateError
-		events.EmitInitFailure(mgr.id, mgr.commitmentAtxId, errLabelMismatch)
+		events.EmitInitFailure(id, mgr.commitmentAtxId, errLabelMismatch)
 		return nil
 	case err != nil:
 		mgr.logger.Error("post setup session failed", zap.Error(err))
 		mgr.state = PostSetupStateError
-		events.EmitInitFailure(mgr.id, mgr.commitmentAtxId, err)
+		events.EmitInitFailure(id, mgr.commitmentAtxId, err)
 		return err
 	}
 	public.InitEnd.Set(float64(mgr.lastOpts.NumUnits))
 	events.EmitInitComplete()
 
 	mgr.logger.Info("post setup completed",
-		zap.Stringer("node_id", mgr.id),
+		zap.Stringer("node_id", id),
 		zap.Stringer("commitment_atx", mgr.commitmentAtxId),
 		zap.String("data_dir", mgr.lastOpts.DataDir),
 		zap.Uint32("num_units", mgr.lastOpts.NumUnits),
@@ -330,7 +327,7 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context) error {
 // (StartSession can take days to complete). After the first call to this
 // method subsequent calls to this method will return an error until
 // StartSession has completed execution.
-func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSetupOpts) error {
+func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSetupOpts, id types.NodeID) error {
 	mgr.logger.Info("preparing post initializer", zap.Any("opts", opts))
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
@@ -339,13 +336,13 @@ func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSe
 	}
 
 	var err error
-	mgr.commitmentAtxId, err = mgr.commitmentAtx(ctx, opts.DataDir)
+	mgr.commitmentAtxId, err = mgr.commitmentAtx(ctx, opts.DataDir, id)
 	if err != nil {
 		return err
 	}
 
 	newInit, err := initialization.NewInitializer(
-		initialization.WithNodeId(mgr.id.Bytes()),
+		initialization.WithNodeId(id.Bytes()),
 		initialization.WithCommitmentAtxId(mgr.commitmentAtxId.Bytes()),
 		initialization.WithConfig(mgr.cfg.ToConfig()),
 		initialization.WithInitOpts(opts.ToInitOpts()),
@@ -362,14 +359,14 @@ func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSe
 	return nil
 }
 
-func (mgr *PostSetupManager) commitmentAtx(ctx context.Context, dataDir string) (types.ATXID, error) {
+func (mgr *PostSetupManager) commitmentAtx(ctx context.Context, dataDir string, id types.NodeID) (types.ATXID, error) {
 	m, err := initialization.LoadMetadata(dataDir)
 	switch {
 	case err == nil:
 		return types.ATXID(types.BytesToHash(m.CommitmentAtxId)), nil
 	case errors.Is(err, initialization.ErrStateMetadataFileMissing):
 		// if this node has already published an ATX, get its initial ATX and from it the commitment ATX
-		atxId, err := atxs.GetFirstIDByNodeID(mgr.db, mgr.id)
+		atxId, err := atxs.GetFirstIDByNodeID(mgr.db, id)
 		if err == nil {
 			atx, err := atxs.Get(mgr.db, atxId)
 			if err != nil {

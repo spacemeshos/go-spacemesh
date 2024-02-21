@@ -554,11 +554,17 @@ type smesherServiceConn struct {
 	postSupervisor   *MockpostSupervisor
 }
 
-func setupSmesherService(t *testing.T) (*smesherServiceConn, context.Context) {
+func setupSmesherService(t *testing.T, id *types.NodeID) (*smesherServiceConn, context.Context) {
 	ctrl, mockCtx := gomock.WithContext(context.Background(), t)
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
 	postSupervisor := NewMockpostSupervisor(ctrl)
-	svc := NewSmesherService(smeshingProvider, postSupervisor, 10*time.Millisecond, activation.DefaultPostSetupOpts())
+	svc := NewSmesherService(
+		smeshingProvider,
+		postSupervisor,
+		10*time.Millisecond,
+		id,
+		activation.DefaultPostSetupOpts(),
+	)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
@@ -578,7 +584,7 @@ func setupSmesherService(t *testing.T) (*smesherServiceConn, context.Context) {
 func TestSmesherService(t *testing.T) {
 	t.Run("IsSmeshing", func(t *testing.T) {
 		t.Parallel()
-		c, ctx := setupSmesherService(t)
+		c, ctx := setupSmesherService(t, nil)
 		c.smeshingProvider.EXPECT().Smeshing().Return(false)
 		res, err := c.IsSmeshing(ctx, &emptypb.Empty{})
 		require.NoError(t, err)
@@ -587,7 +593,7 @@ func TestSmesherService(t *testing.T) {
 
 	t.Run("StartSmeshingMissingArgs", func(t *testing.T) {
 		t.Parallel()
-		c, ctx := setupSmesherService(t)
+		c, ctx := setupSmesherService(t, nil)
 		_, err := c.StartSmeshing(ctx, &pb.StartSmeshingRequest{})
 		require.Equal(t, codes.InvalidArgument, status.Code(err))
 	})
@@ -600,8 +606,9 @@ func TestSmesherService(t *testing.T) {
 		opts.MaxFileSize = 1024
 
 		coinbase := &pb.AccountId{Address: addr1.String()}
+		nodeID := types.RandomNodeID()
 
-		c, ctx := setupSmesherService(t)
+		c, ctx := setupSmesherService(t, &nodeID)
 		c.smeshingProvider.EXPECT().StartSmeshing(gomock.Any()).Return(nil)
 		c.postSupervisor.EXPECT().Start(gomock.All(
 			gomock.Cond(func(postOpts any) bool { return postOpts.(activation.PostSetupOpts).DataDir == opts.DataDir }),
@@ -611,7 +618,7 @@ func TestSmesherService(t *testing.T) {
 			gomock.Cond(
 				func(postOpts any) bool { return postOpts.(activation.PostSetupOpts).MaxFileSize == opts.MaxFileSize },
 			),
-		)).Return(nil)
+		), nodeID).Return(nil)
 		res, err := c.StartSmeshing(ctx, &pb.StartSmeshingRequest{
 			Opts:     opts,
 			Coinbase: coinbase,
@@ -622,7 +629,7 @@ func TestSmesherService(t *testing.T) {
 
 	t.Run("StopSmeshing", func(t *testing.T) {
 		t.Parallel()
-		c, ctx := setupSmesherService(t)
+		c, ctx := setupSmesherService(t, nil)
 		c.smeshingProvider.EXPECT().StopSmeshing(gomock.Any()).Return(nil)
 		c.postSupervisor.EXPECT().Stop(false).Return(nil)
 		res, err := c.StopSmeshing(ctx, &pb.StopSmeshingRequest{})
@@ -632,7 +639,7 @@ func TestSmesherService(t *testing.T) {
 
 	t.Run("SmesherIDs", func(t *testing.T) {
 		t.Parallel()
-		c, ctx := setupSmesherService(t)
+		c, ctx := setupSmesherService(t, nil)
 		nodeId := types.RandomNodeID()
 		c.smeshingProvider.EXPECT().SmesherIDs().Return([]types.NodeID{nodeId})
 		res, err := c.SmesherIDs(ctx, &emptypb.Empty{})
@@ -643,7 +650,7 @@ func TestSmesherService(t *testing.T) {
 
 	t.Run("SetCoinbaseMissingArgs", func(t *testing.T) {
 		t.Parallel()
-		c, ctx := setupSmesherService(t)
+		c, ctx := setupSmesherService(t, nil)
 		_, err := c.SetCoinbase(ctx, &pb.SetCoinbaseRequest{})
 		require.Error(t, err)
 		statusCode := status.Code(err)
@@ -652,7 +659,7 @@ func TestSmesherService(t *testing.T) {
 
 	t.Run("SetCoinbase", func(t *testing.T) {
 		t.Parallel()
-		c, ctx := setupSmesherService(t)
+		c, ctx := setupSmesherService(t, nil)
 		c.smeshingProvider.EXPECT().SetCoinbase(addr1)
 		res, err := c.SetCoinbase(ctx, &pb.SetCoinbaseRequest{
 			Id: &pb.AccountId{Address: addr1.String()},
@@ -663,7 +670,7 @@ func TestSmesherService(t *testing.T) {
 
 	t.Run("Coinbase", func(t *testing.T) {
 		t.Parallel()
-		c, ctx := setupSmesherService(t)
+		c, ctx := setupSmesherService(t, nil)
 		c.smeshingProvider.EXPECT().Coinbase().Return(addr1)
 		res, err := c.Coinbase(ctx, &emptypb.Empty{})
 		require.NoError(t, err)
@@ -674,7 +681,7 @@ func TestSmesherService(t *testing.T) {
 
 	t.Run("MinGas", func(t *testing.T) {
 		t.Parallel()
-		c, ctx := setupSmesherService(t)
+		c, ctx := setupSmesherService(t, nil)
 		_, err := c.MinGas(ctx, &emptypb.Empty{})
 		require.Error(t, err)
 		statusCode := status.Code(err)
@@ -683,7 +690,7 @@ func TestSmesherService(t *testing.T) {
 
 	t.Run("SetMinGas", func(t *testing.T) {
 		t.Parallel()
-		c, ctx := setupSmesherService(t)
+		c, ctx := setupSmesherService(t, nil)
 		_, err := c.SetMinGas(ctx, &pb.SetMinGasRequest{})
 		require.Error(t, err)
 		statusCode := status.Code(err)
@@ -692,7 +699,7 @@ func TestSmesherService(t *testing.T) {
 
 	t.Run("PostSetupComputeProviders", func(t *testing.T) {
 		t.Parallel()
-		c, ctx := setupSmesherService(t)
+		c, ctx := setupSmesherService(t, nil)
 		c.postSupervisor.EXPECT().Providers().Return(nil, nil)
 		_, err := c.PostSetupProviders(ctx, &pb.PostSetupProvidersRequest{Benchmark: false})
 		require.NoError(t, err)
@@ -700,7 +707,7 @@ func TestSmesherService(t *testing.T) {
 
 	t.Run("PostSetupStatusStream", func(t *testing.T) {
 		t.Parallel()
-		c, ctx := setupSmesherService(t)
+		c, ctx := setupSmesherService(t, nil)
 		c.postSupervisor.EXPECT().Status().Return(&activation.PostSetupStatus{}).AnyTimes()
 
 		ctx, cancel := context.WithCancel(ctx)

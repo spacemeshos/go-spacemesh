@@ -5,6 +5,7 @@
 //
 //	mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./store.go
 //
+
 // Package mocks is a generated GoMock package.
 package mocks
 
@@ -49,31 +50,31 @@ func (m *MockExecutor) Exec(arg0 string, arg1 sql.Encoder, arg2 sql.Decoder) (in
 }
 
 // Exec indicates an expected call of Exec.
-func (mr *MockExecutorMockRecorder) Exec(arg0, arg1, arg2 any) *ExecutorExecCall {
+func (mr *MockExecutorMockRecorder) Exec(arg0, arg1, arg2 any) *MockExecutorExecCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockExecutor)(nil).Exec), arg0, arg1, arg2)
-	return &ExecutorExecCall{Call: call}
+	return &MockExecutorExecCall{Call: call}
 }
 
-// ExecutorExecCall wrap *gomock.Call
-type ExecutorExecCall struct {
+// MockExecutorExecCall wrap *gomock.Call
+type MockExecutorExecCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *ExecutorExecCall) Return(arg0 int, arg1 error) *ExecutorExecCall {
+func (c *MockExecutorExecCall) Return(arg0 int, arg1 error) *MockExecutorExecCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *ExecutorExecCall) Do(f func(string, sql.Encoder, sql.Decoder) (int, error)) *ExecutorExecCall {
+func (c *MockExecutorExecCall) Do(f func(string, sql.Encoder, sql.Decoder) (int, error)) *MockExecutorExecCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *ExecutorExecCall) DoAndReturn(f func(string, sql.Encoder, sql.Decoder) (int, error)) *ExecutorExecCall {
+func (c *MockExecutorExecCall) DoAndReturn(f func(string, sql.Encoder, sql.Decoder) (int, error)) *MockExecutorExecCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -87,31 +88,31 @@ func (m *MockExecutor) WithTx(arg0 context.Context, arg1 func(*sql.Tx) error) er
 }
 
 // WithTx indicates an expected call of WithTx.
-func (mr *MockExecutorMockRecorder) WithTx(arg0, arg1 any) *ExecutorWithTxCall {
+func (mr *MockExecutorMockRecorder) WithTx(arg0, arg1 any) *MockExecutorWithTxCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithTx", reflect.TypeOf((*MockExecutor)(nil).WithTx), arg0, arg1)
-	return &ExecutorWithTxCall{Call: call}
+	return &MockExecutorWithTxCall{Call: call}
 }
 
-// ExecutorWithTxCall wrap *gomock.Call
-type ExecutorWithTxCall struct {
+// MockExecutorWithTxCall wrap *gomock.Call
+type MockExecutorWithTxCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *ExecutorWithTxCall) Return(arg0 error) *ExecutorWithTxCall {
+func (c *MockExecutorWithTxCall) Return(arg0 error) *MockExecutorWithTxCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *ExecutorWithTxCall) Do(f func(context.Context, func(*sql.Tx) error) error) *ExecutorWithTxCall {
+func (c *MockExecutorWithTxCall) Do(f func(context.Context, func(*sql.Tx) error) error) *MockExecutorWithTxCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *ExecutorWithTxCall) DoAndReturn(f func(context.Context, func(*sql.Tx) error) error) *ExecutorWithTxCall {
+func (c *MockExecutorWithTxCall) DoAndReturn(f func(context.Context, func(*sql.Tx) error) error) *MockExecutorWithTxCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

@@ -5,6 +5,7 @@
 //
 //	mockgen -typed -package=mocks -destination=./mocks/vm.go -source=./vm.go
 //
+
 // Package mocks is a generated GoMock package.
 package mocks
 
@@ -48,31 +49,31 @@ func (m *MockValidationRequest) Parse() (*types.TxHeader, error) {
 }
 
 // Parse indicates an expected call of Parse.
-func (mr *MockValidationRequestMockRecorder) Parse() *ValidationRequestParseCall {
+func (mr *MockValidationRequestMockRecorder) Parse() *MockValidationRequestParseCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Parse", reflect.TypeOf((*MockValidationRequest)(nil).Parse))
-	return &ValidationRequestParseCall{Call: call}
+	return &MockValidationRequestParseCall{Call: call}
 }
 
-// ValidationRequestParseCall wrap *gomock.Call
-type ValidationRequestParseCall struct {
+// MockValidationRequestParseCall wrap *gomock.Call
+type MockValidationRequestParseCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *ValidationRequestParseCall) Return(arg0 *types.TxHeader, arg1 error) *ValidationRequestParseCall {
+func (c *MockValidationRequestParseCall) Return(arg0 *types.TxHeader, arg1 error) *MockValidationRequestParseCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *ValidationRequestParseCall) Do(f func() (*types.TxHeader, error)) *ValidationRequestParseCall {
+func (c *MockValidationRequestParseCall) Do(f func() (*types.TxHeader, error)) *MockValidationRequestParseCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *ValidationRequestParseCall) DoAndReturn(f func() (*types.TxHeader, error)) *ValidationRequestParseCall {
+func (c *MockValidationRequestParseCall) DoAndReturn(f func() (*types.TxHeader, error)) *MockValidationRequestParseCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -86,31 +87,31 @@ func (m *MockValidationRequest) Verify() bool {
 }
 
 // Verify indicates an expected call of Verify.
-func (mr *MockValidationRequestMockRecorder) Verify() *ValidationRequestVerifyCall {
+func (mr *MockValidationRequestMockRecorder) Verify() *MockValidationRequestVerifyCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockValidationRequest)(nil).Verify))
-	return &ValidationRequestVerifyCall{Call: call}
+	return &MockValidationRequestVerifyCall{Call: call}
 }
 
-// ValidationRequestVerifyCall wrap *gomock.Call
-type ValidationRequestVerifyCall struct {
+// MockValidationRequestVerifyCall wrap *gomock.Call
+type MockValidationRequestVerifyCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *ValidationRequestVerifyCall) Return(arg0 bool) *ValidationRequestVerifyCall {
+func (c *MockValidationRequestVerifyCall) Return(arg0 bool) *MockValidationRequestVerifyCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *ValidationRequestVerifyCall) Do(f func() bool) *ValidationRequestVerifyCall {
+func (c *MockValidationRequestVerifyCall) Do(f func() bool) *MockValidationRequestVerifyCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *ValidationRequestVerifyCall) DoAndReturn(f func() bool) *ValidationRequestVerifyCall {
+func (c *MockValidationRequestVerifyCall) DoAndReturn(f func() bool) *MockValidationRequestVerifyCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

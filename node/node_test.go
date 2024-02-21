@@ -280,6 +280,9 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 
 	r := require.New(t)
 	app := New(WithLog(logtest.New(t)))
+	signer, err := app.LoadOrCreateEdSigner()
+	require.NoError(t, err)
+	app.edSgn = signer // https://github.com/spacemeshos/go-spacemesh/issues/4653
 
 	run := func(c *cobra.Command, args []string) error {
 		app.Config.API.PublicListener = listener
@@ -290,7 +293,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	_, err := grpc.DialContext(
+	_, err = grpc.DialContext(
 		ctx,
 		listener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -331,6 +334,10 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 func TestSpacemeshApp_JsonServiceNotRunning(t *testing.T) {
 	r := require.New(t)
 	app := New(WithLog(logtest.New(t)))
+
+	signer, err := app.LoadOrCreateEdSigner()
+	require.NoError(t, err)
+	app.edSgn = signer // https://github.com/spacemeshos/go-spacemesh/issues/4653
 
 	// Make sure the service is not running by default
 	run := func(c *cobra.Command, args []string) error {
