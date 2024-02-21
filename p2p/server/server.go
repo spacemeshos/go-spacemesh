@@ -204,6 +204,9 @@ func (s *Server) Run(ctx context.Context) error {
 			eg.Wait()
 			return nil
 		case req := <-queue:
+			if s.metrics != nil {
+				s.metrics.inQueueLatency.Observe(time.Since(req.received).Seconds())
+			}
 			if err := limit.Wait(ctx); err != nil {
 				eg.Wait()
 				return nil
