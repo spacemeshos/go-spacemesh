@@ -112,9 +112,9 @@ func WithVerifyingOpts(opts PostProofVerifyingOpts) PostVerifierOpt {
 	}
 }
 
-func PrioritizedIDs(ids ...types.NodeID) PostVerifierOpt {
+func WithPrioritizedID(id types.NodeID) PostVerifierOpt {
 	return func(v *postVerifierOpts) {
-		v.prioritizedIds = ids
+		v.prioritizedIds = append(v.prioritizedIds, id)
 	}
 }
 

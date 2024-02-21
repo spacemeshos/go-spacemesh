@@ -27,6 +27,7 @@ func TestPostConfig(t *testing.T) {
 		smeshingProvider,
 		postSupervisor,
 		time.Second,
+		nil,
 		activation.DefaultPostSetupOpts(),
 	)
 
@@ -53,10 +54,12 @@ func TestStartSmeshingPassesCorrectSmeshingOpts(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
 	postSupervisor := grpcserver.NewMockpostSupervisor(ctrl)
+	nodeID := types.RandomNodeID() // TODO (mafa): add test where nodeID is not available
 	svc := grpcserver.NewSmesherService(
 		smeshingProvider,
 		postSupervisor,
 		time.Second,
+		&nodeID,
 		activation.DefaultPostSetupOpts(),
 	)
 
@@ -73,7 +76,7 @@ func TestStartSmeshingPassesCorrectSmeshingOpts(t *testing.T) {
 		ComputeBatchSize: config.DefaultComputeBatchSize,
 	}
 	opts.ProviderID.SetUint32(providerID)
-	postSupervisor.EXPECT().Start(opts).Return(nil)
+	postSupervisor.EXPECT().Start(opts, nodeID).Return(nil)
 	smeshingProvider.EXPECT().StartSmeshing(addr).Return(nil)
 
 	_, err = svc.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{
@@ -97,6 +100,7 @@ func TestSmesherService_PostSetupProviders(t *testing.T) {
 		smeshingProvider,
 		postSupervisor,
 		time.Second,
+		nil,
 		activation.DefaultPostSetupOpts(),
 	)
 
@@ -143,6 +147,7 @@ func TestSmesherService_PostSetupStatus(t *testing.T) {
 			smeshingProvider,
 			postSupervisor,
 			time.Second,
+			nil,
 			activation.DefaultPostSetupOpts(),
 		)
 
@@ -166,6 +171,7 @@ func TestSmesherService_PostSetupStatus(t *testing.T) {
 			smeshingProvider,
 			postSupervisor,
 			time.Second,
+			nil,
 			activation.DefaultPostSetupOpts(),
 		)
 
@@ -202,6 +208,7 @@ func TestSmesherService_PostSetupStatus(t *testing.T) {
 			smeshingProvider,
 			postSupervisor,
 			time.Second,
+			nil,
 			activation.DefaultPostSetupOpts(),
 		)
 
@@ -239,6 +246,7 @@ func TestSmesherService_SmesherID(t *testing.T) {
 		smeshingProvider,
 		postSupervisor,
 		time.Second,
+		nil,
 		activation.DefaultPostSetupOpts(),
 	)
 

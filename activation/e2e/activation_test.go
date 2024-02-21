@@ -66,12 +66,12 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		opts := opts
 		eg.Go(func() error {
 			validator := activation.NewMocknipostValidator(ctrl)
-			mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX, syncer, validator)
+			mgr, err := activation.NewPostSetupManager(cfg, logger, cdb, goldenATX, syncer, validator)
 			require.NoError(t, err)
 
 			opts.DataDir = t.TempDir()
-			initPost(t, mgr, opts)
-			t.Cleanup(launchPostSupervisor(t, logger, mgr, grpcCfg, opts))
+			initPost(t, mgr, opts, sig.NodeID())
+			t.Cleanup(launchPostSupervisor(t, logger, mgr, sig.NodeID(), grpcCfg, opts))
 
 			require.Eventually(t, func() bool {
 				_, err := svc.Client(sig.NodeID())

@@ -27,6 +27,7 @@ type SmesherService struct {
 	postSupervisor   postSupervisor
 
 	streamInterval time.Duration
+	nodeID         *types.NodeID
 	postOpts       activation.PostSetupOpts
 }
 
@@ -49,12 +50,14 @@ func NewSmesherService(
 	smeshing activation.SmeshingProvider,
 	postSupervisor postSupervisor,
 	streamInterval time.Duration,
+	nodeID *types.NodeID,
 	postOpts activation.PostSetupOpts,
 ) *SmesherService {
 	return &SmesherService{
 		smeshingProvider: smeshing,
 		postSupervisor:   postSupervisor,
 		streamInterval:   streamInterval,
+		nodeID:           nodeID,
 		postOpts:         postOpts,
 	}
 }
@@ -81,7 +84,10 @@ func (s SmesherService) StartSmeshing(
 	if err != nil {
 		status.Error(codes.InvalidArgument, err.Error())
 	}
-	if err := s.postSupervisor.Start(opts); err != nil {
+	if s.nodeID == nil {
+		return nil, status.Errorf(codes.FailedPrecondition, "node is not configured for supervised smeshing")
+	}
+	if err := s.postSupervisor.Start(opts, *s.nodeID); err != nil {
 		ctxzap.Error(ctx, "failed to start post supervisor", zap.Error(err))
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to start post supervisor: %v", err))
 	}

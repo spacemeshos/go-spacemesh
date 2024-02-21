@@ -1087,17 +1087,17 @@ func (m *MockpostSetupProvider) EXPECT() *MockpostSetupProviderMockRecorder {
 }
 
 // PrepareInitializer mocks base method.
-func (m *MockpostSetupProvider) PrepareInitializer(ctx context.Context, opts PostSetupOpts) error {
+func (m *MockpostSetupProvider) PrepareInitializer(ctx context.Context, opts PostSetupOpts, id types.NodeID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PrepareInitializer", ctx, opts)
+	ret := m.ctrl.Call(m, "PrepareInitializer", ctx, opts, id)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // PrepareInitializer indicates an expected call of PrepareInitializer.
-func (mr *MockpostSetupProviderMockRecorder) PrepareInitializer(ctx, opts any) *MockpostSetupProviderPrepareInitializerCall {
+func (mr *MockpostSetupProviderMockRecorder) PrepareInitializer(ctx, opts, id any) *MockpostSetupProviderPrepareInitializerCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PrepareInitializer", reflect.TypeOf((*MockpostSetupProvider)(nil).PrepareInitializer), ctx, opts)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PrepareInitializer", reflect.TypeOf((*MockpostSetupProvider)(nil).PrepareInitializer), ctx, opts, id)
 	return &MockpostSetupProviderPrepareInitializerCall{Call: call}
 }
 
@@ -1113,13 +1113,13 @@ func (c *MockpostSetupProviderPrepareInitializerCall) Return(arg0 error) *Mockpo
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockpostSetupProviderPrepareInitializerCall) Do(f func(context.Context, PostSetupOpts) error) *MockpostSetupProviderPrepareInitializerCall {
+func (c *MockpostSetupProviderPrepareInitializerCall) Do(f func(context.Context, PostSetupOpts, types.NodeID) error) *MockpostSetupProviderPrepareInitializerCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockpostSetupProviderPrepareInitializerCall) DoAndReturn(f func(context.Context, PostSetupOpts) error) *MockpostSetupProviderPrepareInitializerCall {
+func (c *MockpostSetupProviderPrepareInitializerCall) DoAndReturn(f func(context.Context, PostSetupOpts, types.NodeID) error) *MockpostSetupProviderPrepareInitializerCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -1163,17 +1163,17 @@ func (c *MockpostSetupProviderResetCall) DoAndReturn(f func() error) *MockpostSe
 }
 
 // StartSession mocks base method.
-func (m *MockpostSetupProvider) StartSession(context context.Context) error {
+func (m *MockpostSetupProvider) StartSession(context context.Context, id types.NodeID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StartSession", context)
+	ret := m.ctrl.Call(m, "StartSession", context, id)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // StartSession indicates an expected call of StartSession.
-func (mr *MockpostSetupProviderMockRecorder) StartSession(context any) *MockpostSetupProviderStartSessionCall {
+func (mr *MockpostSetupProviderMockRecorder) StartSession(context, id any) *MockpostSetupProviderStartSessionCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSession", reflect.TypeOf((*MockpostSetupProvider)(nil).StartSession), context)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSession", reflect.TypeOf((*MockpostSetupProvider)(nil).StartSession), context, id)
 	return &MockpostSetupProviderStartSessionCall{Call: call}
 }
 
@@ -1189,13 +1189,13 @@ func (c *MockpostSetupProviderStartSessionCall) Return(arg0 error) *MockpostSetu
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockpostSetupProviderStartSessionCall) Do(f func(context.Context) error) *MockpostSetupProviderStartSessionCall {
+func (c *MockpostSetupProviderStartSessionCall) Do(f func(context.Context, types.NodeID) error) *MockpostSetupProviderStartSessionCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockpostSetupProviderStartSessionCall) DoAndReturn(f func(context.Context) error) *MockpostSetupProviderStartSessionCall {
+func (c *MockpostSetupProviderStartSessionCall) DoAndReturn(f func(context.Context, types.NodeID) error) *MockpostSetupProviderStartSessionCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
