@@ -1187,7 +1187,7 @@ func TestHandler_ProcessAtx_OwnNotMalicious(t *testing.T) {
 	require.Nil(t, proof)
 }
 
-func testHandler_PostMalfeasanceProofs(t *testing.T, expectPublish, synced bool) {
+func testHandler_PostMalfeasanceProofs(t *testing.T, synced bool) {
 	goldenATXID := types.ATXID{2, 3, 4}
 	atxHdlr := newTestHandler(t, goldenATXID)
 
@@ -1232,7 +1232,7 @@ func testHandler_PostMalfeasanceProofs(t *testing.T, expectPublish, synced bool)
 		NIPost(gomock.Any(), gomock.Any(), goldenATXID, atx.NIPost, gomock.Any(), atx.NumUnits, gomock.Any()).
 		Return(0, &verifying.ErrInvalidIndex{Index: 2})
 	atxHdlr.mtortoise.EXPECT().OnMalfeasance(gomock.Any())
-	if expectPublish {
+	if !synced {
 		atxHdlr.mpub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, gomock.Any()).DoAndReturn(
 			func(_ context.Context, _ string, data []byte) error {
 				require.NoError(t, codec.Decode(data, &got))
@@ -1270,7 +1270,7 @@ func testHandler_PostMalfeasanceProofs(t *testing.T, expectPublish, synced bool)
 	require.NoError(t, err)
 	require.NotNil(t, proof.Received())
 	proof.SetReceived(time.Time{})
-	if expectPublish {
+	if !synced {
 		require.Equal(t, got.MalfeasanceProof, *proof)
 		require.Equal(t, atx.PublishEpoch.FirstLayer(), got.MalfeasanceProof.Layer)
 	}
@@ -1278,11 +1278,11 @@ func testHandler_PostMalfeasanceProofs(t *testing.T, expectPublish, synced bool)
 
 func TestHandler_PostMalfeasanceProofs(t *testing.T) {
 	t.Run("produced but not published during sync", func(t *testing.T) {
-		testHandler_PostMalfeasanceProofs(t, false, true)
+		testHandler_PostMalfeasanceProofs(t, true)
 	})
 
 	t.Run("produced and published during gossip", func(t *testing.T) {
-		testHandler_PostMalfeasanceProofs(t, true, false)
+		testHandler_PostMalfeasanceProofs(t, false)
 	})
 }
 
@@ -1577,7 +1577,7 @@ func TestHandler_HandleParallelGossipAtx(t *testing.T) {
 	require.NoError(t, eg.Wait())
 }
 
-func testHandler_HandleMaliciousAtx(t *testing.T, expectPublish, synced bool) {
+func testHandler_HandleMaliciousAtx(t *testing.T, synced bool) {
 	const (
 		tickSize = 3
 		units    = 4
@@ -1669,7 +1669,7 @@ func testHandler_HandleMaliciousAtx(t *testing.T, expectPublish, synced bool) {
 	atxHdlr.mtortoise.EXPECT().OnMalfeasance(gomock.Any())
 
 	var got types.MalfeasanceGossip
-	if expectPublish {
+	if !synced {
 		atxHdlr.mpub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, gomock.Any()).DoAndReturn(
 			func(_ context.Context, _ string, data []byte) error {
 				require.NoError(t, codec.Decode(data, &got))
@@ -1700,7 +1700,7 @@ func testHandler_HandleMaliciousAtx(t *testing.T, expectPublish, synced bool) {
 	proof, err := identities.GetMalfeasanceProof(atxHdlr.cdb, sig.NodeID())
 	require.NoError(t, err)
 	require.NotNil(t, proof.Received())
-	if expectPublish {
+	if !synced {
 		proof.SetReceived(time.Time{})
 		require.Equal(t, got.MalfeasanceProof, *proof)
 	}
@@ -1708,11 +1708,11 @@ func testHandler_HandleMaliciousAtx(t *testing.T, expectPublish, synced bool) {
 
 func TestHandler_HandleMaliciousAtx(t *testing.T) {
 	t.Run("produced but not published during sync", func(t *testing.T) {
-		testHandler_HandleMaliciousAtx(t, false, true)
+		testHandler_HandleMaliciousAtx(t, true)
 	})
 
 	t.Run("produced and published during gossip", func(t *testing.T) {
-		testHandler_HandleMaliciousAtx(t, true, false)
+		testHandler_HandleMaliciousAtx(t, false)
 	})
 }
 

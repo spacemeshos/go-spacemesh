@@ -541,10 +541,7 @@ func (h *Handler) HandleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte
 		gossip := types.MalfeasanceGossip{
 			MalfeasanceProof: *proof,
 		}
-		encodedProof, err := codec.Encode(&gossip)
-		if err != nil {
-			h.log.With().Fatal("failed to encode malfeasance gossip", log.Err(err))
-		}
+		encodedProof := codec.MustEncode(&gossip)
 		if err = h.publisher.Publish(ctx, pubsub.MalfeasanceProof, encodedProof); err != nil {
 			h.log.With().Error("failed to broadcast malfeasance proof", log.Err(err))
 			return fmt.Errorf("broadcast atx malfeasance proof: %w", err)
