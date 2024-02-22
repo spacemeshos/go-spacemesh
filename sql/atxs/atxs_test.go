@@ -1,6 +1,8 @@
 package atxs_test
 
 import (
+	"context"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -436,6 +438,8 @@ func TestGetIDsByEpochCached(t *testing.T) {
 	require.NoError(t, err)
 	atx5, err := newAtx(sig2, withPublishEpoch(e3))
 	require.NoError(t, err)
+	atx6, err := newAtx(sig2, withPublishEpoch(e3))
+	require.NoError(t, err)
 
 	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
 		require.NoError(t, atxs.Add(db, atx))
@@ -465,13 +469,27 @@ func TestGetIDsByEpochCached(t *testing.T) {
 		require.Equal(t, 7, db.QueryCount())
 	}
 
-	require.NoError(t, atxs.Add(db, atx5))
+	require.NoError(t, db.WithTx(context.Background(), func(tx *sql.Tx) error {
+		atxs.Add(tx, atx5)
+		return nil
+	}))
 	require.Equal(t, 8, db.QueryCount())
 
 	ids3, err := atxs.GetIDsByEpoch(db, e3)
 	require.NoError(t, err)
 	require.EqualValues(t, []types.ATXID{atx4.ID(), atx5.ID()}, ids3)
 	require.Equal(t, 8, db.QueryCount()) // not incremented after Add
+
+	require.Error(t, db.WithTx(context.Background(), func(tx *sql.Tx) error {
+		atxs.Add(tx, atx6)
+		return errors.New("fail") // rollback
+	}))
+
+	// atx6 should not be in the cache
+	ids4, err := atxs.GetIDsByEpoch(db, e3)
+	require.NoError(t, err)
+	require.EqualValues(t, []types.ATXID{atx4.ID(), atx5.ID()}, ids4)
+	require.Equal(t, 10, db.QueryCount()) // not incremented after Add
 }
 
 func TestVRFNonce(t *testing.T) {

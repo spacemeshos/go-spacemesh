@@ -49,6 +49,8 @@ type QueryCache interface {
 	// specified SliceAppender. If the entry is not cached, the method does
 	// nothing.
 	UpdateSlice(key queryCacheKey, update SliceAppender)
+	// ClearCache empties the cache
+	ClearCache()
 }
 
 // RetrieveFunc retrieves a value to be stored in the cache.
@@ -175,4 +177,14 @@ func (c *queryCache) UpdateSlice(key queryCacheKey, update SliceAppender) {
 			delete(c.values, fullCacheKey{key: key, subKey: sk})
 		}
 	}
+}
+
+func (c *queryCache) ClearCache() {
+	if c == nil {
+		return
+	}
+	c.Lock()
+	defer c.Unlock()
+	// No need to clear c.subKeyMap as it's only used to keep track of possible subkeys for each key
+	c.values = nil
 }
