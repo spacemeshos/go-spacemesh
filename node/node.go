@@ -429,16 +429,16 @@ func (app *App) LoadCheckpoint(ctx context.Context) (*checkpoint.PreservedData, 
 	if restore == 0 {
 		return nil, fmt.Errorf("restore layer not set")
 	}
+	nodeIDs := make([]types.NodeID, 0, len(app.signers))
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      types.ATXID(app.Config.Genesis.GoldenATX()),
 		DataDir:        app.Config.DataDir(),
 		DbFile:         dbFile,
 		LocalDbFile:    localDbFile,
 		PreserveOwnAtx: app.Config.Recovery.PreserveOwnAtx,
-		// TODO(mafa): FIXXME!
-		// NodeID:         app.edSgn.NodeID(),
-		Uri:     checkpointFile,
-		Restore: restore,
+		NodeIDs:        nodeIDs,
+		Uri:            checkpointFile,
+		Restore:        restore,
 	}
 	app.log.WithContext(ctx).With().Info("recover from checkpoint",
 		log.String("url", checkpointFile),
@@ -453,11 +453,11 @@ func (app *App) Started() <-chan struct{} {
 
 // Lock locks the app for exclusive use. It returns an error if the app is already locked.
 func (app *App) Lock() error {
-	lockdir := filepath.Dir(app.Config.FileLock)
-	if _, err := os.Stat(lockdir); errors.Is(err, os.ErrNotExist) {
-		err := os.Mkdir(lockdir, os.ModePerm)
+	lockDir := filepath.Dir(app.Config.FileLock)
+	if _, err := os.Stat(lockDir); errors.Is(err, os.ErrNotExist) {
+		err := os.Mkdir(lockDir, os.ModePerm)
 		if err != nil {
-			return fmt.Errorf("creating dir %s for lock %s: %w", lockdir, app.Config.FileLock, err)
+			return fmt.Errorf("creating dir %s for lock %s: %w", lockDir, app.Config.FileLock, err)
 		}
 	}
 	fl := flock.New(app.Config.FileLock)

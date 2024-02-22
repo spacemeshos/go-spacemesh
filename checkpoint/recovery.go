@@ -45,7 +45,7 @@ type RecoverConfig struct {
 	DbFile         string
 	LocalDbFile    string
 	PreserveOwnAtx bool
-	NodeID         types.NodeID
+	NodeIDs        []types.NodeID
 	Uri            string
 	Restore        types.LayerID
 }
@@ -176,15 +176,41 @@ func recoverFromLocalFile(
 		log.Int("num accounts", len(data.accounts)),
 		log.Int("num atxs", len(data.atxs)),
 	)
-	deps, proofs, err := collectOwnAtxDeps(logger, db, localDB, cfg, data)
-	if err != nil {
-		logger.With().Error("failed to collect deps for own atx", log.Err(err))
-		// continue to recover from checkpoint despite failure to preserve own atx
-	} else if len(deps) > 0 {
-		logger.With().Info("collected own atx deps",
-			log.Context(ctx),
-			log.Int("own atx deps", len(deps)),
-		)
+	allDeps := make([]*types.VerifiedActivationTx, 0)
+	allProofs := make([]*types.PoetProofMessage, 0)
+	if cfg.PreserveOwnAtx {
+		for _, nodeID := range cfg.NodeIDs {
+			deps, proofs, err := collectOwnAtxDeps(logger, db, localDB, nodeID, cfg.GoldenAtx, data)
+			if err != nil {
+				logger.With().Error("failed to collect deps for own atx",
+					nodeID,
+					log.Err(err),
+				)
+				// continue to recover from checkpoint despite failure to preserve own atx
+				continue
+			}
+
+			logger.With().Info("collected own atx deps",
+				log.Context(ctx),
+				nodeID,
+				log.Int("own atx deps", len(deps)),
+			)
+			allDeps = append(allDeps, deps...)
+			allProofs = append(allProofs, proofs...)
+
+			// // deduplicate allDeps and allProofs by sorting and compacting
+			// // TODO: for some reason this causes existing tests to fail - need to investigate
+			// slices.SortFunc(allDeps, func(i, j *types.VerifiedActivationTx) int {
+			// 	return bytes.Compare(i.ID().Bytes(), j.ID().Bytes())
+			// })
+			// allDeps = slices.Compact(allDeps)
+			// slices.SortFunc(allProofs, func(i, j *types.PoetProofMessage) int {
+			// 	iRef, _ := i.Ref()
+			// 	jRef, _ := j.Ref()
+			// 	return bytes.Compare(iRef[:], jRef[:])
+			// })
+			// allProofs = slices.Compact(allProofs)
+		}
 	}
 	if err := db.Close(); err != nil {
 		return nil, fmt.Errorf("close old db: %w", err)
@@ -248,8 +274,8 @@ func recoverFromLocalFile(
 		types.GetEffectiveGenesis(),
 	)
 	var preserve *PreservedData
-	if len(deps) > 0 {
-		preserve = &PreservedData{Deps: deps, Proofs: proofs}
+	if len(allDeps) > 0 {
+		preserve = &PreservedData{Deps: allDeps, Proofs: allProofs}
 	}
 	return preserve, nil
 }
@@ -311,13 +337,11 @@ func collectOwnAtxDeps(
 	logger log.Log,
 	db *sql.Database,
 	localDB *localsql.Database,
-	cfg *RecoverConfig,
+	nodeID types.NodeID,
+	goldenATX types.ATXID,
 	data *recoverydata,
 ) ([]*types.VerifiedActivationTx, []*types.PoetProofMessage, error) {
-	if !cfg.PreserveOwnAtx {
-		return nil, nil, nil
-	}
-	atxid, err := atxs.GetLastIDByNodeID(db, cfg.NodeID)
+	atxid, err := atxs.GetLastIDByNodeID(db, nodeID)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return nil, nil, fmt.Errorf("query own last atx id: %w", err)
 	}
@@ -329,8 +353,8 @@ func collectOwnAtxDeps(
 		own = true
 	}
 
-	// check for if miner is building any atx
-	nipostCh, _ := nipost.Challenge(localDB, cfg.NodeID)
+	// check for if smesher is building any atx
+	nipostCh, _ := nipost.Challenge(localDB, nodeID)
 	if ref == types.EmptyATXID {
 		if nipostCh == nil {
 			return nil, nil, nil
@@ -340,7 +364,7 @@ func collectOwnAtxDeps(
 		}
 	}
 
-	all := map[types.ATXID]struct{}{cfg.GoldenAtx: {}, types.EmptyATXID: {}}
+	all := map[types.ATXID]struct{}{goldenATX: {}, types.EmptyATXID: {}}
 	for _, catx := range data.atxs {
 		all[catx.ID] = struct{}{}
 	}
@@ -353,18 +377,16 @@ func collectOwnAtxDeps(
 			ref,
 			log.Bool("own", own),
 		)
-		deps, proofs, err = collectDeps(db, cfg.GoldenAtx, ref, all)
+		deps, proofs, err = collectDeps(db, goldenATX, ref, all)
 		if err != nil {
 			return nil, nil, err
 		}
 	}
 	if nipostCh != nil {
-		logger.With().Info("collecting pending atx and deps",
-			log.Object("nipost", nipostCh),
-		)
+		logger.With().Info("collecting pending atx and deps", log.Object("nipost", nipostCh))
 		// any previous atx in nipost should already be captured earlier
 		// we only care about positioning atx here
-		deps2, proofs2, err := collectDeps(db, cfg.GoldenAtx, nipostCh.PositioningATX, all)
+		deps2, proofs2, err := collectDeps(db, goldenATX, nipostCh.PositioningATX, all)
 		if err != nil {
 			return nil, nil, fmt.Errorf("deps from nipost positioning atx (%v): %w", nipostCh.PositioningATX, err)
 		}

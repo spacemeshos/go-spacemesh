@@ -157,7 +157,7 @@ func TestRecover(t *testing.T) {
 				DbFile:         "test.sql",
 				LocalDbFile:    "local.sql",
 				PreserveOwnAtx: true,
-				NodeID:         types.NodeID{2, 3, 4},
+				NodeIDs:        []types.NodeID{types.RandomNodeID()},
 				Uri:            tc.uri,
 				Restore:        types.LayerID(recoverLayer),
 			}
@@ -204,7 +204,7 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 		DataDir:        t.TempDir(),
 		DbFile:         "test.sql",
 		PreserveOwnAtx: true,
-		NodeID:         types.NodeID{2, 3, 4},
+		NodeIDs:        []types.NodeID{types.RandomNodeID()},
 		Uri:            fmt.Sprintf("%s/snapshot-15", ts.URL),
 		Restore:        types.LayerID(recoverLayer),
 	}
@@ -254,6 +254,9 @@ func validateAndPreserveData(
 		lg,
 	)
 	mfetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	for _, vatx := range deps {
+		fmt.Println("deps", vatx.ID())
+	}
 	for i, vatx := range deps {
 		encoded, err := codec.Encode(vatx)
 		require.NoError(tb, err)
@@ -435,7 +438,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve(t *testing.T) {
 		DbFile:         "test.sql",
 		LocalDbFile:    "local.sql",
 		PreserveOwnAtx: true,
-		NodeID:         sig.NodeID(),
+		NodeIDs:        []types.NodeID{sig.NodeID()},
 		Uri:            fmt.Sprintf("%s/snapshot-15", ts.URL),
 		Restore:        types.LayerID(recoverLayer),
 	}
@@ -507,7 +510,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
 		DbFile:         "test.sql",
 		LocalDbFile:    "local.sql",
 		PreserveOwnAtx: true,
-		NodeID:         sig.NodeID(),
+		NodeIDs:        []types.NodeID{sig.NodeID()},
 		Uri:            fmt.Sprintf("%s/snapshot-15", ts.URL),
 		Restore:        types.LayerID(recoverLayer),
 	}
@@ -596,7 +599,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_Still_Initializing(t *testing.T)
 		DbFile:         "test.sql",
 		LocalDbFile:    "local.sql",
 		PreserveOwnAtx: true,
-		NodeID:         sig.NodeID(),
+		NodeIDs:        []types.NodeID{sig.NodeID()},
 		Uri:            fmt.Sprintf("%s/snapshot-15", ts.URL),
 		Restore:        types.LayerID(recoverLayer),
 	}
@@ -682,7 +685,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 		DbFile:         "test.sql",
 		LocalDbFile:    "local.sql",
 		PreserveOwnAtx: true,
-		NodeID:         sig.NodeID(),
+		NodeIDs:        []types.NodeID{sig.NodeID()},
 		Uri:            fmt.Sprintf("%s/snapshot-15", ts.URL),
 		Restore:        types.LayerID(recoverLayer),
 	}
@@ -764,7 +767,7 @@ func TestRecover_OwnAtxNotInCheckpoint_DontPreserve(t *testing.T) {
 		DbFile:         "test.sql",
 		LocalDbFile:    "local.sql",
 		PreserveOwnAtx: false,
-		NodeID:         sig.NodeID(),
+		NodeIDs:        []types.NodeID{sig.NodeID()},
 		Uri:            fmt.Sprintf("%s/snapshot-15", ts.URL),
 		Restore:        types.LayerID(recoverLayer),
 	}
@@ -834,7 +837,7 @@ func TestRecover_OwnAtxInCheckpoint(t *testing.T) {
 		DbFile:         "test.sql",
 		LocalDbFile:    "local.sql",
 		PreserveOwnAtx: true,
-		NodeID:         nid,
+		NodeIDs:        []types.NodeID{nid},
 		Uri:            fmt.Sprintf("%s/snapshot-15", ts.URL),
 		Restore:        types.LayerID(recoverLayer),
 	}
