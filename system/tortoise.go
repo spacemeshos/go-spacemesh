@@ -20,4 +20,5 @@ type Tortoise interface {
 	OnApplied(types.LayerID, types.Hash32) bool
 	OnMalfeasance(types.NodeID)
 	OnAtx(*types.AtxTortoiseData)
+	GetMissingActiveSet(types.EpochID, []types.ATXID) []types.ATXID
 }

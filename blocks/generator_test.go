@@ -19,8 +19,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
-	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare3"
+	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -158,16 +158,7 @@ func createModifiedATXs(
 		vAtx, err := onAtx(atx)
 		require.NoError(tb, err)
 
-		data.Add(
-			vAtx.TargetEpoch(),
-			vAtx.SmesherID,
-			vAtx.ID(),
-			vAtx.GetWeight(),
-			vAtx.BaseTickHeight(),
-			vAtx.TickHeight(),
-			0,
-			false,
-		)
+		data.AddFromHeader(vAtx.ToHeader(), 0, false)
 		atxes = append(atxes, atx)
 	}
 	return signers, atxes

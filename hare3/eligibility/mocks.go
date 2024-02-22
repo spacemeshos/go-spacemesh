@@ -240,45 +240,6 @@ func (c *RolacleCalcEligibilityCall) DoAndReturn(f func(context.Context, types.L
 	return c
 }
 
-// IsIdentityActiveOnConsensusView mocks base method.
-func (m *MockRolacle) IsIdentityActiveOnConsensusView(arg0 context.Context, arg1 types.NodeID, arg2 types.LayerID) (bool, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsIdentityActiveOnConsensusView", arg0, arg1, arg2)
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// IsIdentityActiveOnConsensusView indicates an expected call of IsIdentityActiveOnConsensusView.
-func (mr *MockRolacleMockRecorder) IsIdentityActiveOnConsensusView(arg0, arg1, arg2 any) *RolacleIsIdentityActiveOnConsensusViewCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsIdentityActiveOnConsensusView", reflect.TypeOf((*MockRolacle)(nil).IsIdentityActiveOnConsensusView), arg0, arg1, arg2)
-	return &RolacleIsIdentityActiveOnConsensusViewCall{Call: call}
-}
-
-// RolacleIsIdentityActiveOnConsensusViewCall wrap *gomock.Call
-type RolacleIsIdentityActiveOnConsensusViewCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *RolacleIsIdentityActiveOnConsensusViewCall) Return(arg0 bool, arg1 error) *RolacleIsIdentityActiveOnConsensusViewCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *RolacleIsIdentityActiveOnConsensusViewCall) Do(f func(context.Context, types.NodeID, types.LayerID) (bool, error)) *RolacleIsIdentityActiveOnConsensusViewCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *RolacleIsIdentityActiveOnConsensusViewCall) DoAndReturn(f func(context.Context, types.NodeID, types.LayerID) (bool, error)) *RolacleIsIdentityActiveOnConsensusViewCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // Proof mocks base method.
 func (m *MockRolacle) Proof(arg0 context.Context, arg1 *signing.VRFSigner, arg2 types.LayerID, arg3 uint32) (types.VrfSignature, error) {
 	m.ctrl.T.Helper()

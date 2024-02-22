@@ -36,7 +36,6 @@ var (
 	malformedError     = validationError.WithLabelValues("malformed")
 	signatureError     = validationError.WithLabelValues("signature")
 	oracleError        = validationError.WithLabelValues("oracle")
-	maliciousError     = validationError.WithLabelValues("malicious")
 
 	droppedMessages = metrics.NewCounter(
 		"dropped_msgs",

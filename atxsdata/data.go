@@ -13,6 +13,7 @@ const minCapacity = 2
 
 type ATX struct {
 	Node               types.NodeID
+	Coinbase           types.Address
 	Weight             uint64
 	BaseHeight, Height uint64
 	Nonce              types.VRFPostIndex
@@ -97,9 +98,25 @@ func (d *Data) OnEpoch(applied types.EpochID) {
 	}
 }
 
+// AddFromVerified extracts relevant fields from verified atx and adds them together with nonce and malicious flag.
+func (d *Data) AddFromHeader(atx *types.ActivationTxHeader, nonce types.VRFPostIndex, malicious bool) {
+	d.Add(
+		atx.TargetEpoch(),
+		atx.NodeID,
+		atx.Coinbase,
+		atx.ID,
+		atx.GetWeight(),
+		atx.BaseTickHeight,
+		atx.TickHeight(),
+		nonce,
+		malicious,
+	)
+}
+
 func (d *Data) Add(
 	epoch types.EpochID,
 	node types.NodeID,
+	coinbase types.Address,
 	atx types.ATXID,
 	weight, baseHeight, height uint64,
 	nonce types.VRFPostIndex,
@@ -123,6 +140,7 @@ func (d *Data) Add(
 	}
 	data := &ATX{
 		Node:       node,
+		Coinbase:   coinbase,
 		Weight:     weight,
 		BaseHeight: baseHeight,
 		Height:     height,
@@ -133,6 +151,13 @@ func (d *Data) Add(
 	if data.Malicious {
 		d.malicious[node] = struct{}{}
 	}
+}
+
+func (d *Data) IsMalicious(node types.NodeID) bool {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	_, exists := d.malicious[node]
+	return exists
 }
 
 func (d *Data) SetMalicious(node types.NodeID) {

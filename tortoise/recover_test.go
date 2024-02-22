@@ -8,8 +8,9 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/tortoise/sim"
 )
@@ -17,7 +18,7 @@ import (
 type recoveryAdapter struct {
 	testing.TB
 	*Tortoise
-	db *datastore.CachedDB
+	db sql.Executor
 
 	prev types.LayerID
 }
@@ -51,7 +52,13 @@ func TestRecoverState(t *testing.T) {
 	}
 	require.Equal(t, last.Sub(1), verified)
 
-	tortoise2, err := Recover(context.Background(), s.GetState(0).DB, last, WithLogger(logtest.New(t)), WithConfig(cfg))
+	tortoise2, err := Recover(
+		context.Background(),
+		s.GetState(0).DB.Executor,
+		last,
+		WithLogger(logtest.New(t)),
+		WithConfig(cfg),
+	)
 	require.NoError(t, err)
 	verified = tortoise2.LatestComplete()
 	require.Equal(t, last.Sub(1), verified)
@@ -68,7 +75,13 @@ func TestRecoverEmpty(t *testing.T) {
 
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
-	tortoise, err := Recover(context.Background(), s.GetState(0).DB, 100, WithLogger(logtest.New(t)), WithConfig(cfg))
+	tortoise, err := Recover(
+		context.Background(),
+		s.GetState(0).DB.Executor,
+		100,
+		WithLogger(logtest.New(t)),
+		WithConfig(cfg),
+	)
 	require.NoError(t, err)
 	require.NotNil(t, tortoise)
 }
@@ -88,13 +101,18 @@ func TestRecoverWithOpinion(t *testing.T) {
 	var last result.Layer
 	for _, rst := range trt.Updates() {
 		if rst.Verified {
-			require.NoError(t, layers.SetMeshHash(s.GetState(0).DB, rst.Layer, rst.Opinion))
+			require.NoError(t, layers.SetMeshHash(s.GetState(0).DB.Executor, rst.Layer, rst.Opinion))
+		}
+		for _, block := range rst.Blocks {
+			if block.Valid {
+				require.NoError(t, blocks.SetValid(s.GetState(0).DB.Executor, block.Header.ID))
+			}
 		}
 		last = rst
 	}
 	tortoise, err := Recover(
 		context.Background(),
-		s.GetState(0).DB,
+		s.GetState(0).DB.Executor,
 		last.Layer,
 		WithLogger(logtest.New(t)),
 		WithConfig(cfg),
@@ -125,11 +143,22 @@ func TestResetPending(t *testing.T) {
 	require.Len(t, updates1, n+1)
 	require.Equal(t, types.GetEffectiveGenesis(), updates1[0].Layer)
 	require.Equal(t, last, updates1[n].Layer)
-	for _, item := range updates1[:n/2] {
-		require.NoError(t, layers.SetMeshHash(s.GetState(0).DB, item.Layer, item.Opinion))
+	for _, rst := range updates1[:n/2] {
+		require.NoError(t, layers.SetMeshHash(s.GetState(0).DB, rst.Layer, rst.Opinion))
+		for _, block := range rst.Blocks {
+			if block.Valid {
+				require.NoError(t, blocks.SetValid(s.GetState(0).DB.Executor, block.Header.ID))
+			}
+		}
 	}
 
-	recovered, err := Recover(context.Background(), s.GetState(0).DB, last, WithLogger(logtest.New(t)), WithConfig(cfg))
+	recovered, err := Recover(
+		context.Background(),
+		s.GetState(0).DB.Executor,
+		last,
+		WithLogger(logtest.New(t)),
+		WithConfig(cfg),
+	)
 	require.NoError(t, err)
 	updates2 := recovered.Updates()
 	require.Len(t, updates2, n/2+1)
@@ -159,11 +188,22 @@ func TestWindowRecovery(t *testing.T) {
 	require.Len(t, updates1, n+1)
 	require.Equal(t, types.GetEffectiveGenesis(), updates1[0].Layer)
 	require.Equal(t, last, updates1[n].Layer)
-	for _, item := range updates1[:epochSize*4] {
-		require.NoError(t, layers.SetMeshHash(s.GetState(0).DB, item.Layer, item.Opinion))
+	for _, rst := range updates1[:epochSize*4] {
+		require.NoError(t, layers.SetMeshHash(s.GetState(0).DB, rst.Layer, rst.Opinion))
+		for _, block := range rst.Blocks {
+			if block.Valid {
+				require.NoError(t, blocks.SetValid(s.GetState(0).DB.Executor, block.Header.ID))
+			}
+		}
 	}
 
-	recovered, err := Recover(context.Background(), s.GetState(0).DB, last, WithLogger(logtest.New(t)), WithConfig(cfg))
+	recovered, err := Recover(
+		context.Background(),
+		s.GetState(0).DB.Executor,
+		last,
+		WithLogger(logtest.New(t)),
+		WithConfig(cfg),
+	)
 	require.NoError(t, err)
 	updates2 := recovered.Updates()
 	require.Len(t, updates2, epochSize+1)

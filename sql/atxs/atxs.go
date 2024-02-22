@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
 )
 
 const (
@@ -15,7 +16,7 @@ const (
 )
 
 const fullQuery = `select id, atx, base_tick_height, tick_count, pubkey,
-	effective_num_units, received, epoch, sequence, coinbase from atxs`
+	effective_num_units, received, epoch, sequence, coinbase, validity from atxs`
 
 type decoderCallback func(*types.VerifiedActivationTx, error) bool
 
@@ -48,6 +49,7 @@ func decoder(fn decoderCallback) sql.Decoder {
 		a.PublishEpoch = types.EpochID(uint32(stmt.ColumnInt(7)))
 		a.Sequence = uint64(stmt.ColumnInt64(8))
 		stmt.ColumnBytes(9, a.Coinbase[:])
+		a.SetValidity(types.Validity(stmt.ColumnInt(10)))
 		v, err := a.Verify(baseTickHeight, tickCount)
 		if err != nil {
 			return fn(nil, err)
@@ -132,7 +134,7 @@ func CommitmentATX(db sql.Executor, nodeID types.NodeID) (id types.ATXID, err er
 	}
 
 	if rows, err := db.Exec(`
-		select commitment_atx from atxs 
+		select commitment_atx from atxs
 		where pubkey = ?1 and commitment_atx is not null
 		order by epoch desc
 		limit 1;`, enc, dec); err != nil {
@@ -155,7 +157,7 @@ func GetFirstIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, e
 	}
 
 	if rows, err := db.Exec(`
-		select id from atxs 
+		select id from atxs
 		where pubkey = ?1
 		order by epoch asc
 		limit 1;`, enc, dec); err != nil {
@@ -178,7 +180,7 @@ func GetLastIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, er
 	}
 
 	if rows, err := db.Exec(`
-		select id from atxs 
+		select id from atxs
 		where pubkey = ?1
 		order by epoch desc, received desc
 		limit 1;`, enc, dec); err != nil {
@@ -311,12 +313,13 @@ func Add(db sql.Executor, atx *types.VerifiedActivationTx) error {
 		stmt.BindInt64(10, int64(atx.TickCount()))
 		stmt.BindInt64(11, int64(atx.Sequence))
 		stmt.BindBytes(12, atx.Coinbase.Bytes())
+		stmt.BindInt64(13, int64(atx.Validity()))
 	}
 
 	_, err = db.Exec(`
 		insert into atxs (id, epoch, effective_num_units, commitment_atx, nonce,
-			 pubkey, atx, received, base_tick_height, tick_count, sequence, coinbase)
-		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12);`, enc, nil)
+			 pubkey, atx, received, base_tick_height, tick_count, sequence, coinbase, validity)
+		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13);`, enc, nil)
 	if err != nil {
 		return fmt.Errorf("insert ATX ID %v: %w", atx.ID(), err)
 	}
@@ -325,43 +328,63 @@ func Add(db sql.Executor, atx *types.VerifiedActivationTx) error {
 	return nil
 }
 
+type Filter func(types.ATXID) bool
+
+func FilterAll(types.ATXID) bool { return true }
+
 // GetIDWithMaxHeight returns the ID of the atx from the last 2 epoch with the highest (or tied for the highest)
 // tick height. It is possible that some poet servers are faster than others and the network ends up having its
 // highest ticked atx still in previous epoch and the atxs building on top of it have not been published yet.
 // Selecting from the last two epochs to strike a balance between being fair to honest miners while not giving
 // unfair advantage for malicious actors who retroactively publish a high tick atx many epochs back.
-func GetIDWithMaxHeight(db sql.Executor, pref types.NodeID) (types.ATXID, error) {
+func GetIDWithMaxHeight(db sql.Executor, pref types.NodeID, filter Filter) (types.ATXID, error) {
+	if filter == nil {
+		filter = FilterAll
+	}
 	var (
-		rst types.ATXID
-		max uint64
+		rst     types.ATXID
+		highest uint64
 	)
 	dec := func(stmt *sql.Statement) bool {
 		var id types.ATXID
 		stmt.ColumnBytes(0, id[:])
-		height := uint64(stmt.ColumnInt64(1)) + uint64(stmt.ColumnInt64(2))
-		if height >= max {
+		height := uint64(stmt.ColumnInt64(1))
+
+		switch {
+		case height < highest:
+			// Results are ordered by height, so we can stop once we see a lower height.
+			return false
+		case height > highest && filter(id):
+			highest = height
+			rst = id
+			// We can stop on the first ATX if `pref` is empty.
+			return pref != types.EmptyNodeID
+		case height == highest && filter(id):
+			// prefer atxs from `pref`
 			var smesher types.NodeID
-			stmt.ColumnBytes(3, smesher[:])
-			if height > max {
-				max = height
+			stmt.ColumnBytes(2, smesher[:])
+			if smesher == pref {
 				rst = id
-			} else if pref != types.EmptyNodeID && smesher == pref {
-				// height is equal. prefer atxs from `pref`
-				rst = id
+				return false
 			}
+			return true
 		}
+
 		return true
 	}
 
-	if rows, err := db.Exec(`
-		select id, base_tick_height, tick_count, pubkey
-		from atxs left join identities using(pubkey)
-		where identities.pubkey is null and epoch >= (select max(epoch) from atxs)-1
-		order by epoch desc;`, nil, dec); err != nil {
-		return types.ATXID{}, fmt.Errorf("select positioning atx: %w", err)
-	} else if rows == 0 {
-		return types.ATXID{}, sql.ErrNotFound
+	_, err := db.Exec(`
+	SELECT id, base_tick_height + tick_count AS height, pubkey
+	FROM atxs LEFT JOIN identities using(pubkey)
+	WHERE identities.pubkey is null and epoch >= (select max(epoch) from atxs)-1
+	ORDER BY height DESC, epoch DESC;`, nil, dec)
+	switch {
+	case err != nil:
+		return types.ATXID{}, fmt.Errorf("selecting high-tick atx: %w", err)
+	case rst == types.EmptyATXID:
+		return types.ATXID{}, fmt.Errorf("selecting high-tick atx: %w", sql.ErrNotFound)
 	}
+
 	return rst, nil
 }
 
@@ -399,7 +422,7 @@ func LatestN(db sql.Executor, n int) ([]CheckpointAtx, error) {
 	}
 
 	if rows, err := db.Exec(`
-		select id, epoch, effective_num_units, base_tick_height, tick_count, pubkey, sequence, coinbase 
+		select id, epoch, effective_num_units, base_tick_height, tick_count, pubkey, sequence, coinbase
 		from (
 			select row_number() over (partition by pubkey order by epoch desc) RowNum,
 			id, epoch, effective_num_units, base_tick_height, tick_count, pubkey, sequence, coinbase from atxs
@@ -481,4 +504,51 @@ func IterateAtxs(db sql.Executor, from, to types.EpochID, fn func(*types.Verifie
 		return err
 	}
 	return derr
+}
+
+func SetValidity(db sql.Executor, id types.ATXID, validity types.Validity) error {
+	_, err := db.Exec("UPDATE atxs SET validity = ?1 where id = ?2;",
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(validity))
+			stmt.BindBytes(2, id.Bytes())
+		}, nil,
+	)
+	if err != nil {
+		return fmt.Errorf("setting validity %v: %w", id, err)
+	}
+	return nil
+}
+
+func IterateAtxsOps(
+	db sql.Executor,
+	operations builder.Operations,
+	fn func(*types.VerifiedActivationTx) bool,
+) error {
+	var derr error
+	_, err := db.Exec(
+		fullQuery+builder.FilterFrom(operations),
+		builder.BindingsFrom(operations),
+		decoder(func(atx *types.VerifiedActivationTx, err error) bool {
+			if atx != nil {
+				return fn(atx)
+			}
+			derr = err
+			return derr == nil
+		}))
+	if err != nil {
+		return err
+	}
+	return derr
+}
+
+func CountAtxsByOps(db sql.Executor, operations builder.Operations) (count uint32, err error) {
+	_, err = db.Exec(
+		"SELECT count(*) FROM atxs"+builder.FilterFrom(operations),
+		builder.BindingsFrom(operations),
+		func(stmt *sql.Statement) bool {
+			count = uint32(stmt.ColumnInt32(0))
+			return true
+		},
+	)
+	return
 }

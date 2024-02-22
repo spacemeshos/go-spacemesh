@@ -31,7 +31,7 @@ func createTestHandler(t testing.TB, opts ...sql.Opt) *testHandler {
 	lg := logtest.New(t)
 	cdb := datastore.NewCachedDB(sql.InMemory(opts...), lg)
 	return &testHandler{
-		handler: newHandler(cdb, datastore.NewBlobStore(cdb.Database), lg),
+		handler: newHandler(cdb, datastore.NewBlobStore(cdb), lg),
 		cdb:     cdb,
 	}
 }

@@ -45,7 +45,6 @@ const (
 // NIPostBuilder holds the required state and dependencies to create Non-Interactive Proofs of Space-Time (NIPost).
 type NIPostBuilder struct {
 	localDB *localsql.Database
-	signer  *signing.EdSigner
 
 	poetProvers map[string]poetClient
 	poetDB      poetDbAPI
@@ -74,7 +73,6 @@ func NewNIPostBuilder(
 	postService postService,
 	poetServers []types.PoetServer,
 	lg *zap.Logger,
-	signer *signing.EdSigner,
 	poetCfg PoetConfig,
 	layerClock layerClock,
 	opts ...NIPostBuilderOption,
@@ -90,7 +88,6 @@ func NewNIPostBuilder(
 
 	b := &NIPostBuilder{
 		localDB: db,
-		signer:  signer,
 
 		poetProvers: poetClients,
 		poetDB:      poetDB,
@@ -106,23 +103,62 @@ func NewNIPostBuilder(
 	return b, nil
 }
 
-func (nb *NIPostBuilder) ResetState() error {
-	if err := nipost.ClearPoetRegistrations(nb.localDB, nb.signer.NodeID()); err != nil {
+func (nb *NIPostBuilder) ResetState(nodeId types.NodeID) error {
+	if err := nipost.ClearPoetRegistrations(nb.localDB, nodeId); err != nil {
 		return fmt.Errorf("clear poet registrations: %w", err)
 	}
-	if err := nipost.RemoveNIPost(nb.localDB, nb.signer.NodeID()); err != nil {
+	if err := nipost.RemoveNIPost(nb.localDB, nodeId); err != nil {
 		return fmt.Errorf("remove nipost: %w", err)
 	}
 	return nil
 }
 
-func (nb *NIPostBuilder) proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error) {
-	client, err := nb.postService.Client(nb.signer.NodeID())
-	if err != nil {
-		return nil, nil, err
-	}
+func (nb *NIPostBuilder) Proof(
+	ctx context.Context,
+	nodeID types.NodeID,
+	challenge []byte,
+) (*types.Post, *types.PostInfo, error) {
+	started := false
+	retries := 0
+	for {
+		client, err := nb.postService.Client(nodeID)
+		if err != nil {
+			select {
+			case <-ctx.Done():
+				if started {
+					events.EmitPostFailure(nodeID)
+				}
+				return nil, nil, ctx.Err()
+			case <-time.After(2 * time.Second): // Wait a few seconds and try connecting again
+				retries++
+				if retries%10 == 0 { // every 20 seconds inform user about lost connection (for remote post service)
+					// TODO(mafa): emit event warning user about lost connection
+					nb.log.Warn("post service not connected - waiting for reconnection",
+						zap.Stringer("service id", nodeID),
+						zap.Error(err),
+					)
+				}
+				continue
+			}
+		}
+		if !started {
+			events.EmitPostStart(nodeID, challenge)
+			started = true
+		}
 
-	return client.Proof(ctx, challenge)
+		retries = 0
+		post, postInfo, err := client.Proof(ctx, challenge)
+		switch {
+		case errors.Is(err, ErrPostClientClosed):
+			continue
+		case err != nil:
+			events.EmitPostFailure(nodeID)
+			return nil, nil, err
+		default: // err == nil
+			events.EmitPostComplete(nodeID, challenge)
+			return post, postInfo, err
+		}
+	}
 }
 
 // BuildNIPost uses the given challenge to build a NIPost.
@@ -130,6 +166,7 @@ func (nb *NIPostBuilder) proof(ctx context.Context, challenge []byte) (*types.Po
 // publish a proof - a process that takes about an epoch.
 func (nb *NIPostBuilder) BuildNIPost(
 	ctx context.Context,
+	signer *signing.EdSigner,
 	challenge *types.NIPostChallenge,
 ) (*nipost.NIPostState, error) {
 	logger := nb.log.With(log.ZContext(ctx))
@@ -169,7 +206,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 	)
 
 	// Phase 0: Submit challenge to PoET services.
-	count, err := nipost.PoetRegistrationCount(nb.localDB, nb.signer.NodeID()) // TODO(mafa): when are these cleared?
+	count, err := nipost.PoetRegistrationCount(nb.localDB, signer.NodeID())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get poet registration count: %w", err)
 	}
@@ -187,10 +224,10 @@ func (nb *NIPostBuilder) BuildNIPost(
 
 		submitCtx, cancel := context.WithDeadline(ctx, poetRoundStart)
 		defer cancel()
-		if err := nb.submitPoetChallenges(submitCtx, poetProofDeadline, challenge.Hash().Bytes()); err != nil {
+		if err := nb.submitPoetChallenges(submitCtx, signer, poetProofDeadline, challenge.Hash().Bytes()); err != nil {
 			return nil, fmt.Errorf("submitting to poets: %w", err)
 		}
-		count, err := nipost.PoetRegistrationCount(nb.localDB, nb.signer.NodeID())
+		count, err := nipost.PoetRegistrationCount(nb.localDB, signer.NodeID())
 		if err != nil {
 			return nil, fmt.Errorf("failed to get poet registration count: %w", err)
 		}
@@ -200,7 +237,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 	}
 
 	// Phase 1: query PoET services for proofs
-	poetProofRef, membership, err := nipost.PoetProofRef(nb.localDB, nb.signer.NodeID())
+	poetProofRef, membership, err := nipost.PoetProofRef(nb.localDB, signer.NodeID())
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		nb.log.Warn("cannot get poet proof ref", zap.Error(err))
 	}
@@ -218,21 +255,21 @@ func (nb *NIPostBuilder) BuildNIPost(
 			)
 		}
 
-		events.EmitPoetWaitProof(challenge.PublishEpoch, challenge.TargetEpoch(), time.Until(poetRoundEnd))
-		poetProofRef, membership, err = nb.getBestProof(ctx, challenge.Hash(), challenge.PublishEpoch)
+		events.EmitPoetWaitProof(challenge.PublishEpoch, challenge.TargetEpoch(), poetRoundEnd)
+		poetProofRef, membership, err = nb.getBestProof(ctx, signer.NodeID(), challenge.Hash(), challenge.PublishEpoch)
 		if err != nil {
 			return nil, &PoetSvcUnstableError{msg: "getBestProof failed", source: err}
 		}
 		if poetProofRef == types.EmptyPoetProofRef {
 			return nil, &PoetSvcUnstableError{source: ErrPoetProofNotReceived}
 		}
-		if err := nipost.UpdatePoetProofRef(nb.localDB, nb.signer.NodeID(), poetProofRef, membership); err != nil {
+		if err := nipost.UpdatePoetProofRef(nb.localDB, signer.NodeID(), poetProofRef, membership); err != nil {
 			nb.log.Warn("cannot persist poet proof ref", zap.Error(err))
 		}
 	}
 
 	// Phase 2: Post execution.
-	nipostState, err := nipost.NIPost(nb.localDB, nb.signer.NodeID())
+	nipostState, err := nipost.NIPost(nb.localDB, signer.NodeID())
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		nb.log.Warn("cannot get nipost", zap.Error(err))
 	}
@@ -254,14 +291,10 @@ func (nb *NIPostBuilder) BuildNIPost(
 
 		nb.log.Info("starting post execution", zap.Binary("challenge", poetProofRef[:]))
 		startTime := time.Now()
-		events.EmitPostStart(poetProofRef[:])
-
-		proof, postInfo, err := nb.proof(postCtx, poetProofRef[:])
+		proof, postInfo, err := nb.Proof(postCtx, signer.NodeID(), poetProofRef[:])
 		if err != nil {
-			events.EmitPostFailure()
 			return nil, fmt.Errorf("failed to generate Post: %w", err)
 		}
-		events.EmitPostComplete(poetProofRef[:])
 		postGenDuration := time.Since(startTime)
 		nb.log.Info("finished post execution", zap.Duration("duration", postGenDuration))
 		metrics.PostDuration.Set(float64(postGenDuration.Nanoseconds()))
@@ -279,7 +312,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 			NumUnits: postInfo.NumUnits,
 			VRFNonce: *postInfo.Nonce,
 		}
-		if err := nipost.AddNIPost(nb.localDB, nb.signer.NodeID(), nipostState); err != nil {
+		if err := nipost.AddNIPost(nb.localDB, signer.NodeID(), nipostState); err != nil {
 			nb.log.Warn("cannot persist nipost state", zap.Error(err))
 		}
 	}
@@ -300,6 +333,7 @@ func withConditionalTimeout(ctx context.Context, timeout time.Duration) (context
 // Submit the challenge to a single PoET.
 func (nb *NIPostBuilder) submitPoetChallenge(
 	ctx context.Context,
+	nodeID types.NodeID,
 	deadline time.Time,
 	client poetClient,
 	prefix, challenge []byte,
@@ -321,7 +355,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 		ctx,
 		powParams.Challenge,
 		challenge,
-		nb.signer.NodeID().Bytes(),
+		nodeID.Bytes(),
 		powParams.Difficulty,
 	)
 	metrics.PoetPowDuration.Set(float64(time.Since(startTime).Nanoseconds()))
@@ -333,7 +367,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 
 	submitCtx, cancel := withConditionalTimeout(ctx, nb.poetCfg.RequestTimeout)
 	defer cancel()
-	round, err := client.Submit(submitCtx, deadline, prefix, challenge, signature, nb.signer.NodeID(), PoetPoW{
+	round, err := client.Submit(submitCtx, deadline, prefix, challenge, signature, nodeID, PoetPoW{
 		Nonce:  nonce,
 		Params: *powParams,
 	})
@@ -342,7 +376,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 	}
 
 	logger.Info("challenge submitted to poet proving service", zap.String("round", round.ID))
-	return nipost.AddPoetRegistration(nb.localDB, nb.signer.NodeID(), nipost.PoETRegistration{
+	return nipost.AddPoetRegistration(nb.localDB, nodeID, nipost.PoETRegistration{
 		ChallengeHash: types.Hash32(challenge),
 		Address:       client.Address(),
 		RoundID:       round.ID,
@@ -353,18 +387,19 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 // Submit the challenge to all registered PoETs.
 func (nb *NIPostBuilder) submitPoetChallenges(
 	ctx context.Context,
+	signer *signing.EdSigner,
 	deadline time.Time,
 	challenge []byte,
 ) error {
-	signature := nb.signer.Sign(signing.POET, challenge)
-	prefix := bytes.Join([][]byte{nb.signer.Prefix(), {byte(signing.POET)}}, nil)
+	signature := signer.Sign(signing.POET, challenge)
+	prefix := bytes.Join([][]byte{signer.Prefix(), {byte(signing.POET)}}, nil)
 
 	g, ctx := errgroup.WithContext(ctx)
 	errChan := make(chan error, len(nb.poetProvers))
 	for _, poetClient := range nb.poetProvers {
 		client := poetClient
 		g.Go(func() error {
-			errChan <- nb.submitPoetChallenge(ctx, deadline, client, prefix, challenge, signature)
+			errChan <- nb.submitPoetChallenge(ctx, signer.NodeID(), deadline, client, prefix, challenge, signature)
 			return nil
 		})
 	}
@@ -411,6 +446,7 @@ func membersContainChallenge(members []types.Member, challenge types.Hash32) (ui
 
 func (nb *NIPostBuilder) getBestProof(
 	ctx context.Context,
+	nodeID types.NodeID,
 	challenge types.Hash32,
 	publishEpoch types.EpochID,
 ) (types.PoetProofRef, *types.MerkleProof, error) {
@@ -418,7 +454,7 @@ func (nb *NIPostBuilder) getBestProof(
 		poet       *types.PoetProofMessage
 		membership *types.MerkleProof
 	}
-	registrations, err := nipost.PoetRegistrations(nb.localDB, nb.signer.NodeID())
+	registrations, err := nipost.PoetRegistrations(nb.localDB, nodeID)
 	if err != nil {
 		return types.PoetProofRef{}, nil, fmt.Errorf("getting poet registrations: %w", err)
 	}

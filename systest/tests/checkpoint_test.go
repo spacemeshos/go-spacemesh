@@ -25,7 +25,7 @@ import (
 
 func reuseCluster(tctx *testcontext.Context, restoreLayer uint32) (*cluster.Cluster, error) {
 	return cluster.ReuseWait(tctx,
-		cluster.WithKeys(10),
+		cluster.WithKeys(tctx.ClusterSize),
 		cluster.WithBootstrapEpochs([]int{2, 4, 5}),
 		cluster.WithSmesherFlag(cluster.CheckpointUrl(fmt.Sprintf("%s/checkpoint", cluster.BootstrapperEndpoint(0)))),
 		cluster.WithSmesherFlag(cluster.CheckpointLayer(restoreLayer)),
@@ -182,7 +182,7 @@ func TestCheckpoint(t *testing.T) {
 func ensureSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster, stop uint32) {
 	numSmeshers := cl.Total() - cl.Bootnodes()
 	var got int
-	createdch := make(chan *pb.Proposal, numSmeshers)
+	createdCh := make(chan *pb.Proposal, numSmeshers)
 	eg, _ := errgroup.WithContext(tctx)
 	for i := cl.Bootnodes(); i < cl.Total(); i++ {
 		client := cl.Client(i)
@@ -200,17 +200,17 @@ func ensureSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster
 					"status", pb.Proposal_Status_name[int32(proposal.Status)],
 				)
 				got++
-				createdch <- proposal
+				createdCh <- proposal
 				return false, nil
 			}
 			return true, nil
 		})
 	}
 	require.NoError(t, eg.Wait())
-	close(createdch)
+	close(createdCh)
 
 	uniqueSmeshers := map[types.NodeID]struct{}{}
-	for proposal := range createdch {
+	for proposal := range createdCh {
 		uniqueSmeshers[types.BytesToNodeID(proposal.Smesher.Id)] = struct{}{}
 	}
 	require.Lenf(

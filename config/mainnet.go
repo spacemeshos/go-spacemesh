@@ -19,8 +19,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
-	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/hare3"
+	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
@@ -111,8 +111,9 @@ func MainnetConfig() Config {
 			},
 			RegossipAtxInterval: 2 * time.Hour,
 			ATXGradeDelay:       30 * time.Minute,
+			PostValidDelay:      time.Duration(math.MaxInt64),
 		},
-		Genesis: &GenesisConfig{
+		Genesis: GenesisConfig{
 			GenesisTime: "2023-07-14T08:00:00Z",
 			ExtraData:   "00000000000000000001a6bc150307b5c1998045752b3c87eccf3c013036f3cc",
 			Accounts:    MainnetAccounts(),
@@ -128,7 +129,7 @@ func MainnetConfig() Config {
 			},
 		},
 		HARE3: hare3conf,
-		HareEligibility: eligConfig.Config{
+		HareEligibility: eligibility.Config{
 			ConfidenceParam: 200,
 		},
 		Certificate: blocks.CertConfig{
@@ -139,8 +140,8 @@ func MainnetConfig() Config {
 		},
 		Beacon: beacon.Config{
 			Kappa:                    40,
-			Q:                        big.NewRat(1, 3),
-			Theta:                    big.NewRat(1, 4),
+			Q:                        *big.NewRat(1, 3),
+			Theta:                    *big.NewRat(1, 4),
 			GracePeriodDuration:      10 * time.Minute,
 			ProposalDuration:         4 * time.Minute,
 			FirstVotingRoundDuration: 30 * time.Minute,
@@ -187,6 +188,7 @@ func MainnetConfig() Config {
 			Standalone:               false,
 			GossipDuration:           50 * time.Second,
 			OutOfSyncThresholdLayers: 36, // 3h
+			DisableMeshAgreement:     true,
 			DisableAtxReconciliation: true,
 		},
 		Recovery: checkpoint.DefaultConfig(),

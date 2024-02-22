@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 func TestPostSetupManager(t *testing.T) {
@@ -274,10 +275,20 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 func TestPostSetupManager_findCommitmentAtx_UsesLatestAtx(t *testing.T) {
 	mgr := newTestPostManager(t)
 
-	latestAtx := addPrevAtx(t, mgr.db, 1, mgr.signer)
-	atx, err := mgr.findCommitmentAtx(context.Background())
+	challenge := types.NIPostChallenge{
+		PublishEpoch: 1,
+	}
+	atx := types.NewActivationTx(challenge, types.Address{}, nil, 2, nil)
+	require.NoError(t, SignAndFinalizeAtx(mgr.signer, atx))
+	atx.SetEffectiveNumUnits(atx.NumUnits)
+	atx.SetReceived(time.Now())
+	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
-	require.Equal(t, latestAtx.ID(), atx)
+	require.NoError(t, atxs.Add(mgr.db, vAtx))
+
+	commitmentAtx, err := mgr.findCommitmentAtx(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, vAtx.ID(), commitmentAtx)
 }
 
 func TestPostSetupManager_findCommitmentAtx_DefaultsToGoldenAtx(t *testing.T) {
@@ -312,7 +323,12 @@ func TestPostSetupManager_getCommitmentAtx_getsCommitmentAtxFromInitialAtx(t *te
 	commitmentAtx := types.RandomATXID()
 	atx := types.NewActivationTx(types.NIPostChallenge{}, types.Address{}, nil, 1, nil)
 	atx.CommitmentATX = &commitmentAtx
-	addAtx(t, mgr.cdb, mgr.signer, atx)
+	require.NoError(t, SignAndFinalizeAtx(mgr.signer, atx))
+	atx.SetEffectiveNumUnits(atx.NumUnits)
+	atx.SetReceived(time.Now())
+	vAtx, err := atx.Verify(0, 1)
+	require.NoError(t, err)
+	require.NoError(t, atxs.Add(mgr.cdb, vAtx))
 
 	atxid, err := mgr.commitmentAtx(context.Background(), mgr.opts.DataDir)
 	require.NoError(t, err)
@@ -342,13 +358,18 @@ func newTestPostManager(tb testing.TB) *testPostManager {
 
 	goldenATXID := types.ATXID{2, 3, 4}
 
+	validator := NewMocknipostValidator(gomock.NewController(tb))
+	validator.EXPECT().
+		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		AnyTimes()
+	validator.EXPECT().VerifyChain(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	syncer := NewMocksyncer(gomock.NewController(tb))
 	synced := make(chan struct{})
 	close(synced)
 	syncer.EXPECT().RegisterForATXSynced().AnyTimes().Return(synced)
 
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
-	mgr, err := NewPostSetupManager(id, DefaultPostConfig(), zaptest.NewLogger(tb), cdb, goldenATXID, syncer)
+	mgr, err := NewPostSetupManager(id, DefaultPostConfig(), zaptest.NewLogger(tb), cdb, goldenATXID, syncer, validator)
 	require.NoError(tb, err)
 
 	return &testPostManager{

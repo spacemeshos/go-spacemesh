@@ -30,7 +30,7 @@ func DefaultPostServiceConfig() PostSupervisorConfig {
 
 	return PostSupervisorConfig{
 		PostServiceCmd: filepath.Join(filepath.Dir(path), DefaultPostServiceName),
-		NodeAddress:    "http://127.0.0.1:9093",
+		NodeAddress:    "http://127.0.0.1:9094",
 		MaxRetries:     10,
 	}
 }
@@ -44,7 +44,7 @@ func DefaultTestPostServiceConfig() PostSupervisorConfig {
 
 	return PostSupervisorConfig{
 		PostServiceCmd: filepath.Join(filepath.Dir(string(path)), "build", DefaultPostServiceName),
-		NodeAddress:    "http://127.0.0.1:9093",
+		NodeAddress:    "http://127.0.0.1:9094",
 		MaxRetries:     10,
 	}
 }
@@ -227,7 +227,6 @@ func (ps *PostSupervisor) runCmd(
 		"--labels-per-unit", strconv.FormatUint(postCfg.LabelsPerUnit, 10),
 		"--k1", strconv.FormatUint(uint64(postCfg.K1), 10),
 		"--k2", strconv.FormatUint(uint64(postCfg.K2), 10),
-		"--k3", strconv.FormatUint(uint64(postCfg.K3), 10),
 		"--pow-difficulty", postCfg.PowDifficulty.String(),
 
 		"--dir", postOpts.DataDir,
@@ -259,7 +258,6 @@ func (ps *PostSupervisor) runCmd(
 		cmdCfg.PostServiceCmd,
 		args...,
 	)
-	cmd.Dir = filepath.Dir(cmdCfg.PostServiceCmd)
 	pipe, err := cmd.StderrPipe()
 	if err != nil {
 		ps.logger.Error("setup stderr pipe for post service", zap.Error(err))

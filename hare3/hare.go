@@ -14,9 +14,9 @@ import (
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/metrics"
@@ -24,6 +24,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/beacons"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
@@ -42,8 +43,8 @@ type Config struct {
 	RoundDuration   time.Duration `mapstructure:"round-duration"`
 	// LogStats if true will log iteration statistics with INFO level at the start of the next iteration.
 	// This requires additional computation and should be used for debugging only.
-	LogStats     bool `mapstructure:"log-stats"`
-	ProtocolName string
+	LogStats     bool   `mapstructure:"log-stats"`
+	ProtocolName string `mapstructure:"protocolname"`
 }
 
 func (cfg *Config) Validate(zdist time.Duration) error {
@@ -146,7 +147,8 @@ type nodeclock interface {
 func New(
 	nodeclock nodeclock,
 	pubsub pubsub.PublishSubsciber,
-	db *datastore.CachedDB,
+	db *sql.Database,
+	atxsdata *atxsdata.Data,
 	verifier *signing.EdVerifier,
 	oracle oracle,
 	sync system.SyncStateProvider,
@@ -169,6 +171,7 @@ func New(
 		nodeclock: nodeclock,
 		pubsub:    pubsub,
 		db:        db,
+		atxsdata:  atxsdata,
 		verifier:  verifier,
 		oracle: &legacyOracle{
 			log:    zap.NewNop(),
@@ -204,7 +207,8 @@ type Hare struct {
 	// dependencies
 	nodeclock nodeclock
 	pubsub    pubsub.PublishSubsciber
-	db        *datastore.CachedDB
+	db        *sql.Database
+	atxsdata  *atxsdata.Data
 	verifier  *signing.EdVerifier
 	oracle    *legacyOracle
 	sync      system.SyncStateProvider
@@ -282,11 +286,8 @@ func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 		signatureError.Inc()
 		return fmt.Errorf("%w: invalid signature", pubsub.ErrValidationReject)
 	}
-	malicious, err := h.db.IsMalicious(msg.Sender)
-	if err != nil {
-		maliciousError.Inc()
-		return fmt.Errorf("database error %s", err.Error())
-	}
+	malicious := h.atxsdata.IsMalicious(msg.Sender)
+
 	start := time.Now()
 	g := h.oracle.validate(msg)
 	oracleLatency.Observe(time.Since(start).Seconds())
@@ -314,7 +315,7 @@ func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 			h.db, equivocation.Messages[0].SmesherID, codec.MustEncode(proof), time.Now()); err != nil {
 			h.log.Error("failed to save malicious identity", zap.Error(err))
 		}
-		h.db.CacheMalfeasanceProof(equivocation.Messages[0].SmesherID, proof)
+		h.atxsdata.SetMalicious(equivocation.Messages[0].SmesherID)
 	}
 	if !gossip {
 		droppedMessages.Inc()
@@ -521,15 +522,23 @@ func (h *Hare) proposals(session *session) []types.ProposalID {
 	var (
 		beacon   types.Beacon
 		result   []types.ProposalID
-		min, own *types.ActivationTxHeader
+		min, own *atxsdata.ATX
 	)
+	target := session.lid.GetEpoch()
+	publish := target - 1
 	for _, signer := range session.signers {
-		own, err = h.db.GetEpochAtx(session.lid.GetEpoch()-1, signer.NodeID())
-		if err != nil && !errors.Is(err, sql.ErrNotFound) {
+		atxid, err := atxs.GetIDByEpochAndNodeID(h.db, publish, signer.NodeID())
+		switch {
+		case errors.Is(err, sql.ErrNotFound):
+			// if atx is not registered for identity we will get sql.ErrNotFound
+		case err != nil:
+			h.log.Error("failed to get atx id by epoch and node id", zap.Error(err))
 			return []types.ProposalID{}
-		}
-		if min == nil || (min != nil && own != nil && own.TickHeight() < min.TickHeight()) {
-			min = own
+		default:
+			own = h.atxsdata.Get(target, atxid)
+			if min == nil || (min != nil && own != nil && own.Height < min.Height) {
+				min = own
+			}
 		}
 	}
 	if min == nil {
@@ -555,17 +564,17 @@ func (h *Hare) proposals(session *session) []types.ProposalID {
 			)
 			continue
 		}
-		hdr, err := h.db.GetAtxHeader(p.AtxID)
-		if err != nil {
+		header := h.atxsdata.Get(target, p.AtxID)
+		if header == nil {
 			h.log.Error("atx is not loaded", zap.Error(err), zap.Stringer("atxid", p.AtxID))
 			return []types.ProposalID{}
 		}
-		if hdr.BaseTickHeight >= min.TickHeight() {
+		if header.BaseHeight >= min.Height {
 			// does not vote for future proposal
 			h.log.Warn("proposal base tick height too high. skipping",
 				zap.Uint32("lid", session.lid.Uint32()),
-				zap.Uint64("proposal_height", hdr.BaseTickHeight),
-				zap.Uint64("own_height", own.TickHeight()),
+				zap.Uint64("proposal_height", header.BaseHeight),
+				zap.Uint64("own_height", own.Height),
 			)
 			continue
 		}

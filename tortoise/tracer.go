@@ -122,6 +122,7 @@ const (
 	traceUpdates
 	traceApplied
 	traceMalfeasance
+	traceRecoveredBlocks
 )
 
 type traceEvent interface {
@@ -408,7 +409,6 @@ func (a *AppliedTrace) Run(r *traceRunner) error {
 
 type BlockTrace struct {
 	Header types.BlockHeader `json:",inline"`
-	Valid  bool              `json:"v"`
 }
 
 func (b *BlockTrace) Type() eventType {
@@ -420,11 +420,7 @@ func (b *BlockTrace) New() traceEvent {
 }
 
 func (b *BlockTrace) Run(r *traceRunner) error {
-	if b.Valid {
-		r.trt.OnValidBlock(b.Header)
-	} else {
-		r.trt.OnBlock(b.Header)
-	}
+	r.trt.OnBlock(b.Header)
 	return nil
 }
 
@@ -442,6 +438,46 @@ func (m *MalfeasanceTrace) New() traceEvent {
 
 func (m *MalfeasanceTrace) Run(r *traceRunner) error {
 	r.trt.OnMalfeasance(m.ID)
+	return nil
+}
+
+type headerWithValidity struct {
+	Header types.BlockHeader `json:"header"`
+	Valid  bool              `json:"valid"`
+}
+
+func newRecoveredBlocksTrace(
+	layer types.LayerID,
+	blocks map[types.BlockHeader]bool,
+	hare *types.BlockID,
+) *RecoveredBlocksTrace {
+	rst := make([]headerWithValidity, 0, len(blocks))
+	for header, validity := range blocks {
+		rst = append(rst, headerWithValidity{header, validity})
+	}
+	return &RecoveredBlocksTrace{Layer: layer, Blocks: rst, Hare: hare}
+}
+
+type RecoveredBlocksTrace struct {
+	Layer  types.LayerID        `json:"layer"`
+	Blocks []headerWithValidity `json:"blocks"`
+	Hare   *types.BlockID       `json:"hare"`
+}
+
+func (r *RecoveredBlocksTrace) Type() eventType {
+	return traceRecoveredBlocks
+}
+
+func (r *RecoveredBlocksTrace) New() traceEvent {
+	return &RecoveredBlocksTrace{}
+}
+
+func (r *RecoveredBlocksTrace) Run(tr *traceRunner) error {
+	validity := map[types.BlockHeader]bool{}
+	for _, block := range r.Blocks {
+		validity[block.Header] = block.Valid
+	}
+	tr.trt.OnRecoveredBlocks(r.Layer, validity, r.Hare)
 	return nil
 }
 
@@ -472,6 +508,7 @@ func newEventEnum() eventEnum {
 	enum.Register(&UpdatesTrace{})
 	enum.Register(&AppliedTrace{})
 	enum.Register(&MalfeasanceTrace{})
+	enum.Register(&RecoveredBlocksTrace{})
 	return enum
 }
 

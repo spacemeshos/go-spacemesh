@@ -20,10 +20,6 @@ type meshProvider interface {
 	SetZeroBlockLayer(context.Context, types.LayerID)
 }
 
-type activeSetCache interface {
-	GetMissingActiveSet(types.EpochID, []types.ATXID) []types.ATXID
-}
-
 // fetchLogic is the interface between syncer and low-level fetching.
 // it handles all data fetching related logic (for layer or for epoch, from all peers or from any random peer ...etc).
 type fetchLogic interface {
@@ -42,26 +38,9 @@ type fetchLogic interface {
 
 // fetcher is the interface to the low-level fetching.
 type fetcher interface {
-	GetMaliciousIDs(
-		context.Context,
-		[]p2p.Peer,
-		func([]byte, p2p.Peer),
-		func(error, p2p.Peer),
-	) error
-	GetLayerData(
-		context.Context,
-		[]p2p.Peer,
-		types.LayerID,
-		func([]byte, p2p.Peer),
-		func(error, p2p.Peer),
-	) error
-	GetLayerOpinions(
-		context.Context,
-		[]p2p.Peer,
-		types.LayerID,
-		func([]byte, p2p.Peer),
-		func(error, p2p.Peer),
-	) error
+	GetMaliciousIDs(context.Context, p2p.Peer) ([]byte, error)
+	GetLayerData(context.Context, p2p.Peer, types.LayerID) ([]byte, error)
+	GetLayerOpinions(context.Context, p2p.Peer, types.LayerID) ([]byte, error)
 	GetCert(context.Context, types.LayerID, types.BlockID, []p2p.Peer) (*types.Certificate, error)
 
 	GetMalfeasanceProofs(context.Context, []types.NodeID) error

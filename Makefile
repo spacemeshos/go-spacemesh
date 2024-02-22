@@ -61,10 +61,8 @@ build: go-spacemesh get-profiler get-postrs-service
 .PHONY: build
 
 get-libs: get-postrs-lib get-postrs-service
-.PHONY: get-libs
 
 get-profiler: get-postrs-profiler
-.PHONY: get-profiler
 
 gen-p2p-identity:
 	cd cmd/gen-p2p-identity ; go build -o $(BIN_DIR)$@$(EXE) .
@@ -145,7 +143,7 @@ list-versions:
 .PHONY: list-versions
 
 dockerbuild-go:
-	DOCKER_BUILDKIT=1 docker build -t go-spacemesh:$(SHA) .
+	DOCKER_BUILDKIT=1 docker build -t go-spacemesh:$(SHA) -t $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION) .
 .PHONY: dockerbuild-go
 
 dockerpush: dockerbuild-go dockerpush-only
@@ -160,7 +158,7 @@ endif
 .PHONY: dockerpush-only
 
 dockerbuild-bs:
-	DOCKER_BUILDKIT=1 docker build -t go-spacemesh-bs:$(SHA) -f ./bootstrap.Dockerfile .
+	DOCKER_BUILDKIT=1 docker build -t go-spacemesh-bs:$(SHA) -t $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO)-bs:$(DOCKER_IMAGE_VERSION) -f ./bootstrap.Dockerfile .
 .PHONY: dockerbuild-bs
 
 dockerpush-bs: dockerbuild-bs dockerpush-bs-only

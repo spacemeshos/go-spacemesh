@@ -50,11 +50,13 @@ else
 	endif
 endif
 
-POSTRS_SETUP_REV = 0.6.5
+POSTRS_SETUP_REV = 0.7.0
 POSTRS_SETUP_ZIP = libpost-$(platform)-v$(POSTRS_SETUP_REV).zip
 POSTRS_SETUP_URL_ZIP ?= https://github.com/spacemeshos/post-rs/releases/download/v$(POSTRS_SETUP_REV)/$(POSTRS_SETUP_ZIP)
+
 POSTRS_PROFILER_ZIP = profiler-$(platform)-v$(POSTRS_SETUP_REV).zip
 POSTRS_PROFILER_URL ?= https://github.com/spacemeshos/post-rs/releases/download/v$(POSTRS_SETUP_REV)/$(POSTRS_PROFILER_ZIP)
+
 POSTRS_SERVICE_ZIP = service-$(platform)-v$(POSTRS_SETUP_REV).zip
 POSTRS_SERVICE_URL ?= https://github.com/spacemeshos/post-rs/releases/download/v$(POSTRS_SETUP_REV)/$(POSTRS_SERVICE_ZIP)
 
@@ -75,10 +77,16 @@ else
 endif
 
 BINDIR_POSTRS_SETUP_LIBS = $(foreach X,$(POSTRS_SETUP_LIBS),$(BIN_DIR)$(X))
-$(BINDIR_POSTRS_SETUP_LIBS): $(PROJ_DIR)$(POSTRS_SETUP_ZIP)
+
+# file marking libpost version
+$(BIN_DIR).libpost.version.$(POSTRS_SETUP_REV): $(PROJ_DIR)$(POSTRS_SETUP_ZIP)
+	rm -f $(BIN_DIR).libpost.version.*
 	mkdir -p $(dir $@)
-	unzip -o -j $(PROJ_DIR)$(POSTRS_SETUP_ZIP) -d $(dir $@) $(notdir $@)
 	touch $@
+
+$(BINDIR_POSTRS_SETUP_LIBS): $(BIN_DIR).libpost.version.$(POSTRS_SETUP_REV)
+	mkdir -p $(dir $@)
+	unzip -DD -o -j $(PROJ_DIR)$(POSTRS_SETUP_ZIP) -d $(dir $@) $(notdir $@)
 
 CURL_OPTIONS = --retry 10 --retry-max-time 120
 CURL_VERSION = $(shell curl --version 2>/dev/null | head -n 1 | cut -d' ' -f2)
@@ -89,17 +97,33 @@ endif
 $(PROJ_DIR)$(POSTRS_SETUP_ZIP):
 	curl -sSL $(CURL_OPTIONS) $(POSTRS_SETUP_URL_ZIP) -o $(PROJ_DIR)$(POSTRS_SETUP_ZIP)
 
-$(BIN_DIR)$(POSTRS_PROFILER_BIN):
+$(PROJ_DIR)$(POSTRS_PROFILER_ZIP):
 	curl -sSL $(CURL_OPTIONS) $(POSTRS_PROFILER_URL) -o $(PROJ_DIR)$(POSTRS_PROFILER_ZIP)
-	unzip -o -j $(PROJ_DIR)$(POSTRS_PROFILER_ZIP) -d $(BIN_DIR)
+
+# file marking profiler version
+$(BIN_DIR)/.profiler.version.$(POSTRS_SETUP_REV): $(PROJ_DIR)$(POSTRS_PROFILER_ZIP)
+	rm -f $(BIN_DIR).profiler.version.*
+	mkdir -p $(dir $@)
+	touch $@
+
+$(BIN_DIR)$(POSTRS_PROFILER_BIN): $(BIN_DIR)/.profiler.version.$(POSTRS_SETUP_REV)
+	unzip -DD -o -j $(PROJ_DIR)$(POSTRS_PROFILER_ZIP) -d $(BIN_DIR)
 	chmod +x $(BIN_DIR)$(POSTRS_PROFILER_BIN)
 
-$(BIN_DIR)$(POSTRS_SERVICE_BIN):
+$(PROJ_DIR)$(POSTRS_SERVICE_ZIP):
 	curl -sSL $(CURL_OPTIONS) $(POSTRS_SERVICE_URL) -o $(PROJ_DIR)$(POSTRS_SERVICE_ZIP)
-	unzip -o -j $(PROJ_DIR)$(POSTRS_SERVICE_ZIP) -d $(BIN_DIR)
+
+# file marking post-service version
+$(BIN_DIR)/.service.version.$(POSTRS_SETUP_REV): $(PROJ_DIR)$(POSTRS_SERVICE_ZIP)
+	rm -f $(BIN_DIR).service.version.*
+	mkdir -p $(dir $@)
+	touch $@
+
+$(BIN_DIR)$(POSTRS_SERVICE_BIN): $(BIN_DIR)/.service.version.$(POSTRS_SETUP_REV)
+	unzip -DD -o -j $(PROJ_DIR)$(POSTRS_SERVICE_ZIP) -d $(BIN_DIR)
 	chmod +x $(BIN_DIR)$(POSTRS_SERVICE_BIN)
 
-get-postrs-lib: $(PROJ_DIR)$(POSTRS_SETUP_ZIP) $(BINDIR_POSTRS_SETUP_LIBS)
+get-postrs-lib: $(BINDIR_POSTRS_SETUP_LIBS)
 get-postrs-profiler: $(BIN_DIR)$(POSTRS_PROFILER_BIN)
 get-postrs-service: $(BIN_DIR)$(POSTRS_SERVICE_BIN)
 

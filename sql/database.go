@@ -13,8 +13,7 @@ import (
 	sqlite "github.com/go-llsqlite/crawshaw"
 	"github.com/go-llsqlite/crawshaw/sqlitex"
 	"github.com/prometheus/client_golang/prometheus"
-
-	"github.com/spacemeshos/go-spacemesh/log"
+	"go.uber.org/zap"
 )
 
 var (
@@ -64,6 +63,7 @@ func defaultConf() *conf {
 		connections:   16,
 		migrations:    migrations,
 		skipMigration: map[int]struct{}{},
+		logger:        zap.NewNop(),
 	}
 }
 
@@ -75,12 +75,19 @@ type conf struct {
 	migrations    []Migration
 	enableLatency bool
 	cache         bool
+	logger        *zap.Logger
 }
 
 // WithConnections overwrites number of pooled connections.
 func WithConnections(n int) Opt {
 	return func(c *conf) {
 		c.connections = n
+	}
+}
+
+func WithLogger(logger *zap.Logger) Opt {
+	return func(c *conf) {
+		c.logger = logger
 	}
 }
 
@@ -182,7 +189,15 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 		if err != nil {
 			return nil, err
 		}
-		log.With().Info("running migrations", log.Int("current version", before))
+		after := 0
+		if len(config.migrations) > 0 {
+			after = config.migrations[len(config.migrations)-1].Order()
+		}
+		config.logger.Info("running migrations",
+			zap.String("uri", uri),
+			zap.Int("current version", before),
+			zap.Int("target version", after),
+		)
 		tx, err := db.Tx(context.Background())
 		if err != nil {
 			return nil, err
@@ -238,8 +253,17 @@ type Database struct {
 	queryCount atomic.Int64
 }
 
-func (db *Database) getTx(ctx context.Context, initstmt string) (*Tx, error) {
+func (db *Database) getConn(ctx context.Context) *sqlite.Conn {
+	start := time.Now()
 	conn := db.pool.Get(ctx)
+	if conn != nil {
+		connWaitLatency.Observe(time.Since(start).Seconds())
+	}
+	return conn
+}
+
+func (db *Database) getTx(ctx context.Context, initstmt string) (*Tx, error) {
+	conn := db.getConn(ctx)
 	if conn == nil {
 		return nil, ErrNoConnection
 	}
@@ -304,7 +328,7 @@ func (db *Database) WithTxImmediate(ctx context.Context, exec func(*Tx) error) e
 // If application needs to control statement execution lifetime use one of the transaction.
 func (db *Database) Exec(query string, encoder Encoder, decoder Decoder) (int, error) {
 	db.queryCount.Add(1)
-	conn := db.pool.Get(context.Background())
+	conn := db.getConn(context.Background())
 	if conn == nil {
 		return 0, ErrNoConnection
 	}

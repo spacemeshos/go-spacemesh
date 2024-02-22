@@ -73,6 +73,7 @@ func createFetch(tb testing.TB) *testFetch {
 		BatchSize:            3,
 		QueueSize:            1000,
 		RequestTimeout:       3 * time.Second,
+		RequestHardTimeout:   10 * time.Second,
 		MaxRetriesForRequest: 3,
 		GetAtxsConcurrency:   DefaultConfig().GetAtxsConcurrency,
 	}
@@ -186,24 +187,22 @@ func TestFetch_RequestHashBatchFromPeers(t *testing.T) {
 				Data: []byte("b"),
 			}
 			f.mHashS.EXPECT().
-				Request(gomock.Any(), peer, gomock.Any(), gomock.Any(), gomock.Any()).
-				DoAndReturn(
-					func(_ context.Context, _ p2p.Peer, req []byte, okFunc func([]byte), _ func(error)) error {
-						if tc.nErr != nil {
-							return tc.nErr
-						}
-						var rb RequestBatch
-						err := codec.Decode(req, &rb)
-						require.NoError(t, err)
-						resBatch := ResponseBatch{
-							ID:        rb.ID,
-							Responses: []ResponseMessage{res0, res1},
-						}
-						bts, err := codec.Encode(&resBatch)
-						require.NoError(t, err)
-						okFunc(bts)
-						return nil
-					})
+				Request(gomock.Any(), peer, gomock.Any()).
+				DoAndReturn(func(_ context.Context, _ p2p.Peer, req []byte) ([]byte, error) {
+					if tc.nErr != nil {
+						return nil, tc.nErr
+					}
+					var rb RequestBatch
+					err := codec.Decode(req, &rb)
+					require.NoError(t, err)
+					resBatch := ResponseBatch{
+						ID:        rb.ID,
+						Responses: []ResponseMessage{res0, res1},
+					}
+					bts, err := codec.Encode(&resBatch)
+					require.NoError(t, err)
+					return bts, nil
+				})
 
 			var p0, p1 []*promise
 			// query each hash twice
@@ -253,28 +252,26 @@ func TestFetch_Loop_BatchRequestMax(t *testing.T) {
 	h2 := types.RandomHash()
 	h3 := types.RandomHash()
 	f.mHashS.EXPECT().
-		Request(gomock.Any(), peer, gomock.Any(), gomock.Any(), gomock.Any()).
-		DoAndReturn(
-			func(_ context.Context, _ p2p.Peer, req []byte, okFunc func([]byte), _ func(error)) error {
-				var rb RequestBatch
-				err := codec.Decode(req, &rb)
-				require.NoError(t, err)
-				resps := make([]ResponseMessage, 0, len(rb.Requests))
-				for _, r := range rb.Requests {
-					resps = append(resps, ResponseMessage{
-						Hash: r.Hash,
-						Data: []byte("a"),
-					})
-				}
-				resBatch := ResponseBatch{
-					ID:        rb.ID,
-					Responses: resps,
-				}
-				bts, err := codec.Encode(&resBatch)
-				require.NoError(t, err)
-				okFunc(bts)
-				return nil
-			}).
+		Request(gomock.Any(), peer, gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ p2p.Peer, req []byte) ([]byte, error) {
+			var rb RequestBatch
+			err := codec.Decode(req, &rb)
+			require.NoError(t, err)
+			resps := make([]ResponseMessage, 0, len(rb.Requests))
+			for _, r := range rb.Requests {
+				resps = append(resps, ResponseMessage{
+					Hash: r.Hash,
+					Data: []byte("a"),
+				})
+			}
+			resBatch := ResponseBatch{
+				ID:        rb.ID,
+				Responses: resps,
+			}
+			bts, err := codec.Encode(&resBatch)
+			require.NoError(t, err)
+			return bts, nil
+		}).
 		Times(2)
 	// 3 requests with batch size 2 -> 2 sends
 
@@ -335,12 +332,14 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 		BatchTimeout:         2000 * time.Minute, // make sure we never hit the batch timeout
 		BatchSize:            3,
 		QueueSize:            1000,
-		RequestTimeout:       time.Second * time.Duration(3),
+		RequestTimeout:       3 * time.Second,
+		RequestHardTimeout:   10 * time.Second,
 		MaxRetriesForRequest: 3,
 	}
 	p2pconf := p2p.DefaultConfig()
 	p2pconf.Listen = p2p.MustParseAddresses("/ip4/127.0.0.1/tcp/0")
 	p2pconf.DataDir = t.TempDir()
+	p2pconf.IP4Blocklist = nil
 
 	// Good host
 	h, err := p2p.New(ctx, lg, p2pconf, []byte{}, []byte{})

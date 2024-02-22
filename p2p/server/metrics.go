@@ -36,19 +36,31 @@ var (
 		"requests counter",
 		[]string{protoLabel, "state"},
 	)
+	clientRequests = metrics.NewCounter(
+		"client_requests",
+		namespace,
+		"client request counter",
+		[]string{protoLabel, "state"})
 	clientLatency = metrics.NewHistogramWithBuckets(
 		"client_latency_seconds",
 		namespace,
 		"latency since initiating a request",
 		[]string{protoLabel, "result"},
-		prometheus.ExponentialBuckets(0.01, 2, 10),
+		prometheus.ExponentialBuckets(0.01, 2, 20),
 	)
 	serverLatency = metrics.NewHistogramWithBuckets(
 		"server_latency_seconds",
 		namespace,
 		"latency since accepting new stream",
 		[]string{protoLabel},
-		prometheus.ExponentialBuckets(0.01, 2, 10),
+		prometheus.ExponentialBuckets(0.01, 2, 20),
+	)
+	inQueueLatency = metrics.NewHistogramWithBuckets(
+		"in_queue_latency_seconds",
+		namespace,
+		"latency spent in queue",
+		[]string{protoLabel},
+		prometheus.ExponentialBuckets(0.01, 2, 20),
 	)
 )
 
@@ -58,8 +70,13 @@ func newTracker(protocol string) *tracker {
 		queue:                queue.WithLabelValues(protocol),
 		targetRps:            targetRps.WithLabelValues(protocol),
 		completed:            requests.WithLabelValues(protocol, "completed"),
+		failed:               requests.WithLabelValues(protocol, "failed"),
 		accepted:             requests.WithLabelValues(protocol, "accepted"),
 		dropped:              requests.WithLabelValues(protocol, "dropped"),
+		clientSucceeded:      clientRequests.WithLabelValues(protocol, "succeeded"),
+		clientFailed:         clientRequests.WithLabelValues(protocol, "failed"),
+		clientServerError:    clientRequests.WithLabelValues(protocol, "server_error"),
+		inQueueLatency:       inQueueLatency.WithLabelValues(protocol),
 		serverLatency:        serverLatency.WithLabelValues(protocol),
 		clientLatency:        clientLatency.WithLabelValues(protocol, "success"),
 		clientLatencyFailure: clientLatency.WithLabelValues(protocol, "failure"),
@@ -71,8 +88,13 @@ type tracker struct {
 	queue                               prometheus.Gauge
 	targetRps                           prometheus.Gauge
 	completed                           prometheus.Counter
+	failed                              prometheus.Counter
 	accepted                            prometheus.Counter
 	dropped                             prometheus.Counter
+	clientSucceeded                     prometheus.Counter
+	clientFailed                        prometheus.Counter
+	clientServerError                   prometheus.Counter
+	inQueueLatency                      prometheus.Observer
 	serverLatency                       prometheus.Observer
 	clientLatency, clientLatencyFailure prometheus.Observer
 }

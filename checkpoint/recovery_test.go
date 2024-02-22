@@ -252,7 +252,6 @@ func validateAndPreserveData(
 		mreceiver,
 		mtrtl,
 		lg,
-		activation.PoetConfig{},
 	)
 	mfetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	for i, vatx := range deps {
@@ -266,7 +265,7 @@ func validateAndPreserveData(
 				InitialNIPostChallenge(&vatx.ActivationTx.NIPostChallenge, gomock.Any(), goldenAtx).
 				AnyTimes()
 			mvalidator.EXPECT().
-				Post(gomock.Any(), vatx.SmesherID, *vatx.CommitmentATX, vatx.InitialPost, gomock.Any(), vatx.NumUnits)
+				Post(gomock.Any(), vatx.SmesherID, *vatx.CommitmentATX, vatx.InitialPost, gomock.Any(), vatx.NumUnits, gomock.Any())
 			mvalidator.EXPECT().
 				VRFNonce(vatx.SmesherID, *vatx.CommitmentATX, vatx.VRFNonce, gomock.Any(), vatx.NumUnits)
 		} else {
@@ -274,8 +273,9 @@ func validateAndPreserveData(
 		}
 		mvalidator.EXPECT().PositioningAtx(vatx.PositioningATX, cdb, goldenAtx, vatx.PublishEpoch)
 		mvalidator.EXPECT().
-			NIPost(gomock.Any(), vatx.SmesherID, gomock.Any(), vatx.NIPost, gomock.Any(), vatx.NumUnits).
+			NIPost(gomock.Any(), vatx.SmesherID, gomock.Any(), vatx.NIPost, gomock.Any(), vatx.NumUnits, gomock.Any()).
 			Return(uint64(1111111), nil)
+		mvalidator.EXPECT().IsVerifyingFullPost().AnyTimes().Return(true)
 		mreceiver.EXPECT().OnAtx(gomock.Any())
 		mtrtl.EXPECT().OnAtx(gomock.Any())
 		require.NoError(tb, atxHandler.HandleSyncedAtx(context.Background(), vatx.ID().Hash32(), "self", encoded))
