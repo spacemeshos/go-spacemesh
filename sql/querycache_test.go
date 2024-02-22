@@ -87,6 +87,13 @@ func TestCacheSlice(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, 4242, v)
+
+	c.ClearCache()
+	s, err = WithCachedValue(c, QueryCacheKey("tst", "foo"), func() ([]string, error) {
+		return []string{"new"}, nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, []string{"new"}, s)
 }
 
 func TestNoCache(t *testing.T) {
