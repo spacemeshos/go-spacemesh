@@ -627,6 +627,25 @@ func TestSmesherService(t *testing.T) {
 		require.Equal(t, int32(code.Code_OK), res.Status.Code)
 	})
 
+	t.Run("StartSmeshingMultiSetup", func(t *testing.T) {
+		t.Parallel()
+		opts := &pb.PostSetupOpts{}
+		opts.DataDir = t.TempDir()
+		opts.NumUnits = 1
+		opts.MaxFileSize = 1024
+
+		coinbase := &pb.AccountId{Address: addr1.String()}
+
+		c, ctx := setupSmesherService(t, nil) // in multi smeshing setup the node id is nil and start smeshing should fail
+		res, err := c.StartSmeshing(ctx, &pb.StartSmeshingRequest{
+			Opts:     opts,
+			Coinbase: coinbase,
+		})
+		require.Equal(t, codes.FailedPrecondition, status.Code(err))
+		require.ErrorContains(t, err, "node is not configured for supervised smeshing")
+		require.Nil(t, res)
+	})
+
 	t.Run("StopSmeshing", func(t *testing.T) {
 		t.Parallel()
 		c, ctx := setupSmesherService(t, nil)

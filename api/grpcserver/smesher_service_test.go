@@ -54,7 +54,7 @@ func TestStartSmeshingPassesCorrectSmeshingOpts(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
 	postSupervisor := grpcserver.NewMockpostSupervisor(ctrl)
-	nodeID := types.RandomNodeID() // TODO (mafa): add test where nodeID is not available
+	nodeID := types.RandomNodeID()
 	svc := grpcserver.NewSmesherService(
 		smeshingProvider,
 		postSupervisor,
@@ -90,6 +90,44 @@ func TestStartSmeshingPassesCorrectSmeshingOpts(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
+}
+
+func TestStartSmeshingFailsMultiSmeshing(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
+	postSupervisor := grpcserver.NewMockpostSupervisor(ctrl)
+	svc := grpcserver.NewSmesherService(
+		smeshingProvider,
+		postSupervisor,
+		time.Second,
+		nil, // no nodeID in multi smesher setup
+		activation.DefaultPostSetupOpts(),
+	)
+
+	types.SetNetworkHRP("stest")
+	providerID := uint32(7)
+	opts := activation.PostSetupOpts{
+		DataDir:          "data-dir",
+		NumUnits:         1,
+		MaxFileSize:      1024,
+		Throttle:         true,
+		Scrypt:           config.DefaultLabelParams(),
+		ComputeBatchSize: config.DefaultComputeBatchSize,
+	}
+	opts.ProviderID.SetUint32(providerID)
+
+	_, err := svc.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{
+		Coinbase: &pb.AccountId{Address: "stest1qqqqqqrs60l66w5uksxzmaznwq6xnhqfv56c28qlkm4a5"},
+		Opts: &pb.PostSetupOpts{
+			DataDir:     "data-dir",
+			NumUnits:    1,
+			MaxFileSize: 1024,
+			ProviderId:  &providerID,
+			Throttle:    true,
+		},
+	})
+	require.Equal(t, codes.FailedPrecondition, status.Code(err))
+	require.ErrorContains(t, err, "node is not configured for supervised smeshing")
 }
 
 func TestSmesherService_PostSetupProviders(t *testing.T) {
