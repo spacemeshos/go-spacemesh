@@ -17,3 +17,11 @@ func newQueryLatency() *prometheus.HistogramVec {
 		prometheus.ExponentialBuckets(100_000, 2, 20),
 	)
 }
+
+var connWaitLatency = metrics.NewHistogramWithBuckets(
+	"conn_wait_seconds",
+	namespace,
+	"time spent in waiting for a connection from a pool",
+	[]string{},
+	prometheus.ExponentialBuckets(0.01, 2, 20),
+).WithLabelValues()
