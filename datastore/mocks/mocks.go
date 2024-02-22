@@ -78,6 +78,44 @@ func (c *ExecutorExecCall) DoAndReturn(f func(string, sql.Encoder, sql.Decoder) 
 	return c
 }
 
+// QueryCache mocks base method.
+func (m *MockExecutor) QueryCache() sql.QueryCache {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "QueryCache")
+	ret0, _ := ret[0].(sql.QueryCache)
+	return ret0
+}
+
+// QueryCache indicates an expected call of QueryCache.
+func (mr *MockExecutorMockRecorder) QueryCache() *ExecutorQueryCacheCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryCache", reflect.TypeOf((*MockExecutor)(nil).QueryCache))
+	return &ExecutorQueryCacheCall{Call: call}
+}
+
+// ExecutorQueryCacheCall wrap *gomock.Call
+type ExecutorQueryCacheCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *ExecutorQueryCacheCall) Return(arg0 sql.QueryCache) *ExecutorQueryCacheCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *ExecutorQueryCacheCall) Do(f func() sql.QueryCache) *ExecutorQueryCacheCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *ExecutorQueryCacheCall) DoAndReturn(f func() sql.QueryCache) *ExecutorQueryCacheCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // WithTx mocks base method.
 func (m *MockExecutor) WithTx(arg0 context.Context, arg1 func(*sql.Tx) error) error {
 	m.ctrl.T.Helper()

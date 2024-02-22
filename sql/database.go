@@ -363,6 +363,11 @@ func (db *Database) QueryCount() int {
 	return int(db.queryCount.Load())
 }
 
+// Return database's QueryCache.
+func (db *Database) QueryCache() QueryCache {
+	return db.queryCache
+}
+
 func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (int, error) {
 	stmt, err := conn.Prepare(query)
 	if err != nil {

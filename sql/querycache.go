@@ -5,6 +5,8 @@ import (
 	"sync"
 )
 
+var NullQueryCache QueryCache = (*queryCache)(nil)
+
 type queryCacheKey struct {
 	Kind string
 	Key  string
