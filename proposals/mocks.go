@@ -515,3 +515,102 @@ func (c *layerClockLayerToTimeCall) DoAndReturn(f func(types.LayerID) time.Time)
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
+
+// MockproposalsConsumer is a mock of proposalsConsumer interface.
+type MockproposalsConsumer struct {
+	ctrl     *gomock.Controller
+	recorder *MockproposalsConsumerMockRecorder
+}
+
+// MockproposalsConsumerMockRecorder is the mock recorder for MockproposalsConsumer.
+type MockproposalsConsumerMockRecorder struct {
+	mock *MockproposalsConsumer
+}
+
+// NewMockproposalsConsumer creates a new mock instance.
+func NewMockproposalsConsumer(ctrl *gomock.Controller) *MockproposalsConsumer {
+	mock := &MockproposalsConsumer{ctrl: ctrl}
+	mock.recorder = &MockproposalsConsumerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockproposalsConsumer) EXPECT() *MockproposalsConsumerMockRecorder {
+	return m.recorder
+}
+
+// IsKnown mocks base method.
+func (m *MockproposalsConsumer) IsKnown(arg0 types.LayerID, arg1 types.ProposalID) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsKnown", arg0, arg1)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsKnown indicates an expected call of IsKnown.
+func (mr *MockproposalsConsumerMockRecorder) IsKnown(arg0, arg1 any) *proposalsConsumerIsKnownCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsKnown", reflect.TypeOf((*MockproposalsConsumer)(nil).IsKnown), arg0, arg1)
+	return &proposalsConsumerIsKnownCall{Call: call}
+}
+
+// proposalsConsumerIsKnownCall wrap *gomock.Call
+type proposalsConsumerIsKnownCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *proposalsConsumerIsKnownCall) Return(arg0 bool) *proposalsConsumerIsKnownCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *proposalsConsumerIsKnownCall) Do(f func(types.LayerID, types.ProposalID) bool) *proposalsConsumerIsKnownCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *proposalsConsumerIsKnownCall) DoAndReturn(f func(types.LayerID, types.ProposalID) bool) *proposalsConsumerIsKnownCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// OnProposal mocks base method.
+func (m *MockproposalsConsumer) OnProposal(p *types.Proposal) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "OnProposal", p)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// OnProposal indicates an expected call of OnProposal.
+func (mr *MockproposalsConsumerMockRecorder) OnProposal(p any) *proposalsConsumerOnProposalCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnProposal", reflect.TypeOf((*MockproposalsConsumer)(nil).OnProposal), p)
+	return &proposalsConsumerOnProposalCall{Call: call}
+}
+
+// proposalsConsumerOnProposalCall wrap *gomock.Call
+type proposalsConsumerOnProposalCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *proposalsConsumerOnProposalCall) Return(arg0 error) *proposalsConsumerOnProposalCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *proposalsConsumerOnProposalCall) Do(f func(*types.Proposal) error) *proposalsConsumerOnProposalCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *proposalsConsumerOnProposalCall) DoAndReturn(f func(*types.Proposal) error) *proposalsConsumerOnProposalCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}

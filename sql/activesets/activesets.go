@@ -49,6 +49,18 @@ func Get(db sql.Executor, id types.Hash32) (*types.EpochActiveSet, error) {
 	return &rst, nil
 }
 
+func Has(db sql.Executor, id []byte) (bool, error) {
+	rows, err := db.Exec(
+		"select 1 from activesets where id = ?1;",
+		func(stmt *sql.Statement) { stmt.BindBytes(1, id) },
+		nil,
+	)
+	if err != nil {
+		return false, fmt.Errorf("has activeset %s: %w", id, err)
+	}
+	return rows > 0, nil
+}
+
 func GetBlob(db sql.Executor, id []byte) ([]byte, error) {
 	var rst []byte
 	rows, err := db.Exec("select active_set from activesets where id = ?1;",

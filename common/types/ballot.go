@@ -68,6 +68,8 @@ type Ballot struct {
 	ballotID BallotID
 	// malicious is set to true if smesher that produced this ballot is known to be malicious.
 	malicious bool
+	// beacon that this ballot references either via EpochData or RefBallot
+	beacon Beacon
 }
 
 func (b Ballot) Equal(other Ballot) bool {
@@ -288,6 +290,14 @@ func (b *Ballot) SetMalicious() {
 // IsMalicious returns true if ballot is malicious.
 func (b *Ballot) IsMalicious() bool {
 	return b.malicious
+}
+
+func (b *Ballot) Beacon() Beacon {
+	return b.beacon
+}
+
+func (b *Ballot) SetBeacon(beacon Beacon) {
+	b.beacon = beacon
 }
 
 // MarshalLogObject implements logging encoder for Ballot.

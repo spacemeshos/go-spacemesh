@@ -65,6 +65,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/proposals"
+	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/prune"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -747,6 +748,7 @@ func (app *App) initServices(ctx context.Context) error {
 	proposalListener := proposals.NewHandler(
 		app.db,
 		app.atxsdata,
+		app.hare3,
 		app.edVerifier,
 		app.host,
 		fetcherWrapped,
@@ -815,8 +817,10 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 	app.certifier.Register(app.edSgn)
 
+	proposalsStore := store.New(store.WithFirstLayer(app.clock.CurrentLayer()))
+
 	flog := app.addLogger(Fetcher, lg)
-	fetcher := fetch.NewFetch(app.cachedDB, app.host,
+	fetcher := fetch.NewFetch(app.cachedDB, proposalsStore, app.host,
 		fetch.WithContext(ctx),
 		fetch.WithConfig(app.Config.FETCH),
 		fetch.WithLogger(flog),
@@ -853,8 +857,17 @@ func (app *App) initServices(ctx context.Context) error {
 		return err
 	}
 	logger := app.addLogger(HareLogger, lg).Zap()
+
 	app.hare3 = hare3.New(
-		app.clock, app.host, app.db, app.atxsdata, app.edVerifier, app.hOracle, newSyncer, patrol,
+		app.clock,
+		app.host,
+		app.db,
+		app.atxsdata,
+		proposalsStore,
+		app.edVerifier,
+		app.hOracle,
+		newSyncer,
+		patrol,
 		hare3.WithLogger(logger),
 		hare3.WithConfig(app.Config.HARE3),
 	)
@@ -873,6 +886,7 @@ func (app *App) initServices(ctx context.Context) error {
 	app.blockGen = blocks.NewGenerator(
 		app.db,
 		app.atxsdata,
+		proposalsStore,
 		executor,
 		msh,
 		fetcherWrapped,
