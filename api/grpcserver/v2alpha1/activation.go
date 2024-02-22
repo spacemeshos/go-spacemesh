@@ -64,35 +64,65 @@ func (s *ActivationStreamService) Stream(
 			return status.Errorf(codes.Unavailable, "can't send header")
 		}
 	}
-	ops, err := toAtxOperations(toAtxRequest(request))
-	if err != nil {
-		return status.Error(codes.InvalidArgument, err.Error())
-	}
-	var ierr error
-	if err := atxs.IterateAtxsOps(s.db, ops, func(atx *types.VerifiedActivationTx) bool {
-		ierr = stream.Send(&spacemeshv2alpha1.Activation{Versioned: &spacemeshv2alpha1.Activation_V1{V1: toAtx(atx)}})
-		return ierr == nil
-	}); err != nil {
-		return status.Error(codes.Internal, err.Error())
-	}
-	if sub == nil {
-		return nil
-	}
+
+	dbChan := make(chan *types.VerifiedActivationTx, 1<<10)
+	errChan := make(chan error, 1)
+	// send db data to chan to avoid buffer overflow
+	go func() {
+		ops, err := toAtxOperations(toAtxRequest(request))
+		if err != nil {
+			select {
+			case errChan <- status.Error(codes.InvalidArgument, err.Error()):
+			default:
+				ctxzap.Error(stream.Context(), "unable to send error", zap.Error(err))
+			}
+			return
+		}
+		if err := atxs.IterateAtxsOps(s.db, ops, func(atx *types.VerifiedActivationTx) bool {
+			dbChan <- atx
+			return true
+		}); err != nil {
+			select {
+			case errChan <- status.Error(codes.Internal, err.Error()):
+			default:
+				ctxzap.Error(stream.Context(), "unable to send error", zap.Error(err))
+			}
+			return
+		}
+		close(dbChan)
+	}()
 	for {
 		select {
 		case <-stream.Context().Done():
 			return nil
-		case <-sub.Full():
-			return status.Error(codes.Canceled, "buffer overflow")
-		case rst := <-sub.Out():
-			err := stream.Send(&spacemeshv2alpha1.Activation{
-				Versioned: &spacemeshv2alpha1.Activation_V1{V1: toAtx(rst.VerifiedActivationTx)},
-			})
-			switch {
-			case errors.Is(err, io.EOF):
-				return nil
-			case err != nil:
+		case err := <-errChan:
+			return err
+		case atx, ok := <-dbChan:
+			if !ok {
+				dbChan = nil
+				continue
+			}
+			err := stream.Send(&spacemeshv2alpha1.Activation{Versioned: &spacemeshv2alpha1.Activation_V1{V1: toAtx(atx)}})
+			if err != nil {
 				return status.Error(codes.Internal, err.Error())
+			}
+		default:
+			if sub != nil {
+				select {
+				case <-sub.Full():
+					return status.Error(codes.Canceled, "buffer overflow")
+				case rst := <-sub.Out():
+					err := stream.Send(&spacemeshv2alpha1.Activation{
+						Versioned: &spacemeshv2alpha1.Activation_V1{V1: toAtx(rst.VerifiedActivationTx)},
+					})
+					switch {
+					case errors.Is(err, io.EOF):
+						return nil
+					case err != nil:
+						return status.Error(codes.Internal, err.Error())
+					}
+				default:
+				}
 			}
 		}
 	}

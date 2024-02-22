@@ -57,41 +57,72 @@ func (s *RewardStreamService) Stream(
 			return status.Errorf(codes.Unavailable, "can't send header")
 		}
 	}
-	ops, err := toRewardOperations(toRewardRequest(request))
-	if err != nil {
-		return status.Error(codes.InvalidArgument, err.Error())
-	}
-	var ierr error
-	if err := rewards.IterateRewardsOps(s.db, ops, func(rwd *types.Reward) bool {
-		ierr = stream.Send(&spacemeshv2alpha1.Reward{Versioned: &spacemeshv2alpha1.Reward_V1{V1: toReward(rwd)}})
-		return ierr == nil
-	}); err != nil {
-		return status.Error(codes.Internal, err.Error())
-	}
-	if sub == nil {
-		return nil
-	}
+
+	dbChan := make(chan *types.Reward, 1<<10)
+	errChan := make(chan error, 1)
+	// send db data to chan to avoid buffer overflow
+	go func() {
+		ops, err := toRewardOperations(toRewardRequest(request))
+		if err != nil {
+			select {
+			case errChan <- status.Error(codes.InvalidArgument, err.Error()):
+			default:
+				ctxzap.Error(stream.Context(), "unable to send error", zap.Error(err))
+			}
+			return
+		}
+		if err := rewards.IterateRewardsOps(s.db, ops, func(rwd *types.Reward) bool {
+			dbChan <- rwd
+			return true
+		}); err != nil {
+			select {
+			case errChan <- status.Error(codes.Internal, err.Error()):
+			default:
+				ctxzap.Error(stream.Context(), "unable to send error", zap.Error(err))
+			}
+			return
+		}
+		close(dbChan)
+	}()
+
 	for {
 		select {
 		case <-stream.Context().Done():
 			return nil
-		case <-sub.Full():
-			return status.Error(codes.Canceled, "buffer overflow")
-		case rst := <-sub.Out():
-			err := stream.Send(&spacemeshv2alpha1.Reward{
-				Versioned: &spacemeshv2alpha1.Reward_V1{V1: toReward(&types.Reward{
-					Layer:       rst.Layer,
-					TotalReward: rst.Total,
-					LayerReward: rst.LayerReward,
-					Coinbase:    rst.Coinbase,
-					SmesherID:   rst.SmesherID,
-				})},
-			})
-			switch {
-			case errors.Is(err, io.EOF):
-				return nil
-			case err != nil:
+		case err := <-errChan:
+			return err
+		case rwd, ok := <-dbChan:
+			if !ok {
+				dbChan = nil
+				continue
+			}
+			err := stream.Send(&spacemeshv2alpha1.Reward{Versioned: &spacemeshv2alpha1.Reward_V1{V1: toReward(rwd)}})
+			if err != nil {
 				return status.Error(codes.Internal, err.Error())
+			}
+		default:
+			if sub != nil {
+				select {
+				case <-sub.Full():
+					return status.Error(codes.Canceled, "buffer overflow")
+				case rst := <-sub.Out():
+					err := stream.Send(&spacemeshv2alpha1.Reward{
+						Versioned: &spacemeshv2alpha1.Reward_V1{V1: toReward(&types.Reward{
+							Layer:       rst.Layer,
+							TotalReward: rst.Total,
+							LayerReward: rst.LayerReward,
+							Coinbase:    rst.Coinbase,
+							SmesherID:   rst.SmesherID,
+						})},
+					})
+					switch {
+					case errors.Is(err, io.EOF):
+						return nil
+					case err != nil:
+						return status.Error(codes.Internal, err.Error())
+					}
+				default:
+				}
 			}
 		}
 	}
