@@ -254,9 +254,6 @@ func validateAndPreserveData(
 		lg,
 	)
 	mfetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-	for _, vatx := range deps {
-		fmt.Println("deps", vatx.ID())
-	}
 	for i, vatx := range deps {
 		encoded, err := codec.Encode(vatx)
 		require.NoError(tb, err)
@@ -281,9 +278,14 @@ func validateAndPreserveData(
 		mvalidator.EXPECT().IsVerifyingFullPost().AnyTimes().Return(true)
 		mreceiver.EXPECT().OnAtx(gomock.Any())
 		mtrtl.EXPECT().OnAtx(gomock.Any())
-		require.NoError(tb, atxHandler.HandleSyncedAtx(context.Background(), vatx.ID().Hash32(), "self", encoded))
+
+		err = atxHandler.HandleSyncedAtx(context.Background(), vatx.ID().Hash32(), "self", encoded)
+		require.NoError(tb, err)
+
 		err = poetDb.ValidateAndStore(context.Background(), proofs[i])
-		require.ErrorContains(tb, err, "failed to validate poet proof for poetID 706f65745f round 1337")
+		require.ErrorContains(tb, err, fmt.Sprintf("failed to validate poet proof for poetID %s round 1337",
+			hex.EncodeToString(proofs[i].PoetServiceID[:5])),
+		)
 	}
 }
 
@@ -368,13 +370,13 @@ func createAtxChain(tb testing.TB, sig *signing.EdSigner) ([]*types.VerifiedActi
 		proofMessage := &types.PoetProofMessage{
 			PoetProof: types.PoetProof{
 				MerkleProof: shared.MerkleProof{
-					Root:         []byte{1, 2, 3},
+					Root:         types.RandomBytes(32),
 					ProvenLeaves: [][]byte{{1}, {2}},
 					ProofNodes:   [][]byte{{1}, {2}},
 				},
 				LeafCount: 1234,
 			},
-			PoetServiceID: []byte("poet_id_123456"),
+			PoetServiceID: types.RandomBytes(32),
 			RoundID:       "1337",
 		}
 		proofs = append(proofs, proofMessage)
@@ -419,6 +421,15 @@ func atxIDs(atxs []*types.VerifiedActivationTx) []types.ATXID {
 	return ids
 }
 
+func proofRefs(proofs []*types.PoetProofMessage) []types.PoetProofRef {
+	refs := make([]types.PoetProofRef, 0, len(proofs))
+	for _, proof := range proofs {
+		ref, _ := proof.Ref()
+		refs = append(refs, ref)
+	}
+	return refs
+}
+
 func TestRecover_OwnAtxNotInCheckpoint_Preserve(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, http.MethodGet, r.Method)
@@ -443,35 +454,35 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve(t *testing.T) {
 		Restore:        types.LayerID(recoverLayer),
 	}
 
-	olddb, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
+	oldDB, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
-	require.NotNil(t, olddb)
+	require.NotNil(t, oldDB)
 
 	vatxs, proofs := createAtxChain(t, sig)
-	validateAndPreserveData(t, olddb, vatxs, proofs)
+	validateAndPreserveData(t, oldDB, vatxs, proofs)
 	// the proofs are not valid, but save them anyway for the purpose of testing
 	for i, vatx := range vatxs {
 		encoded, err := codec.Encode(proofs[i])
 		require.NoError(t, err)
-		require.NoError(
-			t,
-			poets.Add(
-				olddb,
-				types.PoetProofRef(vatx.GetPoetProofRef()),
-				encoded,
-				proofs[i].PoetServiceID,
-				proofs[i].RoundID,
-			),
+
+		err = poets.Add(
+			oldDB,
+			types.PoetProofRef(vatx.GetPoetProofRef()),
+			encoded,
+			proofs[i].PoetServiceID,
+			proofs[i].RoundID,
 		)
+		require.NoError(t, err)
 	}
-	require.NoError(t, olddb.Close())
+	require.NoError(t, oldDB.Close())
 
 	preserve, err := checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg)
 	require.NoError(t, err)
 	require.NotNil(t, preserve)
+
 	// the two set of atxs have different received time. just compare IDs
 	require.ElementsMatch(t, atxIDs(vatxs[:len(vatxs)-1]), atxIDs(preserve.Deps))
-	require.ElementsMatch(t, proofs[:len(proofs)-1], preserve.Proofs)
+	require.ElementsMatch(t, proofRefs(proofs[:len(vatxs)-1]), proofRefs(preserve.Proofs))
 
 	newdb, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)

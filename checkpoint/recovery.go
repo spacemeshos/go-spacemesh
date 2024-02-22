@@ -1,12 +1,14 @@
 package checkpoint
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
 	"path/filepath"
+	"slices"
 
 	"github.com/spf13/afero"
 
@@ -198,18 +200,27 @@ func recoverFromLocalFile(
 			allDeps = append(allDeps, deps...)
 			allProofs = append(allProofs, proofs...)
 
-			// // deduplicate allDeps and allProofs by sorting and compacting
-			// // TODO: for some reason this causes existing tests to fail - need to investigate
-			// slices.SortFunc(allDeps, func(i, j *types.VerifiedActivationTx) int {
-			// 	return bytes.Compare(i.ID().Bytes(), j.ID().Bytes())
-			// })
-			// allDeps = slices.Compact(allDeps)
-			// slices.SortFunc(allProofs, func(i, j *types.PoetProofMessage) int {
-			// 	iRef, _ := i.Ref()
-			// 	jRef, _ := j.Ref()
-			// 	return bytes.Compare(iRef[:], jRef[:])
-			// })
-			// allProofs = slices.Compact(allProofs)
+			// deduplicate allDeps and allProofs by sorting and compacting
+			// then sort them by publishEpoch
+			slices.SortFunc(allDeps, func(i, j *types.VerifiedActivationTx) int {
+				return bytes.Compare(i.ID().Bytes(), j.ID().Bytes())
+			})
+			allDeps = slices.CompactFunc(allDeps, func(i, j *types.VerifiedActivationTx) bool {
+				return i.ID() == j.ID()
+			})
+			slices.SortFunc(allDeps, func(i, j *types.VerifiedActivationTx) int {
+				return int(i.PublishEpoch) - int(j.PublishEpoch)
+			})
+			slices.SortFunc(allProofs, func(i, j *types.PoetProofMessage) int {
+				iRef, _ := i.Ref()
+				jRef, _ := j.Ref()
+				return bytes.Compare(iRef[:], jRef[:])
+			})
+			allProofs = slices.CompactFunc(allProofs, func(i, j *types.PoetProofMessage) bool {
+				iRef, _ := i.Ref()
+				jRef, _ := j.Ref()
+				return iRef == jRef
+			})
 		}
 	}
 	if err := db.Close(); err != nil {
