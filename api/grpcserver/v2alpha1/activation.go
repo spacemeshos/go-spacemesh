@@ -100,6 +100,9 @@ func (s *ActivationStreamService) Stream(
 		case atx, ok := <-dbChan:
 			if !ok {
 				dbChan = nil
+				if sub == nil {
+					return nil
+				}
 				continue
 			}
 			err := stream.Send(&spacemeshv2alpha1.Activation{Versioned: &spacemeshv2alpha1.Activation_V1{V1: toAtx(atx)}})

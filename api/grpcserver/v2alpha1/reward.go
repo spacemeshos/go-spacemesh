@@ -94,6 +94,9 @@ func (s *RewardStreamService) Stream(
 		case rwd, ok := <-dbChan:
 			if !ok {
 				dbChan = nil
+				if sub == nil {
+					return nil
+				}
 				continue
 			}
 			err := stream.Send(&spacemeshv2alpha1.Reward{Versioned: &spacemeshv2alpha1.Reward_V1{V1: toReward(rwd)}})
