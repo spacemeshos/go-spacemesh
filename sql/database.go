@@ -258,7 +258,7 @@ func (db *Database) getTx(ctx context.Context, initstmt string) (*Tx, error) {
 	if conn == nil {
 		return nil, ErrNoConnection
 	}
-	tx := &Tx{db: db, conn: conn}
+	tx := &Tx{queryCache: db.queryCache, db: db, conn: conn}
 	if err := tx.begin(initstmt); err != nil {
 		return nil, err
 	}
@@ -272,6 +272,7 @@ func (db *Database) withTx(ctx context.Context, initstmt string, exec func(*Tx) 
 	}
 	defer tx.Release()
 	if err := exec(tx); err != nil {
+		tx.queryCache.ClearCache()
 		return err
 	}
 	return tx.Commit()
@@ -392,6 +393,7 @@ func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (in
 
 // Tx is wrapper for database transaction.
 type Tx struct {
+	*queryCache
 	db        *Database
 	conn      *sqlite.Conn
 	committed bool
