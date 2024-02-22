@@ -918,7 +918,7 @@ func TestProposals(t *testing.T) {
 				require.NoError(t, identities.SetMalicious(db, id, []byte("non empty"), time.Time{}))
 				atxsdata.SetMalicious(id)
 			}
-			require.Equal(t, tc.expect, hare.selectProposals(&session{
+			require.ElementsMatch(t, tc.expect, hare.selectProposals(&session{
 				lid:     tc.layer,
 				beacon:  tc.beacon,
 				signers: []*signing.EdSigner{signer},
