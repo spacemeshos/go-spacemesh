@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	CacheKindEpochATXs = "epoch-atxs"
-	CacheKindATXBlob   = "atx-blob"
+	CacheKindEpochATXs sql.QueryCacheKind = "epoch-atxs"
+	CacheKindATXBlob   sql.QueryCacheKind = "atx-blob"
 )
 
 const fullQuery = `select id, atx, base_tick_height, tick_count, pubkey,
