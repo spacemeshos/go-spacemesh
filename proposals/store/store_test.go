@@ -143,7 +143,8 @@ func TestStore_GetForLayer(t *testing.T) {
 
 func TestStore_WithFirstLayer(t *testing.T) {
 	t.Parallel()
-	s := store.New(store.WithFirstLayer(5))
-	proposal := generateProposal(types.LayerID(0))
-	require.ErrorIs(t, s.Add(proposal), store.ErrLayerEvicted)
+	s := store.New(store.WithEvictedLayer(5))
+	require.ErrorIs(t, s.Add(generateProposal(types.LayerID(0))), store.ErrLayerEvicted)
+	require.ErrorIs(t, s.Add(generateProposal(types.LayerID(5))), store.ErrLayerEvicted)
+	require.NoError(t, s.Add(generateProposal(types.LayerID(6))))
 }

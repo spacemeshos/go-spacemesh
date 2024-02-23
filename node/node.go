@@ -112,6 +112,7 @@ const (
 	BlockGenLogger         = "blockGenerator"
 	BlockHandlerLogger     = "blockHandler"
 	TxHandlerLogger        = "txHandler"
+	ProposalStoreLogger    = "proposalStore"
 	ProposalBuilderLogger  = "proposalBuilder"
 	ProposalListenerLogger = "proposalListener"
 	NipostBuilderLogger    = "nipostBuilder"
@@ -745,29 +746,6 @@ func (app *App) initServices(ctx context.Context) error {
 		)
 	}
 
-	proposalListener := proposals.NewHandler(
-		app.db,
-		app.atxsdata,
-		app.hare3,
-		app.edVerifier,
-		app.host,
-		fetcherWrapped,
-		beaconProtocol,
-		msh,
-		trtl,
-		vrfVerifier,
-		app.clock,
-		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
-		proposals.WithConfig(proposals.Config{
-			LayerSize:              layerSize,
-			LayersPerEpoch:         layersPerEpoch,
-			GoldenATXID:            goldenATXID,
-			MaxExceptions:          trtlCfg.MaxExceptions,
-			Hdist:                  trtlCfg.Hdist,
-			MinimalActiveSetWeight: trtlCfg.MinimalActiveSetWeight,
-		}),
-	)
-
 	blockHandler := blocks.NewHandler(fetcherWrapped, app.db, trtl, msh,
 		blocks.WithLogger(app.addLogger(BlockHandlerLogger, lg)))
 
@@ -817,7 +795,14 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 	app.certifier.Register(app.edSgn)
 
-	proposalsStore := store.New(store.WithFirstLayer(app.clock.CurrentLayer()))
+	var evictedLayer types.LayerID
+	if lid := app.clock.CurrentLayer(); lid > 0 {
+		evictedLayer = lid - 1
+	}
+	proposalsStore := store.New(
+		store.WithEvictedLayer(evictedLayer),
+		store.WithStoreLogger(app.addLogger(ProposalStoreLogger, lg).Zap()),
+	)
 
 	flog := app.addLogger(Fetcher, lg)
 	fetcher := fetch.NewFetch(app.cachedDB, proposalsStore, app.host,
@@ -882,6 +867,29 @@ func (app *App) initServices(ctx context.Context) error {
 		)
 		return nil
 	})
+
+	proposalListener := proposals.NewHandler(
+		app.db,
+		app.atxsdata,
+		app.hare3,
+		app.edVerifier,
+		app.host,
+		fetcherWrapped,
+		beaconProtocol,
+		msh,
+		trtl,
+		vrfVerifier,
+		app.clock,
+		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
+		proposals.WithConfig(proposals.Config{
+			LayerSize:              layerSize,
+			LayersPerEpoch:         layersPerEpoch,
+			GoldenATXID:            goldenATXID,
+			MaxExceptions:          trtlCfg.MaxExceptions,
+			Hdist:                  trtlCfg.Hdist,
+			MinimalActiveSetWeight: trtlCfg.MinimalActiveSetWeight,
+		}),
+	)
 
 	app.blockGen = blocks.NewGenerator(
 		app.db,

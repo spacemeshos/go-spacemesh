@@ -37,7 +37,7 @@ func WithCapacity(capacity types.LayerID) StoreOption {
 	}
 }
 
-func WithFirstLayer(layer types.LayerID) StoreOption {
+func WithEvictedLayer(layer types.LayerID) StoreOption {
 	return func(s *Store) {
 		s.evicted = &layer
 	}
@@ -58,6 +58,11 @@ func New(opts ...StoreOption) *Store {
 	for _, opt := range opts {
 		opt(s)
 	}
+	var evicted uint32
+	if s.evicted != nil {
+		evicted = s.evicted.Uint32()
+	}
+	s.logger.Info("proposals store created", zap.Uint32("capacity", s.capacity.Uint32()), zap.Uint32("evicted", evicted))
 	return s
 }
 
@@ -88,6 +93,10 @@ func (s *Store) Add(p *types.Proposal) error {
 	defer s.mu.Unlock()
 
 	if s.IsEvicted(p.Layer) {
+		s.logger.Debug("can't add proposal in evicted layer",
+			zap.Uint32("layer", p.Layer.Uint32()),
+			zap.Uint32("evicted", s.evicted.Uint32()),
+		)
 		return ErrLayerEvicted
 	}
 
@@ -116,10 +125,6 @@ func (s *Store) Get(layer types.LayerID, id types.ProposalID) *types.Proposal {
 func (s *Store) GetForLayer(layer types.LayerID) []*types.Proposal {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-
-	if s.IsEvicted(layer) {
-		return nil
-	}
 
 	if proposals, ok := s.data[layer]; ok {
 		return maps.Values(proposals)
