@@ -45,7 +45,10 @@ const (
 // DefaultConfig defines the default configuration options for api.
 func DefaultConfig() Config {
 	return Config{
-		PublicServices:        []Service{GlobalState, Mesh, Transaction, Node, Activation, ActivationV2Alpha1, RewardV2Alpha1},
+		PublicServices: []Service{
+			GlobalState, Mesh, Transaction, Node, Activation, ActivationV2Alpha1,
+			RewardV2Alpha1,
+		},
 		PublicListener:        "0.0.0.0:9092",
 		PrivateServices:       []Service{Admin, Smesher, Debug, ActivationStreamV2Alpha1, RewardStreamV2Alpha1},
 		PrivateListener:       "127.0.0.1:9093",

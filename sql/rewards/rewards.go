@@ -2,10 +2,10 @@ package rewards
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/sql/builder"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
 )
 
 const fullQuery = `select pubkey, coinbase, layer, total_reward, layer_reward from rewards`
