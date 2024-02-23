@@ -3,15 +3,23 @@ package sql
 import (
 	"slices"
 	"sync"
+
+	"github.com/hashicorp/golang-lru/v2/simplelru"
 )
 
+const defaultLRUCacheSize = 100
+
+type QueryCacheKind string
+
+var NullQueryCache QueryCache = (*queryCache)(nil)
+
 type queryCacheKey struct {
-	Kind string
+	Kind QueryCacheKind
 	Key  string
 }
 
 // QueryCacheKey creates a key for QueryCache.
-func QueryCacheKey(kind, key string) queryCacheKey {
+func QueryCacheKey(kind QueryCacheKind, key string) queryCacheKey {
 	return queryCacheKey{Kind: kind, Key: key}
 }
 
@@ -100,25 +108,71 @@ func AppendToCachedSlice[T any](db any, key queryCacheKey, v T) {
 	}
 }
 
-type fullCacheKey struct {
-	key    queryCacheKey
+type lruCacheKey struct {
+	key    string
 	subKey QueryCacheSubKey
 }
 
+type lru = simplelru.LRU[lruCacheKey, any]
+
 type queryCache struct {
 	sync.Mutex
-	updateMtx sync.RWMutex
-	subKeyMap map[queryCacheKey][]QueryCacheSubKey
-	values    map[fullCacheKey]any
+	updateMtx        sync.RWMutex
+	subKeyMap        map[queryCacheKey][]QueryCacheSubKey
+	cacheSizesByKind map[QueryCacheKind]int
+	caches           map[QueryCacheKind]*lru
 }
 
 var _ QueryCache = &queryCache{}
 
+func (c *queryCache) ensureLRU(kind QueryCacheKind) *lru {
+	if lruForKind, found := c.caches[kind]; found {
+		return lruForKind
+	}
+	size, found := c.cacheSizesByKind[kind]
+	if !found || size <= 0 {
+		size = defaultLRUCacheSize
+	}
+	lruForKind, err := simplelru.NewLRU[lruCacheKey, any](size, func(k lruCacheKey, v any) {
+		if k.subKey == mainSubKey {
+			c.clearSubKeys(queryCacheKey{Kind: kind, Key: k.key})
+		}
+	})
+	if err != nil {
+		panic("NewLRU failed: " + err.Error())
+	}
+	if c.caches == nil {
+		c.caches = make(map[QueryCacheKind]*lru)
+	}
+	c.caches[kind] = lruForKind
+	return lruForKind
+}
+
+func (c *queryCache) clearSubKeys(key queryCacheKey) {
+	lru, found := c.caches[key.Kind]
+	if !found {
+		return
+	}
+	for _, sk := range c.subKeyMap[key] {
+		lru.Remove(lruCacheKey{
+			key:    key.Key,
+			subKey: sk,
+		})
+	}
+}
+
 func (c *queryCache) get(key queryCacheKey, subKey QueryCacheSubKey) (any, bool) {
 	c.Lock()
 	defer c.Unlock()
-	v, found := c.values[fullCacheKey{key: key, subKey: subKey}]
-	return v, found
+	lru, found := c.caches[key.Kind]
+	if !found {
+		return nil, false
+	}
+
+	return lru.Get(lruCacheKey{
+		key:    key.Key,
+		subKey: subKey,
+	})
 }
 
 func (c *queryCache) set(key queryCacheKey, subKey QueryCacheSubKey, v any) {
@@ -133,12 +187,8 @@ func (c *queryCache) set(key queryCacheKey, subKey QueryCacheSubKey, v any) {
 			c.subKeyMap[key] = append(sks, subKey)
 		}
 	}
-	fk := fullCacheKey{key: key, subKey: subKey}
-	if c.values == nil {
-		c.values = map[fullCacheKey]any{fk: v}
-	} else {
-		c.values[fk] = v
-	}
+	lru := c.ensureLRU(key.Kind)
+	lru.Add(lruCacheKey{key: key.Key, subKey: subKey}, v)
 }
 
 func (c *queryCache) GetValue(key queryCacheKey, subKey QueryCacheSubKey, retrieve UntypedRetrieveFunc) (any, error) {
@@ -166,16 +216,24 @@ func (c *queryCache) UpdateSlice(key queryCacheKey, update SliceAppender) {
 	if c == nil {
 		return
 	}
+
 	// Here we lock for the call b/c we can't have conflicting updates for
 	// the slice at the same time
 	c.updateMtx.Lock()
-	defer c.updateMtx.Unlock()
-	fk := fullCacheKey{key: key, subKey: mainSubKey}
-	if _, found := c.values[fk]; found {
-		c.values[fk] = update(c.values[fk])
-		for _, sk := range c.subKeyMap[key] {
-			delete(c.values, fullCacheKey{key: key, subKey: sk})
-		}
+	c.Lock()
+	defer func() {
+		c.Unlock()
+		c.updateMtx.Unlock()
+	}()
+	lru, found := c.caches[key.Kind]
+	if !found {
+		return
+	}
+
+	k := lruCacheKey{key: key.Key, subKey: mainSubKey}
+	if v, found := lru.Get(k); found {
+		lru.Add(k, update(v))
+		c.clearSubKeys(key)
 	}
 }
 
@@ -183,8 +241,12 @@ func (c *queryCache) ClearCache() {
 	if c == nil {
 		return
 	}
+	c.updateMtx.Lock()
 	c.Lock()
-	defer c.Unlock()
+	defer func() {
+		c.Unlock()
+		c.updateMtx.Unlock()
+	}()
 	// No need to clear c.subKeyMap as it's only used to keep track of possible subkeys for each key
-	c.values = nil
+	c.caches = nil
 }

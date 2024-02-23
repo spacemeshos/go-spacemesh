@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"sort"
 	"sync"
@@ -74,8 +75,9 @@ type conf struct {
 	vacuumState   int
 	migrations    []Migration
 	enableLatency bool
-	logger        *zap.Logger
 	cache         bool
+	cacheSizes    map[QueryCacheKind]int
+	logger        *zap.Logger
 }
 
 // WithConnections overwrites number of pooled connections.
@@ -150,6 +152,17 @@ func WithLatencyMetering(enable bool) Opt {
 func WithQueryCache(enable bool) Opt {
 	return func(c *conf) {
 		c.cache = enable
+	}
+}
+
+// WithQueryCacheSizes sets query cache sizes for the specified cache kinds.
+func WithQueryCacheSizes(sizes map[QueryCacheKind]int) Opt {
+	return func(c *conf) {
+		if c.cacheSizes == nil {
+			c.cacheSizes = maps.Clone(sizes)
+		} else {
+			maps.Copy(c.cacheSizes, sizes)
+		}
 	}
 }
 
@@ -235,7 +248,8 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 		}
 	}
 	if config.cache {
-		db.queryCache = &queryCache{}
+		config.logger.Debug("using query cache", zap.Any("sizes", config.cacheSizes))
+		db.queryCache = &queryCache{cacheSizesByKind: config.cacheSizes}
 	}
 	db.queryCount.Store(0)
 	return db, nil

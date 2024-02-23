@@ -578,6 +578,47 @@ func TestGetBlobCached(t *testing.T) {
 	}
 }
 
+func TestCachedBlobEviction(t *testing.T) {
+	db := sql.InMemory(
+		sql.WithQueryCache(true),
+		sql.WithQueryCacheSizes(map[sql.QueryCacheKind]int{
+			atxs.CacheKindATXBlob: 10,
+		}))
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	addedATXs := make([]*types.VerifiedActivationTx, 11)
+	blobs := make([][]byte, 11)
+	for n := range addedATXs {
+		atx, err := newAtx(sig, withPublishEpoch(1))
+		require.NoError(t, err)
+		require.NoError(t, atxs.Add(db, atx))
+		addedATXs[n] = atx
+		encoded, err := codec.Encode(atx.ActivationTx)
+		require.NoError(t, err)
+		blobs[n] = encoded
+		buf, err := atxs.GetBlob(db, atx.ID().Bytes())
+		require.NoError(t, err)
+		require.Equal(t, encoded, buf)
+	}
+
+	require.Equal(t, 22, db.QueryCount())
+
+	// The ATXs except the first one stay in place
+	for n, atx := range addedATXs[1:] {
+		buf, err := atxs.GetBlob(db, atx.ID().Bytes())
+		require.NoError(t, err)
+		require.Equal(t, blobs[n+1], buf)
+		require.Equal(t, 22, db.QueryCount())
+	}
+
+	// The first ATX is evicted. We check it after the loop to avoid additional evictions.
+	buf, err := atxs.GetBlob(db, addedATXs[0].ID().Bytes())
+	require.NoError(t, err)
+	require.Equal(t, blobs[0], buf)
+	require.Equal(t, 23, db.QueryCount())
+}
+
 func TestCheckpointATX(t *testing.T) {
 	db := sql.InMemory()
 

@@ -110,13 +110,14 @@ type BaseConfig struct {
 	OptFilterThreshold int    `mapstructure:"optimistic-filtering-threshold"`
 	TickSize           uint64 `mapstructure:"tick-size"`
 
-	DatabaseConnections          int           `mapstructure:"db-connections"`
-	DatabaseLatencyMetering      bool          `mapstructure:"db-latency-metering"`
-	DatabaseSizeMeteringInterval time.Duration `mapstructure:"db-size-metering-interval"`
-	DatabasePruneInterval        time.Duration `mapstructure:"db-prune-interval"`
-	DatabaseVacuumState          int           `mapstructure:"db-vacuum-state"`
-	DatabaseSkipMigrations       []int         `mapstructure:"db-skip-migrations"`
-	DatabaseQueryCache           bool          `mapstructure:"db-query-cache"`
+	DatabaseConnections          int                     `mapstructure:"db-connections"`
+	DatabaseLatencyMetering      bool                    `mapstructure:"db-latency-metering"`
+	DatabaseSizeMeteringInterval time.Duration           `mapstructure:"db-size-metering-interval"`
+	DatabasePruneInterval        time.Duration           `mapstructure:"db-prune-interval"`
+	DatabaseVacuumState          int                     `mapstructure:"db-vacuum-state"`
+	DatabaseSkipMigrations       []int                   `mapstructure:"db-skip-migrations"`
+	DatabaseQueryCache           bool                    `mapstructure:"db-query-cache"`
+	DatabaseQueryCacheSizes      DatabaseQueryCacheSizes `mapstructure:"db-query-cache-sizes"`
 
 	PruneActivesetsFrom types.EpochID `mapstructure:"prune-activesets-from"`
 
@@ -134,6 +135,12 @@ type BaseConfig struct {
 
 	// NoMainOverride forces the "nomain" builds to run on the mainnet
 	NoMainOverride bool `mapstructure:"no-main-override"`
+}
+
+type DatabaseQueryCacheSizes struct {
+	EpochATXs     int `mapstructure:"epoch-atxs"`
+	ATXBlob       int `mapstructure:"atx-blob"`
+	ActiveSetBlob int `mapstructure:"active-set-blob"`
 }
 
 type PublicMetrics struct {
@@ -212,6 +219,11 @@ func defaultBaseConfig() BaseConfig {
 		DatabasePruneInterval:        30 * time.Minute,
 		NetworkHRP:                   "sm",
 		ATXGradeDelay:                10 * time.Second,
+		DatabaseQueryCacheSizes: DatabaseQueryCacheSizes{
+			EpochATXs:     20,
+			ATXBlob:       10000,
+			ActiveSetBlob: 200,
+		},
 	}
 }
 

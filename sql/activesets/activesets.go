@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	CacheKindActiveSetBlob = "activeset-blob"
+	CacheKindActiveSetBlob sql.QueryCacheKind = "activeset-blob"
 )
 
 func Add(db sql.Executor, id types.Hash32, set *types.EpochActiveSet) error {
