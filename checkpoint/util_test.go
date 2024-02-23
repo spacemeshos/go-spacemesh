@@ -14,7 +14,7 @@ import (
 )
 
 //go:embed checkpointdata.json
-var checkpointdata string
+var checkpointData string
 
 func TestValidateSchema(t *testing.T) {
 	tcs := []struct {
@@ -24,7 +24,7 @@ func TestValidateSchema(t *testing.T) {
 	}{
 		{
 			desc: "valid",
-			data: checkpointdata,
+			data: checkpointData,
 		},
 		{
 			desc: "missing atx",
@@ -113,7 +113,7 @@ func TestRecoveryFile(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			require.NoError(t, rf.Copy(fs, bytes.NewReader([]byte(checkpointdata))))
+			require.NoError(t, rf.Copy(fs, bytes.NewReader([]byte(checkpointData))))
 			require.NoError(t, rf.Save(fs))
 		})
 	}

@@ -296,7 +296,7 @@ func checkpointData(fs afero.Fs, file string, newGenesis types.LayerID) (*recove
 	if err != nil {
 		return nil, fmt.Errorf("%w: read recovery file %v", err, file)
 	}
-	if err = ValidateSchema(data); err != nil {
+	if err := ValidateSchema(data); err != nil {
 		return nil, err
 	}
 	var checkpoint types.Checkpoint
