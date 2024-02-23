@@ -50,7 +50,7 @@ all: install build
 install:
 	git lfs install
 	go mod download
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.54.2
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.56.2
 	go install github.com/spacemeshos/go-scale/scalegen@v1.1.12
 	go install go.uber.org/mock/mockgen@v0.3.0
 	go install gotest.tools/gotestsum@v1.10.1
