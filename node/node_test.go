@@ -417,7 +417,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	app.signers = append(app.signers, signer)
+	app.signers = []*signing.EdSigner{signer}
 
 	mesh, err := mocknet.WithNPeers(1)
 	require.NoError(t, err)
@@ -425,8 +425,8 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	require.NoError(t, err)
 	app.host = h
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	appCtx, appCancel := context.WithCancel(context.Background())
+	defer appCancel()
 
 	run := func(c *cobra.Command, args []string) error {
 		// Give the error channel a buffer
@@ -442,8 +442,11 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
 		// be done more surgically, and we don't need _all_ of the services.
-		return app.Start(context.Background())
+		return app.Start(appCtx)
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
 	// Run the app in a goroutine. As noted above, it blocks if it succeeds.
 	// If there's an error in the args, it will return immediately.
@@ -455,7 +458,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		return nil
 	})
 
-	<-app.started
+	<-app.Started()
 	conn, err := grpc.DialContext(
 		ctx,
 		app.grpcPublicServer.BoundAddress,
@@ -519,6 +522,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 	// Cleanup stops all services and thereby the app
 	<-app.Started() // prevents races when app is not started yet
+	appCancel()
 	app.Cleanup(context.Background())
 
 	// Wait for everything to stop cleanly before ending test
@@ -527,8 +531,6 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 // E2E app test of the transaction service.
 func TestSpacemeshApp_TransactionService(t *testing.T) {
-	r := require.New(t)
-
 	listener := "127.0.0.1:14236"
 
 	app := New(WithLog(logtest.New(t)))
@@ -537,12 +539,15 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	app.Config = &cfg
 
 	signer, err := signing.NewEdSigner()
-	r.NoError(err)
-	app.signers = append(app.signers, signer)
+	require.NoError(t, err)
+	app.signers = []*signing.EdSigner{signer}
 	address := wallet.Address(signer.PublicKey().Bytes())
 
+	appCtx, appCancel := context.WithCancel(context.Background())
+	defer appCancel()
+
 	run := func(c *cobra.Command, args []string) error {
-		r.NoError(app.Initialize())
+		require.NoError(t, app.Initialize())
 
 		// GRPC configuration
 		app.Config.API.PublicListener = listener
@@ -572,7 +577,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
 		// be done more surgically, and we don't need _all_ of the services.
-		return app.Start(context.Background())
+		return app.Start(appCtx)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -584,8 +589,8 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		str, err := testArgs(ctx, cmdWithRun(run))
-		r.Empty(str)
-		r.NoError(err)
+		require.Empty(t, str)
+		require.NoError(t, err)
 		wg.Done()
 	}()
 
@@ -605,8 +610,8 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
-	r.NoError(err)
-	t.Cleanup(func() { r.NoError(conn.Close()) })
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, conn.Close()) })
 	c := pb.NewTransactionServiceClient(conn)
 
 	tx1 := types.NewRawTx(
@@ -653,6 +658,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 
 	// This stops the app
 	// Cleanup stops all services and thereby the app
+	appCancel()
 	app.Cleanup(context.Background())
 
 	// Wait for it to stop
@@ -1157,7 +1163,7 @@ func TestAdminEvents_MultiSmesher(t *testing.T) {
 	})
 	t.Cleanup(func() { assert.NoError(t, eg.Wait()) })
 
-	<-app.started
+	<-app.Started()
 	for _, signer := range app.signers {
 		mgr, err := activation.NewPostSetupManager(
 			cfg.POST,
