@@ -19,6 +19,7 @@ import (
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/post/initialization"
+	"github.com/spacemeshos/post/shared"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
@@ -1021,7 +1022,7 @@ func TestAdminEvents(t *testing.T) {
 	require.NoError(t, err)
 	cfg.DataDirParent = t.TempDir()
 	cfg.FileLock = filepath.Join(cfg.DataDirParent, "LOCK")
-	cfg.SMESHING.Opts.DataDir = cfg.DataDirParent
+	cfg.SMESHING.Opts.DataDir = t.TempDir()
 	cfg.SMESHING.Opts.Scrypt.N = 2
 	cfg.POSTService.PostServiceCmd = activation.DefaultTestPostServiceConfig().PostServiceCmd
 
@@ -1031,21 +1032,7 @@ func TestAdminEvents(t *testing.T) {
 	logger := logtest.New(t, zapcore.DebugLevel)
 	app := New(WithConfig(&cfg), WithLog(logger))
 
-	for i := 0; i < 3; i++ {
-		dir := filepath.Join(app.Config.DataDir(), keyDir)
-		signer, err := signing.NewEdSigner(
-			signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()),
-		)
-		require.NoError(t, err)
-
-		keyFile := filepath.Join(dir, fmt.Sprintf("node_%d.key", i))
-		dst := make([]byte, hex.EncodedLen(len(signer.PrivateKey())))
-		hex.Encode(dst, signer.PrivateKey())
-		require.NoError(t, os.WriteFile(keyFile, dst, 0o600))
-	}
-
 	require.NoError(t, app.LoadIdentities())
-	require.Len(t, app.signers, 3)
 	require.NoError(t, app.Initialize())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1101,32 +1088,63 @@ func TestAdminEvents(t *testing.T) {
 	}
 }
 
-func TestAdminEvents_UnspecifiedAddresses(t *testing.T) {
+func launchPostSupervisor(
+	tb testing.TB,
+	log *zap.Logger,
+	mgr *activation.PostSetupManager,
+	id types.NodeID,
+	address string,
+	postCfg activation.PostConfig,
+	postOpts activation.PostSetupOpts,
+) func() {
+	cmdCfg := activation.DefaultTestPostServiceConfig()
+	cmdCfg.NodeAddress = fmt.Sprintf("http://%s", address)
+	provingOpts := activation.DefaultPostProvingOpts()
+	provingOpts.RandomXMode = activation.PostRandomXModeLight
+
+	ps, err := activation.NewPostSupervisor(log, cmdCfg, postCfg, provingOpts, mgr)
+	require.NoError(tb, err)
+	require.NotNil(tb, ps)
+	require.NoError(tb, ps.Start(postOpts, id))
+	return func() { assert.NoError(tb, ps.Stop(false)) }
+}
+
+func TestAdminEvents_MultiSmesher(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
 	cfg, err := presets.Get("standalone")
 	require.NoError(t, err)
-
 	cfg.DataDirParent = t.TempDir()
 	cfg.FileLock = filepath.Join(cfg.DataDirParent, "LOCK")
-	cfg.SMESHING.Opts.DataDir = cfg.DataDirParent
 	cfg.SMESHING.Opts.Scrypt.N = 2
+	cfg.SMESHING.Start = false
 	cfg.POSTService.PostServiceCmd = activation.DefaultTestPostServiceConfig().PostServiceCmd
-
-	// Expose APIs on all interfaces
-	cfg.API.PublicListener = "0.0.0.0:10092"
-	cfg.API.PrivateListener = "0.0.0.0:10093"
-	cfg.API.PostListener = "0.0.0.0:10094"
 
 	cfg.Genesis.GenesisTime = time.Now().Add(5 * time.Second).Format(time.RFC3339)
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 
-	logger := logtest.New(t, zapcore.DebugLevel)
+	logger := logtest.New(t)
 	app := New(WithConfig(&cfg), WithLog(logger))
-	err = app.LoadIdentities()
-	require.NoError(t, err)
+
+	dir := filepath.Join(app.Config.DataDir(), keyDir)
+	require.NoError(t, os.MkdirAll(dir, 0o700))
+	for i := 0; i < 2; i++ {
+		signer, err := signing.NewEdSigner(
+			signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()),
+		)
+		require.NoError(t, err)
+
+		keyFile := filepath.Join(dir, fmt.Sprintf("node_%d.key", i))
+		dst := make([]byte, hex.EncodedLen(len(signer.PrivateKey())))
+		hex.Encode(dst, signer.PrivateKey())
+		require.NoError(t, os.WriteFile(keyFile, dst, 0o600))
+	}
+
+	require.NoError(t, app.LoadIdentities())
+	require.Len(t, app.signers, 2)
 	require.NoError(t, app.Initialize())
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var eg errgroup.Group
@@ -1138,6 +1156,29 @@ func TestAdminEvents_UnspecifiedAddresses(t *testing.T) {
 		return nil
 	})
 	t.Cleanup(func() { assert.NoError(t, eg.Wait()) })
+
+	<-app.started
+	for _, signer := range app.signers {
+		mgr, err := activation.NewPostSetupManager(
+			cfg.POST,
+			logger.Zap(),
+			app.cachedDB,
+			types.ATXID(app.Config.Genesis.GoldenATX()),
+			app.syncer,
+			app.validator,
+		)
+		require.NoError(t, err)
+
+		cfg.SMESHING.Opts.DataDir = t.TempDir()
+		t.Cleanup(launchPostSupervisor(t,
+			logger.Zap(),
+			mgr,
+			signer.NodeID(),
+			cfg.API.PostListener,
+			cfg.POST,
+			cfg.SMESHING.Opts,
+		))
+	}
 
 	grpcCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
@@ -1156,26 +1197,111 @@ func TestAdminEvents_UnspecifiedAddresses(t *testing.T) {
 
 	// 4 is arbitrary, if we received events once, they must be
 	// cached and should be returned immediately
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 1; i++ {
 		stream, err := client.EventsStream(tctx, &pb.EventStreamRequest{})
 		require.NoError(t, err)
-		success := []pb.IsEventDetails{
-			&pb.Event_Beacon{},
-			&pb.Event_InitStart{},
-			&pb.Event_InitComplete{},
-			&pb.Event_PostServiceStarted{},
-			&pb.Event_PostStart{},
-			&pb.Event_PostComplete{},
-			&pb.Event_PoetWaitRound{},
-			&pb.Event_PoetWaitProof{},
-			&pb.Event_PostStart{},
-			&pb.Event_PostComplete{},
-			&pb.Event_AtxPublished{},
+
+		matchers := map[int]func(pb.IsEventDetails) bool{
+			0: func(ev pb.IsEventDetails) bool {
+				_, ok := ev.(*pb.Event_Beacon)
+				return ok
+			},
+			1: func(ev pb.IsEventDetails) bool {
+				startEv, ok := ev.(*pb.Event_PostStart)
+				if !ok {
+					return false
+				}
+				return bytes.Equal(startEv.PostStart.Smesher, app.signers[0].NodeID().Bytes()) &&
+					bytes.Equal(startEv.PostStart.Challenge, shared.ZeroChallenge)
+			},
+			2: func(ev pb.IsEventDetails) bool {
+				completeEv, ok := ev.(*pb.Event_PostComplete)
+				if !ok {
+					return false
+				}
+				return bytes.Equal(completeEv.PostComplete.Smesher, app.signers[0].NodeID().Bytes()) &&
+					bytes.Equal(completeEv.PostComplete.Challenge, shared.ZeroChallenge)
+			},
+			3: func(ev pb.IsEventDetails) bool {
+				startEv, ok := ev.(*pb.Event_PostStart)
+				if !ok {
+					return false
+				}
+				return bytes.Equal(startEv.PostStart.Smesher, app.signers[1].NodeID().Bytes()) &&
+					bytes.Equal(startEv.PostStart.Challenge, shared.ZeroChallenge)
+			},
+			4: func(ev pb.IsEventDetails) bool {
+				completeEv, ok := ev.(*pb.Event_PostComplete)
+				if !ok {
+					return false
+				}
+				return bytes.Equal(completeEv.PostComplete.Smesher, app.signers[1].NodeID().Bytes()) &&
+					bytes.Equal(completeEv.PostComplete.Challenge, shared.ZeroChallenge)
+			},
+			5: func(ev pb.IsEventDetails) bool {
+				// TODO(mafa): this event happens once for each NodeID, but should probably only happen once for all
+				_, ok := ev.(*pb.Event_PoetWaitRound)
+				return ok
+			},
+			6: func(ev pb.IsEventDetails) bool {
+				// TODO(mafa): this event happens once for each NodeID, but should probably only happen once for all
+				_, ok := ev.(*pb.Event_PoetWaitProof)
+				return ok
+			},
+			7: func(ev pb.IsEventDetails) bool {
+				startEv, ok := ev.(*pb.Event_PostStart)
+				if !ok {
+					return false
+				}
+				return bytes.Equal(startEv.PostStart.Smesher, app.signers[0].NodeID().Bytes()) &&
+					!bytes.Equal(startEv.PostStart.Challenge, shared.ZeroChallenge)
+			},
+			8: func(ev pb.IsEventDetails) bool {
+				completeEv, ok := ev.(*pb.Event_PostComplete)
+				if !ok {
+					return false
+				}
+				return bytes.Equal(completeEv.PostComplete.Smesher, app.signers[0].NodeID().Bytes()) &&
+					!bytes.Equal(completeEv.PostComplete.Challenge, shared.ZeroChallenge)
+			},
+			9: func(ev pb.IsEventDetails) bool {
+				startEv, ok := ev.(*pb.Event_PostStart)
+				if !ok {
+					return false
+				}
+				return bytes.Equal(startEv.PostStart.Smesher, app.signers[1].NodeID().Bytes()) &&
+					!bytes.Equal(startEv.PostStart.Challenge, shared.ZeroChallenge)
+			},
+			10: func(ev pb.IsEventDetails) bool {
+				completeEv, ok := ev.(*pb.Event_PostComplete)
+				if !ok {
+					return false
+				}
+				return bytes.Equal(completeEv.PostComplete.Smesher, app.signers[1].NodeID().Bytes()) &&
+					!bytes.Equal(completeEv.PostComplete.Challenge, shared.ZeroChallenge)
+			},
+			11: func(ev pb.IsEventDetails) bool {
+				_, ok := ev.(*pb.Event_AtxPublished)
+				return ok
+			},
+			12: func(ev pb.IsEventDetails) bool {
+				_, ok := ev.(*pb.Event_AtxPublished)
+				return ok
+			},
 		}
-		for idx, ev := range success {
+		for {
 			msg, err := stream.Recv()
 			require.NoError(t, err, "stream %d", i)
-			require.IsType(t, ev, msg.Details, "stream %d, event %d", i, idx)
+			for idx, matcher := range matchers {
+				if matcher(msg.Details) {
+					t.Log("matched event", idx)
+					delete(matchers, idx)
+					break
+				}
+			}
+			if len(matchers) == 0 {
+				break
+			}
 		}
 		require.NoError(t, stream.CloseSend())
 	}
