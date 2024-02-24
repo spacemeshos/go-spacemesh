@@ -194,7 +194,7 @@ func GetCommand() *cobra.Command {
 			}
 
 			if app.signers == nil {
-				if app.signers, err = app.LoadIdentities(); err != nil {
+				if err := app.LoadIdentities(); err != nil {
 					return err
 				}
 			}
@@ -218,7 +218,6 @@ func GetCommand() *cobra.Command {
 			// FIXME: per https://github.com/spacemeshos/go-spacemesh/issues/3830
 			go func() {
 				app.Cleanup(cleanupCtx)
-				_ = app.eg.Wait()
 				close(done)
 			}()
 			select {
@@ -543,7 +542,7 @@ func (app *App) getAppInfo() string {
 func (app *App) Cleanup(ctx context.Context) {
 	app.log.Info("app cleanup starting...")
 	app.stopServices(ctx)
-	// add any other Cleanup tasks here....
+	app.eg.Wait()
 	app.log.Info("app cleanup completed")
 }
 
@@ -1738,12 +1737,12 @@ func (app *App) MigrateExistingIdentity() error {
 }
 
 // LoadIdentities loads all existing identities from the config directory.
-func (app *App) LoadIdentities() ([]*signing.EdSigner, error) {
+func (app *App) LoadIdentities() error {
 	signers := make([]*signing.EdSigner, 0)
 
 	dir := filepath.Join(app.Config.DataDir(), keyDir)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return nil, fmt.Errorf("failed to create directory for identity file: %w", err)
+		return fmt.Errorf("failed to create directory for identity file: %w", err)
 	}
 	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -1791,11 +1790,12 @@ func (app *App) LoadIdentities() ([]*signing.EdSigner, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if len(signers) > 0 {
-		return signers, nil
+		app.signers = signers
+		return nil
 	}
 
 	app.log.Info("Identity file not found. Creating new identity...")
@@ -1803,7 +1803,7 @@ func (app *App) LoadIdentities() ([]*signing.EdSigner, error) {
 		signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create identity: %w", err)
+		return fmt.Errorf("failed to create identity: %w", err)
 	}
 
 	keyFile := filepath.Join(dir, defaultKeyFileName)
@@ -1811,14 +1811,15 @@ func (app *App) LoadIdentities() ([]*signing.EdSigner, error) {
 	hex.Encode(dst, signer.PrivateKey())
 	err = os.WriteFile(keyFile, dst, 0o600)
 	if err != nil {
-		return nil, fmt.Errorf("failed to write identity file: %w", err)
+		return fmt.Errorf("failed to write identity file: %w", err)
 	}
 
 	app.log.With().Info("Created new identity",
 		log.String("filename", defaultKeyFileName),
 		signer.PublicKey(),
 	)
-	return []*signing.EdSigner{signer}, nil
+	app.signers = []*signing.EdSigner{signer}
+	return nil
 }
 
 func (app *App) setupDBs(ctx context.Context, lg log.Log) error {

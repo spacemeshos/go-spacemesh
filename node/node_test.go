@@ -60,8 +60,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestSpacemeshApp_getEdIdentity(t *testing.T) {
-	r := require.New(t)
-
 	tempDir := t.TempDir()
 
 	// setup spacemesh app
@@ -70,39 +68,42 @@ func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	app.log = logtest.New(t)
 
 	// Create new identity.
-	signers1, err := app.LoadIdentities()
-	r.NoError(err)
-	r.Len(signers1, 1)
+	err := app.LoadIdentities()
+	require.NoError(t, err)
+	require.Len(t, app.signers, 1)
+	before := app.signers[0].PublicKey()
 
 	infos, err := os.ReadDir(tempDir)
-	r.NoError(err)
-	r.Len(infos, 1)
+	require.NoError(t, err)
+	require.Len(t, infos, 1)
 
 	// Load existing identity.
-	signers2, err := app.LoadIdentities()
-	r.NoError(err)
-	r.Len(signers2, 1)
+	err = app.LoadIdentities()
+	require.NoError(t, err)
+	require.Len(t, app.signers, 1)
+	after := app.signers[0].PublicKey()
 
 	infos, err = os.ReadDir(tempDir)
-	r.NoError(err)
-	r.Len(infos, 1)
+	require.NoError(t, err)
+	require.Len(t, infos, 1)
 
-	r.Equal(signers1[0].PublicKey(), signers2[0].PublicKey())
+	require.Equal(t, before, after)
 
 	// Invalidate the identity by changing its file name.
 	filename := filepath.Join(tempDir, infos[0].Name())
 	err = os.Rename(filename, filename+"_")
-	r.NoError(err)
+	require.NoError(t, err)
 
 	// Create new identity.
-	signers3, err := app.LoadIdentities()
-	r.NoError(err)
-	r.Len(signers3, 1)
+	err = app.LoadIdentities()
+	require.NoError(t, err)
+	require.Len(t, app.signers, 1)
+	after = app.signers[0].PublicKey()
 
 	infos, err = os.ReadDir(tempDir)
-	r.NoError(err)
-	r.Len(infos, 2)
-	r.NotEqual(signers1[0].PublicKey(), signers3[0].PublicKey())
+	require.NoError(t, err)
+	require.Len(t, infos, 2)
+	require.NotEqual(t, before, after)
 
 	t.Run("bad length", func(t *testing.T) {
 		testLoadIdentities(t,
@@ -132,13 +133,13 @@ func testLoadIdentities(t *testing.T, data []byte, expect string) {
 	keyFile := filepath.Join(app.Config.DataDirParent, keyDir, defaultKeyFileName)
 	require.NoError(t, os.MkdirAll(filepath.Dir(keyFile), 0o700))
 	require.NoError(t, os.WriteFile(keyFile, data, 0o600))
-	signer, err := app.LoadIdentities()
+	err := app.LoadIdentities()
 	if len(expect) > 0 {
 		require.ErrorContains(t, err, expect)
-		require.Nil(t, signer)
+		require.Nil(t, app.signers)
 	} else {
 		require.NoError(t, err)
-		require.NotEmpty(t, signer)
+		require.NotEmpty(t, app.signers)
 	}
 }
 
@@ -158,19 +159,19 @@ func TestSpacemeshApp_SetLoggers(t *testing.T) {
 	var buf1, buf2 bytes.Buffer
 
 	app := New(WithLog(logtest.New(t)))
-	mylogger := "anton"
+	myLogger := "anton"
 	myLog := newLogger(&buf1)
 	myLog2 := newLogger(&buf2)
 
-	app.log = app.addLogger(mylogger, myLog)
+	app.log = app.addLogger(myLogger, myLog)
 	msg1 := "hi there"
 	app.log.Info(msg1)
 	r.Equal(
-		fmt.Sprintf("INFO\t%s\t%s\n", mylogger, msg1),
+		fmt.Sprintf("INFO\t%s\t%s\n", myLogger, msg1),
 		buf1.String(),
 	)
-	r.NoError(app.SetLogLevel(mylogger, "warn"))
-	r.Equal("warn", app.loggers[mylogger].String())
+	r.NoError(app.SetLogLevel(myLogger, "warn"))
+	r.Equal("warn", app.loggers[myLogger].String())
 	buf1.Reset()
 
 	msg1 = "other logger"
@@ -182,19 +183,19 @@ func TestSpacemeshApp_SetLoggers(t *testing.T) {
 	// This one should be printed
 	app.log.Warning(msg3)
 	r.Equal(
-		fmt.Sprintf("WARN\t%s\t%s\n", mylogger, msg3),
+		fmt.Sprintf("WARN\t%s\t%s\n", myLogger, msg3),
 		buf1.String(),
 	)
 	r.Equal(fmt.Sprintf("INFO\t%s\n", msg1), buf2.String())
 	buf1.Reset()
 
-	r.NoError(app.SetLogLevel(mylogger, "info"))
+	r.NoError(app.SetLogLevel(myLogger, "info"))
 
 	msg4 := "nihao"
 	app.log.Info(msg4)
-	r.Equal("info", app.loggers[mylogger].String())
+	r.Equal("info", app.loggers[myLogger].String())
 	r.Equal(
-		fmt.Sprintf("INFO\t%s\t%s\n", mylogger, msg4),
+		fmt.Sprintf("INFO\t%s\t%s\n", myLogger, msg4),
 		buf1.String(),
 	)
 
@@ -202,8 +203,8 @@ func TestSpacemeshApp_SetLoggers(t *testing.T) {
 	r.Error(app.SetLogLevel("anton3", "warn"))
 
 	// test bad loglevel
-	r.Error(app.SetLogLevel(mylogger, "lulu"))
-	r.Equal("info", app.loggers[mylogger].String())
+	r.Error(app.SetLogLevel(myLogger, "lulu"))
+	r.Equal("info", app.loggers[myLogger].String())
 }
 
 func TestSpacemeshApp_AddLogger(t *testing.T) {
@@ -287,9 +288,8 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 
 	r := require.New(t)
 	app := New(WithLog(logtest.New(t)))
-	signer, err := app.LoadIdentities()
+	err := app.LoadIdentities()
 	require.NoError(t, err)
-	app.signers = signer // https://github.com/spacemeshos/go-spacemesh/issues/4653
 
 	run := func(c *cobra.Command, args []string) error {
 		app.Config.API.PublicListener = listener
@@ -342,9 +342,8 @@ func TestSpacemeshApp_JsonServiceNotRunning(t *testing.T) {
 	r := require.New(t)
 	app := New(WithLog(logtest.New(t)))
 
-	signers, err := app.LoadIdentities()
+	err := app.LoadIdentities()
 	require.NoError(t, err)
-	app.signers = signers // https://github.com/spacemeshos/go-spacemesh/issues/4653
 
 	// Make sure the service is not running by default
 	run := func(c *cobra.Command, args []string) error {
@@ -1031,9 +1030,22 @@ func TestAdminEvents(t *testing.T) {
 
 	logger := logtest.New(t, zapcore.DebugLevel)
 	app := New(WithConfig(&cfg), WithLog(logger))
-	signers, err := app.LoadIdentities()
-	require.NoError(t, err)
-	app.signers = signers // https://github.com/spacemeshos/go-spacemesh/issues/4653
+
+	for i := 0; i < 3; i++ {
+		dir := filepath.Join(app.Config.DataDir(), keyDir)
+		signer, err := signing.NewEdSigner(
+			signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()),
+		)
+		require.NoError(t, err)
+
+		keyFile := filepath.Join(dir, fmt.Sprintf("node_%d.key", i))
+		dst := make([]byte, hex.EncodedLen(len(signer.PrivateKey())))
+		hex.Encode(dst, signer.PrivateKey())
+		require.NoError(t, os.WriteFile(keyFile, dst, 0o600))
+	}
+
+	require.NoError(t, app.LoadIdentities())
+	require.Len(t, app.signers, 3)
 	require.NoError(t, app.Initialize())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1043,7 +1055,6 @@ func TestAdminEvents(t *testing.T) {
 			return err
 		}
 		app.Cleanup(context.Background())
-		app.eg.Wait() // https://github.com/spacemeshos/go-spacemesh/issues/4653
 		return nil
 	})
 	t.Cleanup(func() { assert.NoError(t, eg.Wait()) })
@@ -1113,9 +1124,8 @@ func TestAdminEvents_UnspecifiedAddresses(t *testing.T) {
 
 	logger := logtest.New(t, zapcore.DebugLevel)
 	app := New(WithConfig(&cfg), WithLog(logger))
-	signers, err := app.LoadIdentities()
+	err = app.LoadIdentities()
 	require.NoError(t, err)
-	app.signers = signers // https://github.com/spacemeshos/go-spacemesh/issues/4653
 	require.NoError(t, app.Initialize())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1125,7 +1135,6 @@ func TestAdminEvents_UnspecifiedAddresses(t *testing.T) {
 			return err
 		}
 		app.Cleanup(context.Background())
-		app.eg.Wait() // https://github.com/spacemeshos/go-spacemesh/issues/4653
 		return nil
 	})
 	t.Cleanup(func() { assert.NoError(t, eg.Wait()) })

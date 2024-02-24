@@ -88,7 +88,6 @@ func NewTestNetwork(t *testing.T, conf config.Config, l log.Log, size int) []*Te
 		defer cancel()
 		for _, a := range apps {
 			a.Cleanup(ctx)
-			a.eg.Wait()
 		}
 	})
 
@@ -114,7 +113,7 @@ func NewApp(t *testing.T, conf *config.Config, l log.Log) *App {
 	err := app.Initialize()
 	require.NoError(t, err)
 
-	app.signers, err = app.LoadIdentities()
+	err = app.LoadIdentities()
 	require.NoError(t, err, "could not retrieve identity")
 
 	return app
