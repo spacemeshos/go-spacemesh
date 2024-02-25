@@ -658,7 +658,7 @@ func (f *Fetch) sendBatch(peer p2p.Peer, batch *batchInfo) ([]byte, error) {
 		f.peers.OnFailure(peer)
 		return nil, err
 	}
-	f.peers.OnLatency(peer, time.Since(start))
+	f.peers.OnLatency(peer, len(data), time.Since(start))
 	return data, nil
 }
 

@@ -30,7 +30,7 @@ func withEvents(events []event) *Peers {
 			tracker.OnFailure(ev.id)
 		}
 		for i := 0; i < ev.success; i++ {
-			tracker.OnLatency(ev.id, ev.latency)
+			tracker.OnLatency(ev.id, 1024, ev.latency)
 		}
 	}
 	return tracker

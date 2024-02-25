@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync/atomic"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 
@@ -250,10 +251,13 @@ func (f *Fetch) PeerEpochInfo(ctx context.Context, peer p2p.Peer, epoch types.Ep
 	if err != nil {
 		return nil, err
 	}
+	start := time.Now()
 	data, err := f.servers[atxProtocol].Request(ctx, peer, epochBytes)
 	if err != nil {
+		f.peers.OnFailure(peer)
 		return nil, err
 	}
+	f.peers.OnLatency(peer, len(data), time.Since(start))
 
 	var ed EpochData
 	if err := codec.Decode(data, &ed); err != nil {
