@@ -499,7 +499,7 @@ func (f *Fetch) failAfterRetry(hash types.Hash32) {
 	}
 
 	// first check if we have it locally from gossips
-	if _, err := f.bs.Get(req.hint, hash.Bytes()); err == nil {
+	if has, err := f.bs.Has(req.hint, hash.Bytes()); err == nil && has {
 		close(req.promise.completed)
 		delete(f.ongoing, hash)
 		return
@@ -696,7 +696,7 @@ func (f *Fetch) getHash(
 	}
 
 	// check if we already have this hash locally
-	if _, err := f.bs.Get(h, hash.Bytes()); err == nil {
+	if has, err := f.bs.Has(h, hash.Bytes()); err == nil && has {
 		return nil, nil
 	}
 
