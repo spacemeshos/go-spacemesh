@@ -11,13 +11,18 @@ import (
 // and at the start of current epoch we still need data from previous epoch for hare oracle.
 const minCapacity = 2
 
+// SAFETY: all exported fields are read-only and are safe to read concurrently.
+// Thanks to the fact that ATX is immutable, it is safe to return a pointer to it.
 type ATX struct {
 	Node               types.NodeID
 	Coinbase           types.Address
 	Weight             uint64
 	BaseHeight, Height uint64
 	Nonce              types.VRFPostIndex
-	Malicious          bool
+	// unexported to avoid accidental unsynchronized access
+	// (this field is mutated by the Data under a lock and
+	// might only be safely read under the same lock)
+	malicious bool
 }
 
 type Opt func(*Data)
@@ -99,8 +104,9 @@ func (d *Data) OnEpoch(applied types.EpochID) {
 }
 
 // AddFromVerified extracts relevant fields from verified atx and adds them together with nonce and malicious flag.
-func (d *Data) AddFromHeader(atx *types.ActivationTxHeader, nonce types.VRFPostIndex, malicious bool) {
-	d.Add(
+// Returns true if the atx was added to the store.
+func (d *Data) AddFromHeader(atx *types.ActivationTxHeader, nonce types.VRFPostIndex, malicious bool) bool {
+	return d.Add(
 		atx.TargetEpoch(),
 		atx.NodeID,
 		atx.Coinbase,
@@ -113,6 +119,8 @@ func (d *Data) AddFromHeader(atx *types.ActivationTxHeader, nonce types.VRFPostI
 	)
 }
 
+// Add adds atx data to the store.
+// Returns true if the atx was added to the store.
 func (d *Data) Add(
 	epoch types.EpochID,
 	node types.NodeID,
@@ -121,11 +129,11 @@ func (d *Data) Add(
 	weight, baseHeight, height uint64,
 	nonce types.VRFPostIndex,
 	malicious bool,
-) {
+) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.IsEvicted(epoch) {
-		return
+		return false
 	}
 	ecache, exists := d.epochs[epoch]
 	if !exists {
@@ -134,10 +142,12 @@ func (d *Data) Add(
 		}
 		d.epochs[epoch] = ecache
 	}
-	_, exists = ecache.index[atx]
-	if !exists {
-		atxsCounter.WithLabelValues(epoch.String()).Inc()
+
+	if _, exists = ecache.index[atx]; exists {
+		return false
 	}
+
+	atxsCounter.WithLabelValues(epoch.String()).Inc()
 	data := &ATX{
 		Node:       node,
 		Coinbase:   coinbase,
@@ -145,12 +155,13 @@ func (d *Data) Add(
 		BaseHeight: baseHeight,
 		Height:     height,
 		Nonce:      nonce,
-		Malicious:  malicious,
+		malicious:  malicious,
 	}
 	ecache.index[atx] = data
-	if data.Malicious {
+	if malicious {
 		d.malicious[node] = struct{}{}
 	}
+	return true
 }
 
 func (d *Data) IsMalicious(node types.NodeID) bool {
@@ -179,8 +190,43 @@ func (d *Data) Get(epoch types.EpochID, atx types.ATXID) *ATX {
 		return nil
 	}
 	_, exists = d.malicious[data.Node]
-	data.Malicious = exists
+	data.malicious = exists
 	return data
+}
+
+func (d *Data) GetInEpoch(epoch types.EpochID, maliciousToo bool) []*ATX {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	ecache, exists := d.epochs[epoch]
+	if !exists {
+		return nil
+	}
+	atxs := make([]*ATX, 0, len(ecache.index))
+	for _, data := range ecache.index {
+		if _, exists := d.malicious[data.Node]; exists {
+			data.malicious = true
+		}
+		if !data.malicious || maliciousToo {
+			atxs = append(atxs, data)
+		}
+	}
+	return atxs
+}
+
+func (d *Data) MissingInEpoch(epoch types.EpochID, atxs []types.ATXID) []types.ATXID {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	ecache, exists := d.epochs[epoch]
+	if !exists {
+		return atxs
+	}
+	var missing []types.ATXID
+	for _, id := range atxs {
+		if _, exists := ecache.index[id]; !exists {
+			missing = append(missing, id)
+		}
+	}
+	return missing
 }
 
 // WeightForSet computes total weight of atxs in the set and returned array with

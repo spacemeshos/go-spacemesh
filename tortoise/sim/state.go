@@ -3,6 +3,7 @@ package sim
 import (
 	"errors"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -15,10 +16,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
-func newState(logger log.Log, conf config) State {
+func newState(logger log.Log, conf config, atxdata *atxsdata.Data) State {
 	return State{
-		logger: logger,
-		DB:     newCacheDB(logger, conf),
+		logger:  logger,
+		DB:      newCacheDB(logger, conf),
+		Atxdata: atxdata,
 	}
 }
 
@@ -26,7 +28,8 @@ func newState(logger log.Log, conf config) State {
 type State struct {
 	logger log.Log
 
-	DB *datastore.CachedDB
+	DB      *datastore.CachedDB
+	Atxdata *atxsdata.Data
 }
 
 // OnBeacon callback to store generated beacon.
@@ -38,6 +41,8 @@ func (s *State) OnBeacon(eid types.EpochID, beacon types.Beacon) {
 
 // OnActivationTx callback to store activation transaction.
 func (s *State) OnActivationTx(atx *types.VerifiedActivationTx) {
+	// TODO: consider using actual values for nonce and malicious if needed
+	s.Atxdata.AddFromHeader(atx.ToHeader(), 0, false)
 	if err := atxs.Add(s.DB, atx); err != nil {
 		s.logger.With().Panic("failed to add atx", log.Err(err))
 	}

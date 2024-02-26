@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -20,10 +21,11 @@ import (
 func Recover(
 	ctx context.Context,
 	db sql.Executor,
+	atxdata *atxsdata.Data,
 	current types.LayerID,
 	opts ...Opt,
 ) (*Tortoise, error) {
-	trtl, err := New(opts...)
+	trtl, err := New(atxdata, opts...)
 	if err != nil {
 		return nil, err
 	}

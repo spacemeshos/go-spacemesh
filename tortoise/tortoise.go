@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/fixed"
 	"go.uber.org/zap"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -45,10 +46,10 @@ type turtle struct {
 }
 
 // newTurtle creates a new verifying tortoise algorithm instance.
-func newTurtle(logger *zap.Logger, config Config) *turtle {
+func newTurtle(logger *zap.Logger, config Config, atxdata *atxsdata.Data) *turtle {
 	t := &turtle{
 		Config: config,
-		state:  newState(),
+		state:  newState(atxdata),
 		logger: logger,
 	}
 	genesis := types.GetEffectiveGenesis()
@@ -58,7 +59,7 @@ func newTurtle(logger *zap.Logger, config Config) *turtle {
 	t.processed = genesis
 	t.evicted = genesis.Sub(1)
 
-	t.epochs[genesis.GetEpoch()] = &epochInfo{atxs: map[types.ATXID]atxInfo{}}
+	t.epochs[genesis.GetEpoch()] = &epochInfo{}
 	genlayer := t.layer(genesis)
 	genlayer.hareTerminated = true
 	t.verifying = newVerifying(config, t.state)
@@ -78,7 +79,7 @@ func (t *turtle) lookbackWindowStart() (types.LayerID, bool) {
 	return t.verified.Sub(t.WindowSize), true
 }
 
-func (t *turtle) evict(ctx context.Context) {
+func (t *turtle) evict() {
 	if !t.verified.After(types.GetEffectiveGenesis().Add(t.Hdist)) {
 		return
 	}
@@ -109,8 +110,6 @@ func (t *turtle) evict(ctx context.Context) {
 
 		delete(t.ballots, lid)
 		if lid.OrdinalInEpoch() == types.GetLayersPerEpoch()-1 {
-			epoch := t.epoch(lid.GetEpoch())
-			atxsNumber.Sub(float64(len(epoch.atxs)))
 			delete(t.epochs, lid.GetEpoch())
 		}
 	}
@@ -322,7 +321,7 @@ func (t *turtle) updateLast(last types.LayerID) {
 }
 
 func (t *turtle) tallyVotes(ctx context.Context, last types.LayerID) {
-	defer t.evict(ctx)
+	defer t.evict()
 
 	t.logger.Debug("on layer", zap.Uint32("last", last.Uint32()))
 	t.updateLast(last)
@@ -520,13 +519,8 @@ func (t *turtle) runFull() (verified, changed types.LayerID) {
 
 func (t *turtle) computeEpochHeight(lid types.LayerID) {
 	einfo := t.epoch(lid.GetEpoch())
-	heights := make([]uint64, 0, len(einfo.atxs))
-	for _, info := range einfo.atxs {
-		if !info.malfeasant {
-			heights = append(heights, info.height)
-		}
-	}
-	einfo.height = getMedian(heights)
+	allAtxs := t.atxsdata.GetInEpoch(lid.GetEpoch(), false)
+	einfo.height = getMedianAtxHeight(allAtxs)
 	t.logger.Debug(
 		"computed epoch height",
 		zap.Uint32("in layer", lid.GetEpoch().Uint32()),
@@ -650,29 +644,22 @@ func (t *turtle) onOpinionChange(lid types.LayerID, early bool) {
 func (t *turtle) onAtx(atx *types.AtxTortoiseData) {
 	start := time.Now()
 	epoch := t.epoch(atx.TargetEpoch)
-	if _, exist := epoch.atxs[atx.ID]; !exist {
-		mal := t.isMalfeasant(atx.Smesher)
-		t.logger.Debug("on atx",
-			zap.Stringer("id", atx.ID),
-			zap.Uint32("epoch", uint32(atx.TargetEpoch)),
-			zap.Uint64("weight", atx.Weight),
-			zap.Uint64("height", atx.Height),
-			zap.Bool("malfeasant", mal),
-		)
-		info := atxInfo{
-			weight:     atx.Weight,
-			height:     atx.Height,
-			malfeasant: mal,
-		}
-		epoch.atxs[atx.ID] = info
-		if atx.Weight > math.MaxInt64 {
-			t.logger.Panic("fixme: atx size is not expected to overflow int64", zap.Uint64("weight", info.weight))
-		}
-		if !mal {
-			epoch.weight = epoch.weight.Add(fixed.New64(int64(info.weight)))
-		}
-		atxsNumber.Inc()
+	mal := t.isMalfeasant(atx.Smesher)
+	t.logger.Debug("on atx",
+		zap.Stringer("id", atx.ID),
+		zap.Uint32("epoch", uint32(atx.TargetEpoch)),
+		zap.Uint64("weight", atx.Weight),
+		zap.Uint64("height", atx.Height),
+		zap.Bool("malfeasant", mal),
+	)
+
+	if atx.Weight > math.MaxInt64 {
+		t.logger.Panic("fixme: atx size is not expected to overflow int64", zap.Uint64("weight", atx.Weight))
 	}
+	if !mal {
+		epoch.weight = epoch.weight.Add(fixed.New64(int64(atx.Weight)))
+	}
+
 	if atx.TargetEpoch == t.last.GetEpoch() {
 		t.localThreshold = epoch.weight.
 			Div(fixed.New(localThresholdFraction)).
@@ -716,9 +703,8 @@ func (t *turtle) decodeBallot(ballot *types.BallotTortoiseData) (*ballotInfo, ty
 	}
 
 	if ballot.EpochData != nil {
-		epoch := t.epoch(ballot.Layer.GetEpoch())
-		atx, exists := epoch.atxs[ballot.AtxID]
-		if !exists {
+		atx := t.atxsdata.Get(ballot.Layer.GetEpoch(), ballot.AtxID)
+		if atx == nil {
 			return nil, 0, fmt.Errorf("atx %s/%d not in state", ballot.AtxID, ballot.Layer.GetEpoch())
 		}
 		refinfo = &referenceInfo{
@@ -726,8 +712,8 @@ func (t *turtle) decodeBallot(ballot *types.BallotTortoiseData) (*ballotInfo, ty
 			atxid:           ballot.AtxID,
 			expectedBallots: ballot.EpochData.Eligibilities,
 			beacon:          ballot.EpochData.Beacon,
-			height:          atx.height,
-			weight:          big.NewRat(int64(atx.weight), int64(ballot.EpochData.Eligibilities)),
+			height:          atx.Height,
+			weight:          big.NewRat(int64(atx.Weight), int64(ballot.EpochData.Eligibilities)),
 		}
 	} else if ballot.Ref != nil {
 		ptr := *ballot.Ref

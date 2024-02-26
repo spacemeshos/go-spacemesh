@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -20,18 +21,17 @@ type recoveryAdapter struct {
 	*Tortoise
 	db sql.Executor
 
-	prev types.LayerID
+	next types.LayerID
 }
 
 func (a *recoveryAdapter) TallyVotes(ctx context.Context, current types.LayerID) {
 	genesis := types.GetEffectiveGenesis()
-	if a.prev == 0 {
-		a.prev = genesis
+	if a.next == 0 {
+		a.next = genesis
 	}
-	for lid := a.prev; lid <= current; lid++ {
-		require.NoError(a, RecoverLayer(ctx, a.Tortoise, a.db, lid, a.OnBallot))
-		a.Tortoise.TallyVotes(ctx, lid)
-		a.prev = lid
+	for ; a.next <= current; a.next++ {
+		require.NoError(a, RecoverLayer(ctx, a.Tortoise, a.db, a.next, a.OnBallot))
+		a.Tortoise.TallyVotes(ctx, a.next)
 	}
 }
 
@@ -43,7 +43,8 @@ func TestRecoverState(t *testing.T) {
 
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
-	tortoise := tortoiseFromSimState(t, s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
+	simState := s.GetState(0)
+	tortoise := tortoiseFromSimState(t, simState, WithLogger(logtest.New(t)), WithConfig(cfg))
 	var last, verified types.LayerID
 	for i := 0; i < 50; i++ {
 		last = s.Next()
@@ -55,6 +56,7 @@ func TestRecoverState(t *testing.T) {
 	tortoise2, err := Recover(
 		context.Background(),
 		s.GetState(0).DB.Executor,
+		simState.Atxdata,
 		last,
 		WithLogger(logtest.New(t)),
 		WithConfig(cfg),
@@ -78,6 +80,7 @@ func TestRecoverEmpty(t *testing.T) {
 	tortoise, err := Recover(
 		context.Background(),
 		s.GetState(0).DB.Executor,
+		atxsdata.New(),
 		100,
 		WithLogger(logtest.New(t)),
 		WithConfig(cfg),
@@ -113,6 +116,7 @@ func TestRecoverWithOpinion(t *testing.T) {
 	tortoise, err := Recover(
 		context.Background(),
 		s.GetState(0).DB.Executor,
+		atxsdata.New(),
 		last.Layer,
 		WithLogger(logtest.New(t)),
 		WithConfig(cfg),
@@ -155,6 +159,7 @@ func TestResetPending(t *testing.T) {
 	recovered, err := Recover(
 		context.Background(),
 		s.GetState(0).DB.Executor,
+		atxsdata.New(),
 		last,
 		WithLogger(logtest.New(t)),
 		WithConfig(cfg),
@@ -200,6 +205,7 @@ func TestWindowRecovery(t *testing.T) {
 	recovered, err := Recover(
 		context.Background(),
 		s.GetState(0).DB.Executor,
+		atxsdata.New(),
 		last,
 		WithLogger(logtest.New(t)),
 		WithConfig(cfg),

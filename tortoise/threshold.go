@@ -5,6 +5,7 @@ import (
 
 	"github.com/spacemeshos/fixed"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
@@ -30,6 +31,20 @@ func getMedian(heights []uint64) uint64 {
 		return (heights[mid-1] + heights[mid]) / 2
 	}
 	return heights[mid]
+}
+
+func getMedianAtxHeight(atxs []*atxsdata.ATX) uint64 {
+	if len(atxs) == 0 {
+		return 0
+	}
+	sort.Slice(atxs, func(i, j int) bool {
+		return atxs[i].Height < atxs[j].Height
+	})
+	mid := len(atxs) / 2
+	if len(atxs)%2 == 0 {
+		return (atxs[mid-1].Height + atxs[mid].Height) / 2
+	}
+	return atxs[mid].Height
 }
 
 func computeExpectedWeight(epochs map[types.EpochID]*epochInfo, target, last types.LayerID) weight {

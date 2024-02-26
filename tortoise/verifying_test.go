@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/fixed"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
@@ -117,7 +118,7 @@ func TestVerifyingProcessLayer(t *testing.T) {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			logger := logtest.Zap(t)
-			v := newVerifying(Config{}, newState())
+			v := newVerifying(Config{}, newState(atxsdata.New()))
 			v.processed = start.Add(1).Add(uint32(len(tc.ballots)))
 
 			for i := range tc.ballots {
@@ -579,7 +580,7 @@ func TestVerifying_Verify(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			logger := logtest.Zap(t)
 
-			state := newState()
+			state := newState(atxsdata.New())
 			state.epochs = epochs
 			state.verified = verified
 			state.processed = processed
