@@ -1739,6 +1739,7 @@ func (app *App) MigrateExistingIdentity() error {
 // LoadIdentities loads all existing identities from the config directory.
 func (app *App) LoadIdentities() error {
 	signers := make([]*signing.EdSigner, 0)
+	pubKeys := make(map[string]*signing.PublicKey)
 
 	dir := filepath.Join(app.Config.DataDir(), keyDir)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -1787,10 +1788,30 @@ func (app *App) LoadIdentities() error {
 			signer.PublicKey(),
 		)
 		signers = append(signers, signer)
+		pubKeys[d.Name()] = signer.PublicKey()
 		return nil
 	})
 	if err != nil {
 		return err
+	}
+
+	// make sure all public keys are unique
+	seen := make(map[string]string)
+	collision := false
+	for f1, pk := range pubKeys {
+		if f2, ok := seen[pk.String()]; ok {
+			app.log.With().Error("duplicate key",
+				log.String("filename1", f1),
+				log.String("filename2", f2),
+				pk,
+			)
+			collision = true
+			continue
+		}
+		seen[pk.String()] = f1
+	}
+	if collision {
+		return fmt.Errorf("duplicate key found in identity files")
 	}
 
 	if len(signers) > 0 {

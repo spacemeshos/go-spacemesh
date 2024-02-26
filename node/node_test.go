@@ -3,7 +3,6 @@ package node
 import (
 	"bytes"
 	"context"
-	"crypto/ed25519"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -26,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"
@@ -61,87 +61,89 @@ func TestMain(m *testing.M) {
 }
 
 func TestSpacemeshApp_getEdIdentity(t *testing.T) {
-	tempDir := t.TempDir()
-
-	// setup spacemesh app
-	app := New(WithLog(logtest.New(t)))
-	app.Config.DataDirParent = tempDir
-	app.log = logtest.New(t)
-
-	// Create new identity.
-	err := app.LoadIdentities()
-	require.NoError(t, err)
-	require.Len(t, app.signers, 1)
-	before := app.signers[0].PublicKey()
-
-	infos, err := os.ReadDir(tempDir)
-	require.NoError(t, err)
-	require.Len(t, infos, 1)
-
-	// Load existing identity.
-	err = app.LoadIdentities()
-	require.NoError(t, err)
-	require.Len(t, app.signers, 1)
-	after := app.signers[0].PublicKey()
-
-	infos, err = os.ReadDir(tempDir)
-	require.NoError(t, err)
-	require.Len(t, infos, 1)
-
-	require.Equal(t, before, after)
-
-	// Invalidate the identity by changing its file name.
-	filename := filepath.Join(tempDir, infos[0].Name())
-	err = os.Rename(filename, filename+"_")
-	require.NoError(t, err)
-
-	// Create new identity.
-	err = app.LoadIdentities()
-	require.NoError(t, err)
-	require.Len(t, app.signers, 1)
-	after = app.signers[0].PublicKey()
-
-	infos, err = os.ReadDir(tempDir)
-	require.NoError(t, err)
-	require.Len(t, infos, 2)
-	require.NotEqual(t, before, after)
-
-	t.Run("bad length", func(t *testing.T) {
-		testLoadIdentities(t,
-			bytes.Repeat([]byte("ab"), signing.PrivateKeySize-1),
-			"invalid key size 63/64",
-		)
-	})
-	t.Run("bad hex", func(t *testing.T) {
-		testLoadIdentities(t,
-			bytes.Repeat([]byte("CV"), signing.PrivateKeySize),
-			"decoding private key: encoding/hex: invalid byte",
-		)
-	})
-	t.Run("good key", func(t *testing.T) {
-		_, priv, err := ed25519.GenerateKey(nil)
-		require.NoError(t, err)
-		testLoadIdentities(t,
-			[]byte(hex.EncodeToString(priv)),
-			"",
-		)
-	})
-}
-
-func testLoadIdentities(t *testing.T, data []byte, expect string) {
-	app := New(WithLog(logtest.New(t)))
-	app.Config.DataDirParent = t.TempDir()
-	keyFile := filepath.Join(app.Config.DataDirParent, keyDir, defaultKeyFileName)
-	require.NoError(t, os.MkdirAll(filepath.Dir(keyFile), 0o700))
-	require.NoError(t, os.WriteFile(keyFile, data, 0o600))
-	err := app.LoadIdentities()
-	if len(expect) > 0 {
-		require.ErrorContains(t, err, expect)
-		require.Nil(t, app.signers)
-	} else {
+	t.Run("no key", func(t *testing.T) {
+		app := New(WithLog(logtest.New(t)))
+		app.Config.DataDirParent = t.TempDir()
+		err := app.LoadIdentities()
 		require.NoError(t, err)
 		require.NotEmpty(t, app.signers)
+	})
+
+	setupAppWithKeys := func(tb testing.TB, data ...[]byte) (*App, *observer.ObservedLogs) {
+		observer, observedLogs := observer.New(zapcore.WarnLevel)
+		logger := zap.New(observer)
+		app := New(WithLog(log.NewFromLog(logger)))
+		app.Config.DataDirParent = t.TempDir()
+		if len(data) == 0 {
+			return app, observedLogs
+		}
+
+		key := data[0]
+		keyFile := filepath.Join(app.Config.DataDirParent, keyDir, defaultKeyFileName)
+		require.NoError(t, os.MkdirAll(filepath.Dir(keyFile), 0o700))
+		require.NoError(t, os.WriteFile(keyFile, key, 0o600))
+
+		for i, key := range data[1:] {
+			keyFile = filepath.Join(app.Config.DataDirParent, keyDir, fmt.Sprintf("identity_%d.key", i))
+			require.NoError(t, os.WriteFile(keyFile, key, 0o600))
+		}
+		return app, observedLogs
 	}
+
+	t.Run("good key", func(t *testing.T) {
+		signer, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		app, _ := setupAppWithKeys(t, []byte(hex.EncodeToString(signer.PrivateKey())))
+		err = app.LoadIdentities()
+		require.NoError(t, err)
+		require.NotEmpty(t, app.signers)
+		before := app.signers[0].PublicKey()
+
+		err = app.LoadIdentities()
+		require.NoError(t, err)
+		require.NotEmpty(t, app.signers)
+		after := app.signers[0].PublicKey()
+		require.Equal(t, before, after)
+	})
+
+	t.Run("bad length", func(t *testing.T) {
+		app, _ := setupAppWithKeys(t, bytes.Repeat([]byte("ab"), signing.PrivateKeySize-1))
+		err := app.LoadIdentities()
+		require.ErrorContains(t, err, "invalid key size 63/64")
+		require.Nil(t, app.signers)
+	})
+
+	t.Run("bad hex", func(t *testing.T) {
+		app, _ := setupAppWithKeys(t, bytes.Repeat([]byte("CV"), signing.PrivateKeySize))
+		err := app.LoadIdentities()
+		require.ErrorContains(t, err, "decoding private key: encoding/hex: invalid byte")
+		require.Nil(t, app.signers)
+	})
+
+	t.Run("duplicate keys", func(t *testing.T) {
+		key1, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		key2, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		app, observedLogs := setupAppWithKeys(t,
+			[]byte(hex.EncodeToString(key1.PrivateKey())),
+			[]byte(hex.EncodeToString(key2.PrivateKey())),
+			[]byte(hex.EncodeToString(key1.PrivateKey())),
+			[]byte(hex.EncodeToString(key2.PrivateKey())),
+		)
+		err = app.LoadIdentities()
+		require.ErrorContains(t, err, "duplicate key")
+
+		require.Len(t, observedLogs.All(), 2)
+		log1 := observedLogs.FilterField(zap.String("public_key", key1.PublicKey().ShortString()))
+		require.Len(t, log1.All(), 1)
+		require.Contains(t, log1.All()[0].Message, "duplicate key")
+		log2 := observedLogs.FilterField(zap.String("public_key", key2.PublicKey().ShortString()))
+		require.Len(t, log2.All(), 1)
+		require.Contains(t, log2.All()[0].Message, "duplicate key")
+	})
 }
 
 func newLogger(buf *bytes.Buffer) log.Log {
