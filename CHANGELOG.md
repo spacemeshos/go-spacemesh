@@ -75,6 +75,55 @@ configuration is as follows:
 }
 ```
 
+#### Extend go-spacemesh with option to manage multiple identities/PoST services
+
+A node can now manage multiple identities and will manage the lifecycle for those identities. This reduces the amount of
+data that is needed to be broadcasted / fetched from the network and reduces the amount of data that needs to be stored
+locally, because only one database is needed for all identities instead of one for each identity.
+
+To ensure you are eligible for rewards of any given identity, the associated PoST service must be running and connected
+to the node during the cyclegap set in the node's configuration. After successfully broadcasting the ATX and registering
+at a PoET server the PoST services can be stopped with only the node having to be online.
+
+This change moves the private keys associated for an identity from the PoST data directory to the node's data directory
+and into the folder `identities` (i.e. if `state.sql` is in folder `data` the keys will now be stored in `data/identities`).
+The node will automatically migrate the `key.bin` file from the PoST data directory during the first startup and copy
+it to the new location as `identity.key`. The content of the file stays unchanged (= the private key of the identity hex-encoded).
+
+##### Adding new identities/PoST services to a node
+
+To add a new identity to a node initialize PoST data and with `postcli` and let the tool generate a new private key for
+you:
+
+```shell
+./postcli -provider=2 -numUnits=4 -datadir=/path/to/data \
+    -commitmentAtxId=c230c51669d1fcd35860131e438e234726b2bd5f9adbbd91bd88a718e7e98ecb
+```
+
+Make sure to replace `provider` with your provider of choice and `numUnits` with the number of PoST units you want to
+initialize. The `commitmentAtxId` is the commitment ATX ID of the identity you want to initialize. For details on the
+usage of `postcli` please refer to [postcli README](https://github.com/spacemeshos/post/cmd/postcli/README.md).
+
+During initialization `postcli` will generate a new private key and store it in the PoST data directory as `key.bin`.
+Copy this file to your `data/identities` directory and rename it to `xxx.key` where `xxx` is a unique identifier for
+the identity. The node will automatically pick up the new identity and manage its lifecycle after a restart.
+
+Setup the `post-service` [binary](https://github.com/spacemeshos/post-rs/releases) or
+[docker image](https://hub.docker.com/r/spacemeshos/post-service/tags) with the data and configure it to connect to your
+node. For details refer to the [post-service README](https://github.com/spacemeshos/post-rs/blob/main/service/README.md).
+
+##### Migrating existing identities/PoST services to a node
+
+If you have multiple nodes running and want to migrate to use only one node for both identities:
+
+1. Stop all nodes.
+2. Copy the `key.bin` files from the PoST data directories of all nodes to the data directory of the node you want to
+   use for both identities and into the folder `data/identities`. Rename the files to `xxx.key` where `xxx` is a unique
+   identifier for each identity.
+3. Start the node managing the identities.
+4. For every identity setup a post service to use the existing PoST data for that identity and connect to the node.
+   For details refer to the [post-service README](https://github.com/spacemeshos/post-rs/blob/main/service/README.md).
+
 ### Highlights
 
 * [#5293](https://github.com/spacemeshos/go-spacemesh/pull/5293) change poet servers configuration
@@ -99,6 +148,13 @@ configuration is as follows:
 
   Publishing is blocked during sync because `Syncer::ListenToATXGossip()` returns false, and thus every malicious ATX being
   synced was causing an error resulting in an interruption of sync.
+
+* [#5592](https://gihtub.com/spacemeshos/go-spacemesh/pull/5592)
+  Extend node with option to have multiple PoST services connect. This allows users to run multiple PoST services,
+  without the need to run multiple nodes. A node can now manage multiple identities and will manage the lifecycle of
+  those identities.
+  To collect rewards for every identity, the associated PoST service must be running and connected to the node during
+  the cyclegap set in the node's configuration.
 
 ### Features
 
