@@ -83,3 +83,15 @@ func DeleteBeforeEpoch(db sql.Executor, epoch types.EpochID) error {
 	}
 	return nil
 }
+
+func Has(db sql.Executor, id []byte) (bool, error) {
+	rows, err := db.Exec(
+		"select 1 from activesets where id = ?1;",
+		func(stmt *sql.Statement) { stmt.BindBytes(1, id) },
+		nil,
+	)
+	if err != nil {
+		return false, fmt.Errorf("has activeset %s: %w", id, err)
+	}
+	return rows > 0, nil
+}
