@@ -88,7 +88,7 @@ func (p *Peers) OnLatency(id peer.ID, size int, latency time.Duration) {
 	}
 	// we assume that latency is proportional to the size of the message
 	// and to account for additional cost of transmitting small messages we add 1024 for adjustment
-	latency = latency / time.Duration(min(size/1024, 1))
+	latency = latency / time.Duration(max(size/1024, 1))
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	peer, exist := p.peers[id]
