@@ -107,6 +107,8 @@ configuration is as follows:
   make sure your post service now connects to `grpc-post-listener` instead of `grpc-private-listener`. If you are
   connecting to a remote post service over the internet we strongly recommend using mTLS via `grpc-tls-listener`.
 
+* [5602](https://github.com/spacemeshos/go-spacemesh/pull/5602) Optimize client side of fetcher to avoid encoding when not needed.
+
 ## Release v1.3.8
 
 ### Features
