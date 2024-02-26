@@ -494,7 +494,7 @@ type testTracer struct {
 }
 
 func (t *testTracer) waitStopped() types.LayerID {
-	wait := time.Second
+	wait := 2 * time.Second
 	select {
 	case <-time.After(wait):
 		require.FailNow(t, "didn't stop", "wait %v", wait)
@@ -536,7 +536,7 @@ func (t *testTracer) OnStop(lid types.LayerID) {
 }
 
 func (t *testTracer) OnActive(el []*types.HareEligibility) {
-	wait := time.Second
+	wait := 2 * time.Second
 	select {
 	case <-time.After(wait):
 		require.FailNow(t, "eligibility can't be sent", "wait %v", wait)

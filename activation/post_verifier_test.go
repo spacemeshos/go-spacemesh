@@ -113,6 +113,8 @@ func TestPostVerifierPrioritization(t *testing.T) {
 
 	err := v.Verify(context.Background(), &shared.Proof{}, &shared.ProofMetadata{NodeId: nodeID.Bytes()})
 	require.NoError(t, err)
+
+	require.NoError(t, v.Close())
 }
 
 func TestVerificationDisabled(t *testing.T) {
