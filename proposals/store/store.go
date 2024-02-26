@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 	"golang.org/x/exp/maps"
 
@@ -26,14 +27,19 @@ type Store struct {
 	// guards access to data and evicted
 	mu      sync.RWMutex
 	evicted *types.LayerID
-	data    map[types.LayerID]map[types.ProposalID]*types.Proposal
+	data    map[types.LayerID]layerData
+}
+
+type layerData struct {
+	proposals map[types.ProposalID]*types.Proposal
+	metric    prometheus.Counter
 }
 
 type StoreOption func(*Store)
 
-func WithCapacity(capacity types.LayerID) StoreOption {
+func WithCapacity(capacity uint32) StoreOption {
 	return func(s *Store) {
-		s.capacity = capacity
+		s.capacity = types.LayerID(capacity)
 	}
 }
 
@@ -43,7 +49,7 @@ func WithEvictedLayer(layer types.LayerID) StoreOption {
 	}
 }
 
-func WithStoreLogger(logger *zap.Logger) StoreOption {
+func WithLogger(logger *zap.Logger) StoreOption {
 	return func(s *Store) {
 		s.logger = logger
 	}
@@ -51,7 +57,7 @@ func WithStoreLogger(logger *zap.Logger) StoreOption {
 
 func New(opts ...StoreOption) *Store {
 	s := &Store{
-		data:     make(map[types.LayerID]map[types.ProposalID]*types.Proposal),
+		data:     make(map[types.LayerID]layerData),
 		capacity: 2,
 		logger:   zap.NewNop(),
 	}
@@ -82,6 +88,7 @@ func (s *Store) OnLayer(layer types.LayerID) {
 		toEvict := layer - s.capacity
 		for lid := evicted; lid <= toEvict; lid++ {
 			s.logger.Debug("evicting layer", zap.Uint32("layer", uint32(lid)))
+			numProposals.DeleteLabelValues(lid.String())
 			delete(s.data, lid)
 		}
 		s.evicted = &toEvict
@@ -100,14 +107,18 @@ func (s *Store) Add(p *types.Proposal) error {
 		return ErrLayerEvicted
 	}
 
-	if s.data[p.Layer] == nil {
-		s.data[p.Layer] = make(map[types.ProposalID]*types.Proposal)
+	if _, exists := s.data[p.Layer]; !exists {
+		s.data[p.Layer] = layerData{
+			proposals: make(map[types.ProposalID]*types.Proposal),
+			metric:    numProposals.WithLabelValues(p.Layer.String()),
+		}
 	}
 
-	if _, ok := s.data[p.Layer][p.ID()]; ok {
+	if _, ok := s.data[p.Layer].proposals[p.ID()]; ok {
 		return ErrProposalExists
 	}
-	s.data[p.Layer][p.ID()] = p
+	s.data[p.Layer].proposals[p.ID()] = p
+	s.data[p.Layer].metric.Inc()
 	return nil
 }
 
@@ -119,15 +130,15 @@ func (s *Store) Get(layer types.LayerID, id types.ProposalID) *types.Proposal {
 		return nil
 	}
 
-	return s.data[layer][id]
+	return s.data[layer].proposals[id]
 }
 
 func (s *Store) GetForLayer(layer types.LayerID) []*types.Proposal {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if proposals, ok := s.data[layer]; ok {
-		return maps.Values(proposals)
+	if d, ok := s.data[layer]; ok {
+		return maps.Values(d.proposals)
 	}
 	return nil
 }
@@ -142,7 +153,7 @@ func (s *Store) GetMany(layer types.LayerID, pids ...types.ProposalID) []*types.
 
 	proposals := make([]*types.Proposal, 0, len(pids))
 	for _, pid := range pids {
-		if p, ok := s.data[layer][pid]; ok {
+		if p, ok := s.data[layer].proposals[pid]; ok {
 			proposals = append(proposals, p)
 		}
 	}
@@ -154,7 +165,7 @@ func (s *Store) Has(id types.ProposalID) bool {
 	defer s.mu.RUnlock()
 
 	for layer := range s.data {
-		if _, ok := s.data[layer][id]; ok {
+		if _, ok := s.data[layer].proposals[id]; ok {
 			return true
 		}
 	}
@@ -162,17 +173,24 @@ func (s *Store) Has(id types.ProposalID) bool {
 }
 
 func (s *Store) GetBlob(id types.ProposalID) ([]byte, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	var proposal *types.Proposal
 
+	s.mu.RLock()
 	for layer := range s.data {
-		if proposal, ok := s.data[layer][id]; ok {
-			blob, err := codec.Encode(proposal)
-			if err != nil {
-				return nil, fmt.Errorf("encoding proposal: %w", err)
-			}
-			return blob, nil
+		if p, ok := s.data[layer].proposals[id]; ok {
+			proposal = p
+			break
 		}
 	}
-	return nil, ErrNotFound
+	s.mu.RUnlock()
+
+	if proposal == nil {
+		return nil, ErrNotFound
+	}
+
+	blob, err := codec.Encode(proposal)
+	if err != nil {
+		return nil, fmt.Errorf("encoding proposal: %w", err)
+	}
+	return blob, nil
 }

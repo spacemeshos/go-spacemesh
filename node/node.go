@@ -795,13 +795,10 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 	app.certifier.Register(app.edSgn)
 
-	var evictedLayer types.LayerID
-	if lid := app.clock.CurrentLayer(); lid > 0 {
-		evictedLayer = lid - 1
-	}
 	proposalsStore := store.New(
-		store.WithEvictedLayer(evictedLayer),
-		store.WithStoreLogger(app.addLogger(ProposalStoreLogger, lg).Zap()),
+		store.WithEvictedLayer(app.clock.CurrentLayer()),
+		store.WithLogger(app.addLogger(ProposalStoreLogger, lg).Zap()),
+		store.WithCapacity(app.Config.Tortoise.Zdist+1),
 	)
 
 	flog := app.addLogger(Fetcher, lg)

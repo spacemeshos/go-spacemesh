@@ -353,6 +353,9 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 		return err
 	}
 	proposalDuration.WithLabelValues(fetchTXs).Observe(float64(time.Since(t4)))
+	if err := h.setProposalBeacon(&p); err != nil {
+		return fmt.Errorf("setting proposal beacon: %w", err)
+	}
 	logger.With().Debug("proposal is syntactically valid")
 
 	err = h.proposals.OnProposal(&p)
@@ -399,22 +402,22 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 	return nil
 }
 
-func (h *Handler) setBallotBeacon(b *types.Ballot) error {
-	if b.EpochData != nil {
-		b.SetBeacon(b.EpochData.Beacon)
+func (h *Handler) setProposalBeacon(p *types.Proposal) error {
+	if p.EpochData != nil {
+		p.SetBeacon(p.EpochData.Beacon)
 		return nil
 	}
-	if b.RefBallot == types.EmptyBallotID {
+	if p.RefBallot == types.EmptyBallotID {
 		return fmt.Errorf("empty refballot")
 	}
-	refBallot, err := ballots.Get(h.db, b.RefBallot)
+	refBallot, err := ballots.Get(h.db, p.RefBallot)
 	if err != nil {
-		return fmt.Errorf("cannot find refballot '%s' in DB: %w", b.RefBallot.String(), err)
+		return fmt.Errorf("cannot find refballot '%s' in DB: %w", p.RefBallot.String(), err)
 	}
 	if refBallot.EpochData == nil {
-		return fmt.Errorf("refballot '%s' with empty epoch data", b.RefBallot.String())
+		return fmt.Errorf("refballot '%s' with empty epoch data", p.RefBallot.String())
 	}
-	b.SetBeacon(refBallot.EpochData.Beacon)
+	p.SetBeacon(refBallot.EpochData.Beacon)
 	return nil
 }
 
@@ -447,9 +450,6 @@ func (h *Handler) processBallot(ctx context.Context, logger log.Log, b *types.Ba
 			return nil, fmt.Errorf("%w: %s", errKnownBallot, b.ID())
 		}
 		return nil, fmt.Errorf("store decoded ballot %s: %w", decoded.ID, err)
-	}
-	if err := h.setBallotBeacon(b); err != nil {
-		return nil, fmt.Errorf("setting beacon in ballot: %w", err)
 	}
 	reportVotesMetrics(b)
 	return proof, nil

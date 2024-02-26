@@ -550,8 +550,11 @@ func (h *Hare) selectProposals(session *session) []types.ProposalID {
 			)
 			continue
 		}
+		// double check that a single smesher is not included twice
+		// theoretically it should never happen as it is covered
+		// by the malicious check above.
 		if n := atxs[p.AtxID]; n > 1 {
-			h.log.Warn("proposal with same atx added several times in the recorded set",
+			h.log.Error("proposal with same atx added several times in the recorded set",
 				zap.Int("n", n),
 				zap.Stringer("id", p.ID()),
 				zap.Stringer("atxid", p.AtxID),
