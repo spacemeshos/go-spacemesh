@@ -256,16 +256,21 @@ func NewFetch(
 	// there is one test that covers this part.
 	if host != nil {
 		connectedf := func(peer p2p.Peer) {
-			f.logger.With().Debug("add peer", log.Stringer("id", peer))
-			f.peers.Add(peer)
+			if f.peers.Add(peer) {
+				f.logger.With().Debug("add peer", log.Stringer("id", peer))
+			}
 		}
 		host.Network().Notify(&network.NotifyBundle{
 			ConnectedF: func(_ network.Network, c network.Conn) {
-				connectedf(c.RemotePeer())
+				if !c.Stat().Transient {
+					connectedf(c.RemotePeer())
+				}
 			},
 			DisconnectedF: func(_ network.Network, c network.Conn) {
-				f.logger.With().Debug("remove peer", log.Stringer("id", c.RemotePeer()))
-				f.peers.Delete(c.RemotePeer())
+				if !c.Stat().Transient && !host.Connected(c.RemotePeer()) {
+					f.logger.With().Debug("remove peer", log.Stringer("id", c.RemotePeer()))
+					f.peers.Delete(c.RemotePeer())
+				}
 			},
 		})
 		for _, peer := range host.GetPeers() {
