@@ -20,7 +20,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
-	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 const (
@@ -111,7 +110,8 @@ type Config struct {
 	PeersRateThreshold   float64                 `mapstructure:"peers-rate-threshold"`
 	Streaming            bool                    `mapstructure:"streaming"`
 	// The maximum number of concurrent requests to get ATXs.
-	GetAtxsConcurrency int64 `mapstructure:"getatxsconcurrency"`
+	GetAtxsConcurrency int64                  `mapstructure:"getatxsconcurrency"`
+	DecayingTag        server.DecayingTagSpec `mapstructure:"decaying-tag"`
 }
 
 func (c Config) getServerConfig(protocol string) ServerConfig {
@@ -154,6 +154,12 @@ func DefaultConfig() Config {
 		},
 		PeersRateThreshold: 0.02,
 		GetAtxsConcurrency: 100,
+		DecayingTag: server.DecayingTagSpec{
+			Interval: time.Minute,
+			Inc:      1000,
+			Dec:      1000,
+			Cap:      10000,
+		},
 	}
 }
 
@@ -300,6 +306,7 @@ func (f *Fetch) registerServer(
 		server.WithTimeout(f.cfg.RequestTimeout),
 		server.WithHardTimeout(f.cfg.RequestHardTimeout),
 		server.WithLog(f.logger),
+		server.WithDecayingTag(f.cfg.DecayingTag),
 	}
 	if f.cfg.EnableServerMetrics {
 		opts = append(opts, server.WithMetrics())
@@ -501,7 +508,7 @@ func (f *Fetch) failAfterRetry(hash types.Hash32) {
 	}
 
 	// first check if we have it locally from gossips
-	if err := f.bs.LoadBlob(req.hint, hash.Bytes(), &sql.Blob{}); err == nil {
+	if has, err := f.bs.Has(req.hint, hash.Bytes()); err == nil && has {
 		close(req.promise.completed)
 		delete(f.ongoing, hash)
 		return
@@ -836,7 +843,7 @@ func (f *Fetch) getHash(
 	}
 
 	// check if we already have this hash locally
-	if err := f.bs.LoadBlob(h, hash.Bytes(), &sql.Blob{}); err == nil {
+	if has, err := f.bs.Has(h, hash.Bytes()); err == nil && has {
 		return nil, nil
 	}
 

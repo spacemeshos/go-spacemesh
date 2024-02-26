@@ -100,12 +100,16 @@ configuration is as follows:
 
 * [#5562](https://github.com/spacemeshos/go-spacemesh/pull/5562) Add streaming mode for fetcher. This should lessen
   GC pressure during sync
+* [#5564](https://github.com/spacemeshos/go-spacemesh/pull/5564) Use decaying tags for fetch peers. This prevents
+  libp2p's Connection Manager from breaking sync.
 * [#5418](https://github.com/spacemeshos/go-spacemesh/pull/5418) Add `grpc-post-listener` to separate post service from
   `grpc-private-listener` and not require mTLS for the post service.
 
   If you are not using a remote post service you do not need to adjust anything. If you are using a remote setup
   make sure your post service now connects to `grpc-post-listener` instead of `grpc-private-listener`. If you are
   connecting to a remote post service over the internet we strongly recommend using mTLS via `grpc-tls-listener`.
+
+* [5602](https://github.com/spacemeshos/go-spacemesh/pull/5602) Optimize client side of fetcher to avoid encoding when not needed.
 
 ## Release v1.3.8
 

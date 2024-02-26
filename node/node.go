@@ -34,6 +34,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+	"github.com/spacemeshos/go-spacemesh/api/grpcserver/v2alpha1"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/blocks"
@@ -48,9 +49,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
-	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/hare3/compat"
+	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -853,7 +854,7 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	logger := app.addLogger(HareLogger, lg).Zap()
 	app.hare3 = hare3.New(
-		app.clock, app.host, app.cachedDB, app.edVerifier, app.hOracle, newSyncer, patrol,
+		app.clock, app.host, app.db, app.atxsdata, app.edVerifier, app.hOracle, newSyncer, patrol,
 		hare3.WithLogger(logger),
 		hare3.WithConfig(app.Config.HARE3),
 	)
@@ -1361,6 +1362,14 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		return service, nil
 	case grpcserver.Activation:
 		service := grpcserver.NewActivationService(app.cachedDB, types.ATXID(app.Config.Genesis.GoldenATX()))
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2alpha1.Activation:
+		service := v2alpha1.NewActivationService(app.db)
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2alpha1.ActivationStream:
+		service := v2alpha1.NewActivationStreamService(app.db)
 		app.grpcServices[svc] = service
 		return service, nil
 	}

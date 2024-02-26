@@ -46,14 +46,21 @@ var (
 		namespace,
 		"latency since initiating a request",
 		[]string{protoLabel, "result"},
-		prometheus.ExponentialBuckets(0.01, 2, 10),
+		prometheus.ExponentialBuckets(0.01, 2, 20),
 	)
 	serverLatency = metrics.NewHistogramWithBuckets(
 		"server_latency_seconds",
 		namespace,
 		"latency since accepting new stream",
 		[]string{protoLabel},
-		prometheus.ExponentialBuckets(0.01, 2, 10),
+		prometheus.ExponentialBuckets(0.01, 2, 20),
+	)
+	inQueueLatency = metrics.NewHistogramWithBuckets(
+		"in_queue_latency_seconds",
+		namespace,
+		"latency spent in queue",
+		[]string{protoLabel},
+		prometheus.ExponentialBuckets(0.01, 2, 20),
 	)
 )
 
@@ -69,6 +76,7 @@ func newTracker(protocol string) *tracker {
 		clientSucceeded:      clientRequests.WithLabelValues(protocol, "succeeded"),
 		clientFailed:         clientRequests.WithLabelValues(protocol, "failed"),
 		clientServerError:    clientRequests.WithLabelValues(protocol, "server_error"),
+		inQueueLatency:       inQueueLatency.WithLabelValues(protocol),
 		serverLatency:        serverLatency.WithLabelValues(protocol),
 		clientLatency:        clientLatency.WithLabelValues(protocol, "success"),
 		clientLatencyFailure: clientLatency.WithLabelValues(protocol, "failure"),
@@ -86,6 +94,7 @@ type tracker struct {
 	clientSucceeded                     prometheus.Counter
 	clientFailed                        prometheus.Counter
 	clientServerError                   prometheus.Counter
+	inQueueLatency                      prometheus.Observer
 	serverLatency                       prometheus.Observer
 	clientLatency, clientLatencyFailure prometheus.Observer
 }

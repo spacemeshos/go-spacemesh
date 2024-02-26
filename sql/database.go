@@ -242,8 +242,17 @@ type Database struct {
 	latency *prometheus.HistogramVec
 }
 
-func (db *Database) getTx(ctx context.Context, initstmt string) (*Tx, error) {
+func (db *Database) getConn(ctx context.Context) *sqlite.Conn {
+	start := time.Now()
 	conn := db.pool.Get(ctx)
+	if conn != nil {
+		connWaitLatency.Observe(time.Since(start).Seconds())
+	}
+	return conn
+}
+
+func (db *Database) getTx(ctx context.Context, initstmt string) (*Tx, error) {
+	conn := db.getConn(ctx)
 	if conn == nil {
 		return nil, ErrNoConnection
 	}
@@ -307,7 +316,7 @@ func (db *Database) WithTxImmediate(ctx context.Context, exec func(*Tx) error) e
 // Note that Exec will block until database is closed or statement has finished.
 // If application needs to control statement execution lifetime use one of the transaction.
 func (db *Database) Exec(query string, encoder Encoder, decoder Decoder) (int, error) {
-	conn := db.pool.Get(context.Background())
+	conn := db.getConn(context.Background())
 	if conn == nil {
 		return 0, ErrNoConnection
 	}

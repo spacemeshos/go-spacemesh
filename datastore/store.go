@@ -58,7 +58,7 @@ type Config struct {
 
 func DefaultConfig() Config {
 	return Config{
-		ATXSize:         3_000_000, // to be in line with 2*`EpochData` size (see fetch/wire_types.go) - see comment above
+		ATXSize:         4_400_000, // to be in line with 2*`EpochData` size (see fetch/wire_types.go) - see comment above
 		MalfeasanceSize: 1_000,
 	}
 }
@@ -416,4 +416,30 @@ func (bs *BlobStore) GetBlobSizes(hint Hint, ids [][]byte) (sizes []int, err err
 		return nil, fmt.Errorf("get %s blob sizes: %w", hint, err)
 	}
 	return sizes, nil
+}
+
+func (bs *BlobStore) Has(hint Hint, key []byte) (bool, error) {
+	switch hint {
+	case ATXDB:
+		return atxs.Has(bs.DB, types.BytesToATXID(key))
+	case ProposalDB:
+		return proposals.Has(bs.DB, types.ProposalID(types.BytesToHash(key).ToHash20()))
+	case BallotDB:
+		id := types.BallotID(types.BytesToHash(key).ToHash20())
+		return ballots.Has(bs.DB, id)
+	case BlockDB:
+		id := types.BlockID(types.BytesToHash(key).ToHash20())
+		return blocks.Has(bs.DB, id)
+	case TXDB:
+		return transactions.Has(bs.DB, types.TransactionID(types.BytesToHash(key)))
+	case POETDB:
+		var ref types.PoetProofRef
+		copy(ref[:], key)
+		return poets.Has(bs.DB, ref)
+	case Malfeasance:
+		return identities.IsMalicious(bs.DB, types.BytesToNodeID(key))
+	case ActiveSet:
+		return activesets.Has(bs.DB, key)
+	}
+	return false, fmt.Errorf("blob store not found %s", hint)
 }

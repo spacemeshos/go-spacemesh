@@ -36,8 +36,8 @@ func standalone() config.Config {
 	conf.Sync.Interval = 3 * time.Second
 	conf.LayersPerEpoch = 10
 
-	conf.HARE3.PreroundDelay = 100 * time.Millisecond
-	conf.HARE3.RoundDuration = 1 * time.Millisecond
+	conf.HARE3.PreroundDelay = 1 * time.Second
+	conf.HARE3.RoundDuration = 100 * time.Millisecond
 
 	conf.Tortoise.Hdist = 2
 	conf.Tortoise.Zdist = 2
