@@ -5,6 +5,7 @@
 //
 //	mockgen -typed -package=localsql -destination=./0003_mocks.go -source=./0003_migration_interfaces.go
 //
+
 // Package localsql is a generated GoMock package.
 package localsql
 
@@ -47,31 +48,31 @@ func (m *MockPoetClient) Address() string {
 }
 
 // Address indicates an expected call of Address.
-func (mr *MockPoetClientMockRecorder) Address() *PoetClientAddressCall {
+func (mr *MockPoetClientMockRecorder) Address() *MockPoetClientAddressCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Address", reflect.TypeOf((*MockPoetClient)(nil).Address))
-	return &PoetClientAddressCall{Call: call}
+	return &MockPoetClientAddressCall{Call: call}
 }
 
-// PoetClientAddressCall wrap *gomock.Call
-type PoetClientAddressCall struct {
+// MockPoetClientAddressCall wrap *gomock.Call
+type MockPoetClientAddressCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *PoetClientAddressCall) Return(arg0 string) *PoetClientAddressCall {
+func (c *MockPoetClientAddressCall) Return(arg0 string) *MockPoetClientAddressCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *PoetClientAddressCall) Do(f func() string) *PoetClientAddressCall {
+func (c *MockPoetClientAddressCall) Do(f func() string) *MockPoetClientAddressCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *PoetClientAddressCall) DoAndReturn(f func() string) *PoetClientAddressCall {
+func (c *MockPoetClientAddressCall) DoAndReturn(f func() string) *MockPoetClientAddressCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -85,31 +86,31 @@ func (m *MockPoetClient) PoetServiceID(ctx context.Context) []byte {
 }
 
 // PoetServiceID indicates an expected call of PoetServiceID.
-func (mr *MockPoetClientMockRecorder) PoetServiceID(ctx any) *PoetClientPoetServiceIDCall {
+func (mr *MockPoetClientMockRecorder) PoetServiceID(ctx any) *MockPoetClientPoetServiceIDCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PoetServiceID", reflect.TypeOf((*MockPoetClient)(nil).PoetServiceID), ctx)
-	return &PoetClientPoetServiceIDCall{Call: call}
+	return &MockPoetClientPoetServiceIDCall{Call: call}
 }
 
-// PoetClientPoetServiceIDCall wrap *gomock.Call
-type PoetClientPoetServiceIDCall struct {
+// MockPoetClientPoetServiceIDCall wrap *gomock.Call
+type MockPoetClientPoetServiceIDCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *PoetClientPoetServiceIDCall) Return(arg0 []byte) *PoetClientPoetServiceIDCall {
+func (c *MockPoetClientPoetServiceIDCall) Return(arg0 []byte) *MockPoetClientPoetServiceIDCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *PoetClientPoetServiceIDCall) Do(f func(context.Context) []byte) *PoetClientPoetServiceIDCall {
+func (c *MockPoetClientPoetServiceIDCall) Do(f func(context.Context) []byte) *MockPoetClientPoetServiceIDCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *PoetClientPoetServiceIDCall) DoAndReturn(f func(context.Context) []byte) *PoetClientPoetServiceIDCall {
+func (c *MockPoetClientPoetServiceIDCall) DoAndReturn(f func(context.Context) []byte) *MockPoetClientPoetServiceIDCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
