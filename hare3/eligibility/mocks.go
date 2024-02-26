@@ -5,6 +5,7 @@
 //
 //	mockgen -typed -package=eligibility -destination=./mocks.go -source=./interface.go
 //
+
 // Package eligibility is a generated GoMock package.
 package eligibility
 
@@ -49,31 +50,31 @@ func (m *MockactiveSetCache) Add(key types.EpochID, value *cachedActiveSet) bool
 }
 
 // Add indicates an expected call of Add.
-func (mr *MockactiveSetCacheMockRecorder) Add(key, value any) *activeSetCacheAddCall {
+func (mr *MockactiveSetCacheMockRecorder) Add(key, value any) *MockactiveSetCacheAddCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MockactiveSetCache)(nil).Add), key, value)
-	return &activeSetCacheAddCall{Call: call}
+	return &MockactiveSetCacheAddCall{Call: call}
 }
 
-// activeSetCacheAddCall wrap *gomock.Call
-type activeSetCacheAddCall struct {
+// MockactiveSetCacheAddCall wrap *gomock.Call
+type MockactiveSetCacheAddCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *activeSetCacheAddCall) Return(evicted bool) *activeSetCacheAddCall {
+func (c *MockactiveSetCacheAddCall) Return(evicted bool) *MockactiveSetCacheAddCall {
 	c.Call = c.Call.Return(evicted)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *activeSetCacheAddCall) Do(f func(types.EpochID, *cachedActiveSet) bool) *activeSetCacheAddCall {
+func (c *MockactiveSetCacheAddCall) Do(f func(types.EpochID, *cachedActiveSet) bool) *MockactiveSetCacheAddCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *activeSetCacheAddCall) DoAndReturn(f func(types.EpochID, *cachedActiveSet) bool) *activeSetCacheAddCall {
+func (c *MockactiveSetCacheAddCall) DoAndReturn(f func(types.EpochID, *cachedActiveSet) bool) *MockactiveSetCacheAddCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -88,31 +89,31 @@ func (m *MockactiveSetCache) Get(key types.EpochID) (*cachedActiveSet, bool) {
 }
 
 // Get indicates an expected call of Get.
-func (mr *MockactiveSetCacheMockRecorder) Get(key any) *activeSetCacheGetCall {
+func (mr *MockactiveSetCacheMockRecorder) Get(key any) *MockactiveSetCacheGetCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockactiveSetCache)(nil).Get), key)
-	return &activeSetCacheGetCall{Call: call}
+	return &MockactiveSetCacheGetCall{Call: call}
 }
 
-// activeSetCacheGetCall wrap *gomock.Call
-type activeSetCacheGetCall struct {
+// MockactiveSetCacheGetCall wrap *gomock.Call
+type MockactiveSetCacheGetCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *activeSetCacheGetCall) Return(value *cachedActiveSet, ok bool) *activeSetCacheGetCall {
+func (c *MockactiveSetCacheGetCall) Return(value *cachedActiveSet, ok bool) *MockactiveSetCacheGetCall {
 	c.Call = c.Call.Return(value, ok)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *activeSetCacheGetCall) Do(f func(types.EpochID) (*cachedActiveSet, bool)) *activeSetCacheGetCall {
+func (c *MockactiveSetCacheGetCall) Do(f func(types.EpochID) (*cachedActiveSet, bool)) *MockactiveSetCacheGetCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *activeSetCacheGetCall) DoAndReturn(f func(types.EpochID) (*cachedActiveSet, bool)) *activeSetCacheGetCall {
+func (c *MockactiveSetCacheGetCall) DoAndReturn(f func(types.EpochID) (*cachedActiveSet, bool)) *MockactiveSetCacheGetCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -149,31 +150,31 @@ func (m *MockvrfVerifier) Verify(nodeID types.NodeID, msg []byte, sig types.VrfS
 }
 
 // Verify indicates an expected call of Verify.
-func (mr *MockvrfVerifierMockRecorder) Verify(nodeID, msg, sig any) *vrfVerifierVerifyCall {
+func (mr *MockvrfVerifierMockRecorder) Verify(nodeID, msg, sig any) *MockvrfVerifierVerifyCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockvrfVerifier)(nil).Verify), nodeID, msg, sig)
-	return &vrfVerifierVerifyCall{Call: call}
+	return &MockvrfVerifierVerifyCall{Call: call}
 }
 
-// vrfVerifierVerifyCall wrap *gomock.Call
-type vrfVerifierVerifyCall struct {
+// MockvrfVerifierVerifyCall wrap *gomock.Call
+type MockvrfVerifierVerifyCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *vrfVerifierVerifyCall) Return(arg0 bool) *vrfVerifierVerifyCall {
+func (c *MockvrfVerifierVerifyCall) Return(arg0 bool) *MockvrfVerifierVerifyCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *vrfVerifierVerifyCall) Do(f func(types.NodeID, []byte, types.VrfSignature) bool) *vrfVerifierVerifyCall {
+func (c *MockvrfVerifierVerifyCall) Do(f func(types.NodeID, []byte, types.VrfSignature) bool) *MockvrfVerifierVerifyCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *vrfVerifierVerifyCall) DoAndReturn(f func(types.NodeID, []byte, types.VrfSignature) bool) *vrfVerifierVerifyCall {
+func (c *MockvrfVerifierVerifyCall) DoAndReturn(f func(types.NodeID, []byte, types.VrfSignature) bool) *MockvrfVerifierVerifyCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -211,31 +212,31 @@ func (m *MockRolacle) CalcEligibility(arg0 context.Context, arg1 types.LayerID, 
 }
 
 // CalcEligibility indicates an expected call of CalcEligibility.
-func (mr *MockRolacleMockRecorder) CalcEligibility(arg0, arg1, arg2, arg3, arg4, arg5 any) *RolacleCalcEligibilityCall {
+func (mr *MockRolacleMockRecorder) CalcEligibility(arg0, arg1, arg2, arg3, arg4, arg5 any) *MockRolacleCalcEligibilityCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CalcEligibility", reflect.TypeOf((*MockRolacle)(nil).CalcEligibility), arg0, arg1, arg2, arg3, arg4, arg5)
-	return &RolacleCalcEligibilityCall{Call: call}
+	return &MockRolacleCalcEligibilityCall{Call: call}
 }
 
-// RolacleCalcEligibilityCall wrap *gomock.Call
-type RolacleCalcEligibilityCall struct {
+// MockRolacleCalcEligibilityCall wrap *gomock.Call
+type MockRolacleCalcEligibilityCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *RolacleCalcEligibilityCall) Return(arg0 uint16, arg1 error) *RolacleCalcEligibilityCall {
+func (c *MockRolacleCalcEligibilityCall) Return(arg0 uint16, arg1 error) *MockRolacleCalcEligibilityCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *RolacleCalcEligibilityCall) Do(f func(context.Context, types.LayerID, uint32, int, types.NodeID, types.VrfSignature) (uint16, error)) *RolacleCalcEligibilityCall {
+func (c *MockRolacleCalcEligibilityCall) Do(f func(context.Context, types.LayerID, uint32, int, types.NodeID, types.VrfSignature) (uint16, error)) *MockRolacleCalcEligibilityCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *RolacleCalcEligibilityCall) DoAndReturn(f func(context.Context, types.LayerID, uint32, int, types.NodeID, types.VrfSignature) (uint16, error)) *RolacleCalcEligibilityCall {
+func (c *MockRolacleCalcEligibilityCall) DoAndReturn(f func(context.Context, types.LayerID, uint32, int, types.NodeID, types.VrfSignature) (uint16, error)) *MockRolacleCalcEligibilityCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -250,31 +251,31 @@ func (m *MockRolacle) Proof(arg0 context.Context, arg1 *signing.VRFSigner, arg2 
 }
 
 // Proof indicates an expected call of Proof.
-func (mr *MockRolacleMockRecorder) Proof(arg0, arg1, arg2, arg3 any) *RolacleProofCall {
+func (mr *MockRolacleMockRecorder) Proof(arg0, arg1, arg2, arg3 any) *MockRolacleProofCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Proof", reflect.TypeOf((*MockRolacle)(nil).Proof), arg0, arg1, arg2, arg3)
-	return &RolacleProofCall{Call: call}
+	return &MockRolacleProofCall{Call: call}
 }
 
-// RolacleProofCall wrap *gomock.Call
-type RolacleProofCall struct {
+// MockRolacleProofCall wrap *gomock.Call
+type MockRolacleProofCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *RolacleProofCall) Return(arg0 types.VrfSignature, arg1 error) *RolacleProofCall {
+func (c *MockRolacleProofCall) Return(arg0 types.VrfSignature, arg1 error) *MockRolacleProofCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *RolacleProofCall) Do(f func(context.Context, *signing.VRFSigner, types.LayerID, uint32) (types.VrfSignature, error)) *RolacleProofCall {
+func (c *MockRolacleProofCall) Do(f func(context.Context, *signing.VRFSigner, types.LayerID, uint32) (types.VrfSignature, error)) *MockRolacleProofCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *RolacleProofCall) DoAndReturn(f func(context.Context, *signing.VRFSigner, types.LayerID, uint32) (types.VrfSignature, error)) *RolacleProofCall {
+func (c *MockRolacleProofCall) DoAndReturn(f func(context.Context, *signing.VRFSigner, types.LayerID, uint32) (types.VrfSignature, error)) *MockRolacleProofCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -289,31 +290,31 @@ func (m *MockRolacle) Validate(arg0 context.Context, arg1 types.LayerID, arg2 ui
 }
 
 // Validate indicates an expected call of Validate.
-func (mr *MockRolacleMockRecorder) Validate(arg0, arg1, arg2, arg3, arg4, arg5, arg6 any) *RolacleValidateCall {
+func (mr *MockRolacleMockRecorder) Validate(arg0, arg1, arg2, arg3, arg4, arg5, arg6 any) *MockRolacleValidateCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Validate", reflect.TypeOf((*MockRolacle)(nil).Validate), arg0, arg1, arg2, arg3, arg4, arg5, arg6)
-	return &RolacleValidateCall{Call: call}
+	return &MockRolacleValidateCall{Call: call}
 }
 
-// RolacleValidateCall wrap *gomock.Call
-type RolacleValidateCall struct {
+// MockRolacleValidateCall wrap *gomock.Call
+type MockRolacleValidateCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *RolacleValidateCall) Return(arg0 bool, arg1 error) *RolacleValidateCall {
+func (c *MockRolacleValidateCall) Return(arg0 bool, arg1 error) *MockRolacleValidateCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *RolacleValidateCall) Do(f func(context.Context, types.LayerID, uint32, int, types.NodeID, types.VrfSignature, uint16) (bool, error)) *RolacleValidateCall {
+func (c *MockRolacleValidateCall) Do(f func(context.Context, types.LayerID, uint32, int, types.NodeID, types.VrfSignature, uint16) (bool, error)) *MockRolacleValidateCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *RolacleValidateCall) DoAndReturn(f func(context.Context, types.LayerID, uint32, int, types.NodeID, types.VrfSignature, uint16) (bool, error)) *RolacleValidateCall {
+func (c *MockRolacleValidateCall) DoAndReturn(f func(context.Context, types.LayerID, uint32, int, types.NodeID, types.VrfSignature, uint16) (bool, error)) *MockRolacleValidateCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
