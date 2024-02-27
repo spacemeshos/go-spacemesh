@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
+	"github.com/spacemeshos/go-spacemesh/proposals/store"
 )
 
 const (
@@ -232,10 +233,11 @@ type Fetch struct {
 // NewFetch creates a new Fetch struct.
 func NewFetch(
 	cdb *datastore.CachedDB,
+	proposals *store.Store,
 	host *p2p.Host,
 	opts ...Option,
 ) *Fetch {
-	bs := datastore.NewBlobStore(cdb)
+	bs := datastore.NewBlobStore(cdb, proposals)
 
 	f := &Fetch{
 		cfg:         DefaultConfig(),

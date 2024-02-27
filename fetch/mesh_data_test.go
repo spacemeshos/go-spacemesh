@@ -21,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
+	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -770,7 +771,7 @@ func Test_GetAtxsLimiting(t *testing.T) {
 			client := server.New(mesh.Hosts()[0], hashProtocol, nil)
 			host, err := p2p.Upgrade(mesh.Hosts()[0])
 			require.NoError(t, err)
-			f := NewFetch(cdb, host,
+			f := NewFetch(cdb, store.New(), host,
 				WithContext(context.Background()),
 				withServers(map[string]requester{hashProtocol: client}),
 				WithConfig(cfg),

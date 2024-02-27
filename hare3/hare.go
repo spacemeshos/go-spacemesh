@@ -22,13 +22,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
-	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/beacons"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
-	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -149,6 +148,7 @@ func New(
 	pubsub pubsub.PublishSubsciber,
 	db *sql.Database,
 	atxsdata *atxsdata.Data,
+	proposals *store.Store,
 	verifier *signing.EdVerifier,
 	oracle oracle,
 	sync system.SyncStateProvider,
@@ -172,6 +172,7 @@ func New(
 		pubsub:    pubsub,
 		db:        db,
 		atxsdata:  atxsdata,
+		proposals: proposals,
 		verifier:  verifier,
 		oracle: &legacyOracle{
 			log:    zap.NewNop(),
@@ -209,6 +210,7 @@ type Hare struct {
 	pubsub    pubsub.PublishSubsciber
 	db        *sql.Database
 	atxsdata  *atxsdata.Data
+	proposals *store.Store
 	verifier  *signing.EdVerifier
 	oracle    *legacyOracle
 	sync      system.SyncStateProvider
@@ -327,6 +329,7 @@ func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 }
 
 func (h *Hare) onLayer(layer types.LayerID) {
+	h.proposals.OnLayer(layer)
 	if !h.sync.IsSynced(h.ctx) {
 		h.log.Debug("not synced", zap.Uint32("lid", layer.Uint32()))
 		return
@@ -407,7 +410,7 @@ func (h *Hare) run(session *session) error {
 			return h.ctx.Err()
 		}
 		start := time.Now()
-		session.proto.OnInitial(h.proposals(session))
+		session.proto.OnInitial(h.selectProposals(session))
 		proposalsLatency.Observe(time.Since(start).Seconds())
 	}
 	if err := h.onOutput(session, current, session.proto.Next()); err != nil {
@@ -503,26 +506,15 @@ func (h *Hare) onOutput(session *session, ir IterRound, out output) error {
 	return nil
 }
 
-func (h *Hare) proposals(session *session) []types.ProposalID {
+func (h *Hare) selectProposals(session *session) []types.ProposalID {
 	h.log.Debug("requested proposals",
 		zap.Uint32("lid", session.lid.Uint32()),
 		zap.Stringer("beacon", session.beacon),
 	)
-	props, err := proposals.GetByLayer(h.db, session.lid)
-	if err != nil {
-		if errors.Is(err, sql.ErrNotFound) {
-			h.log.Warn("no proposals found for hare, using empty set",
-				zap.Uint32("lid", session.lid.Uint32()), zap.Error(err))
-		} else {
-			h.log.Error("failed to get proposals for hare",
-				zap.Uint32("lid", session.lid.Uint32()), zap.Error(err))
-		}
-		return []types.ProposalID{}
-	}
+
 	var (
-		beacon   types.Beacon
-		result   []types.ProposalID
-		min, own *atxsdata.ATX
+		result []types.ProposalID
+		min    *atxsdata.ATX
 	)
 	target := session.lid.GetEpoch()
 	publish := target - 1
@@ -535,7 +527,7 @@ func (h *Hare) proposals(session *session) []types.ProposalID {
 			h.log.Error("failed to get atx id by epoch and node id", zap.Error(err))
 			return []types.ProposalID{}
 		default:
-			own = h.atxsdata.Get(target, atxid)
+			own := h.atxsdata.Get(target, atxid)
 			if min == nil || (min != nil && own != nil && own.Height < min.Height) {
 				min = own
 			}
@@ -545,19 +537,24 @@ func (h *Hare) proposals(session *session) []types.ProposalID {
 		h.log.Debug("no atxs in the requested epoch", zap.Uint32("epoch", session.lid.GetEpoch().Uint32()-1))
 		return []types.ProposalID{}
 	}
+
+	candidates := h.proposals.GetForLayer(session.lid)
 	atxs := map[types.ATXID]int{}
-	for _, p := range props {
+	for _, p := range candidates {
 		atxs[p.AtxID]++
 	}
-	for _, p := range props {
-		if p.IsMalicious() {
+	for _, p := range candidates {
+		if h.atxsdata.IsMalicious(p.SmesherID) || p.IsMalicious() {
 			h.log.Warn("not voting on proposal from malicious identity",
 				zap.Stringer("id", p.ID()),
 			)
 			continue
 		}
+		// double check that a single smesher is not included twice
+		// theoretically it should never happen as it is covered
+		// by the malicious check above.
 		if n := atxs[p.AtxID]; n > 1 {
-			h.log.Warn("proposal with same atx added several times in the recorded set",
+			h.log.Error("proposal with same atx added several times in the recorded set",
 				zap.Int("n", n),
 				zap.Stringer("id", p.ID()),
 				zap.Stringer("atxid", p.AtxID),
@@ -566,7 +563,7 @@ func (h *Hare) proposals(session *session) []types.ProposalID {
 		}
 		header := h.atxsdata.Get(target, p.AtxID)
 		if header == nil {
-			h.log.Error("atx is not loaded", zap.Error(err), zap.Stringer("atxid", p.AtxID))
+			h.log.Error("atx is not loaded", zap.Stringer("atxid", p.AtxID))
 			return []types.ProposalID{}
 		}
 		if header.BaseHeight >= min.Height {
@@ -574,37 +571,37 @@ func (h *Hare) proposals(session *session) []types.ProposalID {
 			h.log.Warn("proposal base tick height too high. skipping",
 				zap.Uint32("lid", session.lid.Uint32()),
 				zap.Uint64("proposal_height", header.BaseHeight),
-				zap.Uint64("own_height", own.Height),
+				zap.Uint64("min_height", min.Height),
 			)
 			continue
 		}
 
-		if p.EpochData != nil {
-			beacon = p.EpochData.Beacon
-		} else if p.RefBallot == types.EmptyBallotID {
-			h.log.Error("empty refballot", zap.Stringer("id", p.Ballot.ID()))
-			return []types.ProposalID{}
-		} else if refBallot, err := ballots.Get(h.db, p.RefBallot); err != nil {
-			h.log.Error("refballot not loaded", zap.Stringer("id", p.RefBallot), zap.Error(err))
-			return []types.ProposalID{}
-		} else if refBallot.EpochData == nil {
-			h.log.Error("refballot with empty epoch data", zap.Stringer("id", refBallot.ID()))
-			return []types.ProposalID{}
-		} else {
-			beacon = refBallot.EpochData.Beacon
-		}
-		if beacon == session.beacon {
+		if p.Beacon() == session.beacon {
 			result = append(result, p.ID())
 		} else {
 			h.log.Warn("proposal has different beacon value",
 				zap.Uint32("lid", session.lid.Uint32()),
 				zap.Stringer("id", p.ID()),
-				zap.String("proposal_beacon", beacon.ShortString()),
+				zap.String("proposal_beacon", p.Beacon().ShortString()),
 				zap.String("epoch_beacon", session.beacon.ShortString()),
 			)
 		}
 	}
 	return result
+}
+
+func (h *Hare) IsKnown(layer types.LayerID, proposal types.ProposalID) bool {
+	return h.proposals.Get(layer, proposal) != nil
+}
+
+func (h *Hare) OnProposal(p *types.Proposal) error {
+	h.log.With().Debug(
+		"new proposal",
+		zap.Stringer("id", p.ID()),
+		zap.Uint32("layer", p.Layer.Uint32()),
+		zap.Int("num_txs", len(p.TxIDs)),
+	)
+	return h.proposals.Add(p)
 }
 
 func (h *Hare) Stop() {

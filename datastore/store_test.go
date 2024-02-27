@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
@@ -21,7 +22,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
-	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
 
@@ -195,7 +195,7 @@ func TestStore_GetAtxByNodeID(t *testing.T) {
 
 func TestBlobStore_GetATXBlob(t *testing.T) {
 	db := sql.InMemory()
-	bs := datastore.NewBlobStore(db)
+	bs := datastore.NewBlobStore(db, store.New())
 
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
@@ -241,7 +241,7 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 
 func TestBlobStore_GetBallotBlob(t *testing.T) {
 	db := sql.InMemory()
-	bs := datastore.NewBlobStore(db)
+	bs := datastore.NewBlobStore(db, store.New())
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -275,7 +275,7 @@ func TestBlobStore_GetBallotBlob(t *testing.T) {
 
 func TestBlobStore_GetBlockBlob(t *testing.T) {
 	db := sql.InMemory()
-	bs := datastore.NewBlobStore(db)
+	bs := datastore.NewBlobStore(db, store.New())
 
 	blk := types.Block{
 		InnerBlock: types.InnerBlock{
@@ -304,12 +304,12 @@ func TestBlobStore_GetBlockBlob(t *testing.T) {
 	require.Equal(t, blk, gotB)
 
 	_, err = bs.Get(datastore.ProposalDB, blk.ID().Bytes())
-	require.ErrorIs(t, err, sql.ErrNotFound)
+	require.ErrorIs(t, err, store.ErrNotFound)
 }
 
 func TestBlobStore_GetPoetBlob(t *testing.T) {
 	db := sql.InMemory()
-	bs := datastore.NewBlobStore(db)
+	bs := datastore.NewBlobStore(db, store.New())
 
 	ref := []byte("ref0")
 	poet := []byte("proof0")
@@ -338,7 +338,8 @@ func TestBlobStore_GetPoetBlob(t *testing.T) {
 
 func TestBlobStore_GetProposalBlob(t *testing.T) {
 	db := sql.InMemory()
-	bs := datastore.NewBlobStore(db)
+	proposals := store.New()
+	bs := datastore.NewBlobStore(db, proposals)
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -358,9 +359,9 @@ func TestBlobStore_GetProposalBlob(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, has)
 	_, err = bs.Get(datastore.ProposalDB, p.ID().Bytes())
-	require.ErrorIs(t, err, sql.ErrNotFound)
+	require.ErrorIs(t, err, store.ErrNotFound)
 
-	require.NoError(t, proposals.Add(db, &p))
+	require.NoError(t, proposals.Add(&p))
 	has, err = bs.Has(datastore.ProposalDB, p.ID().Bytes())
 	require.NoError(t, err)
 	require.True(t, has)
@@ -374,7 +375,7 @@ func TestBlobStore_GetProposalBlob(t *testing.T) {
 
 func TestBlobStore_GetTXBlob(t *testing.T) {
 	db := sql.InMemory()
-	bs := datastore.NewBlobStore(db)
+	bs := datastore.NewBlobStore(db, store.New())
 
 	tx := &types.Transaction{}
 	tx.Raw = []byte{1, 1, 1}
@@ -401,7 +402,7 @@ func TestBlobStore_GetTXBlob(t *testing.T) {
 
 func TestBlobStore_GetMalfeasanceBlob(t *testing.T) {
 	db := sql.InMemory()
-	bs := datastore.NewBlobStore(db)
+	bs := datastore.NewBlobStore(db, store.New())
 
 	proof := &types.MalfeasanceProof{
 		Layer: types.LayerID(11),
@@ -434,7 +435,7 @@ func TestBlobStore_GetMalfeasanceBlob(t *testing.T) {
 
 func TestBlobStore_GetActiveSet(t *testing.T) {
 	db := sql.InMemory()
-	bs := datastore.NewBlobStore(db)
+	bs := datastore.NewBlobStore(db, store.New())
 
 	as := &types.EpochActiveSet{Epoch: 7}
 	hash := types.ATXIDList(as.Set).Hash()
