@@ -107,7 +107,7 @@ configuration is as follows:
   make sure your post service now connects to `grpc-post-listener` instead of `grpc-private-listener`. If you are
   connecting to a remote post service over the internet we strongly recommend using mTLS via `grpc-tls-listener`.
 * [#5601](https://github.com/spacemeshos/go-spacemesh/pull/5601) measure latency from all requests in sync
-  This improves peers selection logic, mainly to prevent asking slow peers for collection of atxs, which is often blocks sync.
+  This improves peers selection logic, mainly to prevent asking slow peers for collection of atxs, which often blocks sync.
 
 ## Release v1.3.8
 
