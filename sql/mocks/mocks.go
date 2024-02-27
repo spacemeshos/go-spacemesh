@@ -5,6 +5,7 @@
 //
 //	mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./database.go
 //
+
 // Package mocks is a generated GoMock package.
 package mocks
 
@@ -48,31 +49,31 @@ func (m *MockExecutor) Exec(arg0 string, arg1 sql.Encoder, arg2 sql.Decoder) (in
 }
 
 // Exec indicates an expected call of Exec.
-func (mr *MockExecutorMockRecorder) Exec(arg0, arg1, arg2 any) *ExecutorExecCall {
+func (mr *MockExecutorMockRecorder) Exec(arg0, arg1, arg2 any) *MockExecutorExecCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockExecutor)(nil).Exec), arg0, arg1, arg2)
-	return &ExecutorExecCall{Call: call}
+	return &MockExecutorExecCall{Call: call}
 }
 
-// ExecutorExecCall wrap *gomock.Call
-type ExecutorExecCall struct {
+// MockExecutorExecCall wrap *gomock.Call
+type MockExecutorExecCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *ExecutorExecCall) Return(arg0 int, arg1 error) *ExecutorExecCall {
+func (c *MockExecutorExecCall) Return(arg0 int, arg1 error) *MockExecutorExecCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *ExecutorExecCall) Do(f func(string, sql.Encoder, sql.Decoder) (int, error)) *ExecutorExecCall {
+func (c *MockExecutorExecCall) Do(f func(string, sql.Encoder, sql.Decoder) (int, error)) *MockExecutorExecCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *ExecutorExecCall) DoAndReturn(f func(string, sql.Encoder, sql.Decoder) (int, error)) *ExecutorExecCall {
+func (c *MockExecutorExecCall) DoAndReturn(f func(string, sql.Encoder, sql.Decoder) (int, error)) *MockExecutorExecCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
