@@ -11,7 +11,7 @@ import (
 )
 
 // any random non zero number that will be used if size is not specified in the test case
-// it is intentionally different from assumed minimal size in the latency function
+// it is intentionally different from assumed minimal size in the latency function.
 const testSize = 100
 
 type event struct {
