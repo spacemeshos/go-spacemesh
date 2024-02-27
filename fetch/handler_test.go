@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -31,7 +32,7 @@ func createTestHandler(t testing.TB) *testHandler {
 	lg := logtest.New(t)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
 	return &testHandler{
-		handler: newHandler(cdb, datastore.NewBlobStore(cdb), lg),
+		handler: newHandler(cdb, datastore.NewBlobStore(cdb, store.New()), lg),
 		cdb:     cdb,
 	}
 }

@@ -34,3 +34,8 @@ type layerClock interface {
 	CurrentLayer() types.LayerID
 	LayerToTime(types.LayerID) time.Time
 }
+
+type proposalsConsumer interface {
+	IsKnown(types.LayerID, types.ProposalID) bool
+	OnProposal(p *types.Proposal) error
+}
