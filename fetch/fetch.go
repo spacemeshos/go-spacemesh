@@ -413,6 +413,22 @@ func (f *Fetch) loop() {
 	}
 }
 
+func (f *Fetch) meteredRequest(
+	ctx context.Context,
+	protocol string,
+	peer p2p.Peer,
+	req []byte,
+) ([]byte, error) {
+	start := time.Now()
+	resp, err := f.servers[protocol].Request(ctx, peer, req)
+	if err != nil {
+		f.peers.OnFailure(peer)
+	} else {
+		f.peers.OnLatency(peer, len(resp), time.Since(start))
+	}
+	return resp, err
+}
+
 // receive Data from message server and call response handlers accordingly.
 func (f *Fetch) receiveResponse(data []byte, batch *batchInfo) {
 	if f.stopped() {
@@ -656,15 +672,8 @@ func (f *Fetch) sendBatch(peer p2p.Peer, batch *batchInfo) ([]byte, error) {
 	// Request is synchronous,
 	// it will return errors only if size of the bytes buffer is large
 	// or target peer is not connected
-	start := time.Now()
 	req := codec.MustEncode(&batch.RequestBatch)
-	data, err := f.servers[hashProtocol].Request(f.shutdownCtx, peer, req)
-	if err != nil {
-		f.peers.OnFailure(peer)
-		return nil, err
-	}
-	f.peers.OnLatency(peer, time.Since(start))
-	return data, nil
+	return f.meteredRequest(f.shutdownCtx, hashProtocol, peer, req)
 }
 
 // handleHashError is called when an error occurred processing batches of the following hashes.
