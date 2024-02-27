@@ -113,12 +113,11 @@ func TestBlocklist(t *testing.T) {
 		},
 	}
 
+	ipv6Available := false
 	ifs, err := net.InterfaceAddrs()
 	require.NoError(t, err)
 
-	ipv6Available := false
-
-	// check if at least one interface is IPv6
+	// check if at least one interface has an IPv6 address
 	for _, ifa := range ifs {
 		if ipnet, ok := ifa.(*net.IPNet); ok && ipnet.IP.To4() == nil {
 			ipv6Available = true
