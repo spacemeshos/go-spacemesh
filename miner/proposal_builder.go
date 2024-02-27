@@ -320,44 +320,45 @@ func (pb *ProposalBuilder) Run(ctx context.Context) error {
 	if prepareDisabled {
 		pb.logger.With().Warning("activeset will not be prepared in advance")
 	}
-	eg.Go(func() error {
-		for {
-			select {
-			case <-ctx.Done():
-				return nil
-			case <-pb.clock.AwaitLayer(next):
-				current := pb.clock.CurrentLayer()
-				if current.Before(next) {
-					pb.logger.With().Info("time sync detected, realigning ProposalBuilder",
-						log.Uint32("current", current.Uint32()),
-						log.Uint32("next", next.Uint32()),
-					)
-					continue
-				}
-				next = current.Add(1)
-				ctx := log.WithNewSessionID(ctx)
-				synced := pb.syncer.IsSynced(ctx)
-				if !prepareDisabled {
+	for {
+		select {
+		case <-ctx.Done():
+			eg.Wait()
+			return nil
+		case <-pb.clock.AwaitLayer(next):
+			current := pb.clock.CurrentLayer()
+			if current.Before(next) {
+				pb.logger.With().Info("time sync detected, realigning ProposalBuilder",
+					log.Uint32("current", current.Uint32()),
+					log.Uint32("next", next.Uint32()),
+				)
+				continue
+			}
+			next = current.Add(1)
+			ctx := log.WithNewSessionID(ctx)
+			synced := pb.syncer.IsSynced(ctx)
+			if !prepareDisabled {
+				eg.Go(func() error {
 					pb.runPrepare(ctx, current)
-					prepareDisabled = true
-				}
-				if current <= types.GetEffectiveGenesis() || !synced {
-					continue
-				}
-				if err := pb.build(ctx, current); err != nil {
-					if errors.Is(err, errAtxNotAvailable) {
-						pb.logger.With().
-							Debug("signer is not active in epoch", log.Context(ctx), log.Uint32("lid", current.Uint32()), log.Err(err))
-					} else {
-						pb.logger.With().Warning("failed to build proposal",
-							log.Context(ctx), log.Uint32("lid", current.Uint32()), log.Err(err),
-						)
-					}
+					return nil
+				})
+				prepareDisabled = true
+			}
+			if current <= types.GetEffectiveGenesis() || !synced {
+				continue
+			}
+			if err := pb.build(ctx, current); err != nil {
+				if errors.Is(err, errAtxNotAvailable) {
+					pb.logger.With().
+						Debug("signer is not active in epoch", log.Context(ctx), log.Uint32("lid", current.Uint32()), log.Err(err))
+				} else {
+					pb.logger.With().Warning("failed to build proposal",
+						log.Context(ctx), log.Uint32("lid", current.Uint32()), log.Err(err),
+					)
 				}
 			}
 		}
-	})
-	return eg.Wait()
+	}
 }
 
 func (pb *ProposalBuilder) runPrepare(ctx context.Context, current types.LayerID) {
