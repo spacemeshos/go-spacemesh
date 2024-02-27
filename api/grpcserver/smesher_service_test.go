@@ -92,7 +92,7 @@ func TestStartSmeshingPassesCorrectSmeshingOpts(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestStartSmeshingFailsMultiSmeshing(t *testing.T) {
+func TestStartSmeshing_ErrorOnMultiSmeshingSetup(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
 	postSupervisor := grpcserver.NewMockpostSupervisor(ctrl)

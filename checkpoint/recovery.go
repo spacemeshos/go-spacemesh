@@ -208,7 +208,7 @@ func recoverFromLocalFile(
 			allDeps = slices.CompactFunc(allDeps, func(i, j *types.VerifiedActivationTx) bool {
 				return i.ID() == j.ID()
 			})
-			slices.SortFunc(allDeps, func(i, j *types.VerifiedActivationTx) int {
+			slices.SortStableFunc(allDeps, func(i, j *types.VerifiedActivationTx) int {
 				return int(i.PublishEpoch) - int(j.PublishEpoch)
 			})
 			slices.SortFunc(allProofs, func(i, j *types.PoetProofMessage) int {

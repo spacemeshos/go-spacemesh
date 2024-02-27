@@ -3,7 +3,7 @@ package checkpoint_test
 import (
 	"bytes"
 	_ "embed"
-	"os"
+	"io/fs"
 	"path/filepath"
 	"testing"
 
@@ -127,19 +127,19 @@ func TestRecoveryFile_Copy(t *testing.T) {
 }
 
 func TestCopyFile(t *testing.T) {
-	fs := afero.NewMemMapFs()
+	aferoFS := afero.NewMemMapFs()
 	dir := t.TempDir()
 	src := filepath.Join(dir, "test_src")
 	dst := filepath.Join(dir, "test_dest")
-	err := checkpoint.CopyFile(fs, src, dst)
-	require.ErrorIs(t, err, os.ErrNotExist)
+	err := checkpoint.CopyFile(aferoFS, src, dst)
+	require.ErrorIs(t, err, fs.ErrNotExist)
 
 	// create src file
-	require.NoError(t, afero.WriteFile(fs, src, []byte("blah"), 0o600))
-	err = checkpoint.CopyFile(fs, src, dst)
+	require.NoError(t, afero.WriteFile(aferoFS, src, []byte("blah"), 0o600))
+	err = checkpoint.CopyFile(aferoFS, src, dst)
 	require.NoError(t, err)
 
 	// dst file cannot be copied over
-	err = checkpoint.CopyFile(fs, src, dst)
-	require.ErrorIs(t, err, os.ErrExist)
+	err = checkpoint.CopyFile(aferoFS, src, dst)
+	require.ErrorIs(t, err, fs.ErrExist)
 }

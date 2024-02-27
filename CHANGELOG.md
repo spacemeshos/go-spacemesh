@@ -92,8 +92,7 @@ it to the new location as `identity.key`. The content of the file stays unchange
 
 ##### Adding new identities/PoST services to a node
 
-To add a new identity to a node initialize PoST data and with `postcli` and let the tool generate a new private key for
-you:
+To add a new identity to a node, initialize PoST data with `postcli` and let it generate a new private key for you:
 
 ```shell
 ./postcli -provider=2 -numUnits=4 -datadir=/path/to/data \
@@ -101,7 +100,7 @@ you:
 ```
 
 Make sure to replace `provider` with your provider of choice and `numUnits` with the number of PoST units you want to
-initialize. The `commitmentAtxId` is the commitment ATX ID of the identity you want to initialize. For details on the
+initialize. The `commitmentAtxId` is the commitment ATX ID for the identity you want to initialize. For details on the
 usage of `postcli` please refer to [postcli README](https://github.com/spacemeshos/post/cmd/postcli/README.md).
 
 During initialization `postcli` will generate a new private key and store it in the PoST data directory as `key.bin`.
@@ -114,7 +113,7 @@ node. For details refer to the [post-service README](https://github.com/spacemes
 
 ##### Migrating existing identities/PoST services to a node
 
-If you have multiple nodes running and want to migrate to use only one node for both identities:
+If you have multiple nodes running and want to migrate to use only one node for all identities:
 
 1. Stop all nodes.
 2. Copy the `key.bin` files from the PoST data directories of all nodes to the data directory of the node you want to
@@ -123,6 +122,9 @@ If you have multiple nodes running and want to migrate to use only one node for 
 3. Start the node managing the identities.
 4. For every identity setup a post service to use the existing PoST data for that identity and connect to the node.
    For details refer to the [post-service README](https://github.com/spacemeshos/post-rs/blob/main/service/README.md).
+
+**WARNING:** DO NOT run multiple nodes with the same identity at the same time. This will result in an equivocation
+and permanent ineligibility for rewards.
 
 ### Highlights
 
