@@ -113,8 +113,8 @@ func NewApp(t *testing.T, conf *config.Config, l log.Log) *App {
 	err := app.Initialize()
 	require.NoError(t, err)
 
-	err = app.LoadIdentities()
-	require.NoError(t, err, "could not retrieve identity")
+	err = app.NewIdentity()
+	require.NoError(t, err, "could not create identity")
 
 	return app
 }

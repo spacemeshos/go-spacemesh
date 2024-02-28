@@ -953,7 +953,7 @@ func TestAdminEvents(t *testing.T) {
 	logger := logtest.New(t, zapcore.DebugLevel)
 	app := New(WithConfig(&cfg), WithLog(logger))
 
-	require.NoError(t, app.LoadIdentities())
+	require.NoError(t, app.NewIdentity())
 	require.NoError(t, app.Initialize())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
