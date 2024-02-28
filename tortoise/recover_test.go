@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/tortoise/sim"
@@ -211,4 +212,30 @@ func TestWindowRecovery(t *testing.T) {
 	for i := range updates1[epochSize*4:] {
 		require.Equal(t, updates1[epochSize*4+i].Opinion, updates2[i].Opinion)
 	}
+}
+
+func TestRecoverOnlyAtxs(t *testing.T) {
+	const size = 10
+	s := sim.New(sim.WithLayerSize(size))
+	s.Setup()
+
+	cfg := defaultTestConfig()
+	trt := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg))
+	var last types.LayerID
+	// this creates a layer without any ballots, so we will also won't have them in the database
+	for _, lid := range sim.GenLayers(s, sim.WithSequence(10, sim.WithLayerSizeOverwrite(0))) {
+		last = lid
+		trt.TallyVotes(context.Background(), lid)
+	}
+	future := last + 1000
+	recovered, err := Recover(context.Background(), s.GetState(0).DB.Executor, future,
+		WithLogger(logtest.New(t)),
+		WithConfig(cfg),
+	)
+	require.NoError(t, err)
+	epoch := types.EpochID(2)
+	ids, err := atxs.GetIDsByEpoch(s.GetState(0).DB, epoch)
+	require.NoError(t, err)
+	require.NotEmpty(t, ids)
+	require.Empty(t, recovered.GetMissingActiveSet(epoch+1, ids), "target epoch %v", epoch+1)
 }
