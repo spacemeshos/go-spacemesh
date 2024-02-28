@@ -178,7 +178,7 @@ func (d *Data) SetMalicious(node types.NodeID) {
 }
 
 // Get returns atx data.
-// SAFETY: The returned potiner MUST NOT be modified.
+// SAFETY: The returned pointer MUST NOT be modified.
 func (d *Data) Get(epoch types.EpochID, atx types.ATXID) *ATX {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
@@ -201,7 +201,7 @@ func NotMalicious(data *ATX) bool {
 
 // GetInEpoch returns all atxs in the epoch.
 // If filters are provided, only atxs that pass all filters are returned.
-// SAFETY: The returned potiners MUST NOT be modified.
+// SAFETY: The returned pointers MUST NOT be modified.
 func (d *Data) GetInEpoch(epoch types.EpochID, filters ...func(*ATX) bool) []*ATX {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
