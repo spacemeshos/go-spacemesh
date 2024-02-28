@@ -82,6 +82,17 @@ func Recover(
 	}
 	trtl.UpdateLastLayer(last)
 
+	for lid := start; !lid.After(last); lid = lid.Add(1) {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+		if err := RecoverLayer(ctx, trtl, db, lid, trtl.OnRecoveredBallot); err != nil {
+			return nil, fmt.Errorf("failed to load tortoise state at layer %d: %w", lid, err)
+		}
+	}
+
 	// load activations from future epochs that are not yet referenced by the ballots
 	atxsEpoch, err := atxs.LatestEpoch(db)
 	if err != nil {
@@ -93,17 +104,6 @@ func Recover(
 			if err := recoverEpoch(eid, trtl, db); err != nil {
 				return nil, err
 			}
-		}
-	}
-
-	for lid := start; !lid.After(last); lid = lid.Add(1) {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-		}
-		if err := RecoverLayer(ctx, trtl, db, lid, trtl.OnRecoveredBallot); err != nil {
-			return nil, fmt.Errorf("failed to load tortoise state at layer %d: %w", lid, err)
 		}
 	}
 
