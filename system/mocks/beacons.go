@@ -5,6 +5,7 @@
 //
 //	mockgen -typed -package=mocks -destination=./mocks/beacons.go -source=./beacons.go
 //
+
 // Package mocks is a generated GoMock package.
 package mocks
 
@@ -46,31 +47,31 @@ func (m *MockBeaconCollector) ReportBeaconFromBallot(arg0 types.EpochID, arg1 *t
 }
 
 // ReportBeaconFromBallot indicates an expected call of ReportBeaconFromBallot.
-func (mr *MockBeaconCollectorMockRecorder) ReportBeaconFromBallot(arg0, arg1, arg2, arg3 any) *BeaconCollectorReportBeaconFromBallotCall {
+func (mr *MockBeaconCollectorMockRecorder) ReportBeaconFromBallot(arg0, arg1, arg2, arg3 any) *MockBeaconCollectorReportBeaconFromBallotCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReportBeaconFromBallot", reflect.TypeOf((*MockBeaconCollector)(nil).ReportBeaconFromBallot), arg0, arg1, arg2, arg3)
-	return &BeaconCollectorReportBeaconFromBallotCall{Call: call}
+	return &MockBeaconCollectorReportBeaconFromBallotCall{Call: call}
 }
 
-// BeaconCollectorReportBeaconFromBallotCall wrap *gomock.Call
-type BeaconCollectorReportBeaconFromBallotCall struct {
+// MockBeaconCollectorReportBeaconFromBallotCall wrap *gomock.Call
+type MockBeaconCollectorReportBeaconFromBallotCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *BeaconCollectorReportBeaconFromBallotCall) Return() *BeaconCollectorReportBeaconFromBallotCall {
+func (c *MockBeaconCollectorReportBeaconFromBallotCall) Return() *MockBeaconCollectorReportBeaconFromBallotCall {
 	c.Call = c.Call.Return()
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *BeaconCollectorReportBeaconFromBallotCall) Do(f func(types.EpochID, *types.Ballot, types.Beacon, fixed.Fixed)) *BeaconCollectorReportBeaconFromBallotCall {
+func (c *MockBeaconCollectorReportBeaconFromBallotCall) Do(f func(types.EpochID, *types.Ballot, types.Beacon, fixed.Fixed)) *MockBeaconCollectorReportBeaconFromBallotCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *BeaconCollectorReportBeaconFromBallotCall) DoAndReturn(f func(types.EpochID, *types.Ballot, types.Beacon, fixed.Fixed)) *BeaconCollectorReportBeaconFromBallotCall {
+func (c *MockBeaconCollectorReportBeaconFromBallotCall) DoAndReturn(f func(types.EpochID, *types.Ballot, types.Beacon, fixed.Fixed)) *MockBeaconCollectorReportBeaconFromBallotCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -108,31 +109,31 @@ func (m *MockBeaconGetter) GetBeacon(arg0 types.EpochID) (types.Beacon, error) {
 }
 
 // GetBeacon indicates an expected call of GetBeacon.
-func (mr *MockBeaconGetterMockRecorder) GetBeacon(arg0 any) *BeaconGetterGetBeaconCall {
+func (mr *MockBeaconGetterMockRecorder) GetBeacon(arg0 any) *MockBeaconGetterGetBeaconCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBeacon", reflect.TypeOf((*MockBeaconGetter)(nil).GetBeacon), arg0)
-	return &BeaconGetterGetBeaconCall{Call: call}
+	return &MockBeaconGetterGetBeaconCall{Call: call}
 }
 
-// BeaconGetterGetBeaconCall wrap *gomock.Call
-type BeaconGetterGetBeaconCall struct {
+// MockBeaconGetterGetBeaconCall wrap *gomock.Call
+type MockBeaconGetterGetBeaconCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *BeaconGetterGetBeaconCall) Return(arg0 types.Beacon, arg1 error) *BeaconGetterGetBeaconCall {
+func (c *MockBeaconGetterGetBeaconCall) Return(arg0 types.Beacon, arg1 error) *MockBeaconGetterGetBeaconCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *BeaconGetterGetBeaconCall) Do(f func(types.EpochID) (types.Beacon, error)) *BeaconGetterGetBeaconCall {
+func (c *MockBeaconGetterGetBeaconCall) Do(f func(types.EpochID) (types.Beacon, error)) *MockBeaconGetterGetBeaconCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *BeaconGetterGetBeaconCall) DoAndReturn(f func(types.EpochID) (types.Beacon, error)) *BeaconGetterGetBeaconCall {
+func (c *MockBeaconGetterGetBeaconCall) DoAndReturn(f func(types.EpochID) (types.Beacon, error)) *MockBeaconGetterGetBeaconCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

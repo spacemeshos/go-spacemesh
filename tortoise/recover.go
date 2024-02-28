@@ -81,6 +81,7 @@ func Recover(
 		trtl.UpdateVerified(valid)
 	}
 	trtl.UpdateLastLayer(last)
+
 	for lid := start; !lid.After(last); lid = lid.Add(1) {
 		select {
 		case <-ctx.Done():
@@ -91,11 +92,22 @@ func Recover(
 			return nil, fmt.Errorf("failed to load tortoise state at layer %d: %w", lid, err)
 		}
 	}
-	if last == 0 {
-		last = current
-	} else {
-		last = min(last, current)
+
+	// load activations from future epochs that are not yet referenced by the ballots
+	atxsEpoch, err := atxs.LatestEpoch(db)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load latest epoch: %w", err)
 	}
+	atxsEpoch++ // recoverEpoch expects target epoch
+	if last.GetEpoch() != atxsEpoch {
+		for eid := last.GetEpoch() + 1; eid <= atxsEpoch; eid++ {
+			if err := recoverEpoch(eid, trtl, db); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	last = min(last, current)
 	if last < start {
 		return trtl, nil
 	}
@@ -111,19 +123,6 @@ func Recover(
 		}
 		if err != nil && !errors.Is(err, sql.ErrNotFound) {
 			return nil, fmt.Errorf("check opinion %w", err)
-		}
-	}
-	// load activations from future epochs that are not yet referenced by the ballots
-	epoch, err := atxs.LatestEpoch(db)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load latest epoch: %w", err)
-	}
-	epoch++ // recoverEpoch expects target epoch, rather than publish
-	if last.GetEpoch() != epoch {
-		for eid := last.GetEpoch() + 1; eid <= epoch; eid++ {
-			if err := recoverEpoch(eid, trtl, db); err != nil {
-				return nil, err
-			}
 		}
 	}
 	return trtl, nil

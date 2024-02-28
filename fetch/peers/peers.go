@@ -54,14 +54,15 @@ type Peers struct {
 	globalLatency float64
 }
 
-func (p *Peers) Add(id peer.ID) {
+func (p *Peers) Add(id peer.ID) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	_, exist := p.peers[id]
 	if exist {
-		return
+		return false
 	}
 	p.peers[id] = &data{id: id}
+	return true
 }
 
 func (p *Peers) Delete(id peer.ID) {
@@ -82,7 +83,15 @@ func (p *Peers) OnFailure(id peer.ID) {
 }
 
 // OnLatency updates average peer and global latency.
-func (p *Peers) OnLatency(id peer.ID, latency time.Duration) {
+func (p *Peers) OnLatency(id peer.ID, size int, latency time.Duration) {
+	if size == 0 {
+		return
+	}
+	// We assume that latency is proportional to the size of the message
+	// and define it as a duration to transmit 1kiB.
+	// To account for the additional overhead of transmitting small messages,
+	// we treat them as if they were 1kiB.
+	latency = latency / time.Duration(max(size/1024, 1))
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	peer, exist := p.peers[id]

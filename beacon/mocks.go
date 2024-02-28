@@ -5,6 +5,7 @@
 //
 //	mockgen -typed -package=beacon -destination=./mocks.go -source=./interface.go
 //
+
 // Package beacon is a generated GoMock package.
 package beacon
 
@@ -49,31 +50,31 @@ func (m *Mockcoin) FinishEpoch(arg0 context.Context, arg1 types.EpochID) {
 }
 
 // FinishEpoch indicates an expected call of FinishEpoch.
-func (mr *MockcoinMockRecorder) FinishEpoch(arg0, arg1 any) *coinFinishEpochCall {
+func (mr *MockcoinMockRecorder) FinishEpoch(arg0, arg1 any) *MockcoinFinishEpochCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FinishEpoch", reflect.TypeOf((*Mockcoin)(nil).FinishEpoch), arg0, arg1)
-	return &coinFinishEpochCall{Call: call}
+	return &MockcoinFinishEpochCall{Call: call}
 }
 
-// coinFinishEpochCall wrap *gomock.Call
-type coinFinishEpochCall struct {
+// MockcoinFinishEpochCall wrap *gomock.Call
+type MockcoinFinishEpochCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *coinFinishEpochCall) Return() *coinFinishEpochCall {
+func (c *MockcoinFinishEpochCall) Return() *MockcoinFinishEpochCall {
 	c.Call = c.Call.Return()
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *coinFinishEpochCall) Do(f func(context.Context, types.EpochID)) *coinFinishEpochCall {
+func (c *MockcoinFinishEpochCall) Do(f func(context.Context, types.EpochID)) *MockcoinFinishEpochCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *coinFinishEpochCall) DoAndReturn(f func(context.Context, types.EpochID)) *coinFinishEpochCall {
+func (c *MockcoinFinishEpochCall) DoAndReturn(f func(context.Context, types.EpochID)) *MockcoinFinishEpochCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -85,31 +86,31 @@ func (m *Mockcoin) FinishRound(arg0 context.Context) {
 }
 
 // FinishRound indicates an expected call of FinishRound.
-func (mr *MockcoinMockRecorder) FinishRound(arg0 any) *coinFinishRoundCall {
+func (mr *MockcoinMockRecorder) FinishRound(arg0 any) *MockcoinFinishRoundCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FinishRound", reflect.TypeOf((*Mockcoin)(nil).FinishRound), arg0)
-	return &coinFinishRoundCall{Call: call}
+	return &MockcoinFinishRoundCall{Call: call}
 }
 
-// coinFinishRoundCall wrap *gomock.Call
-type coinFinishRoundCall struct {
+// MockcoinFinishRoundCall wrap *gomock.Call
+type MockcoinFinishRoundCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *coinFinishRoundCall) Return() *coinFinishRoundCall {
+func (c *MockcoinFinishRoundCall) Return() *MockcoinFinishRoundCall {
 	c.Call = c.Call.Return()
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *coinFinishRoundCall) Do(f func(context.Context)) *coinFinishRoundCall {
+func (c *MockcoinFinishRoundCall) Do(f func(context.Context)) *MockcoinFinishRoundCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *coinFinishRoundCall) DoAndReturn(f func(context.Context)) *coinFinishRoundCall {
+func (c *MockcoinFinishRoundCall) DoAndReturn(f func(context.Context)) *MockcoinFinishRoundCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -124,31 +125,31 @@ func (m *Mockcoin) Get(arg0 context.Context, arg1 types.EpochID, arg2 types.Roun
 }
 
 // Get indicates an expected call of Get.
-func (mr *MockcoinMockRecorder) Get(arg0, arg1, arg2 any) *coinGetCall {
+func (mr *MockcoinMockRecorder) Get(arg0, arg1, arg2 any) *MockcoinGetCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*Mockcoin)(nil).Get), arg0, arg1, arg2)
-	return &coinGetCall{Call: call}
+	return &MockcoinGetCall{Call: call}
 }
 
-// coinGetCall wrap *gomock.Call
-type coinGetCall struct {
+// MockcoinGetCall wrap *gomock.Call
+type MockcoinGetCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *coinGetCall) Return(arg0 bool, arg1 error) *coinGetCall {
+func (c *MockcoinGetCall) Return(arg0 bool, arg1 error) *MockcoinGetCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *coinGetCall) Do(f func(context.Context, types.EpochID, types.RoundID) (bool, error)) *coinGetCall {
+func (c *MockcoinGetCall) Do(f func(context.Context, types.EpochID, types.RoundID) (bool, error)) *MockcoinGetCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *coinGetCall) DoAndReturn(f func(context.Context, types.EpochID, types.RoundID) (bool, error)) *coinGetCall {
+func (c *MockcoinGetCall) DoAndReturn(f func(context.Context, types.EpochID, types.RoundID) (bool, error)) *MockcoinGetCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -162,31 +163,31 @@ func (m *Mockcoin) HandleProposal(arg0 context.Context, arg1 p2p.Peer, arg2 []by
 }
 
 // HandleProposal indicates an expected call of HandleProposal.
-func (mr *MockcoinMockRecorder) HandleProposal(arg0, arg1, arg2 any) *coinHandleProposalCall {
+func (mr *MockcoinMockRecorder) HandleProposal(arg0, arg1, arg2 any) *MockcoinHandleProposalCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleProposal", reflect.TypeOf((*Mockcoin)(nil).HandleProposal), arg0, arg1, arg2)
-	return &coinHandleProposalCall{Call: call}
+	return &MockcoinHandleProposalCall{Call: call}
 }
 
-// coinHandleProposalCall wrap *gomock.Call
-type coinHandleProposalCall struct {
+// MockcoinHandleProposalCall wrap *gomock.Call
+type MockcoinHandleProposalCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *coinHandleProposalCall) Return(arg0 error) *coinHandleProposalCall {
+func (c *MockcoinHandleProposalCall) Return(arg0 error) *MockcoinHandleProposalCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *coinHandleProposalCall) Do(f func(context.Context, p2p.Peer, []byte) error) *coinHandleProposalCall {
+func (c *MockcoinHandleProposalCall) Do(f func(context.Context, p2p.Peer, []byte) error) *MockcoinHandleProposalCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *coinHandleProposalCall) DoAndReturn(f func(context.Context, p2p.Peer, []byte) error) *coinHandleProposalCall {
+func (c *MockcoinHandleProposalCall) DoAndReturn(f func(context.Context, p2p.Peer, []byte) error) *MockcoinHandleProposalCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -198,31 +199,31 @@ func (m *Mockcoin) StartEpoch(arg0 context.Context, arg1 types.EpochID) {
 }
 
 // StartEpoch indicates an expected call of StartEpoch.
-func (mr *MockcoinMockRecorder) StartEpoch(arg0, arg1 any) *coinStartEpochCall {
+func (mr *MockcoinMockRecorder) StartEpoch(arg0, arg1 any) *MockcoinStartEpochCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartEpoch", reflect.TypeOf((*Mockcoin)(nil).StartEpoch), arg0, arg1)
-	return &coinStartEpochCall{Call: call}
+	return &MockcoinStartEpochCall{Call: call}
 }
 
-// coinStartEpochCall wrap *gomock.Call
-type coinStartEpochCall struct {
+// MockcoinStartEpochCall wrap *gomock.Call
+type MockcoinStartEpochCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *coinStartEpochCall) Return() *coinStartEpochCall {
+func (c *MockcoinStartEpochCall) Return() *MockcoinStartEpochCall {
 	c.Call = c.Call.Return()
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *coinStartEpochCall) Do(f func(context.Context, types.EpochID)) *coinStartEpochCall {
+func (c *MockcoinStartEpochCall) Do(f func(context.Context, types.EpochID)) *MockcoinStartEpochCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *coinStartEpochCall) DoAndReturn(f func(context.Context, types.EpochID)) *coinStartEpochCall {
+func (c *MockcoinStartEpochCall) DoAndReturn(f func(context.Context, types.EpochID)) *MockcoinStartEpochCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -234,31 +235,31 @@ func (m *Mockcoin) StartRound(arg0 context.Context, arg1 types.RoundID, arg2 []w
 }
 
 // StartRound indicates an expected call of StartRound.
-func (mr *MockcoinMockRecorder) StartRound(arg0, arg1, arg2 any) *coinStartRoundCall {
+func (mr *MockcoinMockRecorder) StartRound(arg0, arg1, arg2 any) *MockcoinStartRoundCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartRound", reflect.TypeOf((*Mockcoin)(nil).StartRound), arg0, arg1, arg2)
-	return &coinStartRoundCall{Call: call}
+	return &MockcoinStartRoundCall{Call: call}
 }
 
-// coinStartRoundCall wrap *gomock.Call
-type coinStartRoundCall struct {
+// MockcoinStartRoundCall wrap *gomock.Call
+type MockcoinStartRoundCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *coinStartRoundCall) Return() *coinStartRoundCall {
+func (c *MockcoinStartRoundCall) Return() *MockcoinStartRoundCall {
 	c.Call = c.Call.Return()
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *coinStartRoundCall) Do(f func(context.Context, types.RoundID, []weakcoin.Participant)) *coinStartRoundCall {
+func (c *MockcoinStartRoundCall) Do(f func(context.Context, types.RoundID, []weakcoin.Participant)) *MockcoinStartRoundCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *coinStartRoundCall) DoAndReturn(f func(context.Context, types.RoundID, []weakcoin.Participant)) *coinStartRoundCall {
+func (c *MockcoinStartRoundCall) DoAndReturn(f func(context.Context, types.RoundID, []weakcoin.Participant)) *MockcoinStartRoundCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -295,31 +296,31 @@ func (m *MockeligibilityChecker) PassStrictThreshold(arg0 types.VrfSignature) bo
 }
 
 // PassStrictThreshold indicates an expected call of PassStrictThreshold.
-func (mr *MockeligibilityCheckerMockRecorder) PassStrictThreshold(arg0 any) *eligibilityCheckerPassStrictThresholdCall {
+func (mr *MockeligibilityCheckerMockRecorder) PassStrictThreshold(arg0 any) *MockeligibilityCheckerPassStrictThresholdCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PassStrictThreshold", reflect.TypeOf((*MockeligibilityChecker)(nil).PassStrictThreshold), arg0)
-	return &eligibilityCheckerPassStrictThresholdCall{Call: call}
+	return &MockeligibilityCheckerPassStrictThresholdCall{Call: call}
 }
 
-// eligibilityCheckerPassStrictThresholdCall wrap *gomock.Call
-type eligibilityCheckerPassStrictThresholdCall struct {
+// MockeligibilityCheckerPassStrictThresholdCall wrap *gomock.Call
+type MockeligibilityCheckerPassStrictThresholdCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *eligibilityCheckerPassStrictThresholdCall) Return(arg0 bool) *eligibilityCheckerPassStrictThresholdCall {
+func (c *MockeligibilityCheckerPassStrictThresholdCall) Return(arg0 bool) *MockeligibilityCheckerPassStrictThresholdCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *eligibilityCheckerPassStrictThresholdCall) Do(f func(types.VrfSignature) bool) *eligibilityCheckerPassStrictThresholdCall {
+func (c *MockeligibilityCheckerPassStrictThresholdCall) Do(f func(types.VrfSignature) bool) *MockeligibilityCheckerPassStrictThresholdCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *eligibilityCheckerPassStrictThresholdCall) DoAndReturn(f func(types.VrfSignature) bool) *eligibilityCheckerPassStrictThresholdCall {
+func (c *MockeligibilityCheckerPassStrictThresholdCall) DoAndReturn(f func(types.VrfSignature) bool) *MockeligibilityCheckerPassStrictThresholdCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -333,31 +334,31 @@ func (m *MockeligibilityChecker) PassThreshold(arg0 types.VrfSignature) bool {
 }
 
 // PassThreshold indicates an expected call of PassThreshold.
-func (mr *MockeligibilityCheckerMockRecorder) PassThreshold(arg0 any) *eligibilityCheckerPassThresholdCall {
+func (mr *MockeligibilityCheckerMockRecorder) PassThreshold(arg0 any) *MockeligibilityCheckerPassThresholdCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PassThreshold", reflect.TypeOf((*MockeligibilityChecker)(nil).PassThreshold), arg0)
-	return &eligibilityCheckerPassThresholdCall{Call: call}
+	return &MockeligibilityCheckerPassThresholdCall{Call: call}
 }
 
-// eligibilityCheckerPassThresholdCall wrap *gomock.Call
-type eligibilityCheckerPassThresholdCall struct {
+// MockeligibilityCheckerPassThresholdCall wrap *gomock.Call
+type MockeligibilityCheckerPassThresholdCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *eligibilityCheckerPassThresholdCall) Return(arg0 bool) *eligibilityCheckerPassThresholdCall {
+func (c *MockeligibilityCheckerPassThresholdCall) Return(arg0 bool) *MockeligibilityCheckerPassThresholdCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *eligibilityCheckerPassThresholdCall) Do(f func(types.VrfSignature) bool) *eligibilityCheckerPassThresholdCall {
+func (c *MockeligibilityCheckerPassThresholdCall) Do(f func(types.VrfSignature) bool) *MockeligibilityCheckerPassThresholdCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *eligibilityCheckerPassThresholdCall) DoAndReturn(f func(types.VrfSignature) bool) *eligibilityCheckerPassThresholdCall {
+func (c *MockeligibilityCheckerPassThresholdCall) DoAndReturn(f func(types.VrfSignature) bool) *MockeligibilityCheckerPassThresholdCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -394,31 +395,31 @@ func (m *MocklayerClock) AwaitLayer(arg0 types.LayerID) <-chan struct{} {
 }
 
 // AwaitLayer indicates an expected call of AwaitLayer.
-func (mr *MocklayerClockMockRecorder) AwaitLayer(arg0 any) *layerClockAwaitLayerCall {
+func (mr *MocklayerClockMockRecorder) AwaitLayer(arg0 any) *MocklayerClockAwaitLayerCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AwaitLayer", reflect.TypeOf((*MocklayerClock)(nil).AwaitLayer), arg0)
-	return &layerClockAwaitLayerCall{Call: call}
+	return &MocklayerClockAwaitLayerCall{Call: call}
 }
 
-// layerClockAwaitLayerCall wrap *gomock.Call
-type layerClockAwaitLayerCall struct {
+// MocklayerClockAwaitLayerCall wrap *gomock.Call
+type MocklayerClockAwaitLayerCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *layerClockAwaitLayerCall) Return(arg0 <-chan struct{}) *layerClockAwaitLayerCall {
+func (c *MocklayerClockAwaitLayerCall) Return(arg0 <-chan struct{}) *MocklayerClockAwaitLayerCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *layerClockAwaitLayerCall) Do(f func(types.LayerID) <-chan struct{}) *layerClockAwaitLayerCall {
+func (c *MocklayerClockAwaitLayerCall) Do(f func(types.LayerID) <-chan struct{}) *MocklayerClockAwaitLayerCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *layerClockAwaitLayerCall) DoAndReturn(f func(types.LayerID) <-chan struct{}) *layerClockAwaitLayerCall {
+func (c *MocklayerClockAwaitLayerCall) DoAndReturn(f func(types.LayerID) <-chan struct{}) *MocklayerClockAwaitLayerCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -432,31 +433,31 @@ func (m *MocklayerClock) CurrentLayer() types.LayerID {
 }
 
 // CurrentLayer indicates an expected call of CurrentLayer.
-func (mr *MocklayerClockMockRecorder) CurrentLayer() *layerClockCurrentLayerCall {
+func (mr *MocklayerClockMockRecorder) CurrentLayer() *MocklayerClockCurrentLayerCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CurrentLayer", reflect.TypeOf((*MocklayerClock)(nil).CurrentLayer))
-	return &layerClockCurrentLayerCall{Call: call}
+	return &MocklayerClockCurrentLayerCall{Call: call}
 }
 
-// layerClockCurrentLayerCall wrap *gomock.Call
-type layerClockCurrentLayerCall struct {
+// MocklayerClockCurrentLayerCall wrap *gomock.Call
+type MocklayerClockCurrentLayerCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *layerClockCurrentLayerCall) Return(arg0 types.LayerID) *layerClockCurrentLayerCall {
+func (c *MocklayerClockCurrentLayerCall) Return(arg0 types.LayerID) *MocklayerClockCurrentLayerCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *layerClockCurrentLayerCall) Do(f func() types.LayerID) *layerClockCurrentLayerCall {
+func (c *MocklayerClockCurrentLayerCall) Do(f func() types.LayerID) *MocklayerClockCurrentLayerCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *layerClockCurrentLayerCall) DoAndReturn(f func() types.LayerID) *layerClockCurrentLayerCall {
+func (c *MocklayerClockCurrentLayerCall) DoAndReturn(f func() types.LayerID) *MocklayerClockCurrentLayerCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -470,31 +471,31 @@ func (m *MocklayerClock) LayerToTime(arg0 types.LayerID) time.Time {
 }
 
 // LayerToTime indicates an expected call of LayerToTime.
-func (mr *MocklayerClockMockRecorder) LayerToTime(arg0 any) *layerClockLayerToTimeCall {
+func (mr *MocklayerClockMockRecorder) LayerToTime(arg0 any) *MocklayerClockLayerToTimeCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LayerToTime", reflect.TypeOf((*MocklayerClock)(nil).LayerToTime), arg0)
-	return &layerClockLayerToTimeCall{Call: call}
+	return &MocklayerClockLayerToTimeCall{Call: call}
 }
 
-// layerClockLayerToTimeCall wrap *gomock.Call
-type layerClockLayerToTimeCall struct {
+// MocklayerClockLayerToTimeCall wrap *gomock.Call
+type MocklayerClockLayerToTimeCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *layerClockLayerToTimeCall) Return(arg0 time.Time) *layerClockLayerToTimeCall {
+func (c *MocklayerClockLayerToTimeCall) Return(arg0 time.Time) *MocklayerClockLayerToTimeCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *layerClockLayerToTimeCall) Do(f func(types.LayerID) time.Time) *layerClockLayerToTimeCall {
+func (c *MocklayerClockLayerToTimeCall) Do(f func(types.LayerID) time.Time) *MocklayerClockLayerToTimeCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *layerClockLayerToTimeCall) DoAndReturn(f func(types.LayerID) time.Time) *layerClockLayerToTimeCall {
+func (c *MocklayerClockLayerToTimeCall) DoAndReturn(f func(types.LayerID) time.Time) *MocklayerClockLayerToTimeCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -531,31 +532,31 @@ func (m *MockvrfSigner) NodeID() types.NodeID {
 }
 
 // NodeID indicates an expected call of NodeID.
-func (mr *MockvrfSignerMockRecorder) NodeID() *vrfSignerNodeIDCall {
+func (mr *MockvrfSignerMockRecorder) NodeID() *MockvrfSignerNodeIDCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NodeID", reflect.TypeOf((*MockvrfSigner)(nil).NodeID))
-	return &vrfSignerNodeIDCall{Call: call}
+	return &MockvrfSignerNodeIDCall{Call: call}
 }
 
-// vrfSignerNodeIDCall wrap *gomock.Call
-type vrfSignerNodeIDCall struct {
+// MockvrfSignerNodeIDCall wrap *gomock.Call
+type MockvrfSignerNodeIDCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *vrfSignerNodeIDCall) Return(arg0 types.NodeID) *vrfSignerNodeIDCall {
+func (c *MockvrfSignerNodeIDCall) Return(arg0 types.NodeID) *MockvrfSignerNodeIDCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *vrfSignerNodeIDCall) Do(f func() types.NodeID) *vrfSignerNodeIDCall {
+func (c *MockvrfSignerNodeIDCall) Do(f func() types.NodeID) *MockvrfSignerNodeIDCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *vrfSignerNodeIDCall) DoAndReturn(f func() types.NodeID) *vrfSignerNodeIDCall {
+func (c *MockvrfSignerNodeIDCall) DoAndReturn(f func() types.NodeID) *MockvrfSignerNodeIDCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -569,31 +570,31 @@ func (m *MockvrfSigner) Sign(msg []byte) types.VrfSignature {
 }
 
 // Sign indicates an expected call of Sign.
-func (mr *MockvrfSignerMockRecorder) Sign(msg any) *vrfSignerSignCall {
+func (mr *MockvrfSignerMockRecorder) Sign(msg any) *MockvrfSignerSignCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Sign", reflect.TypeOf((*MockvrfSigner)(nil).Sign), msg)
-	return &vrfSignerSignCall{Call: call}
+	return &MockvrfSignerSignCall{Call: call}
 }
 
-// vrfSignerSignCall wrap *gomock.Call
-type vrfSignerSignCall struct {
+// MockvrfSignerSignCall wrap *gomock.Call
+type MockvrfSignerSignCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *vrfSignerSignCall) Return(arg0 types.VrfSignature) *vrfSignerSignCall {
+func (c *MockvrfSignerSignCall) Return(arg0 types.VrfSignature) *MockvrfSignerSignCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *vrfSignerSignCall) Do(f func([]byte) types.VrfSignature) *vrfSignerSignCall {
+func (c *MockvrfSignerSignCall) Do(f func([]byte) types.VrfSignature) *MockvrfSignerSignCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *vrfSignerSignCall) DoAndReturn(f func([]byte) types.VrfSignature) *vrfSignerSignCall {
+func (c *MockvrfSignerSignCall) DoAndReturn(f func([]byte) types.VrfSignature) *MockvrfSignerSignCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -630,31 +631,31 @@ func (m *MockvrfVerifier) Verify(nodeID types.NodeID, msg []byte, sig types.VrfS
 }
 
 // Verify indicates an expected call of Verify.
-func (mr *MockvrfVerifierMockRecorder) Verify(nodeID, msg, sig any) *vrfVerifierVerifyCall {
+func (mr *MockvrfVerifierMockRecorder) Verify(nodeID, msg, sig any) *MockvrfVerifierVerifyCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockvrfVerifier)(nil).Verify), nodeID, msg, sig)
-	return &vrfVerifierVerifyCall{Call: call}
+	return &MockvrfVerifierVerifyCall{Call: call}
 }
 
-// vrfVerifierVerifyCall wrap *gomock.Call
-type vrfVerifierVerifyCall struct {
+// MockvrfVerifierVerifyCall wrap *gomock.Call
+type MockvrfVerifierVerifyCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *vrfVerifierVerifyCall) Return(arg0 bool) *vrfVerifierVerifyCall {
+func (c *MockvrfVerifierVerifyCall) Return(arg0 bool) *MockvrfVerifierVerifyCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *vrfVerifierVerifyCall) Do(f func(types.NodeID, []byte, types.VrfSignature) bool) *vrfVerifierVerifyCall {
+func (c *MockvrfVerifierVerifyCall) Do(f func(types.NodeID, []byte, types.VrfSignature) bool) *MockvrfVerifierVerifyCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *vrfVerifierVerifyCall) DoAndReturn(f func(types.NodeID, []byte, types.VrfSignature) bool) *vrfVerifierVerifyCall {
+func (c *MockvrfVerifierVerifyCall) DoAndReturn(f func(types.NodeID, []byte, types.VrfSignature) bool) *MockvrfVerifierVerifyCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -692,31 +693,31 @@ func (m *MocknonceFetcher) VRFNonce(arg0 types.NodeID, arg1 types.EpochID) (type
 }
 
 // VRFNonce indicates an expected call of VRFNonce.
-func (mr *MocknonceFetcherMockRecorder) VRFNonce(arg0, arg1 any) *nonceFetcherVRFNonceCall {
+func (mr *MocknonceFetcherMockRecorder) VRFNonce(arg0, arg1 any) *MocknonceFetcherVRFNonceCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRFNonce", reflect.TypeOf((*MocknonceFetcher)(nil).VRFNonce), arg0, arg1)
-	return &nonceFetcherVRFNonceCall{Call: call}
+	return &MocknonceFetcherVRFNonceCall{Call: call}
 }
 
-// nonceFetcherVRFNonceCall wrap *gomock.Call
-type nonceFetcherVRFNonceCall struct {
+// MocknonceFetcherVRFNonceCall wrap *gomock.Call
+type MocknonceFetcherVRFNonceCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *nonceFetcherVRFNonceCall) Return(arg0 types.VRFPostIndex, arg1 error) *nonceFetcherVRFNonceCall {
+func (c *MocknonceFetcherVRFNonceCall) Return(arg0 types.VRFPostIndex, arg1 error) *MocknonceFetcherVRFNonceCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *nonceFetcherVRFNonceCall) Do(f func(types.NodeID, types.EpochID) (types.VRFPostIndex, error)) *nonceFetcherVRFNonceCall {
+func (c *MocknonceFetcherVRFNonceCall) Do(f func(types.NodeID, types.EpochID) (types.VRFPostIndex, error)) *MocknonceFetcherVRFNonceCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *nonceFetcherVRFNonceCall) DoAndReturn(f func(types.NodeID, types.EpochID) (types.VRFPostIndex, error)) *nonceFetcherVRFNonceCall {
+func (c *MocknonceFetcherVRFNonceCall) DoAndReturn(f func(types.NodeID, types.EpochID) (types.VRFPostIndex, error)) *MocknonceFetcherVRFNonceCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

@@ -549,8 +549,6 @@ linters-settings:
         alias: vm
       - pkg: "github.com/spacemeshos/go-spacemesh/p2p/metrics"
         alias: p2pmetrics
-      - pkg: "github.com/spacemeshos/go-spacemesh/sql/proposals"
-        alias: dbproposals
       - pkg: "github.com/spacemeshos/go-spacemesh/sql/metrics"
         alias: dbmetrics
       - pkg: "github.com/spacemeshos/go-spacemesh/txs/types"

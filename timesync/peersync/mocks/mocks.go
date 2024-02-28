@@ -5,6 +5,7 @@
 //
 //	mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./sync.go
 //
+
 // Package mocks is a generated GoMock package.
 package mocks
 
@@ -48,31 +49,31 @@ func (m *MockTime) Now() time.Time {
 }
 
 // Now indicates an expected call of Now.
-func (mr *MockTimeMockRecorder) Now() *TimeNowCall {
+func (mr *MockTimeMockRecorder) Now() *MockTimeNowCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Now", reflect.TypeOf((*MockTime)(nil).Now))
-	return &TimeNowCall{Call: call}
+	return &MockTimeNowCall{Call: call}
 }
 
-// TimeNowCall wrap *gomock.Call
-type TimeNowCall struct {
+// MockTimeNowCall wrap *gomock.Call
+type MockTimeNowCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *TimeNowCall) Return(arg0 time.Time) *TimeNowCall {
+func (c *MockTimeNowCall) Return(arg0 time.Time) *MockTimeNowCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *TimeNowCall) Do(f func() time.Time) *TimeNowCall {
+func (c *MockTimeNowCall) Do(f func() time.Time) *MockTimeNowCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *TimeNowCall) DoAndReturn(f func() time.Time) *TimeNowCall {
+func (c *MockTimeNowCall) DoAndReturn(f func() time.Time) *MockTimeNowCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -109,31 +110,31 @@ func (m *MockgetPeers) GetPeers() []p2p.Peer {
 }
 
 // GetPeers indicates an expected call of GetPeers.
-func (mr *MockgetPeersMockRecorder) GetPeers() *getPeersGetPeersCall {
+func (mr *MockgetPeersMockRecorder) GetPeers() *MockgetPeersGetPeersCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPeers", reflect.TypeOf((*MockgetPeers)(nil).GetPeers))
-	return &getPeersGetPeersCall{Call: call}
+	return &MockgetPeersGetPeersCall{Call: call}
 }
 
-// getPeersGetPeersCall wrap *gomock.Call
-type getPeersGetPeersCall struct {
+// MockgetPeersGetPeersCall wrap *gomock.Call
+type MockgetPeersGetPeersCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *getPeersGetPeersCall) Return(arg0 []p2p.Peer) *getPeersGetPeersCall {
+func (c *MockgetPeersGetPeersCall) Return(arg0 []p2p.Peer) *MockgetPeersGetPeersCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *getPeersGetPeersCall) Do(f func() []p2p.Peer) *getPeersGetPeersCall {
+func (c *MockgetPeersGetPeersCall) Do(f func() []p2p.Peer) *MockgetPeersGetPeersCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *getPeersGetPeersCall) DoAndReturn(f func() []p2p.Peer) *getPeersGetPeersCall {
+func (c *MockgetPeersGetPeersCall) DoAndReturn(f func() []p2p.Peer) *MockgetPeersGetPeersCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

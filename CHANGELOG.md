@@ -94,12 +94,16 @@ configuration is as follows:
   If a node finds a proof invalid, it will report it to the network by
   creating a malfeasance proof. The malicious node will then be blacklisted by the network.
 
+* [#5586](https://github.com/spacemeshos/go-spacemesh/pull/5586)
+  Do not try to publish proofs for malicious ATXs during sync.
+
+  Publishing is blocked during sync because `Syncer::ListenToATXGossip()` returns false, and thus every malicious ATX being
+  synced was causing an error resulting in an interruption of sync.
+
 ### Features
 
 ### Improvements
 
-* [#5564](https://github.com/spacemeshos/go-spacemesh/pull/5564) Use decaying tags for fetch peers. This prevents
-  libp2p's Connection Manager from breaking sync.
 * [#5418](https://github.com/spacemeshos/go-spacemesh/pull/5418) Add `grpc-post-listener` to separate post service from
   `grpc-private-listener` and not require mTLS for the post service.
 * [#5465](https://github.com/spacemeshos/go-spacemesh/pull/5465)
@@ -108,6 +112,33 @@ configuration is as follows:
   If you are not using a remote post service you do not need to adjust anything. If you are using a remote setup
   make sure your post service now connects to `grpc-post-listener` instead of `grpc-private-listener`. If you are
   connecting to a remote post service over the internet we strongly recommend using mTLS via `grpc-tls-listener`.
+* [#5601](https://github.com/spacemeshos/go-spacemesh/pull/5601) measure latency from all requests in sync
+  This improves peers selection logic, mainly to prevent asking slow peers for collection of atxs, which often blocks sync.
+
+* [5602](https://github.com/spacemeshos/go-spacemesh/pull/5602) Optimize client side of fetcher to avoid encoding when
+  not needed.
+
+## Release v1.3.10
+
+### Improvements
+
+* [#5564](https://github.com/spacemeshos/go-spacemesh/pull/5564) Use decaying tags for fetch peers. This prevents
+  libp2p's Connection Manager from breaking sync.
+
+* [#5522](https://github.com/spacemeshos/go-spacemesh/pull/5522) Disable mesh agreement sync protocol.
+  It reduces number of requests for historical activation ids.
+
+* [#5571](https://github.com/spacemeshos/go-spacemesh/pull/5571) Adjust to 2.2M ATXs
+
+## Release v1.3.9
+
+### Improvements
+
+* [#5530](https://github.com/spacemeshos/go-spacemesh/pull/5530)
+  Adjusted cache sizes for the increased number of ATXs on the network.
+
+* [#5511](https://github.com/spacemeshos/go-spacemesh/pull/5511)
+  Fix dialing peers on their private IPs, which was causing "portscan" complaints.
 
 ## Release v1.3.8
 

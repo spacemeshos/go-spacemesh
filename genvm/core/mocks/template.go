@@ -5,6 +5,7 @@
 //
 //	mockgen -typed -package=mocks -destination=./mocks/template.go github.com/spacemeshos/go-spacemesh/genvm/core Template
 //
+
 // Package mocks is a generated GoMock package.
 package mocks
 
@@ -48,31 +49,31 @@ func (m *MockTemplate) BaseGas(arg0 byte) uint64 {
 }
 
 // BaseGas indicates an expected call of BaseGas.
-func (mr *MockTemplateMockRecorder) BaseGas(arg0 any) *TemplateBaseGasCall {
+func (mr *MockTemplateMockRecorder) BaseGas(arg0 any) *MockTemplateBaseGasCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BaseGas", reflect.TypeOf((*MockTemplate)(nil).BaseGas), arg0)
-	return &TemplateBaseGasCall{Call: call}
+	return &MockTemplateBaseGasCall{Call: call}
 }
 
-// TemplateBaseGasCall wrap *gomock.Call
-type TemplateBaseGasCall struct {
+// MockTemplateBaseGasCall wrap *gomock.Call
+type MockTemplateBaseGasCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *TemplateBaseGasCall) Return(arg0 uint64) *TemplateBaseGasCall {
+func (c *MockTemplateBaseGasCall) Return(arg0 uint64) *MockTemplateBaseGasCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *TemplateBaseGasCall) Do(f func(byte) uint64) *TemplateBaseGasCall {
+func (c *MockTemplateBaseGasCall) Do(f func(byte) uint64) *MockTemplateBaseGasCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *TemplateBaseGasCall) DoAndReturn(f func(byte) uint64) *TemplateBaseGasCall {
+func (c *MockTemplateBaseGasCall) DoAndReturn(f func(byte) uint64) *MockTemplateBaseGasCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -87,31 +88,31 @@ func (m *MockTemplate) EncodeScale(arg0 *scale.Encoder) (int, error) {
 }
 
 // EncodeScale indicates an expected call of EncodeScale.
-func (mr *MockTemplateMockRecorder) EncodeScale(arg0 any) *TemplateEncodeScaleCall {
+func (mr *MockTemplateMockRecorder) EncodeScale(arg0 any) *MockTemplateEncodeScaleCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EncodeScale", reflect.TypeOf((*MockTemplate)(nil).EncodeScale), arg0)
-	return &TemplateEncodeScaleCall{Call: call}
+	return &MockTemplateEncodeScaleCall{Call: call}
 }
 
-// TemplateEncodeScaleCall wrap *gomock.Call
-type TemplateEncodeScaleCall struct {
+// MockTemplateEncodeScaleCall wrap *gomock.Call
+type MockTemplateEncodeScaleCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *TemplateEncodeScaleCall) Return(arg0 int, arg1 error) *TemplateEncodeScaleCall {
+func (c *MockTemplateEncodeScaleCall) Return(arg0 int, arg1 error) *MockTemplateEncodeScaleCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *TemplateEncodeScaleCall) Do(f func(*scale.Encoder) (int, error)) *TemplateEncodeScaleCall {
+func (c *MockTemplateEncodeScaleCall) Do(f func(*scale.Encoder) (int, error)) *MockTemplateEncodeScaleCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *TemplateEncodeScaleCall) DoAndReturn(f func(*scale.Encoder) (int, error)) *TemplateEncodeScaleCall {
+func (c *MockTemplateEncodeScaleCall) DoAndReturn(f func(*scale.Encoder) (int, error)) *MockTemplateEncodeScaleCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -125,31 +126,31 @@ func (m *MockTemplate) ExecGas(arg0 byte) uint64 {
 }
 
 // ExecGas indicates an expected call of ExecGas.
-func (mr *MockTemplateMockRecorder) ExecGas(arg0 any) *TemplateExecGasCall {
+func (mr *MockTemplateMockRecorder) ExecGas(arg0 any) *MockTemplateExecGasCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecGas", reflect.TypeOf((*MockTemplate)(nil).ExecGas), arg0)
-	return &TemplateExecGasCall{Call: call}
+	return &MockTemplateExecGasCall{Call: call}
 }
 
-// TemplateExecGasCall wrap *gomock.Call
-type TemplateExecGasCall struct {
+// MockTemplateExecGasCall wrap *gomock.Call
+type MockTemplateExecGasCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *TemplateExecGasCall) Return(arg0 uint64) *TemplateExecGasCall {
+func (c *MockTemplateExecGasCall) Return(arg0 uint64) *MockTemplateExecGasCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *TemplateExecGasCall) Do(f func(byte) uint64) *TemplateExecGasCall {
+func (c *MockTemplateExecGasCall) Do(f func(byte) uint64) *MockTemplateExecGasCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *TemplateExecGasCall) DoAndReturn(f func(byte) uint64) *TemplateExecGasCall {
+func (c *MockTemplateExecGasCall) DoAndReturn(f func(byte) uint64) *MockTemplateExecGasCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -163,31 +164,31 @@ func (m *MockTemplate) LoadGas() uint64 {
 }
 
 // LoadGas indicates an expected call of LoadGas.
-func (mr *MockTemplateMockRecorder) LoadGas() *TemplateLoadGasCall {
+func (mr *MockTemplateMockRecorder) LoadGas() *MockTemplateLoadGasCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadGas", reflect.TypeOf((*MockTemplate)(nil).LoadGas))
-	return &TemplateLoadGasCall{Call: call}
+	return &MockTemplateLoadGasCall{Call: call}
 }
 
-// TemplateLoadGasCall wrap *gomock.Call
-type TemplateLoadGasCall struct {
+// MockTemplateLoadGasCall wrap *gomock.Call
+type MockTemplateLoadGasCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *TemplateLoadGasCall) Return(arg0 uint64) *TemplateLoadGasCall {
+func (c *MockTemplateLoadGasCall) Return(arg0 uint64) *MockTemplateLoadGasCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *TemplateLoadGasCall) Do(f func() uint64) *TemplateLoadGasCall {
+func (c *MockTemplateLoadGasCall) Do(f func() uint64) *MockTemplateLoadGasCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *TemplateLoadGasCall) DoAndReturn(f func() uint64) *TemplateLoadGasCall {
+func (c *MockTemplateLoadGasCall) DoAndReturn(f func() uint64) *MockTemplateLoadGasCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -202,31 +203,31 @@ func (m *MockTemplate) MaxSpend(arg0 byte, arg1 any) (uint64, error) {
 }
 
 // MaxSpend indicates an expected call of MaxSpend.
-func (mr *MockTemplateMockRecorder) MaxSpend(arg0, arg1 any) *TemplateMaxSpendCall {
+func (mr *MockTemplateMockRecorder) MaxSpend(arg0, arg1 any) *MockTemplateMaxSpendCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MaxSpend", reflect.TypeOf((*MockTemplate)(nil).MaxSpend), arg0, arg1)
-	return &TemplateMaxSpendCall{Call: call}
+	return &MockTemplateMaxSpendCall{Call: call}
 }
 
-// TemplateMaxSpendCall wrap *gomock.Call
-type TemplateMaxSpendCall struct {
+// MockTemplateMaxSpendCall wrap *gomock.Call
+type MockTemplateMaxSpendCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *TemplateMaxSpendCall) Return(arg0 uint64, arg1 error) *TemplateMaxSpendCall {
+func (c *MockTemplateMaxSpendCall) Return(arg0 uint64, arg1 error) *MockTemplateMaxSpendCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *TemplateMaxSpendCall) Do(f func(byte, any) (uint64, error)) *TemplateMaxSpendCall {
+func (c *MockTemplateMaxSpendCall) Do(f func(byte, any) (uint64, error)) *MockTemplateMaxSpendCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *TemplateMaxSpendCall) DoAndReturn(f func(byte, any) (uint64, error)) *TemplateMaxSpendCall {
+func (c *MockTemplateMaxSpendCall) DoAndReturn(f func(byte, any) (uint64, error)) *MockTemplateMaxSpendCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -240,31 +241,31 @@ func (m *MockTemplate) Verify(arg0 core.Host, arg1 []byte, arg2 *scale.Decoder) 
 }
 
 // Verify indicates an expected call of Verify.
-func (mr *MockTemplateMockRecorder) Verify(arg0, arg1, arg2 any) *TemplateVerifyCall {
+func (mr *MockTemplateMockRecorder) Verify(arg0, arg1, arg2 any) *MockTemplateVerifyCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockTemplate)(nil).Verify), arg0, arg1, arg2)
-	return &TemplateVerifyCall{Call: call}
+	return &MockTemplateVerifyCall{Call: call}
 }
 
-// TemplateVerifyCall wrap *gomock.Call
-type TemplateVerifyCall struct {
+// MockTemplateVerifyCall wrap *gomock.Call
+type MockTemplateVerifyCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *TemplateVerifyCall) Return(arg0 bool) *TemplateVerifyCall {
+func (c *MockTemplateVerifyCall) Return(arg0 bool) *MockTemplateVerifyCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *TemplateVerifyCall) Do(f func(core.Host, []byte, *scale.Decoder) bool) *TemplateVerifyCall {
+func (c *MockTemplateVerifyCall) Do(f func(core.Host, []byte, *scale.Decoder) bool) *MockTemplateVerifyCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *TemplateVerifyCall) DoAndReturn(f func(core.Host, []byte, *scale.Decoder) bool) *TemplateVerifyCall {
+func (c *MockTemplateVerifyCall) DoAndReturn(f func(core.Host, []byte, *scale.Decoder) bool) *MockTemplateVerifyCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

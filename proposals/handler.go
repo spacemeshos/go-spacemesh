@@ -18,10 +18,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
-	"github.com/spacemeshos/go-spacemesh/sql/proposals"
+	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
@@ -60,6 +61,8 @@ type Handler struct {
 	validator  eligibilityValidator
 	tortoise   tortoiseProvider
 	clock      layerClock
+
+	proposals proposalsConsumer
 }
 
 // Config defines configuration for the handler.
@@ -107,6 +110,7 @@ func WithConfig(cfg Config) Opt {
 func NewHandler(
 	db *sql.Database,
 	atxsdata *atxsdata.Data,
+	proposals proposalsConsumer,
 	edVerifier *signing.EdVerifier,
 	p pubsub.Publisher,
 	f system.Fetcher,
@@ -126,6 +130,7 @@ func NewHandler(
 		cfg:        defaultConfig(),
 		db:         db,
 		atxsdata:   atxsdata,
+		proposals:  proposals,
 		activeSets: activeSets,
 		edVerifier: edVerifier,
 		publisher:  p,
@@ -325,19 +330,12 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 	proposalDuration.WithLabelValues(decodeInit).Observe(float64(time.Since(t0)))
 
 	logger = logger.WithFields(p.ID(), p.Ballot.ID(), p.Layer)
-	t1 := time.Now()
-	if has, err := proposals.Has(h.db, p.ID()); err != nil {
-		logger.With().Error("failed to look up proposal", log.Err(err))
-		return fmt.Errorf("lookup proposal %v: %w", p.ID(), err)
-	} else if has {
+	if h.proposals.IsKnown(p.Layer, p.ID()) {
 		known.Inc()
 		return fmt.Errorf("%w proposal %s", errKnownProposal, p.ID())
 	}
-	proposalDuration.WithLabelValues(dbLookup).Observe(float64(time.Since(t1)))
+	logger.With().Info("new proposal", log.ShortStringer("exp hash", expHash), log.Int("num_txs", len(p.TxIDs)))
 
-	logger.With().Info("new proposal",
-		log.String("exp hash", expHash.ShortString()),
-		log.Int("num_txs", len(p.TxIDs)))
 	t2 := time.Now()
 	h.fetcher.RegisterPeerHashes(peer, collectHashes(p))
 	proposalDuration.WithLabelValues(peerHashes).Observe(float64(time.Since(t2)))
@@ -356,19 +354,20 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 		return err
 	}
 	proposalDuration.WithLabelValues(fetchTXs).Observe(float64(time.Since(t4)))
-
-	logger.With().Debug("proposal is syntactically valid")
-	t5 := time.Now()
-	if err := proposals.Add(h.db, &p); err != nil {
-		if errors.Is(err, sql.ErrObjectExists) {
-			known.Inc()
-			return fmt.Errorf("%w proposal %s", errKnownProposal, p.ID())
-		}
-		logger.With().Error("failed to save proposal", log.Err(err))
-		return fmt.Errorf("save proposal: %w", err)
+	if err := h.setProposalBeacon(&p); err != nil {
+		return fmt.Errorf("setting proposal beacon: %w", err)
 	}
-	proposalDuration.WithLabelValues(dbSave).Observe(float64(time.Since(t5)))
-	logger.With().Debug("added proposal to database")
+	logger.With().Debug("proposal is syntactically valid")
+
+	err = h.proposals.OnProposal(&p)
+	switch {
+	case errors.Is(err, store.ErrProposalExists):
+		known.Inc()
+		return fmt.Errorf("%w %s", errKnownProposal, p.ID())
+	case err != nil:
+		return fmt.Errorf("saving proposal: %w", err)
+	}
+	logger.With().Debug("stored proposal")
 
 	t6 := time.Now()
 	if err = h.mesh.AddTXsFromProposal(ctx, p.Layer, p.ID(), p.TxIDs); err != nil {
@@ -401,6 +400,25 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 		pubsub.ProposalProtocol,
 		time.Since(h.clock.LayerToTime(p.Layer)),
 	)
+	return nil
+}
+
+func (h *Handler) setProposalBeacon(p *types.Proposal) error {
+	if p.EpochData != nil {
+		p.SetBeacon(p.EpochData.Beacon)
+		return nil
+	}
+	if p.RefBallot == types.EmptyBallotID {
+		return fmt.Errorf("empty refballot")
+	}
+	refBallot, err := ballots.Get(h.db, p.RefBallot)
+	if err != nil {
+		return fmt.Errorf("cannot find refballot '%s' in DB: %w", p.RefBallot.String(), err)
+	}
+	if refBallot.EpochData == nil {
+		return fmt.Errorf("refballot '%s' with empty epoch data", p.RefBallot.String())
+	}
+	p.SetBeacon(refBallot.EpochData.Beacon)
 	return nil
 }
 
