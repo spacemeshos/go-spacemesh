@@ -33,11 +33,13 @@ type VrfNonceKey struct {
 type Executor interface {
 	sql.Executor
 	WithTx(context.Context, func(*sql.Tx) error) error
+	QueryCache() sql.QueryCache
 }
 
 // CachedDB is simply a database injected with cache.
 type CachedDB struct {
 	Executor
+	sql.QueryCache
 	logger log.Log
 
 	// cache is optional
@@ -108,6 +110,7 @@ func NewCachedDB(db Executor, lg log.Log, opts ...Opt) *CachedDB {
 
 	return &CachedDB{
 		Executor:         db,
+		QueryCache:       db.QueryCache(),
 		atxsdata:         o.atxsdata,
 		logger:           lg,
 		atxHdrCache:      atxHdrCache,
