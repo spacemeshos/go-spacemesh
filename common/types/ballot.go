@@ -58,11 +58,22 @@ type Ballot struct {
 	// the proof of the smeshers eligibility to vote and propose block content in this epoch.
 	// Eligibilities must be produced in the ascending order.
 	// the proofs are vrf signatures and need not be included in the ballot's signature.
-	// according to protocol there are 50 per layer, the rest is safety margin
-	EligibilityProofs []VotingEligibility `scale:"max=500"`
+	//
+	// Worst case scenario is that a smesher identity has > 99.97% of the total weight of the network.
+	// In this case they will get all available 50 eligibility slots in all 4032 layers of the epoch.
+	// Additionally every other identity on the network that successfully published an ATX will get 1 eligibility.
+	//
+	// If we expect 2.2 Mio ATXs that would be a total of 2.2 Mio + 50 * 4032 = 2,401,600 eligibility proofs.
+	// Since these are randomly distributed across the epoch, we can expect an average of n * p =
+	// 2,401,600 / 4032 = 595.7 eligibility proofs per ballot with a standard deviation of sqrt(n * p * (1 - p)) =
+	// sqrt(2,401,600 * 1/4032 * 4031/4032) = 24.4
+	//
+	// This means that we can expect a maximum of 595.7 + 6*24.4 = 743 eligibility proofs per ballot with
+	// > 99.9997% probability.
+	EligibilityProofs []VotingEligibility `scale:"max=800"` // 800 leaves some additional space for future growth
 	// from the smesher's view, the set of ATXs eligible to vote and propose block content in this epoch
 	// only present in smesher's first ballot of the epoch
-	ActiveSet []ATXID `scale:"max=100000"`
+	ActiveSet []ATXID `scale:"max=2200000"`
 
 	// the following fields are kept private and from being serialized
 	ballotID BallotID

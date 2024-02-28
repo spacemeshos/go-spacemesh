@@ -22,7 +22,7 @@ type RequestMessage struct {
 // ResponseMessage is sent to the node as a response.
 type ResponseMessage struct {
 	Hash types.Hash32
-	Data []byte `scale:"max=89128960"` // limit to 85 MiB
+	Data []byte `scale:"max=89128960"` // limit to 85 MiB - keep in line with Response.Data in `p2p/server/server.go`
 }
 
 // RequestBatch is a batch of requests and a hash of all requests as ID.
@@ -108,6 +108,7 @@ type EpochData struct {
 	// to be in line with `EpochActiveSet` in common/types/activation.go
 	// and DefaultConfig in datastore/store.go
 	// also double-check the size of `ResponseMessage` above
+	// and the fields `EligibilityProofs` and `ActiveSet` in the type `Ballot` in common/types/ballot.go
 	AtxIDs []types.ATXID `scale:"max=2200000"`
 }
 
