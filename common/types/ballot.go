@@ -59,18 +59,15 @@ type Ballot struct {
 	// Eligibilities must be produced in the ascending order.
 	// the proofs are vrf signatures and need not be included in the ballot's signature.
 	//
-	// Worst case scenario is that a smesher identity has > 99.97% of the total weight of the network.
-	// In this case they will get all available 50 eligibility slots in all 4032 layers of the epoch.
-	// Additionally every other identity on the network that successfully published an ATX will get 1 eligibility.
+	// The number of eligibility proofs depends on the smeshers weight and the total weight of the network.
+	// For epoch 16 the biggest smesher had 888 SUs and the total weight of the network was ~20.2 Mio SUs.
+	// This means that the biggest smesher received 888 / 20,200,000 = 0.0044% of all eligibility slots for the epoch.
+	// There are 4032 layers in an epoch and 50 eligibility slots per layer, so the biggest smesher received
+	// 0.0044% * 4032 * 50 = ~9 eligibility slots and the vast majority of smeshers received 1 eligibility slot.
 	//
-	// If we expect 2.2 Mio ATXs that would be a total of 2.2 Mio + 50 * 4032 = 2,401,600 eligibility proofs.
-	// Since these are randomly distributed across the epoch, we can expect an average of n * p =
-	// 2,401,600 / 4032 = 595.7 eligibility proofs per ballot with a standard deviation of sqrt(n * p * (1 - p)) =
-	// sqrt(2,401,600 * 1/4032 * 4031/4032) = 24.4
-	//
-	// This means that we can expect a maximum of 595.7 + 6*24.4 = 743 eligibility proofs per ballot with
-	// > 99.9997% probability.
-	EligibilityProofs []VotingEligibility `scale:"max=800"` // 800 leaves some additional space for future growth
+	// Assuming the largest smesher won't control more than 10% of space in the network, we can assume that the
+	// highest number of eligibilities a single ballot will be less than 25000. (10% of 4032 * 50 = 20160)
+	EligibilityProofs []VotingEligibility `scale:"max=25000"`
 	// from the smesher's view, the set of ATXs eligible to vote and propose block content in this epoch
 	// only present in smesher's first ballot of the epoch
 	ActiveSet []ATXID `scale:"max=2200000"`

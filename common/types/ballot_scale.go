@@ -37,7 +37,7 @@ func (t *Ballot) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.EligibilityProofs, 800)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.EligibilityProofs, 25000)
 		if err != nil {
 			return total, err
 		}
@@ -83,7 +83,7 @@ func (t *Ballot) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[VotingEligibility](dec, 800)
+		field, n, err := scale.DecodeStructSliceWithLimit[VotingEligibility](dec, 25000)
 		if err != nil {
 			return total, err
 		}
