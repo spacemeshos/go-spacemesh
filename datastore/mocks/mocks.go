@@ -88,31 +88,31 @@ func (m *MockExecutor) QueryCache() sql.QueryCache {
 }
 
 // QueryCache indicates an expected call of QueryCache.
-func (mr *MockExecutorMockRecorder) QueryCache() *ExecutorQueryCacheCall {
+func (mr *MockExecutorMockRecorder) QueryCache() *MockExecutorQueryCacheCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryCache", reflect.TypeOf((*MockExecutor)(nil).QueryCache))
-	return &ExecutorQueryCacheCall{Call: call}
+	return &MockExecutorQueryCacheCall{Call: call}
 }
 
-// ExecutorQueryCacheCall wrap *gomock.Call
-type ExecutorQueryCacheCall struct {
+// MockExecutorQueryCacheCall wrap *gomock.Call
+type MockExecutorQueryCacheCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *ExecutorQueryCacheCall) Return(arg0 sql.QueryCache) *ExecutorQueryCacheCall {
+func (c *MockExecutorQueryCacheCall) Return(arg0 sql.QueryCache) *MockExecutorQueryCacheCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *ExecutorQueryCacheCall) Do(f func() sql.QueryCache) *ExecutorQueryCacheCall {
+func (c *MockExecutorQueryCacheCall) Do(f func() sql.QueryCache) *MockExecutorQueryCacheCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *ExecutorQueryCacheCall) DoAndReturn(f func() sql.QueryCache) *ExecutorQueryCacheCall {
+func (c *MockExecutorQueryCacheCall) DoAndReturn(f func() sql.QueryCache) *MockExecutorQueryCacheCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
