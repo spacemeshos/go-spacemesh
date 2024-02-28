@@ -1,6 +1,8 @@
 package atxs_test
 
 import (
+	"context"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -414,6 +416,82 @@ func TestGetIDsByEpoch(t *testing.T) {
 	require.EqualValues(t, []types.ATXID{atx4.ID()}, ids3)
 }
 
+func TestGetIDsByEpochCached(t *testing.T) {
+	db := sql.InMemory(sql.WithQueryCache(true))
+
+	sig1, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	sig2, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	e1 := types.EpochID(1)
+	e2 := types.EpochID(2)
+	e3 := types.EpochID(3)
+
+	atx1, err := newAtx(sig1, withPublishEpoch(e1))
+	require.NoError(t, err)
+	atx2, err := newAtx(sig1, withPublishEpoch(e2))
+	require.NoError(t, err)
+	atx3, err := newAtx(sig2, withPublishEpoch(e2))
+	require.NoError(t, err)
+	atx4, err := newAtx(sig2, withPublishEpoch(e3))
+	require.NoError(t, err)
+	atx5, err := newAtx(sig2, withPublishEpoch(e3))
+	require.NoError(t, err)
+	atx6, err := newAtx(sig2, withPublishEpoch(e3))
+	require.NoError(t, err)
+
+	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
+		require.NoError(t, atxs.Add(db, atx))
+	}
+
+	require.Equal(t, 4, db.QueryCount())
+
+	for i := 0; i < 3; i++ {
+		ids1, err := atxs.GetIDsByEpoch(db, e1)
+		require.NoError(t, err)
+		require.EqualValues(t, []types.ATXID{atx1.ID()}, ids1)
+		require.Equal(t, 5, db.QueryCount())
+	}
+
+	for i := 0; i < 3; i++ {
+		ids2, err := atxs.GetIDsByEpoch(db, e2)
+		require.NoError(t, err)
+		require.Contains(t, ids2, atx2.ID())
+		require.Contains(t, ids2, atx3.ID())
+		require.Equal(t, 6, db.QueryCount())
+	}
+
+	for i := 0; i < 3; i++ {
+		ids3, err := atxs.GetIDsByEpoch(db, e3)
+		require.NoError(t, err)
+		require.EqualValues(t, []types.ATXID{atx4.ID()}, ids3)
+		require.Equal(t, 7, db.QueryCount())
+	}
+
+	require.NoError(t, db.WithTx(context.Background(), func(tx *sql.Tx) error {
+		atxs.Add(tx, atx5)
+		return nil
+	}))
+	require.Equal(t, 8, db.QueryCount())
+
+	ids3, err := atxs.GetIDsByEpoch(db, e3)
+	require.NoError(t, err)
+	require.EqualValues(t, []types.ATXID{atx4.ID(), atx5.ID()}, ids3)
+	require.Equal(t, 8, db.QueryCount()) // not incremented after Add
+
+	require.Error(t, db.WithTx(context.Background(), func(tx *sql.Tx) error {
+		atxs.Add(tx, atx6)
+		return errors.New("fail") // rollback
+	}))
+
+	// atx6 should not be in the cache
+	ids4, err := atxs.GetIDsByEpoch(db, e3)
+	require.NoError(t, err)
+	require.EqualValues(t, []types.ATXID{atx4.ID(), atx5.ID()}, ids4)
+	require.Equal(t, 10, db.QueryCount()) // not incremented after Add
+}
+
 func TestVRFNonce(t *testing.T) {
 	// Arrange
 	db := sql.InMemory()
@@ -477,6 +555,68 @@ func TestGetBlob(t *testing.T) {
 	encoded, err := codec.Encode(atx.ActivationTx)
 	require.NoError(t, err)
 	require.Equal(t, encoded, buf)
+}
+
+func TestGetBlobCached(t *testing.T) {
+	db := sql.InMemory(sql.WithQueryCache(true))
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	atx, err := newAtx(sig, withPublishEpoch(1))
+	require.NoError(t, err)
+
+	require.NoError(t, atxs.Add(db, atx))
+	encoded, err := codec.Encode(atx.ActivationTx)
+	require.NoError(t, err)
+	require.Equal(t, 1, db.QueryCount())
+
+	for i := 0; i < 3; i++ {
+		buf, err := atxs.GetBlob(db, atx.ID().Bytes())
+		require.NoError(t, err)
+		require.Equal(t, encoded, buf)
+		require.Equal(t, 2, db.QueryCount())
+	}
+}
+
+func TestCachedBlobEviction(t *testing.T) {
+	db := sql.InMemory(
+		sql.WithQueryCache(true),
+		sql.WithQueryCacheSizes(map[sql.QueryCacheKind]int{
+			atxs.CacheKindATXBlob: 10,
+		}))
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	addedATXs := make([]*types.VerifiedActivationTx, 11)
+	blobs := make([][]byte, 11)
+	for n := range addedATXs {
+		atx, err := newAtx(sig, withPublishEpoch(1))
+		require.NoError(t, err)
+		require.NoError(t, atxs.Add(db, atx))
+		addedATXs[n] = atx
+		encoded, err := codec.Encode(atx.ActivationTx)
+		require.NoError(t, err)
+		blobs[n] = encoded
+		buf, err := atxs.GetBlob(db, atx.ID().Bytes())
+		require.NoError(t, err)
+		require.Equal(t, encoded, buf)
+	}
+
+	require.Equal(t, 22, db.QueryCount())
+
+	// The ATXs except the first one stay in place
+	for n, atx := range addedATXs[1:] {
+		buf, err := atxs.GetBlob(db, atx.ID().Bytes())
+		require.NoError(t, err)
+		require.Equal(t, blobs[n+1], buf)
+		require.Equal(t, 22, db.QueryCount())
+	}
+
+	// The first ATX is evicted. We check it after the loop to avoid additional evictions.
+	buf, err := atxs.GetBlob(db, addedATXs[0].ID().Bytes())
+	require.NoError(t, err)
+	require.Equal(t, blobs[0], buf)
+	require.Equal(t, 23, db.QueryCount())
 }
 
 func TestCheckpointATX(t *testing.T) {
