@@ -190,8 +190,15 @@ func GetCommand() *cobra.Command {
 			}
 
 			if app.signers == nil {
-				if err := app.LoadIdentities(); err != nil {
-					return err
+				err := app.LoadIdentities()
+				switch {
+				case errors.Is(err, fs.ErrNotExist):
+					app.log.Info("Identity file not found. Creating new identity...")
+					if err := app.NewIdentity(); err != nil {
+						return fmt.Errorf("creating new identity: %w", err)
+					}
+				case err != nil:
+					return fmt.Errorf("loading identities: %w", err)
 				}
 			}
 

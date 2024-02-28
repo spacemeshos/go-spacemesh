@@ -91,15 +91,47 @@ func (app *App) MigrateExistingIdentity() error {
 	return nil
 }
 
+// NewIdentity creates a new identity, saves it to `keyDir/supervisedIDKeyFileName` in the config directory and
+// initializes app.signers with that identity.
+func (app *App) NewIdentity() error {
+	dir := filepath.Join(app.Config.DataDir(), keyDir)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return fmt.Errorf("failed to create directory for identity file: %w", err)
+	}
+
+	signer, err := signing.NewEdSigner(
+		signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create identity: %w", err)
+	}
+
+	keyFile := filepath.Join(dir, supervisedIDKeyFileName)
+	if _, err := os.Stat(keyFile); err == nil {
+		return fmt.Errorf("identity file %s already exists: %w", supervisedIDKeyFileName, fs.ErrExist)
+	}
+
+	dst := make([]byte, hex.EncodedLen(len(signer.PrivateKey())))
+	hex.Encode(dst, signer.PrivateKey())
+	err = os.WriteFile(keyFile, dst, 0o600)
+	if err != nil {
+		return fmt.Errorf("failed to write identity file: %w", err)
+	}
+
+	app.log.With().Info("Created new identity",
+		log.String("filename", supervisedIDKeyFileName),
+		signer.PublicKey(),
+	)
+	app.signers = []*signing.EdSigner{signer}
+	return nil
+}
+
 // LoadIdentities loads all existing identities from the config directory.
 func (app *App) LoadIdentities() error {
 	signers := make([]*signing.EdSigner, 0)
 	pubKeys := make(map[string]*signing.PublicKey)
 
 	dir := filepath.Join(app.Config.DataDir(), keyDir)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return fmt.Errorf("failed to create directory for identity file: %w", err)
-	}
 	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return fmt.Errorf("failed to walk directory at %s: %w", path, err)
@@ -124,10 +156,10 @@ func (app *App) LoadIdentities() error {
 
 		n, err := hex.Decode(dst, data)
 		if err != nil {
-			return fmt.Errorf("decoding private key: %w", err)
+			return fmt.Errorf("decoding private key in %s: %w", d.Name(), err)
 		}
 		if n != signing.PrivateKeySize {
-			return fmt.Errorf("invalid key size %d/%d", n, signing.PrivateKeySize)
+			return fmt.Errorf("invalid key size %d/%d for %s", n, signing.PrivateKeySize, d.Name())
 		}
 
 		signer, err := signing.NewEdSigner(
@@ -135,7 +167,7 @@ func (app *App) LoadIdentities() error {
 			signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()),
 		)
 		if err != nil {
-			return fmt.Errorf("failed to construct identity from data file: %w", err)
+			return fmt.Errorf("failed to construct identity %s: %w", d.Name(), err)
 		}
 
 		app.log.With().Info("Loaded existing identity",
@@ -148,6 +180,9 @@ func (app *App) LoadIdentities() error {
 	})
 	if err != nil {
 		return err
+	}
+	if len(signers) == 0 {
+		return fmt.Errorf("no identity files found: %w", fs.ErrNotExist)
 	}
 
 	// make sure all public keys are unique
@@ -169,31 +204,6 @@ func (app *App) LoadIdentities() error {
 		return fmt.Errorf("duplicate key found in identity files")
 	}
 
-	if len(signers) > 0 {
-		app.signers = signers
-		return nil
-	}
-
-	app.log.Info("Identity file not found. Creating new identity...")
-	signer, err := signing.NewEdSigner(
-		signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create identity: %w", err)
-	}
-
-	keyFile := filepath.Join(dir, supervisedIDKeyFileName)
-	dst := make([]byte, hex.EncodedLen(len(signer.PrivateKey())))
-	hex.Encode(dst, signer.PrivateKey())
-	err = os.WriteFile(keyFile, dst, 0o600)
-	if err != nil {
-		return fmt.Errorf("failed to write identity file: %w", err)
-	}
-
-	app.log.With().Info("Created new identity",
-		log.String("filename", supervisedIDKeyFileName),
-		signer.PublicKey(),
-	)
-	app.signers = []*signing.EdSigner{signer}
+	app.signers = signers
 	return nil
 }
