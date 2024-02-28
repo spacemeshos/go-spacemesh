@@ -11,6 +11,7 @@ import (
 	"slices"
 
 	"github.com/spf13/afero"
+	"golang.org/x/exp/maps"
 
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -147,14 +148,14 @@ func RecoverWithDb(
 		return nil, fmt.Errorf("remove old bootstrap data: %w", err)
 	}
 	logger.With().Info("recover from uri", log.String("uri", cfg.Uri))
-	cpfile, err := copyToLocalFile(ctx, logger, fs, cfg.DataDir, cfg.Uri, cfg.Restore)
+	cpFile, err := copyToLocalFile(ctx, logger, fs, cfg.DataDir, cfg.Uri, cfg.Restore)
 	if err != nil {
 		return nil, err
 	}
-	return recoverFromLocalFile(ctx, logger, db, localDB, fs, cfg, cpfile)
+	return recoverFromLocalFile(ctx, logger, db, localDB, fs, cfg, cpFile)
 }
 
-type recoverydata struct {
+type recoveryData struct {
 	accounts []*types.Account
 	atxs     []*atxs.CheckpointAtx
 }
@@ -178,11 +179,11 @@ func recoverFromLocalFile(
 		log.Int("num accounts", len(data.accounts)),
 		log.Int("num atxs", len(data.atxs)),
 	)
-	allDeps := make([]*types.VerifiedActivationTx, 0)
-	allProofs := make([]*types.PoetProofMessage, 0)
+	deps := make(map[types.ATXID]*types.VerifiedActivationTx)
+	proofs := make(map[types.PoetProofRef]*types.PoetProofMessage)
 	if cfg.PreserveOwnAtx {
 		for _, nodeID := range cfg.NodeIDs {
-			deps, proofs, err := collectOwnAtxDeps(logger, db, localDB, nodeID, cfg.GoldenAtx, data)
+			nodeDeps, nodeProofs, err := collectOwnAtxDeps(logger, db, localDB, nodeID, cfg.GoldenAtx, data)
 			if err != nil {
 				logger.With().Error("failed to collect deps for own atx",
 					nodeID,
@@ -195,37 +196,30 @@ func recoverFromLocalFile(
 			logger.With().Info("collected own atx deps",
 				log.Context(ctx),
 				nodeID,
-				log.Int("own atx deps", len(deps)),
+				log.Int("own atx deps", len(nodeDeps)),
 			)
-			allDeps = append(allDeps, deps...)
-			allProofs = append(allProofs, proofs...)
-
-			// deduplicate allDeps and allProofs by sorting and compacting
-			// then sort them by publishEpoch
-			slices.SortFunc(allDeps, func(i, j *types.VerifiedActivationTx) int {
-				return bytes.Compare(i.ID().Bytes(), j.ID().Bytes())
-			})
-			allDeps = slices.CompactFunc(allDeps, func(i, j *types.VerifiedActivationTx) bool {
-				return i.ID() == j.ID()
-			})
-			slices.SortStableFunc(allDeps, func(i, j *types.VerifiedActivationTx) int {
-				return int(i.PublishEpoch) - int(j.PublishEpoch)
-			})
-			slices.SortFunc(allProofs, func(i, j *types.PoetProofMessage) int {
-				iRef, _ := i.Ref()
-				jRef, _ := j.Ref()
-				return bytes.Compare(iRef[:], jRef[:])
-			})
-			allProofs = slices.CompactFunc(allProofs, func(i, j *types.PoetProofMessage) bool {
-				iRef, _ := i.Ref()
-				jRef, _ := j.Ref()
-				return iRef == jRef
-			})
+			maps.Copy(deps, nodeDeps)
+			maps.Copy(proofs, nodeProofs)
 		}
 	}
 	if err := db.Close(); err != nil {
 		return nil, fmt.Errorf("close old db: %w", err)
 	}
+	allDeps := maps.Values(deps)
+	// sort ATXs them by publishEpoch and then by ID
+	slices.SortFunc(allDeps, func(i, j *types.VerifiedActivationTx) int {
+		return bytes.Compare(i.ID().Bytes(), j.ID().Bytes())
+	})
+	slices.SortStableFunc(allDeps, func(i, j *types.VerifiedActivationTx) int {
+		return int(i.PublishEpoch) - int(j.PublishEpoch)
+	})
+	allProofs := maps.Values(proofs)
+	// sort PoET proofs by ref
+	slices.SortFunc(allProofs, func(i, j *types.PoetProofMessage) int {
+		iRef, _ := i.Ref()
+		jRef, _ := j.Ref()
+		return bytes.Compare(iRef[:], jRef[:])
+	})
 
 	// all is ready. backup the old data and create new.
 	backupDir, err := backupOldDb(fs, cfg.DataDir, cfg.DbFile)
@@ -237,17 +231,17 @@ func recoverFromLocalFile(
 		log.String("backup dir", backupDir),
 	)
 
-	newdb, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
+	newDB, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite db %w", err)
 	}
-	defer newdb.Close()
+	defer newDB.Close()
 	logger.With().Info("populating new database",
 		log.Context(ctx),
 		log.Int("num accounts", len(data.accounts)),
 		log.Int("num atxs", len(data.atxs)),
 	)
-	if err = newdb.WithTx(ctx, func(tx *sql.Tx) error {
+	if err = newDB.WithTx(ctx, func(tx *sql.Tx) error {
 		for _, acct := range data.accounts {
 			if err = accounts.Update(tx, acct); err != nil {
 				return fmt.Errorf("restore account snapshot: %w", err)
@@ -259,18 +253,18 @@ func recoverFromLocalFile(
 				log.Uint64("balance", acct.Balance),
 			)
 		}
-		for _, catx := range data.atxs {
-			if err = atxs.AddCheckpointed(tx, catx); err != nil {
-				return fmt.Errorf("add checkpoint atx %s: %w", catx.ID.String(), err)
+		for _, cAtx := range data.atxs {
+			if err = atxs.AddCheckpointed(tx, cAtx); err != nil {
+				return fmt.Errorf("add checkpoint atx %s: %w", cAtx.ID.String(), err)
 			}
 			logger.With().Info("checkpoint atx saved",
 				log.Context(ctx),
-				catx.ID,
-				catx.SmesherID,
+				cAtx.ID,
+				cAtx.SmesherID,
 			)
 		}
 		if err = recovery.SetCheckpoint(tx, cfg.Restore); err != nil {
-			return fmt.Errorf("save checkppoint info: %w", err)
+			return fmt.Errorf("save checkpoint info: %w", err)
 		}
 		return nil
 	}); err != nil {
@@ -291,7 +285,7 @@ func recoverFromLocalFile(
 	return preserve, nil
 }
 
-func checkpointData(fs afero.Fs, file string, newGenesis types.LayerID) (*recoverydata, error) {
+func checkpointData(fs afero.Fs, file string, newGenesis types.LayerID) (*recoveryData, error) {
 	data, err := afero.ReadFile(fs, file)
 	if err != nil {
 		return nil, fmt.Errorf("%w: read recovery file %v", err, file)
@@ -325,20 +319,20 @@ func checkpointData(fs afero.Fs, file string, newGenesis types.LayerID) (*recove
 	}
 	allAtxs := make([]*atxs.CheckpointAtx, 0, len(checkpoint.Data.Atxs))
 	for _, atx := range checkpoint.Data.Atxs {
-		var catx atxs.CheckpointAtx
-		catx.ID = types.ATXID(types.BytesToHash(atx.ID))
-		catx.Epoch = types.EpochID(atx.Epoch)
-		catx.CommitmentATX = types.ATXID(types.BytesToHash(atx.CommitmentAtx))
-		catx.SmesherID = types.BytesToNodeID(atx.PublicKey)
-		catx.NumUnits = atx.NumUnits
-		catx.VRFNonce = types.VRFPostIndex(atx.VrfNonce)
-		catx.BaseTickHeight = atx.BaseTickHeight
-		catx.TickCount = atx.TickCount
-		catx.Sequence = atx.Sequence
-		copy(catx.Coinbase[:], atx.Coinbase)
-		allAtxs = append(allAtxs, &catx)
+		var cAtx atxs.CheckpointAtx
+		cAtx.ID = types.ATXID(types.BytesToHash(atx.ID))
+		cAtx.Epoch = types.EpochID(atx.Epoch)
+		cAtx.CommitmentATX = types.ATXID(types.BytesToHash(atx.CommitmentAtx))
+		cAtx.SmesherID = types.BytesToNodeID(atx.PublicKey)
+		cAtx.NumUnits = atx.NumUnits
+		cAtx.VRFNonce = types.VRFPostIndex(atx.VrfNonce)
+		cAtx.BaseTickHeight = atx.BaseTickHeight
+		cAtx.TickCount = atx.TickCount
+		cAtx.Sequence = atx.Sequence
+		copy(cAtx.Coinbase[:], atx.Coinbase)
+		allAtxs = append(allAtxs, &cAtx)
 	}
-	return &recoverydata{
+	return &recoveryData{
 		accounts: allAccts,
 		atxs:     allAtxs,
 	}, nil
@@ -350,8 +344,8 @@ func collectOwnAtxDeps(
 	localDB *localsql.Database,
 	nodeID types.NodeID,
 	goldenATX types.ATXID,
-	data *recoverydata,
-) ([]*types.VerifiedActivationTx, []*types.PoetProofMessage, error) {
+	data *recoveryData,
+) (map[types.ATXID]*types.VerifiedActivationTx, map[types.PoetProofRef]*types.PoetProofMessage, error) {
 	atxid, err := atxs.GetLastIDByNodeID(db, nodeID)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return nil, nil, fmt.Errorf("query own last atx id: %w", err)
@@ -376,12 +370,12 @@ func collectOwnAtxDeps(
 	}
 
 	all := map[types.ATXID]struct{}{goldenATX: {}, types.EmptyATXID: {}}
-	for _, catx := range data.atxs {
-		all[catx.ID] = struct{}{}
+	for _, cAtx := range data.atxs {
+		all[cAtx.ID] = struct{}{}
 	}
 	var (
-		deps   []*types.VerifiedActivationTx
-		proofs []*types.PoetProofMessage
+		deps   map[types.ATXID]*types.VerifiedActivationTx
+		proofs map[types.PoetProofRef]*types.PoetProofMessage
 	)
 	if ref != types.EmptyATXID {
 		logger.With().Info("collecting atx and deps",
@@ -401,8 +395,8 @@ func collectOwnAtxDeps(
 		if err != nil {
 			return nil, nil, fmt.Errorf("deps from nipost positioning atx (%v): %w", nipostCh.PositioningATX, err)
 		}
-		deps = append(deps, deps2...)
-		proofs = append(proofs, proofs2...)
+		maps.Copy(deps, deps2)
+		maps.Copy(proofs, proofs2)
 	}
 	return deps, proofs, nil
 }
@@ -412,9 +406,9 @@ func collectDeps(
 	goldenAtxId types.ATXID,
 	ref types.ATXID,
 	all map[types.ATXID]struct{},
-) ([]*types.VerifiedActivationTx, []*types.PoetProofMessage, error) {
-	var deps []*types.VerifiedActivationTx
-	if err := collect(db, goldenAtxId, ref, all, &deps); err != nil {
+) (map[types.ATXID]*types.VerifiedActivationTx, map[types.PoetProofRef]*types.PoetProofMessage, error) {
+	deps := make(map[types.ATXID]*types.VerifiedActivationTx)
+	if err := collect(db, goldenAtxId, ref, all, deps); err != nil {
 		return nil, nil, err
 	}
 	proofs, err := poetProofs(db, deps)
@@ -429,7 +423,7 @@ func collect(
 	goldenAtxID types.ATXID,
 	ref types.ATXID,
 	all map[types.ATXID]struct{},
-	deps *[]*types.VerifiedActivationTx,
+	deps map[types.ATXID]*types.VerifiedActivationTx,
 ) error {
 	if _, ok := all[ref]; ok {
 		return nil
@@ -460,14 +454,17 @@ func collect(
 	if err = collect(db, goldenAtxID, atx.PositioningATX, all, deps); err != nil {
 		return err
 	}
-	*deps = append(*deps, atx)
+	deps[ref] = atx
 	all[ref] = struct{}{}
 	return nil
 }
 
-func poetProofs(db *sql.Database, vatxs []*types.VerifiedActivationTx) ([]*types.PoetProofMessage, error) {
-	var proofs []*types.PoetProofMessage
-	for _, vatx := range vatxs {
+func poetProofs(
+	db *sql.Database,
+	vAtxs map[types.ATXID]*types.VerifiedActivationTx,
+) (map[types.PoetProofRef]*types.PoetProofMessage, error) {
+	proofs := make(map[types.PoetProofRef]*types.PoetProofMessage, len(vAtxs))
+	for _, vatx := range vAtxs {
 		proof, err := poets.Get(db, types.PoetProofRef(vatx.GetPoetProofRef()))
 		if err != nil {
 			return nil, fmt.Errorf("get poet proof (%v): %w", vatx.ID(), err)
@@ -476,7 +473,11 @@ func poetProofs(db *sql.Database, vatxs []*types.VerifiedActivationTx) ([]*types
 		if err := codec.Decode(proof, &msg); err != nil {
 			return nil, fmt.Errorf("decode poet proof (%v): %w", vatx.ID(), err)
 		}
-		proofs = append(proofs, &msg)
+		ref, err := msg.Ref()
+		if err != nil {
+			return nil, fmt.Errorf("get poet proof ref (%v): %w", vatx.ID(), err)
+		}
+		proofs[ref] = &msg
 	}
 	return proofs, nil
 }
