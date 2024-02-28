@@ -178,6 +178,7 @@ func (d *Data) SetMalicious(node types.NodeID) {
 }
 
 // Get returns atx data.
+// SAFETY: The returned potiner MUST NOT be modified.
 func (d *Data) Get(epoch types.EpochID, atx types.ATXID) *ATX {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
@@ -194,7 +195,14 @@ func (d *Data) Get(epoch types.EpochID, atx types.ATXID) *ATX {
 	return data
 }
 
-func (d *Data) GetInEpoch(epoch types.EpochID, maliciousToo bool) []*ATX {
+func NotMalicious(data *ATX) bool {
+	return !data.malicious
+}
+
+// GetInEpoch returns all atxs in the epoch.
+// If filters are provided, only atxs that pass all filters are returned.
+// SAFETY: The returned potiners MUST NOT be modified.
+func (d *Data) GetInEpoch(epoch types.EpochID, filters ...func(*ATX) bool) []*ATX {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	ecache, exists := d.epochs[epoch]
@@ -202,12 +210,16 @@ func (d *Data) GetInEpoch(epoch types.EpochID, maliciousToo bool) []*ATX {
 		return nil
 	}
 	atxs := make([]*ATX, 0, len(ecache.index))
-	for _, data := range ecache.index {
-		if _, exists := d.malicious[data.Node]; exists {
-			data.malicious = true
+	for _, atx := range ecache.index {
+		if _, exists := d.malicious[atx.Node]; exists {
+			atx.malicious = true
 		}
-		if !data.malicious || maliciousToo {
-			atxs = append(atxs, data)
+		ok := true
+		for _, filter := range filters {
+			ok = ok && filter(atx)
+		}
+		if ok {
+			atxs = append(atxs, atx)
 		}
 	}
 	return atxs
