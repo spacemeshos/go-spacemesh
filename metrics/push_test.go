@@ -41,7 +41,7 @@ func TestStartPushMetrics(t *testing.T) {
 
 	pusher := push.New(ts.URL, "my_job").
 		Gatherer(prometheus.DefaultGatherer).
-		Format(expfmt.FmtText)
+		Format(expfmt.NewFormat(expfmt.TypeProtoText))
 	err := pusher.Push()
 	if err != nil {
 		t.Fatal("can't push to server", err)
