@@ -595,12 +595,6 @@ func (h *Hare) IsKnown(layer types.LayerID, proposal types.ProposalID) bool {
 }
 
 func (h *Hare) OnProposal(p *types.Proposal) error {
-	h.log.With().Debug(
-		"new proposal",
-		zap.Stringer("id", p.ID()),
-		zap.Uint32("layer", p.Layer.Uint32()),
-		zap.Int("num_txs", len(p.TxIDs)),
-	)
 	return h.proposals.Add(p)
 }
 

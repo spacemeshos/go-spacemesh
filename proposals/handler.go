@@ -334,6 +334,7 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 		known.Inc()
 		return fmt.Errorf("%w proposal %s", errKnownProposal, p.ID())
 	}
+	logger.With().Info("new proposal", log.ShortStringer("exp hash", expHash), log.Int("num_txs", len(p.TxIDs)))
 
 	t2 := time.Now()
 	h.fetcher.RegisterPeerHashes(peer, collectHashes(p))
