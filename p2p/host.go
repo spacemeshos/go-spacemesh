@@ -122,6 +122,7 @@ type Config struct {
 	DisableConnectionManager    bool             `mapstructure:"disable-connection-manager"`
 	DisableResourceManager      bool             `mapstructure:"disable-resource-manager"`
 	DisableDHT                  bool             `mapstructure:"disable-dht"`
+	DisablePubSub               bool             `mapstructure:"disable-pubsub"`
 	Flood                       bool             `mapstructure:"flood"`
 	Listen                      AddressList      `mapstructure:"listen"`
 	Bootnodes                   []string         `mapstructure:"bootnodes"`

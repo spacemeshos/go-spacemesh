@@ -95,14 +95,14 @@ type Config struct {
 }
 
 // New creates PubSub instance.
-func New(ctx context.Context, logger log.Log, h host.Host, cfg Config) (*PubSub, error) {
+func New(ctx context.Context, logger log.Log, h host.Host, cfg Config) (*GossipPubSub, error) {
 	// TODO(dshulyak) refactor code to accept options
 	opts := getOptions(cfg)
 	ps, err := pubsub.NewGossipSub(ctx, h, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize gossipsub instance: %w", err)
 	}
-	return &PubSub{
+	return &GossipPubSub{
 		logger: logger,
 		pubsub: ps,
 		topics: map[string]*pubsub.Topic{},

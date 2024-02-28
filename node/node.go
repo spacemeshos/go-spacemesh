@@ -141,21 +141,8 @@ func GetCommand() *cobra.Command {
 		Use:   "node",
 		Short: "start node",
 		RunE: func(c *cobra.Command, args []string) error {
-			preset := conf.Preset // might be set via CLI flag
-			if err := loadConfig(&conf, preset, *configPath); err != nil {
-				return fmt.Errorf("loading config: %w", err)
-			}
-			// apply CLI args to config
-			if err := c.ParseFlags(os.Args[1:]); err != nil {
-				return fmt.Errorf("parsing flags: %w", err)
-			}
-
-			if conf.LOGGING.Encoder == config.JSONLogEncoder {
-				log.JSONLog(true)
-			}
-
-			if cmd.NoMainNet && onMainNet(&conf) && !conf.NoMainOverride {
-				return errors.New("this is a testnet-only build not intended for mainnet")
+			if err := configure(c, *configPath, &conf); err != nil {
+				return err
 			}
 
 			app := New(
@@ -253,7 +240,41 @@ func GetCommand() *cobra.Command {
 	}
 	c.AddCommand(versionCmd)
 
+	relayCmd := cobra.Command{
+		Use:          "relay",
+		Short:        "Run relay server",
+		SilenceUsage: true,
+		RunE: func(c *cobra.Command, args []string) error {
+			if err := configure(c, *configPath, &conf); err != nil {
+				return err
+			}
+			return runRelay(c.Context(), &conf)
+		},
+	}
+	c.AddCommand(&relayCmd)
+
 	return c
+}
+
+func configure(c *cobra.Command, configPath string, conf *config.Config) error {
+	preset := conf.Preset // might be set via CLI flag
+	if err := loadConfig(conf, preset, configPath); err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+	// apply CLI args to config
+	if err := c.ParseFlags(os.Args[1:]); err != nil {
+		return fmt.Errorf("parsing flags: %w", err)
+	}
+
+	if conf.LOGGING.Encoder == config.JSONLogEncoder {
+		log.JSONLog(true)
+	}
+
+	if cmd.NoMainNet && onMainNet(conf) && !conf.NoMainOverride {
+		return errors.New("this is a testnet-only build not intended for mainnet")
+	}
+
+	return nil
 }
 
 var (

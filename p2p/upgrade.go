@@ -91,7 +91,7 @@ type Host struct {
 	}
 
 	host.Host
-	*pubsub.PubSub
+	pubsub.PubSub
 
 	nodeReporter func()
 
@@ -140,16 +140,20 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 		h.ConnManager().Protect(peer.ID, "direct")
 		// TBD: also protect ping
 	}
-	if fh.PubSub, err = pubsub.New(fh.ctx, fh.logger, h, pubsub.Config{
-		Flood:          cfg.Flood,
-		IsBootnode:     cfg.Bootnode,
-		Direct:         direct,
-		Bootnodes:      bootnodes,
-		MaxMessageSize: cfg.MaxMessageSize,
-		QueueSize:      cfg.GossipQueueSize,
-		Throttle:       cfg.GossipValidationThrottle,
-	}); err != nil {
-		return nil, fmt.Errorf("failed to initialize pubsub: %w", err)
+	if fh.cfg.DisablePubSub {
+		fh.PubSub = &pubsub.NullPubSub{}
+	} else {
+		if fh.PubSub, err = pubsub.New(fh.ctx, fh.logger, h, pubsub.Config{
+			Flood:          cfg.Flood,
+			IsBootnode:     cfg.Bootnode,
+			Direct:         direct,
+			Bootnodes:      bootnodes,
+			MaxMessageSize: cfg.MaxMessageSize,
+			QueueSize:      cfg.GossipQueueSize,
+			Throttle:       cfg.GossipValidationThrottle,
+		}); err != nil {
+			return nil, fmt.Errorf("failed to initialize pubsub: %w", err)
+		}
 	}
 	dopts := []discovery.Opt{
 		discovery.WithMinPeers(cfg.MinPeers),
