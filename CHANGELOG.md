@@ -94,12 +94,6 @@ configuration is as follows:
   If a node finds a proof invalid, it will report it to the network by
   creating a malfeasance proof. The malicious node will then be blacklisted by the network.
 
-* [#5586](https://github.com/spacemeshos/go-spacemesh/pull/5586)
-  Do not try to publish proofs for malicious ATXs during sync.
-
-  Publishing is blocked during sync because `Syncer::ListenToATXGossip()` returns false, and thus every malicious ATX being
-  synced was causing an error resulting in an interruption of sync.
-
 ### Features
 
 ### Improvements
@@ -119,6 +113,25 @@ configuration is as follows:
   not needed.
 
 * [5561](https://github.com/spacemeshos/go-spacemesh/pull/5561) Reuse atxdata in Tortoise to optimize memory usage.
+
+## Release v1.3.11
+
+### Improvements
+
+* [#5586](https://github.com/spacemeshos/go-spacemesh/pull/5586)
+  Do not try to publish proofs for malicious ATXs during sync.
+  Publishing is blocked during sync because `Syncer::ListenToATXGossip()` returns false, and thus every malicious ATX being
+  synced was causing an error resulting in an interruption of sync.
+
+* [#5603](https://github.com/spacemeshos/go-spacemesh/pull/5603)
+  Do not try to sync over transient (relayed) connections. This fixes
+  possible sync issues when hole punching is enabled.
+
+* [#5618](https://github.com/spacemeshos/go-spacemesh/pull/5618)
+  Add index on ATXs that makes epoch ATX requests faster
+
+* [#5619](https://github.com/spacemeshos/go-spacemesh/pull/5619)
+  Updated data structures to support the network with up to 2.2 unique smesher identities.
 
 ## Release v1.3.10
 
@@ -220,7 +233,6 @@ configuration is as follows:
 
 ### Improvements
 
->>>>>>> origin/develop
 * [#5467](https://github.com/spacemeshos/go-spacemesh/pull/5467)
   Fix a bug that could cause ATX sync to stall because of exhausted limit of concurrent requests for dependencies.
   Fetching dependencies of an ATX is not limited anymore.
