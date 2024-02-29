@@ -14,6 +14,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
 )
@@ -68,6 +69,7 @@ func newTracer(opts ...TraceOpt) *tracer {
 
 type traceRunner struct {
 	opts          []Opt
+	atxdata       *atxsdata.Data
 	trt           *Tortoise
 	pending       map[types.BallotID]*DecodedBallot
 	assertOutputs bool
@@ -153,14 +155,17 @@ func (c *ConfigTrace) New() traceEvent {
 func (c *ConfigTrace) Run(r *traceRunner) error {
 	types.SetLayersPerEpoch(c.EpochSize)
 	types.SetEffectiveGenesis(c.EffectiveGenesis)
-	trt, err := New(append(r.opts, WithConfig(Config{
-		Hdist:                    c.Hdist,
-		Zdist:                    c.Zdist,
-		WindowSize:               c.WindowSize,
-		MaxExceptions:            int(c.MaxExceptions),
-		BadBeaconVoteDelayLayers: c.BadBeaconVoteDelayLayers,
-		LayerSize:                c.LayerSize,
-	}))...)
+	r.atxdata = atxsdata.New(atxsdata.WithCapacityFromLayers(c.WindowSize, c.EpochSize))
+	trt, err := New(
+		r.atxdata,
+		append(r.opts, WithConfig(Config{
+			Hdist:                    c.Hdist,
+			Zdist:                    c.Zdist,
+			WindowSize:               c.WindowSize,
+			MaxExceptions:            int(c.MaxExceptions),
+			BadBeaconVoteDelayLayers: c.BadBeaconVoteDelayLayers,
+			LayerSize:                c.LayerSize,
+		}))...)
 	if err != nil {
 		return err
 	}
@@ -181,6 +186,17 @@ func (a *AtxTrace) New() traceEvent {
 }
 
 func (a *AtxTrace) Run(r *traceRunner) error {
+	r.atxdata.Add(
+		a.Header.TargetEpoch,
+		a.Header.Smesher,
+		types.Address{},
+		a.Header.ID,
+		a.Header.Weight,
+		a.Header.BaseHeight,
+		a.Header.Height,
+		0,
+		false,
+	)
 	r.trt.OnAtx(a.Header)
 	return nil
 }

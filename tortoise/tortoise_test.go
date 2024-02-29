@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
@@ -330,18 +331,20 @@ func defaultTestConfig() Config {
 }
 
 func tortoiseFromSimState(tb testing.TB, state sim.State, opts ...Opt) *recoveryAdapter {
-	trtl, err := New(opts...)
+	trtl, err := New(state.Atxdata, opts...)
 	require.NoError(tb, err)
 	return &recoveryAdapter{
 		TB:       tb,
 		Tortoise: trtl,
 		db:       state.DB.Executor,
+		atxdata:  state.Atxdata,
 	}
 }
 
 func defaultAlgorithm(tb testing.TB) *Tortoise {
 	tb.Helper()
 	trtl, err := New(
+		atxsdata.New(),
 		WithConfig(defaultTestConfig()),
 		WithLogger(logtest.New(tb)),
 	)
@@ -829,20 +832,23 @@ func TestBallotsNotProcessedWithoutBeacon(t *testing.T) {
 
 	s := sim.New()
 	s.Setup()
+	simState := s.GetState(0)
 	cfg := defaultTestConfig()
-	tortoise := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+	tortoise := tortoiseFromSimState(t, simState, WithConfig(cfg), WithLogger(logtest.New(t)))
 	last := s.Next()
 
-	beacon, err := beacons.Get(s.GetState(0).DB, last.GetEpoch())
+	beacon, err := beacons.Get(simState.DB, last.GetEpoch())
 	require.NoError(t, err)
 
-	require.NoError(t, beacons.Set(s.GetState(0).DB, last.GetEpoch(), types.EmptyBeacon))
+	require.NoError(t, beacons.Set(simState.DB, last.GetEpoch(), types.EmptyBeacon))
 	tortoise.TallyVotes(ctx, last)
 	_, err = tortoise.EncodeVotes(ctx)
 	require.Error(t, err)
 
-	require.NoError(t, beacons.Set(s.GetState(0).DB, last.GetEpoch(), beacon))
-	tortoise.TallyVotes(ctx, last)
+	require.NoError(t, beacons.Set(simState.DB, last.GetEpoch(), beacon))
+	// Recover layer so it picks up the beacon and retry tallying votes in the last layer
+	require.NoError(t, RecoverLayer(ctx, tortoise.Tortoise, tortoise.db, simState.Atxdata, last, tortoise.OnBallot))
+	tortoise.Tortoise.TallyVotes(ctx, last)
 	_, err = tortoise.EncodeVotes(ctx)
 	require.NoError(t, err)
 }
@@ -1046,7 +1052,7 @@ func tortoiseVotingWithCurrent(tortoise voter) sim.VotesGenerator {
 
 func TestOnBeacon(t *testing.T) {
 	cfg := defaultTestConfig()
-	tortoise, err := New(WithConfig(cfg), WithLogger(logtest.New(t)))
+	tortoise, err := New(atxsdata.New(), WithConfig(cfg), WithLogger(logtest.New(t)))
 	require.NoError(t, err)
 
 	genesis := types.GetEffectiveGenesis()
@@ -1060,7 +1066,7 @@ func TestOnBeacon(t *testing.T) {
 	defer func() {
 		types.SetEffectiveGenesis(genesis.Uint32())
 	}()
-	tortoise, err = New(WithConfig(cfg), WithLogger(logtest.New(t)))
+	tortoise, err = New(atxsdata.New(), WithConfig(cfg), WithLogger(logtest.New(t)))
 	require.NoError(t, err)
 	tortoise.OnBeacon(newGenesis.GetEpoch()-1, types.Beacon{2})
 	require.Nil(t, tortoise.trtl.epoch(newGenesis.GetEpoch()-1).beacon)
@@ -1608,7 +1614,7 @@ func TestComputeBallotWeight(t *testing.T) {
 
 			cfg := DefaultConfig()
 			cfg.LayerSize = tc.layerSize
-			trtl, err := New(WithLogger(logtest.New(t)), WithConfig(cfg))
+			trtl, err := New(atxsdata.New(), WithLogger(logtest.New(t)), WithConfig(cfg))
 			require.NoError(t, err)
 			lid := types.LayerID(111)
 			for _, weight := range tc.atxs {
@@ -1621,6 +1627,7 @@ func TestComputeBallotWeight(t *testing.T) {
 				header.PublishEpoch = lid.GetEpoch() - 1
 				header.BaseTickHeight = 0
 				header.TickCount = 1
+				trtl.trtl.atxsdata.AddFromHeader(header, types.VRFPostIndex(0), false)
 				trtl.OnAtx(header.ToData())
 				atxids = append(atxids, atxID)
 			}
@@ -2032,7 +2039,6 @@ func TestStateManagement(t *testing.T) {
 
 	updates := tortoise.Updates()
 	tortoise.OnApplied(updates[len(updates)-1].Layer, updates[len(updates)-1].Opinion)
-	tortoise.TallyVotes(ctx, last)
 
 	evicted := tortoise.trtl.evicted
 	require.Equal(t, verified.Sub(window).Sub(1), evicted)
@@ -2397,6 +2403,7 @@ func TestSwitchMode(t *testing.T) {
 			TickCount:         200,
 		}
 		header.PublishEpoch = types.EpochID(1)
+		tortoise.trtl.atxsdata.AddFromHeader(header, 0, false)
 		tortoise.OnAtx(header.ToData())
 		// feed ballots that vote against previously validated layer
 		// without the fix they would be ignored
@@ -2411,7 +2418,7 @@ func TestSwitchMode(t *testing.T) {
 			ballot.EligibilityProofs = template.EligibilityProofs
 			tortoise.OnBallot(ballot.ToTortoiseData())
 		}
-		tortoise.TallyVotes(ctx, last)
+		tortoise.Tortoise.TallyVotes(ctx, last)
 		events = tortoise.Updates()
 		require.Len(t, events, 3)
 		require.Equal(t, events[0].Layer, nohare)
@@ -2840,6 +2847,7 @@ func TestEncodeVotes(t *testing.T) {
 		cfg.Hdist = 1
 		cfg.Zdist = 1
 		tortoise, err := New(
+			atxsdata.New(),
 			WithConfig(cfg),
 			WithLogger(logtest.New(t)),
 		)
@@ -2877,7 +2885,9 @@ func TestEncodeVotes(t *testing.T) {
 		require.Equal(t, hasher.Sum(nil), opinion.Hash[:])
 	})
 	t.Run("rewrite before base", func(t *testing.T) {
+		atxdata := atxsdata.New()
 		tortoise, err := New(
+			atxdata,
 			WithConfig(defaultTestConfig()),
 			WithLogger(logtest.New(t)),
 		)
@@ -2901,6 +2911,7 @@ func TestEncodeVotes(t *testing.T) {
 			TickCount:         1,
 		}
 		header.PublishEpoch = lid.GetEpoch() - 1
+		atxdata.AddFromHeader(header, 0, false)
 		tortoise.OnAtx(header.ToData())
 		tortoise.OnBeacon(lid.GetEpoch(), types.EmptyBeacon)
 
@@ -3024,6 +3035,7 @@ func TestMissingActiveSet(t *testing.T) {
 		atx := &types.ActivationTxHeader{}
 		atx.ID = atxid
 		atx.PublishEpoch = epoch - 1
+		tortoise.trtl.atxsdata.AddFromHeader(atx, 0, false)
 		tortoise.OnAtx(atx.ToData())
 	}
 	t.Run("empty", func(t *testing.T) {
@@ -3164,7 +3176,7 @@ func TestMultipleTargets(t *testing.T) {
 func TestUpdates(t *testing.T) {
 	genesis := types.GetEffectiveGenesis()
 	t.Run("hare output included", func(t *testing.T) {
-		trt, err := New()
+		trt, err := New(atxsdata.New())
 		require.NoError(t, err)
 		id := types.BlockID{1}
 		lid := genesis + 1
@@ -3183,7 +3195,7 @@ func TestUpdates(t *testing.T) {
 		require.Equal(t, id, updates[1].Blocks[0].Header.ID)
 	})
 	t.Run("tally first", func(t *testing.T) {
-		trt, err := New()
+		trt, err := New(atxsdata.New())
 		require.NoError(t, err)
 		id := types.BlockID{1}
 		lid := genesis + 1

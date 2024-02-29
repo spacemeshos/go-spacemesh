@@ -706,6 +706,7 @@ func (app *App) initServices(ctx context.Context) error {
 	trtl, err := tortoise.Recover(
 		ctx,
 		app.db,
+		app.atxsdata,
 		app.clock.CurrentLayer(), trtlopts...,
 	)
 	if err != nil {

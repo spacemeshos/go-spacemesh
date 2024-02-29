@@ -1080,6 +1080,7 @@ func TestHandler_ProcessAtx(t *testing.T) {
 		coinbase,
 		100,
 		&types.NIPost{},
+		withVrfNonce(7),
 	)
 	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
 	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
@@ -1106,6 +1107,7 @@ func TestHandler_ProcessAtx(t *testing.T) {
 		coinbase,
 		100,
 		&types.NIPost{},
+		withVrfNonce(7),
 	)
 	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
 	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
@@ -1152,6 +1154,7 @@ func TestHandler_ProcessAtx_OwnNotMalicious(t *testing.T) {
 		coinbase,
 		100,
 		&types.NIPost{},
+		withVrfNonce(7),
 	)
 	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
 	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
@@ -1772,6 +1775,7 @@ func TestHandler_HandleSyncedAtx(t *testing.T) {
 			types.Address{2, 4, 5},
 			2,
 			nil,
+			withVrfNonce(9),
 		)
 
 		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
@@ -1806,6 +1810,7 @@ func TestHandler_HandleSyncedAtx(t *testing.T) {
 			types.Address{2, 4, 5},
 			2,
 			nil,
+			withVrfNonce(9),
 		)
 
 		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
