@@ -65,19 +65,17 @@ func (s *ActivationStreamService) Stream(
 		}
 	}
 
-	dbChan := make(chan *types.VerifiedActivationTx, 1<<10)
+	dbChan := make(chan *types.VerifiedActivationTx, 100)
 	errChan := make(chan error, 1)
+
+	ops, err := toAtxOperations(toAtxRequest(request))
+	if err != nil {
+		return status.Error(codes.InvalidArgument, err.Error())
+	}
+
 	// send db data to chan to avoid buffer overflow
 	go func() {
-		ops, err := toAtxOperations(toAtxRequest(request))
-		if err != nil {
-			select {
-			case errChan <- status.Error(codes.InvalidArgument, err.Error()):
-			default:
-				ctxzap.Error(stream.Context(), "unable to send error", zap.Error(err))
-			}
-			return
-		}
+		defer close(dbChan)
 		if err := atxs.IterateAtxsOps(s.db, ops, func(atx *types.VerifiedActivationTx) bool {
 			dbChan <- atx
 			return true
@@ -89,43 +87,48 @@ func (s *ActivationStreamService) Stream(
 			}
 			return
 		}
-		close(dbChan)
 	}()
+
+	var eventsOut <-chan events.ActivationTx
+	var eventsFull <-chan struct{}
+	if sub != nil {
+		eventsOut = sub.Out()
+		eventsFull = sub.Full()
+	}
+
 	for {
 		select {
-		case <-stream.Context().Done():
-			return nil
-		case err := <-errChan:
-			return err
-		case atx, ok := <-dbChan:
-			if !ok {
-				dbChan = nil
-				if sub == nil {
-					return nil
-				}
-				continue
-			}
-			err := stream.Send(&spacemeshv2alpha1.Activation{Versioned: &spacemeshv2alpha1.Activation_V1{V1: toAtx(atx)}})
-			if err != nil {
+		case rst := <-eventsOut:
+			err := stream.Send(&spacemeshv2alpha1.Activation{
+				Versioned: &spacemeshv2alpha1.Activation_V1{V1: toAtx(rst.VerifiedActivationTx)},
+			})
+			switch {
+			case errors.Is(err, io.EOF):
+				return nil
+			case err != nil:
 				return status.Error(codes.Internal, err.Error())
 			}
 		default:
-			if sub != nil {
-				select {
-				case <-sub.Full():
-					return status.Error(codes.Canceled, "buffer overflow")
-				case rst := <-sub.Out():
-					err := stream.Send(&spacemeshv2alpha1.Activation{
-						Versioned: &spacemeshv2alpha1.Activation_V1{V1: toAtx(rst.VerifiedActivationTx)},
-					})
-					switch {
-					case errors.Is(err, io.EOF):
+			select {
+			case <-eventsFull:
+				return status.Error(codes.Canceled, "buffer overflow")
+			case rst, ok := <-dbChan:
+				if !ok {
+					dbChan = nil
+					if sub == nil {
 						return nil
-					case err != nil:
-						return status.Error(codes.Internal, err.Error())
 					}
-				default:
+					continue
 				}
+				err := stream.Send(&spacemeshv2alpha1.Activation{Versioned: &spacemeshv2alpha1.Activation_V1{V1: toAtx(rst)}})
+				if err != nil {
+					return status.Error(codes.Internal, err.Error())
+				}
+			case err := <-errChan:
+				return err
+			case <-stream.Context().Done():
+				return nil
+			default:
 			}
 		}
 	}

@@ -60,19 +60,17 @@ func (s *RewardStreamService) Stream(
 		}
 	}
 
-	dbChan := make(chan *types.Reward, 1<<10)
+	dbChan := make(chan *types.Reward, 100)
 	errChan := make(chan error, 1)
+
+	ops, err := toRewardOperations(toRewardRequest(request))
+	if err != nil {
+		return status.Error(codes.InvalidArgument, err.Error())
+	}
+
 	// send db data to chan to avoid buffer overflow
 	go func() {
-		ops, err := toRewardOperations(toRewardRequest(request))
-		if err != nil {
-			select {
-			case errChan <- status.Error(codes.InvalidArgument, err.Error()):
-			default:
-				ctxzap.Error(stream.Context(), "unable to send error", zap.Error(err))
-			}
-			return
-		}
+		defer close(dbChan)
 		if err := rewards.IterateRewardsOps(s.db, ops, func(rwd *types.Reward) bool {
 			dbChan <- rwd
 			return true
@@ -84,50 +82,54 @@ func (s *RewardStreamService) Stream(
 			}
 			return
 		}
-		close(dbChan)
 	}()
+
+	var eventsOut <-chan events.Reward
+	var eventsFull <-chan struct{}
+	if sub != nil {
+		eventsOut = sub.Out()
+		eventsFull = sub.Full()
+	}
 
 	for {
 		select {
-		case <-stream.Context().Done():
-			return nil
-		case err := <-errChan:
-			return err
-		case rwd, ok := <-dbChan:
-			if !ok {
-				dbChan = nil
-				if sub == nil {
-					return nil
-				}
-				continue
-			}
-			err := stream.Send(&spacemeshv2alpha1.Reward{Versioned: &spacemeshv2alpha1.Reward_V1{V1: toReward(rwd)}})
-			if err != nil {
+		case rst := <-eventsOut:
+			err := stream.Send(&spacemeshv2alpha1.Reward{
+				Versioned: &spacemeshv2alpha1.Reward_V1{V1: toReward(&types.Reward{
+					Layer:       rst.Layer,
+					TotalReward: rst.Total,
+					LayerReward: rst.LayerReward,
+					Coinbase:    rst.Coinbase,
+					SmesherID:   rst.SmesherID,
+				})},
+			})
+			switch {
+			case errors.Is(err, io.EOF):
+				return nil
+			case err != nil:
 				return status.Error(codes.Internal, err.Error())
 			}
 		default:
-			if sub != nil {
-				select {
-				case <-sub.Full():
-					return status.Error(codes.Canceled, "buffer overflow")
-				case rst := <-sub.Out():
-					err := stream.Send(&spacemeshv2alpha1.Reward{
-						Versioned: &spacemeshv2alpha1.Reward_V1{V1: toReward(&types.Reward{
-							Layer:       rst.Layer,
-							TotalReward: rst.Total,
-							LayerReward: rst.LayerReward,
-							Coinbase:    rst.Coinbase,
-							SmesherID:   rst.SmesherID,
-						})},
-					})
-					switch {
-					case errors.Is(err, io.EOF):
+			select {
+			case <-eventsFull:
+				return status.Error(codes.Canceled, "buffer overflow")
+			case rst, ok := <-dbChan:
+				if !ok {
+					dbChan = nil
+					if sub == nil {
 						return nil
-					case err != nil:
-						return status.Error(codes.Internal, err.Error())
 					}
-				default:
+					continue
 				}
+				err := stream.Send(&spacemeshv2alpha1.Reward{Versioned: &spacemeshv2alpha1.Reward_V1{V1: toReward(rst)}})
+				if err != nil {
+					return status.Error(codes.Internal, err.Error())
+				}
+			case err := <-errChan:
+				return err
+			case <-stream.Context().Done():
+				return nil
+			default:
 			}
 		}
 	}
