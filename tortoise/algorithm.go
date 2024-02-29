@@ -506,14 +506,10 @@ func (t *Tortoise) OnHareOutput(lid types.LayerID, bid types.BlockID) {
 
 // GetMissingActiveSet returns unknown atxs from the original list. It is done for a specific epoch
 // as active set atxs never cross epoch boundary.
-func (t *Tortoise) GetMissingActiveSet(epoch types.EpochID, atxs []types.ATXID) []types.ATXID {
+func (t *Tortoise) GetMissingActiveSet(target types.EpochID, atxs []types.ATXID) []types.ATXID {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	_, exists := t.trtl.epochs[epoch]
-	if !exists {
-		return atxs
-	}
-	return t.trtl.atxsdata.MissingInEpoch(epoch, atxs)
+	return t.trtl.atxsdata.MissingInEpoch(target, atxs)
 }
 
 // OnApplied compares stored opinion with computed opinion and sets
