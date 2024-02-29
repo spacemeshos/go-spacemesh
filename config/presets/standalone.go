@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/multiformats/go-multiaddr"
 	"github.com/spacemeshos/post/initialization"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -88,5 +89,10 @@ func standalone() config.Config {
 	conf.API.PublicListener = "0.0.0.0:10092"
 	conf.API.PrivateListener = "127.0.0.1:10093"
 	conf.API.PostListener = "127.0.0.1:10094"
+
+	addr, _ := multiaddr.NewMultiaddr("/ip4/0.0.0.0/tcp/17513")
+	conf.P2P.Listen = []multiaddr.Multiaddr{addr}
+	conf.P2P.AdvertiseAddress = conf.P2P.Listen
+
 	return conf
 }
