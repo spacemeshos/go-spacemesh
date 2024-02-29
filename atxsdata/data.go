@@ -195,34 +195,39 @@ func (d *Data) Get(epoch types.EpochID, atx types.ATXID) *ATX {
 	return data
 }
 
-func NotMalicious(data *ATX) bool {
+type lockGuard struct{}
+
+// AtxFilter is a function that filters atxs.
+// The `lockGuard` prevents using the filter functions outside of the allowed context
+// to prevent data races.
+type AtxFilter func(*ATX, lockGuard) bool
+
+func NotMalicious(data *ATX, _ lockGuard) bool {
 	return !data.malicious
 }
 
-// GetInEpoch returns all atxs in the epoch.
+// IterateInEpoch calls `fn` for every ATX in epoch.
 // If filters are provided, only atxs that pass all filters are returned.
-// SAFETY: The returned pointers MUST NOT be modified.
-func (d *Data) GetInEpoch(epoch types.EpochID, filters ...func(*ATX) bool) []*ATX {
+// SAFETY: The returned pointer MUST NOT be modified.
+func (d *Data) IterateInEpoch(epoch types.EpochID, fn func(types.ATXID, *ATX), filters ...AtxFilter) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	ecache, exists := d.epochs[epoch]
 	if !exists {
-		return nil
+		return
 	}
-	atxs := make([]*ATX, 0, len(ecache.index))
-	for _, atx := range ecache.index {
+	for id, atx := range ecache.index {
 		if _, exists := d.malicious[atx.Node]; exists {
 			atx.malicious = true
 		}
 		ok := true
 		for _, filter := range filters {
-			ok = ok && filter(atx)
+			ok = ok && filter(atx, lockGuard{})
 		}
 		if ok {
-			atxs = append(atxs, atx)
+			fn(id, atx)
 		}
 	}
-	return atxs
 }
 
 func (d *Data) MissingInEpoch(epoch types.EpochID, atxs []types.ATXID) []types.ATXID {

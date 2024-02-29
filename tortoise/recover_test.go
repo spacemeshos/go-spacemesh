@@ -19,7 +19,8 @@ import (
 type recoveryAdapter struct {
 	testing.TB
 	*Tortoise
-	db sql.Executor
+	db      sql.Executor
+	atxdata *atxsdata.Data
 
 	next types.LayerID
 }
@@ -30,7 +31,7 @@ func (a *recoveryAdapter) TallyVotes(ctx context.Context, current types.LayerID)
 		a.next = genesis
 	}
 	for ; a.next <= current; a.next++ {
-		require.NoError(a, RecoverLayer(ctx, a.Tortoise, a.db, a.next, a.OnBallot))
+		require.NoError(a, RecoverLayer(ctx, a.Tortoise, a.db, a.atxdata, a.next, a.OnBallot))
 		a.Tortoise.TallyVotes(ctx, a.next)
 	}
 }

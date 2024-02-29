@@ -337,6 +337,7 @@ func tortoiseFromSimState(tb testing.TB, state sim.State, opts ...Opt) *recovery
 		TB:       tb,
 		Tortoise: trtl,
 		db:       state.DB.Executor,
+		atxdata:  state.Atxdata,
 	}
 }
 
@@ -831,21 +832,22 @@ func TestBallotsNotProcessedWithoutBeacon(t *testing.T) {
 
 	s := sim.New()
 	s.Setup()
+	simState := s.GetState(0)
 	cfg := defaultTestConfig()
-	tortoise := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+	tortoise := tortoiseFromSimState(t, simState, WithConfig(cfg), WithLogger(logtest.New(t)))
 	last := s.Next()
 
-	beacon, err := beacons.Get(s.GetState(0).DB, last.GetEpoch())
+	beacon, err := beacons.Get(simState.DB, last.GetEpoch())
 	require.NoError(t, err)
 
-	require.NoError(t, beacons.Set(s.GetState(0).DB, last.GetEpoch(), types.EmptyBeacon))
+	require.NoError(t, beacons.Set(simState.DB, last.GetEpoch(), types.EmptyBeacon))
 	tortoise.TallyVotes(ctx, last)
 	_, err = tortoise.EncodeVotes(ctx)
 	require.Error(t, err)
 
-	require.NoError(t, beacons.Set(s.GetState(0).DB, last.GetEpoch(), beacon))
+	require.NoError(t, beacons.Set(simState.DB, last.GetEpoch(), beacon))
 	// Recover layer so it picks up the beacon and retry tallying votes in the last layer
-	require.NoError(t, RecoverLayer(ctx, tortoise.Tortoise, tortoise.db, last, tortoise.OnBallot))
+	require.NoError(t, RecoverLayer(ctx, tortoise.Tortoise, tortoise.db, simState.Atxdata, last, tortoise.OnBallot))
 	tortoise.Tortoise.TallyVotes(ctx, last)
 	_, err = tortoise.EncodeVotes(ctx)
 	require.NoError(t, err)

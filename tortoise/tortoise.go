@@ -519,8 +519,15 @@ func (t *turtle) runFull() (verified, changed types.LayerID) {
 
 func (t *turtle) computeEpochHeight(lid types.LayerID) {
 	einfo := t.epoch(lid.GetEpoch())
-	allAtxs := t.atxsdata.GetInEpoch(lid.GetEpoch(), atxsdata.NotMalicious)
-	einfo.height = getMedianAtxHeight(allAtxs)
+	var heights []uint64
+	t.atxsdata.IterateInEpoch(
+		lid.GetEpoch(),
+		func(_ types.ATXID, atx *atxsdata.ATX) {
+			heights = append(heights, atx.Height)
+		},
+		atxsdata.NotMalicious,
+	)
+	einfo.height = getMedian(heights)
 	t.logger.Debug(
 		"computed epoch height",
 		zap.Uint32("in layer", lid.GetEpoch().Uint32()),
