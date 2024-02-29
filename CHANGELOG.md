@@ -10,6 +10,12 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
   Do not try to sync over transient (relayed) connections. This fixes
   possible sync issues when hole punching is enabled.
 
+* [#5586](https://github.com/spacemeshos/go-spacemesh/pull/5586)
+  Do not try to publish proofs for malicious ATXs during sync.
+
+  Publishing is blocked during sync because `Syncer::ListenToATXGossip()` returns false, and thus every malicious ATX being
+  synced was causing an error resulting in an interruption of sync.
+
 ## Release v1.3.10
 
 ### Improvements
