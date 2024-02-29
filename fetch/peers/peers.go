@@ -54,14 +54,15 @@ type Peers struct {
 	globalLatency float64
 }
 
-func (p *Peers) Add(id peer.ID) {
+func (p *Peers) Add(id peer.ID) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	_, exist := p.peers[id]
 	if exist {
-		return
+		return false
 	}
 	p.peers[id] = &data{id: id}
+	return true
 }
 
 func (p *Peers) Delete(id peer.ID) {

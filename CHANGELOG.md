@@ -2,6 +2,14 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## Release v1.3.11
+
+### Improvements
+
+* [#5603](https://github.com/spacemeshos/go-spacemesh/pull/5603)
+  Do not try to sync over transient (relayed) connections. This fixes
+  possible sync issues when hole punching is enabled.
+
 ## Release v1.3.10
 
 ### Improvements
