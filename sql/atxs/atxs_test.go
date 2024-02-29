@@ -404,7 +404,7 @@ func TestGetIDsByEpoch(t *testing.T) {
 
 	ids1, err := atxs.GetIDsByEpoch(db, e1)
 	require.NoError(t, err)
-	require.EqualValues(t, []types.ATXID{atx1.ID()}, ids1)
+	require.ElementsMatch(t, []types.ATXID{atx1.ID()}, ids1)
 
 	ids2, err := atxs.GetIDsByEpoch(db, e2)
 	require.NoError(t, err)
@@ -413,7 +413,7 @@ func TestGetIDsByEpoch(t *testing.T) {
 
 	ids3, err := atxs.GetIDsByEpoch(db, e3)
 	require.NoError(t, err)
-	require.EqualValues(t, []types.ATXID{atx4.ID()}, ids3)
+	require.ElementsMatch(t, []types.ATXID{atx4.ID()}, ids3)
 }
 
 func TestGetIDsByEpochCached(t *testing.T) {
@@ -450,7 +450,7 @@ func TestGetIDsByEpochCached(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		ids1, err := atxs.GetIDsByEpoch(db, e1)
 		require.NoError(t, err)
-		require.EqualValues(t, []types.ATXID{atx1.ID()}, ids1)
+		require.ElementsMatch(t, []types.ATXID{atx1.ID()}, ids1)
 		require.Equal(t, 5, db.QueryCount())
 	}
 
@@ -465,7 +465,7 @@ func TestGetIDsByEpochCached(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		ids3, err := atxs.GetIDsByEpoch(db, e3)
 		require.NoError(t, err)
-		require.EqualValues(t, []types.ATXID{atx4.ID()}, ids3)
+		require.ElementsMatch(t, []types.ATXID{atx4.ID()}, ids3)
 		require.Equal(t, 7, db.QueryCount())
 	}
 
@@ -477,7 +477,7 @@ func TestGetIDsByEpochCached(t *testing.T) {
 
 	ids3, err := atxs.GetIDsByEpoch(db, e3)
 	require.NoError(t, err)
-	require.EqualValues(t, []types.ATXID{atx4.ID(), atx5.ID()}, ids3)
+	require.ElementsMatch(t, []types.ATXID{atx4.ID(), atx5.ID()}, ids3)
 	require.Equal(t, 8, db.QueryCount()) // not incremented after Add
 
 	require.Error(t, db.WithTx(context.Background(), func(tx *sql.Tx) error {
@@ -488,7 +488,7 @@ func TestGetIDsByEpochCached(t *testing.T) {
 	// atx6 should not be in the cache
 	ids4, err := atxs.GetIDsByEpoch(db, e3)
 	require.NoError(t, err)
-	require.EqualValues(t, []types.ATXID{atx4.ID(), atx5.ID()}, ids4)
+	require.ElementsMatch(t, []types.ATXID{atx4.ID(), atx5.ID()}, ids4)
 	require.Equal(t, 10, db.QueryCount()) // not incremented after Add
 }
 
