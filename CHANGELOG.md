@@ -6,15 +6,17 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ### Improvements
 
+* [#5586](https://github.com/spacemeshos/go-spacemesh/pull/5586)
+  Do not try to publish proofs for malicious ATXs during sync.
+  Publishing is blocked during sync because `Syncer::ListenToATXGossip()` returns false, and thus every malicious ATX being
+  synced was causing an error resulting in an interruption of sync.
+
 * [#5603](https://github.com/spacemeshos/go-spacemesh/pull/5603)
   Do not try to sync over transient (relayed) connections. This fixes
   possible sync issues when hole punching is enabled.
 
-* [#5586](https://github.com/spacemeshos/go-spacemesh/pull/5586)
-  Do not try to publish proofs for malicious ATXs during sync.
-
-  Publishing is blocked during sync because `Syncer::ListenToATXGossip()` returns false, and thus every malicious ATX being
-  synced was causing an error resulting in an interruption of sync.
+* [#5618](https://github.com/spacemeshos/go-spacemesh/pull/5618)
+  Add index on ATXs that makes epoch ATX requests faster
 
 ## Release v1.3.10
 
