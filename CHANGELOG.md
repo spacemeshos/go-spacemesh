@@ -118,6 +118,8 @@ configuration is as follows:
 * [5602](https://github.com/spacemeshos/go-spacemesh/pull/5602) Optimize client side of fetcher to avoid encoding when
   not needed.
 
+* [5561](https://github.com/spacemeshos/go-spacemesh/pull/5561) Reuse atxdata in Tortoise to optimize memory usage.
+
 ## Release v1.3.10
 
 ### Improvements

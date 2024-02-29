@@ -8,6 +8,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -83,10 +84,10 @@ func WithTracer(opts ...TraceOpt) Opt {
 }
 
 // New creates Tortoise instance.
-func New(opts ...Opt) (*Tortoise, error) {
+func New(atxdata *atxsdata.Data, opts ...Opt) (*Tortoise, error) {
 	t := &Tortoise{
 		ctx:    context.Background(),
-		logger: log.NewNop().Zap(),
+		logger: zap.NewNop(),
 		cfg:    DefaultConfig(),
 	}
 	for _, opt := range opts {
@@ -107,7 +108,7 @@ func New(opts ...Opt) (*Tortoise, error) {
 			zap.Uint32("tortoise-window-size", t.cfg.WindowSize),
 		)
 	}
-	t.trtl = newTurtle(t.logger, t.cfg)
+	t.trtl = newTurtle(t.logger, t.cfg, atxdata)
 	if t.tracer != nil {
 		t.tracer.On(&ConfigTrace{
 			Hdist:                    t.cfg.Hdist,
@@ -194,7 +195,7 @@ func (t *Tortoise) OnMalfeasance(id types.NodeID) {
 		return
 	}
 	t.logger.Debug("on malfeasance", zap.Stringer("id", id))
-	t.trtl.makrMalfeasant(id)
+	t.trtl.markMalfeasant(id)
 	malfeasantNumber.Inc()
 	if t.tracer != nil {
 		t.tracer.On(&MalfeasanceTrace{ID: id})
@@ -505,21 +506,10 @@ func (t *Tortoise) OnHareOutput(lid types.LayerID, bid types.BlockID) {
 
 // GetMissingActiveSet returns unknown atxs from the original list. It is done for a specific epoch
 // as active set atxs never cross epoch boundary.
-func (t *Tortoise) GetMissingActiveSet(epoch types.EpochID, atxs []types.ATXID) []types.ATXID {
+func (t *Tortoise) GetMissingActiveSet(target types.EpochID, atxs []types.ATXID) []types.ATXID {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	edata, exists := t.trtl.epochs[epoch]
-	if !exists {
-		return atxs
-	}
-	var missing []types.ATXID
-	for _, atx := range atxs {
-		_, exists := edata.atxs[atx]
-		if !exists {
-			missing = append(missing, atx)
-		}
-	}
-	return missing
+	return t.trtl.atxsdata.MissingInEpoch(target, atxs)
 }
 
 // OnApplied compares stored opinion with computed opinion and sets
@@ -531,13 +521,19 @@ func (t *Tortoise) OnApplied(lid types.LayerID, opinion types.Hash32) bool {
 	layer := t.trtl.layer(lid)
 	t.logger.Debug("on applied",
 		zap.Uint32("lid", lid.Uint32()),
+		zap.Uint32("pending", t.trtl.pending.Uint32()),
+		zap.Uint32("processed", t.trtl.processed.Uint32()),
 		log.ZShortStringer("computed", layer.opinion),
 		log.ZShortStringer("stored", opinion),
 	)
 	rst := false
 	if layer.opinion == opinion {
+		oldPending := t.trtl.pending
 		t.trtl.pending = min(lid+1, t.trtl.processed)
 		rst = true
+		if oldPending != t.trtl.pending {
+			t.trtl.evict()
+		}
 	}
 	if t.tracer != nil {
 		t.tracer.On(&AppliedTrace{Layer: lid, Opinion: opinion, Result: rst})

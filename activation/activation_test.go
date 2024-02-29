@@ -61,6 +61,14 @@ func newAtx(
 	return atx
 }
 
+type atxOption func(*types.ActivationTx)
+
+func withVrfNonce(nonce types.VRFPostIndex) atxOption {
+	return func(atx *types.ActivationTx) {
+		atx.VRFNonce = &nonce
+	}
+}
+
 func newActivationTx(
 	tb testing.TB,
 	sig *signing.EdSigner,
@@ -73,6 +81,7 @@ func newActivationTx(
 	coinbase types.Address,
 	numUnits uint32,
 	nipost *types.NIPost,
+	opts ...atxOption,
 ) *types.VerifiedActivationTx {
 	challenge := types.NIPostChallenge{
 		Sequence:       sequence,
@@ -89,6 +98,9 @@ func newActivationTx(
 
 	atx.SetEffectiveNumUnits(numUnits)
 	atx.SetReceived(time.Now())
+	for _, opt := range opts {
+		opt(atx)
+	}
 	require.NoError(tb, SignAndFinalizeAtx(sig, atx))
 	vAtx, err := atx.Verify(startTick, numTicks)
 	require.NoError(tb, err)
