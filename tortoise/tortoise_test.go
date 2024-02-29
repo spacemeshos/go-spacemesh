@@ -1619,16 +1619,12 @@ func TestComputeBallotWeight(t *testing.T) {
 			lid := types.LayerID(111)
 			for _, weight := range tc.atxs {
 				atxID := types.RandomATXID()
-				header := &types.ActivationTxHeader{
-					NumUnits:          uint32(weight),
-					ID:                atxID,
-					EffectiveNumUnits: uint32(weight),
+				atx := atxsdata.ATX{
+					Weight: uint64(weight),
+					Height: 1,
 				}
-				header.PublishEpoch = lid.GetEpoch() - 1
-				header.BaseTickHeight = 0
-				header.TickCount = 1
-				trtl.trtl.atxsdata.AddFromHeader(header, types.VRFPostIndex(0), false)
-				trtl.OnAtx(header.ToData())
+				trtl.trtl.atxsdata.AddAtx(lid.GetEpoch(), atxID, &atx)
+				trtl.OnAtx(lid.GetEpoch(), atxID, &atx)
 				atxids = append(atxids, atxID)
 			}
 
@@ -1724,12 +1720,11 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 	// and then do rerun
 	partitionEnd := last
 	s1.Merge(s2)
-	require.NoError(t, s1.GetState(0).DB.IterateEpochATXHeaders(
-		partitionEnd.GetEpoch(), func(header *types.ActivationTxHeader) error {
-			tortoise1.OnAtx(header.ToData())
-			tortoise2.OnAtx(header.ToData())
-			return nil
-		}))
+	s1.GetState(0).Atxdata.IterateInEpoch(
+		partitionEnd.GetEpoch(), func(id types.ATXID, atx *atxsdata.ATX) {
+			tortoise1.OnAtx(partitionEnd.GetEpoch(), id, atx)
+			tortoise2.OnAtx(partitionEnd.GetEpoch(), id, atx)
+		})
 	for lid := partitionStart; !lid.After(partitionEnd); lid = lid.Add(1) {
 		mergedBlocks, err := blocks.Layer(s1.GetState(0).DB, lid)
 		require.NoError(t, err)
@@ -2397,14 +2392,12 @@ func TestSwitchMode(t *testing.T) {
 		template.Votes.Support = nil
 
 		// add an atx to increase optimistic threshold in verifying tortoise to trigger a switch
-		header := &types.ActivationTxHeader{
-			ID:                types.ATXID{1},
-			EffectiveNumUnits: 1,
-			TickCount:         200,
+		atx := atxsdata.ATX{
+			Height: 200,
+			Weight: 200,
 		}
-		header.PublishEpoch = types.EpochID(1)
-		tortoise.trtl.atxsdata.AddFromHeader(header, 0, false)
-		tortoise.OnAtx(header.ToData())
+		tortoise.trtl.atxsdata.AddAtx(types.EpochID(2), types.ATXID{1}, &atx)
+		tortoise.OnAtx(types.EpochID(2), types.ATXID{1}, &atx)
 		// feed ballots that vote against previously validated layer
 		// without the fix they would be ignored
 		for i := 1; i <= 16; i++ {
@@ -2903,16 +2896,13 @@ func TestEncodeVotes(t *testing.T) {
 		ballot := types.Ballot{}
 
 		atxid := types.ATXID{1}
-		header := &types.ActivationTxHeader{
-			NumUnits:          10,
-			EffectiveNumUnits: 10,
-			ID:                atxid,
-			BaseTickHeight:    1,
-			TickCount:         1,
+		atx := atxsdata.ATX{
+			Weight:     10,
+			BaseHeight: 1,
+			Height:     2,
 		}
-		header.PublishEpoch = lid.GetEpoch() - 1
-		atxdata.AddFromHeader(header, 0, false)
-		tortoise.OnAtx(header.ToData())
+		atxdata.AddAtx(lid.GetEpoch(), atxid, &atx)
+		tortoise.OnAtx(lid.GetEpoch(), atxid, &atx)
 		tortoise.OnBeacon(lid.GetEpoch(), types.EmptyBeacon)
 
 		ballot.EpochData = &types.EpochData{
@@ -3025,27 +3015,25 @@ func TestBaseBallotBeforeCurrentLayer(t *testing.T) {
 
 func TestMissingActiveSet(t *testing.T) {
 	tortoise := defaultAlgorithm(t)
-	epoch := types.EpochID(3)
+	target := types.EpochID(3)
 	aset := []types.ATXID{
 		types.ATXID(types.BytesToHash([]byte("first"))),
 		types.ATXID(types.BytesToHash([]byte("second"))),
 		types.ATXID(types.BytesToHash([]byte("third"))),
 	}
 	for _, atxid := range aset[:2] {
-		atx := &types.ActivationTxHeader{}
-		atx.ID = atxid
-		atx.PublishEpoch = epoch - 1
-		tortoise.trtl.atxsdata.AddFromHeader(atx, 0, false)
-		tortoise.OnAtx(atx.ToData())
+		atx := &atxsdata.ATX{}
+		tortoise.trtl.atxsdata.AddAtx(target, atxid, atx)
+		tortoise.OnAtx(target, atxid, atx)
 	}
 	t.Run("empty", func(t *testing.T) {
-		require.Equal(t, aset, tortoise.GetMissingActiveSet(epoch+1, aset))
+		require.Equal(t, aset, tortoise.GetMissingActiveSet(target+1, aset))
 	})
 	t.Run("all available", func(t *testing.T) {
-		require.Empty(t, tortoise.GetMissingActiveSet(epoch, aset[:2]))
+		require.Empty(t, tortoise.GetMissingActiveSet(target, aset[:2]))
 	})
 	t.Run("some available", func(t *testing.T) {
-		require.Equal(t, []types.ATXID{aset[2]}, tortoise.GetMissingActiveSet(epoch, aset))
+		require.Equal(t, []types.ATXID{aset[2]}, tortoise.GetMissingActiveSet(target, aset))
 	})
 }
 

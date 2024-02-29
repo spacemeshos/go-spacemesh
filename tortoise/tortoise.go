@@ -648,13 +648,13 @@ func (t *turtle) onOpinionChange(lid types.LayerID, early bool) {
 	}
 }
 
-func (t *turtle) onAtx(atx *types.AtxTortoiseData) {
+func (t *turtle) onAtx(target types.EpochID, id types.ATXID, atx *atxsdata.ATX) {
 	start := time.Now()
-	epoch := t.epoch(atx.TargetEpoch)
-	mal := t.isMalfeasant(atx.Smesher)
+	epoch := t.epoch(target)
+	mal := t.isMalfeasant(atx.Node)
 	t.logger.Debug("on atx",
-		zap.Stringer("id", atx.ID),
-		zap.Uint32("epoch", uint32(atx.TargetEpoch)),
+		zap.Stringer("id", id),
+		zap.Uint32("epoch", uint32(target)),
 		zap.Uint64("weight", atx.Weight),
 		zap.Uint64("height", atx.Height),
 		zap.Bool("malfeasant", mal),
@@ -667,7 +667,7 @@ func (t *turtle) onAtx(atx *types.AtxTortoiseData) {
 		epoch.weight = epoch.weight.Add(fixed.New64(int64(atx.Weight)))
 	}
 
-	if atx.TargetEpoch == t.last.GetEpoch() {
+	if target == t.last.GetEpoch() {
 		t.localThreshold = epoch.weight.
 			Div(fixed.New(localThresholdFraction)).
 			Div(fixed.New64(int64(types.GetLayersPerEpoch())))
