@@ -107,8 +107,13 @@ type MaliciousIDs struct {
 type EpochData struct {
 	// to be in line with `EpochActiveSet` in common/types/activation.go
 	// and DefaultConfig in datastore/store.go
-	// also double-check the size of `ResponseMessage` above
-	// and the fields `EligibilityProofs` and `ActiveSet` in the type `Ballot` in common/types/ballot.go
+	//
+	// When changing this value also check
+	// - the size of `ResponseMessage` above
+	// - the fields `EligibilityProofs` and `ActiveSet` in the type `Ballot` in common/types/ballot.go
+	// - the size of `Rewards` in the type `InnerBlock` in common/types/block.go
+	// - the size of `Ballots` in the type `LayerData` below
+	// - the size of `Proposals` in the type `Value` in hare3/types.go
 	AtxIDs []types.ATXID `scale:"max=2200000"`
 }
 
