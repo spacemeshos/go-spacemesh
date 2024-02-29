@@ -217,27 +217,20 @@ func (f *Fetch) GetPoetProof(ctx context.Context, id types.Hash32) error {
 }
 
 func (f *Fetch) GetMaliciousIDs(ctx context.Context, peer p2p.Peer) ([]byte, error) {
-	return f.servers[malProtocol].Request(ctx, peer, []byte{})
+	return f.meteredRequest(ctx, malProtocol, peer, []byte{})
 }
 
 // GetLayerData get layer data from peers.
 func (f *Fetch) GetLayerData(ctx context.Context, peer p2p.Peer, lid types.LayerID) ([]byte, error) {
-	lidBytes, err := codec.Encode(&lid)
-	if err != nil {
-		return nil, err
-	}
-	return f.servers[lyrDataProtocol].Request(ctx, peer, lidBytes)
+	lidBytes := codec.MustEncode(&lid)
+	return f.meteredRequest(ctx, lyrDataProtocol, peer, lidBytes)
 }
 
 func (f *Fetch) GetLayerOpinions(ctx context.Context, peer p2p.Peer, lid types.LayerID) ([]byte, error) {
-	req := OpinionRequest{
+	reqData := codec.MustEncode(&OpinionRequest{
 		Layer: lid,
-	}
-	reqData, err := codec.Encode(&req)
-	if err != nil {
-		return nil, err
-	}
-	return f.servers[OpnProtocol].Request(ctx, peer, reqData)
+	})
+	return f.meteredRequest(ctx, OpnProtocol, peer, reqData)
 }
 
 // PeerEpochInfo get the epoch info published in the given epoch from the specified peer.
@@ -245,16 +238,11 @@ func (f *Fetch) PeerEpochInfo(ctx context.Context, peer p2p.Peer, epoch types.Ep
 	f.logger.WithContext(ctx).With().Debug("requesting epoch info from peer",
 		log.Stringer("peer", peer),
 		log.Stringer("epoch", epoch))
-
-	epochBytes, err := codec.Encode(epoch)
+	epochBytes := codec.MustEncode(epoch)
+	data, err := f.meteredRequest(ctx, atxProtocol, peer, epochBytes)
 	if err != nil {
 		return nil, err
 	}
-	data, err := f.servers[atxProtocol].Request(ctx, peer, epochBytes)
-	if err != nil {
-		return nil, err
-	}
-
 	var ed EpochData
 	if err := codec.Decode(data, &ed); err != nil {
 		return nil, fmt.Errorf("decoding epoch data: %w", err)
@@ -269,12 +257,8 @@ func (f *Fetch) PeerMeshHashes(ctx context.Context, peer p2p.Peer, req *MeshHash
 		log.Object("req", req),
 	)
 
-	reqData, err := codec.Encode(req)
-	if err != nil {
-		f.logger.With().Fatal("failed to encode mesh hash request", log.Err(err))
-	}
-
-	data, err := f.servers[meshHashProtocol].Request(ctx, peer, reqData)
+	reqData := codec.MustEncode(req)
+	data, err := f.meteredRequest(ctx, meshHashProtocol, peer, reqData)
 	if err != nil {
 		return nil, err
 	}
@@ -302,7 +286,7 @@ func (f *Fetch) GetCert(
 	reqData := codec.MustEncode(req)
 
 	for _, peer := range peers {
-		data, err := f.servers[OpnProtocol].Request(ctx, peer, reqData)
+		data, err := f.meteredRequest(ctx, OpnProtocol, peer, reqData)
 		if err != nil {
 			f.logger.With().Debug("failed to get cert", log.Stringer("peer", peer), log.Err(err))
 			continue

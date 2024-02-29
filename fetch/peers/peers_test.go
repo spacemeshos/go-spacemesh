@@ -10,9 +10,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// any random non zero number that will be used if size is not specified in the test case
+// it is intentionally different from assumed minimal size in the latency function.
+const testSize = 100
+
 type event struct {
 	id          peer.ID
 	add, delete bool
+	size        int
 	success     int
 	failure     int
 	latency     time.Duration
@@ -30,7 +35,7 @@ func withEvents(events []event) *Peers {
 			tracker.OnFailure(ev.id)
 		}
 		for i := 0; i < ev.success; i++ {
-			tracker.OnLatency(ev.id, ev.latency)
+			tracker.OnLatency(ev.id, max(ev.size, testSize), ev.latency)
 		}
 	}
 	return tracker
@@ -69,6 +74,17 @@ func TestSelect(t *testing.T) {
 			expect:     []peer.ID{"a", "b"},
 			selectFrom: []peer.ID{"b", "a"},
 			best:       peer.ID("a"),
+		},
+		{
+			desc: "latency adjusted based on size",
+			events: []event{
+				{id: "a", success: 2, latency: 10, size: 1_000, add: true},
+				{id: "b", success: 2, latency: 20, size: 4_000, add: true},
+			},
+			n:          5,
+			expect:     []peer.ID{"b", "a"},
+			selectFrom: []peer.ID{"a", "b"},
+			best:       peer.ID("b"),
 		},
 		{
 			desc: "total number is larger then capacity",

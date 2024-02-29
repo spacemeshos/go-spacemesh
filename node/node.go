@@ -65,10 +65,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/proposals"
+	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/prune"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
@@ -111,6 +113,7 @@ const (
 	BlockGenLogger         = "blockGenerator"
 	BlockHandlerLogger     = "blockHandler"
 	TxHandlerLogger        = "txHandler"
+	ProposalStoreLogger    = "proposalStore"
 	ProposalBuilderLogger  = "proposalBuilder"
 	ProposalListenerLogger = "proposalListener"
 	NipostBuilderLogger    = "nipostBuilder"
@@ -745,28 +748,6 @@ func (app *App) initServices(ctx context.Context) error {
 		)
 	}
 
-	proposalListener := proposals.NewHandler(
-		app.db,
-		app.atxsdata,
-		app.edVerifier,
-		app.host,
-		fetcherWrapped,
-		beaconProtocol,
-		msh,
-		trtl,
-		vrfVerifier,
-		app.clock,
-		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
-		proposals.WithConfig(proposals.Config{
-			LayerSize:              layerSize,
-			LayersPerEpoch:         layersPerEpoch,
-			GoldenATXID:            goldenATXID,
-			MaxExceptions:          trtlCfg.MaxExceptions,
-			Hdist:                  trtlCfg.Hdist,
-			MinimalActiveSetWeight: trtlCfg.MinimalActiveSetWeight,
-		}),
-	)
-
 	blockHandler := blocks.NewHandler(fetcherWrapped, app.db, trtl, msh,
 		blocks.WithLogger(app.addLogger(BlockHandlerLogger, lg)))
 
@@ -816,8 +797,14 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 	app.certifier.Register(app.edSgn)
 
+	proposalsStore := store.New(
+		store.WithEvictedLayer(app.clock.CurrentLayer()),
+		store.WithLogger(app.addLogger(ProposalStoreLogger, lg).Zap()),
+		store.WithCapacity(app.Config.Tortoise.Zdist+1),
+	)
+
 	flog := app.addLogger(Fetcher, lg)
-	fetcher := fetch.NewFetch(app.cachedDB, app.host,
+	fetcher := fetch.NewFetch(app.cachedDB, proposalsStore, app.host,
 		fetch.WithContext(ctx),
 		fetch.WithConfig(app.Config.FETCH),
 		fetch.WithLogger(flog),
@@ -854,8 +841,17 @@ func (app *App) initServices(ctx context.Context) error {
 		return err
 	}
 	logger := app.addLogger(HareLogger, lg).Zap()
+
 	app.hare3 = hare3.New(
-		app.clock, app.host, app.db, app.atxsdata, app.edVerifier, app.hOracle, newSyncer, patrol,
+		app.clock,
+		app.host,
+		app.db,
+		app.atxsdata,
+		proposalsStore,
+		app.edVerifier,
+		app.hOracle,
+		newSyncer,
+		patrol,
 		hare3.WithLogger(logger),
 		hare3.WithConfig(app.Config.HARE3),
 	)
@@ -871,9 +867,33 @@ func (app *App) initServices(ctx context.Context) error {
 		return nil
 	})
 
+	proposalListener := proposals.NewHandler(
+		app.db,
+		app.atxsdata,
+		app.hare3,
+		app.edVerifier,
+		app.host,
+		fetcherWrapped,
+		beaconProtocol,
+		msh,
+		trtl,
+		vrfVerifier,
+		app.clock,
+		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
+		proposals.WithConfig(proposals.Config{
+			LayerSize:              layerSize,
+			LayersPerEpoch:         layersPerEpoch,
+			GoldenATXID:            goldenATXID,
+			MaxExceptions:          trtlCfg.MaxExceptions,
+			Hdist:                  trtlCfg.Hdist,
+			MinimalActiveSetWeight: trtlCfg.MinimalActiveSetWeight,
+		}),
+	)
+
 	app.blockGen = blocks.NewGenerator(
 		app.db,
 		app.atxsdata,
+		proposalsStore,
 		executor,
 		msh,
 		fetcherWrapped,
@@ -1694,6 +1714,12 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		sql.WithConnections(app.Config.DatabaseConnections),
 		sql.WithLatencyMetering(app.Config.DatabaseLatencyMetering),
 		sql.WithVacuumState(app.Config.DatabaseVacuumState),
+		sql.WithQueryCache(app.Config.DatabaseQueryCache),
+		sql.WithQueryCacheSizes(map[sql.QueryCacheKind]int{
+			atxs.CacheKindEpochATXs:           app.Config.DatabaseQueryCacheSizes.EpochATXs,
+			atxs.CacheKindATXBlob:             app.Config.DatabaseQueryCacheSizes.ATXBlob,
+			activesets.CacheKindActiveSetBlob: app.Config.DatabaseQueryCacheSizes.ActiveSetBlob,
+		}),
 	}
 	if len(app.Config.DatabaseSkipMigrations) > 0 {
 		dbopts = append(dbopts, sql.WithSkipMigrations(app.Config.DatabaseSkipMigrations...))

@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -19,7 +20,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
-	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
 
@@ -33,11 +33,13 @@ type VrfNonceKey struct {
 type Executor interface {
 	sql.Executor
 	WithTx(context.Context, func(*sql.Tx) error) error
+	QueryCache() sql.QueryCache
 }
 
 // CachedDB is simply a database injected with cache.
 type CachedDB struct {
 	Executor
+	sql.QueryCache
 	logger log.Log
 
 	// cache is optional
@@ -108,6 +110,7 @@ func NewCachedDB(db Executor, lg log.Log, opts ...Opt) *CachedDB {
 
 	return &CachedDB{
 		Executor:         db,
+		QueryCache:       db.QueryCache(),
 		atxsdata:         o.atxsdata,
 		logger:           lg,
 		atxHdrCache:      atxHdrCache,
@@ -356,13 +359,14 @@ const (
 )
 
 // NewBlobStore returns a BlobStore.
-func NewBlobStore(db sql.Executor) *BlobStore {
-	return &BlobStore{DB: db}
+func NewBlobStore(db sql.Executor, proposals *store.Store) *BlobStore {
+	return &BlobStore{DB: db, proposals: proposals}
 }
 
 // BlobStore gets data as a blob to serve direct fetch requests.
 type BlobStore struct {
-	DB sql.Executor
+	DB        sql.Executor
+	proposals *store.Store
 }
 
 // Get gets an ATX as bytes by an ATX ID as bytes.
@@ -371,7 +375,7 @@ func (bs *BlobStore) Get(hint Hint, key []byte) ([]byte, error) {
 	case ATXDB:
 		return atxs.GetBlob(bs.DB, key)
 	case ProposalDB:
-		return proposals.GetBlob(bs.DB, key)
+		return bs.proposals.GetBlob(types.ProposalID(types.BytesToHash(key).ToHash20()))
 	case BallotDB:
 		id := types.BallotID(types.BytesToHash(key).ToHash20())
 		blt, err := ballots.Get(bs.DB, id)
@@ -413,7 +417,7 @@ func (bs *BlobStore) Has(hint Hint, key []byte) (bool, error) {
 	case ATXDB:
 		return atxs.Has(bs.DB, types.BytesToATXID(key))
 	case ProposalDB:
-		return proposals.Has(bs.DB, types.ProposalID(types.BytesToHash(key).ToHash20()))
+		return bs.proposals.Has(types.ProposalID(types.BytesToHash(key).ToHash20())), nil
 	case BallotDB:
 		id := types.BallotID(types.BytesToHash(key).ToHash20())
 		return ballots.Has(bs.DB, id)

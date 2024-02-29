@@ -1547,6 +1547,7 @@ func TestGetPositioningAtxDbFailed(t *testing.T) {
 	sig := maps.Values(tab.signers)[0]
 
 	db := datastoremocks.NewMockExecutor(tab.mctrl)
+	db.EXPECT().QueryCache().Return(sql.NullQueryCache)
 	tab.Builder.cdb = datastore.NewCachedDB(db, logtest.New(t))
 	expected := errors.New("db error")
 	db.EXPECT().Exec(gomock.Any(), gomock.Any(), gomock.Any()).Return(0, expected)
