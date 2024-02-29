@@ -46,9 +46,10 @@ func (s *RewardStreamService) Stream(
 	request *spacemeshv2alpha1.RewardStreamRequest,
 	stream spacemeshv2alpha1.RewardStreamService_StreamServer,
 ) error {
+	ctx := stream.Context()
 	var sub *events.BufferedSubscription[events.Reward]
 	if request.Watch {
-		matcher := rewardsMatcher{request, stream.Context()}
+		matcher := rewardsMatcher{request, ctx}
 		var err error
 		sub, err = events.SubscribeMatched(matcher.match)
 		if err != nil {
@@ -72,13 +73,22 @@ func (s *RewardStreamService) Stream(
 	go func() {
 		defer close(dbChan)
 		if err := rewards.IterateRewardsOps(s.db, ops, func(rwd *types.Reward) bool {
-			dbChan <- rwd
-			return true
+			select {
+			case dbChan <- rwd:
+				return true
+			case <-ctx.Done():
+				// exit if the stream context is cancelled
+				return false
+			}
 		}); err != nil {
 			select {
 			case errChan <- status.Error(codes.Internal, err.Error()):
 			default:
 				ctxzap.Error(stream.Context(), "unable to send error", zap.Error(err))
+				select {
+				case <-ctx.Done(): // check ctx.Done() to avoid blocking
+				default:
+				}
 			}
 			return
 		}
@@ -111,6 +121,22 @@ func (s *RewardStreamService) Stream(
 			}
 		default:
 			select {
+			case rst := <-eventsOut:
+				err := stream.Send(&spacemeshv2alpha1.Reward{
+					Versioned: &spacemeshv2alpha1.Reward_V1{V1: toReward(&types.Reward{
+						Layer:       rst.Layer,
+						TotalReward: rst.Total,
+						LayerReward: rst.LayerReward,
+						Coinbase:    rst.Coinbase,
+						SmesherID:   rst.SmesherID,
+					})},
+				})
+				switch {
+				case errors.Is(err, io.EOF):
+					return nil
+				case err != nil:
+					return status.Error(codes.Internal, err.Error())
+				}
 			case <-eventsFull:
 				return status.Error(codes.Canceled, "buffer overflow")
 			case rst, ok := <-dbChan:
@@ -127,9 +153,8 @@ func (s *RewardStreamService) Stream(
 				}
 			case err := <-errChan:
 				return err
-			case <-stream.Context().Done():
+			case <-ctx.Done():
 				return nil
-			default:
 			}
 		}
 	}

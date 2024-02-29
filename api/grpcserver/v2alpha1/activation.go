@@ -51,9 +51,10 @@ func (s *ActivationStreamService) Stream(
 	request *spacemeshv2alpha1.ActivationStreamRequest,
 	stream spacemeshv2alpha1.ActivationStreamService_StreamServer,
 ) error {
+	ctx := stream.Context()
 	var sub *events.BufferedSubscription[events.ActivationTx]
 	if request.Watch {
-		matcher := atxsMatcher{request, stream.Context()}
+		matcher := atxsMatcher{request, ctx}
 		var err error
 		sub, err = events.SubscribeMatched(matcher.match)
 		if err != nil {
@@ -77,13 +78,22 @@ func (s *ActivationStreamService) Stream(
 	go func() {
 		defer close(dbChan)
 		if err := atxs.IterateAtxsOps(s.db, ops, func(atx *types.VerifiedActivationTx) bool {
-			dbChan <- atx
-			return true
+			select {
+			case dbChan <- atx:
+				return true
+			case <-ctx.Done():
+				// exit if the stream context is cancelled
+				return false
+			}
 		}); err != nil {
 			select {
 			case errChan <- status.Error(codes.Internal, err.Error()):
 			default:
 				ctxzap.Error(stream.Context(), "unable to send error", zap.Error(err))
+				select {
+				case <-ctx.Done(): // check ctx.Done() to avoid blocking
+				default:
+				}
 			}
 			return
 		}
@@ -110,6 +120,16 @@ func (s *ActivationStreamService) Stream(
 			}
 		default:
 			select {
+			case rst := <-eventsOut:
+				err := stream.Send(&spacemeshv2alpha1.Activation{
+					Versioned: &spacemeshv2alpha1.Activation_V1{V1: toAtx(rst.VerifiedActivationTx)},
+				})
+				switch {
+				case errors.Is(err, io.EOF):
+					return nil
+				case err != nil:
+					return status.Error(codes.Internal, err.Error())
+				}
 			case <-eventsFull:
 				return status.Error(codes.Canceled, "buffer overflow")
 			case rst, ok := <-dbChan:
@@ -126,9 +146,8 @@ func (s *ActivationStreamService) Stream(
 				}
 			case err := <-errChan:
 				return err
-			case <-stream.Context().Done():
+			case <-ctx.Done():
 				return nil
-			default:
 			}
 		}
 	}
