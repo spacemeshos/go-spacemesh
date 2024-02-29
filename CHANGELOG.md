@@ -18,6 +18,9 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 * [#5618](https://github.com/spacemeshos/go-spacemesh/pull/5618)
   Add index on ATXs that makes epoch ATX requests faster
 
+* [#5619](https://github.com/spacemeshos/go-spacemesh/pull/5619)
+  Updated data structures to support the network with up to 2.2 unique smesher identities.
+
 ## Release v1.3.10
 
 ### Improvements
@@ -25,7 +28,7 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 * [#5564](https://github.com/spacemeshos/go-spacemesh/pull/5564) Use decaying tags for fetch peers. This prevents
   libp2p's Connection Manager from breaking sync.
 
-* [#5522](https://github.com/spacemeshos/go-spacemesh/pull/5522) Disable mesh aggremenet sync protocol.
+* [#5522](https://github.com/spacemeshos/go-spacemesh/pull/5522) Disable mesh agreement sync protocol.
 
   It reduces number of requests for historical activation ids.
 
