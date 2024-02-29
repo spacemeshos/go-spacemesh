@@ -49,6 +49,8 @@ type Proposal struct {
 
 	// the following fields are kept private and from being serialized
 	proposalID ProposalID
+	// beacon that this proposal references either via its ballot's EpochData or RefBallot
+	beacon Beacon
 }
 
 func (p Proposal) Equal(other Proposal) bool {
@@ -121,6 +123,14 @@ func (p *Proposal) ID() ProposalID {
 // SetID set the ProposalID.
 func (p *Proposal) SetID(pid ProposalID) {
 	p.proposalID = pid
+}
+
+func (p *Proposal) Beacon() Beacon {
+	return p.beacon
+}
+
+func (p *Proposal) SetBeacon(beacon Beacon) {
+	p.beacon = beacon
 }
 
 // MarshalLogObject implements logging interface.

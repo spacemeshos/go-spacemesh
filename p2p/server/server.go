@@ -421,30 +421,32 @@ func WriteErrorResponse(w io.Writer, respErr error) error {
 	})
 }
 
-func ReadResponse(r io.Reader, toCall func(resLen uint32) (int, error)) error {
-	respLen, _, err := codec.DecodeLen(r)
+func ReadResponse(r io.Reader, toCall func(resLen uint32) (int, error)) (int, error) {
+	respLen, nBytes, err := codec.DecodeLen(r)
 	if err != nil {
-		return err
+		return nBytes, err
 	}
 	if respLen != 0 {
 		n, err := toCall(respLen)
+		nBytes += n
 		if err != nil {
-			return err
+			return nBytes, err
 		}
 		if int(respLen) != n {
-			return errors.New("malformed server response")
+			return nBytes, errors.New("malformed server response")
 		}
 	}
-	errStr, _, err := codec.DecodeStringWithLimit(r, 1024)
+	errStr, n, err := codec.DecodeStringWithLimit(r, 1024)
+	nBytes += n
 	switch {
 	case err != nil:
-		return err
+		return nBytes, err
 	case errStr != "":
-		return NewServerError(errStr)
+		return nBytes, NewServerError(errStr)
 	case respLen == 0:
-		return errors.New("malformed server response")
+		return nBytes, errors.New("malformed server response")
 	}
-	return nil
+	return nBytes, nil
 }
 
 func WrapHandler(handler Handler) StreamHandler {

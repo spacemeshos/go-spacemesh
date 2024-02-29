@@ -18,6 +18,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
+const (
+	fetchSubKey sql.QueryCacheSubKey = "epoch-info-req"
+)
+
 type handler struct {
 	logger log.Log
 	cdb    *datastore.CachedDB
@@ -40,12 +44,13 @@ func newHandler(
 func (h *handler) handleMaliciousIDsReq(ctx context.Context, _ []byte) ([]byte, error) {
 	nodes, err := identities.GetMalicious(h.cdb)
 	if err != nil {
-		h.logger.WithContext(ctx).With().Warning("serve: failed to get malicious IDs", log.Err(err))
+		h.logger.With().Warning("serve: failed to get malicious IDs",
+			log.Context(ctx), log.Err(err))
 		return nil, err
 	}
-	h.logger.WithContext(ctx).
-		With().
-		Debug("serve: responded to malicious IDs request", log.Int("num_malicious", len(nodes)))
+	h.logger.With().
+		Debug("serve: responded to malicious IDs request",
+			log.Context(ctx), log.Int("num_malicious", len(nodes)))
 	malicious := &MaliciousIDs{
 		NodeIDs: nodes,
 	}
@@ -62,8 +67,10 @@ func (h *handler) handleMaliciousIDsReqStream(ctx context.Context, msg []byte, s
 			return cbk(total, id[:])
 		})
 	}); err != nil {
-		h.logger.WithContext(ctx).With().
-			Warning("serve: failed to stream malicious node IDs", log.Err(err))
+		h.logger.With().
+			Warning("serve: failed to stream malicious node IDs",
+				log.Context(ctx),
+				log.Err(err))
 	}
 
 	return nil
@@ -75,23 +82,27 @@ func (h *handler) handleEpochInfoReq(ctx context.Context, msg []byte) ([]byte, e
 	if err := codec.Decode(msg, &epoch); err != nil {
 		return nil, err
 	}
-	atxids, err := atxs.GetIDsByEpoch(h.cdb, epoch)
-	if err != nil {
-		h.logger.WithContext(ctx).With().Warning("serve: failed to get epoch atx IDs", epoch, log.Err(err))
-		return nil, err
-	}
-	ed := EpochData{
-		AtxIDs: atxids,
-	}
-	h.logger.WithContext(ctx).With().Debug("serve: responded to epoch info request",
-		epoch,
-		log.Int("atx_count", len(ed.AtxIDs)),
-	)
-	bts, err := codec.Encode(&ed)
-	if err != nil {
-		h.logger.WithContext(ctx).With().Fatal("serve: failed to serialize epoch atx", epoch, log.Err(err))
-	}
-	return bts, nil
+
+	cacheKey := sql.QueryCacheKey(atxs.CacheKindEpochATXs, epoch.String())
+	return sql.WithCachedSubKey(h.cdb, cacheKey, fetchSubKey, func() ([]byte, error) {
+		atxids, err := atxs.GetIDsByEpoch(h.cdb, epoch)
+		if err != nil {
+			h.logger.With().Warning("serve: failed to get epoch atx IDs",
+				epoch, log.Err(err), log.Context(ctx))
+			return nil, err
+		}
+		ed := EpochData{
+			AtxIDs: atxids,
+		}
+		h.logger.With().Debug("serve: responded to epoch info request",
+			epoch, log.Context(ctx), log.Int("atx_count", len(ed.AtxIDs)))
+		bts, err := codec.Encode(&ed)
+		if err != nil {
+			h.logger.With().Fatal("serve: failed to serialize epoch atx",
+				epoch, log.Context(ctx), log.Err(err))
+		}
+		return bts, nil
+	})
 }
 
 // handleEpochInfoReq streams the ATXs published in the specified epoch.
@@ -105,8 +116,8 @@ func (h *handler) handleEpochInfoReqStream(ctx context.Context, msg []byte, s io
 			return cbk(total, id[:])
 		})
 	}); err != nil {
-		h.logger.WithContext(ctx).With().
-			Warning("serve: failed to stream epoch atx IDs", epoch, log.Err(err))
+		h.logger.With().Warning("serve: failed to stream epoch atx IDs",
+			log.Context(ctx), epoch, log.Err(err))
 	}
 
 	return nil
@@ -138,8 +149,9 @@ func (h *handler) streamIDs(ctx context.Context, s io.ReadWriter, retrieve retri
 	); err != nil {
 		if !started {
 			if wrErr := server.WriteErrorResponse(s, err); wrErr != nil {
-				h.logger.WithContext(ctx).With().
-					Warning("serve: failed to write error response", log.Err(wrErr))
+				h.logger.With().
+					Warning("serve: failed to write error response",
+						log.Context(ctx), log.Err(wrErr))
 			}
 		}
 		return err
@@ -177,13 +189,16 @@ func (h *handler) handleLayerDataReq(ctx context.Context, req []byte) ([]byte, e
 	}
 	ld.Ballots, err = ballots.IDsInLayer(h.cdb, lid)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		h.logger.WithContext(ctx).With().Warning("serve: failed to get layer ballots", lid, log.Err(err))
+		h.logger.With().Warning("serve: failed to get layer ballots",
+			lid, log.Err(err), log.Context(ctx))
 		return nil, err
 	}
 
 	out, err := codec.Encode(&ld)
 	if err != nil {
-		h.logger.WithContext(ctx).With().Fatal("serve: failed to serialize layer data response", log.Err(err))
+		h.logger.With().Fatal(
+			"serve: failed to serialize layer data response",
+			log.Context(ctx), log.Err(err))
 	}
 	return out, nil
 }
@@ -207,12 +222,13 @@ func (h *handler) handleLayerOpinionsReq2(ctx context.Context, data []byte) ([]b
 	opnReqV2.Inc()
 	lo.PrevAggHash, err = layers.GetAggregatedHash(h.cdb, lid.Sub(1))
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		h.logger.WithContext(ctx).With().Error("serve: failed to get prev agg hash", lid, log.Err(err))
+		h.logger.With().Error("serve: failed to get prev agg hash", log.Context(ctx), lid, log.Err(err))
 		return nil, err
 	}
 	bid, err := certificates.CertifiedBlock(h.cdb, lid)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		h.logger.WithContext(ctx).With().Error("serve: failed to get layer certified block", lid, log.Err(err))
+		h.logger.With().Error("serve: failed to get layer certified block",
+			log.Context(ctx), lid, log.Err(err))
 		return nil, err
 	}
 	if err == nil {
@@ -220,7 +236,8 @@ func (h *handler) handleLayerOpinionsReq2(ctx context.Context, data []byte) ([]b
 	}
 	out, err = codec.Encode(&lo)
 	if err != nil {
-		h.logger.WithContext(ctx).With().Fatal("serve: failed to serialize layer opinions response", log.Err(err))
+		h.logger.With().Fatal("serve: failed to serialize layer opinions response",
+			log.Context(ctx), log.Err(err))
 	}
 	return out, nil
 }
@@ -229,7 +246,7 @@ func (h *handler) handleCertReq(ctx context.Context, lid types.LayerID, bid type
 	certReq.Inc()
 	certs, err := certificates.Get(h.cdb, lid)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		h.logger.WithContext(ctx).With().Error("serve: failed to get certificate", lid, log.Err(err))
+		h.logger.With().Error("serve: failed to get certificate", log.Context(ctx), lid, log.Err(err))
 		return nil, err
 	}
 	if err == nil {
@@ -237,7 +254,8 @@ func (h *handler) handleCertReq(ctx context.Context, lid types.LayerID, bid type
 			if cert.Block == bid {
 				out, err := codec.Encode(cert.Cert)
 				if err != nil {
-					h.logger.WithContext(ctx).With().Fatal("serve: failed to encode cert", log.Err(err))
+					h.logger.With().Fatal("serve: failed to encode cert",
+						log.Context(ctx), log.Err(err))
 				}
 				return out, nil
 			}
@@ -249,7 +267,7 @@ func (h *handler) handleCertReq(ctx context.Context, lid types.LayerID, bid type
 func (h *handler) handleHashReq(ctx context.Context, data []byte) ([]byte, error) {
 	var requestBatch RequestBatch
 	if err := codec.Decode(data, &requestBatch); err != nil {
-		h.logger.WithContext(ctx).With().Warning("serve: failed to parse request", log.Err(err))
+		h.logger.With().Warning("serve: failed to parse request", log.Context(ctx), log.Err(err))
 		return nil, errBadRequest
 	}
 	resBatch := ResponseBatch{
@@ -262,27 +280,31 @@ func (h *handler) handleHashReq(ctx context.Context, data []byte) ([]byte, error
 		totalHashReqs.WithLabelValues(string(r.Hint)).Add(1)
 		var blob sql.Blob
 		if err := h.bs.LoadBlob(r.Hint, r.Hash.Bytes(), &blob); err != nil {
-			if !errors.Is(err, sql.ErrNotFound) {
-				h.logger.WithContext(ctx).With().Debug("serve: database error",
+			if !errors.Is(err, datastore.ErrNotFound) {
+				h.logger.With().Debug("serve: database error",
+					log.Context(ctx),
 					log.String("hash", r.Hash.ShortString()),
 					log.String("hint", string(r.Hint)),
 					log.Err(err))
 				return nil, err
 			}
-			h.logger.WithContext(ctx).With().Debug("serve: remote peer requested nonexistent hash",
+			h.logger.With().Debug("serve: remote peer requested nonexistent hash",
+				log.Context(ctx),
 				log.String("hash", r.Hash.ShortString()),
 				log.String("hint", string(r.Hint)),
 				log.Err(err))
 			hashMissing.WithLabelValues(string(r.Hint)).Add(1)
 			continue
 		} else if len(blob.Bytes) == 0 {
-			h.logger.WithContext(ctx).With().Debug("serve: remote peer requested golden",
+			h.logger.With().Debug("serve: remote peer requested golden",
+				log.Context(ctx),
 				log.String("hash", r.Hash.ShortString()),
 				log.Int("dataSize", len(blob.Bytes)))
 			hashEmptyData.WithLabelValues(string(r.Hint)).Add(1)
 			continue
 		} else {
-			h.logger.WithContext(ctx).With().Debug("serve: responded to hash request",
+			h.logger.With().Debug("serve: responded to hash request",
+				log.Context(ctx),
 				log.String("hash", r.Hash.ShortString()),
 				log.Int("dataSize", len(blob.Bytes)))
 		}
@@ -296,12 +318,14 @@ func (h *handler) handleHashReq(ctx context.Context, data []byte) ([]byte, error
 
 	bts, err := codec.Encode(&resBatch)
 	if err != nil {
-		h.logger.WithContext(ctx).With().Fatal("serve: failed to encode batch id",
+		h.logger.With().Fatal("serve: failed to encode batch id",
+			log.Context(ctx),
 			log.Err(err),
 			log.String("batch_hash", resBatch.ID.ShortString()))
 		return nil, err
 	}
-	h.logger.WithContext(ctx).With().Debug("serve: returning response for batch",
+	h.logger.With().Debug("serve: returning response for batch",
+		log.Context(ctx),
 		log.String("batch_hash", resBatch.ID.ShortString()),
 		log.Int("count_responses", len(resBatch.Responses)),
 		log.Int("data_size", len(bts)))
@@ -311,7 +335,7 @@ func (h *handler) handleHashReq(ctx context.Context, data []byte) ([]byte, error
 func (h *handler) handleHashReqStream(ctx context.Context, msg []byte, s io.ReadWriter) error {
 	var requestBatch RequestBatch
 	if err := codec.Decode(msg, &requestBatch); err != nil {
-		h.logger.WithContext(ctx).With().Warning("serve: failed to parse request", log.Err(err))
+		h.logger.With().Warning("serve: failed to parse request", log.Context(ctx), log.Err(err))
 		return errBadRequest
 	}
 
@@ -390,23 +414,28 @@ func (h *handler) handleMeshHashReq(ctx context.Context, reqData []byte) ([]byte
 		err    error
 	)
 	if err = codec.Decode(reqData, &req); err != nil {
-		h.logger.WithContext(ctx).With().Warning("serve: failed to parse mesh hash request", log.Err(err))
+		h.logger.With().Warning("serve: failed to parse mesh hash request",
+			log.Context(ctx), log.Err(err))
 		return nil, errBadRequest
 	}
 	if err := req.Validate(); err != nil {
-		h.logger.WithContext(ctx).With().Debug("failed to validate mesh hash request", log.Err(err))
+		h.logger.With().Debug("failed to validate mesh hash request",
+			log.Context(ctx), log.Err(err))
 		return nil, err
 	}
 	hashes, err = layers.GetAggHashes(h.cdb, req.From, req.To, req.Step)
 	if err != nil {
-		h.logger.WithContext(ctx).With().Warning("serve: failed to get mesh hashes", log.Err(err))
+		h.logger.With().Warning("serve: failed to get mesh hashes",
+			log.Context(ctx), log.Err(err))
 		return nil, err
 	}
 	data, err = codec.EncodeSlice(hashes)
 	if err != nil {
-		h.logger.WithContext(ctx).With().Fatal("serve: failed to encode hashes", log.Err(err))
+		h.logger.With().Fatal("serve: failed to encode hashes",
+			log.Context(ctx), log.Err(err))
 	}
-	h.logger.WithContext(ctx).With().Debug("serve: returning response for mesh hashes",
+	h.logger.With().Debug("serve: returning response for mesh hashes",
+		log.Context(ctx),
 		log.Stringer("layer_from", req.From),
 		log.Stringer("layer_to", req.To),
 		log.Uint32("by", req.Step),
@@ -418,11 +447,13 @@ func (h *handler) handleMeshHashReq(ctx context.Context, reqData []byte) ([]byte
 func (h *handler) handleMeshHashReqStream(ctx context.Context, reqData []byte, s io.ReadWriter) error {
 	var req MeshHashRequest
 	if err := codec.Decode(reqData, &req); err != nil {
-		h.logger.WithContext(ctx).With().Warning("serve: failed to parse mesh hash request", log.Err(err))
+		h.logger.With().Warning("serve: failed to parse mesh hash request",
+			log.Context(ctx), log.Err(err))
 		return errBadRequest
 	}
 	if err := req.Validate(); err != nil {
-		h.logger.WithContext(ctx).With().Debug("failed to validate mesh hash request", log.Err(err))
+		h.logger.With().Debug("failed to validate mesh hash request",
+			log.Context(ctx), log.Err(err))
 		return err
 	}
 
@@ -432,8 +463,9 @@ func (h *handler) handleMeshHashReqStream(ctx context.Context, reqData []byte, s
 				return cbk(total, id[:])
 			})
 	}); err != nil {
-		h.logger.WithContext(ctx).With().
-			Warning("serve: failed to stream mesh hashes", log.Err(err))
+		h.logger.With().
+			Warning("serve: failed to stream mesh hashes",
+				log.Context(ctx), log.Err(err))
 	}
 
 	return nil

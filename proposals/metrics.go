@@ -53,7 +53,6 @@ var numBlocksInException = metrics.NewHistogramWithBuckets(
 const (
 	// labels for each step of proposal/ballot processing.
 	decodeInit = "decode"
-	dbLookup   = "db_r"
 	peerHashes = "hashes"
 	ballot     = "ballot"
 	fetchTXs   = "txs"

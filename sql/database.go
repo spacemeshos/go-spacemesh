@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	sqlite "github.com/go-llsqlite/crawshaw"
@@ -77,6 +79,8 @@ type conf struct {
 	vacuumState   int
 	migrations    []Migration
 	enableLatency bool
+	cache         bool
+	cacheSizes    map[QueryCacheKind]int
 	logger        *zap.Logger
 }
 
@@ -145,6 +149,24 @@ func WithVacuumState(i int) Opt {
 func WithLatencyMetering(enable bool) Opt {
 	return func(c *conf) {
 		c.enableLatency = enable
+	}
+}
+
+// WithQueryCache enables in-memory caching of results of some queries.
+func WithQueryCache(enable bool) Opt {
+	return func(c *conf) {
+		c.cache = enable
+	}
+}
+
+// WithQueryCacheSizes sets query cache sizes for the specified cache kinds.
+func WithQueryCacheSizes(sizes map[QueryCacheKind]int) Opt {
+	return func(c *conf) {
+		if c.cacheSizes == nil {
+			c.cacheSizes = maps.Clone(sizes)
+		} else {
+			maps.Copy(c.cacheSizes, sizes)
+		}
 	}
 }
 
@@ -229,17 +251,24 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 			}
 		}
 	}
+	if config.cache {
+		config.logger.Debug("using query cache", zap.Any("sizes", config.cacheSizes))
+		db.queryCache = &queryCache{cacheSizesByKind: config.cacheSizes}
+	}
+	db.queryCount.Store(0)
 	return db, nil
 }
 
 // Database is an instance of sqlite database.
 type Database struct {
+	*queryCache
 	pool *sqlitex.Pool
 
 	closed   bool
 	closeMux sync.Mutex
 
-	latency *prometheus.HistogramVec
+	latency    *prometheus.HistogramVec
+	queryCount atomic.Int64
 }
 
 func (db *Database) getConn(ctx context.Context) *sqlite.Conn {
@@ -256,7 +285,7 @@ func (db *Database) getTx(ctx context.Context, initstmt string) (*Tx, error) {
 	if conn == nil {
 		return nil, ErrNoConnection
 	}
-	tx := &Tx{db: db, conn: conn}
+	tx := &Tx{queryCache: db.queryCache, db: db, conn: conn}
 	if err := tx.begin(initstmt); err != nil {
 		return nil, err
 	}
@@ -270,6 +299,7 @@ func (db *Database) withTx(ctx context.Context, initstmt string, exec func(*Tx) 
 	}
 	defer tx.Release()
 	if err := exec(tx); err != nil {
+		tx.queryCache.ClearCache()
 		return err
 	}
 	return tx.Commit()
@@ -316,6 +346,7 @@ func (db *Database) WithTxImmediate(ctx context.Context, exec func(*Tx) error) e
 // Note that Exec will block until database is closed or statement has finished.
 // If application needs to control statement execution lifetime use one of the transaction.
 func (db *Database) Exec(query string, encoder Encoder, decoder Decoder) (int, error) {
+	db.queryCount.Add(1)
 	conn := db.getConn(context.Background())
 	if conn == nil {
 		return 0, ErrNoConnection
@@ -342,6 +373,17 @@ func (db *Database) Close() error {
 	}
 	db.closed = true
 	return nil
+}
+
+// QueryCount returns the number of queries executed, including failed
+// queries, but not counting transaction start / commit / rollback.
+func (db *Database) QueryCount() int {
+	return int(db.queryCount.Load())
+}
+
+// Return database's QueryCache.
+func (db *Database) QueryCache() QueryCache {
+	return db.queryCache
 }
 
 func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (int, error) {
@@ -383,6 +425,7 @@ func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (in
 
 // Tx is wrapper for database transaction.
 type Tx struct {
+	*queryCache
 	db        *Database
 	conn      *sqlite.Conn
 	committed bool
@@ -422,6 +465,7 @@ func (tx *Tx) Release() error {
 
 // Exec query.
 func (tx *Tx) Exec(query string, encoder Encoder, decoder Decoder) (int, error) {
+	tx.db.queryCount.Add(1)
 	if tx.db.latency != nil {
 		start := time.Now()
 		defer func() {

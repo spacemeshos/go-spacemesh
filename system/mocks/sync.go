@@ -5,6 +5,7 @@
 //
 //	mockgen -typed -package=mocks -destination=./mocks/sync.go -source=./sync.go
 //
+
 // Package mocks is a generated GoMock package.
 package mocks
 
@@ -48,31 +49,31 @@ func (m *MockSyncStateProvider) IsBeaconSynced(arg0 types.EpochID) bool {
 }
 
 // IsBeaconSynced indicates an expected call of IsBeaconSynced.
-func (mr *MockSyncStateProviderMockRecorder) IsBeaconSynced(arg0 any) *SyncStateProviderIsBeaconSyncedCall {
+func (mr *MockSyncStateProviderMockRecorder) IsBeaconSynced(arg0 any) *MockSyncStateProviderIsBeaconSyncedCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsBeaconSynced", reflect.TypeOf((*MockSyncStateProvider)(nil).IsBeaconSynced), arg0)
-	return &SyncStateProviderIsBeaconSyncedCall{Call: call}
+	return &MockSyncStateProviderIsBeaconSyncedCall{Call: call}
 }
 
-// SyncStateProviderIsBeaconSyncedCall wrap *gomock.Call
-type SyncStateProviderIsBeaconSyncedCall struct {
+// MockSyncStateProviderIsBeaconSyncedCall wrap *gomock.Call
+type MockSyncStateProviderIsBeaconSyncedCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *SyncStateProviderIsBeaconSyncedCall) Return(arg0 bool) *SyncStateProviderIsBeaconSyncedCall {
+func (c *MockSyncStateProviderIsBeaconSyncedCall) Return(arg0 bool) *MockSyncStateProviderIsBeaconSyncedCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *SyncStateProviderIsBeaconSyncedCall) Do(f func(types.EpochID) bool) *SyncStateProviderIsBeaconSyncedCall {
+func (c *MockSyncStateProviderIsBeaconSyncedCall) Do(f func(types.EpochID) bool) *MockSyncStateProviderIsBeaconSyncedCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *SyncStateProviderIsBeaconSyncedCall) DoAndReturn(f func(types.EpochID) bool) *SyncStateProviderIsBeaconSyncedCall {
+func (c *MockSyncStateProviderIsBeaconSyncedCall) DoAndReturn(f func(types.EpochID) bool) *MockSyncStateProviderIsBeaconSyncedCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -86,31 +87,31 @@ func (m *MockSyncStateProvider) IsSynced(arg0 context.Context) bool {
 }
 
 // IsSynced indicates an expected call of IsSynced.
-func (mr *MockSyncStateProviderMockRecorder) IsSynced(arg0 any) *SyncStateProviderIsSyncedCall {
+func (mr *MockSyncStateProviderMockRecorder) IsSynced(arg0 any) *MockSyncStateProviderIsSyncedCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSynced", reflect.TypeOf((*MockSyncStateProvider)(nil).IsSynced), arg0)
-	return &SyncStateProviderIsSyncedCall{Call: call}
+	return &MockSyncStateProviderIsSyncedCall{Call: call}
 }
 
-// SyncStateProviderIsSyncedCall wrap *gomock.Call
-type SyncStateProviderIsSyncedCall struct {
+// MockSyncStateProviderIsSyncedCall wrap *gomock.Call
+type MockSyncStateProviderIsSyncedCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *SyncStateProviderIsSyncedCall) Return(arg0 bool) *SyncStateProviderIsSyncedCall {
+func (c *MockSyncStateProviderIsSyncedCall) Return(arg0 bool) *MockSyncStateProviderIsSyncedCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *SyncStateProviderIsSyncedCall) Do(f func(context.Context) bool) *SyncStateProviderIsSyncedCall {
+func (c *MockSyncStateProviderIsSyncedCall) Do(f func(context.Context) bool) *MockSyncStateProviderIsSyncedCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *SyncStateProviderIsSyncedCall) DoAndReturn(f func(context.Context) bool) *SyncStateProviderIsSyncedCall {
+func (c *MockSyncStateProviderIsSyncedCall) DoAndReturn(f func(context.Context) bool) *MockSyncStateProviderIsSyncedCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -18,9 +19,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
-	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
+
+var ErrNotFound = errors.New("not found")
 
 type VrfNonceKey struct {
 	ID    types.NodeID
@@ -32,11 +34,13 @@ type VrfNonceKey struct {
 type Executor interface {
 	sql.Executor
 	WithTx(context.Context, func(*sql.Tx) error) error
+	QueryCache() sql.QueryCache
 }
 
 // CachedDB is simply a database injected with cache.
 type CachedDB struct {
 	Executor
+	sql.QueryCache
 	logger log.Log
 
 	// cache is optional
@@ -107,6 +111,7 @@ func NewCachedDB(db Executor, lg log.Log, opts ...Opt) *CachedDB {
 
 	return &CachedDB{
 		Executor:         db,
+		QueryCache:       db.QueryCache(),
 		atxsdata:         o.atxsdata,
 		logger:           lg,
 		atxHdrCache:      atxHdrCache,
@@ -355,13 +360,14 @@ const (
 )
 
 // NewBlobStore returns a BlobStore.
-func NewBlobStore(db sql.Executor) *BlobStore {
-	return &BlobStore{DB: db}
+func NewBlobStore(db sql.Executor, proposals *store.Store) *BlobStore {
+	return &BlobStore{DB: db, proposals: proposals}
 }
 
 // BlobStore gets data as a blob to serve direct fetch requests.
 type BlobStore struct {
-	DB sql.Executor
+	DB        sql.Executor
+	proposals *store.Store
 }
 
 type (
@@ -371,7 +377,6 @@ type (
 
 var loadBlobDispatch = map[Hint]loadBlobFunc{
 	ATXDB:       atxs.LoadBlob,
-	ProposalDB:  proposals.LoadBlob,
 	BallotDB:    ballots.LoadBlob,
 	BlockDB:     blocks.LoadBlob,
 	TXDB:        transactions.LoadBlob,
@@ -382,7 +387,6 @@ var loadBlobDispatch = map[Hint]loadBlobFunc{
 
 var blobSizeDispatch = map[Hint]blobSizeFunc{
 	ATXDB:       atxs.GetBlobSizes,
-	ProposalDB:  proposals.GetBlobSizes,
 	BallotDB:    ballots.GetBlobSizes,
 	BlockDB:     blocks.GetBlobSizes,
 	TXDB:        transactions.GetBlobSizes,
@@ -391,22 +395,63 @@ var blobSizeDispatch = map[Hint]blobSizeFunc{
 	ActiveSet:   activesets.GetBlobSizes,
 }
 
+func (bs *BlobStore) loadProposal(key []byte, blob *sql.Blob) error {
+	id := types.ProposalID(types.BytesToHash(key).ToHash20())
+	b, err := bs.proposals.GetBlob(id)
+	switch {
+	case err == nil:
+		blob.Bytes = b
+		return nil
+	case errors.Is(err, store.ErrNotFound):
+		return ErrNotFound
+	default:
+		return err
+	}
+}
+
+func (bs *BlobStore) getProposalSizes(keys [][]byte) (sizes []int, err error) {
+	sizes = make([]int, len(keys))
+	for n, k := range keys {
+		id := types.ProposalID(types.BytesToHash(k).ToHash20())
+		size, err := bs.proposals.GetBlobSize(id)
+		switch {
+		case err == nil:
+			sizes[n] = size
+		case errors.Is(err, store.ErrNotFound):
+			sizes[n] = -1
+		default:
+			return nil, err
+		}
+	}
+	return sizes, err
+}
+
 // LoadBlob gets an blob as bytes by an object ID as bytes.
 func (bs *BlobStore) LoadBlob(hint Hint, key []byte, blob *sql.Blob) error {
-	// TODO: use dispatch table (LoadBlob fns)
+	if hint == ProposalDB {
+		return bs.loadProposal(key, blob)
+	}
 	loader, found := loadBlobDispatch[hint]
 	if !found {
 		return fmt.Errorf("blob store not found %s", hint)
 	}
-	if err := loader(bs.DB, key, blob); err != nil {
+	err := loader(bs.DB, key, blob)
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, sql.ErrNotFound):
+		return ErrNotFound
+	default:
 		return fmt.Errorf("get %s blob: %w", hint, err)
 	}
-	return nil
 }
 
 // GetBlobSizes returns the sizes of the blobs corresponding to the specified ids. For
 // non-existent objects, the corresponding items are set to -1.
 func (bs *BlobStore) GetBlobSizes(hint Hint, ids [][]byte) (sizes []int, err error) {
+	if hint == ProposalDB {
+		return bs.getProposalSizes(ids)
+	}
 	getSizes, found := blobSizeDispatch[hint]
 	if !found {
 		return nil, fmt.Errorf("blob store not found %s", hint)
@@ -423,7 +468,7 @@ func (bs *BlobStore) Has(hint Hint, key []byte) (bool, error) {
 	case ATXDB:
 		return atxs.Has(bs.DB, types.BytesToATXID(key))
 	case ProposalDB:
-		return proposals.Has(bs.DB, types.ProposalID(types.BytesToHash(key).ToHash20()))
+		return bs.proposals.Has(types.ProposalID(types.BytesToHash(key).ToHash20())), nil
 	case BallotDB:
 		id := types.BallotID(types.BytesToHash(key).ToHash20())
 		return ballots.Has(bs.DB, id)

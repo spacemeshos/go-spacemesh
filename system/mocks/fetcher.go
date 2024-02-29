@@ -5,6 +5,7 @@
 //
 //	mockgen -typed -package=mocks -destination=./mocks/fetcher.go -source=./fetcher.go
 //
+
 // Package mocks is a generated GoMock package.
 package mocks
 
@@ -50,31 +51,31 @@ func (m *MockFetcher) GetActiveSet(arg0 context.Context, arg1 types.Hash32) erro
 }
 
 // GetActiveSet indicates an expected call of GetActiveSet.
-func (mr *MockFetcherMockRecorder) GetActiveSet(arg0, arg1 any) *FetcherGetActiveSetCall {
+func (mr *MockFetcherMockRecorder) GetActiveSet(arg0, arg1 any) *MockFetcherGetActiveSetCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetActiveSet", reflect.TypeOf((*MockFetcher)(nil).GetActiveSet), arg0, arg1)
-	return &FetcherGetActiveSetCall{Call: call}
+	return &MockFetcherGetActiveSetCall{Call: call}
 }
 
-// FetcherGetActiveSetCall wrap *gomock.Call
-type FetcherGetActiveSetCall struct {
+// MockFetcherGetActiveSetCall wrap *gomock.Call
+type MockFetcherGetActiveSetCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *FetcherGetActiveSetCall) Return(arg0 error) *FetcherGetActiveSetCall {
+func (c *MockFetcherGetActiveSetCall) Return(arg0 error) *MockFetcherGetActiveSetCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *FetcherGetActiveSetCall) Do(f func(context.Context, types.Hash32) error) *FetcherGetActiveSetCall {
+func (c *MockFetcherGetActiveSetCall) Do(f func(context.Context, types.Hash32) error) *MockFetcherGetActiveSetCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *FetcherGetActiveSetCall) DoAndReturn(f func(context.Context, types.Hash32) error) *FetcherGetActiveSetCall {
+func (c *MockFetcherGetActiveSetCall) DoAndReturn(f func(context.Context, types.Hash32) error) *MockFetcherGetActiveSetCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -92,32 +93,32 @@ func (m *MockFetcher) GetAtxs(arg0 context.Context, arg1 []types.ATXID, arg2 ...
 }
 
 // GetAtxs indicates an expected call of GetAtxs.
-func (mr *MockFetcherMockRecorder) GetAtxs(arg0, arg1 any, arg2 ...any) *FetcherGetAtxsCall {
+func (mr *MockFetcherMockRecorder) GetAtxs(arg0, arg1 any, arg2 ...any) *MockFetcherGetAtxsCall {
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{arg0, arg1}, arg2...)
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAtxs", reflect.TypeOf((*MockFetcher)(nil).GetAtxs), varargs...)
-	return &FetcherGetAtxsCall{Call: call}
+	return &MockFetcherGetAtxsCall{Call: call}
 }
 
-// FetcherGetAtxsCall wrap *gomock.Call
-type FetcherGetAtxsCall struct {
+// MockFetcherGetAtxsCall wrap *gomock.Call
+type MockFetcherGetAtxsCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *FetcherGetAtxsCall) Return(arg0 error) *FetcherGetAtxsCall {
+func (c *MockFetcherGetAtxsCall) Return(arg0 error) *MockFetcherGetAtxsCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *FetcherGetAtxsCall) Do(f func(context.Context, []types.ATXID, ...system.GetAtxOpt) error) *FetcherGetAtxsCall {
+func (c *MockFetcherGetAtxsCall) Do(f func(context.Context, []types.ATXID, ...system.GetAtxOpt) error) *MockFetcherGetAtxsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *FetcherGetAtxsCall) DoAndReturn(f func(context.Context, []types.ATXID, ...system.GetAtxOpt) error) *FetcherGetAtxsCall {
+func (c *MockFetcherGetAtxsCall) DoAndReturn(f func(context.Context, []types.ATXID, ...system.GetAtxOpt) error) *MockFetcherGetAtxsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -131,31 +132,31 @@ func (m *MockFetcher) GetBallots(arg0 context.Context, arg1 []types.BallotID) er
 }
 
 // GetBallots indicates an expected call of GetBallots.
-func (mr *MockFetcherMockRecorder) GetBallots(arg0, arg1 any) *FetcherGetBallotsCall {
+func (mr *MockFetcherMockRecorder) GetBallots(arg0, arg1 any) *MockFetcherGetBallotsCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBallots", reflect.TypeOf((*MockFetcher)(nil).GetBallots), arg0, arg1)
-	return &FetcherGetBallotsCall{Call: call}
+	return &MockFetcherGetBallotsCall{Call: call}
 }
 
-// FetcherGetBallotsCall wrap *gomock.Call
-type FetcherGetBallotsCall struct {
+// MockFetcherGetBallotsCall wrap *gomock.Call
+type MockFetcherGetBallotsCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *FetcherGetBallotsCall) Return(arg0 error) *FetcherGetBallotsCall {
+func (c *MockFetcherGetBallotsCall) Return(arg0 error) *MockFetcherGetBallotsCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *FetcherGetBallotsCall) Do(f func(context.Context, []types.BallotID) error) *FetcherGetBallotsCall {
+func (c *MockFetcherGetBallotsCall) Do(f func(context.Context, []types.BallotID) error) *MockFetcherGetBallotsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *FetcherGetBallotsCall) DoAndReturn(f func(context.Context, []types.BallotID) error) *FetcherGetBallotsCall {
+func (c *MockFetcherGetBallotsCall) DoAndReturn(f func(context.Context, []types.BallotID) error) *MockFetcherGetBallotsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -169,31 +170,31 @@ func (m *MockFetcher) GetBlockTxs(arg0 context.Context, arg1 []types.Transaction
 }
 
 // GetBlockTxs indicates an expected call of GetBlockTxs.
-func (mr *MockFetcherMockRecorder) GetBlockTxs(arg0, arg1 any) *FetcherGetBlockTxsCall {
+func (mr *MockFetcherMockRecorder) GetBlockTxs(arg0, arg1 any) *MockFetcherGetBlockTxsCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlockTxs", reflect.TypeOf((*MockFetcher)(nil).GetBlockTxs), arg0, arg1)
-	return &FetcherGetBlockTxsCall{Call: call}
+	return &MockFetcherGetBlockTxsCall{Call: call}
 }
 
-// FetcherGetBlockTxsCall wrap *gomock.Call
-type FetcherGetBlockTxsCall struct {
+// MockFetcherGetBlockTxsCall wrap *gomock.Call
+type MockFetcherGetBlockTxsCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *FetcherGetBlockTxsCall) Return(arg0 error) *FetcherGetBlockTxsCall {
+func (c *MockFetcherGetBlockTxsCall) Return(arg0 error) *MockFetcherGetBlockTxsCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *FetcherGetBlockTxsCall) Do(f func(context.Context, []types.TransactionID) error) *FetcherGetBlockTxsCall {
+func (c *MockFetcherGetBlockTxsCall) Do(f func(context.Context, []types.TransactionID) error) *MockFetcherGetBlockTxsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *FetcherGetBlockTxsCall) DoAndReturn(f func(context.Context, []types.TransactionID) error) *FetcherGetBlockTxsCall {
+func (c *MockFetcherGetBlockTxsCall) DoAndReturn(f func(context.Context, []types.TransactionID) error) *MockFetcherGetBlockTxsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -207,31 +208,31 @@ func (m *MockFetcher) GetBlocks(arg0 context.Context, arg1 []types.BlockID) erro
 }
 
 // GetBlocks indicates an expected call of GetBlocks.
-func (mr *MockFetcherMockRecorder) GetBlocks(arg0, arg1 any) *FetcherGetBlocksCall {
+func (mr *MockFetcherMockRecorder) GetBlocks(arg0, arg1 any) *MockFetcherGetBlocksCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlocks", reflect.TypeOf((*MockFetcher)(nil).GetBlocks), arg0, arg1)
-	return &FetcherGetBlocksCall{Call: call}
+	return &MockFetcherGetBlocksCall{Call: call}
 }
 
-// FetcherGetBlocksCall wrap *gomock.Call
-type FetcherGetBlocksCall struct {
+// MockFetcherGetBlocksCall wrap *gomock.Call
+type MockFetcherGetBlocksCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *FetcherGetBlocksCall) Return(arg0 error) *FetcherGetBlocksCall {
+func (c *MockFetcherGetBlocksCall) Return(arg0 error) *MockFetcherGetBlocksCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *FetcherGetBlocksCall) Do(f func(context.Context, []types.BlockID) error) *FetcherGetBlocksCall {
+func (c *MockFetcherGetBlocksCall) Do(f func(context.Context, []types.BlockID) error) *MockFetcherGetBlocksCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *FetcherGetBlocksCall) DoAndReturn(f func(context.Context, []types.BlockID) error) *FetcherGetBlocksCall {
+func (c *MockFetcherGetBlocksCall) DoAndReturn(f func(context.Context, []types.BlockID) error) *MockFetcherGetBlocksCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -245,31 +246,31 @@ func (m *MockFetcher) GetPoetProof(arg0 context.Context, arg1 types.Hash32) erro
 }
 
 // GetPoetProof indicates an expected call of GetPoetProof.
-func (mr *MockFetcherMockRecorder) GetPoetProof(arg0, arg1 any) *FetcherGetPoetProofCall {
+func (mr *MockFetcherMockRecorder) GetPoetProof(arg0, arg1 any) *MockFetcherGetPoetProofCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPoetProof", reflect.TypeOf((*MockFetcher)(nil).GetPoetProof), arg0, arg1)
-	return &FetcherGetPoetProofCall{Call: call}
+	return &MockFetcherGetPoetProofCall{Call: call}
 }
 
-// FetcherGetPoetProofCall wrap *gomock.Call
-type FetcherGetPoetProofCall struct {
+// MockFetcherGetPoetProofCall wrap *gomock.Call
+type MockFetcherGetPoetProofCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *FetcherGetPoetProofCall) Return(arg0 error) *FetcherGetPoetProofCall {
+func (c *MockFetcherGetPoetProofCall) Return(arg0 error) *MockFetcherGetPoetProofCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *FetcherGetPoetProofCall) Do(f func(context.Context, types.Hash32) error) *FetcherGetPoetProofCall {
+func (c *MockFetcherGetPoetProofCall) Do(f func(context.Context, types.Hash32) error) *MockFetcherGetPoetProofCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *FetcherGetPoetProofCall) DoAndReturn(f func(context.Context, types.Hash32) error) *FetcherGetPoetProofCall {
+func (c *MockFetcherGetPoetProofCall) DoAndReturn(f func(context.Context, types.Hash32) error) *MockFetcherGetPoetProofCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -283,31 +284,31 @@ func (m *MockFetcher) GetProposalTxs(arg0 context.Context, arg1 []types.Transact
 }
 
 // GetProposalTxs indicates an expected call of GetProposalTxs.
-func (mr *MockFetcherMockRecorder) GetProposalTxs(arg0, arg1 any) *FetcherGetProposalTxsCall {
+func (mr *MockFetcherMockRecorder) GetProposalTxs(arg0, arg1 any) *MockFetcherGetProposalTxsCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposalTxs", reflect.TypeOf((*MockFetcher)(nil).GetProposalTxs), arg0, arg1)
-	return &FetcherGetProposalTxsCall{Call: call}
+	return &MockFetcherGetProposalTxsCall{Call: call}
 }
 
-// FetcherGetProposalTxsCall wrap *gomock.Call
-type FetcherGetProposalTxsCall struct {
+// MockFetcherGetProposalTxsCall wrap *gomock.Call
+type MockFetcherGetProposalTxsCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *FetcherGetProposalTxsCall) Return(arg0 error) *FetcherGetProposalTxsCall {
+func (c *MockFetcherGetProposalTxsCall) Return(arg0 error) *MockFetcherGetProposalTxsCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *FetcherGetProposalTxsCall) Do(f func(context.Context, []types.TransactionID) error) *FetcherGetProposalTxsCall {
+func (c *MockFetcherGetProposalTxsCall) Do(f func(context.Context, []types.TransactionID) error) *MockFetcherGetProposalTxsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *FetcherGetProposalTxsCall) DoAndReturn(f func(context.Context, []types.TransactionID) error) *FetcherGetProposalTxsCall {
+func (c *MockFetcherGetProposalTxsCall) DoAndReturn(f func(context.Context, []types.TransactionID) error) *MockFetcherGetProposalTxsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -321,31 +322,31 @@ func (m *MockFetcher) GetProposals(arg0 context.Context, arg1 []types.ProposalID
 }
 
 // GetProposals indicates an expected call of GetProposals.
-func (mr *MockFetcherMockRecorder) GetProposals(arg0, arg1 any) *FetcherGetProposalsCall {
+func (mr *MockFetcherMockRecorder) GetProposals(arg0, arg1 any) *MockFetcherGetProposalsCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposals", reflect.TypeOf((*MockFetcher)(nil).GetProposals), arg0, arg1)
-	return &FetcherGetProposalsCall{Call: call}
+	return &MockFetcherGetProposalsCall{Call: call}
 }
 
-// FetcherGetProposalsCall wrap *gomock.Call
-type FetcherGetProposalsCall struct {
+// MockFetcherGetProposalsCall wrap *gomock.Call
+type MockFetcherGetProposalsCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *FetcherGetProposalsCall) Return(arg0 error) *FetcherGetProposalsCall {
+func (c *MockFetcherGetProposalsCall) Return(arg0 error) *MockFetcherGetProposalsCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *FetcherGetProposalsCall) Do(f func(context.Context, []types.ProposalID) error) *FetcherGetProposalsCall {
+func (c *MockFetcherGetProposalsCall) Do(f func(context.Context, []types.ProposalID) error) *MockFetcherGetProposalsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *FetcherGetProposalsCall) DoAndReturn(f func(context.Context, []types.ProposalID) error) *FetcherGetProposalsCall {
+func (c *MockFetcherGetProposalsCall) DoAndReturn(f func(context.Context, []types.ProposalID) error) *MockFetcherGetProposalsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -357,31 +358,31 @@ func (m *MockFetcher) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32) {
 }
 
 // RegisterPeerHashes indicates an expected call of RegisterPeerHashes.
-func (mr *MockFetcherMockRecorder) RegisterPeerHashes(peer, hashes any) *FetcherRegisterPeerHashesCall {
+func (mr *MockFetcherMockRecorder) RegisterPeerHashes(peer, hashes any) *MockFetcherRegisterPeerHashesCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterPeerHashes", reflect.TypeOf((*MockFetcher)(nil).RegisterPeerHashes), peer, hashes)
-	return &FetcherRegisterPeerHashesCall{Call: call}
+	return &MockFetcherRegisterPeerHashesCall{Call: call}
 }
 
-// FetcherRegisterPeerHashesCall wrap *gomock.Call
-type FetcherRegisterPeerHashesCall struct {
+// MockFetcherRegisterPeerHashesCall wrap *gomock.Call
+type MockFetcherRegisterPeerHashesCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *FetcherRegisterPeerHashesCall) Return() *FetcherRegisterPeerHashesCall {
+func (c *MockFetcherRegisterPeerHashesCall) Return() *MockFetcherRegisterPeerHashesCall {
 	c.Call = c.Call.Return()
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *FetcherRegisterPeerHashesCall) Do(f func(p2p.Peer, []types.Hash32)) *FetcherRegisterPeerHashesCall {
+func (c *MockFetcherRegisterPeerHashesCall) Do(f func(p2p.Peer, []types.Hash32)) *MockFetcherRegisterPeerHashesCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *FetcherRegisterPeerHashesCall) DoAndReturn(f func(p2p.Peer, []types.Hash32)) *FetcherRegisterPeerHashesCall {
+func (c *MockFetcherRegisterPeerHashesCall) DoAndReturn(f func(p2p.Peer, []types.Hash32)) *MockFetcherRegisterPeerHashesCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -418,31 +419,31 @@ func (m *MockBlockFetcher) GetBlocks(arg0 context.Context, arg1 []types.BlockID)
 }
 
 // GetBlocks indicates an expected call of GetBlocks.
-func (mr *MockBlockFetcherMockRecorder) GetBlocks(arg0, arg1 any) *BlockFetcherGetBlocksCall {
+func (mr *MockBlockFetcherMockRecorder) GetBlocks(arg0, arg1 any) *MockBlockFetcherGetBlocksCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlocks", reflect.TypeOf((*MockBlockFetcher)(nil).GetBlocks), arg0, arg1)
-	return &BlockFetcherGetBlocksCall{Call: call}
+	return &MockBlockFetcherGetBlocksCall{Call: call}
 }
 
-// BlockFetcherGetBlocksCall wrap *gomock.Call
-type BlockFetcherGetBlocksCall struct {
+// MockBlockFetcherGetBlocksCall wrap *gomock.Call
+type MockBlockFetcherGetBlocksCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *BlockFetcherGetBlocksCall) Return(arg0 error) *BlockFetcherGetBlocksCall {
+func (c *MockBlockFetcherGetBlocksCall) Return(arg0 error) *MockBlockFetcherGetBlocksCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *BlockFetcherGetBlocksCall) Do(f func(context.Context, []types.BlockID) error) *BlockFetcherGetBlocksCall {
+func (c *MockBlockFetcherGetBlocksCall) Do(f func(context.Context, []types.BlockID) error) *MockBlockFetcherGetBlocksCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *BlockFetcherGetBlocksCall) DoAndReturn(f func(context.Context, []types.BlockID) error) *BlockFetcherGetBlocksCall {
+func (c *MockBlockFetcherGetBlocksCall) DoAndReturn(f func(context.Context, []types.BlockID) error) *MockBlockFetcherGetBlocksCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -483,32 +484,32 @@ func (m *MockAtxFetcher) GetAtxs(arg0 context.Context, arg1 []types.ATXID, arg2 
 }
 
 // GetAtxs indicates an expected call of GetAtxs.
-func (mr *MockAtxFetcherMockRecorder) GetAtxs(arg0, arg1 any, arg2 ...any) *AtxFetcherGetAtxsCall {
+func (mr *MockAtxFetcherMockRecorder) GetAtxs(arg0, arg1 any, arg2 ...any) *MockAtxFetcherGetAtxsCall {
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{arg0, arg1}, arg2...)
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAtxs", reflect.TypeOf((*MockAtxFetcher)(nil).GetAtxs), varargs...)
-	return &AtxFetcherGetAtxsCall{Call: call}
+	return &MockAtxFetcherGetAtxsCall{Call: call}
 }
 
-// AtxFetcherGetAtxsCall wrap *gomock.Call
-type AtxFetcherGetAtxsCall struct {
+// MockAtxFetcherGetAtxsCall wrap *gomock.Call
+type MockAtxFetcherGetAtxsCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *AtxFetcherGetAtxsCall) Return(arg0 error) *AtxFetcherGetAtxsCall {
+func (c *MockAtxFetcherGetAtxsCall) Return(arg0 error) *MockAtxFetcherGetAtxsCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *AtxFetcherGetAtxsCall) Do(f func(context.Context, []types.ATXID, ...system.GetAtxOpt) error) *AtxFetcherGetAtxsCall {
+func (c *MockAtxFetcherGetAtxsCall) Do(f func(context.Context, []types.ATXID, ...system.GetAtxOpt) error) *MockAtxFetcherGetAtxsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *AtxFetcherGetAtxsCall) DoAndReturn(f func(context.Context, []types.ATXID, ...system.GetAtxOpt) error) *AtxFetcherGetAtxsCall {
+func (c *MockAtxFetcherGetAtxsCall) DoAndReturn(f func(context.Context, []types.ATXID, ...system.GetAtxOpt) error) *MockAtxFetcherGetAtxsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -545,31 +546,31 @@ func (m *MockTxFetcher) GetBlockTxs(arg0 context.Context, arg1 []types.Transacti
 }
 
 // GetBlockTxs indicates an expected call of GetBlockTxs.
-func (mr *MockTxFetcherMockRecorder) GetBlockTxs(arg0, arg1 any) *TxFetcherGetBlockTxsCall {
+func (mr *MockTxFetcherMockRecorder) GetBlockTxs(arg0, arg1 any) *MockTxFetcherGetBlockTxsCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlockTxs", reflect.TypeOf((*MockTxFetcher)(nil).GetBlockTxs), arg0, arg1)
-	return &TxFetcherGetBlockTxsCall{Call: call}
+	return &MockTxFetcherGetBlockTxsCall{Call: call}
 }
 
-// TxFetcherGetBlockTxsCall wrap *gomock.Call
-type TxFetcherGetBlockTxsCall struct {
+// MockTxFetcherGetBlockTxsCall wrap *gomock.Call
+type MockTxFetcherGetBlockTxsCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *TxFetcherGetBlockTxsCall) Return(arg0 error) *TxFetcherGetBlockTxsCall {
+func (c *MockTxFetcherGetBlockTxsCall) Return(arg0 error) *MockTxFetcherGetBlockTxsCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *TxFetcherGetBlockTxsCall) Do(f func(context.Context, []types.TransactionID) error) *TxFetcherGetBlockTxsCall {
+func (c *MockTxFetcherGetBlockTxsCall) Do(f func(context.Context, []types.TransactionID) error) *MockTxFetcherGetBlockTxsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *TxFetcherGetBlockTxsCall) DoAndReturn(f func(context.Context, []types.TransactionID) error) *TxFetcherGetBlockTxsCall {
+func (c *MockTxFetcherGetBlockTxsCall) DoAndReturn(f func(context.Context, []types.TransactionID) error) *MockTxFetcherGetBlockTxsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -583,31 +584,31 @@ func (m *MockTxFetcher) GetProposalTxs(arg0 context.Context, arg1 []types.Transa
 }
 
 // GetProposalTxs indicates an expected call of GetProposalTxs.
-func (mr *MockTxFetcherMockRecorder) GetProposalTxs(arg0, arg1 any) *TxFetcherGetProposalTxsCall {
+func (mr *MockTxFetcherMockRecorder) GetProposalTxs(arg0, arg1 any) *MockTxFetcherGetProposalTxsCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposalTxs", reflect.TypeOf((*MockTxFetcher)(nil).GetProposalTxs), arg0, arg1)
-	return &TxFetcherGetProposalTxsCall{Call: call}
+	return &MockTxFetcherGetProposalTxsCall{Call: call}
 }
 
-// TxFetcherGetProposalTxsCall wrap *gomock.Call
-type TxFetcherGetProposalTxsCall struct {
+// MockTxFetcherGetProposalTxsCall wrap *gomock.Call
+type MockTxFetcherGetProposalTxsCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *TxFetcherGetProposalTxsCall) Return(arg0 error) *TxFetcherGetProposalTxsCall {
+func (c *MockTxFetcherGetProposalTxsCall) Return(arg0 error) *MockTxFetcherGetProposalTxsCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *TxFetcherGetProposalTxsCall) Do(f func(context.Context, []types.TransactionID) error) *TxFetcherGetProposalTxsCall {
+func (c *MockTxFetcherGetProposalTxsCall) Do(f func(context.Context, []types.TransactionID) error) *MockTxFetcherGetProposalTxsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *TxFetcherGetProposalTxsCall) DoAndReturn(f func(context.Context, []types.TransactionID) error) *TxFetcherGetProposalTxsCall {
+func (c *MockTxFetcherGetProposalTxsCall) DoAndReturn(f func(context.Context, []types.TransactionID) error) *MockTxFetcherGetProposalTxsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -644,31 +645,31 @@ func (m *MockPoetProofFetcher) GetPoetProof(arg0 context.Context, arg1 types.Has
 }
 
 // GetPoetProof indicates an expected call of GetPoetProof.
-func (mr *MockPoetProofFetcherMockRecorder) GetPoetProof(arg0, arg1 any) *PoetProofFetcherGetPoetProofCall {
+func (mr *MockPoetProofFetcherMockRecorder) GetPoetProof(arg0, arg1 any) *MockPoetProofFetcherGetPoetProofCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPoetProof", reflect.TypeOf((*MockPoetProofFetcher)(nil).GetPoetProof), arg0, arg1)
-	return &PoetProofFetcherGetPoetProofCall{Call: call}
+	return &MockPoetProofFetcherGetPoetProofCall{Call: call}
 }
 
-// PoetProofFetcherGetPoetProofCall wrap *gomock.Call
-type PoetProofFetcherGetPoetProofCall struct {
+// MockPoetProofFetcherGetPoetProofCall wrap *gomock.Call
+type MockPoetProofFetcherGetPoetProofCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *PoetProofFetcherGetPoetProofCall) Return(arg0 error) *PoetProofFetcherGetPoetProofCall {
+func (c *MockPoetProofFetcherGetPoetProofCall) Return(arg0 error) *MockPoetProofFetcherGetPoetProofCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *PoetProofFetcherGetPoetProofCall) Do(f func(context.Context, types.Hash32) error) *PoetProofFetcherGetPoetProofCall {
+func (c *MockPoetProofFetcherGetPoetProofCall) Do(f func(context.Context, types.Hash32) error) *MockPoetProofFetcherGetPoetProofCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *PoetProofFetcherGetPoetProofCall) DoAndReturn(f func(context.Context, types.Hash32) error) *PoetProofFetcherGetPoetProofCall {
+func (c *MockPoetProofFetcherGetPoetProofCall) DoAndReturn(f func(context.Context, types.Hash32) error) *MockPoetProofFetcherGetPoetProofCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -705,31 +706,31 @@ func (m *MockBallotFetcher) GetBallots(arg0 context.Context, arg1 []types.Ballot
 }
 
 // GetBallots indicates an expected call of GetBallots.
-func (mr *MockBallotFetcherMockRecorder) GetBallots(arg0, arg1 any) *BallotFetcherGetBallotsCall {
+func (mr *MockBallotFetcherMockRecorder) GetBallots(arg0, arg1 any) *MockBallotFetcherGetBallotsCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBallots", reflect.TypeOf((*MockBallotFetcher)(nil).GetBallots), arg0, arg1)
-	return &BallotFetcherGetBallotsCall{Call: call}
+	return &MockBallotFetcherGetBallotsCall{Call: call}
 }
 
-// BallotFetcherGetBallotsCall wrap *gomock.Call
-type BallotFetcherGetBallotsCall struct {
+// MockBallotFetcherGetBallotsCall wrap *gomock.Call
+type MockBallotFetcherGetBallotsCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *BallotFetcherGetBallotsCall) Return(arg0 error) *BallotFetcherGetBallotsCall {
+func (c *MockBallotFetcherGetBallotsCall) Return(arg0 error) *MockBallotFetcherGetBallotsCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *BallotFetcherGetBallotsCall) Do(f func(context.Context, []types.BallotID) error) *BallotFetcherGetBallotsCall {
+func (c *MockBallotFetcherGetBallotsCall) Do(f func(context.Context, []types.BallotID) error) *MockBallotFetcherGetBallotsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *BallotFetcherGetBallotsCall) DoAndReturn(f func(context.Context, []types.BallotID) error) *BallotFetcherGetBallotsCall {
+func (c *MockBallotFetcherGetBallotsCall) DoAndReturn(f func(context.Context, []types.BallotID) error) *MockBallotFetcherGetBallotsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -766,31 +767,31 @@ func (m *MockProposalFetcher) GetProposals(arg0 context.Context, arg1 []types.Pr
 }
 
 // GetProposals indicates an expected call of GetProposals.
-func (mr *MockProposalFetcherMockRecorder) GetProposals(arg0, arg1 any) *ProposalFetcherGetProposalsCall {
+func (mr *MockProposalFetcherMockRecorder) GetProposals(arg0, arg1 any) *MockProposalFetcherGetProposalsCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposals", reflect.TypeOf((*MockProposalFetcher)(nil).GetProposals), arg0, arg1)
-	return &ProposalFetcherGetProposalsCall{Call: call}
+	return &MockProposalFetcherGetProposalsCall{Call: call}
 }
 
-// ProposalFetcherGetProposalsCall wrap *gomock.Call
-type ProposalFetcherGetProposalsCall struct {
+// MockProposalFetcherGetProposalsCall wrap *gomock.Call
+type MockProposalFetcherGetProposalsCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *ProposalFetcherGetProposalsCall) Return(arg0 error) *ProposalFetcherGetProposalsCall {
+func (c *MockProposalFetcherGetProposalsCall) Return(arg0 error) *MockProposalFetcherGetProposalsCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *ProposalFetcherGetProposalsCall) Do(f func(context.Context, []types.ProposalID) error) *ProposalFetcherGetProposalsCall {
+func (c *MockProposalFetcherGetProposalsCall) Do(f func(context.Context, []types.ProposalID) error) *MockProposalFetcherGetProposalsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *ProposalFetcherGetProposalsCall) DoAndReturn(f func(context.Context, []types.ProposalID) error) *ProposalFetcherGetProposalsCall {
+func (c *MockProposalFetcherGetProposalsCall) DoAndReturn(f func(context.Context, []types.ProposalID) error) *MockProposalFetcherGetProposalsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -827,31 +828,31 @@ func (m *MockActiveSetFetcher) GetActiveSet(arg0 context.Context, arg1 types.Has
 }
 
 // GetActiveSet indicates an expected call of GetActiveSet.
-func (mr *MockActiveSetFetcherMockRecorder) GetActiveSet(arg0, arg1 any) *ActiveSetFetcherGetActiveSetCall {
+func (mr *MockActiveSetFetcherMockRecorder) GetActiveSet(arg0, arg1 any) *MockActiveSetFetcherGetActiveSetCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetActiveSet", reflect.TypeOf((*MockActiveSetFetcher)(nil).GetActiveSet), arg0, arg1)
-	return &ActiveSetFetcherGetActiveSetCall{Call: call}
+	return &MockActiveSetFetcherGetActiveSetCall{Call: call}
 }
 
-// ActiveSetFetcherGetActiveSetCall wrap *gomock.Call
-type ActiveSetFetcherGetActiveSetCall struct {
+// MockActiveSetFetcherGetActiveSetCall wrap *gomock.Call
+type MockActiveSetFetcherGetActiveSetCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *ActiveSetFetcherGetActiveSetCall) Return(arg0 error) *ActiveSetFetcherGetActiveSetCall {
+func (c *MockActiveSetFetcherGetActiveSetCall) Return(arg0 error) *MockActiveSetFetcherGetActiveSetCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *ActiveSetFetcherGetActiveSetCall) Do(f func(context.Context, types.Hash32) error) *ActiveSetFetcherGetActiveSetCall {
+func (c *MockActiveSetFetcherGetActiveSetCall) Do(f func(context.Context, types.Hash32) error) *MockActiveSetFetcherGetActiveSetCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *ActiveSetFetcherGetActiveSetCall) DoAndReturn(f func(context.Context, types.Hash32) error) *ActiveSetFetcherGetActiveSetCall {
+func (c *MockActiveSetFetcherGetActiveSetCall) DoAndReturn(f func(context.Context, types.Hash32) error) *MockActiveSetFetcherGetActiveSetCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -886,31 +887,31 @@ func (m *MockPeerTracker) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash3
 }
 
 // RegisterPeerHashes indicates an expected call of RegisterPeerHashes.
-func (mr *MockPeerTrackerMockRecorder) RegisterPeerHashes(peer, hashes any) *PeerTrackerRegisterPeerHashesCall {
+func (mr *MockPeerTrackerMockRecorder) RegisterPeerHashes(peer, hashes any) *MockPeerTrackerRegisterPeerHashesCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterPeerHashes", reflect.TypeOf((*MockPeerTracker)(nil).RegisterPeerHashes), peer, hashes)
-	return &PeerTrackerRegisterPeerHashesCall{Call: call}
+	return &MockPeerTrackerRegisterPeerHashesCall{Call: call}
 }
 
-// PeerTrackerRegisterPeerHashesCall wrap *gomock.Call
-type PeerTrackerRegisterPeerHashesCall struct {
+// MockPeerTrackerRegisterPeerHashesCall wrap *gomock.Call
+type MockPeerTrackerRegisterPeerHashesCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *PeerTrackerRegisterPeerHashesCall) Return() *PeerTrackerRegisterPeerHashesCall {
+func (c *MockPeerTrackerRegisterPeerHashesCall) Return() *MockPeerTrackerRegisterPeerHashesCall {
 	c.Call = c.Call.Return()
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *PeerTrackerRegisterPeerHashesCall) Do(f func(p2p.Peer, []types.Hash32)) *PeerTrackerRegisterPeerHashesCall {
+func (c *MockPeerTrackerRegisterPeerHashesCall) Do(f func(p2p.Peer, []types.Hash32)) *MockPeerTrackerRegisterPeerHashesCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *PeerTrackerRegisterPeerHashesCall) DoAndReturn(f func(p2p.Peer, []types.Hash32)) *PeerTrackerRegisterPeerHashesCall {
+func (c *MockPeerTrackerRegisterPeerHashesCall) DoAndReturn(f func(p2p.Peer, []types.Hash32)) *MockPeerTrackerRegisterPeerHashesCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

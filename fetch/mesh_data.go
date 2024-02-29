@@ -221,9 +221,9 @@ func (f *Fetch) GetPoetProof(ctx context.Context, id types.Hash32) error {
 func (f *Fetch) GetMaliciousIDs(ctx context.Context, peer p2p.Peer) ([]byte, error) {
 	if f.cfg.Streaming {
 		var b []byte
-		if err := f.servers[malProtocol].StreamRequest(
-			ctx, peer, []byte{},
-			func(ctx context.Context, s io.ReadWriter) error {
+		if err := f.meteredStreamRequest(
+			ctx, malProtocol, peer, []byte{},
+			func(ctx context.Context, s io.ReadWriter) (int, error) {
 				return server.ReadResponse(s, func(respLen uint32) (n int, err error) {
 					b = make([]byte, respLen)
 					if _, err := io.ReadFull(s, b); err != nil {
@@ -237,35 +237,28 @@ func (f *Fetch) GetMaliciousIDs(ctx context.Context, peer p2p.Peer) ([]byte, err
 		}
 		return b, nil
 	} else {
-		return f.servers[malProtocol].Request(ctx, peer, []byte{})
+		return f.meteredRequest(ctx, malProtocol, peer, []byte{})
 	}
 }
 
 // GetLayerData get layer data from peers.
 func (f *Fetch) GetLayerData(ctx context.Context, peer p2p.Peer, lid types.LayerID) ([]byte, error) {
-	lidBytes, err := codec.Encode(&lid)
-	if err != nil {
-		return nil, err
-	}
-	return f.servers[lyrDataProtocol].Request(ctx, peer, lidBytes)
+	lidBytes := codec.MustEncode(&lid)
+	return f.meteredRequest(ctx, lyrDataProtocol, peer, lidBytes)
 }
 
 func (f *Fetch) GetLayerOpinions(ctx context.Context, peer p2p.Peer, lid types.LayerID) ([]byte, error) {
-	req := OpinionRequest{
+	reqData := codec.MustEncode(&OpinionRequest{
 		Layer: lid,
-	}
-	reqData, err := codec.Encode(&req)
-	if err != nil {
-		return nil, err
-	}
-	return f.servers[OpnProtocol].Request(ctx, peer, reqData)
+	})
+	return f.meteredRequest(ctx, OpnProtocol, peer, reqData)
 }
 
 func (f *Fetch) peerEpochInfoStreamed(ctx context.Context, peer p2p.Peer, epochBytes []byte) (*EpochData, error) {
 	var ed EpochData
-	if err := f.servers[atxProtocol].StreamRequest(
-		ctx, peer, epochBytes,
-		func(ctx context.Context, s io.ReadWriter) error {
+	if err := f.meteredStreamRequest(
+		ctx, atxProtocol, peer, epochBytes,
+		func(ctx context.Context, s io.ReadWriter) (int, error) {
 			return server.ReadResponse(s, func(respLen uint32) (n int, err error) {
 				return codec.DecodeFrom(s, &ed)
 			})
@@ -281,20 +274,19 @@ func (f *Fetch) PeerEpochInfo(ctx context.Context, peer p2p.Peer, epoch types.Ep
 	f.logger.WithContext(ctx).With().Debug("requesting epoch info from peer",
 		log.Stringer("peer", peer),
 		log.Stringer("epoch", epoch))
+	epochBytes := codec.MustEncode(epoch)
 
-	epochBytes, err := codec.Encode(epoch)
-	if err != nil {
-		return nil, err
-	}
-
-	var ed *EpochData
+	var (
+		ed  *EpochData
+		err error
+	)
 	if f.cfg.Streaming {
 		ed, err = f.peerEpochInfoStreamed(ctx, peer, epochBytes)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		data, err := f.servers[atxProtocol].Request(ctx, peer, epochBytes)
+		data, err := f.meteredRequest(ctx, atxProtocol, peer, epochBytes)
 		if err != nil {
 			return nil, err
 		}
@@ -310,9 +302,9 @@ func (f *Fetch) PeerEpochInfo(ctx context.Context, peer p2p.Peer, epoch types.Ep
 
 func (f *Fetch) peerMeshHashesStreamed(ctx context.Context, peer p2p.Peer, reqBytes []byte) ([]types.Hash32, error) {
 	var hashes []types.Hash32
-	if err := f.servers[meshHashProtocol].StreamRequest(
-		ctx, peer, reqBytes,
-		func(ctx context.Context, s io.ReadWriter) error {
+	if err := f.meteredStreamRequest(
+		ctx, meshHashProtocol, peer, reqBytes,
+		func(ctx context.Context, s io.ReadWriter) (int, error) {
 			return server.ReadResponse(s, func(respLen uint32) (n int, err error) {
 				hashes, n, err = codec.ReadSlice[types.Hash32](s)
 				return n, err
@@ -342,7 +334,7 @@ func (f *Fetch) PeerMeshHashes(ctx context.Context, peer p2p.Peer, req *MeshHash
 			return nil, err
 		}
 	} else {
-		data, err := f.servers[meshHashProtocol].Request(ctx, peer, reqData)
+		data, err := f.meteredRequest(ctx, meshHashProtocol, peer, reqData)
 		if err != nil {
 			return nil, err
 		}
@@ -371,7 +363,7 @@ func (f *Fetch) GetCert(
 	reqData := codec.MustEncode(req)
 
 	for _, peer := range peers {
-		data, err := f.servers[OpnProtocol].Request(ctx, peer, reqData)
+		data, err := f.meteredRequest(ctx, OpnProtocol, peer, reqData)
 		if err != nil {
 			f.logger.With().Debug("failed to get cert", log.Stringer("peer", peer), log.Err(err))
 			continue

@@ -5,6 +5,7 @@
 //
 //	mockgen -typed -package=mocks -destination=./mocks/tortoise.go -source=./tortoise.go
 //
+
 // Package mocks is a generated GoMock package.
 package mocks
 
@@ -49,31 +50,31 @@ func (m *MockTortoise) GetMissingActiveSet(arg0 types.EpochID, arg1 []types.ATXI
 }
 
 // GetMissingActiveSet indicates an expected call of GetMissingActiveSet.
-func (mr *MockTortoiseMockRecorder) GetMissingActiveSet(arg0, arg1 any) *TortoiseGetMissingActiveSetCall {
+func (mr *MockTortoiseMockRecorder) GetMissingActiveSet(arg0, arg1 any) *MockTortoiseGetMissingActiveSetCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMissingActiveSet", reflect.TypeOf((*MockTortoise)(nil).GetMissingActiveSet), arg0, arg1)
-	return &TortoiseGetMissingActiveSetCall{Call: call}
+	return &MockTortoiseGetMissingActiveSetCall{Call: call}
 }
 
-// TortoiseGetMissingActiveSetCall wrap *gomock.Call
-type TortoiseGetMissingActiveSetCall struct {
+// MockTortoiseGetMissingActiveSetCall wrap *gomock.Call
+type MockTortoiseGetMissingActiveSetCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *TortoiseGetMissingActiveSetCall) Return(arg0 []types.ATXID) *TortoiseGetMissingActiveSetCall {
+func (c *MockTortoiseGetMissingActiveSetCall) Return(arg0 []types.ATXID) *MockTortoiseGetMissingActiveSetCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *TortoiseGetMissingActiveSetCall) Do(f func(types.EpochID, []types.ATXID) []types.ATXID) *TortoiseGetMissingActiveSetCall {
+func (c *MockTortoiseGetMissingActiveSetCall) Do(f func(types.EpochID, []types.ATXID) []types.ATXID) *MockTortoiseGetMissingActiveSetCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *TortoiseGetMissingActiveSetCall) DoAndReturn(f func(types.EpochID, []types.ATXID) []types.ATXID) *TortoiseGetMissingActiveSetCall {
+func (c *MockTortoiseGetMissingActiveSetCall) DoAndReturn(f func(types.EpochID, []types.ATXID) []types.ATXID) *MockTortoiseGetMissingActiveSetCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -87,31 +88,31 @@ func (m *MockTortoise) LatestComplete() types.LayerID {
 }
 
 // LatestComplete indicates an expected call of LatestComplete.
-func (mr *MockTortoiseMockRecorder) LatestComplete() *TortoiseLatestCompleteCall {
+func (mr *MockTortoiseMockRecorder) LatestComplete() *MockTortoiseLatestCompleteCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LatestComplete", reflect.TypeOf((*MockTortoise)(nil).LatestComplete))
-	return &TortoiseLatestCompleteCall{Call: call}
+	return &MockTortoiseLatestCompleteCall{Call: call}
 }
 
-// TortoiseLatestCompleteCall wrap *gomock.Call
-type TortoiseLatestCompleteCall struct {
+// MockTortoiseLatestCompleteCall wrap *gomock.Call
+type MockTortoiseLatestCompleteCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *TortoiseLatestCompleteCall) Return(arg0 types.LayerID) *TortoiseLatestCompleteCall {
+func (c *MockTortoiseLatestCompleteCall) Return(arg0 types.LayerID) *MockTortoiseLatestCompleteCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *TortoiseLatestCompleteCall) Do(f func() types.LayerID) *TortoiseLatestCompleteCall {
+func (c *MockTortoiseLatestCompleteCall) Do(f func() types.LayerID) *MockTortoiseLatestCompleteCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *TortoiseLatestCompleteCall) DoAndReturn(f func() types.LayerID) *TortoiseLatestCompleteCall {
+func (c *MockTortoiseLatestCompleteCall) DoAndReturn(f func() types.LayerID) *MockTortoiseLatestCompleteCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -125,31 +126,31 @@ func (m *MockTortoise) OnApplied(arg0 types.LayerID, arg1 types.Hash32) bool {
 }
 
 // OnApplied indicates an expected call of OnApplied.
-func (mr *MockTortoiseMockRecorder) OnApplied(arg0, arg1 any) *TortoiseOnAppliedCall {
+func (mr *MockTortoiseMockRecorder) OnApplied(arg0, arg1 any) *MockTortoiseOnAppliedCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnApplied", reflect.TypeOf((*MockTortoise)(nil).OnApplied), arg0, arg1)
-	return &TortoiseOnAppliedCall{Call: call}
+	return &MockTortoiseOnAppliedCall{Call: call}
 }
 
-// TortoiseOnAppliedCall wrap *gomock.Call
-type TortoiseOnAppliedCall struct {
+// MockTortoiseOnAppliedCall wrap *gomock.Call
+type MockTortoiseOnAppliedCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *TortoiseOnAppliedCall) Return(arg0 bool) *TortoiseOnAppliedCall {
+func (c *MockTortoiseOnAppliedCall) Return(arg0 bool) *MockTortoiseOnAppliedCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *TortoiseOnAppliedCall) Do(f func(types.LayerID, types.Hash32) bool) *TortoiseOnAppliedCall {
+func (c *MockTortoiseOnAppliedCall) Do(f func(types.LayerID, types.Hash32) bool) *MockTortoiseOnAppliedCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *TortoiseOnAppliedCall) DoAndReturn(f func(types.LayerID, types.Hash32) bool) *TortoiseOnAppliedCall {
+func (c *MockTortoiseOnAppliedCall) DoAndReturn(f func(types.LayerID, types.Hash32) bool) *MockTortoiseOnAppliedCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -161,31 +162,31 @@ func (m *MockTortoise) OnAtx(arg0 *types.AtxTortoiseData) {
 }
 
 // OnAtx indicates an expected call of OnAtx.
-func (mr *MockTortoiseMockRecorder) OnAtx(arg0 any) *TortoiseOnAtxCall {
+func (mr *MockTortoiseMockRecorder) OnAtx(arg0 any) *MockTortoiseOnAtxCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnAtx", reflect.TypeOf((*MockTortoise)(nil).OnAtx), arg0)
-	return &TortoiseOnAtxCall{Call: call}
+	return &MockTortoiseOnAtxCall{Call: call}
 }
 
-// TortoiseOnAtxCall wrap *gomock.Call
-type TortoiseOnAtxCall struct {
+// MockTortoiseOnAtxCall wrap *gomock.Call
+type MockTortoiseOnAtxCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *TortoiseOnAtxCall) Return() *TortoiseOnAtxCall {
+func (c *MockTortoiseOnAtxCall) Return() *MockTortoiseOnAtxCall {
 	c.Call = c.Call.Return()
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *TortoiseOnAtxCall) Do(f func(*types.AtxTortoiseData)) *TortoiseOnAtxCall {
+func (c *MockTortoiseOnAtxCall) Do(f func(*types.AtxTortoiseData)) *MockTortoiseOnAtxCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *TortoiseOnAtxCall) DoAndReturn(f func(*types.AtxTortoiseData)) *TortoiseOnAtxCall {
+func (c *MockTortoiseOnAtxCall) DoAndReturn(f func(*types.AtxTortoiseData)) *MockTortoiseOnAtxCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -197,31 +198,31 @@ func (m *MockTortoise) OnBlock(arg0 types.BlockHeader) {
 }
 
 // OnBlock indicates an expected call of OnBlock.
-func (mr *MockTortoiseMockRecorder) OnBlock(arg0 any) *TortoiseOnBlockCall {
+func (mr *MockTortoiseMockRecorder) OnBlock(arg0 any) *MockTortoiseOnBlockCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnBlock", reflect.TypeOf((*MockTortoise)(nil).OnBlock), arg0)
-	return &TortoiseOnBlockCall{Call: call}
+	return &MockTortoiseOnBlockCall{Call: call}
 }
 
-// TortoiseOnBlockCall wrap *gomock.Call
-type TortoiseOnBlockCall struct {
+// MockTortoiseOnBlockCall wrap *gomock.Call
+type MockTortoiseOnBlockCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *TortoiseOnBlockCall) Return() *TortoiseOnBlockCall {
+func (c *MockTortoiseOnBlockCall) Return() *MockTortoiseOnBlockCall {
 	c.Call = c.Call.Return()
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *TortoiseOnBlockCall) Do(f func(types.BlockHeader)) *TortoiseOnBlockCall {
+func (c *MockTortoiseOnBlockCall) Do(f func(types.BlockHeader)) *MockTortoiseOnBlockCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *TortoiseOnBlockCall) DoAndReturn(f func(types.BlockHeader)) *TortoiseOnBlockCall {
+func (c *MockTortoiseOnBlockCall) DoAndReturn(f func(types.BlockHeader)) *MockTortoiseOnBlockCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -233,31 +234,31 @@ func (m *MockTortoise) OnHareOutput(arg0 types.LayerID, arg1 types.BlockID) {
 }
 
 // OnHareOutput indicates an expected call of OnHareOutput.
-func (mr *MockTortoiseMockRecorder) OnHareOutput(arg0, arg1 any) *TortoiseOnHareOutputCall {
+func (mr *MockTortoiseMockRecorder) OnHareOutput(arg0, arg1 any) *MockTortoiseOnHareOutputCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnHareOutput", reflect.TypeOf((*MockTortoise)(nil).OnHareOutput), arg0, arg1)
-	return &TortoiseOnHareOutputCall{Call: call}
+	return &MockTortoiseOnHareOutputCall{Call: call}
 }
 
-// TortoiseOnHareOutputCall wrap *gomock.Call
-type TortoiseOnHareOutputCall struct {
+// MockTortoiseOnHareOutputCall wrap *gomock.Call
+type MockTortoiseOnHareOutputCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *TortoiseOnHareOutputCall) Return() *TortoiseOnHareOutputCall {
+func (c *MockTortoiseOnHareOutputCall) Return() *MockTortoiseOnHareOutputCall {
 	c.Call = c.Call.Return()
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *TortoiseOnHareOutputCall) Do(f func(types.LayerID, types.BlockID)) *TortoiseOnHareOutputCall {
+func (c *MockTortoiseOnHareOutputCall) Do(f func(types.LayerID, types.BlockID)) *MockTortoiseOnHareOutputCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *TortoiseOnHareOutputCall) DoAndReturn(f func(types.LayerID, types.BlockID)) *TortoiseOnHareOutputCall {
+func (c *MockTortoiseOnHareOutputCall) DoAndReturn(f func(types.LayerID, types.BlockID)) *MockTortoiseOnHareOutputCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -269,31 +270,31 @@ func (m *MockTortoise) OnMalfeasance(arg0 types.NodeID) {
 }
 
 // OnMalfeasance indicates an expected call of OnMalfeasance.
-func (mr *MockTortoiseMockRecorder) OnMalfeasance(arg0 any) *TortoiseOnMalfeasanceCall {
+func (mr *MockTortoiseMockRecorder) OnMalfeasance(arg0 any) *MockTortoiseOnMalfeasanceCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnMalfeasance", reflect.TypeOf((*MockTortoise)(nil).OnMalfeasance), arg0)
-	return &TortoiseOnMalfeasanceCall{Call: call}
+	return &MockTortoiseOnMalfeasanceCall{Call: call}
 }
 
-// TortoiseOnMalfeasanceCall wrap *gomock.Call
-type TortoiseOnMalfeasanceCall struct {
+// MockTortoiseOnMalfeasanceCall wrap *gomock.Call
+type MockTortoiseOnMalfeasanceCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *TortoiseOnMalfeasanceCall) Return() *TortoiseOnMalfeasanceCall {
+func (c *MockTortoiseOnMalfeasanceCall) Return() *MockTortoiseOnMalfeasanceCall {
 	c.Call = c.Call.Return()
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *TortoiseOnMalfeasanceCall) Do(f func(types.NodeID)) *TortoiseOnMalfeasanceCall {
+func (c *MockTortoiseOnMalfeasanceCall) Do(f func(types.NodeID)) *MockTortoiseOnMalfeasanceCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *TortoiseOnMalfeasanceCall) DoAndReturn(f func(types.NodeID)) *TortoiseOnMalfeasanceCall {
+func (c *MockTortoiseOnMalfeasanceCall) DoAndReturn(f func(types.NodeID)) *MockTortoiseOnMalfeasanceCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -305,31 +306,31 @@ func (m *MockTortoise) OnWeakCoin(arg0 types.LayerID, arg1 bool) {
 }
 
 // OnWeakCoin indicates an expected call of OnWeakCoin.
-func (mr *MockTortoiseMockRecorder) OnWeakCoin(arg0, arg1 any) *TortoiseOnWeakCoinCall {
+func (mr *MockTortoiseMockRecorder) OnWeakCoin(arg0, arg1 any) *MockTortoiseOnWeakCoinCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnWeakCoin", reflect.TypeOf((*MockTortoise)(nil).OnWeakCoin), arg0, arg1)
-	return &TortoiseOnWeakCoinCall{Call: call}
+	return &MockTortoiseOnWeakCoinCall{Call: call}
 }
 
-// TortoiseOnWeakCoinCall wrap *gomock.Call
-type TortoiseOnWeakCoinCall struct {
+// MockTortoiseOnWeakCoinCall wrap *gomock.Call
+type MockTortoiseOnWeakCoinCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *TortoiseOnWeakCoinCall) Return() *TortoiseOnWeakCoinCall {
+func (c *MockTortoiseOnWeakCoinCall) Return() *MockTortoiseOnWeakCoinCall {
 	c.Call = c.Call.Return()
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *TortoiseOnWeakCoinCall) Do(f func(types.LayerID, bool)) *TortoiseOnWeakCoinCall {
+func (c *MockTortoiseOnWeakCoinCall) Do(f func(types.LayerID, bool)) *MockTortoiseOnWeakCoinCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *TortoiseOnWeakCoinCall) DoAndReturn(f func(types.LayerID, bool)) *TortoiseOnWeakCoinCall {
+func (c *MockTortoiseOnWeakCoinCall) DoAndReturn(f func(types.LayerID, bool)) *MockTortoiseOnWeakCoinCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -341,31 +342,31 @@ func (m *MockTortoise) TallyVotes(arg0 context.Context, arg1 types.LayerID) {
 }
 
 // TallyVotes indicates an expected call of TallyVotes.
-func (mr *MockTortoiseMockRecorder) TallyVotes(arg0, arg1 any) *TortoiseTallyVotesCall {
+func (mr *MockTortoiseMockRecorder) TallyVotes(arg0, arg1 any) *MockTortoiseTallyVotesCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TallyVotes", reflect.TypeOf((*MockTortoise)(nil).TallyVotes), arg0, arg1)
-	return &TortoiseTallyVotesCall{Call: call}
+	return &MockTortoiseTallyVotesCall{Call: call}
 }
 
-// TortoiseTallyVotesCall wrap *gomock.Call
-type TortoiseTallyVotesCall struct {
+// MockTortoiseTallyVotesCall wrap *gomock.Call
+type MockTortoiseTallyVotesCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *TortoiseTallyVotesCall) Return() *TortoiseTallyVotesCall {
+func (c *MockTortoiseTallyVotesCall) Return() *MockTortoiseTallyVotesCall {
 	c.Call = c.Call.Return()
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *TortoiseTallyVotesCall) Do(f func(context.Context, types.LayerID)) *TortoiseTallyVotesCall {
+func (c *MockTortoiseTallyVotesCall) Do(f func(context.Context, types.LayerID)) *MockTortoiseTallyVotesCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *TortoiseTallyVotesCall) DoAndReturn(f func(context.Context, types.LayerID)) *TortoiseTallyVotesCall {
+func (c *MockTortoiseTallyVotesCall) DoAndReturn(f func(context.Context, types.LayerID)) *MockTortoiseTallyVotesCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -379,31 +380,31 @@ func (m *MockTortoise) Updates() []result.Layer {
 }
 
 // Updates indicates an expected call of Updates.
-func (mr *MockTortoiseMockRecorder) Updates() *TortoiseUpdatesCall {
+func (mr *MockTortoiseMockRecorder) Updates() *MockTortoiseUpdatesCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Updates", reflect.TypeOf((*MockTortoise)(nil).Updates))
-	return &TortoiseUpdatesCall{Call: call}
+	return &MockTortoiseUpdatesCall{Call: call}
 }
 
-// TortoiseUpdatesCall wrap *gomock.Call
-type TortoiseUpdatesCall struct {
+// MockTortoiseUpdatesCall wrap *gomock.Call
+type MockTortoiseUpdatesCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *TortoiseUpdatesCall) Return(arg0 []result.Layer) *TortoiseUpdatesCall {
+func (c *MockTortoiseUpdatesCall) Return(arg0 []result.Layer) *MockTortoiseUpdatesCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *TortoiseUpdatesCall) Do(f func() []result.Layer) *TortoiseUpdatesCall {
+func (c *MockTortoiseUpdatesCall) Do(f func() []result.Layer) *MockTortoiseUpdatesCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *TortoiseUpdatesCall) DoAndReturn(f func() []result.Layer) *TortoiseUpdatesCall {
+func (c *MockTortoiseUpdatesCall) DoAndReturn(f func() []result.Layer) *MockTortoiseUpdatesCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

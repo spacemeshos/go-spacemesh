@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
@@ -25,7 +26,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
-	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
 
@@ -35,12 +35,16 @@ type blobKey struct {
 }
 
 type testP2PFetch struct {
-	t            *testing.T
-	clientDB     *sql.Database
-	clientCDB    *datastore.CachedDB
-	clientFetch  *Fetch
-	serverID     peer.ID
-	serverDB     *sql.Database
+	t        *testing.T
+	clientDB *sql.Database
+	// client proposals
+	clientPDB   *store.Store
+	clientCDB   *datastore.CachedDB
+	clientFetch *Fetch
+	serverID    peer.ID
+	serverDB    *sql.Database
+	// server proposals
+	serverPDB    *store.Store
 	serverCDB    *datastore.CachedDB
 	serverFetch  *Fetch
 	recvMtx      sync.Mutex
@@ -107,14 +111,16 @@ func createP2PFetch(
 	tpf := &testP2PFetch{
 		t:            t,
 		clientDB:     clientDB,
+		clientPDB:    store.New(store.WithLogger(lg.Zap())),
 		clientCDB:    datastore.NewCachedDB(clientDB, lg),
 		serverID:     serverHost.ID(),
 		serverDB:     serverDB,
+		serverPDB:    store.New(store.WithLogger(lg.Zap())),
 		serverCDB:    datastore.NewCachedDB(serverDB, lg),
 		receivedData: make(map[blobKey][]byte),
 	}
 
-	tpf.serverFetch = NewFetch(tpf.serverCDB, serverHost,
+	tpf.serverFetch = NewFetch(tpf.serverCDB, tpf.serverPDB, serverHost,
 		WithContext(ctx),
 		WithConfig(p2pFetchCfg(serverStreaming)),
 		WithLogger(lg))
@@ -125,7 +131,7 @@ func createP2PFetch(
 	require.NoError(t, tpf.serverFetch.Start())
 	t.Cleanup(tpf.serverFetch.Stop)
 
-	tpf.clientFetch = NewFetch(tpf.clientCDB, clientHost,
+	tpf.clientFetch = NewFetch(tpf.clientCDB, tpf.clientPDB, clientHost,
 		WithContext(ctx),
 		WithConfig(p2pFetchCfg(clientStreaming)),
 		WithLogger(lg))
@@ -413,11 +419,18 @@ func TestP2PGetProp(t *testing.T) {
 				Signature: types.RandomEdSignature(),
 			}
 			proposal.SetID(types.ProposalID{7, 8})
-			require.NoError(t, proposals.Add(tpf.serverCDB, proposal))
+			require.NoError(t, tpf.serverPDB.Add(proposal))
 			tpf.verifyGetHash(
 				func() error {
+					id := proposal.ID()
+					if errStr != "" {
+						// Proposals are not fetched from SQLite DB
+						// so simulating db error by closing it is not
+						// going to work
+						id = types.RandomProposalID()
+					}
 					return tpf.clientFetch.GetProposals(
-						context.Background(), []types.ProposalID{proposal.ID()})
+						context.Background(), []types.ProposalID{id})
 				},
 				errStr, "prop", proposal.ID().AsHash32(), proposal.ID().Bytes(),
 				codec.MustEncode(proposal))

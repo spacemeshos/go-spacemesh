@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
+	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -30,12 +31,12 @@ type testHandler struct {
 	cdb *datastore.CachedDB
 }
 
-func createTestHandler(t testing.TB) *testHandler {
+func createTestHandler(t testing.TB, opts ...sql.Opt) *testHandler {
 	lg := logtest.New(t)
-	db := sql.InMemory()
+	db := sql.InMemory(opts...)
 	cdb := datastore.NewCachedDB(db, lg)
 	return &testHandler{
-		handler: newHandler(cdb, datastore.NewBlobStore(cdb), lg),
+		handler: newHandler(cdb, datastore.NewBlobStore(cdb, store.New()), lg),
 		db:      db,
 		cdb:     cdb,
 	}
@@ -347,6 +348,47 @@ func TestHandleEpochInfoReq(t *testing.T) {
 			})
 		})
 	}
+}
+
+func TestHandleEpochInfoReqWithQueryCache(t *testing.T) {
+	th := createTestHandler(t, sql.WithQueryCache(true))
+	epoch := types.EpochID(11)
+	var expected EpochData
+
+	for i := 0; i < 10; i++ {
+		vatx := newAtx(t, epoch)
+		require.NoError(t, atxs.Add(th.cdb, vatx))
+		expected.AtxIDs = append(expected.AtxIDs, vatx.ID())
+	}
+
+	qc := th.cdb.Executor.(interface{ QueryCount() int })
+	require.Equal(t, 10, qc.QueryCount())
+	epochBytes, err := codec.Encode(epoch)
+	require.NoError(t, err)
+
+	var got EpochData
+	for i := 0; i < 3; i++ {
+		out, err := th.handleEpochInfoReq(context.Background(), epochBytes)
+		require.NoError(t, err)
+		require.NoError(t, codec.Decode(out, &got))
+		require.ElementsMatch(t, expected.AtxIDs, got.AtxIDs)
+		require.Equal(t, 11, qc.QueryCount())
+	}
+
+	// Add another ATX which should be appended to the cached slice
+	vatx := newAtx(t, epoch)
+	require.NoError(t, atxs.Add(th.cdb, vatx))
+	expected.AtxIDs = append(expected.AtxIDs, vatx.ID())
+	require.Equal(t, 12, qc.QueryCount())
+
+	out, err := th.handleEpochInfoReq(context.Background(), epochBytes)
+	require.NoError(t, err)
+	require.NoError(t, codec.Decode(out, &got))
+	require.ElementsMatch(t, expected.AtxIDs, got.AtxIDs)
+	// The query count is not incremented as the slice is still
+	// cached and the new atx is just appended to it, even though
+	// the response is re-serialized.
+	require.Equal(t, 12, qc.QueryCount())
 }
 
 func TestHandleMaliciousIDsReq(t *testing.T) {

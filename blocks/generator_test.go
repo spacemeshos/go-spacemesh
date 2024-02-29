@@ -22,12 +22,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
-	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
@@ -75,7 +75,16 @@ func createTestGenerator(t *testing.T) *testGenerator {
 	lg := logtest.New(t)
 	db := sql.InMemory()
 	data := atxsdata.New()
-	tg.Generator = NewGenerator(db, data, tg.mockExec, tg.mockMesh, tg.mockFetch, tg.mockCert, tg.mockPatrol,
+	proposals := store.New()
+	tg.Generator = NewGenerator(
+		db,
+		data,
+		proposals,
+		tg.mockExec,
+		tg.mockMesh,
+		tg.mockFetch,
+		tg.mockCert,
+		tg.mockPatrol,
 		WithGeneratorLogger(lg),
 		WithHareOutputChan(ch),
 		WithConfig(testConfig()))
@@ -167,6 +176,7 @@ func createModifiedATXs(
 func createProposals(
 	t *testing.T,
 	db sql.Executor,
+	store *store.Store,
 	layerID types.LayerID,
 	meshHash types.Hash32,
 	signers []*signing.EdSigner,
@@ -185,7 +195,7 @@ func createProposals(
 		if to > len(txIDs) {
 			to = len(txIDs)
 		}
-		p := createProposal(t, db, activeSet, layerID, meshHash, activeSet[i], signers[i], txIDs[from:to], 1)
+		p := createProposal(t, db, store, activeSet, layerID, meshHash, activeSet[i], signers[i], txIDs[from:to], 1)
 		plist = append(plist, p)
 	}
 	return plist
@@ -194,6 +204,7 @@ func createProposals(
 func createProposal(
 	t *testing.T,
 	db sql.Executor,
+	store *store.Store,
 	activeSet types.ATXIDList,
 	lid types.LayerID,
 	meshHash types.Hash32,
@@ -226,7 +237,7 @@ func createProposal(
 	p.SmesherID = signer.NodeID()
 	require.NoError(t, p.Initialize())
 	require.NoError(t, ballots.Add(db, &p.Ballot))
-	require.NoError(t, proposals.Add(db, p))
+	store.Add(p)
 	activesets.Add(db, activeSet.Hash(), &types.EpochActiveSet{Set: activeSet})
 	return p
 }
@@ -259,6 +270,7 @@ func genData(
 	t *testing.T,
 	db *sql.Database,
 	data *atxsdata.Data,
+	store *store.Store,
 	lid types.LayerID,
 	optimistic bool,
 ) hare3.ConsensusOutput {
@@ -272,7 +284,7 @@ func genData(
 		meshHash = types.RandomHash()
 	}
 	require.NoError(t, layers.SetMeshHash(db, lid.Sub(1), meshHash))
-	plist := createProposals(t, db, lid, meshHash, signers, activeSet, txIDs)
+	plist := createProposals(t, db, store, lid, meshHash, signers, activeSet, txIDs)
 	return hare3.ConsensusOutput{
 		Layer:     lid,
 		Proposals: types.ToProposalIDs(plist),
@@ -298,11 +310,11 @@ func Test_SerialExecution(t *testing.T) {
 	tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), lid, gomock.Any())
 	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), lid, gomock.Any(), false)
 	tg.mockPatrol.EXPECT().CompleteHare(lid)
-	tg.hareCh <- genData(t, tg.db, tg.atxs, lid, false)
+	tg.hareCh <- genData(t, tg.db, tg.atxs, tg.proposals, lid, false)
 	require.Eventually(t, func() bool { return len(tg.hareCh) == 0 }, time.Second, 100*time.Millisecond)
 
 	// nothing happens
-	tg.hareCh <- genData(t, tg.db, tg.atxs, layerID+1, true)
+	tg.hareCh <- genData(t, tg.db, tg.atxs, tg.proposals, layerID+1, true)
 	require.Eventually(t, func() bool { return len(tg.hareCh) == 0 }, time.Second, 100*time.Millisecond)
 
 	lid = layerID + 2
@@ -311,7 +323,7 @@ func Test_SerialExecution(t *testing.T) {
 	tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), lid, gomock.Any())
 	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), lid, gomock.Any(), false)
 	tg.mockPatrol.EXPECT().CompleteHare(lid)
-	tg.hareCh <- genData(t, tg.db, tg.atxs, lid, false)
+	tg.hareCh <- genData(t, tg.db, tg.atxs, tg.proposals, lid, false)
 	require.Eventually(t, func() bool { return len(tg.hareCh) == 0 }, time.Second, 100*time.Millisecond)
 
 	for _, lyr := range []types.LayerID{layerID, layerID + 1} {
@@ -323,7 +335,7 @@ func Test_SerialExecution(t *testing.T) {
 		tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), lyr, gomock.Any(), true)
 		tg.mockPatrol.EXPECT().CompleteHare(lyr)
 	}
-	tg.hareCh <- genData(t, tg.db, tg.atxs, layerID, true)
+	tg.hareCh <- genData(t, tg.db, tg.atxs, tg.proposals, layerID, true)
 	require.Eventually(t, func() bool { return len(tg.hareCh) == 0 }, time.Second, 100*time.Millisecond)
 	tg.Stop()
 }
@@ -373,7 +385,7 @@ func Test_run(t *testing.T) {
 			txIDs := createAndSaveTxs(t, numTXs, tg.db)
 			signers, atxes := createATXs(t, tg.atxs, (layerID.GetEpoch() - 1).FirstLayer(), numProposals)
 			activeSet := types.ToATXIDs(atxes)
-			plist := createProposals(t, tg.db, layerID, meshHash, signers, activeSet, txIDs)
+			plist := createProposals(t, tg.db, tg.proposals, layerID, meshHash, signers, activeSet, txIDs)
 			pids := types.ToProposalIDs(plist)
 			tg.mockFetch.EXPECT().GetProposals(gomock.Any(), pids)
 
@@ -487,7 +499,7 @@ func Test_run_DiffHasFromConsensus(t *testing.T) {
 	signers, atxes := createATXs(t, tg.atxs, (layerID.GetEpoch() - 1).FirstLayer(), 10)
 	activeSet := types.ToATXIDs(atxes)
 	meshHash := types.RandomHash()
-	plist := createProposals(t, tg.db, layerID, meshHash, signers, activeSet, txIDs)
+	plist := createProposals(t, tg.db, tg.proposals, layerID, meshHash, signers, activeSet, txIDs)
 	pids := types.ToProposalIDs(plist)
 	require.NoError(t, layers.SetMeshHash(tg.db, layerID.Sub(1), types.RandomHash()))
 
@@ -507,7 +519,7 @@ func Test_run_ExecuteFailed(t *testing.T) {
 	signers, atxes := createATXs(t, tg.atxs, (layerID.GetEpoch() - 1).FirstLayer(), 10)
 	activeSet := types.ToATXIDs(atxes)
 	meshHash := types.RandomHash()
-	plist := createProposals(t, tg.db, layerID, meshHash, signers, activeSet, txIDs)
+	plist := createProposals(t, tg.db, tg.proposals, layerID, meshHash, signers, activeSet, txIDs)
 	pids := types.ToProposalIDs(plist)
 	require.NoError(t, layers.SetMeshHash(tg.db, layerID.Sub(1), meshHash))
 
@@ -540,7 +552,7 @@ func Test_run_AddBlockFailed(t *testing.T) {
 	signers, atxes := createATXs(t, tg.atxs, (layerID.GetEpoch() - 1).FirstLayer(), 10)
 	activeSet := types.ToATXIDs(atxes)
 	meshHash := types.RandomHash()
-	plist := createProposals(t, tg.db, layerID, meshHash, signers, activeSet, txIDs)
+	plist := createProposals(t, tg.db, tg.proposals, layerID, meshHash, signers, activeSet, txIDs)
 	pids := types.ToProposalIDs(plist)
 	require.NoError(t, layers.SetMeshHash(tg.db, layerID.Sub(1), meshHash))
 
@@ -565,7 +577,7 @@ func Test_run_RegisterCertFailureIgnored(t *testing.T) {
 	signers, atxes := createATXs(t, tg.atxs, (layerID.GetEpoch() - 1).FirstLayer(), 10)
 	activeSet := types.ToATXIDs(atxes)
 	meshHash := types.RandomHash()
-	plist := createProposals(t, tg.db, layerID, meshHash, signers, activeSet, txIDs)
+	plist := createProposals(t, tg.db, tg.proposals, layerID, meshHash, signers, activeSet, txIDs)
 	pids := types.ToProposalIDs(plist)
 	require.NoError(t, layers.SetMeshHash(tg.db, layerID.Sub(1), meshHash))
 
@@ -593,7 +605,7 @@ func Test_run_CertifyFailureIgnored(t *testing.T) {
 	signers, atxes := createATXs(t, tg.atxs, (layerID.GetEpoch() - 1).FirstLayer(), 10)
 	activeSet := types.ToATXIDs(atxes)
 	meshHash := types.RandomHash()
-	plist := createProposals(t, tg.db, layerID, meshHash, signers, activeSet, txIDs)
+	plist := createProposals(t, tg.db, tg.proposals, layerID, meshHash, signers, activeSet, txIDs)
 	pids := types.ToProposalIDs(plist)
 	require.NoError(t, layers.SetMeshHash(tg.db, layerID.Sub(1), meshHash))
 
@@ -621,7 +633,7 @@ func Test_run_ProcessLayerFailed(t *testing.T) {
 	signers, atxes := createATXs(t, tg.atxs, (layerID.GetEpoch() - 1).FirstLayer(), 10)
 	activeSet := types.ToATXIDs(atxes)
 	meshHash := types.RandomHash()
-	plist := createProposals(t, tg.db, layerID, meshHash, signers, activeSet, txIDs)
+	plist := createProposals(t, tg.db, tg.proposals, layerID, meshHash, signers, activeSet, txIDs)
 	pids := types.ToProposalIDs(plist)
 	require.NoError(t, layers.SetMeshHash(tg.db, layerID.Sub(1), meshHash))
 
@@ -662,7 +674,7 @@ func Test_processHareOutput_UnequalHeight(t *testing.T) {
 		},
 	)
 	activeSet := types.ToATXIDs(atxes)
-	pList := createProposals(t, tg.db, layerID, types.Hash32{}, signers, activeSet, nil)
+	pList := createProposals(t, tg.db, tg.proposals, layerID, types.Hash32{}, signers, activeSet, nil)
 	ctx := context.Background()
 	ho := hare3.ConsensusOutput{
 		Layer:     layerID,
@@ -712,6 +724,7 @@ func Test_processHareOutput_bad_state(t *testing.T) {
 		p := createProposal(
 			t,
 			tg.db,
+			tg.proposals,
 			activeSet,
 			layerID,
 			types.Hash32{},
@@ -739,6 +752,7 @@ func Test_processHareOutput_bad_state(t *testing.T) {
 		p := createProposal(
 			t,
 			tg.db,
+			tg.proposals,
 			activeSet,
 			layerID,
 			types.Hash32{},
@@ -768,7 +782,7 @@ func Test_processHareOutput_EmptyProposals(t *testing.T) {
 	activeSet := types.ToATXIDs(atxes)
 	plist := make([]*types.Proposal, 0, numProposals)
 	for i := 0; i < numProposals; i++ {
-		p := createProposal(t, tg.db, activeSet, lid, types.Hash32{}, activeSet[i], signers[i], nil, 1)
+		p := createProposal(t, tg.db, tg.proposals, activeSet, lid, types.Hash32{}, activeSet[i], signers[i], nil, 1)
 		plist = append(plist, p)
 	}
 	ctx := context.Background()
@@ -819,7 +833,7 @@ func Test_processHareOutput_StableBlockID(t *testing.T) {
 	txIDs := createAndSaveTxs(t, numTXs, tg.db)
 	signers, atxes := createATXs(t, tg.atxs, (layerID.GetEpoch() - 1).FirstLayer(), numProposals)
 	activeSet := types.ToATXIDs(atxes)
-	plist := createProposals(t, tg.db, layerID, types.Hash32{}, signers, activeSet, txIDs)
+	plist := createProposals(t, tg.db, tg.proposals, layerID, types.Hash32{}, signers, activeSet, txIDs)
 	ctx := context.Background()
 	ho1 := hare3.ConsensusOutput{
 		Layer:     layerID,
@@ -866,9 +880,10 @@ func Test_processHareOutput_SameATX(t *testing.T) {
 	signers, atxes := createATXs(t, tg.atxs, (layerID.GetEpoch() - 1).FirstLayer(), numProposals)
 	activeSet := types.ToATXIDs(atxes)
 	atxID := activeSet[0]
-	proposal1 := createProposal(t, tg.db, activeSet, layerID, types.Hash32{}, atxID, signers[0], txIDs[0:500], 1)
-	proposal2 := createProposal(t, tg.db, activeSet, layerID, types.Hash32{}, atxID, signers[0], txIDs[400:], 1)
-	plist := []*types.Proposal{proposal1, proposal2}
+	plist := []*types.Proposal{
+		createProposal(t, tg.db, tg.proposals, activeSet, layerID, types.Hash32{}, atxID, signers[0], txIDs[0:500], 1),
+		createProposal(t, tg.db, tg.proposals, activeSet, layerID, types.Hash32{}, atxID, signers[0], txIDs[400:], 1),
+	}
 	ho := hare3.ConsensusOutput{
 		Layer:     layerID,
 		Proposals: types.ToProposalIDs(plist),
@@ -888,8 +903,8 @@ func Test_processHareOutput_EmptyATXID(t *testing.T) {
 	txIDs := createAndSaveTxs(t, numTXs, tg.db)
 	signers, atxes := createATXs(t, tg.atxs, (layerID.GetEpoch() - 1).FirstLayer(), numProposals)
 	activeSet := types.ToATXIDs(atxes)
-	plist := createProposals(t, tg.db, layerID, types.Hash32{}, signers[1:], activeSet[1:], txIDs[1:])
-	p := createProposal(t, tg.db, activeSet, layerID, types.Hash32{}, types.EmptyATXID, signers[0], txIDs, 1)
+	plist := createProposals(t, tg.db, tg.proposals, layerID, types.Hash32{}, signers[1:], activeSet[1:], txIDs[1:])
+	p := createProposal(t, tg.db, tg.proposals, activeSet, layerID, types.Hash32{}, types.EmptyATXID, signers[0], txIDs, 1)
 	plist = append(plist, p)
 	ho := hare3.ConsensusOutput{
 		Layer:     layerID,
@@ -909,9 +924,9 @@ func Test_processHareOutput_MultipleEligibilities(t *testing.T) {
 	signers, atxes := createATXs(t, tg.atxs, (layerID.GetEpoch() - 1).FirstLayer(), 10)
 	activeSet := types.ToATXIDs(atxes)
 	plist := []*types.Proposal{
-		createProposal(t, tg.db, activeSet, layerID, types.Hash32{}, atxes[0].ID(), signers[0], ids, 2),
-		createProposal(t, tg.db, activeSet, layerID, types.Hash32{}, atxes[1].ID(), signers[1], ids, 1),
-		createProposal(t, tg.db, activeSet, layerID, types.Hash32{}, atxes[2].ID(), signers[2], ids, 5),
+		createProposal(t, tg.db, tg.proposals, activeSet, layerID, types.Hash32{}, atxes[0].ID(), signers[0], ids, 2),
+		createProposal(t, tg.db, tg.proposals, activeSet, layerID, types.Hash32{}, atxes[1].ID(), signers[1], ids, 1),
+		createProposal(t, tg.db, tg.proposals, activeSet, layerID, types.Hash32{}, atxes[2].ID(), signers[2], ids, 5),
 	}
 	ctx := context.Background()
 	ho := hare3.ConsensusOutput{
