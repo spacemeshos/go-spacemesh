@@ -114,7 +114,20 @@ type EpochData struct {
 
 // LayerData is the data response for a given layer ID.
 type LayerData struct {
-	Ballots []types.BallotID `scale:"max=500"` // expected are 50 proposals per layer + safety margin
+	// Ballots contains the ballots for the given layer.
+	//
+	// Worst case scenario is that a single smesher identity has > 99.97% of the total weight of the network.
+	// In this case they will get all 50 available slots in all 4032 layers of the epoch.
+	// Additionally every other identity on the network that successfully published an ATX will get 1 slot.
+	//
+	// If we expect 2.2 Mio ATXs that would be a total of 2.2 Mio + 50 * 4032 = 2,401,600 slots.
+	// Since these are randomly distributed across the epoch, we can expect an average of n * p =
+	// 2,401,600 / 4032 = 595.7 ballots in a layer with a standard deviation of sqrt(n * p * (1 - p)) =
+	// sqrt(2,401,600 * 1/4032 * 4031/4032) = 24.4
+	//
+	// This means that we can expect a maximum of 595.7 + 6*24.4 = 743 ballots per layer with
+	// > 99.9997% probability.
+	Ballots []types.BallotID `scale:"max=800"`
 }
 
 type OpinionRequest struct {

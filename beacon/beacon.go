@@ -1126,8 +1126,7 @@ func atxThresholdFraction(kappa int, q *big.Rat, numATXs int) *big.Float {
 // TODO(nkryuchkov): Consider having a generic function for probabilities.
 func atxThreshold(kappa int, q *big.Rat, numATXs int) *big.Int {
 	const (
-		sigLengthBytes = 80
-		sigLengthBits  = sigLengthBytes * 8
+		sigLengthBits = types.VrfSignatureSize * 8
 	)
 
 	fraction := atxThresholdFraction(kappa, q, numATXs)
