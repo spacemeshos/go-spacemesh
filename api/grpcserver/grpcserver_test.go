@@ -1771,9 +1771,9 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 	// Give the server-side time to subscribe to events
 	time.Sleep(time.Millisecond * 50)
 
-	events.ReportRewardReceived(events.Reward{
+	events.ReportRewardReceived(types.Reward{
 		Layer:       layerFirst,
-		Total:       rewardAmount,
+		TotalReward: rewardAmount,
 		LayerReward: rewardAmount * 2,
 		Coinbase:    addr1,
 		SmesherID:   rewardSmesherID,
@@ -1793,7 +1793,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 	// test streaming a reward and account update that should be filtered out
 	// these should not be received
 	events.ReportAccountUpdate(addr2)
-	events.ReportRewardReceived(events.Reward{Coinbase: addr2})
+	events.ReportRewardReceived(types.Reward{Coinbase: addr2})
 
 	_, err = stream.Recv()
 	require.Error(t, err)
@@ -1827,9 +1827,9 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 	time.Sleep(time.Millisecond * 50)
 
 	// publish a reward
-	events.ReportRewardReceived(events.Reward{
+	events.ReportRewardReceived(types.Reward{
 		Layer:       layerFirst,
-		Total:       rewardAmount,
+		TotalReward: rewardAmount,
 		LayerReward: rewardAmount * 2,
 		Coinbase:    addr1,
 		SmesherID:   rewardSmesherID,

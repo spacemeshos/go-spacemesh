@@ -47,7 +47,7 @@ func (s *RewardStreamService) Stream(
 	stream spacemeshv2alpha1.RewardStreamService_StreamServer,
 ) error {
 	ctx := stream.Context()
-	var sub *events.BufferedSubscription[events.Reward]
+	var sub *events.BufferedSubscription[types.Reward]
 	if request.Watch {
 		matcher := rewardsMatcher{request, ctx}
 		var err error
@@ -94,7 +94,7 @@ func (s *RewardStreamService) Stream(
 		}
 	}()
 
-	var eventsOut <-chan events.Reward
+	var eventsOut <-chan types.Reward
 	var eventsFull <-chan struct{}
 	if sub != nil {
 		eventsOut = sub.Out()
@@ -105,13 +105,7 @@ func (s *RewardStreamService) Stream(
 		select {
 		case rst := <-eventsOut:
 			err := stream.Send(&spacemeshv2alpha1.Reward{
-				Versioned: &spacemeshv2alpha1.Reward_V1{V1: toReward(&types.Reward{
-					Layer:       rst.Layer,
-					TotalReward: rst.Total,
-					LayerReward: rst.LayerReward,
-					Coinbase:    rst.Coinbase,
-					SmesherID:   rst.SmesherID,
-				})},
+				Versioned: &spacemeshv2alpha1.Reward_V1{V1: toReward(&rst)},
 			})
 			switch {
 			case errors.Is(err, io.EOF):
@@ -123,13 +117,7 @@ func (s *RewardStreamService) Stream(
 			select {
 			case rst := <-eventsOut:
 				err := stream.Send(&spacemeshv2alpha1.Reward{
-					Versioned: &spacemeshv2alpha1.Reward_V1{V1: toReward(&types.Reward{
-						Layer:       rst.Layer,
-						TotalReward: rst.Total,
-						LayerReward: rst.LayerReward,
-						Coinbase:    rst.Coinbase,
-						SmesherID:   rst.SmesherID,
-					})},
+					Versioned: &spacemeshv2alpha1.Reward_V1{V1: toReward(&rst)},
 				})
 				switch {
 				case errors.Is(err, io.EOF):
@@ -306,7 +294,7 @@ type rewardsMatcher struct {
 	ctx context.Context
 }
 
-func (m *rewardsMatcher) match(t *events.Reward) bool {
+func (m *rewardsMatcher) match(t *types.Reward) bool {
 	if len(m.GetSmesher()) > 0 {
 		var nodeId types.NodeID
 		copy(nodeId[:], m.GetSmesher())

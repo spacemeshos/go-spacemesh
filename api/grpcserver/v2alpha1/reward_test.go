@@ -149,16 +149,10 @@ func TestRewardStreamService_Stream(t *testing.T) {
 		)
 
 		gen = fixture.NewRewardsGenerator().WithLayers(start, 10)
-		var streamed []events.Reward
+		var streamed []types.Reward
 		for i := 0; i < n; i++ {
 			rwd := gen.Next()
-			streamed = append(streamed, events.Reward{
-				Layer:       rwd.Layer,
-				Total:       rwd.TotalReward,
-				LayerReward: rwd.LayerReward,
-				Coinbase:    rwd.Coinbase,
-				SmesherID:   rwd.SmesherID,
-			})
+			streamed = append(streamed, *rwd)
 		}
 
 		for _, tc := range []struct {
@@ -172,6 +166,7 @@ func TestRewardStreamService_Stream(t *testing.T) {
 						Smesher: streamed[3].SmesherID.Bytes(),
 					},
 					StartLayer: start,
+					EndLayer:   start,
 					Watch:      true,
 				},
 			},
@@ -182,6 +177,7 @@ func TestRewardStreamService_Stream(t *testing.T) {
 						Coinbase: streamed[3].Coinbase.String(),
 					},
 					StartLayer: start,
+					EndLayer:   start,
 					Watch:      true,
 				},
 			},
@@ -198,13 +194,7 @@ func TestRewardStreamService_Stream(t *testing.T) {
 					events.ReportRewardReceived(rst)
 					matcher := rewardsMatcher{tc.request, ctx}
 					if matcher.match(&rst) {
-						expect = append(expect, &types.Reward{
-							Layer:       rst.Layer,
-							TotalReward: rst.Total,
-							LayerReward: rst.LayerReward,
-							Coinbase:    rst.Coinbase,
-							SmesherID:   rst.SmesherID,
-						})
+						expect = append(expect, &rst)
 					}
 				}
 
