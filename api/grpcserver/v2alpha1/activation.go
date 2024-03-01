@@ -86,14 +86,7 @@ func (s *ActivationStreamService) Stream(
 				return false
 			}
 		}); err != nil {
-			select {
-			case errChan <- status.Error(codes.Internal, err.Error()):
-			default:
-				ctxzap.Error(stream.Context(), "unable to send error", zap.Error(err))
-				select {
-				case <-ctx.Done(): // check ctx.Done() to avoid blocking
-				default:
-				}
+			errChan <- status.Error(codes.Internal, err.Error()):
 			}
 			return
 		}
