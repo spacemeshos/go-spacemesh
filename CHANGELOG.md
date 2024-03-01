@@ -2,6 +2,13 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## Release v1.3.12
+
+### Improvements
+
+* [#5465](https://github.com/spacemeshos/go-spacemesh/pull/5465)
+  Add an option to cache SQL query results
+
 ## Release v1.3.11
 
 ### Improvements
