@@ -82,12 +82,11 @@ func (s *ActivationStreamService) Stream(
 			case dbChan <- atx:
 				return true
 			case <-ctx.Done():
-				// exit if the stream context is cancelled
+				// exit if the stream context is canceled
 				return false
 			}
 		}); err != nil {
-			errChan <- status.Error(codes.Internal, err.Error()):
-			}
+			errChan <- status.Error(codes.Internal, err.Error())
 			return
 		}
 	}()

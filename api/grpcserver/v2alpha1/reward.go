@@ -77,19 +77,11 @@ func (s *RewardStreamService) Stream(
 			case dbChan <- rwd:
 				return true
 			case <-ctx.Done():
-				// exit if the stream context is cancelled
+				// exit if the stream context is canceled
 				return false
 			}
 		}); err != nil {
-			select {
-			case errChan <- status.Error(codes.Internal, err.Error()):
-			default:
-				ctxzap.Error(stream.Context(), "unable to send error", zap.Error(err))
-				select {
-				case <-ctx.Done(): // check ctx.Done() to avoid blocking
-				default:
-				}
-			}
+			errChan <- status.Error(codes.Internal, err.Error())
 			return
 		}
 	}()
