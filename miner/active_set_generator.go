@@ -78,11 +78,6 @@ func (p *activeSetGenerator) updateFallback(target types.EpochID, set []types.AT
 func (a *activeSetGenerator) ensure(ctx context.Context, target types.EpochID) {
 	var err error
 	for try := 0; try < a.cfg.activeSet.Tries; try++ {
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(a.cfg.activeSet.RetryInterval):
-		}
 		current := a.clock.CurrentLayer()
 		// we run it here for side effects
 		_, _, _, err = a.generate(current, target)
@@ -90,6 +85,11 @@ func (a *activeSetGenerator) ensure(ctx context.Context, target types.EpochID) {
 			return
 		}
 		a.log.Debug("failed to prepare active set", zap.Error(err), zap.Uint32("attempt", uint32(try)))
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(a.cfg.activeSet.RetryInterval):
+		}
 	}
 	a.log.Warn("failed to prepare active set", zap.Error(err))
 }
@@ -145,7 +145,7 @@ func (p *activeSetGenerator) generate(
 		if result.Total == 0 {
 			return id, 0, nil, fmt.Errorf("empty active set")
 		}
-		if result.Total > 0 && len(result.Set)*100/result.Total > p.cfg.goodAtxPercent {
+		if len(result.Set)*100/result.Total > p.cfg.goodAtxPercent {
 			set = result.Set
 			setWeight = result.Weight
 		} else {
@@ -230,7 +230,7 @@ func activeSetFromGrades(
 		}
 		return true
 	}); err != nil {
-		return gradedActiveSet{}, fmt.Errorf("failed to iterate atxs that target epoch %v: %v", target, err)
+		return gradedActiveSet{}, fmt.Errorf("failed to iterate atxs that target epoch %v: %w", target, err)
 	}
 	return gradedActiveSet{
 		Set:    set,

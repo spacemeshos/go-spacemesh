@@ -309,6 +309,14 @@ func TestActiveSetEnsure(t *testing.T) {
 	_, _, _, err := activeset.Get(tester.localdb, activeset.Tortoise, target)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
+	// interruptible
+	ctx, cancel := context.WithCancel(ctx)
+	cancel()
+	tester.clock.EXPECT().CurrentLayer().Return(0).Times(1)
+	tester.gen.ensure(ctx, target)
+	_, _, _, err = activeset.Get(tester.localdb, activeset.Tortoise, target)
+	require.ErrorIs(t, err, sql.ErrNotFound)
+
 	// computes from first try
 	tester.atxsdata.AddFromHeader(gatx(expected[0], 2, types.NodeID{1}, 1).ToHeader(), types.VRFPostIndex(0), false)
 	tester.clock.EXPECT().CurrentLayer().Return(0).Times(1)
@@ -319,8 +327,4 @@ func TestActiveSetEnsure(t *testing.T) {
 	require.Equal(t, expected, set)
 	require.Equal(t, 1*ticks, int(weight))
 
-	// interruptible
-	ctx, cancel := context.WithCancel(ctx)
-	cancel()
-	tester.gen.ensure(ctx, target)
 }

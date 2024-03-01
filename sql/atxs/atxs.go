@@ -547,8 +547,7 @@ func IterateForGrading(
 	fn func(id types.ATXID, atxtime, prooftime int64, weight uint64) bool,
 ) error {
 	if _, err := db.Exec(`
-		select atxs.id as id, atxs.received as atxtime,
-			   identities.received as prooftime, effective_num_units, tick_count from atxs
+		select atxs.id, atxs.received, identities.received, effective_num_units, tick_count from atxs
 		left join identities on atxs.pubkey = identities.pubkey
 		where atxs.epoch == ?1;`,
 		func(stmt *sql.Statement) {
