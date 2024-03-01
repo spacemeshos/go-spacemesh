@@ -249,7 +249,7 @@ func Test_Builder_Multi_InitialPost(t *testing.T) {
 func Test_Builder_Multi_HappyPath(t *testing.T) {
 	layerDuration := 2 * time.Second
 	tab := newTestBuilder(t, 3, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4, CycleGap: layerDuration}))
-	tab.regossipInterval = 0 // disable regossip for testing
+	tab.conf.RegossipInterval = 0 // disable regossip for testing
 
 	// step 1: build initial posts
 	initialPostChan := make(chan struct{})
