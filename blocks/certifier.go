@@ -130,16 +130,16 @@ func NewCertifier(
 	return c
 }
 
-func (c *Certifier) Register(s *signing.EdSigner) {
+func (c *Certifier) Register(sig *signing.EdSigner) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if _, exists := c.signers[s.NodeID()]; exists {
-		c.logger.With().Error("signing key already registered", log.ShortStringer("id", s.NodeID()))
+	if _, exists := c.signers[sig.NodeID()]; exists {
+		c.logger.With().Error("signing key already registered", log.ShortStringer("id", sig.NodeID()))
 		return
 	}
 
-	c.logger.With().Info("registered signing key", log.ShortStringer("id", s.NodeID()))
-	c.signers[s.NodeID()] = s
+	c.logger.With().Info("registered signing key", log.ShortStringer("id", sig.NodeID()))
+	c.signers[sig.NodeID()] = sig
 }
 
 // Start starts the background goroutine for periodic pruning.

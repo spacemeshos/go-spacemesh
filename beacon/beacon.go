@@ -135,16 +135,16 @@ func New(
 	return pd
 }
 
-func (pd *ProtocolDriver) Register(s *signing.EdSigner) {
+func (pd *ProtocolDriver) Register(sig *signing.EdSigner) {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
-	if _, exists := pd.signers[s.NodeID()]; exists {
-		pd.logger.With().Error("signing key already registered", log.ShortStringer("id", s.NodeID()))
+	if _, exists := pd.signers[sig.NodeID()]; exists {
+		pd.logger.With().Error("signing key already registered", log.ShortStringer("id", sig.NodeID()))
 		return
 	}
 
-	pd.logger.With().Info("registered signing key", log.ShortStringer("id", s.NodeID()))
-	pd.signers[s.NodeID()] = s
+	pd.logger.With().Info("registered signing key", log.ShortStringer("id", sig.NodeID()))
+	pd.signers[sig.NodeID()] = sig
 }
 
 type participant struct {
