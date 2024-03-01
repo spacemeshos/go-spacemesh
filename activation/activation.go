@@ -390,7 +390,7 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 	}
 }
 
-func (b *Builder) buildNIPostChallenge(ctx context.Context, nodeID types.NodeID) (*types.NIPostChallenge, error) {
+func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID) (*types.NIPostChallenge, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -526,7 +526,7 @@ func (b *Builder) Coinbase() types.Address {
 
 // PublishActivationTx attempts to publish an atx, it returns an error if an atx cannot be created.
 func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner) error {
-	challenge, err := b.buildNIPostChallenge(ctx, sig.NodeID())
+	challenge, err := b.BuildNIPostChallenge(ctx, sig.NodeID())
 	if err != nil {
 		return err
 	}
