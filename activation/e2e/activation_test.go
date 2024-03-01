@@ -150,6 +150,10 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		},
 	).Times(numSigners)
 
+	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
+	require.NoError(t, err)
+	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
+	v := activation.NewValidator(nil, poetDb, cfg, opts.Scrypt, verifier)
 	tab := activation.NewBuilder(
 		conf,
 		cdb,
@@ -160,22 +164,16 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		syncer,
 		logger,
 		activation.WithPoetConfig(poetCfg),
+		activation.WithValidator(v),
 	)
 	for _, sig := range signers {
 		tab.Register(sig)
 	}
 
 	require.NoError(t, tab.StartSmeshing(types.Address{}))
-
 	<-endChan
-
 	require.NoError(t, tab.StopSmeshing(false))
 
-	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
-	require.NoError(t, err)
-	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
-
-	v := activation.NewValidator(nil, poetDb, cfg, opts.Scrypt, verifier)
 	for _, sig := range signers {
 		atx := atxs[sig.NodeID()]
 
