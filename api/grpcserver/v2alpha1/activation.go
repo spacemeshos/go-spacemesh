@@ -51,9 +51,10 @@ func (s *ActivationStreamService) Stream(
 	request *spacemeshv2alpha1.ActivationStreamRequest,
 	stream spacemeshv2alpha1.ActivationStreamService_StreamServer,
 ) error {
+	ctx := stream.Context()
 	var sub *events.BufferedSubscription[events.ActivationTx]
 	if request.Watch {
-		matcher := resultsMatcher{request, stream.Context()}
+		matcher := atxsMatcher{request, ctx}
 		var err error
 		sub, err = events.SubscribeMatched(matcher.match)
 		if err != nil {
@@ -64,27 +65,42 @@ func (s *ActivationStreamService) Stream(
 			return status.Errorf(codes.Unavailable, "can't send header")
 		}
 	}
-	ops, err := toOperations(toRequest(request))
+
+	dbChan := make(chan *types.VerifiedActivationTx, 100)
+	errChan := make(chan error, 1)
+
+	ops, err := toAtxOperations(toAtxRequest(request))
 	if err != nil {
 		return status.Error(codes.InvalidArgument, err.Error())
 	}
-	var ierr error
-	if err := atxs.IterateAtxsOps(s.db, ops, func(atx *types.VerifiedActivationTx) bool {
-		ierr = stream.Send(&spacemeshv2alpha1.Activation{Versioned: &spacemeshv2alpha1.Activation_V1{V1: toAtx(atx)}})
-		return ierr == nil
-	}); err != nil {
-		return status.Error(codes.Internal, err.Error())
+
+	// send db data to chan to avoid buffer overflow
+	go func() {
+		defer close(dbChan)
+		if err := atxs.IterateAtxsOps(s.db, ops, func(atx *types.VerifiedActivationTx) bool {
+			select {
+			case dbChan <- atx:
+				return true
+			case <-ctx.Done():
+				// exit if the stream context is canceled
+				return false
+			}
+		}); err != nil {
+			errChan <- status.Error(codes.Internal, err.Error())
+			return
+		}
+	}()
+
+	var eventsOut <-chan events.ActivationTx
+	var eventsFull <-chan struct{}
+	if sub != nil {
+		eventsOut = sub.Out()
+		eventsFull = sub.Full()
 	}
-	if sub == nil {
-		return nil
-	}
+
 	for {
 		select {
-		case <-stream.Context().Done():
-			return nil
-		case <-sub.Full():
-			return status.Error(codes.Canceled, "buffer overflow")
-		case rst := <-sub.Out():
+		case rst := <-eventsOut:
 			err := stream.Send(&spacemeshv2alpha1.Activation{
 				Versioned: &spacemeshv2alpha1.Activation_V1{V1: toAtx(rst.VerifiedActivationTx)},
 			})
@@ -93,6 +109,40 @@ func (s *ActivationStreamService) Stream(
 				return nil
 			case err != nil:
 				return status.Error(codes.Internal, err.Error())
+			}
+		default:
+			select {
+			case rst := <-eventsOut:
+				err := stream.Send(&spacemeshv2alpha1.Activation{
+					Versioned: &spacemeshv2alpha1.Activation_V1{V1: toAtx(rst.VerifiedActivationTx)},
+				})
+				switch {
+				case errors.Is(err, io.EOF):
+					return nil
+				case err != nil:
+					return status.Error(codes.Internal, err.Error())
+				}
+			case <-eventsFull:
+				return status.Error(codes.Canceled, "buffer overflow")
+			case rst, ok := <-dbChan:
+				if !ok {
+					dbChan = nil
+					if sub == nil {
+						return nil
+					}
+					continue
+				}
+				err := stream.Send(&spacemeshv2alpha1.Activation{Versioned: &spacemeshv2alpha1.Activation_V1{V1: toAtx(rst)}})
+				switch {
+				case errors.Is(err, io.EOF):
+					return nil
+				case err != nil:
+					return status.Error(codes.Internal, err.Error())
+				}
+			case err := <-errChan:
+				return err
+			case <-ctx.Done():
+				return nil
 			}
 		}
 	}
@@ -189,7 +239,7 @@ func (s *ActivationService) List(
 	ctx context.Context,
 	request *spacemeshv2alpha1.ActivationRequest,
 ) (*spacemeshv2alpha1.ActivationList, error) {
-	ops, err := toOperations(request)
+	ops, err := toAtxOperations(request)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
@@ -230,7 +280,7 @@ func (s *ActivationService) ActivationsCount(
 	return &spacemeshv2alpha1.ActivationsCountResponse{Count: count}, nil
 }
 
-func toRequest(filter *spacemeshv2alpha1.ActivationStreamRequest) *spacemeshv2alpha1.ActivationRequest {
+func toAtxRequest(filter *spacemeshv2alpha1.ActivationStreamRequest) *spacemeshv2alpha1.ActivationRequest {
 	return &spacemeshv2alpha1.ActivationRequest{
 		NodeId:     filter.NodeId,
 		Id:         filter.Id,
@@ -240,7 +290,7 @@ func toRequest(filter *spacemeshv2alpha1.ActivationStreamRequest) *spacemeshv2al
 	}
 }
 
-func toOperations(filter *spacemeshv2alpha1.ActivationRequest) (builder.Operations, error) {
+func toAtxOperations(filter *spacemeshv2alpha1.ActivationRequest) (builder.Operations, error) {
 	ops := builder.Operations{}
 	if filter == nil {
 		return ops, nil
@@ -306,12 +356,12 @@ func toOperations(filter *spacemeshv2alpha1.ActivationRequest) (builder.Operatio
 	return ops, nil
 }
 
-type resultsMatcher struct {
+type atxsMatcher struct {
 	*spacemeshv2alpha1.ActivationStreamRequest
 	ctx context.Context
 }
 
-func (m *resultsMatcher) match(t *events.ActivationTx) bool {
+func (m *atxsMatcher) match(t *events.ActivationTx) bool {
 	if len(m.NodeId) > 0 {
 		var nodeId types.NodeID
 		copy(nodeId[:], m.NodeId)

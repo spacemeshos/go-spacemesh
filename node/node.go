@@ -1393,6 +1393,14 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		service := v2alpha1.NewActivationStreamService(app.db)
 		app.grpcServices[svc] = service
 		return service, nil
+	case v2alpha1.Reward:
+		service := v2alpha1.NewRewardService(app.db)
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2alpha1.RewardStream:
+		service := v2alpha1.NewRewardStreamService(app.db)
+		app.grpcServices[svc] = service
+		return service, nil
 	}
 	return nil, fmt.Errorf("unknown service %s", svc)
 }
