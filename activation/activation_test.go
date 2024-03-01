@@ -61,6 +61,14 @@ func newAtx(
 	return atx
 }
 
+type atxOption func(*types.ActivationTx)
+
+func withVrfNonce(nonce types.VRFPostIndex) atxOption {
+	return func(atx *types.ActivationTx) {
+		atx.VRFNonce = &nonce
+	}
+}
+
 func newActivationTx(
 	tb testing.TB,
 	sig *signing.EdSigner,
@@ -73,6 +81,7 @@ func newActivationTx(
 	coinbase types.Address,
 	numUnits uint32,
 	nipost *types.NIPost,
+	opts ...atxOption,
 ) *types.VerifiedActivationTx {
 	challenge := types.NIPostChallenge{
 		Sequence:       sequence,
@@ -89,6 +98,9 @@ func newActivationTx(
 
 	atx.SetEffectiveNumUnits(numUnits)
 	atx.SetReceived(time.Now())
+	for _, opt := range opts {
+		opt(atx)
+	}
 	require.NoError(tb, SignAndFinalizeAtx(sig, atx))
 	vAtx, err := atx.Verify(startTick, numTicks)
 	require.NoError(tb, err)
@@ -1535,6 +1547,7 @@ func TestGetPositioningAtxDbFailed(t *testing.T) {
 	sig := maps.Values(tab.signers)[0]
 
 	db := datastoremocks.NewMockExecutor(tab.mctrl)
+	db.EXPECT().QueryCache().Return(sql.NullQueryCache)
 	tab.Builder.cdb = datastore.NewCachedDB(db, logtest.New(t))
 	expected := errors.New("db error")
 	db.EXPECT().Exec(gomock.Any(), gomock.Any(), gomock.Any()).Return(0, expected)

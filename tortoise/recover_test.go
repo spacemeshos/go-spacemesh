@@ -6,10 +6,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/tortoise/sim"
@@ -18,20 +20,20 @@ import (
 type recoveryAdapter struct {
 	testing.TB
 	*Tortoise
-	db sql.Executor
+	db      sql.Executor
+	atxdata *atxsdata.Data
 
-	prev types.LayerID
+	next types.LayerID
 }
 
 func (a *recoveryAdapter) TallyVotes(ctx context.Context, current types.LayerID) {
 	genesis := types.GetEffectiveGenesis()
-	if a.prev == 0 {
-		a.prev = genesis
+	if a.next == 0 {
+		a.next = genesis
 	}
-	for lid := a.prev; lid <= current; lid++ {
-		require.NoError(a, RecoverLayer(ctx, a.Tortoise, a.db, lid, a.OnBallot))
-		a.Tortoise.TallyVotes(ctx, lid)
-		a.prev = lid
+	for ; a.next <= current; a.next++ {
+		require.NoError(a, RecoverLayer(ctx, a.Tortoise, a.db, a.atxdata, a.next, a.OnBallot))
+		a.Tortoise.TallyVotes(ctx, a.next)
 	}
 }
 
@@ -43,7 +45,8 @@ func TestRecoverState(t *testing.T) {
 
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
-	tortoise := tortoiseFromSimState(t, s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
+	simState := s.GetState(0)
+	tortoise := tortoiseFromSimState(t, simState, WithLogger(logtest.New(t)), WithConfig(cfg))
 	var last, verified types.LayerID
 	for i := 0; i < 50; i++ {
 		last = s.Next()
@@ -55,6 +58,7 @@ func TestRecoverState(t *testing.T) {
 	tortoise2, err := Recover(
 		context.Background(),
 		s.GetState(0).DB.Executor,
+		simState.Atxdata,
 		last,
 		WithLogger(logtest.New(t)),
 		WithConfig(cfg),
@@ -78,6 +82,7 @@ func TestRecoverEmpty(t *testing.T) {
 	tortoise, err := Recover(
 		context.Background(),
 		s.GetState(0).DB.Executor,
+		atxsdata.New(),
 		100,
 		WithLogger(logtest.New(t)),
 		WithConfig(cfg),
@@ -113,6 +118,7 @@ func TestRecoverWithOpinion(t *testing.T) {
 	tortoise, err := Recover(
 		context.Background(),
 		s.GetState(0).DB.Executor,
+		atxsdata.New(),
 		last.Layer,
 		WithLogger(logtest.New(t)),
 		WithConfig(cfg),
@@ -155,6 +161,7 @@ func TestResetPending(t *testing.T) {
 	recovered, err := Recover(
 		context.Background(),
 		s.GetState(0).DB.Executor,
+		atxsdata.New(),
 		last,
 		WithLogger(logtest.New(t)),
 		WithConfig(cfg),
@@ -200,6 +207,7 @@ func TestWindowRecovery(t *testing.T) {
 	recovered, err := Recover(
 		context.Background(),
 		s.GetState(0).DB.Executor,
+		atxsdata.New(),
 		last,
 		WithLogger(logtest.New(t)),
 		WithConfig(cfg),
@@ -211,4 +219,30 @@ func TestWindowRecovery(t *testing.T) {
 	for i := range updates1[epochSize*4:] {
 		require.Equal(t, updates1[epochSize*4+i].Opinion, updates2[i].Opinion)
 	}
+}
+
+func TestRecoverOnlyAtxs(t *testing.T) {
+	const size = 10
+	s := sim.New(sim.WithLayerSize(size))
+	s.Setup()
+
+	cfg := defaultTestConfig()
+	trt := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg))
+	var last types.LayerID
+	// this creates a layer without any ballots, so we will also won't have them in the database
+	for _, lid := range sim.GenLayers(s, sim.WithSequence(10, sim.WithLayerSizeOverwrite(0))) {
+		last = lid
+		trt.TallyVotes(context.Background(), lid)
+	}
+	future := last + 1000
+	recovered, err := Recover(context.Background(), s.GetState(0).DB.Executor, s.GetState(0).Atxdata, future,
+		WithLogger(logtest.New(t)),
+		WithConfig(cfg),
+	)
+	require.NoError(t, err)
+	epoch := types.EpochID(2)
+	ids, err := atxs.GetIDsByEpoch(s.GetState(0).DB, epoch)
+	require.NoError(t, err)
+	require.NotEmpty(t, ids)
+	require.Empty(t, recovered.GetMissingActiveSet(epoch+1, ids), "target epoch %v", epoch+1)
 }

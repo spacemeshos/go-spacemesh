@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -20,10 +21,11 @@ import (
 func Recover(
 	ctx context.Context,
 	db sql.Executor,
+	atxdata *atxsdata.Data,
 	current types.LayerID,
 	opts ...Opt,
 ) (*Tortoise, error) {
-	trtl, err := New(opts...)
+	trtl, err := New(atxdata, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +70,7 @@ func Recover(
 
 	if types.GetEffectiveGenesis() != types.FirstEffectiveGenesis() {
 		// need to load the golden atxs after a checkpoint recovery
-		if err := recoverEpoch(types.GetEffectiveGenesis().Add(1).GetEpoch(), trtl, db); err != nil {
+		if err := recoverEpoch(types.GetEffectiveGenesis().Add(1).GetEpoch(), trtl, db, atxdata); err != nil {
 			return nil, err
 		}
 	}
@@ -81,21 +83,33 @@ func Recover(
 		trtl.UpdateVerified(valid)
 	}
 	trtl.UpdateLastLayer(last)
+
 	for lid := start; !lid.After(last); lid = lid.Add(1) {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		default:
 		}
-		if err := RecoverLayer(ctx, trtl, db, lid, trtl.OnRecoveredBallot); err != nil {
+		if err := RecoverLayer(ctx, trtl, db, atxdata, lid, trtl.OnRecoveredBallot); err != nil {
 			return nil, fmt.Errorf("failed to load tortoise state at layer %d: %w", lid, err)
 		}
 	}
-	if last == 0 {
-		last = current
-	} else {
-		last = min(last, current)
+
+	// load activations from future epochs that are not yet referenced by the ballots
+	atxsEpoch, err := atxs.LatestEpoch(db)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load latest epoch: %w", err)
 	}
+	atxsEpoch++ // recoverEpoch expects target epoch
+	if last.GetEpoch() != atxsEpoch {
+		for eid := last.GetEpoch() + 1; eid <= atxsEpoch; eid++ {
+			if err := recoverEpoch(eid, trtl, db, atxdata); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	last = min(last, current)
 	if last < start {
 		return trtl, nil
 	}
@@ -113,30 +127,22 @@ func Recover(
 			return nil, fmt.Errorf("check opinion %w", err)
 		}
 	}
-	// load activations from future epochs that are not yet referenced by the ballots
-	epoch, err := atxs.LatestEpoch(db)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load latest epoch: %w", err)
-	}
-	epoch++ // recoverEpoch expects target epoch, rather than publish
-	if last.GetEpoch() != epoch {
-		for eid := last.GetEpoch() + 1; eid <= epoch; eid++ {
-			if err := recoverEpoch(eid, trtl, db); err != nil {
-				return nil, err
-			}
-		}
-	}
 	return trtl, nil
 }
 
-func recoverEpoch(target types.EpochID, trtl *Tortoise, db sql.Executor) error {
-	publish := target - 1
-	if err := atxs.IterateAtxs(db, publish, publish, func(atx *types.VerifiedActivationTx) bool {
-		trtl.OnAtx(atx.ToHeader().ToData())
-		return true
-	}); err != nil {
-		return fmt.Errorf("iterate atxs: %w", err)
-	}
+func recoverEpoch(target types.EpochID, trtl *Tortoise, db sql.Executor, atxdata *atxsdata.Data) error {
+	// TODO(poszu): pass trtl.OnAtx directly when OnAtx is refactored to use atxsdata.ATX type.
+	atxdata.IterateInEpoch(target, func(id types.ATXID, atx *atxsdata.ATX) {
+		trtl.OnAtx(&types.AtxTortoiseData{
+			ID:          id,
+			Smesher:     atx.Node,
+			TargetEpoch: target,
+			BaseHeight:  atx.BaseHeight,
+			Height:      atx.Height,
+			Weight:      atx.Weight,
+		})
+	})
+
 	beacon, err := beacons.Get(db, target)
 	if err == nil && beacon != types.EmptyBeacon {
 		trtl.OnBeacon(target, beacon)
@@ -150,11 +156,12 @@ func RecoverLayer(
 	ctx context.Context,
 	trtl *Tortoise,
 	db sql.Executor,
+	atxdata *atxsdata.Data,
 	lid types.LayerID,
 	onBallot ballotFunc,
 ) error {
 	if lid.FirstInEpoch() {
-		if err := recoverEpoch(lid.GetEpoch(), trtl, db); err != nil {
+		if err := recoverEpoch(lid.GetEpoch(), trtl, db, atxdata); err != nil {
 			return err
 		}
 	}

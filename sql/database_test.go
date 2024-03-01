@@ -156,3 +156,17 @@ func TestDatabaseVacuumState(t *testing.T) {
 	_, err = os.Open(dbFile + "-wal")
 	require.ErrorIs(t, err, os.ErrNotExist)
 }
+
+func TestQueryCount(t *testing.T) {
+	db := InMemory()
+	require.Equal(t, 0, db.QueryCount())
+
+	n, err := db.Exec("select 1", nil, nil)
+	require.Equal(t, 1, n)
+	require.NoError(t, err)
+	require.Equal(t, 1, db.QueryCount())
+
+	_, err = db.Exec("select invalid", nil, nil)
+	require.Error(t, err)
+	require.Equal(t, 2, db.QueryCount())
+}

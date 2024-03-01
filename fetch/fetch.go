@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
+	"github.com/spacemeshos/go-spacemesh/proposals/store"
 )
 
 const (
@@ -232,10 +233,11 @@ type Fetch struct {
 // NewFetch creates a new Fetch struct.
 func NewFetch(
 	cdb *datastore.CachedDB,
+	proposals *store.Store,
 	host *p2p.Host,
 	opts ...Option,
 ) *Fetch {
-	bs := datastore.NewBlobStore(cdb)
+	bs := datastore.NewBlobStore(cdb, proposals)
 
 	f := &Fetch{
 		cfg:         DefaultConfig(),
@@ -256,16 +258,21 @@ func NewFetch(
 	// there is one test that covers this part.
 	if host != nil {
 		connectedf := func(peer p2p.Peer) {
-			f.logger.With().Debug("add peer", log.Stringer("id", peer))
-			f.peers.Add(peer)
+			if f.peers.Add(peer) {
+				f.logger.With().Debug("add peer", log.Stringer("id", peer))
+			}
 		}
 		host.Network().Notify(&network.NotifyBundle{
 			ConnectedF: func(_ network.Network, c network.Conn) {
-				connectedf(c.RemotePeer())
+				if !c.Stat().Transient {
+					connectedf(c.RemotePeer())
+				}
 			},
 			DisconnectedF: func(_ network.Network, c network.Conn) {
-				f.logger.With().Debug("remove peer", log.Stringer("id", c.RemotePeer()))
-				f.peers.Delete(c.RemotePeer())
+				if !c.Stat().Transient && !host.Connected(c.RemotePeer()) {
+					f.logger.With().Debug("remove peer", log.Stringer("id", c.RemotePeer()))
+					f.peers.Delete(c.RemotePeer())
+				}
 			},
 		})
 		for _, peer := range host.GetPeers() {
@@ -408,6 +415,22 @@ func (f *Fetch) loop() {
 	}
 }
 
+func (f *Fetch) meteredRequest(
+	ctx context.Context,
+	protocol string,
+	peer p2p.Peer,
+	req []byte,
+) ([]byte, error) {
+	start := time.Now()
+	resp, err := f.servers[protocol].Request(ctx, peer, req)
+	if err != nil {
+		f.peers.OnFailure(peer)
+	} else {
+		f.peers.OnLatency(peer, len(resp), time.Since(start))
+	}
+	return resp, err
+}
+
 // receive Data from message server and call response handlers accordingly.
 func (f *Fetch) receiveResponse(data []byte, batch *batchInfo) {
 	if f.stopped() {
@@ -499,7 +522,7 @@ func (f *Fetch) failAfterRetry(hash types.Hash32) {
 	}
 
 	// first check if we have it locally from gossips
-	if _, err := f.bs.Get(req.hint, hash.Bytes()); err == nil {
+	if has, err := f.bs.Has(req.hint, hash.Bytes()); err == nil && has {
 		close(req.promise.completed)
 		delete(f.ongoing, hash)
 		return
@@ -651,15 +674,8 @@ func (f *Fetch) sendBatch(peer p2p.Peer, batch *batchInfo) ([]byte, error) {
 	// Request is synchronous,
 	// it will return errors only if size of the bytes buffer is large
 	// or target peer is not connected
-	start := time.Now()
 	req := codec.MustEncode(&batch.RequestBatch)
-	data, err := f.servers[hashProtocol].Request(f.shutdownCtx, peer, req)
-	if err != nil {
-		f.peers.OnFailure(peer)
-		return nil, err
-	}
-	f.peers.OnLatency(peer, time.Since(start))
-	return data, nil
+	return f.meteredRequest(f.shutdownCtx, hashProtocol, peer, req)
 }
 
 // handleHashError is called when an error occurred processing batches of the following hashes.
@@ -696,7 +712,7 @@ func (f *Fetch) getHash(
 	}
 
 	// check if we already have this hash locally
-	if _, err := f.bs.Get(h, hash.Bytes()); err == nil {
+	if has, err := f.bs.Has(h, hash.Bytes()); err == nil && has {
 		return nil, nil
 	}
 

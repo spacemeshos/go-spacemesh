@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/fixed"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/proposals/util"
@@ -57,7 +58,7 @@ func TestFullBallotFilter(t *testing.T) {
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
-			state := newState()
+			state := newState(atxsdata.New())
 			state.last = tc.last
 			config := Config{}
 			config.BadBeaconVoteDelayLayers = tc.distance
@@ -339,6 +340,7 @@ func TestFullCountVotes(t *testing.T) {
 					TickCount:         tc.activeset[i].TickCount,
 				}
 				header.PublishEpoch = 1
+				tortoise.trtl.atxsdata.AddFromHeader(header, 0, false)
 				tortoise.OnAtx(header.ToData())
 				activeset = append(activeset, atxid)
 				weights = append(weights, header.GetWeight())
@@ -543,7 +545,7 @@ func TestFullVerify(t *testing.T) {
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
-			full := newFullTortoise(Config{}, newState())
+			full := newFullTortoise(Config{}, newState(atxsdata.New()))
 			full.epochs = epochs
 			full.last = last
 			full.processed = last

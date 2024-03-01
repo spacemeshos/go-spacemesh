@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/hash"
@@ -199,6 +200,17 @@ func (b *bopt) assert(onDecode func(*DecodedBallot, error), onStore func(error))
 }
 
 func (a *atxAction) execute(trt *Tortoise) {
+	trt.trtl.atxsdata.Add(
+		a.header.TargetEpoch,
+		a.header.Smesher,
+		types.Address{},
+		a.header.ID,
+		a.header.Weight,
+		a.header.BaseHeight,
+		a.header.Height,
+		0,
+		false,
+	)
 	trt.OnAtx(&a.header)
 }
 
@@ -723,7 +735,7 @@ func (s *session) withDelay(val uint32) *session {
 
 func (s *session) tortoise() *Tortoise {
 	s.ensureConfig()
-	trt, err := New(WithLogger(logtest.New(s.tb)), WithConfig(*s.config))
+	trt, err := New(atxsdata.New(), WithLogger(logtest.New(s.tb)), WithConfig(*s.config))
 	require.NoError(s.tb, err)
 	return trt
 }
