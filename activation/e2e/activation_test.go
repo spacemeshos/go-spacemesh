@@ -2,6 +2,7 @@ package activation_test
 
 import (
 	"context"
+	"math/rand"
 	"sync"
 	"testing"
 	"time"
@@ -70,6 +71,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 			require.NoError(t, err)
 
 			opts.DataDir = t.TempDir()
+			opts.NumUnits = uint32(rand.Int31n(int32(cfg.MaxNumUnits/2-cfg.MinNumUnits))) + cfg.MinNumUnits
 			initPost(t, mgr, opts, sig.NodeID())
 			t.Cleanup(launchPostSupervisor(t, logger, mgr, sig.NodeID(), grpcCfg, opts))
 
