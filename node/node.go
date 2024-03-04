@@ -1781,6 +1781,12 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	return nil
 }
 
+// MigrateLocalDB migrates the old node_state.sql to the new local.sql
+//
+// This function is idempotent and can be called multiple times without side effects.
+// It will only migrate the old db to the new db if the old db exists and the new db does not.
+//
+// TODO(mafa): this can be removed in the future when we are sure that all nodes have migrated to the new db.
 func (app *App) MigrateLocalDB(lg *zap.Logger, dbPath string, clients []localsql.PoetClient) error {
 	oldDBFile := filepath.Join(dbPath, oldLocalDbFile)
 	dbFile := filepath.Join(dbPath, localDbFile)

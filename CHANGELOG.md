@@ -176,6 +176,10 @@ and permanent ineligibility for rewards.
 
 ### Improvements
 
+* [#5641](https://github.com/spacemeshos/go-spacemesh/pull/5641) Rename `node_state.sql` to `local.sql`.
+
+  To avoid confusion with the `state.sql` database, the `node_state.sql` database has been renamed to `local.sql`.
+
 * [#5219](https://github.com/spacemeshos/go-spacemesh/pull/5219) Migrate data from `nipost_builder_state.bin` to `local.sql`.
 
   The node will automatically migrate the data from disk and store it in the database. The migration will take place at the
