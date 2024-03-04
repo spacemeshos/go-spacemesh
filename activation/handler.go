@@ -387,21 +387,21 @@ func (h *Handler) ContextuallyValidateAtx(atx *types.VerifiedActivationTx) error
 
 // cacheAtx caches the atx in the atxsdata cache.
 // Returns true if the atx was cached, false otherwise.
-func (h *Handler) cacheAtx(ctx context.Context, atx *types.ActivationTxHeader) bool {
+func (h *Handler) cacheAtx(ctx context.Context, atx *types.ActivationTxHeader) *atxsdata.ATX {
 	if !h.atxsdata.IsEvicted(atx.TargetEpoch()) {
 		nonce, err := h.cdb.VRFNonce(atx.NodeID, atx.TargetEpoch())
 		if err != nil {
 			h.log.With().Error("failed vrf nonce read", log.Err(err), log.Context(ctx))
-			return false
+			return nil
 		}
 		malicious, err := h.cdb.IsMalicious(atx.NodeID)
 		if err != nil {
 			h.log.With().Error("failed is malicious read", log.Err(err), log.Context(ctx))
-			return false
+			return nil
 		}
 		return h.atxsdata.AddFromHeader(atx, nonce, malicious)
 	}
-	return false
+	return nil
 }
 
 // storeAtx stores an ATX and notifies subscribers of the ATXID.
@@ -476,14 +476,11 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 		h.cdb.CacheMalfeasanceProof(atx.SmesherID, proof)
 		h.tortoise.OnMalfeasance(atx.SmesherID)
 	}
-	header, err := h.cdb.GetAtxHeader(atx.ID())
-	if err != nil {
-		return nil, fmt.Errorf("get header for processed atx %s: %w", atx.ID(), err)
-	}
+	header := atx.ToHeader()
 	added := h.cacheAtx(ctx, header)
 	h.beacon.OnAtx(header)
-	if added {
-		h.tortoise.OnAtx(header.ToData())
+	if added != nil {
+		h.tortoise.OnAtx(atx.TargetEpoch(), atx.ID(), added)
 	}
 
 	h.log.WithContext(ctx).With().Debug("finished storing atx in epoch", atx.ID(), atx.PublishEpoch)

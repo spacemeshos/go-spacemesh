@@ -278,11 +278,8 @@ func validateAndPreserveData(
 			Return(uint64(1111111), nil)
 		mvalidator.EXPECT().IsVerifyingFullPost().AnyTimes().Return(true)
 		mreceiver.EXPECT().OnAtx(gomock.Any())
-		mtrtl.EXPECT().OnAtx(gomock.Any())
-
-		err = atxHandler.HandleSyncedAtx(context.Background(), vatx.ID().Hash32(), "self", encoded)
-		require.NoError(tb, err)
-
+		mtrtl.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
+		require.NoError(tb, atxHandler.HandleSyncedAtx(context.Background(), vatx.ID().Hash32(), "self", encoded))
 		err = poetDb.ValidateAndStore(context.Background(), proofs[i])
 		require.ErrorContains(tb, err, fmt.Sprintf("failed to validate poet proof for poetID %s round 1337",
 			hex.EncodeToString(proofs[i].PoetServiceID[:5])),

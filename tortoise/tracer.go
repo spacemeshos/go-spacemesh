@@ -174,7 +174,9 @@ func (c *ConfigTrace) Run(r *traceRunner) error {
 }
 
 type AtxTrace struct {
-	Header *types.AtxTortoiseData `json:",inline"`
+	ID          types.ATXID   `json:"id"`
+	TargetEpoch types.EpochID `json:"target"`
+	Atx         *atxsdata.ATX `json:",inline"`
 }
 
 func (a *AtxTrace) Type() eventType {
@@ -186,18 +188,8 @@ func (a *AtxTrace) New() traceEvent {
 }
 
 func (a *AtxTrace) Run(r *traceRunner) error {
-	r.atxdata.Add(
-		a.Header.TargetEpoch,
-		a.Header.Smesher,
-		types.Address{},
-		a.Header.ID,
-		a.Header.Weight,
-		a.Header.BaseHeight,
-		a.Header.Height,
-		0,
-		false,
-	)
-	r.trt.OnAtx(a.Header)
+	r.atxdata.AddAtx(a.TargetEpoch, a.ID, a.Atx)
+	r.trt.OnAtx(a.TargetEpoch, a.ID, a.Atx)
 	return nil
 }
 

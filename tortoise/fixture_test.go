@@ -18,29 +18,35 @@ import (
 	"github.com/spacemeshos/go-spacemesh/tortoise/opinionhash"
 )
 
+type atxData struct {
+	target types.EpochID
+	id     types.ATXID
+	atxsdata.ATX
+}
+
 type smesher struct {
 	reg registry
 
 	id       int
-	defaults types.AtxTortoiseData
+	defaults atxData
 	atxs     map[types.ATXID]*atxAction
 }
 
-type atxOpt func(*types.AtxTortoiseData)
+type atxOpt func(*atxData)
 
 type aopt struct {
 	opts []atxOpt
 }
 
 func (a *aopt) height(val uint64) *aopt {
-	a.opts = append(a.opts, func(header *types.AtxTortoiseData) {
+	a.opts = append(a.opts, func(header *atxData) {
 		header.Height = val
 	})
 	return a
 }
 
 func (a *aopt) weight(val uint64) *aopt {
-	a.opts = append(a.opts, func(header *types.AtxTortoiseData) {
+	a.opts = append(a.opts, func(header *atxData) {
 		header.Weight = val
 	})
 	return a
@@ -51,19 +57,19 @@ func (s *smesher) malfeasant() {
 	s.reg.register(&malfeasantAction{id: smesher})
 }
 
-func (s *smesher) rawatx(id types.ATXID, epoch uint32, opts ...*aopt) *atxAction {
-	header := s.defaults
-	header.ID = id
-	header.Smesher = hash.Sum([]byte(strconv.Itoa(s.id)))
-	header.TargetEpoch = types.EpochID(epoch) + 1
+func (s *smesher) rawatx(id types.ATXID, publish types.EpochID, opts ...*aopt) *atxAction {
+	atx := s.defaults
+	atx.id = id
+	atx.target = publish + 1
+	atx.Node = hash.Sum([]byte(strconv.Itoa(s.id)))
 	for _, opt := range opts {
 		for _, o := range opt.opts {
-			o(&header)
+			o(&atx)
 		}
 	}
 	val := &atxAction{
 		reg:     s.reg,
-		header:  header,
+		atx:     atx,
 		ballots: map[types.BallotID]*ballotAction{},
 	}
 	s.reg.register(val)
@@ -73,12 +79,12 @@ func (s *smesher) rawatx(id types.ATXID, epoch uint32, opts ...*aopt) *atxAction
 
 // atx accepts publish epoch and atx fields that are relevant for tortoise
 // as options.
-func (s *smesher) atx(epoch uint32, opts ...*aopt) *atxAction {
-	id := hash.Sum([]byte(strconv.Itoa(s.id)), []byte(strconv.Itoa(int(epoch))))
+func (s *smesher) atx(publish types.EpochID, opts ...*aopt) *atxAction {
+	id := hash.Sum([]byte(strconv.Itoa(s.id)), []byte(strconv.Itoa(int(publish))))
 	if val, exists := s.atxs[id]; exists {
 		return val
 	}
-	return s.rawatx(id, epoch, opts...)
+	return s.rawatx(id, publish, opts...)
 }
 
 type malfeasantAction struct {
@@ -100,13 +106,13 @@ func (a *malfeasantAction) execute(trt *Tortoise) {
 type atxAction struct {
 	reg registry
 
-	header    types.AtxTortoiseData
+	atx       atxData
 	ballots   map[types.BallotID]*ballotAction
 	reference *ballotAction
 }
 
 func (a *atxAction) String() string {
-	return fmt.Sprintf("atx %v", a.header.ID)
+	return fmt.Sprintf("atx %v", a.atx.id)
 }
 
 func (*atxAction) deps() []action {
@@ -200,25 +206,15 @@ func (b *bopt) assert(onDecode func(*DecodedBallot, error), onStore func(error))
 }
 
 func (a *atxAction) execute(trt *Tortoise) {
-	trt.trtl.atxsdata.Add(
-		a.header.TargetEpoch,
-		a.header.Smesher,
-		types.Address{},
-		a.header.ID,
-		a.header.Weight,
-		a.header.BaseHeight,
-		a.header.Height,
-		0,
-		false,
-	)
-	trt.OnAtx(&a.header)
+	trt.trtl.atxsdata.AddAtx(a.atx.target, a.atx.id, &a.atx.ATX)
+	trt.OnAtx(a.atx.target, a.atx.id, &a.atx.ATX)
 }
 
 func (a *atxAction) rawballot(id types.BallotID, n int, opts ...*bopt) *ballotAction {
 	lid := uint32(n) + types.GetEffectiveGenesis().Uint32()
 	b := types.BallotTortoiseData{}
-	b.Smesher = a.header.Smesher
-	b.AtxID = a.header.ID
+	b.Smesher = a.atx.Node
+	b.AtxID = a.atx.id
 	b.Layer = types.LayerID(lid)
 	b.ID = id
 
@@ -261,7 +257,7 @@ func (a *atxAction) rawballot(id types.BallotID, n int, opts ...*bopt) *ballotAc
 }
 
 func (a *atxAction) ballot(n int, opts ...*bopt) *ballotAction {
-	hs := hash.Sum(a.header.ID[:], []byte(strconv.Itoa(int(n))))
+	hs := hash.Sum(a.atx.id[:], []byte(strconv.Itoa(int(n))))
 	var id types.BallotID
 	copy(id[:], hs[:])
 	if val, exist := a.ballots[id]; exist {

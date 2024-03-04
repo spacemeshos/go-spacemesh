@@ -37,7 +37,28 @@ This argument was replaced by `--poet-servers` that take JSON-encoded array of p
 (address, public key). The default value is
 
 ```json
-[{"address":"https://mainnet-poet-0.spacemesh.network","pubkey":"cFnqCS5oER7GOX576oPtahlxB/1y95aDibdK7RHQFVg="},{"address":"https://mainnet-poet-1.spacemesh.network","pubkey":"Qh1efxY4YhoYBEXKPTiHJ/a7n1GsllRSyweQKO3j7m0="},{"address":"https://mainnet-poet-2.spacemesh.network","pubkey":"8RXEI0MwO3uJUINFFlOm/uTjJCneV9FidMpXmn55G8Y="},{"address":"https://poet-110.spacemesh.network","pubkey":"8Qqgid+37eyY7ik+EA47Nd5TrQjXolbv2Mdgir243No="},{"address":"https://poet-111.spacemesh.network","pubkey":"caIV0Ym59L3RqbVAL6UrCPwr+z+lwe2TBj57QWnAgtM="},{"address":"https://poet-112.spacemesh.network","pubkey":"5p/mPvmqhwdvf8U0GVrNq/9IN/HmZj5hCkFLAN04g1E="}]
+[
+  {
+    "address": "https://mainnet-poet-0.spacemesh.network",
+    "pubkey": "cFnqCS5oER7GOX576oPtahlxB/1y95aDibdK7RHQFVg="
+  },
+  {
+    "address": "https://mainnet-poet-1.spacemesh.network",
+    "pubkey": "Qh1efxY4YhoYBEXKPTiHJ/a7n1GsllRSyweQKO3j7m0="
+  },
+  {
+    "address": "https://poet-110.spacemesh.network",
+    "pubkey": "8Qqgid+37eyY7ik+EA47Nd5TrQjXolbv2Mdgir243No="
+  },
+  {
+    "address": "https://poet-111.spacemesh.network",
+    "pubkey": "caIV0Ym59L3RqbVAL6UrCPwr+z+lwe2TBj57QWnAgtM="
+  },
+  {
+    "address": "https://poet-112.spacemesh.network",
+    "pubkey": "5p/mPvmqhwdvf8U0GVrNq/9IN/HmZj5hCkFLAN04g1E="
+  }
+]
 ```
 
 ##### config.json
@@ -61,10 +82,6 @@ configuration is as follows:
         "pubkey": "Qh1efxY4YhoYBEXKPTiHJ/a7n1GsllRSyweQKO3j7m0="
       },
       {
-        "address": "https://mainnet-poet-2.spacemesh.network",
-        "pubkey": "8RXEI0MwO3uJUINFFlOm/uTjJCneV9FidMpXmn55G8Y="
-      },
-      {
         "address": "https://poet-110.spacemesh.network",
         "pubkey": "8Qqgid+37eyY7ik+EA47Nd5TrQjXolbv2Mdgir243No="
       },
@@ -77,7 +94,7 @@ configuration is as follows:
         "pubkey": "5p/mPvmqhwdvf8U0GVrNq/9IN/HmZj5hCkFLAN04g1E="
       }
     ]
-  },
+  }
 }
 ```
 
