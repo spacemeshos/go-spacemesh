@@ -29,19 +29,17 @@ const (
 )
 
 func genPrivateKey(tb testing.TB, path string) *rsa.PrivateKey {
-	priv, err := rsa.GenerateKey(rand.Reader, 4096)
+	caKey, err := rsa.GenerateKey(rand.Reader, 4096)
 	require.NoError(tb, err)
 
 	f, err := os.Create(path)
 	require.NoError(tb, err)
 	defer f.Close()
-	privBytes, err := x509.MarshalPKCS8PrivateKey(priv)
-	require.NoError(tb, err)
 	require.NoError(tb, pem.Encode(f, &pem.Block{
-		Type:  "PRIVATE KEY",
-		Bytes: privBytes,
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(caKey),
 	}))
-	return priv
+	return caKey
 }
 
 func genCertificate(
