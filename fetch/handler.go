@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 
+	"github.com/spacemeshos/go-scale"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -133,7 +134,7 @@ func (h *handler) streamIDs(ctx context.Context, s io.ReadWriter, retrieve retri
 	if err := retrieve(func(total int, id []byte) error {
 		if !started {
 			started = true
-			respSize := codec.LenSize(uint32(total)) + uint32(total*len(id))
+			respSize := scale.LenSize(uint32(total)) + uint32(total*len(id))
 			if _, err := codec.EncodeLen(s, respSize); err != nil {
 				return err
 			}
@@ -361,13 +362,13 @@ func (h *handler) handleHashReqStream(ctx context.Context, msg []byte, s io.Read
 			if size > 0 {
 				goodIDs = append(goodIDs, ids[n])
 				count++
-				totalSize += types.Hash32Length + codec.LenSize(uint32(size)) + uint32(size)
+				totalSize += types.Hash32Length + scale.LenSize(uint32(size)) + uint32(size)
 			}
 		}
 		idsByHint[hint] = goodIDs
 	}
 
-	totalSize += codec.LenSize(count)
+	totalSize += scale.LenSize(count)
 
 	if _, err := codec.EncodeLen(s, totalSize); err != nil {
 		return err

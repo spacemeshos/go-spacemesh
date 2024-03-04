@@ -39,7 +39,7 @@ require (
 	github.com/spacemeshos/api/release/go v1.29.0
 	github.com/spacemeshos/economics v0.1.2
 	github.com/spacemeshos/fixed v0.1.1
-	github.com/spacemeshos/go-scale v1.1.12
+	github.com/spacemeshos/go-scale v1.1.13-0.20240304184947-728911ec77e7
 	github.com/spacemeshos/merkle-tree v0.2.3
 	github.com/spacemeshos/poet v0.10.2
 	github.com/spacemeshos/post v0.11.0
@@ -47,7 +47,7 @@ require (
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.18.2
-	github.com/stretchr/testify v1.8.4
+	github.com/stretchr/testify v1.9.0
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
 	github.com/zeebo/blake3 v0.2.3
 	go.uber.org/mock v0.4.0
@@ -200,7 +200,7 @@ require (
 	go.uber.org/fx v1.20.1 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/crypto v0.18.0 // indirect
-	golang.org/x/mod v0.14.0 // indirect
+	golang.org/x/mod v0.15.0 // indirect
 	golang.org/x/net v0.20.0 // indirect
 	golang.org/x/oauth2 v0.16.0 // indirect
 	golang.org/x/sys v0.16.0 // indirect

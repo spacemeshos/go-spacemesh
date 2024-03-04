@@ -164,20 +164,6 @@ func DecodeLen(r io.Reader) (uint32, int, error) {
 	return scale.DecodeCompact32(scale.NewDecoder(r))
 }
 
-// LenSize returns the size in bytes required to encode a length value.
-func LenSize(v uint32) uint32 {
-	switch {
-	case v <= (1<<6 - 1):
-		return 1
-	case v <= (1<<14 - 1):
-		return 2
-	case v <= (1<<30 - 1):
-		return 4
-	default:
-		return 5
-	}
-}
-
 // DecodeStringWithLimit decodes a string from an io.Reader, limiting the maximum length.
 func DecodeStringWithLimit(r io.Reader, limit uint32) (string, int, error) {
 	return scale.DecodeStringWithLimit(scale.NewDecoder(r), limit)
