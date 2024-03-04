@@ -83,9 +83,11 @@ configuration is as follows:
 
 #### Extend go-spacemesh with option to manage multiple identities/PoST services
 
-A node can now manage multiple identities and will manage the lifecycle for those identities. This reduces the amount of
-data that is needed to be broadcasted / fetched from the network and reduces the amount of data that needs to be stored
-locally, because only one database is needed for all identities instead of one for each identity.
+**NOTE:** This is a new feature, not yet supported by Smapp and possibly subject to change. Please use with caution.
+
+A node can now manage multiple identities and their life cycle. This reduces the amount of data that is needed to be
+broadcasted / fetched from the network and reduces the amount of data that needs to be stored locally, because only one
+database is needed for all identities instead of one for each.
 
 To ensure you are eligible for rewards of any given identity, the associated PoST service must be running and connected
 to the node during the cyclegap set in the node's configuration. After successfully broadcasting the ATX and registering
