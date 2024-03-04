@@ -18,6 +18,12 @@ encrypted connection between the post service and the node over insecure connect
 
 Smeshers using the default setup with a supervised post service do not need to make changes to their node configuration.
 
+#### Fully migrated local state into `node_state.sql`
+
+With this release the node has fully migrated its local state into `node_state.sql`. During the first start after the
+upgrade the node will migrate the data from disk and store it in the database. This change also allows the PoST data
+directory to be set to read only after the migration is complete, as the node will no longer write to it.
+
 #### New poets configuration
 
 Upgrading requires changes in config and in CLI flags (if not using the default).
@@ -132,11 +138,6 @@ and permanent ineligibility for rewards.
   The config now takes the poet server address and its public key. See the [Upgrade Information](#new-poets-configuration)
   for details.
 
-* [#5219](https://github.com/spacemeshos/go-spacemesh/pull/5219) Migrate data from `nipost_builder_state.bin` to `node_state.sql`.
-
-  The node will automatically migrate the data from disk and store it in the database. The migration will take place at the
-  first startup after the upgrade.
-
 * [#5390](https://github.com/spacemeshos/go-spacemesh/pull/5390)
   Distributed PoST verification.
 
@@ -156,8 +157,14 @@ and permanent ineligibility for rewards.
 
 ### Improvements
 
+* [#5219](https://github.com/spacemeshos/go-spacemesh/pull/5219) Migrate data from `nipost_builder_state.bin` to `node_state.sql`.
+
+  The node will automatically migrate the data from disk and store it in the database. The migration will take place at the
+  first startup after the upgrade.
+
 * [#5418](https://github.com/spacemeshos/go-spacemesh/pull/5418) Add `grpc-post-listener` to separate post service from
   `grpc-private-listener` and not require mTLS for the post service.
+
 * [#5465](https://github.com/spacemeshos/go-spacemesh/pull/5465)
   Add an option to cache SQL query results. This is useful for nodes with high peer counts.
 
