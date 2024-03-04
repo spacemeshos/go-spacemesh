@@ -117,7 +117,6 @@ func TestPostMalfeasanceProof(t *testing.T) {
 
 	// 1. Initialize
 	postSetupMgr, err := activation.NewPostSetupManager(
-		signer.NodeID(),
 		cfg.POST,
 		logger.Named("post"),
 		datastore.NewCachedDB(sql.InMemory(), log.NewNop()),
@@ -135,7 +134,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		postSetupMgr,
 	)
 	require.NoError(t, err)
-	require.NoError(t, postSupervisor.Start(cfg.SMESHING.Opts))
+	require.NoError(t, postSupervisor.Start(cfg.SMESHING.Opts, signer.NodeID()))
 	t.Cleanup(func() { assert.NoError(t, postSupervisor.Stop(false)) })
 
 	// 2. create ATX with invalid POST labels

@@ -183,9 +183,9 @@ func (t *Tortoise) OnWeakCoin(lid types.LayerID, coin bool) {
 	}
 }
 
-// OnMalfeasance registers node id as malfeasent.
+// OnMalfeasance registers node id as malfeasant.
 // - ballots from this id will have zero weight
-// - atxs - will not be counted towards global/local threhsolds
+// - atxs - will not be counted towards global/local thresholds
 // If node registers equivocating ballot/atx it should
 // call OnMalfeasance before storing ballot/atx.
 func (t *Tortoise) OnMalfeasance(id types.NodeID) {

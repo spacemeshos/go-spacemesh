@@ -18,6 +18,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 )
 
@@ -131,7 +132,7 @@ func (ps *PostSupervisor) Status() *PostSetupStatus {
 	return ps.postSetupProvider.Status()
 }
 
-func (ps *PostSupervisor) Start(opts PostSetupOpts) error {
+func (ps *PostSupervisor) Start(opts PostSetupOpts, id types.NodeID) error {
 	ps.mtx.Lock()
 	defer ps.mtx.Unlock()
 	if ps.stop != nil {
@@ -146,7 +147,7 @@ func (ps *PostSupervisor) Start(opts PostSetupOpts) error {
 	ps.eg.Go(func() error {
 		// If it returns any error other than context.Canceled
 		// (which is how we signal it to stop) then we shutdown.
-		err := ps.postSetupProvider.PrepareInitializer(ctx, opts)
+		err := ps.postSetupProvider.PrepareInitializer(ctx, opts, id)
 		switch {
 		case errors.Is(err, context.Canceled):
 			return nil
@@ -155,7 +156,7 @@ func (ps *PostSupervisor) Start(opts PostSetupOpts) error {
 			return err
 		}
 
-		err = ps.postSetupProvider.StartSession(ctx)
+		err = ps.postSetupProvider.StartSession(ctx, id)
 		switch {
 		case errors.Is(err, context.Canceled):
 			return nil

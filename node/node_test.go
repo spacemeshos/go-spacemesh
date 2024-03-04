@@ -3,7 +3,6 @@ package node
 import (
 	"bytes"
 	"context"
-	"crypto/ed25519"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -19,6 +18,7 @@ import (
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/post/initialization"
+	"github.com/spacemeshos/post/shared"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
@@ -59,82 +59,6 @@ func TestMain(m *testing.M) {
 	os.Exit(res)
 }
 
-func TestSpacemeshApp_getEdIdentity(t *testing.T) {
-	r := require.New(t)
-
-	tempdir := t.TempDir()
-
-	// setup spacemesh app
-	app := New(WithLog(logtest.New(t)))
-	app.Config.SMESHING.Opts.DataDir = tempdir
-	app.log = logtest.New(t)
-
-	// Create new identity.
-	signer1, err := app.LoadOrCreateEdSigner()
-	r.NoError(err)
-	infos, err := os.ReadDir(tempdir)
-	r.NoError(err)
-	r.Len(infos, 1)
-
-	// Load existing identity.
-	signer2, err := app.LoadOrCreateEdSigner()
-	r.NoError(err)
-	infos, err = os.ReadDir(tempdir)
-	r.NoError(err)
-	r.Len(infos, 1)
-	r.Equal(signer1.PublicKey(), signer2.PublicKey())
-
-	// Invalidate the identity by changing its file name.
-	filename := filepath.Join(tempdir, infos[0].Name())
-	err = os.Rename(filename, filename+"_")
-	r.NoError(err)
-
-	// Create new identity.
-	signer3, err := app.LoadOrCreateEdSigner()
-	r.NoError(err)
-	infos, err = os.ReadDir(tempdir)
-	r.NoError(err)
-	r.Len(infos, 2)
-	r.NotEqual(signer1.PublicKey(), signer3.PublicKey())
-
-	t.Run("bad length", func(t *testing.T) {
-		testLoadOrCreateEdSigner(t,
-			bytes.Repeat([]byte("ab"), signing.PrivateKeySize-1),
-			"invalid key size 63/64",
-		)
-	})
-	t.Run("bad hex", func(t *testing.T) {
-		testLoadOrCreateEdSigner(t,
-			bytes.Repeat([]byte("CV"), signing.PrivateKeySize),
-			"decoding private key: encoding/hex: invalid byte",
-		)
-	})
-	t.Run("good key", func(t *testing.T) {
-		_, priv, err := ed25519.GenerateKey(nil)
-		require.NoError(t, err)
-		testLoadOrCreateEdSigner(t,
-			[]byte(hex.EncodeToString(priv)),
-			"",
-		)
-	})
-}
-
-func testLoadOrCreateEdSigner(t *testing.T, data []byte, expect string) {
-	tempdir := t.TempDir()
-	app := New(WithLog(logtest.New(t)))
-	app.Config.SMESHING.Opts.DataDir = tempdir
-	keyfile := filepath.Join(app.Config.SMESHING.Opts.DataDir, edKeyFileName)
-	require.NoError(t, os.WriteFile(keyfile, data, 0o600))
-	signer, err := app.LoadOrCreateEdSigner()
-	if len(expect) > 0 {
-		require.ErrorContains(t, err, expect)
-		require.Nil(t, signer)
-	} else {
-		require.NoError(t, err)
-		require.NotEmpty(t, signer)
-	}
-}
-
 func newLogger(buf *bytes.Buffer) log.Log {
 	lvl := zap.NewAtomicLevelAt(zapcore.InfoLevel)
 	syncer := zapcore.AddSync(buf)
@@ -148,22 +72,23 @@ func newLogger(buf *bytes.Buffer) log.Log {
 func TestSpacemeshApp_SetLoggers(t *testing.T) {
 	r := require.New(t)
 
-	var buf1, buf2 bytes.Buffer
+	cfg := getTestDefaultConfig(t)
+	app := New(WithConfig(cfg), WithLog(logtest.New(t)))
 
-	app := New(WithLog(logtest.New(t)))
-	mylogger := "anton"
+	var buf1, buf2 bytes.Buffer
+	myLogger := "anton"
 	myLog := newLogger(&buf1)
 	myLog2 := newLogger(&buf2)
 
-	app.log = app.addLogger(mylogger, myLog)
+	app.log = app.addLogger(myLogger, myLog)
 	msg1 := "hi there"
 	app.log.Info(msg1)
 	r.Equal(
-		fmt.Sprintf("INFO\t%s\t%s\n", mylogger, msg1),
+		fmt.Sprintf("INFO\t%s\t%s\n", myLogger, msg1),
 		buf1.String(),
 	)
-	r.NoError(app.SetLogLevel(mylogger, "warn"))
-	r.Equal("warn", app.loggers[mylogger].String())
+	r.NoError(app.SetLogLevel(myLogger, "warn"))
+	r.Equal("warn", app.loggers[myLogger].String())
 	buf1.Reset()
 
 	msg1 = "other logger"
@@ -175,19 +100,19 @@ func TestSpacemeshApp_SetLoggers(t *testing.T) {
 	// This one should be printed
 	app.log.Warning(msg3)
 	r.Equal(
-		fmt.Sprintf("WARN\t%s\t%s\n", mylogger, msg3),
+		fmt.Sprintf("WARN\t%s\t%s\n", myLogger, msg3),
 		buf1.String(),
 	)
 	r.Equal(fmt.Sprintf("INFO\t%s\n", msg1), buf2.String())
 	buf1.Reset()
 
-	r.NoError(app.SetLogLevel(mylogger, "info"))
+	r.NoError(app.SetLogLevel(myLogger, "info"))
 
-	msg4 := "nihao"
+	msg4 := "你好"
 	app.log.Info(msg4)
-	r.Equal("info", app.loggers[mylogger].String())
+	r.Equal("info", app.loggers[myLogger].String())
 	r.Equal(
-		fmt.Sprintf("INFO\t%s\t%s\n", mylogger, msg4),
+		fmt.Sprintf("INFO\t%s\t%s\n", myLogger, msg4),
 		buf1.String(),
 	)
 
@@ -195,24 +120,26 @@ func TestSpacemeshApp_SetLoggers(t *testing.T) {
 	r.Error(app.SetLogLevel("anton3", "warn"))
 
 	// test bad loglevel
-	r.Error(app.SetLogLevel(mylogger, "lulu"))
-	r.Equal("info", app.loggers[mylogger].String())
+	r.Error(app.SetLogLevel(myLogger, "lulu"))
+	r.Equal("info", app.loggers[myLogger].String())
 }
 
 func TestSpacemeshApp_AddLogger(t *testing.T) {
 	r := require.New(t)
 
 	var buf bytes.Buffer
-
 	lg := newLogger(&buf)
-	app := New(WithLog(logtest.New(t)))
-	mylogger := "anton"
-	subLogger := app.addLogger(mylogger, lg)
+
+	cfg := getTestDefaultConfig(t)
+	app := New(WithConfig(cfg), WithLog(logtest.New(t)))
+
+	myLogger := "anton"
+	subLogger := app.addLogger(myLogger, lg)
 	subLogger.Debug("should not get printed")
 	teststr := "should get printed"
 	subLogger.Info(teststr)
 	r.Equal(
-		fmt.Sprintf("INFO\t%s\t%s\n", mylogger, teststr),
+		fmt.Sprintf("INFO\t%s\t%s\n", myLogger, teststr),
 		buf.String(),
 	)
 }
@@ -238,7 +165,9 @@ func cmdWithRun(run func(*cobra.Command, []string) error) *cobra.Command {
 
 func TestSpacemeshApp_Cmd(t *testing.T) {
 	r := require.New(t)
-	app := New(WithLog(logtest.New(t)))
+
+	cfg := getTestDefaultConfig(t)
+	app := New(WithConfig(cfg), WithLog(logtest.New(t)))
 
 	expected := `unknown command "illegal" for "node"`
 	expected2 := "Error: " + expected + "\nRun 'node --help' for usage.\n"
@@ -279,18 +208,20 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	listener := "127.0.0.1:1242"
 
 	r := require.New(t)
-	app := New(WithLog(logtest.New(t)))
+	cfg := getTestDefaultConfig(t)
+	cfg.API.PublicListener = listener
+	app := New(WithConfig(cfg), WithLog(logtest.New(t)))
+	err := app.NewIdentity()
+	require.NoError(t, err)
 
 	run := func(c *cobra.Command, args []string) error {
-		app.Config.API.PublicListener = listener
-		app.Config.DataDirParent = t.TempDir()
 		return app.startAPIServices(context.Background())
 	}
 	defer app.stopServices(context.Background())
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	_, err := grpc.DialContext(
+	_, err = grpc.DialContext(
 		ctx,
 		listener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -330,11 +261,13 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 
 func TestSpacemeshApp_JsonServiceNotRunning(t *testing.T) {
 	r := require.New(t)
-	app := New(WithLog(logtest.New(t)))
+	cfg := getTestDefaultConfig(t)
+	app := New(WithConfig(cfg), WithLog(logtest.New(t)))
+	err := app.NewIdentity()
+	require.NoError(t, err)
 
 	// Make sure the service is not running by default
 	run := func(c *cobra.Command, args []string) error {
-		app.Config.DataDirParent = t.TempDir()
 		return app.startAPIServices(context.Background())
 	}
 
@@ -348,16 +281,18 @@ func TestSpacemeshApp_JsonServiceNotRunning(t *testing.T) {
 
 func TestSpacemeshApp_JsonService(t *testing.T) {
 	r := require.New(t)
-	app := New(WithLog(logtest.New(t)))
-	const message = "nihao shijie"
+
+	const message = "你好世界"
 	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
 	listener := "127.0.0.1:0"
 
+	cfg := getTestDefaultConfig(t)
+	cfg.API.JSONListener = listener
+	cfg.API.PrivateServices = nil
+	app := New(WithConfig(cfg), WithLog(logtest.New(t)))
+
 	// Make sure the service is not running by default
 	run := func(c *cobra.Command, args []string) error {
-		app.Config.API.PrivateServices = nil
-		app.Config.API.JSONListener = listener
-		app.Config.DataDirParent = t.TempDir()
 		return app.startAPIServices(context.Background())
 	}
 
@@ -394,16 +329,12 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		events.EventHook(),
 	) // errlog is used to simulate errors in the app
 
-	app := New(WithLog(logger))
-	app.Config = getTestDefaultConfig(t)
-	types.SetNetworkHRP(app.Config.NetworkHRP) // ensure that the correct HRP is set when generating the address below
-	app.Config.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte{1}).String()
-	app.Config.SMESHING.Opts.DataDir = t.TempDir()
-	app.Config.SMESHING.Opts.Scrypt.N = 2
+	cfg := getTestDefaultConfig(t)
+	app := New(WithConfig(cfg), WithLog(logger))
 
-	edSgn, err := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	app.edSgn = edSgn
+	app.signers = []*signing.EdSigner{signer}
 
 	mesh, err := mocknet.WithNPeers(1)
 	require.NoError(t, err)
@@ -411,8 +342,8 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	require.NoError(t, err)
 	app.host = h
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	appCtx, appCancel := context.WithCancel(context.Background())
+	defer appCancel()
 
 	run := func(c *cobra.Command, args []string) error {
 		// Give the error channel a buffer
@@ -428,8 +359,11 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
 		// be done more surgically, and we don't need _all_ of the services.
-		return app.Start(context.Background())
+		return app.Start(appCtx)
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
 	// Run the app in a goroutine. As noted above, it blocks if it succeeds.
 	// If there's an error in the args, it will return immediately.
@@ -441,7 +375,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		return nil
 	})
 
-	<-app.started
+	<-app.Started()
 	conn, err := grpc.DialContext(
 		ctx,
 		app.grpcPublicServer.BoundAddress,
@@ -505,6 +439,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 	// Cleanup stops all services and thereby the app
 	<-app.Started() // prevents races when app is not started yet
+	appCancel()
 	app.Cleanup(context.Background())
 
 	// Wait for everything to stop cleanly before ending test
@@ -513,22 +448,22 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 // E2E app test of the transaction service.
 func TestSpacemeshApp_TransactionService(t *testing.T) {
-	r := require.New(t)
-
 	listener := "127.0.0.1:14236"
 
-	app := New(WithLog(logtest.New(t)))
 	cfg := config.DefaultTestConfig()
 	cfg.DataDirParent = t.TempDir()
-	app.Config = &cfg
+	app := New(WithConfig(&cfg), WithLog(logtest.New(t)))
 
 	signer, err := signing.NewEdSigner()
-	r.NoError(err)
-	app.edSgn = signer
+	require.NoError(t, err)
+	app.signers = []*signing.EdSigner{signer}
 	address := wallet.Address(signer.PublicKey().Bytes())
 
+	appCtx, appCancel := context.WithCancel(context.Background())
+	defer appCancel()
+
 	run := func(c *cobra.Command, args []string) error {
-		r.NoError(app.Initialize())
+		require.NoError(t, app.Initialize())
 
 		// GRPC configuration
 		app.Config.API.PublicListener = listener
@@ -558,7 +493,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
 		// be done more surgically, and we don't need _all_ of the services.
-		return app.Start(context.Background())
+		return app.Start(appCtx)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -570,8 +505,8 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		str, err := testArgs(ctx, cmdWithRun(run))
-		r.Empty(str)
-		r.NoError(err)
+		require.Empty(t, str)
+		require.NoError(t, err)
 		wg.Done()
 	}()
 
@@ -591,8 +526,8 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
-	r.NoError(err)
-	t.Cleanup(func() { r.NoError(conn.Close()) })
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, conn.Close()) })
 	c := pb.NewTransactionServiceClient(conn)
 
 	tx1 := types.NewRawTx(
@@ -639,6 +574,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 
 	// This stops the app
 	// Cleanup stops all services and thereby the app
+	appCancel()
 	app.Cleanup(context.Background())
 
 	// Wait for it to stop
@@ -917,9 +853,8 @@ func TestHRP(t *testing.T) {
 
 func TestGenesisConfig(t *testing.T) {
 	t.Run("config is written to a file", func(t *testing.T) {
-		app := New()
-		app.Config = getTestDefaultConfig(t)
-		app.Config.DataDirParent = t.TempDir()
+		cfg := getTestDefaultConfig(t)
+		app := New(WithConfig(cfg))
 
 		require.NoError(t, app.Initialize())
 		t.Cleanup(func() { app.Cleanup(context.Background()) })
@@ -933,9 +868,8 @@ func TestGenesisConfig(t *testing.T) {
 	})
 
 	t.Run("no error if no diff", func(t *testing.T) {
-		app := New()
-		app.Config = getTestDefaultConfig(t)
-		app.Config.DataDirParent = t.TempDir()
+		cfg := getTestDefaultConfig(t)
+		app := New(WithConfig(cfg))
 
 		require.NoError(t, app.Initialize())
 		app.Cleanup(context.Background())
@@ -945,9 +879,8 @@ func TestGenesisConfig(t *testing.T) {
 	})
 
 	t.Run("fatal error on a diff", func(t *testing.T) {
-		app := New()
-		app.Config = getTestDefaultConfig(t)
-		app.Config.DataDirParent = t.TempDir()
+		cfg := getTestDefaultConfig(t)
+		app := New(WithConfig(cfg))
 
 		require.NoError(t, app.Initialize())
 		t.Cleanup(func() { app.Cleanup(context.Background()) })
@@ -959,18 +892,17 @@ func TestGenesisConfig(t *testing.T) {
 	})
 
 	t.Run("not valid time", func(t *testing.T) {
-		app := New()
-		app.Config = getTestDefaultConfig(t)
-		app.Config.DataDirParent = t.TempDir()
-		app.Config.Genesis.GenesisTime = time.Now().Format(time.RFC1123)
+		cfg := getTestDefaultConfig(t)
+		cfg.Genesis.GenesisTime = time.Now().Format(time.RFC1123)
+		app := New(WithConfig(cfg))
 
 		require.ErrorContains(t, app.Initialize(), "time.RFC3339")
 	})
+
 	t.Run("long extra data", func(t *testing.T) {
-		app := New()
-		app.Config = getTestDefaultConfig(t)
-		app.Config.DataDirParent = t.TempDir()
-		app.Config.Genesis.ExtraData = string(make([]byte, 256))
+		cfg := getTestDefaultConfig(t)
+		cfg.Genesis.ExtraData = string(make([]byte, 256))
+		app := New(WithConfig(cfg))
 
 		require.ErrorContains(t, app.Initialize(), "extra-data")
 	})
@@ -978,8 +910,8 @@ func TestGenesisConfig(t *testing.T) {
 
 func TestFlock(t *testing.T) {
 	t.Run("sanity", func(t *testing.T) {
-		app := New()
-		app.Config = getTestDefaultConfig(t)
+		cfg := getTestDefaultConfig(t)
+		app := New(WithConfig(cfg))
 
 		require.NoError(t, app.Lock())
 		t.Cleanup(app.Unlock)
@@ -991,9 +923,9 @@ func TestFlock(t *testing.T) {
 	})
 
 	t.Run("dir doesn't exist", func(t *testing.T) {
-		app := New()
-		app.Config = getTestDefaultConfig(t)
-		app.Config.FileLock = filepath.Join(t.TempDir(), "newdir", "LOCK")
+		cfg := getTestDefaultConfig(t)
+		cfg.FileLock = filepath.Join(t.TempDir(), "newdir", "LOCK")
+		app := New(WithConfig(cfg))
 
 		require.NoError(t, app.Lock())
 		t.Cleanup(app.Unlock)
@@ -1008,7 +940,7 @@ func TestAdminEvents(t *testing.T) {
 	require.NoError(t, err)
 	cfg.DataDirParent = t.TempDir()
 	cfg.FileLock = filepath.Join(cfg.DataDirParent, "LOCK")
-	cfg.SMESHING.Opts.DataDir = cfg.DataDirParent
+	cfg.SMESHING.Opts.DataDir = t.TempDir()
 	cfg.SMESHING.Opts.Scrypt.N = 2
 	cfg.POSTService.PostServiceCmd = activation.DefaultTestPostServiceConfig().PostServiceCmd
 
@@ -1017,9 +949,8 @@ func TestAdminEvents(t *testing.T) {
 
 	logger := logtest.New(t, zapcore.DebugLevel)
 	app := New(WithConfig(&cfg), WithLog(logger))
-	signer, err := app.LoadOrCreateEdSigner()
-	require.NoError(t, err)
-	app.edSgn = signer // https://github.com/spacemeshos/go-spacemesh/issues/4653
+
+	require.NoError(t, app.NewIdentity())
 	require.NoError(t, app.Initialize())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1029,7 +960,6 @@ func TestAdminEvents(t *testing.T) {
 			return err
 		}
 		app.Cleanup(context.Background())
-		app.eg.Wait() // https://github.com/spacemeshos/go-spacemesh/issues/4653
 		return nil
 	})
 	t.Cleanup(func() { assert.NoError(t, eg.Wait()) })
@@ -1076,33 +1006,63 @@ func TestAdminEvents(t *testing.T) {
 	}
 }
 
-func TestAdminEvents_UnspecifiedAddresses(t *testing.T) {
+func launchPostSupervisor(
+	tb testing.TB,
+	log *zap.Logger,
+	mgr *activation.PostSetupManager,
+	id types.NodeID,
+	address string,
+	postCfg activation.PostConfig,
+	postOpts activation.PostSetupOpts,
+) func() {
+	cmdCfg := activation.DefaultTestPostServiceConfig()
+	cmdCfg.NodeAddress = fmt.Sprintf("http://%s", address)
+	provingOpts := activation.DefaultPostProvingOpts()
+	provingOpts.RandomXMode = activation.PostRandomXModeLight
+
+	ps, err := activation.NewPostSupervisor(log, cmdCfg, postCfg, provingOpts, mgr)
+	require.NoError(tb, err)
+	require.NotNil(tb, ps)
+	require.NoError(tb, ps.Start(postOpts, id))
+	return func() { assert.NoError(tb, ps.Stop(false)) }
+}
+
+func TestAdminEvents_MultiSmesher(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
 	cfg, err := presets.Get("standalone")
 	require.NoError(t, err)
-
 	cfg.DataDirParent = t.TempDir()
 	cfg.FileLock = filepath.Join(cfg.DataDirParent, "LOCK")
-	cfg.SMESHING.Opts.DataDir = cfg.DataDirParent
 	cfg.SMESHING.Opts.Scrypt.N = 2
+	cfg.SMESHING.Start = false
 	cfg.POSTService.PostServiceCmd = activation.DefaultTestPostServiceConfig().PostServiceCmd
-
-	// Expose APIs on all interfaces
-	cfg.API.PublicListener = "0.0.0.0:10092"
-	cfg.API.PrivateListener = "0.0.0.0:10093"
-	cfg.API.PostListener = "0.0.0.0:10094"
 
 	cfg.Genesis.GenesisTime = time.Now().Add(5 * time.Second).Format(time.RFC3339)
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 
-	logger := logtest.New(t, zapcore.DebugLevel)
+	logger := logtest.New(t)
 	app := New(WithConfig(&cfg), WithLog(logger))
-	signer, err := app.LoadOrCreateEdSigner()
-	require.NoError(t, err)
-	app.edSgn = signer // https://github.com/spacemeshos/go-spacemesh/issues/4653
+
+	dir := filepath.Join(app.Config.DataDir(), keyDir)
+	require.NoError(t, os.MkdirAll(dir, 0o700))
+	for i := 0; i < 2; i++ {
+		signer, err := signing.NewEdSigner(
+			signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()),
+		)
+		require.NoError(t, err)
+
+		keyFile := filepath.Join(dir, fmt.Sprintf("node_%d.key", i))
+		dst := make([]byte, hex.EncodedLen(len(signer.PrivateKey())))
+		hex.Encode(dst, signer.PrivateKey())
+		require.NoError(t, os.WriteFile(keyFile, dst, 0o600))
+	}
+
+	require.NoError(t, app.LoadIdentities())
+	require.Len(t, app.signers, 2)
 	require.NoError(t, app.Initialize())
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var eg errgroup.Group
@@ -1111,10 +1071,32 @@ func TestAdminEvents_UnspecifiedAddresses(t *testing.T) {
 			return err
 		}
 		app.Cleanup(context.Background())
-		app.eg.Wait() // https://github.com/spacemeshos/go-spacemesh/issues/4653
 		return nil
 	})
 	t.Cleanup(func() { assert.NoError(t, eg.Wait()) })
+
+	<-app.Started()
+	for _, signer := range app.signers {
+		mgr, err := activation.NewPostSetupManager(
+			cfg.POST,
+			logger.Zap(),
+			app.cachedDB,
+			types.ATXID(app.Config.Genesis.GoldenATX()),
+			app.syncer,
+			app.validator,
+		)
+		require.NoError(t, err)
+
+		cfg.SMESHING.Opts.DataDir = t.TempDir()
+		t.Cleanup(launchPostSupervisor(t,
+			logger.Zap(),
+			mgr,
+			signer.NodeID(),
+			cfg.API.PostListener,
+			cfg.POST,
+			cfg.SMESHING.Opts,
+		))
+	}
 
 	grpcCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
@@ -1136,23 +1118,108 @@ func TestAdminEvents_UnspecifiedAddresses(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		stream, err := client.EventsStream(tctx, &pb.EventStreamRequest{})
 		require.NoError(t, err)
-		success := []pb.IsEventDetails{
-			&pb.Event_Beacon{},
-			&pb.Event_InitStart{},
-			&pb.Event_InitComplete{},
-			&pb.Event_PostServiceStarted{},
-			&pb.Event_PostStart{},
-			&pb.Event_PostComplete{},
-			&pb.Event_PoetWaitRound{},
-			&pb.Event_PoetWaitProof{},
-			&pb.Event_PostStart{},
-			&pb.Event_PostComplete{},
-			&pb.Event_AtxPublished{},
+
+		matchers := map[int]func(pb.IsEventDetails) bool{
+			0: func(ev pb.IsEventDetails) bool {
+				_, ok := ev.(*pb.Event_Beacon)
+				return ok
+			},
+			1: func(ev pb.IsEventDetails) bool {
+				startEv, ok := ev.(*pb.Event_PostStart)
+				if !ok {
+					return false
+				}
+				return bytes.Equal(startEv.PostStart.Smesher, app.signers[0].NodeID().Bytes()) &&
+					bytes.Equal(startEv.PostStart.Challenge, shared.ZeroChallenge)
+			},
+			2: func(ev pb.IsEventDetails) bool {
+				completeEv, ok := ev.(*pb.Event_PostComplete)
+				if !ok {
+					return false
+				}
+				return bytes.Equal(completeEv.PostComplete.Smesher, app.signers[0].NodeID().Bytes()) &&
+					bytes.Equal(completeEv.PostComplete.Challenge, shared.ZeroChallenge)
+			},
+			3: func(ev pb.IsEventDetails) bool {
+				startEv, ok := ev.(*pb.Event_PostStart)
+				if !ok {
+					return false
+				}
+				return bytes.Equal(startEv.PostStart.Smesher, app.signers[1].NodeID().Bytes()) &&
+					bytes.Equal(startEv.PostStart.Challenge, shared.ZeroChallenge)
+			},
+			4: func(ev pb.IsEventDetails) bool {
+				completeEv, ok := ev.(*pb.Event_PostComplete)
+				if !ok {
+					return false
+				}
+				return bytes.Equal(completeEv.PostComplete.Smesher, app.signers[1].NodeID().Bytes()) &&
+					bytes.Equal(completeEv.PostComplete.Challenge, shared.ZeroChallenge)
+			},
+			5: func(ev pb.IsEventDetails) bool {
+				// TODO(mafa): this event happens once for each NodeID, but should probably only happen once for all
+				_, ok := ev.(*pb.Event_PoetWaitRound)
+				return ok
+			},
+			6: func(ev pb.IsEventDetails) bool {
+				// TODO(mafa): this event happens once for each NodeID, but should probably only happen once for all
+				_, ok := ev.(*pb.Event_PoetWaitProof)
+				return ok
+			},
+			7: func(ev pb.IsEventDetails) bool {
+				startEv, ok := ev.(*pb.Event_PostStart)
+				if !ok {
+					return false
+				}
+				return bytes.Equal(startEv.PostStart.Smesher, app.signers[0].NodeID().Bytes()) &&
+					!bytes.Equal(startEv.PostStart.Challenge, shared.ZeroChallenge)
+			},
+			8: func(ev pb.IsEventDetails) bool {
+				completeEv, ok := ev.(*pb.Event_PostComplete)
+				if !ok {
+					return false
+				}
+				return bytes.Equal(completeEv.PostComplete.Smesher, app.signers[0].NodeID().Bytes()) &&
+					!bytes.Equal(completeEv.PostComplete.Challenge, shared.ZeroChallenge)
+			},
+			9: func(ev pb.IsEventDetails) bool {
+				startEv, ok := ev.(*pb.Event_PostStart)
+				if !ok {
+					return false
+				}
+				return bytes.Equal(startEv.PostStart.Smesher, app.signers[1].NodeID().Bytes()) &&
+					!bytes.Equal(startEv.PostStart.Challenge, shared.ZeroChallenge)
+			},
+			10: func(ev pb.IsEventDetails) bool {
+				completeEv, ok := ev.(*pb.Event_PostComplete)
+				if !ok {
+					return false
+				}
+				return bytes.Equal(completeEv.PostComplete.Smesher, app.signers[1].NodeID().Bytes()) &&
+					!bytes.Equal(completeEv.PostComplete.Challenge, shared.ZeroChallenge)
+			},
+			11: func(ev pb.IsEventDetails) bool {
+				_, ok := ev.(*pb.Event_AtxPublished)
+				return ok
+			},
+			12: func(ev pb.IsEventDetails) bool {
+				_, ok := ev.(*pb.Event_AtxPublished)
+				return ok
+			},
 		}
-		for idx, ev := range success {
+		for {
 			msg, err := stream.Recv()
 			require.NoError(t, err, "stream %d", i)
-			require.IsType(t, ev, msg.Details, "stream %d, event %d", i, idx)
+			for idx, matcher := range matchers {
+				if matcher(msg.Details) {
+					t.Log("matched event", idx)
+					delete(matchers, idx)
+					break
+				}
+			}
+			if len(matchers) == 0 {
+				break
+			}
 		}
 		require.NoError(t, stream.CloseSend())
 	}
@@ -1167,6 +1234,13 @@ func TestEmptyExtraData(t *testing.T) {
 
 func getTestDefaultConfig(tb testing.TB) *config.Config {
 	cfg := config.MainnetConfig()
+	types.SetNetworkHRP(cfg.NetworkHRP)
+	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
+
+	tmp := tb.TempDir()
+	cfg.DataDirParent = tmp
+	cfg.FileLock = filepath.Join(tmp, "LOCK")
+	cfg.LayerDuration = 20 * time.Second
 
 	// is set to 0 to make sync start immediately when node starts
 	cfg.P2P.MinPeers = 0
@@ -1179,7 +1253,10 @@ func getTestDefaultConfig(tb testing.TB) *config.Config {
 
 	cfg.SMESHING = config.DefaultSmeshingConfig()
 	cfg.SMESHING.Start = true
+	cfg.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte{1}).String()
+	cfg.SMESHING.Opts.DataDir = filepath.Join(tmp, "post")
 	cfg.SMESHING.Opts.NumUnits = cfg.POST.MinNumUnits + 1
+	cfg.SMESHING.Opts.Scrypt.N = 2
 	cfg.SMESHING.Opts.ProviderID.SetUint32(initialization.CPUProviderID())
 
 	cfg.HARE3.RoundDuration = 2
@@ -1191,12 +1268,8 @@ func getTestDefaultConfig(tb testing.TB) *config.Config {
 	cfg.Tortoise.Hdist = 5
 	cfg.Tortoise.Zdist = 5
 
-	cfg.LayerDuration = 20 * time.Second
 	cfg.HareEligibility.ConfidenceParam = 1
 	cfg.Sync.Interval = 2 * time.Second
-	tmp := tb.TempDir()
-	cfg.DataDirParent = tmp
-	cfg.FileLock = filepath.Join(tmp, "LOCK")
 
 	cfg.FETCH.RequestTimeout = 10 * time.Second
 	cfg.FETCH.RequestHardTimeout = 20 * time.Second
@@ -1204,12 +1277,8 @@ func getTestDefaultConfig(tb testing.TB) *config.Config {
 	cfg.FETCH.BatchTimeout = 5 * time.Second
 
 	cfg.Beacon = beacon.NodeSimUnitTestConfig()
-
 	cfg.Genesis = config.DefaultTestGenesisConfig()
-
-	cfg.POSTService = config.DefaultTestConfig().POSTService
-
-	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
+	cfg.POSTService = activation.DefaultTestPostServiceConfig()
 
 	return &cfg
 }

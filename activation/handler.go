@@ -9,7 +9,6 @@ import (
 
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
-	"go.uber.org/zap"
 	"golang.org/x/exp/maps"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
@@ -100,11 +99,11 @@ func (h *Handler) Register(sig *signing.EdSigner) {
 	h.signerMtx.Lock()
 	defer h.signerMtx.Unlock()
 	if _, exists := h.signers[sig.NodeID()]; exists {
-		h.log.Error("signing key already registered", zap.Stringer("id", sig.NodeID()))
+		h.log.With().Error("signing key already registered", log.ShortStringer("id", sig.NodeID()))
 		return
 	}
 
-	h.log.Info("registered signing key", zap.Stringer("id", sig.NodeID()))
+	h.log.With().Info("registered signing key", log.ShortStringer("id", sig.NodeID()))
 	h.signers[sig.NodeID()] = sig
 }
 

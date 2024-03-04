@@ -571,7 +571,6 @@ func TestValidateMerkleProof(t *testing.T) {
 }
 
 func TestVerifyChainDeps(t *testing.T) {
-	ctrl := gomock.NewController(t)
 	db := sql.InMemory()
 	ctx := context.Background()
 	goldenATXID := types.ATXID{2, 3, 4}
@@ -609,6 +608,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		vAtx.SetValidity(types.Unknown)
 		require.NoError(t, atxs.Add(db, vAtx))
 
+		ctrl := gomock.NewController(t)
 		v := NewMockPostVerifier(ctrl)
 		v.EXPECT().Verify(ctx, (*shared.Proof)(atx.NIPost.Post), gomock.Any(), gomock.Any())
 
@@ -633,6 +633,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		vAtx.SetValidity(types.Unknown)
 		require.NoError(t, atxs.Add(db, vAtx))
 
+		ctrl := gomock.NewController(t)
 		v := NewMockPostVerifier(ctrl)
 		v.EXPECT().Verify(ctx, (*shared.Proof)(atx.NIPost.Post), gomock.Any(), gomock.Any())
 
@@ -658,6 +659,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		vAtx.SetValidity(types.Unknown)
 		require.NoError(t, atxs.Add(db, vAtx))
 
+		ctrl := gomock.NewController(t)
 		v := NewMockPostVerifier(ctrl)
 		v.EXPECT().Verify(ctx, (*shared.Proof)(atx.NIPost.Post), gomock.Any(), gomock.Any())
 		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
@@ -681,6 +683,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		vAtx.SetValidity(types.Unknown)
 		require.NoError(t, atxs.Add(db, vAtx))
 
+		ctrl := gomock.NewController(t)
 		v := NewMockPostVerifier(ctrl)
 		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
 		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID, VerifyChainOpts.WithTrustedID(signer.NodeID()))
@@ -703,9 +706,11 @@ func TestVerifyChainDeps(t *testing.T) {
 		vAtx.SetValidity(types.Unknown)
 		require.NoError(t, atxs.Add(db, vAtx))
 
+		ctrl := gomock.NewController(t)
 		v := NewMockPostVerifier(ctrl)
 		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
-		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID, VerifyChainOpts.AssumeValidBefore(time.Now()))
+		before := time.Now().Add(10 * time.Second)
+		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID, VerifyChainOpts.AssumeValidBefore(before))
 		require.NoError(t, err)
 	})
 
@@ -725,8 +730,9 @@ func TestVerifyChainDeps(t *testing.T) {
 		vAtx.SetValidity(types.Unknown)
 		require.NoError(t, atxs.Add(db, vAtx))
 
-		expected := errors.New("post is invalid")
+		ctrl := gomock.NewController(t)
 		v := NewMockPostVerifier(ctrl)
+		expected := errors.New("post is invalid")
 		v.EXPECT().Verify(ctx, (*shared.Proof)(atx.NIPost.Post), gomock.Any(), gomock.Any()).Return(expected)
 		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
 		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID)
