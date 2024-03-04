@@ -131,16 +131,8 @@ func Recover(
 }
 
 func recoverEpoch(target types.EpochID, trtl *Tortoise, db sql.Executor, atxdata *atxsdata.Data) error {
-	// TODO(poszu): pass trtl.OnAtx directly when OnAtx is refactored to use atxsdata.ATX type.
 	atxdata.IterateInEpoch(target, func(id types.ATXID, atx *atxsdata.ATX) {
-		trtl.OnAtx(&types.AtxTortoiseData{
-			ID:          id,
-			Smesher:     atx.Node,
-			TargetEpoch: target,
-			BaseHeight:  atx.BaseHeight,
-			Height:      atx.Height,
-			Weight:      atx.Weight,
-		})
+		trtl.OnAtx(target, id, atx)
 	})
 
 	beacon, err := beacons.Get(db, target)

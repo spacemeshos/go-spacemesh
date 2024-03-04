@@ -332,19 +332,16 @@ func TestFullCountVotes(t *testing.T) {
 			)
 			for i := range tc.activeset {
 				atxid := types.ATXID{byte(i + 1)}
-				header := &types.ActivationTxHeader{
-					ID:                atxid,
-					NumUnits:          1,
-					EffectiveNumUnits: 1,
-					BaseTickHeight:    tc.activeset[i].BaseHeight,
-					TickCount:         tc.activeset[i].TickCount,
+				atx := atxsdata.ATX{
+					Weight:     tc.activeset[i].TickCount,
+					BaseHeight: tc.activeset[i].BaseHeight,
+					Height:     tc.activeset[i].BaseHeight + tc.activeset[i].TickCount,
 				}
-				header.PublishEpoch = 1
-				tortoise.trtl.atxsdata.AddFromHeader(header, 0, false)
-				tortoise.OnAtx(header.ToData())
+				tortoise.trtl.atxsdata.AddAtx(2, atxid, &atx)
+				tortoise.OnAtx(2, atxid, &atx)
 				activeset = append(activeset, atxid)
-				weights = append(weights, header.GetWeight())
-				total += header.GetWeight()
+				weights = append(weights, atx.Weight)
+				total += atx.Weight
 			}
 
 			consensus := tortoise.trtl

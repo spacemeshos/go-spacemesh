@@ -148,7 +148,7 @@ func TestHandler_processBlockATXs(t *testing.T) {
 	goldenATXID := types.ATXID{2, 3, 4}
 	atxHdlr := newTestHandler(t, goldenATXID)
 	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any()).AnyTimes()
-	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any()).AnyTimes()
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	sig, err := signing.NewEdSigner()
 	r.NoError(err)
@@ -1083,7 +1083,7 @@ func TestHandler_ProcessAtx(t *testing.T) {
 		withVrfNonce(7),
 	)
 	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
-	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
 	proof, err := atxHdlr.processVerifiedATX(context.Background(), atx1)
 	require.NoError(t, err)
 	require.Nil(t, proof)
@@ -1110,7 +1110,7 @@ func TestHandler_ProcessAtx(t *testing.T) {
 		withVrfNonce(7),
 	)
 	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
-	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
 	atxHdlr.mtortoise.EXPECT().OnMalfeasance(gomock.Any())
 	proof, err = atxHdlr.processVerifiedATX(context.Background(), atx2)
 	require.NoError(t, err)
@@ -1157,7 +1157,7 @@ func TestHandler_ProcessAtx_OwnNotMalicious(t *testing.T) {
 		withVrfNonce(7),
 	)
 	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
-	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
 	proof, err := atxHdlr.processVerifiedATX(context.Background(), atx1)
 	require.NoError(t, err)
 	require.Nil(t, proof)
@@ -1317,7 +1317,7 @@ func TestHandler_ProcessAtxStoresNewVRFNonce(t *testing.T) {
 	nonce1 := types.VRFPostIndex(123)
 	atx1.VRFNonce = &nonce1
 	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
-	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
 	proof, err := atxHdlr.processVerifiedATX(context.Background(), atx1)
 	require.NoError(t, err)
 	require.Nil(t, proof)
@@ -1344,7 +1344,7 @@ func TestHandler_ProcessAtxStoresNewVRFNonce(t *testing.T) {
 	nonce2 := types.VRFPostIndex(456)
 	atx2.VRFNonce = &nonce2
 	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
-	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
 	proof, err = atxHdlr.processVerifiedATX(context.Background(), atx2)
 	require.NoError(t, err)
 	require.Nil(t, proof)
@@ -1360,7 +1360,7 @@ func BenchmarkNewActivationDb(b *testing.B) {
 	goldenATXID := types.ATXID{2, 3, 4}
 	atxHdlr := newTestHandler(b, goldenATXID)
 	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
-	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
 
 	const (
 		numOfMiners = 300
@@ -1501,7 +1501,7 @@ func TestHandler_HandleGossipAtx(t *testing.T) {
 			atxHdlr.mValidator.EXPECT().
 				NIPost(gomock.Any(), nodeID1, goldenATXID, second.NIPost, gomock.Any(), second.NumUnits, gomock.Any())
 			atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
-			atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
+			atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
 			require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), "", data))
 			return nil
 		},
@@ -1512,7 +1512,7 @@ func TestHandler_HandleGossipAtx(t *testing.T) {
 	atxHdlr.mValidator.EXPECT().PositioningAtx(second.PositioningATX, gomock.Any(), goldenATXID, second.PublishEpoch)
 	atxHdlr.mValidator.EXPECT().IsVerifyingFullPost().AnyTimes().Return(true)
 	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
-	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
 	require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), "", secondData))
 }
 
@@ -1568,7 +1568,7 @@ func TestHandler_HandleParallelGossipAtx(t *testing.T) {
 		NIPost(gomock.Any(), nodeID, goldenATXID, atx.NIPost, gomock.Any(), atx.NumUnits, gomock.Any())
 	atxHdlr.mValidator.EXPECT().IsVerifyingFullPost()
 	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
-	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
 
 	var eg errgroup.Group
 	for i := 0; i < 10; i++ {
@@ -1628,7 +1628,7 @@ func testHandler_HandleMaliciousAtx(t *testing.T, synced bool) {
 		PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).
 		Times(2)
 	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any()).Times(2)
-	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any()).Times(2)
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any()).Times(2)
 	atxHdlr.mValidator.EXPECT().IsVerifyingFullPost().Return(true).Times(2)
 
 	peer := p2p.Peer("buddy")
@@ -1779,7 +1779,7 @@ func TestHandler_HandleSyncedAtx(t *testing.T) {
 		)
 
 		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
-		atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
+		atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
 		proof, err := atxHdlr.processVerifiedATX(context.Background(), atx)
 		require.NoError(t, err)
 		require.Nil(t, proof)
@@ -1814,7 +1814,7 @@ func TestHandler_HandleSyncedAtx(t *testing.T) {
 		)
 
 		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
-		atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
+		atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
 		proof, err := atxHdlr.processVerifiedATX(context.Background(), atx)
 		require.NoError(t, err)
 		require.Nil(t, proof)
@@ -1860,7 +1860,7 @@ func BenchmarkGetAtxHeaderWithConcurrentProcessAtx(b *testing.B) {
 	goldenATXID := types.ATXID{2, 3, 4}
 	atxHdlr := newTestHandler(b, goldenATXID)
 	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
-	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
 
 	var (
 		stop uint64
@@ -2156,7 +2156,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 	atxHdlr.mValidator.EXPECT().InitialNIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 	atxHdlr.mValidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
-	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
 	require.NoError(t, atxHdlr.HandleSyncedAtx(context.Background(), atx1.ID().Hash32(), peer, buf))
 
 	stored1, err := atxHdlr.cdb.GetAtxHeader(atx1.ID())
@@ -2201,7 +2201,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 	atxHdlr.mValidator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 	atxHdlr.mValidator.EXPECT().PositioningAtx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
-	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
 	require.NoError(t, atxHdlr.HandleSyncedAtx(context.Background(), atx2.ID().Hash32(), peer, buf))
 
 	stored2, err := atxHdlr.cdb.GetAtxHeader(atx2.ID())

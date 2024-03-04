@@ -104,8 +104,8 @@ func (d *Data) OnEpoch(applied types.EpochID) {
 }
 
 // AddFromVerified extracts relevant fields from verified atx and adds them together with nonce and malicious flag.
-// Returns true if the atx was added to the store.
-func (d *Data) AddFromHeader(atx *types.ActivationTxHeader, nonce types.VRFPostIndex, malicious bool) bool {
+// Returns the ATX that was added to the store (if any) or `nil` if it wasn't.
+func (d *Data) AddFromHeader(atx *types.ActivationTxHeader, nonce types.VRFPostIndex, malicious bool) *ATX {
 	return d.Add(
 		atx.TargetEpoch(),
 		atx.NodeID,
@@ -119,36 +119,47 @@ func (d *Data) AddFromHeader(atx *types.ActivationTxHeader, nonce types.VRFPostI
 	)
 }
 
-// Add adds atx data to the store.
-// Returns true if the atx was added to the store.
-func (d *Data) Add(
-	epoch types.EpochID,
-	node types.NodeID,
-	coinbase types.Address,
-	atx types.ATXID,
-	weight, baseHeight, height uint64,
-	nonce types.VRFPostIndex,
-	malicious bool,
-) bool {
+// Add adds ATX data to the store.
+// Returns whether the ATX was added to the store.
+func (d *Data) AddAtx(target types.EpochID, id types.ATXID, atx *ATX) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if d.IsEvicted(epoch) {
+	if d.IsEvicted(target) {
 		return false
 	}
-	ecache, exists := d.epochs[epoch]
+	ecache, exists := d.epochs[target]
 	if !exists {
 		ecache = epochCache{
 			index: map[types.ATXID]*ATX{},
 		}
-		d.epochs[epoch] = ecache
+		d.epochs[target] = ecache
 	}
 
-	if _, exists = ecache.index[atx]; exists {
+	if _, exists = ecache.index[id]; exists {
 		return false
 	}
 
-	atxsCounter.WithLabelValues(epoch.String()).Inc()
-	data := &ATX{
+	atxsCounter.WithLabelValues(target.String()).Inc()
+
+	ecache.index[id] = atx
+	if atx.malicious {
+		d.malicious[atx.Node] = struct{}{}
+	}
+	return true
+}
+
+// Add adds ATX data to the store.
+// Returns the ATX that was added to the store (if any) or `nil` if it wasn't.
+func (d *Data) Add(
+	epoch types.EpochID,
+	node types.NodeID,
+	coinbase types.Address,
+	atxid types.ATXID,
+	weight, baseHeight, height uint64,
+	nonce types.VRFPostIndex,
+	malicious bool,
+) *ATX {
+	atx := &ATX{
 		Node:       node,
 		Coinbase:   coinbase,
 		Weight:     weight,
@@ -157,11 +168,10 @@ func (d *Data) Add(
 		Nonce:      nonce,
 		malicious:  malicious,
 	}
-	ecache.index[atx] = data
-	if malicious {
-		d.malicious[node] = struct{}{}
+	if d.AddAtx(epoch, atxid, atx) {
+		return atx
 	}
-	return true
+	return nil
 }
 
 func (d *Data) IsMalicious(node types.NodeID) bool {

@@ -291,14 +291,14 @@ func (t *Tortoise) TallyVotes(ctx context.Context, lid types.LayerID) {
 }
 
 // OnAtx is expected to be called before ballots that use this atx.
-func (t *Tortoise) OnAtx(header *types.AtxTortoiseData) {
+func (t *Tortoise) OnAtx(target types.EpochID, id types.ATXID, atx *atxsdata.ATX) {
 	start := time.Now()
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	waitAtxDuration.Observe(float64(time.Since(start).Nanoseconds()))
-	t.trtl.onAtx(header)
+	t.trtl.onAtx(target, id, atx)
 	if t.tracer != nil {
-		t.tracer.On(&AtxTrace{Header: header})
+		t.tracer.On(&AtxTrace{ID: id, TargetEpoch: target, Atx: atx})
 	}
 }
 

@@ -13,6 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
+	atxsdata "github.com/spacemeshos/go-spacemesh/atxsdata"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	result "github.com/spacemeshos/go-spacemesh/common/types/result"
 	gomock "go.uber.org/mock/gomock"
@@ -156,15 +157,15 @@ func (c *MockTortoiseOnAppliedCall) DoAndReturn(f func(types.LayerID, types.Hash
 }
 
 // OnAtx mocks base method.
-func (m *MockTortoise) OnAtx(arg0 *types.AtxTortoiseData) {
+func (m *MockTortoise) OnAtx(arg0 types.EpochID, arg1 types.ATXID, arg2 *atxsdata.ATX) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "OnAtx", arg0)
+	m.ctrl.Call(m, "OnAtx", arg0, arg1, arg2)
 }
 
 // OnAtx indicates an expected call of OnAtx.
-func (mr *MockTortoiseMockRecorder) OnAtx(arg0 any) *MockTortoiseOnAtxCall {
+func (mr *MockTortoiseMockRecorder) OnAtx(arg0, arg1, arg2 any) *MockTortoiseOnAtxCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnAtx", reflect.TypeOf((*MockTortoise)(nil).OnAtx), arg0)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnAtx", reflect.TypeOf((*MockTortoise)(nil).OnAtx), arg0, arg1, arg2)
 	return &MockTortoiseOnAtxCall{Call: call}
 }
 
@@ -180,13 +181,13 @@ func (c *MockTortoiseOnAtxCall) Return() *MockTortoiseOnAtxCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockTortoiseOnAtxCall) Do(f func(*types.AtxTortoiseData)) *MockTortoiseOnAtxCall {
+func (c *MockTortoiseOnAtxCall) Do(f func(types.EpochID, types.ATXID, *atxsdata.ATX)) *MockTortoiseOnAtxCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockTortoiseOnAtxCall) DoAndReturn(f func(*types.AtxTortoiseData)) *MockTortoiseOnAtxCall {
+func (c *MockTortoiseOnAtxCall) DoAndReturn(f func(types.EpochID, types.ATXID, *atxsdata.ATX)) *MockTortoiseOnAtxCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
