@@ -1150,6 +1150,7 @@ func TestAdminEvents_MultiSmesher(t *testing.T) {
 
 	<-app.Started()
 	for _, signer := range app.signers {
+		signer := signer
 		mgr, err := activation.NewPostSetupManager(
 			cfg.POST,
 			logger.Zap(),
@@ -1168,6 +1169,7 @@ func TestAdminEvents_MultiSmesher(t *testing.T) {
 			cfg.API.PostListener,
 			cfg.POST,
 			cfg.SMESHING.Opts,
+			func() { app.atxBuilder.Register(signer) },
 		))
 	}
 
