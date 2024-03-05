@@ -57,6 +57,9 @@ type atxProvider interface {
 	GetMalfeasanceProof(id types.NodeID) (*types.MalfeasanceProof, error)
 }
 
+type atxBuilder interface {
+}
+
 type postSupervisor interface {
 	Start(opts activation.PostSetupOpts, sig *signing.EdSigner) error
 	Stop(deleteFiles bool) error
