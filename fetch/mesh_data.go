@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync/atomic"
+	"strings"
+	"sync"
 
+	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -66,8 +68,11 @@ func (f *Fetch) getHashes(
 	pendingMetric := pendingHashReqs.WithLabelValues(string(hint))
 	pendingMetric.Add(float64(len(hashes)))
 
-	var eg errgroup.Group
-	var failed atomic.Uint64
+	var (
+		eg       errgroup.Group
+		mu       sync.Mutex
+		bfailure = BatchError{Errors: map[types.Hash32]error{}}
+	)
 	for i, hash := range hashes {
 		if err := options.limiter.Acquire(ctx, 1); err != nil {
 			pendingMetric.Add(float64(i - len(hashes)))
@@ -97,12 +102,15 @@ func (f *Fetch) getHashes(
 				options.limiter.Release(1)
 				pendingMetric.Add(-1)
 				if p.err != nil {
-					f.logger.Debug("failed to get hash",
+					f.logger.With().Debug("failed to get hash",
 						log.String("hint", string(hint)),
 						log.Stringer("hash", h),
 						log.Err(p.err),
 					)
-					failed.Add(1)
+
+					mu.Lock()
+					bfailure.Add(h, p.err)
+					mu.Unlock()
 				}
 				return nil
 			}
@@ -110,8 +118,8 @@ func (f *Fetch) getHashes(
 	}
 
 	eg.Wait()
-	if failed.Load() > 0 {
-		return fmt.Errorf("failed to fetch %d hashes out of %d", failed.Load(), len(hashes))
+	if !bfailure.Empty() {
+		return &bfailure
 	}
 	return nil
 }
@@ -312,4 +320,44 @@ func (f *Fetch) GetCert(
 		return &peerCert, nil
 	}
 	return nil, fmt.Errorf("failed to get cert %v/%s from %d peers: %w", lid, bid.String(), len(peers), ctx.Err())
+}
+
+type BatchError struct {
+	Errors map[types.Hash32]error
+}
+
+func (b *BatchError) Empty() bool {
+	return len(b.Errors) == 0
+}
+
+func (b *BatchError) Add(id types.Hash32, err error) {
+	if b.Errors == nil {
+		b.Errors = map[types.Hash32]error{}
+	}
+	b.Errors[id] = err
+}
+
+func (b *BatchError) Error() string {
+	var builder strings.Builder
+	builder.WriteString("batch failure: ")
+	for hash, err := range b.Errors {
+		builder.WriteString(hash.ShortString())
+		builder.WriteString("=")
+		builder.WriteString(err.Error())
+	}
+	return builder.String()
+}
+
+func (b *BatchError) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddArray("errors", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+		for hash, err := range b.Errors {
+			encoder.AppendObject(zapcore.ObjectMarshalerFunc(func(encoder log.ObjectEncoder) error {
+				encoder.AddString("id", hash.ShortString())
+				encoder.AddString("error", err.Error())
+				return nil
+			}))
+		}
+		return nil
+	}))
+	return nil
 }

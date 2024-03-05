@@ -28,8 +28,12 @@ type DecayingTagSpec struct {
 	Cap      int           `mapstructure:"cap"`
 }
 
-// ErrNotConnected is returned when peer is not connected.
-var ErrNotConnected = errors.New("peer is not connected")
+var (
+	// ErrNotConnected is returned when peer is not connected.
+	ErrNotConnected = errors.New("peer is not connected")
+	// ErrPeerResponseFailed raised if peer responded with an error.
+	ErrPeerResponseFailed = errors.New("peer response failed")
+)
 
 // Opt is a type to configure a server.
 type Opt func(s *Server)
@@ -343,7 +347,7 @@ func (s *Server) Request(ctx context.Context, pid peer.ID, req []byte) ([]byte, 
 			s.metrics.clientServerError.Inc()
 			s.metrics.clientLatency.Observe(took)
 		}
-		return nil, errors.New(data.Error)
+		return nil, fmt.Errorf("%w: %s", ErrPeerResponseFailed, data.Error)
 	case s.metrics != nil:
 		s.metrics.clientSucceeded.Inc()
 		s.metrics.clientLatency.Observe(took)
