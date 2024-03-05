@@ -554,7 +554,7 @@ type smesherServiceConn struct {
 	postSupervisor   *MockpostSupervisor
 }
 
-func setupSmesherService(t *testing.T, id *types.NodeID) (*smesherServiceConn, context.Context) {
+func setupSmesherService(t *testing.T, sig *signing.EdSigner) (*smesherServiceConn, context.Context) {
 	ctrl, mockCtx := gomock.WithContext(context.Background(), t)
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
 	postSupervisor := NewMockpostSupervisor(ctrl)
@@ -562,7 +562,7 @@ func setupSmesherService(t *testing.T, id *types.NodeID) (*smesherServiceConn, c
 		smeshingProvider,
 		postSupervisor,
 		10*time.Millisecond,
-		id,
+		sig,
 		activation.DefaultPostSetupOpts(),
 	)
 	cfg, cleanup := launchServer(t, svc)
@@ -606,9 +606,10 @@ func TestSmesherService(t *testing.T) {
 		opts.MaxFileSize = 1024
 
 		coinbase := &pb.AccountId{Address: addr1.String()}
-		nodeID := types.RandomNodeID()
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
 
-		c, ctx := setupSmesherService(t, &nodeID)
+		c, ctx := setupSmesherService(t, sig)
 		c.smeshingProvider.EXPECT().StartSmeshing(gomock.Any()).Return(nil)
 		c.postSupervisor.EXPECT().Start(gomock.All(
 			gomock.Cond(func(postOpts any) bool { return postOpts.(activation.PostSetupOpts).DataDir == opts.DataDir }),
@@ -618,7 +619,7 @@ func TestSmesherService(t *testing.T) {
 			gomock.Cond(
 				func(postOpts any) bool { return postOpts.(activation.PostSetupOpts).MaxFileSize == opts.MaxFileSize },
 			),
-		), nodeID, gomock.Any()).Return(nil)
+		), sig).Return(nil)
 		res, err := c.StartSmeshing(ctx, &pb.StartSmeshingRequest{
 			Opts:     opts,
 			Coinbase: coinbase,

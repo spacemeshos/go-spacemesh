@@ -17,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 func TestPostConfig(t *testing.T) {
@@ -54,12 +55,13 @@ func TestStartSmeshingPassesCorrectSmeshingOpts(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
 	postSupervisor := grpcserver.NewMockpostSupervisor(ctrl)
-	nodeID := types.RandomNodeID()
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	svc := grpcserver.NewSmesherService(
 		smeshingProvider,
 		postSupervisor,
 		time.Second,
-		&nodeID,
+		sig,
 		activation.DefaultPostSetupOpts(),
 	)
 
@@ -76,7 +78,7 @@ func TestStartSmeshingPassesCorrectSmeshingOpts(t *testing.T) {
 		ComputeBatchSize: config.DefaultComputeBatchSize,
 	}
 	opts.ProviderID.SetUint32(providerID)
-	postSupervisor.EXPECT().Start(opts, nodeID, gomock.Any()).Return(nil)
+	postSupervisor.EXPECT().Start(opts, sig).Return(nil)
 	smeshingProvider.EXPECT().StartSmeshing(addr).Return(nil)
 
 	_, err = svc.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{

@@ -42,12 +42,13 @@ func launchPostSupervisor(
 	require.NoError(tb, err)
 	goldenATXID := types.RandomATXID()
 
-	validator := activation.NewMocknipostValidator(gomock.NewController(tb))
+	ctrl := gomock.NewController(tb)
+	validator := activation.NewMocknipostValidator(ctrl)
 	validator.EXPECT().
 		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		AnyTimes()
 
-	syncer := activation.NewMocksyncer(gomock.NewController(tb))
+	syncer := activation.NewMocksyncer(ctrl)
 	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
 		ch := make(chan struct{})
 		close(ch)
@@ -58,10 +59,12 @@ func launchPostSupervisor(
 	require.NoError(tb, err)
 
 	// start post supervisor
-	ps, err := activation.NewPostSupervisor(log, serviceCfg, postCfg, provingOpts, mgr)
+	builder := activation.NewMockAtxBuilder(ctrl)
+	builder.EXPECT().Register(sig)
+	ps, err := activation.NewPostSupervisor(log, serviceCfg, postCfg, provingOpts, mgr, builder)
 	require.NoError(tb, err)
 	require.NotNil(tb, ps)
-	require.NoError(tb, ps.Start(postOpts, sig.NodeID(), func() {}))
+	require.NoError(tb, ps.Start(postOpts, sig))
 	return sig.NodeID(), func() { assert.NoError(tb, ps.Stop(false)) }
 }
 
@@ -85,11 +88,12 @@ func launchPostSupervisorTLS(
 	require.NoError(tb, err)
 	goldenATXID := types.RandomATXID()
 
-	validator := activation.NewMocknipostValidator(gomock.NewController(tb))
+	ctrl := gomock.NewController(tb)
+	validator := activation.NewMocknipostValidator(ctrl)
 	validator.EXPECT().
 		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		AnyTimes()
-	syncer := activation.NewMocksyncer(gomock.NewController(tb))
+	syncer := activation.NewMocksyncer(ctrl)
 	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
 		ch := make(chan struct{})
 		close(ch)
@@ -99,10 +103,13 @@ func launchPostSupervisorTLS(
 	mgr, err := activation.NewPostSetupManager(postCfg, log.Named("post manager"), cdb, goldenATXID, syncer, validator)
 	require.NoError(tb, err)
 
-	ps, err := activation.NewPostSupervisor(log, serviceCfg, postCfg, provingOpts, mgr)
+	// start post supervisor
+	builder := activation.NewMockAtxBuilder(ctrl)
+	builder.EXPECT().Register(sig)
+	ps, err := activation.NewPostSupervisor(log, serviceCfg, postCfg, provingOpts, mgr, builder)
 	require.NoError(tb, err)
 	require.NotNil(tb, ps)
-	require.NoError(tb, ps.Start(postOpts, sig.NodeID(), func() {}))
+	require.NoError(tb, ps.Start(postOpts, sig))
 	return sig.NodeID(), func() { assert.NoError(tb, ps.Stop(false)) }
 }
 

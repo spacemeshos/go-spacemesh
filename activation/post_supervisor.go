@@ -18,8 +18,8 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // DefaultPostServiceConfig returns the default config for post service.
@@ -69,6 +69,7 @@ type PostSupervisor struct {
 	provingOpts PostProvingOpts
 
 	postSetupProvider postSetupProvider
+	atxBuilder        AtxBuilder
 
 	pid atomic.Int64 // pid of the running post service, only for tests.
 
@@ -84,6 +85,7 @@ func NewPostSupervisor(
 	postCfg PostConfig,
 	provingOpts PostProvingOpts,
 	postSetupProvider postSetupProvider,
+	atxBuilder AtxBuilder,
 ) (*PostSupervisor, error) {
 	if _, err := os.Stat(cmdCfg.PostServiceCmd); err != nil {
 		return nil, fmt.Errorf("post service binary not found: %s", cmdCfg.PostServiceCmd)
@@ -96,6 +98,7 @@ func NewPostSupervisor(
 		provingOpts: provingOpts,
 
 		postSetupProvider: postSetupProvider,
+		atxBuilder:        atxBuilder,
 	}, nil
 }
 
@@ -132,7 +135,7 @@ func (ps *PostSupervisor) Status() *PostSetupStatus {
 	return ps.postSetupProvider.Status()
 }
 
-func (ps *PostSupervisor) Start(opts PostSetupOpts, id types.NodeID, onInitDone func()) error {
+func (ps *PostSupervisor) Start(opts PostSetupOpts, sig *signing.EdSigner) error {
 	ps.mtx.Lock()
 	defer ps.mtx.Unlock()
 	if ps.stop != nil {
@@ -147,7 +150,7 @@ func (ps *PostSupervisor) Start(opts PostSetupOpts, id types.NodeID, onInitDone 
 	ps.eg.Go(func() error {
 		// If it returns any error other than context.Canceled
 		// (which is how we signal it to stop) then we shutdown.
-		err := ps.postSetupProvider.PrepareInitializer(ctx, opts, id)
+		err := ps.postSetupProvider.PrepareInitializer(ctx, opts, sig.NodeID())
 		switch {
 		case errors.Is(err, context.Canceled):
 			return nil
@@ -156,7 +159,7 @@ func (ps *PostSupervisor) Start(opts PostSetupOpts, id types.NodeID, onInitDone 
 			return err
 		}
 
-		err = ps.postSetupProvider.StartSession(ctx, id)
+		err = ps.postSetupProvider.StartSession(ctx, sig.NodeID())
 		switch {
 		case errors.Is(err, context.Canceled):
 			return nil
@@ -164,7 +167,7 @@ func (ps *PostSupervisor) Start(opts PostSetupOpts, id types.NodeID, onInitDone 
 			ps.logger.Fatal("initialization failed", zap.Error(err))
 			return err
 		}
-		onInitDone()
+		ps.atxBuilder.Register(sig)
 
 		return ps.runCmd(ctx, ps.cmdCfg, ps.postCfg, opts, ps.provingOpts)
 	})

@@ -1165,11 +1165,10 @@ func TestAdminEvents_MultiSmesher(t *testing.T) {
 		t.Cleanup(launchPostSupervisor(t,
 			logger.Zap(),
 			mgr,
-			signer.NodeID(),
+			signer,
 			cfg.API.PostListener,
 			cfg.POST,
 			cfg.SMESHING.Opts,
-			func() { app.atxBuilder.Register(signer) },
 		))
 	}
 
@@ -1304,7 +1303,7 @@ func launchPostSupervisor(
 	tb testing.TB,
 	log *zap.Logger,
 	mgr *activation.PostSetupManager,
-	id types.NodeID,
+	sig *signing.EdSigner,
 	address string,
 	postCfg activation.PostConfig,
 	postOpts activation.PostSetupOpts,
@@ -1314,10 +1313,12 @@ func launchPostSupervisor(
 	provingOpts := activation.DefaultPostProvingOpts()
 	provingOpts.RandomXMode = activation.PostRandomXModeLight
 
-	ps, err := activation.NewPostSupervisor(log, cmdCfg, postCfg, provingOpts, mgr)
+	builder := activation.NewMockAtxBuilder(gomock.NewController(tb))
+	builder.EXPECT().Register(sig)
+	ps, err := activation.NewPostSupervisor(log, cmdCfg, postCfg, provingOpts, mgr, builder)
 	require.NoError(tb, err)
 	require.NotNil(tb, ps)
-	require.NoError(tb, ps.Start(postOpts, id, func() {}))
+	require.NoError(tb, ps.Start(postOpts, sig))
 	return func() { assert.NoError(tb, ps.Stop(false)) }
 }
 

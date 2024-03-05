@@ -19,6 +19,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // SmesherService exposes endpoints to manage smeshing.
@@ -27,7 +28,7 @@ type SmesherService struct {
 	postSupervisor   postSupervisor
 
 	streamInterval time.Duration
-	nodeID         *types.NodeID
+	sig            *signing.EdSigner
 	postOpts       activation.PostSetupOpts
 }
 
@@ -50,14 +51,14 @@ func NewSmesherService(
 	smeshing activation.SmeshingProvider,
 	postSupervisor postSupervisor,
 	streamInterval time.Duration,
-	nodeID *types.NodeID,
+	sig *signing.EdSigner,
 	postOpts activation.PostSetupOpts,
 ) *SmesherService {
 	return &SmesherService{
 		smeshingProvider: smeshing,
 		postSupervisor:   postSupervisor,
 		streamInterval:   streamInterval,
-		nodeID:           nodeID,
+		sig:              sig,
 		postOpts:         postOpts,
 	}
 }
@@ -84,10 +85,10 @@ func (s SmesherService) StartSmeshing(
 	if err != nil {
 		status.Error(codes.InvalidArgument, err.Error())
 	}
-	if s.nodeID == nil {
+	if s.sig == nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "node is not configured for supervised smeshing")
 	}
-	if err := s.postSupervisor.Start(opts, *s.nodeID, func() {}); err != nil {
+	if err := s.postSupervisor.Start(opts, s.sig); err != nil {
 		ctxzap.Error(ctx, "failed to start post supervisor", zap.Error(err))
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to start post supervisor: %v", err))
 	}

@@ -987,17 +987,6 @@ func (app *App) initServices(ctx context.Context) error {
 		return fmt.Errorf("create post setup manager: %v", err)
 	}
 
-	app.postSupervisor, err = activation.NewPostSupervisor(
-		app.log.Zap(),
-		app.Config.POSTService,
-		app.Config.POST,
-		app.Config.SMESHING.ProvingOpts,
-		postSetupMgr,
-	)
-	if err != nil {
-		return fmt.Errorf("init post service: %w", err)
-	}
-
 	grpcPostService, err := app.grpcService(grpcserver.Post, lg)
 	if err != nil {
 		return fmt.Errorf("init post grpc service: %w", err)
@@ -1036,10 +1025,27 @@ func (app *App) initServices(ctx context.Context) error {
 		activation.WithValidator(app.validator),
 		activation.WithPostValidityDelay(app.Config.PostValidDelay),
 	)
-	// Don't register the supervised ID yet - it will be registered
-	// once POST is initialized.
-	for _, sig := range app.signers[1:] {
-		atxBuilder.Register(sig)
+	if len(app.signers) > 1 {
+		// in a remote setup we register eagerly so the atxBuilder can inform about missing
+		// connections to post services asap
+		//
+		// in a supervised setup the postSetupManager will register at the atxBuilder
+		// as soon as it finished initializing, to avoid warning about a missing connections when
+		// this is expected
+		for _, sig := range app.signers {
+			atxBuilder.Register(sig)
+		}
+	}
+	app.postSupervisor, err = activation.NewPostSupervisor(
+		app.log.Zap(),
+		app.Config.POSTService,
+		app.Config.POST,
+		app.Config.SMESHING.ProvingOpts,
+		postSetupMgr,
+		atxBuilder,
+	)
+	if err != nil {
+		return fmt.Errorf("init post service: %w", err)
 	}
 
 	nodeIDs := make([]types.NodeID, 0, len(app.signers))
@@ -1345,8 +1351,7 @@ func (app *App) startServices(ctx context.Context) error {
 		}
 		if err := app.postSupervisor.Start(
 			app.Config.SMESHING.Opts,
-			app.signers[0].NodeID(),
-			func() { app.atxBuilder.Register(app.signers[0]) },
+			app.signers[0],
 		); err != nil {
 			return fmt.Errorf("start post service: %w", err)
 		}
@@ -1408,16 +1413,15 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		app.grpcServices[svc] = service
 		return service, nil
 	case grpcserver.Smesher:
-		var nodeID *types.NodeID
+		var sig *signing.EdSigner
 		if len(app.signers) == 1 {
-			nodeID = new(types.NodeID)
-			*nodeID = app.signers[0].NodeID()
+			sig = app.signers[0]
 		}
 		service := grpcserver.NewSmesherService(
 			app.atxBuilder,
 			app.postSupervisor,
 			app.Config.API.SmesherStreamInterval,
-			nodeID,
+			sig,
 			app.Config.SMESHING.Opts,
 		)
 		app.grpcServices[svc] = service
