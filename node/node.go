@@ -1025,7 +1025,7 @@ func (app *App) initServices(ctx context.Context) error {
 		activation.WithValidator(app.validator),
 		activation.WithPostValidityDelay(app.Config.PostValidDelay),
 	)
-	if len(app.signers) > 1 || !app.Config.SMESHING.Start {
+	if len(app.signers) > 1 || (len(app.signers) == 1 && !app.Config.SMESHING.Start) {
 		// in a remote setup we register eagerly so the atxBuilder can inform about missing
 		// connections to post services asap. Any setup with more than one signer is considered
 		// a remote setup. If there is only one signer and smeshing is disabled we also consider it a
