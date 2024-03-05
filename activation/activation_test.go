@@ -1375,7 +1375,7 @@ func TestRegossip(t *testing.T) {
 			h.signer, 0, types.EmptyATXID, types.EmptyATXID, nil,
 			layer.GetEpoch(), 0, 1, types.Address{}, 1, &types.NIPost{})
 		require.NoError(t, atxs.Add(h.cdb.Database, atx))
-		blob, err := atxs.GetBlob(h.cdb.Database, atx.ID().Bytes())
+		blob, err := atxs.GetBlob(context.Background(), h.cdb.Database, atx.ID().Bytes())
 		require.NoError(t, err)
 		h.mclock.EXPECT().CurrentLayer().Return(layer)
 

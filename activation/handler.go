@@ -481,8 +481,8 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 }
 
 // GetEpochAtxs returns all valid ATXs received in the epoch epochID.
-func (h *Handler) GetEpochAtxs(epochID types.EpochID) (ids []types.ATXID, err error) {
-	ids, err = atxs.GetIDsByEpoch(h.cdb, epochID)
+func (h *Handler) GetEpochAtxs(ctx context.Context, epochID types.EpochID) (ids []types.ATXID, err error) {
+	ids, err = atxs.GetIDsByEpoch(ctx, h.cdb, epochID)
 	h.log.With().Debug("returned epoch atxs", epochID,
 		log.Int("count", len(ids)),
 		log.String("atxs", fmt.Sprint(ids)))
