@@ -1833,6 +1833,9 @@ func (app *App) MigrateLocalDB(lg *zap.Logger, dbPath string, clients []localsql
 	if _, err := oldDB.Exec(fmt.Sprintf("VACUUM INTO '%s'", dbFile), nil, nil); err != nil {
 		return fmt.Errorf("vacuum %s to %s: %w", oldDBFile, dbFile, err)
 	}
+	if err := oldDB.Close(); err != nil {
+		return fmt.Errorf("close %s: %w", oldDBFile, err)
+	}
 	if err := atomic.ReplaceFile(oldDBFile, fmt.Sprintf("%s.bak", oldDBFile)); err != nil {
 		return fmt.Errorf("renaming %s to %s: %w", oldDBFile, fmt.Sprintf("%s.bak", oldDBFile), err)
 	}
