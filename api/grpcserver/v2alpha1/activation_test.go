@@ -227,9 +227,18 @@ func TestActivationService_ActivationsCount(t *testing.T) {
 	conn := dialGrpc(ctx, t, cfg)
 	client := spacemeshv2alpha1.NewActivationServiceClient(conn)
 
-	count, err := client.ActivationsCount(ctx, &spacemeshv2alpha1.ActivationsCountRequest{
-		Epoch: activations[3].PublishEpoch.Uint32(),
+	t.Run("count without filter", func(t *testing.T) {
+		count, err := client.ActivationsCount(ctx, &spacemeshv2alpha1.ActivationsCountRequest{})
+		require.NoError(t, err)
+		require.Len(t, activations, int(count.Count))
 	})
-	require.NoError(t, err)
-	require.Len(t, activations, int(count.Count))
+
+	t.Run("count with filter", func(t *testing.T) {
+		epoch := activations[3].PublishEpoch.Uint32()
+		count, err := client.ActivationsCount(ctx, &spacemeshv2alpha1.ActivationsCountRequest{
+			Epoch: &epoch,
+		})
+		require.NoError(t, err)
+		require.Len(t, activations, int(count.Count))
+	})
 }
