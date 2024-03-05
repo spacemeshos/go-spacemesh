@@ -155,10 +155,7 @@ func GetCommand() *cobra.Command {
 				WithConfig(&conf),
 				// NOTE(dshulyak) this needs to be max level so that child logger can can be current level or below.
 				// otherwise it will fail later when child logger will try to increase level.
-				WithLog(log.RegisterHooks(
-					log.NewWithLevel("node", zap.NewAtomicLevelAt(zap.DebugLevel)),
-					events.EventHook()),
-				),
+				WithLog(log.NewWithLevel("node", zap.NewAtomicLevelAt(zap.DebugLevel), events.EventHook())),
 			)
 
 			// os.Interrupt for all systems, especially windows, syscall.SIGTERM is mainly for docker.
