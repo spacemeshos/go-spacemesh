@@ -241,7 +241,7 @@ func TestRecoverOnlyAtxs(t *testing.T) {
 	)
 	require.NoError(t, err)
 	epoch := types.EpochID(2)
-	ids, err := atxs.GetIDsByEpoch(s.GetState(0).DB, epoch)
+	ids, err := atxs.GetIDsByEpoch(context.Background(), s.GetState(0).DB, epoch)
 	require.NoError(t, err)
 	require.NotEmpty(t, ids)
 	require.Empty(t, recovered.GetMissingActiveSet(epoch+1, ids), "target epoch %v", epoch+1)
