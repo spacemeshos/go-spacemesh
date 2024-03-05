@@ -182,6 +182,10 @@ func recoverFromLocalFile(
 	deps := make(map[types.ATXID]*types.VerifiedActivationTx)
 	proofs := make(map[types.PoetProofRef]*types.PoetProofMessage)
 	if cfg.PreserveOwnAtx {
+		logger.With().Info("preserving own atx deps",
+			log.Context(ctx),
+			log.Int("num identities", len(cfg.NodeIDs)),
+		)
 		for _, nodeID := range cfg.NodeIDs {
 			nodeDeps, nodeProofs, err := collectOwnAtxDeps(logger, db, localDB, nodeID, cfg.GoldenAtx, data)
 			if err != nil {

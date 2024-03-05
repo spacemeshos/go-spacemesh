@@ -432,7 +432,10 @@ func (app *App) LoadCheckpoint(ctx context.Context) (*checkpoint.PreservedData, 
 	if restore == 0 {
 		return nil, fmt.Errorf("restore layer not set")
 	}
-	nodeIDs := make([]types.NodeID, 0, len(app.signers))
+	nodeIDs := make([]types.NodeID, len(app.signers))
+	for i, sig := range app.signers {
+		nodeIDs[i] = sig.NodeID()
+	}
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      types.ATXID(app.Config.Genesis.GoldenATX()),
 		DataDir:        app.Config.DataDir(),
