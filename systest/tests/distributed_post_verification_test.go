@@ -134,7 +134,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		postSetupMgr,
 	)
 	require.NoError(t, err)
-	require.NoError(t, postSupervisor.Start(cfg.SMESHING.Opts, signer.NodeID()))
+	require.NoError(t, postSupervisor.Start(cfg.SMESHING.Opts, signer.NodeID(), func() {}))
 	t.Cleanup(func() { assert.NoError(t, postSupervisor.Stop(false)) })
 
 	// 2. create ATX with invalid POST labels

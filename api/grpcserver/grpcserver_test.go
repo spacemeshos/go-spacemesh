@@ -618,7 +618,7 @@ func TestSmesherService(t *testing.T) {
 			gomock.Cond(
 				func(postOpts any) bool { return postOpts.(activation.PostSetupOpts).MaxFileSize == opts.MaxFileSize },
 			),
-		), nodeID).Return(nil)
+		), nodeID, gomock.Any()).Return(nil)
 		res, err := c.StartSmeshing(ctx, &pb.StartSmeshingRequest{
 			Opts:     opts,
 			Coinbase: coinbase,

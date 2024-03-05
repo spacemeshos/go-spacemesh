@@ -1036,7 +1036,9 @@ func (app *App) initServices(ctx context.Context) error {
 		activation.WithValidator(app.validator),
 		activation.WithPostValidityDelay(app.Config.PostValidDelay),
 	)
-	for _, sig := range app.signers {
+	// Don't register the supervised ID yet - it will be registered
+	// once POST is initialized.
+	for _, sig := range app.signers[1:] {
 		atxBuilder.Register(sig)
 	}
 
@@ -1341,7 +1343,11 @@ func (app *App) startServices(ctx context.Context) error {
 		if len(app.signers) > 1 {
 			return fmt.Errorf("supervised smeshing cannot be started in a multi-smeshing setup")
 		}
-		if err := app.postSupervisor.Start(app.Config.SMESHING.Opts, app.signers[0].NodeID()); err != nil {
+		if err := app.postSupervisor.Start(
+			app.Config.SMESHING.Opts,
+			app.signers[0].NodeID(),
+			func() { app.atxBuilder.Register(app.signers[0]) },
+		); err != nil {
 			return fmt.Errorf("start post service: %w", err)
 		}
 	} else {

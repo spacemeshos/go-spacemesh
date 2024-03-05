@@ -69,7 +69,7 @@ func Test_PostSupervisor_Start_FailPrepare(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, ps)
 
-	require.NoError(t, ps.Start(postOpts, nodeID))
+	require.NoError(t, ps.Start(postOpts, nodeID, func() {}))
 	require.ErrorIs(t, ps.Stop(false), testErr)
 }
 
@@ -105,7 +105,7 @@ func Test_PostSupervisor_Start_FailStartSession(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, ps)
 
-	require.NoError(t, ps.Start(postOpts, nodeID))
+	require.NoError(t, ps.Start(postOpts, nodeID, func() {}))
 	require.EqualError(t, ps.eg.Wait(), "failed start session")
 }
 
@@ -127,7 +127,7 @@ func Test_PostSupervisor_StartsServiceCmd(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, ps)
 
-	require.NoError(t, ps.Start(postOpts, nodeID))
+	require.NoError(t, ps.Start(postOpts, nodeID, func() {}))
 	t.Cleanup(func() { assert.NoError(t, ps.Stop(false)) })
 
 	require.Eventually(t, func() bool { return ps.pid.Load() != 0 }, 5*time.Second, 100*time.Millisecond)
@@ -166,7 +166,7 @@ func Test_PostSupervisor_Restart_Possible(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, ps)
 
-	require.NoError(t, ps.Start(postOpts, nodeID))
+	require.NoError(t, ps.Start(postOpts, nodeID, func() {}))
 	t.Cleanup(func() { assert.NoError(t, ps.Stop(false)) })
 	require.Eventually(t, func() bool { return ps.pid.Load() != 0 }, 5*time.Second, 100*time.Millisecond)
 
@@ -175,7 +175,7 @@ func Test_PostSupervisor_Restart_Possible(t *testing.T) {
 
 	mgr.EXPECT().PrepareInitializer(gomock.Any(), postOpts, nodeID).Return(nil)
 	mgr.EXPECT().StartSession(gomock.Any(), nodeID).Return(nil)
-	require.NoError(t, ps.Start(postOpts, nodeID))
+	require.NoError(t, ps.Start(postOpts, nodeID, func() {}))
 	require.Eventually(t, func() bool { return ps.pid.Load() != 0 }, 5*time.Second, 100*time.Millisecond)
 
 	require.NoError(t, ps.Stop(false))
@@ -200,7 +200,7 @@ func Test_PostSupervisor_LogFatalOnCrash(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, ps)
 
-	require.NoError(t, ps.Start(postOpts, nodeID))
+	require.NoError(t, ps.Start(postOpts, nodeID, func() {}))
 	t.Cleanup(func() { assert.NoError(t, ps.Stop(false)) })
 
 	require.Eventually(t, func() bool { return ps.pid.Load() != 0 }, 5*time.Second, 100*time.Millisecond)
@@ -235,7 +235,7 @@ func Test_PostSupervisor_LogFatalOnInvalidConfig(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, ps)
 
-	require.NoError(t, ps.Start(postOpts, nodeID))
+	require.NoError(t, ps.Start(postOpts, nodeID, func() {}))
 	t.Cleanup(func() { assert.NoError(t, ps.Stop(false)) })
 
 	require.Eventually(t, func() bool { return ps.pid.Load() != 0 }, 5*time.Second, 100*time.Millisecond)
@@ -267,7 +267,7 @@ func Test_PostSupervisor_StopOnError(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, ps)
 
-	require.NoError(t, ps.Start(postOpts, nodeID))
+	require.NoError(t, ps.Start(postOpts, nodeID, func() {}))
 	t.Cleanup(func() { assert.NoError(t, ps.Stop(false)) })
 	require.Eventually(t, func() bool { return ps.pid.Load() != 0 }, 5*time.Second, 100*time.Millisecond)
 

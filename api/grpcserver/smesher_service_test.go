@@ -76,7 +76,7 @@ func TestStartSmeshingPassesCorrectSmeshingOpts(t *testing.T) {
 		ComputeBatchSize: config.DefaultComputeBatchSize,
 	}
 	opts.ProviderID.SetUint32(providerID)
-	postSupervisor.EXPECT().Start(opts, nodeID).Return(nil)
+	postSupervisor.EXPECT().Start(opts, nodeID, gomock.Any()).Return(nil)
 	smeshingProvider.EXPECT().StartSmeshing(addr).Return(nil)
 
 	_, err = svc.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{

@@ -1089,17 +1089,17 @@ func (c *MockpostSupervisorProvidersCall) DoAndReturn(f func() ([]activation.Pos
 }
 
 // Start mocks base method.
-func (m *MockpostSupervisor) Start(opts activation.PostSetupOpts, id types.NodeID) error {
+func (m *MockpostSupervisor) Start(opts activation.PostSetupOpts, id types.NodeID, onInitDone func()) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Start", opts, id)
+	ret := m.ctrl.Call(m, "Start", opts, id, onInitDone)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Start indicates an expected call of Start.
-func (mr *MockpostSupervisorMockRecorder) Start(opts, id any) *MockpostSupervisorStartCall {
+func (mr *MockpostSupervisorMockRecorder) Start(opts, id, onInitDone any) *MockpostSupervisorStartCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockpostSupervisor)(nil).Start), opts, id)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockpostSupervisor)(nil).Start), opts, id, onInitDone)
 	return &MockpostSupervisorStartCall{Call: call}
 }
 
@@ -1115,13 +1115,13 @@ func (c *MockpostSupervisorStartCall) Return(arg0 error) *MockpostSupervisorStar
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockpostSupervisorStartCall) Do(f func(activation.PostSetupOpts, types.NodeID) error) *MockpostSupervisorStartCall {
+func (c *MockpostSupervisorStartCall) Do(f func(activation.PostSetupOpts, types.NodeID, func()) error) *MockpostSupervisorStartCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockpostSupervisorStartCall) DoAndReturn(f func(activation.PostSetupOpts, types.NodeID) error) *MockpostSupervisorStartCall {
+func (c *MockpostSupervisorStartCall) DoAndReturn(f func(activation.PostSetupOpts, types.NodeID, func()) error) *MockpostSupervisorStartCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

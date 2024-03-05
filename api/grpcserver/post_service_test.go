@@ -61,7 +61,7 @@ func launchPostSupervisor(
 	ps, err := activation.NewPostSupervisor(log, serviceCfg, postCfg, provingOpts, mgr)
 	require.NoError(tb, err)
 	require.NotNil(tb, ps)
-	require.NoError(tb, ps.Start(postOpts, sig.NodeID()))
+	require.NoError(tb, ps.Start(postOpts, sig.NodeID(), func() {}))
 	return sig.NodeID(), func() { assert.NoError(tb, ps.Stop(false)) }
 }
 
@@ -102,7 +102,7 @@ func launchPostSupervisorTLS(
 	ps, err := activation.NewPostSupervisor(log, serviceCfg, postCfg, provingOpts, mgr)
 	require.NoError(tb, err)
 	require.NotNil(tb, ps)
-	require.NoError(tb, ps.Start(postOpts, sig.NodeID()))
+	require.NoError(tb, ps.Start(postOpts, sig.NodeID(), func() {}))
 	return sig.NodeID(), func() { assert.NoError(tb, ps.Stop(false)) }
 }
 

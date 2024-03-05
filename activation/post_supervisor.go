@@ -132,7 +132,7 @@ func (ps *PostSupervisor) Status() *PostSetupStatus {
 	return ps.postSetupProvider.Status()
 }
 
-func (ps *PostSupervisor) Start(opts PostSetupOpts, id types.NodeID) error {
+func (ps *PostSupervisor) Start(opts PostSetupOpts, id types.NodeID, onInitDone func()) error {
 	ps.mtx.Lock()
 	defer ps.mtx.Unlock()
 	if ps.stop != nil {
@@ -164,6 +164,7 @@ func (ps *PostSupervisor) Start(opts PostSetupOpts, id types.NodeID) error {
 			ps.logger.Fatal("initialization failed", zap.Error(err))
 			return err
 		}
+		onInitDone()
 
 		return ps.runCmd(ctx, ps.cmdCfg, ps.postCfg, opts, ps.provingOpts)
 	})

@@ -57,7 +57,7 @@ type atxProvider interface {
 }
 
 type postSupervisor interface {
-	Start(opts activation.PostSetupOpts, id types.NodeID) error
+	Start(opts activation.PostSetupOpts, id types.NodeID, onInitDone func()) error
 	Stop(deleteFiles bool) error
 
 	Config() activation.PostConfig

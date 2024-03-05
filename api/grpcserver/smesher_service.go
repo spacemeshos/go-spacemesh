@@ -87,7 +87,7 @@ func (s SmesherService) StartSmeshing(
 	if s.nodeID == nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "node is not configured for supervised smeshing")
 	}
-	if err := s.postSupervisor.Start(opts, *s.nodeID); err != nil {
+	if err := s.postSupervisor.Start(opts, *s.nodeID, func() {}); err != nil {
 		ctxzap.Error(ctx, "failed to start post supervisor", zap.Error(err))
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to start post supervisor: %v", err))
 	}
