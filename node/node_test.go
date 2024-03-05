@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"
@@ -321,13 +322,21 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	require.Equal(t, message, msg.Msg.Value)
 }
 
+type noopHook struct{}
+
+func (f *noopHook) OnWrite(*zapcore.CheckedEntry, []zapcore.Field) {}
+
 // E2E app test of the stream endpoints in the NodeService.
 func TestSpacemeshApp_NodeService(t *testing.T) {
 	logger := logtest.New(t)
-	errlog := log.RegisterHooks(
-		logtest.New(t, zap.ErrorLevel),
-		events.EventHook(),
-	) // errlog is used to simulate errors in the app
+	// errlog is used to simulate errors in the app
+	errlog := log.NewFromLog(
+		zaptest.NewLogger(
+			t,
+			zaptest.Level(zap.ErrorLevel),
+			zaptest.WrapOptions(zap.Hooks(events.EventHook()), zap.WithPanicHook(&noopHook{})),
+		),
+	)
 
 	cfg := getTestDefaultConfig(t)
 	app := New(WithConfig(cfg), WithLog(logger))
@@ -419,7 +428,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	eg.Go(func() error {
 		errlog.Error("test123")
 		errlog.Error("test456")
-		assert.Panics(t, func() { errlog.Panic("testPANIC") })
+		errlog.Panic("testPANIC")
 		return nil
 	})
 
