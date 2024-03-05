@@ -1090,17 +1090,17 @@ func (c *MockpostSupervisorProvidersCall) DoAndReturn(f func() ([]activation.Pos
 }
 
 // Start mocks base method.
-func (m *MockpostSupervisor) Start(opts activation.PostSetupOpts, id *signing.EdSigner) error {
+func (m *MockpostSupervisor) Start(opts activation.PostSetupOpts, sig *signing.EdSigner) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Start", opts, id)
+	ret := m.ctrl.Call(m, "Start", opts, sig)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Start indicates an expected call of Start.
-func (mr *MockpostSupervisorMockRecorder) Start(opts, id any) *MockpostSupervisorStartCall {
+func (mr *MockpostSupervisorMockRecorder) Start(opts, sig any) *MockpostSupervisorStartCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockpostSupervisor)(nil).Start), opts, id)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockpostSupervisor)(nil).Start), opts, sig)
 	return &MockpostSupervisorStartCall{Call: call}
 }
 
