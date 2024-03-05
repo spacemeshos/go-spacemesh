@@ -1025,13 +1025,15 @@ func (app *App) initServices(ctx context.Context) error {
 		activation.WithValidator(app.validator),
 		activation.WithPostValidityDelay(app.Config.PostValidDelay),
 	)
-	if len(app.signers) > 1 {
+	if len(app.signers) > 1 || !app.Config.SMESHING.Start {
 		// in a remote setup we register eagerly so the atxBuilder can inform about missing
-		// connections to post services asap
+		// connections to post services asap. Any setup with more than one signer is considered
+		// a remote setup. If there is only one signer and smeshing is disabled we also consider it a
+		// remote setup.
 		//
 		// in a supervised setup the postSetupManager will register at the atxBuilder
-		// as soon as it finished initializing, to avoid warning about a missing connections when
-		// this is expected
+		// as soon as it finished initializing, to avoid warning about a missing connection when
+		// the supervised post service isn't ready yet
 		for _, sig := range app.signers {
 			atxBuilder.Register(sig)
 		}
