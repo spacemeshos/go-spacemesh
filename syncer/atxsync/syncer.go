@@ -97,24 +97,25 @@ type Syncer struct {
 	localdb *localsql.Database
 }
 
-func (s *Syncer) closeToTheEpoch(epoch types.EpochID, timestamp time.Time) bool {
-	epochStart := s.clock.LayerToTime(epoch.FirstLayer())
+func (s *Syncer) closeToTheEpoch(publish types.EpochID, timestamp time.Time) bool {
+	target := publish + 1
+	epochStart := s.clock.LayerToTime(target.FirstLayer())
 	return timestamp.After(epochStart) || epochStart.Sub(timestamp) < 2*s.cfg.EpochInfoInterval
 }
 
-func (s *Syncer) Download(ctx context.Context, epoch types.EpochID) error {
-	s.logger.Info("starting atx sync", log.ZContext(ctx), epoch.Field().Zap())
+func (s *Syncer) Download(ctx context.Context, publish types.EpochID) error {
+	s.logger.Info("starting atx sync", log.ZContext(ctx), publish.Field().Zap())
 
-	state, err := atxsync.GetSyncState(s.localdb, epoch)
+	state, err := atxsync.GetSyncState(s.localdb, publish)
 	if err != nil {
-		return fmt.Errorf("failed to get state for epoch %v: %w", epoch, err)
+		return fmt.Errorf("failed to get state for epoch %v: %w", publish, err)
 	}
-	lastSuccess, err := atxsync.GetRequestTime(s.localdb, epoch)
+	lastSuccess, err := atxsync.GetRequestTime(s.localdb, publish)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		return fmt.Errorf("failed to get last request time for epoch %v: %w", epoch, err)
+		return fmt.Errorf("failed to get last request time for epoch %v: %w", publish, err)
 	}
 	// in case of immediate we will request epoch info without waiting EpochInfoInterval
-	immediate := len(state) == 0 || (errors.Is(err, sql.ErrNotFound) || !s.closeToTheEpoch(epoch, lastSuccess))
+	immediate := len(state) == 0 || (errors.Is(err, sql.ErrNotFound) || !s.closeToTheEpoch(publish, lastSuccess))
 
 	ctx, cancel := context.WithCancel(ctx)
 	eg, ctx := errgroup.WithContext(ctx)
@@ -129,10 +130,10 @@ func (s *Syncer) Download(ctx context.Context, epoch types.EpochID) error {
 	// - all atxs from that epoch have to be downloaded or they are unavailable.
 	//   atx is unavailable if it was requested more than RequestsLimit times, and no peer provided it.
 	eg.Go(func() error {
-		return s.downloadEpochInfo(ctx, epoch, immediate, updates)
+		return s.downloadEpochInfo(ctx, publish, immediate, updates)
 	})
 	eg.Go(func() error {
-		err := s.downloadAtxs(ctx, epoch, state, updates)
+		err := s.downloadAtxs(ctx, publish, state, updates)
 		cancel()
 		return err
 	})
@@ -141,7 +142,7 @@ func (s *Syncer) Download(ctx context.Context, epoch types.EpochID) error {
 
 func (s *Syncer) downloadEpochInfo(
 	ctx context.Context,
-	epoch types.EpochID,
+	publish types.EpochID,
 	immediate bool,
 	updates chan epochUpdate,
 ) error {
@@ -164,14 +165,14 @@ func (s *Syncer) downloadEpochInfo(
 		}
 		// do not run it concurrently, epoch info is large and will continue to grow
 		for _, peer := range peers {
-			epochData, err := s.fetcher.PeerEpochInfo(ctx, peer, epoch)
+			epochData, err := s.fetcher.PeerEpochInfo(ctx, peer, publish)
 			if err != nil || epochData == nil {
 				if errors.Is(err, context.Canceled) {
 					return nil
 				}
 				s.logger.Warn("failed to download epoch info",
 					log.ZContext(ctx),
-					epoch.Field().Zap(),
+					publish.Field().Zap(),
 					zap.String("peer", peer.String()),
 					zap.Error(err),
 				)
@@ -179,7 +180,7 @@ func (s *Syncer) downloadEpochInfo(
 			}
 			s.logger.Info("downloaded epoch info",
 				log.ZContext(ctx),
-				epoch.Field().Zap(),
+				publish.Field().Zap(),
 				zap.String("peer", peer.String()),
 				zap.Int("atxs", len(epochData.AtxIDs)),
 			)
@@ -202,7 +203,7 @@ func (s *Syncer) downloadEpochInfo(
 
 func (s *Syncer) downloadAtxs(
 	ctx context.Context,
-	epoch types.EpochID,
+	publish types.EpochID,
 	state map[types.ATXID]int,
 	updates chan epochUpdate,
 ) error {
@@ -219,11 +220,11 @@ func (s *Syncer) downloadAtxs(
 
 	for {
 		// waiting for update if there is nothing to download
-		if nothingToDownload && s.closeToTheEpoch(epoch, lastSuccess) {
+		if nothingToDownload && s.closeToTheEpoch(publish, lastSuccess) {
 			s.logger.Info(
 				"atx sync terminated",
 				log.ZContext(ctx),
-				epoch.Field().Zap(),
+				publish.Field().Zap(),
 				zap.Int("downloaded", len(downloaded)),
 				zap.Int("total", len(state)),
 				zap.Int("unavailable", len(state)-len(downloaded)),
@@ -284,7 +285,7 @@ func (s *Syncer) downloadAtxs(
 			s.logger.Info(
 				"atx sync progress",
 				log.ZContext(ctx),
-				epoch.Field().Zap(),
+				publish.Field().Zap(),
 				zap.Int("downloaded", len(downloaded)),
 				zap.Int("total", len(state)),
 				zap.Int("progress", int(progress)),
@@ -311,12 +312,12 @@ func (s *Syncer) downloadAtxs(
 		}
 
 		if err := s.localdb.WithTx(ctx, func(tx *sql.Tx) error {
-			if err := atxsync.SaveRequestTime(tx, epoch, lastSuccess); err != nil {
+			if err := atxsync.SaveRequestTime(tx, publish, lastSuccess); err != nil {
 				return fmt.Errorf("failed to save request time: %w", err)
 			}
-			return atxsync.SaveSyncState(tx, epoch, state, s.cfg.RequestsLimit)
+			return atxsync.SaveSyncState(tx, publish, state, s.cfg.RequestsLimit)
 		}); err != nil {
-			return fmt.Errorf("failed to persist state for epoch %v: %w", epoch, err)
+			return fmt.Errorf("failed to persist state for epoch %v: %w", publish, err)
 		}
 		batch = batch[:0]
 	}
