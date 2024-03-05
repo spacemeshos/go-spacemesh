@@ -48,6 +48,8 @@ type (
 // Presently, the cached entries are never removed, but eventually, it might
 // become an LRU cache.
 type QueryCache interface {
+	// IsCached returns true if the requests are being cached.
+	IsCached() bool
 	// GetValue retrieves the specified key+subKey value from the cache. If
 	// the entry is absent from cache, it's populated by calling retrieve func.
 	// Note that the retrieve func should never cause UpdateSlice to be
@@ -57,12 +59,18 @@ type QueryCache interface {
 	// specified SliceAppender. If the entry is not cached, the method does
 	// nothing.
 	UpdateSlice(key queryCacheKey, update SliceAppender)
-	// ClearCache empties the cache
+	// ClearCache empties the cache.
 	ClearCache()
 }
 
 // RetrieveFunc retrieves a value to be stored in the cache.
 type RetrieveFunc[T any] func() (T, error)
+
+// IsCached returns true if the database is cached.
+func IsCached(db any) bool {
+	cache, ok := db.(QueryCache)
+	return ok && cache.IsCached()
+}
 
 // WithCachedValue retrieves the specified value from the cache. If the entry is
 // absent from the cache, it's populated by calling retrieve func. Note that the
@@ -189,6 +197,10 @@ func (c *queryCache) set(key queryCacheKey, subKey QueryCacheSubKey, v any) {
 	}
 	lru := c.ensureLRU(key.Kind)
 	lru.Add(lruCacheKey{key: key.Key, subKey: subKey}, v)
+}
+
+func (c *queryCache) IsCached() bool {
+	return c != nil
 }
 
 func (c *queryCache) GetValue(key queryCacheKey, subKey QueryCacheSubKey, retrieve UntypedRetrieveFunc) (any, error) {

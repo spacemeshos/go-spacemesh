@@ -82,7 +82,8 @@ func p2pCfg(t *testing.T) p2p.Config {
 func createP2PFetch(
 	t *testing.T,
 	clientStreaming,
-	serverStreaming bool,
+	serverStreaming,
+	sqlCache bool,
 	opts ...Option,
 ) (*testP2PFetch, context.Context) {
 	lg := logtest.New(t)
@@ -106,8 +107,12 @@ func createP2PFetch(
 
 	require.Equal(t, 1, len(clientHost.GetPeers()))
 
-	clientDB := sql.InMemory()
-	serverDB := sql.InMemory()
+	var sqlOpts []sql.Opt
+	if sqlCache {
+		sqlOpts = []sql.Opt{sql.WithQueryCache(true)}
+	}
+	clientDB := sql.InMemory(sqlOpts...)
+	serverDB := sql.InMemory(sqlOpts...)
 	tpf := &testP2PFetch{
 		t:            t,
 		clientDB:     clientDB,
@@ -187,6 +192,7 @@ func (tpf *testP2PFetch) verifyGetHash(
 func forStreaming(
 	t *testing.T,
 	errStr string,
+	sqlCache bool,
 	toCall func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string),
 ) {
 	for _, tc := range []struct {
@@ -213,19 +219,41 @@ func forStreaming(
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Run("ok", func(t *testing.T) {
-				tpf, ctx := createP2PFetch(t, tc.clientStreaming, tc.serverStreaming)
+				tpf, ctx := createP2PFetch(t, tc.clientStreaming, tc.serverStreaming, sqlCache)
 				toCall(t, ctx, tpf, "")
 			})
 			t.Run("fail", func(t *testing.T) {
-				tpf, ctx := createP2PFetch(t, tc.clientStreaming, tc.serverStreaming)
+				tpf, ctx := createP2PFetch(t, tc.clientStreaming, tc.serverStreaming, sqlCache)
 				toCall(t, ctx, tpf, errStr)
 			})
 		})
 	}
 }
 
+func forStreamingCachedUncached(
+	t *testing.T,
+	errStr string,
+	toCall func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string),
+) {
+	for _, tc := range []struct {
+		name     string
+		sqlCache bool
+	}{
+		{
+			name:     "no sql caching",
+			sqlCache: false,
+		},
+		{
+			name:     "sql caching",
+			sqlCache: true,
+		},
+	} {
+		forStreaming(t, errStr, tc.sqlCache, toCall)
+	}
+}
+
 func TestP2PPeerEpochInfo(t *testing.T) {
-	forStreaming(
+	forStreamingCachedUncached(
 		t, "server error: exec epoch 11: database: no free connection",
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			epoch := types.EpochID(11)
@@ -247,7 +275,7 @@ func TestP2PPeerEpochInfo(t *testing.T) {
 
 func TestP2PPeerMeshHashes(t *testing.T) {
 	forStreaming(
-		t, "server error: get aggHashes from 7 to 23 by 5: database: no free connection",
+		t, "server error: get aggHashes from 7 to 23 by 5: database: no free connection", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			req := &MeshHashRequest{
 				From: 7,
@@ -280,7 +308,7 @@ func TestP2PPeerMeshHashes(t *testing.T) {
 
 func TestP2PMaliciousIDs(t *testing.T) {
 	forStreaming(
-		t, "server error: get malicious identities: database: no free connection",
+		t, "server error: get malicious identities: database: no free connection", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			var bad []types.NodeID
 			for i := 0; i < 11; i++ {
@@ -306,7 +334,7 @@ func TestP2PMaliciousIDs(t *testing.T) {
 }
 
 func TestP2PGetATXs(t *testing.T) {
-	forStreaming(
+	forStreamingCachedUncached(
 		t, "failed to fetch 1 hashes out of 1",
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			epoch := types.EpochID(11)
@@ -324,7 +352,7 @@ func TestP2PGetATXs(t *testing.T) {
 
 func TestP2PGetPoet(t *testing.T) {
 	forStreaming(
-		t, "database: no free connection",
+		t, "database: no free connection", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			ref := types.PoetProofRef{0x42, 0x43}
 			require.NoError(t, poets.Add(
@@ -343,7 +371,7 @@ func TestP2PGetPoet(t *testing.T) {
 
 func TestP2PGetBallot(t *testing.T) {
 	forStreaming(
-		t, "failed to fetch 1 hashes out of 1",
+		t, "failed to fetch 1 hashes out of 1", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			signer, err := signing.NewEdSigner()
 			require.NoError(t, err)
@@ -366,7 +394,7 @@ func TestP2PGetBallot(t *testing.T) {
 }
 
 func TestP2PGetActiveSet(t *testing.T) {
-	forStreaming(
+	forStreamingCachedUncached(
 		t, "failed to fetch 1 hashes out of 1",
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			id := types.RandomHash()
@@ -387,7 +415,7 @@ func TestP2PGetActiveSet(t *testing.T) {
 
 func TestP2PGetBlock(t *testing.T) {
 	forStreaming(
-		t, "failed to fetch 1 hashes out of 1",
+		t, "failed to fetch 1 hashes out of 1", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			lid := types.LayerID(111)
 			bk := types.NewExistingBlock(types.RandomBlockID(), types.InnerBlock{LayerIndex: lid})
@@ -405,7 +433,7 @@ func TestP2PGetBlock(t *testing.T) {
 
 func TestP2PGetProp(t *testing.T) {
 	forStreaming(
-		t, "failed to fetch 1 hashes out of 1",
+		t, "failed to fetch 1 hashes out of 1", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			nodeID := types.RandomNodeID()
 			ballot := types.NewExistingBallot(types.BallotID{1}, types.RandomEdSignature(), nodeID, types.LayerID(0))
@@ -439,7 +467,7 @@ func TestP2PGetProp(t *testing.T) {
 
 func TestP2PGetBlockTransactions(t *testing.T) {
 	forStreaming(
-		t, "failed to fetch 1 hashes out of 1",
+		t, "failed to fetch 1 hashes out of 1", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			signer, err := signing.NewEdSigner()
 			require.NoError(t, err)
@@ -457,7 +485,7 @@ func TestP2PGetBlockTransactions(t *testing.T) {
 
 func TestP2PGetProposalTransactions(t *testing.T) {
 	forStreaming(
-		t, "failed to fetch 1 hashes out of 1",
+		t, "failed to fetch 1 hashes out of 1", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			signer, err := signing.NewEdSigner()
 			require.NoError(t, err)
@@ -475,7 +503,7 @@ func TestP2PGetProposalTransactions(t *testing.T) {
 
 func TestP2PGetMalfeasanceProofs(t *testing.T) {
 	forStreaming(
-		t, "failed to fetch 1 hashes out of 1",
+		t, "failed to fetch 1 hashes out of 1", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			nid := types.RandomNodeID()
 			proof := types.RandomBytes(11)

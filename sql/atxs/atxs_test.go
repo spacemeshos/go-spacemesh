@@ -631,9 +631,9 @@ func TestGetBlobCached(t *testing.T) {
 	require.Equal(t, 1, db.QueryCount())
 
 	for i := 0; i < 3; i++ {
-		buf, err := atxs.GetBlob(db, atx.ID().Bytes())
-		require.NoError(t, err)
-		require.Equal(t, encoded, buf)
+		var b sql.Blob
+		require.NoError(t, atxs.LoadBlob(db, atx.ID().Bytes(), &b))
+		require.Equal(t, encoded, b.Bytes)
 		require.Equal(t, 2, db.QueryCount())
 	}
 }
@@ -649,6 +649,7 @@ func TestCachedBlobEviction(t *testing.T) {
 	require.NoError(t, err)
 	addedATXs := make([]*types.VerifiedActivationTx, 11)
 	blobs := make([][]byte, 11)
+	var b sql.Blob
 	for n := range addedATXs {
 		atx, err := newAtx(sig, withPublishEpoch(1))
 		require.NoError(t, err)
@@ -657,25 +658,22 @@ func TestCachedBlobEviction(t *testing.T) {
 		encoded, err := codec.Encode(atx.ActivationTx)
 		require.NoError(t, err)
 		blobs[n] = encoded
-		buf, err := atxs.GetBlob(db, atx.ID().Bytes())
-		require.NoError(t, err)
-		require.Equal(t, encoded, buf)
+		require.NoError(t, atxs.LoadBlob(db, atx.ID().Bytes(), &b))
+		require.Equal(t, encoded, b.Bytes)
 	}
 
 	require.Equal(t, 22, db.QueryCount())
 
 	// The ATXs except the first one stay in place
 	for n, atx := range addedATXs[1:] {
-		buf, err := atxs.GetBlob(db, atx.ID().Bytes())
-		require.NoError(t, err)
-		require.Equal(t, blobs[n+1], buf)
+		require.NoError(t, atxs.LoadBlob(db, atx.ID().Bytes(), &b))
+		require.Equal(t, blobs[n+1], b.Bytes)
 		require.Equal(t, 22, db.QueryCount())
 	}
 
 	// The first ATX is evicted. We check it after the loop to avoid additional evictions.
-	buf, err := atxs.GetBlob(db, addedATXs[0].ID().Bytes())
-	require.NoError(t, err)
-	require.Equal(t, blobs[0], buf)
+	require.NoError(t, atxs.LoadBlob(db, addedATXs[0].ID().Bytes(), &b))
+	require.Equal(t, blobs[0], b.Bytes)
 	require.Equal(t, 23, db.QueryCount())
 }
 

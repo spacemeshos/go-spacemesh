@@ -350,7 +350,10 @@ func TestHandleEpochInfoReq(t *testing.T) {
 	}
 }
 
-func TestHandleEpochInfoReqWithQueryCache(t *testing.T) {
+func testHandleEpochInfoReqWithQueryCache(
+	t *testing.T,
+	getInfo func(th *testHandler, req []byte, ed *EpochData),
+) {
 	th := createTestHandler(t, sql.WithQueryCache(true))
 	epoch := types.EpochID(11)
 	var expected EpochData
@@ -368,9 +371,7 @@ func TestHandleEpochInfoReqWithQueryCache(t *testing.T) {
 
 	var got EpochData
 	for i := 0; i < 3; i++ {
-		out, err := th.handleEpochInfoReq(context.Background(), epochBytes)
-		require.NoError(t, err)
-		require.NoError(t, codec.Decode(out, &got))
+		getInfo(th, epochBytes, &got)
 		require.ElementsMatch(t, expected.AtxIDs, got.AtxIDs)
 		require.Equal(t, 11, qc.QueryCount())
 	}
@@ -381,14 +382,33 @@ func TestHandleEpochInfoReqWithQueryCache(t *testing.T) {
 	expected.AtxIDs = append(expected.AtxIDs, vatx.ID())
 	require.Equal(t, 12, qc.QueryCount())
 
-	out, err := th.handleEpochInfoReq(context.Background(), epochBytes)
-	require.NoError(t, err)
-	require.NoError(t, codec.Decode(out, &got))
+	getInfo(th, epochBytes, &got)
 	require.ElementsMatch(t, expected.AtxIDs, got.AtxIDs)
 	// The query count is not incremented as the slice is still
 	// cached and the new atx is just appended to it, even though
 	// the response is re-serialized.
 	require.Equal(t, 12, qc.QueryCount())
+}
+
+func TestHandleEpochInfoReqWithQueryCache(t *testing.T) {
+	testHandleEpochInfoReqWithQueryCache(t, func(th *testHandler, req []byte, ed *EpochData) {
+		out, err := th.handleEpochInfoReq(context.Background(), req)
+		require.NoError(t, err)
+		require.NoError(t, codec.Decode(out, ed))
+	})
+}
+
+func TestHandleEpochInfoReqStreamWithQueryCache(t *testing.T) {
+	testHandleEpochInfoReqWithQueryCache(t, func(th *testHandler, req []byte, ed *EpochData) {
+		var b bytes.Buffer
+		err := th.handleEpochInfoReqStream(context.Background(), req, &b)
+		require.NoError(t, err)
+		n, err := server.ReadResponse(&b, func(resLen uint32) (int, error) {
+			return codec.DecodeFrom(&b, ed)
+		})
+		require.NoError(t, err)
+		require.NotZero(t, n)
+	})
 }
 
 func TestHandleMaliciousIDsReq(t *testing.T) {

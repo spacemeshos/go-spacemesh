@@ -61,10 +61,18 @@ func GetBlobSizes(db sql.Executor, ids [][]byte) (sizes []int, err error) {
 
 // LoadBlob loads activesets as an encoded blob, ready to be sent over the wire.
 func LoadBlob(db sql.Executor, id []byte, blob *sql.Blob) error {
+	if sql.IsCached(db) {
+		b, err := getBlob(db, id)
+		if err != nil {
+			return err
+		}
+		blob.Bytes = b
+		return nil
+	}
 	return sql.LoadBlob(db, "select active_set from activesets where id = ?1", id, blob)
 }
 
-func GetBlob(db sql.Executor, id []byte) ([]byte, error) {
+func getBlob(db sql.Executor, id []byte) ([]byte, error) {
 	cacheKey := sql.QueryCacheKey(CacheKindActiveSetBlob, string(id))
 	return sql.WithCachedValue(db, cacheKey, func() ([]byte, error) {
 		var rst []byte

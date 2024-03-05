@@ -222,6 +222,20 @@ func IterateIDsByEpoch(
 	epoch types.EpochID,
 	callback func(total int, id types.ATXID) error,
 ) error {
+	if sql.IsCached(db) {
+		// If the slices are cached, let's not do more SELECTs
+		ids, err := GetIDsByEpoch(db, epoch)
+		if err != nil {
+			return err
+		}
+		for _, id := range ids {
+			if err := callback(len(ids), id); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
 	var callbackErr error
 	enc := func(stmt *sql.Statement) {
 		stmt.BindInt64(1, int64(epoch))
@@ -303,11 +317,18 @@ func GetBlobSizes(db sql.Executor, ids [][]byte) (sizes []int, err error) {
 
 // LoadBlob loads ATX as an encoded blob, ready to be sent over the wire.
 func LoadBlob(db sql.Executor, id []byte, blob *sql.Blob) error {
+	if sql.IsCached(db) {
+		b, err := getBlob(db, id)
+		if err != nil {
+			return err
+		}
+		blob.Bytes = b
+		return nil
+	}
 	return sql.LoadBlob(db, "select atx from atxs where id = ?1", id, blob)
 }
 
-// GetBlob loads ATX as an encoded blob, ready to be sent over the wire.
-func GetBlob(db sql.Executor, id []byte) (buf []byte, err error) {
+func getBlob(db sql.Executor, id []byte) (buf []byte, err error) {
 	cacheKey := sql.QueryCacheKey(CacheKindATXBlob, string(id))
 	return sql.WithCachedValue(db, cacheKey, func() ([]byte, error) {
 		if rows, err := db.Exec("select atx from atxs where id = ?1",
