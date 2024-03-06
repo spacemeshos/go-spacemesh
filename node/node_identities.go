@@ -149,23 +149,8 @@ func (app *App) LoadIdentities() error {
 			return nil
 		}
 
-		// read hex data from file
-		dst := make([]byte, signing.PrivateKeySize)
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return fmt.Errorf("failed to open identity file at %s: %w", path, err)
-		}
-
-		n, err := hex.Decode(dst, data)
-		if err != nil {
-			return fmt.Errorf("decoding private key in %s: %w", d.Name(), err)
-		}
-		if n != signing.PrivateKeySize {
-			return fmt.Errorf("invalid key size %d/%d for %s", n, signing.PrivateKeySize, d.Name())
-		}
-
 		signer, err := signing.NewEdSigner(
-			signing.WithPrivateKey(dst),
+			signing.FromFile(path),
 			signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()),
 		)
 		if err != nil {
