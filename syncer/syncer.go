@@ -30,7 +30,6 @@ type Config struct {
 	Standalone               bool
 	GossipDuration           time.Duration  `mapstructure:"gossipduration"`
 	DisableMeshAgreement     bool           `mapstructure:"disable-mesh-agreement"`
-	DisableAtxReconciliation bool           `mapstructure:"disable-atx-reconciliation"`
 	OutOfSyncThresholdLayers uint32         `mapstructure:"out-of-sync-threshold"`
 	AtxSync                  atxsync.Config `mapstructure:"atx-sync"`
 }
@@ -39,7 +38,7 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{
 		Interval:                 10 * time.Second,
-		EpochEndFraction:         0.8,
+		EpochEndFraction:         0.5,
 		HareDelayLayers:          10,
 		SyncCertDistance:         10,
 		MaxStaleDuration:         time.Second,
@@ -135,6 +134,13 @@ type Syncer struct {
 	lastLayerSynced  atomic.Uint32
 	lastEpochSynced  atomic.Uint32
 	stateErr         atomic.Bool
+
+	// backgroundSync always runs one sync operation in the background.
+	backgroundSync struct {
+		epoch  atomic.Uint32
+		eg     errgroup.Group
+		cancel context.CancelFunc
+	}
 
 	// awaitATXSyncedCh is the list of subscribers' channels to notify when this node enters ATX synced state
 	awaitATXSyncedCh chan struct{}
@@ -418,15 +424,23 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	return success
 }
 
+func (s *Syncer) backgroundEpoch() types.EpochID {
+	lid := s.ticker.CurrentLayer()
+	if lid.OrdinalInEpoch() > uint32(float64(types.GetLayersPerEpoch())*s.cfg.EpochEndFraction) {
+		return lid.GetEpoch() + 1
+	}
+	return lid.GetEpoch()
+}
+
 func (s *Syncer) syncAtx(ctx context.Context) error {
 	if !s.ListenToATXGossip() {
-		s.logger.WithContext(ctx).With().Info("syncing atx from genesis", s.ticker.CurrentLayer())
-		for epoch := s.lastAtxEpoch() + 1; epoch <= s.ticker.CurrentLayer().GetEpoch(); epoch++ {
+		s.logger.WithContext(ctx).With().Debug("syncing atx from genesis", s.ticker.CurrentLayer())
+		for epoch := s.lastAtxEpoch() + 1; epoch < s.backgroundEpoch(); epoch++ {
 			if err := s.fetchATXsForEpoch(ctx, epoch); err != nil {
 				return err
 			}
 		}
-		s.logger.WithContext(ctx).With().Info("atxs synced to epoch", s.lastAtxEpoch())
+		s.logger.WithContext(ctx).With().Debug("atxs synced to epoch", s.lastAtxEpoch())
 
 		// FIXME https://github.com/spacemeshos/go-spacemesh/issues/3987
 		s.logger.WithContext(ctx).With().Info("syncing malicious proofs")
@@ -448,21 +462,24 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 			return err
 		}
 	}
-	if s.cfg.DisableAtxReconciliation {
-		s.logger.Debug("atx sync reconciliation is disabled")
-		return nil
+
+	target := s.backgroundEpoch()
+	if epoch := s.backgroundSync.epoch.Load(); epoch != 0 && epoch != target.Uint32() {
+		s.backgroundSync.cancel()
+		s.backgroundSync.eg.Wait()
 	}
-	// steady state atx syncing
-	curr := s.ticker.CurrentLayer()
-	if float64(
-		(curr - curr.GetEpoch().FirstLayer()).Uint32(),
-	) >= float64(
-		types.GetLayersPerEpoch(),
-	)*s.cfg.EpochEndFraction {
-		s.logger.WithContext(ctx).With().Debug("at end of epoch, syncing atx", curr.GetEpoch())
-		if err := s.fetchATXsForEpoch(ctx, curr.GetEpoch()); err != nil {
+	if s.backgroundSync.epoch.Load() == 0 {
+		s.backgroundSync.epoch.Store(target.Uint32())
+		ctx, cancel := context.WithCancel(ctx)
+		s.backgroundSync.cancel = cancel
+		s.backgroundSync.eg.Go(func() error {
+			err := s.fetchATXsForEpoch(ctx, target)
+			if err != nil {
+				s.logger.With().Warning("background atx sync failed", log.Context(ctx), target.Field(), log.Err(err))
+			}
+			s.backgroundSync.epoch.Store(0)
 			return err
-		}
+		})
 	}
 	return nil
 }
