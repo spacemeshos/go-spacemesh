@@ -82,6 +82,44 @@ func (c *MocklayerTickerCurrentLayerCall) DoAndReturn(f func() types.LayerID) *M
 	return c
 }
 
+// LayerToTime mocks base method.
+func (m *MocklayerTicker) LayerToTime(arg0 types.LayerID) time.Time {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LayerToTime", arg0)
+	ret0, _ := ret[0].(time.Time)
+	return ret0
+}
+
+// LayerToTime indicates an expected call of LayerToTime.
+func (mr *MocklayerTickerMockRecorder) LayerToTime(arg0 any) *MocklayerTickerLayerToTimeCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LayerToTime", reflect.TypeOf((*MocklayerTicker)(nil).LayerToTime), arg0)
+	return &MocklayerTickerLayerToTimeCall{Call: call}
+}
+
+// MocklayerTickerLayerToTimeCall wrap *gomock.Call
+type MocklayerTickerLayerToTimeCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MocklayerTickerLayerToTimeCall) Return(arg0 time.Time) *MocklayerTickerLayerToTimeCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MocklayerTickerLayerToTimeCall) Do(f func(types.LayerID) time.Time) *MocklayerTickerLayerToTimeCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MocklayerTickerLayerToTimeCall) DoAndReturn(f func(types.LayerID) time.Time) *MocklayerTickerLayerToTimeCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // MockmeshProvider is a mock of meshProvider interface.
 type MockmeshProvider struct {
 	ctrl     *gomock.Controller
@@ -774,17 +812,17 @@ func (m *MockatxSyncer) EXPECT() *MockatxSyncerMockRecorder {
 }
 
 // Download mocks base method.
-func (m *MockatxSyncer) Download(arg0 context.Context, arg1 types.EpochID) error {
+func (m *MockatxSyncer) Download(arg0 context.Context, arg1 types.EpochID, arg2 time.Time) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Download", arg0, arg1)
+	ret := m.ctrl.Call(m, "Download", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Download indicates an expected call of Download.
-func (mr *MockatxSyncerMockRecorder) Download(arg0, arg1 any) *MockatxSyncerDownloadCall {
+func (mr *MockatxSyncerMockRecorder) Download(arg0, arg1, arg2 any) *MockatxSyncerDownloadCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Download", reflect.TypeOf((*MockatxSyncer)(nil).Download), arg0, arg1)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Download", reflect.TypeOf((*MockatxSyncer)(nil).Download), arg0, arg1, arg2)
 	return &MockatxSyncerDownloadCall{Call: call}
 }
 
@@ -800,13 +838,13 @@ func (c *MockatxSyncerDownloadCall) Return(arg0 error) *MockatxSyncerDownloadCal
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockatxSyncerDownloadCall) Do(f func(context.Context, types.EpochID) error) *MockatxSyncerDownloadCall {
+func (c *MockatxSyncerDownloadCall) Do(f func(context.Context, types.EpochID, time.Time) error) *MockatxSyncerDownloadCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockatxSyncerDownloadCall) DoAndReturn(f func(context.Context, types.EpochID) error) *MockatxSyncerDownloadCall {
+func (c *MockatxSyncerDownloadCall) DoAndReturn(f func(context.Context, types.EpochID, time.Time) error) *MockatxSyncerDownloadCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

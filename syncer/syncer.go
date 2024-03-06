@@ -434,50 +434,40 @@ func (s *Syncer) backgroundEpoch() types.EpochID {
 
 func (s *Syncer) syncAtx(ctx context.Context) error {
 	if !s.ListenToATXGossip() {
-		s.logger.WithContext(ctx).With().Debug("syncing atx from genesis", s.ticker.CurrentLayer())
+		s.logger.With().Debug("syncing atx from genesis", log.Context(ctx), s.ticker.CurrentLayer(), s.lastAtxEpoch())
 		for epoch := s.lastAtxEpoch() + 1; epoch < s.backgroundEpoch(); epoch++ {
-			if err := s.fetchATXsForEpoch(ctx, epoch); err != nil {
+			if err := s.fetchATXsForEpoch(ctx, epoch, false); err != nil {
 				return err
 			}
 		}
-		s.logger.WithContext(ctx).With().Debug("atxs synced to epoch", s.lastAtxEpoch())
+		s.logger.With().Debug("atxs synced to epoch", log.Context(ctx), s.lastAtxEpoch())
 
 		// FIXME https://github.com/spacemeshos/go-spacemesh/issues/3987
-		s.logger.WithContext(ctx).With().Info("syncing malicious proofs")
+		s.logger.With().Info("syncing malicious proofs", log.Context(ctx))
 		if err := s.syncMalfeasance(ctx); err != nil {
 			return err
 		}
-		s.logger.WithContext(ctx).With().Info("malicious IDs synced")
+		s.logger.With().Info("malicious IDs synced", log.Context(ctx))
 		s.setATXSynced()
-		return nil
 	}
 
-	// after recovering from a checkpoint, we want to be aggressive syncing atx from peers
-	// as a form of regossip for atxs that didn't make it into the checkpoint data.
-	if types.FirstEffectiveGenesis() != types.GetEffectiveGenesis() &&
-		(s.ticker.CurrentLayer() < types.GetEffectiveGenesis() ||
-			s.ticker.CurrentLayer().GetEpoch() == types.GetEffectiveGenesis().GetEpoch()) {
-		// sync atxs for the first recovery epoch
-		if err := s.fetchATXsForEpoch(ctx, types.GetEffectiveGenesis().GetEpoch()+1); err != nil {
-			return err
-		}
-	}
-
-	target := s.backgroundEpoch()
-	if epoch := s.backgroundSync.epoch.Load(); epoch != 0 && epoch != target.Uint32() {
+	publish := s.backgroundEpoch()
+	if epoch := s.backgroundSync.epoch.Load(); epoch != 0 && epoch != publish.Uint32() {
 		s.backgroundSync.cancel()
 		s.backgroundSync.eg.Wait()
+		s.backgroundSync.epoch.Store(0)
 	}
-	if s.backgroundSync.epoch.Load() == 0 {
-		s.backgroundSync.epoch.Store(target.Uint32())
+	if s.backgroundSync.epoch.Load() == 0 && publish.Uint32() != 0 {
+		s.logger.With().Debug("download atx for epoch in background", publish, log.Context(ctx))
+		s.backgroundSync.epoch.Store(publish.Uint32())
 		ctx, cancel := context.WithCancel(ctx)
 		s.backgroundSync.cancel = cancel
 		s.backgroundSync.eg.Go(func() error {
-			err := s.fetchATXsForEpoch(ctx, target)
+			err := s.fetchATXsForEpoch(ctx, publish, true)
 			if err != nil {
-				s.logger.With().Warning("background atx sync failed", log.Context(ctx), target.Field(), log.Err(err))
+				s.logger.With().Warning("background atx sync failed", log.Context(ctx), publish.Field(), log.Err(err))
+				s.backgroundSync.epoch.Store(0)
 			}
-			s.backgroundSync.epoch.Store(0)
 			return err
 		})
 	}
@@ -585,11 +575,21 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID, peers ...
 }
 
 // fetching ATXs published the specified epoch.
-func (s *Syncer) fetchATXsForEpoch(ctx context.Context, epoch types.EpochID) error {
-	if err := s.atxsyncer.Download(ctx, epoch); err != nil {
+func (s *Syncer) fetchATXsForEpoch(ctx context.Context, publish types.EpochID, background bool) error {
+	target := publish + 1
+	if background {
+		target++
+	}
+	downloadUntil := s.ticker.LayerToTime(target.FirstLayer())
+	if err := s.atxsyncer.Download(ctx, publish, downloadUntil); err != nil {
 		return err
 	}
-	s.setLastAtxEpoch(epoch)
-	atxEpoch.Set(float64(epoch))
+	s.setLastAtxEpoch(publish)
+	atxEpoch.Set(float64(publish))
 	return nil
+}
+
+// WaitBackgroundSync is a helper to wait for the background sync to finish.
+func (s *Syncer) WaitBackgroundSync() {
+	s.backgroundSync.eg.Wait()
 }

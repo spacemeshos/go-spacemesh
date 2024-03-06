@@ -14,6 +14,7 @@ import (
 
 type layerTicker interface {
 	CurrentLayer() types.LayerID
+	LayerToTime(types.LayerID) time.Time
 }
 
 type meshProvider interface {
@@ -36,7 +37,7 @@ type fetchLogic interface {
 }
 
 type atxSyncer interface {
-	Download(context.Context, types.EpochID) error
+	Download(context.Context, types.EpochID, time.Time) error
 }
 
 // fetcher is the interface to the low-level fetching.
