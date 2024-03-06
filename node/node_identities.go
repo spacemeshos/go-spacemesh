@@ -18,7 +18,7 @@ import (
 const (
 	legacyKeyFileName       = "key.bin"
 	keyDir                  = "identities"
-	supervisedIDKeyFileName = "identity.key"
+	supervisedIDKeyFileName = "local.key"
 )
 
 // TestIdentity loads a pre-configured identity for testing purposes.
@@ -32,15 +32,12 @@ func (app *App) TestIdentity() ([]*signing.EdSigner, error) {
 	if err != nil {
 		return nil, fmt.Errorf("decoding private key: %w", err)
 	}
-	if len(dst) != signing.PrivateKeySize {
-		return nil, fmt.Errorf("invalid key size %d/%d", dst, signing.PrivateKeySize)
-	}
 	signer, err := signing.NewEdSigner(
 		signing.WithPrivateKey(dst),
 		signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to construct identity from data file: %w", err)
+		return nil, fmt.Errorf("failed to construct test identity: %w", err)
 	}
 
 	app.log.With().Info("Loaded testing identity", signer.PublicKey())
@@ -131,7 +128,6 @@ func (app *App) NewIdentity() error {
 // LoadIdentities loads all existing identities from the config directory.
 func (app *App) LoadIdentities() error {
 	signers := make([]*signing.EdSigner, 0)
-	pubKeys := make(map[string]*signing.PublicKey)
 
 	dir := filepath.Join(app.Config.DataDir(), keyDir)
 	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
@@ -162,7 +158,6 @@ func (app *App) LoadIdentities() error {
 			signer.PublicKey(),
 		)
 		signers = append(signers, signer)
-		pubKeys[d.Name()] = signer.PublicKey()
 		return nil
 	})
 	if err != nil {
@@ -172,20 +167,20 @@ func (app *App) LoadIdentities() error {
 		return fmt.Errorf("no identity files found: %w", fs.ErrNotExist)
 	}
 
-	// make sure all public keys are unique
+	// make sure all keys are unique
 	seen := make(map[string]string)
 	collision := false
-	for f1, pk := range pubKeys {
-		if f2, ok := seen[pk.String()]; ok {
+	for _, sig := range signers {
+		if file, ok := seen[sig.PublicKey().String()]; ok {
 			app.log.With().Error("duplicate key",
-				log.String("filename1", f1),
-				log.String("filename2", f2),
-				pk,
+				log.String("filename1", sig.Name()),
+				log.String("filename2", file),
+				sig.PublicKey(),
 			)
 			collision = true
 			continue
 		}
-		seen[pk.String()] = f1
+		seen[sig.PublicKey().String()] = sig.Name()
 	}
 	if collision {
 		return fmt.Errorf("duplicate key found in identity files")
