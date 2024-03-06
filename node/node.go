@@ -1025,15 +1025,14 @@ func (app *App) initServices(ctx context.Context) error {
 		activation.WithValidator(app.validator),
 		activation.WithPostValidityDelay(app.Config.PostValidDelay),
 	)
-	if len(app.signers) > 1 || (len(app.signers) == 1 && !app.Config.SMESHING.Start) {
-		// in a remote setup we register eagerly so the atxBuilder can inform about missing
-		// connections to post services asap. Any setup with more than one signer is considered
-		// a remote setup. If there is only one signer and smeshing is disabled we also consider it a
-		// remote setup.
+	if len(app.signers) > 1 {
+		// in a remote setup we register eagerly so the atxBuilder can warn about missing connections asap.
+		// Any setup with more than one signer is considered a remote setup. If there is only one signer it
+		// is either a supervised or non-smeshing setup.
 		//
-		// in a supervised setup the postSetupManager will register at the atxBuilder
-		// as soon as it finished initializing, to avoid warning about a missing connection when
-		// the supervised post service isn't ready yet
+		// Either way, in a supervised setup the postSetupManager will register at the atxBuilder when
+		// it finished initializing, to avoid warning about a missing connection when the supervised post
+		// service isn't ready yet.
 		for _, sig := range app.signers {
 			atxBuilder.Register(sig)
 		}
@@ -1416,7 +1415,8 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		return service, nil
 	case grpcserver.Smesher:
 		var sig *signing.EdSigner
-		if len(app.signers) == 1 {
+		if len(app.signers) == 1 && app.signers[0].Name() == supervisedIDKeyFileName {
+			// StartSmeshing is only supported in a supervised setup (single signer)
 			sig = app.signers[0]
 		}
 		service := grpcserver.NewSmesherService(
