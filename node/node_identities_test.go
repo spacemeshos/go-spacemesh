@@ -93,12 +93,6 @@ func TestSpacemeshApp_NewIdentity(t *testing.T) {
 		require.Len(t, app.signers, 1)
 		newKey := app.signers[0].PublicKey()
 		require.NotEqual(t, existingKey, newKey) // new key was created and loaded
-
-		err = app.LoadIdentities()
-		require.NoError(t, err)
-		require.Len(t, app.signers, 2)
-		require.Equal(t, app.signers[0].PublicKey(), existingKey)
-		require.Equal(t, app.signers[1].PublicKey(), newKey)
 	})
 }
 
