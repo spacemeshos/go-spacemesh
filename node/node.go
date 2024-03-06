@@ -1769,7 +1769,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		return err
 	}
 
-	localDB, err := localsql.Open("file:"+dbFile,
+	localDB, err := localsql.Open("file:"+filepath.Join(dbPath, localDbFile),
 		sql.WithLogger(dbLog.Zap()),
 		sql.WithMigrations(migrations),
 		sql.WithMigration(localsql.New0001Migration(app.Config.SMESHING.Opts.DataDir)),
