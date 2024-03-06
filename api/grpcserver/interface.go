@@ -58,6 +58,7 @@ type atxProvider interface {
 }
 
 type atxBuilder interface {
+	PostState() map[types.NodeID]int
 }
 
 type postSupervisor interface {

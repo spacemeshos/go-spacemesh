@@ -183,6 +183,17 @@ func (b *Builder) Smeshing() bool {
 	return b.stop != nil
 }
 
+// PostState returns the current state of the post service for each registered smesher.
+func (b *Builder) PostState() map[types.NodeID]int {
+	b.smeshingMutex.Lock()
+	defer b.smeshingMutex.Unlock()
+	state := make(map[types.NodeID]int, len(b.signers))
+	for id := range b.signers {
+		state[id] = 1
+	}
+	return state
+}
+
 // StartSmeshing is the main entry point of the atx builder. It runs the main
 // loop of the builder in a new go-routine and shouldn't be called more than
 // once without calling StopSmeshing in between. If the post data is incomplete
