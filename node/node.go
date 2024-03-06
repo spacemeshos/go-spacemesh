@@ -1025,12 +1025,12 @@ func (app *App) initServices(ctx context.Context) error {
 		activation.WithValidator(app.validator),
 		activation.WithPostValidityDelay(app.Config.PostValidDelay),
 	)
-	if len(app.signers) > 1 {
+	if len(app.signers) > 1 || app.signers[0].Name() != supervisedIDKeyFileName {
 		// in a remote setup we register eagerly so the atxBuilder can warn about missing connections asap.
 		// Any setup with more than one signer is considered a remote setup. If there is only one signer it
-		// is either a supervised or non-smeshing setup.
+		// is considered a remote setup if the key for the signer has not been sourced from `supervisedIDKeyFileName`.
 		//
-		// Either way, in a supervised setup the postSetupManager will register at the atxBuilder when
+		// In a supervised setup the postSetupManager will register at the atxBuilder when
 		// it finished initializing, to avoid warning about a missing connection when the supervised post
 		// service isn't ready yet.
 		for _, sig := range app.signers {
