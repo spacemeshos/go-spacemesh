@@ -212,12 +212,19 @@ func TestActivationService_ActivationsCount(t *testing.T) {
 	db := sql.InMemory()
 	ctx := context.Background()
 
-	gen := fixture.NewAtxsGenerator().WithEpochs(0, 1)
-	activations := make([]types.VerifiedActivationTx, 30)
-	for i := range activations {
-		atx := gen.Next()
+	genEpoch3 := fixture.NewAtxsGenerator().WithEpochs(3, 1)
+	epoch3ATXs := make([]types.VerifiedActivationTx, 30)
+	for i := range epoch3ATXs {
+		atx := genEpoch3.Next()
 		require.NoError(t, atxs.Add(db, atx))
-		activations[i] = *atx
+		epoch3ATXs[i] = *atx
+	}
+	genEpoch5 := fixture.NewAtxsGenerator().WithEpochs(5, 1)
+	epoch5ATXs := make([]types.VerifiedActivationTx, 10) // ensure the number here is different from above
+	for i := range epoch5ATXs {
+		atx := genEpoch5.Next()
+		require.NoError(t, atxs.Add(db, atx))
+		epoch5ATXs[i] = *atx
 	}
 
 	svc := NewActivationService(db)
@@ -227,9 +234,27 @@ func TestActivationService_ActivationsCount(t *testing.T) {
 	conn := dialGrpc(ctx, t, cfg)
 	client := spacemeshv2alpha1.NewActivationServiceClient(conn)
 
-	count, err := client.ActivationsCount(ctx, &spacemeshv2alpha1.ActivationsCountRequest{
-		Epoch: activations[3].PublishEpoch.Uint32(),
+	t.Run("count without filter", func(t *testing.T) {
+		count, err := client.ActivationsCount(ctx, &spacemeshv2alpha1.ActivationsCountRequest{})
+		require.NoError(t, err)
+		require.Equal(t, len(epoch3ATXs)+len(epoch5ATXs), int(count.Count))
 	})
-	require.NoError(t, err)
-	require.Len(t, activations, int(count.Count))
+
+	t.Run("count with filter", func(t *testing.T) {
+		epoch := uint32(3)
+		epoch3Count, err := client.ActivationsCount(ctx, &spacemeshv2alpha1.ActivationsCountRequest{
+			Epoch: &epoch,
+		})
+		require.NoError(t, err)
+		require.Len(t, epoch3ATXs, int(epoch3Count.Count))
+
+		epoch = uint32(5)
+		epoch5Count, err := client.ActivationsCount(ctx, &spacemeshv2alpha1.ActivationsCountRequest{
+			Epoch: &epoch,
+		})
+		require.NoError(t, err)
+		require.Len(t, epoch5ATXs, int(epoch5Count.Count))
+
+		require.NotEqual(t, int(epoch3Count.Count), int(epoch5Count.Count))
+	})
 }
