@@ -418,7 +418,7 @@ func GenVRF(
 // Returns a map of all active node IDs in the specified layer id.
 func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (*cachedActiveSet, error) {
 	if !targetLayer.After(types.GetEffectiveGenesis()) {
-		return nil, errEmptyActiveSet
+		return nil, fmt.Errorf("target layer %d not after effective genesis %d", targetLayer, types.GetEffectiveGenesis())
 	}
 	targetEpoch := targetLayer.GetEpoch()
 	// the first bootstrap data targets first epoch after genesis (epoch 2)

@@ -1,4 +1,7 @@
 {
+    "logging": {
+        "hare": "debug"
+    },
     "preset": "fastnet",
     "poet": {
         "phase-shift": "30s",
