@@ -267,7 +267,7 @@ func (db *CachedDB) IterateEpochATXHeaders(
 	epoch types.EpochID,
 	iter func(*types.ActivationTxHeader) error,
 ) error {
-	ids, err := atxs.GetIDsByEpoch(db, epoch-1)
+	ids, err := atxs.GetIDsByEpoch(context.Background(), db, epoch-1)
 	if err != nil {
 		return err
 	}
@@ -370,10 +370,10 @@ type BlobStore struct {
 }
 
 // Get gets an ATX as bytes by an ATX ID as bytes.
-func (bs *BlobStore) Get(hint Hint, key []byte) ([]byte, error) {
+func (bs *BlobStore) Get(ctx context.Context, hint Hint, key []byte) ([]byte, error) {
 	switch hint {
 	case ATXDB:
-		return atxs.GetBlob(bs.DB, key)
+		return atxs.GetBlob(ctx, bs.DB, key)
 	case ProposalDB:
 		return bs.proposals.GetBlob(types.ProposalID(types.BytesToHash(key).ToHash20()))
 	case BallotDB:
@@ -407,7 +407,7 @@ func (bs *BlobStore) Get(hint Hint, key []byte) ([]byte, error) {
 	case Malfeasance:
 		return identities.GetMalfeasanceBlob(bs.DB, key)
 	case ActiveSet:
-		return activesets.GetBlob(bs.DB, key)
+		return activesets.GetBlob(ctx, bs.DB, key)
 	}
 	return nil, fmt.Errorf("blob store not found %s", hint)
 }

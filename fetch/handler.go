@@ -67,8 +67,8 @@ func (h *handler) handleEpochInfoReq(ctx context.Context, msg []byte) ([]byte, e
 	}
 
 	cacheKey := sql.QueryCacheKey(atxs.CacheKindEpochATXs, epoch.String())
-	return sql.WithCachedSubKey(h.cdb, cacheKey, fetchSubKey, func() ([]byte, error) {
-		atxids, err := atxs.GetIDsByEpoch(h.cdb, epoch)
+	return sql.WithCachedSubKey(ctx, h.cdb, cacheKey, fetchSubKey, func(ctx context.Context) ([]byte, error) {
+		atxids, err := atxs.GetIDsByEpoch(ctx, h.cdb, epoch)
 		if err != nil {
 			h.logger.With().Warning("serve: failed to get epoch atx IDs",
 				epoch, log.Err(err), log.Context(ctx))
@@ -189,7 +189,7 @@ func (h *handler) handleHashReq(ctx context.Context, data []byte) ([]byte, error
 	// be included in the response at all
 	for _, r := range requestBatch.Requests {
 		totalHashReqs.WithLabelValues(string(r.Hint)).Add(1)
-		res, err := h.bs.Get(r.Hint, r.Hash.Bytes())
+		res, err := h.bs.Get(ctx, r.Hint, r.Hash.Bytes())
 		if err != nil {
 			h.logger.With().Debug("serve: remote peer requested nonexistent hash",
 				log.Context(ctx),

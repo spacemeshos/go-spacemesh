@@ -195,7 +195,7 @@ func TestRegossip(t *testing.T) {
 			}
 		}
 
-		blob, err := atxs.GetBlob(tab.cdb, refAtx.ID().Bytes())
+		blob, err := atxs.GetBlob(context.Background(), tab.cdb, refAtx.ID().Bytes())
 		require.NoError(t, err)
 
 		// atx will be regossiped once (by the smesher)
