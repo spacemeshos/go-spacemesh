@@ -445,6 +445,14 @@ func collect(
 		if err = collect(db, *atx.CommitmentATX, all, deps); err != nil {
 			return err
 		}
+	} else {
+		commitment, err := atxs.CommitmentATX(db, atx.SmesherID)
+		if err != nil {
+			return fmt.Errorf("get commitment for ref atx %v: %w", ref, err)
+		}
+		if err = collect(db, commitment, all, deps); err != nil {
+			return err
+		}
 	}
 	if err = collect(db, atx.PrevATXID, all, deps); err != nil {
 		return err
