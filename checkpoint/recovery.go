@@ -182,6 +182,10 @@ func recoverFromLocalFile(
 	deps := make(map[types.ATXID]*types.VerifiedActivationTx)
 	proofs := make(map[types.PoetProofRef]*types.PoetProofMessage)
 	if cfg.PreserveOwnAtx {
+		logger.With().Info("preserving own atx deps",
+			log.Context(ctx),
+			log.Int("num identities", len(cfg.NodeIDs)),
+		)
 		for _, nodeID := range cfg.NodeIDs {
 			nodeDeps, nodeProofs, err := collectOwnAtxDeps(logger, db, localDB, nodeID, cfg.GoldenAtx, data)
 			if err != nil {
@@ -192,7 +196,6 @@ func recoverFromLocalFile(
 				// continue to recover from checkpoint despite failure to preserve own atx
 				continue
 			}
-
 			logger.With().Info("collected own atx deps",
 				log.Context(ctx),
 				nodeID,
@@ -213,13 +216,14 @@ func recoverFromLocalFile(
 	slices.SortStableFunc(allDeps, func(i, j *types.VerifiedActivationTx) int {
 		return int(i.PublishEpoch) - int(j.PublishEpoch)
 	})
-	allProofs := maps.Values(proofs)
-	// sort PoET proofs by ref
-	slices.SortFunc(allProofs, func(i, j *types.PoetProofMessage) int {
-		iRef, _ := i.Ref()
-		jRef, _ := j.Ref()
-		return bytes.Compare(iRef[:], jRef[:])
-	})
+	allProofs := make([]*types.PoetProofMessage, 0, len(proofs))
+	for _, dep := range allDeps {
+		proof, ok := proofs[types.PoetProofRef(dep.GetPoetProofRef())]
+		if !ok {
+			return nil, fmt.Errorf("missing poet proof for atx %v", dep.ID())
+		}
+		allProofs = append(allProofs, proof)
+	}
 
 	// all is ready. backup the old data and create new.
 	backupDir, err := backupOldDb(fs, cfg.DataDir, cfg.DbFile)
@@ -382,16 +386,20 @@ func collectOwnAtxDeps(
 			ref,
 			log.Bool("own", own),
 		)
-		deps, proofs, err = collectDeps(db, goldenATX, ref, all)
+		deps, proofs, err = collectDeps(db, ref, all)
 		if err != nil {
 			return nil, nil, err
 		}
+		logger.With().Debug("collected atx and deps",
+			ref,
+			log.Int("deps", len(deps)),
+		)
 	}
 	if nipostCh != nil {
 		logger.With().Info("collecting pending atx and deps", log.Object("nipost", nipostCh))
 		// any previous atx in nipost should already be captured earlier
 		// we only care about positioning atx here
-		deps2, proofs2, err := collectDeps(db, goldenATX, nipostCh.PositioningATX, all)
+		deps2, proofs2, err := collectDeps(db, nipostCh.PositioningATX, all)
 		if err != nil {
 			return nil, nil, fmt.Errorf("deps from nipost positioning atx (%v): %w", nipostCh.PositioningATX, err)
 		}
@@ -403,12 +411,11 @@ func collectOwnAtxDeps(
 
 func collectDeps(
 	db *sql.Database,
-	goldenAtxId types.ATXID,
 	ref types.ATXID,
 	all map[types.ATXID]struct{},
 ) (map[types.ATXID]*types.VerifiedActivationTx, map[types.PoetProofRef]*types.PoetProofMessage, error) {
 	deps := make(map[types.ATXID]*types.VerifiedActivationTx)
-	if err := collect(db, goldenAtxId, ref, all, deps); err != nil {
+	if err := collect(db, ref, all, deps); err != nil {
 		return nil, nil, err
 	}
 	proofs, err := poetProofs(db, deps)
@@ -420,7 +427,6 @@ func collectDeps(
 
 func collect(
 	db *sql.Database,
-	goldenAtxID types.ATXID,
 	ref types.ATXID,
 	all map[types.ATXID]struct{},
 	deps map[types.ATXID]*types.VerifiedActivationTx,
@@ -436,7 +442,7 @@ func collect(
 		return fmt.Errorf("atx %v belong to previous snapshot. cannot be preserved", ref)
 	}
 	if atx.CommitmentATX != nil {
-		if err = collect(db, goldenAtxID, *atx.CommitmentATX, all, deps); err != nil {
+		if err = collect(db, *atx.CommitmentATX, all, deps); err != nil {
 			return err
 		}
 	} else {
@@ -444,14 +450,14 @@ func collect(
 		if err != nil {
 			return fmt.Errorf("get commitment for ref atx %v: %w", ref, err)
 		}
-		if err := collect(db, goldenAtxID, commitment, all, deps); err != nil {
+		if err = collect(db, commitment, all, deps); err != nil {
 			return err
 		}
 	}
-	if err = collect(db, goldenAtxID, atx.PrevATXID, all, deps); err != nil {
+	if err = collect(db, atx.PrevATXID, all, deps); err != nil {
 		return err
 	}
-	if err = collect(db, goldenAtxID, atx.PositioningATX, all, deps); err != nil {
+	if err = collect(db, atx.PositioningATX, all, deps); err != nil {
 		return err
 	}
 	deps[ref] = atx
@@ -473,11 +479,7 @@ func poetProofs(
 		if err := codec.Decode(proof, &msg); err != nil {
 			return nil, fmt.Errorf("decode poet proof (%v): %w", vatx.ID(), err)
 		}
-		ref, err := msg.Ref()
-		if err != nil {
-			return nil, fmt.Errorf("get poet proof ref (%v): %w", vatx.ID(), err)
-		}
-		proofs[ref] = &msg
+		proofs[types.PoetProofRef(vatx.GetPoetProofRef())] = &msg
 	}
 	return proofs, nil
 }

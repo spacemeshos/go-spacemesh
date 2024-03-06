@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -23,6 +24,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
@@ -49,6 +51,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 )
 
 const layersPerEpoch = 3
@@ -941,6 +944,88 @@ func TestFlock(t *testing.T) {
 	})
 }
 
+func TestMigrateLocalDB(t *testing.T) {
+	t.Run("no DB exists", func(t *testing.T) {
+		cfg := getTestDefaultConfig(t)
+		app := New(WithConfig(cfg))
+
+		lg := zaptest.NewLogger(t)
+		ctrl := gomock.NewController(t)
+		client := localsql.NewMockPoetClient(ctrl)
+		require.NoError(t, app.MigrateLocalDB(lg, app.Config.DataDir(), []localsql.PoetClient{client}))
+
+		// no-op
+		require.NoFileExists(t, filepath.Join(app.Config.DataDir(), oldLocalDbFile))
+		require.NoFileExists(t, filepath.Join(app.Config.DataDir(), localDbFile))
+	})
+
+	t.Run("new DB exists", func(t *testing.T) {
+		cfg := getTestDefaultConfig(t)
+		app := New(WithConfig(cfg))
+
+		db, err := localsql.Open(filepath.Join(app.Config.DataDir(), localDbFile))
+		require.NoError(t, err)
+		require.NoError(t, db.Close())
+		require.FileExists(t, filepath.Join(app.Config.DataDir(), localDbFile))
+
+		lg := zaptest.NewLogger(t)
+		ctrl := gomock.NewController(t)
+		client := localsql.NewMockPoetClient(ctrl)
+		require.NoError(t, app.MigrateLocalDB(lg, app.Config.DataDir(), []localsql.PoetClient{client}))
+
+		// no-op
+		require.NoFileExists(t, filepath.Join(app.Config.DataDir(), oldLocalDbFile))
+		require.FileExists(t, filepath.Join(app.Config.DataDir(), localDbFile))
+	})
+
+	t.Run("old DB exists", func(t *testing.T) {
+		cfg := getTestDefaultConfig(t)
+		app := New(WithConfig(cfg))
+
+		db, err := localsql.Open(filepath.Join(app.Config.DataDir(), oldLocalDbFile))
+		require.NoError(t, err)
+		require.NoError(t, db.Close())
+		require.FileExists(t, filepath.Join(app.Config.DataDir(), oldLocalDbFile))
+
+		lg := zaptest.NewLogger(t)
+		ctrl := gomock.NewController(t)
+		client := localsql.NewMockPoetClient(ctrl)
+		require.NoError(t, app.MigrateLocalDB(lg, app.Config.DataDir(), []localsql.PoetClient{client}))
+
+		// migrates existing file
+		require.NoFileExists(t, filepath.Join(app.Config.DataDir(), oldLocalDbFile))
+		require.FileExists(t, filepath.Join(app.Config.DataDir(), localDbFile))
+	})
+
+	t.Run("both DBs exist", func(t *testing.T) {
+		cfg := getTestDefaultConfig(t)
+		app := New(WithConfig(cfg))
+
+		db, err := localsql.Open(filepath.Join(app.Config.DataDir(), oldLocalDbFile))
+		require.NoError(t, err)
+		require.NoError(t, db.Close())
+		require.FileExists(t, filepath.Join(app.Config.DataDir(), oldLocalDbFile))
+
+		db, err = localsql.Open(filepath.Join(app.Config.DataDir(), localDbFile))
+		require.NoError(t, err)
+		require.NoError(t, db.Close())
+		require.FileExists(t, filepath.Join(app.Config.DataDir(), localDbFile))
+
+		lg := zaptest.NewLogger(t)
+		ctrl := gomock.NewController(t)
+		client := localsql.NewMockPoetClient(ctrl)
+		err = app.MigrateLocalDB(lg, app.Config.DataDir(), []localsql.PoetClient{client})
+		require.ErrorIs(t, err, fs.ErrExist)
+	})
+}
+
+func TestEmptyExtraData(t *testing.T) {
+	cfg := getTestDefaultConfig(t)
+	cfg.Genesis.ExtraData = ""
+	app := New(WithConfig(cfg), WithLog(logtest.New(t)))
+	require.Error(t, app.Initialize())
+}
+
 func TestAdminEvents(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -1013,27 +1098,6 @@ func TestAdminEvents(t *testing.T) {
 		}
 		require.NoError(t, stream.CloseSend())
 	}
-}
-
-func launchPostSupervisor(
-	tb testing.TB,
-	log *zap.Logger,
-	mgr *activation.PostSetupManager,
-	id types.NodeID,
-	address string,
-	postCfg activation.PostConfig,
-	postOpts activation.PostSetupOpts,
-) func() {
-	cmdCfg := activation.DefaultTestPostServiceConfig()
-	cmdCfg.NodeAddress = fmt.Sprintf("http://%s", address)
-	provingOpts := activation.DefaultPostProvingOpts()
-	provingOpts.RandomXMode = activation.PostRandomXModeLight
-
-	ps, err := activation.NewPostSupervisor(log, cmdCfg, postCfg, provingOpts, mgr)
-	require.NoError(tb, err)
-	require.NotNil(tb, ps)
-	require.NoError(tb, ps.Start(postOpts, id))
-	return func() { assert.NoError(tb, ps.Stop(false)) }
 }
 
 func TestAdminEvents_MultiSmesher(t *testing.T) {
@@ -1234,11 +1298,25 @@ func TestAdminEvents_MultiSmesher(t *testing.T) {
 	}
 }
 
-func TestEmptyExtraData(t *testing.T) {
-	cfg := getTestDefaultConfig(t)
-	cfg.Genesis.ExtraData = ""
-	app := New(WithConfig(cfg), WithLog(logtest.New(t)))
-	require.Error(t, app.Initialize())
+func launchPostSupervisor(
+	tb testing.TB,
+	log *zap.Logger,
+	mgr *activation.PostSetupManager,
+	id types.NodeID,
+	address string,
+	postCfg activation.PostConfig,
+	postOpts activation.PostSetupOpts,
+) func() {
+	cmdCfg := activation.DefaultTestPostServiceConfig()
+	cmdCfg.NodeAddress = fmt.Sprintf("http://%s", address)
+	provingOpts := activation.DefaultPostProvingOpts()
+	provingOpts.RandomXMode = activation.PostRandomXModeLight
+
+	ps, err := activation.NewPostSupervisor(log, cmdCfg, postCfg, provingOpts, mgr)
+	require.NoError(tb, err)
+	require.NotNil(tb, ps)
+	require.NoError(tb, ps.Start(postOpts, id))
+	return func() { assert.NoError(tb, ps.Stop(false)) }
 }
 
 func getTestDefaultConfig(tb testing.TB) *config.Config {

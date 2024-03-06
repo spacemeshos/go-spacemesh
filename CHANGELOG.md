@@ -18,9 +18,9 @@ encrypted connection between the post service and the node over insecure connect
 
 Smeshers using the default setup with a supervised post service do not need to make changes to their node configuration.
 
-#### Fully migrated local state into `node_state.sql`
+#### Fully migrated local state into `local.sql`
 
-With this release the node has fully migrated its local state into `node_state.sql`. During the first start after the
+With this release the node has fully migrated its local state into `local.sql`. During the first start after the
 upgrade the node will migrate the data from disk and store it in the database. This change also allows the PoST data
 directory to be set to read only after the migration is complete, as the node will no longer write to it.
 
@@ -176,7 +176,11 @@ and permanent ineligibility for rewards.
 
 ### Improvements
 
-* [#5219](https://github.com/spacemeshos/go-spacemesh/pull/5219) Migrate data from `nipost_builder_state.bin` to `node_state.sql`.
+* [#5641](https://github.com/spacemeshos/go-spacemesh/pull/5641) Rename `node_state.sql` to `local.sql`.
+
+  To avoid confusion with the `state.sql` database, the `node_state.sql` database has been renamed to `local.sql`.
+
+* [#5219](https://github.com/spacemeshos/go-spacemesh/pull/5219) Migrate data from `nipost_builder_state.bin` to `local.sql`.
 
   The node will automatically migrate the data from disk and store it in the database. The migration will take place at the
   first startup after the upgrade.

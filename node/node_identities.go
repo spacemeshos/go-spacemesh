@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/natefinch/atomic"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -83,7 +85,7 @@ func (app *App) MigrateExistingIdentity() error {
 		return fmt.Errorf("failed to close legacy identity file: %w", err)
 	}
 
-	if err := os.Rename(oldKey, oldKey+".bak"); err != nil {
+	if err := atomic.ReplaceFile(oldKey, oldKey+".bak"); err != nil {
 		return fmt.Errorf("failed to rename legacy identity file: %w", err)
 	}
 
