@@ -155,13 +155,20 @@ func (s *Syncer) downloadEpochInfo(
 	ctx context.Context,
 	publish types.EpochID,
 	immediate bool,
-	updates chan epochUpdate,
+	updates chan<- epochUpdate,
 ) error {
 	interval := s.cfg.EpochInfoInterval
 	if immediate {
 		interval = 0
 	}
 	for {
+		if interval != 0 {
+			s.logger.Debug(
+				"waiting between epoch info requests",
+				publish.Field().Zap(),
+				zap.Duration("duration", interval),
+			)
+		}
 		select {
 		case <-ctx.Done():
 			return nil
@@ -216,11 +223,10 @@ func (s *Syncer) downloadAtxs(
 	ctx context.Context,
 	publish types.EpochID,
 	state map[types.ATXID]int,
-	updates chan epochUpdate,
+	updates <-chan epochUpdate,
 ) error {
-	batch := make([]types.ATXID, 0, s.cfg.AtxsBatch)
-	batch = batch[:0]
 	var (
+		batch                = make([]types.ATXID, 0, s.cfg.AtxsBatch)
 		downloaded           = map[types.ATXID]bool{}
 		previouslyDownloaded = 0
 		start                = time.Now()
