@@ -2,26 +2,23 @@ package grpcserver
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
-var statusMap map[int]pb.ServiceState_Status = map[int]pb.ServiceState_Status{
-	1: pb.ServiceState_READY_PROOFING,
-	2: pb.ServiceState_PROOF_RECEIVED,
+var statusMap map[int]pb.PostState_State = map[int]pb.PostState_State{
+	0: pb.PostState_IDLE,
+	1: pb.PostState_PROVING,
 }
 
 // PostInfoService provides information about connected PostServices.
 type PostInfoService struct {
 	log *zap.Logger
 
-	builder atxBuilder
+	states postState
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -39,31 +36,27 @@ func (s *PostInfoService) String() string {
 }
 
 // NewPostInfoService creates a new instance of the post info grpc service.
-func NewPostInfoService(log *zap.Logger, builder atxBuilder) *PostInfoService {
+func NewPostInfoService(log *zap.Logger, states postState) *PostInfoService {
 	return &PostInfoService{
-		log:     log,
-		builder: builder,
+		log:    log,
+		states: states,
 	}
 }
 
-func (s *PostInfoService) ServiceStates(context.Context, *pb.ServiceStatesRequest) (*pb.ServiceStatesResponse, error) {
-	state := s.builder.PostState()
-	pbState := make([]*pb.ServiceState, 0, len(state))
-	for nodeID, state := range state {
+func (s *PostInfoService) PostStates(context.Context, *pb.PostStatesRequest) (*pb.PostStatesResponse, error) {
+	states := s.states.PostStates()
+	pbState := make([]*pb.PostState, 0, len(states))
+	for id, state := range states {
 		nodeState, ok := statusMap[state]
 		if !ok {
-			s.log.Warn("unknown status",
-				zap.Stringer("node_id", nodeID),
-				zap.Int("status", state),
-			)
-			return nil, status.Error(codes.Internal, fmt.Sprintf("identity %s is in unknown state", nodeID.String()))
+			s.log.Panic("unknown status", zap.Stringer("pubkey", id), zap.Int("status", int(state)))
 		}
 
-		pbState = append(pbState, &pb.ServiceState{
-			NodeId: nodeID.Bytes(),
-			Status: nodeState,
+		pbState = append(pbState, &pb.PostState{
+			Id:    id.Bytes(),
+			State: nodeState,
 		})
 	}
 
-	return &pb.ServiceStatesResponse{States: pbState}, nil
+	return &pb.PostStatesResponse{States: pbState}, nil
 }

@@ -57,8 +57,12 @@ type atxProvider interface {
 	GetMalfeasanceProof(id types.NodeID) (*types.MalfeasanceProof, error)
 }
 
-type atxBuilder interface {
-	PostState() map[types.NodeID]int
+type postState interface {
+	// PostStates returns the current state of all registered IDs.
+	// Meaning:
+	// * 0 - idle
+	// * 1 - proving.
+	PostStates() map[types.NodeID]int
 }
 
 type postSupervisor interface {

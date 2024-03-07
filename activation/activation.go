@@ -84,6 +84,9 @@ type Builder struct {
 	// delay before PoST in ATX is considered valid (counting from the time it was received)
 	postValidityDelay time.Duration
 
+	// states of each known identity
+	postStates postStates
+
 	// smeshingMutex protects methods like `StartSmeshing` and `StopSmeshing` from concurrent execution
 	// since they (can) modify the fields below.
 	smeshingMutex sync.Mutex
@@ -153,6 +156,7 @@ func NewBuilder(
 		log:               log,
 		poetRetryInterval: defaultPoetRetryInterval,
 		postValidityDelay: 12 * time.Hour,
+		postStates:        newPostStates(log),
 	}
 	for _, opt := range opts {
 		opt(b)
@@ -170,6 +174,7 @@ func (b *Builder) Register(sig *signing.EdSigner) {
 
 	b.log.Info("registered signing key", log.ZShortStringer("id", sig.NodeID()))
 	b.signers[sig.NodeID()] = sig
+	b.postStates.set(sig.NodeID(), stateIdle)
 
 	if b.stop != nil {
 		b.startID(b.parentCtx, sig)
@@ -184,14 +189,8 @@ func (b *Builder) Smeshing() bool {
 }
 
 // PostState returns the current state of the post service for each registered smesher.
-func (b *Builder) PostState() map[types.NodeID]int {
-	b.smeshingMutex.Lock()
-	defer b.smeshingMutex.Unlock()
-	state := make(map[types.NodeID]int, len(b.signers))
-	for id := range b.signers {
-		state[id] = 1
-	}
-	return state
+func (b *Builder) PostStates() map[types.NodeID]int {
+	return b.postStates.get()
 }
 
 // StartSmeshing is the main entry point of the atx builder. It runs the main
@@ -219,6 +218,9 @@ func (b *Builder) StartSmeshing(coinbase types.Address) error {
 }
 
 func (b *Builder) startID(ctx context.Context, sig *signing.EdSigner) {
+	if err := b.postStates.watchEvents(ctx); err != nil {
+		b.log.Error("failed to watch post events", zap.Error(err))
+	}
 	b.eg.Go(func() error {
 		b.run(ctx, sig)
 		return nil
@@ -262,6 +264,7 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 		}
 		var resetErr error
 		for _, sig := range b.signers {
+			b.postStates.set(sig.NodeID(), stateIdle)
 			if err := b.nipostBuilder.ResetState(sig.NodeID()); err != nil {
 				b.log.Error("failed to reset builder state", log.ZShortStringer("id", sig.NodeID()), zap.Error(err))
 				err = fmt.Errorf("reset builder state for id %s: %w", sig.NodeID().ShortString(), err)
@@ -427,6 +430,10 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		// challenge is fresh
 		return challenge, nil
 	}
+	b.log.Info("Building new NiPOST challenge", zap.Stringer("id", nodeID), zap.Stringer("current_epoch", current))
+	// Reset the state to idle because we won't be building POST until we get a new PoET proof
+	// (typically more than epoch time from now).
+	b.postStates.set(nodeID, stateIdle)
 
 	prev, err := b.cdb.GetLastAtx(nodeID)
 	switch {
