@@ -14,7 +14,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -224,10 +223,6 @@ func TestRegossip(t *testing.T) {
 func Test_Builder_Multi_InitialPost(t *testing.T) {
 	tab := newTestBuilder(t, 5, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go tab.postStates.watchEvents(ctx)
-
 	var eg errgroup.Group
 	for _, sig := range tab.signers {
 		sig := sig
@@ -246,38 +241,17 @@ func Test_Builder_Multi_InitialPost(t *testing.T) {
 
 			commitmentATX := types.RandomATXID()
 			tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), commitmentATX, post, meta, numUnits).Return(nil)
-			tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).DoAndReturn(
-				func(ctx context.Context, id types.NodeID, challenge []byte) (*types.Post, *types.PostInfo, error) {
-					events.EmitPostStart(id, challenge)
-					require.Eventually(t, func() bool {
-						for desc, state := range tab.PostStates() {
-							if id == desc.NodeID() {
-								return state == types.PostStateProving
-							}
-						}
-						return false
-					}, time.Second*5, time.Millisecond*100)
-
-					events.EmitPostComplete(id, challenge)
-					require.Eventually(t, func() bool {
-						for desc, state := range tab.PostStates() {
-							if id == desc.NodeID() {
-								return state == types.PostStateIdle
-							}
-						}
-						return false
-					}, time.Second*5, time.Millisecond*100)
-
-					return post,
-						&types.PostInfo{
-							CommitmentATX: commitmentATX,
-							Nonce:         new(types.VRFPostIndex),
-							NumUnits:      numUnits,
-							NodeID:        sig.NodeID(),
-							LabelsPerUnit: tab.conf.LabelsPerUnit,
-						},
-						nil
-				})
+			tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).Return(
+				post,
+				&types.PostInfo{
+					CommitmentATX: commitmentATX,
+					Nonce:         new(types.VRFPostIndex),
+					NumUnits:      numUnits,
+					NodeID:        sig.NodeID(),
+					LabelsPerUnit: tab.conf.LabelsPerUnit,
+				},
+				nil,
+			)
 			require.NoError(t, tab.buildInitialPost(context.Background(), sig.NodeID()))
 
 			// postClient.Proof() should not be called again

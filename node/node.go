@@ -988,6 +988,7 @@ func (app *App) initServices(ctx context.Context) error {
 		return fmt.Errorf("create post setup manager: %v", err)
 	}
 
+	postStates := activation.NewPostStates(app.addLogger(PostLogger, lg).Zap())
 	grpcPostService, err := app.grpcService(grpcserver.Post, lg)
 	if err != nil {
 		return fmt.Errorf("init post grpc service: %w", err)
@@ -1000,6 +1001,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.addLogger(NipostBuilderLogger, lg).Zap(),
 		app.Config.POET,
 		app.clock,
+		activation.NipostbuilderWithPostStates(postStates),
 	)
 	if err != nil {
 		return fmt.Errorf("create nipost builder: %w", err)
@@ -1025,6 +1027,7 @@ func (app *App) initServices(ctx context.Context) error {
 		activation.WithPoetRetryInterval(app.Config.HARE3.PreroundDelay),
 		activation.WithValidator(app.validator),
 		activation.WithPostValidityDelay(app.Config.PostValidDelay),
+		activation.WithPostStates(postStates),
 	)
 	if len(app.signers) > 1 || app.signers[0].Name() != supervisedIDKeyFileName {
 		// in a remote setup we register eagerly so the atxBuilder can warn about missing connections asap.

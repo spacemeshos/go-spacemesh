@@ -3,15 +3,13 @@ package activation
 import (
 	"context"
 	"testing"
-	"time"
 
-	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zaptest"
 	"golang.org/x/exp/maps"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/events"
 )
 
 func TestPostStates_RegisteredStartsIdle(t *testing.T) {
@@ -30,46 +28,46 @@ func TestPostStates_RegisteredStartsIdle(t *testing.T) {
 }
 
 func TestPostStates_SetState(t *testing.T) {
-	postStates := newPostStates(zaptest.NewLogger(t))
+	postStates := NewPostStates(zaptest.NewLogger(t))
 	id := types.RandomNodeID()
 
-	postStates.set(id, types.PostStateProving)
-	states := postStates.get()
+	postStates.Set(id, types.PostStateProving)
+	states := postStates.Get()
 	require.Len(t, states, 1)
 	require.Equal(t, types.PostStateProving, states[id])
 
-	postStates.set(id, types.PostStateIdle)
-	states = postStates.get()
+	postStates.Set(id, types.PostStateIdle)
+	states = postStates.Get()
 	require.Equal(t, types.PostStateIdle, states[id])
 }
 
-func TestPostStates_ReactsOnEvents(t *testing.T) {
-	postStates := newPostStates(zaptest.NewLogger(t))
+func TestPostState_OnProof(t *testing.T) {
+	ctrl := gomock.NewController(t)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go postStates.watchEvents(ctx)
+	mpostStates := NewMockPostStates(ctrl)
+	mPostService := NewMockpostService(ctrl)
+	mPostClient := NewMockPostClient(ctrl)
+	nb, err := NewNIPostBuilder(
+		nil,
+		nil,
+		mPostService,
+		[]types.PoetServer{},
+		zaptest.NewLogger(t),
+		PoetConfig{},
+		nil,
+		NipostbuilderWithPostStates(mpostStates),
+	)
+	require.NoError(t, err)
 
-	ids := []types.NodeID{types.RandomNodeID(), types.RandomNodeID()}
-	for _, id := range ids {
-		postStates.set(id, types.PostStateIdle)
-	}
+	id := types.RandomNodeID()
 
-	// Reacts to Post Start
-	events.EmitPostStart(ids[0], shared.ZeroChallenge)
-	require.Eventually(t, func() bool {
-		return types.PostStateProving == postStates.get()[ids[0]]
-	}, time.Second*5, time.Millisecond*100)
+	mPostService.EXPECT().Client(id).Return(mPostClient, nil)
+	mPostClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(nil, nil, nil)
+	gomock.InOrder(
+		mpostStates.EXPECT().Set(id, types.PostStateProving),
+		mpostStates.EXPECT().Set(id, types.PostStateIdle),
+	)
 
-	states := postStates.get()
-	for _, id := range ids[1:] {
-		require.Contains(t, states, id)
-		require.Equal(t, types.PostStateIdle, states[id])
-	}
-
-	// Reacts to Post Complete
-	events.EmitPostComplete(ids[0], shared.ZeroChallenge)
-	require.Eventually(t, func() bool {
-		return types.PostStateIdle == postStates.get()[ids[0]]
-	}, time.Second*5, time.Millisecond*100)
+	_, _, err = nb.Proof(context.Background(), id, []byte("abc"))
+	require.NoError(t, err)
 }

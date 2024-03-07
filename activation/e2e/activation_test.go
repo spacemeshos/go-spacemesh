@@ -115,6 +115,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 
 	poetDb := activation.NewPoetDb(db, log.NewFromLog(logger).Named("poetDb"))
 
+	postStates := activation.NewMockPostStates(ctrl)
 	localDB := localsql.InMemory()
 	nb, err := activation.NewNIPostBuilder(
 		localDB,
@@ -124,6 +125,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		logger.Named("nipostBuilder"),
 		poetCfg,
 		clock,
+		activation.NipostbuilderWithPostStates(postStates),
 	)
 	require.NoError(t, err)
 
@@ -165,8 +167,19 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		logger,
 		activation.WithPoetConfig(poetCfg),
 		activation.WithValidator(v),
+		activation.WithPostStates(postStates),
 	)
 	for _, sig := range signers {
+		gomock.InOrder(
+			// it starts by setting to IDLE
+			postStates.EXPECT().Set(sig.NodeID(), types.PostStateIdle),
+			// initial proof
+			postStates.EXPECT().Set(sig.NodeID(), types.PostStateProving),
+			postStates.EXPECT().Set(sig.NodeID(), types.PostStateIdle),
+			// post proof
+			postStates.EXPECT().Set(sig.NodeID(), types.PostStateProving),
+			postStates.EXPECT().Set(sig.NodeID(), types.PostStateIdle),
+		)
 		tab.Register(sig)
 	}
 

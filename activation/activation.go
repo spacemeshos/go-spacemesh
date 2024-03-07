@@ -85,8 +85,7 @@ type Builder struct {
 	postValidityDelay time.Duration
 
 	// states of each known identity
-	postStates         postStates
-	watchingPostStates sync.Once
+	postStates PostStates
 
 	// smeshingMutex protects methods like `StartSmeshing` and `StopSmeshing` from concurrent execution
 	// since they (can) modify the fields below.
@@ -132,6 +131,12 @@ func WithValidator(v nipostValidator) BuilderOption {
 	}
 }
 
+func WithPostStates(ps PostStates) BuilderOption {
+	return func(b *Builder) {
+		b.postStates = ps
+	}
+}
+
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
 func NewBuilder(
 	conf Config,
@@ -157,7 +162,7 @@ func NewBuilder(
 		log:               log,
 		poetRetryInterval: defaultPoetRetryInterval,
 		postValidityDelay: 12 * time.Hour,
-		postStates:        newPostStates(log),
+		postStates:        NewPostStates(log),
 	}
 	for _, opt := range opts {
 		opt(b)
@@ -175,7 +180,7 @@ func (b *Builder) Register(sig *signing.EdSigner) {
 
 	b.log.Info("registered signing key", log.ZShortStringer("id", sig.NodeID()))
 	b.signers[sig.NodeID()] = sig
-	b.postStates.set(sig.NodeID(), types.PostStateIdle)
+	b.postStates.Set(sig.NodeID(), types.PostStateIdle)
 
 	if b.stop != nil {
 		b.startID(b.parentCtx, sig)
@@ -191,7 +196,7 @@ func (b *Builder) Smeshing() bool {
 
 // PostState returns the current state of the post service for each registered smesher.
 func (b *Builder) PostStates() map[types.IdentityDescriptor]types.PostState {
-	states := b.postStates.get()
+	states := b.postStates.Get()
 	res := make(map[types.IdentityDescriptor]types.PostState, len(states))
 	b.smeshingMutex.Lock()
 	defer b.smeshingMutex.Unlock()
@@ -228,14 +233,6 @@ func (b *Builder) StartSmeshing(coinbase types.Address) error {
 }
 
 func (b *Builder) startID(ctx context.Context, sig *signing.EdSigner) {
-	b.watchingPostStates.Do(func() {
-		b.eg.Go(func() error {
-			if err := b.postStates.watchEvents(ctx); err != nil {
-				b.log.Error("failed to watch post events", zap.Error(err))
-			}
-			return nil
-		})
-	})
 	b.eg.Go(func() error {
 		b.run(ctx, sig)
 		return nil
@@ -279,7 +276,7 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 		}
 		var resetErr error
 		for _, sig := range b.signers {
-			b.postStates.set(sig.NodeID(), types.PostStateIdle)
+			b.postStates.Set(sig.NodeID(), types.PostStateIdle)
 			if err := b.nipostBuilder.ResetState(sig.NodeID()); err != nil {
 				b.log.Error("failed to reset builder state", log.ZShortStringer("id", sig.NodeID()), zap.Error(err))
 				err = fmt.Errorf("reset builder state for id %s: %w", sig.NodeID().ShortString(), err)
@@ -435,6 +432,9 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		return nil, fmt.Errorf("get nipost challenge: %w", err)
 	case challenge.PublishEpoch < current:
 		// challenge is stale
+		// Reset the state to idle because we won't be building POST until we get a new PoET proof
+		// (typically more than epoch time from now).
+		b.postStates.Set(nodeID, types.PostStateIdle)
 		if err := b.nipostBuilder.ResetState(nodeID); err != nil {
 			return nil, fmt.Errorf("reset nipost builder state: %w", err)
 		}
@@ -446,9 +446,6 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		return challenge, nil
 	}
 	b.log.Info("building new NiPOST challenge", zap.Stringer("id", nodeID), zap.Stringer("current_epoch", current))
-	// Reset the state to idle because we won't be building POST until we get a new PoET proof
-	// (typically more than epoch time from now).
-	b.postStates.set(nodeID, types.PostStateIdle)
 
 	prev, err := b.cdb.GetLastAtx(nodeID)
 	switch {
