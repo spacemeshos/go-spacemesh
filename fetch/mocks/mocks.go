@@ -128,31 +128,31 @@ func (m *Mockrequester) StreamRequest(arg0 context.Context, arg1 p2p.Peer, arg2 
 }
 
 // StreamRequest indicates an expected call of StreamRequest.
-func (mr *MockrequesterMockRecorder) StreamRequest(arg0, arg1, arg2, arg3 any) *requesterStreamRequestCall {
+func (mr *MockrequesterMockRecorder) StreamRequest(arg0, arg1, arg2, arg3 any) *MockrequesterStreamRequestCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StreamRequest", reflect.TypeOf((*Mockrequester)(nil).StreamRequest), arg0, arg1, arg2, arg3)
-	return &requesterStreamRequestCall{Call: call}
+	return &MockrequesterStreamRequestCall{Call: call}
 }
 
-// requesterStreamRequestCall wrap *gomock.Call
-type requesterStreamRequestCall struct {
+// MockrequesterStreamRequestCall wrap *gomock.Call
+type MockrequesterStreamRequestCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *requesterStreamRequestCall) Return(arg0 error) *requesterStreamRequestCall {
+func (c *MockrequesterStreamRequestCall) Return(arg0 error) *MockrequesterStreamRequestCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *requesterStreamRequestCall) Do(f func(context.Context, p2p.Peer, []byte, server.StreamRequestCallback) error) *requesterStreamRequestCall {
+func (c *MockrequesterStreamRequestCall) Do(f func(context.Context, p2p.Peer, []byte, server.StreamRequestCallback) error) *MockrequesterStreamRequestCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *requesterStreamRequestCall) DoAndReturn(f func(context.Context, p2p.Peer, []byte, server.StreamRequestCallback) error) *requesterStreamRequestCall {
+func (c *MockrequesterStreamRequestCall) DoAndReturn(f func(context.Context, p2p.Peer, []byte, server.StreamRequestCallback) error) *MockrequesterStreamRequestCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
