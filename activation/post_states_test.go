@@ -48,7 +48,7 @@ func TestPostStates_ReactsOnEvents(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	require.NoError(t, postStates.watchEvents(ctx))
+	go postStates.watchEvents(ctx)
 
 	ids := []types.NodeID{types.RandomNodeID(), types.RandomNodeID()}
 	for _, id := range ids {

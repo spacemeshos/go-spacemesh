@@ -85,7 +85,8 @@ type Builder struct {
 	postValidityDelay time.Duration
 
 	// states of each known identity
-	postStates postStates
+	postStates         postStates
+	watchingPostStates sync.Once
 
 	// smeshingMutex protects methods like `StartSmeshing` and `StopSmeshing` from concurrent execution
 	// since they (can) modify the fields below.
@@ -227,9 +228,14 @@ func (b *Builder) StartSmeshing(coinbase types.Address) error {
 }
 
 func (b *Builder) startID(ctx context.Context, sig *signing.EdSigner) {
-	if err := b.postStates.watchEvents(ctx); err != nil {
-		b.log.Error("failed to watch post events", zap.Error(err))
-	}
+	b.watchingPostStates.Do(func() {
+		b.eg.Go(func() error {
+			if err := b.postStates.watchEvents(ctx); err != nil {
+				b.log.Error("failed to watch post events", zap.Error(err))
+			}
+			return nil
+		})
+	})
 	b.eg.Go(func() error {
 		b.run(ctx, sig)
 		return nil
@@ -439,7 +445,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		// challenge is fresh
 		return challenge, nil
 	}
-	b.log.Info("Building new NiPOST challenge", zap.Stringer("id", nodeID), zap.Stringer("current_epoch", current))
+	b.log.Info("building new NiPOST challenge", zap.Stringer("id", nodeID), zap.Stringer("current_epoch", current))
 	// Reset the state to idle because we won't be building POST until we get a new PoET proof
 	// (typically more than epoch time from now).
 	b.postStates.set(nodeID, types.PostStateIdle)

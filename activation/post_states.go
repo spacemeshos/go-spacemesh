@@ -14,10 +14,9 @@ import (
 )
 
 type postStates struct {
-	log            *zap.Logger
-	mu             sync.RWMutex
-	states         map[types.NodeID]types.PostState
-	watchingStates sync.Once
+	log    *zap.Logger
+	mu     sync.RWMutex
+	states map[types.NodeID]types.PostState
 }
 
 func newPostStates(log *zap.Logger) postStates {
@@ -44,39 +43,33 @@ func (s *postStates) get() map[types.NodeID]types.PostState {
 }
 
 func (s *postStates) watchEvents(ctx context.Context) error {
-	var result error
-	s.watchingStates.Do(func() {
-		events.InitializeReporter()
-		sub, err := events.SubscribeMatched(func(t *events.UserEvent) bool {
-			switch t.Event.Details.(type) {
-			case *pb.Event_PostStart:
-				return true
-			case *pb.Event_PostComplete:
-				return true
-			default:
-				return false
-			}
-		}, events.WithBuffer(50))
-		if err != nil {
-			result = fmt.Errorf("subscribing to post events: %w", err)
+	events.InitializeReporter()
+	sub, err := events.SubscribeMatched(func(t *events.UserEvent) bool {
+		switch t.Event.Details.(type) {
+		case *pb.Event_PostStart:
+			return true
+		case *pb.Event_PostComplete:
+			return true
+		default:
+			return false
 		}
+	}, events.WithBuffer(50))
+	if err != nil {
+		return fmt.Errorf("subscribing to post events: %w", err)
+	}
 
-		go func() {
-			for {
-				select {
-				case e := <-sub.Out():
-					switch e.Event.Details.(type) {
-					case *pb.Event_PostStart:
-						s.set(types.BytesToNodeID(e.Event.GetPostStart().Smesher), types.PostStateProving)
-					case *pb.Event_PostComplete:
-						s.set(types.BytesToNodeID(e.Event.GetPostComplete().Smesher), types.PostStateIdle)
-					}
-				case <-ctx.Done():
-					sub.Close()
-					return
-				}
+	for {
+		select {
+		case e := <-sub.Out():
+			switch e.Event.Details.(type) {
+			case *pb.Event_PostStart:
+				s.set(types.BytesToNodeID(e.Event.GetPostStart().Smesher), types.PostStateProving)
+			case *pb.Event_PostComplete:
+				s.set(types.BytesToNodeID(e.Event.GetPostComplete().Smesher), types.PostStateIdle)
 			}
-		}()
-	})
-	return result
+		case <-ctx.Done():
+			sub.Close()
+			return nil
+		}
+	}
 }

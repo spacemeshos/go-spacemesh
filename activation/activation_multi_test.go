@@ -226,7 +226,7 @@ func Test_Builder_Multi_InitialPost(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	require.NoError(t, tab.postStates.watchEvents(ctx))
+	go tab.postStates.watchEvents(ctx)
 
 	var eg errgroup.Group
 	for _, sig := range tab.signers {
