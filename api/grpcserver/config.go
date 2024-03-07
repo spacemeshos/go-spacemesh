@@ -35,7 +35,7 @@ const (
 	Activation               Service = "activation"
 	Smesher                  Service = "smesher"
 	Post                     Service = "post"
-	PostInfo                 Service = "postinfo"
+	PostInfo                 Service = "postInfo"
 	Node                     Service = "node"
 	ActivationV2Alpha1       Service = "activation_v2alpha1"
 	ActivationStreamV2Alpha1 Service = "activation_stream_v2alpha1"
