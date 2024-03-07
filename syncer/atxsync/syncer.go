@@ -14,7 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/atxsync"
@@ -321,7 +320,7 @@ func (s *Syncer) downloadAtxs(
 				batchError := &fetch.BatchError{}
 				if errors.As(err, &batchError) {
 					for hash, err := range batchError.Errors {
-						if errors.Is(err, server.ErrPeerResponseFailed) {
+						if errors.Is(err, fetch.ErrExceedMaxRetries) {
 							state[types.ATXID(hash)]++
 						} else if errors.Is(err, pubsub.ErrValidationReject) {
 							state[types.ATXID(hash)] = s.cfg.RequestsLimit

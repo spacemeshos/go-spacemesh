@@ -14,7 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/atxsync"
@@ -198,7 +197,7 @@ func TestSyncer(t *testing.T) {
 					}
 					for _, bad := range bad.AtxIDs {
 						if bad == id {
-							berr.Add(bad.Hash32(), fmt.Errorf("%w: test", server.ErrPeerResponseFailed))
+							berr.Add(bad.Hash32(), fmt.Errorf("%w: test", fetch.ErrExceedMaxRetries))
 						}
 					}
 				}

@@ -7,7 +7,6 @@ import (
 	"strings"
 	"sync"
 
-	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -346,18 +345,4 @@ func (b *BatchError) Error() string {
 		builder.WriteString(err.Error())
 	}
 	return builder.String()
-}
-
-func (b *BatchError) MarshalLogObject(encoder log.ObjectEncoder) error {
-	encoder.AddArray("errors", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-		for hash, err := range b.Errors {
-			encoder.AppendObject(zapcore.ObjectMarshalerFunc(func(encoder log.ObjectEncoder) error {
-				encoder.AddString("id", hash.ShortString())
-				encoder.AddString("error", err.Error())
-				return nil
-			}))
-		}
-		return nil
-	}))
-	return nil
 }
