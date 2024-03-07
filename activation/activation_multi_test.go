@@ -250,16 +250,22 @@ func Test_Builder_Multi_InitialPost(t *testing.T) {
 				func(ctx context.Context, id types.NodeID, challenge []byte) (*types.Post, *types.PostInfo, error) {
 					events.EmitPostStart(id, challenge)
 					require.Eventually(t, func() bool {
-						states := tab.PostStates()
-						require.Contains(t, states, id)
-						return stateProving == postState(states[id])
+						for desc, state := range tab.PostStates() {
+							if id == desc.NodeID() {
+								return state == types.PostStateProving
+							}
+						}
+						return false
 					}, time.Second*5, time.Millisecond*100)
 
 					events.EmitPostComplete(id, challenge)
 					require.Eventually(t, func() bool {
-						states := tab.PostStates()
-						require.Contains(t, states, id)
-						return stateIdle == postState(states[id])
+						for desc, state := range tab.PostStates() {
+							if id == desc.NodeID() {
+								return state == types.PostStateIdle
+							}
+						}
+						return false
 					}, time.Second*5, time.Millisecond*100)
 
 					return post,

@@ -59,10 +59,7 @@ type atxProvider interface {
 
 type postState interface {
 	// PostStates returns the current state of all registered IDs.
-	// Meaning:
-	// * 0 - idle
-	// * 1 - proving.
-	PostStates() map[types.NodeID]int
+	PostStates() map[types.IdentityDescriptor]types.PostState
 }
 
 type postSupervisor interface {

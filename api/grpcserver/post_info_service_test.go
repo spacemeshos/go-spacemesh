@@ -12,6 +12,26 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
+type idMock struct {
+	id   types.NodeID
+	name string
+}
+
+func newIdMock(name string) idMock {
+	return idMock{
+		id:   types.RandomNodeID(),
+		name: name,
+	}
+}
+
+func (i idMock) NodeID() types.NodeID {
+	return i.id
+}
+
+func (i idMock) Name() string {
+	return i.name
+}
+
 func TestPostInfoService(t *testing.T) {
 	log := zaptest.NewLogger(t)
 	mpostStates := NewMockpostState(gomock.NewController(t))
@@ -21,22 +41,24 @@ func TestPostInfoService(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
 	conn := dialGrpc(ctx, t, cfg)
-
-	// create client
 	client := pb.NewPostInfoServiceClient(conn)
 
-	states := map[types.NodeID]int{types.RandomNodeID(): 0, types.RandomNodeID(): 1}
-	mpostStates.EXPECT().PostStates().Return(states)
+	existingStates := map[types.IdentityDescriptor]types.PostState{
+		newIdMock("idle.key"):    types.PostStateIdle,
+		newIdMock("proving.key"): types.PostStateProving,
+	}
+	mpostStates.EXPECT().PostStates().Return(existingStates)
+
 	resp, err := client.PostStates(ctx, &pb.PostStatesRequest{})
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 
-	for id, state := range states {
+	for id, state := range existingStates {
 		require.Contains(t, resp.States, &pb.PostState{
-			Id:    id.Bytes(),
-			State: pb.PostState_State(state),
+			Id:    id.NodeID().Bytes(),
+			Name:  id.Name(),
+			State: statusMap[state],
 		})
 	}
 }

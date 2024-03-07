@@ -7,11 +7,13 @@ import (
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-var statusMap map[int]pb.PostState_State = map[int]pb.PostState_State{
-	0: pb.PostState_IDLE,
-	1: pb.PostState_PROVING,
+var statusMap map[types.PostState]pb.PostState_State = map[types.PostState]pb.PostState_State{
+	types.PostStateIdle:    pb.PostState_IDLE,
+	types.PostStateProving: pb.PostState_PROVING,
 }
 
 // PostInfoService provides information about connected PostServices.
@@ -45,18 +47,14 @@ func NewPostInfoService(log *zap.Logger, states postState) *PostInfoService {
 
 func (s *PostInfoService) PostStates(context.Context, *pb.PostStatesRequest) (*pb.PostStatesResponse, error) {
 	states := s.states.PostStates()
-	pbState := make([]*pb.PostState, 0, len(states))
+	pbStates := make([]*pb.PostState, 0, len(states))
 	for id, state := range states {
-		nodeState, ok := statusMap[state]
-		if !ok {
-			s.log.Panic("unknown status", zap.Stringer("pubkey", id), zap.Int("status", int(state)))
-		}
-
-		pbState = append(pbState, &pb.PostState{
-			Id:    id.Bytes(),
-			State: nodeState,
+		pbStates = append(pbStates, &pb.PostState{
+			Id:    id.NodeID().Bytes(),
+			Name:  id.Name(),
+			State: statusMap[state],
 		})
 	}
 
-	return &pb.PostStatesResponse{States: pbState}, nil
+	return &pb.PostStatesResponse{States: pbStates}, nil
 }

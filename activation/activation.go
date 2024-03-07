@@ -174,7 +174,7 @@ func (b *Builder) Register(sig *signing.EdSigner) {
 
 	b.log.Info("registered signing key", log.ZShortStringer("id", sig.NodeID()))
 	b.signers[sig.NodeID()] = sig
-	b.postStates.set(sig.NodeID(), stateIdle)
+	b.postStates.set(sig.NodeID(), types.PostStateIdle)
 
 	if b.stop != nil {
 		b.startID(b.parentCtx, sig)
@@ -189,8 +189,17 @@ func (b *Builder) Smeshing() bool {
 }
 
 // PostState returns the current state of the post service for each registered smesher.
-func (b *Builder) PostStates() map[types.NodeID]int {
-	return b.postStates.get()
+func (b *Builder) PostStates() map[types.IdentityDescriptor]types.PostState {
+	states := b.postStates.get()
+	res := make(map[types.IdentityDescriptor]types.PostState, len(states))
+	b.smeshingMutex.Lock()
+	defer b.smeshingMutex.Unlock()
+	for id, state := range states {
+		if sig, exists := b.signers[id]; exists {
+			res[sig] = state
+		}
+	}
+	return res
 }
 
 // StartSmeshing is the main entry point of the atx builder. It runs the main
@@ -264,7 +273,7 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 		}
 		var resetErr error
 		for _, sig := range b.signers {
-			b.postStates.set(sig.NodeID(), stateIdle)
+			b.postStates.set(sig.NodeID(), types.PostStateIdle)
 			if err := b.nipostBuilder.ResetState(sig.NodeID()); err != nil {
 				b.log.Error("failed to reset builder state", log.ZShortStringer("id", sig.NodeID()), zap.Error(err))
 				err = fmt.Errorf("reset builder state for id %s: %w", sig.NodeID().ShortString(), err)
@@ -433,7 +442,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	b.log.Info("Building new NiPOST challenge", zap.Stringer("id", nodeID), zap.Stringer("current_epoch", current))
 	// Reset the state to idle because we won't be building POST until we get a new PoET proof
 	// (typically more than epoch time from now).
-	b.postStates.set(nodeID, stateIdle)
+	b.postStates.set(nodeID, types.PostStateIdle)
 
 	prev, err := b.cdb.GetLastAtx(nodeID)
 	switch {

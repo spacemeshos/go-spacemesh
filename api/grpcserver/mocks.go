@@ -974,10 +974,10 @@ func (m *MockpostState) EXPECT() *MockpostStateMockRecorder {
 }
 
 // PostStates mocks base method.
-func (m *MockpostState) PostStates() map[types.NodeID]int {
+func (m *MockpostState) PostStates() map[types.IdentityDescriptor]types.PostState {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PostStates")
-	ret0, _ := ret[0].(map[types.NodeID]int)
+	ret0, _ := ret[0].(map[types.IdentityDescriptor]types.PostState)
 	return ret0
 }
 
@@ -994,19 +994,19 @@ type MockpostStatePostStatesCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockpostStatePostStatesCall) Return(arg0 map[types.NodeID]int) *MockpostStatePostStatesCall {
+func (c *MockpostStatePostStatesCall) Return(arg0 map[types.IdentityDescriptor]types.PostState) *MockpostStatePostStatesCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockpostStatePostStatesCall) Do(f func() map[types.NodeID]int) *MockpostStatePostStatesCall {
+func (c *MockpostStatePostStatesCall) Do(f func() map[types.IdentityDescriptor]types.PostState) *MockpostStatePostStatesCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockpostStatePostStatesCall) DoAndReturn(f func() map[types.NodeID]int) *MockpostStatePostStatesCall {
+func (c *MockpostStatePostStatesCall) DoAndReturn(f func() map[types.IdentityDescriptor]types.PostState) *MockpostStatePostStatesCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

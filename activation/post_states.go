@@ -3,6 +3,7 @@ package activation
 import (
 	"context"
 	"fmt"
+	"maps"
 	"sync"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
@@ -15,38 +16,18 @@ import (
 type postStates struct {
 	log            *zap.Logger
 	mu             sync.RWMutex
-	states         map[types.NodeID]postState
+	states         map[types.NodeID]types.PostState
 	watchingStates sync.Once
 }
 
 func newPostStates(log *zap.Logger) postStates {
 	return postStates{
 		log:    log,
-		states: make(map[types.NodeID]postState),
+		states: make(map[types.NodeID]types.PostState),
 	}
 }
 
-type postState int
-
-// Values must match the ones described in github.com/spacemeshos/go-spacemesh/api/grpcserver/interface.go
-// under the postState interface.
-const (
-	stateIdle postState = iota
-	stateProving
-)
-
-func (s postState) String() string {
-	switch s {
-	case stateIdle:
-		return "idle"
-	case stateProving:
-		return "proving"
-	default:
-		panic(fmt.Sprintf("unknown post state %d", s))
-	}
-}
-
-func (s *postStates) set(id types.NodeID, state postState) {
+func (s *postStates) set(id types.NodeID, state types.PostState) {
 	s.mu.Lock()
 	s.states[id] = state
 	s.mu.Unlock()
@@ -54,14 +35,12 @@ func (s *postStates) set(id types.NodeID, state postState) {
 	s.log.Info("post state changed", zap.Stringer("id", id), zap.Stringer("state", state))
 }
 
-func (s *postStates) get() map[types.NodeID]int {
+func (s *postStates) get() map[types.NodeID]types.PostState {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	states := make(map[types.NodeID]int, len(s.states))
-	for id, state := range s.states {
-		states[id] = int(state)
-	}
-	return states
+	copy := make(map[types.NodeID]types.PostState, len(s.states))
+	maps.Copy(copy, s.states)
+	return copy
 }
 
 func (s *postStates) watchEvents(ctx context.Context) error {
@@ -88,9 +67,9 @@ func (s *postStates) watchEvents(ctx context.Context) error {
 				case e := <-sub.Out():
 					switch e.Event.Details.(type) {
 					case *pb.Event_PostStart:
-						s.set(types.BytesToNodeID(e.Event.GetPostStart().Smesher), stateProving)
+						s.set(types.BytesToNodeID(e.Event.GetPostStart().Smesher), types.PostStateProving)
 					case *pb.Event_PostComplete:
-						s.set(types.BytesToNodeID(e.Event.GetPostComplete().Smesher), stateIdle)
+						s.set(types.BytesToNodeID(e.Event.GetPostComplete().Smesher), types.PostStateIdle)
 					}
 				case <-ctx.Done():
 					sub.Close()
