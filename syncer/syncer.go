@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -27,10 +28,11 @@ type Config struct {
 	SyncCertDistance         uint32
 	MaxStaleDuration         time.Duration `mapstructure:"maxstaleduration"`
 	Standalone               bool
-	GossipDuration           time.Duration `mapstructure:"gossipduration"`
-	DisableMeshAgreement     bool          `mapstructure:"disable-mesh-agreement"`
-	DisableAtxReconciliation bool          `mapstructure:"disable-atx-reconciliation"`
-	OutOfSyncThresholdLayers uint32        `mapstructure:"out-of-sync-threshold"`
+	GossipDuration           time.Duration  `mapstructure:"gossipduration"`
+	DisableMeshAgreement     bool           `mapstructure:"disable-mesh-agreement"`
+	DisableAtxReconciliation bool           `mapstructure:"disable-atx-reconciliation"`
+	OutOfSyncThresholdLayers uint32         `mapstructure:"out-of-sync-threshold"`
+	AtxSync                  atxsync.Config `mapstructure:"atx-sync"`
 }
 
 // DefaultConfig for the syncer.
@@ -43,6 +45,7 @@ func DefaultConfig() Config {
 		MaxStaleDuration:         time.Second,
 		GossipDuration:           15 * time.Second,
 		OutOfSyncThresholdLayers: 3,
+		AtxSync:                  atxsync.DefaultConfig(),
 	}
 }
 
@@ -114,6 +117,7 @@ type Syncer struct {
 
 	cfg          Config
 	cdb          *datastore.CachedDB
+	atxsyncer    atxSyncer
 	ticker       layerTicker
 	beacon       system.BeaconGetter
 	mesh         *mesh.Mesh
@@ -149,12 +153,14 @@ func NewSyncer(
 	fetcher fetcher,
 	patrol layerPatrol,
 	ch certHandler,
+	atxSyncer atxSyncer,
 	opts ...Option,
 ) *Syncer {
 	s := &Syncer{
 		logger:           log.NewNop(),
 		cfg:              DefaultConfig(),
 		cdb:              cdb,
+		atxsyncer:        atxSyncer,
 		ticker:           ticker,
 		beacon:           beacon,
 		mesh:             mesh,
@@ -377,7 +383,9 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		}
 
 		if err := s.syncAtx(ctx); err != nil {
-			s.logger.With().Error("failed to sync atxs", log.Context(ctx), log.Err(err))
+			if !errors.Is(err, context.Canceled) {
+				s.logger.With().Error("failed to sync atxs", log.Context(ctx), log.Err(err))
+			}
 			return false
 		}
 
@@ -443,7 +451,7 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 		}
 	}
 	if s.cfg.DisableAtxReconciliation {
-		s.logger.Debug("atx sync disabled")
+		s.logger.Debug("atx sync reconciliation is disabled")
 		return nil
 	}
 	// steady state atx syncing
@@ -563,7 +571,7 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID, peers ...
 
 // fetching ATXs published the specified epoch.
 func (s *Syncer) fetchATXsForEpoch(ctx context.Context, epoch types.EpochID) error {
-	if err := s.dataFetcher.GetEpochATXs(ctx, epoch); err != nil {
+	if err := s.atxsyncer.Download(ctx, epoch); err != nil {
 		return err
 	}
 	s.setLastAtxEpoch(epoch)

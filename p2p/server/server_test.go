@@ -67,7 +67,8 @@ func TestServer(t *testing.T) {
 	})
 	t.Run("ReceiveError", func(t *testing.T) {
 		_, err := client.Request(ctx, mesh.Hosts()[2].ID(), request)
-		require.Equal(t, err, testErr)
+		require.ErrorContains(t, err, "peer error")
+		require.ErrorContains(t, err, testErr.Error())
 	})
 	t.Run("DialError", func(t *testing.T) {
 		_, err := client.Request(ctx, mesh.Hosts()[2].ID(), request)

@@ -861,6 +861,10 @@ func (app *App) initServices(ctx context.Context) error {
 		fetcher,
 		patrol,
 		app.certifier,
+		atxsync.New(fetcher, app.clock, app.db, app.localDB,
+			atxsync.WithConfig(app.Config.Sync.AtxSync),
+			atxsync.WithLogger(app.syncLogger.Zap()),
+		),
 		syncer.WithConfig(syncerConf),
 		syncer.WithLogger(app.syncLogger),
 	)
