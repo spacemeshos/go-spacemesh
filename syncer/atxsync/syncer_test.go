@@ -108,7 +108,11 @@ func TestSyncer(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 		publish := types.EpochID(1)
-		tester.clock.EXPECT().LayerToTime((publish + 1).FirstLayer()).Return(time.Now()).AnyTimes()
+		now := time.Now()
+		tester.fetcher.EXPECT().SelectBestShuffled(tester.cfg.EpochInfoPeers).Return([]p2p.Peer{"a"}).AnyTimes()
+		tester.fetcher.EXPECT().PeerEpochInfo(gomock.Any(), gomock.Any(), publish).Return(edata("1"), nil).AnyTimes()
+		tester.fetcher.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).Return(errors.New("no atxs")).AnyTimes()
+		tester.clock.EXPECT().LayerToTime((publish + 1).FirstLayer()).Return(now).AnyTimes()
 		require.ErrorIs(t, tester.syncer.Download(ctx, publish), context.Canceled)
 	})
 	t.Run("error on no peers", func(t *testing.T) {
