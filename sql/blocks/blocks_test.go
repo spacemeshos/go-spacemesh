@@ -1,6 +1,7 @@
 package blocks
 
 import (
+	"context"
 	"sort"
 	"testing"
 
@@ -274,6 +275,7 @@ func TestLastValid(t *testing.T) {
 
 func TestLoadBlob(t *testing.T) {
 	db := sql.InMemory()
+	ctx := context.Background()
 
 	lid1 := types.LayerID(11)
 	block1 := types.NewExistingBlock(
@@ -293,15 +295,15 @@ func TestLoadBlob(t *testing.T) {
 	}
 
 	var blob1 sql.Blob
-	require.NoError(t, LoadBlob(db, block1.ID().Bytes(), &blob1))
+	require.NoError(t, LoadBlob(ctx, db, block1.ID().Bytes(), &blob1))
 	require.Equal(t, encoded1, blob1.Bytes)
 
 	var blob2 sql.Blob
-	require.NoError(t, LoadBlob(db, block2.ID().Bytes(), &blob2))
+	require.NoError(t, LoadBlob(ctx, db, block2.ID().Bytes(), &blob2))
 	require.Equal(t, encoded2, blob2.Bytes)
 
 	noSuchID := types.RandomBallotID()
-	require.ErrorIs(t, LoadBlob(db, noSuchID.Bytes(), &sql.Blob{}), sql.ErrNotFound)
+	require.ErrorIs(t, LoadBlob(ctx, db, noSuchID.Bytes(), &sql.Blob{}), sql.ErrNotFound)
 
 	sizes, err := GetBlobSizes(db, [][]byte{
 		block1.ID().Bytes(),

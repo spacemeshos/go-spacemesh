@@ -40,7 +40,6 @@ func launchPostSupervisor(
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	id := sig.NodeID()
 	goldenATXID := types.RandomATXID()
 
 	validator := activation.NewMocknipostValidator(gomock.NewController(tb))
@@ -55,15 +54,15 @@ func launchPostSupervisor(
 		return ch
 	})
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
-	mgr, err := activation.NewPostSetupManager(id, postCfg, log.Named("post manager"), cdb, goldenATXID, syncer, validator)
+	mgr, err := activation.NewPostSetupManager(postCfg, log.Named("post manager"), cdb, goldenATXID, syncer, validator)
 	require.NoError(tb, err)
 
 	// start post supervisor
 	ps, err := activation.NewPostSupervisor(log, serviceCfg, postCfg, provingOpts, mgr)
 	require.NoError(tb, err)
 	require.NotNil(tb, ps)
-	require.NoError(tb, ps.Start(postOpts))
-	return id, func() { assert.NoError(tb, ps.Stop(false)) }
+	require.NoError(tb, ps.Start(postOpts, sig.NodeID()))
+	return sig.NodeID(), func() { assert.NoError(tb, ps.Stop(false)) }
 }
 
 func launchPostSupervisorTLS(
@@ -84,7 +83,6 @@ func launchPostSupervisorTLS(
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	id := sig.NodeID()
 	goldenATXID := types.RandomATXID()
 
 	validator := activation.NewMocknipostValidator(gomock.NewController(tb))
@@ -98,14 +96,14 @@ func launchPostSupervisorTLS(
 		return ch
 	})
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
-	mgr, err := activation.NewPostSetupManager(id, postCfg, log.Named("post manager"), cdb, goldenATXID, syncer, validator)
+	mgr, err := activation.NewPostSetupManager(postCfg, log.Named("post manager"), cdb, goldenATXID, syncer, validator)
 	require.NoError(tb, err)
 
 	ps, err := activation.NewPostSupervisor(log, serviceCfg, postCfg, provingOpts, mgr)
 	require.NoError(tb, err)
 	require.NotNil(tb, ps)
-	require.NoError(tb, ps.Start(postOpts))
-	return id, func() { assert.NoError(tb, ps.Stop(false)) }
+	require.NoError(tb, ps.Start(postOpts, sig.NodeID()))
+	return sig.NodeID(), func() { assert.NoError(tb, ps.Stop(false)) }
 }
 
 func Test_GenerateProof(t *testing.T) {

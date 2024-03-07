@@ -1,6 +1,7 @@
 package activesets
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -60,9 +61,9 @@ func GetBlobSizes(db sql.Executor, ids [][]byte) (sizes []int, err error) {
 }
 
 // LoadBlob loads activesets as an encoded blob, ready to be sent over the wire.
-func LoadBlob(db sql.Executor, id []byte, blob *sql.Blob) error {
+func LoadBlob(ctx context.Context, db sql.Executor, id []byte, blob *sql.Blob) error {
 	if sql.IsCached(db) {
-		b, err := getBlob(db, id)
+		b, err := getBlob(ctx, db, id)
 		if err != nil {
 			return err
 		}
@@ -72,9 +73,9 @@ func LoadBlob(db sql.Executor, id []byte, blob *sql.Blob) error {
 	return sql.LoadBlob(db, "select active_set from activesets where id = ?1", id, blob)
 }
 
-func getBlob(db sql.Executor, id []byte) ([]byte, error) {
+func getBlob(ctx context.Context, db sql.Executor, id []byte) ([]byte, error) {
 	cacheKey := sql.QueryCacheKey(CacheKindActiveSetBlob, string(id))
-	return sql.WithCachedValue(db, cacheKey, func() ([]byte, error) {
+	return sql.WithCachedValue(ctx, db, cacheKey, func(context.Context) ([]byte, error) {
 		var rst []byte
 		rows, err := db.Exec("select active_set from activesets where id = ?1;",
 			func(stmt *sql.Statement) {

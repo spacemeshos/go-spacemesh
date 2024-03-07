@@ -1,6 +1,7 @@
 package identities
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -73,13 +74,14 @@ func Test_GetMalicious(t *testing.T) {
 
 func TestLoadMalfeasanceBlob(t *testing.T) {
 	db := sql.InMemory()
+	ctx := context.Background()
 
 	nid1 := types.RandomNodeID()
 	proof1 := types.RandomBytes(11)
 	SetMalicious(db, nid1, proof1, time.Now().Local())
 
 	var blob1 sql.Blob
-	require.NoError(t, LoadMalfeasanceBlob(db, nid1.Bytes(), &blob1))
+	require.NoError(t, LoadMalfeasanceBlob(ctx, db, nid1.Bytes(), &blob1))
 	require.Equal(t, proof1, blob1.Bytes)
 
 	blobSizes, err := GetBlobSizes(db, [][]byte{nid1.Bytes()})
@@ -91,7 +93,7 @@ func TestLoadMalfeasanceBlob(t *testing.T) {
 	SetMalicious(db, nid2, proof2, time.Now().Local())
 
 	var blob2 sql.Blob
-	require.NoError(t, LoadMalfeasanceBlob(db, nid2.Bytes(), &blob2))
+	require.NoError(t, LoadMalfeasanceBlob(ctx, db, nid2.Bytes(), &blob2))
 	require.Equal(t, proof2, blob2.Bytes)
 	blobSizes, err = GetBlobSizes(db, [][]byte{
 		nid1.Bytes(),
@@ -101,7 +103,7 @@ func TestLoadMalfeasanceBlob(t *testing.T) {
 	require.Equal(t, []int{len(blob1.Bytes), len(blob2.Bytes)}, blobSizes)
 
 	noSuchID := types.RandomATXID()
-	require.ErrorIs(t, LoadMalfeasanceBlob(db, noSuchID[:], &sql.Blob{}), sql.ErrNotFound)
+	require.ErrorIs(t, LoadMalfeasanceBlob(ctx, db, noSuchID[:], &sql.Blob{}), sql.ErrNotFound)
 
 	blobSizes, err = GetBlobSizes(db, [][]byte{
 		nid1.Bytes(),

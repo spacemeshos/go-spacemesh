@@ -93,10 +93,6 @@ func MainnetConfig() Config {
 					Pubkey:  types.MustBase64FromString("Qh1efxY4YhoYBEXKPTiHJ/a7n1GsllRSyweQKO3j7m0="),
 				},
 				{
-					Address: "https://mainnet-poet-2.spacemesh.network",
-					Pubkey:  types.MustBase64FromString("8RXEI0MwO3uJUINFFlOm/uTjJCneV9FidMpXmn55G8Y="),
-				},
-				{
 					Address: "https://poet-110.spacemesh.network",
 					Pubkey:  types.MustBase64FromString("8Qqgid+37eyY7ik+EA47Nd5TrQjXolbv2Mdgir243No="),
 				},
@@ -121,7 +117,7 @@ func MainnetConfig() Config {
 		Tortoise: tortoise.Config{
 			Hdist:                    10,
 			Zdist:                    2,
-			WindowSize:               4032,
+			WindowSize:               10000,
 			MaxExceptions:            1000,
 			BadBeaconVoteDelayLayers: 4032,
 			MinimalActiveSetWeight: []types.EpochMinimalActiveWeight{

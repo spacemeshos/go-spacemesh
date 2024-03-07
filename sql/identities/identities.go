@@ -1,6 +1,7 @@
 package identities
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -74,7 +75,7 @@ func GetBlobSizes(db sql.Executor, ids [][]byte) (sizes []int, err error) {
 }
 
 // LoadMalfeasanceBlob returns the malfeasance proof in raw bytes for the given identity.
-func LoadMalfeasanceBlob(db sql.Executor, nodeID []byte, blob *sql.Blob) error {
+func LoadMalfeasanceBlob(ctx context.Context, db sql.Executor, nodeID []byte, blob *sql.Blob) error {
 	return sql.LoadBlob(db, "select proof from identities where pubkey = ?1;", nodeID, blob)
 }
 

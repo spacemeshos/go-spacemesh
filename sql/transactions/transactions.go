@@ -1,6 +1,7 @@
 package transactions
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"time"
@@ -215,7 +216,7 @@ func GetBlobSizes(db sql.Executor, ids [][]byte) (sizes []int, err error) {
 }
 
 // LoadBlob loads transaction as an encoded blob, ready to be sent over the wire.
-func LoadBlob(db sql.Executor, id []byte, blob *sql.Blob) error {
+func LoadBlob(ctx context.Context, db sql.Executor, id []byte, blob *sql.Blob) error {
 	return sql.LoadBlob(db, "select tx from transactions where id = ?1", id, blob)
 }
 

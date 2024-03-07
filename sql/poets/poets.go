@@ -1,6 +1,7 @@
 package poets
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -26,14 +27,14 @@ func GetBlobSizes(db sql.Executor, refs [][]byte) (sizes []int, err error) {
 }
 
 // LoadBlob loads PoET as an encoded blob, ready to be sent over the wire.
-func LoadBlob(db sql.Executor, ref []byte, blob *sql.Blob) error {
+func LoadBlob(ctx context.Context, db sql.Executor, ref []byte, blob *sql.Blob) error {
 	return sql.LoadBlob(db, "select poet from poets where ref = ?1", ref, blob)
 }
 
 // Get gets a PoET for a given ref.
 func Get(db sql.Executor, ref types.PoetProofRef) (poet []byte, err error) {
 	var b sql.Blob
-	if err := LoadBlob(db, ref[:], &b); err != nil {
+	if err := LoadBlob(context.Background(), db, ref[:], &b); err != nil {
 		return nil, err
 	}
 	return b.Bytes, nil

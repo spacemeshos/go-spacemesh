@@ -9,7 +9,6 @@ import (
 
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
-	"go.uber.org/zap"
 	"golang.org/x/exp/maps"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
@@ -100,11 +99,11 @@ func (h *Handler) Register(sig *signing.EdSigner) {
 	h.signerMtx.Lock()
 	defer h.signerMtx.Unlock()
 	if _, exists := h.signers[sig.NodeID()]; exists {
-		h.log.Error("signing key already registered", zap.Stringer("id", sig.NodeID()))
+		h.log.With().Error("signing key already registered", log.ShortStringer("id", sig.NodeID()))
 		return
 	}
 
-	h.log.Info("registered signing key", zap.Stringer("id", sig.NodeID()))
+	h.log.With().Info("registered signing key", log.ShortStringer("id", sig.NodeID()))
 	h.signers[sig.NodeID()] = sig
 }
 
@@ -386,20 +385,23 @@ func (h *Handler) ContextuallyValidateAtx(atx *types.VerifiedActivationTx) error
 	return err
 }
 
-func (h *Handler) cacheAtx(ctx context.Context, atx *types.ActivationTxHeader) {
+// cacheAtx caches the atx in the atxsdata cache.
+// Returns true if the atx was cached, false otherwise.
+func (h *Handler) cacheAtx(ctx context.Context, atx *types.ActivationTxHeader) *atxsdata.ATX {
 	if !h.atxsdata.IsEvicted(atx.TargetEpoch()) {
 		nonce, err := h.cdb.VRFNonce(atx.NodeID, atx.TargetEpoch())
 		if err != nil {
 			h.log.With().Error("failed vrf nonce read", log.Err(err), log.Context(ctx))
-			return
+			return nil
 		}
 		malicious, err := h.cdb.IsMalicious(atx.NodeID)
 		if err != nil {
 			h.log.With().Error("failed is malicious read", log.Err(err), log.Context(ctx))
-			return
+			return nil
 		}
-		h.atxsdata.AddFromHeader(atx, nonce, malicious)
+		return h.atxsdata.AddFromHeader(atx, nonce, malicious)
 	}
+	return nil
 }
 
 // storeAtx stores an ATX and notifies subscribers of the ATXID.
@@ -474,13 +476,12 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 		h.cdb.CacheMalfeasanceProof(atx.SmesherID, proof)
 		h.tortoise.OnMalfeasance(atx.SmesherID)
 	}
-	header, err := h.cdb.GetAtxHeader(atx.ID())
-	if err != nil {
-		return nil, fmt.Errorf("get header for processed atx %s: %w", atx.ID(), err)
-	}
+	header := atx.ToHeader()
+	added := h.cacheAtx(ctx, header)
 	h.beacon.OnAtx(header)
-	h.tortoise.OnAtx(header.ToData())
-	h.cacheAtx(ctx, header)
+	if added != nil {
+		h.tortoise.OnAtx(atx.TargetEpoch(), atx.ID(), added)
+	}
 
 	h.log.WithContext(ctx).With().Debug("finished storing atx in epoch", atx.ID(), atx.PublishEpoch)
 
@@ -488,8 +489,8 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 }
 
 // GetEpochAtxs returns all valid ATXs received in the epoch epochID.
-func (h *Handler) GetEpochAtxs(epochID types.EpochID) (ids []types.ATXID, err error) {
-	ids, err = atxs.GetIDsByEpoch(h.cdb, epochID)
+func (h *Handler) GetEpochAtxs(ctx context.Context, epochID types.EpochID) (ids []types.ATXID, err error) {
+	ids, err = atxs.GetIDsByEpoch(ctx, h.cdb, epochID)
 	h.log.With().Debug("returned epoch atxs", epochID,
 		log.Int("count", len(ids)),
 		log.String("atxs", fmt.Sprint(ids)))

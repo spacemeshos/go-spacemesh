@@ -86,8 +86,8 @@ func (h *handler) handleEpochInfoReq(ctx context.Context, msg []byte) ([]byte, e
 	}
 
 	cacheKey := sql.QueryCacheKey(atxs.CacheKindEpochATXs, epoch.String())
-	return sql.WithCachedSubKey(h.cdb, cacheKey, fetchSubKey, func() ([]byte, error) {
-		atxids, err := atxs.GetIDsByEpoch(h.cdb, epoch)
+	return sql.WithCachedSubKey(ctx, h.cdb, cacheKey, fetchSubKey, func(ctx context.Context) ([]byte, error) {
+		atxids, err := atxs.GetIDsByEpoch(ctx, h.cdb, epoch)
 		if err != nil {
 			h.logger.With().Warning("serve: failed to get epoch atx IDs",
 				epoch, log.Err(err), log.Context(ctx))
@@ -281,7 +281,7 @@ func (h *handler) handleHashReq(ctx context.Context, data []byte) ([]byte, error
 	for _, r := range requestBatch.Requests {
 		totalHashReqs.WithLabelValues(string(r.Hint)).Add(1)
 		var blob sql.Blob
-		if err := h.bs.LoadBlob(r.Hint, r.Hash.Bytes(), &blob); err != nil {
+		if err := h.bs.LoadBlob(ctx, r.Hint, r.Hash.Bytes(), &blob); err != nil {
 			if !errors.Is(err, datastore.ErrNotFound) {
 				h.logger.With().Debug("serve: database error",
 					log.Context(ctx),
@@ -386,7 +386,7 @@ func (h *handler) handleHashReqStream(ctx context.Context, msg []byte, s io.Read
 	var blob sql.Blob
 	for hint, ids := range idsByHint {
 		for _, id := range ids {
-			if err := h.bs.LoadBlob(hint, id, &blob); err != nil {
+			if err := h.bs.LoadBlob(ctx, hint, id, &blob); err != nil {
 				return err
 			}
 			if _, err := s.Write(id); err != nil {

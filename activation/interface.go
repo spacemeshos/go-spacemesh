@@ -97,8 +97,8 @@ type atxProvider interface {
 // This interface is used by the atx builder and currently implemented by the PostSetupManager.
 // Eventually most of the functionality will be moved to the PoSTClient.
 type postSetupProvider interface {
-	PrepareInitializer(ctx context.Context, opts PostSetupOpts) error
-	StartSession(context context.Context) error
+	PrepareInitializer(ctx context.Context, opts PostSetupOpts, id types.NodeID) error
+	StartSession(context context.Context, id types.NodeID) error
 	Status() *PostSetupStatus
 	Reset() error
 }

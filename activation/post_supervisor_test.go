@@ -15,6 +15,8 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 func closedChan() <-chan struct{} {
@@ -57,16 +59,17 @@ func Test_PostSupervisor_Start_FailPrepare(t *testing.T) {
 	postCfg := DefaultPostConfig()
 	postOpts := DefaultPostSetupOpts()
 	provingOpts := DefaultPostProvingOpts()
+	nodeID := types.RandomNodeID()
 
 	mgr := NewMockpostSetupProvider(gomock.NewController(t))
 	testErr := errors.New("test error")
-	mgr.EXPECT().PrepareInitializer(gomock.Any(), postOpts).Return(testErr)
+	mgr.EXPECT().PrepareInitializer(gomock.Any(), postOpts, nodeID).Return(testErr)
 
 	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr)
 	require.NoError(t, err)
 	require.NotNil(t, ps)
 
-	require.NoError(t, ps.Start(postOpts))
+	require.NoError(t, ps.Start(postOpts, nodeID))
 	require.ErrorIs(t, ps.Stop(false), testErr)
 }
 
@@ -91,17 +94,18 @@ func Test_PostSupervisor_Start_FailStartSession(t *testing.T) {
 	postCfg := DefaultPostConfig()
 	postOpts := DefaultPostSetupOpts()
 	provingOpts := DefaultPostProvingOpts()
+	nodeID := types.RandomNodeID()
 
 	ctrl := gomock.NewController(t)
 	mgr := NewMockpostSetupProvider(ctrl)
-	mgr.EXPECT().PrepareInitializer(gomock.Any(), postOpts).Return(nil)
-	mgr.EXPECT().StartSession(gomock.Any()).Return(errors.New("failed start session"))
+	mgr.EXPECT().PrepareInitializer(gomock.Any(), postOpts, nodeID).Return(nil)
+	mgr.EXPECT().StartSession(gomock.Any(), nodeID).Return(errors.New("failed start session"))
 
 	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr)
 	require.NoError(t, err)
 	require.NotNil(t, ps)
 
-	require.NoError(t, ps.Start(postOpts))
+	require.NoError(t, ps.Start(postOpts, nodeID))
 	require.EqualError(t, ps.eg.Wait(), "failed start session")
 }
 
@@ -112,17 +116,18 @@ func Test_PostSupervisor_StartsServiceCmd(t *testing.T) {
 	postCfg := DefaultPostConfig()
 	postOpts := DefaultPostSetupOpts()
 	provingOpts := DefaultPostProvingOpts()
+	nodeID := types.RandomNodeID()
 
 	ctrl := gomock.NewController(t)
 	mgr := NewMockpostSetupProvider(ctrl)
-	mgr.EXPECT().PrepareInitializer(gomock.Any(), postOpts).Return(nil)
-	mgr.EXPECT().StartSession(gomock.Any()).Return(nil)
+	mgr.EXPECT().PrepareInitializer(gomock.Any(), postOpts, nodeID).Return(nil)
+	mgr.EXPECT().StartSession(gomock.Any(), nodeID).Return(nil)
 
 	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr)
 	require.NoError(t, err)
 	require.NotNil(t, ps)
 
-	require.NoError(t, ps.Start(postOpts))
+	require.NoError(t, ps.Start(postOpts, nodeID))
 	t.Cleanup(func() { assert.NoError(t, ps.Stop(false)) })
 
 	require.Eventually(t, func() bool { return ps.pid.Load() != 0 }, 5*time.Second, 100*time.Millisecond)
@@ -150,26 +155,27 @@ func Test_PostSupervisor_Restart_Possible(t *testing.T) {
 	postCfg := DefaultPostConfig()
 	postOpts := DefaultPostSetupOpts()
 	provingOpts := DefaultPostProvingOpts()
+	nodeID := types.RandomNodeID()
 
 	ctrl := gomock.NewController(t)
 	mgr := NewMockpostSetupProvider(ctrl)
-	mgr.EXPECT().PrepareInitializer(gomock.Any(), postOpts).Return(nil)
-	mgr.EXPECT().StartSession(gomock.Any()).Return(nil)
+	mgr.EXPECT().PrepareInitializer(gomock.Any(), postOpts, nodeID).Return(nil)
+	mgr.EXPECT().StartSession(gomock.Any(), nodeID).Return(nil)
 
 	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr)
 	require.NoError(t, err)
 	require.NotNil(t, ps)
 
-	require.NoError(t, ps.Start(postOpts))
+	require.NoError(t, ps.Start(postOpts, nodeID))
 	t.Cleanup(func() { assert.NoError(t, ps.Stop(false)) })
 	require.Eventually(t, func() bool { return ps.pid.Load() != 0 }, 5*time.Second, 100*time.Millisecond)
 
 	require.NoError(t, ps.Stop(false))
 	require.Eventually(t, func() bool { return ps.pid.Load() == 0 }, 5*time.Second, 100*time.Millisecond)
 
-	mgr.EXPECT().PrepareInitializer(gomock.Any(), postOpts).Return(nil)
-	mgr.EXPECT().StartSession(gomock.Any()).Return(nil)
-	require.NoError(t, ps.Start(postOpts))
+	mgr.EXPECT().PrepareInitializer(gomock.Any(), postOpts, nodeID).Return(nil)
+	mgr.EXPECT().StartSession(gomock.Any(), nodeID).Return(nil)
+	require.NoError(t, ps.Start(postOpts, nodeID))
 	require.Eventually(t, func() bool { return ps.pid.Load() != 0 }, 5*time.Second, 100*time.Millisecond)
 
 	require.NoError(t, ps.Stop(false))
@@ -183,17 +189,18 @@ func Test_PostSupervisor_LogFatalOnCrash(t *testing.T) {
 	postCfg := DefaultPostConfig()
 	postOpts := DefaultPostSetupOpts()
 	provingOpts := DefaultPostProvingOpts()
+	nodeID := types.RandomNodeID()
 
 	ctrl := gomock.NewController(t)
 	mgr := NewMockpostSetupProvider(ctrl)
-	mgr.EXPECT().PrepareInitializer(gomock.Any(), postOpts).Return(nil)
-	mgr.EXPECT().StartSession(gomock.Any()).Return(nil)
+	mgr.EXPECT().PrepareInitializer(gomock.Any(), postOpts, nodeID).Return(nil)
+	mgr.EXPECT().StartSession(gomock.Any(), nodeID).Return(nil)
 
 	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr)
 	require.NoError(t, err)
 	require.NotNil(t, ps)
 
-	require.NoError(t, ps.Start(postOpts))
+	require.NoError(t, ps.Start(postOpts, nodeID))
 	t.Cleanup(func() { assert.NoError(t, ps.Stop(false)) })
 
 	require.Eventually(t, func() bool { return ps.pid.Load() != 0 }, 5*time.Second, 100*time.Millisecond)
@@ -217,17 +224,18 @@ func Test_PostSupervisor_LogFatalOnInvalidConfig(t *testing.T) {
 	postCfg := DefaultPostConfig()
 	postOpts := DefaultPostSetupOpts()
 	provingOpts := DefaultPostProvingOpts()
+	nodeID := types.RandomNodeID()
 
 	ctrl := gomock.NewController(t)
 	mgr := NewMockpostSetupProvider(ctrl)
-	mgr.EXPECT().PrepareInitializer(gomock.Any(), postOpts).Return(nil)
-	mgr.EXPECT().StartSession(gomock.Any()).Return(nil)
+	mgr.EXPECT().PrepareInitializer(gomock.Any(), postOpts, nodeID).Return(nil)
+	mgr.EXPECT().StartSession(gomock.Any(), nodeID).Return(nil)
 
 	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr)
 	require.NoError(t, err)
 	require.NotNil(t, ps)
 
-	require.NoError(t, ps.Start(postOpts))
+	require.NoError(t, ps.Start(postOpts, nodeID))
 	t.Cleanup(func() { assert.NoError(t, ps.Stop(false)) })
 
 	require.Eventually(t, func() bool { return ps.pid.Load() != 0 }, 5*time.Second, 100*time.Millisecond)
@@ -248,17 +256,18 @@ func Test_PostSupervisor_StopOnError(t *testing.T) {
 	postCfg := DefaultPostConfig()
 	postOpts := DefaultPostSetupOpts()
 	provingOpts := DefaultPostProvingOpts()
+	nodeID := types.RandomNodeID()
 
 	ctrl := gomock.NewController(t)
 	mgr := NewMockpostSetupProvider(ctrl)
-	mgr.EXPECT().PrepareInitializer(gomock.Any(), postOpts).Return(nil)
-	mgr.EXPECT().StartSession(gomock.Any()).Return(nil)
+	mgr.EXPECT().PrepareInitializer(gomock.Any(), postOpts, nodeID).Return(nil)
+	mgr.EXPECT().StartSession(gomock.Any(), nodeID).Return(nil)
 
 	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr)
 	require.NoError(t, err)
 	require.NotNil(t, ps)
 
-	require.NoError(t, ps.Start(postOpts))
+	require.NoError(t, ps.Start(postOpts, nodeID))
 	t.Cleanup(func() { assert.NoError(t, ps.Stop(false)) })
 	require.Eventually(t, func() bool { return ps.pid.Load() != 0 }, 5*time.Second, 100*time.Millisecond)
 

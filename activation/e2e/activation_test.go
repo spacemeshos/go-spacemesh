@@ -2,6 +2,7 @@ package activation_test
 
 import (
 	"context"
+	"math/rand"
 	"sync"
 	"testing"
 	"time"
@@ -66,12 +67,13 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		opts := opts
 		eg.Go(func() error {
 			validator := activation.NewMocknipostValidator(ctrl)
-			mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX, syncer, validator)
+			mgr, err := activation.NewPostSetupManager(cfg, logger, cdb, goldenATX, syncer, validator)
 			require.NoError(t, err)
 
 			opts.DataDir = t.TempDir()
-			initPost(t, mgr, opts)
-			t.Cleanup(launchPostSupervisor(t, logger, mgr, grpcCfg, opts))
+			opts.NumUnits = uint32(rand.Int31n(int32(cfg.MaxNumUnits/2-cfg.MinNumUnits))) + cfg.MinNumUnits
+			initPost(t, mgr, opts, sig.NodeID())
+			t.Cleanup(launchPostSupervisor(t, logger, mgr, sig.NodeID(), grpcCfg, opts))
 
 			require.Eventually(t, func() bool {
 				_, err := svc.Client(sig.NodeID())
@@ -148,6 +150,10 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		},
 	).Times(numSigners)
 
+	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
+	require.NoError(t, err)
+	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
+	v := activation.NewValidator(nil, poetDb, cfg, opts.Scrypt, verifier)
 	tab := activation.NewBuilder(
 		conf,
 		cdb,
@@ -158,22 +164,16 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		syncer,
 		logger,
 		activation.WithPoetConfig(poetCfg),
+		activation.WithValidator(v),
 	)
 	for _, sig := range signers {
 		tab.Register(sig)
 	}
 
 	require.NoError(t, tab.StartSmeshing(types.Address{}))
-
 	<-endChan
-
 	require.NoError(t, tab.StopSmeshing(false))
 
-	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
-	require.NoError(t, err)
-	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
-
-	v := activation.NewValidator(nil, poetDb, cfg, opts.Scrypt, verifier)
 	for _, sig := range signers {
 		atx := atxs[sig.NodeID()]
 

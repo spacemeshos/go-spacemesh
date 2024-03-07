@@ -218,11 +218,11 @@ type Hare struct {
 	tracer    Tracer
 }
 
-func (h *Hare) Register(signer *signing.EdSigner) {
+func (h *Hare) Register(sig *signing.EdSigner) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.log.Info("register signing key", zap.Stringer("node", signer.NodeID()))
-	h.signers[string(signer.NodeID().Bytes())] = signer
+	h.log.Info("registered signing key", log.ZShortStringer("id", sig.NodeID()))
+	h.signers[string(sig.NodeID().Bytes())] = sig
 }
 
 func (h *Hare) Results() <-chan ConsensusOutput {

@@ -1,6 +1,7 @@
 package atxs
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -224,7 +225,7 @@ func IterateIDsByEpoch(
 ) error {
 	if sql.IsCached(db) {
 		// If the slices are cached, let's not do more SELECTs
-		ids, err := GetIDsByEpoch(db, epoch)
+		ids, err := GetIDsByEpoch(context.Background(), db, epoch)
 		if err != nil {
 			return err
 		}
@@ -262,9 +263,9 @@ func IterateIDsByEpoch(
 }
 
 // GetIDsByEpoch gets ATX IDs for a given epoch.
-func GetIDsByEpoch(db sql.Executor, epoch types.EpochID) (ids []types.ATXID, err error) {
+func GetIDsByEpoch(ctx context.Context, db sql.Executor, epoch types.EpochID) (ids []types.ATXID, err error) {
 	cacheKey := sql.QueryCacheKey(CacheKindEpochATXs, epoch.String())
-	return sql.WithCachedValue(db, cacheKey, func() (ids []types.ATXID, err error) {
+	return sql.WithCachedValue(ctx, db, cacheKey, func(context.Context) (ids []types.ATXID, err error) {
 		enc := func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(epoch))
 		}
@@ -316,9 +317,9 @@ func GetBlobSizes(db sql.Executor, ids [][]byte) (sizes []int, err error) {
 }
 
 // LoadBlob loads ATX as an encoded blob, ready to be sent over the wire.
-func LoadBlob(db sql.Executor, id []byte, blob *sql.Blob) error {
+func LoadBlob(ctx context.Context, db sql.Executor, id []byte, blob *sql.Blob) error {
 	if sql.IsCached(db) {
-		b, err := getBlob(db, id)
+		b, err := getBlob(ctx, db, id)
 		if err != nil {
 			return err
 		}
@@ -328,9 +329,9 @@ func LoadBlob(db sql.Executor, id []byte, blob *sql.Blob) error {
 	return sql.LoadBlob(db, "select atx from atxs where id = ?1", id, blob)
 }
 
-func getBlob(db sql.Executor, id []byte) (buf []byte, err error) {
+func getBlob(ctx context.Context, db sql.Executor, id []byte) (buf []byte, err error) {
 	cacheKey := sql.QueryCacheKey(CacheKindATXBlob, string(id))
-	return sql.WithCachedValue(db, cacheKey, func() ([]byte, error) {
+	return sql.WithCachedValue(ctx, db, cacheKey, func(context.Context) ([]byte, error) {
 		if rows, err := db.Exec("select atx from atxs where id = ?1",
 			func(stmt *sql.Statement) {
 				stmt.BindBytes(1, id)

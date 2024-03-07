@@ -2,6 +2,7 @@ package ballots
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -79,7 +80,7 @@ func GetBlobSizes(db sql.Executor, ids [][]byte) (sizes []int, err error) {
 }
 
 // LoadBlob loads ballot as an encoded blob, ready to be sent over the wire.
-func LoadBlob(db sql.Executor, id []byte, b *sql.Blob) error {
+func LoadBlob(ctx context.Context, db sql.Executor, id []byte, b *sql.Blob) error {
 	return sql.LoadBlob(db, "select ballot from ballots where id = ?1", id, b)
 }
 

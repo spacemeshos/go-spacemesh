@@ -301,6 +301,7 @@ func TestApplyAndUndoLayers(t *testing.T) {
 
 func TestGetBlob(t *testing.T) {
 	db := sql.InMemory()
+	ctx := context.Background()
 
 	rng := rand.New(rand.NewSource(1001))
 	numTXs := 5
@@ -314,13 +315,13 @@ func TestGetBlob(t *testing.T) {
 	}
 
 	noSuchID := types.RandomTransactionID()
-	require.ErrorIs(t, transactions.LoadBlob(db, noSuchID[:], &sql.Blob{}), sql.ErrNotFound)
+	require.ErrorIs(t, transactions.LoadBlob(ctx, db, noSuchID[:], &sql.Blob{}), sql.ErrNotFound)
 
 	ids := [][]byte{noSuchID[:]}
 	expSizes := []int{-1}
 	for _, tx := range txs {
 		var blob sql.Blob
-		require.NoError(t, transactions.LoadBlob(db, tx.ID[:], &blob))
+		require.NoError(t, transactions.LoadBlob(ctx, db, tx.ID[:], &blob))
 		require.Equal(t, tx.Raw, blob.Bytes)
 		ids = append(ids, tx.ID[:])
 		expSizes = append(expSizes, len(tx.Raw))

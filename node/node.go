@@ -4,9 +4,9 @@ package node
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net"
 	"net/http"
 	"net/url"
@@ -23,6 +23,7 @@ import (
 	grpc_logsettable "github.com/grpc-ecosystem/go-grpc-middleware/logging/settable"
 	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	"github.com/mitchellh/mapstructure"
+	"github.com/natefinch/atomic"
 	"github.com/spacemeshos/poet/server"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
@@ -86,10 +87,11 @@ import (
 )
 
 const (
-	edKeyFileName   = "key.bin"
 	genesisFileName = "genesis.json"
 	dbFile          = "state.sql"
-	localDbFile     = "node_state.sql"
+
+	oldLocalDbFile = "node_state.sql"
+	localDbFile    = "local.sql"
 )
 
 // Logger names.
@@ -156,10 +158,7 @@ func GetCommand() *cobra.Command {
 				WithConfig(&conf),
 				// NOTE(dshulyak) this needs to be max level so that child logger can can be current level or below.
 				// otherwise it will fail later when child logger will try to increase level.
-				WithLog(log.RegisterHooks(
-					log.NewWithLevel("node", zap.NewAtomicLevelAt(zap.DebugLevel)),
-					events.EventHook()),
-				),
+				WithLog(log.NewWithLevel("node", zap.NewAtomicLevelAt(zap.DebugLevel), events.EventHook())),
 			)
 
 			// os.Interrupt for all systems, especially windows, syscall.SIGTERM is mainly for docker.
@@ -181,10 +180,27 @@ func GetCommand() *cobra.Command {
 				return fmt.Errorf("initializing app: %w", err)
 			}
 
-			/* Create or load miner identity */
+			// Migrate legacy identity to new location
+			if err := app.MigrateExistingIdentity(); err != nil {
+				return fmt.Errorf("migrating existing identity: %w", err)
+			}
+
 			var err error
-			if app.edSgn, err = app.LoadOrCreateEdSigner(); err != nil {
-				return fmt.Errorf("could not retrieve identity: %w", err)
+			if app.signers, err = app.TestIdentity(); err != nil {
+				return fmt.Errorf("testing identity: %w", err)
+			}
+
+			if app.signers == nil {
+				err := app.LoadIdentities()
+				switch {
+				case errors.Is(err, fs.ErrNotExist):
+					app.log.Info("Identity file not found. Creating new identity...")
+					if err := app.NewIdentity(); err != nil {
+						return fmt.Errorf("creating new identity: %w", err)
+					}
+				case err != nil:
+					return fmt.Errorf("loading identities: %w", err)
+				}
 			}
 
 			// Don't print usage on error from this point forward
@@ -206,7 +222,6 @@ func GetCommand() *cobra.Command {
 			// FIXME: per https://github.com/spacemeshos/go-spacemesh/issues/3830
 			go func() {
 				app.Cleanup(cleanupCtx)
-				_ = app.eg.Wait()
 				close(done)
 			}()
 			select {
@@ -356,7 +371,7 @@ func New(opts ...Option) *App {
 type App struct {
 	*cobra.Command
 	fileLock          *flock.Flock
-	edSgn             *signing.EdSigner
+	signers           []*signing.EdSigner
 	Config            *config.Config
 	db                *sql.Database
 	cachedDB          *datastore.CachedDB
@@ -417,13 +432,17 @@ func (app *App) LoadCheckpoint(ctx context.Context) (*checkpoint.PreservedData, 
 	if restore == 0 {
 		return nil, fmt.Errorf("restore layer not set")
 	}
+	nodeIDs := make([]types.NodeID, len(app.signers))
+	for i, sig := range app.signers {
+		nodeIDs[i] = sig.NodeID()
+	}
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      types.ATXID(app.Config.Genesis.GoldenATX()),
 		DataDir:        app.Config.DataDir(),
 		DbFile:         dbFile,
 		LocalDbFile:    localDbFile,
 		PreserveOwnAtx: app.Config.Recovery.PreserveOwnAtx,
-		NodeID:         app.edSgn.NodeID(),
+		NodeIDs:        nodeIDs,
 		Uri:            checkpointFile,
 		Restore:        restore,
 	}
@@ -440,11 +459,11 @@ func (app *App) Started() <-chan struct{} {
 
 // Lock locks the app for exclusive use. It returns an error if the app is already locked.
 func (app *App) Lock() error {
-	lockdir := filepath.Dir(app.Config.FileLock)
-	if _, err := os.Stat(lockdir); errors.Is(err, os.ErrNotExist) {
-		err := os.Mkdir(lockdir, os.ModePerm)
+	lockDir := filepath.Dir(app.Config.FileLock)
+	if _, err := os.Stat(lockDir); errors.Is(err, fs.ErrNotExist) {
+		err := os.Mkdir(lockDir, os.ModePerm)
 		if err != nil {
-			return fmt.Errorf("creating dir %s for lock %s: %w", lockdir, app.Config.FileLock, err)
+			return fmt.Errorf("creating dir %s for lock %s: %w", lockDir, app.Config.FileLock, err)
 		}
 	}
 	fl := flock.New(app.Config.FileLock)
@@ -476,7 +495,7 @@ func (app *App) Initialize() error {
 	gpath := filepath.Join(app.Config.DataDir(), genesisFileName)
 	var existing config.GenesisConfig
 	if err := existing.LoadFromFile(gpath); err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
+		if !errors.Is(err, fs.ErrNotExist) {
 			return fmt.Errorf("failed to load genesis config at %s: %w", gpath, err)
 		}
 		if err := app.Config.Genesis.Validate(); err != nil {
@@ -530,7 +549,7 @@ func (app *App) getAppInfo() string {
 func (app *App) Cleanup(ctx context.Context) {
 	app.log.Info("app cleanup starting...")
 	app.stopServices(ctx)
-	// add any other Cleanup tasks here....
+	app.eg.Wait()
 	app.log.Info("app cleanup completed")
 }
 
@@ -591,12 +610,18 @@ func (app *App) initServices(ctx context.Context) error {
 
 	poetDb := activation.NewPoetDb(app.db, app.addLogger(PoetDbLogger, lg))
 
+	opts := []activation.PostVerifierOpt{
+		activation.WithVerifyingOpts(app.Config.SMESHING.VerifyingOpts),
+		activation.WithAutoscaling(),
+	}
+	for _, sig := range app.signers {
+		opts = append(opts, activation.WithPrioritizedID(sig.NodeID()))
+	}
+
 	verifier, err := activation.NewPostVerifier(
 		app.Config.POST,
 		app.addLogger(NipostValidatorLogger, lg).Zap(),
-		activation.WithVerifyingOpts(app.Config.SMESHING.VerifyingOpts),
-		activation.PrioritizedIDs(app.edSgn.NodeID()),
-		activation.WithAutoscaling(),
+		opts...,
 	)
 	if err != nil {
 		return fmt.Errorf("creating post verifier: %w", err)
@@ -662,7 +687,9 @@ func (app *App) initServices(ctx context.Context) error {
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)),
 	)
-	beaconProtocol.Register(app.edSgn)
+	for _, sig := range app.signers {
+		beaconProtocol.Register(sig)
+	}
 
 	trtlCfg := app.Config.Tortoise
 	trtlCfg.LayerSize = layerSize
@@ -682,6 +709,7 @@ func (app *App) initServices(ctx context.Context) error {
 	trtl, err := tortoise.Recover(
 		ctx,
 		app.db,
+		app.atxsdata,
 		app.clock.CurrentLayer(), trtlopts...,
 	)
 	if err != nil {
@@ -735,7 +763,9 @@ func (app *App) initServices(ctx context.Context) error {
 		trtl,
 		app.addLogger(ATXHandlerLogger, lg),
 	)
-	atxHandler.Register(app.edSgn)
+	for _, sig := range app.signers {
+		atxHandler.Register(sig)
+	}
 
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
 
@@ -794,7 +824,9 @@ func (app *App) initServices(ctx context.Context) error {
 		blocks.WithCertConfig(app.Config.Certificate),
 		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg)),
 	)
-	app.certifier.Register(app.edSgn)
+	for _, sig := range app.signers {
+		app.certifier.Register(sig)
+	}
 
 	proposalsStore := store.New(
 		store.WithEvictedLayer(app.clock.CurrentLayer()),
@@ -854,7 +886,9 @@ func (app *App) initServices(ctx context.Context) error {
 		hare3.WithLogger(logger),
 		hare3.WithConfig(app.Config.HARE3),
 	)
-	app.hare3.Register(app.edSgn)
+	for _, sig := range app.signers {
+		app.hare3.Register(sig)
+	}
 	app.hare3.Start()
 	app.eg.Go(func() error {
 		compat.ReportWeakcoin(
@@ -926,7 +960,9 @@ func (app *App) initServices(ctx context.Context) error {
 		miner.WithMinGoodAtxPercent(minerGoodAtxPct),
 		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)),
 	)
-	proposalBuilder.Register(app.edSgn)
+	for _, sig := range app.signers {
+		proposalBuilder.Register(sig)
+	}
 
 	host, port, err := net.SplitHostPort(app.Config.API.PostListener)
 	if err != nil {
@@ -939,7 +975,6 @@ func (app *App) initServices(ctx context.Context) error {
 
 	app.Config.POSTService.NodeAddress = fmt.Sprintf("http://%s:%s", host, port)
 	postSetupMgr, err := activation.NewPostSetupManager(
-		app.edSgn.NodeID(),
 		app.Config.POST,
 		app.addLogger(PostLogger, lg).Zap(),
 		app.cachedDB,
@@ -982,6 +1017,7 @@ func (app *App) initServices(ctx context.Context) error {
 
 	builderConfig := activation.Config{
 		GoldenATXID:      goldenATXID,
+		LabelsPerUnit:    app.Config.POST.LabelsPerUnit,
 		RegossipInterval: app.Config.RegossipAtxInterval,
 	}
 	atxBuilder := activation.NewBuilder(
@@ -1000,13 +1036,19 @@ func (app *App) initServices(ctx context.Context) error {
 		activation.WithValidator(app.validator),
 		activation.WithPostValidityDelay(app.Config.PostValidDelay),
 	)
-	atxBuilder.Register(app.edSgn)
+	for _, sig := range app.signers {
+		atxBuilder.Register(sig)
+	}
 
+	nodeIDs := make([]types.NodeID, 0, len(app.signers))
+	for _, s := range app.signers {
+		nodeIDs = append(nodeIDs, s.NodeID())
+	}
 	malfeasanceHandler := malfeasance.NewHandler(
 		app.cachedDB,
 		app.addLogger(MalfeasanceLogger, lg),
 		app.host.ID(),
-		app.edSgn.NodeID(),
+		nodeIDs,
 		app.edVerifier,
 		trtl,
 		app.postVerifier,
@@ -1296,7 +1338,10 @@ func (app *App) startServices(ctx context.Context) error {
 		if app.Config.SMESHING.CoinbaseAccount == "" {
 			return fmt.Errorf("smeshing enabled but no coinbase account provided")
 		}
-		if err := app.postSupervisor.Start(app.Config.SMESHING.Opts); err != nil {
+		if len(app.signers) > 1 {
+			return fmt.Errorf("supervised smeshing cannot be started in a multi-smeshing setup")
+		}
+		if err := app.postSupervisor.Start(app.Config.SMESHING.Opts, app.signers[0].NodeID()); err != nil {
 			return fmt.Errorf("start post service: %w", err)
 		}
 	} else {
@@ -1357,10 +1402,16 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		app.grpcServices[svc] = service
 		return service, nil
 	case grpcserver.Smesher:
+		var nodeID *types.NodeID
+		if len(app.signers) == 1 {
+			nodeID = new(types.NodeID)
+			*nodeID = app.signers[0].NodeID()
+		}
 		service := grpcserver.NewSmesherService(
 			app.atxBuilder,
 			app.postSupervisor,
 			app.Config.API.SmesherStreamInterval,
+			nodeID,
 			app.Config.SMESHING.Opts,
 		)
 		app.grpcServices[svc] = service
@@ -1390,6 +1441,14 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		return service, nil
 	case v2alpha1.ActivationStream:
 		service := v2alpha1.NewActivationStreamService(app.db)
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2alpha1.Reward:
+		service := v2alpha1.NewRewardService(app.db)
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2alpha1.RewardStream:
+		service := v2alpha1.NewRewardStreamService(app.db)
 		app.grpcServices[svc] = service
 		return service, nil
 	}
@@ -1639,64 +1698,6 @@ func (app *App) stopServices(ctx context.Context) {
 	grpczap.SetGrpcLoggerV2(grpclog, log.NewNop().Zap())
 }
 
-// LoadOrCreateEdSigner either loads a previously created ed identity for the node or creates a new one if not exists.
-func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
-	filename := filepath.Join(app.Config.SMESHING.Opts.DataDir, edKeyFileName)
-	app.log.Info("Looking for identity file at `%v`", filename)
-
-	var data []byte
-	if len(app.Config.TestConfig.SmesherKey) > 0 {
-		app.log.With().Error("!!!TESTING!!! using pre-configured smesher key")
-		data = []byte(app.Config.TestConfig.SmesherKey)
-	} else {
-		var err error
-		data, err = os.ReadFile(filename)
-		if err != nil {
-			if !os.IsNotExist(err) {
-				return nil, fmt.Errorf("failed to read identity file: %w", err)
-			}
-
-			app.log.Info("Identity file not found. Creating new identity...")
-
-			edSgn, err := signing.NewEdSigner(
-				signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()),
-			)
-			if err != nil {
-				return nil, fmt.Errorf("failed to create identity: %w", err)
-			}
-			if err := os.MkdirAll(filepath.Dir(filename), 0o700); err != nil {
-				return nil, fmt.Errorf("failed to create directory for identity file: %w", err)
-			}
-
-			err = os.WriteFile(filename, []byte(hex.EncodeToString(edSgn.PrivateKey())), 0o600)
-			if err != nil {
-				return nil, fmt.Errorf("failed to write identity file: %w", err)
-			}
-
-			app.log.With().Info("created new identity", edSgn.PublicKey())
-			return edSgn, nil
-		}
-	}
-	dst := make([]byte, signing.PrivateKeySize)
-	n, err := hex.Decode(dst, data)
-	if err != nil {
-		return nil, fmt.Errorf("decoding private key: %w", err)
-	}
-	if n != signing.PrivateKeySize {
-		return nil, fmt.Errorf("invalid key size %d/%d", n, signing.PrivateKeySize)
-	}
-	edSgn, err := signing.NewEdSigner(
-		signing.WithPrivateKey(dst),
-		signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to construct identity from data file: %w", err)
-	}
-
-	app.log.Info("Loaded existing identity; public key: %v", edSgn.PublicKey())
-	return edSgn, nil
-}
-
 func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	dbPath := app.Config.DataDir()
 	if err := os.MkdirAll(dbPath, os.ModePerm); err != nil {
@@ -1762,6 +1763,12 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	if err != nil {
 		return fmt.Errorf("load local migrations: %w", err)
 	}
+
+	// Migrate `node_state.sql` to `local.sql`
+	if err := app.MigrateLocalDB(dbLog.Zap(), dbPath, clients); err != nil {
+		return err
+	}
+
 	localDB, err := localsql.Open("file:"+filepath.Join(dbPath, localDbFile),
 		sql.WithLogger(dbLog.Zap()),
 		sql.WithMigrations(migrations),
@@ -1774,6 +1781,67 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		return fmt.Errorf("open sqlite db %w", err)
 	}
 	app.localDB = localDB
+	return nil
+}
+
+// MigrateLocalDB migrates the old node_state.sql to the new local.sql
+//
+// This function is idempotent and can be called multiple times without side effects.
+// It will only migrate the old db to the new db if the old db exists and the new db does not.
+//
+// TODO(mafa): this can be removed in the future when we are sure that all nodes have migrated to the new db.
+func (app *App) MigrateLocalDB(lg *zap.Logger, dbPath string, clients []localsql.PoetClient) error {
+	oldDBFile := filepath.Join(dbPath, oldLocalDbFile)
+	dbFile := filepath.Join(dbPath, localDbFile)
+	_, err := os.Stat(oldDBFile)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return nil // no old db to migrate
+	case err != nil:
+		return fmt.Errorf("stat %s: %w", oldDBFile, err)
+	}
+
+	_, err = os.Stat(dbFile)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		// no new db, migrate old to new
+	case err == nil:
+		// both exist, error
+		return fmt.Errorf("%w: both %s and %s exist", fs.ErrExist, oldDBFile, dbFile)
+	case err != nil:
+		return fmt.Errorf("stat %s: %w", dbFile, err)
+	}
+
+	lg.Info("migrating local DB",
+		zap.String("old db", oldDBFile),
+		zap.String("new db", dbFile),
+	)
+	migrations, err := sql.LocalMigrations()
+	if err != nil {
+		return fmt.Errorf("load local migrations: %w", err)
+	}
+	oldDB, err := localsql.Open("file:"+oldDBFile,
+		sql.WithLogger(lg),
+		sql.WithMigrations(migrations),
+		sql.WithMigration(localsql.New0001Migration(app.Config.SMESHING.Opts.DataDir)),
+		sql.WithMigration(localsql.New0002Migration(app.Config.SMESHING.Opts.DataDir)),
+		sql.WithMigration(localsql.New0003Migration(app.Config.SMESHING.Opts.DataDir, clients)),
+		sql.WithConnections(app.Config.DatabaseConnections),
+	)
+	if err != nil {
+		return fmt.Errorf("open sqlite db %w", err)
+	}
+	defer oldDB.Close()
+
+	if _, err := oldDB.Exec(fmt.Sprintf("VACUUM INTO '%s'", dbFile), nil, nil); err != nil {
+		return fmt.Errorf("vacuum %s to %s: %w", oldDBFile, dbFile, err)
+	}
+	if err := oldDB.Close(); err != nil {
+		return fmt.Errorf("close %s: %w", oldDBFile, err)
+	}
+	if err := atomic.ReplaceFile(oldDBFile, fmt.Sprintf("%s.bak", oldDBFile)); err != nil {
+		return fmt.Errorf("renaming %s to %s: %w", oldDBFile, fmt.Sprintf("%s.bak", oldDBFile), err)
+	}
 	return nil
 }
 

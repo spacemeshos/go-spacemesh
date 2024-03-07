@@ -1,6 +1,7 @@
 package blocks
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -63,7 +64,7 @@ func GetBlobSizes(db sql.Executor, ids [][]byte) (sizes []int, err error) {
 }
 
 // LoadBlob loads block as an encoded blob, ready to be sent over the wire.
-func LoadBlob(db sql.Executor, id []byte, b *sql.Blob) error {
+func LoadBlob(ctx context.Context, db sql.Executor, id []byte, b *sql.Blob) error {
 	return sql.LoadBlob(db, "select block from blocks where id = ?1", id, b)
 }
 

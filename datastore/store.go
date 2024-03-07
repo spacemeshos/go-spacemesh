@@ -268,7 +268,7 @@ func (db *CachedDB) IterateEpochATXHeaders(
 	epoch types.EpochID,
 	iter func(*types.ActivationTxHeader) error,
 ) error {
-	ids, err := atxs.GetIDsByEpoch(db, epoch-1)
+	ids, err := atxs.GetIDsByEpoch(context.Background(), db, epoch-1)
 	if err != nil {
 		return err
 	}
@@ -371,7 +371,7 @@ type BlobStore struct {
 }
 
 type (
-	loadBlobFunc func(db sql.Executor, key []byte, blob *sql.Blob) error
+	loadBlobFunc func(ctx context.Context, db sql.Executor, key []byte, blob *sql.Blob) error
 	blobSizeFunc func(db sql.Executor, ids [][]byte) (sizes []int, err error)
 )
 
@@ -427,7 +427,7 @@ func (bs *BlobStore) getProposalSizes(keys [][]byte) (sizes []int, err error) {
 }
 
 // LoadBlob gets an blob as bytes by an object ID as bytes.
-func (bs *BlobStore) LoadBlob(hint Hint, key []byte, blob *sql.Blob) error {
+func (bs *BlobStore) LoadBlob(ctx context.Context, hint Hint, key []byte, blob *sql.Blob) error {
 	if hint == ProposalDB {
 		return bs.loadProposal(key, blob)
 	}
@@ -435,7 +435,7 @@ func (bs *BlobStore) LoadBlob(hint Hint, key []byte, blob *sql.Blob) error {
 	if !found {
 		return fmt.Errorf("blob store not found %s", hint)
 	}
-	err := loader(bs.DB, key, blob)
+	err := loader(ctx, bs.DB, key, blob)
 	switch {
 	case err == nil:
 		return nil

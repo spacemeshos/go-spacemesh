@@ -2,15 +2,6 @@ package types
 
 import "github.com/spacemeshos/go-spacemesh/log"
 
-type AtxTortoiseData struct {
-	ID          ATXID   `json:"id"`
-	Smesher     NodeID  `json:"node"`
-	TargetEpoch EpochID `json:"target"`
-	BaseHeight  uint64  `json:"base"`
-	Height      uint64  `json:"height"`
-	Weight      uint64  `json:"weight"`
-}
-
 type BallotTortoiseData struct {
 	ID            BallotID       `json:"id"`
 	Smesher       NodeID         `json:"node"`
