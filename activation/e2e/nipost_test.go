@@ -64,7 +64,7 @@ func launchPostSupervisor(
 	tb testing.TB,
 	log *zap.Logger,
 	mgr *activation.PostSetupManager,
-	id types.NodeID,
+	sig *signing.EdSigner,
 	cfg grpcserver.Config,
 	postOpts activation.PostSetupOpts,
 ) func() {
@@ -74,10 +74,12 @@ func launchPostSupervisor(
 	provingOpts := activation.DefaultPostProvingOpts()
 	provingOpts.RandomXMode = activation.PostRandomXModeLight
 
-	ps, err := activation.NewPostSupervisor(log, cmdCfg, postCfg, provingOpts, mgr)
+	builder := activation.NewMockAtxBuilder(gomock.NewController(tb))
+	builder.EXPECT().Register(gomock.Any())
+	ps, err := activation.NewPostSupervisor(log, cmdCfg, postCfg, provingOpts, mgr, builder)
 	require.NoError(tb, err)
 	require.NotNil(tb, ps)
-	require.NoError(tb, ps.Start(postOpts, id))
+	require.NoError(tb, ps.Start(postOpts, sig))
 	return func() { assert.NoError(tb, ps.Stop(false)) }
 }
 
@@ -174,7 +176,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	t.Cleanup(launchPostSupervisor(t, logger, mgr, sig.NodeID(), grpcCfg, opts))
+	t.Cleanup(launchPostSupervisor(t, logger, mgr, sig, grpcCfg, opts))
 
 	require.Eventually(t, func() bool {
 		_, err := svc.Client(sig.NodeID())
@@ -326,7 +328,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	opts.DataDir = t.TempDir()
 	opts.ProviderID.SetUint32(initialization.CPUProviderID())
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
-	t.Cleanup(launchPostSupervisor(t, logger, mgr, sig.NodeID(), grpcCfg, opts))
+	t.Cleanup(launchPostSupervisor(t, logger, mgr, sig, grpcCfg, opts))
 
 	require.Eventually(t, func() bool {
 		_, err := svc.Client(sig.NodeID())
@@ -399,7 +401,7 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 
 			opts.DataDir = t.TempDir()
 			initPost(t, mgr, opts, sig.NodeID())
-			t.Cleanup(launchPostSupervisor(t, logger, mgr, sig.NodeID(), grpcCfg, opts))
+			t.Cleanup(launchPostSupervisor(t, logger, mgr, sig, grpcCfg, opts))
 
 			require.Eventually(t, func() bool {
 				_, err := svc.Client(sig.NodeID())

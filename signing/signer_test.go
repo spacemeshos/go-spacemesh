@@ -1,21 +1,134 @@
 package signing
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/hex"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewEdSignerFromBuffer(t *testing.T) {
-	b := []byte{1, 2, 3}
-	_, err := NewEdSigner(WithPrivateKey(b))
-	require.ErrorContains(t, err, "too small")
+func Test_NewEdSigner_WithPrivateKey(t *testing.T) {
+	t.Run("key too short", func(t *testing.T) {
+		_, err := NewEdSigner(WithPrivateKey(make([]byte, 63)))
+		require.ErrorContains(t, err, "invalid key length")
+	})
 
-	b = make([]byte, 64)
-	_, err = NewEdSigner(WithPrivateKey(b))
-	require.ErrorContains(t, err, "private and public do not match")
+	t.Run("key too long", func(t *testing.T) {
+		_, err := NewEdSigner(WithPrivateKey(make([]byte, 65)))
+		require.ErrorContains(t, err, "invalid key length")
+	})
+
+	t.Run("key mismatch", func(t *testing.T) {
+		_, err := NewEdSigner(WithPrivateKey(make([]byte, 64)))
+		require.ErrorContains(t, err, "private and public do not match")
+	})
+
+	t.Run("valid key", func(t *testing.T) {
+		ed, err := NewEdSigner()
+		require.NoError(t, err)
+
+		key := ed.PrivateKey()
+		ed2, err := NewEdSigner(WithPrivateKey(key))
+		require.NoError(t, err)
+		require.Equal(t, ed.priv, ed2.priv)
+		require.Equal(t, ed.PublicKey(), ed2.PublicKey())
+	})
+
+	t.Run("fails if private key already set", func(t *testing.T) {
+		ed, err := NewEdSigner()
+		require.NoError(t, err)
+
+		key := ed.PrivateKey()
+		_, err = NewEdSigner(WithPrivateKey(key), WithPrivateKey(key))
+		require.ErrorContains(t, err, "invalid option WithPrivateKey: private key already set")
+
+		keyFile := filepath.Join(t.TempDir(), "identity.key")
+		dst := make([]byte, hex.EncodedLen(len(ed.PrivateKey())))
+		hex.Encode(dst, ed.PrivateKey())
+		err = os.WriteFile(keyFile, dst, 0o600)
+		require.NoError(t, err)
+
+		_, err = NewEdSigner(FromFile(keyFile), WithPrivateKey(key))
+		require.ErrorContains(t, err, "invalid option WithPrivateKey: private key already set")
+	})
+}
+
+func Test_NewEdSigner_FromFile(t *testing.T) {
+	t.Run("invalid file", func(t *testing.T) {
+		_, err := NewEdSigner(FromFile("nonexistent"))
+		require.ErrorIs(t, err, fs.ErrNotExist)
+		require.ErrorContains(t, err, "failed to open identity file at nonexistent")
+	})
+
+	t.Run("invalid key", func(t *testing.T) {
+		keyFile := filepath.Join(t.TempDir(), "identity.key")
+		key := bytes.Repeat([]byte{0}, PrivateKeySize*2)
+		err := os.WriteFile(keyFile, key, 0o600)
+		require.NoError(t, err)
+
+		_, err = NewEdSigner(FromFile(keyFile))
+		require.ErrorContains(t, err, "decoding private key in identity.key")
+	})
+
+	t.Run("invalid key size - too short", func(t *testing.T) {
+		keyFile := filepath.Join(t.TempDir(), "identity.key")
+		key := bytes.Repeat([]byte{0}, 63)
+		dst := make([]byte, hex.EncodedLen(len(key)))
+		hex.Encode(dst, key)
+		err := os.WriteFile(keyFile, dst, 0o600)
+		require.NoError(t, err)
+
+		_, err = NewEdSigner(FromFile(keyFile))
+		require.ErrorContains(t, err, "invalid key size 63/64 for identity.key")
+	})
+
+	t.Run("invalid key size - too long", func(t *testing.T) {
+		keyFile := filepath.Join(t.TempDir(), "identity.key")
+		key := bytes.Repeat([]byte{0}, 65)
+		dst := make([]byte, hex.EncodedLen(len(key)))
+		hex.Encode(dst, key)
+		err := os.WriteFile(keyFile, dst, 0o600)
+		require.NoError(t, err)
+
+		_, err = NewEdSigner(FromFile(keyFile))
+		require.ErrorContains(t, err, "invalid key size 65/64 for identity.key")
+	})
+
+	t.Run("valid key", func(t *testing.T) {
+		ed, err := NewEdSigner()
+		require.NoError(t, err)
+
+		keyFile := filepath.Join(t.TempDir(), "identity.key")
+		dst := make([]byte, hex.EncodedLen(len(ed.PrivateKey())))
+		hex.Encode(dst, ed.PrivateKey())
+		err = os.WriteFile(keyFile, dst, 0o600)
+		require.NoError(t, err)
+
+		ed2, err := NewEdSigner(FromFile(keyFile))
+		require.NoError(t, err)
+		require.Equal(t, ed.priv, ed2.priv)
+		require.Equal(t, ed.PublicKey(), ed2.PublicKey())
+	})
+
+	t.Run("fails if private key already set", func(t *testing.T) {
+		ed, err := NewEdSigner()
+		require.NoError(t, err)
+
+		keyFile := filepath.Join(t.TempDir(), "identity.key")
+		dst := make([]byte, hex.EncodedLen(len(ed.PrivateKey())))
+		hex.Encode(dst, ed.PrivateKey())
+		err = os.WriteFile(keyFile, dst, 0o600)
+		require.NoError(t, err)
+
+		_, err = NewEdSigner(WithPrivateKey(ed.PrivateKey()), FromFile(keyFile))
+		require.ErrorContains(t, err, "invalid option FromFile: private key already set")
+	})
 }
 
 func TestEdSigner_Sign(t *testing.T) {
@@ -38,17 +151,6 @@ func TestEdSigner_ValidKeyEncoding(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, []byte(ed.priv[32:]), ed.PublicKey().Bytes())
-}
-
-func TestEdSigner_WithPrivateKey(t *testing.T) {
-	ed, err := NewEdSigner()
-	require.NoError(t, err)
-
-	key := ed.PrivateKey()
-	ed2, err := NewEdSigner(WithPrivateKey(key))
-	require.NoError(t, err)
-	require.Equal(t, ed.priv, ed2.priv)
-	require.Equal(t, ed.PublicKey(), ed2.PublicKey())
 }
 
 func TestPublicKey_ShortString(t *testing.T) {

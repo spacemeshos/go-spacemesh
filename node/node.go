@@ -987,17 +987,6 @@ func (app *App) initServices(ctx context.Context) error {
 		return fmt.Errorf("create post setup manager: %v", err)
 	}
 
-	app.postSupervisor, err = activation.NewPostSupervisor(
-		app.log.Zap(),
-		app.Config.POSTService,
-		app.Config.POST,
-		app.Config.SMESHING.ProvingOpts,
-		postSetupMgr,
-	)
-	if err != nil {
-		return fmt.Errorf("init post service: %w", err)
-	}
-
 	grpcPostService, err := app.grpcService(grpcserver.Post, lg)
 	if err != nil {
 		return fmt.Errorf("init post grpc service: %w", err)
@@ -1036,8 +1025,28 @@ func (app *App) initServices(ctx context.Context) error {
 		activation.WithValidator(app.validator),
 		activation.WithPostValidityDelay(app.Config.PostValidDelay),
 	)
-	for _, sig := range app.signers {
-		atxBuilder.Register(sig)
+	if len(app.signers) > 1 || app.signers[0].Name() != supervisedIDKeyFileName {
+		// in a remote setup we register eagerly so the atxBuilder can warn about missing connections asap.
+		// Any setup with more than one signer is considered a remote setup. If there is only one signer it
+		// is considered a remote setup if the key for the signer has not been sourced from `supervisedIDKeyFileName`.
+		//
+		// In a supervised setup the postSetupManager will register at the atxBuilder when
+		// it finished initializing, to avoid warning about a missing connection when the supervised post
+		// service isn't ready yet.
+		for _, sig := range app.signers {
+			atxBuilder.Register(sig)
+		}
+	}
+	app.postSupervisor, err = activation.NewPostSupervisor(
+		app.log.Zap(),
+		app.Config.POSTService,
+		app.Config.POST,
+		app.Config.SMESHING.ProvingOpts,
+		postSetupMgr,
+		atxBuilder,
+	)
+	if err != nil {
+		return fmt.Errorf("init post service: %w", err)
 	}
 
 	nodeIDs := make([]types.NodeID, 0, len(app.signers))
@@ -1341,7 +1350,10 @@ func (app *App) startServices(ctx context.Context) error {
 		if len(app.signers) > 1 {
 			return fmt.Errorf("supervised smeshing cannot be started in a multi-smeshing setup")
 		}
-		if err := app.postSupervisor.Start(app.Config.SMESHING.Opts, app.signers[0].NodeID()); err != nil {
+		if err := app.postSupervisor.Start(
+			app.Config.SMESHING.Opts,
+			app.signers[0],
+		); err != nil {
 			return fmt.Errorf("start post service: %w", err)
 		}
 	} else {
@@ -1402,16 +1414,16 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		app.grpcServices[svc] = service
 		return service, nil
 	case grpcserver.Smesher:
-		var nodeID *types.NodeID
-		if len(app.signers) == 1 {
-			nodeID = new(types.NodeID)
-			*nodeID = app.signers[0].NodeID()
+		var sig *signing.EdSigner
+		if len(app.signers) == 1 && app.signers[0].Name() == supervisedIDKeyFileName {
+			// StartSmeshing is only supported in a supervised setup (single signer)
+			sig = app.signers[0]
 		}
 		service := grpcserver.NewSmesherService(
 			app.atxBuilder,
 			app.postSupervisor,
 			app.Config.API.SmesherStreamInterval,
-			nodeID,
+			sig,
 			app.Config.SMESHING.Opts,
 		)
 		app.grpcServices[svc] = service
