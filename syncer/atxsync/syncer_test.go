@@ -109,7 +109,7 @@ func TestSyncer(t *testing.T) {
 		cancel()
 		publish := types.EpochID(1)
 		tester.clock.EXPECT().LayerToTime((publish + 1).FirstLayer()).Return(time.Now()).AnyTimes()
-		require.NoError(t, tester.syncer.Download(ctx, publish))
+		require.ErrorIs(t, tester.syncer.Download(ctx, publish), context.Canceled)
 	})
 	t.Run("error on no peers", func(t *testing.T) {
 		tester := newTester(t, DefaultConfig())

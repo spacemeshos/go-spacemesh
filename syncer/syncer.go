@@ -383,7 +383,9 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		}
 
 		if err := s.syncAtx(ctx); err != nil {
-			s.logger.With().Error("failed to sync atxs", log.Context(ctx), log.Err(err))
+			if !errors.Is(err, context.Canceled) {
+				s.logger.With().Error("failed to sync atxs", log.Context(ctx), log.Err(err))
+			}
 			return false
 		}
 
