@@ -320,6 +320,9 @@ func (s *Syncer) downloadAtxs(
 				batchError := &fetch.BatchError{}
 				if errors.As(err, &batchError) {
 					for hash, err := range batchError.Errors {
+						if _, exists := state[types.ATXID(hash)]; !exists {
+							continue
+						}
 						if errors.Is(err, fetch.ErrExceedMaxRetries) {
 							state[types.ATXID(hash)]++
 						} else if errors.Is(err, pubsub.ErrValidationReject) {
