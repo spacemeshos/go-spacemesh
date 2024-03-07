@@ -23,6 +23,7 @@ import (
 	grpc_logsettable "github.com/grpc-ecosystem/go-grpc-middleware/logging/settable"
 	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	"github.com/mitchellh/mapstructure"
+	"github.com/natefinch/atomic"
 	"github.com/spacemeshos/poet/server"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
@@ -88,7 +89,9 @@ import (
 const (
 	genesisFileName = "genesis.json"
 	dbFile          = "state.sql"
-	localDbFile     = "node_state.sql"
+
+	oldLocalDbFile = "node_state.sql"
+	localDbFile    = "local.sql"
 )
 
 // Logger names.
@@ -155,10 +158,7 @@ func GetCommand() *cobra.Command {
 				WithConfig(&conf),
 				// NOTE(dshulyak) this needs to be max level so that child logger can can be current level or below.
 				// otherwise it will fail later when child logger will try to increase level.
-				WithLog(log.RegisterHooks(
-					log.NewWithLevel("node", zap.NewAtomicLevelAt(zap.DebugLevel)),
-					events.EventHook()),
-				),
+				WithLog(log.NewWithLevel("node", zap.NewAtomicLevelAt(zap.DebugLevel), events.EventHook())),
 			)
 
 			// os.Interrupt for all systems, especially windows, syscall.SIGTERM is mainly for docker.
@@ -432,7 +432,10 @@ func (app *App) LoadCheckpoint(ctx context.Context) (*checkpoint.PreservedData, 
 	if restore == 0 {
 		return nil, fmt.Errorf("restore layer not set")
 	}
-	nodeIDs := make([]types.NodeID, 0, len(app.signers))
+	nodeIDs := make([]types.NodeID, len(app.signers))
+	for i, sig := range app.signers {
+		nodeIDs[i] = sig.NodeID()
+	}
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      types.ATXID(app.Config.Genesis.GoldenATX()),
 		DataDir:        app.Config.DataDir(),
@@ -988,17 +991,6 @@ func (app *App) initServices(ctx context.Context) error {
 		return fmt.Errorf("create post setup manager: %v", err)
 	}
 
-	app.postSupervisor, err = activation.NewPostSupervisor(
-		app.log.Zap(),
-		app.Config.POSTService,
-		app.Config.POST,
-		app.Config.SMESHING.ProvingOpts,
-		postSetupMgr,
-	)
-	if err != nil {
-		return fmt.Errorf("init post service: %w", err)
-	}
-
 	grpcPostService, err := app.grpcService(grpcserver.Post, lg)
 	if err != nil {
 		return fmt.Errorf("init post grpc service: %w", err)
@@ -1037,8 +1029,28 @@ func (app *App) initServices(ctx context.Context) error {
 		activation.WithValidator(app.validator),
 		activation.WithPostValidityDelay(app.Config.PostValidDelay),
 	)
-	for _, sig := range app.signers {
-		atxBuilder.Register(sig)
+	if len(app.signers) > 1 || app.signers[0].Name() != supervisedIDKeyFileName {
+		// in a remote setup we register eagerly so the atxBuilder can warn about missing connections asap.
+		// Any setup with more than one signer is considered a remote setup. If there is only one signer it
+		// is considered a remote setup if the key for the signer has not been sourced from `supervisedIDKeyFileName`.
+		//
+		// In a supervised setup the postSetupManager will register at the atxBuilder when
+		// it finished initializing, to avoid warning about a missing connection when the supervised post
+		// service isn't ready yet.
+		for _, sig := range app.signers {
+			atxBuilder.Register(sig)
+		}
+	}
+	app.postSupervisor, err = activation.NewPostSupervisor(
+		app.log.Zap(),
+		app.Config.POSTService,
+		app.Config.POST,
+		app.Config.SMESHING.ProvingOpts,
+		postSetupMgr,
+		atxBuilder,
+	)
+	if err != nil {
+		return fmt.Errorf("init post service: %w", err)
 	}
 
 	nodeIDs := make([]types.NodeID, 0, len(app.signers))
@@ -1342,7 +1354,10 @@ func (app *App) startServices(ctx context.Context) error {
 		if len(app.signers) > 1 {
 			return fmt.Errorf("supervised smeshing cannot be started in a multi-smeshing setup")
 		}
-		if err := app.postSupervisor.Start(app.Config.SMESHING.Opts, app.signers[0].NodeID()); err != nil {
+		if err := app.postSupervisor.Start(
+			app.Config.SMESHING.Opts,
+			app.signers[0],
+		); err != nil {
 			return fmt.Errorf("start post service: %w", err)
 		}
 	} else {
@@ -1403,16 +1418,16 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		app.grpcServices[svc] = service
 		return service, nil
 	case grpcserver.Smesher:
-		var nodeID *types.NodeID
-		if len(app.signers) == 1 {
-			nodeID = new(types.NodeID)
-			*nodeID = app.signers[0].NodeID()
+		var sig *signing.EdSigner
+		if len(app.signers) == 1 && app.signers[0].Name() == supervisedIDKeyFileName {
+			// StartSmeshing is only supported in a supervised setup (single signer)
+			sig = app.signers[0]
 		}
 		service := grpcserver.NewSmesherService(
 			app.atxBuilder,
 			app.postSupervisor,
 			app.Config.API.SmesherStreamInterval,
-			nodeID,
+			sig,
 			app.Config.SMESHING.Opts,
 		)
 		app.grpcServices[svc] = service
@@ -1764,6 +1779,12 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	if err != nil {
 		return fmt.Errorf("load local migrations: %w", err)
 	}
+
+	// Migrate `node_state.sql` to `local.sql`
+	if err := app.MigrateLocalDB(dbLog.Zap(), dbPath, clients); err != nil {
+		return err
+	}
+
 	localDB, err := localsql.Open("file:"+filepath.Join(dbPath, localDbFile),
 		sql.WithLogger(dbLog.Zap()),
 		sql.WithMigrations(migrations),
@@ -1776,6 +1797,67 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		return fmt.Errorf("open sqlite db %w", err)
 	}
 	app.localDB = localDB
+	return nil
+}
+
+// MigrateLocalDB migrates the old node_state.sql to the new local.sql
+//
+// This function is idempotent and can be called multiple times without side effects.
+// It will only migrate the old db to the new db if the old db exists and the new db does not.
+//
+// TODO(mafa): this can be removed in the future when we are sure that all nodes have migrated to the new db.
+func (app *App) MigrateLocalDB(lg *zap.Logger, dbPath string, clients []localsql.PoetClient) error {
+	oldDBFile := filepath.Join(dbPath, oldLocalDbFile)
+	dbFile := filepath.Join(dbPath, localDbFile)
+	_, err := os.Stat(oldDBFile)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return nil // no old db to migrate
+	case err != nil:
+		return fmt.Errorf("stat %s: %w", oldDBFile, err)
+	}
+
+	_, err = os.Stat(dbFile)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		// no new db, migrate old to new
+	case err == nil:
+		// both exist, error
+		return fmt.Errorf("%w: both %s and %s exist", fs.ErrExist, oldDBFile, dbFile)
+	case err != nil:
+		return fmt.Errorf("stat %s: %w", dbFile, err)
+	}
+
+	lg.Info("migrating local DB",
+		zap.String("old db", oldDBFile),
+		zap.String("new db", dbFile),
+	)
+	migrations, err := sql.LocalMigrations()
+	if err != nil {
+		return fmt.Errorf("load local migrations: %w", err)
+	}
+	oldDB, err := localsql.Open("file:"+oldDBFile,
+		sql.WithLogger(lg),
+		sql.WithMigrations(migrations),
+		sql.WithMigration(localsql.New0001Migration(app.Config.SMESHING.Opts.DataDir)),
+		sql.WithMigration(localsql.New0002Migration(app.Config.SMESHING.Opts.DataDir)),
+		sql.WithMigration(localsql.New0003Migration(app.Config.SMESHING.Opts.DataDir, clients)),
+		sql.WithConnections(app.Config.DatabaseConnections),
+	)
+	if err != nil {
+		return fmt.Errorf("open sqlite db %w", err)
+	}
+	defer oldDB.Close()
+
+	if _, err := oldDB.Exec(fmt.Sprintf("VACUUM INTO '%s'", dbFile), nil, nil); err != nil {
+		return fmt.Errorf("vacuum %s to %s: %w", oldDBFile, dbFile, err)
+	}
+	if err := oldDB.Close(); err != nil {
+		return fmt.Errorf("close %s: %w", oldDBFile, err)
+	}
+	if err := atomic.ReplaceFile(oldDBFile, fmt.Sprintf("%s.bak", oldDBFile)); err != nil {
+		return fmt.Errorf("renaming %s to %s: %w", oldDBFile, fmt.Sprintf("%s.bak", oldDBFile), err)
+	}
 	return nil
 }
 

@@ -1767,6 +1767,65 @@ func (c *MockpoetDbAPIValidateAndStoreCall) DoAndReturn(f func(context.Context, 
 	return c
 }
 
+// MockAtxBuilder is a mock of AtxBuilder interface.
+type MockAtxBuilder struct {
+	ctrl     *gomock.Controller
+	recorder *MockAtxBuilderMockRecorder
+}
+
+// MockAtxBuilderMockRecorder is the mock recorder for MockAtxBuilder.
+type MockAtxBuilderMockRecorder struct {
+	mock *MockAtxBuilder
+}
+
+// NewMockAtxBuilder creates a new mock instance.
+func NewMockAtxBuilder(ctrl *gomock.Controller) *MockAtxBuilder {
+	mock := &MockAtxBuilder{ctrl: ctrl}
+	mock.recorder = &MockAtxBuilderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockAtxBuilder) EXPECT() *MockAtxBuilderMockRecorder {
+	return m.recorder
+}
+
+// Register mocks base method.
+func (m *MockAtxBuilder) Register(sig *signing.EdSigner) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Register", sig)
+}
+
+// Register indicates an expected call of Register.
+func (mr *MockAtxBuilderMockRecorder) Register(sig any) *MockAtxBuilderRegisterCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Register", reflect.TypeOf((*MockAtxBuilder)(nil).Register), sig)
+	return &MockAtxBuilderRegisterCall{Call: call}
+}
+
+// MockAtxBuilderRegisterCall wrap *gomock.Call
+type MockAtxBuilderRegisterCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockAtxBuilderRegisterCall) Return() *MockAtxBuilderRegisterCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockAtxBuilderRegisterCall) Do(f func(*signing.EdSigner)) *MockAtxBuilderRegisterCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockAtxBuilderRegisterCall) DoAndReturn(f func(*signing.EdSigner)) *MockAtxBuilderRegisterCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // MockpostService is a mock of postService interface.
 type MockpostService struct {
 	ctrl     *gomock.Controller

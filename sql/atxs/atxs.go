@@ -1,6 +1,7 @@
 package atxs
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -216,9 +217,9 @@ func GetIDByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.No
 }
 
 // GetIDsByEpoch gets ATX IDs for a given epoch.
-func GetIDsByEpoch(db sql.Executor, epoch types.EpochID) (ids []types.ATXID, err error) {
+func GetIDsByEpoch(ctx context.Context, db sql.Executor, epoch types.EpochID) (ids []types.ATXID, err error) {
 	cacheKey := sql.QueryCacheKey(CacheKindEpochATXs, epoch.String())
-	return sql.WithCachedValue(db, cacheKey, func() (ids []types.ATXID, err error) {
+	return sql.WithCachedValue(ctx, db, cacheKey, func(context.Context) (ids []types.ATXID, err error) {
 		enc := func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(epoch))
 		}
@@ -264,9 +265,9 @@ func VRFNonce(db sql.Executor, id types.NodeID, epoch types.EpochID) (nonce type
 }
 
 // GetBlob loads ATX as an encoded blob, ready to be sent over the wire.
-func GetBlob(db sql.Executor, id []byte) (buf []byte, err error) {
+func GetBlob(ctx context.Context, db sql.Executor, id []byte) (buf []byte, err error) {
 	cacheKey := sql.QueryCacheKey(CacheKindATXBlob, string(id))
-	return sql.WithCachedValue(db, cacheKey, func() ([]byte, error) {
+	return sql.WithCachedValue(ctx, db, cacheKey, func(context.Context) ([]byte, error) {
 		if rows, err := db.Exec("select atx from atxs where id = ?1",
 			func(stmt *sql.Statement) {
 				stmt.BindBytes(1, id)

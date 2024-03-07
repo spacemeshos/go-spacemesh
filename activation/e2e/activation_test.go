@@ -73,7 +73,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 			opts.DataDir = t.TempDir()
 			opts.NumUnits = uint32(rand.Int31n(int32(cfg.MaxNumUnits/2-cfg.MinNumUnits))) + cfg.MinNumUnits
 			initPost(t, mgr, opts, sig.NodeID())
-			t.Cleanup(launchPostSupervisor(t, logger, mgr, sig.NodeID(), grpcCfg, opts))
+			t.Cleanup(launchPostSupervisor(t, logger, mgr, sig, grpcCfg, opts))
 
 			require.Eventually(t, func() bool {
 				_, err := svc.Client(sig.NodeID())
