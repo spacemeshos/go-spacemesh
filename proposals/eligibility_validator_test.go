@@ -585,8 +585,7 @@ func TestEligibilityValidator(t *testing.T) {
 					ReportBeaconFromBallot(tc.executed.Layer.GetEpoch(), &tc.executed, gomock.Any(), gomock.Any())
 			}
 			totalWeight, _ := c.WeightForSet(tc.executed.Layer.GetEpoch(), tc.actives)
-			rst, err := tv.CheckEligibility(context.Background(), &tc.executed, totalWeight)
-			assert.Equal(t, !tc.fail, rst)
+			err := tv.CheckEligibility(context.Background(), &tc.executed, totalWeight)
 			if len(tc.err) == 0 {
 				assert.Empty(t, err)
 			} else {
