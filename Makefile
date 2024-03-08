@@ -2,6 +2,12 @@ VERSION ?= $(shell git describe --tags)
 COMMIT = $(shell git rev-parse HEAD)
 BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 
+GOLANGCI_LINT_VERSION := v1.56.2
+STATICCHECK_VERSION := v0.4.7
+GOTESTSUM_VERSION := v1.11.0
+GOSCALE_VERSION := v1.1.13
+MOCKGEN_VERSION := v0.4.0
+
 # Add an indicator to the branch name if dirty and use commithash if running in detached mode
 ifeq ($(BRANCH),HEAD)
     BRANCH = $(SHA)
@@ -50,11 +56,11 @@ all: install build
 install:
 	git lfs install
 	go mod download
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.54.2
-	go install github.com/spacemeshos/go-scale/scalegen@v1.1.12
-	go install go.uber.org/mock/mockgen@v0.4.0
-	go install gotest.tools/gotestsum@v1.10.1
-	go install honnef.co/go/tools/cmd/staticcheck@v0.4.5
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s $(GOLANGCI_LINT_VERSION)
+	go install github.com/spacemeshos/go-scale/scalegen@$(GOSCALE_VERSION)
+	go install go.uber.org/mock/mockgen@$(MOCKGEN_VERSION)
+	go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
+	go install honnef.co/go/tools/cmd/staticcheck@$(STATICCHECK_VERSION)
 .PHONY: install
 
 build: go-spacemesh get-profiler get-postrs-service

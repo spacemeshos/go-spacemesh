@@ -17,7 +17,7 @@ type meshProvider interface {
 }
 
 type eligibilityValidator interface {
-	CheckEligibility(context.Context, *types.Ballot, uint64) (bool, error)
+	CheckEligibility(context.Context, *types.Ballot, uint64) error
 }
 
 type tortoiseProvider interface {

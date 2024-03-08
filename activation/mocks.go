@@ -1989,3 +1989,100 @@ func (c *MockPostClientProofCall) DoAndReturn(f func(context.Context, []byte) (*
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
+
+// MockPostStates is a mock of PostStates interface.
+type MockPostStates struct {
+	ctrl     *gomock.Controller
+	recorder *MockPostStatesMockRecorder
+}
+
+// MockPostStatesMockRecorder is the mock recorder for MockPostStates.
+type MockPostStatesMockRecorder struct {
+	mock *MockPostStates
+}
+
+// NewMockPostStates creates a new mock instance.
+func NewMockPostStates(ctrl *gomock.Controller) *MockPostStates {
+	mock := &MockPostStates{ctrl: ctrl}
+	mock.recorder = &MockPostStatesMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockPostStates) EXPECT() *MockPostStatesMockRecorder {
+	return m.recorder
+}
+
+// Get mocks base method.
+func (m *MockPostStates) Get() map[types.NodeID]types.PostState {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Get")
+	ret0, _ := ret[0].(map[types.NodeID]types.PostState)
+	return ret0
+}
+
+// Get indicates an expected call of Get.
+func (mr *MockPostStatesMockRecorder) Get() *MockPostStatesGetCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockPostStates)(nil).Get))
+	return &MockPostStatesGetCall{Call: call}
+}
+
+// MockPostStatesGetCall wrap *gomock.Call
+type MockPostStatesGetCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockPostStatesGetCall) Return(arg0 map[types.NodeID]types.PostState) *MockPostStatesGetCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockPostStatesGetCall) Do(f func() map[types.NodeID]types.PostState) *MockPostStatesGetCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockPostStatesGetCall) DoAndReturn(f func() map[types.NodeID]types.PostState) *MockPostStatesGetCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Set mocks base method.
+func (m *MockPostStates) Set(id types.NodeID, state types.PostState) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Set", id, state)
+}
+
+// Set indicates an expected call of Set.
+func (mr *MockPostStatesMockRecorder) Set(id, state any) *MockPostStatesSetCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Set", reflect.TypeOf((*MockPostStates)(nil).Set), id, state)
+	return &MockPostStatesSetCall{Call: call}
+}
+
+// MockPostStatesSetCall wrap *gomock.Call
+type MockPostStatesSetCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockPostStatesSetCall) Return() *MockPostStatesSetCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockPostStatesSetCall) Do(f func(types.NodeID, types.PostState)) *MockPostStatesSetCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockPostStatesSetCall) DoAndReturn(f func(types.NodeID, types.PostState)) *MockPostStatesSetCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
