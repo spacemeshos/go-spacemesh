@@ -1905,6 +1905,8 @@ func (app *App) Start(ctx context.Context) error {
 
 		app.log.Info("checking ATX signatures")
 
+		count := 0
+
 		// check ATX signatures
 		atxs.IterateAtxs(app.cachedDB, 0, app.clock.CurrentLayer().GetEpoch(), func(atx *types.VerifiedActivationTx) bool {
 			// verify atx signature
@@ -1914,8 +1916,16 @@ func (app *App) Start(ctx context.Context) error {
 					log.Err(err),
 				)
 			}
+
+			count++
+			if count%1000 == 0 {
+				app.log.With().Info("verifying ATX signatures", log.Int("count", count))
+			}
+
 			return true
 		})
+
+		app.log.With().Info("ATX signatures verified", log.Int("count", count))
 		return nil
 	})
 
