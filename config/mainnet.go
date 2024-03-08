@@ -118,7 +118,7 @@ func MainnetConfig() Config {
 		Tortoise: tortoise.Config{
 			Hdist:                    10,
 			Zdist:                    2,
-			WindowSize:               10000,
+			WindowSize:               4032,
 			MaxExceptions:            1000,
 			BadBeaconVoteDelayLayers: 4032,
 			MinimalActiveSetWeight: []types.EpochMinimalActiveWeight{

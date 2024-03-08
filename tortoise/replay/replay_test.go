@@ -51,14 +51,18 @@ func TestReplayMainnet(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	db, err := sql.Open(fmt.Sprintf("file:%s?mode=ro", *dbpath))
+	db, err := sql.Open(fmt.Sprintf("file:%s", *dbpath))
 	require.NoError(t, err)
 
 	start := time.Now()
+	atxsdata, err := atxsdata.Warm(db,
+		atxsdata.WithCapacityFromLayers(cfg.Tortoise.WindowSize, cfg.LayersPerEpoch),
+	)
+	require.NoError(t, err)
 	trtl, err := tortoise.Recover(
 		context.Background(),
 		db,
-		atxsdata.New(),
+		atxsdata,
 		clock.CurrentLayer(), opts...,
 	)
 	require.NoError(t, err)
