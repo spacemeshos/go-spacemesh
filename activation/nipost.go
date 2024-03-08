@@ -143,7 +143,7 @@ func (nb *NIPostBuilder) Proof(
 				if retries%10 == 0 { // every 20 seconds inform user about lost connection (for remote post service)
 					// TODO(mafa): emit event warning user about lost connection
 					nb.log.Warn("post service not connected - waiting for reconnection",
-						zap.Stringer("service id", nodeID),
+						zap.Stringer("smesherID", nodeID),
 						zap.Error(err),
 					)
 				}
@@ -180,7 +180,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 	signer *signing.EdSigner,
 	challenge *types.NIPostChallenge,
 ) (*nipost.NIPostState, error) {
-	logger := nb.log.With(log.ZContext(ctx))
+	logger := nb.log.With(log.ZContext(ctx), log.ZShortStringer("smesherID", signer.NodeID()))
 	// Note: to avoid missing next PoET round, we need to publish the ATX before the next PoET round starts.
 	//   We can still publish an ATX late (i.e. within publish epoch) and receive rewards, but we will miss one
 	//   epoch because we didn't submit the challenge to PoET in time for next round.
@@ -211,9 +211,9 @@ func (nb *NIPostBuilder) BuildNIPost(
 	logger.Info("building nipost",
 		zap.Time("poet round start", poetRoundStart),
 		zap.Time("poet round end", poetRoundEnd),
-		zap.Stringer("publish epoch", publishEpoch),
 		zap.Time("publish epoch end", publishEpochEnd),
-		zap.Stringer("target epoch", challenge.TargetEpoch()),
+		zap.Uint32("publish epoch", publishEpoch.Uint32()),
+		zap.Uint32("target epoch", challenge.TargetEpoch().Uint32()),
 	)
 
 	// Phase 0: Submit challenge to PoET services.
@@ -350,7 +350,11 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 	prefix, challenge []byte,
 	signature types.EdSignature,
 ) error {
-	logger := nb.log.With(log.ZContext(ctx), zap.String("poet", client.Address()))
+	logger := nb.log.With(
+		log.ZContext(ctx),
+		zap.String("poet", client.Address()),
+		log.ZShortStringer("smesherID", nodeID),
+	)
 
 	logger.Debug("querying for poet pow parameters")
 	powCtx, cancel := withConditionalTimeout(ctx, nb.poetCfg.RequestTimeout)
@@ -404,13 +408,13 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 ) error {
 	signature := signer.Sign(signing.POET, challenge)
 	prefix := bytes.Join([][]byte{signer.Prefix(), {byte(signing.POET)}}, nil)
-
+	nodeID := signer.NodeID()
 	g, ctx := errgroup.WithContext(ctx)
 	errChan := make(chan error, len(nb.poetProvers))
 	for _, poetClient := range nb.poetProvers {
 		client := poetClient
 		g.Go(func() error {
-			errChan <- nb.submitPoetChallenge(ctx, signer.NodeID(), deadline, client, prefix, challenge, signature)
+			errChan <- nb.submitPoetChallenge(ctx, nodeID, deadline, client, prefix, challenge, signature)
 			return nil
 		})
 	}
@@ -424,13 +428,13 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 			continue
 		}
 
-		nb.log.Warn("failed to submit challenge to poet", zap.Error(err))
+		nb.log.Warn("failed to submit challenge to poet", zap.Error(err), log.ZShortStringer("smesherID", nodeID))
 		if !errors.Is(err, ErrInvalidRequest) {
 			allInvalid = false
 		}
 	}
 	if allInvalid {
-		nb.log.Warn("all poet submits were too late. ATX challenge expires")
+		nb.log.Warn("all poet submits were too late. ATX challenge expires", log.ZShortStringer("smesherID", nodeID))
 		return ErrATXChallengeExpired
 	}
 	return nil
@@ -475,6 +479,7 @@ func (nb *NIPostBuilder) getBestProof(
 	for _, r := range registrations {
 		logger := nb.log.With(
 			log.ZContext(ctx),
+			log.ZShortStringer("smesherID", nodeID),
 			zap.String("poet_address", r.Address),
 			zap.String("round", r.RoundID),
 		)
@@ -526,7 +531,11 @@ func (nb *NIPostBuilder) getBestProof(
 
 	var bestProof *poetProof
 	for proof := range proofs {
-		nb.log.Info("got poet proof", zap.Uint64("leaf count", proof.poet.LeafCount))
+		nb.log.Info(
+			"got poet proof",
+			zap.Uint64("leaf count", proof.poet.LeafCount),
+			log.ZShortStringer("smesherID", nodeID),
+		)
 		if bestProof == nil || bestProof.poet.LeafCount < proof.poet.LeafCount {
 			bestProof = proof
 		}
@@ -537,7 +546,12 @@ func (nb *NIPostBuilder) getBestProof(
 		if err != nil {
 			return types.PoetProofRef{}, nil, err
 		}
-		nb.log.Info("selected the best proof", zap.Uint64("leafCount", bestProof.poet.LeafCount), zap.Binary("ref", ref[:]))
+		nb.log.Info(
+			"selected the best proof",
+			zap.Uint64("leafCount", bestProof.poet.LeafCount),
+			zap.Binary("ref", ref[:]),
+			log.ZShortStringer("smesherID", nodeID),
+		)
 		return ref, bestProof.membership, nil
 	}
 

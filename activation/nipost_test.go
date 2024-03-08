@@ -318,7 +318,7 @@ func Test_NIPost_PostClientHandling(t *testing.T) {
 		require.Equal(t, 1, tnb.observedLogs.Len(), "expected 1 log message")
 		require.Equal(t, zapcore.WarnLevel, tnb.observedLogs.All()[0].Level)
 		require.Equal(t, "post service not connected - waiting for reconnection", tnb.observedLogs.All()[0].Message)
-		require.Equal(t, sig.NodeID().String(), tnb.observedLogs.All()[0].ContextMap()["service id"])
+		require.Equal(t, sig.NodeID().String(), tnb.observedLogs.All()[0].ContextMap()["smesherID"])
 	})
 }
 
