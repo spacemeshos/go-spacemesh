@@ -316,7 +316,7 @@ func TestSynchronize_FetchLayerDataFailed(t *testing.T) {
 	require.False(t, ts.syncer.synchronize(context.Background()))
 	ts.syncer.waitBackgroundSync()
 	require.Equal(t, lyr.Sub(1), ts.syncer.getLastSyncedLayer())
-	require.Equal(t, current.GetEpoch()-1, ts.syncer.lastAtxEpoch())
+	require.Equal(t, current.GetEpoch(), ts.syncer.lastAtxEpoch())
 	require.False(t, ts.syncer.dataSynced())
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.False(t, ts.syncer.ListenToGossip())
