@@ -51,7 +51,7 @@ func TestReplayMainnet(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	db, err := sql.Open(fmt.Sprintf("file:%s", *dbpath))
+	db, err := sql.Open(fmt.Sprintf("file:%s?mode=ro", *dbpath))
 	require.NoError(t, err)
 
 	start := time.Now()
