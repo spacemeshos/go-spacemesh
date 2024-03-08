@@ -13,7 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/server"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/atxsync"
@@ -43,6 +43,8 @@ func DefaultConfig() Config {
 		AtxsBatch:         1000,
 		RequestsLimit:     20,
 		EpochInfoPeers:    2,
+		ProgressFraction:  0.1,
+		ProgressInterval:  20 * time.Minute,
 	}
 }
 
@@ -61,6 +63,11 @@ type Config struct {
 
 	// AtxsBatch is the maximum number of atxs to sync in a single request.
 	AtxsBatch int `mapstructure:"atxs-batch"`
+
+	// ProgressFraction will report progress every fraction from total is downloaded.
+	ProgressFraction float64 `mapstructure:"progress-every-fraction"`
+	// ProgressInterval will report progress every interval.
+	ProgressInterval time.Duration `mapstructure:"progress-on-time"`
 }
 
 func WithConfig(cfg Config) Opt {
@@ -95,8 +102,8 @@ func (s *Syncer) closeToTheEpoch(publish types.EpochID, timestamp, downloadUntil
 	return timestamp.After(downloadUntil) || downloadUntil.Sub(timestamp) < 2*s.cfg.EpochInfoInterval
 }
 
-func (s *Syncer) Download(ctx context.Context, publish types.EpochID, downloadUntil time.Time) error {
-	s.logger.Info("starting atx sync", log.ZContext(ctx), publish.Field().Zap())
+func (s *Syncer) Download(parent context.Context, publish types.EpochID, downloadUntil time.Time) error {
+	s.logger.Info("starting atx sync", log.ZContext(parent), publish.Field().Zap())
 
 	state, err := atxsync.GetSyncState(s.localdb, publish)
 	if err != nil {
@@ -110,7 +117,7 @@ func (s *Syncer) Download(ctx context.Context, publish types.EpochID, downloadUn
 	immediate := len(state) == 0 ||
 		(errors.Is(err, sql.ErrNotFound) || !s.closeToTheEpoch(publish, lastSuccess, downloadUntil))
 
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancel(parent)
 	eg, ctx := errgroup.WithContext(ctx)
 	updates := make(chan epochUpdate, s.cfg.EpochInfoPeers)
 	if len(state) == 0 {
@@ -130,20 +137,30 @@ func (s *Syncer) Download(ctx context.Context, publish types.EpochID, downloadUn
 		cancel()
 		return err
 	})
-	return eg.Wait()
+	if err := eg.Wait(); err != nil {
+		return err
+	}
+	return parent.Err()
 }
 
 func (s *Syncer) downloadEpochInfo(
 	ctx context.Context,
 	publish types.EpochID,
 	immediate bool,
-	updates chan epochUpdate,
+	updates chan<- epochUpdate,
 ) error {
 	interval := s.cfg.EpochInfoInterval
 	if immediate {
 		interval = 0
 	}
 	for {
+		if interval != 0 {
+			s.logger.Debug(
+				"waiting between epoch info requests",
+				publish.Field().Zap(),
+				zap.Duration("duration", interval),
+			)
+		}
 		select {
 		case <-ctx.Done():
 			return nil
@@ -199,11 +216,10 @@ func (s *Syncer) downloadAtxs(
 	publish types.EpochID,
 	downloadUntil time.Time,
 	state map[types.ATXID]int,
-	updates chan epochUpdate,
+	updates <-chan epochUpdate,
 ) error {
-	batch := make([]types.ATXID, 0, s.cfg.AtxsBatch)
-	batch = batch[:0]
 	var (
+		batch                = make([]types.ATXID, 0, s.cfg.AtxsBatch)
 		downloaded           = map[types.ATXID]bool{}
 		previouslyDownloaded = 0
 		start                = time.Now()
@@ -216,7 +232,7 @@ func (s *Syncer) downloadAtxs(
 		// waiting for update if there is nothing to download
 		if nothingToDownload && s.closeToTheEpoch(publish, lastSuccess, downloadUntil) {
 			s.logger.Info(
-				"atx sync terminated",
+				"atx sync completed",
 				log.ZContext(ctx),
 				publish.Field().Zap(),
 				zap.Int("downloaded", len(downloaded)),
@@ -273,9 +289,10 @@ func (s *Syncer) downloadAtxs(
 		}
 		nothingToDownload = len(batch) == 0
 
-		// report progress every 10% or every 20 minutes
-		if progress := float64(len(downloaded) - previouslyDownloaded); progress/float64(len(state)) > 0.1 ||
-			time.Since(progressTimestamp) > 20*time.Minute {
+		if progress := float64(len(downloaded) - previouslyDownloaded); progress/float64(
+			len(state),
+		) > s.cfg.ProgressFraction && s.cfg.ProgressFraction != 0 ||
+			time.Since(progressTimestamp) > s.cfg.ProgressInterval && s.cfg.ProgressInterval != 0 {
 			s.logger.Info(
 				"atx sync progress",
 				log.ZContext(ctx),
@@ -297,8 +314,13 @@ func (s *Syncer) downloadAtxs(
 				batchError := &fetch.BatchError{}
 				if errors.As(err, &batchError) {
 					for hash, err := range batchError.Errors {
-						if errors.Is(err, server.ErrPeerResponseFailed) {
+						if _, exists := state[types.ATXID(hash)]; !exists {
+							continue
+						}
+						if errors.Is(err, fetch.ErrExceedMaxRetries) {
 							state[types.ATXID(hash)]++
+						} else if errors.Is(err, pubsub.ErrValidationReject) {
+							state[types.ATXID(hash)] = s.cfg.RequestsLimit
 						}
 					}
 				}

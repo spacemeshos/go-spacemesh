@@ -264,13 +264,14 @@ func (s *ActivationService) ActivationsCount(
 	ctx context.Context,
 	request *spacemeshv2alpha1.ActivationsCountRequest,
 ) (*spacemeshv2alpha1.ActivationsCountResponse, error) {
-	ops := builder.Operations{Filter: []builder.Op{
-		{
+	ops := builder.Operations{}
+	if request.Epoch != nil {
+		ops.Filter = append(ops.Filter, builder.Op{
 			Field: builder.Epoch,
 			Token: builder.Eq,
-			Value: int64(request.Epoch),
-		},
-	}}
+			Value: int64(*request.Epoch),
+		})
+	}
 
 	count, err := atxs.CountAtxsByOps(s.db, ops)
 	if err != nil {

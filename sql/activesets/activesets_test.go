@@ -1,6 +1,7 @@
 package activesets
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -11,6 +12,8 @@ import (
 )
 
 func TestActiveSet(t *testing.T) {
+	ctx := context.Background()
+
 	ids := []types.Hash32{{1}, {2}, {3}, {4}}
 	set := &types.EpochActiveSet{
 		Epoch: 2,
@@ -26,7 +29,7 @@ func TestActiveSet(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, set, set1)
 
-	blob, err := GetBlob(db, ids[0].Bytes())
+	blob, err := GetBlob(ctx, db, ids[0].Bytes())
 	require.NoError(t, err)
 	require.Equal(t, codec.MustEncode(set), blob)
 
@@ -36,21 +39,22 @@ func TestActiveSet(t *testing.T) {
 
 	_, err = Get(db, ids[3])
 	require.ErrorIs(t, err, sql.ErrNotFound)
-	_, err = GetBlob(db, ids[3].Bytes())
+	_, err = GetBlob(ctx, db, ids[3].Bytes())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
 	require.NoError(t, DeleteBeforeEpoch(db, set.Epoch))
-	blob, err = GetBlob(db, ids[0].Bytes())
+	blob, err = GetBlob(ctx, db, ids[0].Bytes())
 	require.NoError(t, err)
 	require.NotEmpty(t, blob)
 
 	require.NoError(t, DeleteBeforeEpoch(db, set.Epoch+1))
-	blob, err = GetBlob(db, ids[0].Bytes())
+	blob, err = GetBlob(ctx, db, ids[0].Bytes())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.Empty(t, blob)
 }
 
 func TestCachedActiveSet(t *testing.T) {
+	ctx := context.Background()
 	ids := []types.Hash32{{1}, {2}}
 	set0 := &types.EpochActiveSet{
 		Epoch: 2,
@@ -67,14 +71,14 @@ func TestCachedActiveSet(t *testing.T) {
 	require.Equal(t, 2, db.QueryCount())
 
 	for i := 0; i < 3; i++ {
-		blob, err := GetBlob(db, ids[0].Bytes())
+		blob, err := GetBlob(ctx, db, ids[0].Bytes())
 		require.NoError(t, err)
 		require.Equal(t, codec.MustEncode(set0), blob)
 		require.Equal(t, 3, db.QueryCount())
 	}
 
 	for i := 0; i < 3; i++ {
-		blob, err := GetBlob(db, ids[1].Bytes())
+		blob, err := GetBlob(ctx, db, ids[1].Bytes())
 		require.NoError(t, err)
 		require.Equal(t, codec.MustEncode(set1), blob)
 		require.Equal(t, 4, db.QueryCount())

@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -57,7 +58,7 @@ type atxProvider interface {
 }
 
 type postSupervisor interface {
-	Start(opts activation.PostSetupOpts, id types.NodeID) error
+	Start(opts activation.PostSetupOpts, sig *signing.EdSigner) error
 	Stop(deleteFiles bool) error
 
 	Config() activation.PostConfig

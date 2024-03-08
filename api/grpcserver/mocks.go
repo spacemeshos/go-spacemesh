@@ -19,6 +19,7 @@ import (
 	activation "github.com/spacemeshos/go-spacemesh/activation"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
+	signing "github.com/spacemeshos/go-spacemesh/signing"
 	system "github.com/spacemeshos/go-spacemesh/system"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -1089,17 +1090,17 @@ func (c *MockpostSupervisorProvidersCall) DoAndReturn(f func() ([]activation.Pos
 }
 
 // Start mocks base method.
-func (m *MockpostSupervisor) Start(opts activation.PostSetupOpts, id types.NodeID) error {
+func (m *MockpostSupervisor) Start(opts activation.PostSetupOpts, sig *signing.EdSigner) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Start", opts, id)
+	ret := m.ctrl.Call(m, "Start", opts, sig)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Start indicates an expected call of Start.
-func (mr *MockpostSupervisorMockRecorder) Start(opts, id any) *MockpostSupervisorStartCall {
+func (mr *MockpostSupervisorMockRecorder) Start(opts, sig any) *MockpostSupervisorStartCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockpostSupervisor)(nil).Start), opts, id)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockpostSupervisor)(nil).Start), opts, sig)
 	return &MockpostSupervisorStartCall{Call: call}
 }
 
@@ -1115,13 +1116,13 @@ func (c *MockpostSupervisorStartCall) Return(arg0 error) *MockpostSupervisorStar
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockpostSupervisorStartCall) Do(f func(activation.PostSetupOpts, types.NodeID) error) *MockpostSupervisorStartCall {
+func (c *MockpostSupervisorStartCall) Do(f func(activation.PostSetupOpts, *signing.EdSigner) error) *MockpostSupervisorStartCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockpostSupervisorStartCall) DoAndReturn(f func(activation.PostSetupOpts, types.NodeID) error) *MockpostSupervisorStartCall {
+func (c *MockpostSupervisorStartCall) DoAndReturn(f func(activation.PostSetupOpts, *signing.EdSigner) error) *MockpostSupervisorStartCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

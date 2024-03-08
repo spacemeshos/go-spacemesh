@@ -80,3 +80,15 @@ func GetRequestTime(db sql.Executor, epoch types.EpochID) (time.Time, error) {
 	}
 	return timestamp, nil
 }
+
+func Clear(db sql.Executor) error {
+	_, err := db.Exec(`delete from atx_sync_state`, nil, nil)
+	if err != nil {
+		return fmt.Errorf("clear atx sync state failed: %w", err)
+	}
+	_, err = db.Exec(`delete from atx_sync_requests`, nil, nil)
+	if err != nil {
+		return fmt.Errorf("clear atx sync requests failed: %w", err)
+	}
+	return nil
+}

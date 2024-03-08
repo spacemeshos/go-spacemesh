@@ -23,6 +23,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
+	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
@@ -185,6 +186,7 @@ func MainnetConfig() Config {
 			GossipDuration:           50 * time.Second,
 			OutOfSyncThresholdLayers: 36, // 3h
 			DisableMeshAgreement:     true,
+			AtxSync:                  atxsync.DefaultConfig(),
 		},
 		Recovery: checkpoint.DefaultConfig(),
 		Cache:    datastore.DefaultConfig(),

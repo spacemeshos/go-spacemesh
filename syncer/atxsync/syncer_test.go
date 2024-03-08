@@ -14,7 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/atxsync"
@@ -104,7 +103,11 @@ func TestSyncer(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 		publish := types.EpochID(1)
-		require.NoError(t, tester.syncer.Download(ctx, publish, time.Now()))
+		now := time.Now()
+		tester.fetcher.EXPECT().SelectBestShuffled(tester.cfg.EpochInfoPeers).Return([]p2p.Peer{"a"}).AnyTimes()
+		tester.fetcher.EXPECT().PeerEpochInfo(gomock.Any(), gomock.Any(), publish).Return(edata("1"), nil).AnyTimes()
+		tester.fetcher.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).Return(errors.New("no atxs")).AnyTimes()
+		require.ErrorIs(t, tester.syncer.Download(ctx, publish, now), context.Canceled)
 	})
 	t.Run("error on no peers", func(t *testing.T) {
 		tester := newTester(t, DefaultConfig())
@@ -190,7 +193,7 @@ func TestSyncer(t *testing.T) {
 					}
 					for _, bad := range bad.AtxIDs {
 						if bad == id {
-							berr.Add(bad.Hash32(), fmt.Errorf("%w: test", server.ErrPeerResponseFailed))
+							berr.Add(bad.Hash32(), fmt.Errorf("%w: test", fetch.ErrExceedMaxRetries))
 						}
 					}
 				}
