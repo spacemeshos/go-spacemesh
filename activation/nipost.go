@@ -52,6 +52,7 @@ type NIPostBuilder struct {
 	log         *zap.Logger
 	poetCfg     PoetConfig
 	layerClock  layerClock
+	postStates  PostStates
 }
 
 type NIPostBuilderOption func(*NIPostBuilder)
@@ -63,6 +64,12 @@ func withPoetClients(clients []poetClient) NIPostBuilderOption {
 		for _, client := range clients {
 			nb.poetProvers[client.Address()] = client
 		}
+	}
+}
+
+func NipostbuilderWithPostStates(ps PostStates) NIPostBuilderOption {
+	return func(nb *NIPostBuilder) {
+		nb.postStates = ps
 	}
 }
 
@@ -95,6 +102,7 @@ func NewNIPostBuilder(
 		log:         lg,
 		poetCfg:     poetCfg,
 		layerClock:  layerClock,
+		postStates:  NewPostStates(lg),
 	}
 
 	for _, opt := range opts {
@@ -118,6 +126,7 @@ func (nb *NIPostBuilder) Proof(
 	nodeID types.NodeID,
 	challenge []byte,
 ) (*types.Post, *types.PostInfo, error) {
+	nb.postStates.Set(nodeID, types.PostStateProving)
 	started := false
 	retries := 0
 	for {
@@ -152,10 +161,12 @@ func (nb *NIPostBuilder) Proof(
 		case errors.Is(err, ErrPostClientClosed):
 			continue
 		case err != nil:
+			// We don't set the state to idle here, because we will retry up the stack.
 			events.EmitPostFailure(nodeID)
 			return nil, nil, err
 		default: // err == nil
 			events.EmitPostComplete(nodeID, challenge)
+			nb.postStates.Set(nodeID, types.PostStateIdle)
 			return post, postInfo, err
 		}
 	}

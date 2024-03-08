@@ -172,6 +172,29 @@ and permanent ineligibility for rewards.
   To collect rewards for every identity, the associated PoST service must be running and connected to the node during
   the cyclegap set in the node's configuration.
 
+* [#5651](https://github.com/spacemeshos/go-spacemesh/pull/5651)
+  New GRPC service `spacemesh.v1.PostInfoService.PostStates` allowing to check the status of
+  PoST proving of all registered identities. It's usefull for operators to figure out when
+  post-services for each identity need to be up or can be shutdown.
+
+  An example output:
+  ```json
+  {
+    "states": [
+      {
+        "id": "874uW9N/y0PwUXxJ8Kb8Q2Yd+sqhpGJYkLbjlkIz5Ig=",
+        "state": "IDLE",
+        "name": "post0.key"
+      },
+      {
+        "id": "sBq/pHUHtzczY1quuG2muPGkksfVldwnH0M/eUPc3qE=",
+        "state": "PROVING",
+        "name": "post1.key"
+      }
+    ]
+  }
+  ```
+
 ### Features
 
 ### Improvements

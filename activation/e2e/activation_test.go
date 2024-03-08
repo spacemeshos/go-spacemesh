@@ -2,7 +2,6 @@ package activation_test
 
 import (
 	"context"
-	"math/rand"
 	"sync"
 	"testing"
 	"time"
@@ -62,16 +61,18 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
 
 	var eg errgroup.Group
+	i := uint32(1)
 	for _, sig := range signers {
 		sig := sig
 		opts := opts
+		opts.DataDir = t.TempDir()
+		opts.NumUnits = min(i*2, cfg.MaxNumUnits)
+		i += 1
 		eg.Go(func() error {
 			validator := activation.NewMocknipostValidator(ctrl)
 			mgr, err := activation.NewPostSetupManager(cfg, logger, cdb, goldenATX, syncer, validator)
 			require.NoError(t, err)
 
-			opts.DataDir = t.TempDir()
-			opts.NumUnits = uint32(rand.Int31n(int32(cfg.MaxNumUnits/2-cfg.MinNumUnits))) + cfg.MinNumUnits
 			initPost(t, mgr, opts, sig.NodeID())
 			t.Cleanup(launchPostSupervisor(t, logger, mgr, sig, grpcCfg, opts))
 
@@ -89,8 +90,8 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	layerDuration := 3 * time.Second
 	epoch := layersPerEpoch * layerDuration
 	poetCfg := activation.PoetConfig{
-		PhaseShift:        epoch / 2,
-		CycleGap:          epoch / 4,
+		PhaseShift:        epoch,
+		CycleGap:          epoch / 2,
 		GracePeriod:       epoch / 5,
 		RequestTimeout:    epoch / 5,
 		RequestRetryDelay: epoch / 50,
@@ -115,6 +116,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 
 	poetDb := activation.NewPoetDb(db, log.NewFromLog(logger).Named("poetDb"))
 
+	postStates := activation.NewMockPostStates(ctrl)
 	localDB := localsql.InMemory()
 	nb, err := activation.NewNIPostBuilder(
 		localDB,
@@ -124,6 +126,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		logger.Named("nipostBuilder"),
 		poetCfg,
 		clock,
+		activation.NipostbuilderWithPostStates(postStates),
 	)
 	require.NoError(t, err)
 
@@ -165,8 +168,19 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		logger,
 		activation.WithPoetConfig(poetCfg),
 		activation.WithValidator(v),
+		activation.WithPostStates(postStates),
 	)
 	for _, sig := range signers {
+		gomock.InOrder(
+			// it starts by setting to IDLE
+			postStates.EXPECT().Set(sig.NodeID(), types.PostStateIdle),
+			// initial proof
+			postStates.EXPECT().Set(sig.NodeID(), types.PostStateProving),
+			postStates.EXPECT().Set(sig.NodeID(), types.PostStateIdle),
+			// post proof
+			postStates.EXPECT().Set(sig.NodeID(), types.PostStateProving),
+			postStates.EXPECT().Set(sig.NodeID(), types.PostStateIdle),
+		)
 		tab.Register(sig)
 	}
 

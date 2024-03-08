@@ -156,3 +156,8 @@ type PostClient interface {
 	Info(ctx context.Context) (*types.PostInfo, error)
 	Proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error)
 }
+
+type PostStates interface {
+	Set(id types.NodeID, state types.PostState)
+	Get() map[types.NodeID]types.PostState
+}
