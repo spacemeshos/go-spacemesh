@@ -1888,46 +1888,46 @@ func (app *App) Start(ctx context.Context) error {
 		})
 	}
 
-	app.eg.Go(func() error {
-	loop:
-		for {
-			app.log.Info("waiting for atx sync")
-			select {
-			case <-app.syncer.RegisterForATXSynced():
-				app.log.Info("atx sync done")
-				break loop
-			case <-ctx.Done():
-				return nil
-			case <-time.After(1 * time.Minute):
-				// wait for atx sync
-			}
-		}
+	// app.eg.Go(func() error {
+	// loop:
+	// 	for {
+	// 		app.log.Info("waiting for atx sync")
+	// 		select {
+	// 		case <-app.syncer.RegisterForATXSynced():
+	// 			app.log.Info("atx sync done")
+	// 			break loop
+	// 		case <-ctx.Done():
+	// 			return nil
+	// 		case <-time.After(1 * time.Minute):
+	// 			// wait for atx sync
+	// 		}
+	// 	}
 
-		app.log.Info("checking ATX signatures")
+	// 	app.log.Info("checking ATX signatures")
 
-		count := 0
+	// 	count := 0
 
-		// check ATX signatures
-		atxs.IterateAtxs(app.cachedDB, 0, app.clock.CurrentLayer().GetEpoch(), func(atx *types.VerifiedActivationTx) bool {
-			// verify atx signature
-			if !app.edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature) {
-				app.log.With().Error("ATX signature verification failed",
-					log.String("atx", atx.ShortString()),
-					log.Err(err),
-				)
-			}
+	// 	// check ATX signatures
+	// 	atxs.IterateAtxs(app.cachedDB, 0, app.clock.CurrentLayer().GetEpoch(), func(atx *types.VerifiedActivationTx) bool {
+	// 		// verify atx signature
+	// 		if !app.edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature) {
+	// 			app.log.With().Error("ATX signature verification failed",
+	// 				log.String("atx", atx.ShortString()),
+	// 				log.Err(err),
+	// 			)
+	// 		}
 
-			count++
-			if count%1000 == 0 {
-				app.log.With().Info("verifying ATX signatures", log.Int("count", count))
-			}
+	// 		count++
+	// 		if count%1000 == 0 {
+	// 			app.log.With().Info("verifying ATX signatures", log.Int("count", count))
+	// 		}
 
-			return true
-		})
+	// 		return true
+	// 	})
 
-		app.log.With().Info("ATX signatures verified", log.Int("count", count))
-		return nil
-	})
+	// 	app.log.With().Info("ATX signatures verified", log.Int("count", count))
+	// 	return nil
+	// })
 
 	// app blocks until it receives a signal to exit
 	// this signal may come from the node or from sig-abort (ctrl-c)
