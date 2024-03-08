@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"context"
 	"slices"
 	"sync"
 
@@ -9,7 +10,10 @@ import (
 
 const defaultLRUCacheSize = 100
 
-type QueryCacheKind string
+type (
+	QueryCacheKind   string
+	inGetValueCtxKey struct{}
+)
 
 var NullQueryCache QueryCache = (*queryCache)(nil)
 
@@ -38,7 +42,7 @@ const (
 
 type (
 	// UntypedRetrieveFunc retrieves a value to be cached.
-	UntypedRetrieveFunc func() (any, error)
+	UntypedRetrieveFunc func(ctx context.Context) (any, error)
 	// SliceAppender modifies slice value stored in the cache, appending the
 	// specified item to it and returns the updated slice.
 	SliceAppender func(s any) any
@@ -52,7 +56,12 @@ type QueryCache interface {
 	// the entry is absent from cache, it's populated by calling retrieve func.
 	// Note that the retrieve func should never cause UpdateSlice to be
 	// called for this cache.
-	GetValue(key queryCacheKey, subKey QueryCacheSubKey, retrieve UntypedRetrieveFunc) (any, error)
+	GetValue(
+		ctx context.Context,
+		key queryCacheKey,
+		subKey QueryCacheSubKey,
+		retrieve UntypedRetrieveFunc,
+	) (any, error)
 	// UpdateSlice updates the slice stored in the cache by invoking the
 	// specified SliceAppender. If the entry is not cached, the method does
 	// nothing.
@@ -67,8 +76,13 @@ type RetrieveFunc[T any] func() (T, error)
 // WithCachedValue retrieves the specified value from the cache. If the entry is
 // absent from the cache, it's populated by calling retrieve func. Note that the
 // retrieve func should never cause UpdateSlice to be called.
-func WithCachedValue[T any](db any, key queryCacheKey, retrieve func() (T, error)) (T, error) {
-	return WithCachedSubKey(db, key, mainSubKey, retrieve)
+func WithCachedValue[T any](
+	ctx context.Context,
+	db any,
+	key queryCacheKey,
+	retrieve func(ctx context.Context) (T, error),
+) (T, error) {
+	return WithCachedSubKey(ctx, db, key, mainSubKey, retrieve)
 }
 
 // WithCachedValue retrieves the specified value identified by the key and
@@ -76,17 +90,22 @@ func WithCachedValue[T any](db any, key queryCacheKey, retrieve func() (T, error
 // by calling retrieve func. Note that the retrieve func should never cause
 // UpdateSlice to be called.
 func WithCachedSubKey[T any](
+	ctx context.Context,
 	db any,
 	key queryCacheKey,
 	subKey QueryCacheSubKey,
-	retrieve func() (T, error),
+	retrieve func(ctx context.Context) (T, error),
 ) (T, error) {
 	cache, ok := db.(QueryCache)
 	if !ok {
-		return retrieve()
+		return retrieve(ctx)
 	}
 
-	v, err := cache.GetValue(key, subKey, func() (any, error) { return retrieve() })
+	v, err := cache.GetValue(
+		ctx, key, subKey,
+		func(ctx context.Context) (any, error) {
+			return retrieve(ctx)
+		})
 	if err != nil {
 		var r T
 		return r, err
@@ -191,12 +210,20 @@ func (c *queryCache) set(key queryCacheKey, subKey QueryCacheSubKey, v any) {
 	lru.Add(lruCacheKey{key: key.Key, subKey: subKey}, v)
 }
 
-func (c *queryCache) GetValue(key queryCacheKey, subKey QueryCacheSubKey, retrieve UntypedRetrieveFunc) (any, error) {
+func (c *queryCache) GetValue(
+	ctx context.Context,
+	key queryCacheKey,
+	subKey QueryCacheSubKey,
+	retrieve UntypedRetrieveFunc,
+) (any, error) {
 	if c == nil {
-		return retrieve()
+		return retrieve(ctx)
 	}
-	c.updateMtx.RLock()
-	defer c.updateMtx.RUnlock()
+	// Avoid recursive locking from within retrieve()
+	if ctx.Value(inGetValueCtxKey{}) == nil {
+		c.updateMtx.RLock()
+		defer c.updateMtx.RUnlock()
+	}
 	v, found := c.get(key, subKey)
 	var err error
 	if !found {
@@ -204,7 +231,7 @@ func (c *queryCache) GetValue(key queryCacheKey, subKey QueryCacheSubKey, retrie
 		// called several times when populating this cached entry.
 		// That's better than locking for the duration of retrieve(),
 		// which can also refer to this cache
-		v, err = retrieve()
+		v, err = retrieve(context.WithValue(ctx, inGetValueCtxKey{}, true))
 		if err == nil {
 			c.set(key, subKey, v)
 		}

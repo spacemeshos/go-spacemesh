@@ -28,13 +28,16 @@ func setupAppWithKeys(tb testing.TB, data ...[]byte) (*App, *observer.ObservedLo
 		return app, observedLogs
 	}
 
-	key := data[0]
-	keyFile := filepath.Join(app.Config.DataDirParent, keyDir, supervisedIDKeyFileName)
-	require.NoError(tb, os.MkdirAll(filepath.Dir(keyFile), 0o700))
-	require.NoError(tb, os.WriteFile(keyFile, key, 0o600))
+	require.NoError(tb, os.MkdirAll(filepath.Join(app.Config.DataDirParent, keyDir), 0o700))
+	if len(data) == 1 {
+		key := data[0]
+		keyFile := filepath.Join(app.Config.DataDirParent, keyDir, supervisedIDKeyFileName)
+		require.NoError(tb, os.WriteFile(keyFile, key, 0o600))
+		return app, observedLogs
+	}
 
-	for i, key := range data[1:] {
-		keyFile = filepath.Join(app.Config.DataDirParent, keyDir, fmt.Sprintf("identity_%d.key", i))
+	for i, key := range data {
+		keyFile := filepath.Join(app.Config.DataDirParent, keyDir, fmt.Sprintf("identity_%d.key", i))
 		require.NoError(tb, os.WriteFile(keyFile, key, 0o600))
 	}
 	return app, observedLogs
@@ -93,12 +96,6 @@ func TestSpacemeshApp_NewIdentity(t *testing.T) {
 		require.Len(t, app.signers, 1)
 		newKey := app.signers[0].PublicKey()
 		require.NotEqual(t, existingKey, newKey) // new key was created and loaded
-
-		err = app.LoadIdentities()
-		require.NoError(t, err)
-		require.Len(t, app.signers, 2)
-		require.Equal(t, app.signers[0].PublicKey(), existingKey)
-		require.Equal(t, app.signers[1].PublicKey(), newKey)
 	})
 }
 
@@ -174,5 +171,45 @@ func TestSpacemeshApp_LoadIdentities(t *testing.T) {
 		log2 := observedLogs.FilterField(zap.String("public_key", key2.PublicKey().ShortString()))
 		require.Len(t, log2.All(), 1)
 		require.Contains(t, log2.All()[0].Message, "duplicate key")
+	})
+
+	t.Run("supervised key alongside others", func(t *testing.T) {
+		key, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		key1, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		key2, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		app, _ := setupAppWithKeys(t,
+			[]byte(hex.EncodeToString(key1.PrivateKey())),
+			[]byte(hex.EncodeToString(key2.PrivateKey())),
+		)
+
+		dst := make([]byte, hex.EncodedLen(len(key.PrivateKey())))
+		hex.Encode(dst, key.PrivateKey())
+		err = os.WriteFile(filepath.Join(app.Config.DataDirParent, keyDir, supervisedIDKeyFileName), dst, 0o600)
+		require.NoError(t, err)
+		err = app.LoadIdentities()
+		require.ErrorContains(t, err, "supervised key found in remote smeshing mode")
+	})
+
+	t.Run("multiple good keys", func(t *testing.T) {
+		key1, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		key2, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		key3, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		app, _ := setupAppWithKeys(t,
+			[]byte(hex.EncodeToString(key1.PrivateKey())),
+			[]byte(hex.EncodeToString(key2.PrivateKey())),
+			[]byte(hex.EncodeToString(key3.PrivateKey())),
+		)
+
+		err = app.LoadIdentities()
+		require.NoError(t, err)
+		require.Len(t, app.signers, 3)
 	})
 }

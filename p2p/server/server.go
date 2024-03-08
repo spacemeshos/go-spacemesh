@@ -347,7 +347,7 @@ func (s *Server) Request(ctx context.Context, pid peer.ID, req []byte) ([]byte, 
 			s.metrics.clientServerError.Inc()
 			s.metrics.clientLatency.Observe(took)
 		}
-		return nil, fmt.Errorf("%w: %s", ErrPeerResponseFailed, data.Error)
+		return nil, fmt.Errorf("peer error: %s", data.Error)
 	case s.metrics != nil:
 		s.metrics.clientSucceeded.Inc()
 		s.metrics.clientLatency.Observe(took)

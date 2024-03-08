@@ -80,3 +80,25 @@ func TestRequestTime(t *testing.T) {
 		}
 	}
 }
+
+func TestClear(t *testing.T) {
+	db := localsql.InMemory()
+	// add some state
+	for epoch := types.EpochID(1); epoch < types.EpochID(5); epoch++ {
+		states := map[types.ATXID]int{}
+		const size = 100
+		for i := 0; i < size; i++ {
+			id := types.ATXID{}
+			binary.BigEndian.PutUint64(id[:], uint64(i))
+			states[id] = 0
+		}
+		require.NoError(t, SaveSyncState(db, epoch, states, 1))
+		require.NoError(t, SaveRequestTime(db, epoch, time.Now()))
+	}
+	require.NoError(t, Clear(db))
+	for epoch := types.EpochID(1); epoch < types.EpochID(5); epoch++ {
+		state, err := GetSyncState(db, epoch)
+		require.NoError(t, err)
+		require.Empty(t, state)
+	}
+}

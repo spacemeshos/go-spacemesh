@@ -680,7 +680,7 @@ func (b *Builder) Regossip(ctx context.Context, nodeID types.NodeID) error {
 	} else if err != nil {
 		return err
 	}
-	blob, err := atxs.GetBlob(b.cdb, atx.Bytes())
+	blob, err := atxs.GetBlob(ctx, b.cdb, atx.Bytes())
 	if err != nil {
 		return fmt.Errorf("get blob %s: %w", atx.ShortString(), err)
 	}

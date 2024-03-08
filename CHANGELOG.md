@@ -18,9 +18,9 @@ encrypted connection between the post service and the node over insecure connect
 
 Smeshers using the default setup with a supervised post service do not need to make changes to their node configuration.
 
-#### Fully migrated local state into `node_state.sql`
+#### Fully migrated local state into `local.sql`
 
-With this release the node has fully migrated its local state into `node_state.sql`. During the first start after the
+With this release the node has fully migrated its local state into `local.sql`. During the first start after the
 upgrade the node will migrate the data from disk and store it in the database. This change also allows the PoST data
 directory to be set to read only after the migration is complete, as the node will no longer write to it.
 
@@ -113,7 +113,7 @@ at a PoET server the PoST services can be stopped with only the node having to b
 This change moves the private keys associated for an identity from the PoST data directory to the node's data directory
 and into the folder `identities` (i.e. if `state.sql` is in folder `data` the keys will now be stored in `data/identities`).
 The node will automatically migrate the `key.bin` file from the PoST data directory during the first startup and copy
-it to the new location as `identity.key`. The content of the file stays unchanged (= the private key of the identity hex-encoded).
+it to the new location as `local.key`. The content of the file stays unchanged (= the private key of the identity hex-encoded).
 
 ##### Adding new identities/PoST services to a node
 
@@ -128,7 +128,7 @@ Make sure to replace `provider` with your provider of choice and `numUnits` with
 initialize. The `commitmentAtxId` is the commitment ATX ID for the identity you want to initialize. For details on the
 usage of `postcli` please refer to [postcli README](https://github.com/spacemeshos/post/cmd/postcli/README.md).
 
-During initialization `postcli` will generate a new private key and store it in the PoST data directory as `key.bin`.
+During initialization `postcli` will generate a new private key and store it in the PoST data directory as `identity.key`.
 Copy this file to your `data/identities` directory and rename it to `xxx.key` where `xxx` is a unique identifier for
 the identity. The node will automatically pick up the new identity and manage its lifecycle after a restart.
 
@@ -141,9 +141,9 @@ node. For details refer to the [post-service README](https://github.com/spacemes
 If you have multiple nodes running and want to migrate to use only one node for all identities:
 
 1. Stop all nodes.
-2. Copy the `key.bin` files from the PoST data directories of all nodes to the data directory of the node you want to
-   use for both identities and into the folder `data/identities`. Rename the files to `xxx.key` where `xxx` is a unique
-   identifier for each identity.
+2. Copy the `identity.key` files from the PoST data directories of all nodes to the `data/identities` directory of the
+   node you want to use for those identities. The choose names for the key files that makes it easy to distinguish which
+   key belongs to which identity.
 3. Start the node managing the identities.
 4. For every identity setup a post service to use the existing PoST data for that identity and connect to the node.
    For details refer to the [post-service README](https://github.com/spacemeshos/post-rs/blob/main/service/README.md).
@@ -176,7 +176,11 @@ and permanent ineligibility for rewards.
 
 ### Improvements
 
-* [#5219](https://github.com/spacemeshos/go-spacemesh/pull/5219) Migrate data from `nipost_builder_state.bin` to `node_state.sql`.
+* [#5641](https://github.com/spacemeshos/go-spacemesh/pull/5641) Rename `node_state.sql` to `local.sql`.
+
+  To avoid confusion with the `state.sql` database, the `node_state.sql` database has been renamed to `local.sql`.
+
+* [#5219](https://github.com/spacemeshos/go-spacemesh/pull/5219) Migrate data from `nipost_builder_state.bin` to `local.sql`.
 
   The node will automatically migrate the data from disk and store it in the database. The migration will take place at the
   first startup after the upgrade.

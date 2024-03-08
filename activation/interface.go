@@ -144,6 +144,10 @@ var (
 	ErrPostClientNotConnected = fmt.Errorf("post service not registered")
 )
 
+type AtxBuilder interface {
+	Register(sig *signing.EdSigner)
+}
+
 type postService interface {
 	Client(nodeId types.NodeID) (PostClient, error)
 }

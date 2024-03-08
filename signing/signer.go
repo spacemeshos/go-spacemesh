@@ -3,9 +3,12 @@ package signing
 import (
 	"bytes"
 	"crypto/ed25519"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 
 	oasis "github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 
@@ -50,6 +53,7 @@ func (d Domain) String() string {
 
 type edSignerOption struct {
 	priv   PrivateKey
+	file   string
 	prefix []byte
 }
 
@@ -64,11 +68,50 @@ func WithPrefix(prefix []byte) EdSignerOptionFunc {
 	}
 }
 
+// FromFile loads the private key from a file.
+func FromFile(path string) EdSignerOptionFunc {
+	return func(opt *edSignerOption) error {
+		if opt.priv != nil {
+			return errors.New("invalid option FromFile: private key already set")
+		}
+
+		// read hex data from file
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("failed to open identity file at %s: %w", path, err)
+		}
+
+		if n := hex.DecodedLen(len(data)); n != PrivateKeySize {
+			return fmt.Errorf("invalid key size %d/%d for %s", n, PrivateKeySize, filepath.Base(path))
+		}
+
+		dst := make([]byte, PrivateKeySize)
+		n, err := hex.Decode(dst, data)
+		if err != nil || n != PrivateKeySize {
+			return fmt.Errorf("decoding private key in %s: %w", filepath.Base(path), err)
+		}
+
+		priv := PrivateKey(dst)
+		keyPair := ed25519.NewKeyFromSeed(priv[:32])
+		if !bytes.Equal(keyPair[32:], priv.Public().(ed25519.PublicKey)) {
+			return errors.New("private and public do not match")
+		}
+
+		opt.priv = priv
+		opt.file = filepath.Base(path)
+		return nil
+	}
+}
+
 // WithPrivateKey sets the private key used by EdSigner.
 func WithPrivateKey(priv PrivateKey) EdSignerOptionFunc {
 	return func(opt *edSignerOption) error {
+		if opt.priv != nil {
+			return errors.New("invalid option WithPrivateKey: private key already set")
+		}
+
 		if len(priv) != ed25519.PrivateKeySize {
-			return errors.New("could not create EdSigner from the provided key: too small")
+			return errors.New("could not create EdSigner: invalid key length")
 		}
 
 		keyPair := ed25519.NewKeyFromSeed(priv[:32])
@@ -97,6 +140,7 @@ func WithKeyFromRand(rand io.Reader) EdSignerOptionFunc {
 // EdSigner represents an ED25519 signer.
 type EdSigner struct {
 	priv PrivateKey
+	file string
 
 	prefix []byte
 }
@@ -121,6 +165,7 @@ func NewEdSigner(opts ...EdSignerOptionFunc) (*EdSigner, error) {
 	sig := &EdSigner{
 		priv:   cfg.priv,
 		prefix: cfg.prefix,
+		file:   cfg.file,
 	}
 	return sig, nil
 }
@@ -148,6 +193,11 @@ func (es *EdSigner) PublicKey() *PublicKey {
 // PrivateKey returns private key.
 func (es *EdSigner) PrivateKey() PrivateKey {
 	return es.priv
+}
+
+// Name returns the name of the signer. This is the filename of the identity file.
+func (es *EdSigner) Name() string {
+	return es.file
 }
 
 // VRFSigner wraps same ed25519 key to provide ecvrf.
