@@ -391,6 +391,7 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 }
 
 func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID) (*types.NIPostChallenge, error) {
+	logger := b.log.With(log.ZShortStringer("smesherID", nodeID))
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -405,7 +406,11 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	case err != nil:
 		return nil, fmt.Errorf("get nipost challenge: %w", err)
 	case challenge.PublishEpoch < current:
-		// challenge is stale
+		logger.Info(
+			"existing NiPOST challenge is stale, resetting state",
+			zap.Stringer("current_epoch", current),
+			zap.Stringer("challenge publish epoch", challenge.PublishEpoch),
+		)
 		if err := b.nipostBuilder.ResetState(nodeID); err != nil {
 			return nil, fmt.Errorf("reset nipost builder state: %w", err)
 		}
@@ -416,6 +421,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		// challenge is fresh
 		return challenge, nil
 	}
+	logger.Info("building new NiPOST challenge", zap.Stringer("current_epoch", current))
 
 	prev, err := b.cdb.GetLastAtx(nodeID)
 	switch {
@@ -436,7 +442,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	metrics.PublishOntimeWindowLatency.Observe(until.Seconds())
 	wait := buildNipostChallengeStartDeadline(b.poetRoundStart(current), b.poetCfg.GracePeriod)
 	if time.Until(wait) > 0 {
-		b.log.Debug("waiting for fresh atxs",
+		logger.Debug("waiting for fresh atxs",
 			zap.Duration("till poet round", until),
 			zap.Uint32("current epoch", current.Uint32()),
 			zap.Duration("wait", time.Until(wait)),
@@ -462,7 +468,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		if err != nil {
 			return nil, fmt.Errorf("get initial post: %w", err)
 		}
-		b.log.Info("verifying the initial post")
+		logger.Info("verifying the initial post")
 		initialPost := &types.Post{
 			Nonce:   post.Nonce,
 			Indices: post.Indices,
@@ -473,9 +479,9 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 			LabelsPerUnit: b.conf.LabelsPerUnit,
 		}, post.NumUnits)
 		if err != nil {
-			b.log.Error("initial POST is invalid", log.ZShortStringer("smesherID", nodeID), zap.Error(err))
+			logger.Error("initial POST is invalid", zap.Error(err))
 			if err := nipost.RemoveInitialPost(b.localDB, nodeID); err != nil {
-				b.log.Fatal("failed to remove initial post", log.ZShortStringer("smesherID", nodeID), zap.Error(err))
+				logger.Fatal("failed to remove initial post", zap.Error(err))
 			}
 			return nil, fmt.Errorf("initial POST is invalid: %w", err)
 		}
@@ -532,6 +538,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner
 	}
 
 	b.log.Info("atx challenge is ready",
+		log.ZShortStringer("smesherID", sig.NodeID()),
 		zap.Stringer("current_epoch", b.layerClock.CurrentLayer().GetEpoch()),
 		zap.Stringer("publish_epoch", challenge.PublishEpoch),
 		zap.Stringer("target_epoch", challenge.TargetEpoch()),
@@ -592,14 +599,14 @@ func (b *Builder) createAtx(
 		zap.Stringer("pub_epoch", pubEpoch),
 		zap.Stringer("pub_epoch_first_layer", pubEpoch.FirstLayer()),
 		zap.Stringer("current_layer", b.layerClock.CurrentLayer()),
-		zap.Stringer("node_id", sig.NodeID()),
+		log.ZShortStringer("smesherID", sig.NodeID()),
 	)
 	select {
 	case <-ctx.Done():
 		return nil, fmt.Errorf("wait for publication epoch: %w", ctx.Err())
 	case <-b.layerClock.AwaitLayer(pubEpoch.FirstLayer()):
 	}
-	b.log.Debug("publication epoch has arrived!")
+	b.log.Debug("publication epoch has arrived!", log.ZShortStringer("smesherID", sig.NodeID()))
 
 	if challenge.PublishEpoch < b.layerClock.CurrentLayer().GetEpoch() {
 		if challenge.InitialPost != nil {
@@ -619,7 +626,7 @@ func (b *Builder) createAtx(
 	default:
 		oldNonce, err := atxs.VRFNonce(b.cdb, sig.NodeID(), challenge.PublishEpoch)
 		if err != nil {
-			b.log.Warn("failed to get VRF nonce for ATX", zap.Error(err))
+			b.log.Warn("failed to get VRF nonce for ATX", zap.Error(err), log.ZShortStringer("smesherID", sig.NodeID()))
 			break
 		}
 		if nipostState.VRFNonce != oldNonce {
@@ -666,7 +673,7 @@ func (b *Builder) getPositioningAtx(ctx context.Context, nodeID types.NodeID) (t
 		VerifyChainOpts.WithLogger(b.log),
 	)
 	if errors.Is(err, sql.ErrNotFound) {
-		b.log.Info("using golden atx as positioning atx")
+		b.log.Info("using golden atx as positioning atx", log.ZShortStringer("smesherID", nodeID))
 		return b.conf.GoldenATXID, nil
 	}
 	return id, err
