@@ -248,13 +248,15 @@ func forStreamingCachedUncached(
 			sqlCache: true,
 		},
 	} {
-		forStreaming(t, errStr, tc.sqlCache, toCall)
+		t.Run(tc.name, func(t *testing.T) {
+			forStreaming(t, errStr, tc.sqlCache, toCall)
+		})
 	}
 }
 
 func TestP2PPeerEpochInfo(t *testing.T) {
 	forStreamingCachedUncached(
-		t, "server error: exec epoch 11: database: no free connection",
+		t, "peer error: exec epoch 11: database: no free connection",
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			epoch := types.EpochID(11)
 			atxIDs := tpf.createATXs(epoch)
@@ -275,7 +277,7 @@ func TestP2PPeerEpochInfo(t *testing.T) {
 
 func TestP2PPeerMeshHashes(t *testing.T) {
 	forStreaming(
-		t, "server error: get aggHashes from 7 to 23 by 5: database: no free connection", false,
+		t, "peer error: get aggHashes from 7 to 23 by 5: database: no free connection", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			req := &MeshHashRequest{
 				From: 7,
@@ -308,7 +310,7 @@ func TestP2PPeerMeshHashes(t *testing.T) {
 
 func TestP2PMaliciousIDs(t *testing.T) {
 	forStreaming(
-		t, "server error: get malicious identities: database: no free connection", false,
+		t, "database: no free connection", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			var bad []types.NodeID
 			for i := 0; i < 11; i++ {
@@ -335,7 +337,7 @@ func TestP2PMaliciousIDs(t *testing.T) {
 
 func TestP2PGetATXs(t *testing.T) {
 	forStreamingCachedUncached(
-		t, "failed to fetch 1 hashes out of 1",
+		t, "database: no free connection",
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			epoch := types.EpochID(11)
 			atx := newAtx(tpf.t, epoch)
@@ -371,7 +373,7 @@ func TestP2PGetPoet(t *testing.T) {
 
 func TestP2PGetBallot(t *testing.T) {
 	forStreaming(
-		t, "failed to fetch 1 hashes out of 1", false,
+		t, "database: no free connection", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			signer, err := signing.NewEdSigner()
 			require.NoError(t, err)
@@ -395,7 +397,7 @@ func TestP2PGetBallot(t *testing.T) {
 
 func TestP2PGetActiveSet(t *testing.T) {
 	forStreamingCachedUncached(
-		t, "failed to fetch 1 hashes out of 1",
+		t, "database: no free connection",
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			id := types.RandomHash()
 			set := &types.EpochActiveSet{
@@ -415,7 +417,7 @@ func TestP2PGetActiveSet(t *testing.T) {
 
 func TestP2PGetBlock(t *testing.T) {
 	forStreaming(
-		t, "failed to fetch 1 hashes out of 1", false,
+		t, "database: no free connection", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			lid := types.LayerID(111)
 			bk := types.NewExistingBlock(types.RandomBlockID(), types.InnerBlock{LayerIndex: lid})
@@ -433,7 +435,7 @@ func TestP2PGetBlock(t *testing.T) {
 
 func TestP2PGetProp(t *testing.T) {
 	forStreaming(
-		t, "failed to fetch 1 hashes out of 1", false,
+		t, "database: no free connection", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			nodeID := types.RandomNodeID()
 			ballot := types.NewExistingBallot(types.BallotID{1}, types.RandomEdSignature(), nodeID, types.LayerID(0))
@@ -467,7 +469,7 @@ func TestP2PGetProp(t *testing.T) {
 
 func TestP2PGetBlockTransactions(t *testing.T) {
 	forStreaming(
-		t, "failed to fetch 1 hashes out of 1", false,
+		t, "database: no free connection", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			signer, err := signing.NewEdSigner()
 			require.NoError(t, err)
@@ -485,7 +487,7 @@ func TestP2PGetBlockTransactions(t *testing.T) {
 
 func TestP2PGetProposalTransactions(t *testing.T) {
 	forStreaming(
-		t, "failed to fetch 1 hashes out of 1", false,
+		t, "database: no free connection", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			signer, err := signing.NewEdSigner()
 			require.NoError(t, err)
@@ -503,7 +505,7 @@ func TestP2PGetProposalTransactions(t *testing.T) {
 
 func TestP2PGetMalfeasanceProofs(t *testing.T) {
 	forStreaming(
-		t, "failed to fetch 1 hashes out of 1", false,
+		t, "database: no free connection", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			nid := types.RandomNodeID()
 			proof := types.RandomBytes(11)

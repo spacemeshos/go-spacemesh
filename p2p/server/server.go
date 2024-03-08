@@ -128,7 +128,7 @@ func (*ServerError) Is(target error) bool {
 }
 
 func (err *ServerError) Error() string {
-	return fmt.Sprintf("server error: %s", err.msg)
+	return fmt.Sprintf("peer error: %s", err.msg)
 }
 
 //go:generate scalegen -types Response

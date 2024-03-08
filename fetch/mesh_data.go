@@ -5,7 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"sync/atomic"
+	"strings"
+	"sync"
 
 	"golang.org/x/sync/errgroup"
 
@@ -68,8 +69,11 @@ func (f *Fetch) getHashes(
 	pendingMetric := pendingHashReqs.WithLabelValues(string(hint))
 	pendingMetric.Add(float64(len(hashes)))
 
-	var eg errgroup.Group
-	var failed atomic.Uint64
+	var (
+		eg       errgroup.Group
+		mu       sync.Mutex
+		bfailure = BatchError{Errors: map[types.Hash32]error{}}
+	)
 	for i, hash := range hashes {
 		if err := options.limiter.Acquire(ctx, 1); err != nil {
 			pendingMetric.Add(float64(i - len(hashes)))
@@ -104,7 +108,10 @@ func (f *Fetch) getHashes(
 						log.Stringer("hash", h),
 						log.Err(p.err),
 					)
-					failed.Add(1)
+
+					mu.Lock()
+					bfailure.Add(h, p.err)
+					mu.Unlock()
 				}
 				return nil
 			}
@@ -112,8 +119,8 @@ func (f *Fetch) getHashes(
 	}
 
 	eg.Wait()
-	if failed.Load() > 0 {
-		return fmt.Errorf("failed to fetch %d hashes out of %d", failed.Load(), len(hashes))
+	if !bfailure.Empty() {
+		return &bfailure
 	}
 	return nil
 }
@@ -389,4 +396,30 @@ func (f *Fetch) GetCert(
 		return &peerCert, nil
 	}
 	return nil, fmt.Errorf("failed to get cert %v/%s from %d peers: %w", lid, bid.String(), len(peers), ctx.Err())
+}
+
+type BatchError struct {
+	Errors map[types.Hash32]error
+}
+
+func (b *BatchError) Empty() bool {
+	return len(b.Errors) == 0
+}
+
+func (b *BatchError) Add(id types.Hash32, err error) {
+	if b.Errors == nil {
+		b.Errors = map[types.Hash32]error{}
+	}
+	b.Errors[id] = err
+}
+
+func (b *BatchError) Error() string {
+	var builder strings.Builder
+	builder.WriteString("batch failure: ")
+	for hash, err := range b.Errors {
+		builder.WriteString(hash.ShortString())
+		builder.WriteString("=")
+		builder.WriteString(err.Error())
+	}
+	return builder.String()
 }

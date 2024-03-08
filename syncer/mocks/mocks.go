@@ -322,44 +322,6 @@ func (c *MockfetchLogicGetCertCall) DoAndReturn(f func(context.Context, types.La
 	return c
 }
 
-// GetEpochATXs mocks base method.
-func (m *MockfetchLogic) GetEpochATXs(arg0 context.Context, arg1 types.EpochID) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetEpochATXs", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// GetEpochATXs indicates an expected call of GetEpochATXs.
-func (mr *MockfetchLogicMockRecorder) GetEpochATXs(arg0, arg1 any) *MockfetchLogicGetEpochATXsCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEpochATXs", reflect.TypeOf((*MockfetchLogic)(nil).GetEpochATXs), arg0, arg1)
-	return &MockfetchLogicGetEpochATXsCall{Call: call}
-}
-
-// MockfetchLogicGetEpochATXsCall wrap *gomock.Call
-type MockfetchLogicGetEpochATXsCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockfetchLogicGetEpochATXsCall) Return(arg0 error) *MockfetchLogicGetEpochATXsCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockfetchLogicGetEpochATXsCall) Do(f func(context.Context, types.EpochID) error) *MockfetchLogicGetEpochATXsCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockfetchLogicGetEpochATXsCall) DoAndReturn(f func(context.Context, types.EpochID) error) *MockfetchLogicGetEpochATXsCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // GetLayerData mocks base method.
 func (m *MockfetchLogic) GetLayerData(arg0 context.Context, arg1 p2p.Peer, arg2 types.LayerID) ([]byte, error) {
 	m.ctrl.T.Helper()
@@ -784,6 +746,67 @@ func (c *MockfetchLogicSelectBestShuffledCall) Do(f func(int) []p2p.Peer) *Mockf
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockfetchLogicSelectBestShuffledCall) DoAndReturn(f func(int) []p2p.Peer) *MockfetchLogicSelectBestShuffledCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// MockatxSyncer is a mock of atxSyncer interface.
+type MockatxSyncer struct {
+	ctrl     *gomock.Controller
+	recorder *MockatxSyncerMockRecorder
+}
+
+// MockatxSyncerMockRecorder is the mock recorder for MockatxSyncer.
+type MockatxSyncerMockRecorder struct {
+	mock *MockatxSyncer
+}
+
+// NewMockatxSyncer creates a new mock instance.
+func NewMockatxSyncer(ctrl *gomock.Controller) *MockatxSyncer {
+	mock := &MockatxSyncer{ctrl: ctrl}
+	mock.recorder = &MockatxSyncerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockatxSyncer) EXPECT() *MockatxSyncerMockRecorder {
+	return m.recorder
+}
+
+// Download mocks base method.
+func (m *MockatxSyncer) Download(arg0 context.Context, arg1 types.EpochID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Download", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Download indicates an expected call of Download.
+func (mr *MockatxSyncerMockRecorder) Download(arg0, arg1 any) *MockatxSyncerDownloadCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Download", reflect.TypeOf((*MockatxSyncer)(nil).Download), arg0, arg1)
+	return &MockatxSyncerDownloadCall{Call: call}
+}
+
+// MockatxSyncerDownloadCall wrap *gomock.Call
+type MockatxSyncerDownloadCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockatxSyncerDownloadCall) Return(arg0 error) *MockatxSyncerDownloadCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockatxSyncerDownloadCall) Do(f func(context.Context, types.EpochID) error) *MockatxSyncerDownloadCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockatxSyncerDownloadCall) DoAndReturn(f func(context.Context, types.EpochID) error) *MockatxSyncerDownloadCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

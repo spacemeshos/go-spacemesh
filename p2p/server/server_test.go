@@ -23,12 +23,13 @@ func TestServer(t *testing.T) {
 	require.NoError(t, err)
 	proto := "test"
 	request := []byte("test request")
+	testErr := errors.New("test error")
 
 	handler := func(_ context.Context, msg []byte) ([]byte, error) {
 		return msg, nil
 	}
 	errhandler := func(_ context.Context, _ []byte) ([]byte, error) {
-		return nil, errors.New("test error")
+		return nil, testErr
 	}
 	opts := []Opt{
 		WithTimeout(100 * time.Millisecond),
@@ -67,7 +68,8 @@ func TestServer(t *testing.T) {
 	t.Run("ReceiveError", func(t *testing.T) {
 		_, err := client.Request(ctx, mesh.Hosts()[2].ID(), request)
 		require.ErrorIs(t, err, &ServerError{})
-		require.ErrorContains(t, err, "server error: test error")
+		require.ErrorContains(t, err, "peer error")
+		require.ErrorContains(t, err, testErr.Error())
 	})
 	t.Run("DialError", func(t *testing.T) {
 		_, err := client.Request(ctx, mesh.Hosts()[2].ID(), request)

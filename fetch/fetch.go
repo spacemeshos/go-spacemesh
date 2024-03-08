@@ -37,9 +37,9 @@ const (
 )
 
 var (
-	// errExceedMaxRetries is returned when MaxRetriesForRequest attempts has been made to fetch
+	// ErrExceedMaxRetries is returned when MaxRetriesForRequest attempts has been made to fetch
 	// data for a hash and failed.
-	errExceedMaxRetries = errors.New("fetch failed after max retries for request")
+	ErrExceedMaxRetries = errors.New("fetch failed after max retries for request")
 
 	errValidatorsNotSet = errors.New("validators not set")
 )
@@ -567,7 +567,7 @@ func (f *Fetch) failAfterRetry(hash types.Hash32) {
 			log.Stringer("hash", req.hash),
 			log.Int("retries", req.retries),
 		)
-		req.promise.err = errExceedMaxRetries
+		req.promise.err = ErrExceedMaxRetries
 		close(req.promise.completed)
 	} else {
 		// put the request back to the unprocessed list

@@ -33,7 +33,10 @@ type fetchLogic interface {
 		bool,
 		[]p2p.Peer,
 	) ([]*fetch.LayerOpinion, []*types.Certificate, error)
-	GetEpochATXs(context.Context, types.EpochID) error
+}
+
+type atxSyncer interface {
+	Download(context.Context, types.EpochID) error
 }
 
 // fetcher is the interface to the low-level fetching.

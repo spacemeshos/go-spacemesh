@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/atxsync"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
@@ -115,6 +116,12 @@ func Recover(
 		return nil, fmt.Errorf("open old local database: %w", err)
 	}
 	defer localDB.Close()
+	logger.With().Info("clearing atx sync metadata from local database")
+	if err := localDB.WithTx(ctx, func(tx *sql.Tx) error {
+		return atxsync.Clear(tx)
+	}); err != nil {
+		return nil, fmt.Errorf("clear atxsync: %w", err)
+	}
 	preserve, err := RecoverWithDb(ctx, logger, db, localDB, fs, cfg)
 	switch {
 	case errors.Is(err, ErrCheckpointNotFound):
