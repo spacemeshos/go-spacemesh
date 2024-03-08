@@ -126,7 +126,7 @@ func (d *DataFetch) PollMaliciousProofs(ctx context.Context) error {
 // PollLayerData polls all peers for data in the specified layer.
 func (d *DataFetch) PollLayerData(ctx context.Context, lid types.LayerID, peers ...p2p.Peer) error {
 	if len(peers) == 0 {
-		peers = d.fetcher.SelectBestShuffled(fetch.RedundantPeers)
+		peers = d.fetcher.SelectBestShuffled(fetch.LayersPeer)
 		if len(peers) == 0 {
 			return errNoPeers
 		}

@@ -32,6 +32,7 @@ const (
 
 	cacheSize = 1000
 
+	LayersPeer     = 3
 	RedundantPeers = 20
 )
 

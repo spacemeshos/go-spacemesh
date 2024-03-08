@@ -61,6 +61,7 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 			return ctx.Err()
 		default:
 		}
+		current := s.ticker.CurrentLayer()
 
 		// layers should be processed in order. once we skip one layer, there is no point
 		// continuing with later layers. return on error
@@ -77,49 +78,62 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 			}
 		}
 
-		if opinions, certs, err := s.layerOpinions(ctx, lid); err == nil {
-			if len(certs) > 0 {
-				if err = s.adopt(ctx, lid, certs); err != nil {
-					s.logger.WithContext(ctx).
-						With().
-						Warning("failed to adopt peer opinions", lid, log.Err(err))
-				}
-			}
-			if s.IsSynced(ctx) && !s.cfg.DisableMeshAgreement {
-				if err = s.checkMeshAgreement(ctx, lid, opinions); err != nil &&
-					errors.Is(err, errMeshHashDiverged) {
-					s.logger.WithContext(ctx).
-						With().
-						Debug("mesh hash diverged, trying to reach agreement",
-							lid,
-							log.Stringer("diverged", lid.Sub(1)),
-						)
-					if err = s.ensureMeshAgreement(ctx, lid, opinions, resyncPeers); err != nil {
+		// certificate is effective only within hare distance, outside it we don't vote according to other rules.
+		certEffective := lid.Add(s.cfg.SyncCertDistance).After(current)
+		if certEffective {
+			if opinions, certs, err := s.layerOpinions(ctx, lid); err == nil {
+				if len(certs) > 0 {
+					if err = s.adopt(ctx, lid, certs); err != nil {
 						s.logger.WithContext(ctx).
 							With().
-							Debug("failed to reach mesh agreement with peers",
+							Warning("failed to adopt peer opinions", lid, log.Err(err))
+					}
+				}
+				if s.IsSynced(ctx) && !s.cfg.DisableMeshAgreement {
+					if err = s.checkMeshAgreement(ctx, lid, opinions); err != nil &&
+						errors.Is(err, errMeshHashDiverged) {
+						s.logger.WithContext(ctx).
+							With().
+							Debug("mesh hash diverged, trying to reach agreement",
 								lid,
-								log.Err(err),
+								log.Stringer("diverged", lid.Sub(1)),
 							)
-						hashResolve.Inc()
-					} else {
-						hashResolveFail.Inc()
+						if err = s.ensureMeshAgreement(ctx, lid, opinions, resyncPeers); err != nil {
+							s.logger.WithContext(ctx).
+								With().
+								Debug("failed to reach mesh agreement with peers",
+									lid,
+									log.Err(err),
+								)
+							hashResolve.Inc()
+						} else {
+							hashResolveFail.Inc()
+						}
 					}
 				}
 			}
 		}
-		// even if it fails to fetch opinions, we still go ahead to ProcessLayer so that the tortoise
-		// has a chance to count ballots and form its own opinions
-		if err := s.mesh.ProcessLayer(ctx, lid); err != nil {
-			if !errors.Is(err, mesh.ErrMissingBlock) {
-				s.logger.WithContext(ctx).
-					With().
-					Warning("mesh failed to process layer from sync", lid, log.Err(err))
+		// there is no point in tortoise counting after every single layer, in fact it is wasteful.
+		// we periodically invoke counting to evict executed layers.
+		if lid.Uint32()%(max(types.GetLayersPerEpoch()/4, 1)) == 0 || lid == s.getLastSyncedLayer() {
+			err1 := s.mesh.ProcessLayer(ctx, lid)
+			if err1 != nil {
+				missing := &mesh.ErrMissingBlocks{}
+				if !errors.As(err1, &missing) {
+					// we try once as we cannot assume that all blocks that reported as missing are valid
+					// we need to continue download layers, as they may be deemed as invalid after counting more votes
+					if err := s.dataFetcher.GetBlocks(ctx, missing.Blocks); err == nil {
+						err1 = s.mesh.ProcessLayer(ctx, lid)
+					} else {
+						s.logger.With().Debug("failed to download blocks", log.Err(err))
+					}
+				} else {
+					s.logger.With().Warning("failed to process layer", log.Context(ctx), lid, log.Err(err1))
+				}
 			}
-			s.stateErr.Store(true)
-		} else {
-			s.stateErr.Store(false)
+			s.stateErr.Store(err1 != nil)
 		}
+
 	}
 	s.logger.WithContext(ctx).With().Debug("end of state sync",
 		log.Bool("state_synced", s.stateSynced()),
