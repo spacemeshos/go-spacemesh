@@ -1888,8 +1888,36 @@ func (app *App) Start(ctx context.Context) error {
 		})
 	}
 
-	// TODO(mafa): add code to fetch all ATXs from DB, decode and verify their signatures with
-	// the updated app.edVerifier and see if oasis is compatible to stdlib signatures.
+	app.eg.Go(func() error {
+	loop:
+		for {
+			app.log.Info("waiting for atx sync")
+			select {
+			case <-app.syncer.RegisterForATXSynced():
+				app.log.Info("atx sync done")
+				break loop
+			case <-ctx.Done():
+				return nil
+			case <-time.After(1 * time.Minute):
+				// wait for atx sync
+			}
+		}
+
+		app.log.Info("checking ATX signatures")
+
+		// check ATX signatures
+		atxs.IterateAtxs(app.cachedDB, 0, app.clock.CurrentLayer().GetEpoch(), func(atx *types.VerifiedActivationTx) bool {
+			// verify atx signature
+			if !app.edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature) {
+				app.log.With().Error("ATX signature verification failed",
+					log.String("atx", atx.ShortString()),
+					log.Err(err),
+				)
+			}
+			return true
+		})
+		return nil
+	})
 
 	// app blocks until it receives a signal to exit
 	// this signal may come from the node or from sig-abort (ctrl-c)
