@@ -186,7 +186,6 @@ func MainnetConfig() Config {
 			GossipDuration:           50 * time.Second,
 			OutOfSyncThresholdLayers: 36, // 3h
 			DisableMeshAgreement:     true,
-			DisableAtxReconciliation: true,
 			AtxSync:                  atxsync.DefaultConfig(),
 		},
 		Recovery: checkpoint.DefaultConfig(),

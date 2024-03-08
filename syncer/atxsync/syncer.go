@@ -23,10 +23,6 @@ import (
 
 //go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./syncer.go
 
-type clock interface {
-	LayerToTime(types.LayerID) time.Time
-}
-
 type fetcher interface {
 	SelectBestShuffled(int) []p2p.Peer
 	PeerEpochInfo(context.Context, p2p.Peer, types.EpochID) (*fetch.EpochData, error)
@@ -80,12 +76,11 @@ func WithConfig(cfg Config) Opt {
 	}
 }
 
-func New(fetcher fetcher, clock clock, db sql.Executor, localdb *localsql.Database, opts ...Opt) *Syncer {
+func New(fetcher fetcher, db sql.Executor, localdb *localsql.Database, opts ...Opt) *Syncer {
 	s := &Syncer{
 		logger:  zap.NewNop(),
 		cfg:     DefaultConfig(),
 		fetcher: fetcher,
-		clock:   clock,
 		db:      db,
 		localdb: localdb,
 	}
@@ -99,18 +94,15 @@ type Syncer struct {
 	logger  *zap.Logger
 	cfg     Config
 	fetcher fetcher
-	clock   clock
 	db      sql.Executor
 	localdb *localsql.Database
 }
 
-func (s *Syncer) closeToTheEpoch(publish types.EpochID, timestamp time.Time) bool {
-	target := publish + 1
-	epochStart := s.clock.LayerToTime(target.FirstLayer())
-	return timestamp.After(epochStart) || epochStart.Sub(timestamp) < 2*s.cfg.EpochInfoInterval
+func (s *Syncer) closeToTheEpoch(publish types.EpochID, timestamp, downloadUntil time.Time) bool {
+	return timestamp.After(downloadUntil) || downloadUntil.Sub(timestamp) < 2*s.cfg.EpochInfoInterval
 }
 
-func (s *Syncer) Download(parent context.Context, publish types.EpochID) error {
+func (s *Syncer) Download(parent context.Context, publish types.EpochID, downloadUntil time.Time) error {
 	s.logger.Info("starting atx sync", log.ZContext(parent), publish.Field().Zap())
 
 	state, err := atxsync.GetSyncState(s.localdb, publish)
@@ -122,7 +114,8 @@ func (s *Syncer) Download(parent context.Context, publish types.EpochID) error {
 		return fmt.Errorf("failed to get last request time for epoch %v: %w", publish, err)
 	}
 	// in case of immediate we will request epoch info without waiting EpochInfoInterval
-	immediate := len(state) == 0 || (errors.Is(err, sql.ErrNotFound) || !s.closeToTheEpoch(publish, lastSuccess))
+	immediate := len(state) == 0 ||
+		(errors.Is(err, sql.ErrNotFound) || !s.closeToTheEpoch(publish, lastSuccess, downloadUntil))
 
 	ctx, cancel := context.WithCancel(parent)
 	eg, ctx := errgroup.WithContext(ctx)
@@ -140,7 +133,7 @@ func (s *Syncer) Download(parent context.Context, publish types.EpochID) error {
 		return s.downloadEpochInfo(ctx, publish, immediate, updates)
 	})
 	eg.Go(func() error {
-		err := s.downloadAtxs(ctx, publish, state, updates)
+		err := s.downloadAtxs(ctx, publish, downloadUntil, state, updates)
 		cancel()
 		return err
 	})
@@ -221,6 +214,7 @@ func (s *Syncer) downloadEpochInfo(
 func (s *Syncer) downloadAtxs(
 	ctx context.Context,
 	publish types.EpochID,
+	downloadUntil time.Time,
 	state map[types.ATXID]int,
 	updates <-chan epochUpdate,
 ) error {
@@ -236,7 +230,7 @@ func (s *Syncer) downloadAtxs(
 
 	for {
 		// waiting for update if there is nothing to download
-		if nothingToDownload && s.closeToTheEpoch(publish, lastSuccess) {
+		if nothingToDownload && s.closeToTheEpoch(publish, lastSuccess, downloadUntil) {
 			s.logger.Info(
 				"atx sync completed",
 				log.ZContext(ctx),
