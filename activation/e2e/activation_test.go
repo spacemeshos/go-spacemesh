@@ -2,7 +2,6 @@ package activation_test
 
 import (
 	"context"
-	"math/rand"
 	"sync"
 	"testing"
 	"time"
@@ -62,16 +61,18 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
 
 	var eg errgroup.Group
+	i := uint32(1)
 	for _, sig := range signers {
 		sig := sig
 		opts := opts
+		opts.DataDir = t.TempDir()
+		opts.NumUnits = min(i*2, cfg.MaxNumUnits)
+		i += 1
 		eg.Go(func() error {
 			validator := activation.NewMocknipostValidator(ctrl)
 			mgr, err := activation.NewPostSetupManager(cfg, logger, cdb, goldenATX, syncer, validator)
 			require.NoError(t, err)
 
-			opts.DataDir = t.TempDir()
-			opts.NumUnits = uint32(rand.Int31n(int32(cfg.MaxNumUnits/2-cfg.MinNumUnits))) + cfg.MinNumUnits
 			initPost(t, mgr, opts, sig.NodeID())
 			t.Cleanup(launchPostSupervisor(t, logger, mgr, sig, grpcCfg, opts))
 
@@ -89,8 +90,8 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	layerDuration := 3 * time.Second
 	epoch := layersPerEpoch * layerDuration
 	poetCfg := activation.PoetConfig{
-		PhaseShift:        epoch / 2,
-		CycleGap:          epoch / 4,
+		PhaseShift:        epoch,
+		CycleGap:          epoch / 2,
 		GracePeriod:       epoch / 5,
 		RequestTimeout:    epoch / 5,
 		RequestRetryDelay: epoch / 50,
