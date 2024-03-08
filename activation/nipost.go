@@ -200,9 +200,9 @@ func (nb *NIPostBuilder) BuildNIPost(
 	logger.Info("building nipost",
 		zap.Time("poet round start", poetRoundStart),
 		zap.Time("poet round end", poetRoundEnd),
-		zap.Stringer("publish epoch", publishEpoch),
 		zap.Time("publish epoch end", publishEpochEnd),
-		zap.Stringer("target epoch", challenge.TargetEpoch()),
+		zap.Uint32("publish epoch", publishEpoch.Uint32()),
+		zap.Uint32("target epoch", challenge.TargetEpoch().Uint32()),
 	)
 
 	// Phase 0: Submit challenge to PoET services.

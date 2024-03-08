@@ -408,8 +408,8 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	case challenge.PublishEpoch < current:
 		logger.Info(
 			"existing NiPOST challenge is stale, resetting state",
-			zap.Stringer("current_epoch", current),
-			zap.Stringer("challenge publish epoch", challenge.PublishEpoch),
+			zap.Uint32("current_epoch", current.Uint32()),
+			zap.Uint32("challenge publish epoch", challenge.PublishEpoch.Uint32()),
 		)
 		if err := b.nipostBuilder.ResetState(nodeID); err != nil {
 			return nil, fmt.Errorf("reset nipost builder state: %w", err)
@@ -421,7 +421,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		// challenge is fresh
 		return challenge, nil
 	}
-	logger.Info("building new NiPOST challenge", zap.Stringer("current_epoch", current))
+	logger.Info("building new NiPOST challenge", zap.Uint32("current_epoch", current.Uint32()))
 
 	prev, err := b.cdb.GetLastAtx(nodeID)
 	switch {
@@ -539,9 +539,9 @@ func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner
 
 	b.log.Info("atx challenge is ready",
 		log.ZShortStringer("smesherID", sig.NodeID()),
-		zap.Stringer("current_epoch", b.layerClock.CurrentLayer().GetEpoch()),
-		zap.Stringer("publish_epoch", challenge.PublishEpoch),
-		zap.Stringer("target_epoch", challenge.TargetEpoch()),
+		zap.Uint32("current_epoch", b.layerClock.CurrentLayer().GetEpoch().Uint32()),
+		zap.Uint32("publish_epoch", challenge.PublishEpoch.Uint32()),
+		zap.Uint32("target_epoch", challenge.TargetEpoch().Uint32()),
 	)
 	ctx, cancel := context.WithDeadline(ctx, b.layerClock.LayerToTime((challenge.TargetEpoch()).FirstLayer()))
 	defer cancel()
@@ -596,9 +596,9 @@ func (b *Builder) createAtx(
 	}
 
 	b.log.Info("awaiting atx publication epoch",
-		zap.Stringer("pub_epoch", pubEpoch),
-		zap.Stringer("pub_epoch_first_layer", pubEpoch.FirstLayer()),
-		zap.Stringer("current_layer", b.layerClock.CurrentLayer()),
+		zap.Uint32("pub_epoch", pubEpoch.Uint32()),
+		zap.Uint32("pub_epoch_first_layer", pubEpoch.FirstLayer().Uint32()),
+		zap.Uint32("current_layer", b.layerClock.CurrentLayer().Uint32()),
 		log.ZShortStringer("smesherID", sig.NodeID()),
 	)
 	select {
