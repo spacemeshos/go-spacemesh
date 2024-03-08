@@ -591,7 +591,7 @@ func (s *Syncer) fetchATXsForEpoch(ctx context.Context, publish types.EpochID, b
 	return nil
 }
 
-// WaitBackgroundSync is a helper to wait for the background sync to finish.
-func (s *Syncer) WaitBackgroundSync() {
+// waitBackgroundSync is a helper to wait for the background sync to finish.
+func (s *Syncer) waitBackgroundSync() {
 	s.backgroundSync.eg.Wait()
 }

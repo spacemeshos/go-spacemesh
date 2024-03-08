@@ -314,6 +314,7 @@ func TestSynchronize_FetchLayerDataFailed(t *testing.T) {
 	ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lyr).Return(errors.New("meh"))
 
 	require.False(t, ts.syncer.synchronize(context.Background()))
+	ts.syncer.waitBackgroundSync()
 	require.Equal(t, lyr.Sub(1), ts.syncer.getLastSyncedLayer())
 	require.Equal(t, current.GetEpoch()-1, ts.syncer.lastAtxEpoch())
 	require.False(t, ts.syncer.dataSynced())
@@ -390,7 +391,7 @@ func startWithSyncedState(t *testing.T, ts *testSyncer) types.LayerID {
 	ts.mAtxSyncer.EXPECT().Download(gomock.Any(), gLayer.GetEpoch(), gomock.Any())
 	ts.mAtxSyncer.EXPECT().Download(gomock.Any(), gLayer.GetEpoch()+1, gomock.Any())
 	require.True(t, ts.syncer.synchronize(context.Background()))
-	ts.syncer.WaitBackgroundSync()
+	ts.syncer.waitBackgroundSync()
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.True(t, ts.syncer.ListenToGossip())
 	require.True(t, ts.syncer.IsSynced(context.Background()))
@@ -479,7 +480,7 @@ func TestSyncAtxs(t *testing.T) {
 				ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid)
 			}
 			require.True(t, ts.syncer.synchronize(context.Background()))
-			ts.syncer.WaitBackgroundSync()
+			ts.syncer.waitBackgroundSync()
 			require.Equal(t, tc.epochEnd, ts.syncer.lastAtxEpoch())
 		})
 	}
@@ -495,7 +496,7 @@ func TestSynchronize_StaySyncedUponFailure(t *testing.T) {
 
 	require.False(t, ts.syncer.synchronize(context.Background()))
 	require.False(t, ts.syncer.dataSynced())
-	ts.syncer.WaitBackgroundSync()
+	ts.syncer.waitBackgroundSync()
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.True(t, ts.syncer.ListenToGossip())
 	require.True(t, ts.syncer.IsSynced(context.Background()))
@@ -512,7 +513,7 @@ func TestSynchronize_BecomeNotSyncedUponFailureIfNoGossip(t *testing.T) {
 
 	require.False(t, ts.syncer.synchronize(context.Background()))
 	require.False(t, ts.syncer.dataSynced())
-	ts.syncer.WaitBackgroundSync()
+	ts.syncer.waitBackgroundSync()
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.False(t, ts.syncer.ListenToGossip())
 	require.False(t, ts.syncer.IsSynced(context.Background()))
@@ -747,7 +748,7 @@ func TestSynchronize_RecoverFromCheckpoint(t *testing.T) {
 
 	ts.mDataFetcher.EXPECT().PollMaliciousProofs(gomock.Any())
 	require.True(t, ts.syncer.synchronize(context.Background()))
-	ts.syncer.WaitBackgroundSync()
+	ts.syncer.waitBackgroundSync()
 	require.Equal(t, (current + 1).GetEpoch(), ts.syncer.lastAtxEpoch())
 	types.SetEffectiveGenesis(types.FirstEffectiveGenesis().Uint32())
 }
