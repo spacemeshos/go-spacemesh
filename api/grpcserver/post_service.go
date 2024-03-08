@@ -43,7 +43,7 @@ func (s *PostService) String() string {
 	return "PostService"
 }
 
-// NewPostService creates a new grpc service using config data.
+// NewPostService creates a new instance of the post grpc service.
 func NewPostService(log *zap.Logger) *PostService {
 	return &PostService{
 		log:    log,

@@ -950,6 +950,67 @@ func (c *MockatxProviderMaxHeightAtxCall) DoAndReturn(f func() (types.ATXID, err
 	return c
 }
 
+// MockpostState is a mock of postState interface.
+type MockpostState struct {
+	ctrl     *gomock.Controller
+	recorder *MockpostStateMockRecorder
+}
+
+// MockpostStateMockRecorder is the mock recorder for MockpostState.
+type MockpostStateMockRecorder struct {
+	mock *MockpostState
+}
+
+// NewMockpostState creates a new mock instance.
+func NewMockpostState(ctrl *gomock.Controller) *MockpostState {
+	mock := &MockpostState{ctrl: ctrl}
+	mock.recorder = &MockpostStateMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockpostState) EXPECT() *MockpostStateMockRecorder {
+	return m.recorder
+}
+
+// PostStates mocks base method.
+func (m *MockpostState) PostStates() map[types.IdentityDescriptor]types.PostState {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PostStates")
+	ret0, _ := ret[0].(map[types.IdentityDescriptor]types.PostState)
+	return ret0
+}
+
+// PostStates indicates an expected call of PostStates.
+func (mr *MockpostStateMockRecorder) PostStates() *MockpostStatePostStatesCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PostStates", reflect.TypeOf((*MockpostState)(nil).PostStates))
+	return &MockpostStatePostStatesCall{Call: call}
+}
+
+// MockpostStatePostStatesCall wrap *gomock.Call
+type MockpostStatePostStatesCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockpostStatePostStatesCall) Return(arg0 map[types.IdentityDescriptor]types.PostState) *MockpostStatePostStatesCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockpostStatePostStatesCall) Do(f func() map[types.IdentityDescriptor]types.PostState) *MockpostStatePostStatesCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockpostStatePostStatesCall) DoAndReturn(f func() map[types.IdentityDescriptor]types.PostState) *MockpostStatePostStatesCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // MockpostSupervisor is a mock of postSupervisor interface.
 type MockpostSupervisor struct {
 	ctrl     *gomock.Controller

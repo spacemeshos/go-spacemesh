@@ -84,6 +84,9 @@ type Builder struct {
 	// delay before PoST in ATX is considered valid (counting from the time it was received)
 	postValidityDelay time.Duration
 
+	// states of each known identity
+	postStates PostStates
+
 	// smeshingMutex protects methods like `StartSmeshing` and `StopSmeshing` from concurrent execution
 	// since they (can) modify the fields below.
 	smeshingMutex sync.Mutex
@@ -128,6 +131,12 @@ func WithValidator(v nipostValidator) BuilderOption {
 	}
 }
 
+func WithPostStates(ps PostStates) BuilderOption {
+	return func(b *Builder) {
+		b.postStates = ps
+	}
+}
+
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
 func NewBuilder(
 	conf Config,
@@ -153,6 +162,7 @@ func NewBuilder(
 		log:               log,
 		poetRetryInterval: defaultPoetRetryInterval,
 		postValidityDelay: 12 * time.Hour,
+		postStates:        NewPostStates(log),
 	}
 	for _, opt := range opts {
 		opt(b)
@@ -170,6 +180,7 @@ func (b *Builder) Register(sig *signing.EdSigner) {
 
 	b.log.Info("registered signing key", log.ZShortStringer("id", sig.NodeID()))
 	b.signers[sig.NodeID()] = sig
+	b.postStates.Set(sig.NodeID(), types.PostStateIdle)
 
 	if b.stop != nil {
 		b.startID(b.parentCtx, sig)
@@ -181,6 +192,20 @@ func (b *Builder) Smeshing() bool {
 	b.smeshingMutex.Lock()
 	defer b.smeshingMutex.Unlock()
 	return b.stop != nil
+}
+
+// PostState returns the current state of the post service for each registered smesher.
+func (b *Builder) PostStates() map[types.IdentityDescriptor]types.PostState {
+	states := b.postStates.Get()
+	res := make(map[types.IdentityDescriptor]types.PostState, len(states))
+	b.smeshingMutex.Lock()
+	defer b.smeshingMutex.Unlock()
+	for id, state := range states {
+		if sig, exists := b.signers[id]; exists {
+			res[sig] = state
+		}
+	}
+	return res
 }
 
 // StartSmeshing is the main entry point of the atx builder. It runs the main
@@ -251,6 +276,7 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 		}
 		var resetErr error
 		for _, sig := range b.signers {
+			b.postStates.Set(sig.NodeID(), types.PostStateIdle)
 			if err := b.nipostBuilder.ResetState(sig.NodeID()); err != nil {
 				b.log.Error("failed to reset builder state", log.ZShortStringer("id", sig.NodeID()), zap.Error(err))
 				err = fmt.Errorf("reset builder state for id %s: %w", sig.NodeID().ShortString(), err)
@@ -411,6 +437,9 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 			zap.Uint32("current_epoch", current.Uint32()),
 			zap.Uint32("challenge publish epoch", challenge.PublishEpoch.Uint32()),
 		)
+		// Reset the state to idle because we won't be building POST until we get a new PoET proof
+		// (typically more than epoch time from now).
+		b.postStates.Set(nodeID, types.PostStateIdle)
 		if err := b.nipostBuilder.ResetState(nodeID); err != nil {
 			return nil, fmt.Errorf("reset nipost builder state: %w", err)
 		}
