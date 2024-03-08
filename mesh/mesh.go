@@ -308,15 +308,15 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, lid types.LayerID) error {
 		)
 	}
 	applicable, missing := filterMissing(results, next)
-	if len(missing) > 0 {
-		return &ErrMissingBlocks{Blocks: missing}
-	}
-
 	if err := msh.ensureStateConsistent(ctx, applicable); err != nil {
 		return err
 	}
 	if err := msh.applyResults(ctx, applicable); err != nil {
 		return err
+	}
+	// apply what we were able to download, as it will allow to prune some of the data from tortoise
+	if len(missing) > 0 {
+		return &ErrMissingBlocks{Blocks: missing}
 	}
 	return nil
 }
