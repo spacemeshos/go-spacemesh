@@ -3,9 +3,11 @@ package localsql
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
 
 	"github.com/natefinch/atomic"
@@ -16,6 +18,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
+
+var mainnetPoet2ServiceID []byte
+
+func init() {
+	mainnetPoet2ServiceID, _ = base64.StdEncoding.DecodeString("8RXEI0MwO3uJUINFFlOm/uTjJCneV9FidMpXmn55G8Y=")
+}
 
 func New0003Migration(log *zap.Logger, dataDir string, poetClients []PoetClient) *migration0003 {
 	return &migration0003{
@@ -41,6 +49,11 @@ func (migration0003) Order() int {
 
 func (m migration0003) Rollback() error {
 	filename := filepath.Join(m.dataDir, builderFilename)
+	// skip if file exists
+	if _, err := os.Stat(filename); err == nil {
+		return nil
+	}
+
 	backupName := fmt.Sprintf("%s.bak", filename)
 	if err := atomic.ReplaceFile(backupName, filename); err != nil {
 		return fmt.Errorf("rolling back nipost builder state: %w", err)
@@ -115,13 +128,14 @@ func (m migration0003) moveNipostStateToDb(db sql.Executor, dataDir string) erro
 	}
 	// Phase 0 completed.
 	for _, req := range state.PoetRequests {
+		if bytes.Equal(req.PoetServiceID.ServiceID, mainnetPoet2ServiceID) {
+			m.logger.Info("PoET `mainnet-poet-2.spacemesh.network` has been retired - skipping")
+			continue
+		}
+
 		address, err := m.getAddress(req.PoetServiceID)
 		if err != nil {
-			m.logger.Warn("failed to resolve address for poet service id during migration - skipping this PoET",
-				zap.Binary("service_id", req.PoetServiceID.ServiceID),
-				zap.Error(err),
-			)
-			continue
+			return fmt.Errorf("get address for poet service id %x: %w", req.PoetServiceID.ServiceID, err)
 		}
 
 		enc := func(stmt *sql.Statement) {
