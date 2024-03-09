@@ -521,24 +521,6 @@ func IterateAtxsData(
 	return nil
 }
 
-func IterateAtxs(db sql.Executor, from, to types.EpochID, fn func(*types.VerifiedActivationTx) bool) error {
-	var derr error
-	_, err := db.Exec(fullQuery+" where epoch between ?1 and ?2", func(stmt *sql.Statement) {
-		stmt.BindInt64(1, int64(from.Uint32()))
-		stmt.BindInt64(2, int64(to.Uint32()))
-	}, decoder(func(atx *types.VerifiedActivationTx, err error) bool {
-		if atx != nil {
-			return fn(atx)
-		}
-		derr = err
-		return derr == nil
-	}))
-	if err != nil {
-		return err
-	}
-	return derr
-}
-
 func SetValidity(db sql.Executor, id types.ATXID, validity types.Validity) error {
 	_, err := db.Exec("UPDATE atxs SET validity = ?1 where id = ?2;",
 		func(stmt *sql.Statement) {
