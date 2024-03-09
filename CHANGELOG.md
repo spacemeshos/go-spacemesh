@@ -24,6 +24,8 @@ With this release the node has fully migrated its local state into `local.sql`. 
 upgrade the node will migrate the data from disk and store it in the database. This change also allows the PoST data
 directory to be set to read only after the migration is complete, as the node will no longer write to it.
 
+**NOTE:** To ensure a successful migration make sure that the config contains all PoETs your node is using.
+
 #### New poets configuration
 
 Upgrading requires changes in config and in CLI flags (if not using the default).
@@ -174,10 +176,11 @@ and permanent ineligibility for rewards.
 
 * [#5651](https://github.com/spacemeshos/go-spacemesh/pull/5651)
   New GRPC service `spacemesh.v1.PostInfoService.PostStates` allowing to check the status of
-  PoST proving of all registered identities. It's usefull for operators to figure out when
+  PoST proving of all registered identities. It's useful for operators to figure out when
   post-services for each identity need to be up or can be shutdown.
 
   An example output:
+
   ```json
   {
     "states": [
