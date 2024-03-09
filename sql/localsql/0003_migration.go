@@ -10,20 +10,23 @@ import (
 
 	"github.com/natefinch/atomic"
 	"github.com/spacemeshos/post/initialization"
+	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-func New0003Migration(dataDir string, poetClients []PoetClient) *migration0003 {
+func New0003Migration(log *zap.Logger, dataDir string, poetClients []PoetClient) *migration0003 {
 	return &migration0003{
+		logger:      log,
 		dataDir:     dataDir,
 		poetClients: poetClients,
 	}
 }
 
 type migration0003 struct {
+	logger      *zap.Logger
 	dataDir     string
 	poetClients []PoetClient
 }
@@ -114,7 +117,11 @@ func (m migration0003) moveNipostStateToDb(db sql.Executor, dataDir string) erro
 	for _, req := range state.PoetRequests {
 		address, err := m.getAddress(req.PoetServiceID)
 		if err != nil {
-			return fmt.Errorf("get address for poet service id %x: %w", req.PoetServiceID.ServiceID, err)
+			m.logger.Warn("failed to resolve address for poet service id during migration - skipping this PoET",
+				zap.Binary("service_id", req.PoetServiceID.ServiceID),
+				zap.Error(err),
+			)
+			continue
 		}
 
 		enc := func(stmt *sql.Statement) {

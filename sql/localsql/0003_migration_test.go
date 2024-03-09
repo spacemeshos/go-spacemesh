@@ -13,6 +13,10 @@ import (
 	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/require"
 	gomock "go.uber.org/mock/gomock"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest"
+	"go.uber.org/zap/zaptest/observer"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -29,7 +33,7 @@ func saveBuilderState(dir string, state *NIPostBuilderState) error {
 func Test_0003Migration_CompatibleSQL(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "test1.db")
 	db, err := Open("file:"+file,
-		sql.WithMigration(New0003Migration(t.TempDir(), nil)),
+		sql.WithMigration(New0003Migration(zaptest.NewLogger(t), t.TempDir(), nil)),
 	)
 	require.NoError(t, err)
 
@@ -82,7 +86,7 @@ func Test_0003Migration_BeforePhase0(t *testing.T) {
 	migrations = migrations[:2]
 	db := InMemory(
 		sql.WithMigrations(migrations),
-		sql.WithMigration(New0003Migration(dataDir, nil)),
+		sql.WithMigration(New0003Migration(zaptest.NewLogger(t), dataDir, nil)),
 	)
 
 	_, err = db.Exec("select count(*) from poet_registration where id = ?1;",
@@ -141,9 +145,23 @@ func Test_0003Migration_Phase0_missing_poet_client(t *testing.T) {
 		sql.WithMigrations(migrations),
 	)
 
-	err = New0003Migration(dataDir, nil).Apply(db)
-	require.ErrorContains(t, err, "no poet client found")
-	require.FileExists(t, filepath.Join(dataDir, builderFilename))
+	observer, observedLogs := observer.New(zapcore.WarnLevel)
+	logger := zap.New(observer)
+
+	ctrl := gomock.NewController(t)
+	poetClient1 := NewMockPoetClient(ctrl)
+	poetClient1.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().
+		Return([]byte("service1"))
+	poetClient1.EXPECT().Address().AnyTimes().Return("http://poet1.com")
+
+	err = New0003Migration(logger, dataDir, []PoetClient{poetClient1}).Apply(db)
+	require.NoError(t, err)
+	require.Equal(t, 1, observedLogs.Len(), "expected 1 log message")
+	require.Equal(t, zapcore.WarnLevel, observedLogs.All()[0].Level)
+	require.Contains(t, observedLogs.All()[0].Message, "failed to resolve address for poet service id")
+	require.Equal(t, state.PoetRequests[1].PoetServiceID.ServiceID, observedLogs.All()[0].ContextMap()["service_id"])
+
+	require.NoFileExists(t, filepath.Join(dataDir, builderFilename))
 }
 
 func Test_0003Migration_Phase0_Complete(t *testing.T) {
@@ -204,7 +222,7 @@ func Test_0003Migration_Phase0_Complete(t *testing.T) {
 		Return([]byte("service2"))
 	poetClient2.EXPECT().Address().AnyTimes().Return("http://poet2.com")
 
-	err = New0003Migration(dataDir, []PoetClient{poetClient1, poetClient2}).Apply(db)
+	err = New0003Migration(zaptest.NewLogger(t), dataDir, []PoetClient{poetClient1, poetClient2}).Apply(db)
 	require.NoError(t, err)
 
 	address := []string{
@@ -312,7 +330,7 @@ func Test_0003Migration_Phase1_Complete(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	err = New0003Migration(dataDir, []PoetClient{poetClient1, poetClient2}).Apply(db)
+	err = New0003Migration(zaptest.NewLogger(t), dataDir, []PoetClient{poetClient1, poetClient2}).Apply(db)
 	require.NoError(t, err)
 
 	address := []string{
@@ -448,7 +466,7 @@ func Test_0003Migration_Phase2_Complete(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	err = New0003Migration(dataDir, []PoetClient{poetClient1, poetClient2}).Apply(db)
+	err = New0003Migration(zaptest.NewLogger(t), dataDir, []PoetClient{poetClient1, poetClient2}).Apply(db)
 	require.NoError(t, err)
 
 	address := []string{
@@ -614,7 +632,7 @@ func Test_0003Migration_Rollback(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	migration := New0003Migration(dataDir, []PoetClient{poetClient1, poetClient2})
+	migration := New0003Migration(zaptest.NewLogger(t), dataDir, []PoetClient{poetClient1, poetClient2})
 
 	tx, err := db.Tx(context.Background())
 	require.NoError(t, err)
