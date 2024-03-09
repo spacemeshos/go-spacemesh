@@ -171,12 +171,8 @@ func (cs *ConservativeState) AddToDB(tx *types.Transaction) error {
 	return transactions.Add(cs.db, tx, time.Now())
 }
 
-// HasTx returns true if transaction exists in the cache.
+// HasTx returns true if transaction exists in the database.
 func (cs *ConservativeState) HasTx(tid types.TransactionID) (bool, error) {
-	if cs.cache.Has(tid) {
-		return true, nil
-	}
-
 	has, err := transactions.Has(cs.db, tid)
 	if err != nil {
 		return false, fmt.Errorf("has tx: %w", err)
