@@ -22,7 +22,11 @@ import (
 var mainnetPoet2ServiceID []byte
 
 func init() {
-	mainnetPoet2ServiceID, _ = base64.StdEncoding.DecodeString("8RXEI0MwO3uJUINFFlOm/uTjJCneV9FidMpXmn55G8Y=")
+	var err error
+	mainnetPoet2ServiceID, err = base64.StdEncoding.DecodeString("8RXEI0MwO3uJUINFFlOm/uTjJCneV9FidMpXmn55G8Y=")
+	if err != nil {
+		panic(fmt.Errorf("failed to decode mainnet poet 2 service id: %w", err))
+	}
 }
 
 func New0003Migration(log *zap.Logger, dataDir string, poetClients []PoetClient) *migration0003 {
