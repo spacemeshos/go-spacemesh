@@ -65,18 +65,22 @@ func TestSyncState(t *testing.T) {
 func TestRequestTime(t *testing.T) {
 	db := localsql.InMemory()
 	for epoch := types.EpochID(1); epoch < types.EpochID(5); epoch++ {
-		timestamp, err := GetRequestTime(db, epoch)
+		timestamp, total, downloaded, err := GetRequest(db, epoch)
 		require.ErrorIs(t, err, sql.ErrNotFound)
 		require.True(t, timestamp.IsZero())
+		require.Zero(t, total)
+		require.Zero(t, downloaded)
 
 		for step := time.Duration(0); step < 10*time.Second; step += time.Second {
 			now := time.Now().Add(step)
-			require.NoError(t, SaveRequestTime(db, epoch, now))
+			require.NoError(t, SaveRequest(db, epoch, now, int64(step), int64(step)))
 
-			timestamp, err = GetRequestTime(db, epoch)
+			timestamp, total, downloaded, err := GetRequest(db, epoch)
 			require.NoError(t, err)
 			// now is truncated to a multiple of seconds, as we discard nanonesconds when saving request time
 			require.Equal(t, now.Truncate(time.Second), timestamp)
+			require.Equal(t, int64(step), total)
+			require.Equal(t, int64(step), downloaded)
 		}
 	}
 }
@@ -93,7 +97,7 @@ func TestClear(t *testing.T) {
 			states[id] = 0
 		}
 		require.NoError(t, SaveSyncState(db, epoch, states, 1))
-		require.NoError(t, SaveRequestTime(db, epoch, time.Now()))
+		require.NoError(t, SaveRequest(db, epoch, time.Now(), 10, 10))
 	}
 	require.NoError(t, Clear(db))
 	for epoch := types.EpochID(1); epoch < types.EpochID(5); epoch++ {
