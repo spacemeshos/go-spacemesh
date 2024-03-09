@@ -228,6 +228,8 @@ func (s *Syncer) IsBeaconSynced(epoch types.EpochID) bool {
 
 // Start starts the main sync loop that tries to sync data for every SyncInterval.
 func (s *Syncer) Start() {
+	// start syncer loop immediately
+	interval := time.Duration(0)
 	s.syncOnce.Do(func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		s.stop = cancel
@@ -241,7 +243,7 @@ func (s *Syncer) Start() {
 				case <-ctx.Done():
 					s.logger.WithContext(ctx).Info("stopping sync to shutdown")
 					return fmt.Errorf("shutdown context done: %w", ctx.Err())
-				case <-time.After(s.cfg.Interval):
+				case <-time.After(interval):
 					ok := s.synchronize(ctx)
 					if ok {
 						runSuccess.Inc()
@@ -249,6 +251,7 @@ func (s *Syncer) Start() {
 						runFail.Inc()
 					}
 				}
+				interval = s.cfg.Interval
 			}
 		})
 		s.logger.WithContext(ctx).Info("starting syncer layer processing loop")

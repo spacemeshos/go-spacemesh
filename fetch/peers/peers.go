@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/p2p"
 )
@@ -170,4 +171,60 @@ func (p *Peers) Total() int {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return len(p.peers)
+}
+
+func (p *Peers) Stats() Stats {
+	best := p.SelectBest(3)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	stats := Stats{
+		Total:                len(p.peers),
+		GlobalAverageLatency: p.globalLatency,
+	}
+	for _, peer := range best {
+		peerData, exist := p.peers[peer]
+		if !exist {
+			continue
+		}
+		stats.BestPeers = append(stats.BestPeers, PeerStats{
+			ID:       peerData.id,
+			Success:  peerData.success,
+			Failures: peerData.failures,
+			Latency:  peerData.averageLatency,
+		})
+	}
+	return stats
+}
+
+type Stats struct {
+	Total                int
+	GlobalAverageLatency float64
+	BestPeers            []PeerStats
+}
+
+func (s *Stats) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	enc.AddInt("total", s.Total)
+	enc.AddFloat64("global average latency", s.GlobalAverageLatency)
+	enc.AddArray("best peers", zapcore.ArrayMarshalerFunc(func(arrEnc zapcore.ArrayEncoder) error {
+		for _, peer := range s.BestPeers {
+			arrEnc.AppendObject(&peer)
+		}
+		return nil
+	}))
+	return nil
+}
+
+type PeerStats struct {
+	ID       peer.ID
+	Success  int
+	Failures int
+	Latency  float64
+}
+
+func (p *PeerStats) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	enc.AddString("id", p.ID.String())
+	enc.AddInt("success", p.Success)
+	enc.AddInt("failures", p.Failures)
+	enc.AddFloat64("latency per 1024 bytes", p.Latency)
+	return nil
 }
