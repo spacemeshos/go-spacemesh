@@ -55,7 +55,7 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 
 	// used to make sure we only resync from the same peer once during each run.
 	resyncPeers := make(map[p2p.Peer]struct{})
-	for lid := start; lid <= s.getLastSyncedLayer(); lid++ {
+	for lid := start; lid <= s.getLastSyncedLayer()+1; lid++ {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
