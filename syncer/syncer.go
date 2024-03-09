@@ -398,12 +398,19 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		if s.ticker.CurrentLayer() <= types.GetEffectiveGenesis() {
 			return true
 		}
-		// always sync to currentLayer-1 to reduce race with gossip and hare/tortoise
-		for layerID := s.getLastSyncedLayer().Add(1); layerID.Before(s.ticker.CurrentLayer()); layerID = layerID.Add(1) {
+		// try to sync current, but do not set it as synced.
+		// we may miss ballots, as they are being gossiped at the same time.
+		// and blocks/certificate as they are generated within same layer.
+		for layerID := s.getLastSyncedLayer().Add(1); ; layerID = layerID.Add(1) {
+			current := s.ticker.CurrentLayer()
 			if err := s.syncLayer(ctx, layerID); err != nil {
 				return false
 			}
-			s.setLastSyncedLayer(layerID)
+			if layerID.Before(current) {
+				s.setLastSyncedLayer(layerID)
+			} else {
+				break
+			}
 		}
 		s.logger.WithContext(ctx).With().Debug("data is synced",
 			log.Stringer("current", s.ticker.CurrentLayer()),
@@ -555,7 +562,7 @@ func (s *Syncer) setStateAfterSync(ctx context.Context, success bool) {
 	case notSynced:
 		if success && s.dataSynced() && s.stateSynced() {
 			// wait till s.ticker.GetCurrentLayer() + numGossipSyncLayers to participate in consensus
-			s.setSyncState(ctx, gossipSync)
+			s.setSyncState(ctx, synced)
 			s.syncedTargetTime = time.Now().Add(s.cfg.GossipDuration)
 		}
 	}
