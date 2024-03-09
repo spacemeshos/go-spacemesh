@@ -103,20 +103,23 @@ func (s *Syncer) closeToTheEpoch(publish types.EpochID, timestamp, downloadUntil
 }
 
 func (s *Syncer) Download(parent context.Context, publish types.EpochID, downloadUntil time.Time) error {
-	s.logger.Info("starting atx sync", log.ZContext(parent), publish.Field().Zap())
 
 	state, err := atxsync.GetSyncState(s.localdb, publish)
 	if err != nil {
 		return fmt.Errorf("failed to get state for epoch %v: %w", publish, err)
 	}
-	lastSuccess, err := atxsync.GetRequestTime(s.localdb, publish)
+	lastSuccess, total, downloaded, err := atxsync.GetRequest(s.localdb, publish)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return fmt.Errorf("failed to get last request time for epoch %v: %w", publish, err)
 	}
 	// in case of immediate we will request epoch info without waiting EpochInfoInterval
 	immediate := len(state) == 0 ||
 		(errors.Is(err, sql.ErrNotFound) || !s.closeToTheEpoch(publish, lastSuccess, downloadUntil))
-
+	if !immediate && total == downloaded {
+		s.logger.Debug("sync for epoch was completed before", log.ZContext(parent), publish.Field().Zap())
+		return nil
+	}
+	s.logger.Info("starting atx sync", log.ZContext(parent), publish.Field().Zap())
 	ctx, cancel := context.WithCancel(parent)
 	eg, ctx := errgroup.WithContext(ctx)
 	updates := make(chan epochUpdate, s.cfg.EpochInfoPeers)
@@ -328,7 +331,7 @@ func (s *Syncer) downloadAtxs(
 		}
 
 		if err := s.localdb.WithTx(ctx, func(tx *sql.Tx) error {
-			if err := atxsync.SaveRequestTime(tx, publish, lastSuccess); err != nil {
+			if err := atxsync.SaveRequest(tx, publish, lastSuccess, int64(len(state)), int64(len(downloaded))); err != nil {
 				return fmt.Errorf("failed to save request time: %w", err)
 			}
 			return atxsync.SaveSyncState(tx, publish, state, s.cfg.RequestsLimit)

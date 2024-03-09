@@ -130,10 +130,7 @@ func TestSyncer(t *testing.T) {
 		}
 		require.NoError(t, atxsync.SaveSyncState(tester.localdb, publish, state, tester.cfg.AtxsBatch))
 		lastSuccess := now.Add(-tester.cfg.EpochInfoInterval)
-		require.NoError(t, atxsync.SaveRequestTime(tester.localdb, publish, lastSuccess))
-		for id := range state {
-			require.NoError(t, atxs.Add(tester.db, atx(id)))
-		}
+		require.NoError(t, atxsync.SaveRequest(tester.localdb, publish, lastSuccess, 2, 2))
 		require.NoError(t, tester.syncer.Download(context.Background(), publish, time.Now()))
 	})
 	t.Run("immediate epoch info retries", func(t *testing.T) {
