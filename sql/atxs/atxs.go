@@ -489,6 +489,38 @@ func LatestEpoch(db sql.Executor) (types.EpochID, error) {
 	return epoch, nil
 }
 
+func IterateAtxsData(
+	db sql.Executor,
+	from, to types.EpochID,
+	fn func(id types.ATXID, node types.NodeID, epoch types.EpochID, coinbase types.Address, weight uint64, base uint64, height uint64) bool,
+) error {
+	_, err := db.Exec(
+		`select id, pubkey, epoch, coinbase, effective_num_units, base_tick_height, tick_count
+		from atxs where epoch between ?1 and ?2;`,
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(from.Uint32()))
+			stmt.BindInt64(2, int64(to.Uint32()))
+		},
+		func(stmt *sql.Statement) bool {
+			var id types.ATXID
+			stmt.ColumnBytes(0, id[:])
+			var node types.NodeID
+			stmt.ColumnBytes(1, node[:])
+			epoch := types.EpochID(uint32(stmt.ColumnInt64(2)))
+			var coinbase types.Address
+			stmt.ColumnBytes(2, coinbase[:])
+			weight := uint64(stmt.ColumnInt64(3))
+			base := uint64(stmt.ColumnInt64(4))
+			ticks := uint64(stmt.ColumnInt64(5))
+			return fn(id, node, epoch, coinbase, weight*ticks, base, base+ticks)
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("iterate atx fields: %w", err)
+	}
+	return nil
+}
+
 func IterateAtxs(db sql.Executor, from, to types.EpochID, fn func(*types.VerifiedActivationTx) bool) error {
 	var derr error
 	_, err := db.Exec(fullQuery+" where epoch between ?1 and ?2", func(stmt *sql.Statement) {
