@@ -508,10 +508,10 @@ func IterateAtxsData(
 			stmt.ColumnBytes(1, node[:])
 			epoch := types.EpochID(uint32(stmt.ColumnInt64(2)))
 			var coinbase types.Address
-			stmt.ColumnBytes(2, coinbase[:])
-			weight := uint64(stmt.ColumnInt64(3))
-			base := uint64(stmt.ColumnInt64(4))
-			ticks := uint64(stmt.ColumnInt64(5))
+			stmt.ColumnBytes(3, coinbase[:])
+			weight := uint64(stmt.ColumnInt64(4))
+			base := uint64(stmt.ColumnInt64(5))
+			ticks := uint64(stmt.ColumnInt64(6))
 			return fn(id, node, epoch, coinbase, weight*ticks, base, base+ticks)
 		},
 	)
