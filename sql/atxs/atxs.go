@@ -3,6 +3,7 @@ package atxs
 import (
 	"context"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -566,4 +567,16 @@ func CountAtxsByOps(db sql.Executor, operations builder.Operations) (count uint3
 		},
 	)
 	return
+}
+
+func IterateBlobs(db sql.Executor, fn func(id types.ATXID, reader io.Reader) bool) error {
+	_, err := db.Exec("select id, atx from atxs_blobs;", nil, func(stmt *sql.Statement) bool {
+		var id types.ATXID
+		stmt.ColumnBytes(0, id[:])
+		return fn(id, stmt.ColumnReader(1))
+	})
+	if err != nil {
+		return fmt.Errorf("iterate atx blobs: %w", err)
+	}
+	return err
 }

@@ -3,10 +3,14 @@ package atxs_test
 import (
 	"context"
 	"errors"
+	"flag"
+	"fmt"
+	"io"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/DataDog/zstd"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -913,4 +917,59 @@ func TestLatest(t *testing.T) {
 			require.EqualValues(t, tc.expect, latest)
 		})
 	}
+}
+
+var (
+	dbpath = flag.String("dbpath", "", "path to database")
+)
+
+func TestAtxsCompression(t *testing.T) {
+	// chunk size 2000 compressed 1153636 uncompressed 2092726 ratio 0.5512599356055212 duration 67.749021ms level 5
+	// chunk size 2000 compressed 1062238 uncompressed 1947182 ratio 0.5455257906040627 duration 64.020966ms level 5
+	// chunk size 2000 compressed 1032770 uncompressed 1915016 ratio 0.5393009771197734 duration 64.290344ms level 5
+	// chunk size 2000 compressed 1058963 uncompressed 2128498 ratio 0.4975165586249083 duration 65.171629ms level 5
+	// chunk size 2000 compressed 1063051 uncompressed 2181679 ratio 0.4872627916389166 duration 64.323674ms level 5
+	// chunk size 2000 compressed 1061795 uncompressed 2182598 ratio 0.4864821648329193 duration 61.787097ms level 5
+	// chunk size 2000 compressed 1050660 uncompressed 2166217 ratio 0.48502066044168246 duration 61.540656ms level 5
+
+	if len(*dbpath) == 0 {
+		t.Skip("set -dbpath=<PATH> to run this test")
+	}
+
+	db, err := sql.Open("file:" + *dbpath)
+	require.NoError(t, err)
+	defer db.Close()
+
+	i := 0
+	input := make([]byte, 0, 10<<20)
+	output := make([]byte, 0, 10<<20)
+	level := zstd.DefaultCompression
+	require.NoError(t, atxs.IterateBlobs(db, func(id types.ATXID, reader io.Reader) bool {
+		i++
+		buf, _ := io.ReadAll(reader)
+		input = append(input, buf...)
+		if i == 2000 {
+			start := time.Now()
+			output, err = zstd.CompressLevel(output, input, level)
+			require.NoError(t, err)
+			fmt.Println(
+				"chunk size",
+				i,
+				"compressed",
+				len(output),
+				"uncompressed",
+				len(input),
+				"ratio",
+				float64(len(output))/float64(len(input)),
+				"duration",
+				time.Since(start),
+				"level",
+				level,
+			)
+			i = 0
+			input = input[:0]
+			output = output[:0]
+		}
+		return true
+	}))
 }
