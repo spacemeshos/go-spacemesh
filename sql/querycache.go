@@ -118,7 +118,7 @@ func WithCachedSubKey[T any](
 		var r T
 		return r, err
 	}
-	return v.(T), err
+	return v.(T), nil
 }
 
 // AppendToCachedSlice adds a value to the slice stored in the cache by invoking

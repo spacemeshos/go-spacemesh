@@ -88,11 +88,11 @@ func getBlob(ctx context.Context, db sql.Executor, id []byte) ([]byte, error) {
 				return true
 			},
 		)
-		if rows == 0 {
-			return nil, fmt.Errorf("active set %x: %w", id, sql.ErrNotFound)
-		}
 		if err != nil {
 			return nil, fmt.Errorf("get active set blob %x: %w", id, err)
+		}
+		if rows == 0 {
+			return nil, fmt.Errorf("active set %x: %w", id, sql.ErrNotFound)
 		}
 		return rst, nil
 	})
