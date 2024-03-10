@@ -22,10 +22,11 @@ func main() {
 	db, err := sql.Open("file:" + *db)
 	must(err)
 	var (
-		included float64
-		total    float64
+		all float64
+		n   float64
 	)
 	for i := *from; i <= *to; i++ {
+		included := float64(0)
 		id, err := layers.GetApplied(db, types.LayerID(i))
 		must(err)
 		if id != types.EmptyBlockID {
@@ -35,14 +36,17 @@ func main() {
 		}
 		ballots, err := ballots.Layer(db, types.LayerID(i))
 		must(err)
+		total := float64(0)
 		for _, ballot := range ballots {
 			if ballot.IsMalicious() {
 				continue
 			}
 			total += 1
 		}
+		all += included / total
+		n++
 	}
-	fmt.Printf("from = %d to = %d average inclusion %f\n", *from, *to, included/total)
+	fmt.Printf("from = %d to = %d average inclusion %f\n", *from, *to, all/n)
 }
 
 func must(err error) {
