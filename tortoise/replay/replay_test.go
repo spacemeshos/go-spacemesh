@@ -75,6 +75,8 @@ func TestReplayMainnet(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	finish := time.Since(start)
+
 	// run it after recovery, but before updates, as update may result in eviction from memory
 	runtime.GC()
 	var after runtime.MemStats
@@ -84,7 +86,7 @@ func TestReplayMainnet(t *testing.T) {
 
 	zlog.Info(
 		"initialized",
-		zap.Duration("duration", time.Since(start)),
+		zap.Duration("duration", finish),
 		zap.Stringer("mode", trtl.Mode()),
 		zap.Float64("heap", float64(after.HeapInuse-before.HeapInuse)/1024/1024),
 		zap.Array("updates", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {

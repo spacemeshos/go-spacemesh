@@ -1,10 +1,14 @@
 package ballots
 
 import (
+	"flag"
+	"fmt"
+	"io"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/DataDog/zstd"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -325,4 +329,68 @@ func TestAllFirstInEpoch(t *testing.T) {
 			require.Equal(t, expect, results)
 		})
 	}
+}
+
+func TestEncodingSize(t *testing.T) {
+	ballot := types.Ballot{}
+	fmt.Println("empty", len(codec.MustEncode(&ballot)))
+	ballot.EpochData = &types.EpochData{}
+	fmt.Println("with epoch data", len(codec.MustEncode(&ballot)))
+	ballot.EligibilityProofs = []types.VotingEligibility{{}}
+	fmt.Println("single eligibility", len(codec.MustEncode(&ballot)))
+	ballot.Votes = types.Votes{Support: []types.Vote{{ID: types.BlockID{1}}}}
+	fmt.Println("single support", len(codec.MustEncode(&ballot)))
+}
+
+var (
+	dbpath = flag.String("dbpath", "", "path to database")
+)
+
+func TestCompressions(t *testing.T) {
+	// chunk size 5000 compressed 949777 uncompressed 1754679 ratio 0.5412824795874345 duration 57.337931ms level 5
+	// chunk size 5000 compressed 946271 uncompressed 1806652 ratio 0.5237704881737048 duration 57.609862ms level 5
+	// chunk size 5000 compressed 955630 uncompressed 1908897 ratio 0.5006189438193889 duration 54.430003ms level 5
+	// chunk size 5000 compressed 956587 uncompressed 2029065 ratio 0.471442265279821 duration 54.258789ms level 5
+	// chunk size 5000 compressed 959445 uncompressed 2079847 ratio 0.4613055671883557 duration 55.865252ms level 5
+
+	if len(*dbpath) == 0 {
+		t.Skip("set -dbpath=<PATH> to run this test")
+	}
+
+	db, err := sql.Open("file:" + *dbpath)
+	require.NoError(t, err)
+	defer db.Close()
+
+	i := 0
+	input := make([]byte, 0, 10<<20)
+	output := make([]byte, 0, 10<<20)
+	level := zstd.DefaultCompression
+	require.NoError(t, IterateBlobs(db, func(id types.BallotID, reaader io.Reader) bool {
+		i++
+		buf, _ := io.ReadAll(reaader)
+		input = append(input, buf...)
+		if i == 5000 {
+			start := time.Now()
+			output, err = zstd.CompressLevel(output, input, level)
+			require.NoError(t, err)
+			fmt.Println(
+				"chunk size",
+				i,
+				"compressed",
+				len(output),
+				"uncompressed",
+				len(input),
+				"ratio",
+				float64(len(output))/float64(len(input)),
+				"duration",
+				time.Since(start),
+				"level",
+				level,
+			)
+			i = 0
+			input = input[:0]
+			output = output[:0]
+		}
+		return true
+	}))
 }
