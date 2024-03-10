@@ -44,7 +44,7 @@ type splitConf struct {
 	// TODO(dshulyak) support both transient and full partitions
 	//
 	// transient partitions can be configured without splitting state, in transient partitions
-	// - votes are splitted
+	// - votes are split
 	// - hare will not reach consensus (or will reach only in one of the partition)
 	// - but atxs and beacons remain the same
 	//
@@ -69,7 +69,7 @@ func (g *Generator) Split(opts ...SplitOpt) []*Generator {
 		opt(&conf)
 	}
 	if len(g.states) == 1 {
-		panic("initailize with more then one state")
+		panic("initialize with more then one state")
 	}
 	if len(conf.Partitions) > len(g.states) {
 		panic("can partition only only less then existing states")

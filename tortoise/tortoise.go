@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/fixed"
 	"go.uber.org/zap"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -45,10 +46,10 @@ type turtle struct {
 }
 
 // newTurtle creates a new verifying tortoise algorithm instance.
-func newTurtle(logger *zap.Logger, config Config) *turtle {
+func newTurtle(logger *zap.Logger, config Config, atxdata *atxsdata.Data) *turtle {
 	t := &turtle{
 		Config: config,
-		state:  newState(),
+		state:  newState(atxdata),
 		logger: logger,
 	}
 	genesis := types.GetEffectiveGenesis()
@@ -58,7 +59,7 @@ func newTurtle(logger *zap.Logger, config Config) *turtle {
 	t.processed = genesis
 	t.evicted = genesis.Sub(1)
 
-	t.epochs[genesis.GetEpoch()] = &epochInfo{atxs: map[types.ATXID]atxInfo{}}
+	t.epochs[genesis.GetEpoch()] = &epochInfo{}
 	genlayer := t.layer(genesis)
 	genlayer.hareTerminated = true
 	t.verifying = newVerifying(config, t.state)
@@ -78,7 +79,7 @@ func (t *turtle) lookbackWindowStart() (types.LayerID, bool) {
 	return t.verified.Sub(t.WindowSize), true
 }
 
-func (t *turtle) evict(ctx context.Context) {
+func (t *turtle) evict() {
 	if !t.verified.After(types.GetEffectiveGenesis().Add(t.Hdist)) {
 		return
 	}
@@ -109,8 +110,6 @@ func (t *turtle) evict(ctx context.Context) {
 
 		delete(t.ballots, lid)
 		if lid.OrdinalInEpoch() == types.GetLayersPerEpoch()-1 {
-			epoch := t.epoch(lid.GetEpoch())
-			atxsNumber.Sub(float64(len(epoch.atxs)))
 			delete(t.epochs, lid.GetEpoch())
 		}
 	}
@@ -149,8 +148,7 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Opin
 			var opinion *types.Opinion
 			opinion, err = t.encodeVotes(ctx, base, t.evicted.Add(1), current)
 			if err == nil {
-				layerDistanceToBaseBallot.Observe(float64(t.last - base.layer))
-				t.logger.Info("encoded votes",
+				t.logger.Debug("encoded votes",
 					log.ZContext(ctx),
 					zap.Stringer("base ballot", base.id),
 					zap.Stringer("base layer", base.layer),
@@ -308,9 +306,7 @@ func (t *turtle) getFullVote(verified, current types.LayerID, block *blockInfo) 
 	return layer.coinflip, reasonCoinflip, nil
 }
 
-func (t *turtle) onLayer(ctx context.Context, last types.LayerID) {
-	t.logger.Debug("on layer", zap.Uint32("last", last.Uint32()))
-	defer t.evict(ctx)
+func (t *turtle) updateLast(last types.LayerID) {
 	if last.After(t.last) {
 		update := t.last.GetEpoch() != last.GetEpoch()
 		t.last = last
@@ -322,19 +318,32 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) {
 				Div(fixed.New64(int64(types.GetLayersPerEpoch())))
 		}
 	}
+}
+
+func (t *turtle) tallyVotes(ctx context.Context, last types.LayerID) {
+	defer t.evict()
+
+	t.logger.Debug("on layer", zap.Uint32("last", last.Uint32()))
+	t.updateLast(last)
 	if err := t.drainRetriable(); err != nil {
 		return
 	}
 	for process := t.processed.Add(1); !process.After(t.last); process = process.Add(1) {
 		if process.FirstInEpoch() {
-			t.computeEpochHeight(process.GetEpoch())
+			t.computeEpochHeight(process)
 		}
 		layer := t.layer(process)
 		for _, block := range layer.blocks {
 			t.updateRefHeight(layer, block)
 		}
-		prev := t.layer(process.Sub(1))
-		layer.verifying.goodUncounted = layer.verifying.goodUncounted.Add(prev.verifying.goodUncounted)
+
+		// NOTE(dshulyak) i need this when running verifying tortoise not from the genesis.
+		if previous := process - 1; previous > t.evicted {
+			prev := t.layer(previous)
+			layer.verifying.goodUncounted = layer.verifying.goodUncounted.Add(prev.verifying.goodUncounted)
+			layer.prevOpinion = &prev.opinion
+		}
+
 		t.processed = process
 		processedLayer.Set(float64(t.processed))
 
@@ -352,7 +361,6 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) {
 			}
 		}
 
-		layer.prevOpinion = &prev.opinion
 		opinion := layer.opinion
 		layer.computeOpinion(t.Hdist, t.last)
 		if opinion != layer.opinion {
@@ -363,9 +371,11 @@ func (t *turtle) onLayer(ctx context.Context, last types.LayerID) {
 		}
 
 		t.logger.Debug("initial local opinion",
+			zap.Bool("hate terminated", layer.hareTerminated),
 			zap.Uint32("lid", layer.lid.Uint32()),
 			log.ZShortStringer("previous", opinion),
 			log.ZShortStringer("opinion", layer.opinion),
+			zapBlocks(layer.blocks),
 		)
 		// terminate layer that falls out of the zdist window and wasn't terminated
 		// by any other component
@@ -507,21 +517,33 @@ func (t *turtle) runFull() (verified, changed types.LayerID) {
 	return verified, changed
 }
 
-func (t *turtle) computeEpochHeight(epoch types.EpochID) {
-	einfo := t.epoch(epoch)
-	heights := make([]uint64, 0, len(einfo.atxs))
-	for _, info := range einfo.atxs {
-		if !info.malfeasant {
-			heights = append(heights, info.height)
-		}
-	}
+func (t *turtle) computeEpochHeight(lid types.LayerID) {
+	einfo := t.epoch(lid.GetEpoch())
+	var heights []uint64
+	t.atxsdata.IterateInEpoch(
+		lid.GetEpoch(),
+		func(_ types.ATXID, atx *atxsdata.ATX) {
+			heights = append(heights, atx.Height)
+		},
+		atxsdata.NotMalicious,
+	)
 	einfo.height = getMedian(heights)
+	t.logger.Debug(
+		"computed epoch height",
+		zap.Uint32("in layer", lid.GetEpoch().Uint32()),
+		zap.Uint32("for epoch", lid.GetEpoch().Uint32()),
+		zap.Uint64("height", einfo.height),
+	)
 }
 
 func (t *turtle) onBlock(header types.BlockHeader, data, valid bool) {
 	if header.LayerID <= t.evicted {
 		return
 	}
+
+	t.logger.Debug("on block", zap.Inline(&header), zap.Bool("data", data), zap.Bool("valid", valid))
+
+	// update existing state without calling t.addBlock
 	if binfo := t.state.getBlock(header); binfo != nil {
 		binfo.data = data
 		if valid {
@@ -529,8 +551,6 @@ func (t *turtle) onBlock(header types.BlockHeader, data, valid bool) {
 		}
 		return
 	}
-	t.logger.Debug("on data block", zap.Inline(&header))
-
 	binfo := newBlockInfo(header)
 	binfo.data = data
 	if valid {
@@ -580,6 +600,9 @@ func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {
 	if exists && previous == bid {
 		return
 	}
+	// we do not compute opinion because opinion hashing recursive.
+	// so if we didn't receive layer in order this opinion will be wrong
+	// and we also need to copy previous layer opinion into layer.prevOpinion
 	if !lid.After(t.processed) && withinDistance(t.Config.Hdist, lid, t.last) {
 		t.logger.Debug("local opinion changed within hdist",
 			zap.Uint32("lid", lid.Uint32()),
@@ -601,6 +624,7 @@ func (t *turtle) onOpinionChange(lid types.LayerID, early bool) {
 		t.logger.Debug("computed local opinion",
 			zap.Uint32("last", t.last.Uint32()),
 			zap.Uint32("lid", layer.lid.Uint32()),
+			zap.Bool("changed from previous", opinion != layer.opinion),
 			log.ZShortStringer("previous", opinion),
 			log.ZShortStringer("new", layer.opinion),
 			log.ZShortStringer("prev layer", layer.prevOpinion),
@@ -624,33 +648,26 @@ func (t *turtle) onOpinionChange(lid types.LayerID, early bool) {
 	}
 }
 
-func (t *turtle) onAtx(atx *types.AtxTortoiseData) {
+func (t *turtle) onAtx(target types.EpochID, id types.ATXID, atx *atxsdata.ATX) {
 	start := time.Now()
-	epoch := t.epoch(atx.TargetEpoch)
-	if _, exist := epoch.atxs[atx.ID]; !exist {
-		mal := t.isMalfeasant(atx.Smesher)
-		t.logger.Debug("on atx",
-			zap.Stringer("id", atx.ID),
-			zap.Uint32("epoch", uint32(atx.TargetEpoch)),
-			zap.Uint64("weight", atx.Weight),
-			zap.Uint64("height", atx.Height),
-			zap.Bool("malfeasant", mal),
-		)
-		info := atxInfo{
-			weight:     atx.Weight,
-			height:     atx.Height,
-			malfeasant: mal,
-		}
-		epoch.atxs[atx.ID] = info
-		if atx.Weight > math.MaxInt64 {
-			t.logger.Panic("fixme: atx size is not expected to overflow int64", zap.Uint64("weight", info.weight))
-		}
-		if !mal {
-			epoch.weight = epoch.weight.Add(fixed.New64(int64(info.weight)))
-		}
-		atxsNumber.Inc()
+	epoch := t.epoch(target)
+	mal := t.isMalfeasant(atx.Node)
+	t.logger.Debug("on atx",
+		zap.Stringer("id", id),
+		zap.Uint32("epoch", uint32(target)),
+		zap.Uint64("weight", atx.Weight),
+		zap.Uint64("height", atx.Height),
+		zap.Bool("malfeasant", mal),
+	)
+
+	if atx.Weight > math.MaxInt64 {
+		t.logger.Panic("fixme: atx size is not expected to overflow int64", zap.Uint64("weight", atx.Weight))
 	}
-	if atx.TargetEpoch == t.last.GetEpoch() {
+	if !mal {
+		epoch.weight = epoch.weight.Add(fixed.New64(int64(atx.Weight)))
+	}
+
+	if target == t.last.GetEpoch() {
 		t.localThreshold = epoch.weight.
 			Div(fixed.New(localThresholdFraction)).
 			Div(fixed.New64(int64(types.GetLayersPerEpoch())))
@@ -693,9 +710,8 @@ func (t *turtle) decodeBallot(ballot *types.BallotTortoiseData) (*ballotInfo, ty
 	}
 
 	if ballot.EpochData != nil {
-		epoch := t.epoch(ballot.Layer.GetEpoch())
-		atx, exists := epoch.atxs[ballot.AtxID]
-		if !exists {
+		atx := t.atxsdata.Get(ballot.Layer.GetEpoch(), ballot.AtxID)
+		if atx == nil {
 			return nil, 0, fmt.Errorf("atx %s/%d not in state", ballot.AtxID, ballot.Layer.GetEpoch())
 		}
 		refinfo = &referenceInfo{
@@ -703,8 +719,8 @@ func (t *turtle) decodeBallot(ballot *types.BallotTortoiseData) (*ballotInfo, ty
 			atxid:           ballot.AtxID,
 			expectedBallots: ballot.EpochData.Eligibilities,
 			beacon:          ballot.EpochData.Beacon,
-			height:          atx.height,
-			weight:          big.NewRat(int64(atx.weight), int64(ballot.EpochData.Eligibilities)),
+			height:          atx.Height,
+			weight:          big.NewRat(int64(atx.Weight), int64(ballot.EpochData.Eligibilities)),
 		}
 	} else if ballot.Ref != nil {
 		ptr := *ballot.Ref
@@ -801,6 +817,10 @@ func (t *turtle) storeBallot(ballot *ballotInfo, offset types.LayerID) error {
 				if existing != nil {
 					current.supported[i] = existing
 				} else {
+					if !withinDistance(t.Hdist, block.layer, t.last) {
+						block.validity = against
+						block.hare = against
+					}
 					t.addBlock(block)
 				}
 			}
@@ -890,6 +910,8 @@ func getLocalVote(config Config, verified, last types.LayerID, block *blockInfo)
 	if withinDistance(config.Hdist, block.layer, last) {
 		return block.hare, reasonHareOutput
 	}
+	// if layer was verified, but then global threshold became unreachable we will not
+	// update validity, but verified variable will be lowered
 	if block.layer.After(verified) {
 		return abstain, reasonValidity
 	}

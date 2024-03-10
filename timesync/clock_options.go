@@ -5,8 +5,7 @@ import (
 	"time"
 
 	"github.com/jonboulle/clockwork"
-
-	"github.com/spacemeshos/go-spacemesh/log"
+	"go.uber.org/zap"
 )
 
 type option struct {
@@ -15,7 +14,7 @@ type option struct {
 	layerDuration time.Duration
 	tickInterval  time.Duration
 
-	log *log.Log
+	log *zap.Logger
 }
 
 func (o *option) validate() error {
@@ -75,9 +74,9 @@ func WithTickInterval(d time.Duration) OptionFunc {
 }
 
 // WithLogger sets the logger for the NodeClock.
-func WithLogger(logger log.Log) OptionFunc {
+func WithLogger(logger *zap.Logger) OptionFunc {
 	return func(opts *option) error {
-		opts.log = &logger
+		opts.log = logger
 		return nil
 	}
 }

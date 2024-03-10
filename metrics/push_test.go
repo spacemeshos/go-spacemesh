@@ -4,13 +4,13 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/push"
 	"github.com/prometheus/common/expfmt"
+	"github.com/stretchr/testify/require"
 )
 
 func TestStartPushMetrics(t *testing.T) {
@@ -26,14 +26,10 @@ func TestStartPushMetrics(t *testing.T) {
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resBytes, err := io.ReadAll(r.Body)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
 		res := string(resBytes)
-		if !strings.Contains(res, testMetricName+" 1") {
-			t.Fatal("r.Body doesn't contains out test metric!")
-		}
+		require.Contains(t, res, testMetricName+" 1")
 
 		w.WriteHeader(202)
 	}))
@@ -41,9 +37,6 @@ func TestStartPushMetrics(t *testing.T) {
 
 	pusher := push.New(ts.URL, "my_job").
 		Gatherer(prometheus.DefaultGatherer).
-		Format(expfmt.FmtText)
-	err := pusher.Push()
-	if err != nil {
-		t.Fatal("can't push to server", err)
-	}
+		Format(expfmt.NewFormat(expfmt.TypeTextPlain))
+	require.NoError(t, pusher.Push())
 }

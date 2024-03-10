@@ -117,7 +117,7 @@ func New(
 	}
 
 	pd.ctx, pd.cancel = context.WithCancel(pd.ctx)
-	pd.theta = new(big.Float).SetRat(pd.config.Theta)
+	pd.theta = new(big.Float).SetRat(&pd.config.Theta)
 
 	if pd.weakCoin == nil {
 		pd.weakCoin = weakcoin.New(
@@ -135,16 +135,16 @@ func New(
 	return pd
 }
 
-func (pd *ProtocolDriver) Register(s *signing.EdSigner) {
+func (pd *ProtocolDriver) Register(sig *signing.EdSigner) {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
-	if _, exists := pd.signers[s.NodeID()]; exists {
-		pd.logger.With().Error("signing key already registered", log.ShortStringer("id", s.NodeID()))
+	if _, exists := pd.signers[sig.NodeID()]; exists {
+		pd.logger.With().Error("signing key already registered", log.ShortStringer("id", sig.NodeID()))
 		return
 	}
 
-	pd.logger.With().Info("registered signing key", log.ShortStringer("id", s.NodeID()))
-	pd.signers[s.NodeID()] = s
+	pd.logger.With().Info("registered signing key", log.ShortStringer("id", sig.NodeID()))
+	pd.signers[sig.NodeID()] = sig
 }
 
 type participant struct {
@@ -1069,8 +1069,8 @@ func createProposalChecker(logger log.Log, conf Config, numEarlyATXs, numATXs in
 		return &proposalChecker{threshold: big.NewInt(0), thresholdStrict: big.NewInt(0)}
 	}
 
-	high := atxThreshold(conf.Kappa, conf.Q, numEarlyATXs)
-	low := atxThreshold(conf.Kappa, conf.Q, numATXs)
+	high := atxThreshold(conf.Kappa, &conf.Q, numEarlyATXs)
+	low := atxThreshold(conf.Kappa, &conf.Q, numATXs)
 	logger.With().Info("created proposal checker with ATX threshold",
 		log.Int("num_early_atxs", numEarlyATXs),
 		log.Int("num_atxs", numATXs),
@@ -1126,8 +1126,7 @@ func atxThresholdFraction(kappa int, q *big.Rat, numATXs int) *big.Float {
 // TODO(nkryuchkov): Consider having a generic function for probabilities.
 func atxThreshold(kappa int, q *big.Rat, numATXs int) *big.Int {
 	const (
-		sigLengthBytes = 80
-		sigLengthBits  = sigLengthBytes * 8
+		sigLengthBits = types.VrfSignatureSize * 8
 	)
 
 	fraction := atxThresholdFraction(kappa, q, numATXs)

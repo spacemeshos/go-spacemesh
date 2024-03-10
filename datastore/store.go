@@ -1,6 +1,7 @@
 package datastore
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -11,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -18,7 +20,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
-	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
 
@@ -27,9 +28,18 @@ type VrfNonceKey struct {
 	Epoch types.EpochID
 }
 
+//go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./store.go
+
+type Executor interface {
+	sql.Executor
+	WithTx(context.Context, func(*sql.Tx) error) error
+	QueryCache() sql.QueryCache
+}
+
 // CachedDB is simply a database injected with cache.
 type CachedDB struct {
-	*sql.Database
+	Executor
+	sql.QueryCache
 	logger log.Log
 
 	// cache is optional
@@ -44,14 +54,15 @@ type CachedDB struct {
 }
 
 type Config struct {
+	// ATXSize must be larger than the sum of all ATXs in last 2 epochs to be effective
 	ATXSize         int `mapstructure:"atx-size"`
-	MalfeasenceSize int `mapstructure:"malfeasence-size"`
+	MalfeasanceSize int `mapstructure:"malfeasance-size"`
 }
 
 func DefaultConfig() Config {
 	return Config{
-		ATXSize:         100_000,
-		MalfeasenceSize: 1_000,
+		ATXSize:         4_400_000, // to be in line with 2*`EpochData` size (see fetch/wire_types.go) - see comment above
+		MalfeasanceSize: 1_000,
 	}
 }
 
@@ -75,7 +86,7 @@ func WithConsensusCache(c *atxsdata.Data) Opt {
 }
 
 // NewCachedDB create an instance of a CachedDB.
-func NewCachedDB(db *sql.Database, lg log.Log, opts ...Opt) *CachedDB {
+func NewCachedDB(db Executor, lg log.Log, opts ...Opt) *CachedDB {
 	o := cacheOpts{cfg: DefaultConfig()}
 	for _, opt := range opts {
 		opt(&o)
@@ -87,7 +98,7 @@ func NewCachedDB(db *sql.Database, lg log.Log, opts ...Opt) *CachedDB {
 		lg.Fatal("failed to create atx cache", err)
 	}
 
-	malfeasanceCache, err := lru.New[types.NodeID, *types.MalfeasanceProof](o.cfg.MalfeasenceSize)
+	malfeasanceCache, err := lru.New[types.NodeID, *types.MalfeasanceProof](o.cfg.MalfeasanceSize)
 	if err != nil {
 		lg.Fatal("failed to create malfeasance cache", err)
 	}
@@ -98,7 +109,8 @@ func NewCachedDB(db *sql.Database, lg log.Log, opts ...Opt) *CachedDB {
 	}
 
 	return &CachedDB{
-		Database:         db,
+		Executor:         db,
+		QueryCache:       db.QueryCache(),
 		atxsdata:         o.atxsdata,
 		logger:           lg,
 		atxHdrCache:      atxHdrCache,
@@ -152,7 +164,7 @@ func (db *CachedDB) GetMalfeasanceProof(id types.NodeID) (*types.MalfeasanceProo
 		return proof, nil
 	}
 
-	proof, err := identities.GetMalfeasanceProof(db.Database, id)
+	proof, err := identities.GetMalfeasanceProof(db.Executor, id)
 	if err != nil && err != sql.ErrNotFound {
 		return nil, err
 	}
@@ -255,7 +267,7 @@ func (db *CachedDB) IterateEpochATXHeaders(
 	epoch types.EpochID,
 	iter func(*types.ActivationTxHeader) error,
 ) error {
-	ids, err := atxs.GetIDsByEpoch(db, epoch-1)
+	ids, err := atxs.GetIDsByEpoch(context.Background(), db, epoch-1)
 	if err != nil {
 		return err
 	}
@@ -328,7 +340,7 @@ func (db *CachedDB) IdentityExists(nodeID types.NodeID) (bool, error) {
 }
 
 func (db *CachedDB) MaxHeightAtx() (types.ATXID, error) {
-	return atxs.GetIDWithMaxHeight(db, types.EmptyNodeID)
+	return atxs.GetIDWithMaxHeight(db, types.EmptyNodeID, atxs.FilterAll)
 }
 
 // Hint marks which DB should be queried for a certain provided hash.
@@ -347,22 +359,23 @@ const (
 )
 
 // NewBlobStore returns a BlobStore.
-func NewBlobStore(db *sql.Database) *BlobStore {
-	return &BlobStore{DB: db}
+func NewBlobStore(db sql.Executor, proposals *store.Store) *BlobStore {
+	return &BlobStore{DB: db, proposals: proposals}
 }
 
 // BlobStore gets data as a blob to serve direct fetch requests.
 type BlobStore struct {
-	DB *sql.Database
+	DB        sql.Executor
+	proposals *store.Store
 }
 
 // Get gets an ATX as bytes by an ATX ID as bytes.
-func (bs *BlobStore) Get(hint Hint, key []byte) ([]byte, error) {
+func (bs *BlobStore) Get(ctx context.Context, hint Hint, key []byte) ([]byte, error) {
 	switch hint {
 	case ATXDB:
-		return atxs.GetBlob(bs.DB, key)
+		return atxs.GetBlob(ctx, bs.DB, key)
 	case ProposalDB:
-		return proposals.GetBlob(bs.DB, key)
+		return bs.proposals.GetBlob(types.ProposalID(types.BytesToHash(key).ToHash20()))
 	case BallotDB:
 		id := types.BallotID(types.BytesToHash(key).ToHash20())
 		blt, err := ballots.Get(bs.DB, id)
@@ -394,7 +407,33 @@ func (bs *BlobStore) Get(hint Hint, key []byte) ([]byte, error) {
 	case Malfeasance:
 		return identities.GetMalfeasanceBlob(bs.DB, key)
 	case ActiveSet:
-		return activesets.GetBlob(bs.DB, key)
+		return activesets.GetBlob(ctx, bs.DB, key)
 	}
 	return nil, fmt.Errorf("blob store not found %s", hint)
+}
+
+func (bs *BlobStore) Has(hint Hint, key []byte) (bool, error) {
+	switch hint {
+	case ATXDB:
+		return atxs.Has(bs.DB, types.BytesToATXID(key))
+	case ProposalDB:
+		return bs.proposals.Has(types.ProposalID(types.BytesToHash(key).ToHash20())), nil
+	case BallotDB:
+		id := types.BallotID(types.BytesToHash(key).ToHash20())
+		return ballots.Has(bs.DB, id)
+	case BlockDB:
+		id := types.BlockID(types.BytesToHash(key).ToHash20())
+		return blocks.Has(bs.DB, id)
+	case TXDB:
+		return transactions.Has(bs.DB, types.TransactionID(types.BytesToHash(key)))
+	case POETDB:
+		var ref types.PoetProofRef
+		copy(ref[:], key)
+		return poets.Has(bs.DB, ref)
+	case Malfeasance:
+		return identities.IsMalicious(bs.DB, types.BytesToNodeID(key))
+	case ActiveSet:
+		return activesets.Has(bs.DB, key)
+	}
+	return false, fmt.Errorf("blob store not found %s", hint)
 }

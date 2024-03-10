@@ -2,6 +2,7 @@ package datastore_test
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"testing"
 	"time"
@@ -13,14 +14,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
-	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
 
@@ -194,7 +196,8 @@ func TestStore_GetAtxByNodeID(t *testing.T) {
 
 func TestBlobStore_GetATXBlob(t *testing.T) {
 	db := sql.InMemory()
-	bs := datastore.NewBlobStore(db)
+	bs := datastore.NewBlobStore(db, store.New())
+	ctx := context.Background()
 
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
@@ -213,10 +216,19 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
 
-	_, err = bs.Get(datastore.ATXDB, atx.ID().Bytes())
+	has, err := bs.Has(datastore.ATXDB, atx.ID().Bytes())
+	require.NoError(t, err)
+	require.False(t, has)
+
+	_, err = bs.Get(ctx, datastore.ATXDB, atx.ID().Bytes())
 	require.ErrorIs(t, err, sql.ErrNotFound)
+
 	require.NoError(t, atxs.Add(db, vAtx))
-	got, err := bs.Get(datastore.ATXDB, atx.ID().Bytes())
+
+	has, err = bs.Has(datastore.ATXDB, atx.ID().Bytes())
+	require.NoError(t, err)
+	require.True(t, has)
+	got, err := bs.Get(ctx, datastore.ATXDB, atx.ID().Bytes())
 	require.NoError(t, err)
 
 	var gotA types.ActivationTx
@@ -226,13 +238,14 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	gotA.SetReceived(atx.Received())
 	require.Equal(t, *atx, gotA)
 
-	_, err = bs.Get(datastore.BallotDB, atx.ID().Bytes())
+	_, err = bs.Get(ctx, datastore.BallotDB, atx.ID().Bytes())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
 func TestBlobStore_GetBallotBlob(t *testing.T) {
 	db := sql.InMemory()
-	bs := datastore.NewBlobStore(db)
+	bs := datastore.NewBlobStore(db, store.New())
+	ctx := context.Background()
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -242,10 +255,17 @@ func TestBlobStore_GetBallotBlob(t *testing.T) {
 	blt.SmesherID = sig.NodeID()
 	require.NoError(t, blt.Initialize())
 
-	_, err = bs.Get(datastore.BallotDB, blt.ID().Bytes())
+	has, err := bs.Has(datastore.BallotDB, blt.ID().Bytes())
+	require.NoError(t, err)
+	require.False(t, has)
+	_, err = bs.Get(ctx, datastore.BallotDB, blt.ID().Bytes())
 	require.ErrorIs(t, err, sql.ErrNotFound)
+
 	require.NoError(t, ballots.Add(db, blt))
-	got, err := bs.Get(datastore.BallotDB, blt.ID().Bytes())
+	has, err = bs.Has(datastore.BallotDB, blt.ID().Bytes())
+	require.NoError(t, err)
+	require.True(t, has)
+	got, err := bs.Get(ctx, datastore.BallotDB, blt.ID().Bytes())
 	require.NoError(t, err)
 	var gotB types.Ballot
 	require.NoError(t, codec.Decode(got, &gotB))
@@ -253,13 +273,14 @@ func TestBlobStore_GetBallotBlob(t *testing.T) {
 	require.NoError(t, gotB.Initialize())
 	require.Equal(t, *blt, gotB)
 
-	_, err = bs.Get(datastore.BlockDB, blt.ID().Bytes())
+	_, err = bs.Get(ctx, datastore.BlockDB, blt.ID().Bytes())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
 func TestBlobStore_GetBlockBlob(t *testing.T) {
 	db := sql.InMemory()
-	bs := datastore.NewBlobStore(db)
+	bs := datastore.NewBlobStore(db, store.New())
+	ctx := context.Background()
 
 	blk := types.Block{
 		InnerBlock: types.InnerBlock{
@@ -269,44 +290,63 @@ func TestBlobStore_GetBlockBlob(t *testing.T) {
 	}
 	blk.Initialize()
 
-	_, err := bs.Get(datastore.BlockDB, blk.ID().Bytes())
+	has, err := bs.Has(datastore.BlockDB, blk.ID().Bytes())
+	require.NoError(t, err)
+	require.False(t, has)
+
+	_, err = bs.Get(ctx, datastore.BlockDB, blk.ID().Bytes())
 	require.ErrorIs(t, err, sql.ErrNotFound)
+
 	require.NoError(t, blocks.Add(db, &blk))
-	got, err := bs.Get(datastore.BlockDB, blk.ID().Bytes())
+	has, err = bs.Has(datastore.BlockDB, blk.ID().Bytes())
+	require.NoError(t, err)
+	require.True(t, has)
+	got, err := bs.Get(ctx, datastore.BlockDB, blk.ID().Bytes())
 	require.NoError(t, err)
 	var gotB types.Block
 	require.NoError(t, codec.Decode(got, &gotB))
 	gotB.Initialize()
 	require.Equal(t, blk, gotB)
-	_, err = bs.Get(datastore.ProposalDB, blk.ID().Bytes())
-	require.ErrorIs(t, err, sql.ErrNotFound)
+
+	_, err = bs.Get(ctx, datastore.ProposalDB, blk.ID().Bytes())
+	require.ErrorIs(t, err, store.ErrNotFound)
 }
 
 func TestBlobStore_GetPoetBlob(t *testing.T) {
 	db := sql.InMemory()
-	bs := datastore.NewBlobStore(db)
+	bs := datastore.NewBlobStore(db, store.New())
+	ctx := context.Background()
 
 	ref := []byte("ref0")
 	poet := []byte("proof0")
 	sid := []byte("sid0")
 	rid := "rid0"
 
-	_, err := bs.Get(datastore.POETDB, ref)
+	has, err := bs.Has(datastore.POETDB, ref)
+	require.NoError(t, err)
+	require.False(t, has)
+
+	_, err = bs.Get(ctx, datastore.POETDB, ref)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 	var poetRef types.PoetProofRef
 	copy(poetRef[:], ref)
 	require.NoError(t, poets.Add(db, poetRef, poet, sid, rid))
-	got, err := bs.Get(datastore.POETDB, ref)
+	has, err = bs.Has(datastore.POETDB, ref)
+	require.NoError(t, err)
+	require.True(t, has)
+	got, err := bs.Get(ctx, datastore.POETDB, ref)
 	require.NoError(t, err)
 	require.True(t, bytes.Equal(poet, got))
 
-	_, err = bs.Get(datastore.BlockDB, ref)
+	_, err = bs.Get(ctx, datastore.BlockDB, ref)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
 func TestBlobStore_GetProposalBlob(t *testing.T) {
 	db := sql.InMemory()
-	bs := datastore.NewBlobStore(db)
+	proposals := store.New()
+	bs := datastore.NewBlobStore(db, proposals)
+	ctx := context.Background()
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -322,42 +362,56 @@ func TestBlobStore_GetProposalBlob(t *testing.T) {
 	p.SmesherID = signer.NodeID()
 	require.NoError(t, p.Initialize())
 
-	_, err = bs.Get(datastore.ProposalDB, p.ID().Bytes())
-	require.ErrorIs(t, err, sql.ErrNotFound)
-	require.NoError(t, ballots.Add(db, blt))
-	require.NoError(t, proposals.Add(db, &p))
-	got, err := bs.Get(datastore.ProposalDB, p.ID().Bytes())
+	has, err := bs.Has(datastore.ProposalDB, p.ID().Bytes())
+	require.NoError(t, err)
+	require.False(t, has)
+	_, err = bs.Get(ctx, datastore.ProposalDB, p.ID().Bytes())
+	require.ErrorIs(t, err, store.ErrNotFound)
+
+	require.NoError(t, proposals.Add(&p))
+	has, err = bs.Has(datastore.ProposalDB, p.ID().Bytes())
+	require.NoError(t, err)
+	require.True(t, has)
+	got, err := bs.Get(ctx, datastore.ProposalDB, p.ID().Bytes())
 	require.NoError(t, err)
 	var gotP types.Proposal
 	require.NoError(t, codec.Decode(got, &gotP))
 	require.NoError(t, gotP.Initialize())
 	require.Equal(t, p, gotP)
-	_, err = bs.Get(datastore.BlockDB, p.ID().Bytes())
-	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
 func TestBlobStore_GetTXBlob(t *testing.T) {
 	db := sql.InMemory()
-	bs := datastore.NewBlobStore(db)
+	bs := datastore.NewBlobStore(db, store.New())
+	ctx := context.Background()
 
 	tx := &types.Transaction{}
 	tx.Raw = []byte{1, 1, 1}
 	tx.ID = types.TransactionID{1}
 
-	_, err := bs.Get(datastore.TXDB, tx.ID.Bytes())
+	has, err := bs.Has(datastore.TXDB, tx.ID.Bytes())
+	require.NoError(t, err)
+	require.False(t, has)
+
+	_, err = bs.Get(ctx, datastore.TXDB, tx.ID.Bytes())
 	require.ErrorIs(t, err, sql.ErrNotFound)
+
 	require.NoError(t, transactions.Add(db, tx, time.Now()))
-	got, err := bs.Get(datastore.TXDB, tx.ID.Bytes())
+	has, err = bs.Has(datastore.TXDB, tx.ID.Bytes())
+	require.NoError(t, err)
+	require.True(t, has)
+	got, err := bs.Get(ctx, datastore.TXDB, tx.ID.Bytes())
 	require.NoError(t, err)
 	require.Equal(t, tx.Raw, got)
 
-	_, err = bs.Get(datastore.BlockDB, tx.ID.Bytes())
+	_, err = bs.Get(ctx, datastore.BlockDB, tx.ID.Bytes())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
 func TestBlobStore_GetMalfeasanceBlob(t *testing.T) {
 	db := sql.InMemory()
-	bs := datastore.NewBlobStore(db)
+	bs := datastore.NewBlobStore(db, store.New())
+	ctx := context.Background()
 
 	proof := &types.MalfeasanceProof{
 		Layer: types.LayerID(11),
@@ -372,10 +426,42 @@ func TestBlobStore_GetMalfeasanceBlob(t *testing.T) {
 	require.NoError(t, err)
 	nodeID := types.NodeID{1, 2, 3}
 
-	_, err = bs.Get(datastore.Malfeasance, nodeID.Bytes())
+	has, err := bs.Has(datastore.Malfeasance, nodeID.Bytes())
+	require.NoError(t, err)
+	require.False(t, has)
+
+	_, err = bs.Get(ctx, datastore.Malfeasance, nodeID.Bytes())
 	require.ErrorIs(t, err, sql.ErrNotFound)
+
 	require.NoError(t, identities.SetMalicious(db, nodeID, encoded, time.Now()))
-	got, err := bs.Get(datastore.Malfeasance, nodeID.Bytes())
+	has, err = bs.Has(datastore.Malfeasance, nodeID.Bytes())
+	require.NoError(t, err)
+	require.True(t, has)
+	got, err := bs.Get(ctx, datastore.Malfeasance, nodeID.Bytes())
 	require.NoError(t, err)
 	require.Equal(t, encoded, got)
+}
+
+func TestBlobStore_GetActiveSet(t *testing.T) {
+	db := sql.InMemory()
+	bs := datastore.NewBlobStore(db, store.New())
+	ctx := context.Background()
+
+	as := &types.EpochActiveSet{Epoch: 7}
+	hash := types.ATXIDList(as.Set).Hash()
+
+	has, err := bs.Has(datastore.ActiveSet, hash.Bytes())
+	require.NoError(t, err)
+	require.False(t, has)
+
+	_, err = bs.Get(ctx, datastore.ActiveSet, hash.Bytes())
+	require.ErrorIs(t, err, sql.ErrNotFound)
+
+	require.NoError(t, activesets.Add(db, hash, as))
+	has, err = bs.Has(datastore.ActiveSet, hash.Bytes())
+	require.NoError(t, err)
+	require.True(t, has)
+	got, err := bs.Get(ctx, datastore.ActiveSet, hash.Bytes())
+	require.NoError(t, err)
+	require.Equal(t, codec.MustEncode(as), got)
 }

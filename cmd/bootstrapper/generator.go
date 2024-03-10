@@ -95,7 +95,7 @@ func (g *Generator) Generate(
 		err       error
 	)
 	if genBeacon && genActiveSet {
-		suffix = bootstrap.SuffixBoostrap
+		suffix = bootstrap.SuffixBootstrap
 	} else if genBeacon {
 		suffix = bootstrap.SuffixBeacon
 	} else if genActiveSet {
@@ -181,7 +181,7 @@ func queryBitcoin(ctx context.Context, client *http.Client, targetUrl string) (*
 	defer resp.Body.Close()
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("bootstrap read resonse: %w", err)
+		return nil, fmt.Errorf("bootstrap read response: %w", err)
 	}
 	var br BitcoinResponse
 	err = json.Unmarshal(data, &br)
@@ -205,7 +205,7 @@ func getActiveSet(ctx context.Context, endpoint string, epoch types.EpochID) ([]
 	if err != nil {
 		return nil, fmt.Errorf("epoch stream %v: %w", endpoint, err)
 	}
-	activeSet := make([]types.ATXID, 0, 10_000)
+	activeSet := make([]types.ATXID, 0, 300_000)
 	for {
 		resp, err := stream.Recv()
 		if errors.Is(err, io.EOF) {
@@ -227,7 +227,7 @@ func (g *Generator) GenUpdate(
 ) (string, error) {
 	as := make([]string, 0, len(activeSet))
 	for _, atx := range activeSet {
-		as = append(as, hex.EncodeToString(atx.Hash32().Bytes())) // no leading 0x
+		as = append(as, hex.EncodeToString(atx.Bytes())) // no leading 0x
 	}
 	var update bootstrap.Update
 	update.Version = SchemaVersion
@@ -243,11 +243,11 @@ func (g *Generator) GenUpdate(
 	}
 	data, err := json.Marshal(update)
 	if err != nil {
-		return "", fmt.Errorf("marshal data %v: %w", string(data), err)
+		return "", fmt.Errorf("marshal data: %w", err)
 	}
 	// make sure the data is valid
 	if err = bootstrap.ValidateSchema(data); err != nil {
-		return "", fmt.Errorf("invalid data %v: %w", string(data), err)
+		return "", fmt.Errorf("invalid data: %w", err)
 	}
 	filename := PersistedFilename(epoch, suffix)
 	err = afero.WriteFile(g.fs, filename, data, 0o600)
@@ -255,7 +255,6 @@ func (g *Generator) GenUpdate(
 		return "", fmt.Errorf("persist epoch update %v: %w", filename, err)
 	}
 	g.logger.With().Info("generated update",
-		log.String("update", string(data)),
 		log.String("filename", filename),
 	)
 	return filename, nil

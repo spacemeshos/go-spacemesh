@@ -8,6 +8,7 @@ import (
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
@@ -149,7 +150,7 @@ func (pc *postClient) send(ctx context.Context, req *pb.NodeRequest) (*pb.Servic
 	// send command
 	select {
 	case <-pc.closed:
-		return nil, fmt.Errorf("post client closed")
+		return nil, activation.ErrPostClientClosed
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case pc.con <- cmd:
@@ -158,7 +159,7 @@ func (pc *postClient) send(ctx context.Context, req *pb.NodeRequest) (*pb.Servic
 	// receive response
 	select {
 	case <-pc.closed:
-		return nil, fmt.Errorf("post client closed")
+		return nil, activation.ErrPostClientClosed
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case resp := <-resp:

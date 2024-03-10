@@ -3,7 +3,6 @@ package grpcserver
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -27,10 +26,9 @@ func launchPostSupervisor(
 	tb testing.TB,
 	log *zap.Logger,
 	cfg Config,
+	serviceCfg activation.PostSupervisorConfig,
 	postOpts activation.PostSetupOpts,
 ) (types.NodeID, func()) {
-	cmdCfg := activation.DefaultTestPostServiceConfig()
-	cmdCfg.NodeAddress = fmt.Sprintf("http://%s", cfg.PublicListener)
 	postCfg := activation.DefaultPostConfig()
 	provingOpts := activation.DefaultPostProvingOpts()
 	provingOpts.RandomXMode = activation.PostRandomXModeLight
@@ -42,48 +40,41 @@ func launchPostSupervisor(
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	id := sig.NodeID()
 	goldenATXID := types.RandomATXID()
 
-	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
-	mgr, err := activation.NewPostSetupManager(id, postCfg, log.Named("post manager"), cdb, goldenATXID)
-	require.NoError(tb, err)
+	ctrl := gomock.NewController(tb)
+	validator := activation.NewMocknipostValidator(ctrl)
+	validator.EXPECT().
+		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		AnyTimes()
 
-	syncer := activation.NewMocksyncer(gomock.NewController(tb))
+	syncer := activation.NewMocksyncer(ctrl)
 	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
 		ch := make(chan struct{})
 		close(ch)
 		return ch
 	})
+	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
+	mgr, err := activation.NewPostSetupManager(postCfg, log.Named("post manager"), cdb, goldenATXID, syncer, validator)
+	require.NoError(tb, err)
 
 	// start post supervisor
-	ps, err := activation.NewPostSupervisor(log, cmdCfg, postCfg, provingOpts, mgr, syncer)
+	builder := activation.NewMockAtxBuilder(ctrl)
+	builder.EXPECT().Register(sig)
+	ps, err := activation.NewPostSupervisor(log, serviceCfg, postCfg, provingOpts, mgr, builder)
 	require.NoError(tb, err)
 	require.NotNil(tb, ps)
-	require.NoError(tb, ps.Start(postOpts))
-	return id, func() { assert.NoError(tb, ps.Stop(false)) }
+	require.NoError(tb, ps.Start(postOpts, sig))
+	return sig.NodeID(), func() { assert.NoError(tb, ps.Stop(false)) }
 }
 
 func launchPostSupervisorTLS(
 	tb testing.TB,
 	log *zap.Logger,
 	cfg Config,
+	serviceCfg activation.PostSupervisorConfig,
 	postOpts activation.PostSetupOpts,
 ) (types.NodeID, func()) {
-	pwd, err := os.Getwd()
-	require.NoError(tb, err)
-	caCert := filepath.Join(pwd, caCert)
-	require.FileExists(tb, caCert)
-	clientCert := filepath.Join(pwd, clientCert)
-	require.FileExists(tb, clientCert)
-	clientKey := filepath.Join(pwd, clientKey)
-	require.FileExists(tb, clientKey)
-
-	cmdCfg := activation.DefaultTestPostServiceConfig()
-	cmdCfg.CACert = caCert
-	cmdCfg.Cert = clientCert
-	cmdCfg.Key = clientKey
-	cmdCfg.NodeAddress = fmt.Sprintf("https://%s", cfg.TLSListener)
 	postCfg := activation.DefaultPostConfig()
 	provingOpts := activation.DefaultPostProvingOpts()
 	provingOpts.RandomXMode = activation.PostRandomXModeLight
@@ -95,25 +86,31 @@ func launchPostSupervisorTLS(
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	id := sig.NodeID()
 	goldenATXID := types.RandomATXID()
 
-	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
-	mgr, err := activation.NewPostSetupManager(id, postCfg, log.Named("post manager"), cdb, goldenATXID)
-	require.NoError(tb, err)
-
-	syncer := activation.NewMocksyncer(gomock.NewController(tb))
+	ctrl := gomock.NewController(tb)
+	validator := activation.NewMocknipostValidator(ctrl)
+	validator.EXPECT().
+		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		AnyTimes()
+	syncer := activation.NewMocksyncer(ctrl)
 	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
 		ch := make(chan struct{})
 		close(ch)
 		return ch
 	})
+	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
+	mgr, err := activation.NewPostSetupManager(postCfg, log.Named("post manager"), cdb, goldenATXID, syncer, validator)
+	require.NoError(tb, err)
 
-	ps, err := activation.NewPostSupervisor(log, cmdCfg, postCfg, provingOpts, mgr, syncer)
+	// start post supervisor
+	builder := activation.NewMockAtxBuilder(ctrl)
+	builder.EXPECT().Register(sig)
+	ps, err := activation.NewPostSupervisor(log, serviceCfg, postCfg, provingOpts, mgr, builder)
 	require.NoError(tb, err)
 	require.NotNil(tb, ps)
-	require.NoError(tb, ps.Start(postOpts))
-	return id, func() { assert.NoError(tb, ps.Stop(false)) }
+	require.NoError(tb, ps.Start(postOpts, sig))
+	return sig.NodeID(), func() { assert.NoError(tb, ps.Stop(false)) }
 }
 
 func Test_GenerateProof(t *testing.T) {
@@ -127,7 +124,10 @@ func Test_GenerateProof(t *testing.T) {
 	opts.ProviderID.SetUint32(initialization.CPUProviderID())
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
 
-	id, postCleanup := launchPostSupervisor(t, log.Named("supervisor"), cfg, opts)
+	serviceCfg := activation.DefaultTestPostServiceConfig()
+	serviceCfg.NodeAddress = fmt.Sprintf("http://%s", cfg.PublicListener)
+
+	id, postCleanup := launchPostSupervisor(t, log.Named("supervisor"), cfg, serviceCfg, opts)
 	t.Cleanup(postCleanup)
 
 	var client activation.PostClient
@@ -162,14 +162,22 @@ func Test_GenerateProof(t *testing.T) {
 func Test_GenerateProof_TLS(t *testing.T) {
 	log := zaptest.NewLogger(t)
 	svc := NewPostService(log)
-	cfg, cleanup := launchTLSServer(t, svc)
+	certDir := genKeys(t)
+	cfg, cleanup := launchTLSServer(t, certDir, svc)
 	t.Cleanup(cleanup)
 
 	opts := activation.DefaultPostSetupOpts()
 	opts.DataDir = t.TempDir()
 	opts.ProviderID.SetUint32(initialization.CPUProviderID())
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
-	id, postCleanup := launchPostSupervisorTLS(t, log.Named("supervisor"), cfg, opts)
+
+	serviceCfg := activation.DefaultTestPostServiceConfig()
+	serviceCfg.NodeAddress = fmt.Sprintf("https://%s", cfg.TLSListener)
+	serviceCfg.CACert = filepath.Join(certDir, caCertName)
+	serviceCfg.Cert = filepath.Join(certDir, clientCertName)
+	serviceCfg.Key = filepath.Join(certDir, clientKeyName)
+
+	id, postCleanup := launchPostSupervisorTLS(t, log.Named("supervisor"), cfg, serviceCfg, opts)
 	t.Cleanup(postCleanup)
 
 	var client activation.PostClient
@@ -211,7 +219,11 @@ func Test_GenerateProof_Cancel(t *testing.T) {
 	opts.DataDir = t.TempDir()
 	opts.ProviderID.SetUint32(initialization.CPUProviderID())
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
-	id, postCleanup := launchPostSupervisor(t, log.Named("supervisor"), cfg, opts)
+
+	serviceCfg := activation.DefaultTestPostServiceConfig()
+	serviceCfg.NodeAddress = fmt.Sprintf("http://%s", cfg.PublicListener)
+
+	id, postCleanup := launchPostSupervisor(t, log.Named("supervisor"), cfg, serviceCfg, opts)
 	t.Cleanup(postCleanup)
 
 	var client activation.PostClient
@@ -246,7 +258,11 @@ func Test_Metadata(t *testing.T) {
 	opts.DataDir = t.TempDir()
 	opts.ProviderID.SetUint32(initialization.CPUProviderID())
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
-	id, postCleanup := launchPostSupervisor(t, log.Named("supervisor"), cfg, opts)
+
+	serviceCfg := activation.DefaultTestPostServiceConfig()
+	serviceCfg.NodeAddress = fmt.Sprintf("http://%s", cfg.PublicListener)
+
+	id, postCleanup := launchPostSupervisor(t, log.Named("supervisor"), cfg, serviceCfg, opts)
 	t.Cleanup(postCleanup)
 
 	var client activation.PostClient
@@ -286,16 +302,19 @@ func Test_GenerateProof_MultipleServices(t *testing.T) {
 	opts.ProviderID.SetUint32(initialization.CPUProviderID())
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
 
+	serviceCfg := activation.DefaultTestPostServiceConfig()
+	serviceCfg.NodeAddress = fmt.Sprintf("http://%s", cfg.PublicListener)
+
 	// all but one should not be able to register to the node (i.e. open a stream to it).
-	id, postCleanup := launchPostSupervisor(t, log.Named("supervisor1"), cfg, opts)
+	id, postCleanup := launchPostSupervisor(t, log.Named("supervisor1"), cfg, serviceCfg, opts)
 	t.Cleanup(postCleanup)
 
 	opts.DataDir = t.TempDir()
-	_, postCleanup = launchPostSupervisor(t, log.Named("supervisor2"), cfg, opts)
+	_, postCleanup = launchPostSupervisor(t, log.Named("supervisor2"), cfg, serviceCfg, opts)
 	t.Cleanup(postCleanup)
 
 	opts.DataDir = t.TempDir()
-	_, postCleanup = launchPostSupervisor(t, log.Named("supervisor3"), cfg, opts)
+	_, postCleanup = launchPostSupervisor(t, log.Named("supervisor3"), cfg, serviceCfg, opts)
 	t.Cleanup(postCleanup)
 
 	var client activation.PostClient

@@ -13,16 +13,17 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
+	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
-	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
-	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/hare3"
+	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
+	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
@@ -69,7 +70,8 @@ func MainnetConfig() Config {
 			MetricsPort:           1010,
 			DatabaseConnections:   16,
 			DatabasePruneInterval: 30 * time.Minute,
-			PruneActivesetsFrom:   11, // starting from epoch 12 activesets below 11 will be pruned
+			DatabaseVacuumState:   9,
+			PruneActivesetsFrom:   12, // starting from epoch 13 activesets below 12 will be pruned
 			NetworkHRP:            "sm",
 
 			LayerDuration:  5 * time.Minute,
@@ -82,17 +84,33 @@ func MainnetConfig() Config {
 			OptFilterThreshold: 90,
 
 			TickSize: 9331200,
-			PoETServers: []string{
-				"https://mainnet-poet-0.spacemesh.network",
-				"https://mainnet-poet-1.spacemesh.network",
-				"https://mainnet-poet-2.spacemesh.network",
-				"https://poet-110.spacemesh.network",
-				"https://poet-111.spacemesh.network",
-				"https://poet-112.spacemesh.network",
+			PoetServers: []types.PoetServer{
+				{
+					Address: "https://mainnet-poet-0.spacemesh.network",
+					Pubkey:  types.MustBase64FromString("cFnqCS5oER7GOX576oPtahlxB/1y95aDibdK7RHQFVg="),
+				},
+				{
+					Address: "https://mainnet-poet-1.spacemesh.network",
+					Pubkey:  types.MustBase64FromString("Qh1efxY4YhoYBEXKPTiHJ/a7n1GsllRSyweQKO3j7m0="),
+				},
+				{
+					Address: "https://poet-110.spacemesh.network",
+					Pubkey:  types.MustBase64FromString("8Qqgid+37eyY7ik+EA47Nd5TrQjXolbv2Mdgir243No="),
+				},
+				{
+					Address: "https://poet-111.spacemesh.network",
+					Pubkey:  types.MustBase64FromString("caIV0Ym59L3RqbVAL6UrCPwr+z+lwe2TBj57QWnAgtM="),
+				},
+				{
+					Address: "https://poet-112.spacemesh.network",
+					Pubkey:  types.MustBase64FromString("5p/mPvmqhwdvf8U0GVrNq/9IN/HmZj5hCkFLAN04g1E="),
+				},
 			},
 			RegossipAtxInterval: 2 * time.Hour,
+			ATXGradeDelay:       30 * time.Minute,
+			PostValidDelay:      time.Duration(math.MaxInt64),
 		},
-		Genesis: &GenesisConfig{
+		Genesis: GenesisConfig{
 			GenesisTime: "2023-07-14T08:00:00Z",
 			ExtraData:   "00000000000000000001a6bc150307b5c1998045752b3c87eccf3c013036f3cc",
 			Accounts:    MainnetAccounts(),
@@ -105,29 +123,22 @@ func MainnetConfig() Config {
 			BadBeaconVoteDelayLayers: 4032,
 			MinimalActiveSetWeight: []types.EpochMinimalActiveWeight{
 				{Weight: 1_000_000},
-				// generated using ./cmd/activeset for publish epoch 6
-				// it will be used starting from epoch 11, so that there is plenty of time
-				// for participants to update software
-				{Epoch: 11, Weight: 7_879_129_244},
 			},
 		},
-		HARE: hareConfig.Config{
-			Disable:         hare3conf.EnableLayer,
-			N:               200,
-			ExpectedLeaders: 5,
-			RoundDuration:   25 * time.Second,
-			WakeupDelta:     25 * time.Second,
-			LimitConcurrent: 2,
-			LimitIterations: 4,
-		},
 		HARE3: hare3conf,
-		HareEligibility: eligConfig.Config{
+		HareEligibility: eligibility.Config{
 			ConfidenceParam: 200,
+		},
+		Certificate: blocks.CertConfig{
+			// NOTE(dshulyak) this is intentional. we increased committee size with hare3 upgrade
+			// but certifier continues to use 200 committee size.
+			// this will be upgraded in future with scheduled upgrade.
+			CommitteeSize: 200,
 		},
 		Beacon: beacon.Config{
 			Kappa:                    40,
-			Q:                        big.NewRat(1, 3),
-			Theta:                    big.NewRat(1, 4),
+			Q:                        *big.NewRat(1, 3),
+			Theta:                    *big.NewRat(1, 4),
 			GracePeriodDuration:      10 * time.Minute,
 			ProposalDuration:         4 * time.Minute,
 			FirstVotingRoundDuration: 30 * time.Minute,
@@ -174,6 +185,8 @@ func MainnetConfig() Config {
 			Standalone:               false,
 			GossipDuration:           50 * time.Second,
 			OutOfSyncThresholdLayers: 36, // 3h
+			DisableMeshAgreement:     true,
+			AtxSync:                  atxsync.DefaultConfig(),
 		},
 		Recovery: checkpoint.DefaultConfig(),
 		Cache:    datastore.DefaultConfig(),

@@ -7,20 +7,18 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 //go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./interface.go
 
 type layerTicker interface {
 	CurrentLayer() types.LayerID
+	LayerToTime(types.LayerID) time.Time
 }
 
 type meshProvider interface {
 	SetZeroBlockLayer(context.Context, types.LayerID)
-}
-
-type activeSetCache interface {
-	GetMissingActiveSet(types.EpochID, []types.ATXID) []types.ATXID
 }
 
 // fetchLogic is the interface between syncer and low-level fetching.
@@ -36,40 +34,26 @@ type fetchLogic interface {
 		bool,
 		[]p2p.Peer,
 	) ([]*fetch.LayerOpinion, []*types.Certificate, error)
-	GetEpochATXs(context.Context, types.EpochID) error
+}
+
+type atxSyncer interface {
+	Download(context.Context, types.EpochID, time.Time) error
 }
 
 // fetcher is the interface to the low-level fetching.
 type fetcher interface {
-	GetMaliciousIDs(
-		context.Context,
-		[]p2p.Peer,
-		func([]byte, p2p.Peer),
-		func(error, p2p.Peer),
-	) error
-	GetLayerData(
-		context.Context,
-		[]p2p.Peer,
-		types.LayerID,
-		func([]byte, p2p.Peer),
-		func(error, p2p.Peer),
-	) error
-	GetLayerOpinions(
-		context.Context,
-		[]p2p.Peer,
-		types.LayerID,
-		func([]byte, p2p.Peer),
-		func(error, p2p.Peer),
-	) error
+	GetMaliciousIDs(context.Context, p2p.Peer) ([]byte, error)
+	GetLayerData(context.Context, p2p.Peer, types.LayerID) ([]byte, error)
+	GetLayerOpinions(context.Context, p2p.Peer, types.LayerID) ([]byte, error)
 	GetCert(context.Context, types.LayerID, types.BlockID, []p2p.Peer) (*types.Certificate, error)
 
 	GetMalfeasanceProofs(context.Context, []types.NodeID) error
-	GetAtxs(context.Context, []types.ATXID) error
+	system.AtxFetcher
 	GetBallots(context.Context, []types.BallotID) error
 	GetBlocks(context.Context, []types.BlockID) error
 	RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32)
 
-	SelectBest(int) []p2p.Peer
+	SelectBestShuffled(int) []p2p.Peer
 	PeerEpochInfo(context.Context, p2p.Peer, types.EpochID) (*fetch.EpochData, error)
 	PeerMeshHashes(context.Context, p2p.Peer, *fetch.MeshHashRequest) (*fetch.MeshHashes, error)
 }

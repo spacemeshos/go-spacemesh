@@ -14,23 +14,21 @@ import (
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zapcore"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
-	"github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
+	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	pmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
+	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/beacons"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
-	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
@@ -116,7 +114,9 @@ type node struct {
 	vrfsigner  *signing.VRFSigner
 	atx        *types.VerifiedActivationTx
 	oracle     *eligibility.Oracle
-	db         *datastore.CachedDB
+	db         *sql.Database
+	atxsdata   *atxsdata.Data
+	proposals  *store.Store
 
 	ctrl       *gomock.Controller
 	mpublisher *pmocks.MockPublishSubsciber
@@ -146,7 +146,9 @@ func (n *node) reuseSigner(signer *signing.EdSigner) *node {
 }
 
 func (n *node) withDb() *node {
-	n.db = datastore.NewCachedDB(sql.InMemory(), log.NewNop())
+	n.db = sql.InMemory()
+	n.atxsdata = atxsdata.New()
+	n.proposals = store.New()
 	return n
 }
 
@@ -191,10 +193,9 @@ func (n *node) withOracle() *node {
 	n.oracle = eligibility.New(
 		beaconget,
 		n.db,
+		n.atxsdata,
 		signing.NewVRFVerifier(),
 		layersPerEpoch,
-		config.DefaultConfig(),
-		log.NewNop(),
 	)
 	return n
 }
@@ -215,7 +216,16 @@ func (n *node) withHare() *node {
 	tracer := newTestTracer(n.t)
 	n.tracer = tracer
 	n.patrol = layerpatrol.New()
-	n.hare = New(n.nclock, n.mpublisher, n.db, signing.NewEdVerifier(), n.oracle, n.msyncer, n.patrol,
+	n.hare = New(
+		n.nclock,
+		n.mpublisher,
+		n.db,
+		n.atxsdata,
+		n.proposals,
+		signing.NewEdVerifier(),
+		n.oracle,
+		n.msyncer,
+		n.patrol,
 		WithConfig(n.t.cfg),
 		WithLogger(logger.Zap()),
 		WithWallclock(n.clock),
@@ -236,6 +246,14 @@ func (n *node) waitSent() {
 func (n *node) register(signer *signing.EdSigner) {
 	n.hare.Register(signer)
 	n.registered = append(n.registered, signer)
+}
+
+func (n *node) storeAtx(atx *types.VerifiedActivationTx) error {
+	if err := atxs.Add(n.db, atx); err != nil {
+		return err
+	}
+	n.atxsdata.AddFromHeader(atx.ToHeader(), *atx.VRFNonce, false)
+	return nil
 }
 
 type clusterOpt func(*lockstepCluster)
@@ -395,6 +413,7 @@ func (cl *lockstepCluster) genProposals(lid types.LayerID) {
 		cl.t.rng.Read(bid[:])
 		proposal.SetID(id)
 		proposal.Ballot.SetID(bid)
+		proposal.SetBeacon(proposal.EpochData.Beacon)
 		all = append(all, proposal)
 	}
 	for _, other := range cl.nodes {
@@ -407,7 +426,7 @@ func (cl *lockstepCluster) genProposals(lid types.LayerID) {
 		}
 		for _, proposal := range cp[:int(float64(len(cp))*cl.proposals.fraction)] {
 			require.NoError(cl.t, ballots.Add(other.db, &proposal.Ballot))
-			require.NoError(cl.t, proposals.Add(other.db, proposal))
+			other.hare.OnProposal(proposal)
 		}
 	}
 }
@@ -420,7 +439,7 @@ func (cl *lockstepCluster) setup() {
 			if other.atx == nil {
 				continue
 			}
-			require.NoError(cl.t, atxs.Add(n.db, other.atx))
+			require.NoError(cl.t, n.storeAtx(other.atx))
 		}
 		n.oracle.UpdateActiveSet(cl.t.genesis.GetEpoch()+1, active)
 		n.mpublisher.EXPECT().
@@ -487,7 +506,7 @@ type testTracer struct {
 }
 
 func (t *testTracer) waitStopped() types.LayerID {
-	wait := time.Second
+	wait := 2 * time.Second
 	select {
 	case <-time.After(wait):
 		require.FailNow(t, "didn't stop", "wait %v", wait)
@@ -529,7 +548,7 @@ func (t *testTracer) OnStop(lid types.LayerID) {
 }
 
 func (t *testTracer) OnActive(el []*types.HareEligibility) {
-	wait := time.Second
+	wait := 2 * time.Second
 	select {
 	case <-time.After(wait):
 		require.FailNow(t, "eligibility can't be sent", "wait %v", wait)
@@ -550,11 +569,13 @@ func (*testTracer) OnMessageReceived(*Message) {}
 
 func testHare(t *testing.T, active, inactive, equivocators int, opts ...clusterOpt) {
 	t.Parallel()
+	cfg := DefaultConfig()
+	cfg.LogStats = true
 	tst := &tester{
 		TB:            t,
 		rng:           rand.New(rand.NewSource(1001)),
 		start:         time.Now(),
-		cfg:           DefaultConfig(),
+		cfg:           cfg,
 		layerDuration: 5 * time.Minute,
 		beacon:        types.Beacon{1, 1, 1, 1},
 		genesis:       types.GetEffectiveGenesis(),
@@ -660,7 +681,7 @@ func TestHandler(t *testing.T) {
 	cluster.addActive(1)
 	n := cluster.nodes[0]
 	require.NoError(t, beacons.Add(n.db, tst.genesis.GetEpoch()+1, tst.beacon))
-	require.NoError(t, atxs.Add(n.db, n.atx))
+	require.NoError(t, n.storeAtx(n.atx))
 	n.oracle.UpdateActiveSet(tst.genesis.GetEpoch()+1, []types.ATXID{n.atx.ID()})
 	n.mpublisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	layer := tst.genesis + 1
@@ -730,7 +751,7 @@ func TestHandler(t *testing.T) {
 		require.NoError(t, n.hare.Handler(context.Background(), "", codec.MustEncode(msg1)))
 		require.NoError(t, n.hare.Handler(context.Background(), "", codec.MustEncode(msg2)))
 
-		malicious, err := n.db.IsMalicious(n.signer.NodeID())
+		malicious, err := identities.IsMalicious(n.db, n.signer.NodeID())
 		require.NoError(t, err)
 		require.True(t, malicious)
 
@@ -764,7 +785,7 @@ func gproposal(
 	smesher types.NodeID,
 	layer types.LayerID,
 	beacon types.Beacon,
-) types.Proposal {
+) *types.Proposal {
 	proposal := types.Proposal{}
 	proposal.Layer = layer
 	proposal.EpochData = &types.EpochData{
@@ -775,25 +796,8 @@ func gproposal(
 	proposal.Ballot.SmesherID = smesher
 	proposal.SetID(id)
 	proposal.Ballot.SetID(types.BallotID(id))
-	return proposal
-}
-
-func gref(
-	id types.ProposalID,
-	atxid types.ATXID,
-	smesher types.NodeID,
-	layer types.LayerID,
-	ref types.ProposalID,
-) types.Proposal {
-	proposal := types.Proposal{}
-	proposal.Layer = layer
-	proposal.RefBallot = types.BallotID(ref)
-	proposal.AtxID = atxid
-	proposal.SmesherID = smesher
-	proposal.Ballot.SmesherID = smesher
-	proposal.SetID(id)
-	proposal.Ballot.SetID(types.BallotID(id))
-	return proposal
+	proposal.SetBeacon(beacon)
+	return &proposal
 }
 
 func TestProposals(t *testing.T) {
@@ -815,7 +819,7 @@ func TestProposals(t *testing.T) {
 	for _, tc := range []struct {
 		desc      string
 		atxs      []types.VerifiedActivationTx
-		proposals []types.Proposal
+		proposals []*types.Proposal
 		malicious []types.NodeID
 		layer     types.LayerID
 		beacon    types.Beacon
@@ -830,73 +834,11 @@ func TestProposals(t *testing.T) {
 				gatx(atxids[1], publish, ids[1], 10, 100),
 				gatx(atxids[2], publish, signer.NodeID(), 10, 100),
 			},
-			proposals: []types.Proposal{
+			proposals: []*types.Proposal{
 				gproposal(pids[0], atxids[0], ids[0], layer, goodBeacon),
 				gproposal(pids[1], atxids[1], ids[1], layer, goodBeacon),
 			},
 			expect: []types.ProposalID{pids[0], pids[1]},
-		},
-		{
-			desc:   "reference",
-			layer:  layer,
-			beacon: goodBeacon,
-			atxs: []types.VerifiedActivationTx{
-				gatx(atxids[0], publish, ids[0], 10, 100),
-				gatx(atxids[1], publish, ids[1], 10, 100),
-				gatx(atxids[2], publish, signer.NodeID(), 10, 100),
-			},
-			proposals: []types.Proposal{
-				gproposal(pids[0], atxids[0], ids[0], layer, goodBeacon),
-				gproposal(pids[1], atxids[1], ids[1], layer.Sub(1), goodBeacon),
-				gref(pids[2], atxids[1], ids[1], layer, pids[1]),
-			},
-			expect: []types.ProposalID{pids[0], pids[2]},
-		},
-		{
-			desc:   "no reference",
-			layer:  layer,
-			beacon: goodBeacon,
-			atxs: []types.VerifiedActivationTx{
-				gatx(atxids[0], publish, ids[0], 10, 100),
-				gatx(atxids[1], publish, ids[1], 10, 100),
-				gatx(atxids[2], publish, signer.NodeID(), 10, 100),
-			},
-			proposals: []types.Proposal{
-				gproposal(pids[0], atxids[0], ids[0], layer, goodBeacon),
-				gref(pids[2], atxids[1], ids[1], layer, pids[1]),
-			},
-			expect: []types.ProposalID{},
-		},
-		{
-			desc:   "reference to reference",
-			layer:  layer,
-			beacon: goodBeacon,
-			atxs: []types.VerifiedActivationTx{
-				gatx(atxids[0], publish, ids[0], 10, 100),
-				gatx(atxids[1], publish, ids[1], 10, 100),
-				gatx(atxids[2], publish, signer.NodeID(), 10, 100),
-			},
-			proposals: []types.Proposal{
-				gproposal(pids[0], atxids[0], ids[0], layer, goodBeacon),
-				gref(pids[1], atxids[1], ids[1], layer.Sub(1), pids[1]),
-				gref(pids[2], atxids[1], ids[1], layer, pids[1]),
-			},
-			expect: []types.ProposalID{},
-		},
-		{
-			desc:   "empty reference",
-			layer:  layer,
-			beacon: goodBeacon,
-			atxs: []types.VerifiedActivationTx{
-				gatx(atxids[0], publish, ids[0], 10, 100),
-				gatx(atxids[1], publish, ids[1], 10, 100),
-				gatx(atxids[2], publish, signer.NodeID(), 10, 100),
-			},
-			proposals: []types.Proposal{
-				gproposal(pids[0], atxids[0], ids[0], layer, goodBeacon),
-				gref(pids[1], atxids[1], ids[1], layer, types.EmptyProposalID),
-			},
-			expect: []types.ProposalID{},
 		},
 		{
 			desc:   "mismatched beacon",
@@ -907,7 +849,7 @@ func TestProposals(t *testing.T) {
 				gatx(atxids[1], publish, ids[1], 10, 100),
 				gatx(atxids[2], publish, signer.NodeID(), 10, 100),
 			},
-			proposals: []types.Proposal{
+			proposals: []*types.Proposal{
 				gproposal(pids[0], atxids[0], ids[0], layer, goodBeacon),
 				gproposal(pids[1], atxids[1], ids[1], layer, badBeacon),
 			},
@@ -922,7 +864,7 @@ func TestProposals(t *testing.T) {
 				gatx(atxids[1], publish, ids[1], 10, 100),
 				gatx(atxids[2], publish, signer.NodeID(), 10, 100),
 			},
-			proposals: []types.Proposal{
+			proposals: []*types.Proposal{
 				gproposal(pids[0], atxids[0], ids[0], layer, goodBeacon),
 				gproposal(pids[1], atxids[1], ids[1], layer, goodBeacon),
 				gproposal(pids[2], atxids[1], ids[1], layer, goodBeacon),
@@ -937,7 +879,7 @@ func TestProposals(t *testing.T) {
 				gatx(atxids[0], publish, ids[0], 101, 1000),
 				gatx(atxids[1], publish, signer.NodeID(), 10, 100),
 			},
-			proposals: []types.Proposal{
+			proposals: []*types.Proposal{
 				gproposal(pids[0], atxids[0], ids[0], layer, goodBeacon),
 				gproposal(pids[1], atxids[1], ids[1], layer, goodBeacon),
 			},
@@ -952,7 +894,7 @@ func TestProposals(t *testing.T) {
 				gatx(atxids[1], publish, ids[1], 10, 100),
 				gatx(atxids[2], publish, signer.NodeID(), 10, 100),
 			},
-			proposals: []types.Proposal{
+			proposals: []*types.Proposal{
 				gproposal(pids[0], atxids[0], ids[0], layer, goodBeacon),
 				gproposal(pids[1], atxids[1], ids[1], layer, goodBeacon),
 			},
@@ -961,23 +903,46 @@ func TestProposals(t *testing.T) {
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
-			db := datastore.NewCachedDB(sql.InMemory(), log.NewNop())
-			hare := New(nil, nil, db, nil, nil, nil, layerpatrol.New(), WithLogger(logtest.New(t).Zap()))
+			db := sql.InMemory()
+			atxsdata := atxsdata.New()
+			proposals := store.New()
+			hare := New(nil, nil, db, atxsdata, proposals, nil, nil, nil, layerpatrol.New(), WithLogger(logtest.New(t).Zap()))
 			for _, atx := range tc.atxs {
 				require.NoError(t, atxs.Add(db, &atx))
+				atxsdata.AddFromHeader(atx.ToHeader(), *atx.VRFNonce, false)
 			}
 			for _, proposal := range tc.proposals {
-				require.NoError(t, proposals.Add(db, &proposal))
-				require.NoError(t, ballots.Add(db, &proposal.Ballot))
+				proposals.Add(proposal)
 			}
 			for _, id := range tc.malicious {
 				require.NoError(t, identities.SetMalicious(db, id, []byte("non empty"), time.Time{}))
+				atxsdata.SetMalicious(id)
 			}
-			require.Equal(t, tc.expect, hare.proposals(&session{
+			require.ElementsMatch(t, tc.expect, hare.selectProposals(&session{
 				lid:     tc.layer,
 				beacon:  tc.beacon,
 				signers: []*signing.EdSigner{signer},
 			}))
 		})
 	}
+}
+
+func TestHare_AddProposal(t *testing.T) {
+	t.Parallel()
+	proposals := store.New()
+	hare := New(nil, nil, nil, nil, proposals, nil, nil, nil, nil)
+
+	p := gproposal(
+		types.RandomProposalID(),
+		types.RandomATXID(),
+		types.RandomNodeID(),
+		types.LayerID(0),
+		types.RandomBeacon(),
+	)
+	require.False(t, hare.IsKnown(p.Layer, p.ID()))
+	require.NoError(t, hare.OnProposal(p))
+	require.True(t, proposals.Has(p.ID()))
+
+	require.True(t, hare.IsKnown(p.Layer, p.ID()))
+	require.ErrorIs(t, hare.OnProposal(p), store.ErrProposalExists)
 }

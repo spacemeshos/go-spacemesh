@@ -5,7 +5,9 @@ tmpfile := $(shell mktemp /tmp/systest-XXX)
 test_name ?= TestSmeshing
 org ?= spacemeshos
 image_name ?= $(org)/systest:$(version_info)
-poet_image ?= spacemeshos/poet:v0.9.7
+poet_image ?= $(org)/poet:v0.10.2
+post_service_image ?= $(org)/post-service:v0.7.1
+post_init_image ?= $(org)/postcli:v0.12.1
 smesher_image ?= $(org)/go-spacemesh-dev:$(version_info)
 bs_image ?= $(org)/go-spacemesh-dev-bs:$(version_info)
 test_id ?= systest-$(version_info)
@@ -57,6 +59,8 @@ template:
 	@echo bs-image=$(bs_image) >> $(tmpfile)
 	@echo poet-image=$(poet_image) >> $(tmpfile)
 	@echo poet-size=$(poet_size) >> $(tmpfile)
+	@echo post-service-image=$(post_service_image) >> $(tmpfile)
+	@echo post-init-image=$(post_init_image) >> $(tmpfile)
 	@echo keep=$(keep) >> $(tmpfile)
 	@echo testid=$(test_id) >> $(tmpfile)
 
@@ -74,7 +78,8 @@ gomplate:
 run: gomplate $(run_deps)
 	@echo "launching test job with name=$(test_job_name) and testid=$(test_id)"
 	@testid=$(test_id) job_name=$(test_job_name) image=$(image_name) command="$(command)" gomplate --file systest_job.yml.tmpl | kubectl apply -f -
-	-@kubectl wait --timeout=20s --for=condition=ready -l job-name=$(test_job_name) pod
+	until kubectl get jobs $(test_job_name); do sleep 1; done
+	kubectl wait --timeout=30s --for=condition=ready -l job-name=$(test_job_name) pod
 	kubectl logs job/$(test_job_name) -f --ignore-errors
 	test_job_name=$(test_job_name) ./wait_for_job.sh
 

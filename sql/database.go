@@ -4,12 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
+	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	sqlite "github.com/go-llsqlite/crawshaw"
 	"github.com/go-llsqlite/crawshaw/sqlitex"
 	"github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/zap"
 )
 
 var (
@@ -50,20 +55,29 @@ type Encoder func(*Statement)
 type Decoder func(*Statement) bool
 
 func defaultConf() *conf {
+	migrations, err := StateMigrations()
+	if err != nil {
+		panic(err)
+	}
+
 	return &conf{
-		connections: 16,
-		migrations:  StateMigrations,
+		connections:   16,
+		migrations:    migrations,
+		skipMigration: map[int]struct{}{},
+		logger:        zap.NewNop(),
 	}
 }
 
 type conf struct {
 	flags         sqlite.OpenFlags
 	connections   int
-	migrations    Migrations
+	skipMigration map[int]struct{}
+	vacuumState   int
+	migrations    []Migration
 	enableLatency bool
-
-	// TODO: remove after state is pruned for majority
-	v5Migration func(Executor) error
+	cache         bool
+	cacheSizes    map[QueryCacheKind]int
+	logger        *zap.Logger
 }
 
 // WithConnections overwrites number of pooled connections.
@@ -73,16 +87,55 @@ func WithConnections(n int) Opt {
 	}
 }
 
-// WithMigrations overwrites embedded migrations.
-func WithMigrations(migrations Migrations) Opt {
+func WithLogger(logger *zap.Logger) Opt {
 	return func(c *conf) {
+		c.logger = logger
+	}
+}
+
+// WithMigrations overwrites embedded migrations.
+// Migrations are sorted by order before applying.
+func WithMigrations(migrations []Migration) Opt {
+	return func(c *conf) {
+		sort.Slice(migrations, func(i, j int) bool {
+			return migrations[i].Order() < migrations[j].Order()
+		})
 		c.migrations = migrations
 	}
 }
 
-func WithV5Migration(cb func(Executor) error) Opt {
+// WithMigration adds migration to the list of migrations.
+// It will overwrite an existing migration with the same order.
+func WithMigration(migration Migration) Opt {
 	return func(c *conf) {
-		c.v5Migration = cb
+		for i, m := range c.migrations {
+			if m.Order() == migration.Order() {
+				c.migrations[i] = migration
+				return
+			}
+			if m.Order() > migration.Order() {
+				c.migrations = slices.Insert(c.migrations, i, migration)
+				return
+			}
+		}
+		c.migrations = append(c.migrations, migration)
+	}
+}
+
+// WithSkipMigrations will update database version with executing associated migrations.
+// It should be used at your own risk.
+func WithSkipMigrations(i ...int) Opt {
+	return func(c *conf) {
+		for _, index := range i {
+			c.skipMigration[index] = struct{}{}
+		}
+	}
+}
+
+// WithVacuumState will execute vacuum if database version before the migration was less or equal to the provided value.
+func WithVacuumState(i int) Opt {
+	return func(c *conf) {
+		c.vacuumState = i
 	}
 }
 
@@ -92,6 +145,24 @@ func WithV5Migration(cb func(Executor) error) Opt {
 func WithLatencyMetering(enable bool) Opt {
 	return func(c *conf) {
 		c.enableLatency = enable
+	}
+}
+
+// WithQueryCache enables in-memory caching of results of some queries.
+func WithQueryCache(enable bool) Opt {
+	return func(c *conf) {
+		c.cache = enable
+	}
+}
+
+// WithQueryCacheSizes sets query cache sizes for the specified cache kinds.
+func WithQueryCacheSizes(sizes map[QueryCacheKind]int) Opt {
+	return func(c *conf) {
+		if c.cacheSizes == nil {
+			c.cacheSizes = maps.Clone(sizes)
+		} else {
+			maps.Copy(c.cacheSizes, sizes)
+		}
 	}
 }
 
@@ -131,54 +202,86 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 		if err != nil {
 			return nil, err
 		}
+		after := 0
+		if len(config.migrations) > 0 {
+			after = config.migrations[len(config.migrations)-1].Order()
+		}
+		config.logger.Info("running migrations",
+			zap.String("uri", uri),
+			zap.Int("current version", before),
+			zap.Int("target version", after),
+		)
 		tx, err := db.Tx(context.Background())
 		if err != nil {
 			return nil, err
 		}
-		err = config.migrations(tx)
-		if err == nil {
-			tx.Commit()
-		}
-		tx.Release()
-		if err != nil {
-			return nil, err
-		}
-		if before <= 4 && config.v5Migration != nil {
-			// v5 migration (active set extraction) needs the 3rd migration to execute first
-			if err := config.v5Migration(db); err != nil {
-				return nil, err
+		for i, m := range config.migrations {
+			if m.Order() <= before {
+				continue
 			}
+			if _, ok := config.skipMigration[m.Order()]; !ok {
+				if err := m.Apply(tx); err != nil {
+					for j := i; j >= 0 && config.migrations[j].Order() > before; j-- {
+						if e := config.migrations[j].Rollback(); e != nil {
+							err = errors.Join(err, fmt.Errorf("rollback %s: %w", m.Name(), e))
+							break
+						}
+					}
+
+					tx.Release()
+					err = errors.Join(err, db.Close())
+					return nil, fmt.Errorf("apply %s: %w", m.Name(), err)
+				}
+			}
+			// version is set intentionally even if actual migration was skipped
+			if _, err := tx.Exec(fmt.Sprintf("PRAGMA user_version = %d;", m.Order()), nil, nil); err != nil {
+				return nil, fmt.Errorf("update user_version to %d: %w", m.Order(), err)
+			}
+		}
+		tx.Commit()
+		tx.Release()
+
+		if config.vacuumState != 0 && before <= config.vacuumState {
 			if err := Vacuum(db); err != nil {
 				return nil, err
 			}
 		}
 	}
-	for i := 0; i < config.connections; i++ {
-		conn := pool.Get(context.Background())
-		if err := registerFunctions(conn); err != nil {
-			return nil, err
-		}
-		pool.Put(conn)
+	if config.cache {
+		config.logger.Debug("using query cache", zap.Any("sizes", config.cacheSizes))
+		db.queryCache = &queryCache{cacheSizesByKind: config.cacheSizes}
 	}
+	db.queryCount.Store(0)
 	return db, nil
 }
 
 // Database is an instance of sqlite database.
 type Database struct {
+	*queryCache
 	pool *sqlitex.Pool
 
 	closed   bool
 	closeMux sync.Mutex
 
-	latency *prometheus.HistogramVec
+	latency    *prometheus.HistogramVec
+	queryCount atomic.Int64
+}
+
+func (db *Database) getConn(ctx context.Context) *sqlite.Conn {
+	start := time.Now()
+	conn := db.pool.Get(ctx)
+	if conn != nil {
+		connWaitLatency.Observe(time.Since(start).Seconds())
+	}
+	return conn
 }
 
 func (db *Database) getTx(ctx context.Context, initstmt string) (*Tx, error) {
-	conn := db.pool.Get(ctx)
+	conn := db.getConn(ctx)
 	if conn == nil {
 		return nil, ErrNoConnection
 	}
-	tx := &Tx{db: db, conn: conn}
+	tx := &Tx{queryCache: db.queryCache, db: db, conn: conn}
 	if err := tx.begin(initstmt); err != nil {
 		return nil, err
 	}
@@ -192,6 +295,7 @@ func (db *Database) withTx(ctx context.Context, initstmt string, exec func(*Tx) 
 	}
 	defer tx.Release()
 	if err := exec(tx); err != nil {
+		tx.queryCache.ClearCache()
 		return err
 	}
 	return tx.Commit()
@@ -238,7 +342,8 @@ func (db *Database) WithTxImmediate(ctx context.Context, exec func(*Tx) error) e
 // Note that Exec will block until database is closed or statement has finished.
 // If application needs to control statement execution lifetime use one of the transaction.
 func (db *Database) Exec(query string, encoder Encoder, decoder Decoder) (int, error) {
-	conn := db.pool.Get(context.Background())
+	db.queryCount.Add(1)
+	conn := db.getConn(context.Background())
 	if conn == nil {
 		return 0, ErrNoConnection
 	}
@@ -266,6 +371,17 @@ func (db *Database) Close() error {
 	return nil
 }
 
+// QueryCount returns the number of queries executed, including failed
+// queries, but not counting transaction start / commit / rollback.
+func (db *Database) QueryCount() int {
+	return int(db.queryCount.Load())
+}
+
+// Return database's QueryCache.
+func (db *Database) QueryCache() QueryCache {
+	return db.queryCache
+}
+
 func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (int, error) {
 	stmt, err := conn.Prepare(query)
 	if err != nil {
@@ -281,7 +397,7 @@ func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (in
 		row, err := stmt.Step()
 		if err != nil {
 			code := sqlite.ErrCode(err)
-			if code == sqlite.SQLITE_CONSTRAINT_PRIMARYKEY {
+			if code == sqlite.SQLITE_CONSTRAINT_PRIMARYKEY || code == sqlite.SQLITE_CONSTRAINT_UNIQUE {
 				return 0, ErrObjectExists
 			}
 			return 0, fmt.Errorf("step %d: %w", rows, err)
@@ -305,6 +421,7 @@ func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (in
 
 // Tx is wrapper for database transaction.
 type Tx struct {
+	*queryCache
 	db        *Database
 	conn      *sqlite.Conn
 	committed bool
@@ -344,6 +461,7 @@ func (tx *Tx) Release() error {
 
 // Exec query.
 func (tx *Tx) Exec(query string, encoder Encoder, decoder Decoder) (int, error) {
+	tx.db.queryCount.Add(1)
 	if tx.db.latency != nil {
 		start := time.Now()
 		defer func() {

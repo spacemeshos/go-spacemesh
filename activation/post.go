@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"runtime"
 	"sync"
+	"time"
 
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/initialization"
@@ -24,12 +25,15 @@ type PostSetupProvider initialization.Provider
 
 // PostConfig is the configuration of the Post protocol, used for data creation, proofs generation and validation.
 type PostConfig struct {
-	MinNumUnits   uint32        `mapstructure:"post-min-numunits"`
-	MaxNumUnits   uint32        `mapstructure:"post-max-numunits"`
-	LabelsPerUnit uint64        `mapstructure:"post-labels-per-unit"`
-	K1            uint32        `mapstructure:"post-k1"`
-	K2            uint32        `mapstructure:"post-k2"`
-	K3            uint32        `mapstructure:"post-k3"`
+	MinNumUnits   uint32 `mapstructure:"post-min-numunits"`
+	MaxNumUnits   uint32 `mapstructure:"post-max-numunits"`
+	LabelsPerUnit uint64 `mapstructure:"post-labels-per-unit"`
+	K1            uint   `mapstructure:"post-k1"`
+	K2            uint   `mapstructure:"post-k2"`
+	// size of the subset of labels to verify in POST proofs
+	// lower values will result in faster ATX verification but increase the risk
+	// as the node must depend on malfeasance proofs to detect invalid ATXs
+	K3            uint          `mapstructure:"post-k3"`
 	PowDifficulty PowDifficulty `mapstructure:"post-pow-difficulty"`
 }
 
@@ -40,7 +44,6 @@ func (c PostConfig) ToConfig() config.Config {
 		LabelsPerUnit: c.LabelsPerUnit,
 		K1:            c.K1,
 		K2:            c.K2,
-		K3:            c.K3,
 		PowDifficulty: [32]byte(c.PowDifficulty),
 	}
 }
@@ -77,22 +80,33 @@ func DefaultPostProvingOpts() PostProvingOpts {
 	}
 }
 
-// PostProvingOpts are the options controlling POST proving process.
+// PostProofVerifyingOpts are the options controlling POST proving process.
 type PostProofVerifyingOpts struct {
+	// Disable verifying POST proofs. Experimental.
+	// Use with caution, only on private nodes with a trusted public peer that
+	// validates the proofs.
+	Disabled bool `mapstructure:"smeshing-opts-verifying-disable"`
+
 	// Number of workers spawned to verify proofs.
 	Workers int `mapstructure:"smeshing-opts-verifying-workers"`
+	// The minimum number of verifying workers to keep
+	// while POST is being generated in parallel.
+	//
+	// Caps at the value of `Workers` (then scaling is disabled).
+	MinWorkers int `mapstructure:"smeshing-opts-verifying-min-workers"`
 	// Flags used for the PoW verification.
 	Flags PostPowFlags `mapstructure:"smeshing-opts-verifying-powflags"`
 }
 
 func DefaultPostVerifyingOpts() PostProofVerifyingOpts {
-	workers := runtime.NumCPU() * 3 / 4
+	workers := runtime.NumCPU() * 1 / 2
 	if workers < 1 {
 		workers = 1
 	}
 	return PostProofVerifyingOpts{
-		Workers: workers,
-		Flags:   PostPowFlags(config.DefaultVerifyingPowFlags()),
+		MinWorkers: 1,
+		Workers:    workers,
+		Flags:      PostPowFlags(config.DefaultVerifyingPowFlags()),
 	}
 }
 
@@ -123,7 +137,7 @@ func DefaultPostConfig() PostConfig {
 		LabelsPerUnit: cfg.LabelsPerUnit,
 		K1:            cfg.K1,
 		K2:            cfg.K2,
-		K3:            cfg.K3,
+		K3:            cfg.K2, // The default is to verify all K2 indices.
 		PowDifficulty: PowDifficulty(cfg.PowDifficulty),
 	}
 }
@@ -161,37 +175,58 @@ func (o PostSetupOpts) ToInitOpts() config.InitOpts {
 
 // PostSetupManager implements the PostProvider interface.
 type PostSetupManager struct {
-	id              types.NodeID
 	commitmentAtxId types.ATXID
+	syncer          syncer
 
 	cfg         PostConfig
 	logger      *zap.Logger
 	db          *datastore.CachedDB
 	goldenATXID types.ATXID
+	validator   nipostValidator
 
 	mu       sync.Mutex                  // mu protects setting the values below.
 	lastOpts *PostSetupOpts              // the last options used to initiate a Post setup session.
 	state    PostSetupState              // state is the current state of the Post setup.
 	init     *initialization.Initializer // init is the current initializer instance.
+
+	// delay before PoST in ATX is considered valid (counting from the time it was received)
+	// used to decide whether to fully verify a candidate for commitment ATX
+	postValidityDelay time.Duration
+}
+
+type PostSetupManagerOpt func(*PostSetupManager)
+
+// PostValidityDelay sets the delay before PoST in ATX is considered valid.
+func PostValidityDelay(delay time.Duration) PostSetupManagerOpt {
+	return func(mgr *PostSetupManager) {
+		mgr.postValidityDelay = delay
+	}
 }
 
 // NewPostSetupManager creates a new instance of PostSetupManager.
 func NewPostSetupManager(
-	id types.NodeID,
 	cfg PostConfig,
 	logger *zap.Logger,
 	db *datastore.CachedDB,
 	goldenATXID types.ATXID,
+	syncer syncer,
+	validator nipostValidator,
+	opts ...PostSetupManagerOpt,
 ) (*PostSetupManager, error) {
 	mgr := &PostSetupManager{
-		id:          id,
 		cfg:         cfg,
 		logger:      logger,
 		db:          db,
 		goldenATXID: goldenATXID,
 		state:       PostSetupStateNotStarted,
-	}
+		syncer:      syncer,
+		validator:   validator,
 
+		postValidityDelay: 12 * time.Hour,
+	}
+	for _, opt := range opts {
+		opt(mgr)
+	}
 	return mgr, nil
 }
 
@@ -222,7 +257,7 @@ func (mgr *PostSetupManager) Status() *PostSetupStatus {
 // previously started session, and will return an error if a session is already
 // in progress. It must be ensured that PrepareInitializer is called once
 // before each call to StartSession and that the node is ATX synced.
-func (mgr *PostSetupManager) StartSession(ctx context.Context) error {
+func (mgr *PostSetupManager) StartSession(ctx context.Context, id types.NodeID) error {
 	// Ensure only one goroutine can execute initialization at a time.
 	err := func() error {
 		mgr.mu.Lock()
@@ -237,7 +272,7 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context) error {
 		return err
 	}
 	mgr.logger.Info("post setup session starting",
-		zap.Stringer("node_id", mgr.id),
+		zap.Stringer("node_id", id),
 		zap.Stringer("commitment_atx", mgr.commitmentAtxId),
 		zap.String("data_dir", mgr.lastOpts.DataDir),
 		zap.Uint32("num_units", mgr.lastOpts.NumUnits),
@@ -245,7 +280,7 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context) error {
 		zap.Stringer("provider", mgr.lastOpts.ProviderID),
 	)
 	public.InitStart.Set(float64(mgr.lastOpts.NumUnits))
-	events.EmitInitStart(mgr.id, mgr.commitmentAtxId)
+	events.EmitInitStart(id, mgr.commitmentAtxId)
 	err = mgr.init.Initialize(ctx)
 
 	mgr.mu.Lock()
@@ -262,19 +297,19 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context) error {
 			zap.Error(errLabelMismatch),
 		)
 		mgr.state = PostSetupStateError
-		events.EmitInitFailure(mgr.id, mgr.commitmentAtxId, errLabelMismatch)
+		events.EmitInitFailure(id, mgr.commitmentAtxId, errLabelMismatch)
 		return nil
 	case err != nil:
 		mgr.logger.Error("post setup session failed", zap.Error(err))
 		mgr.state = PostSetupStateError
-		events.EmitInitFailure(mgr.id, mgr.commitmentAtxId, err)
+		events.EmitInitFailure(id, mgr.commitmentAtxId, err)
 		return err
 	}
 	public.InitEnd.Set(float64(mgr.lastOpts.NumUnits))
 	events.EmitInitComplete()
 
 	mgr.logger.Info("post setup completed",
-		zap.Stringer("node_id", mgr.id),
+		zap.Stringer("node_id", id),
 		zap.Stringer("commitment_atx", mgr.commitmentAtxId),
 		zap.String("data_dir", mgr.lastOpts.DataDir),
 		zap.Uint32("num_units", mgr.lastOpts.NumUnits),
@@ -292,7 +327,8 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context) error {
 // (StartSession can take days to complete). After the first call to this
 // method subsequent calls to this method will return an error until
 // StartSession has completed execution.
-func (mgr *PostSetupManager) PrepareInitializer(opts PostSetupOpts) error {
+func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSetupOpts, id types.NodeID) error {
+	mgr.logger.Info("preparing post initializer", zap.Any("opts", opts))
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
 	if mgr.state == PostSetupStatePrepared || mgr.state == PostSetupStateInProgress {
@@ -300,13 +336,13 @@ func (mgr *PostSetupManager) PrepareInitializer(opts PostSetupOpts) error {
 	}
 
 	var err error
-	mgr.commitmentAtxId, err = mgr.commitmentAtx(opts.DataDir)
+	mgr.commitmentAtxId, err = mgr.commitmentAtx(ctx, opts.DataDir, id)
 	if err != nil {
 		return err
 	}
 
 	newInit, err := initialization.NewInitializer(
-		initialization.WithNodeId(mgr.id.Bytes()),
+		initialization.WithNodeId(id.Bytes()),
 		initialization.WithCommitmentAtxId(mgr.commitmentAtxId.Bytes()),
 		initialization.WithConfig(mgr.cfg.ToConfig()),
 		initialization.WithInitOpts(opts.ToInitOpts()),
@@ -323,14 +359,14 @@ func (mgr *PostSetupManager) PrepareInitializer(opts PostSetupOpts) error {
 	return nil
 }
 
-func (mgr *PostSetupManager) commitmentAtx(dataDir string) (types.ATXID, error) {
+func (mgr *PostSetupManager) commitmentAtx(ctx context.Context, dataDir string, id types.NodeID) (types.ATXID, error) {
 	m, err := initialization.LoadMetadata(dataDir)
 	switch {
 	case err == nil:
 		return types.ATXID(types.BytesToHash(m.CommitmentAtxId)), nil
 	case errors.Is(err, initialization.ErrStateMetadataFileMissing):
 		// if this node has already published an ATX, get its initial ATX and from it the commitment ATX
-		atxId, err := atxs.GetFirstIDByNodeID(mgr.db, mgr.id)
+		atxId, err := atxs.GetFirstIDByNodeID(mgr.db, id)
 		if err == nil {
 			atx, err := atxs.Get(mgr.db, atxId)
 			if err != nil {
@@ -343,7 +379,7 @@ func (mgr *PostSetupManager) commitmentAtx(dataDir string) (types.ATXID, error) 
 		}
 
 		// if this node has not published an ATX select the best ATX with `findCommitmentAtx`
-		return mgr.findCommitmentAtx()
+		return mgr.findCommitmentAtx(ctx)
 	default:
 		return types.EmptyATXID, fmt.Errorf("load metadata: %w", err)
 	}
@@ -352,8 +388,25 @@ func (mgr *PostSetupManager) commitmentAtx(dataDir string) (types.ATXID, error) 
 // findCommitmentAtx determines the best commitment ATX to use for the node.
 // It will use the ATX with the highest height seen by the node and defaults to the goldenATX,
 // when no ATXs have yet been published.
-func (mgr *PostSetupManager) findCommitmentAtx() (types.ATXID, error) {
-	atx, err := atxs.GetIDWithMaxHeight(mgr.db, types.EmptyNodeID)
+func (mgr *PostSetupManager) findCommitmentAtx(ctx context.Context) (types.ATXID, error) {
+	mgr.logger.Info("waiting for ATXs to sync before selecting commitment ATX")
+	select {
+	case <-ctx.Done():
+		return types.EmptyATXID, ctx.Err()
+	case <-mgr.syncer.RegisterForATXSynced():
+		mgr.logger.Info("ATXs synced - selecting commitment ATX")
+	}
+
+	atx, err := findFullyValidHighTickAtx(
+		context.Background(),
+		mgr.db,
+		types.EmptyNodeID,
+		mgr.goldenATXID,
+		mgr.validator,
+		mgr.logger,
+		VerifyChainOpts.AssumeValidBefore(time.Now().Add(-mgr.postValidityDelay)),
+		VerifyChainOpts.WithLogger(mgr.logger),
+	)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
 		mgr.logger.Info("using golden atx as commitment atx")

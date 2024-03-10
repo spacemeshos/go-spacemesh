@@ -187,7 +187,7 @@ func TestEligibilityValidator(t *testing.T) {
 				geligibilities(1, 2),
 			),
 			fail: true,
-			err:  "zero total weight",
+			err:  "empty active set",
 		},
 		{
 			desc:    "ref ballot in previous",
@@ -277,21 +277,6 @@ func TestEligibilityValidator(t *testing.T) {
 			),
 			fail: true,
 			err:  "beacon is missing",
-		},
-		{
-			desc:    "ref ballot in current atx in set missing",
-			current: epoch.FirstLayer(),
-			atxs: []types.VerifiedActivationTx{
-				gatx(types.ATXID{1}, epoch-1, types.NodeID{1}, 10, 10),
-			},
-			actives: gactiveset(types.ATXID{1}, types.ATXID{2}),
-			executed: gballot(
-				types.BallotID{1}, types.ATXID{1},
-				types.NodeID{1}, epoch.FirstLayer(), gdata(10, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
-				geligibilities(1, 2),
-			),
-			fail: true,
-			err:  "atx in active set is missing",
 		},
 		{
 			desc:    "mismatched num eligible",
@@ -586,13 +571,8 @@ func TestEligibilityValidator(t *testing.T) {
 				ms.mvrf,
 			)
 			for _, atx := range tc.atxs {
-				c.Add(
-					atx.TargetEpoch(),
-					atx.SmesherID,
-					atx.ID(),
-					atx.GetWeight(),
-					atx.BaseTickHeight(),
-					atx.TickHeight(),
+				c.AddFromHeader(
+					atx.ToHeader(),
 					0,
 					false,
 				)
@@ -604,8 +584,8 @@ func TestEligibilityValidator(t *testing.T) {
 				ms.mbc.EXPECT().
 					ReportBeaconFromBallot(tc.executed.Layer.GetEpoch(), &tc.executed, gomock.Any(), gomock.Any())
 			}
-			rst, err := tv.CheckEligibility(context.Background(), &tc.executed, tc.actives)
-			assert.Equal(t, !tc.fail, rst)
+			totalWeight, _ := c.WeightForSet(tc.executed.Layer.GetEpoch(), tc.actives)
+			err := tv.CheckEligibility(context.Background(), &tc.executed, totalWeight)
 			if len(tc.err) == 0 {
 				assert.Empty(t, err)
 			} else {

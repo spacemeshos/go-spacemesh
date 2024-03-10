@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	"golang.org/x/sync/errgroup"
@@ -14,38 +15,78 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 var errBadRequest = errors.New("invalid request")
 
 // GetAtxs gets the data for given atx IDs and validates them. returns an error if at least one ATX cannot be fetched.
-func (f *Fetch) GetAtxs(ctx context.Context, ids []types.ATXID) error {
+func (f *Fetch) GetAtxs(ctx context.Context, ids []types.ATXID, opts ...system.GetAtxOpt) error {
 	if len(ids) == 0 {
 		return nil
 	}
-	f.logger.WithContext(ctx).With().Debug("requesting atxs from peer", log.Int("num_atxs", len(ids)))
+
+	options := system.GetAtxOpts{}
+	for _, opt := range opts {
+		opt(&options)
+	}
+
+	f.logger.WithContext(ctx).With().
+		Debug("requesting atxs from peer", log.Int("num_atxs", len(ids)), log.Bool("limiting", !options.LimitingOff))
 	hashes := types.ATXIDsToHashes(ids)
-	return f.getHashes(ctx, hashes, datastore.ATXDB, f.validators.atx.HandleMessage)
+	if options.LimitingOff {
+		return f.getHashes(ctx, hashes, datastore.ATXDB, f.validators.atx.HandleMessage)
+	}
+	return f.getHashes(ctx, hashes, datastore.ATXDB, f.validators.atx.HandleMessage, withLimiter(f.getAtxsLimiter))
 }
 
 type dataReceiver func(context.Context, types.Hash32, p2p.Peer, []byte) error
+
+type getHashesOpt func(*getHashesOpts)
+
+func withLimiter(l limiter) getHashesOpt {
+	return func(o *getHashesOpts) {
+		o.limiter = l
+	}
+}
 
 func (f *Fetch) getHashes(
 	ctx context.Context,
 	hashes []types.Hash32,
 	hint datastore.Hint,
 	receiver dataReceiver,
+	opts ...getHashesOpt,
 ) error {
-	var eg errgroup.Group
-	var errs error
-	var mu sync.Mutex
-	for _, hash := range hashes {
+	options := getHashesOpts{
+		limiter: noLimit{},
+	}
+	for _, opt := range opts {
+		opt(&options)
+	}
+
+	pendingMetric := pendingHashReqs.WithLabelValues(string(hint))
+	pendingMetric.Add(float64(len(hashes)))
+
+	var (
+		eg       errgroup.Group
+		mu       sync.Mutex
+		bfailure = BatchError{Errors: map[types.Hash32]error{}}
+	)
+	for i, hash := range hashes {
+		if err := options.limiter.Acquire(ctx, 1); err != nil {
+			pendingMetric.Add(float64(i - len(hashes)))
+			return fmt.Errorf("acquiring slot to get hash: %w", err)
+		}
 		p, err := f.getHash(ctx, hash, hint, receiver)
 		if err != nil {
+			options.limiter.Release(1)
+			pendingMetric.Add(float64(i - len(hashes)))
 			return err
 		}
 		if p == nil {
 			// data is available locally
+			options.limiter.Release(1)
+			pendingMetric.Add(-1)
 			continue
 		}
 
@@ -53,21 +94,33 @@ func (f *Fetch) getHashes(
 		eg.Go(func() error {
 			select {
 			case <-ctx.Done():
+				options.limiter.Release(1)
+				pendingMetric.Add(-1)
 				return ctx.Err()
 			case <-p.completed:
+				options.limiter.Release(1)
+				pendingMetric.Add(-1)
 				if p.err != nil {
+					f.logger.With().Debug("failed to get hash",
+						log.String("hint", string(hint)),
+						log.Stringer("hash", h),
+						log.Err(p.err),
+					)
+
 					mu.Lock()
-					defer mu.Unlock()
-					err := fmt.Errorf("hint: %v, hash: %v, err: %w", hint, h.String(), p.err)
-					errs = errors.Join(errs, err)
+					bfailure.Add(h, p.err)
+					mu.Unlock()
 				}
 				return nil
 			}
 		})
 	}
 
-	err := eg.Wait()
-	return errors.Join(errs, err)
+	eg.Wait()
+	if !bfailure.Empty() {
+		return &bfailure
+	}
+	return nil
 }
 
 // GetActiveSet downloads activeset.
@@ -157,7 +210,7 @@ func (f *Fetch) GetPoetProof(ctx context.Context, id types.Hash32) error {
 		return nil
 	case errors.Is(pm.err, activation.ErrObjectExists):
 		// PoET proofs are concurrently stored in DB in two places:
-		// fetcher and nipost builder. Hence it might happen that
+		// fetcher and nipost builder. Hence, it might happen that
 		// a proof had been inserted into the DB while the fetcher
 		// was fetching.
 		return nil
@@ -170,68 +223,21 @@ func (f *Fetch) GetPoetProof(ctx context.Context, id types.Hash32) error {
 	}
 }
 
-func (f *Fetch) GetMaliciousIDs(
-	ctx context.Context,
-	peers []p2p.Peer,
-	okCB func([]byte, p2p.Peer),
-	errCB func(error, p2p.Peer),
-) error {
-	return poll(ctx, f.servers[malProtocol], peers, []byte{}, okCB, errCB)
+func (f *Fetch) GetMaliciousIDs(ctx context.Context, peer p2p.Peer) ([]byte, error) {
+	return f.meteredRequest(ctx, malProtocol, peer, []byte{})
 }
 
 // GetLayerData get layer data from peers.
-func (f *Fetch) GetLayerData(
-	ctx context.Context,
-	peers []p2p.Peer,
-	lid types.LayerID,
-	okCB func([]byte, p2p.Peer),
-	errCB func(error, p2p.Peer),
-) error {
-	lidBytes, err := codec.Encode(&lid)
-	if err != nil {
-		return err
-	}
-	return poll(ctx, f.servers[lyrDataProtocol], peers, lidBytes, okCB, errCB)
+func (f *Fetch) GetLayerData(ctx context.Context, peer p2p.Peer, lid types.LayerID) ([]byte, error) {
+	lidBytes := codec.MustEncode(&lid)
+	return f.meteredRequest(ctx, lyrDataProtocol, peer, lidBytes)
 }
 
-func (f *Fetch) GetLayerOpinions(
-	ctx context.Context,
-	peers []p2p.Peer,
-	lid types.LayerID,
-	okCB func([]byte, p2p.Peer),
-	errCB func(error, p2p.Peer),
-) error {
-	req := OpinionRequest{
+func (f *Fetch) GetLayerOpinions(ctx context.Context, peer p2p.Peer, lid types.LayerID) ([]byte, error) {
+	reqData := codec.MustEncode(&OpinionRequest{
 		Layer: lid,
-	}
-	reqData, err := codec.Encode(&req)
-	if err != nil {
-		return err
-	}
-	return poll(ctx, f.servers[OpnProtocol], peers, reqData, okCB, errCB)
-}
-
-func poll(
-	ctx context.Context,
-	srv requester,
-	peers []p2p.Peer,
-	req []byte,
-	okCB func([]byte, p2p.Peer),
-	errCB func(error, p2p.Peer),
-) error {
-	for _, p := range peers {
-		peer := p
-		okFunc := func(data []byte) {
-			okCB(data, peer)
-		}
-		errFunc := func(err error) {
-			errCB(err, peer)
-		}
-		if err := srv.Request(ctx, peer, req, okFunc, errFunc); err != nil {
-			errFunc(err)
-		}
-	}
-	return nil
+	})
+	return f.meteredRequest(ctx, OpnProtocol, peer, reqData)
 }
 
 // PeerEpochInfo get the epoch info published in the given epoch from the specified peer.
@@ -239,35 +245,17 @@ func (f *Fetch) PeerEpochInfo(ctx context.Context, peer p2p.Peer, epoch types.Ep
 	f.logger.WithContext(ctx).With().Debug("requesting epoch info from peer",
 		log.Stringer("peer", peer),
 		log.Stringer("epoch", epoch))
-
-	var (
-		done = make(chan error, 1)
-		ed   EpochData
-	)
-	okCB := func(data []byte) {
-		done <- codec.Decode(data, &ed)
-	}
-	errCB := func(perr error) {
-		done <- perr
-	}
-	epochBytes, err := codec.Encode(epoch)
+	epochBytes := codec.MustEncode(epoch)
+	data, err := f.meteredRequest(ctx, atxProtocol, peer, epochBytes)
 	if err != nil {
 		return nil, err
 	}
-	if err := f.servers[atxProtocol].Request(ctx, peer, epochBytes, okCB, errCB); err != nil {
-		return nil, err
+	var ed EpochData
+	if err := codec.Decode(data, &ed); err != nil {
+		return nil, fmt.Errorf("decoding epoch data: %w", err)
 	}
-	select {
-	case err := <-done:
-		if err != nil {
-			return nil, err
-		}
-		f.RegisterPeerHashes(peer, types.ATXIDsToHashes(ed.AtxIDs))
-		return &ed, nil
-	case <-ctx.Done():
-		f.logger.WithContext(ctx).With().Debug("context done")
-		return nil, ctx.Err()
-	}
+	f.RegisterPeerHashes(peer, types.ATXIDsToHashes(ed.AtxIDs))
+	return &ed, nil
 }
 
 func (f *Fetch) PeerMeshHashes(ctx context.Context, peer p2p.Peer, req *MeshHashRequest) (*MeshHashes, error) {
@@ -276,38 +264,18 @@ func (f *Fetch) PeerMeshHashes(ctx context.Context, peer p2p.Peer, req *MeshHash
 		log.Object("req", req),
 	)
 
-	var (
-		done    = make(chan error, 1)
-		hashes  []types.Hash32
-		reqData []byte
-	)
-	reqData, err := codec.Encode(req)
+	reqData := codec.MustEncode(req)
+	data, err := f.meteredRequest(ctx, meshHashProtocol, peer, reqData)
 	if err != nil {
-		f.logger.With().Fatal("failed to encode mesh hash request", log.Err(err))
-	}
-
-	okCB := func(data []byte) {
-		h, err := codec.DecodeSlice[types.Hash32](data)
-		hashes = h
-		done <- err
-	}
-	errCB := func(perr error) {
-		done <- perr
-	}
-	if err = f.servers[meshHashProtocol].Request(ctx, peer, reqData, okCB, errCB); err != nil {
 		return nil, err
 	}
-	select {
-	case err := <-done:
-		if err != nil {
-			return nil, err
-		}
-		return &MeshHashes{
-			Hashes: hashes,
-		}, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
+	hashes, err := codec.DecodeSlice[types.Hash32](data)
+	if err != nil {
+		return nil, fmt.Errorf("decoding hashes response: %w", err)
 	}
+	return &MeshHashes{
+		Hashes: hashes,
+	}, nil
 }
 
 func (f *Fetch) GetCert(
@@ -322,49 +290,59 @@ func (f *Fetch) GetCert(
 		Layer: lid,
 		Block: &bid,
 	}
-	reqData, err := codec.Encode(req)
-	if err != nil {
-		f.logger.With().Fatal("failed to encode cert request", log.Err(err))
-	}
+	reqData := codec.MustEncode(req)
 
-	out := make(chan *types.Certificate, 1)
 	for _, peer := range peers {
-		done := make(chan error, 1)
-		okCB := func(data []byte) {
-			var peerCert types.Certificate
-			if err = codec.Decode(data, &peerCert); err != nil {
-				done <- err
-				return
-			}
-			// for generic data fetches by hash (ID for atx/block/proposal/ballot/tx), the check on whether the returned
-			// data matching the hash was done on the data handlers' path. for block certificate, there is no ID associated
-			// with it, hence the check here.
-			// however, certificate doesn't go through that path. it's requested by a separate protocol because a block
-			// certificate doesn't have an ID.
-			if peerCert.BlockID != bid {
-				done <- fmt.Errorf("peer %v served wrong cert. want %s got %s", peer, bid.String(), peerCert.BlockID.String())
-				return
-			}
-			out <- &peerCert
-		}
-		errCB := func(perr error) {
-			done <- perr
-		}
-		if err := f.servers[OpnProtocol].Request(ctx, peer, reqData, okCB, errCB); err != nil {
-			done <- err
-		}
-		select {
-		case err := <-done:
-			f.logger.With().Debug("failed to get cert from peer",
-				log.Stringer("peer", peer),
-				log.Err(err),
-			)
+		data, err := f.meteredRequest(ctx, OpnProtocol, peer, reqData)
+		if err != nil {
+			f.logger.With().Debug("failed to get cert", log.Stringer("peer", peer), log.Err(err))
 			continue
-		case cert := <-out:
-			return cert, nil
-		case <-ctx.Done():
-			return nil, ctx.Err()
 		}
+		var peerCert types.Certificate
+		if err = codec.Decode(data, &peerCert); err != nil {
+			f.logger.With().Debug("failed to decode cert", log.Stringer("peer", peer), log.Err(err))
+			continue
+		}
+		// for generic data fetches by hash (ID for atx/block/proposal/ballot/tx), the check on whether the returned
+		// data matching the hash was done on the data handlers' path. for block certificate, there is no ID associated
+		// with it, hence the check here.
+		// however, certificate doesn't go through that path. it's requested by a separate protocol because a block
+		// certificate doesn't have an ID.
+		if peerCert.BlockID != bid {
+			f.logger.With().Debug(
+				"peer served wrong cert",
+				log.Stringer("want", bid),
+				log.Stringer("got", peerCert.BlockID),
+				log.Stringer("peer", peer),
+			)
+		}
+		return &peerCert, nil
 	}
-	return nil, fmt.Errorf("failed to get cert %v/%s from %d peers", lid, bid.String(), len(peers))
+	return nil, fmt.Errorf("failed to get cert %v/%s from %d peers: %w", lid, bid.String(), len(peers), ctx.Err())
+}
+
+type BatchError struct {
+	Errors map[types.Hash32]error
+}
+
+func (b *BatchError) Empty() bool {
+	return len(b.Errors) == 0
+}
+
+func (b *BatchError) Add(id types.Hash32, err error) {
+	if b.Errors == nil {
+		b.Errors = map[types.Hash32]error{}
+	}
+	b.Errors[id] = err
+}
+
+func (b *BatchError) Error() string {
+	var builder strings.Builder
+	builder.WriteString("batch failure: ")
+	for hash, err := range b.Errors {
+		builder.WriteString(hash.ShortString())
+		builder.WriteString("=")
+		builder.WriteString(err.Error())
+	}
+	return builder.String()
 }

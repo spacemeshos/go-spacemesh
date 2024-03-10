@@ -14,6 +14,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
 )
@@ -68,6 +69,7 @@ func newTracer(opts ...TraceOpt) *tracer {
 
 type traceRunner struct {
 	opts          []Opt
+	atxdata       *atxsdata.Data
 	trt           *Tortoise
 	pending       map[types.BallotID]*DecodedBallot
 	assertOutputs bool
@@ -119,11 +121,10 @@ const (
 	traceTally
 	traceBlock
 	traceHare
-	traceActiveset
-	traceResults
 	traceUpdates
 	traceApplied
-	traceMalfeasence
+	traceMalfeasance
+	traceRecoveredBlocks
 )
 
 type traceEvent interface {
@@ -154,14 +155,17 @@ func (c *ConfigTrace) New() traceEvent {
 func (c *ConfigTrace) Run(r *traceRunner) error {
 	types.SetLayersPerEpoch(c.EpochSize)
 	types.SetEffectiveGenesis(c.EffectiveGenesis)
-	trt, err := New(append(r.opts, WithConfig(Config{
-		Hdist:                    c.Hdist,
-		Zdist:                    c.Zdist,
-		WindowSize:               c.WindowSize,
-		MaxExceptions:            int(c.MaxExceptions),
-		BadBeaconVoteDelayLayers: c.BadBeaconVoteDelayLayers,
-		LayerSize:                c.LayerSize,
-	}))...)
+	r.atxdata = atxsdata.New(atxsdata.WithCapacityFromLayers(c.WindowSize, c.EpochSize))
+	trt, err := New(
+		r.atxdata,
+		append(r.opts, WithConfig(Config{
+			Hdist:                    c.Hdist,
+			Zdist:                    c.Zdist,
+			WindowSize:               c.WindowSize,
+			MaxExceptions:            int(c.MaxExceptions),
+			BadBeaconVoteDelayLayers: c.BadBeaconVoteDelayLayers,
+			LayerSize:                c.LayerSize,
+		}))...)
 	if err != nil {
 		return err
 	}
@@ -170,7 +174,9 @@ func (c *ConfigTrace) Run(r *traceRunner) error {
 }
 
 type AtxTrace struct {
-	Header *types.AtxTortoiseData `json:",inline"`
+	ID          types.ATXID   `json:"id"`
+	TargetEpoch types.EpochID `json:"target"`
+	Atx         *atxsdata.ATX `json:",inline"`
 }
 
 func (a *AtxTrace) Type() eventType {
@@ -182,7 +188,8 @@ func (a *AtxTrace) New() traceEvent {
 }
 
 func (a *AtxTrace) Run(r *traceRunner) error {
-	r.trt.OnAtx(a.Header)
+	r.atxdata.AddAtx(a.TargetEpoch, a.ID, a.Atx)
+	r.trt.OnAtx(a.TargetEpoch, a.ID, a.Atx)
 	return nil
 }
 
@@ -410,7 +417,6 @@ func (a *AppliedTrace) Run(r *traceRunner) error {
 
 type BlockTrace struct {
 	Header types.BlockHeader `json:",inline"`
-	Valid  bool              `json:"v"`
 }
 
 func (b *BlockTrace) Type() eventType {
@@ -422,11 +428,7 @@ func (b *BlockTrace) New() traceEvent {
 }
 
 func (b *BlockTrace) Run(r *traceRunner) error {
-	if b.Valid {
-		r.trt.OnValidBlock(b.Header)
-	} else {
-		r.trt.OnBlock(b.Header)
-	}
+	r.trt.OnBlock(b.Header)
 	return nil
 }
 
@@ -435,7 +437,7 @@ type MalfeasanceTrace struct {
 }
 
 func (m *MalfeasanceTrace) Type() eventType {
-	return traceMalfeasence
+	return traceMalfeasance
 }
 
 func (m *MalfeasanceTrace) New() traceEvent {
@@ -444,6 +446,46 @@ func (m *MalfeasanceTrace) New() traceEvent {
 
 func (m *MalfeasanceTrace) Run(r *traceRunner) error {
 	r.trt.OnMalfeasance(m.ID)
+	return nil
+}
+
+type headerWithValidity struct {
+	Header types.BlockHeader `json:"header"`
+	Valid  bool              `json:"valid"`
+}
+
+func newRecoveredBlocksTrace(
+	layer types.LayerID,
+	blocks map[types.BlockHeader]bool,
+	hare *types.BlockID,
+) *RecoveredBlocksTrace {
+	rst := make([]headerWithValidity, 0, len(blocks))
+	for header, validity := range blocks {
+		rst = append(rst, headerWithValidity{header, validity})
+	}
+	return &RecoveredBlocksTrace{Layer: layer, Blocks: rst, Hare: hare}
+}
+
+type RecoveredBlocksTrace struct {
+	Layer  types.LayerID        `json:"layer"`
+	Blocks []headerWithValidity `json:"blocks"`
+	Hare   *types.BlockID       `json:"hare"`
+}
+
+func (r *RecoveredBlocksTrace) Type() eventType {
+	return traceRecoveredBlocks
+}
+
+func (r *RecoveredBlocksTrace) New() traceEvent {
+	return &RecoveredBlocksTrace{}
+}
+
+func (r *RecoveredBlocksTrace) Run(tr *traceRunner) error {
+	validity := map[types.BlockHeader]bool{}
+	for _, block := range r.Blocks {
+		validity[block.Header] = block.Valid
+	}
+	tr.trt.OnRecoveredBlocks(r.Layer, validity, r.Hare)
 	return nil
 }
 
@@ -474,6 +516,7 @@ func newEventEnum() eventEnum {
 	enum.Register(&UpdatesTrace{})
 	enum.Register(&AppliedTrace{})
 	enum.Register(&MalfeasanceTrace{})
+	enum.Register(&RecoveredBlocksTrace{})
 	return enum
 }
 

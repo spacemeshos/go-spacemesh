@@ -1,7 +1,6 @@
 package grpcserver
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -17,13 +16,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/network"
+	ma "github.com/multiformats/go-multiaddr"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/merkle-tree"
 	"github.com/spacemeshos/poet/shared"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
+	"go.uber.org/zap/zaptest/observer"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"
@@ -62,8 +66,11 @@ const (
 	txsPerProposal = 99
 	layersPerEpoch = uint32(5)
 
-	atxPerLayer    = 2
-	blkPerLayer    = 3
+	// for now LayersStream returns no ATXs.
+	atxPerLayer = 0
+
+	// LayersStream returns one effective block per layer.
+	blkPerLayer    = 1
 	accountBalance = 8675301
 	accountCounter = 0
 	rewardAmount   = 5551234
@@ -78,23 +85,24 @@ var (
 	postGenesisEpoch = types.EpochID(2)
 	genesisID        = types.Hash20{}
 
-	addr1       types.Address
-	addr2       types.Address
-	prevAtxID   = types.ATXID(types.HexToHash32("44444"))
-	chlng       = types.HexToHash32("55555")
-	poetRef     = []byte("66666")
-	nipost      = newNIPostWithChallenge(&chlng, poetRef)
-	challenge   = newChallenge(1, prevAtxID, prevAtxID, postGenesisEpoch)
-	globalAtx   *types.VerifiedActivationTx
-	globalAtx2  *types.VerifiedActivationTx
-	globalTx    *types.Transaction
-	globalTx2   *types.Transaction
-	ballot1     = genLayerBallot(types.LayerID(11))
-	block1      = genLayerBlock(types.LayerID(11), nil)
-	block2      = genLayerBlock(types.LayerID(11), nil)
-	block3      = genLayerBlock(types.LayerID(11), nil)
-	meshAPIMock = &MeshAPIMock{}
-	conStateAPI = &ConStateAPIMock{
+	addr1           types.Address
+	addr2           types.Address
+	rewardSmesherID = types.RandomNodeID()
+	prevAtxID       = types.ATXID(types.HexToHash32("44444"))
+	chlng           = types.HexToHash32("55555")
+	poetRef         = []byte("66666")
+	nipost          = newNIPostWithChallenge(&chlng, poetRef)
+	challenge       = newChallenge(1, prevAtxID, prevAtxID, postGenesisEpoch)
+	globalAtx       *types.VerifiedActivationTx
+	globalAtx2      *types.VerifiedActivationTx
+	globalTx        *types.Transaction
+	globalTx2       *types.Transaction
+	ballot1         = genLayerBallot(types.LayerID(11))
+	block1          = genLayerBlock(types.LayerID(11), nil)
+	block2          = genLayerBlock(types.LayerID(11), nil)
+	block3          = genLayerBlock(types.LayerID(11), nil)
+	meshAPIMock     = &MeshAPIMock{}
+	conStateAPI     = &ConStateAPIMock{
 		returnTx:      make(map[types.TransactionID]*types.Transaction),
 		layerApplied:  make(map[types.TransactionID]*types.LayerID),
 		balances:      make(map[types.Address]*big.Int),
@@ -260,13 +268,26 @@ func (m *MeshAPIMock) ProcessedLayer() types.LayerID {
 	return layerVerified
 }
 
-func (m *MeshAPIMock) GetRewards(types.Address) (rewards []*types.Reward, err error) {
+func (m *MeshAPIMock) GetRewardsByCoinbase(types.Address) (rewards []*types.Reward, err error) {
 	return []*types.Reward{
 		{
 			Layer:       layerFirst,
 			TotalReward: rewardAmount,
 			LayerReward: rewardAmount,
 			Coinbase:    addr1,
+			SmesherID:   rewardSmesherID,
+		},
+	}, nil
+}
+
+func (m *MeshAPIMock) GetRewardsBySmesherId(types.NodeID) (rewards []*types.Reward, err error) {
+	return []*types.Reward{
+		{
+			Layer:       layerFirst,
+			TotalReward: rewardAmount,
+			LayerReward: rewardAmount,
+			Coinbase:    addr1,
+			SmesherID:   rewardSmesherID,
 		},
 	}, nil
 }
@@ -281,6 +302,10 @@ func (m *MeshAPIMock) GetLayer(tid types.LayerID) (*types.Layer, error) {
 	ballots := []*types.Ballot{ballot1}
 	blocks := []*types.Block{block1, block2, block3}
 	return types.NewExistingLayer(tid, ballots, blocks), nil
+}
+
+func (m *MeshAPIMock) GetLayerVerified(tid types.LayerID) (*types.Block, error) {
+	return block1, nil
 }
 
 func (m *MeshAPIMock) GetATXs(
@@ -371,7 +396,10 @@ func (t *ConStateAPIMock) GetMeshTransactions(
 	for _, txId := range txIds {
 		for _, tx := range t.returnTx {
 			if tx.ID == txId {
-				txs = append(txs, &types.MeshTransaction{Transaction: *tx})
+				txs = append(txs, &types.MeshTransaction{
+					State:       types.APPLIED,
+					Transaction: *tx,
+				})
 			}
 		}
 	}
@@ -425,9 +453,7 @@ func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, epoch types.
 
 func launchServer(tb testing.TB, services ...ServiceAPI) (Config, func()) {
 	cfg := DefaultTestConfig()
-	cfg.PublicListener = "127.0.0.1:0" // run on random port
-
-	grpcService, err := NewPublic(zaptest.NewLogger(tb).Named("grpc"), cfg, services)
+	grpcService, err := NewWithServices(cfg.PublicListener, zaptest.NewLogger(tb).Named("grpc"), cfg, services)
 	require.NoError(tb, err)
 
 	// start gRPC server
@@ -465,6 +491,62 @@ func TestNewServersConfig(t *testing.T) {
 	require.Contains(t, jsonService.listener, strconv.Itoa(port2), "Expected same port")
 }
 
+func TestNewLocalServer(t *testing.T) {
+	tt := []struct {
+		name     string
+		listener string
+		warn     bool
+	}{
+		{
+			name:     "valid",
+			listener: "192.168.1.1:1234",
+			warn:     false,
+		},
+		{
+			name:     "valid random port",
+			listener: "10.0.0.1:0",
+			warn:     false,
+		},
+		{
+			name:     "invalid",
+			listener: "0.0.0.0:1234",
+			warn:     true,
+		},
+		{
+			name:     "invalid random port",
+			listener: "88.77.66.11:0",
+			warn:     true,
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			observer, observedLogs := observer.New(zapcore.WarnLevel)
+			logger := zap.New(observer)
+
+			ctrl := gomock.NewController(t)
+			peerCounter := NewMockpeerCounter(ctrl)
+			meshApi := NewMockmeshAPI(ctrl)
+			genTime := NewMockgenesisTimeAPI(ctrl)
+			syncer := NewMocksyncer(ctrl)
+
+			cfg := DefaultTestConfig()
+			cfg.PostListener = tc.listener
+			svc := NewNodeService(peerCounter, meshApi, genTime, syncer, "v0.0.0", "cafebabe")
+			grpcService, err := NewWithServices(cfg.PostListener, logger, cfg, []ServiceAPI{svc})
+			if tc.warn {
+				require.Equal(t, observedLogs.Len(), 1, "Expected a warning log")
+				require.Equal(t, observedLogs.All()[0].Message, "unsecured grpc server is listening on a public IP address")
+				require.Equal(t, observedLogs.All()[0].ContextMap()["address"], tc.listener)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, grpcService.listener, tc.listener, "expected same listener")
+		})
+	}
+}
+
 type smesherServiceConn struct {
 	pb.SmesherServiceClient
 
@@ -472,11 +554,17 @@ type smesherServiceConn struct {
 	postSupervisor   *MockpostSupervisor
 }
 
-func setupSmesherService(t *testing.T) (*smesherServiceConn, context.Context) {
+func setupSmesherService(t *testing.T, sig *signing.EdSigner) (*smesherServiceConn, context.Context) {
 	ctrl, mockCtx := gomock.WithContext(context.Background(), t)
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
 	postSupervisor := NewMockpostSupervisor(ctrl)
-	svc := NewSmesherService(smeshingProvider, postSupervisor, 10*time.Millisecond, activation.DefaultPostSetupOpts())
+	svc := NewSmesherService(
+		smeshingProvider,
+		postSupervisor,
+		10*time.Millisecond,
+		sig,
+		activation.DefaultPostSetupOpts(),
+	)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
@@ -496,7 +584,7 @@ func setupSmesherService(t *testing.T) (*smesherServiceConn, context.Context) {
 func TestSmesherService(t *testing.T) {
 	t.Run("IsSmeshing", func(t *testing.T) {
 		t.Parallel()
-		c, ctx := setupSmesherService(t)
+		c, ctx := setupSmesherService(t, nil)
 		c.smeshingProvider.EXPECT().Smeshing().Return(false)
 		res, err := c.IsSmeshing(ctx, &emptypb.Empty{})
 		require.NoError(t, err)
@@ -505,7 +593,7 @@ func TestSmesherService(t *testing.T) {
 
 	t.Run("StartSmeshingMissingArgs", func(t *testing.T) {
 		t.Parallel()
-		c, ctx := setupSmesherService(t)
+		c, ctx := setupSmesherService(t, nil)
 		_, err := c.StartSmeshing(ctx, &pb.StartSmeshingRequest{})
 		require.Equal(t, codes.InvalidArgument, status.Code(err))
 	})
@@ -518,8 +606,10 @@ func TestSmesherService(t *testing.T) {
 		opts.MaxFileSize = 1024
 
 		coinbase := &pb.AccountId{Address: addr1.String()}
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
 
-		c, ctx := setupSmesherService(t)
+		c, ctx := setupSmesherService(t, sig)
 		c.smeshingProvider.EXPECT().StartSmeshing(gomock.Any()).Return(nil)
 		c.postSupervisor.EXPECT().Start(gomock.All(
 			gomock.Cond(func(postOpts any) bool { return postOpts.(activation.PostSetupOpts).DataDir == opts.DataDir }),
@@ -529,7 +619,7 @@ func TestSmesherService(t *testing.T) {
 			gomock.Cond(
 				func(postOpts any) bool { return postOpts.(activation.PostSetupOpts).MaxFileSize == opts.MaxFileSize },
 			),
-		)).Return(nil)
+		), sig).Return(nil)
 		res, err := c.StartSmeshing(ctx, &pb.StartSmeshingRequest{
 			Opts:     opts,
 			Coinbase: coinbase,
@@ -538,9 +628,28 @@ func TestSmesherService(t *testing.T) {
 		require.Equal(t, int32(code.Code_OK), res.Status.Code)
 	})
 
+	t.Run("StartSmeshingMultiSetup", func(t *testing.T) {
+		t.Parallel()
+		opts := &pb.PostSetupOpts{}
+		opts.DataDir = t.TempDir()
+		opts.NumUnits = 1
+		opts.MaxFileSize = 1024
+
+		coinbase := &pb.AccountId{Address: addr1.String()}
+
+		c, ctx := setupSmesherService(t, nil) // in multi smeshing setup the node id is nil and start smeshing should fail
+		res, err := c.StartSmeshing(ctx, &pb.StartSmeshingRequest{
+			Opts:     opts,
+			Coinbase: coinbase,
+		})
+		require.Equal(t, codes.FailedPrecondition, status.Code(err))
+		require.ErrorContains(t, err, "node is not configured for supervised smeshing")
+		require.Nil(t, res)
+	})
+
 	t.Run("StopSmeshing", func(t *testing.T) {
 		t.Parallel()
-		c, ctx := setupSmesherService(t)
+		c, ctx := setupSmesherService(t, nil)
 		c.smeshingProvider.EXPECT().StopSmeshing(gomock.Any()).Return(nil)
 		c.postSupervisor.EXPECT().Stop(false).Return(nil)
 		res, err := c.StopSmeshing(ctx, &pb.StopSmeshingRequest{})
@@ -548,19 +657,20 @@ func TestSmesherService(t *testing.T) {
 		require.Equal(t, int32(code.Code_OK), res.Status.Code)
 	})
 
-	t.Run("SmesherID", func(t *testing.T) {
+	t.Run("SmesherIDs", func(t *testing.T) {
 		t.Parallel()
-		c, ctx := setupSmesherService(t)
+		c, ctx := setupSmesherService(t, nil)
 		nodeId := types.RandomNodeID()
-		c.smeshingProvider.EXPECT().SmesherID().Return(nodeId)
-		res, err := c.SmesherID(ctx, &emptypb.Empty{})
+		c.smeshingProvider.EXPECT().SmesherIDs().Return([]types.NodeID{nodeId})
+		res, err := c.SmesherIDs(ctx, &emptypb.Empty{})
 		require.NoError(t, err)
-		require.Equal(t, nodeId.Bytes(), res.PublicKey)
+		require.Equal(t, 1, len(res.PublicKeys))
+		require.Equal(t, nodeId.Bytes(), res.PublicKeys[0])
 	})
 
 	t.Run("SetCoinbaseMissingArgs", func(t *testing.T) {
 		t.Parallel()
-		c, ctx := setupSmesherService(t)
+		c, ctx := setupSmesherService(t, nil)
 		_, err := c.SetCoinbase(ctx, &pb.SetCoinbaseRequest{})
 		require.Error(t, err)
 		statusCode := status.Code(err)
@@ -569,7 +679,7 @@ func TestSmesherService(t *testing.T) {
 
 	t.Run("SetCoinbase", func(t *testing.T) {
 		t.Parallel()
-		c, ctx := setupSmesherService(t)
+		c, ctx := setupSmesherService(t, nil)
 		c.smeshingProvider.EXPECT().SetCoinbase(addr1)
 		res, err := c.SetCoinbase(ctx, &pb.SetCoinbaseRequest{
 			Id: &pb.AccountId{Address: addr1.String()},
@@ -580,7 +690,7 @@ func TestSmesherService(t *testing.T) {
 
 	t.Run("Coinbase", func(t *testing.T) {
 		t.Parallel()
-		c, ctx := setupSmesherService(t)
+		c, ctx := setupSmesherService(t, nil)
 		c.smeshingProvider.EXPECT().Coinbase().Return(addr1)
 		res, err := c.Coinbase(ctx, &emptypb.Empty{})
 		require.NoError(t, err)
@@ -591,7 +701,7 @@ func TestSmesherService(t *testing.T) {
 
 	t.Run("MinGas", func(t *testing.T) {
 		t.Parallel()
-		c, ctx := setupSmesherService(t)
+		c, ctx := setupSmesherService(t, nil)
 		_, err := c.MinGas(ctx, &emptypb.Empty{})
 		require.Error(t, err)
 		statusCode := status.Code(err)
@@ -600,7 +710,7 @@ func TestSmesherService(t *testing.T) {
 
 	t.Run("SetMinGas", func(t *testing.T) {
 		t.Parallel()
-		c, ctx := setupSmesherService(t)
+		c, ctx := setupSmesherService(t, nil)
 		_, err := c.SetMinGas(ctx, &pb.SetMinGasRequest{})
 		require.Error(t, err)
 		statusCode := status.Code(err)
@@ -609,7 +719,7 @@ func TestSmesherService(t *testing.T) {
 
 	t.Run("PostSetupComputeProviders", func(t *testing.T) {
 		t.Parallel()
-		c, ctx := setupSmesherService(t)
+		c, ctx := setupSmesherService(t, nil)
 		c.postSupervisor.EXPECT().Providers().Return(nil, nil)
 		_, err := c.PostSetupProviders(ctx, &pb.PostSetupProvidersRequest{Benchmark: false})
 		require.NoError(t, err)
@@ -617,7 +727,7 @@ func TestSmesherService(t *testing.T) {
 
 	t.Run("PostSetupStatusStream", func(t *testing.T) {
 		t.Parallel()
-		c, ctx := setupSmesherService(t)
+		c, ctx := setupSmesherService(t, nil)
 		c.postSupervisor.EXPECT().Status().Return(&activation.PostSetupStatus{}).AnyTimes()
 
 		ctx, cancel := context.WithCancel(ctx)
@@ -810,8 +920,8 @@ func TestMeshService(t *testing.T) {
 							},
 						})
 						require.NoError(t, err)
-						require.Equal(t, uint32(1), res.TotalResults)
-						require.Equal(t, 1, len(res.Data))
+						require.Equal(t, uint32(0), res.TotalResults)
+						require.Equal(t, 0, len(res.Data))
 					},
 				},
 				{
@@ -859,9 +969,8 @@ func TestMeshService(t *testing.T) {
 							},
 						})
 						require.NoError(t, err)
-						require.Equal(t, uint32(1), res.TotalResults)
-						require.Equal(t, 1, len(res.Data))
-						checkAccountMeshDataItemActivation(t, res.Data[0].Datum)
+						require.Equal(t, uint32(0), res.TotalResults)
+						require.Equal(t, 0, len(res.Data))
 					},
 				},
 				{
@@ -878,10 +987,9 @@ func TestMeshService(t *testing.T) {
 							},
 						})
 						require.NoError(t, err)
-						require.Equal(t, uint32(2), res.TotalResults)
-						require.Equal(t, 2, len(res.Data))
+						require.Equal(t, uint32(1), res.TotalResults)
+						require.Equal(t, 1, len(res.Data))
 						checkAccountMeshDataItemTx(t, res.Data[0].Datum)
-						checkAccountMeshDataItemActivation(t, res.Data[1].Datum)
 					},
 				},
 				{
@@ -897,7 +1005,7 @@ func TestMeshService(t *testing.T) {
 							},
 						})
 						require.NoError(t, err)
-						require.Equal(t, uint32(2), res.TotalResults)
+						require.Equal(t, uint32(1), res.TotalResults)
 						require.Equal(t, 1, len(res.Data))
 						checkAccountMeshDataItemTx(t, res.Data[0].Datum)
 					},
@@ -916,9 +1024,8 @@ func TestMeshService(t *testing.T) {
 							},
 						})
 						require.NoError(t, err)
-						require.Equal(t, uint32(2), res.TotalResults)
-						require.Equal(t, 1, len(res.Data))
-						checkAccountMeshDataItemActivation(t, res.Data[0].Datum)
+						require.Equal(t, uint32(1), res.TotalResults)
+						require.Equal(t, 0, len(res.Data))
 					},
 				},
 			}
@@ -1578,39 +1685,13 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 	require.Equal(t, blkPerLayer, len(l.Blocks), "unexpected number of blocks in layer")
 	require.Equal(t, stateRoot.Bytes(), l.RootStateHash, "unexpected state root")
 
-	// The order of the activations is not deterministic since they're
-	// stored in a map, and randomized each run. Check if either matches.
-	require.Condition(t, func() bool {
-		for _, a := range l.Activations {
-			// Compare the two element by element
-			if a.Layer.Number != globalAtx.PublishEpoch.Uint32() {
-				continue
-			}
-			if !bytes.Equal(a.Id.Id, globalAtx.ID().Bytes()) {
-				continue
-			}
-			if !bytes.Equal(a.SmesherId.Id, globalAtx.SmesherID.Bytes()) {
-				continue
-			}
-			if a.Coinbase.Address != globalAtx.Coinbase.String() {
-				continue
-			}
-			if !bytes.Equal(a.PrevAtx.Id, globalAtx.PrevATXID.Bytes()) {
-				continue
-			}
-			if a.NumUnits != uint32(globalAtx.NumUnits) {
-				continue
-			}
-			// found a match
-			return true
-		}
-		// no match
-		return false
-	}, "return layer does not contain expected activation data")
-
 	resBlock := l.Blocks[0]
 
-	require.Equal(t, len(block1.TxIDs), len(resBlock.Transactions))
+	resTxIDs := make([]types.TransactionID, 0, len(resBlock.Transactions))
+	for _, tx := range resBlock.Transactions {
+		resTxIDs = append(resTxIDs, types.TransactionID(types.BytesToHash(tx.Id)))
+	}
+	require.ElementsMatch(t, block1.TxIDs, resTxIDs)
 	require.Equal(t, types.Hash20(block1.ID()).Bytes(), resBlock.Id)
 
 	// Check the tx as well
@@ -1672,12 +1753,6 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	require.NoError(t, err, "got error from stream")
 	checkAccountMeshDataItemTx(t, res.Datum.Datum)
 
-	// publish an activation
-	events.ReportNewActivation(globalAtx)
-	res, err = stream.Recv()
-	require.NoError(t, err, "got error from stream")
-	checkAccountMeshDataItemActivation(t, res.Datum.Datum)
-
 	// test streaming a tx and an atx that are filtered out
 	// these should not be received
 	events.ReportNewTx(0, globalTx2)
@@ -1723,11 +1798,12 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 	// Give the server-side time to subscribe to events
 	time.Sleep(time.Millisecond * 50)
 
-	events.ReportRewardReceived(events.Reward{
+	events.ReportRewardReceived(types.Reward{
 		Layer:       layerFirst,
-		Total:       rewardAmount,
+		TotalReward: rewardAmount,
 		LayerReward: rewardAmount * 2,
 		Coinbase:    addr1,
+		SmesherID:   rewardSmesherID,
 	})
 
 	res, err := stream.Recv()
@@ -1744,7 +1820,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 	// test streaming a reward and account update that should be filtered out
 	// these should not be received
 	events.ReportAccountUpdate(addr2)
-	events.ReportRewardReceived(events.Reward{Coinbase: addr2})
+	events.ReportRewardReceived(types.Reward{Coinbase: addr2})
 
 	_, err = stream.Recv()
 	require.Error(t, err)
@@ -1778,11 +1854,12 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 	time.Sleep(time.Millisecond * 50)
 
 	// publish a reward
-	events.ReportRewardReceived(events.Reward{
+	events.ReportRewardReceived(types.Reward{
 		Layer:       layerFirst,
-		Total:       rewardAmount,
+		TotalReward: rewardAmount,
 		LayerReward: rewardAmount * 2,
 		Coinbase:    addr1,
+		SmesherID:   rewardSmesherID,
 	})
 	res, err := stream.Recv()
 	require.NoError(t, err, "got error from stream")
@@ -1818,6 +1895,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
 	db := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+
 	grpcService := NewMeshService(
 		db,
 		meshAPIMock,
@@ -1828,14 +1906,6 @@ func TestLayerStream_comprehensive(t *testing.T) {
 		layerDuration,
 		layerAvgSize,
 		txsPerProposal,
-	)
-	require.NoError(
-		t,
-		activesets.Add(
-			db,
-			ballot1.EpochData.ActiveSetHash,
-			&types.EpochActiveSet{Set: types.ATXIDList{globalAtx.ID(), globalAtx2.ID()}},
-		),
 	)
 	cfg, cleanup := launchServer(t, grpcService)
 	t.Cleanup(cleanup)
@@ -1894,7 +1964,7 @@ func checkAccountDataQueryItemReward(t *testing.T, dataItem any) {
 	require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
 	require.Equal(t, uint64(rewardAmount), x.Reward.LayerReward.Value)
 	require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
-	require.Nil(t, x.Reward.Smesher)
+	require.Equal(t, rewardSmesherID.Bytes(), x.Reward.Smesher.Id)
 }
 
 func checkAccountMeshDataItemTx(t *testing.T, dataItem any) {
@@ -1905,18 +1975,6 @@ func checkAccountMeshDataItemTx(t *testing.T, dataItem any) {
 	require.Equal(t, globalTx.Principal.String(), x.MeshTransaction.Transaction.Principal.Address)
 }
 
-func checkAccountMeshDataItemActivation(t *testing.T, dataItem any) {
-	t.Helper()
-	require.IsType(t, &pb.AccountMeshData_Activation{}, dataItem)
-	x := dataItem.(*pb.AccountMeshData_Activation)
-	require.Equal(t, globalAtx.ID().Bytes(), x.Activation.Id.Id)
-	require.Equal(t, globalAtx.PublishEpoch.Uint32(), x.Activation.Layer.Number)
-	require.Equal(t, globalAtx.SmesherID.Bytes(), x.Activation.SmesherId.Id)
-	require.Equal(t, globalAtx.Coinbase.String(), x.Activation.Coinbase.Address)
-	require.Equal(t, globalAtx.PrevATXID.Bytes(), x.Activation.PrevAtx.Id)
-	require.Equal(t, globalAtx.NumUnits, uint32(x.Activation.NumUnits))
-}
-
 func checkAccountDataItemReward(t *testing.T, dataItem any) {
 	t.Helper()
 	require.IsType(t, &pb.AccountData_Reward{}, dataItem)
@@ -1925,6 +1983,7 @@ func checkAccountDataItemReward(t *testing.T, dataItem any) {
 	require.Equal(t, layerFirst.Uint32(), x.Reward.Layer.Number)
 	require.Equal(t, uint64(rewardAmount*2), x.Reward.LayerReward.Value)
 	require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
+	require.Equal(t, rewardSmesherID.Bytes(), x.Reward.Smesher.Id)
 }
 
 func checkAccountDataItemAccount(t *testing.T, dataItem any) {
@@ -1946,6 +2005,7 @@ func checkGlobalStateDataReward(t *testing.T, dataItem any) {
 	require.Equal(t, layerFirst.Uint32(), x.Reward.Layer.Number)
 	require.Equal(t, uint64(rewardAmount*2), x.Reward.LayerReward.Value)
 	require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
+	require.Equal(t, rewardSmesherID.Bytes(), x.Reward.Smesher.Id)
 }
 
 func checkGlobalStateDataAccountWrapper(t *testing.T, dataItem any) {
@@ -2025,10 +2085,10 @@ func TestMultiService(t *testing.T) {
 
 func TestDebugService(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	identity := NewMocknetworkIdentity(ctrl)
+	netInfo := NewMocknetworkInfo(ctrl)
 	mOracle := NewMockoracle(ctrl)
 	db := sql.InMemory()
-	svc := NewDebugService(db, conStateAPI, identity, mOracle)
+	svc := NewDebugService(db, conStateAPI, netInfo, mOracle)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
@@ -2079,13 +2139,33 @@ func TestDebugService(t *testing.T) {
 
 	t.Run("networkID", func(t *testing.T) {
 		id := p2p.Peer("test")
-		identity.EXPECT().ID().Return(id)
+		netInfo.EXPECT().ID().Return(id)
+		netInfo.EXPECT().ListenAddresses().Return([]ma.Multiaddr{
+			mustParseMultiaddr("/ip4/0.0.0.0/tcp/5000"),
+			mustParseMultiaddr("/ip4/0.0.0.0/udp/5001/quic-v1"),
+		})
+		netInfo.EXPECT().KnownAddresses().Return([]ma.Multiaddr{
+			mustParseMultiaddr("/ip4/10.36.0.221/tcp/5000"),
+			mustParseMultiaddr("/ip4/10.36.0.221/udp/5001/quic-v1"),
+		})
+		netInfo.EXPECT().NATDeviceType().Return(network.NATDeviceTypeCone, network.NATDeviceTypeSymmetric)
+		netInfo.EXPECT().Reachability().Return(network.ReachabilityPrivate)
+		netInfo.EXPECT().DHTServerEnabled().Return(true)
 
 		response, err := c.NetworkInfo(context.Background(), &emptypb.Empty{})
 		require.NoError(t, err)
 		require.NotNil(t, response)
 		require.Equal(t, id.String(), response.Id)
+		require.Equal(t, []string{"/ip4/0.0.0.0/tcp/5000", "/ip4/0.0.0.0/udp/5001/quic-v1"},
+			response.ListenAddresses)
+		require.Equal(t, []string{"/ip4/10.36.0.221/tcp/5000", "/ip4/10.36.0.221/udp/5001/quic-v1"},
+			response.KnownAddresses)
+		require.Equal(t, pb.NetworkInfoResponse_Cone, response.NatTypeUdp)
+		require.Equal(t, pb.NetworkInfoResponse_Symmetric, response.NatTypeTcp)
+		require.Equal(t, pb.NetworkInfoResponse_Private, response.Reachability)
+		require.True(t, response.DhtServerEnabled)
 	})
+
 	t.Run("ActiveSet", func(t *testing.T) {
 		epoch := types.EpochID(3)
 		activeSet := types.RandomActiveSet(11)
@@ -2426,4 +2506,12 @@ func TestMeshService_EpochStream(t *testing.T) {
 		got = append(got, types.ATXID(types.BytesToHash(resp.GetId().GetId())))
 	}
 	require.ElementsMatch(t, expected, got)
+}
+
+func mustParseMultiaddr(s string) ma.Multiaddr {
+	maddr, err := ma.NewMultiaddr(s)
+	if err != nil {
+		panic("can't parse multiaddr: " + err.Error())
+	}
+	return maddr
 }

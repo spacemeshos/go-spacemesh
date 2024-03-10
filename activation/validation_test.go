@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/initialization"
@@ -13,6 +14,9 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 func Test_Validation_VRFNonce(t *testing.T) {
@@ -46,7 +50,7 @@ func Test_Validation_VRFNonce(t *testing.T) {
 
 	nonce := (*types.VRFPostIndex)(init.Nonce())
 
-	v := NewValidator(poetDbAPI, postCfg, initOpts.Scrypt, nil)
+	v := NewValidator(nil, poetDbAPI, postCfg, initOpts.Scrypt, nil)
 
 	// Act & Assert
 	t.Run("valid vrf nonce", func(t *testing.T) {
@@ -87,7 +91,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 	postCfg := DefaultPostConfig()
 	goldenATXID := types.ATXID{2, 3, 4}
 
-	v := NewValidator(poetDbAPI, postCfg, config.ScryptParams{}, nil)
+	v := NewValidator(nil, poetDbAPI, postCfg, config.ScryptParams{}, nil)
 
 	// Act & Assert
 	t.Run("valid initial nipost challenge passes", func(t *testing.T) {
@@ -96,7 +100,13 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 		posAtxId := types.ATXID{1, 2, 3}
 		commitmentAtxId := types.ATXID{5, 6, 7}
 
-		challenge := newChallenge(0, types.EmptyATXID, posAtxId, 2, &commitmentAtxId)
+		challenge := types.NIPostChallenge{
+			Sequence:       0,
+			PrevATXID:      types.EmptyATXID,
+			PublishEpoch:   2,
+			PositioningATX: posAtxId,
+			CommitmentATX:  &commitmentAtxId,
+		}
 		challenge.InitialPost = &types.Post{}
 
 		atxProvider := NewMockatxProvider(ctrl)
@@ -115,7 +125,13 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(0, types.EmptyATXID, posAtxId, types.LayerID(2).GetEpoch(), &goldenATXID)
+		challenge := types.NIPostChallenge{
+			Sequence:       0,
+			PrevATXID:      types.EmptyATXID,
+			PublishEpoch:   0,
+			PositioningATX: posAtxId,
+			CommitmentATX:  &goldenATXID,
+		}
 		challenge.InitialPost = &types.Post{}
 
 		atxProvider := NewMockatxProvider(ctrl)
@@ -130,7 +146,13 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 		posAtxId := types.ATXID{1, 2, 3}
 		commitmentAtxId := types.ATXID{5, 6, 7}
 
-		challenge := newChallenge(0, types.EmptyATXID, posAtxId, 1, &commitmentAtxId)
+		challenge := types.NIPostChallenge{
+			Sequence:       0,
+			PrevATXID:      types.EmptyATXID,
+			PublishEpoch:   1,
+			PositioningATX: posAtxId,
+			CommitmentATX:  &commitmentAtxId,
+		}
 		challenge.InitialPost = &types.Post{}
 
 		atxProvider := NewMockatxProvider(ctrl)
@@ -155,7 +177,7 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 	poetDbAPI := NewMockpoetDbAPI(ctrl)
 	postCfg := DefaultPostConfig()
 
-	v := NewValidator(poetDbAPI, postCfg, config.ScryptParams{}, nil)
+	v := NewValidator(nil, poetDbAPI, postCfg, config.ScryptParams{}, nil)
 
 	// Act & Assert
 	t.Run("valid nipost challenge passes", func(t *testing.T) {
@@ -166,7 +188,13 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(10, prevAtxId, posAtxId, 2, nil)
+		challenge := types.NIPostChallenge{
+			Sequence:       10,
+			PrevATXID:      prevAtxId,
+			PublishEpoch:   2,
+			PositioningATX: posAtxId,
+			CommitmentATX:  nil,
+		}
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(&types.ActivationTxHeader{
@@ -189,7 +217,13 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(10, prevAtxId, posAtxId, types.LayerID(1012).GetEpoch(), nil)
+		challenge := types.NIPostChallenge{
+			Sequence:       10,
+			PrevATXID:      prevAtxId,
+			PublishEpoch:   101,
+			PositioningATX: posAtxId,
+			CommitmentATX:  nil,
+		}
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(nil, errors.New("not found"))
@@ -208,7 +242,13 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(10, prevAtxId, posAtxId, types.LayerID(1012).GetEpoch(), nil)
+		challenge := types.NIPostChallenge{
+			Sequence:       10,
+			PrevATXID:      prevAtxId,
+			PublishEpoch:   101,
+			PositioningATX: posAtxId,
+			CommitmentATX:  nil,
+		}
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(&types.ActivationTxHeader{
@@ -231,7 +271,13 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(10, prevAtxId, posAtxId, 2, nil)
+		challenge := types.NIPostChallenge{
+			Sequence:       10,
+			PrevATXID:      prevAtxId,
+			PublishEpoch:   2,
+			PositioningATX: posAtxId,
+			CommitmentATX:  nil,
+		}
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(&types.ActivationTxHeader{
@@ -254,7 +300,13 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := newChallenge(10, prevAtxId, posAtxId, 2, nil)
+		challenge := types.NIPostChallenge{
+			Sequence:       10,
+			PrevATXID:      prevAtxId,
+			PublishEpoch:   2,
+			PositioningATX: posAtxId,
+			CommitmentATX:  nil,
+		}
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(&types.ActivationTxHeader{
@@ -281,7 +333,7 @@ func Test_Validation_Post(t *testing.T) {
 	postCfg := DefaultPostConfig()
 	postVerifier := NewMockPostVerifier(ctrl)
 
-	v := NewValidator(poetDbAPI, postCfg, config.ScryptParams{}, postVerifier)
+	v := NewValidator(nil, poetDbAPI, postCfg, config.ScryptParams{}, postVerifier)
 
 	post := types.Post{}
 	meta := types.PostMetadata{}
@@ -305,7 +357,7 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 	poetDbAPI := NewMockpoetDbAPI(ctrl)
 	postCfg := DefaultPostConfig()
 
-	v := NewValidator(poetDbAPI, postCfg, config.ScryptParams{}, nil)
+	v := NewValidator(nil, poetDbAPI, postCfg, config.ScryptParams{}, nil)
 
 	// Act & Assert
 	t.Run("valid nipost challenge passes", func(t *testing.T) {
@@ -409,7 +461,7 @@ func Test_Validate_NumUnits(t *testing.T) {
 	poetDbAPI := NewMockpoetDbAPI(ctrl)
 	postCfg := DefaultPostConfig()
 
-	v := NewValidator(poetDbAPI, postCfg, config.ScryptParams{}, nil)
+	v := NewValidator(nil, poetDbAPI, postCfg, config.ScryptParams{}, nil)
 
 	// Act & Assert
 	t.Run("valid number of num units passes", func(t *testing.T) {
@@ -451,7 +503,7 @@ func Test_Validate_PostMetadata(t *testing.T) {
 	poetDbAPI := NewMockpoetDbAPI(ctrl)
 	postCfg := DefaultPostConfig()
 
-	v := NewValidator(poetDbAPI, postCfg, config.ScryptParams{}, nil)
+	v := NewValidator(nil, poetDbAPI, postCfg, config.ScryptParams{}, nil)
 
 	// Act & Assert
 	t.Run("valid post metadata", func(t *testing.T) {
@@ -515,5 +567,190 @@ func TestValidateMerkleProof(t *testing.T) {
 
 		err := validateMerkleProof(challenge[:], &proof, []byte("expected root"))
 		require.Error(t, err)
+	})
+}
+
+func TestVerifyChainDeps(t *testing.T) {
+	db := sql.InMemory()
+	ctx := context.Background()
+	goldenATXID := types.ATXID{2, 3, 4}
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	ch := types.NIPostChallenge{
+		Sequence:       1,
+		PrevATXID:      types.EmptyATXID,
+		PublishEpoch:   postGenesisEpoch,
+		PositioningATX: goldenATXID,
+		CommitmentATX:  &goldenATXID,
+	}
+	nipostData := newNIPostWithChallenge(t, types.HexToHash32(""), []byte("00"))
+	invalidAtx := newAtx(ch, nipostData.NIPost, 2, types.Address{})
+	require.NoError(t, SignAndFinalizeAtx(signer, invalidAtx))
+	vInvalidAtx, err := invalidAtx.Verify(0, 1)
+	require.NoError(t, err)
+	vInvalidAtx.SetValidity(types.Invalid)
+	require.NoError(t, atxs.Add(db, vInvalidAtx))
+
+	t.Run("invalid prev ATX", func(t *testing.T) {
+		ch := types.NIPostChallenge{
+			Sequence:       1,
+			PrevATXID:      vInvalidAtx.ID(),
+			PublishEpoch:   postGenesisEpoch,
+			PositioningATX: goldenATXID,
+			CommitmentATX:  nil,
+		}
+		nipostData = newNIPostWithChallenge(t, types.HexToHash32(""), []byte("01"))
+		atx := newAtx(ch, nipostData.NIPost, 2, types.Address{})
+		require.NoError(t, SignAndFinalizeAtx(signer, atx))
+		vAtx, err := atx.Verify(0, 1)
+		require.NoError(t, err)
+		vAtx.SetValidity(types.Unknown)
+		require.NoError(t, atxs.Add(db, vAtx))
+
+		ctrl := gomock.NewController(t)
+		v := NewMockPostVerifier(ctrl)
+		v.EXPECT().Verify(ctx, (*shared.Proof)(atx.NIPost.Post), gomock.Any(), gomock.Any())
+
+		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
+		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID)
+		require.ErrorIs(t, err, &InvalidChainError{ID: invalidAtx.ID()})
+	})
+
+	t.Run("invalid pos ATX", func(t *testing.T) {
+		ch := types.NIPostChallenge{
+			Sequence:       1,
+			PrevATXID:      types.EmptyATXID,
+			PublishEpoch:   postGenesisEpoch,
+			PositioningATX: vInvalidAtx.ID(),
+			CommitmentATX:  nil,
+		}
+		nipostData = newNIPostWithChallenge(t, types.HexToHash32(""), []byte("02"))
+		atx := newAtx(ch, nipostData.NIPost, 2, types.Address{})
+		require.NoError(t, SignAndFinalizeAtx(signer, atx))
+		vAtx, err := atx.Verify(0, 1)
+		require.NoError(t, err)
+		vAtx.SetValidity(types.Unknown)
+		require.NoError(t, atxs.Add(db, vAtx))
+
+		ctrl := gomock.NewController(t)
+		v := NewMockPostVerifier(ctrl)
+		v.EXPECT().Verify(ctx, (*shared.Proof)(atx.NIPost.Post), gomock.Any(), gomock.Any())
+
+		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
+		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID)
+		require.ErrorIs(t, err, &InvalidChainError{ID: invalidAtx.ID()})
+	})
+
+	t.Run("invalid commitment ATX", func(t *testing.T) {
+		commitmentAtxID := vInvalidAtx.ID()
+		ch := types.NIPostChallenge{
+			Sequence:       1,
+			PrevATXID:      types.EmptyATXID,
+			PublishEpoch:   postGenesisEpoch,
+			PositioningATX: goldenATXID,
+			CommitmentATX:  &commitmentAtxID,
+		}
+		nipostData = newNIPostWithChallenge(t, types.HexToHash32(""), []byte("03"))
+		atx := newAtx(ch, nipostData.NIPost, 2, types.Address{})
+		require.NoError(t, SignAndFinalizeAtx(signer, atx))
+		vAtx, err := atx.Verify(0, 1)
+		require.NoError(t, err)
+		vAtx.SetValidity(types.Unknown)
+		require.NoError(t, atxs.Add(db, vAtx))
+
+		ctrl := gomock.NewController(t)
+		v := NewMockPostVerifier(ctrl)
+		v.EXPECT().Verify(ctx, (*shared.Proof)(atx.NIPost.Post), gomock.Any(), gomock.Any())
+		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
+		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID)
+		require.ErrorIs(t, err, &InvalidChainError{ID: invalidAtx.ID()})
+	})
+
+	t.Run("with trusted node ID", func(t *testing.T) {
+		ch := types.NIPostChallenge{
+			Sequence:       1,
+			PrevATXID:      types.EmptyATXID,
+			PublishEpoch:   postGenesisEpoch,
+			PositioningATX: vInvalidAtx.ID(),
+			CommitmentATX:  nil,
+		}
+		nipostData = newNIPostWithChallenge(t, types.HexToHash32(""), []byte("04"))
+		atx := newAtx(ch, nipostData.NIPost, 2, types.Address{})
+		require.NoError(t, SignAndFinalizeAtx(signer, atx))
+		vAtx, err := atx.Verify(0, 1)
+		require.NoError(t, err)
+		vAtx.SetValidity(types.Unknown)
+		require.NoError(t, atxs.Add(db, vAtx))
+
+		ctrl := gomock.NewController(t)
+		v := NewMockPostVerifier(ctrl)
+		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
+		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID, VerifyChainOpts.WithTrustedID(signer.NodeID()))
+		require.NoError(t, err)
+	})
+
+	t.Run("assume valid if older than X", func(t *testing.T) {
+		ch := types.NIPostChallenge{
+			Sequence:       1,
+			PrevATXID:      types.EmptyATXID,
+			PublishEpoch:   postGenesisEpoch,
+			PositioningATX: vInvalidAtx.ID(),
+			CommitmentATX:  nil,
+		}
+		nipostData = newNIPostWithChallenge(t, types.HexToHash32(""), []byte("05"))
+		atx := newAtx(ch, nipostData.NIPost, 2, types.Address{})
+		require.NoError(t, SignAndFinalizeAtx(signer, atx))
+		vAtx, err := atx.Verify(0, 1)
+		require.NoError(t, err)
+		vAtx.SetValidity(types.Unknown)
+		require.NoError(t, atxs.Add(db, vAtx))
+
+		ctrl := gomock.NewController(t)
+		v := NewMockPostVerifier(ctrl)
+		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
+		before := time.Now().Add(10 * time.Second)
+		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID, VerifyChainOpts.AssumeValidBefore(before))
+		require.NoError(t, err)
+	})
+
+	t.Run("invalid top-level", func(t *testing.T) {
+		ch := types.NIPostChallenge{
+			Sequence:       1,
+			PrevATXID:      types.EmptyATXID,
+			PublishEpoch:   postGenesisEpoch,
+			PositioningATX: vInvalidAtx.ID(),
+			CommitmentATX:  nil,
+		}
+		nipostData = newNIPostWithChallenge(t, types.HexToHash32(""), []byte("06"))
+		atx := newAtx(ch, nipostData.NIPost, 2, types.Address{})
+		require.NoError(t, SignAndFinalizeAtx(signer, atx))
+		vAtx, err := atx.Verify(0, 1)
+		require.NoError(t, err)
+		vAtx.SetValidity(types.Unknown)
+		require.NoError(t, atxs.Add(db, vAtx))
+
+		ctrl := gomock.NewController(t)
+		v := NewMockPostVerifier(ctrl)
+		expected := errors.New("post is invalid")
+		v.EXPECT().Verify(ctx, (*shared.Proof)(atx.NIPost.Post), gomock.Any(), gomock.Any()).Return(expected)
+		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
+		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID)
+		require.ErrorIs(t, err, &InvalidChainError{ID: vAtx.ID()})
+		require.ErrorIs(t, err, expected)
+	})
+}
+
+func TestIsVerifyingFullPost(t *testing.T) {
+	t.Run("full", func(t *testing.T) {
+		t.Parallel()
+		validator := NewValidator(nil, nil, PostConfig{K2: 7, K3: 7}, config.ScryptParams{}, nil)
+		require.True(t, validator.IsVerifyingFullPost())
+	})
+
+	t.Run("partial", func(t *testing.T) {
+		t.Parallel()
+		validator := NewValidator(nil, nil, PostConfig{K2: 7, K3: 2}, config.ScryptParams{}, nil)
+		require.False(t, validator.IsVerifyingFullPost())
 	})
 }

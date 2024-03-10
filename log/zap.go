@@ -140,6 +140,11 @@ func Uint64(name string, val uint64) Field {
 	return Field(zap.Uint64(name, val))
 }
 
+// Float64 returns a float64 Field.
+func Float64(name string, val float64) Field {
+	return Field(zap.Float64(name, val))
+}
+
 // Namespace make next fields be inside a namespace.
 func Namespace(name string) Field {
 	return Field(zap.Namespace(name))
@@ -191,6 +196,14 @@ func Context(ctx context.Context) Field {
 
 func ZContext(ctx context.Context) zap.Field {
 	return zap.Inline(&marshalledContext{Context: ctx})
+}
+
+func NiceZapError(err error) zap.Field {
+	var loggable ObjectMarshaller
+	if errors.As(err, &loggable) {
+		return zap.Inline(loggable)
+	}
+	return zap.Error(err)
 }
 
 func Any(key string, value any) Field {

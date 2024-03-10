@@ -7,6 +7,7 @@ import (
 
 	"github.com/spacemeshos/fixed"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/tortoise/opinionhash"
@@ -25,14 +26,7 @@ type (
 		referenceHeight uint64
 	}
 
-	atxInfo struct {
-		weight     uint64
-		height     uint64
-		malfeasant bool
-	}
-
 	epochInfo struct {
-		atxs map[types.ATXID]atxInfo
 		// weight is a sum of all atxs
 		weight weight
 		// median height from atxs
@@ -55,8 +49,9 @@ type (
 		// last evicted layer
 		evicted types.LayerID
 
-		epochs map[types.EpochID]*epochInfo
-		layers layerSlice
+		atxsdata *atxsdata.Data
+		epochs   map[types.EpochID]*epochInfo
+		layers   layerSlice
 		// ballots should not be referenced by other ballots
 		// each ballot stores references (votes) for X previous layers
 		// those X layers may reference another set of ballots that will
@@ -72,8 +67,9 @@ type (
 	}
 )
 
-func newState() *state {
+func newState(atxdata *atxsdata.Data) *state {
 	return &state{
+		atxsdata:   atxdata,
 		epochs:     map[types.EpochID]*epochInfo{},
 		ballots:    map[types.LayerID][]*ballotInfo{},
 		ballotRefs: map[types.BallotID]*ballotInfo{},
@@ -97,7 +93,7 @@ func (s *state) epoch(eid types.EpochID) *epochInfo {
 	epoch, exist := s.epochs[eid]
 	if !exist {
 		epochsNumber.Inc()
-		epoch = &epochInfo{atxs: map[types.ATXID]atxInfo{}}
+		epoch = &epochInfo{}
 		s.epochs[eid] = epoch
 	}
 	return epoch
@@ -160,7 +156,7 @@ func (s *state) isMalfeasant(id types.NodeID) bool {
 	return exists
 }
 
-func (s *state) makrMalfeasant(id types.NodeID) {
+func (s *state) markMalfeasant(id types.NodeID) {
 	s.malnodes[id] = struct{}{}
 }
 

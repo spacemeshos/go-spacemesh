@@ -25,7 +25,7 @@ import (
 
 func reuseCluster(tctx *testcontext.Context, restoreLayer uint32) (*cluster.Cluster, error) {
 	return cluster.ReuseWait(tctx,
-		cluster.WithKeys(10),
+		cluster.WithKeys(tctx.ClusterSize),
 		cluster.WithBootstrapEpochs([]int{2, 4, 5}),
 		cluster.WithSmesherFlag(cluster.CheckpointUrl(fmt.Sprintf("%s/checkpoint", cluster.BootstrapperEndpoint(0)))),
 		cluster.WithSmesherFlag(cluster.CheckpointLayer(restoreLayer)),
@@ -33,6 +33,7 @@ func reuseCluster(tctx *testcontext.Context, restoreLayer uint32) (*cluster.Clus
 }
 
 func TestCheckpoint(t *testing.T) {
+	// TODO(mafa): add new test with multi-smeshing nodes
 	t.Parallel()
 
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))
@@ -182,12 +183,11 @@ func TestCheckpoint(t *testing.T) {
 func ensureSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster, stop uint32) {
 	numSmeshers := cl.Total() - cl.Bootnodes()
 	var got int
-	createdch := make(chan *pb.Proposal, numSmeshers)
+	createdCh := make(chan *pb.Proposal, numSmeshers)
 	eg, _ := errgroup.WithContext(tctx)
 	for i := cl.Bootnodes(); i < cl.Total(); i++ {
-		i := i
 		client := cl.Client(i)
-		watchProposals(tctx, eg, client, func(proposal *pb.Proposal) (bool, error) {
+		watchProposals(tctx, eg, client, tctx.Log.Desugar(), func(proposal *pb.Proposal) (bool, error) {
 			if proposal.Epoch.Number > stop {
 				return false, nil
 			}
@@ -201,17 +201,17 @@ func ensureSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster
 					"status", pb.Proposal_Status_name[int32(proposal.Status)],
 				)
 				got++
-				createdch <- proposal
+				createdCh <- proposal
 				return false, nil
 			}
 			return true, nil
 		})
 	}
 	require.NoError(t, eg.Wait())
-	close(createdch)
+	close(createdCh)
 
 	uniqueSmeshers := map[types.NodeID]struct{}{}
-	for proposal := range createdch {
+	for proposal := range createdCh {
 		uniqueSmeshers[types.BytesToNodeID(proposal.Smesher.Id)] = struct{}{}
 	}
 	require.Lenf(
@@ -256,10 +256,10 @@ func updateCheckpointServer(ctx *testcontext.Context, endpoint string, chdata []
 }
 
 func snapshotNode(ctx *testcontext.Context, client *cluster.NodeClient, snapshot uint32) ([]byte, error) {
-	smshr := pb.NewAdminServiceClient(client)
+	smshr := pb.NewAdminServiceClient(client.PrivConn())
 	stream, err := smshr.CheckpointStream(ctx, &pb.CheckpointStreamRequest{SnapshotLayer: snapshot})
 	if err != nil {
-		return nil, fmt.Errorf("stream checkpoiont %v: %w", client.Name, err)
+		return nil, fmt.Errorf("stream checkpoint %v: %w", client.Name, err)
 	}
 	var (
 		result bytes.Buffer
@@ -282,7 +282,7 @@ func snapshotNode(ctx *testcontext.Context, client *cluster.NodeClient, snapshot
 }
 
 func recoverNode(ctx *testcontext.Context, client *cluster.NodeClient) error {
-	smshr := pb.NewAdminServiceClient(client)
+	smshr := pb.NewAdminServiceClient(client.PrivConn())
 	_, err := smshr.Recover(ctx, &pb.RecoverRequest{})
 	return err
 }
@@ -293,7 +293,7 @@ type acctState struct {
 }
 
 func getBalance(tctx *testcontext.Context, cl *cluster.Cluster, layer uint32) (map[types.Address]acctState, error) {
-	dbg := pb.NewDebugServiceClient(cl.Client(0))
+	dbg := pb.NewDebugServiceClient(cl.Client(0).PrivConn())
 	response, err := dbg.Accounts(tctx, &pb.AccountsRequest{Layer: layer})
 	if err != nil {
 		return nil, err

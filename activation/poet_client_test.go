@@ -19,7 +19,7 @@ func Test_HTTPPoetClient_ParsesURL(t *testing.T) {
 	cfg := server.DefaultRoundConfig()
 
 	t.Run("add http if missing", func(t *testing.T) {
-		client, err := NewHTTPPoetClient("bla", PoetConfig{
+		client, err := NewHTTPPoetClient(types.PoetServer{Address: "bla"}, PoetConfig{
 			PhaseShift: cfg.PhaseShift,
 			CycleGap:   cfg.CycleGap,
 		})
@@ -28,7 +28,7 @@ func Test_HTTPPoetClient_ParsesURL(t *testing.T) {
 	})
 
 	t.Run("do not change scheme if present", func(t *testing.T) {
-		client, err := NewHTTPPoetClient("https://bla", PoetConfig{
+		client, err := NewHTTPPoetClient(types.PoetServer{Address: "https://bla"}, PoetConfig{
 			PhaseShift: cfg.PhaseShift,
 			CycleGap:   cfg.CycleGap,
 		})
@@ -51,7 +51,7 @@ func Test_HTTPPoetClient_Submit(t *testing.T) {
 	defer ts.Close()
 
 	cfg := server.DefaultRoundConfig()
-	client, err := NewHTTPPoetClient(ts.URL, PoetConfig{
+	client, err := NewHTTPPoetClient(types.PoetServer{Address: ts.URL}, PoetConfig{
 		PhaseShift: cfg.PhaseShift,
 		CycleGap:   cfg.CycleGap,
 	}, withCustomHttpClient(ts.Client()))
@@ -83,7 +83,7 @@ func Test_HTTPPoetClient_Address(t *testing.T) {
 	defer ts.Close()
 
 	cfg := server.DefaultRoundConfig()
-	client, err := NewHTTPPoetClient(ts.URL, PoetConfig{
+	client, err := NewHTTPPoetClient(types.PoetServer{Address: ts.URL}, PoetConfig{
 		PhaseShift: cfg.PhaseShift,
 		CycleGap:   cfg.CycleGap,
 	}, withCustomHttpClient(ts.Client()))
@@ -98,14 +98,13 @@ func Test_HTTPPoetClient_Address_Mainnet(t *testing.T) {
 	poETServers := []string{
 		"https://mainnet-poet-0.spacemesh.network",
 		"https://mainnet-poet-1.spacemesh.network",
-		"https://mainnet-poet-2.spacemesh.network",
 		"https://poet-110.spacemesh.network",
 		"https://poet-111.spacemesh.network",
 	}
 
 	for _, url := range poETServers {
 		t.Run(url, func(t *testing.T) {
-			client, err := NewHTTPPoetClient(url, PoetConfig{
+			client, err := NewHTTPPoetClient(types.PoetServer{Address: url}, PoetConfig{
 				PhaseShift: poetCfg.PhaseShift,
 				CycleGap:   poetCfg.CycleGap,
 			})
@@ -129,7 +128,7 @@ func Test_HTTPPoetClient_Proof(t *testing.T) {
 	defer ts.Close()
 
 	cfg := server.DefaultRoundConfig()
-	client, err := NewHTTPPoetClient(ts.URL, PoetConfig{
+	client, err := NewHTTPPoetClient(types.PoetServer{Address: ts.URL}, PoetConfig{
 		PhaseShift: cfg.PhaseShift,
 		CycleGap:   cfg.CycleGap,
 	}, withCustomHttpClient(ts.Client()))
@@ -153,12 +152,12 @@ func Test_HTTPPoetClient_PoetServiceID(t *testing.T) {
 	defer ts.Close()
 
 	cfg := server.DefaultRoundConfig()
-	client, err := NewHTTPPoetClient(ts.URL, PoetConfig{
+	key := types.MustBase64FromString("Zm9vYmFy")
+	client, err := NewHTTPPoetClient(types.PoetServer{Address: ts.URL, Pubkey: key}, PoetConfig{
 		PhaseShift: cfg.PhaseShift,
 		CycleGap:   cfg.CycleGap,
 	}, withCustomHttpClient(ts.Client()))
 	require.NoError(t, err)
 
-	_, err = client.PoetServiceID(context.Background())
-	require.NoError(t, err)
+	require.Equal(t, key.Bytes(), client.PoetServiceID(context.Background()))
 }

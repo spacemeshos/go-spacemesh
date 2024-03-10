@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/tortoise/sim"
@@ -45,7 +46,8 @@ func TestTracer(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "tortoise.trace")
 		trt, err := Recover(
 			context.Background(),
-			s.GetState(0).DB,
+			s.GetState(0).DB.Executor,
+			s.GetState(0).Atxdata,
 			last,
 			WithTracer(WithOutput(path)),
 		)
@@ -56,7 +58,7 @@ func TestTracer(t *testing.T) {
 	t.Run("errors", func(t *testing.T) {
 		t.Parallel()
 		path := filepath.Join(t.TempDir(), "tortoise.trace")
-		trt, err := New(WithTracer(WithOutput(path)))
+		trt, err := New(atxsdata.New(), WithTracer(WithOutput(path)))
 		require.NoError(t, err)
 		ballot := &types.BallotTortoiseData{}
 		_, err = trt.DecodeBallot(ballot)

@@ -41,9 +41,18 @@ type IterRound struct {
 // Delay returns number of network delays since specified iterround.
 func (ir IterRound) Delay(since IterRound) uint32 {
 	if ir.Absolute() > since.Absolute() {
-		return ir.Absolute() - since.Absolute()
+		delay := ir.Absolute() - since.Absolute()
+		// we skip hardlock round in 0th iteration.
+		if since.Iter == 0 && since.Round == preround && delay != 0 {
+			delay--
+		}
+		return delay
 	}
 	return 0
+}
+
+func (ir IterRound) Grade(since IterRound) grade {
+	return max(grade(6-ir.Delay(since)), grade0)
 }
 
 func (ir IterRound) IsMessageRound() bool {
@@ -61,12 +70,24 @@ func (ir IterRound) IsMessageRound() bool {
 }
 
 func (ir IterRound) Absolute() uint32 {
-	return uint32(ir.Iter*uint8(notify) + uint8(ir.Round))
+	return uint32(ir.Iter)*uint32(notify) + uint32(ir.Round)
 }
 
 type Value struct {
 	// Proposals is set in messages for preround and propose rounds.
-	Proposals []types.ProposalID `scale:"max=200"`
+	//
+	// Worst case scenario is that a single smesher identity has > 99.97% of the total weight of the network.
+	// In this case they will get all 50 available slots in all 4032 layers of the epoch.
+	// Additionally every other identity on the network that successfully published an ATX will get 1 slot.
+	//
+	// If we expect 2.2 Mio ATXs that would be a total of 2.2 Mio + 50 * 4032 = 2,401,600 slots.
+	// Since these are randomly distributed across the epoch, we can expect an average of n * p =
+	// 2,401,600 / 4032 = 595.7 eligibilities in a layer with a standard deviation of sqrt(n * p * (1 - p)) =
+	// sqrt(2,401,600 * 1/4032 * 4031/4032) = 24.4
+	//
+	// This means that we can expect a maximum of 595.7 + 6*24.4 = 743 eligibilities in a layer with
+	// > 99.9997% probability.
+	Proposals []types.ProposalID `scale:"max=800"`
 	// Reference is set in messages for commit and notify rounds.
 	Reference *types.Hash32
 }

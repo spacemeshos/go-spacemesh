@@ -19,6 +19,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // SmesherService exposes endpoints to manage smeshing.
@@ -27,6 +28,7 @@ type SmesherService struct {
 	postSupervisor   postSupervisor
 
 	streamInterval time.Duration
+	sig            *signing.EdSigner
 	postOpts       activation.PostSetupOpts
 }
 
@@ -49,12 +51,14 @@ func NewSmesherService(
 	smeshing activation.SmeshingProvider,
 	postSupervisor postSupervisor,
 	streamInterval time.Duration,
+	sig *signing.EdSigner,
 	postOpts activation.PostSetupOpts,
 ) *SmesherService {
 	return &SmesherService{
 		smeshingProvider: smeshing,
 		postSupervisor:   postSupervisor,
 		streamInterval:   streamInterval,
+		sig:              sig,
 		postOpts:         postOpts,
 	}
 }
@@ -81,7 +85,10 @@ func (s SmesherService) StartSmeshing(
 	if err != nil {
 		status.Error(codes.InvalidArgument, err.Error())
 	}
-	if err := s.postSupervisor.Start(opts); err != nil {
+	if s.sig == nil {
+		return nil, status.Errorf(codes.FailedPrecondition, "node is not configured for supervised smeshing")
+	}
+	if err := s.postSupervisor.Start(opts, s.sig); err != nil {
 		ctxzap.Error(ctx, "failed to start post supervisor", zap.Error(err))
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to start post supervisor: %v", err))
 	}
@@ -140,7 +147,16 @@ func (s SmesherService) StopSmeshing(
 
 // SmesherID returns the smesher ID of this node.
 func (s SmesherService) SmesherID(context.Context, *emptypb.Empty) (*pb.SmesherIDResponse, error) {
-	return &pb.SmesherIDResponse{PublicKey: s.smeshingProvider.SmesherID().Bytes()}, nil
+	return nil, status.Errorf(codes.Unimplemented, "this endpoint has been deprecated, use `SmesherIDs` instead")
+}
+
+func (s SmesherService) SmesherIDs(context.Context, *emptypb.Empty) (*pb.SmesherIDsResponse, error) {
+	ids := s.smeshingProvider.SmesherIDs()
+	res := &pb.SmesherIDsResponse{}
+	for _, id := range ids {
+		res.PublicKeys = append(res.PublicKeys, id.Bytes())
+	}
+	return res, nil
 }
 
 // Coinbase returns the current coinbase setting of this node.
@@ -253,8 +269,8 @@ func (s SmesherService) PostConfig(context.Context, *emptypb.Empty) (*pb.PostCon
 		LabelsPerUnit: cfg.LabelsPerUnit,
 		MinNumUnits:   cfg.MinNumUnits,
 		MaxNumUnits:   cfg.MaxNumUnits,
-		K1:            cfg.K1,
-		K2:            cfg.K2,
+		K1:            uint32(cfg.K1),
+		K2:            uint32(cfg.K2),
 	}, nil
 }
 

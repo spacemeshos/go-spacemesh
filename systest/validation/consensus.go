@@ -19,7 +19,7 @@ type ConsensusData struct {
 func getConsensusData(ctx context.Context, distance int, node *cluster.NodeClient) *ConsensusData {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	meshapi := pb.NewMeshServiceClient(node)
+	meshapi := pb.NewMeshServiceClient(node.PubConn())
 	lid, err := meshapi.CurrentLayer(ctx, &pb.CurrentLayerRequest{})
 	if err != nil {
 		return nil

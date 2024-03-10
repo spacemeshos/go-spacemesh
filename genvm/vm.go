@@ -262,12 +262,7 @@ func (v *VM) Apply(
 		return true
 	})
 	for _, reward := range rewardsResult {
-		events.ReportRewardReceived(events.Reward{
-			Layer:       reward.Layer,
-			Total:       reward.TotalReward,
-			LayerReward: reward.LayerReward,
-			Coinbase:    reward.Coinbase,
-		})
+		events.ReportRewardReceived(reward)
 	}
 
 	blockDurationPersist.Observe(float64(time.Since(t3)))

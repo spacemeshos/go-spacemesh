@@ -8,6 +8,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -29,8 +30,10 @@ type Config struct {
 	// recorded in the first ballot, if that weight is less than minimal
 	// for purposes of eligibility computation.
 	MinimalActiveSetWeight []types.EpochMinimalActiveWeight
-
-	LayerSize uint32
+	// CollectDetails sets numbers of layers to collect details.
+	// Must be less than WindowSize.
+	CollectDetails uint32 `mapstructure:"tortoise-collect-details"`
+	LayerSize      uint32
 }
 
 // DefaultConfig for Tortoise.
@@ -81,10 +84,10 @@ func WithTracer(opts ...TraceOpt) Opt {
 }
 
 // New creates Tortoise instance.
-func New(opts ...Opt) (*Tortoise, error) {
+func New(atxdata *atxsdata.Data, opts ...Opt) (*Tortoise, error) {
 	t := &Tortoise{
 		ctx:    context.Background(),
-		logger: log.NewNop().Zap(),
+		logger: zap.NewNop(),
 		cfg:    DefaultConfig(),
 	}
 	for _, opt := range opts {
@@ -99,7 +102,13 @@ func New(opts ...Opt) (*Tortoise, error) {
 	if t.cfg.WindowSize == 0 {
 		t.logger.Panic("tortoise-window-size should not be zero")
 	}
-	t.trtl = newTurtle(t.logger, t.cfg)
+	if t.cfg.CollectDetails > t.cfg.WindowSize {
+		t.logger.Panic("tortoise-collect-details must be lower then tortoise-window-size",
+			zap.Uint32("tortoise-collect-details", t.cfg.CollectDetails),
+			zap.Uint32("tortoise-window-size", t.cfg.WindowSize),
+		)
+	}
+	t.trtl = newTurtle(t.logger, t.cfg, atxdata)
 	if t.tracer != nil {
 		t.tracer.On(&ConfigTrace{
 			Hdist:                    t.cfg.Hdist,
@@ -112,10 +121,22 @@ func New(opts ...Opt) (*Tortoise, error) {
 			EffectiveGenesis:         types.GetEffectiveGenesis().Uint32(),
 		})
 	}
+	if t.cfg.CollectDetails > 0 {
+		t.logger.Info("tortoise will collect details",
+			zap.Uint32("tortoise-collect-details", t.cfg.CollectDetails),
+		)
+		enableCollector(t)
+	}
 	return t, nil
 }
 
 func (t *Tortoise) RecoverFrom(lid types.LayerID, opinion, prev types.Hash32) {
+	if lid <= types.GetEffectiveGenesis() {
+		t.logger.Panic("recover should be after effective genesis",
+			zap.Uint32("lid", lid.Uint32()),
+			zap.Uint32("effective genesis", types.GetEffectiveGenesis().Uint32()),
+		)
+	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.logger.Debug("recover from",
@@ -126,7 +147,7 @@ func (t *Tortoise) RecoverFrom(lid types.LayerID, opinion, prev types.Hash32) {
 	t.trtl.evicted = lid - 1
 	t.trtl.pending = lid
 	t.trtl.verified = lid
-	t.trtl.processed = lid
+	t.trtl.processed = lid - 1 // -1 so that iteration in tallyVotes starts from the target layer
 	t.trtl.last = lid
 	layer := t.trtl.layer(lid)
 	layer.opinion = opinion
@@ -162,9 +183,9 @@ func (t *Tortoise) OnWeakCoin(lid types.LayerID, coin bool) {
 	}
 }
 
-// OnMalfeasance registers node id as malfeasent.
+// OnMalfeasance registers node id as malfeasant.
 // - ballots from this id will have zero weight
-// - atxs - will not be counted towards global/local threhsolds
+// - atxs - will not be counted towards global/local thresholds
 // If node registers equivocating ballot/atx it should
 // call OnMalfeasance before storing ballot/atx.
 func (t *Tortoise) OnMalfeasance(id types.NodeID) {
@@ -173,8 +194,8 @@ func (t *Tortoise) OnMalfeasance(id types.NodeID) {
 	if t.trtl.isMalfeasant(id) {
 		return
 	}
-	t.logger.Debug("on malfeasence", zap.Stringer("id", id))
-	t.trtl.makrMalfeasant(id)
+	t.logger.Debug("on malfeasance", zap.Stringer("id", id))
+	t.trtl.markMalfeasant(id)
 	malfeasantNumber.Inc()
 	if t.tracer != nil {
 		t.tracer.On(&MalfeasanceTrace{ID: id})
@@ -262,7 +283,7 @@ func (t *Tortoise) TallyVotes(ctx context.Context, lid types.LayerID) {
 	defer t.mu.Unlock()
 	waitTallyVotes.Observe(float64(time.Since(start).Nanoseconds()))
 	start = time.Now()
-	t.trtl.onLayer(ctx, lid)
+	t.trtl.tallyVotes(ctx, lid)
 	executeTallyVotes.Observe(float64(time.Since(start).Nanoseconds()))
 	if t.tracer != nil {
 		t.tracer.On(&TallyTrace{Layer: lid})
@@ -270,14 +291,14 @@ func (t *Tortoise) TallyVotes(ctx context.Context, lid types.LayerID) {
 }
 
 // OnAtx is expected to be called before ballots that use this atx.
-func (t *Tortoise) OnAtx(header *types.AtxTortoiseData) {
+func (t *Tortoise) OnAtx(target types.EpochID, id types.ATXID, atx *atxsdata.ATX) {
 	start := time.Now()
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	waitAtxDuration.Observe(float64(time.Since(start).Nanoseconds()))
-	t.trtl.onAtx(header)
+	t.trtl.onAtx(target, id, atx)
 	if t.tracer != nil {
-		t.tracer.On(&AtxTrace{Header: header})
+		t.tracer.On(&AtxTrace{ID: id, TargetEpoch: target, Atx: atx})
 	}
 }
 
@@ -293,16 +314,43 @@ func (t *Tortoise) OnBlock(header types.BlockHeader) {
 	}
 }
 
-// OnValidBlock inserts block, updates that data is stored locally
-// and that block was previously considered valid by tortoise.
-func (t *Tortoise) OnValidBlock(header types.BlockHeader) {
-	start := time.Now()
+// OnRecoveredBlocks uploads blocks to the state with all metadata.
+//
+// Implementation assumes that they will be uploaded in order.
+func (t *Tortoise) OnRecoveredBlocks(lid types.LayerID, validity map[types.BlockHeader]bool, hare *types.BlockID) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	waitBlockDuration.Observe(float64(time.Since(start).Nanoseconds()))
-	t.trtl.onBlock(header, true, true)
+
+	for block, valid := range validity {
+		if exists := t.trtl.getBlock(block); exists != nil {
+			continue
+		}
+		info := newBlockInfo(block)
+		info.data = true
+		if valid {
+			info.validity = support
+		}
+		t.trtl.addBlock(info)
+	}
+	if hare != nil {
+		t.trtl.onHareOutput(lid, *hare)
+	} else if !withinDistance(t.cfg.Hdist, lid, t.trtl.last) {
+		layer := t.trtl.state.layer(lid)
+		layer.hareTerminated = true
+		for _, info := range layer.blocks {
+			if info.validity == abstain {
+				info.validity = against
+			}
+		}
+	}
+
+	t.logger.Debug("loaded recovered blocks",
+		zap.Uint32("lid", lid.Uint32()),
+		zap.Uint32("last", t.trtl.last.Uint32()),
+		zapBlocks(t.trtl.state.layer(lid).blocks),
+	)
 	if t.tracer != nil {
-		t.tracer.On(&BlockTrace{Header: header, Valid: true})
+		t.tracer.On(newRecoveredBlocksTrace(lid, validity, hare))
 	}
 }
 
@@ -458,21 +506,10 @@ func (t *Tortoise) OnHareOutput(lid types.LayerID, bid types.BlockID) {
 
 // GetMissingActiveSet returns unknown atxs from the original list. It is done for a specific epoch
 // as active set atxs never cross epoch boundary.
-func (t *Tortoise) GetMissingActiveSet(epoch types.EpochID, atxs []types.ATXID) []types.ATXID {
+func (t *Tortoise) GetMissingActiveSet(target types.EpochID, atxs []types.ATXID) []types.ATXID {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	edata, exists := t.trtl.epochs[epoch]
-	if !exists {
-		return atxs
-	}
-	var missing []types.ATXID
-	for _, atx := range atxs {
-		_, exists := edata.atxs[atx]
-		if !exists {
-			missing = append(missing, atx)
-		}
-	}
-	return missing
+	return t.trtl.atxsdata.MissingInEpoch(target, atxs)
 }
 
 // OnApplied compares stored opinion with computed opinion and sets
@@ -484,16 +521,39 @@ func (t *Tortoise) OnApplied(lid types.LayerID, opinion types.Hash32) bool {
 	layer := t.trtl.layer(lid)
 	t.logger.Debug("on applied",
 		zap.Uint32("lid", lid.Uint32()),
+		zap.Uint32("pending", t.trtl.pending.Uint32()),
+		zap.Uint32("processed", t.trtl.processed.Uint32()),
 		log.ZShortStringer("computed", layer.opinion),
 		log.ZShortStringer("stored", opinion),
 	)
 	rst := false
 	if layer.opinion == opinion {
+		oldPending := t.trtl.pending
 		t.trtl.pending = min(lid+1, t.trtl.processed)
 		rst = true
+		if oldPending != t.trtl.pending {
+			t.trtl.evict()
+		}
 	}
 	if t.tracer != nil {
 		t.tracer.On(&AppliedTrace{Layer: lid, Opinion: opinion, Result: rst})
+	}
+	return rst
+}
+
+// latestsResults returns at most N latest results from process layer.
+//
+// private as it meant to be used for metering.
+func (t *Tortoise) latestsResults(n uint32) []result.Layer {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if n > t.trtl.processed.Uint32() {
+		n = t.trtl.processed.Uint32()
+	}
+	rst, err := t.results(t.trtl.processed-types.LayerID(n), t.trtl.processed)
+	if err != nil {
+		t.logger.Error("unexpected error", zap.Error(err))
+		return nil
 	}
 	return rst
 }
@@ -575,4 +635,24 @@ func (t *Tortoise) Mode() Mode {
 		return Full
 	}
 	return Verifying
+}
+
+// UpdateLastLayer updates last layer which is used for determining weight thresholds.
+func (t *Tortoise) UpdateLastLayer(last types.LayerID) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.trtl.updateLast(last)
+}
+
+// UpdateVerified layers based on the previously known verified layer.
+func (t *Tortoise) UpdateVerified(verified types.LayerID) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.trtl.verified = verified
+}
+
+func (t *Tortoise) WithinHdist(lid types.LayerID) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return withinDistance(t.cfg.Hdist, lid, t.trtl.last)
 }

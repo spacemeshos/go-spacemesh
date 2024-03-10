@@ -6,10 +6,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/tortoise/sim"
 )
@@ -17,20 +20,20 @@ import (
 type recoveryAdapter struct {
 	testing.TB
 	*Tortoise
-	db *datastore.CachedDB
+	db      sql.Executor
+	atxdata *atxsdata.Data
 
-	prev types.LayerID
+	next types.LayerID
 }
 
 func (a *recoveryAdapter) TallyVotes(ctx context.Context, current types.LayerID) {
 	genesis := types.GetEffectiveGenesis()
-	if a.prev == 0 {
-		a.prev = genesis
+	if a.next == 0 {
+		a.next = genesis
 	}
-	for lid := a.prev; lid <= current; lid++ {
-		require.NoError(a, RecoverLayer(ctx, a.Tortoise, a.db, lid, a.OnBallot))
-		a.Tortoise.TallyVotes(ctx, lid)
-		a.prev = lid
+	for ; a.next <= current; a.next++ {
+		require.NoError(a, RecoverLayer(ctx, a.Tortoise, a.db, a.atxdata, a.next, a.OnBallot))
+		a.Tortoise.TallyVotes(ctx, a.next)
 	}
 }
 
@@ -42,7 +45,8 @@ func TestRecoverState(t *testing.T) {
 
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
-	tortoise := tortoiseFromSimState(t, s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
+	simState := s.GetState(0)
+	tortoise := tortoiseFromSimState(t, simState, WithLogger(logtest.New(t)), WithConfig(cfg))
 	var last, verified types.LayerID
 	for i := 0; i < 50; i++ {
 		last = s.Next()
@@ -51,7 +55,14 @@ func TestRecoverState(t *testing.T) {
 	}
 	require.Equal(t, last.Sub(1), verified)
 
-	tortoise2, err := Recover(context.Background(), s.GetState(0).DB, last, WithLogger(logtest.New(t)), WithConfig(cfg))
+	tortoise2, err := Recover(
+		context.Background(),
+		s.GetState(0).DB.Executor,
+		simState.Atxdata,
+		last,
+		WithLogger(logtest.New(t)),
+		WithConfig(cfg),
+	)
 	require.NoError(t, err)
 	verified = tortoise2.LatestComplete()
 	require.Equal(t, last.Sub(1), verified)
@@ -68,7 +79,14 @@ func TestRecoverEmpty(t *testing.T) {
 
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
-	tortoise, err := Recover(context.Background(), s.GetState(0).DB, 100, WithLogger(logtest.New(t)), WithConfig(cfg))
+	tortoise, err := Recover(
+		context.Background(),
+		s.GetState(0).DB.Executor,
+		atxsdata.New(),
+		100,
+		WithLogger(logtest.New(t)),
+		WithConfig(cfg),
+	)
 	require.NoError(t, err)
 	require.NotNil(t, tortoise)
 }
@@ -88,13 +106,19 @@ func TestRecoverWithOpinion(t *testing.T) {
 	var last result.Layer
 	for _, rst := range trt.Updates() {
 		if rst.Verified {
-			require.NoError(t, layers.SetMeshHash(s.GetState(0).DB, rst.Layer, rst.Opinion))
+			require.NoError(t, layers.SetMeshHash(s.GetState(0).DB.Executor, rst.Layer, rst.Opinion))
+		}
+		for _, block := range rst.Blocks {
+			if block.Valid {
+				require.NoError(t, blocks.SetValid(s.GetState(0).DB.Executor, block.Header.ID))
+			}
 		}
 		last = rst
 	}
 	tortoise, err := Recover(
 		context.Background(),
-		s.GetState(0).DB,
+		s.GetState(0).DB.Executor,
+		atxsdata.New(),
 		last.Layer,
 		WithLogger(logtest.New(t)),
 		WithConfig(cfg),
@@ -125,11 +149,23 @@ func TestResetPending(t *testing.T) {
 	require.Len(t, updates1, n+1)
 	require.Equal(t, types.GetEffectiveGenesis(), updates1[0].Layer)
 	require.Equal(t, last, updates1[n].Layer)
-	for _, item := range updates1[:n/2] {
-		require.NoError(t, layers.SetMeshHash(s.GetState(0).DB, item.Layer, item.Opinion))
+	for _, rst := range updates1[:n/2] {
+		require.NoError(t, layers.SetMeshHash(s.GetState(0).DB, rst.Layer, rst.Opinion))
+		for _, block := range rst.Blocks {
+			if block.Valid {
+				require.NoError(t, blocks.SetValid(s.GetState(0).DB.Executor, block.Header.ID))
+			}
+		}
 	}
 
-	recovered, err := Recover(context.Background(), s.GetState(0).DB, last, WithLogger(logtest.New(t)), WithConfig(cfg))
+	recovered, err := Recover(
+		context.Background(),
+		s.GetState(0).DB.Executor,
+		atxsdata.New(),
+		last,
+		WithLogger(logtest.New(t)),
+		WithConfig(cfg),
+	)
 	require.NoError(t, err)
 	updates2 := recovered.Updates()
 	require.Len(t, updates2, n/2+1)
@@ -159,11 +195,23 @@ func TestWindowRecovery(t *testing.T) {
 	require.Len(t, updates1, n+1)
 	require.Equal(t, types.GetEffectiveGenesis(), updates1[0].Layer)
 	require.Equal(t, last, updates1[n].Layer)
-	for _, item := range updates1[:epochSize*4] {
-		require.NoError(t, layers.SetMeshHash(s.GetState(0).DB, item.Layer, item.Opinion))
+	for _, rst := range updates1[:epochSize*4] {
+		require.NoError(t, layers.SetMeshHash(s.GetState(0).DB, rst.Layer, rst.Opinion))
+		for _, block := range rst.Blocks {
+			if block.Valid {
+				require.NoError(t, blocks.SetValid(s.GetState(0).DB.Executor, block.Header.ID))
+			}
+		}
 	}
 
-	recovered, err := Recover(context.Background(), s.GetState(0).DB, last, WithLogger(logtest.New(t)), WithConfig(cfg))
+	recovered, err := Recover(
+		context.Background(),
+		s.GetState(0).DB.Executor,
+		atxsdata.New(),
+		last,
+		WithLogger(logtest.New(t)),
+		WithConfig(cfg),
+	)
 	require.NoError(t, err)
 	updates2 := recovered.Updates()
 	require.Len(t, updates2, epochSize+1)
@@ -171,4 +219,30 @@ func TestWindowRecovery(t *testing.T) {
 	for i := range updates1[epochSize*4:] {
 		require.Equal(t, updates1[epochSize*4+i].Opinion, updates2[i].Opinion)
 	}
+}
+
+func TestRecoverOnlyAtxs(t *testing.T) {
+	const size = 10
+	s := sim.New(sim.WithLayerSize(size))
+	s.Setup()
+
+	cfg := defaultTestConfig()
+	trt := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg))
+	var last types.LayerID
+	// this creates a layer without any ballots, so we will also won't have them in the database
+	for _, lid := range sim.GenLayers(s, sim.WithSequence(10, sim.WithLayerSizeOverwrite(0))) {
+		last = lid
+		trt.TallyVotes(context.Background(), lid)
+	}
+	future := last + 1000
+	recovered, err := Recover(context.Background(), s.GetState(0).DB.Executor, s.GetState(0).Atxdata, future,
+		WithLogger(logtest.New(t)),
+		WithConfig(cfg),
+	)
+	require.NoError(t, err)
+	epoch := types.EpochID(2)
+	ids, err := atxs.GetIDsByEpoch(context.Background(), s.GetState(0).DB, epoch)
+	require.NoError(t, err)
+	require.NotEmpty(t, ids)
+	require.Empty(t, recovered.GetMissingActiveSet(epoch+1, ids), "target epoch %v", epoch+1)
 }

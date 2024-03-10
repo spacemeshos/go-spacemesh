@@ -41,6 +41,10 @@ func (ps *PubSub) Register(topic string, handler GossipHandler, opts ...Validato
 			err := handler(log.WithNewRequestID(ctx), pid, msg.Data)
 			metrics.ProcessedMessagesDuration.WithLabelValues(topic, castResult(err)).
 				Observe(float64(time.Since(start)))
+			if err != nil {
+				ps.logger.With().Debug("topic validation failed",
+					log.String("topic", topic), log.Err(err))
+			}
 			switch {
 			case errors.Is(err, ErrValidationReject):
 				return pubsub.ValidationReject

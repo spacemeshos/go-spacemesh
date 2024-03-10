@@ -72,9 +72,16 @@ type ProposalBuilder struct {
 	tortoise  votesEncoder
 	syncer    system.SyncStateProvider
 
-	mu      sync.Mutex
-	signers map[types.NodeID]*signerSession
-	shared  sharedSession
+	signers struct {
+		mu      sync.Mutex
+		signers map[types.NodeID]*signerSession
+	}
+	shared sharedSession
+
+	fallback struct {
+		mu   sync.Mutex
+		data map[types.EpochID][]types.ATXID
+	}
 }
 
 type signerSession struct {
@@ -251,7 +258,18 @@ func New(
 		tortoise:  trtl,
 		syncer:    syncer,
 		conState:  conState,
-		signers:   map[types.NodeID]*signerSession{},
+		signers: struct {
+			mu      sync.Mutex
+			signers map[types.NodeID]*signerSession
+		}{
+			signers: map[types.NodeID]*signerSession{},
+		},
+		fallback: struct {
+			mu   sync.Mutex
+			data map[types.EpochID][]types.ATXID
+		}{
+			data: map[types.EpochID][]types.ATXID{},
+		},
 	}
 	for _, opt := range opts {
 		opt(pb)
@@ -259,14 +277,15 @@ func New(
 	return pb
 }
 
-func (pb *ProposalBuilder) Register(signer *signing.EdSigner) {
-	pb.mu.Lock()
-	defer pb.mu.Unlock()
-	_, exist := pb.signers[signer.NodeID()]
+func (pb *ProposalBuilder) Register(sig *signing.EdSigner) {
+	pb.signers.mu.Lock()
+	defer pb.signers.mu.Unlock()
+	_, exist := pb.signers.signers[sig.NodeID()]
 	if !exist {
-		pb.signers[signer.NodeID()] = &signerSession{
-			signer: signer,
-			log:    pb.logger.WithFields(log.String("signer", signer.NodeID().ShortString())),
+		pb.logger.With().Info("registered signing key", log.ShortStringer("id", sig.NodeID()))
+		pb.signers.signers[sig.NodeID()] = &signerSession{
+			signer: sig,
+			log:    pb.logger.WithFields(log.String("signer", sig.NodeID().ShortString())),
 		}
 	}
 }
@@ -368,6 +387,20 @@ func (pb *ProposalBuilder) decideMeshHash(ctx context.Context, current types.Lay
 	return mesh
 }
 
+func (pb *ProposalBuilder) UpdateActiveSet(epoch types.EpochID, activeSet []types.ATXID) {
+	pb.logger.With().Info("received activeset update",
+		epoch,
+		log.Int("size", len(activeSet)),
+	)
+	pb.fallback.mu.Lock()
+	defer pb.fallback.mu.Unlock()
+	if _, ok := pb.fallback.data[epoch]; ok {
+		pb.logger.With().Debug("fallback active set already exists", epoch)
+		return
+	}
+	pb.fallback.data[epoch] = activeSet
+}
+
 func (pb *ProposalBuilder) initSharedData(ctx context.Context, lid types.LayerID) error {
 	if pb.shared.epoch != lid.GetEpoch() {
 		pb.shared = sharedSession{epoch: lid.GetEpoch()}
@@ -379,21 +412,36 @@ func (pb *ProposalBuilder) initSharedData(ctx context.Context, lid types.LayerID
 		}
 		pb.shared.beacon = beacon
 	}
-	if pb.shared.active.set == nil {
-		weight, set, err := generateActiveSet(
-			pb.logger,
-			pb.cdb,
+	if pb.shared.active.set != nil {
+		return nil
+	}
+
+	if weight, set, err := pb.fallbackActiveSet(pb.shared.epoch); err == nil {
+		pb.logger.With().Info("using fallback active set",
 			pb.shared.epoch,
-			pb.clock.LayerToTime(pb.shared.epoch.FirstLayer()),
-			pb.cfg.goodAtxPercent,
-			pb.cfg.networkDelay,
+			log.Int("size", len(set)),
 		)
-		if err != nil {
-			return err
-		}
+		sort.Slice(set, func(i, j int) bool {
+			return bytes.Compare(set[i].Bytes(), set[j].Bytes()) < 0
+		})
 		pb.shared.active.set = set
 		pb.shared.active.weight = weight
+		return nil
 	}
+
+	weight, set, err := generateActiveSet(
+		pb.logger,
+		pb.cdb,
+		pb.shared.epoch,
+		pb.clock.LayerToTime(pb.shared.epoch.FirstLayer()),
+		pb.cfg.goodAtxPercent,
+		pb.cfg.networkDelay,
+	)
+	if err != nil {
+		return err
+	}
+	pb.shared.active.set = set
+	pb.shared.active.weight = weight
 	return nil
 }
 
@@ -482,10 +530,10 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 		return err
 	}
 
-	pb.mu.Lock()
+	pb.signers.mu.Lock()
 	// don't accept registration in the middle of computing proposals
-	signers := maps.Values(pb.signers)
-	pb.mu.Unlock()
+	signers := maps.Values(pb.signers.signers)
+	pb.signers.mu.Unlock()
 
 	var eg errgroup.Group
 	eg.SetLimit(pb.cfg.workersLimit)
@@ -702,6 +750,25 @@ func activesFromFirstBlock(
 	var totalWeight uint64
 	for _, id := range set {
 		atx, err := cdb.GetAtxHeader(id)
+		if err != nil {
+			return 0, nil, err
+		}
+		totalWeight += atx.GetWeight()
+	}
+	return totalWeight, set, nil
+}
+
+func (pb *ProposalBuilder) fallbackActiveSet(targetEpoch types.EpochID) (uint64, []types.ATXID, error) {
+	pb.fallback.mu.Lock()
+	defer pb.fallback.mu.Unlock()
+	set, ok := pb.fallback.data[targetEpoch]
+	if !ok {
+		return 0, nil, fmt.Errorf("no fallback active set for epoch %d", targetEpoch)
+	}
+
+	var totalWeight uint64
+	for _, id := range set {
+		atx, err := pb.cdb.GetAtxHeader(id)
 		if err != nil {
 			return 0, nil, err
 		}

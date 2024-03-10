@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -33,16 +34,18 @@ func newCore(rng *rand.Rand, id string, logger log.Log) *core {
 		panic(err)
 	}
 	c := &core{
-		id:     id,
-		logger: logger,
-		rng:    rng,
-		cdb:    cdb,
-		units:  units,
-		signer: sig,
+		id:      id,
+		logger:  logger,
+		rng:     rng,
+		cdb:     cdb,
+		units:   units,
+		signer:  sig,
+		atxdata: atxsdata.New(),
 	}
 	cfg := tortoise.DefaultConfig()
 	cfg.LayerSize = layerSize
 	c.tortoise, err = tortoise.New(
+		c.atxdata,
 		tortoise.WithLogger(logger.Named("trtl")),
 		tortoise.WithConfig(cfg),
 	)
@@ -59,6 +62,7 @@ type core struct {
 	rng    *rand.Rand
 
 	cdb      *datastore.CachedDB
+	atxdata  *atxsdata.Data
 	tortoise *tortoise.Tortoise
 
 	// generated on setup
@@ -128,7 +132,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		m.Send(MessageBallot{Ballot: ballot})
 	case MessageLayerEnd:
 		if ev.LayerID.After(types.GetEffectiveGenesis()) {
-			tortoise.RecoverLayer(context.Background(), c.tortoise, c.cdb, ev.LayerID, c.tortoise.OnBallot)
+			tortoise.RecoverLayer(context.Background(), c.tortoise, c.cdb.Executor, c.atxdata, ev.LayerID, c.tortoise.OnBallot)
 			c.tortoise.TallyVotes(context.Background(), ev.LayerID)
 			m.Notify(EventVerified{ID: c.id, Verified: c.tortoise.LatestComplete(), Layer: ev.LayerID})
 		}
@@ -171,6 +175,11 @@ func (c *core) OnMessage(m Messenger, event Message) {
 			panic(err)
 		}
 		atxs.Add(c.cdb, vAtx)
+		malicious, err := c.cdb.IsMalicious(vAtx.SmesherID)
+		if err != nil {
+			c.logger.With().Fatal("failed is malicious lookup", log.Err(err))
+		}
+		c.atxdata.AddFromHeader(vAtx.ToHeader(), 0, malicious)
 	case MessageBeacon:
 		beacons.Add(c.cdb, ev.EpochID+1, ev.Beacon)
 	case MessageCoinflip:

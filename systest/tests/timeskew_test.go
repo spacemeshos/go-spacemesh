@@ -17,7 +17,7 @@ func TestShortTimeskew(t *testing.T) {
 	t.Parallel()
 
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))
-	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(10))
+	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(tctx.ClusterSize))
 	require.NoError(t, err)
 
 	var (
@@ -35,13 +35,21 @@ func TestShortTimeskew(t *testing.T) {
 	failed := int(0.2 * float64(tctx.ClusterSize))
 	eg, ctx := errgroup.WithContext(tctx)
 	client := cl.Client(0)
-	scheduleChaos(ctx, eg, client, enableSkew, stopSkew, func(ctx context.Context) (chaos.Teardown, error) {
-		names := []string{}
-		for i := 1; i <= failed; i++ {
-			names = append(names, cl.Client(cl.Total()-i).Name)
-		}
-		return chaos.Timeskew(tctx, "skew", skewOffset, names...)
-	})
+	scheduleChaos(
+		ctx,
+		eg,
+		client,
+		tctx.Log.Desugar(),
+		enableSkew,
+		stopSkew,
+		func(ctx context.Context) (chaos.Teardown, error) {
+			names := []string{}
+			for i := 1; i <= failed; i++ {
+				names = append(names, cl.Client(cl.Total()-i).Name)
+			}
+			return chaos.Timeskew(tctx, "skew", skewOffset, names...)
+		},
+	)
 
 	// hare round is 2s, including time when nodes wait for proposals
 	// those nodes where clock is adjusted won't be able to reach consensus,
@@ -54,22 +62,25 @@ func TestShortTimeskew(t *testing.T) {
 	// abstain on one or two layers. in such case longer delay might be necessary to confirm that layer
 
 	var confirmed uint32
-	watchLayers(ctx, eg, client, func(layer *pb.LayerStreamResponse) (bool, error) {
-		if layer.Layer.Number.Number == stopTest {
-			return false, nil
-		}
-		if layer.Layer.Status == pb.Layer_LAYER_STATUS_APPLIED {
-			tctx.Log.Debugw("layer applied",
-				"layer", layer.Layer.Number.Number,
-				"hash", prettyHex(layer.Layer.Hash),
-			)
-			confirmed = layer.Layer.Number.Number
-			if confirmed >= stopSkew {
+	watchLayers(
+		ctx,
+		eg,
+		client,
+		tctx.Log.Desugar(),
+		func(layer *pb.LayerStreamResponse) (bool, error) {
+			if layer.Layer.Number.Number == stopTest {
 				return false, nil
 			}
-		}
-		return true, nil
-	})
+			if layer.Layer.Status == pb.Layer_LAYER_STATUS_APPLIED {
+				tctx.Log.Debugw("layer applied", "layer", layer.Layer.Number.Number, "hash", prettyHex(layer.Layer.Hash))
+				confirmed = layer.Layer.Number.Number
+				if confirmed >= stopSkew {
+					return false, nil
+				}
+			}
+			return true, nil
+		},
+	)
 	require.NoError(t, eg.Wait())
 	require.LessOrEqual(t, int(stopSkew), int(confirmed))
 }

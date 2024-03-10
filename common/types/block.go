@@ -71,8 +71,21 @@ func (b Block) Equal(other Block) bool {
 type InnerBlock struct {
 	LayerIndex LayerID
 	TickHeight uint64
-	Rewards    []AnyReward     `scale:"max=500"`
-	TxIDs      []TransactionID `scale:"max=100000"`
+	// Rewards are the rewards for the block.
+	//
+	// Worst case scenario is that a single smesher identity has > 99.97% of the total weight of the network.
+	// In this case they will get all 50 available slots in all 4032 layers of the epoch.
+	// Additionally every other identity on the network that successfully published an ATX will get 1 slot.
+	//
+	// If we expect 2.2 Mio ATXs that would be a total of 2.2 Mio + 50 * 4032 = 2,401,600 slots.
+	// Since these are randomly distributed across the epoch, we can expect an average of n * p =
+	// 2,401,600 / 4032 = 595.7 rewards in a block with a standard deviation of sqrt(n * p * (1 - p)) =
+	// sqrt(2,401,600 * 1/4032 * 4031/4032) = 24.4
+	//
+	// This means that we can expect a maximum of 595.7 + 6*24.4 = 743 rewards per block with
+	// > 99.9997% probability.
+	Rewards []AnyReward     `scale:"max=800"`
+	TxIDs   []TransactionID `scale:"max=100000"`
 }
 
 // RatNum represents a rational number with the numerator and denominator.
@@ -106,10 +119,11 @@ type AnyReward struct {
 	Weight RatNum
 }
 
-// CoinbaseReward contains the reward information by coinbase, used as an interface to VM.
+// CoinbaseReward contains the reward information by coinbase and smesher, used as an interface to VM.
 type CoinbaseReward struct {
-	Coinbase Address
-	Weight   RatNum
+	SmesherID NodeID
+	Coinbase  Address
+	Weight    RatNum
 }
 
 // Initialize calculates and sets the Block's cached blockID.
@@ -193,11 +207,6 @@ func (ids blockIDs) MarshalLogArray(encoder log.ArrayEncoder) error {
 func SortBlockIDs(ids blockIDs) []BlockID {
 	sort.Slice(ids, func(i, j int) bool { return ids[i].Compare(ids[j]) })
 	return ids
-}
-
-// BlockIdsField returns a list of loggable fields for a given list of BlockID.
-func BlockIdsField(ids blockIDs) log.Field {
-	return log.Array("block_ids", ids)
 }
 
 // ToBlockIDs returns a slice of BlockID corresponding to the given list of Block.

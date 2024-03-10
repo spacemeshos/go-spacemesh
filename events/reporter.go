@@ -89,7 +89,7 @@ func ReportNewActivation(activation *types.VerifiedActivationTx) {
 }
 
 // ReportRewardReceived reports a new reward.
-func ReportRewardReceived(r Reward) {
+func ReportRewardReceived(r types.Reward) {
 	mu.RLock()
 	defer mu.RUnlock()
 
@@ -288,7 +288,7 @@ func SubscribeRewards() Subscription {
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		sub, err := reporter.bus.Subscribe(new(Reward))
+		sub, err := reporter.bus.Subscribe(new(types.Reward))
 		if err != nil {
 			log.With().Panic("Failed to subscribe to rewards")
 		}
@@ -381,14 +381,6 @@ type TxReceipt struct {
 	Address types.Address
 }
 
-// Reward represents a reward object with extra data needed by the API.
-type Reward struct {
-	Layer       types.LayerID
-	Total       uint64
-	LayerReward uint64
-	Coinbase    types.Address
-}
-
 // Transaction wraps a tx with its layer ID and validity info.
 type Transaction struct {
 	Transaction *types.Transaction
@@ -470,7 +462,7 @@ func newEventReporter() *EventReporter {
 	if err != nil {
 		log.With().Panic("failed to create account emitter", log.Err(err))
 	}
-	rewardEmitter, err := bus.Emitter(new(Reward))
+	rewardEmitter, err := bus.Emitter(new(types.Reward))
 	if err != nil {
 		log.With().Panic("failed to create reward emitter", log.Err(err))
 	}
