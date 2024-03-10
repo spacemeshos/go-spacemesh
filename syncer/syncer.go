@@ -402,8 +402,9 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		for layerID := s.getLastSyncedLayer().Add(1); layerID.Before(s.ticker.CurrentLayer()); layerID = layerID.Add(1) {
 			if err := s.syncLayer(ctx, layerID); err != nil {
 				if !errors.Is(err, context.Canceled) {
+					// BatchError spams too much, in case of no progress enable debug mode for sync
 					s.logger.With().
-						Warning("failed to sync layer", log.Context(ctx), log.Err(err), layerID)
+						Debug("failed to sync layer", log.Context(ctx), log.Err(err), layerID)
 				}
 				return false
 			}

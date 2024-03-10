@@ -39,7 +39,7 @@ func WithLogger(logger *zap.Logger) Opt {
 
 func DefaultConfig() Config {
 	return Config{
-		EpochInfoInterval: 30 * time.Minute,
+		EpochInfoInterval: 4 * time.Hour,
 		AtxsBatch:         1000,
 		RequestsLimit:     20,
 		EpochInfoPeers:    2,
@@ -98,10 +98,6 @@ type Syncer struct {
 	localdb *localsql.Database
 }
 
-func (s *Syncer) closeToTheEpoch(publish types.EpochID, timestamp, downloadUntil time.Time) bool {
-	return timestamp.After(downloadUntil) || downloadUntil.Sub(timestamp) < 2*s.cfg.EpochInfoInterval
-}
-
 func (s *Syncer) Download(parent context.Context, publish types.EpochID, downloadUntil time.Time) error {
 
 	state, err := atxsync.GetSyncState(s.localdb, publish)
@@ -113,8 +109,7 @@ func (s *Syncer) Download(parent context.Context, publish types.EpochID, downloa
 		return fmt.Errorf("failed to get last request time for epoch %v: %w", publish, err)
 	}
 	// in case of immediate we will request epoch info without waiting EpochInfoInterval
-	immediate := len(state) == 0 ||
-		(errors.Is(err, sql.ErrNotFound) || !s.closeToTheEpoch(publish, lastSuccess, downloadUntil))
+	immediate := len(state) == 0 || (errors.Is(err, sql.ErrNotFound) || !lastSuccess.After(downloadUntil))
 	if !immediate && total == downloaded {
 		s.logger.Debug("sync for epoch was completed before", log.ZContext(parent), publish.Field().Zap())
 		return nil
@@ -233,7 +228,7 @@ func (s *Syncer) downloadAtxs(
 
 	for {
 		// waiting for update if there is nothing to download
-		if nothingToDownload && s.closeToTheEpoch(publish, lastSuccess, downloadUntil) {
+		if nothingToDownload && lastSuccess.After(downloadUntil) {
 			s.logger.Info(
 				"atx sync completed",
 				log.ZContext(ctx),
