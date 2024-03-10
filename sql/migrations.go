@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"embed"
 	"fmt"
+	"io"
 	"io/fs"
 	"strconv"
 	"strings"
@@ -12,6 +13,10 @@ import (
 
 //go:embed migrations/**/*.sql
 var embedded embed.FS
+
+func MigrationsFS() fs.FS {
+	return embedded
+}
 
 type sqlMigration struct {
 	order   int
@@ -54,6 +59,10 @@ func (sqlMigration) Rollback() error {
 	return nil
 }
 
+func Version(db Executor) (int, error) {
+	return version(db)
+}
+
 func version(db Executor) (int, error) {
 	var current int
 	if _, err := db.Exec("PRAGMA user_version;", nil, func(stmt *Statement) bool {
@@ -75,38 +84,46 @@ func LocalMigrations() ([]Migration, error) {
 
 func sqlMigrations(dbname string) ([]Migration, error) {
 	var migrations []Migration
-	err := fs.WalkDir(embedded, fmt.Sprintf("migrations/%s", dbname), func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return fmt.Errorf("walkdir %s: %w", path, err)
-		}
-		if d.IsDir() {
-			return nil
-		}
-		parts := strings.Split(d.Name(), "_")
-		if len(parts) < 1 {
-			return fmt.Errorf("invalid migration %s", d.Name())
-		}
-		order, err := strconv.Atoi(parts[0])
-		if err != nil {
-			return fmt.Errorf("invalid migration %s: %w", d.Name(), err)
-		}
-		f, err := embedded.Open(path)
-		if err != nil {
-			return fmt.Errorf("read file %s: %w", path, err)
-		}
-		scanner := bufio.NewScanner(f)
-		scanner.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
-			if i := bytes.Index(data, []byte(";")); i >= 0 {
-				return i + 1, data[0 : i+1], nil
+	err := fs.WalkDir(
+		embedded,
+		fmt.Sprintf("migrations/%s", dbname),
+		func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return fmt.Errorf("walkdir %s: %w", path, err)
 			}
-			return 0, nil, nil
-		})
-		migrations = append(migrations, &sqlMigration{
-			order:   order,
-			name:    d.Name(),
-			content: scanner,
-		})
-		return nil
-	})
+			if d.IsDir() {
+				return nil
+			}
+			parts := strings.Split(d.Name(), "_")
+			if len(parts) < 1 {
+				return fmt.Errorf("invalid migration %s", d.Name())
+			}
+			order, err := strconv.Atoi(parts[0])
+			if err != nil {
+				return fmt.Errorf("invalid migration %s: %w", d.Name(), err)
+			}
+			f, err := embedded.Open(path)
+			if err != nil {
+				return fmt.Errorf("read file %s: %w", path, err)
+			}
+			migrations = append(migrations, &sqlMigration{
+				order:   order,
+				name:    d.Name(),
+				content: SQLScanner(f),
+			})
+			return nil
+		},
+	)
 	return migrations, err
+}
+
+func SQLScanner(r io.Reader) *bufio.Scanner {
+	scanner := bufio.NewScanner(r)
+	scanner.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
+		if i := bytes.Index(data, []byte(";")); i >= 0 {
+			return i + 1, data[0 : i+1], nil
+		}
+		return 0, nil, nil
+	})
+	return scanner
 }

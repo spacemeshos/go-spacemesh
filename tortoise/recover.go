@@ -171,6 +171,9 @@ func RecoverLayer(
 		results[block.ToVote()] = valid
 	}
 	var hareResult *types.BlockID
+
+	// tortoise votes according to the hare only within hdist (protocol parameter).
+	// also node is free to prune certificates outside hdist to minimize space usage.
 	if trtl.WithinHdist(lid) {
 		hare, err := certificates.GetHareOutput(db, lid)
 		if err != nil && !errors.Is(err, sql.ErrNotFound) {
@@ -181,26 +184,33 @@ func RecoverLayer(
 		}
 	}
 	trtl.OnRecoveredBlocks(lid, results, hareResult)
-	// tortoise votes according to the hare only within hdist (protocol parameter).
-	// also node is free to prune certificates outside hdist to minimize space usage.
 
 	// NOTE(dshulyak) we loaded information about malicious identities earlier.
-	ballotsrst, err := ballots.LayerNoMalicious(db, lid)
-	if err != nil {
-		return err
-	}
-	// NOTE(dshulyak) it is done in two steps so that if ballot from the same layer was used
-	// as reference or base ballot we will be able to decode it.
-	// it might be possible to invalidate such ballots, but until then this is required
-	for _, ballot := range ballotsrst {
-		if ballot.EpochData != nil {
-			onBallot(ballot.ToTortoiseData())
+	if err := ballots.IterateForTortoise(db, lid, func(
+		id types.BallotID,
+		atxid types.ATXID,
+		node types.NodeID,
+		eligibilities uint32,
+		beacon types.Beacon,
+		totalEligibilities uint32,
+		opinion types.Opinion,
+	) bool {
+		data := &types.BallotTortoiseData{
+			ID:            id,
+			Smesher:       node,
+			Layer:         lid,
+			AtxID:         atxid,
+			Eligibilities: eligibilities,
+			Opinion:       opinion,
+			EpochData: &types.ReferenceData{
+				Beacon:        beacon,
+				Eligibilities: totalEligibilities,
+			},
 		}
-	}
-	for _, ballot := range ballotsrst {
-		if ballot.EpochData == nil {
-			onBallot(ballot.ToTortoiseData())
-		}
+		onBallot(data)
+		return true
+	}); err != nil {
+		return fmt.Errorf("iterate ballots: %w", err)
 	}
 	coin, err := layers.GetWeakCoin(db, lid)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
