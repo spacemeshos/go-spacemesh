@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"runtime"
 	"testing"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/migration_extension"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
@@ -29,6 +31,10 @@ func TestReplayMainnet(t *testing.T) {
 	if len(*dbpath) == 0 {
 		t.Skip("set -dbpath=<PATH> to run this test")
 	}
+
+	runtime.GC()
+	var before runtime.MemStats
+	runtime.ReadMemStats(&before)
 
 	cfg := config.MainnetConfig()
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
@@ -51,15 +57,16 @@ func TestReplayMainnet(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	db, err := sql.Open(fmt.Sprintf("file:%s", *dbpath))
+	db, err := sql.Open(fmt.Sprintf("file:%s", *dbpath),
+		sql.WithMigration(migration_extension.M0017()))
 	require.NoError(t, err)
 
 	start := time.Now()
 	atxsdata, err := atxsdata.Warm(db,
 		atxsdata.WithCapacityFromLayers(cfg.Tortoise.WindowSize, cfg.LayersPerEpoch),
 	)
-	zlog.Info("warmed atxsdata", zap.Duration("duration", time.Since(start)))
 	require.NoError(t, err)
+	zlog.Info("loaded atxs data", zap.Duration("duration", time.Since(start)))
 	trtl, err := tortoise.Recover(
 		context.Background(),
 		db,
@@ -67,10 +74,19 @@ func TestReplayMainnet(t *testing.T) {
 		clock.CurrentLayer(), opts...,
 	)
 	require.NoError(t, err)
+
+	// run it after recovery, but before updates, as update may result in eviction from memory
+	runtime.GC()
+	var after runtime.MemStats
+	runtime.ReadMemStats(&after)
+
 	updates := trtl.Updates()
+
 	zlog.Info(
 		"initialized",
 		zap.Duration("duration", time.Since(start)),
+		zap.Stringer("mode", trtl.Mode()),
+		zap.Float64("heap", float64(after.HeapInuse-before.HeapInuse)/1024/1024),
 		zap.Array("updates", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
 			for _, rst := range updates {
 				encoder.AppendObject(&rst)

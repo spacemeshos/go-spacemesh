@@ -316,3 +316,110 @@ func AllFirstInEpoch(db sql.Executor, epoch types.EpochID) ([]*types.Ballot, err
 	}
 	return rst, nil
 }
+
+type BallotTuple struct {
+	Layer              types.LayerID
+	ID                 types.BallotID
+	ATX                types.ATXID
+	Node               types.NodeID
+	Eligibilities      uint32
+	Beacon             types.Beacon
+	TotalEligibilities uint32
+	Opinion            types.Hash32
+}
+
+// AddBallotTuple will insert ballot data to the database.
+func AddBallotTuple(db sql.Executor, ballot *BallotTuple) error {
+	enc := func(stmt *sql.Statement) {
+		stmt.BindInt64(1, int64(ballot.Layer))
+		stmt.BindBytes(2, ballot.ID[:])
+		stmt.BindBytes(3, ballot.ATX.Bytes())
+		stmt.BindBytes(4, ballot.Node[:])
+		stmt.BindInt64(5, int64(ballot.Eligibilities))
+		stmt.BindBytes(6, ballot.Beacon.Bytes())
+		stmt.BindInt64(7, int64(ballot.TotalEligibilities))
+		stmt.BindBytes(8, ballot.Opinion.Bytes())
+	}
+	if _, err := db.Exec(`
+		insert into ballots(layer, id, atx, pubkey, eligibilities, beacon, total_eligibilities, opinion)
+		values(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8);`, enc, nil); err != nil {
+		return fmt.Errorf("add ballot %v: %w", ballot.ID, err)
+	}
+	return nil
+}
+
+// AddMinimalOpinion will insert opinion data to the database.
+// If there is another version of encoded opinion we would prefer to keep one that is smaller in size.
+func AddMinimalOpinion(db sql.Executor, layer types.LayerID, id types.Hash32, opinion types.Opinion) error {
+	encoded := codec.MustEncode(&opinion)
+	enc := func(stmt *sql.Statement) {
+		stmt.BindInt64(1, int64(layer))
+		stmt.BindBytes(2, id[:])
+		stmt.BindBytes(3, encoded)
+	}
+	if _, err := db.Exec(`
+		insert into ballot_opinions (layer, opinion, encoded) values (?1, ?2, ?3) 
+		on conflict(layer, opinion) where length(encoded) > length(?3) do update set encoded = ?3;`, enc, nil); err != nil {
+		return fmt.Errorf("add opinion %v: %w", id, err)
+	}
+	return nil
+}
+
+func IterateBlobs(db sql.Executor, fn func(types.BallotID, io.Reader) bool) error {
+	dec := func(stmt *sql.Statement) bool {
+		var bid types.BallotID
+		stmt.ColumnBytes(0, bid[:])
+		return fn(bid, stmt.ColumnReader(1))
+	}
+	if _, err := db.Exec(`select id, ballot from ballot_blobs;`, nil, dec); err != nil {
+		return fmt.Errorf("iterate blobs: %w", err)
+	}
+	return nil
+}
+
+func IterateForTortoise(
+	db sql.Executor,
+	layer types.LayerID,
+	fn func(
+		id types.BallotID,
+		atxid types.ATXID,
+		node types.NodeID,
+		eligibilities uint32,
+		beacon types.Beacon,
+		total uint32,
+		opinion types.Opinion,
+	) bool,
+) error {
+	enc := func(stmt *sql.Statement) {
+		stmt.BindInt64(1, int64(layer))
+	}
+	var ierr error
+	dec := func(stmt *sql.Statement) bool {
+		var (
+			id        types.BallotID
+			atx       types.ATXID
+			node      types.NodeID
+			beacon    types.Beacon
+			opinionId types.Hash32
+			opinion   types.Opinion
+		)
+		stmt.ColumnBytes(0, id[:])
+		stmt.ColumnBytes(1, atx[:])
+		stmt.ColumnBytes(2, node[:])
+		stmt.ColumnBytes(4, beacon[:])
+		stmt.ColumnBytes(6, opinionId[:])
+		if _, err := codec.DecodeFrom(stmt.ColumnReader(7), &opinion); err != nil {
+			ierr = fmt.Errorf("decode opinion %v/%v: %w", layer, opinionId.ShortString(), err)
+			return false
+		}
+		return fn(id, atx, node, uint32(stmt.ColumnInt64(3)), beacon, uint32(stmt.ColumnInt64(5)), opinion)
+	}
+	if _, err := db.Exec(`
+		select id, atx, pubkey, eligibilities, beacon, total_eligibilities, ballots.opinion, encoded
+		from ballots 
+		left join ballot_opinions using(layer, opinion)
+		where layer = ?1`, enc, dec); err != nil {
+		return fmt.Errorf("iterate for tortoise: %w", err)
+	}
+	return ierr
+}
