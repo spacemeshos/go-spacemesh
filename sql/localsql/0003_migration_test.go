@@ -435,7 +435,7 @@ func Test_0003Migration_Phase0_MainnetPoet2(t *testing.T) {
 	require.Equal(t, secondLog.ContextMap()["poet_service_id"], base64.StdEncoding.EncodeToString([]byte("service1")))
 	require.Equal(t, secondLog.ContextMap()["address"], "http://poet1.com")
 	require.Equal(t, secondLog.ContextMap()["round_id"], "101")
-	require.Equal(t, secondLog.ContextMap()["round_end"], endTime.UTC())
+	require.Equal(t, secondLog.ContextMap()["round_end"].(time.Time).UTC(), endTime.UTC())
 
 	_, err = db.Exec("select hash, address, round_id, round_end from poet_registration where id = ?1;",
 		func(stmt *sql.Statement) {
