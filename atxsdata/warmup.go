@@ -37,7 +37,15 @@ func Warmup(db sql.Executor, cache *Data) error {
 
 	var ierr error
 	if err := atxs.IterateAtxsData(db, cache.Evicted(), latest,
-		func(id types.ATXID, node types.NodeID, epoch types.EpochID, coinbase types.Address, weight uint64, base, height uint64) bool {
+		func(
+			id types.ATXID,
+			node types.NodeID,
+			epoch types.EpochID,
+			coinbase types.Address,
+			weight,
+			base,
+			height uint64,
+		) bool {
 			target := epoch + 1
 			nonce, err := atxs.VRFNonce(db, node, target)
 			if err != nil {

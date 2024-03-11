@@ -489,10 +489,19 @@ func LatestEpoch(db sql.Executor) (types.EpochID, error) {
 	return epoch, nil
 }
 
+// IterateAtxsData iterate over data used for consensus.
 func IterateAtxsData(
 	db sql.Executor,
 	from, to types.EpochID,
-	fn func(id types.ATXID, node types.NodeID, epoch types.EpochID, coinbase types.Address, weight uint64, base uint64, height uint64) bool,
+	fn func(
+		id types.ATXID,
+		node types.NodeID,
+		epoch types.EpochID,
+		coinbase types.Address,
+		weight uint64,
+		base uint64,
+		height uint64,
+	) bool,
 ) error {
 	_, err := db.Exec(
 		`select id, pubkey, epoch, coinbase, effective_num_units, base_tick_height, tick_count
@@ -509,10 +518,10 @@ func IterateAtxsData(
 			epoch := types.EpochID(uint32(stmt.ColumnInt64(2)))
 			var coinbase types.Address
 			stmt.ColumnBytes(3, coinbase[:])
-			weight := uint64(stmt.ColumnInt64(4))
-			base := uint64(stmt.ColumnInt64(5))
+			effectiveUnits := uint64(stmt.ColumnInt64(4))
+			baseHeight := uint64(stmt.ColumnInt64(5))
 			ticks := uint64(stmt.ColumnInt64(6))
-			return fn(id, node, epoch, coinbase, weight*ticks, base, base+ticks)
+			return fn(id, node, epoch, coinbase, effectiveUnits*ticks, baseHeight, baseHeight+ticks)
 		},
 	)
 	if err != nil {
