@@ -26,10 +26,17 @@ type Validator struct {
 	beacons            system.BeaconCollector
 	logger             log.Log
 	vrfVerifier        vrfVerifier
+	validateBoundaries types.EpochID
 }
 
 // ValidatorOpt for configuring Validator.
 type ValidatorOpt func(h *Validator)
+
+func WithValidateBoundaries(epoch types.EpochID) ValidatorOpt {
+	return func(v *Validator) {
+		v.validateBoundaries = epoch
+	}
+}
 
 // NewEligibilityValidator returns a new EligibilityValidator.
 func NewEligibilityValidator(
@@ -89,7 +96,9 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot, 
 		data *types.EpochData
 		err  error
 	)
-	if ballot.EpochData != nil && ballot.Layer.GetEpoch() == v.clock.CurrentLayer().GetEpoch() {
+	if v.validateBoundaries >= ballot.Layer.GetEpoch() {
+		data, err = v.validateReferenceBoundaries(ballot, atx.Weight, weight)
+	} else if ballot.EpochData != nil && ballot.Layer.GetEpoch() == v.clock.CurrentLayer().GetEpoch() {
 		data, err = v.validateReference(ballot, atx.Weight, weight)
 	} else {
 		data, err = v.validateSecondary(ballot)
@@ -213,4 +222,52 @@ func (v *Validator) validateSecondary(ballot *types.Ballot) (*types.EpochData, e
 		)
 	}
 	return &types.EpochData{Beacon: refdata.Beacon, EligibilityCount: refdata.Eligiblities}, nil
+}
+
+func (v *Validator) validateReferenceBoundaries(
+	ballot *types.Ballot,
+	atxWeight, activeSetWeight uint64,
+) (*types.EpochData, error) {
+	if ballot.EpochData.Beacon == types.EmptyBeacon {
+		return nil, fmt.Errorf("%w: beacon is missing in ref ballot %v", pubsub.ErrValidationReject, ballot.ID())
+	}
+	if activeSetWeight == 0 {
+		return nil, fmt.Errorf("empty active set in ref ballot %v", ballot.ID())
+	}
+	upperBoundary, err := GetNumEligibleSlots(
+		atxWeight,
+		minweight.Select(ballot.Layer.GetEpoch(), v.minActiveSetWeight),
+		minweight.Select(ballot.Layer.GetEpoch(), v.minActiveSetWeight),
+		v.avgLayerSize,
+		v.layersPerEpoch,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", pubsub.ErrValidationReject, err)
+	}
+	lowerBoundary, err := GetNumEligibleSlots(
+		atxWeight,
+		activeSetWeight,
+		activeSetWeight,
+		v.avgLayerSize,
+		v.layersPerEpoch)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", pubsub.ErrValidationReject, err)
+	}
+	if ballot.EpochData.EligibilityCount > upperBoundary {
+		return nil, fmt.Errorf(
+			"%w: ballot is higher than upper boundary %v, got: %v",
+			pubsub.ErrValidationReject,
+			upperBoundary,
+			ballot.EpochData.EligibilityCount,
+		)
+	} else if ballot.EpochData.EligibilityCount < lowerBoundary {
+		// it could also mean that node doesn't have enough atxs to recognize that the boundary is actually lower
+		// TODO(dshulyak) make sure that this error will not block syncedness
+		return nil, fmt.Errorf(
+			"ballot is lower than lower boundary %v, got: %v",
+			lowerBoundary,
+			ballot.EpochData.EligibilityCount,
+		)
+	}
+	return ballot.EpochData, nil
 }

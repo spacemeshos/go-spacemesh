@@ -68,6 +68,9 @@ type Config struct {
 	MaxExceptions          int
 	Hdist                  uint32
 	MinimalActiveSetWeight []types.EpochMinimalActiveWeight
+	// starting from this epoch protocol will switch into validation mode that doesn't require to download
+	// generated activeset, but instead relies on sync to catchup if some other node has many more atxs.
+	ValidateBoundaries types.EpochID
 }
 
 // defaultConfig for BlockHandler.
@@ -148,6 +151,7 @@ func NewHandler(
 			bc,
 			b.logger,
 			verifier,
+			WithValidateBoundaries(b.cfg.ValidateBoundaries),
 		)
 	}
 	return b
@@ -466,7 +470,7 @@ func (h *Handler) checkBallotSyntacticValidity(
 	b *types.Ballot,
 ) (*tortoise.DecodedBallot, error) {
 	t0 := time.Now()
-	ref, err := h.checkBallotDataIntegrity(ctx, b)
+	activeSetWeight, err := h.checkBallotDataIntegrity(ctx, b)
 	if err != nil {
 		badData.Inc()
 		return nil, err
@@ -502,7 +506,7 @@ func (h *Handler) checkBallotSyntacticValidity(
 	ballotDuration.WithLabelValues(votes).Observe(float64(time.Since(t3)))
 
 	t4 := time.Now()
-	if err := h.validator.CheckEligibility(ctx, b, ref); err != nil {
+	if err := h.validator.CheckEligibility(ctx, b, activeSetWeight); err != nil {
 		notEligible.Inc()
 		return nil, err
 	}
@@ -525,7 +529,9 @@ func (h *Handler) checkBallotDataIntegrity(ctx context.Context, b *types.Ballot)
 		if epoch > 0 {
 			epoch-- // download activesets in the previous epoch too
 		}
-		if b.Layer.GetEpoch() >= epoch {
+		if target := b.Layer.GetEpoch(); target > epoch && target >= h.cfg.ValidateBoundaries {
+			return h.atxsdata.NonDecreasingWeight(target), nil
+		} else if b.Layer.GetEpoch() >= epoch {
 			var exists bool
 			totalWeight, exists := h.activeSets.Get(b.EpochData.ActiveSetHash)
 			if !exists {
