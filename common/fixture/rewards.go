@@ -3,6 +3,7 @@ package fixture
 import (
 	"encoding/binary"
 	"math/rand"
+	"slices"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -21,8 +22,9 @@ func NewRewardsGenerator() *RewardsGenerator {
 type RewardsGenerator struct {
 	rng *rand.Rand
 
-	Addrs  []types.Address
-	Layers []types.LayerID
+	UniqueCoinbase bool
+	Addrs          []types.Address
+	Layers         []types.LayerID
 }
 
 // WithSeed update randomness source.
@@ -51,11 +53,25 @@ func (g *RewardsGenerator) WithLayers(start, n int) *RewardsGenerator {
 	return g
 }
 
+// WithUniqueCoinbase will generate every reward with different address
+func (g *RewardsGenerator) WithUniqueCoinbase() *RewardsGenerator {
+	g.UniqueCoinbase = true
+	return g
+}
+
 // Next generates Reward.
 func (g *RewardsGenerator) Next() *types.Reward {
 	var reward types.Reward
 	g.rng.Read(reward.SmesherID[:])
-	reward.Coinbase = g.Addrs[g.rng.Intn(len(g.Addrs))]
+
+	index := g.rng.Intn(len(g.Addrs))
+	coinbase := g.Addrs[index]
+
+	if g.UniqueCoinbase {
+		g.Addrs = slices.Delete(g.Addrs, index, index+1)
+	}
+
+	reward.Coinbase = coinbase
 	reward.LayerReward = uint64(g.rng.Int())
 	reward.TotalReward = uint64(g.rng.Int())
 	reward.Layer = g.Layers[g.rng.Intn(len(g.Layers))]
