@@ -431,18 +431,12 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	return success
 }
 
-func (s *Syncer) backgroundEpoch() types.EpochID {
-	lid := s.ticker.CurrentLayer()
-	if lid.OrdinalInEpoch() > uint32(float64(types.GetLayersPerEpoch())*s.cfg.EpochEndFraction) {
-		return lid.GetEpoch() + 1
-	}
-	return lid.GetEpoch()
-}
-
 func (s *Syncer) syncAtx(ctx context.Context) error {
+	current := s.ticker.CurrentLayer()
+	// on startup always download all activations that were published before current epoch
 	if !s.ListenToATXGossip() {
-		s.logger.With().Debug("syncing atx from genesis", log.Context(ctx), s.ticker.CurrentLayer(), s.lastAtxEpoch())
-		for epoch := s.lastAtxEpoch() + 1; epoch < s.backgroundEpoch(); epoch++ {
+		s.logger.With().Debug("syncing atx from genesis", log.Context(ctx), current, s.lastAtxEpoch())
+		for epoch := s.lastAtxEpoch() + 1; epoch < current.GetEpoch(); epoch++ {
 			if err := s.fetchATXsForEpoch(ctx, epoch, false); err != nil {
 				return err
 			}
@@ -458,7 +452,15 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 		s.setATXSynced()
 	}
 
-	publish := s.backgroundEpoch()
+	publish := current.GetEpoch()
+	if publish == 0 {
+		return nil // nothing to sync in epoch 0
+	}
+
+	// if we are not advanced enough sync previous epoch, otherwise start syncing activations published in this epoch
+	if current.OrdinalInEpoch() <= uint32(float64(types.GetLayersPerEpoch())*s.cfg.EpochEndFraction) {
+		publish -= 1
+	}
 	if epoch := s.backgroundSync.epoch.Load(); epoch != 0 && epoch != publish.Uint32() {
 		s.backgroundSync.cancel()
 		s.backgroundSync.eg.Wait()
