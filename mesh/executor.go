@@ -133,9 +133,9 @@ func (e *Executor) Execute(ctx context.Context, lid types.LayerID, block *types.
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	start := time.Now()
-	if err := e.checkOrder(lid); err != nil {
-		return err
-	}
+	// if err := e.checkOrder(lid); err != nil {
+	// 	return err
+	// }
 	if block == nil {
 		return e.executeEmpty(ctx, lid)
 	}
@@ -157,9 +157,9 @@ func (e *Executor) Execute(ctx context.Context, lid types.LayerID, block *types.
 		return fmt.Errorf("apply block: %w", err)
 	}
 	updateResults(block.ID(), executed)
-	if err = e.cs.UpdateCache(ctx, block.LayerIndex, block.ID(), executed, ineffective); err != nil {
-		return fmt.Errorf("update cache: %w", err)
-	}
+	// if err = e.cs.UpdateCache(ctx, block.LayerIndex, block.ID(), executed, ineffective); err != nil {
+	// 	return fmt.Errorf("update cache: %w", err)
+	// }
 	state, err := e.vm.GetStateRoot()
 	if err != nil {
 		return fmt.Errorf("get state hash: %w", err)
@@ -171,6 +171,7 @@ func (e *Executor) Execute(ctx context.Context, lid types.LayerID, block *types.
 		log.Stringer("state_hash", state),
 		log.Duration("duration", time.Since(start)),
 		log.Int("count", len(executed)),
+		log.Int("skipped", len(ineffective)),
 		log.Int("rewards", len(rewards)),
 	)
 	return nil
@@ -200,9 +201,9 @@ func (e *Executor) executeEmpty(ctx context.Context, lid types.LayerID) error {
 	if _, _, err := e.vm.Apply(vm.ApplyContext{Layer: lid}, nil, nil); err != nil {
 		return fmt.Errorf("apply empty layer: %w", err)
 	}
-	if err := e.cs.UpdateCache(ctx, lid, types.EmptyBlockID, nil, nil); err != nil {
-		return fmt.Errorf("update cache: %w", err)
-	}
+	// if err := e.cs.UpdateCache(ctx, lid, types.EmptyBlockID, nil, nil); err != nil {
+	// 	return fmt.Errorf("update cache: %w", err)
+	// }
 	state, err := e.vm.GetStateRoot()
 	if err != nil {
 		return fmt.Errorf("get state hash: %w", err)

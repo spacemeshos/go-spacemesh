@@ -787,14 +787,20 @@ func (c *Cache) ApplyLayer(
 }
 
 func (c *Cache) RevertToLayer(db *sql.Database, revertTo types.LayerID) error {
+	c.logger.With().Info("undo layers", revertTo)
+	start := time.Now()
 	if err := undoLayers(db, revertTo.Add(1)); err != nil {
 		return err
 	}
-
-	if err := c.buildFromScratch(db); err != nil {
-		c.logger.With().Error("failed to build from scratch after revert", log.Err(err))
-		return err
-	}
+	c.logger.With().Info("undo layers done", revertTo, log.Duration("duration", time.Since(start)))
+	// TODO(dshulyak) this definitely takes forever in case of revert to genesis,
+	// might be problematic even with shorter revert and needs to be optimized
+	// start = time.Now()
+	// if err := c.buildFromScratch(db); err != nil {
+	// 	c.logger.With().Error("failed to build from scratch after revert", log.Err(err))
+	// 	return err
+	// }
+	// c.logger.With().Info("rebuild from scratch done", log.Duration("duration", time.Since(start)))
 	return nil
 }
 

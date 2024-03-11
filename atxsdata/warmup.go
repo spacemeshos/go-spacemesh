@@ -74,3 +74,44 @@ func Warmup(db sql.Executor, cache *Data) error {
 	}
 	return ierr
 }
+
+func Load(db sql.Executor, cache *Data, epoch types.EpochID) error {
+	var ierr error
+	if err := atxs.IterateAtxsData(db, epoch, epoch,
+		func(
+			id types.ATXID,
+			node types.NodeID,
+			epoch types.EpochID,
+			coinbase types.Address,
+			weight,
+			base,
+			height uint64,
+		) bool {
+			target := epoch + 1
+			nonce, err := atxs.VRFNonce(db, node, target)
+			if err != nil {
+				ierr = fmt.Errorf("missing nonce %w", err)
+				return false
+			}
+			malicious, err := identities.IsMalicious(db, node)
+			if err != nil {
+				ierr = err
+				return false
+			}
+			cache.Add(
+				target,
+				node,
+				coinbase,
+				id,
+				weight,
+				base,
+				height,
+				nonce,
+				malicious,
+			)
+			return true
+		}); err != nil {
+		return err
+	}
+	return ierr
+}
