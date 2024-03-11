@@ -24,6 +24,8 @@ With this release the node has fully migrated its local state into `local.sql`. 
 upgrade the node will migrate the data from disk and store it in the database. This change also allows the PoST data
 directory to be set to read only after the migration is complete, as the node will no longer write to it.
 
+**NOTE:** To ensure a successful migration make sure that the config contains all PoETs your node is using.
+
 #### New poets configuration
 
 Upgrading requires changes in config and in CLI flags (if not using the default).
@@ -153,6 +155,34 @@ and permanent ineligibility for rewards.
 
 ### Highlights
 
+* [#5599](https://github.com/spacemeshos/go-spacemesh/pull/5599) new atx sync that is less fragile to network failures.
+  
+  new atx sync will avoid blocking startup, and additionally will be running in background to ask peers for atxs.
+  by default it does that every 4 hours by requesting known atxs from 2 peers. configuration can be adjusted by providing
+
+```json
+  {
+    "syncer": {
+      "atx-sync": {
+        // interval and number of peers determine how much traffic node will spend for asking about known atxs.
+        // for example in this configuration every 4 hours it will download known atxs from 2 peers.
+        // with 2_000_000 atxs it will amount to ~128MB of traffic every 4 hours.
+        "epoch-info-request-interval": "4h",
+        "epoch-info-peers": 2,
+        // number of retries to fetch any specific atx.
+        "requests-limit": 20,
+        // number of full atxs that will be downloaded in parallel.
+        // you can try to tune this value up if sync will be slow.
+        "atxs-batch": 1000,
+        // atx sync progress will be reported when 10% of known atxs were downloaded, or every 20 minutes.
+        // if it is too noisy tune them to your liking.
+        "progress-every-fraction": 0.1,
+        "progress-on-time": "20m"
+      }
+    }
+  }
+```
+
 * [#5293](https://github.com/spacemeshos/go-spacemesh/pull/5293) change poet servers configuration
   The config now takes the poet server address and its public key. See the [Upgrade Information](#new-poets-configuration)
   for details.
@@ -174,10 +204,11 @@ and permanent ineligibility for rewards.
 
 * [#5651](https://github.com/spacemeshos/go-spacemesh/pull/5651)
   New GRPC service `spacemesh.v1.PostInfoService.PostStates` allowing to check the status of
-  PoST proving of all registered identities. It's usefull for operators to figure out when
+  PoST proving of all registered identities. It's useful for operators to figure out when
   post-services for each identity need to be up or can be shutdown.
 
   An example output:
+
   ```json
   {
     "states": [
