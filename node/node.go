@@ -1385,7 +1385,7 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 
 	switch svc {
 	case grpcserver.Debug:
-		service := grpcserver.NewDebugService(app.db, app.conState, app.host, app.hOracle)
+		service := grpcserver.NewDebugService(app.db, app.conState, app.host, app.hOracle, app.loggers, app.log)
 		app.grpcServices[svc] = service
 		return service, nil
 	case grpcserver.GlobalState:
