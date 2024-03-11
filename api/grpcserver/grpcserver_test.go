@@ -535,7 +535,7 @@ func TestNewLocalServer(t *testing.T) {
 			svc := NewNodeService(peerCounter, meshApi, genTime, syncer, "v0.0.0", "cafebabe")
 			grpcService, err := NewWithServices(cfg.PostListener, logger, cfg, []ServiceAPI{svc})
 			if tc.warn {
-				require.Equal(t, observedLogs.Len(), 1, "Expected a warning log")
+				require.Equal(t, 1, observedLogs.Len(), "Expected a warning log")
 				require.Equal(t, observedLogs.All()[0].Message, "unsecured grpc server is listening on a public IP address")
 				require.Equal(t, observedLogs.All()[0].ContextMap()["address"], tc.listener)
 				return

@@ -1794,16 +1794,16 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 			return fmt.Errorf("failed to create poet client: %w", err)
 		}
 	}
-	migrations, err = sql.LocalMigrations()
-	if err != nil {
-		return fmt.Errorf("load local migrations: %w", err)
-	}
 
 	// Migrate `node_state.sql` to `local.sql`
 	if err := app.MigrateLocalDB(dbLog.Zap(), dbPath, clients); err != nil {
 		return err
 	}
 
+	migrations, err = sql.LocalMigrations()
+	if err != nil {
+		return fmt.Errorf("load local migrations: %w", err)
+	}
 	localDB, err := localsql.Open("file:"+filepath.Join(dbPath, localDbFile),
 		sql.WithLogger(dbLog.Zap()),
 		sql.WithMigrations(migrations),
@@ -2003,8 +2003,6 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 		}
 	}
 
-	lg := logger
-
 	/* Initialize all protocol services */
 
 	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
@@ -2015,17 +2013,17 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 		timesync.WithLayerDuration(app.Config.LayerDuration),
 		timesync.WithTickInterval(1*time.Second),
 		timesync.WithGenesisTime(gTime),
-		timesync.WithLogger(app.addLogger(ClockLogger, lg).Zap()),
+		timesync.WithLogger(app.addLogger(ClockLogger, logger).Zap()),
 	)
 	if err != nil {
 		return fmt.Errorf("cannot create clock: %w", err)
 	}
 
-	lg.Info("initializing p2p services")
+	logger.Info("initializing p2p services")
 
 	cfg := app.Config.P2P
 	cfg.DataDir = filepath.Join(app.Config.DataDir(), "p2p")
-	p2plog := app.addLogger(P2PLogger, lg)
+	p2plog := app.addLogger(P2PLogger, logger)
 	// if addLogger won't add a level we will use a default 0 (info).
 	cfg.LogLevel = app.getLevel(P2PLogger)
 	prologue := fmt.Sprintf("%x-%v",
@@ -2046,7 +2044,7 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 		return fmt.Errorf("initialize p2p host: %w", err)
 	}
 
-	if err := app.setupDBs(ctx, lg); err != nil {
+	if err := app.setupDBs(ctx, logger); err != nil {
 		return err
 	}
 	if err := app.initServices(ctx); err != nil {
