@@ -99,7 +99,6 @@ type Syncer struct {
 }
 
 func (s *Syncer) Download(parent context.Context, publish types.EpochID, downloadUntil time.Time) error {
-
 	state, err := atxsync.GetSyncState(s.localdb, publish)
 	if err != nil {
 		return fmt.Errorf("failed to get state for epoch %v: %w", publish, err)
