@@ -211,12 +211,14 @@ func TestSyncer(t *testing.T) {
 		}
 	})
 	t.Run("terminate empty epoch", func(t *testing.T) {
-		tester := newTester(t, DefaultConfig())
+		cfg := DefaultConfig()
+		cfg.EpochInfoInterval = time.Millisecond
+		tester := newTester(t, cfg)
 		publish := types.EpochID(2)
 		now := time.Now()
 		peers := []p2p.Peer{"a"}
 		tester.fetcher.EXPECT().SelectBestShuffled(tester.cfg.EpochInfoPeers).Return(peers).AnyTimes()
-		tester.fetcher.EXPECT().PeerEpochInfo(gomock.Any(), peers[0], publish).Return(edata(), nil)
+		tester.fetcher.EXPECT().PeerEpochInfo(gomock.Any(), peers[0], publish).Return(edata(), nil).AnyTimes()
 		require.NoError(t, tester.syncer.Download(context.Background(), publish, now))
 	})
 }
