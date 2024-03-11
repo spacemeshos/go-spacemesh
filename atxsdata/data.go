@@ -69,7 +69,8 @@ type Data struct {
 }
 
 type epochCache struct {
-	index map[types.ATXID]*ATX
+	nonDecreasingWeight uint64
+	index               map[types.ATXID]*ATX
 }
 
 func (d *Data) Evicted() types.EpochID {
@@ -144,6 +145,8 @@ func (d *Data) AddAtx(target types.EpochID, id types.ATXID, atx *ATX) bool {
 	ecache.index[id] = atx
 	if atx.malicious {
 		d.malicious[atx.Node] = struct{}{}
+	} else {
+		ecache.nonDecreasingWeight += atx.Weight
 	}
 	return true
 }
@@ -276,4 +279,17 @@ func (d *Data) WeightForSet(epoch types.EpochID, set []types.ATXID) (uint64, []b
 		}
 	}
 	return weight, used
+}
+
+// NonDecreasingWeight is used to validate that ballots don't artificially decrease number of eligibilities.
+// it has to be non decreasing as if node equivocates other nodes on the network can learn equivocators in different
+// order.
+func (d *Data) NonDecreasingWeight(target types.EpochID) uint64 {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	ecache, exists := d.epochs[target]
+	if !exists {
+		return 0
+	}
+	return ecache.nonDecreasingWeight
 }

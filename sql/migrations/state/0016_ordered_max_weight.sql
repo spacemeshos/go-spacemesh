@@ -1,0 +1,1 @@
+CREATE INDEX atxs_by_epoch_pubkey_weight ON atxs (epoch, pubkey, effective_num_units*ticks DESC);
