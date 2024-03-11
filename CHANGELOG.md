@@ -155,6 +155,34 @@ and permanent ineligibility for rewards.
 
 ### Highlights
 
+* [#5599](https://github.com/spacemeshos/go-spacemesh/pull/5599) new atx sync that is less fragile to network failures.
+  
+  new atx sync will avoid blocking startup, and additionally will be running in background to ask peers for atxs.
+  by default it does that every 4 hours by requesting known atxs from 2 peers. configuration can be adjusted by providing
+
+```json
+  {
+    "syncer": {
+      "atx-sync": {
+        // interval and number of peers determine how much traffic node will spend for asking about known atxs.
+        // for example in this configuration every 4 hours it will download known atxs from 2 peers.
+        // with 2_000_000 atxs it will amount to ~128MB of traffic every 4 hours.
+        "epoch-info-request-interval": "4h",
+        "epoch-info-peers": 2,
+        // number of retries to fetch any specific atx.
+        "requests-limit": 20,
+        // number of full atxs that will be downloaded in parallel.
+        // you can try to tune this value up if sync will be slow.
+        "atxs-batch": 1000,
+        // atx sync progress will be reported when 10% of known atxs were downloaded, or every 20 minutes.
+        // if it is too noisy tune them to your liking.
+        "progress-every-fraction": 0.1,
+        "progress-on-time": "20m"
+      }
+    }
+  }
+```
+
 * [#5293](https://github.com/spacemeshos/go-spacemesh/pull/5293) change poet servers configuration
   The config now takes the poet server address and its public key. See the [Upgrade Information](#new-poets-configuration)
   for details.
