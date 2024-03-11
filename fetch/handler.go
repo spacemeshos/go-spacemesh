@@ -3,6 +3,7 @@ package fetch
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 
 	"github.com/spacemeshos/go-scale"
@@ -267,11 +268,20 @@ func (h *handler) handleCertReq(ctx context.Context, lid types.LayerID, bid type
 }
 
 func (h *handler) handleHashReq(ctx context.Context, data []byte) ([]byte, error) {
+	return h.doHandleHashReq(ctx, data, datastore.NoHint)
+}
+
+func (h *handler) doHandleHashReq(ctx context.Context, data []byte, hint datastore.Hint) ([]byte, error) {
 	var requestBatch RequestBatch
 	if err := codec.Decode(data, &requestBatch); err != nil {
 		h.logger.With().Warning("serve: failed to parse request", log.Context(ctx), log.Err(err))
 		return nil, errBadRequest
 	}
+
+	if hint != datastore.NoHint && len(requestBatch.Requests) > 1 {
+		return nil, fmt.Errorf("batch of size 1 expected for %s", hint)
+	}
+
 	resBatch := ResponseBatch{
 		ID:        requestBatch.ID,
 		Responses: make([]ResponseMessage, 0, len(requestBatch.Requests)),
@@ -279,6 +289,9 @@ func (h *handler) handleHashReq(ctx context.Context, data []byte) ([]byte, error
 	// this will iterate all requests and populate appropriate Responses, if there are any missing items they will not
 	// be included in the response at all
 	for _, r := range requestBatch.Requests {
+		if hint != datastore.NoHint && r.Hint != hint {
+			return nil, fmt.Errorf("bad hint: %q (expected %q)", r.Hint, hint)
+		}
 		totalHashReqs.WithLabelValues(string(r.Hint)).Add(1)
 		var blob sql.Blob
 		if err := h.bs.LoadBlob(ctx, r.Hint, r.Hash.Bytes(), &blob); err != nil {
@@ -335,14 +348,30 @@ func (h *handler) handleHashReq(ctx context.Context, data []byte) ([]byte, error
 }
 
 func (h *handler) handleHashReqStream(ctx context.Context, msg []byte, s io.ReadWriter) error {
+	return h.doHandleHashReqStream(ctx, msg, s, datastore.NoHint)
+}
+
+func (h *handler) doHandleHashReqStream(
+	ctx context.Context,
+	msg []byte,
+	s io.ReadWriter,
+	hint datastore.Hint,
+) error {
 	var requestBatch RequestBatch
 	if err := codec.Decode(msg, &requestBatch); err != nil {
 		h.logger.With().Warning("serve: failed to parse request", log.Context(ctx), log.Err(err))
 		return errBadRequest
 	}
 
+	if hint != datastore.NoHint && len(requestBatch.Requests) > 1 {
+		return fmt.Errorf("batch of size 1 expected for %s", hint)
+	}
+
 	idsByHint := make(map[datastore.Hint][][]byte)
 	for _, r := range requestBatch.Requests {
+		if hint != datastore.NoHint && r.Hint != hint {
+			return fmt.Errorf("bad hint: %q (expected %q)", r.Hint, hint)
+		}
 		idsByHint[r.Hint] = append(idsByHint[r.Hint], r.Hash.Bytes())
 	}
 

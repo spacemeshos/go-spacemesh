@@ -24,12 +24,13 @@ import (
 )
 
 const (
-	atxProtocol      = "ax/1"
-	lyrDataProtocol  = "ld/1"
-	hashProtocol     = "hs/1"
-	meshHashProtocol = "mh/1"
-	malProtocol      = "ml/1"
-	OpnProtocol      = "lp/2"
+	atxProtocol       = "ax/1"
+	lyrDataProtocol   = "ld/1"
+	hashProtocol      = "hs/1"
+	activeSetProtocol = "as/1"
+	meshHashProtocol  = "mh/1"
+	malProtocol       = "ml/1"
+	OpnProtocol       = "lp/2"
 
 	cacheSize = 1000
 
@@ -59,9 +60,14 @@ type promise struct {
 	err       error
 }
 
+var protocolMap = map[datastore.Hint]string{
+	datastore.ActiveSet: activeSetProtocol,
+}
+
 type batchInfo struct {
 	RequestBatch
-	peer p2p.Peer
+	protocol string
+	peer     p2p.Peer
 }
 
 // setID calculates the hash of all requests and sets it as this batches ID.
@@ -79,6 +85,24 @@ func (b *batchInfo) toMap() map[types.Hash32]RequestMessage {
 		m[r.Hash] = r
 	}
 	return m
+}
+
+func (b *batchInfo) extraProtocols() []string {
+	if b.protocol != "" {
+		return []string{b.protocol}
+	}
+	return nil
+}
+
+func makeBatch(peer p2p.Peer, reqs []RequestMessage) *batchInfo {
+	batch := &batchInfo{
+		RequestBatch: RequestBatch{
+			Requests: reqs,
+		},
+		peer: peer,
+	}
+	batch.setID()
+	return batch
 }
 
 type ServerConfig struct {
@@ -146,6 +170,8 @@ func DefaultConfig() Config {
 			// ballots > 300 bytes
 			// often queried after receiving gossip message
 			hashProtocol: {Queue: 2000, Requests: 200, Interval: time.Second},
+			// active sets (can get quite large)
+			activeSetProtocol: {Queue: 1, Requests: 1, Interval: 30 * time.Second},
 			// serves at most 100 hashes - 3KB
 			meshHashProtocol: {Queue: 1000, Requests: 100, Interval: time.Second},
 			// serves all malicious ids (id - 32 byte) - 10KB
@@ -290,11 +316,21 @@ func NewFetch(
 		if f.cfg.Streaming {
 			f.registerServer(host, atxProtocol, h.handleEpochInfoReqStream)
 			f.registerServer(host, hashProtocol, h.handleHashReqStream)
+			f.registerServer(
+				host, activeSetProtocol,
+				func(ctx context.Context, msg []byte, s io.ReadWriter) error {
+					return h.doHandleHashReqStream(ctx, msg, s, datastore.ActiveSet)
+				})
 			f.registerServer(host, meshHashProtocol, h.handleMeshHashReqStream)
 			f.registerServer(host, malProtocol, h.handleMaliciousIDsReqStream)
 		} else {
 			f.registerServer(host, atxProtocol, server.WrapHandler(h.handleEpochInfoReq))
 			f.registerServer(host, hashProtocol, server.WrapHandler(h.handleHashReq))
+			f.registerServer(
+				host, activeSetProtocol,
+				server.WrapHandler(func(ctx context.Context, data []byte) ([]byte, error) {
+					return h.doHandleHashReq(ctx, data, datastore.ActiveSet)
+				}))
 			f.registerServer(host, meshHashProtocol, server.WrapHandler(h.handleMeshHashReq))
 			f.registerServer(host, malProtocol, server.WrapHandler(h.handleMaliciousIDsReq))
 		}
@@ -440,9 +476,10 @@ func (f *Fetch) meteredRequest(
 	protocol string,
 	peer p2p.Peer,
 	req []byte,
+	extraProtocols ...string,
 ) ([]byte, error) {
 	start := time.Now()
-	resp, err := f.servers[protocol].Request(ctx, peer, req)
+	resp, err := f.servers[protocol].Request(ctx, peer, req, extraProtocols...)
 	if err != nil {
 		f.peers.OnFailure(peer)
 	} else {
@@ -457,6 +494,7 @@ func (f *Fetch) meteredStreamRequest(
 	peer p2p.Peer,
 	req []byte,
 	callback func(context.Context, io.ReadWriter) (int, error),
+	extraProtocols ...string,
 ) error {
 	start := time.Now()
 	var nBytes int
@@ -466,6 +504,7 @@ func (f *Fetch) meteredStreamRequest(
 			nBytes, err = callback(ctx, rw)
 			return err
 		},
+		extraProtocols...,
 	)
 	if err != nil {
 		f.peers.OnFailure(peer)
@@ -619,16 +658,10 @@ func (f *Fetch) send(requests []RequestMessage) {
 	}
 
 	peer2batches := f.organizeRequests(requests)
-	for peer, peerBatches := range peer2batches {
+	for peer, batches := range peer2batches {
 		peer := peer
-		for _, reqs := range peerBatches {
-			batch := &batchInfo{
-				RequestBatch: RequestBatch{
-					Requests: reqs,
-				},
-				peer: peer,
-			}
-			batch.setID()
+		for _, batch := range batches {
+			batch := batch
 			go func() {
 				if f.cfg.Streaming {
 					if err := f.streamBatch(peer, batch); err != nil {
@@ -658,7 +691,7 @@ func (f *Fetch) send(requests []RequestMessage) {
 	}
 }
 
-func (f *Fetch) organizeRequests(requests []RequestMessage) map[p2p.Peer][][]RequestMessage {
+func (f *Fetch) organizeRequests(requests []RequestMessage) map[p2p.Peer][]*batchInfo {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	peer2requests := make(map[p2p.Peer][]RequestMessage)
 
@@ -697,12 +730,26 @@ func (f *Fetch) organizeRequests(requests []RequestMessage) map[p2p.Peer][][]Req
 	}
 
 	// split every peer's requests into batches of f.cfg.BatchSize each
-	result := make(map[p2p.Peer][][]RequestMessage)
+	result := make(map[p2p.Peer][]*batchInfo)
 	for peer, reqs := range peer2requests {
-		if len(reqs) < f.cfg.BatchSize {
-			result[peer] = [][]RequestMessage{
-				reqs,
+		j := 0
+		for i, req := range reqs {
+			// Use batches of size 1 for hashes with specific protocol.
+			// This is currently used for active sets which are too large
+			// to be batched.
+			protocol, found := protocolMap[req.Hint]
+			if !found {
+				reqs[j] = reqs[i]
+				j++
+			} else {
+				b := makeBatch(peer, []RequestMessage{reqs[i]})
+				b.protocol = protocol
+				result[peer] = append(result[peer], b)
 			}
+		}
+		reqs = reqs[:j]
+		if len(reqs) < f.cfg.BatchSize {
+			result[peer] = append(result[peer], makeBatch(peer, reqs))
 			continue
 		}
 		for i := 0; i < len(reqs); i += f.cfg.BatchSize {
@@ -710,9 +757,10 @@ func (f *Fetch) organizeRequests(requests []RequestMessage) map[p2p.Peer][][]Req
 			if j > len(reqs) {
 				j = len(reqs)
 			}
-			result[peer] = append(result[peer], reqs[i:j])
+			result[peer] = append(result[peer], makeBatch(peer, reqs[i:j]))
 		}
 	}
+
 	return result
 }
 
@@ -722,10 +770,11 @@ func (f *Fetch) streamBatch(peer p2p.Peer, batch *batchInfo) error {
 	if f.stopped() {
 		return f.shutdownCtx.Err()
 	}
-	f.logger.With().Debug("sending batched request to peer",
+	f.logger.With().Debug("sending streamed batched request to peer",
 		log.Stringer("batch_hash", batch.ID),
 		log.Int("num_requests", len(batch.Requests)),
 		log.Stringer("peer", peer),
+		log.Any("extraProtocols", batch.extraProtocols()),
 	)
 	// Request is synchronous, it will return errors only if size of the bytes buffer
 	// is large or target peer is not connected
@@ -761,7 +810,8 @@ func (f *Fetch) streamBatch(peer p2p.Peer, batch *batchInfo) error {
 			}
 
 			return n, nil
-		})
+		},
+		batch.extraProtocols()...)
 }
 
 func (f *Fetch) receiveStreamedBatch(
@@ -844,12 +894,13 @@ func (f *Fetch) sendBatch(peer p2p.Peer, batch *batchInfo) ([]byte, error) {
 		log.Stringer("batch_hash", batch.ID),
 		log.Int("num_requests", len(batch.Requests)),
 		log.Stringer("peer", peer),
+		log.Any("extraProtocols", batch.extraProtocols()),
 	)
 	// Request is synchronous,
 	// it will return errors only if size of the bytes buffer is large
 	// or target peer is not connected
 	req := codec.MustEncode(&batch.RequestBatch)
-	return f.meteredRequest(f.shutdownCtx, hashProtocol, peer, req)
+	return f.meteredRequest(f.shutdownCtx, hashProtocol, peer, req, batch.extraProtocols()...)
 }
 
 // handleHashError is called when an error occurred processing batches of the following hashes.

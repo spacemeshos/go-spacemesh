@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -68,6 +69,7 @@ func p2pFetchCfg(streaming bool) Config {
 	cfg.RequestHardTimeout = 10 * time.Second
 	cfg.MaxRetriesForRequest = 3
 	cfg.Streaming = streaming
+	cfg.EnableServerMetrics = true
 	return cfg
 }
 
@@ -136,6 +138,10 @@ func createP2PFetch(
 	require.NoError(t, tpf.serverFetch.Start())
 	t.Cleanup(tpf.serverFetch.Stop)
 
+	require.Eventually(t, func() bool {
+		return len(serverHost.Mux().Protocols()) != 0
+	}, 10*time.Second, 10*time.Millisecond)
+
 	tpf.clientFetch = NewFetch(tpf.clientCDB, tpf.clientPDB, clientHost,
 		WithContext(ctx),
 		WithConfig(p2pFetchCfg(clientStreaming)),
@@ -169,12 +175,13 @@ func (tpf *testP2PFetch) createATXs(epoch types.EpochID) []types.ATXID {
 
 func (tpf *testP2PFetch) verifyGetHash(
 	toCall func() error,
-	errStr string,
-	kind string,
+	errStr, kind, protocol string,
 	h types.Hash32,
 	id []byte,
 	data []byte,
 ) {
+	srv := tpf.serverFetch.servers[protocol].(*server.Server)
+	numAccepted := srv.NumAcceptedRequests()
 	if errStr != "" {
 		tpf.serverDB.Close()
 	}
@@ -184,6 +191,7 @@ func (tpf *testP2PFetch) verifyGetHash(
 		k := blobKey{kind: kind, id: h}
 		require.Contains(tpf.t, tpf.receivedData, k)
 		require.Equal(tpf.t, data, tpf.receivedData[k])
+		require.Equal(tpf.t, numAccepted+1, srv.NumAcceptedRequests())
 	} else {
 		require.ErrorContains(tpf.t, err, errStr)
 	}
@@ -347,7 +355,7 @@ func TestP2PGetATXs(t *testing.T) {
 					return tpf.clientFetch.GetAtxs(
 						context.Background(), []types.ATXID{atx.ID()})
 				},
-				errStr, "atx", types.Hash32(atx.ID()), atx.ID().Bytes(),
+				errStr, "atx", "hs/1", types.Hash32(atx.ID()), atx.ID().Bytes(),
 				codec.MustEncode(atx))
 		})
 }
@@ -366,7 +374,7 @@ func TestP2PGetPoet(t *testing.T) {
 					return tpf.clientFetch.GetPoetProof(
 						context.Background(), types.Hash32(ref))
 				},
-				errStr, "poet", types.Hash32(ref), ref[:],
+				errStr, "poet", "hs/1", types.Hash32(ref), ref[:],
 				[]byte("proof1"))
 		})
 }
@@ -390,7 +398,7 @@ func TestP2PGetBallot(t *testing.T) {
 					return tpf.clientFetch.GetBallots(
 						context.Background(), []types.BallotID{b.ID()})
 				},
-				errStr, "ballot", b.ID().AsHash32(), b.ID().Bytes(),
+				errStr, "ballot", "hs/1", b.ID().AsHash32(), b.ID().Bytes(),
 				codec.MustEncode(b))
 		})
 }
@@ -410,7 +418,7 @@ func TestP2PGetActiveSet(t *testing.T) {
 				func() error {
 					return tpf.clientFetch.GetActiveSet(context.Background(), id)
 				},
-				errStr, "activeset", id, id.Bytes(),
+				errStr, "activeset", "as/1", id, id.Bytes(),
 				codec.MustEncode(set))
 		})
 }
@@ -428,7 +436,7 @@ func TestP2PGetBlock(t *testing.T) {
 					return tpf.clientFetch.GetBlocks(
 						context.Background(), []types.BlockID{bk.ID()})
 				},
-				errStr, "block", bk.ID().AsHash32(), bk.ID().Bytes(),
+				errStr, "block", "hs/1", bk.ID().AsHash32(), bk.ID().Bytes(),
 				codec.MustEncode(bk))
 		})
 }
@@ -463,7 +471,7 @@ func TestP2PGetProp(t *testing.T) {
 					return tpf.clientFetch.GetProposals(
 						context.Background(), []types.ProposalID{id})
 				},
-				errStr, "prop", proposal.ID().AsHash32(), proposal.ID().Bytes(),
+				errStr, "prop", "hs/1", proposal.ID().AsHash32(), proposal.ID().Bytes(),
 				codec.MustEncode(proposal))
 		})
 }
@@ -481,7 +489,7 @@ func TestP2PGetBlockTransactions(t *testing.T) {
 					return tpf.clientFetch.GetBlockTxs(
 						context.Background(), []types.TransactionID{tx.ID})
 				},
-				errStr, "txBlock", types.Hash32(tx.ID), tx.ID.Bytes(),
+				errStr, "txBlock", "hs/1", types.Hash32(tx.ID), tx.ID.Bytes(),
 				tx.Raw)
 		})
 }
@@ -499,7 +507,7 @@ func TestP2PGetProposalTransactions(t *testing.T) {
 					return tpf.clientFetch.GetProposalTxs(
 						context.Background(), []types.TransactionID{tx.ID})
 				},
-				errStr, "txProposal", types.Hash32(tx.ID), tx.ID.Bytes(),
+				errStr, "txProposal", "hs/1", types.Hash32(tx.ID), tx.ID.Bytes(),
 				tx.Raw)
 		})
 }
@@ -517,7 +525,7 @@ func TestP2PGetMalfeasanceProofs(t *testing.T) {
 					return tpf.clientFetch.GetMalfeasanceProofs(
 						context.Background(), []types.NodeID{nid})
 				},
-				errStr, "mal", types.Hash32(nid), nid.Bytes(),
+				errStr, "mal", "hs/1", types.Hash32(nid), nid.Bytes(),
 				proof)
 		})
 }
