@@ -11,10 +11,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/cmd/merge-nodes/internal"
 )
 
+var version string
+
 func main() {
 	app := &cli.App{
-		Name:  "Spacemesh Node Merger",
-		Usage: "Merge two or more Spacemesh nodes into one",
+		Name:    "Spacemesh Node Merger",
+		Usage:   "Merge two or more Spacemesh nodes into one",
+		Version: version,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:     "from",

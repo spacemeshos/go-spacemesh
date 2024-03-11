@@ -245,9 +245,6 @@ func GetCommand() *cobra.Command {
 		Short: "Show version info",
 		Run: func(c *cobra.Command, args []string) {
 			fmt.Print(cmd.Version)
-			if cmd.Commit != "" {
-				fmt.Printf("+%s", cmd.Commit)
-			}
 			fmt.Println()
 		},
 	}

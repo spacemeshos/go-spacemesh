@@ -70,6 +70,10 @@ get-libs: get-postrs-lib get-postrs-service
 
 get-profiler: get-postrs-profiler
 
+merge-nodes:
+	cd cmd/merge-nodes ; go build -o $(BIN_DIR)$@$(EXE) -ldflags "-X main.version=${VERSION}" .
+.PHONY: merge-nodes
+
 gen-p2p-identity:
 	cd cmd/gen-p2p-identity ; go build -o $(BIN_DIR)$@$(EXE) .
 .PHONY: gen-p2p-identity
@@ -149,7 +153,10 @@ list-versions:
 .PHONY: list-versions
 
 dockerbuild-go:
-	DOCKER_BUILDKIT=1 docker build -t go-spacemesh:$(SHA) -t $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION) .
+	DOCKER_BUILDKIT=1 docker build \
+		--build-arg VERSION=${VERSION} \
+		-t go-spacemesh:$(SHA) \
+		-t $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION) .
 .PHONY: dockerbuild-go
 
 dockerpush: dockerbuild-go dockerpush-only
