@@ -33,7 +33,7 @@ const (
 
 	cacheSize = 1000
 
-	RedundantPeers = 20
+	RedundantPeers = 5
 )
 
 var (

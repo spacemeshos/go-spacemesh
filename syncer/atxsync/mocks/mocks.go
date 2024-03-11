@@ -12,7 +12,6 @@ package mocks
 import (
 	context "context"
 	reflect "reflect"
-	time "time"
 
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	fetch "github.com/spacemeshos/go-spacemesh/fetch"
@@ -20,67 +19,6 @@ import (
 	system "github.com/spacemeshos/go-spacemesh/system"
 	gomock "go.uber.org/mock/gomock"
 )
-
-// Mockclock is a mock of clock interface.
-type Mockclock struct {
-	ctrl     *gomock.Controller
-	recorder *MockclockMockRecorder
-}
-
-// MockclockMockRecorder is the mock recorder for Mockclock.
-type MockclockMockRecorder struct {
-	mock *Mockclock
-}
-
-// NewMockclock creates a new mock instance.
-func NewMockclock(ctrl *gomock.Controller) *Mockclock {
-	mock := &Mockclock{ctrl: ctrl}
-	mock.recorder = &MockclockMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *Mockclock) EXPECT() *MockclockMockRecorder {
-	return m.recorder
-}
-
-// LayerToTime mocks base method.
-func (m *Mockclock) LayerToTime(arg0 types.LayerID) time.Time {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LayerToTime", arg0)
-	ret0, _ := ret[0].(time.Time)
-	return ret0
-}
-
-// LayerToTime indicates an expected call of LayerToTime.
-func (mr *MockclockMockRecorder) LayerToTime(arg0 any) *MockclockLayerToTimeCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LayerToTime", reflect.TypeOf((*Mockclock)(nil).LayerToTime), arg0)
-	return &MockclockLayerToTimeCall{Call: call}
-}
-
-// MockclockLayerToTimeCall wrap *gomock.Call
-type MockclockLayerToTimeCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockclockLayerToTimeCall) Return(arg0 time.Time) *MockclockLayerToTimeCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockclockLayerToTimeCall) Do(f func(types.LayerID) time.Time) *MockclockLayerToTimeCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockclockLayerToTimeCall) DoAndReturn(f func(types.LayerID) time.Time) *MockclockLayerToTimeCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
 
 // Mockfetcher is a mock of fetcher interface.
 type Mockfetcher struct {

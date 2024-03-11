@@ -46,7 +46,8 @@ func Latest(db sql.Executor, address types.Address) (types.Account, error) {
 	account, err := load(
 		db,
 		address,
-		"select balance, next_nonce, layer_updated, template, state from accounts where address = ?1;",
+		`select balance, next_nonce, layer_updated, template, state from accounts where address = ?1 
+		order by layer_updated desc;`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, address.Bytes())
 		},
@@ -61,7 +62,7 @@ func Latest(db sql.Executor, address types.Address) (types.Account, error) {
 func Get(db sql.Executor, address types.Address, layer types.LayerID) (types.Account, error) {
 	account, err := load(db, address,
 		`select balance, next_nonce, layer_updated, template, state
-		 from accounts where address = ?1 and layer_updated <= ?2;`,
+		 from accounts where address = ?1 and layer_updated <= ?2 order by layer_updated desc;`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, address.Bytes())
 			stmt.BindInt64(2, int64(layer))

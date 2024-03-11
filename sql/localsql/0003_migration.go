@@ -3,27 +3,42 @@ package localsql
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
 
 	"github.com/natefinch/atomic"
 	"github.com/spacemeshos/post/initialization"
+	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-func New0003Migration(dataDir string, poetClients []PoetClient) *migration0003 {
+var mainnetPoet2ServiceID []byte
+
+func init() {
+	var err error
+	mainnetPoet2ServiceID, err = base64.StdEncoding.DecodeString("8RXEI0MwO3uJUINFFlOm/uTjJCneV9FidMpXmn55G8Y=")
+	if err != nil {
+		panic(fmt.Errorf("failed to decode mainnet poet 2 service id: %w", err))
+	}
+}
+
+func New0003Migration(log *zap.Logger, dataDir string, poetClients []PoetClient) *migration0003 {
 	return &migration0003{
+		logger:      log,
 		dataDir:     dataDir,
 		poetClients: poetClients,
 	}
 }
 
 type migration0003 struct {
+	logger      *zap.Logger
 	dataDir     string
 	poetClients []PoetClient
 }
@@ -38,6 +53,11 @@ func (migration0003) Order() int {
 
 func (m migration0003) Rollback() error {
 	filename := filepath.Join(m.dataDir, builderFilename)
+	// skip if file exists
+	if _, err := os.Stat(filename); err == nil {
+		return nil
+	}
+
 	backupName := fmt.Sprintf("%s.bak", filename)
 	if err := atomic.ReplaceFile(backupName, filename); err != nil {
 		return fmt.Errorf("rolling back nipost builder state: %w", err)
@@ -112,6 +132,11 @@ func (m migration0003) moveNipostStateToDb(db sql.Executor, dataDir string) erro
 	}
 	// Phase 0 completed.
 	for _, req := range state.PoetRequests {
+		if bytes.Equal(req.PoetServiceID.ServiceID, mainnetPoet2ServiceID) {
+			m.logger.Info("PoET `mainnet-poet-2.spacemesh.network` has been retired - skipping")
+			continue
+		}
+
 		address, err := m.getAddress(req.PoetServiceID)
 		if err != nil {
 			return fmt.Errorf("get address for poet service id %x: %w", req.PoetServiceID.ServiceID, err)

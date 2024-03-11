@@ -100,6 +100,7 @@ const (
 	P2PLogger              = "p2p"
 	PostLogger             = "post"
 	PostServiceLogger      = "postService"
+	PostInfoServiceLogger  = "postInfoService"
 	StateDbLogger          = "stateDb"
 	BeaconLogger           = "beacon"
 	CachedDBLogger         = "cachedDB"
@@ -861,7 +862,7 @@ func (app *App) initServices(ctx context.Context) error {
 		fetcher,
 		patrol,
 		app.certifier,
-		atxsync.New(fetcher, app.clock, app.db, app.localDB,
+		atxsync.New(fetcher, app.db, app.localDB,
 			atxsync.WithConfig(app.Config.Sync.AtxSync),
 			atxsync.WithLogger(app.syncLogger.Zap()),
 		),
@@ -991,6 +992,7 @@ func (app *App) initServices(ctx context.Context) error {
 		return fmt.Errorf("create post setup manager: %v", err)
 	}
 
+	postStates := activation.NewPostStates(app.addLogger(PostLogger, lg).Zap())
 	grpcPostService, err := app.grpcService(grpcserver.Post, lg)
 	if err != nil {
 		return fmt.Errorf("init post grpc service: %w", err)
@@ -1003,6 +1005,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.addLogger(NipostBuilderLogger, lg).Zap(),
 		app.Config.POET,
 		app.clock,
+		activation.NipostbuilderWithPostStates(postStates),
 	)
 	if err != nil {
 		return fmt.Errorf("create nipost builder: %w", err)
@@ -1028,6 +1031,7 @@ func (app *App) initServices(ctx context.Context) error {
 		activation.WithPoetRetryInterval(app.Config.HARE3.PreroundDelay),
 		activation.WithValidator(app.validator),
 		activation.WithPostValidityDelay(app.Config.PostValidDelay),
+		activation.WithPostStates(postStates),
 	)
 	if len(app.signers) > 1 || app.signers[0].Name() != supervisedIDKeyFileName {
 		// in a remote setup we register eagerly so the atxBuilder can warn about missing connections asap.
@@ -1436,6 +1440,10 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		service := grpcserver.NewPostService(app.addLogger(PostServiceLogger, lg).Zap())
 		app.grpcServices[svc] = service
 		return service, nil
+	case grpcserver.PostInfo:
+		service := grpcserver.NewPostInfoService(app.addLogger(PostInfoServiceLogger, lg).Zap(), app.atxBuilder)
+		app.grpcServices[svc] = service
+		return service, nil
 	case grpcserver.Transaction:
 		service := grpcserver.NewTransactionService(
 			app.db,
@@ -1790,7 +1798,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		sql.WithMigrations(migrations),
 		sql.WithMigration(localsql.New0001Migration(app.Config.SMESHING.Opts.DataDir)),
 		sql.WithMigration(localsql.New0002Migration(app.Config.SMESHING.Opts.DataDir)),
-		sql.WithMigration(localsql.New0003Migration(app.Config.SMESHING.Opts.DataDir, clients)),
+		sql.WithMigration(localsql.New0003Migration(dbLog.Zap(), app.Config.SMESHING.Opts.DataDir, clients)),
 		sql.WithConnections(app.Config.DatabaseConnections),
 	)
 	if err != nil {
@@ -1841,7 +1849,7 @@ func (app *App) MigrateLocalDB(lg *zap.Logger, dbPath string, clients []localsql
 		sql.WithMigrations(migrations),
 		sql.WithMigration(localsql.New0001Migration(app.Config.SMESHING.Opts.DataDir)),
 		sql.WithMigration(localsql.New0002Migration(app.Config.SMESHING.Opts.DataDir)),
-		sql.WithMigration(localsql.New0003Migration(app.Config.SMESHING.Opts.DataDir, clients)),
+		sql.WithMigration(localsql.New0003Migration(lg, app.Config.SMESHING.Opts.DataDir, clients)),
 		sql.WithConnections(app.Config.DatabaseConnections),
 	)
 	if err != nil {

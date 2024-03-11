@@ -23,10 +23,6 @@ import (
 
 //go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./syncer.go
 
-type clock interface {
-	LayerToTime(types.LayerID) time.Time
-}
-
 type fetcher interface {
 	SelectBestShuffled(int) []p2p.Peer
 	PeerEpochInfo(context.Context, p2p.Peer, types.EpochID) (*fetch.EpochData, error)
@@ -43,7 +39,7 @@ func WithLogger(logger *zap.Logger) Opt {
 
 func DefaultConfig() Config {
 	return Config{
-		EpochInfoInterval: 30 * time.Minute,
+		EpochInfoInterval: 4 * time.Hour,
 		AtxsBatch:         1000,
 		RequestsLimit:     20,
 		EpochInfoPeers:    2,
@@ -80,12 +76,11 @@ func WithConfig(cfg Config) Opt {
 	}
 }
 
-func New(fetcher fetcher, clock clock, db sql.Executor, localdb *localsql.Database, opts ...Opt) *Syncer {
+func New(fetcher fetcher, db sql.Executor, localdb *localsql.Database, opts ...Opt) *Syncer {
 	s := &Syncer{
 		logger:  zap.NewNop(),
 		cfg:     DefaultConfig(),
 		fetcher: fetcher,
-		clock:   clock,
 		db:      db,
 		localdb: localdb,
 	}
@@ -99,31 +94,26 @@ type Syncer struct {
 	logger  *zap.Logger
 	cfg     Config
 	fetcher fetcher
-	clock   clock
 	db      sql.Executor
 	localdb *localsql.Database
 }
 
-func (s *Syncer) closeToTheEpoch(publish types.EpochID, timestamp time.Time) bool {
-	target := publish + 1
-	epochStart := s.clock.LayerToTime(target.FirstLayer())
-	return timestamp.After(epochStart) || epochStart.Sub(timestamp) < 2*s.cfg.EpochInfoInterval
-}
-
-func (s *Syncer) Download(parent context.Context, publish types.EpochID) error {
-	s.logger.Info("starting atx sync", log.ZContext(parent), publish.Field().Zap())
-
+func (s *Syncer) Download(parent context.Context, publish types.EpochID, downloadUntil time.Time) error {
 	state, err := atxsync.GetSyncState(s.localdb, publish)
 	if err != nil {
 		return fmt.Errorf("failed to get state for epoch %v: %w", publish, err)
 	}
-	lastSuccess, err := atxsync.GetRequestTime(s.localdb, publish)
+	lastSuccess, total, downloaded, err := atxsync.GetRequest(s.localdb, publish)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return fmt.Errorf("failed to get last request time for epoch %v: %w", publish, err)
 	}
 	// in case of immediate we will request epoch info without waiting EpochInfoInterval
-	immediate := len(state) == 0 || (errors.Is(err, sql.ErrNotFound) || !s.closeToTheEpoch(publish, lastSuccess))
-
+	immediate := len(state) == 0 || (errors.Is(err, sql.ErrNotFound) || !lastSuccess.After(downloadUntil))
+	if !immediate && total == downloaded {
+		s.logger.Debug("sync for epoch was completed before", log.ZContext(parent), publish.Field().Zap())
+		return nil
+	}
+	s.logger.Info("starting atx sync", log.ZContext(parent), publish.Field().Zap())
 	ctx, cancel := context.WithCancel(parent)
 	eg, ctx := errgroup.WithContext(ctx)
 	updates := make(chan epochUpdate, s.cfg.EpochInfoPeers)
@@ -140,7 +130,7 @@ func (s *Syncer) Download(parent context.Context, publish types.EpochID) error {
 		return s.downloadEpochInfo(ctx, publish, immediate, updates)
 	})
 	eg.Go(func() error {
-		err := s.downloadAtxs(ctx, publish, state, updates)
+		err := s.downloadAtxs(ctx, publish, downloadUntil, state, updates)
 		cancel()
 		return err
 	})
@@ -221,6 +211,7 @@ func (s *Syncer) downloadEpochInfo(
 func (s *Syncer) downloadAtxs(
 	ctx context.Context,
 	publish types.EpochID,
+	downloadUntil time.Time,
 	state map[types.ATXID]int,
 	updates <-chan epochUpdate,
 ) error {
@@ -236,7 +227,7 @@ func (s *Syncer) downloadAtxs(
 
 	for {
 		// waiting for update if there is nothing to download
-		if nothingToDownload && s.closeToTheEpoch(publish, lastSuccess) {
+		if nothingToDownload && lastSuccess.After(downloadUntil) {
 			s.logger.Info(
 				"atx sync completed",
 				log.ZContext(ctx),
@@ -334,7 +325,7 @@ func (s *Syncer) downloadAtxs(
 		}
 
 		if err := s.localdb.WithTx(ctx, func(tx *sql.Tx) error {
-			if err := atxsync.SaveRequestTime(tx, publish, lastSuccess); err != nil {
+			if err := atxsync.SaveRequest(tx, publish, lastSuccess, int64(len(state)), int64(len(downloaded))); err != nil {
 				return fmt.Errorf("failed to save request time: %w", err)
 			}
 			return atxsync.SaveSyncState(tx, publish, state, s.cfg.RequestsLimit)

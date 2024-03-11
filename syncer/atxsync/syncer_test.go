@@ -44,9 +44,8 @@ func newTester(tb testing.TB, cfg Config) *tester {
 	localdb := localsql.InMemory()
 	db := sql.InMemory()
 	ctrl := gomock.NewController(tb)
-	clock := mocks.NewMockclock(ctrl)
 	fetcher := mocks.NewMockfetcher(ctrl)
-	syncer := New(fetcher, clock, db, localdb, WithConfig(cfg), WithLogger(logtest.New(tb).Zap()))
+	syncer := New(fetcher, db, localdb, WithConfig(cfg), WithLogger(logtest.New(tb).Zap()))
 	return &tester{
 		tb:      tb,
 		syncer:  syncer,
@@ -54,7 +53,6 @@ func newTester(tb testing.TB, cfg Config) *tester {
 		db:      db,
 		cfg:     cfg,
 		ctrl:    ctrl,
-		clock:   clock,
 		fetcher: fetcher,
 	}
 }
@@ -66,7 +64,6 @@ type tester struct {
 	db      *sql.Database
 	cfg     Config
 	ctrl    *gomock.Controller
-	clock   *mocks.Mockclock
 	fetcher *mocks.Mockfetcher
 }
 
@@ -99,8 +96,7 @@ func TestSyncer(t *testing.T) {
 			}).AnyTimes()
 
 		past := time.Now().Add(-time.Minute)
-		tester.clock.EXPECT().LayerToTime((publish + 1).FirstLayer()).Return(past).AnyTimes()
-		require.NoError(t, tester.syncer.Download(context.Background(), publish))
+		require.NoError(t, tester.syncer.Download(context.Background(), publish, past))
 	})
 	t.Run("interruptible", func(t *testing.T) {
 		tester := newTester(t, DefaultConfig())
@@ -111,33 +107,31 @@ func TestSyncer(t *testing.T) {
 		tester.fetcher.EXPECT().SelectBestShuffled(tester.cfg.EpochInfoPeers).Return([]p2p.Peer{"a"}).AnyTimes()
 		tester.fetcher.EXPECT().PeerEpochInfo(gomock.Any(), gomock.Any(), publish).Return(edata("1"), nil).AnyTimes()
 		tester.fetcher.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).Return(errors.New("no atxs")).AnyTimes()
-		tester.clock.EXPECT().LayerToTime((publish + 1).FirstLayer()).Return(now).AnyTimes()
-		require.ErrorIs(t, tester.syncer.Download(ctx, publish), context.Canceled)
+		require.ErrorIs(t, tester.syncer.Download(ctx, publish, now), context.Canceled)
 	})
 	t.Run("error on no peers", func(t *testing.T) {
 		tester := newTester(t, DefaultConfig())
 		publish := types.EpochID(1)
-		tester.clock.EXPECT().LayerToTime((publish + 1).FirstLayer()).Return(time.Now()).AnyTimes()
 		tester.fetcher.EXPECT().SelectBestShuffled(tester.cfg.EpochInfoPeers).Return(nil)
-		require.ErrorContains(t, tester.syncer.Download(context.Background(), publish), "no peers available")
+		require.ErrorContains(
+			t,
+			tester.syncer.Download(context.Background(), publish, time.Now()),
+			"no peers available",
+		)
 	})
 	t.Run("terminate without queries if sync on time", func(t *testing.T) {
 		tester := newTester(t, DefaultConfig())
 		publish := types.EpochID(2)
 		now := time.Now()
-		tester.clock.EXPECT().LayerToTime((publish + 1).FirstLayer()).Return(now).AnyTimes()
 
 		state := map[types.ATXID]int{
 			aid("1"): 0,
 			aid("2"): 0,
 		}
 		require.NoError(t, atxsync.SaveSyncState(tester.localdb, publish, state, tester.cfg.AtxsBatch))
-		lastSuccess := now.Add(-tester.cfg.EpochInfoInterval)
-		require.NoError(t, atxsync.SaveRequestTime(tester.localdb, publish, lastSuccess))
-		for id := range state {
-			require.NoError(t, atxs.Add(tester.db, atx(id)))
-		}
-		require.NoError(t, tester.syncer.Download(context.Background(), publish))
+		lastSuccess := now.Add(time.Minute)
+		require.NoError(t, atxsync.SaveRequest(tester.localdb, publish, lastSuccess, 2, 2))
+		require.NoError(t, tester.syncer.Download(context.Background(), publish, now))
 	})
 	t.Run("immediate epoch info retries", func(t *testing.T) {
 		tester := newTester(t, Config{
@@ -165,8 +159,7 @@ func TestSyncer(t *testing.T) {
 			}).AnyTimes()
 
 		past := time.Now().Add(-time.Minute)
-		tester.clock.EXPECT().LayerToTime((publish + 1).FirstLayer()).Return(past).AnyTimes()
-		require.NoError(t, tester.syncer.Download(ctx, publish))
+		require.NoError(t, tester.syncer.Download(ctx, publish, past))
 	})
 	t.Run("give up on atx after max retries", func(t *testing.T) {
 		tester := newTester(t, Config{
@@ -209,8 +202,7 @@ func TestSyncer(t *testing.T) {
 			AnyTimes()
 
 		past := time.Now().Add(-time.Minute)
-		tester.clock.EXPECT().LayerToTime((publish + 1).FirstLayer()).Return(past).AnyTimes()
-		require.NoError(t, tester.syncer.Download(context.Background(), publish))
+		require.NoError(t, tester.syncer.Download(context.Background(), publish, past))
 
 		state, err := atxsync.GetSyncState(tester.localdb, publish)
 		require.NoError(t, err)
@@ -222,10 +214,9 @@ func TestSyncer(t *testing.T) {
 		tester := newTester(t, DefaultConfig())
 		publish := types.EpochID(2)
 		now := time.Now()
-		tester.clock.EXPECT().LayerToTime((publish + 1).FirstLayer()).Return(now).AnyTimes()
 		peers := []p2p.Peer{"a"}
 		tester.fetcher.EXPECT().SelectBestShuffled(tester.cfg.EpochInfoPeers).Return(peers).AnyTimes()
 		tester.fetcher.EXPECT().PeerEpochInfo(gomock.Any(), peers[0], publish).Return(edata(), nil)
-		require.NoError(t, tester.syncer.Download(context.Background(), publish))
+		require.NoError(t, tester.syncer.Download(context.Background(), publish, now))
 	})
 }

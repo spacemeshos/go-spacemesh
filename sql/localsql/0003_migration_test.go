@@ -2,6 +2,7 @@ package localsql
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"path/filepath"
 	"sort"
@@ -13,6 +14,10 @@ import (
 	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/require"
 	gomock "go.uber.org/mock/gomock"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest"
+	"go.uber.org/zap/zaptest/observer"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -29,7 +34,7 @@ func saveBuilderState(dir string, state *NIPostBuilderState) error {
 func Test_0003Migration_CompatibleSQL(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "test1.db")
 	db, err := Open("file:"+file,
-		sql.WithMigration(New0003Migration(t.TempDir(), nil)),
+		sql.WithMigration(New0003Migration(zaptest.NewLogger(t), t.TempDir(), nil)),
 	)
 	require.NoError(t, err)
 
@@ -82,7 +87,7 @@ func Test_0003Migration_BeforePhase0(t *testing.T) {
 	migrations = migrations[:2]
 	db := InMemory(
 		sql.WithMigrations(migrations),
-		sql.WithMigration(New0003Migration(dataDir, nil)),
+		sql.WithMigration(New0003Migration(zaptest.NewLogger(t), dataDir, nil)),
 	)
 
 	_, err = db.Exec("select count(*) from poet_registration where id = ?1;",
@@ -141,7 +146,7 @@ func Test_0003Migration_Phase0_missing_poet_client(t *testing.T) {
 		sql.WithMigrations(migrations),
 	)
 
-	err = New0003Migration(dataDir, nil).Apply(db)
+	err = New0003Migration(zaptest.NewLogger(t), dataDir, nil).Apply(db)
 	require.ErrorContains(t, err, "no poet client found")
 	require.FileExists(t, filepath.Join(dataDir, builderFilename))
 }
@@ -204,7 +209,7 @@ func Test_0003Migration_Phase0_Complete(t *testing.T) {
 		Return([]byte("service2"))
 	poetClient2.EXPECT().Address().AnyTimes().Return("http://poet2.com")
 
-	err = New0003Migration(dataDir, []PoetClient{poetClient1, poetClient2}).Apply(db)
+	err = New0003Migration(zaptest.NewLogger(t), dataDir, []PoetClient{poetClient1, poetClient2}).Apply(db)
 	require.NoError(t, err)
 
 	address := []string{
@@ -225,6 +230,94 @@ func Test_0003Migration_Phase0_Complete(t *testing.T) {
 			require.Equal(t, state.PoetRequests[i].PoetRound.ID, stmt.ColumnText(2))
 			require.Equal(t, endTime.Unix(), stmt.ColumnInt64(3))
 			i++
+			return true
+		})
+	require.NoError(t, err)
+
+	require.NoFileExists(t, filepath.Join(dataDir, builderFilename))
+}
+
+func Test_0003Migration_Phase0_MainnetPoet2(t *testing.T) {
+	dataDir := t.TempDir()
+
+	mainnetPoet2, err := hex.DecodeString("f115c42343303b7b895083451653a6fee4e32429de57d16274ca579a7e791bc6")
+	require.NoError(t, err)
+
+	endTime := time.Now()
+	state := &NIPostBuilderState{
+		PoetRequests: []PoetRequest{
+			{
+				PoetRound: &types.PoetRound{
+					ID:  "101",
+					End: types.RoundEnd(endTime),
+				},
+				PoetServiceID: PoetServiceID{
+					ServiceID: []byte("service1"),
+				},
+			},
+			{
+				PoetRound: &types.PoetRound{
+					ID:  "102",
+					End: types.RoundEnd(endTime),
+				},
+				PoetServiceID: PoetServiceID{
+					ServiceID: mainnetPoet2,
+				},
+			},
+		},
+	}
+	require.NoError(t, saveBuilderState(dataDir, state))
+	require.FileExists(t, filepath.Join(dataDir, builderFilename))
+
+	nodeID := types.RandomNodeID()
+	nonce := uint64(1024)
+	err = initialization.SaveMetadata(dataDir, &shared.PostMetadata{
+		NodeId:   nodeID.Bytes(),
+		NumUnits: 8,
+		Nonce:    &nonce,
+	})
+	require.NoError(t, err)
+
+	migrations, err := sql.LocalMigrations()
+	require.NoError(t, err)
+	sort.Slice(migrations, func(i, j int) bool { return migrations[i].Order() < migrations[j].Order() })
+	migrations = migrations[:2]
+	db := InMemory(
+		sql.WithMigrations(migrations),
+	)
+
+	observer, observedLogs := observer.New(zapcore.InfoLevel)
+	logger := zap.New(observer)
+
+	ctrl := gomock.NewController(t)
+	poetClient1 := NewMockPoetClient(ctrl)
+	poetClient1.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().
+		Return([]byte("service1"))
+	poetClient1.EXPECT().Address().AnyTimes().Return("http://poet1.com")
+
+	poetClient2 := NewMockPoetClient(ctrl)
+	poetClient2.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().
+		Return([]byte("service2"))
+	poetClient2.EXPECT().Address().AnyTimes().Return("http://poet2.com")
+
+	err = New0003Migration(logger, dataDir, []PoetClient{poetClient1}).Apply(db)
+	require.NoError(t, err)
+	require.Equal(t, 1, observedLogs.Len(), "expected 1 log message")
+	require.Equal(t, zapcore.InfoLevel, observedLogs.All()[0].Level)
+	require.Contains(t, observedLogs.All()[0].Message, "`mainnet-poet-2.spacemesh.network` has been retired")
+
+	_, err = db.Exec("select hash, address, round_id, round_end from poet_registration where id = ?1;",
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, nodeID.Bytes())
+		},
+		func(stmt *sql.Statement) bool {
+			buf := make([]byte, stmt.ColumnLen(0))
+			stmt.ColumnBytes(0, buf)
+
+			require.Equal(t, state.Challenge.Bytes(), buf)
+			require.Equal(t, "http://poet1.com", stmt.ColumnText(1))
+			require.Equal(t, state.PoetRequests[0].PoetRound.ID, stmt.ColumnText(2))
+			require.Equal(t, endTime.Unix(), stmt.ColumnInt64(3))
 			return true
 		})
 	require.NoError(t, err)
@@ -312,7 +405,7 @@ func Test_0003Migration_Phase1_Complete(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	err = New0003Migration(dataDir, []PoetClient{poetClient1, poetClient2}).Apply(db)
+	err = New0003Migration(zaptest.NewLogger(t), dataDir, []PoetClient{poetClient1, poetClient2}).Apply(db)
 	require.NoError(t, err)
 
 	address := []string{
@@ -448,7 +541,7 @@ func Test_0003Migration_Phase2_Complete(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	err = New0003Migration(dataDir, []PoetClient{poetClient1, poetClient2}).Apply(db)
+	err = New0003Migration(zaptest.NewLogger(t), dataDir, []PoetClient{poetClient1, poetClient2}).Apply(db)
 	require.NoError(t, err)
 
 	address := []string{
@@ -614,7 +707,7 @@ func Test_0003Migration_Rollback(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	migration := New0003Migration(dataDir, []PoetClient{poetClient1, poetClient2})
+	migration := New0003Migration(zaptest.NewLogger(t), dataDir, []PoetClient{poetClient1, poetClient2})
 
 	tx, err := db.Tx(context.Background())
 	require.NoError(t, err)
@@ -624,4 +717,7 @@ func Test_0003Migration_Rollback(t *testing.T) {
 	require.NoError(t, tx.Release())
 
 	require.FileExists(t, filepath.Join(dataDir, builderFilename))
+
+	// rolling back again is no-op
+	require.NoError(t, migration.Rollback())
 }
