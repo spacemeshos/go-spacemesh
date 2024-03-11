@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	log2 "github.com/spacemeshos/go-spacemesh/log"
 	"io"
 	"log"
 	"math"
@@ -2090,14 +2089,12 @@ func TestDebugService(t *testing.T) {
 	mOracle := NewMockoracle(ctrl)
 	db := sql.InMemory()
 
-	logger := zaptest.NewLogger(t)
-	appLog := log2.NewFromLog(logger)
 	testLog := zap.NewAtomicLevel()
 	loggers := map[string]*zap.AtomicLevel{
 		"test": &testLog,
 	}
 
-	svc := NewDebugService(db, conStateAPI, netInfo, mOracle, loggers, appLog)
+	svc := NewDebugService(db, conStateAPI, netInfo, mOracle, loggers)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
@@ -2255,7 +2252,7 @@ func TestDebugService(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		require.Equal(t, logger.Level().String(), "debug")
+		require.Equal(t, testLog.Level().String(), "debug")
 	})
 }
 

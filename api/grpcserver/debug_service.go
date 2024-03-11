@@ -3,7 +3,6 @@ package grpcserver
 import (
 	"context"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"sort"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
@@ -30,7 +29,6 @@ type DebugService struct {
 	netInfo  networkInfo
 	oracle   oracle
 	loggers  map[string]*zap.AtomicLevel
-	log      log.Log
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -48,14 +46,15 @@ func (d DebugService) String() string {
 }
 
 // NewDebugService creates a new grpc service using config data.
-func NewDebugService(db *sql.Database, conState conservativeState, host networkInfo, oracle oracle, loggers map[string]*zap.AtomicLevel, log log.Log) *DebugService {
+func NewDebugService(db *sql.Database, conState conservativeState, host networkInfo, oracle oracle,
+	loggers map[string]*zap.AtomicLevel,
+) *DebugService {
 	return &DebugService{
 		db:       db,
 		conState: conState,
 		netInfo:  host,
 		oracle:   oracle,
 		loggers:  loggers,
-		log:      log,
 	}
 }
 
@@ -161,7 +160,9 @@ func (d DebugService) ChangeLogLevel(ctx context.Context, req *pb.ChangeLogLevel
 	}
 
 	if req.GetModule() == "*" {
-		d.log.SetLevel(&level)
+		for _, logger := range d.loggers {
+			logger.SetLevel(level.Level())
+		}
 		return nil, nil
 	}
 
