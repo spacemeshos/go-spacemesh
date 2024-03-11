@@ -53,7 +53,7 @@ func (g *RewardsGenerator) WithLayers(start, n int) *RewardsGenerator {
 	return g
 }
 
-// WithUniqueCoinbase will generate every reward with different address
+// WithUniqueCoinbase will generate every reward with different address.
 func (g *RewardsGenerator) WithUniqueCoinbase() *RewardsGenerator {
 	g.UniqueCoinbase = true
 	return g
