@@ -435,7 +435,8 @@ func TestP2PGetBlock(t *testing.T) {
 
 func TestP2PGetProp(t *testing.T) {
 	forStreaming(
-		t, "database: no free connection", false,
+		// TODO: it's probably doesn't make too much sense to retry if the hash is not found
+		t, "failed after max retries", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			nodeID := types.RandomNodeID()
 			ballot := types.NewExistingBallot(types.BallotID{1}, types.RandomEdSignature(), nodeID, types.LayerID(0))
