@@ -67,7 +67,7 @@ func DefaultLoggingConfig() LoggerConfig {
 		TrtlLoggerLevel:            defaultLoggingLevel.String(),
 		MeshLoggerLevel:            defaultLoggingLevel.String(),
 		SyncLoggerLevel:            defaultLoggingLevel.String(),
-		FetcherLoggerLevel:         zapcore.ErrorLevel.String(),
+		FetcherLoggerLevel:         defaultLoggingLevel.String(),
 		HareOracleLoggerLevel:      defaultLoggingLevel.String(),
 		HareLoggerLevel:            defaultLoggingLevel.String(),
 		NipostBuilderLoggerLevel:   defaultLoggingLevel.String(),
