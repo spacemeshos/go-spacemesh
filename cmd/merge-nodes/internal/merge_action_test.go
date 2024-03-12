@@ -31,10 +31,11 @@ func Test_MergeDBs_InvalidTargetScheme(t *testing.T) {
 	migrations, err := sql.LocalMigrations()
 	require.NoError(t, err)
 
-	_, err = localsql.Open("file:"+filepath.Join(tmpDst, localDbFile),
-		sql.WithMigrations(migrations[:2]), // old DB
+	db, err := localsql.Open("file:"+filepath.Join(tmpDst, localDbFile),
+		sql.WithMigrations(migrations[:2]), // old schema
 	)
 	require.NoError(t, err)
+	require.NoError(t, db.Close())
 
 	err = MergeDBs(context.Background(), logger, "", tmpDst)
 	var schemaErr ErrInvalidSchemaVersion
@@ -59,8 +60,9 @@ func Test_MergeDBs_TargetIsSupervised(t *testing.T) {
 	err = os.WriteFile(filepath.Join(tmpDst, keyDir, supervisedIDKeyFileName), []byte("key"), 0o600)
 	require.NoError(t, err)
 
-	_, err = localsql.Open("file:" + filepath.Join(tmpDst, localDbFile))
+	db, err := localsql.Open("file:" + filepath.Join(tmpDst, localDbFile))
 	require.NoError(t, err)
+	require.NoError(t, db.Close())
 
 	err = MergeDBs(context.Background(), logger, "", tmpDst)
 	require.ErrorIs(t, err, ErrSupervisedNode)
@@ -73,8 +75,9 @@ func Test_MergeDBs_InvalidSourcePath(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	tmpDst := t.TempDir()
 
-	_, err := localsql.Open("file:" + filepath.Join(tmpDst, localDbFile))
+	db, err := localsql.Open("file:" + filepath.Join(tmpDst, localDbFile))
 	require.NoError(t, err)
+	require.NoError(t, db.Close())
 
 	err = MergeDBs(context.Background(), logger, "/invalid/source/path", tmpDst)
 	require.ErrorIs(t, err, fs.ErrNotExist)
@@ -89,14 +92,16 @@ func Test_MergeDBs_InvalidSourceScheme(t *testing.T) {
 	migrations, err := sql.LocalMigrations()
 	require.NoError(t, err)
 
-	_, err = localsql.Open("file:" + filepath.Join(tmpDst, localDbFile))
+	db, err := localsql.Open("file:" + filepath.Join(tmpDst, localDbFile))
 	require.NoError(t, err)
+	require.NoError(t, db.Close())
 
 	tmpSrc := t.TempDir()
-	_, err = localsql.Open("file:"+filepath.Join(tmpSrc, localDbFile),
-		sql.WithMigrations(migrations[:2]), // old DB
+	db, err = localsql.Open("file:"+filepath.Join(tmpSrc, localDbFile),
+		sql.WithMigrations(migrations[:2]), // old schema
 	)
 	require.NoError(t, err)
+	require.NoError(t, db.Close())
 
 	err = MergeDBs(context.Background(), logger, tmpSrc, tmpDst)
 	var schemaErr ErrInvalidSchemaVersion
@@ -115,8 +120,9 @@ func Test_MergeDBs_SourceIsSupervised(t *testing.T) {
 	logger := zap.New(observer)
 	tmpDst := t.TempDir()
 
-	_, err := localsql.Open("file:" + filepath.Join(tmpDst, localDbFile))
+	db, err := localsql.Open("file:" + filepath.Join(tmpDst, localDbFile))
 	require.NoError(t, err)
+	require.NoError(t, db.Close())
 
 	tmpSrc := t.TempDir()
 
@@ -126,8 +132,9 @@ func Test_MergeDBs_SourceIsSupervised(t *testing.T) {
 	err = os.WriteFile(filepath.Join(tmpSrc, keyDir, supervisedIDKeyFileName), []byte("key"), 0o600)
 	require.NoError(t, err)
 
-	_, err = localsql.Open("file:" + filepath.Join(tmpSrc, localDbFile))
+	db, err = localsql.Open("file:" + filepath.Join(tmpSrc, localDbFile))
 	require.NoError(t, err)
+	require.NoError(t, db.Close())
 
 	err = MergeDBs(context.Background(), logger, tmpSrc, tmpDst)
 	require.ErrorIs(t, err, ErrSupervisedNode)
@@ -139,8 +146,9 @@ func Test_MergeDBs_SourceIsSupervised(t *testing.T) {
 func Test_MergeDBs_InvalidSourceKey(t *testing.T) {
 	tmpDst := t.TempDir()
 
-	_, err := localsql.Open("file:" + filepath.Join(tmpDst, localDbFile))
+	db, err := localsql.Open("file:" + filepath.Join(tmpDst, localDbFile))
 	require.NoError(t, err)
+	require.NoError(t, db.Close())
 
 	tmpSrc := t.TempDir()
 	err = os.MkdirAll(filepath.Join(tmpSrc, keyDir), 0o700)
@@ -149,8 +157,9 @@ func Test_MergeDBs_InvalidSourceKey(t *testing.T) {
 	err = os.WriteFile(filepath.Join(tmpSrc, keyDir, "invalid.key"), []byte("key"), 0o600)
 	require.NoError(t, err)
 
-	_, err = localsql.Open("file:" + filepath.Join(tmpSrc, localDbFile))
+	db, err = localsql.Open("file:" + filepath.Join(tmpSrc, localDbFile))
 	require.NoError(t, err)
+	require.NoError(t, db.Close())
 
 	err = MergeDBs(context.Background(), zaptest.NewLogger(t), tmpSrc, tmpDst)
 	require.ErrorContains(t, err, "not a valid key file")
@@ -165,8 +174,9 @@ func Test_MergeDBs_TargetKeyAlreadyExists(t *testing.T) {
 	err = os.WriteFile(filepath.Join(tmpDst, keyDir, "exists.key"), []byte("key"), 0o600)
 	require.NoError(t, err)
 
-	_, err = localsql.Open("file:" + filepath.Join(tmpDst, localDbFile))
+	db, err := localsql.Open("file:" + filepath.Join(tmpDst, localDbFile))
 	require.NoError(t, err)
+	require.NoError(t, db.Close())
 
 	tmpSrc := t.TempDir()
 	err = os.MkdirAll(filepath.Join(tmpSrc, keyDir), 0o700)
@@ -180,8 +190,9 @@ func Test_MergeDBs_TargetKeyAlreadyExists(t *testing.T) {
 	err = os.WriteFile(filepath.Join(tmpSrc, keyDir, "exists.key"), key, 0o600)
 	require.NoError(t, err)
 
-	_, err = localsql.Open("file:" + filepath.Join(tmpSrc, localDbFile))
+	db, err = localsql.Open("file:" + filepath.Join(tmpSrc, localDbFile))
 	require.NoError(t, err)
+	require.NoError(t, db.Close())
 
 	err = MergeDBs(context.Background(), zaptest.NewLogger(t), tmpSrc, tmpDst)
 	require.ErrorIs(t, err, fs.ErrExist)
@@ -307,6 +318,7 @@ func Test_MergeDBs_Successful_Existing_Node(t *testing.T) {
 
 	dstDB, err = localsql.Open("file:" + filepath.Join(tmpDst, localDbFile))
 	require.NoError(t, err)
+	defer dstDB.Close()
 
 	ch, err := nipost.Challenge(dstDB, sig1.NodeID())
 	require.NoError(t, err)
@@ -333,6 +345,8 @@ func Test_MergeDBs_Successful_Existing_Node(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, poet2[0], sig2Poet1)
 	require.Equal(t, poet2[1], sig2Poet2)
+
+	require.NoError(t, dstDB.Close())
 }
 
 func Test_MergeDBs_Successful_Empty_Dir(t *testing.T) {
@@ -403,6 +417,7 @@ func Test_MergeDBs_Successful_Empty_Dir(t *testing.T) {
 
 	dstDB, err := localsql.Open("file:" + filepath.Join(tmpDst, localDbFile))
 	require.NoError(t, err)
+	defer dstDB.Close()
 
 	ch, err := nipost.Challenge(dstDB, sig.NodeID())
 	require.NoError(t, err)
@@ -416,4 +431,6 @@ func Test_MergeDBs_Successful_Empty_Dir(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, poet[0], sigPoet1)
 	require.Equal(t, poet[1], sigPoet2)
+
+	require.NoError(t, dstDB.Close())
 }

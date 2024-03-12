@@ -145,7 +145,9 @@ func MergeDBs(ctx context.Context, dbLog *zap.Logger, from, to string) error {
 		if _, err := tx.Exec("INSERT INTO main.challenge SELECT * FROM srcDB.challenge;", nil, nil); err != nil {
 			return fmt.Errorf("merge challenge: %w", err)
 		}
-		if _, err := tx.Exec("INSERT INTO main.poet_registration SELECT * FROM srcDB.poet_registration;", nil, nil); err != nil {
+		if _, err := tx.Exec(
+			"INSERT INTO main.poet_registration SELECT * FROM srcDB.poet_registration;", nil, nil,
+		); err != nil {
 			return fmt.Errorf("merge poet_registration: %w", err)
 		}
 		if _, err := tx.Exec("INSERT INTO main.nipost SELECT * FROM srcDB.nipost;", nil, nil); err != nil {
