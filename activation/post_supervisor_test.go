@@ -267,9 +267,7 @@ func Test_PostSupervisor_LogFatalOnInvalidConfig(t *testing.T) {
 	require.NoError(t, err)
 
 	ctrl := gomock.NewController(t)
-	mgr := NewMockpostSetupProvider(ctrl)
-	mgr.EXPECT().PrepareInitializer(gomock.Any(), postOpts, sig.NodeID()).Return(nil)
-	mgr.EXPECT().StartSession(gomock.Any(), sig.NodeID()).Return(nil)
+	mgr := newPostManager(t, postCfg, postOpts)
 	builder := NewMockAtxBuilder(ctrl)
 	builder.EXPECT().Register(sig)
 	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr, builder)
