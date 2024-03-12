@@ -21,9 +21,8 @@ type data struct {
 func (d *data) latency(global float64) float64 {
 	if d.success+d.failures == 0 {
 		return 0.9 * global // to prioritize trying out new peer
-	}
-	if d.success == 0 {
-		return global + d.failRate*global
+	} else if d.success == 0 {
+		return 1.1 * global
 	}
 	return d.averageLatency + d.failRate*global
 }
@@ -176,7 +175,7 @@ func (p *Peers) Total() int {
 }
 
 func (p *Peers) Stats() Stats {
-	best := p.SelectBest(3)
+	best := p.SelectBest(5)
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	stats := Stats{
