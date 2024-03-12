@@ -2088,7 +2088,13 @@ func TestDebugService(t *testing.T) {
 	netInfo := NewMocknetworkInfo(ctrl)
 	mOracle := NewMockoracle(ctrl)
 	db := sql.InMemory()
-	svc := NewDebugService(db, conStateAPI, netInfo, mOracle)
+
+	testLog := zap.NewAtomicLevel()
+	loggers := map[string]*zap.AtomicLevel{
+		"test": &testLog,
+	}
+
+	svc := NewDebugService(db, conStateAPI, netInfo, mOracle, loggers)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
@@ -2203,6 +2209,50 @@ func TestDebugService(t *testing.T) {
 		msg, err = stream.Recv()
 		require.NoError(t, err)
 		require.Equal(t, pb.Proposal_Included, msg.Status)
+	})
+
+	t.Run("ChangeLogLevel module debug", func(t *testing.T) {
+		_, err := c.ChangeLogLevel(context.Background(), &pb.ChangeLogLevelRequest{
+			Module: "test",
+			Level:  "DEBUG",
+		})
+		require.NoError(t, err)
+
+		require.Equal(t, testLog.Level().String(), "debug")
+	})
+
+	t.Run("ChangeLogLevel module not found", func(t *testing.T) {
+		_, err := c.ChangeLogLevel(context.Background(), &pb.ChangeLogLevelRequest{
+			Module: "unknown-module",
+			Level:  "DEBUG",
+		})
+		require.Error(t, err)
+
+		s, ok := status.FromError(err)
+		require.True(t, ok)
+		require.Equal(t, s.Message(), "cannot find logger unknown-module")
+	})
+
+	t.Run("ChangeLogLevel unknown level", func(t *testing.T) {
+		_, err := c.ChangeLogLevel(context.Background(), &pb.ChangeLogLevelRequest{
+			Module: "test",
+			Level:  "unknown-level",
+		})
+		require.Error(t, err)
+
+		s, ok := status.FromError(err)
+		require.True(t, ok)
+		require.Equal(t, s.Message(), "parse level: unrecognized level: \"unknown-level\"")
+	})
+
+	t.Run("ChangeLogLevel '*' to debug", func(t *testing.T) {
+		_, err := c.ChangeLogLevel(context.Background(), &pb.ChangeLogLevelRequest{
+			Module: "*",
+			Level:  "DEBUG",
+		})
+		require.NoError(t, err)
+
+		require.Equal(t, testLog.Level().String(), "debug")
 	})
 }
 

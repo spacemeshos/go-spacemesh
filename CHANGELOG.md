@@ -228,6 +228,13 @@ and permanent ineligibility for rewards.
 
 ### Features
 
+* [#5678](https://github.com/spacemeshos/go-spacemesh/pull/5678) API to for changing log level without restarting a node. Examples: 
+  > grpcurl -plaintext -d '{"module": "sync", "level": "debug"}' 127.0.0.1:9093 spacemesh.v1.DebugService.ChangeLogLevel
+
+  > grpcurl -plaintext -d '{"module": "*", "level": "debug"}' 127.0.0.1:9093 spacemesh.v1.DebugService.ChangeLogLevel
+
+  "*" will replace log level for all known modules, expect that some of them will spam too much.
+
 ### Improvements
 
 * [#5641](https://github.com/spacemeshos/go-spacemesh/pull/5641) Rename `node_state.sql` to `local.sql`.
