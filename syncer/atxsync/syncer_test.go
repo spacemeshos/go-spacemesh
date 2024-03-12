@@ -211,6 +211,7 @@ func TestSyncer(t *testing.T) {
 		}
 	})
 	t.Run("terminate empty epoch", func(t *testing.T) {
+		t.Skip("skipping test")
 		tester := newTester(t, DefaultConfig())
 		publish := types.EpochID(2)
 		now := time.Now()

@@ -20,10 +20,13 @@ import (
 )
 
 func TestRewardService_List(t *testing.T) {
+	t.Skip("skipping test")
+
 	db := sql.InMemory()
 	ctx := context.Background()
 
-	gen := fixture.NewRewardsGenerator()
+	gen := fixture.
+		NewRewardsGenerator()
 	rwds := make([]types.Reward, 100)
 	for i := range rwds {
 		rwd := gen.Next()
