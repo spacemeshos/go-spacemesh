@@ -1,14 +1,18 @@
 package activation
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 	"runtime"
 	"syscall"
 	"testing"
 	"time"
 
 	"github.com/spacemeshos/post/initialization"
+	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -16,13 +20,46 @@ import (
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 func closedChan() <-chan struct{} {
 	ch := make(chan struct{})
 	close(ch)
 	return ch
+}
+
+func testSetupOpts(t *testing.T) PostSetupOpts {
+	t.Helper()
+	opts := DefaultPostSetupOpts()
+	opts.DataDir = t.TempDir()
+	opts.ProviderID.SetUint32(initialization.CPUProviderID())
+	opts.Scrypt.N = 2
+	return opts
+}
+
+func newPostManager(t *testing.T, cfg PostConfig, opts PostSetupOpts) *PostSetupManager {
+	t.Helper()
+	ctrl := gomock.NewController(t)
+	validator := NewMocknipostValidator(ctrl)
+	validator.EXPECT().
+		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		AnyTimes()
+
+	syncer := NewMocksyncer(ctrl)
+	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
+		ch := make(chan struct{})
+		close(ch)
+		return ch
+	})
+	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+	mgr, err := NewPostSetupManager(cfg, zaptest.NewLogger(t), cdb, types.RandomATXID(), syncer, validator)
+	require.NoError(t, err)
+	return mgr
 }
 
 func Test_PostSupervisor_ErrorOnMissingBinary(t *testing.T) {
@@ -117,15 +154,13 @@ func Test_PostSupervisor_StartsServiceCmd(t *testing.T) {
 
 	cmdCfg := DefaultTestPostServiceConfig()
 	postCfg := DefaultPostConfig()
-	postOpts := DefaultPostSetupOpts()
+	postOpts := testSetupOpts(t)
 	provingOpts := DefaultPostProvingOpts()
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
 	ctrl := gomock.NewController(t)
-	mgr := NewMockpostSetupProvider(ctrl)
-	mgr.EXPECT().PrepareInitializer(gomock.Any(), postOpts, sig.NodeID()).Return(nil)
-	mgr.EXPECT().StartSession(gomock.Any(), sig.NodeID()).Return(nil)
+	mgr := newPostManager(t, postCfg, postOpts)
 	builder := NewMockAtxBuilder(ctrl)
 	builder.EXPECT().Register(sig)
 	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr, builder)
@@ -158,15 +193,13 @@ func Test_PostSupervisor_Restart_Possible(t *testing.T) {
 
 	cmdCfg := DefaultTestPostServiceConfig()
 	postCfg := DefaultPostConfig()
-	postOpts := DefaultPostSetupOpts()
+	postOpts := testSetupOpts(t)
 	provingOpts := DefaultPostProvingOpts()
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
 	ctrl := gomock.NewController(t)
-	mgr := NewMockpostSetupProvider(ctrl)
-	mgr.EXPECT().PrepareInitializer(gomock.Any(), postOpts, sig.NodeID()).Return(nil)
-	mgr.EXPECT().StartSession(gomock.Any(), sig.NodeID()).Return(nil)
+	mgr := newPostManager(t, postCfg, postOpts)
 	builder := NewMockAtxBuilder(ctrl)
 	builder.EXPECT().Register(sig)
 	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr, builder)
@@ -180,8 +213,6 @@ func Test_PostSupervisor_Restart_Possible(t *testing.T) {
 	require.NoError(t, ps.Stop(false))
 	require.Eventually(t, func() bool { return ps.pid.Load() == 0 }, 5*time.Second, 100*time.Millisecond)
 
-	mgr.EXPECT().PrepareInitializer(gomock.Any(), postOpts, sig.NodeID()).Return(nil)
-	mgr.EXPECT().StartSession(gomock.Any(), sig.NodeID()).Return(nil)
 	builder.EXPECT().Register(sig)
 	require.NoError(t, ps.Start(postOpts, sig))
 	require.Eventually(t, func() bool { return ps.pid.Load() != 0 }, 5*time.Second, 100*time.Millisecond)
@@ -195,15 +226,13 @@ func Test_PostSupervisor_LogFatalOnCrash(t *testing.T) {
 
 	cmdCfg := DefaultTestPostServiceConfig()
 	postCfg := DefaultPostConfig()
-	postOpts := DefaultPostSetupOpts()
+	postOpts := testSetupOpts(t)
 	provingOpts := DefaultPostProvingOpts()
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
 	ctrl := gomock.NewController(t)
-	mgr := NewMockpostSetupProvider(ctrl)
-	mgr.EXPECT().PrepareInitializer(gomock.Any(), postOpts, sig.NodeID()).Return(nil)
-	mgr.EXPECT().StartSession(gomock.Any(), sig.NodeID()).Return(nil)
+	mgr := newPostManager(t, postCfg, postOpts)
 	builder := NewMockAtxBuilder(ctrl)
 	builder.EXPECT().Register(sig)
 	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr, builder)
@@ -232,7 +261,7 @@ func Test_PostSupervisor_LogFatalOnInvalidConfig(t *testing.T) {
 	cmdCfg.NodeAddress = "http://127.0.0.1:9099" // wrong port
 	cmdCfg.MaxRetries = 1                        // speedup test, will fail on 2nd retry (~ 5s)
 	postCfg := DefaultPostConfig()
-	postOpts := DefaultPostSetupOpts()
+	postOpts := testSetupOpts(t)
 	provingOpts := DefaultPostProvingOpts()
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -266,7 +295,7 @@ func Test_PostSupervisor_StopOnError(t *testing.T) {
 
 	cmdCfg := DefaultTestPostServiceConfig()
 	postCfg := DefaultPostConfig()
-	postOpts := DefaultPostSetupOpts()
+	postOpts := testSetupOpts(t)
 	provingOpts := DefaultPostProvingOpts()
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -274,7 +303,15 @@ func Test_PostSupervisor_StopOnError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mgr := NewMockpostSetupProvider(ctrl)
 	mgr.EXPECT().PrepareInitializer(gomock.Any(), postOpts, sig.NodeID()).Return(nil)
-	mgr.EXPECT().StartSession(gomock.Any(), sig.NodeID()).Return(nil)
+	mgr.EXPECT().StartSession(gomock.Any(), sig.NodeID()).DoAndReturn(func(_ context.Context, id types.NodeID) error {
+		// The service requires metadata JSON file to exist or it will fail to boot.
+		meta := shared.PostMetadata{NodeId: id.Bytes(), CommitmentAtxId: types.RandomATXID().Bytes(), NumUnits: 1}
+		metaBytes, err := json.Marshal(meta)
+		require.NoError(t, err)
+		err = os.WriteFile(filepath.Join(postOpts.DataDir, "postdata_metadata.json"), metaBytes, 0o644)
+		require.NoError(t, err)
+		return nil
+	})
 	builder := NewMockAtxBuilder(ctrl)
 	builder.EXPECT().Register(sig)
 	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr, builder)
