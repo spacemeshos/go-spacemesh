@@ -31,7 +31,7 @@ func Test_MergeDBs_InvalidTargetScheme(t *testing.T) {
 	migrations, err := sql.LocalMigrations()
 	require.NoError(t, err)
 
-	_, err = localsql.Open("file:"+filepath.Join(tmpDst, "/local.sql"),
+	_, err = localsql.Open("file:"+filepath.Join(tmpDst, localDbFile),
 		sql.WithMigrations(migrations[:2]), // old DB
 	)
 	require.NoError(t, err)
@@ -59,7 +59,7 @@ func Test_MergeDBs_TargetIsSupervised(t *testing.T) {
 	err = os.WriteFile(filepath.Join(tmpDst, keyDir, supervisedIDKeyFileName), []byte("key"), 0o600)
 	require.NoError(t, err)
 
-	_, err = localsql.Open("file:" + filepath.Join(tmpDst, "/local.sql"))
+	_, err = localsql.Open("file:" + filepath.Join(tmpDst, localDbFile))
 	require.NoError(t, err)
 
 	err = MergeDBs(context.Background(), logger, "", tmpDst)
@@ -73,7 +73,7 @@ func Test_MergeDBs_InvalidSourcePath(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	tmpDst := t.TempDir()
 
-	_, err := localsql.Open("file:" + filepath.Join(tmpDst, "/local.sql"))
+	_, err := localsql.Open("file:" + filepath.Join(tmpDst, localDbFile))
 	require.NoError(t, err)
 
 	err = MergeDBs(context.Background(), logger, "/invalid/source/path", tmpDst)
@@ -89,11 +89,11 @@ func Test_MergeDBs_InvalidSourceScheme(t *testing.T) {
 	migrations, err := sql.LocalMigrations()
 	require.NoError(t, err)
 
-	_, err = localsql.Open("file:" + filepath.Join(tmpDst, "/local.sql"))
+	_, err = localsql.Open("file:" + filepath.Join(tmpDst, localDbFile))
 	require.NoError(t, err)
 
 	tmpSrc := t.TempDir()
-	_, err = localsql.Open("file:"+filepath.Join(tmpSrc, "/local.sql"),
+	_, err = localsql.Open("file:"+filepath.Join(tmpSrc, localDbFile),
 		sql.WithMigrations(migrations[:2]), // old DB
 	)
 	require.NoError(t, err)
@@ -115,7 +115,7 @@ func Test_MergeDBs_SourceIsSupervised(t *testing.T) {
 	logger := zap.New(observer)
 	tmpDst := t.TempDir()
 
-	_, err := localsql.Open("file:" + filepath.Join(tmpDst, "/local.sql"))
+	_, err := localsql.Open("file:" + filepath.Join(tmpDst, localDbFile))
 	require.NoError(t, err)
 
 	tmpSrc := t.TempDir()
@@ -126,7 +126,7 @@ func Test_MergeDBs_SourceIsSupervised(t *testing.T) {
 	err = os.WriteFile(filepath.Join(tmpSrc, keyDir, supervisedIDKeyFileName), []byte("key"), 0o600)
 	require.NoError(t, err)
 
-	_, err = localsql.Open("file:" + filepath.Join(tmpSrc, "/local.sql"))
+	_, err = localsql.Open("file:" + filepath.Join(tmpSrc, localDbFile))
 	require.NoError(t, err)
 
 	err = MergeDBs(context.Background(), logger, tmpSrc, tmpDst)
@@ -139,7 +139,7 @@ func Test_MergeDBs_SourceIsSupervised(t *testing.T) {
 func Test_MergeDBs_InvalidSourceKey(t *testing.T) {
 	tmpDst := t.TempDir()
 
-	_, err := localsql.Open("file:" + filepath.Join(tmpDst, "/local.sql"))
+	_, err := localsql.Open("file:" + filepath.Join(tmpDst, localDbFile))
 	require.NoError(t, err)
 
 	tmpSrc := t.TempDir()
@@ -149,7 +149,7 @@ func Test_MergeDBs_InvalidSourceKey(t *testing.T) {
 	err = os.WriteFile(filepath.Join(tmpSrc, keyDir, "invalid.key"), []byte("key"), 0o600)
 	require.NoError(t, err)
 
-	_, err = localsql.Open("file:" + filepath.Join(tmpSrc, "/local.sql"))
+	_, err = localsql.Open("file:" + filepath.Join(tmpSrc, localDbFile))
 	require.NoError(t, err)
 
 	err = MergeDBs(context.Background(), zaptest.NewLogger(t), tmpSrc, tmpDst)
@@ -165,7 +165,7 @@ func Test_MergeDBs_TargetKeyAlreadyExists(t *testing.T) {
 	err = os.WriteFile(filepath.Join(tmpDst, keyDir, "exists.key"), []byte("key"), 0o600)
 	require.NoError(t, err)
 
-	_, err = localsql.Open("file:" + filepath.Join(tmpDst, "/local.sql"))
+	_, err = localsql.Open("file:" + filepath.Join(tmpDst, localDbFile))
 	require.NoError(t, err)
 
 	tmpSrc := t.TempDir()
@@ -180,7 +180,7 @@ func Test_MergeDBs_TargetKeyAlreadyExists(t *testing.T) {
 	err = os.WriteFile(filepath.Join(tmpSrc, keyDir, "exists.key"), key, 0o600)
 	require.NoError(t, err)
 
-	_, err = localsql.Open("file:" + filepath.Join(tmpSrc, "/local.sql"))
+	_, err = localsql.Open("file:" + filepath.Join(tmpSrc, localDbFile))
 	require.NoError(t, err)
 
 	err = MergeDBs(context.Background(), zaptest.NewLogger(t), tmpSrc, tmpDst)
@@ -201,7 +201,7 @@ func Test_MergeDBs_Successful_Existing_Node(t *testing.T) {
 	err = os.WriteFile(filepath.Join(tmpDst, keyDir, "id1.key"), key, 0o600)
 	require.NoError(t, err)
 
-	dstDB, err := localsql.Open("file:" + filepath.Join(tmpDst, "/local.sql"))
+	dstDB, err := localsql.Open("file:" + filepath.Join(tmpDst, localDbFile))
 	require.NoError(t, err)
 
 	sig1Ch := &types.NIPostChallenge{
@@ -253,7 +253,7 @@ func Test_MergeDBs_Successful_Existing_Node(t *testing.T) {
 	err = os.WriteFile(filepath.Join(tmpSrc, keyDir, "id2.key"), key, 0o600)
 	require.NoError(t, err)
 
-	srcDB, err := localsql.Open("file:" + filepath.Join(tmpSrc, "/local.sql"))
+	srcDB, err := localsql.Open("file:" + filepath.Join(tmpSrc, localDbFile))
 	require.NoError(t, err)
 
 	cAtx := types.RandomATXID()
@@ -305,7 +305,7 @@ func Test_MergeDBs_Successful_Existing_Node(t *testing.T) {
 	require.FileExists(t, filepath.Join(tmpDst, keyDir, "id1.key"))
 	require.FileExists(t, filepath.Join(tmpDst, keyDir, "id2.key"))
 
-	dstDB, err = localsql.Open("file:" + filepath.Join(tmpDst, "/local.sql"))
+	dstDB, err = localsql.Open("file:" + filepath.Join(tmpDst, localDbFile))
 	require.NoError(t, err)
 
 	ch, err := nipost.Challenge(dstDB, sig1.NodeID())
@@ -350,7 +350,7 @@ func Test_MergeDBs_Successful_Empty_Dir(t *testing.T) {
 	err = os.WriteFile(filepath.Join(tmpSrc, keyDir, "id.key"), key, 0o600)
 	require.NoError(t, err)
 
-	srcDB, err := localsql.Open("file:" + filepath.Join(tmpSrc, "/local.sql"))
+	srcDB, err := localsql.Open("file:" + filepath.Join(tmpSrc, localDbFile))
 	require.NoError(t, err)
 
 	cAtx := types.RandomATXID()
@@ -401,7 +401,7 @@ func Test_MergeDBs_Successful_Empty_Dir(t *testing.T) {
 
 	require.FileExists(t, filepath.Join(tmpDst, keyDir, "id.key"))
 
-	dstDB, err := localsql.Open("file:" + filepath.Join(tmpDst, "/local.sql"))
+	dstDB, err := localsql.Open("file:" + filepath.Join(tmpDst, localDbFile))
 	require.NoError(t, err)
 
 	ch, err := nipost.Challenge(dstDB, sig.NodeID())

@@ -53,19 +53,6 @@ func MergeDBs(ctx context.Context, dbLog *zap.Logger, from, to string) error {
 		if err != nil {
 			return err
 		}
-		// -------------
-		// this code should not be needed but without it, Test_MergeDBs_Successful_Empty_Dir fails on INSERT initial_post
-		// with sqlite.SQLITE_CONSTRAINT_PRIMARYKEY error
-		if err := dstDB.Close(); err != nil {
-			return fmt.Errorf("close target database: %w", err)
-		}
-		dstDB, err = localsql.Open("file:"+filepath.Join(to, localDbFile),
-			sql.WithLogger(dbLog),
-		)
-		if err != nil {
-			return err
-		}
-		// -------------
 	case err != nil:
 		return err
 	default:
@@ -152,16 +139,16 @@ func MergeDBs(ctx context.Context, dbLog *zap.Logger, from, to string) error {
 		if _, err := tx.Exec("ATTACH DATABASE ?1 AS srcDB;", enc, nil); err != nil {
 			return fmt.Errorf("attach source database: %w", err)
 		}
-		if _, err := tx.Exec("INSERT INTO initial_post SELECT * FROM srcDB.initial_post;", nil, nil); err != nil {
+		if _, err := tx.Exec("INSERT INTO main.initial_post SELECT * FROM srcDB.initial_post;", nil, nil); err != nil {
 			return fmt.Errorf("merge initial_post: %w", err)
 		}
-		if _, err := tx.Exec("INSERT INTO challenge SELECT * FROM srcDB.challenge;", nil, nil); err != nil {
+		if _, err := tx.Exec("INSERT INTO main.challenge SELECT * FROM srcDB.challenge;", nil, nil); err != nil {
 			return fmt.Errorf("merge challenge: %w", err)
 		}
-		if _, err := tx.Exec("INSERT INTO poet_registration SELECT * FROM srcDB.poet_registration;", nil, nil); err != nil {
+		if _, err := tx.Exec("INSERT INTO main.poet_registration SELECT * FROM srcDB.poet_registration;", nil, nil); err != nil {
 			return fmt.Errorf("merge poet_registration: %w", err)
 		}
-		if _, err := tx.Exec("INSERT INTO nipost SELECT * FROM srcDB.nipost;", nil, nil); err != nil {
+		if _, err := tx.Exec("INSERT INTO main.nipost SELECT * FROM srcDB.nipost;", nil, nil); err != nil {
 			return fmt.Errorf("merge nipost: %w", err)
 		}
 		return nil
