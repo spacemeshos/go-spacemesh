@@ -1904,7 +1904,7 @@ func (app *App) Start(ctx context.Context) error {
 
 // verifyDB performs a verification of ATX signatures in the database.
 //
-//nolint:unused
+//lint:ignore U1000 This function is currently unused but is left here for future use.
 func (app *App) verifyDB(ctx context.Context) {
 	app.eg.Go(func() error {
 		app.log.Info("checking ATX signatures")
