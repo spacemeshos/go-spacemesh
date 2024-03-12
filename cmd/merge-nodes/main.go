@@ -15,26 +15,25 @@ var version string
 
 func main() {
 	app := &cli.App{
-		Name:    "Spacemesh Node Merger",
-		Usage:   "Merge two or more Spacemesh nodes into one",
+		Name: "Spacemesh Node Merger",
+		Usage: "Merge identities of two Spacemesh nodes into one.\n" +
+			"The `from` node will be merged into the `to` node, leaving the `from` node untouched.\n" +
+			"The `to` node can be an existing node or an empty folder.\n" +
+			"Be sure to backup the `to` node before running this command.\n" +
+			"NOTE: both `from` and `to` nodes must be upgraded to the latest version before running this command.\n" +
+			"NOTE: after upgrading and starting the nodes at least once, convert them to remote nodes before merging.",
 		Version: version,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:     "from",
 				Aliases:  []string{"f"},
-				Usage:    "The `data` folder(s) to read identities from and merge into one node",
+				Usage:    "The `data` folder to read identities from and merge into `to`",
 				Required: true,
 			},
 			&cli.StringFlag{
 				Name:     "to",
 				Aliases:  []string{"t"},
-				Usage:    "The `data` folder to write the merged node to",
-				Required: true,
-			},
-			&cli.StringFlag{
-				Name:     "name",
-				Aliases:  []string{"n"},
-				Usage:    "The `name` of the identity merged from `from` to `to`",
+				Usage:    "The `data` folder to write the merged node to. Can be an existing remote node or an empty folder.",
 				Required: true,
 			},
 		},
@@ -46,7 +45,7 @@ func main() {
 				return fmt.Errorf("create logger: %w", err)
 			}
 			defer dbLog.Sync()
-			return internal.MergeDBs(ctx.Context, dbLog, ctx.String("name"), ctx.String("from"), ctx.String("to"))
+			return internal.MergeDBs(ctx.Context, dbLog, ctx.String("from"), ctx.String("to"))
 		},
 	}
 
