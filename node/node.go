@@ -72,6 +72,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
@@ -237,7 +238,7 @@ func GetCommand() *cobra.Command {
 	configPath = cmd.AddFlags(c.PersistentFlags(), &conf)
 
 	// versionCmd returns the current version of spacemesh.
-	versionCmd := cobra.Command{
+	versionCmd := &cobra.Command{
 		Use:   "version",
 		Short: "Show version info",
 		Run: func(c *cobra.Command, args []string) {
@@ -248,7 +249,7 @@ func GetCommand() *cobra.Command {
 			fmt.Println()
 		},
 	}
-	c.AddCommand(&versionCmd)
+	c.AddCommand(versionCmd)
 
 	return c
 }
@@ -1385,7 +1386,7 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 
 	switch svc {
 	case grpcserver.Debug:
-		service := grpcserver.NewDebugService(app.db, app.conState, app.host, app.hOracle)
+		service := grpcserver.NewDebugService(app.db, app.conState, app.host, app.hOracle, app.loggers)
 		app.grpcServices[svc] = service
 		return service, nil
 	case grpcserver.GlobalState:
@@ -1887,6 +1888,10 @@ func (app *App) Start(ctx context.Context) error {
 			return nil
 		})
 	}
+
+	// uncomment to verify ATXs signatures
+	// app.verifyDB(ctx)
+
 	// app blocks until it receives a signal to exit
 	// this signal may come from the node or from sig-abort (ctrl-c)
 	select {
@@ -1895,6 +1900,43 @@ func (app *App) Start(ctx context.Context) error {
 	case err = <-app.errCh:
 		return err
 	}
+}
+
+// verifyDB performs a verification of ATX signatures in the database.
+//
+//lint:ignore U1000 This function is currently unused but is left here for future use.
+func (app *App) verifyDB(ctx context.Context) {
+	app.eg.Go(func() error {
+		app.log.Info("checking ATX signatures")
+		count := 0
+
+		// check ATX signatures
+		atxs.IterateAtxsOps(app.cachedDB, builder.Operations{}, func(atx *types.VerifiedActivationTx) bool {
+			select {
+			case <-ctx.Done():
+				// stop on context cancellation
+				return false
+			default:
+			}
+
+			// verify atx signature
+			if !app.edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature) {
+				app.log.With().Error("ATX signature verification failed",
+					log.Stringer("atx_id", atx.ID()),
+					log.Stringer("smesher", atx.SmesherID),
+				)
+			}
+
+			count++
+			if count%1000 == 0 {
+				app.log.With().Info("verifying ATX signatures", log.Int("count", count))
+			}
+			return true
+		})
+
+		app.log.With().Info("ATX signatures verified", log.Int("count", count))
+		return nil
+	})
 }
 
 func (app *App) startSynchronous(ctx context.Context) (err error) {

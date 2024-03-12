@@ -53,11 +53,11 @@ func TestSelect(t *testing.T) {
 		best       peer.ID
 	}{
 		{
-			desc: "latency adjusted with moving average",
+			desc: "latency adjusted with more requests",
 			events: []event{
 				{id: "a", success: 1, latency: 8, add: true},
 				{id: "b", success: 1, latency: 9, add: true},
-				{id: "a", success: 1, latency: 14, add: true},
+				{id: "a", success: 3, latency: 14, add: true},
 			},
 			n:          5,
 			expect:     []peer.ID{"b", "a"},

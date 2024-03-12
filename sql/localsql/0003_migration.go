@@ -116,15 +116,35 @@ func (m migration0003) moveNipostStateToDb(db sql.Executor, dataDir string) erro
 	state, err := loadBuilderState(dataDir)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
-		return nil // no state to move
+		return nil // no state to migrate
 	case err != nil:
 		return fmt.Errorf("load nipost builder state: %w", err)
-	default:
 	}
 
 	meta, err := initialization.LoadMetadata(dataDir)
 	if err != nil {
 		return fmt.Errorf("load post metadata: %w", err)
+	}
+
+	challenge, err := m.getChallengeHash(db, types.BytesToNodeID(meta.NodeId))
+	switch {
+	case errors.Is(err, sql.ErrNotFound):
+		m.logger.Warn("nipost state on disk but no challenge in database - skipping migration",
+			zap.String("state_challenge", state.Challenge.ShortString()),
+			zap.String("node_id", types.BytesToNodeID(meta.NodeId).ShortString()),
+		)
+		return discardBuilderState(dataDir)
+	case err != nil:
+		return fmt.Errorf("get challenge hash: %w", err)
+	}
+
+	if !bytes.Equal(challenge.Bytes(), state.Challenge.Bytes()) {
+		m.logger.Warn("challenge mismatch - discarding builder state and skipping migration",
+			zap.String("node_id", types.BytesToNodeID(meta.NodeId).ShortString()),
+			zap.String("challenge", challenge.ShortString()),
+			zap.String("state_challenge", state.Challenge.ShortString()),
+		)
+		return discardBuilderState(dataDir)
 	}
 
 	if len(state.PoetRequests) == 0 {
@@ -155,6 +175,14 @@ func (m migration0003) moveNipostStateToDb(db sql.Executor, dataDir string) erro
 		); err != nil {
 			return fmt.Errorf("insert poet registration for %s: %w", types.BytesToNodeID(meta.NodeId).ShortString(), err)
 		}
+
+		m.logger.Info("PoET registration added to database",
+			zap.String("node_id", types.BytesToNodeID(meta.NodeId).ShortString()),
+			zap.String("poet_service_id", base64.StdEncoding.EncodeToString(req.PoetServiceID.ServiceID)),
+			zap.String("address", address),
+			zap.String("round_id", req.PoetRound.ID),
+			zap.Time("round_end", req.PoetRound.End.IntoTime()),
+		)
 	}
 
 	if state.PoetProofRef == types.EmptyPoetProofRef {
@@ -225,4 +253,42 @@ func (m migration0003) getAddress(serviceID PoetServiceID) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("no poet client found for service id %x", serviceID.ServiceID)
+}
+
+func (m migration0003) getChallengeHash(db sql.Executor, nodeID types.NodeID) (types.Hash32, error) {
+	var ch *types.NIPostChallenge
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, nodeID.Bytes())
+	}
+	dec := func(stmt *sql.Statement) bool {
+		ch = &types.NIPostChallenge{}
+		ch.PublishEpoch = types.EpochID(stmt.ColumnInt64(0))
+		ch.Sequence = uint64(stmt.ColumnInt64(1))
+		stmt.ColumnBytes(2, ch.PrevATXID[:])
+		stmt.ColumnBytes(3, ch.PositioningATX[:])
+		ch.CommitmentATX = &types.ATXID{}
+		if n := stmt.ColumnBytes(4, ch.CommitmentATX[:]); n == 0 {
+			ch.CommitmentATX = nil
+		}
+		if n := stmt.ColumnLen(6); n > 0 {
+			ch.InitialPost = &types.Post{
+				Nonce:   uint32(stmt.ColumnInt64(5)),
+				Indices: make([]byte, n),
+				Pow:     uint64(stmt.ColumnInt64(7)),
+			}
+			stmt.ColumnBytes(6, ch.InitialPost.Indices)
+		}
+		return true
+	}
+	if _, err := db.Exec(`
+		select epoch, sequence, prev_atx, pos_atx, commit_atx,
+			post_nonce, post_indices, post_pow
+		from challenge where id = ?1 limit 1;`, enc, dec,
+	); err != nil {
+		return types.Hash32{}, fmt.Errorf("get challenge from node id %s: %w", nodeID.ShortString(), err)
+	}
+	if ch == nil {
+		return types.Hash32{}, fmt.Errorf("get challenge from node id %s: %w", nodeID.ShortString(), sql.ErrNotFound)
+	}
+	return ch.Hash(), nil
 }

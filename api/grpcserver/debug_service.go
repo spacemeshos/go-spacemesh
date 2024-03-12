@@ -28,6 +28,7 @@ type DebugService struct {
 	conState conservativeState
 	netInfo  networkInfo
 	oracle   oracle
+	loggers  map[string]*zap.AtomicLevel
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -45,12 +46,15 @@ func (d DebugService) String() string {
 }
 
 // NewDebugService creates a new grpc service using config data.
-func NewDebugService(db *sql.Database, conState conservativeState, host networkInfo, oracle oracle) *DebugService {
+func NewDebugService(db *sql.Database, conState conservativeState, host networkInfo, oracle oracle,
+	loggers map[string]*zap.AtomicLevel,
+) *DebugService {
 	return &DebugService{
 		db:       db,
 		conState: conState,
 		netInfo:  host,
 		oracle:   oracle,
+		loggers:  loggers,
 	}
 }
 
@@ -147,6 +151,29 @@ func (d DebugService) ProposalsStream(_ *emptypb.Empty, stream pb.DebugService_P
 			}
 		}
 	}
+}
+
+func (d DebugService) ChangeLogLevel(ctx context.Context, req *pb.ChangeLogLevelRequest) (*emptypb.Empty, error) {
+	level, err := zap.ParseAtomicLevel(req.GetLevel())
+	if err != nil {
+		return nil, fmt.Errorf("parse level: %w", err)
+	}
+
+	if req.GetModule() == "*" {
+		for _, logger := range d.loggers {
+			logger.SetLevel(level.Level())
+		}
+		return nil, nil
+	}
+
+	logger, ok := d.loggers[req.GetModule()]
+	if !ok {
+		return nil, fmt.Errorf("cannot find logger %v", req.GetModule())
+	}
+
+	logger.SetLevel(level.Level())
+
+	return &emptypb.Empty{}, nil
 }
 
 func castEventProposal(ev *events.EventProposal) *pb.Proposal {

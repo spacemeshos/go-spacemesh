@@ -108,11 +108,11 @@ type Config struct {
 	RequestHardTimeout   time.Duration           `mapstructure:"request-hard-timeout"`
 	EnableServerMetrics  bool                    `mapstructure:"servers-metrics"`
 	ServersConfig        map[string]ServerConfig `mapstructure:"servers"`
-	PeersRateThreshold   float64                 `mapstructure:"peers-rate-threshold"`
 	Streaming            bool                    `mapstructure:"streaming"`
 	// The maximum number of concurrent requests to get ATXs.
-	GetAtxsConcurrency int64                  `mapstructure:"getatxsconcurrency"`
-	DecayingTag        server.DecayingTagSpec `mapstructure:"decaying-tag"`
+	GetAtxsConcurrency   int64                  `mapstructure:"getatxsconcurrency"`
+	DecayingTag          server.DecayingTagSpec `mapstructure:"decaying-tag"`
+	LogPeerStatsInterval time.Duration          `mapstructure:"log-peer-stats-interval"`
 }
 
 func (c Config) getServerConfig(protocol string) ServerConfig {
@@ -153,7 +153,6 @@ func DefaultConfig() Config {
 			// 64 bytes
 			OpnProtocol: {Queue: 10000, Requests: 1000, Interval: time.Second},
 		},
-		PeersRateThreshold: 0.02,
 		GetAtxsConcurrency: 100,
 		DecayingTag: server.DecayingTagSpec{
 			Interval: time.Minute,
@@ -161,6 +160,7 @@ func DefaultConfig() Config {
 			Dec:      1000,
 			Cap:      10000,
 		},
+		LogPeerStatsInterval: 20 * time.Minute,
 	}
 }
 
@@ -375,6 +375,17 @@ func (f *Fetch) Start() error {
 				return srv.Run(f.shutdownCtx)
 			})
 		}
+		f.eg.Go(func() error {
+			for {
+				select {
+				case <-f.shutdownCtx.Done():
+					return nil
+				case <-time.After(f.cfg.LogPeerStatsInterval):
+					stats := f.peers.Stats()
+					f.logger.With().Info("peer stats", log.Inline(&stats))
+				}
+			}
+		})
 	})
 	return nil
 }
@@ -632,7 +643,7 @@ func (f *Fetch) send(requests []RequestMessage) {
 				}
 				data, err := f.sendBatch(peer, batch)
 				if err != nil {
-					f.logger.With().Warning(
+					f.logger.With().Debug(
 						"failed to send batch request",
 						log.Stringer("batch", batch.ID),
 						log.Stringer("peer", peer),
@@ -853,7 +864,7 @@ func (f *Fetch) handleHashError(batch *batchInfo, err error) {
 			continue
 		}
 		f.logger.WithContext(req.ctx).With().
-			Warning("hash request failed", log.Stringer("hash", req.hash), log.Err(err))
+			Debug("hash request failed", log.Stringer("hash", req.hash), log.Err(err))
 		req.promise.err = err
 		peerErrors.WithLabelValues(string(req.hint)).Inc()
 		close(req.promise.completed)
