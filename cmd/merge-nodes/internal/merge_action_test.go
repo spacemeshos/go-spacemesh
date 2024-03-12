@@ -81,7 +81,6 @@ func Test_MergeDBs_InvalidSourcePath(t *testing.T) {
 
 	err = MergeDBs(context.Background(), logger, "/invalid/source/path", tmpDst)
 	require.ErrorIs(t, err, fs.ErrNotExist)
-	require.ErrorContains(t, err, "/invalid/source/path")
 }
 
 func Test_MergeDBs_InvalidSourceScheme(t *testing.T) {

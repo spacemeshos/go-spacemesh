@@ -53,9 +53,11 @@ func MergeDBs(ctx context.Context, dbLog *zap.Logger, from, to string) error {
 		if err != nil {
 			return err
 		}
+		defer dstDB.Close()
 	case err != nil:
 		return err
 	default:
+		defer dstDB.Close()
 		// target database exists, check if there is at least one key in the target key directory
 		// not named supervisedIDKeyFileName
 		if err := checkIdentities(dbLog, to); err != nil {
@@ -63,7 +65,6 @@ func MergeDBs(ctx context.Context, dbLog *zap.Logger, from, to string) error {
 			return err
 		}
 	}
-	defer dstDB.Close()
 
 	// Open the source database
 	srcDB, err := openDB(dbLog, from)
@@ -194,6 +195,7 @@ func openDB(dbLog *zap.Logger, path string) (*localsql.Database, error) {
 		return nil, fmt.Errorf("get source database schema for %s: %w", dbPath, err)
 	}
 	if version != len(migrations) {
+		db.Close()
 		return nil, ErrInvalidSchemaVersion{
 			Expected: len(migrations),
 			Actual:   version,
