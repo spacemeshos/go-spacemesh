@@ -371,24 +371,10 @@ func (f *Fetch) Start() error {
 				select {
 				case <-f.shutdownCtx.Done():
 					return nil
-				case <-time.After(10 * time.Minute):
-					stats := f.peers.Stats()
-					f.logger.With().
-						Error("peers stats", log.Inline(&stats))
-				}
-
-			}
-		})
-		f.eg.Go(func() error {
-			for {
-				select {
-				case <-f.shutdownCtx.Done():
-					return nil
 				case <-time.After(f.cfg.LogPeerStatsInterval):
 					stats := f.peers.Stats()
 					f.logger.With().Info("peer stats", log.Inline(&stats))
 				}
-
 			}
 		})
 	})

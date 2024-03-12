@@ -228,7 +228,6 @@ func (s *Syncer) IsBeaconSynced(epoch types.EpochID) bool {
 
 // Start starts the main sync loop that tries to sync data for every SyncInterval.
 func (s *Syncer) Start() {
-	// start syncer loop immediately
 	s.syncOnce.Do(func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		s.stop = cancel
