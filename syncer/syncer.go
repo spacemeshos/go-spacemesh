@@ -474,7 +474,12 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 		s.backgroundSync.eg.Go(func() error {
 			err := s.fetchATXsForEpoch(ctx, publish, true)
 			if err != nil {
-				s.logger.With().Warning("background atx sync failed", log.Context(ctx), publish.Field(), log.Err(err))
+				if !errors.Is(err, context.Canceled) {
+					s.logger.With().
+						Warning("background atx sync failed", log.Context(ctx), publish.Field(), log.Err(err))
+				} else {
+					s.logger.With().Debug("background atx sync stopped", log.Context(ctx), publish.Field())
+				}
 				s.backgroundSync.epoch.Store(0)
 			}
 			return err
