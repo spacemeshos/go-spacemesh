@@ -20,7 +20,7 @@ type data struct {
 
 func (d *data) latency(global float64) float64 {
 	if d.success+d.failures == 0 {
-		return 0.8 * global // to prioritize trying out new peer
+		return 0.9 * global // to prioritize trying out new peer
 	}
 	if d.success == 0 {
 		return global + d.failRate*global
@@ -102,12 +102,14 @@ func (p *Peers) OnLatency(id peer.ID, size int, latency time.Duration) {
 	peer.success++
 	peer.failRate = float64(peer.failures) / float64(peer.success+peer.failures)
 	if peer.averageLatency != 0 {
-		peer.averageLatency = 0.8*peer.averageLatency + 0.2*float64(latency)
+		delta := (float64(latency) - float64(peer.averageLatency)) / 10 // 86% of the value is the last 19
+		peer.averageLatency += delta
 	} else {
 		peer.averageLatency = float64(latency)
 	}
 	if p.globalLatency != 0 {
-		p.globalLatency = 0.8*p.globalLatency + 0.2*float64(latency)
+		delta := (float64(latency) - float64(p.globalLatency)) / 25 // 86% of the value is the last 49
+		p.globalLatency += delta
 	} else {
 		p.globalLatency = float64(latency)
 	}
