@@ -366,6 +366,19 @@ func (f *Fetch) Start() error {
 				return srv.Run(f.shutdownCtx)
 			})
 		}
+		f.eg.Go(func() error {
+			for {
+				select {
+				case <-f.shutdownCtx.Done():
+					return nil
+				case <-time.After(10 * time.Minute):
+					stats := f.peers.Stats()
+					f.logger.With().
+						Error("peers stats", log.Inline(&stats))
+				}
+
+			}
+		})
 	})
 	return nil
 }
