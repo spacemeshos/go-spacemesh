@@ -222,7 +222,7 @@ func (g *Generator) processHareOutput(ctx context.Context, out hare3.ConsensusOu
 		}
 		block.Initialize()
 		hareOutput = block.ID()
-		g.logger.With().Info("generated block", out.Layer, block.ID())
+		g.logger.With().Debug("generated block", out.Layer, block.ID())
 	}
 	if err := g.saveAndCertify(ctx, out.Layer, block); err != nil {
 		return block, err
@@ -254,14 +254,14 @@ func (g *Generator) processOptimisticLayers(max types.LayerID) {
 				failGenCnt.Inc()
 				return err
 			}
-			g.logger.With().Info("generated block (optimistic)", lid, block.ID())
+			g.logger.With().Debug("generated block (optimistic)", lid, block.ID())
 			if err = g.msh.ProcessLayerPerHareOutput(md.ctx, lid, block.ID(), true); err != nil {
 				return err
 			}
 			return nil
 		}
 		if err = doit(); err != nil {
-			g.logger.With().Error("failed to process optimistic layer",
+			g.logger.With().Warning("failed to process optimistic layer",
 				log.Context(md.ctx),
 				lid,
 				log.Err(err),
