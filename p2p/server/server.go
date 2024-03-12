@@ -455,7 +455,7 @@ func ReadResponse(r io.Reader, toCall func(resLen uint32) (int, error)) (int, er
 
 func WrapHandler(handler Handler) StreamHandler {
 	return func(ctx context.Context, req []byte, stream io.ReadWriter) error {
-		buf, err := handler(log.WithNewRequestID(ctx), req)
+		buf, err := handler(ctx, req)
 		var resp Response
 		if err != nil {
 			resp.Error = err.Error()
