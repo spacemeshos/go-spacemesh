@@ -175,12 +175,12 @@ func (s *Store) Has(id types.ProposalID) bool {
 
 func (s *Store) getByID(id types.ProposalID) (*types.Proposal, error) {
 	s.mu.RLock()
+	defer s.mu.RUnlock()
 	for _, m := range s.data {
 		if p, ok := m.proposals[id]; ok {
 			return p, nil
 		}
 	}
-	s.mu.RUnlock()
 	return nil, ErrNotFound
 }
 
