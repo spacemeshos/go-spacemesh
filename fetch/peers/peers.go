@@ -19,12 +19,14 @@ type data struct {
 }
 
 func (d *data) latency(global float64) float64 {
-	if d.success+d.failures == 0 {
+	switch {
+	case d.success+d.failures == 0:
 		return 0.9 * global // to prioritize trying out new peer
-	} else if d.success == 0 {
+	case d.success == 0:
 		return 1.1 * global
+	default:
+		return d.averageLatency + d.failRate*global
 	}
-	return d.averageLatency + d.failRate*global
 }
 
 func (p *data) less(other *data, global float64) bool {
