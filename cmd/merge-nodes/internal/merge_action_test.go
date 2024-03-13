@@ -24,8 +24,6 @@ import (
 )
 
 func Test_MergeDBs_InvalidTargetScheme(t *testing.T) {
-	observer, observedLogs := observer.New(zapcore.WarnLevel)
-	logger := zap.New(observer)
 	tmpDst := t.TempDir()
 
 	migrations, err := sql.LocalMigrations()
@@ -37,11 +35,9 @@ func Test_MergeDBs_InvalidTargetScheme(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 
-	err = MergeDBs(context.Background(), logger, "", tmpDst)
+	err = MergeDBs(context.Background(), zaptest.NewLogger(t), "", tmpDst)
 	require.ErrorIs(t, err, ErrInvalidSchema)
-
-	require.Equal(t, 1, observedLogs.Len(), "Expected a warning log")
-	require.Equal(t, observedLogs.All()[0].Message, "target database has an invalid schema version - aborting merge")
+	require.ErrorContains(t, err, "target database")
 }
 
 func Test_MergeDBs_TargetIsSupervised(t *testing.T) {
@@ -79,8 +75,6 @@ func Test_MergeDBs_InvalidSourcePath(t *testing.T) {
 }
 
 func Test_MergeDBs_InvalidSourceScheme(t *testing.T) {
-	observer, observedLogs := observer.New(zapcore.WarnLevel)
-	logger := zap.New(observer)
 	tmpDst := t.TempDir()
 
 	migrations, err := sql.LocalMigrations()
@@ -97,10 +91,9 @@ func Test_MergeDBs_InvalidSourceScheme(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 
-	err = MergeDBs(context.Background(), logger, tmpSrc, tmpDst)
+	err = MergeDBs(context.Background(), zaptest.NewLogger(t), tmpSrc, tmpDst)
 	require.ErrorIs(t, err, ErrInvalidSchema)
-
-	require.Equal(t, 1, observedLogs.Len(), "Expected a warning log")
+	require.ErrorContains(t, err, "source database")
 }
 
 func Test_MergeDBs_SourceIsSupervised(t *testing.T) {

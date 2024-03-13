@@ -30,9 +30,6 @@ func MergeDBs(ctx context.Context, dbLog *zap.Logger, from, to string) error {
 	var err error
 	dstDB, err = openDB(dbLog, to)
 	switch {
-	case errors.Is(err, ErrInvalidSchema):
-		dbLog.Error("target database has an invalid schema version - aborting merge")
-		return err
 	case errors.Is(err, fs.ErrNotExist):
 		// target database does not exist, create it
 		dbLog.Info("target database does not exist, creating it", zap.String("path", to))
@@ -51,7 +48,7 @@ func MergeDBs(ctx context.Context, dbLog *zap.Logger, from, to string) error {
 		}
 		defer dstDB.Close()
 	case err != nil:
-		return err
+		return fmt.Errorf("open target database: %w", err)
 	default:
 		defer dstDB.Close()
 		// target database exists, check if there is at least one key in the target key directory
@@ -64,12 +61,8 @@ func MergeDBs(ctx context.Context, dbLog *zap.Logger, from, to string) error {
 
 	// Open the source database
 	srcDB, err := openDB(dbLog, from)
-	switch {
-	case errors.Is(err, ErrInvalidSchema):
-		dbLog.Error("source database has an invalid schema version - aborting merge")
-		return err
-	case err != nil:
-		return err
+	if err != nil {
+		return fmt.Errorf("open source database: %w", err)
 	}
 	if err := srcDB.Close(); err != nil {
 		return fmt.Errorf("close source database: %w", err)
