@@ -435,7 +435,7 @@ func (f *Fetch) meteredRequest(
 	start := time.Now()
 	resp, err := f.servers[protocol].Request(ctx, peer, req)
 	if err != nil {
-		f.peers.OnFailure(peer)
+		f.peers.OnLatencyFailed(peer, len(resp), time.Since(start))
 	} else {
 		f.peers.OnLatency(peer, len(resp), time.Since(start))
 	}

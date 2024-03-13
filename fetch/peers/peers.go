@@ -22,8 +22,6 @@ func (d *data) latency(global float64) float64 {
 	switch {
 	case d.success+d.failures == 0:
 		return 0.9 * global // to prioritize trying out new peer
-	case d.success == 0:
-		return 1.1 * global
 	default:
 		return d.averageLatency + d.failRate*global
 	}
@@ -85,10 +83,36 @@ func (p *Peers) OnFailure(id peer.ID) {
 }
 
 // OnLatency updates average peer and global latency.
-func (p *Peers) OnLatency(id peer.ID, size int, latency time.Duration) {
-	if size == 0 {
+func (p *Peers) OnLatencyFailed(id peer.ID, size int, latency time.Duration) {
+	// We assume that latency is proportional to the size of the message
+	// and define it as a duration to transmit 1kiB.
+	// To account for the additional overhead of transmitting small messages,
+	// we treat them as if they were 1kiB.
+	latency = latency / time.Duration(max(size/1024, 1))
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	peer, exist := p.peers[id]
+	if !exist {
 		return
 	}
+	peer.failures++
+	peer.failRate = float64(peer.failures) / float64(peer.success+peer.failures)
+	if peer.averageLatency != 0 {
+		delta := (float64(latency) - float64(peer.averageLatency)) / 10 // 86% of the value is the last 19
+		peer.averageLatency += delta
+	} else {
+		peer.averageLatency = float64(latency)
+	}
+	if p.globalLatency != 0 {
+		delta := (float64(latency) - float64(p.globalLatency)) / 25 // 86% of the value is the last 49
+		p.globalLatency += delta
+	} else {
+		p.globalLatency = float64(latency)
+	}
+}
+
+// OnLatency updates average peer and global latency.
+func (p *Peers) OnLatency(id peer.ID, size int, latency time.Duration) {
 	// We assume that latency is proportional to the size of the message
 	// and define it as a duration to transmit 1kiB.
 	// To account for the additional overhead of transmitting small messages,
