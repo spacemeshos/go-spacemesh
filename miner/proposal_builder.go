@@ -514,6 +514,7 @@ func (pb *ProposalBuilder) initSignerData(
 		)
 		ss.log.With().Info("proposal eligibilities for an epoch", log.Inline(&ss.session))
 		events.EmitEligibilities(
+			ss.signer.NodeID(),
 			ss.session.epoch,
 			ss.session.beacon,
 			ss.session.atx,
@@ -651,7 +652,7 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 				ss.latency.publish = time.Now()
 				ss.log.With().Info("proposal created", log.Context(ctx), log.Inline(proposal), log.Object("latency", &ss.latency))
 				proposalBuild.Observe(ss.latency.total().Seconds())
-				events.EmitProposal(lid, proposal.ID())
+				events.EmitProposal(ss.signer.NodeID(), lid, proposal.ID())
 				events.ReportProposal(events.ProposalCreated, proposal)
 			}
 			return nil
