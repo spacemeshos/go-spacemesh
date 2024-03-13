@@ -141,13 +141,14 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 		// TBD: also protect ping
 	}
 	if fh.PubSub, err = pubsub.New(fh.ctx, fh.logger, h, pubsub.Config{
-		Flood:          cfg.Flood,
-		IsBootnode:     cfg.Bootnode,
-		Direct:         direct,
-		Bootnodes:      bootnodes,
-		MaxMessageSize: cfg.MaxMessageSize,
-		QueueSize:      cfg.GossipQueueSize,
-		Throttle:       cfg.GossipValidationThrottle,
+		Flood:                 cfg.Flood,
+		IsBootnode:            cfg.Bootnode,
+		Direct:                direct,
+		Bootnodes:             bootnodes,
+		MaxMessageSize:        cfg.MaxMessageSize,
+		QueueSize:             cfg.GossipQueueSize,
+		PeerOutboundQueueSize: cfg.GossipPeerOutboundQueueSize,
+		Throttle:              cfg.GossipValidationThrottle,
 	}); err != nil {
 		return nil, fmt.Errorf("failed to initialize pubsub: %w", err)
 	}

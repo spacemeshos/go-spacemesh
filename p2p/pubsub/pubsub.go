@@ -79,7 +79,7 @@ const (
 
 // DefaultConfig for PubSub.
 func DefaultConfig() Config {
-	return Config{Flood: true, QueueSize: 10000, Throttle: 10000}
+	return Config{Flood: true, PeerOutboundQueueSize: 8192, QueueSize: 10000, Throttle: 10000}
 }
 
 // Config for PubSub.
@@ -88,10 +88,11 @@ type Config struct {
 	IsBootnode bool
 	Bootnodes  []peer.AddrInfo
 	// Direct peers should be configured on both ends.
-	Direct         []peer.AddrInfo
-	MaxMessageSize int
-	QueueSize      int
-	Throttle       int
+	Direct                []peer.AddrInfo
+	MaxMessageSize        int
+	PeerOutboundQueueSize int
+	QueueSize             int
+	Throttle              int
 }
 
 // New creates PubSub instance.
