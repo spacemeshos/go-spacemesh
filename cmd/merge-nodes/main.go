@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 
@@ -14,6 +13,14 @@ import (
 var version string
 
 func main() {
+	cfg := zap.NewProductionConfig()
+	cfg.Encoding = "console"
+	dbLog, err := cfg.Build()
+	if err != nil {
+		log.Fatalln("create logger:", err)
+	}
+	defer dbLog.Sync()
+
 	app := &cli.App{
 		Name: "Spacemesh Node Merger",
 		Usage: "Merge identities of two Spacemesh nodes into one.\n" +
@@ -38,18 +45,13 @@ func main() {
 			},
 		},
 		Action: func(ctx *cli.Context) error {
-			cfg := zap.NewProductionConfig()
-			cfg.Encoding = "console"
-			dbLog, err := cfg.Build()
-			if err != nil {
-				return fmt.Errorf("create logger: %w", err)
-			}
-			defer dbLog.Sync()
 			return internal.MergeDBs(ctx.Context, dbLog, ctx.String("from"), ctx.String("to"))
 		},
 	}
 
 	if err := app.Run(os.Args); err != nil {
-		log.Fatalf("app run: %v\n", err)
+		dbLog.Fatal("app run:",
+			zap.Error(err),
+		)
 	}
 }
