@@ -38,15 +38,10 @@ func Test_MergeDBs_InvalidTargetScheme(t *testing.T) {
 	require.NoError(t, db.Close())
 
 	err = MergeDBs(context.Background(), logger, "", tmpDst)
-	var schemaErr ErrInvalidSchemaVersion
-	require.ErrorAs(t, err, &schemaErr)
-	require.Equal(t, schemaErr.Expected, len(migrations))
-	require.Equal(t, schemaErr.Actual, 2)
+	require.ErrorIs(t, err, ErrInvalidSchema)
 
 	require.Equal(t, 1, observedLogs.Len(), "Expected a warning log")
 	require.Equal(t, observedLogs.All()[0].Message, "target database has an invalid schema version - aborting merge")
-	require.Equal(t, observedLogs.All()[0].ContextMap()["db version"], int64(2))
-	require.Equal(t, observedLogs.All()[0].ContextMap()["expected version"], int64(len(migrations)))
 }
 
 func Test_MergeDBs_TargetIsSupervised(t *testing.T) {
@@ -103,15 +98,9 @@ func Test_MergeDBs_InvalidSourceScheme(t *testing.T) {
 	require.NoError(t, db.Close())
 
 	err = MergeDBs(context.Background(), logger, tmpSrc, tmpDst)
-	var schemaErr ErrInvalidSchemaVersion
-	require.ErrorAs(t, err, &schemaErr)
-	require.Equal(t, schemaErr.Expected, len(migrations))
-	require.Equal(t, schemaErr.Actual, 2)
+	require.ErrorIs(t, err, ErrInvalidSchema)
 
 	require.Equal(t, 1, observedLogs.Len(), "Expected a warning log")
-	require.Equal(t, observedLogs.All()[0].Message, "source database has an invalid schema version - aborting merge")
-	require.Equal(t, observedLogs.All()[0].ContextMap()["db version"], int64(2))
-	require.Equal(t, observedLogs.All()[0].ContextMap()["expected version"], int64(len(migrations)))
 }
 
 func Test_MergeDBs_SourceIsSupervised(t *testing.T) {

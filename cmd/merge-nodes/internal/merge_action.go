@@ -29,13 +29,9 @@ func MergeDBs(ctx context.Context, dbLog *zap.Logger, from, to string) error {
 	var dstDB *localsql.Database
 	var err error
 	dstDB, err = openDB(dbLog, to)
-	var schemaErr ErrInvalidSchemaVersion
 	switch {
-	case errors.As(err, &schemaErr):
-		dbLog.Error("target database has an invalid schema version - aborting merge",
-			zap.Int("db version", schemaErr.Actual),
-			zap.Int("expected version", schemaErr.Expected),
-		)
+	case errors.Is(err, ErrInvalidSchema):
+		dbLog.Error("target database has an invalid schema version - aborting merge")
 		return err
 	case errors.Is(err, fs.ErrNotExist):
 		// target database does not exist, create it
@@ -69,11 +65,8 @@ func MergeDBs(ctx context.Context, dbLog *zap.Logger, from, to string) error {
 	// Open the source database
 	srcDB, err := openDB(dbLog, from)
 	switch {
-	case errors.As(err, &schemaErr):
-		dbLog.Error("source database has an invalid schema version - aborting merge",
-			zap.Int("db version", schemaErr.Actual),
-			zap.Int("expected version", schemaErr.Expected),
-		)
+	case errors.Is(err, ErrInvalidSchema):
+		dbLog.Error("source database has an invalid schema version - aborting merge")
 		return err
 	case err != nil:
 		return err
@@ -196,10 +189,7 @@ func openDB(dbLog *zap.Logger, path string) (*localsql.Database, error) {
 	}
 	if version != len(migrations) {
 		db.Close()
-		return nil, ErrInvalidSchemaVersion{
-			Expected: len(migrations),
-			Actual:   version,
-		}
+		return nil, ErrInvalidSchema
 	}
 	return db, nil
 }
