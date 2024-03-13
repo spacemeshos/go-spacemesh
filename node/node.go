@@ -1761,11 +1761,15 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 			app.Config.DatabaseSizeMeteringInterval,
 		)
 	}
+	applied, err := layers.GetLastApplied(app.db)
+	if err != nil {
+		return err
+	}
 	app.log.Info("starting cache warmup")
 	start := time.Now()
 	data, err := atxsdata.Warm(
 		app.db,
-		atxsdata.WithCapacityFromLayers(app.Config.Tortoise.WindowSize, app.Config.LayersPerEpoch),
+		app.Config.Tortoise.WindowSizeEpochs(applied),
 	)
 	if err != nil {
 		return err

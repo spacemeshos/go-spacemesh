@@ -119,6 +119,7 @@ func MainnetConfig() Config {
 			Hdist:                    10,
 			Zdist:                    2,
 			WindowSize:               4032,
+			Mainnet:                  true,
 			MaxExceptions:            1000,
 			BadBeaconVoteDelayLayers: 4032,
 			MinimalActiveSetWeight: []types.EpochMinimalActiveWeight{

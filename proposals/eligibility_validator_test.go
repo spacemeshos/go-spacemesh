@@ -558,7 +558,7 @@ func TestEligibilityValidator(t *testing.T) {
 			lg := logtest.New(t)
 			const capacity = 2
 			c := atxsdata.New(atxsdata.WithCapacity(capacity))
-			c.OnEpoch(tc.evicted + capacity)
+			c.EvictEpoch(tc.evicted + capacity)
 			tv := NewEligibilityValidator(
 				layerAvgSize,
 				layersPerEpoch,
