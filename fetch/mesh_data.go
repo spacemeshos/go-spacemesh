@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -254,7 +255,6 @@ func (f *Fetch) PeerEpochInfo(ctx context.Context, peer p2p.Peer, epoch types.Ep
 	if err := codec.Decode(data, &ed); err != nil {
 		return nil, fmt.Errorf("decoding epoch data: %w", err)
 	}
-	f.RegisterPeerHashes(peer, types.ATXIDsToHashes(ed.AtxIDs))
 	return &ed, nil
 }
 
@@ -327,6 +327,15 @@ type BatchError struct {
 
 func (b *BatchError) Empty() bool {
 	return len(b.Errors) == 0
+}
+
+func (b *BatchError) AllRejected() bool {
+	for _, err := range b.Errors {
+		if !errors.Is(err, pubsub.ErrValidationReject) {
+			return false
+		}
+	}
+	return true
 }
 
 func (b *BatchError) Add(id types.Hash32, err error) {

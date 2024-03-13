@@ -153,7 +153,6 @@ func (d *DataFetch) PollLayerData(ctx context.Context, lid types.LayerID, peers 
 				return nil
 			}
 			logger.With().Debug("received layer data from peer", log.Stringer("peer", peer))
-			registerLayerHashes(d.fetcher, peer, &ld)
 			layerData <- ld
 			return nil
 		})

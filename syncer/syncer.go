@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -401,7 +402,14 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		// always sync to currentLayer-1 to reduce race with gossip and hare/tortoise
 		for layerID := s.getLastSyncedLayer().Add(1); layerID.Before(s.ticker.CurrentLayer()); layerID = layerID.Add(1) {
 			if err := s.syncLayer(ctx, layerID); err != nil {
-				if !errors.Is(err, context.Canceled) {
+				berr := &fetch.BatchError{}
+				if errors.As(err, &berr) {
+					if berr.AllRejected() {
+						s.logger.With().
+							Info("remaining objects are rejected in the layer", log.Context(ctx), log.Err(err), layerID)
+						return true
+					}
+				} else if !errors.Is(err, context.Canceled) {
 					// BatchError spams too much, in case of no progress enable debug mode for sync
 					s.logger.With().
 						Debug("failed to sync layer", log.Context(ctx), log.Err(err), layerID)
