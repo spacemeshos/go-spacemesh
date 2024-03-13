@@ -58,6 +58,10 @@ jobs:
         run: |
           make install
           make build VERSION=${{ github.ref_name }}
+      - name: Build node-merge
+        shell: bash
+        run: |
+          make node-merge VERSION=${{ github.ref_name }}
 
       - name: Create release archive
         shell: bash
