@@ -32,6 +32,8 @@ import (
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
@@ -1545,6 +1547,14 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			logger.Zap(),
 			app.Config.API,
 			maps.Values(publicSvcs),
+			// public server needs restriction on max connection age to prevent attacks
+			grpc.KeepaliveParams(keepalive.ServerParameters{
+				MaxConnectionIdle:     2 * time.Hour,
+				MaxConnectionAge:      3 * time.Hour,
+				MaxConnectionAgeGrace: 10 * time.Minute,
+				Time:                  time.Minute,
+				Timeout:               10 * time.Second,
+			}),
 		)
 		if err != nil {
 			return err

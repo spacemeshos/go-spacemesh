@@ -60,7 +60,13 @@ func streamingGrpcLogStart(
 
 // NewWithServices creates a new Server listening on the provided address with the given logger and config.
 // Services passed in the svc slice are registered with the server.
-func NewWithServices(listener string, logger *zap.Logger, config Config, svc []ServiceAPI) (*Server, error) {
+func NewWithServices(
+	listener string,
+	logger *zap.Logger,
+	config Config,
+	svc []ServiceAPI,
+	grpcOpts ...grpc.ServerOption,
+) (*Server, error) {
 	if len(svc) == 0 {
 		return nil, errors.New("no services to register")
 	}
@@ -75,7 +81,7 @@ func NewWithServices(listener string, logger *zap.Logger, config Config, svc []S
 		logger.Warn("unsecured grpc server is listening on a public IP address", zap.String("address", listener))
 	}
 
-	server := New(listener, logger, config)
+	server := New(listener, logger, config, grpcOpts...)
 	for _, s := range svc {
 		s.RegisterService(server.GrpcServer)
 	}
@@ -132,14 +138,11 @@ func New(listener string, logger *zap.Logger, config Config, grpcOpts ...grpc.Se
 		),
 		grpc.MaxSendMsgSize(config.GrpcSendMsgSize),
 		grpc.MaxRecvMsgSize(config.GrpcRecvMsgSize),
-	}
-
-	opts = append(opts,
 		grpc.KeepaliveParams(keepalive.ServerParameters{
 			Time:    time.Minute,
 			Timeout: 10 * time.Second,
 		}),
-	)
+	}
 
 	opts = append(opts, grpcOpts...)
 	return &Server{
