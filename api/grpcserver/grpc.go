@@ -134,16 +134,10 @@ func New(listener string, logger *zap.Logger, config Config, grpcOpts ...grpc.Se
 		grpc.MaxRecvMsgSize(config.GrpcRecvMsgSize),
 	}
 
-	// this is done to prevent routers from cleaning up our connections (e.g aws load balances..)
-	// TODO: these parameters work for now but we might need to revisit or add them as configuration
-	// TODO: Configure maxconns, maxconcurrentcons ..
 	opts = append(opts,
 		grpc.KeepaliveParams(keepalive.ServerParameters{
-			MaxConnectionIdle:     time.Minute * 120,
-			MaxConnectionAge:      time.Minute * 180,
-			MaxConnectionAgeGrace: time.Minute * 10,
-			Time:                  time.Minute,
-			Timeout:               time.Minute * 3,
+			Time:    time.Minute,
+			Timeout: 10 * time.Second,
 		}),
 	)
 
