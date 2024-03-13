@@ -49,7 +49,7 @@ func TestRelay(t *testing.T) {
 		require.Error(t, err)
 		t.Fatalf("stopped with error: %v", err)
 	case <-time.After(30 * time.Second):
-		t.Fatalf("timed out waiting for addresses")
+		require.FailNow(t, "timed out waiting for addresses")
 	}
 
 	p2pCfg := p2p.DefaultConfig()
