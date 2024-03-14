@@ -225,27 +225,29 @@ func (f *Fetch) GetPoetProof(ctx context.Context, id types.Hash32) error {
 	}
 }
 
-func (f *Fetch) GetMaliciousIDs(ctx context.Context, peer p2p.Peer) ([]byte, error) {
+func (f *Fetch) GetMaliciousIDs(ctx context.Context, peer p2p.Peer) ([]types.NodeID, error) {
+	var malIDs MaliciousIDs
 	if f.cfg.Streaming {
-		var b []byte
 		if err := f.meteredStreamRequest(
 			ctx, malProtocol, peer, []byte{},
 			func(ctx context.Context, s io.ReadWriter) (int, error) {
 				return server.ReadResponse(s, func(respLen uint32) (n int, err error) {
-					b = make([]byte, respLen)
-					if _, err := io.ReadFull(s, b); err != nil {
-						return 0, err
-					}
-					return int(respLen), nil
+					return codec.DecodeFrom(s, &malIDs)
 				})
 			},
 		); err != nil {
 			return nil, err
 		}
-		return b, nil
 	} else {
-		return f.meteredRequest(ctx, malProtocol, peer, []byte{})
+		data, err := f.meteredRequest(ctx, malProtocol, peer, []byte{})
+		if err != nil {
+			return nil, err
+		}
+		if err := codec.Decode(data, &malIDs); err != nil {
+			return nil, err
+		}
 	}
+	return malIDs.NodeIDs, nil
 }
 
 // GetLayerData get layer data from peers.

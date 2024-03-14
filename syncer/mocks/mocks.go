@@ -477,10 +477,10 @@ func (c *MockfetchLogicGetMalfeasanceProofsCall) DoAndReturn(f func(context.Cont
 }
 
 // GetMaliciousIDs mocks base method.
-func (m *MockfetchLogic) GetMaliciousIDs(arg0 context.Context, arg1 p2p.Peer) ([]byte, error) {
+func (m *MockfetchLogic) GetMaliciousIDs(arg0 context.Context, arg1 p2p.Peer) ([]types.NodeID, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetMaliciousIDs", arg0, arg1)
-	ret0, _ := ret[0].([]byte)
+	ret0, _ := ret[0].([]types.NodeID)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -498,19 +498,19 @@ type MockfetchLogicGetMaliciousIDsCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockfetchLogicGetMaliciousIDsCall) Return(arg0 []byte, arg1 error) *MockfetchLogicGetMaliciousIDsCall {
+func (c *MockfetchLogicGetMaliciousIDsCall) Return(arg0 []types.NodeID, arg1 error) *MockfetchLogicGetMaliciousIDsCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockfetchLogicGetMaliciousIDsCall) Do(f func(context.Context, p2p.Peer) ([]byte, error)) *MockfetchLogicGetMaliciousIDsCall {
+func (c *MockfetchLogicGetMaliciousIDsCall) Do(f func(context.Context, p2p.Peer) ([]types.NodeID, error)) *MockfetchLogicGetMaliciousIDsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockfetchLogicGetMaliciousIDsCall) DoAndReturn(f func(context.Context, p2p.Peer) ([]byte, error)) *MockfetchLogicGetMaliciousIDsCall {
+func (c *MockfetchLogicGetMaliciousIDsCall) DoAndReturn(f func(context.Context, p2p.Peer) ([]types.NodeID, error)) *MockfetchLogicGetMaliciousIDsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -1147,10 +1147,10 @@ func (c *MockfetcherGetMalfeasanceProofsCall) DoAndReturn(f func(context.Context
 }
 
 // GetMaliciousIDs mocks base method.
-func (m *Mockfetcher) GetMaliciousIDs(arg0 context.Context, arg1 p2p.Peer) ([]byte, error) {
+func (m *Mockfetcher) GetMaliciousIDs(arg0 context.Context, arg1 p2p.Peer) ([]types.NodeID, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetMaliciousIDs", arg0, arg1)
-	ret0, _ := ret[0].([]byte)
+	ret0, _ := ret[0].([]types.NodeID)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -1168,19 +1168,19 @@ type MockfetcherGetMaliciousIDsCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockfetcherGetMaliciousIDsCall) Return(arg0 []byte, arg1 error) *MockfetcherGetMaliciousIDsCall {
+func (c *MockfetcherGetMaliciousIDsCall) Return(arg0 []types.NodeID, arg1 error) *MockfetcherGetMaliciousIDsCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockfetcherGetMaliciousIDsCall) Do(f func(context.Context, p2p.Peer) ([]byte, error)) *MockfetcherGetMaliciousIDsCall {
+func (c *MockfetcherGetMaliciousIDsCall) Do(f func(context.Context, p2p.Peer) ([]types.NodeID, error)) *MockfetcherGetMaliciousIDsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockfetcherGetMaliciousIDsCall) DoAndReturn(f func(context.Context, p2p.Peer) ([]byte, error)) *MockfetcherGetMaliciousIDsCall {
+func (c *MockfetcherGetMaliciousIDsCall) DoAndReturn(f func(context.Context, p2p.Peer) ([]types.NodeID, error)) *MockfetcherGetMaliciousIDsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

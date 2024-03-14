@@ -66,22 +66,16 @@ func (d *DataFetch) PollMaliciousProofs(ctx context.Context) error {
 	peers := d.fetcher.SelectBestShuffled(fetch.RedundantPeers)
 	logger := d.logger.WithContext(ctx)
 
-	maliciousIDs := make(chan fetch.MaliciousIDs, len(peers))
+	maliciousIDs := make(chan []types.NodeID, len(peers))
 	var eg errgroup.Group
 	fetchErr := threadSafeErr{}
 	for _, peer := range peers {
 		peer := peer
 		eg.Go(func() error {
-			data, err := d.fetcher.GetMaliciousIDs(ctx, peer)
+			malIDs, err := d.fetcher.GetMaliciousIDs(ctx, peer)
 			if err != nil {
 				malPeerError.Inc()
 				logger.With().Debug("failed to get malicious IDs", log.Err(err), log.Stringer("peer", peer))
-				fetchErr.join(err)
-				return nil
-			}
-			var malIDs fetch.MaliciousIDs
-			if err := codec.Decode(data, &malIDs); err != nil {
-				logger.With().Debug("failed to decode", log.Err(err))
 				fetchErr.join(err)
 				return nil
 			}
@@ -97,7 +91,7 @@ func (d *DataFetch) PollMaliciousProofs(ctx context.Context) error {
 	success := false
 	for ids := range maliciousIDs {
 		success = true
-		for _, id := range ids.NodeIDs {
+		for _, id := range ids {
 			allIds[id] = struct{}{}
 		}
 	}

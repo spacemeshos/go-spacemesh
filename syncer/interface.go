@@ -42,7 +42,7 @@ type atxSyncer interface {
 
 // fetcher is the interface to the low-level fetching.
 type fetcher interface {
-	GetMaliciousIDs(context.Context, p2p.Peer) ([]byte, error)
+	GetMaliciousIDs(context.Context, p2p.Peer) ([]types.NodeID, error)
 	GetLayerData(context.Context, p2p.Peer, types.LayerID) ([]byte, error)
 	GetLayerOpinions(context.Context, p2p.Peer, types.LayerID) ([]byte, error)
 	GetCert(context.Context, types.LayerID, types.BlockID, []p2p.Peer) (*types.Certificate, error)
