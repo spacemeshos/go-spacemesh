@@ -51,7 +51,7 @@ func DefaultConfig() Config {
 
 func (c *Config) WindowSizeLayers(applied types.LayerID) types.LayerID {
 	if c.Mainnet && applied < types.LayerID(30_000) {
-		return 8064
+		return 10_000
 	}
 	return 4032
 }
