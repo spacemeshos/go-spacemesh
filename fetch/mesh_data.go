@@ -330,17 +330,24 @@ func (b *BatchError) Empty() bool {
 }
 
 func (b *BatchError) AllRejected() bool {
-	for _, err := range b.Errors {
-		nested := &BatchError{}
-		if errors.As(err, &nested) && nested.AllRejected() {
-			continue
+	for hash := range b.Errors {
+		if !b.IsRejected(hash) {
+			return false
 		}
-		if errors.Is(err, pubsub.ErrValidationReject) {
-			continue
-		}
-		return false
 	}
 	return true
+}
+
+func (b *BatchError) IsRejected(hash types.Hash32) bool {
+	err := b.Errors[hash]
+	if err == nil {
+		return false
+	}
+	nested := &BatchError{}
+	if errors.As(err, &nested) && nested.AllRejected() {
+		return true
+	}
+	return errors.Is(err, pubsub.ErrValidationReject)
 }
 
 func (b *BatchError) Add(id types.Hash32, err error) {
