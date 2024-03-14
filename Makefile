@@ -30,7 +30,7 @@ LDFLAGS = -ldflags "$(C_LDFLAGS)"
 
 include Makefile-libs.Inc
 
-UNIT_TESTS ?= $(shell go list ./...  | grep -v systest/tests | grep -v cmd/node | grep -v cmd/gen-p2p-identity | grep -v cmd/trace | grep -v genvm/cmd)
+UNIT_TESTS ?= $(shell go list ./...  | grep -v systest/tests | grep -v genvm/cmd)
 
 export CGO_ENABLED := 1
 export CGO_CFLAGS := $(CGO_CFLAGS) -DSQLITE_ENABLE_DBSTAT_VTAB=1

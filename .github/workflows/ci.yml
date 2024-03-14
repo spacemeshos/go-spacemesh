@@ -97,6 +97,40 @@ jobs:
       - name: lint
         run: make lint-github-action
 
+  build-tools:
+    runs-on: ${{ matrix.os }}
+    needs: filter-changes
+    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
+    strategy:
+      fail-fast: true
+      matrix:
+        os:
+          - ubuntu-latest
+          - [self-hosted, linux, arm64]
+          # - macos-12-large
+          - [go-spacemesh, m2-pro]
+          - windows-latest
+    steps:
+      - name: disable Windows Defender - Windows
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: |
+          Set-MpPreference -DisableRealtimeMonitoring $true
+      - name: checkout
+        uses: actions/checkout@v4
+      - name: set up go
+        uses: actions/setup-go@v5
+        with:
+          check-latest: true
+          go-version: ${{ env.go-version }}
+      - name: setup env
+        run: make install
+      - name: build merge-nodes
+        run: make merge-nodes
+      - name: build gen-p2p-identity
+        run: make gen-p2p-identity
+      - name: build bootstrapper
+        run: make bootstrapper
+
   build:
     runs-on: ${{ matrix.os }}
     needs: filter-changes
