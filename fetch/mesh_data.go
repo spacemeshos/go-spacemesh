@@ -331,9 +331,14 @@ func (b *BatchError) Empty() bool {
 
 func (b *BatchError) AllRejected() bool {
 	for _, err := range b.Errors {
-		if !errors.Is(err, pubsub.ErrValidationReject) {
-			return false
+		nested := &BatchError{}
+		if errors.As(err, &nested) && nested.AllRejected() {
+			continue
 		}
+		if errors.Is(err, pubsub.ErrValidationReject) {
+			continue
+		}
+		return false
 	}
 	return true
 }
