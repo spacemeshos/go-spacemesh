@@ -144,6 +144,7 @@ type Config struct {
 	IP4Blocklist                []string         `mapstructure:"ip4-blocklist"`
 	IP6Blocklist                []string         `mapstructure:"ip6-blocklist"`
 	GossipQueueSize             int              `mapstructure:"gossip-queue-size"`
+	GossipPeerOutboundQueueSize int              `mapstructure:"gossip-peer-outbound-queue-size"`
 	GossipValidationThrottle    int              `mapstructure:"gossip-validation-throttle"`
 	GossipAtxValidationThrottle int              `mapstructure:"gossip-atx-validation-throttle"`
 	PingPeers                   []string         `mapstructure:"ping-peers"`
