@@ -407,9 +407,10 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 					if berr.AllRejected() {
 						s.logger.With().
 							Info("remaining objects are rejected in the layer", log.Context(ctx), log.Err(err), layerID)
-						return true
+						continue
 					}
-				} else if !errors.Is(err, context.Canceled) {
+				}
+				if !errors.Is(err, context.Canceled) {
 					// BatchError spams too much, in case of no progress enable debug mode for sync
 					s.logger.With().
 						Debug("failed to sync layer", log.Context(ctx), log.Err(err), layerID)
