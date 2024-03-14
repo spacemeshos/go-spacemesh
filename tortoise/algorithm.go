@@ -50,10 +50,10 @@ func DefaultConfig() Config {
 }
 
 func (c *Config) WindowSizeLayers(applied types.LayerID) types.LayerID {
-	if !c.Mainnet || applied > types.LayerID(30_000) || applied < types.LayerID(20_000) {
-		return types.LayerID(c.WindowSize)
+	if c.Mainnet && applied < types.LayerID(30_000) {
+		return 8064
 	}
-	return 8064
+	return 4032
 }
 
 func (c *Config) WindowSizeEpochs(applied types.LayerID) types.EpochID {
