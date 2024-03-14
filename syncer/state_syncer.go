@@ -119,7 +119,7 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 			err1 := s.mesh.ProcessLayer(ctx, lid)
 			if err1 != nil {
 				missing := &mesh.ErrMissingBlocks{}
-				if !errors.As(err1, &missing) {
+				if errors.As(err1, &missing) {
 					// we try once as we cannot assume that all blocks that reported as missing are valid
 					// we need to continue download layers, as they may be deemed as invalid after counting more votes
 					if err := s.dataFetcher.GetBlocks(ctx, missing.Blocks); err == nil {
