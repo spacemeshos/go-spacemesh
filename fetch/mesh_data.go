@@ -347,7 +347,7 @@ func (b *BatchError) IsRejected(hash types.Hash32) bool {
 	if errors.As(err, &nested) && nested.AllRejected() {
 		return true
 	}
-	return errors.Is(err, pubsub.ErrValidationReject)
+	return errors.Is(err, pubsub.ErrValidationReject) || errors.Is(err, ErrIgnore)
 }
 
 func (b *BatchError) Add(id types.Hash32, err error) {
@@ -367,3 +367,5 @@ func (b *BatchError) Error() string {
 	}
 	return builder.String()
 }
+
+var ErrIgnore = errors.New("fetch: value is ignored")

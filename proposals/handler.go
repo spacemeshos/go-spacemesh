@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -485,7 +486,12 @@ func (h *Handler) checkBallotSyntacticValidity(
 	// and added to the tortoise.
 	decoded, err := h.tortoise.DecodeBallot(b.ToTortoiseData())
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode ballot id %s err %w", b.ID().AsHash32().ShortString(), err)
+		return nil, fmt.Errorf(
+			"%w: failed to decode ballot id %s err: %v",
+			fetch.ErrIgnore,
+			b.ID().AsHash32().ShortString(),
+			err,
+		)
 	}
 	ballotDuration.WithLabelValues(decode).Observe(float64(time.Since(t2)))
 
