@@ -70,7 +70,7 @@ get-libs: get-postrs-lib get-postrs-service
 
 get-profiler: get-postrs-profiler
 
-merge-nodes:
+merge-nodes: get-libs
 	cd cmd/merge-nodes ; go build -o $(BIN_DIR)$@$(EXE) -ldflags "-X main.version=${VERSION}" .
 .PHONY: merge-nodes
 
