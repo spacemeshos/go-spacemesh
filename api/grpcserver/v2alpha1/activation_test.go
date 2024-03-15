@@ -3,7 +3,6 @@ package v2alpha1
 import (
 	"context"
 	"errors"
-	"golang.org/x/exp/rand"
 	"io"
 	"testing"
 	"time"
@@ -222,9 +221,7 @@ func TestActivationService_ActivationsCount(t *testing.T) {
 		epoch3ATXs[i] = *atx
 	}
 
-	ts := time.Now().UnixNano()
-	r := rand.New(rand.NewSource(uint64(ts))).Int63n(1000)
-	genEpoch5 := fixture.NewAtxsGenerator().WithSeed(ts+r).
+	genEpoch5 := fixture.NewAtxsGenerator().WithSeed(time.Now().UnixNano()+1).
 		WithEpochs(5, 1)
 	epoch5ATXs := make([]types.VerifiedActivationTx, 10) // ensure the number here is different from above
 	for i := range epoch5ATXs {
