@@ -15,6 +15,9 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 * [#5707](https://github.com/spacemeshos/go-spacemesh/pull/5707) Fix a race on closing a channel when the node is
   shutting down.
 
+* [#5710](https://github.com/spacemeshos/go-spacemesh/pull/5710) Node now checks the database version and will refuse to
+  start if it is newer than expected.
+
 ## Release v1.4.0
 
 ### Upgrade information
