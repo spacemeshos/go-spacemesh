@@ -2,6 +2,19 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## UNRELEASED
+
+### Upgrade information
+
+### Highlights
+
+### Features
+
+### Improvements
+
+* [#5707](https://github.com/spacemeshos/go-spacemesh/pull/5707) Fix a race on closing a channel when the node is
+  shutting down.
+
 ## Release v1.4.0
 
 ### Upgrade information
@@ -228,9 +241,10 @@ and permanent ineligibility for rewards.
 
 ### Features
 
-* [#5678](https://github.com/spacemeshos/go-spacemesh/pull/5678) API to for changing log level without restarting a node. Examples: 
-  > grpcurl -plaintext -d '{"module": "sync", "level": "debug"}' 127.0.0.1:9093 spacemesh.v1.DebugService.ChangeLogLevel
+* [#5678](https://github.com/spacemeshos/go-spacemesh/pull/5678) API to for changing log level without restarting a
+  node. Examples:
 
+  > grpcurl -plaintext -d '{"module": "sync", "level": "debug"}' 127.0.0.1:9093 spacemesh.v1.DebugService.ChangeLogLevel
   > grpcurl -plaintext -d '{"module": "*", "level": "debug"}' 127.0.0.1:9093 spacemesh.v1.DebugService.ChangeLogLevel
 
   "*" will replace log level for all known modules, expect that some of them will spam too much.
