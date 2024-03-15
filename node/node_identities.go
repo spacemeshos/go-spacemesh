@@ -79,6 +79,17 @@ func (app *App) MigrateExistingIdentity() error {
 		return fmt.Errorf("stat %s: %w", newKey, err)
 	}
 
+	_, err = os.Stat(oldKey + ".bak")
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		// no backup, migrate old to new
+	case err == nil:
+		// backup already exists - something is wrong
+		return fmt.Errorf("%w: backup %s already exists", fs.ErrExist, oldKey+".bak")
+	case err != nil:
+		return fmt.Errorf("stat %s: %w", oldKey+".bak", err)
+	}
+
 	dst, err := os.Create(newKey)
 	if err != nil {
 		return fmt.Errorf("failed to create new identity file: %w", err)

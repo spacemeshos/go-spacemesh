@@ -265,7 +265,7 @@ func Test_MigrateExistingIdentity(t *testing.T) {
 
 		err = app.MigrateExistingIdentity()
 		require.ErrorIs(t, err, fs.ErrExist)
-		require.ErrorContains(t, err, "file already exists")
+		require.ErrorContains(t, err, fmt.Sprintf("both %s and %s exist", newKey, oldKey))
 		require.FileExists(t, newKey)
 		require.FileExists(t, oldKey)
 
@@ -276,5 +276,39 @@ func Test_MigrateExistingIdentity(t *testing.T) {
 		oldKeyBin, err := os.ReadFile(oldKey)
 		require.NoError(t, err)
 		require.Equal(t, []byte(sigOld.PrivateKey()), oldKeyBin)
+	})
+
+	t.Run("migrate with an already existing backup", func(t *testing.T) {
+		app := New(WithLog(logtest.New(t)))
+		app.Config.DataDirParent = t.TempDir()
+		app.Config.SMESHING.Opts.DataDir = t.TempDir()
+
+		sigOld, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		oldKey := filepath.Join(app.Config.SMESHING.Opts.DataDir, legacyKeyFileName)
+		err = os.WriteFile(oldKey, sigOld.PrivateKey(), 0o600)
+		require.NoError(t, err)
+
+		sigBackup, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		backupKey := filepath.Join(app.Config.SMESHING.Opts.DataDir, legacyKeyFileName+".bak")
+		err = os.WriteFile(backupKey, sigBackup.PrivateKey(), 0o600)
+		require.NoError(t, err)
+
+		err = app.MigrateExistingIdentity()
+		require.ErrorIs(t, err, fs.ErrExist)
+		require.ErrorContains(t, err, fmt.Sprintf("backup %s already exists", backupKey))
+		require.FileExists(t, filepath.Join(app.Config.SMESHING.Opts.DataDir, legacyKeyFileName))
+		require.FileExists(t, filepath.Join(app.Config.SMESHING.Opts.DataDir, legacyKeyFileName+".bak"))
+
+		oldKeyBin, err := os.ReadFile(oldKey)
+		require.NoError(t, err)
+		require.Equal(t, []byte(sigOld.PrivateKey()), oldKeyBin)
+
+		backupKeyBin, err := os.ReadFile(backupKey)
+		require.NoError(t, err)
+		require.Equal(t, []byte(sigBackup.PrivateKey()), backupKeyBin)
 	})
 }
