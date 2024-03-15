@@ -505,7 +505,7 @@ func TestBeacon_NoRaceOnClose(t *testing.T) {
 		beacons:          make(map[types.EpochID]types.Beacon),
 		cdb:              datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
 		clock:            mclock,
-		cancel:           func() {},
+		closed:           make(chan struct{}),
 		results:          make(chan result.Beacon, 100),
 		metricsCollector: metrics.NewBeaconMetricsCollector(nil, logtest.New(t).WithName("metrics")),
 	}

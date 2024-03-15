@@ -63,13 +63,6 @@ func WithLogger(logger log.Log) Opt {
 	}
 }
 
-// WithContext defines context for beacon.
-func WithContext(ctx context.Context) Opt {
-	return func(pd *ProtocolDriver) {
-		pd.ctx = ctx
-	}
-}
-
 // WithConfig defines protocol parameters.
 func WithConfig(cfg Config) Opt {
 	return func(pd *ProtocolDriver) {
@@ -93,7 +86,6 @@ func New(
 	opts ...Opt,
 ) *ProtocolDriver {
 	pd := &ProtocolDriver{
-		ctx:            context.Background(),
 		logger:         log.NewNop(),
 		config:         DefaultConfig(),
 		publisher:      publisher,
@@ -107,6 +99,7 @@ func New(
 		ballotsBeacons: make(map[types.EpochID]map[types.Beacon]*beaconWeight),
 		states:         make(map[types.EpochID]*state),
 		results:        make(chan result.Beacon, 100),
+		closed:         make(chan struct{}),
 	}
 	for _, opt := range opts {
 		opt(pd)
@@ -116,7 +109,6 @@ func New(
 		conf:  pd.config,
 	}
 
-	pd.ctx, pd.cancel = context.WithCancel(pd.ctx)
 	pd.theta = new(big.Float).SetRat(&pd.config.Theta)
 
 	if pd.weakCoin == nil {
@@ -167,9 +159,8 @@ type ProtocolDriver struct {
 	inProtocol uint64
 	logger     log.Log
 	eg         errgroup.Group
-	ctx        context.Context
-	cancel     context.CancelFunc
 	startOnce  sync.Once
+	closed     chan struct{}
 
 	config    Config
 	sync      system.SyncStateProvider
@@ -261,21 +252,22 @@ func (pd *ProtocolDriver) UpdateBeacon(epoch types.EpochID, beacon types.Beacon)
 
 // Close closes ProtocolDriver.
 func (pd *ProtocolDriver) Close() {
+	pd.resultsMtx.Lock()
+	defer pd.resultsMtx.Unlock()
+
 	if pd.isClosed() {
 		return
 	}
 
 	pd.logger.Info("closing beacon protocol")
 	pd.metricsCollector.Stop()
-	pd.cancel()
+	close(pd.closed)
 	pd.logger.Info("waiting for beacon goroutines to finish")
 	if err := pd.eg.Wait(); err != nil {
 		pd.logger.With().Info("received error waiting for goroutines to finish", log.Err(err))
 	}
-	pd.resultsMtx.Lock()
 	close(pd.results)
 	pd.results = nil
-	pd.resultsMtx.Unlock()
 	pd.logger.Info("beacon goroutines finished")
 }
 
@@ -305,9 +297,12 @@ func (pd *ProtocolDriver) Results() <-chan result.Beacon {
 
 // isClosed returns true if the beacon protocol is shutting down.
 func (pd *ProtocolDriver) isClosed() bool {
-	pd.resultsMtx.Lock()
-	defer pd.resultsMtx.Unlock()
-	return pd.results == nil
+	select {
+	case <-pd.closed:
+		return true
+	default:
+		return false
+	}
 }
 
 func (pd *ProtocolDriver) OnAtx(atx *types.ActivationTxHeader) {
@@ -706,7 +701,7 @@ func (pd *ProtocolDriver) listenEpochs(ctx context.Context) {
 	layer := currentEpoch.Add(1).FirstLayer()
 	for {
 		select {
-		case <-pd.ctx.Done():
+		case <-pd.closed:
 			return
 		case <-pd.clock.AwaitLayer(layer):
 			current := pd.clock.CurrentLayer()
@@ -845,8 +840,8 @@ func (pd *ProtocolDriver) runProposalPhase(ctx context.Context, epoch types.Epoc
 
 	select {
 	case <-ctx.Done():
-	case <-pd.ctx.Done():
-		return pd.ctx.Err()
+	case <-pd.closed:
+		return errors.New("protocol closed")
 	}
 
 	finished := time.Now()

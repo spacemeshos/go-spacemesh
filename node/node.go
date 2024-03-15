@@ -684,7 +684,6 @@ func (app *App) initServices(ctx context.Context) error {
 		vrfVerifier,
 		app.cachedDB,
 		app.clock,
-		beacon.WithContext(ctx),
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)),
 	)
