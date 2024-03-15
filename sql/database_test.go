@@ -191,5 +191,5 @@ func Test_Migration_FailsIfDatabaseTooNew(t *testing.T) {
 	_, err = Open("file:"+dbFile,
 		WithMigrations([]Migration{migration1, migration2}),
 	)
-	require.Error(t, err)
+	require.ErrorIs(t, err, ErrTooNew)
 }
