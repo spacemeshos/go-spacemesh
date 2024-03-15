@@ -68,6 +68,17 @@ func (app *App) MigrateExistingIdentity() error {
 		return fmt.Errorf("failed to create directory for identity file: %w", err)
 	}
 
+	_, err = os.Stat(newKey)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		// no new key, migrate old to new
+	case err == nil:
+		// both exist, error
+		return fmt.Errorf("%w: both %s and %s exist", fs.ErrExist, newKey, oldKey)
+	case err != nil:
+		return fmt.Errorf("stat %s: %w", newKey, err)
+	}
+
 	dst, err := os.Create(newKey)
 	if err != nil {
 		return fmt.Errorf("failed to create new identity file: %w", err)

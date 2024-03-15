@@ -213,3 +213,68 @@ func TestSpacemeshApp_LoadIdentities(t *testing.T) {
 		require.Len(t, app.signers, 3)
 	})
 }
+
+func Test_MigrateExistingIdentity(t *testing.T) {
+	t.Run("no key - no migration", func(t *testing.T) {
+		app := New(WithLog(logtest.New(t)))
+		app.Config.DataDirParent = t.TempDir()
+		app.Config.SMESHING.Opts.DataDir = t.TempDir()
+		err := app.MigrateExistingIdentity()
+		require.NoError(t, err)
+	})
+
+	t.Run("existing key is migrated", func(t *testing.T) {
+		app := New(WithLog(logtest.New(t)))
+		app.Config.DataDirParent = t.TempDir()
+		app.Config.SMESHING.Opts.DataDir = t.TempDir()
+
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		err = os.WriteFile(filepath.Join(app.Config.SMESHING.Opts.DataDir, legacyKeyFileName), sig.PrivateKey(), 0o600)
+		require.NoError(t, err)
+
+		err = app.MigrateExistingIdentity()
+		require.NoError(t, err)
+
+		require.FileExists(t, filepath.Join(app.Config.DataDirParent, keyDir, supervisedIDKeyFileName))
+		require.NoFileExists(t, filepath.Join(app.Config.SMESHING.Opts.DataDir, legacyKeyFileName))
+		require.FileExists(t, filepath.Join(app.Config.SMESHING.Opts.DataDir, legacyKeyFileName+".bak"))
+	})
+
+	t.Run("migration does not overwrite existing key", func(t *testing.T) {
+		app := New(WithLog(logtest.New(t)))
+		app.Config.DataDirParent = t.TempDir()
+		app.Config.SMESHING.Opts.DataDir = t.TempDir()
+
+		sigOld, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		oldKey := filepath.Join(app.Config.SMESHING.Opts.DataDir, legacyKeyFileName)
+		err = os.WriteFile(oldKey, sigOld.PrivateKey(), 0o600)
+		require.NoError(t, err)
+
+		sigNew, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		newKey := filepath.Join(app.Config.DataDirParent, keyDir, supervisedIDKeyFileName)
+		err = os.MkdirAll(filepath.Dir(newKey), 0o700)
+		require.NoError(t, err)
+		err = os.WriteFile(newKey, sigNew.PrivateKey(), 0o600)
+		require.NoError(t, err)
+
+		err = app.MigrateExistingIdentity()
+		require.ErrorIs(t, err, fs.ErrExist)
+		require.ErrorContains(t, err, "file already exists")
+		require.FileExists(t, newKey)
+		require.FileExists(t, oldKey)
+
+		newKeyBin, err := os.ReadFile(newKey)
+		require.NoError(t, err)
+		require.Equal(t, []byte(sigNew.PrivateKey()), newKeyBin)
+
+		oldKeyBin, err := os.ReadFile(oldKey)
+		require.NoError(t, err)
+		require.Equal(t, []byte(sigOld.PrivateKey()), oldKeyBin)
+	})
+}
