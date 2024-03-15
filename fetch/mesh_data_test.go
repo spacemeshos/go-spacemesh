@@ -473,6 +473,7 @@ func TestFetch_GetMaliciousIDs(t *testing.T) {
 		f := createFetch(t)
 		expectedIds := generateMaliciousIDs(t)
 		resp := codec.MustEncode(&MaliciousIDs{NodeIDs: expectedIds})
+		f.mh.EXPECT().ID().Return("self").AnyTimes()
 		f.mMalS.EXPECT().Request(gomock.Any(), p2p.Peer("p0"), []byte{}).Return(resp, nil)
 		ids, err := f.GetMaliciousIDs(context.Background(), "p0")
 		require.NoError(t, err)

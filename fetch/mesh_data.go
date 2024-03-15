@@ -247,6 +247,7 @@ func (f *Fetch) GetMaliciousIDs(ctx context.Context, peer p2p.Peer) ([]types.Nod
 			return nil, err
 		}
 	}
+	f.RegisterPeerHashes(peer, types.NodeIDsToHashes(malIDs.NodeIDs))
 	return malIDs.NodeIDs, nil
 }
 
