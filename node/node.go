@@ -925,6 +925,7 @@ func (app *App) initServices(ctx context.Context) error {
 			MaxExceptions:          trtlCfg.MaxExceptions,
 			Hdist:                  trtlCfg.Hdist,
 			MinimalActiveSetWeight: trtlCfg.MinimalActiveSetWeight,
+			ValidateBoundaries:     trtlCfg.ValidateBoundaries,
 		}),
 	)
 

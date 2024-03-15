@@ -387,7 +387,11 @@ func (h *Handler) ContextuallyValidateAtx(atx *types.VerifiedActivationTx) error
 
 // cacheAtx caches the atx in the atxsdata cache.
 // Returns true if the atx was cached, false otherwise.
-func (h *Handler) cacheAtx(ctx context.Context, atx *types.ActivationTxHeader) *atxsdata.ATX {
+func (h *Handler) cacheAtx(
+	ctx context.Context,
+	atx *types.ActivationTxHeader,
+	knownLargest *types.ATXID,
+) *atxsdata.ATX {
 	if !h.atxsdata.IsEvicted(atx.TargetEpoch()) {
 		nonce, err := h.cdb.VRFNonce(atx.NodeID, atx.TargetEpoch())
 		if err != nil {
@@ -399,7 +403,7 @@ func (h *Handler) cacheAtx(ctx context.Context, atx *types.ActivationTxHeader) *
 			h.log.With().Error("failed is malicious read", log.Err(err), log.Context(ctx))
 			return nil
 		}
-		return h.atxsdata.AddFromHeader(atx, nonce, malicious)
+		return h.atxsdata.AddFromHeaderWithReplacement(atx, nonce, malicious, knownLargest)
 	}
 	return nil
 }
@@ -410,7 +414,10 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 	if err != nil {
 		return nil, fmt.Errorf("checking if node is malicious: %w", err)
 	}
-	var proof *types.MalfeasanceProof
+	var (
+		proof        *types.MalfeasanceProof
+		largestKnown *types.ATXID
+	)
 	if err := h.cdb.WithTx(ctx, func(tx *sql.Tx) error {
 		if malicious {
 			if err := atxs.Add(tx, atx); err != nil && !errors.Is(err, sql.ErrObjectExists) {
@@ -419,13 +426,15 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 			return nil
 		}
 
-		prev, err := atxs.GetByEpochAndNodeID(tx, atx.PublishEpoch, atx.SmesherID)
+		prev, err := atxs.GetLargestInEpochFromNodeID(tx, atx.PublishEpoch, atx.SmesherID)
 		if err != nil && !errors.Is(err, sql.ErrNotFound) {
 			return err
 		}
 
 		// do ID check to be absolutely sure.
 		if prev != nil && prev.ID() != atx.ID() {
+			id := prev.ID()
+			largestKnown = &id
 			if _, ok := h.signers[atx.SmesherID]; ok {
 				// if we land here we tried to publish 2 ATXs in the same epoch
 				// don't punish ourselves but fail validation and thereby the handling of the incoming ATX
@@ -477,7 +486,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 		h.tortoise.OnMalfeasance(atx.SmesherID)
 	}
 	header := atx.ToHeader()
-	added := h.cacheAtx(ctx, header)
+	added := h.cacheAtx(ctx, header, largestKnown)
 	h.beacon.OnAtx(header)
 	if added != nil {
 		h.tortoise.OnAtx(atx.TargetEpoch(), atx.ID(), added)

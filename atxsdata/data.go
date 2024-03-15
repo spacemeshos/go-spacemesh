@@ -24,7 +24,7 @@ type ATX struct {
 func New() *Data {
 	return &Data{
 		malicious: map[types.NodeID]struct{}{},
-		epochs:    map[types.EpochID]epochCache{},
+		epochs:    map[types.EpochID]*epochCache{},
 	}
 }
 
@@ -33,11 +33,12 @@ type Data struct {
 
 	mu        sync.RWMutex
 	malicious map[types.NodeID]struct{}
-	epochs    map[types.EpochID]epochCache
+	epochs    map[types.EpochID]*epochCache
 }
 
 type epochCache struct {
-	index map[types.ATXID]*ATX
+	nonDecreasingWeight uint64
+	index               map[types.ATXID]*ATX
 }
 
 func (d *Data) Evicted() types.EpochID {
@@ -93,7 +94,7 @@ func (d *Data) AddAtx(target types.EpochID, id types.ATXID, atx *ATX) bool {
 	}
 	ecache, exists := d.epochs[target]
 	if !exists {
-		ecache = epochCache{
+		ecache = &epochCache{
 			index: map[types.ATXID]*ATX{},
 		}
 		d.epochs[target] = ecache
@@ -108,8 +109,67 @@ func (d *Data) AddAtx(target types.EpochID, id types.ATXID, atx *ATX) bool {
 	ecache.index[id] = atx
 	if atx.malicious {
 		d.malicious[atx.Node] = struct{}{}
+	} else {
+		ecache.nonDecreasingWeight += atx.Weight
 	}
 	return true
+}
+
+func (d *Data) AddFromHeaderWithReplacement(
+	atx *types.ActivationTxHeader,
+	nonce types.VRFPostIndex,
+	malicious bool,
+	knownLargest *types.ATXID,
+) *ATX {
+	return d.AddWithReplacement(
+		atx.TargetEpoch(),
+		atx.ID,
+		&ATX{
+			Node:       atx.NodeID,
+			Coinbase:   atx.Coinbase,
+			Weight:     atx.GetWeight(),
+			BaseHeight: atx.BaseTickHeight,
+			Height:     atx.TickHeight(),
+			Nonce:      nonce,
+			malicious:  malicious,
+		},
+		knownLargest,
+	)
+}
+
+func (d *Data) AddWithReplacement(target types.EpochID, id types.ATXID, atx *ATX, knownLargest *types.ATXID) *ATX {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.IsEvicted(target) {
+		return nil
+	}
+	ecache, exists := d.epochs[target]
+	if !exists {
+		ecache = &epochCache{
+			index: map[types.ATXID]*ATX{},
+		}
+		d.epochs[target] = ecache
+	}
+
+	if _, exists = ecache.index[id]; exists {
+		return nil
+	}
+
+	atxsCounter.WithLabelValues(target.String()).Inc()
+
+	ecache.index[id] = atx
+	if atx.malicious {
+		d.malicious[atx.Node] = struct{}{}
+	}
+	if knownLargest == nil {
+		ecache.nonDecreasingWeight += atx.Weight
+	} else {
+		largest := ecache.index[*knownLargest]
+		if largest.Weight < atx.Weight {
+			ecache.nonDecreasingWeight += atx.Weight - largest.Weight
+		}
+	}
+	return atx
 }
 
 // Add adds ATX data to the store.
@@ -240,4 +300,17 @@ func (d *Data) WeightForSet(epoch types.EpochID, set []types.ATXID) (uint64, []b
 		}
 	}
 	return weight, used
+}
+
+// NonDecreasingWeight is used to validate that ballots don't artificially decrease number of eligibilities.
+// it has to be non decreasing as if node equivocates other nodes on the network can learn equivocators in different
+// order.
+func (d *Data) NonDecreasingWeight(target types.EpochID) uint64 {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	ecache, exists := d.epochs[target]
+	if !exists {
+		return 0
+	}
+	return ecache.nonDecreasingWeight
 }

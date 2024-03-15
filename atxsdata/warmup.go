@@ -39,7 +39,12 @@ func Warmup(db sql.Executor, cache *Data, keep types.EpochID) error {
 	}
 	cache.EvictEpoch(evict)
 
-	var ierr error
+	var (
+		ierr      error
+		prevEpoch types.EpochID
+		prevNode  types.NodeID
+		largest   *types.ATXID
+	)
 	if err := atxs.IterateAtxsData(db, cache.Evicted(), latest,
 		func(
 			id types.ATXID,
@@ -61,17 +66,24 @@ func Warmup(db sql.Executor, cache *Data, keep types.EpochID) error {
 				ierr = err
 				return false
 			}
-			cache.Add(
-				target,
-				node,
-				coinbase,
-				id,
-				weight,
-				base,
-				height,
-				nonce,
-				malicious,
-			)
+			atx := &ATX{
+				Node:       node,
+				Coinbase:   coinbase,
+				Weight:     weight,
+				BaseHeight: base,
+				Height:     height,
+				Nonce:      nonce,
+				malicious:  malicious,
+			}
+			if prevEpoch == epoch && prevNode == node {
+				cache.AddWithReplacement(target, id, atx, largest)
+			} else {
+				// we iterate in the order of largest to smallest weight for equivocating atxs
+				cache.AddWithReplacement(target, id, atx, nil)
+				largest = &id
+			}
+			prevEpoch = epoch
+			prevNode = node
 			return true
 		}); err != nil {
 		return err
