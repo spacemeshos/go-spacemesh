@@ -14,6 +14,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
+var ErrBoundary = fmt.Errorf("validator: eligibility count doesn't match expected bondaries")
+
 // Validator validates the eligibility of a Ballot.
 // the validation focuses on eligibility only and assumes the Ballot to be valid otherwise.
 type Validator struct {
@@ -234,38 +236,40 @@ func (v *Validator) validateReferenceBoundaries(
 	if activeSetWeight == 0 {
 		return nil, fmt.Errorf("empty active set in ref ballot %v", ballot.ID())
 	}
-	upperBoundary, err := GetNumEligibleSlots(
+	minWeight := minweight.Select(ballot.Layer.GetEpoch(), v.minActiveSetWeight)
+	upperBoundary := MustGetNumEligibleSlots(
 		atxWeight,
-		minweight.Select(ballot.Layer.GetEpoch(), v.minActiveSetWeight),
-		minweight.Select(ballot.Layer.GetEpoch(), v.minActiveSetWeight),
+		minWeight,
+		minWeight,
 		v.avgLayerSize,
 		v.layersPerEpoch,
 	)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", pubsub.ErrValidationReject, err)
-	}
-	lowerBoundary, err := GetNumEligibleSlots(
+	lowerBoundary := MustGetNumEligibleSlots(
 		atxWeight,
 		activeSetWeight,
 		activeSetWeight,
 		v.avgLayerSize,
-		v.layersPerEpoch)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", pubsub.ErrValidationReject, err)
-	}
+		v.layersPerEpoch,
+	)
 	if ballot.EpochData.EligibilityCount > upperBoundary {
+		// this can only be the case if the other node is misconfigured or intentionally dos'ing network.
+		// safe to reject
 		return nil, fmt.Errorf(
-			"%w: ballot is higher than upper boundary %v, got: %v",
+			"%w %w: min weight %d. lower boundary %v. ballot count %d",
 			pubsub.ErrValidationReject,
-			upperBoundary,
+			ErrBoundary,
+			minWeight,
+			lowerBoundary,
 			ballot.EpochData.EligibilityCount,
 		)
 	} else if ballot.EpochData.EligibilityCount < lowerBoundary {
-		// it could also mean that node doesn't have enough atxs to recognize that the boundary is actually lower
-		// TODO(dshulyak) make sure that this error will not block syncedness
+		// in this case we should not reject it, as it will disconnect such peer from us.
+		// but we in fact might be missing atxs and instead should run consistency check with that peer.
 		return nil, fmt.Errorf(
-			"ballot is lower than lower boundary %v, got: %v",
-			lowerBoundary,
+			"%w: local weight %d. upper boundary %v. ballot count %d",
+			ErrBoundary,
+			activeSetWeight,
+			upperBoundary,
 			ballot.EpochData.EligibilityCount,
 		)
 	}

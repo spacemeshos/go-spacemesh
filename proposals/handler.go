@@ -508,6 +508,13 @@ func (h *Handler) checkBallotSyntacticValidity(
 	t4 := time.Now()
 	if err := h.validator.CheckEligibility(ctx, b, activeSetWeight); err != nil {
 		notEligible.Inc()
+		if errors.Is(err, ErrBoundary) {
+			h.logger.With().Warning("ballot doesn't pass eligibility boundary validation",
+				log.Context(ctx),
+				log.Err(err),
+				log.Inline(b),
+			)
+		}
 		return nil, err
 	}
 	ballotDuration.WithLabelValues(eligible).Observe(float64(time.Since(t4)))

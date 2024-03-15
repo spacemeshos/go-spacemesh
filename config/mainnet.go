@@ -124,7 +124,7 @@ func MainnetConfig() Config {
 			MinimalActiveSetWeight: []types.EpochMinimalActiveWeight{
 				{Weight: 1_000_000},
 			},
-			ValidateBoundaries: types.EpochID(17), // for testing
+			ValidateBoundaries: types.EpochID(16),
 		},
 		HARE3: hare3conf,
 		HareEligibility: eligibility.Config{

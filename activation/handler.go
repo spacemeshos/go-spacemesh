@@ -486,7 +486,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 		h.tortoise.OnMalfeasance(atx.SmesherID)
 	}
 	header := atx.ToHeader()
-	added := h.cacheAtx(ctx, header)
+	added := h.cacheAtx(ctx, header, largestKnown)
 	h.beacon.OnAtx(header)
 	if added != nil {
 		h.tortoise.OnAtx(atx.TargetEpoch(), atx.ID(), added)
