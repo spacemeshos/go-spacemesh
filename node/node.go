@@ -1363,7 +1363,8 @@ func (app *App) startServices(ctx context.Context) error {
 		); err != nil {
 			return fmt.Errorf("start post service: %w", err)
 		}
-	} else {
+	} else if len(app.signers) == 1 && app.signers[0].Name() == supervisedIDKeyFileName {
+		// supervised setup but not started
 		app.log.Info("smeshing not started, waiting to be triggered via smesher api")
 	}
 
