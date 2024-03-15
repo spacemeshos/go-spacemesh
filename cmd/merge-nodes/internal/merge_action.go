@@ -165,7 +165,7 @@ func openDB(dbLog *zap.Logger, path string) (*localsql.Database, error) {
 
 	db, err := localsql.Open("file:"+dbPath,
 		sql.WithLogger(dbLog),
-		sql.WithMigrations([]sql.Migration{}), // do not migrate database when opening
+		sql.WithMigrations(nil),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("open source database %s: %w", dbPath, err)
