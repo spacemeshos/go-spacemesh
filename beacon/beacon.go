@@ -210,7 +210,9 @@ type ProtocolDriver struct {
 	// the map key is the epoch when the ballot is published. the beacon value is calculated in the
 	// previous epoch and used in the current epoch.
 	ballotsBeacons map[types.EpochID]map[types.Beacon]*beaconWeight
-	results        chan result.Beacon
+
+	resultsMtx sync.Mutex
+	results    chan result.Beacon
 
 	// metrics
 	metricsCollector *metrics.BeaconMetricsCollector
@@ -259,6 +261,10 @@ func (pd *ProtocolDriver) UpdateBeacon(epoch types.EpochID, beacon types.Beacon)
 
 // Close closes ProtocolDriver.
 func (pd *ProtocolDriver) Close() {
+	if pd.isClosed() {
+		return
+	}
+
 	pd.logger.Info("closing beacon protocol")
 	pd.metricsCollector.Stop()
 	pd.cancel()
@@ -266,11 +272,20 @@ func (pd *ProtocolDriver) Close() {
 	if err := pd.eg.Wait(); err != nil {
 		pd.logger.With().Info("received error waiting for goroutines to finish", log.Err(err))
 	}
+	pd.resultsMtx.Lock()
 	close(pd.results)
+	pd.results = nil
+	pd.resultsMtx.Unlock()
 	pd.logger.Info("beacon goroutines finished")
 }
 
 func (pd *ProtocolDriver) onResult(epoch types.EpochID, beacon types.Beacon) {
+	pd.resultsMtx.Lock()
+	defer pd.resultsMtx.Unlock()
+	if pd.results == nil {
+		return
+	}
+
 	select {
 	case pd.results <- result.Beacon{Epoch: epoch, Beacon: beacon}:
 	default:
@@ -283,17 +298,16 @@ func (pd *ProtocolDriver) onResult(epoch types.EpochID, beacon types.Beacon) {
 
 // Results notifies waiter that beacon for a target epoch has completed.
 func (pd *ProtocolDriver) Results() <-chan result.Beacon {
+	pd.resultsMtx.Lock()
+	defer pd.resultsMtx.Unlock()
 	return pd.results
 }
 
 // isClosed returns true if the beacon protocol is shutting down.
 func (pd *ProtocolDriver) isClosed() bool {
-	select {
-	case <-pd.ctx.Done():
-		return true
-	default:
-		return false
-	}
+	pd.resultsMtx.Lock()
+	defer pd.resultsMtx.Unlock()
+	return pd.results == nil
 }
 
 func (pd *ProtocolDriver) OnAtx(atx *types.ActivationTxHeader) {
