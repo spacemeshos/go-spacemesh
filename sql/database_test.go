@@ -171,7 +171,7 @@ func TestQueryCount(t *testing.T) {
 	require.Equal(t, 2, db.QueryCount())
 }
 
-func Test_MigrationFailsIfDatabaseTooNew(t *testing.T) {
+func Test_Migration_FailsIfDatabaseTooNew(t *testing.T) {
 	dir := t.TempDir()
 
 	ctrl := gomock.NewController(t)

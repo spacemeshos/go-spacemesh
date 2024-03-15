@@ -209,6 +209,7 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 			after = config.migrations[len(config.migrations)-1].Order()
 		}
 		if before > after {
+			pool.Close()
 			config.logger.Error("database version is newer than expected - downgrade is not supported",
 				zap.String("uri", uri),
 				zap.Int("current version", before),
