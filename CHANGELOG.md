@@ -272,10 +272,9 @@ and permanent ineligibility for rewards.
   If you are not using a remote post service you do not need to adjust anything. If you are using a remote setup
   make sure your post service now connects to `grpc-post-listener` instead of `grpc-private-listener`. If you are
   connecting to a remote post service over the internet we strongly recommend using mTLS via `grpc-tls-listener`.
-* [#5465](https://github.com/spacemeshos/go-spacemesh/pull/5465)
-  Add an option to cache SQL query results. This is useful for nodes with high peer counts.
 * [#5601](https://github.com/spacemeshos/go-spacemesh/pull/5601) measure latency from all requests in sync
   This improves peers selection logic, mainly to prevent asking slow peers for collection of atxs, which often blocks sync.
+
 * [5602](https://github.com/spacemeshos/go-spacemesh/pull/5602) Optimize client side of fetcher to avoid encoding when
   not needed.
 
