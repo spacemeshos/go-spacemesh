@@ -30,7 +30,7 @@ LDFLAGS = -ldflags "$(C_LDFLAGS)"
 
 include Makefile-libs.Inc
 
-UNIT_TESTS ?= $(shell go list ./...  | grep -v systest/tests | grep -v cmd/node | grep -v cmd/gen-p2p-identity | grep -v cmd/trace | grep -v genvm/cmd)
+UNIT_TESTS ?= $(shell go list ./...  | grep -v systest/tests | grep -v genvm/cmd)
 
 export CGO_ENABLED := 1
 export CGO_CFLAGS := $(CGO_CFLAGS) -DSQLITE_ENABLE_DBSTAT_VTAB=1
@@ -69,6 +69,10 @@ build: go-spacemesh get-profiler get-postrs-service
 get-libs: get-postrs-lib get-postrs-service
 
 get-profiler: get-postrs-profiler
+
+merge-nodes: get-libs
+	cd cmd/merge-nodes ; go build -o $(BIN_DIR)$@$(EXE) -ldflags "-X main.version=${VERSION}" .
+.PHONY: merge-nodes
 
 gen-p2p-identity:
 	cd cmd/gen-p2p-identity ; go build -o $(BIN_DIR)$@$(EXE) .
@@ -149,7 +153,10 @@ list-versions:
 .PHONY: list-versions
 
 dockerbuild-go:
-	DOCKER_BUILDKIT=1 docker build -t go-spacemesh:$(SHA) -t $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION) .
+	DOCKER_BUILDKIT=1 docker build \
+		--build-arg VERSION=${VERSION} \
+		-t go-spacemesh:$(SHA) \
+		-t $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION) .
 .PHONY: dockerbuild-go
 
 dockerpush: dockerbuild-go dockerpush-only

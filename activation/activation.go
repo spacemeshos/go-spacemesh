@@ -476,7 +476,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 			zap.Uint32("current epoch", current.Uint32()),
 			zap.Duration("wait", time.Until(wait)),
 		)
-		events.EmitPoetWaitRound(current, current+1, wait)
+		events.EmitPoetWaitRound(nodeID, current, current+1, wait)
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -601,6 +601,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner
 		return fmt.Errorf("discarding challenge after published ATX: %w", err)
 	}
 	events.EmitAtxPublished(
+		sig.NodeID(),
 		atx.PublishEpoch, atx.TargetEpoch(),
 		atx.ID(),
 		b.layerClock.LayerToTime(atx.TargetEpoch().FirstLayer()),
