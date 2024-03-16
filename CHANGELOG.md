@@ -15,6 +15,9 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 * [#5707](https://github.com/spacemeshos/go-spacemesh/pull/5707) Fix a race on closing a channel when the node is
   shutting down.
 
+* [#5709](https://github.com/spacemeshos/go-spacemesh/pull/5709) Prevent users from accidentally deleting their keys,
+  if they downgrade to v1.3.x and upgrade again.
+
 ## Release v1.4.0
 
 ### Upgrade information
