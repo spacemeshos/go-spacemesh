@@ -15,6 +15,12 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 * [#5707](https://github.com/spacemeshos/go-spacemesh/pull/5707) Fix a race on closing a channel when the node is
   shutting down.
 
+* [#5709](https://github.com/spacemeshos/go-spacemesh/pull/5709) Prevent users from accidentally deleting their keys,
+  if they downgrade to v1.3.x and upgrade again.
+
+* [#5710](https://github.com/spacemeshos/go-spacemesh/pull/5710) Node now checks the database version and will refuse to
+  start if it is newer than expected.
+
 * [#5562](https://github.com/spacemeshos/go-spacemesh/pull/5562) Add streaming mode for fetcher. This should lessen
   GC pressure during sync
 

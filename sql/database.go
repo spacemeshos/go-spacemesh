@@ -28,6 +28,8 @@ var (
 	ErrNotFound = errors.New("database: not found")
 	// ErrObjectExists is returned if database constraints didn't allow to insert an object.
 	ErrObjectExists = errors.New("database: object exists")
+	// ErrTooNew is returned if database version is newer than expected.
+	ErrTooNew = errors.New("database version is too new")
 )
 
 const (
@@ -209,6 +211,15 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 		after := 0
 		if len(config.migrations) > 0 {
 			after = config.migrations[len(config.migrations)-1].Order()
+		}
+		if before > after {
+			pool.Close()
+			config.logger.Error("database version is newer than expected - downgrade is not supported",
+				zap.String("uri", uri),
+				zap.Int("current version", before),
+				zap.Int("target version", after),
+			)
+			return nil, fmt.Errorf("%w: %d > %d", ErrTooNew, before, after)
 		}
 		config.logger.Info("running migrations",
 			zap.String("uri", uri),
