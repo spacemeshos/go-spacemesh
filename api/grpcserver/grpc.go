@@ -19,7 +19,6 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/reflection"
 )
 
@@ -138,10 +137,10 @@ func New(listener string, logger *zap.Logger, config Config, grpcOpts ...grpc.Se
 		),
 		grpc.MaxSendMsgSize(config.GrpcSendMsgSize),
 		grpc.MaxRecvMsgSize(config.GrpcRecvMsgSize),
-		grpc.KeepaliveParams(keepalive.ServerParameters{
-			Time:    time.Minute,
-			Timeout: 10 * time.Second,
-		}),
+		// grpc.KeepaliveParams(keepalive.ServerParameters{
+		// 	Time:    time.Minute,
+		// 	Timeout: 10 * time.Second,
+		// }),
 	}
 
 	opts = append(opts, grpcOpts...)
