@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"testing"
+	"time"
 
 	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
 	"github.com/stretchr/testify/assert"
@@ -219,7 +220,9 @@ func TestActivationService_ActivationsCount(t *testing.T) {
 		require.NoError(t, atxs.Add(db, atx))
 		epoch3ATXs[i] = *atx
 	}
-	genEpoch5 := fixture.NewAtxsGenerator().WithEpochs(5, 1)
+
+	genEpoch5 := fixture.NewAtxsGenerator().WithSeed(time.Now().UnixNano()+1).
+		WithEpochs(5, 1)
 	epoch5ATXs := make([]types.VerifiedActivationTx, 10) // ensure the number here is different from above
 	for i := range epoch5ATXs {
 		atx := genEpoch5.Next()
