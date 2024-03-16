@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jonboulle/clockwork"
 	"go.uber.org/zap"
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/jonboulle/clockwork"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -129,6 +129,7 @@ func (sst *syncState) done() {
 		sst.syncedPeers.updateFrom(sst.syncingPeers)
 		sst.syncingPeers.clear()
 	}
+	maps.Clear(sst.state)
 }
 
 func (sst *syncState) numSyncedPeers() int {
@@ -236,6 +237,7 @@ func (s *Syncer) shouldSync(epochStart, epochEnd time.Time) (bool, error) {
 
 func (s *Syncer) download(parent context.Context, initial bool) error {
 	s.logger.Info("starting malfeasance proof sync", log.ZContext(parent))
+	defer s.logger.Debug("malfeasance proof sync terminated", log.ZContext(parent))
 	ctx, cancel := context.WithCancel(parent)
 	eg, ctx := errgroup.WithContext(ctx)
 	updates := make(chan malUpdate, s.cfg.MalfeasanceIDPeers)
@@ -262,17 +264,24 @@ func (s *Syncer) downloadNodeIDs(ctx context.Context, initial bool, updates chan
 			s.logger.Debug(
 				"pausing between malfeasant node ID requests",
 				zap.Duration("duration", interval))
-		}
-		select {
-		case <-ctx.Done():
-			return nil
-		// TODO(ivan4th) this has to be randomized in a followup
-		// when sync will be schedulled in advance, in order to smooth out request rate across the network
-		case <-s.clock.After(interval):
+			select {
+			case <-ctx.Done():
+				return nil
+				// TODO(ivan4th) this has to be randomized in a followup
+				// when sync will be schedulled in advance, in order to smooth out request rate across the network
+			case <-s.clock.After(interval):
+			}
 		}
 
 		peers := s.fetcher.SelectBestShuffled(s.cfg.MalfeasanceIDPeers)
 		if len(peers) == 0 {
+			s.logger.Debug(
+				"don't have enough peers for malfeasance sync",
+				zap.Int("nPeers", s.cfg.MalfeasanceIDPeers),
+			)
+			if interval == 0 {
+				interval = s.cfg.RetryInterval
+			}
 			continue
 		}
 
@@ -349,6 +358,8 @@ func (s *Syncer) downloadMalfeasanceProofs(ctx context.Context, initial bool, up
 			case <-ctx.Done():
 				return ctx.Err()
 			case update = <-updates:
+				s.logger.Debug("malfeasance sync update",
+					log.ZContext(ctx), zap.Int("count", len(update.nodeIDs)))
 				sst.update(update)
 				gotUpdate = true
 			}
@@ -357,6 +368,8 @@ func (s *Syncer) downloadMalfeasanceProofs(ctx context.Context, initial bool, up
 			case <-ctx.Done():
 				return ctx.Err()
 			case update = <-updates:
+				s.logger.Debug("malfeasance sync update",
+					log.ZContext(ctx), zap.Int("count", len(update.nodeIDs)))
 				sst.update(update)
 				gotUpdate = true
 			default:
@@ -379,6 +392,7 @@ func (s *Syncer) downloadMalfeasanceProofs(ctx context.Context, initial bool, up
 		nothingToDownload = len(batch) == 0
 
 		if len(batch) != 0 {
+			s.logger.Debug("retrieving malfeasance identities", log.ZContext(ctx))
 			err := s.fetcher.GetMalfeasanceProofs(ctx, batch)
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
@@ -403,6 +417,8 @@ func (s *Syncer) downloadMalfeasanceProofs(ctx context.Context, initial bool, up
 					}
 				}
 			}
+		} else {
+			s.logger.Debug("no new malfeasance identities", log.ZContext(ctx))
 		}
 	}
 }
@@ -416,7 +432,7 @@ func (s *Syncer) EnsureInSync(parent context.Context, epochStart, epochEnd time.
 	return s.download(parent, true)
 }
 
-func (s *Syncer) Download(parent context.Context) error {
+func (s *Syncer) DownloadLoop(parent context.Context) error {
 	return s.download(parent, false)
 }
 
@@ -424,5 +440,3 @@ type malUpdate struct {
 	peer    p2p.Peer
 	nodeIDs []types.NodeID
 }
-
-// QQQQQ: fixup in node: if p2p min peers < MinSyncPeers, set MinSyncPeers to p2p min peers

@@ -24,6 +24,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
+	"github.com/spacemeshos/go-spacemesh/syncer/malsync"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
@@ -187,6 +188,7 @@ func MainnetConfig() Config {
 			OutOfSyncThresholdLayers: 36, // 3h
 			DisableMeshAgreement:     true,
 			AtxSync:                  atxsync.DefaultConfig(),
+			MalSync:                  malsync.DefaultConfig(),
 		},
 		Recovery: checkpoint.DefaultConfig(),
 		Cache:    datastore.DefaultConfig(),

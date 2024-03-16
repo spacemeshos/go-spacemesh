@@ -238,9 +238,13 @@ func TestSyncer(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 		tester.expectPeers([]p2p.Peer{"a"})
-		tester.fetcher.EXPECT().GetMaliciousIDs(gomock.Any(), gomock.Any()).Return(malData("1"), nil).AnyTimes()
-		tester.fetcher.EXPECT().GetMalfeasanceProofs(gomock.Any(), gomock.Any()).Return(errors.New("no atxs")).AnyTimes()
-		require.ErrorIs(t, tester.syncer.Download(ctx), context.Canceled)
+		tester.fetcher.EXPECT().
+			GetMaliciousIDs(gomock.Any(), gomock.Any()).
+			Return(malData("1"), nil).AnyTimes()
+		tester.fetcher.EXPECT().
+			GetMalfeasanceProofs(gomock.Any(), gomock.Any()).
+			Return(errors.New("no atxs")).AnyTimes()
+		require.ErrorIs(t, tester.syncer.DownloadLoop(ctx), context.Canceled)
 	})
 	t.Run("retries on no peers", func(t *testing.T) {
 		tester := newTester(t, DefaultConfig())
@@ -252,7 +256,7 @@ func TestSyncer(t *testing.T) {
 			}).AnyTimes()
 		var eg errgroup.Group
 		eg.Go(func() error {
-			require.ErrorIs(t, tester.syncer.Download(ctx), context.Canceled)
+			require.ErrorIs(t, tester.syncer.DownloadLoop(ctx), context.Canceled)
 			return nil
 		})
 		tester.clock.BlockUntil(1)
