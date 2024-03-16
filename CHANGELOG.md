@@ -21,6 +21,9 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 * [#5710](https://github.com/spacemeshos/go-spacemesh/pull/5710) Node now checks the database version and will refuse to
   start if it is newer than expected.
 
+* [#5562](https://github.com/spacemeshos/go-spacemesh/pull/5562) Add streaming mode for fetcher. This should lessen
+  GC pressure during sync
+
 ## Release v1.4.0
 
 ### Upgrade information
