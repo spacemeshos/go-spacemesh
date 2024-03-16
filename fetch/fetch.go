@@ -574,7 +574,7 @@ func (f *Fetch) failAfterRetry(hash types.Hash32) {
 
 	req.retries++
 	if req.retries > f.cfg.MaxRetriesForRequest {
-		f.logger.WithContext(req.ctx).With().Warning("gave up on hash after max retries",
+		f.logger.WithContext(req.ctx).With().Info("gave up on hash after max retries",
 			log.Stringer("hash", req.hash),
 			log.Int("retries", req.retries),
 		)
@@ -632,7 +632,7 @@ func (f *Fetch) send(requests []RequestMessage) {
 			go func() {
 				if f.cfg.Streaming {
 					if err := f.streamBatch(peer, batch); err != nil {
-						f.logger.With().Warning(
+						f.logger.With().Debug(
 							"failed to process batch request",
 							log.Stringer("batch", batch.ID),
 							log.Stringer("peer", peer),
@@ -739,7 +739,7 @@ func (f *Fetch) streamBatch(peer p2p.Peer, batch *batchInfo) error {
 				return f.receiveStreamedBatch(ctx, s, batch, batchMap)
 			})
 			if err != nil {
-				f.logger.With().Warning(
+				f.logger.With().Debug(
 					"failed to send batch request",
 					log.Stringer("batch", batch.ID),
 					log.Stringer("peer", peer),

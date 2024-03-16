@@ -70,7 +70,7 @@ func (h *handler) handleMaliciousIDsReqStream(ctx context.Context, msg []byte, s
 		})
 	}); err != nil {
 		h.logger.With().
-			Warning("serve: failed to stream malicious node IDs",
+			Debug("serve: failed to stream malicious node IDs",
 				log.Context(ctx),
 				log.Err(err))
 	}
@@ -118,7 +118,7 @@ func (h *handler) handleEpochInfoReqStream(ctx context.Context, msg []byte, s io
 			return cbk(total, id[:])
 		})
 	}); err != nil {
-		h.logger.With().Warning("serve: failed to stream epoch atx IDs",
+		h.logger.With().Debug("serve: failed to stream epoch atx IDs",
 			log.Context(ctx), epoch, log.Err(err))
 	}
 
@@ -152,7 +152,7 @@ func (h *handler) streamIDs(ctx context.Context, s io.ReadWriter, retrieve retri
 		if !started {
 			if wrErr := server.WriteErrorResponse(s, err); wrErr != nil {
 				h.logger.With().
-					Warning("serve: failed to write error response",
+					Debug("serve: failed to write error response",
 						log.Context(ctx), log.Err(wrErr))
 			}
 		}
@@ -466,7 +466,7 @@ func (h *handler) handleMeshHashReqStream(ctx context.Context, reqData []byte, s
 			})
 	}); err != nil {
 		h.logger.With().
-			Warning("serve: failed to stream mesh hashes",
+			Debug("serve: failed to stream mesh hashes",
 				log.Context(ctx), log.Err(err))
 	}
 
