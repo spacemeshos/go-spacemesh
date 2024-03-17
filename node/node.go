@@ -872,6 +872,7 @@ func (app *App) initServices(ctx context.Context) error {
 		malsync.New(fetcher, app.db, app.localDB,
 			malsync.WithConfig(app.Config.Sync.MalSync),
 			malsync.WithLogger(app.syncLogger.Zap()),
+			malsync.WithPeerErrMetric(syncer.MalPeerError),
 		),
 		syncer.WithConfig(syncerConf),
 		syncer.WithLogger(app.syncLogger),

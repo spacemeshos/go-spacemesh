@@ -39,6 +39,20 @@ func WithLogger(logger *zap.Logger) Opt {
 	}
 }
 
+type counter interface {
+	Inc()
+}
+
+type noCounter struct{}
+
+func (noCounter) Inc() {}
+
+func WithPeerErrMetric(counter counter) Opt {
+	return func(s *Syncer) {
+		s.peerErrMetric = counter
+	}
+}
+
 func withClock(clock clockwork.Clock) Opt {
 	return func(s *Syncer) {
 		s.clock = clock
@@ -105,7 +119,7 @@ func (sps syncPeerSet) updateFrom(other syncPeerSet) {
 	maps.Copy(sps, other)
 }
 
-// syncState stores malfeasance sync state
+// syncState stores malfeasance sync state.
 type syncState struct {
 	limit        int
 	initial      bool
@@ -200,22 +214,24 @@ func (sst *syncState) missing(max int, has func(nodeID types.NodeID) (bool, erro
 }
 
 type Syncer struct {
-	logger  *zap.Logger
-	cfg     Config
-	fetcher fetcher
-	db      sql.Executor
-	localdb *localsql.Database
-	clock   clockwork.Clock
+	logger        *zap.Logger
+	cfg           Config
+	fetcher       fetcher
+	db            sql.Executor
+	localdb       *localsql.Database
+	clock         clockwork.Clock
+	peerErrMetric counter
 }
 
 func New(fetcher fetcher, db sql.Executor, localdb *localsql.Database, opts ...Opt) *Syncer {
 	s := &Syncer{
-		logger:  zap.NewNop(),
-		cfg:     DefaultConfig(),
-		fetcher: fetcher,
-		db:      db,
-		localdb: localdb,
-		clock:   clockwork.NewRealClock(),
+		logger:        zap.NewNop(),
+		cfg:           DefaultConfig(),
+		fetcher:       fetcher,
+		db:            db,
+		localdb:       localdb,
+		clock:         clockwork.NewRealClock(),
+		peerErrMetric: noCounter{},
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -294,6 +310,7 @@ func (s *Syncer) downloadNodeIDs(ctx context.Context, initial bool, updates chan
 					if errors.Is(err, context.Canceled) {
 						return ctx.Err()
 					}
+					s.peerErrMetric.Inc()
 					s.logger.Warn("failed to download malfeasant node IDs",
 						log.ZContext(ctx),
 						zap.String("peer", peer.String()),

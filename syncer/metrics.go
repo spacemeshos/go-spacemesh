@@ -87,7 +87,7 @@ var (
 	layerPeerError = peerError.WithLabelValues("layer")
 	opnsPeerError  = peerError.WithLabelValues("opns")
 	certPeerError  = peerError.WithLabelValues("cert")
-	malPeerError   = peerError.WithLabelValues("mal")
+	MalPeerError   = peerError.WithLabelValues("mal")
 
 	v2OpnPoll = metrics.NewCounter(
 		"opn_poll",

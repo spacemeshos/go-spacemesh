@@ -25,6 +25,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/syncer/malsync/mocks"
 )
 
+type fakeCounter struct {
+	n int
+}
+
+func (fc *fakeCounter) Inc() { fc.n++ }
+
 func genNodeIDs(n int) []types.NodeID {
 	ids := make([]types.NodeID, n)
 	for i := range ids {
@@ -128,17 +134,18 @@ func malData(ids ...string) []types.NodeID {
 }
 
 type tester struct {
-	tb       testing.TB
-	syncer   *Syncer
-	localdb  *localsql.Database
-	db       *sql.Database
-	cfg      Config
-	ctrl     *gomock.Controller
-	fetcher  *mocks.Mockfetcher
-	clock    clockwork.FakeClock
-	received map[types.NodeID]bool
-	attempts map[types.NodeID]int
-	peers    []p2p.Peer
+	tb           testing.TB
+	syncer       *Syncer
+	localdb      *localsql.Database
+	db           *sql.Database
+	cfg          Config
+	ctrl         *gomock.Controller
+	fetcher      *mocks.Mockfetcher
+	clock        clockwork.FakeClock
+	received     map[types.NodeID]bool
+	attempts     map[types.NodeID]int
+	peers        []p2p.Peer
+	peerErrCount *fakeCounter
 }
 
 func newTester(tb testing.TB, cfg Config) *tester {
@@ -147,23 +154,26 @@ func newTester(tb testing.TB, cfg Config) *tester {
 	ctrl := gomock.NewController(tb)
 	fetcher := mocks.NewMockfetcher(ctrl)
 	clock := clockwork.NewFakeClock()
+	peerErrCount := &fakeCounter{}
 	syncer := New(fetcher, db, localdb,
 		withClock(clock),
 		WithConfig(cfg),
 		WithLogger(logtest.New(tb).Zap()),
+		WithPeerErrMetric(peerErrCount),
 	)
 	return &tester{
-		tb:       tb,
-		syncer:   syncer,
-		localdb:  localdb,
-		db:       db,
-		cfg:      cfg,
-		ctrl:     ctrl,
-		fetcher:  fetcher,
-		clock:    clock,
-		received: make(map[types.NodeID]bool),
-		attempts: make(map[types.NodeID]int),
-		peers:    []p2p.Peer{"a", "b", "c"},
+		tb:           tb,
+		syncer:       syncer,
+		localdb:      localdb,
+		db:           db,
+		cfg:          cfg,
+		ctrl:         ctrl,
+		fetcher:      fetcher,
+		clock:        clock,
+		received:     make(map[types.NodeID]bool),
+		attempts:     make(map[types.NodeID]int),
+		peers:        []p2p.Peer{"a", "b", "c"},
+		peerErrCount: peerErrCount,
 	}
 }
 
@@ -232,6 +242,7 @@ func TestSyncer(t *testing.T) {
 		// second call does nothing after recent sync
 		require.NoError(t,
 			tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
+		require.Zero(t, tester.peerErrCount.n)
 	})
 	t.Run("interruptible", func(t *testing.T) {
 		tester := newTester(t, DefaultConfig())
@@ -271,6 +282,39 @@ func TestSyncer(t *testing.T) {
 		tester.clock.BlockUntil(1)
 		cancel()
 		eg.Wait()
+	})
+	t.Run("gettings ids from MinSyncPeers peers is enough", func(t *testing.T) {
+		cfg := DefaultConfig()
+		cfg.MinSyncPeers = 2
+		tester := newTester(t, cfg)
+		tester.expectPeers(tester.peers)
+		tester.fetcher.EXPECT().
+			GetMaliciousIDs(gomock.Any(), tester.peers[0]).
+			Return(nil, errors.New("fail"))
+		for _, p := range tester.peers[1:] {
+			tester.fetcher.EXPECT().
+				GetMaliciousIDs(gomock.Any(), p).
+				Return(malData("4", "1", "3", "2"), nil)
+		}
+		tester.expectGetProofs(nil)
+		epochStart := tester.clock.Now().Truncate(time.Second)
+		epochEnd := epochStart.Add(10 * time.Minute)
+		require.NoError(t,
+			tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
+		require.ElementsMatch(t, []types.NodeID{
+			nid("1"), nid("2"), nid("3"), nid("4"),
+		}, maps.Keys(tester.received))
+		require.Equal(t, map[types.NodeID]int{
+			nid("1"): 1,
+			nid("2"): 1,
+			nid("3"): 1,
+			nid("4"): 1,
+		}, tester.attempts)
+		tester.clock.Advance(1 * time.Minute)
+		// second call does nothing after recent sync
+		require.NoError(t,
+			tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
+		require.Equal(t, 1, tester.peerErrCount.n)
 	})
 	t.Run("skip hashes after max retries", func(t *testing.T) {
 		cfg := DefaultConfig()
