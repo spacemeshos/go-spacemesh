@@ -464,14 +464,13 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 
 	var wait time.Time
 	until := time.Until(b.poetRoundStart(current))
-	if until <= 0 {
+	for until <= 0 {
 		metrics.PublishLateWindowLatency.Observe(-until.Seconds())
 		current++
 
-		wait = buildNipostChallengeStartDeadline(b.poetRoundStart(current), b.poetCfg.GracePeriod)
-	} else {
-		wait = b.poetRoundStart(current).Add(until)
+		until = time.Until(b.poetRoundStart(current))
 	}
+	wait = buildNipostChallengeStartDeadline(b.poetRoundStart(current), b.poetCfg.GracePeriod)
 
 	metrics.PublishOntimeWindowLatency.Observe(until.Seconds())
 	if time.Until(wait) > 0 {
