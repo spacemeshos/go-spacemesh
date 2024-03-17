@@ -45,15 +45,6 @@ const (
 	numMalicious = 11
 )
 
-func generateMaliciousIDs(t *testing.T) []types.NodeID {
-	t.Helper()
-	malIDs := make([]types.NodeID, numMalicious)
-	for i := range malIDs {
-		malIDs[i] = types.RandomNodeID()
-	}
-	return malIDs
-}
-
 func generateLayerOpinions(t *testing.T, bid *types.BlockID) []byte {
 	t.Helper()
 	lo := &fetch.LayerOpinion{
