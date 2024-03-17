@@ -462,14 +462,18 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		return nil, fmt.Errorf("get last ATX: %w", err)
 	}
 
+	var wait time.Time
 	until := time.Until(b.poetRoundStart(current))
 	if until <= 0 {
 		metrics.PublishLateWindowLatency.Observe(-until.Seconds())
 		current++
-		until = time.Until(b.poetRoundStart(current))
+
+		wait = buildNipostChallengeStartDeadline(b.poetRoundStart(current), b.poetCfg.GracePeriod)
+	} else {
+		wait = b.poetRoundStart(current).Add(until)
 	}
+
 	metrics.PublishOntimeWindowLatency.Observe(until.Seconds())
-	wait := buildNipostChallengeStartDeadline(b.poetRoundStart(current), b.poetCfg.GracePeriod)
 	if time.Until(wait) > 0 {
 		logger.Debug("waiting for fresh atxs",
 			zap.Duration("till poet round", until),
