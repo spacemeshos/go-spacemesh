@@ -155,3 +155,62 @@ func (c *MockfetcherSelectBestShuffledCall) DoAndReturn(f func(int) []p2p.Peer) 
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
+
+// Mockcounter is a mock of counter interface.
+type Mockcounter struct {
+	ctrl     *gomock.Controller
+	recorder *MockcounterMockRecorder
+}
+
+// MockcounterMockRecorder is the mock recorder for Mockcounter.
+type MockcounterMockRecorder struct {
+	mock *Mockcounter
+}
+
+// NewMockcounter creates a new mock instance.
+func NewMockcounter(ctrl *gomock.Controller) *Mockcounter {
+	mock := &Mockcounter{ctrl: ctrl}
+	mock.recorder = &MockcounterMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *Mockcounter) EXPECT() *MockcounterMockRecorder {
+	return m.recorder
+}
+
+// Inc mocks base method.
+func (m *Mockcounter) Inc() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Inc")
+}
+
+// Inc indicates an expected call of Inc.
+func (mr *MockcounterMockRecorder) Inc() *MockcounterIncCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Inc", reflect.TypeOf((*Mockcounter)(nil).Inc))
+	return &MockcounterIncCall{Call: call}
+}
+
+// MockcounterIncCall wrap *gomock.Call
+type MockcounterIncCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockcounterIncCall) Return() *MockcounterIncCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockcounterIncCall) Do(f func()) *MockcounterIncCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockcounterIncCall) DoAndReturn(f func()) *MockcounterIncCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
