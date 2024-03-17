@@ -15,8 +15,10 @@ import (
 	"github.com/spacemeshos/fixed"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/beacon/metrics"
 	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
@@ -494,6 +496,38 @@ func TestBeaconWithMetrics(t *testing.T) {
 	}
 
 	tpd.Close()
+}
+
+func TestBeacon_NoRaceOnClose(t *testing.T) {
+	mclock := NewMocklayerClock(gomock.NewController(t))
+	pd := &ProtocolDriver{
+		logger:           logtest.New(t).WithName("Beacon"),
+		beacons:          make(map[types.EpochID]types.Beacon),
+		cdb:              datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
+		clock:            mclock,
+		closed:           make(chan struct{}),
+		results:          make(chan result.Beacon, 100),
+		metricsCollector: metrics.NewBeaconMetricsCollector(nil, logtest.New(t).WithName("metrics")),
+	}
+	// check for a race between onResult and Close
+	var eg errgroup.Group
+	eg.Go(func() error {
+		for i := 0; i < 1000; i++ {
+			time.Sleep(1 * time.Millisecond)
+			pd.onResult(types.EpochID(i), types.Beacon{})
+		}
+		return nil
+	})
+	eg.Go(func() error {
+		resultChan := pd.Results()
+		for result := range resultChan {
+			t.Log(result)
+		}
+		return nil
+	})
+	time.Sleep(300 * time.Millisecond)
+	pd.Close()
+	require.NoError(t, eg.Wait())
 }
 
 func TestBeacon_BeaconsWithDatabase(t *testing.T) {
