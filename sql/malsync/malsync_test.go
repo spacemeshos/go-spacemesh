@@ -4,8 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/stretchr/testify/require"
+
+	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 )
 
 func TestMalfeasanceSyncState(t *testing.T) {
@@ -19,6 +20,6 @@ func TestMalfeasanceSyncState(t *testing.T) {
 		timestamp, err = GetSyncState(db)
 		require.NoError(t, err)
 		require.Equal(t, ts.Truncate(time.Second), timestamp)
-		ts.Add(3 * time.Minute)
+		ts = ts.Add(3 * time.Minute)
 	}
 }
