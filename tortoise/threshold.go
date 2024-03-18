@@ -77,8 +77,9 @@ func computeExpectedWeightInWindow(
 	target, processed, last types.LayerID,
 ) weight {
 	window := last
-	if last.Difference(target) > config.WindowSize {
-		window = target.Add(config.WindowSize)
+	windowSize := config.WindowSizeLayers(last)
+	if last.Difference(target) > windowSize.Uint32() {
+		window = target.Add(windowSize.Uint32())
 		if processed.After(window) {
 			window = processed
 		}
