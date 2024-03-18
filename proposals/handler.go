@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -481,11 +482,16 @@ func (h *Handler) checkBallotSyntacticValidity(
 	ballotDuration.WithLabelValues(fetchRef).Observe(float64(time.Since(t1)))
 
 	t2 := time.Now()
-	// ballot can be decoded only if all dependencies (blocks, ballots, atxs) were downloaded
+	// ballot can be decoded only if all dependencies (ballots, atxs) were downloaded
 	// and added to the tortoise.
 	decoded, err := h.tortoise.DecodeBallot(b.ToTortoiseData())
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode ballot id %s err %w", b.ID().AsHash32().ShortString(), err)
+		return nil, fmt.Errorf(
+			"%w: failed to decode ballot id %s. %v",
+			fetch.ErrIgnore,
+			b.ID().AsHash32().ShortString(),
+			err,
+		)
 	}
 	ballotDuration.WithLabelValues(decode).Observe(float64(time.Since(t2)))
 
@@ -543,6 +549,7 @@ func (h *Handler) checkBallotDataIntegrity(ctx context.Context, b *types.Ballot)
 						b.ID().String(),
 					)
 				}
+
 				computed, used := h.atxsdata.WeightForSet(set.Epoch, set.Set)
 				for i := range used {
 					if !used[i] {

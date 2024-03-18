@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -401,12 +402,18 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		// always sync to currentLayer-1 to reduce race with gossip and hare/tortoise
 		for layerID := s.getLastSyncedLayer().Add(1); layerID.Before(s.ticker.CurrentLayer()); layerID = layerID.Add(1) {
 			if err := s.syncLayer(ctx, layerID); err != nil {
-				if !errors.Is(err, context.Canceled) {
-					// BatchError spams too much, in case of no progress enable debug mode for sync
+				batchError := &fetch.BatchError{}
+				if errors.As(err, &batchError) && batchError.Ignore() {
 					s.logger.With().
-						Debug("failed to sync layer", log.Context(ctx), log.Err(err), layerID)
+						Info("remaining ballots are rejected in the layer", log.Context(ctx), log.Err(err), layerID)
+				} else {
+					if !errors.Is(err, context.Canceled) {
+						// BatchError spams too much, in case of no progress enable debug mode for sync
+						s.logger.With().
+							Debug("failed to sync layer", log.Context(ctx), log.Err(err), layerID)
+					}
+					return false
 				}
-				return false
 			}
 			s.setLastSyncedLayer(layerID)
 		}
@@ -583,7 +590,7 @@ func (s *Syncer) syncMalfeasance(ctx context.Context) error {
 
 func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID, peers ...p2p.Peer) error {
 	if err := s.dataFetcher.PollLayerData(ctx, layerID, peers...); err != nil {
-		return fmt.Errorf("download layer data %v: %w", layerID, err)
+		return err
 	}
 	dataLayer.Set(float64(layerID))
 	return nil
