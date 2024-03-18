@@ -33,7 +33,7 @@ func DefaultPostServiceConfig() PostSupervisorConfig {
 
 	return PostSupervisorConfig{
 		PostServiceCmd: filepath.Join(filepath.Dir(path), DefaultPostServiceName),
-		NodeAddress:    "http://127.0.0.1:0",
+		NodeAddress:    "http://127.0.0.1:9094",
 		MaxRetries:     10,
 	}
 }
