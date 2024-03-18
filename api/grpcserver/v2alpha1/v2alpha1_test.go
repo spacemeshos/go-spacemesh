@@ -2,7 +2,9 @@ package v2alpha1
 
 import (
 	"context"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -11,6 +13,15 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+)
+
+const (
+	genTimeUnix   = 1000000
+	layerDuration = 10 * time.Second
+)
+
+var (
+	genesisID = types.Hash20{}
 )
 
 func launchServer(tb testing.TB, services ...grpcserver.ServiceAPI) (grpcserver.Config, func()) {
