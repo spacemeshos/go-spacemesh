@@ -31,6 +31,7 @@ func Test_NewEdSigner_WithPrivateKey(t *testing.T) {
 
 	t.Run("valid key", func(t *testing.T) {
 		ed, err := NewEdSigner()
+		require.Empty(t, ed.Name())
 		require.NoError(t, err)
 
 		key := ed.PrivateKey()
@@ -38,6 +39,7 @@ func Test_NewEdSigner_WithPrivateKey(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, ed.priv, ed2.priv)
 		require.Equal(t, ed.PublicKey(), ed2.PublicKey())
+		require.Empty(t, ed2.Name())
 	})
 
 	t.Run("fails if private key already set", func(t *testing.T) {
@@ -114,6 +116,7 @@ func Test_NewEdSigner_FromFile(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, ed.priv, ed2.priv)
 		require.Equal(t, ed.PublicKey(), ed2.PublicKey())
+		require.Equal(t, "identity.key", ed2.Name())
 	})
 
 	t.Run("fails if private key already set", func(t *testing.T) {
@@ -143,6 +146,7 @@ func TestEdSigner_ToFile(t *testing.T) {
 
 		ed, err := NewEdSigner(ToFile(path))
 		require.NoError(t, err)
+		require.Equal(t, "identity.key", ed.Name())
 
 		require.FileExists(t, path)
 		data, err := os.ReadFile(path)

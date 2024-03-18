@@ -225,7 +225,10 @@ func (es *EdSigner) PrivateKey() PrivateKey {
 
 // Name returns the name of the signer. This is the filename of the identity file.
 func (es *EdSigner) Name() string {
-	return es.file
+	if es.file == "" {
+		return ""
+	}
+	return filepath.Base(es.file)
 }
 
 // VRFSigner wraps same ed25519 key to provide ecvrf.
