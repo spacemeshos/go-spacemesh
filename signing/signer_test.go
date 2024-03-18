@@ -2,7 +2,6 @@ package signing
 
 import (
 	"bytes"
-	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
 	"io/fs"
@@ -10,6 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"github.com/stretchr/testify/require"
 )
 

@@ -32,6 +32,8 @@ import (
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
@@ -72,6 +74,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
@@ -237,18 +240,15 @@ func GetCommand() *cobra.Command {
 	configPath = cmd.AddFlags(c.PersistentFlags(), &conf)
 
 	// versionCmd returns the current version of spacemesh.
-	versionCmd := cobra.Command{
+	versionCmd := &cobra.Command{
 		Use:   "version",
 		Short: "Show version info",
 		Run: func(c *cobra.Command, args []string) {
 			fmt.Print(cmd.Version)
-			if cmd.Commit != "" {
-				fmt.Printf("+%s", cmd.Commit)
-			}
 			fmt.Println()
 		},
 	}
-	c.AddCommand(&versionCmd)
+	c.AddCommand(versionCmd)
 
 	return c
 }
@@ -684,7 +684,6 @@ func (app *App) initServices(ctx context.Context) error {
 		vrfVerifier,
 		app.cachedDB,
 		app.clock,
-		beacon.WithContext(ctx),
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)),
 	)
@@ -1365,7 +1364,8 @@ func (app *App) startServices(ctx context.Context) error {
 		); err != nil {
 			return fmt.Errorf("start post service: %w", err)
 		}
-	} else {
+	} else if len(app.signers) == 1 && app.signers[0].Name() == supervisedIDKeyFileName {
+		// supervised setup but not started
 		app.log.Info("smeshing not started, waiting to be triggered via smesher api")
 	}
 
@@ -1545,6 +1545,14 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			logger.Zap(),
 			app.Config.API,
 			maps.Values(publicSvcs),
+			// public server needs restriction on max connection age to prevent attacks
+			grpc.KeepaliveParams(keepalive.ServerParameters{
+				MaxConnectionIdle:     2 * time.Hour,
+				MaxConnectionAge:      3 * time.Hour,
+				MaxConnectionAgeGrace: 10 * time.Minute,
+				Time:                  time.Minute,
+				Timeout:               10 * time.Second,
+			}),
 		)
 		if err != nil {
 			return err
@@ -1788,16 +1796,16 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 			return fmt.Errorf("failed to create poet client: %w", err)
 		}
 	}
-	migrations, err = sql.LocalMigrations()
-	if err != nil {
-		return fmt.Errorf("load local migrations: %w", err)
-	}
 
 	// Migrate `node_state.sql` to `local.sql`
 	if err := app.MigrateLocalDB(dbLog.Zap(), dbPath, clients); err != nil {
 		return err
 	}
 
+	migrations, err = sql.LocalMigrations()
+	if err != nil {
+		return fmt.Errorf("load local migrations: %w", err)
+	}
 	localDB, err := localsql.Open("file:"+filepath.Join(dbPath, localDbFile),
 		sql.WithLogger(dbLog.Zap()),
 		sql.WithMigrations(migrations),
@@ -1892,6 +1900,10 @@ func (app *App) Start(ctx context.Context) error {
 			return nil
 		})
 	}
+
+	// uncomment to verify ATXs signatures
+	// app.verifyDB(ctx)
+
 	// app blocks until it receives a signal to exit
 	// this signal may come from the node or from sig-abort (ctrl-c)
 	select {
@@ -1900,6 +1912,43 @@ func (app *App) Start(ctx context.Context) error {
 	case err = <-app.errCh:
 		return err
 	}
+}
+
+// verifyDB performs a verification of ATX signatures in the database.
+//
+//lint:ignore U1000 This function is currently unused but is left here for future use.
+func (app *App) verifyDB(ctx context.Context) {
+	app.eg.Go(func() error {
+		app.log.Info("checking ATX signatures")
+		count := 0
+
+		// check ATX signatures
+		atxs.IterateAtxsOps(app.cachedDB, builder.Operations{}, func(atx *types.VerifiedActivationTx) bool {
+			select {
+			case <-ctx.Done():
+				// stop on context cancellation
+				return false
+			default:
+			}
+
+			// verify atx signature
+			if !app.edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature) {
+				app.log.With().Error("ATX signature verification failed",
+					log.Stringer("atx_id", atx.ID()),
+					log.Stringer("smesher", atx.SmesherID),
+				)
+			}
+
+			count++
+			if count%1000 == 0 {
+				app.log.With().Info("verifying ATX signatures", log.Int("count", count))
+			}
+			return true
+		})
+
+		app.log.With().Info("ATX signatures verified", log.Int("count", count))
+		return nil
+	})
 }
 
 func (app *App) startSynchronous(ctx context.Context) (err error) {
@@ -1956,8 +2005,6 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 		}
 	}
 
-	lg := logger
-
 	/* Initialize all protocol services */
 
 	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
@@ -1968,17 +2015,17 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 		timesync.WithLayerDuration(app.Config.LayerDuration),
 		timesync.WithTickInterval(1*time.Second),
 		timesync.WithGenesisTime(gTime),
-		timesync.WithLogger(app.addLogger(ClockLogger, lg).Zap()),
+		timesync.WithLogger(app.addLogger(ClockLogger, logger).Zap()),
 	)
 	if err != nil {
 		return fmt.Errorf("cannot create clock: %w", err)
 	}
 
-	lg.Info("initializing p2p services")
+	logger.Info("initializing p2p services")
 
 	cfg := app.Config.P2P
 	cfg.DataDir = filepath.Join(app.Config.DataDir(), "p2p")
-	p2plog := app.addLogger(P2PLogger, lg)
+	p2plog := app.addLogger(P2PLogger, logger)
 	// if addLogger won't add a level we will use a default 0 (info).
 	cfg.LogLevel = app.getLevel(P2PLogger)
 	prologue := fmt.Sprintf("%x-%v",
@@ -1999,7 +2046,7 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 		return fmt.Errorf("initialize p2p host: %w", err)
 	}
 
-	if err := app.setupDBs(ctx, lg); err != nil {
+	if err := app.setupDBs(ctx, logger); err != nil {
 		return err
 	}
 	if err := app.initServices(ctx); err != nil {
