@@ -15,6 +15,10 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 * [#5730](https://github.com/spacemeshos/go-spacemesh/pull/5730) Fixed a bug where the node behaves incorrectly when
   first started with supervised smeshing.
 
+* [#5731](https://github.com/spacemeshos/go-spacemesh/pull/5731) The default listen address for `PostService` is now
+  `127.0.0.1:0` instead of `127.0.0.1:9094`. This will ensure that a node binds the post service to a random free port
+  and prevents multiple instances of the post service from binding to the same port.
+
 ## Release v1.4.1
 
 ### Improvements
