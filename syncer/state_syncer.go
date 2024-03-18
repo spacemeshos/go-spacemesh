@@ -115,7 +115,8 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 		}
 		// there is no point in tortoise counting after every single layer, in fact it is wasteful.
 		// we periodically invoke counting to evict executed layers.
-		if lid.Uint32()%(max(types.GetLayersPerEpoch()/4, 1)) == 0 || lid == s.getLastSyncedLayer() {
+		if lid.Uint32()%(uint32(max(float64(types.GetLayersPerEpoch())*s.cfg.TallyVotesFrequency, 1))) == 0 ||
+			lid == s.getLastSyncedLayer() {
 			err1 := s.mesh.ProcessLayer(ctx, lid)
 			if err1 != nil {
 				missing := &mesh.ErrMissingBlocks{}

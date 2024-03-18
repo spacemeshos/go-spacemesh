@@ -22,10 +22,13 @@ import (
 
 // Config is the config params for syncer.
 type Config struct {
-	Interval                 time.Duration `mapstructure:"interval"`
-	EpochEndFraction         float64       `mapstructure:"epochendfraction"`
-	HareDelayLayers          uint32
-	SyncCertDistance         uint32
+	Interval         time.Duration `mapstructure:"interval"`
+	EpochEndFraction float64       `mapstructure:"epochendfraction"`
+	HareDelayLayers  uint32
+	SyncCertDistance uint32
+	// TallyVotesFrequency how often to tally votes during layers sync.
+	// Setting this to 0.25 will tally votes after downloading data for quarter of the epoch.
+	TallyVotesFrequency      float64
 	MaxStaleDuration         time.Duration `mapstructure:"maxstaleduration"`
 	Standalone               bool
 	GossipDuration           time.Duration  `mapstructure:"gossipduration"`
@@ -41,6 +44,7 @@ func DefaultConfig() Config {
 		EpochEndFraction:         0.5,
 		HareDelayLayers:          10,
 		SyncCertDistance:         10,
+		TallyVotesFrequency:      0.25,
 		MaxStaleDuration:         time.Second,
 		GossipDuration:           15 * time.Second,
 		OutOfSyncThresholdLayers: 3,
