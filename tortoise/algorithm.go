@@ -16,9 +16,9 @@ import (
 
 // Config for protocol parameters.
 type Config struct {
-	Hdist uint32 `mapstructure:"tortoise-hdist"` // hare output lookback distance
-	Zdist uint32 `mapstructure:"tortoise-zdist"` // hare result wait distance
 	// how long we are waiting for a switch from verifying to full. relevant during rerun.
+	Hdist      uint32 `mapstructure:"tortoise-hdist"`       // hare output lookback distance
+	Zdist      uint32 `mapstructure:"tortoise-zdist"`       // hare result wait distance
 	WindowSize uint32 `mapstructure:"tortoise-window-size"` // size of the tortoise sliding window (in layers)
 	// ignored if candidate for base ballot has more than max exceptions
 	MaxExceptions int `mapstructure:"tortoise-max-exceptions"`
@@ -34,6 +34,7 @@ type Config struct {
 	// Must be less than WindowSize.
 	CollectDetails uint32 `mapstructure:"tortoise-collect-details"`
 	LayerSize      uint32
+	Mainnet        bool
 }
 
 // DefaultConfig for Tortoise.
@@ -46,6 +47,22 @@ func DefaultConfig() Config {
 		BadBeaconVoteDelayLayers: 0,
 		MaxExceptions:            50 * 100, // 100 layers of average size
 	}
+}
+
+func (c *Config) WindowSizeLayers(applied types.LayerID) types.LayerID {
+	if c.Mainnet && applied < types.LayerID(30_000) {
+		return 10_000
+	}
+	return 4032
+}
+
+func (c *Config) WindowSizeEpochs(applied types.LayerID) types.EpochID {
+	layers := c.WindowSizeLayers(applied)
+	quo := layers / types.LayerID(types.GetLayersPerEpoch())
+	if layers%types.LayerID(types.GetLayersPerEpoch()) != 0 {
+		quo++
+	}
+	return types.EpochID(quo)
 }
 
 // Tortoise is a thread safe verifying tortoise wrapper, it just locks all actions.
