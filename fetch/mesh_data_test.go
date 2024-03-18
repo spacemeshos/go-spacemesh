@@ -850,7 +850,7 @@ func TestBatchErrorIgnore(t *testing.T) {
 			desc: "random error",
 			error: BatchError{
 				Errors: map[types.Hash32]error{
-					types.Hash32{1}: errors.New("random error"),
+					{1}: errors.New("random error"),
 				},
 			},
 		},
@@ -858,7 +858,7 @@ func TestBatchErrorIgnore(t *testing.T) {
 			desc: "reject",
 			error: BatchError{
 				Errors: map[types.Hash32]error{
-					types.Hash32{1}: pubsub.ErrValidationReject,
+					{1}: pubsub.ErrValidationReject,
 				},
 			},
 			ignored: true,
@@ -867,7 +867,7 @@ func TestBatchErrorIgnore(t *testing.T) {
 			desc: "ignore",
 			error: BatchError{
 				Errors: map[types.Hash32]error{
-					types.Hash32{1}: ErrIgnore,
+					{1}: ErrIgnore,
 				},
 			},
 			ignored: true,
@@ -876,9 +876,9 @@ func TestBatchErrorIgnore(t *testing.T) {
 			desc: "recursive reject",
 			error: BatchError{
 				Errors: map[types.Hash32]error{
-					types.Hash32{1}: &BatchError{
+					{1}: &BatchError{
 						Errors: map[types.Hash32]error{
-							types.Hash32{2}: pubsub.ErrValidationReject,
+							{2}: pubsub.ErrValidationReject,
 						},
 					},
 				},
@@ -889,9 +889,9 @@ func TestBatchErrorIgnore(t *testing.T) {
 			desc: "recursive ignore",
 			error: BatchError{
 				Errors: map[types.Hash32]error{
-					types.Hash32{1}: &BatchError{
+					{1}: &BatchError{
 						Errors: map[types.Hash32]error{
-							types.Hash32{2}: ErrIgnore,
+							{2}: ErrIgnore,
 						},
 					},
 				},
@@ -902,12 +902,12 @@ func TestBatchErrorIgnore(t *testing.T) {
 			desc: "random error with reject",
 			error: BatchError{
 				Errors: map[types.Hash32]error{
-					types.Hash32{1}: &BatchError{
+					{1}: &BatchError{
 						Errors: map[types.Hash32]error{
-							types.Hash32{2}: pubsub.ErrValidationReject,
+							{2}: pubsub.ErrValidationReject,
 						},
 					},
-					types.Hash32{3}: errors.New("random error"),
+					{3}: errors.New("random error"),
 				},
 			},
 		},
