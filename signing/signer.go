@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -67,11 +68,26 @@ func WithPrefix(prefix []byte) EdSignerOptionFunc {
 	}
 }
 
+// ToFile writes the private key to a file after creation.
+func ToFile(path string) EdSignerOptionFunc {
+	return func(opt *edSignerOption) error {
+		if opt.file != "" {
+			return errors.New("invalid option ToFile: file already set")
+		}
+		opt.file = path
+		return nil
+	}
+}
+
 // FromFile loads the private key from a file.
 func FromFile(path string) EdSignerOptionFunc {
 	return func(opt *edSignerOption) error {
 		if opt.priv != nil {
 			return errors.New("invalid option FromFile: private key already set")
+		}
+
+		if opt.file != "" {
+			return errors.New("invalid option FromFile: file already set")
 		}
 
 		// read hex data from file
@@ -160,6 +176,19 @@ func NewEdSigner(opts ...EdSignerOptionFunc) (*EdSigner, error) {
 			return nil, fmt.Errorf("could not generate key pair: %w", err)
 		}
 		cfg.priv = priv
+
+		if cfg.file != "" {
+			if _, err := os.Stat(cfg.file); err == nil {
+				return nil, fmt.Errorf("identity file %s already exists: %w", filepath.Base(cfg.file), fs.ErrExist)
+			}
+
+			dst := make([]byte, hex.EncodedLen(len(cfg.priv)))
+			hex.Encode(dst, cfg.priv)
+			err = os.WriteFile(cfg.file, dst, 0o600)
+			if err != nil {
+				return nil, fmt.Errorf("failed to write identity file: %w", err)
+			}
+		}
 	}
 	sig := &EdSigner{
 		priv:   cfg.priv,

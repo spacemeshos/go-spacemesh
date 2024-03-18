@@ -131,6 +131,60 @@ func Test_NewEdSigner_FromFile(t *testing.T) {
 	})
 }
 
+func TestEdSigner_ToFile(t *testing.T) {
+	t.Run("invalid file", func(t *testing.T) {
+		_, err := NewEdSigner(ToFile("¿/ae_nonexistent"))
+		require.ErrorIs(t, err, fs.ErrNotExist)
+		require.ErrorContains(t, err, "failed to write identity file")
+	})
+
+	t.Run("valid file", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "identity.key")
+
+		ed, err := NewEdSigner(ToFile(path))
+		require.NoError(t, err)
+
+		require.FileExists(t, path)
+		data, err := os.ReadFile(path)
+		require.NoError(t, err)
+
+		key := make([]byte, hex.DecodedLen(len(data)))
+		_, err = hex.Decode(key, data)
+		require.NoError(t, err)
+
+		require.Equal(t, []byte(ed.PrivateKey()), key)
+	})
+
+	t.Run("fails if file already set", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "identity.key")
+
+		_, err := NewEdSigner(ToFile(path), ToFile(path))
+		require.ErrorContains(t, err, "invalid option ToFile: file already set")
+	})
+
+	t.Run("valid if private key is passed", func(t *testing.T) {
+		ed, err := NewEdSigner()
+		require.NoError(t, err)
+
+		_, err = NewEdSigner(WithPrivateKey(ed.PrivateKey()), ToFile(filepath.Join(t.TempDir(), "identity.key")))
+		require.NoError(t, err)
+	})
+
+	t.Run("fails if file already exists", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "identity.key")
+
+		_, err := NewEdSigner(ToFile(path))
+		require.NoError(t, err)
+
+		_, err = NewEdSigner(ToFile(path))
+		require.ErrorIs(t, err, fs.ErrExist)
+		require.ErrorContains(t, err, "identity.key already exists")
+
+		_, err = NewEdSigner(FromFile(path), ToFile(path))
+		require.ErrorContains(t, err, "invalid option ToFile: file already set")
+	})
+}
+
 func TestEdSigner_Sign(t *testing.T) {
 	ed, err := NewEdSigner()
 	require.NoError(t, err)

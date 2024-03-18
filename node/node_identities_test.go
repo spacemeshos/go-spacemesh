@@ -50,6 +50,7 @@ func TestSpacemeshApp_NewIdentity(t *testing.T) {
 		err := app.NewIdentity()
 		require.NoError(t, err)
 		require.Len(t, app.signers, 1)
+		require.FileExists(t, filepath.Join(app.Config.DataDirParent, keyDir, supervisedIDKeyFileName))
 	})
 
 	t.Run("no key but existing directory", func(t *testing.T) {
@@ -59,6 +60,7 @@ func TestSpacemeshApp_NewIdentity(t *testing.T) {
 		err := app.NewIdentity()
 		require.NoError(t, err)
 		require.Len(t, app.signers, 1)
+		require.FileExists(t, filepath.Join(app.Config.DataDirParent, keyDir, supervisedIDKeyFileName))
 	})
 
 	t.Run("existing key is not overwritten", func(t *testing.T) {
