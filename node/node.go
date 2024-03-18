@@ -1559,7 +1559,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		if err := app.grpcPostServer.Start(); err != nil {
 			return err
 		}
-		app.Config.POSTService.NodeAddress = app.grpcPostServer.BoundAddress
+		app.Config.POSTService.NodeAddress = fmt.Sprintf("http://%s", app.grpcPostServer.BoundAddress)
 		svc, err := app.grpcService(grpcserver.Smesher, app.log)
 		if err != nil {
 			return err
