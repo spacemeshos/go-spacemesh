@@ -230,6 +230,7 @@ func (ff *ForkFinder) UpdateAgreement(
 func (ff *ForkFinder) updateAgreement(peer p2p.Peer, update *layerHash, created time.Time) {
 	if update == nil {
 		ff.logger.With().Fatal("invalid arg", log.Stringer("peer", peer))
+		return // keep golint happy
 	}
 
 	ff.mu.Lock()

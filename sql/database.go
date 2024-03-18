@@ -7,6 +7,7 @@ import (
 	"maps"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -15,6 +16,9 @@ import (
 	"github.com/go-llsqlite/crawshaw/sqlitex"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 )
 
 var (
@@ -24,6 +28,8 @@ var (
 	ErrNotFound = errors.New("database: not found")
 	// ErrObjectExists is returned if database constraints didn't allow to insert an object.
 	ErrObjectExists = errors.New("database: object exists")
+	// ErrTooNew is returned if database version is newer than expected.
+	ErrTooNew = errors.New("database version is too new")
 )
 
 const (
@@ -205,6 +211,15 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 		after := 0
 		if len(config.migrations) > 0 {
 			after = config.migrations[len(config.migrations)-1].Order()
+		}
+		if before > after {
+			pool.Close()
+			config.logger.Error("database version is newer than expected - downgrade is not supported",
+				zap.String("uri", uri),
+				zap.Int("current version", before),
+				zap.Int("target version", after),
+			)
+			return nil, fmt.Errorf("%w: %d > %d", ErrTooNew, before, after)
 		}
 		config.logger.Info("running migrations",
 			zap.String("uri", uri),
@@ -469,4 +484,81 @@ func (tx *Tx) Exec(query string, encoder Encoder, decoder Decoder) (int, error) 
 		}()
 	}
 	return exec(tx.conn, query, encoder, decoder)
+}
+
+// Blob represents a binary blob data. It can be reused efficiently
+// across multiple data retrieval operations, minimizing reallocations
+// of the underlying byte slice.
+type Blob struct {
+	Bytes []byte
+}
+
+func (b *Blob) resize(n int) {
+	if cap(b.Bytes) < n {
+		b.Bytes = slices.Grow(b.Bytes, n)
+	}
+	b.Bytes = b.Bytes[:n]
+}
+
+func (b *Blob) fromColumn(stmt *Statement, col int) {
+	if l := stmt.ColumnLen(col); l != 0 {
+		b.resize(l)
+		stmt.ColumnBytes(col, b.Bytes)
+	} else {
+		b.resize(0)
+	}
+}
+
+// GetBlobSizes returns a slice containing the sizes of blobs
+// corresponding to the specified ids. For non-existent ids the
+// corresponding value is -1.
+func GetBlobSizes(db Executor, cmd string, ids [][]byte) (sizes []int, err error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	cmd += fmt.Sprintf(" (?%s)", strings.Repeat(",?", len(ids)-1))
+	sizes = make([]int, len(ids))
+	for n := range sizes {
+		sizes[n] = -1
+	}
+	m := make(map[string]int)
+	for n, id := range ids {
+		m[string(id)] = n
+	}
+	id := make([]byte, len(ids[0]))
+	if _, err := db.Exec(cmd,
+		func(stmt *Statement) {
+			for n, id := range ids {
+				stmt.BindBytes(n+1, id)
+			}
+		}, func(stmt *Statement) bool {
+			stmt.ColumnBytes(0, id[:])
+			n, found := m[string(id)]
+			if !found {
+				panic("BUG: bad ID retrieved from DB")
+			}
+			sizes[n] = stmt.ColumnInt(1)
+			return true
+		}); err != nil {
+		return nil, fmt.Errorf("get blob sizes: %w", err)
+	}
+
+	return sizes, nil
+}
+
+// LoadBlob loads an encoded blob.
+func LoadBlob(db Executor, cmd string, id []byte, blob *Blob) error {
+	if rows, err := db.Exec(cmd,
+		func(stmt *Statement) {
+			stmt.BindBytes(1, id)
+		}, func(stmt *Statement) bool {
+			blob.fromColumn(stmt, 0)
+			return true
+		}); err != nil {
+		return fmt.Errorf("get %v: %w", types.BytesToHash(id), err)
+	} else if rows == 0 {
+		return fmt.Errorf("%w: object %s", ErrNotFound, util.Encode(id))
+	}
+	return nil
 }

@@ -1,6 +1,7 @@
 package blocks
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -54,6 +55,17 @@ func Has(db sql.Executor, id types.BlockID) (bool, error) {
 		return false, fmt.Errorf("has ballot %s: %w", id, err)
 	}
 	return rows > 0, nil
+}
+
+// GetBlobSizes returns the sizes of the blobs corresponding to blocks with specified
+// ids. For non-existent balots, the corresponding items are set to -1.
+func GetBlobSizes(db sql.Executor, ids [][]byte) (sizes []int, err error) {
+	return sql.GetBlobSizes(db, "select id, length(block) from blocks where id in", ids)
+}
+
+// LoadBlob loads block as an encoded blob, ready to be sent over the wire.
+func LoadBlob(ctx context.Context, db sql.Executor, id []byte, b *sql.Blob) error {
+	return sql.LoadBlob(db, "select block from blocks where id = ?1", id, b)
 }
 
 // Get block with id from database.

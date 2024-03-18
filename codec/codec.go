@@ -115,32 +115,56 @@ func DecodeSlice[V any, H scale.DecodablePtr[V]](buf []byte) ([]V, error) {
 	return v, nil
 }
 
-// EncodeCompact16 encodes uint16 to a buffer.
+// ReadSlice decodes slice from am io.Reader.
+func ReadSlice[V any, H scale.DecodablePtr[V]](r io.Reader) ([]V, int, error) {
+	v, n, err := scale.DecodeStructSlice[V, H](scale.NewDecoder(r))
+	if err != nil {
+		return nil, 0, fmt.Errorf("read struct slice: %w", err)
+	}
+	return v, n, nil
+}
+
+// EncodeCompact16 encodes uint16 to an io.Writer.
 func EncodeCompact16(w io.Writer, value uint16) (int, error) {
 	return scale.EncodeCompact16(scale.NewEncoder(w), value)
 }
 
-// DecodeCompact16 decodes uint16 from a buffer.
-func DecodeCompact16(w io.Reader) (uint16, int, error) {
-	return scale.DecodeCompact16(scale.NewDecoder(w))
+// DecodeCompact16 decodes uint16 from an io.Reader.
+func DecodeCompact16(r io.Reader) (uint16, int, error) {
+	return scale.DecodeCompact16(scale.NewDecoder(r))
 }
 
-// EncodeStringSlice encodes []string to a buffer.
+// EncodeStringSlice encodes []string to an io.Writer.
 func EncodeStringSlice(w io.Writer, value []string) (int, error) {
 	return scale.EncodeStringSlice(scale.NewEncoder(w), value)
 }
 
-// DecodeStringSlice decodes []string from a buffer.
-func DecodeStringSlice(w io.Reader) ([]string, int, error) {
-	return scale.DecodeStringSlice(scale.NewDecoder(w))
+// DecodeStringSlice decodes []string from an io.Reader.
+func DecodeStringSlice(r io.Reader) ([]string, int, error) {
+	return scale.DecodeStringSlice(scale.NewDecoder(r))
 }
 
-// EncodeByteSlice encodes []string to a buffer.
+// EncodeByteSlice encodes []string to an io.Writer.
 func EncodeByteSlice(w io.Writer, value []byte) (int, error) {
 	return scale.EncodeByteSlice(scale.NewEncoder(w), value)
 }
 
-// DecodeByteSlice decodes []string from a buffer.
-func DecodeByteSlice(w io.Reader) ([]byte, int, error) {
-	return scale.DecodeByteSlice(scale.NewDecoder(w))
+// DecodeByteSlice decodes []string from an io.Reader.
+func DecodeByteSlice(r io.Reader) ([]byte, int, error) {
+	return scale.DecodeByteSlice(scale.NewDecoder(r))
+}
+
+// EncodeLen encodes a length value to an io.Writer.
+func EncodeLen(w io.Writer, value uint32) (int, error) {
+	return scale.EncodeCompact32(scale.NewEncoder(w), value)
+}
+
+// DecodeLen decodes a length value from an io.Reader.
+func DecodeLen(r io.Reader) (uint32, int, error) {
+	return scale.DecodeCompact32(scale.NewDecoder(r))
+}
+
+// DecodeStringWithLimit decodes a string from an io.Reader, limiting the maximum length.
+func DecodeStringWithLimit(r io.Reader, limit uint32) (string, int, error) {
+	return scale.DecodeStringWithLimit(scale.NewDecoder(r), limit)
 }

@@ -3,6 +3,7 @@ package store
 import (
 	"errors"
 	"fmt"
+	"io"
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -172,23 +173,36 @@ func (s *Store) Has(id types.ProposalID) bool {
 	return false
 }
 
-func (s *Store) GetBlob(id types.ProposalID) ([]byte, error) {
-	var proposal *types.Proposal
-
+func (s *Store) getByID(id types.ProposalID) (*types.Proposal, error) {
 	s.mu.RLock()
-	for layer := range s.data {
-		if p, ok := s.data[layer].proposals[id]; ok {
-			proposal = p
-			break
+	defer s.mu.RUnlock()
+	for _, m := range s.data {
+		if p, ok := m.proposals[id]; ok {
+			return p, nil
 		}
 	}
-	s.mu.RUnlock()
+	return nil, ErrNotFound
+}
 
-	if proposal == nil {
-		return nil, ErrNotFound
+func (s *Store) GetBlobSize(id types.ProposalID) (int, error) {
+	p, err := s.getByID(id)
+	if err != nil {
+		return 0, err
+	}
+	n, err := codec.EncodeTo(io.Discard, p)
+	if err != nil {
+		return 0, fmt.Errorf("encoding proposal: %w", err)
+	}
+	return n, err
+}
+
+func (s *Store) GetBlob(id types.ProposalID) ([]byte, error) {
+	p, err := s.getByID(id)
+	if err != nil {
+		return nil, err
 	}
 
-	blob, err := codec.Encode(proposal)
+	blob, err := codec.Encode(p)
 	if err != nil {
 		return nil, fmt.Errorf("encoding proposal: %w", err)
 	}
