@@ -1,6 +1,7 @@
 package identities
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -69,4 +70,46 @@ func Test_GetMalicious(t *testing.T) {
 	got, err = GetMalicious(db)
 	require.NoError(t, err)
 	require.Equal(t, bad, got)
+}
+
+func TestLoadMalfeasanceBlob(t *testing.T) {
+	db := sql.InMemory()
+	ctx := context.Background()
+
+	nid1 := types.RandomNodeID()
+	proof1 := types.RandomBytes(11)
+	SetMalicious(db, nid1, proof1, time.Now().Local())
+
+	var blob1 sql.Blob
+	require.NoError(t, LoadMalfeasanceBlob(ctx, db, nid1.Bytes(), &blob1))
+	require.Equal(t, proof1, blob1.Bytes)
+
+	blobSizes, err := GetBlobSizes(db, [][]byte{nid1.Bytes()})
+	require.NoError(t, err)
+	require.Equal(t, []int{len(blob1.Bytes)}, blobSizes)
+
+	nid2 := types.RandomNodeID()
+	proof2 := types.RandomBytes(12)
+	SetMalicious(db, nid2, proof2, time.Now().Local())
+
+	var blob2 sql.Blob
+	require.NoError(t, LoadMalfeasanceBlob(ctx, db, nid2.Bytes(), &blob2))
+	require.Equal(t, proof2, blob2.Bytes)
+	blobSizes, err = GetBlobSizes(db, [][]byte{
+		nid1.Bytes(),
+		nid2.Bytes(),
+	})
+	require.NoError(t, err)
+	require.Equal(t, []int{len(blob1.Bytes), len(blob2.Bytes)}, blobSizes)
+
+	noSuchID := types.RandomATXID()
+	require.ErrorIs(t, LoadMalfeasanceBlob(ctx, db, noSuchID[:], &sql.Blob{}), sql.ErrNotFound)
+
+	blobSizes, err = GetBlobSizes(db, [][]byte{
+		nid1.Bytes(),
+		noSuchID.Bytes(),
+		nid2.Bytes(),
+	})
+	require.NoError(t, err)
+	require.Equal(t, []int{len(blob1.Bytes), -1, len(blob2.Bytes)}, blobSizes)
 }

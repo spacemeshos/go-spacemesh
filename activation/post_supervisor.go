@@ -18,7 +18,9 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -169,7 +171,7 @@ func (ps *PostSupervisor) Start(opts PostSetupOpts, sig *signing.EdSigner) error
 		}
 		ps.atxBuilder.Register(sig)
 
-		return ps.runCmd(ctx, ps.cmdCfg, ps.postCfg, opts, ps.provingOpts)
+		return ps.runCmd(ctx, ps.cmdCfg, ps.postCfg, opts, ps.provingOpts, sig.NodeID())
 	})
 	return nil
 }
@@ -205,13 +207,14 @@ func (ps *PostSupervisor) Stop(deleteFiles bool) error {
 
 // captureCmdOutput returns a function that reads from the given pipe and logs the output.
 // it returns when the pipe is closed.
-func (ps *PostSupervisor) captureCmdOutput(pipe io.ReadCloser) func() error {
+func (ps *PostSupervisor) captureCmdOutput(pipe io.ReadCloser, smesherId types.NodeID) func() error {
 	return func() error {
 		scanner := bufio.NewScanner(pipe)
+		logger := ps.logger.With(log.ZShortStringer("smesherID", smesherId))
 		for scanner.Scan() {
 			line := scanner.Text()
 			line = strings.TrimRight(line, "\r\n") // remove line delimiters at end of input
-			ps.logger.Info(line)
+			logger.Info(line)
 		}
 		return nil
 	}
@@ -223,13 +226,13 @@ func (ps *PostSupervisor) runCmd(
 	postCfg PostConfig,
 	postOpts PostSetupOpts,
 	provingOpts PostProvingOpts,
+	smesherId types.NodeID,
 ) error {
 	args := []string{
 		"--address", cmdCfg.NodeAddress,
 
 		"--min-num-units", strconv.FormatUint(uint64(postCfg.MinNumUnits), 10),
 		"--max-num-units", strconv.FormatUint(uint64(postCfg.MaxNumUnits), 10),
-		"--labels-per-unit", strconv.FormatUint(postCfg.LabelsPerUnit, 10),
 		"--k1", strconv.FormatUint(uint64(postCfg.K1), 10),
 		"--k2", strconv.FormatUint(uint64(postCfg.K2), 10),
 		"--pow-difficulty", postCfg.PowDifficulty.String(),
@@ -270,13 +273,18 @@ func (ps *PostSupervisor) runCmd(
 	}
 
 	var eg errgroup.Group
-	eg.Go(ps.captureCmdOutput(pipe))
+	eg.Go(ps.captureCmdOutput(pipe, smesherId))
 	if err := cmd.Start(); err != nil {
 		pipe.Close()
 		ps.logger.Error("start post service", zap.Error(err))
 		return nil
 	}
-	ps.logger.Info("post service started", zap.Int("pid", cmd.Process.Pid), zap.String("cmd", cmd.String()))
+	ps.logger.Info(
+		"post service started",
+		zap.Int("pid", cmd.Process.Pid),
+		zap.String("cmd", cmd.String()),
+		log.ZShortStringer("smesherID", smesherId),
+	)
 	ps.pid.Store(int64(cmd.Process.Pid))
 	events.EmitPostServiceStarted()
 	err = cmd.Wait()

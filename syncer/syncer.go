@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -401,7 +402,18 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		// always sync to currentLayer-1 to reduce race with gossip and hare/tortoise
 		for layerID := s.getLastSyncedLayer().Add(1); layerID.Before(s.ticker.CurrentLayer()); layerID = layerID.Add(1) {
 			if err := s.syncLayer(ctx, layerID); err != nil {
-				return false
+				batchError := &fetch.BatchError{}
+				if errors.As(err, &batchError) && batchError.Ignore() {
+					s.logger.With().
+						Info("remaining ballots are rejected in the layer", log.Context(ctx), log.Err(err), layerID)
+				} else {
+					if !errors.Is(err, context.Canceled) {
+						// BatchError spams too much, in case of no progress enable debug mode for sync
+						s.logger.With().
+							Debug("failed to sync layer", log.Context(ctx), log.Err(err), layerID)
+					}
+					return false
+				}
 			}
 			s.setLastSyncedLayer(layerID)
 		}
@@ -426,18 +438,12 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	return success
 }
 
-func (s *Syncer) backgroundEpoch() types.EpochID {
-	lid := s.ticker.CurrentLayer()
-	if lid.OrdinalInEpoch() > uint32(float64(types.GetLayersPerEpoch())*s.cfg.EpochEndFraction) {
-		return lid.GetEpoch() + 1
-	}
-	return lid.GetEpoch()
-}
-
 func (s *Syncer) syncAtx(ctx context.Context) error {
+	current := s.ticker.CurrentLayer()
+	// on startup always download all activations that were published before current epoch
 	if !s.ListenToATXGossip() {
-		s.logger.With().Debug("syncing atx from genesis", log.Context(ctx), s.ticker.CurrentLayer(), s.lastAtxEpoch())
-		for epoch := s.lastAtxEpoch() + 1; epoch < s.backgroundEpoch(); epoch++ {
+		s.logger.With().Debug("syncing atx from genesis", log.Context(ctx), current, s.lastAtxEpoch())
+		for epoch := s.lastAtxEpoch() + 1; epoch < current.GetEpoch(); epoch++ {
 			if err := s.fetchATXsForEpoch(ctx, epoch, false); err != nil {
 				return err
 			}
@@ -453,7 +459,15 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 		s.setATXSynced()
 	}
 
-	publish := s.backgroundEpoch()
+	publish := current.GetEpoch()
+	if publish == 0 {
+		return nil // nothing to sync in epoch 0
+	}
+
+	// if we are not advanced enough sync previous epoch, otherwise start syncing activations published in this epoch
+	if current.OrdinalInEpoch() <= uint32(float64(types.GetLayersPerEpoch())*s.cfg.EpochEndFraction) {
+		publish -= 1
+	}
 	if epoch := s.backgroundSync.epoch.Load(); epoch != 0 && epoch != publish.Uint32() {
 		s.backgroundSync.cancel()
 		s.backgroundSync.eg.Wait()
@@ -466,10 +480,16 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 		s.backgroundSync.cancel = cancel
 		s.backgroundSync.eg.Go(func() error {
 			err := s.fetchATXsForEpoch(ctx, publish, true)
-			if err != nil {
-				s.logger.With().Warning("background atx sync failed", log.Context(ctx), publish.Field(), log.Err(err))
-				s.backgroundSync.epoch.Store(0)
+			if err == nil {
+				return nil
 			}
+			if !errors.Is(err, context.Canceled) {
+				s.logger.With().
+					Warning("background atx sync failed", log.Context(ctx), publish.Field(), log.Err(err))
+			} else {
+				s.logger.With().Debug("background atx sync stopped", log.Context(ctx), publish.Field())
+			}
+			s.backgroundSync.epoch.Store(0)
 			return err
 		})
 	}
@@ -570,7 +590,7 @@ func (s *Syncer) syncMalfeasance(ctx context.Context) error {
 
 func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID, peers ...p2p.Peer) error {
 	if err := s.dataFetcher.PollLayerData(ctx, layerID, peers...); err != nil {
-		return fmt.Errorf("PollLayerData: %w", err)
+		return err
 	}
 	dataLayer.Set(float64(layerID))
 	return nil

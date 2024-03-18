@@ -56,8 +56,8 @@ func DefaultLoggingConfig() LoggerConfig {
 	return LoggerConfig{
 		Encoder:                    ConsoleLogEncoder,
 		AppLoggerLevel:             defaultLoggingLevel.String(),
-		GrpcLoggerLevel:            defaultLoggingLevel.String(),
-		P2PLoggerLevel:             zapcore.WarnLevel.String(),
+		GrpcLoggerLevel:            zapcore.WarnLevel.String(),
+		P2PLoggerLevel:             zapcore.ErrorLevel.String(),
 		PostLoggerLevel:            defaultLoggingLevel.String(),
 		StateDbLoggerLevel:         defaultLoggingLevel.String(),
 		AtxHandlerLevel:            defaultLoggingLevel.String(),

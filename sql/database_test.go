@@ -170,3 +170,26 @@ func TestQueryCount(t *testing.T) {
 	require.Error(t, err)
 	require.Equal(t, 2, db.QueryCount())
 }
+
+func Test_Migration_FailsIfDatabaseTooNew(t *testing.T) {
+	dir := t.TempDir()
+
+	ctrl := gomock.NewController(t)
+	migration1 := NewMockMigration(ctrl)
+	migration1.EXPECT().Order().Return(1).AnyTimes()
+
+	migration2 := NewMockMigration(ctrl)
+	migration2.EXPECT().Order().Return(2).AnyTimes()
+
+	dbFile := filepath.Join(dir, "test.sql")
+	db, err := Open("file:" + dbFile)
+	require.NoError(t, err)
+	_, err = db.Exec("PRAGMA user_version = 3", nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	_, err = Open("file:"+dbFile,
+		WithMigrations([]Migration{migration1, migration2}),
+	)
+	require.ErrorIs(t, err, ErrTooNew)
+}

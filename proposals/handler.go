@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -30,17 +31,12 @@ import (
 var (
 	errMalformedData         = fmt.Errorf("%w: malformed data", pubsub.ErrValidationReject)
 	errWrongHash             = fmt.Errorf("%w: incorrect hash", pubsub.ErrValidationReject)
-	errInitialize            = errors.New("failed to initialize")
-	errInvalidATXID          = errors.New("ballot has invalid ATXID")
-	errMissingEpochData      = errors.New("epoch data is missing in ref ballot")
-	errUnexpectedEpochData   = errors.New("non-ref ballot declares epoch data")
-	errEmptyActiveSet        = errors.New("ref ballot declares empty active set")
-	errMissingBeacon         = errors.New("beacon is missing in ref ballot")
-	errNotEligible           = errors.New("ballot not eligible")
-	errDoubleVoting          = errors.New("ballot doubly-voted in same layer")
-	errConflictingExceptions = errors.New("conflicting exceptions")
-	errExceptionsOverflow    = errors.New("too many exceptions")
-	errDuplicateTX           = errors.New("duplicate TxID in proposal")
+	errInitialize            = fmt.Errorf("%w: failed to initialize", pubsub.ErrValidationReject)
+	errInvalidATXID          = fmt.Errorf("%w: ballot has invalid ATXID", pubsub.ErrValidationReject)
+	errDoubleVoting          = fmt.Errorf("%w: ballot doubly-voted in same layer", pubsub.ErrValidationReject)
+	errConflictingExceptions = fmt.Errorf("%w: conflicting exceptions", pubsub.ErrValidationReject)
+	errExceptionsOverflow    = fmt.Errorf("%w: too many exceptions", pubsub.ErrValidationReject)
+	errDuplicateTX           = fmt.Errorf("%w: duplicate TxID in proposal", pubsub.ErrValidationReject)
 	errKnownProposal         = errors.New("known proposal")
 	errKnownBallot           = errors.New("known ballot")
 	errMaliciousBallot       = errors.New("malicious ballot")
@@ -169,11 +165,15 @@ func (h *Handler) HandleSyncedBallot(ctx context.Context, expHash types.Hash32, 
 		return errMalformedData
 	}
 	if b.Layer <= types.GetEffectiveGenesis() {
-		return fmt.Errorf("ballot before effective genesis: layer %v", b.Layer)
+		return fmt.Errorf("%w: ballot before effective genesis: layer %v", pubsub.ErrValidationReject, b.Layer)
 	}
 
 	if !h.edVerifier.Verify(signing.BALLOT, b.SmesherID, b.SignedBytes(), b.Signature) {
-		return fmt.Errorf("failed to verify ballot signature")
+		return fmt.Errorf(
+			"%w: failed to verify ballot %s signature",
+			pubsub.ErrValidationReject,
+			b.ID().String(),
+		)
 	}
 
 	// set the ballot and smesher ID when received
@@ -183,7 +183,12 @@ func (h *Handler) HandleSyncedBallot(ctx context.Context, expHash types.Hash32, 
 	}
 
 	if b.ID().AsHash32() != expHash {
-		return fmt.Errorf("%w: ballot want %s, got %s", errWrongHash, expHash.ShortString(), b.ID().String())
+		return fmt.Errorf(
+			"%w: ballot want %s, got %s",
+			pubsub.ErrValidationReject,
+			expHash.ShortString(),
+			b.ID().String(),
+		)
 	}
 
 	if b.AtxID == types.EmptyATXID || b.AtxID == h.cfg.GoldenATXID {
@@ -477,11 +482,16 @@ func (h *Handler) checkBallotSyntacticValidity(
 	ballotDuration.WithLabelValues(fetchRef).Observe(float64(time.Since(t1)))
 
 	t2 := time.Now()
-	// ballot can be decoded only if all dependencies (blocks, ballots, atxs) were downloaded
+	// ballot can be decoded only if all dependencies (ballots, atxs) were downloaded
 	// and added to the tortoise.
 	decoded, err := h.tortoise.DecodeBallot(b.ToTortoiseData())
 	if err != nil {
-		return nil, fmt.Errorf("decode ballot %s: %w", b.ID(), err)
+		return nil, fmt.Errorf(
+			"%w: failed to decode ballot id %s. %v",
+			fetch.ErrIgnore,
+			b.ID().AsHash32().ShortString(),
+			err,
+		)
 	}
 	ballotDuration.WithLabelValues(decode).Observe(float64(time.Since(t2)))
 
@@ -498,13 +508,9 @@ func (h *Handler) checkBallotSyntacticValidity(
 	ballotDuration.WithLabelValues(votes).Observe(float64(time.Since(t3)))
 
 	t4 := time.Now()
-	if eligible, err := h.validator.CheckEligibility(ctx, b, ref); err != nil || !eligible {
+	if err := h.validator.CheckEligibility(ctx, b, ref); err != nil {
 		notEligible.Inc()
-		var reason string
-		if err != nil {
-			reason = err.Error()
-		}
-		return nil, fmt.Errorf("%w: %v", errNotEligible, reason)
+		return nil, err
 	}
 	ballotDuration.WithLabelValues(eligible).Observe(float64(time.Since(t4)))
 
@@ -516,10 +522,10 @@ func (h *Handler) checkBallotDataIntegrity(ctx context.Context, b *types.Ballot)
 	if b.RefBallot == types.EmptyBallotID {
 		// this is the smesher's first Ballot in this epoch, should contain EpochData
 		if b.EpochData == nil {
-			return 0, errMissingEpochData
+			return 0, fmt.Errorf("%w: missing epoch data", pubsub.ErrValidationReject)
 		}
 		if b.EpochData.Beacon == types.EmptyBeacon {
-			return 0, errMissingBeacon
+			return 0, fmt.Errorf("%w: missing beacon", pubsub.ErrValidationReject)
 		}
 		epoch := h.clock.CurrentLayer().GetEpoch()
 		if epoch > 0 {
@@ -543,6 +549,7 @@ func (h *Handler) checkBallotDataIntegrity(ctx context.Context, b *types.Ballot)
 						b.ID().String(),
 					)
 				}
+
 				computed, used := h.atxsdata.WeightForSet(set.Epoch, set.Set)
 				for i := range used {
 					if !used[i] {
@@ -559,7 +566,7 @@ func (h *Handler) checkBallotDataIntegrity(ctx context.Context, b *types.Ballot)
 			return totalWeight, nil
 		}
 	} else if b.EpochData != nil {
-		return 0, errUnexpectedEpochData
+		return 0, fmt.Errorf("%w: epoch data in non-first ballot %s", pubsub.ErrValidationReject, b.ID())
 	}
 	return 0, nil
 }

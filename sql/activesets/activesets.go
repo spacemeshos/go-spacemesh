@@ -54,7 +54,26 @@ func Get(db sql.Executor, id types.Hash32) (*types.EpochActiveSet, error) {
 	return &rst, nil
 }
 
-func GetBlob(ctx context.Context, db sql.Executor, id []byte) ([]byte, error) {
+// GetBlobSizes returns the sizes of the blobs corresponding to activesets with specified
+// ids. For non-existent activesets, the corresponding items are set to -1.
+func GetBlobSizes(db sql.Executor, ids [][]byte) (sizes []int, err error) {
+	return sql.GetBlobSizes(db, "select id, length(active_set) from activesets where id in", ids)
+}
+
+// LoadBlob loads activesets as an encoded blob, ready to be sent over the wire.
+func LoadBlob(ctx context.Context, db sql.Executor, id []byte, blob *sql.Blob) error {
+	if sql.IsCached(db) {
+		b, err := getBlob(ctx, db, id)
+		if err != nil {
+			return err
+		}
+		blob.Bytes = b
+		return nil
+	}
+	return sql.LoadBlob(db, "select active_set from activesets where id = ?1", id, blob)
+}
+
+func getBlob(ctx context.Context, db sql.Executor, id []byte) ([]byte, error) {
 	cacheKey := sql.QueryCacheKey(CacheKindActiveSetBlob, string(id))
 	return sql.WithCachedValue(ctx, db, cacheKey, func(context.Context) ([]byte, error) {
 		var rst []byte
@@ -69,11 +88,11 @@ func GetBlob(ctx context.Context, db sql.Executor, id []byte) ([]byte, error) {
 				return true
 			},
 		)
-		if rows == 0 {
-			return nil, fmt.Errorf("active set %x: %w", id, sql.ErrNotFound)
-		}
 		if err != nil {
 			return nil, fmt.Errorf("get active set blob %x: %w", id, err)
+		}
+		if rows == 0 {
+			return nil, fmt.Errorf("active set %x: %w", id, sql.ErrNotFound)
 		}
 		return rst, nil
 	})

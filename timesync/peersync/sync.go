@@ -151,7 +151,7 @@ func (s *Sync) streamHandler(stream network.Stream) {
 	defer stream.SetDeadline(time.Time{})
 	var request Request
 	if _, err := codec.DecodeFrom(stream, &request); err != nil {
-		s.log.With().Warning("can't decode request", log.Err(err))
+		s.log.With().Debug("can't decode request", log.Err(err))
 		return
 	}
 	resp := Response{
@@ -159,7 +159,7 @@ func (s *Sync) streamHandler(stream network.Stream) {
 		Timestamp: uint64(s.time.Now().UnixNano()),
 	}
 	if _, err := codec.EncodeTo(stream, &resp); err != nil {
-		s.log.With().Warning("can't encode response", log.Err(err))
+		s.log.With().Debug("can't encode response", log.Err(err))
 	}
 }
 
@@ -268,19 +268,19 @@ func (s *Sync) GetOffset(ctx context.Context, id uint64, prs []p2p.Peer) (time.D
 			logger := s.log.WithFields(log.Stringer("pid", pid)).With()
 			stream, err := s.h.NewStream(network.WithNoDial(ctx, "existing connection"), pid, protocolName)
 			if err != nil {
-				logger.Warning("failed to create new stream", log.Err(err))
+				logger.Debug("failed to create new stream", log.Err(err))
 				return
 			}
 			defer stream.Close()
 			_ = stream.SetDeadline(s.time.Now().Add(s.config.RoundTimeout))
 			defer stream.SetDeadline(time.Time{})
 			if _, err := stream.Write(buf); err != nil {
-				logger.Warning("failed to send a request", log.Err(err))
+				logger.Debug("failed to send a request", log.Err(err))
 				return
 			}
 			var resp Response
 			if _, err := codec.DecodeFrom(stream, &resp); err != nil {
-				logger.Warning("failed to read response from peer", log.Err(err))
+				logger.Debug("failed to read response from peer", log.Err(err))
 				return
 			}
 			select {

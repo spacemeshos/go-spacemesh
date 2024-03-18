@@ -2,6 +2,12 @@ VERSION ?= $(shell git describe --tags)
 COMMIT = $(shell git rev-parse HEAD)
 BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 
+GOLANGCI_LINT_VERSION := v1.56.2
+STATICCHECK_VERSION := v0.4.7
+GOTESTSUM_VERSION := v1.11.0
+GOSCALE_VERSION := v1.1.13
+MOCKGEN_VERSION := v0.4.0
+
 # Add an indicator to the branch name if dirty and use commithash if running in detached mode
 ifeq ($(BRANCH),HEAD)
     BRANCH = $(SHA)
@@ -24,7 +30,7 @@ LDFLAGS = -ldflags "$(C_LDFLAGS)"
 
 include Makefile-libs.Inc
 
-UNIT_TESTS ?= $(shell go list ./...  | grep -v systest/tests | grep -v cmd/node | grep -v cmd/gen-p2p-identity | grep -v cmd/trace | grep -v genvm/cmd)
+UNIT_TESTS ?= $(shell go list ./...  | grep -v systest/tests | grep -v genvm/cmd)
 
 export CGO_ENABLED := 1
 export CGO_CFLAGS := $(CGO_CFLAGS) -DSQLITE_ENABLE_DBSTAT_VTAB=1
@@ -50,11 +56,11 @@ all: install build
 install:
 	git lfs install
 	go mod download
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.54.2
-	go install github.com/spacemeshos/go-scale/scalegen@v1.1.12
-	go install go.uber.org/mock/mockgen@v0.4.0
-	go install gotest.tools/gotestsum@v1.10.1
-	go install honnef.co/go/tools/cmd/staticcheck@v0.4.5
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s $(GOLANGCI_LINT_VERSION)
+	go install github.com/spacemeshos/go-scale/scalegen@$(GOSCALE_VERSION)
+	go install go.uber.org/mock/mockgen@$(MOCKGEN_VERSION)
+	go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
+	go install honnef.co/go/tools/cmd/staticcheck@$(STATICCHECK_VERSION)
 .PHONY: install
 
 build: go-spacemesh get-profiler get-postrs-service
@@ -63,6 +69,10 @@ build: go-spacemesh get-profiler get-postrs-service
 get-libs: get-postrs-lib get-postrs-service
 
 get-profiler: get-postrs-profiler
+
+merge-nodes: get-libs
+	cd cmd/merge-nodes ; go build -o $(BIN_DIR)$@$(EXE) -ldflags "-X main.version=${VERSION}" .
+.PHONY: merge-nodes
 
 gen-p2p-identity:
 	cd cmd/gen-p2p-identity ; go build -o $(BIN_DIR)$@$(EXE) .
@@ -143,7 +153,10 @@ list-versions:
 .PHONY: list-versions
 
 dockerbuild-go:
-	DOCKER_BUILDKIT=1 docker build -t go-spacemesh:$(SHA) -t $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION) .
+	DOCKER_BUILDKIT=1 docker build \
+		--build-arg VERSION=${VERSION} \
+		-t go-spacemesh:$(SHA) \
+		-t $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION) .
 .PHONY: dockerbuild-go
 
 dockerpush: dockerbuild-go dockerpush-only

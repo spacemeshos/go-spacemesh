@@ -2,7 +2,6 @@ package cluster
 
 import (
 	"context"
-	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -15,6 +14,7 @@ import (
 	"time"
 
 	"github.com/mitchellh/mapstructure"
+	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"github.com/spf13/viper"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
@@ -855,7 +855,6 @@ func deployPostService(
 		"--randomx-mode", conf.SMESHING.ProvingOpts.RandomXMode.String(),
 		"--min-num-units", strconv.FormatUint(uint64(conf.POST.MinNumUnits), 10),
 		"--max-num-units", strconv.FormatUint(uint64(conf.POST.MaxNumUnits), 10),
-		"--labels-per-unit", strconv.FormatUint(uint64(conf.POST.LabelsPerUnit), 10),
 		"--k1", strconv.FormatUint(uint64(conf.POST.K1), 10),
 		"--k2", strconv.FormatUint(uint64(conf.POST.K2), 10),
 		"--pow-difficulty", conf.POST.PowDifficulty.String(),

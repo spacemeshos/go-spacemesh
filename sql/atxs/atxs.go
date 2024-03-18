@@ -216,6 +216,52 @@ func GetIDByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.No
 	return id, err
 }
 
+// IterateIDsByEpoch invokes the specified callback for each ATX ID in a given epoch.
+// It stops if the callback returns an error.
+func IterateIDsByEpoch(
+	db sql.Executor,
+	epoch types.EpochID,
+	callback func(total int, id types.ATXID) error,
+) error {
+	if sql.IsCached(db) {
+		// If the slices are cached, let's not do more SELECTs
+		ids, err := GetIDsByEpoch(context.Background(), db, epoch)
+		if err != nil {
+			return err
+		}
+		for _, id := range ids {
+			if err := callback(len(ids), id); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	var callbackErr error
+	enc := func(stmt *sql.Statement) {
+		stmt.BindInt64(1, int64(epoch))
+	}
+	dec := func(stmt *sql.Statement) bool {
+		var id types.ATXID
+		total := stmt.ColumnInt(0)
+		stmt.ColumnBytes(1, id[:])
+		if callbackErr = callback(total, id); callbackErr != nil {
+			return false
+		}
+		return true
+	}
+
+	// Get total count in the same select statement to avoid the need for transaction
+	if _, err := db.Exec(
+		"select (select count(*) from atxs where epoch = ?1) as total, id from atxs where epoch = ?1;",
+		enc, dec,
+	); err != nil {
+		return fmt.Errorf("exec epoch %v: %w", epoch, err)
+	}
+
+	return callbackErr
+}
+
 // GetIDsByEpoch gets ATX IDs for a given epoch.
 func GetIDsByEpoch(ctx context.Context, db sql.Executor, epoch types.EpochID) (ids []types.ATXID, err error) {
 	cacheKey := sql.QueryCacheKey(CacheKindEpochATXs, epoch.String())
@@ -264,8 +310,26 @@ func VRFNonce(db sql.Executor, id types.NodeID, epoch types.EpochID) (nonce type
 	return nonce, err
 }
 
-// GetBlob loads ATX as an encoded blob, ready to be sent over the wire.
-func GetBlob(ctx context.Context, db sql.Executor, id []byte) (buf []byte, err error) {
+// GetBlobSizes returns the sizes of the blobs corresponding to ATXs with specified
+// ids. For non-existent ATXs, the corresponding items are set to -1.
+func GetBlobSizes(db sql.Executor, ids [][]byte) (sizes []int, err error) {
+	return sql.GetBlobSizes(db, "select id, length(atx) from atxs where id in", ids)
+}
+
+// LoadBlob loads ATX as an encoded blob, ready to be sent over the wire.
+func LoadBlob(ctx context.Context, db sql.Executor, id []byte, blob *sql.Blob) error {
+	if sql.IsCached(db) {
+		b, err := getBlob(ctx, db, id)
+		if err != nil {
+			return err
+		}
+		blob.Bytes = b
+		return nil
+	}
+	return sql.LoadBlob(db, "select atx from atxs where id = ?1", id, blob)
+}
+
+func getBlob(ctx context.Context, db sql.Executor, id []byte) (buf []byte, err error) {
 	cacheKey := sql.QueryCacheKey(CacheKindATXBlob, string(id))
 	return sql.WithCachedValue(ctx, db, cacheKey, func(context.Context) ([]byte, error) {
 		if rows, err := db.Exec("select atx from atxs where id = ?1",
@@ -489,22 +553,45 @@ func LatestEpoch(db sql.Executor) (types.EpochID, error) {
 	return epoch, nil
 }
 
-func IterateAtxs(db sql.Executor, from, to types.EpochID, fn func(*types.VerifiedActivationTx) bool) error {
-	var derr error
-	_, err := db.Exec(fullQuery+" where epoch between ?1 and ?2", func(stmt *sql.Statement) {
-		stmt.BindInt64(1, int64(from.Uint32()))
-		stmt.BindInt64(2, int64(to.Uint32()))
-	}, decoder(func(atx *types.VerifiedActivationTx, err error) bool {
-		if atx != nil {
-			return fn(atx)
-		}
-		derr = err
-		return derr == nil
-	}))
+// IterateAtxsData iterate over data used for consensus.
+func IterateAtxsData(
+	db sql.Executor,
+	from, to types.EpochID,
+	fn func(
+		id types.ATXID,
+		node types.NodeID,
+		epoch types.EpochID,
+		coinbase types.Address,
+		weight uint64,
+		base uint64,
+		height uint64,
+	) bool,
+) error {
+	_, err := db.Exec(
+		`select id, pubkey, epoch, coinbase, effective_num_units, base_tick_height, tick_count
+		from atxs where epoch between ?1 and ?2;`,
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(from.Uint32()))
+			stmt.BindInt64(2, int64(to.Uint32()))
+		},
+		func(stmt *sql.Statement) bool {
+			var id types.ATXID
+			stmt.ColumnBytes(0, id[:])
+			var node types.NodeID
+			stmt.ColumnBytes(1, node[:])
+			epoch := types.EpochID(uint32(stmt.ColumnInt64(2)))
+			var coinbase types.Address
+			stmt.ColumnBytes(3, coinbase[:])
+			effectiveUnits := uint64(stmt.ColumnInt64(4))
+			baseHeight := uint64(stmt.ColumnInt64(5))
+			ticks := uint64(stmt.ColumnInt64(6))
+			return fn(id, node, epoch, coinbase, effectiveUnits*ticks, baseHeight, baseHeight+ticks)
+		},
+	)
 	if err != nil {
-		return err
+		return fmt.Errorf("iterate atx fields: %w", err)
 	}
-	return derr
+	return nil
 }
 
 func SetValidity(db sql.Executor, id types.ATXID, validity types.Validity) error {

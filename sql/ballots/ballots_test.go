@@ -1,6 +1,7 @@
 package ballots
 
 import (
+	"context"
 	"os"
 	"testing"
 	"time"
@@ -325,4 +326,38 @@ func TestAllFirstInEpoch(t *testing.T) {
 			require.Equal(t, expect, results)
 		})
 	}
+}
+
+func TestLoadBlob(t *testing.T) {
+	db := sql.InMemory()
+	ctx := context.Background()
+
+	ballot1 := types.NewExistingBallot(
+		types.RandomBallotID(), types.RandomEdSignature(), types.RandomNodeID(), types.LayerID(0))
+	encoded1 := codec.MustEncode(&ballot1)
+	require.NoError(t, Add(db, &ballot1))
+
+	ballot2 := types.NewExistingBallot(
+		types.RandomBallotID(), types.RandomEdSignature(), types.RandomNodeID(), types.LayerID(0))
+	encoded2 := codec.MustEncode(&ballot2)
+	require.NoError(t, Add(db, &ballot2))
+
+	var blob1 sql.Blob
+	require.NoError(t, LoadBlob(ctx, db, ballot1.ID().Bytes(), &blob1))
+	require.Equal(t, encoded1, blob1.Bytes)
+
+	var blob2 sql.Blob
+	require.NoError(t, LoadBlob(ctx, db, ballot2.ID().Bytes(), &blob2))
+	require.Equal(t, encoded2, blob2.Bytes)
+
+	noSuchID := types.RandomBallotID()
+	require.ErrorIs(t, LoadBlob(ctx, db, noSuchID.Bytes(), &sql.Blob{}), sql.ErrNotFound)
+
+	sizes, err := GetBlobSizes(db, [][]byte{
+		ballot1.ID().Bytes(),
+		ballot2.ID().Bytes(),
+		noSuchID.Bytes(),
+	})
+	require.NoError(t, err)
+	require.Equal(t, []int{len(blob1.Bytes), len(blob2.Bytes), -1}, sizes)
 }

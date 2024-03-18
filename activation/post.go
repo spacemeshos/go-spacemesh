@@ -257,7 +257,7 @@ func (mgr *PostSetupManager) Status() *PostSetupStatus {
 // previously started session, and will return an error if a session is already
 // in progress. It must be ensured that PrepareInitializer is called once
 // before each call to StartSession and that the node is ATX synced.
-func (mgr *PostSetupManager) StartSession(ctx context.Context, id types.NodeID) error {
+func (mgr *PostSetupManager) StartSession(ctx context.Context, nodeID types.NodeID) error {
 	// Ensure only one goroutine can execute initialization at a time.
 	err := func() error {
 		mgr.mu.Lock()
@@ -272,7 +272,7 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, id types.NodeID) 
 		return err
 	}
 	mgr.logger.Info("post setup session starting",
-		zap.Stringer("node_id", id),
+		zap.Stringer("node_id", nodeID),
 		zap.Stringer("commitment_atx", mgr.commitmentAtxId),
 		zap.String("data_dir", mgr.lastOpts.DataDir),
 		zap.Uint32("num_units", mgr.lastOpts.NumUnits),
@@ -280,7 +280,7 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, id types.NodeID) 
 		zap.Stringer("provider", mgr.lastOpts.ProviderID),
 	)
 	public.InitStart.Set(float64(mgr.lastOpts.NumUnits))
-	events.EmitInitStart(id, mgr.commitmentAtxId)
+	events.EmitInitStart(nodeID, mgr.commitmentAtxId)
 	err = mgr.init.Initialize(ctx)
 
 	mgr.mu.Lock()
@@ -297,19 +297,19 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, id types.NodeID) 
 			zap.Error(errLabelMismatch),
 		)
 		mgr.state = PostSetupStateError
-		events.EmitInitFailure(id, mgr.commitmentAtxId, errLabelMismatch)
+		events.EmitInitFailure(nodeID, mgr.commitmentAtxId, errLabelMismatch)
 		return nil
 	case err != nil:
 		mgr.logger.Error("post setup session failed", zap.Error(err))
 		mgr.state = PostSetupStateError
-		events.EmitInitFailure(id, mgr.commitmentAtxId, err)
+		events.EmitInitFailure(nodeID, mgr.commitmentAtxId, err)
 		return err
 	}
 	public.InitEnd.Set(float64(mgr.lastOpts.NumUnits))
-	events.EmitInitComplete()
+	events.EmitInitComplete(nodeID)
 
 	mgr.logger.Info("post setup completed",
-		zap.Stringer("node_id", id),
+		zap.Stringer("node_id", nodeID),
 		zap.Stringer("commitment_atx", mgr.commitmentAtxId),
 		zap.String("data_dir", mgr.lastOpts.DataDir),
 		zap.Uint32("num_units", mgr.lastOpts.NumUnits),

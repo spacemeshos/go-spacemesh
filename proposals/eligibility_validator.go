@@ -2,24 +2,17 @@ package proposals
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/spacemeshos/fixed"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner/minweight"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/system"
-)
-
-var (
-	errIncorrectCounter    = errors.New("proof counter larger than number of slots available")
-	errInvalidProofsOrder  = errors.New("proofs are out of order")
-	errIncorrectVRFSig     = errors.New("proof contains incorrect VRF signature")
-	errIncorrectLayerIndex = errors.New("ballot has incorrect layer index")
-	errIncorrectEligCount  = errors.New("ballot has incorrect eligibility count")
 )
 
 // Validator validates the eligibility of a Ballot.
@@ -69,21 +62,26 @@ func NewEligibilityValidator(
 }
 
 // CheckEligibility checks that a ballot is eligible in the layer that it specifies.
-func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot, weight uint64) (bool, error) {
+func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot, weight uint64) error {
 	if len(ballot.EligibilityProofs) == 0 {
-		return false, fmt.Errorf("empty eligibility list is invalid (ballot %s)", ballot.ID())
+		return fmt.Errorf(
+			"%w: empty eligibility list is invalid (ballot %s)",
+			pubsub.ErrValidationReject,
+			ballot.ID(),
+		)
 	}
 	atx := v.atxsdata.Get(ballot.Layer.GetEpoch(), ballot.AtxID)
 	if atx == nil {
-		return false, fmt.Errorf(
+		return fmt.Errorf(
 			"failed to load atx from cache with epoch %d %s",
 			ballot.Layer.GetEpoch(),
 			ballot.AtxID.ShortString(),
 		)
 	}
 	if atx.Node != ballot.SmesherID {
-		return false, fmt.Errorf(
-			"referenced atx %s belongs to a different smesher %s",
+		return fmt.Errorf(
+			"%w: referenced atx %s belongs to a different smesher %s",
+			pubsub.ErrValidationReject,
 			atx.Node.ShortString(),
 			ballot.SmesherID.ShortString(),
 		)
@@ -98,25 +96,35 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot, 
 		data, err = v.validateSecondary(ballot)
 	}
 	if err != nil {
-		return false, err
+		return err
 	}
 	for i, proof := range ballot.EligibilityProofs {
 		if proof.J >= data.EligibilityCount {
-			return false, fmt.Errorf("%w: proof counter (%d) numEligibleBallots (%d)",
-				errIncorrectCounter, proof.J, data.EligibilityCount)
+			return fmt.Errorf("%w: proof counter larger than number of slots (%d) numEligibleBallots (%d)",
+				pubsub.ErrValidationReject, proof.J, data.EligibilityCount)
 		}
 		if i != 0 && proof.J <= ballot.EligibilityProofs[i-1].J {
-			return false, fmt.Errorf("%w: %d <= %d", errInvalidProofsOrder, proof.J, ballot.EligibilityProofs[i-1].J)
+			return fmt.Errorf(
+				"%w: proofs are out of order: %d <= %d",
+				pubsub.ErrValidationReject,
+				proof.J,
+				ballot.EligibilityProofs[i-1].J,
+			)
 		}
 		if !v.vrfVerifier.Verify(ballot.SmesherID,
 			MustSerializeVRFMessage(data.Beacon, ballot.Layer.GetEpoch(), atx.Nonce, proof.J), proof.Sig) {
-			return false, fmt.Errorf("%w: beacon: %v, epoch: %v, counter: %v, vrfSig: %s",
-				errIncorrectVRFSig, data.Beacon.ShortString(), ballot.Layer.GetEpoch(), proof.J, proof.Sig,
+			return fmt.Errorf(
+				"%w: proof contains incorrect VRF signature. beacon: %v, epoch: %v, counter: %v, vrfSig: %s",
+				fetch.ErrIgnore,
+				data.Beacon.ShortString(),
+				ballot.Layer.GetEpoch(),
+				proof.J,
+				proof.Sig,
 			)
 		}
 		if eligible := CalcEligibleLayer(ballot.Layer.GetEpoch(), v.layersPerEpoch, proof.Sig); ballot.Layer != eligible {
-			return false, fmt.Errorf("%w: ballot layer (%v), eligible layer (%v)",
-				errIncorrectLayerIndex, ballot.Layer, eligible)
+			return fmt.Errorf("%w: ballot has incorrect layer index. ballot layer (%v), eligible layer (%v)",
+				pubsub.ErrValidationReject, ballot.Layer, eligible)
 		}
 	}
 
@@ -129,7 +137,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot, 
 
 	v.beacons.ReportBeaconFromBallot(ballot.Layer.GetEpoch(), ballot, data.Beacon,
 		fixed.DivUint64(atx.Weight, uint64(data.EligibilityCount)))
-	return true, nil
+	return nil
 }
 
 // validateReference executed for reference ballots in latest epoch.
@@ -138,10 +146,10 @@ func (v *Validator) validateReference(
 	weight, totalWeight uint64,
 ) (*types.EpochData, error) {
 	if ballot.EpochData.Beacon == types.EmptyBeacon {
-		return nil, fmt.Errorf("%w: ref ballot %v", errMissingBeacon, ballot.ID())
+		return nil, fmt.Errorf("%w: beacon is missing in ref ballot %v", pubsub.ErrValidationReject, ballot.ID())
 	}
 	if totalWeight == 0 {
-		return nil, fmt.Errorf("%w: ref ballot %v", errEmptyActiveSet, ballot.ID())
+		return nil, fmt.Errorf("%w: empty active set in ref ballot %v", pubsub.ErrValidationReject, ballot.ID())
 	}
 	numEligibleSlots, err := GetNumEligibleSlots(
 		weight,
@@ -151,12 +159,12 @@ func (v *Validator) validateReference(
 		v.layersPerEpoch,
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %v", pubsub.ErrValidationReject, err)
 	}
 	if ballot.EpochData.EligibilityCount != numEligibleSlots {
 		return nil, fmt.Errorf(
-			"%w: expected %v, got: %v",
-			errIncorrectEligCount,
+			"%w: ballot has incorrect eligibility count expected %v, got: %v",
+			pubsub.ErrValidationReject,
 			numEligibleSlots,
 			ballot.EpochData.EligibilityCount,
 		)
@@ -168,7 +176,11 @@ func (v *Validator) validateReference(
 func (v *Validator) validateSecondary(ballot *types.Ballot) (*types.EpochData, error) {
 	if ballot.RefBallot == types.EmptyBallotID {
 		if ballot.EpochData == nil {
-			return nil, fmt.Errorf("%w: ref ballot %v", errMissingEpochData, ballot.ID())
+			return nil, fmt.Errorf(
+				"%w: epoch data is missing in ref ballot %v",
+				pubsub.ErrValidationReject,
+				ballot.ID(),
+			)
 		}
 		return ballot.EpochData, nil
 	}
@@ -178,7 +190,8 @@ func (v *Validator) validateSecondary(ballot *types.Ballot) (*types.EpochData, e
 	}
 	if refdata.ATXID != ballot.AtxID {
 		return nil, fmt.Errorf(
-			"ballot (%v/%v) should be sharing atx with a reference ballot (%v/%v)",
+			"%w: ballot (%v/%v) should be sharing atx with a reference ballot (%v/%v)",
+			pubsub.ErrValidationReject,
 			ballot.ID(),
 			ballot.AtxID,
 			refdata.ID,
@@ -186,10 +199,19 @@ func (v *Validator) validateSecondary(ballot *types.Ballot) (*types.EpochData, e
 		)
 	}
 	if refdata.Smesher != ballot.SmesherID {
-		return nil, fmt.Errorf("mismatched smesher id with refballot in ballot %v", ballot.ID())
+		return nil, fmt.Errorf(
+			"%w: mismatched smesher id with refballot in ballot %v",
+			pubsub.ErrValidationReject,
+			ballot.ID(),
+		)
 	}
 	if refdata.Layer.GetEpoch() != ballot.Layer.GetEpoch() {
-		return nil, fmt.Errorf("ballot %v targets mismatched epoch %d", ballot.ID(), ballot.Layer.GetEpoch())
+		return nil, fmt.Errorf(
+			"%w: ballot %v targets mismatched epoch %d",
+			pubsub.ErrValidationReject,
+			ballot.ID(),
+			ballot.Layer.GetEpoch(),
+		)
 	}
 	return &types.EpochData{Beacon: refdata.Beacon, EligibilityCount: refdata.Eligiblities}, nil
 }
