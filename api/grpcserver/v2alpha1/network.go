@@ -2,12 +2,14 @@ package v2alpha1
 
 import (
 	"context"
+	"time"
+
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
-	"time"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 const (

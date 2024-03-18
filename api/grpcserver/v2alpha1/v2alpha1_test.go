@@ -2,7 +2,6 @@ package v2alpha1
 
 import (
 	"context"
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"testing"
 	"time"
 
@@ -13,6 +12,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 const (
@@ -20,9 +20,7 @@ const (
 	layerDuration = 10 * time.Second
 )
 
-var (
-	genesisID = types.Hash20{}
-)
+var genesisID = types.Hash20{}
 
 func launchServer(tb testing.TB, services ...grpcserver.ServiceAPI) (grpcserver.Config, func()) {
 	cfg := grpcserver.DefaultTestConfig()

@@ -1,10 +1,12 @@
 package v2alpha1
 
 import (
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"go.uber.org/mock/gomock"
 	"reflect"
 	"time"
+
+	"go.uber.org/mock/gomock"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 // MockgenesisTimeAPI is a mock of genesisTimeAPI interface.
@@ -41,28 +43,29 @@ func (m *MockgenesisTimeAPI) CurrentLayer() types.LayerID {
 // CurrentLayer indicates an expected call of CurrentLayer.
 func (mr *MockgenesisTimeAPIMockRecorder) CurrentLayer() *MockgenesisTimeAPICurrentLayerCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CurrentLayer", reflect.TypeOf((*MockgenesisTimeAPI)(nil).CurrentLayer))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CurrentLayer",
+		reflect.TypeOf((*MockgenesisTimeAPI)(nil).CurrentLayer))
 	return &MockgenesisTimeAPICurrentLayerCall{Call: call}
 }
 
-// MockgenesisTimeAPICurrentLayerCall wrap *gomock.Call
+// MockgenesisTimeAPICurrentLayerCall wrap *gomock.Call.
 type MockgenesisTimeAPICurrentLayerCall struct {
 	*gomock.Call
 }
 
-// Return rewrite *gomock.Call.Return
+// Return rewrite *gomock.Call.Return.
 func (c *MockgenesisTimeAPICurrentLayerCall) Return(arg0 types.LayerID) *MockgenesisTimeAPICurrentLayerCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
-// Do rewrite *gomock.Call.Do
+// Do rewrite *gomock.Call.Do.
 func (c *MockgenesisTimeAPICurrentLayerCall) Do(f func() types.LayerID) *MockgenesisTimeAPICurrentLayerCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
+// DoAndReturn rewrite *gomock.Call.DoAndReturn.
 func (c *MockgenesisTimeAPICurrentLayerCall) DoAndReturn(f func() types.LayerID) *MockgenesisTimeAPICurrentLayerCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
@@ -79,28 +82,29 @@ func (m *MockgenesisTimeAPI) GenesisTime() time.Time {
 // GenesisTime indicates an expected call of GenesisTime.
 func (mr *MockgenesisTimeAPIMockRecorder) GenesisTime() *MockgenesisTimeAPIGenesisTimeCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenesisTime", reflect.TypeOf((*MockgenesisTimeAPI)(nil).GenesisTime))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenesisTime",
+		reflect.TypeOf((*MockgenesisTimeAPI)(nil).GenesisTime))
 	return &MockgenesisTimeAPIGenesisTimeCall{Call: call}
 }
 
-// MockgenesisTimeAPIGenesisTimeCall wrap *gomock.Call
+// MockgenesisTimeAPIGenesisTimeCall wrap *gomock.Call.
 type MockgenesisTimeAPIGenesisTimeCall struct {
 	*gomock.Call
 }
 
-// Return rewrite *gomock.Call.Return
+// Return rewrite *gomock.Call.Return.
 func (c *MockgenesisTimeAPIGenesisTimeCall) Return(arg0 time.Time) *MockgenesisTimeAPIGenesisTimeCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
-// Do rewrite *gomock.Call.Do
+// Do rewrite *gomock.Call.Do.
 func (c *MockgenesisTimeAPIGenesisTimeCall) Do(f func() time.Time) *MockgenesisTimeAPIGenesisTimeCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
+// DoAndReturn rewrite *gomock.Call.DoAndReturn.
 func (c *MockgenesisTimeAPIGenesisTimeCall) DoAndReturn(f func() time.Time) *MockgenesisTimeAPIGenesisTimeCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c

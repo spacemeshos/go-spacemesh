@@ -3,13 +3,15 @@ package v2alpha1
 import (
 	"context"
 	"fmt"
+	"testing"
+	"time"
+
 	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/types/known/emptypb"
-	"testing"
-	"time"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 func TestNetworkService_Info(t *testing.T) {
@@ -37,6 +39,5 @@ func TestNetworkService_Info(t *testing.T) {
 		require.Equal(t, info.Hrp, types.NetworkHRP())
 		require.Equal(t, info.EffectiveGenesisLayer, types.GetEffectiveGenesis().Uint32())
 		require.Equal(t, info.LayersPerEpoch, types.GetLayersPerEpoch())
-
 	})
 }
