@@ -68,24 +68,23 @@ func Test_PostSupervisor_ErrorOnMissingBinary(t *testing.T) {
 	cmdCfg := DefaultTestPostServiceConfig()
 	cmdCfg.PostServiceCmd = "missing"
 	postCfg := DefaultPostConfig()
+	postOpts := DefaultPostSetupOpts()
 	provingOpts := DefaultPostProvingOpts()
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
 
-	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, nil, nil)
+	ps := NewPostSupervisor(log.Named("supervisor"), postCfg, provingOpts, nil, nil)
+	err = ps.Start(cmdCfg, postOpts, sig)
 	require.ErrorContains(t, err, "post service binary not found")
-	require.Nil(t, ps)
 }
 
 func Test_PostSupervisor_StopWithoutStart(t *testing.T) {
 	log := zaptest.NewLogger(t)
 
-	cmdCfg := DefaultTestPostServiceConfig()
 	postCfg := DefaultPostConfig()
 	provingOpts := DefaultPostProvingOpts()
 
-	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, nil, nil)
-	require.NoError(t, err)
-	require.NotNil(t, ps)
-
+	ps := NewPostSupervisor(log.Named("supervisor"), postCfg, provingOpts, nil, nil)
 	require.NoError(t, ps.Stop(false))
 }
 
@@ -104,11 +103,9 @@ func Test_PostSupervisor_Start_FailPrepare(t *testing.T) {
 	testErr := errors.New("test error")
 	mgr.EXPECT().PrepareInitializer(gomock.Any(), postOpts, sig.NodeID()).Return(testErr)
 	builder := NewMockAtxBuilder(ctrl)
-	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr, builder)
-	require.NoError(t, err)
-	require.NotNil(t, ps)
+	ps := NewPostSupervisor(log.Named("supervisor"), postCfg, provingOpts, mgr, builder)
 
-	require.NoError(t, ps.Start(postOpts, sig))
+	require.NoError(t, ps.Start(cmdCfg, postOpts, sig))
 	require.ErrorIs(t, ps.Stop(false), testErr)
 }
 
@@ -141,11 +138,9 @@ func Test_PostSupervisor_Start_FailStartSession(t *testing.T) {
 	mgr.EXPECT().PrepareInitializer(gomock.Any(), postOpts, sig.NodeID()).Return(nil)
 	mgr.EXPECT().StartSession(gomock.Any(), sig.NodeID()).Return(errors.New("failed start session"))
 	builder := NewMockAtxBuilder(ctrl)
-	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr, builder)
-	require.NoError(t, err)
-	require.NotNil(t, ps)
+	ps := NewPostSupervisor(log.Named("supervisor"), postCfg, provingOpts, mgr, builder)
 
-	require.NoError(t, ps.Start(postOpts, sig))
+	require.NoError(t, ps.Start(cmdCfg, postOpts, sig))
 	require.EqualError(t, ps.eg.Wait(), "failed start session")
 }
 
@@ -163,11 +158,9 @@ func Test_PostSupervisor_StartsServiceCmd(t *testing.T) {
 	mgr := newPostManager(t, postCfg, postOpts)
 	builder := NewMockAtxBuilder(ctrl)
 	builder.EXPECT().Register(sig)
-	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr, builder)
-	require.NoError(t, err)
-	require.NotNil(t, ps)
+	ps := NewPostSupervisor(log.Named("supervisor"), postCfg, provingOpts, mgr, builder)
 
-	require.NoError(t, ps.Start(postOpts, sig))
+	require.NoError(t, ps.Start(cmdCfg, postOpts, sig))
 	t.Cleanup(func() { assert.NoError(t, ps.Stop(false)) })
 
 	require.Eventually(t, func() bool { return ps.pid.Load() != 0 }, 5*time.Second, 100*time.Millisecond)
@@ -202,11 +195,9 @@ func Test_PostSupervisor_Restart_Possible(t *testing.T) {
 	mgr := newPostManager(t, postCfg, postOpts)
 	builder := NewMockAtxBuilder(ctrl)
 	builder.EXPECT().Register(sig)
-	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr, builder)
-	require.NoError(t, err)
-	require.NotNil(t, ps)
+	ps := NewPostSupervisor(log.Named("supervisor"), postCfg, provingOpts, mgr, builder)
 
-	require.NoError(t, ps.Start(postOpts, sig))
+	require.NoError(t, ps.Start(cmdCfg, postOpts, sig))
 	t.Cleanup(func() { assert.NoError(t, ps.Stop(false)) })
 	require.Eventually(t, func() bool { return ps.pid.Load() != 0 }, 5*time.Second, 100*time.Millisecond)
 
@@ -214,7 +205,7 @@ func Test_PostSupervisor_Restart_Possible(t *testing.T) {
 	require.Eventually(t, func() bool { return ps.pid.Load() == 0 }, 5*time.Second, 100*time.Millisecond)
 
 	builder.EXPECT().Register(sig)
-	require.NoError(t, ps.Start(postOpts, sig))
+	require.NoError(t, ps.Start(cmdCfg, postOpts, sig))
 	require.Eventually(t, func() bool { return ps.pid.Load() != 0 }, 5*time.Second, 100*time.Millisecond)
 
 	require.NoError(t, ps.Stop(false))
@@ -235,11 +226,9 @@ func Test_PostSupervisor_LogFatalOnCrash(t *testing.T) {
 	mgr := newPostManager(t, postCfg, postOpts)
 	builder := NewMockAtxBuilder(ctrl)
 	builder.EXPECT().Register(sig)
-	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr, builder)
-	require.NoError(t, err)
-	require.NotNil(t, ps)
+	ps := NewPostSupervisor(log.Named("supervisor"), postCfg, provingOpts, mgr, builder)
 
-	require.NoError(t, ps.Start(postOpts, sig))
+	require.NoError(t, ps.Start(cmdCfg, postOpts, sig))
 	t.Cleanup(func() { assert.NoError(t, ps.Stop(false)) })
 
 	require.Eventually(t, func() bool { return ps.pid.Load() != 0 }, 5*time.Second, 100*time.Millisecond)
@@ -270,11 +259,9 @@ func Test_PostSupervisor_LogFatalOnInvalidConfig(t *testing.T) {
 	mgr := newPostManager(t, postCfg, postOpts)
 	builder := NewMockAtxBuilder(ctrl)
 	builder.EXPECT().Register(sig)
-	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr, builder)
-	require.NoError(t, err)
-	require.NotNil(t, ps)
+	ps := NewPostSupervisor(log.Named("supervisor"), postCfg, provingOpts, mgr, builder)
 
-	require.NoError(t, ps.Start(postOpts, sig))
+	require.NoError(t, ps.Start(cmdCfg, postOpts, sig))
 	t.Cleanup(func() { assert.NoError(t, ps.Stop(false)) })
 
 	require.Eventually(t, func() bool { return ps.pid.Load() != 0 }, 5*time.Second, 100*time.Millisecond)
@@ -312,11 +299,9 @@ func Test_PostSupervisor_StopOnError(t *testing.T) {
 	})
 	builder := NewMockAtxBuilder(ctrl)
 	builder.EXPECT().Register(sig)
-	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr, builder)
-	require.NoError(t, err)
-	require.NotNil(t, ps)
+	ps := NewPostSupervisor(log.Named("supervisor"), postCfg, provingOpts, mgr, builder)
 
-	require.NoError(t, ps.Start(postOpts, sig))
+	require.NoError(t, ps.Start(cmdCfg, postOpts, sig))
 	t.Cleanup(func() { assert.NoError(t, ps.Stop(false)) })
 	require.Eventually(t, func() bool { return ps.pid.Load() != 0 }, 5*time.Second, 100*time.Millisecond)
 
@@ -328,15 +313,13 @@ func Test_PostSupervisor_StopOnError(t *testing.T) {
 func Test_PostSupervisor_Providers_includesCPU(t *testing.T) {
 	log := zaptest.NewLogger(t)
 
-	cmdCfg := DefaultTestPostServiceConfig()
 	postCfg := DefaultPostConfig()
 	provingOpts := DefaultPostProvingOpts()
 
 	ctrl := gomock.NewController(t)
 	mgr := NewMockpostSetupProvider(ctrl)
 	builder := NewMockAtxBuilder(ctrl)
-	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr, builder)
-	require.NoError(t, err)
+	ps := NewPostSupervisor(log.Named("supervisor"), postCfg, provingOpts, mgr, builder)
 
 	providers, err := ps.Providers()
 	require.NoError(t, err)
@@ -352,15 +335,13 @@ func Test_PostSupervisor_Providers_includesCPU(t *testing.T) {
 func Test_PostSupervisor_Benchmark(t *testing.T) {
 	log := zaptest.NewLogger(t)
 
-	cmdCfg := DefaultTestPostServiceConfig()
 	postCfg := DefaultPostConfig()
 	provingOpts := DefaultPostProvingOpts()
 
 	ctrl := gomock.NewController(t)
 	mgr := NewMockpostSetupProvider(ctrl)
 	builder := NewMockAtxBuilder(ctrl)
-	ps, err := NewPostSupervisor(log.Named("supervisor"), cmdCfg, postCfg, provingOpts, mgr, builder)
-	require.NoError(t, err)
+	ps := NewPostSupervisor(log.Named("supervisor"), postCfg, provingOpts, mgr, builder)
 
 	providers, err := ps.Providers()
 	require.NoError(t, err)

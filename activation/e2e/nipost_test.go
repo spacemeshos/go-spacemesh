@@ -76,10 +76,8 @@ func launchPostSupervisor(
 
 	builder := activation.NewMockAtxBuilder(gomock.NewController(tb))
 	builder.EXPECT().Register(gomock.Any())
-	ps, err := activation.NewPostSupervisor(log, cmdCfg, postCfg, provingOpts, mgr, builder)
-	require.NoError(tb, err)
-	require.NotNil(tb, ps)
-	require.NoError(tb, ps.Start(postOpts, sig))
+	ps := activation.NewPostSupervisor(log, postCfg, provingOpts, mgr, builder)
+	require.NoError(tb, ps.Start(cmdCfg, postOpts, sig))
 	return func() { assert.NoError(tb, ps.Stop(false)) }
 }
 

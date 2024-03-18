@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -968,16 +967,6 @@ func (app *App) initServices(ctx context.Context) error {
 		proposalBuilder.Register(sig)
 	}
 
-	host, port, err := net.SplitHostPort(app.Config.API.PostListener)
-	if err != nil {
-		return fmt.Errorf("parse grpc-private-listener: %w", err)
-	}
-	ip := net.ParseIP(host)
-	if ip.IsUnspecified() {
-		host = "127.0.0.1"
-	}
-
-	app.Config.POSTService.NodeAddress = fmt.Sprintf("http://%s:%s", host, port)
 	postSetupMgr, err := activation.NewPostSetupManager(
 		app.Config.POST,
 		app.addLogger(PostLogger, lg).Zap(),
@@ -1044,9 +1033,8 @@ func (app *App) initServices(ctx context.Context) error {
 			atxBuilder.Register(sig)
 		}
 	}
-	app.postSupervisor, err = activation.NewPostSupervisor(
+	app.postSupervisor = activation.NewPostSupervisor(
 		app.log.Zap(),
-		app.Config.POSTService,
 		app.Config.POST,
 		app.Config.SMESHING.ProvingOpts,
 		postSetupMgr,
@@ -1350,24 +1338,6 @@ func (app *App) startServices(ctx context.Context) error {
 		}
 	}
 
-	if app.Config.SMESHING.Start {
-		if app.Config.SMESHING.CoinbaseAccount == "" {
-			return fmt.Errorf("smeshing enabled but no coinbase account provided")
-		}
-		if len(app.signers) > 1 {
-			return fmt.Errorf("supervised smeshing cannot be started in a multi-smeshing setup")
-		}
-		if err := app.postSupervisor.Start(
-			app.Config.SMESHING.Opts,
-			app.signers[0],
-		); err != nil {
-			return fmt.Errorf("start post service: %w", err)
-		}
-	} else if len(app.signers) == 1 && app.signers[0].Name() == supervisedIDKeyFileName {
-		// supervised setup but not started
-		app.log.Info("smeshing not started, waiting to be triggered via smesher api")
-	}
-
 	if app.ptimesync != nil {
 		app.ptimesync.Start()
 	}
@@ -1431,8 +1401,8 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 			app.atxBuilder,
 			app.postSupervisor,
 			app.Config.API.SmesherStreamInterval,
-			sig,
 			app.Config.SMESHING.Opts,
+			sig,
 		)
 		app.grpcServices[svc] = service
 		return service, nil
@@ -1588,6 +1558,30 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		}
 		if err := app.grpcPostServer.Start(); err != nil {
 			return err
+		}
+		app.Config.POSTService.NodeAddress = app.grpcPostServer.BoundAddress
+		svc, err := app.grpcService(grpcserver.Smesher, app.log)
+		if err != nil {
+			return err
+		}
+		svc.(*grpcserver.SmesherService).SetPostServiceConfig(app.Config.POSTService)
+		if app.Config.SMESHING.Start {
+			if app.Config.SMESHING.CoinbaseAccount == "" {
+				return fmt.Errorf("smeshing enabled but no coinbase account provided")
+			}
+			if len(app.signers) > 1 {
+				return fmt.Errorf("supervised smeshing cannot be started in a multi-smeshing setup")
+			}
+			if err := app.postSupervisor.Start(
+				app.Config.POSTService,
+				app.Config.SMESHING.Opts,
+				app.signers[0],
+			); err != nil {
+				return fmt.Errorf("start post service: %w", err)
+			}
+		} else if len(app.signers) == 1 && app.signers[0].Name() == supervisedIDKeyFileName {
+			// supervised setup but not started
+			app.log.Info("smeshing not started, waiting to be triggered via smesher api")
 		}
 	}
 
