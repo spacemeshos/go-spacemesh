@@ -23,7 +23,7 @@ func TestRewardService_List(t *testing.T) {
 	db := sql.InMemory()
 	ctx := context.Background()
 
-	gen := fixture.NewRewardsGenerator()
+	gen := fixture.NewRewardsGenerator().WithAddresses(100).WithUniqueCoinbase()
 	rwds := make([]types.Reward, 100)
 	for i := range rwds {
 		rwd := gen.Next()

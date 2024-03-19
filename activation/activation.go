@@ -476,7 +476,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 			zap.Uint32("current epoch", current.Uint32()),
 			zap.Duration("wait", time.Until(wait)),
 		)
-		events.EmitPoetWaitRound(current, current+1, wait)
+		events.EmitPoetWaitRound(nodeID, current, current+1, wait)
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -601,6 +601,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner
 		return fmt.Errorf("discarding challenge after published ATX: %w", err)
 	}
 	events.EmitAtxPublished(
+		sig.NodeID(),
 		atx.PublishEpoch, atx.TargetEpoch(),
 		atx.ID(),
 		b.layerClock.LayerToTime(atx.TargetEpoch().FirstLayer()),
@@ -716,14 +717,14 @@ func (b *Builder) Regossip(ctx context.Context, nodeID types.NodeID) error {
 	} else if err != nil {
 		return err
 	}
-	blob, err := atxs.GetBlob(ctx, b.cdb, atx.Bytes())
-	if err != nil {
+	var blob sql.Blob
+	if err := atxs.LoadBlob(ctx, b.cdb, atx.Bytes(), &blob); err != nil {
 		return fmt.Errorf("get blob %s: %w", atx.ShortString(), err)
 	}
-	if len(blob) == 0 {
+	if len(blob.Bytes) == 0 {
 		return nil // checkpoint
 	}
-	if err := b.publisher.Publish(ctx, pubsub.AtxProtocol, blob); err != nil {
+	if err := b.publisher.Publish(ctx, pubsub.AtxProtocol, blob.Bytes); err != nil {
 		return fmt.Errorf("republish %s: %w", atx.ShortString(), err)
 	}
 	b.log.Debug("re-gossipped atx", log.ZShortStringer("atx", atx))

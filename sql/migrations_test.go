@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMigrationsAppliedOnce(t *testing.T) {
+func Test_MigrationsAppliedOnce(t *testing.T) {
 	db := InMemory()
 
 	var version int

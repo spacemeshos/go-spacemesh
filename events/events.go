@@ -24,53 +24,55 @@ func EmitBeacon(epoch types.EpochID, beacon types.Beacon) {
 		&pb.Event_Beacon{
 			Beacon: &pb.EventBeacon{
 				Epoch:  epoch.Uint32(),
-				Beacon: beacon[:],
+				Beacon: beacon.Bytes(),
 			},
 		},
 	)
 }
 
-func EmitInitStart(smesher types.NodeID, commitment types.ATXID) {
+func EmitInitStart(nodeID types.NodeID, commitment types.ATXID) {
 	const help = "Node started PoST data initialization. Initialization will not be performed again if already completed."
 	emitUserEvent(
 		help,
 		false,
 		&pb.Event_InitStart{
 			InitStart: &pb.EventInitStart{
-				Smesher:    smesher[:],
-				Commitment: commitment[:],
+				Smesher:    nodeID.Bytes(),
+				Commitment: commitment.Bytes(),
 			},
 		},
 	)
 }
 
-func EmitInitFailure(smesher types.NodeID, commitment types.ATXID, err error) {
+func EmitInitFailure(nodeID types.NodeID, commitment types.ATXID, err error) {
 	const help = "Node failed PoST data initialization."
 	emitUserEvent(
 		help,
 		true,
 		&pb.Event_InitFailed{
 			InitFailed: &pb.EventInitFailed{
-				Smesher:    smesher[:],
-				Commitment: commitment[:],
+				Smesher:    nodeID.Bytes(),
+				Commitment: commitment.Bytes(),
 				Error:      err.Error(),
 			},
 		},
 	)
 }
 
-func EmitInitComplete() {
+func EmitInitComplete(nodeID types.NodeID) {
 	const help = "Node successfully completed PoST data initialization."
 	emitUserEvent(
 		help,
 		false,
 		&pb.Event_InitComplete{
-			InitComplete: &pb.EventInitComplete{},
+			InitComplete: &pb.EventInitComplete{
+				Smesher: nodeID.Bytes(),
+			},
 		},
 	)
 }
 
-func EmitPoetWaitRound(current, publish types.EpochID, wait time.Time) {
+func EmitPoetWaitRound(nodeID types.NodeID, current, publish types.EpochID, wait time.Time) {
 	const help = "Node is waiting for PoET registration window in current epoch to open. " +
 		"After this it will submit challenge and wait until PoET round ends in publish epoch."
 	emitUserEvent(
@@ -81,17 +83,12 @@ func EmitPoetWaitRound(current, publish types.EpochID, wait time.Time) {
 			Publish: publish.Uint32(),
 			Wait:    durationpb.New(time.Until(wait)),
 			Until:   timestamppb.New(wait),
+			Smesher: nodeID.Bytes(),
 		}},
 	)
 }
 
-type EventPoetWaitEnd struct {
-	Publish types.EpochID `json:"publish"`
-	Target  types.EpochID `json:"target"`
-	Wait    time.Duration `json:"wait"`
-}
-
-func EmitPoetWaitProof(publish, target types.EpochID, wait time.Time) {
+func EmitPoetWaitProof(nodeID types.NodeID, publish, target types.EpochID, wait time.Time) {
 	const help = "Node is waiting for PoET to complete. " +
 		"After it's complete, the node will fetch the PoET proof, generate a PoST proof, " +
 		"and finally publish an ATX to establish eligibility for rewards in the target epoch."
@@ -104,6 +101,7 @@ func EmitPoetWaitProof(publish, target types.EpochID, wait time.Time) {
 				Target:  target.Uint32(),
 				Wait:    durationpb.New(time.Until(wait)),
 				Until:   timestamppb.New(wait),
+				Smesher: nodeID.Bytes(),
 			},
 		},
 	)
@@ -168,18 +166,21 @@ func EmitPostFailure(nodeID types.NodeID) {
 	)
 }
 
-func EmitInvalidPostProof() {
+func EmitInvalidPostProof(nodeID types.NodeID) {
 	const help = "Node generated invalid POST proof. Please verify your POST data."
 	emitUserEvent(
 		help,
 		true,
-		&pb.Event_PostComplete{PostComplete: &pb.EventPostComplete{}},
+		&pb.Event_PostComplete{PostComplete: &pb.EventPostComplete{
+			Smesher: nodeID.Bytes(),
+		}},
 	)
 }
 
 func EmitAtxPublished(
+	nodeID types.NodeID,
 	current, target types.EpochID,
-	id types.ATXID,
+	atxID types.ATXID,
 	wait time.Time,
 ) {
 	const help = "Node published activation for the current epoch. " +
@@ -191,18 +192,20 @@ func EmitAtxPublished(
 			AtxPublished: &pb.EventAtxPubished{
 				Current: current.Uint32(),
 				Target:  target.Uint32(),
-				Id:      id[:],
+				Id:      atxID.Bytes(),
 				Wait:    durationpb.New(time.Until(wait)),
 				Until:   timestamppb.New(wait),
+				Smesher: nodeID.Bytes(),
 			},
 		},
 	)
 }
 
 func EmitEligibilities(
+	nodeID types.NodeID,
 	epoch types.EpochID,
 	beacon types.Beacon,
-	atx types.ATXID,
+	atxID types.ATXID,
 	activeSetSize uint32,
 	eligibilities map[types.LayerID][]types.VotingEligibility,
 ) {
@@ -215,10 +218,11 @@ func EmitEligibilities(
 		&pb.Event_Eligibilities{
 			Eligibilities: &pb.EventEligibilities{
 				Epoch:         epoch.Uint32(),
-				Beacon:        beacon[:],
-				Atx:           atx[:],
+				Beacon:        beacon.Bytes(),
+				Atx:           atxID.Bytes(),
 				ActiveSetSize: activeSetSize,
 				Eligibilities: castEligibilities(eligibilities),
+				Smesher:       nodeID.Bytes(),
 			},
 		},
 	)
@@ -235,7 +239,7 @@ func castEligibilities(proofs map[types.LayerID][]types.VotingEligibility) []*pb
 	return rst
 }
 
-func EmitProposal(layer types.LayerID, proposal types.ProposalID) {
+func EmitProposal(nodeID types.NodeID, layer types.LayerID, proposal types.ProposalID) {
 	const help = "Node published proposal. Rewards will be received once proposal is included in the block."
 	emitUserEvent(
 		help,
@@ -244,19 +248,20 @@ func EmitProposal(layer types.LayerID, proposal types.ProposalID) {
 			Proposal: &pb.EventProposal{
 				Layer:    layer.Uint32(),
 				Proposal: proposal[:],
+				Smesher:  nodeID.Bytes(),
 			},
 		},
 	)
 }
 
-func EmitOwnMalfeasanceProof(id types.NodeID, mp *types.MalfeasanceProof) {
+func EmitOwnMalfeasanceProof(nodeID types.NodeID, mp *types.MalfeasanceProof) {
 	const help = "Node committed malicious behavior. Identity will be canceled."
 	emitUserEvent(
 		help,
 		false,
 		&pb.Event_Malfeasance{
 			Malfeasance: &pb.EventMalfeasance{
-				Proof: ToMalfeasancePB(id, mp, false),
+				Proof: ToMalfeasancePB(nodeID, mp, false),
 			},
 		},
 	)
@@ -277,7 +282,7 @@ func emitUserEvent(help string, failure bool, details pb.IsEventDetails) {
 	}
 }
 
-func ToMalfeasancePB(smesher types.NodeID, mp *types.MalfeasanceProof, includeProof bool) *pb.MalfeasanceProof {
+func ToMalfeasancePB(nodeID types.NodeID, mp *types.MalfeasanceProof, includeProof bool) *pb.MalfeasanceProof {
 	if mp == nil {
 		return &pb.MalfeasanceProof{}
 	}
@@ -293,10 +298,10 @@ func ToMalfeasancePB(smesher types.NodeID, mp *types.MalfeasanceProof, includePr
 		kind = pb.MalfeasanceProof_MALFEASANCE_POST_INDEX
 	}
 	result := &pb.MalfeasanceProof{
-		SmesherId: &pb.SmesherId{Id: smesher.Bytes()},
+		SmesherId: &pb.SmesherId{Id: nodeID.Bytes()},
 		Layer:     &pb.LayerNumber{Number: mp.Layer.Uint32()},
 		Kind:      kind,
-		DebugInfo: types.MalfeasanceInfo(smesher, mp),
+		DebugInfo: types.MalfeasanceInfo(nodeID, mp),
 	}
 	if includeProof {
 		data, _ := codec.Encode(mp)

@@ -1,10 +1,10 @@
 package signing_test
 
 import (
-	"crypto/ed25519"
 	"crypto/rand"
 	"testing"
 
+	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"

@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/p2p/server"
 )
 
 //go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./interface.go
@@ -13,6 +14,7 @@ import (
 type requester interface {
 	Run(context.Context) error
 	Request(context.Context, p2p.Peer, []byte) ([]byte, error)
+	StreamRequest(context.Context, p2p.Peer, []byte, server.StreamRequestCallback) error
 }
 
 // The ValidatorFunc type is an adapter to allow the use of functions as

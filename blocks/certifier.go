@@ -464,7 +464,7 @@ func (c *Certifier) tryGenCert(
 		return nil
 	}
 
-	logger.With().Info("generating certificate",
+	logger.With().Debug("generating certificate",
 		log.Uint16("eligibility_count", c.certifyMsgs[lid][bid].totalEligibility),
 		log.Int("num_msg", len(c.certifyMsgs[lid][bid].signatures)),
 	)
