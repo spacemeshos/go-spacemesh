@@ -9,7 +9,6 @@ import (
 	"syscall"
 
 	"github.com/libp2p/go-libp2p/core/peer"
-	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
@@ -30,22 +29,13 @@ func runRelay(ctx context.Context, cfg *config.Config) error {
 	p2pCfg.Relay = true
 	p2pCfg.RelayServer.Enable = true
 
-	lvl := zap.NewAtomicLevel()
-	loggers, err := decodeLoggers(cfg.LOGGING)
+	lvl, err := decodeLoggerLevel(cfg, P2PLogger)
 	if err != nil {
 		return fmt.Errorf("failed to decode loggers: %w", err)
 	}
-	level, ok := loggers[P2PLogger]
-	if ok {
-		if err := lvl.UnmarshalText([]byte(level)); err != nil {
-			return fmt.Errorf("cannot parse logging for %v: %w", P2PLogger, err)
-		}
-	} else {
-		lvl.SetLevel(log.DefaultLevel())
-	}
 
 	p2pCfg.LogLevel = lvl.Level()
-	p2pLog := log.NewWithLevel("node", zap.NewAtomicLevelAt(zap.DebugLevel)).WithName(P2PLogger)
+	p2pLog := log.NewWithLevel("node", lvl).WithName(P2PLogger)
 
 	if cfg.CollectMetrics {
 		metrics.StartMetricsServer(cfg.MetricsPort)

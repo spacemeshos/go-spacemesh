@@ -581,21 +581,10 @@ func (app *App) Cleanup(ctx context.Context) {
 //
 // This method is not safe to be called concurrently.
 func (app *App) addLogger(name string, logger log.Log) log.Log {
-	lvl := zap.NewAtomicLevel()
-	loggers, err := decodeLoggers(app.Config.LOGGING)
+	lvl, err := decodeLoggerLevel(app.Config, name)
 	if err != nil {
 		app.log.With().Panic("unable to decode loggers into map[string]string", log.Err(err))
 	}
-	level, ok := loggers[name]
-	if ok {
-		if err := lvl.UnmarshalText([]byte(level)); err != nil {
-			app.log.Error("cannot parse logging for %v error %v", name, err)
-			lvl.SetLevel(log.DefaultLevel())
-		}
-	} else {
-		lvl.SetLevel(log.DefaultLevel())
-	}
-
 	if logger.Check(lvl.Level()) {
 		app.loggers[name] = &lvl
 		logger = logger.SetLevel(&lvl)
@@ -2163,12 +2152,23 @@ type layerFetcher struct {
 	system.Fetcher
 }
 
-func decodeLoggers(cfg config.LoggerConfig) (map[string]string, error) {
-	rst := map[string]string{}
-	if err := mapstructure.Decode(cfg, &rst); err != nil {
-		return nil, fmt.Errorf("mapstructure decode: %w", err)
+func decodeLoggerLevel(cfg *config.Config, name string) (zap.AtomicLevel, error) {
+	lvl := zap.NewAtomicLevel()
+	loggers := map[string]string{}
+	if err := mapstructure.Decode(cfg.LOGGING, &loggers); err != nil {
+		return zap.AtomicLevel{}, fmt.Errorf("error decoding mapstructure: %w", err)
 	}
-	return rst, nil
+
+	level, ok := loggers[name]
+	if ok {
+		if err := lvl.UnmarshalText([]byte(level)); err != nil {
+			return zap.AtomicLevel{}, fmt.Errorf("cannot parse logging for %v: %w", name, err)
+		}
+	} else {
+		lvl.SetLevel(log.DefaultLevel())
+	}
+
+	return lvl, nil
 }
 
 type tortoiseWeakCoin struct {
