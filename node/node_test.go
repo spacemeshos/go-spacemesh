@@ -1110,6 +1110,8 @@ func TestAdminEvents_MultiSmesher(t *testing.T) {
 	cfg.DataDirParent = t.TempDir()
 	cfg.FileLock = filepath.Join(cfg.DataDirParent, "LOCK")
 	cfg.SMESHING.Opts.Scrypt.N = 2
+	cfg.SMESHING.Start = false
+	cfg.API.PostListener = "0.0.0.0:10094"
 	cfg.POSTService.PostServiceCmd = activation.DefaultTestPostServiceConfig().PostServiceCmd
 
 	cfg.Genesis.GenesisTime = time.Now().Add(5 * time.Second).Format(time.RFC3339)
