@@ -70,8 +70,8 @@ func TestSpacemeshApp_NewIdentity(t *testing.T) {
 
 		app, _ := setupAppWithKeys(t, []byte(hex.EncodeToString(signer.PrivateKey())))
 		err = app.NewIdentity()
-		require.ErrorContains(t, err, fmt.Sprintf("identity file %s already exists", supervisedIDKeyFileName))
 		require.ErrorIs(t, err, fs.ErrExist)
+		require.ErrorContains(t, err, fmt.Sprintf("save identity file %s", supervisedIDKeyFileName))
 		require.Empty(t, app.signers)
 
 		err = app.LoadIdentities()
