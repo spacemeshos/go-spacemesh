@@ -55,7 +55,8 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 
 	// used to make sure we only resync from the same peer once during each run.
 	resyncPeers := make(map[p2p.Peer]struct{})
-	for lid := start; lid <= s.getLastSyncedLayer(); lid++ {
+	last := s.getLastSyncedLayer()
+	for lid := start; lid <= last; lid++ {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -116,7 +117,7 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 		// there is no point in tortoise counting after every single layer, in fact it is wasteful.
 		// we periodically invoke counting to evict executed layers.
 		if lid.Uint32()%(uint32(max(float64(types.GetLayersPerEpoch())*s.cfg.TallyVotesFrequency, 1))) == 0 ||
-			lid == s.getLastSyncedLayer() {
+			lid == last || s.stateErr.Load() {
 			err1 := s.mesh.ProcessLayer(ctx, lid)
 			if err1 != nil {
 				missing := &mesh.MissingBlocksError{}
