@@ -316,7 +316,7 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, lid types.LayerID) error {
 	}
 	// apply what we were able to download, as it will allow to prune some of the data from tortoise
 	if len(missing) > 0 {
-		return &ErrMissingBlocks{Blocks: missing}
+		return &MissingBlocksError{Blocks: missing}
 	}
 	return nil
 }
@@ -495,7 +495,7 @@ func (msh *Mesh) ProcessLayerPerHareOutput(
 	}
 	err := msh.ProcessLayer(ctx, layerID)
 	if err != nil {
-		missing := &ErrMissingBlocks{}
+		missing := &MissingBlocksError{}
 		if errors.As(err, &missing) {
 			select {
 			case <-ctx.Done():
@@ -628,11 +628,11 @@ func (msh *Mesh) LastVerified() types.LayerID {
 	return msh.trtl.LatestComplete()
 }
 
-type ErrMissingBlocks struct {
+type MissingBlocksError struct {
 	Blocks []types.BlockID
 }
 
-func (e *ErrMissingBlocks) Error() string {
+func (e *MissingBlocksError) Error() string {
 	if len(e.Blocks) == 0 {
 		return ""
 	}
