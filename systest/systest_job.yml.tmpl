@@ -21,3 +21,34 @@ spec:
         imagePullPolicy: IfNotPresent
         name: {{ .Env.job_name}}
       restartPolicy: Never
+      serviceAccount: {{ .Env.job_name }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Env.job_name }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Env.job_name }}
+rules:
+- apiGroups: [""]
+  resources: ["services","namespaces","configmaps","pods"]
+  verbs: ["get","create","patch","update","list","watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get","create","patch","update","list","watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Env.job_name }}
+subjects:
+- kind: ServiceAccount
+  name: {{ .Env.job_name }}
+  namespace: testnet-10x
+roleRef:
+  kind: ClusterRole
+  name: {{ .Env.job_name }}
+  apiGroup: rbac.authorization.k8s.io
