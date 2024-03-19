@@ -568,7 +568,6 @@ func (t *testTracer) OnMessageSent(m *Message) {
 func (*testTracer) OnMessageReceived(*Message) {}
 
 func testHare(t *testing.T, active, inactive, equivocators int, opts ...clusterOpt) {
-	t.Parallel()
 	cfg := DefaultConfig()
 	cfg.LogStats = true
 	tst := &tester{
@@ -622,7 +621,6 @@ func testHare(t *testing.T, active, inactive, equivocators int, opts ...clusterO
 }
 
 func TestHare(t *testing.T) {
-	t.Parallel()
 	t.Run("one", func(t *testing.T) { testHare(t, 1, 0, 0) })
 	t.Run("two", func(t *testing.T) { testHare(t, 2, 0, 0) })
 	t.Run("small", func(t *testing.T) { testHare(t, 5, 0, 0) })
