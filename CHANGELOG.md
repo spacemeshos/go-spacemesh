@@ -2,6 +2,19 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## UNRELEASED
+
+### Upgrade information
+
+### Highlights
+
+### Features
+
+### Improvements
+
+* [#5730](https://github.com/spacemeshos/go-spacemesh/pull/5730) Fixed a bug where the node behaves incorrectly when
+  first started with supervised smeshing.
+
 ## Release v1.4.1
 
 ### Improvements
