@@ -852,7 +852,7 @@ func (app *App) initServices(ctx context.Context) error {
 	syncerConf.SyncCertDistance = app.Config.Tortoise.Hdist
 	syncerConf.Standalone = app.Config.Standalone
 
-	if app.Config.P2P.MinPeers > app.Config.Sync.MalSync.MinSyncPeers {
+	if app.Config.P2P.MinPeers < app.Config.Sync.MalSync.MinSyncPeers {
 		app.Config.Sync.MalSync.MinSyncPeers = max(1, app.Config.P2P.MinPeers)
 	}
 	app.syncLogger = app.addLogger(SyncLogger, lg)
