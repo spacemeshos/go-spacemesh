@@ -138,7 +138,7 @@ func (ps *PostSupervisor) Start(cmdCfg PostSupervisorConfig, opts PostSetupOpts,
 	}
 
 	if _, err := os.Stat(cmdCfg.PostServiceCmd); err != nil {
-		return fmt.Errorf("post service binary not found: %s", cmdCfg.PostServiceCmd)
+		return fmt.Errorf("stat post service binary %s: %w", cmdCfg.PostServiceCmd, err)
 	}
 
 	// TODO(mafa): verify that opts don't delete existing files

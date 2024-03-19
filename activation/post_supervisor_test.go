@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -75,7 +76,8 @@ func Test_PostSupervisor_ErrorOnMissingBinary(t *testing.T) {
 
 	ps := NewPostSupervisor(log.Named("supervisor"), postCfg, provingOpts, nil, nil)
 	err = ps.Start(cmdCfg, postOpts, sig)
-	require.ErrorContains(t, err, "post service binary not found")
+	require.ErrorIs(t, err, fs.ErrNotExist)
+	require.ErrorContains(t, err, "stat post service binary missing")
 }
 
 func Test_PostSupervisor_StopWithoutStart(t *testing.T) {
