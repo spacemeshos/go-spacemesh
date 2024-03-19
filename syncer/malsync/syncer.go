@@ -409,7 +409,9 @@ func (s *Syncer) downloadMalfeasanceProofs(ctx context.Context, initial bool, up
 		nothingToDownload = len(batch) == 0
 
 		if len(batch) != 0 {
-			s.logger.Debug("retrieving malfeasance identities", log.ZContext(ctx))
+			s.logger.Debug("retrieving malfeasant identities",
+				log.ZContext(ctx),
+				zap.Int("count", len(batch)))
 			err := s.fetcher.GetMalfeasanceProofs(ctx, batch)
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
@@ -435,7 +437,7 @@ func (s *Syncer) downloadMalfeasanceProofs(ctx context.Context, initial bool, up
 				}
 			}
 		} else {
-			s.logger.Debug("no new malfeasance identities", log.ZContext(ctx))
+			s.logger.Debug("no new malfeasant identities", log.ZContext(ctx))
 		}
 	}
 }
