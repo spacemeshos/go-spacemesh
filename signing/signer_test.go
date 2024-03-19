@@ -182,7 +182,7 @@ func TestEdSigner_ToFile(t *testing.T) {
 
 		_, err = NewEdSigner(ToFile(path))
 		require.ErrorIs(t, err, fs.ErrExist)
-		require.ErrorContains(t, err, "identity.key already exists")
+		require.ErrorContains(t, err, "save identity file identity.key")
 
 		_, err = NewEdSigner(FromFile(path), ToFile(path))
 		require.ErrorContains(t, err, "invalid option ToFile: file already set")

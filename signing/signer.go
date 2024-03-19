@@ -178,8 +178,14 @@ func NewEdSigner(opts ...EdSignerOptionFunc) (*EdSigner, error) {
 		cfg.priv = priv
 
 		if cfg.file != "" {
-			if _, err := os.Stat(cfg.file); err == nil {
-				return nil, fmt.Errorf("identity file %s already exists: %w", filepath.Base(cfg.file), fs.ErrExist)
+			_, err := os.Stat(cfg.file)
+			switch {
+			case errors.Is(err, fs.ErrNotExist):
+			// continue
+			case err != nil:
+				return nil, fmt.Errorf("stat identity file %s: %w", filepath.Base(cfg.file), err)
+			default: // err == nil
+				return nil, fmt.Errorf("save identity file %s: %w", filepath.Base(cfg.file), fs.ErrExist)
 			}
 
 			dst := make([]byte, hex.EncodedLen(len(cfg.priv)))
