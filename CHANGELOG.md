@@ -24,6 +24,8 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 * [#5736](https://github.com/spacemeshos/go-spacemesh/pull/5736) Fixed slow POST initialization on Windows.
 
+* [#5738](https://github.com/spacemeshos/go-spacemesh/pull/5738) sql: fix epoch ATX ID cache deadlock
+
 ## Release v1.4.1
 
 ### Improvements
