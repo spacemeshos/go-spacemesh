@@ -81,11 +81,11 @@ run: gomplate $(run_deps)
 	@echo "launching test job with name=$(test_job_name) and testid=$(test_id)"
 	@testid=$(test_id) job_name=$(test_job_name) image=$(image_name) command="$(command)" \
 	  gomplate --file systest_job.yml.tmpl | kubectl apply -f -
-	@if [ -z "${norbac} ]; then \
+	@if [ -z "${norbac}" ]; then \
 	  testid=$(test_id) job_name=$(test_job_name) image=$(image_name) command="$(command)" \
-	    gomplate --file systest_rbac.yml.tmpl | kubectl apply -f -
+	    gomplate --file systest_rbac.yml.tmpl | kubectl apply -f -; \
 	fi
-	until kubectl get jobs $(test_job_name); do sleep 1; done
+	until kubectl get pod -l job-name=$(test_job_name) | grep -q .; do sleep 1; done
 	kubectl wait --timeout=30s --for=condition=ready -l job-name=$(test_job_name) pod
 	kubectl logs job/$(test_job_name) -f --ignore-errors
 	test_job_name=$(test_job_name) bash ./wait_for_job.sh
