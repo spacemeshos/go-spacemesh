@@ -171,6 +171,9 @@ func Test_MergeDBs_TargetKeyAlreadyExists(t *testing.T) {
 	err = os.WriteFile(filepath.Join(tmpSrc, keyDir, "exists.key"), key, 0o600)
 	require.NoError(t, err)
 
+	err = os.WriteFile(filepath.Join(tmpSrc, keyDir, "a.key"), key, 0o600) // second key to check if no keys were copied
+	require.NoError(t, err)
+
 	db, err = localsql.Open("file:" + filepath.Join(tmpSrc, localDbFile))
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
@@ -178,6 +181,15 @@ func Test_MergeDBs_TargetKeyAlreadyExists(t *testing.T) {
 	err = MergeDBs(context.Background(), zaptest.NewLogger(t), tmpSrc, tmpDst)
 	require.ErrorIs(t, err, fs.ErrExist)
 	require.ErrorContains(t, err, "exists.key")
+
+	require.FileExists(t, filepath.Join(tmpDst, keyDir, "exists.key"))
+	data, err := os.ReadFile(filepath.Join(tmpDst, keyDir, "exists.key"))
+	require.NoError(t, err)
+	require.Equal(t, "key", string(data))
+
+	require.NoFileExists(t, filepath.Join(tmpDst, keyDir, "a.key"))
+	require.FileExists(t, filepath.Join(tmpSrc, keyDir, "a.key"))
+	require.FileExists(t, filepath.Join(tmpSrc, keyDir, "exists.key"))
 }
 
 func Test_MergeDBs_Successful_Existing_Node(t *testing.T) {
