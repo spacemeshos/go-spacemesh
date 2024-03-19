@@ -45,9 +45,11 @@ func TestRelay(t *testing.T) {
 	select {
 	case addrInfo = <-relayAddrInfoCh:
 	case <-ctx.Done():
-		err := eg.Wait()
-		require.Error(t, err)
-		t.Fatalf("stopped with error: %v", err)
+		if err := eg.Wait(); err != nil {
+			require.FailNow(t, "premature stop", "error: %v", err)
+		} else {
+			require.FailNow(t, "stopped without result and no error")
+		}
 	case <-time.After(30 * time.Second):
 		require.FailNow(t, "timed out waiting for addresses")
 	}
