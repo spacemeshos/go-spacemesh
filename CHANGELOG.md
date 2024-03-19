@@ -19,6 +19,9 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
   `127.0.0.1:0` instead of `127.0.0.1:9094`. This will ensure that a node binds the post service to a random free port
   and prevents multiple instances of the post service from binding to the same port.
 
+* [#5735](https://github.com/spacemeshos/go-spacemesh/pull/5735) Don't hold database connections for long in fetcher
+  streaming mode
+
 ## Release v1.4.1
 
 ### Improvements
