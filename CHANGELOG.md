@@ -22,7 +22,7 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 * [#5735](https://github.com/spacemeshos/go-spacemesh/pull/5735) Don't hold database connections for long in fetcher
   streaming mode
 
-* [#5736](https://github.com/spacemeshos/go-spacemesh/pull/5736) Fixed slow POST initialization time on Windows.
+* [#5736](https://github.com/spacemeshos/go-spacemesh/pull/5736) Fixed slow POST initialization on Windows.
 
 ## Release v1.4.1
 
