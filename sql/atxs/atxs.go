@@ -388,9 +388,13 @@ func Add(db sql.Executor, atx *types.VerifiedActivationTx) error {
 	if err != nil {
 		return fmt.Errorf("insert ATX ID %v: %w", atx.ID(), err)
 	}
+	return nil
+}
+
+// AtxAdded updates epoch query cache with new ATX, if the query cache is enabled.
+func AtxAdded(db sql.Executor, atx *types.VerifiedActivationTx) {
 	epochCacheKey := sql.QueryCacheKey(CacheKindEpochATXs, atx.PublishEpoch.String())
 	sql.AppendToCachedSlice(db, epochCacheKey, atx.ID())
-	return nil
 }
 
 type Filter func(types.ATXID) bool
