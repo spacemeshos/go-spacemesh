@@ -179,7 +179,7 @@ func (p *Peers) Stats() Stats {
 	defer p.mu.Unlock()
 	stats := Stats{
 		Total:                len(p.peers),
-		GlobalAverageLatency: p.globalLatency,
+		GlobalAverageLatency: time.Duration(p.globalLatency),
 	}
 	for _, peer := range best {
 		peerData, exist := p.peers[peer]
@@ -190,7 +190,7 @@ func (p *Peers) Stats() Stats {
 			ID:       peerData.id,
 			Success:  peerData.success,
 			Failures: peerData.failures,
-			Latency:  peerData.averageLatency,
+			Latency:  time.Duration(peerData.averageLatency),
 		})
 	}
 	return stats
@@ -198,13 +198,13 @@ func (p *Peers) Stats() Stats {
 
 type Stats struct {
 	Total                int
-	GlobalAverageLatency float64
+	GlobalAverageLatency time.Duration
 	BestPeers            []PeerStats
 }
 
 func (s *Stats) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddInt("total", s.Total)
-	enc.AddFloat64("global average latency", s.GlobalAverageLatency)
+	enc.AddDuration("global average latency", s.GlobalAverageLatency)
 	enc.AddArray("best peers", zapcore.ArrayMarshalerFunc(func(arrEnc zapcore.ArrayEncoder) error {
 		for _, peer := range s.BestPeers {
 			arrEnc.AppendObject(&peer)
@@ -218,13 +218,13 @@ type PeerStats struct {
 	ID       peer.ID
 	Success  int
 	Failures int
-	Latency  float64
+	Latency  time.Duration
 }
 
 func (p *PeerStats) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddString("id", p.ID.String())
 	enc.AddInt("success", p.Success)
 	enc.AddInt("failures", p.Failures)
-	enc.AddFloat64("latency per 1024 bytes", p.Latency)
+	enc.AddDuration("latency per 1024 bytes", p.Latency)
 	return nil
 }
