@@ -361,6 +361,7 @@ func testHandleEpochInfoReqWithQueryCache(
 	for i := 0; i < 10; i++ {
 		vatx := newAtx(t, epoch)
 		require.NoError(t, atxs.Add(th.cdb, vatx))
+		atxs.AtxAdded(th.cdb, vatx)
 		expected.AtxIDs = append(expected.AtxIDs, vatx.ID())
 	}
 
@@ -379,6 +380,7 @@ func testHandleEpochInfoReqWithQueryCache(
 	// Add another ATX which should be appended to the cached slice
 	vatx := newAtx(t, epoch)
 	require.NoError(t, atxs.Add(th.cdb, vatx))
+	atxs.AtxAdded(th.cdb, vatx)
 	expected.AtxIDs = append(expected.AtxIDs, vatx.ID())
 	require.Equal(t, 12, qc.QueryCount())
 
