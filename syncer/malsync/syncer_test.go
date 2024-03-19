@@ -244,6 +244,20 @@ func TestSyncer(t *testing.T) {
 			tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
 		require.Zero(t, tester.peerErrCount.n)
 	})
+	t.Run("EnsureInSync with no malfeasant identities", func(t *testing.T) {
+		tester := newTester(t, DefaultConfig())
+		tester.expectPeers(tester.peers)
+		for _, p := range tester.peers {
+			tester.fetcher.EXPECT().
+				GetMaliciousIDs(gomock.Any(), p).
+				Return(nil, nil)
+		}
+		epochStart := tester.clock.Now().Truncate(time.Second)
+		epochEnd := epochStart.Add(10 * time.Minute)
+		require.NoError(t,
+			tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
+		require.Zero(t, tester.peerErrCount.n)
+	})
 	t.Run("interruptible", func(t *testing.T) {
 		tester := newTester(t, DefaultConfig())
 		ctx, cancel := context.WithCancel(context.Background())
