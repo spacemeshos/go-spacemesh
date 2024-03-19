@@ -22,6 +22,8 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 * [#5735](https://github.com/spacemeshos/go-spacemesh/pull/5735) Don't hold database connections for long in fetcher
   streaming mode
 
+* [#5738](https://github.com/spacemeshos/go-spacemesh/pull/5738) sql: fix epoch ATX ID cache deadlock
+
 ## Release v1.4.1
 
 ### Improvements
