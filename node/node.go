@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -1559,7 +1560,15 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		if err := app.grpcPostServer.Start(); err != nil {
 			return err
 		}
-		app.Config.POSTService.NodeAddress = fmt.Sprintf("http://%s", app.grpcPostServer.BoundAddress)
+		host, port, err := net.SplitHostPort(app.grpcPostServer.BoundAddress)
+		if err != nil {
+			return fmt.Errorf("parse grpc-private-listener: %w", err)
+		}
+		ip := net.ParseIP(host)
+		if ip.IsUnspecified() { // 0.0.0.0 isn't a valid address to connect to on windows
+			host = "127.0.0.1"
+		}
+		app.Config.POSTService.NodeAddress = fmt.Sprintf("http://%s:%s", host, port)
 		svc, err := app.grpcService(grpcserver.Smesher, app.log)
 		if err != nil {
 			return err

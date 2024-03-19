@@ -1168,7 +1168,7 @@ func TestAdminEvents_MultiSmesher(t *testing.T) {
 			logger.Zap(),
 			mgr,
 			signer,
-			cfg.API.PostListener,
+			"127.0.0.1:10094",
 			cfg.POST,
 			cfg.SMESHING.Opts,
 		))
