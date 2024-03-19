@@ -508,7 +508,7 @@ func IterateAtxsData(
 ) error {
 	_, err := db.Exec(
 		`select id, pubkey, epoch, coinbase, effective_num_units, base_tick_height, tick_count
-		from atxs where epoch between ?1 and ?2 order by pubkey, epoch, effective_num_units * tick_count desc;`,
+		from atxs where epoch between ?1 and ?2 order by epoch, pubkey, effective_num_units * tick_count desc;`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(from.Uint32()))
 			stmt.BindInt64(2, int64(to.Uint32()))
