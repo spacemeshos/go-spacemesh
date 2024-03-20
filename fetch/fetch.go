@@ -730,7 +730,7 @@ func (f *Fetch) streamBatch(peer p2p.Peer, batch *batchInfo) error {
 	// Request is synchronous, it will return errors only if size of the bytes buffer
 	// is large or target peer is not connected
 	req := codec.MustEncode(&batch.RequestBatch)
-	return f.meteredStreamRequest(
+	err := f.meteredStreamRequest(
 		f.shutdownCtx, hashProtocol, peer, req,
 		func(ctx context.Context, s io.ReadWriter) (int, error) {
 			batchMap := batch.toMap()
@@ -739,13 +739,6 @@ func (f *Fetch) streamBatch(peer p2p.Peer, batch *batchInfo) error {
 				return f.receiveStreamedBatch(ctx, s, batch, batchMap)
 			})
 			if err != nil {
-				f.logger.With().Debug(
-					"failed to send batch request",
-					log.Stringer("batch", batch.ID),
-					log.Stringer("peer", peer),
-					log.Err(err),
-				)
-				f.handleHashError(batch, err)
 				return n, err
 			}
 
@@ -762,6 +755,16 @@ func (f *Fetch) streamBatch(peer p2p.Peer, batch *batchInfo) error {
 
 			return n, nil
 		})
+	if err != nil {
+		f.logger.With().Debug(
+			"failed to send batch request",
+			log.Stringer("batch", batch.ID),
+			log.Stringer("peer", peer),
+			log.Err(err),
+		)
+		f.handleHashError(batch, err)
+	}
+	return err
 }
 
 func (f *Fetch) receiveStreamedBatch(
