@@ -562,9 +562,10 @@ func setupSmesherService(t *testing.T, sig *signing.EdSigner) (*smesherServiceCo
 		smeshingProvider,
 		postSupervisor,
 		10*time.Millisecond,
-		sig,
 		activation.DefaultPostSetupOpts(),
+		sig,
 	)
+	svc.SetPostServiceConfig(activation.DefaultTestPostServiceConfig())
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
@@ -584,7 +585,11 @@ func setupSmesherService(t *testing.T, sig *signing.EdSigner) (*smesherServiceCo
 func TestSmesherService(t *testing.T) {
 	t.Run("IsSmeshing", func(t *testing.T) {
 		t.Parallel()
-		c, ctx := setupSmesherService(t, nil)
+
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		c, ctx := setupSmesherService(t, sig)
 		c.smeshingProvider.EXPECT().Smeshing().Return(false)
 		res, err := c.IsSmeshing(ctx, &emptypb.Empty{})
 		require.NoError(t, err)
@@ -593,8 +598,12 @@ func TestSmesherService(t *testing.T) {
 
 	t.Run("StartSmeshingMissingArgs", func(t *testing.T) {
 		t.Parallel()
-		c, ctx := setupSmesherService(t, nil)
-		_, err := c.StartSmeshing(ctx, &pb.StartSmeshingRequest{})
+
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		c, ctx := setupSmesherService(t, sig)
+		_, err = c.StartSmeshing(ctx, &pb.StartSmeshingRequest{})
 		require.Equal(t, codes.InvalidArgument, status.Code(err))
 	})
 
@@ -611,15 +620,16 @@ func TestSmesherService(t *testing.T) {
 
 		c, ctx := setupSmesherService(t, sig)
 		c.smeshingProvider.EXPECT().StartSmeshing(gomock.Any()).Return(nil)
-		c.postSupervisor.EXPECT().Start(gomock.All(
-			gomock.Cond(func(postOpts any) bool { return postOpts.(activation.PostSetupOpts).DataDir == opts.DataDir }),
-			gomock.Cond(
-				func(postOpts any) bool { return postOpts.(activation.PostSetupOpts).NumUnits == opts.NumUnits },
-			),
-			gomock.Cond(
-				func(postOpts any) bool { return postOpts.(activation.PostSetupOpts).MaxFileSize == opts.MaxFileSize },
-			),
-		), sig).Return(nil)
+		c.postSupervisor.EXPECT().Start(gomock.Any(),
+			gomock.All(
+				gomock.Cond(func(postOpts any) bool { return postOpts.(activation.PostSetupOpts).DataDir == opts.DataDir }),
+				gomock.Cond(
+					func(postOpts any) bool { return postOpts.(activation.PostSetupOpts).NumUnits == opts.NumUnits },
+				),
+				gomock.Cond(
+					func(postOpts any) bool { return postOpts.(activation.PostSetupOpts).MaxFileSize == opts.MaxFileSize },
+				),
+			), sig).Return(nil)
 		res, err := c.StartSmeshing(ctx, &pb.StartSmeshingRequest{
 			Opts:     opts,
 			Coinbase: coinbase,
