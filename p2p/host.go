@@ -397,6 +397,23 @@ func New(
 	return Upgrade(h, opts...)
 }
 
+// AutoStart initializes a new host and starts it.
+func AutoStart(ctx context.Context,
+	logger log.Log,
+	cfg Config,
+	prologue []byte,
+	quicNetCookie handshake.NetworkCookie,
+	opts ...Opt) (*Host, error) {
+	host, err := New(ctx, logger, cfg, prologue, quicNetCookie, opts...)
+	if err != nil {
+		return nil, err
+	}
+	if err := host.Start(); err != nil {
+		return nil, err
+	}
+	return host, nil
+}
+
 func setupResourcesManager(hostcfg Config) func(cfg *libp2p.Config) error {
 	return func(cfg *libp2p.Config) error {
 		rcmgr.MustRegisterWith(prometheus.DefaultRegisterer)
