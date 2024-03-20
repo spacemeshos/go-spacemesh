@@ -403,7 +403,8 @@ func AutoStart(ctx context.Context,
 	cfg Config,
 	prologue []byte,
 	quicNetCookie handshake.NetworkCookie,
-	opts ...Opt) (*Host, error) {
+	opts ...Opt,
+) (*Host, error) {
 	host, err := New(ctx, logger, cfg, prologue, quicNetCookie, opts...)
 	if err != nil {
 		return nil, err
