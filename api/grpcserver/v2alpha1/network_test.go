@@ -6,8 +6,9 @@ import (
 	"time"
 
 	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/stretchr/testify/require"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 func TestNetworkService_Info(t *testing.T) {
