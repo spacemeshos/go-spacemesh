@@ -380,6 +380,10 @@ func (fh *Host) Start() error {
 	if fh.closed.closed {
 		return errors.New("p2p: closed")
 	}
+	if err := fh.Network().Listen(fh.cfg.Listen...); err != nil {
+		fh.Network().Close()
+		return err
+	}
 	fh.discovery.Start()
 	if fh.ping != nil {
 		fh.ping.Start()
