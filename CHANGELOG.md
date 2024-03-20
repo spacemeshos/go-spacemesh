@@ -166,7 +166,7 @@ To add a new identity to a node, initialize PoST data with `postcli` and let it 
 
 Make sure to replace `provider` with your provider of choice and `numUnits` with the number of PoST units you want to
 initialize. The `commitmentAtxId` is the commitment ATX ID for the identity you want to initialize. For details on the
-usage of `postcli` please refer to [postcli README](https://github.com/spacemeshos/post/cmd/postcli/README.md).
+usage of `postcli` please refer to [postcli README](https://github.com/spacemeshos/post/blob/develop/cmd/postcli/README.md).
 
 During initialization `postcli` will generate a new private key and store it in the PoST data directory as `identity.key`.
 Copy this file to your `data/identities` directory and rename it to `xxx.key` where `xxx` is a unique identifier for
