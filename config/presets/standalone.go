@@ -88,7 +88,7 @@ func standalone() config.Config {
 
 	conf.API.PublicListener = "0.0.0.0:10092"
 	conf.API.PrivateListener = "127.0.0.1:10093"
-	conf.API.PostListener = "127.0.0.1:10094"
+	conf.API.PostListener = "127.0.0.1:0"
 
 	addr, _ := multiaddr.NewMultiaddr("/ip4/0.0.0.0/tcp/17513")
 	conf.P2P.Listen = []multiaddr.Multiaddr{addr}

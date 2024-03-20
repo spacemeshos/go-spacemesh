@@ -19,7 +19,7 @@ func TestGossip(t *testing.T) {
 	mesh, err := mocknet.FullMeshLinked(n)
 	require.NoError(t, err)
 	topic := "test"
-	pubsubs := []*PubSub{}
+	pubsubs := []PubSub{}
 	count := n * n
 	received := make(chan []byte, count)
 

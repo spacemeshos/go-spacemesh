@@ -301,6 +301,7 @@ func TestApplyAndUndoLayers(t *testing.T) {
 
 func TestGetBlob(t *testing.T) {
 	db := sql.InMemory()
+	ctx := context.Background()
 
 	rng := rand.New(rand.NewSource(1001))
 	numTXs := 5
@@ -312,11 +313,23 @@ func TestGetBlob(t *testing.T) {
 		require.NoError(t, transactions.Add(db, tx, time.Now()))
 		txs = append(txs, tx)
 	}
+
+	noSuchID := types.RandomTransactionID()
+	require.ErrorIs(t, transactions.LoadBlob(ctx, db, noSuchID[:], &sql.Blob{}), sql.ErrNotFound)
+
+	ids := [][]byte{noSuchID[:]}
+	expSizes := []int{-1}
 	for _, tx := range txs {
-		buf, err := transactions.GetBlob(db, tx.ID[:])
-		require.NoError(t, err)
-		require.Equal(t, tx.Raw, buf)
+		var blob sql.Blob
+		require.NoError(t, transactions.LoadBlob(ctx, db, tx.ID[:], &blob))
+		require.Equal(t, tx.Raw, blob.Bytes)
+		ids = append(ids, tx.ID[:])
+		expSizes = append(expSizes, len(tx.Raw))
 	}
+
+	blobSizes, err := transactions.GetBlobSizes(db, ids)
+	require.NoError(t, err)
+	require.Equal(t, expSizes, blobSizes)
 }
 
 func TestGetByAddress(t *testing.T) {

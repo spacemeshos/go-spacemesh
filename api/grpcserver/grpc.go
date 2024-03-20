@@ -78,6 +78,8 @@ func NewWithServices(
 	ip := net.ParseIP(host)
 	if host != "localhost" && !ip.IsPrivate() && !ip.IsLoopback() {
 		logger.Warn("unsecured grpc server is listening on a public IP address", zap.String("address", listener))
+	} else {
+		logger.Info("grpc server is listening on a private IP address", zap.String("address", listener))
 	}
 
 	server := New(listener, logger, config, grpcOpts...)
@@ -169,6 +171,7 @@ func (s *Server) Start() error {
 	}
 	s.BoundAddress = lis.Addr().String()
 	reflection.Register(s.GrpcServer)
+	s.logger.Info("bound to address", zap.String("address", s.BoundAddress))
 	s.grp.Go(func() error {
 		if err := s.GrpcServer.Serve(lis); err != nil {
 			s.logger.Error("serving grpc server", zap.Error(err))

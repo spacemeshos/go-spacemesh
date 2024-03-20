@@ -1,6 +1,7 @@
 package fetch
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -106,7 +107,7 @@ func generateLayerContent(t *testing.T) []byte {
 	return out
 }
 
-func TestFetch_getHashes(t *testing.T) {
+func testFetch_getHashes(t *testing.T, streaming bool) {
 	blks := []*types.Block{
 		genLayerBlock(types.LayerID(10), types.RandomTXSet(10)),
 		genLayerBlock(types.LayerID(11), types.RandomTXSet(10)),
@@ -118,6 +119,7 @@ func TestFetch_getHashes(t *testing.T) {
 		name      string
 		fetchErrs map[types.Hash32]struct{}
 		hdlrErr   error
+		reqErr    error
 	}{
 		{
 			name: "all hashes fetched",
@@ -125,6 +127,10 @@ func TestFetch_getHashes(t *testing.T) {
 		{
 			name:      "all hashes failed",
 			fetchErrs: map[types.Hash32]struct{}{hashes[0]: {}, hashes[1]: {}, hashes[2]: {}},
+		},
+		{
+			name:   "hash request failed",
+			reqErr: errors.New("request failed"),
 		},
 		{
 			name:      "some hashes failed",
@@ -145,6 +151,7 @@ func TestFetch_getHashes(t *testing.T) {
 			f.cfg.QueueSize = 3
 			f.cfg.BatchSize = 2
 			f.cfg.MaxRetriesForRequest = 0
+			f.cfg.Streaming = streaming
 			peers := []p2p.Peer{p2p.Peer("buddy 0"), p2p.Peer("buddy 1")}
 			for _, peer := range peers {
 				f.peers.Add(peer)
@@ -161,47 +168,76 @@ func TestFetch_getHashes(t *testing.T) {
 				}
 				responses[h] = res
 			}
-			f.mHashS.EXPECT().
-				Request(gomock.Any(), gomock.Any(), gomock.Any()).
-				DoAndReturn(
-					func(_ context.Context, p p2p.Peer, req []byte) ([]byte, error) {
-						var rb RequestBatch
-						err := codec.Decode(req, &rb)
-						require.NoError(t, err)
+			requestFn := func(_ context.Context, p p2p.Peer, req []byte) ([]byte, error) {
+				if tc.reqErr != nil {
+					return nil, tc.reqErr
+				}
+				var rb RequestBatch
+				err := codec.Decode(req, &rb)
+				require.NoError(t, err)
 
-						resBatch := ResponseBatch{
-							ID: rb.ID,
-						}
-						for _, r := range rb.Requests {
-							if _, ok := tc.fetchErrs[r.Hash]; ok {
-								continue
+				resBatch := ResponseBatch{
+					ID: rb.ID,
+				}
+				for _, r := range rb.Requests {
+					if _, ok := tc.fetchErrs[r.Hash]; ok {
+						continue
+					}
+					res := responses[r.Hash]
+					resBatch.Responses = append(resBatch.Responses, res)
+					f.mBlocksH.EXPECT().
+						HandleMessage(gomock.Any(), res.Hash, p, res.Data).
+						Return(tc.hdlrErr)
+				}
+				bts, err := codec.Encode(&resBatch)
+				require.NoError(t, err)
+
+				return bts, nil
+			}
+			if streaming {
+				f.mHashS.EXPECT().
+					StreamRequest(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(
+						func(
+							ctx context.Context,
+							p p2p.Peer,
+							req []byte,
+							cbk server.StreamRequestCallback,
+						) error {
+							b, err := requestFn(ctx, p, req)
+							if err != nil {
+								return err
 							}
-							res := responses[r.Hash]
-							resBatch.Responses = append(resBatch.Responses, res)
-							f.mBlocksH.EXPECT().
-								HandleMessage(gomock.Any(), res.Hash, p, res.Data).
-								Return(tc.hdlrErr)
-						}
-						bts, err := codec.Encode(&resBatch)
-						require.NoError(t, err)
+							resp := &server.Response{Data: b}
+							buf := bytes.NewBuffer(codec.MustEncode(resp))
+							return cbk(ctx, buf)
+						}).
+					Times(len(peers))
+			} else {
+				f.mHashS.EXPECT().
+					Request(gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(requestFn).
+					Times(len(peers))
+			}
 
-						return bts, nil
-					}).
-				Times(len(peers))
-
-			got := f.getHashes(
+			err := f.getHashes(
 				context.Background(),
 				hashes,
 				datastore.BlockDB,
 				f.validators.block.HandleMessage,
 			)
-			if len(tc.fetchErrs) > 0 || tc.hdlrErr != nil {
-				require.NotEmpty(t, got)
+			if len(tc.fetchErrs) > 0 || tc.hdlrErr != nil || tc.reqErr != nil {
+				require.Error(t, err)
 			} else {
-				require.Empty(t, got)
+				require.NoError(t, err)
 			}
 		})
 	}
+}
+
+func TestFetch_getHashes(t *testing.T) {
+	t.Run("no streaming", func(t *testing.T) { testFetch_getHashes(t, false) })
+	t.Run("streaming", func(t *testing.T) { testFetch_getHashes(t, true) })
 }
 
 func TestFetch_GetMalfeasanceProofs(t *testing.T) {
@@ -545,8 +581,9 @@ func Test_PeerEpochInfo(t *testing.T) {
 	peer := p2p.Peer("p0")
 	errUnknown := errors.New("unknown")
 	tt := []struct {
-		name string
-		err  error
+		name      string
+		err       error
+		streaming bool
 	}{
 		{
 			name: "success",
@@ -554,6 +591,15 @@ func Test_PeerEpochInfo(t *testing.T) {
 		{
 			name: "fail",
 			err:  errUnknown,
+		},
+		{
+			name:      "success (streamed)",
+			streaming: true,
+		},
+		{
+			name:      "fail (streamed)",
+			err:       errUnknown,
+			streaming: true,
 		},
 	}
 
@@ -563,19 +609,42 @@ func Test_PeerEpochInfo(t *testing.T) {
 			t.Parallel()
 
 			f := createFetch(t)
+			f.cfg.Streaming = tc.streaming
 			f.mh.EXPECT().ID().Return("self").AnyTimes()
 			var expected *EpochData
-			f.mAtxS.EXPECT().
-				Request(gomock.Any(), peer, gomock.Any()).
-				DoAndReturn(
-					func(_ context.Context, _ p2p.Peer, req []byte) ([]byte, error) {
-						if tc.err == nil {
-							var data []byte
-							expected, data = generateEpochData(t)
-							return data, nil
-						}
-						return nil, tc.err
-					})
+			epochIDBytes := codec.MustEncode(types.EpochID(111))
+			if tc.streaming {
+				f.mAtxS.EXPECT().
+					StreamRequest(gomock.Any(), peer, epochIDBytes, gomock.Any()).
+					DoAndReturn(
+						func(
+							ctx context.Context,
+							_ p2p.Peer,
+							_ []byte,
+							cbk server.StreamRequestCallback,
+						) error {
+							if tc.err == nil {
+								var r server.Response
+								expected, r.Data = generateEpochData(t)
+								var b bytes.Buffer
+								codec.MustEncodeTo(&b, &r)
+								return cbk(ctx, &b)
+							}
+							return tc.err
+						})
+			} else {
+				f.mAtxS.EXPECT().
+					Request(gomock.Any(), peer, epochIDBytes).
+					DoAndReturn(
+						func(context.Context, p2p.Peer, []byte) ([]byte, error) {
+							if tc.err == nil {
+								var data []byte
+								expected, data = generateEpochData(t)
+								return data, nil
+							}
+							return nil, tc.err
+						})
+			}
 			got, err := f.PeerEpochInfo(context.Background(), peer, types.EpochID(111))
 			require.ErrorIs(t, err, tc.err)
 			if tc.err == nil {
@@ -728,7 +797,7 @@ func Test_GetAtxsLimiting(t *testing.T) {
 			srv := server.New(
 				mesh.Hosts()[1],
 				hashProtocol,
-				func(_ context.Context, data []byte) ([]byte, error) {
+				server.WrapHandler(func(_ context.Context, data []byte) ([]byte, error) {
 					var requestBatch RequestBatch
 					require.NoError(t, codec.Decode(data, &requestBatch))
 					resBatch := ResponseBatch{
@@ -746,7 +815,7 @@ func Test_GetAtxsLimiting(t *testing.T) {
 					response, err := codec.Encode(&resBatch)
 					require.NoError(t, err)
 					return response, nil
-				},
+				}),
 			)
 
 			var (
@@ -815,6 +884,14 @@ func FuzzMeshHashRequest(f *testing.F) {
 	})
 }
 
+func FuzzMeshHashRequestStream(f *testing.F) {
+	h := createTestHandler(f)
+	f.Fuzz(func(t *testing.T, data []byte) {
+		var b bytes.Buffer
+		h.handleMeshHashReqStream(context.Background(), data, &b)
+	})
+}
+
 func FuzzLayerInfo(f *testing.F) {
 	h := createTestHandler(f)
 	f.Fuzz(func(t *testing.T, data []byte) {
@@ -822,9 +899,25 @@ func FuzzLayerInfo(f *testing.F) {
 	})
 }
 
+func FuzzLayerInfoStream(f *testing.F) {
+	h := createTestHandler(f)
+	f.Fuzz(func(t *testing.T, data []byte) {
+		var b bytes.Buffer
+		h.handleEpochInfoReqStream(context.Background(), data, &b)
+	})
+}
+
 func FuzzHashReq(f *testing.F) {
 	h := createTestHandler(f)
 	f.Fuzz(func(t *testing.T, data []byte) {
 		h.handleHashReq(context.Background(), data)
+	})
+}
+
+func FuzzHashReqStream(f *testing.F) {
+	h := createTestHandler(f)
+	f.Fuzz(func(t *testing.T, data []byte) {
+		var b bytes.Buffer
+		h.handleHashReqStream(context.Background(), data, &b)
 	})
 }
