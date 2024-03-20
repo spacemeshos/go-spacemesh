@@ -22,4 +22,8 @@ func TestMalfeasanceSyncState(t *testing.T) {
 		require.Equal(t, ts.Truncate(time.Second), timestamp)
 		ts = ts.Add(3 * time.Minute)
 	}
+	require.NoError(t, Clear(db))
+	timestamp, err = GetSyncState(db)
+	require.NoError(t, err)
+	require.Equal(t, time.Time{}, timestamp)
 }

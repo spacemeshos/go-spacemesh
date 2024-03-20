@@ -25,13 +25,21 @@ func GetSyncState(db sql.Executor) (time.Time, error) {
 	return timestamp, nil
 }
 
-func UpdateSyncState(db sql.Executor, timestamp time.Time) error {
+func updateSyncState(db sql.Executor, ts int64) error {
 	_, err := db.Exec("update malfeasance_sync_state set timestamp = ?1",
 		func(stmt *sql.Statement) {
-			stmt.BindInt64(1, timestamp.Unix())
+			stmt.BindInt64(1, ts)
 		}, nil)
 	if err != nil {
 		return fmt.Errorf("error updating malfeasance sync state: %w", err)
 	}
 	return nil
+}
+
+func UpdateSyncState(db sql.Executor, timestamp time.Time) error {
+	return updateSyncState(db, timestamp.Unix())
+}
+
+func Clear(db sql.Executor) error {
+	return updateSyncState(db, 0)
 }
