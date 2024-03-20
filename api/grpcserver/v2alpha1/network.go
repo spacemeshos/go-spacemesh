@@ -2,6 +2,7 @@ package v2alpha1
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -17,11 +18,7 @@ const (
 	Network = "network_v2alpha1"
 )
 
-func NewNetworkService(
-	genesisTime time.Time,
-	genesisID types.Hash20,
-	layerDuration time.Duration,
-) *NetworkService {
+func NewNetworkService(genesisTime string, genesisID types.Hash20, layerDuration time.Duration) *NetworkService {
 	return &NetworkService{
 		genesisTime:   genesisTime,
 		genesisID:     genesisID,
@@ -30,7 +27,7 @@ func NewNetworkService(
 }
 
 type NetworkService struct {
-	genesisTime   time.Time
+	genesisTime   string
 	genesisID     types.Hash20
 	layerDuration time.Duration
 }
@@ -51,8 +48,13 @@ func (s *NetworkService) String() string {
 func (s *NetworkService) Info(context.Context,
 	*spacemeshv2alpha1.NetworkInfoRequest,
 ) (*spacemeshv2alpha1.NetworkInfoResponse, error) {
+	gTime, err := time.Parse(time.RFC3339, s.genesisTime)
+	if err != nil {
+		return nil, fmt.Errorf("cannot parse genesis time %s: %w", s.genesisTime, err)
+	}
+
 	return &spacemeshv2alpha1.NetworkInfoResponse{
-		GenesisTime:           timestamppb.New(s.genesisTime),
+		GenesisTime:           timestamppb.New(gTime),
 		LayerDuration:         durationpb.New(s.layerDuration),
 		GenesisId:             s.genesisID.Bytes(),
 		Hrp:                   types.NetworkHRP(),

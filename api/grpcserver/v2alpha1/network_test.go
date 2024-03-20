@@ -15,7 +15,7 @@ func TestNetworkService_Info(t *testing.T) {
 	ctx := context.Background()
 	genesis := time.Unix(genTimeUnix, 0)
 
-	svc := NewNetworkService(genesis, genesisID, layerDuration)
+	svc := NewNetworkService(genesis.Format(time.RFC3339), genesisID, layerDuration)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
