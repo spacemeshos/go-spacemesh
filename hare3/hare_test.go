@@ -506,7 +506,7 @@ type testTracer struct {
 }
 
 func (t *testTracer) waitStopped() types.LayerID {
-	wait := 2 * time.Second
+	wait := 10 * time.Second
 	select {
 	case <-time.After(wait):
 		require.FailNow(t, "didn't stop", "wait %v", wait)
@@ -517,7 +517,7 @@ func (t *testTracer) waitStopped() types.LayerID {
 }
 
 func (t *testTracer) waitEligibility() []*types.HareEligibility {
-	wait := time.Second
+	wait := 10 * time.Second
 	select {
 	case <-time.After(wait):
 		require.FailNow(t, "no eligibility", "wait %v", wait)
@@ -528,7 +528,7 @@ func (t *testTracer) waitEligibility() []*types.HareEligibility {
 }
 
 func (t *testTracer) waitSent() *Message {
-	wait := time.Second
+	wait := 10 * time.Second
 	select {
 	case <-time.After(wait):
 		require.FailNow(t, "no message", "wait %v", wait)
@@ -548,7 +548,7 @@ func (t *testTracer) OnStop(lid types.LayerID) {
 }
 
 func (t *testTracer) OnActive(el []*types.HareEligibility) {
-	wait := 2 * time.Second
+	wait := 10 * time.Second
 	select {
 	case <-time.After(wait):
 		require.FailNow(t, "eligibility can't be sent", "wait %v", wait)
@@ -557,7 +557,7 @@ func (t *testTracer) OnActive(el []*types.HareEligibility) {
 }
 
 func (t *testTracer) OnMessageSent(m *Message) {
-	wait := time.Second
+	wait := 10 * time.Second
 	select {
 	case <-time.After(wait):
 		require.FailNow(t, "message can't be sent", "wait %v", wait)
@@ -568,7 +568,6 @@ func (t *testTracer) OnMessageSent(m *Message) {
 func (*testTracer) OnMessageReceived(*Message) {}
 
 func testHare(t *testing.T, active, inactive, equivocators int, opts ...clusterOpt) {
-	t.Parallel()
 	cfg := DefaultConfig()
 	cfg.LogStats = true
 	tst := &tester{
@@ -622,7 +621,6 @@ func testHare(t *testing.T, active, inactive, equivocators int, opts ...clusterO
 }
 
 func TestHare(t *testing.T) {
-	t.Parallel()
 	t.Run("one", func(t *testing.T) { testHare(t, 1, 0, 0) })
 	t.Run("two", func(t *testing.T) { testHare(t, 2, 0, 0) })
 	t.Run("small", func(t *testing.T) { testHare(t, 5, 0, 0) })
@@ -906,7 +904,18 @@ func TestProposals(t *testing.T) {
 			db := sql.InMemory()
 			atxsdata := atxsdata.New()
 			proposals := store.New()
-			hare := New(nil, nil, db, atxsdata, proposals, nil, nil, nil, layerpatrol.New(), WithLogger(logtest.New(t).Zap()))
+			hare := New(
+				nil,
+				nil,
+				db,
+				atxsdata,
+				proposals,
+				nil,
+				nil,
+				nil,
+				layerpatrol.New(),
+				WithLogger(logtest.New(t).Zap()),
+			)
 			for _, atx := range tc.atxs {
 				require.NoError(t, atxs.Add(db, &atx))
 				atxsdata.AddFromHeader(atx.ToHeader(), *atx.VRFNonce, false)

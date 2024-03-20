@@ -61,10 +61,8 @@ func launchPostSupervisor(
 	// start post supervisor
 	builder := activation.NewMockAtxBuilder(ctrl)
 	builder.EXPECT().Register(sig)
-	ps, err := activation.NewPostSupervisor(log, serviceCfg, postCfg, provingOpts, mgr, builder)
-	require.NoError(tb, err)
-	require.NotNil(tb, ps)
-	require.NoError(tb, ps.Start(postOpts, sig))
+	ps := activation.NewPostSupervisor(log, postCfg, provingOpts, mgr, builder)
+	require.NoError(tb, ps.Start(serviceCfg, postOpts, sig))
 	return sig.NodeID(), func() { assert.NoError(tb, ps.Stop(false)) }
 }
 
@@ -106,10 +104,8 @@ func launchPostSupervisorTLS(
 	// start post supervisor
 	builder := activation.NewMockAtxBuilder(ctrl)
 	builder.EXPECT().Register(sig)
-	ps, err := activation.NewPostSupervisor(log, serviceCfg, postCfg, provingOpts, mgr, builder)
-	require.NoError(tb, err)
-	require.NotNil(tb, ps)
-	require.NoError(tb, ps.Start(postOpts, sig))
+	ps := activation.NewPostSupervisor(log, postCfg, provingOpts, mgr, builder)
+	require.NoError(tb, ps.Start(serviceCfg, postOpts, sig))
 	return sig.NodeID(), func() { assert.NoError(tb, ps.Stop(false)) }
 }
 

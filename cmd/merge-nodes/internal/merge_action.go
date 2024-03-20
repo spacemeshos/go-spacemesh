@@ -73,15 +73,34 @@ func MergeDBs(ctx context.Context, dbLog *zap.Logger, from, to string) error {
 		return err
 	}
 
+	fromKeyDir := filepath.Join(from, keyDir)
+	toKeyDir := filepath.Join(to, keyDir)
+
+	// check for name collisions
+	toKeyDirFiles, err := os.ReadDir(toKeyDir)
+	if err != nil {
+		return fmt.Errorf("read target key directory: %w", err)
+	}
+	fromKeyDirFiles, err := os.ReadDir(fromKeyDir)
+	if err != nil {
+		return fmt.Errorf("read source key directory: %w", err)
+	}
+	for _, toFile := range toKeyDirFiles {
+		for _, fromFile := range fromKeyDirFiles {
+			if toFile.Name() == fromFile.Name() {
+				return fmt.Errorf("identity file %s already exists: %w", toFile.Name(), fs.ErrExist)
+			}
+		}
+	}
+
 	// copy files from `from` to `to`
-	dir := filepath.Join(from, keyDir)
-	err = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+	err = filepath.WalkDir(fromKeyDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return fmt.Errorf("failed to walk directory at %s: %w", path, err)
 		}
 
 		// skip subdirectories and files in them
-		if d.IsDir() && path != dir {
+		if d.IsDir() && path != fromKeyDir {
 			return fs.SkipDir
 		}
 
@@ -98,10 +117,6 @@ func MergeDBs(ctx context.Context, dbLog *zap.Logger, from, to string) error {
 		}
 
 		dstPath := filepath.Join(to, keyDir, d.Name())
-		if _, err := os.Stat(dstPath); err == nil {
-			return fmt.Errorf("identity file %s already exists: %w", d.Name(), fs.ErrExist)
-		}
-
 		dst := make([]byte, hex.EncodedLen(len(signer.PrivateKey())))
 		hex.Encode(dst, signer.PrivateKey())
 		err = os.WriteFile(dstPath, dst, 0o600)
