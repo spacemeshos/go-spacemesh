@@ -98,7 +98,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot, 
 		data *types.EpochData
 		err  error
 	)
-	if v.validateBoundaries >= ballot.Layer.GetEpoch() {
+	if ballot.EpochData != nil && v.validateBoundaries >= ballot.Layer.GetEpoch() {
 		data, err = v.validateReferenceBoundaries(ballot, atx.Weight, weight)
 	} else if ballot.EpochData != nil && ballot.Layer.GetEpoch() == v.clock.CurrentLayer().GetEpoch() {
 		data, err = v.validateReference(ballot, atx.Weight, weight)

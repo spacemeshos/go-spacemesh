@@ -536,7 +536,7 @@ func (h *Handler) checkBallotDataIntegrity(ctx context.Context, b *types.Ballot)
 		if epoch > 0 {
 			epoch-- // download activesets in the previous epoch too
 		}
-		if target := b.Layer.GetEpoch(); target > epoch && target >= h.cfg.ValidateBoundaries {
+		if target := b.Layer.GetEpoch(); target >= epoch && h.cfg.ValidateBoundaries >= target {
 			return h.atxsdata.NonDecreasingWeight(target), nil
 		} else if b.Layer.GetEpoch() >= epoch {
 			var exists bool
