@@ -229,6 +229,8 @@ func (v *Validator) validateReferenceBoundaries(
 	if ballot.EpochData.Beacon == types.EmptyBeacon {
 		return nil, fmt.Errorf("%w: beacon is missing in ref ballot %v", pubsub.ErrValidationReject, ballot.ID())
 	}
+	// this error is possible only due to programmer mistake, for example if NonDecreasingWeight is returned as zero
+	// atx for this ballot actually stored locally
 	if activeSetWeight == 0 {
 		return nil, fmt.Errorf("zero local weight. failed to validate ballot %v", ballot.ID())
 	}
