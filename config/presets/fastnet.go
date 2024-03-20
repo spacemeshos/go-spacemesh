@@ -51,6 +51,7 @@ func fastnet() config.Config {
 	conf.LayerDuration = 15 * time.Second
 	conf.Sync.Interval = 5 * time.Second
 	conf.Sync.GossipDuration = 10 * time.Second
+	conf.Sync.AtxSync.EpochInfoInterval = 20 * time.Second
 	conf.LayersPerEpoch = 4
 	conf.RegossipAtxInterval = 30 * time.Second
 

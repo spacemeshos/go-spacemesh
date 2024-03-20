@@ -91,7 +91,7 @@ type Host struct {
 	}
 
 	host.Host
-	*pubsub.PubSub
+	pubsub.PubSub
 
 	nodeReporter func()
 
@@ -140,16 +140,21 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 		h.ConnManager().Protect(peer.ID, "direct")
 		// TBD: also protect ping
 	}
-	if fh.PubSub, err = pubsub.New(fh.ctx, fh.logger, h, pubsub.Config{
-		Flood:          cfg.Flood,
-		IsBootnode:     cfg.Bootnode,
-		Direct:         direct,
-		Bootnodes:      bootnodes,
-		MaxMessageSize: cfg.MaxMessageSize,
-		QueueSize:      cfg.GossipQueueSize,
-		Throttle:       cfg.GossipValidationThrottle,
-	}); err != nil {
-		return nil, fmt.Errorf("failed to initialize pubsub: %w", err)
+	if fh.cfg.DisablePubSub {
+		fh.PubSub = &pubsub.NullPubSub{}
+	} else {
+		if fh.PubSub, err = pubsub.New(fh.ctx, fh.logger, h, pubsub.Config{
+			Flood:                 cfg.Flood,
+			IsBootnode:            cfg.Bootnode,
+			Direct:                direct,
+			Bootnodes:             bootnodes,
+			MaxMessageSize:        cfg.MaxMessageSize,
+			QueueSize:             cfg.GossipQueueSize,
+			PeerOutboundQueueSize: cfg.GossipPeerOutboundQueueSize,
+			Throttle:              cfg.GossipValidationThrottle,
+		}); err != nil {
+			return nil, fmt.Errorf("failed to initialize pubsub: %w", err)
+		}
 	}
 	dopts := []discovery.Opt{
 		discovery.WithMinPeers(cfg.MinPeers),
@@ -237,8 +242,18 @@ func (fh *Host) GetPeers() []Peer {
 	return fh.Host.Network().Peers()
 }
 
+// Connected returns true if the specified peer is connected.
+// Peers that only have transient connections to them aren't considered connected.
 func (fh *Host) Connected(p Peer) bool {
-	return fh.Host.Network().Connectedness(p) == network.Connected
+	if fh.Host.Network().Connectedness(p) != network.Connected {
+		return false
+	}
+	for _, c := range fh.Host.Network().ConnsToPeer(p) {
+		if !c.Stat().Transient {
+			return true
+		}
+	}
+	return false
 }
 
 // ConnectedPeerInfo retrieves a peer info object for the given peer.ID, if the
@@ -364,6 +379,10 @@ func (fh *Host) Start() error {
 	defer fh.closed.Unlock()
 	if fh.closed.closed {
 		return errors.New("p2p: closed")
+	}
+	if err := fh.Network().Listen(fh.cfg.Listen...); err != nil {
+		fh.Network().Close()
+		return err
 	}
 	fh.discovery.Start()
 	if fh.ping != nil {

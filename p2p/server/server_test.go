@@ -35,9 +35,9 @@ func TestServer(t *testing.T) {
 		WithTimeout(100 * time.Millisecond),
 		WithLog(logtest.New(t)),
 	}
-	client := New(mesh.Hosts()[0], proto, handler, append(opts, WithRequestSizeLimit(2*limit))...)
-	srv1 := New(mesh.Hosts()[1], proto, handler, append(opts, WithRequestSizeLimit(limit))...)
-	srv2 := New(mesh.Hosts()[2], proto, errhandler, append(opts, WithRequestSizeLimit(limit))...)
+	client := New(mesh.Hosts()[0], proto, WrapHandler(handler), append(opts, WithRequestSizeLimit(2*limit))...)
+	srv1 := New(mesh.Hosts()[1], proto, WrapHandler(handler), append(opts, WithRequestSizeLimit(limit))...)
+	srv2 := New(mesh.Hosts()[2], proto, WrapHandler(errhandler), append(opts, WithRequestSizeLimit(limit))...)
 	ctx, cancel := context.WithCancel(context.Background())
 	var eg errgroup.Group
 	eg.Go(func() error {
@@ -67,7 +67,9 @@ func TestServer(t *testing.T) {
 	})
 	t.Run("ReceiveError", func(t *testing.T) {
 		_, err := client.Request(ctx, mesh.Hosts()[2].ID(), request)
-		require.Equal(t, err, testErr)
+		require.ErrorIs(t, err, &ServerError{})
+		require.ErrorContains(t, err, "peer error")
+		require.ErrorContains(t, err, testErr.Error())
 	})
 	t.Run("DialError", func(t *testing.T) {
 		_, err := client.Request(ctx, mesh.Hosts()[2].ID(), request)
@@ -102,9 +104,9 @@ func TestQueued(t *testing.T) {
 	srv := New(
 		mesh.Hosts()[1],
 		proto,
-		func(_ context.Context, msg []byte) ([]byte, error) {
+		WrapHandler(func(_ context.Context, msg []byte) ([]byte, error) {
 			return msg, nil
-		},
+		}),
 		WithQueueSize(total/4),
 		WithRequestsPerInterval(50, time.Second),
 		WithMetrics(),

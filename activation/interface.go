@@ -97,8 +97,8 @@ type atxProvider interface {
 // This interface is used by the atx builder and currently implemented by the PostSetupManager.
 // Eventually most of the functionality will be moved to the PoSTClient.
 type postSetupProvider interface {
-	PrepareInitializer(ctx context.Context, opts PostSetupOpts) error
-	StartSession(context context.Context) error
+	PrepareInitializer(ctx context.Context, opts PostSetupOpts, id types.NodeID) error
+	StartSession(context context.Context, id types.NodeID) error
 	Status() *PostSetupStatus
 	Reset() error
 }
@@ -144,6 +144,10 @@ var (
 	ErrPostClientNotConnected = fmt.Errorf("post service not registered")
 )
 
+type AtxBuilder interface {
+	Register(sig *signing.EdSigner)
+}
+
 type postService interface {
 	Client(nodeId types.NodeID) (PostClient, error)
 }
@@ -151,4 +155,9 @@ type postService interface {
 type PostClient interface {
 	Info(ctx context.Context) (*types.PostInfo, error)
 	Proof(ctx context.Context, challenge []byte) (*types.Post, *types.PostInfo, error)
+}
+
+type PostStates interface {
+	Set(id types.NodeID, state types.PostState)
+	Get() map[types.NodeID]types.PostState
 }

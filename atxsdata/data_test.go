@@ -42,7 +42,7 @@ func TestData(t *testing.T) {
 						d.BaseHeight,
 						d.Height,
 						d.Nonce,
-						d.Malicious,
+						d.malicious,
 					)
 				}
 			}
@@ -71,12 +71,12 @@ func TestData(t *testing.T) {
 			)
 			data := c.Get(types.EpochID(epoch), types.ATXID{byte(epoch)})
 			require.NotNil(t, data)
-			require.False(t, data.Malicious)
+			require.False(t, data.malicious)
 		}
 		c.SetMalicious(node)
 		for epoch := 1; epoch <= 10; epoch++ {
 			data := c.Get(types.EpochID(epoch), types.ATXID{byte(epoch)})
-			require.True(t, data.Malicious)
+			require.True(t, data.malicious)
 		}
 		require.True(t, c.IsMalicious(node))
 	})

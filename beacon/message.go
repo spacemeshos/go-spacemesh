@@ -52,8 +52,10 @@ func ProposalFromVrf(vrf types.VrfSignature) Proposal {
 type FirstVotingMessageBody struct {
 	EpochID types.EpochID
 	// number of proposals is expected to be under 100, 1000 is a safe upper bound
+	// This expectation holds true for any number of smeshers on the network
 	ValidProposals []Proposal `scale:"max=1000"`
 	// number of proposals is expected to be under 100, 1000 is a safe upper bound
+	// This expectation holds true for any number of smeshers on the network
 	PotentiallyValidProposals []Proposal `scale:"max=1000"`
 }
 

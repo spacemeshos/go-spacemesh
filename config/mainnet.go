@@ -24,6 +24,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
+	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
@@ -92,10 +93,6 @@ func MainnetConfig() Config {
 				{
 					Address: "https://mainnet-poet-1.spacemesh.network",
 					Pubkey:  types.MustBase64FromString("Qh1efxY4YhoYBEXKPTiHJ/a7n1GsllRSyweQKO3j7m0="),
-				},
-				{
-					Address: "https://mainnet-poet-2.spacemesh.network",
-					Pubkey:  types.MustBase64FromString("8RXEI0MwO3uJUINFFlOm/uTjJCneV9FidMpXmn55G8Y="),
 				},
 				{
 					Address: "https://poet-110.spacemesh.network",
@@ -190,7 +187,7 @@ func MainnetConfig() Config {
 			GossipDuration:           50 * time.Second,
 			OutOfSyncThresholdLayers: 36, // 3h
 			DisableMeshAgreement:     true,
-			DisableAtxReconciliation: true,
+			AtxSync:                  atxsync.DefaultConfig(),
 		},
 		Recovery: checkpoint.DefaultConfig(),
 		Cache:    datastore.DefaultConfig(),

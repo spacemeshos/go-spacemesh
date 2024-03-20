@@ -7,9 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -28,15 +28,15 @@ type RecoveryFile struct {
 	path    string
 }
 
-func NewRecoveryFile(fs afero.Fs, path string) (*RecoveryFile, error) {
-	if err := fs.MkdirAll(filepath.Dir(path), dirPerm); err != nil {
+func NewRecoveryFile(aferoFs afero.Fs, path string) (*RecoveryFile, error) {
+	if err := aferoFs.MkdirAll(filepath.Dir(path), dirPerm); err != nil {
 		return nil, fmt.Errorf("create dst dir %v: %w", filepath.Dir(path), err)
 	}
-	f, _ := fs.Stat(path)
+	f, _ := aferoFs.Stat(path)
 	if f != nil {
-		return nil, fmt.Errorf("%w: file already exist: %v", os.ErrExist, path)
+		return nil, fmt.Errorf("%w: file already exist: %v", fs.ErrExist, path)
 	}
-	tmpf, err := afero.TempFile(fs, filepath.Dir(path), filepath.Base(path))
+	tmpf, err := afero.TempFile(aferoFs, filepath.Dir(path), filepath.Base(path))
 	if err != nil {
 		return nil, fmt.Errorf("%w: create tmp file", err)
 	}

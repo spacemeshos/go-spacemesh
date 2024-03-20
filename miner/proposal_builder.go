@@ -298,14 +298,15 @@ func New(
 	return pb
 }
 
-func (pb *ProposalBuilder) Register(signer *signing.EdSigner) {
+func (pb *ProposalBuilder) Register(sig *signing.EdSigner) {
 	pb.signers.mu.Lock()
 	defer pb.signers.mu.Unlock()
-	_, exist := pb.signers.signers[signer.NodeID()]
+	_, exist := pb.signers.signers[sig.NodeID()]
 	if !exist {
-		pb.signers.signers[signer.NodeID()] = &signerSession{
-			signer: signer,
-			log:    pb.logger.WithFields(log.String("signer", signer.NodeID().ShortString())),
+		pb.logger.With().Info("registered signing key", log.ShortStringer("id", sig.NodeID()))
+		pb.signers.signers[sig.NodeID()] = &signerSession{
+			signer: sig,
+			log:    pb.logger.WithFields(log.String("signer", sig.NodeID().ShortString())),
 		}
 	}
 }
@@ -537,6 +538,7 @@ func (pb *ProposalBuilder) initSignerData(
 		)
 		ss.log.With().Info("proposal eligibilities for an epoch", log.Inline(&ss.session))
 		events.EmitEligibilities(
+			ss.signer.NodeID(),
 			ss.session.epoch,
 			ss.session.beacon,
 			ss.session.atx,
@@ -674,7 +676,7 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 				ss.latency.publish = time.Now()
 				ss.log.With().Info("proposal created", log.Context(ctx), log.Inline(proposal), log.Object("latency", &ss.latency))
 				proposalBuild.Observe(ss.latency.total().Seconds())
-				events.EmitProposal(lid, proposal.ID())
+				events.EmitProposal(ss.signer.NodeID(), lid, proposal.ID())
 				events.ReportProposal(events.ProposalCreated, proposal)
 			}
 			return nil

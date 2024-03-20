@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/jonboulle/clockwork"
@@ -51,6 +52,8 @@ type deadlineAdjuster struct {
 	hardDeadline    time.Time
 }
 
+var _ io.ReadWriteCloser = &deadlineAdjuster{}
+
 func newDeadlineAdjuster(stream peerStream, timeout, hardTimeout time.Duration) *deadlineAdjuster {
 	return &deadlineAdjuster{
 		peerStream:      stream,
@@ -77,6 +80,12 @@ func (dadj *deadlineAdjuster) augmentError(what string, err error) error {
 		timeout:      dadj.timeout,
 		hardTimeout:  dadj.hardTimeout,
 	}
+}
+
+func (dadj *deadlineAdjuster) Close() error {
+	// FIXME: unsure if this is really needed (inherited from the older Server code)
+	_ = dadj.peerStream.SetDeadline(time.Time{})
+	return dadj.peerStream.Close()
 }
 
 func (dadj *deadlineAdjuster) adjust() error {

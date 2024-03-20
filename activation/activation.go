@@ -59,6 +59,7 @@ const (
 // Config defines configuration for Builder.
 type Config struct {
 	GoldenATXID      types.ATXID
+	LabelsPerUnit    uint64
 	RegossipInterval time.Duration
 }
 
@@ -68,8 +69,7 @@ type Config struct {
 type Builder struct {
 	accountLock       sync.RWMutex
 	coinbaseAccount   types.Address
-	goldenATXID       types.ATXID
-	regossipInterval  time.Duration
+	conf              Config
 	cdb               *datastore.CachedDB
 	localDB           *localsql.Database
 	publisher         pubsub.Publisher
@@ -83,6 +83,9 @@ type Builder struct {
 	poetRetryInterval time.Duration
 	// delay before PoST in ATX is considered valid (counting from the time it was received)
 	postValidityDelay time.Duration
+
+	// states of each known identity
+	postStates PostStates
 
 	// smeshingMutex protects methods like `StartSmeshing` and `StopSmeshing` from concurrent execution
 	// since they (can) modify the fields below.
@@ -128,6 +131,12 @@ func WithValidator(v nipostValidator) BuilderOption {
 	}
 }
 
+func WithPostStates(ps PostStates) BuilderOption {
+	return func(b *Builder) {
+		b.postStates = ps
+	}
+}
+
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
 func NewBuilder(
 	conf Config,
@@ -143,8 +152,7 @@ func NewBuilder(
 	b := &Builder{
 		parentCtx:         context.Background(),
 		signers:           make(map[types.NodeID]*signing.EdSigner),
-		goldenATXID:       conf.GoldenATXID,
-		regossipInterval:  conf.RegossipInterval,
+		conf:              conf,
 		cdb:               cdb,
 		localDB:           localDB,
 		publisher:         publisher,
@@ -154,6 +162,7 @@ func NewBuilder(
 		log:               log,
 		poetRetryInterval: defaultPoetRetryInterval,
 		postValidityDelay: 12 * time.Hour,
+		postStates:        NewPostStates(log),
 	}
 	for _, opt := range opts {
 		opt(b)
@@ -165,12 +174,13 @@ func (b *Builder) Register(sig *signing.EdSigner) {
 	b.smeshingMutex.Lock()
 	defer b.smeshingMutex.Unlock()
 	if _, exists := b.signers[sig.NodeID()]; exists {
-		b.log.Error("signing key already registered", zap.Stringer("id", sig.NodeID()))
+		b.log.Error("signing key already registered", log.ZShortStringer("id", sig.NodeID()))
 		return
 	}
 
-	b.log.Info("registered signing key", zap.Stringer("id", sig.NodeID()))
+	b.log.Info("registered signing key", log.ZShortStringer("id", sig.NodeID()))
 	b.signers[sig.NodeID()] = sig
+	b.postStates.Set(sig.NodeID(), types.PostStateIdle)
 
 	if b.stop != nil {
 		b.startID(b.parentCtx, sig)
@@ -182,6 +192,20 @@ func (b *Builder) Smeshing() bool {
 	b.smeshingMutex.Lock()
 	defer b.smeshingMutex.Unlock()
 	return b.stop != nil
+}
+
+// PostState returns the current state of the post service for each registered smesher.
+func (b *Builder) PostStates() map[types.IdentityDescriptor]types.PostState {
+	states := b.postStates.Get()
+	res := make(map[types.IdentityDescriptor]types.PostState, len(states))
+	b.smeshingMutex.Lock()
+	defer b.smeshingMutex.Unlock()
+	for id, state := range states {
+		if sig, exists := b.signers[id]; exists {
+			res[sig] = state
+		}
+	}
+	return res
 }
 
 // StartSmeshing is the main entry point of the atx builder. It runs the main
@@ -213,11 +237,11 @@ func (b *Builder) startID(ctx context.Context, sig *signing.EdSigner) {
 		b.run(ctx, sig)
 		return nil
 	})
-	if b.regossipInterval == 0 {
+	if b.conf.RegossipInterval == 0 {
 		return
 	}
 	b.eg.Go(func() error {
-		ticker := time.NewTicker(b.regossipInterval)
+		ticker := time.NewTicker(b.conf.RegossipInterval)
 		defer ticker.Stop()
 		for {
 			select {
@@ -252,8 +276,9 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 		}
 		var resetErr error
 		for _, sig := range b.signers {
+			b.postStates.Set(sig.NodeID(), types.PostStateIdle)
 			if err := b.nipostBuilder.ResetState(sig.NodeID()); err != nil {
-				b.log.Error("failed to reset builder state", log.ZShortStringer("nodeId", sig.NodeID()), zap.Error(err))
+				b.log.Error("failed to reset builder state", log.ZShortStringer("id", sig.NodeID()), zap.Error(err))
 				err = fmt.Errorf("reset builder state for id %s: %w", sig.NodeID().ShortString(), err)
 				resetErr = errors.Join(resetErr, err)
 				continue
@@ -277,13 +302,13 @@ func (b *Builder) SmesherIDs() []types.NodeID {
 	return maps.Keys(b.signers)
 }
 
-func (b *Builder) buildInitialPost(ctx context.Context, nodeId types.NodeID) error {
+func (b *Builder) buildInitialPost(ctx context.Context, nodeID types.NodeID) error {
 	// Generate the initial POST if we don't have an ATX...
-	if _, err := b.cdb.GetLastAtx(nodeId); err == nil {
+	if _, err := b.cdb.GetLastAtx(nodeID); err == nil {
 		return nil
 	}
 	// ...and if we haven't stored an initial post yet.
-	_, err := nipost.InitialPost(b.localDB, nodeId)
+	_, err := nipost.InitialPost(b.localDB, nodeID)
 	switch {
 	case err == nil:
 		b.log.Info("load initial post from db")
@@ -296,14 +321,10 @@ func (b *Builder) buildInitialPost(ctx context.Context, nodeId types.NodeID) err
 
 	// Create the initial post and save it.
 	startTime := time.Now()
-	post, postInfo, err := b.nipostBuilder.Proof(ctx, nodeId, shared.ZeroChallenge)
+	post, postInfo, err := b.nipostBuilder.Proof(ctx, nodeID, shared.ZeroChallenge)
 	if err != nil {
 		return fmt.Errorf("post execution: %w", err)
 	}
-	metrics.PostDuration.Set(float64(time.Since(startTime).Nanoseconds()))
-	public.PostSeconds.Set(float64(time.Since(startTime)))
-	b.log.Info("created the initial post")
-
 	initialPost := nipost.Post{
 		Nonce:   post.Nonce,
 		Indices: post.Indices,
@@ -313,7 +334,23 @@ func (b *Builder) buildInitialPost(ctx context.Context, nodeId types.NodeID) err
 		CommitmentATX: postInfo.CommitmentATX,
 		VRFNonce:      *postInfo.Nonce,
 	}
-	return nipost.AddInitialPost(b.localDB, nodeId, initialPost)
+	err = b.validator.Post(ctx, nodeID, postInfo.CommitmentATX, post, &types.PostMetadata{
+		Challenge:     shared.ZeroChallenge,
+		LabelsPerUnit: postInfo.LabelsPerUnit,
+	}, postInfo.NumUnits)
+	if err != nil {
+		b.log.Error("initial POST is invalid", log.ZShortStringer("smesherID", nodeID), zap.Error(err))
+		if err := nipost.RemoveInitialPost(b.localDB, nodeID); err != nil {
+			b.log.Fatal("failed to remove initial post", log.ZShortStringer("smesherID", nodeID), zap.Error(err))
+		}
+		return fmt.Errorf("initial POST is invalid: %w", err)
+	}
+
+	metrics.PostDuration.Set(float64(time.Since(startTime).Nanoseconds()))
+	public.PostSeconds.Set(float64(time.Since(startTime)))
+	b.log.Info("created the initial post")
+
+	return nipost.AddInitialPost(b.localDB, nodeID, initialPost)
 }
 
 func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
@@ -379,7 +416,8 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 	}
 }
 
-func (b *Builder) buildNIPostChallenge(ctx context.Context, nodeID types.NodeID) (*types.NIPostChallenge, error) {
+func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID) (*types.NIPostChallenge, error) {
+	logger := b.log.With(log.ZShortStringer("smesherID", nodeID))
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -394,7 +432,14 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	case err != nil:
 		return nil, fmt.Errorf("get nipost challenge: %w", err)
 	case challenge.PublishEpoch < current:
-		// challenge is stale
+		logger.Info(
+			"existing NiPOST challenge is stale, resetting state",
+			zap.Uint32("current_epoch", current.Uint32()),
+			zap.Uint32("challenge publish epoch", challenge.PublishEpoch.Uint32()),
+		)
+		// Reset the state to idle because we won't be building POST until we get a new PoET proof
+		// (typically more than epoch time from now).
+		b.postStates.Set(nodeID, types.PostStateIdle)
 		if err := b.nipostBuilder.ResetState(nodeID); err != nil {
 			return nil, fmt.Errorf("reset nipost builder state: %w", err)
 		}
@@ -405,6 +450,7 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		// challenge is fresh
 		return challenge, nil
 	}
+	logger.Info("building new NiPOST challenge", zap.Uint32("current_epoch", current.Uint32()))
 
 	prev, err := b.cdb.GetLastAtx(nodeID)
 	switch {
@@ -425,12 +471,12 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	metrics.PublishOntimeWindowLatency.Observe(until.Seconds())
 	wait := buildNipostChallengeStartDeadline(b.poetRoundStart(current), b.poetCfg.GracePeriod)
 	if time.Until(wait) > 0 {
-		b.log.Debug("waiting for fresh atxs",
+		logger.Debug("waiting for fresh atxs",
 			zap.Duration("till poet round", until),
 			zap.Uint32("current epoch", current.Uint32()),
 			zap.Duration("wait", time.Until(wait)),
 		)
-		events.EmitPoetWaitRound(current, current+1, wait)
+		events.EmitPoetWaitRound(nodeID, current, current+1, wait)
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -450,6 +496,23 @@ func (b *Builder) buildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		post, err := nipost.InitialPost(b.localDB, nodeID)
 		if err != nil {
 			return nil, fmt.Errorf("get initial post: %w", err)
+		}
+		logger.Info("verifying the initial post")
+		initialPost := &types.Post{
+			Nonce:   post.Nonce,
+			Indices: post.Indices,
+			Pow:     post.Pow,
+		}
+		err = b.validator.Post(ctx, nodeID, post.CommitmentATX, initialPost, &types.PostMetadata{
+			Challenge:     shared.ZeroChallenge,
+			LabelsPerUnit: b.conf.LabelsPerUnit,
+		}, post.NumUnits)
+		if err != nil {
+			logger.Error("initial POST is invalid", zap.Error(err))
+			if err := nipost.RemoveInitialPost(b.localDB, nodeID); err != nil {
+				logger.Fatal("failed to remove initial post", zap.Error(err))
+			}
+			return nil, fmt.Errorf("initial POST is invalid: %w", err)
 		}
 		challenge = &types.NIPostChallenge{
 			PublishEpoch:   current + 1,
@@ -498,15 +561,16 @@ func (b *Builder) Coinbase() types.Address {
 
 // PublishActivationTx attempts to publish an atx, it returns an error if an atx cannot be created.
 func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner) error {
-	challenge, err := b.buildNIPostChallenge(ctx, sig.NodeID())
+	challenge, err := b.BuildNIPostChallenge(ctx, sig.NodeID())
 	if err != nil {
 		return err
 	}
 
 	b.log.Info("atx challenge is ready",
-		zap.Stringer("current_epoch", b.layerClock.CurrentLayer().GetEpoch()),
-		zap.Stringer("publish_epoch", challenge.PublishEpoch),
-		zap.Stringer("target_epoch", challenge.TargetEpoch()),
+		log.ZShortStringer("smesherID", sig.NodeID()),
+		zap.Uint32("current_epoch", b.layerClock.CurrentLayer().GetEpoch().Uint32()),
+		zap.Uint32("publish_epoch", challenge.PublishEpoch.Uint32()),
+		zap.Uint32("target_epoch", challenge.TargetEpoch().Uint32()),
 	)
 	ctx, cancel := context.WithDeadline(ctx, b.layerClock.LayerToTime((challenge.TargetEpoch()).FirstLayer()))
 	defer cancel()
@@ -537,6 +601,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner
 		return fmt.Errorf("discarding challenge after published ATX: %w", err)
 	}
 	events.EmitAtxPublished(
+		sig.NodeID(),
 		atx.PublishEpoch, atx.TargetEpoch(),
 		atx.ID(),
 		b.layerClock.LayerToTime(atx.TargetEpoch().FirstLayer()),
@@ -561,17 +626,17 @@ func (b *Builder) createAtx(
 	}
 
 	b.log.Info("awaiting atx publication epoch",
-		zap.Stringer("pub_epoch", pubEpoch),
-		zap.Stringer("pub_epoch_first_layer", pubEpoch.FirstLayer()),
-		zap.Stringer("current_layer", b.layerClock.CurrentLayer()),
-		zap.Stringer("node_id", sig.NodeID()),
+		zap.Uint32("pub_epoch", pubEpoch.Uint32()),
+		zap.Uint32("pub_epoch_first_layer", pubEpoch.FirstLayer().Uint32()),
+		zap.Uint32("current_layer", b.layerClock.CurrentLayer().Uint32()),
+		log.ZShortStringer("smesherID", sig.NodeID()),
 	)
 	select {
 	case <-ctx.Done():
 		return nil, fmt.Errorf("wait for publication epoch: %w", ctx.Err())
 	case <-b.layerClock.AwaitLayer(pubEpoch.FirstLayer()):
 	}
-	b.log.Debug("publication epoch has arrived!")
+	b.log.Debug("publication epoch has arrived!", log.ZShortStringer("smesherID", sig.NodeID()))
 
 	if challenge.PublishEpoch < b.layerClock.CurrentLayer().GetEpoch() {
 		if challenge.InitialPost != nil {
@@ -591,7 +656,7 @@ func (b *Builder) createAtx(
 	default:
 		oldNonce, err := atxs.VRFNonce(b.cdb, sig.NodeID(), challenge.PublishEpoch)
 		if err != nil {
-			b.log.Warn("failed to get VRF nonce for ATX", zap.Error(err))
+			b.log.Warn("failed to get VRF nonce for ATX", zap.Error(err), log.ZShortStringer("smesherID", sig.NodeID()))
 			break
 		}
 		if nipostState.VRFNonce != oldNonce {
@@ -630,7 +695,7 @@ func (b *Builder) getPositioningAtx(ctx context.Context, nodeID types.NodeID) (t
 		ctx,
 		b.cdb,
 		nodeID,
-		b.goldenATXID,
+		b.conf.GoldenATXID,
 		b.validator,
 		b.log,
 		VerifyChainOpts.AssumeValidBefore(time.Now().Add(-b.postValidityDelay)),
@@ -638,8 +703,8 @@ func (b *Builder) getPositioningAtx(ctx context.Context, nodeID types.NodeID) (t
 		VerifyChainOpts.WithLogger(b.log),
 	)
 	if errors.Is(err, sql.ErrNotFound) {
-		b.log.Info("using golden atx as positioning atx")
-		return b.goldenATXID, nil
+		b.log.Info("using golden atx as positioning atx", log.ZShortStringer("smesherID", nodeID))
+		return b.conf.GoldenATXID, nil
 	}
 	return id, err
 }
@@ -652,14 +717,14 @@ func (b *Builder) Regossip(ctx context.Context, nodeID types.NodeID) error {
 	} else if err != nil {
 		return err
 	}
-	blob, err := atxs.GetBlob(b.cdb, atx.Bytes())
-	if err != nil {
+	var blob sql.Blob
+	if err := atxs.LoadBlob(ctx, b.cdb, atx.Bytes(), &blob); err != nil {
 		return fmt.Errorf("get blob %s: %w", atx.ShortString(), err)
 	}
-	if len(blob) == 0 {
+	if len(blob.Bytes) == 0 {
 		return nil // checkpoint
 	}
-	if err := b.publisher.Publish(ctx, pubsub.AtxProtocol, blob); err != nil {
+	if err := b.publisher.Publish(ctx, pubsub.AtxProtocol, blob.Bytes); err != nil {
 		return fmt.Errorf("republish %s: %w", atx.ShortString(), err)
 	}
 	b.log.Debug("re-gossipped atx", log.ZShortStringer("atx", atx))

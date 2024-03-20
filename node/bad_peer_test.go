@@ -61,7 +61,6 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 	<-app1.Started()
 	t.Cleanup(func() {
 		app1.Cleanup(ctx)
-		app1.eg.Wait()
 	})
 	eg.Go(func() error {
 		return app2.Start(grpContext)
@@ -69,7 +68,6 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 	<-app2.Started()
 	t.Cleanup(func() {
 		app2.Cleanup(ctx)
-		app2.eg.Wait()
 	})
 
 	// Connect app2 to app1

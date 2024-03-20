@@ -1,11 +1,16 @@
 package activesets
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
+)
+
+const (
+	CacheKindActiveSetBlob sql.QueryCacheKind = "activeset-blob"
 )
 
 func Add(db sql.Executor, id types.Hash32, set *types.EpochActiveSet) error {
@@ -49,26 +54,48 @@ func Get(db sql.Executor, id types.Hash32) (*types.EpochActiveSet, error) {
 	return &rst, nil
 }
 
-func GetBlob(db sql.Executor, id []byte) ([]byte, error) {
-	var rst []byte
-	rows, err := db.Exec("select active_set from activesets where id = ?1;",
-		func(stmt *sql.Statement) {
-			stmt.BindBytes(1, id)
-		},
-		func(stmt *sql.Statement) bool {
-			rd := stmt.ColumnReader(0)
-			rst = make([]byte, rd.Len())
-			rd.Read(rst)
-			return true
-		},
-	)
-	if rows == 0 {
-		return nil, fmt.Errorf("active set %x: %w", id, sql.ErrNotFound)
+// GetBlobSizes returns the sizes of the blobs corresponding to activesets with specified
+// ids. For non-existent activesets, the corresponding items are set to -1.
+func GetBlobSizes(db sql.Executor, ids [][]byte) (sizes []int, err error) {
+	return sql.GetBlobSizes(db, "select id, length(active_set) from activesets where id in", ids)
+}
+
+// LoadBlob loads activesets as an encoded blob, ready to be sent over the wire.
+func LoadBlob(ctx context.Context, db sql.Executor, id []byte, blob *sql.Blob) error {
+	if sql.IsCached(db) {
+		b, err := getBlob(ctx, db, id)
+		if err != nil {
+			return err
+		}
+		blob.Bytes = b
+		return nil
 	}
-	if err != nil {
-		return nil, fmt.Errorf("get active set blob %x: %w", id, err)
-	}
-	return rst, nil
+	return sql.LoadBlob(db, "select active_set from activesets where id = ?1", id, blob)
+}
+
+func getBlob(ctx context.Context, db sql.Executor, id []byte) ([]byte, error) {
+	cacheKey := sql.QueryCacheKey(CacheKindActiveSetBlob, string(id))
+	return sql.WithCachedValue(ctx, db, cacheKey, func(context.Context) ([]byte, error) {
+		var rst []byte
+		rows, err := db.Exec("select active_set from activesets where id = ?1;",
+			func(stmt *sql.Statement) {
+				stmt.BindBytes(1, id)
+			},
+			func(stmt *sql.Statement) bool {
+				rd := stmt.ColumnReader(0)
+				rst = make([]byte, rd.Len())
+				rd.Read(rst)
+				return true
+			},
+		)
+		if err != nil {
+			return nil, fmt.Errorf("get active set blob %x: %w", id, err)
+		}
+		if rows == 0 {
+			return nil, fmt.Errorf("active set %x: %w", id, sql.ErrNotFound)
+		}
+		return rst, nil
+	})
 }
 
 func DeleteBeforeEpoch(db sql.Executor, epoch types.EpochID) error {
@@ -82,4 +109,16 @@ func DeleteBeforeEpoch(db sql.Executor, epoch types.EpochID) error {
 		return fmt.Errorf("delete activesets before %v: %w", epoch, err)
 	}
 	return nil
+}
+
+func Has(db sql.Executor, id []byte) (bool, error) {
+	rows, err := db.Exec(
+		"select 1 from activesets where id = ?1;",
+		func(stmt *sql.Statement) { stmt.BindBytes(1, id) },
+		nil,
+	)
+	if err != nil {
+		return false, fmt.Errorf("has activeset %s: %w", id, err)
+	}
+	return rows > 0, nil
 }

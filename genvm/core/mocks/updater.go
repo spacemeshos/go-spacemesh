@@ -5,6 +5,7 @@
 //
 //	mockgen -typed -package=mocks -destination=./mocks/updater.go github.com/spacemeshos/go-spacemesh/genvm/core AccountUpdater
 //
+
 // Package mocks is a generated GoMock package.
 package mocks
 
@@ -47,31 +48,31 @@ func (m *MockAccountUpdater) Update(arg0 types.Account) error {
 }
 
 // Update indicates an expected call of Update.
-func (mr *MockAccountUpdaterMockRecorder) Update(arg0 any) *AccountUpdaterUpdateCall {
+func (mr *MockAccountUpdaterMockRecorder) Update(arg0 any) *MockAccountUpdaterUpdateCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockAccountUpdater)(nil).Update), arg0)
-	return &AccountUpdaterUpdateCall{Call: call}
+	return &MockAccountUpdaterUpdateCall{Call: call}
 }
 
-// AccountUpdaterUpdateCall wrap *gomock.Call
-type AccountUpdaterUpdateCall struct {
+// MockAccountUpdaterUpdateCall wrap *gomock.Call
+type MockAccountUpdaterUpdateCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *AccountUpdaterUpdateCall) Return(arg0 error) *AccountUpdaterUpdateCall {
+func (c *MockAccountUpdaterUpdateCall) Return(arg0 error) *MockAccountUpdaterUpdateCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *AccountUpdaterUpdateCall) Do(f func(types.Account) error) *AccountUpdaterUpdateCall {
+func (c *MockAccountUpdaterUpdateCall) Do(f func(types.Account) error) *MockAccountUpdaterUpdateCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *AccountUpdaterUpdateCall) DoAndReturn(f func(types.Account) error) *AccountUpdaterUpdateCall {
+func (c *MockAccountUpdaterUpdateCall) DoAndReturn(f func(types.Account) error) *MockAccountUpdaterUpdateCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

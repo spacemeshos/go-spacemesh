@@ -79,7 +79,7 @@ const (
 
 // DefaultConfig for PubSub.
 func DefaultConfig() Config {
-	return Config{Flood: true, QueueSize: 10000, Throttle: 10000}
+	return Config{Flood: true, PeerOutboundQueueSize: 8192, QueueSize: 10000, Throttle: 10000}
 }
 
 // Config for PubSub.
@@ -88,21 +88,22 @@ type Config struct {
 	IsBootnode bool
 	Bootnodes  []peer.AddrInfo
 	// Direct peers should be configured on both ends.
-	Direct         []peer.AddrInfo
-	MaxMessageSize int
-	QueueSize      int
-	Throttle       int
+	Direct                []peer.AddrInfo
+	MaxMessageSize        int
+	PeerOutboundQueueSize int
+	QueueSize             int
+	Throttle              int
 }
 
 // New creates PubSub instance.
-func New(ctx context.Context, logger log.Log, h host.Host, cfg Config) (*PubSub, error) {
+func New(ctx context.Context, logger log.Log, h host.Host, cfg Config) (*GossipPubSub, error) {
 	// TODO(dshulyak) refactor code to accept options
 	opts := getOptions(cfg)
 	ps, err := pubsub.NewGossipSub(ctx, h, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize gossipsub instance: %w", err)
 	}
-	return &PubSub{
+	return &GossipPubSub{
 		logger: logger,
 		pubsub: ps,
 		topics: map[string]*pubsub.Topic{},
@@ -165,6 +166,11 @@ func DropPeerOnValidationReject(handler GossipHandler, h host.Host, logger log.L
 	return func(ctx context.Context, peer peer.ID, data []byte) error {
 		err := handler(ctx, peer, data)
 		if errors.Is(err, ErrValidationReject) {
+			logger.With().Warning("dropping a peer due to a rejected validation",
+				log.Context(ctx),
+				log.Stringer("peer", peer),
+				log.Err(err),
+			)
 			p2pmetrics.DroppedConnectionsValidationReject.Inc()
 			err := h.Network().ClosePeer(peer)
 			if err != nil {

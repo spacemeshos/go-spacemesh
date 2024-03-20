@@ -5,6 +5,7 @@
 //
 //	mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./interface.go
 //
+
 // Package mocks is a generated GoMock package.
 package mocks
 
@@ -46,31 +47,31 @@ func (m *MocklayerPatrol) CompleteHare(arg0 types.LayerID) {
 }
 
 // CompleteHare indicates an expected call of CompleteHare.
-func (mr *MocklayerPatrolMockRecorder) CompleteHare(arg0 any) *layerPatrolCompleteHareCall {
+func (mr *MocklayerPatrolMockRecorder) CompleteHare(arg0 any) *MocklayerPatrolCompleteHareCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CompleteHare", reflect.TypeOf((*MocklayerPatrol)(nil).CompleteHare), arg0)
-	return &layerPatrolCompleteHareCall{Call: call}
+	return &MocklayerPatrolCompleteHareCall{Call: call}
 }
 
-// layerPatrolCompleteHareCall wrap *gomock.Call
-type layerPatrolCompleteHareCall struct {
+// MocklayerPatrolCompleteHareCall wrap *gomock.Call
+type MocklayerPatrolCompleteHareCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *layerPatrolCompleteHareCall) Return() *layerPatrolCompleteHareCall {
+func (c *MocklayerPatrolCompleteHareCall) Return() *MocklayerPatrolCompleteHareCall {
 	c.Call = c.Call.Return()
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *layerPatrolCompleteHareCall) Do(f func(types.LayerID)) *layerPatrolCompleteHareCall {
+func (c *MocklayerPatrolCompleteHareCall) Do(f func(types.LayerID)) *MocklayerPatrolCompleteHareCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *layerPatrolCompleteHareCall) DoAndReturn(f func(types.LayerID)) *layerPatrolCompleteHareCall {
+func (c *MocklayerPatrolCompleteHareCall) DoAndReturn(f func(types.LayerID)) *MocklayerPatrolCompleteHareCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -107,31 +108,31 @@ func (m *MockmeshProvider) AddBlockWithTXs(arg0 context.Context, arg1 *types.Blo
 }
 
 // AddBlockWithTXs indicates an expected call of AddBlockWithTXs.
-func (mr *MockmeshProviderMockRecorder) AddBlockWithTXs(arg0, arg1 any) *meshProviderAddBlockWithTXsCall {
+func (mr *MockmeshProviderMockRecorder) AddBlockWithTXs(arg0, arg1 any) *MockmeshProviderAddBlockWithTXsCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddBlockWithTXs", reflect.TypeOf((*MockmeshProvider)(nil).AddBlockWithTXs), arg0, arg1)
-	return &meshProviderAddBlockWithTXsCall{Call: call}
+	return &MockmeshProviderAddBlockWithTXsCall{Call: call}
 }
 
-// meshProviderAddBlockWithTXsCall wrap *gomock.Call
-type meshProviderAddBlockWithTXsCall struct {
+// MockmeshProviderAddBlockWithTXsCall wrap *gomock.Call
+type MockmeshProviderAddBlockWithTXsCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *meshProviderAddBlockWithTXsCall) Return(arg0 error) *meshProviderAddBlockWithTXsCall {
+func (c *MockmeshProviderAddBlockWithTXsCall) Return(arg0 error) *MockmeshProviderAddBlockWithTXsCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *meshProviderAddBlockWithTXsCall) Do(f func(context.Context, *types.Block) error) *meshProviderAddBlockWithTXsCall {
+func (c *MockmeshProviderAddBlockWithTXsCall) Do(f func(context.Context, *types.Block) error) *MockmeshProviderAddBlockWithTXsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *meshProviderAddBlockWithTXsCall) DoAndReturn(f func(context.Context, *types.Block) error) *meshProviderAddBlockWithTXsCall {
+func (c *MockmeshProviderAddBlockWithTXsCall) DoAndReturn(f func(context.Context, *types.Block) error) *MockmeshProviderAddBlockWithTXsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -145,31 +146,31 @@ func (m *MockmeshProvider) ProcessLayerPerHareOutput(arg0 context.Context, arg1 
 }
 
 // ProcessLayerPerHareOutput indicates an expected call of ProcessLayerPerHareOutput.
-func (mr *MockmeshProviderMockRecorder) ProcessLayerPerHareOutput(arg0, arg1, arg2, arg3 any) *meshProviderProcessLayerPerHareOutputCall {
+func (mr *MockmeshProviderMockRecorder) ProcessLayerPerHareOutput(arg0, arg1, arg2, arg3 any) *MockmeshProviderProcessLayerPerHareOutputCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProcessLayerPerHareOutput", reflect.TypeOf((*MockmeshProvider)(nil).ProcessLayerPerHareOutput), arg0, arg1, arg2, arg3)
-	return &meshProviderProcessLayerPerHareOutputCall{Call: call}
+	return &MockmeshProviderProcessLayerPerHareOutputCall{Call: call}
 }
 
-// meshProviderProcessLayerPerHareOutputCall wrap *gomock.Call
-type meshProviderProcessLayerPerHareOutputCall struct {
+// MockmeshProviderProcessLayerPerHareOutputCall wrap *gomock.Call
+type MockmeshProviderProcessLayerPerHareOutputCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *meshProviderProcessLayerPerHareOutputCall) Return(arg0 error) *meshProviderProcessLayerPerHareOutputCall {
+func (c *MockmeshProviderProcessLayerPerHareOutputCall) Return(arg0 error) *MockmeshProviderProcessLayerPerHareOutputCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *meshProviderProcessLayerPerHareOutputCall) Do(f func(context.Context, types.LayerID, types.BlockID, bool) error) *meshProviderProcessLayerPerHareOutputCall {
+func (c *MockmeshProviderProcessLayerPerHareOutputCall) Do(f func(context.Context, types.LayerID, types.BlockID, bool) error) *MockmeshProviderProcessLayerPerHareOutputCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *meshProviderProcessLayerPerHareOutputCall) DoAndReturn(f func(context.Context, types.LayerID, types.BlockID, bool) error) *meshProviderProcessLayerPerHareOutputCall {
+func (c *MockmeshProviderProcessLayerPerHareOutputCall) DoAndReturn(f func(context.Context, types.LayerID, types.BlockID, bool) error) *MockmeshProviderProcessLayerPerHareOutputCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -183,31 +184,31 @@ func (m *MockmeshProvider) ProcessedLayer() types.LayerID {
 }
 
 // ProcessedLayer indicates an expected call of ProcessedLayer.
-func (mr *MockmeshProviderMockRecorder) ProcessedLayer() *meshProviderProcessedLayerCall {
+func (mr *MockmeshProviderMockRecorder) ProcessedLayer() *MockmeshProviderProcessedLayerCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProcessedLayer", reflect.TypeOf((*MockmeshProvider)(nil).ProcessedLayer))
-	return &meshProviderProcessedLayerCall{Call: call}
+	return &MockmeshProviderProcessedLayerCall{Call: call}
 }
 
-// meshProviderProcessedLayerCall wrap *gomock.Call
-type meshProviderProcessedLayerCall struct {
+// MockmeshProviderProcessedLayerCall wrap *gomock.Call
+type MockmeshProviderProcessedLayerCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *meshProviderProcessedLayerCall) Return(arg0 types.LayerID) *meshProviderProcessedLayerCall {
+func (c *MockmeshProviderProcessedLayerCall) Return(arg0 types.LayerID) *MockmeshProviderProcessedLayerCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *meshProviderProcessedLayerCall) Do(f func() types.LayerID) *meshProviderProcessedLayerCall {
+func (c *MockmeshProviderProcessedLayerCall) Do(f func() types.LayerID) *MockmeshProviderProcessedLayerCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *meshProviderProcessedLayerCall) DoAndReturn(f func() types.LayerID) *meshProviderProcessedLayerCall {
+func (c *MockmeshProviderProcessedLayerCall) DoAndReturn(f func() types.LayerID) *MockmeshProviderProcessedLayerCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -245,31 +246,31 @@ func (m *Mockexecutor) ExecuteOptimistic(arg0 context.Context, arg1 types.LayerI
 }
 
 // ExecuteOptimistic indicates an expected call of ExecuteOptimistic.
-func (mr *MockexecutorMockRecorder) ExecuteOptimistic(arg0, arg1, arg2, arg3, arg4 any) *executorExecuteOptimisticCall {
+func (mr *MockexecutorMockRecorder) ExecuteOptimistic(arg0, arg1, arg2, arg3, arg4 any) *MockexecutorExecuteOptimisticCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecuteOptimistic", reflect.TypeOf((*Mockexecutor)(nil).ExecuteOptimistic), arg0, arg1, arg2, arg3, arg4)
-	return &executorExecuteOptimisticCall{Call: call}
+	return &MockexecutorExecuteOptimisticCall{Call: call}
 }
 
-// executorExecuteOptimisticCall wrap *gomock.Call
-type executorExecuteOptimisticCall struct {
+// MockexecutorExecuteOptimisticCall wrap *gomock.Call
+type MockexecutorExecuteOptimisticCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *executorExecuteOptimisticCall) Return(arg0 *types.Block, arg1 error) *executorExecuteOptimisticCall {
+func (c *MockexecutorExecuteOptimisticCall) Return(arg0 *types.Block, arg1 error) *MockexecutorExecuteOptimisticCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *executorExecuteOptimisticCall) Do(f func(context.Context, types.LayerID, uint64, []types.AnyReward, []types.TransactionID) (*types.Block, error)) *executorExecuteOptimisticCall {
+func (c *MockexecutorExecuteOptimisticCall) Do(f func(context.Context, types.LayerID, uint64, []types.AnyReward, []types.TransactionID) (*types.Block, error)) *MockexecutorExecuteOptimisticCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *executorExecuteOptimisticCall) DoAndReturn(f func(context.Context, types.LayerID, uint64, []types.AnyReward, []types.TransactionID) (*types.Block, error)) *executorExecuteOptimisticCall {
+func (c *MockexecutorExecuteOptimisticCall) DoAndReturn(f func(context.Context, types.LayerID, uint64, []types.AnyReward, []types.TransactionID) (*types.Block, error)) *MockexecutorExecuteOptimisticCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -306,31 +307,31 @@ func (m *MocklayerClock) AwaitLayer(layerID types.LayerID) <-chan struct{} {
 }
 
 // AwaitLayer indicates an expected call of AwaitLayer.
-func (mr *MocklayerClockMockRecorder) AwaitLayer(layerID any) *layerClockAwaitLayerCall {
+func (mr *MocklayerClockMockRecorder) AwaitLayer(layerID any) *MocklayerClockAwaitLayerCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AwaitLayer", reflect.TypeOf((*MocklayerClock)(nil).AwaitLayer), layerID)
-	return &layerClockAwaitLayerCall{Call: call}
+	return &MocklayerClockAwaitLayerCall{Call: call}
 }
 
-// layerClockAwaitLayerCall wrap *gomock.Call
-type layerClockAwaitLayerCall struct {
+// MocklayerClockAwaitLayerCall wrap *gomock.Call
+type MocklayerClockAwaitLayerCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *layerClockAwaitLayerCall) Return(arg0 <-chan struct{}) *layerClockAwaitLayerCall {
+func (c *MocklayerClockAwaitLayerCall) Return(arg0 <-chan struct{}) *MocklayerClockAwaitLayerCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *layerClockAwaitLayerCall) Do(f func(types.LayerID) <-chan struct{}) *layerClockAwaitLayerCall {
+func (c *MocklayerClockAwaitLayerCall) Do(f func(types.LayerID) <-chan struct{}) *MocklayerClockAwaitLayerCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *layerClockAwaitLayerCall) DoAndReturn(f func(types.LayerID) <-chan struct{}) *layerClockAwaitLayerCall {
+func (c *MocklayerClockAwaitLayerCall) DoAndReturn(f func(types.LayerID) <-chan struct{}) *MocklayerClockAwaitLayerCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -344,31 +345,31 @@ func (m *MocklayerClock) CurrentLayer() types.LayerID {
 }
 
 // CurrentLayer indicates an expected call of CurrentLayer.
-func (mr *MocklayerClockMockRecorder) CurrentLayer() *layerClockCurrentLayerCall {
+func (mr *MocklayerClockMockRecorder) CurrentLayer() *MocklayerClockCurrentLayerCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CurrentLayer", reflect.TypeOf((*MocklayerClock)(nil).CurrentLayer))
-	return &layerClockCurrentLayerCall{Call: call}
+	return &MocklayerClockCurrentLayerCall{Call: call}
 }
 
-// layerClockCurrentLayerCall wrap *gomock.Call
-type layerClockCurrentLayerCall struct {
+// MocklayerClockCurrentLayerCall wrap *gomock.Call
+type MocklayerClockCurrentLayerCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *layerClockCurrentLayerCall) Return(arg0 types.LayerID) *layerClockCurrentLayerCall {
+func (c *MocklayerClockCurrentLayerCall) Return(arg0 types.LayerID) *MocklayerClockCurrentLayerCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *layerClockCurrentLayerCall) Do(f func() types.LayerID) *layerClockCurrentLayerCall {
+func (c *MocklayerClockCurrentLayerCall) Do(f func() types.LayerID) *MocklayerClockCurrentLayerCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *layerClockCurrentLayerCall) DoAndReturn(f func() types.LayerID) *layerClockCurrentLayerCall {
+func (c *MocklayerClockCurrentLayerCall) DoAndReturn(f func() types.LayerID) *MocklayerClockCurrentLayerCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -405,31 +406,31 @@ func (m *Mockcertifier) CertifyIfEligible(arg0 context.Context, arg1 types.Layer
 }
 
 // CertifyIfEligible indicates an expected call of CertifyIfEligible.
-func (mr *MockcertifierMockRecorder) CertifyIfEligible(arg0, arg1, arg2 any) *certifierCertifyIfEligibleCall {
+func (mr *MockcertifierMockRecorder) CertifyIfEligible(arg0, arg1, arg2 any) *MockcertifierCertifyIfEligibleCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CertifyIfEligible", reflect.TypeOf((*Mockcertifier)(nil).CertifyIfEligible), arg0, arg1, arg2)
-	return &certifierCertifyIfEligibleCall{Call: call}
+	return &MockcertifierCertifyIfEligibleCall{Call: call}
 }
 
-// certifierCertifyIfEligibleCall wrap *gomock.Call
-type certifierCertifyIfEligibleCall struct {
+// MockcertifierCertifyIfEligibleCall wrap *gomock.Call
+type MockcertifierCertifyIfEligibleCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *certifierCertifyIfEligibleCall) Return(arg0 error) *certifierCertifyIfEligibleCall {
+func (c *MockcertifierCertifyIfEligibleCall) Return(arg0 error) *MockcertifierCertifyIfEligibleCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *certifierCertifyIfEligibleCall) Do(f func(context.Context, types.LayerID, types.BlockID) error) *certifierCertifyIfEligibleCall {
+func (c *MockcertifierCertifyIfEligibleCall) Do(f func(context.Context, types.LayerID, types.BlockID) error) *MockcertifierCertifyIfEligibleCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *certifierCertifyIfEligibleCall) DoAndReturn(f func(context.Context, types.LayerID, types.BlockID) error) *certifierCertifyIfEligibleCall {
+func (c *MockcertifierCertifyIfEligibleCall) DoAndReturn(f func(context.Context, types.LayerID, types.BlockID) error) *MockcertifierCertifyIfEligibleCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -443,31 +444,31 @@ func (m *Mockcertifier) RegisterForCert(arg0 context.Context, arg1 types.LayerID
 }
 
 // RegisterForCert indicates an expected call of RegisterForCert.
-func (mr *MockcertifierMockRecorder) RegisterForCert(arg0, arg1, arg2 any) *certifierRegisterForCertCall {
+func (mr *MockcertifierMockRecorder) RegisterForCert(arg0, arg1, arg2 any) *MockcertifierRegisterForCertCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterForCert", reflect.TypeOf((*Mockcertifier)(nil).RegisterForCert), arg0, arg1, arg2)
-	return &certifierRegisterForCertCall{Call: call}
+	return &MockcertifierRegisterForCertCall{Call: call}
 }
 
-// certifierRegisterForCertCall wrap *gomock.Call
-type certifierRegisterForCertCall struct {
+// MockcertifierRegisterForCertCall wrap *gomock.Call
+type MockcertifierRegisterForCertCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *certifierRegisterForCertCall) Return(arg0 error) *certifierRegisterForCertCall {
+func (c *MockcertifierRegisterForCertCall) Return(arg0 error) *MockcertifierRegisterForCertCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *certifierRegisterForCertCall) Do(f func(context.Context, types.LayerID, types.BlockID) error) *certifierRegisterForCertCall {
+func (c *MockcertifierRegisterForCertCall) Do(f func(context.Context, types.LayerID, types.BlockID) error) *MockcertifierRegisterForCertCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *certifierRegisterForCertCall) DoAndReturn(f func(context.Context, types.LayerID, types.BlockID) error) *certifierRegisterForCertCall {
+func (c *MockcertifierRegisterForCertCall) DoAndReturn(f func(context.Context, types.LayerID, types.BlockID) error) *MockcertifierRegisterForCertCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -504,31 +505,31 @@ func (m *MocktortoiseProvider) GetMissingActiveSet(arg0 types.EpochID, arg1 []ty
 }
 
 // GetMissingActiveSet indicates an expected call of GetMissingActiveSet.
-func (mr *MocktortoiseProviderMockRecorder) GetMissingActiveSet(arg0, arg1 any) *tortoiseProviderGetMissingActiveSetCall {
+func (mr *MocktortoiseProviderMockRecorder) GetMissingActiveSet(arg0, arg1 any) *MocktortoiseProviderGetMissingActiveSetCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMissingActiveSet", reflect.TypeOf((*MocktortoiseProvider)(nil).GetMissingActiveSet), arg0, arg1)
-	return &tortoiseProviderGetMissingActiveSetCall{Call: call}
+	return &MocktortoiseProviderGetMissingActiveSetCall{Call: call}
 }
 
-// tortoiseProviderGetMissingActiveSetCall wrap *gomock.Call
-type tortoiseProviderGetMissingActiveSetCall struct {
+// MocktortoiseProviderGetMissingActiveSetCall wrap *gomock.Call
+type MocktortoiseProviderGetMissingActiveSetCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *tortoiseProviderGetMissingActiveSetCall) Return(arg0 []types.ATXID) *tortoiseProviderGetMissingActiveSetCall {
+func (c *MocktortoiseProviderGetMissingActiveSetCall) Return(arg0 []types.ATXID) *MocktortoiseProviderGetMissingActiveSetCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *tortoiseProviderGetMissingActiveSetCall) Do(f func(types.EpochID, []types.ATXID) []types.ATXID) *tortoiseProviderGetMissingActiveSetCall {
+func (c *MocktortoiseProviderGetMissingActiveSetCall) Do(f func(types.EpochID, []types.ATXID) []types.ATXID) *MocktortoiseProviderGetMissingActiveSetCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *tortoiseProviderGetMissingActiveSetCall) DoAndReturn(f func(types.EpochID, []types.ATXID) []types.ATXID) *tortoiseProviderGetMissingActiveSetCall {
+func (c *MocktortoiseProviderGetMissingActiveSetCall) DoAndReturn(f func(types.EpochID, []types.ATXID) []types.ATXID) *MocktortoiseProviderGetMissingActiveSetCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

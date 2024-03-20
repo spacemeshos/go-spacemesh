@@ -343,11 +343,9 @@ func watchProposals(
 			proposal, err := proposals.Recv()
 			s, ok := status.FromError(err)
 			if ok && s.Code() != codes.OK {
-				if ok && s.Code() != codes.OK {
-					log.Warn("proposals stream error", zap.String("client", client.Name), zap.Error(err), zap.Any("status", s))
-					if s.Code() == codes.Unavailable {
-						return nil
-					}
+				log.Warn("proposals stream error", zap.String("client", client.Name), zap.Error(err), zap.Any("status", s))
+				if s.Code() == codes.Unavailable {
+					return nil
 				}
 			}
 			if err != nil {

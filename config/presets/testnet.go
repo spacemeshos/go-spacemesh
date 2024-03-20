@@ -25,6 +25,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
+	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
@@ -138,10 +139,11 @@ func testnet() config.Config {
 		LOGGING:  config.DefaultLoggingConfig(),
 		Sync: syncer.Config{
 			Interval:                 time.Minute,
-			EpochEndFraction:         0.8,
+			EpochEndFraction:         0.5,
 			MaxStaleDuration:         time.Hour,
 			GossipDuration:           50 * time.Second,
 			OutOfSyncThresholdLayers: 10,
+			AtxSync:                  atxsync.DefaultConfig(),
 		},
 		Recovery: checkpoint.DefaultConfig(),
 		Cache:    datastore.DefaultConfig(),
