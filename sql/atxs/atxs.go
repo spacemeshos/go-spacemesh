@@ -644,3 +644,29 @@ func CountAtxsByOps(db sql.Executor, operations builder.Operations) (count uint3
 	)
 	return
 }
+
+// IterateForGrading selects every atx from publish epoch and joins identities to load malfeasence proofs if they exist.
+func IterateForGrading(
+	db sql.Executor,
+	epoch types.EpochID,
+	fn func(id types.ATXID, atxtime, prooftime int64, weight uint64) bool,
+) error {
+	if _, err := db.Exec(`
+		select atxs.id, atxs.received, identities.received, effective_num_units, tick_count from atxs
+		left join identities on atxs.pubkey = identities.pubkey
+		where atxs.epoch == ?1;`,
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(epoch))
+		}, func(stmt *sql.Statement) bool {
+			id := types.ATXID{}
+			stmt.ColumnBytes(0, id[:])
+			atxtime := stmt.ColumnInt64(1)
+			prooftime := stmt.ColumnInt64(2)
+			units := uint64(stmt.ColumnInt64(3))
+			ticks := uint64(stmt.ColumnInt64(4))
+			return fn(id, atxtime, prooftime, units*ticks)
+		}); err != nil {
+		return fmt.Errorf("iterate for grading: %w", err)
+	}
+	return nil
+}

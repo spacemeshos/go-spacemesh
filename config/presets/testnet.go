@@ -22,6 +22,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
+	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
@@ -151,6 +152,11 @@ func testnet() config.Config {
 			// but certifier continues to use 200 committee size.
 			// this will be upgraded in future with scheduled upgrade.
 			CommitteeSize: 200,
+		},
+		ActiveSet: miner.ActiveSetPreparation{
+			Window:        10 * time.Minute,
+			RetryInterval: time.Minute,
+			Tries:         5,
 		},
 	}
 }
