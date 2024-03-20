@@ -260,17 +260,18 @@ func TestSynchronize_AllGood(t *testing.T) {
 		ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid)
 	}
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
+	var eg errgroup.Group
+	var atxSynced bool
+	eg.Go(func() error {
 		atxSyncedCh := ts.syncer.RegisterForATXSynced()
 		select {
 		case <-atxSyncedCh:
-			wg.Done()
+			atxSynced = true
 		case <-time.After(1 * time.Second):
-			require.Fail(t, "node should be atx synced")
 		}
-	}()
+		return nil
+	})
+	require.True(t, atxSynced, "node should be atx synced")
 
 	require.True(t, ts.syncer.synchronize(context.Background()))
 	require.Equal(t, current1.Sub(1), ts.syncer.getLastSyncedLayer())
@@ -280,17 +281,17 @@ func TestSynchronize_AllGood(t *testing.T) {
 	require.False(t, ts.syncer.ListenToGossip())
 	require.False(t, ts.syncer.IsSynced(context.Background()))
 
-	wg.Add(1)
-	go func() {
+	atxSynced = false
+	eg.Go(func() error {
 		atxSyncedCh := ts.syncer.RegisterForATXSynced()
 		select {
 		case <-atxSyncedCh:
-			wg.Done()
+			atxSynced = true
 		case <-time.After(1 * time.Second):
-			require.Fail(t, "node should be atx synced")
 		}
-	}()
-	wg.Wait()
+		return nil
+	})
+	require.True(t, atxSynced, "node should be atx synced")
 
 	ts.mTicker.advanceToLayer(current2)
 	require.True(t, ts.syncer.synchronize(context.Background()))

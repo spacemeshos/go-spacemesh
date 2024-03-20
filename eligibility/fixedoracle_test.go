@@ -23,9 +23,11 @@ func TestFixedRolacle_Eligible(t *testing.T) {
 	v := types.RandomNodeID()
 	oracle.Register(true, v)
 
-	res, _ := oracle.eligible(context.Background(), types.LayerID(1), 1, 10, v, types.EmptyVrfSignature)
-	res2, _ := oracle.eligible(context.Background(), types.LayerID(1), 1, 10, v, types.EmptyVrfSignature)
-	assert.True(t, res == res2)
+	res, err := oracle.eligible(context.Background(), types.LayerID(1), 1, 10, v, types.EmptyVrfSignature)
+	require.NoError(t, err)
+	res2, err := oracle.eligible(context.Background(), types.LayerID(1), 1, 10, v, types.EmptyVrfSignature)
+	require.NoError(t, err)
+	require.Equal(t, res, res2)
 }
 
 func TestFixedRolacle_Eligible2(t *testing.T) {

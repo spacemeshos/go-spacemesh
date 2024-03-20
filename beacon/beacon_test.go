@@ -634,11 +634,11 @@ func TestBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
 	b := types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, epoch.FirstLayer())
 	b.EligibilityProofs = []types.VotingEligibility{{J: 1}}
 	pd.recordBeacon(epoch, &b, types.RandomBeacon(), fixed.New64(1))
-	require.Equal(t, numEpochsToKeep+1, len(pd.beacons))
-	require.Equal(t, numEpochsToKeep+1, len(pd.ballotsBeacons))
+	require.Len(t, pd.beacons, numEpochsToKeep+1)
+	require.Len(t, pd.ballotsBeacons, numEpochsToKeep+1)
 	pd.cleanupEpoch(epoch)
-	require.Equal(t, numEpochsToKeep, len(pd.beacons))
-	require.Equal(t, numEpochsToKeep, len(pd.ballotsBeacons))
+	require.Len(t, pd.beacons, numEpochsToKeep)
+	require.Len(t, pd.ballotsBeacons, numEpochsToKeep)
 }
 
 func TestBeacon_ReportBeaconFromBallot(t *testing.T) {

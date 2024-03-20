@@ -239,7 +239,7 @@ func TestMeshService_MalfeasanceStream(t *testing.T) {
 		case pb.MalfeasanceProof_MALFEASANCE_HARE:
 			hare++
 		}
-		require.EqualValues(t, got.Layer.Number, layer)
+		require.EqualValues(t, layer, got.Layer.Number)
 	}
 	require.Equal(t, 30, total)
 	require.Equal(t, 10, atx)

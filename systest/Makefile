@@ -72,7 +72,7 @@ config: template
 
 .PHONY: gomplate
 gomplate:
-	@go install github.com/hairyhenderson/gomplate/v4/cmd/gomplate@v4.0.0-pre-1
+	@go install github.com/hairyhenderson/gomplate/v4/cmd/gomplate@v4.0.0-pre-2
 
 # Using bash to invoke ./wait_for_job.sh script to avoid problems on Mac
 # where /bin/bash is an old bash

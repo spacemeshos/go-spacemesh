@@ -1221,7 +1221,7 @@ func Test_HandleFollowingVotes_Malicious(t *testing.T) {
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
 	tpd.mClock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now()).AnyTimes()
 	res := tpd.HandleFollowingVotes(context.Background(), "peerID", msgBytes)
-	require.Equal(t, nil, res)
+	require.NoError(t, res)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, round, true)
 	expected := make(map[Proposal]*big.Int, len(plist))
 	for _, p := range plist {

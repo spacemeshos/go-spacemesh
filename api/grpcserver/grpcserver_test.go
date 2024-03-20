@@ -916,7 +916,7 @@ func TestMeshService(t *testing.T) {
 						})
 						require.NoError(t, err)
 						require.Equal(t, uint32(0), res.TotalResults)
-						require.Equal(t, 0, len(res.Data))
+						require.Empty(t, res.Data)
 					},
 				},
 				{
@@ -1451,8 +1451,8 @@ func TestTransactionService(t *testing.T) {
 			})
 			res, err := c.TransactionsState(context.Background(), req)
 			require.NoError(t, err)
-			require.Equal(t, 1, len(res.TransactionsState))
-			require.Equal(t, 0, len(res.Transactions))
+			require.Len(t, res.TransactionsState, 1)
+			require.Empty(t, res.Transactions)
 			require.Equal(t, globalTx.ID.Bytes(), res.TransactionsState[0].Id.Id)
 			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_PROCESSED, res.TransactionsState[0].State)
 		}},
@@ -2116,7 +2116,7 @@ func TestDebugService(t *testing.T) {
 	t.Run("Accounts", func(t *testing.T) {
 		res, err := c.Accounts(context.Background(), &pb.AccountsRequest{})
 		require.NoError(t, err)
-		require.Equal(t, 2, len(res.AccountWrapper))
+		require.Len(t, res.AccountWrapper, 2)
 
 		// Get the list of addresses and compare them regardless of order
 		var addresses []string
@@ -2252,7 +2252,7 @@ func TestDebugService(t *testing.T) {
 
 		s, ok := status.FromError(err)
 		require.True(t, ok)
-		require.Equal(t, s.Message(), "parse level: unrecognized level: \"unknown-level\"")
+		require.Equal(t, "parse level: unrecognized level: \"unknown-level\"", s.Message())
 	})
 
 	t.Run("ChangeLogLevel '*' to debug", func(t *testing.T) {

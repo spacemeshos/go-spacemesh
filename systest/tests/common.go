@@ -220,7 +220,11 @@ func malfeasanceStream(
 		proof, err := layers.Recv()
 		s, ok := status.FromError(err)
 		if ok && s.Code() != codes.OK {
-			logger.Warn("malfeasance stream error", zap.String("client", node.Name), zap.Error(err), zap.Any("status", s))
+			logger.Warn("malfeasance stream error",
+				zap.String("client", node.Name),
+				zap.Error(err),
+				zap.Any("status", s),
+			)
 			if s.Code() == codes.Unavailable {
 				return nil
 			}

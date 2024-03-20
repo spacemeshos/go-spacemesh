@@ -445,12 +445,12 @@ func Test_HandleCertifyMessage_Certified(t *testing.T) {
 					wg.Add(1)
 					go func(data []byte) {
 						res := tcc.HandleCertifyMessage(context.Background(), "peer", data)
-						require.Equal(t, nil, res)
+						require.NoError(t, res)
 						wg.Done()
 					}(encoded)
 				} else {
 					res := tcc.HandleCertifyMessage(context.Background(), "peer", encoded)
-					require.Equal(t, nil, res)
+					require.NoError(t, res)
 				}
 			}
 			wg.Wait()
@@ -557,7 +557,7 @@ func Test_HandleCertifyMessage_NotRegistered(t *testing.T) {
 			Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
 			Return(true, nil)
 		res := tc.HandleCertifyMessage(context.Background(), "peer", encoded)
-		require.Equal(t, nil, res)
+		require.NoError(t, res)
 	}
 	verifyCerts(t, tc.db, b.LayerIndex, nil)
 	require.Empty(t, tc.CertCount())
@@ -595,7 +595,7 @@ func Test_HandleCertifyMessage_LayerNotRegistered(t *testing.T) {
 		Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
 		Return(true, nil)
 	res := tc.HandleCertifyMessage(context.Background(), "peer", encoded)
-	require.Equal(t, nil, res)
+	require.NoError(t, res)
 }
 
 func Test_HandleCertifyMessage_BlockNotRegistered(t *testing.T) {
@@ -613,7 +613,7 @@ func Test_HandleCertifyMessage_BlockNotRegistered(t *testing.T) {
 		Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
 		Return(true, nil)
 	res := tc.HandleCertifyMessage(context.Background(), "peer", encoded)
-	require.Equal(t, nil, res)
+	require.NoError(t, res)
 }
 
 func Test_HandleCertifyMessage_BeaconNotAvailable(t *testing.T) {

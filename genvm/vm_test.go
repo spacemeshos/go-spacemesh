@@ -464,7 +464,7 @@ func (t *tester) estimateSpendGas(principal, to, amount int, nonce core.Nonce) i
 }
 
 func (t *tester) estimateDrainGas(principal, vault, to, amount int, nonce core.Nonce) int {
-	require.IsType(t, t.accounts[principal], &vestingAccount{})
+	require.IsType(t, &vestingAccount{}, t.accounts[principal])
 	vestacc := t.accounts[principal].(*vestingAccount)
 	tx := vestacc.drainVault(
 		t.accounts[vault].getAddress(),
@@ -556,7 +556,7 @@ type drainVault struct {
 }
 
 func (tx *drainVault) gen(t *tester) types.RawTx {
-	require.IsType(t, t.accounts[tx.owner], &vestingAccount{})
+	require.IsType(t, &vestingAccount{}, t.accounts[tx.owner])
 	vestacc := t.accounts[tx.owner].(*vestingAccount)
 	nonce := t.nextNonce(tx.owner)
 	return types.NewRawTx(vestacc.drainVault(
@@ -574,7 +574,7 @@ type drainVaultWithOpts struct {
 }
 
 func (tx *drainVaultWithOpts) gen(t *tester) types.RawTx {
-	require.IsType(t, t.accounts[tx.owner], &vestingAccount{})
+	require.IsType(t, &vestingAccount{}, t.accounts[tx.owner])
 	vestacc := t.accounts[tx.owner].(*vestingAccount)
 	nonce := t.nextNonce(tx.owner)
 	return types.NewRawTx(vestacc.drainVault(
