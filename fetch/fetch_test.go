@@ -359,7 +359,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	require.Equal(t, 1, h.GetPeers())
+	require.Len(t, h.GetPeers(), 1)
 
 	// This handler returns a ResponseBatch with an empty response that will fail validation on the remote peer
 	badPeerHandler := func(_ context.Context, data []byte) ([]byte, error) {

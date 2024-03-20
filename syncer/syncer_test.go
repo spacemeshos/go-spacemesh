@@ -261,17 +261,16 @@ func TestSynchronize_AllGood(t *testing.T) {
 	}
 
 	var eg errgroup.Group
-	var atxSynced bool
 	eg.Go(func() error {
 		atxSyncedCh := ts.syncer.RegisterForATXSynced()
 		select {
 		case <-atxSyncedCh:
-			atxSynced = true
-		case <-time.After(1 * time.Second):
+			return errors.New("node should not be atx synced")
+		case <-time.After(100 * time.Millisecond):
+			return nil
 		}
-		return nil
 	})
-	require.True(t, atxSynced, "node should be atx synced")
+	require.NoError(t, eg.Wait())
 
 	require.True(t, ts.syncer.synchronize(context.Background()))
 	require.Equal(t, current1.Sub(1), ts.syncer.getLastSyncedLayer())
@@ -281,17 +280,16 @@ func TestSynchronize_AllGood(t *testing.T) {
 	require.False(t, ts.syncer.ListenToGossip())
 	require.False(t, ts.syncer.IsSynced(context.Background()))
 
-	atxSynced = false
 	eg.Go(func() error {
 		atxSyncedCh := ts.syncer.RegisterForATXSynced()
 		select {
 		case <-atxSyncedCh:
-			atxSynced = true
+			return nil
 		case <-time.After(1 * time.Second):
+			return errors.New("not atx synced")
 		}
-		return nil
 	})
-	require.True(t, atxSynced, "node should be atx synced")
+	require.NoError(t, eg.Wait())
 
 	ts.mTicker.advanceToLayer(current2)
 	require.True(t, ts.syncer.synchronize(context.Background()))
@@ -351,19 +349,17 @@ func TestSynchronize_FailedInitialATXsSync(t *testing.T) {
 		Download(gomock.Any(), failedEpoch, gomock.Any()).
 		Return(errors.New("no ATXs. should fail sync"))
 
-	var atxSynced bool
 	var eg errgroup.Group
 	eg.Go(func() error {
 		atxSyncedCh := ts.syncer.RegisterForATXSynced()
 		select {
 		case <-atxSyncedCh:
-			atxSynced = true
+			return errors.New("node should not be atx synced")
 		case <-time.After(100 * time.Millisecond):
+			return nil
 		}
-		return nil
 	})
-	eg.Wait()
-	require.False(t, atxSynced, "node should not be atx synced")
+	require.NoError(t, eg.Wait())
 
 	require.False(t, ts.syncer.synchronize(context.Background()))
 	require.Equal(t, types.GetEffectiveGenesis(), ts.syncer.getLastSyncedLayer())
@@ -377,13 +373,12 @@ func TestSynchronize_FailedInitialATXsSync(t *testing.T) {
 		atxSyncedCh := ts.syncer.RegisterForATXSynced()
 		select {
 		case <-atxSyncedCh:
-			atxSynced = true
+			return errors.New("node should not be atx synced")
 		case <-time.After(100 * time.Millisecond):
+			return nil
 		}
-		return nil
 	})
-	eg.Wait()
-	require.False(t, atxSynced, "node should not be atx synced")
+	require.NoError(t, eg.Wait())
 }
 
 func startWithSyncedState(t *testing.T, ts *testSyncer) types.LayerID {
