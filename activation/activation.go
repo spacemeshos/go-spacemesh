@@ -467,7 +467,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		metrics.PublishLateWindowLatency.Observe(-until.Seconds())
 		current++
 
-		// check until is positive after update
+		// check `until` is positive after `current` is incremented
 		until = time.Until(b.poetRoundStart(current))
 		if until <= 0 {
 			logger.Fatal(
