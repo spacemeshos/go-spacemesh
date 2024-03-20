@@ -257,7 +257,6 @@ func New(
 
 	lopts := []libp2p.Option{
 		libp2p.Identity(key),
-		libp2p.ListenAddrs(cfg.Listen...),
 		libp2p.UserAgent("go-spacemesh"),
 		libp2p.Muxer("/yamux/1.0.0", &streamer),
 		libp2p.Peerstore(ps),
@@ -397,6 +396,24 @@ func New(
 		WithDirectNodes(g.direct),
 	)
 	return Upgrade(h, opts...)
+}
+
+// AutoStart initializes a new host and starts it.
+func AutoStart(ctx context.Context,
+	logger log.Log,
+	cfg Config,
+	prologue []byte,
+	quicNetCookie handshake.NetworkCookie,
+	opts ...Opt,
+) (*Host, error) {
+	host, err := New(ctx, logger, cfg, prologue, quicNetCookie, opts...)
+	if err != nil {
+		return nil, err
+	}
+	if err := host.Start(); err != nil {
+		return nil, err
+	}
+	return host, nil
 }
 
 func setupResourcesManager(hostcfg Config) func(cfg *libp2p.Config) error {
