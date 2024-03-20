@@ -1458,7 +1458,7 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		return service, nil
 	case v2alpha1.Network:
 		service := v2alpha1.NewNetworkService(
-			app.clock,
+			app.clock.GenesisTime(),
 			app.Config.Genesis.GenesisID(),
 			app.Config.LayerDuration)
 		app.grpcServices[svc] = service

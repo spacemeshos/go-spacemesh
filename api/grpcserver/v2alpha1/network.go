@@ -18,19 +18,19 @@ const (
 )
 
 func NewNetworkService(
-	genTime genesisTimeAPI,
+	genesisTime time.Time,
 	genesisID types.Hash20,
 	layerDuration time.Duration,
 ) *NetworkService {
 	return &NetworkService{
-		genTime:       genTime,
+		genesisTime:   genesisTime,
 		genesisID:     genesisID,
 		layerDuration: layerDuration,
 	}
 }
 
 type NetworkService struct {
-	genTime       genesisTimeAPI
+	genesisTime   time.Time
 	genesisID     types.Hash20
 	layerDuration time.Duration
 }
@@ -52,7 +52,7 @@ func (s *NetworkService) Info(context.Context,
 	*spacemeshv2alpha1.NetworkInfoRequest,
 ) (*spacemeshv2alpha1.NetworkInfoResponse, error) {
 	return &spacemeshv2alpha1.NetworkInfoResponse{
-		GenesisTime:           timestamppb.New(s.genTime.GenesisTime()),
+		GenesisTime:           timestamppb.New(s.genesisTime),
 		LayerDuration:         durationpb.New(s.layerDuration),
 		GenesisId:             s.genesisID.Bytes(),
 		Hrp:                   types.NetworkHRP(),

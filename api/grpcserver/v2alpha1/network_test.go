@@ -6,20 +6,15 @@ import (
 	"time"
 
 	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNetworkService_Info(t *testing.T) {
 	ctx := context.Background()
-	ctrl := gomock.NewController(t)
-	genTime := NewMockgenesisTimeAPI(ctrl)
 	genesis := time.Unix(genTimeUnix, 0)
-	genTime.EXPECT().GenesisTime().Return(genesis)
 
-	svc := NewNetworkService(genTime, genesisID, layerDuration)
+	svc := NewNetworkService(genesis, genesisID, layerDuration)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
