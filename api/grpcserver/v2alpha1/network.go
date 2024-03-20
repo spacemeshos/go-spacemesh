@@ -7,7 +7,8 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
 	"google.golang.org/grpc"
-	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
@@ -47,10 +48,12 @@ func (s *NetworkService) String() string {
 	return "NetworkService"
 }
 
-func (s *NetworkService) Info(context.Context, *emptypb.Empty) (*spacemeshv2alpha1.NetworkInfoResponse, error) {
+func (s *NetworkService) Info(context.Context,
+	*spacemeshv2alpha1.NetworkInfoRequest,
+) (*spacemeshv2alpha1.NetworkInfoResponse, error) {
 	return &spacemeshv2alpha1.NetworkInfoResponse{
-		GenesisTime:           uint64(s.genTime.GenesisTime().Unix()),
-		LayerDuration:         uint32(s.layerDuration.Seconds()),
+		GenesisTime:           timestamppb.New(s.genTime.GenesisTime()),
+		LayerDuration:         durationpb.New(s.layerDuration),
 		GenesisId:             s.genesisID.Bytes(),
 		Hrp:                   types.NetworkHRP(),
 		EffectiveGenesisLayer: types.GetEffectiveGenesis().Uint32(),
