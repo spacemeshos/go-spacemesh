@@ -411,7 +411,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	// Verify that connections remain up
 	for i := 0; i < 5; i++ {
 		conns := h.Network().ConnsToPeer(badPeerHost.ID())
-		require.Equal(t, 1, conns)
+		require.Len(t, conns, 1)
 		time.Sleep(100 * time.Millisecond)
 	}
 
