@@ -2,6 +2,28 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## UNRELEASED
+
+### Upgrade information
+
+### Highlights
+
+### Features
+
+### Improvements
+
+* [#5730](https://github.com/spacemeshos/go-spacemesh/pull/5730) Fixed a bug where the node behaves incorrectly when
+  first started with supervised smeshing.
+
+* [#5731](https://github.com/spacemeshos/go-spacemesh/pull/5731) The default listen address for `PostService` is now
+  `127.0.0.1:0` instead of `127.0.0.1:9094`. This will ensure that a node binds the post service to a random free port
+  and prevents multiple instances of the post service from binding to the same port.
+
+* [#5735](https://github.com/spacemeshos/go-spacemesh/pull/5735) Don't hold database connections for long in fetcher
+  streaming mode
+
+* [#5738](https://github.com/spacemeshos/go-spacemesh/pull/5738) sql: fix epoch ATX ID cache deadlock
+
 ## Release v1.4.1
 
 ### Improvements
@@ -144,7 +166,7 @@ To add a new identity to a node, initialize PoST data with `postcli` and let it 
 
 Make sure to replace `provider` with your provider of choice and `numUnits` with the number of PoST units you want to
 initialize. The `commitmentAtxId` is the commitment ATX ID for the identity you want to initialize. For details on the
-usage of `postcli` please refer to [postcli README](https://github.com/spacemeshos/post/cmd/postcli/README.md).
+usage of `postcli` please refer to [postcli README](https://github.com/spacemeshos/post/blob/develop/cmd/postcli/README.md).
 
 During initialization `postcli` will generate a new private key and store it in the PoST data directory as `identity.key`.
 Copy this file to your `data/identities` directory and rename it to `xxx.key` where `xxx` is a unique identifier for
@@ -257,6 +279,8 @@ and permanent ineligibility for rewards.
   > grpcurl -plaintext -d '{"module": "*", "level": "debug"}' 127.0.0.1:9093 spacemesh.v1.DebugService.ChangeLogLevel
 
   "*" will replace log level for all known modules, expect that some of them will spam too much.
+* [#5612](https://github.com/spacemeshos/go-spacemesh/pull/5612)
+  Add relay command for running dedicated relay nodes
 
 ### Improvements
 

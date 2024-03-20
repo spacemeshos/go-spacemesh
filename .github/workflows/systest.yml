@@ -124,6 +124,7 @@ jobs:
           bootstrap: 4m
           level: ${{ inputs.log_level }}
           clusters: 4
+          norbac: 1
         run: make -C systest run test_name=${{ inputs.test_name }}
 
       - name: Delete pod

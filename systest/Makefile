@@ -74,14 +74,24 @@ config: template
 gomplate:
 	@go install github.com/hairyhenderson/gomplate/v4/cmd/gomplate@v4.0.0-pre-1
 
+# Using bash to invoke ./wait_for_job.sh script to avoid problems on Mac
+# where /bin/bash is an old bash
 .PHONY: run
 run: gomplate $(run_deps)
 	@echo "launching test job with name=$(test_job_name) and testid=$(test_id)"
-	@testid=$(test_id) job_name=$(test_job_name) image=$(image_name) command="$(command)" gomplate --file systest_job.yml.tmpl | kubectl apply -f -
-	until kubectl get jobs $(test_job_name); do sleep 1; done
+	@if [ -z "${norbac}" ]; then \
+	  testid=$(test_id) job_name=$(test_job_name) image=$(image_name) command="$(command)" rbac=1 \
+	    gomplate --file systest_job.yml.tmpl | kubectl apply -f -; \
+	  testid=$(test_id) job_name=$(test_job_name) image=$(image_name) command="$(command)" \
+	    gomplate --file systest_rbac.yml.tmpl | kubectl apply -f -; \
+	else \
+	  testid=$(test_id) job_name=$(test_job_name) image=$(image_name) command="$(command)" \
+	    gomplate --file systest_job.yml.tmpl | kubectl apply -f -; \
+	fi
+	until kubectl get pod -l job-name=$(test_job_name) | grep -q .; do sleep 1; done
 	kubectl wait --timeout=30s --for=condition=ready -l job-name=$(test_job_name) pod
 	kubectl logs job/$(test_job_name) -f --ignore-errors
-	test_job_name=$(test_job_name) ./wait_for_job.sh
+	test_job_name=$(test_job_name) bash ./wait_for_job.sh
 
 .PHONY: clean
 clean:

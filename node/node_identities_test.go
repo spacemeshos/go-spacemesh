@@ -50,6 +50,7 @@ func TestSpacemeshApp_NewIdentity(t *testing.T) {
 		err := app.NewIdentity()
 		require.NoError(t, err)
 		require.Len(t, app.signers, 1)
+		require.FileExists(t, filepath.Join(app.Config.DataDirParent, keyDir, supervisedIDKeyFileName))
 	})
 
 	t.Run("no key but existing directory", func(t *testing.T) {
@@ -59,6 +60,7 @@ func TestSpacemeshApp_NewIdentity(t *testing.T) {
 		err := app.NewIdentity()
 		require.NoError(t, err)
 		require.Len(t, app.signers, 1)
+		require.FileExists(t, filepath.Join(app.Config.DataDirParent, keyDir, supervisedIDKeyFileName))
 	})
 
 	t.Run("existing key is not overwritten", func(t *testing.T) {
@@ -68,8 +70,8 @@ func TestSpacemeshApp_NewIdentity(t *testing.T) {
 
 		app, _ := setupAppWithKeys(t, []byte(hex.EncodeToString(signer.PrivateKey())))
 		err = app.NewIdentity()
-		require.ErrorContains(t, err, fmt.Sprintf("identity file %s already exists", supervisedIDKeyFileName))
 		require.ErrorIs(t, err, fs.ErrExist)
+		require.ErrorContains(t, err, fmt.Sprintf("save identity file %s", supervisedIDKeyFileName))
 		require.Empty(t, app.signers)
 
 		err = app.LoadIdentities()
