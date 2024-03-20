@@ -34,16 +34,11 @@ type Validator struct {
 // ValidatorOpt for configuring Validator.
 type ValidatorOpt func(h *Validator)
 
-func WithValidateBoundaries(epoch types.EpochID) ValidatorOpt {
-	return func(v *Validator) {
-		v.validateBoundaries = epoch
-	}
-}
-
 // NewEligibilityValidator returns a new EligibilityValidator.
 func NewEligibilityValidator(
 	avgLayerSize, layersPerEpoch uint32,
 	minActiveSetWeight []types.EpochMinimalActiveWeight,
+	validateBoundaries types.EpochID,
 	clock layerClock,
 	tortoise tortoiseProvider,
 	atxsdata *atxsdata.Data,
@@ -56,6 +51,7 @@ func NewEligibilityValidator(
 		minActiveSetWeight: minActiveSetWeight,
 		avgLayerSize:       avgLayerSize,
 		layersPerEpoch:     layersPerEpoch,
+		validateBoundaries: validateBoundaries,
 		tortoise:           tortoise,
 		atxsdata:           atxsdata,
 		clock:              clock,
@@ -234,7 +230,7 @@ func (v *Validator) validateReferenceBoundaries(
 		return nil, fmt.Errorf("%w: beacon is missing in ref ballot %v", pubsub.ErrValidationReject, ballot.ID())
 	}
 	if activeSetWeight == 0 {
-		return nil, fmt.Errorf("empty active set in ref ballot %v", ballot.ID())
+		return nil, fmt.Errorf("zero local weight. failed to validate ballot %v", ballot.ID())
 	}
 	minWeight := minweight.Select(ballot.Layer.GetEpoch(), v.minActiveSetWeight)
 	upperBoundary := MustGetNumEligibleSlots(

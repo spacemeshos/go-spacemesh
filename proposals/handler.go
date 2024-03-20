@@ -145,13 +145,13 @@ func NewHandler(
 			b.cfg.LayerSize,
 			b.cfg.LayersPerEpoch,
 			b.cfg.MinimalActiveSetWeight,
+			b.cfg.ValidateBoundaries,
 			clock,
 			tortoise,
 			atxsdata,
 			bc,
 			b.logger,
 			verifier,
-			WithValidateBoundaries(b.cfg.ValidateBoundaries),
 		)
 	}
 	return b
