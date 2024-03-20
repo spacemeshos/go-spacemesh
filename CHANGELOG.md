@@ -279,6 +279,8 @@ and permanent ineligibility for rewards.
   > grpcurl -plaintext -d '{"module": "*", "level": "debug"}' 127.0.0.1:9093 spacemesh.v1.DebugService.ChangeLogLevel
 
   "*" will replace log level for all known modules, expect that some of them will spam too much.
+* [#5612](https://github.com/spacemeshos/go-spacemesh/pull/5612)
+  Add relay command for running dedicated relay nodes
 
 ### Improvements
 
