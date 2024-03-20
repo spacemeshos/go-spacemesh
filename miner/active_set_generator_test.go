@@ -326,5 +326,4 @@ func TestActiveSetEnsure(t *testing.T) {
 	require.Equal(t, types.ATXIDList(expected).Hash(), id)
 	require.Equal(t, expected, set)
 	require.Equal(t, 1*ticks, int(weight))
-
 }
