@@ -14,6 +14,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
+var ErrBoundary = fmt.Errorf("validator: eligibility count doesn't match expected bondaries")
+
 // Validator validates the eligibility of a Ballot.
 // the validation focuses on eligibility only and assumes the Ballot to be valid otherwise.
 type Validator struct {
@@ -26,6 +28,7 @@ type Validator struct {
 	beacons            system.BeaconCollector
 	logger             log.Log
 	vrfVerifier        vrfVerifier
+	validateBoundaries types.EpochID
 }
 
 // ValidatorOpt for configuring Validator.
@@ -35,6 +38,7 @@ type ValidatorOpt func(h *Validator)
 func NewEligibilityValidator(
 	avgLayerSize, layersPerEpoch uint32,
 	minActiveSetWeight []types.EpochMinimalActiveWeight,
+	validateBoundaries types.EpochID,
 	clock layerClock,
 	tortoise tortoiseProvider,
 	atxsdata *atxsdata.Data,
@@ -47,6 +51,7 @@ func NewEligibilityValidator(
 		minActiveSetWeight: minActiveSetWeight,
 		avgLayerSize:       avgLayerSize,
 		layersPerEpoch:     layersPerEpoch,
+		validateBoundaries: validateBoundaries,
 		tortoise:           tortoise,
 		atxsdata:           atxsdata,
 		clock:              clock,
@@ -89,7 +94,9 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot, 
 		data *types.EpochData
 		err  error
 	)
-	if ballot.EpochData != nil && ballot.Layer.GetEpoch() == v.clock.CurrentLayer().GetEpoch() {
+	if ballot.EpochData != nil && v.validateBoundaries >= ballot.Layer.GetEpoch() {
+		data, err = v.validateReferenceBoundaries(ballot, atx.Weight, weight)
+	} else if ballot.EpochData != nil && ballot.Layer.GetEpoch() == v.clock.CurrentLayer().GetEpoch() {
 		data, err = v.validateReference(ballot, atx.Weight, weight)
 	} else {
 		data, err = v.validateSecondary(ballot)
@@ -213,4 +220,56 @@ func (v *Validator) validateSecondary(ballot *types.Ballot) (*types.EpochData, e
 		)
 	}
 	return &types.EpochData{Beacon: refdata.Beacon, EligibilityCount: refdata.Eligiblities}, nil
+}
+
+func (v *Validator) validateReferenceBoundaries(
+	ballot *types.Ballot,
+	atxWeight, activeSetWeight uint64,
+) (*types.EpochData, error) {
+	if ballot.EpochData.Beacon == types.EmptyBeacon {
+		return nil, fmt.Errorf("%w: beacon is missing in ref ballot %v", pubsub.ErrValidationReject, ballot.ID())
+	}
+	// this error is possible only due to programmer mistake, for example if NonDecreasingWeight is returned as zero
+	// atx for this ballot actually stored locally
+	if activeSetWeight == 0 {
+		return nil, fmt.Errorf("zero local weight. failed to validate ballot %v", ballot.ID())
+	}
+	minWeight := minweight.Select(ballot.Layer.GetEpoch(), v.minActiveSetWeight)
+	upperBoundary := MustGetNumEligibleSlots(
+		atxWeight,
+		minWeight,
+		minWeight,
+		v.avgLayerSize,
+		v.layersPerEpoch,
+	)
+	lowerBoundary := MustGetNumEligibleSlots(
+		atxWeight,
+		activeSetWeight,
+		activeSetWeight,
+		v.avgLayerSize,
+		v.layersPerEpoch,
+	)
+	if ballot.EpochData.EligibilityCount > upperBoundary {
+		// this can only be the case if the other node is misconfigured or intentionally dos'ing network.
+		// safe to reject
+		return nil, fmt.Errorf(
+			"%w %w: min weight %d. lower boundary %v. ballot count %d",
+			pubsub.ErrValidationReject,
+			ErrBoundary,
+			minWeight,
+			lowerBoundary,
+			ballot.EpochData.EligibilityCount,
+		)
+	} else if ballot.EpochData.EligibilityCount < lowerBoundary {
+		// in this case we should not reject it, as it will disconnect such peer from us.
+		// but we in fact might be missing atxs and instead should run consistency check with that peer.
+		return nil, fmt.Errorf(
+			"%w: local weight %d. upper boundary %v. ballot count %d",
+			ErrBoundary,
+			activeSetWeight,
+			upperBoundary,
+			ballot.EpochData.EligibilityCount,
+		)
+	}
+	return ballot.EpochData, nil
 }

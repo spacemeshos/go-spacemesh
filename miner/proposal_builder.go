@@ -454,7 +454,7 @@ func (pb *ProposalBuilder) initSignerData(
 		ss.session = session{epoch: lid.GetEpoch()}
 	}
 	if ss.session.atx == types.EmptyATXID {
-		atx, err := atxs.GetByEpochAndNodeID(pb.cdb, ss.session.epoch-1, ss.signer.NodeID())
+		atx, err := atxs.GetLargestInEpochFromNodeID(pb.cdb, ss.session.epoch-1, ss.signer.NodeID())
 		if err != nil {
 			if errors.Is(err, sql.ErrNotFound) {
 				err = errAtxNotAvailable

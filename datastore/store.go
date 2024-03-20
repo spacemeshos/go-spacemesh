@@ -314,20 +314,6 @@ func (db *CachedDB) GetLastAtx(nodeID types.NodeID) (*types.ActivationTxHeader, 
 	}
 }
 
-// GetEpochAtx gets the atx header of specified node ID published in the specified epoch.
-func (db *CachedDB) GetEpochAtx(
-	epoch types.EpochID,
-	nodeID types.NodeID,
-) (*types.ActivationTxHeader, error) {
-	vatx, err := atxs.GetByEpochAndNodeID(db, epoch, nodeID)
-	if err != nil {
-		return nil, fmt.Errorf("no epoch atx found: %w", err)
-	}
-	header := vatx.ToHeader()
-	db.atxHdrCache.Add(vatx.ID(), header)
-	return header, nil
-}
-
 // IdentityExists returns true if this NodeID has published any ATX.
 func (db *CachedDB) IdentityExists(nodeID types.NodeID) (bool, error) {
 	_, err := atxs.GetLastIDByNodeID(db, nodeID)

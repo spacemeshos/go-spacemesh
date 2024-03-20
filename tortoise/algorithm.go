@@ -30,6 +30,9 @@ type Config struct {
 	// recorded in the first ballot, if that weight is less than minimal
 	// for purposes of eligibility computation.
 	MinimalActiveSetWeight []types.EpochMinimalActiveWeight
+	// ValidateBoundaries is the epoch where protocol will switch to a different ballot validation method.
+	ValidateBoundaries types.EpochID `mapstructure:"tortoise-validate-boundaries"`
+
 	// CollectDetails sets numbers of layers to collect details.
 	// Must be less than WindowSize.
 	CollectDetails uint32 `mapstructure:"tortoise-collect-details"`

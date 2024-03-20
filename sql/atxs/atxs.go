@@ -91,8 +91,8 @@ func Get(db sql.Executor, id types.ATXID) (*types.VerifiedActivationTx, error) {
 	return v, nil
 }
 
-// GetByEpochAndNodeID gets any ATX by the specified NodeID published in the given epoch.
-func GetByEpochAndNodeID(
+// GetLargestInEpochFromNodeID gets largest ATX from the specified NodeID published in the given epoch.
+func GetLargestInEpochFromNodeID(
 	db sql.Executor,
 	epoch types.EpochID,
 	nodeID types.NodeID,
@@ -101,7 +101,10 @@ func GetByEpochAndNodeID(
 		stmt.BindInt64(1, int64(epoch))
 		stmt.BindBytes(2, nodeID.Bytes())
 	}
-	q := fmt.Sprintf("%v where epoch = ?1 and pubkey = ?2 limit 1;", fullQuery)
+	q := fmt.Sprintf(
+		"%v where epoch = ?1 and pubkey = ?2 order by effective_num_units*tick_count desc limit 1;",
+		fullQuery,
+	)
 	v, err := load(db, q, enc)
 	if err != nil {
 		return nil, fmt.Errorf("get by epoch %v nid %s: %w", epoch, nodeID.String(), err)
@@ -573,7 +576,7 @@ func IterateAtxsData(
 ) error {
 	_, err := db.Exec(
 		`select id, pubkey, epoch, coinbase, effective_num_units, base_tick_height, tick_count
-		from atxs where epoch between ?1 and ?2;`,
+		from atxs where epoch between ?1 and ?2 order by epoch, pubkey, effective_num_units * tick_count desc;`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(from.Uint32()))
 			stmt.BindInt64(2, int64(to.Uint32()))

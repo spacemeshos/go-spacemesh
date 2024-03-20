@@ -133,17 +133,18 @@ func TestEligibilityValidator(t *testing.T) {
 	publish := epoch - 1
 
 	for _, tc := range []struct {
-		desc      string
-		evicted   types.EpochID
-		current   types.LayerID
-		minWeight uint64
-		atxs      []types.VerifiedActivationTx
-		actives   types.ATXIDList
-		ballots   []types.Ballot
-		vrfFailed bool
-		executed  types.Ballot
-		fail      bool
-		err       string
+		desc               string
+		evicted            types.EpochID
+		current            types.LayerID
+		minWeight          uint64
+		validateBoundaries types.EpochID
+		atxs               []types.VerifiedActivationTx
+		actives            types.ATXIDList
+		ballots            []types.Ballot
+		vrfFailed          bool
+		executed           types.Ballot
+		fail               bool
+		err                string
 	}{
 		{
 			desc:    "ref ballot in current",
@@ -534,6 +535,105 @@ func TestEligibilityValidator(t *testing.T) {
 			fail: true,
 			err:  "ballot has incorrect layer index",
 		},
+		{
+			desc:    "validate boundaries higher then lower boundary",
+			current: epoch.FirstLayer(),
+			atxs: []types.VerifiedActivationTx{
+				gatx(types.ATXID{1}, publish, types.NodeID{1}, 10, 10),
+				gatx(types.ATXID{2}, publish, types.NodeID{2}, 10, 10),
+			},
+			validateBoundaries: epoch,
+			minWeight:          100,
+			executed: gballot(
+				types.BallotID{1}, types.ATXID{1},
+				types.NodeID{1}, epoch.FirstLayer(), gdata(20, types.Beacon{1}, types.Hash32{}),
+				geligibilities(14),
+			),
+		},
+		{
+			desc:    "validate boundaries lower then upper",
+			current: epoch.FirstLayer(),
+			atxs: []types.VerifiedActivationTx{
+				gatx(types.ATXID{1}, publish, types.NodeID{1}, 10, 10),
+				gatx(types.ATXID{2}, publish, types.NodeID{2}, 10, 10),
+			},
+			validateBoundaries: epoch,
+			minWeight:          100,
+			executed: gballot(
+				types.BallotID{1}, types.ATXID{1},
+				types.NodeID{1}, epoch.FirstLayer(), gdata(299, types.Beacon{1}, types.Hash32{}),
+				geligibilities(14),
+			),
+		},
+		{
+			desc:    "validate boundaries lower then lower boundary",
+			current: epoch.FirstLayer(),
+			atxs: []types.VerifiedActivationTx{
+				gatx(types.ATXID{1}, publish, types.NodeID{1}, 10, 10),
+				gatx(types.ATXID{2}, publish, types.NodeID{2}, 10, 10),
+			},
+			validateBoundaries: epoch,
+			minWeight:          100,
+			executed: gballot(
+				types.BallotID{1}, types.ATXID{1},
+				types.NodeID{1}, epoch.FirstLayer(), gdata(14, types.Beacon{1}, types.Hash32{}),
+				geligibilities(14),
+			),
+			fail: true,
+			err:  "doesn't match expected bondaries: local weight 2000. upper boundary 300. ballot count 14",
+		},
+		{
+			desc:    "validate boundaries higher then higher boundary",
+			current: epoch.FirstLayer(),
+			atxs: []types.VerifiedActivationTx{
+				gatx(types.ATXID{1}, publish, types.NodeID{1}, 10, 10),
+				gatx(types.ATXID{2}, publish, types.NodeID{2}, 10, 10),
+			},
+			validateBoundaries: epoch,
+			minWeight:          100,
+			executed: gballot(
+				types.BallotID{1}, types.ATXID{1},
+				types.NodeID{1}, epoch.FirstLayer(), gdata(301, types.Beacon{3}, types.Hash32{}),
+				geligibilities(14),
+			),
+			fail: true,
+			err: "validation reject validator: eligibility count doesn't match expected bondaries: " +
+				"min weight 100. lower boundary 15. ballot count 301",
+		},
+		{
+			desc:    "validate boundaries empty beacon",
+			current: epoch.FirstLayer(),
+			atxs: []types.VerifiedActivationTx{
+				gatx(types.ATXID{1}, publish, types.NodeID{1}, 10, 10),
+				gatx(types.ATXID{2}, publish, types.NodeID{2}, 10, 10),
+			},
+			validateBoundaries: epoch,
+			minWeight:          100,
+			executed: gballot(
+				types.BallotID{1}, types.ATXID{1},
+				types.NodeID{1}, epoch.FirstLayer(), gdata(301, types.Beacon{}, types.Hash32{}),
+				geligibilities(14),
+			),
+			fail: true,
+			err:  "validation reject: beacon is missing in ref ballot",
+		},
+		{
+			desc:    "validate boundaries empty local weight",
+			current: epoch.FirstLayer(),
+			atxs: []types.VerifiedActivationTx{
+				gatx(types.ATXID{1}, publish, types.NodeID{1}, 10, 10),
+				gatx(types.ATXID{2}, publish, types.NodeID{2}, 10, 10),
+			},
+			validateBoundaries: epoch,
+			minWeight:          100,
+			executed: gballot(
+				types.BallotID{1}, types.ATXID{1},
+				types.NodeID{1}, epoch.FirstLayer(), gdata(301, types.Beacon{}, types.Hash32{}),
+				geligibilities(14),
+			),
+			fail: true,
+			err:  "validation reject: beacon is missing in ref ballot",
+		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			ms := fullMockSet(t)
@@ -563,6 +663,7 @@ func TestEligibilityValidator(t *testing.T) {
 				layerAvgSize,
 				layersPerEpoch,
 				[]types.EpochMinimalActiveWeight{{Weight: tc.minWeight}},
+				tc.validateBoundaries,
 				ms.mclock,
 				ms.md,
 				c,
@@ -584,7 +685,12 @@ func TestEligibilityValidator(t *testing.T) {
 				ms.mbc.EXPECT().
 					ReportBeaconFromBallot(tc.executed.Layer.GetEpoch(), &tc.executed, gomock.Any(), gomock.Any())
 			}
-			totalWeight, _ := c.WeightForSet(tc.executed.Layer.GetEpoch(), tc.actives)
+			var totalWeight uint64
+			if tc.validateBoundaries != 0 {
+				totalWeight = c.NonDecreasingWeight(tc.executed.Layer.GetEpoch())
+			} else {
+				totalWeight, _ = c.WeightForSet(tc.executed.Layer.GetEpoch(), tc.actives)
+			}
 			err := tv.CheckEligibility(context.Background(), &tc.executed, totalWeight)
 			if len(tc.err) == 0 {
 				assert.Empty(t, err)

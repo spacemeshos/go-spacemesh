@@ -246,7 +246,7 @@ func TestLatestN(t *testing.T) {
 	}
 }
 
-func TestGetByEpochAndNodeID(t *testing.T) {
+func TestGetLargest(t *testing.T) {
 	db := sql.InMemory()
 
 	sig1, err := signing.NewEdSigner()
@@ -257,30 +257,33 @@ func TestGetByEpochAndNodeID(t *testing.T) {
 	atx1, err := newAtx(sig1, withPublishEpoch(1))
 	require.NoError(t, err)
 
-	atx2, err := newAtx(sig2, withPublishEpoch(2))
+	atx2, err := newAtx(sig2, withPublishEpoch(2), withNumUnits(5))
 	require.NoError(t, err)
 
-	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2} {
+	atx3, err := newAtx(sig2, withPublishEpoch(2), withNumUnits(10))
+	require.NoError(t, err)
+
+	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3} {
 		require.NoError(t, atxs.Add(db, atx))
 	}
 
 	// Act & Assert
 
-	got, err := atxs.GetByEpochAndNodeID(db, types.EpochID(1), sig1.NodeID())
+	got, err := atxs.GetLargestInEpochFromNodeID(db, types.EpochID(1), sig1.NodeID())
 	require.NoError(t, err)
 	require.Equal(t, atx1, got)
 
-	got, err = atxs.GetByEpochAndNodeID(db, types.EpochID(2), sig1.NodeID())
+	got, err = atxs.GetLargestInEpochFromNodeID(db, types.EpochID(2), sig1.NodeID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.Nil(t, got)
 
-	got, err = atxs.GetByEpochAndNodeID(db, types.EpochID(1), sig2.NodeID())
+	got, err = atxs.GetLargestInEpochFromNodeID(db, types.EpochID(1), sig2.NodeID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.Nil(t, got)
 
-	got, err = atxs.GetByEpochAndNodeID(db, types.EpochID(2), sig2.NodeID())
+	got, err = atxs.GetLargestInEpochFromNodeID(db, types.EpochID(2), sig2.NodeID())
 	require.NoError(t, err)
-	require.Equal(t, atx2, got)
+	require.Equal(t, atx3, got)
 }
 
 func TestGetLastIDByNodeID(t *testing.T) {
@@ -762,6 +765,12 @@ func withPublishEpoch(epoch types.EpochID) createAtxOpt {
 func withSequence(seq uint64) createAtxOpt {
 	return func(atx *types.ActivationTx) {
 		atx.Sequence = seq
+	}
+}
+
+func withNumUnits(num uint32) createAtxOpt {
+	return func(atx *types.ActivationTx) {
+		atx.NumUnits = num
 	}
 }
 
