@@ -146,6 +146,12 @@ type Syncer struct {
 		cancel context.CancelFunc
 	}
 
+	// malSync runs malfeasant identity sync in the background
+	malSync struct {
+		started bool
+		eg      errgroup.Group
+	}
+
 	// awaitATXSyncedCh is the list of subscribers' channels to notify when this node enters ATX synced state
 	awaitATXSyncedCh chan struct{}
 
@@ -273,20 +279,6 @@ func (s *Syncer) Start() {
 				}
 			}
 		})
-		if !s.cfg.Standalone {
-			s.eg.Go(func() error {
-				select {
-				case <-ctx.Done():
-					return nil
-				case <-s.awaitATXSyncedCh:
-					err := s.malsyncer.DownloadLoop(ctx)
-					if err != nil && !errors.Is(err, context.Canceled) {
-						s.logger.WithContext(ctx).Error("malfeasance sync failed", log.Err(err))
-					}
-					return nil
-				}
-			})
-		}
 	})
 }
 
@@ -504,6 +496,21 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 			}
 			s.backgroundSync.epoch.Store(0)
 			return err
+		})
+	}
+	if !s.malSync.started {
+		s.malSync.started = true
+		s.malSync.eg.Go(func() error {
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-s.awaitATXSyncedCh:
+				err := s.malsyncer.DownloadLoop(ctx)
+				if err != nil && !errors.Is(err, context.Canceled) {
+					s.logger.WithContext(ctx).Error("malfeasance sync failed", log.Err(err))
+				}
+				return nil
+			}
 		})
 	}
 	return nil
