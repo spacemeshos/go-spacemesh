@@ -256,7 +256,6 @@ func New(
 
 	lopts := []libp2p.Option{
 		libp2p.Identity(key),
-		libp2p.ListenAddrs(cfg.Listen...),
 		libp2p.UserAgent("go-spacemesh"),
 		libp2p.Muxer("/yamux/1.0.0", &streamer),
 		libp2p.Peerstore(ps),
