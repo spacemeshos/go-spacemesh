@@ -124,7 +124,7 @@ func TestGlobalStateService(t *testing.T) {
 		// huge offset is not an error, we just expect no results
 		require.NoError(t, err)
 		require.Equal(t, uint32(0), res.TotalResults)
-		require.Equal(t, 0, len(res.AccountItem))
+		require.Empty(t, res.AccountItem)
 	})
 	t.Run("AccountDataQuery_ZeroMaxResults", func(t *testing.T) {
 		t.Parallel()

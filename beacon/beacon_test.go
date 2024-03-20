@@ -275,15 +275,14 @@ func TestBeacon_MultipleNodes_OnlyOneHonest(t *testing.T) {
 			}
 		}
 	}
-	var wg sync.WaitGroup
+	var eg errgroup.Group
 	for _, node := range testNodes {
-		wg.Add(1)
-		go func(testNode *testProtocolDriver) {
-			require.NoError(t, testNode.onNewEpoch(context.Background(), types.EpochID(2)))
-			wg.Done()
-		}(node)
+		node := node
+		eg.Go(func() error {
+			return node.onNewEpoch(context.Background(), types.EpochID(2))
+		})
 	}
-	wg.Wait()
+	require.NoError(t, eg.Wait())
 	beacons := make(map[types.Beacon]struct{})
 	for _, node := range testNodes {
 		got, err := node.GetBeacon(types.EpochID(3))
@@ -328,15 +327,14 @@ func TestBeacon_NoProposals(t *testing.T) {
 			}
 		}
 	}
-	var wg sync.WaitGroup
+	var eg errgroup.Group
 	for _, node := range testNodes {
-		wg.Add(1)
-		go func(testNode *testProtocolDriver) {
-			require.NoError(t, testNode.onNewEpoch(context.Background(), types.EpochID(2)))
-			wg.Done()
-		}(node)
+		node := node
+		eg.Go(func() error {
+			return node.onNewEpoch(context.Background(), types.EpochID(2))
+		})
 	}
-	wg.Wait()
+	require.NoError(t, eg.Wait())
 	for _, node := range testNodes {
 		got, err := node.GetBeacon(types.EpochID(3))
 		require.Error(t, err)
@@ -622,11 +620,11 @@ func TestBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
 		b.EligibilityProofs = []types.VotingEligibility{{J: 1}}
 		pd.ReportBeaconFromBallot(e, &b, types.RandomBeacon(), fixed.New64(1))
 		pd.cleanupEpoch(e)
-		require.Equal(t, i+1, len(pd.beacons))
-		require.Equal(t, i+1, len(pd.ballotsBeacons))
+		require.Len(t, pd.beacons, i+1)
+		require.Len(t, pd.ballotsBeacons, i+1)
 	}
-	require.Equal(t, numEpochsToKeep, len(pd.beacons))
-	require.Equal(t, numEpochsToKeep, len(pd.ballotsBeacons))
+	require.Len(t, pd.beacons, numEpochsToKeep)
+	require.Len(t, pd.ballotsBeacons, numEpochsToKeep)
 
 	epoch = epoch + numEpochsToKeep
 	err := pd.setBeacon(epoch, types.RandomBeacon())

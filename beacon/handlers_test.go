@@ -250,7 +250,7 @@ func Test_HandleProposal_InitEpoch(t *testing.T) {
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
 	tpd.mClock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(epochStart).AnyTimes()
 	res := tpd.HandleProposal(context.Background(), "peerID", msgBytes)
-	require.Equal(t, nil, res)
+	require.NoError(t, res)
 }
 
 func Test_HandleProposal_Success(t *testing.T) {
@@ -421,7 +421,7 @@ func Test_HandleProposal_NotInProtocolStillWorks(t *testing.T) {
 	tpd.mClock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(epochStart).AnyTimes()
 	mockChecker.EXPECT().PassStrictThreshold(gomock.Any()).Return(true)
 	res := tpd.HandleProposal(context.Background(), "peerID", msgBytes)
-	require.Equal(t, nil, res)
+	require.NoError(t, res)
 
 	p := ProposalFromVrf(msg.VRFSignature)
 	checkProposed(t, tpd.ProtocolDriver, epoch, vrfSigner.NodeID(), true)
@@ -890,7 +890,7 @@ func Test_HandleFirstVotes_Success(t *testing.T) {
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
 	tpd.mClock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now()).AnyTimes()
 	res := tpd.HandleFirstVotes(context.Background(), "peerID", msgBytes)
-	require.Equal(t, nil, res)
+	require.NoError(t, res)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, types.FirstRound, true)
 	expected := map[types.NodeID]proposalList{
 		signer.NodeID(): append(validVotes, pValidVotes...),
@@ -925,7 +925,7 @@ func Test_HandleFirstVotes_Malicious(t *testing.T) {
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
 	tpd.mClock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now()).AnyTimes()
 	res := tpd.HandleFirstVotes(context.Background(), "peerID", msgBytes)
-	require.Equal(t, nil, res)
+	require.NoError(t, res)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, types.FirstRound, true)
 	expected := map[types.NodeID]proposalList{
 		signer.NodeID(): append(validVotes, pValidVotes...),
@@ -1191,7 +1191,7 @@ func Test_HandleFollowingVotes_Success(t *testing.T) {
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
 	tpd.mClock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now()).AnyTimes()
 	res := tpd.HandleFollowingVotes(context.Background(), "peerID", msgBytes)
-	require.Equal(t, nil, res)
+	require.NoError(t, res)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, round, true)
 	expected := make(map[Proposal]*big.Int, len(plist))
 	for i, p := range plist {

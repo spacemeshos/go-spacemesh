@@ -674,7 +674,7 @@ func TestSmesherService(t *testing.T) {
 		c.smeshingProvider.EXPECT().SmesherIDs().Return([]types.NodeID{nodeId})
 		res, err := c.SmesherIDs(ctx, &emptypb.Empty{})
 		require.NoError(t, err)
-		require.Equal(t, 1, len(res.PublicKeys))
+		require.Len(t, res.PublicKeys, 1)
 		require.Equal(t, nodeId.Bytes(), res.PublicKeys[0])
 	})
 
@@ -874,7 +874,7 @@ func TestMeshService(t *testing.T) {
 						})
 						require.NoError(t, err)
 						require.Equal(t, uint32(0), res.TotalResults)
-						require.Equal(t, 0, len(res.Data))
+						require.Empty(t, res.Data)
 					},
 				},
 				{
@@ -1464,8 +1464,8 @@ func TestTransactionService(t *testing.T) {
 			})
 			res, err := c.TransactionsState(context.Background(), req)
 			require.NoError(t, err)
-			require.Equal(t, 1, len(res.TransactionsState))
-			require.Equal(t, 1, len(res.Transactions))
+			require.Len(t, res.TransactionsState, 1)
+			require.Len(t, res.Transactions, 1)
 			require.Equal(t, globalTx.ID.Bytes(), res.TransactionsState[0].Id.Id)
 			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_PROCESSED, res.TransactionsState[0].State)
 
@@ -2139,7 +2139,7 @@ func TestDebugService(t *testing.T) {
 		}
 		res, err := c.Accounts(context.Background(), &pb.AccountsRequest{Layer: lid.Uint32()})
 		require.NoError(t, err)
-		require.Equal(t, 2, len(res.AccountWrapper))
+		require.Len(t, res.AccountWrapper, 2)
 
 		// Get the list of addresses and compare them regardless of order
 		var addresses []string
@@ -2262,7 +2262,7 @@ func TestDebugService(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		require.Equal(t, testLog.Level().String(), "debug")
+		require.Equal(t, zapcore.DebugLevel, testLog.Level())
 	})
 }
 

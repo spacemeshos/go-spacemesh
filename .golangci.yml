@@ -613,7 +613,7 @@ linters-settings:
     # sprintf1: false
     # Optimizes into strings concatenation.
     # Default: true
-    # strconcat: false
+    strconcat: false
 
   revive:
     # Maximum number of open files at the same time.

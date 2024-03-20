@@ -130,7 +130,7 @@ func Test_NIPost_PostClientHandling(t *testing.T) {
 			event := e.Event.GetPostComplete()
 			require.NotNil(t, event, "wrong event type")
 			require.EqualValues(t, shared.ZeroChallenge, event.Challenge)
-			require.Equal(t, false, e.Event.Failure)
+			require.False(t, e.Event.Failure)
 			require.Equal(t, "Node finished PoST execution using PoET challenge.", e.Event.Help)
 		case <-time.After(5 * time.Second):
 			require.Fail(t, "timeout waiting for event")
@@ -202,7 +202,7 @@ func Test_NIPost_PostClientHandling(t *testing.T) {
 			event := e.Event.GetPostComplete()
 			require.NotNil(t, event, "wrong event type")
 			require.EqualValues(t, shared.ZeroChallenge, event.Challenge)
-			require.Equal(t, false, e.Event.Failure)
+			require.False(t, e.Event.Failure)
 			require.Equal(t, "Node finished PoST execution using PoET challenge.", e.Event.Help)
 		case <-time.After(5 * time.Second):
 			require.Fail(t, "timeout waiting for event")

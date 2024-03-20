@@ -113,7 +113,7 @@ func submitTransaction(ctx context.Context, tx []byte, node *cluster.NodeClient)
 		return nil, err
 	}
 	if response.Txstate == nil {
-		return nil, fmt.Errorf("tx state should not be nil")
+		return nil, errors.New("tx state should not be nil")
 	}
 	return response.Txstate.Id.Id, nil
 }
