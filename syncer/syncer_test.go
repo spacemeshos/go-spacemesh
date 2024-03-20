@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
@@ -349,17 +350,19 @@ func TestSynchronize_FailedInitialATXsSync(t *testing.T) {
 		Download(gomock.Any(), failedEpoch, gomock.Any()).
 		Return(errors.New("no ATXs. should fail sync"))
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
+	var atxSynced bool
+	var eg errgroup.Group
+	eg.Go(func() error {
 		atxSyncedCh := ts.syncer.RegisterForATXSynced()
 		select {
 		case <-atxSyncedCh:
-			require.Fail(t, "node should not be atx synced")
+			atxSynced = true
 		case <-time.After(100 * time.Millisecond):
-			wg.Done()
 		}
-	}()
+		return nil
+	})
+	eg.Wait()
+	require.False(t, atxSynced, "node should not be atx synced")
 
 	require.False(t, ts.syncer.synchronize(context.Background()))
 	require.Equal(t, types.GetEffectiveGenesis(), ts.syncer.getLastSyncedLayer())
@@ -369,17 +372,17 @@ func TestSynchronize_FailedInitialATXsSync(t *testing.T) {
 	require.False(t, ts.syncer.ListenToGossip())
 	require.False(t, ts.syncer.IsSynced(context.Background()))
 
-	wg.Add(1)
-	go func() {
+	eg.Go(func() error {
 		atxSyncedCh := ts.syncer.RegisterForATXSynced()
 		select {
 		case <-atxSyncedCh:
-			require.Fail(t, "node should not be atx synced")
+			atxSynced = true
 		case <-time.After(100 * time.Millisecond):
-			wg.Done()
 		}
-	}()
-	wg.Wait()
+		return nil
+	})
+	eg.Wait()
+	require.False(t, atxSynced, "node should not be atx synced")
 }
 
 func startWithSyncedState(t *testing.T, ts *testSyncer) types.LayerID {

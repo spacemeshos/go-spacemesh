@@ -21,7 +21,7 @@ func TestVotesUpdate(t *testing.T) {
 		c1 := original.tail
 		c2 := cp.tail
 		for c1 != nil || c2 != nil {
-			require.True(t, c1 == c2, "pointers should be equal")
+			require.Equal(t, c1, c2, "pointers should be equal")
 			c1 = c1.prev
 			c2 = c2.prev
 		}
@@ -39,9 +39,9 @@ func TestVotesUpdate(t *testing.T) {
 		c2 := cp.tail
 		for c1 != nil || c2 != nil {
 			if c1.lid >= modified {
-				require.False(t, c1 == c2)
+				require.NotEqual(t, c1, c2)
 			} else {
-				require.True(t, c1 == c2)
+				require.Equal(t, c1, c2)
 			}
 			c1 = c1.prev
 			c2 = c2.prev
@@ -82,7 +82,7 @@ func TestVotesUpdate(t *testing.T) {
 		cp, err := original.update(types.LayerID(0), update)
 		require.NoError(t, err)
 		for c := original.tail; c != nil; c = c.prev {
-			require.Len(t, c.supported, 0)
+			require.Empty(t, c.supported)
 		}
 		for c := cp.tail; c != nil; c = c.prev {
 			require.Len(t, c.supported, 1)
@@ -397,12 +397,13 @@ func TestLayersSliceBoundaries(t *testing.T) {
 	for i := types.LayerID(0); i < total; i++ {
 		slice.get(i, i+capacity)
 		slice.pop()
-		require.True(
+		require.Less(
 			t,
-			cap(slice.data) < capacity+capacity/2,
+			cap(slice.data),
+			capacity+capacity/2,
 			"slice expected to double on append: cap=%d",
 			cap(slice.data),
 		)
-		require.Equal(t, capacity-1, len(slice.data))
+		require.Len(t, slice.data, capacity-1)
 	}
 }
