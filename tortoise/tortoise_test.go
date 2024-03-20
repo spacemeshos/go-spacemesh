@@ -1951,7 +1951,7 @@ func TestLateBlock(t *testing.T) {
 	require.NoError(t, err)
 	var block types.Block
 	require.NoError(t, codec.Decode(buf, &block))
-	require.Greater(t, block.TxIDs, 2)
+	require.Greater(t, len(block.TxIDs), 2)
 	block.TxIDs = block.TxIDs[:2]
 	block.Initialize()
 	tortoise.OnBlock(block.ToVote())

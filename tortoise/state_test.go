@@ -39,9 +39,9 @@ func TestVotesUpdate(t *testing.T) {
 		c2 := cp.tail
 		for c1 != nil || c2 != nil {
 			if c1.lid >= modified {
-				require.NotEqual(t, c1, c2)
+				require.NotSame(t, c1, c2)
 			} else {
-				require.Equal(t, c1, c2)
+				require.Same(t, c1, c2)
 			}
 			c1 = c1.prev
 			c2 = c2.prev
