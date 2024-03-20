@@ -141,21 +141,8 @@ func GetCommand() *cobra.Command {
 		Use:   "node",
 		Short: "start node",
 		RunE: func(c *cobra.Command, args []string) error {
-			preset := conf.Preset // might be set via CLI flag
-			if err := loadConfig(&conf, preset, *configPath); err != nil {
-				return fmt.Errorf("loading config: %w", err)
-			}
-			// apply CLI args to config
-			if err := c.ParseFlags(os.Args[1:]); err != nil {
-				return fmt.Errorf("parsing flags: %w", err)
-			}
-
-			if conf.LOGGING.Encoder == config.JSONLogEncoder {
-				log.JSONLog(true)
-			}
-
-			if cmd.NoMainNet && onMainNet(&conf) && !conf.NoMainOverride {
-				return errors.New("this is a testnet-only build not intended for mainnet")
+			if err := configure(c, *configPath, &conf); err != nil {
+				return err
 			}
 
 			app := New(
@@ -250,7 +237,41 @@ func GetCommand() *cobra.Command {
 	}
 	c.AddCommand(versionCmd)
 
+	relayCmd := cobra.Command{
+		Use:          "relay",
+		Short:        "Run relay server",
+		SilenceUsage: true,
+		RunE: func(c *cobra.Command, args []string) error {
+			if err := configure(c, *configPath, &conf); err != nil {
+				return err
+			}
+			return runRelay(c.Context(), &conf)
+		},
+	}
+	c.AddCommand(&relayCmd)
+
 	return c
+}
+
+func configure(c *cobra.Command, configPath string, conf *config.Config) error {
+	preset := conf.Preset // might be set via CLI flag
+	if err := loadConfig(conf, preset, configPath); err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+	// apply CLI args to config
+	if err := c.ParseFlags(os.Args[1:]); err != nil {
+		return fmt.Errorf("parsing flags: %w", err)
+	}
+
+	if conf.LOGGING.Encoder == config.JSONLogEncoder {
+		log.JSONLog(true)
+	}
+
+	if cmd.NoMainNet && onMainNet(conf) && !conf.NoMainOverride {
+		return errors.New("this is a testnet-only build not intended for mainnet")
+	}
+
+	return nil
 }
 
 var (
@@ -560,21 +581,10 @@ func (app *App) Cleanup(ctx context.Context) {
 //
 // This method is not safe to be called concurrently.
 func (app *App) addLogger(name string, logger log.Log) log.Log {
-	lvl := zap.NewAtomicLevel()
-	loggers, err := decodeLoggers(app.Config.LOGGING)
+	lvl, err := decodeLoggerLevel(app.Config, name)
 	if err != nil {
 		app.log.With().Panic("unable to decode loggers into map[string]string", log.Err(err))
 	}
-	level, ok := loggers[name]
-	if ok {
-		if err := lvl.UnmarshalText([]byte(level)); err != nil {
-			app.log.Error("cannot parse logging for %v error %v", name, err)
-			lvl.SetLevel(log.DefaultLevel())
-		}
-	} else {
-		lvl.SetLevel(log.DefaultLevel())
-	}
-
 	if logger.Check(lvl.Level()) {
 		app.loggers[name] = &lvl
 		logger = logger.SetLevel(&lvl)
@@ -2145,12 +2155,23 @@ type layerFetcher struct {
 	system.Fetcher
 }
 
-func decodeLoggers(cfg config.LoggerConfig) (map[string]string, error) {
-	rst := map[string]string{}
-	if err := mapstructure.Decode(cfg, &rst); err != nil {
-		return nil, fmt.Errorf("mapstructure decode: %w", err)
+func decodeLoggerLevel(cfg *config.Config, name string) (zap.AtomicLevel, error) {
+	lvl := zap.NewAtomicLevel()
+	loggers := map[string]string{}
+	if err := mapstructure.Decode(cfg.LOGGING, &loggers); err != nil {
+		return zap.AtomicLevel{}, fmt.Errorf("error decoding mapstructure: %w", err)
 	}
-	return rst, nil
+
+	level, ok := loggers[name]
+	if ok {
+		if err := lvl.UnmarshalText([]byte(level)); err != nil {
+			return zap.AtomicLevel{}, fmt.Errorf("cannot parse logging for %v: %w", name, err)
+		}
+	} else {
+		lvl.SetLevel(log.DefaultLevel())
+	}
+
+	return lvl, nil
 }
 
 type tortoiseWeakCoin struct {
