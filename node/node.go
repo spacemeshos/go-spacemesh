@@ -1572,7 +1572,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		}
 		host, port, err := net.SplitHostPort(app.grpcPostServer.BoundAddress)
 		if err != nil {
-			return fmt.Errorf("parse grpc-private-listener: %w", err)
+			return fmt.Errorf("parse grpc-post-listener: %w", err)
 		}
 		ip := net.ParseIP(host)
 		if ip.IsUnspecified() { // 0.0.0.0 isn't a valid address to connect to on windows
