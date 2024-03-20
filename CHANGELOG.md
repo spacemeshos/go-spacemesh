@@ -2,13 +2,7 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
-## UNRELEASED
-
-### Upgrade information
-
-### Highlights
-
-### Features
+## Release v1.4.2
 
 ### Improvements
 
@@ -21,6 +15,8 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 * [#5735](https://github.com/spacemeshos/go-spacemesh/pull/5735) Don't hold database connections for long in fetcher
   streaming mode
+
+* [#5736](https://github.com/spacemeshos/go-spacemesh/pull/5736) Fixed slow POST initialization on Windows.
 
 * [#5738](https://github.com/spacemeshos/go-spacemesh/pull/5738) sql: fix epoch ATX ID cache deadlock
 
@@ -195,7 +191,7 @@ and permanent ineligibility for rewards.
 ### Highlights
 
 * [#5599](https://github.com/spacemeshos/go-spacemesh/pull/5599) new atx sync that is less fragile to network failures.
-  
+
   new atx sync will avoid blocking startup, and additionally will be running in background to ask peers for atxs.
   by default it does that every 4 hours by requesting known atxs from 2 peers. configuration can be adjusted by providing
 
