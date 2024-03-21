@@ -2,6 +2,7 @@ package grpcserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -116,16 +117,16 @@ func (s SmesherService) StartSmeshing(
 
 func (s SmesherService) postSetupOpts(in *pb.PostSetupOpts) (activation.PostSetupOpts, error) {
 	if in == nil {
-		return activation.PostSetupOpts{}, fmt.Errorf("`Opts` must be provided")
+		return activation.PostSetupOpts{}, errors.New("`Opts` must be provided")
 	}
 	if in.DataDir == "" {
-		return activation.PostSetupOpts{}, fmt.Errorf("`Opts.DataDir` must be provided")
+		return activation.PostSetupOpts{}, errors.New("`Opts.DataDir` must be provided")
 	}
 	if in.NumUnits == 0 {
-		return activation.PostSetupOpts{}, fmt.Errorf("`Opts.NumUnits` must be provided")
+		return activation.PostSetupOpts{}, errors.New("`Opts.NumUnits` must be provided")
 	}
 	if in.MaxFileSize == 0 {
-		return activation.PostSetupOpts{}, fmt.Errorf("`Opts.MaxFileSize` must be provided")
+		return activation.PostSetupOpts{}, errors.New("`Opts.MaxFileSize` must be provided")
 	}
 
 	// Overlay default with api provided opts

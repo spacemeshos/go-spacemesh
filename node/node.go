@@ -452,7 +452,7 @@ func (app *App) LoadCheckpoint(ctx context.Context) (*checkpoint.PreservedData, 
 		return nil, nil
 	}
 	if restore == 0 {
-		return nil, fmt.Errorf("restore layer not set")
+		return nil, errors.New("restore layer not set")
 	}
 	nodeIDs := make([]types.NodeID, len(app.signers))
 	for i, sig := range app.signers {
@@ -532,7 +532,7 @@ func (app *App) Initialize() error {
 			app.log.Error("genesis config updated after node initialization, if this update is required delete config"+
 				" at %s.\ndiff:\n%s", gpath, diff,
 			)
-			return fmt.Errorf("genesis config updated after node initialization")
+			return errors.New("genesis config updated after node initialization")
 		}
 	}
 
@@ -781,7 +781,8 @@ func (app *App) initServices(ctx context.Context) error {
 
 	if app.Config.HareEligibility.ConfidenceParam >= app.Config.BaseConfig.LayersPerEpoch {
 		return fmt.Errorf(
-			"confidence param should be smaller than layers per epoch. eligibility-confidence-param: %d. layers-per-epoch: %d",
+			"confidence param should be smaller than layers per epoch. eligibility-confidence-param: %d. "+
+				"layers-per-epoch: %d",
 			app.Config.HareEligibility.ConfidenceParam,
 			app.Config.BaseConfig.LayersPerEpoch,
 		)
@@ -882,7 +883,8 @@ func (app *App) initServices(ctx context.Context) error {
 	beaconProtocol.SetSyncState(newSyncer)
 	app.hOracle.SetSync(newSyncer)
 
-	if err := app.Config.HARE3.Validate(time.Duration(app.Config.Tortoise.Zdist) * app.Config.LayerDuration); err != nil {
+	err = app.Config.HARE3.Validate(time.Duration(app.Config.Tortoise.Zdist) * app.Config.LayerDuration)
+	if err != nil {
 		return err
 	}
 	logger := app.addLogger(HareLogger, lg).Zap()
@@ -1588,10 +1590,10 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		svc.(*grpcserver.SmesherService).SetPostServiceConfig(app.Config.POSTService)
 		if app.Config.SMESHING.Start {
 			if app.Config.SMESHING.CoinbaseAccount == "" {
-				return fmt.Errorf("smeshing enabled but no coinbase account provided")
+				return errors.New("smeshing enabled but no coinbase account provided")
 			}
 			if len(app.signers) > 1 {
-				return fmt.Errorf("supervised smeshing cannot be started in a multi-smeshing setup")
+				return errors.New("supervised smeshing cannot be started in a multi-smeshing setup")
 			}
 			if err := app.postSupervisor.Start(
 				app.Config.POSTService,
@@ -1619,7 +1621,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 
 	if len(app.Config.API.JSONListener) > 0 {
 		if len(publicSvcs) == 0 {
-			return fmt.Errorf("start json server without public services")
+			return errors.New("start json server without public services")
 		}
 		app.jsonAPIServer = grpcserver.NewJSONHTTPServer(
 			app.Config.API.JSONListener,

@@ -69,7 +69,10 @@ func New(opts ...StoreOption) *Store {
 	if s.evicted != nil {
 		evicted = s.evicted.Uint32()
 	}
-	s.logger.Info("proposals store created", zap.Uint32("capacity", s.capacity.Uint32()), zap.Uint32("evicted", evicted))
+	s.logger.Info("proposals store created",
+		zap.Uint32("capacity", s.capacity.Uint32()),
+		zap.Uint32("evicted", evicted),
+	)
 	return s
 }
 

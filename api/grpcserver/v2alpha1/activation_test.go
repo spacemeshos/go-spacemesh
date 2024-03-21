@@ -46,7 +46,7 @@ func TestActivationService_List(t *testing.T) {
 		s, ok := status.FromError(err)
 		require.True(t, ok)
 		assert.Equal(t, codes.InvalidArgument, s.Code())
-		require.Equal(t, s.Message(), "limit is capped at 100")
+		require.Equal(t, "limit is capped at 100", s.Message())
 	})
 
 	t.Run("no limit set", func(t *testing.T) {
@@ -56,7 +56,7 @@ func TestActivationService_List(t *testing.T) {
 		s, ok := status.FromError(err)
 		require.True(t, ok)
 		assert.Equal(t, codes.InvalidArgument, s.Code())
-		require.Equal(t, s.Message(), "limit must be set to <= 100")
+		require.Equal(t, "limit must be set to <= 100", s.Message())
 	})
 
 	t.Run("limit and offset", func(t *testing.T) {

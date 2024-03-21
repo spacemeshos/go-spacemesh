@@ -2,6 +2,7 @@ package activation
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/spacemeshos/merkle-tree"
@@ -115,9 +116,9 @@ func (db *PoetDb) StoreProof(ctx context.Context, ref types.PoetProofRef, proofM
 	}
 
 	db.log.WithContext(ctx).With().Info("stored poet proof",
-		log.String("poet_proof_id", fmt.Sprintf("%x", ref[:5])),
+		log.String("poet_proof_id", hex.EncodeToString(ref[:5])),
 		log.String("round_id", proofMessage.RoundID),
-		log.String("poet_service_id", fmt.Sprintf("%x", proofMessage.PoetServiceID[:5])),
+		log.String("poet_service_id", hex.EncodeToString(proofMessage.PoetServiceID[:5])),
 	)
 
 	return nil

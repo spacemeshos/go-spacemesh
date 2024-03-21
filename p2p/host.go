@@ -284,7 +284,8 @@ func New(
 			),
 			libp2p.Security(
 				noise.ID,
-				func(id protocol.ID, privkey crypto.PrivKey, muxers []tptu.StreamMuxer) (*noise.SessionTransport, error) {
+				func(id protocol.ID, privkey crypto.PrivKey, muxers []tptu.StreamMuxer,
+				) (*noise.SessionTransport, error) {
 					tp, err := noise.New(id, privkey, muxers)
 					if err != nil {
 						return nil, err
