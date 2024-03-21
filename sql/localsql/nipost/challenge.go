@@ -146,7 +146,9 @@ func PoetProofRef(db sql.Executor, nodeID types.NodeID) (types.PoetProofRef, *ty
 	}
 	_, err := db.Exec(`select poet_proof_ref, poet_proof_membership from challenge where id = ?1 limit 1;`, enc, dec)
 	if err != nil {
-		return types.PoetProofRef{}, nil, fmt.Errorf("get poet proof ref from node id %s: %w", nodeID.ShortString(), err)
+		return types.PoetProofRef{}, nil, fmt.Errorf("get poet proof ref from node id %s: %w",
+			nodeID.ShortString(), err,
+		)
 	}
 	if membership == nil {
 		return types.PoetProofRef{}, nil,

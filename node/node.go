@@ -142,21 +142,8 @@ func GetCommand() *cobra.Command {
 		Use:   "node",
 		Short: "start node",
 		RunE: func(c *cobra.Command, args []string) error {
-			preset := conf.Preset // might be set via CLI flag
-			if err := loadConfig(&conf, preset, *configPath); err != nil {
-				return fmt.Errorf("loading config: %w", err)
-			}
-			// apply CLI args to config
-			if err := c.ParseFlags(os.Args[1:]); err != nil {
-				return fmt.Errorf("parsing flags: %w", err)
-			}
-
-			if conf.LOGGING.Encoder == config.JSONLogEncoder {
-				log.JSONLog(true)
-			}
-
-			if cmd.NoMainNet && onMainNet(&conf) && !conf.NoMainOverride {
-				return errors.New("this is a testnet-only build not intended for mainnet")
+			if err := configure(c, *configPath, &conf); err != nil {
+				return err
 			}
 
 			app := New(
@@ -251,7 +238,41 @@ func GetCommand() *cobra.Command {
 	}
 	c.AddCommand(versionCmd)
 
+	relayCmd := cobra.Command{
+		Use:          "relay",
+		Short:        "Run relay server",
+		SilenceUsage: true,
+		RunE: func(c *cobra.Command, args []string) error {
+			if err := configure(c, *configPath, &conf); err != nil {
+				return err
+			}
+			return runRelay(c.Context(), &conf)
+		},
+	}
+	c.AddCommand(&relayCmd)
+
 	return c
+}
+
+func configure(c *cobra.Command, configPath string, conf *config.Config) error {
+	preset := conf.Preset // might be set via CLI flag
+	if err := loadConfig(conf, preset, configPath); err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+	// apply CLI args to config
+	if err := c.ParseFlags(os.Args[1:]); err != nil {
+		return fmt.Errorf("parsing flags: %w", err)
+	}
+
+	if conf.LOGGING.Encoder == config.JSONLogEncoder {
+		log.JSONLog(true)
+	}
+
+	if cmd.NoMainNet && onMainNet(conf) && !conf.NoMainOverride {
+		return errors.New("this is a testnet-only build not intended for mainnet")
+	}
+
+	return nil
 }
 
 var (
@@ -432,7 +453,7 @@ func (app *App) LoadCheckpoint(ctx context.Context) (*checkpoint.PreservedData, 
 		return nil, nil
 	}
 	if restore == 0 {
-		return nil, fmt.Errorf("restore layer not set")
+		return nil, errors.New("restore layer not set")
 	}
 	nodeIDs := make([]types.NodeID, len(app.signers))
 	for i, sig := range app.signers {
@@ -512,7 +533,7 @@ func (app *App) Initialize() error {
 			app.log.Error("genesis config updated after node initialization, if this update is required delete config"+
 				" at %s.\ndiff:\n%s", gpath, diff,
 			)
-			return fmt.Errorf("genesis config updated after node initialization")
+			return errors.New("genesis config updated after node initialization")
 		}
 	}
 
@@ -561,21 +582,10 @@ func (app *App) Cleanup(ctx context.Context) {
 //
 // This method is not safe to be called concurrently.
 func (app *App) addLogger(name string, logger log.Log) log.Log {
-	lvl := zap.NewAtomicLevel()
-	loggers, err := decodeLoggers(app.Config.LOGGING)
+	lvl, err := decodeLoggerLevel(app.Config, name)
 	if err != nil {
 		app.log.With().Panic("unable to decode loggers into map[string]string", log.Err(err))
 	}
-	level, ok := loggers[name]
-	if ok {
-		if err := lvl.UnmarshalText([]byte(level)); err != nil {
-			app.log.Error("cannot parse logging for %v error %v", name, err)
-			lvl.SetLevel(log.DefaultLevel())
-		}
-	} else {
-		lvl.SetLevel(log.DefaultLevel())
-	}
-
 	if logger.Check(lvl.Level()) {
 		app.loggers[name] = &lvl
 		logger = logger.SetLevel(&lvl)
@@ -772,7 +782,8 @@ func (app *App) initServices(ctx context.Context) error {
 
 	if app.Config.HareEligibility.ConfidenceParam >= app.Config.BaseConfig.LayersPerEpoch {
 		return fmt.Errorf(
-			"confidence param should be smaller than layers per epoch. eligibility-confidence-param: %d. layers-per-epoch: %d",
+			"confidence param should be smaller than layers per epoch. eligibility-confidence-param: %d. "+
+				"layers-per-epoch: %d",
 			app.Config.HareEligibility.ConfidenceParam,
 			app.Config.BaseConfig.LayersPerEpoch,
 		)
@@ -881,7 +892,8 @@ func (app *App) initServices(ctx context.Context) error {
 	beaconProtocol.SetSyncState(newSyncer)
 	app.hOracle.SetSync(newSyncer)
 
-	if err := app.Config.HARE3.Validate(time.Duration(app.Config.Tortoise.Zdist) * app.Config.LayerDuration); err != nil {
+	err = app.Config.HARE3.Validate(time.Duration(app.Config.Tortoise.Zdist) * app.Config.LayerDuration)
+	if err != nil {
 		return err
 	}
 	logger := app.addLogger(HareLogger, lg).Zap()
@@ -960,7 +972,9 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	proposalBuilder := miner.New(
 		app.clock,
-		app.cachedDB,
+		app.db,
+		app.localDB,
+		app.atxsdata,
 		app.host,
 		trtl,
 		newSyncer,
@@ -977,16 +991,6 @@ func (app *App) initServices(ctx context.Context) error {
 		proposalBuilder.Register(sig)
 	}
 
-	host, port, err := net.SplitHostPort(app.Config.API.PostListener)
-	if err != nil {
-		return fmt.Errorf("parse grpc-private-listener: %w", err)
-	}
-	ip := net.ParseIP(host)
-	if ip.IsUnspecified() {
-		host = "127.0.0.1"
-	}
-
-	app.Config.POSTService.NodeAddress = fmt.Sprintf("http://%s:%s", host, port)
 	postSetupMgr, err := activation.NewPostSetupManager(
 		app.Config.POST,
 		app.addLogger(PostLogger, lg).Zap(),
@@ -1053,9 +1057,8 @@ func (app *App) initServices(ctx context.Context) error {
 			atxBuilder.Register(sig)
 		}
 	}
-	app.postSupervisor, err = activation.NewPostSupervisor(
+	app.postSupervisor = activation.NewPostSupervisor(
 		app.log.Zap(),
-		app.Config.POSTService,
 		app.Config.POST,
 		app.Config.SMESHING.ProvingOpts,
 		postSetupMgr,
@@ -1359,24 +1362,6 @@ func (app *App) startServices(ctx context.Context) error {
 		}
 	}
 
-	if app.Config.SMESHING.Start {
-		if app.Config.SMESHING.CoinbaseAccount == "" {
-			return fmt.Errorf("smeshing enabled but no coinbase account provided")
-		}
-		if len(app.signers) > 1 {
-			return fmt.Errorf("supervised smeshing cannot be started in a multi-smeshing setup")
-		}
-		if err := app.postSupervisor.Start(
-			app.Config.SMESHING.Opts,
-			app.signers[0],
-		); err != nil {
-			return fmt.Errorf("start post service: %w", err)
-		}
-	} else if len(app.signers) == 1 && app.signers[0].Name() == supervisedIDKeyFileName {
-		// supervised setup but not started
-		app.log.Info("smeshing not started, waiting to be triggered via smesher api")
-	}
-
 	if app.ptimesync != nil {
 		app.ptimesync.Start()
 	}
@@ -1440,8 +1425,8 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 			app.atxBuilder,
 			app.postSupervisor,
 			app.Config.API.SmesherStreamInterval,
-			sig,
 			app.Config.SMESHING.Opts,
+			sig,
 		)
 		app.grpcServices[svc] = service
 		return service, nil
@@ -1598,6 +1583,38 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		if err := app.grpcPostServer.Start(); err != nil {
 			return err
 		}
+		host, port, err := net.SplitHostPort(app.grpcPostServer.BoundAddress)
+		if err != nil {
+			return fmt.Errorf("parse grpc-post-listener: %w", err)
+		}
+		ip := net.ParseIP(host)
+		if ip.IsUnspecified() { // 0.0.0.0 isn't a valid address to connect to on windows
+			host = "127.0.0.1"
+		}
+		app.Config.POSTService.NodeAddress = fmt.Sprintf("http://%s:%s", host, port)
+		svc, err := app.grpcService(grpcserver.Smesher, app.log)
+		if err != nil {
+			return err
+		}
+		svc.(*grpcserver.SmesherService).SetPostServiceConfig(app.Config.POSTService)
+		if app.Config.SMESHING.Start {
+			if app.Config.SMESHING.CoinbaseAccount == "" {
+				return errors.New("smeshing enabled but no coinbase account provided")
+			}
+			if len(app.signers) > 1 {
+				return errors.New("supervised smeshing cannot be started in a multi-smeshing setup")
+			}
+			if err := app.postSupervisor.Start(
+				app.Config.POSTService,
+				app.Config.SMESHING.Opts,
+				app.signers[0],
+			); err != nil {
+				return fmt.Errorf("start post service: %w", err)
+			}
+		} else if len(app.signers) == 1 && app.signers[0].Name() == supervisedIDKeyFileName {
+			// supervised setup but not started
+			app.log.Info("smeshing not started, waiting to be triggered via smesher api")
+		}
 	}
 
 	if len(authenticatedSvcs) > 0 && app.Config.API.TLSListener != "" {
@@ -1613,7 +1630,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 
 	if len(app.Config.API.JSONListener) > 0 {
 		if len(publicSvcs) == 0 {
-			return fmt.Errorf("start json server without public services")
+			return errors.New("start json server without public services")
 		}
 		app.jsonAPIServer = grpcserver.NewJSONHTTPServer(
 			app.Config.API.JSONListener,
@@ -2151,12 +2168,23 @@ type layerFetcher struct {
 	system.Fetcher
 }
 
-func decodeLoggers(cfg config.LoggerConfig) (map[string]string, error) {
-	rst := map[string]string{}
-	if err := mapstructure.Decode(cfg, &rst); err != nil {
-		return nil, fmt.Errorf("mapstructure decode: %w", err)
+func decodeLoggerLevel(cfg *config.Config, name string) (zap.AtomicLevel, error) {
+	lvl := zap.NewAtomicLevel()
+	loggers := map[string]string{}
+	if err := mapstructure.Decode(cfg.LOGGING, &loggers); err != nil {
+		return zap.AtomicLevel{}, fmt.Errorf("error decoding mapstructure: %w", err)
 	}
-	return rst, nil
+
+	level, ok := loggers[name]
+	if ok {
+		if err := lvl.UnmarshalText([]byte(level)); err != nil {
+			return zap.AtomicLevel{}, fmt.Errorf("cannot parse logging for %v: %w", name, err)
+		}
+	} else {
+		lvl.SetLevel(log.DefaultLevel())
+	}
+
+	return lvl, nil
 }
 
 type tortoiseWeakCoin struct {

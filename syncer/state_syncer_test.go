@@ -54,7 +54,8 @@ func TestProcessLayers_MultiLayers(t *testing.T) {
 		lid := lid
 		ts.mLyrPatrol.EXPECT().IsHareInCharge(lid).Return(false)
 		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid, true, peers).DoAndReturn(
-			func(context.Context, types.LayerID, bool, []p2p.Peer) ([]*fetch.LayerOpinion, []*types.Certificate, error) {
+			func(context.Context, types.LayerID, bool, []p2p.Peer,
+			) ([]*fetch.LayerOpinion, []*types.Certificate, error) {
 				prevLid := lid.Sub(1)
 				prevHash, err := layers.GetAggregatedHash(ts.cdb, prevLid)
 				require.NoError(t, err)

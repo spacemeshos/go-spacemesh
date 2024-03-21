@@ -11,7 +11,7 @@ import (
 type Config struct {
 	// Security parameter (for calculating ATX threshold)
 	Kappa int `mapstructure:"beacon-kappa"`
-	// Ratio of dishonest spacetime (for calculating ATX threshold). It should be a string representing a rational number.
+	// Ratio of dishonest spacetime (for calculating ATX threshold). Should be a string representing a rational number.
 	Q big.Rat `mapstructure:"beacon-q"`
 	// Amount of rounds in every epoch
 	RoundsNumber types.RoundID `mapstructure:"beacon-rounds-number"`

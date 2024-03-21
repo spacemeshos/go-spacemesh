@@ -259,10 +259,7 @@ func Test_HandleOwnGossip(t *testing.T) {
 	require.NoError(t, err)
 	tx := newTx(t, 3, 10, 1, signer)
 
-	require.Equal(t,
-		nil,
-		th.HandleGossipTransaction(context.Background(), id, tx.Raw),
-	)
+	require.NoError(t, th.HandleGossipTransaction(context.Background(), id, tx.Raw))
 }
 
 func Test_HandleProposal(t *testing.T) {

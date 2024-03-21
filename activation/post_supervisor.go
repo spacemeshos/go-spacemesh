@@ -66,7 +66,6 @@ type PostSupervisorConfig struct {
 type PostSupervisor struct {
 	logger *zap.Logger
 
-	cmdCfg      PostSupervisorConfig
 	postCfg     PostConfig
 	provingOpts PostProvingOpts
 
@@ -83,25 +82,19 @@ type PostSupervisor struct {
 // NewPostSupervisor returns a new post service.
 func NewPostSupervisor(
 	logger *zap.Logger,
-	cmdCfg PostSupervisorConfig,
 	postCfg PostConfig,
 	provingOpts PostProvingOpts,
 	postSetupProvider postSetupProvider,
 	atxBuilder AtxBuilder,
-) (*PostSupervisor, error) {
-	if _, err := os.Stat(cmdCfg.PostServiceCmd); err != nil {
-		return nil, fmt.Errorf("post service binary not found: %s", cmdCfg.PostServiceCmd)
-	}
-
+) *PostSupervisor {
 	return &PostSupervisor{
 		logger:      logger,
-		cmdCfg:      cmdCfg,
 		postCfg:     postCfg,
 		provingOpts: provingOpts,
 
 		postSetupProvider: postSetupProvider,
 		atxBuilder:        atxBuilder,
-	}, nil
+	}
 }
 
 func (ps *PostSupervisor) Config() PostConfig {
@@ -137,11 +130,15 @@ func (ps *PostSupervisor) Status() *PostSetupStatus {
 	return ps.postSetupProvider.Status()
 }
 
-func (ps *PostSupervisor) Start(opts PostSetupOpts, sig *signing.EdSigner) error {
+func (ps *PostSupervisor) Start(cmdCfg PostSupervisorConfig, opts PostSetupOpts, sig *signing.EdSigner) error {
 	ps.mtx.Lock()
 	defer ps.mtx.Unlock()
 	if ps.stop != nil {
-		return fmt.Errorf("post service already started")
+		return errors.New("post service already started")
+	}
+
+	if _, err := os.Stat(cmdCfg.PostServiceCmd); err != nil {
+		return fmt.Errorf("stat post service binary %s: %w", cmdCfg.PostServiceCmd, err)
 	}
 
 	// TODO(mafa): verify that opts don't delete existing files
@@ -171,7 +168,7 @@ func (ps *PostSupervisor) Start(opts PostSetupOpts, sig *signing.EdSigner) error
 		}
 		ps.atxBuilder.Register(sig)
 
-		return ps.runCmd(ctx, ps.cmdCfg, ps.postCfg, opts, ps.provingOpts, sig.NodeID())
+		return ps.runCmd(ctx, cmdCfg, ps.postCfg, opts, ps.provingOpts, sig.NodeID())
 	})
 	return nil
 }

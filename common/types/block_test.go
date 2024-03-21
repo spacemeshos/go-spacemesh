@@ -113,9 +113,9 @@ func Test_BlockIDCompare(t *testing.T) {
 	testBlockID_2 := types.BlockID{2, 2}
 	testBlockID_3 := types.BlockID{3, 3}
 
-	require.Equal(t, false, testBlockID_2.Compare(testBlockID_2))
-	require.Equal(t, false, testBlockID_2.Compare(testBlockID_1))
-	require.Equal(t, true, testBlockID_2.Compare(testBlockID_3))
+	require.False(t, testBlockID_2.Compare(testBlockID_2))
+	require.False(t, testBlockID_2.Compare(testBlockID_1))
+	require.True(t, testBlockID_2.Compare(testBlockID_3))
 }
 
 func Test_SortBlockIDs(t *testing.T) {

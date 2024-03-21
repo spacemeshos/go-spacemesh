@@ -498,7 +498,6 @@ func waitPod(ctx *testcontext.Context, id string) (*apiv1.Pod, error) {
 	}
 	defer watcher.Stop()
 	for {
-		var pod *apiv1.Pod
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -506,7 +505,10 @@ func waitPod(ctx *testcontext.Context, id string) (*apiv1.Pod, error) {
 			if !open {
 				return nil, fmt.Errorf("watcher is terminated while waiting for pod with id %v", id)
 			}
-			pod = ev.Object.(*apiv1.Pod)
+			pod, ok := ev.Object.(*apiv1.Pod)
+			if !ok {
+				continue
+			}
 			if pod.Status.Phase == apiv1.PodRunning && areContainersReady(pod) {
 				return pod, nil
 			}
@@ -1115,11 +1117,11 @@ func PoetRestListen(port int) DeploymentFlag {
 }
 
 func StartSmeshing(start bool) DeploymentFlag {
-	return DeploymentFlag{Name: "--smeshing-start", Value: fmt.Sprintf("%v", start)}
+	return DeploymentFlag{Name: "--smeshing-start", Value: strconv.FormatBool(start)}
 }
 
 func GenerateFallback() DeploymentFlag {
-	return DeploymentFlag{Name: "--fallback", Value: fmt.Sprintf("%v", true)}
+	return DeploymentFlag{Name: "--fallback", Value: strconv.FormatBool(true)}
 }
 
 func SmesherKey(key ed25519.PrivateKey) DeploymentFlag {
@@ -1127,9 +1129,9 @@ func SmesherKey(key ed25519.PrivateKey) DeploymentFlag {
 }
 
 func Bootnode() DeploymentFlag {
-	return DeploymentFlag{Name: "--p2p-bootnode", Value: fmt.Sprintf("%v", true)}
+	return DeploymentFlag{Name: "--p2p-bootnode", Value: strconv.FormatBool(true)}
 }
 
 func PrivateNetwork() DeploymentFlag {
-	return DeploymentFlag{Name: "--p2p-private-network", Value: fmt.Sprintf("%v", true)}
+	return DeploymentFlag{Name: "--p2p-private-network", Value: strconv.FormatBool(true)}
 }

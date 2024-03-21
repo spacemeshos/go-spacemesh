@@ -219,7 +219,7 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
 		trt.EXPECT().OnMalfeasance(sig.NodeID())
-		require.Equal(t, nil, h.HandleMalfeasanceProof(context.Background(), "peer", data))
+		require.NoError(t, h.HandleMalfeasanceProof(context.Background(), "peer", data))
 
 		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.NoError(t, err)
@@ -252,7 +252,7 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 		require.NotEqual(t, gossip.MalfeasanceProof, *malProof)
 
 		trt.EXPECT().OnMalfeasance(sig.NodeID())
-		require.Equal(t, nil, h.HandleMalfeasanceProof(context.Background(), "self", data))
+		require.NoError(t, h.HandleMalfeasanceProof(context.Background(), "self", data))
 		malProof, err = identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.NoError(t, err)
 		require.NotEqual(t, gossip.MalfeasanceProof, *malProof)
@@ -441,7 +441,7 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
 		trt.EXPECT().OnMalfeasance(sig.NodeID())
-		require.Equal(t, nil, h.HandleMalfeasanceProof(context.Background(), "peer", data))
+		require.NoError(t, h.HandleMalfeasanceProof(context.Background(), "peer", data))
 
 		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.NoError(t, err)
@@ -473,7 +473,7 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 		require.NotEqual(t, gossip.MalfeasanceProof, *malProof)
 
 		trt.EXPECT().OnMalfeasance(sig.NodeID())
-		require.Equal(t, nil, h.HandleMalfeasanceProof(context.Background(), "self", data))
+		require.NoError(t, h.HandleMalfeasanceProof(context.Background(), "self", data))
 		malProof, err = identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.NoError(t, err)
 		require.NotEqual(t, gossip.MalfeasanceProof, *malProof)
@@ -677,7 +677,7 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
 		trt.EXPECT().OnMalfeasance(sig.NodeID())
-		require.Equal(t, nil, h.HandleMalfeasanceProof(context.Background(), "peer", data))
+		require.NoError(t, h.HandleMalfeasanceProof(context.Background(), "peer", data))
 
 		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.NoError(t, err)
@@ -709,7 +709,7 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 		require.NotEqual(t, gossip.MalfeasanceProof, *malProof)
 
 		trt.EXPECT().OnMalfeasance(sig.NodeID())
-		require.Equal(t, nil, h.HandleMalfeasanceProof(context.Background(), "self", data))
+		require.NoError(t, h.HandleMalfeasanceProof(context.Background(), "self", data))
 		malProof, err = identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.NoError(t, err)
 		require.NotEqual(t, gossip.MalfeasanceProof, *malProof)
@@ -1142,7 +1142,8 @@ func TestHandler_HandleMalfeasanceProof_InvalidPostIndex(t *testing.T) {
 			},
 		}
 
-		postVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("invalid"))
+		postVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(errors.New("invalid"))
 		trt.EXPECT().OnMalfeasance(sig.NodeID())
 		err := h.HandleSyncedMalfeasanceProof(context.Background(), nodeIdH32, "peer", codec.MustEncode(&proof))
 		require.NoError(t, err)

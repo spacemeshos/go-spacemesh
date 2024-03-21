@@ -411,16 +411,16 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 			return true
 		}
 		// always sync to currentLayer-1 to reduce race with gossip and hare/tortoise
-		for layerID := s.getLastSyncedLayer().Add(1); layerID.Before(s.ticker.CurrentLayer()); layerID = layerID.Add(1) {
-			if err := s.syncLayer(ctx, layerID); err != nil {
+		for layer := s.getLastSyncedLayer().Add(1); layer.Before(s.ticker.CurrentLayer()); layer = layer.Add(1) {
+			if err := s.syncLayer(ctx, layer); err != nil {
 				if !errors.Is(err, context.Canceled) {
 					// BatchError spams too much, in case of no progress enable debug mode for sync
 					s.logger.With().
-						Debug("failed to sync layer", log.Context(ctx), log.Err(err), layerID)
+						Debug("failed to sync layer", log.Context(ctx), log.Err(err), layer)
 				}
 				return false
 			}
-			s.setLastSyncedLayer(layerID)
+			s.setLastSyncedLayer(layer)
 		}
 		s.logger.WithContext(ctx).With().Debug("data is synced",
 			log.Stringer("current", s.ticker.CurrentLayer()),

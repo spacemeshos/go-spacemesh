@@ -266,7 +266,7 @@ func TestEncodeAbstainVotesForZdist(t *testing.T) {
 		votes, err := tortoise.EncodeVotes(context.Background(), EncodeVotesWithCurrent(current))
 		require.NoError(t, err)
 		require.Len(t, votes.Support, 1)
-		require.Len(t, votes.Against, 0)
+		require.Empty(t, votes.Against)
 
 		if i > zdist+1 {
 			require.Len(t, votes.Abstain, zdist, "abstain is limited by zdist: %+v", votes.Abstain)
@@ -315,8 +315,8 @@ func TestEncodeAbstainVotesDelayedHare(t *testing.T) {
 			ID: block.ID(), LayerID: block.LayerIndex, Height: block.TickHeight,
 		})
 	}
-	require.Equal(t, votes.Support, supported)
-	require.Equal(t, votes.Abstain, []types.LayerID{types.LayerID(9)})
+	require.Equal(t, supported, votes.Support)
+	require.Equal(t, []types.LayerID{types.LayerID(9)}, votes.Abstain)
 }
 
 func defaultTestConfig() Config {
@@ -496,7 +496,7 @@ func TestComputeExpectedWeight(t *testing.T) {
 			}
 
 			weight := computeExpectedWeight(epochs, tc.target, tc.last)
-			require.Equal(t, tc.expect, weight.Float())
+			require.InEpsilon(t, tc.expect, weight.Float(), 0.0001)
 		})
 	}
 }
@@ -816,15 +816,15 @@ func TestBallotHasGoodBeacon(t *testing.T) {
 
 	trtl.OnBeacon(layerID.GetEpoch(), epochBeacon)
 	badBeacon, err := trtl.trtl.compareBeacons(ballot.ID(), ballot.Layer, epochBeacon)
-	assert.NoError(t, err)
-	assert.False(t, badBeacon)
+	require.NoError(t, err)
+	require.False(t, badBeacon)
 
 	// bad beacon
 	beacon := types.RandomBeacon()
 	require.NotEqual(t, epochBeacon, beacon)
 	badBeacon, err = trtl.trtl.compareBeacons(ballot.ID(), ballot.Layer, beacon)
-	assert.NoError(t, err)
-	assert.True(t, badBeacon)
+	require.NoError(t, err)
+	require.True(t, badBeacon)
 }
 
 func TestBallotsNotProcessedWithoutBeacon(t *testing.T) {
@@ -1660,7 +1660,7 @@ func TestComputeBallotWeight(t *testing.T) {
 
 				trtl.OnBallot(ballot.ToTortoiseData())
 				ref := trtl.trtl.ballotRefs[ballot.ID()]
-				require.Equal(t, b.ExpectedWeight, ref.weight.Float())
+				require.InEpsilon(t, b.ExpectedWeight, ref.weight.Float(), 0.0001)
 			}
 		})
 	}
@@ -1951,7 +1951,7 @@ func TestLateBlock(t *testing.T) {
 	require.NoError(t, err)
 	var block types.Block
 	require.NoError(t, codec.Decode(buf, &block))
-	require.True(t, len(block.TxIDs) > 2)
+	require.Greater(t, len(block.TxIDs), 2)
 	block.TxIDs = block.TxIDs[:2]
 	block.Initialize()
 	tortoise.OnBlock(block.ToVote())
@@ -2043,9 +2043,9 @@ func TestStateManagement(t *testing.T) {
 		for _, ballot := range tortoise.trtl.ballots[lid] {
 			require.Contains(t, tortoise.trtl.ballotRefs, ballot.id, "layer %s", lid)
 			for current := ballot.votes.tail; current != nil; current = current.prev {
-				require.True(
+				require.False(
 					t,
-					!current.lid.Before(evicted),
+					current.lid.Before(evicted),
 					"no votes for layers before evicted (evicted %s, in state %s, ballot %s)",
 					evicted,
 					current.lid,
@@ -2328,7 +2328,7 @@ func TestSwitchMode(t *testing.T) {
 		tortoise.TallyVotes(ctx, last)
 		layer := tortoise.trtl.layer(types.GetEffectiveGenesis().Add(1))
 		require.Len(t, layer.blocks, 1)
-		require.Equal(t, layer.blocks[0].validity, against)
+		require.Equal(t, against, layer.blocks[0].validity)
 
 		block := layer.blocks[0]
 		last = s.Next(sim.WithNumBlocks(1), sim.WithVoteGenerator(addSupport(types.Vote{
@@ -3362,7 +3362,7 @@ func TestBaseAbstain(t *testing.T) {
 	require.NoError(t, err)
 	base := s.smesher(0).atx(1).ballot(2)
 	require.Equal(t, op.Base, base.ID)
-	require.Equal(t, op.Abstain, []types.LayerID{base.Layer})
+	require.Equal(t, []types.LayerID{base.Layer}, op.Abstain)
 	require.Empty(t, op.Support)
 	require.Empty(t, op.Against)
 }

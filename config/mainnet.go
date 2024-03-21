@@ -21,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
+	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
@@ -192,5 +193,10 @@ func MainnetConfig() Config {
 		},
 		Recovery: checkpoint.DefaultConfig(),
 		Cache:    datastore.DefaultConfig(),
+		ActiveSet: miner.ActiveSetPreparation{
+			Window:        60 * time.Minute,
+			RetryInterval: time.Minute,
+			Tries:         20,
+		},
 	}
 }

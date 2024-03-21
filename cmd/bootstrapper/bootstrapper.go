@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -76,7 +77,7 @@ var cmd = &cobra.Command{
 	Short: "generate bootstrapping data",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 0 {
-			return fmt.Errorf("epoch not specified")
+			return errors.New("epoch not specified")
 		}
 		var targetEpochs []types.EpochID
 		epochs := strings.Split(args[0], ",")
@@ -112,17 +113,17 @@ var cmd = &cobra.Command{
 		}
 
 		if len(targetEpochs) != 1 {
-			return fmt.Errorf("too many epochs specified")
+			return errors.New("too many epochs specified")
 		}
 		// one-time execution
 		if !genBeacon && !genActiveSet {
-			return fmt.Errorf("no action specified via --beacon or --actives")
+			return errors.New("no action specified via --beacon or --actives")
 		}
 		if genBeacon && len(bitcoinEndpoint) == 0 {
-			return fmt.Errorf("missing bitcoin endpoint for beacon generation")
+			return errors.New("missing bitcoin endpoint for beacon generation")
 		}
 		if genActiveSet && len(spacemeshEndpoint) == 0 {
-			return fmt.Errorf("missing spacemesh endpoint for active set generation")
+			return errors.New("missing spacemesh endpoint for active set generation")
 		}
 		gsBucket, gsPath, err := parseToGsBucket(out)
 		if err != nil {
