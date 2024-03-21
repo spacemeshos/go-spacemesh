@@ -378,7 +378,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 			Params: *powParams,
 		}
 	} else {
-		logger.Info("registering with a certificate", zap.Binary("cert", auth.PoetCert))
+		logger.Info("registering with a certificate", zap.Binary("cert", auth.PoetCert.Data))
 	}
 
 	logger.Debug("submitting challenge to poet proving service")

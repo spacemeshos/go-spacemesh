@@ -12,6 +12,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
 
@@ -119,15 +120,9 @@ type SmeshingProvider interface {
 	SetCoinbase(coinbase types.Address)
 }
 
-type PoetCert []byte
-
-func (c PoetCert) Bytes() []byte {
-	return c
-}
-
 type PoetAuth struct {
 	*PoetPoW
-	PoetCert
+	*certifier.PoetCert
 }
 
 // PoetClient servers as an interface to communicate with a PoET server.
@@ -162,22 +157,22 @@ type certifierClient interface {
 	// The ID for which this client certifies.
 	Id() types.NodeID
 	// Certify the ID in the given certifier.
-	Certify(ctx context.Context, url *url.URL, pubkey []byte) (PoetCert, error)
+	Certify(ctx context.Context, url *url.URL, pubkey []byte) (*certifier.PoetCert, error)
 }
 
 // certifierService is used to certify nodeID for registerting in the poet.
 // It holds the certificates and can recertify if needed.
 type certifierService interface {
 	// Acquire a certificate for the given poet.
-	GetCertificate(poet string) PoetCert
+	GetCertificate(poet string) *certifier.PoetCert
 	// Recertify the nodeID and return a certificate confirming that
 	// it is verified. The certificate can be later used to submit in poet.
-	Recertify(ctx context.Context, poet PoetClient) (PoetCert, error)
+	Recertify(ctx context.Context, poet PoetClient) (*certifier.PoetCert, error)
 
 	// Certify the nodeID for all given poets.
 	// It won't recertify poets that already have a certificate.
 	// It returns a map of a poet address to a certificate for it.
-	CertifyAll(ctx context.Context, poets []PoetClient) map[string]PoetCert
+	CertifyAll(ctx context.Context, poets []PoetClient) map[string]*certifier.PoetCert
 }
 
 type poetDbAPI interface {

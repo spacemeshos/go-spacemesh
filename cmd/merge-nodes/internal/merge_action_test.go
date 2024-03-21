@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -21,7 +22,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
-	"github.com/spacemeshos/post/shared"
 )
 
 func Test_MergeDBs_InvalidTargetScheme(t *testing.T) {

@@ -41,7 +41,7 @@ require (
 	github.com/spacemeshos/fixed v0.1.1
 	github.com/spacemeshos/go-scale v1.1.13
 	github.com/spacemeshos/merkle-tree v0.2.3
-	github.com/spacemeshos/poet v0.10.2
+	github.com/spacemeshos/poet v0.10.3-0.20240321171438-96878e4dfa8d
 	github.com/spacemeshos/post v0.12.5
 	github.com/spf13/afero v1.11.0
 	github.com/spf13/cobra v1.8.0
@@ -216,7 +216,7 @@ require (
 	google.golang.org/api v0.167.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/genproto v0.0.0-20240213162025-012b6fc9bca9 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20240304161311-37d4d3c04a78 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20240304212257-790db918fca8 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect

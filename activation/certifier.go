@@ -14,12 +14,15 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-retryablehttp"
+	"github.com/spacemeshos/poet/shared"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
 	certifier_db "github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
 )
 
@@ -97,8 +100,9 @@ type CertifyRequest struct {
 }
 
 type CertifyResponse struct {
-	Signature []byte `json:"signature"`
-	PubKey    []byte `json:"pub_key"`
+	Certificate []byte `json:"certificate"`
+	Signature   []byte `json:"signature"`
+	PubKey      []byte `json:"pub_key"`
 }
 
 type Certifier struct {
@@ -121,7 +125,7 @@ func NewCertifier(
 	return c
 }
 
-func (c *Certifier) GetCertificate(poet string) PoetCert {
+func (c *Certifier) GetCertificate(poet string) *certifier.PoetCert {
 	cert, err := certifier_db.Certificate(c.db, c.client.Id(), poet)
 	switch {
 	case err == nil:
@@ -132,7 +136,7 @@ func (c *Certifier) GetCertificate(poet string) PoetCert {
 	return nil
 }
 
-func (c *Certifier) Recertify(ctx context.Context, poet PoetClient) (PoetCert, error) {
+func (c *Certifier) Recertify(ctx context.Context, poet PoetClient) (*certifier.PoetCert, error) {
 	url, pubkey, err := poet.CertifierInfo(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("querying certifier info: %w", err)
@@ -142,7 +146,7 @@ func (c *Certifier) Recertify(ctx context.Context, poet PoetClient) (PoetCert, e
 		return nil, fmt.Errorf("certifying POST for %s at %v: %w", poet.Address(), url, err)
 	}
 
-	if err := certifier_db.AddCertificate(c.db, c.client.Id(), cert.Bytes(), poet.Address()); err != nil {
+	if err := certifier_db.AddCertificate(c.db, c.client.Id(), *cert, poet.Address()); err != nil {
 		c.logger.Warn("failed to persist poet cert", zap.Error(err))
 	}
 
@@ -153,8 +157,8 @@ func (c *Certifier) Recertify(ctx context.Context, poet PoetClient) (PoetCert, e
 // It optimizes the number of certification requests by taking a unique set of
 // certifiers among the given poets and sending a single request to each of them.
 // It returns a map of a poet address to a certificate for it.
-func (c *Certifier) CertifyAll(ctx context.Context, poets []PoetClient) map[string]PoetCert {
-	certs := make(map[string]PoetCert)
+func (c *Certifier) CertifyAll(ctx context.Context, poets []PoetClient) map[string]*certifier.PoetCert {
+	certs := make(map[string]*certifier.PoetCert)
 	poetsToCertify := []PoetClient{}
 	for _, poet := range poets {
 		if cert := c.GetCertificate(poet.Address()); cert != nil {
@@ -230,10 +234,11 @@ func (c *Certifier) CertifyAll(ctx context.Context, poets []PoetClient) map[stri
 		c.logger.Info(
 			"successfully obtained certificate",
 			zap.Stringer("certifier", svc.url),
-			zap.Binary("cert", cert.Bytes()),
+			zap.Binary("cert data", cert.Data),
+			zap.Binary("cert signature", cert.Signature),
 		)
 		for _, poet := range svc.poets {
-			if err := certifier_db.AddCertificate(c.db, c.client.Id(), cert.Bytes(), poet); err != nil {
+			if err := certifier_db.AddCertificate(c.db, c.client.Id(), *cert, poet); err != nil {
 				c.logger.Warn("failed to persist poet cert", zap.Error(err))
 			}
 			certs[poet] = cert
@@ -269,7 +274,7 @@ func NewCertifierClient(
 ) *CertifierClient {
 	c := &CertifierClient{
 		client:   retryablehttp.NewClient(),
-		logger:   logger,
+		logger:   logger.With(log.ZShortStringer("smesherID", postInfo.NodeID)),
 		post:     post,
 		postInfo: postInfo,
 		postCh:   postCh,
@@ -294,7 +299,7 @@ func (c *CertifierClient) Id() types.NodeID {
 	return c.postInfo.NodeID
 }
 
-func (c *CertifierClient) Certify(ctx context.Context, url *url.URL, pubkey []byte) (PoetCert, error) {
+func (c *CertifierClient) Certify(ctx context.Context, url *url.URL, pubkey []byte) (*certifier.PoetCert, error) {
 	request := CertifyRequest{
 		Proof: ProofToCertify{
 			Pow:     c.post.Pow,
@@ -341,8 +346,25 @@ func (c *CertifierClient) Certify(ctx context.Context, url *url.URL, pubkey []by
 	if !bytes.Equal(certRespose.PubKey, pubkey) {
 		return nil, errors.New("pubkey is invalid")
 	}
-	if !ed25519.Verify(pubkey, c.postInfo.NodeID[:], certRespose.Signature) {
+	if !ed25519.Verify(pubkey, certRespose.Certificate, certRespose.Signature) {
 		return nil, errors.New("signature is invalid")
 	}
-	return certRespose.Signature, nil
+	cert, err := shared.DecodeCert(certRespose.Certificate)
+	if err != nil {
+		return nil, fmt.Errorf("decoding certificate: %w", err)
+	}
+	if !bytes.Equal(cert.Pubkey, c.Id().Bytes()) {
+		return nil, errors.New("certificate pubkey doesn't match node ID")
+	}
+	if cert.Expiration != nil {
+		c.logger.Info("certificate has expiration date", zap.Time("expiration", *cert.Expiration))
+		if time.Until(*cert.Expiration) < 0 {
+			return nil, errors.New("certificate is expired")
+		}
+	}
+
+	return &certifier.PoetCert{
+		Data:      certRespose.Certificate,
+		Signature: certRespose.Signature,
+	}, nil
 }

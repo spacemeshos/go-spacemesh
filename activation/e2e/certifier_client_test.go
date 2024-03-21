@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/poet/registration"
+	poetShared "github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
@@ -150,10 +151,15 @@ func (c *testCertifier) certify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Certify nodeID
+	certData, err := poetShared.EncodeCert(&poetShared.Cert{Pubkey: req.Metadata.NodeId})
+	if err != nil {
+		panic(fmt.Sprintf("encoding cert: %v", err))
+	}
+
 	resp := activation.CertifyResponse{
-		Signature: ed25519.Sign(c.privKey, req.Metadata.NodeId),
-		PubKey:    c.privKey.Public().(ed25519.PublicKey),
+		Certificate: certData,
+		Signature:   ed25519.Sign(c.privKey, certData),
+		PubKey:      c.privKey.Public().(ed25519.PublicKey),
 	}
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		http.Error(w, fmt.Sprintf("encoding response: %v", err), http.StatusInternalServerError)

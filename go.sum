@@ -570,8 +570,8 @@ github.com/spacemeshos/go-scale v1.1.13 h1:y5rl/qmN0tE38ErpCeq8Ofq4+fCKRWF1qUIjA
 github.com/spacemeshos/go-scale v1.1.13/go.mod h1:HV6e3/X5h9u2aFpYKJxt7PY/fBuLBegEKWgeZJ+/5jE=
 github.com/spacemeshos/merkle-tree v0.2.3 h1:zGEgOR9nxAzJr0EWjD39QFngwFEOxfxMloEJZtAysas=
 github.com/spacemeshos/merkle-tree v0.2.3/go.mod h1:VomOcQ5pCBXz7goiWMP5hReyqOfDXGSKbrH2GB9Htww=
-github.com/spacemeshos/poet v0.10.2 h1:FVb0xgCFcjZyIGBQ92SlOZVx4KCmlCRRL4JSHL6LMGU=
-github.com/spacemeshos/poet v0.10.2/go.mod h1:73ROEXGladw3RbvhAk0sIGi/ttfpo+ASUBRvnBK55N8=
+github.com/spacemeshos/poet v0.10.3-0.20240321171438-96878e4dfa8d h1:hTTVfcln6E04eCDfcdydApzsJtfMJ02gMT8JXQQwgRw=
+github.com/spacemeshos/poet v0.10.3-0.20240321171438-96878e4dfa8d/go.mod h1:+H37RV00jlztjRvKML/cBp/DIAGCweOgjNGaI814+W8=
 github.com/spacemeshos/post v0.12.5 h1:kIqweQ2vzojd6/+KAfw4x0CCYEbgo9BPdYdsqHDKXlE=
 github.com/spacemeshos/post v0.12.5/go.mod h1:NEstvZ4BKHuiGTcb+H+cQsZiNSh0G7GOLjZv6jjnHxM=
 github.com/spacemeshos/sha256-simd v0.1.0 h1:G7Mfu5RYdQiuE+wu4ZyJ7I0TI74uqLhFnKblEnSpjYI=
@@ -844,8 +844,8 @@ google.golang.org/genproto v0.0.0-20200423170343-7949de9c1215/go.mod h1:55QSHmfG
 google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013/go.mod h1:NbSheEEYHJ7i3ixzK3sjbqSGDJWnxyFXZblF3eUsNvo=
 google.golang.org/genproto v0.0.0-20240213162025-012b6fc9bca9 h1:9+tzLLstTlPTRyJTh+ah5wIMsBW5c4tQwGTN3thOW9Y=
 google.golang.org/genproto v0.0.0-20240213162025-012b6fc9bca9/go.mod h1:mqHbVIp48Muh7Ywss/AD6I5kNVKZMmAa/QEW58Gxp2s=
-google.golang.org/genproto/googleapis/api v0.0.0-20240304161311-37d4d3c04a78 h1:SzXBGiWM1LNVYLCRP3e0/Gsze804l4jGoJ5lYysEO5I=
-google.golang.org/genproto/googleapis/api v0.0.0-20240304161311-37d4d3c04a78/go.mod h1:O1cOfN1Cy6QEYr7VxtjOyP5AdAuR0aJ/MYZaaof623Y=
+google.golang.org/genproto/googleapis/api v0.0.0-20240304212257-790db918fca8 h1:8eadJkXbwDEMNwcB5O0s5Y5eCfyuCLdvaiOIaGTrWmQ=
+google.golang.org/genproto/googleapis/api v0.0.0-20240304212257-790db918fca8/go.mod h1:O1cOfN1Cy6QEYr7VxtjOyP5AdAuR0aJ/MYZaaof623Y=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20240318140521-94a12d6c2237 h1:NnYq6UN9ReLM9/Y01KWNOWyI5xQ9kbIms5GGJVwS/Yc=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20240318140521-94a12d6c2237/go.mod h1:WtryC6hu0hhx87FDGxWCDptyssuo68sk10vYjF+T9fY=
 google.golang.org/grpc v1.14.0/go.mod h1:yo6s7OP7yaDglbqo1J04qKzAhqBH6lvTonzMVmEdcZw=

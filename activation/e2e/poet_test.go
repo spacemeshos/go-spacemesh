@@ -11,6 +11,7 @@ import (
 
 	"github.com/spacemeshos/poet/registration"
 	"github.com/spacemeshos/poet/server"
+	"github.com/spacemeshos/poet/shared"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
@@ -18,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
 )
 
 // HTTPPoetTestHarness utilizes a local self-contained poet server instance
@@ -139,6 +141,10 @@ func TestHTTPPoet(t *testing.T) {
 	prefix := bytes.Join([][]byte{signer.Prefix(), {byte(signing.POET)}}, nil)
 
 	t.Run("submit with cert", func(t *testing.T) {
+		cert := shared.Cert{Pubkey: signer.NodeID().Bytes()}
+		encoded, err := shared.EncodeCert(&cert)
+		require.NoError(t, err)
+
 		poetRound, err := client.Submit(
 			context.Background(),
 			time.Time{},
@@ -147,7 +153,10 @@ func TestHTTPPoet(t *testing.T) {
 			signature,
 			signer.NodeID(),
 			activation.PoetAuth{
-				PoetCert: ed25519.Sign(certPrivKey, signer.NodeID().Bytes()),
+				PoetCert: &certifier.PoetCert{
+					Data:      encoded,
+					Signature: ed25519.Sign(certPrivKey, encoded),
+				},
 			},
 		)
 		require.NoError(t, err)
@@ -161,7 +170,7 @@ func TestHTTPPoet(t *testing.T) {
 			ch.Bytes(),
 			signature,
 			signer.NodeID(),
-			activation.PoetAuth{PoetCert: activation.PoetCert("oops")},
+			activation.PoetAuth{PoetCert: &certifier.PoetCert{Data: []byte("oops")}},
 		)
 		require.ErrorIs(t, err, activation.ErrUnathorized)
 	})

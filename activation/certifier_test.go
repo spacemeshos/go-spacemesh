@@ -12,14 +12,16 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
 )
 
 func TestPersistsCerts(t *testing.T) {
 	client := activation.NewMockcertifierClient(gomock.NewController(t))
 	client.EXPECT().Id().AnyTimes().Return(types.RandomNodeID())
 	db := localsql.InMemory()
+	cert := &certifier.PoetCert{Data: []byte("cert"), Signature: []byte("sig")}
 	{
-		certifier := activation.NewCertifier(db, zaptest.NewLogger(t), client)
+		c := activation.NewCertifier(db, zaptest.NewLogger(t), client)
 
 		poetMock := activation.NewMockPoetClient(gomock.NewController(t))
 		poetMock.EXPECT().Address().Return("http://poet")
@@ -29,21 +31,21 @@ func TestPersistsCerts(t *testing.T) {
 
 		client.EXPECT().
 			Certify(gomock.Any(), &url.URL{Scheme: "http", Host: "certifier.org"}, []byte("pubkey")).
-			Return(activation.PoetCert("cert"), nil)
+			Return(cert, nil)
 
-		require.Nil(t, certifier.GetCertificate("http://poet"))
-		certs, err := certifier.Recertify(context.Background(), poetMock)
+		require.Nil(t, c.GetCertificate("http://poet"))
+		got, err := c.Recertify(context.Background(), poetMock)
 		require.NoError(t, err)
-		require.Equal(t, activation.PoetCert("cert"), certs)
+		require.Equal(t, cert, got)
 
-		cert := certifier.GetCertificate("http://poet")
-		require.Equal(t, activation.PoetCert("cert"), cert)
-		require.Nil(t, certifier.GetCertificate("http://other-poet"))
+		got = c.GetCertificate("http://poet")
+		require.Equal(t, cert, got)
+		require.Nil(t, c.GetCertificate("http://other-poet"))
 	}
 	{
 		// Create new certifier and check that it loads the certs back.
-		certifier := activation.NewCertifier(db, zaptest.NewLogger(t), client)
-		cert := certifier.GetCertificate("http://poet")
-		require.Equal(t, activation.PoetCert("cert"), cert)
+		c := activation.NewCertifier(db, zaptest.NewLogger(t), client)
+		got := c.GetCertificate("http://poet")
+		require.Equal(t, cert, got)
 	}
 }
