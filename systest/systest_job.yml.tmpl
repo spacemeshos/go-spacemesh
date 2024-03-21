@@ -21,3 +21,6 @@ spec:
         imagePullPolicy: IfNotPresent
         name: {{ .Env.job_name}}
       restartPolicy: Never
+      {{ if (index .Env "rbac") }}
+      serviceAccount: {{ .Env.job_name }}
+      {{ end }}
