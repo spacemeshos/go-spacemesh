@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 	"io"
 	"io/fs"
 	"net/http"
@@ -216,6 +217,16 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	cfg.API.PublicListener = listener
 	app := New(WithConfig(cfg), WithLog(logtest.New(t)))
 	err := app.NewIdentity()
+	require.NoError(t, err)
+
+	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
+	require.NoError(t, err)
+
+	app.clock, err = timesync.NewClock(
+		timesync.WithLayerDuration(cfg.LayerDuration),
+		timesync.WithTickInterval(1*time.Second),
+		timesync.WithGenesisTime(gTime),
+		timesync.WithLogger(zaptest.NewLogger(t)))
 	require.NoError(t, err)
 
 	run := func(c *cobra.Command, args []string) error {
