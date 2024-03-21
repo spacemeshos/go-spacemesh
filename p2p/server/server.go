@@ -9,6 +9,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/connmgr"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
@@ -20,8 +21,19 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-// ErrNotConnected is returned when peer is not connected.
-var ErrNotConnected = errors.New("peer is not connected")
+type DecayingTagSpec struct {
+	Interval time.Duration `mapstructure:"interval"`
+	Inc      int           `mapstructure:"inc"`
+	Dec      int           `mapstructure:"dec"`
+	Cap      int           `mapstructure:"cap"`
+}
+
+var (
+	// ErrNotConnected is returned when peer is not connected.
+	ErrNotConnected = errors.New("peer is not connected")
+	// ErrPeerResponseFailed raised if peer responded with an error.
+	ErrPeerResponseFailed = errors.New("peer response failed")
+)
 
 // Opt is a type to configure a server.
 type Opt func(s *Server)
@@ -88,14 +100,46 @@ func WithRequestsPerInterval(n int, interval time.Duration) Opt {
 	}
 }
 
-// Handler is the handler to be defined by the application.
+func WithDecayingTag(tag DecayingTagSpec) Opt {
+	return func(s *Server) {
+		s.decayingTagSpec = &tag
+	}
+}
+
+// Handler is a handler to be defined by the application.
 type Handler func(context.Context, []byte) ([]byte, error)
+
+// StreamHandler is a handler that writes the response to the stream directly instead of
+// buffering the serialized representation.
+type StreamHandler func(context.Context, []byte, io.ReadWriter) error
+
+// StreamRequestCallback is a function that executes a streamed request.
+type StreamRequestCallback func(context.Context, io.ReadWriter) error
+
+// ServerError is used by the client (Request/StreamRequest) to represent an error
+// returned by the server.
+type ServerError struct {
+	msg string
+}
+
+func NewServerError(msg string) *ServerError {
+	return &ServerError{msg: msg}
+}
+
+func (*ServerError) Is(target error) bool {
+	_, ok := target.(*ServerError)
+	return ok
+}
+
+func (err *ServerError) Error() string {
+	return fmt.Sprintf("peer error: %s", err.msg)
+}
 
 //go:generate scalegen -types Response
 
 // Response is a server response.
 type Response struct {
-	Data  []byte `scale:"max=62914560"` // 60 MiB
+	Data  []byte `scale:"max=89128960"` // 85 MiB
 	Error string `scale:"max=1024"`     // TODO(mafa): make error code instead of string
 }
 
@@ -103,13 +147,15 @@ type Response struct {
 type Server struct {
 	logger              log.Log
 	protocol            string
-	handler             Handler
+	handler             StreamHandler
 	timeout             time.Duration
 	hardTimeout         time.Duration
 	requestLimit        int
 	queueSize           int
 	requestsPerInterval int
 	interval            time.Duration
+	decayingTagSpec     *DecayingTagSpec
+	decayingTag         connmgr.DecayingTag
 
 	metrics *tracker // metrics can be nil
 
@@ -117,7 +163,7 @@ type Server struct {
 }
 
 // New server for the handler.
-func New(h Host, proto string, handler Handler, opts ...Opt) *Server {
+func New(h Host, proto string, handler StreamHandler, opts ...Opt) *Server {
 	srv := &Server{
 		logger:              log.NewNop(),
 		protocol:            proto,
@@ -133,6 +179,23 @@ func New(h Host, proto string, handler Handler, opts ...Opt) *Server {
 	for _, opt := range opts {
 		opt(srv)
 	}
+
+	if srv.decayingTagSpec != nil {
+		decayer, supported := connmgr.SupportsDecay(h.ConnManager())
+		if supported {
+			tag, err := decayer.RegisterDecayingTag(
+				"server:"+proto,
+				srv.decayingTagSpec.Interval,
+				connmgr.DecayFixed(srv.decayingTagSpec.Dec),
+				connmgr.BumpSumBounded(0, srv.decayingTagSpec.Cap))
+			if err != nil {
+				srv.logger.Error("error registering decaying tag", log.Err(err))
+			} else {
+				srv.decayingTag = tag
+			}
+		}
+	}
+
 	return srv
 }
 
@@ -171,11 +234,17 @@ func (s *Server) Run(ctx context.Context) error {
 			eg.Wait()
 			return nil
 		case req := <-queue:
+			if s.metrics != nil {
+				s.metrics.inQueueLatency.Observe(time.Since(req.received).Seconds())
+			}
 			if err := limit.Wait(ctx); err != nil {
 				eg.Wait()
 				return nil
 			}
 			eg.Go(func() error {
+				if s.decayingTag != nil {
+					s.decayingTag.Bump(req.stream.Conn().RemotePeer(), s.decayingTagSpec.Inc)
+				}
 				ok := s.queueHandler(ctx, req.stream)
 				if s.metrics != nil {
 					s.metrics.serverLatency.Observe(time.Since(req.received).Seconds())
@@ -192,9 +261,8 @@ func (s *Server) Run(ctx context.Context) error {
 }
 
 func (s *Server) queueHandler(ctx context.Context, stream network.Stream) bool {
-	defer stream.Close()
-	defer stream.SetDeadline(time.Time{})
 	dadj := newDeadlineAdjuster(stream, s.timeout, s.hardTimeout)
+	defer dadj.Close()
 	rd := bufio.NewReader(dadj)
 	size, err := varint.ReadUvarint(rd)
 	if err != nil {
@@ -229,94 +297,83 @@ func (s *Server) queueHandler(ctx context.Context, stream network.Stream) bool {
 		return false
 	}
 	start := time.Now()
-	buf, err = s.handler(log.WithNewRequestID(ctx), buf)
-	s.logger.With().Debug("protocol handler execution time",
-		log.String("protocol", s.protocol),
-		log.Stringer("remotePeer", stream.Conn().RemotePeer()),
-		log.Stringer("remoteMultiaddr", stream.Conn().RemoteMultiaddr()),
-		log.Duration("duration", time.Since(start)),
-	)
-	var resp Response
-	if err != nil {
+	if err = s.handler(log.WithNewRequestID(ctx), buf, dadj); err != nil {
 		s.logger.With().Debug("handler reported error",
 			log.String("protocol", s.protocol),
 			log.Stringer("remotePeer", stream.Conn().RemotePeer()),
 			log.Stringer("remoteMultiaddr", stream.Conn().RemoteMultiaddr()),
 			log.Err(err),
 		)
-		resp.Error = err.Error()
-	} else {
-		resp.Data = buf
-	}
-
-	wr := bufio.NewWriter(dadj)
-	if _, err := codec.EncodeTo(wr, &resp); err != nil {
-		s.logger.With().Warning(
-			"failed to write response",
-			log.String("protocol", s.protocol),
-			log.Stringer("remotePeer", stream.Conn().RemotePeer()),
-			log.Stringer("remoteMultiaddr", stream.Conn().RemoteMultiaddr()),
-			log.Int("resp.Data len", len(resp.Data)),
-			log.Int("resp.Error len", len(resp.Error)),
-			log.Err(err),
-		)
 		return false
 	}
-	if err := wr.Flush(); err != nil {
-		s.logger.With().Warning("failed to flush stream",
-			log.String("protocol", s.protocol),
-			log.Stringer("remotePeer", stream.Conn().RemotePeer()),
-			log.Stringer("remoteMultiaddr", stream.Conn().RemoteMultiaddr()),
-			log.Err(err))
-		return false
-	}
-
+	s.logger.With().Debug("protocol handler execution time",
+		log.String("protocol", s.protocol),
+		log.Stringer("remotePeer", stream.Conn().RemotePeer()),
+		log.Stringer("remoteMultiaddr", stream.Conn().RemoteMultiaddr()),
+		log.Duration("duration", time.Since(start)),
+	)
 	return true
 }
 
-// Request sends a binary request to the peer. Request is executed in the background, one of the callbacks
-// is guaranteed to be called on success/error.
+// Request sends a binary request to the peer.
 func (s *Server) Request(ctx context.Context, pid peer.ID, req []byte) ([]byte, error) {
+	var r Response
+	if err := s.StreamRequest(ctx, pid, req, func(ctx context.Context, stream io.ReadWriter) error {
+		rd := bufio.NewReader(stream)
+		if _, err := codec.DecodeFrom(rd, &r); err != nil {
+			return fmt.Errorf("peer %s: %w", pid, err)
+		}
+		if r.Error != "" {
+			return &ServerError{msg: r.Error}
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return r.Data, nil
+}
+
+// StreamRequest sends a binary request to the peer. The response is read from the stream
+// by the specified callback.
+func (s *Server) StreamRequest(ctx context.Context, pid peer.ID, req []byte, callback StreamRequestCallback) error {
 	start := time.Now()
 	if len(req) > s.requestLimit {
-		return nil, fmt.Errorf("request length (%d) is longer than limit %d", len(req), s.requestLimit)
+		return fmt.Errorf("request length (%d) is longer than limit %d", len(req), s.requestLimit)
 	}
 	if s.h.Network().Connectedness(pid) != network.Connected {
-		return nil, fmt.Errorf("%w: %s", ErrNotConnected, pid)
+		return fmt.Errorf("%w: %s", ErrNotConnected, pid)
 	}
-	data, err := s.request(ctx, pid, req)
-	s.logger.WithContext(ctx).With().Debug("request execution time",
-		log.String("protocol", s.protocol),
-		log.Duration("duration", time.Since(start)),
-		log.Err(err),
-	)
 
+	ctx, cancel := context.WithTimeout(ctx, s.hardTimeout)
+	defer cancel()
+	stream, err := s.streamRequest(ctx, pid, req)
+	if err == nil {
+		err = callback(ctx, stream)
+		s.logger.WithContext(ctx).With().Debug("request execution time",
+			log.String("protocol", s.protocol),
+			log.Duration("duration", time.Since(start)),
+			log.Err(err),
+		)
+	}
+
+	serverError := errors.Is(err, &ServerError{})
 	took := time.Since(start).Seconds()
 	switch {
+	case s.metrics == nil:
+	case serverError:
+		s.metrics.clientServerError.Inc()
+		s.metrics.clientLatency.Observe(took)
 	case err != nil:
-		if s.metrics != nil {
-			s.metrics.clientFailed.Inc()
-			s.metrics.clientLatencyFailure.Observe(took)
-		}
-		return nil, err
-	case len(data.Error) > 0:
-		if s.metrics != nil {
-			s.metrics.clientServerError.Inc()
-			s.metrics.clientLatency.Observe(took)
-		}
-		return nil, errors.New(data.Error)
-	case s.metrics != nil:
+		s.metrics.clientFailed.Inc()
+		s.metrics.clientLatencyFailure.Observe(took)
+	default:
 		s.metrics.clientSucceeded.Inc()
 		s.metrics.clientLatency.Observe(took)
 	}
-	return data.Data, nil
+	return err
 }
 
-func (s *Server) request(ctx context.Context, pid peer.ID, req []byte) (*Response, error) {
-	ctx, cancel := context.WithTimeout(ctx, s.hardTimeout)
-	defer cancel()
-
-	var stream network.Stream
+func (s *Server) streamRequest(ctx context.Context, pid peer.ID, req []byte) (stm io.ReadWriteCloser, err error) {
 	stream, err := s.h.NewStream(
 		network.WithNoDial(ctx, "existing connection"),
 		pid,
@@ -325,10 +382,12 @@ func (s *Server) request(ctx context.Context, pid peer.ID, req []byte) (*Respons
 	if err != nil {
 		return nil, err
 	}
-	defer stream.Close()
-	defer stream.SetDeadline(time.Time{})
 	dadj := newDeadlineAdjuster(stream, s.timeout, s.hardTimeout)
-
+	defer func() {
+		if err != nil {
+			dadj.Close()
+		}
+	}()
 	wr := bufio.NewWriter(dadj)
 	sz := make([]byte, binary.MaxVarintLen64)
 	n := binary.PutUvarint(sz, uint64(len(req)))
@@ -344,12 +403,65 @@ func (s *Server) request(ctx context.Context, pid peer.ID, req []byte) (*Respons
 		return nil, fmt.Errorf("peer %s address %s: %w",
 			pid, stream.Conn().RemoteMultiaddr(), err)
 	}
+	return dadj, nil
+}
 
-	rd := bufio.NewReader(dadj)
-	var r Response
-	if _, err = codec.DecodeFrom(rd, &r); err != nil {
-		return nil, fmt.Errorf("peer %s address %s: %w",
-			pid, stream.Conn().RemoteMultiaddr(), err)
+func writeResponse(w io.Writer, resp *Response) error {
+	wr := bufio.NewWriter(w)
+	if _, err := codec.EncodeTo(wr, resp); err != nil {
+		return fmt.Errorf("failed to write response (len %d err len %d): %w",
+			len(resp.Data), len(resp.Error), err)
 	}
-	return &r, nil
+	if err := wr.Flush(); err != nil {
+		return fmt.Errorf("failed to write response (len %d err len %d): %w",
+			len(resp.Data), len(resp.Error), err)
+	}
+	return nil
+}
+
+func WriteErrorResponse(w io.Writer, respErr error) error {
+	return writeResponse(w, &Response{
+		Error: respErr.Error(),
+	})
+}
+
+func ReadResponse(r io.Reader, toCall func(resLen uint32) (int, error)) (int, error) {
+	respLen, nBytes, err := codec.DecodeLen(r)
+	if err != nil {
+		return nBytes, err
+	}
+	if respLen != 0 {
+		n, err := toCall(respLen)
+		nBytes += n
+		if err != nil {
+			return nBytes, err
+		}
+		if int(respLen) != n {
+			return nBytes, errors.New("malformed server response")
+		}
+	}
+	errStr, n, err := codec.DecodeStringWithLimit(r, 1024)
+	nBytes += n
+	switch {
+	case err != nil:
+		return nBytes, err
+	case errStr != "":
+		return nBytes, NewServerError(errStr)
+	case respLen == 0:
+		return nBytes, errors.New("malformed server response")
+	}
+	return nBytes, nil
+}
+
+func WrapHandler(handler Handler) StreamHandler {
+	return func(ctx context.Context, req []byte, stream io.ReadWriter) error {
+		buf, err := handler(ctx, req)
+		var resp Response
+		if err != nil {
+			resp.Error = err.Error()
+		} else {
+			resp.Data = buf
+		}
+		return writeResponse(stream, &resp)
+	}
 }

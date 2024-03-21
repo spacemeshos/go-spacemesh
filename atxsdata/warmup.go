@@ -36,30 +36,40 @@ func Warmup(db sql.Executor, cache *Data) error {
 	cache.OnEpoch(applied.GetEpoch())
 
 	var ierr error
-	if err := atxs.IterateAtxs(db, cache.Evicted(), latest, func(vatx *types.VerifiedActivationTx) bool {
-		nonce, err := atxs.VRFNonce(db, vatx.SmesherID, vatx.TargetEpoch())
-		if err != nil {
-			ierr = fmt.Errorf("missing nonce %w", err)
-			return false
-		}
-		malicious, err := identities.IsMalicious(db, vatx.SmesherID)
-		if err != nil {
-			ierr = err
-			return false
-		}
-		cache.Add(
-			vatx.TargetEpoch(),
-			vatx.SmesherID,
-			vatx.Coinbase,
-			vatx.ID(),
-			vatx.GetWeight(),
-			vatx.BaseTickHeight(),
-			vatx.TickHeight(),
-			nonce,
-			malicious,
-		)
-		return true
-	}); err != nil {
+	if err := atxs.IterateAtxsData(db, cache.Evicted(), latest,
+		func(
+			id types.ATXID,
+			node types.NodeID,
+			epoch types.EpochID,
+			coinbase types.Address,
+			weight,
+			base,
+			height uint64,
+		) bool {
+			target := epoch + 1
+			nonce, err := atxs.VRFNonce(db, node, target)
+			if err != nil {
+				ierr = fmt.Errorf("missing nonce %w", err)
+				return false
+			}
+			malicious, err := identities.IsMalicious(db, node)
+			if err != nil {
+				ierr = err
+				return false
+			}
+			cache.Add(
+				target,
+				node,
+				coinbase,
+				id,
+				weight,
+				base,
+				height,
+				nonce,
+				malicious,
+			)
+			return true
+		}); err != nil {
 		return err
 	}
 	return ierr

@@ -3,7 +3,7 @@ FROM ubuntu:22.04 AS linux
 ENV DEBIAN_FRONTEND noninteractive
 ENV SHELL /bin/bash
 ARG TZ=Etc/UTC
-ENV TZ $TZ
+ENV TZ=${TZ}
 USER root
 RUN set -ex \
    && apt-get update --fix-missing \
@@ -27,6 +27,8 @@ ENV LANGUAGE en_US.UTF-8
 ENV LC_ALL en_US.UTF-8
 
 FROM golang:1.21 as builder
+ARG VERSION=""
+ENV VERSION=${VERSION}
 RUN set -ex \
    && apt-get update --fix-missing \
    && apt-get install -qy --no-install-recommends \
@@ -48,8 +50,9 @@ RUN go mod download
 COPY . .
 
 # And compile the project
-RUN --mount=type=cache,id=build,target=/root/.cache/go-build make build
+RUN --mount=type=cache,id=build,target=/root/.cache/go-build make build VERSION=${VERSION}
 RUN --mount=type=cache,id=build,target=/root/.cache/go-build make gen-p2p-identity
+RUN --mount=type=cache,id=build,target=/root/.cache/go-build make merge-nodes VERSION=${VERSION}
 
 # In this last stage, we start from a fresh image, to reduce the image size and not ship the Go compiler in our production artifacts.
 FROM linux AS spacemesh
@@ -59,6 +62,7 @@ COPY --from=builder /src/build/go-spacemesh /bin/
 COPY --from=builder /src/build/service /bin/
 COPY --from=builder /src/build/libpost.so /bin/
 COPY --from=builder /src/build/gen-p2p-identity /bin/
+COPY --from=builder /src/build/merge-nodes /bin/
 
 ENTRYPOINT ["/bin/go-spacemesh"]
 EXPOSE 7513

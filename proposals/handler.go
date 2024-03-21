@@ -18,10 +18,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
-	"github.com/spacemeshos/go-spacemesh/sql/proposals"
+	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
@@ -29,17 +30,12 @@ import (
 var (
 	errMalformedData         = fmt.Errorf("%w: malformed data", pubsub.ErrValidationReject)
 	errWrongHash             = fmt.Errorf("%w: incorrect hash", pubsub.ErrValidationReject)
-	errInitialize            = errors.New("failed to initialize")
-	errInvalidATXID          = errors.New("ballot has invalid ATXID")
-	errMissingEpochData      = errors.New("epoch data is missing in ref ballot")
-	errUnexpectedEpochData   = errors.New("non-ref ballot declares epoch data")
-	errEmptyActiveSet        = errors.New("ref ballot declares empty active set")
-	errMissingBeacon         = errors.New("beacon is missing in ref ballot")
-	errNotEligible           = errors.New("ballot not eligible")
-	errDoubleVoting          = errors.New("ballot doubly-voted in same layer")
-	errConflictingExceptions = errors.New("conflicting exceptions")
-	errExceptionsOverflow    = errors.New("too many exceptions")
-	errDuplicateTX           = errors.New("duplicate TxID in proposal")
+	errInitialize            = fmt.Errorf("%w: failed to initialize", pubsub.ErrValidationReject)
+	errInvalidATXID          = fmt.Errorf("%w: ballot has invalid ATXID", pubsub.ErrValidationReject)
+	errDoubleVoting          = fmt.Errorf("%w: ballot doubly-voted in same layer", pubsub.ErrValidationReject)
+	errConflictingExceptions = fmt.Errorf("%w: conflicting exceptions", pubsub.ErrValidationReject)
+	errExceptionsOverflow    = fmt.Errorf("%w: too many exceptions", pubsub.ErrValidationReject)
+	errDuplicateTX           = fmt.Errorf("%w: duplicate TxID in proposal", pubsub.ErrValidationReject)
 	errKnownProposal         = errors.New("known proposal")
 	errKnownBallot           = errors.New("known ballot")
 	errMaliciousBallot       = errors.New("malicious ballot")
@@ -60,6 +56,8 @@ type Handler struct {
 	validator  eligibilityValidator
 	tortoise   tortoiseProvider
 	clock      layerClock
+
+	proposals proposalsConsumer
 }
 
 // Config defines configuration for the handler.
@@ -107,6 +105,7 @@ func WithConfig(cfg Config) Opt {
 func NewHandler(
 	db *sql.Database,
 	atxsdata *atxsdata.Data,
+	proposals proposalsConsumer,
 	edVerifier *signing.EdVerifier,
 	p pubsub.Publisher,
 	f system.Fetcher,
@@ -126,6 +125,7 @@ func NewHandler(
 		cfg:        defaultConfig(),
 		db:         db,
 		atxsdata:   atxsdata,
+		proposals:  proposals,
 		activeSets: activeSets,
 		edVerifier: edVerifier,
 		publisher:  p,
@@ -164,11 +164,15 @@ func (h *Handler) HandleSyncedBallot(ctx context.Context, expHash types.Hash32, 
 		return errMalformedData
 	}
 	if b.Layer <= types.GetEffectiveGenesis() {
-		return fmt.Errorf("ballot before effective genesis: layer %v", b.Layer)
+		return fmt.Errorf("%w: ballot before effective genesis: layer %v", pubsub.ErrValidationReject, b.Layer)
 	}
 
 	if !h.edVerifier.Verify(signing.BALLOT, b.SmesherID, b.SignedBytes(), b.Signature) {
-		return fmt.Errorf("failed to verify ballot signature")
+		return fmt.Errorf(
+			"%w: failed to verify ballot %s signature",
+			pubsub.ErrValidationReject,
+			b.ID().String(),
+		)
 	}
 
 	// set the ballot and smesher ID when received
@@ -178,7 +182,12 @@ func (h *Handler) HandleSyncedBallot(ctx context.Context, expHash types.Hash32, 
 	}
 
 	if b.ID().AsHash32() != expHash {
-		return fmt.Errorf("%w: ballot want %s, got %s", errWrongHash, expHash.ShortString(), b.ID().String())
+		return fmt.Errorf(
+			"%w: ballot want %s, got %s",
+			pubsub.ErrValidationReject,
+			expHash.ShortString(),
+			b.ID().String(),
+		)
 	}
 
 	if b.AtxID == types.EmptyATXID || b.AtxID == h.cfg.GoldenATXID {
@@ -325,19 +334,12 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 	proposalDuration.WithLabelValues(decodeInit).Observe(float64(time.Since(t0)))
 
 	logger = logger.WithFields(p.ID(), p.Ballot.ID(), p.Layer)
-	t1 := time.Now()
-	if has, err := proposals.Has(h.db, p.ID()); err != nil {
-		logger.With().Error("failed to look up proposal", log.Err(err))
-		return fmt.Errorf("lookup proposal %v: %w", p.ID(), err)
-	} else if has {
+	if h.proposals.IsKnown(p.Layer, p.ID()) {
 		known.Inc()
 		return fmt.Errorf("%w proposal %s", errKnownProposal, p.ID())
 	}
-	proposalDuration.WithLabelValues(dbLookup).Observe(float64(time.Since(t1)))
+	logger.With().Info("new proposal", log.ShortStringer("exp hash", expHash), log.Int("num_txs", len(p.TxIDs)))
 
-	logger.With().Info("new proposal",
-		log.String("exp hash", expHash.ShortString()),
-		log.Int("num_txs", len(p.TxIDs)))
 	t2 := time.Now()
 	h.fetcher.RegisterPeerHashes(peer, collectHashes(p))
 	proposalDuration.WithLabelValues(peerHashes).Observe(float64(time.Since(t2)))
@@ -356,19 +358,20 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 		return err
 	}
 	proposalDuration.WithLabelValues(fetchTXs).Observe(float64(time.Since(t4)))
-
-	logger.With().Debug("proposal is syntactically valid")
-	t5 := time.Now()
-	if err := proposals.Add(h.db, &p); err != nil {
-		if errors.Is(err, sql.ErrObjectExists) {
-			known.Inc()
-			return fmt.Errorf("%w proposal %s", errKnownProposal, p.ID())
-		}
-		logger.With().Error("failed to save proposal", log.Err(err))
-		return fmt.Errorf("save proposal: %w", err)
+	if err := h.setProposalBeacon(&p); err != nil {
+		return fmt.Errorf("setting proposal beacon: %w", err)
 	}
-	proposalDuration.WithLabelValues(dbSave).Observe(float64(time.Since(t5)))
-	logger.With().Debug("added proposal to database")
+	logger.With().Debug("proposal is syntactically valid")
+
+	err = h.proposals.OnProposal(&p)
+	switch {
+	case errors.Is(err, store.ErrProposalExists):
+		known.Inc()
+		return fmt.Errorf("%w %s", errKnownProposal, p.ID())
+	case err != nil:
+		return fmt.Errorf("saving proposal: %w", err)
+	}
+	logger.With().Debug("stored proposal")
 
 	t6 := time.Now()
 	if err = h.mesh.AddTXsFromProposal(ctx, p.Layer, p.ID(), p.TxIDs); err != nil {
@@ -401,6 +404,25 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 		pubsub.ProposalProtocol,
 		time.Since(h.clock.LayerToTime(p.Layer)),
 	)
+	return nil
+}
+
+func (h *Handler) setProposalBeacon(p *types.Proposal) error {
+	if p.EpochData != nil {
+		p.SetBeacon(p.EpochData.Beacon)
+		return nil
+	}
+	if p.RefBallot == types.EmptyBallotID {
+		return fmt.Errorf("empty refballot")
+	}
+	refBallot, err := ballots.Get(h.db, p.RefBallot)
+	if err != nil {
+		return fmt.Errorf("cannot find refballot '%s' in DB: %w", p.RefBallot.String(), err)
+	}
+	if refBallot.EpochData == nil {
+		return fmt.Errorf("refballot '%s' with empty epoch data", p.RefBallot.String())
+	}
+	p.SetBeacon(refBallot.EpochData.Beacon)
 	return nil
 }
 
@@ -463,7 +485,7 @@ func (h *Handler) checkBallotSyntacticValidity(
 	// and added to the tortoise.
 	decoded, err := h.tortoise.DecodeBallot(b.ToTortoiseData())
 	if err != nil {
-		return nil, fmt.Errorf("decode ballot %s: %w", b.ID(), err)
+		return nil, fmt.Errorf("failed to decode ballot id %s err %w", b.ID().AsHash32().ShortString(), err)
 	}
 	ballotDuration.WithLabelValues(decode).Observe(float64(time.Since(t2)))
 
@@ -480,13 +502,9 @@ func (h *Handler) checkBallotSyntacticValidity(
 	ballotDuration.WithLabelValues(votes).Observe(float64(time.Since(t3)))
 
 	t4 := time.Now()
-	if eligible, err := h.validator.CheckEligibility(ctx, b, ref); err != nil || !eligible {
+	if err := h.validator.CheckEligibility(ctx, b, ref); err != nil {
 		notEligible.Inc()
-		var reason string
-		if err != nil {
-			reason = err.Error()
-		}
-		return nil, fmt.Errorf("%w: %v", errNotEligible, reason)
+		return nil, err
 	}
 	ballotDuration.WithLabelValues(eligible).Observe(float64(time.Since(t4)))
 
@@ -498,10 +516,10 @@ func (h *Handler) checkBallotDataIntegrity(ctx context.Context, b *types.Ballot)
 	if b.RefBallot == types.EmptyBallotID {
 		// this is the smesher's first Ballot in this epoch, should contain EpochData
 		if b.EpochData == nil {
-			return 0, errMissingEpochData
+			return 0, fmt.Errorf("%w: missing epoch data", pubsub.ErrValidationReject)
 		}
 		if b.EpochData.Beacon == types.EmptyBeacon {
-			return 0, errMissingBeacon
+			return 0, fmt.Errorf("%w: missing beacon", pubsub.ErrValidationReject)
 		}
 		epoch := h.clock.CurrentLayer().GetEpoch()
 		if epoch > 0 {
@@ -541,7 +559,7 @@ func (h *Handler) checkBallotDataIntegrity(ctx context.Context, b *types.Ballot)
 			return totalWeight, nil
 		}
 	} else if b.EpochData != nil {
-		return 0, errUnexpectedEpochData
+		return 0, fmt.Errorf("%w: epoch data in non-first ballot %s", pubsub.ErrValidationReject, b.ID())
 	}
 	return 0, nil
 }

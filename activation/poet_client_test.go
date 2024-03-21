@@ -98,7 +98,6 @@ func Test_HTTPPoetClient_Address_Mainnet(t *testing.T) {
 	poETServers := []string{
 		"https://mainnet-poet-0.spacemesh.network",
 		"https://mainnet-poet-1.spacemesh.network",
-		"https://mainnet-poet-2.spacemesh.network",
 		"https://poet-110.spacemesh.network",
 		"https://poet-111.spacemesh.network",
 	}

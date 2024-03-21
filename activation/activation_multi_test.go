@@ -195,13 +195,13 @@ func TestRegossip(t *testing.T) {
 			}
 		}
 
-		blob, err := atxs.GetBlob(tab.cdb, refAtx.ID().Bytes())
-		require.NoError(t, err)
+		var blob sql.Blob
+		require.NoError(t, atxs.LoadBlob(context.Background(), tab.cdb, refAtx.ID().Bytes(), &blob))
 
 		// atx will be regossiped once (by the smesher)
 		tab.mclock.EXPECT().CurrentLayer().Return(layer)
 		ctx := context.Background()
-		tab.mpub.EXPECT().Publish(ctx, pubsub.AtxProtocol, blob)
+		tab.mpub.EXPECT().Publish(ctx, pubsub.AtxProtocol, blob.Bytes)
 		require.NoError(t, tab.Regossip(ctx, refAtx.SmesherID))
 	})
 
@@ -222,15 +222,33 @@ func TestRegossip(t *testing.T) {
 
 func Test_Builder_Multi_InitialPost(t *testing.T) {
 	tab := newTestBuilder(t, 5, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
+
 	var eg errgroup.Group
 	for _, sig := range tab.signers {
 		sig := sig
 		eg.Go(func() error {
+			numUnits := uint32(12)
+
+			post := &types.Post{
+				Indices: types.RandomBytes(10),
+				Nonce:   rand.Uint32(),
+				Pow:     rand.Uint64(),
+			}
+			meta := &types.PostMetadata{
+				Challenge:     shared.ZeroChallenge,
+				LabelsPerUnit: tab.conf.LabelsPerUnit,
+			}
+
+			commitmentATX := types.RandomATXID()
+			tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), commitmentATX, post, meta, numUnits).Return(nil)
 			tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).Return(
-				&types.Post{Indices: make([]byte, 10)},
+				post,
 				&types.PostInfo{
-					CommitmentATX: types.RandomATXID(),
+					CommitmentATX: commitmentATX,
 					Nonce:         new(types.VRFPostIndex),
+					NumUnits:      numUnits,
+					NodeID:        sig.NodeID(),
+					LabelsPerUnit: tab.conf.LabelsPerUnit,
 				},
 				nil,
 			)
@@ -250,7 +268,6 @@ func Test_Builder_Multi_InitialPost(t *testing.T) {
 func Test_Builder_Multi_HappyPath(t *testing.T) {
 	layerDuration := 2 * time.Second
 	tab := newTestBuilder(t, 3, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4, CycleGap: layerDuration}))
-	tab.regossipInterval = 0 // disable regossip for testing
 
 	// step 1: build initial posts
 	initialPostChan := make(chan struct{})
@@ -265,12 +282,23 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 			Nonce:   rand.Uint32(),
 			Pow:     rand.Uint64(),
 
-			NumUnits:      4,
+			NumUnits:      uint32(12),
 			CommitmentATX: types.RandomATXID(),
 			VRFNonce:      types.VRFPostIndex(rand.Uint64()),
 		}
 		initialPost[sig.NodeID()] = &nipost
 
+		post := &types.Post{
+			Indices: nipost.Indices,
+			Nonce:   nipost.Nonce,
+			Pow:     nipost.Pow,
+		}
+		meta := &types.PostMetadata{
+			Challenge:     shared.ZeroChallenge,
+			LabelsPerUnit: tab.conf.LabelsPerUnit,
+		}
+		tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), nipost.CommitmentATX, post, meta, nipost.NumUnits).
+			Return(nil)
 		tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).DoAndReturn(
 			func(ctx context.Context, _ types.NodeID, _ []byte) (*types.Post, *types.PostInfo, error) {
 				<-initialPostChan
@@ -284,6 +312,7 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 					NumUnits:      nipost.NumUnits,
 					CommitmentATX: nipost.CommitmentATX,
 					Nonce:         &nipost.VRFNonce,
+					LabelsPerUnit: tab.conf.LabelsPerUnit,
 				}
 
 				return post, postInfo, nil
@@ -316,6 +345,19 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 				return postGenesisEpoch.FirstLayer() + 1
 			},
 		)
+
+		nipost := initialPost[sig.NodeID()]
+		post := &types.Post{
+			Indices: nipost.Indices,
+			Nonce:   nipost.Nonce,
+			Pow:     nipost.Pow,
+		}
+		meta := &types.PostMetadata{
+			Challenge:     shared.ZeroChallenge,
+			LabelsPerUnit: tab.conf.LabelsPerUnit,
+		}
+		tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), nipost.CommitmentATX, post, meta, nipost.NumUnits).
+			Return(nil)
 	}
 
 	// step 3: create ATX

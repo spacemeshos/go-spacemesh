@@ -48,19 +48,19 @@ func TestCertification(t *testing.T) {
 		AnyTimes()
 	validator.EXPECT().VerifyChain(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
-	mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, types.ATXID{2, 3, 4}, syncer, validator)
+	mgr, err := activation.NewPostSetupManager(cfg, logger, cdb, types.ATXID{2, 3, 4}, syncer, validator)
 	require.NoError(t, err)
 
 	opts := activation.DefaultPostSetupOpts()
 	opts.DataDir = t.TempDir()
 	opts.ProviderID.SetUint32(initialization.CPUProviderID())
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
-	initPost(t, mgr, opts)
+	initPost(t, mgr, opts, sig.NodeID())
 
 	svc := grpcserver.NewPostService(logger)
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
-	t.Cleanup(launchPostSupervisor(t, logger, mgr, grpcCfg, opts))
+	t.Cleanup(launchPostSupervisor(t, logger, mgr, sig, grpcCfg, opts))
 
 	var postClient activation.PostClient
 	require.Eventually(t, func() bool {

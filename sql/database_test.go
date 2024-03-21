@@ -156,3 +156,40 @@ func TestDatabaseVacuumState(t *testing.T) {
 	_, err = os.Open(dbFile + "-wal")
 	require.ErrorIs(t, err, os.ErrNotExist)
 }
+
+func TestQueryCount(t *testing.T) {
+	db := InMemory()
+	require.Equal(t, 0, db.QueryCount())
+
+	n, err := db.Exec("select 1", nil, nil)
+	require.Equal(t, 1, n)
+	require.NoError(t, err)
+	require.Equal(t, 1, db.QueryCount())
+
+	_, err = db.Exec("select invalid", nil, nil)
+	require.Error(t, err)
+	require.Equal(t, 2, db.QueryCount())
+}
+
+func Test_Migration_FailsIfDatabaseTooNew(t *testing.T) {
+	dir := t.TempDir()
+
+	ctrl := gomock.NewController(t)
+	migration1 := NewMockMigration(ctrl)
+	migration1.EXPECT().Order().Return(1).AnyTimes()
+
+	migration2 := NewMockMigration(ctrl)
+	migration2.EXPECT().Order().Return(2).AnyTimes()
+
+	dbFile := filepath.Join(dir, "test.sql")
+	db, err := Open("file:" + dbFile)
+	require.NoError(t, err)
+	_, err = db.Exec("PRAGMA user_version = 3", nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	_, err = Open("file:"+dbFile,
+		WithMigrations([]Migration{migration1, migration2}),
+	)
+	require.ErrorIs(t, err, ErrTooNew)
+}

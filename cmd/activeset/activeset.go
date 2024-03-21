@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -32,7 +33,7 @@ Example:
 	db, err := sql.Open("file:" + dbpath)
 	must(err, "can't open db at dbpath=%v. err=%s\n", dbpath, err)
 
-	ids, err := atxs.GetIDsByEpoch(db, types.EpochID(publish))
+	ids, err := atxs.GetIDsByEpoch(context.Background(), db, types.EpochID(publish))
 	must(err, "get ids by epoch %d. dbpath=%v. err=%s\n", publish, dbpath, err)
 	var weight uint64
 	for _, id := range ids {

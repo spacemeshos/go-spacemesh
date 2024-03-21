@@ -39,6 +39,18 @@ func AddPost(db sql.Executor, nodeID types.NodeID, post Post) error {
 	return nil
 }
 
+func RemovePost(db sql.Executor, nodeID types.NodeID) error {
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, nodeID.Bytes())
+	}
+	if _, err := db.Exec(`
+		delete from post where id = ?1;`, enc, nil,
+	); err != nil {
+		return fmt.Errorf("delete post for %s: %w", nodeID, err)
+	}
+	return nil
+}
+
 func GetPost(db sql.Executor, nodeID types.NodeID) (*Post, error) {
 	var post *Post
 	enc := func(stmt *sql.Statement) {

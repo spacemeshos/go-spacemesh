@@ -58,6 +58,10 @@ jobs:
         run: |
           make install
           make build VERSION=${{ github.ref_name }}
+      - name: Build merge-nodes
+        shell: bash
+        run: |
+          make merge-nodes VERSION=${{ github.ref_name }}
 
       - name: Create release archive
         shell: bash
@@ -148,7 +152,7 @@ jobs:
           destination: ${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         id: create_release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

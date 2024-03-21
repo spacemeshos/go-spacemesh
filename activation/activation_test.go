@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"os"
 	"testing"
 	"time"
@@ -61,6 +62,14 @@ func newAtx(
 	return atx
 }
 
+type atxOption func(*types.ActivationTx)
+
+func withVrfNonce(nonce types.VRFPostIndex) atxOption {
+	return func(atx *types.ActivationTx) {
+		atx.VRFNonce = &nonce
+	}
+}
+
 func newActivationTx(
 	tb testing.TB,
 	sig *signing.EdSigner,
@@ -73,6 +82,7 @@ func newActivationTx(
 	coinbase types.Address,
 	numUnits uint32,
 	nipost *types.NIPost,
+	opts ...atxOption,
 ) *types.VerifiedActivationTx {
 	challenge := types.NIPostChallenge{
 		Sequence:       sequence,
@@ -89,6 +99,9 @@ func newActivationTx(
 
 	atx.SetEffectiveNumUnits(numUnits)
 	atx.SetReceived(time.Now())
+	for _, opt := range opts {
+		opt(atx)
+	}
 	require.NoError(tb, SignAndFinalizeAtx(sig, atx))
 	vAtx, err := atx.Verify(startTick, numTicks)
 	require.NoError(tb, err)
@@ -131,7 +144,8 @@ func newTestBuilder(tb testing.TB, numSigners int, opts ...BuilderOption) *testA
 	opts = append(opts, WithValidator(tab.mValidator))
 
 	cfg := Config{
-		GoldenATXID: tab.goldenATXID,
+		GoldenATXID:   tab.goldenATXID,
+		LabelsPerUnit: DefaultPostConfig().LabelsPerUnit,
 	}
 
 	tab.msync.EXPECT().RegisterForATXSynced().DoAndReturn(closedChan).AnyTimes()
@@ -798,11 +812,28 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 	require.NoError(t, atxs.Add(tab.cdb, vPosAtx))
 
 	// generate and store initial post in state
-	require.NoError(t, nipost.AddPost(
-		tab.localDb,
-		sig.NodeID(),
-		nipost.Post{Indices: make([]byte, 10), Challenge: shared.ZeroChallenge},
-	))
+	post := nipost.Post{
+		Indices: types.RandomBytes(10),
+		Nonce:   rand.Uint32(),
+		Pow:     rand.Uint64(),
+
+		NumUnits:      uint32(12),
+		CommitmentATX: types.RandomATXID(),
+		VRFNonce:      types.VRFPostIndex(rand.Uint64()),
+		Challenge:     shared.ZeroChallenge,
+	}
+	require.NoError(t, nipost.AddPost(tab.localDb, sig.NodeID(), post))
+	initialPost := &types.Post{
+		Nonce:   post.Nonce,
+		Indices: post.Indices,
+		Pow:     post.Pow,
+	}
+	meta := &types.PostMetadata{
+		Challenge:     shared.ZeroChallenge,
+		LabelsPerUnit: tab.conf.LabelsPerUnit,
+	}
+	tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), post.CommitmentATX, initialPost, meta, post.NumUnits).
+		Return(nil)
 
 	// create and publish ATX
 	tab.mclock.EXPECT().CurrentLayer().Return(currLayer).AnyTimes()
@@ -837,13 +868,29 @@ func TestBuilder_PublishActivationTx_NoPrevATX_PublishFails_InitialPost_preserve
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(tab.cdb, vPosAtx))
 
-	// generate and store initial post in state
+	// generate and store initial refPost in state
 	refPost := nipost.Post{
-		Indices:       make([]byte, 10),
+		Indices: types.RandomBytes(10),
+		Nonce:   rand.Uint32(),
+		Pow:     rand.Uint64(),
+
+		NumUnits:      uint32(12),
 		CommitmentATX: types.RandomATXID(),
+		VRFNonce:      types.VRFPostIndex(rand.Uint64()),
 		Challenge:     shared.ZeroChallenge,
 	}
 	require.NoError(t, nipost.AddPost(tab.localDb, sig.NodeID(), refPost))
+	initialPost := &types.Post{
+		Nonce:   refPost.Nonce,
+		Indices: refPost.Indices,
+		Pow:     refPost.Pow,
+	}
+	meta := &types.PostMetadata{
+		Challenge:     shared.ZeroChallenge,
+		LabelsPerUnit: tab.conf.LabelsPerUnit,
+	}
+	tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), refPost.CommitmentATX, initialPost, meta, refPost.NumUnits).
+		Return(nil)
 
 	// create and publish ATX
 	tab.mclock.EXPECT().CurrentLayer().Return(currLayer).AnyTimes()
@@ -1121,8 +1168,28 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 			return nil
 		})
 
-	post := nipost.Post{Indices: make([]byte, 10), Challenge: shared.ZeroChallenge}
+	post := nipost.Post{
+		Indices: types.RandomBytes(10),
+		Nonce:   rand.Uint32(),
+		Pow:     rand.Uint64(),
+
+		NumUnits:      uint32(12),
+		CommitmentATX: types.RandomATXID(),
+		VRFNonce:      types.VRFPostIndex(rand.Uint64()),
+		Challenge:     shared.ZeroChallenge,
+	}
 	require.NoError(t, nipost.AddPost(tab.localDb, sig.NodeID(), post))
+	initialPost := &types.Post{
+		Nonce:   post.Nonce,
+		Indices: post.Indices,
+		Pow:     post.Pow,
+	}
+	meta := &types.PostMetadata{
+		Challenge:     shared.ZeroChallenge,
+		LabelsPerUnit: tab.conf.LabelsPerUnit,
+	}
+	tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), post.CommitmentATX, initialPost, meta, post.NumUnits).
+		Return(nil)
 
 	tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil)
 
@@ -1387,14 +1454,38 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
 	sig := maps.Values(tab.signers)[0]
 
+	post := nipost.Post{
+		Indices: types.RandomBytes(10),
+		Nonce:   rand.Uint32(),
+		Pow:     rand.Uint64(),
+
+		NumUnits:      uint32(12),
+		CommitmentATX: types.RandomATXID(),
+		VRFNonce:      types.VRFPostIndex(rand.Uint64()),
+	}
+	initialPost := &types.Post{
+		Nonce:   post.Nonce,
+		Indices: post.Indices,
+		Pow:     post.Pow,
+	}
 	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).Return(
-		&types.Post{Indices: make([]byte, 10)},
+		initialPost,
 		&types.PostInfo{
-			CommitmentATX: types.RandomATXID(),
-			Nonce:         new(types.VRFPostIndex),
+			NodeID:        sig.NodeID(),
+			CommitmentATX: post.CommitmentATX,
+			Nonce:         &post.VRFNonce,
+
+			NumUnits:      post.NumUnits,
+			LabelsPerUnit: tab.conf.LabelsPerUnit,
 		},
 		nil,
 	)
+	meta := &types.PostMetadata{
+		Challenge:     shared.ZeroChallenge,
+		LabelsPerUnit: tab.conf.LabelsPerUnit,
+	}
+	tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), post.CommitmentATX, initialPost, meta, post.NumUnits).
+		Return(nil)
 
 	_, _, err := tab.buildInitialPost(context.Background(), sig.NodeID())
 	require.NoError(t, err)
@@ -1439,24 +1530,31 @@ func TestBuilder_obtainPost(t *testing.T) {
 	t.Run("no POST or ATX - generate", func(t *testing.T) {
 		tab := newTestBuilder(t, 1)
 		sig := maps.Values(tab.signers)[0]
-		tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).
-			Return(
-				&types.Post{Indices: make([]byte, 10)},
-				&types.PostInfo{
-					CommitmentATX: types.RandomATXID(),
-					Nonce:         new(types.VRFPostIndex),
-				},
-				nil,
-			)
+		post := types.Post{Indices: make([]byte, 10)}
+		postInfo := types.PostInfo{
+			CommitmentATX: types.RandomATXID(),
+			Nonce:         new(types.VRFPostIndex),
+		}
+		tab.mnipost.EXPECT().
+			Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).
+			Return(&post, &postInfo, nil)
+		tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), postInfo.CommitmentATX, &post, gomock.Any(), gomock.Any())
 		_, _, _, err := tab.obtainPost(context.Background(), sig.NodeID())
 		require.NoError(t, err)
 	})
 	t.Run("initial POST available", func(t *testing.T) {
 		tab := newTestBuilder(t, 1)
 		sig := maps.Values(tab.signers)[0]
+		post := types.Post{Indices: make([]byte, 10)}
+		postInfo := types.PostInfo{
+			CommitmentATX: types.RandomATXID(),
+			Nonce:         new(types.VRFPostIndex),
+		}
 		tab.mnipost.EXPECT().
 			Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).
-			Return(&types.Post{Indices: []byte{1, 2, 3}}, &types.PostInfo{Nonce: new(types.VRFPostIndex)}, nil)
+			Return(&post, &postInfo, nil)
+		tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), postInfo.CommitmentATX, &post, gomock.Any(), gomock.Any())
+
 		_, _, err := tab.buildInitialPost(context.Background(), sig.NodeID())
 		require.NoError(t, err)
 
@@ -1511,14 +1609,32 @@ func TestBuilder_InitialPostIsPersisted(t *testing.T) {
 	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
 	sig := maps.Values(tab.signers)[0]
 
+	commitmentATX := types.RandomATXID()
+	nonce := types.VRFPostIndex(rand.Uint64())
+	numUnits := uint32(12)
+	initialPost := &types.Post{
+		Nonce:   rand.Uint32(),
+		Indices: types.RandomBytes(10),
+		Pow:     rand.Uint64(),
+	}
+	meta := &types.PostMetadata{
+		Challenge:     shared.ZeroChallenge,
+		LabelsPerUnit: tab.conf.LabelsPerUnit,
+	}
 	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).Return(
-		&types.Post{Indices: make([]byte, 10)},
+		initialPost,
 		&types.PostInfo{
-			CommitmentATX: types.RandomATXID(),
-			Nonce:         new(types.VRFPostIndex),
+			NodeID:        sig.NodeID(),
+			CommitmentATX: commitmentATX,
+			Nonce:         &nonce,
+
+			NumUnits:      numUnits,
+			LabelsPerUnit: tab.conf.LabelsPerUnit,
 		},
 		nil,
 	)
+	tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), commitmentATX, initialPost, meta, numUnits).
+		Return(nil)
 	_, _, _, err := tab.obtainPost(context.Background(), sig.NodeID())
 	require.NoError(t, err)
 
@@ -1571,11 +1687,28 @@ func TestWaitPositioningAtx(t *testing.T) {
 					return nil
 				})
 
-			require.NoError(t, nipost.AddPost(
-				tab.localDb,
-				sig.NodeID(),
-				nipost.Post{Indices: make([]byte, 10), Challenge: shared.ZeroChallenge},
-			))
+			post := nipost.Post{
+				Indices: types.RandomBytes(10),
+				Nonce:   rand.Uint32(),
+				Pow:     rand.Uint64(),
+
+				NumUnits:      uint32(12),
+				CommitmentATX: types.RandomATXID(),
+				VRFNonce:      types.VRFPostIndex(rand.Uint64()),
+				Challenge:     shared.ZeroChallenge,
+			}
+			require.NoError(t, nipost.AddPost(tab.localDb, sig.NodeID(), post))
+			initialPost := &types.Post{
+				Nonce:   post.Nonce,
+				Indices: post.Indices,
+				Pow:     post.Pow,
+			}
+			meta := &types.PostMetadata{
+				Challenge:     shared.ZeroChallenge,
+				LabelsPerUnit: tab.conf.LabelsPerUnit,
+			}
+			tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), post.CommitmentATX, initialPost, meta, post.NumUnits).
+				Return(nil)
 
 			require.NoError(t, tab.PublishActivationTx(context.Background(), sig))
 		})
@@ -1664,6 +1797,7 @@ func TestGetPositioningAtxDbFailed(t *testing.T) {
 	sig := maps.Values(tab.signers)[0]
 
 	db := datastoremocks.NewMockExecutor(tab.mctrl)
+	db.EXPECT().QueryCache().Return(sql.NullQueryCache)
 	tab.Builder.cdb = datastore.NewCachedDB(db, logtest.New(t))
 	expected := errors.New("db error")
 	db.EXPECT().Exec(gomock.Any(), gomock.Any(), gomock.Any()).Return(0, expected)

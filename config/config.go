@@ -20,8 +20,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
-	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare3"
+	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
+	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
@@ -58,6 +59,9 @@ type Config struct {
 	Beacon          beacon.Config              `mapstructure:"beacon"`
 	TIME            timeConfig.TimeConfig      `mapstructure:"time"`
 	VM              vm.Config                  `mapstructure:"vm"`
+	Certifier       activation.CertifierConfig `mapstructure:"certifier"`
+	POST            activation.PostConfig      `mapstructure:"post"`
+	POSTService     activation.PostSupervisorConfig
 	POET            activation.PoetConfig      `mapstructure:"poet"`
 	SMESHING        SmeshingConfig             `mapstructure:"smeshing"`
 	LOGGING         LoggerConfig               `mapstructure:"logging"`
@@ -66,9 +70,7 @@ type Config struct {
 	Sync            syncer.Config              `mapstructure:"syncer"`
 	Recovery        checkpoint.Config          `mapstructure:"recovery"`
 	Cache           datastore.Config           `mapstructure:"cache"`
-	Certifier       activation.CertifierConfig `mapstructure:"certifier"`
-	POST            activation.PostConfig      `mapstructure:"post"`
-	POSTService     activation.PostSupervisorConfig
+	ActiveSet       miner.ActiveSetPreparation `mapstructure:"active-set-preparation"`
 }
 
 // DataDir returns the absolute path to use for the node's data. This is the tilde-expanded path given in the config
@@ -111,12 +113,14 @@ type BaseConfig struct {
 	OptFilterThreshold int    `mapstructure:"optimistic-filtering-threshold"`
 	TickSize           uint64 `mapstructure:"tick-size"`
 
-	DatabaseConnections          int           `mapstructure:"db-connections"`
-	DatabaseLatencyMetering      bool          `mapstructure:"db-latency-metering"`
-	DatabaseSizeMeteringInterval time.Duration `mapstructure:"db-size-metering-interval"`
-	DatabasePruneInterval        time.Duration `mapstructure:"db-prune-interval"`
-	DatabaseVacuumState          int           `mapstructure:"db-vacuum-state"`
-	DatabaseSkipMigrations       []int         `mapstructure:"db-skip-migrations"`
+	DatabaseConnections          int                     `mapstructure:"db-connections"`
+	DatabaseLatencyMetering      bool                    `mapstructure:"db-latency-metering"`
+	DatabaseSizeMeteringInterval time.Duration           `mapstructure:"db-size-metering-interval"`
+	DatabasePruneInterval        time.Duration           `mapstructure:"db-prune-interval"`
+	DatabaseVacuumState          int                     `mapstructure:"db-vacuum-state"`
+	DatabaseSkipMigrations       []int                   `mapstructure:"db-skip-migrations"`
+	DatabaseQueryCache           bool                    `mapstructure:"db-query-cache"`
+	DatabaseQueryCacheSizes      DatabaseQueryCacheSizes `mapstructure:"db-query-cache-sizes"`
 
 	PruneActivesetsFrom types.EpochID `mapstructure:"prune-activesets-from"`
 
@@ -140,6 +144,12 @@ type BaseConfig struct {
 
 	// NoMainOverride forces the "nomain" builds to run on the mainnet
 	NoMainOverride bool `mapstructure:"no-main-override"`
+}
+
+type DatabaseQueryCacheSizes struct {
+	EpochATXs     int `mapstructure:"epoch-atxs"`
+	ATXBlob       int `mapstructure:"atx-blob"`
+	ActiveSetBlob int `mapstructure:"active-set-blob"`
 }
 
 type DeprecatedPoETServers struct{}
@@ -190,6 +200,7 @@ func DefaultConfig() Config {
 		Sync:            syncer.DefaultConfig(),
 		Recovery:        checkpoint.DefaultConfig(),
 		Cache:           datastore.DefaultConfig(),
+		ActiveSet:       miner.DefaultActiveSetPrepartion(),
 		Certifier:       activation.DefaultCertifierConfig(),
 	}
 }
@@ -224,9 +235,14 @@ func defaultBaseConfig() BaseConfig {
 		DatabaseConnections:          16,
 		DatabaseSizeMeteringInterval: 10 * time.Minute,
 		DatabasePruneInterval:        30 * time.Minute,
-		NetworkHRP:                   "sm",
-		ATXGradeDelay:                10 * time.Second,
-		PostValidDelay:               12 * time.Hour,
+		DatabaseQueryCacheSizes: DatabaseQueryCacheSizes{
+			EpochATXs:     20,
+			ATXBlob:       10000,
+			ActiveSetBlob: 200,
+		},
+		NetworkHRP:     "sm",
+		ATXGradeDelay:  10 * time.Second,
+		PostValidDelay: 12 * time.Hour,
 	}
 }
 

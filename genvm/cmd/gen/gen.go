@@ -2,11 +2,11 @@ package gen
 
 import (
 	"bytes"
-	"crypto/ed25519"
 	"encoding/hex"
 	"fmt"
 	"os"
 
+	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"github.com/spacemeshos/economics/constants"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"

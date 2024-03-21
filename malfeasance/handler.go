@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/spacemeshos/post/shared"
@@ -33,7 +34,7 @@ type Handler struct {
 	logger       log.Log
 	cdb          *datastore.CachedDB
 	self         p2p.Peer
-	nodeID       types.NodeID
+	nodeIDs      []types.NodeID
 	edVerifier   SigVerifier
 	tortoise     tortoise
 	postVerifier postVerifier
@@ -43,7 +44,7 @@ func NewHandler(
 	cdb *datastore.CachedDB,
 	lg log.Log,
 	self p2p.Peer,
-	nodeID types.NodeID,
+	nodeID []types.NodeID,
 	edVerifier SigVerifier,
 	tortoise tortoise,
 	postVerifier postVerifier,
@@ -52,7 +53,7 @@ func NewHandler(
 		logger:       lg,
 		cdb:          cdb,
 		self:         self,
-		nodeID:       nodeID,
+		nodeIDs:      nodeID,
 		edVerifier:   edVerifier,
 		tortoise:     tortoise,
 		postVerifier: postVerifier,
@@ -62,7 +63,7 @@ func NewHandler(
 func (h *Handler) reportMalfeasance(smesher types.NodeID, mp *types.MalfeasanceProof) {
 	h.tortoise.OnMalfeasance(smesher)
 	events.ReportMalfeasance(smesher, mp)
-	if h.nodeID == smesher {
+	if slices.Contains(h.nodeIDs, smesher) {
 		events.EmitOwnMalfeasanceProof(smesher, mp)
 	}
 }

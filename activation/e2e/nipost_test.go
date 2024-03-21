@@ -67,6 +67,7 @@ func launchPostSupervisor(
 	tb testing.TB,
 	log *zap.Logger,
 	mgr *activation.PostSetupManager,
+	sig *signing.EdSigner,
 	cfg grpcserver.Config,
 	postOpts activation.PostSetupOpts,
 ) func() {
@@ -76,10 +77,10 @@ func launchPostSupervisor(
 	provingOpts := activation.DefaultPostProvingOpts()
 	provingOpts.RandomXMode = activation.PostRandomXModeLight
 
-	ps, err := activation.NewPostSupervisor(log, cmdCfg, postCfg, provingOpts, mgr)
-	require.NoError(tb, err)
-	require.NotNil(tb, ps)
-	require.NoError(tb, ps.Start(postOpts))
+	builder := activation.NewMockAtxBuilder(gomock.NewController(tb))
+	builder.EXPECT().Register(gomock.Any())
+	ps := activation.NewPostSupervisor(log, postCfg, provingOpts, mgr, builder)
+	require.NoError(tb, ps.Start(cmdCfg, postOpts, sig))
 	return func() { assert.NoError(tb, ps.Stop(false)) }
 }
 
@@ -102,12 +103,12 @@ func launchServer(tb testing.TB, services ...grpcserver.ServiceAPI) (grpcserver.
 	return cfg, func() { assert.NoError(tb, server.Close()) }
 }
 
-func initPost(tb testing.TB, mgr *activation.PostSetupManager, opts activation.PostSetupOpts) {
+func initPost(tb testing.TB, mgr *activation.PostSetupManager, opts activation.PostSetupOpts, id types.NodeID) {
 	tb.Helper()
 
 	// Create data.
-	require.NoError(tb, mgr.PrepareInitializer(context.Background(), opts))
-	require.NoError(tb, mgr.StartSession(context.Background()))
+	require.NoError(tb, mgr.PrepareInitializer(context.Background(), opts, id))
+	require.NoError(tb, mgr.StartSession(context.Background(), id))
 	require.Equal(tb, activation.PostSetupStateComplete, mgr.Status().State)
 }
 
@@ -131,14 +132,14 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	})
 
 	validator := activation.NewMocknipostValidator(ctrl)
-	mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX, syncer, validator)
+	mgr, err := activation.NewPostSetupManager(cfg, logger, cdb, goldenATX, syncer, validator)
 	require.NoError(t, err)
 
 	opts := activation.DefaultPostSetupOpts()
 	opts.DataDir = t.TempDir()
 	opts.ProviderID.SetUint32(initialization.CPUProviderID())
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
-	initPost(t, mgr, opts)
+	initPost(t, mgr, opts, sig.NodeID())
 
 	// ensure that genesis aligns with layer timings
 	genesis := time.Now().Add(layerDuration).Round(layerDuration)
@@ -184,7 +185,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	t.Cleanup(launchPostSupervisor(t, logger, mgr, grpcCfg, opts))
+	t.Cleanup(launchPostSupervisor(t, logger, mgr, sig, grpcCfg, opts))
 
 	var postClient activation.PostClient
 	require.Eventually(t, func() bool {
@@ -275,12 +276,12 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 		sig := sig
 		opts := opts
 		eg.Go(func() error {
-			mgr, err := activation.NewPostSetupManager(sig.NodeID(), cfg, logger, cdb, goldenATX, syncer, validator)
+			mgr, err := activation.NewPostSetupManager(cfg, logger, cdb, goldenATX, syncer, validator)
 			require.NoError(t, err)
 
 			opts.DataDir = t.TempDir()
-			initPost(t, mgr, opts)
-			t.Cleanup(launchPostSupervisor(t, logger, mgr, grpcCfg, opts))
+			initPost(t, mgr, opts, sig.NodeID())
+			t.Cleanup(launchPostSupervisor(t, logger, mgr, sig, grpcCfg, opts))
 
 			require.Eventually(t, func() bool {
 				_, err := svc.Client(sig.NodeID())

@@ -32,10 +32,12 @@ type LoggerConfig struct {
 	MeshLoggerLevel            string `mapstructure:"mesh"`
 	SyncLoggerLevel            string `mapstructure:"sync"`
 	HareOracleLoggerLevel      string `mapstructure:"hareOracle"`
+	HareLoggerLevel            string `mapstructure:"hare"`
 	BlockCertLoggerLevel       string `mapstructure:"blockCert"`
 	BlockGenLoggerLevel        string `mapstructure:"blockGenerator"`
 	BlockHandlerLoggerLevel    string `mapstructure:"blockHandler"`
 	TxHandlerLoggerLevel       string `mapstructure:"txHandler"`
+	ProposalStoreLoggerLevel   string `mapstructure:"proposalStore"`
 	ProposalBuilderLoggerLevel string `mapstructure:"proposalBuilder"`
 	ProposalListenerLevel      string `mapstructure:"proposalListener"`
 	NipostBuilderLoggerLevel   string `mapstructure:"nipostBuilder"`
@@ -54,8 +56,8 @@ func DefaultLoggingConfig() LoggerConfig {
 	return LoggerConfig{
 		Encoder:                    ConsoleLogEncoder,
 		AppLoggerLevel:             defaultLoggingLevel.String(),
-		GrpcLoggerLevel:            defaultLoggingLevel.String(),
-		P2PLoggerLevel:             zapcore.WarnLevel.String(),
+		GrpcLoggerLevel:            zapcore.WarnLevel.String(),
+		P2PLoggerLevel:             zapcore.ErrorLevel.String(),
 		PostLoggerLevel:            defaultLoggingLevel.String(),
 		StateDbLoggerLevel:         defaultLoggingLevel.String(),
 		AtxHandlerLevel:            defaultLoggingLevel.String(),
@@ -67,6 +69,7 @@ func DefaultLoggingConfig() LoggerConfig {
 		SyncLoggerLevel:            defaultLoggingLevel.String(),
 		FetcherLoggerLevel:         defaultLoggingLevel.String(),
 		HareOracleLoggerLevel:      defaultLoggingLevel.String(),
+		HareLoggerLevel:            defaultLoggingLevel.String(),
 		NipostBuilderLoggerLevel:   defaultLoggingLevel.String(),
 		TimeSyncLoggerLevel:        defaultLoggingLevel.String(),
 		VMLogLevel:                 defaultLoggingLevel.String(),

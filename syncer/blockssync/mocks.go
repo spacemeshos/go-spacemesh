@@ -5,6 +5,7 @@
 //
 //	mockgen -typed -package=blockssync -destination=./mocks.go -source=./blocks.go
 //
+
 // Package blockssync is a generated GoMock package.
 package blockssync
 
@@ -48,31 +49,31 @@ func (m *MockblockFetcher) GetBlocks(arg0 context.Context, arg1 []types.BlockID)
 }
 
 // GetBlocks indicates an expected call of GetBlocks.
-func (mr *MockblockFetcherMockRecorder) GetBlocks(arg0, arg1 any) *blockFetcherGetBlocksCall {
+func (mr *MockblockFetcherMockRecorder) GetBlocks(arg0, arg1 any) *MockblockFetcherGetBlocksCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlocks", reflect.TypeOf((*MockblockFetcher)(nil).GetBlocks), arg0, arg1)
-	return &blockFetcherGetBlocksCall{Call: call}
+	return &MockblockFetcherGetBlocksCall{Call: call}
 }
 
-// blockFetcherGetBlocksCall wrap *gomock.Call
-type blockFetcherGetBlocksCall struct {
+// MockblockFetcherGetBlocksCall wrap *gomock.Call
+type MockblockFetcherGetBlocksCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *blockFetcherGetBlocksCall) Return(arg0 error) *blockFetcherGetBlocksCall {
+func (c *MockblockFetcherGetBlocksCall) Return(arg0 error) *MockblockFetcherGetBlocksCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *blockFetcherGetBlocksCall) Do(f func(context.Context, []types.BlockID) error) *blockFetcherGetBlocksCall {
+func (c *MockblockFetcherGetBlocksCall) Do(f func(context.Context, []types.BlockID) error) *MockblockFetcherGetBlocksCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *blockFetcherGetBlocksCall) DoAndReturn(f func(context.Context, []types.BlockID) error) *blockFetcherGetBlocksCall {
+func (c *MockblockFetcherGetBlocksCall) DoAndReturn(f func(context.Context, []types.BlockID) error) *MockblockFetcherGetBlocksCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

@@ -5,6 +5,7 @@
 //
 //	mockgen -typed -package=sql -destination=./mocks.go -source=./interface.go
 //
+
 // Package sql is a generated GoMock package.
 package sql
 
@@ -46,31 +47,31 @@ func (m *MockMigration) Apply(db Executor) error {
 }
 
 // Apply indicates an expected call of Apply.
-func (mr *MockMigrationMockRecorder) Apply(db any) *MigrationApplyCall {
+func (mr *MockMigrationMockRecorder) Apply(db any) *MockMigrationApplyCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Apply", reflect.TypeOf((*MockMigration)(nil).Apply), db)
-	return &MigrationApplyCall{Call: call}
+	return &MockMigrationApplyCall{Call: call}
 }
 
-// MigrationApplyCall wrap *gomock.Call
-type MigrationApplyCall struct {
+// MockMigrationApplyCall wrap *gomock.Call
+type MockMigrationApplyCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MigrationApplyCall) Return(arg0 error) *MigrationApplyCall {
+func (c *MockMigrationApplyCall) Return(arg0 error) *MockMigrationApplyCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MigrationApplyCall) Do(f func(Executor) error) *MigrationApplyCall {
+func (c *MockMigrationApplyCall) Do(f func(Executor) error) *MockMigrationApplyCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MigrationApplyCall) DoAndReturn(f func(Executor) error) *MigrationApplyCall {
+func (c *MockMigrationApplyCall) DoAndReturn(f func(Executor) error) *MockMigrationApplyCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -84,31 +85,31 @@ func (m *MockMigration) Name() string {
 }
 
 // Name indicates an expected call of Name.
-func (mr *MockMigrationMockRecorder) Name() *MigrationNameCall {
+func (mr *MockMigrationMockRecorder) Name() *MockMigrationNameCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Name", reflect.TypeOf((*MockMigration)(nil).Name))
-	return &MigrationNameCall{Call: call}
+	return &MockMigrationNameCall{Call: call}
 }
 
-// MigrationNameCall wrap *gomock.Call
-type MigrationNameCall struct {
+// MockMigrationNameCall wrap *gomock.Call
+type MockMigrationNameCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MigrationNameCall) Return(arg0 string) *MigrationNameCall {
+func (c *MockMigrationNameCall) Return(arg0 string) *MockMigrationNameCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MigrationNameCall) Do(f func() string) *MigrationNameCall {
+func (c *MockMigrationNameCall) Do(f func() string) *MockMigrationNameCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MigrationNameCall) DoAndReturn(f func() string) *MigrationNameCall {
+func (c *MockMigrationNameCall) DoAndReturn(f func() string) *MockMigrationNameCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -122,31 +123,31 @@ func (m *MockMigration) Order() int {
 }
 
 // Order indicates an expected call of Order.
-func (mr *MockMigrationMockRecorder) Order() *MigrationOrderCall {
+func (mr *MockMigrationMockRecorder) Order() *MockMigrationOrderCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Order", reflect.TypeOf((*MockMigration)(nil).Order))
-	return &MigrationOrderCall{Call: call}
+	return &MockMigrationOrderCall{Call: call}
 }
 
-// MigrationOrderCall wrap *gomock.Call
-type MigrationOrderCall struct {
+// MockMigrationOrderCall wrap *gomock.Call
+type MockMigrationOrderCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MigrationOrderCall) Return(arg0 int) *MigrationOrderCall {
+func (c *MockMigrationOrderCall) Return(arg0 int) *MockMigrationOrderCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MigrationOrderCall) Do(f func() int) *MigrationOrderCall {
+func (c *MockMigrationOrderCall) Do(f func() int) *MockMigrationOrderCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MigrationOrderCall) DoAndReturn(f func() int) *MigrationOrderCall {
+func (c *MockMigrationOrderCall) DoAndReturn(f func() int) *MockMigrationOrderCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -160,31 +161,31 @@ func (m *MockMigration) Rollback() error {
 }
 
 // Rollback indicates an expected call of Rollback.
-func (mr *MockMigrationMockRecorder) Rollback() *MigrationRollbackCall {
+func (mr *MockMigrationMockRecorder) Rollback() *MockMigrationRollbackCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rollback", reflect.TypeOf((*MockMigration)(nil).Rollback))
-	return &MigrationRollbackCall{Call: call}
+	return &MockMigrationRollbackCall{Call: call}
 }
 
-// MigrationRollbackCall wrap *gomock.Call
-type MigrationRollbackCall struct {
+// MockMigrationRollbackCall wrap *gomock.Call
+type MockMigrationRollbackCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MigrationRollbackCall) Return(arg0 error) *MigrationRollbackCall {
+func (c *MockMigrationRollbackCall) Return(arg0 error) *MockMigrationRollbackCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MigrationRollbackCall) Do(f func() error) *MigrationRollbackCall {
+func (c *MockMigrationRollbackCall) Do(f func() error) *MockMigrationRollbackCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MigrationRollbackCall) DoAndReturn(f func() error) *MigrationRollbackCall {
+func (c *MockMigrationRollbackCall) DoAndReturn(f func() error) *MockMigrationRollbackCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
