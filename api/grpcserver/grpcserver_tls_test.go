@@ -36,7 +36,7 @@ func genPrivateKey(tb testing.TB, path string) *rsa.PrivateKey {
 	require.NoError(tb, err)
 	defer f.Close()
 	require.NoError(tb, pem.Encode(f, &pem.Block{
-		Type:  "PRIVATE KEY",
+		Type:  "RSA PRIVATE KEY",
 		Bytes: x509.MarshalPKCS1PrivateKey(caKey),
 	}))
 	return caKey

@@ -198,6 +198,14 @@ func ZContext(ctx context.Context) zap.Field {
 	return zap.Inline(&marshalledContext{Context: ctx})
 }
 
+func NiceZapError(err error) zap.Field {
+	var loggable ObjectMarshaller
+	if errors.As(err, &loggable) {
+		return zap.Inline(loggable)
+	}
+	return zap.Error(err)
+}
+
 func Any(key string, value any) Field {
 	return Field(zap.Any(key, value))
 }

@@ -1,10 +1,10 @@
 package tests
 
 import (
-	"crypto/ed25519"
 	"sync"
 	"testing"
 
+	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

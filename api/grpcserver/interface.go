@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -56,8 +57,13 @@ type atxProvider interface {
 	GetMalfeasanceProof(id types.NodeID) (*types.MalfeasanceProof, error)
 }
 
+type postState interface {
+	// PostStates returns the current state of all registered IDs.
+	PostStates() map[types.IdentityDescriptor]types.PostState
+}
+
 type postSupervisor interface {
-	Start(opts activation.PostSetupOpts) error
+	Start(cmdCfg activation.PostSupervisorConfig, opts activation.PostSetupOpts, sig *signing.EdSigner) error
 	Stop(deleteFiles bool) error
 
 	Config() activation.PostConfig

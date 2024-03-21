@@ -19,6 +19,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // SmesherService exposes endpoints to manage smeshing.
@@ -27,7 +28,9 @@ type SmesherService struct {
 	postSupervisor   postSupervisor
 
 	streamInterval time.Duration
+	cmdCfg         *activation.PostSupervisorConfig
 	postOpts       activation.PostSetupOpts
+	sig            *signing.EdSigner
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -50,17 +53,27 @@ func NewSmesherService(
 	postSupervisor postSupervisor,
 	streamInterval time.Duration,
 	postOpts activation.PostSetupOpts,
+	sig *signing.EdSigner,
 ) *SmesherService {
 	return &SmesherService{
 		smeshingProvider: smeshing,
 		postSupervisor:   postSupervisor,
 		streamInterval:   streamInterval,
 		postOpts:         postOpts,
+		sig:              sig,
 	}
+}
+
+// SetPostServiceConfig sets the post supervisor config.
+func (s *SmesherService) SetPostServiceConfig(cfg activation.PostSupervisorConfig) {
+	s.cmdCfg = &cfg
 }
 
 // IsSmeshing reports whether the node is smeshing.
 func (s SmesherService) IsSmeshing(context.Context, *emptypb.Empty) (*pb.IsSmeshingResponse, error) {
+	if s.sig == nil {
+		return nil, status.Errorf(codes.FailedPrecondition, "node is not configured for supervised smeshing")
+	}
 	return &pb.IsSmeshingResponse{IsSmeshing: s.smeshingProvider.Smeshing()}, nil
 }
 
@@ -69,6 +82,17 @@ func (s SmesherService) StartSmeshing(
 	ctx context.Context,
 	in *pb.StartSmeshingRequest,
 ) (*pb.StartSmeshingResponse, error) {
+	if s.sig == nil {
+		return nil, status.Errorf(codes.FailedPrecondition, "node is not configured for supervised smeshing")
+	}
+	if s.cmdCfg == nil {
+		return nil, status.Errorf(codes.FailedPrecondition, "post supervisor config is not set")
+	}
+	opts, err := s.postSetupOpts(in.Opts)
+	if err != nil {
+		status.Error(codes.InvalidArgument, err.Error())
+	}
+
 	if in.Coinbase == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "`Coinbase` must be provided")
 	}
@@ -77,11 +101,7 @@ func (s SmesherService) StartSmeshing(
 		return nil, fmt.Errorf("failed to parse in.Coinbase.Address `%s`: %w", in.Coinbase.Address, err)
 	}
 
-	opts, err := s.postSetupOpts(in.Opts)
-	if err != nil {
-		status.Error(codes.InvalidArgument, err.Error())
-	}
-	if err := s.postSupervisor.Start(opts); err != nil {
+	if err := s.postSupervisor.Start(*s.cmdCfg, opts, s.sig); err != nil {
 		ctxzap.Error(ctx, "failed to start post supervisor", zap.Error(err))
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to start post supervisor: %v", err))
 	}

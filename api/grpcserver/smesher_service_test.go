@@ -17,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 func TestPostConfig(t *testing.T) {
@@ -28,6 +29,7 @@ func TestPostConfig(t *testing.T) {
 		postSupervisor,
 		time.Second,
 		activation.DefaultPostSetupOpts(),
+		nil,
 	)
 
 	postConfig := activation.PostConfig{
@@ -53,12 +55,17 @@ func TestStartSmeshingPassesCorrectSmeshingOpts(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
 	postSupervisor := grpcserver.NewMockpostSupervisor(ctrl)
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	cmdCfg := activation.DefaultTestPostServiceConfig()
 	svc := grpcserver.NewSmesherService(
 		smeshingProvider,
 		postSupervisor,
 		time.Second,
 		activation.DefaultPostSetupOpts(),
+		sig,
 	)
+	svc.SetPostServiceConfig(cmdCfg)
 
 	types.SetNetworkHRP("stest")
 	addr, err := types.StringToAddress("stest1qqqqqqrs60l66w5uksxzmaznwq6xnhqfv56c28qlkm4a5")
@@ -73,7 +80,7 @@ func TestStartSmeshingPassesCorrectSmeshingOpts(t *testing.T) {
 		ComputeBatchSize: config.DefaultComputeBatchSize,
 	}
 	opts.ProviderID.SetUint32(providerID)
-	postSupervisor.EXPECT().Start(opts).Return(nil)
+	postSupervisor.EXPECT().Start(cmdCfg, opts, sig).Return(nil)
 	smeshingProvider.EXPECT().StartSmeshing(addr).Return(nil)
 
 	_, err = svc.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{
@@ -89,6 +96,84 @@ func TestStartSmeshingPassesCorrectSmeshingOpts(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestStartSmeshing_ErrorOnMissingPostServiceConfig(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
+	postSupervisor := grpcserver.NewMockpostSupervisor(ctrl)
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	svc := grpcserver.NewSmesherService(
+		smeshingProvider,
+		postSupervisor,
+		time.Second,
+		activation.DefaultPostSetupOpts(),
+		sig,
+	)
+
+	providerID := uint32(7)
+	opts := activation.PostSetupOpts{
+		DataDir:          "data-dir",
+		NumUnits:         1,
+		MaxFileSize:      1024,
+		Throttle:         true,
+		Scrypt:           config.DefaultLabelParams(),
+		ComputeBatchSize: config.DefaultComputeBatchSize,
+	}
+	opts.ProviderID.SetUint32(providerID)
+
+	_, err = svc.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{
+		Coinbase: &pb.AccountId{Address: "stest1qqqqqqrs60l66w5uksxzmaznwq6xnhqfv56c28qlkm4a5"},
+		Opts: &pb.PostSetupOpts{
+			DataDir:     "data-dir",
+			NumUnits:    1,
+			MaxFileSize: 1024,
+			ProviderId:  &providerID,
+			Throttle:    true,
+		},
+	})
+	require.Equal(t, codes.FailedPrecondition, status.Code(err))
+	require.ErrorContains(t, err, "post supervisor config is not set")
+}
+
+func TestStartSmeshing_ErrorOnMultiSmeshingSetup(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
+	postSupervisor := grpcserver.NewMockpostSupervisor(ctrl)
+	svc := grpcserver.NewSmesherService(
+		smeshingProvider,
+		postSupervisor,
+		time.Second,
+		activation.DefaultPostSetupOpts(),
+		nil, // no nodeID in multi smesher setup
+	)
+	svc.SetPostServiceConfig(activation.DefaultTestPostServiceConfig())
+
+	types.SetNetworkHRP("stest")
+	providerID := uint32(7)
+	opts := activation.PostSetupOpts{
+		DataDir:          "data-dir",
+		NumUnits:         1,
+		MaxFileSize:      1024,
+		Throttle:         true,
+		Scrypt:           config.DefaultLabelParams(),
+		ComputeBatchSize: config.DefaultComputeBatchSize,
+	}
+	opts.ProviderID.SetUint32(providerID)
+
+	_, err := svc.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{
+		Coinbase: &pb.AccountId{Address: "stest1qqqqqqrs60l66w5uksxzmaznwq6xnhqfv56c28qlkm4a5"},
+		Opts: &pb.PostSetupOpts{
+			DataDir:     "data-dir",
+			NumUnits:    1,
+			MaxFileSize: 1024,
+			ProviderId:  &providerID,
+			Throttle:    true,
+		},
+	})
+	require.Equal(t, codes.FailedPrecondition, status.Code(err))
+	require.ErrorContains(t, err, "node is not configured for supervised smeshing")
+}
+
 func TestSmesherService_PostSetupProviders(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
@@ -98,6 +183,7 @@ func TestSmesherService_PostSetupProviders(t *testing.T) {
 		postSupervisor,
 		time.Second,
 		activation.DefaultPostSetupOpts(),
+		nil, // no nodeID in multi smesher setup
 	)
 
 	providers := []activation.PostSetupProvider{
@@ -144,6 +230,7 @@ func TestSmesherService_PostSetupStatus(t *testing.T) {
 			postSupervisor,
 			time.Second,
 			activation.DefaultPostSetupOpts(),
+			nil,
 		)
 
 		postSupervisor.EXPECT().Status().Return(&activation.PostSetupStatus{
@@ -167,6 +254,7 @@ func TestSmesherService_PostSetupStatus(t *testing.T) {
 			postSupervisor,
 			time.Second,
 			activation.DefaultPostSetupOpts(),
+			nil,
 		)
 
 		id := activation.PostProviderID{}
@@ -203,6 +291,7 @@ func TestSmesherService_PostSetupStatus(t *testing.T) {
 			postSupervisor,
 			time.Second,
 			activation.DefaultPostSetupOpts(),
+			nil,
 		)
 
 		id := activation.PostProviderID{}
@@ -240,6 +329,7 @@ func TestSmesherService_SmesherID(t *testing.T) {
 		postSupervisor,
 		time.Second,
 		activation.DefaultPostSetupOpts(),
+		nil,
 	)
 
 	resp, err := svc.SmesherID(context.Background(), &emptypb.Empty{})

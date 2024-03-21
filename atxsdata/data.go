@@ -11,13 +11,18 @@ import (
 // and at the start of current epoch we still need data from previous epoch for hare oracle.
 const minCapacity = 2
 
+// SAFETY: all exported fields are read-only and are safe to read concurrently.
+// Thanks to the fact that ATX is immutable, it is safe to return a pointer to it.
 type ATX struct {
 	Node               types.NodeID
 	Coinbase           types.Address
 	Weight             uint64
 	BaseHeight, Height uint64
 	Nonce              types.VRFPostIndex
-	Malicious          bool
+	// unexported to avoid accidental unsynchronized access
+	// (this field is mutated by the Data under a lock and
+	// might only be safely read under the same lock)
+	malicious bool
 }
 
 type Opt func(*Data)
@@ -99,8 +104,9 @@ func (d *Data) OnEpoch(applied types.EpochID) {
 }
 
 // AddFromVerified extracts relevant fields from verified atx and adds them together with nonce and malicious flag.
-func (d *Data) AddFromHeader(atx *types.ActivationTxHeader, nonce types.VRFPostIndex, malicious bool) {
-	d.Add(
+// Returns the ATX that was added to the store (if any) or `nil` if it wasn't.
+func (d *Data) AddFromHeader(atx *types.ActivationTxHeader, nonce types.VRFPostIndex, malicious bool) *ATX {
+	return d.Add(
 		atx.TargetEpoch(),
 		atx.NodeID,
 		atx.Coinbase,
@@ -113,44 +119,59 @@ func (d *Data) AddFromHeader(atx *types.ActivationTxHeader, nonce types.VRFPostI
 	)
 }
 
-func (d *Data) Add(
-	epoch types.EpochID,
-	node types.NodeID,
-	coinbase types.Address,
-	atx types.ATXID,
-	weight, baseHeight, height uint64,
-	nonce types.VRFPostIndex,
-	malicious bool,
-) {
+// Add adds ATX data to the store.
+// Returns whether the ATX was added to the store.
+func (d *Data) AddAtx(target types.EpochID, id types.ATXID, atx *ATX) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if d.IsEvicted(epoch) {
-		return
+	if d.IsEvicted(target) {
+		return false
 	}
-	ecache, exists := d.epochs[epoch]
+	ecache, exists := d.epochs[target]
 	if !exists {
 		ecache = epochCache{
 			index: map[types.ATXID]*ATX{},
 		}
-		d.epochs[epoch] = ecache
+		d.epochs[target] = ecache
 	}
-	_, exists = ecache.index[atx]
-	if !exists {
-		atxsCounter.WithLabelValues(epoch.String()).Inc()
+
+	if _, exists = ecache.index[id]; exists {
+		return false
 	}
-	data := &ATX{
+
+	atxsCounter.WithLabelValues(target.String()).Inc()
+
+	ecache.index[id] = atx
+	if atx.malicious {
+		d.malicious[atx.Node] = struct{}{}
+	}
+	return true
+}
+
+// Add adds ATX data to the store.
+// Returns the ATX that was added to the store (if any) or `nil` if it wasn't.
+func (d *Data) Add(
+	epoch types.EpochID,
+	node types.NodeID,
+	coinbase types.Address,
+	atxid types.ATXID,
+	weight, baseHeight, height uint64,
+	nonce types.VRFPostIndex,
+	malicious bool,
+) *ATX {
+	atx := &ATX{
 		Node:       node,
 		Coinbase:   coinbase,
 		Weight:     weight,
 		BaseHeight: baseHeight,
 		Height:     height,
 		Nonce:      nonce,
-		Malicious:  malicious,
+		malicious:  malicious,
 	}
-	ecache.index[atx] = data
-	if data.Malicious {
-		d.malicious[node] = struct{}{}
+	if d.AddAtx(epoch, atxid, atx) {
+		return atx
 	}
+	return nil
 }
 
 func (d *Data) IsMalicious(node types.NodeID) bool {
@@ -167,6 +188,7 @@ func (d *Data) SetMalicious(node types.NodeID) {
 }
 
 // Get returns atx data.
+// SAFETY: The returned pointer MUST NOT be modified.
 func (d *Data) Get(epoch types.EpochID, atx types.ATXID) *ATX {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
@@ -179,8 +201,59 @@ func (d *Data) Get(epoch types.EpochID, atx types.ATXID) *ATX {
 		return nil
 	}
 	_, exists = d.malicious[data.Node]
-	data.Malicious = exists
+	data.malicious = exists
 	return data
+}
+
+type lockGuard struct{}
+
+// AtxFilter is a function that filters atxs.
+// The `lockGuard` prevents using the filter functions outside of the allowed context
+// to prevent data races.
+type AtxFilter func(*ATX, lockGuard) bool
+
+func NotMalicious(data *ATX, _ lockGuard) bool {
+	return !data.malicious
+}
+
+// IterateInEpoch calls `fn` for every ATX in epoch.
+// If filters are provided, only atxs that pass all filters are returned.
+// SAFETY: The returned pointer MUST NOT be modified.
+func (d *Data) IterateInEpoch(epoch types.EpochID, fn func(types.ATXID, *ATX), filters ...AtxFilter) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	ecache, exists := d.epochs[epoch]
+	if !exists {
+		return
+	}
+	for id, atx := range ecache.index {
+		if _, exists := d.malicious[atx.Node]; exists {
+			atx.malicious = true
+		}
+		ok := true
+		for _, filter := range filters {
+			ok = ok && filter(atx, lockGuard{})
+		}
+		if ok {
+			fn(id, atx)
+		}
+	}
+}
+
+func (d *Data) MissingInEpoch(epoch types.EpochID, atxs []types.ATXID) []types.ATXID {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	ecache, exists := d.epochs[epoch]
+	if !exists {
+		return atxs
+	}
+	var missing []types.ATXID
+	for _, id := range atxs {
+		if _, exists := ecache.index[id]; !exists {
+			missing = append(missing, id)
+		}
+	}
+	return missing
 }
 
 // WeightForSet computes total weight of atxs in the set and returned array with

@@ -1,6 +1,7 @@
 package fetch
 
 import (
+	"bytes"
 	"context"
 	"testing"
 	"time"
@@ -12,6 +13,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/p2p/server"
+	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -24,14 +27,17 @@ import (
 
 type testHandler struct {
 	*handler
+	db  *sql.Database
 	cdb *datastore.CachedDB
 }
 
-func createTestHandler(t testing.TB) *testHandler {
+func createTestHandler(t testing.TB, opts ...sql.Opt) *testHandler {
 	lg := logtest.New(t)
-	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
+	db := sql.InMemory(opts...)
+	cdb := datastore.NewCachedDB(db, lg)
 	return &testHandler{
-		handler: newHandler(cdb, datastore.NewBlobStore(cdb), lg),
+		handler: newHandler(cdb, datastore.NewBlobStore(cdb, store.New()), lg),
+		db:      db,
 		cdb:     cdb,
 	}
 }
@@ -313,13 +319,98 @@ func TestHandleEpochInfoReq(t *testing.T) {
 			epochBytes, err := codec.Encode(epoch)
 			require.NoError(t, err)
 
-			out, err := th.handleEpochInfoReq(context.Background(), epochBytes)
-			require.NoError(t, err)
-			var got EpochData
-			require.NoError(t, codec.Decode(out, &got))
-			require.ElementsMatch(t, expected.AtxIDs, got.AtxIDs)
+			t.Run("non-streamed", func(t *testing.T) {
+				out, err := th.handleEpochInfoReq(context.Background(), epochBytes)
+				require.NoError(t, err)
+				var got EpochData
+				require.NoError(t, codec.Decode(out, &got))
+				require.ElementsMatch(t, expected.AtxIDs, got.AtxIDs)
+			})
+
+			t.Run("streamed", func(t *testing.T) {
+				var b bytes.Buffer
+				require.NoError(t, th.handleEpochInfoReqStream(context.Background(), epochBytes, &b))
+				var resp server.Response
+				require.NoError(t, codec.Decode(b.Bytes(), &resp))
+				var got EpochData
+				require.NoError(t, codec.Decode(resp.Data, &got))
+				require.ElementsMatch(t, expected.AtxIDs, got.AtxIDs)
+			})
+
+			t.Run("streamed request failure", func(t *testing.T) {
+				th.db.Close()
+				var b bytes.Buffer
+				require.NoError(t, th.handleEpochInfoReqStream(context.Background(), epochBytes, &b))
+				var resp server.Response
+				require.NoError(t, codec.Decode(b.Bytes(), &resp))
+				require.Empty(t, resp.Data)
+				require.Contains(t, resp.Error, "exec epoch 11: database: no free connection")
+			})
 		})
 	}
+}
+
+func testHandleEpochInfoReqWithQueryCache(
+	t *testing.T,
+	getInfo func(th *testHandler, req []byte, ed *EpochData),
+) {
+	th := createTestHandler(t, sql.WithQueryCache(true))
+	epoch := types.EpochID(11)
+	var expected EpochData
+
+	for i := 0; i < 10; i++ {
+		vatx := newAtx(t, epoch)
+		require.NoError(t, atxs.Add(th.cdb, vatx))
+		atxs.AtxAdded(th.cdb, vatx)
+		expected.AtxIDs = append(expected.AtxIDs, vatx.ID())
+	}
+
+	qc := th.cdb.Executor.(interface{ QueryCount() int })
+	require.Equal(t, 10, qc.QueryCount())
+	epochBytes, err := codec.Encode(epoch)
+	require.NoError(t, err)
+
+	var got EpochData
+	for i := 0; i < 3; i++ {
+		getInfo(th, epochBytes, &got)
+		require.ElementsMatch(t, expected.AtxIDs, got.AtxIDs)
+		require.Equal(t, 11, qc.QueryCount())
+	}
+
+	// Add another ATX which should be appended to the cached slice
+	vatx := newAtx(t, epoch)
+	require.NoError(t, atxs.Add(th.cdb, vatx))
+	atxs.AtxAdded(th.cdb, vatx)
+	expected.AtxIDs = append(expected.AtxIDs, vatx.ID())
+	require.Equal(t, 12, qc.QueryCount())
+
+	getInfo(th, epochBytes, &got)
+	require.ElementsMatch(t, expected.AtxIDs, got.AtxIDs)
+	// The query count is not incremented as the slice is still
+	// cached and the new atx is just appended to it, even though
+	// the response is re-serialized.
+	require.Equal(t, 12, qc.QueryCount())
+}
+
+func TestHandleEpochInfoReqWithQueryCache(t *testing.T) {
+	testHandleEpochInfoReqWithQueryCache(t, func(th *testHandler, req []byte, ed *EpochData) {
+		out, err := th.handleEpochInfoReq(context.Background(), req)
+		require.NoError(t, err)
+		require.NoError(t, codec.Decode(out, ed))
+	})
+}
+
+func TestHandleEpochInfoReqStreamWithQueryCache(t *testing.T) {
+	testHandleEpochInfoReqWithQueryCache(t, func(th *testHandler, req []byte, ed *EpochData) {
+		var b bytes.Buffer
+		err := th.handleEpochInfoReqStream(context.Background(), req, &b)
+		require.NoError(t, err)
+		n, err := server.ReadResponse(&b, func(resLen uint32) (int, error) {
+			return codec.DecodeFrom(&b, ed)
+		})
+		require.NoError(t, err)
+		require.NotZero(t, n)
+	})
 }
 
 func TestHandleMaliciousIDsReq(t *testing.T) {

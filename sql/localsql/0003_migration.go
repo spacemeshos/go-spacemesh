@@ -3,27 +3,42 @@ package localsql
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
 
 	"github.com/natefinch/atomic"
 	"github.com/spacemeshos/post/initialization"
+	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-func New0003Migration(dataDir string, poetClients []PoetClient) *migration0003 {
+var mainnetPoet2ServiceID []byte
+
+func init() {
+	var err error
+	mainnetPoet2ServiceID, err = base64.StdEncoding.DecodeString("8RXEI0MwO3uJUINFFlOm/uTjJCneV9FidMpXmn55G8Y=")
+	if err != nil {
+		panic(fmt.Errorf("failed to decode mainnet poet 2 service id: %w", err))
+	}
+}
+
+func New0003Migration(log *zap.Logger, dataDir string, poetClients []PoetClient) *migration0003 {
 	return &migration0003{
+		logger:      log,
 		dataDir:     dataDir,
 		poetClients: poetClients,
 	}
 }
 
 type migration0003 struct {
+	logger      *zap.Logger
 	dataDir     string
 	poetClients []PoetClient
 }
@@ -38,6 +53,11 @@ func (migration0003) Order() int {
 
 func (m migration0003) Rollback() error {
 	filename := filepath.Join(m.dataDir, builderFilename)
+	// skip if file exists
+	if _, err := os.Stat(filename); err == nil {
+		return nil
+	}
+
 	backupName := fmt.Sprintf("%s.bak", filename)
 	if err := atomic.ReplaceFile(backupName, filename); err != nil {
 		return fmt.Errorf("rolling back nipost builder state: %w", err)
@@ -96,10 +116,9 @@ func (m migration0003) moveNipostStateToDb(db sql.Executor, dataDir string) erro
 	state, err := loadBuilderState(dataDir)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
-		return nil // no state to move
+		return nil // no state to migrate
 	case err != nil:
 		return fmt.Errorf("load nipost builder state: %w", err)
-	default:
 	}
 
 	meta, err := initialization.LoadMetadata(dataDir)
@@ -107,14 +126,41 @@ func (m migration0003) moveNipostStateToDb(db sql.Executor, dataDir string) erro
 		return fmt.Errorf("load post metadata: %w", err)
 	}
 
+	challenge, err := m.getChallengeHash(db, types.BytesToNodeID(meta.NodeId))
+	switch {
+	case errors.Is(err, sql.ErrNotFound):
+		m.logger.Warn("nipost state on disk but no challenge in database - skipping migration",
+			zap.String("state_challenge", state.Challenge.ShortString()),
+			zap.String("node_id", types.BytesToNodeID(meta.NodeId).ShortString()),
+		)
+		return discardBuilderState(dataDir)
+	case err != nil:
+		return fmt.Errorf("get challenge hash: %w", err)
+	}
+
+	if !bytes.Equal(challenge.Bytes(), state.Challenge.Bytes()) {
+		m.logger.Warn("challenge mismatch - discarding builder state and skipping migration",
+			zap.String("node_id", types.BytesToNodeID(meta.NodeId).ShortString()),
+			zap.String("challenge", challenge.ShortString()),
+			zap.String("state_challenge", state.Challenge.ShortString()),
+		)
+		return discardBuilderState(dataDir)
+	}
+
 	if len(state.PoetRequests) == 0 {
 		return discardBuilderState(dataDir) // Phase 0: Submit PoET challenge to PoET services
 	}
 	// Phase 0 completed.
 	for _, req := range state.PoetRequests {
+		if bytes.Equal(req.PoetServiceID.ServiceID, mainnetPoet2ServiceID) {
+			m.logger.Info("PoET `mainnet-poet-2.spacemesh.network` has been retired - skipping")
+			continue
+		}
+
+		poetPubKey := base64.StdEncoding.EncodeToString(req.PoetServiceID.ServiceID)
 		address, err := m.getAddress(req.PoetServiceID)
 		if err != nil {
-			return fmt.Errorf("get address for poet service id %x: %w", req.PoetServiceID.ServiceID, err)
+			return fmt.Errorf("get address for poet service id %s: %w", poetPubKey, err)
 		}
 
 		enc := func(stmt *sql.Statement) {
@@ -130,6 +176,14 @@ func (m migration0003) moveNipostStateToDb(db sql.Executor, dataDir string) erro
 		); err != nil {
 			return fmt.Errorf("insert poet registration for %s: %w", types.BytesToNodeID(meta.NodeId).ShortString(), err)
 		}
+
+		m.logger.Info("PoET registration added to database",
+			zap.String("node_id", types.BytesToNodeID(meta.NodeId).ShortString()),
+			zap.String("poet_service_id", poetPubKey),
+			zap.String("address", address),
+			zap.String("round_id", req.PoetRound.ID),
+			zap.Time("round_end", req.PoetRound.End.IntoTime()),
+		)
 	}
 
 	if state.PoetProofRef == types.EmptyPoetProofRef {
@@ -199,5 +253,44 @@ func (m migration0003) getAddress(serviceID PoetServiceID) (string, error) {
 			return client.Address(), nil
 		}
 	}
-	return "", fmt.Errorf("no poet client found for service id %x", serviceID.ServiceID)
+	key := base64.StdEncoding.EncodeToString(serviceID.ServiceID)
+	return "", fmt.Errorf("no poet client found for service id %s", key)
+}
+
+func (m migration0003) getChallengeHash(db sql.Executor, nodeID types.NodeID) (types.Hash32, error) {
+	var ch *types.NIPostChallenge
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, nodeID.Bytes())
+	}
+	dec := func(stmt *sql.Statement) bool {
+		ch = &types.NIPostChallenge{}
+		ch.PublishEpoch = types.EpochID(stmt.ColumnInt64(0))
+		ch.Sequence = uint64(stmt.ColumnInt64(1))
+		stmt.ColumnBytes(2, ch.PrevATXID[:])
+		stmt.ColumnBytes(3, ch.PositioningATX[:])
+		ch.CommitmentATX = &types.ATXID{}
+		if n := stmt.ColumnBytes(4, ch.CommitmentATX[:]); n == 0 {
+			ch.CommitmentATX = nil
+		}
+		if n := stmt.ColumnLen(6); n > 0 {
+			ch.InitialPost = &types.Post{
+				Nonce:   uint32(stmt.ColumnInt64(5)),
+				Indices: make([]byte, n),
+				Pow:     uint64(stmt.ColumnInt64(7)),
+			}
+			stmt.ColumnBytes(6, ch.InitialPost.Indices)
+		}
+		return true
+	}
+	if _, err := db.Exec(`
+		select epoch, sequence, prev_atx, pos_atx, commit_atx,
+			post_nonce, post_indices, post_pow
+		from challenge where id = ?1 limit 1;`, enc, dec,
+	); err != nil {
+		return types.Hash32{}, fmt.Errorf("get challenge from node id %s: %w", nodeID.ShortString(), err)
+	}
+	if ch == nil {
+		return types.Hash32{}, fmt.Errorf("get challenge from node id %s: %w", nodeID.ShortString(), sql.ErrNotFound)
+	}
+	return ch.Hash(), nil
 }

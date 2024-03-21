@@ -281,7 +281,7 @@ func (t *EpochData) DecodeScale(dec *scale.Decoder) (total int, err error) {
 
 func (t *LayerData) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.Ballots, 500)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.Ballots, 800)
 		if err != nil {
 			return total, err
 		}
@@ -292,7 +292,7 @@ func (t *LayerData) EncodeScale(enc *scale.Encoder) (total int, err error) {
 
 func (t *LayerData) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[types.BallotID](dec, 500)
+		field, n, err := scale.DecodeStructSliceWithLimit[types.BallotID](dec, 800)
 		if err != nil {
 			return total, err
 		}

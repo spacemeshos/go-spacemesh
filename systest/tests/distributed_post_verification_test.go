@@ -108,7 +108,8 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	require.NoError(t, host.Start())
 	t.Cleanup(func() { assert.NoError(t, host.Stop()) })
 
-	syncer := activation.NewMocksyncer(gomock.NewController(t))
+	ctrl := gomock.NewController(t)
+	syncer := activation.NewMocksyncer(ctrl)
 	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
 		ch := make(chan struct{})
 		close(ch)
@@ -117,25 +118,25 @@ func TestPostMalfeasanceProof(t *testing.T) {
 
 	// 1. Initialize
 	postSetupMgr, err := activation.NewPostSetupManager(
-		signer.NodeID(),
 		cfg.POST,
 		logger.Named("post"),
 		datastore.NewCachedDB(sql.InMemory(), log.NewNop()),
 		cl.GoldenATX(),
 		syncer,
-		activation.NewMocknipostValidator(gomock.NewController(t)),
+		activation.NewMocknipostValidator(ctrl),
 	)
 	require.NoError(t, err)
 
-	postSupervisor, err := activation.NewPostSupervisor(
+	builder := activation.NewMockAtxBuilder(ctrl)
+	builder.EXPECT().Register(signer)
+	postSupervisor := activation.NewPostSupervisor(
 		logger.Named("post-supervisor"),
-		cfg.POSTService,
 		cfg.POST,
 		cfg.SMESHING.ProvingOpts,
 		postSetupMgr,
+		builder,
 	)
-	require.NoError(t, err)
-	require.NoError(t, postSupervisor.Start(cfg.SMESHING.Opts))
+	require.NoError(t, postSupervisor.Start(cfg.POSTService, cfg.SMESHING.Opts, signer))
 	t.Cleanup(func() { assert.NoError(t, postSupervisor.Stop(false)) })
 
 	// 2. create ATX with invalid POST labels

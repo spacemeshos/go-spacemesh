@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -54,9 +55,14 @@ func TestReplayMainnet(t *testing.T) {
 	require.NoError(t, err)
 
 	start := time.Now()
+	atxsdata, err := atxsdata.Warm(db,
+		atxsdata.WithCapacityFromLayers(cfg.Tortoise.WindowSize, cfg.LayersPerEpoch),
+	)
+	require.NoError(t, err)
 	trtl, err := tortoise.Recover(
 		context.Background(),
 		db,
+		atxsdata,
 		clock.CurrentLayer(), opts...,
 	)
 	require.NoError(t, err)

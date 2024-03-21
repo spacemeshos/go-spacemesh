@@ -40,30 +40,30 @@ func launchPostSupervisor(
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	id := sig.NodeID()
 	goldenATXID := types.RandomATXID()
 
-	validator := activation.NewMocknipostValidator(gomock.NewController(tb))
+	ctrl := gomock.NewController(tb)
+	validator := activation.NewMocknipostValidator(ctrl)
 	validator.EXPECT().
 		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		AnyTimes()
 
-	syncer := activation.NewMocksyncer(gomock.NewController(tb))
+	syncer := activation.NewMocksyncer(ctrl)
 	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
 		ch := make(chan struct{})
 		close(ch)
 		return ch
 	})
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
-	mgr, err := activation.NewPostSetupManager(id, postCfg, log.Named("post manager"), cdb, goldenATXID, syncer, validator)
+	mgr, err := activation.NewPostSetupManager(postCfg, log.Named("post manager"), cdb, goldenATXID, syncer, validator)
 	require.NoError(tb, err)
 
 	// start post supervisor
-	ps, err := activation.NewPostSupervisor(log, serviceCfg, postCfg, provingOpts, mgr)
-	require.NoError(tb, err)
-	require.NotNil(tb, ps)
-	require.NoError(tb, ps.Start(postOpts))
-	return id, func() { assert.NoError(tb, ps.Stop(false)) }
+	builder := activation.NewMockAtxBuilder(ctrl)
+	builder.EXPECT().Register(sig)
+	ps := activation.NewPostSupervisor(log, postCfg, provingOpts, mgr, builder)
+	require.NoError(tb, ps.Start(serviceCfg, postOpts, sig))
+	return sig.NodeID(), func() { assert.NoError(tb, ps.Stop(false)) }
 }
 
 func launchPostSupervisorTLS(
@@ -84,28 +84,29 @@ func launchPostSupervisorTLS(
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	id := sig.NodeID()
 	goldenATXID := types.RandomATXID()
 
-	validator := activation.NewMocknipostValidator(gomock.NewController(tb))
+	ctrl := gomock.NewController(tb)
+	validator := activation.NewMocknipostValidator(ctrl)
 	validator.EXPECT().
 		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		AnyTimes()
-	syncer := activation.NewMocksyncer(gomock.NewController(tb))
+	syncer := activation.NewMocksyncer(ctrl)
 	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
 		ch := make(chan struct{})
 		close(ch)
 		return ch
 	})
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
-	mgr, err := activation.NewPostSetupManager(id, postCfg, log.Named("post manager"), cdb, goldenATXID, syncer, validator)
+	mgr, err := activation.NewPostSetupManager(postCfg, log.Named("post manager"), cdb, goldenATXID, syncer, validator)
 	require.NoError(tb, err)
 
-	ps, err := activation.NewPostSupervisor(log, serviceCfg, postCfg, provingOpts, mgr)
-	require.NoError(tb, err)
-	require.NotNil(tb, ps)
-	require.NoError(tb, ps.Start(postOpts))
-	return id, func() { assert.NoError(tb, ps.Stop(false)) }
+	// start post supervisor
+	builder := activation.NewMockAtxBuilder(ctrl)
+	builder.EXPECT().Register(sig)
+	ps := activation.NewPostSupervisor(log, postCfg, provingOpts, mgr, builder)
+	require.NoError(tb, ps.Start(serviceCfg, postOpts, sig))
+	return sig.NodeID(), func() { assert.NoError(tb, ps.Stop(false)) }
 }
 
 func Test_GenerateProof(t *testing.T) {

@@ -113,12 +113,6 @@ func NewWithLevel(module string, level zap.AtomicLevel, hooks ...func(zapcore.En
 	return NewFromLog(log)
 }
 
-// RegisterHooks wraps provided loggers with hooks.
-func RegisterHooks(lg Log, hooks ...func(zapcore.Entry) error) Log {
-	core := zapcore.RegisterHooks(lg.logger.Core(), hooks...)
-	return NewFromLog(zap.New(core))
-}
-
 // NewDefault creates a Log with the default log level.
 func NewDefault(module string) Log {
 	return NewWithLevel(module, zap.NewAtomicLevelAt(DefaultLevel()))

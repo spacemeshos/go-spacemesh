@@ -63,7 +63,7 @@ jobs:
 
       - name: Setup kubectl
         id: install
-        uses: azure/setup-kubectl@v3
+        uses: azure/setup-kubectl@v4
         with:
           version: "v1.23.15"
 
@@ -124,6 +124,7 @@ jobs:
           bootstrap: 4m
           level: ${{ inputs.log_level }}
           clusters: 4
+          norbac: 1
         run: make -C systest run test_name=${{ inputs.test_name }}
 
       - name: Delete pod

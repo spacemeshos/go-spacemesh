@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -27,22 +28,23 @@ type Config struct {
 	SyncCertDistance         uint32
 	MaxStaleDuration         time.Duration `mapstructure:"maxstaleduration"`
 	Standalone               bool
-	GossipDuration           time.Duration `mapstructure:"gossipduration"`
-	DisableMeshAgreement     bool          `mapstructure:"disable-mesh-agreement"`
-	DisableAtxReconciliation bool          `mapstructure:"disable-atx-reconciliation"`
-	OutOfSyncThresholdLayers uint32        `mapstructure:"out-of-sync-threshold"`
+	GossipDuration           time.Duration  `mapstructure:"gossipduration"`
+	DisableMeshAgreement     bool           `mapstructure:"disable-mesh-agreement"`
+	OutOfSyncThresholdLayers uint32         `mapstructure:"out-of-sync-threshold"`
+	AtxSync                  atxsync.Config `mapstructure:"atx-sync"`
 }
 
 // DefaultConfig for the syncer.
 func DefaultConfig() Config {
 	return Config{
 		Interval:                 10 * time.Second,
-		EpochEndFraction:         0.8,
+		EpochEndFraction:         0.5,
 		HareDelayLayers:          10,
 		SyncCertDistance:         10,
 		MaxStaleDuration:         time.Second,
 		GossipDuration:           15 * time.Second,
 		OutOfSyncThresholdLayers: 3,
+		AtxSync:                  atxsync.DefaultConfig(),
 	}
 }
 
@@ -114,6 +116,7 @@ type Syncer struct {
 
 	cfg          Config
 	cdb          *datastore.CachedDB
+	atxsyncer    atxSyncer
 	ticker       layerTicker
 	beacon       system.BeaconGetter
 	mesh         *mesh.Mesh
@@ -132,6 +135,13 @@ type Syncer struct {
 	lastEpochSynced  atomic.Uint32
 	stateErr         atomic.Bool
 
+	// backgroundSync always runs one sync operation in the background.
+	backgroundSync struct {
+		epoch  atomic.Uint32
+		eg     errgroup.Group
+		cancel context.CancelFunc
+	}
+
 	// awaitATXSyncedCh is the list of subscribers' channels to notify when this node enters ATX synced state
 	awaitATXSyncedCh chan struct{}
 
@@ -149,12 +159,14 @@ func NewSyncer(
 	fetcher fetcher,
 	patrol layerPatrol,
 	ch certHandler,
+	atxSyncer atxSyncer,
 	opts ...Option,
 ) *Syncer {
 	s := &Syncer{
 		logger:           log.NewNop(),
 		cfg:              DefaultConfig(),
 		cdb:              cdb,
+		atxsyncer:        atxSyncer,
 		ticker:           ticker,
 		beacon:           beacon,
 		mesh:             mesh,
@@ -377,7 +389,9 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		}
 
 		if err := s.syncAtx(ctx); err != nil {
-			s.logger.With().Error("failed to sync atxs", log.Context(ctx), log.Err(err))
+			if !errors.Is(err, context.Canceled) {
+				s.logger.With().Error("failed to sync atxs", log.Context(ctx), log.Err(err))
+			}
 			return false
 		}
 
@@ -387,6 +401,11 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		// always sync to currentLayer-1 to reduce race with gossip and hare/tortoise
 		for layerID := s.getLastSyncedLayer().Add(1); layerID.Before(s.ticker.CurrentLayer()); layerID = layerID.Add(1) {
 			if err := s.syncLayer(ctx, layerID); err != nil {
+				if !errors.Is(err, context.Canceled) {
+					// BatchError spams too much, in case of no progress enable debug mode for sync
+					s.logger.With().
+						Debug("failed to sync layer", log.Context(ctx), log.Err(err), layerID)
+				}
 				return false
 			}
 			s.setLastSyncedLayer(layerID)
@@ -413,50 +432,59 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 }
 
 func (s *Syncer) syncAtx(ctx context.Context) error {
+	current := s.ticker.CurrentLayer()
+	// on startup always download all activations that were published before current epoch
 	if !s.ListenToATXGossip() {
-		s.logger.WithContext(ctx).With().Info("syncing atx from genesis", s.ticker.CurrentLayer())
-		for epoch := s.lastAtxEpoch() + 1; epoch <= s.ticker.CurrentLayer().GetEpoch(); epoch++ {
-			if err := s.fetchATXsForEpoch(ctx, epoch); err != nil {
+		s.logger.With().Debug("syncing atx from genesis", log.Context(ctx), current, s.lastAtxEpoch())
+		for epoch := s.lastAtxEpoch() + 1; epoch < current.GetEpoch(); epoch++ {
+			if err := s.fetchATXsForEpoch(ctx, epoch, false); err != nil {
 				return err
 			}
 		}
-		s.logger.WithContext(ctx).With().Info("atxs synced to epoch", s.lastAtxEpoch())
+		s.logger.With().Debug("atxs synced to epoch", log.Context(ctx), s.lastAtxEpoch())
 
 		// FIXME https://github.com/spacemeshos/go-spacemesh/issues/3987
-		s.logger.WithContext(ctx).With().Info("syncing malicious proofs")
+		s.logger.With().Info("syncing malicious proofs", log.Context(ctx))
 		if err := s.syncMalfeasance(ctx); err != nil {
 			return err
 		}
-		s.logger.WithContext(ctx).With().Info("malicious IDs synced")
+		s.logger.With().Info("malicious IDs synced", log.Context(ctx))
 		s.setATXSynced()
-		return nil
 	}
 
-	// after recovering from a checkpoint, we want to be aggressive syncing atx from peers
-	// as a form of regossip for atxs that didn't make it into the checkpoint data.
-	if types.FirstEffectiveGenesis() != types.GetEffectiveGenesis() &&
-		(s.ticker.CurrentLayer() < types.GetEffectiveGenesis() ||
-			s.ticker.CurrentLayer().GetEpoch() == types.GetEffectiveGenesis().GetEpoch()) {
-		// sync atxs for the first recovery epoch
-		if err := s.fetchATXsForEpoch(ctx, types.GetEffectiveGenesis().GetEpoch()+1); err != nil {
-			return err
-		}
+	publish := current.GetEpoch()
+	if publish == 0 {
+		return nil // nothing to sync in epoch 0
 	}
-	if s.cfg.DisableAtxReconciliation {
-		s.logger.Debug("atx sync disabled")
-		return nil
+
+	// if we are not advanced enough sync previous epoch, otherwise start syncing activations published in this epoch
+	if current.OrdinalInEpoch() <= uint32(float64(types.GetLayersPerEpoch())*s.cfg.EpochEndFraction) {
+		publish -= 1
 	}
-	// steady state atx syncing
-	curr := s.ticker.CurrentLayer()
-	if float64(
-		(curr - curr.GetEpoch().FirstLayer()).Uint32(),
-	) >= float64(
-		types.GetLayersPerEpoch(),
-	)*s.cfg.EpochEndFraction {
-		s.logger.WithContext(ctx).With().Debug("at end of epoch, syncing atx", curr.GetEpoch())
-		if err := s.fetchATXsForEpoch(ctx, curr.GetEpoch()); err != nil {
+	if epoch := s.backgroundSync.epoch.Load(); epoch != 0 && epoch != publish.Uint32() {
+		s.backgroundSync.cancel()
+		s.backgroundSync.eg.Wait()
+		s.backgroundSync.epoch.Store(0)
+	}
+	if s.backgroundSync.epoch.Load() == 0 && publish.Uint32() != 0 {
+		s.logger.With().Debug("download atx for epoch in background", publish, log.Context(ctx))
+		s.backgroundSync.epoch.Store(publish.Uint32())
+		ctx, cancel := context.WithCancel(ctx)
+		s.backgroundSync.cancel = cancel
+		s.backgroundSync.eg.Go(func() error {
+			err := s.fetchATXsForEpoch(ctx, publish, true)
+			if err == nil {
+				return nil
+			}
+			if !errors.Is(err, context.Canceled) {
+				s.logger.With().
+					Warning("background atx sync failed", log.Context(ctx), publish.Field(), log.Err(err))
+			} else {
+				s.logger.With().Debug("background atx sync stopped", log.Context(ctx), publish.Field())
+			}
+			s.backgroundSync.epoch.Store(0)
 			return err
-		}
+		})
 	}
 	return nil
 }
@@ -555,18 +583,28 @@ func (s *Syncer) syncMalfeasance(ctx context.Context) error {
 
 func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID, peers ...p2p.Peer) error {
 	if err := s.dataFetcher.PollLayerData(ctx, layerID, peers...); err != nil {
-		return fmt.Errorf("PollLayerData: %w", err)
+		return fmt.Errorf("download layer data %v: %w", layerID, err)
 	}
 	dataLayer.Set(float64(layerID))
 	return nil
 }
 
 // fetching ATXs published the specified epoch.
-func (s *Syncer) fetchATXsForEpoch(ctx context.Context, epoch types.EpochID) error {
-	if err := s.dataFetcher.GetEpochATXs(ctx, epoch); err != nil {
+func (s *Syncer) fetchATXsForEpoch(ctx context.Context, publish types.EpochID, background bool) error {
+	target := publish + 1
+	if background {
+		target++
+	}
+	downloadUntil := s.ticker.LayerToTime(target.FirstLayer())
+	if err := s.atxsyncer.Download(ctx, publish, downloadUntil); err != nil {
 		return err
 	}
-	s.setLastAtxEpoch(epoch)
-	atxEpoch.Set(float64(epoch))
+	s.setLastAtxEpoch(publish)
+	atxEpoch.Set(float64(publish))
 	return nil
+}
+
+// waitBackgroundSync is a helper to wait for the background sync to finish.
+func (s *Syncer) waitBackgroundSync() {
+	s.backgroundSync.eg.Wait()
 }

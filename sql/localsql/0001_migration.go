@@ -91,7 +91,6 @@ func (migration0001) movePostToDb(db sql.Executor, dataDir string) error {
 		return nil // no post file, nothing to do
 	case err != nil:
 		return fmt.Errorf("loading post: %w", err)
-	default:
 	}
 
 	meta, err := initialization.LoadMetadata(dataDir)
@@ -123,7 +122,6 @@ func (migration0001) moveNipostChallengeToDb(db sql.Executor, dataDir string) er
 		return nil // no challenge file, nothing to do
 	case err != nil:
 		return fmt.Errorf("loading nipost challenge: %w", err)
-	default:
 	}
 
 	meta, err := initialization.LoadMetadata(dataDir)

@@ -33,6 +33,7 @@ func reuseCluster(tctx *testcontext.Context, restoreLayer uint32) (*cluster.Clus
 }
 
 func TestCheckpoint(t *testing.T) {
+	// TODO(mafa): add new test with multi-smeshing nodes
 	t.Parallel()
 
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))
