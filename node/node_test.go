@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/timesync"
 	"io"
 	"io/fs"
 	"net/http"
@@ -53,6 +52,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
 const layersPerEpoch = 3
