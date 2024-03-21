@@ -961,7 +961,9 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	proposalBuilder := miner.New(
 		app.clock,
-		app.cachedDB,
+		app.db,
+		app.localDB,
+		app.atxsdata,
 		app.host,
 		trtl,
 		newSyncer,
