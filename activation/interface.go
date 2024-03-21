@@ -80,8 +80,12 @@ type layerClock interface {
 }
 
 type nipostBuilder interface {
-	BuildNIPost(context.Context, *signing.EdSigner, *types.NIPostChallenge) (*nipost.NIPostState, error)
-	Proof(context.Context, types.NodeID, []byte) (*types.Post, *types.PostInfo, error)
+	BuildNIPost(
+		ctx context.Context,
+		sig *signing.EdSigner,
+		challenge *types.NIPostChallenge,
+	) (*nipost.NIPostState, error)
+	Proof(ctx context.Context, nodeID types.NodeID, challenge []byte) (*types.Post, *types.PostInfo, error)
 	ResetState(types.NodeID) error
 }
 

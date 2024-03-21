@@ -862,9 +862,9 @@ func TestBuilder_PublishActivationTx_NoPrevATX_PublishFails_InitialPost_preserve
 		Challenge:     shared.ZeroChallenge,
 		LabelsPerUnit: tab.conf.LabelsPerUnit,
 	}
-	tab.mValidator.EXPECT().Post(
-		gomock.Any(), sig.NodeID(), refPost.CommitmentATX, initialPost, meta, refPost.NumUnits,
-	).Return(nil)
+	tab.mValidator.EXPECT().
+		Post(gomock.Any(), sig.NodeID(), refPost.CommitmentATX, initialPost, meta, refPost.NumUnits).
+		Return(nil)
 
 	// create and publish ATX
 	tab.mclock.EXPECT().CurrentLayer().Return(currLayer).AnyTimes()
