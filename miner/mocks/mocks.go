@@ -221,68 +221,6 @@ func (c *MockvotesEncoderTallyVotesCall) DoAndReturn(f func(context.Context, typ
 	return c
 }
 
-// Mockmesh is a mock of mesh interface.
-type Mockmesh struct {
-	ctrl     *gomock.Controller
-	recorder *MockmeshMockRecorder
-}
-
-// MockmeshMockRecorder is the mock recorder for Mockmesh.
-type MockmeshMockRecorder struct {
-	mock *Mockmesh
-}
-
-// NewMockmesh creates a new mock instance.
-func NewMockmesh(ctrl *gomock.Controller) *Mockmesh {
-	mock := &Mockmesh{ctrl: ctrl}
-	mock.recorder = &MockmeshMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *Mockmesh) EXPECT() *MockmeshMockRecorder {
-	return m.recorder
-}
-
-// GetMalfeasanceProof mocks base method.
-func (m *Mockmesh) GetMalfeasanceProof(nodeID types.NodeID) (*types.MalfeasanceProof, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMalfeasanceProof", nodeID)
-	ret0, _ := ret[0].(*types.MalfeasanceProof)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetMalfeasanceProof indicates an expected call of GetMalfeasanceProof.
-func (mr *MockmeshMockRecorder) GetMalfeasanceProof(nodeID any) *MockmeshGetMalfeasanceProofCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMalfeasanceProof", reflect.TypeOf((*Mockmesh)(nil).GetMalfeasanceProof), nodeID)
-	return &MockmeshGetMalfeasanceProofCall{Call: call}
-}
-
-// MockmeshGetMalfeasanceProofCall wrap *gomock.Call
-type MockmeshGetMalfeasanceProofCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockmeshGetMalfeasanceProofCall) Return(arg0 *types.MalfeasanceProof, arg1 error) *MockmeshGetMalfeasanceProofCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockmeshGetMalfeasanceProofCall) Do(f func(types.NodeID) (*types.MalfeasanceProof, error)) *MockmeshGetMalfeasanceProofCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockmeshGetMalfeasanceProofCall) DoAndReturn(f func(types.NodeID) (*types.MalfeasanceProof, error)) *MockmeshGetMalfeasanceProofCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // MocklayerClock is a mock of layerClock interface.
 type MocklayerClock struct {
 	ctrl     *gomock.Controller
