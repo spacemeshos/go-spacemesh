@@ -325,7 +325,8 @@ func (s *Syncer) downloadAtxs(
 		}
 
 		if err := s.localdb.WithTx(context.Background(), func(tx *sql.Tx) error {
-			if err := atxsync.SaveRequest(tx, publish, lastSuccess, int64(len(state)), int64(len(downloaded))); err != nil {
+			err := atxsync.SaveRequest(tx, publish, lastSuccess, int64(len(state)), int64(len(downloaded)))
+			if err != nil {
 				return fmt.Errorf("failed to save request time: %w", err)
 			}
 			return atxsync.SaveSyncState(tx, publish, state, s.cfg.RequestsLimit)

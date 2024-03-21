@@ -179,7 +179,7 @@ linters:
     - govet
     # - grouper
     - importas
-    - inamedparam
+    # - inamedparam
     - ineffassign
     # - interfacebloat
     # - intrange
@@ -549,11 +549,6 @@ linters-settings:
       - pkg: "k8s.io/client-go/applyconfigurations/meta/v1"
         alias: metav1
 
-  inamedparam:
-    # Skips check for interface methods with only a single parameter.
-    # Default: false
-    skip-single-param: false
-
   lll:
     # Max line length, lines longer will be reported.
     # '\t' is counted as 1 character by default, and can be changed with the tab-width option.
@@ -596,7 +591,7 @@ linters-settings:
   nestif:
     # Minimal complexity of if statements to report.
     # Default: 5
-    min-complexity: 5
+    min-complexity: 15
 
   perfsprint:
     # Optimizes even if it requires an int or uint type cast.

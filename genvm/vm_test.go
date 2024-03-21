@@ -1043,7 +1043,8 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 						0: spawned{
 							template: template,
 							change: spent{
-								amount: 100 + defaultGasPrice*(ref.estimateSpawnGas(0, 0)+ref.estimateSpendGas(0, 11, 100, 2)),
+								amount: 100 + defaultGasPrice*(ref.estimateSpawnGas(0, 0)+
+									ref.estimateSpendGas(0, 11, 100, 2)),
 							},
 						},
 						10: same{},
@@ -1434,7 +1435,7 @@ func runTestCases(t *testing.T, tcs []templateTestCase, genTester func(t *testin
 							i,
 						)
 					} else {
-						require.Equal(t, types.TransactionFailure.String(), rst.Status.String(), "layer=%s ith=%d", lid, i)
+						require.Equal(t, types.TransactionFailure, rst.Status, "layer=%s ith=%d", lid, i)
 						require.Equal(t, expected.Error(), rst.Message)
 					}
 				}
@@ -1770,8 +1771,9 @@ func TestVestingWithVault(t *testing.T) {
 	genTester := func(t *testing.T) *tester {
 		return newTester(t).
 			addVesting(vestingAccounts, 1, 2).
-			addVault(10, total, initial, types.GetEffectiveGenesis().Add(start-1), types.GetEffectiveGenesis().Add(end-1)).
-			applyGenesis()
+			addVault(10, total, initial, types.GetEffectiveGenesis().Add(start-1),
+				types.GetEffectiveGenesis().Add(end-1),
+			).applyGenesis()
 	}
 	ref := genTester(t)
 	tcs := []templateTestCase{

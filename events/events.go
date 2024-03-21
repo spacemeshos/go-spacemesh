@@ -31,7 +31,8 @@ func EmitBeacon(epoch types.EpochID, beacon types.Beacon) {
 }
 
 func EmitInitStart(nodeID types.NodeID, commitment types.ATXID) {
-	const help = "Node started PoST data initialization. Initialization will not be performed again if already completed."
+	const help = "Node started PoST data initialization. Initialization will not be performed again if " +
+		"already completed."
 	emitUserEvent(
 		help,
 		false,

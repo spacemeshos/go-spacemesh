@@ -132,7 +132,7 @@ func validateMerkleProof(leaf []byte, proof *types.MerkleProof, expectedRoot []b
 			hexNodes = append(hexNodes, n.Hex())
 		}
 		return fmt.Errorf(
-			"invalid merkle proof, calculated root does not match the proof root, leaf: %v, nodes: %v, expected root: %v",
+			"invalid merkle proof, calculated root does not match proof root, leaf: %v, nodes: %v, expected root: %v",
 			util.Encode(leaf),
 			hexNodes,
 			util.Encode(expectedRoot),
@@ -223,7 +223,8 @@ func (v *Validator) VRFNonce(
 		LabelsPerUnit:   PostMetadata.LabelsPerUnit,
 	}
 
-	if err := verifying.VerifyVRFNonce((*uint64)(vrfNonce), meta, verifying.WithLabelScryptParams(v.scrypt)); err != nil {
+	err := verifying.VerifyVRFNonce((*uint64)(vrfNonce), meta, verifying.WithLabelScryptParams(v.scrypt))
+	if err != nil {
 		return fmt.Errorf("verify VRF nonce: %w", err)
 	}
 	return nil

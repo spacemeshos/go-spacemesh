@@ -712,7 +712,8 @@ func (t *turtle) decodeBallot(ballot *types.BallotTortoiseData) (*ballotInfo, ty
 		)
 	}
 
-	if ballot.EpochData != nil {
+	switch {
+	case ballot.EpochData != nil:
 		atx := t.atxsdata.Get(ballot.Layer.GetEpoch(), ballot.AtxID)
 		if atx == nil {
 			return nil, 0, fmt.Errorf("atx %s/%d not in state", ballot.AtxID, ballot.Layer.GetEpoch())
@@ -725,7 +726,7 @@ func (t *turtle) decodeBallot(ballot *types.BallotTortoiseData) (*ballotInfo, ty
 			height:          atx.Height,
 			weight:          big.NewRat(int64(atx.Weight), int64(ballot.EpochData.Eligibilities)),
 		}
-	} else if ballot.Ref != nil {
+	case ballot.Ref != nil:
 		ptr := *ballot.Ref
 		ref, exists := t.state.ballotRefs[ptr]
 		if !exists {
@@ -738,7 +739,7 @@ func (t *turtle) decodeBallot(ballot *types.BallotTortoiseData) (*ballotInfo, ty
 			return nil, 0, fmt.Errorf("ballot %s is not a reference ballot", ptr)
 		}
 		refinfo = ref.reference
-	} else {
+	default:
 		return nil, 0, fmt.Errorf("epoch data and pointer are nil for ballot %s", ballot.ID)
 	}
 
@@ -819,13 +820,13 @@ func (t *turtle) storeBallot(ballot *ballotInfo, offset types.LayerID) error {
 				existing := t.getBlock(block.header())
 				if existing != nil {
 					current.supported[i] = existing
-				} else {
-					if !withinDistance(t.Hdist, block.layer, t.last) {
-						block.validity = against
-						block.hare = against
-					}
-					t.addBlock(block)
+					continue
 				}
+				if !withinDistance(t.Hdist, block.layer, t.last) {
+					block.validity = against
+					block.hare = against
+				}
+				t.addBlock(block)
 			}
 		}
 		layer.opinions[ballot.opinion()] = ballot.votes

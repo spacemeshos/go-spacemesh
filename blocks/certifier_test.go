@@ -3,11 +3,11 @@ package blocks
 import (
 	"context"
 	"errors"
-	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -169,8 +169,8 @@ func Test_HandleSyncedCertificate(t *testing.T) {
 	sigs := make([]types.CertifyMessage, numMsgs)
 	for i := 0; i < numMsgs; i++ {
 		nid, msg, _ := genEncodedMsg(t, b.LayerIndex, b.ID())
-		tc.mOracle.EXPECT().
-			Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
+		tc.mOracle.EXPECT().Validate(
+			gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
 			Return(true, nil)
 		sigs[i] = *msg
 	}
@@ -249,9 +249,14 @@ func Test_HandleSyncedCertificate_MultipleCertificates(t *testing.T) {
 				nid, msg, _ := genEncodedMsg(t, b.LayerIndex, bid)
 				oldCert.Signatures = append(oldCert.Signatures, *msg)
 				if !tc.sameBid {
-					tcc.mOracle.EXPECT().
-						Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tcc.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
-						Return(tc.valid, nil)
+					tcc.mOracle.EXPECT().Validate(gomock.Any(),
+						b.LayerIndex,
+						eligibility.CertifyRound,
+						tcc.cfg.CommitteeSize,
+						nid,
+						msg.Proof,
+						defaultCnt,
+					).Return(tc.valid, nil)
 				}
 			}
 			require.NoError(t, certificates.Add(tcc.db, b.LayerIndex, oldCert))
@@ -259,9 +264,15 @@ func Test_HandleSyncedCertificate_MultipleCertificates(t *testing.T) {
 			sigs := make([]types.CertifyMessage, numMsgs)
 			for i := 0; i < numMsgs; i++ {
 				nid, msg, _ := genEncodedMsg(t, b.LayerIndex, b.ID())
-				tcc.mOracle.EXPECT().
-					Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tcc.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
-					Return(true, nil)
+				tcc.mOracle.EXPECT().Validate(
+					gomock.Any(),
+					b.LayerIndex,
+					eligibility.CertifyRound,
+					tcc.cfg.CommitteeSize,
+					nid,
+					msg.Proof,
+					defaultCnt,
+				).Return(true, nil)
 				sigs[i] = *msg
 			}
 			cert := &types.Certificate{
@@ -303,8 +314,8 @@ func Test_HandleSyncedCertificate_NotEnoughEligibility(t *testing.T) {
 	sigs := make([]types.CertifyMessage, numMsgs)
 	for i := 0; i < numMsgs; i++ {
 		nid, msg, _ := genEncodedMsg(t, b.LayerIndex, b.ID())
-		tc.mOracle.EXPECT().
-			Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
+		tc.mOracle.EXPECT().Validate(
+			gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
 			Return(true, nil)
 		sigs[i] = *msg
 	}
@@ -440,27 +451,30 @@ func Test_HandleCertifyMessage_Certified(t *testing.T) {
 					defaultCnt,
 				).Return(true, nil).MinTimes(cutoff).MaxTimes(numMsgs)
 			}
-			var wg sync.WaitGroup
+			var eg errgroup.Group
 			for i := 0; i < numMsgs; i++ {
 				nid, msg, encoded := genEncodedMsg(t, b.LayerIndex, b.ID())
 				if !tc.concurrent && i < cutoff { // we know exactly which msgs will be validated
-					tcc.mOracle.EXPECT().
-						Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tcc.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
-						Return(true, nil)
+					tcc.mOracle.EXPECT().Validate(
+						gomock.Any(),
+						b.LayerIndex,
+						eligibility.CertifyRound,
+						tcc.cfg.CommitteeSize,
+						nid,
+						msg.Proof,
+						defaultCnt,
+					).Return(true, nil)
 				}
 				if tc.concurrent {
-					wg.Add(1)
-					go func(data []byte) {
-						res := tcc.HandleCertifyMessage(context.Background(), "peer", data)
-						require.NoError(t, res)
-						wg.Done()
-					}(encoded)
+					eg.Go(func() error {
+						return tcc.HandleCertifyMessage(context.Background(), "peer", encoded)
+					})
 				} else {
 					res := tcc.HandleCertifyMessage(context.Background(), "peer", encoded)
 					require.NoError(t, res)
 				}
 			}
-			wg.Wait()
+			require.NoError(t, eg.Wait())
 			verifyCerts(t, tcc.db, b.LayerIndex, map[types.BlockID]bool{b.ID(): true, ho: false})
 			require.Equal(t, map[types.EpochID]int{b.LayerIndex.GetEpoch(): 1}, tcc.CertCount())
 		})
@@ -504,9 +518,15 @@ func Test_HandleCertifyMessage_MultipleCertificates(t *testing.T) {
 				nid, msg, _ := genEncodedMsg(t, b.LayerIndex, bid)
 				oldCert.Signatures = append(oldCert.Signatures, *msg)
 				if !tc.sameBid {
-					tcc.mOracle.EXPECT().
-						Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tcc.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
-						Return(tc.valid, nil)
+					tcc.mOracle.EXPECT().Validate(
+						gomock.Any(),
+						b.LayerIndex,
+						eligibility.CertifyRound,
+						tcc.cfg.CommitteeSize,
+						nid,
+						msg.Proof,
+						defaultCnt,
+					).Return(tc.valid, nil)
 				}
 			}
 			require.NoError(t, certificates.Add(tcc.db, b.LayerIndex, oldCert))
@@ -524,7 +544,15 @@ func Test_HandleCertifyMessage_MultipleCertificates(t *testing.T) {
 				nid, msg, encoded := genEncodedMsg(t, b.LayerIndex, b.ID())
 				if i < cutoff { // we know exactly which msgs will be validated
 					tcc.mOracle.EXPECT().
-						Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tcc.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
+						Validate(
+							gomock.Any(),
+							b.LayerIndex,
+							eligibility.CertifyRound,
+							tcc.cfg.CommitteeSize,
+							nid,
+							msg.Proof,
+							defaultCnt,
+						).
 						Return(true, nil)
 				}
 				tcc.HandleCertifyMessage(context.Background(), "peer", encoded)
@@ -560,8 +588,8 @@ func Test_HandleCertifyMessage_NotRegistered(t *testing.T) {
 	)
 	for i := 0; i < numMsgs; i++ {
 		nid, msg, encoded := genEncodedMsg(t, b.LayerIndex, b.ID())
-		tc.mOracle.EXPECT().
-			Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
+		tc.mOracle.EXPECT().Validate(
+			gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
 			Return(true, nil)
 		res := tc.HandleCertifyMessage(context.Background(), "peer", encoded)
 		require.NoError(t, res)
@@ -598,8 +626,8 @@ func Test_HandleCertifyMessage_LayerNotRegistered(t *testing.T) {
 	)
 	tc.mClk.EXPECT().CurrentLayer().Return(b.LayerIndex).AnyTimes()
 	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil)
-	tc.mOracle.EXPECT().
-		Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
+	tc.mOracle.EXPECT().Validate(
+		gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
 		Return(true, nil)
 	res := tc.HandleCertifyMessage(context.Background(), "peer", encoded)
 	require.NoError(t, res)
@@ -616,8 +644,8 @@ func Test_HandleCertifyMessage_BlockNotRegistered(t *testing.T) {
 	)
 	tc.mClk.EXPECT().CurrentLayer().Return(b.LayerIndex).AnyTimes()
 	tc.mb.EXPECT().GetBeacon(b.LayerIndex.GetEpoch()).Return(types.RandomBeacon(), nil)
-	tc.mOracle.EXPECT().
-		Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
+	tc.mOracle.EXPECT().Validate(
+		gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
 		Return(true, nil)
 	res := tc.HandleCertifyMessage(context.Background(), "peer", encoded)
 	require.NoError(t, res)

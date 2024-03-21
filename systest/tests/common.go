@@ -148,7 +148,11 @@ func stateHashStream(
 		state, err := states.Recv()
 		s, ok := status.FromError(err)
 		if ok && s.Code() != codes.OK {
-			logger.Warn("global state stream error", zap.String("client", node.Name), zap.Error(err), zap.Any("status", s))
+			logger.Warn("global state stream error",
+				zap.String("client", node.Name),
+				zap.Error(err),
+				zap.Any("status", s),
+			)
 			if s.Code() == codes.Unavailable {
 				return nil
 			}
@@ -315,7 +319,11 @@ func watchTransactionResults(ctx context.Context,
 			rst, err := rsts.Recv()
 			s, ok := status.FromError(err)
 			if ok && s.Code() != codes.OK {
-				log.Warn("transactions stream error", zap.String("client", client.Name), zap.Error(err), zap.Any("status", s))
+				log.Warn("transactions stream error",
+					zap.String("client", client.Name),
+					zap.Error(err),
+					zap.Any("status", s),
+				)
 				if s.Code() == codes.Unavailable {
 					return nil
 				}
@@ -347,7 +355,11 @@ func watchProposals(
 			proposal, err := proposals.Recv()
 			s, ok := status.FromError(err)
 			if ok && s.Code() != codes.OK {
-				log.Warn("proposals stream error", zap.String("client", client.Name), zap.Error(err), zap.Any("status", s))
+				log.Warn("proposals stream error",
+					zap.String("client", client.Name),
+					zap.Error(err),
+					zap.Any("status", s),
+				)
 				if s.Code() == codes.Unavailable {
 					return nil
 				}

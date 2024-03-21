@@ -109,7 +109,7 @@ func TestPostSetupManager_StartSession_WithoutProvider_Error(t *testing.T) {
 	nodeID := types.RandomNodeID()
 
 	// Create data.
-	require.NoError(t, mgr.PrepareInitializer(context.Background(), mgr.opts, nodeID)) // prepare is fine without provider
+	require.NoError(t, mgr.PrepareInitializer(context.Background(), mgr.opts, nodeID)) // prepare works without provider
 	require.ErrorContains(t, mgr.StartSession(context.Background(), nodeID), "no provider specified")
 
 	require.Equal(t, PostSetupStateError, mgr.Status().State)

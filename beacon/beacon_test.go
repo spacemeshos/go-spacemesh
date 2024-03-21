@@ -7,7 +7,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -206,15 +205,14 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 			}
 		}
 	}
-	var wg sync.WaitGroup
+	var eg errgroup.Group
 	for _, node := range testNodes {
-		wg.Add(1)
-		go func(testNode *testProtocolDriver) {
-			require.NoError(t, testNode.onNewEpoch(context.Background(), types.EpochID(2)))
-			wg.Done()
-		}(node)
+		node := node
+		eg.Go(func() error {
+			return node.onNewEpoch(context.Background(), types.EpochID(2))
+		})
 	}
-	wg.Wait()
+	require.NoError(t, eg.Wait())
 	beacons := make(map[types.Beacon]struct{})
 	for _, node := range testNodes {
 		got, err := node.GetBeacon(types.EpochID(3))
@@ -453,6 +451,7 @@ func TestBeaconWithMetrics(t *testing.T) {
 		tpd.recordBeacon(thisEpoch, &b, beacon2, fixed.New64(1))
 
 		count := layer.OrdinalInEpoch() + 1
+		//nolint:lll
 		expected := fmt.Sprintf(`
 			# HELP spacemesh_beacons_beacon_observed_total Number of beacons collected from blocks for each epoch and value
 			# TYPE spacemesh_beacons_beacon_observed_total counter
@@ -470,6 +469,7 @@ func TestBeaconWithMetrics(t *testing.T) {
 		require.NoError(t, err)
 
 		weight := layer.OrdinalInEpoch() + 1
+		//nolint:lll
 		expected = fmt.Sprintf(`
 			# HELP spacemesh_beacons_beacon_observed_weight Weight of beacons collected from blocks for each epoch and value
 			# TYPE spacemesh_beacons_beacon_observed_weight counter
@@ -989,6 +989,7 @@ func TestBeacon_atxThreshold(t *testing.T) {
 
 	kappa := 40
 	q := big.NewRat(1, 3)
+	//nolint:lll
 	tt := []struct {
 		name      string
 		w         int

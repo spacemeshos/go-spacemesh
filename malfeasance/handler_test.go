@@ -1142,7 +1142,8 @@ func TestHandler_HandleMalfeasanceProof_InvalidPostIndex(t *testing.T) {
 			},
 		}
 
-		postVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("invalid"))
+		postVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(errors.New("invalid"))
 		trt.EXPECT().OnMalfeasance(sig.NodeID())
 		err := h.HandleSyncedMalfeasanceProof(context.Background(), nodeIdH32, "peer", codec.MustEncode(&proof))
 		require.NoError(t, err)

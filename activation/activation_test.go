@@ -862,8 +862,9 @@ func TestBuilder_PublishActivationTx_NoPrevATX_PublishFails_InitialPost_preserve
 		Challenge:     shared.ZeroChallenge,
 		LabelsPerUnit: tab.conf.LabelsPerUnit,
 	}
-	tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), refPost.CommitmentATX, initialPost, meta, refPost.NumUnits).
-		Return(nil)
+	tab.mValidator.EXPECT().Post(
+		gomock.Any(), sig.NodeID(), refPost.CommitmentATX, initialPost, meta, refPost.NumUnits,
+	).Return(nil)
 
 	// create and publish ATX
 	tab.mclock.EXPECT().CurrentLayer().Return(currLayer).AnyTimes()
@@ -1537,7 +1538,8 @@ func TestWaitPositioningAtx(t *testing.T) {
 			// everything else are stubs that are irrelevant for the test
 			tab.mpostClient.EXPECT().Info(gomock.Any()).Return(&types.PostInfo{}, nil).AnyTimes()
 			tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil)
-			tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any()).Return(&nipost.NIPostState{}, nil)
+			tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any()).
+				Return(&nipost.NIPostState{}, nil)
 			closed := make(chan struct{})
 			close(closed)
 			tab.mclock.EXPECT().AwaitLayer(types.EpochID(1).FirstLayer()).Return(closed).AnyTimes()
@@ -1569,8 +1571,9 @@ func TestWaitPositioningAtx(t *testing.T) {
 				Challenge:     shared.ZeroChallenge,
 				LabelsPerUnit: tab.conf.LabelsPerUnit,
 			}
-			tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), post.CommitmentATX, initialPost, meta, post.NumUnits).
-				Return(nil)
+			tab.mValidator.EXPECT().Post(
+				gomock.Any(), sig.NodeID(), post.CommitmentATX, initialPost, meta, post.NumUnits,
+			).Return(nil)
 
 			require.NoError(t, tab.PublishActivationTx(context.Background(), sig))
 		})

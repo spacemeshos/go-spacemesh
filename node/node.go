@@ -781,7 +781,8 @@ func (app *App) initServices(ctx context.Context) error {
 
 	if app.Config.HareEligibility.ConfidenceParam >= app.Config.BaseConfig.LayersPerEpoch {
 		return fmt.Errorf(
-			"confidence param should be smaller than layers per epoch. eligibility-confidence-param: %d. layers-per-epoch: %d",
+			"confidence param should be smaller than layers per epoch. eligibility-confidence-param: %d. "+
+				"layers-per-epoch: %d",
 			app.Config.HareEligibility.ConfidenceParam,
 			app.Config.BaseConfig.LayersPerEpoch,
 		)
@@ -882,7 +883,8 @@ func (app *App) initServices(ctx context.Context) error {
 	beaconProtocol.SetSyncState(newSyncer)
 	app.hOracle.SetSync(newSyncer)
 
-	if err := app.Config.HARE3.Validate(time.Duration(app.Config.Tortoise.Zdist) * app.Config.LayerDuration); err != nil {
+	err = app.Config.HARE3.Validate(time.Duration(app.Config.Tortoise.Zdist) * app.Config.LayerDuration)
+	if err != nil {
 		return err
 	}
 	logger := app.addLogger(HareLogger, lg).Zap()

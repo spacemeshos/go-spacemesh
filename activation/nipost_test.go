@@ -1164,9 +1164,9 @@ func TestNIPostBuilder_Mainnet_Poet_Workaround(t *testing.T) {
 				poetProvider.EXPECT().PowParams(gomock.Any()).AnyTimes().Return(&PoetPowParams{}, nil)
 
 				// PoET succeeds to submit
-				poetProvider.EXPECT().
-					Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-					Return(&types.PoetRound{}, nil)
+				poetProvider.EXPECT().Submit(
+					gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
+				).Return(&types.PoetRound{}, nil)
 
 				// proof is fetched from PoET
 				poetProvider.EXPECT().Proof(gomock.Any(), "").Return(&types.PoetProofMessage{

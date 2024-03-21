@@ -155,7 +155,8 @@ func TestEligibilityValidator(t *testing.T) {
 			actives: gactiveset(types.ATXID{1}, types.ATXID{2}),
 			executed: gballot(
 				types.BallotID{1}, types.ATXID{1},
-				types.NodeID{1}, epoch.FirstLayer(), gdata(15, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
+				types.NodeID{1}, epoch.FirstLayer(),
+				gdata(15, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
 				geligibilities(1, 2),
 			),
 		},
@@ -170,7 +171,8 @@ func TestEligibilityValidator(t *testing.T) {
 			actives: gactiveset(types.ATXID{1}, types.ATXID{2}),
 			executed: gballot(
 				types.BallotID{1}, types.ATXID{1},
-				types.NodeID{1}, epoch.FirstLayer(), gdata(3, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
+				types.NodeID{1}, epoch.FirstLayer(),
+				gdata(3, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
 				geligibilities(1, 2),
 			),
 		},
@@ -480,7 +482,8 @@ func TestEligibilityValidator(t *testing.T) {
 			actives: gactiveset(types.ATXID{1}, types.ATXID{2}),
 			executed: gballot(
 				types.BallotID{1}, types.ATXID{1},
-				types.NodeID{1}, epoch.FirstLayer(), gdata(15, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
+				types.NodeID{1}, epoch.FirstLayer(),
+				gdata(15, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
 				geligibilities(2, 1, 3),
 			),
 			fail: true,
@@ -496,7 +499,8 @@ func TestEligibilityValidator(t *testing.T) {
 			actives: gactiveset(types.ATXID{1}, types.ATXID{2}),
 			executed: gballot(
 				types.BallotID{1}, types.ATXID{1},
-				types.NodeID{1}, epoch.FirstLayer(), gdata(15, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
+				types.NodeID{1}, epoch.FirstLayer(),
+				gdata(15, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
 				geligibilities(15),
 			),
 			fail: true,
@@ -512,7 +516,8 @@ func TestEligibilityValidator(t *testing.T) {
 			actives: gactiveset(types.ATXID{1}, types.ATXID{2}),
 			executed: gballot(
 				types.BallotID{1}, types.ATXID{1},
-				types.NodeID{1}, epoch.FirstLayer(), gdata(15, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
+				types.NodeID{1}, epoch.FirstLayer(),
+				gdata(15, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
 				geligibilities(14),
 			),
 			vrfFailed: true,
@@ -529,7 +534,8 @@ func TestEligibilityValidator(t *testing.T) {
 			actives: gactiveset(types.ATXID{1}, types.ATXID{2}),
 			executed: gballot(
 				types.BallotID{1}, types.ATXID{1},
-				types.NodeID{1}, epoch.FirstLayer(), gdata(15, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
+				types.NodeID{1}, epoch.FirstLayer(),
+				gdata(15, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
 				geligibilityWithSig(1, "adjust layer"),
 			),
 			fail: true,

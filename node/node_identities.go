@@ -207,7 +207,7 @@ func (app *App) LoadIdentities() error {
 					supervisedIDKeyFileName,
 				)
 				app.log.Error(
-					"Please ensure you do not have a key file named %s in your identities directory when using remote smeshing.",
+					"Ensure you do not have a file named %s in your identities directory when using remote smeshing.",
 					supervisedIDKeyFileName,
 				)
 				return errors.New("supervised key found in remote smeshing mode")

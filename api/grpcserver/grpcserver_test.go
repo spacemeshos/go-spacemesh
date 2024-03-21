@@ -12,7 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"sync"
 	"testing"
 	"time"
 
@@ -536,8 +535,10 @@ func TestNewLocalServer(t *testing.T) {
 			grpcService, err := NewWithServices(cfg.PostListener, logger, cfg, []ServiceAPI{svc})
 			if tc.warn {
 				require.Equal(t, 1, observedLogs.Len(), "Expected a warning log")
-				require.Equal(t, observedLogs.All()[0].Message, "unsecured grpc server is listening on a public IP address")
-				require.Equal(t, observedLogs.All()[0].ContextMap()["address"], tc.listener)
+				require.Equal(t, "unsecured grpc server is listening on a public IP address",
+					observedLogs.All()[0].Message,
+				)
+				require.Equal(t, tc.listener, observedLogs.All()[0].ContextMap()["address"])
 				return
 			}
 
@@ -622,13 +623,15 @@ func TestSmesherService(t *testing.T) {
 		c.smeshingProvider.EXPECT().StartSmeshing(gomock.Any()).Return(nil)
 		c.postSupervisor.EXPECT().Start(gomock.Any(),
 			gomock.All(
-				gomock.Cond(func(postOpts any) bool { return postOpts.(activation.PostSetupOpts).DataDir == opts.DataDir }),
-				gomock.Cond(
-					func(postOpts any) bool { return postOpts.(activation.PostSetupOpts).NumUnits == opts.NumUnits },
-				),
-				gomock.Cond(
-					func(postOpts any) bool { return postOpts.(activation.PostSetupOpts).MaxFileSize == opts.MaxFileSize },
-				),
+				gomock.Cond(func(postOpts any) bool {
+					return postOpts.(activation.PostSetupOpts).DataDir == opts.DataDir
+				}),
+				gomock.Cond(func(postOpts any) bool {
+					return postOpts.(activation.PostSetupOpts).NumUnits == opts.NumUnits
+				}),
+				gomock.Cond(func(postOpts any) bool {
+					return postOpts.(activation.PostSetupOpts).MaxFileSize == opts.MaxFileSize
+				}),
 			), sig).Return(nil)
 		res, err := c.StartSmeshing(ctx, &pb.StartSmeshingRequest{
 			Opts:     opts,
@@ -647,7 +650,7 @@ func TestSmesherService(t *testing.T) {
 
 		coinbase := &pb.AccountId{Address: addr1.String()}
 
-		c, ctx := setupSmesherService(t, nil) // in multi smeshing setup the node id is nil and start smeshing should fail
+		c, ctx := setupSmesherService(t, nil) // in 1:n the node id is nil and start smeshing should fail
 		res, err := c.StartSmeshing(ctx, &pb.StartSmeshingRequest{
 			Opts:     opts,
 			Coinbase: coinbase,
@@ -1566,19 +1569,18 @@ func TestTransactionService(t *testing.T) {
 
 			// Simulate the process by which a newly-broadcast tx lands in the mempool
 			broadcastSignal := make(chan struct{})
-			var wgBroadcast sync.WaitGroup
-			wgBroadcast.Add(1)
-			go func() {
-				defer wgBroadcast.Done()
+			var eg errgroup.Group
+
+			eg.Go(func() error {
 				select {
 				case <-ctx.Done():
-					require.Fail(t, "context deadline exceeded while waiting for broadcast signal")
-					return
+					return ctx.Err()
 				case <-broadcastSignal:
 					// We assume the data is valid here, and put it directly into the txpool
 					conStateAPI.put(globalTx.ID, globalTx)
+					return nil
 				}
-			}()
+			})
 
 			stream, err := c.TransactionsStateStream(ctx, req)
 			require.NoError(t, err)
@@ -1593,7 +1595,7 @@ func TestTransactionService(t *testing.T) {
 			require.Equal(t, globalTx.ID.Bytes(), res.Txstate.Id.Id)
 			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.Txstate.State)
 			close(broadcastSignal)
-			wgBroadcast.Wait()
+			require.NoError(t, eg.Wait())
 
 			response, err := stream.Recv()
 			require.NoError(t, err)
