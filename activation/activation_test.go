@@ -1544,8 +1544,8 @@ func TestBuilder_InitialPostLogErrorMissingVRFNonce(t *testing.T) {
 	tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), commitmentATX, initialPost, meta, numUnits).
 		Return(nil)
 	require.ErrorContains(t, tab.buildInitialPost(context.Background(), sig.NodeID()), "nil VRF nonce")
-	observedLogs := tab.observedLogs.FilterLevelExact(zapcore.ErrorLevel)
 
+	observedLogs := tab.observedLogs.FilterLevelExact(zapcore.ErrorLevel)
 	require.Equal(t, 1, observedLogs.Len(), "expected 1 log message")
 	require.Equal(t, zapcore.ErrorLevel, observedLogs.All()[0].Level)
 	require.Equal(t, "initial PoST is invalid: missing VRF nonce. Check your PoST data", observedLogs.All()[0].Message)
