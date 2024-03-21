@@ -445,6 +445,7 @@ func TestGetIDsByEpochCached(t *testing.T) {
 
 	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
 		require.NoError(t, atxs.Add(db, atx))
+		atxs.AtxAdded(db, atx)
 	}
 
 	require.Equal(t, 4, db.QueryCount())
@@ -475,6 +476,7 @@ func TestGetIDsByEpochCached(t *testing.T) {
 		atxs.Add(tx, atx5)
 		return nil
 	}))
+	atxs.AtxAdded(db, atx5)
 	require.Equal(t, 8, db.QueryCount())
 
 	ids3, err := atxs.GetIDsByEpoch(ctx, db, e3)

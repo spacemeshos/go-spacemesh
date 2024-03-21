@@ -498,7 +498,6 @@ func waitPod(ctx *testcontext.Context, id string) (*apiv1.Pod, error) {
 	}
 	defer watcher.Stop()
 	for {
-		var pod *apiv1.Pod
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -506,7 +505,10 @@ func waitPod(ctx *testcontext.Context, id string) (*apiv1.Pod, error) {
 			if !open {
 				return nil, fmt.Errorf("watcher is terminated while waiting for pod with id %v", id)
 			}
-			pod = ev.Object.(*apiv1.Pod)
+			pod, ok := ev.Object.(*apiv1.Pod)
+			if !ok {
+				continue
+			}
 			if pod.Status.Phase == apiv1.PodRunning && areContainersReady(pod) {
 				return pod, nil
 			}

@@ -14,7 +14,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
@@ -23,6 +25,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	datastoremocks "github.com/spacemeshos/go-spacemesh/datastore/mocks"
 	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
@@ -114,17 +117,20 @@ type testAtxBuilder struct {
 	localDb     *localsql.Database
 	goldenATXID types.ATXID
 
-	mctrl       *gomock.Controller
-	mpub        *mocks.MockPublisher
-	mnipost     *MocknipostBuilder
-	mpostClient *MockPostClient
-	mclock      *MocklayerClock
-	msync       *Mocksyncer
-	mValidator  *MocknipostValidator
+	observedLogs *observer.ObservedLogs
+	mctrl        *gomock.Controller
+	mpub         *mocks.MockPublisher
+	mnipost      *MocknipostBuilder
+	mpostClient  *MockPostClient
+	mclock       *MocklayerClock
+	msync        *Mocksyncer
+	mValidator   *MocknipostValidator
 }
 
 func newTestBuilder(tb testing.TB, numSigners int, opts ...BuilderOption) *testAtxBuilder {
-	lg := logtest.New(tb, zapcore.DebugLevel)
+	observer, observedLogs := observer.New(zapcore.DebugLevel)
+	logger := zap.New(observer)
+	lg := log.NewFromLog(logger)
 
 	ctrl := gomock.NewController(tb)
 	tab := &testAtxBuilder{
@@ -132,13 +138,14 @@ func newTestBuilder(tb testing.TB, numSigners int, opts ...BuilderOption) *testA
 		localDb:     localsql.InMemory(sql.WithConnections(numSigners)),
 		goldenATXID: types.ATXID(types.HexToHash32("77777")),
 
-		mctrl:       ctrl,
-		mpub:        mocks.NewMockPublisher(ctrl),
-		mnipost:     NewMocknipostBuilder(ctrl),
-		mpostClient: NewMockPostClient(ctrl),
-		mclock:      NewMocklayerClock(ctrl),
-		msync:       NewMocksyncer(ctrl),
-		mValidator:  NewMocknipostValidator(ctrl),
+		observedLogs: observedLogs,
+		mctrl:        ctrl,
+		mpub:         mocks.NewMockPublisher(ctrl),
+		mnipost:      NewMocknipostBuilder(ctrl),
+		mpostClient:  NewMockPostClient(ctrl),
+		mclock:       NewMocklayerClock(ctrl),
+		msync:        NewMocksyncer(ctrl),
+		mValidator:   NewMocknipostValidator(ctrl),
 	}
 
 	opts = append(opts, WithValidator(tab.mValidator))
@@ -158,7 +165,7 @@ func newTestBuilder(tb testing.TB, numSigners int, opts ...BuilderOption) *testA
 		tab.mnipost,
 		tab.mclock,
 		tab.msync,
-		lg.Zap(),
+		logger,
 		opts...,
 	)
 	tab.Builder = b
@@ -1505,6 +1512,59 @@ func TestBuilder_InitialPostIsPersisted(t *testing.T) {
 	require.NoError(t, tab.buildInitialPost(context.Background(), sig.NodeID()))
 
 	// postClient.Proof() should not be called again
+	require.NoError(t, tab.buildInitialPost(context.Background(), sig.NodeID()))
+}
+
+func TestBuilder_InitialPostLogErrorMissingVRFNonce(t *testing.T) {
+	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
+	sig := maps.Values(tab.signers)[0]
+
+	commitmentATX := types.RandomATXID()
+	numUnits := uint32(12)
+	initialPost := &types.Post{
+		Nonce:   rand.Uint32(),
+		Indices: types.RandomBytes(10),
+		Pow:     rand.Uint64(),
+	}
+	meta := &types.PostMetadata{
+		Challenge:     shared.ZeroChallenge,
+		LabelsPerUnit: tab.conf.LabelsPerUnit,
+	}
+	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).Return(
+		initialPost,
+		&types.PostInfo{
+			NodeID:        sig.NodeID(),
+			CommitmentATX: commitmentATX,
+
+			NumUnits:      numUnits,
+			LabelsPerUnit: tab.conf.LabelsPerUnit,
+		},
+		nil,
+	)
+	tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), commitmentATX, initialPost, meta, numUnits).
+		Return(nil)
+	require.ErrorContains(t, tab.buildInitialPost(context.Background(), sig.NodeID()), "nil VRF nonce")
+
+	observedLogs := tab.observedLogs.FilterLevelExact(zapcore.ErrorLevel)
+	require.Equal(t, 1, observedLogs.Len(), "expected 1 log message")
+	require.Equal(t, zapcore.ErrorLevel, observedLogs.All()[0].Level)
+	require.Equal(t, "initial PoST is invalid: missing VRF nonce. Check your PoST data", observedLogs.All()[0].Message)
+	require.Equal(t, sig.NodeID().ShortString(), observedLogs.All()[0].ContextMap()["smesherID"])
+
+	// postClient.Proof() should be called again and no error if vrf nonce is provided
+	nonce := types.VRFPostIndex(rand.Uint64())
+	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).Return(
+		initialPost,
+		&types.PostInfo{
+			NodeID:        sig.NodeID(),
+			CommitmentATX: commitmentATX,
+			Nonce:         &nonce,
+
+			NumUnits:      numUnits,
+			LabelsPerUnit: tab.conf.LabelsPerUnit,
+		},
+		nil,
+	)
 	require.NoError(t, tab.buildInitialPost(context.Background(), sig.NodeID()))
 }
 

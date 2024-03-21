@@ -325,6 +325,12 @@ func (b *Builder) buildInitialPost(ctx context.Context, nodeID types.NodeID) err
 	if err != nil {
 		return fmt.Errorf("post execution: %w", err)
 	}
+	if postInfo.Nonce == nil {
+		b.log.Error("initial PoST is invalid: missing VRF nonce. Check your PoST data",
+			log.ZShortStringer("smesherID", nodeID),
+		)
+		return errors.New("nil VRF nonce")
+	}
 	initialPost := nipost.Post{
 		Nonce:   post.Nonce,
 		Indices: post.Indices,

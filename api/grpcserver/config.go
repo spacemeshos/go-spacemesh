@@ -54,7 +54,7 @@ func DefaultConfig() Config {
 		PrivateServices:       []Service{Admin, Smesher, Debug, ActivationStreamV2Alpha1, RewardStreamV2Alpha1},
 		PrivateListener:       "127.0.0.1:9093",
 		PostServices:          []Service{Post, PostInfo},
-		PostListener:          "127.0.0.1:9094",
+		PostListener:          "127.0.0.1:0",
 		TLSServices:           []Service{Post, PostInfo},
 		TLSListener:           "",
 		JSONListener:          "",

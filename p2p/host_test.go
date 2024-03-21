@@ -57,11 +57,13 @@ func TestPrologue(t *testing.T) {
 			nc2 := []byte("blue")
 			h2, err := New(context.Background(), logtest.New(t), cfg2, nc2, nc2)
 			require.NoError(t, err)
+			require.NoError(t, h2.Start())
 			t.Cleanup(func() { h2.Stop() })
 
 			nc3 := []byte("red")
 			h3, err := New(context.Background(), logtest.New(t), cfg3, nc3, nc3)
 			require.NoError(t, err)
+			require.NoError(t, h3.Start())
 			t.Cleanup(func() { h3.Stop() })
 
 			err = h1.Connect(context.Background(), peer.AddrInfo{
@@ -151,6 +153,7 @@ func TestBlocklist(t *testing.T) {
 			}
 			h2, err := New(context.Background(), logtest.New(t), cfg2, nil, nil)
 			require.NoError(t, err)
+			require.NoError(t, h2.Start())
 			t.Cleanup(func() { h2.Stop() })
 
 			err = h1.Connect(context.Background(), peer.AddrInfo{

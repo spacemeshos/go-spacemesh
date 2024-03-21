@@ -472,6 +472,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 	}); err != nil {
 		return nil, fmt.Errorf("store atx: %w", err)
 	}
+	atxs.AtxAdded(h.cdb, atx)
 	if proof != nil {
 		h.cdb.CacheMalfeasanceProof(atx.SmesherID, proof)
 		h.tortoise.OnMalfeasance(atx.SmesherID)
