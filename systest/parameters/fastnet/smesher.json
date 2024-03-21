@@ -5,9 +5,6 @@
         "cycle-gap": "30s",
         "grace-period": "10s"
     },
-    "tortoise": {
-        "tortoise-enable-tracer": true
-    },
     "api": {
         "grpc-public-listener": "0.0.0.0:9092",
         "grpc-private-listener": "0.0.0.0:9093",
