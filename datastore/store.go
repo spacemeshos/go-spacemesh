@@ -62,7 +62,9 @@ type Config struct {
 
 func DefaultConfig() Config {
 	return Config{
-		ATXSize:         4_400_000, // to be in line with 2*`EpochData` size (see fetch/wire_types.go) - see comment above
+		// NOTE(dshulyak) there are several places where this cache is used, but none of them require to hold
+		// all atxs in memory. those places should eventually be refactored to load necessary data from db.
+		ATXSize:         1_000,
 		MalfeasanceSize: 1_000,
 	}
 }

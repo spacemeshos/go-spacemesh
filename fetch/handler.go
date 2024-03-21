@@ -66,9 +66,16 @@ func (h *handler) handleMaliciousIDsReq(ctx context.Context, _ []byte) ([]byte, 
 
 func (h *handler) handleMaliciousIDsReqStream(ctx context.Context, msg []byte, s io.ReadWriter) error {
 	if err := h.streamIDs(ctx, s, func(cbk retrieveCallback) error {
-		return identities.IterateMalicious(h.cdb, func(total int, id types.NodeID) error {
-			return cbk(total, id[:])
-		})
+		nodeIDs, err := identities.GetMalicious(h.cdb)
+		if err != nil {
+			h.logger.With().Warning("serve: failed to get malicious IDs",
+				log.Context(ctx), log.Err(err))
+			return err
+		}
+		for _, nodeID := range nodeIDs {
+			cbk(len(nodeIDs), nodeID[:])
+		}
+		return nil
 	}); err != nil {
 		h.logger.With().
 			Debug("serve: failed to stream malicious node IDs",
@@ -115,9 +122,16 @@ func (h *handler) handleEpochInfoReqStream(ctx context.Context, msg []byte, s io
 		return err
 	}
 	if err := h.streamIDs(ctx, s, func(cbk retrieveCallback) error {
-		return atxs.IterateIDsByEpoch(h.cdb, epoch, func(total int, id types.ATXID) error {
-			return cbk(total, id[:])
-		})
+		atxids, err := atxs.GetIDsByEpoch(ctx, h.cdb, epoch)
+		if err != nil {
+			h.logger.With().Warning("serve: failed to get epoch atx IDs",
+				epoch, log.Err(err), log.Context(ctx))
+			return err
+		}
+		for _, atxID := range atxids {
+			cbk(len(atxids), atxID[:])
+		}
+		return nil
 	}); err != nil {
 		h.logger.With().Debug("serve: failed to stream epoch atx IDs",
 			log.Context(ctx), epoch, log.Err(err))
@@ -482,17 +496,24 @@ func (h *handler) handleMeshHashReqStream(ctx context.Context, reqData []byte, s
 			log.Context(ctx), log.Err(err))
 		return errBadRequest
 	}
-	if err := req.Validate(); err != nil {
-		h.logger.With().Debug("failed to validate mesh hash request",
-			log.Context(ctx), log.Err(err))
-		return err
-	}
 
 	if err := h.streamIDs(ctx, s, func(cbk retrieveCallback) error {
-		return layers.IterateAggHashes(
-			h.cdb, req.From, req.To, req.Step, func(total int, id types.Hash32) error {
-				return cbk(total, id[:])
-			})
+		if err := req.Validate(); err != nil {
+			h.logger.With().Debug("failed to validate mesh hash request",
+				log.Context(ctx), log.Err(err))
+			return err
+		}
+
+		hashes, err := layers.GetAggHashes(h.cdb, req.From, req.To, req.Step)
+		if err != nil {
+			h.logger.With().Warning("serve: failed to get mesh hashes",
+				log.Context(ctx), log.Err(err))
+			return err
+		}
+		for _, id := range hashes {
+			cbk(len(hashes), id[:])
+		}
+		return nil
 	}); err != nil {
 		h.logger.With().
 			Debug("serve: failed to stream mesh hashes",

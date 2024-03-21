@@ -63,7 +63,7 @@ type postState interface {
 }
 
 type postSupervisor interface {
-	Start(opts activation.PostSetupOpts, sig *signing.EdSigner) error
+	Start(cmdCfg activation.PostSupervisorConfig, opts activation.PostSetupOpts, sig *signing.EdSigner) error
 	Stop(deleteFiles bool) error
 
 	Config() activation.PostConfig

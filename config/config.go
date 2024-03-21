@@ -22,6 +22,7 @@ import (
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
+	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
@@ -60,14 +61,15 @@ type Config struct {
 	VM              vm.Config             `mapstructure:"vm"`
 	POST            activation.PostConfig `mapstructure:"post"`
 	POSTService     activation.PostSupervisorConfig
-	POET            activation.PoetConfig `mapstructure:"poet"`
-	SMESHING        SmeshingConfig        `mapstructure:"smeshing"`
-	LOGGING         LoggerConfig          `mapstructure:"logging"`
-	FETCH           fetch.Config          `mapstructure:"fetch"`
-	Bootstrap       bootstrap.Config      `mapstructure:"bootstrap"`
-	Sync            syncer.Config         `mapstructure:"syncer"`
-	Recovery        checkpoint.Config     `mapstructure:"recovery"`
-	Cache           datastore.Config      `mapstructure:"cache"`
+	POET            activation.PoetConfig      `mapstructure:"poet"`
+	SMESHING        SmeshingConfig             `mapstructure:"smeshing"`
+	LOGGING         LoggerConfig               `mapstructure:"logging"`
+	FETCH           fetch.Config               `mapstructure:"fetch"`
+	Bootstrap       bootstrap.Config           `mapstructure:"bootstrap"`
+	Sync            syncer.Config              `mapstructure:"syncer"`
+	Recovery        checkpoint.Config          `mapstructure:"recovery"`
+	Cache           datastore.Config           `mapstructure:"cache"`
+	ActiveSet       miner.ActiveSetPreparation `mapstructure:"active-set-preparation"`
 }
 
 // DataDir returns the absolute path to use for the node's data. This is the tilde-expanded path given in the config
@@ -197,6 +199,7 @@ func DefaultConfig() Config {
 		Sync:            syncer.DefaultConfig(),
 		Recovery:        checkpoint.DefaultConfig(),
 		Cache:           datastore.DefaultConfig(),
+		ActiveSet:       miner.DefaultActiveSetPrepartion(),
 	}
 }
 
