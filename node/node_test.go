@@ -281,6 +281,16 @@ func TestSpacemeshApp_JsonServiceNotRunning(t *testing.T) {
 	err := app.NewIdentity()
 	require.NoError(t, err)
 
+	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
+	require.NoError(t, err)
+
+	app.clock, err = timesync.NewClock(
+		timesync.WithLayerDuration(cfg.LayerDuration),
+		timesync.WithTickInterval(1*time.Second),
+		timesync.WithGenesisTime(gTime),
+		timesync.WithLogger(zaptest.NewLogger(t)))
+	require.NoError(t, err)
+
 	// Make sure the service is not running by default
 	run := func(c *cobra.Command, args []string) error {
 		return app.startAPIServices(context.Background())
@@ -305,6 +315,16 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	cfg.API.JSONListener = listener
 	cfg.API.PrivateServices = nil
 	app := New(WithConfig(cfg), WithLog(logtest.New(t)))
+
+	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
+	require.NoError(t, err)
+
+	app.clock, err = timesync.NewClock(
+		timesync.WithLayerDuration(cfg.LayerDuration),
+		timesync.WithTickInterval(1*time.Second),
+		timesync.WithGenesisTime(gTime),
+		timesync.WithLogger(zaptest.NewLogger(t)))
+	require.NoError(t, err)
 
 	// Make sure the service is not running by default
 	run := func(c *cobra.Command, args []string) error {
