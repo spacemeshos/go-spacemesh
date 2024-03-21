@@ -370,7 +370,7 @@ func (d *Discovery) ensureAtLeastMinPeers(ctx context.Context) error {
 		case <-disconnected:
 		}
 		if connected := len(d.h.Network().Peers()); connected >= d.minPeers {
-			d.backup = nil // once got enough peers no need to keep backup, they are either already connected or unavailable
+			d.backup = nil // once got enough peers no need to keep, they are either already connected or unavailable
 			d.logger.Debug("node is connected with required number of peers. skipping bootstrap",
 				zap.Int("required", d.minPeers),
 				zap.Int("connected", connected),

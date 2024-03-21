@@ -815,7 +815,7 @@ func generateActiveSet(
 	}
 
 	if total := numOmitted + len(set); total == 0 {
-		return 0, nil, fmt.Errorf("empty active set")
+		return 0, nil, errors.New("empty active set")
 	} else if numOmitted*100/total > 100-goodAtxPercent {
 		// if the node is not synced during `targetEpoch-1`, it doesn't have the correct receipt timestamp
 		// for all the atx and malfeasance proof. this active set is not usable.

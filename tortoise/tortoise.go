@@ -168,7 +168,7 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Opin
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode votes: %w", err)
 	}
-	return nil, fmt.Errorf("no ballots within a sliding window")
+	return nil, errors.New("no ballots within a sliding window")
 }
 
 // encode differences between selected base ballot and local votes.
@@ -494,7 +494,8 @@ func (t *turtle) runVerifying() (verified, changed types.LayerID) {
 func (t *turtle) runFull() (verified, changed types.LayerID) {
 	if !t.isFull {
 		t.switchModes()
-		for counted := max(t.full.counted.Add(1), t.evicted.Add(1)); !counted.After(t.processed); counted = counted.Add(1) {
+		start := max(t.full.counted.Add(1), t.evicted.Add(1))
+		for counted := start; !counted.After(t.processed); counted = counted.Add(1) {
 			for _, ballot := range t.ballots[counted] {
 				t.full.countBallot(t.logger, ballot)
 			}
@@ -705,8 +706,10 @@ func (t *turtle) decodeBallot(ballot *types.BallotTortoiseData) (*ballotInfo, ty
 		base = &ballotInfo{layer: t.evicted}
 		verr = errors.Join(verr, fmt.Errorf("%w: %s", errDanglingBase, ballot.Opinion.Base))
 	} else if !base.layer.Before(ballot.Layer) {
-		return nil, 0, fmt.Errorf("votes for ballot (%s/%s) should be encoded with base ballot (%s/%s) from previous layers",
-			ballot.Layer, ballot.ID, base.layer, base.id)
+		return nil, 0, fmt.Errorf(
+			"votes for ballot (%s/%s) should be encoded with base ballot (%s/%s) from previous layers",
+			ballot.Layer, ballot.ID, base.layer, base.id,
+		)
 	}
 
 	if ballot.EpochData != nil {

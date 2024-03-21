@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -158,7 +159,7 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 		func(ctx context.Context, protocol string, data []byte) error {
 			for i, node := range testNodes {
-				peer := p2p.Peer(fmt.Sprint(i))
+				peer := p2p.Peer(strconv.Itoa(i))
 				switch protocol {
 				case pubsub.BeaconProposalProtocol:
 					require.NoError(t, node.HandleProposal(ctx, peer, data))
@@ -233,11 +234,11 @@ func TestBeacon_MultipleNodes_OnlyOneHonest(t *testing.T) {
 			for i, node := range testNodes {
 				switch protocol {
 				case pubsub.BeaconProposalProtocol:
-					require.NoError(t, node.HandleProposal(ctx, p2p.Peer(fmt.Sprint(i)), data))
+					require.NoError(t, node.HandleProposal(ctx, p2p.Peer(strconv.Itoa(i)), data))
 				case pubsub.BeaconFirstVotesProtocol:
-					require.NoError(t, node.HandleFirstVotes(ctx, p2p.Peer(fmt.Sprint(i)), data))
+					require.NoError(t, node.HandleFirstVotes(ctx, p2p.Peer(strconv.Itoa(i)), data))
 				case pubsub.BeaconFollowingVotesProtocol:
-					require.NoError(t, node.HandleFollowingVotes(ctx, p2p.Peer(fmt.Sprint(i)), data))
+					require.NoError(t, node.HandleFollowingVotes(ctx, p2p.Peer(strconv.Itoa(i)), data))
 				case pubsub.BeaconWeakCoinProtocol:
 				}
 			}

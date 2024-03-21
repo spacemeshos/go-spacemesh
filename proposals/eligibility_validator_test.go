@@ -302,7 +302,8 @@ func TestEligibilityValidator(t *testing.T) {
 			actives: gactiveset(types.ATXID{1}),
 			executed: gballot(
 				types.BallotID{1}, types.ATXID{1},
-				types.NodeID{1}, (epoch + 1).FirstLayer(), gdata(10, types.Beacon{1}, gactiveset(types.ATXID{1}).Hash()),
+				types.NodeID{1}, (epoch + 1).FirstLayer(),
+				gdata(10, types.Beacon{1}, gactiveset(types.ATXID{1}).Hash()),
 				geligibilities(1, 2),
 			),
 			fail: true,

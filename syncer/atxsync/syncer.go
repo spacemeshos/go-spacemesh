@@ -168,7 +168,7 @@ func (s *Syncer) downloadEpochInfo(
 
 		peers := s.fetcher.SelectBestShuffled(s.cfg.EpochInfoPeers)
 		if len(peers) == 0 {
-			return fmt.Errorf("no peers available")
+			return errors.New("no peers available")
 		}
 		// do not run it concurrently, epoch info is large and will continue to grow
 		for _, peer := range peers {

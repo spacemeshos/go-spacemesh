@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -192,17 +191,18 @@ func TestSynchronize_OnlyOneSynchronize(t *testing.T) {
 	for lid := gLayer.Add(2); lid.Before(current); lid = lid.Add(1) {
 		ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid)
 	}
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		require.True(t, ts.syncer.synchronize(ctx))
-		wg.Done()
-	}()
+	var eg errgroup.Group
+	eg.Go(func() error {
+		if !ts.syncer.synchronize(ctx) {
+			return errors.New("synchronize failed")
+		}
+		return nil
+	})
 	<-started
 	require.False(t, ts.syncer.synchronize(ctx))
 	// allow synchronize to finish
 	close(done)
-	wg.Wait()
+	require.NoError(t, eg.Wait())
 
 	cancel()
 	ts.syncer.Close()

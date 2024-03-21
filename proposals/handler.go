@@ -306,11 +306,11 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 
 	if !h.edVerifier.Verify(signing.PROPOSAL, p.SmesherID, p.SignedBytes(), p.Signature) {
 		badSigProposal.Inc()
-		return fmt.Errorf("failed to verify proposal signature")
+		return errors.New("failed to verify proposal signature")
 	}
 	if !h.edVerifier.Verify(signing.BALLOT, p.Ballot.SmesherID, p.Ballot.SignedBytes(), p.Ballot.Signature) {
 		badSigBallot.Inc()
-		return fmt.Errorf("failed to verify ballot signature")
+		return errors.New("failed to verify ballot signature")
 	}
 
 	// set the proposal ID when received
@@ -413,7 +413,7 @@ func (h *Handler) setProposalBeacon(p *types.Proposal) error {
 		return nil
 	}
 	if p.RefBallot == types.EmptyBallotID {
-		return fmt.Errorf("empty refballot")
+		return errors.New("empty refballot")
 	}
 	refBallot, err := ballots.Get(h.db, p.RefBallot)
 	if err != nil {

@@ -931,7 +931,7 @@ func TestMeshService(t *testing.T) {
 						})
 						require.NoError(t, err)
 						require.Equal(t, uint32(0), res.TotalResults)
-						require.Equal(t, 0, len(res.Data))
+						require.Empty(t, res.Data)
 					},
 				},
 				{
@@ -964,7 +964,7 @@ func TestMeshService(t *testing.T) {
 						})
 						require.NoError(t, err)
 						require.Equal(t, uint32(1), res.TotalResults)
-						require.Equal(t, 1, len(res.Data))
+						require.Len(t, res.Data, 1)
 						checkAccountMeshDataItemTx(t, res.Data[0].Datum)
 					},
 				},
@@ -980,7 +980,7 @@ func TestMeshService(t *testing.T) {
 						})
 						require.NoError(t, err)
 						require.Equal(t, uint32(0), res.TotalResults)
-						require.Equal(t, 0, len(res.Data))
+						require.Empty(t, res.Data)
 					},
 				},
 				{
@@ -998,7 +998,7 @@ func TestMeshService(t *testing.T) {
 						})
 						require.NoError(t, err)
 						require.Equal(t, uint32(1), res.TotalResults)
-						require.Equal(t, 1, len(res.Data))
+						require.Len(t, res.Data, 1)
 						checkAccountMeshDataItemTx(t, res.Data[0].Datum)
 					},
 				},
@@ -1016,7 +1016,7 @@ func TestMeshService(t *testing.T) {
 						})
 						require.NoError(t, err)
 						require.Equal(t, uint32(1), res.TotalResults)
-						require.Equal(t, 1, len(res.Data))
+						require.Len(t, res.Data, 1)
 						checkAccountMeshDataItemTx(t, res.Data[0].Datum)
 					},
 				},
@@ -1035,7 +1035,7 @@ func TestMeshService(t *testing.T) {
 						})
 						require.NoError(t, err)
 						require.Equal(t, uint32(1), res.TotalResults)
-						require.Equal(t, 0, len(res.Data))
+						require.Empty(t, res.Data)
 					},
 				},
 			}
@@ -1148,7 +1148,7 @@ func TestMeshService(t *testing.T) {
 				return func(t *testing.T) {
 					res, err := c.LayersQuery(context.Background(), req)
 					require.NoError(t, err, "query returned an unexpected error")
-					require.Equal(t, numResults, len(res.Layer), "unexpected number of layer results")
+					require.Len(t, res.Layer, numResults, "unexpected number of layer results")
 				}
 			}
 			generateRunFnError := func(msg string, req *pb.LayersQueryRequest) func(*testing.T) {
@@ -1265,7 +1265,7 @@ func TestMeshService(t *testing.T) {
 
 						// endpoint inclusive so add one
 						numLayers := layerLatest.Difference(layerFirst) + 1
-						require.EqualValues(t, numLayers, len(res.Layer))
+						require.Len(t, res.Layer, int(numLayers))
 						checkLayer(t, res.Layer[0])
 
 						resLayerNine := res.Layer[9]
@@ -1691,8 +1691,8 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 	require.Equal(t, uint32(0), l.Number.Number, "first layer is zero")
 	require.Equal(t, pb.Layer_LAYER_STATUS_CONFIRMED, l.Status, "first layer is confirmed")
 
-	require.Equal(t, atxPerLayer, len(l.Activations), "unexpected number of activations in layer")
-	require.Equal(t, blkPerLayer, len(l.Blocks), "unexpected number of blocks in layer")
+	require.Len(t, l.Activations, atxPerLayer, "unexpected number of activations in layer")
+	require.Len(t, l.Blocks, blkPerLayer, "unexpected number of blocks in layer")
 	require.Equal(t, stateRoot.Bytes(), l.RootStateHash, "unexpected state root")
 
 	resBlock := l.Blocks[0]
@@ -2228,7 +2228,7 @@ func TestDebugService(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		require.Equal(t, testLog.Level().String(), "debug")
+		require.Equal(t, zapcore.DebugLevel, testLog.Level())
 	})
 
 	t.Run("ChangeLogLevel module not found", func(t *testing.T) {
@@ -2240,7 +2240,7 @@ func TestDebugService(t *testing.T) {
 
 		s, ok := status.FromError(err)
 		require.True(t, ok)
-		require.Equal(t, s.Message(), "cannot find logger unknown-module")
+		require.Equal(t, "cannot find logger unknown-module", s.Message())
 	})
 
 	t.Run("ChangeLogLevel unknown level", func(t *testing.T) {

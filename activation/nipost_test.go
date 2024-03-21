@@ -3,7 +3,6 @@ package activation
 import (
 	"context"
 	"errors"
-	"fmt"
 	"testing"
 	"time"
 
@@ -165,7 +164,7 @@ func Test_NIPost_PostClientHandling(t *testing.T) {
 		case e := <-tnb.eventSub:
 			event := e.Event.GetPostComplete()
 			require.NotNil(t, event, "wrong event type")
-			require.Equal(t, true, e.Event.Failure)
+			require.True(t, e.Event.Failure)
 			require.Equal(t, "Node failed PoST execution.", e.Event.Help)
 		case <-time.After(5 * time.Second):
 			require.Fail(t, "timeout waiting for event")
@@ -235,7 +234,7 @@ func Test_NIPost_PostClientHandling(t *testing.T) {
 			case e := <-tnb.eventSub:
 				event := e.Event.GetPostComplete()
 				require.NotNil(t, event, "wrong event type")
-				require.Equal(t, true, e.Event.Failure)
+				require.True(t, e.Event.Failure)
 				require.Equal(t, "Node failed PoST execution.", e.Event.Help)
 			case <-time.After(5 * time.Second):
 				require.Fail(t, "timeout waiting for event")
@@ -256,7 +255,7 @@ func Test_NIPost_PostClientHandling(t *testing.T) {
 		require.Nil(t, nipost)
 		require.Nil(t, nipostInfo)
 
-		require.Nil(t, eg.Wait())
+		require.NoError(t, eg.Wait())
 	})
 
 	t.Run("connect, disconnect, reconnect then error", func(t *testing.T) {
@@ -290,7 +289,7 @@ func Test_NIPost_PostClientHandling(t *testing.T) {
 		case e := <-tnb.eventSub:
 			event := e.Event.GetPostComplete()
 			require.NotNil(t, event, "wrong event type")
-			require.Equal(t, true, e.Event.Failure)
+			require.True(t, e.Event.Failure)
 			require.Equal(t, "Node failed PoST execution.", e.Event.Help)
 		case <-time.After(5 * time.Second):
 			require.Fail(t, "timeout waiting for event")
@@ -540,7 +539,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(nil, nil, fmt.Errorf("error"))
+	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(nil, nil, errors.New("error"))
 
 	// check that proof ref is not called again
 	nipost, err = nb.BuildNIPost(context.Background(), sig, &challenge)

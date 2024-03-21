@@ -195,7 +195,7 @@ func (app *App) LoadIdentities() error {
 		seen[sig.PublicKey().String()] = sig.Name()
 	}
 	if collision {
-		return fmt.Errorf("duplicate key found in identity files")
+		return errors.New("duplicate key found in identity files")
 	}
 
 	if len(signers) > 1 {
@@ -210,7 +210,7 @@ func (app *App) LoadIdentities() error {
 					"Please ensure you do not have a key file named %s in your identities directory when using remote smeshing.",
 					supervisedIDKeyFileName,
 				)
-				return fmt.Errorf("supervised key found in remote smeshing mode")
+				return errors.New("supervised key found in remote smeshing mode")
 			}
 		}
 	}

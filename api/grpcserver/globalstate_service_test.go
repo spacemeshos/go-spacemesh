@@ -153,7 +153,7 @@ func TestGlobalStateService(t *testing.T) {
 		// zero maxresults means return everything
 		require.NoError(t, err)
 		require.Equal(t, uint32(2), res.TotalResults)
-		require.Equal(t, 2, len(res.AccountItem))
+		require.Len(t, res.AccountItem, 2)
 	})
 	t.Run("AccountDataQuery_OneResult", func(t *testing.T) {
 		t.Parallel()
@@ -182,7 +182,7 @@ func TestGlobalStateService(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Equal(t, uint32(2), res.TotalResults)
-		require.Equal(t, 1, len(res.AccountItem))
+		require.Len(t, res.AccountItem, 1)
 		checkAccountDataQueryItemReward(t, res.AccountItem[0].Datum)
 	})
 	t.Run("AccountDataQuery", func(t *testing.T) {
@@ -211,7 +211,7 @@ func TestGlobalStateService(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Equal(t, uint32(2), res.TotalResults)
-		require.Equal(t, 2, len(res.AccountItem))
+		require.Len(t, res.AccountItem, 2)
 
 		checkAccountDataQueryItemReward(t, res.AccountItem[0].Datum)
 		checkAccountDataQueryItemAccount(t, res.AccountItem[1].Datum)

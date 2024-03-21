@@ -275,7 +275,7 @@ func (*Validator) NIPostChallenge(challenge *types.NIPostChallenge, atxs atxProv
 	}
 
 	if prevATX.Sequence+1 != challenge.Sequence {
-		return fmt.Errorf("sequence number is not one more than prev sequence number")
+		return errors.New("sequence number is not one more than prev sequence number")
 	}
 	return nil
 }

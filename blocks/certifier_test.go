@@ -190,8 +190,15 @@ func Test_HandleSyncedCertificate_HareOutputTrumped(t *testing.T) {
 	sigs := make([]types.CertifyMessage, numMsgs)
 	for i := 0; i < numMsgs; i++ {
 		nid, msg, _ := genEncodedMsg(t, b.LayerIndex, b.ID())
-		tc.mOracle.EXPECT().
-			Validate(gomock.Any(), b.LayerIndex, eligibility.CertifyRound, tc.cfg.CommitteeSize, nid, msg.Proof, defaultCnt).
+		tc.mOracle.EXPECT().Validate(
+			gomock.Any(),
+			b.LayerIndex,
+			eligibility.CertifyRound,
+			tc.cfg.CommitteeSize,
+			nid,
+			msg.Proof,
+			defaultCnt,
+		).
 			Return(true, nil)
 		sigs[i] = *msg
 	}

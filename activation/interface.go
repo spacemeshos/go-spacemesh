@@ -2,7 +2,7 @@ package activation
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"io"
 	"time"
 
@@ -140,8 +140,8 @@ type poetDbAPI interface {
 }
 
 var (
-	ErrPostClientClosed       = fmt.Errorf("post client closed")
-	ErrPostClientNotConnected = fmt.Errorf("post service not registered")
+	ErrPostClientClosed       = errors.New("post client closed")
+	ErrPostClientNotConnected = errors.New("post service not registered")
 )
 
 type AtxBuilder interface {

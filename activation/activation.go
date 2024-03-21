@@ -187,7 +187,7 @@ func (b *Builder) Register(sig *signing.EdSigner) {
 	}
 }
 
-// Smeshing returns true iff atx builder is smeshing.
+// Smeshing returns true if atx builder is smeshing.
 func (b *Builder) Smeshing() bool {
 	b.smeshingMutex.Lock()
 	defer b.smeshingMutex.Unlock()

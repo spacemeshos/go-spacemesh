@@ -496,7 +496,7 @@ func TestComputeExpectedWeight(t *testing.T) {
 			}
 
 			weight := computeExpectedWeight(epochs, tc.target, tc.last)
-			require.Equal(t, tc.expect, weight.Float())
+			require.InEpsilon(t, tc.expect, weight.Float(), 0.0001)
 		})
 	}
 }
@@ -1660,7 +1660,7 @@ func TestComputeBallotWeight(t *testing.T) {
 
 				trtl.OnBallot(ballot.ToTortoiseData())
 				ref := trtl.trtl.ballotRefs[ballot.ID()]
-				require.Equal(t, b.ExpectedWeight, ref.weight.Float())
+				require.InEpsilon(t, b.ExpectedWeight, ref.weight.Float(), 0.0001)
 			}
 		})
 	}

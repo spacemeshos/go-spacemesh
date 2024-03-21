@@ -3,7 +3,7 @@ package grpcserver
 import (
 	"context"
 	"encoding/hex"
-	"fmt"
+	"errors"
 	"testing"
 	"time"
 
@@ -167,7 +167,7 @@ func TestMeshService_MalfeasanceQuery(t *testing.T) {
 		IncludeProof: true,
 	}
 	resp, err := client.MalfeasanceQuery(context.Background(), req)
-	require.Equal(t, status.Code(err), codes.InvalidArgument)
+	require.Equal(t, codes.InvalidArgument, status.Code(err))
 	require.Nil(t, resp)
 
 	req.SmesherHex = hex.EncodeToString(nodeID.Bytes())
@@ -292,7 +292,7 @@ func (t *ConStateAPIMockInstrumented) GetMeshTransactions(
 
 func (t *ConStateAPIMockInstrumented) GetLayerStateRoot(types.LayerID) (types.Hash32, error) {
 	if instrumentedNoStateRoot {
-		return stateRoot, fmt.Errorf("error")
+		return stateRoot, errors.New("error")
 	}
 	return stateRoot, nil
 }
@@ -315,7 +315,7 @@ func TestReadLayer(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	instrumentedErr = fmt.Errorf("error")
+	instrumentedErr = errors.New("error")
 	_, err := srv.readLayer(ctx, layer, pb.Layer_LAYER_STATUS_UNSPECIFIED)
 	require.ErrorContains(t, err, "error reading layer data")
 
