@@ -466,6 +466,7 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 
 	publish := current.GetEpoch()
 	if publish == 0 {
+		s.logger.With().Info("QQQQQ: nothing to sync")
 		return nil // nothing to sync in epoch 0
 	}
 
@@ -498,6 +499,7 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 			return err
 		})
 	}
+	s.logger.With().Info("QQQQQ: aaaa")
 	if !s.malSync.started {
 		s.malSync.started = true
 		s.malSync.eg.Go(func() error {
