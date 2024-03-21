@@ -2,6 +2,19 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## UNRELEASED
+
+### Upgrade information
+
+### Highlights
+
+### Features
+
+### Improvements
+
+* [#5753](ttps://github.com/spacemeshos/go-spacemesh/pull/5753) Fix for a possible segmentation fault in setups with
+  remote post services when an identity does their initial proof.
+
 ## Release v1.4.2
 
 ### Improvements
