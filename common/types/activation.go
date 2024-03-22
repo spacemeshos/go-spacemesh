@@ -2,6 +2,7 @@ package types
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"time"
 
@@ -276,7 +277,7 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 // Initialize calculates and sets the cached ID field. This field must be set before calling the ID() method.
 func (atx *ActivationTx) Initialize() error {
 	if atx.ID() != EmptyATXID {
-		return fmt.Errorf("ATX already initialized")
+		return errors.New("ATX already initialized")
 	}
 
 	atx.id = ATXID(BytesToHash(atx.HashInnerBytes()))
@@ -338,10 +339,10 @@ func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActi
 		}
 	}
 	if atx.effectiveNumUnits == 0 {
-		return nil, fmt.Errorf("effective num units not set")
+		return nil, errors.New("effective num units not set")
 	}
 	if !atx.Golden() && atx.received.IsZero() {
-		return nil, fmt.Errorf("received time not set")
+		return nil, errors.New("received time not set")
 	}
 	vAtx := &VerifiedActivationTx{
 		ActivationTx: atx,

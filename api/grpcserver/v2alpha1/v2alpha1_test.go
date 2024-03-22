@@ -24,16 +24,16 @@ var genesisID = types.Hash20{}
 
 func launchServer(tb testing.TB, services ...grpcserver.ServiceAPI) (grpcserver.Config, func()) {
 	cfg := grpcserver.DefaultTestConfig()
-	grpcService, err := grpcserver.NewWithServices(cfg.PublicListener, zaptest.NewLogger(tb).Named("grpc"), cfg, services)
+	grpc, err := grpcserver.NewWithServices(cfg.PublicListener, zaptest.NewLogger(tb).Named("grpc"), cfg, services)
 	require.NoError(tb, err)
 
 	// start gRPC server
-	require.NoError(tb, grpcService.Start())
+	require.NoError(tb, grpc.Start())
 
 	// update config with bound addresses
-	cfg.PublicListener = grpcService.BoundAddress
+	cfg.PublicListener = grpc.BoundAddress
 
-	return cfg, func() { assert.NoError(tb, grpcService.Close()) }
+	return cfg, func() { assert.NoError(tb, grpc.Close()) }
 }
 
 func dialGrpc(ctx context.Context, tb testing.TB, cfg grpcserver.Config) *grpc.ClientConn {

@@ -132,7 +132,11 @@ func (s *ActivationStreamService) Stream(
 					}
 					continue
 				}
-				err := stream.Send(&spacemeshv2alpha1.Activation{Versioned: &spacemeshv2alpha1.Activation_V1{V1: toAtx(rst)}})
+				err := stream.Send(&spacemeshv2alpha1.Activation{
+					Versioned: &spacemeshv2alpha1.Activation_V1{
+						V1: toAtx(rst),
+					},
+				})
 				switch {
 				case errors.Is(err, io.EOF):
 					return nil

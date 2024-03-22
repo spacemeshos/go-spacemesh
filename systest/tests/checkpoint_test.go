@@ -54,7 +54,7 @@ func TestCheckpoint(t *testing.T) {
 	checkpointEpoch := uint32(4)
 	lastEpoch := uint32(8)
 
-	// need to bootstrap the checkpoint epoch and the next epoch as the beacon protocol was interrupted in the last epoch
+	// bootstrap the checkpoint epoch and the next epoch as the beacon protocol was interrupted in the last epoch
 	cl, err := reuseCluster(tctx, restoreLayer)
 	require.NoError(t, err)
 

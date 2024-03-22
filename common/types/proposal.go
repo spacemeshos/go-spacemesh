@@ -2,7 +2,7 @@ package types
 
 import (
 	"bytes"
-	"fmt"
+	"errors"
 	"sort"
 
 	"github.com/google/go-cmp/cmp"
@@ -76,7 +76,7 @@ type InnerProposal struct {
 // this should be called once all the other fields of the Proposal are set.
 func (p *Proposal) Initialize() error {
 	if p.proposalID != EmptyProposalID {
-		return fmt.Errorf("proposal already initialized")
+		return errors.New("proposal already initialized")
 	}
 	if err := p.Ballot.Initialize(); err != nil {
 		return err

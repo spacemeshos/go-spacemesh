@@ -108,7 +108,7 @@ func NewTLS(logger *zap.Logger, config Config, svc []ServiceAPI) (*Server, error
 
 	certPool := x509.NewCertPool()
 	if !certPool.AppendCertsFromPEM(caCert) {
-		return nil, fmt.Errorf("setup CA certificate")
+		return nil, errors.New("setup CA certificate")
 	}
 
 	tlsConfig := &tls.Config{
