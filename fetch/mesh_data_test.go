@@ -21,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -84,15 +85,13 @@ func startTestLoop(t *testing.T, f *Fetch, eg *errgroup.Group, stop chan struct{
 	})
 }
 
-func generateMaliciousIDs(t *testing.T) []byte {
+func generateMaliciousIDs(t *testing.T) []types.NodeID {
 	t.Helper()
-	var malicious MaliciousIDs
-	for i := 0; i < numMalicious; i++ {
-		malicious.NodeIDs = append(malicious.NodeIDs, types.RandomNodeID())
+	malIDs := make([]types.NodeID, numMalicious)
+	for i := range malIDs {
+		malIDs[i] = types.RandomNodeID()
 	}
-	data, err := codec.Encode(&malicious)
-	require.NoError(t, err)
-	return data
+	return malIDs
 }
 
 func generateLayerContent(t *testing.T) []byte {
@@ -516,7 +515,9 @@ func TestFetch_GetMaliciousIDs(t *testing.T) {
 		t.Parallel()
 		f := createFetch(t)
 		expectedIds := generateMaliciousIDs(t)
-		f.mMalS.EXPECT().Request(gomock.Any(), p2p.Peer("p0"), []byte{}).Return(expectedIds, nil)
+		resp := codec.MustEncode(&MaliciousIDs{NodeIDs: expectedIds})
+		f.mh.EXPECT().ID().Return("self").AnyTimes()
+		f.mMalS.EXPECT().Request(gomock.Any(), p2p.Peer("p0"), []byte{}).Return(resp, nil)
 		ids, err := f.GetMaliciousIDs(context.Background(), "p0")
 		require.NoError(t, err)
 		require.Equal(t, expectedIds, ids)
@@ -886,6 +887,89 @@ func Test_GetAtxsLimiting(t *testing.T) {
 				err = f.GetAtxs(context.Background(), atxIds, system.WithoutLimiting())
 			}
 			require.NoError(t, err)
+		})
+	}
+}
+
+func TestBatchErrorIgnore(t *testing.T) {
+	for _, tc := range []struct {
+		desc    string
+		error   BatchError
+		ignored bool
+	}{
+		{
+			desc:    "empty",
+			ignored: true,
+		},
+		{
+			desc: "random error",
+			error: BatchError{
+				Errors: map[types.Hash32]error{
+					{1}: errors.New("random error"),
+				},
+			},
+		},
+		{
+			desc: "reject",
+			error: BatchError{
+				Errors: map[types.Hash32]error{
+					{1}: pubsub.ErrValidationReject,
+				},
+			},
+			ignored: true,
+		},
+		{
+			desc: "ignore",
+			error: BatchError{
+				Errors: map[types.Hash32]error{
+					{1}: ErrIgnore,
+				},
+			},
+			ignored: true,
+		},
+		{
+			desc: "recursive reject",
+			error: BatchError{
+				Errors: map[types.Hash32]error{
+					{1}: &BatchError{
+						Errors: map[types.Hash32]error{
+							{2}: pubsub.ErrValidationReject,
+						},
+					},
+				},
+			},
+			ignored: true,
+		},
+		{
+			desc: "recursive ignore",
+			error: BatchError{
+				Errors: map[types.Hash32]error{
+					{1}: &BatchError{
+						Errors: map[types.Hash32]error{
+							{2}: ErrIgnore,
+						},
+					},
+				},
+			},
+			ignored: true,
+		},
+		{
+			desc: "random error with reject",
+			error: BatchError{
+				Errors: map[types.Hash32]error{
+					{1}: &BatchError{
+						Errors: map[types.Hash32]error{
+							{2}: pubsub.ErrValidationReject,
+						},
+					},
+					{3}: errors.New("random error"),
+				},
+			},
+		},
+	} {
+		tc := tc
+		t.Run(tc.desc, func(t *testing.T) {
+			require.Equal(t, tc.ignored, tc.error.Ignore())
 		})
 	}
 }

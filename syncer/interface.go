@@ -26,7 +26,6 @@ type meshProvider interface {
 type fetchLogic interface {
 	fetcher
 
-	PollMaliciousProofs(ctx context.Context) error
 	PollLayerData(context.Context, types.LayerID, ...p2p.Peer) error
 	PollLayerOpinions(
 		context.Context,
@@ -40,15 +39,20 @@ type atxSyncer interface {
 	Download(context.Context, types.EpochID, time.Time) error
 }
 
+type malSyncer interface {
+	EnsureInSync(parent context.Context, epochStart, epochEnd time.Time) error
+	DownloadLoop(parent context.Context) error
+}
+
 // fetcher is the interface to the low-level fetching.
 type fetcher interface {
-	GetMaliciousIDs(context.Context, p2p.Peer) ([]byte, error)
+	GetMaliciousIDs(context.Context, p2p.Peer) ([]types.NodeID, error)
 	GetLayerData(context.Context, p2p.Peer, types.LayerID) ([]byte, error)
 	GetLayerOpinions(context.Context, p2p.Peer, types.LayerID) ([]byte, error)
 	GetCert(context.Context, types.LayerID, types.BlockID, []p2p.Peer) (*types.Certificate, error)
 
-	GetMalfeasanceProofs(context.Context, []types.NodeID) error
 	system.AtxFetcher
+	system.MalfeasanceProofFetcher
 	GetBallots(context.Context, []types.BallotID) error
 	GetBlocks(context.Context, []types.BlockID) error
 	RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32)

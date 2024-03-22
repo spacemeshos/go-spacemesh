@@ -81,6 +81,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
 	"github.com/spacemeshos/go-spacemesh/syncer/blockssync"
+	"github.com/spacemeshos/go-spacemesh/syncer/malsync"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
@@ -862,6 +863,9 @@ func (app *App) initServices(ctx context.Context) error {
 	syncerConf.SyncCertDistance = app.Config.Tortoise.Hdist
 	syncerConf.Standalone = app.Config.Standalone
 
+	if app.Config.P2P.MinPeers < app.Config.Sync.MalSync.MinSyncPeers {
+		app.Config.Sync.MalSync.MinSyncPeers = max(1, app.Config.P2P.MinPeers)
+	}
 	app.syncLogger = app.addLogger(SyncLogger, lg)
 	newSyncer := syncer.NewSyncer(
 		app.cachedDB,
@@ -875,6 +879,11 @@ func (app *App) initServices(ctx context.Context) error {
 		atxsync.New(fetcher, app.db, app.localDB,
 			atxsync.WithConfig(app.Config.Sync.AtxSync),
 			atxsync.WithLogger(app.syncLogger.Zap()),
+		),
+		malsync.New(fetcher, app.db, app.localDB,
+			malsync.WithConfig(app.Config.Sync.MalSync),
+			malsync.WithLogger(app.syncLogger.Zap()),
+			malsync.WithPeerErrMetric(syncer.MalPeerError),
 		),
 		syncer.WithConfig(syncerConf),
 		syncer.WithLogger(app.syncLogger),
@@ -1460,6 +1469,13 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		service := v2alpha1.NewRewardStreamService(app.db)
 		app.grpcServices[svc] = service
 		return service, nil
+	case v2alpha1.Network:
+		service := v2alpha1.NewNetworkService(
+			app.clock.GenesisTime(),
+			app.Config.Genesis.GenesisID(),
+			app.Config.LayerDuration)
+		app.grpcServices[svc] = service
+		return service, nil
 	}
 	return nil, fmt.Errorf("unknown service %s", svc)
 }
@@ -1787,10 +1803,14 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		)
 	}
 	app.log.Info("starting cache warmup")
+	applied, err := layers.GetLastApplied(app.db)
+	if err != nil {
+		return err
+	}
 	start := time.Now()
 	data, err := atxsdata.Warm(
 		app.db,
-		atxsdata.WithCapacityFromLayers(app.Config.Tortoise.WindowSize, app.Config.LayersPerEpoch),
+		app.Config.Tortoise.WindowSizeEpochs(applied),
 	)
 	if err != nil {
 		return err

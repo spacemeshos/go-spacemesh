@@ -402,8 +402,6 @@ func (msh *Mesh) applyResults(ctx context.Context, results []result.Layer) error
 				Status:  events.LayerStatusTypeApplied,
 			})
 		}
-
-		msh.atxsdata.OnEpoch(layer.Layer.GetEpoch())
 		if layer.Layer > msh.LatestLayerInState() {
 			msh.setLatestLayerInState(layer.Layer)
 		}

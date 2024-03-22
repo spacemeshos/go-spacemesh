@@ -61,68 +61,6 @@ func (e *threadSafeErr) join(err error) {
 	e.err = errors.Join(e.err, err)
 }
 
-// PollMaliciousProofs polls all peers for malicious NodeIDs.
-func (d *DataFetch) PollMaliciousProofs(ctx context.Context) error {
-	peers := d.fetcher.SelectBestShuffled(fetch.RedundantPeers)
-	logger := d.logger.WithContext(ctx)
-
-	maliciousIDs := make(chan fetch.MaliciousIDs, len(peers))
-	var eg errgroup.Group
-	fetchErr := threadSafeErr{}
-	for _, peer := range peers {
-		peer := peer
-		eg.Go(func() error {
-			data, err := d.fetcher.GetMaliciousIDs(ctx, peer)
-			if err != nil {
-				malPeerError.Inc()
-				logger.With().Debug("failed to get malicious IDs", log.Err(err), log.Stringer("peer", peer))
-				fetchErr.join(err)
-				return nil
-			}
-			var malIDs fetch.MaliciousIDs
-			if err := codec.Decode(data, &malIDs); err != nil {
-				logger.With().Debug("failed to decode", log.Err(err))
-				fetchErr.join(err)
-				return nil
-			}
-			logger.With().Debug("received malicious id from peer", log.Stringer("peer", peer))
-			maliciousIDs <- malIDs
-			return nil
-		})
-	}
-	_ = eg.Wait()
-	close(maliciousIDs)
-
-	allIds := make(map[types.NodeID]struct{})
-	success := false
-	for ids := range maliciousIDs {
-		success = true
-		for _, id := range ids.NodeIDs {
-			allIds[id] = struct{}{}
-		}
-	}
-	if !success {
-		return fetchErr.err
-	}
-
-	var idsToFetch []types.NodeID
-	for nodeID := range allIds {
-		if exists, err := d.ids.IdentityExists(nodeID); err != nil {
-			logger.With().Error("failed to check identity", log.Err(err))
-			continue
-		} else if !exists {
-			logger.With().Info("malicious identity does not exist", log.Stringer("identity", nodeID))
-			continue
-		}
-		idsToFetch = append(idsToFetch, nodeID)
-	}
-
-	if err := d.fetcher.GetMalfeasanceProofs(ctx, idsToFetch); err != nil {
-		return fmt.Errorf("getting malfeasance proofs: %w", err)
-	}
-	return nil
-}
-
 // PollLayerData polls all peers for data in the specified layer.
 func (d *DataFetch) PollLayerData(ctx context.Context, lid types.LayerID, peers ...p2p.Peer) error {
 	if len(peers) == 0 {

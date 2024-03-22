@@ -331,12 +331,10 @@ func TestP2PMaliciousIDs(t *testing.T) {
 				tpf.serverDB.Close()
 			}
 
-			out, err := tpf.clientFetch.GetMaliciousIDs(context.Background(), tpf.serverID)
+			malIDs, err := tpf.clientFetch.GetMaliciousIDs(context.Background(), tpf.serverID)
 			if errStr == "" {
 				require.NoError(t, err)
-				var got MaliciousIDs
-				require.NoError(t, codec.Decode(out, &got))
-				require.ElementsMatch(t, bad, got.NodeIDs)
+				require.ElementsMatch(t, bad, malIDs)
 			} else {
 				require.ErrorContains(t, err, errStr)
 			}

@@ -52,6 +52,8 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 * [#5684](https://github.com/spacemeshos/go-spacemesh/pull5684) Use separate fetcher protocol for active sets.
   This enables separate pacers for active set requests
 
+* [#5718](https://github.com/spacemeshos/go-spacemesh/pull/5718) Sync malfeasance proofs continuously.
+
 ## Release v1.4.0
 
 ### Upgrade information
