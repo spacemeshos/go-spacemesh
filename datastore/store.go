@@ -351,6 +351,7 @@ type Hint string
 
 // DB hints per DB.
 const (
+	NoHint      Hint = ""
 	BallotDB    Hint = "ballotDB"
 	BlockDB     Hint = "blocksDB"
 	ProposalDB  Hint = "proposalDB"

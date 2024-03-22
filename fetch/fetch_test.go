@@ -189,7 +189,7 @@ func TestFetch_RequestHashBatchFromPeers(t *testing.T) {
 			}
 			f.mHashS.EXPECT().
 				Request(gomock.Any(), peer, gomock.Any()).
-				DoAndReturn(func(_ context.Context, _ p2p.Peer, req []byte) ([]byte, error) {
+				DoAndReturn(func(_ context.Context, _ p2p.Peer, req []byte, extraProtocols ...string) ([]byte, error) {
 					if tc.nErr != nil {
 						return nil, tc.nErr
 					}
@@ -254,7 +254,7 @@ func TestFetch_Loop_BatchRequestMax(t *testing.T) {
 	h3 := types.RandomHash()
 	f.mHashS.EXPECT().
 		Request(gomock.Any(), peer, gomock.Any()).
-		DoAndReturn(func(_ context.Context, _ p2p.Peer, req []byte) ([]byte, error) {
+		DoAndReturn(func(_ context.Context, _ p2p.Peer, req []byte, extraProtocols ...string) ([]byte, error) {
 			var rb RequestBatch
 			err := codec.Decode(req, &rb)
 			require.NoError(t, err)
