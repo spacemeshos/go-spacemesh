@@ -41,3 +41,12 @@ func TestGet(t *testing.T) {
 	require.Equal(t, expectWeight, weight)
 	require.Equal(t, expectSet, set)
 }
+
+func TestLarge(t *testing.T) {
+	db := localsql.InMemory()
+	expect := make([]types.ATXID, 5_000_000)
+	require.NoError(t, Add(db, Tortoise, 1, types.Hash32{1}, 10, expect))
+	_, _, set, err := Get(db, Tortoise, 1)
+	require.NoError(t, err)
+	require.Equal(t, expect, set)
+}
