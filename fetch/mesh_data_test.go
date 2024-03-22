@@ -706,15 +706,21 @@ func TestFetch_GetMeshHashes(t *testing.T) {
 			require.NoError(t, err)
 			f.mMHashS.EXPECT().
 				Request(gomock.Any(), peer, gomock.Any()).
-				DoAndReturn(func(_ context.Context, _ p2p.Peer, gotReq []byte, extraProtocols ...string) ([]byte, error) {
-					require.Equal(t, reqData, gotReq)
-					if tc.err == nil {
-						data, err := codec.EncodeSlice(expected.Hashes)
-						require.NoError(t, err)
-						return data, nil
-					}
-					return nil, tc.err
-				})
+				DoAndReturn(
+					func(
+						_ context.Context,
+						_ p2p.Peer,
+						gotReq []byte,
+						extraProtocols ...string,
+					) ([]byte, error) {
+						require.Equal(t, reqData, gotReq)
+						if tc.err == nil {
+							data, err := codec.EncodeSlice(expected.Hashes)
+							require.NoError(t, err)
+							return data, nil
+						}
+						return nil, tc.err
+					})
 			got, err := f.PeerMeshHashes(context.Background(), peer, req)
 			if tc.err == nil {
 				require.NoError(t, err)
@@ -766,15 +772,21 @@ func TestFetch_GetCert(t *testing.T) {
 				ith := i
 				f.mOpn2S.EXPECT().
 					Request(gomock.Any(), p, gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ p2p.Peer, gotReq []byte, extraProtocols ...string) ([]byte, error) {
-						require.Equal(t, reqData, gotReq)
-						if tc.results[ith] == nil {
-							data, err := codec.Encode(&expected)
-							require.NoError(t, err)
-							return data, nil
-						}
-						return nil, tc.results[ith]
-					})
+					DoAndReturn(
+						func(
+							_ context.Context,
+							_ p2p.Peer,
+							gotReq []byte,
+							extraProtocols ...string,
+						) ([]byte, error) {
+							require.Equal(t, reqData, gotReq)
+							if tc.results[ith] == nil {
+								data, err := codec.Encode(&expected)
+								require.NoError(t, err)
+								return data, nil
+							}
+							return nil, tc.results[ith]
+						})
 				if tc.results[ith] == nil {
 					break
 				}
