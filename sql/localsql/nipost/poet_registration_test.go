@@ -44,7 +44,7 @@ func Test_AddPoetRegistration(t *testing.T) {
 
 	registrations, err := PoetRegistrations(db, nodeID)
 	require.NoError(t, err)
-	require.Equal(t, 2, len(registrations))
+	require.Len(t, registrations, 2)
 	require.Equal(t, reg1, registrations[0])
 	require.Equal(t, reg2, registrations[1])
 

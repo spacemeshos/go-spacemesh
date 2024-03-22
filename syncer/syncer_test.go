@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"os"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
@@ -191,17 +191,18 @@ func TestSynchronize_OnlyOneSynchronize(t *testing.T) {
 	for lid := gLayer.Add(2); lid.Before(current); lid = lid.Add(1) {
 		ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid)
 	}
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		require.True(t, ts.syncer.synchronize(ctx))
-		wg.Done()
-	}()
+	var eg errgroup.Group
+	eg.Go(func() error {
+		if !ts.syncer.synchronize(ctx) {
+			return errors.New("synchronize failed")
+		}
+		return nil
+	})
 	<-started
 	require.False(t, ts.syncer.synchronize(ctx))
 	// allow synchronize to finish
 	close(done)
-	wg.Wait()
+	require.NoError(t, eg.Wait())
 
 	cancel()
 	ts.syncer.Close()
@@ -261,17 +262,17 @@ func TestSynchronize_AllGood(t *testing.T) {
 		ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid)
 	}
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
+	var eg errgroup.Group
+	eg.Go(func() error {
 		atxSyncedCh := ts.syncer.RegisterForATXSynced()
 		select {
 		case <-atxSyncedCh:
-			wg.Done()
-		case <-time.After(1 * time.Second):
-			require.Fail(t, "node should be atx synced")
+			return errors.New("node should not be atx synced")
+		case <-time.After(100 * time.Millisecond):
+			return nil
 		}
-	}()
+	})
+	require.NoError(t, eg.Wait())
 
 	require.True(t, ts.syncer.synchronize(context.Background()))
 	require.Equal(t, current1.Sub(1), ts.syncer.getLastSyncedLayer())
@@ -281,17 +282,16 @@ func TestSynchronize_AllGood(t *testing.T) {
 	require.False(t, ts.syncer.ListenToGossip())
 	require.False(t, ts.syncer.IsSynced(context.Background()))
 
-	wg.Add(1)
-	go func() {
+	eg.Go(func() error {
 		atxSyncedCh := ts.syncer.RegisterForATXSynced()
 		select {
 		case <-atxSyncedCh:
-			wg.Done()
+			return nil
 		case <-time.After(1 * time.Second):
-			require.Fail(t, "node should be atx synced")
+			return errors.New("not atx synced")
 		}
-	}()
-	wg.Wait()
+	})
+	require.NoError(t, eg.Wait())
 
 	ts.mTicker.advanceToLayer(current2)
 	require.True(t, ts.syncer.synchronize(context.Background()))
@@ -351,17 +351,17 @@ func TestSynchronize_FailedInitialATXsSync(t *testing.T) {
 		Download(gomock.Any(), failedEpoch, gomock.Any()).
 		Return(errors.New("no ATXs. should fail sync"))
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
+	var eg errgroup.Group
+	eg.Go(func() error {
 		atxSyncedCh := ts.syncer.RegisterForATXSynced()
 		select {
 		case <-atxSyncedCh:
-			require.Fail(t, "node should not be atx synced")
+			return errors.New("node should not be atx synced")
 		case <-time.After(100 * time.Millisecond):
-			wg.Done()
+			return nil
 		}
-	}()
+	})
+	require.NoError(t, eg.Wait())
 
 	require.False(t, ts.syncer.synchronize(context.Background()))
 	require.Equal(t, types.GetEffectiveGenesis(), ts.syncer.getLastSyncedLayer())
@@ -371,17 +371,16 @@ func TestSynchronize_FailedInitialATXsSync(t *testing.T) {
 	require.False(t, ts.syncer.ListenToGossip())
 	require.False(t, ts.syncer.IsSynced(context.Background()))
 
-	wg.Add(1)
-	go func() {
+	eg.Go(func() error {
 		atxSyncedCh := ts.syncer.RegisterForATXSynced()
 		select {
 		case <-atxSyncedCh:
-			require.Fail(t, "node should not be atx synced")
+			return errors.New("node should not be atx synced")
 		case <-time.After(100 * time.Millisecond):
-			wg.Done()
+			return nil
 		}
-	}()
-	wg.Wait()
+	})
+	require.NoError(t, eg.Wait())
 }
 
 func startWithSyncedState(t *testing.T, ts *testSyncer) types.LayerID {
