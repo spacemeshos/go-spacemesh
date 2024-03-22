@@ -453,7 +453,7 @@ func Test_Proof(t *testing.T) {
 	require.NoError(t, err)
 
 	sig, err := o.Proof(context.Background(), signer.VRFSigner(), layer, 3)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.NotNil(t, sig)
 }
 

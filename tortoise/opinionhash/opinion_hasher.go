@@ -41,9 +41,7 @@ func (h *OpinionHasher) WriteAbstain() {
 func (h *OpinionHasher) WriteSupport(id types.BlockID, height uint64) {
 	_, err := scale.EncodeByteArray(h.enc, id[:])
 	if err != nil {
-		if err != nil {
-			panic("unexpected scale encode failure: " + err.Error())
-		}
+		panic("unexpected scale encode failure: " + err.Error())
 	}
 	_, err = scale.EncodeUint64(h.enc, height)
 	if err != nil {

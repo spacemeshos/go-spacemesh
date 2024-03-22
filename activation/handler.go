@@ -155,28 +155,28 @@ func (h *Handler) SyntacticallyValidate(ctx context.Context, atx *types.Activati
 		return fmt.Errorf("atx publish epoch is too far in the future: %d > %d", atx.PublishEpoch, current+1)
 	}
 	if atx.PositioningATX == types.EmptyATXID {
-		return fmt.Errorf("empty positioning atx")
+		return errors.New("empty positioning atx")
 	}
 
 	switch {
 	case atx.PrevATXID == types.EmptyATXID:
 		if atx.InitialPost == nil {
-			return fmt.Errorf("no prev atx declared, but initial post is not included")
+			return errors.New("no prev atx declared, but initial post is not included")
 		}
 		if atx.InnerActivationTx.NodeID == nil {
-			return fmt.Errorf("no prev atx declared, but node id is missing")
+			return errors.New("no prev atx declared, but node id is missing")
 		}
 		if atx.VRFNonce == nil {
-			return fmt.Errorf("no prev atx declared, but vrf nonce is missing")
+			return errors.New("no prev atx declared, but vrf nonce is missing")
 		}
 		if atx.CommitmentATX == nil {
-			return fmt.Errorf("no prev atx declared, but commitment atx is missing")
+			return errors.New("no prev atx declared, but commitment atx is missing")
 		}
 		if *atx.CommitmentATX == types.EmptyATXID {
-			return fmt.Errorf("empty commitment atx")
+			return errors.New("empty commitment atx")
 		}
 		if atx.Sequence != 0 {
-			return fmt.Errorf("no prev atx declared, but sequence number not zero")
+			return errors.New("no prev atx declared, but sequence number not zero")
 		}
 
 		// Use the NIPost's Post metadata, while overriding the challenge to a zero challenge,
@@ -195,13 +195,13 @@ func (h *Handler) SyntacticallyValidate(ctx context.Context, atx *types.Activati
 		}
 	default:
 		if atx.InnerActivationTx.NodeID != nil {
-			return fmt.Errorf("prev atx declared, but node id is included")
+			return errors.New("prev atx declared, but node id is included")
 		}
 		if atx.InitialPost != nil {
-			return fmt.Errorf("prev atx declared, but initial post is included")
+			return errors.New("prev atx declared, but initial post is included")
 		}
 		if atx.CommitmentATX != nil {
-			return fmt.Errorf("prev atx declared, but commitment atx is included")
+			return errors.New("prev atx declared, but commitment atx is included")
 		}
 	}
 	return nil
@@ -364,7 +364,7 @@ func (h *Handler) ContextuallyValidateAtx(atx *types.VerifiedActivationTx) error
 
 	if err == nil && atx.PrevATXID != lastAtx {
 		// last atx referenced does not equal last ATX seen from node
-		return fmt.Errorf("last atx is not the one referenced")
+		return errors.New("last atx is not the one referenced")
 	}
 
 	if errors.Is(err, sql.ErrNotFound) && atx.PrevATXID == types.EmptyATXID {
@@ -429,7 +429,9 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 			if _, ok := h.signers[atx.SmesherID]; ok {
 				// if we land here we tried to publish 2 ATXs in the same epoch
 				// don't punish ourselves but fail validation and thereby the handling of the incoming ATX
-				return fmt.Errorf("%s already published an ATX in epoch %d", atx.SmesherID.ShortString(), atx.PublishEpoch)
+				return fmt.Errorf("%s already published an ATX in epoch %d", atx.SmesherID.ShortString(),
+					atx.PublishEpoch,
+				)
 			}
 
 			var atxProof types.AtxProof

@@ -53,7 +53,7 @@ func (rf *RecoveryFile) Copy(fs afero.Fs, src io.Reader) error {
 		return err
 	}
 	if n == 0 {
-		return fmt.Errorf("no recovery data")
+		return errors.New("no recovery data")
 	}
 	return rf.Save(fs)
 }

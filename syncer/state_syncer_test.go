@@ -54,7 +54,8 @@ func TestProcessLayers_MultiLayers(t *testing.T) {
 		lid := lid
 		ts.mLyrPatrol.EXPECT().IsHareInCharge(lid).Return(false)
 		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid, true, peers).DoAndReturn(
-			func(context.Context, types.LayerID, bool, []p2p.Peer) ([]*fetch.LayerOpinion, []*types.Certificate, error) {
+			func(context.Context, types.LayerID, bool, []p2p.Peer,
+			) ([]*fetch.LayerOpinion, []*types.Certificate, error) {
 				prevLid := lid.Sub(1)
 				prevHash, err := layers.GetAggregatedHash(ts.cdb, prevLid)
 				require.NoError(t, err)
@@ -301,10 +302,12 @@ func TestProcessLayers_HareTakesTooLong(t *testing.T) {
 			ts.mLyrPatrol.EXPECT().IsHareInCharge(lid).Return(false)
 		}
 		peers := test.GeneratePeerIDs(3)
-		ts.mDataFetcher.EXPECT().SelectBestShuffled(gomock.Any()).Return(peers)
-		ts.mDataFetcher.EXPECT().
-			PollLayerOpinions(gomock.Any(), lid, gomock.Any(), peers).
-			Return(nil, nil, nil)
+		if lid.Add(ts.syncer.cfg.SyncCertDistance).After(current) {
+			ts.mDataFetcher.EXPECT().SelectBestShuffled(gomock.Any()).Return(peers)
+			ts.mDataFetcher.EXPECT().
+				PollLayerOpinions(gomock.Any(), lid, gomock.Any(), peers).
+				Return(nil, nil, nil)
+		}
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
 		ts.mTortoise.EXPECT().Updates().Return(fixture.RLayers(fixture.RLayer(lid)))
 		ts.mTortoise.EXPECT().OnApplied(lid, gomock.Any())
@@ -517,10 +520,12 @@ func TestProcessLayers_NoHashResolutionForNewlySyncedNode(t *testing.T) {
 	for lid := instate; lid <= current; lid++ {
 		ts.mLyrPatrol.EXPECT().IsHareInCharge(lid)
 		peers := test.GeneratePeerIDs(3)
-		ts.mDataFetcher.EXPECT().SelectBestShuffled(gomock.Any()).Return(peers)
-		ts.mDataFetcher.EXPECT().
-			PollLayerOpinions(gomock.Any(), lid, gomock.Any(), peers).
-			Return(opns, nil, nil)
+		if lid.Add(ts.syncer.cfg.SyncCertDistance) > current {
+			ts.mDataFetcher.EXPECT().SelectBestShuffled(gomock.Any()).Return(peers)
+			ts.mDataFetcher.EXPECT().
+				PollLayerOpinions(gomock.Any(), lid, gomock.Any(), peers).
+				Return(opns, nil, nil)
+		}
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
 		ts.mTortoise.EXPECT().
 			Updates().

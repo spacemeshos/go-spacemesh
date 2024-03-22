@@ -22,10 +22,13 @@ import (
 
 // Config is the config params for syncer.
 type Config struct {
-	Interval                 time.Duration `mapstructure:"interval"`
-	EpochEndFraction         float64       `mapstructure:"epochendfraction"`
-	HareDelayLayers          uint32
-	SyncCertDistance         uint32
+	Interval         time.Duration `mapstructure:"interval"`
+	EpochEndFraction float64       `mapstructure:"epochendfraction"`
+	HareDelayLayers  uint32
+	SyncCertDistance uint32
+	// TallyVotesFrequency how often to tally votes during layers sync.
+	// Setting this to 0.25 will tally votes after downloading data for quarter of the epoch.
+	TallyVotesFrequency      float64
 	MaxStaleDuration         time.Duration `mapstructure:"maxstaleduration"`
 	Standalone               bool
 	GossipDuration           time.Duration  `mapstructure:"gossipduration"`
@@ -41,6 +44,7 @@ func DefaultConfig() Config {
 		EpochEndFraction:         0.5,
 		HareDelayLayers:          10,
 		SyncCertDistance:         10,
+		TallyVotesFrequency:      0.25,
 		MaxStaleDuration:         time.Second,
 		GossipDuration:           15 * time.Second,
 		OutOfSyncThresholdLayers: 3,
@@ -399,16 +403,16 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 			return true
 		}
 		// always sync to currentLayer-1 to reduce race with gossip and hare/tortoise
-		for layerID := s.getLastSyncedLayer().Add(1); layerID.Before(s.ticker.CurrentLayer()); layerID = layerID.Add(1) {
-			if err := s.syncLayer(ctx, layerID); err != nil {
+		for layer := s.getLastSyncedLayer().Add(1); layer.Before(s.ticker.CurrentLayer()); layer = layer.Add(1) {
+			if err := s.syncLayer(ctx, layer); err != nil {
 				if !errors.Is(err, context.Canceled) {
 					// BatchError spams too much, in case of no progress enable debug mode for sync
 					s.logger.With().
-						Debug("failed to sync layer", log.Context(ctx), log.Err(err), layerID)
+						Debug("failed to sync layer", log.Context(ctx), log.Err(err), layer)
 				}
 				return false
 			}
-			s.setLastSyncedLayer(layerID)
+			s.setLastSyncedLayer(layer)
 		}
 		s.logger.WithContext(ctx).With().Debug("data is synced",
 			log.Stringer("current", s.ticker.CurrentLayer()),

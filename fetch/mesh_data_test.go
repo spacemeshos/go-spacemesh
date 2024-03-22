@@ -44,7 +44,8 @@ func (f *testFetch) expectTransactionCall(times int) *gomock.Call {
 			HandleMessage(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Times(times)
 	} else if f.method == txsForProposal {
-		return f.mTxProposalH.EXPECT().HandleMessage(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(times)
+		return f.mTxProposalH.EXPECT().HandleMessage(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Times(times)
 	}
 	return nil
 }

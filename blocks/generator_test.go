@@ -425,8 +425,8 @@ func Test_run(t *testing.T) {
 					require.Equal(t, layerID, block.LayerIndex)
 					require.Len(t, block.TxIDs, tc.expNumTxs)
 					require.Len(t, block.Rewards, numProposals)
-					// numUnit is the ATX weight. eligible slots per epoch is 3 for each atx, each proposal has 1 eligibility
-					// the expected weight for each eligibility is `numUnit` * 1/3
+					// numUnit is the ATX weight. eligible slots per epoch is 3 for each atx, each proposal has 1
+					// eligibility; the expected weight for each eligibility is `numUnit` * 1/3
 					expWeight := new(big.Rat).SetInt64(numUnit * 1 / 3)
 					checkRewards(t, atxes, expWeight, block.Rewards)
 					return nil
@@ -904,7 +904,9 @@ func Test_processHareOutput_EmptyATXID(t *testing.T) {
 	signers, atxes := createATXs(t, tg.atxs, (layerID.GetEpoch() - 1).FirstLayer(), numProposals)
 	activeSet := types.ToATXIDs(atxes)
 	plist := createProposals(t, tg.db, tg.proposals, layerID, types.Hash32{}, signers[1:], activeSet[1:], txIDs[1:])
-	p := createProposal(t, tg.db, tg.proposals, activeSet, layerID, types.Hash32{}, types.EmptyATXID, signers[0], txIDs, 1)
+	p := createProposal(t, tg.db, tg.proposals, activeSet, layerID, types.Hash32{}, types.EmptyATXID, signers[0],
+		txIDs, 1,
+	)
 	plist = append(plist, p)
 	ho := hare3.ConsensusOutput{
 		Layer:     layerID,

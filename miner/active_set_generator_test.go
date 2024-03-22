@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
@@ -64,21 +65,31 @@ func unixPtr(sec, nsec int64) *time.Time {
 
 func newTesterActiveSetGenerator(tb testing.TB, cfg config) *testerActiveSetGenerator {
 	var (
-		db       = sql.InMemory()
-		localdb  = localsql.InMemory()
-		atxsdata = atxsdata.New()
-		ctrl     = gomock.NewController(tb)
-		clock    = mocks.NewMocklayerClock(ctrl)
-		gen      = newActiveSetGenerator(cfg, logtest.New(tb).Zap(), db, localdb, atxsdata, clock)
+		db        = sql.InMemory()
+		localdb   = localsql.InMemory()
+		atxsdata  = atxsdata.New()
+		ctrl      = gomock.NewController(tb)
+		clock     = mocks.NewMocklayerClock(ctrl)
+		wallclock = clockwork.NewFakeClock()
+		gen       = newActiveSetGenerator(
+			cfg,
+			logtest.New(tb).Zap(),
+			db,
+			localdb,
+			atxsdata,
+			clock,
+			withWallClock(wallclock),
+		)
 	)
 	return &testerActiveSetGenerator{
-		tb:       tb,
-		gen:      gen,
-		db:       db,
-		localdb:  localdb,
-		atxsdata: atxsdata,
-		ctrl:     ctrl,
-		clock:    clock,
+		tb:        tb,
+		gen:       gen,
+		db:        db,
+		localdb:   localdb,
+		atxsdata:  atxsdata,
+		ctrl:      ctrl,
+		clock:     clock,
+		wallclock: wallclock,
 	}
 }
 
@@ -86,11 +97,12 @@ type testerActiveSetGenerator struct {
 	tb  testing.TB
 	gen *activeSetGenerator
 
-	db       *sql.Database
-	localdb  *localsql.Database
-	atxsdata *atxsdata.Data
-	ctrl     *gomock.Controller
-	clock    *mocks.MocklayerClock
+	db        *sql.Database
+	localdb   *localsql.Database
+	atxsdata  *atxsdata.Data
+	ctrl      *gomock.Controller
+	clock     *mocks.MocklayerClock
+	wallclock clockwork.FakeClock
 }
 
 func TestActiveSetGenerate(t *testing.T) {
@@ -292,22 +304,36 @@ func TestActiveSetEnsure(t *testing.T) {
 		tries  = 10
 		target = 3
 	)
-
 	ctx := context.Background()
 	tester := newTesterActiveSetGenerator(t, config{
 		activeSet: ActiveSetPreparation{
-			RetryInterval: time.Nanosecond,
+			RetryInterval: time.Second,
 			Tries:         tries,
 		},
 	})
 
+	terminated := make(chan struct{})
 	expected := []types.ATXID{{1}}
 	// verify that it tries compute activeset for configured number of tries
 	tester.gen.updateFallback(target, expected)
 	tester.clock.EXPECT().CurrentLayer().Return(0).Times(tries)
-	tester.gen.ensure(ctx, target)
+	go func() {
+		tester.gen.ensure(ctx, target)
+		terminated <- struct{}{}
+	}()
+	go func() {
+		for i := 0; i < tries; i++ {
+			tester.wallclock.BlockUntil(1)
+			tester.wallclock.Advance(tester.gen.cfg.activeSet.RetryInterval)
+		}
+	}()
 	_, _, _, err := activeset.Get(tester.localdb, activeset.Tortoise, target)
 	require.ErrorIs(t, err, sql.ErrNotFound)
+	select {
+	case <-terminated:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out")
+	}
 
 	// interruptible
 	ctx, cancel := context.WithCancel(ctx)

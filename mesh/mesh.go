@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -29,8 +30,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
-
-var ErrMissingBlock = errors.New("missing blocks")
 
 // Mesh is the logic layer above our mesh.DB database.
 type Mesh struct {
@@ -309,21 +308,15 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, lid types.LayerID) error {
 		)
 	}
 	applicable, missing := filterMissing(results, next)
-	if len(missing) > 0 {
-		select {
-		case <-ctx.Done():
-		case msh.missingBlocks <- missing:
-		}
-		if len(applicable) == 0 {
-			return fmt.Errorf("%w: request missing blocks %v", ErrMissingBlock, missing)
-		}
-	}
-
 	if err := msh.ensureStateConsistent(ctx, applicable); err != nil {
 		return err
 	}
 	if err := msh.applyResults(ctx, applicable); err != nil {
 		return err
+	}
+	// apply what we were able to download, as it will allow to prune some of the data from tortoise
+	if len(missing) > 0 {
+		return &MissingBlocksError{Blocks: missing}
 	}
 	return nil
 }
@@ -500,7 +493,18 @@ func (msh *Mesh) ProcessLayerPerHareOutput(
 			return fmt.Errorf("optimistically applied for %v/%v: %w", layerID, blockID, err)
 		}
 	}
-	return msh.ProcessLayer(ctx, layerID)
+	err := msh.ProcessLayer(ctx, layerID)
+	if err != nil {
+		missing := &MissingBlocksError{}
+		if errors.As(err, &missing) {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case msh.missingBlocks <- missing.Blocks:
+			}
+		}
+	}
+	return err
 }
 
 func (msh *Mesh) setLatestLayerInState(lyr types.LayerID) {
@@ -622,4 +626,23 @@ func (msh *Mesh) GetRewardsBySmesherId(smesherID types.NodeID) ([]*types.Reward,
 // LastVerified returns the latest layer verified by tortoise.
 func (msh *Mesh) LastVerified() types.LayerID {
 	return msh.trtl.LatestComplete()
+}
+
+type MissingBlocksError struct {
+	Blocks []types.BlockID
+}
+
+func (e *MissingBlocksError) Error() string {
+	if len(e.Blocks) == 0 {
+		return ""
+	}
+	var builder strings.Builder
+	builder.WriteString("missing blocks: ")
+	for i, b := range e.Blocks {
+		if i > 0 {
+			builder.WriteString(", ")
+		}
+		builder.WriteString(b.String())
+	}
+	return builder.String()
 }

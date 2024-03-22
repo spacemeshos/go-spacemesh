@@ -1,6 +1,7 @@
 package beacon
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 	"time"
@@ -80,7 +81,7 @@ func (s *state) setMinerFirstRoundVote(nodeID types.NodeID, voteList []Proposal)
 func (s *state) getMinerFirstRoundVote(nodeID types.NodeID) (proposalList, error) {
 	p, ok := s.firstRoundIncomingVotes[nodeID]
 	if !ok {
-		return nil, fmt.Errorf("no first round votes for miner")
+		return nil, errors.New("no first round votes for miner")
 	}
 	return p, nil
 }

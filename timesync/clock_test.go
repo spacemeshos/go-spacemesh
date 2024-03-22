@@ -2,7 +2,7 @@ package timesync
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"testing"
 	"time"
 
@@ -88,13 +88,13 @@ func Test_NodeClock_Close(t *testing.T) {
 	var eg errgroup.Group
 	eg.Go(func() error {
 		if !assert.NotPanics(t, func() { clock.Close() }) {
-			return fmt.Errorf("panic on first close")
+			return errors.New("panic on first close")
 		}
 		return nil
 	})
 	eg.Go(func() error {
 		if !assert.NotPanics(t, func() { clock.Close() }) {
-			return fmt.Errorf("panic on second close")
+			return errors.New("panic on second close")
 		}
 		return nil
 	})

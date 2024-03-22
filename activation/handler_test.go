@@ -1240,7 +1240,8 @@ func testHandler_PostMalfeasanceProofs(t *testing.T, synced bool) {
 			func(_ context.Context, _ string, data []byte) error {
 				require.NoError(t, codec.Decode(data, &got))
 				postVerifier := NewMockPostVerifier(gomock.NewController(t))
-				postVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("invalid"))
+				postVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+					Return(errors.New("invalid"))
 				nodeID, err := malfeasance.Validate(
 					context.Background(),
 					atxHdlr.log,
@@ -1555,7 +1556,8 @@ func TestHandler_HandleParallelGossipAtx(t *testing.T) {
 	atxHdlr.mValidator.EXPECT().VRFNonce(nodeID, goldenATXID, &vrfNonce, gomock.Any(), atx.NumUnits)
 	atxHdlr.mValidator.EXPECT().
 		Post(gomock.Any(), atx.SmesherID, goldenATXID, atx.InitialPost, gomock.Any(), atx.NumUnits).DoAndReturn(
-		func(context.Context, types.NodeID, types.ATXID, *types.Post, *types.PostMetadata, uint32, ...validatorOption) error {
+		func(context.Context, types.NodeID, types.ATXID, *types.Post, *types.PostMetadata, uint32, ...validatorOption,
+		) error {
 			time.Sleep(100 * time.Millisecond)
 			return nil
 		},
@@ -1868,6 +1870,7 @@ func BenchmarkGetAtxHeaderWithConcurrentProcessAtx(b *testing.B) {
 	)
 	for i := 0; i < runtime.NumCPU()/2; i++ {
 		wg.Add(1)
+		//nolint:testifylint
 		go func() {
 			defer wg.Done()
 			for i := 0; ; i++ {
@@ -2096,7 +2099,8 @@ func TestHandler_FetchReferences(t *testing.T) {
 		atx := newAtx(challenge, nipost.NIPost, 2, coinbase)
 
 		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), atx.GetPoetProofRef())
-		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atx.PrevATXID}, gomock.Any()).Return(errors.New("oh"))
+		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atx.PrevATXID}, gomock.Any()).
+			Return(errors.New("oh"))
 		require.Error(t, atxHdlr.FetchReferences(context.Background(), atx))
 	})
 }

@@ -107,7 +107,7 @@ func createP2PFetch(
 	})
 	require.NoError(t, err)
 
-	require.Equal(t, 1, len(clientHost.GetPeers()))
+	require.Len(t, clientHost.GetPeers(), 1)
 
 	var sqlOpts []sql.Opt
 	if sqlCache {

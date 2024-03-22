@@ -55,7 +55,7 @@ func TestPostVerifierScaling(t *testing.T) {
 	defer cancel()
 
 	err := v.Verify(ctx, &shared.Proof{}, &shared.ProofMetadata{})
-	require.Error(t, err, context.Canceled)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
 
 	mockVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 	v.scale(1)
@@ -67,5 +67,5 @@ func TestPostVerifierScaling(t *testing.T) {
 	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 	err = v.Verify(ctx, &shared.Proof{}, &shared.ProofMetadata{})
-	require.Error(t, err, context.Canceled)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
 }

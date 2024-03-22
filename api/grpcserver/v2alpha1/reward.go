@@ -127,7 +127,11 @@ func (s *RewardStreamService) Stream(
 					}
 					continue
 				}
-				err := stream.Send(&spacemeshv2alpha1.Reward{Versioned: &spacemeshv2alpha1.Reward_V1{V1: toReward(rst)}})
+				err := stream.Send(&spacemeshv2alpha1.Reward{
+					Versioned: &spacemeshv2alpha1.Reward_V1{
+						V1: toReward(rst),
+					},
+				})
 				switch {
 				case errors.Is(err, io.EOF):
 					return nil
