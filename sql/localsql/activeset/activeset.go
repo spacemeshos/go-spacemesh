@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/spacemeshos/go-scale"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
@@ -17,7 +18,7 @@ const (
 	Hare
 )
 
-// disable verification for max number of atxs as it is performed before calling functions in this module
+// disable verification for max number of atxs as it is performed before calling functions in this module.
 const maxAtxs = math.MaxUint32
 
 // Add adds an activeset with weight to the database.
