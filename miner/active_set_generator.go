@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jonboulle/clockwork"
 	"go.uber.org/zap"
 	"golang.org/x/exp/maps"
 
@@ -23,20 +24,33 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/activeset"
 )
 
+type activesetGenOpt func(*activeSetGenerator)
+
+func withWallClock(clock clockwork.Clock) activesetGenOpt {
+	return func(a *activeSetGenerator) {
+		a.wallclock = clock
+	}
+}
+
 func newActiveSetGenerator(
 	cfg config,
 	log *zap.Logger,
 	db, localdb sql.Executor,
 	atxsdata *atxsdata.Data,
 	clock layerClock,
+	opts ...activesetGenOpt,
 ) *activeSetGenerator {
 	a := &activeSetGenerator{
-		cfg:      cfg,
-		log:      log,
-		db:       db,
-		localdb:  localdb,
-		atxsdata: atxsdata,
-		clock:    clock,
+		cfg:       cfg,
+		log:       log,
+		db:        db,
+		localdb:   localdb,
+		atxsdata:  atxsdata,
+		clock:     clock,
+		wallclock: clockwork.NewRealClock(),
+	}
+	for _, opt := range opts {
+		opt(a)
 	}
 	a.fallback.data = map[types.EpochID][]types.ATXID{}
 	return a
@@ -49,6 +63,7 @@ type activeSetGenerator struct {
 	db, localdb sql.Executor
 	atxsdata    *atxsdata.Data
 	clock       layerClock
+	wallclock   clockwork.Clock
 
 	fallback struct {
 		sync.Mutex
@@ -88,7 +103,7 @@ func (a *activeSetGenerator) ensure(ctx context.Context, target types.EpochID) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(a.cfg.activeSet.RetryInterval):
+		case <-a.wallclock.After(a.cfg.activeSet.RetryInterval):
 		}
 	}
 	a.log.Warn("failed to prepare active set", zap.Error(err))

@@ -21,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -867,6 +868,89 @@ func Test_GetAtxsLimiting(t *testing.T) {
 				err = f.GetAtxs(context.Background(), atxIds, system.WithoutLimiting())
 			}
 			require.NoError(t, err)
+		})
+	}
+}
+
+func TestBatchErrorIgnore(t *testing.T) {
+	for _, tc := range []struct {
+		desc    string
+		error   BatchError
+		ignored bool
+	}{
+		{
+			desc:    "empty",
+			ignored: true,
+		},
+		{
+			desc: "random error",
+			error: BatchError{
+				Errors: map[types.Hash32]error{
+					{1}: errors.New("random error"),
+				},
+			},
+		},
+		{
+			desc: "reject",
+			error: BatchError{
+				Errors: map[types.Hash32]error{
+					{1}: pubsub.ErrValidationReject,
+				},
+			},
+			ignored: true,
+		},
+		{
+			desc: "ignore",
+			error: BatchError{
+				Errors: map[types.Hash32]error{
+					{1}: ErrIgnore,
+				},
+			},
+			ignored: true,
+		},
+		{
+			desc: "recursive reject",
+			error: BatchError{
+				Errors: map[types.Hash32]error{
+					{1}: &BatchError{
+						Errors: map[types.Hash32]error{
+							{2}: pubsub.ErrValidationReject,
+						},
+					},
+				},
+			},
+			ignored: true,
+		},
+		{
+			desc: "recursive ignore",
+			error: BatchError{
+				Errors: map[types.Hash32]error{
+					{1}: &BatchError{
+						Errors: map[types.Hash32]error{
+							{2}: ErrIgnore,
+						},
+					},
+				},
+			},
+			ignored: true,
+		},
+		{
+			desc: "random error with reject",
+			error: BatchError{
+				Errors: map[types.Hash32]error{
+					{1}: &BatchError{
+						Errors: map[types.Hash32]error{
+							{2}: pubsub.ErrValidationReject,
+						},
+					},
+					{3}: errors.New("random error"),
+				},
+			},
+		},
+	} {
+		tc := tc
+		t.Run(tc.desc, func(t *testing.T) {
+			require.Equal(t, tc.ignored, tc.error.Ignore())
 		})
 	}
 }

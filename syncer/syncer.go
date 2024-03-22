@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -23,10 +24,13 @@ import (
 
 // Config is the config params for syncer.
 type Config struct {
-	Interval                 time.Duration `mapstructure:"interval"`
-	EpochEndFraction         float64       `mapstructure:"epochendfraction"`
-	HareDelayLayers          uint32
-	SyncCertDistance         uint32
+	Interval         time.Duration `mapstructure:"interval"`
+	EpochEndFraction float64       `mapstructure:"epochendfraction"`
+	HareDelayLayers  uint32
+	SyncCertDistance uint32
+	// TallyVotesFrequency how often to tally votes during layers sync.
+	// Setting this to 0.25 will tally votes after downloading data for quarter of the epoch.
+	TallyVotesFrequency      float64
 	MaxStaleDuration         time.Duration `mapstructure:"maxstaleduration"`
 	Standalone               bool
 	GossipDuration           time.Duration  `mapstructure:"gossipduration"`
@@ -43,6 +47,7 @@ func DefaultConfig() Config {
 		EpochEndFraction:         0.5,
 		HareDelayLayers:          10,
 		SyncCertDistance:         10,
+		TallyVotesFrequency:      0.25,
 		MaxStaleDuration:         time.Second,
 		GossipDuration:           15 * time.Second,
 		OutOfSyncThresholdLayers: 3,
@@ -413,12 +418,18 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		// always sync to currentLayer-1 to reduce race with gossip and hare/tortoise
 		for layer := s.getLastSyncedLayer().Add(1); layer.Before(s.ticker.CurrentLayer()); layer = layer.Add(1) {
 			if err := s.syncLayer(ctx, layer); err != nil {
-				if !errors.Is(err, context.Canceled) {
-					// BatchError spams too much, in case of no progress enable debug mode for sync
+				batchError := &fetch.BatchError{}
+				if errors.As(err, &batchError) && batchError.Ignore() {
 					s.logger.With().
-						Debug("failed to sync layer", log.Context(ctx), log.Err(err), layer)
+						Info("remaining ballots are rejected in the layer", log.Context(ctx), log.Err(err), layer)
+				} else {
+					if !errors.Is(err, context.Canceled) {
+						// BatchError spams too much, in case of no progress enable debug mode for sync
+						s.logger.With().
+							Debug("failed to sync layer", log.Context(ctx), log.Err(err), layer)
+					}
+					return false
 				}
-				return false
 			}
 			s.setLastSyncedLayer(layer)
 		}
@@ -614,7 +625,7 @@ func (s *Syncer) syncMalfeasance(ctx context.Context, epoch types.EpochID) error
 
 func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID, peers ...p2p.Peer) error {
 	if err := s.dataFetcher.PollLayerData(ctx, layerID, peers...); err != nil {
-		return fmt.Errorf("download layer data %v: %w", layerID, err)
+		return err
 	}
 	dataLayer.Set(float64(layerID))
 	return nil

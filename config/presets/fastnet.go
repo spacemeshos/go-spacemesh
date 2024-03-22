@@ -55,6 +55,7 @@ func fastnet() config.Config {
 	conf.Sync.MalSync.IDRequestInterval = 20 * time.Second
 	conf.LayersPerEpoch = 4
 	conf.RegossipAtxInterval = 30 * time.Second
+	conf.FETCH.RequestTimeout = 2 * time.Second
 
 	conf.Tortoise.Hdist = 4
 	conf.Tortoise.Zdist = 2

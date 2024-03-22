@@ -17,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -806,7 +807,9 @@ func TestBallot_DecodeBeforeVotesConsistency(t *testing.T) {
 
 	decoded := &tortoise.DecodedBallot{BallotTortoiseData: b.ToTortoiseData()}
 	th.md.EXPECT().DecodeBallot(decoded.BallotTortoiseData).Return(decoded, expected)
-	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), b.ID().AsHash32(), peer, data), expected)
+	err := th.HandleSyncedBallot(context.Background(), b.ID().AsHash32(), peer, data)
+	require.ErrorIs(t, err, fetch.ErrIgnore)
+	require.Contains(t, err.Error(), expected.Error())
 }
 
 func TestBallot_DecodedStoreFailure(t *testing.T) {

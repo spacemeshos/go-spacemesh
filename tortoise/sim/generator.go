@@ -94,7 +94,7 @@ func New(opts ...GenOpt) *Generator {
 	}
 	// TODO support multiple persist states.
 	for i := 0; i < g.conf.StateInstances; i++ {
-		atxdata := atxsdata.New(atxsdata.WithCapacityFromLayers(g.conf.WindowSize, g.conf.LayersPerEpoch))
+		atxdata := atxsdata.New()
 		g.states = append(g.states, newState(g.logger, g.conf, atxdata))
 	}
 	return g

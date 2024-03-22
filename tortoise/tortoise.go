@@ -71,22 +71,15 @@ func newTurtle(logger *zap.Logger, config Config, atxdata *atxsdata.Data) *turtl
 	return t
 }
 
-func (t *turtle) lookbackWindowStart() (types.LayerID, bool) {
-	// prevent overflow/wraparound
-	if t.verified.Before(types.LayerID(t.WindowSize)) {
-		return types.LayerID(0), false
-	}
-	return t.verified.Sub(t.WindowSize), true
-}
-
 func (t *turtle) evict() {
 	if !t.verified.After(types.GetEffectiveGenesis().Add(t.Hdist)) {
 		return
 	}
-	windowStart, ok := t.lookbackWindowStart()
-	if !ok {
+	size := t.Config.WindowSizeLayers(t.verified)
+	if t.verified.Before(size) {
 		return
 	}
+	windowStart := t.verified - size
 	t.logger.Debug("evict in memory state",
 		zap.Stringer("pending", t.pending),
 		zap.Stringer("from_layer", t.evicted.Add(1)),
@@ -111,6 +104,7 @@ func (t *turtle) evict() {
 		delete(t.ballots, lid)
 		if lid.OrdinalInEpoch() == types.GetLayersPerEpoch()-1 {
 			delete(t.epochs, lid.GetEpoch())
+			t.atxsdata.EvictEpoch(lid.GetEpoch())
 		}
 	}
 	for _, ballot := range t.ballots[windowStart] {

@@ -1469,6 +1469,13 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		service := v2alpha1.NewRewardStreamService(app.db)
 		app.grpcServices[svc] = service
 		return service, nil
+	case v2alpha1.Network:
+		service := v2alpha1.NewNetworkService(
+			app.clock.GenesisTime(),
+			app.Config.Genesis.GenesisID(),
+			app.Config.LayerDuration)
+		app.grpcServices[svc] = service
+		return service, nil
 	}
 	return nil, fmt.Errorf("unknown service %s", svc)
 }
@@ -1796,10 +1803,14 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		)
 	}
 	app.log.Info("starting cache warmup")
+	applied, err := layers.GetLastApplied(app.db)
+	if err != nil {
+		return err
+	}
 	start := time.Now()
 	data, err := atxsdata.Warm(
 		app.db,
-		atxsdata.WithCapacityFromLayers(app.Config.Tortoise.WindowSize, app.Config.LayersPerEpoch),
+		app.Config.Tortoise.WindowSizeEpochs(applied),
 	)
 	if err != nil {
 		return err

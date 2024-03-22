@@ -248,7 +248,9 @@ func advanceState(t testing.TB, ts *testSyncer, from, to types.LayerID) {
 			certificates.Add(ts.cdb, lid, &types.Certificate{BlockID: types.EmptyBlockID}),
 		)
 		ts.mLyrPatrol.EXPECT().IsHareInCharge(lid)
-		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid, false, gomock.Any())
+		if lid.Add(ts.syncer.cfg.SyncCertDistance) > ts.mTicker.CurrentLayer() {
+			ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid, false, gomock.Any())
+		}
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
 		ts.mTortoise.EXPECT().OnApplied(lid, gomock.Any())
 		ts.mTortoise.EXPECT().Updates().Return(fixture.RLayers(fixture.RLayer(lid)))
