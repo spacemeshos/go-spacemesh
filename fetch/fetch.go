@@ -171,7 +171,7 @@ func DefaultConfig() Config {
 			// often queried after receiving gossip message
 			hashProtocol: {Queue: 2000, Requests: 200, Interval: time.Second},
 			// active sets (can get quite large)
-			activeSetProtocol: {Queue: 1, Requests: 1, Interval: 30 * time.Second},
+			activeSetProtocol: {Queue: 10, Requests: 1, Interval: time.Second},
 			// serves at most 100 hashes - 3KB
 			meshHashProtocol: {Queue: 1000, Requests: 100, Interval: time.Second},
 			// serves all malicious ids (id - 32 byte) - 10KB
