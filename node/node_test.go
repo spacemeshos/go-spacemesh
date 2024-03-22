@@ -515,6 +515,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	// If there's an error in the args, it will return immediately.
 	var wg sync.WaitGroup
 	wg.Add(1)
+	//nolint:testifylint
 	go func() {
 		str, err := testArgs(ctx, cmdWithRun(run))
 		require.Empty(t, str)
@@ -557,6 +558,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	// TODO(dshulyak) synchronization below is messed up
 	var wg2 sync.WaitGroup
 	wg2.Add(1)
+	//nolint:testifylint
 	go func() {
 		defer wg2.Done()
 
@@ -668,9 +670,11 @@ func TestConfig_CustomTypes(t *testing.T) {
 			},
 		},
 		{
-			name:   "post-pow-difficulty",
-			cli:    "--post-pow-difficulty=00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
-			config: `{"post": {"post-pow-difficulty": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"}}`,
+			name: "post-pow-difficulty",
+			cli:  "--post-pow-difficulty=00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+			config: `{"post": {
+				"post-pow-difficulty": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+				}}`,
 			updatePreset: func(t *testing.T, c *config.Config) {
 				diff, err := hex.DecodeString(
 					"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",

@@ -241,7 +241,8 @@ func TestDataFetch_PollLayerData_PeerErrors(t *testing.T) {
 		td.mFetcher.EXPECT().SelectBestShuffled(gomock.Any()).Return(peers)
 		td.mFetcher.EXPECT().RegisterPeerHashes(peers[0], gomock.Any())
 		td.mFetcher.EXPECT().GetLayerData(gomock.Any(), peers[0], lid).Return(generateLayerContent(t), nil)
-		td.mFetcher.EXPECT().GetLayerData(gomock.Any(), gomock.Any(), lid).Return(nil, errors.New("na")).Times(numPeers - 1)
+		td.mFetcher.EXPECT().GetLayerData(gomock.Any(), gomock.Any(), lid).Return(nil, errors.New("na")).
+			Times(numPeers - 1)
 		td.mFetcher.EXPECT().GetBallots(gomock.Any(), gomock.Any())
 		require.NoError(t, td.PollLayerData(context.Background(), lid))
 	})
@@ -347,7 +348,8 @@ func TestDataFetch_PollLayerOpinions(t *testing.T) {
 			}
 			for _, bid := range tc.queried {
 				td.mFetcher.EXPECT().GetCert(gomock.Any(), lid, bid, gomock.Any()).DoAndReturn(
-					func(_ context.Context, _ types.LayerID, bid types.BlockID, peers []p2p.Peer) (*types.Certificate, error) {
+					func(_ context.Context, _ types.LayerID, bid types.BlockID, peers []p2p.Peer,
+					) (*types.Certificate, error) {
 						require.Len(t, peers, 2)
 						if tc.cErr == nil {
 							return &types.Certificate{BlockID: bid}, nil

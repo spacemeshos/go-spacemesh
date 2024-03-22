@@ -23,20 +23,20 @@ func TestGetBallot(t *testing.T) {
 	trt := s.tortoise()
 	s.runOn(trt)
 
-	require.Equal(t, trt.GetBallot(ref.ID), &BallotData{
+	require.Equal(t, &BallotData{
 		ID:           ref.ID,
 		Layer:        ref.Layer,
 		ATXID:        ref.AtxID,
 		Smesher:      ref.Smesher,
 		Beacon:       ref.EpochData.Beacon,
 		Eligiblities: ref.EpochData.Eligibilities,
-	})
-	require.Equal(t, trt.GetBallot(secondary.ID), &BallotData{
+	}, trt.GetBallot(ref.ID))
+	require.Equal(t, &BallotData{
 		ID:           secondary.ID,
 		Layer:        secondary.Layer,
 		ATXID:        secondary.AtxID,
 		Smesher:      secondary.Smesher,
 		Beacon:       ref.EpochData.Beacon,
 		Eligiblities: ref.EpochData.Eligibilities,
-	})
+	}, trt.GetBallot(secondary.ID))
 }

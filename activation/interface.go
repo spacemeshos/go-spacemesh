@@ -2,7 +2,7 @@ package activation
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"io"
 	"time"
 
@@ -80,7 +80,11 @@ type layerClock interface {
 }
 
 type nipostBuilder interface {
-	BuildNIPost(ctx context.Context, sig *signing.EdSigner, challenge *types.NIPostChallenge) (*nipost.NIPostState, error)
+	BuildNIPost(
+		ctx context.Context,
+		sig *signing.EdSigner,
+		challenge *types.NIPostChallenge,
+	) (*nipost.NIPostState, error)
 	Proof(ctx context.Context, nodeID types.NodeID, challenge []byte) (*types.Post, *types.PostInfo, error)
 	ResetState(types.NodeID) error
 }
@@ -140,8 +144,8 @@ type poetDbAPI interface {
 }
 
 var (
-	ErrPostClientClosed       = fmt.Errorf("post client closed")
-	ErrPostClientNotConnected = fmt.Errorf("post service not registered")
+	ErrPostClientClosed       = errors.New("post client closed")
+	ErrPostClientNotConnected = errors.New("post service not registered")
 )
 
 type AtxBuilder interface {

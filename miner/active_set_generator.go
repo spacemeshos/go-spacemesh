@@ -158,7 +158,7 @@ func (p *activeSetGenerator) generate(
 			return id, 0, nil, err
 		}
 		if result.Total == 0 {
-			return id, 0, nil, fmt.Errorf("empty active set")
+			return id, 0, nil, errors.New("empty active set")
 		}
 		if len(result.Set)*100/result.Total > p.cfg.goodAtxPercent {
 			set = result.Set
@@ -191,7 +191,7 @@ func (p *activeSetGenerator) generate(
 		}
 	}
 	if set != nil && setWeight == 0 {
-		return id, 0, nil, fmt.Errorf("empty active set")
+		return id, 0, nil, errors.New("empty active set")
 	}
 	if set != nil {
 		p.log.Info("prepared activeset",

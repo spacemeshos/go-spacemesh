@@ -1,6 +1,7 @@
 package rewards
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -77,7 +78,7 @@ func ListByKey(db sql.Executor, coinbase *types.Address, smesherID *types.NodeID
 			stmt.BindBytes(1, smesherID[:])
 		}
 	} else {
-		return nil, fmt.Errorf("must specify coinbase and/or smesherID")
+		return nil, errors.New("must specify coinbase and/or smesherID")
 	}
 	stmt := fmt.Sprintf(
 		"%s where %s order by layer;",

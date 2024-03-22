@@ -208,7 +208,7 @@ func (fo *FixedRolacle) CalcEligibility(
 	id types.NodeID,
 	sig types.VrfSignature,
 ) (uint16, error) {
-	eligible, err := fo.eligible(ctx, layer, round, committeeSize, id, sig)
+	eligible, err := fo.eligible(ctx, layer, round, committeeSize, id)
 	if eligible {
 		return 1, nil
 	}
@@ -222,7 +222,6 @@ func (fo *FixedRolacle) eligible(
 	round uint32,
 	committeeSize int,
 	id types.NodeID,
-	sig types.VrfSignature,
 ) (bool, error) {
 	fo.mapRW.RLock()
 	total := len(fo.honest) + len(fo.faulty) // safe since len >= 0

@@ -174,7 +174,9 @@ func (m migration0003) moveNipostStateToDb(db sql.Executor, dataDir string) erro
 			insert into poet_registration (id, hash, address, round_id, round_end)
 			values (?1, ?2, ?3, ?4, ?5);`, enc, nil,
 		); err != nil {
-			return fmt.Errorf("insert poet registration for %s: %w", types.BytesToNodeID(meta.NodeId).ShortString(), err)
+			return fmt.Errorf("insert poet registration for %s: %w",
+				types.BytesToNodeID(meta.NodeId).ShortString(), err,
+			)
 		}
 
 		m.logger.Info("PoET registration added to database",

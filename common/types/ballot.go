@@ -2,7 +2,7 @@ package types
 
 import (
 	"bytes"
-	"fmt"
+	"errors"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -249,7 +249,7 @@ type EpochData struct {
 // this should be called once all the other fields of the Ballot are set.
 func (b *Ballot) Initialize() error {
 	if b.ID() != EmptyBallotID {
-		return fmt.Errorf("ballot already initialized")
+		return errors.New("ballot already initialized")
 	}
 
 	b.ballotID = BallotID(BytesToHash(b.HashInnerBytes()).ToHash20())
