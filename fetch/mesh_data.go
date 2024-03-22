@@ -399,7 +399,7 @@ func (f *Fetch) GetCert(
 	return nil, fmt.Errorf("failed to get cert %v/%s from %d peers: %w", lid, bid.String(), len(peers), ctx.Err())
 }
 
-var ErrIgnore = errors.New("fecth: ignore")
+var ErrIgnore = errors.New("fetch: ignore")
 
 type BatchError struct {
 	Errors map[types.Hash32]error
