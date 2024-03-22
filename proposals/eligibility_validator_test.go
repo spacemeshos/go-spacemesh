@@ -563,9 +563,8 @@ func TestEligibilityValidator(t *testing.T) {
 			}).AnyTimes()
 
 			lg := logtest.New(t)
-			const capacity = 2
-			c := atxsdata.New(atxsdata.WithCapacity(capacity))
-			c.OnEpoch(tc.evicted + capacity)
+			c := atxsdata.New()
+			c.EvictEpoch(tc.evicted)
 			tv := NewEligibilityValidator(
 				layerAvgSize,
 				layersPerEpoch,

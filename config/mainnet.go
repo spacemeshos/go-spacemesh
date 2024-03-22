@@ -125,6 +125,9 @@ func MainnetConfig() Config {
 			MinimalActiveSetWeight: []types.EpochMinimalActiveWeight{
 				{Weight: 1_000_000},
 			},
+			HistoricalWindowSize: []tortoise.WindowSizeInterval{
+				{End: 30_000, Window: 10_000},
+			},
 		},
 		HARE3: hare3conf,
 		HareEligibility: eligibility.Config{
