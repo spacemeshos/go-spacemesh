@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
+	"github.com/spacemeshos/go-spacemesh/syncer/malsync"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -36,6 +37,7 @@ type Config struct {
 	DisableMeshAgreement     bool           `mapstructure:"disable-mesh-agreement"`
 	OutOfSyncThresholdLayers uint32         `mapstructure:"out-of-sync-threshold"`
 	AtxSync                  atxsync.Config `mapstructure:"atx-sync"`
+	MalSync                  malsync.Config `mapstructure:"malfeasance-sync"`
 }
 
 // DefaultConfig for the syncer.
@@ -50,6 +52,7 @@ func DefaultConfig() Config {
 		GossipDuration:           15 * time.Second,
 		OutOfSyncThresholdLayers: 3,
 		AtxSync:                  atxsync.DefaultConfig(),
+		MalSync:                  malsync.DefaultConfig(),
 	}
 }
 
@@ -122,6 +125,7 @@ type Syncer struct {
 	cfg          Config
 	cdb          *datastore.CachedDB
 	atxsyncer    atxSyncer
+	malsyncer    malSyncer
 	ticker       layerTicker
 	beacon       system.BeaconGetter
 	mesh         *mesh.Mesh
@@ -147,6 +151,12 @@ type Syncer struct {
 		cancel context.CancelFunc
 	}
 
+	// malSync runs malfeasant identity sync in the background
+	malSync struct {
+		started bool
+		eg      errgroup.Group
+	}
+
 	// awaitATXSyncedCh is the list of subscribers' channels to notify when this node enters ATX synced state
 	awaitATXSyncedCh chan struct{}
 
@@ -165,6 +175,7 @@ func NewSyncer(
 	patrol layerPatrol,
 	ch certHandler,
 	atxSyncer atxSyncer,
+	malSyncer malSyncer,
 	opts ...Option,
 ) *Syncer {
 	s := &Syncer{
@@ -172,6 +183,7 @@ func NewSyncer(
 		cfg:              DefaultConfig(),
 		cdb:              cdb,
 		atxsyncer:        atxSyncer,
+		malsyncer:        malSyncer,
 		ticker:           ticker,
 		beacon:           beacon,
 		mesh:             mesh,
@@ -456,7 +468,7 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 
 		// FIXME https://github.com/spacemeshos/go-spacemesh/issues/3987
 		s.logger.With().Info("syncing malicious proofs", log.Context(ctx))
-		if err := s.syncMalfeasance(ctx); err != nil {
+		if err := s.syncMalfeasance(ctx, current.GetEpoch()); err != nil {
 			return err
 		}
 		s.logger.With().Info("malicious IDs synced", log.Context(ctx))
@@ -465,6 +477,7 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 
 	publish := current.GetEpoch()
 	if publish == 0 {
+		s.logger.With().Info("QQQQQ: nothing to sync")
 		return nil // nothing to sync in epoch 0
 	}
 
@@ -495,6 +508,22 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 			}
 			s.backgroundSync.epoch.Store(0)
 			return err
+		})
+	}
+	s.logger.With().Info("QQQQQ: aaaa")
+	if !s.malSync.started {
+		s.malSync.started = true
+		s.malSync.eg.Go(func() error {
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-s.awaitATXSyncedCh:
+				err := s.malsyncer.DownloadLoop(ctx)
+				if err != nil && !errors.Is(err, context.Canceled) {
+					s.logger.WithContext(ctx).Error("malfeasance sync failed", log.Err(err))
+				}
+				return nil
+			}
 		})
 	}
 	return nil
@@ -585,9 +614,11 @@ func (s *Syncer) setStateAfterSync(ctx context.Context, success bool) {
 	}
 }
 
-func (s *Syncer) syncMalfeasance(ctx context.Context) error {
-	if err := s.dataFetcher.PollMaliciousProofs(ctx); err != nil {
-		return fmt.Errorf("PollMaliciousProofs: %w", err)
+func (s *Syncer) syncMalfeasance(ctx context.Context, epoch types.EpochID) error {
+	epochStart := s.ticker.LayerToTime(epoch.FirstLayer())
+	epochEnd := s.ticker.LayerToTime(epoch.Add(1).FirstLayer())
+	if err := s.malsyncer.EnsureInSync(ctx, epochStart, epochEnd); err != nil {
+		return fmt.Errorf("syncing malfeasance proof: %w", err)
 	}
 	return nil
 }

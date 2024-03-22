@@ -85,15 +85,13 @@ func startTestLoop(t *testing.T, f *Fetch, eg *errgroup.Group, stop chan struct{
 	})
 }
 
-func generateMaliciousIDs(t *testing.T) []byte {
+func generateMaliciousIDs(t *testing.T) []types.NodeID {
 	t.Helper()
-	var malicious MaliciousIDs
-	for i := 0; i < numMalicious; i++ {
-		malicious.NodeIDs = append(malicious.NodeIDs, types.RandomNodeID())
+	malIDs := make([]types.NodeID, numMalicious)
+	for i := range malIDs {
+		malIDs[i] = types.RandomNodeID()
 	}
-	data, err := codec.Encode(&malicious)
-	require.NoError(t, err)
-	return data
+	return malIDs
 }
 
 func generateLayerContent(t *testing.T) []byte {
@@ -511,7 +509,9 @@ func TestFetch_GetMaliciousIDs(t *testing.T) {
 		t.Parallel()
 		f := createFetch(t)
 		expectedIds := generateMaliciousIDs(t)
-		f.mMalS.EXPECT().Request(gomock.Any(), p2p.Peer("p0"), []byte{}).Return(expectedIds, nil)
+		resp := codec.MustEncode(&MaliciousIDs{NodeIDs: expectedIds})
+		f.mh.EXPECT().ID().Return("self").AnyTimes()
+		f.mMalS.EXPECT().Request(gomock.Any(), p2p.Peer("p0"), []byte{}).Return(resp, nil)
 		ids, err := f.GetMaliciousIDs(context.Background(), "p0")
 		require.NoError(t, err)
 		require.Equal(t, expectedIds, ids)

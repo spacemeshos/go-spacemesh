@@ -81,6 +81,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
 	"github.com/spacemeshos/go-spacemesh/syncer/blockssync"
+	"github.com/spacemeshos/go-spacemesh/syncer/malsync"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
@@ -862,6 +863,9 @@ func (app *App) initServices(ctx context.Context) error {
 	syncerConf.SyncCertDistance = app.Config.Tortoise.Hdist
 	syncerConf.Standalone = app.Config.Standalone
 
+	if app.Config.P2P.MinPeers < app.Config.Sync.MalSync.MinSyncPeers {
+		app.Config.Sync.MalSync.MinSyncPeers = max(1, app.Config.P2P.MinPeers)
+	}
 	app.syncLogger = app.addLogger(SyncLogger, lg)
 	newSyncer := syncer.NewSyncer(
 		app.cachedDB,
@@ -875,6 +879,11 @@ func (app *App) initServices(ctx context.Context) error {
 		atxsync.New(fetcher, app.db, app.localDB,
 			atxsync.WithConfig(app.Config.Sync.AtxSync),
 			atxsync.WithLogger(app.syncLogger.Zap()),
+		),
+		malsync.New(fetcher, app.db, app.localDB,
+			malsync.WithConfig(app.Config.Sync.MalSync),
+			malsync.WithLogger(app.syncLogger.Zap()),
+			malsync.WithPeerErrMetric(syncer.MalPeerError),
 		),
 		syncer.WithConfig(syncerConf),
 		syncer.WithLogger(app.syncLogger),
