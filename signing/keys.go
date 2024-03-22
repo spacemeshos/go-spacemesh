@@ -59,7 +59,7 @@ func (p *PublicKey) ShortString() string {
 	return s[:shortStringSize]
 }
 
-// Equals returns true iff the public keys are equal.
+// Equals returns true if the public keys are equal.
 func (p *PublicKey) Equals(o *PublicKey) bool {
 	return p.PublicKey.Equal(o.PublicKey)
 }

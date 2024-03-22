@@ -123,12 +123,12 @@ func TestRewards(t *testing.T) {
 	unknownAddr := types.Address{1, 2, 3}
 	got, err = ListByCoinbase(db, unknownAddr)
 	require.NoError(t, err)
-	require.Len(t, got, 0)
+	require.Empty(t, got)
 
 	unknownSmesher := types.NodeID{1, 2, 3}
 	got, err = ListBySmesherId(db, unknownSmesher)
 	require.NoError(t, err)
-	require.Len(t, got, 0)
+	require.Empty(t, got)
 
 	require.NoError(t, Revert(db, lid1))
 	got, err = ListByCoinbase(db, coinbase1)
@@ -304,7 +304,7 @@ func Test_0008Migration(t *testing.T) {
 	// this should return nothing (since smesherID wasn't set)
 	rewards, err = ListBySmesherId(db, reward.SmesherID)
 	require.NoError(t, err)
-	require.Len(t, rewards, 0)
+	require.Empty(t, rewards)
 
 	// add more data and verify that we can read it both ways
 	reward = &types.Reward{

@@ -90,11 +90,11 @@ func createP2PFetch(
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	t.Cleanup(cancel)
 
-	serverHost, err := p2p.New(ctx, lg, p2pCfg(t), []byte{}, []byte{})
+	serverHost, err := p2p.AutoStart(ctx, lg, p2pCfg(t), []byte{}, []byte{})
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, serverHost.Stop()) })
 
-	clientHost, err := p2p.New(ctx, lg, p2pCfg(t), []byte{}, []byte{})
+	clientHost, err := p2p.AutoStart(ctx, lg, p2pCfg(t), []byte{}, []byte{})
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, clientHost.Stop()) })
 
@@ -105,7 +105,7 @@ func createP2PFetch(
 	})
 	require.NoError(t, err)
 
-	require.Equal(t, 1, len(clientHost.GetPeers()))
+	require.Len(t, clientHost.GetPeers(), 1)
 
 	var sqlOpts []sql.Opt
 	if sqlCache {

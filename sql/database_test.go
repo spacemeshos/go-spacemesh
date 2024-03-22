@@ -46,7 +46,7 @@ func Test_Transaction_Isolation(t *testing.T) {
 		stmt.BindText(1, key)
 	}, nil)
 	require.NoError(t, err)
-	require.Equal(t, rows, 1)
+	require.Equal(t, 1, rows)
 
 	require.NoError(t, tx.Release())
 
@@ -54,7 +54,7 @@ func Test_Transaction_Isolation(t *testing.T) {
 		stmt.BindText(1, key)
 	}, nil)
 	require.NoError(t, err)
-	require.Equal(t, rows, 0)
+	require.Equal(t, 0, rows)
 }
 
 func Test_Migration_Rollback(t *testing.T) {

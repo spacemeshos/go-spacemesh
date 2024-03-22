@@ -122,7 +122,8 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot, 
 				proof.Sig,
 			)
 		}
-		if eligible := CalcEligibleLayer(ballot.Layer.GetEpoch(), v.layersPerEpoch, proof.Sig); ballot.Layer != eligible {
+		eligible := CalcEligibleLayer(ballot.Layer.GetEpoch(), v.layersPerEpoch, proof.Sig)
+		if ballot.Layer != eligible {
 			return fmt.Errorf("%w: ballot has incorrect layer index. ballot layer (%v), eligible layer (%v)",
 				pubsub.ErrValidationReject, ballot.Layer, eligible)
 		}

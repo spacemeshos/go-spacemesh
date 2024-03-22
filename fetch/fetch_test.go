@@ -343,13 +343,13 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	p2pconf.IP4Blocklist = nil
 
 	// Good host
-	h, err := p2p.New(ctx, lg, p2pconf, []byte{}, []byte{})
+	h, err := p2p.AutoStart(ctx, lg, p2pconf, []byte{}, []byte{})
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, h.Stop()) })
 
 	// Bad host, will send a message that results in validation reject
 	p2pconf.DataDir = t.TempDir()
-	badPeerHost, err := p2p.New(ctx, lg, p2pconf, []byte{}, []byte{})
+	badPeerHost, err := p2p.AutoStart(ctx, lg, p2pconf, []byte{}, []byte{})
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, badPeerHost.Stop()) })
 
@@ -359,7 +359,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	require.Equal(t, 1, len(h.GetPeers()))
+	require.Len(t, h.GetPeers(), 1)
 
 	// This handler returns a ResponseBatch with an empty response that will fail validation on the remote peer
 	badPeerHandler := func(_ context.Context, data []byte) ([]byte, error) {
@@ -411,7 +411,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	// Verify that connections remain up
 	for i := 0; i < 5; i++ {
 		conns := h.Network().ConnsToPeer(badPeerHost.ID())
-		require.Equal(t, 1, len(conns))
+		require.Len(t, conns, 1)
 		time.Sleep(100 * time.Millisecond)
 	}
 
@@ -442,5 +442,5 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	require.Eventually(t, func() bool {
 		return len(h.Host.Network().ConnsToPeer(badPeerHost.ID())) == 0
 	}, time.Second*15, time.Millisecond*200)
-	require.Equal(t, 0, len(h.GetPeers()))
+	require.Empty(t, h.GetPeers())
 }

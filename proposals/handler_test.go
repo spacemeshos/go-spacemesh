@@ -1096,7 +1096,7 @@ func TestProposal_ProposalGossip_Concurrent(t *testing.T) {
 		require.Error(t, res2)
 	} else {
 		require.Error(t, res1)
-		require.Nil(t, res2)
+		require.NoError(t, res2)
 	}
 }
 
@@ -1217,7 +1217,7 @@ func TestProposal_ProposalGossip_Fetched(t *testing.T) {
 			} else {
 				th.mconsumer.EXPECT().OnProposal(gomock.Any())
 				th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), p.Layer, p.ID(), p.TxIDs).Return(nil).Times(1)
-				require.Equal(t, nil, th.HandleProposal(context.Background(), peer, data))
+				require.NoError(t, th.HandleProposal(context.Background(), peer, data))
 			}
 		})
 	}

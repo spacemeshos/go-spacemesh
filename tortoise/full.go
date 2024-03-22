@@ -77,7 +77,8 @@ func (f *full) countForLateBlock(block *blockInfo) {
 			if block.height > ballot.reference.height {
 				continue
 			}
-			for current := ballot.votes.tail; current != nil && !current.lid.Before(block.layer); current = current.prev {
+			start := ballot.votes.tail
+			for current := start; current != nil && !current.lid.Before(block.layer); current = current.prev {
 				if current.lid != block.layer {
 					continue
 				}

@@ -147,7 +147,7 @@ func TestTransportWrapper(t *testing.T) {
 					require.Error(t, err)
 				} else {
 					require.NoError(t, err)
-					require.Equal(t, buf, []byte{11, 22, 33, 44})
+					require.Equal(t, []byte{11, 22, 33, 44}, buf)
 					require.NoError(t, eg.Wait())
 				}
 			}

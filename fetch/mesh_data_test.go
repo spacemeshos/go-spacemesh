@@ -45,7 +45,8 @@ func (f *testFetch) expectTransactionCall(times int) *gomock.Call {
 			HandleMessage(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Times(times)
 	} else if f.method == txsForProposal {
-		return f.mTxProposalH.EXPECT().HandleMessage(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(times)
+		return f.mTxProposalH.EXPECT().HandleMessage(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Times(times)
 	}
 	return nil
 }
@@ -108,7 +109,7 @@ func generateLayerContent(t *testing.T) []byte {
 	return out
 }
 
-func TestFetch_getHashes(t *testing.T) {
+func testFetch_getHashes(t *testing.T, streaming bool) {
 	blks := []*types.Block{
 		genLayerBlock(types.LayerID(10), types.RandomTXSet(10)),
 		genLayerBlock(types.LayerID(11), types.RandomTXSet(10)),
@@ -120,6 +121,7 @@ func TestFetch_getHashes(t *testing.T) {
 		name      string
 		fetchErrs map[types.Hash32]struct{}
 		hdlrErr   error
+		reqErr    error
 	}{
 		{
 			name: "all hashes fetched",
@@ -127,6 +129,10 @@ func TestFetch_getHashes(t *testing.T) {
 		{
 			name:      "all hashes failed",
 			fetchErrs: map[types.Hash32]struct{}{hashes[0]: {}, hashes[1]: {}, hashes[2]: {}},
+		},
+		{
+			name:   "hash request failed",
+			reqErr: errors.New("request failed"),
 		},
 		{
 			name:      "some hashes failed",
@@ -147,6 +153,7 @@ func TestFetch_getHashes(t *testing.T) {
 			f.cfg.QueueSize = 3
 			f.cfg.BatchSize = 2
 			f.cfg.MaxRetriesForRequest = 0
+			f.cfg.Streaming = streaming
 			peers := []p2p.Peer{p2p.Peer("buddy 0"), p2p.Peer("buddy 1")}
 			for _, peer := range peers {
 				f.peers.Add(peer)
@@ -163,47 +170,76 @@ func TestFetch_getHashes(t *testing.T) {
 				}
 				responses[h] = res
 			}
-			f.mHashS.EXPECT().
-				Request(gomock.Any(), gomock.Any(), gomock.Any()).
-				DoAndReturn(
-					func(_ context.Context, p p2p.Peer, req []byte) ([]byte, error) {
-						var rb RequestBatch
-						err := codec.Decode(req, &rb)
-						require.NoError(t, err)
+			requestFn := func(_ context.Context, p p2p.Peer, req []byte) ([]byte, error) {
+				if tc.reqErr != nil {
+					return nil, tc.reqErr
+				}
+				var rb RequestBatch
+				err := codec.Decode(req, &rb)
+				require.NoError(t, err)
 
-						resBatch := ResponseBatch{
-							ID: rb.ID,
-						}
-						for _, r := range rb.Requests {
-							if _, ok := tc.fetchErrs[r.Hash]; ok {
-								continue
+				resBatch := ResponseBatch{
+					ID: rb.ID,
+				}
+				for _, r := range rb.Requests {
+					if _, ok := tc.fetchErrs[r.Hash]; ok {
+						continue
+					}
+					res := responses[r.Hash]
+					resBatch.Responses = append(resBatch.Responses, res)
+					f.mBlocksH.EXPECT().
+						HandleMessage(gomock.Any(), res.Hash, p, res.Data).
+						Return(tc.hdlrErr)
+				}
+				bts, err := codec.Encode(&resBatch)
+				require.NoError(t, err)
+
+				return bts, nil
+			}
+			if streaming {
+				f.mHashS.EXPECT().
+					StreamRequest(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(
+						func(
+							ctx context.Context,
+							p p2p.Peer,
+							req []byte,
+							cbk server.StreamRequestCallback,
+						) error {
+							b, err := requestFn(ctx, p, req)
+							if err != nil {
+								return err
 							}
-							res := responses[r.Hash]
-							resBatch.Responses = append(resBatch.Responses, res)
-							f.mBlocksH.EXPECT().
-								HandleMessage(gomock.Any(), res.Hash, p, res.Data).
-								Return(tc.hdlrErr)
-						}
-						bts, err := codec.Encode(&resBatch)
-						require.NoError(t, err)
+							resp := &server.Response{Data: b}
+							buf := bytes.NewBuffer(codec.MustEncode(resp))
+							return cbk(ctx, buf)
+						}).
+					Times(len(peers))
+			} else {
+				f.mHashS.EXPECT().
+					Request(gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(requestFn).
+					Times(len(peers))
+			}
 
-						return bts, nil
-					}).
-				Times(len(peers))
-
-			got := f.getHashes(
+			err := f.getHashes(
 				context.Background(),
 				hashes,
 				datastore.BlockDB,
 				f.validators.block.HandleMessage,
 			)
-			if len(tc.fetchErrs) > 0 || tc.hdlrErr != nil {
-				require.NotEmpty(t, got)
+			if len(tc.fetchErrs) > 0 || tc.hdlrErr != nil || tc.reqErr != nil {
+				require.Error(t, err)
 			} else {
-				require.Empty(t, got)
+				require.NoError(t, err)
 			}
 		})
 	}
+}
+
+func TestFetch_getHashes(t *testing.T) {
+	t.Run("no streaming", func(t *testing.T) { testFetch_getHashes(t, false) })
+	t.Run("streaming", func(t *testing.T) { testFetch_getHashes(t, true) })
 }
 
 func TestFetch_GetMalfeasanceProofs(t *testing.T) {

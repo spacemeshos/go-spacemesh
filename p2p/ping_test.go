@@ -40,7 +40,7 @@ func TestPing(t *testing.T) {
 			nc := []byte("foobar")
 			h1, err := New(context.Background(), logtest.New(t), cfg1, nc, nc)
 			require.NoError(t, err)
-			h1.discovery.Start()
+			require.NoError(t, h1.Start())
 			t.Cleanup(func() { h1.Stop() })
 
 			cfg2 := DefaultConfig()

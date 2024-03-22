@@ -304,7 +304,6 @@ func (f *Fetch) PeerEpochInfo(ctx context.Context, peer p2p.Peer, epoch types.Ep
 			return nil, fmt.Errorf("decoding epoch data: %w", err)
 		}
 	}
-	f.RegisterPeerHashes(peer, types.ATXIDsToHashes(ed.AtxIDs))
 	return ed, nil
 }
 
