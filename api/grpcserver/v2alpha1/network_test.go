@@ -26,11 +26,11 @@ func TestNetworkService_Info(t *testing.T) {
 		info, err := client.Info(ctx, &spacemeshv2alpha1.NetworkInfoRequest{})
 		require.NoError(t, err)
 
-		require.Equal(t, info.GenesisTime.AsTime().UTC(), genesis.UTC())
-		require.Equal(t, info.LayerDuration.AsDuration(), layerDuration)
-		require.Equal(t, info.GenesisId, genesisID.Bytes())
-		require.Equal(t, info.Hrp, types.NetworkHRP())
-		require.Equal(t, info.EffectiveGenesisLayer, types.GetEffectiveGenesis().Uint32())
-		require.Equal(t, info.LayersPerEpoch, types.GetLayersPerEpoch())
+		require.Equal(t, genesis.UTC(), info.GenesisTime.AsTime().UTC())
+		require.Equal(t, layerDuration, info.LayerDuration.AsDuration())
+		require.Equal(t, genesisID.Bytes(), info.GenesisId)
+		require.Equal(t, types.NetworkHRP(), info.Hrp)
+		require.Equal(t, types.GetEffectiveGenesis().Uint32(), info.EffectiveGenesisLayer)
+		require.Equal(t, types.GetLayersPerEpoch(), info.LayersPerEpoch)
 	})
 }
