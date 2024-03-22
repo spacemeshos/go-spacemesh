@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jonboulle/clockwork"
 	"go.uber.org/zap"
 	"golang.org/x/exp/maps"
 
-	"github.com/jonboulle/clockwork"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
