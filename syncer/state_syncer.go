@@ -82,37 +82,7 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 		// certificate is effective only within hare distance, outside it we don't vote according to other rules.
 		certEffective := lid.Add(s.cfg.SyncCertDistance).After(current)
 		if certEffective {
-			if opinions, certs, err := s.layerOpinions(ctx, lid); err == nil {
-				if len(certs) > 0 {
-					if err = s.adopt(ctx, lid, certs); err != nil {
-						s.logger.WithContext(ctx).
-							With().
-							Warning("failed to adopt peer opinions", lid, log.Err(err))
-					}
-				}
-				if s.IsSynced(ctx) && !s.cfg.DisableMeshAgreement {
-					if err = s.checkMeshAgreement(ctx, lid, opinions); err != nil &&
-						errors.Is(err, errMeshHashDiverged) {
-						s.logger.WithContext(ctx).
-							With().
-							Debug("mesh hash diverged, trying to reach agreement",
-								lid,
-								log.Stringer("diverged", lid.Sub(1)),
-							)
-						if err = s.ensureMeshAgreement(ctx, lid, opinions, resyncPeers); err != nil {
-							s.logger.WithContext(ctx).
-								With().
-								Debug("failed to reach mesh agreement with peers",
-									lid,
-									log.Err(err),
-								)
-							hashResolve.Inc()
-						} else {
-							hashResolveFail.Inc()
-						}
-					}
-				}
-			}
+			s.processLayerOpinions(ctx, lid, resyncPeers)
 		}
 		// there is no point in tortoise counting after every single layer, in fact it is wasteful.
 		// we periodically invoke counting to evict executed layers.
@@ -145,6 +115,40 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 		log.Stringer("last_synced", s.getLastSyncedLayer()),
 	)
 	return nil
+}
+
+func (s *Syncer) processLayerOpinions(ctx context.Context, lid types.LayerID, resyncPeers map[p2p.Peer]struct{}) {
+	if opinions, certs, err := s.layerOpinions(ctx, lid); err == nil {
+		if len(certs) > 0 {
+			if err = s.adopt(ctx, lid, certs); err != nil {
+				s.logger.WithContext(ctx).
+					With().
+					Warning("failed to adopt peer opinions", lid, log.Err(err))
+			}
+		}
+		if s.IsSynced(ctx) && !s.cfg.DisableMeshAgreement {
+			if err = s.checkMeshAgreement(ctx, lid, opinions); err != nil &&
+				errors.Is(err, errMeshHashDiverged) {
+				s.logger.WithContext(ctx).
+					With().
+					Debug("mesh hash diverged, trying to reach agreement",
+						lid,
+						log.Stringer("diverged", lid.Sub(1)),
+					)
+				if err = s.ensureMeshAgreement(ctx, lid, opinions, resyncPeers); err != nil {
+					s.logger.WithContext(ctx).
+						With().
+						Debug("failed to reach mesh agreement with peers",
+							lid,
+							log.Err(err),
+						)
+					hashResolve.Inc()
+				} else {
+					hashResolveFail.Inc()
+				}
+			}
+		}
+	}
 }
 
 func (s *Syncer) needCert(ctx context.Context, lid types.LayerID) (bool, error) {
