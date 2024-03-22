@@ -613,7 +613,7 @@ func (f *Fetch) failAfterRetry(hash types.Hash32) {
 
 	req.retries++
 	if req.retries > f.cfg.MaxRetriesForRequest {
-		f.logger.WithContext(req.ctx).With().Info("gave up on hash after max retries",
+		f.logger.WithContext(req.ctx).With().Debug("gave up on hash after max retries",
 			log.Stringer("hash", req.hash),
 			log.Int("retries", req.retries),
 		)
