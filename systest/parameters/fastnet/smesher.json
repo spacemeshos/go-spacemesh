@@ -12,7 +12,14 @@
     },
     "fetch": {
         "servers-metrics": true,
-        "log-peer-stats-interval": "1m"
+        "log-peer-stats-interval": "30s",
+        "servers": {
+            "ax/1": {
+                "interval": "1s",
+                "queue": 200,
+                "requests": 100
+            }
+        }
     },
     "smeshing": {
         "smeshing-verifying-opts": {
@@ -21,6 +28,8 @@
     },
     "logging": {
         "txHandler": "debug",
-        "grpc": "debug"
+        "grpc": "debug",
+        "sync": "debug",
+        "fetcher": "debug"
     }
 }
